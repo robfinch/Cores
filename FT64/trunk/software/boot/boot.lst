@@ -3,65 +3,136 @@
                         	
                         		code
                         		org		$FFFC0000
-FFFC0000 003FFF1B 		jmp		brkrout
-	org		$FFFC0010
-FFFC0004 00700018 
+FFFC0000 003FFF1A 		jmp		brkrout
+	org		$FFFC0100
+FFFC0004 01700018 
 FFFC0008 00000000 
 FFFC000C 00000000 
+FFFC0010 00000000 
+FFFC0014 00000000 
+FFFC0018 00000000 
+FFFC001C 00000000 
+FFFC0020 00000000 
+FFFC0024 00000000 
+FFFC0028 00000000 
+FFFC002C 00000000 
+FFFC0030 00000000 
+FFFC0034 00000000 
+FFFC0038 00000000 
+FFFC003C 00000000 
+FFFC0040 00000000 
+FFFC0044 00000000 
+FFFC0048 00000000 
+FFFC004C 00000000 
+FFFC0050 00000000 
+FFFC0054 00000000 
+FFFC0058 00000000 
+FFFC005C 00000000 
+FFFC0060 00000000 
+FFFC0064 00000000 
+FFFC0068 00000000 
+FFFC006C 00000000 
+FFFC0070 00000000 
+FFFC0074 00000000 
+FFFC0078 00000000 
+FFFC007C 00000000 
+FFFC0080 00000000 
+FFFC0084 00000000 
+FFFC0088 00000000 
+FFFC008C 00000000 
+FFFC0090 00000000 
+FFFC0094 00000000 
+FFFC0098 00000000 
+FFFC009C 00000000 
+FFFC00A0 00000000 
+FFFC00A4 00000000 
+FFFC00A8 00000000 
+FFFC00AC 00000000 
+FFFC00B0 00000000 
+FFFC00B4 00000000 
+FFFC00B8 00000000 
+FFFC00BC 00000000 
+FFFC00C0 00000000 
+FFFC00C4 00000000 
+FFFC00C8 00000000 
+FFFC00CC 00000000 
+FFFC00D0 00000000 
+FFFC00D4 00000000 
+FFFC00D8 00000000 
+FFFC00DC 00000000 
+FFFC00E0 00000000 
+FFFC00E4 00000000 
+FFFC00E8 00000000 
+FFFC00EC 00000000 
+FFFC00F0 00000000 
+FFFC00F4 00000000 
+FFFC00F8 00000000 
+FFFC00FC 00000000 
                         	start:
-FFFC0010 00048D1B 		ldi		r1,#$12345678
-FFFC0014 56780809 
-FFFC0018 04000816 		sw		r1,$400
-FFFC001C 08000816 		sw		r1,$800
+FFFC0100 7FF8F809 		ldi		r31,#$7FF8		; set stack pointer
+FFFC0104 00048D1A 		ldi		r1,#$12345678
+FFFC0108 56780809 
+FFFC010C 04000816 		sw		r1,$400
+FFFC0110 08000816 		sw		r1,$800
+FFFC0114 FFC01759 		call	calltest
                         		; From Wikipedia
                         		; inst. 123 should execute in parallel with 456 due to 
                         		; renaming
                         	start4:
-FFFC0020 04000812 		lw		r1,$400		; 1
-FFFC0024 00020844 		add		r1,r1,#2	; 2
-FFFC0028 04080816 		sw		r1,$408		; 3
-FFFC002C 08000812 		lw		r1,$800		; 4
-FFFC0030 00040844 		add		r1,r1,#4	; 5
-FFFC0034 08080816 		sw		r1,$808		; 6
+FFFC0118 04000812 		lw		r1,$400		; 1
+FFFC011C 00020844 		add		r1,r1,#2	; 2
+FFFC0120 04080816 		sw		r1,$408		; 3
+FFFC0124 08000812 		lw		r1,$800		; 4
+FFFC0128 00040844 		add		r1,r1,#4	; 5
+FFFC012C 08080816 		sw		r1,$808		; 6
                         	;	bra		start4
                         	
-FFFC0038 7FFCF809 		ldi		r31,#$7FFC		; set stack pointer
-FFFC003C 002AAA9B 		ldi		r1,#$AAAA5555	; pick some data to write
-FFFC0040 55550809 
-FFFC0044 00001809 		ldi		r3,#0
+FFFC0130 7FFCF809 		ldi		r31,#$7FFC		; set stack pointer
+FFFC0134 002AAA9A 		ldi		r1,#$AAAA5555	; pick some data to write
+FFFC0138 55550809 
+FFFC013C 00001809 		ldi		r3,#0
+FFFC0140 003FFF1A 		ldi		r4,#start1
+FFFC0144 01482009 
                         	start1:
-FFFC0048 8C026042 		shr		r2,r1,#12
-FFFC004C 003FF71B 		sh		r2,$FFDC0600	; write to LEDs
-FFFC0050 06001014 
-FFFC0054 00010844 		add		r1,r1,#1
-FFFC0058 000118C4 		add		r3,r3,#1
-FFFC005C 000A10C6 		cmp		r2,r3,#10	; stop after a few cycles
-FFFC0060 FFE40881 		bne		r2,start1
-FFFC0064 003FFF1B 		jal		r29,clearTxtScreen
+FFFC0148 0E426042 		shr		r2,r1,#12
+FFFC014C 003FF71A 		sh		r2,$FFDC0600	; write to LEDs
+FFFC0150 06001014 
+FFFC0154 00010844 		add		r1,r1,#1
+FFFC0158 000118C4 		add		r3,r3,#1
+FFFC015C 000A10C6 		cmp		r2,r3,#10	; stop after a few cycles
+FFFC0160 00240083 		bne		r2,r0,r4
+	jal		r29,clearTxtScreen
 start3:
-FFFC0068 0074E818 
-FFFC006C FFFC0001 		bra		start3
+FFFC0164 003FFF1A 
+FFFC0168 0184E818 
+FFFC016C FFF00031 		bra		start3
                         	
                         	brkrout:
-FFFC0070 C8000002 		rti
-                        	
+FFFC0170 C8000002 		rti
+
+                        	calltest:
+FFFC0174 04000812 		lw		r1,$400		; 1
+FFFC0178 00020844 		add		r1,r1,#2	; 2
+FFFC017C 04000816 		sw		r1,$400		; 3
+FFFC0180 0008FFE9 		ret
+
                         	;----------------------------------------------------------------------------
                         	;----------------------------------------------------------------------------
                         	clearTxtScreen:
-FFFC0074 00242009 			ldi		r4,#$0024
-FFFC0078 003FF71B 			sh		r4,LEDS
-FFFC007C 06002014 
-FFFC0080 003FF41B 			ldi		r1,#$FFD00000	; text screen address
-FFFC0084 00000809 
-FFFC0088 09B01009 			ldi		r2,#2480		; number of chars 2480 (80x31)
-FFFC008C 000021DB 			ldi		r3,#%000010000_111111111_0000100000
-FFFC0090 FC201809 
+FFFC0184 00242009 			ldi		r4,#$0024
+FFFC0188 003FF71A 			sh		r4,LEDS
+FFFC018C 06002014 
+FFFC0190 003FF41A 			ldi		r1,#$FFD00000	; text screen address
+FFFC0194 00000809 
+FFFC0198 09B01009 			ldi		r2,#2480		; number of chars 2480 (80x31)
+FFFC019C 000021DA 			ldi		r3,#%000010000_111111111_0000100000
+FFFC01A0 FC201809 
                         	.cts1:
-FFFC0094 00001854 			sh		r3,[r1]
-FFFC0098 00040844 			add		r1,r1,#4
-FFFC009C FFFF1084 			sub		r2,r2,#1
-FFFC00A0 FFF00881 			bne		r2,.cts1
-FFFC00A4 00000758 			jal		[r29]
+FFFC01A4 00001854 			sh		r3,[r1]
+FFFC01A8 00040844 			add		r1,r1,#4
+FFFC01AC FFFF1084 			sub		r2,r2,#1
+FFFC01B0 FFFFF8B0 			bne		r2,.cts1
+FFFC01B4 00000758 			jal		[r29]
                         	
                         	// ----------------------------------------------------------------------------
                         	// Fill the text screen with random characters and colors.
@@ -84,30 +155,39 @@ FFFC00A4 00000758 			jal		[r29]
                         	;		ret
                         	
                         	
-                        	
-                        		rodata
-                        		align 8                        	
-                        	begin_init_data:
-                        	
-                        		rodata
-                        		align 8                        	
-                        	end_init_data:
-10 symbols
+                        	
+
+                        		rodata
+
+                        		align 8                        	
+
+                        	begin_init_data:
+
+                        	
+
+                        		rodata
+
+                        		align 8                        	
+
+                        	end_init_data:
+
+11 symbols
   Symbol Name                              seg     address bits
 Ì LEDS                                      const  ffdc0600 33
   begin_init_data                          rodata  fffc1000 32
-  brkrout                                    code  fffc0070 32
-  clearTxtScreen                             code  fffc0074 32
-  clearTxtScreen.cts1                        code  fffc0094 32
+  brkrout                                    code  fffc0170 32
+  calltest                                   code  fffc0174 32
+  clearTxtScreen                             code  fffc0184 32
+  clearTxtScreen.cts1                        code  fffc01a4 32
   end_init_data                            rodata  fffc1000 32
-  start                                      code  fffc0010 32
-  start1                                     code  fffc0048 32
-  start3                                     code  fffc006c 32
-  start4                                     code  fffc0020 32
+  start                                      code  fffc0100 32
+  start1                                     code  fffc0148 32
+  start3                                     code  fffc016c 32
+  start4                                     code  fffc0118 32
 0 compressable instructions
 The top 1024 are:
 Comp  Opcode  Count
 
-number of bytes: 384
-number of instructions: 96
+number of bytes: 468
+number of instructions: 117
 4.000000 bytes (32 bits) per instruction

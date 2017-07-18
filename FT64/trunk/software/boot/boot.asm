@@ -4,11 +4,13 @@ LEDS	equ		$FFDC0600
 	code
 	org		$FFFC0000
 	jmp		brkrout
-	org		$FFFC0010
+	org		$FFFC0100
 start:
+	ldi		r31,#$7FF8		; set stack pointer
 	ldi		r1,#$12345678
 	sw		r1,$400
 	sw		r1,$800
+	call	calltest
 	; From Wikipedia
 	; inst. 123 should execute in parallel with 456 due to 
 	; renaming
@@ -24,19 +26,26 @@ start4:
 	ldi		r31,#$7FFC		; set stack pointer
 	ldi		r1,#$AAAA5555	; pick some data to write
 	ldi		r3,#0
+	ldi		r4,#start1
 start1:
 	shr		r2,r1,#12
 	sh		r2,$FFDC0600	; write to LEDs
 	add		r1,r1,#1
 	add		r3,r3,#1
 	cmp		r2,r3,#10	; stop after a few cycles
-	bne		r2,start1
+	bne		r2,r0,r4
 	jal		r29,clearTxtScreen
 start3:
 	bra		start3
 
 brkrout:
 	rti
+
+calltest:
+	lw		r1,$400		; 1
+	add		r1,r1,#2	; 2
+	sw		r1,$400		; 3
+	ret
 
 ;----------------------------------------------------------------------------
 ;----------------------------------------------------------------------------

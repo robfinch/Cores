@@ -17,16 +17,16 @@ xmlns="http://www.w3.org/TR/REC-html40">
   <o:Keywords>superscalar;FT64</o:Keywords>
   <o:LastAuthor>robfinch@sympatico.ca</o:LastAuthor>
   <o:Revision>2</o:Revision>
-  <o:TotalTime>11277</o:TotalTime>
-  <o:Created>2017-07-17T09:46:00Z</o:Created>
-  <o:LastSaved>2017-07-17T09:46:00Z</o:LastSaved>
+  <o:TotalTime>11638</o:TotalTime>
+  <o:Created>2017-07-18T03:48:00Z</o:Created>
+  <o:LastSaved>2017-07-18T03:48:00Z</o:LastSaved>
   <o:Pages>122</o:Pages>
-  <o:Words>14578</o:Words>
-  <o:Characters>83097</o:Characters>
+  <o:Words>14959</o:Words>
+  <o:Characters>85272</o:Characters>
   <o:Company>Hewlett-Packard Company</o:Company>
-  <o:Lines>692</o:Lines>
-  <o:Paragraphs>194</o:Paragraphs>
-  <o:CharactersWithSpaces>97481</o:CharactersWithSpaces>
+  <o:Lines>710</o:Lines>
+  <o:Paragraphs>200</o:Paragraphs>
+  <o:CharactersWithSpaces>100031</o:CharactersWithSpaces>
   <o:Version>14.00</o:Version>
  </o:DocumentProperties>
  <o:OfficeDocumentSettings>
@@ -4371,11 +4371,11 @@ enable protected mode.<o:p></o:p></span></p>
   padding:0cm 5.4pt 0cm 5.4pt'>
   <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
   normal'>62<span
-  style='mso-spacerun:yes'>                                            </span>33<span
+  style='mso-spacerun:yes'>                                         </span>33<span
   style='mso-spacerun:yes'>       </span>32<span
   style='mso-spacerun:yes'>         </span>30<span
-  style='mso-spacerun:yes'>       </span><span
-  style='mso-spacerun:yes'>                          </span>9<span
+  style='mso-spacerun:yes'>          </span><span
+  style='mso-spacerun:yes'>                       </span>9<span
   style='mso-spacerun:yes'>       </span>6<span
   style='mso-spacerun:yes'>                </span>1</p>
   </td>
@@ -4781,6 +4781,13 @@ and status bits to indicate the occurrence of exception conditions.<o:p></o:p></
 exception or interrupt. The break handler will examine this code in order to
 determine what to do. Only the low order 16 bits are implemented. The high
 order bits read as zero and are not updateable.<o:p></o:p></span></p>
+
+<h3>BADADDR (CSR 0x007)<o:p></o:p></h3>
+
+<p class=MsoNormal style='margin-left:36.0pt'>This register contains the
+effective address for a load / store operation that caused a memory management
+exception or a bus error. Note that the address of the instruction causing the
+exception is available in the EPC register.<o:p></o:p></p>
 
 <h3><span style='mso-bidi-font-family:"Times New Roman"'>PCR2 Paging Control
 (CSR 0x008)<o:p></o:p></span></h3>
@@ -5598,8 +5605,8 @@ color:#365F91;mso-themecolor:accent1;mso-themeshade:191'><o:p></o:p></span></b><
   mso-border-alt:solid windowtext .5pt;mso-border-top-alt:solid windowtext 2.25pt;
   padding:0cm 5.4pt 0cm 5.4pt'>
   <p style='margin:0cm;margin-bottom:.0001pt'><span style='font-size:10.0pt;
-  color:gray;mso-themecolor:background1;mso-themeshade:128'>- attempt to
-  convert <span class=SpellE>NaN</span> or too large to integer<o:p></o:p></span></p>
+  color:gray;mso-themecolor:background1;mso-themeshade:128'>- attempt to convert
+  <span class=SpellE>NaN</span> or too large to integer<o:p></o:p></span></p>
   </td>
  </tr>
  <tr style='mso-yfti-irow:27'>
@@ -5838,6 +5845,639 @@ mso-bidi-theme-font:major-bidi;mso-ansi-language:EN-CA;mso-fareast-language:
 EN-US;mso-bidi-language:AR-SA'><br clear=all style='page-break-before:always'>
 </span></b>
 
+<h3><span class=SpellE>DBADx</span> (CSR 0x018 to 0x01B) Debug Address Register</h3>
+
+<p class=MsoNormal style='margin-left:36.0pt'>These registers contain addresses
+of instruction or data breakpoints.</p>
+
+<table class=MsoTableGrid border=1 cellspacing=0 cellpadding=0
+ style='margin-left:33.75pt;border-collapse:collapse;border:none;mso-border-alt:
+ solid windowtext .5pt;mso-yfti-tbllook:1184;mso-padding-alt:0cm 5.4pt 0cm 5.4pt'>
+ <tr style='mso-yfti-irow:0;mso-yfti-firstrow:yes'>
+  <td width=593 valign=top style='width:445.05pt;border:none;border-bottom:
+  solid windowtext 1.0pt;mso-border-bottom-alt:solid windowtext .5pt;
+  padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
+  text-align:center;line-height:normal'>63<span
+  style='mso-spacerun:yes'>                             </span><span
+  style='mso-spacerun:yes'>                                                                                                             </span>0</p>
+  </td>
+ </tr>
+ <tr style='mso-yfti-irow:1;mso-yfti-lastrow:yes'>
+  <td width=593 valign=top style='width:445.05pt;border:solid windowtext 1.0pt;
+  border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
+  padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
+  text-align:center;line-height:normal'>Address <sub>63..0</sub></p>
+  </td>
+ </tr>
+</table>
+
+<h3>DBCR (CSR 0x01C) Debug Control Register</h3>
+
+<p class=MsoNormal style='margin-left:36.0pt'>This register contains bits
+controlling the circumstances under which a debug interrupt will occur.</p>
+
+<table class=MsoTableGrid border=1 cellspacing=0 cellpadding=0
+ style='margin-left:33.75pt;border-collapse:collapse;border:none;mso-border-alt:
+ solid windowtext .5pt;mso-yfti-tbllook:1184;mso-padding-alt:0cm 5.4pt 0cm 5.4pt'>
+ <tr style='mso-yfti-irow:0;mso-yfti-firstrow:yes'>
+  <td width=115 valign=top style='width:85.95pt;border:solid windowtext 1.0pt;
+  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'>bits</p>
+  </td>
+  <td width=434 valign=top style='width:325.15pt;border:solid windowtext 1.0pt;
+  border-left:none;mso-border-left-alt:solid windowtext .5pt;mso-border-alt:
+  solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'><o:p>&nbsp;</o:p></p>
+  </td>
+  <td width=19 valign=top style='width:14.15pt;border:solid windowtext 1.0pt;
+  border-left:none;mso-border-left-alt:solid windowtext .5pt;mso-border-alt:
+  solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'><o:p>&nbsp;</o:p></p>
+  </td>
+  <td width=26 valign=top style='width:19.8pt;border:solid windowtext 1.0pt;
+  border-left:none;mso-border-left-alt:solid windowtext .5pt;mso-border-alt:
+  solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'><o:p>&nbsp;</o:p></p>
+  </td>
+ </tr>
+ <tr style='mso-yfti-irow:1'>
+  <td width=115 valign=top style='width:85.95pt;border:solid windowtext 1.0pt;
+  border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
+  padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'>3 to 0</p>
+  </td>
+  <td width=434 valign=top style='width:325.15pt;border-top:none;border-left:
+  none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'>Enables a specific debug address register to do address matching. If
+  the corresponding bit in this register is set and the address (instruction or
+  data) matches the address in the debug address register then a debug
+  interrupt will be taken.</p>
+  </td>
+  <td width=19 valign=top style='width:14.15pt;border-top:none;border-left:
+  none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'><o:p>&nbsp;</o:p></p>
+  </td>
+  <td width=26 valign=top style='width:19.8pt;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'><o:p>&nbsp;</o:p></p>
+  </td>
+ </tr>
+ <tr style='mso-yfti-irow:2'>
+  <td width=115 valign=top style='width:85.95pt;border:solid windowtext 1.0pt;
+  border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
+  padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'>17, 16</p>
+  </td>
+  <td width=434 valign=top style='width:325.15pt;border-top:none;border-left:
+  none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'><span class=GramE>This pair of bits determine</span> what should
+  match the debug address register zero in order for a debug interrupt to
+  occur.</p>
+  <table class=MsoTableGrid border=1 cellspacing=0 cellpadding=0
+   style='border-collapse:collapse;border:none;mso-border-alt:solid windowtext .5pt;
+   mso-yfti-tbllook:1184;mso-padding-alt:0cm 5.4pt 0cm 5.4pt'>
+   <tr style='mso-yfti-irow:0;mso-yfti-firstrow:yes'>
+    <td width=57 valign=top style='width:43.1pt;border:solid windowtext 1.0pt;
+    mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+    <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;
+    line-height:normal'>17:16</p>
+    </td>
+    <td width=340 valign=top style='width:9.0cm;border:solid windowtext 1.0pt;
+    border-left:none;mso-border-left-alt:solid windowtext .5pt;mso-border-alt:
+    solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+    <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;
+    line-height:normal'><o:p>&nbsp;</o:p></p>
+    </td>
+    <td width=20 valign=top style='width:15.35pt;border:solid windowtext 1.0pt;
+    border-left:none;mso-border-left-alt:solid windowtext .5pt;mso-border-alt:
+    solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+    <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;
+    line-height:normal'><o:p>&nbsp;</o:p></p>
+    </td>
+   </tr>
+   <tr style='mso-yfti-irow:1'>
+    <td width=57 valign=top style='width:43.1pt;border:solid windowtext 1.0pt;
+    border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:
+    solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+    <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;
+    line-height:normal'>00</p>
+    </td>
+    <td width=340 valign=top style='width:9.0cm;border-top:none;border-left:
+    none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+    mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+    mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+    <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;
+    line-height:normal'>match the instruction address</p>
+    </td>
+    <td width=20 valign=top style='width:15.35pt;border-top:none;border-left:
+    none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+    mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+    mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+    <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;
+    line-height:normal'><o:p>&nbsp;</o:p></p>
+    </td>
+   </tr>
+   <tr style='mso-yfti-irow:2'>
+    <td width=57 valign=top style='width:43.1pt;border:solid windowtext 1.0pt;
+    border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:
+    solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+    <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;
+    line-height:normal'>01</p>
+    </td>
+    <td width=340 valign=top style='width:9.0cm;border-top:none;border-left:
+    none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+    mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+    mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+    <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;
+    line-height:normal'>match a data store address</p>
+    </td>
+    <td width=20 valign=top style='width:15.35pt;border-top:none;border-left:
+    none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+    mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+    mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+    <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;
+    line-height:normal'><o:p>&nbsp;</o:p></p>
+    </td>
+   </tr>
+   <tr style='mso-yfti-irow:3'>
+    <td width=57 valign=top style='width:43.1pt;border:solid windowtext 1.0pt;
+    border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:
+    solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+    <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;
+    line-height:normal'>10</p>
+    </td>
+    <td width=340 valign=top style='width:9.0cm;border-top:none;border-left:
+    none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+    mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+    mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+    <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;
+    line-height:normal'>reserved</p>
+    </td>
+    <td width=20 valign=top style='width:15.35pt;border-top:none;border-left:
+    none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+    mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+    mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+    <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;
+    line-height:normal'><o:p>&nbsp;</o:p></p>
+    </td>
+   </tr>
+   <tr style='mso-yfti-irow:4;mso-yfti-lastrow:yes'>
+    <td width=57 valign=top style='width:43.1pt;border:solid windowtext 1.0pt;
+    border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:
+    solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+    <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;
+    line-height:normal'>11</p>
+    </td>
+    <td width=340 valign=top style='width:9.0cm;border-top:none;border-left:
+    none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+    mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+    mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+    <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;
+    line-height:normal'>match a data load or store address</p>
+    </td>
+    <td width=20 valign=top style='width:15.35pt;border-top:none;border-left:
+    none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+    mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+    mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+    <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;
+    line-height:normal'><o:p>&nbsp;</o:p></p>
+    </td>
+   </tr>
+  </table>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'><o:p></o:p></p>
+  </td>
+  <td width=19 valign=top style='width:14.15pt;border-top:none;border-left:
+  none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'><o:p>&nbsp;</o:p></p>
+  </td>
+  <td width=26 valign=top style='width:19.8pt;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'><o:p>&nbsp;</o:p></p>
+  </td>
+ </tr>
+ <tr style='mso-yfti-irow:3;height:110.4pt'>
+  <td width=115 valign=top style='width:85.95pt;border:solid windowtext 1.0pt;
+  border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
+  padding:0cm 5.4pt 0cm 5.4pt;height:110.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'>19, 18</p>
+  </td>
+  <td width=434 valign=top style='width:325.15pt;border-top:none;border-left:
+  none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt;height:110.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'><span class=GramE>This pair of bits determine</span> how many of the
+  address bits need to match in order to be considered a match to the debug
+  address register. These bits are ignored when matching instruction addresses,
+  which are always half-word aligned.</p>
+  <table class=MsoTableGrid border=1 cellspacing=0 cellpadding=0
+   style='border-collapse:collapse;border:none;mso-border-alt:solid windowtext .5pt;
+   mso-yfti-tbllook:1184;mso-padding-alt:0cm 5.4pt 0cm 5.4pt'>
+   <tr style='mso-yfti-irow:0;mso-yfti-firstrow:yes'>
+    <td width=57 valign=top style='width:43.1pt;border:solid windowtext 1.0pt;
+    mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+    <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;
+    line-height:normal'>19:18</p>
+    </td>
+    <td width=293 valign=top style='width:219.7pt;border:solid windowtext 1.0pt;
+    border-left:none;mso-border-left-alt:solid windowtext .5pt;mso-border-alt:
+    solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+    <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;
+    line-height:normal'><o:p>&nbsp;</o:p></p>
+    </td>
+    <td width=68 valign=top style='width:50.8pt;border:solid windowtext 1.0pt;
+    border-left:none;mso-border-left-alt:solid windowtext .5pt;mso-border-alt:
+    solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+    <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;
+    line-height:normal'>Size</p>
+    </td>
+   </tr>
+   <tr style='mso-yfti-irow:1'>
+    <td width=57 valign=top style='width:43.1pt;border:solid windowtext 1.0pt;
+    border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:
+    solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+    <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;
+    line-height:normal'>00</p>
+    </td>
+    <td width=293 valign=top style='width:219.7pt;border-top:none;border-left:
+    none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+    mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+    mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+    <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;
+    line-height:normal'>all bits must match</p>
+    </td>
+    <td width=68 valign=top style='width:50.8pt;border-top:none;border-left:
+    none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+    mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+    mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+    <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;
+    line-height:normal'>byte</p>
+    </td>
+   </tr>
+   <tr style='mso-yfti-irow:2'>
+    <td width=57 valign=top style='width:43.1pt;border:solid windowtext 1.0pt;
+    border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:
+    solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+    <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;
+    line-height:normal'>01</p>
+    </td>
+    <td width=293 valign=top style='width:219.7pt;border-top:none;border-left:
+    none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+    mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+    mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+    <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;
+    line-height:normal'>all but the least significant bit should match</p>
+    </td>
+    <td width=68 valign=top style='width:50.8pt;border-top:none;border-left:
+    none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+    mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+    mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+    <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;
+    line-height:normal'>char</p>
+    </td>
+   </tr>
+   <tr style='mso-yfti-irow:3'>
+    <td width=57 valign=top style='width:43.1pt;border:solid windowtext 1.0pt;
+    border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:
+    solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+    <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;
+    line-height:normal'>10</p>
+    </td>
+    <td width=293 valign=top style='width:219.7pt;border-top:none;border-left:
+    none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+    mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+    mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+    <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;
+    line-height:normal'>all but the two LSB’s should match</p>
+    </td>
+    <td width=68 valign=top style='width:50.8pt;border-top:none;border-left:
+    none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+    mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+    mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+    <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;
+    line-height:normal'>half</p>
+    </td>
+   </tr>
+   <tr style='mso-yfti-irow:4;mso-yfti-lastrow:yes'>
+    <td width=57 valign=top style='width:43.1pt;border:solid windowtext 1.0pt;
+    border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:
+    solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+    <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;
+    line-height:normal'>11</p>
+    </td>
+    <td width=293 valign=top style='width:219.7pt;border-top:none;border-left:
+    none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+    mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+    mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+    <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;
+    line-height:normal'>all but the three LSB’s should match</p>
+    </td>
+    <td width=68 valign=top style='width:50.8pt;border-top:none;border-left:
+    none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+    mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+    mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+    <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;
+    line-height:normal'>word</p>
+    </td>
+   </tr>
+  </table>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'><o:p></o:p></p>
+  </td>
+  <td width=19 valign=top style='width:14.15pt;border-top:none;border-left:
+  none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt;height:110.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'><o:p>&nbsp;</o:p></p>
+  </td>
+  <td width=26 valign=top style='width:19.8pt;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt;height:110.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'><o:p>&nbsp;</o:p></p>
+  </td>
+ </tr>
+ <tr style='mso-yfti-irow:4'>
+  <td width=115 valign=top style='width:85.95pt;border:solid windowtext 1.0pt;
+  border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
+  padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'>23 to 20</p>
+  </td>
+  <td width=434 valign=top style='width:325.15pt;border-top:none;border-left:
+  none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'>Same as 16 to 19 except for debug address register one.</p>
+  </td>
+  <td width=19 valign=top style='width:14.15pt;border-top:none;border-left:
+  none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'><o:p>&nbsp;</o:p></p>
+  </td>
+  <td width=26 valign=top style='width:19.8pt;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'><o:p>&nbsp;</o:p></p>
+  </td>
+ </tr>
+ <tr style='mso-yfti-irow:5'>
+  <td width=115 valign=top style='width:85.95pt;border:solid windowtext 1.0pt;
+  border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
+  padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'>27 to 24</p>
+  </td>
+  <td width=434 valign=top style='width:325.15pt;border-top:none;border-left:
+  none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'>Same as 16 to 19 except for debug address register two.</p>
+  </td>
+  <td width=19 valign=top style='width:14.15pt;border-top:none;border-left:
+  none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'><o:p>&nbsp;</o:p></p>
+  </td>
+  <td width=26 valign=top style='width:19.8pt;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'><o:p>&nbsp;</o:p></p>
+  </td>
+ </tr>
+ <tr style='mso-yfti-irow:6'>
+  <td width=115 valign=top style='width:85.95pt;border:solid windowtext 1.0pt;
+  border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
+  padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'>31 to 28</p>
+  </td>
+  <td width=434 valign=top style='width:325.15pt;border-top:none;border-left:
+  none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'>Same as 16 to 19 except for debug address register three.</p>
+  </td>
+  <td width=19 valign=top style='width:14.15pt;border-top:none;border-left:
+  none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'><o:p>&nbsp;</o:p></p>
+  </td>
+  <td width=26 valign=top style='width:19.8pt;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'><o:p>&nbsp;</o:p></p>
+  </td>
+ </tr>
+ <tr style='mso-yfti-irow:7'>
+  <td width=115 valign=top style='width:85.95pt;border:solid windowtext 1.0pt;
+  border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
+  padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'>55 to 62</p>
+  </td>
+  <td width=434 valign=top style='width:325.15pt;border-top:none;border-left:
+  none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'>These bits are a history stack for single stepping mode. An exception
+  will automatically disable single stepping mode and record the single step mode
+  state on stack. Returning from an exception pops the single step mode state from
+  the stack.</p>
+  </td>
+  <td width=19 valign=top style='width:14.15pt;border-top:none;border-left:
+  none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'><o:p>&nbsp;</o:p></p>
+  </td>
+  <td width=26 valign=top style='width:19.8pt;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'><o:p>&nbsp;</o:p></p>
+  </td>
+ </tr>
+ <tr style='mso-yfti-irow:8;mso-yfti-lastrow:yes'>
+  <td width=115 valign=top style='width:85.95pt;border:solid windowtext 1.0pt;
+  border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
+  padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'>63</p>
+  </td>
+  <td width=434 valign=top style='width:325.15pt;border-top:none;border-left:
+  none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'>This bit enables SSM (single stepping mode)</p>
+  </td>
+  <td width=19 valign=top style='width:14.15pt;border-top:none;border-left:
+  none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'><o:p>&nbsp;</o:p></p>
+  </td>
+  <td width=26 valign=top style='width:19.8pt;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'><o:p>&nbsp;</o:p></p>
+  </td>
+ </tr>
+</table>
+
+<h3>DBSR (CSR 0x01D) - Debug Status Register</h3>
+
+<p class=MsoNormal style='margin-left:36.0pt'>This register contains bits
+indicating which addresses matched. These bits are set when an address match
+occurs, and must be reset by software.</p>
+
+<table class=MsoTableGrid border=1 cellspacing=0 cellpadding=0
+ style='margin-left:36.0pt;border-collapse:collapse;border:none;mso-border-alt:
+ solid windowtext .5pt;mso-yfti-tbllook:1184;mso-padding-alt:0cm 5.4pt 0cm 5.4pt'>
+ <tr style='mso-yfti-irow:0;mso-yfti-firstrow:yes'>
+  <td width=63 valign=top style='width:47.4pt;border:solid windowtext 1.0pt;
+  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'>bit</p>
+  </td>
+  <td width=227 valign=top style='width:6.0cm;border:solid windowtext 1.0pt;
+  border-left:none;mso-border-left-alt:solid windowtext .5pt;mso-border-alt:
+  solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'><o:p>&nbsp;</o:p></p>
+  </td>
+ </tr>
+ <tr style='mso-yfti-irow:1'>
+  <td width=63 valign=top style='width:47.4pt;border:solid windowtext 1.0pt;
+  border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
+  padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'>0</p>
+  </td>
+  <td width=227 valign=top style='width:6.0cm;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'>matched address register zero</p>
+  </td>
+ </tr>
+ <tr style='mso-yfti-irow:2'>
+  <td width=63 valign=top style='width:47.4pt;border:solid windowtext 1.0pt;
+  border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
+  padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'>1</p>
+  </td>
+  <td width=227 valign=top style='width:6.0cm;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'>matched address register one</p>
+  </td>
+ </tr>
+ <tr style='mso-yfti-irow:3'>
+  <td width=63 valign=top style='width:47.4pt;border:solid windowtext 1.0pt;
+  border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
+  padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'>2</p>
+  </td>
+  <td width=227 valign=top style='width:6.0cm;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'>matched address register two</p>
+  </td>
+ </tr>
+ <tr style='mso-yfti-irow:4'>
+  <td width=63 valign=top style='width:47.4pt;border:solid windowtext 1.0pt;
+  border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
+  padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'>3</p>
+  </td>
+  <td width=227 valign=top style='width:6.0cm;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'>matched address register three</p>
+  </td>
+ </tr>
+ <tr style='mso-yfti-irow:5;mso-yfti-lastrow:yes'>
+  <td width=63 valign=top style='width:47.4pt;border:solid windowtext 1.0pt;
+  border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
+  padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'>63 to 4</p>
+  </td>
+  <td width=227 valign=top style='width:6.0cm;border-top:none;border-left:none;
+  border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'>not used, reserved</p>
+  </td>
+ </tr>
+</table>
+
+<p class=MsoNormal style='margin-left:36.0pt'><o:p>&nbsp;</o:p></p>
+
 <h3>CAS (CSR 0x02C) Compare and Swap </h3>
 
 <p class=MsoNormal style='margin-left:36.0pt'>This register is to support the
@@ -5858,8 +6498,8 @@ is set to zero. No write to memory occurs if the match fails.</p>
   padding:0cm 5.4pt 0cm 5.4pt'>
   <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
   text-align:center;line-height:normal'>63<span
-  style='mso-spacerun:yes'>                                                                                                                                      
-  </span>0</p>
+  style='mso-spacerun:yes'>                                                                                                                                   
+  </span><span style='mso-spacerun:yes'>   </span>0</p>
   </td>
  </tr>
  <tr style='mso-yfti-irow:1;mso-yfti-lastrow:yes'>
@@ -5922,10 +6562,9 @@ the status bits copied from the low order bits of the register.<o:p></o:p></span
   mso-border-bottom-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
   <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
   text-align:center;line-height:normal'><span style='mso-bidi-font-family:"Times New Roman"'>63<span
-  style='mso-spacerun:yes'>  </span><span
-  style='mso-spacerun:yes'>                    </span><span
-  style='mso-spacerun:yes'>                                                              </span><span
-  style='mso-spacerun:yes'>                                              </span>14<o:p></o:p></span></p>
+  style='mso-spacerun:yes'>  </span><span style='mso-spacerun:yes'>    </span><span
+  style='mso-spacerun:yes'>                </span><span
+  style='mso-spacerun:yes'>                                                                                                            </span>14<o:p></o:p></span></p>
   </td>
   <td width=142 valign=top style='width:106.3pt;border:none;border-bottom:solid windowtext 1.0pt;
   mso-border-bottom-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
@@ -6045,8 +6684,8 @@ underflow. An exception is also triggered on a stack underflow.<o:p></o:p></span
   style='mso-spacerun:yes'>   </span><span
   style='mso-spacerun:yes'>      </span><span
   style='mso-spacerun:yes'>                                                            </span><span
-  style='mso-spacerun:yes'>                                                                                                    </span><span
-  style='mso-spacerun:yes'>           </span>0<o:p></o:p></span></p>
+  style='mso-spacerun:yes'>                      </span><span
+  style='mso-spacerun:yes'>                                                                                         </span>0<o:p></o:p></span></p>
   </td>
  </tr>
  <tr style='mso-yfti-irow:1;mso-yfti-lastrow:yes'>
@@ -6984,7 +7623,7 @@ depending on the system.<o:p></o:p></span></p>
   border-top:none;mso-border-top-alt:solid windowtext 1.5pt;mso-border-alt:
   solid windowtext .5pt;mso-border-top-alt:solid windowtext 1.5pt;padding:0cm 5.4pt 0cm 5.4pt'>
   <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
-  text-align:center;line-height:normal'><span style='mso-bidi-font-family:"Times New Roman"'>482<o:p></o:p></span></p>
+  text-align:center;line-height:normal'><span style='mso-bidi-font-family:"Times New Roman"'>480<o:p></o:p></span></p>
   </td>
   <td width=50 valign=top style='width:37.65pt;border-top:none;border-left:
   none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
@@ -6992,7 +7631,7 @@ depending on the system.<o:p></o:p></span></p>
   mso-border-alt:solid windowtext .5pt;mso-border-top-alt:solid windowtext 1.5pt;
   padding:0cm 5.4pt 0cm 5.4pt'>
   <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
-  normal'><span style='mso-bidi-font-family:"Times New Roman"'>TGT<o:p></o:p></span></p>
+  normal'><span style='mso-bidi-font-family:"Times New Roman"'>SSM<o:p></o:p></span></p>
   </td>
   <td width=40 valign=top style='width:29.95pt;border-top:none;border-left:
   none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
@@ -7008,7 +7647,7 @@ depending on the system.<o:p></o:p></span></p>
   mso-border-alt:solid windowtext .5pt;mso-border-top-alt:solid windowtext 1.5pt;
   padding:0cm 5.4pt 0cm 5.4pt'>
   <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
-  normal'><span style='mso-bidi-font-family:"Times New Roman"'>call target exception<o:p></o:p></span></p>
+  normal'><span style='mso-bidi-font-family:"Times New Roman"'>single step<o:p></o:p></span></p>
   </td>
   <td width=86 valign=top style='width:64.65pt;border-top:none;border-left:
   none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
@@ -7020,6 +7659,79 @@ depending on the system.<o:p></o:p></span></p>
   </td>
  </tr>
  <tr style='mso-yfti-irow:11'>
+  <td width=52 valign=top style='width:38.75pt;border:solid windowtext 1.0pt;
+  border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
+  padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
+  text-align:center;line-height:normal'><span style='mso-bidi-font-family:"Times New Roman"'>481<o:p></o:p></span></p>
+  </td>
+  <td width=50 valign=top style='width:37.65pt;border-top:none;border-left:
+  none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'><span style='mso-bidi-font-family:"Times New Roman"'>DBG<o:p></o:p></span></p>
+  </td>
+  <td width=40 valign=top style='width:29.95pt;border-top:none;border-left:
+  none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'><span style='mso-bidi-font-family:"Times New Roman"'>x<o:p></o:p></span></p>
+  </td>
+  <td width=365 valign=top style='width:274.05pt;border-top:none;border-left:
+  none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'><span style='mso-bidi-font-family:"Times New Roman"'>debug exception<o:p></o:p></span></p>
+  </td>
+  <td width=86 valign=top style='width:64.65pt;border-top:none;border-left:
+  none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'><span style='mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
+  </td>
+ </tr>
+ <tr style='mso-yfti-irow:12'>
+  <td width=52 valign=top style='width:38.75pt;border:solid windowtext 1.0pt;
+  border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
+  padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
+  text-align:center;line-height:normal'><span style='mso-bidi-font-family:"Times New Roman"'>482<o:p></o:p></span></p>
+  </td>
+  <td width=50 valign=top style='width:37.65pt;border-top:none;border-left:
+  none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'><span style='mso-bidi-font-family:"Times New Roman"'>TGT<o:p></o:p></span></p>
+  </td>
+  <td width=40 valign=top style='width:29.95pt;border-top:none;border-left:
+  none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'><span style='mso-bidi-font-family:"Times New Roman"'>x<o:p></o:p></span></p>
+  </td>
+  <td width=365 valign=top style='width:274.05pt;border-top:none;border-left:
+  none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'><span style='mso-bidi-font-family:"Times New Roman"'>call target
+  exception<o:p></o:p></span></p>
+  </td>
+  <td width=86 valign=top style='width:64.65pt;border-top:none;border-left:
+  none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'><span style='mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
+  </td>
+ </tr>
+ <tr style='mso-yfti-irow:13'>
   <td width=52 valign=top style='width:38.75pt;border:solid windowtext 1.0pt;
   border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
   padding:0cm 5.4pt 0cm 5.4pt'>
@@ -7055,7 +7767,7 @@ depending on the system.<o:p></o:p></span></p>
   normal'><span style='mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
   </td>
  </tr>
- <tr style='mso-yfti-irow:12'>
+ <tr style='mso-yfti-irow:14'>
   <td width=52 valign=top style='width:38.75pt;border:solid windowtext 1.0pt;
   border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
   padding:0cm 5.4pt 0cm 5.4pt'>
@@ -7092,7 +7804,7 @@ depending on the system.<o:p></o:p></span></p>
   normal'><span style='mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
   </td>
  </tr>
- <tr style='mso-yfti-irow:13'>
+ <tr style='mso-yfti-irow:15'>
   <td width=52 valign=top style='width:38.75pt;border:solid windowtext 1.0pt;
   border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
   padding:0cm 5.4pt 0cm 5.4pt'>
@@ -7129,7 +7841,7 @@ depending on the system.<o:p></o:p></span></p>
   normal'><span style='mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
   </td>
  </tr>
- <tr style='mso-yfti-irow:14'>
+ <tr style='mso-yfti-irow:16'>
   <td width=52 valign=top style='width:38.75pt;border:solid windowtext 1.0pt;
   border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
   padding:0cm 5.4pt 0cm 5.4pt'>
@@ -7166,7 +7878,7 @@ depending on the system.<o:p></o:p></span></p>
   normal'><span style='mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
   </td>
  </tr>
- <tr style='mso-yfti-irow:15'>
+ <tr style='mso-yfti-irow:17'>
   <td width=52 valign=top style='width:38.75pt;border:solid windowtext 1.0pt;
   border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
   padding:0cm 5.4pt 0cm 5.4pt'>
@@ -7203,7 +7915,7 @@ depending on the system.<o:p></o:p></span></p>
   normal'><span style='mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
   </td>
  </tr>
- <tr style='mso-yfti-irow:16'>
+ <tr style='mso-yfti-irow:18'>
   <td width=52 valign=top style='width:38.75pt;border:solid windowtext 1.0pt;
   border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
   padding:0cm 5.4pt 0cm 5.4pt'>
@@ -7239,7 +7951,7 @@ depending on the system.<o:p></o:p></span></p>
   normal'><span style='mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
   </td>
  </tr>
- <tr style='mso-yfti-irow:17'>
+ <tr style='mso-yfti-irow:19'>
   <td width=52 valign=top style='width:38.75pt;border:solid windowtext 1.0pt;
   border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
   padding:0cm 5.4pt 0cm 5.4pt'>
@@ -7275,7 +7987,7 @@ depending on the system.<o:p></o:p></span></p>
   normal'><span style='mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
   </td>
  </tr>
- <tr style='mso-yfti-irow:18'>
+ <tr style='mso-yfti-irow:20'>
   <td width=52 valign=top style='width:38.75pt;border:solid windowtext 1.0pt;
   border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
   padding:0cm 5.4pt 0cm 5.4pt'>
@@ -7301,7 +8013,8 @@ depending on the system.<o:p></o:p></span></p>
   mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
   mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
   <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
-  normal'><span style='mso-bidi-font-family:"Times New Roman"'>floating point exception<o:p></o:p></span></p>
+  normal'><span style='mso-bidi-font-family:"Times New Roman"'>floating point
+  exception<o:p></o:p></span></p>
   </td>
   <td width=86 valign=top style='width:64.65pt;border-top:none;border-left:
   none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
@@ -7311,7 +8024,7 @@ depending on the system.<o:p></o:p></span></p>
   normal'><span style='mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
   </td>
  </tr>
- <tr style='mso-yfti-irow:19'>
+ <tr style='mso-yfti-irow:21'>
   <td width=52 valign=top style='width:38.75pt;border:solid windowtext 1.0pt;
   border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
   padding:0cm 5.4pt 0cm 5.4pt'>
@@ -7347,7 +8060,7 @@ depending on the system.<o:p></o:p></span></p>
   normal'><span style='mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
   </td>
  </tr>
- <tr style='mso-yfti-irow:20'>
+ <tr style='mso-yfti-irow:22'>
   <td width=52 valign=top style='width:38.75pt;border:solid windowtext 1.0pt;
   border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
   padding:0cm 5.4pt 0cm 5.4pt'>
@@ -7383,7 +8096,7 @@ depending on the system.<o:p></o:p></span></p>
   normal'><span style='mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
   </td>
  </tr>
- <tr style='mso-yfti-irow:21'>
+ <tr style='mso-yfti-irow:23'>
   <td width=52 valign=top style='width:38.75pt;border:solid windowtext 1.0pt;
   border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
   padding:0cm 5.4pt 0cm 5.4pt'>
@@ -7419,7 +8132,7 @@ depending on the system.<o:p></o:p></span></p>
   normal'><span style='mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
   </td>
  </tr>
- <tr style='mso-yfti-irow:22'>
+ <tr style='mso-yfti-irow:24'>
   <td width=52 valign=top style='width:38.75pt;border:solid windowtext 1.0pt;
   border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
   padding:0cm 5.4pt 0cm 5.4pt'>
@@ -7456,7 +8169,7 @@ depending on the system.<o:p></o:p></span></p>
   normal'><span style='mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
   </td>
  </tr>
- <tr style='mso-yfti-irow:23'>
+ <tr style='mso-yfti-irow:25'>
   <td width=52 valign=top style='width:38.75pt;border:solid windowtext 1.0pt;
   border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
   padding:0cm 5.4pt 0cm 5.4pt'>
@@ -7493,79 +8206,79 @@ depending on the system.<o:p></o:p></span></p>
   normal'><span style='mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
   </td>
  </tr>
- <tr style='mso-yfti-irow:24'>
-  <td width=52 valign=top style='width:38.75pt;border:solid windowtext 1.0pt;
-  border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
-  padding:0cm 5.4pt 0cm 5.4pt'>
-  <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
-  text-align:center;line-height:normal'><span style='mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
-  </td>
-  <td width=50 valign=top style='width:37.65pt;border-top:none;border-left:
-  none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
-  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
-  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
-  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
-  normal'><span style='mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
-  </td>
-  <td width=40 valign=top style='width:29.95pt;border-top:none;border-left:
-  none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
-  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
-  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
-  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
-  normal'><span style='mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
-  </td>
-  <td width=365 valign=top style='width:274.05pt;border-top:none;border-left:
-  none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
-  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
-  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
-  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
-  normal'><span style='mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
-  </td>
-  <td width=86 valign=top style='width:64.65pt;border-top:none;border-left:
-  none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
-  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
-  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
-  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
-  normal'><span style='mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
-  </td>
- </tr>
- <tr style='mso-yfti-irow:25'>
-  <td width=52 valign=top style='width:38.75pt;border:solid windowtext 1.0pt;
-  border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
-  padding:0cm 5.4pt 0cm 5.4pt'>
-  <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
-  text-align:center;line-height:normal'><span style='mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
-  </td>
-  <td width=50 valign=top style='width:37.65pt;border-top:none;border-left:
-  none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
-  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
-  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
-  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
-  normal'><span style='mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
-  </td>
-  <td width=40 valign=top style='width:29.95pt;border-top:none;border-left:
-  none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
-  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
-  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
-  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
-  normal'><span style='mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
-  </td>
-  <td width=365 valign=top style='width:274.05pt;border-top:none;border-left:
-  none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
-  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
-  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
-  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
-  normal'><span style='mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
-  </td>
-  <td width=86 valign=top style='width:64.65pt;border-top:none;border-left:
-  none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
-  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
-  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
-  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
-  normal'><span style='mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
-  </td>
- </tr>
  <tr style='mso-yfti-irow:26'>
+  <td width=52 valign=top style='width:38.75pt;border:solid windowtext 1.0pt;
+  border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
+  padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
+  text-align:center;line-height:normal'><span style='mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
+  </td>
+  <td width=50 valign=top style='width:37.65pt;border-top:none;border-left:
+  none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'><span style='mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
+  </td>
+  <td width=40 valign=top style='width:29.95pt;border-top:none;border-left:
+  none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'><span style='mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
+  </td>
+  <td width=365 valign=top style='width:274.05pt;border-top:none;border-left:
+  none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'><span style='mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
+  </td>
+  <td width=86 valign=top style='width:64.65pt;border-top:none;border-left:
+  none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'><span style='mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
+  </td>
+ </tr>
+ <tr style='mso-yfti-irow:27'>
+  <td width=52 valign=top style='width:38.75pt;border:solid windowtext 1.0pt;
+  border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
+  padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
+  text-align:center;line-height:normal'><span style='mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
+  </td>
+  <td width=50 valign=top style='width:37.65pt;border-top:none;border-left:
+  none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'><span style='mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
+  </td>
+  <td width=40 valign=top style='width:29.95pt;border-top:none;border-left:
+  none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'><span style='mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
+  </td>
+  <td width=365 valign=top style='width:274.05pt;border-top:none;border-left:
+  none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'><span style='mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
+  </td>
+  <td width=86 valign=top style='width:64.65pt;border-top:none;border-left:
+  none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
+  mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
+  mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
+  <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
+  normal'><span style='mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
+  </td>
+ </tr>
+ <tr style='mso-yfti-irow:28'>
   <td width=52 valign=top style='width:38.75pt;border:solid windowtext 1.0pt;
   border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
   padding:0cm 5.4pt 0cm 5.4pt'>
@@ -7601,7 +8314,7 @@ depending on the system.<o:p></o:p></span></p>
   normal'><span style='mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
   </td>
  </tr>
- <tr style='mso-yfti-irow:27'>
+ <tr style='mso-yfti-irow:29'>
   <td width=52 valign=top style='width:38.75pt;border:solid windowtext 1.0pt;
   border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
   padding:0cm 5.4pt 0cm 5.4pt'>
@@ -7637,7 +8350,7 @@ depending on the system.<o:p></o:p></span></p>
   normal'><span style='mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
   </td>
  </tr>
- <tr style='mso-yfti-irow:28'>
+ <tr style='mso-yfti-irow:30'>
   <td width=52 valign=top style='width:38.75pt;border:solid windowtext 1.0pt;
   border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
   padding:0cm 5.4pt 0cm 5.4pt'>
@@ -7673,7 +8386,7 @@ depending on the system.<o:p></o:p></span></p>
   normal'><span style='mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
   </td>
  </tr>
- <tr style='mso-yfti-irow:29'>
+ <tr style='mso-yfti-irow:31'>
   <td width=52 valign=top style='width:38.75pt;border:solid windowtext 1.0pt;
   border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
   padding:0cm 5.4pt 0cm 5.4pt'>
@@ -7709,33 +8422,33 @@ depending on the system.<o:p></o:p></span></p>
   normal'><span style='mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
   </td>
  </tr>
- <tr style='mso-yfti-irow:30'>
+ <tr style='mso-yfti-irow:32'>
   <td width=52 valign=top style='width:38.75pt;border:solid windowtext 1.0pt;
   border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
   padding:0cm 5.4pt 0cm 5.4pt'>
   <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
-  text-align:center;line-height:normal'><span style='mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
+  text-align:center;line-height:normal'><span style='mso-bidi-font-family:"Times New Roman"'>509<o:p></o:p></span></p>
   </td>
   <td width=50 valign=top style='width:37.65pt;border-top:none;border-left:
   none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
   mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
   mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
   <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
-  normal'><span style='mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
+  normal'><span style='mso-bidi-font-family:"Times New Roman"'>IBE<o:p></o:p></span></p>
   </td>
   <td width=40 valign=top style='width:29.95pt;border-top:none;border-left:
   none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
   mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
   mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
   <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
-  normal'><span style='mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
+  normal'><span style='mso-bidi-font-family:"Times New Roman"'>x<o:p></o:p></span></p>
   </td>
   <td width=365 valign=top style='width:274.05pt;border-top:none;border-left:
   none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
   mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
   mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
   <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
-  normal'><span style='mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
+  normal'><span style='mso-bidi-font-family:"Times New Roman"'>instruction bus error<o:p></o:p></span></p>
   </td>
   <td width=86 valign=top style='width:64.65pt;border-top:none;border-left:
   none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
@@ -7745,7 +8458,7 @@ depending on the system.<o:p></o:p></span></p>
   normal'><span style='mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
   </td>
  </tr>
- <tr style='mso-yfti-irow:31'>
+ <tr style='mso-yfti-irow:33'>
   <td width=52 valign=top style='width:38.75pt;border:solid windowtext 1.0pt;
   border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
   padding:0cm 5.4pt 0cm 5.4pt'>
@@ -7782,7 +8495,7 @@ depending on the system.<o:p></o:p></span></p>
   normal'><span style='mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
   </td>
  </tr>
- <tr style='mso-yfti-irow:32;mso-yfti-lastrow:yes'>
+ <tr style='mso-yfti-irow:34;mso-yfti-lastrow:yes'>
   <td width=52 valign=top style='width:38.75pt;border:solid windowtext 1.0pt;
   border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
   padding:0cm 5.4pt 0cm 5.4pt'>
@@ -8917,8 +9630,8 @@ Register Layout<o:p></o:p></span></h2>
   <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
   text-align:center;line-height:normal'><span style='font-size:7.0pt;
   mso-bidi-font-size:11.0pt;mso-bidi-font-family:"Times New Roman"'>30<span
-  style='mso-spacerun:yes'>                        </span><span
-  style='mso-spacerun:yes'>                                                                                    </span>14<o:p></o:p></span></p>
+  style='mso-spacerun:yes'>                                                                                                           
+  </span>14<o:p></o:p></span></p>
   </td>
   <td width=95 valign=top style='width:70.9pt;border:solid windowtext 1.0pt;
   border-left:none;mso-border-left-alt:solid windowtext .5pt;mso-border-alt:
@@ -9699,7 +10412,8 @@ first operand must be in a register. The second operand may be in a register or
 may be an immediate value specified in the instruction.<o:p></o:p></span></p>
 
 <p class=MsoNormal style='margin-left:36.0pt'><span style='mso-bidi-font-family:
-"Times New Roman"'>For the sub-word forms the result is sign extended to 64 bits.<o:p></o:p></span></p>
+"Times New Roman"'>For the sub-word forms the result is sign extended to 64
+bits.<o:p></o:p></span></p>
 
 <p class=MsoNormal><span style='mso-bidi-font-family:"Times New Roman"'>Instruction
 Format:<o:p></o:p></span></p>
@@ -10349,8 +11063,7 @@ Format:<o:p></o:p></span></p>
   <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
   text-align:center;line-height:normal'><span style='font-size:8.0pt;
   mso-bidi-font-size:11.0pt;mso-bidi-font-family:"Times New Roman"'>31 <span
-  style='mso-spacerun:yes'>                  </span><span
-  style='mso-spacerun:yes'>           </span><span
+  style='mso-spacerun:yes'>                             </span><span
   style='mso-spacerun:yes'>        </span>22<o:p></o:p></span></p>
   </td>
   <td width=27 valign=top style='width:20.45pt;border:none;border-bottom:solid windowtext 1.0pt;
@@ -10610,7 +11323,8 @@ Format:<o:p></o:p></span></p>
   text-align:center;line-height:normal'><span style='font-size:8.0pt;
   mso-bidi-font-size:11.0pt;mso-bidi-font-family:"Times New Roman"'>19<span
   style='mso-spacerun:yes'>    </span><span style='mso-spacerun:yes'> </span><span
-  style='mso-spacerun:yes'>                           </span>11<o:p></o:p></span></p>
+  style='mso-spacerun:yes'>             </span><span
+  style='mso-spacerun:yes'>              </span>11<o:p></o:p></span></p>
   </td>
   <td width=76 valign=top style='width:2.0cm;border:none;border-bottom:solid windowtext 1.0pt;
   mso-border-bottom-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
@@ -10866,8 +11580,7 @@ Format:<o:p></o:p></span></p>
   <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
   text-align:center;line-height:normal'><span style='font-size:8.0pt;
   mso-bidi-font-size:11.0pt;mso-bidi-font-family:"Times New Roman"'>10 <span
-  style='mso-spacerun:yes'>        </span><span
-  style='mso-spacerun:yes'>     </span>6<o:p></o:p></span></p>
+  style='mso-spacerun:yes'>             </span>6<o:p></o:p></span></p>
   </td>
   <td width=74 valign=top style='width:55.15pt;border:none;border-bottom:solid windowtext 1.0pt;
   mso-border-bottom-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
@@ -11655,10 +12368,10 @@ mso-bidi-theme-font:major-bidi'><o:p>&nbsp;</o:p></span></b></p>
 <p class=MsoNormal><strong><span style='mso-bidi-font-family:"Times New Roman";
 mso-bidi-theme-font:minor-bidi'>Description:<o:p></o:p></span></strong></p>
 
-<p class=MsoNormal style='margin-left:36.0pt'>Multiplies two registers using BCD
-arithmetic and places the result in a target register. Only the low order byte
-of the register is used. The result is a 16 bit BCD value. The result is zero
-extended to 64 bits.</p>
+<p class=MsoNormal style='margin-left:36.0pt'>Multiplies two registers using
+BCD arithmetic and places the result in a target register. Only the low order
+byte of the register is used. The result is a 16 bit BCD value. The result is
+zero extended to 64 bits.</p>
 
 <p class=MsoNormal><strong><span style='mso-bidi-font-family:"Times New Roman";
 mso-bidi-theme-font:minor-bidi'>Instruction Format:<o:p></o:p></span></strong></p>
@@ -12004,7 +12717,8 @@ contains the target address which is an absolute address.<o:p></o:p></span></p>
   <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
   text-align:center;line-height:normal'><span style='font-size:8.0pt;
   mso-bidi-font-size:11.0pt;mso-bidi-font-family:"Times New Roman"'>5<span
-  style='mso-spacerun:yes'>                  </span><span
+  style='mso-spacerun:yes'>     </span><span
+  style='mso-spacerun:yes'>             </span><span
   style='mso-spacerun:yes'> </span>0<o:p></o:p></span></p>
   </td>
  </tr>
@@ -12184,8 +12898,8 @@ Immediate<o:p></o:p></span></h2>
 then an eleven bit sign extended value is shifted left twice and added to the
 program counter. The branch is relative to the address of the instruction
 directly following the branch. The displacement value may not be extended with
-a prefix instruction. This instruction is useful for implementing case statements
-based on small values.<o:p></o:p></span></p>
+a prefix instruction. This instruction is useful for implementing case
+statements based on small values.<o:p></o:p></span></p>
 
 <p class=MsoNormal><span style='mso-bidi-font-family:"Times New Roman"'>Instruction
 Format:<o:p></o:p></span></p>
@@ -12222,7 +12936,8 @@ Format:<o:p></o:p></span></p>
   <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
   text-align:center;line-height:normal'><span style='font-size:8.0pt;
   mso-bidi-font-size:11.0pt;mso-bidi-font-family:"Times New Roman"'>10 <span
-  style='mso-spacerun:yes'>             </span>6<o:p></o:p></span></p>
+  style='mso-spacerun:yes'>          </span><span
+  style='mso-spacerun:yes'>   </span>6<o:p></o:p></span></p>
   </td>
   <td width=85 valign=top style='width:63.75pt;border:none;border-bottom:solid windowtext 1.0pt;
   mso-border-bottom-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
@@ -13372,7 +14087,8 @@ Format:<o:p></o:p></span></p>
   <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
   text-align:center;line-height:normal'><span style='font-size:8.0pt;
   mso-bidi-font-size:11.0pt;mso-bidi-font-family:"Times New Roman"'>10 <span
-  style='mso-spacerun:yes'>             </span>6<o:p></o:p></span></p>
+  style='mso-spacerun:yes'> </span><span
+  style='mso-spacerun:yes'>            </span>6<o:p></o:p></span></p>
   </td>
   <td width=74 valign=top style='width:55.15pt;border:none;border-bottom:solid windowtext 1.0pt;
   mso-border-bottom-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
@@ -13668,12 +14384,12 @@ Equal Unsigned<o:p></o:p></span></h2>
 
 <p class=MsoNormal style='margin-left:36.0pt'><span style='mso-bidi-font-family:
 "Times New Roman"'>If register Ra is greater than or equal to register <span
-class=SpellE>Rb</span> then an eleven bit sign extended value is shifted left twice
-and added to the program counter. The values are treated as unsigned numbers. The
-branch is relative to the address of the instruction directly following the
-branch. The immediate value may not be extended with a prefix instruction. This
-instruction may also be used to branch on less than or equal by swapping the
-registers around.<o:p></o:p></span></p>
+class=SpellE>Rb</span> then an eleven bit sign extended value is shifted left
+twice and added to the program counter. The values are treated as unsigned
+numbers. The branch is relative to the address of the instruction directly following
+the branch. The immediate value may not be extended with a prefix instruction.
+This instruction may also be used to branch on less than or equal by swapping
+the registers around.<o:p></o:p></span></p>
 
 <p class=MsoNormal><span style='mso-bidi-font-family:"Times New Roman"'>Instruction
 Format:<o:p></o:p></span></p>
@@ -14065,8 +14781,8 @@ Format:<o:p></o:p></span></p>
   <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
   text-align:center;line-height:normal'><span style='font-size:8.0pt;
   mso-bidi-font-size:11.0pt;mso-bidi-font-family:"Times New Roman"'>5<span
-  style='mso-spacerun:yes'>            </span><span
-  style='mso-spacerun:yes'> </span>1<o:p></o:p></span></p>
+  style='mso-spacerun:yes'>           </span><span
+  style='mso-spacerun:yes'> </span><span style='mso-spacerun:yes'> </span>1<o:p></o:p></span></p>
   </td>
   <td width=38 valign=top style='width:1.0cm;border:none;border-bottom:solid windowtext 1.0pt;
   mso-border-bottom-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
@@ -14130,8 +14846,8 @@ Format:<o:p></o:p></span></p>
 <p class=MsoNormal><span style='mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
 
 <p class=MsoNormal style='margin-left:36.0pt'><span style='mso-bidi-font-family:
-"Times New Roman"'>A branch to a value computed in a register may be performed using
-the instruction format shown below. <span class=SpellE><span class=GramE>Rc</span></span>
+"Times New Roman"'>A branch to a value computed in a register may be performed
+using the instruction format shown below. <span class=SpellE><span class=GramE>Rc</span></span>
 contains the target address which is an absolute address.<o:p></o:p></span></p>
 
 <table class=MsoTableGrid border=1 cellspacing=0 cellpadding=0
@@ -14170,7 +14886,8 @@ contains the target address which is an absolute address.<o:p></o:p></span></p>
   <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
   text-align:center;line-height:normal'><span style='font-size:8.0pt;
   mso-bidi-font-size:11.0pt;mso-bidi-font-family:"Times New Roman"'>15<span
-  style='mso-spacerun:yes'>             </span>11<o:p></o:p></span></p>
+  style='mso-spacerun:yes'>     </span><span
+  style='mso-spacerun:yes'>        </span>11<o:p></o:p></span></p>
   </td>
   <td width=76 valign=top style='width:2.0cm;border:none;border-bottom:solid windowtext 1.0pt;
   mso-border-bottom-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
@@ -14408,8 +15125,8 @@ Format:<o:p></o:p></span></p>
   <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
   text-align:center;line-height:normal'><span style='font-size:8.0pt;
   mso-bidi-font-size:11.0pt;mso-bidi-font-family:"Times New Roman"'>5<span
-  style='mso-spacerun:yes'>            </span><span
-  style='mso-spacerun:yes'> </span>1<o:p></o:p></span></p>
+  style='mso-spacerun:yes'>           </span><span
+  style='mso-spacerun:yes'> </span><span style='mso-spacerun:yes'> </span>1<o:p></o:p></span></p>
   </td>
   <td width=38 valign=top style='width:1.0cm;border:none;border-bottom:solid windowtext 1.0pt;
   mso-border-bottom-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
@@ -14473,8 +15190,8 @@ Format:<o:p></o:p></span></p>
 <p class=MsoNormal><span style='mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
 
 <p class=MsoNormal style='margin-left:36.0pt'><span style='mso-bidi-font-family:
-"Times New Roman"'>A branch to a value computed in a register may be performed using
-the instruction format shown below. <span class=SpellE><span class=GramE>Rc</span></span>
+"Times New Roman"'>A branch to a value computed in a register may be performed
+using the instruction format shown below. <span class=SpellE><span class=GramE>Rc</span></span>
 contains the target address which is an absolute address.<o:p></o:p></span></p>
 
 <table class=MsoTableGrid border=1 cellspacing=0 cellpadding=0
@@ -14513,7 +15230,8 @@ contains the target address which is an absolute address.<o:p></o:p></span></p>
   <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
   text-align:center;line-height:normal'><span style='font-size:8.0pt;
   mso-bidi-font-size:11.0pt;mso-bidi-font-family:"Times New Roman"'>15<span
-  style='mso-spacerun:yes'>             </span>11<o:p></o:p></span></p>
+  style='mso-spacerun:yes'>     </span><span
+  style='mso-spacerun:yes'>        </span>11<o:p></o:p></span></p>
   </td>
   <td width=76 valign=top style='width:2.0cm;border:none;border-bottom:solid windowtext 1.0pt;
   mso-border-bottom-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
@@ -14713,7 +15431,8 @@ Format:<o:p></o:p></span></p>
   <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
   text-align:center;line-height:normal'><span style='font-size:8.0pt;
   mso-bidi-font-size:11.0pt;mso-bidi-font-family:"Times New Roman"'>31 <span
-  style='mso-spacerun:yes'>                             </span><span
+  style='mso-spacerun:yes'>    </span><span
+  style='mso-spacerun:yes'>                         </span><span
   style='mso-spacerun:yes'>        </span>22<o:p></o:p></span></p>
   </td>
   <td width=27 valign=top style='width:20.45pt;border:none;border-bottom:solid windowtext 1.0pt;
@@ -15430,8 +16149,8 @@ style='font-size:12.0pt;mso-bidi-font-size:11.0pt;line-height:115%;mso-bidi-font
   mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
   mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
   <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
-  normal'><span style='mso-bidi-font-family:"Times New Roman"'>invalidate
-  entire instruction cache (address is ignored)<o:p></o:p></span></p>
+  normal'><span style='mso-bidi-font-family:"Times New Roman"'>invalidate entire
+  instruction cache (address is ignored)<o:p></o:p></span></p>
   </td>
  </tr>
  <tr style='mso-yfti-irow:5'>
@@ -15478,7 +16197,8 @@ style='font-size:12.0pt;mso-bidi-font-size:11.0pt;line-height:115%;mso-bidi-font
   mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
   mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
   <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
-  normal'><span style='mso-bidi-font-family:"Times New Roman"'>enable data cache<o:p></o:p></span></p>
+  normal'><span style='mso-bidi-font-family:"Times New Roman"'>enable data
+  cache<o:p></o:p></span></p>
   </td>
  </tr>
  <tr style='mso-yfti-irow:7'>
@@ -15575,8 +16295,8 @@ extend(memory[displacement + Ra]))<o:p></o:p></span></p>
 Form<o:p></o:p></span></p>
 
 <p class=MsoNormal style='margin-left:36.0pt'><span style='mso-bidi-font-family:
-"Times New Roman"'>Line = <span class=GramE>round<sub>32</sub>(</span>sign extend(memory[Ra
-+ <span class=SpellE>Rb</span> * scale]))<o:p></o:p></span></p>
+"Times New Roman"'>Line = <span class=GramE>round<sub>32</sub>(</span>sign
+extend(memory[Ra + <span class=SpellE>Rb</span> * scale]))<o:p></o:p></span></p>
 
 <p class=MsoNormal><span style='mso-bidi-font-family:"Times New Roman"'>Notes:<o:p></o:p></span></p>
 
@@ -15860,9 +16580,9 @@ expected.</span></p>
 
 <p class=MsoNormal style='margin-left:36.0pt;line-height:150%'><span
 style='mso-bookmark:_Toc406345294'>This instruction is typically used to
-implement semaphores. The LWR and SWC may also be used to perform a similar function
-where the memory system does not support bus locks, but support address
-reservations instead.</span></p>
+implement semaphores. The LWR and SWC may also be used to perform a similar
+function where the memory system does not support bus locks, but support
+address reservations instead.</span></p>
 
 <p class=MsoNormal><span style='mso-bookmark:_Toc406345294'><b
 style='mso-bidi-font-weight:normal'>Instruction Format:</b></span><b
@@ -16093,8 +16813,8 @@ Not Equal<o:p></o:p></span></h2>
 <p class=MsoNormal><span style='mso-bidi-font-family:"Times New Roman"'>Description:<o:p></o:p></span></p>
 
 <p class=MsoNormal style='margin-left:36.0pt'><span style='mso-bidi-font-family:
-"Times New Roman"'>The conditional move if not equal instruction moves the contents
-of register <span class=SpellE>Rb</span> to the target register <span
+"Times New Roman"'>The conditional move if not equal instruction moves the
+contents of register <span class=SpellE>Rb</span> to the target register <span
 class=SpellE><span class=GramE>Rt</span></span> if Ra is non-zero. Otherwise
 the contents of register <span class=SpellE><span class=GramE>Rc</span></span>
 are moved to the target register.<o:p></o:p></span></p>
@@ -17702,7 +18422,8 @@ style='mso-special-character:line-break;page-break-before:always'>
 mso-fareast-font-family:"Times New Roman";mso-fareast-theme-font:major-fareast;
 mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></b></p>
 
-<h2><span style='font-size:20.0pt;line-height:115%'>DIVSU – Signed-Unsigned Division<o:p></o:p></span></h2>
+<h2><span style='font-size:20.0pt;line-height:115%'>DIVSU – Signed-Unsigned
+Division<o:p></o:p></span></h2>
 
 <p class=MsoNormal><span style='mso-bidi-font-family:"Times New Roman"'>Description:<o:p></o:p></span></p>
 
@@ -17983,9 +18704,9 @@ mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></b></p>
 <p class=MsoNormal style='margin-left:36.0pt'><span style='mso-bidi-font-family:
 "Times New Roman"'>The immediate prefix instruction extends the immediate
 constant of the following instruction. Immediate constants up to 64 bits may be
-formed by using two immediate constant prefixes in succession. If using two prefixes
-the low order prefix should appear first in the instruction stream. The
-assembler will automatically emit prefix instructions where needed.<o:p></o:p></span></p>
+formed by using two immediate constant prefixes in succession. If using two
+prefixes the low order prefix should appear first in the instruction stream.
+The assembler will automatically emit prefix instructions where needed.<o:p></o:p></span></p>
 
 <p class=MsoNormal><span style='mso-bidi-font-family:"Times New Roman"'>Instruction
 Format:<o:p></o:p></span></p>
@@ -18698,8 +19419,8 @@ mso-bidi-font-family:"Times New Roman";mso-bidi-theme-font:major-bidi'><o:p>&nbs
 <p class=MsoNormal><span style='mso-bidi-font-family:"Times New Roman"'>Description:<o:p></o:p></span></p>
 
 <p class=MsoNormal style='margin-left:36.0pt'><span style='mso-bidi-font-family:
-"Times New Roman"'>This instruction loads a char (16 bit) value from memory.
-The value is zero extended to 64 bits when placed in the target register. <o:p></o:p></span></p>
+"Times New Roman"'>This instruction loads a char (16 bit) value from memory. The
+value is zero extended to 64 bits when placed in the target register. <o:p></o:p></span></p>
 
 <p class=MsoNormal><span style='mso-bidi-font-family:"Times New Roman"'>Instruction
 Format:<o:p></o:p></span></p>
@@ -18895,8 +19616,8 @@ Format:<o:p></o:p></span></p>
 
 <p class=MsoNormal><span style='mso-bidi-font-family:"Times New Roman"'><o:p>&nbsp;</o:p></span></p>
 
-<p class=MsoNormal><span style='mso-bidi-font-family:"Times New Roman"'>Clock
-Cycles: 4 minimum depending on memory access time<o:p></o:p></span></p>
+<p class=MsoNormal><span style='mso-bidi-font-family:"Times New Roman"'>Clock Cycles:
+4 minimum depending on memory access time<o:p></o:p></span></p>
 
 <span style='font-size:11.0pt;line-height:115%;font-family:"Times New Roman","serif";
 mso-fareast-font-family:Calibri;mso-fareast-theme-font:minor-latin;mso-ansi-language:
@@ -19211,8 +19932,7 @@ Increment<o:p></o:p></span></h2>
 "Times New Roman"'>Loads a word (64 bit) value to memory and increments the
 pointer register. The increment of the pointer register takes place after the
 load operation. If the increment amount is positive it takes place after the
-load operation. If the amount is negative it takes place before the load
-operation.<o:p></o:p></span></p>
+load operation. If the amount is negative it takes place before the load operation.<o:p></o:p></span></p>
 
 <p class=MsoNormal><span style='mso-bidi-font-family:"Times New Roman"'>Instruction
 Format:<o:p></o:p></span></p>
@@ -19728,9 +20448,9 @@ mso-bidi-font-family:"Times New Roman";mso-bidi-theme-font:major-bidi'><o:p>&nbs
 
 <p class=MsoNormal style='margin-left:36.0pt'><span style='mso-bidi-font-family:
 "Times New Roman"'>Compute the modulus (remainder) value. The first operand
-must be in a register. The second operand may be in either a register or an immediate
-value specified in the instruction. The operands are treated as signed values
-and the result is a signed result.<o:p></o:p></span></p>
+must be in a register. The second operand may be in either a register or an
+immediate value specified in the instruction. The operands are treated as
+signed values and the result is a signed result.<o:p></o:p></span></p>
 
 <p class=MsoNormal><span style='mso-bidi-font-family:"Times New Roman"'>Instruction
 Format:<o:p></o:p></span></p>
@@ -20433,8 +21153,8 @@ class=SpellE>Nand</span><o:p></o:p></span></h2>
 <p class=MsoNormal><span style='mso-bidi-font-family:"Times New Roman"'>Description:<o:p></o:p></span></p>
 
 <p class=MsoNormal style='margin-left:36.0pt'><span style='mso-bidi-font-family:
-"Times New Roman"'>Perform a bitwise and <span class=GramE>operation between two
-operands then invert</span> the result. Both operands must be in registers.<o:p></o:p></span></p>
+"Times New Roman"'>Perform a bitwise and <span class=GramE>operation between
+two operands then invert</span> the result. Both operands must be in registers.<o:p></o:p></span></p>
 
 <p class=MsoNormal><span style='mso-bidi-font-family:"Times New Roman"'>Instruction
 Format:<o:p></o:p></span></p>
@@ -21574,7 +22294,8 @@ amount in register <span class=SpellE>Rb</span> or an immediate value. The bit z
 is shifted into the most significant bits. <o:p></o:p></span></p>
 
 <p class=MsoNormal style='margin-left:36.0pt'><span style='mso-bidi-font-family:
-"Times New Roman"'>For the sub-word forms the result is sign extended to 64 bits.<o:p></o:p></span></p>
+"Times New Roman"'>For the sub-word forms the result is sign extended to 64
+bits.<o:p></o:p></span></p>
 
 <p class=MsoNormal><span style='mso-bidi-font-family:"Times New Roman"'>Instruction
 Format:<o:p></o:p></span></p>
@@ -22440,8 +23161,8 @@ mso-bidi-font-family:"Times New Roman";mso-bidi-theme-font:major-bidi'><o:p>&nbs
 
 <p class=MsoNormal style='margin-left:36.0pt'><span style='mso-bidi-font-family:
 "Times New Roman"'>Bits from the source register Ra are shifted left by the
-amount in register <span class=SpellE>Rb</span> or an immediate value. Zeros are
-shifted into the least significant bits. <o:p></o:p></span></p>
+amount in register <span class=SpellE>Rb</span> or an immediate value. Zeros
+are shifted into the least significant bits. <o:p></o:p></span></p>
 
 <p class=MsoNormal style='margin-left:36.0pt'><span style='mso-bidi-font-family:
 "Times New Roman"'>For the sub-word forms the result is sign extended to 64
@@ -23821,8 +24542,7 @@ double precision. Briefly,<o:p></o:p></span></p>
   mso-border-bottom-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
   <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
   text-align:center;line-height:115%'><span style='mso-bidi-font-family:"Times New Roman"'>61<span
-  style='mso-spacerun:yes'>                 </span><span
-  style='mso-spacerun:yes'>       </span>52<o:p></o:p></span></p>
+  style='mso-spacerun:yes'>                        </span>52<o:p></o:p></span></p>
   </td>
   <td width=350 valign=top style='width:262.25pt;border:none;border-bottom:
   solid windowtext 1.0pt;mso-border-bottom-alt:solid windowtext .5pt;
@@ -24001,7 +24721,8 @@ mso-ascii-theme-font:minor-latin;mso-hansi-theme-font:minor-latin;mso-bidi-font-
   text-align:center;line-height:normal'><span style='font-size:8.0pt;
   mso-bidi-font-size:11.0pt;mso-bidi-font-family:"Times New Roman"'>31<span
   style='mso-spacerun:yes'>     </span><span
-  style='mso-spacerun:yes'>    </span><span style='mso-spacerun:yes'>  </span>26<o:p></o:p></span></p>
+  style='mso-spacerun:yes'>    </span><span
+  style='mso-spacerun:yes'>  </span>26<o:p></o:p></span></p>
   </td>
   <td width=53 valign=top style='width:39.4pt;border:none;border-bottom:solid windowtext 1.0pt;
   mso-border-bottom-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
@@ -24336,7 +25057,7 @@ class=SpellE>Rb</span> and place the result into target register Rt.<o:p></o:p><
   text-align:center;line-height:normal'><span style='font-size:8.0pt;
   mso-bidi-font-size:11.0pt;mso-bidi-font-family:"Times New Roman"'>5<span
   style='mso-spacerun:yes'>      </span><span
-  style='mso-spacerun:yes'>      </span><span
+  style='mso-spacerun:yes'>   </span><span style='mso-spacerun:yes'>   </span><span
   style='mso-spacerun:yes'>     </span>0<o:p></o:p></span></p>
   </td>
  </tr>
@@ -24434,7 +25155,8 @@ Format:<o:p></o:p></span></p>
   <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
   text-align:center;line-height:normal'><span style='font-size:8.0pt;
   mso-bidi-font-size:11.0pt;mso-bidi-font-family:"Times New Roman"'>31 <span
-  style='mso-spacerun:yes'>                             </span><span
+  style='mso-spacerun:yes'>                         </span><span
+  style='mso-spacerun:yes'>    </span><span
   style='mso-spacerun:yes'>        </span>22<o:p></o:p></span></p>
   </td>
   <td width=27 valign=top style='width:20.45pt;border:none;border-bottom:solid windowtext 1.0pt;
@@ -24588,8 +25310,7 @@ contains the target address which is an absolute address.<o:p></o:p></span></p>
   <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
   text-align:center;line-height:normal'><span style='font-size:8.0pt;
   mso-bidi-font-size:11.0pt;mso-bidi-font-family:"Times New Roman"'>5<span
-  style='mso-spacerun:yes'>  </span><span
-  style='mso-spacerun:yes'>                </span><span
+  style='mso-spacerun:yes'>                  </span><span
   style='mso-spacerun:yes'> </span>0<o:p></o:p></span></p>
   </td>
  </tr>
@@ -24806,7 +25527,8 @@ Format:<o:p></o:p></span></p>
   <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
   text-align:center;line-height:normal'><span style='font-size:8.0pt;
   mso-bidi-font-size:11.0pt;mso-bidi-font-family:"Times New Roman"'>10 <span
-  style='mso-spacerun:yes'>             </span>6<o:p></o:p></span></p>
+  style='mso-spacerun:yes'>    </span><span
+  style='mso-spacerun:yes'>         </span>6<o:p></o:p></span></p>
   </td>
   <td width=74 valign=top style='width:55.15pt;border:none;border-bottom:solid windowtext 1.0pt;
   mso-border-bottom-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
@@ -25120,8 +25842,7 @@ Format:<o:p></o:p></span></p>
   <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
   text-align:center;line-height:normal'><span style='font-size:8.0pt;
   mso-bidi-font-size:11.0pt;mso-bidi-font-family:"Times New Roman"'>31 <span
-  style='mso-spacerun:yes'>   </span><span
-  style='mso-spacerun:yes'>                          </span><span
+  style='mso-spacerun:yes'>                             </span><span
   style='mso-spacerun:yes'>        </span>22<o:p></o:p></span></p>
   </td>
   <td width=27 valign=top style='width:20.45pt;border:none;border-bottom:solid windowtext 1.0pt;
@@ -25602,8 +26323,7 @@ contains the target address which is an absolute address.<o:p></o:p></span></p>
   <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
   text-align:center;line-height:normal'><span style='font-size:8.0pt;
   mso-bidi-font-size:11.0pt;mso-bidi-font-family:"Times New Roman"'>15<span
-  style='mso-spacerun:yes'>       </span><span
-  style='mso-spacerun:yes'>      </span>11<o:p></o:p></span></p>
+  style='mso-spacerun:yes'>             </span>11<o:p></o:p></span></p>
   </td>
   <td width=76 valign=top style='width:2.0cm;border:none;border-bottom:solid windowtext 1.0pt;
   mso-border-bottom-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
@@ -26555,7 +27275,7 @@ Exceptions<o:p></o:p></span></h2>
 <p class=MsoNormal style='margin-left:36.0pt;line-height:150%'>This instruction
 clears floating point exceptions. The Exceptions to clear are identified as the
 bits set in the union of register Ra and an immediate field in the instruction.
-Either the immediate or Ra should be zero.<o:p></o:p></p>
+Either the immediate or Ra should be zero.</p>
 
 <p class=MsoNormal><strong><span style='mso-bidi-font-family:"Times New Roman";
 mso-bidi-theme-font:minor-bidi'>Instruction Format:<o:p></o:p></span></strong></p>
@@ -26568,8 +27288,8 @@ mso-bidi-theme-font:minor-bidi'>Instruction Format:<o:p></o:p></span></strong></
   mso-border-bottom-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
   <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
   text-align:center;line-height:normal'><span style='font-size:8.0pt;
-  mso-bidi-font-size:11.0pt;mso-bidi-font-family:"Times New Roman"'>31 <span
-  style='mso-spacerun:yes'>    </span><span
+  mso-bidi-font-size:11.0pt;mso-bidi-font-family:"Times New Roman"'>31<span
+  style='mso-spacerun:yes'>     </span><span
   style='mso-spacerun:yes'>    </span><span
   style='mso-spacerun:yes'>  </span>26<o:p></o:p></span></p>
   </td>
@@ -26678,7 +27398,7 @@ mso-bidi-theme-font:minor-bidi'><o:p>&nbsp;</o:p></span></strong></p>
 
 <p class=MsoNormal><strong><span style='mso-bidi-font-family:"Times New Roman";
 mso-bidi-theme-font:minor-bidi'>Execution Units: </span></strong>All Floating
-Point<o:p></o:p></p>
+Point</p>
 
 <p class=MsoNormal><strong><span style='mso-bidi-font-family:"Times New Roman";
 mso-bidi-theme-font:minor-bidi'>Operation:<o:p></o:p></span></strong></p>
@@ -26692,13 +27412,13 @@ mso-bidi-theme-font:minor-bidi'>Operation:<o:p></o:p></span></strong></p>
   <td width=47 valign=top style='width:35.45pt;border:solid windowtext 1.0pt;
   mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
   <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
-  text-align:center;line-height:normal'>Bit<o:p></o:p></p>
+  text-align:center;line-height:normal'>Bit</p>
   </td>
   <td width=359 valign=top style='width:269.35pt;border:solid windowtext 1.0pt;
   border-left:none;mso-border-left-alt:solid windowtext .5pt;mso-border-alt:
   solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
   <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
-  normal'>Exception Enabled<o:p></o:p></p>
+  normal'>Exception Enabled</p>
   </td>
  </tr>
  <tr style='mso-yfti-irow:1'>
@@ -26706,50 +27426,50 @@ mso-bidi-theme-font:minor-bidi'>Operation:<o:p></o:p></span></strong></p>
   border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
   padding:0cm 5.4pt 0cm 5.4pt'>
   <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
-  text-align:center;line-height:normal'>0<o:p></o:p></p>
+  text-align:center;line-height:normal'>0</p>
   </td>
   <td width=359 valign=top style='width:269.35pt;border-top:none;border-left:
   none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
   mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
   mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
   <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
-  normal'>global invalid operation clears the following:<o:p></o:p></p>
+  normal'>global invalid operation clears the following:</p>
   <p class=MsoListParagraphCxSpFirst style='margin-bottom:0cm;margin-bottom:
   .0001pt;mso-add-space:auto;text-indent:-18.0pt;line-height:normal;mso-list:
   l3 level1 lfo4'><![if !supportLists]><span style='font-family:"Calibri","sans-serif";
   mso-fareast-font-family:Calibri'><span style='mso-list:Ignore'>-<span
   style='font:7.0pt "Times New Roman"'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  </span></span></span><![endif]>division of infinities<o:p></o:p></p>
+  </span></span></span><![endif]>division of infinities</p>
   <p class=MsoListParagraphCxSpMiddle style='margin-bottom:0cm;margin-bottom:
   .0001pt;mso-add-space:auto;text-indent:-18.0pt;line-height:normal;mso-list:
   l3 level1 lfo4'><![if !supportLists]><span style='font-family:"Calibri","sans-serif";
   mso-fareast-font-family:Calibri'><span style='mso-list:Ignore'>-<span
   style='font:7.0pt "Times New Roman"'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  </span></span></span><![endif]>zero divided by zero<o:p></o:p></p>
+  </span></span></span><![endif]>zero divided by zero</p>
   <p class=MsoListParagraphCxSpMiddle style='margin-bottom:0cm;margin-bottom:
   .0001pt;mso-add-space:auto;text-indent:-18.0pt;line-height:normal;mso-list:
   l3 level1 lfo4'><![if !supportLists]><span style='font-family:"Calibri","sans-serif";
   mso-fareast-font-family:Calibri'><span style='mso-list:Ignore'>-<span
   style='font:7.0pt "Times New Roman"'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  </span></span></span><![endif]>subtraction of infinities<o:p></o:p></p>
+  </span></span></span><![endif]>subtraction of infinities</p>
   <p class=MsoListParagraphCxSpMiddle style='margin-bottom:0cm;margin-bottom:
   .0001pt;mso-add-space:auto;text-indent:-18.0pt;line-height:normal;mso-list:
   l3 level1 lfo4'><![if !supportLists]><span style='font-family:"Calibri","sans-serif";
   mso-fareast-font-family:Calibri'><span style='mso-list:Ignore'>-<span
   style='font:7.0pt "Times New Roman"'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  </span></span></span><![endif]>infinity times zero<o:p></o:p></p>
+  </span></span></span><![endif]>infinity times zero</p>
   <p class=MsoListParagraphCxSpMiddle style='margin-bottom:0cm;margin-bottom:
   .0001pt;mso-add-space:auto;text-indent:-18.0pt;line-height:normal;mso-list:
   l3 level1 lfo4'><![if !supportLists]><span style='font-family:"Calibri","sans-serif";
   mso-fareast-font-family:Calibri'><span style='mso-list:Ignore'>-<span
   style='font:7.0pt "Times New Roman"'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  </span></span></span><![endif]><span class=SpellE>NaN</span> comparison<o:p></o:p></p>
+  </span></span></span><![endif]><span class=SpellE>NaN</span> comparison</p>
   <p class=MsoListParagraphCxSpLast style='margin-bottom:0cm;margin-bottom:
   .0001pt;mso-add-space:auto;text-indent:-18.0pt;line-height:normal;mso-list:
   l3 level1 lfo4'><![if !supportLists]><span style='font-family:"Calibri","sans-serif";
   mso-fareast-font-family:Calibri'><span style='mso-list:Ignore'>-<span
   style='font:7.0pt "Times New Roman"'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-  </span></span></span><![endif]>division by zero<o:p></o:p></p>
+  </span></span></span><![endif]>division by zero</p>
   </td>
  </tr>
  <tr style='mso-yfti-irow:2'>
@@ -26757,14 +27477,14 @@ mso-bidi-theme-font:minor-bidi'>Operation:<o:p></o:p></span></strong></p>
   border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
   padding:0cm 5.4pt 0cm 5.4pt'>
   <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
-  text-align:center;line-height:normal'>1<o:p></o:p></p>
+  text-align:center;line-height:normal'>1</p>
   </td>
   <td width=359 valign=top style='width:269.35pt;border-top:none;border-left:
   none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
   mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
   mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
   <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
-  normal'>overflow<o:p></o:p></p>
+  normal'>overflow</p>
   </td>
  </tr>
  <tr style='mso-yfti-irow:3'>
@@ -26772,14 +27492,14 @@ mso-bidi-theme-font:minor-bidi'>Operation:<o:p></o:p></span></strong></p>
   border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
   padding:0cm 5.4pt 0cm 5.4pt'>
   <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
-  text-align:center;line-height:normal'>2<o:p></o:p></p>
+  text-align:center;line-height:normal'>2</p>
   </td>
   <td width=359 valign=top style='width:269.35pt;border-top:none;border-left:
   none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
   mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
   mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
   <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
-  normal'>underflow<o:p></o:p></p>
+  normal'>underflow</p>
   </td>
  </tr>
  <tr style='mso-yfti-irow:4'>
@@ -26787,14 +27507,14 @@ mso-bidi-theme-font:minor-bidi'>Operation:<o:p></o:p></span></strong></p>
   border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
   padding:0cm 5.4pt 0cm 5.4pt'>
   <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
-  text-align:center;line-height:normal'>3<o:p></o:p></p>
+  text-align:center;line-height:normal'>3</p>
   </td>
   <td width=359 valign=top style='width:269.35pt;border-top:none;border-left:
   none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
   mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
   mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
   <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
-  normal'>divide by zero<o:p></o:p></p>
+  normal'>divide by zero</p>
   </td>
  </tr>
  <tr style='mso-yfti-irow:5'>
@@ -26802,14 +27522,14 @@ mso-bidi-theme-font:minor-bidi'>Operation:<o:p></o:p></span></strong></p>
   border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
   padding:0cm 5.4pt 0cm 5.4pt'>
   <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
-  text-align:center;line-height:normal'>4<o:p></o:p></p>
+  text-align:center;line-height:normal'>4</p>
   </td>
   <td width=359 valign=top style='width:269.35pt;border-top:none;border-left:
   none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
   mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
   mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
   <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
-  normal'>inexact operation<o:p></o:p></p>
+  normal'>inexact operation</p>
   </td>
  </tr>
  <tr style='mso-yfti-irow:6;mso-yfti-lastrow:yes'>
@@ -26817,14 +27537,14 @@ mso-bidi-theme-font:minor-bidi'>Operation:<o:p></o:p></span></strong></p>
   border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
   padding:0cm 5.4pt 0cm 5.4pt'>
   <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
-  text-align:center;line-height:normal'>5<o:p></o:p></p>
+  text-align:center;line-height:normal'>5</p>
   </td>
   <td width=359 valign=top style='width:269.35pt;border-top:none;border-left:
   none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
   mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
   mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
   <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
-  normal'>summary exception<o:p></o:p></p>
+  normal'>summary exception</p>
   </td>
  </tr>
 </table>
@@ -26864,8 +27584,8 @@ exceptions.</p>
   mso-border-bottom-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
   <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
   text-align:center;line-height:normal'><span style='font-size:8.0pt;
-  mso-bidi-font-size:11.0pt;mso-bidi-font-family:"Times New Roman"'>31 <span
-  style='mso-spacerun:yes'>    </span><span
+  mso-bidi-font-size:11.0pt;mso-bidi-font-family:"Times New Roman"'>31<span
+  style='mso-spacerun:yes'>     </span><span
   style='mso-spacerun:yes'>    </span><span
   style='mso-spacerun:yes'>  </span>26<o:p></o:p></span></p>
   </td>
@@ -27036,8 +27756,7 @@ exceptions.</p>
   <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
   text-align:center;line-height:normal'><span style='font-size:8.0pt;
   mso-bidi-font-size:11.0pt;mso-bidi-font-family:"Times New Roman"'>21 <span
-  style='mso-spacerun:yes'>  </span><span
-  style='mso-spacerun:yes'>         </span><span
+  style='mso-spacerun:yes'>           </span><span
   style='mso-spacerun:yes'>      </span>16<o:p></o:p></span></p>
   </td>
   <td width=76 valign=top style='width:2.0cm;border:none;border-bottom:solid windowtext 1.0pt;
@@ -27197,9 +27916,8 @@ class=SpellE>Rb</span> and place the result into target register Rt.<o:p></o:p><
   <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
   text-align:center;line-height:normal'><span style='font-size:8.0pt;
   mso-bidi-font-size:11.0pt;mso-bidi-font-family:"Times New Roman"'>10<span
-  style='mso-spacerun:yes'>     </span><span
-  style='mso-spacerun:yes'>    </span><span
-  style='mso-spacerun:yes'>    </span>6<o:p></o:p></span></p>
+  style='mso-spacerun:yes'>     </span><span style='mso-spacerun:yes'>  </span><span
+  style='mso-spacerun:yes'>  </span><span style='mso-spacerun:yes'>    </span>6<o:p></o:p></span></p>
   </td>
   <td width=85 valign=top style='width:63.75pt;border:none;border-bottom:solid windowtext 1.0pt;
   mso-border-bottom-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
@@ -27436,8 +28154,8 @@ Value<o:p></o:p></span></h2>
 
 <p class=MsoNormal style='margin-left:36.0pt'><span style='mso-bidi-font-family:
 "Times New Roman"'>Negate the value of the floating point number in register Ra
-and place the result into target register Rt. The sign bit (bit 63) of the
-register is inverted. No rounding of the number occurs.<o:p></o:p></span></p>
+and place the result into target register Rt. The sign bit (bit 63) of the register
+is inverted. No rounding of the number occurs.<o:p></o:p></span></p>
 
 <p class=MsoNormal><strong>Instruction Format:<o:p></o:p></strong></p>
 
@@ -27473,7 +28191,7 @@ register is inverted. No rounding of the number occurs.<o:p></o:p></span></p>
   <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
   text-align:center;line-height:normal'><span style='font-size:8.0pt;
   mso-bidi-font-size:11.0pt;mso-bidi-font-family:"Times New Roman"'>20 <span
-  style='mso-spacerun:yes'>  </span><span style='mso-spacerun:yes'> </span><span
+  style='mso-spacerun:yes'>   </span><span
   style='mso-spacerun:yes'>      </span>16<o:p></o:p></span></p>
   </td>
   <td width=76 valign=top style='width:2.0cm;border:none;border-bottom:solid windowtext 1.0pt;
@@ -28165,7 +28883,7 @@ Point Exceptions<o:p></o:p></span></h2>
 <p class=MsoNormal style='margin-left:36.0pt;line-height:150%'>This instruction
 triggers floating point exceptions. The Exceptions to trigger are identified as
 the bits set in the union of register Ra and an immediate field in the
-instruction. Either the immediate or Ra should be zero.<o:p></o:p></p>
+instruction. Either the immediate or Ra should be zero.</p>
 
 <p class=MsoNormal><strong><span style='mso-bidi-font-family:"Times New Roman";
 mso-bidi-theme-font:minor-bidi'>Instruction Format:<o:p></o:p></span></strong></p>
@@ -28178,8 +28896,8 @@ mso-bidi-theme-font:minor-bidi'>Instruction Format:<o:p></o:p></span></strong></
   mso-border-bottom-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
   <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
   text-align:center;line-height:normal'><span style='font-size:8.0pt;
-  mso-bidi-font-size:11.0pt;mso-bidi-font-family:"Times New Roman"'>31 <span
-  style='mso-spacerun:yes'>    </span><span
+  mso-bidi-font-size:11.0pt;mso-bidi-font-family:"Times New Roman"'>31<span
+  style='mso-spacerun:yes'>     </span><span
   style='mso-spacerun:yes'>    </span><span
   style='mso-spacerun:yes'>  </span>26<o:p></o:p></span></p>
   </td>
@@ -28287,7 +29005,8 @@ mso-bidi-theme-font:minor-bidi'>Instruction Format:<o:p></o:p></span></strong></
 mso-bidi-theme-font:minor-bidi'><o:p>&nbsp;</o:p></span></strong></p>
 
 <p class=MsoNormal><strong><span style='mso-bidi-font-family:"Times New Roman";
-mso-bidi-theme-font:minor-bidi'>Execution Units: </span></strong>All Floating Point<o:p></o:p></p>
+mso-bidi-theme-font:minor-bidi'>Execution Units: </span></strong>All Floating
+Point</p>
 
 <p class=MsoNormal><strong><span style='mso-bidi-font-family:"Times New Roman";
 mso-bidi-theme-font:minor-bidi'>Operation:<o:p></o:p></span></strong></p>
@@ -28301,13 +29020,13 @@ mso-bidi-theme-font:minor-bidi'>Operation:<o:p></o:p></span></strong></p>
   <td width=47 valign=top style='width:35.45pt;border:solid windowtext 1.0pt;
   mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
   <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
-  text-align:center;line-height:normal'>Bit<o:p></o:p></p>
+  text-align:center;line-height:normal'>Bit</p>
   </td>
   <td width=359 valign=top style='width:269.35pt;border:solid windowtext 1.0pt;
   border-left:none;mso-border-left-alt:solid windowtext .5pt;mso-border-alt:
   solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
   <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
-  normal'>Exception Enabled<o:p></o:p></p>
+  normal'>Exception Enabled</p>
   </td>
  </tr>
  <tr style='mso-yfti-irow:1'>
@@ -28315,14 +29034,14 @@ mso-bidi-theme-font:minor-bidi'>Operation:<o:p></o:p></span></strong></p>
   border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
   padding:0cm 5.4pt 0cm 5.4pt'>
   <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
-  text-align:center;line-height:normal'>0<o:p></o:p></p>
+  text-align:center;line-height:normal'>0</p>
   </td>
   <td width=359 valign=top style='width:269.35pt;border-top:none;border-left:
   none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
   mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
   mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
   <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
-  normal'>global invalid operation <o:p></o:p></p>
+  normal'>global invalid operation </p>
   </td>
  </tr>
  <tr style='mso-yfti-irow:2'>
@@ -28330,14 +29049,14 @@ mso-bidi-theme-font:minor-bidi'>Operation:<o:p></o:p></span></strong></p>
   border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
   padding:0cm 5.4pt 0cm 5.4pt'>
   <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
-  text-align:center;line-height:normal'>1<o:p></o:p></p>
+  text-align:center;line-height:normal'>1</p>
   </td>
   <td width=359 valign=top style='width:269.35pt;border-top:none;border-left:
   none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
   mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
   mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
   <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
-  normal'>overflow<o:p></o:p></p>
+  normal'>overflow</p>
   </td>
  </tr>
  <tr style='mso-yfti-irow:3'>
@@ -28345,14 +29064,14 @@ mso-bidi-theme-font:minor-bidi'>Operation:<o:p></o:p></span></strong></p>
   border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
   padding:0cm 5.4pt 0cm 5.4pt'>
   <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
-  text-align:center;line-height:normal'>2<o:p></o:p></p>
+  text-align:center;line-height:normal'>2</p>
   </td>
   <td width=359 valign=top style='width:269.35pt;border-top:none;border-left:
   none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
   mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
   mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
   <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
-  normal'>underflow<o:p></o:p></p>
+  normal'>underflow</p>
   </td>
  </tr>
  <tr style='mso-yfti-irow:4'>
@@ -28360,14 +29079,14 @@ mso-bidi-theme-font:minor-bidi'>Operation:<o:p></o:p></span></strong></p>
   border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
   padding:0cm 5.4pt 0cm 5.4pt'>
   <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
-  text-align:center;line-height:normal'>3<o:p></o:p></p>
+  text-align:center;line-height:normal'>3</p>
   </td>
   <td width=359 valign=top style='width:269.35pt;border-top:none;border-left:
   none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
   mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
   mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
   <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
-  normal'>divide by zero<o:p></o:p></p>
+  normal'>divide by zero</p>
   </td>
  </tr>
  <tr style='mso-yfti-irow:5'>
@@ -28375,14 +29094,14 @@ mso-bidi-theme-font:minor-bidi'>Operation:<o:p></o:p></span></strong></p>
   border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
   padding:0cm 5.4pt 0cm 5.4pt'>
   <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
-  text-align:center;line-height:normal'>4<o:p></o:p></p>
+  text-align:center;line-height:normal'>4</p>
   </td>
   <td width=359 valign=top style='width:269.35pt;border-top:none;border-left:
   none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
   mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
   mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
   <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
-  normal'>inexact operation<o:p></o:p></p>
+  normal'>inexact operation</p>
   </td>
  </tr>
  <tr style='mso-yfti-irow:6;mso-yfti-lastrow:yes'>
@@ -28390,14 +29109,14 @@ mso-bidi-theme-font:minor-bidi'>Operation:<o:p></o:p></span></strong></p>
   border-top:none;mso-border-top-alt:solid windowtext .5pt;mso-border-alt:solid windowtext .5pt;
   padding:0cm 5.4pt 0cm 5.4pt'>
   <p class=MsoNormal align=center style='margin-bottom:0cm;margin-bottom:.0001pt;
-  text-align:center;line-height:normal'>5<o:p></o:p></p>
+  text-align:center;line-height:normal'>5</p>
   </td>
   <td width=359 valign=top style='width:269.35pt;border-top:none;border-left:
   none;border-bottom:solid windowtext 1.0pt;border-right:solid windowtext 1.0pt;
   mso-border-top-alt:solid windowtext .5pt;mso-border-left-alt:solid windowtext .5pt;
   mso-border-alt:solid windowtext .5pt;padding:0cm 5.4pt 0cm 5.4pt'>
   <p class=MsoNormal style='margin-bottom:0cm;margin-bottom:.0001pt;line-height:
-  normal'>reserved<o:p></o:p></p>
+  normal'>reserved</p>
   </td>
  </tr>
 </table>
@@ -28559,8 +29278,8 @@ style='mso-special-character:line-break;page-break-before:always'>
 
 <h1><span style='mso-bidi-font-family:"Times New Roman"'>Opcode Tables<o:p></o:p></span></h1>
 
-<h2><span style='mso-bidi-font-family:"Times New Roman"'>Major Opcode (inst. bits
-0 to 5)<o:p></o:p></span></h2>
+<h2><span style='mso-bidi-font-family:"Times New Roman"'>Major Opcode (inst.
+bits 0 to 5)<o:p></o:p></span></h2>
 
 <table class=MsoTableGrid border=1 cellspacing=0 cellpadding=0
  style='border-collapse:collapse;border:none;mso-border-alt:solid windowtext .5pt;
@@ -31175,8 +31894,8 @@ stored safely.<o:p></o:p></span></p>
 "Times New Roman"'>Branches are evaluated after the following instruction <span
 class=SpellE>enqueues</span> so that false branch <span class=SpellE>mispredictions</span>
 don’t occur. <span class=SpellE>Mispredict</span> logic looks at the address of
-the instruction following the branch to ensure that the branch address was
-predicted correctly.<o:p></o:p></span></p>
+the instruction following the branch to ensure that the branch address was predicted
+correctly.<o:p></o:p></span></p>
 
 <span style='font-size:11.0pt;line-height:115%;font-family:"Times New Roman","serif";
 mso-fareast-font-family:Calibri;mso-fareast-theme-font:minor-latin;mso-ansi-language:
