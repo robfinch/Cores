@@ -22,6 +22,7 @@
 //
 // ============================================================================
 //
+//`define DEBUG_LOGIC 1'b1
 `define HIGH        1'b1
 `define LOW         1'b0
 `define TRUE        1'b1
@@ -195,9 +196,16 @@
 `define CSR_TICK    11'h002
 `define CSR_PCR     11'h003
 `define CSR_CAUSE   11'h006
+`define CSR_BADADR  11'h007
 `define CSR_PCR2    11'h008
 `define CSR_SEMA    11'h00C
 `define CSR_FSTAT   11'h014
+`define CSR_DBAD0   11'h018
+`define CSR_DBAD1   11'h019
+`define CSR_DBAD2   11'h01A
+`define CSR_DBAD3   11'h01B
+`define CSR_DBCTRL  11'h01C
+`define CSR_DBSTAT  11'h01D
 `define CSR_CAS     11'h02C
 `define CSR_TVEC    11'b00000110xxx
 `define CSR_EPC     11'h040
@@ -232,13 +240,17 @@
 `define EXC_INVALID	9'd4
 
 `define FLT_NONE    9'd000
+`define FLT_DBG     9'd481
 `define FLT_TGT     9'd482
 `define FLT_IADR    9'd484
 `define FLT_FLT     9'd486
 `define FLT_DBZ     9'd488
 `define FLT_OFL     9'd489
 `define FLT_EXF     9'd497
+`define FLT_DWF     9'd498
+`define FLT_DRF     9'd499
 `define FLT_PRIV    9'd501
+`define FLT_IBE     9'd509
 
 //`define INSTRUCTION_OP	15:13	// opcode
 //`define INSTRUCTION_RA	12:10	// rA 
@@ -259,7 +271,7 @@
 `define INSTRUCTION_SB  31
 `define INSTRUCTION_S1  25:21
 `define INSTRUCTION_S2  31:26
-`define INSTRUCTION_COND    13:11
+`define INSTRUCTION_COND    18:16
 
 `define FORW_BRANCH	1'b0
 `define BACK_BRANCH	1'b1

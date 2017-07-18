@@ -26,6 +26,9 @@
 //
 `define TRUE    1'b1
 `define FALSE   1'b0
+`define BRK         6'd0
+`define FLT_EXF     9'd497
+`define FLT_IBE     9'd509
 
 // -----------------------------------------------------------------------------
 // Small, 64 line cache memory (2kiB) made from distributed RAM. Access is
@@ -283,7 +286,7 @@ endmodule
 // address bit 4).
 // -----------------------------------------------------------------------------
 
-module FT64_L2_icache(rst, clk, nxt, wr, adr, i, o, hit, invall, invline);
+module FT64_L2_icache(rst, clk, nxt, wr, adr, exv_i, i, err_i, o, hit, invall, invline);
 parameter CAMTAGS = 1'b0;   // 32 way
 parameter FOURWAY = 1'b1;
 input rst;
@@ -291,7 +294,9 @@ input clk;
 input nxt;
 input wr;
 input [37:0] adr;
+input exv_i;
 input [63:0] i;
+input err_i;
 output [255:0] o;
 output hit;
 input invall;
@@ -314,8 +319,10 @@ always @(posedge clk)
     sel1 <= adr[4:3];
 always @(posedge clk)
     sel2 <= sel1;
+// An exception is forced to be stored in the event of an error loading the
+// the instruction line.
 always @(posedge clk)
-    i1 <= i;
+    i1 <= err_i ? {2{16'd0,1'b0,`FLT_IBE,`BRK}} : exv_i ? {2{16'd0,1'b0,`FLT_EXF,`BRK}} : i;
 always @(posedge clk)
     i2 <= i1;
 
