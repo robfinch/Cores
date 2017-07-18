@@ -26,42 +26,6 @@
 #include "stdafx.h"
 
 
-// Setup the value to be shifted by sign/zero extending it.
-// ToFix: for some reason the op is coming through as signed when it should be
-// unsigned according to the type. So there's a fudge jump to fix this.
-
-static void MaskShift(int op, AMODE *ap1, int size)
-{
-	switch(op) {
-	case op_shru:
-j1:
-		switch (size) {
-			case 1:	GenerateTriadic(op_and,0,ap1,ap1,make_immed(0xffff)); break;
-			default:	;
-		}
-		break;
-    case op_srl:
-    case op_sra:
-	case op_asr:
-	case op_shr:
-		if (isTable888|isFISA64|isThor) {
-			if (ap1->isUnsigned)
-				goto j1;
-			switch (size) {
-				case 1:	GenerateDiadic(op_sxc,0,ap1,ap1); break;
-				default:	;
-			}
-		}
-		else {
-			switch (size) {
-				case 1:	GenerateDiadic(op_sext16,0,ap1,ap1); break;
-				default:	;
-			}
-		}
-		break;
-	}
-}
-
 AMODE *GenerateShift(ENODE *node,int flags, int size, int op)
 {
 	AMODE *ap1, *ap2, *ap3;
@@ -70,8 +34,17 @@ AMODE *GenerateShift(ENODE *node,int flags, int size, int op)
     ap3 = GetTempRegister();
     ap1 = GenerateExpression(node->p[0],F_REG,size);
     ap2 = GenerateExpression(node->p[1],F_REG | F_IMMED,8);
-	//MaskShift(op, ap1, GetNaturalSize(node->p[0]));
 	GenerateTriadic(op,size,ap3,ap1,ap2);
+	// Shifts automatically sign extend
+	// Don't actually need to zero extend on a shift right, but the other shifts
+	// need it.
+	if (ap2->isUnsigned)
+		switch(size) {
+		case 1:	GenerateTriadic(op_and,0,ap3,ap3,make_immed(0xFF)); break;	// shorter
+		case 2:	Generate4adic(op_bfextu,0,ap3,ap3,make_immed(0),make_immed(15)); break;
+		case 4:	Generate4adic(op_bfextu,0,ap3,ap3,make_immed(0),make_immed(31)); break;
+		default:	;
+		}
 	ReleaseTempRegister(ap2);
 	ReleaseTempRegister(ap1);
     MakeLegalAmode(ap3,flags,size);
@@ -79,9 +52,9 @@ AMODE *GenerateShift(ENODE *node,int flags, int size, int op)
 }
 
 
-/*
- *      generate shift equals operators.
- */
+//
+//      generate shift equals operators.
+//
 AMODE *GenerateAssignShift(ENODE *node,int flags,int size,int op)
 {
 	struct amode    *ap1, *ap2, *ap3;

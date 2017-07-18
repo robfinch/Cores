@@ -116,6 +116,7 @@ extern TABLE            gsyms[257],
 extern TABLE            tagtable;
 extern SYM              *lasthead;
 extern struct slit      *strtab;
+extern struct clit		*casetab;
 extern Float128		    *quadtab;
 extern int              lc_static;
 extern int              lc_auto;
@@ -321,8 +322,8 @@ extern AMODE *make_indirect(int i);
 extern AMODE *make_indexed(int o, int i);
 extern AMODE *make_indx(ENODE *node, int reg);
 extern AMODE *make_string(char *s);
-extern void GenerateFalseJump(ENODE *node,int label,int predreg);
-extern void GenerateTrueJump(ENODE *node,int label,int predreg);
+extern void GenerateFalseJump(ENODE *node,int label);
+extern void GenerateTrueJump(ENODE *node,int label);
 extern char *GetNamespace();
 extern char nmspace[20][100];
 extern AMODE *GenerateDereference(ENODE *, int, int, int);

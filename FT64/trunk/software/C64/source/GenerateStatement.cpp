@@ -26,6 +26,7 @@
 #include "stdafx.h"
 
 extern char *rtrim(char *);
+extern int caselit(scase *casetab,int);
 
 /*
  *	68000 C compiler
@@ -55,7 +56,7 @@ char *semaphores[20];
 char last_rem[132];
 
 extern TYP              stdfunc;
-
+extern int pwrof2(int);
 
 int bitsset(int64_t mask)
 {
@@ -131,6 +132,21 @@ AMODE *make_direct(int i)
 	return make_offset(makeinode(en_icon,i));
 }
 
+AMODE *make_indexed2(int lab, int i)
+{
+	AMODE *ap;
+    ENODE *ep;
+    ep = allocEnode();
+    ep->nodetype = en_clabcon;
+    ep->i = lab;
+    ap = allocAmode();
+	ap->mode = am_indx;
+	ap->preg = i;
+    ap->offset = ep;
+	ap->isUnsigned = TRUE;
+    return ap;
+}
+
 /*
  *      generate a direct reference to a string label.
  */
@@ -171,7 +187,7 @@ void GenerateWhile(struct snode *stmt)
     {
 		breaklab = nextlabel++;
 		initstack();
-		GenerateFalseJump(stmt->exp,breaklab,stmt->predreg);
+		GenerateFalseJump(stmt->exp,breaklab);
 		GenerateStatement(stmt->s1);
 		GenerateMonadic(op_bra,0,make_clabel(contlab));
 		GenerateLabel(breaklab);
@@ -180,7 +196,7 @@ void GenerateWhile(struct snode *stmt)
     else					        /* no loop code */
     {
 		initstack();
-		GenerateTrueJump(stmt->exp,contlab,stmt->predreg);
+		GenerateTrueJump(stmt->exp,contlab);
     }
     contlab = lab1;         /* restore old continue label */
 }
@@ -192,27 +208,27 @@ void GenerateUntil(Statement *stmt)
 {
 	int lab1, lab2;
 
-        initstack();            /* initialize temp registers */
-        lab1 = contlab;         /* save old continue label */
-        lab2 = breaklab;        /* save old break label */
-        contlab = nextlabel++;  /* new continue label */
-        GenerateLabel(contlab);
-        if( stmt->s1 != NULL )      /* has block */
-        {
-            breaklab = nextlabel++;
-            initstack();
-            GenerateTrueJump(stmt->exp,breaklab,stmt->predreg);
-            GenerateStatement(stmt->s1);
-            GenerateMonadic(op_bra,0,make_clabel(contlab));
-            GenerateLabel(breaklab);
-            breaklab = lab2;        /* restore old break label */
-        }
-        else					        /* no loop code */
-        {
-            initstack();
-            GenerateFalseJump(stmt->exp,contlab,stmt->predreg);
-        }
-        contlab = lab1;         /* restore old continue label */
+	initstack();            /* initialize temp registers */
+	lab1 = contlab;         /* save old continue label */
+	lab2 = breaklab;        /* save old break label */
+	contlab = nextlabel++;  /* new continue label */
+	GenerateLabel(contlab);
+	if( stmt->s1 != NULL )      /* has block */
+	{
+		breaklab = nextlabel++;
+		initstack();
+		GenerateTrueJump(stmt->exp,breaklab);
+		GenerateStatement(stmt->s1);
+		GenerateMonadic(op_bra,0,make_clabel(contlab));
+		GenerateLabel(breaklab);
+		breaklab = lab2;        /* restore old break label */
+	}
+	else					        /* no loop code */
+	{
+		initstack();
+		GenerateFalseJump(stmt->exp,contlab);
+	}
+	contlab = lab1;         /* restore old continue label */
 }
 
 
@@ -234,7 +250,7 @@ void GenerateFor(struct snode *stmt)
     GenerateLabel(loop_label);
     initstack();
     if( stmt->exp != NULL )
-            GenerateFalseJump(stmt->exp,exit_label,stmt->predreg);
+            GenerateFalseJump(stmt->exp,exit_label);
     if( stmt->s1 != NULL )
 	{
             breaklab = exit_label;
@@ -285,8 +301,8 @@ void GenerateIf(Statement *stmt)
     initstack();            /* clear temps */
 	if (gCpu!=888)
 		if (stmt->predreg==70)
-			GenerateFalseJump(stmt->exp,lab1,stmt->predreg);
-    GenerateFalseJump(stmt->exp,lab1,stmt->predreg);
+			GenerateFalseJump(stmt->exp,lab1);
+    GenerateFalseJump(stmt->exp,lab1);
     //if( stmt->s1 != 0 && stmt->s1->next != 0 )
     //    if( stmt->s2 != 0 )
     //        breaklab = lab2;
@@ -314,7 +330,7 @@ void GenerateIf(Statement *stmt)
 /*
  *      generate code for a do - while loop.
  */
-void GenerateDo(struct snode *stmt)
+void GenerateDo(Statement *stmt)
 {
 	int     oldcont, oldbreak;
     oldcont = contlab;
@@ -324,7 +340,7 @@ void GenerateDo(struct snode *stmt)
 	breaklab = nextlabel++;
 	GenerateStatement(stmt->s1);      /* generate body */
 	initstack();
-	GenerateTrueJump(stmt->exp,contlab,stmt->predreg);
+	GenerateTrueJump(stmt->exp,contlab);
 	GenerateLabel(breaklab);
     breaklab = oldbreak;
     contlab = oldcont;
@@ -333,7 +349,7 @@ void GenerateDo(struct snode *stmt)
 /*
  *      generate code for a do - while loop.
  */
-void GenerateDoUntil(struct snode *stmt)
+void GenerateDoUntil(Statement *stmt)
 {
 	int     oldcont, oldbreak;
     oldcont = contlab;
@@ -343,7 +359,7 @@ void GenerateDoUntil(struct snode *stmt)
     breaklab = nextlabel++;
     GenerateStatement(stmt->s1);      /* generate body */
     initstack();
-    GenerateFalseJump(stmt->exp,contlab,stmt->predreg);
+    GenerateFalseJump(stmt->exp,contlab);
     GenerateLabel(breaklab);
     breaklab = oldbreak;
     contlab = oldcont;
@@ -376,7 +392,7 @@ void GenerateSwitch(Statement *stmt)
 {    
 	int             curlab;
 	int *bf;
-	int nn;
+	int nn,jj;
   struct snode    *defcase;
   AMODE *ap, *ap1;
 
@@ -402,9 +418,12 @@ void GenerateSwitch(Statement *stmt)
             }
             else
             {
-				bf = (int *)stmt->label;
+				bf = (int *)stmt->casevals;
 				for (nn = bf[0]; nn >= 1; nn--) {
-					if (bf[nn] < -256 || bf[nn] > 255) {
+					if ((jj = pwrof2(bf[nn])) != -1) {
+						GenerateTriadic(op_bbs,0,ap,make_immed(jj),make_clabel(curlab));
+					}
+					else if (bf[nn] < -256 || bf[nn] > 255) {
 						ap1 = GetTempRegister();
 						GenerateTriadic(op_cmp,0,ap1,ap,make_immed(bf[nn]));
 						ReleaseTempRegister(ap1);
@@ -447,17 +466,110 @@ void GenerateCase(Statement *stmt)
     }
 }
 
+static int casevalcmp(const void *a, const void *b)
+{
+	int aa,bb;
+	aa = ((scase *)a)->val;
+	bb = ((scase *)b)->val;
+	if (aa < bb)
+		return -1;
+	else if (aa==bb)
+		return 0;
+	else
+		return 1;
+}
+
 /*
  *      analyze and generate best switch statement.
  */
 void genxswitch(Statement *stmt)
 { 
+	AMODE *ap, *ap1, *ap2;
+	Statement *st, *defcase;
 	int     oldbreak;
+	int tablabel;
+	int *bf;
+	int nn,mm,kk;
+	int minv,maxv;
+	int deflbl;
+	int curlab;
     oldbreak = breaklab;
     breaklab = nextlabel++;
-    GenerateSwitch(stmt);
-    GenerateCase(stmt->s1);
-    GenerateLabel(breaklab);
+	bf = (int *)stmt->label;
+	minv = 0x7FFFFFFFL;
+	maxv = 0;
+	struct scase casetab[512];
+
+	st = stmt->s1;
+	mm = 0;
+	deflbl = 0;
+	defcase = nullptr;
+	curlab = nextlabel++;
+	// Determine minimum and maximum values in all cases
+	// Record case values and labels.
+	while( st != (Statement *)NULL )
+	{
+		if (st->s2) {
+			defcase = st->s2;
+			deflbl = (int)st->s2->label;
+		}
+		else {
+			bf = st->casevals;
+			for (nn = bf[0]; nn >= 1; nn--) {
+				if (bf[nn] < minv) minv = bf[nn];
+				if (bf[nn] > maxv) maxv = bf[nn];
+				st->label = (int *)curlab;
+				casetab[mm].label = curlab;
+				casetab[mm].val = bf[nn];
+				mm++;
+			}
+			curlab = nextlabel++;
+		}
+		st = st->next;
+	}
+	//
+	// check case density
+	// If there are enough cases
+	// and if the case is dense enough use a computed jump
+	if (mm * 100 / (maxv-minv) > 50 && (maxv-minv) > (stmt->nkd ? 7 : 12)) {
+		if (deflbl==0)
+			deflbl = nextlabel++;
+		for (nn = mm; nn < 512; nn++) {
+			casetab[nn].label = deflbl;
+			casetab[nn].val = maxv+1;
+		}
+		for (kk = minv; kk < maxv; kk++) {
+			for (nn = 0; nn < mm; nn++) {
+				if (casetab[nn].val==kk)
+					goto j1;
+			}
+			// value not found
+			casetab[mm].val = kk;
+			casetab[mm].label = defcase ? (int)defcase->label : breaklab;
+			mm++;
+j1:	;
+		}
+		qsort(&casetab[0],512,sizeof(struct scase),casevalcmp);
+		tablabel = caselit(casetab,maxv-minv+1);
+	    ap = GenerateExpression(stmt->exp,F_REG,GetNaturalSize(stmt->exp));
+		ap1 = GetTempRegister();
+		ap2 = GetTempRegister();
+		if (!stmt->nkd) {
+			GenerateDiadic(op_ldi,0,ap1,make_immed(minv));
+			GenerateDiadic(op_ldi,0,ap2,make_immed(maxv+1));
+			Generate4adic(op_chk,0,ap,ap1,ap2,make_clabel(defcase ? (int)defcase->label : breaklab));
+		}
+		GenerateTriadic(op_sub,0,ap,ap,make_immed(minv));
+		GenerateTriadic(op_shl,0,ap,ap,make_immed(3));
+		GenerateDiadic(op_lw,0,ap,make_indexed2(tablabel,ap->preg));
+		GenerateDiadic(op_jal,0,makereg(0),make_indexed(0,ap->preg));
+		GenerateCase(stmt->s1);
+		GenerateLabel(breaklab);
+		return;
+	}
+	GenerateSwitch(stmt);
+	GenerateCase(stmt->s1);
+	GenerateLabel(breaklab);
     breaklab = oldbreak;
 }
 

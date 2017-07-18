@@ -112,6 +112,19 @@ struct slit {
 	char			*nmspace;
 };
 
+struct scase {
+	int label;
+	int val;
+};
+
+struct clit {
+    struct clit *next;
+    int     label;
+	int		num;
+    scase   *cases;
+	char	*nmspace;
+};
+
 class C64PException
 {
 public:

@@ -444,8 +444,40 @@ void Float128::FloatToInt(__int64 *i, Float128 *a)
 	delete a1;
 }
 
+void Float128::Float128ToDouble(double *d, Float128 *a)
+{
+	bool sgn;
+	unsigned __int16 exp;
+	__int64 *di = (__int64 *)d;
 
-void Float128::Pack()
+	// Do we have a zero ?
+	if (a->IsZero()) {
+		*di = a->sign ? 0x8000000000000000LL : 0x0000000000000000LL;
+		return;
+	}
+	// Or an infinite number ?
+	if (a->IsInfinite()) {
+		*di = a->sign ? 0xFFF0000000000000LL : 0x7FF0000000000000LL;
+		return;
+	}
+	// Too large a number -> infinity
+	if (a->exp > a->bias + 0x400) {
+		*di = a->sign ? 0xFFF0000000000000LL : 0x7FF0000000000000LL;
+		return;
+	}
+	// Too small a number -> zero
+	if (a->exp < a->bias - 0x3ff) {
+		*di = a->sign ? 0x8000000000000000LL : 0x0000000000000000LL;
+	}
+	sgn = a->sign;
+	exp = a->exp - (bias - 0x3ff);
+	*di = (__int64)sgn << 63;
+	*di |= (__int64)exp << 52;
+	*di |= (__int64)(a->man[FLT128_WORDS-1] & 0x3FFFFFFFL) << 22;
+	*di |= (__int64)a->man[FLT128_WORDS-2] >> 10;
+}
+
+void Float128::Pack(int prec)
 {
 	Float128 a;
 	if (man[FLT128_WORDS-5] & 0x40000000) {
@@ -474,7 +506,14 @@ void Float128::Pack()
 	Float128::Assign(&a,this);
 	a.ShiftManLeft();
 	a.ShiftManLeft();
-	if (FLT_PREC==80) {
+	if (prec==64) {
+		double d;
+		__int32 *p = (__int32 *)&d;
+		Float128ToDouble(&d,this);
+		pack[3] = p[1];
+		pack[2] = p[0];
+	}
+	else if (prec==80) {
 		pack[3] = (((unsigned __int32)sign << 31) | (unsigned __int32)exp << 16) | (a.man[FLT128_WORDS-1] >> 16);
 		pack[2] = ((a.man[FLT128_WORDS-1] & 0xFFFF) << 16) | (a.man[FLT128_WORDS-2] >> 16);
 		pack[1] = ((a.man[FLT128_WORDS-2] & 0xFFFF) << 16) | (a.man[FLT128_WORDS-3] >> 16);
@@ -491,8 +530,27 @@ char *Float128::ToString()
 {
 	static char buf[50];
 
-	Pack();
+	Pack(FLT_PREC);
 	switch(FLT_PREC) {
+	case 64:
+		sprintf_s(buf,sizeof(buf),"0x%08X,0x%08X", pack[2],pack[3]);
+		break;
+	case 80:
+		sprintf_s(buf,sizeof(buf),"0x%08X,0x%08X,0x%08X", pack[1],pack[2],pack[3]);
+		break;
+	case 128:
+		sprintf_s(buf,sizeof(buf),"0x%08X,0x%08X,0x%08X,0x%08X", pack[0],pack[1],pack[2],pack[3]);
+		break;
+	}
+	return (buf);
+}
+
+char *Float128::ToString(int prec)
+{
+	static char buf[50];
+
+	Pack(prec);
+	switch(prec) {
 	case 64:
 		sprintf_s(buf,sizeof(buf),"0x%08X,0x%08X", pack[2],pack[3]);
 		break;

@@ -94,6 +94,7 @@ TABLE           gsyms[257];// = {0,0},
 SYM             *lasthead = (SYM *)NULL;
 Float128		*quadtab = nullptr;
 struct slit     *strtab = (struct slit *)NULL;
+struct clit		*casetab = (struct clit *)NULL;
 int             lc_static = 0;
 int             lc_auto = 0;
 int				lc_thread = 0;

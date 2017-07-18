@@ -1,12 +1,12 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2016  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2017  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-// C32 - 'C' derived language compiler
-//  - 32 bit CPU
+// C64 - 'C' derived language compiler
+//  - 64 bit CPU
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -167,8 +167,8 @@ int pwrof2(int i)
 	int p;
 	int q;
 
-    q = 2;
-    p = 1;
+    q = 1;
+    p = 0;
     while( q > 0 )
     {
 		if( q == i )
@@ -301,6 +301,7 @@ static void opt0(ENODE **node)
 								return;
                         }
                     }
+					// Add or subtract of zero gets eliminated.
                     else if( ep->p[1]->nodetype == en_icon ) {
                         if( ep->p[1]->i == 0 ) {
                             *node = ep->p[0];
@@ -401,9 +402,17 @@ static void opt0(ENODE **node)
                                     }
                             }
                     break;
-            case en_and: 
+
+			case en_and: 
             case en_or:
 			case en_xor:    
+                    opt0(&(ep->p[0]));
+                    opt0(&(ep->p[1]));
+                    if( ep->p[0]->nodetype == en_icon &&
+                            ep->p[1]->nodetype == en_icon )
+                            dooper(node);
+                    break;
+
 			case en_shr:	case en_shru:	case en_asr:
 			case en_shl:	case en_shlu:
                     opt0(&(ep->p[0]));
@@ -411,7 +420,15 @@ static void opt0(ENODE **node)
                     if( ep->p[0]->nodetype == en_icon &&
                             ep->p[1]->nodetype == en_icon )
                             dooper(node);
+					// Shift by zero....
+                    else if( ep->p[1]->nodetype == en_icon ) {
+                        if( ep->p[1]->i == 0 ) {
+                            *node = ep->p[0];
+                            return;
+                        }
+                    }
                     break;
+
             case en_land:   
                     opt0(&(ep->p[0]));
                     opt0(&(ep->p[1]));

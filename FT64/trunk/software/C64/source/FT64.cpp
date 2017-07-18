@@ -209,7 +209,7 @@ AMODE *GenExpr(ENODE *node)
 	case en_ge:		op = op_sge;	break;
 	case en_uge:	op = op_sgeu;	break;
 	default:	// en_land, en_lor
-		GenerateFalseJump(node,lab0,0);
+		GenerateFalseJump(node,lab0);
 		ap1 = GetTempRegister();
 		GenerateDiadic(op_ldi,0,ap1,make_immed(1));
 		GenerateMonadic(op_bra,0,make_label(lab1));

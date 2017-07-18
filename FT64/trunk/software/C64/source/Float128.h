@@ -137,8 +137,10 @@ public:
 	static void Normalize(Float128 *a);
 	static void IntToFloat(Float128 *d, __int64 v);
 	static void FloatToInt(__int64 *i, Float128 *a);
-	void Pack();
+	static void Float128ToDouble(double *d, Float128 *a);
+	void Pack(int);
 	char *ToString();
+	char *ToString(int);
 	bool IsManZero() const;
 	bool IsZero() const;
 	bool IsInfinite() const;

@@ -20,12 +20,14 @@ typedef struct snode {
 	struct snode *next;   /* next statement */
 	struct snode *prolog;
 	struct snode *epilog;
+	bool nkd;
 	int predreg;		 /* assigned predicate register */
 	ENODE *exp;           /* condition or expression */
 	ENODE *initExpr;      /* initialization expression - for loops */
 	ENODE *incrExpr;      /* increment expression - for loops */
 	struct snode *s1, *s2;       /* internal statements */
 	int *label;         /* label number for goto */
+	int *casevals;		// case values
 	TABLE ssyms;			/* local symbols associated with statement */
 	char *fcname;       // firstcall block var name
 	char *lptr;

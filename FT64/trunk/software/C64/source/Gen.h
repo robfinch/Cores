@@ -75,7 +75,7 @@ enum e_op {
 		op_beq, op_bne, op_blt, op_ble, op_bgt, op_bge,
 		op_bltu, op_bleu, op_bgtu, op_bgeu,
 		op_bltui, op_bleui, op_blti, op_blei, op_bgti, op_bgtui, op_bgei, op_bgeui,
-		op_bbs, op_bbc,
+		op_bbs, op_bbc, op_bor,
 
 		op_brz, op_brnz, op_br,
 		op_lft, op_sft,

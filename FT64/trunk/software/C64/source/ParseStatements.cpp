@@ -28,7 +28,7 @@
 extern TYP *head, *tail;
 extern TYP stdbyte;
 extern int catchdecl;
-Statement *ParseStatement();   /* forward declararation */ 
+Statement *ParseStatement(int);   /* forward declararation */ 
 Statement *ParseCatchStatement();
 int iflevel;
 Statement *currentStmt;
@@ -122,7 +122,7 @@ Statement *vortex_stmt()
         snp->stype = st_vortex; 
         snp->label = (int *)my_strdup((char *)sp->name->c_str());
         snp->next = 0; 
-		snp->s1 = ParseStatement(); 
+		snp->s1 = ParseStatement(0); 
         return snp; 
 } 
   
@@ -155,7 +155,7 @@ Statement *ParseWhileStatement()
         needpunc( closepa,13 ); 
 		if (lastst==kw_do)
 			NextToken();
-        snp->s1 = ParseStatement(); 
+        snp->s1 = ParseStatement(0); 
 		// Empty statements return NULL
 		if (snp->s1)
 			snp->s1->outer = snp;
@@ -181,7 +181,7 @@ Statement *ParseUntilStatement()
         if( expression(&(snp->exp)) == 0 ) 
             error(ERR_EXPREXPECT); 
         needpunc( closepa,14 ); 
-        snp->s1 = ParseStatement(); 
+        snp->s1 = ParseStatement(0); 
 		// Empty statements return NULL
 		if (snp->s1)
 			snp->s1->outer = snp;
@@ -200,7 +200,7 @@ Statement *ParseDoStatement()
 	iflevel++;
 	if ((iflevel > maxPn-1) && isThor)
 	    error(ERR_OUTOFPREDS);
-    snp->s1 = ParseStatement(); 
+    snp->s1 = ParseStatement(0); 
 	// Empty statements return NULL
 	if (snp->s1)
 		snp->s1->outer = snp;
@@ -243,7 +243,7 @@ Statement *ParseForStatement()
     if( expression(&(snp->incrExpr)) == NULL ) 
         snp->incrExpr = (ENODE *)NULL; 
     needpunc(closepa,18); 
-    snp->s1 = ParseStatement(); 
+    snp->s1 = ParseStatement(0); 
 	// Empty statements return NULL
 	if (snp->s1)
 		snp->s1->outer = snp;
@@ -256,7 +256,7 @@ Statement *ParseForeverStatement()
 	Statement *snp; 
     snp = NewStatement(st_forever, TRUE);
     snp->stype = st_forever; 
-    snp->s1 = ParseStatement(); 
+    snp->s1 = ParseStatement(0); 
 	// Empty statements return NULL
 	if (snp->s1)
 		snp->s1->outer = snp;
@@ -286,7 +286,7 @@ struct snode *ParseCriticalStatement()
     snp->stype = st_critical; 
     snp->label = (int *)my_strdup((char *)sp->name->c_str()); 
     snp->next = 0; 
-	snp->s1 = ParseStatement();
+	snp->s1 = ParseStatement(0);
 	// Empty statements return NULL
 	if (snp->s1)
 		snp->s1->outer = snp;
@@ -328,13 +328,13 @@ Statement *ParseSpinlockStatement()
 		NextToken();
 //    snp->label = sp->name; 
     snp->next = 0; 
-	snp->s1 = ParseStatement();
+	snp->s1 = ParseStatement(0);
 	// Empty statements return NULL
 	if (snp->s1)
 		snp->s1->outer = snp;
 	if (lastst==kw_lockfail) {
 		NextToken();
-		snp->s2 = ParseStatement();
+		snp->s2 = ParseStatement(0);
 		// Empty statements return NULL
 		if (snp->s2)
 			snp->s2->outer = snp;
@@ -394,7 +394,7 @@ Statement *ParseFirstcallStatement()
   lastst = st;
   // doinit should set realname
   snp->fcname = my_strdup(sp->realname);
-  snp->s1 = ParseStatement(); 
+  snp->s1 = ParseStatement(0); 
 	// Empty statements return NULL
 	if (snp->s1)
 		snp->s1->outer = snp;
@@ -425,12 +425,12 @@ Statement *ParseIfStatement()
         needpunc( closepa,19 ); 
 		if (lastst==kw_then)
 			NextToken();
-        snp->s1 = ParseStatement(); 
+        snp->s1 = ParseStatement(0); 
 		if (snp->s1)
 			snp->s1->outer = snp;
         if( lastst == kw_else ) { 
             NextToken(); 
-            snp->s2 = ParseStatement(); 
+            snp->s2 = ParseStatement(0); 
 			if (snp->s2)
 				snp->s2->outer = snp;
         } 
@@ -460,7 +460,7 @@ Statement *ParseCatchStatement()
 	if (lastst != openpa) {
 		snp->label = (int *)NULL;
 		snp->s2 = (Statement *)99999;
-		snp->s1 = ParseStatement();
+		snp->s1 = ParseStatement(0);
 		// Empty statements return NULL
 		if (snp->s1)
 			snp->s1->outer = snp;
@@ -487,7 +487,7 @@ Statement *ParseCatchStatement()
     strncpy_s(lastid, sizeof(lastid), declid->c_str(),sizeof(lastid)-1);
     nameref(&node,FALSE);
     strcpy_s(lastid,sizeof(lastid),buf);
-	snp->s1 = ParseStatement();
+	snp->s1 = ParseStatement(0);
 	// Empty statements return NULL
 	if (snp->s1)
 		snp->s1->outer = snp;
@@ -529,7 +529,7 @@ Statement *ParseCaseStatement()
 		bf[0] = nn;
 		for (; nn > 0; nn--)
 			bf[nn]=buf[nn-1];
-		snp->label = (int *)bf;
+		snp->casevals = (int *)bf;
     }
     else if( lastst == kw_default) { 
         NextToken(); 
@@ -544,12 +544,12 @@ Statement *ParseCaseStatement()
     head = (Statement *)NULL; 
     while( lastst != end && lastst != kw_case && lastst != kw_default ) { 
 		if( head == NULL ) {
-			head = tail = ParseStatement(); 
+			head = tail = ParseStatement(0); 
 			if (head)
 				head->outer = snp;
 		}
 		else { 
-			tail->next = ParseStatement(); 
+			tail->next = ParseStatement(0); 
 			if( tail->next != NULL )  {
 				tail->next->outer = snp;
 				tail = tail->next;
@@ -584,12 +584,13 @@ int CheckForDuplicateCases(Statement *head)
 	return FALSE;
 } 
   
-Statement *ParseSwitchStatement() 
+Statement *ParseSwitchStatement(int nkd) 
 {       
 	Statement *snp; 
     Statement *head, *tail; 
 
     snp = NewStatement(st_switch, TRUE);
+	snp->nkd = nkd;
 	iflevel++;
     if( expression(&(snp->exp)) == NULL ) 
         error(ERR_EXPREXPECT); 
@@ -752,7 +753,7 @@ Statement *ParseTryStatement()
 	hd = (Statement *)NULL;
 	tl = (Statement *)NULL;
 	snp = NewStatement(st_try, TRUE);
-    snp->s1 = ParseStatement();
+    snp->s1 = ParseStatement(0);
 	// Empty statements return NULL
 	if (snp->s1)
 		snp->s1->outer = snp;
@@ -817,18 +818,18 @@ Statement *ParseCompoundStatement()
 	p = currentStmt;
 	if (lastst==kw_prolog) {
 		NextToken();
-		currentFn->prolog = snp->prolog = ParseStatement();
+		currentFn->prolog = snp->prolog = ParseStatement(0);
 	}
 	if (lastst==kw_epilog) {
 		NextToken();
-		currentFn->epilog = snp->epilog = ParseStatement();
+		currentFn->epilog = snp->epilog = ParseStatement(0);
 	}
 	if (lastst==kw_prolog) {
 		NextToken();
-		currentFn->prolog = snp->prolog = ParseStatement();
+		currentFn->prolog = snp->prolog = ParseStatement(0);
 	}
 	if (lastst != end) {
-		head = tail = ParseStatement(); 
+		head = tail = ParseStatement(0); 
 		if (head)
 			head->outer = snp;
 	}
@@ -841,15 +842,15 @@ Statement *ParseCompoundStatement()
 	while( lastst != end) {
 		if (lastst==kw_prolog) {
 			NextToken();
-			currentFn->prolog = snp->prolog = ParseStatement();
+			currentFn->prolog = snp->prolog = ParseStatement(0);
 		}
 		else if (lastst==kw_epilog) {
 			NextToken();
-			currentFn->epilog = snp->epilog = ParseStatement();
+			currentFn->epilog = snp->epilog = ParseStatement(0);
 		}
 		else
 		{
-			tail->next = ParseStatement(); 
+			tail->next = ParseStatement(0); 
 			if( tail->next != NULL ) {
 				tail->next->outer = snp;
 				tail = tail->next;
@@ -925,7 +926,7 @@ Statement *ParseGotoStatement()
     return (Statement *)NULL;
 } 
   
-Statement *ParseStatement() 
+Statement *ParseStatement(int nkd) 
 {
 	Statement *snp; 
 	dfs.puts("<ParseStatement>");
@@ -940,6 +941,10 @@ Statement *ParseStatement()
     case kw_check:
          snp = ParseCheckStatement();
          break;
+	case kw_naked:
+		 NextToken();
+		 snp = ParseStatement(1);
+		 break;
 	/*
     case kw_prolog:
          snp = NewStatement(st_empty,1);
@@ -960,7 +965,7 @@ Statement *ParseStatement()
     case kw_continue: snp = ParseContinueStatement(); break; 
     case kw_do:
 	case kw_loop: snp = ParseDoStatement(); break; 
-    case kw_switch: snp = ParseSwitchStatement(); break;
+    case kw_switch: snp = ParseSwitchStatement(nkd); break;
 	case kw_try: snp = ParseTryStatement(); break;
 	case kw_throw: snp = ParseThrowStatement(); break;
 	case kw_vortex:

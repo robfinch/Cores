@@ -90,7 +90,7 @@ struct oplst {
 		{"beq", op_beq}, {"bne", op_bne},
 		{"blt", op_blt}, {"ble", op_ble}, {"bgt", op_bgt}, {"bge", op_bge},
 		{"bltu", op_bltu}, {"bleu", op_bleu}, {"bgtu", op_bgtu}, {"bgeu", op_bgeu},
-		{"bbs", op_bbs}, {"bbc", op_bbc},
+		{"bbs", op_bbs}, {"bbc", op_bbc}, {"bor", op_bor},
 		{"rti", op_rti}, {"rtd", op_rtd},
 		{"lwr", op_lwr}, {"swc", op_swc}, {"cache",op_cache},
 		{"or",op_or}, {"ori",op_ori}, {"iret", op_iret}, {"andi", op_andi},
@@ -630,7 +630,7 @@ void GenerateFloat(Float128 *val)
 	if (val==nullptr)
 		return;
 	ofs.printf("\r\n\talign 8\r\n");
-	ofs.printf("\tdh\t%s",val->ToString());
+	ofs.printf("\tdh\t%s",val->ToString(64));
     gentype = longgen;
     outcol = 65;
 }
@@ -640,7 +640,7 @@ void GenerateQuad(Float128 *val)
 	if (val==nullptr)
 		return;
 	ofs.printf("\r\n\talign 8\r\n");
-	ofs.printf("\tdh\t%s",val->ToString());
+	ofs.printf("\tdh\t%s",val->ToString(128));
     gentype = longgen;
     outcol = 65;
 }
@@ -750,6 +750,21 @@ int stringlit(char *s)
   return lp->label;
 }
 
+int caselit(struct scase *cases, int num)
+{
+	struct clit *lp;
+
+	lp = (struct clit *)allocx(sizeof(struct clit));
+	lp->label = nextlabel++;
+	lp->nmspace = my_strdup(GetNamespace());
+	lp->cases = (struct scase *)allocx(sizeof(struct scase)*num);
+	lp->num = num;
+	memcpy(lp->cases, cases, num * sizeof(struct scase));
+	lp->next = casetab;
+	casetab = lp;
+	return lp->label;
+}
+
 int quadlit(Float128 *f128)
 {
 	Float128 *lp;
@@ -795,18 +810,26 @@ char *strip_crlf(char *p)
 void dumplits()
 {
 	char *cp;
+	int nn;
 
   dfs.printf("<Dumplits>\n");
   roseg();
   nl();
 	align(8);
   nl();
+	while(casetab != nullptr) {
+		nl();
+		put_label(casetab->label,"",casetab->nmspace,'D');
+		for (nn = 0; nn < casetab->num; nn++)
+			GenerateLabelReference(casetab->cases[nn].label);
+		casetab = casetab->next;
+	}
 	while(quadtab != nullptr) {
 		nl();
 		put_label(quadtab->label,"",quadtab->nmspace,'D');
 		ofs.printf("\tdh\t");
-		quadtab->Pack();
-		ofs.printf("%s",quadtab->ToString());
+		quadtab->Pack(64);
+		ofs.printf("%s",quadtab->ToString(64));
 		outcol += 35;
 		quadtab = quadtab->next;
 	}

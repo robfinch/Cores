@@ -955,7 +955,7 @@ AMODE *gen_hook(ENODE *node,int flags, int size)
     	GeneratePredicateMonadic(hook_predreg,op_ldi,make_immed(node->p[0]->i));
 	}
 */
-    GenerateFalseJump(node->p[0],false_label,node->predreg);
+    GenerateFalseJump(node->p[0],false_label);
     node = node->p[1];
     ap1 = GenerateExpression(node->p[0],flags,size);
     GenerateDiadic(op_bra,0,make_clabel(end_label),0);
@@ -1927,7 +1927,7 @@ static void GenerateCmp(ENODE *node, int op, int label)
  *      generate a jump to label if the node passed evaluates to
  *      a true condition.
  */
-void GenerateTrueJump(ENODE *node, int label, int predreg)
+void GenerateTrueJump(ENODE *node, int label)
 { 
   AMODE  *ap1;
   int             siz1;
@@ -1949,16 +1949,16 @@ void GenerateTrueJump(ENODE *node, int label, int predreg)
     case en_uge: GenerateCmp(node, op_geu, label); break;
     case en_land:
             lab0 = nextlabel++;
-            GenerateFalseJump(node->p[0],lab0, predreg);
-            GenerateTrueJump(node->p[1],label, predreg);
+            GenerateFalseJump(node->p[0],lab0);
+            GenerateTrueJump(node->p[1],label);
             GenerateLabel(lab0);
             break;
               case en_lor:
-                        GenerateTrueJump(node->p[0],label, predreg);
-                        GenerateTrueJump(node->p[1],label, predreg);
+                        GenerateTrueJump(node->p[0],label);
+                        GenerateTrueJump(node->p[1],label);
                         break;
                 case en_not:
-                        GenerateFalseJump(node->p[0],label, predreg);
+                        GenerateFalseJump(node->p[0],label);
                         break;
                 default:
                         siz1 = GetNaturalSize(node);
@@ -1974,9 +1974,9 @@ void GenerateTrueJump(ENODE *node, int label, int predreg)
  *      generate code to execute a jump to label if the expression
  *      passed is false.
  */
-void GenerateFalseJump(ENODE *node,int label, int predreg)
+void GenerateFalseJump(ENODE *node,int label)
 {
-	AMODE *ap;
+	AMODE *ap, *ap1, *ap2;
         int             siz1;
         int             lab0;
         if( node == (ENODE *)NULL )
@@ -2000,17 +2000,17 @@ void GenerateFalseJump(ENODE *node,int label, int predreg)
                 case en_fgt: GenerateCmp(node, op_fle, label); break;
                 case en_fge: GenerateCmp(node, op_flt, label); break;
                 case en_land:
-                        GenerateFalseJump(node->p[0],label, predreg);
-                        GenerateFalseJump(node->p[1],label, predreg);
+                        GenerateFalseJump(node->p[0],label);
+                        GenerateFalseJump(node->p[1],label);
                         break;
                 case en_lor:
                         lab0 = nextlabel++;
-                        GenerateTrueJump(node->p[0],lab0, predreg);
-                        GenerateFalseJump(node->p[1],label, predreg);
+                        GenerateTrueJump(node->p[0],lab0);
+                        GenerateFalseJump(node->p[1],label);
                         GenerateLabel(lab0);
                         break;
                 case en_not:
-                        GenerateTrueJump(node->p[0],label, predreg);
+                        GenerateTrueJump(node->p[0],label);
                         break;
                 default:
                         siz1 = GetNaturalSize(node);
