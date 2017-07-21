@@ -50,6 +50,9 @@ extern int AllocateRegisterVars();
 static void scan_compound(Statement *stmt);
 static void repcse_compound(Statement *stmt);
 
+CSE CSETable[500];
+short int csendx;
+
 /*
  *      this module will step through the parse tree and find all
  *      optimizable expressions. at present these expressions are
@@ -109,20 +112,18 @@ int equalnode(ENODE *node1, ENODE *node2)
     }
 }
 
-/*
- *      SearchCSEList will search the common expression table for an entry
- *      that matches the node passed and return a pointer to it.
- */
+//
+// SearchCSEList will search the common expression table for an entry
+// that matches the node passed and return a pointer to it.
+//
 static CSE *SearchCSEList(ENODE *node)
 {
-	CSE *csp;
+	int cnt;
 
-    csp = olist;
-    while( csp != (CSE *)NULL ) {
-        if( equalnode(node,csp->exp) )
-            return csp;
-        csp = csp->next;
-    }
+	for (cnt = 0; cnt < csendx; cnt++) {
+        if( equalnode(node,CSETable[cnt].exp) )
+            return &CSETable[cnt];
+	}
     return (CSE *)NULL;
 }
 
@@ -141,17 +142,21 @@ static ENODE *DuplicateEnode(ENODE *node)
     return temp;
 }
 
-/*
- *      InsertNodeIntoCSEList will enter a reference to an expression node into the
- *      common expression table. duse is a flag indicating whether or not
- *      this reference will be dereferenced.
- */
+
+// InsertNodeIntoCSEList will enter a reference to an expression node into the
+// common expression table. duse is a flag indicating whether or not
+// this reference will be dereferenced.
+
 CSE *InsertNodeIntoCSEList(ENODE *node, int duse)
 {
 	CSE *csp;
 
     if( (csp = SearchCSEList(node)) == NULL ) {   /* add to tree */
-        csp = allocCSE();
+		if (csendx > 499)
+			throw new C64PException(ERR_CSETABLE,0x01);
+		csp = &CSETable[csendx];
+		csendx++;
+//        csp = allocCSE();
         csp->next = olist;
         csp->uses = 1;
         csp->duses = (duse != 0);
@@ -167,49 +172,26 @@ CSE *InsertNodeIntoCSEList(ENODE *node, int duse)
     return csp;
 }
 
-/*
- *      voidauto will void an auto dereference node which points to
- *      the same auto constant as node.
- */
-CSE *voidauto(ENODE *node)
-{
-	CSE *csp;
-
-	csp = (CSE *)olist;
-    while( csp != NULL ) {
-        if( IsLValue(csp->exp) && equalnode(node,csp->exp->p[0]) ) {
-            if( csp->voidf )
-                 return (CSE *)NULL;
-            csp->voidf = 1;
-            return csp;
-        }
-        csp = csp->next;
-    }
-    return (CSE *)NULL;
-}
-
 // voidauto2 searches the entire CSE list for auto dereferenced node which
 // point to the passed node. There might be more than one LValue that matches.
-//      voidauto will void an auto dereference node which points to
-//      the same auto constant as node.
+// voidauto will void an auto dereference node which points to
+// the same auto constant as node.
 //
 int voidauto2(ENODE *node)
 {
-	CSE *csp;
     int uses;
     int voided;
- 
+	int cnt;
+
     uses = 0;
     voided = 0;
-	csp = (CSE *)olist;
-    while( csp != NULL ) {
-        if( IsLValue(csp->exp) && equalnode(node,csp->exp->p[0]) ) {
-            csp->voidf = 1;
+	for (cnt = 0; cnt < csendx; cnt++) {
+        if( IsLValue(CSETable[cnt].exp) && equalnode(node,CSETable[cnt].exp->p[0]) ) {
+            CSETable[cnt].voidf = 1;
             voided = 1;
-            uses += csp->uses;
+            uses += CSETable[cnt].uses;
         }
-        csp = csp->next;
-    }
+	}
     return voided ? uses : -1;
 }
 
@@ -247,11 +229,10 @@ static void scanexpr(ENODE *node, int duse)
         case en_tempfpref:
         case en_tempref:
                 csp1 = InsertNodeIntoCSEList(node,duse);
-                if ((nn = voidauto2(node)) > 0)
-                    csp1->uses = (csp1->duses += nn);
-//                if( (csp = voidauto(node)) != NULL ) {
-//                    csp1->uses = (csp1->duses += csp->uses);
-//                    }
+                if ((nn = voidauto2(node)) > 0) {
+					csp1->duses += 1;
+                    csp1->uses = csp1->duses + nn - 1;
+				}
                 break;
 		case en_ref32: case en_ref32u:
         case en_b_ref:
@@ -474,21 +455,6 @@ static void scan_compound(Statement *stmt)
 }
 
 /*
- *      exchange will exchange the order of two expression entries
- *      following c1 in the linked list.
- */
-static void exchange(CSE **c1)
-{
-	CSE *csp1, *csp2;
-
-    csp1 = *c1;
-    csp2 = csp1->next;
-    csp1->next = csp2->next;
-    csp2->next = csp1;
-    *c1 = csp2;
-}
-
-/*
  *      returns the desirability of optimization for a subexpression.
  */
 int OptimizationDesireability(CSE *csp)
@@ -508,27 +474,6 @@ int OptimizationDesireability(CSE *csp)
 	    return 2 * csp->uses;
     return csp->uses;
 }
-
-/*
- *      bsort implements a bubble sort on the expression list.
- */
-int bsort(CSE **list)
-{
-	CSE *csp1, *csp2;
-    int i;
-
-    csp1 = *list;
-    if( csp1 == NULL || csp1->next == NULL )
-        return FALSE;
-    i = bsort( &(csp1->next));
-    csp2 = csp1->next;
-    if( OptimizationDesireability(csp1) < OptimizationDesireability(csp2) ) {
-        exchange(list);
-        return TRUE;
-    }
-    return FALSE;
-}
-
 
 /*
  *      repexpr will replace all allocated references within an expression
@@ -753,6 +698,7 @@ int opt1(Statement *block)
 {
 	int nn;
 
+	csendx = 0;
     nn = 0;
 	olist = (CSE *)NULL;
     if (opt_noregs==FALSE) {

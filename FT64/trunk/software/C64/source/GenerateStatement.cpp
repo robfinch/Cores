@@ -511,7 +511,8 @@ void genxswitch(Statement *stmt)
 	{
 		if (st->s2) {
 			defcase = st->s2;
-			deflbl = (int)st->s2->label;
+			deflbl = curlab;
+			curlab = nextlabel++;
 		}
 		else {
 			bf = st->casevals;

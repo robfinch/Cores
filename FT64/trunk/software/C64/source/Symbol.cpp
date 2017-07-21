@@ -33,9 +33,9 @@ extern bool isRegister;
 
 SYM *makeint2(std::string na);
 
-int round2(int n)
+int round8(int n)
 {
-    while (n & 1) n++;
+    while (n & 7) n++;
     return n;
 }
 
@@ -641,7 +641,7 @@ SYM *SYM::FindRisingMatch(bool ignore)
 }
 
 
-void SYM::BuildParameterList(int *num)
+void SYM::BuildParameterList(int *num, int *numa)
 {
 	int i, poffset, preg, fpreg;
 	SYM *sp1;
@@ -660,6 +660,7 @@ void SYM::BuildParameterList(int *num)
 	// declarations are processed.
 	np = ParameterDeclaration::Parse(1);
 	*num += np;
+	*numa = 0;
   dfs.printf("B");
 	nparms = onp;
 	for(i = 0;i < np && i < 20;++i) {
@@ -700,13 +701,15 @@ void SYM::BuildParameterList(int *num)
 			else
 				sp1->IsRegister = false;
 		}
+		if (!sp1->IsRegister)
+			*numa += 1;
 		// Check for aggregate types passed as parameters. Structs
 		// and unions use the type size. There could also be arrays
 		// passed.
-//		if (!noParmOffset)
-//			poffset += round2(sp1->tp->size);
-//		if (round2(sp1->tp->size) > 2)
-//			IsLeaf = FALSE;
+		if (!noParmOffset)
+			poffset += round8(sp1->tp->size);
+		if (round8(sp1->tp->size) > 8)
+			IsLeaf = FALSE;
 		sp1->storage_class = sc_auto;
 	}
 	// Process extra hidden parameter
@@ -716,15 +719,31 @@ void SYM::BuildParameterList(int *num)
 	if (tp) {
 		if (tp->GetBtp()) {
 			if (tp->GetBtp()->type==bt_struct || tp->GetBtp()->type==bt_union || tp->GetBtp()->type==bt_class ) {
-				sp1 = makeint2("_pHiddenStructPtr");
+				sp1 = makeStructPtr("_pHiddenStructPtr");
 				sp1->parent = parent;
 				sp1->value.i = poffset;
-				poffset += 2;
-				sp1->storage_class = sc_auto;
+				poffset += sizeOfWord;
+				sp1->storage_class = sc_register;
+				sp1->IsAuto = false;
 				sp1->next = 0;
+				sp1->IsRegister = true;
+				if (preg > 23)
+					sp1->IsRegister = false;
+				if (sp1->IsRegister && sp1->tp->size < 11) {
+					sp1->reg = sp1->IsAuto ? preg | 0x8000 : preg;
+					preg++;
+					if ((preg & 0x8000)==0) {
+						noParmOffset = true;
+						sp1->value.i = -1;
+					}
+				}
+				else
+					sp1->IsRegister = false;
 				// record parameter list
 				params.insert(sp1);
 		//		nparms++;
+				if (!sp1->IsRegister)
+					*numa += 1;
 				*num = *num + 1;
 			}
 		}

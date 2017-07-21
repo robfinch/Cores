@@ -121,10 +121,11 @@ public:
 //typedef struct enode ENODE;
 
 typedef struct cse {
+		short int nxt;
         struct cse      *next;
         ENODE *exp;           /* optimizable expression */
-        int             uses;           /* number of uses */
-        int             duses;          /* number of dereferenced uses */
+        short int       uses;           /* number of uses */
+        short int       duses;          /* number of dereferenced uses */
         short int       voidf;          /* cannot optimize flag */
         short int       reg;            /* AllocateRegisterVarsd register */
         unsigned int    isfp : 1;

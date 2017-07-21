@@ -1,0 +1,393 @@
+                        		code
+                        		align	16                        	
+                        	_RTGetButtonSTKSIZE_ EQU 0
+
+                        	_TwoSpaces:
+000000 FF1FE7C2 		      	push 	xlr
+000004 0030E009 		      	ldi  	xlr,#ramtest_2
+000008 FFF8F7EA 		      	link 	#-_TwoSpacesSTKSIZE_-8
+                        	; 	putch(' ');
+00000C FF1F97C2 		      	push 	r18
+000010 00209009 		      	ldi  	r18,#32
+000014 0000E81C 		      	call 	_putch
+000018 00209009 		      	ldi  	r18,#32
+00001C 0000E81C 		      	call 	_putch
+000020 691F97C2 		      	pop  	r18
+                        	ramtest_5:
+000024 6C1FF7C2 		      	unlink
+000028 691FE7C2 		      	pop  	xlr
+00002C 0008FFE9 		      	ret  	#8
+                        	ramtest_2:
+000030 0008EF92 		      	lw   	lr,8[bp]
+000034 0010EF96 		      	sw   	lr,16[bp]
+000038 FF700030 		      	bra  	ramtest_5
+                        	_TwoSpacesSTKSIZE_ EQU 0
+
+                        	_puthex:
+00003C FF1FE7C2 		      	push 	xlr
+000040 FFF8F7EA 		      	link 	#-_puthexSTKSIZE_-8
+                        	; 	asm {
+                        		      	     	
+000044 00000C9D 				mov		r1,r18
+000048 0000001A 				call	_DisplayTetra
+00004C F800001B 
+000050 0008FFEB 
+                        	ramtest_9:
+000054 6C1FF7C2 		      	unlink
+000058 691FE7C2 		      	pop  	xlr
+00005C 0008FFE9 		      	ret  	#8
+                        	_puthexSTKSIZE_ EQU 0
+
+                        	_dumpaddr:
+000060 FF1FE7C2 		      	push 	xlr
+000064 00B4E009 		      	ldi  	xlr,#ramtest_10
+000068 FFF8F7EA 		      	link 	#-_dumpaddrSTKSIZE_-8
+                        	; 	TwoSpaces();
+00006C 0000E81C 		      	call 	_TwoSpaces
+                        	; 	puthex((int)p);
+000070 FF1F97C2 		      	push 	r18
+000074 000003D9 		      	call 	_puthex
+                        	; 	putch(' ');
+000078 00209009 		      	ldi  	r18,#32
+00007C 0000E81C 		      	call 	_putch
+000080 691F97C2 		      	pop  	r18
+                        	; 	puthex(p[0]);
+000084 FF1F97C2 		      	push 	r18
+000088 00001C92 		      	lw   	r3,[r18]
+00008C 000090DD 		      	mov  	r18,r3
+000090 000003D9 		      	call 	_puthex
+                        	; 	putch('\r');
+000094 000D9009 		      	ldi  	r18,#13
+000098 0000E81C 		      	call 	_putch
+                        	; 	putch('\n');
+00009C 000A9009 		      	ldi  	r18,#10
+0000A0 0000E81C 		      	call 	_putch
+0000A4 691F97C2 		      	pop  	r18
+                        	ramtest_13:
+0000A8 6C1FF7C2 		      	unlink
+0000AC 691FE7C2 		      	pop  	xlr
+0000B0 0008FFE9 		      	ret  	#8
+                        	ramtest_10:
+0000B4 0008EF92 		      	lw   	lr,8[bp]
+0000B8 0010EF96 		      	sw   	lr,16[bp]
+0000BC FF700030 		      	bra  	ramtest_13
+                        	_dumpaddrSTKSIZE_ EQU 0
+
+                        	_SetMem:
+0000C0 FF1FE7C2 		      	push 	xlr
+0000C4 0148E009 		      	ldi  	xlr,#ramtest_15
+0000C8 FFF0F7EA 		      	link 	#-_SetMemSTKSIZE_-8
+                        	; 	for (p = (__int32 *)0x10000; p < (__int32 *)0x20000000; p+=2) {
+0000CC 0000005A 		      	ldi  	r3,#65536
+0000D0 00001809 
+0000D4 000058DD 		      	mov  	r11,r3
+                        	ramtest_18:
+0000D8 0008001A 		      	cmp  	r3,r11,#536870912
+0000DC 00001AC6 
+0000E0 030300F0 		      	bge  	r3,r0,ramtest_19
+                        	; 		if ((p & 0xFFF)==0) {
+0000E4 0FFF1AC8 		      	and  	r3,r11,#4095
+0000E8 000020C6 		      	cmp  	r4,r3,#0
+0000EC 02010131 		      	bne  	r4,r0,ramtest_21
+                        	; 			TwoSpaces();
+0000F0 0000E81C 		      	call 	_TwoSpaces
+                        	; 			puthex((int)p>>12);
+0000F4 FF1F97C2 		      	push 	r18
+0000F8 0EC362C2 		      	asr.w	r3,r11,#12
+0000FC 000090DD 		      	mov  	r18,r3
+000100 000003D9 		      	call 	_puthex
+                        	; 			putch('\r');
+000104 000D9009 		      	ldi  	r18,#13
+000108 0000E81C 		      	call 	_putch
+00010C 691F97C2 		      	pop  	r18
+                        	; 	asm {
+                        		      	     	
+000110 0000001A 				lcu		r1,BUTTONS
+000114 F800001B 
+000118 00140821 
+                        	ramtest_28:
+                        	ramtest_25:
+                        	ramtest_27:
+00011C 00041846 		      	cmp  	r3,r1,#4
+000120 008100F0 		      	bne  	r3,r0,ramtest_23
+                        	ramtest_29:
+000124 691F5FC2 		      	pop  	r11
+000128 6C1FF7C2 		      	unlink
+00012C 691FE7C2 		      	pop  	xlr
+000130 0008FFE9 		      	ret  	#8
+                        	ramtest_23:
+                        	ramtest_21:
+                        	; 		p[0] = (__int32)n1;
+000134 000092D4 		      	sh   	r18,[r11]
+                        	; 		p[1] = (__int32)n2;
+000138 00049AD4 		      	sh   	r19,4[r11]
+                        	ramtest_20:
+00013C 00085AC4 		      	add  	r11,r11,#8
+000140 FCB00031 		      	bra  	ramtest_18
+                        	ramtest_19:
+000144 FEF00031 		      	bra  	ramtest_29
+                        	ramtest_15:
+000148 0008EF92 		      	lw   	lr,8[bp]
+00014C 0010EF96 		      	sw   	lr,16[bp]
+000150 FEB00030 		      	bra  	ramtest_29
+                        	_SetMemSTKSIZE_ EQU 8
+
+                        	_CheckMem:
+000154 FF1FE7C2 		      	push 	xlr
+000158 0248E009 		      	ldi  	xlr,#ramtest_31
+00015C FFE8F7EA 		      	link 	#-_CheckMemSTKSIZE_-8
+                        	; 	__int32 *p;
+000160 FFF00796 		      	sw   	r0,-16[bp]
+                        	; 	for (p = (__int32 *)0x10000; p < (__int32 *)0x20000000; p+=2) {
+000164 0000005A 		      	ldi  	r3,#65536
+000168 00001809 
+00016C 000058DD 		      	mov  	r11,r3
+                        	ramtest_34:
+000170 0008001A 		      	cmp  	r3,r11,#536870912
+000174 00001AC6 
+000178 058300F0 		      	bge  	r3,r0,ramtest_35
+                        	; 		if ((p & 0xFFF)==0) {
+00017C 0FFF1AC8 		      	and  	r3,r11,#4095
+000180 000020C6 		      	cmp  	r4,r3,#0
+000184 02010131 		      	bne  	r4,r0,ramtest_37
+                        	; 			TwoSpaces();
+000188 0000E81C 		      	call 	_TwoSpaces
+                        	; 			puthex((int)p>>12);
+00018C FF1F97C2 		      	push 	r18
+000190 0EC362C2 		      	asr.w	r3,r11,#12
+000194 000090DD 		      	mov  	r18,r3
+000198 000003D9 		      	call 	_puthex
+                        	; 			putch('\r');
+00019C 000D9009 		      	ldi  	r18,#13
+0001A0 0000E81C 		      	call 	_putch
+0001A4 691F97C2 		      	pop  	r18
+                        	; 	asm {
+                        		      	     	
+0001A8 0000001A 				lcu		r1,BUTTONS
+0001AC F800001B 
+0001B0 00140821 
+                        	ramtest_44:
+                        	ramtest_41:
+                        	ramtest_43:
+0001B4 00041846 		      	cmp  	r3,r1,#4
+0001B8 008100F0 		      	bne  	r3,r0,ramtest_39
+                        	ramtest_45:
+0001BC 691F5FC2 		      	pop  	r11
+0001C0 6C1FF7C2 		      	unlink
+0001C4 691FE7C2 		      	pop  	xlr
+0001C8 0008FFE9 		      	ret  	#8
+                        	ramtest_39:
+                        	ramtest_37:
+                        	; 		if (p[0] != (__int32)n1) {
+0001CC 00001AD0 		      	lh   	r3,[r11]
+0001D0 00C090F1 		      	beq  	r3,r18,ramtest_46
+                        	; 			badcount++;
+0001D4 FFF01F92 		      	lw   	r3,-16[bp]
+0001D8 000118C4 		      	add  	r3,r3,#1
+0001DC FFF01F96 		      	sw   	r3,-16[bp]
+                        	; 			dumpaddr(p);
+0001E0 FF1F97C2 		      	push 	r18
+0001E4 000092DD 		      	mov  	r18,r11
+0001E8 00000619 		      	call 	_dumpaddr
+0001EC 691F97C2 		      	pop  	r18
+                        	ramtest_46:
+                        	; 		if (p[1] != (__int32)n2) {
+0001F0 00041AD0 		      	lh   	r3,4[r11]
+0001F4 00C098F1 		      	beq  	r3,r19,ramtest_48
+                        	; 			badcount++;
+0001F8 FFF01F92 		      	lw   	r3,-16[bp]
+0001FC 000118C4 		      	add  	r3,r3,#1
+000200 FFF01F96 		      	sw   	r3,-16[bp]
+                        	; 			dumpaddr(p);
+000204 FF1F97C2 		      	push 	r18
+000208 000092DD 		      	mov  	r18,r11
+00020C 00000619 		      	call 	_dumpaddr
+000210 691F97C2 		      	pop  	r18
+                        	ramtest_48:
+                        	; 		if (badcount > 10)
+000214 FFF01F92 		      	lw   	r3,-16[bp]
+000218 000A20C6 		      	cmp  	r4,r3,#10
+00021C 00032031 		      	bge  	r0,r4,ramtest_50
+                        	; 			break;
+000220 00700030 		      	bra  	ramtest_35
+                        	ramtest_50:
+                        	ramtest_36:
+000224 00085AC4 		      	add  	r11,r11,#8
+000228 FA300031 		      	bra  	ramtest_34
+                        	ramtest_35:
+                        	; 	putch('\r');
+00022C FF1F97C2 		      	push 	r18
+000230 000D9009 		      	ldi  	r18,#13
+000234 0000E81C 		      	call 	_putch
+                        	; 	putch('\n');
+000238 000A9009 		      	ldi  	r18,#10
+00023C 0000E81C 		      	call 	_putch
+000240 691F97C2 		      	pop  	r18
+000244 FBB00031 		      	bra  	ramtest_45
+                        	ramtest_31:
+000248 0008EF92 		      	lw   	lr,8[bp]
+00024C 0010EF96 		      	sw   	lr,16[bp]
+000250 FB700030 		      	bra  	ramtest_45
+                        	_CheckMemSTKSIZE_ EQU 16
+
+000254 FF1FE7C2 	public code _ramtest:
+	      	push 	xlr
+000258 031CE009 		      	ldi  	xlr,#ramtest_53
+00025C FFF0F7EA 		      	link 	#-_ramtestSTKSIZE_-8
+                        	; 	DBGDisplayString("  RAM Test\r\n");
+000260 FF1F97C2 		      	push 	r18
+000264 10009009 		      	ldi  	r18,#ramtest_52
+000268 0000E81C 		      	call 	_DBGDisplayString
+00026C 691F97C2 		      	pop  	r18
+                        	; 	SetMem(0xAAAAAAAA,0x55555555);
+000270 FF1F97C2 		      	push 	r18
+000274 FF1F9FC2 		      	push 	r19
+000278 0015555A 		      	ldi  	r19,#1431655765
+00027C 55559809 
+000280 FFEAAA9A 		      	ldi  	r18,#-1431655766
+000284 AAAA9009 
+000288 00000C19 		      	call 	_SetMem
+00028C 691F9FC2 		      	pop  	r19
+000290 691F97C2 		      	pop  	r18
+                        	; 	CheckMem(0xAAAAAAAA,0x55555555);
+000294 FF1F97C2 		      	push 	r18
+000298 FF1F9FC2 		      	push 	r19
+00029C 0015555A 		      	ldi  	r19,#1431655765
+0002A0 55559809 
+0002A4 FFEAAA9A 		      	ldi  	r18,#-1431655766
+0002A8 AAAA9009 
+0002AC 00001559 		      	call 	_CheckMem
+0002B0 691F9FC2 		      	pop  	r19
+                        	; 	putch('\r');
+0002B4 000D9009 		      	ldi  	r18,#13
+0002B8 0000E81C 		      	call 	_putch
+                        	; 	putch('\n');
+0002BC 000A9009 		      	ldi  	r18,#10
+0002C0 0000E81C 		      	call 	_putch
+0002C4 691F97C2 		      	pop  	r18
+                        	; 	SetMem(0x55555555,0xAAAAAAAA);
+0002C8 FF1F97C2 		      	push 	r18
+0002CC FF1F9FC2 		      	push 	r19
+0002D0 FFEAAA9A 		      	ldi  	r19,#-1431655766
+0002D4 AAAA9809 
+0002D8 0015555A 		      	ldi  	r18,#1431655765
+0002DC 55559009 
+0002E0 00000C19 		      	call 	_SetMem
+0002E4 691F9FC2 		      	pop  	r19
+0002E8 691F97C2 		      	pop  	r18
+                        	; 	CheckMem(0x55555555,0xAAAAAAAA);
+0002EC FF1F97C2 		      	push 	r18
+0002F0 FF1F9FC2 		      	push 	r19
+0002F4 FFEAAA9A 		      	ldi  	r19,#-1431655766
+0002F8 AAAA9809 
+0002FC 0015555A 		      	ldi  	r18,#1431655765
+000300 55559009 
+000304 00001559 		      	call 	_CheckMem
+000308 691F9FC2 		      	pop  	r19
+00030C 691F97C2 		      	pop  	r18
+                        	ramtest_56:
+000310 6C1FF7C2 		      	unlink
+000314 691FE7C2 		      	pop  	xlr
+000318 0008FFE9 		      	ret  	#8
+                        	ramtest_53:
+00031C 0008EF92 		      	lw   	lr,8[bp]
+000320 0010EF96 		      	sw   	lr,16[bp]
+000324 FF700030 		      	bra  	ramtest_56
+                        	endpublic
+
+                        	
+
+                        	_ramtestSTKSIZE_ EQU 8
+
+                        		rodata
+                        		align	16                        	
+                        		align	8                        	
+                        		align	1                        	
+                        	ramtest_52:	;   RAM Test
+                        		dc	32,32,82,65,77,32,84,101
+                        		dc	115,116,13,10,0
+                        		extern	_DBGHideCursor
+	extern	_puthexnum
+;	global	_ramtest
+                        		extern	_DBGDisplayString
+	extern	_putch
+	extern	_dumpaddr
+	extern	_puthex
+	extern	_puthex
+
+
+                        		rodata
+
+                        		align 8                        	
+
+                        	begin_init_data:
+
+                        	
+
+                        		rodata
+
+                        		align 8                        	
+
+                        	end_init_data:
+
+52 symbols
+  Symbol Name                              seg     address bits
+Ì BUTTONS                                    code  8000000000000014 -858993460
+  _CheckMem                                  code  000154 32
+Ì _CheckMemSTKSIZE_                         const  000010 6
+Ì _DBGDisplayString                        rodata  000000 32
+Ì _DBGHideCursor                           rodata  000000 32
+Ì _DisplayTetra                              code  8000000000000008 -858993460
+Ì _RTGetButtonSTKSIZE_                      const  000000 1
+  _SetMem                                    code  0000c0 32
+Ì _SetMemSTKSIZE_                           const  000008 5
+  _TwoSpaces                                 code  000000 32
+Ì _TwoSpacesSTKSIZE_                        const  000000 1
+  _dumpaddr                                rodata  000060 32
+Ì _dumpaddrSTKSIZE_                         const  000000 1
+Ì _putch                                   rodata  000000 32
+  _puthex                                  rodata  00003c 32
+Ì _puthexSTKSIZE_                           const  000000 1
+Ì _puthexnum                               rodata  000000 32
+  _ramtest                                   code  000254 -858993460
+Ì _ramtestSTKSIZE_                          const  000008 5
+  begin_init_data                          rodata  001000 32
+  end_init_data                            rodata  001000 32
+  ramtest_10                                 code  0000b4 32
+  ramtest_13                                 code  0000a8 32
+  ramtest_15                                 code  000148 32
+  ramtest_18                                 code  0000d8 32
+  ramtest_19                                 code  000144 32
+  ramtest_2                                  code  000030 32
+  ramtest_20                                 code  00013c 32
+  ramtest_21                                 code  000134 32
+  ramtest_23                                 code  000134 32
+  ramtest_25                                 code  00011c 32
+  ramtest_27                                 code  00011c 32
+  ramtest_28                                 code  00011c 32
+  ramtest_29                                 code  000124 32
+  ramtest_31                                 code  000248 32
+  ramtest_34                                 code  000170 32
+  ramtest_35                                 code  00022c 32
+  ramtest_36                                 code  000224 32
+  ramtest_37                                 code  0001cc 32
+  ramtest_39                                 code  0001cc 32
+  ramtest_41                                 code  0001b4 32
+  ramtest_43                                 code  0001b4 32
+  ramtest_44                                 code  0001b4 32
+  ramtest_45                                 code  0001bc 32
+  ramtest_46                                 code  0001f0 32
+  ramtest_48                                 code  000214 32
+  ramtest_5                                  code  000024 32
+  ramtest_50                                 code  000224 32
+  ramtest_52                               rodata  001000 32
+  ramtest_53                                 code  00031c 32
+  ramtest_56                                 code  000310 32
+  ramtest_9                                  code  000054 32
+0 compressable instructions
+The top 1024 are:
+Comp  Opcode  Count
+
+number of bytes: 1472
+number of instructions: 368
+4.000000 bytes (32 bits) per instruction

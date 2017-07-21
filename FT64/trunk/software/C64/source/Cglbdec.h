@@ -173,6 +173,8 @@ extern std::string *declid;
 extern Compiler compiler;
 
 // Analyze.c
+extern short int csendx;
+extern CSE CSETable[500];
 extern int equalnode(ENODE *node1, ENODE *node2);
 extern int bsort(CSE **list);
 extern int OptimizationDesireability(CSE *csp);
@@ -241,6 +243,7 @@ extern void funcbody(SYM *sp);
 extern int GetIntegerExpression(ENODE **p);
 extern Float128 *GetFloatExpression(ENODE **pnode);
 // Expr.c
+extern SYM *makeStructPtr(std::string name);
 extern ENODE *makenode(int nt, ENODE *v1, ENODE *v2);
 extern ENODE *makeinode(int nt, int v1);
 extern ENODE *makesnode(int nt, std::string *v1, std::string *v2, int i);

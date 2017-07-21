@@ -66,17 +66,17 @@ AMODE *copy_addr(AMODE *ap)
 void GeneratePredicatedMonadic(int pr, int pop, int op, int len, AMODE *ap1)
 {
 	struct ocode *cd;
-  cd = (struct ocode *)allocx(sizeof(struct ocode));
+	cd = (struct ocode *)allocx(sizeof(struct ocode));
 	cd->predop = pop;
 	cd->pregreg = pr;
-  cd->opcode = op;
-  cd->length = len;
-  cd->oper1 = copy_addr(ap1);
-  cd->oper2 = NULL;
+	cd->opcode = op;
+	cd->length = len;
+	cd->oper1 = copy_addr(ap1);
+	cd->oper2 = NULL;
 	cd->oper3 = NULL;
 	cd->oper4 = NULL;
 	currentFn->UsesPredicate = TRUE;
-  AddToPeepList(cd);
+	AddToPeepList(cd);
 }
 
 void GenerateZeradic(int op)
@@ -214,11 +214,11 @@ static void AddToPeepList(struct ocode *cd)
 void GenerateLabel(int labno)
 {      
 	struct ocode *newl;
-  newl = (struct ocode *)allocx(sizeof(struct ocode));
-  newl->opcode = op_label;
-  newl->oper1 = (struct amode *)labno;
+	newl = (struct ocode *)allocx(sizeof(struct ocode));
+	newl->opcode = op_label;
+	newl->oper1 = (struct amode *)labno;
 	newl->oper2 = (struct amode *)my_strdup((char *)currentFn->name->c_str());
-  AddToPeepList(newl);
+	AddToPeepList(newl);
 }
 
 //void gen_ilabel(char *name)
@@ -993,6 +993,7 @@ static void opt_peep()
 {  
 	struct ocode    *ip;
 	int rep;
+	int refBP;
 	
 	if (::opt_nopeep)
 		return;
@@ -1090,4 +1091,55 @@ static void opt_peep()
         }
      }
 	PeepoptSubSP();
+    ip = peep_head;
+
+	// Remove all the compiler hints that didn't work out.
+    while( ip != NULL )
+    {
+        if (ip->opcode==op_hint) {
+			if (ip->fwd)
+				ip->fwd->back = ip->back;
+			if (ip->back)
+				ip->back->fwd = ip->fwd;
+		}
+		ip = ip->fwd;
+	}
+
+	// Check for references to r30 the base pointer
+	refBP = 0;
+    for (ip = peep_head; ip != NULL; ip = ip->fwd)
+    {
+		if (ip->opcode != op_label) {
+			if (ip->oper1) {
+				if (ip->oper1->preg==regBP || ip->oper1->sreg==regBP)
+					refBP++;
+			}
+			if (ip->oper2) {
+				if (ip->oper2->preg==regBP || ip->oper2->sreg==regBP)
+					refBP++;
+			}
+			if (ip->oper3) {
+				if (ip->oper3->preg==regBP || ip->oper3->sreg==regBP)
+					refBP++;
+			}
+			if (ip->oper4) {
+				if (ip->oper4->preg==regBP || ip->oper4->sreg==regBP)
+					refBP++;
+			}
+		}
+	}
+
+	// Remove the link and unlink instructions if no references
+	// to BP.
+	if (refBP==0) {
+	    for (ip = peep_head; ip != NULL; ip = ip->fwd)
+		{
+			if (ip->opcode==op_link || ip->opcode==op_unlk) {
+				if (ip->back)
+					ip->back->fwd = ip->fwd;
+				if (ip->fwd)
+					ip->fwd->back = ip->back;
+			}
+		}
+	}
 }

@@ -23,7 +23,7 @@ start4:
 	sw		r1,$808		; 6
 ;	bra		start4
 
-	ldi		r31,#$7FFC		; set stack pointer
+	ldi		r31,#$7FF8		; set stack pointer
 	ldi		r1,#$AAAA5555	; pick some data to write
 	ldi		r3,#0
 	ldi		r4,#start1
@@ -59,7 +59,7 @@ clearTxtScreen:
 		sh		r3,[r1]
 		add		r1,r1,#4
 		sub		r2,r2,#1
-		bne		r2,.cts1
+		bne		r2,r0,.cts1
 		jal		[r29]
 
 // ----------------------------------------------------------------------------

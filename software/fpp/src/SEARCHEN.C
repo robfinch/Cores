@@ -21,13 +21,13 @@
       nothing
 --------------------------------------------------------------------------- */
 
-void searchenv(char *filename, char *envname, char *pathname)
+void searchenv(char *filename, char *envname, char *pathname, int pathsize)
 {
    static char pbuf[5000];
-   char *p;
+   char *p, *np;
 //   char *strpbrk(), *strtok(), *getenv();
 
-   strcpy(pathname, filename);
+   strcpy_s(pathname, pathsize-1, filename);
    if (_access(pathname, 0) != -1)
       return;
 
@@ -43,18 +43,21 @@ void searchenv(char *filename, char *envname, char *pathname)
       return;
    }
 
-   strcpy(pbuf, "");
-   strcat(pbuf, p);
-   if (p = strtok(pbuf, ";"))
+   strcpy_s(pbuf, sizeof(pbuf)-1, "");
+   strcat_s(pbuf, sizeof(pbuf)-1, p);
+   np = NULL;
+   if (p = strtok_s(pbuf, ";", &np))
    {
       do
       {
-         sprintf(pathname, "%0.90s\\%s", p, filename);
-
+		  if (p[strlen(p)-1]=='\\')
+	         sprintf_s(pathname, pathsize-1, "%0.90s%s", p, filename);
+		  else
+		     sprintf_s(pathname, pathsize-1, "%0.90s\\%s", p, filename);
          if (_access(pathname, 0) >= 0)
             return;
       }
-      while(p = strtok(NULL, "; "));
+      while(p = strtok_s(NULL, "; ", &np));
    }
    *pathname = 0;
 }

@@ -12,18 +12,10 @@
 #include "fpp.h"
 
 /* ---------------------------------------------------------------------------
-   
-   (C) 1992 FinchWare
+   (C) 1992,2014 Robert T Finch
 
    fpp - PreProcessor for Assembler / Compiler
    This file contains processing for main and most of the directives.
-
-   Changes
-           Author      : R. Finch
-           Date        : /90
-           Release     :
-           Description : new module
-
 --------------------------------------------------------------------------- */
 
 void ShellSort(void *, int, int, int (*)());   // Does a shellsort - like bsort()
@@ -207,6 +199,15 @@ void dinclude()
       } while(1);
       *f = 0;
       strcpy(path, name);
+      if (_access(path, 0) < 0) {
+           strcpy(path, SourceName);
+           f = strrchr(path,'\\');
+           if (!f)
+               f = strrchr(path, '/');
+           if (f) {
+               strcpy(f+1,name);
+           }
+      }
    }
    else if (ch == '<')
    {
@@ -220,7 +221,9 @@ void dinclude()
          f++;
       } while(1);
       *f = 0;
-      searchenv((char *)name, (char *)"INCLUDE", (char *)path);
+      searchenv((char *)name, (char *)"FPPINC", (char *)path, sizeof(path));
+	  if (path[0]=='\0')
+		searchenv((char *)name, (char *)"INCLUDE", (char *)path, sizeof(path));
    }
    if (ch != '\n')
 	   ScanPastEOL();
@@ -238,7 +241,7 @@ void dinclude()
          p->body = bbfile.body;
    }
    else
-      err(9, path);
+      err(9, name);
 }
 
 /* -----------------------------------------------------------------------------
@@ -602,7 +605,7 @@ main(int argc, char *argv[]) {
    HashInfo.width = sizeof(SDef);
    if (argc < 2)
    {
-		fprintf(stderr, "FPP version 1.19  (C) 1998,2011-2014 Robert T Finch  \n");
+		fprintf(stderr, "FPP version 1.21  (C) 1998-2017 Robert T Finch  \n");
 		fprintf(stderr, "\nfpp [options] <filename> [<output filename>]\n\n");
 		fprintf(stderr, "Options:\n");
 		fprintf(stderr, "/D<macro name>[=<definition>] - define a macro\n");
@@ -628,7 +631,7 @@ main(int argc, char *argv[]) {
       parsesw(argv[xx]);
 
 	if (banner)
-		fprintf(stderr, "FPP version 1.19  (C) 1998,2011-2014 Robert T Finch  \n");
+		fprintf(stderr, "FPP version 1.21  (C) 1998-2017 Robert T Finch  \n");
 
    /* ---------------------------
          Get source file name.
@@ -645,13 +648,13 @@ main(int argc, char *argv[]) {
           Check for extension and add one if neccessary.
    ----------------------------------------------------- */
    if (!strchr(SourceName, '.'))
-      strcat(SourceName, ".c");
+      strcat_s(SourceName, sizeof(SourceName)-1, ".c");
 
    OutputName[0] = '\0';
    if (xx < argc) {
       strncpy(OutputName, argv[xx], sizeof(OutputName));
       if (!strchr(OutputName, '.'))
-         strcat(OutputName, ".pp");
+         strcat_s(OutputName, sizeof(OutputName)-1,".pp");
    }
 
    /* ------------------------------

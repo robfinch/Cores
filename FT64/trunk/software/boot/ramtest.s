@@ -1,6 +1,7 @@
 	code
 	align	16
-_RTGetButtonSTKSIZE_ EQU 0
+_RTGetButtonSTKSIZE_ EQU 0
+
 _TwoSpaces:
 	      	push 	xlr
 	      	ldi  	xlr,#ramtest_2
@@ -20,7 +21,8 @@ ramtest_2:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
 	      	bra  	ramtest_5
-_TwoSpacesSTKSIZE_ EQU 0
+_TwoSpacesSTKSIZE_ EQU 0
+
 _puthex:
 	      	push 	xlr
 	      	link 	#-_puthexSTKSIZE_-8
@@ -32,7 +34,8 @@ ramtest_9:
 	      	unlink
 	      	pop  	xlr
 	      	ret  	#8
-_puthexSTKSIZE_ EQU 0
+_puthexSTKSIZE_ EQU 0
+
 _dumpaddr:
 	      	push 	xlr
 	      	ldi  	xlr,#ramtest_10
@@ -66,7 +69,8 @@ ramtest_10:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
 	      	bra  	ramtest_13
-_dumpaddrSTKSIZE_ EQU 0
+_dumpaddrSTKSIZE_ EQU 0
+
 _SetMem:
 	      	push 	xlr
 	      	ldi  	xlr,#ramtest_15
@@ -120,7 +124,8 @@ ramtest_15:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
 	      	bra  	ramtest_29
-_SetMemSTKSIZE_ EQU 8
+_SetMemSTKSIZE_ EQU 8
+
 _CheckMem:
 	      	push 	xlr
 	      	ldi  	xlr,#ramtest_31
@@ -213,7 +218,8 @@ ramtest_31:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
 	      	bra  	ramtest_45
-_CheckMemSTKSIZE_ EQU 16
+_CheckMemSTKSIZE_ EQU 16
+
 public code _ramtest:
 	      	push 	xlr
 	      	ldi  	xlr,#ramtest_53
@@ -269,9 +275,12 @@ ramtest_53:
 	      	lw   	lr,8[bp]
 	      	sw   	lr,16[bp]
 	      	bra  	ramtest_56
-endpublic
-
-_ramtestSTKSIZE_ EQU 8
+endpublic
+
+
+
+_ramtestSTKSIZE_ EQU 8
+
 	rodata
 	align	16
 	align	8

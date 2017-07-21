@@ -229,7 +229,7 @@ else begin
 
 	if (branchmiss) begin
 	    pc0 <= misspc;
-	    pc1 <= misspc + 4;
+	    pc1 <= misspc + 32'd4;
 	    fetchbuf <= 1'b0;
 	    fetchbufA_v <= `INV;
 	    fetchbufB_v <= `INV;

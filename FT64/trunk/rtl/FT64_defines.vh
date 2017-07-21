@@ -159,6 +159,7 @@
 `define FBGE        4'd11
 `define FBUN        4'd15
 `define BEQI    6'b11001x
+`define CHK     6'b11010x
 `define MULUI   6'h38
 `define MULSUI  6'h39
 `define MULI    6'h3A
@@ -240,6 +241,7 @@
 `define EXC_INVALID	9'd4
 
 `define FLT_NONE    9'd000
+`define FLT_SSM     9'd480
 `define FLT_DBG     9'd481
 `define FLT_TGT     9'd482
 `define FLT_IADR    9'd484
@@ -250,6 +252,7 @@
 `define FLT_DWF     9'd498
 `define FLT_DRF     9'd499
 `define FLT_PRIV    9'd501
+`define FLT_DBE     9'd508
 `define FLT_IBE     9'd509
 
 //`define INSTRUCTION_OP	15:13	// opcode

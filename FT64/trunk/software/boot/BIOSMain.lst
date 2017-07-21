@@ -1,0 +1,781 @@
+                        		code
+                        		align	16                        	
+                        	_GetButtonSTKSIZE_ EQU 0
+                        	
+000000 FF1FE7C2 	public code _BIOSMain:
+	      	push 	xlr
+000004 00D0E009 		      	ldi  	xlr,#BIOSMain_4
+000008 FFD0F7EA 		      	link 	#-_BIOSMainSTKSIZE_-8
+                        	; 	float pi = 3.1415926535897932384626;
+00000C 10001812 		      	lw   	r3,BIOSMain_1
+000010 FFF81F96 		      	sw   	r3,-8[bp]
+000014 FFD80796 		      	sw   	r0,-40[bp]
+                        	; 	DBGAttr = 0x087FC00;//0b0000_1000_0111_1111_1100_0000_0000;
+000018 000021DA 		      	ldi  	r3,#8911872
+00001C FC001809 
+000020 00001814 		      	sh   	r3,_DBGAttr
+                        	; 	DBGClearScreen();
+000024 0000E81C 		      	call 	_DBGClearScreen
+                        	; 	DBGHomeCursor();
+000028 0000E81C 		      	call 	_DBGHomeCursor
+                        	; 	DBGDisplayString("  FT64 Bios Started\r\n");
+00002C FF1F97C2 		      	push 	r18
+000030 11209009 		      	ldi  	r18,#BIOSMain_2
+000034 0000E81C 		      	call 	_DBGDisplayString
+                        	; 	DBGDisplayString("  Menu\r\n  up = ramtest\r\n  left = float test\r\n  right=TinyBasic\r\n");
+000038 109E9009 		      	ldi  	r18,#BIOSMain_3
+00003C 0000E81C 		      	call 	_DBGDisplayString
+000040 691F97C2 		      	pop  	r18
+                        	BIOSMain_7:
+                        	; 	asm {
+                        		      	     	
+000044 0000001A 				lb		r1,BUTTONS
+000048 F800001B 
+00004C 000B0813 
+                        	BIOSMain_12:
+                        	BIOSMain_9:
+                        	BIOSMain_11:
+000050 FFE00F96 		      	sw   	r1,-32[bp]
+                        	; 		switch(btn) {
+000054 FFE01F92 		      	lw   	r3,-32[bp]
+                        	; 		case 8:
+000058 008018E6 		      	bbs  	r3,#3,BIOSMain_18
+                        	; 		case 2:
+00005C 014008E6 		      	bbs  	r3,#1,BIOSMain_19
+                        	; 		case 1:
+000060 020000E6 		      	bbs  	r3,#0,BIOSMain_20
+000064 02F00030 		      	bra  	BIOSMain_13
+                        	BIOSMain_18:
+                        	BIOSMain_21:
+                        	; 	asm {
+                        		      	     	
+000068 0000001A 				lb		r1,BUTTONS
+00006C F800001B 
+000070 000B0813 
+                        	BIOSMain_26:
+                        	BIOSMain_23:
+                        	BIOSMain_25:
+000074 00000071 		      	beq  	r1,r0,BIOSMain_22
+                        	; 			while(GetButton());
+000078 FF700031 		      	bra  	BIOSMain_21
+                        	BIOSMain_22:
+                        	; 			ramtest();
+00007C 0000E81C 		      	call 	_ramtest
+                        	; 			break;
+000080 01F00031 		      	bra  	BIOSMain_13
+                        	BIOSMain_19:
+                        	BIOSMain_27:
+                        	; 	asm {
+                        		      	     	
+000084 0000001A 				lb		r1,BUTTONS
+000088 F800001B 
+00008C 000B0813 
+                        	BIOSMain_32:
+                        	BIOSMain_29:
+                        	BIOSMain_31:
+000090 00000071 		      	beq  	r1,r0,BIOSMain_28
+                        	; 			while(GetButton());
+000094 FF700031 		      	bra  	BIOSMain_27
+                        	BIOSMain_28:
+                        	; 			FloatTest();
+000098 0000E81C 		      	call 	_FloatTest
+                        	; 			break;
+00009C 01300030 		      	bra  	BIOSMain_13
+                        	BIOSMain_20:
+                        	BIOSMain_33:
+                        	; 	asm {
+                        		      	     	
+0000A0 0000001A 				lb		r1,BUTTONS
+0000A4 F800001B 
+0000A8 000B0813 
+                        	BIOSMain_38:
+                        	BIOSMain_35:
+                        	BIOSMain_37:
+0000AC 00000071 		      	beq  	r1,r0,BIOSMain_34
+                        	; 			while(GetButton());
+0000B0 FF700031 		      	bra  	BIOSMain_33
+                        	BIOSMain_34:
+                        	; 			asm {
+                        		      	     	
+0000B4 0000001A 				jmp	TinyBasicDSD9
+BIOSMain_13:
+0000B8 F800001B 
+0000BC 00240018 
+0000C0 FC300030 		      	bra  	BIOSMain_7
+                        	BIOSMain_8:
+                        	BIOSMain_39:
+0000C4 6C1FF7C2 		      	unlink
+0000C8 691FE7C2 		      	pop  	xlr
+0000CC 0008FFE9 		      	ret  	#8
+                        	BIOSMain_4:
+0000D0 0008EF92 		      	lw   	lr,8[bp]
+0000D4 0010EF96 		      	sw   	lr,16[bp]
+0000D8 FF700030 		      	bra  	BIOSMain_39
+                        	endpublic
+                        	
+                        	
+                        	
+                        	_BIOSMainSTKSIZE_ EQU 40
+                        	
+                        	_GetEPCSTKSIZE_ EQU 0
+                        	
+                        	_GetBadAddrSTKSIZE_ EQU 0
+                        	
+                        	_SetPCHNDXSTKSIZE_ EQU 0
+                        	
+                        	_ReadPCHISTSTKSIZE_ EQU 0
+                        	
+0000DC FF1FF7C2 	public code _BTNCIRQHandler:
+	      	push 	bp
+0000E0 FF1FEFC2 		      	push 	lr
+0000E4 FF1FE7C2 		      	push 	xlr
+0000E8 FF1FD7C2 		      	push 	gp
+0000EC FF1FD7C2 		      	push 	r26
+0000F0 FF1FCFC2 		      	push 	r25
+0000F4 FF1FC7C2 		      	push 	r24
+0000F8 FF1FBFC2 		      	push 	r23
+0000FC FF1FB7C2 		      	push 	r22
+000100 FF1FAFC2 		      	push 	r21
+000104 FF1FA7C2 		      	push 	r20
+000108 FF1F9FC2 		      	push 	r19
+00010C FF1F97C2 		      	push 	r18
+000110 FF1F8FC2 		      	push 	r17
+000114 FF1F87C2 		      	push 	r16
+000118 FF1F7FC2 		      	push 	r15
+00011C FF1F77C2 		      	push 	r14
+000120 FF1F6FC2 		      	push 	r13
+000124 FF1F67C2 		      	push 	r12
+000128 FF1F5FC2 		      	push 	r11
+00012C FF1F57C2 		      	push 	r10
+000130 FF1F4FC2 		      	push 	r9
+000134 FF1F47C2 		      	push 	r8
+000138 FF1F3FC2 		      	push 	r7
+00013C FF1F37C2 		      	push 	r6
+000140 FF1F2FC2 		      	push 	r5
+000144 FF1F27C2 		      	push 	r4
+000148 FF1F1FC2 		      	push 	r3
+00014C FF1F17C2 		      	push 	r2
+000150 FF1F0FC2 		      	push 	r1
+000154 FF1FE7C2 		      	push 	xlr
+000158 0258E009 		      	ldi  	xlr,#BIOSMain_45
+00015C FFF0F7EA 		      	link 	#-_BTNCIRQHandlerSTKSIZE_-8
+                        	; 	asm {
+                        		      	     	
+000160 001E0809 				ldi		r1,#30
+000164 0000001A 				sh		r1,PIC_ESR
+000168 F800001B 
+00016C 002D0814 
+                        	; 	DBGDisplayString("\r\nPC History:\r\n");
+000170 FF1F97C2 		      	push 	r18
+000174 107E9009 		      	ldi  	r18,#BIOSMain_44
+000178 0000E81C 		      	call 	_DBGDisplayString
+00017C 691F97C2 		      	pop  	r18
+                        	; 	for (nn = 63; nn >= 0; nn--) {
+000180 003F1809 		      	ldi  	r3,#63
+000184 FFF81F96 		      	sw   	r3,-8[bp]
+                        	BIOSMain_48:
+000188 FFF81F92 		      	lw   	r3,-8[bp]
+00018C 000020C6 		      	cmp  	r4,r3,#0
+000190 02020130 		      	blt  	r4,r0,BIOSMain_49
+                        	; 		SetPCHNDX(nn);
+000194 FF1F97C2 		      	push 	r18
+000198 FFF81F92 		      	lw   	r3,-8[bp]
+00019C 000090DD 		      	mov  	r18,r3
+                        	; 	asm {
+                        		      	     	
+0001A0 4101048E 				csrrw	r0,#$101,r18
+                        	BIOSMain_54:
+                        	BIOSMain_51:
+                        	BIOSMain_53:
+0001A4 691F97C2 		      	pop  	r18
+                        	; 		puthex(ReadPCHIST());
+0001A8 FF1F97C2 		      	push 	r18
+                        	; 	asm {
+                        		      	     	
+0001AC 0100080E 				csrrd	r1,#$100,r0
+                        	BIOSMain_58:
+                        	BIOSMain_55:
+                        	BIOSMain_57:
+                        		      	hint 	#1
+0001B0 0000905D 		      	mov  	r18,r1
+0001B4 0000E81C 		      	call 	_puthex
+                        	; 		putch(' ');
+0001B8 00209009 		      	ldi  	r18,#32
+0001BC 0000E81C 		      	call 	_putch
+0001C0 691F97C2 		      	pop  	r18
+                        	BIOSMain_50:
+0001C4 FFF81F92 		      	lw   	r3,-8[bp]
+0001C8 FFFF18C4 		      	sub  	r3,r3,#1
+0001CC FFF81F96 		      	sw   	r3,-8[bp]
+0001D0 FDB00031 		      	bra  	BIOSMain_48
+                        	BIOSMain_49:
+                        	BIOSMain_59:
+0001D4 6C1FF7C2 		      	unlink
+0001D8 691FE7C2 		      	pop  	xlr
+0001DC 691F0FC2 		      	pop  	r1
+0001E0 691F17C2 		      	pop  	r2
+0001E4 691F1FC2 		      	pop  	r3
+0001E8 691F27C2 		      	pop  	r4
+0001EC 691F2FC2 		      	pop  	r5
+0001F0 691F37C2 		      	pop  	r6
+0001F4 691F3FC2 		      	pop  	r7
+0001F8 691F47C2 		      	pop  	r8
+0001FC 691F4FC2 		      	pop  	r9
+000200 691F57C2 		      	pop  	r10
+000204 691F5FC2 		      	pop  	r11
+000208 691F67C2 		      	pop  	r12
+00020C 691F6FC2 		      	pop  	r13
+000210 691F77C2 		      	pop  	r14
+000214 691F7FC2 		      	pop  	r15
+000218 691F87C2 		      	pop  	r16
+00021C 691F8FC2 		      	pop  	r17
+000220 691F97C2 		      	pop  	r18
+000224 691F9FC2 		      	pop  	r19
+000228 691FA7C2 		      	pop  	r20
+00022C 691FAFC2 		      	pop  	r21
+000230 691FB7C2 		      	pop  	r22
+000234 691FBFC2 		      	pop  	r23
+000238 691FC7C2 		      	pop  	r24
+00023C 691FCFC2 		      	pop  	r25
+000240 691FD7C2 		      	pop  	r26
+000244 691FD7C2 		      	pop  	gp
+000248 691FE7C2 		      	pop  	xlr
+00024C 691FEFC2 		      	pop  	lr
+000250 691FF7C2 		      	pop  	bp
+000254 C8000002 		      	iret 
+BIOSMain_45:
+000258 0008EF92 		      	lw   	lr,8[bp]
+00025C 0010EF96 		      	sw   	lr,16[bp]
+000260 FBB00030 		      	bra  	BIOSMain_59
+                        	endpublic
+                        	
+                        	
+                        	
+                        	_BTNCIRQHandlerSTKSIZE_ EQU 8
+                        	
+000264 FF1FF7C2 	public code _DBERout:
+	      	push 	bp
+000268 FF1FEFC2 		      	push 	lr
+00026C FF1FE7C2 		      	push 	xlr
+000270 FF1FD7C2 		      	push 	gp
+000274 FF1FD7C2 		      	push 	r26
+000278 FF1FCFC2 		      	push 	r25
+00027C FF1FC7C2 		      	push 	r24
+000280 FF1FBFC2 		      	push 	r23
+000284 FF1FB7C2 		      	push 	r22
+000288 FF1FAFC2 		      	push 	r21
+00028C FF1FA7C2 		      	push 	r20
+000290 FF1F9FC2 		      	push 	r19
+000294 FF1F97C2 		      	push 	r18
+000298 FF1F8FC2 		      	push 	r17
+00029C FF1F87C2 		      	push 	r16
+0002A0 FF1F7FC2 		      	push 	r15
+0002A4 FF1F77C2 		      	push 	r14
+0002A8 FF1F6FC2 		      	push 	r13
+0002AC FF1F67C2 		      	push 	r12
+0002B0 FF1F5FC2 		      	push 	r11
+0002B4 FF1F57C2 		      	push 	r10
+0002B8 FF1F4FC2 		      	push 	r9
+0002BC FF1F47C2 		      	push 	r8
+0002C0 FF1F3FC2 		      	push 	r7
+0002C4 FF1F37C2 		      	push 	r6
+0002C8 FF1F2FC2 		      	push 	r5
+0002CC FF1F27C2 		      	push 	r4
+0002D0 FF1F1FC2 		      	push 	r3
+0002D4 FF1F17C2 		      	push 	r2
+0002D8 FF1F0FC2 		      	push 	r1
+0002DC FF1FE7C2 		      	push 	xlr
+0002E0 0414E009 		      	ldi  	xlr,#BIOSMain_61
+0002E4 FFF0F7EA 		      	link 	#-_DBERoutSTKSIZE_-8
+                        	; 	DBGDisplayString("\r\nDatabus error: ");
+0002E8 FF1F97C2 		      	push 	r18
+0002EC 105A9009 		      	ldi  	r18,#BIOSMain_60
+0002F0 0000E81C 		      	call 	_DBGDisplayString
+0002F4 691F97C2 		      	pop  	r18
+                        	; 	puthex(GetEPC());
+0002F8 FF1F97C2 		      	push 	r18
+                        	; 	asm {
+                        		      	     	
+0002FC 0040080E 				csrrd	r1,#$40,r0
+                        	BIOSMain_67:
+                        	BIOSMain_64:
+                        	BIOSMain_66:
+                        		      	hint 	#1
+000300 0000905D 		      	mov  	r18,r1
+000304 0000E81C 		      	call 	_puthex
+                        	; 	putch(' ');
+000308 00209009 		      	ldi  	r18,#32
+00030C 0000E81C 		      	call 	_putch
+000310 691F97C2 		      	pop  	r18
+                        	; 	puthex(GetBadAddr());
+000314 FF1F97C2 		      	push 	r18
+                        	; 	asm {
+                        		      	     	
+000318 0007080E 				csrrd	r1,#7,r0
+00031C 003FF71A 				sh		r1,$FFDC0080
+000320 00800814 
+                        	BIOSMain_71:
+                        	BIOSMain_68:
+                        	BIOSMain_70:
+                        		      	hint 	#1
+000324 0000905D 		      	mov  	r18,r1
+000328 0000E81C 		      	call 	_puthex
+                        	; 	putch(' ');
+00032C 00209009 		      	ldi  	r18,#32
+000330 0000E81C 		      	call 	_putch
+000334 691F97C2 		      	pop  	r18
+                        	; 	for (nn = 63; nn >= 0; nn--) {
+000338 003F1809 		      	ldi  	r3,#63
+00033C FFF81F96 		      	sw   	r3,-8[bp]
+                        	BIOSMain_72:
+000340 FFF81F92 		      	lw   	r3,-8[bp]
+000344 000020C6 		      	cmp  	r4,r3,#0
+000348 02020130 		      	blt  	r4,r0,BIOSMain_73
+                        	; 		SetPCHNDX(nn);
+00034C FF1F97C2 		      	push 	r18
+000350 FFF81F92 		      	lw   	r3,-8[bp]
+000354 000090DD 		      	mov  	r18,r3
+                        	; 	asm {
+                        		      	     	
+000358 4101048E 				csrrw	r0,#$101,r18
+                        	BIOSMain_78:
+                        	BIOSMain_75:
+                        	BIOSMain_77:
+00035C 691F97C2 		      	pop  	r18
+                        	; 		puthex(ReadPCHIST());
+000360 FF1F97C2 		      	push 	r18
+                        	; 	asm {
+                        		      	     	
+000364 0100080E 				csrrd	r1,#$100,r0
+                        	BIOSMain_82:
+                        	BIOSMain_79:
+                        	BIOSMain_81:
+                        		      	hint 	#1
+000368 0000905D 		      	mov  	r18,r1
+00036C 0000E81C 		      	call 	_puthex
+                        	; 		putch(' ');
+000370 00209009 		      	ldi  	r18,#32
+000374 0000E81C 		      	call 	_putch
+000378 691F97C2 		      	pop  	r18
+                        	BIOSMain_74:
+00037C FFF81F92 		      	lw   	r3,-8[bp]
+000380 FFFF18C4 		      	sub  	r3,r3,#1
+000384 FFF81F96 		      	sw   	r3,-8[bp]
+000388 FDB00031 		      	bra  	BIOSMain_72
+                        	BIOSMain_73:
+                        	BIOSMain_83:
+00038C FFF00031 		      	bra  	BIOSMain_83
+                        	BIOSMain_84:
+                        	BIOSMain_85:
+000390 6C1FF7C2 		      	unlink
+000394 691FE7C2 		      	pop  	xlr
+000398 691F0FC2 		      	pop  	r1
+00039C 691F17C2 		      	pop  	r2
+0003A0 691F1FC2 		      	pop  	r3
+0003A4 691F27C2 		      	pop  	r4
+0003A8 691F2FC2 		      	pop  	r5
+0003AC 691F37C2 		      	pop  	r6
+0003B0 691F3FC2 		      	pop  	r7
+0003B4 691F47C2 		      	pop  	r8
+0003B8 691F4FC2 		      	pop  	r9
+0003BC 691F57C2 		      	pop  	r10
+0003C0 691F5FC2 		      	pop  	r11
+0003C4 691F67C2 		      	pop  	r12
+0003C8 691F6FC2 		      	pop  	r13
+0003CC 691F77C2 		      	pop  	r14
+0003D0 691F7FC2 		      	pop  	r15
+0003D4 691F87C2 		      	pop  	r16
+0003D8 691F8FC2 		      	pop  	r17
+0003DC 691F97C2 		      	pop  	r18
+0003E0 691F9FC2 		      	pop  	r19
+0003E4 691FA7C2 		      	pop  	r20
+0003E8 691FAFC2 		      	pop  	r21
+0003EC 691FB7C2 		      	pop  	r22
+0003F0 691FBFC2 		      	pop  	r23
+0003F4 691FC7C2 		      	pop  	r24
+0003F8 691FCFC2 		      	pop  	r25
+0003FC 691FD7C2 		      	pop  	r26
+000400 691FD7C2 		      	pop  	gp
+000404 691FE7C2 		      	pop  	xlr
+000408 691FEFC2 		      	pop  	lr
+00040C 691FF7C2 		      	pop  	bp
+000410 C8000002 		      	iret 
+BIOSMain_61:
+000414 0008EF92 		      	lw   	lr,8[bp]
+000418 0010EF96 		      	sw   	lr,16[bp]
+00041C FBB00030 		      	bra  	BIOSMain_85
+                        	endpublic
+                        	
+                        	
+                        	
+                        	_DBERoutSTKSIZE_ EQU 8
+                        	
+000420 FF1FF7C2 	public code _IBERout:
+	      	push 	bp
+000424 FF1FEFC2 		      	push 	lr
+000428 FF1FE7C2 		      	push 	xlr
+00042C FF1FD7C2 		      	push 	gp
+000430 FF1FD7C2 		      	push 	r26
+000434 FF1FCFC2 		      	push 	r25
+000438 FF1FC7C2 		      	push 	r24
+00043C FF1FBFC2 		      	push 	r23
+000440 FF1FB7C2 		      	push 	r22
+000444 FF1FAFC2 		      	push 	r21
+000448 FF1FA7C2 		      	push 	r20
+00044C FF1F9FC2 		      	push 	r19
+000450 FF1F97C2 		      	push 	r18
+000454 FF1F8FC2 		      	push 	r17
+000458 FF1F87C2 		      	push 	r16
+00045C FF1F7FC2 		      	push 	r15
+000460 FF1F77C2 		      	push 	r14
+000464 FF1F6FC2 		      	push 	r13
+000468 FF1F67C2 		      	push 	r12
+00046C FF1F5FC2 		      	push 	r11
+000470 FF1F57C2 		      	push 	r10
+000474 FF1F4FC2 		      	push 	r9
+000478 FF1F47C2 		      	push 	r8
+00047C FF1F3FC2 		      	push 	r7
+000480 FF1F37C2 		      	push 	r6
+000484 FF1F2FC2 		      	push 	r5
+000488 FF1F27C2 		      	push 	r4
+00048C FF1F1FC2 		      	push 	r3
+000490 FF1F17C2 		      	push 	r2
+000494 FF1F0FC2 		      	push 	r1
+000498 FF1FE7C2 		      	push 	xlr
+00049C 0598E009 		      	ldi  	xlr,#BIOSMain_88
+0004A0 FFF0F7EA 		      	link 	#-_IBERoutSTKSIZE_-8
+                        	; 	DBGDisplayString("\r\nInstruction Bus Error:\r\n");
+0004A4 FF1F97C2 		      	push 	r18
+0004A8 10249009 		      	ldi  	r18,#BIOSMain_86
+0004AC 0000E81C 		      	call 	_DBGDisplayString
+                        	; 	DBGDisplayString("PC History:\r\n");
+0004B0 10089009 		      	ldi  	r18,#BIOSMain_87
+0004B4 0000E81C 		      	call 	_DBGDisplayString
+0004B8 691F97C2 		      	pop  	r18
+                        	; 	for (nn = 63; nn >= 0; nn--) {
+0004BC 003F1809 		      	ldi  	r3,#63
+0004C0 FFF81F96 		      	sw   	r3,-8[bp]
+                        	BIOSMain_91:
+0004C4 FFF81F92 		      	lw   	r3,-8[bp]
+0004C8 000020C6 		      	cmp  	r4,r3,#0
+0004CC 02020130 		      	blt  	r4,r0,BIOSMain_92
+                        	; 		SetPCHNDX(nn);
+0004D0 FF1F97C2 		      	push 	r18
+0004D4 FFF81F92 		      	lw   	r3,-8[bp]
+0004D8 000090DD 		      	mov  	r18,r3
+                        	; 	asm {
+                        		      	     	
+0004DC 4101048E 				csrrw	r0,#$101,r18
+                        	BIOSMain_97:
+                        	BIOSMain_94:
+                        	BIOSMain_96:
+0004E0 691F97C2 		      	pop  	r18
+                        	; 		puthex(ReadPCHIST());
+0004E4 FF1F97C2 		      	push 	r18
+                        	; 	asm {
+                        		      	     	
+0004E8 0100080E 				csrrd	r1,#$100,r0
+                        	BIOSMain_101:
+                        	BIOSMain_98:
+                        	BIOSMain_100:
+                        		      	hint 	#1
+0004EC 0000905D 		      	mov  	r18,r1
+0004F0 0000E81C 		      	call 	_puthex
+                        	; 		putch(' ');
+0004F4 00209009 		      	ldi  	r18,#32
+0004F8 0000E81C 		      	call 	_putch
+0004FC 691F97C2 		      	pop  	r18
+                        	BIOSMain_93:
+000500 FFF81F92 		      	lw   	r3,-8[bp]
+000504 FFFF18C4 		      	sub  	r3,r3,#1
+000508 FFF81F96 		      	sw   	r3,-8[bp]
+00050C FDB00031 		      	bra  	BIOSMain_91
+                        	BIOSMain_92:
+                        	BIOSMain_102:
+000510 FFF00031 		      	bra  	BIOSMain_102
+                        	BIOSMain_103:
+                        	BIOSMain_104:
+000514 6C1FF7C2 		      	unlink
+000518 691FE7C2 		      	pop  	xlr
+00051C 691F0FC2 		      	pop  	r1
+000520 691F17C2 		      	pop  	r2
+000524 691F1FC2 		      	pop  	r3
+000528 691F27C2 		      	pop  	r4
+00052C 691F2FC2 		      	pop  	r5
+000530 691F37C2 		      	pop  	r6
+000534 691F3FC2 		      	pop  	r7
+000538 691F47C2 		      	pop  	r8
+00053C 691F4FC2 		      	pop  	r9
+000540 691F57C2 		      	pop  	r10
+000544 691F5FC2 		      	pop  	r11
+000548 691F67C2 		      	pop  	r12
+00054C 691F6FC2 		      	pop  	r13
+000550 691F77C2 		      	pop  	r14
+000554 691F7FC2 		      	pop  	r15
+000558 691F87C2 		      	pop  	r16
+00055C 691F8FC2 		      	pop  	r17
+000560 691F97C2 		      	pop  	r18
+000564 691F9FC2 		      	pop  	r19
+000568 691FA7C2 		      	pop  	r20
+00056C 691FAFC2 		      	pop  	r21
+000570 691FB7C2 		      	pop  	r22
+000574 691FBFC2 		      	pop  	r23
+000578 691FC7C2 		      	pop  	r24
+00057C 691FCFC2 		      	pop  	r25
+000580 691FD7C2 		      	pop  	r26
+000584 691FD7C2 		      	pop  	gp
+000588 691FE7C2 		      	pop  	xlr
+00058C 691FEFC2 		      	pop  	lr
+000590 691FF7C2 		      	pop  	bp
+000594 C8000002 		      	iret 
+BIOSMain_88:
+000598 0008EF92 		      	lw   	lr,8[bp]
+00059C 0010EF96 		      	sw   	lr,16[bp]
+0005A0 FBB00030 		      	bra  	BIOSMain_104
+                        	endpublic
+                        	
+                        	
+                        	
+                        	_IBERoutSTKSIZE_ EQU 8
+                        	
+                        		rodata
+                        		align	16                        	
+                        		align	8                        	
+                        		align	8                        	
+                        	BIOSMain_1:
+001000 54442D18 		dh	0x54442D18,0x400921FB
+001002 400921FB 
+                        		align	2                        	
+                        	BIOSMain_87:	; PC History:
+001008 00430050 		dc	80,67,32,72,105,115,116,111
+00100A 00480020 
+00100C 00730069 
+00100E 006F0074 
+001018 00790072 		dc	114,121,58,13,10,0
+00101A 000D003A 
+00101C 0000000A 
+                        	BIOSMain_86:	; Instruction Bus Error:
+001024 000A000D 		dc	13,10,73,110,115,116,114,117
+001026 006E0049 
+001028 00740073 
+00102A 00750072 
+001034 00740063 		dc	99,116,105,111,110,32,66,117
+001036 006F0069 
+001038 0020006E 
+00103A 00750042 
+001044 00200073 		dc	115,32,69,114,114,111,114,58
+001046 00720045 
+001048 006F0072 
+00104A 003A0072 
+001054 000A000D 		dc	13,10,0
+001056 000D0000 
+                        	BIOSMain_60:	; Databus error: 
+00105A 000A000D 		dc	13,10,68,97,116,97,98,117
+00105C 00610044 
+00105E 00610074 
+001060 00750062 
+00106A 00200073 		dc	115,32,101,114,114,111,114,58
+00106C 00720065 
+00106E 006F0072 
+001070 003A0072 
+00107A 00000020 		dc	32,0
+                        	BIOSMain_44:	; PC History:
+00107E 000A000D 		dc	13,10,80,67,32,72,105,115
+001080 00430050 
+001082 00480020 
+001084 00730069 
+00108E 006F0074 		dc	116,111,114,121,58,13,10,0
+001090 00790072 
+001092 000D003A 
+001094 0000000A 
+                        	BIOSMain_3:	;   Menu  up = ramtest  left = float test  right=TinyBasic
+00109E 00200020 		dc	32,32,77,101,110,117,13,10
+0010A0 0065004D 
+0010A2 0075006E 
+0010A4 000A000D 
+0010AE 00200020 		dc	32,32,117,112,32,61,32,114
+0010B0 00700075 
+0010B2 003D0020 
+0010B4 00720020 
+0010BE 006D0061 		dc	97,109,116,101,115,116,13,10
+0010C0 00650074 
+0010C2 00740073 
+0010C4 000A000D 
+0010CE 00200020 		dc	32,32,108,101,102,116,32,61
+0010D0 0065006C 
+0010D2 00740066 
+0010D4 003D0020 
+0010DE 00660020 		dc	32,102,108,111,97,116,32,116
+0010E0 006F006C 
+0010E2 00740061 
+0010E4 00740020 
+0010EE 00730065 		dc	101,115,116,13,10,32,32,114
+0010F0 000D0074 
+0010F2 0020000A 
+0010F4 00720020 
+0010FE 00670069 		dc	105,103,104,116,61,84,105,110
+001100 00740068 
+001102 0054003D 
+001104 006E0069 
+00110E 00420079 		dc	121,66,97,115,105,99,13,10
+001110 00730061 
+001112 00630069 
+001114 000A000D 
+00111E 00200000 		dc	0
+                        	BIOSMain_2:	;   FT64 Bios Started
+001120 00200020 		dc	32,32,70,84,54,52,32,66
+001122 00540046 
+001124 00340036 
+001126 00420020 
+001130 006F0069 		dc	105,111,115,32,83,116,97,114
+001132 00200073 
+001134 00740053 
+001136 00720061 
+001140 00650074 		dc	116,101,100,13,10,0
+001142 000D0064 
+001144 0000000A 
+                        	;	global	_BIOSMain
+                        	;	global	_BTNCIRQHandler
+                        		extern	_DBGHomeCursor
+	extern	_ramtest
+	extern	_DBGClearScreen
+	extern	_DBGDisplayString
+	extern	_putch
+	extern	_DBGAttr
+;	global	_DBERout
+                        	;	global	_IBERout
+                        		extern	_printf
+	extern	_FloatTest
+	extern	_prtflt
+	extern	_puthex
+	extern	_puthex
+
+
+                        		rodata
+
+00114C 00000000 		align 
+                        	
+
+                        	begin_init_data:
+
+                        	
+
+                        		rodata
+
+                        		align 8                        	
+
+                        	end_init_data:
+
+104 symbols
+  Symbol Name                              seg     address bits
+  BIOSMain_1                               rodata  001000 32
+  BIOSMain_100                               code  0004ec 32
+  BIOSMain_101                               code  0004ec 32
+  BIOSMain_102                               code  000510 32
+  BIOSMain_103                               code  000514 32
+  BIOSMain_104                               code  000514 32
+  BIOSMain_11                                code  000050 32
+  BIOSMain_12                                code  000050 32
+  BIOSMain_13                                code  0000c0 32
+  BIOSMain_18                                code  000068 32
+  BIOSMain_19                                code  000084 32
+  BIOSMain_2                               rodata  001120 32
+  BIOSMain_20                                code  0000a0 32
+  BIOSMain_21                                code  000068 32
+  BIOSMain_22                                code  00007c 32
+  BIOSMain_23                                code  000074 32
+  BIOSMain_25                                code  000074 32
+  BIOSMain_26                                code  000074 32
+  BIOSMain_27                                code  000084 32
+  BIOSMain_28                                code  000098 32
+  BIOSMain_29                                code  000090 32
+  BIOSMain_3                               rodata  00109e 32
+  BIOSMain_31                                code  000090 32
+  BIOSMain_32                                code  000090 32
+  BIOSMain_33                                code  0000a0 32
+  BIOSMain_34                                code  0000b4 32
+  BIOSMain_35                                code  0000ac 32
+  BIOSMain_37                                code  0000ac 32
+  BIOSMain_38                                code  0000ac 32
+  BIOSMain_39                                code  0000c4 32
+  BIOSMain_4                                 code  0000d0 32
+  BIOSMain_44                              rodata  00107e 32
+  BIOSMain_45                                code  000258 32
+  BIOSMain_48                                code  000188 32
+  BIOSMain_49                                code  0001d4 32
+  BIOSMain_50                                code  0001c4 32
+  BIOSMain_51                                code  0001a4 32
+  BIOSMain_53                                code  0001a4 32
+  BIOSMain_54                                code  0001a4 32
+  BIOSMain_55                                code  0001b0 32
+  BIOSMain_57                                code  0001b0 32
+  BIOSMain_58                                code  0001b0 32
+  BIOSMain_59                                code  0001d4 32
+  BIOSMain_60                              rodata  00105a 32
+  BIOSMain_61                                code  000414 32
+  BIOSMain_64                                code  000300 32
+  BIOSMain_66                                code  000300 32
+  BIOSMain_67                                code  000300 32
+  BIOSMain_68                                code  000324 32
+  BIOSMain_7                                 code  000044 32
+  BIOSMain_70                                code  000324 32
+  BIOSMain_71                                code  000324 32
+  BIOSMain_72                                code  000340 32
+  BIOSMain_73                                code  00038c 32
+  BIOSMain_74                                code  00037c 32
+  BIOSMain_75                                code  00035c 32
+  BIOSMain_77                                code  00035c 32
+  BIOSMain_78                                code  00035c 32
+  BIOSMain_79                                code  000368 32
+  BIOSMain_8                                 code  0000c4 32
+  BIOSMain_81                                code  000368 32
+  BIOSMain_82                                code  000368 32
+  BIOSMain_83                                code  00038c 32
+  BIOSMain_84                                code  000390 32
+  BIOSMain_85                                code  000390 32
+  BIOSMain_86                              rodata  001024 32
+  BIOSMain_87                              rodata  001008 32
+  BIOSMain_88                                code  000598 32
+  BIOSMain_9                                 code  000050 32
+  BIOSMain_91                                code  0004c4 32
+  BIOSMain_92                                code  000510 32
+  BIOSMain_93                                code  000500 32
+  BIOSMain_94                                code  0004e0 32
+  BIOSMain_96                                code  0004e0 32
+  BIOSMain_97                                code  0004e0 32
+  BIOSMain_98                                code  0004ec 32
+Ì BUTTONS                                    code  800000000000000b -858993460
+Ì PIC_ESR                                    code  800000000000002d -858993460
+Ì TinyBasicDSD9                              code  8000000000000024 -858993460
+  _BIOSMain                                  code  000000 -858993460
+Ì _BIOSMainSTKSIZE_                         const  000028 7
+  _BTNCIRQHandler                            code  0000dc -858993460
+Ì _BTNCIRQHandlerSTKSIZE_                   const  000008 5
+  _DBERout                                   code  000264 -858993460
+Ì _DBERoutSTKSIZE_                          const  000008 5
+Ì _DBGAttr                                 rodata  000000 32
+Ì _DBGClearScreen                          rodata  000000 32
+Ì _DBGDisplayString                        rodata  000000 32
+Ì _DBGHomeCursor                           rodata  000000 32
+Ì _FloatTest                               rodata  000000 32
+Ì _GetBadAddrSTKSIZE_                       const  000000 1
+Ì _GetButtonSTKSIZE_                        const  000000 1
+Ì _GetEPCSTKSIZE_                           const  000000 1
+  _IBERout                                   code  000420 -858993460
+Ì _IBERoutSTKSIZE_                          const  000008 5
+Ì _ReadPCHISTSTKSIZE_                       const  000000 1
+Ì _SetPCHNDXSTKSIZE_                        const  000000 1
+Ì _printf                                  rodata  000000 32
+Ì _prtflt                                  rodata  000000 32
+Ì _putch                                   rodata  000000 32
+Ì _puthex                                  rodata  000000 32
+Ì _ramtest                                 rodata  000000 32
+  begin_init_data                          rodata  001150 32
+  end_init_data                            rodata  001150 32
+0 compressable instructions
+The top 1024 are:
+Comp  Opcode  Count
+
+number of bytes: 2776
+number of instructions: 694
+4.000000 bytes (32 bits) per instruction

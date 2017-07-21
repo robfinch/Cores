@@ -127,7 +127,7 @@ int ParseFunction(SYM *sp)
 {
     SYM *osp;
 	Statement *stmt;
-	int nump;
+	int nump, numa;
 	std::string name;
 
   dfs.puts("<ParseFunction>\n");
@@ -155,7 +155,7 @@ int ParseFunction(SYM *sp)
   // declarations. the original 'C' style is parsed here. Originally the
   // parameter types appeared as list after the parenthesis and before the
   // function body.
-	sp->BuildParameterList(&nump);
+	sp->BuildParameterList(&nump, &numa);
 	dfs.printf("B");
   sp->mangledName = sp->BuildSignature(1);  // build against parameters
 
@@ -209,6 +209,7 @@ int ParseFunction(SYM *sp)
 		sp->IsInterrupt = isInterrupt;
 		sp->IsTask = isTask;
 		sp->NumParms = nump;
+		sp->numa = numa;
 		sp->IsVirtual = isVirtual;
 		sp->IsInline = isInline;
 		isPascal = FALSE;
@@ -233,6 +234,7 @@ j2:
 		sp->IsVirtual = isVirtual;
 		sp->IsInline = isInline;
 		sp->NumParms = nump;
+		sp->numa = numa;
 		sp->params.MoveTo(&sp->proto);
 		isPascal = FALSE;
 		isKernel = FALSE;
@@ -253,7 +255,7 @@ j2:
 			dfs.printf("F");
 //			NextToken();
 //			ParameterDeclaration::Parse(2);
-			sp->BuildParameterList(&nump);
+			sp->BuildParameterList(&nump, &numa);
 			// for old-style parameter list
 			//needpunc(closepa);
 			if (lastst==semicolon) {
@@ -267,6 +269,7 @@ j2:
 				sp->IsRegister = isRegister;
 				sp->IsVirtual = isVirtual;
 				sp->NumParms = nump;
+				sp->numa = numa;
 				isPascal = FALSE;
     			isKernel = FALSE;
 				isOscall = FALSE;
@@ -295,6 +298,7 @@ j2:
     		isTask = FALSE;
 				isNocall = FALSE;
 				sp->NumParms = nump;
+				sp->numa = numa;
 				stmt = ParseFunctionBody(sp);
 				funcbottom(stmt);
 			}
@@ -316,6 +320,7 @@ dfs.printf("G");
 			isTask = FALSE;
 			isNocall = FALSE;
 			sp->NumParms = nump;
+			sp->numa = numa;
 			stmt = ParseFunctionBody(sp);
 			funcbottom(stmt);
     }
@@ -406,6 +411,7 @@ static Statement *ParseFunctionBody(SYM *sp)
 {    
 	std::string lbl;
 	char *p;
+	int stkspace;
 
   dfs.printf("<Parse function body>:%s|\n", (char *)sp->name->c_str());
 
@@ -447,7 +453,9 @@ static Statement *ParseFunctionBody(SYM *sp)
 	sp->stmt = ParseCompoundStatement();
   dfs.printf("D");
 //	stmt->stype = st_funcbody;
+  sp->stkspace = tmpVarSpace() + lc_auto;
   if (!sp->IsInline) {
+
 	GenerateFunction(sp);
 	dfs.putch('E');
 
@@ -456,7 +464,8 @@ static Statement *ParseFunctionBody(SYM *sp)
 		ofs.printf("endpublic\r\n\r\n");
 	}
   }
-	ofs.printf("%sSTKSIZE_ EQU %d\r\n", (char *)sp->mangledName->c_str(), tmpVarSpace() + lc_auto);
+	//if (sp->stkspace)
+	//ofs.printf("%sSTKSIZE_ EQU %d\r\n", (char *)sp->mangledName->c_str(), sp->stkspace);
 	isFuncBody = false;
 	dfs.printf("</ParseFunctionBody>\n");
 	return sp->stmt;

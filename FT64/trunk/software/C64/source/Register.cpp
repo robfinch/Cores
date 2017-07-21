@@ -1,12 +1,12 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2016  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2017  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-// C32 - 'C' derived language compiler
-//  - 32 bit CPU
+// C64 - 'C' derived language compiler
+//  - 64 bit CPU
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -69,7 +69,7 @@ static short int save_reg_alloc_ptr;
 static short int breg_stack_ptr;
 static short int breg_alloc_ptr;
 
-char tmpregs[] = {3,4,5,6,7,8,9,10};
+char tmpregs[] = {1,2,3,4,5,6,7,8,9,10};
 char tmpbregs[] = {5,6,7};
 char regstack[18];
 char bregstack[18];
@@ -81,8 +81,9 @@ int bregmask=0;
 void initRegStack()
 {
 	int i;
+	SYM *sym = currentFn;
 
-    next_reg = 3;
+	next_reg = sym->IsLeaf ? 1 : 3;
     next_breg = 5;
 	//for (rsp=0; rsp < 3; rsp=rsp+1)
 	//	regstack[rsp] = tmpregs[rsp];
@@ -152,7 +153,8 @@ void initstack()
 AMODE *GetTempRegister()
 {
 	AMODE *ap;
-    
+    SYM *sym = currentFn;
+
 	if (reg_in_use[next_reg] >= 0) {
 //		if (isThor)	
 //			GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(-8));
@@ -173,7 +175,7 @@ AMODE *GetTempRegister()
     }
     else {
         if (next_reg++ >= 10)
-    		next_reg = 3;		/* wrap around */
+			next_reg = sym->IsLeaf ? 1 : 3;		/* wrap around */
     }
     if (reg_alloc_ptr++ == MAX_REG_STACK)
 		fatal("GetTempRegister(): register stack overflow");
@@ -183,6 +185,7 @@ AMODE *GetTempRegister()
 AMODE *GetTempFPRegister()
 {
 	AMODE *ap;
+    SYM *sym = currentFn;
     
 	if (reg_in_use[next_reg] >= 0) {
 //		if (isThor)	
@@ -200,7 +203,7 @@ AMODE *GetTempFPRegister()
     reg_alloc[reg_alloc_ptr].mode = am_reg;
     reg_alloc[reg_alloc_ptr].f.isPushed = 'F';
     if (next_reg++ >= 10)
-    	next_reg = 3;		/* wrap around */
+    	next_reg = sym->IsLeaf ? 1 : 3;		/* wrap around */
     if (reg_alloc_ptr++ == MAX_REG_STACK)
 		fatal("GetTempRegister(): register stack overflow");
 	return ap;
@@ -242,10 +245,12 @@ AMODE *GetTempFPRegister()
 void checkstack()
 {
     int i;
-    for (i=3; i<= 10; i++)
+    SYM *sym = currentFn;
+
+    for (i=1; i<= 10; i++)
         if (reg_in_use[i] != -1)
             fatal("checkstack()/1");
-	if (next_reg != 3) {
+	if (next_reg != sym->IsLeaf ? 1 : 3) {
 		//printf("Nextreg: %d\r\n", next_reg);
         fatal("checkstack()/3");
 	}
@@ -277,28 +282,31 @@ void checkbrstack()
  */
 void validate(AMODE *ap)
 {
+    SYM *sym = currentFn;
+	int frg = sym->IsLeaf ? 1 : 3;
+
     switch (ap->mode) {
 	case am_reg:
-		if ((ap->preg >= 3 && ap->preg <= 10) && reg_alloc[ap->deep].f.isPushed == 'T' ) {
+		if ((ap->preg >= frg && ap->preg <= 10) && reg_alloc[ap->deep].f.isPushed == 'T' ) {
 			GenerateTempRegPop(ap->preg, am_reg, (int) ap->deep, 0);
 //			if (isThor)
 //				GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(8));
 		}
 		break;
     case am_indx2:
-		if ((ap->preg >= 3 && ap->preg <= 10) && reg_alloc[ap->deep].f.isPushed == 'T') {
+		if ((ap->preg >= frg && ap->preg <= 10) && reg_alloc[ap->deep].f.isPushed == 'T') {
 			GenerateTempRegPop(ap->preg, am_reg, (int) ap->deep, 0);
 //			if (isThor)
 //				GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(8));
 		}
-		if ((ap->sreg >= 3 && ap->sreg <= 10) && reg_alloc[ap->deep2].f.isPushed  == 'T') {
+		if ((ap->sreg >= frg && ap->sreg <= 10) && reg_alloc[ap->deep2].f.isPushed  == 'T') {
 			GenerateTempRegPop(ap->sreg, am_reg, (int) ap->deep2, 0);
 //			if (isThor)
 //				GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(8));
 		}
 		break;
     case am_indx3:
-		if ((ap->sreg >= 3 && ap->sreg <= 10) && reg_alloc[ap->deep2].f.isPushed == 'T') {
+		if ((ap->sreg >= frg && ap->sreg <= 10) && reg_alloc[ap->deep2].f.isPushed == 'T') {
 			GenerateTempRegPop(ap->sreg, am_reg, (int) ap->deep2, 0);
 //			if (isThor)
 //				GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(8));
@@ -309,7 +317,7 @@ void validate(AMODE *ap)
     case am_ainc:
     case am_adec:
 common:
-		if ((ap->preg >= 3 && ap->preg <= 10) && reg_alloc[ap->deep].f.isPushed == 'T') {
+		if ((ap->preg >= frg && ap->preg <= 10) && reg_alloc[ap->deep].f.isPushed == 'T') {
 			GenerateTempRegPop(ap->preg, am_reg, (int) ap->deep, 0);
 //			if (isThor)
 //				GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(8));
@@ -325,6 +333,8 @@ common:
 void ReleaseTempRegister(AMODE *ap)
 {
     int number;
+    SYM *sym = currentFn;
+	int frg = sym->IsLeaf ? 1 : 3;
 
 	TRACE(printf("ReleaseTempRegister:r%d r%d\r\n", ap->preg, ap->sreg);)
 
@@ -341,10 +351,10 @@ void ReleaseTempRegister(AMODE *ap)
 	case am_adec:
 	case am_reg:
 common:
-		if (ap->preg >= 3 && ap->preg <= 10) {
+		if (ap->preg >= frg && ap->preg <= 10) {
 			if (reg_in_use[ap->preg]==-1)
 				return;
-			if (next_reg-- <= 3)
+			if (next_reg-- <= frg)
 				next_reg = 10;
 			number = reg_in_use[ap->preg];
 			reg_in_use[ap->preg] = -1;
@@ -353,10 +363,10 @@ common:
 		return;
     case am_indx2:
 	case am_indx3:
-		if (ap->sreg >= 3 && ap->sreg <= 10) {
+		if (ap->sreg >= frg && ap->sreg <= 10) {
 			if (reg_in_use[ap->sreg]==-1)
 				return;
-			if (next_reg-- <= 3)
+			if (next_reg-- <= frg)
 				next_reg = 10;
 			number = reg_in_use[ap->sreg];
 			reg_in_use[ap->sreg] = -1;

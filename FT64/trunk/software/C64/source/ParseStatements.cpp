@@ -564,20 +564,38 @@ Statement *ParseCaseStatement()
 int CheckForDuplicateCases(Statement *head) 
 {     
 	Statement *top, *cur;
+	int cnt, cnt2;
 
 	cur = top = head;
 	while( top != (Statement *)NULL )
 	{
-		cur = top->next;
-		while( cur != (Statement *)NULL )
-		{
-			if( (!(cur->s1 || cur->s2) && cur->label == top->label)
-				|| (cur->s2 && top->s2) )
-			{
-				printf(" duplicate case value %d\n",cur->label);
-				return TRUE;
+		if (top->casevals) {
+			for (cnt = 1; cnt < top->casevals[0]+1; cnt++) {
+				cur = top->next;
+				while( cur != (Statement *)NULL )
+				{
+					if (cur->casevals) {	// default statements have no casevals
+						for (cnt2 = 1; cnt2 < cur->casevals[0]+1; cnt2++) {
+		//					if( (!(cur->s1 || cur->s2) && cur->casevals[cnt2] == top->casevals[cnt])
+							if (cur->casevals[cnt2] == top->casevals[cnt])
+							{
+								//printf(" duplicate case value %d\n",cur->casevals[cnt2]);
+								return TRUE;
+							}
+						}
+					}
+					cur = cur->next;
+				}
 			}
-			cur = cur->next;
+		}
+		else {
+			cur = top->next;
+			while( cur != (Statement *)NULL )
+			{
+				if (cur->s2 && top->s2)
+					return TRUE;
+				cur = cur->next;
+			}
 		}
 		top = top->next;
 	}

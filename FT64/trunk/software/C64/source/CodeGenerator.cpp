@@ -945,7 +945,6 @@ AMODE *gen_hook(ENODE *node,int flags, int size)
 	AMODE *ap1, *ap2;
     int false_label, end_label;
 
-	hook_predreg--;
     false_label = nextlabel++;
     end_label = nextlabel++;
     flags = (flags & F_REG) | F_VOL;
@@ -963,12 +962,12 @@ AMODE *gen_hook(ENODE *node,int flags, int size)
     ap2 = GenerateExpression(node->p[1],flags,size);
     if( !equal_address(ap1,ap2) )
     {
+		GenerateMonadic(op_hint,0,make_immed(2));
 		GenerateDiadic(op_mov,0,ap1,ap2);
     }
     ReleaseTempReg(ap2);
     GenerateLabel(end_label);
-	hook_predreg++;
-    return ap1;
+    return (ap1);
 }
 
 void GenMemop(int op, AMODE *ap1, AMODE *ap2, int ssize)
@@ -1111,7 +1110,7 @@ AMODE *GenerateAssignModiv(ENODE *node,int flags,int size,int op)
     siz1 = GetNaturalSize(node->p[0]);
     isFP = node->etype==bt_double || node->etype==bt_float || node->etype==bt_triple || node->etype==bt_quad;
     if (isFP) {
-        if (op==op_divs || op==op_divu)
+        if (op==op_div || op==op_divu)
            op = op_fdiv;
         ap1 = GenerateExpression(node->p[0],F_REG,siz1);
         ap2 = GenerateExpression(node->p[1],F_REG,size);
@@ -1683,7 +1682,7 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
 	case en_xor:	return GenerateBinary(node,flags,size,op_xor);
     case en_mul:    return GenerateMultiply(node,flags,size,op_mul);
     case en_mulu:   return GenerateMultiply(node,flags,size,op_mulu);
-    case en_div:    return GenerateModDiv(node,flags,size,op_divs);
+    case en_div:    return GenerateModDiv(node,flags,size,op_div);
     case en_udiv:   return GenerateModDiv(node,flags,size,op_divu);
     case en_mod:    return GenerateModDiv(node,flags,size,op_mod);
     case en_umod:   return GenerateModDiv(node,flags,size,op_modu);
@@ -1711,7 +1710,7 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
             return GenerateAssignShift(node,flags,size,op_shru);
     case en_asmul: return GenerateAssignMultiply(node,flags,size,op_mul);
     case en_asmulu: return GenerateAssignMultiply(node,flags,size,op_mulu);
-    case en_asdiv: return GenerateAssignModiv(node,flags,size,op_divs);
+    case en_asdiv: return GenerateAssignModiv(node,flags,size,op_div);
     case en_asdivu: return GenerateAssignModiv(node,flags,size,op_divu);
     case en_asmod: return GenerateAssignModiv(node,flags,size,op_mod);
     case en_asmodu: return GenerateAssignModiv(node,flags,size,op_modu);

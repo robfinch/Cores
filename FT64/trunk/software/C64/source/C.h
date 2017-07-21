@@ -200,7 +200,9 @@ public:
 	// Function attributes
 	uint8_t NumRegisterVars;
 	unsigned __int8 NumParms;
-	// Auto's are ehandled by compound statements
+	unsigned __int8 numa;			// number of stack parameters (autos)
+	int stkspace;					// stack space used by function
+	// Auto's are handled by compound statements
 	TABLE proto;
 	TABLE params;
 	TABLE lsyms;              // local symbols (goto labels)
@@ -260,7 +262,7 @@ public:
 	SYM *FindExactMatch(int mm);
 	static SYM *FindExactMatch(int mm, std::string name, int rettype, TypeArray *typearray);
 	std::string *BuildSignature(int opt = 0);
-	void BuildParameterList(int *num);
+	void BuildParameterList(int *num, int*numa);
 	void AddParameters(SYM *list);
 	void AddProto(SYM *list);
 	void AddProto(TypeArray *);
@@ -354,6 +356,7 @@ public:
 	static void ParseLong();
 	static void ParseInt();
 	static void ParseInt80();
+	static void ParseInt64();
 	static void ParseInt40();
 	static void ParseInt32();
 	static void ParseInt16();
@@ -482,6 +485,9 @@ public:
 #define ERR_TOOMANY_PARAMS  51
 #define ERR_THIS            52
 #define ERR_BADARG			53
+#define ERR_CSETABLE		54
+#define ERR_UBLTZ			55
+#define ERR_UBGEQ			56
 #define ERR_NULLPOINTER		1000
 #define ERR_CIRCULAR_LIST 1001
 

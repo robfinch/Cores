@@ -250,6 +250,27 @@ void Declaration::ParseInt32()
 	head->isShort = TRUE;
 }
 
+void Declaration::ParseInt64()
+{
+	if (isUnsigned) {
+		head = (TYP *)TYP::Make(bt_ulong,8);
+		tail = head;
+	}
+	else {
+		head = (TYP *)TYP::Make(bt_long,8);
+		tail = head;
+	}
+	bit_max = 64;
+	NextToken();
+	if( lastst == kw_int )
+		NextToken();
+	head->isUnsigned = isUnsigned;
+	head->isVolatile = isVolatile;
+	head->isIO = isIO;
+	head->isConst = isConst;
+	head->isShort = TRUE;
+}
+
 void Declaration::ParseInt16()
 {
 	if (isUnsigned) {
@@ -427,6 +448,7 @@ int Declaration::ParseSpecifier(TABLE *table)
 			case kw_int8:	ParseInt8(); goto lxit;
 			case kw_int16:	ParseInt16(); goto lxit;
 			case kw_int32:	ParseInt32(); goto lxit;
+			case kw_int64:	ParseInt64(); goto lxit;
 			case kw_short:	ParseInt32();	goto lxit;
 			case kw_long:	ParseLong();	goto lxit;	// long, long int
 			case kw_int:	ParseInt();		goto lxit;
@@ -642,35 +664,35 @@ lxit:
 SYM *Declaration::ParsePrefixOpenpa(bool isUnion)
 {
 	TYP *temp1, *temp2, *temp3, *temp4;
-  SYM *sp;
+	SYM *sp;
 
-  dfs.puts("<ParsePrefixOpenpa>\n");
-  NextToken();
-  temp1 = head;
-  temp2 = tail;
-  head = tail = (TYP *)NULL;	// It might be a typecast following.
+	dfs.puts("<ParsePrefixOpenpa>\n");
+	NextToken();
+	temp1 = head;
+	temp2 = tail;
+	head = tail = (TYP *)NULL;	// It might be a typecast following.
 	// Do we have (getchar)()
 	// This processing is difficult to do with a loop, so a recursive
 	// call is made.
 	sp = ParsePrefix(isUnion); 
-  needpunc(closepa,20);
-  // Head could be NULL still if a type hasn't been found
-  // eg. int (getchar)();
-  if (head)
-     isFuncPtr = head->type == bt_pointer;
-  temp3 = head;
-  temp4 = tail;
-  head = temp1;
-  tail = temp2;
-  sp = ParseSuffix(sp);
+	needpunc(closepa,20);
+	// Head could be NULL still if a type hasn't been found
+	// eg. int (getchar)();
+	if (head)
+		isFuncPtr = head->type == bt_pointer;
+	temp3 = head;
+	temp4 = tail;
+	head = temp1;
+	tail = temp2;
+	sp = ParseSuffix(sp);
 	// (getchar)() returns temp4 = NULL
 	if (temp4!=NULL) {
 		temp4->btp = head->GetIndex();
 		if(temp4->type == bt_pointer && temp4->val_flag != 0 && head != NULL)
 			temp4->size *= head->size;
-    head = temp3;
+		head = temp3;
 	}
-  dfs.puts("</ParsePrefixOpenpa>\n");
+	dfs.puts("</ParsePrefixOpenpa>\n");
 	return sp;
 }
 
@@ -706,6 +728,8 @@ j1:
     if(tail == NULL)
       tail = head;
     NextToken();
+	if (lastst==closepa)
+		goto lxit;
     sp = ParsePrefix(isUnion);
     goto lxit;
 
@@ -791,6 +815,7 @@ void Declaration::ParseSuffixOpenpa(SYM *sp)
 	std::string odecl;
 	int isd;
 	int nump = 0;
+	int numa = 0;
 	SYM *cf;
 	
 	dfs.printf("<openpa>\n");
@@ -844,12 +869,13 @@ void Declaration::ParseSuffixOpenpa(SYM *sp)
 			cf = currentFn;
 			currentFn = sp;
 			nump = 0;
-			sp->BuildParameterList(&nump);
+			sp->BuildParameterList(&nump, &numa);
 			currentFn = cf;
 			if (lastst==begin) {
 				temp1->type = bt_ifunc;
 				currentFn = sp;
 				sp->NumParms = nump;
+				sp->numa = numa;
 				needParseFunction = 2;
 				goto j1;
 			}
@@ -860,6 +886,7 @@ void Declaration::ParseSuffixOpenpa(SYM *sp)
 	  }
 	  currentFn = sp;
 	  sp->NumParms = 0;
+	  sp->numa = 0;
 j1: ;
   }
   else {
@@ -887,7 +914,7 @@ j2:
   		//ParseParameterDeclarations(10);	// parse and discard
   		funcdecl = 10;
   //				SetType(sp);
-  		sp->BuildParameterList(&nump);
+  		sp->BuildParameterList(&nump, &numa);
   		needParseFunction = 0;
   	  dfs.printf("Set false\n");
   //				sp->parms = sym;
@@ -921,7 +948,10 @@ j2:
   			sp->params.CopyTo(&sp->proto);
       }
   	  else {
-  	    error(ERR_SYNTAX);
+		if (funcdecl > 0 && lastst==closepa)
+			;
+		else
+  			error(ERR_SYNTAX);
   	  }
       dfs.printf("Z\r\n");
 //				if (isFuncPtr)

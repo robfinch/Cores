@@ -1,12 +1,12 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2016  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2017  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-// C32 - 'C' derived language compiler
-//  - 32 bit CPU
+// C64 - 'C' derived language compiler
+//  - 64 bit CPU
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -65,6 +65,7 @@ struct oplst {
 		{"addi",op_addi}, {"sub",op_sub}, {"subu", op_subu},
 		{"subi",op_subi}, {"and",op_and}, {"eor",op_eor}, {"eori", op_eori},
 		{"divi", op_divi}, {"modi", op_modi}, {"modui", op_modui},
+		{"div", op_div}, 
 		{"sext8",op_sext8}, {"sext16", op_sext16}, {"sext32", op_sext32},
 		{"sxb",op_sxb}, {"sxc", op_sxc}, {"sxh", op_sxh},
 		{"zxb",op_zxb}, {"zxc", op_zxc}, {"zxh", op_zxh},
@@ -716,8 +717,9 @@ void GenerateReference(SYM *sp,int offset)
 }
 
 void genstorage(int nbytes)
-{       nl();
-        ofs.printf("\tfill.b\t%d,0x00\n",nbytes);
+{       
+	nl();
+	ofs.printf("\tfill.b\t%d,0x00\n",nbytes);
 }
 
 void GenerateLabelReference(int n)
@@ -741,13 +743,13 @@ int stringlit(char *s)
 {      
 	struct slit *lp;
 
-  lp = (struct slit *)allocx(sizeof(struct slit));
-  lp->label = nextlabel++;
-  lp->str = my_strdup(s);
+	lp = (struct slit *)allocx(sizeof(struct slit));
+	lp->label = nextlabel++;
+	lp->str = my_strdup(s);
 	lp->nmspace = my_strdup(GetNamespace());
-  lp->next = strtab;
-  strtab = lp;
-  return lp->label;
+	lp->next = strtab;
+	strtab = lp;
+	return lp->label;
 }
 
 int caselit(struct scase *cases, int num)
@@ -805,24 +807,31 @@ char *strip_crlf(char *p)
 }
 
 
-//     Dump the string literal pool.
+// Dump the literal pools.
 
 void dumplits()
 {
 	char *cp;
 	int nn;
 
-  dfs.printf("<Dumplits>\n");
-  roseg();
-  nl();
-	align(8);
-  nl();
+	dfs.printf("<Dumplits>\n");
+	roseg();
+	if (casetab) {
+		nl();
+		align(8);
+		nl();
+	}
 	while(casetab != nullptr) {
 		nl();
 		put_label(casetab->label,"",casetab->nmspace,'D');
 		for (nn = 0; nn < casetab->num; nn++)
 			GenerateLabelReference(casetab->cases[nn].label);
 		casetab = casetab->next;
+	}
+	if (quadtab) {
+		nl();
+		align(8);
+		nl();
 	}
 	while(quadtab != nullptr) {
 		nl();
@@ -833,29 +842,32 @@ void dumplits()
 		outcol += 35;
 		quadtab = quadtab->next;
 	}
-  nl();
-	align(1);
-  nl();
+	if (strtab) {
+		nl();
+		align(2);
+		nl();
+	}
 	while( strtab != NULL) {
-	  dfs.printf(".");
-    nl();
-    put_label(strtab->label,strip_crlf(strtab->str),strtab->nmspace,'D');
-    cp = strtab->str;
-    while(*cp)
-      GenerateChar(*cp++);
-    GenerateChar(0);
-    strtab = strtab->next;
-  }
-  nl();
-  dfs.printf("</Dumplits>\n");
+		dfs.printf(".");
+		nl();
+		put_label(strtab->label,strip_crlf(strtab->str),strtab->nmspace,'D');
+		cp = strtab->str;
+		while(*cp)
+			GenerateChar(*cp++);
+		GenerateChar(0);
+		strtab = strtab->next;
+	}
+	nl();
+	dfs.printf("</Dumplits>\n");
 }
 
 void nl()
-{       if(outcol > 0) {
-                ofs.printf("\n");
-                outcol = 0;
-                gentype = nogen;
-                }
+{       
+	if(outcol > 0) {
+		ofs.printf("\n");
+		outcol = 0;
+		gentype = nogen;
+	}
 }
 
 void align(int n)
