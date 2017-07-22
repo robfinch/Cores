@@ -81,6 +81,7 @@
 `define FSIGN   6'h16
 `define FMAN    6'h17
 `define FNABS   6'h18
+`define FCVTSD  6'h19
 `define FCVTSQ  6'h1B
 `define FSTAT   6'h1C
 `define FTX     6'h20
@@ -88,6 +89,7 @@
 `define FEX     6'h22
 `define FDX     6'h23
 `define FRM     6'h24
+`define FCVTDS  6'h29
 
 `define FADD    6'h04
 `define FSUB    6'h05
@@ -535,7 +537,8 @@ begin
         `FLOAT: 
             begin
                 case(func6b)
-                `FABS,`FNABS,`FNEG,`FMAN,`FMOV,`FSIGN,`FCVTSQ:  begin fpcnt <= 8'd0; end
+                `FABS,`FNABS,`FNEG,`FMAN,`FMOV,`FSIGN,
+                `FCVTSD,`FCVTSQ,`FCVTDS:  begin fpcnt <= 8'd0; end
                 `FTOI:  begin fpcnt <= 8'd1; end
                 `ITOF:  begin fpcnt <= 8'd1; end
                 `FCMP:  begin fpcnt <= 8'd0; end

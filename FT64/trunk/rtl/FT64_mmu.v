@@ -125,7 +125,12 @@ always @(posedge clk_i)
     stb2 <= stb1 & s_stb_i;    
    
 always @(posedge clk_i)
-begin
+if (rst_i) begin
+    cyc_o <= 1'b0;
+    stb_o <= 1'b0;
+    pea_o <= 32'hFFFC0100;
+end
+else begin
     pea_o[15:0] <= s_adr2[15:0];
     pea_o[21:16] <= _4MB2 ? s_adr2[21:16] : doutb[5:0];
     pea_o[31:22] <= mapen2 ? doutb[15:6] : s_adr2[31:22];

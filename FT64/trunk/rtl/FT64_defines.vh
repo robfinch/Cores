@@ -30,8 +30,26 @@
 
 `define ZERO		64'd0
 
-`define BRK     5'd0
-`define RR      6'h2
+`define BRK     6'h00
+`define VECTOR  6'h01
+`define VADD        6'h04
+`define VSUB        6'h05
+`define VSxx        6'h06
+`define VSEQ            3'd0
+`define VSNE            3'd1
+`define VSLT            3'd2
+`define VSGE            3'd3
+`define VSLE            3'd4
+`define VSGT            3'd5
+`define VAND        6'h08
+`define VOR         6'h09
+`define VXOR        6'h0A
+`define VADDS       6'h14
+`define VSUBS       6'h15
+`define VANDS       6'h18
+`define VORS        6'h19
+`define VXORS       6'h1A
+`define RR      6'h02
 `define BCD         6'h00
 `define BCDADD          5'h00
 `define BCDSUB          5'h01
@@ -56,6 +74,12 @@
 `define CNTLO           5'h01
 `define CNTPOP          5'h02
 `define ABS             5'h04
+`define NOT             5'h05
+`define REDOR           5'h06
+`define SLT             5'h08
+`define SGE             5'h09
+`define SLE             5'h0A
+`define SGT             5'h0B
 `define ADD	        6'h04
 `define SUB         6'h05
 `define CMP         6'd6
@@ -74,6 +98,7 @@
 `define SBX         6'h15
 `define SWX         6'h16
 `define SWCX        6'h17
+`define CALLR       6'h18
 `define PUSH        6'h19
 `define POP         6'h1A
 `define UNLINK      6'h1B
@@ -96,6 +121,7 @@
 `define SEI         6'h30
 `define WAIT        6'h31
 `define RTI         6'h32
+`define VMOV        6'h33
 `define MEMDB       6'h34
 `define MEMSB       6'h35
 `define SYNC        6'h36
@@ -175,6 +201,7 @@
 `define FSIGN   6'h16
 `define FMAN    6'h17
 `define FNABS   6'h18
+`define FCVTSD  6'h19
 `define FCVTSQ  6'h1B
 `define FSTAT   6'h1C
 `define FTX     6'h20
@@ -182,6 +209,7 @@
 `define FEX     6'h22
 `define FDX     6'h23
 `define FRM     6'h24
+`define FCVTDS  6'h29
 
 `define FADD    6'h04
 `define FSUB    6'h05
@@ -200,6 +228,8 @@
 `define CSR_BADADR  11'h007
 `define CSR_PCR2    11'h008
 `define CSR_SEMA    11'h00C
+`define CSR_SBL     11'h00E
+`define CSR_SBU     11'h00F
 `define CSR_FSTAT   11'h014
 `define CSR_DBAD0   11'h018
 `define CSR_DBAD1   11'h019
@@ -246,12 +276,14 @@
 `define FLT_TGT     9'd482
 `define FLT_IADR    9'd484
 `define FLT_FLT     9'd486
+`define FLT_CHK     9'd487
 `define FLT_DBZ     9'd488
 `define FLT_OFL     9'd489
 `define FLT_EXF     9'd497
 `define FLT_DWF     9'd498
 `define FLT_DRF     9'd499
 `define FLT_PRIV    9'd501
+`define FLT_STK     9'd504
 `define FLT_DBE     9'd508
 `define FLT_IBE     9'd509
 

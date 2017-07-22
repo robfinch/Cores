@@ -50,7 +50,7 @@ output [2:0] TMDS_OUT_data_n;
 
 wire rst;
 wire xrst = ~cpu_resetn;
-wire clk25, clk80, clk100, clk400;
+wire clk50, clk80, clk100, clk400;
 wire hSync, vSync, blank, border;
 wire [7:0] red, blue, green;
 
@@ -73,7 +73,7 @@ NexysVideoClkgen ucg1
   .clk100(clk100),
   .clk400(clk400),
   .clk80(clk80),
-  .clk25(clk25),
+  .clk50(clk50),
   // Status and control signals
   .reset(xrst), 
   .locked(locked),       // output locked
@@ -139,7 +139,7 @@ wire cs_led = cyc && stb && (adr[31:4]==28'hFFDC060);
 FT64_TextController #(.num(1)) tc1
 (
 	.rst_i(rst),
-	.clk_i(clk25),
+	.clk_i(clk50),
 	.cs_i(cs_tc1),
 	.cyc_i(cyc),
 	.stb_i(stb),
@@ -163,9 +163,13 @@ assign green = tc1_rgb[15:8];
 assign blue = tc1_rgb[7:0];
 
 wire ack_led = cs_led;
-always @(posedge clk25)
+always @(posedge clk50)
+begin
+led[0] <= cs_br;
+led[1] <= cs_scr;
 if (cs_led)
     led <= dato[7:0];
+end
 wire [7:0] led_dato = sw;
 
 assign ack = ack_scr|ack_led|tc1_ack|ack_br;
@@ -175,13 +179,13 @@ casex({cs_br,cs_tc1,cs_scr,cs_led})
 4'b01xx:    dati <= {2{tc1_dato}};
 4'b001x:    dati <= scr_dato;
 4'b0001:    dati <= {8{led_dato}};
-default:    dati <= 64'h1e; // NOP
+default:    dati <= {2{32'h1C}}; // NOP
 endcase
 
 scratchmem uscr1
 (
     .rst_i(rst),
-    .clk_i(clk25),
+    .clk_i(clk50),
     .cs_i(cs_scr),
     .cyc_i(cyc),
     .stb_i(stb),
@@ -196,7 +200,7 @@ scratchmem uscr1
 bootrom ubr1
 (
     .rst_i(rst),
-    .clk_i(clk25),
+    .clk_i(clk50),
     .cs_i(cs_br),
     .cyc_i(cyc),
     .stb_i(stb),
@@ -209,12 +213,13 @@ FT64_mpu ucpu1
 (
     .hartid_i(64'h1),
     .rst_i(rst),
-    .clk_i(clk25),
+    .clk_i(clk50),
     .irq_i(3'd0),
     .vec_i(9'h000),
     .cyc_o(cyc),
     .stb_o(stb),
     .ack_i(ack),
+    .err_i(1'b0),
     .we_o(we),
     .sel_o(sel),
     .adr_o(adr),

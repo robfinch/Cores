@@ -24,7 +24,8 @@
 //
 `include "FT64_defines.vh"
 
-module FT64alu(rst, clk, ld, abort, instr, a, b, c, imm, pc, csr, o, ob, done, idle, excen, exc);
+module FT64alu(rst, clk, ld, abort, instr, a, b, c, imm, tgt, tgt2, ven, vm, sbl, sbu,
+    pc, csr, o, ob, done, idle, excen, exc);
 parameter DBW = 64;
 parameter BIG = 1'b1;
 parameter TRUE = 1'b1;
@@ -38,6 +39,12 @@ input [63:0] a;
 input [63:0] b;
 input [63:0] c;
 input [63:0] imm;
+input [7:0] tgt;
+input [7:0] tgt2;
+input [5:0] ven;
+input [15:0] vm;
+input [31:0] sbl;
+input [31:0] sbu;
 input [31:0] pc;
 input [63:0] csr;
 output reg [63:0] o;
@@ -217,9 +224,9 @@ cntpop64 ucpop1
 
 wire [7:0] bcdaddo,bcdsubo;
 wire [15:0] bcdmulo;
-BCDAdd(1'b0,a,b,bcdaddo);
-BCDSub(1'b0,a,b,bcdsubo);
-BCDMul2(a,b,bcdmulo);
+BCDAdd ubcd1 (1'b0,a,b,bcdaddo);
+BCDSub ubcd2 (1'b0,a,b,bcdsubo);
+BCDMul2 ubcd3 (a,b,bcdmulo);
 
 wire [7:0] s8 = a[7:0] + b[7:0];
 wire [15:0] s16 = a[15:0] + b[15:0];
@@ -230,9 +237,36 @@ wire [31:0] d32 = a[31:0] - b[31:0];
 wire [63:0] and64 = a & b;
 wire [63:0] or64 = a | b;
 wire [63:0] xor64 = a ^ b;
+wire [63:0] redor64 = {63'd0,|a};
+wire [63:0] redor32 = {63'd0,|a[31:0]};
+wire [63:0] redor16 = {63'd0,|a[15:0]};
+wire [63:0] redor8 = {63'd0,|a[7:0]};
 
 always @*
 case(instr[`INSTRUCTION_OP])
+`VECTOR:
+    case(instr[`INSTRUCTION_S2])
+    `VADD,`VADDS:  o = vm[ven] ? a + b : c;
+    `VSUB,`VSUBS:  o = vm[ven] ? a - b : c;
+    `VAND,`VANDS:  o = vm[ven] ? a & b : c;
+    `VOR,`VORS:    o = vm[ven] ? a | b : c;
+    `VXOR,`VXORS:  o = vm[ven] ? a ^ b : c;
+    `VSxx:
+        case({instr[25],instr[20:19]})
+        `VSEQ:     begin
+                       o = c;    
+                       o[ven] = vm[ven] ? a==b : c[ven];
+                   end
+        `VSNE:     begin
+                       o = c;    
+                       o[ven] = vm[ven] ? a!=b : c[ven];
+                   end
+        `VSLT:      begin
+                         o = c;    
+                         o[ven] = vm[ven] ? $signed(a) < $signed(b) : c[ven];
+                    end
+        endcase
+    endcase    
 `RR:
     case(instr[`INSTRUCTION_S2])
     `BCD:
@@ -253,6 +287,22 @@ case(instr[`INSTRUCTION_OP])
                     2'd2:   o = BIG ? (a[31] ? -a[31:0] : a[31:0]) : 64'hCCCCCCCCCCCCCCCC;
                     2'd3:   o = BIG ? (a[63] ? -a : a) : 64'hCCCCCCCCCCCCCCCC;
                     endcase
+        `NOT:   case(sz)
+                2'd0:   o = ~|a[7:0];
+                2'd1:   o = ~|a[15:0];
+                2'd2:   o = ~|a[31:0];
+                2'd3:   o = ~|a[63:0];
+                endcase
+        `REDOR: case(sz)
+                2'd0:   o = redor8;
+                2'd1:   o = redor16;
+                2'd2:   o = redor32;
+                2'd3:   o = redor64;
+                endcase
+        `SLT:   o = a[63];
+        `SGE:   o = a[63:1]==63'd0;
+        `SLE:   o = a[63] || a==64'h0;
+        `SGT:   o = a==64'd1;
         default:    o = 64'hDEADDEADDEADDEAD;
         endcase
     `BITFIELD:  o = BIG ? bfout : 64'hCCCCCCCCCCCCCCCC;
@@ -370,7 +420,7 @@ case(instr[`INSTRUCTION_OP])
     default:    ob = 64'hCCCCCCCCCCCCCCCC;
     endcase
 `RET:       ob = a + b;
-`LINK:      ob = a + b;
+`LINK:      ob = a - b;
 default:    ob = 64'hCCCCCCCCCCCCCCCC;
 endcase
 
@@ -406,6 +456,11 @@ endfunction
 
 always @*
 begin
+if ((tgt==6'd31 || tgt==6'd30) && (o[31:0] < sbl || o[31:0] > sbu))
+    exc <= `FLT_STK;
+else if ((tgt2==6'd31 || tgt2==6'd30) && (ob[31:0] < sbl || ob[31:0] > sbu))
+    exc <= `FLT_STK;
+else
 case(instr[`INSTRUCTION_OP])
 `RR:
     case(instr[`INSTRUCTION_S2])
