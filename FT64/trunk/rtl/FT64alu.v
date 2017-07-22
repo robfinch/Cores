@@ -66,6 +66,11 @@ wire [31:0] shftho;
 function IsMul;
 input [31:0] isn;
 case(isn[`INSTRUCTION_OP])
+`VECTOR:
+    case(isn[`INSTRUCTION_S2])
+    `VMUL:      IsMul = TRUE;
+    default:    IsMul = FALSE;
+    endcase
 `RR:
     case(isn[`INSTRUCTION_S2])
     `MULU,`MULSU,`MUL: IsMul = TRUE;
@@ -79,6 +84,11 @@ endfunction
 function IsDivmod;
 input [31:0] isn;
 case(isn[`INSTRUCTION_OP])
+`VECTOR:
+    case(isn[`INSTRUCTION_S2])
+    `VDIV:      IsDivmod = TRUE;
+    default:    IsDivmod = FALSE;
+    endcase
 `RR:
     case(isn[`INSTRUCTION_S2])
     `DIVMODU,`DIVMODSU,`DIVMOD: IsDivmod = TRUE;
@@ -92,6 +102,11 @@ endfunction
 function IsSgn;
 input [31:0] isn;
 case(isn[`INSTRUCTION_OP])
+`VECTOR:
+    case(isn[`INSTRUCTION_S2])
+    `VMUL,`VDIV:    IsSgn = TRUE;
+    default:    IsSgn = FALSE;
+    endcase
 `RR:
     case(isn[`INSTRUCTION_S2])
     `MUL,`DIVMOD:   IsSgn = TRUE;
@@ -248,9 +263,13 @@ case(instr[`INSTRUCTION_OP])
     case(instr[`INSTRUCTION_S2])
     `VADD,`VADDS:  o = vm[ven] ? a + b : c;
     `VSUB,`VSUBS:  o = vm[ven] ? a - b : c;
+    `VMUL:         o = vm[ven] ? prod[DBW-1:0] : c;
+    `VDIV:         o = BIG ? (vm[ven] ? divq : c) : 64'hCCCCCCCCCCCCCCCC;
     `VAND,`VANDS:  o = vm[ven] ? a & b : c;
     `VOR,`VORS:    o = vm[ven] ? a | b : c;
     `VXOR,`VXORS:  o = vm[ven] ? a ^ b : c;
+    `VSHLV:        o = a;   // no masking here
+    `VSHRV:        o = a;
     `VSxx:
         case({instr[25],instr[20:19]})
         `VSEQ:     begin
@@ -266,6 +285,7 @@ case(instr[`INSTRUCTION_OP])
                          o[ven] = vm[ven] ? $signed(a) < $signed(b) : c[ven];
                     end
         endcase
+    `VBITS2V:   o = vm[ven] ? a[ven] : c;
     endcase    
 `RR:
     case(instr[`INSTRUCTION_S2])
@@ -399,6 +419,7 @@ case(instr[`INSTRUCTION_OP])
  `MODSUI:    o = BIG ? rem : 64'hCCCCCCCCCCCCCCCC;
  `MODI:      o = BIG ? rem : 64'hCCCCCCCCCCCCCCCC;
  `LB,`LH,`LHU,`LW,`SB,`SH,`SW,`CAS:  o = a + b;
+ `LV,`SV:    o = a + b + {ven,3'b0};
  `CSRRW:     o = BIG ? csr : 64'hCCCCCCCCCCCCCCCC;
  `RET:       o = a;
  `LINK:      o = a - 32'd8;
@@ -407,6 +428,12 @@ endcase
 
 always @*
 case(instr[`INSTRUCTION_OP])
+`VECTOR:
+    case(instr[`INSTRUCTION_S2])
+    `VMUL:      ob = prod[127:64];
+    `VDIV:      ob = BIG ? rem : 64'hCCCCCCCCCCCCCCCC;
+    default:    ob = 64'hCCCCCCCCCCCCCCCC;
+    endcase
 `RR:
     case(instr[`INSTRUCTION_S2])
     `MUL,`MULU,`MULSU:  ob = prod[127:64];

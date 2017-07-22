@@ -148,11 +148,11 @@ parameter wyde = 3'd1;
 parameter tetra = 3'd2;
 parameter octa = 3'd3;
 
-wire [5:0] Ra0, Ra1;
-wire [5:0] Rb0, Rb1;
-wire [5:0] Rc0, Rc1;
-wire [5:0] Rt0, Rt1;
-wire [5:0] Rt0b, Rt1b;
+wire [7:0] Ra0, Ra1;
+wire [7:0] Rb0, Rb1;
+wire [7:0] Rc0, Rc1;
+wire [7:0] Rt0, Rt1;
+wire [7:0] Rt0b, Rt1b;
 wire [63:0] rfoa0,rfob0,rfoc0,rfoc0a;
 wire [63:0] rfoa1,rfob1,rfoc1,rfoc1a;
 reg  [31:0] rf_v;
@@ -1085,28 +1085,37 @@ FT64_dcache udc2
 function [7:0] fnRa;
 input [31:0] isn;
 case(isn[`INSTRUCTION_OP])
+`VECTOR:case(isn[`INSTRUCTION_S2])
+        `VSHLV:     fnRa = (vqe+1+isn[15:11] >= vl) ? 8'h00 : {isn[9:6],vl-vqe-isn[15:11]-1};
+        `VSHRV:     fnRa = (vqe+isn[15:11] >= vl) ? 8'h00 : {isn[9:6],vqe+isn[15:11]};
+        default:    fnRa = {isn[9:6],vqe};
+        endcase
 `RR:    case(isn[`INSTRUCTION_S2])
         `VMOV:
             case (isn[`INSTRUCTION_S1])
             5'h0:   fnRa = isn[`INSTRUCTION_RA];
-            5'h1:   fnRa = {1'b0,1'b1,2'b00,isn[9:6]};
+            5'h1:   fnRa = {4'h2,isn[9:6]};
             endcase
         default:    fnRa = isn[`INSTRUCTION_RA];
         endcase
-`VECTOR:    fnRa = {1'b1,isn[8:6],vqe};
-`CALL:  fnRa = 6'd31;
+`CALL:  fnRa = 8'd31;
 default:    fnRa = isn[`INSTRUCTION_RA];
 endcase
 endfunction
 
 function [7:0] fnRb;
 input [31:0] isn;
+input fb;
 case(isn[`INSTRUCTION_OP])
-`RR:    fnRb = isn[`INSTRUCTION_RB];
+`RR:        case(isn[`INSTRUCTION_S2])
+            `VEX:       fnRb = fb ? {isn[14:11],rfoa1[3:0]} : {isn[14:11],rfoa0[3:0]};
+            `LVX,`SVX:  fnRb = {isn[14:11],vqe};
+            default:    fnRb = isn[`INSTRUCTION_RB];
+            endcase
 `VECTOR:    case(isn[`INSTRUCTION_S2])
-            `VADDS,`VSUBS,`VANDS,`VORS,`VXORS:
+            `VADDS,`VSUBS,`VANDS,`VORS,`VXORS,`VXORS:
                         fnRb = isn[`INSTRUCTION_RB];
-            default:    fnRb = {1'b1,isn[13:11],vqe};
+            default:    fnRb = {isn[14:11],vqe};
             endcase
 default:    fnRb = isn[`INSTRUCTION_RB];
 endcase
@@ -1115,10 +1124,13 @@ endfunction
 function [7:0] fnRc;
 input [31:0] isn;
 case(isn[`INSTRUCTION_OP])
-`RR:    fnRc = isn[`INSTRUCTION_RC];
+`RR:        case(isn[`INSTRUCTION_S2])
+            `SVX:       fnRc = {isn[19:16],vqe};
+            default:    fnRc = isn[`INSTRUCTION_RC];
+            endcase
 `VECTOR:    case(isn[`INSTRUCTION_S2])
-            `VSxx:      fnRc = {4'h4,1'b0,isn[18:16]};
-            default:    fnRc = {1'b1,isn[19:16],vqe};
+            `VSxx:      fnRc = {4'h2,1'b0,isn[18:16]};
+            default:    fnRc = {isn[19:16],vqe};
             endcase
 default:    fnRc = isn[`INSTRUCTION_RC];
 endcase
@@ -1128,14 +1140,17 @@ function [7:0] fnRt;
 input [31:0] isn;
 casex(isn[`INSTRUCTION_OP])
 `VECTOR:case(isn[`INSTRUCTION_S2])
-        `VSxx:      fnRt = {4'h4,1'b0,isn[18:16]};
-        default:    fnRt = {1'b1,isn[18:16],vqe};
+        `VSxx:      fnRt = {4'h2,1'b0,isn[18:16]};
+        `VSHLV:     fnRt = (vqe+1 >= vl) ? 8'h00 : {isn[19:16],vl-vqe-1};
+        `VSHRV:     fnRt = (vqe >= vl) ? 8'h00 : {isn[19:16],vqe};
+        `VEINS:     fnRt = {isn[19:16],4'h0};
+        default:    fnRt = {isn[19:16],vqe};
         endcase
        
 `RR:    case(isn[`INSTRUCTION_S2])
         `VMOV:
             case (isn[`INSTRUCTION_S1])
-            5'h0:   fnRt = {1'b0,1'b1,2'b00,isn[9:6]};
+            5'h0:   fnRt = {4'h2,isn[9:6]};
             5'h1:   fnRt = isn[`INSTRUCTION_RB];
             endcase
         `R1:        fnRt = isn[`INSTRUCTION_RB];
@@ -1158,6 +1173,7 @@ casex(isn[`INSTRUCTION_OP])
 `LCALL: fnRt = 8'd31;
 `RET:   fnRt = 8'd0;
 `LINK:  fnRt = isn[`INSTRUCTION_RB];
+`LV:    fnRt = {isn[14:11],vqe};
 default:    fnRt = isn[`INSTRUCTION_RB];
 endcase
 endfunction
@@ -1208,11 +1224,13 @@ casex(isn[`INSTRUCTION_OP])
 `LHU:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `LW:    Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `LWR:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`LV:    Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `SB:    Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `SC:    Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `SH:    Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `SW:    Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `SWC:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`SV:    Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `CAS:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `JAL:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `CALL:  Source1Valid = FALSE;
@@ -1265,7 +1283,13 @@ casex(isn[`INSTRUCTION_OP])
 `RET:   Source2Valid = TRUE;
 `LINK:  Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
 `LCALL: Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
-`VECTOR:    Source2Valid = FALSE;
+`VECTOR:    case(isn[`INSTRUCTION_S2])
+            `VADDS,`VSUBS,`VANDS,`VORS,`VXORS:
+                Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
+            default:    Source2Valid = FALSE;
+            endcase
+`LV:        Source2Valid = TRUE;
+`SV:        Source2Valid = FALSE;
 default:    Source2Valid = TRUE;
 endcase
 endfunction
@@ -1273,6 +1297,11 @@ endfunction
 function Source3Valid;
 input [31:0] isn;
 case(isn[`INSTRUCTION_OP])
+`VECTOR:
+    case(isn[`INSTRUCTION_S2])
+    `VEX:       Source3Valid = TRUE;
+    default:    Source3Valid = TRUE;
+    endcase
 `BccR:  Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
 `CHK:   Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
 `RR:
@@ -1293,7 +1322,31 @@ endfunction
 
 function IsVector;
 input [31:0] isn;
-IsVector = isn[`INSTRUCTION_OP]==`VECTOR;
+case(isn[`INSTRUCTION_OP])
+`VECTOR:    case(isn[`INSTRUCTION_S2])
+            `VEINS:     IsVector = FALSE;
+            `VEX:       IsVector = FALSE;
+            default:    IsVector = TRUE;
+            endcase
+`LV,`SV:    IsVector = TRUE;
+default:    IsVector = FALSE;
+endcase
+endfunction
+
+function IsVeins;
+input [31:0] isn;
+case(isn[`INSTRUCTION_OP])
+`VECTOR:    IsVeins = isn[`INSTRUCTION_S2]==`VEINS;
+default:    IsVeins = FALSE;
+endcase
+endfunction
+
+function IsVex;
+input [31:0] isn;
+case(isn[`INSTRUCTION_OP])
+`VECTOR:    IsVex = isn[`INSTRUCTION_S2]==`VEX;
+default:    IsVex = FALSE;
+endcase
 endfunction
 
 function IsALU;
@@ -1365,11 +1418,13 @@ casex(isn[`INSTRUCTION_OP])
 `LHU:  HasConst = TRUE;
 `LW:  HasConst = TRUE;
 `LWR: HasConst = TRUE;
+`LV:    HasConst = TRUE;
 `SB:  HasConst = TRUE;
 `SC:  HasConst = TRUE;
 `SH:  HasConst = TRUE;
 `SW:  HasConst = TRUE;
 `SWC:   HasConst = TRUE;
+`SV:    HasConst = TRUE;
 `CAS:   HasConst = TRUE;
 `JAL:   HasConst = TRUE;
 `CALL:  HasConst = TRUE;
@@ -1420,6 +1475,7 @@ case(isn[`INSTRUCTION_OP])
 `LHU:   IsMem = TRUE;
 `LW:    IsMem = TRUE;
 `LWR:   IsMem = TRUE;
+`LV,`SV:    IsMem = TRUE;
 `SB:    IsMem = TRUE;
 `SC:    IsMem = TRUE;
 `SH:    IsMem = TRUE;
@@ -1483,6 +1539,7 @@ case(isn[`INSTRUCTION_OP])
 `LHU:   IsLoad = TRUE;
 `LW:    IsLoad = TRUE;
 `LWR:   IsLoad = TRUE;
+`LV:    IsLoad = TRUE;
 `RET:   IsLoad = TRUE;
 default:    IsLoad = FALSE;
 endcase
@@ -1514,6 +1571,7 @@ case(isn[`INSTRUCTION_OP])
 `LHU:       MemSize = tetra;
 `LW,`SW:    MemSize = octa;
 `LWR,`SWC:  MemSize = octa;
+`LV,`SV:    MemSize = octa;
 `RET:       MemSize = octa;
 `LINK:      MemSize = octa;
 default:    MemSize = octa;
@@ -1539,6 +1597,7 @@ case(isn[`INSTRUCTION_OP])
 `SH:    IsStore = TRUE;
 `SW:    IsStore = TRUE;
 `SWC:   IsStore = TRUE;
+`SV:    IsStore = TRUE;
 `CAS:   IsStore = TRUE;
 `CALL:  IsStore = TRUE;
 `LCALL:  IsStore = TRUE;
@@ -1804,6 +1863,7 @@ case(isn[`INSTRUCTION_OP])
 `LHU:       IsRFW = TRUE;
 `LW:        IsRFW = TRUE;
 `LWR:       IsRFW = TRUE;
+`LV:        IsRFW = TRUE;
 `CAS:       IsRFW = TRUE;
 default:    IsRFW = FALSE;
 endcase
@@ -1937,6 +1997,7 @@ begin
 		1'b1:	fnSelect = 8'hF0;
 		endcase
 	`LW,`SW,`LWR,`SWC,`CAS:   fnSelect = 8'hFF;
+	`LV,`SV:   fnSelect = 8'hFF;
     `CALL,`LCALL,`RET,`LINK:  fnSelect = 8'hFF;
 	default:	fnSelect = 8'h00;
 	endcase
@@ -2045,7 +2106,7 @@ case(ins[`INSTRUCTION_OP])
     1'b0:   fnDati = {{32{1'b0}},dat[31:0]};
     1'b1:   fnDati = {{32{1'b0}},dat[63:32]};
     endcase
-`LW,`LWR,`CAS,`RET:   fnDati = dat;
+`LW,`LWR,`LV,`CAS,`RET:   fnDati = dat;
 default:    fnDati = dat;
 endcase
 endfunction
@@ -2558,12 +2619,12 @@ endgenerate
 
 
 assign Ra0 = fnRa(fetchbuf0_instr);
-assign Rb0 = fnRb(fetchbuf0_instr);
+assign Rb0 = fnRb(fetchbuf0_instr,1'b0);
 assign Rc0 = fnRc(fetchbuf0_instr);
 assign Rt0 = fnRt(fetchbuf0_instr);
 assign Rt0b = fnRt2(fetchbuf0_instr);
 assign Ra1 = fnRa(fetchbuf1_instr);
-assign Rb1 = fnRb(fetchbuf1_instr);
+assign Rb1 = fnRb(fetchbuf1_instr,1'b1);
 assign Rc1 = fnRc(fetchbuf1_instr);
 assign Rt1 = fnRt(fetchbuf1_instr);
 assign Rt1b = fnRt2(fetchbuf1_instr);
@@ -3238,6 +3299,14 @@ end
     assign int_commit = (commit0_v && iqentry_instr[head0][`INSTRUCTION_OP]==`BRK) ||
                         (commit0_v && commit1_v && iqentry_instr[head1][`INSTRUCTION_OP]==`BRK);
 
+// Wait until the cycle after Ra becomes valid to give time to read
+// the vector element from the register file.
+reg rf_vra0, rf_vra1;
+always @(posedge clk)
+    rf_vra0 <= rf_v[Ra0];
+always @(posedge clk)
+    rf_vra1 <= rf_v[Ra1];
+
 // Check how many instructions can be queued. This might be fewer than the
 // number ready to queue from the fetch stage if queue slots aren't
 // available or if there are no more physical registers left for remapping.
@@ -3246,6 +3315,9 @@ end
 // NOPs are filtered out and do not enter the instruction queue. The core
 // will stream NOPs on a cache miss and they would mess up the queue order
 // if there are immediate prefixes in the queue.
+// For the VEX instruction, the instruction can't queue until register Ra
+// is valid, because register Ra is used to specify the vector element to
+// read.
 always @*
 begin
     canq1 <= FALSE;
@@ -3275,11 +3347,11 @@ begin
                 // both instructions can be queued.
                 else begin
                     if (iqentry_v[tail0]==`INV) begin
-                        canq1 <= TRUE;
-                        queued1 <= !IsVector(fetchbuf0_instr) || vqe>=vl-1;
+                        canq1 <= !IsVex(fetchbuf0_instr) || rf_vra0;
+                        queued1 <= (!IsVex(fetchbuf0_instr) || rf_vra0) && (!IsVector(fetchbuf0_instr) || vqe>=vl-1);
                         if (iqentry_v[tail1]==`INV) begin
-                            canq2 <= !IsVector(fetchbuf0_instr) || vqe>=vl-1;
-                            queued2 <= !IsVector(fetchbuf0_instr) || vqe>=vl-1;
+                            canq2 <= (!IsVex(fetchbuf0_instr) || rf_vra0) && (!IsVector(fetchbuf0_instr) || vqe>=vl-1);
+                            queued2 <= (!IsVex(fetchbuf0_instr) || rf_vra0) && (!IsVector(fetchbuf0_instr) || vqe>=vl-1);
                         end
                     end
                 end
@@ -3289,8 +3361,8 @@ begin
         else if (fetchbuf0_v) begin
             if (fetchbuf0_instr[`INSTRUCTION_OP]!=`NOP) begin
                 if (iqentry_v[tail0]==`INV) begin
-                    canq1 <= TRUE;
-                    queued1 <= !IsVector(fetchbuf0_instr) || vqe>=vl-1;
+                    canq1 <= !IsVex(fetchbuf0_instr) || rf_vra0;
+                    queued1 <= (!IsVex(fetchbuf0_instr) || rf_vra0) && (!IsVector(fetchbuf0_instr) || vqe>=vl-1);
                 end
             end
             else
@@ -3299,8 +3371,8 @@ begin
         else if (fetchbuf1_v) begin
             if (fetchbuf1_instr[`INSTRUCTION_OP]!=`NOP) begin
                 if (iqentry_v[tail0]==`INV) begin
-                    canq1 <= TRUE;
-                    queued1 <= !IsVector(fetchbuf1_instr) || vqe>=vl-1;
+                    canq1 <= !IsVex(fetchbuf1_instr) || rf_vra1;
+                    queued1 <= (!IsVex(fetchbuf1_instr) || rf_vra1) && (!IsVector(fetchbuf1_instr) || vqe>=vl-1);
                 end
             end
             else
@@ -3812,6 +3884,7 @@ else begin
     end
 
 	if (alu0_v) begin
+	    iqentry_tgt [ alu0_id[2:0] ] <= alu0_tgt;
         iqentry_res	[ alu0_id[2:0] ] <= alu0_bus;
         iqentry_res2[ alu0_id[2:0] ] <= alu0b_bus;
         iqentry_exc	[ alu0_id[2:0] ] <= alu0_exc;
@@ -3821,6 +3894,7 @@ else begin
         alu0_dataready <= FALSE;
 	end
 	if (alu1_v) begin
+	    iqentry_tgt [ alu1_id[2:0] ] <= alu1_tgt;
         iqentry_res	[ alu1_id[2:0] ] <= alu1_bus;
         iqentry_res2[ alu1_id[2:0] ] <= alu1b_bus;
         iqentry_exc	[ alu1_id[2:0] ] <= alu1_exc;
@@ -3959,7 +4033,12 @@ else begin
                             : (iqentry_a3_s[n] == alu1_id) ? alu1_bus
                             : {4{16'hDEAD}};
                 alu0_argI	<= iqentry_a0[n];
-                alu0_tgt    <= iqentry_tgt[n];
+                alu0_tgt    <= IsVeins(iqentry_instr[n]) ?
+                                iqentry_tgt[n] | (iqentry_a2_v[n] ? iqentry_a2[n]
+                                            : (iqentry_a2_s[n] == alu0_id) ? alu0_bus
+                                            : (iqentry_a2_s[n] == alu1_id) ? alu1_bus
+                                            : {4{16'h0000}}) : 
+                                iqentry_tgt[n];
                 alu0_tgt2   <= iqentry_tgt2[n];
                 alu0_ven    <= iqentry_ven[n];
                 alu0_dataready <= IsSingleCycle(iqentry_instr[n]);
@@ -3991,7 +4070,12 @@ else begin
                             : (iqentry_a3_s[n] == alu1_id) ? alu1_bus
                             : {4{16'hDEAD}};
                 alu1_argI	<= iqentry_a0[n];
-                alu1_tgt    <= iqentry_tgt[n];
+                alu1_tgt    <= IsVeins(iqentry_instr[n]) ?
+                                iqentry_tgt[n] | (iqentry_a2_v[n] ? iqentry_a2[n]
+                                            : (iqentry_a2_s[n] == alu0_id) ? alu0_bus
+                                            : (iqentry_a2_s[n] == alu1_id) ? alu1_bus
+                                            : {4{16'h0000}}) : 
+                                iqentry_tgt[n];
                 alu1_tgt2   <= iqentry_tgt2[n];
                 alu1_ven    <= iqentry_ven[n];
                 alu1_dataready <= IsSingleCycle(iqentry_instr[n]);
