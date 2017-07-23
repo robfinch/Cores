@@ -63,7 +63,7 @@ struct oplst {
 {       {"move",op_move}, {"add",op_add}, {"addu", op_addu}, {"mov", op_mov}, {"mtspr", op_mtspr}, {"mfspr", op_mfspr},
 		{"ldi",op_ldi}, {"ld", op_ld},
 		{"addi",op_addi}, {"sub",op_sub}, {"subu", op_subu},
-		{"subi",op_subi}, {"and",op_and}, {"eor",op_eor}, {"eori", op_eori},
+		{"subi",op_subi}, {"and",op_and}, {"eor",op_eor}, {"eori", op_eori}, {"redor", op_redor},
 		{"divi", op_divi}, {"modi", op_modi}, {"modui", op_modui},
 		{"div", op_div}, 
 		{"sext8",op_sext8}, {"sext16", op_sext16}, {"sext32", op_sext32},

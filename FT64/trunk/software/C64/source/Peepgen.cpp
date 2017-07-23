@@ -605,7 +605,8 @@ void PeepoptBcc(struct ocode * ip)
 void PeepoptLc(struct ocode *ip)
 {
 	if (ip->fwd) {
-		if (ip->fwd->opcode==op_sext16 || ip->fwd->opcode==op_sxc) {
+		if (ip->fwd->opcode==op_sext16 || ip->fwd->opcode==op_sxc ||
+			(ip->fwd->opcode==op_bfext && ip->fwd->oper3->offset->i==0 && ip->fwd->oper4->offset->i==15)) {
 			if (ip->fwd->oper1->preg == ip->oper1->preg) {
 				if (ip->fwd->fwd) {
 					ip->fwd->fwd->back = ip;

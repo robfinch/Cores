@@ -37,6 +37,14 @@
 //
 // ============================================================================
 
+`define VECTOR  6'h01
+`define VFSxx   6'h06
+`define VFNEG   6'h16
+`define VSEQ        3'd0
+`define VSNE        3'd1
+`define VSLT        3'd2
+`define VSGE        3'd3
+`define VSUN        3'd7
 `define FLOAT   6'h0B
 `define FCMP    6'h06
 `define FMOV    6'h10
@@ -85,6 +93,7 @@ localparam FMSB = WID==128 ? 111 :
 wire [5:0] op = ir[5:0];
 wire [1:0] prec = ir[25:24];
 wire [5:0] fn = ir[31:26];
+wire [2:0] sxx = {ir[25],ir[20:19]};
 
 wire [4:0] cmp_o;
 
@@ -111,6 +120,20 @@ always @*
         `FCVTDS: o <= {{32{dso[31]}},dso};
         `FCMP:   o <= cmp_o;
         default: o <= 0;
+        endcase
+    `VECTOR:
+        case(fn)
+        `VFNEG:  o <= {~a[WID-1],a[WID-2:0]};   // fneg
+        `VFSxx:
+            case(sxx)
+            `VSEQ:  o <=  cmp_o[0];
+            `VSNE:  o <= ~cmp_o[0];
+            `VSLT:  o <=  cmp_o[1];
+            `VSGE:  o <= ~cmp_o[1];
+            `VSUN:  o <=  cmp_o[4];
+            default:    o <= cmp_o[2];  
+            endcase
+        default:    o <= 0;
         endcase
 	default:	o <= 0;
 	endcase

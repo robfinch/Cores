@@ -370,49 +370,31 @@ void MakeLegalAmode(AMODE *ap,int flags, int size)
 
 void GenLoad(AMODE *ap3, AMODE *ap1, int ssize, int size)
 {
-	/*
-    if (ap3->isFloat) {
-        GenerateDiadic(op_lf,fpsize(ap3),ap3,ap1);
-    }
-	else
-	*/
-	{
-        if (ap3->isUnsigned) {
-        	switch(size) {
-        	case 1:	GenerateDiadic(op_lbu,0,ap3,ap1); break;
-        	case 2:	GenerateDiadic(op_lcu,0,ap3,ap1); break;
-        	case 4:	GenerateDiadic(op_lhu,0,ap3,ap1); break;
-        	case 8: GenerateDiadic(op_lw,0,ap3,ap1); break;
-        	}
+    if (ap3->isUnsigned) {
+        switch(size) {
+        case 1:	GenerateDiadic(op_lbu,0,ap3,ap1); break;
+        case 2:	GenerateDiadic(op_lcu,0,ap3,ap1); break;
+        case 4:	GenerateDiadic(op_lhu,0,ap3,ap1); break;
+        case 8: GenerateDiadic(op_lw,0,ap3,ap1); break;
         }
-        else {
-        	switch(size) {
-        	case 1:	GenerateDiadic(op_lb,0,ap3,ap1); break;
-        	case 2:	GenerateDiadic(op_lc,0,ap3,ap1); break;
-        	case 4:	GenerateDiadic(op_lh,0,ap3,ap1); break;
-        	case 8:	GenerateDiadic(op_lw,0,ap3,ap1); break;
-        	}
-        	if (ssize > size)
-              	GenerateSignExtend(ap3,ssize,size,F_REG);
+    }
+    else {
+        switch(size) {
+        case 1:	GenerateDiadic(op_lb,0,ap3,ap1); break;
+        case 2:	GenerateDiadic(op_lc,0,ap3,ap1); break;
+        case 4:	GenerateDiadic(op_lh,0,ap3,ap1); break;
+        case 8:	GenerateDiadic(op_lw,0,ap3,ap1); break;
         }
     }
 }
 
 void GenStore(AMODE *ap1, AMODE *ap3, int size)
 {
-	/*
-    if (ap1->isFloat) {
-        GenerateDiadic(op_sf,fpsize(ap1),ap1,ap3);
-    } 
-	else
-	*/
-	{
-    	switch(size) {
-    	case 1: GenerateDiadic(op_sb,0,ap1,ap3); break;
-    	case 2: GenerateDiadic(op_sc,0,ap1,ap3); break;
-    	case 4: GenerateDiadic(op_sh,0,ap1,ap3); break;
-    	case 8: GenerateDiadic(op_sw,0,ap1,ap3); break;
-    	}
+    switch(size) {
+    case 1: GenerateDiadic(op_sb,0,ap1,ap3); break;
+    case 2: GenerateDiadic(op_sc,0,ap1,ap3); break;
+    case 4: GenerateDiadic(op_sh,0,ap1,ap3); break;
+    case 8: GenerateDiadic(op_sw,0,ap1,ap3); break;
     }
 }
 
@@ -445,7 +427,7 @@ void GenerateSignExtend(AMODE *ap, int isize, int osize, int flags)
 	}
 	if (ap->isFloat) {
 		switch(isize) {
-		case 5:	GenerateDiadic(op_fs2d,0,ap,ap); break;
+		case 4:	GenerateDiadic(op_fs2d,0,ap,ap); break;
 		}
 	}
 	else {
@@ -982,16 +964,16 @@ void GenMemop(int op, AMODE *ap1, AMODE *ap2, int ssize)
 		ReleaseTempReg(ap3);
 		return;
 	}
-	if (ap1->mode != am_indx2) {
-		if (op==op_add && ap2->mode==am_immed && ap2->offset->i >= -16 && ap2->offset->i < 16 && ssize==2) {
-			GenerateDiadic(op_inc,0,ap1,ap2);
-			return;
-		}
-		if (op==op_sub && ap2->mode==am_immed && ap2->offset->i >= -15 && ap2->offset->i < 15 && ssize==2) {
-			GenerateDiadic(op_dec,0,ap1,ap2);
-			return;
-		}
-	}
+	//if (ap1->mode != am_indx2) {
+	//	if (op==op_add && ap2->mode==am_immed && ap2->offset->i >= -16 && ap2->offset->i < 16 && ssize==2) {
+	//		GenerateDiadic(op_inc,0,ap1,ap2);
+	//		return;
+	//	}
+	//	if (op==op_sub && ap2->mode==am_immed && ap2->offset->i >= -15 && ap2->offset->i < 15 && ssize==2) {
+	//		GenerateDiadic(op_dec,0,ap1,ap2);
+	//		return;
+	//	}
+	//}
    	ap3 = GetTempRegister();
     GenLoad(ap3,ap1,ssize,ssize);
 	GenerateTriadic(op,0,ap3,ap3,ap2);
@@ -1386,6 +1368,23 @@ AMODE *GenerateAutoIncrement(ENODE *node,int flags,int size,int op)
     return ap2;
 }
 
+// autocon and autofcon nodes
+
+AMODE *GenAutocon(ENODE *node, int flags, int size, bool isFloat)
+{
+	AMODE *ap1, *ap2;
+
+	ap1 = GetTempRegister();
+	ap2 = allocAmode();
+	ap2->mode = am_indx;
+	ap2->preg = regBP;          /* frame pointer */
+	ap2->offset = node;     /* use as constant node */
+	ap2->isFloat = isFloat;
+	GenerateDiadic(op_lea,0,ap1,ap2);
+	MakeLegalAmode(ap1,flags,size);
+	return ap1;             /* return reg */
+}
+
 /*
  *      general expression evaluation. returns the addressing mode
  *      of the result.
@@ -1474,7 +1473,7 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
                 ap2->offset = node;     // use as constant node
                 GenerateDiadic(op_lea,0,ap1,ap2);
                 MakeLegalAmode(ap1,flags,size);
-         Leave("GenExpression",6); 
+				Leave("GenExpression",6); 
                 return ap1;             // return reg
             }
             // fallthru
@@ -1486,7 +1485,7 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
 				node->i = -1;
 			ap1->isUnsigned = node->isUnsigned;
             MakeLegalAmode(ap1,flags,size);
-         Leave("GenExpression",7); 
+			Leave("GenExpression",7); 
             return ap1;
 	case en_clabcon:
             ap1 = allocAmode();
@@ -1494,17 +1493,10 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
             ap1->offset = node;
 			ap1->isUnsigned = node->isUnsigned;
             MakeLegalAmode(ap1,flags,size);
-         Leave("GenExpression",7); 
+			Leave("GenExpression",7); 
             return ap1;
-    case en_autocon:
-            ap1 = GetTempRegister();
-            ap2 = allocAmode();
-            ap2->mode = am_indx;
-            ap2->preg = regBP;          /* frame pointer */
-            ap2->offset = node;     /* use as constant node */
-            GenerateDiadic(op_lea,0,ap1,ap2);
-            MakeLegalAmode(ap1,flags,size);
-            return ap1;             /* return reg */
+    case en_autocon:	return GenAutocon(node, flags, size, false);
+    case en_autofcon:	return GenAutocon(node, flags, size, true);
     case en_classcon:
             ap1 = GetTempRegister();
             ap2 = allocAmode();
@@ -1512,17 +1504,6 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
             ap2->preg = regCLP;     /* frame pointer */
             ap2->offset = node;     /* use as constant node */
             GenerateDiadic(op_lea,0,ap1,ap2);
-            MakeLegalAmode(ap1,flags,size);
-            return ap1;             /* return reg */
-    case en_autofcon:
-            ap1 = GetTempRegister();
-            ap2 = allocAmode();
-            ap2->mode = am_indx;
-            ap2->preg = regBP;          /* frame pointer */
-            ap2->offset = node;     /* use as constant node */
-            ap2->isFloat = TRUE;
-            GenerateDiadic(op_lea,0,ap1,ap2);
-			ap1->isAddress = true;
             MakeLegalAmode(ap1,flags,size);
             return ap1;             /* return reg */
     case en_ub_ref:
@@ -1536,20 +1517,12 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
 			ap1 = GenerateDereference(node,flags,size,0);
 			ap1->isUnsigned = TRUE;
             return ap1;
-	case en_ref32:
-			ap1 = GenerateDereference(node,flags,4,1);
-            return ap1;
-	case en_ref32u:
-			ap1 = GenerateDereference(node,flags,4,0);
-            return ap1;
-    case en_b_ref:
-	case en_c_ref:
-	case en_h_ref:
-			ap1 = GenerateDereference(node,flags,1,1);
-            return ap1;
-    case en_w_ref:
-			ap1 = GenerateDereference(node,flags,8,1);
-            return ap1;
+	case en_ref32:	return GenerateDereference(node,flags,4,1);
+	case en_ref32u:	return GenerateDereference(node,flags,4,0);
+    case en_b_ref:	return GenerateDereference(node,flags,1,1);
+	case en_c_ref:	return GenerateDereference(node,flags,2,1);
+	case en_h_ref:	return GenerateDereference(node,flags,4,1);
+    case en_w_ref:	return GenerateDereference(node,flags,8,1);
 	case en_flt_ref:
 	case en_dbl_ref:
     case en_triple_ref:
@@ -1570,13 +1543,6 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
 	case en_hfieldref:
 			ap1 = (flags & BF_ASSIGN) ? GenerateDereference(node,flags & ~BF_ASSIGN,size,1) : GenerateBitfieldDereference(node,flags,size);
 			return ap1;
-	case en_bregvar:
-            ap1 = allocAmode();
-            ap1->mode = am_breg;
-            ap1->preg = node->i;
-            ap1->tempflag = 0;      /* not a temporary */
-            MakeLegalAmode(ap1,flags,size);
-            return ap1;
 	case en_regvar:
     case en_tempref:
             ap1 = allocAmode();
@@ -1761,25 +1727,28 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
 	case en_cucu:
 	case en_ccu:
 			ap1 = GenerateExpression(node->p[0],F_REG,size);
-			GenerateTriadic(op_and,0,ap1,ap1,make_immed(0xffff));
+			Generate4adic(op_bfextu,0,ap1,ap1,make_immed(0),make_immed(15));
 			return ap1;
 	case en_cuhw:
 	case en_cuhu:
 	case en_chu:
 			ap1 = GenerateExpression(node->p[0],F_REG,size);
-			GenerateTriadic(op_and,0,ap1,ap1,make_immed(0xffffffffL));
+			Generate4adic(op_bfextu,0,ap1,ap1,make_immed(0),make_immed(31));
 			return ap1;
 	case en_cbw:
 			ap1 = GenerateExpression(node->p[0],F_REG,size);
-			GenerateDiadic(op_sxb,0,ap1,ap1);
+			//GenerateDiadic(op_sxb,0,ap1,ap1);
+			Generate4adic(op_bfext,0,ap1,ap1,make_immed(0),make_immed(7));
 			return ap1;
 	case en_ccw:
 			ap1 = GenerateExpression(node->p[0],F_REG,size);
-			GenerateDiadic(op_sxh,0,ap1,ap1);
+			Generate4adic(op_bfext,0,ap1,ap1,make_immed(0),make_immed(15));
+			//GenerateDiadic(op_sxh,0,ap1,ap1);
 			return ap1;
 	case en_chw:
 			ap1 = GenerateExpression(node->p[0],F_REG,size);
-			GenerateDiadic(op_sxh,0,ap1,ap1);
+			Generate4adic(op_bfext,0,ap1,ap1,make_immed(0),make_immed(31));
+			//GenerateDiadic(op_sxh,0,ap1,ap1);
 			return ap1;
     default:
             printf("DIAG - uncoded node (%d) in GenerateExpression.\n", node->nodetype);
@@ -1791,232 +1760,238 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
 
 int GetNaturalSize(ENODE *node)
 { 
-	int     siz0, siz1;
-    if( node == NULL )
-            return 0;
-    switch( node->nodetype )
-        {
-		case en_uwfieldref:
-		case en_wfieldref:
-			return 8;
-		case en_bfieldref:
-		case en_ubfieldref:
-			return 1;
-		case en_cfieldref:
-		case en_ucfieldref:
+	int siz0, siz1;
+	if( node == NULL )
+		return 0;
+	switch( node->nodetype )
+	{
+	case en_uwfieldref:
+	case en_wfieldref:
+		return 8;
+	case en_bfieldref:
+	case en_ubfieldref:
+		return 1;
+	case en_cfieldref:
+	case en_ucfieldref:
+		return 2;
+	case en_hfieldref:
+	case en_uhfieldref:
+		return 4;
+	case en_icon:
+		if( -32768 <= node->i && node->i <= 32767 )
 			return 2;
-		case en_hfieldref:
-		case en_uhfieldref:
+		if (-2147483648LL <= node->i && node->i <= 2147483647LL)
 			return 4;
-        case en_icon:
-                if( -32768 <= node->i && node->i <= 32767 )
-                        return 2;
-				if (-2147483648LL <= node->i && node->i <= 2147483647LL)
-					return 4;
-				return 8;
-		case en_fcon:
-				return node->tp->precision / 16;
-	    case en_tcon: return 6;
-		case en_fcall:  case en_labcon: case en_clabcon:
-		case en_cnacon: case en_nacon:  case en_autocon: case en_classcon:
-		case en_tempref:
-		case en_regvar:
-		case en_bregvar:
-        case en_fpregvar:
-		case en_cbw: case en_cubw:
-		case en_ccw: case en_cucw:
-		case en_chw: case en_cuhw:
-		case en_cbu: case en_ccu: case en_chu:
-		case en_cubu: case en_cucu: case en_cuhu:
-                return 8;
-		case en_autofcon:
-				return 8;
-		case en_ref32: case en_ref32u:
-				return 4;
-		case en_b_ref:
-		case en_ub_ref:
-                return 1;
-        case en_cbc:
-		case en_c_ref:	return 2;
-		case en_uc_ref:	return 2;
-		case en_cbh:	return 2;
-		case en_cch:	return 2;
-		case en_h_ref:	return 4;
-		case en_uh_ref:	return 4;
-		case en_flt_ref: return 8;
-		case en_w_ref:  case en_uw_ref:
-                return 8;
-		case en_dbl_ref:
-                return sizeOfFPD;
-		case en_quad_ref:
-				return sizeOfFPQ;
-		case en_triple_ref:
-                return sizeOfFPT;
-		case en_struct_ref:
-				return node->esize;
-		case en_tempfpref:
-			if (node->tp)
-				return node->tp->precision/16;
-			else
-				return 8;
-        case en_not:    case en_compl:
-        case en_uminus: case en_assign:
-        case en_ainc:   case en_adec:
-                return GetNaturalSize(node->p[0]);
-		case en_fadd:	case en_fsub:
-		case en_fmul:	case en_fdiv:
-		case en_fsadd:	case en_fssub:
-		case en_fsmul:	case en_fsdiv:
-        case en_add:    case en_sub:
-		case en_mul:    case en_mulu:
-		case en_div:	case en_udiv:
-		case en_mod:    case en_umod:
-		case en_and:    case en_or:     case en_xor:
-		case en_shl:    case en_shlu:
-		case en_shr:	case en_shru:
-		case en_asr:	case en_asrshu:
-                case en_feq:    case en_fne:
-                case en_flt:    case en_fle:
-                case en_fgt:    case en_fge:
-        case en_eq:     case en_ne:
-        case en_lt:     case en_le:
-        case en_gt:     case en_ge:
-		case en_ult:	case en_ule:
-		case en_ugt:	case en_uge:
-        case en_land:   case en_lor:
-        case en_asadd:  case en_assub:
-		case en_asmul:  case en_asmulu:
-		case en_asdiv:	case en_asdivu:
-        case en_asmod:  case en_asand:
-		case en_asor:   case en_asxor:	case en_aslsh:
-        case en_asrsh:
-                siz0 = GetNaturalSize(node->p[0]);
-                siz1 = GetNaturalSize(node->p[1]);
-                if( siz1 > siz0 )
-                    return siz1;
-                else
-                    return siz0;
-        case en_void:   case en_cond:
-                return GetNaturalSize(node->p[1]);
-        case en_chk:
-             return 8;
-		case en_q2i:
-		case en_t2i:
-			return (sizeOfWord);
-		case en_i2t:
-			return (sizeOfFPT);
-		case en_i2q:
-			return (sizeOfFPQ);
-        default:
-                printf("DIAG - natural size error %d.\n", node->nodetype);
-                break;
-        }
-    return 0;
+		return 8;
+	case en_fcon:
+		return node->tp->precision / 16;
+	case en_tcon: return 6;
+	case en_fcall:  case en_labcon: case en_clabcon:
+	case en_cnacon: case en_nacon:  case en_autocon: case en_classcon:
+	case en_tempref:
+	case en_regvar:
+	case en_fpregvar:
+	case en_cbw: case en_cubw:
+	case en_ccw: case en_cucw:
+	case en_chw: case en_cuhw:
+	case en_cbu: case en_ccu: case en_chu:
+	case en_cubu: case en_cucu: case en_cuhu:
+		return 8;
+	case en_autofcon:
+		return 8;
+	case en_ref32: case en_ref32u:
+		return 4;
+	case en_b_ref:
+	case en_ub_ref:
+		return 1;
+	case en_cbc:
+	case en_c_ref:	return 2;
+	case en_uc_ref:	return 2;
+	case en_cbh:	return 2;
+	case en_cch:	return 2;
+	case en_h_ref:	return 4;
+	case en_uh_ref:	return 4;
+	case en_flt_ref: return 8;
+	case en_w_ref:  case en_uw_ref:
+		return 8;
+	case en_dbl_ref:
+		return sizeOfFPD;
+	case en_quad_ref:
+		return sizeOfFPQ;
+	case en_triple_ref:
+		return sizeOfFPT;
+	case en_struct_ref:
+	return node->esize;
+	case en_tempfpref:
+	if (node->tp)
+		return node->tp->precision/16;
+	else
+		return 8;
+	case en_not:    case en_compl:
+	case en_uminus: case en_assign:
+	case en_ainc:   case en_adec:
+		return GetNaturalSize(node->p[0]);
+	case en_fadd:	case en_fsub:
+	case en_fmul:	case en_fdiv:
+	case en_fsadd:	case en_fssub:
+	case en_fsmul:	case en_fsdiv:
+	case en_add:    case en_sub:
+	case en_mul:    case en_mulu:
+	case en_div:	case en_udiv:
+	case en_mod:    case en_umod:
+	case en_and:    case en_or:     case en_xor:
+	case en_shl:    case en_shlu:
+	case en_shr:	case en_shru:
+	case en_asr:	case en_asrshu:
+	case en_feq:    case en_fne:
+	case en_flt:    case en_fle:
+	case en_fgt:    case en_fge:
+	case en_eq:     case en_ne:
+	case en_lt:     case en_le:
+	case en_gt:     case en_ge:
+	case en_ult:	case en_ule:
+	case en_ugt:	case en_uge:
+	case en_land:   case en_lor:
+	case en_asadd:  case en_assub:
+	case en_asmul:  case en_asmulu:
+	case en_asdiv:	case en_asdivu:
+	case en_asmod:  case en_asand:
+	case en_asor:   case en_asxor:	case en_aslsh:
+	case en_asrsh:
+		siz0 = GetNaturalSize(node->p[0]);
+		siz1 = GetNaturalSize(node->p[1]);
+		if( siz1 > siz0 )
+			return siz1;
+		else
+			return siz0;
+	case en_void:   case en_cond:
+		return GetNaturalSize(node->p[1]);
+	case en_chk:
+		return 8;
+	case en_q2i:
+	case en_t2i:
+		return (sizeOfWord);
+	case en_i2t:
+		return (sizeOfFPT);
+	case en_i2q:
+		return (sizeOfFPQ);
+	default:
+		printf("DIAG - natural size error %d.\n", node->nodetype);
+		break;
+	}
+	return 0;
 }
 
 
 static void GenerateCmp(ENODE *node, int op, int label)
 {
-  Enter("GenCmp");
-  GenerateCmp(node, op, label, 0);
-  Leave("GenCmp",0);
+	Enter("GenCmp");
+	GenerateCmp(node, op, label, 0);
+	Leave("GenCmp",0);
 }
 
-/*
- *      generate a jump to label if the node passed evaluates to
- *      a true condition.
- */
+//
+// Generate a jump to label if the node passed evaluates to
+// a true condition.
+//
 void GenerateTrueJump(ENODE *node, int label)
 { 
-  AMODE  *ap1;
-  int             siz1;
-  int             lab0;
+	AMODE  *ap1;
+	int    siz1;
+	int    lab0;
 
-  if( node == 0 )
-    return;
-  switch( node->nodetype )
-  {
-    case en_eq:	GenerateCmp(node, op_eq, label); break;
-    case en_ne: GenerateCmp(node, op_ne, label); break;
-    case en_lt: GenerateCmp(node, op_lt, label); break;
-    case en_le:	GenerateCmp(node, op_le, label); break;
-    case en_gt: GenerateCmp(node, op_gt, label); break;
-    case en_ge: GenerateCmp(node, op_ge, label); break;
-    case en_ult: GenerateCmp(node, op_ltu, label); break;
-    case en_ule: GenerateCmp(node, op_leu, label); break;
-    case en_ugt: GenerateCmp(node, op_gtu, label); break;
-    case en_uge: GenerateCmp(node, op_geu, label); break;
-    case en_land:
-            lab0 = nextlabel++;
-            GenerateFalseJump(node->p[0],lab0);
-            GenerateTrueJump(node->p[1],label);
-            GenerateLabel(lab0);
-            break;
-              case en_lor:
-                        GenerateTrueJump(node->p[0],label);
-                        GenerateTrueJump(node->p[1],label);
-                        break;
-                case en_not:
-                        GenerateFalseJump(node->p[0],label);
-                        break;
-                default:
-                        siz1 = GetNaturalSize(node);
-                        ap1 = GenerateExpression(node,F_REG,siz1);
-//                        GenerateDiadic(op_tst,siz1,ap1,0);
-                        ReleaseTempRegister(ap1);
-						GenerateTriadic(op_bne,0,ap1,makereg(0),make_label(label));
-                        break;
-                }
+	if( node == 0 )
+		return;
+	switch( node->nodetype )
+	{
+	case en_eq:	GenerateCmp(node, op_eq, label); break;
+	case en_ne: GenerateCmp(node, op_ne, label); break;
+	case en_lt: GenerateCmp(node, op_lt, label); break;
+	case en_le:	GenerateCmp(node, op_le, label); break;
+	case en_gt: GenerateCmp(node, op_gt, label); break;
+	case en_ge: GenerateCmp(node, op_ge, label); break;
+	case en_ult: GenerateCmp(node, op_ltu, label); break;
+	case en_ule: GenerateCmp(node, op_leu, label); break;
+	case en_ugt: GenerateCmp(node, op_gtu, label); break;
+	case en_uge: GenerateCmp(node, op_geu, label); break;
+	case en_feq: GenerateCmp(node, op_feq, label); break;
+	case en_fne: GenerateCmp(node, op_fne, label); break;
+	case en_flt: GenerateCmp(node, op_flt, label); break;
+	case en_fle: GenerateCmp(node, op_fle, label); break;
+	case en_fgt: GenerateCmp(node, op_fgt, label); break;
+	case en_fge: GenerateCmp(node, op_fge, label); break;
+	case en_land:
+		lab0 = nextlabel++;
+		GenerateFalseJump(node->p[0],lab0);
+		GenerateTrueJump(node->p[1],label);
+		GenerateLabel(lab0);
+		break;
+	case en_lor:
+		GenerateTrueJump(node->p[0],label);
+		GenerateTrueJump(node->p[1],label);
+		break;
+	case en_not:
+		GenerateFalseJump(node->p[0],label);
+		break;
+	default:
+		siz1 = GetNaturalSize(node);
+		ap1 = GenerateExpression(node,F_REG,siz1);
+		//                        GenerateDiadic(op_tst,siz1,ap1,0);
+		ReleaseTempRegister(ap1);
+		GenerateTriadic(op_bne,0,ap1,makereg(0),make_label(label));
+		break;
+	}
 }
 
-/*
- *      generate code to execute a jump to label if the expression
- *      passed is false.
- */
+//
+// Generate code to execute a jump to label if the expression
+// passed is false.
+//
 void GenerateFalseJump(ENODE *node,int label)
 {
 	AMODE *ap, *ap1, *ap2;
-        int             siz1;
-        int             lab0;
-        if( node == (ENODE *)NULL )
-                return;
-        switch( node->nodetype )
-                {
-                case en_eq:	GenerateCmp(node, op_ne, label); break;
-                case en_ne: GenerateCmp(node, op_eq, label); break;
-                case en_lt: GenerateCmp(node, op_ge, label); break;
-                case en_le: GenerateCmp(node, op_gt, label); break;
-                case en_gt: GenerateCmp(node, op_le, label); break;
-                case en_ge: GenerateCmp(node, op_lt, label); break;
-                case en_ult: GenerateCmp(node, op_geu, label); break;
-                case en_ule: GenerateCmp(node, op_gtu, label); break;
-                case en_ugt: GenerateCmp(node, op_leu, label); break;
-                case en_uge: GenerateCmp(node, op_ltu, label); break;
-                case en_feq:	GenerateCmp(node, op_fne, label); break;
-                case en_fne: GenerateCmp(node, op_feq, label); break;
-                case en_flt: GenerateCmp(node, op_fge, label); break;
-                case en_fle: GenerateCmp(node, op_fgt, label); break;
-                case en_fgt: GenerateCmp(node, op_fle, label); break;
-                case en_fge: GenerateCmp(node, op_flt, label); break;
-                case en_land:
-                        GenerateFalseJump(node->p[0],label);
-                        GenerateFalseJump(node->p[1],label);
-                        break;
-                case en_lor:
-                        lab0 = nextlabel++;
-                        GenerateTrueJump(node->p[0],lab0);
-                        GenerateFalseJump(node->p[1],label);
-                        GenerateLabel(lab0);
-                        break;
-                case en_not:
-                        GenerateTrueJump(node->p[0],label);
-                        break;
-                default:
-                        siz1 = GetNaturalSize(node);
-                        ap = GenerateExpression(node,F_REG,siz1);
-//                        GenerateDiadic(op_tst,siz1,ap,0);
-                        ReleaseTempRegister(ap);
-						GenerateTriadic(op_beq,0,ap,makereg(0),make_label(label));
-                        break;
-                }
+	int siz1;
+	int lab0;
+
+	if( node == (ENODE *)NULL )
+		return;
+	switch( node->nodetype )
+	{
+	case en_eq:	GenerateCmp(node, op_ne, label); break;
+	case en_ne: GenerateCmp(node, op_eq, label); break;
+	case en_lt: GenerateCmp(node, op_ge, label); break;
+	case en_le: GenerateCmp(node, op_gt, label); break;
+	case en_gt: GenerateCmp(node, op_le, label); break;
+	case en_ge: GenerateCmp(node, op_lt, label); break;
+	case en_ult: GenerateCmp(node, op_geu, label); break;
+	case en_ule: GenerateCmp(node, op_gtu, label); break;
+	case en_ugt: GenerateCmp(node, op_leu, label); break;
+	case en_uge: GenerateCmp(node, op_ltu, label); break;
+	case en_feq: GenerateCmp(node, op_fne, label); break;
+	case en_fne: GenerateCmp(node, op_feq, label); break;
+	case en_flt: GenerateCmp(node, op_fge, label); break;
+	case en_fle: GenerateCmp(node, op_fgt, label); break;
+	case en_fgt: GenerateCmp(node, op_fle, label); break;
+	case en_fge: GenerateCmp(node, op_flt, label); break;
+	case en_land:
+		GenerateFalseJump(node->p[0],label);
+		GenerateFalseJump(node->p[1],label);
+		break;
+	case en_lor:
+		lab0 = nextlabel++;
+		GenerateTrueJump(node->p[0],lab0);
+		GenerateFalseJump(node->p[1],label);
+		GenerateLabel(lab0);
+		break;
+	case en_not:
+		GenerateTrueJump(node->p[0],label);
+		break;
+	default:
+		siz1 = GetNaturalSize(node);
+		ap = GenerateExpression(node,F_REG,siz1);
+		//                        GenerateDiadic(op_tst,siz1,ap,0);
+		ReleaseTempRegister(ap);
+		GenerateTriadic(op_beq,0,ap,makereg(0),make_label(label));
+		break;
+	}
 }

@@ -79,7 +79,7 @@ static bool SameType(TYP *tp1, TYP *tp2)
 {
 	bool ret = false;
 
-	printf("Enter SameType\r\n");
+//	printf("Enter SameType\r\n");
 	while(false) {
 		if (tp1->type == tp2->type) {
 			if (!tp1->GetBtp() && !tp2->GetBtp()) {
@@ -103,7 +103,7 @@ static bool SameType(TYP *tp1, TYP *tp2)
 		}
 	}
 
-	printf("Leave SameType\r\n");
+//	printf("Leave SameType\r\n");
 	return ret;
 }
 
@@ -332,27 +332,27 @@ dfs.printf("F");
 
 SYM *makeint(char *name)
 {  
-  SYM     *sp;
-  TYP     *tp;
+	SYM *sp;
+	TYP *tp;
 
-  sp = allocSYM();
-  tp = TYP::Make(bt_long,2);
-  tp->sname = new std::string("");
+	sp = allocSYM();
+	tp = TYP::Make(bt_long,2);
+	tp->sname = new std::string("");
 	tp->isUnsigned = FALSE;
 	tp->isVolatile = FALSE;
-  sp->SetName(name);
-  sp->storage_class = sc_auto;
-  sp->SetType(tp);
+	sp->SetName(name);
+	sp->storage_class = sc_auto;
+	sp->SetType(tp);
 	sp->IsPrototype = FALSE;
-  currentFn->lsyms.insert(sp);
-  return sp;
+	currentFn->lsyms.insert(sp);
+	return sp;
 }
 
 void check_table(SYM *head)
 {   
 	while( head != 0 ) {
 		if( head->storage_class == sc_ulabel )
-				lfs.printf("*** UNDEFINED LABEL - %s\n",(char *)head->name->c_str());
+			lfs.printf("*** UNDEFINED LABEL - %s\n",(char *)head->name->c_str());
 		head = head->GetNextPtr();
 	}
 }

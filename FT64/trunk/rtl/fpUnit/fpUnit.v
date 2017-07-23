@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2006-2016  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2006-2017  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -72,6 +72,15 @@
 `define TRUE    1'b1
 `define FALSE   1'b0
 
+`define VECTOR  6'h01
+`define VFADD       6'h04
+`define VFSUB       6'h05
+`define VFSxx       6'h06
+`define VFNEG       6'h16
+`define VFTOI       6'h24
+`define VITOF       6'h25
+`define VFMUL       6'h3A
+`define VFDIV       6'h3E
 `define FLOAT   6'h0B
 `define FMOV    6'h10
 `define FTOI    6'h12
@@ -414,14 +423,26 @@ fpAddsub #(32) u10s(.clk(clk), .ce(pipe_ce), .rm(rm), .op(op[0]), .a(a[31:0]), .
 fpDiv    #(32) u11s(.clk(clk), .ce(pipe_ce), .ld(ld), .a(a[31:0]), .b(b[31:0]), .o(fdivs_o), .sign_exe(), .underflow(divUnders), .done() );
 fpMul    #(32) u12s(.clk(clk), .ce(pipe_ce),          .a(a[31:0]), .b(b[31:0]), .o(fmuls_o), .sign_exe(), .inf(), .underflow(mulUnders) );
 */
-always @(fn2,mulUnder,divUnder,mulUnders,divUnders)
+always @*
+case(op2)
+`FLOAT:
     case (fn2)
     `FMUL:	under = mulUnder;
     `FDIV:	under = divUnder;
     default: begin under = 0; unders = 0; end
 	endcase
+`VECTOR:
+    case (fn2)
+    `VFMUL:    under = mulUnder;
+    `VFDIV:    under = divUnder;
+    default: begin under = 0; unders = 0; end
+    endcase
+default: begin under = 0; unders = 0; end
+endcase
 
-always @(fn2,fas_o,fmul_o,fdiv_o,fass_o,fmuls_o,fdivs_o)
+always @*
+case(op2)
+`FLOAT:
     case(fn2)
     `FADD:	fres <= fas_o;
     `FSUB:	fres <= fas_o;
@@ -429,6 +450,16 @@ always @(fn2,fas_o,fmul_o,fdiv_o,fass_o,fmuls_o,fdivs_o)
     `FDIV:	fres <= fdiv_o;
     default:	begin fres <= fas_o; fress <= fass_o; end
     endcase
+`VECTOR:
+    case(fn2)
+    `VFADD:   fres <= fas_o;
+    `VFSUB:   fres <= fas_o;
+    `VFMUL:   fres <= fmul_o;
+    `VFDIV:   fres <= fdiv_o;
+    default:    begin fres <= fas_o; fress <= fass_o; end
+    endcase
+default:    begin fres <= fas_o; fress <= fass_o; end
+endcase
 
 // pipeline stage
 // one cycle latency
@@ -549,6 +580,18 @@ begin
                 default:    fpcnt <= 8'h00;
                 endcase
             end
+        `VECTOR:
+            case(func6b)
+            `VFNEG:  begin fpcnt <= 8'd0; end
+            `VFADD:  begin fpcnt <= 8'd8; end
+            `VFSUB:  begin fpcnt <= 8'd8; end
+            `VFSxx:  begin fpcnt <= 8'd0; end
+            `VFMUL:  begin fpcnt <= 8'd10; end
+            `VFDIV:  begin fpcnt <= maxdivcnt; end
+            `VFTOI:  begin fpcnt <= 8'd1; end
+            `VITOF:  begin fpcnt <= 8'd1; end
+            default:    fpcnt <= 8'h00;
+            endcase
         default:    fpcnt <= 8'h00;
         endcase
     else if (!done)

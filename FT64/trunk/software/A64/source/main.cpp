@@ -1348,24 +1348,18 @@ int checksum64(int64_t *val)
 void processMaster()
 {
     expandedBlock = 0;
-    if (gCpu==888)
-       Table888_processMaster();
-    else if (gCpu==889)
-        Table888mmu_processMaster();
-    else if (gCpu==64)
-        FISA64_processMaster();
-    else if (gCpu==5)
-        Friscv_processMaster();
-    else if (gCpu==4)
-        Thor_processMaster();
-    else if (gCpu==14)
-        dsd6_processMaster();
-    else if (gCpu==7)
-        dsd7_processMaster();
-	else if (gCpu=='A')
-		dsd9_processMaster();
-	else if (gCpu=='F')
-		FT64_processMaster();
+	switch(gCpu) {
+	case 888:	Table888_processMaster();	break;
+	case 889:	Table888mmu_processMaster();	break;
+	case 64:	FISA64_processMaster();	break;
+	case 5:		Friscv_processMaster();	break;
+	case 4:		Thor_processMaster();	break;
+	case 14:	dsd6_processMaster();	break;
+	case 7:		dsd7_processMaster();	break;
+	case 'A':	dsd9_processMaster();	break;
+	case 'F':	FT64_processMaster();	break;
+	default:	FT64_processMaster();
+	}
 }
 
 // ----------------------------------------------------------------------------

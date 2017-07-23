@@ -31,7 +31,6 @@ typedef struct amode {
 	unsigned int defseg : 1;
 	unsigned int tempflag : 1;
 	unsigned int isFloat : 1;
-	unsigned int isAddress : 1;
 	char FloatSize;
 	unsigned int isUnsigned : 1;
 	unsigned int lowhigh : 2;
@@ -60,7 +59,8 @@ enum e_op {
         op_move, op_add, op_addu, op_addi, op_sub, op_subi, op_mov, op_mtspr, op_mfspr, op_ldi, op_ld,
         op_mul, op_muli, op_mulu, op_divi, op_modi, op_modui, 
         op_div, op_divs, op_divsi, op_divu, op_and, op_andi, op_eor, op_eori,
-        op_or, op_ori, op_xor, op_xori, op_asr, op_asri, op_shl, op_shr, op_shru, op_ror, op_rol,
+        op_or, op_ori, op_xor, op_xori, op_redor,
+		op_asr, op_asri, op_shl, op_shr, op_shru, op_ror, op_rol,
 		op_shli, op_shri, op_shrui, op_shlu, op_shlui, op_rori, op_roli,
 		op_bfext, op_bfextu, op_bfins,
 		op_jmp, op_jsr, op_mului, op_mod, op_modu,

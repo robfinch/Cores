@@ -856,7 +856,7 @@ int NextToken()
                     return token = tk_biti;
                 }
             }
-			if (gCpu==7 || gCpu=='A') {
+			if (gCpu==7 || gCpu=='A' || gCpu=='F') {
                 if ((inptr[1]=='b' || inptr[1]=='B') && 
                     (inptr[2]=='c' || inptr[2]=='C') &&
                      isspace(inptr[3])) {
@@ -1522,7 +1522,7 @@ int NextToken()
              }
              break;
 
-        // lb lbu lc lcu lf lh lhu lw ld ldi ldis lea lsr lsri lwar lfd lvb lws lvh lvw ltcb
+        // lb lbu lc lcu lf lh lhu lw ld ldi ldis lea lsr lsri lwar lfd lvb lws lvh lvw ltcb link
         case 'l':
         case 'L':
 			if (gCpu=='A') {
@@ -1610,6 +1610,10 @@ int NextToken()
                 inptr += 2;
                 return token = tk_lf;
             }  
+            if ((inptr[1]=='v' || inptr[1]=='V') && isspace(inptr[2])) {
+                inptr += 2;
+                return token = tk_lv;
+            }  
             if ((inptr[1]=='w' || inptr[1]=='W') && isspace(inptr[2])) {
                 inptr += 2;
                 return token = tk_lw;
@@ -1633,6 +1637,10 @@ int NextToken()
             if ((inptr[1]=='d' || inptr[1]=='D') && (inptr[2]=='i' || inptr[2]=='I') && isspace(inptr[3])) {
                 inptr += 3;
                 return token = tk_ldi;
+            }
+            if ((inptr[1]=='i' || inptr[1]=='I') && (inptr[2]=='n' || inptr[2]=='N') && (inptr[3]=='k' || inptr[3]=='K') && isspace(inptr[4])) {
+                inptr += 4;
+                return token = tk_link;
             }
             if ((inptr[1]=='d' || inptr[1]=='D') && (inptr[2]=='i' || inptr[2]=='I') && (inptr[3]=='s' || inptr[3]=='S') && isspace(inptr[4])) {
                 inptr += 4;
@@ -2087,7 +2095,7 @@ int NextToken()
         
         // sb sc sf sh sw sxb sxc sxh sub subi subu subui shl shli shr shru shrui sei smr ss:
         // seq seqi sne snei sge sgei sgt sgti slt slti sle slei sgeu sgeui sgtu sgtui sltu sltui sleu sleui
-        // swcr sfd sts sync sws stcmp stmov srai srli stcb
+        // swcr sfd sts sync sws stcmp stmov srai srli stcb sv
 		// DSD9: stb stw stp std
         case 's': case 'S':
 			if (gCpu=='A') {
@@ -2348,6 +2356,10 @@ int NextToken()
                 inptr += 2;
                 return token = tk_sw;
             }  
+            if ((inptr[1]=='v' || inptr[1]=='V') && isspace(inptr[2])) {
+                inptr += 2;
+                return token = tk_sv;
+            }  
             if ((inptr[1]=='y' || inptr[1]=='Y') && 
                 (inptr[2]=='s' || inptr[2]=='S') && 
                 isspace(inptr[3])) {
@@ -2572,6 +2584,126 @@ int NextToken()
                  }
              }
              break;
+		
+		// unlink
+		case 'u': case 'U':
+            if ((inptr[1]=='n' || inptr[1]=='N') &&
+				(inptr[2]=='l' || inptr[2]=='L') &&
+				(inptr[3]=='i' || inptr[3]=='I') &&
+				(inptr[4]=='n' || inptr[4]=='N') &&
+				(inptr[5]=='k' || inptr[5]=='K') &&
+				isspace(inptr[6])) {
+                inptr += 6;
+                return token = tk_unlink;
+            }
+			break;
+
+		// vadd vdiv vmul vsub
+		case 'v': case 'V':
+            if ((inptr[1]=='a' || inptr[1]=='A') &&
+				(inptr[2]=='d' || inptr[2]=='D') &&
+				(inptr[3]=='d' || inptr[3]=='D') &&
+				isspaceOrDot(inptr[4])) {
+                inptr += 4;
+                return token = tk_vadd;
+            }
+            if ((inptr[1]=='a' || inptr[1]=='A') &&
+				(inptr[2]=='d' || inptr[2]=='D') &&
+				(inptr[3]=='d' || inptr[3]=='D') &&
+				(inptr[4]=='s' || inptr[4]=='S') &&
+				isspaceOrDot(inptr[5])) {
+                inptr += 5;
+                return token = tk_vadds;
+            }
+            if ((inptr[1]=='a' || inptr[1]=='A') &&
+				(inptr[2]=='n' || inptr[2]=='N') &&
+				(inptr[3]=='d' || inptr[3]=='D') &&
+				isspaceOrDot(inptr[4])) {
+                inptr += 4;
+                return token = tk_vand;
+            }
+            if ((inptr[1]=='a' || inptr[1]=='A') &&
+				(inptr[2]=='n' || inptr[2]=='N') &&
+				(inptr[3]=='d' || inptr[3]=='D') &&
+				(inptr[4]=='s' || inptr[4]=='S') &&
+				isspaceOrDot(inptr[5])) {
+                inptr += 5;
+                return token = tk_vands;
+            }
+            if ((inptr[1]=='d' || inptr[1]=='D') &&
+				(inptr[2]=='i' || inptr[2]=='I') &&
+				(inptr[3]=='v' || inptr[3]=='V') &&
+				isspaceOrDot(inptr[4])) {
+                inptr += 4;
+                return token = tk_vdiv;
+            }
+            if ((inptr[1]=='d' || inptr[1]=='D') &&
+				(inptr[2]=='i' || inptr[2]=='I') &&
+				(inptr[3]=='v' || inptr[3]=='V') &&
+				(inptr[4]=='s' || inptr[4]=='S') &&
+				isspaceOrDot(inptr[5])) {
+                inptr += 5;
+                return token = tk_vdivs;
+            }
+            if ((inptr[1]=='m' || inptr[1]=='M') &&
+				(inptr[2]=='u' || inptr[2]=='U') &&
+				(inptr[3]=='l' || inptr[3]=='L') &&
+				isspaceOrDot(inptr[4])) {
+                inptr += 4;
+                return token = tk_vmul;
+            }
+            if ((inptr[1]=='m' || inptr[1]=='M') &&
+				(inptr[2]=='u' || inptr[2]=='U') &&
+				(inptr[3]=='l' || inptr[3]=='L') &&
+				(inptr[4]=='s' || inptr[4]=='S') &&
+				isspaceOrDot(inptr[5])) {
+                inptr += 5;
+                return token = tk_vmuls;
+            }
+            if ((inptr[1]=='o' || inptr[1]=='O') &&
+				(inptr[2]=='r' || inptr[2]=='R') &&
+				isspaceOrDot(inptr[3])) {
+                inptr += 3;
+                return token = tk_vor;
+            }
+            if ((inptr[1]=='o' || inptr[1]=='O') &&
+				(inptr[2]=='r' || inptr[2]=='R') &&
+				(inptr[3]=='s' || inptr[3]=='S') &&
+				isspaceOrDot(inptr[4])) {
+                inptr += 4;
+                return token = tk_vors;
+            }
+            if ((inptr[1]=='s' || inptr[1]=='S') &&
+				(inptr[2]=='u' || inptr[2]=='U') &&
+				(inptr[3]=='b' || inptr[3]=='B') &&
+				isspaceOrDot(inptr[4])) {
+                inptr += 4;
+                return token = tk_vsub;
+            }
+            if ((inptr[1]=='s' || inptr[1]=='S') &&
+				(inptr[2]=='u' || inptr[2]=='U') &&
+				(inptr[3]=='b' || inptr[3]=='B') &&
+				(inptr[4]=='s' || inptr[4]=='S') &&
+				isspaceOrDot(inptr[5])) {
+                inptr += 5;
+                return token = tk_vsubs;
+            }
+            if ((inptr[1]=='x' || inptr[1]=='X') &&
+				(inptr[2]=='o' || inptr[2]=='O') &&
+				(inptr[3]=='r' || inptr[3]=='R') &&
+				isspaceOrDot(inptr[4])) {
+                inptr += 4;
+                return token = tk_vxor;
+            }
+            if ((inptr[1]=='x' || inptr[1]=='X') &&
+				(inptr[2]=='o' || inptr[2]=='O') &&
+				(inptr[3]=='r' || inptr[3]=='R') &&
+				(inptr[4]=='s' || inptr[4]=='S') &&
+				isspaceOrDot(inptr[5])) {
+                inptr += 5;
+                return token = tk_vxors;
+            }
+			break;
 
         // wai
         case 'w': case 'W':

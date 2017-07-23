@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2006-2016  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2006-2017  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -30,7 +30,10 @@
 //
 // ============================================================================
 
-`define FLOAT   8'hF1
+`define VECTOR  6'h01
+`define VFTOI   6'h24
+`define VITOF   6'h25
+`define FLOAT   6'h0B
 `define FTOI    6'h12
 `define ITOF    6'h13
 
@@ -75,7 +78,11 @@ wire [5:0] fn = ir[25:20];
 wire [2:0] rm = ir[34:32];
 wire [1:0] prec = ir[37:35];
 
-delay1 u1 (.clk(clk), .ce(ce), .i(op==`FLOAT && (fn==`ITOF||fn==`FTOI)), .o(done) );
+delay1 u1 (
+    .clk(clk),
+    .ce(ce),
+    .i((op==`FLOAT && (fn==`ITOF||fn==`FTOI)) || (op==`VECTOR && (fn==`VFTOI || fn==`VITOF))),
+    .o(done) );
 i2f #(WID)  ui2fs (.clk(clk), .ce(ce), .rm(rm), .i(a), .o(i2f_o) );
 f2i #(WID)  uf2is (.clk(clk), .ce(ce), .i(a), .o(f2i_o) );
 
@@ -87,6 +94,12 @@ always @*
        `FTOI:   o <= f2i_o;
        default: o <= 0;
        endcase
+    `VECTOR:
+        case(fn)
+        `VITOF:  o <= i2f_o;
+        `VFTOI:  o <= f2i_o;
+        default: o <= 0;
+        endcase
     default:   o <= 0;
     endcase
 

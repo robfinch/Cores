@@ -63,7 +63,7 @@ enum e_node {
 		en_ref32, en_ref32u,
 		en_struct_ref,
         en_fcall, en_ifcall,
-         en_tempref, en_regvar, en_bregvar, en_fpregvar, en_tempfpref,
+         en_tempref, en_regvar, en_fpregvar, en_tempfpref,
 		en_add, en_sub, en_mul, en_mod,
 		en_ftadd, en_ftsub, en_ftmul, en_ftdiv,
 		en_fdadd, en_fdsub, en_fdmul, en_fddiv,

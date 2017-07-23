@@ -25,7 +25,7 @@
 `include "FT64_defines.vh"
 
 module FT64alu(rst, clk, ld, abort, instr, a, b, c, imm, tgt, tgt2, ven, vm, sbl, sbu,
-    pc, csr, o, ob, done, idle, excen, exc);
+    csr, o, ob, done, idle, excen, exc);
 parameter DBW = 64;
 parameter BIG = 1'b1;
 parameter TRUE = 1'b1;
@@ -45,7 +45,6 @@ input [5:0] ven;
 input [15:0] vm;
 input [31:0] sbl;
 input [31:0] sbu;
-input [31:0] pc;
 input [63:0] csr;
 output reg [63:0] o;
 output reg [63:0] ob;
@@ -68,7 +67,7 @@ input [31:0] isn;
 case(isn[`INSTRUCTION_OP])
 `VECTOR:
     case(isn[`INSTRUCTION_S2])
-    `VMUL:      IsMul = TRUE;
+    `VMUL,`VMULS:   IsMul = TRUE;
     default:    IsMul = FALSE;
     endcase
 `RR:
@@ -86,7 +85,7 @@ input [31:0] isn;
 case(isn[`INSTRUCTION_OP])
 `VECTOR:
     case(isn[`INSTRUCTION_S2])
-    `VDIV:      IsDivmod = TRUE;
+    `VDIV,`VDIVS:   IsDivmod = TRUE;
     default:    IsDivmod = FALSE;
     endcase
 `RR:
@@ -104,7 +103,7 @@ input [31:0] isn;
 case(isn[`INSTRUCTION_OP])
 `VECTOR:
     case(isn[`INSTRUCTION_S2])
-    `VMUL,`VDIV:    IsSgn = TRUE;
+    `VMUL,`VMULS,`VDIV,`VDIVS:    IsSgn = TRUE;
     default:    IsSgn = FALSE;
     endcase
 `RR:
@@ -130,7 +129,9 @@ default:    IsSgnus = FALSE;
 endcase
 endfunction
 
-wire [1:0] sz = instr[`INSTRUCTION_S2]==`R1 ? instr[17:16] : instr[22:21];
+wire [1:0] sz =
+    instr[`INSTRUCTION_OP]==`VECTOR ? 2'd3 : 
+    instr[`INSTRUCTION_S2]==`R1 ? instr[17:16] : instr[22:21];
 
 wire [63:0] bfout,shfto;
 wire [7:0] shftob;
@@ -256,20 +257,44 @@ wire [63:0] redor64 = {63'd0,|a};
 wire [63:0] redor32 = {63'd0,|a[31:0]};
 wire [63:0] redor16 = {63'd0,|a[15:0]};
 wire [63:0] redor8 = {63'd0,|a[7:0]};
+integer n;
+reg [15:0] mask;
+wire [4:0] cpopom;
 
+always @*
+for (n = 0; n < 16; n = n + 1)
+    if (n <= ven)
+        mask[n] = 1'b1;
+    else
+        mask[n] = 1'b0;
+
+cntpop16 ucpop2
+(
+	.i(vm & mask),
+	.o(cpopom)
+);
+ 
 always @*
 case(instr[`INSTRUCTION_OP])
 `VECTOR:
     case(instr[`INSTRUCTION_S2])
+    `VMAND:        o = and64;
+    `VMOR:         o = or64;
+    `VMXOR:        o = xor64;
+    `VMXNOR:       o = ~(xor64);
+    `VMPOP:        o = {57'd0,cpopo};
     `VADD,`VADDS:  o = vm[ven] ? a + b : c;
     `VSUB,`VSUBS:  o = vm[ven] ? a - b : c;
-    `VMUL:         o = vm[ven] ? prod[DBW-1:0] : c;
-    `VDIV:         o = BIG ? (vm[ven] ? divq : c) : 64'hCCCCCCCCCCCCCCCC;
+    `VMUL,`VMULS:  o = vm[ven] ? prod[DBW-1:0] : c;
+    `VDIV,`VDIVS:  o = BIG ? (vm[ven] ? divq : c) : 64'hCCCCCCCCCCCCCCCC;
     `VAND,`VANDS:  o = vm[ven] ? a & b : c;
     `VOR,`VORS:    o = vm[ven] ? a | b : c;
     `VXOR,`VXORS:  o = vm[ven] ? a ^ b : c;
     `VSHLV:        o = a;   // no masking here
     `VSHRV:        o = a;
+    `VCMPRSS:      o = a;
+    `VCIDX:        o = a * ven;
+    `VSCAN:        o = a * (cpopom==0 ? 0 : cpopom-1);              
     `VSxx:
         case({instr[25],instr[20:19]})
         `VSEQ:     begin
@@ -284,8 +309,16 @@ case(instr[`INSTRUCTION_OP])
                          o = c;    
                          o[ven] = vm[ven] ? $signed(a) < $signed(b) : c[ven];
                     end
+        `VSGE:      begin
+                         o = c;    
+                         o[ven] = vm[ven] ? $signed(a) >= $signed(b) : c[ven];
+                    end
         endcase
     `VBITS2V:   o = vm[ven] ? a[ven] : c;
+    `V2BITS:    begin
+                o = b;
+                o[ven] = vm[ven] ? a[0] : b[ven];
+                end
     endcase    
 `RR:
     case(instr[`INSTRUCTION_S2])
@@ -395,6 +428,7 @@ case(instr[`INSTRUCTION_OP])
     `POP:       o = instr[25] ? a + {{59{instr[25]}},instr[25:21]} : a;
     `UNLINK:    o = b;
     `LBX,`LHX,`LHUX,`LWX,`SBX,`SHX,`SWX:   o = BIG ? a + (b << instr[22:21]) : 64'hCCCCCCCCCCCCCCCC;
+    `LVX,`SVX:  o = BIG ? a + (b << 2'd3) : 64'hCCCCCCCCCCCCCCCC;
     `MIN:       o = BIG ? (($signed(a) < $signed(b) && $signed(a) < $signed(c)) ? a :
                            ($signed(b) < $signed(c)) ? b : c) : 64'hCCCCCCCCCCCCCCCC;
     `MAX:       o = BIG ? (($signed(a) > $signed(b) && $signed(a) > $signed(c)) ? a :

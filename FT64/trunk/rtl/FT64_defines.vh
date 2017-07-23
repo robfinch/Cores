@@ -32,6 +32,9 @@
 
 `define BRK     6'h00
 `define VECTOR  6'h01
+`define VCMPRSS     6'h00
+`define VCIDX       6'h01
+`define VSCAN       6'h02
 `define VADD        6'h04
 `define VSUB        6'h05
 `define VSxx        6'h06
@@ -41,6 +44,7 @@
 `define VSGE            3'd3
 `define VSLTU           3'd4
 `define VSGEU           3'd5
+`define VSUN            3'd7
 `define VAND        6'h08
 `define VOR         6'h09
 `define VXOR        6'h0A
@@ -54,8 +58,16 @@
 `define VORS        6'h19
 `define VXORS       6'h1A
 `define VBITS2V     6'h20
+`define V2BITS      6'h21
 `define VEINS       6'h22
 `define VEX         6'h23
+`define VMULS       6'h2A
+`define VDIVS       6'h2E
+`define VMAND       6'h30
+`define VMOR        6'h31
+`define VMXOR       6'h32
+`define VMXNOR      6'h33
+`define VMPOP       6'h34
 `define VMUL        6'h3A
 `define VDIV        6'h3E
 `define RR      6'h02

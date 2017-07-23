@@ -381,25 +381,25 @@ Statement *ParseFirstcallStatement()
 	SYM *sp;
 	int st;
 
-  dfs.puts("<ParseFirstcall>");
-  snp = NewStatement(st_firstcall, TRUE); 
-  sp = allocSYM();
-//	sp->SetName(*(new std::string(snp->fcname)));
-  sp->storage_class = sc_static;
-  sp->value.i = nextlabel++;
-  sp->tp = &stdbyte;
-  st = lastst;
-  lastst = kw_firstcall;       // fake out doinit()
-  doinit(sp);
-  lastst = st;
-  // doinit should set realname
-  snp->fcname = my_strdup(sp->realname);
-  snp->s1 = ParseStatement(0); 
+	dfs.puts("<ParseFirstcall>");
+	snp = NewStatement(st_firstcall, TRUE); 
+	sp = allocSYM();
+	//	sp->SetName(*(new std::string(snp->fcname)));
+	sp->storage_class = sc_static;
+	sp->value.i = nextlabel++;
+	sp->tp = &stdbyte;
+	st = lastst;
+	lastst = kw_firstcall;       // fake out doinit()
+	doinit(sp);
+	lastst = st;
+	// doinit should set realname
+	snp->fcname = my_strdup(sp->realname);
+	snp->s1 = ParseStatement(0); 
 	// Empty statements return NULL
 	if (snp->s1)
 		snp->s1->outer = snp;
-  dfs.puts("</ParseFirstcall>");
-  return snp; 
+	dfs.puts("</ParseFirstcall>");
+	return snp; 
 } 
   
 Statement *ParseIfStatement() 
@@ -563,41 +563,36 @@ Statement *ParseCaseStatement()
   
 int CheckForDuplicateCases(Statement *head) 
 {     
-	Statement *top, *cur;
+	Statement *top, *cur, *def;
 	int cnt, cnt2;
+	static int buf[1000];
+	int ndx;
 
+	ndx = 0;
 	cur = top = head;
-	while( top != (Statement *)NULL )
+	for (top = head; top != (Statement *)NULL; top = top->next)
 	{
 		if (top->casevals) {
 			for (cnt = 1; cnt < top->casevals[0]+1; cnt++) {
-				cur = top->next;
-				while( cur != (Statement *)NULL )
-				{
-					if (cur->casevals) {	// default statements have no casevals
-						for (cnt2 = 1; cnt2 < cur->casevals[0]+1; cnt2++) {
-		//					if( (!(cur->s1 || cur->s2) && cur->casevals[cnt2] == top->casevals[cnt])
-							if (cur->casevals[cnt2] == top->casevals[cnt])
-							{
-								//printf(" duplicate case value %d\n",cur->casevals[cnt2]);
-								return TRUE;
-							}
-						}
-					}
-					cur = cur->next;
-				}
+				for (cnt2 = 0; cnt2 < ndx; cnt2++)
+					if (top->casevals[cnt]==buf[cnt2])
+						return TRUE;
+				if (ndx > 999)
+					throw new C64PException(ERR_TOOMANYCASECONSTANTS,1);
+				buf[ndx] = top->casevals[cnt];
+				ndx++;
 			}
 		}
-		else {
-			cur = top->next;
-			while( cur != (Statement *)NULL )
-			{
-				if (cur->s2 && top->s2)
-					return TRUE;
-				cur = cur->next;
-			}
-		}
-		top = top->next;
+	}
+
+	// Check for duplicate default: statement
+	def = nullptr;
+	for (top = head; top != (Statement *)NULL; top = top->next )
+	{
+		if (top->s2 && def)
+			return TRUE;
+		if (top->s2)
+			def = top->s2;
 	}
 	return FALSE;
 } 

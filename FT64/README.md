@@ -2,6 +2,8 @@
 
 ## Overview
 FT64 is a superscalar core with the following features:
+- 32 general purpose registers
+- 13 vector registers of 16 elements
 - 32 bit fixed size instruction set
 - 64 bit data width
 - immediate prefix instructions for large immediates
@@ -16,6 +18,7 @@ FT64 is a superscalar core with the following features:
 	- one flow control unit
 	- one floating point unit
 	- one memory unit
+- vector instructions
 
 FT64 can issue up to four instructions in a single cycle (2 alu, 1 flow control, 1 floating point) and is capable of committing up to three instructions in a single cycle. Fetch and queue are limited to two instructions per cycle however.
 
