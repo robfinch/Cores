@@ -133,6 +133,7 @@ parameter AREGS = 32;   // number of architectural registers
 parameter DEBUG = 1'b0;
 parameter NMAP = QENTRIES;
 parameter SUP_TXE = 1'b0;
+parameter SUP_VECTOR = 1;
 parameter DBW = 64;
 parameter ABW = 32;
 parameter AMSB = ABW-1;
@@ -172,6 +173,7 @@ reg [3:0] vqe;          // vector element being queued
 reg [3:0] vqet;
 reg [7:0] vl;           // vector length
 reg [63:0] vm [0:7];    // vector mask registers
+reg [1:0] m2;
 
 // CSR's
 reg [63:0] cr0;
@@ -1089,11 +1091,13 @@ input [3:0] vqei;
 input [5:0] vli;
 case(isn[`INSTRUCTION_OP])
 `VECTOR:case(isn[`INSTRUCTION_S2])
-        `VCIDX,`VSCAN:  fnRa = {3'd0,isn[10:6]};
-        `VMAND,`VMOR,`VMXOR,`VMXNOR,`VMPOP:
+        `VCIDX,`VSCAN,`VMFILL:  fnRa = {3'd0,isn[10:6]};
+        `VMAND,`VMOR,`VMXOR,`VMXNOR,`VMPOP,`VMFIRST,`VMLAST:
                     fnRa = {4'h2,isn[9:6]};
         `VSHLV:     fnRa = (vqei+1+isn[15:11] >= vli) ? 8'h00 : {isn[9:6],vli-vqei-isn[15:11]-1};
         `VSHRV:     fnRa = (vqei+isn[15:11] >= vli) ? 8'h00 : {isn[9:6],vqei+isn[15:11]};
+        `VXCHG:     fnRa = {isn[9:6],vqei};
+        `VSxx,`VSxxU,`VSxxS,`VSxxSU:    fnRa = {isn[9:6],vqei};
         default:    fnRa = {isn[9:6],vqei};
         endcase
 `RR:    case(isn[`INSTRUCTION_S2])
@@ -1119,6 +1123,8 @@ case(isn[`INSTRUCTION_OP])
 `RR:        case(isn[`INSTRUCTION_S2])
             `VEX:       fnRb = fb ? {isn[14:11],rfoa1i} : {isn[14:11],rfoa0i};
             `LVX,`SVX:  fnRb = {isn[14:11],vqei};
+            `VXCHG:     fnRb = {isn[14:11],vqei};
+            `VSxx,`VSxxU:   fnRb = {isn[14:11],vqei};
             default:    fnRb = isn[`INSTRUCTION_RB];
             endcase
 `VECTOR:    case(isn[`INSTRUCTION_S2])
@@ -1126,6 +1132,8 @@ case(isn[`INSTRUCTION_OP])
                 fnRb = {4'h2,isn[14:11]};
             `VADDS,`VSUBS,`VMULS,`VANDS,`VORS,`VXORS,`VXORS:
                         fnRb = isn[`INSTRUCTION_RB];
+            `VSHL,`VSHR,`VASR:
+                fnRb = {isn[25],isn[22]}==2'b00 ? isn[`INSTRUCTION_RB] : {isn[14:11],vqei};
             default:    fnRb = {isn[14:11],vqei};
             endcase
 default:    fnRb = isn[`INSTRUCTION_RB];
@@ -1141,7 +1149,7 @@ case(isn[`INSTRUCTION_OP])
             default:    fnRc = isn[`INSTRUCTION_RC];
             endcase
 `VECTOR:    case(isn[`INSTRUCTION_S2])
-            `VSxx:      fnRc = {4'h2,1'b0,isn[18:16]};
+            `VSxx,`VSxxS,`VSxxU,`VSxxSU:    fnRc = {4'h2,isn[19:16]};
             default:    fnRc = {isn[19:16],vqei};
             endcase
 default:    fnRc = isn[`INSTRUCTION_RC];
@@ -1154,13 +1162,14 @@ input [3:0] vqei;
 input [5:0] vli;
 casex(isn[`INSTRUCTION_OP])
 `VECTOR:case(isn[`INSTRUCTION_S2])
-        `VMAND,`VMOR,`VMXOR,`VMXNOR,`VMPOP:
+        `VMAND,`VMOR,`VMXOR,`VMXNOR,`VMFILL:
                     fnRt = {4'h2,isn[19:16]};
-        `VSxx:      fnRt = {4'h2,isn[19:16]};
+        `VSxx,`VSxxU,`VSxxS,`VSxxSU:    fnRt = {4'h2,isn[19:16]};
         `VSHLV:     fnRt = (vqei+1 >= vli) ? 8'h00 : {isn[19:16],vli-vqei-1};
         `VSHRV:     fnRt = (vqei >= vli) ? 8'h00 : {isn[19:16],vqei};
         `VEINS:     fnRt = {isn[19:16],4'h0};
-        `V2BITS:    fnRt = isn[`INSTRUCTION_RB];
+        `V2BITS,`VMPOP:    fnRt = isn[`INSTRUCTION_RB];
+        `VXCHG:     fnRt = {isn[19:16],vqei};
         default:    fnRt = {isn[19:16],vqei};
         endcase
        
@@ -1198,7 +1207,13 @@ endfunction
 
 function [7:0] fnRt2;
 input [31:0] isn;
+input [3:0] vqei;
 case(isn[`INSTRUCTION_OP])
+`VECTOR:
+        case(isn[`INSTRUCTION_S2])
+        `VXCHG:     fnRt2 = {isn[14:11],vqei};
+        default:    fnRt2 = 8'h00;
+        endcase
 `RR:    case(isn[`INSTRUCTION_S2])
         `MUL,`MULU,`MULSU,
         `DIVMOD,`DIVMODU,`DIVMODSU: fnRt2 = isn[`INSTRUCTION_RD];
@@ -1303,12 +1318,14 @@ casex(isn[`INSTRUCTION_OP])
 `LINK:  Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
 `LCALL: Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
 `VECTOR:    case(isn[`INSTRUCTION_S2])
+            `VABS:  Source2Valid = TRUE;
             `VMAND,`VMOR,`VMXOR,`VMXNOR,`VMPOP:
                 Source2Valid = FALSE;
             `VADDS,`VSUBS,`VANDS,`VORS,`VXORS:
                 Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
             `VBITS2V:   Source2Valid = TRUE;
             `V2BITS:    Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
+            `VSHL,`VSHR,`VASR:  Source2Valid = isn[22:21]==2'd2;
             default:    Source2Valid = FALSE;
             endcase
 `LV:        Source2Valid = TRUE;
@@ -1389,6 +1406,39 @@ default:    IsVCmprss = FALSE;
 endcase
 endfunction
 
+function IsVShifti;
+input [31:0] isn;
+case(isn[`INSTRUCTION_OP])
+`VECTOR:    case(isn[`INSTRUCTION_S2])
+            `VSHL,`VSHR,`VASR:
+                IsVShifti = {isn[25],isn[22]}==2'd2;
+            default:    IsVShifti = FALSE;
+            endcase    
+default:    IsVShifti = FALSE;
+endcase
+endfunction
+
+function IsVLS;
+input [31:0] isn;
+case(isn[`INSTRUCTION_OP])
+`RR:
+    case(isn[`INSTRUCTION_S2])
+    `LVX,`SVX,`LVWS,`SVWS:  IsVLS = TRUE;
+    default:    IsVLS = FALSE;
+    endcase
+`LV,`SV:    IsVLS = TRUE;
+default:    IsVLS = FALSE;
+endcase
+endfunction
+
+function [1:0] fnM2;
+input [31:0] isn;
+case(isn[`INSTRUCTION_OP])
+`RR:    fnM2 = isn[24:23];
+default:    fnM2 = 2'b00;
+endcase
+endfunction
+
 function IsALU;
 input [31:0] isn;
 casex(isn[`INSTRUCTION_OP])
@@ -1407,7 +1457,11 @@ casex(isn[`INSTRUCTION_OP])
 `LCALL:  IsALU = FALSE;
 `RET:   IsALU = TRUE;
 `LINK:  IsALU = TRUE;
-`VECTOR:    IsALU = isn[22:21]==2'b00;  // Integer
+`VECTOR:    case(isn[`INSTRUCTION_S2])
+            `VSHL,`VSHR,`VASR:  IsALU = TRUE;
+            default:    IsALU = isn[22:21]==2'b00;  // Integer
+            endcase
+            
 default:    IsALU = TRUE;
 endcase
 endfunction
@@ -1416,7 +1470,10 @@ function IsFPU;
 input [31:0] isn;
 case(isn[`INSTRUCTION_OP])
 `FLOAT: IsFPU = TRUE;
-`VECTOR:    IsFPU = isn[22:21]==2'b01;
+`VECTOR:    case(isn[`INSTRUCTION_S2])
+            `VSHL,`VSHR,`VASR:  IsFPU = FALSE;
+            default:    IsFPU = isn[22:21]==2'b01;
+            endcase
 default:    IsFPU = FALSE;
 endcase
 
@@ -1856,7 +1913,7 @@ function IsRFW;
 input [31:0] isn;
 input [3:0] vqei;
 input [5:0] vli;
-if (fnRt(isn,vqei,vli)==8'd0 && fnRt2(isn)==8'd0) 
+if (fnRt(isn,vqei,vli)==8'd0 && fnRt2(isn,vqei)==8'd0) 
     IsRFW = FALSE;
 else
 case(isn[`INSTRUCTION_OP])
@@ -1993,6 +2050,11 @@ case(isn[`INSTRUCTION_OP])
     `DIVMODU,`DIVMODSU,`DIVMOD: IsAlu0Only = TRUE;
     `MIN,`MAX:  IsAlu0Only = TRUE;
     default:    IsAlu0Only = FALSE;
+    endcase
+`VECTOR:
+    case(isn[`INSTRUCTION_S2])
+    `VSHL,`VSHR,`VASR:  IsAlu0Only = TRUE;
+    default: IsAlu0Only = FALSE;
     endcase
 `MULUI,`MULSUI,`MULI,
 `DIVUI,`DIVSUI,`DIVI,
@@ -2685,12 +2747,12 @@ assign Ra0 = fnRa(fetchbuf0_instr,vqe,vl);
 assign Rb0 = fnRb(fetchbuf0_instr,1'b0,vqe,rfoa0[3:0],rfoa1[3:0]);
 assign Rc0 = fnRc(fetchbuf0_instr,vqe);
 assign Rt0 = fnRt(fetchbuf0_instr,vqet,vl);
-assign Rt0b = fnRt2(fetchbuf0_instr);
+assign Rt0b = fnRt2(fetchbuf0_instr,vqe);
 assign Ra1 = fnRa(fetchbuf1_instr,vqe,vl);
 assign Rb1 = fnRb(fetchbuf1_instr,1'b1,vqe,rfoa0[3:0],rfoa1[3:0]);
 assign Rc1 = fnRc(fetchbuf1_instr,vqe);
 assign Rt1 = fnRt(fetchbuf1_instr,vqet,vl);
-assign Rt1b = fnRt2(fetchbuf1_instr);
+assign Rt1b = fnRt2(fetchbuf1_instr,vqe);
 
     //
     // additional logic for ISSUE
@@ -3087,7 +3149,7 @@ end
     reg [63:0] csr_r;
     always @*
         read_csr(alu0_instr[29:16],csr_r);
-    FT64alu #(.BIG(1'b1)) ualu0 (
+    FT64alu #(.BIG(1'b1),.SUP_VECTOR(SUP_VECTOR)) ualu0 (
         .rst(rst),
         .clk(clk),
         .ld(alu0_ld),
@@ -3111,7 +3173,7 @@ end
         .excen(aec[4:0]),
         .exc(alu0_exc)
     );
-    FT64alu #(.BIG(1'b0)) ualu1 (
+    FT64alu #(.BIG(1'b0),.SUP_VECTOR(SUP_VECTOR)) ualu1 (
         .rst(rst),
         .clk(clk),
         .ld(alu1_ld),
@@ -3408,11 +3470,11 @@ begin
                 // both instructions can be queued.
                 else begin
                     if (iqentry_v[tail0]==`INV) begin
-                        canq1 <= !IsVex(fetchbuf0_instr) || rf_vra0;
-                        queued1 <= (!IsVex(fetchbuf0_instr) || rf_vra0) && (!IsVector(fetchbuf0_instr) || vqe>=vl-1);
+                        canq1 <= !IsVex(fetchbuf0_instr) || rf_vra0 || !SUP_VECTOR;
+                        queued1 <= ((!IsVex(fetchbuf0_instr) || rf_vra0) && (!IsVector(fetchbuf0_instr) || vqe>=vl-1)) || !SUP_VECTOR;
                         if (iqentry_v[tail1]==`INV) begin
-                            canq2 <= !IsVector(fetchbuf1_instr) && (!IsVex(fetchbuf0_instr) || rf_vra0) && (!IsVector(fetchbuf0_instr) || vqe>=vl-1);
-                            queued2 <= !IsVector(fetchbuf1_instr) && (!IsVex(fetchbuf0_instr) || rf_vra0) && (!IsVector(fetchbuf0_instr) || vqe>=vl-1);
+                            canq2 <= (!IsVector(fetchbuf1_instr) && (!IsVex(fetchbuf0_instr) || rf_vra0) && (!IsVector(fetchbuf0_instr) || vqe>=vl-1)) || !SUP_VECTOR;
+                            queued2 <= (!IsVector(fetchbuf1_instr) && (!IsVex(fetchbuf0_instr) || rf_vra0) && (!IsVector(fetchbuf0_instr) || vqe>=vl-1)) || !SUP_VECTOR;
                         end
                     end
                 end
@@ -3422,8 +3484,8 @@ begin
         else if (fetchbuf0_v) begin
             if (fetchbuf0_instr[`INSTRUCTION_OP]!=`NOP) begin
                 if (iqentry_v[tail0]==`INV) begin
-                    canq1 <= !IsVex(fetchbuf0_instr) || rf_vra0;
-                    queued1 <= (!IsVex(fetchbuf0_instr) || rf_vra0) && (!IsVector(fetchbuf0_instr) || vqe>=vl-1);
+                    canq1 <= !IsVex(fetchbuf0_instr) || rf_vra0 || !SUP_VECTOR;
+                    queued1 <= ((!IsVex(fetchbuf0_instr) || rf_vra0) && (!IsVector(fetchbuf0_instr) || vqe>=vl-1)) || !SUP_VECTOR;
                 end
             end
             else
@@ -3432,8 +3494,8 @@ begin
         else if (fetchbuf1_v) begin
             if (fetchbuf1_instr[`INSTRUCTION_OP]!=`NOP) begin
                 if (iqentry_v[tail0]==`INV) begin
-                    canq1 <= !IsVex(fetchbuf1_instr) || rf_vra1;
-                    queued1 <= (!IsVex(fetchbuf1_instr) || rf_vra1) && (!IsVector(fetchbuf1_instr) || vqe>=vl-1);
+                    canq1 <= !IsVex(fetchbuf1_instr) || rf_vra1 || !SUP_VECTOR;
+                    queued1 <= ((!IsVex(fetchbuf1_instr) || rf_vra1) && (!IsVector(fetchbuf1_instr) || vqe>=vl-1)) || !SUP_VECTOR;
                 end
             end
             else
@@ -3720,7 +3782,7 @@ else begin
 	    2'b00: ; // do nothing
 
 	    2'b01: if (canq1) begin
-            if (IsVector(fetchbuf1_instr)) begin
+            if (IsVector(fetchbuf1_instr) && SUP_VECTOR) begin
                 vqe <= vqe + 4'd1;
                 if (IsVCmprss(fetchbuf1_instr)) begin
                     if (vm[fetchbuf1_instr[24:23]])
@@ -3750,7 +3812,7 @@ else begin
 		// happened to be full on the previous cycle (thus we deleted fetchbuf1 but did not
 		// enqueue fetchbuf0) ... probably no need to check for LW -- sanity check, just in case
 		//
-            if (IsVector(fetchbuf0_instr)) begin
+            if (IsVector(fetchbuf0_instr) && SUP_VECTOR) begin
                 vqe <= vqe + 4'd1;
                 if (IsVCmprss(fetchbuf0_instr)) begin
                     if (vm[fetchbuf0_instr[24:23]])
@@ -3792,7 +3854,7 @@ else begin
 		    //
 		    // enqueue the first instruction ...
 		    //
-            if (IsVector(fetchbuf0_instr)) begin
+            if (IsVector(fetchbuf0_instr) && SUP_VECTOR) begin
                 vqe <= vqe + 4'd1;
                 if (IsVCmprss(fetchbuf0_instr)) begin
                     if (vm[fetchbuf0_instr[24:23]])
@@ -5677,7 +5739,7 @@ iqentry_done [tail]    <=    `INV;
 iqentry_out  [tail]    <=    `INV;
 iqentry_res  [tail]    <=    `ZERO;
 iqentry_res2 [tail]    <=    `ZERO;
-iqentry_instr[tail]    <=    fetchbuf0_instr;             // BEQ
+iqentry_instr[tail]    <=    IsVLS(fetchbuf0_instr) ? (vm[fnM2(fetchbuf0_instr)] ? fetchbuf0_instr : `NOP_INSN) : fetchbuf0_instr;
 iqentry_bt   [tail]    <=    (IsBranch(fetchbuf0_instr) && predict_taken0);
 iqentry_agen [tail]    <=    `INV;
 // If the previous instruction was a hardware interrupt and this instruction is a hardware interrupt
@@ -5755,7 +5817,7 @@ iqentry_done [tail]    <=   `INV;
 iqentry_out  [tail]    <=   `INV;
 iqentry_res  [tail]    <=   `ZERO;
 iqentry_res2 [tail]    <=   `ZERO;
-iqentry_instr[tail]    <=   fetchbuf1_instr; 
+iqentry_instr[tail]    <=   IsVLS(fetchbuf1_instr) ? (vm[fnM2(fetchbuf1_instr)] ? fetchbuf1_instr : `NOP_INSN) : fetchbuf1_instr; 
 iqentry_bt   [tail]    <=   (IsBranch(fetchbuf1_instr) && predict_taken1); 
 iqentry_agen [tail]    <=   `INV;
 // If queing 2nd instruction must read from first
@@ -5816,7 +5878,7 @@ iqentry_ven  [tail]    <=   vqe;
 iqentry_exc  [tail]    <=   `EXC_NONE;
 if (vqe==0) begin
 if (tail==tail1) begin
-    if (IsShifti(fetchbuf1_instr)||IsSEI(fetchbuf1_instr))
+    if (IsShifti(fetchbuf1_instr)||IsVShifti(fetchbuf1_instr)||IsSEI(fetchbuf1_instr))
         iqentry_a0[tail] <= {58'd0,fetchbuf1_instr[21],fetchbuf1_instr[`INSTRUCTION_RB]};
     else if (IsBranch(fetchbuf1_instr))
         iqentry_a0[tail] <= {{51{fetchbuf1_instr[`INSTRUCTION_SB]}},fetchbuf1_instr[31:22],fetchbuf1_instr[0],2'b00};
@@ -6176,7 +6238,7 @@ function [63:0] assign_a0;
 input [2:0] tail;
 input [31:0] fb_instr;
 begin
-    if (IsShifti(fb_instr)||IsSEI(fb_instr))
+    if (IsShifti(fb_instr)||IsVShift(fb_instr)||IsSEI(fb_instr))
         assign_a0 = {58'd0,fb_instr[21],fb_instr[`INSTRUCTION_RB]};
     else if (IsBranch(fb_instr))
         assign_a0 = {{51{fb_instr[`INSTRUCTION_SB]}},fb_instr[31:22],fb_instr[0],2'b00};

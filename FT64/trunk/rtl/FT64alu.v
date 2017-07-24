@@ -28,6 +28,7 @@ module FT64alu(rst, clk, ld, abort, instr, a, b, c, imm, tgt, tgt2, ven, vm, sbl
     csr, o, ob, done, idle, excen, exc);
 parameter DBW = 64;
 parameter BIG = 1'b1;
+parameter SUP_VECTOR = 1;
 parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
 input rst;
@@ -273,16 +274,36 @@ cntpop16 ucpop2
 	.i(vm & mask),
 	.o(cpopom)
 );
- 
+
+wire [5:0] lsto, fsto;
+ffz24 uffo1
+(
+    .i(~{8'h00,a[15:0]}),
+    .o(lsto)
+);
+
+flz24 uflo1
+(
+    .i(~{8'h00,a[15:0]}),
+    .o(fsto)
+);
+
 always @*
 case(instr[`INSTRUCTION_OP])
 `VECTOR:
+    if (SUP_VECTOR)
     case(instr[`INSTRUCTION_S2])
+    `VABS:         o = a[63] ? -a : a;
+    `VSIGN:        o = a[63] ? 64'hFFFFFFFFFFFFFFFF : a==64'd0 ? 64'd0 : 64'd1;
     `VMAND:        o = and64;
     `VMOR:         o = or64;
     `VMXOR:        o = xor64;
     `VMXNOR:       o = ~(xor64);
     `VMPOP:        o = {57'd0,cpopo};
+    `VMFILL:       for (n = 0; n < 64; n = n + 1)
+                       o[n] = (n < a);
+    `VMFIRST:      o = fsto==5'd31 ? 64'd64 : fsto;
+    `VMLAST:       o = lsto==5'd31 ? 64'd64 : lsto;
     `VADD,`VADDS:  o = vm[ven] ? a + b : c;
     `VSUB,`VSUBS:  o = vm[ven] ? a - b : c;
     `VMUL,`VMULS:  o = vm[ven] ? prod[DBW-1:0] : c;
@@ -290,12 +311,13 @@ case(instr[`INSTRUCTION_OP])
     `VAND,`VANDS:  o = vm[ven] ? a & b : c;
     `VOR,`VORS:    o = vm[ven] ? a | b : c;
     `VXOR,`VXORS:  o = vm[ven] ? a ^ b : c;
+    `VCNTPOP:      o = {57'd0,cpopo};
     `VSHLV:        o = a;   // no masking here
     `VSHRV:        o = a;
     `VCMPRSS:      o = a;
     `VCIDX:        o = a * ven;
-    `VSCAN:        o = a * (cpopom==0 ? 0 : cpopom-1);              
-    `VSxx:
+    `VSCAN:        o = a * (cpopom==0 ? 0 : cpopom-1);
+    `VSxx,`VSxxS:
         case({instr[25],instr[20:19]})
         `VSEQ:     begin
                        o = c;    
@@ -313,13 +335,52 @@ case(instr[`INSTRUCTION_OP])
                          o = c;    
                          o[ven] = vm[ven] ? $signed(a) >= $signed(b) : c[ven];
                     end
+        `VSLE:      begin
+                          o = c;    
+                          o[ven] = vm[ven] ? $signed(a) <= $signed(b) : c[ven];
+                    end
+        `VSGT:      begin
+                         o = c;    
+                         o[ven] = vm[ven] ? $signed(a) > $signed(b) : c[ven];
+                    end
+        endcase
+    `VSxxU,`VSxxSU:
+        case({instr[25],instr[20:19]})
+        `VSEQ:     begin
+                       o = c;    
+                       o[ven] = vm[ven] ? a==b : c[ven];
+                   end
+        `VSNE:     begin
+                       o = c;    
+                       o[ven] = vm[ven] ? a!=b : c[ven];
+                   end
+        `VSLT:      begin
+                         o = c;    
+                         o[ven] = vm[ven] ? a < b : c[ven];
+                    end
+        `VSGE:      begin
+                         o = c;    
+                         o[ven] = vm[ven] ? a >= b : c[ven];
+                    end
+        `VSLE:      begin
+                          o = c;    
+                          o[ven] = vm[ven] ? a <= b : c[ven];
+                    end
+        `VSGT:      begin
+                         o = c;    
+                         o[ven] = vm[ven] ? a > b : c[ven];
+                    end
         endcase
     `VBITS2V:   o = vm[ven] ? a[ven] : c;
     `V2BITS:    begin
                 o = b;
                 o[ven] = vm[ven] ? a[0] : b[ven];
                 end
-    endcase    
+    `VSHL,`VSHR,`VASR:  o = BIG ? shfto : 64'hCCCCCCCCCCCCCCCC;
+    `VXCHG:     o = vm[ven] ? b : a;
+    endcase
+    else
+        o <= 64'hCCCCCCCCCCCCCCCC;    
 `RR:
     case(instr[`INSTRUCTION_S2])
     `BCD:
@@ -429,6 +490,7 @@ case(instr[`INSTRUCTION_OP])
     `UNLINK:    o = b;
     `LBX,`LHX,`LHUX,`LWX,`SBX,`SHX,`SWX:   o = BIG ? a + (b << instr[22:21]) : 64'hCCCCCCCCCCCCCCCC;
     `LVX,`SVX:  o = BIG ? a + (b << 2'd3) : 64'hCCCCCCCCCCCCCCCC;
+    `LVWS,`SVWS:    o = BIG ? a + ({b * ven,3'b000}) : 64'hCCCCCCCCCCCCCCCC;
     `MIN:       o = BIG ? (($signed(a) < $signed(b) && $signed(a) < $signed(c)) ? a :
                            ($signed(b) < $signed(c)) ? b : c) : 64'hCCCCCCCCCCCCCCCC;
     `MAX:       o = BIG ? (($signed(a) > $signed(b) && $signed(a) > $signed(c)) ? a :
@@ -463,11 +525,15 @@ endcase
 always @*
 case(instr[`INSTRUCTION_OP])
 `VECTOR:
+    if (SUP_VECTOR)
     case(instr[`INSTRUCTION_S2])
     `VMUL:      ob = prod[127:64];
     `VDIV:      ob = BIG ? rem : 64'hCCCCCCCCCCCCCCCC;
+    `VXCHG:     ob = vm[ven] ? a : b;
     default:    ob = 64'hCCCCCCCCCCCCCCCC;
     endcase
+    else
+        ob = 64'hCCCCCCCCCCCCCCCC;
 `RR:
     case(instr[`INSTRUCTION_S2])
     `MUL,`MULU,`MULSU:  ob = prod[127:64];

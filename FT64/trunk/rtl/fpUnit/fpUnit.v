@@ -73,6 +73,7 @@
 `define FALSE   1'b0
 
 `define VECTOR  6'h01
+`define VFABS       6'h03
 `define VFADD       6'h04
 `define VFSUB       6'h05
 `define VFSxx       6'h06

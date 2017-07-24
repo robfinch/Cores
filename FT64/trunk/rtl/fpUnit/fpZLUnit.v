@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2007-2016  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2007-2017  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -38,13 +38,18 @@
 // ============================================================================
 
 `define VECTOR  6'h01
+`define VFABS   6'h03
 `define VFSxx   6'h06
+`define VFSxxS  6'h07
 `define VFNEG   6'h16
 `define VSEQ        3'd0
 `define VSNE        3'd1
 `define VSLT        3'd2
 `define VSGE        3'd3
+`define VSLE        3'd4
+`define VSGT        3'd5
 `define VSUN        3'd7
+`define VFSIGN  6'h26
 `define FLOAT   6'h0B
 `define FCMP    6'h06
 `define FMOV    6'h10
@@ -123,13 +128,17 @@ always @*
         endcase
     `VECTOR:
         case(fn)
+        `VFABS:  o <= {1'b0,a[WID-2:0]};        // fabs
+        `VFSIGN: o <= (a[WID-2:0]==0) ? 0 : {a[WID-1],1'b0,{EMSB{1'b1}},{FMSB+1{1'b0}}};    // fsign
         `VFNEG:  o <= {~a[WID-1],a[WID-2:0]};   // fneg
-        `VFSxx:
+        `VFSxx,`VFSxxS:
             case(sxx)
             `VSEQ:  o <=  cmp_o[0];
             `VSNE:  o <= ~cmp_o[0];
             `VSLT:  o <=  cmp_o[1];
             `VSGE:  o <= ~cmp_o[1];
+            `VSLE:  o <=  cmp_o[2];
+            `VSGT:  o <= ~cmp_o[2];
             `VSUN:  o <=  cmp_o[4];
             default:    o <= cmp_o[2];  
             endcase
