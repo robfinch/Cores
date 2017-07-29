@@ -392,7 +392,7 @@ void PutAddressMode(AMODE *ap)
             PutConstant(ap->offset,ap->lowhigh,ap->rshift);
             break;
     case am_direct:
-			ofs.printf("r0,");
+			//ofs.printf("r0,");
             PutConstant(ap->offset,ap->lowhigh,ap->rshift);
             break;
     case am_reg:

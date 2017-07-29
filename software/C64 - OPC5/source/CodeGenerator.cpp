@@ -386,10 +386,10 @@ void GenLoad(AMODE *ap3, AMODE *ap1, int ssize, int size)
 
 void GenStore(AMODE *ap1, AMODE *ap3, int size)
 {
-    switch(size) {
-    case 1: GenerateDiadic(op_stb,0,ap1,ap3); break;
-    default: GenerateDiadic(op_sto,0,ap1,ap3); break;
-    }
+	if (ap3->mode==am_direct)
+		GenerateTriadic(op_sto,0,ap1,makereg(regZero),ap3);
+	else
+		GenerateDiadic(op_sto,0,ap1,ap3);
 }
 
 /*
