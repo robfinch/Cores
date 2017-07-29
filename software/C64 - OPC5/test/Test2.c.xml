@@ -1,0 +1,1144 @@
+<title>C64D Compiler debug file</title>
+<compile>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+</Find>
+_int</Find>
+<Parsing GlobalDecl>
+<ParseGlobalDecl>
+Enter declare()
+A<ParseSpecifier>
+A<TYP__Make>
+</TYP__Make>
+</Find>
+_ary</Find>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_ary|CDE<ParseDeclSuffix>
+<TYP__Make>
+</TYP__Make>
+Setting array size:40
+<TYP__Make>
+</TYP__Make>
+Setting array size:1800
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_ary</Find>
+hh1kIIbIcinsert type: 22
+***Inserting:_ary into 012DE8D8
+<BuildSignature>:_ary</BuildSignature>Insert _ary into 012DE8D8()
+Insert into global table
+</Find>
+_ary</Find>
+At insert:
+Type array:
+   
+JK</Find>
+_int</Find>
+Enter declare()
+A<ParseSpecifier>
+A<TYP__Make>
+</TYP__Make>
+</Find>
+_main</Find>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_main|CDE<ParseDeclSuffix>
+<openpa>
+****************************
+****************************
+Function: _main
+****************************
+****************************
+</Find>
+_int</Find>
+<TYP__Make>
+</TYP__Make>
+o p q rsYParameter types(_main)
+Type array:
+   
+Proto types(_main)
+Type array:
+   
+X</openpa>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_main</Find>
+hh1h2ikIIbIcinsert type: 32
+***Inserting:_main into 012DE8D8
+<BuildSignature>:_main</BuildSignature>Insert _main into 012DE8D8()
+Insert into global table
+</Find>
+_main</Find>
+At insert:
+Type array:
+   
+J<ParseFunction>
+***********************************
+***********************************
+***********************************
+Parsing function: _main
+***********************************
+***********************************
+***********************************
+A<BuildParameterList
+><ParseParmDecls>
+A(54)CEnter declare()
+A<ParseSpecifier>
+A<TYP__Make>
+</TYP__Make>
+</Find>
+_argc</Find>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_argc|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_argc</Find>
+hh1kIIbIcinsert type: 17
+***Inserting:_argc into 012EEED4
+<BuildSignature>:_argc</BuildSignature>Insert _argc into 012EEED4(_main)
+</Find>
+_argc</Find>
+At insert:
+Type array:
+   
+JK</Find>
+_char</Find>
+EA(66)CEnter declare()
+A<ParseSpecifier>
+A<TYP__Make>
+</TYP__Make>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(9)
+*<TYP__Make>
+</TYP__Make>
+<ParseDeclPrefix>(9)
+*<TYP__Make>
+</TYP__Make>
+</Find>
+_argv</Find>
+<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_argv|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+</ParseDeclPrefix>
+</ParseDeclPrefix>
+CDEGH</Find>
+_argv</Find>
+hh1kIIbIcinsert type: 22
+***Inserting:_argv into 012EEED4
+<BuildSignature>:_argv</BuildSignature>Insert _argv into 012EEED4(_main)
+</Find>
+_argv</Find>
+At insert:
+Type array:
+   
+JKEA(45)</ParseParmDecls>
+B</Find>
+_argcMatch
+</Find>
+</Find>
+_argvMatch
+</Find>
+</BuildParameterList>
+B<BuildSignature>:_main</BuildSignature></Find>
+_mainMatch
+</Find>
+CDEG<Parse function body>:_main|
+</Find>
+_int</Find>
+Bb<GenerateMonadic>
+ABCD</GenerateMonadic>
+CEnter declare()
+A<ParseSpecifier>
+A<TYP__Make>
+</TYP__Make>
+</Find>
+_x</Find>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_x|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_x</Find>
+hh1kIIbIcinsert type: 17
+***Inserting:_x into 01ED96F8
+<BuildSignature>:_x</BuildSignature>Insert _x into 01ED96F8()
+</Find>
+_x</Find>
+At insert:
+Type array:
+   
+JK</Find>
+_y</Find>
+b<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_y|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_y</Find>
+hh1kIIbIcinsert type: 17
+***Inserting:_y into 01ED96F8
+<BuildSignature>:_y</BuildSignature>Insert _y into 01ED96F8()
+</Find>
+_y</Find>
+At insert:
+Type array:
+   
+JK</Find>
+_z</Find>
+b<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_z|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_z</Find>
+hh1kIIbIcinsert type: 17
+***Inserting:_z into 01ED96F8
+<BuildSignature>:_z</BuildSignature>Insert _z into 01ED96F8()
+</Find>
+_z</Find>
+At insert:
+Type array:
+   
+JK</Find>
+_for</Find>
+<Parse></Find>
+_y</Find>
+<Nameref>
+GSearchfor:_y|
+<gsearch2> for: |_y|
+Looking in statement table
+</Find>
+_yMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_yIsEqual:T2sp is not null
+Type array:
+   
+tp:019E1208 <Deref></Deref>deref tp:019E1208 </nameref2>
+</Nameref>
+</Find>
+_y</Find>
+<Nameref>
+GSearchfor:_y|
+<gsearch2> for: |_y|
+Looking in statement table
+</Find>
+_yMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_yIsEqual:T2sp is not null
+Type array:
+   
+tp:019E1208 <Deref></Deref>deref tp:019E1208 </nameref2>
+</Nameref>
+</Find>
+_argc</Find>
+<Nameref>
+GSearchfor:_argc|
+<gsearch2> for: |_argc|
+Looking in statement table
+</Find>
+_argc</Find>
+Looking in function's symbol table
+</Find>
+_argc</Find>
+Searching method/class:_main|012EEE88
+Looking at params 012EEED4
+</Find>
+_argcMatch
+</Find>
+Found as parameter
+</gsearch2>
+<nameref2>
+A:1:_argcIsEqual:T2sp is not null
+Type array:
+   
+tp:019E1148 <Deref></Deref>deref tp:019E1148 </nameref2>
+</Nameref>
+</Find>
+_y</Find>
+<Nameref>
+GSearchfor:_y|
+<gsearch2> for: |_y|
+Looking in statement table
+</Find>
+_yMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_yIsEqual:T2sp is not null
+Type array:
+   
+tp:019E1208 <Deref></Deref>deref tp:019E1208 </nameref2>
+</Nameref>
+<Parse></Find>
+_for</Find>
+<Parse></Find>
+_z</Find>
+<Nameref>
+GSearchfor:_z|
+<gsearch2> for: |_z|
+Looking in statement table
+</Find>
+_z</Find>
+Looking in outer statement table
+</Find>
+_zMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_zIsEqual:T2sp is not null
+Type array:
+   
+tp:019E1208 <Deref></Deref>deref tp:019E1208 </nameref2>
+</Nameref>
+</Find>
+_z</Find>
+<Nameref>
+GSearchfor:_z|
+<gsearch2> for: |_z|
+Looking in statement table
+</Find>
+_z</Find>
+Looking in outer statement table
+</Find>
+_zMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_zIsEqual:T2sp is not null
+Type array:
+   
+tp:019E1208 <Deref></Deref>deref tp:019E1208 </nameref2>
+</Nameref>
+</Find>
+_z</Find>
+<Nameref>
+GSearchfor:_z|
+<gsearch2> for: |_z|
+Looking in statement table
+</Find>
+_z</Find>
+Looking in outer statement table
+</Find>
+_zMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_zIsEqual:T2sp is not null
+Type array:
+   
+tp:019E1208 <Deref></Deref>deref tp:019E1208 </nameref2>
+</Nameref>
+</Find>
+_ary</Find>
+<Parse><ParseExpression>
+<Nameref>
+GSearchfor:_ary|
+<gsearch2> for: |_ary|
+Looking in statement table
+</Find>
+_ary</Find>
+Looking in outer statement table
+</Find>
+_ary</Find>
+Looking in function's symbol table
+</Find>
+_ary</Find>
+Searching method/class:_main|012EEE88
+Looking at params 012EEED4
+</Find>
+_ary</Find>
+Looking at class members 019E112C
+Looking at global symbols
+</Find>
+_aryMatch
+</Find>
+Found in global symbol table
+</gsearch2>
+<nameref2>
+A:1:_aryIsEqual:T2sp is not null
+Type array:
+   
+tp:019E10B8 <TYP__Make>
+</TYP__Make>
+deref tp:019E1238 </nameref2>
+</Nameref>
+</Find>
+_y</Find>
+<Nameref>
+GSearchfor:_y|
+<gsearch2> for: |_y|
+Looking in statement table
+</Find>
+_y</Find>
+Looking in outer statement table
+</Find>
+_yMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_yIsEqual:T2sp is not null
+Type array:
+   
+tp:019E1208 <Deref></Deref>deref tp:019E1208 </nameref2>
+</Nameref>
+<TYP__Make>
+</TYP__Make>
+</Find>
+_z</Find>
+<Nameref>
+GSearchfor:_z|
+<gsearch2> for: |_z|
+Looking in statement table
+</Find>
+_z</Find>
+Looking in outer statement table
+</Find>
+_zMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_zIsEqual:T2sp is not null
+Type array:
+   
+tp:019E1208 <Deref></Deref>deref tp:019E1208 </nameref2>
+</Nameref>
+<Deref></Deref></Find>
+_rand</Find>
+<Nameref>
+GSearchfor:_rand|
+<gsearch2> for: |_rand|
+Looking in statement table
+</Find>
+_rand</Find>
+Looking in outer statement table
+</Find>
+_rand</Find>
+Looking in function's symbol table
+</Find>
+_rand</Find>
+Searching method/class:_main|012EEE88
+Looking at params 012EEED4
+</Find>
+_rand</Find>
+Looking at class members 019E112C
+Looking at global symbols
+</Find>
+_rand</Find>
+</gsearch2>
+<nameref2>
+A:0:_randInsert at nameref
+Type array:
+   
+<BuildSignature>:_rand</BuildSignature></nameref2>
+</Nameref>
+tp2->type=32<ArgumentList></ArgumentList>
+Type array:
+   
+Got Type: 32openpa calling gsearch2<FindRising>_rand 
+</Find>
+_rand</Find>
+</FindRising>
+<gsearch2> for: |_rand|
+Looking in statement table
+</Find>
+_rand</Find>
+Looking in outer statement table
+</Find>
+_rand</Find>
+Looking in function's symbol table
+</Find>
+_rand</Find>
+Searching method/class:_main|012EEE88
+Looking at params 012EEED4
+</Find>
+_rand</Find>
+Looking at class members 019E112C
+Looking at global symbols
+</Find>
+_rand</Find>
+</gsearch2>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<BuildSignature>:_rand</BuildSignature>Insert _rand into 012DE8D8()
+Insert into global table
+</Find>
+_rand</Find>
+At insert:
+Type array:
+   
+Got direct function _rand </ParseExpression>
+</Parse></Parse></Find>
+_for</Find>
+</Parse><Parse></Find>
+_x</Find>
+<Nameref>
+GSearchfor:_x|
+<gsearch2> for: |_x|
+Looking in statement table
+</Find>
+_x</Find>
+Looking in outer statement table
+</Find>
+_x</Find>
+Looking in outer statement table
+</Find>
+_xMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_xIsEqual:T2sp is not null
+Type array:
+   
+tp:019E1208 <Deref></Deref>deref tp:019E1208 </nameref2>
+</Nameref>
+</Find>
+_x</Find>
+<Nameref>
+GSearchfor:_x|
+<gsearch2> for: |_x|
+Looking in statement table
+</Find>
+_x</Find>
+Looking in outer statement table
+</Find>
+_x</Find>
+Looking in outer statement table
+</Find>
+_xMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_xIsEqual:T2sp is not null
+Type array:
+   
+tp:019E1208 <Deref></Deref>deref tp:019E1208 </nameref2>
+</Nameref>
+</Find>
+_x</Find>
+<Nameref>
+GSearchfor:_x|
+<gsearch2> for: |_x|
+Looking in statement table
+</Find>
+_x</Find>
+Looking in outer statement table
+</Find>
+_x</Find>
+Looking in outer statement table
+</Find>
+_xMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_xIsEqual:T2sp is not null
+Type array:
+   
+tp:019E1208 <Deref></Deref>deref tp:019E1208 </nameref2>
+</Nameref>
+<Parse></Find>
+_printf</Find>
+Found _printf
+</Find>
+_printf</Find>
+</Find>
+_printf</Find>
+<Parse><ParseExpression>
+<Nameref>
+GSearchfor:_printf|
+<gsearch2> for: |_printf|
+Looking in statement table
+</Find>
+_printf</Find>
+Looking in outer statement table
+</Find>
+_printf</Find>
+Looking in outer statement table
+</Find>
+_printf</Find>
+Looking in outer statement table
+</Find>
+_printf</Find>
+Looking in function's symbol table
+</Find>
+_printf</Find>
+Searching method/class:_main|012EEE88
+Looking at params 012EEED4
+</Find>
+_printf</Find>
+Looking at class members 019E112C
+Looking at global symbols
+</Find>
+_printf</Find>
+</gsearch2>
+<nameref2>
+A:0:_printfInsert at nameref
+Type array:
+   
+<BuildSignature>:_printf</BuildSignature></nameref2>
+</Nameref>
+tp2->type=32<ArgumentList>022 lastst=45</ArgumentList>
+Type array:
+   022 
+Got Type: 32openpa calling gsearch2<FindRising>_printf 
+</Find>
+_printf</Find>
+</FindRising>
+<gsearch2> for: |_printf|
+Looking in statement table
+</Find>
+_printf</Find>
+Looking in outer statement table
+</Find>
+_printf</Find>
+Looking in outer statement table
+</Find>
+_printf</Find>
+Looking in outer statement table
+</Find>
+_printf</Find>
+Looking in function's symbol table
+</Find>
+_printf</Find>
+Searching method/class:_main|012EEE88
+Looking at params 012EEED4
+</Find>
+_printf</Find>
+Looking at class members 019E112C
+Looking at global symbols
+</Find>
+_printf</Find>
+</gsearch2>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+Insert _p0 into 012EF6A4(_printf)
+</Find>
+_p0</Find>
+At insert:
+Type array:
+   
+<BuildSignature>:_printf</BuildSignature>Insert _printf into 012DE8D8()
+Insert into global table
+</Find>
+_printf</Find>
+At insert:
+Type array:
+   022 
+Got direct function _printf </ParseExpression>
+</Parse></Find>
+_switch</Find>
+</Parse><Parse></Find>
+_argc</Find>
+</Find>
+_argc</Find>
+</Find>
+_argc</Find>
+<Nameref>
+GSearchfor:_argc|
+<gsearch2> for: |_argc|
+Looking in statement table
+</Find>
+_argc</Find>
+Looking in outer statement table
+</Find>
+_argc</Find>
+Looking in outer statement table
+</Find>
+_argc</Find>
+Looking in function's symbol table
+</Find>
+_argc</Find>
+Searching method/class:_main|012EEE88
+Looking at params 012EEED4
+</Find>
+_argcMatch
+</Find>
+Found as parameter
+</gsearch2>
+<nameref2>
+A:1:_argcIsEqual:T2sp is not null
+Type array:
+   
+tp:019E1148 <Deref></Deref>deref tp:019E1148 </nameref2>
+</Nameref>
+</Find>
+_case</Find>
+</Find>
+_printf</Find>
+<Parse><ParseExpression>
+<Nameref>
+GSearchfor:_printf|
+<gsearch2> for: |_printf|
+Looking in statement table
+</Find>
+_printf</Find>
+Looking in outer statement table
+</Find>
+_printf</Find>
+Looking in outer statement table
+</Find>
+_printf</Find>
+Looking in function's symbol table
+</Find>
+_printf</Find>
+Searching method/class:_main|012EEE88
+Looking at params 012EEED4
+</Find>
+_printf</Find>
+Looking at class members 019E112C
+Looking at global symbols
+</Find>
+_printfMatch
+</Find>
+Found in global symbol table
+</gsearch2>
+<nameref2>
+A:1:_printfIsEqual:F1sp is not null
+Type array:
+   
+tp:019E12F8 deref tp:019E12F8 </nameref2>
+</Nameref>
+tp2->type=32<ArgumentList>022 lastst=45</ArgumentList>
+Type array:
+   022 
+Got Type: 32openpa calling gsearch2<FindRising>_printf 
+</Find>
+_printf</Find>
+</FindRising>
+<gsearch2> for: |_printf|
+Looking in statement table
+</Find>
+_printf</Find>
+Looking in outer statement table
+</Find>
+_printf</Find>
+Looking in outer statement table
+</Find>
+_printf</Find>
+Looking in function's symbol table
+</Find>
+_printf</Find>
+Searching method/class:_main|012EEE88
+Looking at params 012EEED4
+</Find>
+_printf</Find>
+Looking at class members 019E112C
+Looking at global symbols
+</Find>
+_printfMatch
+IsEqual:T3Exact matchType array:
+   022 
+Type array:
+   022 
+Found in global symbol table
+</gsearch2>
+Got direct function _printf </Find>
+_break</Find>
+</ParseExpression>
+</Parse><Parse></Find>
+_case</Find>
+</Parse></Find>
+_printf</Find>
+<Parse><ParseExpression>
+<Nameref>
+GSearchfor:_printf|
+<gsearch2> for: |_printf|
+Looking in statement table
+</Find>
+_printf</Find>
+Looking in outer statement table
+</Find>
+_printf</Find>
+Looking in outer statement table
+</Find>
+_printf</Find>
+Looking in function's symbol table
+</Find>
+_printf</Find>
+Searching method/class:_main|012EEE88
+Looking at params 012EEED4
+</Find>
+_printf</Find>
+Looking at class members 019E112C
+Looking at global symbols
+</Find>
+_printfMatch
+</Find>
+Found in global symbol table
+</gsearch2>
+<nameref2>
+A:1:_printfIsEqual:F1sp is not null
+Type array:
+   
+tp:019E12F8 deref tp:019E12F8 </nameref2>
+</Nameref>
+tp2->type=32<ArgumentList>022 lastst=45</ArgumentList>
+Type array:
+   022 
+Got Type: 32openpa calling gsearch2<FindRising>_printf 
+</Find>
+_printf</Find>
+</FindRising>
+<gsearch2> for: |_printf|
+Looking in statement table
+</Find>
+_printf</Find>
+Looking in outer statement table
+</Find>
+_printf</Find>
+Looking in outer statement table
+</Find>
+_printf</Find>
+Looking in function's symbol table
+</Find>
+_printf</Find>
+Searching method/class:_main|012EEE88
+Looking at params 012EEED4
+</Find>
+_printf</Find>
+Looking at class members 019E112C
+Looking at global symbols
+</Find>
+_printfMatch
+IsEqual:T3Exact matchType array:
+   022 
+Type array:
+   022 
+Found in global symbol table
+</gsearch2>
+Got direct function _printf </Find>
+_break</Find>
+</ParseExpression>
+</Parse><Parse></Find>
+_case</Find>
+</Parse></Find>
+_printf</Find>
+<Parse><ParseExpression>
+<Nameref>
+GSearchfor:_printf|
+<gsearch2> for: |_printf|
+Looking in statement table
+</Find>
+_printf</Find>
+Looking in outer statement table
+</Find>
+_printf</Find>
+Looking in outer statement table
+</Find>
+_printf</Find>
+Looking in function's symbol table
+</Find>
+_printf</Find>
+Searching method/class:_main|012EEE88
+Looking at params 012EEED4
+</Find>
+_printf</Find>
+Looking at class members 019E112C
+Looking at global symbols
+</Find>
+_printfMatch
+</Find>
+Found in global symbol table
+</gsearch2>
+<nameref2>
+A:1:_printfIsEqual:F1sp is not null
+Type array:
+   
+tp:019E12F8 deref tp:019E12F8 </nameref2>
+</Nameref>
+tp2->type=32<ArgumentList>022 lastst=45</ArgumentList>
+Type array:
+   022 
+Got Type: 32openpa calling gsearch2<FindRising>_printf 
+</Find>
+_printf</Find>
+</FindRising>
+<gsearch2> for: |_printf|
+Looking in statement table
+</Find>
+_printf</Find>
+Looking in outer statement table
+</Find>
+_printf</Find>
+Looking in outer statement table
+</Find>
+_printf</Find>
+Looking in function's symbol table
+</Find>
+_printf</Find>
+Searching method/class:_main|012EEE88
+Looking at params 012EEED4
+</Find>
+_printf</Find>
+Looking at class members 019E112C
+Looking at global symbols
+</Find>
+_printfMatch
+IsEqual:T3Exact matchType array:
+   022 
+Type array:
+   022 
+Found in global symbol table
+</gsearch2>
+Got direct function _printf </Find>
+_break</Find>
+</ParseExpression>
+</Parse><Parse></Parse></Find>
+_exit</Find>
+</Parse><Parse><ParseExpression>
+<Nameref>
+GSearchfor:_exit|
+<gsearch2> for: |_exit|
+Looking in statement table
+</Find>
+_exit</Find>
+Looking in outer statement table
+</Find>
+_exit</Find>
+Looking in outer statement table
+</Find>
+_exit</Find>
+Looking in function's symbol table
+</Find>
+_exit</Find>
+Searching method/class:_main|012EEE88
+Looking at params 012EEED4
+</Find>
+_exit</Find>
+Looking at class members 019E112C
+Looking at global symbols
+</Find>
+_exit</Find>
+</gsearch2>
+<nameref2>
+A:0:_exitInsert at nameref
+Type array:
+   
+<BuildSignature>:_exit</BuildSignature></nameref2>
+</Nameref>
+tp2->type=32<ArgumentList>017 lastst=45</ArgumentList>
+Type array:
+   017 
+Got Type: 32openpa calling gsearch2<FindRising>_exit 
+</Find>
+_exit</Find>
+</FindRising>
+<gsearch2> for: |_exit|
+Looking in statement table
+</Find>
+_exit</Find>
+Looking in outer statement table
+</Find>
+_exit</Find>
+Looking in outer statement table
+</Find>
+_exit</Find>
+Looking in function's symbol table
+</Find>
+_exit</Find>
+Searching method/class:_main|012EEE88
+Looking at params 012EEED4
+</Find>
+_exit</Find>
+Looking at class members 019E112C
+Looking at global symbols
+</Find>
+_exit</Find>
+</gsearch2>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+Insert _p0 into 012EF944(_exit)
+</Find>
+_p0</Find>
+At insert:
+Type array:
+   
+<BuildSignature>:_exit</BuildSignature>Insert _exit into 012DE8D8()
+Insert into global table
+</Find>
+_exit</Find>
+At insert:
+Type array:
+   017 
+Got direct function _exit </ParseExpression>
+</Parse>Returning EOF from NextToken.
+D
+<gsearch2> for: |_rand|
+Looking in statement table
+</Find>
+_rand</Find>
+Looking in function's symbol table
+</Find>
+_rand</Find>
+Searching method/class:_main|012EEE88
+Looking at params 012EEED4
+</Find>
+_rand</Find>
+Looking at class members 019E112C
+Looking at global symbols
+</Find>
+_randMatch
+</Find>
+Found in global symbol table
+</gsearch2>
+
+<gsearch2> for: |_printf|
+Looking in statement table
+</Find>
+_printf</Find>
+Looking in function's symbol table
+</Find>
+_printf</Find>
+Searching method/class:_main|012EEE88
+Looking at params 012EEED4
+</Find>
+_printf</Find>
+Looking at class members 019E112C
+Looking at global symbols
+</Find>
+_printfMatch
+</Find>
+Found in global symbol table
+</gsearch2>
+
+<gsearch2> for: |_printf|
+Looking in statement table
+</Find>
+_printf</Find>
+Looking in function's symbol table
+</Find>
+_printf</Find>
+Searching method/class:_main|012EEE88
+Looking at params 012EEED4
+</Find>
+_printf</Find>
+Looking at class members 019E112C
+Looking at global symbols
+</Find>
+_printfMatch
+</Find>
+Found in global symbol table
+</gsearch2>
+
+<gsearch2> for: |_printf|
+Looking in statement table
+</Find>
+_printf</Find>
+Looking in function's symbol table
+</Find>
+_printf</Find>
+Searching method/class:_main|012EEE88
+Looking at params 012EEED4
+</Find>
+_printf</Find>
+Looking at class members 019E112C
+Looking at global symbols
+</Find>
+_printfMatch
+</Find>
+Found in global symbol table
+</gsearch2>
+
+<gsearch2> for: |_printf|
+Looking in statement table
+</Find>
+_printf</Find>
+Looking in function's symbol table
+</Find>
+_printf</Find>
+Searching method/class:_main|012EEE88
+Looking at params 012EEED4
+</Find>
+_printf</Find>
+Looking at class members 019E112C
+Looking at global symbols
+</Find>
+_printfMatch
+</Find>
+Found in global symbol table
+</gsearch2>
+
+<gsearch2> for: |_exit|
+Looking in statement table
+</Find>
+_exit</Find>
+Looking in function's symbol table
+</Find>
+_exit</Find>
+Searching method/class:_main|012EEE88
+Looking at params 012EEED4
+</Find>
+_exit</Find>
+Looking at class members 019E112C
+Looking at global symbols
+</Find>
+_exitMatch
+</Find>
+Found in global symbol table
+</gsearch2>
+E</ParseFunctionBody>
+Enter funcbottom
+Leave funcbottom
+F</ParseFunction>
+</ParseGlobalDecl>
+</Parsing GlobalDecl>
+</compile>
+<Dumplits>
+....</Dumplits>
+Enter summary
+Leave summary
+<closefiles>
+ABC</closefiles>
+Next on command line (1).
+Exiting

@@ -1,0 +1,53 @@
+     1	int ary[20][45];
+     2	
+     3	int main(int argc, char **argv)
+     4	{
+     5		int x, y, z;
+     6	
+     7		for (y = 0; y < argc; y++) {
+     8			for (z = 0; z < 45; z++)
+     9				ary[y][z] = rand();
+    10		}
+    11		for (x = 0; x < 10; x++)  {
+    12			printf("Hello World!");
+    13		}
+    14		switch(argc) {
+    15		case 1:	printf("One"); break;
+    16		case 2:	printf("Two"); break;
+    17		case 3:	printf("Three"); break;
+    18		}
+    19		exit(0);
+    20	}
+
+
+*** local symbol table ***
+
+_x         =fffffffe   -    Auto        Long
+_y         =fffffffa   -    Auto        Long
+_z         =fffffff6   -    Auto        Long
+
+
+
+
+ *** global scope typedef symbol table ***
+
+_main      =000708   -    External    Function returning Long
+		Parameters:
+			Type array:
+   017 022 
+_rand      =000000   -    External    Function returning Long
+		Parameters:
+			Type array:
+   
+_exit      =000000   -    External    Function returning Long
+		Parameters:
+			Type array:
+   017 
+_ary       =000000   -    Global      Array of Array of Long
+_printf    =000000   -    External    Function returning Long
+		Parameters:
+			Type array:
+   022 
+
+ *** structures and unions ***
+

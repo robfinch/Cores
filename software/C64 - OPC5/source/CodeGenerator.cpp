@@ -482,55 +482,74 @@ int ischar(ENODE *node)
 // ----------------------------------------------------------------------------
 AMODE *GenerateIndex(ENODE *node)
 {       
-	AMODE *ap1, *ap2;
+	AMODE *ap1, *ap2, *ap3;
 	
     if( (node->p[0]->nodetype == en_tempref || node->p[0]->nodetype==en_regvar) && (node->p[1]->nodetype == en_tempref || node->p[1]->nodetype==en_regvar))
     {       /* both nodes are registers */
-        ap1 = GenerateExpression(node->p[0],F_REG,8);
-        ap2 = GenerateExpression(node->p[1],F_REG,8);
-        ap1->mode = am_indx2;
-        ap1->sreg = ap2->preg;
-		ap1->deep2 = ap2->deep2;
-		ap1->offset = makeinode(en_icon,0);
-		ap1->scale = node->scale;
-        return ap1;
+		ap3 = GetTempRegister();
+        ap1 = GenerateExpression(node->p[0],F_REG,sizeOfWord);
+        ap2 = GenerateExpression(node->p[1],F_REG,sizeOfWord);
+		GenerateTriadic(op_mov,0,ap3,ap1,make_immed(0));
+		GenerateTriadic(op_add,0,ap3,ap2,make_immed(0));
+  //      ap1->mode = am_indx2;
+  //      ap1->sreg = ap2->preg;
+		//ap1->deep2 = ap2->deep2;
+		//ap1->offset = makeinode(en_icon,0);
+		//ap1->scale = node->scale;
+		ReleaseTempReg(ap1);
+        return ap3;
     }
-    ap1 = GenerateExpression(node->p[0],F_REG | F_IMMED,8);
+    ap1 = GenerateExpression(node->p[0],F_REG | F_IMMED,sizeOfWord);
     if( ap1->mode == am_immed )
     {
-		ap2 = GenerateExpression(node->p[1],F_REG,8);
+		ap2 = GenerateExpression(node->p[1],F_REG,sizeOfWord);
+		ReleaseTempReg(ap2);
 		ap2->mode = am_indx;
 		ap2->offset = ap1->offset;
 		ap2->isUnsigned = ap1->isUnsigned;
 		return ap2;
     }
-    ap2 = GenerateExpression(node->p[1],F_ALL,8);   /* get right op */
+    ap2 = GenerateExpression(node->p[1],F_ALL,sizeOfWord);   /* get right op */
+	ap3 = GetTempRegister();
     if( ap2->mode == am_immed && ap1->mode == am_reg ) /* make am_indx */
     {
+		ReleaseTempReg(ap3);
         ap2->mode = am_indx;
         ap2->preg = ap1->preg;
         ap2->deep = ap1->deep;
         return ap2;
     }
 	if (ap2->mode == am_ind && ap1->mode == am_reg) {
-        ap2->mode = am_indx2;
-        ap2->sreg = ap1->preg;
-		ap2->deep2 = ap1->deep;
-        return ap2;
+		GenerateTriadic(op_mov,0,ap3,ap1,make_immed(0));
+		GenerateTriadic(op_add,0,ap1,ap2,make_immed(0));
+		ReleaseTempReg(ap3);
+		ReleaseTempReg(ap2);
+  //      ap2->mode = am_indx2;
+  //      ap2->sreg = ap1->preg;
+		//ap2->deep2 = ap1->deep;
+        return ap1;
 	}
 	if (ap2->mode == am_direct && ap1->mode==am_reg) {
-        ap2->mode = am_indx;
-        ap2->preg = ap1->preg;
-        ap2->deep = ap1->deep;
-        return ap2;
+		GenerateTriadic(op_mov,0,ap3,ap1,make_immed(0));
+		GenerateTriadic(op_add,0,ap1,ap2,make_immed(0));
+		ReleaseTempReg(ap3);
+		ReleaseTempReg(ap2);
+        //ap2->mode = am_indx;
+        //ap2->preg = ap1->preg;
+        //ap2->deep = ap1->deep;
+        return ap1;
     }
 	// ap1->mode must be F_REG
 	MakeLegalAmode(ap2,F_REG,8);
-    ap1->mode = am_indx2;            /* make indexed */
-	ap1->sreg = ap2->preg;
-	ap1->deep2 = ap2->deep;
-	ap1->offset = makeinode(en_icon,0);
-	ap1->scale = node->scale;
+	GenerateTriadic(op_mov,0,ap3,ap1,make_immed(0));
+	GenerateTriadic(op_add,0,ap1,ap2,make_immed(0));
+	ReleaseTempReg(ap3);
+	ReleaseTempReg(ap2);
+ //   ap1->mode = am_indx2;            /* make indexed */
+	//ap1->sreg = ap2->preg;
+	//ap1->deep2 = ap2->deep;
+	//ap1->offset = makeinode(en_icon,0);
+	//ap1->scale = node->scale;
     return ap1;                     /* return indexed */
 }
 
@@ -877,9 +896,9 @@ void swap_nodes(ENODE *node)
     node->p[1] = temp;
 }
 
-/*
- *      generate code to evaluate a multiply node. 
- */
+//
+// Generate code to evaluate a multiply node. 
+//
 AMODE *GenerateMultiply(ENODE *node, int flags, int size, int op)
 {       
 	AMODE *ap1, *ap2, *ap3;
@@ -892,9 +911,9 @@ AMODE *GenerateMultiply(ENODE *node, int flags, int size, int op)
         ap2 = GenerateExpression(node->p[1],F_REG,8);
     }
     else {
-        ap3 = GetTempRegister();
-        ap1 = GenerateExpression(node->p[0],F_REG,8);
-        ap2 = GenerateExpression(node->p[1],F_REG | F_IMMED,8);
+        //ap3 = GetTempRegister();
+        ap1 = GenerateExpression(node->p[0],F_REG,sizeOfWord);
+        ap2 = GenerateExpression(node->p[1],F_REG | F_IMMED,sizeOfWord);
     }
 	if (op==op_fmul) {
 		// Generate a convert operation ?
@@ -904,8 +923,14 @@ AMODE *GenerateMultiply(ENODE *node, int flags, int size, int op)
 		}
 	    GenerateTriadic(op,fpsize(ap1),ap3,ap1,ap2);
 	}
-	else
-		GenerateTriadic(op,0,ap3,ap1,ap2);
+	else {
+		GenerateTriadic(op_mov,0,makereg(1),ap1,make_immed(0));
+		GenerateTriadic(op_mov,0,makereg(2),ap2,make_immed(0));
+		GenerateTriadic(op_mov,0,makereg(regLR),makereg(regPC),make_immed(2));
+		GenerateTriadic(op_mov,0,makereg(regPC),makereg(regZero),make_string(op==op_mul ? "_mul" : "_mulu"));
+		ap3 = makereg(1);
+//		GenerateTriadic(op,0,ap3,ap1,ap2);
+	}
 	ReleaseTempReg(ap2);
 	ReleaseTempReg(ap1);
 	MakeLegalAmode(ap3,flags,2);
@@ -968,9 +993,25 @@ void GenMemop(int op, AMODE *ap1, AMODE *ap2, int ssize)
 	//		return;
 	//	}
 	//}
-   	ap3 = GetTempRegister();
-    GenLoad(ap3,ap1,ssize,ssize);
-	GenerateTriadic(op,0,ap3,ap3,ap2);
+	if (op==op_mul) {
+		ap3 = makereg(1);
+		GenLoad(ap3,ap1,ssize,ssize);
+		GenerateTriadic(op_mov,0,makereg(2),ap2,make_immed(0));
+		GenerateTriadic(op_mov,0,makereg(regLR),makereg(regPC),make_immed(2));
+		GenerateTriadic(op_mov,0,makereg(regPC),makereg(regZero),make_string("_mul"));
+	}
+	else if (op==op_mulu) {
+		ap3 = makereg(1);
+		GenLoad(ap3,ap1,ssize,ssize);
+		GenerateTriadic(op_mov,0,makereg(2),ap2,make_immed(0));
+		GenerateTriadic(op_mov,0,makereg(regLR),makereg(regPC),make_immed(2));
+		GenerateTriadic(op_mov,0,makereg(regPC),makereg(regZero),make_string("_mulu"));
+	}
+	else {
+	   	ap3 = GetTempRegister();
+		GenLoad(ap3,ap1,ssize,ssize);
+		GenerateTriadic(op,0,ap3,ap3,ap2);
+	}
 	GenStore(ap3,ap1,ssize);
 	ReleaseTempReg(ap3);
 }
@@ -1042,7 +1083,7 @@ AMODE *GenerateAssignLogic(ENODE *node,int flags, int size, int op)
 //
 AMODE *GenerateAssignMultiply(ENODE *node,int flags, int size, int op)
 {
-	AMODE *ap1, *ap2;
+	AMODE *ap1, *ap2, *ap3;
     int             ssize;
     ssize = GetNaturalSize(node->p[0]);
     if( ssize > size )
@@ -1057,7 +1098,17 @@ AMODE *GenerateAssignMultiply(ENODE *node,int flags, int size, int op)
         ap2 = GenerateExpression(node->p[1],F_REG | F_IMMED,size);
     }
 	if (ap1->mode==am_reg) {
-	    GenerateTriadic(op,0,ap1,ap1,ap2);
+		GenerateTriadic(op_mov,0,makereg(1),ap1,make_immed(0));
+		GenerateTriadic(op_mov,0,makereg(2),ap2,make_immed(0));
+		GenerateTriadic(op_mov,0,makereg(regLR),makereg(regPC),make_immed(2));
+		GenerateTriadic(op_mov,0,makereg(regPC),makereg(regZero),make_string(op==op_mul ? "_mul": "_mulu"));
+		ReleaseTempReg(ap2);
+		ReleaseTempReg(ap1);
+		ap3 = makereg(1);
+	    GenerateSignExtend(ap3,ssize,size,flags);
+		MakeLegalAmode(ap3,flags,size);
+//	    GenerateTriadic(op,0,ap1,ap1,ap2);
+		return ap3;
 	}
 	else if (ap1->mode==am_fpreg) {
 	    GenerateTriadic(op,ssize==4?'s':ssize==8?'d':ssize==12?'t':ssize==16 ? 'q' : 'd',ap1,ap1,ap2);

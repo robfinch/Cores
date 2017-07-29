@@ -735,7 +735,7 @@ void GenerateReference(SYM *sp,int offset)
 void genstorage(int nbytes)
 {       
 	nl();
-	ofs.printf("\tfill.b\t%d,0x00\n",nbytes);
+	ofs.printf("\tfill.w\t%d,0x00\n",(nbytes+1)/2);
 }
 
 void GenerateLabelReference(int n)

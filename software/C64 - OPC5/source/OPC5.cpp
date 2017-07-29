@@ -883,7 +883,7 @@ static void RestoreRegisterVars()
 		cnt2 = cnt = bitsset(save_mask)*sizeOfWord;
 		for (nn = 31; nn >=1 ; nn--) {
 			if (save_mask & (1LL << nn)) {
-				GenerateDiadic(op_lw,0,makereg(nn),make_indexed(cnt,regSP));
+				GenerateDiadic(op_ld,0,makereg(nn),make_indexed(cnt,regSP));
 				cnt -= sizeOfWord;
 			}
 		}
