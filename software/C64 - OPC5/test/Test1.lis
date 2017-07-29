@@ -1,0 +1,41 @@
+     1	
+     2	int main(int argc, char **argv)
+     3	{
+     4		int x;
+     5	
+     6		for (x = 0; x < 10; x++)  {
+     7			printf("Hello World!");
+     8		}
+     9		switch(argc) {
+    10		case 1:	printf("One"); break;
+    11		case 2:	printf("Two"); break;
+    12		case 3:	printf("Three"); break;
+    13		}
+    14		exit(0);
+    15	}
+
+
+*** local symbol table ***
+
+_x         =fffffffe   -    Auto        Long
+
+
+
+
+ *** global scope typedef symbol table ***
+
+_main      =000000   -    External    Function returning Long
+		Parameters:
+			Type array:
+   017 022 
+_exit      =000000   -    External    Function returning Long
+		Parameters:
+			Type array:
+   017 
+_printf    =000000   -    External    Function returning Long
+		Parameters:
+			Type array:
+   022 
+
+ *** structures and unions ***
+
