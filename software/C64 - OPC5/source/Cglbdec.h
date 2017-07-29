@@ -310,6 +310,7 @@ extern void GeneratePredicatedMonadic(int pr, int pop, int op, int len, AMODE *a
 extern void GeneratePredicatedDiadic(int pop, int pr, int op, int len, AMODE *ap1, AMODE *ap2);
 extern void GeneratePredicatedTriadic(int pop, int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3);
 // Gencode.c
+extern void GenLdi(AMODE *, AMODE *);
 extern AMODE *make_label(int lab);
 extern AMODE *make_clabel(int lab);
 extern AMODE *make_immed(int i);

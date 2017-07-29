@@ -68,7 +68,7 @@ int main(int argc, char **argv)
 	opt_nopeep = FALSE;
 	uctran_off = 0;
 	optimize =1;
-	exceptions=1;
+	exceptions=0;
 //	printf("c64 starting...\r\n");
 	while(--argc) {
     if( **++argv == '-')

@@ -421,7 +421,7 @@ void Statement::GenerateCase()
 		if(stmt->s1 != (Statement *)NULL )
 		{
 			GenerateLabel((int)stmt->label);
-			s1->Generate();
+			stmt->s1->Generate();
 		}
 		else if(stmt->next == (Statement *)NULL)
 			GenerateLabel((int)stmt->label);
@@ -567,7 +567,7 @@ void Statement::GenerateTry()
 
 	a = make_clabel(throwlab);
 	a->mode = am_immed;
-	GenerateDiadic(op_ldi,0,makereg(regXLR),a);
+	GenLdi(makereg(regXLR),a);
 	s1->Generate();
 	GenerateMonadic(op_bra,0,make_clabel(lab1));
 	GenerateLabel(throwlab);
@@ -583,7 +583,7 @@ void Statement::GenerateTry()
 			;
 		else {
 			ap2 = GetTempRegister();
-			GenerateDiadic(op_ldi,0,ap2,make_immed(stmt->num));
+			GenLdi(ap2,make_immed(stmt->num));
 			ReleaseTempReg(ap2);
 			GenerateTriadic(op_bne,0,makereg(2),ap2,make_clabel(nextlabel));
 		}
@@ -603,7 +603,7 @@ void Statement::GenerateTry()
 	GenerateLabel(lab1);
 	a = make_clabel(oldthrow);
 	a->mode = am_immed;
-	GenerateDiadic(op_ldi,0,makereg(regXLR),a);
+	GenLdi(makereg(regXLR),a);
 }
 
 void Statement::GenerateThrow()
@@ -615,13 +615,13 @@ void Statement::GenerateThrow()
 		initstack();
 		ap = GenerateExpression(exp,F_ALL,8);
 		if (ap->mode==am_immed)
-           	GenerateDiadic(op_ldi,0,makereg(1),ap);
+           	GenLdi(makereg(1),ap);
 		else if( ap->mode != am_reg)
 			GenerateDiadic(op_lw,0,makereg(1),ap);
 		else if (ap->preg != 1 )
 			GenerateDiadic(op_mov,0,makereg(1),ap);
 		ReleaseTempRegister(ap);
-		GenerateDiadic(op_ldi,0,makereg(2),make_immed(num));
+		GenLdi(makereg(2),make_immed(num));
 	}
 	GenerateMonadic(op_bra,0,make_clabel(throwlab));
 }

@@ -32,7 +32,7 @@ static void SignExtendBitfield(ENODE *node, AMODE *ap3, int mask)
 
 	umask = 0x80000000 | ~(mask >> 1);
 	ap2 = GetTempRegister();
-	GenerateDiadic(op_ldi,0,ap2,make_immed(umask));
+	GenLdi(ap2,make_immed(umask));
 	GenerateTriadic(op_add,0,ap3,ap3,ap2);
 	GenerateTriadic(op_xor,0,ap3,ap3,ap2);
 	ReleaseTempRegister(ap2);
@@ -54,7 +54,7 @@ AMODE *GenerateBitfieldDereference(ENODE *node, int flags, int size)
 	if (ap->mode==am_reg)
 		GenerateDiadic(op_mov,0,ap3,ap);
 	else if (ap->mode==am_immed)
-		GenerateDiadic(op_ldi,0,ap3,ap);
+		GenLdi(ap3,ap);
 	else	// memory
 		GenerateDiadic(op_lw,0,ap3,ap);
 	ReleaseTempRegister(ap);

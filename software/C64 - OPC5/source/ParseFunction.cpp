@@ -72,7 +72,7 @@ int GetReturnBlockSize()
 	}
 	else
 		throw new C64PException(ERR_NULLPOINTER,'R');
-    return (exceptions ? sizeOfWord*3 : sizeOfWord);
+    return (exceptions ? sizeOfWord*3 : sizeOfWord*2);
 }
 
 static bool SameType(TYP *tp1, TYP *tp2)

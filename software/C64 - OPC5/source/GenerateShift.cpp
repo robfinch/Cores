@@ -67,7 +67,7 @@ AMODE *GenerateAssignShift(ENODE *node,int flags,int size,int op)
 		GenerateDiadic(op_mov,0,ap1,ap3);
 	else if (ap3->mode == am_immed) {
 		error(ERR_LVALUE);
-	    GenerateDiadic(op_ldi,0,ap1,ap3);
+	    GenLdi(ap1,ap3);
 	}
 	else
         GenLoad(ap1,ap3,size,size);

@@ -388,7 +388,7 @@ void PutAddressMode(AMODE *ap)
 	switch( ap->mode )
     {
     case am_immed:
-			ofs.write("#");
+			ofs.write("");
 			// Fall through
     case am_direct:
             PutConstant(ap->offset,ap->lowhigh,ap->rshift);
@@ -400,7 +400,7 @@ void PutAddressMode(AMODE *ap)
             ofs.printf("fp%d", (int)ap->preg);
             break;
     case am_ind:
-			ofs.printf("[%s]",RegMoniker(ap->preg));
+			ofs.printf("%s",RegMoniker(ap->preg));
 			break;
     case am_indx:
 			// It's not known the function is a leaf routine until code
@@ -408,6 +408,7 @@ void PutAddressMode(AMODE *ap)
 			// until code is being output. This bit of code first adds onto
 			// parameter offset the size of the return block, then later
 			// subtracts it off again.
+			ofs.printf("%s,",RegMoniker(ap->preg));
 			if (ap->offset) {
 				if (ap->preg==regBP) {
 					if (ap->offset->sym) {
@@ -425,7 +426,6 @@ void PutAddressMode(AMODE *ap)
 					}
 				}
 			}
-			ofs.printf("[%s]",RegMoniker(ap->preg));
 			break;
 
 	case am_indx2:
@@ -473,7 +473,7 @@ void put_code(struct ocode *p)
 		switch( len )
 			{
 			case 1: ofs.printf("\tdh"); break;
-			case 2: ofs.printf("\tdw"); break;
+			case 2: ofs.printf("\tword"); break;
 			}
 		}
 	else if (op != op_fnname)
@@ -594,7 +594,7 @@ void GenerateChar(int val)
     }
     else {
         nl();
-        ofs.printf("\tdc\t%d",val & 0xffff);
+        ofs.printf("\tword\t%d",val & 0xffff);
         gentype = chargen;
         outcol = 21;
     }
@@ -703,7 +703,7 @@ void GenerateReference(SYM *sp,int offset)
     else {
         nl();
         if(sp->storage_class == sc_static) {
-			ofs.printf("\tdw\t%s",GetNamespace());
+			ofs.printf("\tword\t%s",GetNamespace());
 			ofs.printf("_%ld",sp->value.i);
 			ofs.putch(sign);
 			ofs.printf("%d",offset);
@@ -711,17 +711,17 @@ void GenerateReference(SYM *sp,int offset)
 		}
         else if(sp->storage_class == sc_thread) {
 //            fprintf(output,"\tdw\t%s_%ld%c%d",GetNamespace(),sp->value.i,sign,offset);
-			ofs.printf("\tdw\t%s",GetNamespace());
+			ofs.printf("\tword\t%s",GetNamespace());
 			ofs.printf("_%ld",sp->value.i);
 			ofs.putch(sign);
 			ofs.printf("%d",offset);
 		}
 		else {
 			if (offset==0) {
-				ofs.printf("\tdw\t%s",(char *)sp->name->c_str());
+				ofs.printf("\tword\t%s",(char *)sp->name->c_str());
 			}
 			else {
-				ofs.printf("\tdw\t%s",(char *)sp->name->c_str());
+				ofs.printf("\tword\t%s",(char *)sp->name->c_str());
 				ofs.putch(sign);
 				ofs.printf("%d", offset);
 //				fprintf(output,"\tdw\t%s%c%d",sp->name,sign,offset);
@@ -746,7 +746,7 @@ void GenerateLabelReference(int n)
     }
     else {
         nl();
-        ofs.printf("\tdw\t%s_%d",GetNamespace(),n);
+        ofs.printf("\tword\t%s_%d",GetNamespace(),n);
         outcol = 22;
         gentype = longgen;
     }

@@ -293,7 +293,7 @@ void MakeLegalAmode(AMODE *ap,int flags, int size)
 			if (ap->mode == am_ind || ap->mode==am_indx)
                 GenLoad(ap2,ap,size,size);
 			else if (ap->mode==am_immed) {
-			    GenerateDiadic(op_ldi,0,ap2,ap);
+			    GenLdi(ap2,ap);
             }
 			else {
 				if (ap->mode==am_reg)
@@ -314,7 +314,7 @@ void MakeLegalAmode(AMODE *ap,int flags, int size)
 			if (ap->mode == am_ind || ap->mode==am_indx)
                 GenLoad(ap2,ap,size,size);
 			else if (ap->mode==am_immed) {
-			    GenerateDiadic(op_ldi,0,ap2,ap);
+			    GenLdi(ap2,ap);
             }
 			else {
 				if (ap->mode==am_reg)
@@ -353,7 +353,7 @@ void MakeLegalAmode(AMODE *ap,int flags, int size)
             GenLoad(ap2,ap,size,size);
 			break;
 		case am_immed:
-			GenerateDiadic(op_ldi,0,ap2,ap);
+			GenLdi(ap2,ap);
 			break;
 		case am_reg:
 			GenerateDiadic(op_mov,0,ap2,ap);
@@ -1187,7 +1187,7 @@ AMODE *GenerateAssign(ENODE *node, int flags, int size)
 		if (ap2->mode==am_reg)
 			GenerateDiadic(op_mov,0,ap1,ap2);
 		else if (ap2->mode==am_immed) {
-			GenerateDiadic(op_ldi,0,ap1,ap2);
+			GenLdi(ap1,ap2);
 		}
 		else {
 			GenLoad(ap1,ap2,ssize,size);
@@ -1204,7 +1204,7 @@ AMODE *GenerateAssign(ENODE *node, int flags, int size)
             }
             else {
     			ap3 = GetTempRegister();
-				GenerateDiadic(op_ldi,0,ap3,ap2);
+				GenLdi(ap3,ap2);
 				GenStore(ap3,ap1,ssize);
 		    	ReleaseTempReg(ap3);
           }
@@ -1217,7 +1217,7 @@ AMODE *GenerateAssign(ENODE *node, int flags, int size)
 			// Generate a memory to memory move (struct assignments)
 			if (ssize > 8) {
 				ap3 = GetTempRegister();
-				GenerateDiadic(op_ldi,0,ap3,make_immed(size));
+				GenLdi(ap3,make_immed(size));
 				GenerateTriadic(op_push,0,ap3,ap2,ap1);
 				GenerateDiadic(op_jal,0,makereg(LR),make_string("memcpy_"));
 				GenerateTriadic(op_add,0,makereg(SP),makereg(SP),make_immed(24));
