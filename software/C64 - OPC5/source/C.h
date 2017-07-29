@@ -351,6 +351,7 @@ class Declaration
 	static void SetType(SYM *sp);
 public:
 	Declaration *next;
+	char *lptr;
 	static int declare(SYM *parent,TABLE *table,int al,int ilc,int ztype);
 	static void ParseConst();
 	static void ParseTypedef();
@@ -375,6 +376,7 @@ public:
 	static void ParseSuffixOpenpa(SYM *);
 	static SYM *ParseSuffix(SYM *sp);
 	static void ParseFunctionAttribute(SYM *sym);
+	void GenMixedSource();
 };
 
 class StructDeclaration : public Declaration

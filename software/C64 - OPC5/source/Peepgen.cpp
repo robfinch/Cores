@@ -1002,6 +1002,21 @@ static void PeepoptAnd(struct ocode *ip)
 	}
 }
 
+int IsRet(struct ocode *ip)
+{
+	if (ip==nullptr)
+		return 0;
+	if (ip->oper1==nullptr || ip->oper2==nullptr || ip->oper3==nullptr)
+		return 0;
+	if (ip->opcode==op_mov &&
+		ip->oper1->mode==am_reg && ip->oper1->preg==15 &&
+		ip->oper2->mode==am_reg && ip->oper2->preg==13 &&
+		ip->oper3->mode==am_immed && ip->oper3->offset->i == 0)
+	return 1;
+	return 0;
+}
+
+
 /*
  *      peephole optimizer. This routine calls the instruction
  *      specific optimization routines above for each instruction
@@ -1105,6 +1120,8 @@ static void opt_peep()
 					PeepoptAnd(ip);
 					break;
             }
+			if (IsRet(ip))
+				PeepoptUctran(ip);
 	       ip = ip->fwd;
         }
      }
@@ -1123,7 +1140,7 @@ static void opt_peep()
 		ip = ip->fwd;
 	}
 
-	// Check for references to r30 the base pointer
+	// Check for references to the base pointer
 	refBP = 0;
     for (ip = peep_head; ip != NULL; ip = ip->fwd)
     {
@@ -1148,7 +1165,8 @@ static void opt_peep()
 	}
 
 	// Remove the link and unlink instructions if no references
-	// to BP.
+	// to BP. This only works for processor's with link and unlink
+	// instructions.
 	if (refBP==0) {
 	    for (ip = peep_head; ip != NULL; ip = ip->fwd)
 		{

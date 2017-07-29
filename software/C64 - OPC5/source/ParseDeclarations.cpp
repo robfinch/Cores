@@ -27,6 +27,8 @@
 
 TYP *head = (TYP *)NULL;
 TYP *tail = (TYP *)NULL;
+extern char *rtrim(char *);
+extern char *inpline;
 std::string *declid;
 //char *Declaration::declid = (char *)NULL;
 TABLE tagtable;
@@ -93,6 +95,8 @@ int     imax(int i, int j)
 char *my_strdup(char *s)
 {
 	char *p;
+	if (s==nullptr)
+		return nullptr;
 	int n = strlen(s);
 	int m = sizeof(char);
 	p = (char *)allocx(sizeof(char)*(n+1));
@@ -1797,8 +1801,23 @@ xit:
 
 GlobalDeclaration *GlobalDeclaration::Make()
 {
-  GlobalDeclaration *p = (GlobalDeclaration *)allocx(sizeof(GlobalDeclaration));
-  return p;
+	GlobalDeclaration *p = (GlobalDeclaration *)allocx(sizeof(GlobalDeclaration));
+	firstLineOfFunc = true;
+	return p;
+}
+
+void Declaration::GenMixedSource()
+{
+	if (mixedSource) {
+		if (lptr) {
+			rtrim(lptr);
+			if (strcmp(lptr,last_rem)!=0) {
+          		GenerateMonadic(op_rem,0,make_string(lptr));
+          		strncpy_s(last_rem,131,lptr,130);
+          		last_rem[131] = '\0';
+			}
+		}
+	}
 }
 
 void compile()

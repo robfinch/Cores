@@ -413,7 +413,7 @@ void PutAddressMode(AMODE *ap)
 				if (ap->preg==regBP) {
 					if (ap->offset->sym) {
 						if (ap->offset->sym->IsParameter) {	// must be an parameter
-							ap->offset->i += GetReturnBlockSize()-(currentFn->IsLeaf  ? sizeOfWord : 0);
+							ap->offset->i += GetReturnBlockSize();//-(currentFn->IsLeaf  ? sizeOfWord : 0);
 						}
 					}
 				}
@@ -421,7 +421,7 @@ void PutAddressMode(AMODE *ap)
 				if (ap->preg==regBP) {
 					if (ap->offset->sym) {
 						if (ap->offset->sym->IsParameter) {
-							ap->offset->i -= GetReturnBlockSize()-(currentFn->IsLeaf  ? sizeOfWord : 0);
+							ap->offset->i -= GetReturnBlockSize();//-(currentFn->IsLeaf  ? sizeOfWord : 0);
 						}
 					}
 				}

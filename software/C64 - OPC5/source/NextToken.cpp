@@ -87,6 +87,12 @@ int getline(int listflag)
 {
 	int rv;
 
+	if (lineno > 0 && mixedSource && firstLineOfFunc) {
+		if (inpline && strlen(inpline)>2) {
+		gd->lptr = my_strdup(inpline);
+		firstLineOfFunc = false;
+		}
+	}
     if(lineno > 0 && listflag) {
         lfs.printf("%6d\t%s",lineno,inpline);
 		while(numerrs) {

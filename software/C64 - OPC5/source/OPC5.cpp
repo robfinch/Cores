@@ -789,6 +789,7 @@ void GenerateFunction(SYM *sym)
 	throwlab = nextlabel++;
 	defcatch = nextlabel++;
 	lab0 = nextlabel++;
+	gd->GenMixedSource();
 	//GenerateZeradic(op_calltgt);
 	while( lc_auto & 1 )	/* round frame size to word */
 		++lc_auto;

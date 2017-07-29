@@ -53,6 +53,7 @@ enum e_node {
 		en_cubu, en_cucu, en_cuhu,
 		en_cbw, en_ccw, en_chw,
 		en_cubw, en_cucw, en_cuhw,
+		en_lul,
 
         en_cbc, en_cbh,
 		en_cch,

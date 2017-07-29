@@ -2088,6 +2088,10 @@ TYP *forcefit(ENODE **node1,TYP *tp1,ENODE **node2,TYP *tp2, bool promote)
 				*node1 = makenode(en_i2q,*node1,*node2);
 				return tp2;
 			}
+			if (tp2->type==bt_ulong) {
+				*node1 = makenode(en_lul,*node1, *node2);
+				return tp2;
+			}
 		}
 		else {
 			switch(tp2->type) {
@@ -2395,41 +2399,41 @@ xit:
 // ----------------------------------------------------------------------------
 TYP *shiftop(ENODE **node)
 {
-	ENODE    *ep1, *ep2;
-    TYP             *tp1, *tp2;
-    int             oper;
+	ENODE *ep1, *ep2;
+    TYP   *tp1, *tp2;
+    int   oper;
 
-    Enter("Shiftop");
-    *node = NULL;
+	Enter("Shiftop");
+	*node = NULL;
 	tp1 = addops(&ep1);
 	if( tp1 == 0)
-        goto xit;
-    while( lastst == lshift || lastst == rshift) {
-            oper = (lastst == lshift);
-            NextToken();
-            tp2 = addops(&ep2);
-            if( tp2 == 0 )
-                    error(ERR_IDEXPECT);
-            else    {
-                    tp1 = forcefit(&ep2,tp2,&ep1,tp1,true);
-					if (tp1->IsFloatType())
-						error(ERR_UNDEF_OP);
-					else {
-						if (tp1->isUnsigned)
-							ep1 = makenode(oper ? en_shlu : en_shru,ep1,ep2);
-						else
-							ep1 = makenode(oper ? en_shl : en_asr,ep1,ep2);
-						ep1->esize = tp1->size;
-						PromoteConstFlag(ep1);
-						}
-                    }
-            }
-    *node = ep1;
- xit:
-     if (*node)
-     	(*node)->SetType(tp1);
-    Leave("Shiftop",0);
-    return tp1;
+		goto xit;
+	while( lastst == lshift || lastst == rshift) {
+		oper = (lastst == lshift);
+		NextToken();
+		tp2 = addops(&ep2);
+		if( tp2 == 0 )
+			error(ERR_IDEXPECT);
+		else {
+			tp1 = forcefit(&ep2,tp2,&ep1,tp1,true);
+			if (tp1->IsFloatType())
+				error(ERR_UNDEF_OP);
+			else {
+				if (tp1->isUnsigned)
+					ep1 = makenode(oper ? en_shlu : en_shru,ep1,ep2);
+				else
+					ep1 = makenode(oper ? en_shl : en_asr,ep1,ep2);
+				ep1->esize = tp1->size;
+				PromoteConstFlag(ep1);
+			}
+		}
+	}
+	*node = ep1;
+	xit:
+	if (*node)
+		(*node)->SetType(tp1);
+	Leave("Shiftop",0);
+	return tp1;
 }
 
 /*

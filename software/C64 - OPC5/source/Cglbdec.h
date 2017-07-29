@@ -75,6 +75,8 @@ extern int regXLR;
 extern int regPC;
 extern int regCLP;
 extern int regZero;
+extern int regFirstParm;
+extern int regLastParm;
 extern int farcode;
 extern int wcharSupport;
 extern int verbose;
@@ -90,6 +92,10 @@ extern int sizeOfFP;
 extern int sizeOfFPT;
 extern int sizeOfFPD;
 extern int sizeOfFPQ;
+
+extern GlobalDeclaration *gd;
+extern bool firstLineOfFunc;
+extern char last_rem[132];
 
 /*
 extern FILE             *input,

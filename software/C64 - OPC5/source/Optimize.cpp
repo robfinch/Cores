@@ -236,6 +236,7 @@ static void opt0(ENODE **node)
 			case en_cch:
 			case en_ccw:
 			case en_chw:
+			case en_lul:
 			case en_ainc:
 			case en_adec:
                     opt0( &((*node)->p[0]));

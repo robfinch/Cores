@@ -1795,6 +1795,11 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
 			Generate4adic(op_bfext,0,ap1,ap1,make_immed(0),make_immed(31));
 			//GenerateDiadic(op_sxh,0,ap1,ap1);
 			return ap1;
+	case en_lul:	// long to unsigned long
+			ap1 = GenerateExpression(node->p[0],F_REG,size);
+			GenerateTriadic(op_add,0,ap1,ap1,make_immed(0));
+			GeneratePredicatedTriadic(pop_mi,op_sub,0,ap1,ap1,make_immed(0));
+			return ap1;
     default:
             printf("DIAG - uncoded node (%d) in GenerateExpression.\n", node->nodetype);
             return 0;

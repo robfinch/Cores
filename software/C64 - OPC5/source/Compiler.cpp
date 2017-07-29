@@ -33,6 +33,7 @@ extern void ParseGlobalDeclarations();
 extern void makename(char *s, char *e);
 extern char *errtext(int errnum);
 extern std::string *classname;
+extern char *rtrim(char *);
 
 Compiler::Compiler()
 {
@@ -72,7 +73,7 @@ int Compiler::main2(int argc, char **argv)
 //
 void Compiler::compile()
 {
-	GlobalDeclaration *gd;
+	//GlobalDeclaration *gd;
 
 	dfs.printf("<compile>\n");
 	typenum = 1;

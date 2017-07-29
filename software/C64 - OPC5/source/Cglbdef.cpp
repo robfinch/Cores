@@ -55,6 +55,8 @@ int regZero = 0;
 int regXLR = 28;
 int regGP = 27;
 int regCLP = 25;                // class pointer
+int regFirstParm = 8;
+int regLastParm = 10;
 
 int farcode = 0;
 int wcharSupport = 1;
@@ -71,6 +73,10 @@ std::ifstream *ifs;
 txtoStream ofs;
 txtoStream lfs;
 txtoStream dfs;
+
+GlobalDeclaration *gd;
+bool firstLineOfFunc = false;
+
 /*
 FILE            *input = 0,
                 *list = 0,
