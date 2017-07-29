@@ -11,7 +11,7 @@
     11		for (x = 0; x < 10; x++)  {
     12			printf("Hello World!");
     13		}
-    14		switch(argc) {
+    14		naked switch(argc) {
     15		case 1:	printf("One"); break;
     16		case 2:	printf("Two"); break;
     17		case 3:	printf("Three"); break;

@@ -389,8 +389,10 @@ void PutAddressMode(AMODE *ap)
     {
     case am_immed:
 			ofs.write("");
-			// Fall through
+            PutConstant(ap->offset,ap->lowhigh,ap->rshift);
+            break;
     case am_direct:
+			ofs.printf("r0,");
             PutConstant(ap->offset,ap->lowhigh,ap->rshift);
             break;
     case am_reg:
@@ -400,7 +402,7 @@ void PutAddressMode(AMODE *ap)
             ofs.printf("fp%d", (int)ap->preg);
             break;
     case am_ind:
-			ofs.printf("%s",RegMoniker(ap->preg));
+			ofs.printf("%s,0",RegMoniker(ap->preg));
 			break;
     case am_indx:
 			// It's not known the function is a leaf routine until code

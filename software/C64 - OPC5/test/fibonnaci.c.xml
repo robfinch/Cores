@@ -1,0 +1,749 @@
+<title>C64D Compiler debug file</title>
+<compile>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+</Find>
+_int</Find>
+<Parsing GlobalDecl>
+<ParseGlobalDecl>
+Enter declare()
+A<ParseSpecifier>
+A<TYP__Make>
+</TYP__Make>
+</Find>
+_nums</Find>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_nums|CDE<ParseDeclSuffix>
+<TYP__Make>
+</TYP__Make>
+Setting array size:60
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_nums</Find>
+hh1kIIbIcinsert type: 22
+***Inserting:_nums into 011FF8D0
+<BuildSignature>:_nums</BuildSignature>Insert _nums into 011FF8D0()
+Insert into global table
+</Find>
+_nums</Find>
+At insert:
+Type array:
+   
+JK</Find>
+_int</Find>
+Enter declare()
+A<ParseSpecifier>
+A<TYP__Make>
+</TYP__Make>
+</Find>
+_main</Find>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_main|CDE<ParseDeclSuffix>
+<openpa>
+****************************
+****************************
+Function: _main
+****************************
+****************************
+<TYP__Make>
+</TYP__Make>
+o p q </openpa>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_main</Find>
+hh1h2ikIIbIcinsert type: 33
+***Inserting:_main into 011FF8D0
+<BuildSignature>:_main</BuildSignature>Insert _main into 011FF8D0()
+Insert into global table
+</Find>
+_main</Find>
+At insert:
+Type array:
+   
+J<ParseFunction>
+***********************************
+***********************************
+***********************************
+Parsing function: _main
+***********************************
+***********************************
+***********************************
+A<BuildParameterList
+><ParseParmDecls>
+A(42)</ParseParmDecls>
+B</BuildParameterList>
+B<BuildSignature>:_main</BuildSignature></Find>
+_mainMatch
+</Find>
+CDEG<Parse function body>:_main|
+</Find>
+_int</Find>
+Bb<GenerateMonadic>
+ABCD</GenerateMonadic>
+CEnter declare()
+A<ParseSpecifier>
+A<TYP__Make>
+</TYP__Make>
+</Find>
+_c</Find>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_c|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_c</Find>
+hh1kIIbIcinsert type: 17
+***Inserting:_c into 02239678
+<BuildSignature>:_c</BuildSignature>Insert _c into 02239678()
+</Find>
+_c</Find>
+At insert:
+Type array:
+   
+JK</Find>
+_c1</Find>
+b<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_c1|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_c1</Find>
+hh1kIIbIcinsert type: 17
+***Inserting:_c1 into 02239678
+<BuildSignature>:_c1</BuildSignature>Insert _c1 into 02239678()
+</Find>
+_c1</Find>
+At insert:
+Type array:
+   
+JK</Find>
+_c2</Find>
+b<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_c2|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_c2</Find>
+hh1kIIbIcinsert type: 17
+***Inserting:_c2 into 02239678
+<BuildSignature>:_c2</BuildSignature>Insert _c2 into 02239678()
+</Find>
+_c2</Find>
+At insert:
+Type array:
+   
+JK</Find>
+_int</Find>
+Enter declare()
+A<ParseSpecifier>
+A<TYP__Make>
+</TYP__Make>
+</Find>
+_n</Find>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_n|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_n</Find>
+hh1kIIbIcinsert type: 17
+***Inserting:_n into 02239678
+<BuildSignature>:_n</BuildSignature>Insert _n into 02239678()
+</Find>
+_n</Find>
+At insert:
+Type array:
+   
+JK</Find>
+_c1</Find>
+Found _c1
+</Find>
+_c1</Find>
+</Find>
+_c1</Find>
+<Parse><ParseExpression>
+<Nameref>
+GSearchfor:_c1|
+<gsearch2> for: |_c1|
+Looking in statement table
+</Find>
+_c1Match
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_c1IsEqual:T2sp is not null
+Type array:
+   
+tp:01902110 <Deref></Deref>deref tp:01902110 </nameref2>
+</Nameref>
+</Find>
+_c2</Find>
+</ParseExpression>
+</Parse><Parse><ParseExpression>
+<Nameref>
+GSearchfor:_c2|
+<gsearch2> for: |_c2|
+Looking in statement table
+</Find>
+_c2Match
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_c2IsEqual:T2sp is not null
+Type array:
+   
+tp:01902110 <Deref></Deref>deref tp:01902110 </nameref2>
+</Nameref>
+</Find>
+_for</Find>
+</ParseExpression>
+</Parse><Parse></Find>
+_n</Find>
+<Nameref>
+GSearchfor:_n|
+<gsearch2> for: |_n|
+Looking in statement table
+</Find>
+_nMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_nIsEqual:T2sp is not null
+Type array:
+   
+tp:01902140 <Deref></Deref>deref tp:01902140 </nameref2>
+</Nameref>
+</Find>
+_n</Find>
+<Nameref>
+GSearchfor:_n|
+<gsearch2> for: |_n|
+Looking in statement table
+</Find>
+_nMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_nIsEqual:T2sp is not null
+Type array:
+   
+tp:01902140 <Deref></Deref>deref tp:01902140 </nameref2>
+</Nameref>
+</Find>
+_n</Find>
+<Nameref>
+GSearchfor:_n|
+<gsearch2> for: |_n|
+Looking in statement table
+</Find>
+_nMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_nIsEqual:T2sp is not null
+Type array:
+   
+tp:01902140 <Deref></Deref>deref tp:01902140 </nameref2>
+</Nameref>
+</Find>
+_n</Find>
+<Nameref>
+GSearchfor:_n|
+<gsearch2> for: |_n|
+Looking in statement table
+</Find>
+_nMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_nIsEqual:T2sp is not null
+Type array:
+   
+tp:01902140 <Deref></Deref>deref tp:01902140 </nameref2>
+</Nameref>
+<Parse></Find>
+_if</Find>
+<Parse><ParseIf></Find>
+_n</Find>
+<Nameref>
+GSearchfor:_n|
+<gsearch2> for: |_n|
+Looking in statement table
+</Find>
+_n</Find>
+Looking in outer statement table
+</Find>
+_nMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_nIsEqual:T2sp is not null
+Type array:
+   
+tp:01902140 <Deref></Deref>deref tp:01902140 </nameref2>
+</Nameref>
+<Parse></Find>
+_nums</Find>
+Found _nums
+</Find>
+_nums</Find>
+</Find>
+_numsMatch
+</Find>
+sp okay sc=2
+<Parse><ParseExpression>
+<Nameref>
+GSearchfor:_nums|
+<gsearch2> for: |_nums|
+Looking in statement table
+</Find>
+_nums</Find>
+Looking in outer statement table
+</Find>
+_nums</Find>
+Looking in outer statement table
+</Find>
+_nums</Find>
+Looking in function's symbol table
+</Find>
+_nums</Find>
+Searching method/class:_main|0120FE80
+Looking at params 0120FECC
+</Find>
+_nums</Find>
+Looking at class members 019020F4
+Looking at global symbols
+</Find>
+_numsMatch
+</Find>
+Found in global symbol table
+</gsearch2>
+<nameref2>
+A:1:_numsIsEqual:T2sp is not null
+Type array:
+   
+tp:01902080 <TYP__Make>
+</TYP__Make>
+deref tp:01902170 </nameref2>
+</Nameref>
+<Deref></Deref></Find>
+_c</Find>
+</ParseExpression>
+</Parse><Parse><ParseExpression>
+<Nameref>
+GSearchfor:_c|
+<gsearch2> for: |_c|
+Looking in statement table
+</Find>
+_c</Find>
+Looking in outer statement table
+</Find>
+_c</Find>
+Looking in outer statement table
+</Find>
+_cMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_cIsEqual:T2sp is not null
+Type array:
+   
+tp:01902110 <Deref></Deref>deref tp:01902110 </nameref2>
+</Nameref>
+</ParseExpression>
+</Parse></Find>
+_else</Find>
+<Parse></Find>
+_nums</Find>
+Found _nums
+</Find>
+_nums</Find>
+</Find>
+_numsMatch
+</Find>
+sp okay sc=2
+<Parse><ParseExpression>
+<Nameref>
+GSearchfor:_nums|
+<gsearch2> for: |_nums|
+Looking in statement table
+</Find>
+_nums</Find>
+Looking in outer statement table
+</Find>
+_nums</Find>
+Looking in outer statement table
+</Find>
+_nums</Find>
+Looking in outer statement table
+</Find>
+_nums</Find>
+Looking in outer statement table
+</Find>
+_nums</Find>
+Looking in function's symbol table
+</Find>
+_nums</Find>
+Searching method/class:_main|0120FE80
+Looking at params 0120FECC
+</Find>
+_nums</Find>
+Looking at class members 019020F4
+Looking at global symbols
+</Find>
+_numsMatch
+</Find>
+Found in global symbol table
+</gsearch2>
+<nameref2>
+A:1:_numsIsEqual:T2sp is not null
+Type array:
+   
+tp:01902080 <TYP__Make>
+</TYP__Make>
+deref tp:019021A0 </nameref2>
+</Nameref>
+</Find>
+_n</Find>
+<Nameref>
+GSearchfor:_n|
+<gsearch2> for: |_n|
+Looking in statement table
+</Find>
+_n</Find>
+Looking in outer statement table
+</Find>
+_n</Find>
+Looking in outer statement table
+</Find>
+_n</Find>
+Looking in outer statement table
+</Find>
+_n</Find>
+Looking in outer statement table
+</Find>
+_nMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_nIsEqual:T2sp is not null
+Type array:
+   
+tp:01902140 <Deref></Deref>deref tp:01902140 </nameref2>
+</Nameref>
+<Deref></Deref></Find>
+_c</Find>
+<Nameref>
+GSearchfor:_c|
+<gsearch2> for: |_c|
+Looking in statement table
+</Find>
+_c</Find>
+Looking in outer statement table
+</Find>
+_c</Find>
+Looking in outer statement table
+</Find>
+_c</Find>
+Looking in outer statement table
+</Find>
+_c</Find>
+Looking in outer statement table
+</Find>
+_cMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_cIsEqual:T2sp is not null
+Type array:
+   
+tp:01902110 <Deref></Deref>deref tp:01902110 </nameref2>
+</Nameref>
+</Find>
+_c</Find>
+</ParseExpression>
+</Parse><Parse><ParseExpression>
+<Nameref>
+GSearchfor:_c|
+<gsearch2> for: |_c|
+Looking in statement table
+</Find>
+_c</Find>
+Looking in outer statement table
+</Find>
+_c</Find>
+Looking in outer statement table
+</Find>
+_c</Find>
+Looking in outer statement table
+</Find>
+_c</Find>
+Looking in outer statement table
+</Find>
+_cMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_cIsEqual:T2sp is not null
+Type array:
+   
+tp:01902110 <Deref></Deref>deref tp:01902110 </nameref2>
+</Nameref>
+</Find>
+_c1</Find>
+<Nameref>
+GSearchfor:_c1|
+<gsearch2> for: |_c1|
+Looking in statement table
+</Find>
+_c1</Find>
+Looking in outer statement table
+</Find>
+_c1</Find>
+Looking in outer statement table
+</Find>
+_c1</Find>
+Looking in outer statement table
+</Find>
+_c1</Find>
+Looking in outer statement table
+</Find>
+_c1Match
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_c1IsEqual:T2sp is not null
+Type array:
+   
+tp:01902110 <Deref></Deref>deref tp:01902110 </nameref2>
+</Nameref>
+</Find>
+_c2</Find>
+<Nameref>
+GSearchfor:_c2|
+<gsearch2> for: |_c2|
+Looking in statement table
+</Find>
+_c2</Find>
+Looking in outer statement table
+</Find>
+_c2</Find>
+Looking in outer statement table
+</Find>
+_c2</Find>
+Looking in outer statement table
+</Find>
+_c2</Find>
+Looking in outer statement table
+</Find>
+_c2Match
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_c2IsEqual:T2sp is not null
+Type array:
+   
+tp:01902110 <Deref></Deref>deref tp:01902110 </nameref2>
+</Nameref>
+</Find>
+_c1</Find>
+</ParseExpression>
+</Parse><Parse><ParseExpression>
+<Nameref>
+GSearchfor:_c1|
+<gsearch2> for: |_c1|
+Looking in statement table
+</Find>
+_c1</Find>
+Looking in outer statement table
+</Find>
+_c1</Find>
+Looking in outer statement table
+</Find>
+_c1</Find>
+Looking in outer statement table
+</Find>
+_c1</Find>
+Looking in outer statement table
+</Find>
+_c1Match
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_c1IsEqual:T2sp is not null
+Type array:
+   
+tp:01902110 <Deref></Deref>deref tp:01902110 </nameref2>
+</Nameref>
+</Find>
+_c2</Find>
+<Nameref>
+GSearchfor:_c2|
+<gsearch2> for: |_c2|
+Looking in statement table
+</Find>
+_c2</Find>
+Looking in outer statement table
+</Find>
+_c2</Find>
+Looking in outer statement table
+</Find>
+_c2</Find>
+Looking in outer statement table
+</Find>
+_c2</Find>
+Looking in outer statement table
+</Find>
+_c2Match
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_c2IsEqual:T2sp is not null
+Type array:
+   
+tp:01902110 <Deref></Deref>deref tp:01902110 </nameref2>
+</Nameref>
+</Find>
+_c2</Find>
+</ParseExpression>
+</Parse><Parse><ParseExpression>
+<Nameref>
+GSearchfor:_c2|
+<gsearch2> for: |_c2|
+Looking in statement table
+</Find>
+_c2</Find>
+Looking in outer statement table
+</Find>
+_c2</Find>
+Looking in outer statement table
+</Find>
+_c2</Find>
+Looking in outer statement table
+</Find>
+_c2</Find>
+Looking in outer statement table
+</Find>
+_c2Match
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_c2IsEqual:T2sp is not null
+Type array:
+   
+tp:01902110 <Deref></Deref>deref tp:01902110 </nameref2>
+</Nameref>
+</Find>
+_c</Find>
+<Nameref>
+GSearchfor:_c|
+<gsearch2> for: |_c|
+Looking in statement table
+</Find>
+_c</Find>
+Looking in outer statement table
+</Find>
+_c</Find>
+Looking in outer statement table
+</Find>
+_c</Find>
+Looking in outer statement table
+</Find>
+_c</Find>
+Looking in outer statement table
+</Find>
+_cMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_cIsEqual:T2sp is not null
+Type array:
+   
+tp:01902110 <Deref></Deref>deref tp:01902110 </nameref2>
+</Nameref>
+</ParseExpression>
+</Parse></ParseIf></Parse></Parse>Returning EOF from NextToken.
+D<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+E</ParseFunctionBody>
+Enter funcbottom
+Leave funcbottom
+F</ParseFunction>
+</ParseGlobalDecl>
+</Parsing GlobalDecl>
+</compile>
+<Dumplits>
+</Dumplits>
+Enter summary
+Leave summary
+<closefiles>
+ABC</closefiles>
+Next on command line (1).
+Exiting

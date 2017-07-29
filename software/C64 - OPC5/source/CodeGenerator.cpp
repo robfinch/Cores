@@ -388,7 +388,7 @@ void GenStore(AMODE *ap1, AMODE *ap3, int size)
 {
     switch(size) {
     case 1: GenerateDiadic(op_stb,0,ap1,ap3); break;
-    case 2: GenerateDiadic(op_sto,0,ap1,ap3); break;
+    default: GenerateDiadic(op_sto,0,ap1,ap3); break;
     }
 }
 
@@ -822,30 +822,33 @@ AMODE *GenerateBinary(ENODE *node,int flags, int size, int op)
 {
 	AMODE *ap1, *ap2, *ap3;
 	
-	if (op==op_fadd || op==op_fsub || op==op_fmul || op==op_fdiv ||
-        op==op_fdadd || op==op_fdsub || op==op_fdmul || op==op_fddiv ||
-	    op==op_fsadd || op==op_fssub || op==op_fsmul || op==op_fsdiv)
+	//if (op==op_fadd || op==op_fsub || op==op_fmul || op==op_fdiv ||
+ //       op==op_fdadd || op==op_fdsub || op==op_fdmul || op==op_fddiv ||
+	//    op==op_fsadd || op==op_fssub || op==op_fsmul || op==op_fsdiv)
+	//{
+ //  		ap3 = GetTempRegister();
+	//	ap1 = GenerateExpression(node->p[0],F_REG,size);
+	//	ap2 = GenerateExpression(node->p[1],F_REG,size);
+	//	// Generate a convert operation ?
+	//	if (fpsize(ap1) != fpsize(ap2)) {
+	//		if (fpsize(ap2)=='s')
+	//			GenerateDiadic(op_fcvtsq, 0, ap2, ap2);
+	//	}
+	//    GenerateTriadic(op,fpsize(ap1),ap3,ap1,ap2);
+	//}
+	//else
 	{
-   		ap3 = GetTempRegister();
-		ap1 = GenerateExpression(node->p[0],F_REG,size);
-		ap2 = GenerateExpression(node->p[1],F_REG,size);
-		// Generate a convert operation ?
-		if (fpsize(ap1) != fpsize(ap2)) {
-			if (fpsize(ap2)=='s')
-				GenerateDiadic(op_fcvtsq, 0, ap2, ap2);
-		}
-	    GenerateTriadic(op,fpsize(ap1),ap3,ap1,ap2);
-	}
-	else {
-   		ap3 = GetTempRegister();
+   		//ap3 = GetTempRegister();
 		ap1 = GenerateExpression(node->p[0],F_REG,size);
 		ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
-	    GenerateTriadic(op,0,ap3,ap1,ap2);
+		if (ap2->mode==am_immed)
+			GenerateTriadic(op,0,ap1,makereg(regZero),ap2);
+		else 
+			GenerateTriadic(op,0,ap1,ap2,make_immed(0));
 	}
     ReleaseTempReg(ap2);
-    ReleaseTempReg(ap1);
-    MakeLegalAmode(ap3,flags,size);
-    return ap3;
+    MakeLegalAmode(ap1,flags,size);
+    return ap1;
 }
 
 /*
@@ -1224,7 +1227,7 @@ AMODE *GenerateAssign(ENODE *node, int flags, int size)
 		return ap1;
     }
 */
-	if (size > 8) {
+	if (size > sizeOfWord) {
 		ap1 = GenerateExpression(node->p[0],F_MEM,ssize);
 		ap2 = GenerateExpression(node->p[1],F_MEM,size);
 	}

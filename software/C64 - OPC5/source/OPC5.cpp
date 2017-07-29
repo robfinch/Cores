@@ -830,12 +830,12 @@ void GenerateFunction(SYM *sym)
 		// Stack link/unlink is optimized away by the peephole optimizer if they aren't
 		// needed. So they are just always spit out here.
 		//snprintf(buf, sizeof(buf), "#-%sSTKSIZE_-8",sym->mangledName->c_str());
-		GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(sym->IsLeaf ? sizeOfWord: sizeOfWord*2));
+		GenerateTriadic(op_sub,0,makereg(regSP),makereg(regZero),make_immed(sym->IsLeaf ? sizeOfWord: sizeOfWord*2));
 		if (!sym->IsLeaf)
 			GenerateDiadic(op_sto,0,makereg(regLR),make_indexed(0,regSP));
 		GenerateDiadic(op_sto,0,makereg(regBP),make_indexed(sym->IsLeaf ?0 : sizeOfWord,regSP));
 		GenerateTriadic(op_mov,0,makereg(regBP), makereg(regSP), make_immed(0));
-		GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(sym->stkspace));
+		GenerateTriadic(op_sub,0,makereg(regSP),makereg(regZero),make_immed(sym->stkspace));
 	}
 	if (optimize)
 		opt1(stmt);
@@ -865,7 +865,7 @@ static void UnlinkStack(SYM * sym)
 	if (!sym->IsLeaf)
 		GenerateDiadic(op_ld,0,makereg(regLR),make_indexed(0,regSP));
 	GenerateDiadic(op_ld,0,makereg(regBP),make_indexed(sym->IsLeaf ? 0 : sizeOfWord,regSP));
-	GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),make_immed(sym->IsLeaf ? sizeOfWord : sizeOfWord*2));
+	GenerateTriadic(op_add,0,makereg(regSP),makereg(regZero),make_immed(sym->IsLeaf ? sizeOfWord : sizeOfWord*2));
 	//if (exceptions) {
 	//	if (!sym->IsLeaf || sym->DoesThrow)
 	//		GenerateMonadic(op_pop,0,makereg(regXLR));
@@ -888,7 +888,7 @@ static void RestoreRegisterVars()
 				cnt -= sizeOfWord;
 			}
 		}
-		GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),make_immed(bitsset(save_mask)*sizeOfWord));
+		GenerateTriadic(op_add,0,makereg(regSP),makereg(regZero),make_immed(bitsset(save_mask)*sizeOfWord));
 	}
 }
 
@@ -1090,7 +1090,7 @@ static void SaveRegisterParameters(SYM *sym)
 		int nn;
 		nn = CountPreg(ta);
 		if (nn > 0) {
-			GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(nn * sizeOfWord));
+			GenerateTriadic(op_sub,0,makereg(regSP),makereg(regZero),make_immed(nn * sizeOfWord));
 			for (nn = 0; nn < ta->length; nn++) {
 				if (ta->preg[nn]) {
 					//switch(ta->types[nn]) {
@@ -1131,7 +1131,7 @@ static void RestoreRegisterParameters(SYM *sym)
 					GenerateDiadic(op_ld,0,makereg(ta->preg[nn]& 0x7fff),make_indexed(nn * sizeOfWord,regSP));
 				}
 			}
-			GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),make_immed(cn * sizeOfWord));
+			GenerateTriadic(op_add,0,makereg(regSP),makereg(regZero),make_immed(cn * sizeOfWord));
 		}
 	}
 }
@@ -1197,28 +1197,28 @@ static int GeneratePushParameter(ENODE *ep, int regno)
 				if (ap->mode==am_immed) {
 					GenerateTriadic(op_mov,0,makereg(regno & 0x7fff), makereg(regZero), ap);
 					if (regno & 0x8000) {
-						GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(sizeOfWord));
+						GenerateTriadic(op_sub,0,makereg(regSP),makereg(regZero),make_immed(sizeOfWord));
 						nn = 8;
 					}
 				}
 				else if (ap->mode==am_fpreg) {
 					GenerateDiadic(op_mov,0,makereg(regno & 0x7fff), ap);
 					if (regno & 0x8000) {
-						GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(sz));
+						GenerateTriadic(op_sub,0,makereg(regSP),makereg(regZero),make_immed(sz));
 						nn = sz;
 					}
 				}
 				else {
 					GenerateTriadic(op_mov,0,makereg(regno & 0x7fff), ap, make_immed(0));
 					if (regno & 0x8000) {
-						GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(sizeOfWord));
+						GenerateTriadic(op_sub,0,makereg(regSP),makereg(regZero),make_immed(sizeOfWord));
 						nn = 8;
 					}
 				}
 			}
 			else {
 				if (ap->mode==am_immed) {	// must have been a zero
-					GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(sizeOfWord));
+					GenerateTriadic(op_sub,0,makereg(regSP),makereg(regZero),make_immed(sizeOfWord));
 					GenerateDiadic(op_sto,0,makereg(regZero),make_indexed(0,regSP));
 					nn = 1;
 				}
@@ -1228,7 +1228,7 @@ static int GeneratePushParameter(ENODE *ep, int regno)
 						nn = sz;
 					}
 					else {
-						GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(sizeOfWord));
+						GenerateTriadic(op_sub,0,makereg(regSP),makereg(regZero),make_immed(sizeOfWord));
 						GenerateDiadic(op_sto,0,ap,make_indexed(0,regSP));
           				//GenerateMonadic(op_push,0,ap);
 						nn = 1;
@@ -1344,10 +1344,10 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
 	if (i!=0) {
 		if (sym) {
 			if (!sym->IsPascal)
-				GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),make_immed(i * sizeOfWord));
+				GenerateTriadic(op_add,0,makereg(regSP),makereg(regZero),make_immed(i * sizeOfWord));
 		}
 		else
-			GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),make_immed(i * sizeOfWord));
+			GenerateTriadic(op_add,0,makereg(regSP),makereg(regZero),make_immed(i * sizeOfWord));
 	}
 	RestoreRegisterParameters(sym);
 	RestoreTemporaries(sym, sp, fsp);

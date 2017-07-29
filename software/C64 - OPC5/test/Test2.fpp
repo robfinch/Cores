@@ -11,7 +11,7 @@ int main(int argc, char **argv)
 	for (x = 0; x < 10; x++)  {
 		printf("Hello World!");
 	}
-	switch(argc) {
+	naked switch(argc) {
 	case 1:	printf("One"); break;
 	case 2:	printf("Two"); break;
 	case 3:	printf("Three"); break;
