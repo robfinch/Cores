@@ -468,7 +468,7 @@ void put_code(struct ocode *p)
 	ap4 = p->oper4;
 
 	if (p->comment) {
-		ofs.printf("; %s\n", (char *)p->comment->oper1->offset->sp->c_str());
+		ofs.printf("\t# %s\n", (char *)p->comment->oper1->offset->sp->c_str());
 	}
 	if( op == op_dc )
 		{

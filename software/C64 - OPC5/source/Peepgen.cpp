@@ -283,13 +283,23 @@ void put_ocode(struct ocode *p)
 
 void peep_move(struct ocode	*ip)
 {
-	return;
+	if (ip==nullptr)
+		return;
+	if (ip->oper1==nullptr || ip->oper2==nullptr)
+		return;
 	if (equal_address(ip->oper1, ip->oper2)) {
+		if (ip->oper3) {
+			if (ip->oper3->offset) {
+				if (ip->oper3->offset->i != 0)
+					return;
+			}
+		}
 		if (ip->fwd)
 			ip->fwd->back = ip->back;
 		if (ip->back)
 			ip->back->fwd = ip->fwd;
 	}
+	return;
 	if (ip->back) {
 		if (ip->back->opcode==op_add || ip->back->opcode==op_and) {	// any ALU op
 			if (equal_address(ip->back->oper1, ip->oper1)) {
@@ -1128,23 +1138,20 @@ static void opt_peep()
 	PeepoptSubSP();
     ip = peep_head;
 
-	// Remove all the compiler hints that didn't work out.
-    while( ip != NULL )
-    {
-        if (ip->opcode==op_hint) {
-			if (ip->fwd)
-				ip->fwd->back = ip->back;
-			if (ip->back)
-				ip->back->fwd = ip->fwd;
-		}
-		ip = ip->fwd;
-	}
-
 	// Check for references to the base pointer
 	refBP = 0;
     for (ip = peep_head; ip != NULL; ip = ip->fwd)
     {
 		if (ip->opcode != op_label) {
+			if (ip->opcode==op_hint) {
+				if (ip->oper1->offset) {
+					if ((ip->oper1->offset->i==4) || ip->oper1->offset->i==6) {
+						ip = ip->fwd;
+					while (ip && ip->opcode != op_hint)
+						ip = ip->fwd;
+					}
+				}
+			}
 			if (ip->oper1) {
 				if (ip->oper1->preg==regBP || ip->oper1->sreg==regBP)
 					refBP++;
@@ -1170,12 +1177,35 @@ static void opt_peep()
 	if (refBP==0) {
 	    for (ip = peep_head; ip != NULL; ip = ip->fwd)
 		{
+			if (ip->opcode==op_hint && (ip->oper1->offset->i==4 || ip->oper1->offset->i==6)) {
+				ip = ip->fwd;
+				while (ip && ip->opcode != op_hint) {
+					if (ip->fwd)
+						ip->fwd->back = ip->back;
+					if (ip->back)
+						ip->back->fwd = ip->fwd;
+					ip = ip->fwd;
+				}
+			}
+			/*
 			if (ip->opcode==op_link || ip->opcode==op_unlk) {
 				if (ip->back)
 					ip->back->fwd = ip->fwd;
 				if (ip->fwd)
 					ip->fwd->back = ip->back;
 			}
+			*/
+		}
+	}
+
+	// Remove all the compiler hints that didn't work out.
+    for(ip = peep_head; ip != NULL; ip = ip->fwd )
+    {
+        if (ip->opcode==op_hint) {
+			if (ip->fwd)
+				ip->fwd->back = ip->back;
+			if (ip->back)
+				ip->back->fwd = ip->fwd;
 		}
 	}
 }

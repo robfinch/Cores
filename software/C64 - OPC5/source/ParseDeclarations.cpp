@@ -217,7 +217,7 @@ void Declaration::ParseInt()
 	head->isVolatile = isVolatile;
 	head->isIO = isIO;
 	head->isConst = isConst;
-	NextToken();
+	//NextToken();
 	if (lastst==kw_task) {
 		isTask = TRUE;
 		NextToken();
@@ -455,8 +455,13 @@ int Declaration::ParseSpecifier(TABLE *table)
 			case kw_int64:	ParseInt64(); goto lxit;
 			case kw_short:	ParseInt32();	goto lxit;
 			case kw_long:	ParseLong();	goto lxit;	// long, long int
-			case kw_int:	ParseInt();		goto lxit;
-
+			case kw_int:	NextToken();
+							if (lastst==kw_interrupt) {
+								isInterrupt = TRUE;
+								NextToken();
+							}
+							ParseInt();
+							goto lxit;
             case kw_task:
                 isTask = TRUE;
                 NextToken();

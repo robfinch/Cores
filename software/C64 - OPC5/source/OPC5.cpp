@@ -188,7 +188,7 @@ int AllocateRegisterVars()
 	// Push temporaries on the stack.
 	if( mask != 0 ) {
 		cnt = 0;
-		GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(popcnt(mask)*sizeOfWord));
+		GenerateTriadic(op_sub,0,makereg(regSP),makereg(regZero),make_immed(popcnt(mask)*sizeOfWord));
 		for (nn = 0; nn < 64; nn++) {
 			if (rmask & (0x8000000000000000ULL >> nn)) {
 				GenerateDiadic(op_sto,0,makereg(nn&15),make_indexed(cnt,regSP));
@@ -611,8 +611,6 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int predi
 		switch(op) {
 		case op_beq:
 			size = GetNaturalSize(node);
-			ap1 = GenerateExpression(node->p[0],F_REG,size);
-			ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
 			if (ap2->mode==am_immed)
 				GenerateTriadic(op_cmp,0,ap1,makereg(regZero),ap2);
 			else
@@ -623,8 +621,6 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int predi
 			break;
 		case op_bne:
 			size = GetNaturalSize(node);
-			ap1 = GenerateExpression(node->p[0],F_REG,size);
-			ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
 			if (ap2->mode==am_immed)
 				GenerateTriadic(op_cmp,0,ap1,makereg(regZero),ap2);
 			else
@@ -635,8 +631,6 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int predi
 			break;
 		case op_blt:
 			size = GetNaturalSize(node);
-			ap1 = GenerateExpression(node->p[0],F_REG,size);
-			ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
 			if (ap2->mode==am_immed)
 				GenerateTriadic(op_cmp,0,ap1,makereg(regZero),ap2);
 			else
@@ -647,8 +641,6 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int predi
 			break;
 		case op_ble:
 			size = GetNaturalSize(node);
-			ap1 = GenerateExpression(node->p[0],F_REG,size);
-			ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
 			if (ap2->mode==am_immed)
 				GenerateTriadic(op_cmp,0,ap1,makereg(regZero),ap2);
 			else
@@ -660,8 +652,6 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int predi
 			break;
 		case op_bgt:
 			size = GetNaturalSize(node);
-			ap1 = GenerateExpression(node->p[0],F_REG,size);
-			ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
 			if (ap2->mode==am_immed)
 				GenerateTriadic(op_cmp,0,ap1,makereg(regZero),ap2);
 			else
@@ -675,8 +665,6 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int predi
 			break;
 		case op_bge:
 			size = GetNaturalSize(node);
-			ap1 = GenerateExpression(node->p[0],F_REG,size);
-			ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
 			if (ap2->mode==am_immed)
 				GenerateTriadic(op_cmp,0,ap1,makereg(regZero),ap2);
 			else
@@ -689,8 +677,6 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int predi
 			break;
 		case op_bltu:
 			size = GetNaturalSize(node);
-			ap1 = GenerateExpression(node->p[0],F_REG,size);
-			ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
 			if (ap2->mode==am_immed)
 				GenerateTriadic(op_cmp,0,ap1,makereg(regZero),ap2);
 			else
@@ -701,8 +687,6 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int predi
 			break;
 		case op_bleu:
 			size = GetNaturalSize(node);
-			ap1 = GenerateExpression(node->p[0],F_REG,size);
-			ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
 			if (ap2->mode==am_immed)
 				GenerateTriadic(op_cmp,0,ap1,makereg(regZero),ap2);
 			else
@@ -714,8 +698,6 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int predi
 			break;
 		case op_bgtu:
 			size = GetNaturalSize(node);
-			ap1 = GenerateExpression(node->p[0],F_REG,size);
-			ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
 			if (ap2->mode==am_immed)
 				GenerateTriadic(op_cmp,0,ap1,makereg(regZero),ap2);
 			else
@@ -729,8 +711,6 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int predi
 			break;
 		case op_bgeu:
 			size = GetNaturalSize(node);
-			ap1 = GenerateExpression(node->p[0],F_REG,size);
-			ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
 			if (ap2->mode==am_immed)
 				GenerateTriadic(op_cmp,0,ap1,makereg(regZero),ap2);
 			else
@@ -794,10 +774,14 @@ void GenerateFunction(SYM *sym)
 	while( lc_auto & 1 )	/* round frame size to word */
 		++lc_auto;
 	if (sym->IsInterrupt) {
-       if (sym->stkname)
-           GenerateDiadic(op_lea,0,makereg(SP),make_string(sym->stkname));
-	   for (nn = 30; nn > 0; nn--)
-		   GenerateMonadic(op_push,0,makereg(nn));
+		GenerateTriadic(op_sub,0,makereg(regSP),makereg(regZero),make_immed(13*sizeOfWord));
+		for (nn = 1; nn < 14; nn++) {
+			GenerateTriadic(op_sto,0,makereg(nn),makereg(regSP),make_immed((nn-1)*sizeOfWord));
+		}
+    //   if (sym->stkname)
+    //       GenerateDiadic(op_lea,0,makereg(SP),make_string(sym->stkname));
+	   //for (nn = 30; nn > 0; nn--)
+		  // GenerateMonadic(op_push,0,makereg(nn));
 	}
 	// The prolog code can't be optimized because it'll run *before* any variables
 	// assigned to registers are available. About all we can do here is constant
@@ -830,12 +814,14 @@ void GenerateFunction(SYM *sym)
 		// Stack link/unlink is optimized away by the peephole optimizer if they aren't
 		// needed. So they are just always spit out here.
 		//snprintf(buf, sizeof(buf), "#-%sSTKSIZE_-8",sym->mangledName->c_str());
+		GenerateMonadic(op_hint,0,make_immed(4));
 		GenerateTriadic(op_sub,0,makereg(regSP),makereg(regZero),make_immed(sym->IsLeaf ? sizeOfWord: sizeOfWord*2));
 		if (!sym->IsLeaf)
 			GenerateDiadic(op_sto,0,makereg(regLR),make_indexed(0,regSP));
 		GenerateDiadic(op_sto,0,makereg(regBP),make_indexed(sym->IsLeaf ?0 : sizeOfWord,regSP));
 		GenerateTriadic(op_mov,0,makereg(regBP), makereg(regSP), make_immed(0));
 		GenerateTriadic(op_sub,0,makereg(regSP),makereg(regZero),make_immed(sym->stkspace));
+		GenerateMonadic(op_hint,0,make_immed(5));
 	}
 	if (optimize)
 		opt1(stmt);
@@ -861,11 +847,13 @@ void GenerateFunction(SYM *sym)
 
 static void UnlinkStack(SYM * sym)
 {
+	GenerateMonadic(op_hint,0,make_immed(6));
 	GenerateTriadic(op_mov,0,makereg(regSP),makereg(regBP), make_immed(0));
 	if (!sym->IsLeaf)
 		GenerateDiadic(op_ld,0,makereg(regLR),make_indexed(0,regSP));
 	GenerateDiadic(op_ld,0,makereg(regBP),make_indexed(sym->IsLeaf ? 0 : sizeOfWord,regSP));
 	GenerateTriadic(op_add,0,makereg(regSP),makereg(regZero),make_immed(sym->IsLeaf ? sizeOfWord : sizeOfWord*2));
+	GenerateMonadic(op_hint,0,make_immed(7));
 	//if (exceptions) {
 	//	if (!sym->IsLeaf || sym->DoesThrow)
 	//		GenerateMonadic(op_pop,0,makereg(regXLR));
@@ -919,26 +907,29 @@ void GenerateReturn(Statement *stmt)
 				p = sym->params.Find("_pHiddenStructPtr",false);
 				if (p) {
 					if (p->IsRegister)
-						GenerateDiadic(op_mov,0,makereg(1),makereg(p->reg));
+						GenerateTriadic(op_mov,0,makereg(1),makereg(p->reg),make_immed(0));
 					else
-						GenerateDiadic(op_lw,0,makereg(1),make_indexed(p->value.i,regBP));
-					GenerateMonadic(op_push,0,make_immed(sym->tp->GetBtp()->size));
-					GenerateMonadic(op_push,0,ap);
-					GenerateMonadic(op_push,0,makereg(1));
-					GenerateMonadic(op_call,0,make_string("_memcpy"));
-					GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),make_immed(sizeOfWord*3));
+						GenerateDiadic(op_ld,0,makereg(1),make_indexed(p->value.i,regBP));
+					GenLdi(makereg(2),make_immed(sym->tp->GetBtp()->size));
+					GenerateTriadic(op_sub,0,makereg(regSP),makereg(regZero),make_immed(sizeOfWord*3));
+					GenerateTriadic(op_sto,0,makereg(2),makereg(regSP),make_immed(sizeOfWord*2));
+					GenerateTriadic(op_sto,0,ap,makereg(regSP),make_immed(sizeOfWord*1));
+					GenerateTriadic(op_sto,0,makereg(1),makereg(regSP),make_immed(sizeOfWord*0));
+					GenerateTriadic(op_mov,0,makereg(regLR),makereg(regPC),make_immed(2));
+					GenerateTriadic(op_mov,0,makereg(regPC),makereg(regZero),make_string("_memcpy"));
+					GenerateTriadic(op_add,0,makereg(regSP),makereg(regZero),make_immed(sizeOfWord*3));
 				}
 				else {
 					// ToDo compiler error
 				}
             }
             else
-			    GenerateDiadic(op_mov, 0, makereg(1),ap);
+			    GenerateTriadic(op_mov, 0, makereg(1),ap,make_immed(0));
         }
 		else if (ap->mode == am_fpreg)
-			GenerateDiadic(op_mov, 0, makereg(1),ap);
+			GenerateTriadic(op_mov, 0, makereg(1),ap,make_immed(0));
 		else if (ap->isFloat) {
-			GenerateDiadic(op_lw,0,makereg(1),ap);
+			GenerateDiadic(op_ld,0,makereg(1),ap);
 		}
 		else
 		    GenLoad(makereg(1),ap,sizeOfWord,sizeOfWord);
@@ -986,9 +977,12 @@ void GenerateReturn(Statement *stmt)
 	// Generate the return instruction. For the Pascal calling convention pop the parameters
 	// from the stack.
 	if (sym->IsInterrupt) {
-		for (nn = 1; nn < 31; nn++)
-			GenerateMonadic(op_pop,0,makereg(nn));
-		GenerateZeradic(op_iret);
+		for (nn = 1; nn < 14; nn++) {
+			if (sym->tp->GetBtp()->type!=bt_long || nn != 1)
+				GenerateTriadic(op_ld,0,makereg(nn),makereg(regSP),make_immed((nn-1)*sizeOfWord));
+		}
+		GenerateTriadic(op_add,0,makereg(regSP),makereg(regZero),make_immed(13*sizeOfWord));
+		GenerateZeradic(op_rti);
 		return;
 	}
 

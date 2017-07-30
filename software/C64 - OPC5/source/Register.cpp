@@ -69,9 +69,11 @@ static short int save_reg_alloc_ptr;
 static short int breg_stack_ptr;
 static short int breg_alloc_ptr;
 
-#define MAXTMPREG	8
-#define MINTMPREG	5
-char tmpregs[] = {5,6,7,8};
+#define MAXTMPREG	5
+#define MINTMPREG	(sym->IsLeaf ? 0 : 2)
+#define NTMPREG		2
+
+char tmpregs[] = {1,2,5,6,7,8};
 char tmpbregs[] = {5,6,7};
 char regstack[18];
 char bregstack[18];
@@ -169,9 +171,9 @@ AMODE *GetTempRegister()
     reg_in_use[next_reg] = reg_alloc_ptr;
     ap = allocAmode();
     ap->mode = am_reg;
-    ap->preg = next_reg;
+    ap->preg = tmpregs[next_reg];
     ap->deep = reg_alloc_ptr;
-    reg_alloc[reg_alloc_ptr].reg = next_reg;
+    reg_alloc[reg_alloc_ptr].reg = tmpregs[next_reg];
     reg_alloc[reg_alloc_ptr].mode = am_reg;
     reg_alloc[reg_alloc_ptr].f.isPushed = 'F';
     if (next_reg++ >= MAXTMPREG)
@@ -275,6 +277,17 @@ void checkbrstack()
         fatal("checkbstack()/6");
 }
 
+static int IsTmpReg(int rg)
+{
+	int nn;
+    SYM *sym = currentFn;
+
+	for (nn = MINTMPREG; nn < MAXTMPREG+1; nn++)
+		if (rg==tmpregs[nn])
+			return (TRUE);
+	return (FALSE);
+}
+
 /*
  * validate will make sure that if a register within an address mode has been
  * pushed onto the stack that it is popped back at this time.
@@ -286,26 +299,26 @@ void validate(AMODE *ap)
 
     switch (ap->mode) {
 	case am_reg:
-		if ((ap->preg >= frg && ap->preg <= MAXTMPREG) && reg_alloc[ap->deep].f.isPushed == 'T' ) {
+		if (IsTmpReg(ap->preg) && reg_alloc[ap->deep].f.isPushed == 'T' ) {
 			GenerateTempRegPop(ap->preg, am_reg, (int) ap->deep, 0);
 //			if (isThor)
 //				GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(8));
 		}
 		break;
     case am_indx2:
-		if ((ap->preg >= frg && ap->preg <= MAXTMPREG) && reg_alloc[ap->deep].f.isPushed == 'T') {
+		if (IsTmpReg(ap->preg) && reg_alloc[ap->deep].f.isPushed == 'T') {
 			GenerateTempRegPop(ap->preg, am_reg, (int) ap->deep, 0);
 //			if (isThor)
 //				GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(8));
 		}
-		if ((ap->sreg >= frg && ap->sreg <= MAXTMPREG) && reg_alloc[ap->deep2].f.isPushed  == 'T') {
+		if (IsTmpReg(ap->sreg) && reg_alloc[ap->deep2].f.isPushed  == 'T') {
 			GenerateTempRegPop(ap->sreg, am_reg, (int) ap->deep2, 0);
 //			if (isThor)
 //				GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(8));
 		}
 		break;
     case am_indx3:
-		if ((ap->sreg >= frg && ap->sreg <= MAXTMPREG) && reg_alloc[ap->deep2].f.isPushed == 'T') {
+		if (IsTmpReg(ap->sreg) && reg_alloc[ap->deep2].f.isPushed == 'T') {
 			GenerateTempRegPop(ap->sreg, am_reg, (int) ap->deep2, 0);
 //			if (isThor)
 //				GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(8));
@@ -316,7 +329,7 @@ void validate(AMODE *ap)
     case am_ainc:
     case am_adec:
 common:
-		if ((ap->preg >= frg && ap->preg <= MAXTMPREG) && reg_alloc[ap->deep].f.isPushed == 'T') {
+		if (IsTmpReg(ap->preg) && reg_alloc[ap->deep].f.isPushed == 'T') {
 			GenerateTempRegPop(ap->preg, am_reg, (int) ap->deep, 0);
 //			if (isThor)
 //				GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(8));
@@ -350,7 +363,7 @@ void ReleaseTempRegister(AMODE *ap)
 	case am_adec:
 	case am_reg:
 common:
-		if (ap->preg >= frg && ap->preg <= MAXTMPREG) {
+		if (IsTmpReg(ap->preg)) {
 			if (reg_in_use[ap->preg]==-1)
 				return;
 			if (next_reg-- <= frg)
@@ -362,7 +375,7 @@ common:
 		return;
     case am_indx2:
 	case am_indx3:
-		if (ap->sreg >= frg && ap->sreg <= MAXTMPREG) {
+		if (IsTmpReg(ap->sreg)) {
 			if (reg_in_use[ap->sreg]==-1)
 				return;
 			if (next_reg-- <= frg)

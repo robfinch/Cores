@@ -24,7 +24,6 @@ The compiler supports the 'C' language but includes some additional features som
 
 
 ## Many things to do yet:
-- division operators
 - assignment operators like *= <<= etc.
 - firstcall blocks
 
@@ -41,10 +40,29 @@ The main purpose of prolog / epilog code is allow control over entrance and exit
 Multiple case constants may be listed under a single case statement. Normal 'C' does not allow this, but it has been added to several modern compilers.
 
 ### asm
-Assembler code can be placed into the program. However the compiler does not parse the assembler code which many commerical compilers do. So one has to be aware of the stack offsets to access parameters.
+Assembler code can be placed into the program. However the compiler does not parse the assembler code which many commerical compilers do. The compiler just copies the asm block to output in a raw fashion. So one has to be aware of the stack offsets to access parameters.
 
 ## pascal calling conventions
+Unless specified as pascal the compiler uses the 'C' language calling convention of popping the registers passed to a function after the function is called in the caller's code. When the pascal calling convention is used register parameters are popped off the stack by the called routine. In some machines this is a faster way of doing things.
 
-### 
+### naked
+The keyword naked tells the compiler to omit code generation under certain circumstances. A naked function is a function where the prolog / epilog code has been omitted. This allows the programmer to substitute his own code in place of the compiler generated code. This is useful for specific routine types such as exception handlers.
+The naked keyword can also be applied to the switch statement to reduce the amount of code emitted when a switch is implemented with a jump table. A naked switch doesn't check whether or not the switch expression is in the range of the cases resulting in smaller code. However if the expression is outside of the proper range the code may crash.
+
+### inline
+Inline code is emitted by the compiler 'inline' with other code. Rather than emit a call to a subroutine the entire contents of the routine is placed where used. This allows somewhat faster code at the expense of a larger memory footprint.
+Inline code is often used for small functions where the overhead of calling a function might be larger than just including the code inline.
+
+### until / loop / forever
+An until loop works like a while loop except that the loop runs 'until' the condition is true. This is an alternate to writing 'while (!(cond))'.
+'loop' is a way to code an unconditional loop construct. It is an alternative to writing 'while (1)'.
+'forever' is another way to code a loop that's intentionally without a terminating condition.
+
+### firstcall
+'firstcall' blocks take care of allocating and managing a static variable used to limit a block of code to executing only the first time a function is called.
+
+### block naming
+Blocks of code may be given names for future reference. Follow the opening brace of a block of code directly with a ':' to name the block.
 
 ToDo: more docs
+

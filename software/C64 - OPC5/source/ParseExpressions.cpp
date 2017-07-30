@@ -2088,7 +2088,7 @@ TYP *forcefit(ENODE **node1,TYP *tp1,ENODE **node2,TYP *tp2, bool promote)
 				*node1 = makenode(en_i2q,*node1,*node2);
 				return tp2;
 			}
-			if (tp2->type==bt_ulong) {
+			if (tp2->type==bt_ulong && tp1->type==bt_long) {
 				*node1 = makenode(en_lul,*node1, *node2);
 				return tp2;
 			}

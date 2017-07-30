@@ -66,6 +66,8 @@ static int round2(int n)
 int GetReturnBlockSize()
 {
 	if (currentFn) {
+		if (currentFn->IsInterrupt)
+			return 0;
 		if (currentFn->IsLeaf) {
 		    return (exceptions ? sizeOfWord*3 : sizeOfWord);
 		}
