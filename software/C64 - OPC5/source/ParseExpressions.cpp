@@ -267,6 +267,23 @@ ENODE *makefqnode(int nt, Float128 *f128)
   return ep;
 }
 
+void AddToList(ENODE *list, ENODE *ele)
+{
+	ENODE *p, *pp;
+
+	p = list;
+	pp = nullptr;
+	while (p) {
+		pp = p;
+		p = p->p[2];
+	}
+	if (pp) {
+		pp->p[2] = ele;
+	}
+	else
+		list->p[2] = ele;
+}
+
 bool IsMemberOperator(int op)
 {
   return op==dot || op==pointsto || op==double_colon;
@@ -303,10 +320,10 @@ void PromoteConstFlag(ENODE *ep)
 	ep->constflag = ep->p[0]->constflag && ep->p[1]->constflag;
 }
 
-/*
- *      build the proper dereference operation for a node using the
- *      type pointer tp.
- */
+//
+// build the proper dereference operation for a node using the
+// type pointer tp.
+//
 TYP *deref(ENODE **node, TYP *tp)
 {
   dfs.printf("<Deref>");
@@ -471,7 +488,7 @@ TYP *deref(ENODE **node, TYP *tp)
 		  dfs.printf("F");
 			(*node)->esize = tp->size;
 			(*node)->etype = (e_bt)tp->type;
-      *node = makenode(en_struct_ref,*node,NULL);
+			 *node = makenode(en_struct_ref,*node,NULL);
 			(*node)->isUnsigned = TRUE;
       break;
 		default:
@@ -487,32 +504,32 @@ TYP *deref(ENODE **node, TYP *tp)
     return tp;
 }
 
-/*
-* dereference the node if val_flag is zero. If val_flag is non_zero and
-* tp->type is bt_pointer (array reference) set the size field to the
-* pointer size if this code is not executed on behalf of a sizeof
-* operator
-*/
+//
+// dereference the node if val_flag is zero. If val_flag is non_zero and
+// tp->type is bt_pointer (array reference) set the size field to the
+// pointer size if this code is not executed on behalf of a sizeof
+// operator
+//
 TYP *CondDeref(ENODE **node, TYP *tp)
 {
-  TYP *tp1;
-  int64_t sz;
+	TYP *tp1;
+	int64_t sz;
   
-  if (tp->val_flag == 0)
-    return deref(node, tp);
-  if (tp->type == bt_pointer && sizeof_flag == 0) {
-   	sz = tp->size;
-    tp1 = tp->GetBtp();
-    if (tp1==NULL)
-      printf("DIAG: CondDeref: tp1 is NULL\r\n");
-    tp =(TYP *) TYP::Make(bt_pointer, 8);
-    tp->btp = tp1->GetIndex();
-  }
-  else if (tp->type==bt_pointer)
-    return tp;
-  //    else if (tp->type==bt_struct || tp->type==bt_union)
-  //       return deref(node, tp);
-  return tp;
+	if (tp->val_flag == 0)
+		return deref(node, tp);
+	if (tp->type == bt_pointer && sizeof_flag == 0) {
+		sz = tp->size;
+		tp1 = tp->GetBtp();
+		if (tp1==NULL)
+			printf("DIAG: CondDeref: tp1 is NULL\r\n");
+		tp =(TYP *) TYP::Make(bt_pointer, sizeOfWord);
+		tp->btp = tp1->GetIndex();
+	}
+	else if (tp->type==bt_pointer)
+		return tp;
+	//    else if (tp->type==bt_struct || tp->type==bt_union)
+	//       return deref(node, tp);
+	return tp;
 }
 /*
 TYP *CondDeref(ENODE **node, TYP *tp)
@@ -844,7 +861,7 @@ SYM *makeint2(std::string name)
 	SYM *sp;
 	TYP *tp;
 	sp = allocSYM();
-	tp = TYP::Make(bt_long,2);
+	tp = TYP::Make(bt_long,sizeOfWord);
 	tp->sname = new std::string("");
 	sp->SetName(name);
 	sp->storage_class = sc_auto;
@@ -906,7 +923,7 @@ SYM *CreateDummyParameters(ENODE *ep, SYM *parent, TYP *tp)
 		sprintf_s(buf,sizeof(buf),"_p%d", nn);
 		sp1 = makeint2(std::string(my_strdup(buf)));
 		if (p->p[0]==nullptr)
-			sp1->tp =(TYP *) TYP::Make(bt_long,2);
+			sp1->tp =(TYP *) TYP::Make(bt_long,sizeOfWord);
 		else
 			sp1->SetType(p->p[0]->tp);
 		sp1->parent = parent->GetIndex();
@@ -1131,12 +1148,35 @@ TYP *ParsePrimaryExpression(ENODE **node, int got_pa)
 			memcpy(tptr2,currentClass->tp,sizeof(TYP));
 		}
 		NextToken();
-		tptr = TYP::Make(bt_pointer,2);
+		tptr = TYP::Make(bt_pointer,sizeOfWord);
 		tptr->btp = tptr2->GetIndex();
 		dfs.puts((char *)tptr->GetBtp()->sname->c_str());
 		pnode = makeinode(en_regvar,regCLP);
 		dfs.puts("</ExprThis>");
         break;
+
+	case begin:
+		{
+			int sz = 0;
+			ENODE *list;
+
+			NextToken();
+			head = tail = nullptr;
+			list = makenode(en_list,nullptr,nullptr);
+			while (lastst != end) {
+				tptr = NonCommaExpression(&pnode);
+				pnode->SetType(tptr);
+				sz = sz + tptr->size;
+				AddToList(list, pnode);
+				if (lastst!=comma)
+					break;
+				NextToken();
+			}
+			needpunc(end,9);
+			pnode = makenode(en_aggregate,list,nullptr);
+			pnode->SetType(tptr = TYP::Make(bt_struct,sz));
+		}
+		break;
 
     default:
         Leave("ParsePrimary", 0);
@@ -1203,6 +1243,8 @@ int IsLValue(ENODE *node)
 	case en_cucu:
 	case en_cuhu:
             return IsLValue(node->p[0]);
+	case en_autocon:
+			return node->etype==bt_pointer;
     }
     return FALSE;
 }
@@ -1328,11 +1370,12 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 			uf = pnode->isUnsigned;
 			pnode = makenode(en_add, qnode, pnode);
 			pnode->etype = bt_pointer;
-			pnode->esize = 2;
+			pnode->esize = sizeOfWord;
 			pnode->constflag = cf & qnode->constflag;
 			pnode->isUnsigned = uf & qnode->isUnsigned;
 
 			tp1 = CondDeref(&pnode, tp1);
+			//pnode->tp = tp1;
 			ep1 = pnode;
 			needpunc(closebr,9);
 			break;
@@ -1678,7 +1721,7 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
         if( IsLValue(ep1))
             ep1 = ep1->p[0];
         ep1->esize = 2;     // converted to a pointer so size is now 8
-        tp1 = TYP::Make(bt_pointer,2);
+        tp1 = TYP::Make(bt_pointer,sizeOfWord);
         tp1->btp = tp->GetIndex();
         tp1->val_flag = FALSE;
         tp = tp1;
@@ -2108,10 +2151,13 @@ TYP *forcefit(ENODE **node1,TYP *tp1,ENODE **node2,TYP *tp2, bool promote)
 		return tp1;
     case bt_pointer:
             if( isscalar(tp2) || tp2->type == bt_pointer)
-                return tp1;
+                return (tp1);
 			// pointer to function was really desired.
 			if (tp2->type == bt_func || tp2->type==bt_ifunc)
-				return tp1;
+				return (tp1);
+			if (tp2->type==bt_struct && ((*node2)->nodetype==en_list || (*node2)->nodetype==en_aggregate)) {
+				return (tp1);
+			}
             break;
     case bt_unsigned:
             if( tp2->type == bt_pointer )
@@ -2649,9 +2695,9 @@ xit:
 // ----------------------------------------------------------------------------
 TYP *asnop(ENODE **node)
 {      
-	ENODE    *ep1, *ep2, *ep3;
-    TYP             *tp1, *tp2;
-    int             op;
+	ENODE *ep1, *ep2, *ep3;
+    TYP   *tp1, *tp2, *tp3;
+    int   op;
 
     Enter("Assignop");
     *node = (ENODE *)NULL;
@@ -2665,6 +2711,17 @@ TYP *asnop(ENODE **node)
 ascomm:         NextToken();
                 tp2 = asnop(&ep2);
 ascomm2:
+				// Temporary code to make an LValue
+				//if (!IsLValue(ep1)) {
+				//	ep1 = makenode(en_uw_ref,ep1,(ENODE *)NULL);
+				//	ep1->esize = tp1->size;
+				//	ep1->etype = (enum e_bt)tp1->type;
+				//	ep1->tp = &stdlong;
+				//	tp3 = TYP::Make(bt_pointer,sizeOfWord);
+				//	tp3->btp = tp1->GetIndex();
+				//	tp3->val_flag = FALSE;
+				//	tp1 = tp3;
+				//}
 		        if( tp2 == 0 || !IsLValue(ep1) )
                     error(ERR_LVALUE);
 				else {
@@ -2675,7 +2732,7 @@ ascomm2:
 					ep1->isUnsigned = tp1->isUnsigned;
 					// Struct assign calls memcpy, so function is no
 					// longer a leaf routine.
-					if (tp1->size > 8)
+					if (tp1->size > sizeOfWord)
 						currentFn->IsLeaf = FALSE;
 				}
 				break;
@@ -2739,6 +2796,23 @@ xit:
      	(*node)->SetType(tp1);
     Leave("Assignop",0);
         return tp1;
+}
+
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+TYP *NonAssignExpression(ENODE **node)
+{
+	TYP *tp;
+	pep1 = nullptr;
+	Enter("NonAssignExpression");
+    *node = (ENODE *)NULL;
+    tp = conditional(node);
+    if( tp == (TYP *)NULL )
+        *node =(ENODE *)NULL;
+    Leave("NonAssignExpression",tp ? tp->type : 0);
+     if (*node)
+     	(*node)->SetType(tp);
+    return tp;
 }
 
 // ----------------------------------------------------------------------------

@@ -484,6 +484,7 @@ static void opt0(ENODE **node)
             case en_fcall:  case en_void:
                     opt0(&(ep->p[0]));
                     opt0(&(ep->p[1]));
+					opt0(&(ep->p[2]));
                     break;
             case en_assign:
                     opt0(&(ep->p[0]));

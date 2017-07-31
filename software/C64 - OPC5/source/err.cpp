@@ -88,7 +88,8 @@ static char *errtextstr[] = {
 	"E CSE Table full.",
 	"W Unsigned branch if less than zero is always false.",
 	"W Unsigned branch greater or equal to zero is always true.",
-	"W Forever Infinite loop"
+	"W Forever Infinite loop",
+	"E Assigning too many structure elements."
 };
 
 char *errtext(int errnum)

@@ -85,67 +85,65 @@ void put_sc(int scl)
                 }
 }
 
-void put_ty(TYP *tp)
+void TYP::put_ty()
 {
-		if(tp == 0)
-                return;
-        switch(tp->type) {
-                case bt_exception:
-                        lfs.printf("Exception");
-                        break;
-				case bt_byte:
-                        lfs.printf("Byte");
-                        break;
-				case bt_ubyte:
-                        lfs.printf("Unsigned Byte");
-                        break;
-                case bt_char:
-                        lfs.printf("Char");
-                        break;
-                case bt_short:
-                        lfs.printf("Short");
-                        break;
-                case bt_enum:
-                        lfs.printf("enum ");
-                        goto ucont;
-                case bt_long:
-                        lfs.printf("Long");
-                        break;
-                case bt_unsigned:
-                        lfs.printf("unsigned long");
-                        break;
-                case bt_float:
-                        lfs.printf("Float");
-                        break;
-                case bt_double:
-                        lfs.printf("Double");
-                        break;
-                case bt_pointer:
-                        if( tp->val_flag == 0)
-                                lfs.printf("Pointer to ");
-                        else
-                                lfs.printf("Array of ");
-                        put_ty(tp->GetBtp());
-                        break;
-                case bt_class:
-                        lfs.printf("class ");
-                        goto ucont;
-                case bt_union:
-                        lfs.printf("union ");
-                        goto ucont;
-                case bt_struct:
-                        lfs.printf("struct ");
-ucont:                  if(tp->sname->length() == 0)
-                                lfs.printf("<no name> ");
-                        else
-                                lfs.printf("%s ",(char *)tp->sname->c_str());
-                        break;
-                case bt_ifunc:
-                case bt_func:
-                        lfs.printf("Function returning ");
-                        put_ty(tp->GetBtp());
-                        break;
-                }
+	switch(type) {
+    case bt_exception:
+            lfs.printf("Exception");
+            break;
+	case bt_byte:
+            lfs.printf("Byte");
+            break;
+	case bt_ubyte:
+            lfs.printf("Unsigned Byte");
+            break;
+    case bt_char:
+            lfs.printf("Char");
+            break;
+    case bt_short:
+            lfs.printf("Short");
+            break;
+    case bt_enum:
+            lfs.printf("enum ");
+            goto ucont;
+    case bt_long:
+            lfs.printf("Long");
+            break;
+    case bt_unsigned:
+            lfs.printf("unsigned long");
+            break;
+    case bt_float:
+            lfs.printf("Float");
+            break;
+    case bt_double:
+            lfs.printf("Double");
+            break;
+    case bt_pointer:
+            if( val_flag == 0)
+                    lfs.printf("Pointer to ");
+            else
+                    lfs.printf("Array of ");
+            GetBtp()->put_ty();
+            break;
+    case bt_class:
+            lfs.printf("class ");
+            goto ucont;
+    case bt_union:
+            lfs.printf("union ");
+            goto ucont;
+    case bt_struct:
+            lfs.printf("struct ");
+ucont:                  if(sname->length() == 0)
+                    lfs.printf("<no name> ");
+            else
+                    lfs.printf("%s ",(char *)sname->c_str());
+            break;
+    case bt_ifunc:
+    case bt_func:
+            lfs.printf("Function returning ");
+            GetBtp()->put_ty();
+            break;
+    }
 }
 
 void list_var(SYM *sp, int i)
@@ -170,7 +168,8 @@ void list_var(SYM *sp, int i)
                 ofs.printf(";\tglobal\t%s\n",(char *)sp->name->c_str());
 		put_typedef(sp->storage_class==sc_typedef);
         put_sc(sp->storage_class);
-        put_ty(sp->tp);
+		if (sp->tp)
+			sp->tp->put_ty();
         lfs.printf("\n");
         if(sp->tp == 0)
                 return;

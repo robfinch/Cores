@@ -340,7 +340,7 @@ SYM *makeint(char *name)
 	TYP *tp;
 
 	sp = allocSYM();
-	tp = TYP::Make(bt_long,2);
+	tp = TYP::Make(bt_long,sizeOfWord);
 	tp->sname = new std::string("");
 	tp->isUnsigned = FALSE;
 	tp->isVolatile = FALSE;

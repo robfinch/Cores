@@ -119,7 +119,7 @@ void Declaration::SetType(SYM *sp)
   	}
   }
   else {
-		sp->tp = TYP::Make(bt_long,2);
+		sp->tp = TYP::Make(bt_long,sizeOfWord);
  		sp->tp->lst.head = sp->GetIndex();
   }
 }
@@ -140,7 +140,7 @@ void Declaration::ParseTypedef()
 void Declaration::ParseNaked()
 {
 	isNocall = TRUE;
-	head = (TYP *)TYP::Make(bt_oscall,2);
+	head = (TYP *)TYP::Make(bt_oscall,sizeOfWord);
 	tail = head;
 	NextToken();
 }
@@ -278,11 +278,11 @@ void Declaration::ParseInt64()
 void Declaration::ParseInt16()
 {
 	if (isUnsigned) {
-		head = (TYP *)TYP::Make(bt_uchar,2);
+		head = (TYP *)TYP::Make(bt_uchar,sizeOfWord);
 		tail = head;
 	}
 	else {
-		head =(TYP *)TYP::Make(bt_char,2);
+		head =(TYP *)TYP::Make(bt_char,sizeOfWord);
 		tail = head;
 	}
 	head->isUnsigned = isUnsigned;
@@ -398,13 +398,13 @@ int Declaration::ParseSpecifier(TABLE *table)
 
 			case kw_oscall:
 				isOscall = TRUE;
-				head = tail = (TYP *)TYP::Make(bt_oscall,2);
+				head = tail = (TYP *)TYP::Make(bt_oscall,sizeOfWord);
 				NextToken();
 				goto lxit;
 
 			case kw_interrupt:
 				isInterrupt = TRUE;
-				head = (TYP *)TYP::Make(bt_interrupt,2);
+				head = (TYP *)TYP::Make(bt_interrupt,sizeOfWord);
 				tail = head;
 				NextToken();
 				if (lastst==openpa) {
@@ -424,7 +424,7 @@ int Declaration::ParseSpecifier(TABLE *table)
 
 			case kw_kernel:
 				isKernel = TRUE;
-				head =(TYP *) TYP::Make(bt_kernel,2);
+				head =(TYP *) TYP::Make(bt_kernel,sizeOfWord);
 				tail = head;
 				NextToken();
 				goto lxit;

@@ -1,0 +1,38 @@
+     1	
+     2	int TestFor()
+     3	{
+     4		int x, y;
+     5	
+     6		for (x = 1; x < 100; x++) {
+     7			putch('a');
+     8		}
+     9	
+    10		y = 50;
+    11		for (; y > 0;) {
+    12			putch('a');
+    13			--y;
+    14		}
+    15	}
+
+
+*** local symbol table ***
+
+_x         =fffffffe   -    Auto        Long
+_y         =fffffffa   -    Auto        Long
+
+
+
+
+ *** global scope typedef symbol table ***
+
+_TestFor   =000000   -    Global      Function returning Long
+		Parameters:
+			Type array:
+   
+_putch     =000000   -    External    Function returning Long
+		Parameters:
+			Type array:
+   015 
+
+ *** structures and unions ***
+

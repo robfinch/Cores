@@ -162,13 +162,13 @@ AMODE *GetTempRegister()
 	AMODE *ap;
     SYM *sym = currentFn;
 
-	if (reg_in_use[next_reg] >= 0) {
+	if (reg_in_use[tmpregs[next_reg]] >= 0) {
 //		if (isThor)	
 //			GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(-8));
-		GenerateTempRegPush(next_reg, am_reg, reg_in_use[next_reg],0);
+		GenerateTempRegPush(tmpregs[next_reg], am_reg, reg_in_use[tmpregs[next_reg]],0);
 	}
 	TRACE(printf("GetTempRegister:r%d\r\n", next_reg);)
-    reg_in_use[next_reg] = reg_alloc_ptr;
+    reg_in_use[tmpregs[next_reg]] = reg_alloc_ptr;
     ap = allocAmode();
     ap->mode = am_reg;
     ap->preg = tmpregs[next_reg];

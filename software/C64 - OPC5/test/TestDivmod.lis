@@ -1,0 +1,88 @@
+     1	
+     2	int TestDivmod(int a, int b)
+     3	{
+     4		return a / b;
+     5	}
+     6	
+
+
+*** local symbol table ***
+
+
+
+
+     7	int TestDivmod2(int a)
+     8	{
+     9		return a / 10;
+    10	}
+    11	
+
+
+*** local symbol table ***
+
+
+
+
+    12	int TestMod(int a, int b)
+    13	{
+    14		return a % b;
+    15	}
+    16	
+
+
+*** local symbol table ***
+
+
+
+
+    17	int TestDivmod3(int a, int b)
+    18	{
+    19		a /= b;
+    20		return a;
+    21	}
+    22	
+
+
+*** local symbol table ***
+
+
+
+
+    23	unsigned int TestModu(register unsigned int a, register unsigned int b)
+    24	{
+    25		return a % b;
+    26	}
+    27	
+
+
+*** local symbol table ***
+
+
+
+
+
+ *** global scope typedef symbol table ***
+
+_TestMod   =000000   -    External    Function returning Long
+		Parameters:
+			Type array:
+   017 017 
+_TestDivmod =000000   -    External    Function returning Long
+		Parameters:
+			Type array:
+   017 017 
+_TestDivmod2 =000000   -    External    Function returning Long
+		Parameters:
+			Type array:
+   017 
+_TestModu  =000000   -    External    Function returning 
+		Parameters:
+			Type array:
+   025 025 
+_TestDivmod3 =000000   -    External    Function returning Long
+		Parameters:
+			Type array:
+   017 017 
+
+ *** structures and unions ***
+

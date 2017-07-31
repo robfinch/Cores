@@ -1,0 +1,43 @@
+     1	
+     2	void interrupt myint()
+     3	{
+     4		printf("Hello again.");
+     5	}
+     6	
+
+
+*** local symbol table ***
+
+
+
+
+     7	int interrupt BIOScall()
+     8	{
+     9		return -1;
+    10	}
+    11	
+
+
+*** local symbol table ***
+
+
+
+
+
+ *** global scope typedef symbol table ***
+
+_BIOScall  =000000   -    Global      Function returning Long
+		Parameters:
+			Type array:
+   
+_myint     =000000   -    Global      Function returning 
+		Parameters:
+			Type array:
+   
+_printf    =000000   -    External    Function returning Long
+		Parameters:
+			Type array:
+   022 
+
+ *** structures and unions ***
+

@@ -160,21 +160,21 @@ void Compiler::AddStandardTypes()
 	p->precision = 64;
 	stdulong = *p;
   
-	p = TYP::Make(bt_short,4);
+	p = TYP::Make(bt_short,1);
 	p->precision = 32;
 	stdshort = *p;
   
-	p = TYP::Make(bt_short,4);
+	p = TYP::Make(bt_short,1);
 	p->isUnsigned = true;
 	p->precision = 32;
 	stdushort = *p;
   
-	p = TYP::Make(bt_char,2);
+	p = TYP::Make(bt_char,1);
 	stdchar = *p;
 	p->precision = 16;
 	pchar = p;
   
-	p = TYP::Make(bt_char,2);
+	p = TYP::Make(bt_char,1);
 	p->isUnsigned = true;
 	p->precision = 16;
 	stduchar = *p;

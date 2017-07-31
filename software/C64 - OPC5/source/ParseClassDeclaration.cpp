@@ -243,7 +243,7 @@ void ClassDeclaration::ParseMembers(SYM *sym, int ztype)
   hsym->SetName(*name);
 	hsym->storage_class = sc_member;
 	hsym->value.i = sym->tp->typeno;
-	hsym->tp = TYP::Make(bt_char,2);
+	hsym->tp = TYP::Make(bt_char,1);
   hsym->tp->sname = new std::string("_typeno");
   hsym->tp->alignment = 2;
 	tp->lst.insert(hsym);

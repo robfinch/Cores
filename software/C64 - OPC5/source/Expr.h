@@ -48,7 +48,7 @@
 
 enum e_node {
         en_void,        /* used for parameter lists */
-
+		en_list, en_aggregate,
 		en_cbu, en_ccu, en_chu,
 		en_cubu, en_cucu, en_cuhu,
 		en_cbw, en_ccw, en_chw,
@@ -65,7 +65,7 @@ enum e_node {
 		en_c_ref, en_uc_ref, en_h_ref, en_uh_ref,
         en_b_ref, en_w_ref, en_ub_ref, en_uw_ref,
 		en_ref32, en_ref32u,
-		en_struct_ref,
+		en_struct_ref, en_array_ref,
         en_fcall, en_ifcall,
          en_tempref, en_regvar, en_fpregvar, en_tempfpref,
 		en_add, en_sub, en_mul, en_mod,

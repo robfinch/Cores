@@ -90,7 +90,7 @@ enum e_bt {
 		bt_byte, bt_ubyte,
         bt_char, bt_short, bt_long, bt_float, bt_double, bt_triple, bt_quad, bt_pointer,
 		bt_uchar, bt_ushort, bt_ulong,
-        bt_unsigned,
+        bt_unsigned, bt_array,
         bt_struct, bt_union, bt_class, bt_enum, bt_void,
         bt_func, bt_ifunc, bt_label,
 		bt_interrupt, bt_oscall, bt_pascal, bt_kernel, bt_bitfield, bt_ubitfield,
@@ -316,6 +316,10 @@ public:
 	static TYP *Make(int bt, int siz);
 	static TYP *Copy(TYP *src);
 	bool IsFloatType() const { return (type==bt_quad || type==bt_float || type==bt_double || type==bt_triple); };
+	bool IsStructType() const { return (type==bt_struct || type==bt_union || type==bt_class); };
+	bool IsAggregateType() const { return IsStructType() | isArray; };
+	bool IsUnion() const { return (type==bt_union); };
+	void put_ty();
 };
 
 class TypeArray
@@ -493,21 +497,22 @@ public:
 #define ERR_UBLTZ			55
 #define ERR_UBGEQ			56
 #define ERR_INFINITELOOP	57
+#define ERR_TOOMANYELEMENTS 58
 #define ERR_NULLPOINTER		1000
 #define ERR_CIRCULAR_LIST 1001
 
 /*      alignment sizes         */
 
 #define AL_BYTE			1
-#define AL_CHAR         2
-#define AL_SHORT        2
-#define AL_LONG         4
-#define AL_POINTER      2
-#define AL_FLOAT        4
-#define AL_DOUBLE       8
-#define AL_QUAD			16
-#define AL_STRUCT       2
-#define AL_TRIPLE       12
+#define AL_CHAR         1
+#define AL_SHORT        1
+#define AL_LONG         2
+#define AL_POINTER      1
+#define AL_FLOAT        2
+#define AL_DOUBLE       4
+#define AL_QUAD			8
+#define AL_STRUCT       1
+#define AL_TRIPLE       6
 
 #define TRUE	1
 #define FALSE	0

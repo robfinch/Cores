@@ -74,9 +74,9 @@ void doinit(SYM *sp)
   }
 	if (sp->storage_class == sc_thread) {
         if (sp->tp->type==bt_struct || sp->tp->type==bt_union)
-           algn = imax(sp->tp->alignment,2);
+           algn = imax(sp->tp->alignment,1);
         else if (sp->tp->type==bt_pointer && sp->tp->val_flag)
-           algn = imax(sp->tp->GetBtp()->alignment,2);
+           algn = imax(sp->tp->GetBtp()->alignment,1);
         else
             algn = 2;
 		seg(oseg==noseg ? tlsseg : oseg,algn);
@@ -84,9 +84,9 @@ void doinit(SYM *sp)
 	}
 	else if (sp->storage_class == sc_static || lastst==assign) {
         if (sp->tp->type==bt_struct || sp->tp->type==bt_union)
-           algn = imax(sp->tp->alignment,2);
+           algn = imax(sp->tp->alignment,1);
         else if (sp->tp->type==bt_pointer && sp->tp->val_flag)
-           algn = imax(sp->tp->GetBtp()->alignment,2);
+           algn = imax(sp->tp->GetBtp()->alignment,1);
         else
             algn = 2;
 		seg(oseg==noseg ? dataseg : oseg,algn);          /* initialize into data segment */
@@ -94,9 +94,9 @@ void doinit(SYM *sp)
 	}
 	else {
         if (sp->tp->type==bt_struct || sp->tp->type==bt_union)
-           algn = imax(sp->tp->alignment,2);
+           algn = imax(sp->tp->alignment,1);
         else if (sp->tp->type==bt_pointer && sp->tp->val_flag)
-           algn = imax(sp->tp->GetBtp()->alignment,2);
+           algn = imax(sp->tp->GetBtp()->alignment,1);
         else
             algn = 2;
 		seg(oseg==noseg ? bssseg : oseg,algn);            /* initialize into data segment */

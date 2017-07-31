@@ -43,8 +43,8 @@ Setting array size:60
 CDEGH</Find>
 _nums</Find>
 hh1kIIbIcinsert type: 22
-***Inserting:_nums into 011FF8D0
-<BuildSignature>:_nums</BuildSignature>Insert _nums into 011FF8D0()
+***Inserting:_nums into 0030F8D0
+<BuildSignature>:_nums</BuildSignature>Insert _nums into 0030F8D0()
 Insert into global table
 </Find>
 _nums</Find>
@@ -76,8 +76,8 @@ o p q </openpa>
 CDEGH</Find>
 _main</Find>
 hh1h2ikIIbIcinsert type: 33
-***Inserting:_main into 011FF8D0
-<BuildSignature>:_main</BuildSignature>Insert _main into 011FF8D0()
+***Inserting:_main into 0030F8D0
+<BuildSignature>:_main</BuildSignature>Insert _main into 0030F8D0()
 Insert into global table
 </Find>
 _main</Find>
@@ -118,8 +118,8 @@ Bb<ParseDeclPrefix>(1)
 CDEGH</Find>
 _c</Find>
 hh1kIIbIcinsert type: 17
-***Inserting:_c into 02239678
-<BuildSignature>:_c</BuildSignature>Insert _c into 02239678()
+***Inserting:_c into 018D9678
+<BuildSignature>:_c</BuildSignature>Insert _c into 018D9678()
 </Find>
 _c</Find>
 At insert:
@@ -134,8 +134,8 @@ b<ParseDeclPrefix>(1)
 CDEGH</Find>
 _c1</Find>
 hh1kIIbIcinsert type: 17
-***Inserting:_c1 into 02239678
-<BuildSignature>:_c1</BuildSignature>Insert _c1 into 02239678()
+***Inserting:_c1 into 018D9678
+<BuildSignature>:_c1</BuildSignature>Insert _c1 into 018D9678()
 </Find>
 _c1</Find>
 At insert:
@@ -150,8 +150,8 @@ b<ParseDeclPrefix>(1)
 CDEGH</Find>
 _c2</Find>
 hh1kIIbIcinsert type: 17
-***Inserting:_c2 into 02239678
-<BuildSignature>:_c2</BuildSignature>Insert _c2 into 02239678()
+***Inserting:_c2 into 018D9678
+<BuildSignature>:_c2</BuildSignature>Insert _c2 into 018D9678()
 </Find>
 _c2</Find>
 At insert:
@@ -173,8 +173,8 @@ Bb<ParseDeclPrefix>(1)
 CDEGH</Find>
 _n</Find>
 hh1kIIbIcinsert type: 17
-***Inserting:_n into 02239678
-<BuildSignature>:_n</BuildSignature>Insert _n into 02239678()
+***Inserting:_n into 018D9678
+<BuildSignature>:_n</BuildSignature>Insert _n into 018D9678()
 </Find>
 _n</Find>
 At insert:
@@ -201,7 +201,7 @@ Found as an auto var
 A:1:_c1IsEqual:T2sp is not null
 Type array:
    
-tp:01902110 <Deref></Deref>deref tp:01902110 </nameref2>
+tp:00A12110 <Deref></Deref>deref tp:00A12110 </nameref2>
 </Nameref>
 </Find>
 _c2</Find>
@@ -220,7 +220,7 @@ Found as an auto var
 A:1:_c2IsEqual:T2sp is not null
 Type array:
    
-tp:01902110 <Deref></Deref>deref tp:01902110 </nameref2>
+tp:00A12110 <Deref></Deref>deref tp:00A12110 </nameref2>
 </Nameref>
 </Find>
 _for</Find>
@@ -240,7 +240,7 @@ Found as an auto var
 A:1:_nIsEqual:T2sp is not null
 Type array:
    
-tp:01902140 <Deref></Deref>deref tp:01902140 </nameref2>
+tp:00A12140 <Deref></Deref>deref tp:00A12140 </nameref2>
 </Nameref>
 </Find>
 _n</Find>
@@ -257,7 +257,7 @@ Found as an auto var
 A:1:_nIsEqual:T2sp is not null
 Type array:
    
-tp:01902140 <Deref></Deref>deref tp:01902140 </nameref2>
+tp:00A12140 <Deref></Deref>deref tp:00A12140 </nameref2>
 </Nameref>
 </Find>
 _n</Find>
@@ -274,7 +274,7 @@ Found as an auto var
 A:1:_nIsEqual:T2sp is not null
 Type array:
    
-tp:01902140 <Deref></Deref>deref tp:01902140 </nameref2>
+tp:00A12140 <Deref></Deref>deref tp:00A12140 </nameref2>
 </Nameref>
 </Find>
 _n</Find>
@@ -291,7 +291,7 @@ Found as an auto var
 A:1:_nIsEqual:T2sp is not null
 Type array:
    
-tp:01902140 <Deref></Deref>deref tp:01902140 </nameref2>
+tp:00A12140 <Deref></Deref>deref tp:00A12140 </nameref2>
 </Nameref>
 <Parse></Find>
 _if</Find>
@@ -313,7 +313,7 @@ Found as an auto var
 A:1:_nIsEqual:T2sp is not null
 Type array:
    
-tp:01902140 <Deref></Deref>deref tp:01902140 </nameref2>
+tp:00A12140 <Deref></Deref>deref tp:00A12140 </nameref2>
 </Nameref>
 <Parse></Find>
 _nums</Find>
@@ -340,11 +340,11 @@ _nums</Find>
 Looking in function's symbol table
 </Find>
 _nums</Find>
-Searching method/class:_main|0120FE80
-Looking at params 0120FECC
+Searching method/class:_main|0031FE80
+Looking at params 0031FECC
 </Find>
 _nums</Find>
-Looking at class members 019020F4
+Looking at class members 00A120F4
 Looking at global symbols
 </Find>
 _numsMatch
@@ -355,9 +355,9 @@ Found in global symbol table
 A:1:_numsIsEqual:T2sp is not null
 Type array:
    
-tp:01902080 <TYP__Make>
+tp:00A12080 <TYP__Make>
 </TYP__Make>
-deref tp:01902170 </nameref2>
+deref tp:00A12170 </nameref2>
 </Nameref>
 <Deref></Deref></Find>
 _c</Find>
@@ -382,7 +382,7 @@ Found as an auto var
 A:1:_cIsEqual:T2sp is not null
 Type array:
    
-tp:01902110 <Deref></Deref>deref tp:01902110 </nameref2>
+tp:00A12110 <Deref></Deref>deref tp:00A12110 </nameref2>
 </Nameref>
 </ParseExpression>
 </Parse></Find>
@@ -418,11 +418,11 @@ _nums</Find>
 Looking in function's symbol table
 </Find>
 _nums</Find>
-Searching method/class:_main|0120FE80
-Looking at params 0120FECC
+Searching method/class:_main|0031FE80
+Looking at params 0031FECC
 </Find>
 _nums</Find>
-Looking at class members 019020F4
+Looking at class members 00A120F4
 Looking at global symbols
 </Find>
 _numsMatch
@@ -433,9 +433,9 @@ Found in global symbol table
 A:1:_numsIsEqual:T2sp is not null
 Type array:
    
-tp:01902080 <TYP__Make>
+tp:00A12080 <TYP__Make>
 </TYP__Make>
-deref tp:019021A0 </nameref2>
+deref tp:00A121A0 </nameref2>
 </Nameref>
 </Find>
 _n</Find>
@@ -464,7 +464,7 @@ Found as an auto var
 A:1:_nIsEqual:T2sp is not null
 Type array:
    
-tp:01902140 <Deref></Deref>deref tp:01902140 </nameref2>
+tp:00A12140 <Deref></Deref>deref tp:00A12140 </nameref2>
 </Nameref>
 <Deref></Deref></Find>
 _c</Find>
@@ -493,7 +493,7 @@ Found as an auto var
 A:1:_cIsEqual:T2sp is not null
 Type array:
    
-tp:01902110 <Deref></Deref>deref tp:01902110 </nameref2>
+tp:00A12110 <Deref></Deref>deref tp:00A12110 </nameref2>
 </Nameref>
 </Find>
 _c</Find>
@@ -524,7 +524,7 @@ Found as an auto var
 A:1:_cIsEqual:T2sp is not null
 Type array:
    
-tp:01902110 <Deref></Deref>deref tp:01902110 </nameref2>
+tp:00A12110 <Deref></Deref>deref tp:00A12110 </nameref2>
 </Nameref>
 </Find>
 _c1</Find>
@@ -553,7 +553,7 @@ Found as an auto var
 A:1:_c1IsEqual:T2sp is not null
 Type array:
    
-tp:01902110 <Deref></Deref>deref tp:01902110 </nameref2>
+tp:00A12110 <Deref></Deref>deref tp:00A12110 </nameref2>
 </Nameref>
 </Find>
 _c2</Find>
@@ -582,7 +582,7 @@ Found as an auto var
 A:1:_c2IsEqual:T2sp is not null
 Type array:
    
-tp:01902110 <Deref></Deref>deref tp:01902110 </nameref2>
+tp:00A12110 <Deref></Deref>deref tp:00A12110 </nameref2>
 </Nameref>
 </Find>
 _c1</Find>
@@ -613,7 +613,7 @@ Found as an auto var
 A:1:_c1IsEqual:T2sp is not null
 Type array:
    
-tp:01902110 <Deref></Deref>deref tp:01902110 </nameref2>
+tp:00A12110 <Deref></Deref>deref tp:00A12110 </nameref2>
 </Nameref>
 </Find>
 _c2</Find>
@@ -642,7 +642,7 @@ Found as an auto var
 A:1:_c2IsEqual:T2sp is not null
 Type array:
    
-tp:01902110 <Deref></Deref>deref tp:01902110 </nameref2>
+tp:00A12110 <Deref></Deref>deref tp:00A12110 </nameref2>
 </Nameref>
 </Find>
 _c2</Find>
@@ -673,7 +673,7 @@ Found as an auto var
 A:1:_c2IsEqual:T2sp is not null
 Type array:
    
-tp:01902110 <Deref></Deref>deref tp:01902110 </nameref2>
+tp:00A12110 <Deref></Deref>deref tp:00A12110 </nameref2>
 </Nameref>
 </Find>
 _c</Find>
@@ -702,7 +702,7 @@ Found as an auto var
 A:1:_cIsEqual:T2sp is not null
 Type array:
    
-tp:01902110 <Deref></Deref>deref tp:01902110 </nameref2>
+tp:00A12110 <Deref></Deref>deref tp:00A12110 </nameref2>
 </Nameref>
 </ParseExpression>
 </Parse></ParseIf></Parse></Parse>Returning EOF from NextToken.
