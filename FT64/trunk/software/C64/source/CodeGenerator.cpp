@@ -53,10 +53,11 @@ int hook_predreg=15;
 AMODE *GenerateExpression();            /* forward ParseSpecifieraration */
 extern AMODE *GenExprRaptor64(ENODE *node);
 
+extern AMODE *copy_addr(AMODE *);
 extern AMODE *GenExpr(ENODE *node);
 extern AMODE *GenerateFunctionCall(ENODE *node, int flags);
 extern void GenLdi(AMODE*,AMODE *);
-extern void GenerateCmp(ENODE *node, int op, int label, int predreg);
+extern void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int prediction);
 
 void GenerateRaptor64Cmp(ENODE *node, int op, int label, int predreg);
 void GenerateTable888Cmp(ENODE *node, int op, int label, int predreg);
@@ -936,7 +937,7 @@ AMODE *gen_hook(ENODE *node,int flags, int size)
     	GeneratePredicateMonadic(hook_predreg,op_ldi,make_immed(node->p[0]->i));
 	}
 */
-    GenerateFalseJump(node->p[0],false_label);
+    GenerateFalseJump(node->p[0],false_label,0);
     node = node->p[1];
     ap1 = GenerateExpression(node->p[0],flags,size);
     GenerateDiadic(op_bra,0,make_clabel(end_label),0);
@@ -1137,6 +1138,233 @@ AMODE *GenerateAssignModiv(ENODE *node,int flags,int size,int op)
     return ap1;
 }
 
+// The problem is there are two trees of information. The LHS and the RHS.
+// The RHS is a tree of nodes containing expressions and data to load.
+// The nodes in the RHS have to be matched up against the structure elements
+// of the target LHS.
+
+// This little bit of code is dead code. But it might be useful to match
+// the expression trees at some point.
+
+ENODE *BuildEnodeTree(TYP *tp)
+{
+	ENODE *ep1, *ep2, *ep3;
+	SYM *thead, *first;
+
+	first = thead = SYM::GetPtr(tp->lst.GetHead());
+	ep1 = ep2 = nullptr;
+	while (thead) {
+		if (thead->tp->IsStructType()) {
+			ep3 = BuildEnodeTree(thead->tp);
+		}
+		else
+			ep3 = nullptr;
+		ep1 = makenode(en_void, ep2, ep1);
+		ep1->SetType(thead->tp);
+		ep1->p[2] = ep3;
+		thead = SYM::GetPtr(thead->next);
+	}
+	return ep1;
+}
+
+// This little bit of code a debugging aid.
+// Dumps the expression nodes associated with an aggregate assignment.
+
+void DumpStructEnodes(ENODE *node)
+{
+	ENODE *head;
+	TYP *tp;
+
+	lfs.printf("{");
+	head = node;
+	while (head) {
+		tp = head->tp;
+		if (tp)
+			tp->put_ty();
+		if (head->nodetype==en_aggregate) {
+			DumpStructEnodes(head->p[0]);
+		}
+		if (head->nodetype==en_icon)
+			lfs.printf("%d", head->i);
+		head = head->p[2];
+	}
+	lfs.printf("}");
+}
+
+AMODE *GenerateAssign(ENODE *node, int flags, int size);
+
+void GenerateStructAssign(TYP *tp, int offset, ENODE *ep, AMODE *base)
+{
+	SYM *thead, *first;
+	AMODE *ap1, *ap2;
+	int offset2;
+
+	first = thead = SYM::GetPtr(tp->lst.GetHead());
+	ep = ep->p[0];
+	while (thead) {
+		if (ep == nullptr)
+			break;
+		if (thead->tp->IsAggregateType()) {
+			if (ep->p[2])
+				GenerateStructAssign(thead->tp, offset, ep->p[2], base);
+		}
+		else {
+			ap2 = nullptr;
+			if (ep->p[2]==nullptr)
+				break;
+			ap1 = GenerateExpression(ep->p[2],F_REG,thead->tp->size);
+			if (ap1->mode==am_immed) {
+				ap2 = GetTempRegister();
+				GenLdi(ap2,ap1);
+			}
+			else {
+				ap2 = ap1;
+				ap1 = nullptr;
+			}
+			if (base->offset)
+				offset2 = base->offset->i + offset;
+			else
+				offset2 = offset;
+			switch(thead->tp->size)
+			{
+			case 1:	GenerateTriadic(op_sb,0,ap2,makereg(base->preg),make_immed(offset2)); break;
+			case 2:	GenerateTriadic(op_sc,0,ap2,makereg(base->preg),make_immed(offset2)); break;
+			case 4:	GenerateTriadic(op_sh,0,ap2,makereg(base->preg),make_immed(offset2)); break;
+			default:	GenerateTriadic(op_sw,0,ap2,makereg(base->preg),make_immed(offset2)); break;
+			}
+			if (ap2)
+				ReleaseTempReg(ap2);
+			if (ap1)
+				ReleaseTempReg(ap1);
+		}
+		if (!thead->tp->IsUnion())
+			offset += thead->tp->size;
+		thead = SYM::GetPtr(thead->next);
+		ep = ep->p[2];
+	}
+	if (!thead && ep)
+		error(ERR_TOOMANYELEMENTS);
+}
+
+AMODE *GenerateAggregateAssign(ENODE *node1, ENODE *node2)
+{
+	ENODE *ep1, *ep2;
+	AMODE *ap1, *ap2, *ap3, *base;
+	SYM *thead, *first, *thead2, *first2;
+	TYP *tp;
+	int offset = 0;
+	int offset2;
+
+	if (node1==nullptr || node2==nullptr)
+		return nullptr;
+	//DumpStructEnodes(node2);
+	base = GenerateExpression(node1,F_MEM,sizeOfWord);
+	//base = GenerateDereference(node1,F_MEM,sizeOfWord,0);
+	tp = node1->tp;
+	if (tp==nullptr)
+		tp = &stdlong;
+	if (tp->IsStructType()) {
+		first = thead = SYM::GetPtr(tp->lst.GetHead());
+		ep1 = ep2 = nullptr;
+		ep1 = node2->p[0];
+		while (thead) {
+			if (ep1==nullptr)
+				break;
+			if (thead->tp->IsAggregateType()) {
+				GenerateStructAssign(thead->tp, offset, ep1->p[0], base);
+			}
+			else {
+				ap2 = nullptr;
+				ap1 = GenerateExpression(ep1->p[0],F_REG,thead->tp->size);
+				if (ap1->mode==am_immed) {
+					ap2 = GetTempRegister();
+					GenLdi(ap2,ap1);
+				}
+				else {
+					ap2 = ap1;
+					ap1 = nullptr;
+				}
+				if (base->offset)
+					offset2 = base->offset->i;
+				else
+					offset2 = offset;
+				switch(thead->tp->size)
+				{
+				case 1:	GenerateTriadic(op_sb,0,ap2,makereg(base->preg),make_immed(offset2)); break;
+				case 2:	GenerateTriadic(op_sc,0,ap2,makereg(base->preg),make_immed(offset2)); break;
+				case 4:	GenerateTriadic(op_sh,0,ap2,makereg(base->preg),make_immed(offset2)); break;
+				default:	GenerateTriadic(op_sw,0,ap2,makereg(base->preg),make_immed(offset2)); break;
+				}
+				if (ap2)
+					ReleaseTempReg(ap2);
+				if (ap1)
+					ReleaseTempReg(ap1);	
+			}
+			if (!thead->tp->IsUnion())
+				offset += thead->tp->size;
+			ep1 = ep1->p[2];
+			thead = SYM::GetPtr(thead->next);
+		}
+		if (!thead && ep1)
+			error(ERR_TOOMANYELEMENTS);
+	}
+	// Process Array
+	else {
+		int size = tp->size;
+		if (node1->tp)
+			tp = node1->tp->GetBtp();
+		else
+			tp = nullptr;
+		if (tp==nullptr)
+			tp = &stdlong;
+		if (tp->IsStructType()) {
+			ep1 = ep2 = nullptr;
+			ep1 = node2->p[0];
+			while (ep1 && offset < size) {
+				GenerateStructAssign(tp, offset, ep1->p[2], base);
+				if (!tp->IsUnion())
+					offset += tp->size;
+				ep1 = ep1->p[2];
+			}
+		}
+		else if (tp->IsAggregateType()){
+			GenerateAggregateAssign(node1->p[0],node2->p[0]);
+		}
+		else {
+			ep1 = node2->p[0];
+			offset = 0;
+			if (base->offset)
+				offset = base->offset->i;
+			ep1 = ep1->p[2];
+			while (ep1) {
+				ap1 = GenerateExpression(ep1,F_REG|F_IMMED,sizeOfWord);
+				ap2 = GetTempRegister();
+				if (ap1->mode==am_immed)
+					GenLdi(ap2,ap1);
+				else {
+					if (ap1->offset)
+						offset2 = ap1->offset->i;
+					else
+						offset2 = 0;
+					GenerateDiadic(op_mov,0,ap2,ap1);
+				}
+				switch(tp->GetElementSize())
+				{
+				case 1:	GenerateTriadic(op_sb,0,ap2,makereg(base->preg),make_immed(offset)); offset += 1; break;
+				case 2:	GenerateTriadic(op_sc,0,ap2,makereg(base->preg),make_immed(offset)); offset += 2; break;
+				case 4:	GenerateTriadic(op_sh,0,ap2,makereg(base->preg),make_immed(offset)); offset += 4; break;
+				default:	GenerateTriadic(op_sw,0,ap2,makereg(base->preg),make_immed(offset)); offset += 8; break;
+				}
+				ReleaseTempReg(ap2);
+				ReleaseTempReg(ap1);
+				ep1 = ep1->p[2];
+			}
+		}
+	}
+	return base;
+}
+
+
 // ----------------------------------------------------------------------------
 //      generate code for an assignment node. if the size of the
 //      assignment destination is larger than the size passed then
@@ -1145,8 +1373,9 @@ AMODE *GenerateAssignModiv(ENODE *node,int flags,int size,int op)
 // ----------------------------------------------------------------------------
 AMODE *GenerateAssign(ENODE *node, int flags, int size)
 {
-	AMODE    *ap1, *ap2 ,*ap3;
-        int             ssize;
+	AMODE *ap1, *ap2 ,*ap3;
+	TYP *tp;
+    int ssize;
 
     Enter("GenAssign");
 
@@ -1179,16 +1408,21 @@ AMODE *GenerateAssign(ENODE *node, int flags, int size)
 		return ap1;
     }
 */
-	if (size > 8) {
-		ap1 = GenerateExpression(node->p[0],F_MEM,ssize);
-		ap2 = GenerateExpression(node->p[1],F_MEM,size);
+	tp = node->p[0]->tp;
+	if (tp) {
+		if (node->p[0]->tp->IsAggregateType() || node->p[1]->nodetype==en_list || node->p[1]->nodetype==en_aggregate)
+			return GenerateAggregateAssign(node->p[0],node->p[1]);
 	}
-	else {
+	//if (size > 8) {
+	//	ap1 = GenerateExpression(node->p[0],F_MEM,ssize);
+	//	ap2 = GenerateExpression(node->p[1],F_MEM,size);
+	//}
+	//else {
 		ap1 = GenerateExpression(node->p[0],F_REG|F_MEM,ssize);
   		ap2 = GenerateExpression(node->p[1],F_ALL,size);
 		if (node->p[0]->isUnsigned && !node->p[1]->isUnsigned)
 		    GenerateZeroExtend(ap2,size,ssize);
-	}
+//	}
 	if (ap1->mode == am_reg || ap1->mode==am_fpreg) {
 		if (ap2->mode==am_reg)
 			GenerateDiadic(op_mov,0,ap1,ap2);
@@ -1767,7 +2001,7 @@ int GetNaturalSize(ENODE *node)
 	{
 	case en_uwfieldref:
 	case en_wfieldref:
-		return 8;
+		return sizeOfWord;
 	case en_bfieldref:
 	case en_ubfieldref:
 		return 1;
@@ -1883,10 +2117,10 @@ int GetNaturalSize(ENODE *node)
 }
 
 
-static void GenerateCmp(ENODE *node, int op, int label)
+static void GenerateCmp(ENODE *node, int op, int label, unsigned int prediction)
 {
 	Enter("GenCmp");
-	GenerateCmp(node, op, label, 0);
+	GenerateCmp(node, op, label, 0, prediction);
 	Leave("GenCmp",0);
 }
 
@@ -1894,7 +2128,7 @@ static void GenerateCmp(ENODE *node, int op, int label)
 // Generate a jump to label if the node passed evaluates to
 // a true condition.
 //
-void GenerateTrueJump(ENODE *node, int label)
+void GenerateTrueJump(ENODE *node, int label, unsigned int prediction)
 { 
 	AMODE  *ap1;
 	int    siz1;
@@ -1904,34 +2138,34 @@ void GenerateTrueJump(ENODE *node, int label)
 		return;
 	switch( node->nodetype )
 	{
-	case en_eq:	GenerateCmp(node, op_eq, label); break;
-	case en_ne: GenerateCmp(node, op_ne, label); break;
-	case en_lt: GenerateCmp(node, op_lt, label); break;
-	case en_le:	GenerateCmp(node, op_le, label); break;
-	case en_gt: GenerateCmp(node, op_gt, label); break;
-	case en_ge: GenerateCmp(node, op_ge, label); break;
-	case en_ult: GenerateCmp(node, op_ltu, label); break;
-	case en_ule: GenerateCmp(node, op_leu, label); break;
-	case en_ugt: GenerateCmp(node, op_gtu, label); break;
-	case en_uge: GenerateCmp(node, op_geu, label); break;
-	case en_feq: GenerateCmp(node, op_feq, label); break;
-	case en_fne: GenerateCmp(node, op_fne, label); break;
-	case en_flt: GenerateCmp(node, op_flt, label); break;
-	case en_fle: GenerateCmp(node, op_fle, label); break;
-	case en_fgt: GenerateCmp(node, op_fgt, label); break;
-	case en_fge: GenerateCmp(node, op_fge, label); break;
+	case en_eq:	GenerateCmp(node, op_eq, label, prediction); break;
+	case en_ne: GenerateCmp(node, op_ne, label, prediction); break;
+	case en_lt: GenerateCmp(node, op_lt, label, prediction); break;
+	case en_le:	GenerateCmp(node, op_le, label, prediction); break;
+	case en_gt: GenerateCmp(node, op_gt, label, prediction); break;
+	case en_ge: GenerateCmp(node, op_ge, label, prediction); break;
+	case en_ult: GenerateCmp(node, op_ltu, label, prediction); break;
+	case en_ule: GenerateCmp(node, op_leu, label, prediction); break;
+	case en_ugt: GenerateCmp(node, op_gtu, label, prediction); break;
+	case en_uge: GenerateCmp(node, op_geu, label, prediction); break;
+	case en_feq: GenerateCmp(node, op_feq, label, prediction); break;
+	case en_fne: GenerateCmp(node, op_fne, label, prediction); break;
+	case en_flt: GenerateCmp(node, op_flt, label, prediction); break;
+	case en_fle: GenerateCmp(node, op_fle, label, prediction); break;
+	case en_fgt: GenerateCmp(node, op_fgt, label, prediction); break;
+	case en_fge: GenerateCmp(node, op_fge, label, prediction); break;
 	case en_land:
 		lab0 = nextlabel++;
-		GenerateFalseJump(node->p[0],lab0);
-		GenerateTrueJump(node->p[1],label);
+		GenerateFalseJump(node->p[0],lab0,prediction);
+		GenerateTrueJump(node->p[1],label,prediction^1);
 		GenerateLabel(lab0);
 		break;
 	case en_lor:
-		GenerateTrueJump(node->p[0],label);
-		GenerateTrueJump(node->p[1],label);
+		GenerateTrueJump(node->p[0],label,prediction);
+		GenerateTrueJump(node->p[1],label,prediction);
 		break;
 	case en_not:
-		GenerateFalseJump(node->p[0],label);
+		GenerateFalseJump(node->p[0],label,prediction^1);
 		break;
 	default:
 		siz1 = GetNaturalSize(node);
@@ -1947,7 +2181,7 @@ void GenerateTrueJump(ENODE *node, int label)
 // Generate code to execute a jump to label if the expression
 // passed is false.
 //
-void GenerateFalseJump(ENODE *node,int label)
+void GenerateFalseJump(ENODE *node,int label, unsigned int prediction)
 {
 	AMODE *ap, *ap1, *ap2;
 	int siz1;
@@ -1957,34 +2191,34 @@ void GenerateFalseJump(ENODE *node,int label)
 		return;
 	switch( node->nodetype )
 	{
-	case en_eq:	GenerateCmp(node, op_ne, label); break;
-	case en_ne: GenerateCmp(node, op_eq, label); break;
-	case en_lt: GenerateCmp(node, op_ge, label); break;
-	case en_le: GenerateCmp(node, op_gt, label); break;
-	case en_gt: GenerateCmp(node, op_le, label); break;
-	case en_ge: GenerateCmp(node, op_lt, label); break;
-	case en_ult: GenerateCmp(node, op_geu, label); break;
-	case en_ule: GenerateCmp(node, op_gtu, label); break;
-	case en_ugt: GenerateCmp(node, op_leu, label); break;
-	case en_uge: GenerateCmp(node, op_ltu, label); break;
-	case en_feq: GenerateCmp(node, op_fne, label); break;
-	case en_fne: GenerateCmp(node, op_feq, label); break;
-	case en_flt: GenerateCmp(node, op_fge, label); break;
-	case en_fle: GenerateCmp(node, op_fgt, label); break;
-	case en_fgt: GenerateCmp(node, op_fle, label); break;
-	case en_fge: GenerateCmp(node, op_flt, label); break;
+	case en_eq:	GenerateCmp(node, op_ne, label, prediction); break;
+	case en_ne: GenerateCmp(node, op_eq, label, prediction); break;
+	case en_lt: GenerateCmp(node, op_ge, label, prediction); break;
+	case en_le: GenerateCmp(node, op_gt, label, prediction); break;
+	case en_gt: GenerateCmp(node, op_le, label, prediction); break;
+	case en_ge: GenerateCmp(node, op_lt, label, prediction); break;
+	case en_ult: GenerateCmp(node, op_geu, label, prediction); break;
+	case en_ule: GenerateCmp(node, op_gtu, label, prediction); break;
+	case en_ugt: GenerateCmp(node, op_leu, label, prediction); break;
+	case en_uge: GenerateCmp(node, op_ltu, label, prediction); break;
+	case en_feq: GenerateCmp(node, op_fne, label, prediction); break;
+	case en_fne: GenerateCmp(node, op_feq, label, prediction); break;
+	case en_flt: GenerateCmp(node, op_fge, label, prediction); break;
+	case en_fle: GenerateCmp(node, op_fgt, label, prediction); break;
+	case en_fgt: GenerateCmp(node, op_fle, label, prediction); break;
+	case en_fge: GenerateCmp(node, op_flt, label, prediction); break;
 	case en_land:
-		GenerateFalseJump(node->p[0],label);
-		GenerateFalseJump(node->p[1],label);
+		GenerateFalseJump(node->p[0],label,prediction^1);
+		GenerateFalseJump(node->p[1],label,prediction^1);
 		break;
 	case en_lor:
 		lab0 = nextlabel++;
-		GenerateTrueJump(node->p[0],lab0);
-		GenerateFalseJump(node->p[1],label);
+		GenerateTrueJump(node->p[0],lab0,prediction);
+		GenerateFalseJump(node->p[1],label,prediction^1);
 		GenerateLabel(lab0);
 		break;
 	case en_not:
-		GenerateTrueJump(node->p[0],label);
+		GenerateTrueJump(node->p[0],label,prediction);
 		break;
 	default:
 		siz1 = GetNaturalSize(node);

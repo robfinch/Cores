@@ -148,6 +148,8 @@ int ParseFunction(SYM *sp)
 	if (verbose) printf("Parsing function: %s\r\n", (char *)sp->name->c_str());
   nump = nparms;
   iflevel = 0;
+  looplevel = 0;
+  	foreverlevel = 0;
 		// There could be unnamed parameters in a function prototype.
 	dfs.printf("A");
   // declare parameters
@@ -450,7 +452,7 @@ static Statement *ParseFunctionBody(SYM *sp)
 	bregmask = 0;
 	currentStmt = (Statement *)NULL;
   dfs.printf("C");
-	sp->stmt = ParseCompoundStatement();
+	sp->stmt = Statement::ParseCompound();
   dfs.printf("D");
 //	stmt->stype = st_funcbody;
   sp->stkspace = tmpVarSpace() + lc_auto;

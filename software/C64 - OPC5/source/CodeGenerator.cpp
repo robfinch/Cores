@@ -371,16 +371,10 @@ void MakeLegalAmode(AMODE *ap,int flags, int size)
 void GenLoad(AMODE *ap3, AMODE *ap1, int ssize, int size)
 {
     if (ap3->isUnsigned) {
-        switch(size) {
-        case 1:	GenerateDiadic(op_lbu,0,ap3,ap1); break;
-        default:	GenerateDiadic(op_ld,0,ap3,ap1); break;
-        }
+        GenerateDiadic(op_ld,0,ap3,ap1);
     }
     else {
-        switch(size) {
-        case 1:	GenerateDiadic(op_ldb,0,ap3,ap1); break;
-        default:	GenerateDiadic(op_ld,0,ap3,ap1); break;
-        }
+        GenerateDiadic(op_ld,0,ap3,ap1);
     }
 }
 
@@ -566,15 +560,15 @@ long GetReferenceSize(ENODE *node)
 	case en_uc_ref:
 	case en_cfieldref:
 	case en_ucfieldref:
-			return 2;
+			return 1;
 	case en_ref32:
 	case en_ref32u:
-			return 4;
+			return 1;
 	case en_h_ref:
 	case en_uh_ref:
 	case en_hfieldref:
 	case en_uhfieldref:
-			return 4;
+			return 1;
     case en_w_ref:
 	case en_uw_ref:
     case en_wfieldref:
@@ -582,7 +576,7 @@ long GetReferenceSize(ENODE *node)
 	case en_tempref:
 	case en_fpregvar:
 	case en_regvar:
-            return 8;
+            return sizeOfWord;
 	case en_dbl_ref:
             return sizeOfFPD;
 	case en_quad_ref:

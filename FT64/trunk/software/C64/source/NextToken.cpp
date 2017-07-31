@@ -139,13 +139,13 @@ int getch()
     return lastch;
 }
  
-/*
- *      getid - get an identifier.
- *
- *      identifiers are any isidch conglomerate
- *      that doesn't start with a numeric character.
- *      this set INCLUDES keywords.
- */
+//
+// getid - get an identifier.
+//
+// identifiers are any isidch conglomerate
+// that doesn't start with a numeric character.
+// this set INCLUDES keywords.
+//
 void getid()
 {
 	int    i;

@@ -267,6 +267,23 @@ ENODE *makefqnode(int nt, Float128 *f128)
   return ep;
 }
 
+void AddToList(ENODE *list, ENODE *ele)
+{
+	ENODE *p, *pp;
+
+	p = list;
+	pp = nullptr;
+	while (p) {
+		pp = p;
+		p = p->p[2];
+	}
+	if (pp) {
+		pp->p[2] = ele;
+	}
+	else
+		list->p[2] = ele;
+}
+
 bool IsMemberOperator(int op)
 {
   return op==dot || op==pointsto || op==double_colon;
@@ -1138,6 +1155,29 @@ TYP *ParsePrimaryExpression(ENODE **node, int got_pa)
 		dfs.puts("</ExprThis>");
         break;
 
+	case begin:
+		{
+			int sz = 0;
+			ENODE *list;
+
+			NextToken();
+			head = tail = nullptr;
+			list = makenode(en_list,nullptr,nullptr);
+			while (lastst != end) {
+				tptr = NonCommaExpression(&pnode);
+				pnode->SetType(tptr);
+				sz = sz + tptr->size;
+				AddToList(list, pnode);
+				if (lastst!=comma)
+					break;
+				NextToken();
+			}
+			needpunc(end,9);
+			pnode = makenode(en_aggregate,list,nullptr);
+			pnode->SetType(tptr = TYP::Make(bt_struct,sz));
+		}
+		break;
+
     default:
         Leave("ParsePrimary", 0);
         return (TYP *)NULL;
@@ -1782,25 +1822,25 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
       break;
 
     case kw_typenum:
-      NextToken();
-      needpunc(openpa,3);
-  		tp = head;
-	    tp1 = tail;
-      Declaration::ParseSpecifier(0);
-      Declaration::ParsePrefix(FALSE);
-      if( head != NULL )
-        ep1 = makeinode(en_icon,GetTypeHash(head));
-      else {
-        error(ERR_IDEXPECT);
-        ep1 = makeinode(en_icon,1);
-      }
-      head = tp;
-	    tail = tp1;
-      ep1->constflag = TRUE;
-	    ep1->esize = 2;
-      tp = &stdint;
-      needpunc(closepa,4);
-      break;
+		NextToken();
+		needpunc(openpa,3);
+		tp = head;
+		tp1 = tail;
+		Declaration::ParseSpecifier(0);
+		Declaration::ParsePrefix(FALSE);
+		if( head != NULL )
+			ep1 = makeinode(en_icon,head->GetHash());
+		else {
+			error(ERR_IDEXPECT);
+			ep1 = makeinode(en_icon,1);
+		}
+		head = tp;
+		tail = tp1;
+		ep1->constflag = TRUE;
+		ep1->esize = 2;
+		tp = &stdint;
+		needpunc(closepa,4);
+		break;
 
     default:
         tp = ParsePostfixExpression(&ep1, got_pa);
@@ -2108,6 +2148,8 @@ TYP *forcefit(ENODE **node1,TYP *tp1,ENODE **node2,TYP *tp2, bool promote)
 			// pointer to function was really desired.
 			if (tp2->type == bt_func || tp2->type==bt_ifunc)
 				return tp1;
+			if (tp2->type==bt_struct && ((*node2)->nodetype==en_list || (*node2)->nodetype==en_aggregate))
+				return (tp1);
             break;
     case bt_unsigned:
             if( tp2->type == bt_pointer )

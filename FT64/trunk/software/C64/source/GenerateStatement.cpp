@@ -147,9 +147,9 @@ AMODE *make_indexed2(int lab, int i)
     return ap;
 }
 
-/*
- *      generate a direct reference to a string label.
- */
+//
+// Generate a direct reference to a string label.
+//
 AMODE *make_strlab(std::string s)
 {
 	AMODE *ap;
@@ -159,84 +159,76 @@ AMODE *make_strlab(std::string s)
     return ap;
 }
 
-void GenMixedSource(Statement *stmt)
+void Statement::GenMixedSource()
 {
     if (mixedSource) {
-        rtrim(stmt->lptr);
-        if (strcmp(stmt->lptr,last_rem)!=0) {
-          	GenerateMonadic(op_rem,0,make_string(stmt->lptr));
-          	strncpy_s(last_rem,131,stmt->lptr,130);
+        rtrim(lptr);
+        if (strcmp(lptr,last_rem)!=0) {
+          	GenerateMonadic(op_rem,0,make_string(lptr));
+          	strncpy_s(last_rem,131,lptr,130);
           	last_rem[131] = '\0';
         }
     }
 }
 
-/*
- *      generate code to evaluate a while statement.
- */
-void GenerateWhile(struct snode *stmt)
+void Statement::GenerateWhile()
 {
 	int lab1, lab2;
 
-    initstack();            /* initialize temp registers */
-    lab1 = contlab;         /* save old continue label */
-    lab2 = breaklab;        /* save old break label */
-    contlab = nextlabel++;  /* new continue label */
+    initstack();
+    lab1 = contlab;
+    lab2 = breaklab;
+    contlab = nextlabel++;
     GenerateLabel(contlab);
-    if( stmt->s1 != NULL )      /* has block */
+    if( s1 != NULL )
     {
 		breaklab = nextlabel++;
 		initstack();
-		GenerateFalseJump(stmt->exp,breaklab);
-		GenerateStatement(stmt->s1);
+		GenerateFalseJump(exp,breaklab,2);
+		s1->Generate();
 		GenerateMonadic(op_bra,0,make_clabel(contlab));
 		GenerateLabel(breaklab);
-		breaklab = lab2;        /* restore old break label */
+		breaklab = lab2;
     }
-    else					        /* no loop code */
+    else
     {
 		initstack();
-		GenerateTrueJump(stmt->exp,contlab);
+		GenerateTrueJump(exp,contlab,prediction);
     }
-    contlab = lab1;         /* restore old continue label */
+    contlab = lab1;
 }
 
-/*
- *      generate code to evaluate an until statement.
- */
-void GenerateUntil(Statement *stmt)
+void Statement::GenerateUntil()
 {
 	int lab1, lab2;
 
-	initstack();            /* initialize temp registers */
-	lab1 = contlab;         /* save old continue label */
-	lab2 = breaklab;        /* save old break label */
-	contlab = nextlabel++;  /* new continue label */
+	initstack();
+	lab1 = contlab;
+	lab2 = breaklab;
+	contlab = nextlabel++;
 	GenerateLabel(contlab);
-	if( stmt->s1 != NULL )      /* has block */
+	if( s1 != NULL )
 	{
 		breaklab = nextlabel++;
 		initstack();
-		GenerateTrueJump(stmt->exp,breaklab);
-		GenerateStatement(stmt->s1);
+		GenerateTrueJump(exp,breaklab,2);
+		s1->Generate();
 		GenerateMonadic(op_bra,0,make_clabel(contlab));
 		GenerateLabel(breaklab);
-		breaklab = lab2;        /* restore old break label */
+		breaklab = lab2;
 	}
-	else					        /* no loop code */
+	else
 	{
 		initstack();
-		GenerateFalseJump(stmt->exp,contlab);
+		GenerateFalseJump(exp,contlab,prediction);
 	}
-	contlab = lab1;         /* restore old continue label */
+	contlab = lab1;
 }
 
 
-//      generate code to evaluate a for loop
-//
-void GenerateFor(struct snode *stmt)
+void Statement::GenerateFor()
 {
-	int     old_break, old_cont, exit_label, loop_label;
+	int old_break, old_cont, exit_label, loop_label;
 
     old_break = breaklab;
     old_cont = contlab;
@@ -244,22 +236,22 @@ void GenerateFor(struct snode *stmt)
     exit_label = nextlabel++;
     contlab = nextlabel++;
     initstack();
-    if( stmt->initExpr != NULL )
-            ReleaseTempRegister(GenerateExpression(stmt->initExpr,F_ALL | F_NOVALUE
-                    ,GetNaturalSize(stmt->initExpr)));
+    if( initExpr != NULL )
+            ReleaseTempRegister(GenerateExpression(initExpr,F_ALL | F_NOVALUE
+                    ,GetNaturalSize(initExpr)));
     GenerateLabel(loop_label);
     initstack();
-    if( stmt->exp != NULL )
-            GenerateFalseJump(stmt->exp,exit_label);
-    if( stmt->s1 != NULL )
+    if( exp != NULL )
+            GenerateFalseJump(exp,exit_label,2);
+    if( s1 != NULL )
 	{
             breaklab = exit_label;
-            GenerateStatement(stmt->s1);
+            s1->Generate();
 	}
 	GenerateLabel(contlab);
     initstack();
-    if( stmt->incrExpr != NULL )
-            ReleaseTempRegister(GenerateExpression(stmt->incrExpr,F_ALL | F_NOVALUE,GetNaturalSize(stmt->incrExpr)));
+    if( incrExpr != NULL )
+            ReleaseTempRegister(GenerateExpression(incrExpr,F_ALL | F_NOVALUE,GetNaturalSize(incrExpr)));
     GenerateMonadic(op_bra,0,make_clabel(loop_label));
     breaklab = old_break;
     contlab = old_cont;
@@ -267,9 +259,7 @@ void GenerateFor(struct snode *stmt)
 }
 
 
-//     generate code to evaluate a forever loop
-//
-void GenerateForever(Statement *stmt)
+void Statement::GenerateForever()
 {
 	int old_break, old_cont, exit_label, loop_label;
     old_break = breaklab;
@@ -278,10 +268,10 @@ void GenerateForever(Statement *stmt)
     exit_label = nextlabel++;
     contlab = loop_label;
     GenerateLabel(loop_label);
-    if( stmt->s1 != NULL )
+    if( s1 != NULL )
 	{
         breaklab = exit_label;
-        GenerateStatement(stmt->s1);
+        s1->Generate();
 	}
     GenerateMonadic(op_bra,0,make_clabel(loop_label));
     breaklab = old_break;
@@ -289,77 +279,57 @@ void GenerateForever(Statement *stmt)
     GenerateLabel(exit_label);
 }
 
-/*
- *      generate code to evaluate an if statement.
- */
-void GenerateIf(Statement *stmt)
+void Statement::GenerateIf()
 {
 	int lab1, lab2, oldbreak;
-    lab1 = nextlabel++;     /* else label */
-    lab2 = nextlabel++;     /* exit label */
-    oldbreak = breaklab;    /* save break label */
-    initstack();            /* clear temps */
-	if (gCpu!=888)
-		if (stmt->predreg==70)
-			GenerateFalseJump(stmt->exp,lab1);
-    GenerateFalseJump(stmt->exp,lab1);
-    //if( stmt->s1 != 0 && stmt->s1->next != 0 )
-    //    if( stmt->s2 != 0 )
-    //        breaklab = lab2;
-    //    else
-    //        breaklab = lab1;
-    GenerateStatement(stmt->s1);
-    if( stmt->s2 != 0 )             /* else part exists */
+
+    lab1 = nextlabel++;     // else label
+    lab2 = nextlabel++;     // exit label
+    oldbreak = breaklab;    // save break label
+    initstack();            // clear temps
+    GenerateFalseJump(exp,lab1,prediction);
+    s1->Generate();
+    if( s2 != 0 )             /* else part exists */
     {
         GenerateDiadic(op_bra,0,make_clabel(lab2),0);
         if (mixedSource)
           	GenerateMonadic(op_rem,0,make_string("; else"));
         GenerateLabel(lab1);
-        //if( stmt->s2 == 0 || stmt->s2->next == 0 )
-        //    breaklab = oldbreak;
-        //else
-        //    breaklab = lab2;
-        GenerateStatement(stmt->s2);
+        s2->Generate();
         GenerateLabel(lab2);
     }
-    else                            /* no else code */
+    else
         GenerateLabel(lab1);
     breaklab = oldbreak;
 }
 
-/*
- *      generate code for a do - while loop.
- */
-void GenerateDo(Statement *stmt)
+void Statement::GenerateDo()
 {
-	int     oldcont, oldbreak;
+	int oldcont, oldbreak;
     oldcont = contlab;
     oldbreak = breaklab;
     contlab = nextlabel++;
     GenerateLabel(contlab);
 	breaklab = nextlabel++;
-	GenerateStatement(stmt->s1);      /* generate body */
+	s1->Generate();
 	initstack();
-	GenerateTrueJump(stmt->exp,contlab);
+	GenerateTrueJump(exp,contlab,3);
 	GenerateLabel(breaklab);
     breaklab = oldbreak;
     contlab = oldcont;
 }
 
-/*
- *      generate code for a do - while loop.
- */
-void GenerateDoUntil(Statement *stmt)
+void Statement::GenerateDoUntil()
 {
-	int     oldcont, oldbreak;
+	int oldcont, oldbreak;
     oldcont = contlab;
     oldbreak = breaklab;
     contlab = nextlabel++;
     GenerateLabel(contlab);
     breaklab = nextlabel++;
-    GenerateStatement(stmt->s1);      /* generate body */
+    s1->Generate();
     initstack();
-    GenerateFalseJump(stmt->exp,contlab);
+    GenerateFalseJump(exp,contlab,3);
     GenerateLabel(breaklab);
     breaklab = oldbreak;
     contlab = oldcont;
@@ -385,84 +355,84 @@ void GenerateDoUntil(Statement *stmt)
 //    GenerateDiadic(op_call,0,make_strlab(lib_name),NULL);
 //}
 
-/*
- *      generate a linear search switch statement.
- */
-void GenerateSwitch(Statement *stmt)
+//
+// Generate a switch composed of a series of compare and branch instructions.
+// Also called a linear switch.
+//
+void Statement::GenerateLinearSwitch()
 {    
-	int             curlab;
+	int curlab;
 	int *bf;
 	int nn,jj;
-  struct snode    *defcase;
-  AMODE *ap, *ap1;
+	Statement *defcase, *stmt;
+	AMODE *ap, *ap1;
 
-  curlab = nextlabel++;
-  defcase = 0;
-  initstack();
-  if (stmt->exp==NULL) {
-	  error(ERR_BAD_SWITCH_EXPR);
+	curlab = nextlabel++;
+	defcase = 0;
+	initstack();
+		if (exp==NULL) {
+		error(ERR_BAD_SWITCH_EXPR);
 		return;
 	}
-        ap = GenerateExpression(stmt->exp,F_REG,GetNaturalSize(stmt->exp));
+    ap = GenerateExpression(exp,F_REG,GetNaturalSize(exp));
 //        if( ap->preg != 0 )
 //                GenerateDiadic(op_mov,0,makereg(1),ap);
 //		ReleaseTempRegister(ap);
-        stmt = stmt->s1;
-        while( stmt != NULL )
+    for(stmt = s1; stmt != NULL; stmt = stmt->next )
+    {
+		stmt->GenMixedSource();
+        if( stmt->s2 )          /* default case ? */
         {
-			GenMixedSource(stmt);
-            if( stmt->s2 )          /* default case ? */
-            {
-				stmt->label = (int *)curlab;
-				defcase = stmt;
-            }
-            else
-            {
-				bf = (int *)stmt->casevals;
-				for (nn = bf[0]; nn >= 1; nn--) {
-					if ((jj = pwrof2(bf[nn])) != -1) {
-						GenerateTriadic(op_bbs,0,ap,make_immed(jj),make_clabel(curlab));
-					}
-					else if (bf[nn] < -256 || bf[nn] > 255) {
-						ap1 = GetTempRegister();
-						GenerateTriadic(op_cmp,0,ap1,ap,make_immed(bf[nn]));
-						ReleaseTempRegister(ap1);
-						GenerateTriadic(op_beq,0,ap1,makereg(0),make_clabel(curlab));
-					}
-					else {
-						GenerateTriadic(op_beqi,0,ap,make_immed(bf[nn]),make_clabel(curlab));
-					}
-				}
-		        //GenerateDiadic(op_dw,0,make_label(curlab), make_direct(stmt->label));
-	            stmt->label = (int *)curlab;
-            }
-            if( stmt->s1 != NULL && stmt->next != NULL )
-                curlab = nextlabel++;
-            stmt = stmt->next;
+			stmt->label = (int *)curlab;
+			defcase = stmt;
         }
-        if( defcase == NULL )
-            GenerateMonadic(op_bra,0,make_clabel(breaklab));
         else
-			GenerateMonadic(op_bra,0,make_clabel((int)defcase->label));
+        {
+			bf = (int *)stmt->casevals;
+			for (nn = bf[0]; nn >= 1; nn--) {
+				if ((jj = pwrof2(bf[nn])) != -1) {
+					GenerateTriadic(op_bbs,0,ap,make_immed(jj),make_clabel(curlab));
+				}
+				else if (bf[nn] < -256 || bf[nn] > 255) {
+					ap1 = GetTempRegister();
+					GenerateTriadic(op_cmp,0,ap1,ap,make_immed(bf[nn]));
+					ReleaseTempRegister(ap1);
+					GenerateTriadic(op_beq,0,ap1,makereg(0),make_clabel(curlab));
+				}
+				else {
+					GenerateTriadic(op_beqi,0,ap,make_immed(bf[nn]),make_clabel(curlab));
+				}
+			}
+	        //GenerateDiadic(op_dw,0,make_label(curlab), make_direct(stmt->label));
+            stmt->label = (int *)curlab;
+        }
+        if( stmt->s1 != NULL && stmt->next != NULL )
+            curlab = nextlabel++;
+    }
+    if( defcase == NULL )
+        GenerateMonadic(op_bra,0,make_clabel(breaklab));
+    else
+		GenerateMonadic(op_bra,0,make_clabel((int)defcase->label));
     ReleaseTempRegister(ap);
 }
 
 
-//      generate all cases for a switch statement.
+// generate all cases for a switch statement.
 //
-void GenerateCase(Statement *stmt)
+void Statement::GenerateCase()
 {
-	while( stmt != (Statement *)NULL )
+	Statement *stmt;
+
+	for (stmt = this; stmt != (Statement *)NULL; stmt = stmt->next )
     {
-		GenMixedSource(stmt);
-		if( stmt->s1 != (Statement *)NULL )
+		stmt->GenMixedSource();
+		if(stmt->s1 != (Statement *)NULL )
 		{
 			GenerateLabel((int)stmt->label);
-			GenerateStatement(stmt->s1);
+			s1->Generate();
 		}
-		else if( stmt->next == (Statement *)NULL )
+		else if(stmt->next == (Statement *)NULL)
 			GenerateLabel((int)stmt->label);
-		stmt = stmt->next;
     }
 }
 
@@ -479,14 +449,20 @@ static int casevalcmp(const void *a, const void *b)
 		return 1;
 }
 
-/*
- *      analyze and generate best switch statement.
- */
-void genxswitch(Statement *stmt)
+
+// Currently inline in GenerateSwitch()
+void Statement::GenerateTabularSwitch()
+{
+}
+
+//
+// Analyze and generate best switch statement.
+//
+void Statement::GenerateSwitch()
 { 
 	AMODE *ap, *ap1, *ap2;
 	Statement *st, *defcase;
-	int     oldbreak;
+	int oldbreak;
 	int tablabel;
 	int *bf;
 	int nn,mm,kk;
@@ -495,19 +471,19 @@ void genxswitch(Statement *stmt)
 	int curlab;
     oldbreak = breaklab;
     breaklab = nextlabel++;
-	bf = (int *)stmt->label;
+	bf = (int *)label;
 	minv = 0x7FFFFFFFL;
 	maxv = 0;
 	struct scase casetab[512];
 
-	st = stmt->s1;
+	st = s1;
 	mm = 0;
 	deflbl = 0;
 	defcase = nullptr;
 	curlab = nextlabel++;
 	// Determine minimum and maximum values in all cases
 	// Record case values and labels.
-	while( st != (Statement *)NULL )
+	for(st = s1; st != (Statement *)NULL; st = st->next )
 	{
 		if (st->s2) {
 			defcase = st->s2;
@@ -517,8 +493,8 @@ void genxswitch(Statement *stmt)
 		else {
 			bf = st->casevals;
 			for (nn = bf[0]; nn >= 1; nn--) {
-				if (bf[nn] < minv) minv = bf[nn];
-				if (bf[nn] > maxv) maxv = bf[nn];
+				minv = min(bf[nn],minv);
+				maxv = max(bf[nn],maxv);
 				st->label = (int *)curlab;
 				casetab[mm].label = curlab;
 				casetab[mm].val = bf[nn];
@@ -526,13 +502,12 @@ void genxswitch(Statement *stmt)
 			}
 			curlab = nextlabel++;
 		}
-		st = st->next;
 	}
 	//
 	// check case density
 	// If there are enough cases
 	// and if the case is dense enough use a computed jump
-	if (mm * 100 / (maxv-minv) > 50 && (maxv-minv) > (stmt->nkd ? 7 : 12)) {
+	if (mm * 100 / (maxv-minv) > 50 && (maxv-minv) > (nkd ? 7 : 12)) {
 		if (deflbl==0)
 			deflbl = nextlabel++;
 		for (nn = mm; nn < 512; nn++) {
@@ -552,24 +527,26 @@ j1:	;
 		}
 		qsort(&casetab[0],512,sizeof(struct scase),casevalcmp);
 		tablabel = caselit(casetab,maxv-minv+1);
-	    ap = GenerateExpression(stmt->exp,F_REG,GetNaturalSize(stmt->exp));
+	    ap = GenerateExpression(exp,F_REG,GetNaturalSize(exp));
 		ap1 = GetTempRegister();
 		ap2 = GetTempRegister();
-		if (!stmt->nkd) {
+		if (!nkd) {
 			GenerateDiadic(op_ldi,0,ap1,make_immed(minv));
+			GenerateTriadic(op_blt,0,ap,ap1,make_clabel(defcase ? (int)defcase->label : breaklab));
 			GenerateDiadic(op_ldi,0,ap2,make_immed(maxv+1));
-			Generate4adic(op_chk,0,ap,ap1,ap2,make_clabel(defcase ? (int)defcase->label : breaklab));
+			GenerateTriadic(op_bge,0,ap,ap2,make_clabel(defcase ? (int)defcase->label : breaklab));
+			//Generate4adic(op_chk,0,ap,ap1,ap2,make_clabel(defcase ? (int)defcase->label : breaklab));
 		}
 		GenerateTriadic(op_sub,0,ap,ap,make_immed(minv));
 		GenerateTriadic(op_shl,0,ap,ap,make_immed(3));
 		GenerateDiadic(op_lw,0,ap,make_indexed2(tablabel,ap->preg));
 		GenerateDiadic(op_jal,0,makereg(0),make_indexed(0,ap->preg));
-		GenerateCase(stmt->s1);
+		s1->GenerateCase();
 		GenerateLabel(breaklab);
 		return;
 	}
-	GenerateSwitch(stmt);
-	GenerateCase(stmt->s1);
+	GenerateLinearSwitch();
+	s1->GenerateCase();
 	GenerateLabel(breaklab);
     breaklab = oldbreak;
 }
@@ -584,135 +561,88 @@ int popcnt(int64_t m)
 		if (m & (1LL << n)) cnt = cnt + 1;
 	return cnt;
 }
-/*
-void gen_regsave()
+
+void Statement::GenerateTry()
 {
-	int lab1;
-
-	lab1 = nextlabel++;
-	GenerateLabel(lab1);
-	GenerateDiadic(op_tas,1,make_strlab("sfRunningTCB"),NULL);
-	GenerateDiadic(op_bmi,0,make_label(lab1),NULL);
-	GenerateDiadic(op_move,0,makereg(1),make_strlab("a0save"));
-	GenerateDiadic(op_move,0,make_strlab("RunningTCB"),makereg(1));
-	GenerateDiadic(op_movem,0,make_strlab("d0-d7/a0-a7"),make_strlab("(a0)"));
-	GenerateDiadic(op_move,0,make_strlab("a0save"),make_strlab("32(a0)"));
-	GenerateDiadic(op_move,0,make_strlab("usp"),makereg(1));
-	GenerateDiadic(op_move,0,makereg(1),make_strlab("64(a0)"));
-	GenerateDiadic(op_move,0,make_strlab("4(a7)"),make_strlab("68(a0)"));
-
-	//GenerateDiadic(op_move,4,make_string("sr"),make_string("_TCBsrsave"));
-	//GenerateDiadic(op_movem,4,make_mask(0xFFFF),make_string("_TCBregsave"));
-	//GenerateDiadic(op_move,4,make_string("usp"),make_string("a0"));
-	//GenerateDiadic(op_move,4,make_string("a0"),make_string("_TCBuspsave"));
-}
-
-void gen_regrestore()
-{
-	GenerateDiadic(op_move,0,make_strlab("_TCBuspsave"),make_string("a0"));
-	GenerateDiadic(op_move,0,make_string("a0"),make_string("usp"));
-	GenerateDiadic(op_movem,0,make_string("_TCBregsave"),make_mask(0xFFFF));
-	GenerateDiadic(op_move,0,make_string("_TCBsrsave"),make_string("sr"));
-}
-*/
-/*
-void gen_vortex(struct snode *stmt)
-{
-    int lab1;
-
-    lab1 = nextlabel++;
-    GenerateDiadic(op_bra,0,make_label(lab1),0);
-    //gen_ilabel(stmt->label);
-	gen_regsave();
-	GenerateStatement(stmt->s1);
-	gen_regrestore();
-	GenerateDiadic(op_rte,0,0,0);
-    GenerateLabel(lab1);
-}
-*/
-
-void GenerateTry(Statement *stmt)
-{
-  int lab1,curlab;
+	int lab1,curlab;
 	int oldthrow;
 	AMODE *a, *ap2;
 	ENODE *node;
+	Statement *stmt;
 
-  lab1 = nextlabel++;
+	lab1 = nextlabel++;
 	oldthrow = throwlab;
 	throwlab = nextlabel++;
 
-    a = make_clabel(throwlab);
-    a->mode = am_immed;
+	a = make_clabel(throwlab);
+	a->mode = am_immed;
 	GenerateDiadic(op_ldi,0,makereg(regXLR),a);
-	GenerateStatement(stmt->s1);
-  GenerateMonadic(op_bra,0,make_clabel(lab1));
+	s1->Generate();
+	GenerateMonadic(op_bra,0,make_clabel(lab1));
 	GenerateLabel(throwlab);
-	stmt = stmt->s2;
 	// Generate catch statements
 	// r1 holds the value to be assigned to the catch variable
 	// r2 holds the type number
-	while (stmt) {
-    GenMixedSource(stmt);
+	for (stmt = s2; stmt; stmt = stmt->next) {
+		stmt->GenMixedSource();
 		throwlab = oldthrow;
 		curlab = nextlabel++;
 		GenerateLabel(curlab);
-		if (stmt->s2==(Statement *)99999)
+		if (stmt->num==99999)
 			;
 		else {
-			GenerateTriadic(op_bnei,0,makereg(2),make_immed((int)stmt->s2),make_clabel(nextlabel));
+			ap2 = GetTempRegister();
+			GenerateDiadic(op_ldi,0,ap2,make_immed(stmt->num));
+			ReleaseTempReg(ap2);
+			GenerateTriadic(op_bne,0,makereg(2),ap2,make_clabel(nextlabel));
 		}
 		// move the throw expression result in 'r1' into the catch variable.
-		node = (ENODE *)stmt->label;
-    {
-      ap2 = GenerateExpression(node,F_REG|F_MEM,GetNaturalSize(node));
-      if (ap2->mode==am_reg)
-         GenerateDiadic(op_mov,0,ap2,makereg(1));
-      else
-         GenStore(makereg(1),ap2,GetNaturalSize(node));
-      ReleaseTempRegister(ap2);
-    }
-//            GenStore(makereg(1),make_indexed(sym->value.i,regBP),sym->tp->size);
-		GenerateStatement(stmt->s1);
-		stmt=stmt->next;
+		node = stmt->exp;
+		ap2 = GenerateExpression(node,F_REG|F_MEM,GetNaturalSize(node));
+		if (ap2->mode==am_reg)
+			GenerateDiadic(op_mov,0,ap2,makereg(1));
+		else
+			GenStore(makereg(1),ap2,GetNaturalSize(node));
+		ReleaseTempRegister(ap2);
+		//            GenStore(makereg(1),make_indexed(sym->value.i,regBP),sym->tp->size);
+		stmt->s1->Generate();
 	}
 	GenerateLabel(nextlabel);
 	nextlabel++;
-  GenerateLabel(lab1);
-    a = make_clabel(oldthrow);
-    a->mode = am_immed;
+	GenerateLabel(lab1);
+	a = make_clabel(oldthrow);
+	a->mode = am_immed;
 	GenerateDiadic(op_ldi,0,makereg(regXLR),a);
 }
 
-void GenerateThrow(Statement *stmt)
+void Statement::GenerateThrow()
 {
 	AMODE *ap;
 
-    if( stmt != NULL && stmt->exp != NULL )
+    if(exp != NULL )
 	{
 		initstack();
-		ap = GenerateExpression(stmt->exp,F_ALL,8);
-		if (ap->mode==am_immed) {
+		ap = GenerateExpression(exp,F_ALL,8);
+		if (ap->mode==am_immed)
            	GenerateDiadic(op_ldi,0,makereg(1),ap);
-        }
 		else if( ap->mode != am_reg)
 			GenerateDiadic(op_lw,0,makereg(1),ap);
 		else if (ap->preg != 1 )
 			GenerateDiadic(op_mov,0,makereg(1),ap);
 		ReleaseTempRegister(ap);
-		GenerateDiadic(op_ldi,0,makereg(2),make_immed((int)stmt->label));
+		GenerateDiadic(op_ldi,0,makereg(2),make_immed(num));
 	}
 	GenerateMonadic(op_bra,0,make_clabel(throwlab));
 }
 
-void GenerateCheck(Statement * stmt)
+void Statement::GenerateCheck()
 {
      AMODE *ap1, *ap2, *ap3;
      ENODE *node, *ep;
      int size;
 
     initstack();
-    ep = node = stmt->exp;
+    ep = node = exp;
 	if (ep->p[0]->nodetype==en_lt && ep->p[1]->nodetype==en_ge && equalnode(ep->p[0]->p[0],ep->p[1]->p[0])) {
         ep->nodetype = en_chk;
         if (ep->p[0])
@@ -758,135 +688,11 @@ void GenerateCheck(Statement * stmt)
     ReleaseTempRegister(ap1);
 }
 
-void GenerateSpinlock(Statement *stmt)
-{
-	int lab1, lab2, lab3;
-	AMODE *ap1, *ap2;
-	AMODE *ap;
-	int sp = 0;
-
-	lab1 = nextlabel++;
-	lab2 = nextlabel++;
-	lab3 = nextlabel++;
-
-    if( stmt != (Statement *)NULL && stmt->exp != (ENODE *)NULL )
-	{
-		initstack();
-		ap1 = GetTempRegister();
-		ap2 = GetTempRegister();
-		ap = GenerateExpression(stmt->exp,F_REG,8);
-		GenerateDiadic(op_mov,0,makereg(1),ap);
-		if (stmt->initExpr) {
-		    GenerateTriadic(op_ori, 0, makereg(2),makereg(0),make_immed((int64_t)stmt->initExpr));
-        }
-        else {
-            GenerateDiadic(op_ldi,0,makereg(2),make_immed(-1));
-        }
-        GenerateMonadic(op_bsr,0,make_string("_LockSema"));
-        if (stmt->initExpr)
-            GenerateDiadic(op_beq,0,makereg(1),make_clabel(lab2));
-		ReleaseTempRegister(ap);
-		ReleaseTempRegister(ap2);
-		ReleaseTempRegister(ap1);
-        // We treat this statement generation like a function call and save
-        // the used temporary beforehand.  The statement might reinitialize
-        // the expression vars. There aren't any other cases where temporaries
-        // are needed after statements are generated.
-       	GenerateMonadic(op_push,0,ap);
-		GenerateStatement(stmt->s1);
-    	GenerateMonadic(op_pop,0,ap);
-		// unlock
-		if (isRaptor64)
-			GenerateDiadic(op_outb, 0, makereg(0), make_indexed((int64_t)stmt->incrExpr,ap->preg));
-		else if (isFISA64) {
-            GenerateDiadic(op_mov, 0, makereg(1), makereg(ap->preg));
-            GenerateMonadic(op_bsr, 0, make_string("_UnlockSema"));
-        }
-		else
-			GenerateDiadic(op_sw, 0, makereg(0), make_indexed((int64_t)stmt->incrExpr,ap->preg));
-		if (stmt->initExpr) {
-			GenerateMonadic(isThor?op_br:op_bra,0,make_clabel(lab3));
-			GenerateLabel(lab2);
-			GenerateStatement(stmt->s2);
-			GenerateLabel(lab3);
-		}
-		else {
-			printf("Warning: The lockfail code is unreachable because spinlock tries are infinite.\r\n");
-		}
-	}
-
-	//ap1 = GetTempRegister();
-	//ap2 = GetTempRegister();
-	//if (stmt->exp) {
-	//	lab2 = nextlabel++;
-	//	GenerateTriadic(op_ori,0,ap2,makereg(0),make_immed(stmt->exp));
-	//    GenerateLabel(lab1);
-	//	GenerateTriadic(op_beq,0,ap2,makereg(0),make_label(lab2));
-	//	GenerateTriadic(op_subui,0,ap2,ap2,make_immed(1));
-	//	GenerateTriadic(op_lwr,0,ap1,make_string(stmt->label),NULL);
-	//	GenerateTriadic(op_bne,0,ap1,makereg(0),make_label(lab1),NULL);
-	//	GenerateTriadic(op_not,0,ap1,ap1,NULL);
-	//	GenerateTriadic(op_swc,0,ap1,make_string(stmt->label),NULL);
-	//	GenerateTriadic(op_bnr,0,make_label(lab1),NULL,NULL);
-	//}
-	//else {
-	//	GenerateLabel(lab1);
-	//	GenerateTriadic(op_lwr,0,ap1,make_string(stmt->label),NULL);
-	//	GenerateTriadic(op_bne,0,ap1,makereg(0),make_label(lab1),NULL);
-	//	GenerateTriadic(op_not,0,ap1,ap1,NULL);
-	//	GenerateTriadic(op_swc,0,ap1,make_string(stmt->label),NULL);
-	//	GenerateTriadic(op_bnr,0,make_label(lab1),NULL,NULL);
-	//}
-	//ReleaseTempRegister(ap1);
-	//ReleaseTempRegister(ap2);
-	//GenerateStatement(stmt->s1);
-	//GenerateDiadic(op_sb,0,makereg(0),make_string(stmt->label));
-	//if (stmt->exp) {
-	//	lab3 = nextlabel++;
-	//	GenerateTriadic(op_bra,0,make_label(lab3),NULL,NULL);
-	//	GenerateLabel(lab2);
-	//	GenerateStatement(stmt->s2);
-	//	GenerateLabel(lab3);
-	//}
-	//else {
-	//	printf("Warning: The lockfail code is unreachable because spinlock tries are infinite.\r\n");
-	//}
-}
-
-void GenerateSpinUnlock(Statement *stmt)
-{
-	AMODE *ap;
-
-    if( stmt != NULL && stmt->exp != NULL )
-	{
-		initstack();
-		ap = GenerateExpression(stmt->exp,F_REG|F_IMMED,8);
-		// Force return value into register 1
-		if( ap->preg != 1 ) {
-			if (ap->mode == am_immed) {
-			    GenerateTriadic(op_ori, 0, makereg(1),makereg(0),ap);
-            }
-			else
-				GenerateDiadic(op_mov, 0, makereg(1),ap);
-			if (isRaptor64)
-				GenerateDiadic(op_outb, 0, makereg(0),make_indexed((int64_t)stmt->incrExpr,1));
-    		else if (isFISA64) {
-                GenerateMonadic(op_bsr, 0, make_string("_UnlockSema"));
-            }
-			else
-				GenerateDiadic(op_sb, 0, makereg(0),make_indexed((int64_t)stmt->incrExpr,1));
-		}
-		ReleaseTempRegister(ap);
-	}
-}
-
-void GenerateCompound(Statement *stmt)
+void Statement::GenerateCompound()
 {
 	SYM *sp;
 
-//    if (stmt->prolog)
-//        GenerateStatement(stmt->prolog);
-	sp = sp->GetPtr(stmt->ssyms.GetHead());
+	sp = sp->GetPtr(ssyms.GetHead());
 	while (sp) {
 		if (sp->initexp) {
         	initstack();
@@ -896,18 +702,16 @@ void GenerateCompound(Statement *stmt)
 	}
 	// Generate statement will process the entire list of statements in
 	// the block.
-	GenerateStatement(stmt->s1);
-//    if (stmt->epilog)
-//        GenerateStatement(stmt->epilog);
+	s1->Generate();
 }
 
 // The same as generating a compound statement but leaves out the generation of
 // the prolog and epilog clauses.
-void GenerateFuncbody(Statement *stmt)
+void Statement::GenerateFuncBody()
 {
 	SYM *sp;
 
-	sp = sp->GetPtr(stmt->ssyms.GetHead());
+	sp = sp->GetPtr(ssyms.GetHead());
 	while (sp) {
 		if (sp->initexp) {
         	initstack();
@@ -917,167 +721,137 @@ void GenerateFuncbody(Statement *stmt)
 	}
 	// Generate statement will process the entire list of statements in
 	// the block.
-	GenerateStatement(stmt->s1);
+	s1->Generate();
 }
 
-/*
- *      genstmt will generate a statement and follow the next pointer
- *      until the block is generated.
- */
-void GenerateStatement(Statement *stmt)
+void Statement::Generate()
 {
 	AMODE *ap;
+	Statement *stmt;
  
-	while( stmt != NULL )
+	for(stmt = this; stmt != NULL; stmt = stmt->next )
     {
-        GenMixedSource(stmt);
+        stmt->GenMixedSource();
         switch( stmt->stype )
-                {
-				//case st_vortex:
-				//		gen_vortex(stmt);
-				//		break;
-	            case st_funcbody:
-                        GenerateFuncbody(stmt);
-                        break;
-				case st_compound:
-						GenerateCompound(stmt);
-						break;
-				case st_try:
-						GenerateTry(stmt);
-						break;
-				case st_throw:
-						GenerateThrow(stmt);
-						break;
-				case st_intoff:
-						GenerateIntoff(stmt);
-						break;
-				case st_stop:
-						GenerateStop(stmt);
-						break;
-				case st_inton:
-						GenerateInton(stmt);
-						break;
-				case st_asm:
-						GenerateAsm(stmt);
-						break;
-                case st_label:
-                        GenerateLabel((int64_t)stmt->label);
-                        break;
-                case st_goto:
-                        GenerateMonadic(isThor?op_br:op_bra,0,make_clabel((int64_t)stmt->label));
-                        break;
-				//case st_critical:
-    //                    GenerateCritical(stmt);
-    //                    break;
-				case st_spinlock:
-						GenerateSpinlock(stmt);
-						break;
-				case st_spinunlock:
-						GenerateSpinUnlock(stmt);
-						break;
-				case st_check:
-                        GenerateCheck(stmt);
-                        break;
-                case st_expr:
-                        initstack();
-                        ap = GenerateExpression(stmt->exp,F_ALL | F_NOVALUE,
-                                GetNaturalSize(stmt->exp));
-						ReleaseTempRegister(ap);
-						tmpFreeAll();
-                        break;
-                case st_return:
-						GenerateReturn(stmt);
-                        break;
-                case st_if:
-                        GenerateIf(stmt);
-                        break;
-                case st_do:
-                        GenerateDo(stmt);
-                        break;
-                case st_dountil:
-                        GenerateDoUntil(stmt);
-                        break;
-                case st_doloop:
-                        GenerateForever(stmt);
-                        break;
-                case st_while:
-                        GenerateWhile(stmt);
-                        break;
-                case st_until:
-                        GenerateUntil(stmt);
-                        break;
-                case st_for:
-                        GenerateFor(stmt);
-                        break;
-                case st_forever:
-                        GenerateForever(stmt);
-                        break;
-                case st_firstcall:
-                        GenerateFirstcall(stmt);
-                        break;
-                case st_continue:
-						if (contlab==-1)
-							error(ERR_NOT_IN_LOOP);
-                        GenerateDiadic(isThor?op_br:op_bra,0,make_clabel(contlab),0);
-                        break;
-                case st_break:
-						if (breaklab==-1)
-							error(ERR_NOT_IN_LOOP);
-                        GenerateDiadic(op_bra,0,make_clabel(breaklab),0);
-                        break;
-                case st_switch:
-                        genxswitch(stmt);
-                        break;
-				case st_empty:
-						break;
-                default:
-                        printf("DIAG - unknown statement.\n");
-                        break;
-                }
-        stmt = stmt->next;
+        {
+        case st_funcbody:
+                stmt->GenerateFuncBody();
+                break;
+		case st_compound:
+				stmt->GenerateCompound();
+				break;
+		case st_try:
+				stmt->GenerateTry();
+				break;
+		case st_throw:
+				stmt->GenerateThrow();
+				break;
+		case st_stop:
+				stmt->GenerateStop();
+				break;
+		case st_asm:
+				stmt->GenerateAsm();
+				break;
+        case st_label:
+                GenerateLabel((int64_t)stmt->label);
+                break;
+        case st_goto:
+                GenerateMonadic(isThor?op_br:op_bra,0,make_clabel((int64_t)stmt->label));
+                break;
+		//case st_critical:
+//                    GenerateCritical(stmt);
+//                    break;
+		case st_check:
+                stmt->GenerateCheck();
+                break;
+        case st_expr:
+                initstack();
+                ap = GenerateExpression(stmt->exp,F_ALL | F_NOVALUE,
+                        GetNaturalSize(stmt->exp));
+				ReleaseTempRegister(ap);
+				tmpFreeAll();
+                break;
+        case st_return:
+				GenerateReturn(stmt);
+                break;
+        case st_if:
+                stmt->GenerateIf();
+                break;
+        case st_do:
+                stmt->GenerateDo();
+                break;
+        case st_dountil:
+                stmt->GenerateDoUntil();
+                break;
+        case st_doloop:
+                stmt->GenerateForever();
+                break;
+        case st_while:
+                stmt->GenerateWhile();
+                break;
+        case st_until:
+                stmt->GenerateUntil();
+                break;
+        case st_for:
+                stmt->GenerateFor();
+                break;
+        case st_forever:
+                stmt->GenerateForever();
+                break;
+        case st_firstcall:
+                stmt->GenerateFirstcall();
+                break;
+        case st_continue:
+				if (contlab==-1)
+					error(ERR_NOT_IN_LOOP);
+                GenerateDiadic(isThor?op_br:op_bra,0,make_clabel(contlab),0);
+                break;
+        case st_break:
+				if (breaklab==-1)
+					error(ERR_NOT_IN_LOOP);
+                GenerateDiadic(op_bra,0,make_clabel(breaklab),0);
+                break;
+        case st_switch:
+                stmt->GenerateSwitch();
+                break;
+		case st_empty:
+				break;
+        default:
+                printf("DIAG - unknown statement.\n");
+                break;
+        }
     }
 }
 
-void GenerateIntoff(Statement *stmt)
+void Statement::GenerateStop()
 {
-//	GenerateDiadic(op_move,0,make_string("sr"),make_string("_TCBsrsave"));
-	GenerateMonadic(op_sei,0,(AMODE *)NULL);
+	GenerateMonadic(op_stop,0,make_immed(num));
 }
 
-void GenerateInton(Statement *stmt)
+void Statement::GenerateAsm()
 {
-//	GenerateDiadic(op_move,0,make_string("_TCBsrsave"),make_string("sr"));
+	GenerateMonadic(op_asm,0,make_string((char *)label));
 }
 
-void GenerateStop(Statement *stmt)
-{
-	GenerateMonadic(op_stop,0,make_immed(0));
-}
-
-void GenerateAsm(Statement *stmt)
-{
-	GenerateMonadic(op_asm,0,make_string((char *)stmt->label));
-}
-
-void GenerateFirstcall(Statement *stmt)
+void Statement::GenerateFirstcall()
 {
 	int     lab1, lab2;
 	AMODE *ap1;
 
-    lab1 = contlab;         /* save old continue label */
-    lab2 = breaklab;        /* save old break label */
-    contlab = nextlabel++;  /* new continue label */
-    if( stmt->s1 != NULL )      /* has block */
+    lab1 = contlab;
+    lab2 = breaklab;
+    contlab = nextlabel++;
+    if( s1 != NULL )
     {
         breaklab = nextlabel++;
 		ap1 = GetTempRegister();
-		GenerateDiadic(op_ldt,0,ap1,make_string(stmt->fcname));
+		GenerateDiadic(op_ldt,0,ap1,make_string(fcname));
        	GenerateTriadic(op_beq,0,ap1,makereg(0),make_clabel(breaklab));
 		ReleaseTempRegister(ap1);
-		GenerateDiadic(op_stt,0,makereg(0),make_string(stmt->fcname));
-		GenerateStatement(stmt->s1);
+		GenerateDiadic(op_stt,0,makereg(0),make_string(fcname));
+		s1->Generate();
         GenerateLabel(breaklab);
-        breaklab = lab2;        /* restore old break label */
+        breaklab = lab2;
     }
-    contlab = lab1;         /* restore old continue label */
+    contlab = lab1;
 }

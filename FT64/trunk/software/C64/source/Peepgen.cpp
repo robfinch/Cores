@@ -56,11 +56,11 @@ struct ocode    *peep_head = NULL,
 AMODE *copy_addr(AMODE *ap)
 {
 	AMODE *newap;
-  if( ap == NULL )
-    return NULL;
-  newap = allocAmode();
+	if( ap == NULL )
+		return NULL;
+	newap = allocAmode();
 	memcpy(newap,ap,sizeof(AMODE));
-  return newap;
+	return newap;
 }
 
 void GeneratePredicatedMonadic(int pr, int pop, int op, int len, AMODE *ap1)

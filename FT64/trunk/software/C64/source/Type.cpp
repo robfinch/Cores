@@ -1,12 +1,12 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2016  Robert Finch, Stratford
+//   \\__/ o\    (C) 2012-2017  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-// C32 - 'C' derived language compiler
-//  - 32 bit CPU
+// C64 - 'C' derived language compiler
+//  - 64 bit CPU
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -100,5 +100,120 @@ int TYP::GetBasicType(int num)
   if (num < 0 || num > 32767)
     return 0;
   return compiler.typeTable[num].type;
+}
+
+int TYP::GetHash()
+{
+	int n;
+	TYP *p, *p1;
+
+	n = 0;
+	p = this;
+	do {
+		if (p->type==bt_pointer)
+			n+=20000;
+		p1 = p;
+		p = p->GetBtp();
+	} while (p);
+	n += p1->typeno;
+	return n;
+}
+
+int TYP::GetElementSize()
+{
+	int n;
+	TYP *p, *p1;
+
+	n = 0;
+	p = this;
+	do {
+		p1 = p;
+		p = p->GetBtp();
+	} while (p);
+	switch(p1->type) {
+	case bt_byte:
+	case bt_ubyte:
+		return 1;
+	case bt_char:
+	case bt_uchar:
+		return 2;
+	case bt_short:
+	case bt_ushort:
+		return 4;
+	case bt_long:
+	case bt_ulong:
+	case bt_pointer:
+		return 8;
+	case bt_float:
+	case bt_double:
+		return 8;
+	case bt_struct:
+	case bt_class:
+		return p1->size;
+	default:
+		return 8;
+	}
+	return n;
+}
+
+void TYP::put_ty()
+{
+	switch(type) {
+	case bt_exception:
+            lfs.printf("Exception");
+            break;
+	case bt_byte:
+            lfs.printf("Byte");
+            break;
+	case bt_ubyte:
+            lfs.printf("Unsigned Byte");
+            break;
+    case bt_char:
+            lfs.printf("Char");
+            break;
+    case bt_short:
+            lfs.printf("Short");
+            break;
+    case bt_enum:
+            lfs.printf("enum ");
+            goto ucont;
+    case bt_long:
+            lfs.printf("Long");
+            break;
+    case bt_unsigned:
+            lfs.printf("unsigned long");
+            break;
+    case bt_float:
+            lfs.printf("Float");
+            break;
+    case bt_double:
+            lfs.printf("Double");
+            break;
+    case bt_pointer:
+            if( val_flag == 0)
+                    lfs.printf("Pointer to ");
+            else
+                    lfs.printf("Array of ");
+            GetBtp()->put_ty();
+            break;
+    case bt_class:
+            lfs.printf("class ");
+            goto ucont;
+    case bt_union:
+            lfs.printf("union ");
+            goto ucont;
+    case bt_struct:
+            lfs.printf("struct ");
+ucont:                  if(sname->length() == 0)
+                    lfs.printf("<no name> ");
+            else
+                    lfs.printf("%s ",(char *)sname->c_str());
+            break;
+    case bt_ifunc:
+    case bt_func:
+            lfs.printf("Function returning ");
+            GetBtp()->put_ty();
+            break;
+    }
 }
 

@@ -87,7 +87,9 @@ static char *errtextstr[] = {
 	"E Bad function argument.",
 	"E CSE Table full.",
 	"W Unsigned branch if less than zero is always false.",
-	"W Unsigned branch greater or equal to zero is always true."
+	"W Unsigned branch greater or equal to zero is always true.",
+	"W Forever Infinite loop",
+	"E Too many initilization elements for aggregate"
 };
 
 char *errtext(int errnum)
@@ -97,17 +99,19 @@ char *errtext(int errnum)
 	return "";
 }
 
-/*
- *      error - print error information
- */
+//
+// error - print error information
+//
 void error(int n)
 {
 	if (numerrs < 80) {
 		my_errno[numerrs++] = n;
 		++total_errors;
 	}
-	else
+	else {
+		closefiles();
 		exit(1);
+	}
 }
 
 void fatal(char *str)

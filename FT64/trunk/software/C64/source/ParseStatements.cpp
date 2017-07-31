@@ -28,9 +28,11 @@
 extern TYP *head, *tail;
 extern TYP stdbyte;
 extern int catchdecl;
-Statement *ParseStatement(int);   /* forward declararation */ 
 Statement *ParseCatchStatement();
 int iflevel;
+int looplevel;
+int foreverlevel;
+int loopexit;
 Statement *currentStmt;
 char *llptr;
 extern char *lptr;
@@ -46,6 +48,7 @@ Statement *NewStatement(int typ, int gt) {
 	s->s2 = (Statement *)NULL;
 	s->ssyms.Clear();
 	s->lptr = my_strdup(inpline);
+	s->prediction = 0;
 	//memset(s->ssyms,0,sizeof(s->ssyms));
 	if (gt) NextToken();
 	return s;
@@ -69,63 +72,6 @@ int GetTypeHash(TYP *p)
 }
 
 
-//struct snode    *interrupt_stmt()
-//{       struct snode    *snp; 
-//        SYM             *sp; 
-//	       TYP     *temp1;
-//
-//	   NextToken(); 
-//		if( lastst != id ) { 
-//			error(ERR_IDEXPECT); 
-//			return 0; 
-//        } 
-//        sp = allocSYM(); 
-//        sp->name = my_strdup(lastid); 
-//        sp->value.i = nextlabel++; 
-//        sp->storage_class = sc_global;
-//        sp->tp = temp1; 
-//        temp1 = maketype(bt_long,0);
-//        temp1->val_flag = 1;
-//        insert(sp,&lsyms); 
-//        NextToken();       /* get past label name */ 
-//        needpunc( colon );
-//		snp = (struct snode *)xalloc(sizeof(struct snode)); 
-//        snp->stype = st_interrupt; 
-//        snp->label = sp->name;
-//        snp->next = 0; 
-//		snp->s1 = statement(); 
-//        return snp; 
-//} 
-//  
-
-Statement *vortex_stmt()
-{       Statement *snp; 
-        SYM             *sp; 
-	       TYP     *temp1;
-
-	   NextToken(); 
-		if( lastst != id ) { 
-			error(ERR_IDEXPECT); 
-			return 0; 
-        } 
-        temp1 = TYP::Make(bt_long,0);
-        temp1->val_flag = 1;
-        sp = allocSYM(); 
-        sp->SetName(*(new std::string(lastid))); 
-        sp->value.i = nextlabel++; 
-        sp->storage_class = sc_global;
-        sp->SetType(temp1); 
-        currentFn->lsyms.insert(sp); 
-        NextToken();       /* get past label name */ 
-        needpunc( colon,30 );
-		snp = (struct snode *)xalloc(sizeof(struct snode)); 
-        snp->stype = st_vortex; 
-        snp->label = (int *)my_strdup((char *)sp->name->c_str());
-        snp->next = 0; 
-		snp->s1 = ParseStatement(0); 
-        return snp; 
-} 
-  
 Statement *ParseCheckStatement() 
 {       
 	Statement *snp;
@@ -136,7 +82,7 @@ Statement *ParseCheckStatement()
     return snp; 
 } 
   
-Statement *ParseWhileStatement() 
+Statement *Statement::ParseWhile() 
 {       
 	Statement *snp;
 
@@ -144,6 +90,7 @@ Statement *ParseWhileStatement()
     snp = NewStatement(st_while, TRUE);
 	snp->predreg = iflevel;
 	iflevel++;
+	looplevel++;
 	if ((iflevel > maxPn-1) && isThor)
 	    error(ERR_OUTOFPREDS);
     if( lastst != openpa ) 
@@ -155,16 +102,17 @@ Statement *ParseWhileStatement()
         needpunc( closepa,13 ); 
 		if (lastst==kw_do)
 			NextToken();
-        snp->s1 = ParseStatement(0); 
+        snp->s1 = Statement::Parse(0); 
 		// Empty statements return NULL
 		if (snp->s1)
 			snp->s1->outer = snp;
     } 
 	iflevel--;
+	looplevel--;
     return snp; 
 } 
   
-Statement *ParseUntilStatement()
+Statement *Statement::ParseUntil()
 {
 	Statement *snp; 
 
@@ -172,6 +120,7 @@ Statement *ParseUntilStatement()
     snp = NewStatement(st_until, TRUE);
 	snp->predreg = iflevel;
 	iflevel++;
+	looplevel++;
 	if ((iflevel > maxPn-1) && isThor)
 	    error(ERR_OUTOFPREDS);
     if( lastst != openpa ) 
@@ -181,16 +130,17 @@ Statement *ParseUntilStatement()
         if( expression(&(snp->exp)) == 0 ) 
             error(ERR_EXPREXPECT); 
         needpunc( closepa,14 ); 
-        snp->s1 = ParseStatement(0); 
+        snp->s1 = Statement::Parse(0); 
 		// Empty statements return NULL
 		if (snp->s1)
 			snp->s1->outer = snp;
-   } 
+   	} 
 	iflevel--;
+	looplevel--;
     return snp; 
 } 
   
-Statement *ParseDoStatement() 
+Statement *Statement::ParseDo() 
 {       
 	Statement *snp; 
 
@@ -198,9 +148,10 @@ Statement *ParseDoStatement()
 	snp = NewStatement(st_do, TRUE); 
 	snp->predreg = iflevel;
 	iflevel++;
+	looplevel++;
 	if ((iflevel > maxPn-1) && isThor)
 	    error(ERR_OUTOFPREDS);
-    snp->s1 = ParseStatement(0); 
+    snp->s1 = Statement::Parse(0); 
 	// Empty statements return NULL
 	if (snp->s1)
 		snp->s1->outer = snp;
@@ -220,10 +171,11 @@ Statement *ParseDoStatement()
             needpunc( semicolon,15 );
     } 
 	iflevel--;
+	looplevel--;
     return snp; 
 } 
   
-Statement *ParseForStatement() 
+Statement *Statement::ParseFor() 
 {
 	Statement *snp; 
 
@@ -231,6 +183,7 @@ Statement *ParseForStatement()
 	snp = NewStatement(st_for, TRUE);
 	snp->predreg = iflevel;
 	iflevel++;
+	looplevel++;
 	if ((iflevel > maxPn-1) && isThor)
 	    error(ERR_OUTOFPREDS);
     needpunc(openpa,16); 
@@ -243,139 +196,41 @@ Statement *ParseForStatement()
     if( expression(&(snp->incrExpr)) == NULL ) 
         snp->incrExpr = (ENODE *)NULL; 
     needpunc(closepa,18); 
-    snp->s1 = ParseStatement(0); 
+    snp->s1 = Statement::Parse(0); 
 	// Empty statements return NULL
 	if (snp->s1)
 		snp->s1->outer = snp;
 	iflevel--;
+	looplevel--;
     return snp; 
 } 
-  
-Statement *ParseForeverStatement() 
+
+// The forever statement tries to detect if there's an infinite loop and a
+// warning is output if there is no obvious loop exit.
+// Statements that might exit a loop set the loopexit variable true. These
+// statements include throw, return, break, and goto. There are other ways
+// to exit a loop that aren't easily detectable (exit() or setjmp).
+
+Statement *Statement::ParseForever() 
 {
 	Statement *snp; 
     snp = NewStatement(st_forever, TRUE);
     snp->stype = st_forever; 
-    snp->s1 = ParseStatement(0); 
+    foreverlevel = looplevel;
+    snp->s1 = Statement::Parse(0); 
+    if (loopexit==0)
+    	error(ERR_INFINITELOOP);
 	// Empty statements return NULL
 	if (snp->s1)
 		snp->s1->outer = snp;
     return snp; 
 } 
 
-struct snode *ParseCriticalStatement()
-{
-	struct snode    *snp; 
-	SYM *sp;
-    snp = (struct snode*)xalloc(sizeof(struct snode)); 
-	snp->outer = currentStmt;
-    NextToken(); 
-	if (lastst==openpa)
-		NextToken();
-    if( lastst != id ) { 
-        error(ERR_IDEXPECT); 
-        return 0; 
-    }
-    if( (sp = gsyms[0].Find(lastid,false)) == NULL ) { 
-            error( ERR_UNDEFINED ); 
-			return 0;
-            }
-	NextToken();
-	if (lastst==closepa)
-		NextToken();
-    snp->stype = st_critical; 
-    snp->label = (int *)my_strdup((char *)sp->name->c_str()); 
-    snp->next = 0; 
-	snp->s1 = ParseStatement(0);
-	// Empty statements return NULL
-	if (snp->s1)
-		snp->s1->outer = snp;
-	return snp;
-}
   
-Statement *ParseSpinlockStatement()
-{
-	Statement *snp; 
-
-	snp = NewStatement(st_spinlock, TRUE); 
-	if (lastst==openpa)
-		NextToken();
-    if( NonCommaExpression(&(snp->exp)) == 0 ) 
-        error(ERR_EXPREXPECT); 
-	snp->incrExpr = (ENODE *)1;
-	snp->initExpr = (ENODE *)0;
-	//if( lastst != id ) { 
- //       error(ERR_IDEXPECT); 
- //       return 0; 
- //   }
- //   if( (sp = search(lastid,&gsyms[0])) == NULL ) { 
- //           error( ERR_UNDEFINED ); 
-	//		return 0;
- //           }
-//	NextToken();
-//	if (lastst==comma) {
-//		NextToken();
-//		snp->incrExpr = (ENODE *)GetIntegerExpression((ENODE **)NULL);
-//		if ((int64_t)snp->incrExpr < 1 || (int64_t)snp->incrExpr > 15)
-//			error(ERR_SEMA_INCR);
-//		snp->incrExpr = (ENODE *)((int64_t)snp->incrExpr);
-//	}
-	if (lastst==comma) {
-		NextToken();
-		snp->initExpr = (ENODE *)GetIntegerExpression((ENODE **)NULL);
-	}
-	if (lastst==closepa)
-		NextToken();
-//    snp->label = sp->name; 
-    snp->next = 0; 
-	snp->s1 = ParseStatement(0);
-	// Empty statements return NULL
-	if (snp->s1)
-		snp->s1->outer = snp;
-	if (lastst==kw_lockfail) {
-		NextToken();
-		snp->s2 = ParseStatement(0);
-		// Empty statements return NULL
-		if (snp->s2)
-			snp->s2->outer = snp;
-	}
-	return snp;
-}
-  
-Statement *ParseSpinunlockStatement()
-{
-	Statement *snp; 
-
-    snp = NewStatement(st_spinunlock, TRUE); 
-	snp->incrExpr = (ENODE *)1;
-	if (lastst==openpa)
-		NextToken();
-    if( expression(&(snp->exp)) == 0 ) 
-        error(ERR_EXPREXPECT); 
-	if (lastst==comma) {
-		NextToken();
-		snp->incrExpr = (ENODE *)GetIntegerExpression((ENODE **)NULL);
-		if ((int64_t)snp->incrExpr < 1 || (int64_t)snp->incrExpr > 15)
-			error(ERR_SEMA_INCR);
-		snp->incrExpr = (ENODE *)((int64_t)snp->incrExpr & 15);
-	}
-    //if( lastst != id ) { 
-    //    error(ERR_IDEXPECT); 
-    //    return 0; 
-    //}
-  //  if( (sp = search(lastid,&gsyms[0])) == NULL ) { 
-  //      error( ERR_UNDEFINED ); 
-		//return 0;
-  //  }
-	NextToken();
-	if (lastst==closepa)
-		NextToken();
-    //snp->label = sp->name; 
-    snp->next = 0; 
-	return snp;
-}
-  
-Statement *ParseFirstcallStatement() 
+// Firstcall allocates a hidden static variable that tracks the first time
+// the firstcall statement is entered.
+ 
+Statement *Statement::ParseFirstcall() 
 {
 	Statement *snp; 
 	SYM *sp;
@@ -394,7 +249,7 @@ Statement *ParseFirstcallStatement()
 	lastst = st;
 	// doinit should set realname
 	snp->fcname = my_strdup(sp->realname);
-	snp->s1 = ParseStatement(0); 
+	snp->s1 = Statement::Parse(0); 
 	// Empty statements return NULL
 	if (snp->s1)
 		snp->s1->outer = snp;
@@ -402,52 +257,56 @@ Statement *ParseFirstcallStatement()
 	return snp; 
 } 
   
-Statement *ParseIfStatement() 
+Statement *Statement::ParseIf() 
 {
 	Statement *snp; 
 
-  dfs.puts("<ParseIfStatement>");
+	dfs.puts("<ParseIf>");
 	NextToken();
 	if (lastst == kw_firstcall)
-	   return ParseFirstcallStatement();
+		return (ParseFirstcall());
 	currentFn->UsesPredicate = TRUE;
-  snp = NewStatement(st_if, FALSE);
+	snp = NewStatement(st_if, FALSE);
 	snp->predreg = iflevel;
 	iflevel++;
 	if ((iflevel > maxPn-1) && isThor)
-	    error(ERR_OUTOFPREDS);
-    if( lastst != openpa ) 
-        error(ERR_EXPREXPECT); 
-    else {
-        NextToken(); 
-        if( expression(&(snp->exp)) == 0 ) 
-            error(ERR_EXPREXPECT); 
-        needpunc( closepa,19 ); 
+		error(ERR_OUTOFPREDS);
+	if( lastst != openpa ) 
+		error(ERR_EXPREXPECT); 
+	else {
+		NextToken(); 
+		if( expression(&(snp->exp)) == 0 ) 
+			error(ERR_EXPREXPECT); 
+		if (lastst == semicolon) {
+			NextToken();
+			snp->prediction = (GetIntegerExpression(NULL) & 1) | 2;
+		}
+		needpunc( closepa,19 ); 
 		if (lastst==kw_then)
 			NextToken();
-        snp->s1 = ParseStatement(0); 
+		snp->s1 = Statement::Parse(0); 
 		if (snp->s1)
 			snp->s1->outer = snp;
-        if( lastst == kw_else ) { 
-            NextToken(); 
-            snp->s2 = ParseStatement(0); 
+		if( lastst == kw_else ) { 
+			NextToken(); 
+			snp->s2 = Statement::Parse(0); 
 			if (snp->s2)
 				snp->s2->outer = snp;
-        } 
+		} 
 		else if (lastst == kw_elsif) {
-            snp->s2 = ParseIfStatement(); 
+			snp->s2 = ParseIf(); 
 			if (snp->s2)
 				snp->s2->outer = snp;
 		}
-        else 
-            snp->s2 = 0; 
-    } 
+		else 
+			snp->s2 = 0; 
+	} 
 	iflevel--;
-  dfs.puts("</ParseIfStatement>");
-  return snp; 
+	dfs.puts("</ParseIf>");
+	return snp; 
 } 
 
-Statement *ParseCatchStatement()
+Statement *Statement::ParseCatch()
 {
 	Statement *snp;
 	SYM *sp;
@@ -460,7 +319,7 @@ Statement *ParseCatchStatement()
 	if (lastst != openpa) {
 		snp->label = (int *)NULL;
 		snp->s2 = (Statement *)99999;
-		snp->s1 = ParseStatement(0);
+		snp->s1 = Statement::Parse(0);
 		// Empty statements return NULL
 		if (snp->s1)
 			snp->s1->outer = snp;
@@ -487,21 +346,21 @@ Statement *ParseCatchStatement()
     strncpy_s(lastid, sizeof(lastid), declid->c_str(),sizeof(lastid)-1);
     nameref(&node,FALSE);
     strcpy_s(lastid,sizeof(lastid),buf);
-	snp->s1 = ParseStatement(0);
+	snp->s1 = Statement::Parse(0);
 	// Empty statements return NULL
 	if (snp->s1)
 		snp->s1->outer = snp;
-	snp->label = (int *)node;	// save name reference
+	snp->exp = node;	// save name reference
 	if (sp->tp->typeno >= bt_last)
 		error(ERR_CATCHSTRUCT);
-	snp->s2 = (Statement *)GetTypeHash(sp->tp);
+	snp->num = sp->tp->GetHash();
 	// Empty statements return NULL
 //	if (snp->s2)
 //		snp->s2->outer = snp;
 	return snp;
 }
 
-Statement *ParseCaseStatement()
+Statement *Statement::ParseCase()
 {
 	Statement *snp; 
     Statement *head, *tail;
@@ -544,12 +403,12 @@ Statement *ParseCaseStatement()
     head = (Statement *)NULL; 
     while( lastst != end && lastst != kw_case && lastst != kw_default ) { 
 		if( head == NULL ) {
-			head = tail = ParseStatement(0); 
+			head = tail = Statement::Parse(0); 
 			if (head)
 				head->outer = snp;
 		}
 		else { 
-			tail->next = ParseStatement(0); 
+			tail->next = Statement::Parse(0); 
 			if( tail->next != NULL )  {
 				tail->next->outer = snp;
 				tail = tail->next;
@@ -558,17 +417,19 @@ Statement *ParseCaseStatement()
         tail->next = 0; 
     } 
     snp->s1 = head; 
-    return snp; 
+    return (snp); 
 } 
   
-int CheckForDuplicateCases(Statement *head) 
+int Statement::CheckForDuplicateCases() 
 {     
+	Statement *head;
 	Statement *top, *cur, *def;
 	int cnt, cnt2;
 	static int buf[1000];
 	int ndx;
 
 	ndx = 0;
+	head = this;
 	cur = top = head;
 	for (top = head; top != (Statement *)NULL; top = top->next)
 	{
@@ -576,7 +437,7 @@ int CheckForDuplicateCases(Statement *head)
 			for (cnt = 1; cnt < top->casevals[0]+1; cnt++) {
 				for (cnt2 = 0; cnt2 < ndx; cnt2++)
 					if (top->casevals[cnt]==buf[cnt2])
-						return TRUE;
+						return (TRUE);
 				if (ndx > 999)
 					throw new C64PException(ERR_TOOMANYCASECONSTANTS,1);
 				buf[ndx] = top->casevals[cnt];
@@ -590,14 +451,14 @@ int CheckForDuplicateCases(Statement *head)
 	for (top = head; top != (Statement *)NULL; top = top->next )
 	{
 		if (top->s2 && def)
-			return TRUE;
+			return (TRUE);
 		if (top->s2)
 			def = top->s2;
 	}
-	return FALSE;
+	return (FALSE);
 } 
   
-Statement *ParseSwitchStatement(int nkd) 
+Statement *Statement::ParseSwitch(int nkd) 
 {       
 	Statement *snp; 
     Statement *head, *tail; 
@@ -605,18 +466,19 @@ Statement *ParseSwitchStatement(int nkd)
     snp = NewStatement(st_switch, TRUE);
 	snp->nkd = nkd;
 	iflevel++;
+	looplevel++;
     if( expression(&(snp->exp)) == NULL ) 
         error(ERR_EXPREXPECT); 
     needpunc(begin,36); 
     head = 0; 
     while( lastst != end ) { 
 		if( head == (Statement *)NULL ) {
-			head = tail = ParseCaseStatement(); 
+			head = tail = ParseCase(); 
 			if (head)
 				head->outer = snp;
 		}
 		else { 
-			tail->next = ParseCaseStatement(); 
+			tail->next = ParseCase(); 
 			if( tail->next != (Statement *)NULL ) {
 				tail->next->outer = snp;
 				tail = tail->next;
@@ -627,87 +489,74 @@ Statement *ParseSwitchStatement(int nkd)
     } 
     snp->s1 = head; 
     NextToken(); 
-    if( CheckForDuplicateCases(head) ) 
+    if( head->CheckForDuplicateCases() ) 
         error(ERR_DUPCASE); 
 	iflevel--;
-    return snp; 
+	looplevel--;
+    return (snp); 
 } 
   
-Statement *ParseReturnStatement() 
+Statement *Statement::ParseReturn() 
 {       
 	Statement *snp;
 
+	loopexit = TRUE;
 	snp = NewStatement(st_return, TRUE);
     expression(&(snp->exp));
     if( lastst != end )
         needpunc( semicolon,37 );
-    return snp; 
+    return (snp); 
 } 
   
-Statement *ParseThrowStatement() 
+Statement *Statement::ParseThrow() 
 {  
 	Statement *snp;
 	TYP *tp;
 
 	currentFn->DoesThrow = TRUE;
+	loopexit = TRUE;
 	snp = NewStatement(st_throw, TRUE);
     tp = expression(&(snp->exp));
-	snp->label = (int *)GetTypeHash(tp);
+	snp->num = tp->GetHash();
     if( lastst != end )
         needpunc( semicolon,38 );
-    return snp;
+    return (snp);
 } 
   
-Statement *ParseBreakStatement() 
+Statement *Statement::ParseBreak() 
 {     
 	Statement *snp; 
 
 	snp = NewStatement(st_break, TRUE);
     if( lastst != end )
         needpunc( semicolon,39 );
-    return snp; 
+    if (looplevel==foreverlevel)
+    	loopexit = TRUE;
+    return (snp); 
 } 
   
-Statement *ParseContinueStatement() 
+Statement *Statement::ParseContinue() 
 {
 	Statement *snp; 
 
     snp = NewStatement(st_continue, TRUE);
     if( lastst != end )
         needpunc( semicolon,40 );
-    return snp;
+    return (snp);
 } 
   
-Statement *ParseIntoffStatement() 
-{       
-	Statement *snp; 
-    snp = NewStatement(st_intoff, TRUE); 
-    if( lastst != end )
-        needpunc( semicolon,41 );
-    return snp;
-} 
-  
-Statement *ParseIntonStatement() 
-{       
-	Statement *snp; 
-
-    snp = NewStatement(st_inton, TRUE); 
-    if( lastst != end )
-        needpunc( semicolon,42 );
-    return snp;
-} 
-  
-Statement *ParseStopStatement() 
+Statement *Statement::ParseStop() 
 {
 	Statement *snp; 
 
 	snp = NewStatement(st_stop, TRUE); 
+	snp->num = GetIntegerExpression(NULL);
 	if( lastst != end )
 		needpunc( semicolon,43 );
 	return snp;
 } 
   
-Statement *ParseAsmStatement() 
+Statement *Statement::ParseAsm() 
 {
 	static char buf[3501];
 	int nn;
@@ -758,7 +607,7 @@ j1:
     return snp;
 } 
 
-Statement *ParseTryStatement()
+Statement *Statement::ParseTry()
 {
 	Statement *snp;
 	Statement *hd, *tl;
@@ -766,7 +615,7 @@ Statement *ParseTryStatement()
 	hd = (Statement *)NULL;
 	tl = (Statement *)NULL;
 	snp = NewStatement(st_try, TRUE);
-    snp->s1 = ParseStatement(0);
+    snp->s1 = Statement::Parse(0);
 	// Empty statements return NULL
 	if (snp->s1)
 		snp->s1->outer = snp;
@@ -774,12 +623,12 @@ Statement *ParseTryStatement()
         error(ERR_CATCHEXPECT);
     while( lastst == kw_catch ) {
 		if( hd == NULL ) {
-			hd = tl = ParseCatchStatement(); 
+			hd = tl = ParseCatch(); 
 			if (hd)
 				hd->outer = snp;
 		}
 		else { 
-			tl->next = ParseCatchStatement(); 
+			tl->next = ParseCatch(); 
 			if( tl->next != NULL ) {
 				tl->next->outer = snp;
 				tl = tl->next;
@@ -792,37 +641,38 @@ Statement *ParseTryStatement()
     return snp;
 } 
   
-Statement *ParseExpressionStatement() 
+Statement *Statement::ParseExpression() 
 {       
 	Statement *snp;
-	dfs.printf("Enter Parse Expression Statement\n");
-  snp = NewStatement(st_expr, FALSE); 
-  if( expression(&(snp->exp)) == NULL ) { 
-      error(ERR_EXPREXPECT);
-      NextToken(); 
-  } 
-  if( lastst != end )
-      needpunc( semicolon,44 );
-	dfs.printf("Leave Parse Expression Statement\n");
-  return snp; 
+
+	dfs.printf("<ParseExpression>\n");
+	snp = NewStatement(st_expr, FALSE); 
+	if( expression(&(snp->exp)) == NULL ) { 
+		error(ERR_EXPREXPECT);
+		NextToken(); 
+	} 
+	if( lastst != end )
+		needpunc( semicolon,44 );
+	dfs.printf("</ParseExpression>\n");
+	return snp; 
 } 
 
 // Parse a compound statement.
 
-Statement *ParseCompoundStatement()
+Statement *Statement::ParseCompound()
 {  
 	Statement *snp;
 	Statement *head, *tail; 
-  Statement *p;
+	Statement *p;
 
-  snp = NewStatement(st_compound, FALSE); 
+	snp = NewStatement(st_compound, FALSE); 
 	currentStmt = snp;
 	head = 0;
 	if (lastst==colon) {
 		NextToken();
 		TRACE(printf("Compound <%s>\r\n",lastid);)
 		if (strcmp(lastid,"clockbug")==0)
-			printf("clockbug\r\n");
+		printf("clockbug\r\n");
 		NextToken();
 	}
 	AutoDeclaration::Parse(NULL,&snp->ssyms);
@@ -831,23 +681,23 @@ Statement *ParseCompoundStatement()
 	p = currentStmt;
 	if (lastst==kw_prolog) {
 		NextToken();
-		currentFn->prolog = snp->prolog = ParseStatement(0);
+		currentFn->prolog = snp->prolog = Statement::Parse(0);
 	}
 	if (lastst==kw_epilog) {
 		NextToken();
-		currentFn->epilog = snp->epilog = ParseStatement(0);
+		currentFn->epilog = snp->epilog = Statement::Parse(0);
 	}
 	if (lastst==kw_prolog) {
 		NextToken();
-		currentFn->prolog = snp->prolog = ParseStatement(0);
+		currentFn->prolog = snp->prolog = Statement::Parse(0);
 	}
 	if (lastst != end) {
-		head = tail = ParseStatement(0); 
+		head = tail = Statement::Parse(0); 
 		if (head)
 			head->outer = snp;
 	}
 	//else {
- //       head = tail = NewStatement(st_empty,1);
+	//       head = tail = NewStatement(st_empty,1);
 	//	if (head)
 	//		head->outer = snp;
 	//}
@@ -855,15 +705,15 @@ Statement *ParseCompoundStatement()
 	while( lastst != end) {
 		if (lastst==kw_prolog) {
 			NextToken();
-			currentFn->prolog = snp->prolog = ParseStatement(0);
+			currentFn->prolog = snp->prolog = Statement::Parse(0);
 		}
 		else if (lastst==kw_epilog) {
 			NextToken();
-			currentFn->epilog = snp->epilog = ParseStatement(0);
+			currentFn->epilog = snp->epilog = Statement::Parse(0);
 		}
 		else
 		{
-			tail->next = ParseStatement(0); 
+			tail->next = Statement::Parse(0); 
 			if( tail->next != NULL ) {
 				tail->next->outer = snp;
 				tail = tail->next;
@@ -871,50 +721,51 @@ Statement *ParseCompoundStatement()
 		}
 	}
 	currentStmt = p;
-  NextToken();
+	NextToken();
 	snp->s1 = head;
-  return snp;
+	return (snp);
 } 
   
-Statement *ParseLabelStatement()
+Statement *Statement::ParseLabel()
 {      
 	Statement *snp;
-  SYM *sp;
+	SYM *sp;
 
-  snp = NewStatement(st_label, FALSE); 
-  if( (sp = currentFn->lsyms.Find(lastid,false)) == NULL ) { 
-    sp = allocSYM(); 
-    sp->SetName(*(new std::string(lastid)));
-    sp->storage_class = sc_label; 
-    sp->tp = TYP::Make(bt_label,0);
-    sp->value.i = nextlabel++; 
-    currentFn->lsyms.insert(sp); 
-  } 
-  else { 
-    if( sp->storage_class != sc_ulabel ) 
-      error(ERR_LABEL); 
-    else 
-      sp->storage_class = sc_label; 
-  } 
-  NextToken();       /* get past id */ 
-  needpunc(colon,45); 
-  if( sp->storage_class == sc_label ) { 
-    snp->label = (int *)sp->value.i; 
-    snp->next = (Statement *)NULL; 
-    return snp; 
-  } 
-  return 0; 
+	snp = NewStatement(st_label, FALSE); 
+	if( (sp = currentFn->lsyms.Find(lastid,false)) == NULL ) { 
+		sp = allocSYM(); 
+		sp->SetName(*(new std::string(lastid)));
+		sp->storage_class = sc_label; 
+		sp->tp = TYP::Make(bt_label,0);
+		sp->value.i = nextlabel++; 
+		currentFn->lsyms.insert(sp); 
+	} 
+	else { 
+		if( sp->storage_class != sc_ulabel ) 
+			error(ERR_LABEL); 
+		else 
+			sp->storage_class = sc_label; 
+	} 
+	NextToken();       /* get past id */ 
+	needpunc(colon,45); 
+	if( sp->storage_class == sc_label ) { 
+		snp->label = (int *)sp->value.i; 
+		snp->next = (Statement *)NULL; 
+		return snp; 
+	} 
+	return 0; 
 } 
   
-Statement *ParseGotoStatement() 
+Statement *Statement::ParseGoto() 
 {       
 	Statement *snp; 
     SYM *sp;
 
     NextToken(); 
+    loopexit = TRUE;
     if( lastst != id ) { 
         error(ERR_IDEXPECT); 
-        return (Statement *)NULL;
+        return ((Statement *)NULL);
     } 
     snp = NewStatement(st_goto, FALSE);
     if( (sp = currentFn->lsyms.Find(lastid,false)) == NULL ) { 
@@ -934,77 +785,68 @@ Statement *ParseGotoStatement()
         snp->stype = st_goto;
         snp->label = (int *)sp->value.i;
         snp->next = (Statement *)NULL;
-        return snp; 
+        return (snp); 
     } 
-    return (Statement *)NULL;
+    return ((Statement *)NULL);
 } 
   
-Statement *ParseStatement(int nkd) 
+Statement *Statement::Parse(int nkd) 
 {
 	Statement *snp; 
-	dfs.puts("<ParseStatement>");
+	dfs.puts("<Parse>");
     switch( lastst ) { 
     case semicolon: 
         snp = NewStatement(st_empty,1);
         break; 
     case begin: 
 		NextToken(); 
-        snp = ParseCompoundStatement();
+        snp = ParseCompound();
         return snp; 
     case kw_check:
          snp = ParseCheckStatement();
          break;
 	case kw_naked:
 		 NextToken();
-		 snp = ParseStatement(1);
+		 snp = Parse(1);
 		 break;
 	/*
     case kw_prolog:
          snp = NewStatement(st_empty,1);
-         currentFn->prolog = ParseStatement(); break;
+         currentFn->prolog = Statement::Parse(); break;
     case kw_epilog:
          snp = NewStatement(st_empty,1);
-         currentFn->epilog = ParseStatement(); break;
+         currentFn->epilog = Statement::Parse(); break;
 	*/
-    case kw_if: snp = ParseIfStatement(); break; 
-    case kw_while: snp = ParseWhileStatement(); break; 
-    case kw_until: snp = ParseUntilStatement(); break; 
-    case kw_for:   snp = ParseForStatement();   break; 
-    case kw_forever: snp = ParseForeverStatement(); break; 
-    case kw_firstcall: snp = ParseFirstcallStatement(); break; 
-    case kw_return: snp = ParseReturnStatement(); break; 
-    case kw_break: snp = ParseBreakStatement(); break; 
-    case kw_goto: snp = ParseGotoStatement(); break; 
-    case kw_continue: snp = ParseContinueStatement(); break; 
+    case kw_if: snp = ParseIf(); break; 
+    case kw_while: snp = ParseWhile(); break; 
+    case kw_until: snp = ParseUntil(); break; 
+    case kw_for:   snp = ParseFor();   break; 
+    case kw_forever: snp = ParseForever(); break; 
+    case kw_firstcall: snp = ParseFirstcall(); break; 
+    case kw_return: snp = ParseReturn(); break; 
+    case kw_break: snp = ParseBreak(); break; 
+    case kw_goto: snp = ParseGoto(); break; 
+    case kw_continue: snp = ParseContinue(); break; 
     case kw_do:
-	case kw_loop: snp = ParseDoStatement(); break; 
-    case kw_switch: snp = ParseSwitchStatement(nkd); break;
-	case kw_try: snp = ParseTryStatement(); break;
-	case kw_throw: snp = ParseThrowStatement(); break;
-	case kw_vortex:
-			snp = vortex_stmt();
-			break;
-	case kw_intoff: snp = ParseIntoffStatement(); break;
-	case kw_inton: snp = ParseIntonStatement(); break;
-	case kw_stop: snp = ParseStopStatement(); break;
-	case kw_asm:
-		snp = ParseAsmStatement(); break;
-	case kw_critical: snp = ParseCriticalStatement(); break;
-	case kw_spinlock: snp = ParseSpinlockStatement(); break;
-	case kw_spinunlock: snp = ParseSpinunlockStatement(); break;
+	case kw_loop: snp = ParseDo(); break; 
+    case kw_switch: snp = ParseSwitch(nkd); break;
+	case kw_try: snp = ParseTry(); break;
+	case kw_throw: snp = ParseThrow(); break;
+	case kw_stop: snp = ParseStop(); break;
+	case kw_asm: snp = ParseAsm(); break;
     case id:
 			SkipSpaces();
             if( lastch == ':' ) 
-                return ParseLabelStatement(); 
+                return ParseLabel(); 
             // else fall through to parse expression
     default: 
-            snp = ParseExpressionStatement(); 
+            snp = ParseExpression(); 
             break; 
     } 
 	if( snp != NULL ) {
         snp->next = (Statement *)NULL;
 	}
-	dfs.puts("</ParseStatement>");
-  return snp; 
+	dfs.puts("</Parse>");
+	return snp;
 } 
 

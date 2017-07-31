@@ -256,7 +256,7 @@ AMODE *GenExpr(ENODE *node)
 		//ap2 = GenerateExpression(node,F_REG,8);
 		//GenerateDiadic(op_redor,0,ap1,ap2);
 		//ReleaseTempReg(ap2);
-		GenerateFalseJump(node,lab0);
+		GenerateFalseJump(node,lab0,0);
 		ap1 = GetTempRegister();
 		GenerateDiadic(op_ldi,0,ap1,make_immed(1));
 		GenerateMonadic(op_bra,0,make_label(lab1));
@@ -419,7 +419,7 @@ AMODE *GenExpr(ENODE *node)
 	*/
 }
 
-void GenerateCmp(ENODE *node, int op, int label, int predreg)
+void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int prediction)
 {
 	int size, sz;
 	AMODE *ap1, *ap2, *ap3;
@@ -581,10 +581,10 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg)
 				ap3 = GetTempRegister();
 				GenerateTriadic(op_cmp,0,ap3,ap1,ap2);
 				ReleaseTempRegister(ap3);
-				GenerateTriadic(op_beq,0,ap3,makereg(0),make_clabel(label));
+				Generate4adic(op_beq,0,ap3,makereg(0),make_clabel(label),make_immed(prediction));
 			}
 			else
-				GenerateTriadic(op_beq,0,ap1,ap2,make_clabel(label));
+				Generate4adic(op_beq,0,ap1,ap2,make_clabel(label), make_immed(prediction));
 			break;
 		case op_bne:
 			if (ap2->mode==am_immed) {
@@ -594,11 +594,11 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg)
 					ap3 = GetTempRegister();
 					GenerateTriadic(op_cmp,0,ap3,ap1,ap2);
 					ReleaseTempRegister(ap3);
-					GenerateTriadic(op_bne,0,ap3,makereg(0),make_clabel(label));
+					Generate4adic(op_bne,0,ap3,makereg(0),make_clabel(label), make_immed(prediction));
 				}
 			}
 			else {
-				GenerateTriadic(op_bne,0,ap1,ap2,make_clabel(label));
+				Generate4adic(op_bne,0,ap1,ap2,make_clabel(label), make_immed(prediction));
 			}
 			break;
 		case op_blt:
@@ -609,11 +609,11 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg)
 					ap3 = GetTempRegister();
 					GenerateTriadic(op_cmp,0,ap3,ap1,ap2);
 					ReleaseTempRegister(ap3);
-					GenerateTriadic(op_blt,0,ap3,makereg(0),make_clabel(label));
+					Generate4adic(op_blt,0,ap3,makereg(0),make_clabel(label), make_immed(prediction));
 				}
 			}
 			else
-				GenerateTriadic(op_blt,0,ap1,ap2,make_clabel(label));
+				Generate4adic(op_blt,0,ap1,ap2,make_clabel(label), make_immed(prediction));
 			break;
 		case op_ble:
 			if (ap2->mode==am_immed) {
@@ -623,11 +623,11 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg)
 					ap3 = GetTempRegister();
 					GenerateTriadic(op_cmp,0,ap3,ap1,ap2);
 					ReleaseTempRegister(ap3);
-					GenerateTriadic(op_bge,0,makereg(0),ap3,make_clabel(label));
+					Generate4adic(op_bge,0,makereg(0),ap3,make_clabel(label), make_immed(prediction));
 				}
 			}
 			else
-				GenerateTriadic(op_bge,0,ap2,ap1,make_clabel(label));
+				Generate4adic(op_bge,0,ap2,ap1,make_clabel(label), make_immed(prediction));
 			break;
 		case op_bgt:
 			if (ap2->mode==am_immed) {
@@ -637,11 +637,11 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg)
 					ap3 = GetTempRegister();
 					GenerateTriadic(op_cmp,0,ap3,ap1,ap2);
 					ReleaseTempRegister(ap3);
-					GenerateTriadic(op_blt,0,makereg(0),ap3,make_clabel(label));
+					Generate4adic(op_blt,0,makereg(0),ap3,make_clabel(label), make_immed(prediction));
 				}
 			}
 			else
-				GenerateTriadic(op_blt,0,ap2,ap1,make_clabel(label));
+				Generate4adic(op_blt,0,ap2,ap1,make_clabel(label), make_immed(prediction));
 			break;
 		case op_bge:
 			if (ap2->mode==am_immed) {
@@ -652,11 +652,11 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg)
 					ap3 = GetTempRegister();
 					GenerateTriadic(op_cmp,0,ap3,ap1,ap2);
 					ReleaseTempRegister(ap3);
-					GenerateTriadic(op_bge,0,ap3,makereg(0),make_clabel(label));
+					Generate4adic(op_bge,0,ap3,makereg(0),make_clabel(label), make_immed(prediction));
 				}
 			}
 			else
-				GenerateTriadic(op_bge,0,ap1,ap2,make_clabel(label));
+				Generate4adic(op_bge,0,ap1,ap2,make_clabel(label), make_immed(prediction));
 			break;
 		case op_bltu:
 			if (ap2->mode==am_immed) {
@@ -669,11 +669,11 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg)
 					ap3 = GetTempRegister();
 					GenerateTriadic(op_cmpu,0,ap3,ap1,ap2);
 					ReleaseTempRegister(ap3);
-					GenerateTriadic(op_blt,0,ap3,makereg(0),make_clabel(label));
+					Generate4adic(op_blt,0,ap3,makereg(0),make_clabel(label), make_immed(prediction));
 				}
 			}
 			else
-				GenerateTriadic(op_bltu,0,ap1,ap2,make_clabel(label));
+				Generate4adic(op_bltu,0,ap1,ap2,make_clabel(label), make_immed(prediction));
 			break;
 		case op_bleu:
 			if (ap2->mode==am_immed) {
@@ -683,11 +683,11 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg)
 					ap3 = GetTempRegister();
 					GenerateTriadic(op_cmpu,0,ap3,ap1,ap2);
 					ReleaseTempRegister(ap3);
-					GenerateTriadic(op_bge,0,makereg(0),ap3,make_clabel(label));
+					Generate4adic(op_bge,0,makereg(0),ap3,make_clabel(label), make_immed(prediction));
 				}
 			}
 			else
-				GenerateTriadic(op_bgeu,0,ap2,ap1,make_clabel(label));
+				Generate4adic(op_bgeu,0,ap2,ap1,make_clabel(label), make_immed(prediction));
 			break;
 		case op_bgtu:
 			if (ap2->mode==am_immed) {
@@ -697,24 +697,24 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg)
 					ap3 = GetTempRegister();
 					GenerateTriadic(op_cmpu,0,ap3,ap1,ap2);
 					ReleaseTempRegister(ap3);
-					GenerateTriadic(op_blt,0,makereg(0),ap3,make_clabel(label));
+					Generate4adic(op_blt,0,makereg(0),ap3,make_clabel(label), make_immed(prediction));
 				}
 			}
 			else
-				GenerateTriadic(op_bltu,0,ap2,ap1,make_clabel(label));
+				Generate4adic(op_bltu,0,ap2,ap1,make_clabel(label), make_immed(prediction));
 			break;
 		case op_bgeu:
 			if (ap2->mode==am_immed) {
 				if (ap2->offset->i == 0) {
 					// This branch is always true
 					error(ERR_UBGEQ);
-					GenerateTriadic(op_bgeu,0,ap1,makereg(0),make_clabel(label));
+					Generate4adic(op_bgeu,0,ap1,makereg(0),make_clabel(label), make_immed(prediction));
 				}
 				else {
 					ap3 = GetTempRegister();
 					GenerateTriadic(op_cmpu,0,ap3,ap1,ap2);
 					ReleaseTempRegister(ap3);
-					GenerateTriadic(op_bge,0,ap3,makereg(0),make_clabel(label));
+					Generate4adic(op_bge,0,ap3,makereg(0),make_clabel(label), make_immed(prediction));
 				}
 			}
 			else
@@ -782,7 +782,7 @@ void GenerateFunction(SYM *sym)
 	// optimizations.
 	if (sym->prolog) {
 		scan(sym->prolog);
-	    GenerateStatement(sym->prolog);
+	    sym->prolog->Generate();
 	}
 	if (!sym->IsNocall) {
 		/*
@@ -818,7 +818,7 @@ void GenerateFunction(SYM *sym)
 	}
 	if (optimize)
 		opt1(stmt);
-    GenerateStatement(stmt);
+    stmt->Generate();
     GenerateReturn(nullptr);
 	if (exceptions && sym->IsInline)
 		GenerateMonadic(op_bra,0,make_label(lab0));
@@ -946,7 +946,7 @@ void GenerateReturn(Statement *stmt)
 	RestoreRegisterVars();
     if (sym->IsNocall) {
 		if (sym->epilog) {
-			GenerateStatement(sym->epilog);
+			sym->epilog->Generate();
 			return;
 		}
 		return;
@@ -955,7 +955,7 @@ void GenerateReturn(Statement *stmt)
 	toAdd = sizeOfWord;
 
 	if (sym->epilog) {
-		GenerateStatement(sym->epilog);
+		sym->epilog->Generate();
 		return;
 	}
         

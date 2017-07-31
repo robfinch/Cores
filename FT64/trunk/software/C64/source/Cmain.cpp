@@ -223,7 +223,13 @@ int openfiles(char *s)
         //        fclose(output);
         //        return 0;
         //        }
-		lfs.open(listfile,std::ios::out|std::ios::trunc);
+        try {
+			lfs.open(listfile,std::ios::out|std::ios::trunc);
+		}
+		catch(...) {
+			closefiles();
+			return 0;
+		}
 /*
         if( (list = fopen(listfile,"w")) == 0) {
                 printf(" cant open %s\n",listfile);
@@ -263,15 +269,15 @@ void summary()
 
 void closefiles()
 { 
-  dfs.printf("Enter closefiles\n");
+	dfs.printf("<closefiles>\n");
 	ifs->close();
 	delete ifs;
-  dfs.printf("A");
+	dfs.printf("A");
 	lfs.close();
-  dfs.printf("B");
+	dfs.printf("B");
 	ofs.close();
-  dfs.printf("C");
- dfs.printf("Leave closefiles\n");
+	dfs.printf("C");
+	dfs.printf("</closefiles>\n");
 }
 
 char *GetNamespace()

@@ -895,10 +895,7 @@ void GenerateReturn(Statement *stmt)
   if( stmt != NULL && stmt->exp != NULL )
   {
 		initstack();
-		if (sym->tp->GetBtp() && sym->tp->GetBtp()->IsFloatType())
-			ap = GenerateExpression(stmt->exp,F_REG,sizeOfFP);
-		else
-			ap = GenerateExpression(stmt->exp,F_REG|F_IMMED,sizeOfWord);
+		ap = GenerateExpression(stmt->exp,F_REG|F_IMMED,sizeOfWord);
 		GenerateMonadic(op_hint,0,make_immed(2));
 		if (ap->mode == am_immed)
 		    GenLdi(makereg(1),ap);
@@ -926,11 +923,6 @@ void GenerateReturn(Statement *stmt)
             else
 			    GenerateTriadic(op_mov, 0, makereg(1),ap,make_immed(0));
         }
-		else if (ap->mode == am_fpreg)
-			GenerateTriadic(op_mov, 0, makereg(1),ap,make_immed(0));
-		else if (ap->isFloat) {
-			GenerateDiadic(op_ld,0,makereg(1),ap);
-		}
 		else
 		    GenLoad(makereg(1),ap,sizeOfWord,sizeOfWord);
 		ReleaseTempRegister(ap);

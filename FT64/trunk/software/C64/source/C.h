@@ -47,6 +47,7 @@
 /*      compiler header file    */
 
 class ENODE;
+class Statement;
 
 enum e_sym {
   tk_nop,
@@ -135,7 +136,7 @@ public:
 
 
 struct typ;
-struct snode;
+Statement;
 
 class TYP;
 class SYM;
@@ -241,9 +242,9 @@ public:
     } value;
 	Float128 f128;
   TYP *tp;
-    struct snode *stmt;
-    struct snode *prolog;
-    struct snode *epilog;
+    Statement *stmt;
+    Statement *prolog;
+    Statement *epilog;
     unsigned int stksize;
 
 	TypeArray *GetParameterTypes();
@@ -307,13 +308,19 @@ public:
 	TYP *GetBtp();
 	static TYP *GetPtr(int n);
 	int GetIndex();
+	int GetHash();
 	static int GetSize(int num);
+	int GetElementSize();
 	static int GetBasicType(int num);
 	std::string *sname;
 	unsigned int alignment;
 	static TYP *Make(int bt, int siz);
 	static TYP *Copy(TYP *src);
 	bool IsFloatType() const { return (type==bt_quad || type==bt_float || type==bt_double || type==bt_triple); };
+	bool IsUnion() const { return (type==bt_union); };
+	bool IsStructType() const { return (type==bt_struct || type==bt_class || type==bt_union); };
+	bool IsAggregateType() const { return (IsStructType() | isArray); };
+	void put_ty();
 };
 
 class TypeArray
@@ -488,6 +495,8 @@ public:
 #define ERR_CSETABLE		54
 #define ERR_UBLTZ			55
 #define ERR_UBGEQ			56
+#define ERR_INFINITELOOP	57
+#define ERR_TOOMANYELEMENTS	58
 #define ERR_NULLPOINTER		1000
 #define ERR_CIRCULAR_LIST 1001
 

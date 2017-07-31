@@ -98,7 +98,7 @@ struct clit		*casetab = (struct clit *)NULL;
 int             lc_static = 0;
 int             lc_auto = 0;
 int				lc_thread = 0;
-struct snode    *bodyptr = 0;
+Statement    *bodyptr = 0;
 int             global_flag = 1;
 TABLE           defsyms;
 int64_t         save_mask = 0;          /* register save mask */

@@ -898,7 +898,6 @@ void cseg()
 	if( curseg != codeseg) {
 		nl();
 		ofs.printf("\tcode\n");
-		ofs.printf("\talign\t16\n");
 		curseg = codeseg;
     }
 }
@@ -910,7 +909,6 @@ void dseg()
 		ofs.printf("\tdata\n");
 		curseg = dataseg;
     }
-	ofs.printf("\talign\t8\n");
 }
 
 void tseg()
@@ -928,7 +926,6 @@ void roseg()
 	if( curseg != rodataseg) {
 		nl();
 		ofs.printf("\trodata\n");
-		ofs.printf("\talign\t16\n");
 		curseg = rodataseg;
     }
 }
@@ -959,5 +956,5 @@ void seg(int sg, int algn)
 		}
 		curseg = sg;
     }
- 	ofs.printf("\talign\t%d\n", algn);
+ 	//ofs.printf("\talign\t%d\n", algn);
 }

@@ -121,7 +121,7 @@ extern Float128		    *quadtab;
 extern int              lc_static;
 extern int              lc_auto;
 extern int				lc_thread;
-extern struct snode     *bodyptr;       /* parse tree for function */
+extern Statement     *bodyptr;       /* parse tree for function */
 extern int              global_flag;
 extern TABLE            defsyms;
 extern int64_t          save_mask;      /* register save mask */
@@ -144,6 +144,9 @@ extern int exceptions;
 extern int mixedSource;
 extern SYM *currentFn;
 extern int iflevel;
+extern int foreverlevel;
+extern int looplevel;
+extern int loopexit;
 extern int regmask;
 extern int bregmask;
 extern Statement *currentStmt;
@@ -205,8 +208,7 @@ extern void getbase(int64_t);
 extern void SkipSpaces();
 
 // Stmt.c
-extern int GetTypeHash(TYP *p);
-extern struct snode *ParseCompoundStatement();
+extern Statement *ParseCompoundStatement();
 
 extern void GenerateDiadic(int op, int len, struct amode *ap1,struct amode *ap2);
 // Symbol.c
@@ -258,13 +260,10 @@ extern TYP *NonCommaExpression(ENODE **);
 // Optimize.c
 extern void opt_const(ENODE **node);
 // GenerateStatement.c
-extern void GenerateStatement(struct snode *stmt);
-//extern void GenerateFunction(struct snode *stmt);
-extern void GenerateIntoff(struct snode *stmt);
-extern void GenerateInton(struct snode *stmt);
-extern void GenerateStop(struct snode *stmt);
-extern void GenerateAsm(struct snode *stmt);
-extern void GenerateFirstcall(struct snode *stmt);
+//extern void GenerateFunction(Statement *stmt);
+extern void GenerateIntoff(Statement *stmt);
+extern void GenerateInton(Statement *stmt);
+extern void GenerateStop(Statement *stmt);
 extern void gen_regrestore();
 extern AMODE *make_direct(int i);
 extern AMODE *makereg(int r);
@@ -325,8 +324,8 @@ extern AMODE *make_indirect(int i);
 extern AMODE *make_indexed(int o, int i);
 extern AMODE *make_indx(ENODE *node, int reg);
 extern AMODE *make_string(char *s);
-extern void GenerateFalseJump(ENODE *node,int label);
-extern void GenerateTrueJump(ENODE *node,int label);
+extern void GenerateFalseJump(ENODE *node,int label, unsigned int);
+extern void GenerateTrueJump(ENODE *node,int label, unsigned int);
 extern char *GetNamespace();
 extern char nmspace[20][100];
 extern AMODE *GenerateDereference(ENODE *, int, int, int);

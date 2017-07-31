@@ -707,8 +707,8 @@ void SYM::BuildParameterList(int *num, int *numa)
 		// and unions use the type size. There could also be arrays
 		// passed.
 		if (!noParmOffset)
-			poffset += round2(sp1->tp->size);
-		if (round2(sp1->tp->size) > 2)
+			poffset += sp1->tp->size;
+		if (sp1->tp->size > 1)
 			IsLeaf = FALSE;
 		sp1->storage_class = sc_auto;
 	}

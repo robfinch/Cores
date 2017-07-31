@@ -1,3 +1,6 @@
+#ifndef _EXPR_H
+#define _EXPR_H
+
 // ============================================================================
 //        __
 //   \\__/ o\    (C) 2012-2016  Robert Finch, Stratford
@@ -45,7 +48,7 @@
 
 enum e_node {
         en_void,        /* used for parameter lists */
-
+		en_list, en_aggregate,
 		en_cbu, en_ccu, en_chu,
 		en_cubu, en_cucu, en_cuhu,
 		en_cbw, en_ccw, en_chw,
@@ -133,3 +136,4 @@ typedef struct cse {
 
 #define TRACE(x)
 
+#endif

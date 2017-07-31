@@ -107,13 +107,14 @@ void doinit(SYM *sp)
 	}
 	else {
 		if (sp->storage_class == sc_global) {
-			strcpy_s(lbl, sizeof(lbl), "public ");
-			if (curseg==dataseg)
-				strcat_s(lbl, sizeof(lbl), "data ");
-			else if (curseg==bssseg)
-				strcat_s(lbl, sizeof(lbl), "bss ");
-			else if (curseg==tlsseg)
-				strcat_s(lbl, sizeof(lbl), "tls ");
+			//strcpy_s(lbl, sizeof(lbl), "public ");
+			strcpy_s(lbl, sizeof(lbl), "");
+			//if (curseg==dataseg)
+			//	strcat_s(lbl, sizeof(lbl), "data ");
+			//else if (curseg==bssseg)
+			//	strcat_s(lbl, sizeof(lbl), "bss ");
+			//else if (curseg==tlsseg)
+			//	strcat_s(lbl, sizeof(lbl), "tls ");
 		}
 		strcat_s(lbl, sizeof(lbl), sp->name->c_str());
 		gen_strlab(lbl);
@@ -131,7 +132,8 @@ void doinit(SYM *sp)
 	}
     endinit();
 	if (sp->storage_class == sc_global)
-		ofs.printf("\nendpublic\n");
+		ofs.printf("\n");
+//		ofs.printf("\nendpublic\n");
 }
 
 int InitializeType(TYP *tp)

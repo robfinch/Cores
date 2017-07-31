@@ -436,7 +436,8 @@ static Statement *ParseFunctionBody(SYM *sp)
 	//	put_label((unsigned int) sp->value.i);
 	else {
 		if (sp->storage_class == sc_global)
-			lbl = "public code ";
+//			lbl = "public code ";
+			lbl = "";
 //		strcat(lbl,sp->name);
 		lbl += *sp->mangledName;
 		//gen_strlab(lbl);
@@ -465,7 +466,8 @@ static Statement *ParseFunctionBody(SYM *sp)
 
 	flush_peep();
 	if (sp->storage_class == sc_global) {
-		ofs.printf("endpublic\r\n\r\n");
+//		ofs.printf("endpublic\r\n\r\n");
+		ofs.printf("\r\n\r\n");
 	}
   }
 	//if (sp->stkspace)

@@ -358,6 +358,8 @@ static void scanexpr(ENODE *node, int duse)
 		case en_asand:	case en_asxor: case en_asor:
 		case en_cond:
         case en_void:
+		case en_list:
+		case en_aggregate:
                 scanexpr(node->p[0],0);
                 scanexpr(node->p[1],0);
                 break;
@@ -599,13 +601,14 @@ void repexpr(ENODE *node)
                 case en_fdadd:  case en_fdsub:
 				case en_fadd: case en_fsub:
 				case en_fmul: case en_fdiv:
-                case en_cond:   case en_void:
+				case en_cond:   case en_void:	case en_list:
                 case en_asadd:  case en_assub:
 				case en_asmul:  case en_asmulu:
 				case en_asdiv:  case en_asdivu:
                 case en_asor:   case en_asand:    case en_asxor:
                 case en_asmod:  case en_aslsh:
                 case en_asrsh:  case en_fcall:
+				case en_aggregate:
                 case en_assign:
                         repexpr(node->p[0]);
                         repexpr(node->p[1]);

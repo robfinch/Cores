@@ -1,12 +1,12 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2016  Robert Finch, Stratford
+//   \\__/ o\    (C) 2012-2017  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-// C32 - 'C' derived language compiler
-//  - 32 bit CPU
+// C64 - 'C' derived language compiler
+//  - 64 bit CPU
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -203,7 +203,7 @@ SYM *allocSYM() {
 	sym->proto.SetOwner(compiler.symnum);
 	sym->UsesTemps = true;
 	sym->UsesStackParms = true;
-  compiler.symnum++;
+  	compiler.symnum++;
 	if (compiler.symnum > 32760) {
 	  dfs.printf("Too many symbols.\n");
     throw new C64PException(ERR_TOOMANY_SYMBOLS,1);
@@ -227,7 +227,7 @@ TYP *allocTYP()
 	return tp;
 };
 
-struct snode *allocSnode() { return (struct snode *)xalloc(sizeof(struct snode)); };
+Statement *allocSnode() { return (Statement *)xalloc(sizeof(Statement)); };
 ENODE *allocEnode() {
   ENODE *p;
   p = (ENODE *)allocx(sizeof(ENODE));
