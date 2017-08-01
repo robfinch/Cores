@@ -31,6 +31,7 @@ std::string *declid;
 //char *Declaration::declid = (char *)NULL;
 TABLE tagtable;
 TYP stdconst;
+TYP stdvector;
 Stringx names[20];
 int nparms = 0;
 int funcdecl = 0;		//0,1, or 2
@@ -208,12 +209,19 @@ void Declaration::ParseInt()
 	}
 	bit_max = 64;
 	if (head==nullptr)
-    return;
+		return;
 	head->isUnsigned = isUnsigned;
 	head->isVolatile = isVolatile;
 	head->isIO = isIO;
 	head->isConst = isConst;
 	NextToken();
+	if (lastst==kw_vector) {
+		int btp = head->GetIndex();
+		head = TYP::Make(bt_vector,512);
+		head->btp = btp;
+		tail = head;
+		NextToken();
+	}
 	if (lastst==kw_task) {
 		isTask = TRUE;
 		NextToken();

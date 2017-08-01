@@ -156,7 +156,7 @@ CSE *InsertNodeIntoCSEList(ENODE *node, int duse)
 		csp = &CSETable[csendx];
 		csendx++;
 //        csp = allocCSE();
-        csp->next = olist;
+        //csp->next = olist;
         csp->uses = 1;
         csp->duses = (duse != 0);
         csp->exp = DuplicateEnode(node);
@@ -318,6 +318,7 @@ static void scanexpr(ENODE *node, int duse)
 		case en_ccw:
 		case en_chw:
         case en_uminus:
+		case en_abs:
         case en_compl:  case en_ainc:
         case en_adec:   case en_not:
         case en_chk:
@@ -486,7 +487,7 @@ int OptimizationDesireability(CSE *csp)
  */
 void repexpr(ENODE *node)
 {
-	struct cse      *csp;
+	CSE *csp;
         if( node == NULL )
                 return;
         switch( node->nodetype ) {
@@ -569,6 +570,7 @@ void repexpr(ENODE *node)
 				case en_ccw:
 				case en_chw:
                 case en_uminus:
+				case en_abs:
                 case en_not:    case en_compl:
                 case en_ainc:   case en_adec:
                 case en_chk:

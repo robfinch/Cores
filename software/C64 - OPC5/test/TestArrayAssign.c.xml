@@ -1,0 +1,296 @@
+<title>C64D Compiler debug file</title>
+<compile>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+</Find>
+_void</Find>
+<Parsing GlobalDecl>
+<ParseGlobalDecl>
+Enter declare()
+A<ParseSpecifier>
+A<TYP__Make>
+</TYP__Make>
+</Find>
+_TestArrayAssign</Find>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_TestArrayAssign|CDE<ParseDeclSuffix>
+<openpa>
+****************************
+****************************
+Function: _TestArrayAssign
+****************************
+****************************
+<TYP__Make>
+</TYP__Make>
+o p q </openpa>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_TestArrayAssign</Find>
+hh1h2ikIIbIcinsert type: 34
+***Inserting:_TestArrayAssign into 009B28F0
+<BuildSignature>:_TestArrayAssign</BuildSignature>Insert _TestArrayAssign into 009B28F0()
+Insert into global table
+</Find>
+_TestArrayAssign</Find>
+At insert:
+Type array:
+   
+J<ParseFunction>
+***********************************
+***********************************
+***********************************
+Parsing function: _TestArrayAssign
+***********************************
+***********************************
+***********************************
+A<BuildParameterList
+><ParseParmDecls>
+A(42)</ParseParmDecls>
+B</BuildParameterList>
+B<BuildSignature>:_TestArrayAssign</BuildSignature></Find>
+_TestArrayAssignMatch
+</Find>
+CDEG<Parse function body>:_TestArrayAssign|
+</Find>
+_int</Find>
+Bb<GenerateMonadic>
+ABCD</GenerateMonadic>
+CEnter declare()
+A<ParseSpecifier>
+A</Find>
+_x</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_x|CDE<ParseDeclSuffix>
+<TYP__Make>
+</TYP__Make>
+Setting array size:6
+<TYP__Make>
+</TYP__Make>
+Setting array size:30
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_x</Find>
+hh1kIIbIcinsert type: 22
+***Inserting:_x into 0199C560
+<BuildSignature>:_x</BuildSignature>Insert _x into 0199C560()
+</Find>
+_x</Find>
+At insert:
+Type array:
+   
+JK</Find>
+_x</Find>
+Found _x
+</Find>
+_x</Find>
+</Find>
+_x</Find>
+<Parse><ParseExpression>
+<Nameref>
+GSearchfor:_x|
+<gsearch2> for: |_x|
+Looking in statement table
+</Find>
+_xMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_xIsEqual:T2sp is not null
+Type array:
+   
+tp:010B5130 <TYP__Make>
+</TYP__Make>
+deref tp:010B5160 </nameref2>
+</Nameref>
+<TYP__Make>
+</TYP__Make>
+<Deref></Deref></ParseExpression>
+</Parse></Find>
+_void</Find>
+D<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+E</ParseFunctionBody>
+Enter funcbottom
+Leave funcbottom
+F</ParseFunction>
+Enter declare()
+A<ParseSpecifier>
+A<TYP__Make>
+</TYP__Make>
+</Find>
+_TestArrayAssign2</Find>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_TestArrayAssign2|CDE<ParseDeclSuffix>
+<openpa>
+****************************
+****************************
+Function: _TestArrayAssign2
+****************************
+****************************
+<TYP__Make>
+</TYP__Make>
+o p q </openpa>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_TestArrayAssign2</Find>
+hh1h2ikIIbIcinsert type: 34
+***Inserting:_TestArrayAssign2 into 009B28F0
+<BuildSignature>:_TestArrayAssign2</BuildSignature>Insert _TestArrayAssign2 into 009B28F0()
+Insert into global table
+</Find>
+_TestArrayAssign2</Find>
+At insert:
+Type array:
+   
+J<ParseFunction>
+***********************************
+***********************************
+***********************************
+Parsing function: _TestArrayAssign2
+***********************************
+***********************************
+***********************************
+A<BuildParameterList
+><ParseParmDecls>
+A(42)</ParseParmDecls>
+B</BuildParameterList>
+B<BuildSignature>:_TestArrayAssign2</BuildSignature></Find>
+_TestArrayAssign2Match
+</Find>
+CDEG<Parse function body>:_TestArrayAssign2|
+</Find>
+_int</Find>
+Bb<GenerateMonadic>
+ABCD</GenerateMonadic>
+CEnter declare()
+A<ParseSpecifier>
+A</Find>
+_x</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_x|CDE<ParseDeclSuffix>
+<TYP__Make>
+</TYP__Make>
+Setting array size:6
+<TYP__Make>
+</TYP__Make>
+Setting array size:30
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_x</Find>
+hh1kIIbIcinsert type: 22
+***Inserting:_x into 0199D3C0
+<BuildSignature>:_x</BuildSignature>Insert _x into 0199D3C0()
+</Find>
+_x</Find>
+At insert:
+Type array:
+   
+JK</Find>
+_x</Find>
+Found _x
+</Find>
+_x</Find>
+</Find>
+_x</Find>
+<Parse><ParseExpression>
+<Nameref>
+GSearchfor:_x|
+<gsearch2> for: |_x|
+Looking in statement table
+</Find>
+_xMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_xIsEqual:T2sp is not null
+Type array:
+   
+tp:010B5280 <TYP__Make>
+</TYP__Make>
+deref tp:010B52B0 </nameref2>
+</Nameref>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+</ParseExpression>
+</Parse>Returning EOF from NextToken.
+D<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+Uncoded node in scanexpr():1
+Uncoded node in repexr():1
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+E</ParseFunctionBody>
+Enter funcbottom
+Leave funcbottom
+F</ParseFunction>
+</ParseGlobalDecl>
+</Parsing GlobalDecl>
+</compile>
+<Dumplits>
+</Dumplits>
+Enter summary
+Leave summary
+<closefiles>
+ABC</closefiles>
+Next on command line (1).
+Exiting

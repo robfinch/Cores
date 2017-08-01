@@ -59,6 +59,10 @@ void dooper(ENODE **node)
 
     ep = *node;
     switch( ep->nodetype ) {
+	case en_abs:
+            ep->nodetype = en_icon;
+            ep->i = (ep->p[0]->i >= 0) ? ep->p[0]->i : -ep->p[0]->i;
+			break;
     case en_add:
             ep->nodetype = en_icon;
             ep->i = ep->p[0]->i + ep->p[1]->i;
@@ -77,6 +81,7 @@ void dooper(ENODE **node)
             ep->nodetype = en_icon;
             ep->i = ep->p[0]->i / ep->p[1]->i;
             break;
+	case en_asl:
     case en_shl:
 	case en_shlu:
             ep->nodetype = en_icon;
@@ -239,6 +244,11 @@ static void opt0(ENODE **node)
 			case en_ainc:
 			case en_adec:
                     opt0( &((*node)->p[0]));
+                    return;
+			case en_abs:
+                    opt0( &(ep->p[0]));
+                    if( ep->p[0]->nodetype == en_icon )
+						dooper(node);
                     return;
 			case en_compl:
                     opt0( &(ep->p[0]));
@@ -414,7 +424,7 @@ static void opt0(ENODE **node)
                     break;
 
 			case en_shr:	case en_shru:	case en_asr:
-			case en_shl:	case en_shlu:
+			case en_asl:	case en_shl:	case en_shlu:
                     opt0(&(ep->p[0]));
                     opt0(&(ep->p[1]));
                     if( ep->p[0]->nodetype == en_icon &&
@@ -507,6 +517,8 @@ static int xfold(ENODE *node)
                         i = node->i;
                         node->i = 0;
                         return i;
+				case en_abs:
+						return xfold(node->p[0]);
                 case en_add:
                         return xfold(node->p[0]) + xfold(node->p[1]);
                 case en_sub:
@@ -518,6 +530,7 @@ static int xfold(ENODE *node)
                         else if( node->p[1]->nodetype == en_icon )
                                 return xfold(node->p[0]) * node->p[1]->i;
                         else return 0;
+				case en_asl:
 				case en_shl:	case en_shlu:
                         if( node->p[0]->nodetype == en_icon )
                                 return xfold(node->p[1]) << node->p[0]->i;

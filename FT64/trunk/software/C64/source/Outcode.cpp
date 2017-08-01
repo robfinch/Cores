@@ -72,10 +72,7 @@ struct oplst {
 		{"subui",op_subui}, {"shru", op_shru}, {"divsi", op_divsi}, {"not", op_not},
 		{"addui",op_addui},
 
-		{"shr", op_shr}, {"dw", op_dw}, {"shl", op_shl}, {"shr", op_shr}, {"shru", op_shru},
-		{"shlu", op_shlu}, {"shlui", op_shlui},
-		{"shli", op_shli}, {"shri", op_shri}, {"shrui", op_shrui},
-		{"ror", op_ror}, {"rori", op_rori}, {"rol", op_rol}, {"roli", op_roli},
+		{"dw", op_dw},
 
 		{"bfext", op_bfext}, {"bfextu", op_bfextu}, {"bfins", op_bfins},
 		{"sw", op_sw}, {"lw", op_lw}, {"lh", op_lh}, {"lc", op_lc}, {"lb", op_lb},
@@ -137,8 +134,16 @@ struct oplst {
 		{"bsr", op_bsr},
 		{"cmpu", op_cmpu},
 		{"lc0i", op_lc0i}, {"lc1i", op_lc1i}, {"lc2i", op_lc2i}, {"lc3i", op_lc3i},
+
+		// shifts
+		{"shl", op_shl}, {"shr", op_shr}, {"shru", op_shru},
+		{"shlu", op_shlu}, {"shlui", op_shlui},
+		{"shli", op_shli}, {"shri", op_shri}, {"shrui", op_shrui},
+		{"ror", op_ror}, {"rori", op_rori}, {"rol", op_rol}, {"roli", op_roli},
 		{"sll", op_sll}, {"slli", op_slli}, {"srl", op_srl}, {"srli", op_srli}, {"sra", op_sra}, {"srai", op_srai},
-		{"asl", op_asl}, {"asli", op_asli}, {"lsr", op_lsr}, {"lsri", op_lsri}, {"chk", op_chk }, {"chki",op_chki}, {";", op_rem},
+		{"asl", op_asl}, {"asli", op_asli}, {"lsr", op_lsr}, {"lsri", op_lsri},
+		
+		{"chk", op_chk }, {"chki",op_chki}, {";", op_rem},
 
 		{"fbeq", op_fbeq}, {"fbne", op_fbne}, {"fbor", op_fbor}, {"fbun", op_fbun},
 		{"fblt", op_fblt}, {"fble", op_fble}, {"fbgt", op_fbgt}, {"fbge", op_fbge},
@@ -156,6 +161,13 @@ struct oplst {
 		{"std", op_std}, {"stp", op_stp}, {"stw", op_stw}, {"stb", op_stb}, {"stt", op_stt},
 		{"tgt", op_calltgt},
 		{"hint", op_hint},
+		{"abs", op_abs},
+		// Vector operations
+		{"lv", op_lv}, {"sv", op_sv},
+		{"vadd", op_vadd}, {"vsub", op_vsub}, {"vmul", op_vmul}, {"vdiv", op_vdiv},
+		{"vseq", op_vseq}, {"vsne", op_vsne},
+		{"vslt", op_vslt}, {"vsge", op_vsge}, {"vsle", op_vsle}, {"vsgt", op_vsgt},
+		{"vmuls", op_vmuls},
                 {0,0} };
 
 static char *pad(char *op)
@@ -231,11 +243,15 @@ void putop(int op, int len)
 					case 1:	sprintf_s(buf, sizeof(buf), "%s.b", opl[i].s); break;
 					case 2:	sprintf_s(buf, sizeof(buf), "%s.c", opl[i].s); break;
 					case 4:	sprintf_s(buf, sizeof(buf), "%s.h", opl[i].s); break;
-					case 8:	sprintf_s(buf, sizeof(buf), "%s.w", opl[i].s); break;
+					case 8:	sprintf_s(buf, sizeof(buf), "%s", opl[i].s); break;
 					}
 				}
-				else
-					sprintf_s(buf, sizeof(buf), "%s.%c", opl[i].s, len);
+				else {
+					if (len != 'w' && len!='W')
+						sprintf_s(buf, sizeof(buf), "%s.%c", opl[i].s, len);
+					else
+						sprintf_s(buf, sizeof(buf), "%s", opl[i].s);
+				}
 			}
 			else
 				sprintf_s(buf, sizeof(buf), "%s", opl[i].s);
@@ -380,7 +396,10 @@ void PutAddressMode(AMODE *ap)
             PutConstant(ap->offset,ap->lowhigh,ap->rshift);
             break;
     case am_reg:
-			ofs.write(RegMoniker(ap->preg));
+			if (ap->isVector)
+				ofs.printf("v%d", (int)ap->preg);
+			else
+				ofs.write(RegMoniker(ap->preg));
             break;
     case am_fpreg:
             ofs.printf("fp%d", (int)ap->preg);

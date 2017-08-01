@@ -39,6 +39,7 @@ int brsp=5;
 int bregmask = 0;
 */
 static short int next_reg;
+static short int next_vreg;
 static short int next_breg;
 #define MAX_REG 4			/* max. scratch data	register (D2) */
 #define	MAX_REG_STACK	30
@@ -47,6 +48,8 @@ static short int next_breg;
 static short int reg_in_use[256];	// 0 to 15
 static short int breg_in_use[16];	// 0 to 15
 static short int save_reg_in_use[256];
+static short int vreg_in_use[256];	// 0 to 15
+static short int save_vreg_in_use[256];
 
 static struct {
     enum e_am mode;
@@ -61,15 +64,24 @@ static struct {
 	save_reg_alloc[MAX_REG_STACK + 1],
 	stacked_regs[MAX_REG_STACK + 1],
 	breg_stack[MAX_REG_STACK + 1],
-	breg_alloc[MAX_REG_STACK + 1];
+	breg_alloc[MAX_REG_STACK + 1],
+	vreg_stack[MAX_REG_STACK + 1],
+	vreg_alloc[MAX_REG_STACK + 1],
+	save_vreg_alloc[MAX_REG_STACK + 1],
+	stacked_vregs[MAX_REG_STACK + 1]
+;
 
 static short int reg_stack_ptr;
 static short int reg_alloc_ptr;
 static short int save_reg_alloc_ptr;
+static short int vreg_stack_ptr;
+static short int vreg_alloc_ptr;
+static short int save_vreg_alloc_ptr;
 static short int breg_stack_ptr;
 static short int breg_alloc_ptr;
 
 char tmpregs[] = {1,2,3,4,5,6,7,8,9,10};
+char tmpvregs[] = {1,2,3,4,5,6,7,8,9,10};
 char tmpbregs[] = {5,6,7};
 char regstack[18];
 char bregstack[18];
@@ -84,25 +96,33 @@ void initRegStack()
 	SYM *sym = currentFn;
 
 	next_reg = sym->IsLeaf ? 1 : 3;
+	next_vreg = sym->IsLeaf ? 1 : 3;
     next_breg = 5;
 	//for (rsp=0; rsp < 3; rsp=rsp+1)
 	//	regstack[rsp] = tmpregs[rsp];
 	//rsp = 0;
 	for (i = 0; i <= 255; i++) {
 		reg_in_use[i] = -1;
+		vreg_in_use[i] = -1;
 		breg_in_use[i&15] = -1;
 	}
     reg_stack_ptr = 0;
     reg_alloc_ptr = 0;
+    vreg_stack_ptr = 0;
+    vreg_alloc_ptr = 0;
     breg_stack_ptr = 0;
     breg_alloc_ptr = 0;
 //    act_scratch = 0;
     memset(reg_stack,0,sizeof(reg_stack));
     memset(reg_alloc,0,sizeof(reg_alloc));
+    memset(vreg_stack,0,sizeof(reg_stack));
+    memset(vreg_alloc,0,sizeof(reg_alloc));
     memset(breg_stack,0,sizeof(breg_stack));
     memset(breg_alloc,0,sizeof(breg_alloc));
     memset(stacked_regs,0,sizeof(stacked_regs));
     memset(save_reg_alloc,0,sizeof(save_reg_alloc));
+    memset(stacked_vregs,0,sizeof(stacked_regs));
+    memset(save_vreg_alloc,0,sizeof(save_reg_alloc));
 }
 
 void GenerateTempRegPush(int reg, int rmode, int number, int stkpos)
@@ -121,6 +141,25 @@ void GenerateTempRegPush(int reg, int rmode, int number, int stkpos)
 		fatal("GenerateTempRegPush(): register already pushed");
     reg_alloc[number].f.isPushed = 'T';
 	if (++reg_stack_ptr > MAX_REG_STACK)
+		fatal("GenerateTempRegPush(): register stack overflow");
+}
+
+void GenerateTempVectorRegPush(int reg, int rmode, int number, int stkpos)
+{
+	AMODE *ap1;
+    ap1 = allocAmode();
+    ap1->preg = reg;
+    ap1->mode = rmode;
+
+	GenerateMonadic(op_push,0,ap1);
+	TRACE(printf("pushing r%d\r\n", reg);)
+    vreg_stack[vreg_stack_ptr].mode = (enum e_am)rmode;
+    vreg_stack[vreg_stack_ptr].reg = reg;
+    vreg_stack[vreg_stack_ptr].f.allocnum = number;
+    if (vreg_alloc[number].f.isPushed=='T')
+		fatal("GenerateTempRegPush(): register already pushed");
+    vreg_alloc[number].f.isPushed = 'T';
+	if (++vreg_stack_ptr > MAX_REG_STACK)
 		fatal("GenerateTempRegPush(): register stack overflow");
 }
 
@@ -179,6 +218,33 @@ AMODE *GetTempRegister()
     }
     if (reg_alloc_ptr++ == MAX_REG_STACK)
 		fatal("GetTempRegister(): register stack overflow");
+	return ap;
+}
+
+AMODE *GetTempVectorRegister()
+{
+	AMODE *ap;
+    SYM *sym = currentFn;
+
+	if (vreg_in_use[next_vreg] >= 0) {
+//		if (isThor)	
+//			GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(-8));
+		GenerateTempVectorRegPush(next_vreg, am_reg, vreg_in_use[next_vreg],0);
+	}
+	TRACE(printf("GetTempRegister:r%d\r\n", next_vreg);)
+    vreg_in_use[next_vreg] = vreg_alloc_ptr;
+    ap = allocAmode();
+    ap->mode = am_reg;
+    ap->preg = next_vreg;
+    ap->deep = vreg_alloc_ptr;
+	ap->isVector = TRUE;
+    vreg_alloc[vreg_alloc_ptr].reg = next_vreg;
+    vreg_alloc[vreg_alloc_ptr].mode = am_reg;
+    vreg_alloc[vreg_alloc_ptr].f.isPushed = 'F';
+    if (next_vreg++ >= 10)
+		next_vreg = sym->IsLeaf ? 1 : 3;		/* wrap around */
+    if (vreg_alloc_ptr++ == MAX_REG_STACK)
+		fatal("GetTempVectorRegister(): register stack overflow");
 	return ap;
 }
 
@@ -285,6 +351,7 @@ void validate(AMODE *ap)
     SYM *sym = currentFn;
 	int frg = sym->IsLeaf ? 1 : 3;
 
+	if (!ap->isVector)
     switch (ap->mode) {
 	case am_reg:
 		if ((ap->preg >= frg && ap->preg <= 10) && reg_alloc[ap->deep].f.isPushed == 'T' ) {
@@ -344,6 +411,48 @@ void ReleaseTempRegister(AMODE *ap)
 	}
 
 	validate(ap);
+	if (ap->isVector) {
+		switch (ap->mode) {
+		case am_ind:
+		case am_indx:
+		case am_ainc:
+		case am_adec:
+		case am_reg:
+	commonv:
+			if (ap->preg >= frg && ap->preg <= 10) {
+				if (vreg_in_use[ap->preg]==-1)
+					return;
+				if (next_vreg-- <= frg)
+					next_vreg = 10;
+				number = vreg_in_use[ap->preg];
+				vreg_in_use[ap->preg] = -1;
+				break;
+			}
+			return;
+		case am_indx2:
+		case am_indx3:
+			if (ap->sreg >= frg && ap->sreg <= 10) {
+				if (vreg_in_use[ap->sreg]==-1)
+					return;
+				if (next_vreg-- <= frg)
+					next_vreg = 10;
+				number = vreg_in_use[ap->sreg];
+				vreg_in_use[ap->sreg] = -1;
+				//break;
+			}
+			goto commonv;
+		default:
+			return;
+		}
+		if (vreg_alloc_ptr-- == 0)
+			fatal("ReleaseTempRegister(): no registers are allocated");
+	  //  if (reg_alloc_ptr != number)
+			//fatal("ReleaseTempRegister()/3");
+		if (vreg_alloc[number].f.isPushed=='T')
+			fatal("ReleaseTempRegister(): register on stack");
+		return;
+	}
+	else
     switch (ap->mode) {
 	case am_ind:
 	case am_indx:
@@ -469,9 +578,11 @@ void ReleaseTempFPRegister(AMODE *ap)
 
 void ReleaseTempReg(AMODE *ap)
 {
-     if (ap->mode==am_fpreg)
-         ReleaseTempFPRegister(ap);
-     else
-         ReleaseTempRegister(ap);
+	if (ap==nullptr)
+		return;
+	if (ap->mode==am_fpreg)
+		ReleaseTempFPRegister(ap);
+	else
+		ReleaseTempRegister(ap);
 }
 

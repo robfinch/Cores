@@ -62,42 +62,6 @@ static int OptimizationDesireability(CSE *csp)
     return csp->uses;
 }
 
-/*
- *      exchange will exchange the order of two expression entries
- *      following c1 in the linked list.
- */
-static void exchange(CSE **c1)
-{
-	CSE *csp1, *csp2;
-
-    csp1 = *c1;
-    csp2 = csp1->next;
-    csp1->next = csp2->next;
-    csp2->next = csp1;
-    *c1 = csp2;
-}
-
-/*
- *      bsort implements a bubble sort on the expression list.
- */
-static int bsort(CSE **list)
-{
-	CSE *csp1, *csp2;
-    int i;
-
-    csp1 = *list;
-    if( csp1 == NULL || csp1->next == NULL )
-        return FALSE;
-    i = bsort( &(csp1->next));
-    csp2 = csp1->next;
-    if( OptimizationDesireability(csp1) < OptimizationDesireability(csp2) ) {
-        exchange(list);
-        return TRUE;
-    }
-    return FALSE;
-}
-
-
 static int CSECmp(const void *a, const void *b)
 {
 	CSE *csp1, *csp2;
@@ -113,16 +77,6 @@ static int CSECmp(const void *a, const void *b)
 		return (0);
 	else
 		return (1);
-}
-
-static int CSECount(CSE *p)
-{
-	int count;
-
-	for(count = 0; p; count++) {
-		p = p->next;
-	}
-	return (count);
 }
 
 // ----------------------------------------------------------------------------
@@ -148,7 +102,6 @@ int AllocateRegisterVars()
 	rmask = 0;
 	fpmask = 0;
 	fprmask = 0;
-//	printf("Count:%d\r\n", CSECount(olist));
 
 	// Sort the CSE table according to desirability of allocating
 	// a register.

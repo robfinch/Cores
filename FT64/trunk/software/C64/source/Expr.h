@@ -73,7 +73,7 @@ enum e_node {
 		en_fsadd, en_fssub, en_fsmul, en_fsdiv,
 		en_fadd, en_fsub, en_fmul, en_fdiv,
 		en_i2d, en_i2t, en_i2q, en_d2i, en_q2i, en_s2q, en_t2i, // 63<-
-        en_div, en_shl, en_shlu, en_shr, en_shru, en_asr, en_cond, en_assign, 
+        en_div, en_asl, en_shl, en_shlu, en_shr, en_shru, en_asr, en_cond, en_assign, 
         en_asadd, en_assub, en_asmul, en_asdiv, en_asdivu, en_asmod, en_asmodu,
 		en_asrsh, en_asrshu, en_asmulu, //81
         en_aslsh, en_asand, en_asor, en_asxor, en_uminus, en_not, en_compl,
@@ -86,7 +86,12 @@ enum e_node {
 		en_uwfieldref,en_wfieldref,en_bfieldref,en_ubfieldref,
 		en_uhfieldref,en_hfieldref,en_ucfieldref,en_cfieldref,
 		en_dbl_ref, en_flt_ref, en_triple_ref, en_quad_ref,
-		en_chk
+		en_chk,
+		en_abs, en_max, en_min,
+		// Vector
+		en_autovcon, en_vector_ref,
+		en_vadd, en_vsub, en_vmul, en_vdiv,
+		en_vmuls,
 		};
 
 class ENODE {
@@ -123,16 +128,16 @@ public:
 
 //typedef struct enode ENODE;
 
-typedef struct cse {
-		short int nxt;
-        struct cse      *next;
-        ENODE *exp;           /* optimizable expression */
-        short int       uses;           /* number of uses */
-        short int       duses;          /* number of dereferenced uses */
-        short int       voidf;          /* cannot optimize flag */
-        short int       reg;            /* AllocateRegisterVarsd register */
-        unsigned int    isfp : 1;
-        } CSE;
+class CSE {
+public:
+	short int nxt;
+    ENODE *exp;           /* optimizable expression */
+    short int       uses;           /* number of uses */
+    short int       duses;          /* number of dereferenced uses */
+    short int       voidf;          /* cannot optimize flag */
+    short int       reg;            /* AllocateRegisterVarsd register */
+    unsigned int    isfp : 1;
+};
 
 #define TRACE(x)
 

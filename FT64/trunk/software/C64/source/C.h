@@ -58,7 +58,10 @@ enum e_sym {
         comma, colon, semicolon, double_colon, uparrow, openbr, closebr, begin, end,
         openpa, closepa, pointsto, dot, lor, land, nott, bitorr, bitandd,
 		ellipsis,
+		// functions
+		kw_abs, kw_max, kw_min,
 
+		kw_vector,
 		kw_int, kw_byte, kw_int8, kw_int16, kw_int32, kw_int40, kw_int64, kw_int80,
 		kw_icache, kw_dcache, kw_thread,
         kw_void, kw_char, kw_float, kw_double, kw_triple,
@@ -90,7 +93,7 @@ enum e_bt {
 		bt_byte, bt_ubyte,
         bt_char, bt_short, bt_long, bt_float, bt_double, bt_triple, bt_quad, bt_pointer,
 		bt_uchar, bt_ushort, bt_ulong,
-        bt_unsigned,
+        bt_unsigned, bt_vector,
         bt_struct, bt_union, bt_class, bt_enum, bt_void,
         bt_func, bt_ifunc, bt_label,
 		bt_interrupt, bt_oscall, bt_pascal, bt_kernel, bt_bitfield, bt_ubitfield,
@@ -317,6 +320,7 @@ public:
 	static TYP *Make(int bt, int siz);
 	static TYP *Copy(TYP *src);
 	bool IsFloatType() const { return (type==bt_quad || type==bt_float || type==bt_double || type==bt_triple); };
+	bool IsVectorType() const { return (type==bt_vector); };
 	bool IsUnion() const { return (type==bt_union); };
 	bool IsStructType() const { return (type==bt_struct || type==bt_class || type==bt_union); };
 	bool IsAggregateType() const { return (IsStructType() | isArray); };

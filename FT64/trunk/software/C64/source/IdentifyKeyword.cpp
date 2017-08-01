@@ -159,7 +159,9 @@ int IdentifyKeyword()
 		if (p[1]=='p' && p[2]=='i' && p[3]=='l' && p[4]=='o' && p[5]=='g' && p[6]=='\0')
 			return lastst = kw_epilog;
 	}
-	if (p[0]=='a') {	// and,asm,align,auto
+	if (p[0]=='a') {	// abs,and,asm,align,auto
+		//if (p[1]=='b' && p[2]=='s' && p[3]=='\0')
+		//	return lastst = kw_abs;
 		if (p[1]=='n' && p[2]=='d' && p[3]=='\0')
 			return lastst = land;
 		if (p[1]=='s' && p[2]=='m' && p[3]=='\0')
@@ -170,6 +172,8 @@ int IdentifyKeyword()
 			return lastst = kw_auto;
 	}
 	if (p[0]=='v') {		// virtual,void,volatile
+		if (p[1]=='e' && p[2]=='c' && p[3]=='t' && p[4]=='o' && p[5]=='r' && p[6]=='\0')
+			return lastst = kw_vector;
 		if (p[1]=='i' && p[2]=='r' && p[3]=='t' && p[4]=='u' && p[5]=='a' && p[6]=='l' && p[7]=='\0')
 			return lastst = kw_virtual;
 		if (p[1]=='o' && p[2]=='i' && p[3]=='d' && p[4]=='\0')
@@ -217,9 +221,15 @@ int IdentifyKeyword()
 			return lastst = iconst;
 		}
 	}
-	// mod
-	if (p[0]=='m' && p[1]=='o' && p[2]=='d' && p[3]=='\0')
-		return lastst = modop;
+	// max min mod
+	if (p[0]=='m') {
+		//if (p[1]=='a' && p[2]=='x' && p[3]=='\0')
+		//	return (lastst = kw_max);
+		//if (p[1]=='i' && p[2]=='n' && p[3]=='\0')
+		//	return (lastst = kw_min);
+		if (p[1]=='o' && p[2]=='d' && p[3]=='\0')
+			return lastst = modop;
+	}
 
 	if (p[0]=='p') {	// private,public,pascal,prolog
 		if (p[1]=='r' && p[2]=='i' && p[3]=='v' && p[4]=='a' && p[5]=='t' && p[6]=='e' && p[7]=='\0')
@@ -254,11 +264,11 @@ int IdentifyKeyword()
         if (p[1]=='e' && p[2]=='r' && p[3]=='n' && p[4]=='e' && p[5]=='l' && p[6]=='\0')
             return lastst = kw_kernel;
     }
-	// spinlock,spinunlock
-	if (p[0]=='s' && p[1]=='p' && p[2]=='i' && p[3]=='n' && p[4]=='l' && p[5]=='o' && p[6]=='c' && p[7]=='k' && p[8]=='\0')
-		return lastst = kw_spinlock;
-	if (p[0]=='s' && p[1]=='p' && p[2]=='i' && p[3]=='n' && p[4]=='u' && p[5]=='n' && p[6]=='l' && p[7]=='o' && p[8]=='c' && p[9]=='k' && p[10]=='\0')
-		return lastst = kw_spinunlock;
+	//// spinlock,spinunlock
+	//if (p[0]=='s' && p[1]=='p' && p[2]=='i' && p[3]=='n' && p[4]=='l' && p[5]=='o' && p[6]=='c' && p[7]=='k' && p[8]=='\0')
+	//	return lastst = kw_spinlock;
+	//if (p[0]=='s' && p[1]=='p' && p[2]=='i' && p[3]=='n' && p[4]=='u' && p[5]=='n' && p[6]=='l' && p[7]=='o' && p[8]=='c' && p[9]=='k' && p[10]=='\0')
+	//	return lastst = kw_spinunlock;
 
 	// this,triple,true
 	if (p[0]=='t') {

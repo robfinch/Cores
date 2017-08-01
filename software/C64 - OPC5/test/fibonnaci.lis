@@ -24,17 +24,17 @@
 
 *** local symbol table ***
 
-_c         =fffffffe   -    Auto        Long
-_c1        =fffffffa   -    Auto        Long
-_c2        =fffffff6   -    Auto        Long
-_n         =fffffff2   -    Auto        Long
+_c         =ffffffff   -    Auto        Long
+_c1        =fffffffd   -    Auto        Long
+_c2        =fffffffb   -    Auto        Long
+_n         =fffffff9   -    Auto        Long
 
 
 
 
  *** global scope typedef symbol table ***
 
-_main      =00003c   -    Global      Function returning Long
+_main      =00001e   -    Global      Function returning Long
 		Parameters:
 			Type array:
    

@@ -58,11 +58,14 @@ int wcharSupport = 1;
 int verbose = 0;
 int use_gp = 0;
 int address_bits = 32;
+
 int sizeOfWord = 8;
 int sizeOfFP = 8;
+int sizeOfFPS = 8;
 int sizeOfFPD = 8;
 int sizeOfFPT = 12;
 int sizeOfFPQ = 16;
+int sizeOfPtr = 8;
 
 std::ifstream *ifs;
 txtoStream ofs;

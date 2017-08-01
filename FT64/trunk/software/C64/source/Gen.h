@@ -18,6 +18,7 @@
 #define F_FPREG 1024
 #define F_IMM6  2048
 #define BF_ASSIGN	4096
+#define F_VREG	8192
 #define F_ALL   (15|1024)      /* all modes allowed */
 #define F_NOVALUE 32768		/* dont need result value */
 
@@ -31,6 +32,7 @@ typedef struct amode {
 	unsigned int defseg : 1;
 	unsigned int tempflag : 1;
 	unsigned int isFloat : 1;
+	unsigned int isVector : 1;
 	char FloatSize;
 	unsigned int isUnsigned : 1;
 	unsigned int lowhigh : 2;
@@ -113,11 +115,19 @@ enum e_op {
 		op_fs2d, op_i2d, op_i2t, op_ftoi, op_itof, op_qtoi,
 		op_fmov,
         op_fdmov, op_fix2flt, op_mtfp, op_mffp, op_flt2fix, op_mv2flt, op_mv2fix,
+		// Vector
+		op_lv, op_sv,
+		op_vadd, op_vsub, op_vmul, op_vdiv,
+		op_vadds, op_vsubs, op_vmuls, op_vdivs,
+		op_vseq, op_vsne,
+		op_vslt, op_vsge, op_vsle, op_vsgt,
 		// DSD9
 		op_ldd, op_ldb, op_ldp, op_ldw, op_ldbu, op_ldwu, op_ldpu, op_ldt, op_ldtu,
 		op_std, op_stb, op_stp, op_stw, op_stt, op_calltgt,
 		op_csrrw, op_nop,
 		op_hint,
+		// Built in functions
+		op_abs,
         op_empty };
 
 enum e_seg {

@@ -1,0 +1,45 @@
+     1	
+     2	void TestArrayAssign()
+     3	{
+     4		int x[3][5];
+     5	
+     6		x[2][4] = 10;
+     7	}
+     8	
+
+
+*** local symbol table ***
+
+_x         =ffffffe2   -    Auto        Array of Array of Long
+
+
+
+     9	void TestArrayAssign2()
+    10	{
+    11		int x[3][5];
+    12	
+    13		x[2] = {10,9,8,7,6};
+    14	}
+    15	
+{struct <no name> {LongLongLongLongLong}}
+
+*** local symbol table ***
+
+_x         =ffffffe2   -    Auto        Array of Array of Long
+
+
+
+
+ *** global scope typedef symbol table ***
+
+_TestArrayAssign =000000   -    Global      Function returning 
+		Parameters:
+			Type array:
+   
+_TestArrayAssign2 =000000   -    Global      Function returning 
+		Parameters:
+			Type array:
+   
+
+ *** structures and unions ***
+

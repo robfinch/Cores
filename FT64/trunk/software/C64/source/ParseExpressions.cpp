@@ -418,6 +418,13 @@ TYP *deref(ENODE **node, TYP *tp)
 			break;
 
 		// Pointers (addresses) are always unsigned
+		case bt_vector:
+			(*node)->esize = tp->size;
+			(*node)->etype = (enum e_bt)tp->type;
+            *node = makenode(en_vector_ref,*node,(ENODE *)NULL);
+			(*node)->isUnsigned = TRUE;
+            break;
+
 		case bt_pointer:
 		case bt_unsigned:
 			(*node)->esize = tp->size;
@@ -704,7 +711,9 @@ TYP *nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeArray *typear
 					error(ERR_ILLCLASS);
 				}
 				//sc_member
-				if (sp->tp->IsFloatType())
+				if (sp->tp->IsVectorType())
+					*node = makeinode(en_autovcon,sp->value.i);
+				else if (sp->tp->IsFloatType())
 					*node = makeinode(en_autofcon,sp->value.i);
 				else {
 					*node = makeinode(en_autocon,sp->value.i);
@@ -777,10 +786,10 @@ TYP *nameref(ENODE **node,int nt)
 			}
 */
 //
-//      ArgumentList will build a list of parameter expressions in
-//      a function call and return a pointer to the last expression
-//      parsed. since parameters are generally pushed from right
-//      to left we get just what we asked for...
+// ArgumentList will build a list of parameter expressions in
+// a function call and return a pointer to the last expression
+// parsed. since parameters are generally pushed from right
+// to left we get just what we asked for...
 //
 ENODE *ArgumentList(ENODE *hidden, TypeArray *typearray)
 {
@@ -888,6 +897,7 @@ SYM *makeStructPtr(std::string name)
 }
 
 
+// This function is dead code.
 // Create a list of dummy parameters based on argument types.
 // This is needed in order to add a function to the tables if
 // the function hasn't been encountered before.
@@ -1225,6 +1235,7 @@ int IsLValue(ENODE *node)
 	case en_struct_ref:
 	case en_ref32:
 	case en_ref32u:
+	case en_vector_ref:
             return TRUE;
 	case en_cbc:
 	case en_cbh:
@@ -1597,7 +1608,7 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
     ENODE *ep1, *ep2, *ep3;
     int flag2;
 
-  Enter("<ParseUnary>");
+	Enter("<ParseUnary>");
     ep1 = NULL;
     *node = (ENODE *)NULL;
 	flag2 = FALSE;
@@ -1662,17 +1673,17 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
 
     case nott:
     case kw_not:
-      NextToken();
-      tp = ParseCastExpression(&ep1);
-      if( tp == NULL ) {
-        error(ERR_IDEXPECT);
-        return (TYP *)NULL;
-      }
-      ep1 = makenode(en_not,ep1,(ENODE *)NULL);
-      ep1->constflag = ep1->p[0]->constflag;
-      ep1->isUnsigned = ep1->p[0]->isUnsigned;
-      ep1->esize = tp->size;
-      break;
+		NextToken();
+		tp = ParseCastExpression(&ep1);
+		if( tp == NULL ) {
+			error(ERR_IDEXPECT);
+			return (TYP *)NULL;
+		}
+		ep1 = makenode(en_not,ep1,(ENODE *)NULL);
+		ep1->constflag = ep1->p[0]->constflag;
+		ep1->isUnsigned = ep1->p[0]->isUnsigned;
+		ep1->esize = tp->size;
+		break;
 
     case cmpl:
         NextToken();
@@ -1697,15 +1708,15 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
         if( tp->GetBtp() == NULL )
 			    error(ERR_DEREF);
         else {
-          // A star before a function pointer just means that we want to
-          // invoke the function. We want to retain the pointer to the
-          // function as the type.
-          if (tp->GetBtp()->type!=bt_func && tp->GetBtp()->type!=bt_ifunc)
-            tp = tp->GetBtp();
+			// A star before a function pointer just means that we want to
+			// invoke the function. We want to retain the pointer to the
+			// function as the type.
+			if (tp->GetBtp()->type!=bt_func && tp->GetBtp()->type!=bt_ifunc)
+				tp = tp->GetBtp();
         }
-		    tp1 = tp;
-	      //Autoincdec(tp,&ep1);
-		    tp = CondDeref(&ep1,tp);
+	    tp1 = tp;
+		//Autoincdec(tp,&ep1);
+	    tp = CondDeref(&ep1,tp);
         break;
 
     case bitandd:
@@ -1730,6 +1741,66 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
 		}
 */
         break;
+/*
+	case kw_abs:
+		NextToken();
+		if (lastst==openpa) {
+			flag2 = TRUE;
+			NextToken();
+		}
+        tp = ParseCastExpression(&ep1);
+        if( tp == NULL ) {
+            error(ERR_IDEXPECT);
+            return (TYP *)NULL;
+        }
+        ep1 = makenode(en_abs,ep1,(ENODE *)NULL);
+        ep1->constflag = ep1->p[0]->constflag;
+		ep1->isUnsigned = ep1->p[0]->isUnsigned;
+		ep1->esize = tp->size;
+		if (flag2)
+			needpunc(closepa,2);
+		break;
+
+	case kw_max:
+	case kw_min:
+		{
+			TYP *tp1, *tp2, *tp3;
+
+			flag2 = lastst==kw_max;
+			NextToken();
+			needpunc(comma,2);
+			tp1 = ParseCastExpression(&ep1);
+			if( tp1 == NULL ) {
+				error(ERR_IDEXPECT);
+				return (TYP *)NULL;
+			}
+			needpunc(comma,2);
+			tp2 = ParseCastExpression(&ep2);
+			if( tp1 == NULL ) {
+				error(ERR_IDEXPECT);
+				return (TYP *)NULL;
+			}
+			if (lastst==comma) {
+				NextToken();
+				tp3 = ParseCastExpression(&ep3);
+				if( tp1 == NULL ) {
+					error(ERR_IDEXPECT);
+					return (TYP *)NULL;
+				}
+			}
+			else
+				tp3 = nullptr;
+			tp = forcefit(&ep2,tp2,&ep1,tp1,1);
+			tp = forcefit(&ep3,tp3,&ep2,tp,1);
+			ep1 = makenode(flag2 ? en_max : en_min,ep1,ep2);
+			ep1->p[2] = ep3;
+			ep1->constflag = ep1->p[0]->constflag & ep2->p[0]->constflag & ep3->p[0]->constflag;
+			ep1->isUnsigned = ep1->p[0]->isUnsigned;
+			ep1->esize = tp->size;
+			needpunc(closepa,2);
+		}
+		break;
+*/
     case kw_sizeof:
         NextToken();
 		if (lastst==openpa) {
@@ -1770,10 +1841,10 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
     case kw_new:
       NextToken();
       if (IsBeginningOfTypecast(lastst)) {
-        std::string *name = new std::string("_malloc");
-        
-        tp = head;
-        tp1 = tail;
+			std::string *name = new std::string("_malloc");
+
+			tp = head;
+			tp1 = tail;
   			Declaration::ParseSpecifier(0);
   			Declaration::ParsePrefix(FALSE);
   			if( head != NULL )
@@ -1789,7 +1860,7 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
   			tail = tp1;
       }
       else {
-        std::string *name = new std::string("_malloc");
+			std::string *name = new std::string("_malloc");
 
   			sizeof_flag++;
   			tp = ParseUnaryExpression(&ep1, got_pa);
@@ -1806,16 +1877,16 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
       break;
 
     case kw_delete:
-      NextToken();
-      {
-        std::string *name = new std::string("_free");
+		NextToken();
+		{
+			std::string *name = new std::string("_free");
         
   			if (lastst==openbr) {
-  	      NextToken();
+				NextToken();
     			needpunc(closebr,50);
 		    }
-        tp1 = ParseCastExpression(&ep1);
-        tp1 = deref(&ep1, tp1);
+			tp1 = ParseCastExpression(&ep1);
+			tp1 = deref(&ep1, tp1);
   			ep2 = makesnode(en_cnacon, name, name, 0);
   			ep1 = makefcnode(en_fcall, ep2, ep1, nullptr);
       }
@@ -2128,6 +2199,8 @@ TYP *forcefit(ENODE **node1,TYP *tp1,ENODE **node2,TYP *tp2, bool promote)
 				*node1 = makenode(en_i2q,*node1,*node2);
 				return tp2;
 			}
+			if (tp2->type==bt_vector)
+				return (tp2);
 		}
 		else {
 			switch(tp2->type) {
@@ -2247,6 +2320,7 @@ TYP *multops(ENODE **node)
 	ENODE *ep1, *ep2;
 	TYP *tp1, *tp2;
 	int	oper;
+	bool isScalar;
     
     Enter("Mulops");
     ep1 = (ENODE *)NULL;
@@ -2260,6 +2334,7 @@ TYP *multops(ENODE **node)
                 oper = lastst;
                 NextToken();       /* move on to next unary op */
                 tp2 = ParseCastExpression(&ep2);
+				isScalar = !tp2->IsVectorType();
                 if( tp2 == 0 ) {
                         error(ERR_IDEXPECT);
                         *node = ep1;
@@ -2270,26 +2345,36 @@ TYP *multops(ENODE **node)
                 tp1 = forcefit(&ep2,tp2,&ep1,tp1,true);
                 switch( oper ) {
                         case star:
-                                if (tp1->type==bt_triple) {
+								switch(tp1->type) {
+								case bt_triple:
 									ep1 = makenode(en_fmul,ep1,ep2);
 									ep1->esize = 6;
-                                }  
-								else if (tp1->type==bt_double) {
+									break;
+								case bt_double:
 									ep1 = makenode(en_fmul,ep1,ep2);
 									ep1->esize = 4;
-								}
-								else if (tp1->type==bt_quad) {
+									break;
+								case bt_quad:
 									ep1 = makenode(en_fmul,ep1,ep2);
 									ep1->esize = 8;
-								}
-								else if (tp1->type==bt_float) {
+									break;
+								case bt_float:
 									ep1 = makenode(en_fmul,ep1,ep2);
 									ep1->esize = 2;
-								}
-								else if( tp1->isUnsigned )
+									break;
+								case bt_vector:
+									if (isScalar)
+										ep1 = makenode(en_vmuls,ep1,ep2);
+									else
+										ep1 = makenode(en_vmul,ep1,ep2);
+									ep1->esize = 512;
+									break;
+                                default:
+									if( tp1->isUnsigned )
                                         ep1 = makenode(en_mulu,ep1,ep2);
-                                else
+									else
                                         ep1 = makenode(en_mul,ep1,ep2);
+								}
 								ep1->esize = tp1->size;
 								ep1->etype = (e_bt)tp1->type;
                                 break;
@@ -2341,9 +2426,9 @@ TYP *multops(ENODE **node)
 
 static TYP *addops(ENODE **node)
 {
-	ENODE    *ep1, *ep2, *ep3, *ep4;
-    TYP             *tp1, *tp2;
-    int             oper;
+	ENODE *ep1, *ep2, *ep3, *ep4;
+    TYP *tp1, *tp2;
+    int oper;
 	int sz1, sz2;
 
     Enter("Addops");
@@ -2400,25 +2485,31 @@ static TYP *addops(ENODE **node)
     					ep2->esize = tp2->size;
                         }
                 tp1 = forcefit(&ep2,tp2,&ep1,tp1,true);
-                if (tp1->type==bt_triple) {
+				switch (tp1->type) {
+				case bt_triple:
     				ep1 = makenode( oper ? en_fadd : en_fsub,ep1,ep2);
 					ep1->esize = 6;
-                }
-    			else if (tp1->type==bt_double) {
+					break;
+				case bt_double:
     				ep1 = makenode( oper ? en_fadd : en_fsub,ep1,ep2);
 					ep1->esize = 4;
-				}
-    			else if (tp1->type==bt_quad) {
+					break;
+				case bt_quad:
                     tp1 = forcefit(&ep1,tp1,&ep2,tp2,true);
     				ep1 = makenode( oper ? en_fadd : en_fsub,ep1,ep2);
 					ep1->esize = 8;
-				}
-    			else if (tp1->type==bt_float) {
+					break;
+				case bt_float:
     				ep1 = makenode( oper ? en_fadd : en_fsub,ep1,ep2);
-					ep1->esize = 2;
-				}
-    			else
+					ep1->esize = 8;
+					break;
+				case bt_vector:
+    				ep1 = makenode( oper ? en_vadd : en_vsub,ep1,ep2);
+					ep1->esize = 8;
+					break;
+				default:
     				ep1 = makenode( oper ? en_add : en_sub,ep1,ep2);
+				}
             }
             PromoteConstFlag(ep1);
 			ep1->esize = tp1->size;
@@ -2437,9 +2528,9 @@ xit:
 // ----------------------------------------------------------------------------
 TYP *shiftop(ENODE **node)
 {
-	ENODE    *ep1, *ep2;
-    TYP             *tp1, *tp2;
-    int             oper;
+	ENODE *ep1, *ep2;
+    TYP *tp1, *tp2;
+    int oper;
 
     Enter("Shiftop");
     *node = NULL;
@@ -2460,7 +2551,7 @@ TYP *shiftop(ENODE **node)
 						if (tp1->isUnsigned)
 							ep1 = makenode(oper ? en_shlu : en_shru,ep1,ep2);
 						else
-							ep1 = makenode(oper ? en_shl : en_asr,ep1,ep2);
+							ep1 = makenode(oper ? en_asl : en_asr,ep1,ep2);
 						ep1->esize = tp1->size;
 						PromoteConstFlag(ep1);
 						}
@@ -2687,9 +2778,9 @@ xit:
 // ----------------------------------------------------------------------------
 TYP *asnop(ENODE **node)
 {      
-	ENODE    *ep1, *ep2, *ep3;
-    TYP             *tp1, *tp2;
-    int             op;
+	ENODE *ep1, *ep2, *ep3;
+    TYP *tp1, *tp2;
+    int op;
 
     Enter("Assignop");
     *node = (ENODE *)NULL;
