@@ -132,6 +132,10 @@ int ParseFunction(SYM *sp)
 	int nump, numa;
 	std::string name;
 
+	if (sp->tp->GetBtp()->IsAggregateType())
+		sp->IsLeaf = false;
+	else
+		sp->IsLeaf = true;
   dfs.puts("<ParseFunction>\n");
   isFuncBody = true;
 	if (sp==NULL) {
@@ -448,7 +452,6 @@ static Statement *ParseFunctionBody(SYM *sp)
 	if (!sp->IsInline)
 		GenerateMonadic(op_fnname,0,make_string(p));
 	currentFn = sp;
-	currentFn->IsLeaf = TRUE;
 	currentFn->DoesThrow = FALSE;
 	currentFn->UsesPredicate = FALSE;
 	regmask = 0;

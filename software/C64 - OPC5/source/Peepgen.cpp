@@ -251,16 +251,15 @@ void GenerateLabel(int labno)
  */
 void flush_peep()
 {
-	if (opt_nopeep==FALSE)
-		opt_peep();         /* do the peephole optimizations */
-  while( peep_head != NULL )
-  {
+	opt_peep();         /* do the peephole optimizations */
+	while( peep_head != NULL )
+	{
 		if( peep_head->opcode == op_label )
 			put_label((int)peep_head->oper1,"",GetNamespace(),'C');
 		else
 			put_ocode(peep_head);
 		peep_head = peep_head->fwd;
-  }
+	}
 }
 
 /*
@@ -379,6 +378,7 @@ void peep_add(struct ocode *ip)
 //
 static void PeepoptSub(struct ocode *ip)
 {  
+	return;
 	if (ip->opcode==op_subui) {
 		if (ip->oper3) {
 			if (ip->oper3->mode==am_immed) {
@@ -545,11 +545,11 @@ void PeepoptUctran(struct ocode *ip)
 {
 	if (uctran_off) return;
 	while( ip->fwd != NULL && ip->fwd->opcode != op_label)
-  {
+	{
 		ip->fwd = ip->fwd->fwd;
 		if( ip->fwd != NULL )
 			ip->fwd->back = ip;
-  }
+	}
 }
 
 void PeepoptJAL(struct ocode *ip)
@@ -1038,167 +1038,165 @@ static void opt_peep()
 	int rep;
 	int refBP;
 	
-	if (::opt_nopeep)
-		return;
-
-	opt_nbr();
-	for (rep = 0; rep < 2; rep++)
-	{
-    ip = peep_head;
-    while( ip != NULL )
-    {
-        switch( ip->opcode )
-        {
-		case op_rem:
-			if (ip->fwd) {
-				ip->fwd->comment = ip;
-				if (ip->back)
-					ip->back->fwd = ip->fwd;
-				ip->fwd->back = ip->back;
-			}
-			break;
-		case op_ld:
-			peep_ld(ip);
-			PeepoptLd(ip);
-			break;
-            case op_mov:
-                    peep_move(ip);
-                    break;
-            case op_add:
-            case op_addu:
-            case op_addui:
-                    peep_add(ip);
-                    break;
-            case op_sub:
-                    PeepoptSub(ip);
-                    break;
-            case op_cmp:
-                    peep_cmp(ip);
-                    break;
-            case op_mul:
-//                    PeepoptMuldiv(ip,op_shl);
-                    break;
-			case op_lc0i:
-					PeepoptLc0i(ip);
-					break;
-			case op_lc:
-					PeepoptLc(ip);
-					break;
-            case op_lw:
-                    //PeepoptLw(ip);
-                    break;
-            case op_sxb:
-            case op_sxc:
-            case op_sxh:
-                    PeepoptSxb(ip);
-                    PeepoptSxbAnd(ip);
-                    break;
-            case op_br:
-            case op_bra:
-					PeepoptBranch(ip);
-                    PeepoptUctran(ip);
-					break;
-			case op_pop:
-			case op_push:
-					PeepoptPushPop(ip);
-					break;
-            case op_lea:
-                    PeepoptLea(ip);
-                    break;
-			case op_jal:
-					PeepoptJAL(ip);
-					break;
-            case op_jmp:
-			case op_ret:
-            case op_rts:
-			case op_rti:
-			case op_rtd:
-            case op_rtl:
+	if (!::opt_nopeep) {
+		opt_nbr();
+		for (rep = 0; rep < 2; rep++)
+		{
+		ip = peep_head;
+		while( ip != NULL )
+		{
+			switch( ip->opcode )
+			{
+			case op_rem:
+				if (ip->fwd) {
+					ip->fwd->comment = ip;
+					if (ip->back)
+						ip->back->fwd = ip->fwd;
+					ip->fwd->back = ip->back;
+				}
+				break;
+			case op_ld:
+				peep_ld(ip);
+				PeepoptLd(ip);
+				break;
+				case op_mov:
+						peep_move(ip);
+						break;
+				case op_add:
+				case op_addu:
+				case op_addui:
+						peep_add(ip);
+						break;
+				case op_sub:
+						PeepoptSub(ip);
+						break;
+				case op_cmp:
+						peep_cmp(ip);
+						break;
+				case op_mul:
+	//                    PeepoptMuldiv(ip,op_shl);
+						break;
+				case op_lc0i:
+						PeepoptLc0i(ip);
+						break;
+				case op_lc:
+						PeepoptLc(ip);
+						break;
+				case op_lw:
+						//PeepoptLw(ip);
+						break;
+				case op_sxb:
+				case op_sxc:
+				case op_sxh:
+						PeepoptSxb(ip);
+						PeepoptSxbAnd(ip);
+						break;
+				case op_br:
+				case op_bra:
+						PeepoptBranch(ip);
+						PeepoptUctran(ip);
+						break;
+				case op_pop:
+				case op_push:
+						PeepoptPushPop(ip);
+						break;
+				case op_lea:
+						PeepoptLea(ip);
+						break;
+				case op_jal:
+						PeepoptJAL(ip);
+						break;
+				case op_jmp:
+				case op_ret:
+				case op_rts:
+				case op_rti:
+				case op_rtd:
+				case op_rtl:
+						PeepoptUctran(ip);
+						break;
+				case op_label:
+						PeepoptLabel(ip);
+						break;
+				case op_hint:
+						PeepoptHint(ip);
+						break;
+				case op_sh:
+				case op_sw:
+						PeepoptStore(ip);
+						break;
+				case op_and:
+						PeepoptAnd(ip);
+						break;
+				}
+				if (IsRet(ip))
 					PeepoptUctran(ip);
-					break;
-			case op_label:
-                    PeepoptLabel(ip);
-                    break;
-			case op_hint:
-					PeepoptHint(ip);
-					break;
-			case op_sh:
-			case op_sw:
-					PeepoptStore(ip);
-					break;
-			case op_and:
-					PeepoptAnd(ip);
-					break;
-            }
-			if (IsRet(ip))
-				PeepoptUctran(ip);
-	       ip = ip->fwd;
-        }
-     }
-	PeepoptSubSP();
-    ip = peep_head;
+			   ip = ip->fwd;
+			}
+		 }
+		PeepoptSubSP();
+		ip = peep_head;
 
-	// Check for references to the base pointer
-	refBP = 0;
-    for (ip = peep_head; ip != NULL; ip = ip->fwd)
-    {
-		if (ip->opcode != op_label) {
-			if (ip->opcode==op_hint) {
-				if (ip->oper1->offset) {
-					if ((ip->oper1->offset->i==4) || ip->oper1->offset->i==6) {
-						ip = ip->fwd;
-					while (ip && ip->opcode != op_hint)
+		// Check for references to the base pointer
+		refBP = 0;
+		for (ip = peep_head; ip != NULL; ip = ip->fwd)
+		{
+			if (ip->opcode != op_label) {
+				if (ip->opcode==op_hint) {
+					if (ip->oper1->offset) {
+						if ((ip->oper1->offset->i==4) || ip->oper1->offset->i==6) {
+							ip = ip->fwd;
+						while (ip && ip->opcode != op_hint)
+							ip = ip->fwd;
+						}
+					}
+				}
+				if (ip->oper1) {
+					if (ip->oper1->preg==regBP || ip->oper1->sreg==regBP)
+						refBP++;
+				}
+				if (ip->oper2) {
+					if (ip->oper2->preg==regBP || ip->oper2->sreg==regBP)
+						refBP++;
+				}
+				if (ip->oper3) {
+					if (ip->oper3->preg==regBP || ip->oper3->sreg==regBP)
+						refBP++;
+				}
+				if (ip->oper4) {
+					if (ip->oper4->preg==regBP || ip->oper4->sreg==regBP)
+						refBP++;
+				}
+			}
+		}
+
+		// Remove the link and unlink instructions if no references
+		// to BP. 
+		if (refBP==0) {
+			for (ip = peep_head; ip != NULL; ip = ip->fwd)
+			{
+				if (ip->opcode==op_hint && (ip->oper1->offset->i==4 || ip->oper1->offset->i==6)) {
+					ip = ip->fwd;
+					while (ip && ip->opcode != op_hint) {
+						if (ip->fwd)
+							ip->fwd->back = ip->back;
+						if (ip->back)
+							ip->back->fwd = ip->fwd;
 						ip = ip->fwd;
 					}
 				}
-			}
-			if (ip->oper1) {
-				if (ip->oper1->preg==regBP || ip->oper1->sreg==regBP)
-					refBP++;
-			}
-			if (ip->oper2) {
-				if (ip->oper2->preg==regBP || ip->oper2->sreg==regBP)
-					refBP++;
-			}
-			if (ip->oper3) {
-				if (ip->oper3->preg==regBP || ip->oper3->sreg==regBP)
-					refBP++;
-			}
-			if (ip->oper4) {
-				if (ip->oper4->preg==regBP || ip->oper4->sreg==regBP)
-					refBP++;
-			}
-		}
-	}
-
-	// Remove the link and unlink instructions if no references
-	// to BP. This only works for processor's with link and unlink
-	// instructions.
-	if (refBP==0) {
-	    for (ip = peep_head; ip != NULL; ip = ip->fwd)
-		{
-			if (ip->opcode==op_hint && (ip->oper1->offset->i==4 || ip->oper1->offset->i==6)) {
-				ip = ip->fwd;
-				while (ip && ip->opcode != op_hint) {
-					if (ip->fwd)
-						ip->fwd->back = ip->back;
+				/*
+				if (ip->opcode==op_link || ip->opcode==op_unlk) {
 					if (ip->back)
 						ip->back->fwd = ip->fwd;
-					ip = ip->fwd;
+					if (ip->fwd)
+						ip->fwd->back = ip->back;
 				}
+				*/
 			}
-			/*
-			if (ip->opcode==op_link || ip->opcode==op_unlk) {
-				if (ip->back)
-					ip->back->fwd = ip->fwd;
-				if (ip->fwd)
-					ip->fwd->back = ip->back;
-			}
-			*/
 		}
 	}
-
-	// Remove all the compiler hints that didn't work out.
+	// Remove all the compiler hints that didn't work out. Note hints are
+	// removed even if optimizations are turned off.
     for(ip = peep_head; ip != NULL; ip = ip->fwd )
     {
         if (ip->opcode==op_hint) {

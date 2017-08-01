@@ -28,10 +28,10 @@ _int</Find>
 <ParseGlobalDecl>
 Enter declare()
 A<ParseSpecifier>
-A<TYP__Make>
-</TYP__Make>
-</Find>
+A</Find>
 _abs</Find>
+<TYP__Make>
+</TYP__Make>
 </ParseSpecifier>
 Bb<ParseDeclPrefix>(1)
 <ParsePrefixId>B|_abs|CDE<ParseDeclSuffix>
@@ -56,9 +56,9 @@ X</openpa>
 </ParsePrefixId></ParseDeclPrefix>
 CDEGH</Find>
 _abs</Find>
-hh1h2ikIIbIcinsert type: 32
-***Inserting:_abs into 013CF8F0
-<BuildSignature>:_abs</BuildSignature>Insert _abs into 013CF8F0()
+hh1h2ikIIbIcinsert type: 33
+***Inserting:_abs into 00F128F0
+<BuildSignature>:_abs</BuildSignature>Insert _abs into 00F128F0()
 Insert into global table
 </Find>
 _abs</Find>
@@ -79,10 +79,10 @@ A(78)</Find>
 _int</Find>
 EA(54)CEnter declare()
 A<ParseSpecifier>
-A<TYP__Make>
-</TYP__Make>
-</Find>
+A</Find>
 _a</Find>
+<TYP__Make>
+</TYP__Make>
 </ParseSpecifier>
 Bb<ParseDeclPrefix>(1)
 <ParsePrefixId>B|_a|CDE<ParseDeclSuffix>
@@ -91,8 +91,8 @@ Bb<ParseDeclPrefix>(1)
 CDEGH</Find>
 _a</Find>
 hh1kIIbIcinsert type: 17
-***Inserting:_a into 013DFE0C
-<BuildSignature>:_a</BuildSignature>Insert _a into 013DFE0C(_abs)
+***Inserting:_a into 00F22E0C
+<BuildSignature>:_a</BuildSignature>Insert _a into 00F22E0C(_abs)
 </Find>
 _a</Find>
 At insert:
@@ -122,8 +122,8 @@ _a</Find>
 Looking in function's symbol table
 </Find>
 _a</Find>
-Searching method/class:_abs|013DFDC0
-Looking at params 013DFE0C
+Searching method/class:_abs|00F22DC0
+Looking at params 00F22E0C
 </Find>
 _aMatch
 </Find>
@@ -133,7 +133,7 @@ Found as parameter
 A:1:_aIsEqual:T2sp is not null
 Type array:
    
-tp:01AD20D0 <Deref></Deref>deref tp:01AD20D0 </nameref2>
+tp:016150D0 <Deref></Deref>deref tp:016150D0 </nameref2>
 </Nameref>
 </Find>
 _a</Find>
@@ -146,8 +146,8 @@ _a</Find>
 Looking in function's symbol table
 </Find>
 _a</Find>
-Searching method/class:_abs|013DFDC0
-Looking at params 013DFE0C
+Searching method/class:_abs|00F22DC0
+Looking at params 00F22E0C
 </Find>
 _aMatch
 </Find>
@@ -157,7 +157,7 @@ Found as parameter
 A:1:_aIsEqual:T2sp is not null
 Type array:
    
-tp:01AD20D0 <Deref></Deref>deref tp:01AD20D0 </nameref2>
+tp:016150D0 <Deref></Deref>deref tp:016150D0 </nameref2>
 </Nameref>
 </Find>
 _a</Find>
@@ -170,8 +170,8 @@ _a</Find>
 Looking in function's symbol table
 </Find>
 _a</Find>
-Searching method/class:_abs|013DFDC0
-Looking at params 013DFE0C
+Searching method/class:_abs|00F22DC0
+Looking at params 00F22E0C
 </Find>
 _aMatch
 </Find>
@@ -181,7 +181,7 @@ Found as parameter
 A:1:_aIsEqual:T2sp is not null
 Type array:
    
-tp:01AD20D0 <Deref></Deref>deref tp:01AD20D0 </nameref2>
+tp:016150D0 <Deref></Deref>deref tp:016150D0 </nameref2>
 </Nameref>
 </Parse></Find>
 _int</Find>
@@ -207,10 +207,10 @@ Leave funcbottom
 F</ParseFunction>
 Enter declare()
 A<ParseSpecifier>
-A<TYP__Make>
-</TYP__Make>
-</Find>
+A</Find>
 _min</Find>
+<TYP__Make>
+</TYP__Make>
 </ParseSpecifier>
 Bb<ParseDeclPrefix>(1)
 <ParsePrefixId>B|_min|CDE<ParseDeclSuffix>
@@ -235,9 +235,9 @@ X</openpa>
 </ParsePrefixId></ParseDeclPrefix>
 CDEGH</Find>
 _min</Find>
-hh1h2ikIIbIcinsert type: 32
-***Inserting:_min into 013CF8F0
-<BuildSignature>:_min</BuildSignature>Insert _min into 013CF8F0()
+hh1h2ikIIbIcinsert type: 33
+***Inserting:_min into 00F128F0
+<BuildSignature>:_min</BuildSignature>Insert _min into 00F128F0()
 Insert into global table
 </Find>
 _min</Find>
@@ -258,10 +258,10 @@ A(78)</Find>
 _int</Find>
 EA(54)CEnter declare()
 A<ParseSpecifier>
-A<TYP__Make>
-</TYP__Make>
-</Find>
+A</Find>
 _a</Find>
+<TYP__Make>
+</TYP__Make>
 </ParseSpecifier>
 Bb<ParseDeclPrefix>(1)
 <ParsePrefixId>B|_a|CDE<ParseDeclSuffix>
@@ -270,8 +270,8 @@ Bb<ParseDeclPrefix>(1)
 CDEGH</Find>
 _a</Find>
 hh1kIIbIcinsert type: 17
-***Inserting:_a into 013DFFCC
-<BuildSignature>:_a</BuildSignature>Insert _a into 013DFFCC(_min)
+***Inserting:_a into 00F22FCC
+<BuildSignature>:_a</BuildSignature>Insert _a into 00F22FCC(_min)
 </Find>
 _a</Find>
 At insert:
@@ -283,10 +283,10 @@ EA(78)</Find>
 _int</Find>
 EA(54)CEnter declare()
 A<ParseSpecifier>
-A<TYP__Make>
-</TYP__Make>
-</Find>
+A</Find>
 _b</Find>
+<TYP__Make>
+</TYP__Make>
 </ParseSpecifier>
 Bb<ParseDeclPrefix>(1)
 <ParsePrefixId>B|_b|CDE<ParseDeclSuffix>
@@ -295,8 +295,8 @@ Bb<ParseDeclPrefix>(1)
 CDEGH</Find>
 _b</Find>
 hh1kIIbIcinsert type: 17
-***Inserting:_b into 013DFFCC
-<BuildSignature>:_b</BuildSignature>Insert _b into 013DFFCC(_min)
+***Inserting:_b into 00F22FCC
+<BuildSignature>:_b</BuildSignature>Insert _b into 00F22FCC(_min)
 </Find>
 _b</Find>
 At insert:
@@ -329,8 +329,8 @@ _a</Find>
 Looking in function's symbol table
 </Find>
 _a</Find>
-Searching method/class:_min|013DFF80
-Looking at params 013DFFCC
+Searching method/class:_min|00F22F80
+Looking at params 00F22FCC
 </Find>
 _aMatch
 </Find>
@@ -340,7 +340,7 @@ Found as parameter
 A:1:_aIsEqual:T2sp is not null
 Type array:
    
-tp:01AD2160 <Deref></Deref>deref tp:01AD2160 </nameref2>
+tp:01615160 <Deref></Deref>deref tp:01615160 </nameref2>
 </Nameref>
 </Find>
 _b</Find>
@@ -353,8 +353,8 @@ _b</Find>
 Looking in function's symbol table
 </Find>
 _b</Find>
-Searching method/class:_min|013DFF80
-Looking at params 013DFFCC
+Searching method/class:_min|00F22F80
+Looking at params 00F22FCC
 </Find>
 _bMatch
 </Find>
@@ -364,7 +364,7 @@ Found as parameter
 A:1:_bIsEqual:T2sp is not null
 Type array:
    
-tp:01AD2190 <Deref></Deref>deref tp:01AD2190 </nameref2>
+tp:01615190 <Deref></Deref>deref tp:01615190 </nameref2>
 </Nameref>
 </Find>
 _a</Find>
@@ -377,8 +377,8 @@ _a</Find>
 Looking in function's symbol table
 </Find>
 _a</Find>
-Searching method/class:_min|013DFF80
-Looking at params 013DFFCC
+Searching method/class:_min|00F22F80
+Looking at params 00F22FCC
 </Find>
 _aMatch
 </Find>
@@ -388,7 +388,7 @@ Found as parameter
 A:1:_aIsEqual:T2sp is not null
 Type array:
    
-tp:01AD2160 <Deref></Deref>deref tp:01AD2160 </nameref2>
+tp:01615160 <Deref></Deref>deref tp:01615160 </nameref2>
 </Nameref>
 </Find>
 _b</Find>
@@ -401,8 +401,8 @@ _b</Find>
 Looking in function's symbol table
 </Find>
 _b</Find>
-Searching method/class:_min|013DFF80
-Looking at params 013DFFCC
+Searching method/class:_min|00F22F80
+Looking at params 00F22FCC
 </Find>
 _bMatch
 </Find>
@@ -412,7 +412,7 @@ Found as parameter
 A:1:_bIsEqual:T2sp is not null
 Type array:
    
-tp:01AD2190 <Deref></Deref>deref tp:01AD2190 </nameref2>
+tp:01615190 <Deref></Deref>deref tp:01615190 </nameref2>
 </Nameref>
 </Parse></Find>
 _int</Find>
@@ -438,10 +438,10 @@ Leave funcbottom
 F</ParseFunction>
 Enter declare()
 A<ParseSpecifier>
-A<TYP__Make>
-</TYP__Make>
-</Find>
+A</Find>
 _max</Find>
+<TYP__Make>
+</TYP__Make>
 </ParseSpecifier>
 Bb<ParseDeclPrefix>(1)
 <ParsePrefixId>B|_max|CDE<ParseDeclSuffix>
@@ -466,9 +466,9 @@ X</openpa>
 </ParsePrefixId></ParseDeclPrefix>
 CDEGH</Find>
 _max</Find>
-hh1h2ikIIbIcinsert type: 32
-***Inserting:_max into 013CF8F0
-<BuildSignature>:_max</BuildSignature>Insert _max into 013CF8F0()
+hh1h2ikIIbIcinsert type: 33
+***Inserting:_max into 00F128F0
+<BuildSignature>:_max</BuildSignature>Insert _max into 00F128F0()
 Insert into global table
 </Find>
 _max</Find>
@@ -489,10 +489,10 @@ A(78)</Find>
 _int</Find>
 EA(54)CEnter declare()
 A<ParseSpecifier>
-A<TYP__Make>
-</TYP__Make>
-</Find>
+A</Find>
 _a</Find>
+<TYP__Make>
+</TYP__Make>
 </ParseSpecifier>
 Bb<ParseDeclPrefix>(1)
 <ParsePrefixId>B|_a|CDE<ParseDeclSuffix>
@@ -501,8 +501,8 @@ Bb<ParseDeclPrefix>(1)
 CDEGH</Find>
 _a</Find>
 hh1kIIbIcinsert type: 17
-***Inserting:_a into 013E026C
-<BuildSignature>:_a</BuildSignature>Insert _a into 013E026C(_max)
+***Inserting:_a into 00F2326C
+<BuildSignature>:_a</BuildSignature>Insert _a into 00F2326C(_max)
 </Find>
 _a</Find>
 At insert:
@@ -514,10 +514,10 @@ EA(78)</Find>
 _int</Find>
 EA(54)CEnter declare()
 A<ParseSpecifier>
-A<TYP__Make>
-</TYP__Make>
-</Find>
+A</Find>
 _b</Find>
+<TYP__Make>
+</TYP__Make>
 </ParseSpecifier>
 Bb<ParseDeclPrefix>(1)
 <ParsePrefixId>B|_b|CDE<ParseDeclSuffix>
@@ -526,8 +526,8 @@ Bb<ParseDeclPrefix>(1)
 CDEGH</Find>
 _b</Find>
 hh1kIIbIcinsert type: 17
-***Inserting:_b into 013E026C
-<BuildSignature>:_b</BuildSignature>Insert _b into 013E026C(_max)
+***Inserting:_b into 00F2326C
+<BuildSignature>:_b</BuildSignature>Insert _b into 00F2326C(_max)
 </Find>
 _b</Find>
 At insert:
@@ -560,8 +560,8 @@ _a</Find>
 Looking in function's symbol table
 </Find>
 _a</Find>
-Searching method/class:_max|013E0220
-Looking at params 013E026C
+Searching method/class:_max|00F23220
+Looking at params 00F2326C
 </Find>
 _aMatch
 </Find>
@@ -571,7 +571,7 @@ Found as parameter
 A:1:_aIsEqual:T2sp is not null
 Type array:
    
-tp:01AD2220 <Deref></Deref>deref tp:01AD2220 </nameref2>
+tp:01615220 <Deref></Deref>deref tp:01615220 </nameref2>
 </Nameref>
 </Find>
 _b</Find>
@@ -584,8 +584,8 @@ _b</Find>
 Looking in function's symbol table
 </Find>
 _b</Find>
-Searching method/class:_max|013E0220
-Looking at params 013E026C
+Searching method/class:_max|00F23220
+Looking at params 00F2326C
 </Find>
 _bMatch
 </Find>
@@ -595,7 +595,7 @@ Found as parameter
 A:1:_bIsEqual:T2sp is not null
 Type array:
    
-tp:01AD2250 <Deref></Deref>deref tp:01AD2250 </nameref2>
+tp:01615250 <Deref></Deref>deref tp:01615250 </nameref2>
 </Nameref>
 </Find>
 _a</Find>
@@ -608,8 +608,8 @@ _a</Find>
 Looking in function's symbol table
 </Find>
 _a</Find>
-Searching method/class:_max|013E0220
-Looking at params 013E026C
+Searching method/class:_max|00F23220
+Looking at params 00F2326C
 </Find>
 _aMatch
 </Find>
@@ -619,7 +619,7 @@ Found as parameter
 A:1:_aIsEqual:T2sp is not null
 Type array:
    
-tp:01AD2220 <Deref></Deref>deref tp:01AD2220 </nameref2>
+tp:01615220 <Deref></Deref>deref tp:01615220 </nameref2>
 </Nameref>
 </Find>
 _b</Find>
@@ -632,8 +632,8 @@ _b</Find>
 Looking in function's symbol table
 </Find>
 _b</Find>
-Searching method/class:_max|013E0220
-Looking at params 013E026C
+Searching method/class:_max|00F23220
+Looking at params 00F2326C
 </Find>
 _bMatch
 </Find>
@@ -643,7 +643,7 @@ Found as parameter
 A:1:_bIsEqual:T2sp is not null
 Type array:
    
-tp:01AD2250 <Deref></Deref>deref tp:01AD2250 </nameref2>
+tp:01615250 <Deref></Deref>deref tp:01615250 </nameref2>
 </Nameref>
 </Parse></Find>
 _unsigned</Find>
@@ -671,10 +671,10 @@ Enter declare()
 A<ParseSpecifier>
 A</Find>
 _int</Find>
-<TYP__Make>
-</TYP__Make>
 </Find>
 _minu</Find>
+<TYP__Make>
+</TYP__Make>
 </ParseSpecifier>
 Bb<ParseDeclPrefix>(1)
 <ParsePrefixId>B|_minu|CDE<ParseDeclSuffix>
@@ -699,9 +699,9 @@ X</openpa>
 </ParsePrefixId></ParseDeclPrefix>
 CDEGH</Find>
 _minu</Find>
-hh1h2ikIIbIcinsert type: 32
-***Inserting:_minu into 013CF8F0
-<BuildSignature>:_minu</BuildSignature>Insert _minu into 013CF8F0()
+hh1h2ikIIbIcinsert type: 33
+***Inserting:_minu into 00F128F0
+<BuildSignature>:_minu</BuildSignature>Insert _minu into 00F128F0()
 Insert into global table
 </Find>
 _minu</Find>
@@ -724,10 +724,10 @@ EA(75)CEnter declare()
 A<ParseSpecifier>
 A</Find>
 _int</Find>
-<TYP__Make>
-</TYP__Make>
 </Find>
 _a</Find>
+<TYP__Make>
+</TYP__Make>
 </ParseSpecifier>
 Bb<ParseDeclPrefix>(1)
 <ParsePrefixId>B|_a|CDE<ParseDeclSuffix>
@@ -736,8 +736,8 @@ Bb<ParseDeclPrefix>(1)
 CDEGH</Find>
 _a</Find>
 hh1kIIbIcinsert type: 25
-***Inserting:_a into 013E050C
-<BuildSignature>:_a</BuildSignature>Insert _a into 013E050C(_minu)
+***Inserting:_a into 00F2350C
+<BuildSignature>:_a</BuildSignature>Insert _a into 00F2350C(_minu)
 </Find>
 _a</Find>
 At insert:
@@ -751,10 +751,10 @@ EA(75)CEnter declare()
 A<ParseSpecifier>
 A</Find>
 _int</Find>
-<TYP__Make>
-</TYP__Make>
 </Find>
 _b</Find>
+<TYP__Make>
+</TYP__Make>
 </ParseSpecifier>
 Bb<ParseDeclPrefix>(1)
 <ParsePrefixId>B|_b|CDE<ParseDeclSuffix>
@@ -763,8 +763,8 @@ Bb<ParseDeclPrefix>(1)
 CDEGH</Find>
 _b</Find>
 hh1kIIbIcinsert type: 25
-***Inserting:_b into 013E050C
-<BuildSignature>:_b</BuildSignature>Insert _b into 013E050C(_minu)
+***Inserting:_b into 00F2350C
+<BuildSignature>:_b</BuildSignature>Insert _b into 00F2350C(_minu)
 </Find>
 _b</Find>
 At insert:
@@ -797,8 +797,8 @@ _a</Find>
 Looking in function's symbol table
 </Find>
 _a</Find>
-Searching method/class:_minu|013E04C0
-Looking at params 013E050C
+Searching method/class:_minu|00F234C0
+Looking at params 00F2350C
 </Find>
 _aMatch
 </Find>
@@ -808,7 +808,7 @@ Found as parameter
 A:1:_aIsEqual:T2sp is not null
 Type array:
    
-tp:01AD22E0 <Deref></Deref>deref tp:01AD22E0 </nameref2>
+tp:016152E0 <Deref></Deref>deref tp:016152E0 </nameref2>
 </Nameref>
 </Find>
 _b</Find>
@@ -821,8 +821,8 @@ _b</Find>
 Looking in function's symbol table
 </Find>
 _b</Find>
-Searching method/class:_minu|013E04C0
-Looking at params 013E050C
+Searching method/class:_minu|00F234C0
+Looking at params 00F2350C
 </Find>
 _bMatch
 </Find>
@@ -832,7 +832,7 @@ Found as parameter
 A:1:_bIsEqual:T2sp is not null
 Type array:
    
-tp:01AD2310 <Deref></Deref>deref tp:01AD2310 </nameref2>
+tp:01615310 <Deref></Deref>deref tp:01615310 </nameref2>
 </Nameref>
 </Find>
 _a</Find>
@@ -845,8 +845,8 @@ _a</Find>
 Looking in function's symbol table
 </Find>
 _a</Find>
-Searching method/class:_minu|013E04C0
-Looking at params 013E050C
+Searching method/class:_minu|00F234C0
+Looking at params 00F2350C
 </Find>
 _aMatch
 </Find>
@@ -856,7 +856,7 @@ Found as parameter
 A:1:_aIsEqual:T2sp is not null
 Type array:
    
-tp:01AD22E0 <Deref></Deref>deref tp:01AD22E0 </nameref2>
+tp:016152E0 <Deref></Deref>deref tp:016152E0 </nameref2>
 </Nameref>
 </Find>
 _b</Find>
@@ -869,8 +869,8 @@ _b</Find>
 Looking in function's symbol table
 </Find>
 _b</Find>
-Searching method/class:_minu|013E04C0
-Looking at params 013E050C
+Searching method/class:_minu|00F234C0
+Looking at params 00F2350C
 </Find>
 _bMatch
 </Find>
@@ -880,7 +880,7 @@ Found as parameter
 A:1:_bIsEqual:T2sp is not null
 Type array:
    
-tp:01AD2310 <Deref></Deref>deref tp:01AD2310 </nameref2>
+tp:01615310 <Deref></Deref>deref tp:01615310 </nameref2>
 </Nameref>
 </Parse>Returning EOF from NextToken.
 D<GenerateMonadic>

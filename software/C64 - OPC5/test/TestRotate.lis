@@ -1,40 +1,10 @@
-     1	
-     2	int TestRotate(int a, int b)
-     3	{
-     4		return ((a << b) | (a >> (16-b));
- *** error 6: E Bad punctuation
-     5	}
-     6	
 
+int TestRotate(int a, int b)
+{
+	return ((a << b) | (a >> (16-b));
+}
 
-*** local symbol table ***
-
-
-
-
-     7	int TestRotate2(register int a, register int b)
-     8	{
-     9		return ((a << b) | (a >> (16-b));
- *** error 6: E Bad punctuation
-    10	}
-
-
-*** local symbol table ***
-
-
-
-
-
- *** global scope typedef symbol table ***
-
-_TestRotate =000000   -    External    Function returning Long
-		Parameters:
-			Type array:
-   017 017 
-_TestRotate2 =000000   -    External    Function returning Long
-		Parameters:
-			Type array:
-   017 017 
-
- *** structures and unions ***
-
+int TestRotate2(register int a, register int b)
+{
+	return ((a << b) | (a >> (16-b));
+}

@@ -69,11 +69,11 @@ static short int save_reg_alloc_ptr;
 static short int breg_stack_ptr;
 static short int breg_alloc_ptr;
 
-#define MAXTMPREG	5
+#define MAXTMPREG	4
 #define MINTMPREG	(sym->IsLeaf ? 0 : 2)
 #define NTMPREG		2
 
-char tmpregs[] = {1,2,5,6,7,8};
+char tmpregs[] = {1,2,5,6,7};
 char tmpbregs[] = {5,6,7};
 char regstack[18];
 char bregstack[18];

@@ -51,10 +51,10 @@ int regPC = 15;
 int regSP = 14;
 int regLR = 13;
 int regBP = 12;
+int regCLP = 11;                // class pointer
 int regZero = 0;
 int regXLR = 28;
 int regGP = 27;
-int regCLP = 25;                // class pointer
 int regFirstParm = 8;
 int regLastParm = 10;
 

@@ -1,0 +1,59 @@
+     1	typedef struct _tagTestStruct
+     2	{
+     3		int a;
+     4		int b;
+     5		int c : 14;
+     6		int d : 2;
+     7	} TestStruct;
+     8	
+     9	int TestStruct()
+    10	{
+    11		TestStruct ts;
+    12	
+    13		ts.a = 1;
+    14		ts.b = 2;
+    15		ts.c = 3;
+    16		ts.d = 1;
+    17		return (ts.c+ts.d);
+    18	}
+    19	
+
+
+*** local symbol table ***
+
+_ts        =fffffffa   -    Auto        struct __tagTestStruct 
+
+
+
+    20	TestStruct TestStruct2(register int a, register int c, register int d)
+    21	{
+    22		TestStruct b;
+    23	
+    24		b.a = a;
+    25		return b;
+    26	}
+    27	
+
+
+*** local symbol table ***
+
+_b         =fffffffa   -    Auto        struct __tagTestStruct 
+
+
+
+
+ *** global scope typedef symbol table ***
+
+_TestStruct =000000   1   struct __tagTestStruct 
+_TestStruct2 =000006   -    External    Function returning struct __tagTestStruct 
+		Parameters:
+			Type array:
+   017 017 017 022 
+
+ *** structures and unions ***
+
+__tagTestStruct =000000   -    Type        struct __tagTestStruct 
+    _a         =000000   -    Member      Long
+    _b         =000002   -    Member      Long
+    _c         =000004  0 14   -    Member      
+    _d         =000004  14 2   -    Member      

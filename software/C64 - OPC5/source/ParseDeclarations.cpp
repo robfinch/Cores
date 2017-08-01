@@ -203,11 +203,11 @@ void Declaration::ParseInt()
 {
 //printf("Enter ParseInt\r\n");
 	if (isUnsigned) {
-		head = TYP::Make(bt_ulong,sizeOfWord);
+		head = TYP::Make(bt_ushort,sizeOfWord);
 		tail = head;
 	}
 	else {
-		head = TYP::Make(bt_long,sizeOfWord);
+		head = TYP::Make(bt_short,sizeOfWord);
 		tail = head;
 	}
 	bit_max = 16;
@@ -364,9 +364,9 @@ SYM *Declaration::ParseId()
 //					head = tail = maketype(bt_long,4);
 	}
 	else {
-		head = (TYP *)TYP::Make(bt_long,8);
+		head = (TYP *)TYP::Make(bt_long,1);
 		tail = head;
-		bit_max = 64;
+		bit_max = 16;
 	}
   dfs.puts("</ParseId>");
 	return sp;
@@ -592,27 +592,27 @@ void Declaration::ParseDoubleColon(SYM *sp)
 	SYM *sym;
 	bool gotDouble = false;
 
-  while (lastst==double_colon) {
-    gotDouble = true;
-	  sym = tagtable.Find(lastid,false);
-	  if (sym)
-		   sp->parent = sym->GetIndex();//gsearch(lastid);
-	  else {
-	     sp->parent = 0;
-	     break;
-    }
-    NextToken();
-    if (lastst != id) {
-      error(ERR_IDEXPECT);
-      break;
-    }
-  }
-  if (gotDouble)
-    NextToken();
+	while (lastst==double_colon) {
+		gotDouble = true;
+		sym = tagtable.Find(lastid,false);
+		if (sym)
+			sp->parent = sym->GetIndex();//gsearch(lastid);
+		else {
+			sp->parent = 0;
+			break;
+		}
+		NextToken();
+		if (lastst != id) {
+			error(ERR_IDEXPECT);
+			break;
+		}
+	}
+	if (gotDouble)
+		NextToken();
 	currentClass = sp->GetParentPtr();
 	if (sp->parent)
 		dfs.printf("Setting parent:%s|\r\n",
-      (char *)sp->GetParentPtr()->name->c_str());
+		(char *)sp->GetParentPtr()->name->c_str());
 }
 
 void Declaration::ParseBitfieldSpec(bool isUnion)
@@ -636,37 +636,37 @@ void Declaration::ParseBitfieldSpec(bool isUnion)
 
 SYM *Declaration::ParsePrefixId()
 {
-  SYM *sp;
+	SYM *sp;
 
-  dfs.puts("<ParsePrefixId>");            
-  if (declid) delete declid;
-  declid = new std::string(lastid);
-  dfs.printf("B|%s|",(char *)declid->c_str());
-  sp = allocSYM();
-  dfs.printf("C"); 
-  if (funcdecl==1) {
-    if (nparms > 19)
-      error(ERR_TOOMANY_PARAMS);
-    else {
-		  names[nparms].str = *declid;
-		  nparms++;
-	  }
-	}
-  dfs.printf("D"); 
-  NextToken();
-  ParseDoubleColon(sp);
-  if (declid) delete declid;
+	dfs.puts("<ParsePrefixId>");            
+	if (declid) delete declid;
 	declid = new std::string(lastid);
-  sp->SetName(*declid);
-  dfs.printf("E"); 
+	dfs.printf("B|%s|",(char *)declid->c_str());
+	sp = allocSYM();
+	dfs.printf("C"); 
+	if (funcdecl==1) {
+		if (nparms > 19)
+			error(ERR_TOOMANY_PARAMS);
+		else {
+			names[nparms].str = *declid;
+			nparms++;
+		}
+	}
+	dfs.printf("D"); 
+	NextToken();
+	ParseDoubleColon(sp);
+	if (declid) delete declid;
+	declid = new std::string(lastid);
+	sp->SetName(*declid);
+	dfs.printf("E"); 
 	if (lastst == colon) {
-	  ParseBitfieldSpec(isUnion);
+		ParseBitfieldSpec(isUnion);
 		goto lxit;	// no ParseDeclarationSuffix()
 	}
-  sp->SetName(*declid);
+	sp->SetName(*declid);
 	sp = ParseSuffix(sp);
-lxit:
-  dfs.puts("</ParsePrefixId>");
+	lxit:
+	dfs.puts("</ParsePrefixId>");
 	return sp;
 }
 
@@ -1217,7 +1217,7 @@ int Declaration::declare(SYM *parent,TABLE *table,int al,int ilc,int ztype)
 		  sp->IsAuto = isAuto;
 		  sp->IsParameter = parsingParameterList > 0;
 		  isRegister = false;
-		  if (sp->parent < 0)// was nullptr
+		  if (sp->parent == 0)// was nullptr
 			  sp->parent = parent->GetIndex();
 		  if (al==sc_member)
 			  sp->IsPrivate = isPrivate;

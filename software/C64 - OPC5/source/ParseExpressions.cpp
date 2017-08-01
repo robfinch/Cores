@@ -887,7 +887,7 @@ SYM *makeStructPtr(std::string name)
 	return sp;
 }
 
-
+// Dead code
 // Create a list of dummy parameters based on argument types.
 // This is needed in order to add a function to the tables if
 // the function hasn't been encountered before.
@@ -931,7 +931,7 @@ SYM *CreateDummyParameters(ENODE *ep, SYM *parent, TYP *tp)
 		// Check for aggregate types passed as parameters. Structs
 		// and unions use the type size. There could also be arrays
 		// passed.
-		poffset += round2(sp1->tp->size);
+		poffset += sp1->tp->size;
 //		if (round8(sp1->tp->size) > 8)
 		sp1->storage_class = sc_auto;
 		sp1->next = 0;
@@ -1243,8 +1243,8 @@ int IsLValue(ENODE *node)
 	case en_cucu:
 	case en_cuhu:
             return IsLValue(node->p[0]);
-	case en_autocon:
-			return node->etype==bt_pointer;
+	//case en_autocon:
+	//		return node->etype==bt_pointer;
     }
     return FALSE;
 }

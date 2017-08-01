@@ -271,4 +271,3 @@ SYM *TABLE::Find(std::string na, bool opt)
 	return match[matchno-1];
 }
 
-

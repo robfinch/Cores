@@ -444,34 +444,34 @@ std::string *SYM::GetNameHash()
 std::string *SYM::BuildSignature(int opt)
 {
 	std::string *str;
-  std::string *nh;
+	std::string *nh;
 
-  dfs.printf("<BuildSignature>");
-  if (mangledNames) {
-  	str = new std::string("_Z");		// 'C' likes this
-  	dfs.printf("A");
-  	nh = GetNameHash();
-  	dfs.printf("B");
-  	str->append(*nh);
-  	dfs.printf("C");
-  	delete nh;
-  	dfs.printf("D");
-  	if (name > (std::string *)0x15)
-  	   str->append(*name);
-  	if (opt) {
-      dfs.printf("E");
-  	  str->append(*GetParameterTypes()->BuildSignature());
-    }
-  	else {
-  	  dfs.printf("F");
-  	  str->append(*GetProtoTypes()->BuildSignature());
-    }
-  }
-  else {
-  	str = new std::string("");
-    str->append(*name);
-  }
-  dfs.printf(":%s</BuildSignature>",(char *)str->c_str());
+	dfs.printf("<BuildSignature>");
+	if (mangledNames) {
+		str = new std::string("_Z");		// 'C' likes this
+		dfs.printf("A");
+		nh = GetNameHash();
+		dfs.printf("B");
+		str->append(*nh);
+		dfs.printf("C");
+		delete nh;
+		dfs.printf("D");
+		if (name > (std::string *)0x15)
+			str->append(*name);
+		if (opt) {
+			dfs.printf("E");
+			str->append(*GetParameterTypes()->BuildSignature());
+		}
+		else {
+			dfs.printf("F");
+			str->append(*GetProtoTypes()->BuildSignature());
+		}
+	}
+	else {
+		str = new std::string("");
+		str->append(*name);
+	}
+	dfs.printf(":%s</BuildSignature>",(char *)str->c_str());
 	return str;
 }
 
@@ -794,26 +794,26 @@ void SYM::AddProto(TypeArray *ta)
 
 void SYM::AddDerived(SYM *sp)
 {
-  DerivedMethod *mthd;
+	DerivedMethod *mthd;
  
-  dfs.puts("<AddDerived>"); 
-  mthd = (DerivedMethod *)allocx(sizeof(DerivedMethod));
-  dfs.printf("A");
-  if (sp->tp==nullptr)
-    dfs.printf("Nullptr");
-  if (sp->GetParentPtr()==nullptr)
-     throw C64PException(ERR_NULLPOINTER,10);
-  mthd->typeno = sp->GetParentPtr()->tp->typeno;
-  dfs.printf("B");
-  mthd->name = sp->BuildSignature();
+	dfs.puts("<AddDerived>"); 
+	mthd = (DerivedMethod *)allocx(sizeof(DerivedMethod));
+	dfs.printf("A");
+	if (sp->tp==nullptr)
+		dfs.printf("Nullptr");
+	if (sp->GetParentPtr()==nullptr)
+		throw C64PException(ERR_NULLPOINTER,10);
+	mthd->typeno = sp->GetParentPtr()->tp->typeno;
+	dfs.printf("B");
+	mthd->name = sp->BuildSignature();
 
-  dfs.printf("C");
-  if (derivitives) {
-    dfs.printf("D");
-     mthd->next = derivitives;
-  }
-  derivitives = mthd;
-  dfs.puts("</AddDerived>"); 
+	dfs.printf("C");
+	if (derivitives) {
+		dfs.printf("D");
+		mthd->next = derivitives;
+	}
+	derivitives = mthd;
+	dfs.puts("</AddDerived>"); 
 }
 
 

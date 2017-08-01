@@ -1,0 +1,665 @@
+<title>C64D Compiler debug file</title>
+<compile>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+</Find>
+_class</Find>
+<Parsing GlobalDecl>
+<ParseGlobalDecl>
+Enter declare()
+A<ParseSpecifier>
+A<ParseClassDeclaration>
+</Find>
+_ClassTest</Find>
+---------------------------------Class decl:_ClassTest
+---------------------------------</Find>
+_ClassTest</Find>
+AInsert into tagtable:_ClassTest|
+()
+</Find>
+_ClassTest</Find>
+At insert:
+Type array:
+   
+</Find>
+_public</Find>
+<TYP__Make>
+</TYP__Make>
+Insert _typeno into 01505084()
+</Find>
+_typeno</Find>
+At insert:
+Type array:
+   
+</Find>
+_int</Find>
+Enter declare()
+A<ParseSpecifier>
+A</Find>
+_a</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_a|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_a</Find>
+hh1kIIbIcinsert type: 17
+***Inserting:_a into 01505084
+<BuildSignature>:_a</BuildSignature>Insert _a into 01505084()
+</Find>
+_a</Find>
+At insert:
+Type array:
+   
+JK</Find>
+_int</Find>
+Enter declare()
+A<ParseSpecifier>
+A</Find>
+_b</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_b|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_b</Find>
+hh1kIIbIcinsert type: 17
+***Inserting:_b into 01505084
+<BuildSignature>:_b</BuildSignature>Insert _b into 01505084()
+</Find>
+_b</Find>
+At insert:
+Type array:
+   
+JK</Find>
+_static</Find>
+</Find>
+_int</Find>
+Enter declare()
+A<ParseSpecifier>
+A</Find>
+_Add</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_Add|CDE<ParseDeclSuffix>
+<openpa>
+****************************
+****************************
+Function: _Add
+****************************
+****************************
+</Find>
+_int</Find>
+<TYP__Make>
+</TYP__Make>
+o p q rss Set false
+<BuildParameterList
+><ParseParmDecls>
+A(54)CEnter declare()
+A<ParseSpecifier>
+A</Find>
+_a</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_a|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_a</Find>
+hh1kIIbIcinsert type: 17
+***Inserting:_a into 00E1318C
+<BuildSignature>:_a</BuildSignature>Insert _a into 00E1318C(_Add)
+</Find>
+_a</Find>
+At insert:
+Type array:
+   
+JK</Find>
+_int</Find>
+EA(54)CEnter declare()
+A<ParseSpecifier>
+A</Find>
+_b</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_b|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_b</Find>
+hh1kIIbIcinsert type: 17
+***Inserting:_b into 00E1318C
+<BuildSignature>:_b</BuildSignature>Insert _b into 00E1318C(_Add)
+</Find>
+_b</Find>
+At insert:
+Type array:
+   
+JKEA(45)</ParseParmDecls>
+B</Find>
+_aMatch
+</Find>
+</Find>
+_bMatch
+</Find>
+</BuildParameterList>
+Set false
+Z
+YParameter types(_Add)
+Type array:
+   017 017 
+Proto types(_Add)
+Type array:
+   017 017 
+X</openpa>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_Add</Find>
+hh1h2ikIIbIcinsert type: 33
+***Inserting:_Add into 01505084
+<BuildSignature>:_Add</BuildSignature>Insert _Add into 01505084()
+</Find>
+_Add</Find>
+At insert:
+Type array:
+   017 017 
+JK</ParseClassDeclaration>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(37)
+<ParseDeclSuffix>
+</ParseDeclSuffix>
+Z</ParseDeclPrefix>
+CDEGH</Find>
+_ClassTest</Find>
+hh1kIIbIcJK</Find>
+_int</Find>
+Enter declare()
+A<ParseSpecifier>
+A</Find>
+_ClassTest</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_ClassTest|CDE<ParseDeclSuffix>
+<openpa>
+****************************
+****************************
+Function: _ClassTest
+****************************
+****************************
+<TYP__Make>
+</TYP__Make>
+o p q </openpa>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_ClassTest</Find>
+hh1h2ikIIbIcinsert type: 34
+***Inserting:_ClassTest into 00E028F0
+<BuildSignature>:_ClassTest</BuildSignature>Insert _ClassTest into 00E028F0()
+Insert into global table
+</Find>
+_ClassTest</Find>
+At insert:
+Type array:
+   
+J<ParseFunction>
+***********************************
+***********************************
+***********************************
+Parsing function: _ClassTest
+***********************************
+***********************************
+***********************************
+A<BuildParameterList
+><ParseParmDecls>
+A(42)</ParseParmDecls>
+B</BuildParameterList>
+B<BuildSignature>:_ClassTest</BuildSignature></Find>
+_ClassTestMatch
+</Find>
+CDEG<Parse function body>:_ClassTest|
+</Find>
+_ClassTest</Find>
+Bb<GenerateMonadic>
+ABCD</GenerateMonadic>
+CFound _ClassTest
+</Find>
+_ClassTestMatch
+</Find>
+Found in tagtablesp okay sc=5
+Declaring var of type
+Enter declare()
+A<ParseSpecifier>
+A<ParseId>_ClassTest</Find>
+_ClassTestMatch
+</Find>
+Actually found type.
+</Find>
+_a</Find>
+</ParseId></ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_a|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_a</Find>
+hh1kIIbIcinsert type: 30
+***Inserting:_a into 01EA2EC8
+<BuildSignature>:_a</BuildSignature>Insert _a into 01EA2EC8()
+</Find>
+_a</Find>
+At insert:
+Type array:
+   
+JK</Find>
+_b</Find>
+b<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_b|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_b</Find>
+hh1kIIbIcinsert type: 30
+***Inserting:_b into 01EA2EC8
+<BuildSignature>:_b</BuildSignature>Insert _b into 01EA2EC8()
+</Find>
+_b</Find>
+At insert:
+Type array:
+   
+JK<FindRising>_ClassTest 
+</Find>
+_ClassTest</Find>
+</FindRising></Find>
+_a</Find>
+Found _a
+</Find>
+_a</Find>
+</Find>
+_a</Find>
+<Parse><ParseExpression>
+<Nameref>
+GSearchfor:_a|
+<gsearch2> for: |_a|
+Looking in statement table
+</Find>
+_aMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_aIsEqual:T2sp is not null
+Type array:
+   
+tp:01505070 deref tp:01505070 </nameref2>
+</Nameref>
+</Find>
+_a</Find>
+dot search: 01505084
+<FindRising>_a 
+</Find>
+_aMatch
+</Find>
+</FindRising>Sym:_a Types: (000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, )
+<FindRisingMatch>_a type 17 Found method:IsEqual:T3Found in a base class:</FindRisingMatch>
+tp1->type:17tp1->type:17<Deref></Deref>tp1->type:17B</Find>
+_a</Find>
+<Nameref>
+GSearchfor:_a|
+<gsearch2> for: |_a|
+Looking in statement table
+</Find>
+_aMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_aIsEqual:T2sp is not null
+Type array:
+   
+tp:01505070 deref tp:01505070 </nameref2>
+</Nameref>
+</Find>
+_a</Find>
+dot search: 01505084
+<FindRising>_a 
+</Find>
+_aMatch
+</Find>
+</FindRising>Sym:_a Types: (000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, )
+<FindRisingMatch>_a type 17 Found method:IsEqual:T3Found in a base class:</FindRisingMatch>
+tp1->type:17tp1->type:17<Deref></Deref>tp1->type:17B</Find>
+_b</Find>
+<Nameref>
+GSearchfor:_b|
+<gsearch2> for: |_b|
+Looking in statement table
+</Find>
+_bMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_bIsEqual:T2sp is not null
+Type array:
+   
+tp:01505070 deref tp:01505070 </nameref2>
+</Nameref>
+</Find>
+_a</Find>
+dot search: 01505084
+<FindRising>_a 
+</Find>
+_aMatch
+</Find>
+</FindRising>Sym:_a Types: (000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, )
+<FindRisingMatch>_a type 17 Found method:IsEqual:T3Found in a base class:</FindRisingMatch>
+tp1->type:17tp1->type:17<Deref></Deref>tp1->type:17B</Find>
+_return</Find>
+</ParseExpression>
+</Parse><Parse></Find>
+_a</Find>
+<Nameref>
+GSearchfor:_a|
+<gsearch2> for: |_a|
+Looking in statement table
+</Find>
+_aMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_aIsEqual:T2sp is not null
+Type array:
+   
+tp:01505070 deref tp:01505070 </nameref2>
+</Nameref>
+</Find>
+_a</Find>
+dot search: 01505084
+<FindRising>_a 
+</Find>
+_aMatch
+</Find>
+</FindRising>Sym:_a Types: (000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, )
+<FindRisingMatch>_a type 17 Found method:IsEqual:T3Found in a base class:</FindRisingMatch>
+tp1->type:17tp1->type:17<Deref></Deref>tp1->type:17B</Parse></Find>
+_int</Find>
+D<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+E</ParseFunctionBody>
+Enter funcbottom
+Leave funcbottom
+F</ParseFunction>
+Enter declare()
+A<ParseSpecifier>
+A</Find>
+_ClassTest</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_ClassTest|CD</Find>
+_ClassTestMatch
+</Find>
+</Find>
+_Add</Find>
+Setting parent:_ClassTest|
+E<ParseDeclSuffix>
+<openpa>
+****************************
+****************************
+Function: _Add
+****************************
+****************************
+</Find>
+_int</Find>
+<TYP__Make>
+</TYP__Make>
+o p q rsYParameter types(_Add)
+Type array:
+   
+Proto types(_Add)
+Type array:
+   
+X</openpa>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_AddMatch
+</Find>
+0IsEqual:F2hh1h20IsEqual:F2ikIIbIcinsert type: 33
+***Inserting:_Add into 00E028F0
+<BuildSignature>:_Add</BuildSignature><InsertMethod>_Add type 33 Insert _Add into 01505084()
+</Find>
+_AddMatch
+IsEqual:F2Type array:
+   017 017 
+</Find>
+At insert:
+Type array:
+   
+<FindRising>_Add 
+</Find>
+_AddMatch
+Match
+</Find>
+</FindRising>Sym:_Add Types: (017, 017, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, )
+Sym:_Add Types: (000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, )
+<FindRisingMatch>_Add type 33 <FindRising>_Add 
+</Find>
+_AddMatch
+Match
+</Find>
+</FindRising>Sym:_Add Types: (017, 017, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, )
+Sym:_Add Types: (000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, )
+Found method:IsEqual:F2IsEqual:T3</FindRisingMatch>
+</InsertMethod>
+J<ParseFunction>
+***********************************
+***********************************
+***********************************
+Parent: _ClassTest
+Parsing function: _Add
+***********************************
+***********************************
+***********************************
+A<BuildParameterList
+><ParseParmDecls>
+A(54)CEnter declare()
+A<ParseSpecifier>
+A</Find>
+_a</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_a|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_a</Find>
+hh1kIIbIcinsert type: 17
+***Inserting:_a into 00E137AC
+<BuildSignature>:_a</BuildSignature>Insert _a into 00E137AC(_Add)
+</Find>
+_a</Find>
+At insert:
+Type array:
+   
+JK</Find>
+_int</Find>
+EA(54)CEnter declare()
+A<ParseSpecifier>
+A</Find>
+_b</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_b|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_b</Find>
+hh1kIIbIcinsert type: 17
+***Inserting:_b into 00E137AC
+<BuildSignature>:_b</BuildSignature>Insert _b into 00E137AC(_Add)
+</Find>
+_b</Find>
+At insert:
+Type array:
+   
+JKEA(45)</ParseParmDecls>
+B</Find>
+_aMatch
+</Find>
+</Find>
+_bMatch
+</Find>
+</BuildParameterList>
+B<BuildSignature>:_Add</BuildSignature>Parent Class:_ClassTest|</Find>
+_AddMatch
+Match
+</Find>
+Found at least inexact match0IsEqual:T3Parameter types(_Add)
+Type array:
+   017 017 
+Proto types(_Add)
+Type array:
+   017 017 
+CParseFunction: sp changed
+DEG<Parse function body>:_Add|
+</Find>
+_return</Find>
+Bb<GenerateMonadic>
+ABCD</GenerateMonadic>
+C<Parse></Find>
+_a</Find>
+<Nameref>
+GSearchfor:_a|
+<gsearch2> for: |_a|
+Looking in statement table
+</Find>
+_a</Find>
+Looking in function's symbol table
+</Find>
+_a</Find>
+Searching method/class:_Add|00E13140
+Looking at params 00E1318C
+</Find>
+_aMatch
+</Find>
+Found as parameter
+</gsearch2>
+<nameref2>
+A:1:_aIsEqual:T2sp is not null
+Type array:
+   
+tp:015052B0 <Deref></Deref>deref tp:015052B0 </nameref2>
+</Nameref>
+</Find>
+_b</Find>
+<Nameref>
+GSearchfor:_b|
+<gsearch2> for: |_b|
+Looking in statement table
+</Find>
+_b</Find>
+Looking in function's symbol table
+</Find>
+_b</Find>
+Searching method/class:_Add|00E13140
+Looking at params 00E1318C
+</Find>
+_bMatch
+</Find>
+Found as parameter
+</gsearch2>
+<nameref2>
+A:1:_bIsEqual:T2sp is not null
+Type array:
+   
+tp:015052E0 <Deref></Deref>deref tp:015052E0 </nameref2>
+</Nameref>
+</Parse>Returning EOF from NextToken.
+D<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+E</ParseFunctionBody>
+Enter funcbottom
+Leave funcbottom
+F</ParseFunction>
+</ParseGlobalDecl>
+</Parsing GlobalDecl>
+</compile>
+<Dumplits>
+</Dumplits>
+Enter summary
+Leave summary
+<closefiles>
+ABC</closefiles>
+Next on command line (1).
+Exiting

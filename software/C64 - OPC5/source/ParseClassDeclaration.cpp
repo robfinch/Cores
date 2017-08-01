@@ -219,18 +219,18 @@ void ClassDeclaration::ParseMembers(SYM *sym, int ztype)
 	int slc;
 	TYP *tp = sym->tp;
 	int ist;
-  SYM *hsym;
-  std::string *name;
+	SYM *hsym;
+	std::string *name;
 
 	isPrivate = true;
 	if (sym->tp->size)
-     slc = roundSize(sym->tp);
-  else
-     slc = 0;
+		slc = roundSize(sym->tp);
+	else
+		slc = 0;
 
-//	slc = 0;
-  tp->val_flag = 1;
-//	tp->val_flag = FALSE;
+	//	slc = 0;
+	tp->val_flag = 1;
+	//	tp->val_flag = FALSE;
 	ist = isTypedef;
 	isTypedef = false;
 
@@ -240,16 +240,16 @@ void ClassDeclaration::ParseMembers(SYM *sym, int ztype)
 	// refeerenced as 0[r25].
 	hsym = allocSYM();
 	name = new std::string("_typeno");
-  hsym->SetName(*name);
+	hsym->SetName(*name);
 	hsym->storage_class = sc_member;
 	hsym->value.i = sym->tp->typeno;
 	hsym->tp = TYP::Make(bt_char,1);
-  hsym->tp->sname = new std::string("_typeno");
-  hsym->tp->alignment = 2;
+	hsym->tp->sname = new std::string("_typeno");
+	hsym->tp->alignment = 1;
 	tp->lst.insert(hsym);
-  slc += 2;
+	slc += 1;
 
-  while( lastst != end) {
+	while( lastst != end) {
 		if (lastst==kw_public)
 			isPrivate = false;
 		if (lastst==kw_private)
@@ -261,7 +261,7 @@ void ClassDeclaration::ParseMembers(SYM *sym, int ztype)
 		}
 		if (lastst==kw_unique || lastst==kw_static) {
 			NextToken();
-      declare(sym,&(tp->lst),sc_static,slc,ztype);
+			declare(sym,&(tp->lst),sc_static,slc,ztype);
 		}
 		else {
 			if(ztype == bt_struct || ztype==bt_class)
@@ -269,12 +269,12 @@ void ClassDeclaration::ParseMembers(SYM *sym, int ztype)
 			else
 				slc = imax(slc,declare(sym,&(tp->lst),sc_member,0,ztype));
 		}
-  }
+	}
 	bit_offset = 0;
 	bit_next = 0;
 	bit_width = -1;
-  tp->size = tp->alignment ? tp->alignment : slc;
-  NextToken();
+	tp->size = tp->alignment ? tp->alignment : slc;
+	NextToken();
 	isTypedef = ist;
 }
 

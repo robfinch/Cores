@@ -586,10 +586,10 @@ long GetReferenceSize(ENODE *node)
     case en_triple_ref:
             return sizeOfFPT;
 	case en_struct_ref:
-            return 8;
+            return 1;
 //			return node->esize;
     }
-	return 8;
+	return 1;
 }
 
 //
@@ -1949,10 +1949,10 @@ int GetNaturalSize(ENODE *node)
 		return 1;
 	case en_cfieldref:
 	case en_ucfieldref:
-		return 2;
+		return 1;
 	case en_hfieldref:
 	case en_uhfieldref:
-		return 4;
+		return 1;
 	case en_icon:
 		if( -32768 <= node->i && node->i <= 32767 )
 			return 1;
@@ -1974,20 +1974,20 @@ int GetNaturalSize(ENODE *node)
 	case en_cubu: case en_cucu: case en_cuhu:
 		return sizeOfWord;
 	case en_autofcon:
-		return 4;
+		return 2;
 	case en_ref32: case en_ref32u:
 		return 2;
 	case en_b_ref:
 	case en_ub_ref:
 		return 1;
 	case en_cbc:
-	case en_c_ref:	return 2;
-	case en_uc_ref:	return 2;
-	case en_cbh:	return 2;
-	case en_cch:	return 2;
-	case en_h_ref:	return 4;
-	case en_uh_ref:	return 4;
-	case en_flt_ref: return 8;
+	case en_c_ref:	return 1;
+	case en_uc_ref:	return 1;
+	case en_cbh:	return 1;
+	case en_cch:	return 1;
+	case en_h_ref:	return 1;
+	case en_uh_ref:	return 1;
+	case en_flt_ref: return 2;
 	case en_w_ref:  case en_uw_ref:
 		return sizeOfWord;
 	case en_dbl_ref:

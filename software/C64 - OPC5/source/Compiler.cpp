@@ -141,32 +141,32 @@ void Compiler::AddStandardTypes()
 {
 	TYP *p, *pchar, *pint;
 
-	p = TYP::Make(bt_long,8);
+	p = TYP::Make(bt_long,2);
 	stdint = *p;
 	pint = p;
-	p->precision = 64;
+	p->precision = 32;
   
-	p = TYP::Make(bt_long,8);
+	p = TYP::Make(bt_long,2);
 	p->isUnsigned = true;
-	p->precision = 64;
+	p->precision = 32;
 	stduint = *p;
   
-	p = TYP::Make(bt_long,8);
-	p->precision = 64;
+	p = TYP::Make(bt_long,2);
+	p->precision = 32;
 	stdlong = *p;
   
-	p = TYP::Make(bt_long,8);
+	p = TYP::Make(bt_long,2);
 	p->isUnsigned = true;
-	p->precision = 64;
+	p->precision = 32;
 	stdulong = *p;
   
 	p = TYP::Make(bt_short,1);
-	p->precision = 32;
+	p->precision = 16;
 	stdshort = *p;
   
 	p = TYP::Make(bt_short,1);
 	p->isUnsigned = true;
-	p->precision = 32;
+	p->precision = 16;
 	stdushort = *p;
   
 	p = TYP::Make(bt_char,1);
@@ -193,16 +193,16 @@ void Compiler::AddStandardTypes()
 	p->type = bt_pointer;
 	p->typeno = bt_pointer;
 	p->val_flag = 1;
-	p->size = 8;
+	p->size = 1;
 	p->btp = pchar->GetIndex();
 	p->bit_width = -1;
-	p->precision = 64;
+	p->precision = 16;
 	stdstring = *p;
   
 	p = allocTYP();
 	p->type = bt_double;
 	p->typeno = bt_double;
-	p->size = 8;
+	p->size = 4;
 	p->bit_width = -1;
 	p->precision = 64;
 	stddbl = *p;
@@ -211,7 +211,7 @@ void Compiler::AddStandardTypes()
 	p = allocTYP();
 	p->type = bt_triple;
 	p->typeno = bt_triple;
-	p->size = 12;
+	p->size = 6;
 	p->bit_width = -1;
 	p->precision = 96;
 	stdtriple = *p;
@@ -227,9 +227,9 @@ void Compiler::AddStandardTypes()
 	p = allocTYP();
 	p->type = bt_float;
 	p->typeno = bt_float;
-	p->size = 8;
+	p->size = 2;
 	p->bit_width = -1;
-	p->precision = 64;
+	p->precision = 32;
 	stdflt = *p;
   
 	p = TYP::Make(bt_func,0);
@@ -239,20 +239,18 @@ void Compiler::AddStandardTypes()
 	p = allocTYP();
 	p->type = bt_exception;
 	p->typeno = bt_exception;
-	p->size = 2;
+	p->size = 1;
 	p->isUnsigned = true;
 	p->precision = 16;
 	p->bit_width = -1;
 	stdexception = *p;
 
 	p = allocTYP();
-	p->type = bt_long;
-	p->typeno = bt_long;
+	p->type = bt_short;
+	p->typeno = bt_short;
 	p->val_flag = 1;
-	p->size = 8;
+	p->size = 1;
 	p->bit_width = -1;
-	p->precision = 64;
+	p->precision = 16;
 	stdconst = *p;
 }
-
-

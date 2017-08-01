@@ -143,7 +143,7 @@ int AllocateRegisterVars()
 	int size;
 	int csecnt;
 
-	reg = 7;
+	reg = 2;
     mask = 0;
 	rmask = 0;
 	fpmask = 0;
@@ -166,7 +166,7 @@ int AllocateRegisterVars()
 			csp = &CSETable[csecnt];
 			if (csp->reg==-1) {
 				if( OptimizationDesireability(csp) >= 4-nn ) {
-    				if( csp->duses > csp->uses / (8 >> nn) && reg < 10 )
+    				if( csp->duses > csp->uses / (8 >> nn) && reg < 5 )
     					csp->reg = reg++;
     				else
     					csp->reg = -1;
