@@ -909,7 +909,7 @@ static void PeepoptHint(struct ocode *ip)
 			ip->fwd->back = ip->back;
 			return;
 		}
-		if (equal_address(ip->fwd->oper2, ip->back->oper1)) {
+		if (equal_address(ip->fwd->oper2, ip->back->oper1) && ip->back->oper2->mode==am_immed) {
 			ip->back->oper1 = ip->fwd->oper1;
 			ip->back->fwd = ip->fwd->fwd;
 			ip->fwd->fwd->back = ip->back;
@@ -928,6 +928,7 @@ static void PeepoptHint(struct ocode *ip)
 	// Translated to:
 	//     MOV r1,arg
 	case 2:
+		break;
 		if (equal_address(ip->fwd->oper2, ip->back->oper1)) {
 			ip->back->oper1 = ip->fwd->oper1;
 			ip->back->fwd = ip->fwd->fwd;
