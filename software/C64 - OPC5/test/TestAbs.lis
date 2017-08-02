@@ -53,19 +53,19 @@
 _minu      =000000   -    External    Function returning 
 		Parameters:
 			Type array:
-   025 025 
-_abs       =000000   -    External    Function returning Long
+   024 024 
+_abs       =000000   -    External    Function returning Short
 		Parameters:
 			Type array:
-   017 
-_min       =000000   -    External    Function returning Long
+   016 
+_min       =000000   -    External    Function returning Short
 		Parameters:
 			Type array:
-   017 017 
-_max       =000000   -    External    Function returning Long
+   016 016 
+_max       =000000   -    External    Function returning Short
 		Parameters:
 			Type array:
-   017 017 
+   016 016 
 
  *** structures and unions ***
 

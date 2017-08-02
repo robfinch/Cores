@@ -214,11 +214,11 @@ static char *segstr(int op)
 void putpop(int pop)
 {
 	switch(pop) {
-	case pop_always: break;
-	case pop_nop: ofs.write("0."); break;
-	case pop_z: ofs.write("z."); break;
+	case pop_always: ofs.write("   "); break;
+	case pop_nop: ofs.write(" 0."); break;
+	case pop_z: ofs.write(" z."); break;
 	case pop_nz: ofs.write("nz."); break;
-	case pop_c:	ofs.write("c."); break;
+	case pop_c:	ofs.write(" c."); break;
 	case pop_nc: ofs.write("nc."); break;
 	case pop_mi: ofs.write("mi."); break;
 	case pop_pl: ofs.write("pl."); break;

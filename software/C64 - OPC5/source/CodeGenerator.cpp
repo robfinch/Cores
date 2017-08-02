@@ -235,6 +235,11 @@ AMODE *make_indx(ENODE *node, int rg)
     return ap;
 }
 
+void GenerateHint(int n)
+{
+	GenerateMonadic(op_hint,0,make_immed(n));
+}
+
 // ----------------------------------------------------------------------------
 //      MakeLegalAmode will coerce the addressing mode in ap1 into a
 //      mode that is satisfactory for the flag word.
@@ -908,8 +913,14 @@ AMODE *GenerateMultiply(ENODE *node, int flags, int size, int op)
  */
 AMODE *gen_hook(ENODE *node,int flags, int size)
 {
-	AMODE *ap1, *ap2;
+	AMODE *ap1, *ap2, *ap0;
     int false_label, end_label;
+	struct ocode *ip1, *ip2, *ip3, *ip, *ip0, *ip4;
+	struct ocode *ip0f, *ip1f, *ip2f;
+	struct ocode *ip0b, *ip1b, *ip2b;
+	struct ocode *ip0bf, *ip1bf, *ip2bf;
+	int n1, n2;
+	int predop;
 
     false_label = nextlabel++;
     end_label = nextlabel++;
@@ -920,19 +931,62 @@ AMODE *gen_hook(ENODE *node,int flags, int size)
     	GeneratePredicateMonadic(hook_predreg,op_ldi,make_immed(node->p[0]->i));
 	}
 */
-    GenerateFalseJump(node->p[0],false_label,0);
-    node = node->p[1];
-    ap1 = GenerateExpression(node->p[0],flags,size);
-    GenerateTriadic(op_mov,0,makereg(regPC), makereg(regZero), make_clabel(end_label));
-    GenerateLabel(false_label);
-    ap2 = GenerateExpression(node->p[1],flags,size);
-    if( !equal_address(ap1,ap2) )
-    {
-		GenerateMonadic(op_hint,0,make_immed(2));
-		GenerateDiadic(op_mov,0,ap1,ap2);
-    }
-    ReleaseTempReg(ap2);
-    GenerateLabel(end_label);
+	ip0 = peep_tail;
+	//ap0 = GenerateExpression(node->p[0],flags,size);
+	//ReleaseTempReg(ap0);
+	//ip1 = peep_tail;
+ //   ap1 = GenerateExpression(node->p[1]->p[0],flags,size);
+	//n1 = PeepCount(ip1);
+	//ip2 = peep_tail;
+ //   ap2 = GenerateExpression(node->p[1]->p[1],flags,size);
+	//ReleaseTempReg(ap2);
+	//ip3 = peep_tail;
+	//n2 = PeepCount(ip2);
+	//GenerateFalseJump(node->p[0],false_label,0);
+	//ip4 = peep_tail;
+	n2 = 1;
+	// Don't want to preload if there will be more than three instructions
+	// predicated.
+	if (n2 > 0) {
+		peep_tail = ip0;
+		peep_tail->fwd = nullptr;
+		// Do the standard sequence
+		GenerateFalseJump(node->p[0],false_label,0);
+		node = node->p[1];
+		ap1 = GenerateExpression(node->p[0],flags,size);
+		GenerateTriadic(op_mov,0,makereg(regPC), makereg(regZero), make_clabel(end_label));
+		GenerateLabel(false_label);
+		ap2 = GenerateExpression(node->p[1],flags,size);
+		if( !equal_address(ap1,ap2) )
+		{
+			GenerateHint(2);
+			GenerateDiadic(op_mov,0,ap1,ap2);
+		}
+		ReleaseTempReg(ap2);
+		GenerateLabel(end_label);
+		return (ap1);
+	}
+	// The last instruction generated should have been a branch, get the predicate
+	//predop = ip4->back->predop;
+	//ip0f = ip0->fwd;
+	//ip0b = ip0->back;
+	//ip1b = ip1->back;
+	//ip2b = ip2->back;
+	//ip0bf = ip0->back->fwd;
+	//ip1bf = ip1->back->fwd;
+	//ip2bf = ip2->back->fwd;
+
+	//ip0->fwd = ip1;		// ip1 instead of ip1->back
+	//ip1b->fwd = ip2;
+	//ip2b->fwd = ip0f;
+	//ip1->back = ip0;
+	//ip2->back = ip1b;
+	//ip0f->back = ip2b;
+
+	//peep_tail = ip3;
+	//peep_tail->fwd = nullptr;
+	//for (ip = ip2; ip; ip = ip->fwd)
+	//	ip->predop = predop;
     return (ap1);
 }
 

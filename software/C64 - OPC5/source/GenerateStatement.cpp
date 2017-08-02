@@ -288,14 +288,18 @@ void Statement::GenerateIf()
     oldbreak = breaklab;    // save break label
     initstack();            // clear temps
     GenerateFalseJump(exp,lab1,prediction);
+	GenerateHint(8);
     s1->Generate();
+	GenerateHint(9);
     if( s2 != 0 )             /* else part exists */
     {
 	    GenerateTriadic(op_mov,0,makereg(regPC),makereg(regZero),make_clabel(lab2));
         if (mixedSource)
           	GenerateMonadic(op_rem,0,make_string("; else"));
         GenerateLabel(lab1);
+		GenerateHint(8);
         s2->Generate();
+		GenerateHint(9);
         GenerateLabel(lab2);
     }
     else

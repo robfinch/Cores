@@ -50,8 +50,8 @@ void peep_cmp(struct ocode *ip);
 static void opt_peep();
 void put_ocode(struct ocode *p);
 
-struct ocode    *peep_head = NULL,
-                *peep_tail = NULL;
+struct ocode *peep_head = NULL;
+struct ocode *peep_tail = NULL;
 
 AMODE *copy_addr(AMODE *ap)
 {
@@ -222,6 +222,15 @@ static void AddToPeepList(struct ocode *cd)
 		peep_tail->fwd = cd;
 		peep_tail = cd;
 	}
+}
+
+int PeepCount(struct ocode *ip)
+{
+	int cnt;
+
+	for (cnt = 0; ip && ip != peep_tail; cnt++)
+		ip = ip->fwd;
+	return (cnt);
 }
 
 /*
@@ -886,8 +895,8 @@ static void opt_nbr()
 
 static void PeepoptHint(struct ocode *ip)
 {
-	if (ip->back->opcode==op_label || ip->fwd->opcode==op_label)
-		return;
+	//if (ip->back->opcode==op_label || ip->fwd->opcode==op_label)
+	//	return;
 
 	switch (ip->oper1->offset->i) {
 
@@ -899,6 +908,8 @@ static void PeepoptHint(struct ocode *ip)
 	// Translated to:
 	//    MOV r18,#constant
 	case 1:
+		if (ip->back->opcode==op_label || ip->fwd->opcode==op_label)
+			return;
 		if (ip->fwd->opcode != op_mov) {
 			ip->back->fwd = ip->fwd;
 			ip->fwd->back = ip->back;
@@ -928,15 +939,34 @@ static void PeepoptHint(struct ocode *ip)
 	// Translated to:
 	//     MOV r1,arg
 	case 2:
-		break;
-		if (equal_address(ip->fwd->oper2, ip->back->oper1)) {
-			ip->back->oper1 = ip->fwd->oper1;
-			ip->back->fwd = ip->fwd->fwd;
-			ip->fwd->fwd->back = ip->back;
+		if (ip->back->opcode==op_label || ip->fwd->opcode==op_label)
+			return;
+		if (ip->back && ip->back->oper1 && ip->fwd && ip->fwd->oper2) {
+			if (equal_address(ip->fwd->oper2, ip->back->oper1)) {
+				ip->back->oper1 = ip->fwd->oper1;
+				ip->back->fwd = ip->fwd->fwd;
+				ip->fwd->fwd->back = ip->back;
+			}
+			else {
+				ip->back->fwd = ip->fwd;
+				ip->fwd->back = ip->back;
+			}
 		}
-		else {
-			ip->back->fwd = ip->fwd;
-			ip->fwd->back = ip->back;
+		break;
+
+	case 8:
+		{
+			struct ocode *ip1 = ip->fwd;
+			struct ocode *ip2;
+			if (ip1)
+				ip2 = ip1->fwd;
+			if (ip1==nullptr || ip2==nullptr)
+				return;
+			if (equal_address(ip2->oper2, ip1->oper1)) {
+				ip1->oper1 = ip2->oper1;
+				ip1->fwd = ip2->fwd;
+				ip2->fwd->back = ip1;
+			}
 		}
 		break;
 	}
@@ -1027,6 +1057,163 @@ int IsRet(struct ocode *ip)
 	return 0;
 }
 
+bool IsFlowCtrl(struct ocode *ip)
+{
+	if (ip==nullptr)
+		return false;
+	if (ip->oper1==nullptr || ip->oper3==nullptr)
+		return false;
+	if (ip->opcode==op_mov
+		&& ip->oper1->mode==am_reg && ip->oper1->preg==15
+		&& ip->oper3->mode==am_direct)
+		return true;
+	return false;
+}
+
+void PeepoptPred(struct ocode *ip)
+{
+	struct ocode *ip1, *ip2, *ip3, *ip4;
+	ip1 = ip->fwd;
+	if (ip1)
+		ip2 = ip1->fwd;
+	else
+		return;
+	if (ip2)
+		ip3 = ip2->fwd;
+	if (ip3)
+		ip4 = ip3->fwd;
+	if (ip1->opcode==op_label)
+		return;
+
+	if (ip2 && ip2->opcode==op_label) {
+		if ((int)ip2->oper1 == ip->oper3->offset->i) {
+			// pop_always, pop_nop, pop_z, pop_nz, pop_c, pop_nc, pop_mi, pop_pl
+			switch(ip->predop) {
+			// The code always branches over ip1. Eliminate the branch and the
+			// the ip1 instruction.
+			case pop_always:
+				ip2->back = ip->back;
+				ip->back->fwd = ip2;
+				break;
+			// The code never branches. Eliminate the jump
+			case pop_nop:
+				ip1->back = ip->back;
+				ip->back->fwd = ip1;
+				break;
+			case pop_z:
+			case pop_nz:
+			case pop_c:
+			case pop_nc:
+			case pop_mi:
+			case pop_pl:
+				ip1->back = ip->back;
+				ip->back->fwd = ip1;
+				ip1->predop = ip->predop ^ 1;
+				break;
+			}
+		}
+		return;
+	}
+	return;
+	if (ip3 && ip3->opcode==op_label) {
+		if ((int)ip3->oper1 == ip->oper3->offset->i) {
+			switch(ip->predop) {
+			// The code always branches over ip1 and ip2. Eliminate the branch and the
+			// the ip1 and ip2 instruction.
+			case pop_always:
+				ip3->back = ip->back;
+				ip->back->fwd = ip3;
+				break;
+			// The code never branches. Eliminate the jump
+			case pop_nop:
+				ip1->back = ip->back;
+				ip->back->fwd = ip1;
+				break;
+			case pop_z:
+			case pop_nz:
+			case pop_c:
+			case pop_nc:
+			case pop_mi:
+			case pop_pl:
+				// Eliminate the branch
+				ip1->back = ip->back;
+				ip->back->fwd = ip1;
+				// And predicate the following instructions.
+				ip1->predop = ip->predop ^ 1;
+				ip2->predop = ip->predop ^ 1;
+				break;
+			}
+		}
+		return;
+	}
+	if (ip4 && ip4->opcode==op_label) {
+		if ((int)ip4->oper1 == ip->oper3->offset->i) {
+			switch(ip->predop) {
+			// The code always branches over ip1 and ip2. Eliminate the branch and the
+			// the ip1, ip2 and ip3 instruction.
+			case pop_always:
+				ip4->back = ip->back;
+				ip->back->fwd = ip4;
+				break;
+			// The code never branches. Eliminate the jump
+			case pop_nop:
+				ip1->back = ip->back;
+				ip->back->fwd = ip1;
+				break;
+			case pop_z:
+			case pop_nz:
+			case pop_c:
+			case pop_nc:
+			case pop_mi:
+			case pop_pl:
+				// Eliminate the branch
+				ip1->back = ip->back;
+				ip->back->fwd = ip1;
+				// And predicate the following instructions.
+				ip1->predop = ip->predop ^ 1;
+				ip2->predop = ip->predop ^ 1;
+				ip3->predop = ip->predop ^ 1;
+				break;
+			}
+		}
+		return;
+	}
+}
+
+static void SetLabelReference()
+{
+	struct ocode *p, *q;
+
+	for (p = peep_head; p; p = p->fwd) {
+		if (p->opcode==op_label) {
+			p->isReferenced = false;
+			for (q = peep_head; q; q = q->fwd) {
+				if (IsFlowCtrl(q)) {
+					if (q->oper3->mode==am_direct) {
+						if (q->oper3->offset->i == (int)p->oper1) {
+							p->isReferenced = true;
+							break;
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+static void EliminateUnreferencedLabels()
+{
+	struct ocode *p;
+
+	for (p = peep_head; p; p = p->fwd) {
+		if (p->opcode==op_label && !p->isReferenced) {
+			if (p->back)
+				p->back->fwd = p->fwd;
+			if (p->fwd)
+				p->fwd->back = p->back;
+		}
+	}
+}
 
 /*
  *      peephole optimizer. This routine calls the instruction
@@ -1041,8 +1228,10 @@ static void opt_peep()
 	
 	if (!::opt_nopeep) {
 		opt_nbr();
-		for (rep = 0; rep < 2; rep++)
+		for (rep = 0; rep < 5; rep++)
 		{
+			SetLabelReference();
+			EliminateUnreferencedLabels();
 		ip = peep_head;
 		while( ip != NULL )
 		{
@@ -1131,6 +1320,8 @@ static void opt_peep()
 				}
 				if (IsRet(ip))
 					PeepoptUctran(ip);
+				if (IsFlowCtrl(ip))
+					PeepoptPred(ip);
 			   ip = ip->fwd;
 			}
 		 }

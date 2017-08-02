@@ -50,6 +50,7 @@ struct ocode {
 	short opcode;
 	short length;
 	unsigned int isVolatile : 1;
+	unsigned int isReferenced : 1;
 	short pregreg;
 	short predop;
 	AMODE *oper1, *oper2, *oper3, *oper4;
