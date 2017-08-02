@@ -124,6 +124,7 @@ int optimize = TRUE;
 int opt_noregs = FALSE;
 int opt_nopeep;
 int opt_noexpr = FALSE;
+int opt_nocgo = FALSE;
 int exceptions = FALSE;
 int mixedSource = FALSE;
 SYM *currentFn = (SYM *)NULL;

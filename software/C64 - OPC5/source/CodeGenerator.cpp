@@ -814,13 +814,21 @@ AMODE *GenerateBinary(ENODE *node,int flags, int size, int op)
 	AMODE *ap1, *ap2, *ap3;
 	
    	//ap3 = GetTempRegister();
-	ap1 = GenerateExpression(node->p[0],F_REG,size);
-	ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
-	if (ap2->mode==am_immed)
-		GenerateTriadic(op,0,ap1,makereg(regZero),ap2);
+	if (equalnode(node->p[0],node->p[1]) && !opt_nocgo) {
+		ap1 = GenerateExpression(node->p[0],F_REG,size);
+		ap2 = nullptr;
+	}
+	else
+	{
+		ap1 = GenerateExpression(node->p[0],F_REG,size);
+		ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
+	}
+	if (ap2 && ap2->mode==am_immed)
+		GenerateTriadic(op,0,ap1,makereg(regZero),ap2?ap2:ap1);
 	else 
-		GenerateTriadic(op,0,ap1,ap2,make_immed(0));
-    ReleaseTempReg(ap2);
+		GenerateTriadic(op,0,ap1,ap2?ap2:ap1,make_immed(0));
+	if (ap2)
+		ReleaseTempReg(ap2);
     MakeLegalAmode(ap1,flags,size);
     return ap1;
 }
