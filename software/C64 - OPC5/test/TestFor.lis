@@ -1,7 +1,7 @@
      1	
      2	int TestFor()
      3	{
-     4		int x, y;
+     4		int x, y, z;
      5	
      6		for (x = 1; x < 100; x++) {
      7			putch('a');
@@ -9,23 +9,26 @@
      9	
     10		y = 50;
     11		for (; y > 0;) {
-    12			putch('a');
+    12			putch('b');
     13			--y;
     14		}
-    15	}
+    15	
+    16		for (z = 1; z < 10; ) ;
+    17	}
 
 
 *** local symbol table ***
 
-_x         =fffffffe   -    Auto        Long
-_y         =fffffffa   -    Auto        Long
+_x         =ffffffff   -    Auto        Short
+_y         =fffffffe   -    Auto        Short
+_z         =fffffffd   -    Auto        Short
 
 
 
 
  *** global scope typedef symbol table ***
 
-_TestFor   =000000   -    Global      Function returning Long
+_TestFor   =000000   -    Global      Function returning Short
 		Parameters:
 			Type array:
    

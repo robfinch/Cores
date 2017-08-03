@@ -1,0 +1,23 @@
+     1	int TestPreload(int a)
+     2	{
+     3		int x = a < 10;
+     4		return(x);
+     5	}
+
+
+*** local symbol table ***
+
+_x         =ffffffff   -    Auto        Short
+
+
+
+
+ *** global scope typedef symbol table ***
+
+_TestPreload =000000   -    External    Function returning Short
+		Parameters:
+			Type array:
+   016 
+
+ *** structures and unions ***
+

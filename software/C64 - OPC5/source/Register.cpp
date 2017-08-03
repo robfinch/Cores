@@ -183,6 +183,34 @@ AMODE *GetTempRegister()
 	return ap;
 }
 
+AMODE *GetTempRegister2(int *pushed)
+{
+	AMODE *ap;
+    SYM *sym = currentFn;
+
+	*pushed = FALSE;
+	if (reg_in_use[tmpregs[next_reg]] >= 0) {
+//		if (isThor)	
+//			GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(-8));
+		*pushed = TRUE;
+		GenerateTempRegPush(tmpregs[next_reg], am_reg, reg_in_use[tmpregs[next_reg]],0);
+	}
+	TRACE(printf("GetTempRegister:r%d\r\n", next_reg);)
+    reg_in_use[tmpregs[next_reg]] = reg_alloc_ptr;
+    ap = allocAmode();
+    ap->mode = am_reg;
+    ap->preg = tmpregs[next_reg];
+    ap->deep = reg_alloc_ptr;
+    reg_alloc[reg_alloc_ptr].reg = tmpregs[next_reg];
+    reg_alloc[reg_alloc_ptr].mode = am_reg;
+    reg_alloc[reg_alloc_ptr].f.isPushed = 'F';
+    if (next_reg++ >= MAXTMPREG)
+		next_reg = MINTMPREG;		/* wrap around */
+    if (reg_alloc_ptr++ == MAX_REG_STACK)
+		fatal("GetTempRegister(): register stack overflow");
+	return ap;
+}
+
 AMODE *GetTempFPRegister()
 {
 	AMODE *ap;

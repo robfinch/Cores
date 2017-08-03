@@ -800,7 +800,7 @@ AMODE *GenerateUnary(ENODE *node,int flags, int size, int op)
 	switch(node->nodetype) {
 	case en_uminus:
 	    ap = GenerateExpression(node->p[0],F_REG,size);
-		GenerateTriadic(op_not,0,ap2,ap,make_immed(0));
+		GenerateDiadic(op_not,0,ap2,ap);
 		GenerateTriadic(op_add,0,ap2,makereg(regZero),make_immed(1));
 		break;
 	default:
@@ -908,85 +908,109 @@ AMODE *GenerateMultiply(ENODE *node, int flags, int size, int op)
 	return ap3;
 }
 
-/*
- *      generate code to evaluate a condition operator node (?:)
- */
-AMODE *gen_hook(ENODE *node,int flags, int size)
+//
+// Generate code to evaluate a condition operator node (?:)
+//
+AMODE *GenerateHook(ENODE *node,int flags, int size)
 {
 	AMODE *ap1, *ap2, *ap0;
     int false_label, end_label;
-	struct ocode *ip1, *ip2, *ip3, *ip, *ip0, *ip4;
+	struct ocode *ip1, *ip2, *ip3, *ip, *ip0, *ip4, *ip5;
 	struct ocode *ip0f, *ip1f, *ip2f;
 	struct ocode *ip0b, *ip1b, *ip2b;
 	struct ocode *ip0bf, *ip1bf, *ip2bf;
-	int n1, n2;
+	int n1, n2, which;
 	int predop;
+	int pl, pushed;
 
     false_label = nextlabel++;
     end_label = nextlabel++;
     flags = (flags & F_REG) | F_VOL;
-/*
-    if (node->p[0]->constflag && node->p[1]->constflag) {
-    	GeneratePredicateMonadic(hook_predreg,op_op_ldi,make_immed(node->p[0]->i));
-    	GeneratePredicateMonadic(hook_predreg,op_ldi,make_immed(node->p[0]->i));
-	}
-*/
+
 	ip0 = peep_tail;
+	// The following code attempts to make use of predicated logic. Predicated
+	// logic only works on a single line of code so if there's more than one
+	// line of code then this code is aborted and the regular code used.
+	// Unfortunately it doesn't work right yet. So it's just bypassed for now.
+	goto j1;
+
 	//ap0 = GenerateExpression(node->p[0],flags,size);
 	//ReleaseTempReg(ap0);
-	//ip1 = peep_tail;
- //   ap1 = GenerateExpression(node->p[1]->p[0],flags,size);
-	//n1 = PeepCount(ip1);
-	//ip2 = peep_tail;
- //   ap2 = GenerateExpression(node->p[1]->p[1],flags,size);
-	//ReleaseTempReg(ap2);
+	ip1 = peep_tail;
+    ap1 = GenerateExpression(node->p[1]->p[0],flags,size);
+	ReleaseTempReg(ap1);
+	n1 = PeepCount(ip1);
+	ip2 = peep_tail;
+    ap2 = GenerateExpression(node->p[1]->p[1],flags,size);
+	ReleaseTempReg(ap2);
+	n2 = PeepCount(ip2);
+	if (n1 > 1 && n2 > 1)
+		which = 0;
+	else if (n1 > 1)
+		which = 2;
+	else
+		which = 1;
+	// Now discard the code.
+	peep_tail = ip0 = ip1;
+	peep_tail->fwd = nullptr;
+
 	//ip3 = peep_tail;
-	//n2 = PeepCount(ip2);
 	//GenerateFalseJump(node->p[0],false_label,0);
 	//ip4 = peep_tail;
-	n2 = 1;
 	// Don't want to preload if there will be more than three instructions
 	// predicated.
-	if (n2 > 0) {
+	peep_tail = ip0;
+	peep_tail->fwd = nullptr;
+	// Do the standard sequence
+	if (which==1)
+		ap1 = GenerateExpression(node->p[1]->p[0],flags,size);
+	else if (which==2)
+		ap1 = GenerateExpression(node->p[1]->p[1],flags,size);
+	else {
 		peep_tail = ip0;
 		peep_tail->fwd = nullptr;
-		// Do the standard sequence
-		GenerateFalseJump(node->p[0],false_label,0);
-		node = node->p[1];
-		ap1 = GenerateExpression(node->p[0],flags,size);
-		GenerateTriadic(op_mov,0,makereg(regPC), makereg(regZero), make_clabel(end_label));
-		GenerateLabel(false_label);
-		ap2 = GenerateExpression(node->p[1],flags,size);
-		if( !equal_address(ap1,ap2) )
-		{
-			GenerateHint(2);
-			GenerateDiadic(op_mov,0,ap1,ap2);
-		}
-		ReleaseTempReg(ap2);
-		GenerateLabel(end_label);
-		return (ap1);
+		goto j1;
 	}
-	// The last instruction generated should have been a branch, get the predicate
-	//predop = ip4->back->predop;
-	//ip0f = ip0->fwd;
-	//ip0b = ip0->back;
-	//ip1b = ip1->back;
-	//ip2b = ip2->back;
-	//ip0bf = ip0->back->fwd;
-	//ip1bf = ip1->back->fwd;
-	//ip2bf = ip2->back->fwd;
-
-	//ip0->fwd = ip1;		// ip1 instead of ip1->back
-	//ip1b->fwd = ip2;
-	//ip2b->fwd = ip0f;
-	//ip1->back = ip0;
-	//ip2->back = ip1b;
-	//ip0f->back = ip2b;
-
-	//peep_tail = ip3;
-	//peep_tail->fwd = nullptr;
-	//for (ip = ip2; ip; ip = ip->fwd)
-	//	ip->predop = predop;
+	ReleaseTempReg(ap1);
+	ip4 = peep_tail;
+	GenerateFalseJump(node->p[0],false_label,0);
+	ip5 = peep_tail;
+	predop = peep_tail->back->predop;
+	if (which==1) {
+		ap2 = GenerateExpression(node->p[1]->p[1],flags,size);
+		peep_tail->predop = predop;
+		if (!equal_address(ap1,ap2)) {
+			peep_tail <= ip0;
+			peep_tail->fwd = nullptr;
+			goto j1;
+		}
+	}
+	else if (which==2) {
+		ap2 = GenerateExpression(node->p[1]->p[0],flags,size);
+		peep_tail->predop = predop;
+		if (!equal_address(ap1,ap2)) {
+			peep_tail <= ip0;
+			peep_tail->fwd = nullptr;
+			goto j1;
+		}
+	}
+	PeepNop(ip4->fwd,ip5);
+	ReleaseTempReg(ap2);
+	return (ap1);
+j1:
+	GenerateFalseJump(node->p[0],false_label,0);
+	node = node->p[1];
+	ap1 = GenerateExpression(node->p[0],flags,size);
+	GenerateTriadic(op_mov,0,makereg(regPC), makereg(regZero), make_clabel(end_label));
+	GenerateLabel(false_label);
+	ap2 = GenerateExpression(node->p[1],flags,size);
+	if( !equal_address(ap1,ap2) )
+	{
+		GenerateHint(2);
+		GenerateDiadic(op_mov,0,ap1,ap2);
+	}
+	ReleaseTempReg(ap2);
+	GenerateLabel(end_label);
     return (ap1);
 }
 
@@ -1007,14 +1031,14 @@ void GenMemop(int op, AMODE *ap1, AMODE *ap2, int ssize)
 	if (op==op_mul) {
 		ap3 = makereg(1);
 		GenLoad(ap3,ap1,ssize,ssize);
-		GenerateTriadic(op_mov,0,makereg(2),ap2,make_immed(0));
+		GenerateDiadic(op_mov,0,makereg(2),ap2);
 		GenerateTriadic(op_mov,0,makereg(regLR),makereg(regPC),make_immed(2));
 		GenerateTriadic(op_mov,0,makereg(regPC),makereg(regZero),make_string("_mul"));
 	}
 	else if (op==op_mulu) {
 		ap3 = makereg(1);
 		GenLoad(ap3,ap1,ssize,ssize);
-		GenerateTriadic(op_mov,0,makereg(2),ap2,make_immed(0));
+		GenerateDiadic(op_mov,0,makereg(2),ap2);
 		GenerateTriadic(op_mov,0,makereg(regLR),makereg(regPC),make_immed(2));
 		GenerateTriadic(op_mov,0,makereg(regPC),makereg(regZero),make_string("_mulu"));
 	}
@@ -1102,8 +1126,8 @@ AMODE *GenerateAssignMultiply(ENODE *node,int flags, int size, int op)
     ap1 = GenerateExpression(node->p[0],F_ALL & ~F_IMMED,ssize);
     ap2 = GenerateExpression(node->p[1],F_REG,size);
 	if (ap1->mode==am_reg) {
-		GenerateTriadic(op_mov,0,makereg(1),ap1,make_immed(0));
-		GenerateTriadic(op_mov,0,makereg(2),ap2,make_immed(0));
+		GenerateDiadic(op_mov,0,makereg(1),ap1);
+		GenerateDiadic(op_mov,0,makereg(2),ap2);
 		GenerateTriadic(op_mov,0,makereg(regLR),makereg(regPC),make_immed(2));
 		GenerateTriadic(op_mov,0,makereg(regPC),makereg(regZero),make_string(op==op_mul ? "_mul": "_mulu"));
 		ReleaseTempReg(ap2);
@@ -1145,7 +1169,7 @@ AMODE *GenerateAssignModiv(ENODE *node,int flags,int size,int op)
 	if (ap3->mode==am_immed)
 		GenerateTriadic(op_mov,0,makereg(2),makereg(regZero),ap3);
 	else
-		GenerateTriadic(op_mov,0,makereg(2),ap3,make_immed(0));
+		GenerateDiadic(op_mov,0,makereg(2),ap3);
 	GenerateTriadic(op_mov,0,makereg(regLR),makereg(regPC),make_immed(2));
 	switch(op) {
 	case op_div:	GenerateTriadic(op_mov,0,makereg(regPC),makereg(regZero),make_string("_div")); break;
@@ -1593,7 +1617,7 @@ AMODE *GenAutocon(ENODE *node, int flags, int size, bool isFloat)
 	ap2->preg = regBP;          /* frame pointer */
 	ap2->offset = node;     /* use as constant node */
 	ap2->isFloat = isFloat;
-	GenerateTriadic(op_mov,0,ap1,makereg(regZero),make_immed(0));
+	GenerateDiadic(op_mov,0,ap1,makereg(regZero));
 	GenerateTriadic(op_add,0,ap1,makereg(regBP),make_immed(ap2->offset->i));
 	MakeLegalAmode(ap1,flags,size);
 	return ap1;             /* return reg */
@@ -1922,7 +1946,7 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
       return GenExpr(node);
 
 	case en_cond:
-            return gen_hook(node,flags,size);
+            return GenerateHook(node,flags,size);
 
     case en_void:
             natsize = GetNaturalSize(node->p[0]);
@@ -1935,6 +1959,7 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
 				ap1 = GenerateExpression(node->p[1],flags,size);
 			MakeLegalAmode(ap1,flags,size);
             return (ap1);
+
 	case en_list:
             natsize = GetNaturalSize(node->p[0]);
 			if (node->p[0]) {
@@ -2176,7 +2201,7 @@ void GenerateTrueJump(ENODE *node, int label, unsigned int prediction)
 		ap1 = GenerateExpression(node,F_REG,siz1);
 		//                        GenerateDiadic(op_tst,siz1,ap1,0);
 		ReleaseTempRegister(ap1);
-		GenerateTriadic(op_add,0,ap1,makereg(regZero),make_immed(0));
+		GenerateDiadic(op_add,0,ap1,makereg(regZero));
 		GeneratePredicatedTriadic(pop_nz,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(label));
 		break;
 	}
@@ -2230,7 +2255,7 @@ void GenerateFalseJump(ENODE *node,int label, unsigned int prediction)
 		ap = GenerateExpression(node,F_REG,siz1);
 		//                        GenerateDiadic(op_tst,siz1,ap,0);
 		ReleaseTempRegister(ap);
-		GenerateTriadic(op_add,0,ap,makereg(regZero),make_immed(0));
+		GenerateDiadic(op_add,0,ap,makereg(regZero));
 		GeneratePredicatedTriadic(pop_z,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(label));
 		break;
 	}

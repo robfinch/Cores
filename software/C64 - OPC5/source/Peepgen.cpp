@@ -23,23 +23,6 @@
 //                                                                          
 // ============================================================================
 //
-/*
- *	68000 C compiler
- *
- *	Copyright 1984, 1985, 1986 Matthew Brandt.
- *  all commercial rights reserved.
- *
- *	This compiler is intended as an instructive tool for personal use. Any
- *	use for profit without the written consent of the author is prohibited.
- *
- *	This compiler may be distributed freely for non-commercial use as long
- *	as this notice stays intact. Please forward any enhancements or questions
- *	to:
- *
- *		Matthew Brandt
- *		Box 920337
- *		Norcross, Ga 30092
- */
 #include "stdafx.h"
 
 static void AddToPeepList(struct ocode *newc);
@@ -52,6 +35,7 @@ void put_ocode(struct ocode *p);
 
 struct ocode *peep_head = NULL;
 struct ocode *peep_tail = NULL;
+int preload_count = 0;
 
 AMODE *copy_addr(AMODE *ap)
 {
@@ -202,6 +186,49 @@ void Generate4adic(int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3, AMODE *a
 	cd->oper3 = copy_addr(ap3);
 	cd->oper4 = copy_addr(ap4);
 	AddToPeepList(cd);
+}
+
+int GeneratePreload()
+{
+	struct ocode *cd;
+	cd = (struct ocode *)allocx(sizeof(struct ocode));
+	cd->predop = 0;
+	cd->pregreg = 0;
+	cd->opcode = op_preload;
+	cd->length = preload_count+1;
+	cd->oper1 = nullptr;
+	cd->oper2 = nullptr;
+	cd->oper3 = nullptr;
+	cd->oper4 = nullptr;
+	AddToPeepList(cd);
+	return ++preload_count;
+}
+
+void OverwritePreload(int handle, int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3, AMODE *ap4)
+{
+	struct ocode *ip;
+
+	for (ip = peep_tail; ip; ip=ip->back) {
+		if (ip->opcode==op_preload && ip->length==handle) {
+			ip->opcode = op;
+			ip->length = len;
+			ip->oper1 = ap1;
+			ip->oper2 = ap2;
+			ip->oper3 = ap3;
+			ip->oper4 = ap4;
+			return;
+		}
+	}
+}
+
+
+// NOP out a range in the peep buffer.
+void PeepNop(struct ocode *ip1, struct ocode *ip2)
+{
+	for (; ip1 != ip2; ip1 = ip1->fwd) {
+		ip1->opcode = op_nop;
+	}
+	ip1->opcode = op_nop;
 }
 
 static void AddToPeepList(struct ocode *cd)
@@ -1332,7 +1359,7 @@ static void opt_peep()
 		refBP = 0;
 		for (ip = peep_head; ip != NULL; ip = ip->fwd)
 		{
-			if (ip->opcode != op_label) {
+			if (ip->opcode != op_label && ip->opcode != op_preload && ip->opcode!=op_nop) {
 				if (ip->opcode==op_hint) {
 					if (ip->oper1->offset) {
 						if ((ip->oper1->offset->i==4) || ip->oper1->offset->i==6) {
@@ -1388,10 +1415,11 @@ static void opt_peep()
 		}
 	}
 	// Remove all the compiler hints that didn't work out. Note hints are
-	// removed even if optimizations are turned off.
+	// removed even if optimizations are turned off. Also remove all the
+	// preloads that didn't pan out.
     for(ip = peep_head; ip != NULL; ip = ip->fwd )
     {
-        if (ip->opcode==op_hint) {
+		if (ip->opcode==op_hint || ip->opcode==op_preload || ip->opcode==op_nop) {
 			if (ip->fwd)
 				ip->fwd->back = ip->back;
 			if (ip->back)

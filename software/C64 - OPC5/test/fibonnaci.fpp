@@ -1,3 +1,4 @@
+
 int nums [30];
 
 int main()

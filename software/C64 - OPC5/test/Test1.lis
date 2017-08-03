@@ -17,17 +17,17 @@
 
 *** local symbol table ***
 
-_x         =fffffffe   -    Auto        Long
+_x         =ffffffff   -    Auto        Short
 
 
 
 
  *** global scope typedef symbol table ***
 
-_main      =000000   -    External    Function returning Long
+_main      =000000   -    External    Function returning Short
 		Parameters:
 			Type array:
-   017 022 
+   016 022 
 _exit      =000000   -    External    Function returning Long
 		Parameters:
 			Type array:

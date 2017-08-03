@@ -1,6 +1,6 @@
-# Welcome to the C64 compiler for OPC5
+# Welcome to the C64 compiler for OPC5/OPC6
 
-The compiler might actually work for some trivial programs. At least it should provide a head-start to writing assembly language code for the OPC5.
+The compiler might actually work for some trivial programs. At least it should provide a head-start to writing assembly language code for the OPC5/OPC6.
 The compiler expects to be able to find the "fpp.exe" program which is a pre-processor for the compiler.
 
 ## History
@@ -21,11 +21,45 @@ The compiler supports the 'C' language but includes some additional features som
 - structure alignment control
 - firstcall blocks
 - block naming
+- classes with single inheritance
 
 
 ## Many things to do yet:
 - assignment operators like *= <<= etc.
 - firstcall blocks
+
+## Compiler Options
+-o[pxrc] disables specific optimizations. -o by itself disables all optimizations
+    p disables peephole optimizations
+	x disables optimization of expressions
+	r disables register optimizations
+	c disables optmizations done by the code generator
+
+-S	generates code with source lines embedded in it as comments
+    this option doesn't work real well but is sufficient to be useful as an
+	aid when viewing compiler output
+
+### Register Usage
+The compiler makes use of registers in the following fashion:
+Reg |Usage|Comment|Saved by
+----|-----|-------|--------
+r0 | always zero | fixed use by hardware | ...
+r1 | return value | by convention | caller
+r2 | register variable | callee
+r3 | register variable | callee
+r4 | register variable | callee
+r5 | temporary | expression processing | caller
+r6 | temporary | | caller
+r7 | temporary | | caller
+r8 | parameter | register parameter to function | caller
+r9 | parameter | | caller
+r10 | parameter | | caller
+r11 | class pointer | points to the current class data structure | caller
+r12 | base pointer | | callee
+r13 | link register | stores the return address | callee
+r14 | stack pointer | | callee
+r15 | program counter | fixed use by hardware | ...
+
 
 ### typenum(<type>)
 Returns a hash code for the type which allows a number to be associated with type so the type may be checked at run-time.
@@ -63,6 +97,10 @@ An until loop works like a while loop except that the loop runs 'until' the cond
 
 ### block naming
 Blocks of code may be given names for future reference. Follow the opening brace of a block of code directly with a ':' to name the block.
+
+### class
+A class in C64 operates much like a struct except that it may also have methods as members. Classes may inherit from other classes. Classes support single inheritance.
+Template classes and operator overloading are not supported. Method overloading is supported.
 
 ToDo: more docs
 

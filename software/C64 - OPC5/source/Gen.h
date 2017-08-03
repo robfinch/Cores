@@ -1,5 +1,5 @@
-#ifndef GEN_H
-#define GEN_H
+#ifndef _GEN_H
+#define _GEN_H
 /*
  *      code generation structures and constants
  */
@@ -43,14 +43,14 @@ typedef struct amode {
 	int8_t scale;
 } AMODE;
 
-/*      output code structure   */
+// output code structure
 
 struct ocode {
 	struct ocode *fwd, *back, *comment;
 	short opcode;
 	short length;
 	unsigned int isVolatile : 1;
-	unsigned int isReferenced : 1;
+	unsigned int isReferenced : 1;		// set if label is referenced
 	short pregreg;
 	short predop;
 	AMODE *oper1, *oper2, *oper3, *oper4;
@@ -122,7 +122,7 @@ enum e_op {
 		op_csrrw, op_nop,
 		op_hint,
 		// OPC5
-		op_sto,
+		op_sto, op_preload,
         op_empty };
 
 enum e_seg {

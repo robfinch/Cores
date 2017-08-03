@@ -28,10 +28,10 @@ _int</Find>
 <ParseGlobalDecl>
 Enter declare()
 A<ParseSpecifier>
-A<TYP__Make>
-</TYP__Make>
-</Find>
+A</Find>
 _main</Find>
+<TYP__Make>
+</TYP__Make>
 </ParseSpecifier>
 Bb<ParseDeclPrefix>(1)
 <ParsePrefixId>B|_main|CDE<ParseDeclSuffix>
@@ -56,9 +56,9 @@ X</openpa>
 </ParsePrefixId></ParseDeclPrefix>
 CDEGH</Find>
 _main</Find>
-hh1h2ikIIbIcinsert type: 32
-***Inserting:_main into 0011E8D8
-<BuildSignature>:_main</BuildSignature>Insert _main into 0011E8D8()
+hh1h2ikIIbIcinsert type: 33
+***Inserting:_main into 00D448F8
+<BuildSignature>:_main</BuildSignature>Insert _main into 00D448F8()
 Insert into global table
 </Find>
 _main</Find>
@@ -77,10 +77,10 @@ A<BuildParameterList
 ><ParseParmDecls>
 A(54)CEnter declare()
 A<ParseSpecifier>
-A<TYP__Make>
-</TYP__Make>
-</Find>
+A</Find>
 _argc</Find>
+<TYP__Make>
+</TYP__Make>
 </ParseSpecifier>
 Bb<ParseDeclPrefix>(1)
 <ParsePrefixId>B|_argc|CDE<ParseDeclSuffix>
@@ -88,9 +88,9 @@ Bb<ParseDeclPrefix>(1)
 </ParsePrefixId></ParseDeclPrefix>
 CDEGH</Find>
 _argc</Find>
-hh1kIIbIcinsert type: 17
-***Inserting:_argc into 0012EDF4
-<BuildSignature>:_argc</BuildSignature>Insert _argc into 0012EDF4(_main)
+hh1kIIbIcinsert type: 16
+***Inserting:_argc into 00D54E14
+<BuildSignature>:_argc</BuildSignature>Insert _argc into 00D54E14(_main)
 </Find>
 _argc</Find>
 At insert:
@@ -120,8 +120,8 @@ _argv</Find>
 CDEGH</Find>
 _argv</Find>
 hh1kIIbIcinsert type: 22
-***Inserting:_argv into 0012EDF4
-<BuildSignature>:_argv</BuildSignature>Insert _argv into 0012EDF4(_main)
+***Inserting:_argv into 00D54E14
+<BuildSignature>:_argv</BuildSignature>Insert _argv into 00D54E14(_main)
 </Find>
 _argv</Find>
 At insert:
@@ -145,10 +145,10 @@ Bb<GenerateMonadic>
 ABCD</GenerateMonadic>
 CEnter declare()
 A<ParseSpecifier>
-A<TYP__Make>
-</TYP__Make>
-</Find>
+A</Find>
 _x</Find>
+<TYP__Make>
+</TYP__Make>
 </ParseSpecifier>
 Bb<ParseDeclPrefix>(1)
 <ParsePrefixId>B|_x|CDE<ParseDeclSuffix>
@@ -156,9 +156,9 @@ Bb<ParseDeclPrefix>(1)
 </ParsePrefixId></ParseDeclPrefix>
 CDEGH</Find>
 _x</Find>
-hh1kIIbIcinsert type: 17
-***Inserting:_x into 0162DC48
-<BuildSignature>:_x</BuildSignature>Insert _x into 0162DC48()
+hh1kIIbIcinsert type: 16
+***Inserting:_x into 01BFDDC0
+<BuildSignature>:_x</BuildSignature>Insert _x into 01BFDDC0()
 </Find>
 _x</Find>
 At insert:
@@ -181,7 +181,7 @@ Found as an auto var
 A:1:_xIsEqual:T2sp is not null
 Type array:
    
-tp:00821178 <Deref></Deref>deref tp:00821178 </nameref2>
+tp:01447198 <Deref></Deref>deref tp:0177D6F4 </nameref2>
 </Nameref>
 </Find>
 _x</Find>
@@ -198,7 +198,7 @@ Found as an auto var
 A:1:_xIsEqual:T2sp is not null
 Type array:
    
-tp:00821178 <Deref></Deref>deref tp:00821178 </nameref2>
+tp:01447198 <Deref></Deref>deref tp:0177D6F4 </nameref2>
 </Nameref>
 </Find>
 _x</Find>
@@ -215,7 +215,7 @@ Found as an auto var
 A:1:_xIsEqual:T2sp is not null
 Type array:
    
-tp:00821178 <Deref></Deref>deref tp:00821178 </nameref2>
+tp:01447198 <Deref></Deref>deref tp:0177D6F4 </nameref2>
 </Nameref>
 <Parse></Find>
 _printf</Find>
@@ -237,11 +237,11 @@ _printf</Find>
 Looking in function's symbol table
 </Find>
 _printf</Find>
-Searching method/class:_main|0012EDA8
-Looking at params 0012EDF4
+Searching method/class:_main|00D54DC8
+Looking at params 00D54E14
 </Find>
 _printf</Find>
-Looking at class members 0082109C
+Looking at class members 014470BC
 Looking at global symbols
 </Find>
 _printf</Find>
@@ -252,10 +252,10 @@ Type array:
    
 <BuildSignature>:_printf</BuildSignature></nameref2>
 </Nameref>
-tp2->type=32<ArgumentList>022 lastst=45</ArgumentList>
+tp2->type=33<ArgumentList>022 lastst=45</ArgumentList>
 Type array:
    022 
-Got Type: 32openpa calling gsearch2<FindRising>_printf 
+Got Type: 33openpa calling gsearch2<FindRising>_printf 
 </Find>
 _printf</Find>
 </FindRising>
@@ -269,11 +269,11 @@ _printf</Find>
 Looking in function's symbol table
 </Find>
 _printf</Find>
-Searching method/class:_main|0012EDA8
-Looking at params 0012EDF4
+Searching method/class:_main|00D54DC8
+Looking at params 00D54E14
 </Find>
 _printf</Find>
-Looking at class members 0082109C
+Looking at class members 014470BC
 Looking at global symbols
 </Find>
 _printf</Find>
@@ -284,13 +284,13 @@ _printf</Find>
 </TYP__Make>
 <TYP__Make>
 </TYP__Make>
-Insert _p0 into 0012F244(_printf)
+Insert _p0 into 00D55264(_printf)
 </Find>
 _p0</Find>
 At insert:
 Type array:
    
-<BuildSignature>:_printf</BuildSignature>Insert _printf into 0011E8D8()
+<BuildSignature>:_printf</BuildSignature>Insert _printf into 00D448F8()
 Insert into global table
 </Find>
 _printf</Find>
@@ -321,8 +321,8 @@ _argc</Find>
 Looking in function's symbol table
 </Find>
 _argc</Find>
-Searching method/class:_main|0012EDA8
-Looking at params 0012EDF4
+Searching method/class:_main|00D54DC8
+Looking at params 00D54E14
 </Find>
 _argcMatch
 </Find>
@@ -332,7 +332,7 @@ Found as parameter
 A:1:_argcIsEqual:T2sp is not null
 Type array:
    
-tp:008210B8 <Deref></Deref>deref tp:008210B8 </nameref2>
+tp:014470D8 <Deref></Deref>deref tp:0177D6F4 </nameref2>
 </Nameref>
 </Find>
 _case</Find>
@@ -354,11 +354,11 @@ _printf</Find>
 Looking in function's symbol table
 </Find>
 _printf</Find>
-Searching method/class:_main|0012EDA8
-Looking at params 0012EDF4
+Searching method/class:_main|00D54DC8
+Looking at params 00D54E14
 </Find>
 _printf</Find>
-Looking at class members 0082109C
+Looking at class members 014470BC
 Looking at global symbols
 </Find>
 _printfMatch
@@ -369,12 +369,12 @@ Found in global symbol table
 A:1:_printfIsEqual:F1sp is not null
 Type array:
    
-tp:008211A8 deref tp:008211A8 </nameref2>
+tp:014471C8 deref tp:014471C8 </nameref2>
 </Nameref>
-tp2->type=32<ArgumentList>022 lastst=45</ArgumentList>
+tp2->type=33<ArgumentList>022 lastst=45</ArgumentList>
 Type array:
    022 
-Got Type: 32openpa calling gsearch2<FindRising>_printf 
+Got Type: 33openpa calling gsearch2<FindRising>_printf 
 </Find>
 _printf</Find>
 </FindRising>
@@ -391,11 +391,11 @@ _printf</Find>
 Looking in function's symbol table
 </Find>
 _printf</Find>
-Searching method/class:_main|0012EDA8
-Looking at params 0012EDF4
+Searching method/class:_main|00D54DC8
+Looking at params 00D54E14
 </Find>
 _printf</Find>
-Looking at class members 0082109C
+Looking at class members 014470BC
 Looking at global symbols
 </Find>
 _printfMatch
@@ -428,11 +428,11 @@ _printf</Find>
 Looking in function's symbol table
 </Find>
 _printf</Find>
-Searching method/class:_main|0012EDA8
-Looking at params 0012EDF4
+Searching method/class:_main|00D54DC8
+Looking at params 00D54E14
 </Find>
 _printf</Find>
-Looking at class members 0082109C
+Looking at class members 014470BC
 Looking at global symbols
 </Find>
 _printfMatch
@@ -443,12 +443,12 @@ Found in global symbol table
 A:1:_printfIsEqual:F1sp is not null
 Type array:
    
-tp:008211A8 deref tp:008211A8 </nameref2>
+tp:014471C8 deref tp:014471C8 </nameref2>
 </Nameref>
-tp2->type=32<ArgumentList>022 lastst=45</ArgumentList>
+tp2->type=33<ArgumentList>022 lastst=45</ArgumentList>
 Type array:
    022 
-Got Type: 32openpa calling gsearch2<FindRising>_printf 
+Got Type: 33openpa calling gsearch2<FindRising>_printf 
 </Find>
 _printf</Find>
 </FindRising>
@@ -465,11 +465,11 @@ _printf</Find>
 Looking in function's symbol table
 </Find>
 _printf</Find>
-Searching method/class:_main|0012EDA8
-Looking at params 0012EDF4
+Searching method/class:_main|00D54DC8
+Looking at params 00D54E14
 </Find>
 _printf</Find>
-Looking at class members 0082109C
+Looking at class members 014470BC
 Looking at global symbols
 </Find>
 _printfMatch
@@ -502,11 +502,11 @@ _printf</Find>
 Looking in function's symbol table
 </Find>
 _printf</Find>
-Searching method/class:_main|0012EDA8
-Looking at params 0012EDF4
+Searching method/class:_main|00D54DC8
+Looking at params 00D54E14
 </Find>
 _printf</Find>
-Looking at class members 0082109C
+Looking at class members 014470BC
 Looking at global symbols
 </Find>
 _printfMatch
@@ -517,12 +517,12 @@ Found in global symbol table
 A:1:_printfIsEqual:F1sp is not null
 Type array:
    
-tp:008211A8 deref tp:008211A8 </nameref2>
+tp:014471C8 deref tp:014471C8 </nameref2>
 </Nameref>
-tp2->type=32<ArgumentList>022 lastst=45</ArgumentList>
+tp2->type=33<ArgumentList>022 lastst=45</ArgumentList>
 Type array:
    022 
-Got Type: 32openpa calling gsearch2<FindRising>_printf 
+Got Type: 33openpa calling gsearch2<FindRising>_printf 
 </Find>
 _printf</Find>
 </FindRising>
@@ -539,11 +539,11 @@ _printf</Find>
 Looking in function's symbol table
 </Find>
 _printf</Find>
-Searching method/class:_main|0012EDA8
-Looking at params 0012EDF4
+Searching method/class:_main|00D54DC8
+Looking at params 00D54E14
 </Find>
 _printf</Find>
-Looking at class members 0082109C
+Looking at class members 014470BC
 Looking at global symbols
 </Find>
 _printfMatch
@@ -574,11 +574,11 @@ _exit</Find>
 Looking in function's symbol table
 </Find>
 _exit</Find>
-Searching method/class:_main|0012EDA8
-Looking at params 0012EDF4
+Searching method/class:_main|00D54DC8
+Looking at params 00D54E14
 </Find>
 _exit</Find>
-Looking at class members 0082109C
+Looking at class members 014470BC
 Looking at global symbols
 </Find>
 _exit</Find>
@@ -589,10 +589,10 @@ Type array:
    
 <BuildSignature>:_exit</BuildSignature></nameref2>
 </Nameref>
-tp2->type=32<ArgumentList>017 lastst=45</ArgumentList>
+tp2->type=33<ArgumentList>017 lastst=45</ArgumentList>
 Type array:
    017 
-Got Type: 32openpa calling gsearch2<FindRising>_exit 
+Got Type: 33openpa calling gsearch2<FindRising>_exit 
 </Find>
 _exit</Find>
 </FindRising>
@@ -609,11 +609,11 @@ _exit</Find>
 Looking in function's symbol table
 </Find>
 _exit</Find>
-Searching method/class:_main|0012EDA8
-Looking at params 0012EDF4
+Searching method/class:_main|00D54DC8
+Looking at params 00D54E14
 </Find>
 _exit</Find>
-Looking at class members 0082109C
+Looking at class members 014470BC
 Looking at global symbols
 </Find>
 _exit</Find>
@@ -624,13 +624,13 @@ _exit</Find>
 </TYP__Make>
 <TYP__Make>
 </TYP__Make>
-Insert _p0 into 0012F4E4(_exit)
+Insert _p0 into 00D55504(_exit)
 </Find>
 _p0</Find>
 At insert:
 Type array:
    
-<BuildSignature>:_exit</BuildSignature>Insert _exit into 0011E8D8()
+<BuildSignature>:_exit</BuildSignature>Insert _exit into 00D448F8()
 Insert into global table
 </Find>
 _exit</Find>
@@ -639,25 +639,18 @@ Type array:
    017 
 Got direct function _exit </ParseExpression>
 </Parse>Returning EOF from NextToken.
-D
-<gsearch2> for: |_printf|
-Looking in statement table
-</Find>
-_printf</Find>
-Looking in function's symbol table
-</Find>
-_printf</Find>
-Searching method/class:_main|0012EDA8
-Looking at params 0012EDF4
-</Find>
-_printf</Find>
-Looking at class members 0082109C
-Looking at global symbols
-</Find>
-_printfMatch
-</Find>
-Found in global symbol table
-</gsearch2>
+D<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
 
 <gsearch2> for: |_printf|
 Looking in statement table
@@ -666,17 +659,27 @@ _printf</Find>
 Looking in function's symbol table
 </Find>
 _printf</Find>
-Searching method/class:_main|0012EDA8
-Looking at params 0012EDF4
+Searching method/class:_main|00D54DC8
+Looking at params 00D54E14
 </Find>
 _printf</Find>
-Looking at class members 0082109C
+Looking at class members 014470BC
 Looking at global symbols
 </Find>
 _printfMatch
 </Find>
 Found in global symbol table
 </gsearch2>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
 
 <gsearch2> for: |_printf|
 Looking in statement table
@@ -685,17 +688,19 @@ _printf</Find>
 Looking in function's symbol table
 </Find>
 _printf</Find>
-Searching method/class:_main|0012EDA8
-Looking at params 0012EDF4
+Searching method/class:_main|00D54DC8
+Looking at params 00D54E14
 </Find>
 _printf</Find>
-Looking at class members 0082109C
+Looking at class members 014470BC
 Looking at global symbols
 </Find>
 _printfMatch
 </Find>
 Found in global symbol table
 </gsearch2>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
 
 <gsearch2> for: |_printf|
 Looking in statement table
@@ -704,17 +709,40 @@ _printf</Find>
 Looking in function's symbol table
 </Find>
 _printf</Find>
-Searching method/class:_main|0012EDA8
-Looking at params 0012EDF4
+Searching method/class:_main|00D54DC8
+Looking at params 00D54E14
 </Find>
 _printf</Find>
-Looking at class members 0082109C
+Looking at class members 014470BC
 Looking at global symbols
 </Find>
 _printfMatch
 </Find>
 Found in global symbol table
 </gsearch2>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+
+<gsearch2> for: |_printf|
+Looking in statement table
+</Find>
+_printf</Find>
+Looking in function's symbol table
+</Find>
+_printf</Find>
+Searching method/class:_main|00D54DC8
+Looking at params 00D54E14
+</Find>
+_printf</Find>
+Looking at class members 014470BC
+Looking at global symbols
+</Find>
+_printfMatch
+</Find>
+Found in global symbol table
+</gsearch2>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
 
 <gsearch2> for: |_exit|
 Looking in statement table
@@ -723,17 +751,21 @@ _exit</Find>
 Looking in function's symbol table
 </Find>
 _exit</Find>
-Searching method/class:_main|0012EDA8
-Looking at params 0012EDF4
+Searching method/class:_main|00D54DC8
+Looking at params 00D54E14
 </Find>
 _exit</Find>
-Looking at class members 0082109C
+Looking at class members 014470BC
 Looking at global symbols
 </Find>
 _exitMatch
 </Find>
 Found in global symbol table
 </gsearch2>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
 E</ParseFunctionBody>
 Enter funcbottom
 Leave funcbottom

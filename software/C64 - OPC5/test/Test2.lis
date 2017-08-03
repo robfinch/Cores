@@ -22,19 +22,19 @@
 
 *** local symbol table ***
 
-_x         =fffffffe   -    Auto        Long
-_y         =fffffffa   -    Auto        Long
-_z         =fffffff6   -    Auto        Long
+_x         =ffffffff   -    Auto        Short
+_y         =fffffffe   -    Auto        Short
+_z         =fffffffd   -    Auto        Short
 
 
 
 
  *** global scope typedef symbol table ***
 
-_main      =000708   -    External    Function returning Long
+_main      =000384   -    External    Function returning Short
 		Parameters:
 			Type array:
-   017 022 
+   016 022 
 _rand      =000000   -    External    Function returning Long
 		Parameters:
 			Type array:
@@ -43,7 +43,7 @@ _exit      =000000   -    External    Function returning Long
 		Parameters:
 			Type array:
    017 
-_ary       =000000   -    Global      Array of Array of Long
+_ary       =000000   -    Global      Array of Array of Short
 _printf    =000000   -    External    Function returning Long
 		Parameters:
 			Type array:

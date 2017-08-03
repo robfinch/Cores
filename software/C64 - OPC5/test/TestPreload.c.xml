@@ -29,39 +29,39 @@ _int</Find>
 Enter declare()
 A<ParseSpecifier>
 A</Find>
-_BinaryMergeTest</Find>
+_TestPreload</Find>
 <TYP__Make>
 </TYP__Make>
 </ParseSpecifier>
 Bb<ParseDeclPrefix>(1)
-<ParsePrefixId>B|_BinaryMergeTest|CDE<ParseDeclSuffix>
+<ParsePrefixId>B|_TestPreload|CDE<ParseDeclSuffix>
 <openpa>
 ****************************
 ****************************
-Function: _BinaryMergeTest
+Function: _TestPreload
 ****************************
 ****************************
 </Find>
-_register</Find>
+_int</Find>
 <TYP__Make>
 </TYP__Make>
-o p q rsYParameter types(_BinaryMergeTest)
+o p q rsYParameter types(_TestPreload)
 Type array:
    
-Proto types(_BinaryMergeTest)
+Proto types(_TestPreload)
 Type array:
    
 X</openpa>
 </ParseDeclSuffix>
 </ParsePrefixId></ParseDeclPrefix>
 CDEGH</Find>
-_BinaryMergeTest</Find>
+_TestPreload</Find>
 hh1h2ikIIbIcinsert type: 33
-***Inserting:_BinaryMergeTest into 001A28F8
-<BuildSignature>:_BinaryMergeTest</BuildSignature>Insert _BinaryMergeTest into 001A28F8()
+***Inserting:_TestPreload into 012948F8
+<BuildSignature>:_TestPreload</BuildSignature>Insert _TestPreload into 012948F8()
 Insert into global table
 </Find>
-_BinaryMergeTest</Find>
+_TestPreload</Find>
 At insert:
 Type array:
    
@@ -69,15 +69,13 @@ J<ParseFunction>
 ***********************************
 ***********************************
 ***********************************
-Parsing function: _BinaryMergeTest
+Parsing function: _TestPreload
 ***********************************
 ***********************************
 ***********************************
 A<BuildParameterList
 ><ParseParmDecls>
-A(78)</Find>
-_int</Find>
-EA(54)CEnter declare()
+A(54)CEnter declare()
 A<ParseSpecifier>
 A</Find>
 _a</Find>
@@ -91,35 +89,10 @@ Bb<ParseDeclPrefix>(1)
 CDEGH</Find>
 _a</Find>
 hh1kIIbIcinsert type: 16
-***Inserting:_a into 001B2E0C
-<BuildSignature>:_a</BuildSignature>Insert _a into 001B2E0C(_BinaryMergeTest)
+***Inserting:_a into 012A4E14
+<BuildSignature>:_a</BuildSignature>Insert _a into 012A4E14(_TestPreload)
 </Find>
 _a</Find>
-At insert:
-Type array:
-   
-JK</Find>
-_register</Find>
-EA(78)</Find>
-_int</Find>
-EA(54)CEnter declare()
-A<ParseSpecifier>
-A</Find>
-_b</Find>
-<TYP__Make>
-</TYP__Make>
-</ParseSpecifier>
-Bb<ParseDeclPrefix>(1)
-<ParsePrefixId>B|_b|CDE<ParseDeclSuffix>
-</ParseDeclSuffix>
-</ParsePrefixId></ParseDeclPrefix>
-CDEGH</Find>
-_b</Find>
-hh1kIIbIcinsert type: 16
-***Inserting:_b into 001B2E0C
-<BuildSignature>:_b</BuildSignature>Insert _b into 001B2E0C(_BinaryMergeTest)
-</Find>
-_b</Find>
 At insert:
 Type array:
    
@@ -127,20 +100,53 @@ JKEA(45)</ParseParmDecls>
 B</Find>
 _aMatch
 </Find>
-</Find>
-_bMatch
-</Find>
 </BuildParameterList>
-B<BuildSignature>:_BinaryMergeTest</BuildSignature></Find>
-_BinaryMergeTestMatch
+B<BuildSignature>:_TestPreload</BuildSignature></Find>
+_TestPreloadMatch
 </Find>
-CDEG<Parse function body>:_BinaryMergeTest|
+CDEG<Parse function body>:_TestPreload|
 </Find>
-_return</Find>
+_int</Find>
 Bb<GenerateMonadic>
 ABCD</GenerateMonadic>
-C<Parse></Find>
+CEnter declare()
+A<ParseSpecifier>
+A</Find>
+_x</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_x|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_x</Find>
+hh1kIIbIcinsert type: 16
+***Inserting:_x into 00C9CE98
+<BuildSignature>:_x</BuildSignature>Insert _x into 00C9CE98()
+</Find>
+_x</Find>
+At insert:
+Type array:
+   
+JK<Nameref>
+GSearchfor:_x|
+<gsearch2> for: |_x|
+Looking in statement table
+</Find>
+_xMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_xIsEqual:T2sp is not null
+Type array:
+   
+tp:01997108 <Deref></Deref>deref tp:01CCD6F4 </Find>
 _a</Find>
+</nameref2>
+</Nameref>
 <Nameref>
 GSearchfor:_a|
 <gsearch2> for: |_a|
@@ -150,8 +156,8 @@ _a</Find>
 Looking in function's symbol table
 </Find>
 _a</Find>
-Searching method/class:_BinaryMergeTest|001B2DC0
-Looking at params 001B2E0C
+Searching method/class:_TestPreload|012A4DC8
+Looking at params 012A4E14
 </Find>
 _aMatch
 </Find>
@@ -161,34 +167,35 @@ Found as parameter
 A:1:_aIsEqual:T2sp is not null
 Type array:
    
-tp:008A50D0 <Deref></Deref>deref tp:00BDB6EC </nameref2>
+tp:019970D8 <Deref></Deref>deref tp:01CCD6F4 </nameref2>
 </Nameref>
 </Find>
-_b</Find>
+_return</Find>
+<Parse></Find>
+_x</Find>
+</Find>
+_x</Find>
+</Find>
+_x</Find>
 <Nameref>
-GSearchfor:_b|
-<gsearch2> for: |_b|
+GSearchfor:_x|
+<gsearch2> for: |_x|
 Looking in statement table
 </Find>
-_b</Find>
-Looking in function's symbol table
+_xMatch
 </Find>
-_b</Find>
-Searching method/class:_BinaryMergeTest|001B2DC0
-Looking at params 001B2E0C
-</Find>
-_bMatch
-</Find>
-Found as parameter
+Found as an auto var
 </gsearch2>
 <nameref2>
-A:1:_bIsEqual:T2sp is not null
+A:1:_xIsEqual:T2sp is not null
 Type array:
    
-tp:008A5100 <Deref></Deref>deref tp:00BDB6EC </nameref2>
+tp:01997108 <Deref></Deref>deref tp:01CCD6F4 </nameref2>
 </Nameref>
 </Parse>Returning EOF from NextToken.
 D<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
 ABCD</GenerateMonadic>
 <GenerateMonadic>
 ABCD</GenerateMonadic>

@@ -309,8 +309,11 @@ extern void put_code(struct ocode *);
 extern char *put_label(int lab, char*, char*, char);
 extern char *opstr(int op);
 // Peepgen.c
+extern void PeepNop(struct ocode *ip1, struct ocode *ip2);
 extern void flush_peep();
 extern int equal_address(AMODE *ap1, AMODE *ap2);
+extern int GeneratePreload();
+extern void OverwritePreload(int handle, int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3, AMODE *ap4);
 extern void GenerateLabel(int labno);
 extern void GenerateZeradic(int op);
 extern void GenerateMonadic(int op, int len, AMODE *ap1);
@@ -351,6 +354,7 @@ extern void GenStore(AMODE *, AMODE *, int size);
 extern void ListTable(TABLE *t, int i);
 // Register.c
 extern AMODE *GetTempRegister();
+extern AMODE *GetTempRegister2(int *pushed);
 extern AMODE *GetTempBrRegister();
 extern AMODE *GetTempFPRegister();
 extern void ReleaseTempRegister(AMODE *ap);

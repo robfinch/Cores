@@ -1,7 +1,7 @@
 
 int TestFor()
 {
-	int x, y;
+	int x, y, z;
 
 	for (x = 1; x < 100; x++) {
 		putch('a');
@@ -12,4 +12,6 @@ int TestFor()
 		putch('b');
 		--y;
 	}
+
+	for (z = 1; z < 10; ) ;
 }

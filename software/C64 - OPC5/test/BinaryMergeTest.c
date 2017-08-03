@@ -1,5 +1,5 @@
 
-int BinaryMergeTest(int a, int b)
+int BinaryMergeTest(register int a, register int b)
 {
-	return a + a;
+	return a + a + 1;
 }

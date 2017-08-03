@@ -1,7 +1,7 @@
      1	
-     2	int BinaryMergeTest(int a, int b)
+     2	int BinaryMergeTest(register int a, register int b)
      3	{
-     4		return a + a;
+     4		return a + b + 1;
      5	}
 
 
