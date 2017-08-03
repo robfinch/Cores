@@ -63,13 +63,17 @@ static int round2(int n)
 }
 
 // Return the stack offset where parameter storage begins.
+// If the function doesnt' reference the BP register then the stack
+// offsets will be wrong. However it doesn't matter because there's
+// no references to BP.
+
 int GetReturnBlockSize()
 {
 	if (currentFn) {
 		if (currentFn->IsInterrupt)
 			return 0;
 		if (currentFn->IsLeaf) {
-		    return (exceptions ? sizeOfWord*3 : sizeOfWord);
+		    return (exceptions ? sizeOfWord*3 : sizeOfWord*1);
 		}
 	}
 	else
@@ -104,7 +108,6 @@ static bool SameType(TYP *tp1, TYP *tp2)
 			break;
 		}
 	}
-
 //	printf("Leave SameType\r\n");
 	return ret;
 }

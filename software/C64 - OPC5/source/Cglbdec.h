@@ -328,6 +328,7 @@ extern void GenerateHint(int n);
 extern void GenLdi(AMODE *, AMODE *);
 extern AMODE *make_label(int lab);
 extern AMODE *make_clabel(int lab);
+extern AMODE *make_clabel2(int lab,char*);
 extern AMODE *make_immed(int i);
 extern AMODE *make_indirect(int i);
 extern AMODE *make_offset(ENODE *node);

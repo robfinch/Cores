@@ -1,0 +1,38 @@
+     1	int SomeFunc(int a, int b, register int c)
+     2	{
+     3		return a + b - c;
+     4	}
+     5	
+
+
+*** local symbol table ***
+
+
+
+
+     6	int main()
+     7	{
+     8		SomeFunc(10,20,30);
+     9	}
+    10	
+
+
+*** local symbol table ***
+
+
+
+
+
+ *** global scope typedef symbol table ***
+
+_main      =000000   -    Global      Function returning Short
+		Parameters:
+			Type array:
+   
+_SomeFunc  =000000   -    External    Function returning Short
+		Parameters:
+			Type array:
+   016 016 016 
+
+ *** structures and unions ***
+

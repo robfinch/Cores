@@ -26,6 +26,7 @@
 #include "stdafx.h"
 
 static void AddToPeepList(struct ocode *newc);
+bool IsFlowCtrl(struct ocode *ip);
 void peep_add(struct ocode *ip);
 static void PeepoptSub(struct ocode *ip);
 void peep_move(struct ocode	*ip);
@@ -251,6 +252,14 @@ static void AddToPeepList(struct ocode *cd)
 	}
 }
 
+static inline void Remove(struct ocode *cd)
+{
+	if (cd->fwd)
+		cd->fwd->back = cd->back;
+	if (cd->back)
+		cd->back->fwd = cd->fwd;
+}
+
 int PeepCount(struct ocode *ip)
 {
 	int cnt;
@@ -270,6 +279,8 @@ void GenerateLabel(int labno)
 	newl->opcode = op_label;
 	newl->oper1 = (struct amode *)labno;
 	newl->oper2 = (struct amode *)my_strdup((char *)currentFn->name->c_str());
+	newl->oper3 = nullptr;
+	newl->oper4 = nullptr;
 	AddToPeepList(newl);
 }
 
@@ -329,10 +340,7 @@ void peep_move(struct ocode	*ip)
 					return;
 			}
 		}
-		if (ip->fwd)
-			ip->fwd->back = ip->back;
-		if (ip->back)
-			ip->back->fwd = ip->fwd;
+		Remove(ip);
 	}
 	return;
 	if (ip->back) {
@@ -399,8 +407,7 @@ void peep_add(struct ocode *ip)
                             if (ip->fwd->oper1->preg == regSP) {
                                 if (ip->back==NULL)
                                     return;
-                                ip->back->fwd = ip->fwd;
-                                ip->fwd->back = ip->back;
+								Remove(ip);
                             }
                         }
                     }
@@ -441,7 +448,7 @@ static void PeepoptSub(struct ocode *ip)
 static bool IsSubiSP(struct ocode *ip)
 {
 	if (ip->opcode==op_sub) {
-		if (ip->oper3->mode==am_immed) {
+		if (ip->oper3 && ip->oper3->mode==am_immed) {
 			if (ip->oper1->preg==regSP && ip->oper2->preg==regSP) {
 				return (true);
 			}
@@ -460,46 +467,13 @@ static void MergeSubi(struct ocode *first, struct ocode *last, int amt)
 	// First remove all the excess subtracts
 	for (ip = first; ip && ip != last; ip = ip->fwd) {
 		if (IsSubiSP(ip)) {
-			ip->back->fwd = ip->fwd;
-			ip->fwd->back = ip->back;
+			Remove(ip);
 		}
 	}
 	// Set the amount of the last subtract to the total amount
 	if (ip)	 {// there should be one
 		ip->oper3->offset->i = amt;
 	}
-}
-
-static bool IsFlowControl(struct ocode *ip)
-{
-	if (ip->opcode==op_jal ||
-		ip->opcode==op_jmp ||
-		ip->opcode==op_ret ||
-		ip->opcode==op_call ||
-		ip->opcode==op_bra ||
-		ip->opcode==op_beq ||
-		ip->opcode==op_bne ||
-		ip->opcode==op_blt ||
-		ip->opcode==op_ble ||
-		ip->opcode==op_bgt ||
-		ip->opcode==op_bge ||
-		ip->opcode==op_bltu ||
-		ip->opcode==op_bleu ||
-		ip->opcode==op_bgtu ||
-		ip->opcode==op_bgeu ||
-		ip->opcode==op_beqi ||
-		ip->opcode==op_bnei ||
-		ip->opcode==op_blti ||
-		ip->opcode==op_blei ||
-		ip->opcode==op_bgti ||
-		ip->opcode==op_bgei ||
-		ip->opcode==op_bltui ||
-		ip->opcode==op_bleui ||
-		ip->opcode==op_bgtui ||
-		ip->opcode==op_bgeui
-		)
-		return (true);
-	return (false);
 }
 
 // 'subui'
@@ -519,7 +493,7 @@ static void PeepoptSubSP()
 				last_subi = ip;
 			amt += ip->oper3->offset->i;
 		}
-		else if (ip->opcode==op_push || IsFlowControl(ip)) {
+		else if (ip->opcode==op_push || IsFlowCtrl(ip)) {
 			MergeSubi(first_subi, last_subi, amt);
 			first_subi = last_subi = nullptr;
 			amt = 0;
@@ -554,10 +528,7 @@ void PeepoptMuldiv(struct ocode *ip, int op)
   // remove multiply / divide by 1
 	// This shouldn't get through Optimize, but does sometimes.
   if (num==1) {
-		if (ip->back)
-			ip->back->fwd = ip->fwd;
-		if (ip->fwd)
-			ip->fwd->back = ip->back;
+	  Remove(ip);
 		return;
 	}
   for (shcnt = 1; shcnt < 32; shcnt++) {
@@ -599,14 +570,48 @@ void PeepoptJAL(struct ocode *ip)
 //
 void PeepoptBranch(struct ocode *ip)
 {
-	struct ocode *p;
+	struct ocode *p, *q;
+	int n;
 
 	for (p = ip->fwd; p && p->opcode==op_label; p = p->fwd)
-		if (ip->oper1->offset->i == (int)p->oper1) {
-			ip->back->fwd = ip->fwd;
-			if (ip->fwd != nullptr)
-				ip->fwd->back = ip->back;
+		if (ip->oper3 && ip->oper3->offset->i == (int)p->oper1) {
+			Remove(ip);
 			return;
+		}
+		if (ip->opcode==op_mov
+			&& ip->oper1->mode==am_reg
+			&& ip->oper1->preg==regPC
+			&& ip->oper2->mode==am_reg
+			&& ip->oper2->preg==regZero
+			) {
+			n = 0;
+			for (q = ip; n < 15 && q; q = q->fwd) {
+				if (q->opcode==op_label
+					&& (int)q->oper1==ip->oper3->offset->i) {
+					ip->opcode = op_inc;
+					ip->oper2 = ip->oper3;
+					ip->oper3 = nullptr;
+					ip->oper2->offset->sp = new std::string("-PC");
+					return;
+				}
+				n += q->opcode!=op_label;
+				if (q->oper3)
+					n++;
+			}
+			n= 0;
+			for (q = ip; n < 15 && q; q = q->back) {
+				if (q->opcode==op_label
+					&& (int)q->oper1==ip->oper3->offset->i) {
+					ip->opcode = op_dec;
+					ip->oper2 = ip->oper3;
+					ip->oper3 = nullptr;
+					ip->oper2->offset->sp = new std::string("-PC");
+					return;
+				}
+				n += q->opcode!=op_label;
+				if (q->oper3)
+					n++;
+			}
 		}
 	return;
 }
@@ -890,8 +895,7 @@ void PeepoptSxbAnd(struct ocode *ip)
 		 return;
      if (ip->fwd->oper3->offset->i != 255)
          return;
-     ip->fwd->back = ip->back;
-     ip->back->fwd = ip->fwd;
+	 Remove(ip);
 }
 
 
@@ -938,13 +942,11 @@ static void PeepoptHint(struct ocode *ip)
 		if (ip->back->opcode==op_label || ip->fwd->opcode==op_label)
 			return;
 		if (ip->fwd->opcode != op_mov) {
-			ip->back->fwd = ip->fwd;
-			ip->fwd->back = ip->back;
+			Remove(ip);
 			return;
 		}
 		if (ip->back->opcode != op_mov) {
-			ip->back->fwd = ip->fwd;
-			ip->fwd->back = ip->back;
+			Remove(ip);
 			return;
 		}
 		if (equal_address(ip->fwd->oper2, ip->back->oper1) && ip->back->oper2->mode==am_immed) {
@@ -953,8 +955,7 @@ static void PeepoptHint(struct ocode *ip)
 			ip->fwd->fwd->back = ip->back;
 		}
 		else {
-			ip->back->fwd = ip->fwd;
-			ip->fwd->back = ip->back;
+			Remove(ip);
 		}
 		break;
 
@@ -975,8 +976,7 @@ static void PeepoptHint(struct ocode *ip)
 				ip->fwd->fwd->back = ip->back;
 			}
 			else {
-				ip->back->fwd = ip->fwd;
-				ip->fwd->back = ip->back;
+				Remove(ip);
 			}
 		}
 		break;
@@ -1074,12 +1074,12 @@ int IsRet(struct ocode *ip)
 {
 	if (ip==nullptr)
 		return 0;
-	if (ip->oper1==nullptr || ip->oper2==nullptr || ip->oper3==nullptr)
+	if (ip->oper1==nullptr || ip->oper2==nullptr)
 		return 0;
 	if (ip->opcode==op_mov &&
 		ip->oper1->mode==am_reg && ip->oper1->preg==15 &&
 		ip->oper2->mode==am_reg && ip->oper2->preg==13 &&
-		ip->oper3->mode==am_immed && ip->oper3->offset->i == 0)
+		(ip->oper3==nullptr || ip->oper3->offset->i==0))
 	return 1;
 	return 0;
 }
@@ -1088,11 +1088,17 @@ bool IsFlowCtrl(struct ocode *ip)
 {
 	if (ip==nullptr)
 		return false;
-	if (ip->oper1==nullptr || ip->oper3==nullptr)
+	if (ip->oper1==nullptr)
 		return false;
-	if (ip->opcode==op_mov
+	if (ip->oper3 && ip->opcode==op_mov
 		&& ip->oper1->mode==am_reg && ip->oper1->preg==15
 		&& ip->oper3->mode==am_direct)
+		return true;
+	if ((ip->opcode==op_inc || ip->opcode==op_dec)
+		&& ip->oper1->mode==am_reg && ip->oper1->preg==15
+		&& ip->oper2->mode==am_direct)
+		return true;
+	if (ip->opcode==op_jsr)
 		return true;
 	return false;
 }
@@ -1216,8 +1222,14 @@ static void SetLabelReference()
 			p->isReferenced = false;
 			for (q = peep_head; q; q = q->fwd) {
 				if (IsFlowCtrl(q)) {
-					if (q->oper3->mode==am_direct) {
+					if (q->oper3 && q->oper3->mode==am_direct) {
 						if (q->oper3->offset->i == (int)p->oper1) {
+							p->isReferenced = true;
+							break;
+						}
+					}
+					if (q->oper2->mode==am_direct) {
+						if (q->oper2->offset->i == (int)p->oper1) {
 							p->isReferenced = true;
 							break;
 						}
@@ -1234,10 +1246,7 @@ static void EliminateUnreferencedLabels()
 
 	for (p = peep_head; p; p = p->fwd) {
 		if (p->opcode==op_label && !p->isReferenced) {
-			if (p->back)
-				p->back->fwd = p->fwd;
-			if (p->fwd)
-				p->fwd->back = p->back;
+			Remove(p);
 		}
 	}
 }
@@ -1255,7 +1264,7 @@ static void opt_peep()
 	
 	if (!::opt_nopeep) {
 		opt_nbr();
-		for (rep = 0; rep < 5; rep++)
+		for (rep = 0; rep < 10; rep++)
 		{
 			SetLabelReference();
 			EliminateUnreferencedLabels();
@@ -1349,6 +1358,8 @@ static void opt_peep()
 					PeepoptUctran(ip);
 				if (IsFlowCtrl(ip))
 					PeepoptPred(ip);
+				if (IsFlowCtrl(ip))
+					PeepoptBranch(ip);
 			   ip = ip->fwd;
 			}
 		 }
@@ -1394,36 +1405,38 @@ static void opt_peep()
 			for (ip = peep_head; ip != NULL; ip = ip->fwd)
 			{
 				if (ip->opcode==op_hint && (ip->oper1->offset->i==4 || ip->oper1->offset->i==6)) {
+					Remove(ip);
 					ip = ip->fwd;
 					while (ip && ip->opcode != op_hint) {
-						if (ip->fwd)
-							ip->fwd->back = ip->back;
-						if (ip->back)
-							ip->back->fwd = ip->fwd;
+						Remove(ip);
 						ip = ip->fwd;
 					}
 				}
-				/*
-				if (ip->opcode==op_link || ip->opcode==op_unlk) {
-					if (ip->back)
-						ip->back->fwd = ip->fwd;
-					if (ip->fwd)
-						ip->fwd->back = ip->back;
-				}
-				*/
 			}
 		}
 	}
+	// Unreferenced labels are removed even if optimization is turned off.
+	SetLabelReference();
+	EliminateUnreferencedLabels();
 	// Remove all the compiler hints that didn't work out. Note hints are
 	// removed even if optimizations are turned off. Also remove all the
 	// preloads that didn't pan out.
-    for(ip = peep_head; ip != NULL; ip = ip->fwd )
-    {
+	for(ip = peep_head; ip != NULL; ip = ip->fwd )
+	{
 		if (ip->opcode==op_hint || ip->opcode==op_preload || ip->opcode==op_nop) {
-			if (ip->fwd)
-				ip->fwd->back = ip->back;
-			if (ip->back)
-				ip->back->fwd = ip->fwd;
+			Remove(ip);
+		}
+	}
+	// The above code doesn't remove all the hints, not sure why. So if there
+	// are any remaining they are switched to NOP's.
+	for(ip = peep_head; ip != NULL; ip = ip->fwd )
+	{
+		if (ip->opcode==op_hint || ip->opcode==op_preload || ip->opcode==op_nop) {
+			ip->opcode = op_nop;
+			ip->oper1 = nullptr;
+			ip->oper2 = nullptr;
+			ip->oper3 = nullptr;
+			ip->oper4 = nullptr;
 		}
 	}
 }

@@ -42,7 +42,7 @@ The compiler supports the 'C' language but includes some additional features som
 ### Register Usage
 The compiler makes use of registers in the following fashion:
 Reg |Usage|Comment|Saved by
-----|-----|-------|--------
+----+-----+-------+--------
 r0 | always zero | fixed use by hardware | ...
 r1 | return value | by convention | caller
 r2 | register variable | callee

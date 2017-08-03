@@ -1,0 +1,438 @@
+<title>C64D Compiler debug file</title>
+<compile>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+</Find>
+_int</Find>
+<Parsing GlobalDecl>
+<ParseGlobalDecl>
+Enter declare()
+A<ParseSpecifier>
+A</Find>
+_SomeFunc</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_SomeFunc|CDE<ParseDeclSuffix>
+<openpa>
+****************************
+****************************
+Function: _SomeFunc
+****************************
+****************************
+</Find>
+_int</Find>
+<TYP__Make>
+</TYP__Make>
+o p q rsYParameter types(_SomeFunc)
+Type array:
+   
+Proto types(_SomeFunc)
+Type array:
+   
+X</openpa>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_SomeFunc</Find>
+hh1h2ikIIbIcinsert type: 33
+***Inserting:_SomeFunc into 00C448F8
+<BuildSignature>:_SomeFunc</BuildSignature>Insert _SomeFunc into 00C448F8()
+Insert into global table
+</Find>
+_SomeFunc</Find>
+At insert:
+Type array:
+   
+J<ParseFunction>
+***********************************
+***********************************
+***********************************
+Parsing function: _SomeFunc
+***********************************
+***********************************
+***********************************
+A<BuildParameterList
+><ParseParmDecls>
+A(54)CEnter declare()
+A<ParseSpecifier>
+A</Find>
+_a</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_a|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_a</Find>
+hh1kIIbIcinsert type: 16
+***Inserting:_a into 00C54E14
+<BuildSignature>:_a</BuildSignature>Insert _a into 00C54E14(_SomeFunc)
+</Find>
+_a</Find>
+At insert:
+Type array:
+   
+JK</Find>
+_int</Find>
+EA(54)CEnter declare()
+A<ParseSpecifier>
+A</Find>
+_b</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_b|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_b</Find>
+hh1kIIbIcinsert type: 16
+***Inserting:_b into 00C54E14
+<BuildSignature>:_b</BuildSignature>Insert _b into 00C54E14(_SomeFunc)
+</Find>
+_b</Find>
+At insert:
+Type array:
+   
+JK</Find>
+_register</Find>
+EA(78)</Find>
+_int</Find>
+EA(54)CEnter declare()
+A<ParseSpecifier>
+A</Find>
+_c</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_c|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_c</Find>
+hh1kIIbIcinsert type: 16
+***Inserting:_c into 00C54E14
+<BuildSignature>:_c</BuildSignature>Insert _c into 00C54E14(_SomeFunc)
+</Find>
+_c</Find>
+At insert:
+Type array:
+   
+JKEA(45)</ParseParmDecls>
+B</Find>
+_aMatch
+</Find>
+</Find>
+_bMatch
+</Find>
+</Find>
+_cMatch
+</Find>
+</BuildParameterList>
+B<BuildSignature>:_SomeFunc</BuildSignature></Find>
+_SomeFuncMatch
+</Find>
+CDEG<Parse function body>:_SomeFunc|
+</Find>
+_return</Find>
+Bb<GenerateMonadic>
+ABCD</GenerateMonadic>
+C<Parse></Find>
+_a</Find>
+<Nameref>
+GSearchfor:_a|
+<gsearch2> for: |_a|
+Looking in statement table
+</Find>
+_a</Find>
+Looking in function's symbol table
+</Find>
+_a</Find>
+Searching method/class:_SomeFunc|00C54DC8
+Looking at params 00C54E14
+</Find>
+_aMatch
+</Find>
+Found as parameter
+</gsearch2>
+<nameref2>
+A:1:_aIsEqual:T2sp is not null
+Type array:
+   
+tp:013470D8 <Deref></Deref>deref tp:0167D6F4 </nameref2>
+</Nameref>
+</Find>
+_b</Find>
+<Nameref>
+GSearchfor:_b|
+<gsearch2> for: |_b|
+Looking in statement table
+</Find>
+_b</Find>
+Looking in function's symbol table
+</Find>
+_b</Find>
+Searching method/class:_SomeFunc|00C54DC8
+Looking at params 00C54E14
+</Find>
+_bMatch
+</Find>
+Found as parameter
+</gsearch2>
+<nameref2>
+A:1:_bIsEqual:T2sp is not null
+Type array:
+   
+tp:01347108 <Deref></Deref>deref tp:0167D6F4 </nameref2>
+</Nameref>
+</Find>
+_c</Find>
+<Nameref>
+GSearchfor:_c|
+<gsearch2> for: |_c|
+Looking in statement table
+</Find>
+_c</Find>
+Looking in function's symbol table
+</Find>
+_c</Find>
+Searching method/class:_SomeFunc|00C54DC8
+Looking at params 00C54E14
+</Find>
+_cMatch
+</Find>
+Found as parameter
+</gsearch2>
+<nameref2>
+A:1:_cIsEqual:T2sp is not null
+Type array:
+   
+tp:01347138 <Deref></Deref>deref tp:0167D6F4 </nameref2>
+</Nameref>
+</Parse></Find>
+_int</Find>
+D<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+E</ParseFunctionBody>
+Enter funcbottom
+Leave funcbottom
+F</ParseFunction>
+Enter declare()
+A<ParseSpecifier>
+A</Find>
+_main</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_main|CDE<ParseDeclSuffix>
+<openpa>
+****************************
+****************************
+Function: _main
+****************************
+****************************
+<TYP__Make>
+</TYP__Make>
+o p q </openpa>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_main</Find>
+hh1h2ikIIbIcinsert type: 34
+***Inserting:_main into 00C448F8
+<BuildSignature>:_main</BuildSignature>Insert _main into 00C448F8()
+Insert into global table
+</Find>
+_main</Find>
+At insert:
+Type array:
+   
+J<ParseFunction>
+***********************************
+***********************************
+***********************************
+Parsing function: _main
+***********************************
+***********************************
+***********************************
+A<BuildParameterList
+><ParseParmDecls>
+A(42)</ParseParmDecls>
+B</BuildParameterList>
+B<BuildSignature>:_main</BuildSignature></Find>
+_mainMatch
+</Find>
+CDEG<Parse function body>:_main|
+</Find>
+_SomeFunc</Find>
+Bb<GenerateMonadic>
+ABCD</GenerateMonadic>
+CFound _SomeFunc
+</Find>
+_SomeFunc</Find>
+</Find>
+_SomeFuncMatch
+</Find>
+sp okay sc=4
+<Parse><ParseExpression>
+<Nameref>
+GSearchfor:_SomeFunc|
+<gsearch2> for: |_SomeFunc|
+Looking in statement table
+</Find>
+_SomeFunc</Find>
+Looking in function's symbol table
+</Find>
+_SomeFunc</Find>
+Searching method/class:_main|00C55148
+Looking at params 00C55194
+</Find>
+_SomeFunc</Find>
+Looking at class members 013471AC
+Looking at global symbols
+</Find>
+_SomeFuncMatch
+</Find>
+Found in global symbol table
+</gsearch2>
+<nameref2>
+A:1:_SomeFuncIsEqual:F1sp is not null
+Type array:
+   
+tp:013470A8 deref tp:013470A8 </nameref2>
+</Nameref>
+tp2->type=33<ArgumentList>017 017 017 lastst=45</ArgumentList>
+Type array:
+   017 017 017 
+Got Type: 33openpa calling gsearch2<FindRising>_SomeFunc 
+</Find>
+_SomeFunc</Find>
+</FindRising>
+<gsearch2> for: |_SomeFunc|
+Looking in statement table
+</Find>
+_SomeFunc</Find>
+Looking in function's symbol table
+</Find>
+_SomeFunc</Find>
+Searching method/class:_main|00C55148
+Looking at params 00C55194
+</Find>
+_SomeFunc</Find>
+Looking at class members 013471AC
+Looking at global symbols
+</Find>
+_SomeFuncMatch
+IsEqual:T3Exact matchType array:
+   016 016 016 
+Type array:
+   017 017 017 
+Found in global symbol table
+</gsearch2>
+Got direct function _SomeFunc </ParseExpression>
+</Parse>Returning EOF from NextToken.
+D<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+
+<gsearch2> for: |_SomeFunc|
+Looking in statement table
+</Find>
+_SomeFunc</Find>
+Looking in function's symbol table
+</Find>
+_SomeFunc</Find>
+Searching method/class:_main|00C55148
+Looking at params 00C55194
+</Find>
+_SomeFunc</Find>
+Looking at class members 013471AC
+Looking at global symbols
+</Find>
+_SomeFuncMatch
+</Find>
+Found in global symbol table
+</gsearch2>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+E</ParseFunctionBody>
+Enter funcbottom
+Leave funcbottom
+F</ParseFunction>
+</ParseGlobalDecl>
+</Parsing GlobalDecl>
+</compile>
+<Dumplits>
+</Dumplits>
+Enter summary
+Leave summary
+<closefiles>
+ABC</closefiles>
+Next on command line (1).
+Exiting
