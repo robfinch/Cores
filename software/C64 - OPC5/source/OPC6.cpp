@@ -62,42 +62,6 @@ static int OptimizationDesireability(CSE *csp)
     return csp->uses;
 }
 
-/*
- *      exchange will exchange the order of two expression entries
- *      following c1 in the linked list.
- */
-static void exchange(CSE **c1)
-{
-	CSE *csp1, *csp2;
-
-    csp1 = *c1;
-    csp2 = csp1->next;
-    csp1->next = csp2->next;
-    csp2->next = csp1;
-    *c1 = csp2;
-}
-
-/*
- *      bsort implements a bubble sort on the expression list.
- */
-static int bsort(CSE **list)
-{
-	CSE *csp1, *csp2;
-    int i;
-
-    csp1 = *list;
-    if( csp1 == NULL || csp1->next == NULL )
-        return FALSE;
-    i = bsort( &(csp1->next));
-    csp2 = csp1->next;
-    if( OptimizationDesireability(csp1) < OptimizationDesireability(csp2) ) {
-        exchange(list);
-        return TRUE;
-    }
-    return FALSE;
-}
-
-
 static int CSECmp(const void *a, const void *b)
 {
 	CSE *csp1, *csp2;
@@ -143,7 +107,7 @@ int AllocateRegisterVars()
 	int size;
 	int csecnt;
 
-	reg = 2;
+	reg = 3;
     mask = 0;
 	rmask = 0;
 	fpmask = 0;
@@ -161,16 +125,31 @@ int AllocateRegisterVars()
 	// Make multiple passes over the CSE table in order to use
 	// up all temporary registers. Allocates on the progressively
 	// less desirable.
-	for (nn = 0; nn < 3; nn++) {
+	for (nn = 0; nn < 6; nn++) {
 		for (csecnt = 0; csecnt < csendx; csecnt++)	{
 			csp = &CSETable[csecnt];
 			if (csp->reg==-1) {
 				if( OptimizationDesireability(csp) >= 4-nn ) {
-    				if( csp->duses > csp->uses / (8 >> nn) && reg < 5 )
-    					csp->reg = reg++;
-    				else
-    					csp->reg = -1;
+					if (nn > 3) {
+						if (reg < 5)
+   							csp->reg = reg++;
+					}
+					else {
+    					//if(( csp->duses > csp->uses / 2) && reg < 5 )
+						if (reg < 5)
+    						csp->reg = reg++;
+					}
 				}
+			}
+		}
+	}
+	// Use up all the regs.
+	for (nn = reg; nn < 5; nn++) {
+		for (csecnt = 0; csecnt < csendx; csecnt++)	{
+			csp = &CSETable[csecnt];
+			if (csp->reg==-1) {
+				csp->reg = nn;
+				break;
 			}
 		}
 	}

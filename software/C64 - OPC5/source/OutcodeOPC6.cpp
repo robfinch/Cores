@@ -326,7 +326,7 @@ void PutAddressMode(AMODE *ap)
             ofs.printf("fp%d", (int)ap->preg);
             break;
     case am_ind:
-			ofs.printf("%s,0",RegMoniker(ap->preg));
+			ofs.printf("%s",RegMoniker(ap->preg));
 			break;
     case am_indx:
 			// It's not known the function is a leaf routine until code

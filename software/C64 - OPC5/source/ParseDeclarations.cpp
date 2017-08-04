@@ -485,36 +485,6 @@ int Declaration::ParseSpecifier(TABLE *table)
 
 			case id:	sp = ParseId();	goto lxit;
 
-			case kw_float:
-				head = TYP::Copy(stddouble);
-				tail = head;
-				head->isVolatile = isVolatile;
-				head->isIO = isIO;
-				head->isConst = isConst;
-				NextToken();
-				bit_max = head->precision;
-				goto lxit;
-
-			case kw_double:
-				head = (TYP *)TYP::Make(bt_double,8);
-				tail = head;
-				head->isVolatile = isVolatile;
-				head->isIO = isIO;
-				head->isConst = isConst;
-				NextToken();
-				bit_max = 80;
-				goto lxit;
-
-			case kw_triple:
-				head = TYP::Copy(stdtriple);
-				tail = head;
-				head->isVolatile = isVolatile;
-				head->isIO = isIO;
-				head->isConst = isConst;
-				NextToken();
-				bit_max = head->precision;
-				goto lxit;
-
 			case kw_void:
 				head = (TYP *)TYP::Make(bt_void,0);
 				tail = head;
@@ -604,7 +574,7 @@ void Declaration::ParseDoubleColon(SYM *sp)
 
 void Declaration::ParseBitfieldSpec(bool isUnion)
 {
-  dfs.puts("<ParseBitfieldSpec>");
+	dfs.puts("<ParseBitfieldSpec>");
 	NextToken();
 	bit_width = GetIntegerExpression((ENODE **)NULL);
 	if (isUnion)
@@ -618,7 +588,7 @@ void Declaration::ParseBitfieldSpec(bool isUnion)
 	if (bit_width == 0 || bit_offset + bit_width > bit_max)
 		bit_offset = 0;
 	bit_next = bit_offset + bit_width;
-  dfs.puts("</ParseBitfieldSpec>\n");
+	dfs.puts("</ParseBitfieldSpec>\n");
 }
 
 SYM *Declaration::ParsePrefixId()
