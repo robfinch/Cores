@@ -117,8 +117,7 @@ void GenerateTempRegPush(int reg, int rmode, int number, int stkpos)
     ap1->mode = rmode;
 
 
-	GenerateTriadic(op_sub,0,makereg(regSP),makereg(regZero),make_immed(sizeOfWord));
-	GenerateTriadic(op_sto,0,ap1,makereg(regSP),make_immed(0));
+	GenerateMonadic(op_push,0,ap1);
 	TRACE(printf("pushing r%d\r\n", reg);)
     reg_stack[reg_stack_ptr].mode = (enum e_am)rmode;
     reg_stack[reg_stack_ptr].reg = reg;
@@ -146,8 +145,7 @@ void GenerateTempRegPop(int reg, int rmode, int number, int stkpos)
 	ap1 = allocAmode();
 	ap1->preg = reg;
 	ap1->mode = rmode;
-	GenerateTriadic(op_ld,0,ap1,makereg(regSP),make_immed(0));
-	GenerateTriadic(op_add,0,makereg(regSP),makereg(regZero),make_immed(sizeOfWord));
+	GenerateMonadic(op_pop,0,ap1);
     reg_alloc[number].f.isPushed = 'F';
 }
 

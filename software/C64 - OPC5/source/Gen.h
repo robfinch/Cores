@@ -32,6 +32,7 @@ typedef struct amode {
 	unsigned int tempflag : 1;
 	unsigned int isFloat : 1;
 	char FloatSize;
+	unsigned int isAddress : 1;
 	unsigned int isUnsigned : 1;
 	unsigned int lowhigh : 2;
 	unsigned int isVolatile : 1;

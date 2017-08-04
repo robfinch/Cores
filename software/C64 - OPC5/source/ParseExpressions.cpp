@@ -1188,8 +1188,8 @@ int IsLValue(ENODE *node)
             return IsLValue(node->p[0]);
 	case en_add:
 		return node->tp->type==bt_pointer;
-	//case en_autocon:
-	//		return node->etype==bt_pointer;
+	case en_autocon:
+			return node->etype==bt_pointer;
     }
     return FALSE;
 }
@@ -1300,7 +1300,7 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 				for (tp4 = tp1; tp4; tp4 = tp4->GetBtp()) {
 					sa[cnt2] = max(tp4->numele,1);
 					cnt2++;
-					if (cnt2 > 4) {
+					if (cnt2 > 5) {
 						error(ERR_TOOMANYDIMEN);
 						break;
 					}
