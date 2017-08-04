@@ -141,53 +141,53 @@ void Compiler::AddStandardTypes()
 {
 	TYP *p, *pchar, *pint;
 
-	p = TYP::Make(bt_long,2);
-	stdint = *p;
+	p = TYP::Make(bt_short,1);
+	stdint = p;
 	pint = p;
-	p->precision = 32;
-  
-	p = TYP::Make(bt_long,2);
-	p->isUnsigned = true;
-	p->precision = 32;
-	stduint = *p;
-  
-	p = TYP::Make(bt_long,2);
-	p->precision = 32;
-	stdlong = *p;
-  
-	p = TYP::Make(bt_long,2);
-	p->isUnsigned = true;
-	p->precision = 32;
-	stdulong = *p;
-  
-	p = TYP::Make(bt_short,1);
 	p->precision = 16;
-	stdshort = *p;
   
 	p = TYP::Make(bt_short,1);
 	p->isUnsigned = true;
 	p->precision = 16;
-	stdushort = *p;
+	stduint = p;
+  
+	p = TYP::Make(bt_long,2);
+	p->precision = 32;
+	stdlong = p;
+  
+	p = TYP::Make(bt_long,2);
+	p->isUnsigned = true;
+	p->precision = 32;
+	stdulong = p;
+  
+	p = TYP::Make(bt_short,1);
+	p->precision = 16;
+	stdshort = p;
+  
+	p = TYP::Make(bt_short,1);
+	p->isUnsigned = true;
+	p->precision = 16;
+	stdushort = p;
   
 	p = TYP::Make(bt_char,1);
-	stdchar = *p;
+	stdchar = p;
 	p->precision = 16;
 	pchar = p;
   
 	p = TYP::Make(bt_char,1);
 	p->isUnsigned = true;
 	p->precision = 16;
-	stduchar = *p;
+	stduchar = p;
   
 	p = TYP::Make(bt_byte,1);
-	stdbyte = *p;
+	stdbyte = p;
 	p->precision = 8;
 	pchar = p;
   
 	p = TYP::Make(bt_ubyte,1);
 	p->isUnsigned = true;
 	p->precision = 8;
-	stdubyte = *p;
+	stdubyte = p;
   
 	p = allocTYP();
 	p->type = bt_pointer;
@@ -197,7 +197,7 @@ void Compiler::AddStandardTypes()
 	p->btp = pchar->GetIndex();
 	p->bit_width = -1;
 	p->precision = 16;
-	stdstring = *p;
+	stdstring = p;
   
 	p = allocTYP();
 	p->type = bt_double;
@@ -205,8 +205,8 @@ void Compiler::AddStandardTypes()
 	p->size = 4;
 	p->bit_width = -1;
 	p->precision = 64;
-	stddbl = *p;
-	stddouble = *p;
+	stddbl = p;
+	stddouble = p;
   
 	p = allocTYP();
 	p->type = bt_triple;
@@ -214,7 +214,7 @@ void Compiler::AddStandardTypes()
 	p->size = 6;
 	p->bit_width = -1;
 	p->precision = 96;
-	stdtriple = *p;
+	stdtriple = p;
   
 	p = allocTYP();
 	p->type = bt_quad;
@@ -222,7 +222,7 @@ void Compiler::AddStandardTypes()
 	p->size = 8;
 	p->bit_width = -1;
 	p->precision = 128;
-	stdquad = *p;
+	stdquad = p;
   
 	p = allocTYP();
 	p->type = bt_float;
@@ -230,11 +230,11 @@ void Compiler::AddStandardTypes()
 	p->size = 2;
 	p->bit_width = -1;
 	p->precision = 32;
-	stdflt = *p;
+	stdflt = p;
   
 	p = TYP::Make(bt_func,0);
 	p->btp = pint->GetIndex();
-	stdfunc = *p;
+	stdfunc = p;
 
 	p = allocTYP();
 	p->type = bt_exception;
@@ -243,7 +243,7 @@ void Compiler::AddStandardTypes()
 	p->isUnsigned = true;
 	p->precision = 16;
 	p->bit_width = -1;
-	stdexception = *p;
+	stdexception = p;
 
 	p = allocTYP();
 	p->type = bt_short;
@@ -252,5 +252,5 @@ void Compiler::AddStandardTypes()
 	p->size = 1;
 	p->bit_width = -1;
 	p->precision = 16;
-	stdconst = *p;
+	stdconst = p;
 }

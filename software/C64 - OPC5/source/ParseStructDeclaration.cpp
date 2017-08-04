@@ -45,7 +45,7 @@
 
 extern TABLE tagtable;
 extern TYP *head;
-extern TYP stdconst;
+extern TYP *stdconst;
 extern int bit_next;
 extern int bit_offset;
 extern int bit_width;

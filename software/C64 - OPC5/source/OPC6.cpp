@@ -30,7 +30,7 @@ extern int breaklab;
 extern int contlab;
 extern int retlab;
 
-extern TYP              stdfunc;
+extern TYP *stdfunc;
 
 extern void scan(Statement *);
 extern int GetReturnBlockSize();
@@ -208,7 +208,7 @@ int AllocateRegisterVars()
         if( csp->reg != -1 )
         {               // see if preload needed
             exptr = csp->exp;
-            if( !IsLValue(exptr) || (exptr->p[0]->i > 0) || (exptr->nodetype==en_struct_ref))
+            if( !IsLValue(exptr) || (exptr->p[0] && exptr->p[0]->i > 0) || (exptr->nodetype==en_struct_ref))
             {
                 initstack();
 				{

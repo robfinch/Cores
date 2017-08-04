@@ -26,7 +26,7 @@
 #include "stdafx.h"
 
 extern TYP *head, *tail;
-extern TYP stdbyte;
+extern TYP *stdbyte;
 extern int catchdecl;
 Statement *ParseCatchStatement();
 int iflevel;
@@ -242,7 +242,7 @@ Statement *Statement::ParseFirstcall()
 	//	sp->SetName(*(new std::string(snp->fcname)));
 	sp->storage_class = sc_static;
 	sp->value.i = nextlabel++;
-	sp->tp = &stdbyte;
+	sp->tp = stdbyte;
 	st = lastst;
 	lastst = kw_firstcall;       // fake out doinit()
 	doinit(sp);

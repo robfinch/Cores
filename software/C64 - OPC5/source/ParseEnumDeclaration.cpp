@@ -27,7 +27,7 @@
 
 extern TABLE tagtable;
 extern TYP *head;
-extern TYP stdconst;
+extern TYP *stdconst;
 
 void enumbody(TABLE *table);
 
@@ -78,7 +78,7 @@ void ParseEnumerationList(TABLE *table)
         sp = allocSYM();
         sp->SetName(*(new std::string(lastid)));
         sp->storage_class = sc_const;
-        sp->tp = &stdconst;
+        sp->tp = stdconst;
         table->insert(sp);
         NextToken();
 		if (lastst==assign) {

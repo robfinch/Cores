@@ -89,7 +89,8 @@ static char *errtextstr[] = {
 	"W Unsigned branch if less than zero is always false.",
 	"W Unsigned branch greater or equal to zero is always true.",
 	"W Forever Infinite loop",
-	"E Assigning too many structure elements."
+	"E Assigning too many structure elements.",
+	"E An integer value is required."
 };
 
 char *errtext(int errnum)

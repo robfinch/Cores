@@ -1346,7 +1346,7 @@ AMODE *GenerateArrayAssign(TYP *tp, ENODE *node1, ENODE *node2, AMODE *base)
 	else
 		tp = nullptr;
 	if (tp==nullptr)
-		tp = &stdlong;
+		tp = stdlong;
 	if (tp->IsStructType()) {
 		ep1 = nullptr;
 		ep1 = node2->p[0];
@@ -1407,7 +1407,7 @@ AMODE *GenerateAggregateAssign(ENODE *node1, ENODE *node2)
 	//base = GenerateDereference(node1,F_MEM,sizeOfWord,0);
 	tp = node1->tp;
 	if (tp==nullptr)
-		tp = &stdlong;
+		tp = stdlong;
 	if (tp->IsStructType()) {
 		if (base->offset)
 			offset = base->offset->i;

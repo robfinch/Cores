@@ -55,7 +55,7 @@ int lastsph;
 char *semaphores[20];
 char last_rem[132];
 
-extern TYP              stdfunc;
+extern TYP *stdfunc;
 extern int pwrof2(int);
 
 int bitsset(int64_t mask)

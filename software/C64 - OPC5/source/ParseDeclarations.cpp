@@ -32,7 +32,7 @@ extern char *inpline;
 std::string *declid;
 //char *Declaration::declid = (char *)NULL;
 TABLE tagtable;
-TYP stdconst;
+TYP *stdconst;
 Stringx names[20];
 int nparms = 0;
 int funcdecl = 0;		//0,1, or 2
@@ -150,19 +150,6 @@ void Declaration::ParseLong()
 	NextToken();
 	if (lastst==kw_int) {
 		bit_max = 64;
-		NextToken();
-	}
-	else if (lastst==kw_float) {
-		head = (TYP *)TYP::Make(bt_double,8);
-		tail = head;
-		bit_max = head->precision;
-		NextToken();
-	}
-	else if (lastst==kw_double) {
-		head = TYP::Copy(&stddouble);
-		//head = (TYP *)TYP::Make(bt_quad,8);
-		tail = head;
-		bit_max = head->precision;
 		NextToken();
 	}
 	else {
@@ -499,7 +486,7 @@ int Declaration::ParseSpecifier(TABLE *table)
 			case id:	sp = ParseId();	goto lxit;
 
 			case kw_float:
-				head = TYP::Copy(&stddouble);
+				head = TYP::Copy(stddouble);
 				tail = head;
 				head->isVolatile = isVolatile;
 				head->isIO = isIO;
@@ -519,7 +506,7 @@ int Declaration::ParseSpecifier(TABLE *table)
 				goto lxit;
 
 			case kw_triple:
-				head = TYP::Copy(&stdtriple);
+				head = TYP::Copy(stdtriple);
 				tail = head;
 				head->isVolatile = isVolatile;
 				head->isIO = isIO;
