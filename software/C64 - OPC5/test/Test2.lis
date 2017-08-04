@@ -42,7 +42,7 @@ _rand      =000000   -    External    Function returning Long
 _exit      =000000   -    External    Function returning Long
 		Parameters:
 			Type array:
-   017 
+   016 
 _ary       =000000   -    Global      Array of Array of Short
 _printf    =000000   -    External    Function returning Long
 		Parameters:

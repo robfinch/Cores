@@ -719,8 +719,10 @@ void SYM::BuildParameterList(int *num, int *numa)
 	if (tp) {
 		if (tp->GetBtp()) {
 			if (tp->GetBtp()->type==bt_struct || tp->GetBtp()->type==bt_union || tp->GetBtp()->type==bt_class ) {
+				IsLeaf = false;
 				sp1 = makeStructPtr("_pHiddenStructPtr");
 				sp1->parent = parent;
+				sp1->IsParameter = true;
 				sp1->value.i = poffset;
 				poffset += sizeOfWord;
 				sp1->storage_class = sc_register;

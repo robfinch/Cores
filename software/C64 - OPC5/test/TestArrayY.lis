@@ -1,0 +1,24 @@
+     1	int TestArrayY(int a)
+     2	{
+     3		int y[8];
+     4	
+     5		y = {1,2,3,4,5,6,7,8};
+     6	}
+
+
+*** local symbol table ***
+
+_y         =fffffff8   -    Auto        Array of Short
+
+
+
+
+ *** global scope typedef symbol table ***
+
+_TestArrayY =000000   -    External    Function returning Short
+		Parameters:
+			Type array:
+   016 
+
+ *** structures and unions ***
+

@@ -1,3 +1,4 @@
+
 typedef struct _tagTestStruct
 {
 	int a;
@@ -22,6 +23,6 @@ TestStruct TestStruct2(register int a, register int c, register int d)
 	TestStruct b;
 
 	b.a = a;
-	return b;
+	return (b);
 }
 

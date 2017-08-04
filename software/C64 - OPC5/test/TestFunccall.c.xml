@@ -57,8 +57,8 @@ X</openpa>
 CDEGH</Find>
 _SomeFunc</Find>
 hh1h2ikIIbIcinsert type: 33
-***Inserting:_SomeFunc into 00C448F8
-<BuildSignature>:_SomeFunc</BuildSignature>Insert _SomeFunc into 00C448F8()
+***Inserting:_SomeFunc into 013F8F48
+<BuildSignature>:_SomeFunc</BuildSignature>Insert _SomeFunc into 013F8F48()
 Insert into global table
 </Find>
 _SomeFunc</Find>
@@ -89,8 +89,8 @@ Bb<ParseDeclPrefix>(1)
 CDEGH</Find>
 _a</Find>
 hh1kIIbIcinsert type: 16
-***Inserting:_a into 00C54E14
-<BuildSignature>:_a</BuildSignature>Insert _a into 00C54E14(_SomeFunc)
+***Inserting:_a into 01406434
+<BuildSignature>:_a</BuildSignature>Insert _a into 01406434(_SomeFunc)
 </Find>
 _a</Find>
 At insert:
@@ -112,8 +112,8 @@ Bb<ParseDeclPrefix>(1)
 CDEGH</Find>
 _b</Find>
 hh1kIIbIcinsert type: 16
-***Inserting:_b into 00C54E14
-<BuildSignature>:_b</BuildSignature>Insert _b into 00C54E14(_SomeFunc)
+***Inserting:_b into 01406434
+<BuildSignature>:_b</BuildSignature>Insert _b into 01406434(_SomeFunc)
 </Find>
 _b</Find>
 At insert:
@@ -137,8 +137,8 @@ Bb<ParseDeclPrefix>(1)
 CDEGH</Find>
 _c</Find>
 hh1kIIbIcinsert type: 16
-***Inserting:_c into 00C54E14
-<BuildSignature>:_c</BuildSignature>Insert _c into 00C54E14(_SomeFunc)
+***Inserting:_c into 01406434
+<BuildSignature>:_c</BuildSignature>Insert _c into 01406434(_SomeFunc)
 </Find>
 _c</Find>
 At insert:
@@ -174,8 +174,8 @@ _a</Find>
 Looking in function's symbol table
 </Find>
 _a</Find>
-Searching method/class:_SomeFunc|00C54DC8
-Looking at params 00C54E14
+Searching method/class:_SomeFunc|014063E8
+Looking at params 01406434
 </Find>
 _aMatch
 </Find>
@@ -185,7 +185,7 @@ Found as parameter
 A:1:_aIsEqual:T2sp is not null
 Type array:
    
-tp:013470D8 <Deref></Deref>deref tp:0167D6F4 </nameref2>
+tp:0197B7D0 <Deref></Deref>deref tp:0197B370 </nameref2>
 </Nameref>
 </Find>
 _b</Find>
@@ -198,8 +198,8 @@ _b</Find>
 Looking in function's symbol table
 </Find>
 _b</Find>
-Searching method/class:_SomeFunc|00C54DC8
-Looking at params 00C54E14
+Searching method/class:_SomeFunc|014063E8
+Looking at params 01406434
 </Find>
 _bMatch
 </Find>
@@ -209,7 +209,7 @@ Found as parameter
 A:1:_bIsEqual:T2sp is not null
 Type array:
    
-tp:01347108 <Deref></Deref>deref tp:0167D6F4 </nameref2>
+tp:0197B808 <Deref></Deref>deref tp:0197B370 </nameref2>
 </Nameref>
 </Find>
 _c</Find>
@@ -222,8 +222,8 @@ _c</Find>
 Looking in function's symbol table
 </Find>
 _c</Find>
-Searching method/class:_SomeFunc|00C54DC8
-Looking at params 00C54E14
+Searching method/class:_SomeFunc|014063E8
+Looking at params 01406434
 </Find>
 _cMatch
 </Find>
@@ -233,7 +233,7 @@ Found as parameter
 A:1:_cIsEqual:T2sp is not null
 Type array:
    
-tp:01347138 <Deref></Deref>deref tp:0167D6F4 </nameref2>
+tp:0197B840 <Deref></Deref>deref tp:0197B370 </nameref2>
 </Nameref>
 </Parse></Find>
 _int</Find>
@@ -282,8 +282,8 @@ o p q </openpa>
 CDEGH</Find>
 _main</Find>
 hh1h2ikIIbIcinsert type: 34
-***Inserting:_main into 00C448F8
-<BuildSignature>:_main</BuildSignature>Insert _main into 00C448F8()
+***Inserting:_main into 013F8F48
+<BuildSignature>:_main</BuildSignature>Insert _main into 013F8F48()
 Insert into global table
 </Find>
 _main</Find>
@@ -327,11 +327,11 @@ _SomeFunc</Find>
 Looking in function's symbol table
 </Find>
 _SomeFunc</Find>
-Searching method/class:_main|00C55148
-Looking at params 00C55194
+Searching method/class:_main|014066A8
+Looking at params 014066F4
 </Find>
 _SomeFunc</Find>
-Looking at class members 013471AC
+Looking at class members 0197B8CC
 Looking at global symbols
 </Find>
 _SomeFuncMatch
@@ -342,11 +342,11 @@ Found in global symbol table
 A:1:_SomeFuncIsEqual:F1sp is not null
 Type array:
    
-tp:013470A8 deref tp:013470A8 </nameref2>
+tp:0197B798 deref tp:0197B798 </nameref2>
 </Nameref>
-tp2->type=33<ArgumentList>017 017 017 lastst=45</ArgumentList>
+tp2->type=33<ArgumentList>016 016 016 lastst=45</ArgumentList>
 Type array:
-   017 017 017 
+   016 016 016 
 Got Type: 33openpa calling gsearch2<FindRising>_SomeFunc 
 </Find>
 _SomeFunc</Find>
@@ -358,18 +358,18 @@ _SomeFunc</Find>
 Looking in function's symbol table
 </Find>
 _SomeFunc</Find>
-Searching method/class:_main|00C55148
-Looking at params 00C55194
+Searching method/class:_main|014066A8
+Looking at params 014066F4
 </Find>
 _SomeFunc</Find>
-Looking at class members 013471AC
+Looking at class members 0197B8CC
 Looking at global symbols
 </Find>
 _SomeFuncMatch
 IsEqual:T3Exact matchType array:
    016 016 016 
 Type array:
-   017 017 017 
+   016 016 016 
 Found in global symbol table
 </gsearch2>
 Got direct function _SomeFunc </ParseExpression>
@@ -394,11 +394,11 @@ _SomeFunc</Find>
 Looking in function's symbol table
 </Find>
 _SomeFunc</Find>
-Searching method/class:_main|00C55148
-Looking at params 00C55194
+Searching method/class:_main|014066A8
+Looking at params 014066F4
 </Find>
 _SomeFunc</Find>
-Looking at class members 013471AC
+Looking at class members 0197B8CC
 Looking at global symbols
 </Find>
 _SomeFuncMatch

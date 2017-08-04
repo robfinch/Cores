@@ -63,26 +63,26 @@
 
  *** global scope typedef symbol table ***
 
-_TestMod   =000000   -    External    Function returning Long
+_TestMod   =000000   -    External    Function returning Short
 		Parameters:
 			Type array:
-   017 017 
-_TestDivmod =000000   -    External    Function returning Long
+   016 016 
+_TestDivmod =000000   -    External    Function returning Short
 		Parameters:
 			Type array:
-   017 017 
-_TestDivmod2 =000000   -    External    Function returning Long
+   016 016 
+_TestDivmod2 =000000   -    External    Function returning Short
 		Parameters:
 			Type array:
-   017 
+   016 
 _TestModu  =000000   -    External    Function returning 
 		Parameters:
 			Type array:
-   025 025 
-_TestDivmod3 =000000   -    External    Function returning Long
+   024 024 
+_TestDivmod3 =000000   -    External    Function returning Short
 		Parameters:
 			Type array:
-   017 017 
+   016 016 
 
  *** structures and unions ***
 

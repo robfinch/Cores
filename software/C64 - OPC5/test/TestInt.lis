@@ -26,7 +26,7 @@
 
  *** global scope typedef symbol table ***
 
-_BIOScall  =000000   -    Global      Function returning Long
+_BIOScall  =000000   -    Global      Function returning Short
 		Parameters:
 			Type array:
    

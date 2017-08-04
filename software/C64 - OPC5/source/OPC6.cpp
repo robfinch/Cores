@@ -760,7 +760,7 @@ static void RestoreRegisterVars()
 //
 void GenerateReturn(Statement *stmt)
 {
-	AMODE *ap;
+	AMODE *ap, *ap1;
 	int nn;
 	int toAdd;
 	SYM *sym = currentFn;
@@ -778,18 +778,49 @@ void GenerateReturn(Statement *stmt)
             if (sym->tp->GetBtp() && (sym->tp->GetBtp()->type==bt_struct || sym->tp->GetBtp()->type==bt_union)) {
 				p = sym->params.Find("_pHiddenStructPtr",false);
 				if (p) {
-					if (p->IsRegister)
-						GenerateDiadic(op_mov,0,makereg(1),makereg(p->reg));
-					else
-						GenerateDiadic(op_ld,0,makereg(1),make_indexed(p->value.i,regBP));
-					GenLdi(makereg(2),make_immed(sym->tp->GetBtp()->size));
-					GenerateTriadic(op_sub,0,makereg(regSP),makereg(regZero),make_immed(sizeOfWord*3));
-					GenerateTriadic(op_sto,0,makereg(2),makereg(regSP),make_immed(sizeOfWord*2));
-					GenerateTriadic(op_sto,0,ap,makereg(regSP),make_immed(sizeOfWord*1));
-					GenerateTriadic(op_sto,0,makereg(1),makereg(regSP),make_immed(sizeOfWord*0));
-					GenerateTriadic(op_mov,0,makereg(regLR),makereg(regPC),make_immed(2));
-					GenerateTriadic(op_mov,0,makereg(regPC),makereg(regZero),make_string("_memcpy"));
-					GenerateTriadic(op_add,0,makereg(regSP),makereg(regZero),make_immed(sizeOfWord*3));
+					if (sym->tp->GetBtp()->size > 4) {
+						GenerateMonadic(op_push,0,makereg(8));
+						GenerateMonadic(op_push,0,makereg(9));
+						GenerateMonadic(op_push,0,makereg(10));
+						if (p->IsRegister)
+							GenerateDiadic(op_mov,0,makereg(8),makereg(p->reg));
+						else {
+							ap1 = make_indexed(p->value.i,regBP);
+							ap1->offset->sym = p;
+							GenerateDiadic(op_ld,0,makereg(8),ap1);
+						}
+						GenerateDiadic(op_mov,0,makereg(9),ap);
+						GenLdi(makereg(10),make_immed(sym->tp->GetBtp()->size));
+						GenerateTriadic(op_jsr,0,makereg(regLR),makereg(regZero),make_string("_memcpy"));
+						GenerateMonadic(op_pop,0,makereg(10));
+						GenerateMonadic(op_pop,0,makereg(9));
+						GenerateMonadic(op_pop,0,makereg(8));
+					}
+					else {
+						AMODE *ap2, *ap3;
+
+						ap2 = GetTempRegister();
+						ap3 = GetTempRegister();
+						ap1 = make_indexed(p->value.i,regBP);
+						ap1->offset->sym = p;
+						GenerateDiadic(op_ld,0,ap3,ap1);
+						GenerateDiadic(op_ld,0,ap2,ap);
+						GenerateDiadic(op_sto,0,ap2,ap3);
+						if (sym->tp->GetBtp()->size > 1) {
+							GenerateTriadic(op_ld,0,ap2,ap,make_immed(1));
+							GenerateTriadic(op_sto,0,ap2,ap3,make_immed(1));
+						}
+						if (sym->tp->GetBtp()->size > 2) {
+							GenerateTriadic(op_ld,0,ap2,ap,make_immed(2));
+							GenerateTriadic(op_sto,0,ap2,ap3,make_immed(2));
+						}
+						if (sym->tp->GetBtp()->size > 3) {
+							GenerateTriadic(op_ld,0,ap2,ap,make_immed(3));
+							GenerateTriadic(op_sto,0,ap2,ap3,make_immed(3));
+						}
+						ReleaseTempReg(ap3);
+						ReleaseTempReg(ap2);
+					}
 				}
 				else {
 					// ToDo compiler error

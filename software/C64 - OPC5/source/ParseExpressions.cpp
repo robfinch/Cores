@@ -1161,7 +1161,11 @@ int IsLValue(ENODE *node)
 	case en_cuhu:
             return IsLValue(node->p[0]);
 	case en_add:
-		return node->tp->type==bt_pointer;
+		if (node->tp)
+			return node->tp->type==bt_pointer;
+		else
+			return FALSE;
+			
 	//case en_autocon:
 	//		return node->etype==bt_pointer;
     }

@@ -62,26 +62,26 @@
 
  *** global scope typedef symbol table ***
 
-_TestShiftLeftI1 =000000   -    External    Function returning Long
+_TestShiftLeftI1 =000000   -    External    Function returning Short
 		Parameters:
 			Type array:
-   017 
-_TestShiftLeftI5 =000000   -    External    Function returning Long
+   016 
+_TestShiftLeftI5 =000000   -    External    Function returning Short
 		Parameters:
 			Type array:
-   017 
-_TestShiftLeft =000000   -    External    Function returning Long
+   016 
+_TestShiftLeft =000000   -    External    Function returning Short
 		Parameters:
 			Type array:
-   017 017 
-_TestShiftRight =000000   -    External    Function returning Long
+   016 016 
+_TestShiftRight =000000   -    External    Function returning Short
 		Parameters:
 			Type array:
-   017 017 
-_TestShiftRight =000000   -    External    Function returning Long
+   016 016 
+_TestShiftRight =000000   -    External    Function returning Short
 		Parameters:
 			Type array:
-   025 017 
+   024 016 
 
  *** structures and unions ***
 

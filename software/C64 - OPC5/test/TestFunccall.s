@@ -1,4 +1,4 @@
-	code
+#	code
 _SomeFunc:
 	      	   push 	r12
 	      	   mov  	r12,r14
@@ -22,13 +22,11 @@ _main:
 	      	   mov  	r7,r0,10
 	      	   push 	r7
 	      	   jsr  	r13,r0,_SomeFunc
-	      	   add  	r14,r0,2
+	      	   inc  	r14,2
 	      	   pop  	r8
 	      	   mov  	r15,r13
-
-
-
-
-	rodata
-;	global	_main
-	extern	_SomeFunc
+
+
+#	rodata
+#	global	_main
+#	extern	_SomeFunc

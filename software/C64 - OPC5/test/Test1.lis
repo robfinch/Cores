@@ -31,7 +31,7 @@ _main      =000000   -    External    Function returning Short
 _exit      =000000   -    External    Function returning Long
 		Parameters:
 			Type array:
-   017 
+   016 
 _printf    =000000   -    External    Function returning Long
 		Parameters:
 			Type array:

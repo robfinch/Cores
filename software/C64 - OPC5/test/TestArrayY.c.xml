@@ -29,39 +29,39 @@ _int</Find>
 Enter declare()
 A<ParseSpecifier>
 A</Find>
-_TestPreload</Find>
+_TestArrayY</Find>
 <TYP__Make>
 </TYP__Make>
 </ParseSpecifier>
 Bb<ParseDeclPrefix>(1)
-<ParsePrefixId>B|_TestPreload|CDE<ParseDeclSuffix>
+<ParsePrefixId>B|_TestArrayY|CDE<ParseDeclSuffix>
 <openpa>
 ****************************
 ****************************
-Function: _TestPreload
+Function: _TestArrayY
 ****************************
 ****************************
 </Find>
 _int</Find>
 <TYP__Make>
 </TYP__Make>
-o p q rsYParameter types(_TestPreload)
+o p q rsYParameter types(_TestArrayY)
 Type array:
    
-Proto types(_TestPreload)
+Proto types(_TestArrayY)
 Type array:
    
 X</openpa>
 </ParseDeclSuffix>
 </ParsePrefixId></ParseDeclPrefix>
 CDEGH</Find>
-_TestPreload</Find>
+_TestArrayY</Find>
 hh1h2ikIIbIcinsert type: 33
-***Inserting:_TestPreload into 013F8F48
-<BuildSignature>:_TestPreload</BuildSignature>Insert _TestPreload into 013F8F48()
+***Inserting:_TestArrayY into 008B8F48
+<BuildSignature>:_TestArrayY</BuildSignature>Insert _TestArrayY into 008B8F48()
 Insert into global table
 </Find>
-_TestPreload</Find>
+_TestArrayY</Find>
 At insert:
 Type array:
    
@@ -69,7 +69,7 @@ J<ParseFunction>
 ***********************************
 ***********************************
 ***********************************
-Parsing function: _TestPreload
+Parsing function: _TestArrayY
 ***********************************
 ***********************************
 ***********************************
@@ -89,8 +89,8 @@ Bb<ParseDeclPrefix>(1)
 CDEGH</Find>
 _a</Find>
 hh1kIIbIcinsert type: 16
-***Inserting:_a into 01406434
-<BuildSignature>:_a</BuildSignature>Insert _a into 01406434(_TestPreload)
+***Inserting:_a into 008C642C
+<BuildSignature>:_a</BuildSignature>Insert _a into 008C642C(_TestArrayY)
 </Find>
 _a</Find>
 At insert:
@@ -101,10 +101,10 @@ B</Find>
 _aMatch
 </Find>
 </BuildParameterList>
-B<BuildSignature>:_TestPreload</BuildSignature></Find>
-_TestPreloadMatch
+B<BuildSignature>:_TestArrayY</BuildSignature></Find>
+_TestArrayYMatch
 </Find>
-CDEG<Parse function body>:_TestPreload|
+CDEG<Parse function body>:_TestArrayY|
 </Find>
 _int</Find>
 Bb<GenerateMonadic>
@@ -112,88 +112,59 @@ ABCD</GenerateMonadic>
 CEnter declare()
 A<ParseSpecifier>
 A</Find>
-_x</Find>
+_y</Find>
 <TYP__Make>
 </TYP__Make>
 </ParseSpecifier>
 Bb<ParseDeclPrefix>(1)
-<ParsePrefixId>B|_x|CDE<ParseDeclSuffix>
+<ParsePrefixId>B|_y|CDE<ParseDeclSuffix>
+<TYP__Make>
+</TYP__Make>
+Setting array size:8
 </ParseDeclSuffix>
 </ParsePrefixId></ParseDeclPrefix>
 CDEGH</Find>
-_x</Find>
-hh1kIIbIcinsert type: 16
-***Inserting:_x into 00D31110
-<BuildSignature>:_x</BuildSignature>Insert _x into 00D31110()
+_y</Find>
+hh1kIIbIcinsert type: 22
+***Inserting:_y into 011ECE80
+<BuildSignature>:_y</BuildSignature>Insert _y into 011ECE80()
 </Find>
-_x</Find>
+_y</Find>
 At insert:
 Type array:
    
-JK<Nameref>
-GSearchfor:_x|
-<gsearch2> for: |_x|
+JK</Find>
+_y</Find>
+Found _y
+</Find>
+_y</Find>
+</Find>
+_y</Find>
+<Parse><ParseExpression>
+<Nameref>
+GSearchfor:_y|
+<gsearch2> for: |_y|
 Looking in statement table
 </Find>
-_xMatch
+_yMatch
 </Find>
 Found as an auto var
 </gsearch2>
 <nameref2>
-A:1:_xIsEqual:T2sp is not null
+A:1:_yIsEqual:T2sp is not null
 Type array:
    
-tp:0197B808 <Deref></Deref>deref tp:0197B370 </Find>
-_a</Find>
-</nameref2>
+tp:00E3B838 <TYP__Make>
+</TYP__Make>
+deref tp:00E3B870 </nameref2>
 </Nameref>
-<Nameref>
-GSearchfor:_a|
-<gsearch2> for: |_a|
-Looking in statement table
-</Find>
-_a</Find>
-Looking in function's symbol table
-</Find>
-_a</Find>
-Searching method/class:_TestPreload|014063E8
-Looking at params 01406434
-</Find>
-_aMatch
-</Find>
-Found as parameter
-</gsearch2>
-<nameref2>
-A:1:_aIsEqual:T2sp is not null
-Type array:
-   
-tp:0197B7D0 <Deref></Deref>deref tp:0197B370 </nameref2>
-</Nameref>
-</Find>
-_return</Find>
-<Parse></Find>
-_x</Find>
-</Find>
-_x</Find>
-</Find>
-_x</Find>
-<Nameref>
-GSearchfor:_x|
-<gsearch2> for: |_x|
-Looking in statement table
-</Find>
-_xMatch
-</Find>
-Found as an auto var
-</gsearch2>
-<nameref2>
-A:1:_xIsEqual:T2sp is not null
-Type array:
-   
-tp:0197B808 <Deref></Deref>deref tp:0197B370 </nameref2>
-</Nameref>
+<TYP__Make>
+</TYP__Make>
+</ParseExpression>
 </Parse>Returning EOF from NextToken.
 D<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
 ABCD</GenerateMonadic>
 <GenerateMonadic>
 ABCD</GenerateMonadic>

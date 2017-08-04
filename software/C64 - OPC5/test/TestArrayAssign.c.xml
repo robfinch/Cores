@@ -49,8 +49,8 @@ o p q </openpa>
 CDEGH</Find>
 _TestArrayAssign</Find>
 hh1h2ikIIbIcinsert type: 34
-***Inserting:_TestArrayAssign into 009B28F0
-<BuildSignature>:_TestArrayAssign</BuildSignature>Insert _TestArrayAssign into 009B28F0()
+***Inserting:_TestArrayAssign into 013F8F48
+<BuildSignature>:_TestArrayAssign</BuildSignature>Insert _TestArrayAssign into 013F8F48()
 Insert into global table
 </Find>
 _TestArrayAssign</Find>
@@ -88,6 +88,64 @@ Bb<ParseDeclPrefix>(1)
 <ParsePrefixId>B|_x|CDE<ParseDeclSuffix>
 <TYP__Make>
 </TYP__Make>
+Setting array size:3
+<TYP__Make>
+</TYP__Make>
+Setting array size:15
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_x</Find>
+hh1kIIbIcinsert type: 22
+***Inserting:_x into 02181110
+<BuildSignature>:_x</BuildSignature>Insert _x into 02181110()
+</Find>
+_x</Find>
+At insert:
+Type array:
+   
+JK</Find>
+_int</Find>
+Enter declare()
+A<ParseSpecifier>
+A</Find>
+_y</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_y|CDE<ParseDeclSuffix>
+<TYP__Make>
+</TYP__Make>
+Setting array size:8
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_y</Find>
+hh1kIIbIcinsert type: 22
+***Inserting:_y into 02181110
+<BuildSignature>:_y</BuildSignature>Insert _y into 02181110()
+</Find>
+_y</Find>
+At insert:
+Type array:
+   
+JK</Find>
+_int</Find>
+Enter declare()
+A<ParseSpecifier>
+A</Find>
+_z</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_z|CDE<ParseDeclSuffix>
+<TYP__Make>
+</TYP__Make>
+Setting array size:3
+<TYP__Make>
+</TYP__Make>
 Setting array size:6
 <TYP__Make>
 </TYP__Make>
@@ -95,23 +153,214 @@ Setting array size:30
 </ParseDeclSuffix>
 </ParsePrefixId></ParseDeclPrefix>
 CDEGH</Find>
-_x</Find>
+_z</Find>
 hh1kIIbIcinsert type: 22
-***Inserting:_x into 0199C560
-<BuildSignature>:_x</BuildSignature>Insert _x into 0199C560()
+***Inserting:_z into 02181110
+<BuildSignature>:_z</BuildSignature>Insert _z into 02181110()
 </Find>
-_x</Find>
+_z</Find>
 At insert:
 Type array:
    
 JK</Find>
-_x</Find>
-Found _x
+_y</Find>
+Found _y
 </Find>
-_x</Find>
+_y</Find>
 </Find>
-_x</Find>
+_y</Find>
 <Parse><ParseExpression>
+<Nameref>
+GSearchfor:_y|
+<gsearch2> for: |_y|
+Looking in statement table
+</Find>
+_yMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_yIsEqual:T2sp is not null
+Type array:
+   
+tp:0197B8B0 <TYP__Make>
+</TYP__Make>
+deref tp:0197B9C8 </nameref2>
+</Nameref>
+<Deref></Deref></Find>
+_y</Find>
+</ParseExpression>
+</Parse><Parse><ParseExpression>
+<Nameref>
+GSearchfor:_y|
+<gsearch2> for: |_y|
+Looking in statement table
+</Find>
+_yMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_yIsEqual:T2sp is not null
+Type array:
+   
+tp:0197B8B0 <TYP__Make>
+</TYP__Make>
+deref tp:0197BA00 </nameref2>
+</Nameref>
+<Deref></Deref></Find>
+_y</Find>
+</ParseExpression>
+</Parse><Parse><ParseExpression>
+<Nameref>
+GSearchfor:_y|
+<gsearch2> for: |_y|
+Looking in statement table
+</Find>
+_yMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_yIsEqual:T2sp is not null
+Type array:
+   
+tp:0197B8B0 <TYP__Make>
+</TYP__Make>
+deref tp:0197BA38 </nameref2>
+</Nameref>
+<Deref></Deref></Find>
+_y</Find>
+</ParseExpression>
+</Parse><Parse><ParseExpression>
+<Nameref>
+GSearchfor:_y|
+<gsearch2> for: |_y|
+Looking in statement table
+</Find>
+_yMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_yIsEqual:T2sp is not null
+Type array:
+   
+tp:0197B8B0 <TYP__Make>
+</TYP__Make>
+deref tp:0197BA70 </nameref2>
+</Nameref>
+<Deref></Deref></Find>
+_y</Find>
+</ParseExpression>
+</Parse><Parse><ParseExpression>
+<Nameref>
+GSearchfor:_y|
+<gsearch2> for: |_y|
+Looking in statement table
+</Find>
+_yMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_yIsEqual:T2sp is not null
+Type array:
+   
+tp:0197B8B0 <TYP__Make>
+</TYP__Make>
+deref tp:0197BAA8 </nameref2>
+</Nameref>
+<Deref></Deref></Find>
+_y</Find>
+</ParseExpression>
+</Parse><Parse><ParseExpression>
+<Nameref>
+GSearchfor:_y|
+<gsearch2> for: |_y|
+Looking in statement table
+</Find>
+_yMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_yIsEqual:T2sp is not null
+Type array:
+   
+tp:0197B8B0 <TYP__Make>
+</TYP__Make>
+deref tp:0197BAE0 </nameref2>
+</Nameref>
+<Deref></Deref></Find>
+_y</Find>
+</ParseExpression>
+</Parse><Parse><ParseExpression>
+<Nameref>
+GSearchfor:_y|
+<gsearch2> for: |_y|
+Looking in statement table
+</Find>
+_yMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_yIsEqual:T2sp is not null
+Type array:
+   
+tp:0197B8B0 <TYP__Make>
+</TYP__Make>
+deref tp:0197BB18 </nameref2>
+</Nameref>
+<Deref></Deref></Find>
+_y</Find>
+</ParseExpression>
+</Parse><Parse><ParseExpression>
+<Nameref>
+GSearchfor:_y|
+<gsearch2> for: |_y|
+Looking in statement table
+</Find>
+_yMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_yIsEqual:T2sp is not null
+Type array:
+   
+tp:0197B8B0 <TYP__Make>
+</TYP__Make>
+deref tp:0197BB50 </nameref2>
+</Nameref>
+<Deref></Deref></Find>
+_y</Find>
+</ParseExpression>
+</Parse><Parse><ParseExpression>
+<Nameref>
+GSearchfor:_y|
+<gsearch2> for: |_y|
+Looking in statement table
+</Find>
+_yMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_yIsEqual:T2sp is not null
+Type array:
+   
+tp:0197B8B0 <TYP__Make>
+</TYP__Make>
+deref tp:0197BB88 </nameref2>
+</Nameref>
+<TYP__Make>
+</TYP__Make>
+</Find>
+_x</Find>
+</ParseExpression>
+</Parse><Parse><ParseExpression>
 <Nameref>
 GSearchfor:_x|
 <gsearch2> for: |_x|
@@ -125,16 +374,685 @@ Found as an auto var
 A:1:_xIsEqual:T2sp is not null
 Type array:
    
-tp:010B5130 <TYP__Make>
+tp:0197B840 <TYP__Make>
 </TYP__Make>
-deref tp:010B5160 </nameref2>
+deref tp:0197BBF8 </nameref2>
 </Nameref>
+<TYP__Make>
+</TYP__Make>
+<Deref></Deref></Find>
+_x</Find>
+</ParseExpression>
+</Parse><Parse><ParseExpression>
+<Nameref>
+GSearchfor:_x|
+<gsearch2> for: |_x|
+Looking in statement table
+</Find>
+_xMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_xIsEqual:T2sp is not null
+Type array:
+   
+tp:0197B840 <TYP__Make>
+</TYP__Make>
+deref tp:0197BC68 </nameref2>
+</Nameref>
+<TYP__Make>
+</TYP__Make>
+<Deref></Deref></Find>
+_x</Find>
+</ParseExpression>
+</Parse><Parse><ParseExpression>
+<Nameref>
+GSearchfor:_x|
+<gsearch2> for: |_x|
+Looking in statement table
+</Find>
+_xMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_xIsEqual:T2sp is not null
+Type array:
+   
+tp:0197B840 <TYP__Make>
+</TYP__Make>
+deref tp:0197BCD8 </nameref2>
+</Nameref>
+<TYP__Make>
+</TYP__Make>
+<Deref></Deref></Find>
+_x</Find>
+</ParseExpression>
+</Parse><Parse><ParseExpression>
+<Nameref>
+GSearchfor:_x|
+<gsearch2> for: |_x|
+Looking in statement table
+</Find>
+_xMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_xIsEqual:T2sp is not null
+Type array:
+   
+tp:0197B840 <TYP__Make>
+</TYP__Make>
+deref tp:0197BD48 </nameref2>
+</Nameref>
+<TYP__Make>
+</TYP__Make>
+<Deref></Deref></Find>
+_x</Find>
+</ParseExpression>
+</Parse><Parse><ParseExpression>
+<Nameref>
+GSearchfor:_x|
+<gsearch2> for: |_x|
+Looking in statement table
+</Find>
+_xMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_xIsEqual:T2sp is not null
+Type array:
+   
+tp:0197B840 <TYP__Make>
+</TYP__Make>
+deref tp:0197BDB8 </nameref2>
+</Nameref>
+<TYP__Make>
+</TYP__Make>
+<Deref></Deref></Find>
+_x</Find>
+</ParseExpression>
+</Parse><Parse><ParseExpression>
+<Nameref>
+GSearchfor:_x|
+<gsearch2> for: |_x|
+Looking in statement table
+</Find>
+_xMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_xIsEqual:T2sp is not null
+Type array:
+   
+tp:0197B840 <TYP__Make>
+</TYP__Make>
+deref tp:0197BE28 </nameref2>
+</Nameref>
+<TYP__Make>
+</TYP__Make>
+<Deref></Deref></Find>
+_x</Find>
+</ParseExpression>
+</Parse><Parse><ParseExpression>
+<Nameref>
+GSearchfor:_x|
+<gsearch2> for: |_x|
+Looking in statement table
+</Find>
+_xMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_xIsEqual:T2sp is not null
+Type array:
+   
+tp:0197B840 <TYP__Make>
+</TYP__Make>
+deref tp:0197BE98 </nameref2>
+</Nameref>
+<TYP__Make>
+</TYP__Make>
+<Deref></Deref></Find>
+_x</Find>
+</ParseExpression>
+</Parse><Parse><ParseExpression>
+<Nameref>
+GSearchfor:_x|
+<gsearch2> for: |_x|
+Looking in statement table
+</Find>
+_xMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_xIsEqual:T2sp is not null
+Type array:
+   
+tp:0197B840 <TYP__Make>
+</TYP__Make>
+deref tp:0197BF08 </nameref2>
+</Nameref>
+<TYP__Make>
+</TYP__Make>
+<Deref></Deref></Find>
+_x</Find>
+</ParseExpression>
+</Parse><Parse><ParseExpression>
+<Nameref>
+GSearchfor:_x|
+<gsearch2> for: |_x|
+Looking in statement table
+</Find>
+_xMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_xIsEqual:T2sp is not null
+Type array:
+   
+tp:0197B840 <TYP__Make>
+</TYP__Make>
+deref tp:0197BF78 </nameref2>
+</Nameref>
+<TYP__Make>
+</TYP__Make>
+<Deref></Deref></Find>
+_x</Find>
+</ParseExpression>
+</Parse><Parse><ParseExpression>
+<Nameref>
+GSearchfor:_x|
+<gsearch2> for: |_x|
+Looking in statement table
+</Find>
+_xMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_xIsEqual:T2sp is not null
+Type array:
+   
+tp:0197B840 <TYP__Make>
+</TYP__Make>
+deref tp:0197BFE8 </nameref2>
+</Nameref>
+<TYP__Make>
+</TYP__Make>
+<Deref></Deref></Find>
+_x</Find>
+</ParseExpression>
+</Parse><Parse><ParseExpression>
+<Nameref>
+GSearchfor:_x|
+<gsearch2> for: |_x|
+Looking in statement table
+</Find>
+_xMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_xIsEqual:T2sp is not null
+Type array:
+   
+tp:0197B840 <TYP__Make>
+</TYP__Make>
+deref tp:0197C058 </nameref2>
+</Nameref>
+<TYP__Make>
+</TYP__Make>
+<Deref></Deref></Find>
+_x</Find>
+</ParseExpression>
+</Parse><Parse><ParseExpression>
+<Nameref>
+GSearchfor:_x|
+<gsearch2> for: |_x|
+Looking in statement table
+</Find>
+_xMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_xIsEqual:T2sp is not null
+Type array:
+   
+tp:0197B840 <TYP__Make>
+</TYP__Make>
+deref tp:0197C0C8 </nameref2>
+</Nameref>
+<TYP__Make>
+</TYP__Make>
+<Deref></Deref></Find>
+_x</Find>
+</ParseExpression>
+</Parse><Parse><ParseExpression>
+<Nameref>
+GSearchfor:_x|
+<gsearch2> for: |_x|
+Looking in statement table
+</Find>
+_xMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_xIsEqual:T2sp is not null
+Type array:
+   
+tp:0197B840 <TYP__Make>
+</TYP__Make>
+deref tp:0197C138 </nameref2>
+</Nameref>
+<TYP__Make>
+</TYP__Make>
+<Deref></Deref></Find>
+_x</Find>
+</ParseExpression>
+</Parse><Parse><ParseExpression>
+<Nameref>
+GSearchfor:_x|
+<gsearch2> for: |_x|
+Looking in statement table
+</Find>
+_xMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_xIsEqual:T2sp is not null
+Type array:
+   
+tp:0197B840 <TYP__Make>
+</TYP__Make>
+deref tp:0197C1A8 </nameref2>
+</Nameref>
+<TYP__Make>
+</TYP__Make>
+<Deref></Deref></Find>
+_x</Find>
+</ParseExpression>
+</Parse><Parse><ParseExpression>
+<Nameref>
+GSearchfor:_x|
+<gsearch2> for: |_x|
+Looking in statement table
+</Find>
+_xMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_xIsEqual:T2sp is not null
+Type array:
+   
+tp:0197B840 <TYP__Make>
+</TYP__Make>
+deref tp:0197C218 </nameref2>
+</Nameref>
+<TYP__Make>
+</TYP__Make>
+<Deref></Deref></Find>
+_z</Find>
+</ParseExpression>
+</Parse><Parse><ParseExpression>
+<Nameref>
+GSearchfor:_z|
+<gsearch2> for: |_z|
+Looking in statement table
+</Find>
+_zMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_zIsEqual:T2sp is not null
+Type array:
+   
+tp:0197B990 <TYP__Make>
+</TYP__Make>
+deref tp:0197C288 </nameref2>
+</Nameref>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<Deref></Deref></Find>
+_z</Find>
+</ParseExpression>
+</Parse><Parse><ParseExpression>
+<Nameref>
+GSearchfor:_z|
+<gsearch2> for: |_z|
+Looking in statement table
+</Find>
+_zMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_zIsEqual:T2sp is not null
+Type array:
+   
+tp:0197B990 <TYP__Make>
+</TYP__Make>
+deref tp:0197C330 </nameref2>
+</Nameref>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<Deref></Deref></Find>
+_z</Find>
+</ParseExpression>
+</Parse><Parse><ParseExpression>
+<Nameref>
+GSearchfor:_z|
+<gsearch2> for: |_z|
+Looking in statement table
+</Find>
+_zMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_zIsEqual:T2sp is not null
+Type array:
+   
+tp:0197B990 <TYP__Make>
+</TYP__Make>
+deref tp:0197C3D8 </nameref2>
+</Nameref>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<Deref></Deref></Find>
+_z</Find>
+</ParseExpression>
+</Parse><Parse><ParseExpression>
+<Nameref>
+GSearchfor:_z|
+<gsearch2> for: |_z|
+Looking in statement table
+</Find>
+_zMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_zIsEqual:T2sp is not null
+Type array:
+   
+tp:0197B990 <TYP__Make>
+</TYP__Make>
+deref tp:0197C480 </nameref2>
+</Nameref>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<Deref></Deref></Find>
+_z</Find>
+</ParseExpression>
+</Parse><Parse><ParseExpression>
+<Nameref>
+GSearchfor:_z|
+<gsearch2> for: |_z|
+Looking in statement table
+</Find>
+_zMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_zIsEqual:T2sp is not null
+Type array:
+   
+tp:0197B990 <TYP__Make>
+</TYP__Make>
+deref tp:0197C528 </nameref2>
+</Nameref>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<Deref></Deref></Find>
+_z</Find>
+</ParseExpression>
+</Parse><Parse><ParseExpression>
+<Nameref>
+GSearchfor:_z|
+<gsearch2> for: |_z|
+Looking in statement table
+</Find>
+_zMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_zIsEqual:T2sp is not null
+Type array:
+   
+tp:0197B990 <TYP__Make>
+</TYP__Make>
+deref tp:0197C5D0 </nameref2>
+</Nameref>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<Deref></Deref></Find>
+_z</Find>
+</ParseExpression>
+</Parse><Parse><ParseExpression>
+<Nameref>
+GSearchfor:_z|
+<gsearch2> for: |_z|
+Looking in statement table
+</Find>
+_zMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_zIsEqual:T2sp is not null
+Type array:
+   
+tp:0197B990 <TYP__Make>
+</TYP__Make>
+deref tp:0197C678 </nameref2>
+</Nameref>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<Deref></Deref></Find>
+_z</Find>
+</ParseExpression>
+</Parse><Parse><ParseExpression>
+<Nameref>
+GSearchfor:_z|
+<gsearch2> for: |_z|
+Looking in statement table
+</Find>
+_zMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_zIsEqual:T2sp is not null
+Type array:
+   
+tp:0197B990 <TYP__Make>
+</TYP__Make>
+deref tp:0197C720 </nameref2>
+</Nameref>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<Deref></Deref></Find>
+_z</Find>
+</ParseExpression>
+</Parse><Parse><ParseExpression>
+<Nameref>
+GSearchfor:_z|
+<gsearch2> for: |_z|
+Looking in statement table
+</Find>
+_zMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_zIsEqual:T2sp is not null
+Type array:
+   
+tp:0197B990 <TYP__Make>
+</TYP__Make>
+deref tp:0197C7C8 </nameref2>
+</Nameref>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<Deref></Deref></Find>
+_z</Find>
+</ParseExpression>
+</Parse><Parse><ParseExpression>
+<Nameref>
+GSearchfor:_z|
+<gsearch2> for: |_z|
+Looking in statement table
+</Find>
+_zMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_zIsEqual:T2sp is not null
+Type array:
+   
+tp:0197B990 <TYP__Make>
+</TYP__Make>
+deref tp:0197C870 </nameref2>
+</Nameref>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<Deref></Deref></Find>
+_z</Find>
+</ParseExpression>
+</Parse><Parse><ParseExpression>
+<Nameref>
+GSearchfor:_z|
+<gsearch2> for: |_z|
+Looking in statement table
+</Find>
+_zMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_zIsEqual:T2sp is not null
+Type array:
+   
+tp:0197B990 <TYP__Make>
+</TYP__Make>
+deref tp:0197C918 </nameref2>
+</Nameref>
+<TYP__Make>
+</TYP__Make>
 <TYP__Make>
 </TYP__Make>
 <Deref></Deref></ParseExpression>
 </Parse></Find>
 _void</Find>
 D<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
 ABCD</GenerateMonadic>
 <GenerateMonadic>
 ABCD</GenerateMonadic>
@@ -175,8 +1093,8 @@ o p q </openpa>
 CDEGH</Find>
 _TestArrayAssign2</Find>
 hh1h2ikIIbIcinsert type: 34
-***Inserting:_TestArrayAssign2 into 009B28F0
-<BuildSignature>:_TestArrayAssign2</BuildSignature>Insert _TestArrayAssign2 into 009B28F0()
+***Inserting:_TestArrayAssign2 into 013F8F48
+<BuildSignature>:_TestArrayAssign2</BuildSignature>Insert _TestArrayAssign2 into 013F8F48()
 Insert into global table
 </Find>
 _TestArrayAssign2</Find>
@@ -214,17 +1132,17 @@ Bb<ParseDeclPrefix>(1)
 <ParsePrefixId>B|_x|CDE<ParseDeclSuffix>
 <TYP__Make>
 </TYP__Make>
-Setting array size:6
+Setting array size:3
 <TYP__Make>
 </TYP__Make>
-Setting array size:30
+Setting array size:15
 </ParseDeclSuffix>
 </ParsePrefixId></ParseDeclPrefix>
 CDEGH</Find>
 _x</Find>
 hh1kIIbIcinsert type: 22
-***Inserting:_x into 0199D3C0
-<BuildSignature>:_x</BuildSignature>Insert _x into 0199D3C0()
+***Inserting:_x into 021BAA98
+<BuildSignature>:_x</BuildSignature>Insert _x into 021BAA98()
 </Find>
 _x</Find>
 At insert:
@@ -251,26 +1169,581 @@ Found as an auto var
 A:1:_xIsEqual:T2sp is not null
 Type array:
    
-tp:010B5280 <TYP__Make>
+tp:0197CAA0 <TYP__Make>
 </TYP__Make>
-deref tp:010B52B0 </nameref2>
+deref tp:0197CAD8 </nameref2>
 </Nameref>
 <TYP__Make>
 </TYP__Make>
 <TYP__Make>
 </TYP__Make>
-<TYP__Make>
-</TYP__Make>
 </ParseExpression>
-</Parse>Returning EOF from NextToken.
+</Parse></Find>
+_void</Find>
 D<GenerateMonadic>
 ABCD</GenerateMonadic>
 <GenerateMonadic>
 ABCD</GenerateMonadic>
 <GenerateMonadic>
 ABCD</GenerateMonadic>
-Uncoded node in scanexpr():1
-Uncoded node in repexr():1
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+E</ParseFunctionBody>
+Enter funcbottom
+Leave funcbottom
+F</ParseFunction>
+Enter declare()
+A<ParseSpecifier>
+A<TYP__Make>
+</TYP__Make>
+</Find>
+_TestArrayAssign3</Find>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_TestArrayAssign3|CDE<ParseDeclSuffix>
+<openpa>
+****************************
+****************************
+Function: _TestArrayAssign3
+****************************
+****************************
+<TYP__Make>
+</TYP__Make>
+o p q </openpa>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_TestArrayAssign3</Find>
+hh1h2ikIIbIcinsert type: 34
+***Inserting:_TestArrayAssign3 into 013F8F48
+<BuildSignature>:_TestArrayAssign3</BuildSignature>Insert _TestArrayAssign3 into 013F8F48()
+Insert into global table
+</Find>
+_TestArrayAssign3</Find>
+At insert:
+Type array:
+   
+J<ParseFunction>
+***********************************
+***********************************
+***********************************
+Parsing function: _TestArrayAssign3
+***********************************
+***********************************
+***********************************
+A<BuildParameterList
+><ParseParmDecls>
+A(42)</ParseParmDecls>
+B</BuildParameterList>
+B<BuildSignature>:_TestArrayAssign3</BuildSignature></Find>
+_TestArrayAssign3Match
+</Find>
+CDEG<Parse function body>:_TestArrayAssign3|
+</Find>
+_int</Find>
+Bb<GenerateMonadic>
+ABCD</GenerateMonadic>
+CEnter declare()
+A<ParseSpecifier>
+A</Find>
+_j</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_j|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_j</Find>
+hh1kIIbIcinsert type: 16
+***Inserting:_j into 021BDAB0
+<BuildSignature>:_j</BuildSignature>Insert _j into 021BDAB0()
+</Find>
+_j</Find>
+At insert:
+Type array:
+   
+JK</Find>
+_k</Find>
+b<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_k|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_k</Find>
+hh1kIIbIcinsert type: 16
+***Inserting:_k into 021BDAB0
+<BuildSignature>:_k</BuildSignature>Insert _k into 021BDAB0()
+</Find>
+_k</Find>
+At insert:
+Type array:
+   
+JK</Find>
+_m</Find>
+b<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_m|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_m</Find>
+hh1kIIbIcinsert type: 16
+***Inserting:_m into 021BDAB0
+<BuildSignature>:_m</BuildSignature>Insert _m into 021BDAB0()
+</Find>
+_m</Find>
+At insert:
+Type array:
+   
+JK</Find>
+_int</Find>
+Enter declare()
+A<ParseSpecifier>
+A</Find>
+_x</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_x|CDE<ParseDeclSuffix>
+<TYP__Make>
+</TYP__Make>
+Setting array size:3
+<TYP__Make>
+</TYP__Make>
+Setting array size:12
+<TYP__Make>
+</TYP__Make>
+Setting array size:60
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_x</Find>
+hh1kIIbIcinsert type: 22
+***Inserting:_x into 021BDAB0
+<BuildSignature>:_x</BuildSignature>Insert _x into 021BDAB0()
+</Find>
+_x</Find>
+At insert:
+Type array:
+   
+JK</Find>
+_for</Find>
+<Parse></Find>
+_m</Find>
+<Nameref>
+GSearchfor:_m|
+<gsearch2> for: |_m|
+Looking in statement table
+</Find>
+_mMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_mIsEqual:T2sp is not null
+Type array:
+   
+tp:0197CBF0 <Deref></Deref>deref tp:0197B370 </nameref2>
+</Nameref>
+</Find>
+_m</Find>
+<Nameref>
+GSearchfor:_m|
+<gsearch2> for: |_m|
+Looking in statement table
+</Find>
+_mMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_mIsEqual:T2sp is not null
+Type array:
+   
+tp:0197CBF0 <Deref></Deref>deref tp:0197B370 </nameref2>
+</Nameref>
+</Find>
+_m</Find>
+<Nameref>
+GSearchfor:_m|
+<gsearch2> for: |_m|
+Looking in statement table
+</Find>
+_mMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_mIsEqual:T2sp is not null
+Type array:
+   
+tp:0197CBF0 <Deref></Deref>deref tp:0197B370 </nameref2>
+</Nameref>
+<Parse></Find>
+_for</Find>
+<Parse></Find>
+_j</Find>
+<Nameref>
+GSearchfor:_j|
+<gsearch2> for: |_j|
+Looking in statement table
+</Find>
+_j</Find>
+Looking in outer statement table
+</Find>
+_jMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_jIsEqual:T2sp is not null
+Type array:
+   
+tp:0197CBF0 <Deref></Deref>deref tp:0197B370 </nameref2>
+</Nameref>
+</Find>
+_j</Find>
+<Nameref>
+GSearchfor:_j|
+<gsearch2> for: |_j|
+Looking in statement table
+</Find>
+_j</Find>
+Looking in outer statement table
+</Find>
+_jMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_jIsEqual:T2sp is not null
+Type array:
+   
+tp:0197CBF0 <Deref></Deref>deref tp:0197B370 </nameref2>
+</Nameref>
+</Find>
+_j</Find>
+<Nameref>
+GSearchfor:_j|
+<gsearch2> for: |_j|
+Looking in statement table
+</Find>
+_j</Find>
+Looking in outer statement table
+</Find>
+_jMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_jIsEqual:T2sp is not null
+Type array:
+   
+tp:0197CBF0 <Deref></Deref>deref tp:0197B370 </nameref2>
+</Nameref>
+<Parse></Find>
+_for</Find>
+<Parse></Find>
+_k</Find>
+<Nameref>
+GSearchfor:_k|
+<gsearch2> for: |_k|
+Looking in statement table
+</Find>
+_k</Find>
+Looking in outer statement table
+</Find>
+_k</Find>
+Looking in outer statement table
+</Find>
+_kMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_kIsEqual:T2sp is not null
+Type array:
+   
+tp:0197CBF0 <Deref></Deref>deref tp:0197B370 </nameref2>
+</Nameref>
+</Find>
+_k</Find>
+<Nameref>
+GSearchfor:_k|
+<gsearch2> for: |_k|
+Looking in statement table
+</Find>
+_k</Find>
+Looking in outer statement table
+</Find>
+_k</Find>
+Looking in outer statement table
+</Find>
+_kMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_kIsEqual:T2sp is not null
+Type array:
+   
+tp:0197CBF0 <Deref></Deref>deref tp:0197B370 </nameref2>
+</Nameref>
+</Find>
+_k</Find>
+<Nameref>
+GSearchfor:_k|
+<gsearch2> for: |_k|
+Looking in statement table
+</Find>
+_k</Find>
+Looking in outer statement table
+</Find>
+_k</Find>
+Looking in outer statement table
+</Find>
+_kMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_kIsEqual:T2sp is not null
+Type array:
+   
+tp:0197CBF0 <Deref></Deref>deref tp:0197B370 </nameref2>
+</Nameref>
+</Find>
+_x</Find>
+<Parse><ParseExpression>
+<Nameref>
+GSearchfor:_x|
+<gsearch2> for: |_x|
+Looking in statement table
+</Find>
+_x</Find>
+Looking in outer statement table
+</Find>
+_x</Find>
+Looking in outer statement table
+</Find>
+_xMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_xIsEqual:T2sp is not null
+Type array:
+   
+tp:0197CCD0 <TYP__Make>
+</TYP__Make>
+deref tp:0197CD08 </nameref2>
+</Nameref>
+</Find>
+_m</Find>
+<Nameref>
+GSearchfor:_m|
+<gsearch2> for: |_m|
+Looking in statement table
+</Find>
+_m</Find>
+Looking in outer statement table
+</Find>
+_m</Find>
+Looking in outer statement table
+</Find>
+_mMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_mIsEqual:T2sp is not null
+Type array:
+   
+tp:0197CBF0 <Deref></Deref>deref tp:0197B370 </nameref2>
+</Nameref>
+<TYP__Make>
+</TYP__Make>
+</Find>
+_j</Find>
+<Nameref>
+GSearchfor:_j|
+<gsearch2> for: |_j|
+Looking in statement table
+</Find>
+_j</Find>
+Looking in outer statement table
+</Find>
+_j</Find>
+Looking in outer statement table
+</Find>
+_jMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_jIsEqual:T2sp is not null
+Type array:
+   
+tp:0197CBF0 <Deref></Deref>deref tp:0197B370 </nameref2>
+</Nameref>
+<TYP__Make>
+</TYP__Make>
+</Find>
+_k</Find>
+<Nameref>
+GSearchfor:_k|
+<gsearch2> for: |_k|
+Looking in statement table
+</Find>
+_k</Find>
+Looking in outer statement table
+</Find>
+_k</Find>
+Looking in outer statement table
+</Find>
+_kMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_kIsEqual:T2sp is not null
+Type array:
+   
+tp:0197CBF0 <Deref></Deref>deref tp:0197B370 </nameref2>
+</Nameref>
+<Deref></Deref></Find>
+_rand</Find>
+<Nameref>
+GSearchfor:_rand|
+<gsearch2> for: |_rand|
+Looking in statement table
+</Find>
+_rand</Find>
+Looking in outer statement table
+</Find>
+_rand</Find>
+Looking in outer statement table
+</Find>
+_rand</Find>
+Looking in function's symbol table
+</Find>
+_rand</Find>
+Searching method/class:_TestArrayAssign3|01406808
+Looking at params 01406854
+</Find>
+_rand</Find>
+Looking at class members 0197CBD4
+Looking at global symbols
+</Find>
+_rand</Find>
+</gsearch2>
+<nameref2>
+A:0:_randInsert at nameref
+Type array:
+   
+<BuildSignature>:_rand</BuildSignature></nameref2>
+</Nameref>
+tp2->type=33<ArgumentList></ArgumentList>
+Type array:
+   
+Got Type: 33openpa calling gsearch2<FindRising>_rand 
+</Find>
+_rand</Find>
+</FindRising>
+<gsearch2> for: |_rand|
+Looking in statement table
+</Find>
+_rand</Find>
+Looking in outer statement table
+</Find>
+_rand</Find>
+Looking in outer statement table
+</Find>
+_rand</Find>
+Looking in function's symbol table
+</Find>
+_rand</Find>
+Searching method/class:_TestArrayAssign3|01406808
+Looking at params 01406854
+</Find>
+_rand</Find>
+Looking at class members 0197CBD4
+Looking at global symbols
+</Find>
+_rand</Find>
+</gsearch2>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<BuildSignature>:_rand</BuildSignature>Insert _rand into 013F8F48()
+Insert into global table
+</Find>
+_rand</Find>
+At insert:
+Type array:
+   
+Got direct function _rand </ParseExpression>
+</Parse></Parse></Parse></Parse>Returning EOF from NextToken.
+D<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+
+<gsearch2> for: |_rand|
+Looking in statement table
+</Find>
+_rand</Find>
+Looking in function's symbol table
+</Find>
+_rand</Find>
+Searching method/class:_TestArrayAssign3|01406808
+Looking at params 01406854
+</Find>
+_rand</Find>
+Looking at class members 0197CBD4
+Looking at global symbols
+</Find>
+_randMatch
+</Find>
+Found in global symbol table
+</gsearch2>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
 <GenerateMonadic>
 ABCD</GenerateMonadic>
 <GenerateMonadic>

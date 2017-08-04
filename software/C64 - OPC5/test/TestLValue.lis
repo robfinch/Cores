@@ -1,0 +1,34 @@
+     1	
+     2	int TestLValue()
+     3	{
+     4		int x;
+     5		int y, z;
+     6	
+     7		x = y + z;
+     8	
+     9		x = &y + 20;
+    10		x = y + &x;
+    11	
+    12		&x = y + z;	// should give an LValue error
+ *** error 17: E LValue required
+    13	}
+
+
+*** local symbol table ***
+
+_x         =ffffffff   -    Auto        Short
+_y         =fffffffe   -    Auto        Short
+_z         =fffffffd   -    Auto        Short
+
+
+
+
+ *** global scope typedef symbol table ***
+
+_TestLValue =000000   -    Global      Function returning Short
+		Parameters:
+			Type array:
+   
+
+ *** structures and unions ***
+

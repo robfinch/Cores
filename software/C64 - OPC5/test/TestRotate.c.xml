@@ -57,8 +57,8 @@ X</openpa>
 CDEGH</Find>
 _TestRotate</Find>
 hh1h2ikIIbIcinsert type: 33
-***Inserting:_TestRotate into 00BD28F0
-<BuildSignature>:_TestRotate</BuildSignature>Insert _TestRotate into 00BD28F0()
+***Inserting:_TestRotate into 013F8F48
+<BuildSignature>:_TestRotate</BuildSignature>Insert _TestRotate into 013F8F48()
 Insert into global table
 </Find>
 _TestRotate</Find>
@@ -88,9 +88,9 @@ Bb<ParseDeclPrefix>(1)
 </ParsePrefixId></ParseDeclPrefix>
 CDEGH</Find>
 _a</Find>
-hh1kIIbIcinsert type: 17
-***Inserting:_a into 00BE2E0C
-<BuildSignature>:_a</BuildSignature>Insert _a into 00BE2E0C(_TestRotate)
+hh1kIIbIcinsert type: 16
+***Inserting:_a into 01406434
+<BuildSignature>:_a</BuildSignature>Insert _a into 01406434(_TestRotate)
 </Find>
 _a</Find>
 At insert:
@@ -111,9 +111,9 @@ Bb<ParseDeclPrefix>(1)
 </ParsePrefixId></ParseDeclPrefix>
 CDEGH</Find>
 _b</Find>
-hh1kIIbIcinsert type: 17
-***Inserting:_b into 00BE2E0C
-<BuildSignature>:_b</BuildSignature>Insert _b into 00BE2E0C(_TestRotate)
+hh1kIIbIcinsert type: 16
+***Inserting:_b into 01406434
+<BuildSignature>:_b</BuildSignature>Insert _b into 01406434(_TestRotate)
 </Find>
 _b</Find>
 At insert:
@@ -150,8 +150,8 @@ _a</Find>
 Looking in function's symbol table
 </Find>
 _a</Find>
-Searching method/class:_TestRotate|00BE2DC0
-Looking at params 00BE2E0C
+Searching method/class:_TestRotate|014063E8
+Looking at params 01406434
 </Find>
 _aMatch
 </Find>
@@ -161,7 +161,7 @@ Found as parameter
 A:1:_aIsEqual:T2sp is not null
 Type array:
    
-tp:012D50D0 <Deref></Deref>deref tp:012D50D0 </nameref2>
+tp:0197B7D0 <Deref></Deref>deref tp:0197B370 </nameref2>
 </Nameref>
 </Find>
 _b</Find>
@@ -174,8 +174,8 @@ _b</Find>
 Looking in function's symbol table
 </Find>
 _b</Find>
-Searching method/class:_TestRotate|00BE2DC0
-Looking at params 00BE2E0C
+Searching method/class:_TestRotate|014063E8
+Looking at params 01406434
 </Find>
 _bMatch
 </Find>
@@ -185,7 +185,7 @@ Found as parameter
 A:1:_bIsEqual:T2sp is not null
 Type array:
    
-tp:012D5100 <Deref></Deref>deref tp:012D5100 </nameref2>
+tp:0197B808 <Deref></Deref>deref tp:0197B370 </nameref2>
 </Nameref>
 </Find>
 _a</Find>
@@ -202,8 +202,8 @@ _a</Find>
 Looking in function's symbol table
 </Find>
 _a</Find>
-Searching method/class:_TestRotate|00BE2DC0
-Looking at params 00BE2E0C
+Searching method/class:_TestRotate|014063E8
+Looking at params 01406434
 </Find>
 _aMatch
 </Find>
@@ -213,7 +213,7 @@ Found as parameter
 A:1:_aIsEqual:T2sp is not null
 Type array:
    
-tp:012D50D0 <Deref></Deref>deref tp:012D50D0 </nameref2>
+tp:0197B7D0 <Deref></Deref>deref tp:0197B370 </nameref2>
 </Nameref>
 </Find>
 _b</Find>
@@ -226,8 +226,8 @@ _b</Find>
 Looking in function's symbol table
 </Find>
 _b</Find>
-Searching method/class:_TestRotate|00BE2DC0
-Looking at params 00BE2E0C
+Searching method/class:_TestRotate|014063E8
+Looking at params 01406434
 </Find>
 _bMatch
 </Find>
@@ -237,11 +237,15 @@ Found as parameter
 A:1:_bIsEqual:T2sp is not null
 Type array:
    
-tp:012D5100 <Deref></Deref>deref tp:012D5100 </nameref2>
+tp:0197B808 <Deref></Deref>deref tp:0197B370 </nameref2>
 </Nameref>
 </Parse></Find>
 _int</Find>
 D<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
 ABCD</GenerateMonadic>
 <GenerateMonadic>
 ABCD</GenerateMonadic>
@@ -290,8 +294,8 @@ X</openpa>
 CDEGH</Find>
 _TestRotate2</Find>
 hh1h2ikIIbIcinsert type: 33
-***Inserting:_TestRotate2 into 00BD28F0
-<BuildSignature>:_TestRotate2</BuildSignature>Insert _TestRotate2 into 00BD28F0()
+***Inserting:_TestRotate2 into 013F8F48
+<BuildSignature>:_TestRotate2</BuildSignature>Insert _TestRotate2 into 013F8F48()
 Insert into global table
 </Find>
 _TestRotate2</Find>
@@ -323,9 +327,9 @@ Bb<ParseDeclPrefix>(1)
 </ParsePrefixId></ParseDeclPrefix>
 CDEGH</Find>
 _a</Find>
-hh1kIIbIcinsert type: 17
-***Inserting:_a into 00BE30AC
-<BuildSignature>:_a</BuildSignature>Insert _a into 00BE30AC(_TestRotate2)
+hh1kIIbIcinsert type: 16
+***Inserting:_a into 01406644
+<BuildSignature>:_a</BuildSignature>Insert _a into 01406644(_TestRotate2)
 </Find>
 _a</Find>
 At insert:
@@ -348,9 +352,9 @@ Bb<ParseDeclPrefix>(1)
 </ParsePrefixId></ParseDeclPrefix>
 CDEGH</Find>
 _b</Find>
-hh1kIIbIcinsert type: 17
-***Inserting:_b into 00BE30AC
-<BuildSignature>:_b</BuildSignature>Insert _b into 00BE30AC(_TestRotate2)
+hh1kIIbIcinsert type: 16
+***Inserting:_b into 01406644
+<BuildSignature>:_b</BuildSignature>Insert _b into 01406644(_TestRotate2)
 </Find>
 _b</Find>
 At insert:
@@ -387,8 +391,8 @@ _a</Find>
 Looking in function's symbol table
 </Find>
 _a</Find>
-Searching method/class:_TestRotate2|00BE3060
-Looking at params 00BE30AC
+Searching method/class:_TestRotate2|014065F8
+Looking at params 01406644
 </Find>
 _aMatch
 </Find>
@@ -398,7 +402,7 @@ Found as parameter
 A:1:_aIsEqual:T2sp is not null
 Type array:
    
-tp:012D5190 <Deref></Deref>deref tp:012D5190 </nameref2>
+tp:0197B8B0 <Deref></Deref>deref tp:0197B370 </nameref2>
 </Nameref>
 </Find>
 _b</Find>
@@ -411,8 +415,8 @@ _b</Find>
 Looking in function's symbol table
 </Find>
 _b</Find>
-Searching method/class:_TestRotate2|00BE3060
-Looking at params 00BE30AC
+Searching method/class:_TestRotate2|014065F8
+Looking at params 01406644
 </Find>
 _bMatch
 </Find>
@@ -422,7 +426,7 @@ Found as parameter
 A:1:_bIsEqual:T2sp is not null
 Type array:
    
-tp:012D51C0 <Deref></Deref>deref tp:012D51C0 </nameref2>
+tp:0197B8E8 <Deref></Deref>deref tp:0197B370 </nameref2>
 </Nameref>
 </Find>
 _a</Find>
@@ -439,8 +443,8 @@ _a</Find>
 Looking in function's symbol table
 </Find>
 _a</Find>
-Searching method/class:_TestRotate2|00BE3060
-Looking at params 00BE30AC
+Searching method/class:_TestRotate2|014065F8
+Looking at params 01406644
 </Find>
 _aMatch
 </Find>
@@ -450,7 +454,7 @@ Found as parameter
 A:1:_aIsEqual:T2sp is not null
 Type array:
    
-tp:012D5190 <Deref></Deref>deref tp:012D5190 </nameref2>
+tp:0197B8B0 <Deref></Deref>deref tp:0197B370 </nameref2>
 </Nameref>
 </Find>
 _b</Find>
@@ -463,8 +467,8 @@ _b</Find>
 Looking in function's symbol table
 </Find>
 _b</Find>
-Searching method/class:_TestRotate2|00BE3060
-Looking at params 00BE30AC
+Searching method/class:_TestRotate2|014065F8
+Looking at params 01406644
 </Find>
 _bMatch
 </Find>
@@ -474,10 +478,14 @@ Found as parameter
 A:1:_bIsEqual:T2sp is not null
 Type array:
    
-tp:012D51C0 <Deref></Deref>deref tp:012D51C0 </nameref2>
+tp:0197B8E8 <Deref></Deref>deref tp:0197B370 </nameref2>
 </Nameref>
 </Parse>Returning EOF from NextToken.
 D<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
 ABCD</GenerateMonadic>
 <GenerateMonadic>
 ABCD</GenerateMonadic>
