@@ -422,27 +422,6 @@ void peep_add(struct ocode *ip)
 static void PeepoptSub(struct ocode *ip)
 {  
 	return;
-	if (ip->opcode==op_subui) {
-		if (ip->oper3) {
-			if (ip->oper3->mode==am_immed) {
-				if (ip->oper3->offset->nodetype==en_icon && ip->oper3->offset->i==1) {
-					if (ip->fwd) {
-						if (ip->fwd->opcode==op_ne && ip->fwd->oper2->mode==am_reg && ip->fwd->oper2->preg==0) {
-							if (ip->fwd->oper1->preg==ip->oper1->preg) {
-								ip->opcode = op_loop;
-								ip->oper2 = ip->fwd->oper3;
-								ip->oper3 = NULL;
-								if (ip->fwd->back) ip->fwd->back = ip;
-								ip->fwd = ip->fwd->fwd;
-								return;
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-	return;
 }
 
 static bool IsSubiSP(struct ocode *ip)
@@ -626,63 +605,11 @@ void PeepoptBranch(struct ocode *ip)
         
 void PeepoptBcc(struct ocode * ip)
 {
-     struct ocode *fwd1, *fwd2, *fwd3, *fwd4, *fwd5;
-     if (!ip->fwd)
-         return;
-     fwd1 = ip->fwd;
-     if (fwd1->opcode != op_ldi || fwd1->oper2->mode != am_immed)
-         return;
-     fwd2 = fwd1->fwd;
-     if (!fwd2)
-         return;
-     if (fwd2->opcode != op_bra)
-         return;
-     fwd3 = fwd2->fwd;
-     if (!fwd3)
-         return;
-     if (fwd3->opcode != op_label)
-         return;
-     fwd4 = fwd3->fwd;
-     if (!fwd4)
-         return;
-     if (fwd4->opcode != op_ldi || fwd4->oper2->mode != am_immed)
-         return;
-     fwd5 = fwd4->fwd;
-     if (!fwd5)
-         return;
-     if (fwd5->opcode != op_label)
-         return;
-     // now check labels match up
-     if (ip->oper2!=fwd3->oper1)
-         return;
-     if (fwd2->oper1!=fwd5->oper1)
-         return;
-     // check for same target register
-     if (!equal_address(fwd1->oper1,fwd4->oper1))
-         return;
-     // check ldi values
-     if (fwd1->oper2->offset->i != 1)
-         return;
-     if (fwd4->oper2->offset->i != 0)
-         return;
-// *****
-// need to check branch targets to make sure no other code targets the label.
-// or this code might not work.
 }
 
 void PeepoptLc(struct ocode *ip)
 {
-	if (ip->fwd) {
-		if (ip->fwd->opcode==op_sext16 || ip->fwd->opcode==op_sxc ||
-			(ip->fwd->opcode==op_bfext && ip->fwd->oper3->offset->i==0 && ip->fwd->oper4->offset->i==15)) {
-			if (ip->fwd->oper1->preg == ip->oper1->preg) {
-				if (ip->fwd->fwd) {
-					ip->fwd->fwd->back = ip;
-				}
-				ip->fwd = ip->fwd->fwd;
-			}
-		}
-	}
+	return;
 }
 
 // LEA followed by a push of the same register gets translated to PEA.
@@ -691,130 +618,18 @@ void PeepoptLc(struct ocode *ip)
 
 void PeepoptLea(struct ocode *ip)
 {
-	struct ocode *ip2;
-	int whop;
-
-  whop = 0;
-	ip2 = ip->fwd;
-	if (!ip2)
-	   return;
-  if (ip2->opcode != op_push)
-    return;
-  whop =  ((ip2->oper1 != NULL) ? 1 : 0) +
-          ((ip2->oper2 != NULL) ? 1 : 0) +
-          ((ip2->oper3 != NULL) ? 1 : 0) +
-          ((ip2->oper4 != NULL) ? 1 : 0);
-  if (whop > 1)
-    return;
-  // Pushing a single register     
-  if (ip2->oper1->mode != am_reg)
-     return;
-  // And it's the same register as the LEA
-  if (ip2->oper1->preg != ip->oper1->preg)
-     return;
-  ip->opcode = op_pea;
-  ip->oper1 = copy_addr(ip->oper2);
-  ip->oper2 = NULL;
-  ip->fwd = ip2->fwd;
 }
 
 // LW followed by a push of the same register gets translated to PUSH.
 
 void PeepoptLw(struct ocode *ip)
 {
-	struct ocode *ip2;
-
-    if (!isFISA64)
-       return;
-	ip2 = ip->fwd;
-	if (!ip2)
-	   return;
-    if (ip2->opcode != op_push)
-       return;
-    if (ip2->oper1->mode != am_reg)
-       return;
-    if (ip->oper2->mode != am_ind && ip->oper2->mode != am_indx)
-       return;
-    if (ip->oper1->preg != ip2->oper1->preg)
-       return;     
-    ip->opcode = op_push;
-    ip->oper1 = copy_addr(ip->oper2);
-    ip->oper2 = NULL;
-    ip->fwd = ip2->fwd;
 }
-
-// LC0I followed by a push of the same register gets translated to PUSH.
-
-void PeepoptLc0i(struct ocode *ip)
-{
-	struct ocode *ip2;
-
-    if (!isFISA64)
-       return;
-	ip2 = ip->fwd;
-	if (!ip2)
-	   return;
-    if (ip2->opcode != op_push)
-       return;
-    if (ip->oper2->offset->i > 0x1fffLL || ip->oper2->offset->i <= -0x1fffLL)
-       return;
-    ip->opcode = op_push;
-    ip->oper1 = copy_addr(ip->oper2);
-    ip->oper2 = NULL;
-    ip->fwd = ip2->fwd;
-}
-
 
 // Combine a chain of push operations into a single push
 
 void PeepoptPushPop(struct ocode *ip)
 {
-	struct ocode *ip2,*ip3,*ip4;
-
-	if (ip->opcode==op_pop) {
-		ip2 = ip->fwd;
-		if (ip2 && ip2->opcode==op_push) {
-			ip3 = ip2->fwd;
-			if (ip3 && ip3->opcode==op_ldi) {
-				if (ip3->oper1->preg==ip2->oper1->preg && ip3->oper1->preg==ip->oper1->preg) {
-					ip->back->fwd = ip2->fwd;
-					ip->back->fwd->comment = ip2->comment;
-				}
-			}
-		}
-	}
-	return;
-    if (!isTable888)
-        return;
-	if (ip->oper1->mode == am_immed)
-		return;
-	ip2 = ip->fwd;
-	if (!ip2)
-		return;
-	if (ip2->opcode!=ip->opcode)
-		return;
-	if (ip2->oper1->mode==am_immed)
-		return;
-	ip->oper2 = copy_addr(ip2->oper1);
-	ip->fwd = ip2->fwd;
-	ip3 = ip2->fwd;
-	if (!ip3)
-		return;
-	if (ip3->opcode!=ip->opcode)
-		return;
-	if (ip3->oper1->mode==am_immed)
-		return;
-	ip->oper3 = copy_addr(ip3->oper1);
-	ip->fwd = ip3->fwd;
-	ip4 = ip3->fwd;
-	if (!ip4)
-		return;
-	if (ip4->opcode!=ip->opcode)
-		return;
-	if (ip4->oper1->mode==am_immed)
-		return;
-	ip->oper4 = copy_addr(ip4->oper1);
-	ip->fwd = ip4->fwd;
 }
 
 
@@ -864,61 +679,26 @@ void PeepoptLabel(struct ocode *ip)
     ip->back->fwd = NULL;
 }
  
-// Optimize away duplicate sign extensions that the compiler sometimes
-// generates. This handles sxb, sxcm and sxh.
-
-void PeepoptSxb(struct ocode *ip)
-{
-     if (!ip->fwd)
-         return;
-     if (ip->fwd->opcode != ip->opcode)
-         return;
-     if (ip->fwd->oper1->preg != ip->oper1->preg)
-         return;
-     if (ip->fwd->oper2->preg != ip->oper2->preg)
-         return;
-     // Now we must have the same instruction twice in a row. ELiminate the
-     // duplicate.
-     ip->fwd = ip->fwd->fwd;
-     if (ip->fwd->fwd)
-          ip->fwd->fwd->back = ip;
-}
-void PeepoptSxbAnd(struct ocode *ip)
-{
-     if (!ip->fwd)
-         return;
-     if (ip->opcode != op_sxb)
-         return;
-     if (ip->fwd->opcode != op_and)
-         return;
-	 if (ip->fwd->oper3->mode != am_immed)
-		 return;
-     if (ip->fwd->oper3->offset->i != 255)
-         return;
-	 Remove(ip);
-}
-
-
 // Eliminate branchs to the next line of code.
 
 static void opt_nbr()
 {
-	struct ocode *ip,*pip;
-	
-	ip = peep_head;
-	pip = peep_head;
-	while(ip) { 
-		if (ip->opcode==op_label) {
-			if (pip->opcode==op_br || pip->opcode==op_bra) {
-				if ((int64_t)ip->oper1==pip->oper1->offset->i)	{
-					pip->back->fwd = pip->fwd;
-					ip->back = pip->back;
-				}
-			}
-		}
-		pip = ip;
-		ip = ip->fwd;
-	}
+	//struct ocode *ip,*pip;
+	//
+	//ip = peep_head;
+	//pip = peep_head;
+	//while(ip) { 
+	//	if (ip->opcode==op_label) {
+	//		if (pip->opcode==op_br || pip->opcode==op_bra) {
+	//			if ((int64_t)ip->oper1==pip->oper1->offset->i)	{
+	//				pip->back->fwd = pip->fwd;
+	//				ip->back = pip->back;
+	//			}
+	//		}
+	//	}
+	//	pip = ip;
+	//	ip = ip->fwd;
+	//}
 }
 
 
@@ -1015,9 +795,7 @@ static void PeepoptStore(struct ocode *ip)
 		return;
 	if (!equal_address(ip->oper2, ip->fwd->oper2))
 		return;
-	if (ip->opcode==op_sh && ip->fwd->opcode!=op_lh)
-		return;
-	if (ip->opcode==op_sw && ip->fwd->opcode!=op_lw)
+	if (ip->opcode==op_sto && ip->fwd->opcode!=op_ld)
 		return;
 	ip->fwd = ip->fwd->fwd;
 	ip->fwd->back = ip;
@@ -1117,7 +895,8 @@ void PeepoptPred(struct ocode *ip)
 		ip4 = ip3->fwd;
 	if (ip1->opcode==op_label)
 		return;
-
+	if (ip->oper3==nullptr)
+		return;
 	if (ip2 && ip2->opcode==op_label) {
 		if ((int)ip2->oper1 == ip->oper3->offset->i) {
 			// pop_always, pop_nop, pop_z, pop_nz, pop_c, pop_nc, pop_mi, pop_pl
@@ -1285,84 +1064,47 @@ static void opt_peep()
 				peep_ld(ip);
 				PeepoptLd(ip);
 				break;
-				case op_mov:
-						peep_move(ip);
-						break;
-				case op_add:
-				case op_addu:
-				case op_addui:
-						peep_add(ip);
-						break;
-				case op_sub:
-						PeepoptSub(ip);
-						break;
-				case op_cmp:
-						peep_cmp(ip);
-						break;
-				case op_mul:
-	//                    PeepoptMuldiv(ip,op_shl);
-						break;
-				case op_lc0i:
-						PeepoptLc0i(ip);
-						break;
-				case op_lc:
-						PeepoptLc(ip);
-						break;
-				case op_lw:
-						//PeepoptLw(ip);
-						break;
-				case op_sxb:
-				case op_sxc:
-				case op_sxh:
-						PeepoptSxb(ip);
-						PeepoptSxbAnd(ip);
-						break;
-				case op_br:
-				case op_bra:
-						PeepoptBranch(ip);
-						PeepoptUctran(ip);
-						break;
-				case op_pop:
-				case op_push:
-						PeepoptPushPop(ip);
-						break;
-				case op_lea:
-						PeepoptLea(ip);
-						break;
-				case op_jal:
-						PeepoptJAL(ip);
-						break;
-				case op_jmp:
-				case op_ret:
-				case op_rts:
-				case op_rti:
-				case op_rtd:
-				case op_rtl:
-						PeepoptUctran(ip);
-						break;
-				case op_label:
-						PeepoptLabel(ip);
-						break;
-				case op_hint:
-						PeepoptHint(ip);
-						break;
-				case op_sh:
-				case op_sw:
-						PeepoptStore(ip);
-						break;
-				case op_and:
-						PeepoptAnd(ip);
-						break;
-				}
-				if (IsRet(ip))
+			case op_mov:
+					peep_move(ip);
+					break;
+			case op_add:
+					peep_add(ip);
+					break;
+			case op_sub:
+					PeepoptSub(ip);
+					break;
+			case op_cmp:
+					peep_cmp(ip);
+					break;
+			case op_pop:
+			case op_push:
+					PeepoptPushPop(ip);
+					break;
+			case op_rti:
 					PeepoptUctran(ip);
-				if (IsFlowCtrl(ip))
-					PeepoptPred(ip);
-				if (IsFlowCtrl(ip))
-					PeepoptBranch(ip);
-			   ip = ip->fwd;
+					break;
+			case op_label:
+					PeepoptLabel(ip);
+					break;
+			case op_hint:
+					PeepoptHint(ip);
+					break;
+			case op_sto:
+					PeepoptStore(ip);
+					break;
+			case op_and:
+					PeepoptAnd(ip);
+					break;
 			}
-		 }
+			if (IsRet(ip))
+				PeepoptUctran(ip);
+			if (IsFlowCtrl(ip))
+				PeepoptPred(ip);
+			if (IsFlowCtrl(ip))
+				PeepoptBranch(ip);
+			ip = ip->fwd;
+		}
+		}
 		PeepoptSubSP();
 		ip = peep_head;
 

@@ -113,7 +113,6 @@ extern char             lastkw[128];
 extern char             laststr[MAX_STLP1];
 extern int64_t	ival;
 extern double           rval;
-extern Float128			rval128;
 extern char float_precision;
 extern int parseEsc;
 //extern FloatTriple      FAC1,FAC2;
@@ -124,7 +123,6 @@ extern TABLE            tagtable;
 extern SYM              *lasthead;
 extern struct slit      *strtab;
 extern struct clit		*casetab;
-extern Float128		    *quadtab;
 extern int              lc_static;
 extern int              lc_auto;
 extern int				lc_thread;
@@ -255,7 +253,6 @@ extern SYM *makeint(char *);
 extern void funcbody(SYM *sp);
 // Intexpr.c
 extern int GetIntegerExpression(ENODE **p);
-extern Float128 *GetFloatExpression(ENODE **pnode);
 // Expr.c
 extern SYM *makeStructPtr(std::string name);
 extern ENODE *makenode(int nt, ENODE *v1, ENODE *v2);
@@ -290,15 +287,12 @@ extern void GenerateChar(int val);
 extern void genhalf(int val);
 extern void GenerateWord(int val);
 extern void GenerateLong(int val);
-extern void GenerateFloat(Float128 *val);
-extern void GenerateQuad(Float128 *);
 extern void genstorage(int nbytes);
 extern void GenerateReference(SYM *sp,int offset);
 extern void GenerateLabelReference(int n);
 extern void gen_strlab(char *s);
 extern void dumplits();
 extern int  stringlit(char *s);
-extern int quadlit(Float128 *f128);
 extern void nl();
 extern void seg(int sg, int algn);
 extern void cseg();
@@ -338,6 +332,8 @@ extern int isshort(ENODE *node);
 extern int IdentifyKeyword();
 // Preproc.c
 extern int preprocess();
+// OPC6.cpp
+extern void GenerateCmp(ENODE *node, int label, int predreg, unsigned int prediction);
 // CodeGenerator.c
 extern AMODE *make_indirect(int i);
 extern AMODE *make_indexed(int o, int i);
@@ -362,22 +358,13 @@ extern void ReleaseTempRegister(AMODE *ap);
 extern void ReleaseTempReg(AMODE *ap);
 extern int TempInvalidate();
 extern void TempRevalidate(int sp);
-// Table888.c
-extern void GenerateTable888Function(SYM *sym, Statement *stmt);
-extern void GenerateTable888Return(SYM *sym, Statement *stmt);
-extern AMODE *GenerateTable888FunctionCall(ENODE *node, int flags);
-extern AMODE *GenTable888Set(ENODE *node);
-// Raptor64.c
-extern void GenerateRaptor64Function(SYM *sym, Statement *stmt);
-extern void GenerateRaptor64Return(SYM *sym, Statement *stmt);
-extern AMODE *GenerateRaptor64FunctionCall(ENODE *node, int flags);
 extern AMODE *GenerateFunctionCall(ENODE *node, int flags);
 
 extern void GenerateFunction(SYM *sym);
 extern void GenerateReturn(Statement *stmt);
 
-extern AMODE *GenerateShift(ENODE *node,int flags, int size, int op);
-extern AMODE *GenerateAssignShift(ENODE *node,int flags,int size,int op);
+extern AMODE *GenerateShift(ENODE *node,int flags, int size);
+extern AMODE *GenerateAssignShift(ENODE *node,int flags,int size);
 extern AMODE *GenerateBitfieldDereference(ENODE *node, int flags, int size);
 extern AMODE *GenerateBitfieldAssign(ENODE *node, int flags, int size);
 // err.c

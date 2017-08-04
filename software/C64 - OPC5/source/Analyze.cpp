@@ -86,8 +86,6 @@ int equalnode(ENODE *node1, ENODE *node2)
 		return FALSE;
     }
     switch (node1->nodetype) {
-	case en_fcon:
-		return (Float128::IsEqual(&node1->f128,&node2->f128));
 //			return (node1->f == node2->f);
 	case en_regvar:
 	case en_fpregvar:

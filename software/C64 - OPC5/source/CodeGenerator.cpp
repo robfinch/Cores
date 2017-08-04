@@ -429,29 +429,10 @@ void GenerateSignExtend(AMODE *ap, int isize, int osize, int flags)
     if(ap->mode != am_reg && ap->mode != am_fpreg) {
 		ap1 = GetTempRegister();
 		GenLoad(ap1,ap,isize,isize);
-		switch( isize )
-		{
-		case 1:	Generate4adic(op_bfext,0,ap1,ap1,make_immed(0),make_immed(7)); break;
-		case 2:	Generate4adic(op_bfext,0,ap1,ap1,make_immed(0),make_immed(15)); break;
-		case 4:	Generate4adic(op_bfext,0,ap1,ap1,make_immed(0),make_immed(31)); break;
-		}
 		GenStore(ap1,ap,osize);
 		ReleaseTempRegister(ap1);
 		return;
         //MakeLegalAmode(ap,flags & (F_REG|F_FPREG),isize);
-	}
-	if (ap->isFloat) {
-		switch(isize) {
-		case 4:	GenerateDiadic(op_fs2d,0,ap,ap); break;
-		}
-	}
-	else {
-			switch( isize )
-			{
-			case 1:	Generate4adic(op_bfext,0,ap,ap,make_immed(0),make_immed(7)); break;
-			case 2:	Generate4adic(op_bfext,0,ap,ap,make_immed(0),make_immed(15)); break;
-			case 4:	Generate4adic(op_bfext,0,ap,ap,make_immed(0),make_immed(31)); break;
-			}
 	}
 }
 
@@ -510,25 +491,25 @@ AMODE *GenerateIndex(ENODE *node)
 		ap3 = GetTempRegister();
         ap1 = GenerateExpression(node->p[0],F_REG,sizeOfWord);
         ap2 = GenerateExpression(node->p[1],F_REG,sizeOfWord);
-		GenerateTriadic(op_mov,0,ap3,ap1,make_immed(0));
-		GenerateTriadic(op_add,0,ap3,ap2,make_immed(0));
+		GenerateDiadic(op_mov,0,ap3,ap1);
+		GenerateDiadic(op_add,0,ap3,ap2);
   //      ap1->mode = am_indx2;
   //      ap1->sreg = ap2->preg;
 		//ap1->deep2 = ap2->deep2;
 		//ap1->offset = makeinode(en_icon,0);
 		//ap1->scale = node->scale;
+		ReleaseTempReg(ap2);
 		ReleaseTempReg(ap1);
-        return ap3;
+        return (ap3);
     }
     ap1 = GenerateExpression(node->p[0],F_REG | F_IMMED,sizeOfWord);
     if( ap1->mode == am_immed )
     {
 		ap2 = GenerateExpression(node->p[1],F_REG,sizeOfWord);
-		ReleaseTempReg(ap2);
 		ap2->mode = am_indx;
 		ap2->offset = ap1->offset;
 		ap2->isUnsigned = ap1->isUnsigned;
-		return ap2;
+		return (ap2);
     }
     ap2 = GenerateExpression(node->p[1],F_ALL,sizeOfWord);   /* get right op */
 	ap3 = GetTempRegister();
@@ -538,7 +519,7 @@ AMODE *GenerateIndex(ENODE *node)
         ap2->mode = am_indx;
         ap2->preg = ap1->preg;
         ap2->deep = ap1->deep;
-        return ap2;
+        return (ap2);
     }
 	if (ap2->mode == am_ind && ap1->mode == am_reg) {
 		GenerateTriadic(op_mov,0,ap3,ap1,make_immed(0));
@@ -548,7 +529,7 @@ AMODE *GenerateIndex(ENODE *node)
   //      ap2->mode = am_indx2;
   //      ap2->sreg = ap1->preg;
 		//ap2->deep2 = ap1->deep;
-        return ap1;
+        return (ap1);
 	}
 	if (ap2->mode == am_direct && ap1->mode==am_reg) {
 		GenerateTriadic(op_mov,0,ap3,ap1,make_immed(0));
@@ -558,7 +539,7 @@ AMODE *GenerateIndex(ENODE *node)
         //ap2->mode = am_indx;
         //ap2->preg = ap1->preg;
         //ap2->deep = ap1->deep;
-        return ap1;
+        return (ap1);
     }
 	// ap1->mode must be F_REG
 	MakeLegalAmode(ap2,F_REG,8);
@@ -571,7 +552,7 @@ AMODE *GenerateIndex(ENODE *node)
 	//ap1->deep2 = ap2->deep;
 	//ap1->offset = makeinode(en_icon,0);
 	//ap1->scale = node->scale;
-    return ap1;                     /* return indexed */
+    return (ap1);                     /* return indexed */
 }
 
 long GetReferenceSize(ENODE *node)
@@ -814,7 +795,7 @@ xit:
 //
 // Generate code to evaluate a unary minus or complement.
 //
-AMODE *GenerateUnary(ENODE *node,int flags, int size, int op)
+AMODE *GenerateUnary(ENODE *node,int flags, int size)
 {
 	AMODE *ap, *ap2;
 
@@ -826,7 +807,7 @@ AMODE *GenerateUnary(ENODE *node,int flags, int size, int op)
 		break;
 	default:
 	    ap = GenerateExpression(node->p[0],F_REG,size);
-		GenerateDiadic(op,0,ap2,ap);
+		GenerateDiadic(op_not,0,ap2,ap);
 	}
     ReleaseTempReg(ap);
     MakeLegalAmode(ap2,flags,size);
@@ -837,7 +818,7 @@ AMODE *GenerateUnary(ENODE *node,int flags, int size, int op)
 
 AMODE *GenerateBinary(ENODE *node,int flags, int size, int op)
 {
-	AMODE *ap1, *ap2, *ap3;
+	AMODE *ap1, *ap2;
 	
    	//ap3 = GetTempRegister();
 	if (equalnode(node->p[0],node->p[1]) && !opt_nocgo) {
@@ -869,7 +850,7 @@ AMODE *GenerateBinary(ENODE *node,int flags, int size, int op)
  *      generate code to evaluate a mod operator or a divide
  *      operator.
  */
-AMODE *GenerateModDiv(ENODE *node,int flags,int size, int op)
+AMODE *GenerateModDiv(ENODE *node,int flags,int size)
 {
 	AMODE *ap1, *ap2, *ap3;
 
@@ -883,11 +864,11 @@ AMODE *GenerateModDiv(ENODE *node,int flags,int size, int op)
 	else
 		GenerateTriadic(op_mov,0,makereg(2),ap2,make_immed(0));
 	GenerateTriadic(op_mov,0,makereg(regLR),makereg(regPC),make_immed(2));
-	switch(op) {
-	case op_div:	GenerateTriadic(op_mov,0,makereg(regPC),makereg(regZero),make_string("_div")); break;
-	case op_divu:	GenerateTriadic(op_mov,0,makereg(regPC),makereg(regZero),make_string("_divu")); break;
-	case op_mod:	GenerateTriadic(op_mov,0,makereg(regPC),makereg(regZero),make_string("_mod")); break;
-	case op_modu:	GenerateTriadic(op_mov,0,makereg(regPC),makereg(regZero),make_string("_modu")); break;
+	switch(node->nodetype) {
+	case en_div:	GenerateTriadic(op_mov,0,makereg(regPC),makereg(regZero),make_string("_div")); break;
+	case en_udiv:	GenerateTriadic(op_mov,0,makereg(regPC),makereg(regZero),make_string("_divu")); break;
+	case en_mod:	GenerateTriadic(op_mov,0,makereg(regPC),makereg(regZero),make_string("_mod")); break;
+	case en_umod:	GenerateTriadic(op_mov,0,makereg(regPC),makereg(regZero),make_string("_modu")); break;
 	default:		GenerateTriadic(op_mov,0,makereg(regPC),makereg(regZero),make_string("_div")); break;
 	}
 	ap3 = makereg(1);
@@ -925,7 +906,7 @@ AMODE *GenerateMultiply(ENODE *node, int flags, int size, int op)
 	GenerateTriadic(op_mov,0,makereg(1),ap1,make_immed(0));
 	GenerateTriadic(op_mov,0,makereg(2),ap2,make_immed(0));
 	GenerateTriadic(op_mov,0,makereg(regLR),makereg(regPC),make_immed(2));
-	GenerateTriadic(op_mov,0,makereg(regPC),makereg(regZero),make_string(op==op_mul ? "_mul" : "_mulu"));
+	GenerateTriadic(op_mov,0,makereg(regPC),makereg(regZero),make_string(node->nodetype==en_mul ? "_mul" : "_mulu"));
 	ap3 = makereg(1);
 //		GenerateTriadic(op,0,ap3,ap1,ap2);
 	ReleaseTempReg(ap2);
@@ -935,20 +916,32 @@ AMODE *GenerateMultiply(ENODE *node, int flags, int size, int op)
 	return ap3;
 }
 
+AMODE *GenerateMac(ENODE *node,int flags, int size)
+{
+	AMODE *ap1, *ap2;
+
+	ap1 = GenerateMultiply(node,flags,size,op_nop);
+	ap2 = GenerateExpression(node->p[2],F_REG|F_IMMED,size);
+	if (ap2->mode==am_immed) {
+		if (ap2->offset->i!=0)
+			GenerateTriadic(op_add,0,ap1,makereg(regZero),make_immed(ap2->offset->i));
+	}
+	else 
+		GenerateDiadic(op_add,0,ap1,ap2);
+	ReleaseTempReg(ap2);
+	return (ap1);
+}
+
 //
 // Generate code to evaluate a condition operator node (?:)
 //
 AMODE *GenerateHook(ENODE *node,int flags, int size)
 {
-	AMODE *ap1, *ap2, *ap0;
+	AMODE *ap1, *ap2;
     int false_label, end_label;
-	struct ocode *ip1, *ip2, *ip3, *ip, *ip0, *ip4, *ip5;
-	struct ocode *ip0f, *ip1f, *ip2f;
-	struct ocode *ip0b, *ip1b, *ip2b;
-	struct ocode *ip0bf, *ip1bf, *ip2bf;
+	struct ocode *ip1, *ip2, *ip0, *ip4, *ip5;
 	int n1, n2, which;
 	int predop;
-	int pl, pushed;
 
     false_label = nextlabel++;
     end_label = nextlabel++;
@@ -1007,7 +1000,7 @@ AMODE *GenerateHook(ENODE *node,int flags, int size)
 		ap2 = GenerateExpression(node->p[1]->p[1],flags,size);
 		peep_tail->predop = predop;
 		if (!equal_address(ap1,ap2)) {
-			peep_tail <= ip0;
+			peep_tail = ip0;
 			peep_tail->fwd = nullptr;
 			goto j1;
 		}
@@ -1016,7 +1009,7 @@ AMODE *GenerateHook(ENODE *node,int flags, int size)
 		ap2 = GenerateExpression(node->p[1]->p[0],flags,size);
 		peep_tail->predop = predop;
 		if (!equal_address(ap1,ap2)) {
-			peep_tail <= ip0;
+			peep_tail = ip0;
 			peep_tail->fwd = nullptr;
 			goto j1;
 		}
@@ -1103,18 +1096,8 @@ AMODE *GenerateAssignAdd(ENODE *node,int flags, int size, int op)
     ssize = GetNaturalSize(node->p[0]);
     if( ssize > size )
             size = ssize;
-    if (node->etype==bt_double || node->etype==bt_quad || node->etype==bt_float||node->etype==bt_triple) {
-        ap1 = GenerateExpression(node->p[0],F_REG|F_MEM,ssize);
-        ap2 = GenerateExpression(node->p[1],F_REG,size);
-        if (op==op_add)
-           op = op_fadd;
-        else if (op==op_sub)
-           op = op_fsub;
-    }
-    else {
-        ap1 = GenerateExpression(node->p[0],F_ALL,ssize);
-        ap2 = GenerateExpression(node->p[1],F_REG | F_IMMED,size);
-    }
+    ap1 = GenerateExpression(node->p[0],F_ALL,ssize);
+    ap2 = GenerateExpression(node->p[1],F_REG | F_IMMED,size);
 	if (ap1->mode==am_reg) {
 	    GenerateTriadic(op,0,ap1,ap1,ap2);
 	}
@@ -1193,11 +1176,10 @@ AMODE *GenerateAssignMultiply(ENODE *node,int flags, int size, int op)
 //
 // Generate /= and %= nodes.
 //
-AMODE *GenerateAssignModiv(ENODE *node,int flags,int size,int op)
+AMODE *GenerateAssignModiv(ENODE *node,int flags,int size)
 {
 	AMODE *ap1, *ap2, *ap3;
     int siz1;
-    int isFP;
  
     siz1 = GetNaturalSize(node->p[0]);
     ap1 = GetTempRegister();
@@ -1214,11 +1196,11 @@ AMODE *GenerateAssignModiv(ENODE *node,int flags,int size,int op)
 	else
 		GenerateDiadic(op_mov,0,makereg(2),ap3);
 	GenerateTriadic(op_mov,0,makereg(regLR),makereg(regPC),make_immed(2));
-	switch(op) {
-	case op_div:	GenerateTriadic(op_mov,0,makereg(regPC),makereg(regZero),make_string("_div")); break;
-	case op_divu:	GenerateTriadic(op_mov,0,makereg(regPC),makereg(regZero),make_string("_divu")); break;
-	case op_mod:	GenerateTriadic(op_mov,0,makereg(regPC),makereg(regZero),make_string("_mod")); break;
-	case op_modu:	GenerateTriadic(op_mov,0,makereg(regPC),makereg(regZero),make_string("_modu")); break;
+	switch(node->nodetype) {
+	case en_div:	GenerateTriadic(op_mov,0,makereg(regPC),makereg(regZero),make_string("_div")); break;
+	case en_udiv:	GenerateTriadic(op_mov,0,makereg(regPC),makereg(regZero),make_string("_divu")); break;
+	case en_mod:	GenerateTriadic(op_mov,0,makereg(regPC),makereg(regZero),make_string("_mod")); break;
+	case en_umod:	GenerateTriadic(op_mov,0,makereg(regPC),makereg(regZero),make_string("_modu")); break;
 	default:		GenerateTriadic(op_mov,0,makereg(regPC),makereg(regZero),make_string("_div")); break;
 	}
 	ReleaseTempReg(ap3);
@@ -1291,10 +1273,14 @@ void DumpStructEnodes(ENODE *node)
 
 AMODE *GenerateAssign(ENODE *node, int flags, int size);
 
+// Generate an assignment to a structure type. The type passed must be a
+// structure type.
+
 void GenerateStructAssign(TYP *tp, int offset, ENODE *ep, AMODE *base)
 {
 	SYM *thead, *first;
 	AMODE *ap1, *ap2;
+	int offset2;
 
 	first = thead = SYM::GetPtr(tp->lst.GetHead());
 	ep = ep->p[0];
@@ -1312,16 +1298,17 @@ void GenerateStructAssign(TYP *tp, int offset, ENODE *ep, AMODE *base)
 			ap1 = GenerateExpression(ep->p[2],F_REG,thead->tp->size);
 			if (ap1->mode==am_immed) {
 				ap2 = GetTempRegister();
-				GenerateTriadic(op_mov,0,ap2,makereg(regZero),make_immed(ap1->offset->i));
+				GenLdi(ap2,ap1);
 			}
 			else {
 				ap2 = ap1;
 				ap1 = nullptr;
 			}
 			if (base->offset)
-				GenerateTriadic(op_sto,0,ap2,makereg(base->preg),make_immed(offset+base->offset->i));
+				offset2 = base->offset->i + offset;
 			else
-				GenerateTriadic(op_sto,0,ap2,makereg(base->preg),make_immed(offset));
+				offset2 = offset;
+			GenerateTriadic(op_sto,0,ap2,makereg(base->preg),make_immed(offset2));
 			if (ap2)
 				ReleaseTempReg(ap2);
 			if (ap1)
@@ -1336,11 +1323,70 @@ void GenerateStructAssign(TYP *tp, int offset, ENODE *ep, AMODE *base)
 		error(ERR_TOOMANYELEMENTS);
 }
 
+
+AMODE *GenerateAggregateAssign(ENODE *node1, ENODE *node2);
+
+// Generate an assignment to an array.
+
+void GenerateArrayAssign(TYP *tp, ENODE *node1, ENODE *node2, AMODE *base)
+{
+	ENODE *ep1;
+	AMODE *ap1, *ap2;
+	int size = tp->size;
+	int offset, offset2;
+
+	if (node1->tp)
+		tp = node1->tp->GetBtp();
+	else
+		tp = nullptr;
+	if (tp==nullptr)
+		tp = &stdlong;
+	if (tp->IsStructType()) {
+		ep1 = nullptr;
+		ep1 = node2->p[0];
+		offset = 0;
+		while (ep1 && offset < size) {
+			GenerateStructAssign(tp, offset, ep1->p[2], base);
+			if (!tp->IsUnion())
+				offset += tp->size;
+			ep1 = ep1->p[2];
+		}
+	}
+	else if (tp->IsAggregateType()){
+		GenerateAggregateAssign(node1->p[0],node2->p[0]);
+	}
+	else {
+		ep1 = node2->p[0];
+		if (ep1==nullptr)
+			return;
+		offset = 0;
+		if (base->offset)
+			offset = base->offset->i;
+		ep1 = ep1->p[2];
+		while (ep1) {
+			ap1 = GenerateExpression(ep1,F_REG|F_IMMED,sizeOfWord);
+			ap2 = GetTempRegister();
+			if (ap1->mode==am_immed)
+				GenLdi(ap2,ap1);
+			else {
+				if (ap1->offset)
+					offset2 = ap1->offset->i;
+				else
+					offset2 = 0;
+				GenerateDiadic(op_mov,0,ap2,ap1);
+			}
+			GenerateTriadic(op_sto,0,ap2,makereg(base->preg),make_immed(offset));
+			offset += 1;
+			ReleaseTempReg(ap2);
+			ReleaseTempReg(ap1);
+			ep1 = ep1->p[2];
+		}
+	}
+}
+
 AMODE *GenerateAggregateAssign(ENODE *node1, ENODE *node2)
 {
-	ENODE *ep1, *ep2;
-	AMODE *ap1, *ap2, *ap3, *base;
-	SYM *thead, *first, *thead2, *first2;
+	AMODE *base;
 	TYP *tp;
 	int offset = 0;
 
@@ -1353,92 +1399,20 @@ AMODE *GenerateAggregateAssign(ENODE *node1, ENODE *node2)
 	if (tp==nullptr)
 		tp = &stdlong;
 	if (tp->IsStructType()) {
-		first = thead = SYM::GetPtr(tp->lst.GetHead());
-		ep1 = ep2 = nullptr;
-		ep1 = node2->p[0];
-		while (thead) {
-			if (ep1==nullptr)
-				break;
-			if (thead->tp->IsAggregateType()) {
-				GenerateStructAssign(thead->tp, offset, ep1->p[0], base);
-			}
-			else {
-				ap2 = nullptr;
-				ap1 = GenerateExpression(ep1->p[0],F_REG,thead->tp->size);
-				if (ap1->mode==am_immed) {
-					ap2 = GetTempRegister();
-					GenerateTriadic(op_mov,0,ap2,makereg(regZero),make_immed(ap1->offset->i));
-				}
-				else {
-					ap2 = ap1;
-					ap1 = nullptr;
-				}
-				if (base->offset)
-					GenerateTriadic(op_sto,0,ap2,makereg(base->preg),make_immed(offset+base->offset->i));
-				else
-					GenerateTriadic(op_sto,0,ap2,makereg(base->preg),make_immed(offset));
-				if (ap2)
-					ReleaseTempReg(ap2);
-				if (ap1)
-					ReleaseTempReg(ap1);	
-			}
-			if (!thead->tp->IsUnion())
-				offset += thead->tp->size;
-			ep1 = ep1->p[2];
-			thead = SYM::GetPtr(thead->next);
-		}
-		if (!thead && ep1)
-			error(ERR_TOOMANYELEMENTS);
+		if (base->offset)
+			offset = base->offset->i;
+		else
+			offset = 0;
+		GenerateStructAssign(tp,offset,node2->p[0],base);
+		//GenerateStructAssign(tp,offset2,node2->p[0]->p[0],base);
 	}
 	// Process Array
 	else {
-		int size = tp->size;
-		if (node1->tp)
-			tp = node1->tp->GetBtp();
-		else
-			tp = nullptr;
-		if (tp==nullptr)
-			tp = &stdlong;
-		if (tp->IsStructType()) {
-			ep1 = ep2 = nullptr;
-			ep1 = node2->p[0];
-			while (ep1 && offset < size) {
-				GenerateStructAssign(tp, offset, ep1->p[2], base);
-				if (!tp->IsUnion())
-					offset += tp->size;
-				ep1 = ep1->p[2];
-			}
-		}
-		else if (tp->IsAggregateType()){
-			GenerateAggregateAssign(node1->p[0],node2->p[0]);
-		}
-		else {
-			ep1 = node2->p[0];
-			offset = 0;
-			if (base->offset)
-				offset = base->offset->i;
-			ep1 = ep1->p[2];
-			while (ep1) {
-				ap1 = GenerateExpression(ep1,F_REG|F_IMMED,sizeOfWord);
-				ap2 = GetTempRegister();
-				if (ap1->mode==am_immed)
-					GenLdi(ap2,ap1);
-				else {
-					if (ap1->offset)
-						GenerateTriadic(op_mov,0,ap2,makereg(ap1->preg),make_immed(ap1->offset->i));
-					else
-						GenerateTriadic(op_mov,0,ap2,makereg(ap1->preg),make_immed(0));
-				}
-				GenerateTriadic(op_sto,0,ap2,makereg(base->preg),make_immed(offset));
-				ReleaseTempReg(ap2);
-				ReleaseTempReg(ap1);
-				offset += 2;
-				ep1 = ep1->p[2];
-			}
-		}
+		GenerateArrayAssign(tp, node1, node2, base);
 	}
 	return base;
 }
+
 
 // ----------------------------------------------------------------------------
 //      generate code for an assignment node. if the size of the
@@ -1485,7 +1459,7 @@ AMODE *GenerateAssign(ENODE *node, int flags, int size)
 */
 	tp = node->p[0]->tp;
 	if (tp) {
-		if (node->p[0]->tp->IsAggregateType() || node->p[1]->nodetype==en_list) {
+		if (node->p[0]->tp->IsAggregateType() || node->p[1]->nodetype==en_list || node->p[1]->nodetype==en_aggregate) {
 	//	if (size > sizeOfWord) {
 			return GenerateAggregateAssign(node->p[0], node->p[1]);
 			//ap1 = GenerateExpression(node->p[0],F_MEM,ssize);
@@ -1641,9 +1615,9 @@ AMODE *GenerateAutoIncrement(ENODE *node,int flags,int size,int op)
 	if (ap2->mode == am_reg) {
 		if (node->i < 16) {
 			if (op==op_add)
-				GenerateDiadic(op_inc,0,ap1,make_immed(node->i));
+				GenerateDiadic(op_inc,0,ap2,make_immed(node->i));
 			else
-				GenerateDiadic(op_dec,0,ap1,make_immed(node->i));
+				GenerateDiadic(op_dec,0,ap2,make_immed(node->i));
 		}
 		else
 			GenerateTriadic(op,0,ap2,ap2,make_immed(node->i));
@@ -1687,7 +1661,7 @@ AMODE *GenAutocon(ENODE *node, int flags, int size, bool isFloat)
  */
 AMODE *GenerateExpression(ENODE *node, int flags, int size)
 {   
-	AMODE *ap1, *ap2, *ap3;
+	AMODE *ap1, *ap2;
     int natsize;
 	static char buf[4][20];
 	static int ndx;
@@ -1739,7 +1713,7 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
                 ap2->mode = am_indx;
                 ap2->preg = regGP;      // global pointer
                 ap2->offset = node;     // use as constant node
-                GenerateDiadic(op_lea,0,ap1,ap2);
+                GenerateDiadic(op_mov,0,ap1,ap2);
                 MakeLegalAmode(ap1,flags,size);
          Leave("GenExperssion",4); 
                 return ap1;             // return reg
@@ -1767,7 +1741,7 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
                 ap2->mode = am_indx;
                 ap2->preg = regGP;      // global pointer
                 ap2->offset = node;     // use as constant node
-                GenerateDiadic(op_lea,0,ap1,ap2);
+                GenerateDiadic(op_mov,0,ap1,ap2);
                 MakeLegalAmode(ap1,flags,size);
 				Leave("GenExpression",6); 
                 return ap1;             // return reg
@@ -1799,7 +1773,7 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
             ap2->mode = am_indx;
             ap2->preg = regCLP;     /* frame pointer */
             ap2->offset = node;     /* use as constant node */
-            GenerateDiadic(op_lea,0,ap1,ap2);
+            GenerateDiadic(op_mov,0,ap1,ap2);
             MakeLegalAmode(ap1,flags,size);
             return ap1;             /* return reg */
     case en_ub_ref:
@@ -1862,97 +1836,26 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
             ap1->tempflag = 0;      /* not a temporary */
             MakeLegalAmode(ap1,flags,size);
             return ap1;
-    case en_uminus: return GenerateUnary(node,flags,size,op_neg);
-    case en_compl:  return GenerateUnary(node,flags,size,op_com);
+    case en_uminus: return GenerateUnary(node,flags,size);
+    case en_compl:  return GenerateUnary(node,flags,size);
     case en_add:    return GenerateBinary(node,flags,size,op_add);
     case en_sub:    return GenerateBinary(node,flags,size,op_sub);
-    case en_i2d:
-         ap1 = GetTempRegister();	
-         ap2=GenerateExpression(node->p[0],F_REG,8);
-         GenerateDiadic(op_itof,'d',ap1,ap2);
-         ReleaseTempReg(ap2);
-         return ap1;
-    case en_i2q:
-         ap1 = GetTempRegister();	
-         ap2 = GenerateExpression(node->p[0],F_REG,8);
-		 GenerateTriadic(op_csrrw,0,makereg(0),make_immed(0x18),ap2);
-		 GenerateZeradic(op_nop);
-		 GenerateZeradic(op_nop);
-         GenerateDiadic(op_itof,'q',ap1,makereg(63));
-         ReleaseTempReg(ap2);
-         return ap1;
-    case en_i2t:
-         ap1 = GetTempRegister();	
-         ap2 = GenerateExpression(node->p[0],F_REG,8);
-		 GenerateTriadic(op_csrrw,0,makereg(0),make_immed(0x18),ap2);
-		 GenerateZeradic(op_nop);
-		 GenerateZeradic(op_nop);
-         GenerateDiadic(op_itof,'t',ap1,makereg(63));
-         ReleaseTempReg(ap2);
-         return ap1;
-    case en_d2i:
-         ap1 = GetTempRegister();	
-         ap2 = GenerateExpression(node->p[0],F_REG,8);
-         GenerateDiadic(op_ftoi,'d',ap1,ap2);
-         ReleaseTempReg(ap2);
-         return ap1;
-    case en_q2i:
-         ap1 = GetTempRegister();
-         ap2 = GenerateExpression(node->p[0],F_FPREG,8);
-         GenerateDiadic(op_ftoi,'q',makereg(63),ap2);
-		 GenerateZeradic(op_nop);
-		 GenerateZeradic(op_nop);
-		 GenerateTriadic(op_csrrw,0,ap1,make_immed(0x18),makereg(0));
-         ReleaseTempReg(ap2);
-         return ap1;
-    case en_t2i:
-         ap1 = GetTempRegister();
-         ap2 = GenerateExpression(node->p[0],F_FPREG,8);
-         GenerateDiadic(op_ftoi,'t',makereg(63),ap2);
-		 GenerateZeradic(op_nop);
-		 GenerateZeradic(op_nop);
-		 GenerateTriadic(op_csrrw,0,ap1,make_immed(0x18),makereg(0));
-         ReleaseTempReg(ap2);
-         return ap1;
-	case en_s2q:
-		ap1 = GetTempRegister();
-        ap2 = GenerateExpression(node->p[0],F_FPREG,8);
-        GenerateDiadic(op_fcvtsq,0,ap1,ap2);
-        ReleaseTempReg(ap2);
-		return ap1;
-
-	case en_fadd:	  return GenerateBinary(node,flags,size,op_fadd);
-	case en_fsub:	  return GenerateBinary(node,flags,size,op_fsub);
-	case en_fmul:	  return GenerateBinary(node,flags,size,op_fmul);
-	case en_fdiv:	  return GenerateBinary(node,flags,size,op_fdiv);
-
-	case en_fdadd:    return GenerateBinary(node,flags,size,op_fdadd);
-    case en_fdsub:    return GenerateBinary(node,flags,size,op_fdsub);
-    case en_fsadd:    return GenerateBinary(node,flags,size,op_fsadd);
-    case en_fssub:    return GenerateBinary(node,flags,size,op_fssub);
-    case en_fdmul:    return GenerateMultiply(node,flags,size,op_fdmul);
-    case en_fsmul:    return GenerateMultiply(node,flags,size,op_fsmul);
-    case en_fddiv:    return GenerateMultiply(node,flags,size,op_fddiv);
-    case en_fsdiv:    return GenerateMultiply(node,flags,size,op_fsdiv);
-	case en_ftadd:    return GenerateBinary(node,flags,size,op_ftadd);
-    case en_ftsub:    return GenerateBinary(node,flags,size,op_ftsub);
-    case en_ftmul:    return GenerateMultiply(node,flags,size,op_ftmul);
-    case en_ftdiv:    return GenerateMultiply(node,flags,size,op_ftdiv);
 
 	case en_and:    return GenerateBinary(node,flags,size,op_and);
     case en_or:     return GenerateBinary(node,flags,size,op_or);
 	case en_xor:	return GenerateBinary(node,flags,size,op_xor);
     case en_mul:    return GenerateMultiply(node,flags,size,op_mul);
     case en_mulu:   return GenerateMultiply(node,flags,size,op_mulu);
-    case en_div:    return GenerateModDiv(node,flags,size,op_div);
-    case en_udiv:   return GenerateModDiv(node,flags,size,op_divu);
-    case en_mod:    return GenerateModDiv(node,flags,size,op_mod);
-    case en_umod:   return GenerateModDiv(node,flags,size,op_modu);
-    case en_shl:    return GenerateShift(node,flags,size,op_shl);
-    case en_shlu:   return GenerateShift(node,flags,size,op_shlu);
-    case en_asr:	return GenerateShift(node,flags,size,op_asr);
-    case en_shr:	return GenerateShift(node,flags,size,op_asr);
-    case en_shru:   return GenerateShift(node,flags,size,op_shru);
+	case en_mac:	return GenerateMac(node,flags,size);
+    case en_div:    return GenerateModDiv(node,flags,size);
+    case en_udiv:   return GenerateModDiv(node,flags,size);
+    case en_mod:    return GenerateModDiv(node,flags,size);
+    case en_umod:   return GenerateModDiv(node,flags,size);
+    case en_shl:    return GenerateShift(node,flags,size);
+    case en_shlu:   return GenerateShift(node,flags,size);
+    case en_asr:	return GenerateShift(node,flags,size);
+    case en_shr:	return GenerateShift(node,flags,size);
+    case en_shru:   return GenerateShift(node,flags,size);
 	/*	
 	case en_asfadd: return GenerateAssignAdd(node,flags,size,op_fadd);
 	case en_asfsub: return GenerateAssignAdd(node,flags,size,op_fsub);
@@ -1965,17 +1868,17 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
     case en_asor:   return GenerateAssignLogic(node,flags,size,op_or);
 	case en_asxor:  return GenerateAssignLogic(node,flags,size,op_xor);
     case en_aslsh:
-            return GenerateAssignShift(node,flags,size,op_shl);
+            return GenerateAssignShift(node,flags,size);
     case en_asrsh:
-            return GenerateAssignShift(node,flags,size,op_asr);
+            return GenerateAssignShift(node,flags,size);
     case en_asrshu:
-            return GenerateAssignShift(node,flags,size,op_shru);
+            return GenerateAssignShift(node,flags,size);
     case en_asmul: return GenerateAssignMultiply(node,flags,size,op_mul);
     case en_asmulu: return GenerateAssignMultiply(node,flags,size,op_mulu);
-    case en_asdiv: return GenerateAssignModiv(node,flags,size,op_div);
-    case en_asdivu: return GenerateAssignModiv(node,flags,size,op_divu);
-    case en_asmod: return GenerateAssignModiv(node,flags,size,op_mod);
-    case en_asmodu: return GenerateAssignModiv(node,flags,size,op_modu);
+    case en_asdiv: return GenerateAssignModiv(node,flags,size);
+    case en_asdivu: return GenerateAssignModiv(node,flags,size);
+    case en_asmod: return GenerateAssignModiv(node,flags,size);
+    case en_asmodu: return GenerateAssignModiv(node,flags,size);
     case en_assign:
             return GenerateAssign(node,flags,size);
     case en_ainc: return GenerateAutoIncrement(node,flags,size,op_add);
@@ -2043,27 +1946,22 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
 	case en_cucu:
 	case en_ccu:
 			ap1 = GenerateExpression(node->p[0],F_REG,size);
-			Generate4adic(op_bfextu,0,ap1,ap1,make_immed(0),make_immed(15));
 			return ap1;
 	case en_cuhw:
 	case en_cuhu:
 	case en_chu:
 			ap1 = GenerateExpression(node->p[0],F_REG,size);
-			Generate4adic(op_bfextu,0,ap1,ap1,make_immed(0),make_immed(31));
 			return ap1;
 	case en_cbw:
 			ap1 = GenerateExpression(node->p[0],F_REG,size);
 			//GenerateDiadic(op_sxb,0,ap1,ap1);
-			Generate4adic(op_bfext,0,ap1,ap1,make_immed(0),make_immed(7));
 			return ap1;
 	case en_ccw:
 			ap1 = GenerateExpression(node->p[0],F_REG,size);
-			Generate4adic(op_bfext,0,ap1,ap1,make_immed(0),make_immed(15));
 			//GenerateDiadic(op_sxh,0,ap1,ap1);
 			return ap1;
 	case en_chw:
 			ap1 = GenerateExpression(node->p[0],F_REG,size);
-			Generate4adic(op_bfext,0,ap1,ap1,make_immed(0),make_immed(31));
 			//GenerateDiadic(op_sxh,0,ap1,ap1);
 			return ap1;
 	case en_lul:	// long to unsigned long
@@ -2204,10 +2102,10 @@ int GetNaturalSize(ENODE *node)
 }
 
 
-static void GenerateCmp(ENODE *node, int op, int label, unsigned int prediction)
+static void GenerateCmp(ENODE *node, int label, unsigned int prediction)
 {
 	Enter("GenCmp");
-	GenerateCmp(node, op, label, 0, prediction);
+	GenerateCmp(node, label, 0, prediction);
 	Leave("GenCmp",0);
 }
 
@@ -2225,22 +2123,16 @@ void GenerateTrueJump(ENODE *node, int label, unsigned int prediction)
 		return;
 	switch( node->nodetype )
 	{
-	case en_eq:	GenerateCmp(node, op_eq, label, prediction); break;
-	case en_ne: GenerateCmp(node, op_ne, label, prediction); break;
-	case en_lt: GenerateCmp(node, op_lt, label, prediction); break;
-	case en_le:	GenerateCmp(node, op_le, label, prediction); break;
-	case en_gt: GenerateCmp(node, op_gt, label, prediction); break;
-	case en_ge: GenerateCmp(node, op_ge, label, prediction); break;
-	case en_ult: GenerateCmp(node, op_ltu, label, prediction); break;
-	case en_ule: GenerateCmp(node, op_leu, label, prediction); break;
-	case en_ugt: GenerateCmp(node, op_gtu, label, prediction); break;
-	case en_uge: GenerateCmp(node, op_geu, label, prediction); break;
-	case en_feq: GenerateCmp(node, op_feq, label, prediction); break;
-	case en_fne: GenerateCmp(node, op_fne, label, prediction); break;
-	case en_flt: GenerateCmp(node, op_flt, label, prediction); break;
-	case en_fle: GenerateCmp(node, op_fle, label, prediction); break;
-	case en_fgt: GenerateCmp(node, op_fgt, label, prediction); break;
-	case en_fge: GenerateCmp(node, op_fge, label, prediction); break;
+	case en_eq:	GenerateCmp(node, label, prediction); break;
+	case en_ne: GenerateCmp(node, label, prediction); break;
+	case en_lt: GenerateCmp(node, label, prediction); break;
+	case en_le:	GenerateCmp(node, label, prediction); break;
+	case en_gt: GenerateCmp(node, label, prediction); break;
+	case en_ge: GenerateCmp(node, label, prediction); break;
+	case en_ult: GenerateCmp(node, label, prediction); break;
+	case en_ule: GenerateCmp(node, label, prediction); break;
+	case en_ugt: GenerateCmp(node, label, prediction); break;
+	case en_uge: GenerateCmp(node, label, prediction); break;
 	case en_land:
 		lab0 = nextlabel++;
 		GenerateFalseJump(node->p[0],lab0,prediction);
@@ -2271,7 +2163,7 @@ void GenerateTrueJump(ENODE *node, int label, unsigned int prediction)
 //
 void GenerateFalseJump(ENODE *node,int label, unsigned int prediction)
 {
-	AMODE *ap, *ap1, *ap2;
+	AMODE *ap;
 	int siz1;
 	int lab0;
 
@@ -2279,22 +2171,16 @@ void GenerateFalseJump(ENODE *node,int label, unsigned int prediction)
 		return;
 	switch( node->nodetype )
 	{
-	case en_eq:	GenerateCmp(node, op_ne, label, prediction); break;
-	case en_ne: GenerateCmp(node, op_eq, label, prediction); break;
-	case en_lt: GenerateCmp(node, op_ge, label, prediction); break;
-	case en_le: GenerateCmp(node, op_gt, label, prediction); break;
-	case en_gt: GenerateCmp(node, op_le, label, prediction); break;
-	case en_ge: GenerateCmp(node, op_lt, label, prediction); break;
-	case en_ult: GenerateCmp(node, op_geu, label, prediction); break;
-	case en_ule: GenerateCmp(node, op_gtu, label, prediction); break;
-	case en_ugt: GenerateCmp(node, op_leu, label, prediction); break;
-	case en_uge: GenerateCmp(node, op_ltu, label, prediction); break;
-	case en_feq: GenerateCmp(node, op_fne, label, prediction); break;
-	case en_fne: GenerateCmp(node, op_feq, label, prediction); break;
-	case en_flt: GenerateCmp(node, op_fge, label, prediction); break;
-	case en_fle: GenerateCmp(node, op_fgt, label, prediction); break;
-	case en_fgt: GenerateCmp(node, op_fle, label, prediction); break;
-	case en_fge: GenerateCmp(node, op_flt, label, prediction); break;
+	case en_eq:	GenerateCmp(node, label, prediction); break;
+	case en_ne: GenerateCmp(node, label, prediction); break;
+	case en_lt: GenerateCmp(node, label, prediction); break;
+	case en_le: GenerateCmp(node, label, prediction); break;
+	case en_gt: GenerateCmp(node, label, prediction); break;
+	case en_ge: GenerateCmp(node, label, prediction); break;
+	case en_ult: GenerateCmp(node, label, prediction); break;
+	case en_ule: GenerateCmp(node, label, prediction); break;
+	case en_ugt: GenerateCmp(node, label, prediction); break;
+	case en_uge: GenerateCmp(node, label, prediction); break;
 	case en_land:
 		GenerateFalseJump(node->p[0],label,prediction^1);
 		GenerateFalseJump(node->p[1],label,prediction^1);

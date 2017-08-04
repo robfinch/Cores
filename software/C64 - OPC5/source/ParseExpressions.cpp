@@ -250,23 +250,6 @@ ENODE *makefnode(int nt, double v1)
   return ep;
 }
 
-ENODE *makefqnode(int nt, Float128 *f128)
-{
-	ENODE *ep;
-  ep = allocEnode();
-  ep->nodetype = (enum e_node)nt;
-  ep->constflag = TRUE;
-	ep->isUnsigned = FALSE;
-	ep->etype = bt_void;
-	ep->esize = -1;
-  Float128::Assign(&ep->f128,f128);
-//    ep->f2 = v2;
-	ep->p[0] = 0;
-	ep->p[1] = 0;
-	ep->p[2] = 0;
-  return ep;
-}
-
 void AddToList(ENODE *list, ENODE *ele)
 {
 	ENODE *p, *pp;
@@ -514,15 +497,22 @@ TYP *CondDeref(ENODE **node, TYP *tp)
 {
 	TYP *tp1;
 	int64_t sz;
+	int dimen;
+	int numele;
   
 	if (tp->val_flag == 0)
 		return deref(node, tp);
 	if (tp->type == bt_pointer && sizeof_flag == 0) {
 		sz = tp->size;
+		dimen = tp->dimen;
+		numele = tp->numele;
 		tp1 = tp->GetBtp();
+		tp1->dimen = tp->dimen;
 		if (tp1==NULL)
 			printf("DIAG: CondDeref: tp1 is NULL\r\n");
-		tp =(TYP *) TYP::Make(bt_pointer, sizeOfWord);
+		tp =(TYP *) TYP::Make(bt_pointer,sizeOfWord);
+		tp->dimen = dimen;
+		tp->numele = numele;
 		tp->btp = tp1->GetIndex();
 	}
 	else if (tp->type==bt_pointer)
@@ -669,11 +659,7 @@ TYP *nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeArray *typear
 			break;
 
 		case sc_const:
-			if (sp->tp->type==bt_quad)
-				*node = makefqnode(en_fqcon,&sp->f128);
-			else if (sp->tp->type==bt_float || sp->tp->type==bt_double || sp->tp->type==bt_triple)
-				*node = makefnode(en_fcon,sp->value.f);
-			else {
+			{
 				*node = makeinode(en_icon,sp->value.i);
 				if (sp->tp->isUnsigned)
 				(*node)->isUnsigned = TRUE;
@@ -1026,7 +1012,7 @@ TYP *ParsePrimaryExpression(ENODE **node, int got_pa)
     case cconst:
         tptr = &stdchar;
         tptr->isConst = TRUE;
-        pnode = makeinode(en_icon,ival);
+        pnode = makeinode(en_icon,(int)ival);
         pnode->constflag = TRUE;
 		pnode->esize = 1;
         pnode->SetType(tptr);
@@ -1035,7 +1021,7 @@ TYP *ParsePrimaryExpression(ENODE **node, int got_pa)
     case iconst:
         tptr = &stdint;
         tptr->isConst = TRUE;
-        pnode = makeinode(en_icon,ival);
+        pnode = makeinode(en_icon,(int)ival);
         pnode->constflag = TRUE;
 		if (ival >= -128 && ival < 128)
 			pnode->esize = 1;
@@ -1046,49 +1032,6 @@ TYP *ParsePrimaryExpression(ENODE **node, int got_pa)
 		else
 			pnode->esize = 2;
         pnode->SetType(tptr);
-        NextToken();
-        break;
-
-	case kw_floatmax:
-        tptr = &stdquad;
-        tptr->isConst = TRUE;
-        pnode = makefnode(en_fcon,rval);
-        pnode->constflag = TRUE;
-        pnode->isDouble = TRUE;
-        pnode->SetType(tptr);
-		pnode->i = quadlit(Float128::FloatMax());
-        NextToken();
-		break;
-
-    case rconst:
-        pnode = makefnode(en_fcon,rval);
-        pnode->constflag = TRUE;
-        pnode->isDouble = TRUE;
-		pnode->i = quadlit(&rval128);
-		pnode->f128 = rval128;
-		switch(float_precision) {
-		case 'Q': case 'q':
-			tptr = &stdquad;
-			//getch();
-			break;
-		case 'D': case 'd':
-			tptr = &stddouble;
-			//getch();
-			break;
-		case 'T': case 't':
-			tptr = &stdtriple;
-			//getch();
-			break;
-		case 'S': case 's':
-			tptr = &stdflt;
-			//getch();
-			break;
-		default:
-			tptr = &stdtriple;
-			break;
-		}
-        pnode->SetType(tptr);
-        tptr->isConst = TRUE;
         NextToken();
         break;
 
@@ -1243,6 +1186,8 @@ int IsLValue(ENODE *node)
 	case en_cucu:
 	case en_cuhu:
             return IsLValue(node->p[0]);
+	case en_add:
+		return node->tp->type==bt_pointer;
 	//case en_autocon:
 	//		return node->etype==bt_pointer;
     }
@@ -1298,16 +1243,18 @@ TYP *Autoincdec(TYP *tp, ENODE **node, int flag)
 
 TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 {
-	TYP *tp1, *tp2, *tp3;
+	TYP *tp1, *tp2, *tp3, *tp4;
 	ENODE *ep1, *ep2, *ep3, *ep4;
 	ENODE *rnode, *qnode, *pnode;
 	SYM *sp;
-	int iu;
+	int iu, totsz,sz1;
 	int ii;
 	bool classdet = false;
 	TypeArray typearray;
 	std::string name;
 	int cf, uf;
+	int cnt, numdimen, psz, cnt2;
+	int sa[20];
 
     ep1 = (ENODE *)NULL;
     Enter("<ParsePostfix>");
@@ -1323,7 +1270,7 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 		return ((TYP *)NULL);
     }
 	pep1 = nullptr;
-	while(1) {
+	for(cnt = 0; 1; cnt++) {
 		pop = lastst;
 		switch(lastst) {
 		case openbr:
@@ -1347,21 +1294,73 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 				tp3 = expression(&pnode);
 				tp1 = tp3;
 			}
+			if (cnt==0) {
+				numdimen = tp1->dimen;
+				cnt2 = 1;
+				for (tp4 = tp1; tp4; tp4 = tp4->GetBtp()) {
+					sa[cnt2] = max(tp4->numele,1);
+					cnt2++;
+					if (cnt2 > 4) {
+						error(ERR_TOOMANYDIMEN);
+						break;
+					}
+				}
+			}
+			if (cnt==0)
+				totsz = tp1->size;
 			if (tp1->type != bt_pointer)
 				error(ERR_NOPOINTER);
 			else
 				tp1 = tp1->GetBtp();
-
-			qnode = makeinode(en_icon, tp1->size);
-			qnode->etype = bt_long;
-			qnode->esize = 2;
+			if (cnt==0) {
+				switch(numdimen) {
+				case 1: sz1 = sa[numdimen+1]; break;
+				default: sz1 = sa[1]*sa[numdimen+1]; break;
+				}
+			}
+			else if (cnt==1) {
+				switch(numdimen) {
+				case 2:	sz1 = sa[numdimen+1]; break;
+				default: sz1 = sa[1]*sa[2]*sa[numdimen+1]; break;
+				}
+			}
+			else if (cnt==2) {
+				switch(numdimen) {
+				case 3: sz1 = sa[numdimen+1]; break;
+				default: sz1 = sa[1]*sa[2]*sa[3]*sa[numdimen+1]; break;
+				}
+			}
+			else if (cnt==3) {
+				switch(numdimen) {
+				case 4: sz1 = sa[numdimen+1]; break;
+				default: sz1 = sa[1]*sa[2]*sa[3]*sa[4]*sa[numdimen+1]; break;
+				}
+			}
+			else
+				sz1 = sa[numdimen+1];
+			//if (cnt==0) {
+			//	sz1 = tp1->size;
+			//}
+			//else if (cnt==1) {
+			//	sz1 = totsz / tp1->size;
+			//}
+			qnode = makeinode(en_icon,sz1);
+			qnode->etype = bt_short;
+			qnode->esize = 1;
 			qnode->constflag = TRUE;
 			qnode->isUnsigned = TRUE;
 			cf = qnode->constflag;
 
+			//knode = makeinode(en_icon,tp1->size);
+			//knode->etype = bt_short;
+			//knode->esize = 1;
+			//knode->constflag = TRUE;
+			//knode->isUnsigned = TRUE;
+			//knode->constflag;
+
 			qnode = makenode(en_mulu, qnode, rnode);
-			qnode->etype = bt_long;
-			qnode->esize = 2;
+			qnode->etype = bt_short;
+			qnode->esize = 1;
 			qnode->constflag = cf & rnode->constflag;
 			qnode->isUnsigned = rnode->isUnsigned;
 
@@ -1375,9 +1374,10 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 			pnode->isUnsigned = uf & qnode->isUnsigned;
 
 			tp1 = CondDeref(&pnode, tp1);
-			//pnode->tp = tp1;
+			pnode->tp = tp1;
 			ep1 = pnode;
 			needpunc(closebr,9);
+			psz = sz1;
 			break;
 
 		case openpa:
@@ -1646,14 +1646,7 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
 		else if (ep1->constflag && (ep1->nodetype==en_icon)) {
 			ep1->i = -ep1->i;
 		}
-		else if (ep1->constflag && (ep1->nodetype==en_fcon)) {
-			ep1->f = -ep1->f;
-			ep1->f128.sign = !ep1->f128.sign;
-			// A new literal label is required.
-			ep1->i = quadlit(&ep1->f128);
-		}
 		else
-		
 		{
 			ep1 = makenode(en_uminus,ep1,(ENODE *)NULL);
 			ep1->constflag = ep1->p[0]->constflag;
@@ -2696,7 +2689,7 @@ xit:
 TYP *asnop(ENODE **node)
 {      
 	ENODE *ep1, *ep2, *ep3;
-    TYP   *tp1, *tp2, *tp3;
+    TYP   *tp1, *tp2;
     int   op;
 
     Enter("Assignop");

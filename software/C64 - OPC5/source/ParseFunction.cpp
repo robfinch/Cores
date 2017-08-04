@@ -422,7 +422,6 @@ static Statement *ParseFunctionBody(SYM *sp)
 {    
 	std::string lbl;
 	char *p;
-	int stkspace;
 
   dfs.printf("<Parse function body>:%s|\n", (char *)sp->name->c_str());
 

@@ -163,9 +163,9 @@ void list_var(SYM *sp, int i)
 		}
 //			if (sp->IsPascal) ofs.printf("\tpascal ");
         if( sp->storage_class == sc_external)
-                ofs.printf("\textern\t%s\n",(char *)sp->name->c_str());
+			ofs.printf("#\textern\t%s\n",(char *)sp->name->c_str());
         else if( sp->storage_class == sc_global )
-                ofs.printf(";\tglobal\t%s\n",(char *)sp->name->c_str());
+			ofs.printf("#\tglobal\t%s\n",(char *)sp->name->c_str());
 		put_typedef(sp->storage_class==sc_typedef);
         put_sc(sp->storage_class);
 		if (sp->tp)

@@ -764,30 +764,34 @@ void Declaration::ParseSuffixOpenbr()
 	TYP *temp1;
 	long sz2;
 
-  NextToken();
-  temp1 = (TYP *)TYP::Make(bt_pointer,0);
-  temp1->val_flag = 1;
-  temp1->isArray = TRUE;
-  temp1->btp = head->GetIndex();
-  if(lastst == closebr) {
-    temp1->size = 0;
-    NextToken();
-  }
-  else if(head != NULL) {
-    sz2 = GetIntegerExpression((ENODE **)NULL);
-    temp1->size = sz2 * head->size;
-    dfs.printf("Setting array size:%d\n", (int)temp1->size);
-	  temp1->alignment = head->alignment;
-		needpunc(closebr,21);
-  }
-  else {
-    sz2 = GetIntegerExpression((ENODE **)NULL);
-	  temp1->size = sz2;
-	  needpunc(closebr,22);
+	NextToken();
+	temp1 = (TYP *)TYP::Make(bt_pointer,0);
+	temp1->val_flag = 1;
+	temp1->isArray = TRUE;
+	temp1->btp = head->GetIndex();
+	if(lastst == closebr) {
+		temp1->size = 0;
+		NextToken();
 	}
-  head = temp1;
-  if( tail == NULL)
-    tail = head;
+	else if(head != NULL) {
+		sz2 = GetIntegerExpression((ENODE **)NULL);
+		temp1->numele = sz2;
+		temp1->size = sz2 * head->size;
+		temp1->dimen = head->dimen + 1;
+		dfs.printf("Setting array size:%d\n", (int)temp1->size);
+		temp1->alignment = head->alignment;
+		needpunc(closebr,21);
+	}
+	else {
+		sz2 = GetIntegerExpression((ENODE **)NULL);
+		temp1->size = sz2;
+		temp1->numele = sz2;
+		temp1->dimen = 1;
+		needpunc(closebr,22);
+	}
+	head = temp1;
+	if( tail == NULL)
+		tail = head;
 }
 
 void Declaration::ParseFunctionAttribute(SYM *sym)

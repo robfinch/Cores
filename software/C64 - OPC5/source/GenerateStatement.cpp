@@ -159,6 +159,11 @@ AMODE *make_strlab(std::string s)
     return ap;
 }
 
+void GenerateUBranch(int lab)
+{
+	GenerateTriadic(op_mov,0,makereg(regPC),makereg(regZero),make_clabel(lab));
+}
+
 void Statement::GenMixedSource()
 {
     if (mixedSource) {
@@ -186,7 +191,7 @@ void Statement::GenerateWhile()
 		initstack();
 		GenerateFalseJump(exp,breaklab,2);
 		s1->Generate();
-		GenerateMonadic(op_bra,0,make_clabel(contlab));
+		GenerateTriadic(op_mov,0,makereg(regPC),makereg(regZero),make_clabel(contlab));
 		GenerateLabel(breaklab);
 		breaklab = lab2;
     }
@@ -213,7 +218,7 @@ void Statement::GenerateUntil()
 		initstack();
 		GenerateTrueJump(exp,breaklab,2);
 		s1->Generate();
-		GenerateMonadic(op_bra,0,make_clabel(contlab));
+		GenerateUBranch(contlab);
 		GenerateLabel(breaklab);
 		breaklab = lab2;
 	}
@@ -367,7 +372,7 @@ void Statement::GenerateLinearSwitch()
 {    
 	int curlab;
 	int *bf;
-	int nn,jj;
+	int nn;
 	Statement *defcase, *stmt;
 	AMODE *ap, *ap1;
 
@@ -573,7 +578,7 @@ void Statement::GenerateTry()
 	a->mode = am_immed;
 	GenLdi(makereg(regXLR),a);
 	s1->Generate();
-	GenerateMonadic(op_bra,0,make_clabel(lab1));
+	GenerateUBranch(lab1);
 	GenerateLabel(throwlab);
 	// Generate catch statements
 	// r1 holds the value to be assigned to the catch variable
@@ -621,66 +626,17 @@ void Statement::GenerateThrow()
 		if (ap->mode==am_immed)
            	GenLdi(makereg(1),ap);
 		else if( ap->mode != am_reg)
-			GenerateDiadic(op_lw,0,makereg(1),ap);
+			GenerateDiadic(op_ld,0,makereg(1),ap);
 		else if (ap->preg != 1 )
 			GenerateDiadic(op_mov,0,makereg(1),ap);
 		ReleaseTempRegister(ap);
 		GenLdi(makereg(2),make_immed(num));
 	}
-	GenerateMonadic(op_bra,0,make_clabel(throwlab));
+	GenerateUBranch(throwlab);
 }
 
 void Statement::GenerateCheck()
 {
-     AMODE *ap1, *ap2, *ap3;
-     ENODE *node, *ep;
-     int size;
-
-    initstack();
-    ep = node = exp;
-	if (ep->p[0]->nodetype==en_lt && ep->p[1]->nodetype==en_ge && equalnode(ep->p[0]->p[0],ep->p[1]->p[0])) {
-        ep->nodetype = en_chk;
-        if (ep->p[0])
-            ep->p[2] = ep->p[0]->p[1];
-        else
-            ep->p[2] = NULL;
-        ep->p[1] = ep->p[1]->p[1];
-        ep->p[0] = ep->p[0]->p[0];
-    }
-	else if (ep->p[0]->nodetype==en_ge && ep->p[1]->nodetype==en_lt && equalnode(ep->p[0]->p[0],ep->p[1]->p[0])) {
-       ep->nodetype = en_chk;
-        if (ep->p[1])
-            ep->p[2] = ep->p[1]->p[1];
-        else
-            ep->p[2] = NULL;
-        ep->p[1] = ep->p[0]->p[1];
-        ep->p[0] = ep->p[0]->p[0];
-    }
-    if (ep->nodetype != en_chk) {
-    /*
-    	 printf("ep->p[0]->p[0]->i %d\r\n", ep->p[0]->p[0]->i);
-    	 printf("ep->p[1]->p[0]->i %d\r\n", ep->p[1]->p[0]->i);
-    	 printf("ep->p[0]->p[0]->nt: %d\r\n", ep->p[0]->p[0]->nodetype);
-    	 printf("ep->p[1]->p[0]->nt: %d\r\n", ep->p[1]->p[0]->nodetype);
-    	 printf("ep->p[0]->nodetype=%s ",ep->p[0]->nodetype==en_lt ? "en_lt" : ep->p[0]->nodetype==en_ge ? "en_ge" : "en_??");
-    	 printf("ep->p[1]->nodetype=%s\r\n",ep->p[1]->nodetype==en_lt ? "en_lt" : ep->p[1]->nodetype==en_ge ? "en_ge" : "en_??");
-    	 printf("equalnode:%d\r\n",equalnode(ep->p[0]->p[0],ep->p[1]->p[0]));
-    */
-         error(ERR_CHECK);
-         return;
-    }
-	size = GetNaturalSize(node);
-	ap1 = GenerateExpression(node->p[0],F_REG,size);
-	ap2 = GenerateExpression(node->p[1],F_REG|F_IMM0,size);
-    ap3 = GenerateExpression(node->p[2],F_REG|F_IMMED,size);
-	if (ap2->mode == am_immed) {
-	   ap2->mode = am_reg;
-	   ap2->preg = 0;
-    }
-	GenerateTriadic(ap3->mode==am_immed ? op_chki : op_chk,0,ap1,ap2,ap3);
-    ReleaseTempRegister(ap3);
-    ReleaseTempRegister(ap2);
-    ReleaseTempRegister(ap1);
 }
 
 void Statement::GenerateCompound()
@@ -751,7 +707,7 @@ void Statement::Generate()
                 GenerateLabel((int64_t)stmt->label);
                 break;
         case st_goto:
-                GenerateMonadic(isThor?op_br:op_bra,0,make_clabel((int64_t)stmt->label));
+                GenerateUBranch((int64_t)stmt->label);
                 break;
 		//case st_critical:
 //                    GenerateCritical(stmt);
@@ -820,7 +776,6 @@ void Statement::Generate()
 
 void Statement::GenerateStop()
 {
-	GenerateMonadic(op_stop,0,make_immed(num));
 }
 
 void Statement::GenerateAsm()
@@ -840,10 +795,10 @@ void Statement::GenerateFirstcall()
     {
         breaklab = nextlabel++;
 		ap1 = GetTempRegister();
-		GenerateDiadic(op_ldt,0,ap1,make_string(fcname));
+		GenerateDiadic(op_ld,0,ap1,make_string(fcname));
        	GenerateTriadic(op_beq,0,ap1,makereg(0),make_clabel(breaklab));
 		ReleaseTempRegister(ap1);
-		GenerateDiadic(op_stt,0,makereg(0),make_string(fcname));
+		GenerateDiadic(op_sto,0,makereg(0),make_string(fcname));
 		s1->Generate();
         GenerateLabel(breaklab);
         breaklab = lab2;

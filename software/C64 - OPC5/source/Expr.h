@@ -87,7 +87,7 @@ enum e_node {
 		en_uwfieldref,en_wfieldref,en_bfieldref,en_ubfieldref,
 		en_uhfieldref,en_hfieldref,en_ucfieldref,en_cfieldref,
 		en_dbl_ref, en_flt_ref, en_triple_ref, en_quad_ref,
-		en_chk
+		en_chk, en_mac
 		};
 
 class ENODE {
@@ -112,7 +112,6 @@ public:
   int i;
   double f;
   double f1, f2;
-  Float128 f128;
   std::string *sp;
   std::string *msp;
 	std::string *udnm;			// undecorated name

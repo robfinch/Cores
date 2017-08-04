@@ -59,6 +59,10 @@ void dooper(ENODE **node)
 
     ep = *node;
     switch( ep->nodetype ) {
+	case en_mac:
+            ep->nodetype = en_icon;
+            ep->i = ep->p[0]->i * ep->p[1]->i + ep->p[2]->i;
+            break;
     case en_add:
             ep->nodetype = en_icon;
             ep->i = ep->p[0]->i + ep->p[1]->i;
@@ -279,7 +283,6 @@ static void opt0(ENODE **node)
                     {
                         ep->nodetype = en_fcon;
                         ep->f = ep->p[0]->f;
-						Float128::Assign(&ep->f128,&ep->p[0]->f128);
                     }
                     return;
             case en_add:
@@ -310,6 +313,26 @@ static void opt0(ENODE **node)
                         }
                     }
                     return;
+			case en_mac:
+                    opt0(&(ep->p[0]));
+                    opt0(&(ep->p[1]));
+                    opt0(&(ep->p[2]));
+					if (ep->p[0]->nodetype==en_icon
+						&& ep->p[1]->nodetype==en_icon
+						&& ep->p[2]->nodetype==en_icon) {
+						dooper(node);
+						return;
+					}
+					if (ep->p[0]->nodetype==en_icon &&
+						ep->p[1]->nodetype==en_icon)
+					{
+						ep->p[0]->i = ep->p[0]->i * ep->p[1]->i;
+						ep->p[1]->i = ep->p[2]->i;
+						ep->nodetype = en_add;
+						return;
+					}
+					return;
+
             case en_mul:
 			case en_mulu:
                     opt0(&(ep->p[0]));
@@ -513,6 +536,8 @@ static int xfold(ENODE *node)
                         return xfold(node->p[0]) + xfold(node->p[1]);
                 case en_sub:
                         return xfold(node->p[0]) - xfold(node->p[1]);
+				case en_mac:
+						return xfold(node->p[0]) * xfold(node->p[1]) + xfold(node->p[2]);
                 case en_mul:
 				case en_mulu:
                         if( node->p[0]->nodetype == en_icon )

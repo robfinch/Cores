@@ -234,26 +234,26 @@ int AllocateRegisterVars()
 
 AMODE *GenExpr(ENODE *node)
 {
-	AMODE *ap1,*ap2,*ap3,*ap4;
+	AMODE *ap1,*ap2,*ap3;
 	int lab0, lab1;
 	int size;
-	int op, pop;
+	int pop;
 	int pl,pushed;
 
     lab0 = nextlabel++;
     lab1 = nextlabel++;
 
 	switch(node->nodetype) {
-	case en_eq:		op = op_seq;	break;
-	case en_ne:		op = op_sne;	break;
-	case en_lt:		op = op_slt;	break;
-	case en_ult:	op = op_sltu;	break;
-	case en_le:		op = op_sle;	break;
-	case en_ule:	op = op_sleu;	break;
-	case en_gt:		op = op_sgt;	break;
-	case en_ugt:	op = op_sgtu;	break;
-	case en_ge:		op = op_sge;	break;
-	case en_uge:	op = op_sgeu;	break;
+	case en_eq:		break;
+	case en_ne:		break;
+	case en_lt:		break;
+	case en_ult:	break;
+	case en_le:		break;
+	case en_ule:	break;
+	case en_gt:		break;
+	case en_ugt:	break;
+	case en_ge:		break;
+	case en_uge:	break;
 	default:	// en_land, en_lor
 		pl = GeneratePreload();
 		GenerateFalseJump(node,lab0,0);
@@ -416,40 +416,27 @@ AMODE *GenExpr(ENODE *node)
 		ReleaseTempRegister(ap1);
 		return (ap3);
 	}
-	size = GetNaturalSize(node);
+	//size = GetNaturalSize(node);
     ap3 = GetTempRegister();         
-	ap1 = GenerateExpression(node->p[0],F_REG,size);
-	ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
-	GenerateTriadic(op,0,ap3,ap1,ap2);
-    ReleaseTempRegister(ap2);
-    ReleaseTempRegister(ap1);
+	//ap1 = GenerateExpression(node->p[0],F_REG,size);
+	//ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
+	//GenerateTriadic(op,0,ap3,ap1,ap2);
+ //   ReleaseTempRegister(ap2);
+ //   ReleaseTempRegister(ap1);
     return (ap3);
 }
 
-void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int prediction)
+void GenerateCmp(ENODE *node, int label, int predreg, unsigned int prediction)
 {
 	int size;
-	AMODE *ap1, *ap2, *ap3;
+	AMODE *ap1, *ap2;
 	int lab1;
 
 	size = GetNaturalSize(node);
     ap1 = GenerateExpression(node->p[0],F_REG, size);
 	ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
-	switch(op)
-	{
-	case op_eq:	op = op_beq; break;
-	case op_ne:	op = op_bne; break;
-	case op_lt: op = op_blt; break;
-	case op_le: op = op_ble; break;
-	case op_gt: op = op_bgt; break;
-	case op_ge: op = op_bge; break;
-	case op_ltu: op = op_bltu; break;
-	case op_leu: op = op_bleu; break;
-	case op_gtu: op = op_bgtu; break;
-	case op_geu: op = op_bgeu; break;
-	}
-	switch(op) {
-	case op_beq:
+	switch(node->nodetype) {
+	case en_eq:
 		size = GetNaturalSize(node);
 		if (ap2->mode==am_immed) {
 			if (ap2->offset->i==0)
@@ -461,7 +448,7 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int predi
 			GenerateDiadic(op_cmp,0,ap1,ap2);
 		GeneratePredicatedTriadic(pop_z,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(label));
 		break;
-	case op_bne:
+	case en_ne:
 		size = GetNaturalSize(node);
 		if (ap2->mode==am_immed) {
 			if (ap2->offset->i==0)
@@ -473,7 +460,7 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int predi
 			GenerateDiadic(op_cmp,0,ap1,ap2);
 		GeneratePredicatedTriadic(pop_nz,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(label));
 		break;
-	case op_blt:
+	case en_lt:
 		size = GetNaturalSize(node);
 		if (ap2->mode==am_immed) {
 			if (ap2->offset->i==0)
@@ -485,7 +472,7 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int predi
 			GenerateDiadic(op_cmp,0,ap1,ap2);
 		GeneratePredicatedTriadic(pop_mi,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(label));
 		break;
-	case op_ble:
+	case en_le:
 		size = GetNaturalSize(node);
 		if (ap2->mode==am_immed) {
 			if (ap2->offset->i==0)
@@ -506,7 +493,7 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int predi
 			GenerateDiadic(op_cmp,0,ap1,ap2);
 		GeneratePredicatedTriadic(pop_z,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(label));
 		break;
-	case op_bgt:
+	case en_gt:
 		size = GetNaturalSize(node);
 		if (ap2->mode==am_immed) {
 			if (ap2->offset->i==0)
@@ -529,7 +516,7 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int predi
 		GeneratePredicatedTriadic(pop_pl,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(label));
 		GenerateLabel(lab1);
 		break;
-	case op_bge:
+	case en_ge:
 		size = GetNaturalSize(node);
 		if (ap2->mode==am_immed) {
 			if (ap2->offset->i==0)
@@ -543,7 +530,7 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int predi
 		GeneratePredicatedTriadic(pop_pl,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(label));
 		GenerateLabel(lab1);
 		break;
-	case op_bltu:
+	case en_ult:
 		size = GetNaturalSize(node);
 		if (ap2->mode==am_immed) {
 			if (ap2->offset->i==0)
@@ -555,7 +542,7 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int predi
 			GenerateDiadic(op_cmp,0,ap1,ap2);
 		GeneratePredicatedTriadic(pop_c,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(label));
 		break;
-	case op_bleu:
+	case en_ule:
 		size = GetNaturalSize(node);
 		if (ap2->mode==am_immed) {
 			if (ap2->offset->i==0)
@@ -576,7 +563,7 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int predi
 			GenerateDiadic(op_cmp,0,ap1,ap2);
 		GeneratePredicatedTriadic(pop_z,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(label));
 		break;
-	case op_bgtu:
+	case en_ugt:
 		size = GetNaturalSize(node);
 		if (ap2->mode==am_immed) {
 			if (ap2->offset->i==0)
@@ -599,7 +586,7 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int predi
 		GeneratePredicatedTriadic(pop_nc,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(label));
 		GenerateLabel(lab1);
 		break;
-	case op_bgeu:
+	case en_uge:
 		size = GetNaturalSize(node);
 		if (ap2->mode==am_immed) {
 			if (ap2->offset->i==0)
@@ -641,7 +628,6 @@ static void GenerateDefaultCatch(SYM *sym)
 //
 void GenerateFunction(SYM *sym)
 {
-	char buf[200];
 	AMODE *ap;
     int defcatch;
 	int nn;
@@ -697,8 +683,6 @@ void GenerateFunction(SYM *sym)
 			//GenerateMonadic(op_push, 0, makereg(regBP));
 			ap = make_label(throwlab);
 			ap->mode = am_immed;
-			if (sym->IsLeaf && !sym->DoesThrow)
-				;
 		}
 		// The stack doesn't need to be linked if there is no stack space in use and there
 		// are no parameters passed to the function. Since function parameters are
@@ -728,7 +712,7 @@ void GenerateFunction(SYM *sym)
     stmt->Generate();
     GenerateReturn(nullptr);
 	if (exceptions && sym->IsInline)
-		GenerateMonadic(op_bra,0,make_label(lab0));
+		GenerateTriadic(op_mov,0,makereg(regPC),makereg(regZero),make_label(lab0));
 
 	throwlab = o_throwlab;
 	retlab = o_retlab;
@@ -778,7 +762,6 @@ void GenerateReturn(Statement *stmt)
 {
 	AMODE *ap;
 	int nn;
-	int cnt,cnt2;
 	int toAdd;
 	SYM *sym = currentFn;
 	SYM *p;
@@ -1210,8 +1193,6 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
 	}
 	RestoreRegisterParameters(sym);
 	RestoreTemporaries(sym, sp, fsp);
-	if (flags & F_NOVALUE)
-		;
 	if (sym && sym->tp && sym->tp->GetBtp()->IsFloatType() && (flags & F_FPREG))
 		return (makereg(1));
 	return (makereg(1));

@@ -31,7 +31,6 @@ typedef unsigned __int64 uint64_t;
 
 #define snprintf	sprintf_s
 
-#include "Float128.h"
 #include "Rand.h"
 #include "txtStream.h"
 #include "Value.h"

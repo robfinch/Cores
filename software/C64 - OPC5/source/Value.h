@@ -17,7 +17,6 @@ public:
 		uint16_t wa[8];
 		char *s;
 	} val;
-	Float128 f128;
 	Value() { length = 0; };
 	~Value();
 };

@@ -30,7 +30,7 @@ extern int options(char *);
 extern int openfiles(char *);
 extern void summary();
 extern void ParseGlobalDeclarations();
-extern void makename(char *s, char *e);
+extern void makename(char *s, int, char *e);
 extern char *errtext(int errnum);
 extern std::string *classname;
 extern char *rtrim(char *);
@@ -124,7 +124,7 @@ int Compiler::PreprocessFile(char *nm)
 	static char sysbuf[500];
 
 	strcpy_s(outname, sizeof(outname), nm);
-	makename(outname,".fpp");
+	makename(outname,sizeof(outname)-1,".fpp");
 	sprintf_s(sysbuf, sizeof(sysbuf), "fpp -b %s %s", nm, outname);
 	return system(sysbuf);
 }

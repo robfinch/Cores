@@ -42,7 +42,7 @@
  *		Norcross, Ga 30092
  */
 
-void makename(char *s, char *e);
+void makename(char *s, int, char *e);
 void summary();
 int options(char *);
 int openfiles(char *);
@@ -157,7 +157,7 @@ int PreProcessFile(char *nm)
 	static char sysbuf[500];
 
 	strcpy_s(outname, sizeof(outname), nm);
-	makename(outname,".fpp");
+	makename(outname,sizeof(outname)-1,".fpp");
 	snprintf(sysbuf, sizeof(sysbuf), "fpp -b %s %s", nm, outname);
 	return system(sysbuf);
 }
@@ -176,9 +176,9 @@ int openfiles(char *s)
 		p = strrchr(nmspace[0],'.');
 		if (p)
 			*p = '\0';
-		makename(infile,".fpp");
-        makename(listfile,".lis");
-        makename(outfile,".s");
+		makename(infile,sizeof(infile)-1,".fpp");
+        makename(listfile,sizeof(listfile)-1,".lis");
+        makename(outfile,sizeof(outfile)-1,".s");
     dbgfile += ".xml";
 		ifs = new std::ifstream();
 		ifs->open(infile,std::ios::in);
@@ -244,13 +244,13 @@ int openfiles(char *s)
         return 1;
 }
 
-void makename(char *s, char *e)
+void makename(char *s, int sz, char *e)
 {
 	int n;
 
 	n = strlen(s);
 	while(s[n]!='.' && n >= 0) n--;
-	strcpy(&s[n],e);
+	strcpy_s(&s[n],sz-n,e);
 	//while(*s != 0 && *s != '.')
  //       ++s;
  //   while(*s++ = *e++);
@@ -259,14 +259,14 @@ void makename(char *s, char *e)
 void summary()
 {
 //    if (verbose > 0)
-  dfs.printf("Enter summary\n");
-    	printf("\n -- %d errors found.",total_errors);
-    lfs.write("\f\n *** global scope typedef symbol table ***\n\n");
-    ListTable(&gsyms[0],0);
-    lfs.write("\n *** structures and unions ***\n\n");
-    ListTable(&tagtable,0);
-  dfs.printf("Leave summary\n");
-//	fflush(list);
+	dfs.printf("Enter summary\n");
+	printf("\n -- %d errors found.",total_errors);
+	lfs.write("\f\n *** global scope typedef symbol table ***\n\n");
+	ListTable(&gsyms[0],0);
+	lfs.write("\n *** structures and unions ***\n\n");
+	ListTable(&tagtable,0);
+	dfs.printf("Leave summary\n");
+	//	fflush(list);
 }
 
 void closefiles()

@@ -26,17 +26,16 @@
 #include "stdafx.h"
 
 
-AMODE *GenerateShift(ENODE *node,int flags, int size, int op)
+AMODE *GenerateShift(ENODE *node,int flags, int size)
 {
-	AMODE *ap1, *ap2, *ap3;
-	char sz;
+	AMODE *ap1, *ap2;
 	int nn;
 	int lab1;
 
     ap1 = GenerateExpression(node->p[0],F_REG,size);
     ap2 = GenerateExpression(node->p[1],F_REG | F_IMMED,sizeOfWord);
-	switch (op) {
-	case op_shl:
+	switch (node->nodetype) {
+	case en_shl:
 		switch(ap2->mode) {
 		case am_immed:
 			for (nn = 0; nn < ap2->offset->i && nn < 17; nn++)
@@ -55,8 +54,8 @@ AMODE *GenerateShift(ENODE *node,int flags, int size, int op)
 			return ap1;
 		}
 		break;
-	case op_shru:
-	case op_shr:
+	case en_shru:
+	case en_shr:
 		switch(ap2->mode) {
 		case am_immed:
 			for (nn = 0; nn < ap2->offset->i && nn < 17; nn++) {
@@ -78,7 +77,7 @@ AMODE *GenerateShift(ENODE *node,int flags, int size, int op)
 			return ap1;
 		}
 		break;
-	case op_asr:
+	case en_asr:
 		switch(ap2->mode) {
 		case am_immed:
 			for (nn = 0; nn < ap2->offset->i && nn < 17; nn++) {
@@ -131,7 +130,7 @@ AMODE *GenerateShift(ENODE *node,int flags, int size, int op)
 //
 // Generate shift equals ( <<=, >>=) operators.
 //
-AMODE *GenerateAssignShift(ENODE *node,int flags,int size,int op)
+AMODE *GenerateAssignShift(ENODE *node,int flags,int size)
 {
 	AMODE *ap1, *ap2, *ap3;
 	int lab1, nn;
@@ -149,8 +148,8 @@ AMODE *GenerateAssignShift(ENODE *node,int flags,int size,int op)
 	else
         GenLoad(ap1,ap3,size,size);
 	//MaskShift(op, ap1, size);
-	switch (op) {
-	case op_shl:
+	switch (node->nodetype) {
+	case en_shl:
 		switch(ap2->mode) {
 		case am_immed:
 			for (nn = 0; nn < ap2->offset->i && nn < 17; nn++)
@@ -169,8 +168,8 @@ AMODE *GenerateAssignShift(ENODE *node,int flags,int size,int op)
 			return ap1;
 		}
 		break;
-	case op_shru:
-	case op_shr:
+	case en_shru:
+	case en_shr:
 		switch(ap2->mode) {
 		case am_immed:
 			for (nn = 0; nn < ap2->offset->i && nn < 17; nn++) {
@@ -192,7 +191,7 @@ AMODE *GenerateAssignShift(ENODE *node,int flags,int size,int op)
 			return ap1;
 		}
 		break;
-	case op_asr:
+	case en_asr:
 		switch(ap2->mode) {
 		case am_immed:
 			for (nn = 0; nn < ap2->offset->i && nn < 17; nn++) {

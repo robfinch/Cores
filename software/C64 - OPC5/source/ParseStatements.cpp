@@ -464,7 +464,7 @@ Statement *Statement::ParseSwitch(int nkd)
     Statement *head, *tail; 
 
     snp = NewStatement(st_switch, TRUE);
-	snp->nkd = nkd;
+	snp->nkd = (bool)nkd;
 	iflevel++;
 	looplevel++;
     if( expression(&(snp->exp)) == NULL ) 

@@ -168,16 +168,6 @@ int InitializeType(TYP *tp)
   case bt_struct:
             nbytes = InitializeStructure(tp);
             break;
-  case bt_quad:
-		nbytes = initquad();
-		break;
-  case bt_float:
-  case bt_double:
-		nbytes = initfloat();
-		break;
-  case bt_triple:
-		nbytes = inittriple();
-		break;
   default:
         error(ERR_NOINIT);
         nbytes = 0;
@@ -284,24 +274,6 @@ int initlong()
     return 8;
 }
 
-int initquad()
-{
-	GenerateQuad(GetFloatExpression((ENODE **)NULL));
-	return (16);
-}
-
-int initfloat()
-{
-	GenerateFloat(GetFloatExpression((ENODE **)NULL));
-	return (8);
-}
-
-int inittriple()
-{
-	GenerateQuad(GetFloatExpression((ENODE **)NULL));
-	return (12);
-}
-
 int InitializePointer()
 {   
 	SYM *sp;
@@ -328,10 +300,6 @@ int InitializePointer()
         GenerateLabelReference(stringlit(laststr));
         NextToken();
     }
-	else if (lastst == rconst) {
-        GenerateLabelReference(quadlit(&rval128));
-        NextToken();
-	}
 	//else if (lastst == id) {
 	//	sp = gsearch(lastid);
 	//	if (sp->tp->type == bt_func || sp->tp->type == bt_ifunc) {

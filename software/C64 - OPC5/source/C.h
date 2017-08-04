@@ -240,7 +240,6 @@ public:
         uint16_t wa[8];
         char *s;
     } value;
-	Float128 f128;
   TYP *tp;
     Statement *stmt;
     Statement *prolog;
@@ -303,6 +302,8 @@ public:
 	int8_t		bit_width;
 	int8_t		bit_offset;
 	long        size;
+	long		numele;			// number of elements
+	long		dimen;			// number of the dimension
 	TABLE lst;
 	int btp;
 	TYP *GetBtp();
