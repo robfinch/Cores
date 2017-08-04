@@ -130,26 +130,10 @@ int AllocateRegisterVars()
 			csp = &CSETable[csecnt];
 			if (csp->reg==-1) {
 				if( OptimizationDesireability(csp) >= 4-nn ) {
-					if (nn > 3) {
-						if (reg < 5)
-   							csp->reg = reg++;
-					}
-					else {
-    					//if(( csp->duses > csp->uses / 2) && reg < 5 )
-						if (reg < 5)
-    						csp->reg = reg++;
-					}
+   					//if(( csp->duses > csp->uses / 2) && reg < 5 )
+					if (csp->uses > 3 && reg < 5)
+   						csp->reg = reg++;
 				}
-			}
-		}
-	}
-	// Use up all the regs.
-	for (nn = reg; nn < 5; nn++) {
-		for (csecnt = 0; csecnt < csendx; csecnt++)	{
-			csp = &CSETable[csecnt];
-			if (csp->reg==-1) {
-				csp->reg = nn;
-				break;
 			}
 		}
 	}
