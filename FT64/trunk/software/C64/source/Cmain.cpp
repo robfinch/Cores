@@ -106,12 +106,14 @@ int	options(char *s)
             case 'r':     opt_noregs = TRUE; break;
 			case 'p':     ::opt_nopeep = TRUE; break;
             case 'x':     opt_noexpr = TRUE; break;
+			case 'c':	  opt_nocgo = TRUE; break;
             }
         }
         if (nn==2) {
             opt_noregs = TRUE;
             ::opt_nopeep = TRUE;
             opt_noexpr = TRUE;
+			opt_nocgo = TRUE;
             optimize = FALSE;
         }
     }

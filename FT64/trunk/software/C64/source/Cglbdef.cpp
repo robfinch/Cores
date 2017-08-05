@@ -58,6 +58,7 @@ int wcharSupport = 1;
 int verbose = 0;
 int use_gp = 0;
 int address_bits = 32;
+int maxVL = 64;
 
 int sizeOfWord = 8;
 int sizeOfFP = 8;
@@ -118,6 +119,7 @@ int optimize = TRUE;
 int opt_noregs = FALSE;
 int opt_nopeep;
 int opt_noexpr = FALSE;
+int opt_nocgo = FALSE;
 int exceptions = FALSE;
 int mixedSource = FALSE;
 SYM *currentFn = (SYM *)NULL;

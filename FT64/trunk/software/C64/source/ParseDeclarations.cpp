@@ -32,6 +32,7 @@ std::string *declid;
 TABLE tagtable;
 TYP stdconst;
 TYP stdvector;
+TYP *stdvectormask;
 Stringx names[20];
 int nparms = 0;
 int funcdecl = 0;		//0,1, or 2
@@ -99,26 +100,36 @@ char *my_strdup(char *s)
 	p = (char *)allocx(sizeof(char)*(n+1));
 	memcpy(p,s,sizeof(char)*(n));
 	p[n] = '\0';
-  return p;
+	return p;
 }
 
 void Declaration::SetType(SYM *sp)
 {
-  if (head) {
-  	if (bit_width <= 0) {
-  		sp->tp = head;
-  	}
-  	else {
-  		sp->tp = TYP::Make(bt_bitfield,head->size);
-//  		*(sp->tp) = *head;
-  		sp->tp->bit_width = bit_width;
-  		sp->tp->bit_offset = bit_offset;
-  	}
-  }
-  else {
-		sp->tp = TYP::Make(bt_long,2);
- 		sp->tp->lst.head = sp->GetIndex();
-  }
+	if (head) {
+		if (bit_width <= 0) {
+			sp->tp = head;
+		}
+		else {
+			if (head->IsFloatType()) {
+				sp->tp = head;
+				sp->tp->precision = bit_width;
+			}
+			else if (head->IsVectorType()) {
+				sp->tp = head;
+				sp->tp->numele = bit_width;
+			}
+			else {
+				sp->tp = TYP::Make(bt_bitfield,head->size);
+				//  		*(sp->tp) = *head;
+				sp->tp->bit_width = bit_width;
+				sp->tp->bit_offset = bit_offset;
+			}
+		}
+	}
+	else {
+		sp->tp = TYP::Make(bt_long,sizeOfWord);
+		sp->tp->lst.head = sp->GetIndex();
+	}
 }
 
 // Ignore const
@@ -140,6 +151,25 @@ void Declaration::ParseNaked()
 	head = (TYP *)TYP::Make(bt_oscall,2);
 	tail = head;
 	NextToken();
+}
+
+void Declaration::ParseVoid()
+{
+	head = (TYP *)TYP::Make(bt_void,0);
+	tail = head;
+	head->isVolatile = isVolatile;
+	head->isIO = isIO;
+	head->isConst = isConst;
+	NextToken();
+	if (lastst==kw_interrupt) {
+		isInterrupt = TRUE;
+		NextToken();
+	}
+	if (lastst==kw_nocall || lastst==kw_naked) {
+		isNocall = TRUE;
+		NextToken();
+	}
+	bit_max = 0;
 }
 
 void Declaration::ParseLong()
@@ -218,6 +248,7 @@ void Declaration::ParseInt()
 	if (lastst==kw_vector) {
 		int btp = head->GetIndex();
 		head = TYP::Make(bt_vector,512);
+		head->numele = maxVL;
 		head->btp = btp;
 		tail = head;
 		NextToken();
@@ -235,6 +266,75 @@ void Declaration::ParseInt()
 		NextToken();
 	}
 //printf("Leave ParseInt\r\n");
+}
+
+void Declaration::ParseFloat()
+{
+	head = TYP::Copy(&stddouble);
+	tail = head;
+	head->isVolatile = isVolatile;
+	head->isIO = isIO;
+	head->isConst = isConst;
+	NextToken();
+	if (lastst==kw_vector) {
+		int btp = head->GetIndex();
+		head = TYP::Make(bt_vector,512);
+		head->numele = maxVL;
+		head->btp = btp;
+		tail = head;
+		NextToken();
+	}
+	bit_max = head->precision;
+}
+
+void Declaration::ParseDouble()
+{
+	head = (TYP *)TYP::Make(bt_double,8);
+	tail = head;
+	head->isVolatile = isVolatile;
+	head->isIO = isIO;
+	head->isConst = isConst;
+	NextToken();
+	if (lastst==kw_vector) {
+		int btp = head->GetIndex();
+		head = TYP::Make(bt_vector,512);
+		head->numele = maxVL;
+		head->btp = btp;
+		tail = head;
+		NextToken();
+	}
+	bit_max = head->precision;
+}
+
+void Declaration::ParseVector()
+{
+	int btp;
+
+	head = (TYP *)TYP::Make(bt_double,sizeOfFPD);
+	tail = head;
+	head->isVolatile = isVolatile;
+	head->isIO = isIO;
+	head->isConst = isConst;
+	NextToken();
+	btp = head->GetIndex();
+	head = TYP::Make(bt_vector,512);
+	head->numele = maxVL;
+	head->btp = btp;
+	tail = head;
+	NextToken();
+	bit_max = head->precision;
+}
+
+void Declaration::ParseVectorMask()
+{
+	head = (TYP *)TYP::Make(bt_vector_mask,sizeOfWord);
+	tail = head;
+	head->isVolatile = isVolatile;
+	head->isIO = isIO;
+	head->isConst = isConst;
+	head->numele = maxVL;
+	NextToken();
+	bit_max = head->precision;
 }
 
 void Declaration::ParseInt32()
@@ -384,14 +484,14 @@ int Declaration::ParseSpecifier(TABLE *table)
 {
 	SYM *sp;
 
-  dfs.printf("<ParseSpecifier>\n");
+	dfs.printf("<ParseSpecifier>\n");
 	isUnsigned = FALSE;
 	isSigned = FALSE;
 	isVolatile = FALSE;
 	isVirtual = FALSE;
 	isIO = FALSE;
 	isConst = FALSE;
-  dfs.printf("A");
+	dfs.printf("A");
 	for (;;) {
 		switch (lastst) {
 				
@@ -497,25 +597,8 @@ int Declaration::ParseSpecifier(TABLE *table)
 
 			case id:	sp = ParseId();	goto lxit;
 
-			case kw_float:
-				head = TYP::Copy(&stddouble);
-				tail = head;
-				head->isVolatile = isVolatile;
-				head->isIO = isIO;
-				head->isConst = isConst;
-				NextToken();
-				bit_max = head->precision;
-				goto lxit;
-
-			case kw_double:
-				head = (TYP *)TYP::Make(bt_double,8);
-				tail = head;
-				head->isVolatile = isVolatile;
-				head->isIO = isIO;
-				head->isConst = isConst;
-				NextToken();
-				bit_max = 80;
-				goto lxit;
+			case kw_float:	ParseFloat(); goto lxit;
+			case kw_double:	ParseDouble(); goto lxit;
 
 			case kw_triple:
 				head = TYP::Copy(&stdtriple);
@@ -527,23 +610,10 @@ int Declaration::ParseSpecifier(TABLE *table)
 				bit_max = head->precision;
 				goto lxit;
 
-			case kw_void:
-				head = (TYP *)TYP::Make(bt_void,0);
-				tail = head;
-				head->isVolatile = isVolatile;
-				head->isIO = isIO;
-				head->isConst = isConst;
-				NextToken();
-				if (lastst==kw_interrupt) {
-					isInterrupt = TRUE;
-					NextToken();
-				}
-				if (lastst==kw_nocall || lastst==kw_naked) {
-					isNocall = TRUE;
-					NextToken();
-				}
-				bit_max = 0;
-				goto lxit;
+			case kw_vector:	ParseVector(); goto lxit;
+			case kw_vector_mask: ParseVectorMask(); goto lxit;
+
+			case kw_void:	ParseVoid(); goto lxit;
 
 			case kw_enum:
 				NextToken();
@@ -582,7 +652,7 @@ int Declaration::ParseSpecifier(TABLE *table)
 			}
 	}
 lxit:;
-  dfs.printf("</ParseSpecifier>\n");
+	dfs.printf("</ParseSpecifier>\n");
 	return 0;
 }
 
@@ -591,32 +661,32 @@ void Declaration::ParseDoubleColon(SYM *sp)
 	SYM *sym;
 	bool gotDouble = false;
 
-  while (lastst==double_colon) {
-    gotDouble = true;
-	  sym = tagtable.Find(lastid,false);
-	  if (sym)
-		   sp->parent = sym->GetIndex();//gsearch(lastid);
-	  else {
-	     sp->parent = 0;
-	     break;
-    }
-    NextToken();
-    if (lastst != id) {
-      error(ERR_IDEXPECT);
-      break;
-    }
-  }
-  if (gotDouble)
-    NextToken();
+	while (lastst==double_colon) {
+		gotDouble = true;
+		sym = tagtable.Find(lastid,false);
+		if (sym)
+			sp->parent = sym->GetIndex();//gsearch(lastid);
+		else {
+			sp->parent = 0;
+			break;
+		}
+		NextToken();
+		if (lastst != id) {
+			error(ERR_IDEXPECT);
+			break;
+		}
+	}
+	if (gotDouble)
+	    NextToken();
 	currentClass = sp->GetParentPtr();
 	if (sp->parent)
 		dfs.printf("Setting parent:%s|\r\n",
-      (char *)sp->GetParentPtr()->name->c_str());
+	(char *)sp->GetParentPtr()->name->c_str());
 }
 
 void Declaration::ParseBitfieldSpec(bool isUnion)
 {
-  dfs.puts("<ParseBitfieldSpec>");
+	dfs.puts("<ParseBitfieldSpec>");
 	NextToken();
 	bit_width = GetIntegerExpression((ENODE **)NULL);
 	if (isUnion)
@@ -630,42 +700,42 @@ void Declaration::ParseBitfieldSpec(bool isUnion)
 	if (bit_width == 0 || bit_offset + bit_width > bit_max)
 		bit_offset = 0;
 	bit_next = bit_offset + bit_width;
-  dfs.puts("</ParseBitfieldSpec>\n");
+	dfs.puts("</ParseBitfieldSpec>\n");
 }
 
 SYM *Declaration::ParsePrefixId()
 {
-  SYM *sp;
+	SYM *sp;
 
-  dfs.puts("<ParsePrefixId>");            
-  if (declid) delete declid;
-  declid = new std::string(lastid);
-  dfs.printf("B|%s|",(char *)declid->c_str());
-  sp = allocSYM();
-  dfs.printf("C"); 
-  if (funcdecl==1) {
-    if (nparms > 19)
-      error(ERR_TOOMANY_PARAMS);
-    else {
-		  names[nparms].str = *declid;
-		  nparms++;
-	  }
-	}
-  dfs.printf("D"); 
-  NextToken();
-  ParseDoubleColon(sp);
-  if (declid) delete declid;
+	dfs.puts("<ParsePrefixId>");            
+	if (declid) delete declid;
 	declid = new std::string(lastid);
-  sp->SetName(*declid);
-  dfs.printf("E"); 
+	dfs.printf("B|%s|",(char *)declid->c_str());
+	sp = allocSYM();
+	dfs.printf("C"); 
+	if (funcdecl==1) {
+		if (nparms > 19)
+			error(ERR_TOOMANY_PARAMS);
+		else {
+			names[nparms].str = *declid;
+			nparms++;
+		}
+	}
+	dfs.printf("D"); 
+	NextToken();
+	ParseDoubleColon(sp);
+	if (declid) delete declid;
+	declid = new std::string(lastid);
+	sp->SetName(*declid);
+	dfs.printf("E"); 
 	if (lastst == colon) {
-	  ParseBitfieldSpec(isUnion);
+		ParseBitfieldSpec(isUnion);
 		goto lxit;	// no ParseDeclarationSuffix()
 	}
-  sp->SetName(*declid);
+	sp->SetName(*declid);
 	sp = ParseSuffix(sp);
-lxit:
-  dfs.puts("</ParsePrefixId>");
+	lxit:
+	dfs.puts("</ParsePrefixId>");
 	return sp;
 }
 
@@ -719,39 +789,39 @@ j1:
 	switch (lastst) {
 
 	case kw_const:
-	  isConst = TRUE;
-	  NextToken();
+		isConst = TRUE;
+		NextToken();
 		goto j1; 
 
 //		case ellipsis:
-  case id:
-    sp = ParsePrefixId();
-    goto lxit;
-
-  case star:
-    dfs.putch('*');
-    temp1 = TYP::Make(bt_pointer,sizeOfWord);
-    temp1->btp = head->GetIndex();
-    head = temp1;
-    if(tail == NULL)
-      tail = head;
-    NextToken();
-	if (lastst==closepa)
+	case id:
+		sp = ParsePrefixId();
 		goto lxit;
-    sp = ParsePrefix(isUnion);
-    goto lxit;
 
-  case openpa:
-    sp = ParsePrefixOpenpa(isUnion);
-    goto lxit;
+	case star:
+		dfs.putch('*');
+		temp1 = TYP::Make(bt_pointer,sizeOfWord);
+		temp1->btp = head->GetIndex();
+		head = temp1;
+		if(tail == NULL)
+			tail = head;
+		NextToken();
+		if (lastst==closepa)
+			goto lxit;
+		sp = ParsePrefix(isUnion);
+		goto lxit;
 
-  default:
-    sp = ParseSuffix(sp);
-    dfs.printf("Z");
-    goto lxit;
-  }
+	case openpa:
+		sp = ParsePrefixOpenpa(isUnion);
+		goto lxit;
+
+	default:
+		sp = ParseSuffix(sp);
+		dfs.printf("Z");
+		goto lxit;
+	}
 lxit:
-  dfs.puts("</ParseDeclPrefix>\n");
+	dfs.puts("</ParseDeclPrefix>\n");
 	return sp;
 }
 
@@ -763,30 +833,39 @@ void Declaration::ParseSuffixOpenbr()
 	TYP *temp1;
 	long sz2;
 
-  NextToken();
-  temp1 = (TYP *)TYP::Make(bt_pointer,0);
-  temp1->val_flag = 1;
-  temp1->isArray = TRUE;
-  temp1->btp = head->GetIndex();
-  if(lastst == closebr) {
-    temp1->size = 0;
-    NextToken();
-  }
-  else if(head != NULL) {
-    sz2 = GetIntegerExpression((ENODE **)NULL);
-    temp1->size = sz2 * head->size;
-    dfs.printf("Setting array size:%d\n", (int)temp1->size);
-	  temp1->alignment = head->alignment;
-		needpunc(closebr,21);
-  }
-  else {
-    sz2 = GetIntegerExpression((ENODE **)NULL);
-	  temp1->size = sz2;
-	  needpunc(closebr,22);
+	NextToken();
+	temp1 = (TYP *)TYP::Make(bt_pointer,8);
+	temp1->val_flag = 1;
+	temp1->isArray = TRUE;
+	temp1->btp = head->GetIndex();
+	if(lastst == closebr) {
+		temp1->size = 0;
+		temp1->numele = 0;
+		if (head)
+			temp1->dimen = head->dimen + 1;
+		else
+			temp1->dimen = 1;
+		NextToken();
 	}
-  head = temp1;
-  if( tail == NULL)
-    tail = head;
+	else if(head != NULL) {
+		sz2 = GetIntegerExpression((ENODE **)NULL);
+		temp1->size = sz2 * head->size;
+		temp1->numele = sz2;
+		temp1->dimen = head->dimen + 1;
+		dfs.printf("Setting array size:%d\n", (int)temp1->size);
+		temp1->alignment = head->alignment;
+		needpunc(closebr,21);
+	}
+	else {
+		sz2 = GetIntegerExpression((ENODE **)NULL);
+		temp1->size = sz2;
+		temp1->numele = sz2;
+		temp1->dimen = 1;
+		needpunc(closebr,22);
+	}
+	head = temp1;
+	if( tail == NULL)
+		tail = head;
 }
 
 void Declaration::ParseFunctionAttribute(SYM *sym)
@@ -1172,21 +1251,21 @@ int Declaration::declare(SYM *parent,TABLE *table,int al,int ilc,int ztype)
 
 	dfs.printf("Enter declare()\r\n");
 	nbytes = 0;
-  dfs.printf("A");
+	dfs.printf("A");
 	classname = new std::string("");
-  sp1 = nullptr;
+	sp1 = nullptr;
 	if (ParseSpecifier(table))
 		goto xit1;
-  dfs.printf("B");
-  dhead = head;
-  for(;;) {
-    if (declid) delete declid;
-    declid = nullptr;
-    dfs.printf("b");
-    bit_width = -1;
-    sp = ParsePrefix(ztype==bt_union);
-    if (declid==nullptr)
-      declid = new std::string("");
+	dfs.printf("B");
+	dhead = head;
+	for(;;) {
+	    if (declid) delete declid;
+		declid = nullptr;
+		dfs.printf("b");
+		bit_width = -1;
+		sp = ParsePrefix(ztype==bt_union);
+		if (declid==nullptr)
+			declid = new std::string("");
 	  // If a function declaration is taking place and just the type is
 	  // specified without a parameter name, assign an internal compiler
 	  // generated name.
@@ -1302,21 +1381,21 @@ dfs.printf("E");
 
 		// Increase the storage allocation by the type size.
     if(ztype == bt_union)
-      nbytes = imax(nbytes,roundSize(sp->tp));
-		else if(al != sc_external) {
-		 // If a pointer to a function is defined in a struct.
-		  if (isStructDecl) {
+		nbytes = imax(nbytes,roundSize(sp->tp));
+	else if(al != sc_external) {
+		// If a pointer to a function is defined in a struct.
+		if (isStructDecl) {
 		    if (sp->tp->type==bt_func) {
 			    nbytes += 8;
 		    }
 		    else if (sp->tp->type != bt_ifunc) {
 			    nbytes += roundSize(sp->tp);
 		    }
-		  }
-		  else {
-		    nbytes += roundSize(sp->tp);
-		  }
 		}
+		else {
+		    nbytes += roundSize(sp->tp);
+		}
+	}
 
     dfs.printf("H");
       // For a class declaration there may not be any variables declared as
@@ -1560,6 +1639,7 @@ void GlobalDeclaration::Parse()
         case kw_long: case kw_struct: case kw_union: case kw_class:
         case kw_enum: case kw_void:
         case kw_float: case kw_double:
+		case kw_vector: case kw_vector_mask:
                 lc_static += declare(NULL,&gsyms[0],sc_global,lc_static,bt_struct);
 				isInline = false;
 				break;
@@ -1683,6 +1763,7 @@ void AutoDeclaration::Parse(SYM *parent, TABLE *ssyms)
         case kw_long: case kw_struct: case kw_union: case kw_class:
         case kw_enum: case kw_void:
         case kw_float: case kw_double:
+		case kw_vector: case kw_vector_mask:
             lc_auto += declare(parent,ssyms,sc_auto,lc_auto,bt_struct);
             break;
         case kw_thread:
@@ -1759,6 +1840,7 @@ dfs.printf("B");
     case kw_long: case kw_struct: case kw_union: case kw_class:
     case kw_enum: case kw_void:
     case kw_float: case kw_double:
+	case kw_vector: case kw_vector_mask:
 dfs.printf("C");
     declare(NULL,&currentFn->params,sc_auto,0,bt_struct);
 				isAuto = false;

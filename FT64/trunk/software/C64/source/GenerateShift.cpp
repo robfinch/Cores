@@ -29,7 +29,6 @@
 AMODE *GenerateShift(ENODE *node,int flags, int size, int op)
 {
 	AMODE *ap1, *ap2, *ap3;
-	char sz;
 
     ap3 = GetTempRegister();
     ap1 = GenerateExpression(node->p[0],F_REG,size);
@@ -38,13 +37,13 @@ AMODE *GenerateShift(ENODE *node,int flags, int size, int op)
 	// Shifts automatically sign extend
 	// Don't actually need to zero extend on a shift right, but the other shifts
 	// need it.
-	if (ap2->isUnsigned)
-		switch(size) {
-		case 1:	GenerateTriadic(op_and,0,ap3,ap3,make_immed(0xFF)); break;	// shorter
-		case 2:	Generate4adic(op_bfextu,0,ap3,ap3,make_immed(0),make_immed(15)); break;
-		case 4:	Generate4adic(op_bfextu,0,ap3,ap3,make_immed(0),make_immed(31)); break;
-		default:	;
-		}
+	//if (ap2->isUnsigned)
+	//	switch(size) {
+	//	case 1:	GenerateTriadic(op_and,0,ap3,ap3,make_immed(0xFF)); break;	// shorter
+	//	case 2:	Generate4adic(op_bfextu,0,ap3,ap3,make_immed(0),make_immed(15)); break;
+	//	case 4:	Generate4adic(op_bfextu,0,ap3,ap3,make_immed(0),make_immed(31)); break;
+	//	default:	;
+	//	}
 	ReleaseTempRegister(ap2);
 	ReleaseTempRegister(ap1);
     MakeLegalAmode(ap3,flags,size);

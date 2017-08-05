@@ -214,6 +214,7 @@ static void opt0(ENODE **node)
     if( ep == (ENODE *)NULL )
         return;
     switch( (*node)->nodetype ) {
+	case en_vector_ref:
 	case en_ref32: case en_ref32u:
             case en_b_ref:
 			case en_c_ref:
@@ -291,6 +292,8 @@ static void opt0(ENODE **node)
 						Float128::Assign(&ep->f128,&ep->p[0]->f128);
                     }
                     return;
+			case en_vadd:
+			case en_vsub:
             case en_add:
             case en_sub:
                     opt0(&(ep->p[0]));
@@ -319,6 +322,8 @@ static void opt0(ENODE **node)
                         }
                     }
                     return;
+			case en_vmul:
+			case en_vmuls:
             case en_mul:
 			case en_mulu:
                     opt0(&(ep->p[0]));
@@ -468,6 +473,9 @@ static void opt0(ENODE **node)
                 case en_feq:    case en_fne:
                 case en_flt:    case en_fle:
                 case en_fgt:    case en_fge:
+                case en_veq:    case en_vne:
+                case en_vlt:    case en_vle:
+                case en_vgt:    case en_vge:
                     opt0(&(ep->p[0]));
                     opt0(&(ep->p[1]));
                     break;
@@ -556,6 +564,7 @@ static int xfold(ENODE *node)
 				case en_uc_ref: case en_uh_ref:
                 case en_b_ref:  case en_w_ref:
 				case en_c_ref:  case en_h_ref:
+				case en_vector_ref:
                 case en_compl:
                 case en_not:
                         fold_const(&node->p[0]);

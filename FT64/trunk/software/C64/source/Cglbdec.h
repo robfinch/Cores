@@ -91,6 +91,7 @@ extern int sizeOfFPS;
 extern int sizeOfFPT;
 extern int sizeOfFPD;
 extern int sizeOfFPQ;
+extern int maxVL;
 
 /*
 extern FILE             *input,
@@ -142,6 +143,7 @@ extern int optimize;
 extern int opt_noregs;
 extern int opt_nopeep;
 extern int opt_noexpr;
+extern int opt_nocgo;
 extern int exceptions;
 extern int mixedSource;
 extern SYM *currentFn;
@@ -153,6 +155,7 @@ extern int regmask;
 extern int bregmask;
 extern Statement *currentStmt;
 extern bool dogen;
+extern struct ocode *peep_tail;
 
 extern TYP stdint;
 extern TYP stduint;
@@ -174,6 +177,7 @@ extern TYP stdexception;
 extern TYP stdconst;
 extern TYP stdquad;
 extern TYP stdvector;
+extern TYP *stdvectormask;
 
 extern std::string *declid;
 extern Compiler compiler;
@@ -270,6 +274,7 @@ extern void GenerateStop(Statement *stmt);
 extern void gen_regrestore();
 extern AMODE *make_direct(int i);
 extern AMODE *makereg(int r);
+extern AMODE *makevreg(int r);
 extern AMODE *makefpreg(int t);
 extern AMODE *makebreg(int r);
 extern AMODE *makepred(int r);
@@ -300,6 +305,7 @@ extern void put_code(struct ocode *);
 extern char *put_label(int lab, char*, char*, char);
 extern char *opstr(int op);
 // Peepgen.c
+extern int PeepCount(struct ocode *);
 extern void flush_peep();
 extern int equal_address(AMODE *ap1, AMODE *ap2);
 extern void GenerateLabel(int labno);
@@ -338,10 +344,12 @@ extern void GenStore(AMODE *, AMODE *, int size);
 // List.c
 extern void ListTable(TABLE *t, int i);
 // Register.c
+extern AMODE *GetTempReg(int);
 extern AMODE *GetTempRegister();
 extern AMODE *GetTempBrRegister();
 extern AMODE *GetTempFPRegister();
 extern AMODE *GetTempVectorRegister();
+extern AMODE *GetTempVectorMaskRegister();
 extern void ReleaseTempRegister(AMODE *ap);
 extern void ReleaseTempReg(AMODE *ap);
 extern int TempInvalidate();

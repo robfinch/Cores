@@ -167,7 +167,8 @@ struct oplst {
 		{"vadd", op_vadd}, {"vsub", op_vsub}, {"vmul", op_vmul}, {"vdiv", op_vdiv},
 		{"vseq", op_vseq}, {"vsne", op_vsne},
 		{"vslt", op_vslt}, {"vsge", op_vsge}, {"vsle", op_vsle}, {"vsgt", op_vsgt},
-		{"vmuls", op_vmuls},
+		{"vadds", op_vadds}, {"vsubs", op_vsubs}, {"vmuls", op_vmuls}, {"vdivs", op_vdivs},
+		{"vex", op_vex}, {"veins",op_veins},
                 {0,0} };
 
 static char *pad(char *op)
@@ -279,6 +280,7 @@ static void PutConstant(ENODE *offset, unsigned int lowhigh, unsigned int rshift
 			sprintf_s(buf,sizeof(buf),"0x%llx",offset->f);
 			ofs.write(buf);
 			break;
+	case en_autovcon:
 	case en_autocon:
 	case en_icon:
             if (lowhigh==2) {
@@ -396,10 +398,15 @@ void PutAddressMode(AMODE *ap)
             PutConstant(ap->offset,ap->lowhigh,ap->rshift);
             break;
     case am_reg:
-			if (ap->isVector)
+			if (ap->type==stdvector.GetIndex())
 				ofs.printf("v%d", (int)ap->preg);
+			else if (ap->type==stdvectormask->GetIndex())
+				ofs.printf("vm%d", (int)ap->preg);
 			else
 				ofs.write(RegMoniker(ap->preg));
+            break;
+    case am_vmreg:
+			ofs.printf("vm%d", (int)ap->preg);
             break;
     case am_fpreg:
             ofs.printf("fp%d", (int)ap->preg);

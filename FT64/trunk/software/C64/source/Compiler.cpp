@@ -261,6 +261,15 @@ void Compiler::AddStandardTypes()
 	p->bit_width = -1;
 	p->precision = 64;
 	stdvector = *p;
+
+	p = allocTYP();
+	p->type = bt_vector_mask;
+	p->typeno = bt_vector_mask;
+	p->val_flag = 1;
+	p->size = 64;
+	p->bit_width = -1;
+	p->precision = 64;
+	stdvectormask = p;
 }
 
 

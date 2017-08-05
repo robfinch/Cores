@@ -502,7 +502,8 @@ restart:        /* we come back here after comments */
             getch();
             lastst = asplus;
             }
-    else lastst = plus;
+    else
+		lastst = plus;
     break;
                 case '-':
                         getch();
@@ -608,6 +609,15 @@ restart:        /* we come back here after comments */
                                 getch();
                                 lastst = asrshift;
                             }
+							else if (lastch=='>') {
+								getch();
+								if (lastch=='=') {
+									getch();
+									lastst = asrrot;
+								}
+								else
+									lastst = rrot;
+							}
                             else lastst = rshift;
                         }
                         else lastst = gt;
@@ -621,11 +631,21 @@ restart:        /* we come back here after comments */
                         else if(lastch == '<') {
                                 getch();
                                 if(lastch == '=') {
-                                        getch();
-                                        lastst = aslshift;
-                                        }
-                                else lastst = lshift;
+                                    getch();
+                                    lastst = aslshift;
                                 }
+								else if (lastch=='<') {
+									getch();
+									if (lastch=='=') {
+										getch();
+										lastst = aslrot;
+									}
+									else
+										lastst = lrot;
+								}
+								else
+									lastst = lshift;
+						}
 						else if (lastch == '>') {
 							getch();
 							lastst = neq;

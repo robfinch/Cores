@@ -31,6 +31,7 @@ extern SYM *currentClass;
 static int isscalar(TYP *tp);
 static unsigned char sizeof_flag = 0;
 static TYP *ParseCastExpression(ENODE **node);
+static TYP *NonAssignExpression(ENODE **node);
 TYP *forcefit(ENODE **node1,TYP *tp1,ENODE **node2,TYP *tp2,bool);
 extern void backup();
 extern char *inpline;
@@ -417,14 +418,21 @@ TYP *deref(ENODE **node, TYP *tp)
 			}
 			break;
 
-		// Pointers (addresses) are always unsigned
 		case bt_vector:
 			(*node)->esize = tp->size;
 			(*node)->etype = (enum e_bt)tp->type;
             *node = makenode(en_vector_ref,*node,(ENODE *)NULL);
 			(*node)->isUnsigned = TRUE;
             break;
+		case bt_vector_mask:
+			(*node)->esize = tp->size;
+			(*node)->etype = (enum e_bt)tp->type;
+            *node = makenode(en_uw_ref,*node,(ENODE *)NULL);
+			(*node)->isUnsigned = TRUE;
+			(*node)->vmask = (*node)->p[0]->vmask;
+            break;
 
+		// Pointers (addresses) are always unsigned
 		case bt_pointer:
 		case bt_unsigned:
 			(*node)->esize = tp->size;
@@ -713,6 +721,8 @@ TYP *nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeArray *typear
 				//sc_member
 				if (sp->tp->IsVectorType())
 					*node = makeinode(en_autovcon,sp->value.i);
+				else if (sp->tp->type==bt_vector_mask)
+					*node = makeinode(en_autovmcon,sp->value.i);
 				else if (sp->tp->IsFloatType())
 					*node = makeinode(en_autofcon,sp->value.i);
 				else {
@@ -1293,6 +1303,21 @@ TYP *Autoincdec(TYP *tp, ENODE **node, int flag)
 }
 
 
+void ApplyVMask(ENODE *node, ENODE *mask)
+{
+	if (node==nullptr || mask==nullptr)
+		return;
+	if (node->p[0])
+		ApplyVMask(node->p[0],mask);
+	if (node->p[1])
+		ApplyVMask(node->p[1],mask);
+	if (node->p[2])
+		ApplyVMask(node->p[2],mask);
+	if (node->vmask==nullptr)
+		node->vmask = mask;
+	return;
+}
+
 // ----------------------------------------------------------------------------
 // A Postfix Expression is:
 //		primary
@@ -1307,7 +1332,7 @@ TYP *Autoincdec(TYP *tp, ENODE **node, int flag)
 
 TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 {
-	TYP *tp1, *tp2, *tp3;
+	TYP *tp1, *tp2, *tp3, *tp4;
 	ENODE *ep1, *ep2, *ep3, *ep4;
 	ENODE *rnode, *qnode, *pnode;
 	SYM *sp;
@@ -1316,7 +1341,9 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 	bool classdet = false;
 	TypeArray typearray;
 	std::string name;
-	int cf, uf;
+	int cf, uf, numdimen;
+	int sz1, sz2, cnt, cnt2, totsz;
+	int sa[20];
 
     ep1 = (ENODE *)NULL;
     Enter("<ParsePostfix>");
@@ -1332,7 +1359,7 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 		return ((TYP *)NULL);
     }
 	pep1 = nullptr;
-	while(1) {
+	for (cnt = 0; 1; cnt = cnt+1) {
 		pop = lastst;
 		switch(lastst) {
 		case openbr:
@@ -1356,21 +1383,69 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 				tp3 = expression(&pnode);
 				tp1 = tp3;
 			}
+			if (cnt==0) {
+				numdimen = tp1->dimen;
+				cnt2 = 1;
+				for (tp4 = tp1; tp4; tp4 = tp4->GetBtp()) {
+					sa[cnt2] = max(tp4->numele,sizeOfWord);
+					cnt2++;
+					if (cnt2 > 19) {
+						error(ERR_TOOMANYDIMEN);
+						break;
+					}
+				}
+			}
+			if (cnt==0)
+				totsz = tp1->size;
 			if (tp1->type != bt_pointer)
 				error(ERR_NOPOINTER);
 			else
 				tp1 = tp1->GetBtp();
-
-			qnode = makeinode(en_icon, tp1->size);
-			qnode->etype = bt_long;
-			qnode->esize = 2;
+			if (cnt==0) {
+				switch(numdimen) {
+				case 1: sz1 = sa[numdimen+1]; break;
+				case 2: sz1 = sa[1]*sa[numdimen+1]; break;
+				case 3: sz1 = sa[1]*sa[2]*sa[numdimen+1]; break;
+				default:
+					sz1 = sa[numdimen+1];	// could be a void = 0
+					for (cnt2 = 1; cnt2 < numdimen; cnt2++)
+						sz1 = sz1 * sa[cnt2];
+				}
+			}
+			else if (cnt==1) {
+				switch(numdimen) {
+				case 2:	sz1 = sa[numdimen+1]; break;
+				case 3: sz1 = sa[1]*sa[numdimen+1]; break;
+				default:
+					sz1 = sa[numdimen+1];	// could be a void = 0
+					for (cnt2 = 1; cnt2 < numdimen-1; cnt2++)
+						sz1 = sz1 * sa[cnt2];
+				}
+			}
+			else if (cnt==2) {
+				switch(numdimen) {
+				case 3: sz1 = sa[numdimen+1]; break;
+				default:
+					sz1 = sa[numdimen+1];	// could be a void = 0
+					for (cnt2 = 1; cnt2 < numdimen-2; cnt2++)
+						sz1 = sz1 * sa[cnt2];
+				}
+			}
+			else {
+				sz1 = sa[numdimen+1];	// could be a void = 0
+				for (cnt2 = 1; cnt2 < numdimen-cnt; cnt2++)
+					sz1 = sz1 * sa[cnt2];
+			}
+			qnode = makeinode(en_icon,sz1);
+			qnode->etype = bt_short;
+			qnode->esize = 8;
 			qnode->constflag = TRUE;
 			qnode->isUnsigned = TRUE;
 			cf = qnode->constflag;
 
 			qnode = makenode(en_mulu, qnode, rnode);
-			qnode->etype = bt_long;
-			qnode->esize = 2;
+			qnode->etype = bt_short;
+			qnode->esize = 8;
 			qnode->constflag = cf & rnode->constflag;
 			qnode->isUnsigned = rnode->isUnsigned;
 
@@ -1379,11 +1454,12 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 			uf = pnode->isUnsigned;
 			pnode = makenode(en_add, qnode, pnode);
 			pnode->etype = bt_pointer;
-			pnode->esize = 2;
+			pnode->esize = sizeOfWord;
 			pnode->constflag = cf & qnode->constflag;
 			pnode->isUnsigned = uf & qnode->isUnsigned;
 
 			tp1 = CondDeref(&pnode, tp1);
+			pnode->tp = tp1;
 			ep1 = pnode;
 			needpunc(closebr,9);
 			break;
@@ -1397,6 +1473,14 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 			if (tp2==nullptr) {
 				error(ERR_UNDEFINED);
 				goto j1;
+			}
+			if (tp2->type==bt_vector_mask) {
+				NextToken();
+				tp1 = expression(&ep2);
+				needpunc(closepa,9);
+				ApplyVMask(ep2,ep1);
+				ep1 = ep2;
+				break;
 			}
 			if (tp2->type == bt_pointer) {
 				dfs.printf("Got function pointer.\n");
@@ -1479,6 +1563,17 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 				goto j1;
 			}
 			NextToken();       /* past -> or . */
+			if (tp1->IsVectorType()) {
+				NonAssignExpression(&qnode);
+				ep2 = makenode(en_shl,qnode,makeinode(en_icon,3));
+				// The dot operation will deference the result below so the
+				// old dereference operation isn't needed. It is stripped 
+				// off by using ep->p[0] rather than ep.
+				ep1 = makenode(en_add,ep1->p[0],ep2);
+				tp1 = tp1->GetBtp();
+				tp1 = CondDeref(&ep1,tp1);
+				break;
+			}
 			if(lastst != id) {
 				error(ERR_IDEXPECT);
 				break;
@@ -2036,7 +2131,11 @@ TYP *forcefit(ENODE **node1,TYP *tp1,ENODE **node2,TYP *tp2, bool promote)
 	ENODE *n2;
 
 	if (tp1==tp2)	// duh
-		return tp1;
+		return (tp1);
+	if (tp1 && tp2) {
+		if (tp1->type == tp2->type)
+			return (tp1);
+	}
 	if (node2)
 		n2 = *node2;
 	else
@@ -2055,6 +2154,7 @@ TYP *forcefit(ENODE **node1,TYP *tp1,ENODE **node2,TYP *tp2, bool promote)
 		case bt_enum:	*node1 = makenode(en_cubw,*node1,*node2); (*node1)->esize = 2; return &stdlong;
 		case bt_pointer:*node1 = makenode(en_cubu,*node1,*node2); (*node1)->esize = 2; return tp2;
 		case bt_exception:	*node1 = makenode(en_cubu,*node1,*node2); (*node1)->esize = 2; return &stdexception;
+		case bt_vector:	return (tp2);
 		}
 		return tp1;
 	case bt_byte:
@@ -2070,6 +2170,7 @@ TYP *forcefit(ENODE **node1,TYP *tp1,ENODE **node2,TYP *tp2, bool promote)
 		case bt_enum:	*node1 = makenode(en_cbw,*node1,*node2); (*node1)->esize = 2; return &stdlong;
 		case bt_pointer:*node1 = makenode(en_cbu,*node1,*node2); (*node1)->esize = 2; return tp2;
 		case bt_exception:	*node1 = makenode(en_cbu,*node1,*node2); (*node1)->esize = 2; return &stdexception;
+		case bt_vector:	return (tp2);
 		}
 		return tp1;
 	case bt_enum:
@@ -2086,6 +2187,7 @@ TYP *forcefit(ENODE **node1,TYP *tp1,ENODE **node2,TYP *tp2, bool promote)
 		case bt_enum:	*node1 = makenode(en_ccw,*node1,*node2); (*node1)->esize = 2; return &stdlong;
 		case bt_pointer:*node1 = makenode(en_ccu,*node1,*node2); (*node1)->esize = 2; return tp2;
 		case bt_exception:	*node1 = makenode(en_ccu,*node1,*node2); (*node1)->esize = 2; return &stdexception;
+		case bt_vector:	return (tp2);
 		}
 		return tp1;
 	case bt_uchar:
@@ -2102,6 +2204,7 @@ TYP *forcefit(ENODE **node1,TYP *tp1,ENODE **node2,TYP *tp2, bool promote)
 		case bt_enum:	*node1 = makenode(en_cucw,*node1,n2); (*node1)->esize = 2; return &stdlong;
 		case bt_pointer:*node1 = makenode(en_cucu,*node1,n2); (*node1)->esize = 2; return tp2;
 		case bt_exception:	*node1 = makenode(en_cucu,*node1,*node2); (*node1)->esize = 2; return &stdexception;
+		case bt_vector:	return (tp2);
 		}
 		return tp1;
 	case bt_char:
@@ -2118,6 +2221,7 @@ TYP *forcefit(ENODE **node1,TYP *tp1,ENODE **node2,TYP *tp2, bool promote)
 		case bt_enum:	*node1 = makenode(en_ccw,*node1,n2); (*node1)->esize = 2; return &stdlong;
 		case bt_pointer:*node1 = makenode(en_ccu,*node1,n2); (*node1)->esize = 2; return tp2;
 		case bt_exception:	*node1 = makenode(en_ccu,*node1,*node2); (*node1)->esize = 2; return &stdexception;
+		case bt_vector:	return (tp2);
 		}
 		return tp1;
 	case bt_ushort:
@@ -2134,6 +2238,7 @@ TYP *forcefit(ENODE **node1,TYP *tp1,ENODE **node2,TYP *tp2, bool promote)
 		case bt_enum:	*node1 = makenode(en_cuhw,*node1,*node2); (*node1)->esize = 2; return &stdlong;
 		case bt_pointer:*node1 = makenode(en_cuhu,*node1,*node2); (*node1)->esize = 2; return tp2;
 		case bt_exception:	*node1 = makenode(en_cuhu,*node1,*node2); (*node1)->esize = 2; return &stdexception;
+		case bt_vector:	return (tp2);
 		}
 		return tp1;
 	case bt_short:
@@ -2150,6 +2255,7 @@ TYP *forcefit(ENODE **node1,TYP *tp1,ENODE **node2,TYP *tp2, bool promote)
 		case bt_enum:	*node1 = makenode(en_chu,*node1,*node2); (*node1)->esize = 2; return &stdlong;
 		case bt_pointer:*node1 = makenode(en_chu,*node1,*node2); (*node1)->esize = 2; return tp2;
 		case bt_exception:	*node1 = makenode(en_chu,*node1,*node2); (*node1)->esize = 2; return &stdexception;
+		case bt_vector:	return (tp2);
 		}
 		return tp1;
 	case bt_bitfield:
@@ -2171,6 +2277,8 @@ TYP *forcefit(ENODE **node1,TYP *tp1,ENODE **node2,TYP *tp2, bool promote)
 				*node1 = makenode(en_i2q,*node1,*node2);
 				return tp2;
 			}
+			if (tp2->type==bt_vector)
+				return (tp2);
 		}
 		else {
 			switch(tp2->type) {
@@ -2207,6 +2315,7 @@ TYP *forcefit(ENODE **node1,TYP *tp1,ENODE **node2,TYP *tp2, bool promote)
 			case bt_float:	*node1 = makenode(en_d2i,*node1,*node2); (*node1)->esize = 2; return &stdlong;
 			case bt_triple:	*node1 = makenode(en_t2i,*node1,*node2); (*node1)->esize = 2; return &stdlong;
 			case bt_quad:	*node1 = makenode(en_q2i,*node1,*node2); (*node1)->esize = 2; return &stdlong;
+			case bt_vector: return (tp2);
 			//case bt_double:	node1 = makenode(en_dtoi,*node1,*node2); (*node1)->esize = 2; return &stdlong;
 			}
 		}
@@ -2235,11 +2344,13 @@ TYP *forcefit(ENODE **node1,TYP *tp1,ENODE **node2,TYP *tp2, bool promote)
 				return &stddbl;
 			switch(tp2->type) {
 			case bt_long:	*node2 = makenode(en_i2d,*node2,*node1); break;
+			case bt_vector:	return (tp2);
 			}
 			return tp1;
 	case bt_double:
 			switch(tp2->type) {
 			case bt_long:	*node2 = makenode(en_i2d,*node2,*node1); break;
+			case bt_vector:	return (tp2);
 			//case bt_float:	*node1 = makenode(en_s2q,*node1,*node2); break;
 			}
 			return tp1;
@@ -2294,16 +2405,16 @@ TYP *forcefit(ENODE **node1,TYP *tp1,ENODE **node2,TYP *tp2, bool promote)
 static int isscalar(TYP *tp)
 {
 	return
-			tp->type == bt_byte ||
-			tp->type == bt_char ||
-      tp->type == bt_short ||
-      tp->type == bt_long ||
-			tp->type == bt_ubyte ||
-			tp->type == bt_uchar ||
-      tp->type == bt_ushort ||
-      tp->type == bt_ulong ||
-      tp->type == bt_exception ||
-      tp->type == bt_unsigned;
+		tp->type == bt_byte ||
+		tp->type == bt_char ||
+		tp->type == bt_short ||
+		tp->type == bt_long ||
+		tp->type == bt_ubyte ||
+		tp->type == bt_uchar ||
+		tp->type == bt_ushort ||
+		tp->type == bt_ulong ||
+		tp->type == bt_exception ||
+		tp->type == bt_unsigned;
 }
 
 /*
@@ -2334,7 +2445,6 @@ TYP *multops(ENODE **node)
                 oper = lastst;
                 NextToken();       /* move on to next unary op */
                 tp2 = ParseCastExpression(&ep2);
-				isScalar = !tp2->IsVectorType();
                 if( tp2 == 0 ) {
                         error(ERR_IDEXPECT);
                         *node = ep1;
@@ -2342,6 +2452,7 @@ TYP *multops(ENODE **node)
                             (*node)->SetType(tp1);
                         return tp1;
                         }
+				isScalar = !tp2->IsVectorType();
                 tp1 = forcefit(&ep2,tp2,&ep1,tp1,true);
                 switch( oper ) {
                         case star:
@@ -2430,6 +2541,7 @@ static TYP *addops(ENODE **node)
     TYP *tp1, *tp2;
     int oper;
 	int sz1, sz2;
+	bool isScalar = true;
 
     Enter("Addops");
     ep1 = (ENODE *)NULL;
@@ -2450,6 +2562,7 @@ static TYP *addops(ENODE **node)
             oper = (lastst == plus);
             NextToken();
             tp2 = multops(&ep2);
+			isScalar = !tp2->IsVectorType();
             if( tp2 == 0 ) {
                     error(ERR_IDEXPECT);
                     *node = ep1;
@@ -2504,7 +2617,10 @@ static TYP *addops(ENODE **node)
 					ep1->esize = 8;
 					break;
 				case bt_vector:
-    				ep1 = makenode( oper ? en_vadd : en_vsub,ep1,ep2);
+					if (isScalar)
+    					ep1 = makenode( oper ? en_vadds : en_vsubs,ep1,ep2);
+					else
+    					ep1 = makenode( oper ? en_vadd : en_vsub,ep1,ep2);
 					ep1->esize = 8;
 					break;
 				default:
@@ -2537,8 +2653,10 @@ TYP *shiftop(ENODE **node)
 	tp1 = addops(&ep1);
 	if( tp1 == 0)
         goto xit;
-    while( lastst == lshift || lastst == rshift) {
+    while( lastst == lshift || lastst == rshift || lastst==lrot || lastst==rrot) {
             oper = (lastst == lshift);
+			if (lastst==lrot || lastst==rrot)
+				oper=2 + (lastst==lrot);
             NextToken();
             tp2 = addops(&ep2);
             if( tp2 == 0 )
@@ -2548,10 +2666,22 @@ TYP *shiftop(ENODE **node)
 					if (tp1->IsFloatType())
 						error(ERR_UNDEF_OP);
 					else {
-						if (tp1->isUnsigned)
-							ep1 = makenode(oper ? en_shlu : en_shru,ep1,ep2);
-						else
-							ep1 = makenode(oper ? en_asl : en_asr,ep1,ep2);
+						if (tp1->isUnsigned) {
+							switch(oper) {
+							case 0:	ep1 = makenode(en_shru,ep1,ep2); break;
+							case 1:	ep1 = makenode(en_shlu,ep1,ep2); break;
+							case 2:	ep1 = makenode(en_ror,ep1,ep2); break;
+							case 3:	ep1 = makenode(en_rol,ep1,ep2); break;
+							}
+						}
+						else {
+							switch(oper) {
+							case 0:	ep1 = makenode(en_asr,ep1,ep2); break;
+							case 1:	ep1 = makenode(en_asl,ep1,ep2); break;
+							case 2:	ep1 = makenode(en_ror,ep1,ep2); break;
+							case 3:	ep1 = makenode(en_rol,ep1,ep2); break;
+							}
+						}
 						ep1->esize = tp1->size;
 						PromoteConstFlag(ep1);
 						}
@@ -2569,8 +2699,11 @@ TYP *shiftop(ENODE **node)
  *      relation handles the relational operators < <= > and >=.
  */
 TYP     *relation(ENODE **node)
-{       ENODE    *ep1, *ep2;
-        TYP             *tp1, *tp2;
+{
+	ENODE *ep1, *ep2;
+    TYP *tp1, *tp2;
+	bool isVector = false;
+
         int             nt;
         Enter("Relation");
         *node = (ENODE *)NULL;
@@ -2578,40 +2711,50 @@ TYP     *relation(ENODE **node)
         if( tp1 == 0 )
                 goto xit;
         for(;;) {
+			if (tp1->IsVectorType())
+				isVector = true;
                 switch( lastst ) {
 
                         case lt:
-								if (tp1->IsFloatType())
-                                    nt = en_flt;
-                                else if( tp1->isUnsigned )
-                                        nt = en_ult;
-                                else
-                                        nt = en_lt;
-                                break;
+							if (tp1->IsVectorType())
+								nt = en_vlt;
+							else if (tp1->IsFloatType())
+                                nt = en_flt;
+                            else if( tp1->isUnsigned )
+                                    nt = en_ult;
+                            else
+                                    nt = en_lt;
+                            break;
                         case gt:
-								if (tp1->IsFloatType())
-                                    nt = en_fgt;
-                                else if( tp1->isUnsigned )
-                                        nt = en_ugt;
-                                else
-                                        nt = en_gt;
-                                break;
+							if (tp1->IsVectorType())
+								nt = en_vgt;
+							else if (tp1->IsFloatType())
+                                nt = en_fgt;
+                            else if( tp1->isUnsigned )
+                                    nt = en_ugt;
+                            else
+                                    nt = en_gt;
+                            break;
                         case leq:
-								if (tp1->IsFloatType())
-                                    nt = en_fle;
-                                else if( tp1->isUnsigned )
-                                        nt = en_ule;
-                                else
-                                        nt = en_le;
-                                break;
+							if (tp1->IsVectorType())
+								nt = en_vle;
+							else if (tp1->IsFloatType())
+                                nt = en_fle;
+                            else if( tp1->isUnsigned )
+                                    nt = en_ule;
+                            else
+                                    nt = en_le;
+                            break;
                         case geq:
-								if (tp1->IsFloatType())
-                                    nt = en_fge;
-                                else if( tp1->isUnsigned )
-                                        nt = en_uge;
-                                else
-                                        nt = en_ge;
-                                break;
+							if (tp1->IsVectorType())
+								nt = en_vge;
+							else if (tp1->IsFloatType())
+                                nt = en_fge;
+                            else if( tp1->isUnsigned )
+                                    nt = en_uge;
+                            else
+                                    nt = en_ge;
+                            break;
                         default:
                                 goto fini;
                         }
@@ -2620,9 +2763,13 @@ TYP     *relation(ENODE **node)
                 if( tp2 == 0 )
                         error(ERR_IDEXPECT);
                 else    {
+					if (tp2->IsVectorType())
+						isVector = true;
                         tp1 = forcefit(&ep2,tp2,&ep1,tp1,true);
                         ep1 = makenode(nt,ep1,ep2);
-						ep1->esize = 2;
+						ep1->esize = 1;
+						if (isVector)
+							tp1 = TYP::Make(bt_vector_mask,sizeOfWord);
 						PromoteConstFlag(ep1);
                         }
                 }
@@ -2637,16 +2784,20 @@ xit:
 /*
  *      equalops handles the equality and inequality operators.
  */
-TYP     *equalops(ENODE **node)
+TYP *equalops(ENODE **node)
 {
-	ENODE    *ep1, *ep2;
-    TYP             *tp1, *tp2;
-    int             oper;
+	ENODE *ep1, *ep2;
+    TYP *tp1, *tp2;
+    int oper;
+	bool isVector = false;
+
     Enter("EqualOps");
     *node = (ENODE *)NULL;
     tp1 = relation(&ep1);
     if( tp1 == (TYP *)NULL )
         goto xit;
+	if (tp1->IsVectorType())
+		isVector = true;
     while( lastst == eq || lastst == neq ) {
         oper = (lastst == eq);
         NextToken();
@@ -2654,12 +2805,18 @@ TYP     *equalops(ENODE **node)
         if( tp2 == NULL )
                 error(ERR_IDEXPECT);
         else {
+			if (tp2->IsVectorType())
+				isVector = true;
             tp1 = forcefit(&ep2,tp2,&ep1,tp1,true);
-            if (tp1->IsFloatType())
+			if (tp1->IsVectorType())
+				ep1 = makenode( oper ? en_veq : en_vne,ep1,ep2);
+            else if (tp1->IsFloatType())
                 ep1 = makenode( oper ? en_feq : en_fne,ep1,ep2);
             else
                 ep1 = makenode( oper ? en_eq : en_ne,ep1,ep2);
 			ep1->esize = 2;
+			if (isVector)
+				tp1 = TYP::Make(bt_vector_mask,sizeOfWord);
 			ep1->etype = tp1->type;
             PromoteConstFlag(ep1);
         }
@@ -2868,6 +3025,24 @@ xit:
      	(*node)->SetType(tp1);
     Leave("Assignop",0);
         return tp1;
+}
+
+// ----------------------------------------------------------------------------
+// Evaluate an expression where the assignment operator is not legal.
+// ----------------------------------------------------------------------------
+static TYP *NonAssignExpression(ENODE **node)
+{
+	TYP *tp;
+	pep1 = nullptr;
+	Enter("NonAssignExpression");
+    *node = (ENODE *)NULL;
+    tp = conditional(node);
+    if( tp == (TYP *)NULL )
+        *node =(ENODE *)NULL;
+    Leave("NonAssignExpression",tp ? tp->type : 0);
+     if (*node)
+     	(*node)->SetType(tp);
+    return tp;
 }
 
 // ----------------------------------------------------------------------------

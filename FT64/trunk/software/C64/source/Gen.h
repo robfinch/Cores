@@ -19,7 +19,8 @@
 #define F_IMM6  2048
 #define BF_ASSIGN	4096
 #define F_VREG	8192
-#define F_ALL   (15|1024)      /* all modes allowed */
+#define F_VMREG	16384
+#define F_ALL   (15|1024|F_VREG|F_VMREG)      /* all modes allowed */
 #define F_NOVALUE 32768		/* dont need result value */
 
 /*      addressing mode structure       */
@@ -31,8 +32,7 @@ typedef struct amode {
 	unsigned int segment : 4;
 	unsigned int defseg : 1;
 	unsigned int tempflag : 1;
-	unsigned int isFloat : 1;
-	unsigned int isVector : 1;
+	unsigned int type : 16;
 	char FloatSize;
 	unsigned int isUnsigned : 1;
 	unsigned int lowhigh : 2;
@@ -52,6 +52,8 @@ struct ocode {
 	short opcode;
 	short length;
 	unsigned int isVolatile : 1;
+	unsigned int isReferenced : 1;	// label is referenced by code
+	unsigned int remove : 1;
 	short pregreg;
 	short predop;
 	AMODE *oper1, *oper2, *oper3, *oper4;
@@ -93,7 +95,7 @@ enum e_op {
 		op_feq, op_fne, op_flt, op_fle, op_fgt, op_fge,
 		op_gtu, op_geu, op_ltu, op_leu, op_nr,
         op_bhi, op_bhs, op_blo, op_bls, op_ext, op_lea, op_swap,
-        op_neg, op_not, op_com, op_cmp, op_clr, op_link, op_unlk, op_label, op_ilabel,
+        op_neg, op_not, op_com, op_cmp, op_clr, op_link, op_unlk, op_label,
         op_pea, op_cmpi, op_dc, op_asm, op_stop, op_fnname, 
         // W65C816 ops
         op_sec, op_clc, op_lda, op_sta, op_stz, op_adc, op_sbc, op_ora,
@@ -121,6 +123,7 @@ enum e_op {
 		op_vadds, op_vsubs, op_vmuls, op_vdivs,
 		op_vseq, op_vsne,
 		op_vslt, op_vsge, op_vsle, op_vsgt,
+		op_vex, op_veins,
 		// DSD9
 		op_ldd, op_ldb, op_ldp, op_ldw, op_ldbu, op_ldwu, op_ldpu, op_ldt, op_ldtu,
 		op_std, op_stb, op_stp, op_stw, op_stt, op_calltgt,
@@ -150,7 +153,7 @@ enum e_seg {
 };
 
 enum e_am {
-        am_reg, am_sreg, am_breg, am_fpreg, am_ind, am_brind, am_ainc, am_adec, am_indx, am_indx2,
+        am_reg, am_sreg, am_breg, am_fpreg, am_vreg, am_vmreg, am_ind, am_brind, am_ainc, am_adec, am_indx, am_indx2,
         am_direct, am_jdirect, am_immed, am_mask, am_none, am_indx3, am_predreg
 	};
 

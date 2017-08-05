@@ -85,7 +85,7 @@ TYP *TYP::Make(int bt, int siz)
 
 int TYP::GetSize(int num)
 {
-  if (num < 0 || num > 32767)
+  if (num == 0)
     return 0;
   return compiler.typeTable[num].size;
 }
@@ -97,7 +97,7 @@ int TYP::GetSize(int num)
 
 int TYP::GetBasicType(int num)
 {
-  if (num < 0 || num > 32767)
+  if (num==0)
     return 0;
   return compiler.typeTable[num].type;
 }

@@ -41,13 +41,13 @@ static void SignExtendBitfield(ENODE *node, AMODE *ap3, int mask)
 AMODE *GenerateBitfieldDereference(ENODE *node, int flags, int size)
 {
     AMODE *ap, *ap3;
-    long            mask;
-    int             width = node->bit_width + 1;
+    int width = node->bit_width + 1;
 	int isSigned;
+	uint64_t mask;
 
 	isSigned = node->nodetype==en_wfieldref || node->nodetype==en_hfieldref || node->nodetype==en_cfieldref || node->nodetype==en_bfieldref;
-	//mask = 0;
-	//while (--width)	mask = mask + mask + 1;
+	mask = 0;
+	while (--width)	mask = mask + mask + 1;
 	ap3 = GetTempRegister();
     ap = GenerateDereference(node, flags, node->esize, isSigned);
     MakeLegalAmode(ap, flags, node->esize);
@@ -58,35 +58,30 @@ AMODE *GenerateBitfieldDereference(ENODE *node, int flags, int size)
 	else	// memory
 		GenerateDiadic(op_lw,0,ap3,ap);
 	ReleaseTempRegister(ap);
+	if (node->bit_offset > 0)
+		GenerateTriadic(op_shru, 0, ap3, ap3, make_immed((int) node->bit_offset));
+	GenerateDiadic(op_and, 0, ap3, make_immed(mask));
 	if (isSigned)
-		Generate4adic(op_bfext,0,ap3, ap3, make_immed((int) node->bit_offset), make_immed((int)(node->bit_offset + node->bit_width-1)));
-	else
-		Generate4adic(op_bfextu,0,ap3, ap3, make_immed((int) node->bit_offset), make_immed((int)(node->bit_offset + node->bit_width-1)));
-	//if (node->bit_offset > 0)
-	//	GenerateTriadic(op_shru, 0, ap3, ap3, make_immed((int) node->bit_offset));
-	//GenerateTriadic(op_and, 0, ap3, ap3, make_immed(mask));
-	//if (isSigned)
-	//	SignExtendBitfield(node, ap3, mask);
+		SignExtendBitfield(node, ap3, mask);
 	MakeLegalAmode(ap3, flags, node->esize);
     return ap3;
 }
 
 void GenerateBitfieldInsert(AMODE *ap1, AMODE *ap2, int offset, int width)
 {
-	int mask;
 	int nn;
+	uint64_t mask;
 
-	Generate4adic(op_bfins,0,ap1,ap2,make_immed(offset), make_immed(offset+width-1));
-	//for (mask = nn = 0; nn < width; nn++)
-	//	mask = (mask << 1) | 1;
-	//mask = ~mask;
-	//GenerateTriadic(op_and,0,ap2,ap2,make_immed(~mask));		// clear unwanted bits in source
-	//if (offset > 0)
-	//	GenerateTriadic(op_ror,0,ap1,ap1,make_immed(offset));
-	//GenerateTriadic(op_and,0,ap1,ap1,make_immed(mask));		// clear bits in target field
-	//GenerateTriadic(op_or,0,ap1,ap1,ap2);
-	//if (offset > 0)
-	//	GenerateTriadic(op_rol,0,ap1,ap1,make_immed(offset));
+	for (mask = nn = 0; nn < width; nn++)
+		mask = (mask << 1) | 1;
+	mask = ~mask;
+	GenerateDiadic(op_and,0,ap2,make_immed(~mask));		// clear unwanted bits in source
+	if (offset > 0)
+		GenerateTriadic(op_ror,0,ap1,ap1,make_immed(offset));
+	GenerateDiadic(op_and,0,ap1,make_immed(mask));		// clear bits in target field
+	GenerateTriadic(op_or,0,ap1,ap1,ap2);
+	if (offset > 0)
+		GenerateTriadic(op_rol,0,ap1,ap1,make_immed(offset));
 }
 
 AMODE *GenerateBitfieldAssign(ENODE *node, int flags, int size)

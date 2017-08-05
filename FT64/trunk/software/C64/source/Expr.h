@@ -73,12 +73,14 @@ enum e_node {
 		en_fsadd, en_fssub, en_fsmul, en_fsdiv,
 		en_fadd, en_fsub, en_fmul, en_fdiv,
 		en_i2d, en_i2t, en_i2q, en_d2i, en_q2i, en_s2q, en_t2i, // 63<-
-        en_div, en_asl, en_shl, en_shlu, en_shr, en_shru, en_asr, en_cond, en_assign, 
+        en_div, en_asl, en_shl, en_shlu, en_shr, en_shru, en_asr, en_rol, en_ror,
+		en_cond, en_assign, 
         en_asadd, en_assub, en_asmul, en_asdiv, en_asdivu, en_asmod, en_asmodu,
 		en_asrsh, en_asrshu, en_asmulu, //81
         en_aslsh, en_asand, en_asor, en_asxor, en_uminus, en_not, en_compl,
         en_eq, en_ne, en_lt, en_le, en_gt, en_ge,
         en_feq, en_fne, en_flt, en_fle, en_fgt, en_fge,
+        en_veq, en_vne, en_vlt, en_vle, en_vgt, en_vge,
 		en_and, en_or, en_land, en_lor, //104
         en_xor, en_ainc, en_adec, en_mulu, en_udiv, en_umod, en_ugt,
         en_uge, en_ule, en_ult,
@@ -89,9 +91,9 @@ enum e_node {
 		en_chk,
 		en_abs, en_max, en_min,
 		// Vector
-		en_autovcon, en_vector_ref,
+		en_autovcon, en_autovmcon, en_vector_ref, en_vex, en_veins,
 		en_vadd, en_vsub, en_vmul, en_vdiv,
-		en_vmuls,
+		en_vadds, en_vsubs, en_vmuls, en_vdivs
 		};
 
 class ENODE {
@@ -109,6 +111,7 @@ public:
 	unsigned int isDouble : 1;
 	unsigned int isCheckExpr : 1;
 	unsigned int isPascal : 1;
+	ENODE *vmask;
 	__int8 bit_width;
 	__int8 bit_offset;
 	__int8 scale;

@@ -171,9 +171,12 @@ int IdentifyKeyword()
 		if (p[1]=='u' && p[2]=='t' && p[3]=='o' && p[4]=='\0')
 			return lastst = kw_auto;
 	}
-	if (p[0]=='v') {		// virtual,void,volatile
+	if (p[0]=='v') {		// vector,vector_mask,virtual,void,volatile
 		if (p[1]=='e' && p[2]=='c' && p[3]=='t' && p[4]=='o' && p[5]=='r' && p[6]=='\0')
 			return lastst = kw_vector;
+		if (p[1]=='e' && p[2]=='c' && p[3]=='t' && p[4]=='o' && p[5]=='r'
+			&& p[6]=='_' && p[7]=='m' && p[8]=='a' && p[9]=='s' && p[10]=='k' && p[11]=='\0')
+			return lastst = kw_vector_mask;
 		if (p[1]=='i' && p[2]=='r' && p[3]=='t' && p[4]=='u' && p[5]=='a' && p[6]=='l' && p[7]=='\0')
 			return lastst = kw_virtual;
 		if (p[1]=='o' && p[2]=='i' && p[3]=='d' && p[4]=='\0')

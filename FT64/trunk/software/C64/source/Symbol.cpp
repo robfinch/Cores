@@ -708,7 +708,7 @@ void SYM::BuildParameterList(int *num, int *numa)
 		// passed.
 		if (!noParmOffset)
 			poffset += round8(sp1->tp->size);
-		if (round8(sp1->tp->size) > 8)
+		if (round8(sp1->tp->size) > 8 && !sp1->tp->IsVectorType())
 			IsLeaf = FALSE;
 		sp1->storage_class = sc_auto;
 	}

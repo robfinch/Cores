@@ -63,7 +63,7 @@ int bitsset(int64_t mask)
 	int nn,bs=0;
 	for (nn =0; nn < 64; nn++)
 		if (mask & (1LL << nn)) bs++;
-	return bs;
+	return (bs);
 }
 
 AMODE *makereg(int r)
@@ -72,7 +72,26 @@ AMODE *makereg(int r)
     ap = allocAmode();
     ap->mode = am_reg;
     ap->preg = r;
-    return ap;
+    return (ap);
+}
+
+AMODE *makevreg(int r)
+{
+	AMODE *ap;
+    ap = allocAmode();
+    ap->mode = am_reg;
+    ap->preg = r;
+	ap->type = stdvector.GetIndex();
+    return (ap);
+}
+
+AMODE *makevmreg(int r)
+{
+	AMODE *ap;
+    ap = allocAmode();
+    ap->mode = am_vmreg;
+    ap->preg = r;
+    return (ap);
 }
 
 AMODE *makefpreg(int r)
@@ -81,7 +100,7 @@ AMODE *makefpreg(int r)
     ap = allocAmode();
     ap->mode = am_fpreg;
     ap->preg = r;
-    ap->isFloat = TRUE;
+    ap->type = stddouble.GetIndex();
     return ap;
 }
 
@@ -155,7 +174,7 @@ AMODE *make_strlab(std::string s)
 	AMODE *ap;
     ap = allocAmode();
     ap->mode = am_direct;
-    ap->offset = makesnode(en_nacon,&s,&s,-1);
+    ap->offset = makesnode(en_nacon,new std::string(s),new std::string(s),-1);
     return ap;
 }
 

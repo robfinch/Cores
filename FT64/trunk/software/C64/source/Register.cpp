@@ -40,6 +40,7 @@ int bregmask = 0;
 */
 static short int next_reg;
 static short int next_vreg;
+static short int next_vmreg;
 static short int next_breg;
 #define MAX_REG 4			/* max. scratch data	register (D2) */
 #define	MAX_REG_STACK	30
@@ -50,6 +51,7 @@ static short int breg_in_use[16];	// 0 to 15
 static short int save_reg_in_use[256];
 static short int vreg_in_use[256];	// 0 to 15
 static short int save_vreg_in_use[256];
+static short int vmreg_in_use[256];	// 0 to 15
 
 static struct {
     enum e_am mode;
@@ -67,8 +69,12 @@ static struct {
 	breg_alloc[MAX_REG_STACK + 1],
 	vreg_stack[MAX_REG_STACK + 1],
 	vreg_alloc[MAX_REG_STACK + 1],
+	vmreg_stack[MAX_REG_STACK + 1],
+	vmreg_alloc[MAX_REG_STACK + 1],
 	save_vreg_alloc[MAX_REG_STACK + 1],
-	stacked_vregs[MAX_REG_STACK + 1]
+	save_vmreg_alloc[MAX_REG_STACK + 1],
+	stacked_vregs[MAX_REG_STACK + 1],
+	stacked_vmregs[MAX_REG_STACK + 1]
 ;
 
 static short int reg_stack_ptr;
@@ -77,11 +83,15 @@ static short int save_reg_alloc_ptr;
 static short int vreg_stack_ptr;
 static short int vreg_alloc_ptr;
 static short int save_vreg_alloc_ptr;
+static short int vmreg_stack_ptr;
+static short int vmreg_alloc_ptr;
+static short int save_vmreg_alloc_ptr;
 static short int breg_stack_ptr;
 static short int breg_alloc_ptr;
 
 char tmpregs[] = {1,2,3,4,5,6,7,8,9,10};
 char tmpvregs[] = {1,2,3,4,5,6,7,8,9,10};
+char tmpvmregs[] = {1,2,3};
 char tmpbregs[] = {5,6,7};
 char regstack[18];
 char bregstack[18];
@@ -97,6 +107,7 @@ void initRegStack()
 
 	next_reg = sym->IsLeaf ? 1 : 3;
 	next_vreg = sym->IsLeaf ? 1 : 3;
+	next_vmreg = 1;
     next_breg = 5;
 	//for (rsp=0; rsp < 3; rsp=rsp+1)
 	//	regstack[rsp] = tmpregs[rsp];
@@ -104,25 +115,31 @@ void initRegStack()
 	for (i = 0; i <= 255; i++) {
 		reg_in_use[i] = -1;
 		vreg_in_use[i] = -1;
+		vmreg_in_use[i] = -1;
 		breg_in_use[i&15] = -1;
 	}
     reg_stack_ptr = 0;
     reg_alloc_ptr = 0;
     vreg_stack_ptr = 0;
     vreg_alloc_ptr = 0;
+    vmreg_stack_ptr = 0;
+    vmreg_alloc_ptr = 0;
     breg_stack_ptr = 0;
     breg_alloc_ptr = 0;
 //    act_scratch = 0;
     memset(reg_stack,0,sizeof(reg_stack));
     memset(reg_alloc,0,sizeof(reg_alloc));
-    memset(vreg_stack,0,sizeof(reg_stack));
-    memset(vreg_alloc,0,sizeof(reg_alloc));
+    memset(vreg_stack,0,sizeof(vreg_stack));
+    memset(vreg_alloc,0,sizeof(vreg_alloc));
+    memset(vmreg_stack,0,sizeof(vmreg_stack));
+    memset(vmreg_alloc,0,sizeof(vmreg_alloc));
     memset(breg_stack,0,sizeof(breg_stack));
     memset(breg_alloc,0,sizeof(breg_alloc));
     memset(stacked_regs,0,sizeof(stacked_regs));
     memset(save_reg_alloc,0,sizeof(save_reg_alloc));
-    memset(stacked_vregs,0,sizeof(stacked_regs));
-    memset(save_vreg_alloc,0,sizeof(save_reg_alloc));
+    memset(stacked_vregs,0,sizeof(stacked_vregs));
+    memset(save_vreg_alloc,0,sizeof(save_vreg_alloc));
+    memset(save_vmreg_alloc,0,sizeof(save_vmreg_alloc));
 }
 
 void GenerateTempRegPush(int reg, int rmode, int number, int stkpos)
@@ -237,7 +254,7 @@ AMODE *GetTempVectorRegister()
     ap->mode = am_reg;
     ap->preg = next_vreg;
     ap->deep = vreg_alloc_ptr;
-	ap->isVector = TRUE;
+	ap->type = stdvector.GetIndex();
     vreg_alloc[vreg_alloc_ptr].reg = next_vreg;
     vreg_alloc[vreg_alloc_ptr].mode = am_reg;
     vreg_alloc[vreg_alloc_ptr].f.isPushed = 'F';
@@ -246,6 +263,31 @@ AMODE *GetTempVectorRegister()
     if (vreg_alloc_ptr++ == MAX_REG_STACK)
 		fatal("GetTempVectorRegister(): register stack overflow");
 	return ap;
+}
+
+AMODE *GetTempVectorMaskRegister()
+{
+	AMODE *ap;
+    SYM *sym = currentFn;
+
+	if (vmreg_in_use[next_vmreg] >= 0) {
+//		GenerateTempVectorMaskRegPush(next_vreg, am_reg, vreg_in_use[next_vreg],0);
+	}
+	TRACE(printf("GetTempRegister:r%d\r\n", next_vmreg);)
+    vmreg_in_use[next_vreg] = vmreg_alloc_ptr;
+    ap = allocAmode();
+    ap->mode = am_vmreg;
+    ap->preg = next_vmreg;
+    ap->deep = vmreg_alloc_ptr;
+	ap->type = stdvectormask->GetIndex();
+    vmreg_alloc[vmreg_alloc_ptr].reg = next_vmreg;
+    vmreg_alloc[vmreg_alloc_ptr].mode = am_vmreg;
+    vmreg_alloc[vmreg_alloc_ptr].f.isPushed = 'F';
+    if (next_vmreg++ >= 3)
+		next_vmreg = 1;		/* wrap around */
+    if (vmreg_alloc_ptr++ == MAX_REG_STACK)
+		fatal("GetTempVectorRegister(): register stack overflow");
+	return (ap);
 }
 
 AMODE *GetTempFPRegister()
@@ -264,7 +306,7 @@ AMODE *GetTempFPRegister()
     ap->mode = am_fpreg;
     ap->preg = next_reg;
     ap->deep = reg_alloc_ptr;
-	ap->isFloat = TRUE;
+	ap->type = stddouble.GetIndex();
     reg_alloc[reg_alloc_ptr].reg = next_reg;
     reg_alloc[reg_alloc_ptr].mode = am_reg;
     reg_alloc[reg_alloc_ptr].f.isPushed = 'F';
@@ -351,7 +393,7 @@ void validate(AMODE *ap)
     SYM *sym = currentFn;
 	int frg = sym->IsLeaf ? 1 : 3;
 
-	if (!ap->isVector)
+	if (ap->type!=stdvector.GetIndex())
     switch (ap->mode) {
 	case am_reg:
 		if ((ap->preg >= frg && ap->preg <= 10) && reg_alloc[ap->deep].f.isPushed == 'T' ) {
@@ -411,8 +453,19 @@ void ReleaseTempRegister(AMODE *ap)
 	}
 
 	validate(ap);
-	if (ap->isVector) {
+	if (ap->type==stdvector.GetIndex()) {
 		switch (ap->mode) {
+		case am_vmreg:
+			if (ap->preg >= 1 && ap->preg <= 3) {
+				if (vmreg_in_use[ap->preg]==-1)
+					return;
+				if (next_vmreg-- <= 1)
+					next_vmreg = 3;
+				number = vmreg_in_use[ap->preg];
+				vmreg_in_use[ap->preg] = -1;
+				break;
+			}
+			return;
 		case am_ind:
 		case am_indx:
 		case am_ainc:
@@ -498,6 +551,14 @@ common:
 		fatal("ReleaseTempRegister(): register on stack");
 }
 
+void ReleaseTempVectorMaskRegister()
+{
+}
+
+void ReleaseTempVectorRegister()
+{
+}
+
 // The following is used to save temporary registers across function calls.
 // Save the list of allocated registers and registers in use.
 // Go through the allocated register list and generate a push instruction to
@@ -571,6 +632,18 @@ void ReleaseTempRegister(AMODE *ap)
 		PushOnRstk(ap->preg);
 }
 */
+AMODE *GetTempReg(int type)
+{
+	if (type==stdvectormask->GetIndex())
+		return (GetTempVectorMaskRegister());
+	else if (type==stdvector.GetIndex())
+		return (GetTempVectorRegister());
+	else if (type==stddouble.GetIndex())
+		return (GetTempFPRegister());
+	else
+		return (GetTempRegister());
+}
+
 void ReleaseTempFPRegister(AMODE *ap)
 {
      ReleaseTempRegister(ap);
@@ -580,7 +653,11 @@ void ReleaseTempReg(AMODE *ap)
 {
 	if (ap==nullptr)
 		return;
-	if (ap->mode==am_fpreg)
+	if (ap->type==stdvectormask->GetIndex())
+		ReleaseTempVectorMaskRegister();
+	else if (ap->type==stdvector.GetIndex())
+		ReleaseTempVectorRegister();
+	else if (ap->type==stddouble.GetIndex())
 		ReleaseTempFPRegister(ap);
 	else
 		ReleaseTempRegister(ap);

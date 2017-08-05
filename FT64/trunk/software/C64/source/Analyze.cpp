@@ -73,10 +73,10 @@ short int csendx;
 
 CSE *olist;         /* list of optimizable expressions */
 
-/*
- *      equalnode will return 1 if the expressions pointed to by
- *      node1 and node2 are equivalent.
- */
+//
+// equalnode will return 1 if the expressions pointed to by
+// node1 and node2 are equivalent.
+//
 int equalnode(ENODE *node1, ENODE *node2)
 {
     if (node1 == NULL || node2 == NULL) {
@@ -95,6 +95,7 @@ int equalnode(ENODE *node1, ENODE *node2)
       case en_labcon:
 	  case en_classcon:	// Check type ?
       case en_autocon:
+	  case en_autovcon:
 	  case en_autofcon:
 		  {
 			return (node1->i == node2->i);
@@ -105,8 +106,10 @@ int equalnode(ENODE *node1, ENODE *node2)
 	  case en_cnacon:
 			return (node1->sp->compare(*node2->sp)==0);
       default:
-	        if( IsLValue(node1) && equalnode(node1->p[0], node2->p[0])  )
+	        if( IsLValue(node1) && equalnode(node1->p[0], node2->p[0])  ) {
+//	        if( equalnode(node1->p[0], node2->p[0])  )
 		        return TRUE;
+			}
 		return FALSE;
     }
 }
@@ -223,6 +226,7 @@ static void scanexpr(ENODE *node, int duse)
                 InsertNodeIntoCSEList(node,duse);
                 break;
 		case en_autofcon:
+		case en_autovcon:
         case en_autocon:
 		case en_classcon:
         case en_tempfpref:
@@ -254,10 +258,11 @@ static void scanexpr(ENODE *node, int duse)
 		case en_wfieldref:
 		case en_uwfieldref:
         case en_struct_ref:
+		case en_vector_ref:
                 // There is something wrong with the following code that causes
                 // it to remove zero extension conversion from a byte to a word.
                 if( node->p[0]->nodetype == en_autocon || node->p[0]->nodetype==en_autofcon
-					|| node->p[0]->nodetype == en_classcon) {
+					|| node->p[0]->nodetype == en_classcon || node->p[0]->nodetype==en_autovcon) {
 					first = (SearchCSEList(node)==NULL);	// Detect if this is the first insert
                     csp = InsertNodeIntoCSEList(node,duse);
 					if (csp->voidf)
@@ -351,6 +356,15 @@ static void scanexpr(ENODE *node, int duse)
                 case en_fdadd:  case en_fdsub:
 				case en_fadd: case en_fsub:
 				case en_fmul: case en_fdiv:
+
+				case en_veq:    case en_vne:
+                case en_vlt:    case en_vle:
+                case en_vgt:    case en_vge:
+				case en_vadd: case en_vsub:
+				case en_vmul: case en_vdiv:
+				case en_vadds: case en_vsubs:
+				case en_vmuls: case en_vdivs:
+
 		case en_asmul:  case en_asmulu:
 		case en_asdiv:	case en_asdivu:
         case en_asmod:  case en_aslsh:
@@ -506,6 +520,7 @@ void repexpr(ENODE *node)
                 case en_icon:
                 case en_nacon:
                 case en_labcon:
+				case en_autovcon:
                 case en_autocon:
 				case en_classcon:
 				case en_cnacon:
@@ -536,6 +551,7 @@ void repexpr(ENODE *node)
 				case en_wfieldref:
 				case en_uwfieldref:
                 case en_struct_ref:
+				case en_vector_ref:
 					if( (csp = SearchCSEList(node)) != NULL ) {
 						if( csp->reg > 0 ) {
 							node->nodetype = en_regvar;
@@ -594,6 +610,7 @@ void repexpr(ENODE *node)
                 case en_gt:     case en_ge:
 				case en_ult:	case en_ule:
 				case en_ugt:	case en_uge:
+
                 case en_feq:    case en_fne:
                 case en_flt:    case en_fle:
                 case en_fgt:    case en_fge:
@@ -601,7 +618,16 @@ void repexpr(ENODE *node)
                 case en_fdadd:  case en_fdsub:
 				case en_fadd: case en_fsub:
 				case en_fmul: case en_fdiv:
-                case en_cond:   case en_void:
+
+				case en_veq:    case en_vne:
+                case en_vlt:    case en_vle:
+                case en_vgt:    case en_vge:
+				case en_vadd: case en_vsub:
+				case en_vmul: case en_vdiv:
+				case en_vadds: case en_vsubs:
+				case en_vmuls: case en_vdivs:
+
+				case en_cond:   case en_void:
                 case en_asadd:  case en_assub:
 				case en_asmul:  case en_asmulu:
 				case en_asdiv:  case en_asdivu:

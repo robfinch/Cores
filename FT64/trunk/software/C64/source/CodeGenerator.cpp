@@ -290,10 +290,10 @@ void MakeLegalAmode(AMODE *ap,int flags, int size)
         if( flags & F_REG )
         {
             ReleaseTempRegister(ap);      /* maybe we can use it... */
-			if (ap->isVector)
-				ap2 = GetTempVectorRegister();
+			if (ap)
+				ap2 = GetTempReg(ap->type);
 			else
-				ap2 = GetTempRegister();
+				ap2 = GetTempReg(stdint.GetIndex());
 			if (ap->mode == am_ind || ap->mode==am_indx)
                 GenLoad(ap2,ap,size,size);
 			else if (ap->mode==am_immed) {
@@ -374,7 +374,7 @@ void MakeLegalAmode(AMODE *ap,int flags, int size)
 
 void GenLoad(AMODE *ap3, AMODE *ap1, int ssize, int size)
 {
-	if (ap3->isVector) {
+	if (ap3->type==stdvector.GetIndex()) {
         GenerateDiadic(op_lv,0,ap3,ap1);
 	}
     else if (ap3->isUnsigned) {
@@ -397,7 +397,7 @@ void GenLoad(AMODE *ap3, AMODE *ap1, int ssize, int size)
 
 void GenStore(AMODE *ap1, AMODE *ap3, int size)
 {
-	if (ap1->isVector)
+	if (ap1->type==stdvector.GetIndex())
 	    GenerateDiadic(op_sv,0,ap1,ap3);
 	else
 		switch(size) {
@@ -435,7 +435,7 @@ void GenerateSignExtend(AMODE *ap, int isize, int osize, int flags)
 		return;
         //MakeLegalAmode(ap,flags & (F_REG|F_FPREG),isize);
 	}
-	if (ap->isFloat) {
+	if (ap->type==stddouble.GetIndex()) {
 		switch(isize) {
 		case 4:	GenerateDiadic(op_fs2d,0,ap,ap); break;
 		}
@@ -489,9 +489,9 @@ int ischar(ENODE *node)
 }
 
 // ----------------------------------------------------------------------------
-//      generate code to evaluate an index node (^+) and return
-//      the addressing mode of the result. This routine takes no
-//      flags since it always returns either am_ind or am_indx.
+// Generate code to evaluate an index node (^+) and return the addressing mode
+// of the result. This routine takes no flags since it always returns either
+// am_ind or am_indx.
 //
 // No reason to ReleaseTempReg() because the registers used are transported
 // forward.
@@ -605,8 +605,8 @@ long GetReferenceSize(ENODE *node)
 //
 AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
 {    
-	struct amode    *ap1;
-    int             siz1;
+	AMODE *ap1;
+    int siz1;
 
     Enter("Genderef");
 	siz1 = GetReferenceSize(node);
@@ -682,7 +682,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
 		else
 			ap1->FloatSize = 'd';
 		ap1->segment = stackseg;
-		ap1->isFloat = TRUE;
+		ap1->type = stddouble.GetIndex();
 //	    MakeLegalAmode(ap1,flags,siz1);
         MakeLegalAmode(ap1,flags,size);
 		goto xit;
@@ -703,8 +703,29 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
 		else
 			ap1->FloatSize = 'd';
 		ap1->segment = stackseg;
-		ap1->isVector = TRUE;
-//	    MakeLegalAmode(ap1,flags,siz1);
+		ap1->type = stdvector.GetIndex();
+		//	    MakeLegalAmode(ap1,flags,siz1);
+        MakeLegalAmode(ap1,flags,size);
+		goto xit;
+    }
+    else if( node->p[0]->nodetype == en_autovmcon )
+    {
+        ap1 = allocAmode();
+        ap1->mode = am_indx;
+        ap1->preg = regBP;
+        ap1->offset = makeinode(en_icon,node->p[0]->i);
+		ap1->offset->sym = node->p[0]->sym;
+		if (node->p[0]->tp)
+			switch(node->p[0]->tp->precision) {
+			case 32: ap1->FloatSize = 's'; break;
+			case 64: ap1->FloatSize = 'd'; break;
+			default: ap1->FloatSize = 'd'; break;
+			}
+		else
+			ap1->FloatSize = 'd';
+		ap1->segment = stackseg;
+		ap1->type = stdvectormask->GetIndex();
+		//	    MakeLegalAmode(ap1,flags,siz1);
         MakeLegalAmode(ap1,flags,size);
 		goto xit;
     }
@@ -741,10 +762,26 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
         ap1 = allocAmode();
 		ap1->mode = node->p[0]->i < 18 ? am_ind : am_fpreg;
 		ap1->preg = node->p[0]->i;
-		ap1->isFloat = TRUE;
+		ap1->type = stddouble.GetIndex();
         MakeLegalAmode(ap1,flags,size);
 	    Leave("Genderef",3);
         return ap1;
+	}
+	else if (node->p[0]->nodetype == en_vex) {
+		AMODE *ap2;
+		if (node->p[0]->p[0]->nodetype==en_vector_ref) {
+			ap1 = GenerateDereference(node->p[0]->p[0],F_REG,8,0);
+			ap2 = GenerateExpression(node->p[0]->p[1],F_REG,8);
+			if (ap1->offset && ap2->offset) {
+				GenerateTriadic(op_add,0,ap1,makereg(0),make_immed(ap2->offset->i));
+			}
+			ReleaseTempReg(ap2);
+			//ap1->mode = node->p[0]->i < 18 ? am_ind : am_reg;
+			//ap1->preg = node->p[0]->i;
+			ap1->type = stdvector.GetIndex();
+			MakeLegalAmode(ap1,flags,size);
+			return (ap1);
+		}
 	}
     ap1 = GenerateExpression(node->p[0],F_REG | F_IMMED,8); /* generate address */
     if( ap1->mode == am_reg || ap1->mode==am_fpreg)
@@ -829,6 +866,11 @@ AMODE *GenerateUnary(ENODE *node,int flags, int size, int op)
            op=op_fneg;
 	    GenerateDiadic(op,fsize(node),ap2,ap);
     }
+	else if (node->etype==bt_vector) {
+        ap2 = GetTempVectorRegister();
+        ap = GenerateExpression(node->p[0],F_REG,size);
+	    GenerateDiadic(op,0,ap2,ap);
+	}
     else {
         ap2 = GetTempRegister();
         ap = GenerateExpression(node->p[0],F_REG,size);
@@ -843,7 +885,7 @@ AMODE *GenerateUnary(ENODE *node,int flags, int size, int op)
 
 AMODE *GenerateBinary(ENODE *node,int flags, int size, int op)
 {
-	AMODE *ap1, *ap2, *ap3;
+	AMODE *ap1, *ap2, *ap3, *ap4;
 	
 	if (op==op_fadd || op==op_fsub || op==op_fmul || op==op_fdiv ||
         op==op_fdadd || op==op_fdsub || op==op_fdmul || op==op_fddiv ||
@@ -859,25 +901,51 @@ AMODE *GenerateBinary(ENODE *node,int flags, int size, int op)
 		}
 	    GenerateTriadic(op,fpsize(ap1),ap3,ap1,ap2);
 	}
-	if (op==op_vadd || op==op_vsub || op==op_vmul || op==op_vdiv
-		|| op==op_vmuls) {
+	else if (op==op_vadd || op==op_vsub || op==op_vmul || op==op_vdiv
+		|| op==op_vadds || op==op_vsubs || op==op_vmuls || op==op_vdivs
+		|| op==op_veins) {
    		ap3 = GetTempVectorRegister();
-		ap1 = GenerateExpression(node->p[0],F_REG,size);
-		ap2 = GenerateExpression(node->p[1],F_REG,size);
+		if (equalnode(node->p[0],node->p[1]) && !opt_nocgo) {
+			ap1 = GenerateExpression(node->p[0],F_REG,size);
+			ap2 = GenerateExpression(node->vmask,F_VMREG,size);
+		    Generate4adic(op,0,ap3,ap1,ap1,ap2);
+			ReleaseTempReg(ap2);
+			ap2 = nullptr;
+		}
+		else {
+			ap1 = GenerateExpression(node->p[0],F_VREG,size);
+			ap2 = GenerateExpression(node->p[1],F_VREG,size);
+			ap4 = GenerateExpression(node->vmask,F_VMREG,size);
+		    Generate4adic(op,0,ap3,ap1,ap2,ap4);
+			ReleaseTempReg(ap4);
+		}
 		// Generate a convert operation ?
 		//if (fpsize(ap1) != fpsize(ap2)) {
 		//	if (fpsize(ap2)=='s')
 		//		GenerateDiadic(op_fcvtsq, 0, ap2, ap2);
 		//}
+	}
+	else if (op==op_vex) {
+   		ap3 = GetTempRegister();
+		ap1 = GenerateExpression(node->p[0],F_REG,size);
+		ap2 = GenerateExpression(node->p[1],F_REG,size);
 	    GenerateTriadic(op,0,ap3,ap1,ap2);
 	}
 	else {
    		ap3 = GetTempRegister();
-		ap1 = GenerateExpression(node->p[0],F_REG,size);
-		ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
-	    GenerateTriadic(op,0,ap3,ap1,ap2);
+		if (equalnode(node->p[0],node->p[1]) && !opt_nocgo) {
+			ap1 = GenerateExpression(node->p[0],F_REG,size);
+			ap2 = nullptr;
+		    GenerateTriadic(op,0,ap3,ap1,ap1);
+		}
+		else {
+			ap1 = GenerateExpression(node->p[0],F_REG,size);
+			ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
+		    GenerateTriadic(op,0,ap3,ap1,ap2);
+		}
 	}
-    ReleaseTempReg(ap2);
+	if (ap2)
+		ReleaseTempReg(ap2);
     ReleaseTempReg(ap1);
     MakeLegalAmode(ap3,flags,size);
     return ap3;
@@ -967,13 +1035,15 @@ AMODE *GenerateMultiply(ENODE *node, int flags, int size, int op)
 	return ap3;
 }
 
-/*
- *      generate code to evaluate a condition operator node (?:)
- */
-AMODE *gen_hook(ENODE *node,int flags, int size)
+//
+// Generate code to evaluate a condition operator node (?:)
+//
+AMODE *GenerateHook(ENODE *node,int flags, int size)
 {
 	AMODE *ap1, *ap2;
     int false_label, end_label;
+	struct ocode *ip1;
+	int n1;
 
     false_label = nextlabel++;
     end_label = nextlabel++;
@@ -984,30 +1054,64 @@ AMODE *gen_hook(ENODE *node,int flags, int size)
     	GeneratePredicateMonadic(hook_predreg,op_ldi,make_immed(node->p[0]->i));
 	}
 */
+	ip1 = peep_tail;
+	ap2 = GenerateExpression(node->p[1]->p[1],flags,size);
+	n1 = PeepCount(ip1);
+	if (opt_nocgo)
+		n1 = 9999;
+	if (n1 > 4) {
+		peep_tail = ip1;
+		peep_tail->fwd = nullptr;
+	}
     GenerateFalseJump(node->p[0],false_label,0);
     node = node->p[1];
     ap1 = GenerateExpression(node->p[0],flags,size);
-    GenerateDiadic(op_bra,0,make_clabel(end_label),0);
+	if (n1 > 4)
+		GenerateDiadic(op_bra,0,make_clabel(end_label),0);
+	else {
+		if( !equal_address(ap1,ap2) )
+		{
+			GenerateMonadic(op_hint,0,make_immed(2));
+			GenerateDiadic(op_mov,0,ap2,ap1);
+		}
+	}
     GenerateLabel(false_label);
-    ap2 = GenerateExpression(node->p[1],flags,size);
-    if( !equal_address(ap1,ap2) )
-    {
-		GenerateMonadic(op_hint,0,make_immed(2));
-		GenerateDiadic(op_mov,0,ap1,ap2);
-    }
-    ReleaseTempReg(ap2);
-    GenerateLabel(end_label);
-    return (ap1);
+	if (n1 > 4) {
+		ap2 = GenerateExpression(node->p[1],flags,size);
+		if( !equal_address(ap1,ap2) )
+		{
+			GenerateMonadic(op_hint,0,make_immed(2));
+			GenerateDiadic(op_mov,0,ap1,ap2);
+		}
+	}
+	if (n1 > 4) {
+		ReleaseTempReg(ap2);
+		GenerateLabel(end_label);
+		return (ap1);
+	}
+	else {
+		ReleaseTempReg(ap1);
+		GenerateLabel(end_label);
+		return (ap2);
+	}
 }
 
 void GenMemop(int op, AMODE *ap1, AMODE *ap2, int ssize)
 {
 	AMODE *ap3;
 
-    if (ap1->isFloat) {
+	if (ap1->type==stddouble.GetIndex()) {
      	ap3 = GetTempRegister();
 		GenLoad(ap3,ap1,ssize,ssize);
 		GenerateTriadic(op,ap1->FloatSize,ap3,ap3,ap2);
+		GenStore(ap3,ap1,ssize);
+		ReleaseTempReg(ap3);
+		return;
+	}
+	else if (ap1->type==stdvector.GetIndex()) {
+   		ap3 = GetTempVectorRegister();
+		GenLoad(ap3,ap1,ssize,ssize);
+		GenerateTriadic(op,0,ap3,ap3,ap2);
 		GenStore(ap3,ap1,ssize);
 		ReleaseTempReg(ap3);
 		return;
@@ -1032,7 +1136,7 @@ void GenMemop(int op, AMODE *ap1, AMODE *ap2, int ssize)
 AMODE *GenerateAssignAdd(ENODE *node,int flags, int size, int op)
 {
 	AMODE *ap1, *ap2;
-    int             ssize;
+    int ssize;
 	bool negf = false;
 
     ssize = GetNaturalSize(node->p[0]);
@@ -1045,6 +1149,14 @@ AMODE *GenerateAssignAdd(ENODE *node,int flags, int size, int op)
            op = op_fadd;
         else if (op==op_sub)
            op = op_fsub;
+    }
+    else if (node->etype==bt_vector) {
+        ap1 = GenerateExpression(node->p[0],F_REG|F_MEM,ssize);
+        ap2 = GenerateExpression(node->p[1],F_REG,size);
+        if (op==op_add)
+           op = op_vadd;
+        else if (op==op_sub)
+           op = op_vsub;
     }
     else {
         ap1 = GenerateExpression(node->p[0],F_ALL,ssize);
@@ -1063,7 +1175,7 @@ AMODE *GenerateAssignAdd(ENODE *node,int flags, int size, int op)
 		GenMemop(op, ap1, ap2, ssize);
 	}
     ReleaseTempReg(ap2);
-	if (!ap1->isFloat && !ap1->isUnsigned)
+	if (ap1->type!=stddouble.GetIndex() && !ap1->isUnsigned)
 		GenerateSignExtend(ap1,ssize,size,flags);
     MakeLegalAmode(ap1,flags,size);
     return ap1;
@@ -1105,6 +1217,11 @@ AMODE *GenerateAssignMultiply(ENODE *node,int flags, int size, int op)
         ap1 = GenerateExpression(node->p[0],F_REG | F_MEM,ssize);
         ap2 = GenerateExpression(node->p[1],F_REG,size);
         op = op_fmul;
+    }
+    else if (node->etype==bt_vector) {
+        ap1 = GenerateExpression(node->p[0],F_REG | F_MEM,ssize);
+        ap2 = GenerateExpression(node->p[1],F_REG,size);
+		op = ap2->type==stdvector.GetIndex() ? op_vmul : op_vmuls;
     }
     else {
         ap1 = GenerateExpression(node->p[0],F_ALL & ~F_IMMED,ssize);
@@ -1308,6 +1425,7 @@ void GenerateArrayAssign(TYP *tp, ENODE *node1, ENODE *node2, AMODE *base)
 	int size = tp->size;
 	int offset, offset2;
 
+	offset = 0;
 	if (node1->tp)
 		tp = node1->tp->GetBtp();
 	else
@@ -1392,10 +1510,9 @@ AMODE *GenerateAggregateAssign(ENODE *node1, ENODE *node2)
 
 
 // ----------------------------------------------------------------------------
-//      generate code for an assignment node. if the size of the
-//      assignment destination is larger than the size passed then
-//      everything below this node will be evaluated with the
-//      assignment size.
+// Generate code for an assignment node. If the size of the assignment
+// destination is larger than the size passed then everything below this node
+// will be evaluated with the assignment size.
 // ----------------------------------------------------------------------------
 AMODE *GenerateAssign(ENODE *node, int flags, int size)
 {
@@ -1444,7 +1561,7 @@ AMODE *GenerateAssign(ENODE *node, int flags, int size)
 	//	ap2 = GenerateExpression(node->p[1],F_MEM,size);
 	//}
 	//else {
-		ap1 = GenerateExpression(node->p[0],F_REG|F_MEM,ssize);
+		ap1 = GenerateExpression(node->p[0],F_REG|F_FPREG|F_MEM|F_VREG|F_VMREG,ssize);
   		ap2 = GenerateExpression(node->p[1],F_ALL,size);
 		if (node->p[0]->isUnsigned && !node->p[1]->isUnsigned)
 		    GenerateZeroExtend(ap2,size,ssize);
@@ -1458,6 +1575,13 @@ AMODE *GenerateAssign(ENODE *node, int flags, int size)
 		else {
 			GenLoad(ap1,ap2,ssize,size);
 		}
+	}
+	else if (ap1->mode == am_vreg) {
+		if (ap2->mode==am_vreg) {
+			GenerateDiadic(op_mov,0,ap1,ap2);
+		}
+		else
+			GenLoad(ap1,ap2,ssize,size);
 	}
 	// ap1 is memory
 	else {
@@ -1482,12 +1606,24 @@ AMODE *GenerateAssign(ENODE *node, int flags, int size)
 				ap3 = GetTempRegister();
 			// Generate a memory to memory move (struct assignments)
 			if (ssize > 8) {
-				ap3 = GetTempRegister();
-				GenerateDiadic(op_ldi,0,ap3,make_immed(size));
-				GenerateTriadic(op_push,0,ap3,ap2,ap1);
-				GenerateDiadic(op_jal,0,makereg(LR),make_string("memcpy_"));
-				GenerateTriadic(op_add,0,makereg(SP),makereg(SP),make_immed(24));
-				ReleaseTempRegister(ap3);
+				if (ap1->type==stdvector.GetIndex() && ap2->type==stdvector.GetIndex()) {
+					if (ap2->mode==am_reg)
+						GenStore(ap2,ap1,ssize);
+					else {
+						ap3 = GetTempVectorRegister();
+						GenLoad(ap3,ap2,ssize,ssize);
+						GenStore(ap3,ap1,ssize);
+						ReleaseTempRegister(ap3);
+					}
+				}
+				else {
+					ap3 = GetTempRegister();
+					GenerateDiadic(op_ldi,0,ap3,make_immed(size));
+					GenerateTriadic(op_push,0,ap3,ap2,ap1);
+					GenerateDiadic(op_jal,0,makereg(regLR),make_string("memcpy_"));
+					GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),make_immed(24));
+					ReleaseTempRegister(ap3);
+				}
 			}
 			else {
                 GenLoad(ap3,ap2,ssize,size);
@@ -1630,7 +1766,7 @@ AMODE *GenerateAutoIncrement(ENODE *node,int flags,int size,int op)
 
 // autocon and autofcon nodes
 
-AMODE *GenAutocon(ENODE *node, int flags, int size, bool isFloat, bool isVector)
+AMODE *GenAutocon(ENODE *node, int flags, int size, int type)
 {
 	AMODE *ap1, *ap2;
 
@@ -1639,17 +1775,16 @@ AMODE *GenAutocon(ENODE *node, int flags, int size, bool isFloat, bool isVector)
 	ap2->mode = am_indx;
 	ap2->preg = regBP;          /* frame pointer */
 	ap2->offset = node;     /* use as constant node */
-	ap2->isFloat = isFloat;
-	ap2->isVector = isVector;
+	ap2->type = type;
 	GenerateDiadic(op_lea,0,ap1,ap2);
 	MakeLegalAmode(ap1,flags,size);
 	return ap1;             /* return reg */
 }
 
-/*
- *      general expression evaluation. returns the addressing mode
- *      of the result.
- */
+//
+// General expression evaluation. returns the addressing mode
+// of the result.
+//
 AMODE *GenerateExpression(ENODE *node, int flags, int size)
 {   
 	AMODE *ap1, *ap2, *ap3;
@@ -1676,7 +1811,7 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
         ap1 = allocAmode();
         ap1->mode = am_direct;
         ap1->offset = node;
-		ap1->isFloat = TRUE;
+		ap1->type = stdflt.GetIndex();
         MakeLegalAmode(ap1,flags,size);
         Leave("</GenerateExpression>",2); 
         return ap1;
@@ -1756,9 +1891,10 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
             MakeLegalAmode(ap1,flags,size);
 			Leave("GenExpression",7); 
             return ap1;
-    case en_autocon:	return GenAutocon(node, flags, size, false, false);
-    case en_autofcon:	return GenAutocon(node, flags, size, true, false);
-    case en_autovcon:	return GenAutocon(node, flags, size, false, true);
+    case en_autocon:	return GenAutocon(node, flags, size, stdint.GetIndex());
+    case en_autofcon:	return GenAutocon(node, flags, size, stddouble.GetIndex());
+    case en_autovcon:	return GenAutocon(node, flags, size, stdvector.GetIndex());
+    case en_autovmcon:	return GenAutocon(node, flags, size, stdvectormask->GetIndex());
     case en_classcon:
             ap1 = GetTempRegister();
             ap2 = allocAmode();
@@ -1791,7 +1927,7 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
     case en_triple_ref:
 	case en_quad_ref:
 			ap1 = GenerateDereference(node,flags,size,1);
-			ap1->isFloat = TRUE;
+			ap1->type = stddouble.GetIndex();
             return ap1;
 	case en_ubfieldref:
 	case en_ucfieldref:
@@ -1892,7 +2028,11 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
 	case en_vadd:	  return GenerateBinary(node,flags,size,op_vadd);
 	case en_vsub:	  return GenerateBinary(node,flags,size,op_vsub);
 	case en_vmul:	  return GenerateBinary(node,flags,size,op_vmul);
+	case en_vadds:	  return GenerateBinary(node,flags,size,op_vadds);
+	case en_vsubs:	  return GenerateBinary(node,flags,size,op_vsubs);
 	case en_vmuls:	  return GenerateBinary(node,flags,size,op_vmuls);
+	case en_vex:      return GenerateBinary(node,flags,size,op_vex);
+	case en_veins:    return GenerateBinary(node,flags,size,op_veins);
 
 	case en_fadd:	  return GenerateBinary(node,flags,size,op_fadd);
 	case en_fsub:	  return GenerateBinary(node,flags,size,op_fsub);
@@ -1927,6 +2067,8 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
     case en_asr:	return GenerateShift(node,flags,size,op_asr);
     case en_shr:	return GenerateShift(node,flags,size,op_asr);
     case en_shru:   return GenerateShift(node,flags,size,op_shru);
+	case en_rol:   return GenerateShift(node,flags,size,op_rol);
+	case en_ror:   return GenerateShift(node,flags,size,op_ror);
 	/*	
 	case en_asfadd: return GenerateAssignAdd(node,flags,size,op_fadd);
 	case en_asfsub: return GenerateAssignAdd(node,flags,size,op_fsub);
@@ -1975,10 +2117,13 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
     case en_feq:    case en_fne:
     case en_flt:    case en_fle:
     case en_fgt:    case en_fge:
+    case en_veq:    case en_vne:
+    case en_vlt:    case en_vle:
+    case en_vgt:    case en_vge:
       return GenExpr(node);
 
 	case en_cond:
-            return gen_hook(node,flags,size);
+            return GenerateHook(node,flags,size);
     case en_void:
             natsize = GetNaturalSize(node->p[0]);
             ReleaseTempRegister(GenerateExpression(node->p[0],F_ALL | F_NOVALUE,natsize));
@@ -2084,6 +2229,7 @@ int GetNaturalSize(ENODE *node)
 	case en_flt_ref: return sizeOfFPS;
 	case en_w_ref:  case en_uw_ref:
 		return 8;
+	case en_autovcon:
 	case en_vector_ref:
 		return 512;
 	case en_dbl_ref:
@@ -2107,6 +2253,10 @@ int GetNaturalSize(ENODE *node)
 	case en_fmul:	case en_fdiv:
 	case en_fsadd:	case en_fssub:
 	case en_fsmul:	case en_fsdiv:
+	case en_vadd:	case en_vsub:
+	case en_vmul:	case en_vdiv:
+	case en_vadds:	case en_vsubs:
+	case en_vmuls:	case en_vdivs:
 	case en_add:    case en_sub:
 	case en_mul:    case en_mulu:
 	case en_div:	case en_udiv:
@@ -2193,6 +2343,12 @@ void GenerateTrueJump(ENODE *node, int label, unsigned int prediction)
 	case en_fle: GenerateCmp(node, op_fle, label, prediction); break;
 	case en_fgt: GenerateCmp(node, op_fgt, label, prediction); break;
 	case en_fge: GenerateCmp(node, op_fge, label, prediction); break;
+	case en_veq: GenerateCmp(node, op_vseq, label, prediction); break;
+	case en_vne: GenerateCmp(node, op_vsne, label, prediction); break;
+	case en_vlt: GenerateCmp(node, op_vslt, label, prediction); break;
+	case en_vle: GenerateCmp(node, op_vsle, label, prediction); break;
+	case en_vgt: GenerateCmp(node, op_vsgt, label, prediction); break;
+	case en_vge: GenerateCmp(node, op_vsge, label, prediction); break;
 	case en_land:
 		lab0 = nextlabel++;
 		GenerateFalseJump(node->p[0],lab0,prediction);
@@ -2246,6 +2402,12 @@ void GenerateFalseJump(ENODE *node,int label, unsigned int prediction)
 	case en_fle: GenerateCmp(node, op_fgt, label, prediction); break;
 	case en_fgt: GenerateCmp(node, op_fle, label, prediction); break;
 	case en_fge: GenerateCmp(node, op_flt, label, prediction); break;
+	case en_veq: GenerateCmp(node, op_vsne, label, prediction); break;
+	case en_vne: GenerateCmp(node, op_vseq, label, prediction); break;
+	case en_vlt: GenerateCmp(node, op_vsge, label, prediction); break;
+	case en_vle: GenerateCmp(node, op_vsgt, label, prediction); break;
+	case en_vgt: GenerateCmp(node, op_vsle, label, prediction); break;
+	case en_vge: GenerateCmp(node, op_vslt, label, prediction); break;
 	case en_land:
 		GenerateFalseJump(node->p[0],label,prediction^1);
 		GenerateFalseJump(node->p[1],label,prediction^1);

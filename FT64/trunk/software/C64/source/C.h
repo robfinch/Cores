@@ -1,5 +1,5 @@
-#ifndef C_H
-#define C_H
+#ifndef _C_H
+#define _C_H
 
 // ============================================================================
 //        __
@@ -26,42 +26,24 @@
 //                                                                          
 // ============================================================================
 //
-/*
- *	68000 C compiler
- *
- *	Copyright 1984, 1985, 1986 Matthew Brandt.
- *  all commercial rights reserved.
- *
- *	This compiler is intended as an instructive tool for personal use. Any
- *	use for profit without the written consent of the author is prohibited.
- *
- *	This compiler may be distributed freely for non-commercial use as long
- *	as this notice stays intact. Please forward any enhancements or questions
- *	to:
- *
- *		Matthew Brandt
- *		Box 920337
- *		Norcross, Ga 30092
- */
-
-/*      compiler header file    */
-
 class ENODE;
 class Statement;
 
 enum e_sym {
   tk_nop,
         id, cconst, iconst, lconst, sconst, rconst, plus, minus,
-        star, divide, lshift, rshift, modop, eq, neq, lt, leq, gt,
+        star, divide, lshift, rshift, lrot, rrot,
+		modop, eq, neq, lt, leq, gt,
         geq, assign, asplus, asminus, astimes, asdivide, asmodop,
-		aslshift, asrshift, asand, asor, asxor, autoinc, autodec, hook, cmpl,
+		aslshift, asrshift, aslrot, asrrot,
+		asand, asor, asxor, autoinc, autodec, hook, cmpl,
         comma, colon, semicolon, double_colon, uparrow, openbr, closebr, begin, end,
         openpa, closepa, pointsto, dot, lor, land, nott, bitorr, bitandd,
 		ellipsis,
 		// functions
 		kw_abs, kw_max, kw_min,
 
-		kw_vector,
+		kw_vector, kw_vector_mask,
 		kw_int, kw_byte, kw_int8, kw_int16, kw_int32, kw_int40, kw_int64, kw_int80,
 		kw_icache, kw_dcache, kw_thread,
         kw_void, kw_char, kw_float, kw_double, kw_triple,
@@ -93,7 +75,7 @@ enum e_bt {
 		bt_byte, bt_ubyte,
         bt_char, bt_short, bt_long, bt_float, bt_double, bt_triple, bt_quad, bt_pointer,
 		bt_uchar, bt_ushort, bt_ulong,
-        bt_unsigned, bt_vector,
+        bt_unsigned, bt_vector, bt_vector_mask,
         bt_struct, bt_union, bt_class, bt_enum, bt_void,
         bt_func, bt_ifunc, bt_label,
 		bt_interrupt, bt_oscall, bt_pascal, bt_kernel, bt_bitfield, bt_ubitfield,
@@ -305,7 +287,10 @@ public:
 	__int16 precision;			// precision of the numeric in bits
 	int8_t		bit_width;
 	int8_t		bit_offset;
+	int8_t		ven;			// vector element number
 	long        size;
+	int8_t dimen;
+	int numele;					// number of elements in array / vector length
 	TABLE lst;
 	int btp;
 	TYP *GetBtp();
@@ -361,6 +346,7 @@ class Declaration
 public:
 	Declaration *next;
 	static int declare(SYM *parent,TABLE *table,int al,int ilc,int ztype);
+	static void ParseVoid();
 	static void ParseConst();
 	static void ParseTypedef();
 	static void ParseNaked();
@@ -373,6 +359,10 @@ public:
 	static void ParseInt16();
 	static void ParseInt8();
 	static void ParseByte();
+	static void ParseFloat();
+	static void ParseDouble();
+	static void ParseVector();
+	static void ParseVectorMask();
 	static SYM *ParseId();
 	static void ParseDoubleColon(SYM *sp);
 	static void ParseBitfieldSpec(bool isUnion);

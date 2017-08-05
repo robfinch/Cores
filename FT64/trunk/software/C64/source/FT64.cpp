@@ -88,9 +88,10 @@ int AllocateRegisterVars()
 {
 	CSE *csp;
     ENODE *exptr;
-    int reg;
+    int reg, vreg;
 	uint64_t mask, rmask;
     uint64_t fpmask, fprmask;
+	uint64_t vmask, vrmask;
     AMODE *ap, *ap2;
 	int64_t nn;
 	int cnt;
@@ -98,10 +99,13 @@ int AllocateRegisterVars()
 	int csecnt;
 
 	reg = 11;
+	vreg = 11;
     mask = 0;
 	rmask = 0;
 	fpmask = 0;
 	fprmask = 0;
+	vmask = 0;
+	vrmask = 0;
 
 	// Sort the CSE table according to desirability of allocating
 	// a register.
@@ -119,10 +123,18 @@ int AllocateRegisterVars()
 			csp = &CSETable[csecnt];
 			if (csp->reg==-1) {
 				if( OptimizationDesireability(csp) >= 4-nn ) {
-    				if( csp->duses > csp->uses / (8 >> nn) && reg < 18 )
-    					csp->reg = reg++;
-    				else
-    					csp->reg = -1;
+					if (csp->exp->etype==bt_vector) {
+    					if( csp->duses > csp->uses / (8 >> nn) && vreg < 18 )
+    						csp->reg = vreg++;
+    					else
+    						csp->reg = -1;
+					}
+					else {
+    					if( csp->duses > csp->uses / (8 >> nn) && reg < 18 )
+    						csp->reg = reg++;
+    					else
+    						csp->reg = -1;
+					}
 				}
 			}
 		}
@@ -131,11 +143,20 @@ int AllocateRegisterVars()
 	// Generate bit masks of allocated registers
 	for (csecnt = 0; csecnt < csendx; csecnt++) {
 		csp = &CSETable[csecnt];
-		if( csp->reg != -1 )
-    	{
-    		rmask = rmask | (1LL << (63 - csp->reg));
-    		mask = mask | (1LL << csp->reg);
-    	}
+		if (csp->exp->etype==bt_vector) {
+			if( csp->reg != -1 )
+    		{
+    			vrmask = vrmask | (1LL << (63 - csp->reg));
+    			vmask = vmask | (1LL << csp->reg);
+    		}
+		}
+		else {
+			if( csp->reg != -1 )
+    		{
+    			rmask = rmask | (1LL << (63 - csp->reg));
+    			mask = mask | (1LL << csp->reg);
+    		}
+		}
 	}
 
 	// Push temporaries on the stack.
@@ -204,6 +225,60 @@ AMODE *GenExpr(ENODE *node)
 	case en_ugt:	op = op_sgtu;	break;
 	case en_ge:		op = op_sge;	break;
 	case en_uge:	op = op_sgeu;	break;
+	case en_veq:
+		size = GetNaturalSize(node);
+		ap3 = GetTempVectorRegister();         
+		ap1 = GenerateExpression(node->p[0],F_REG,size);
+		ap2 = GenerateExpression(node->p[1],F_REG,size);
+		GenerateTriadic(op_vseq,0,ap3,ap1,ap2);
+		ReleaseTempReg(ap2);
+		ReleaseTempReg(ap1);
+		return (ap3);
+	case en_vne:
+		size = GetNaturalSize(node);
+		ap3 = GetTempVectorRegister();         
+		ap1 = GenerateExpression(node->p[0],F_REG,size);
+		ap2 = GenerateExpression(node->p[1],F_REG,size);
+		GenerateTriadic(op_vsne,0,ap3,ap1,ap2);
+		ReleaseTempReg(ap2);
+		ReleaseTempReg(ap1);
+		return (ap3);
+	case en_vlt:
+		size = GetNaturalSize(node);
+		ap3 = GetTempVectorRegister();         
+		ap1 = GenerateExpression(node->p[0],F_REG,size);
+		ap2 = GenerateExpression(node->p[1],F_REG,size);
+		GenerateTriadic(op_vslt,0,ap3,ap1,ap2);
+		ReleaseTempReg(ap2);
+		ReleaseTempReg(ap1);
+		return (ap3);
+	case en_vle:
+		size = GetNaturalSize(node);
+		ap3 = GetTempVectorRegister();         
+		ap1 = GenerateExpression(node->p[0],F_REG,size);
+		ap2 = GenerateExpression(node->p[1],F_REG,size);
+		GenerateTriadic(op_vsle,0,ap3,ap1,ap2);
+		ReleaseTempReg(ap2);
+		ReleaseTempReg(ap1);
+		return (ap3);
+	case en_vgt:
+		size = GetNaturalSize(node);
+		ap3 = GetTempVectorRegister();         
+		ap1 = GenerateExpression(node->p[0],F_REG,size);
+		ap2 = GenerateExpression(node->p[1],F_REG,size);
+		GenerateTriadic(op_vsgt,0,ap3,ap1,ap2);
+		ReleaseTempReg(ap2);
+		ReleaseTempReg(ap1);
+		return (ap3);
+	case en_vge:
+		size = GetNaturalSize(node);
+		ap3 = GetTempVectorRegister();         
+		ap1 = GenerateExpression(node->p[0],F_REG,size);
+		ap2 = GenerateExpression(node->p[1],F_REG,size);
+		GenerateTriadic(op_vsge,0,ap3,ap1,ap2);
+		ReleaseTempReg(ap2);
+		ReleaseTempReg(ap1);
+		return (ap3);
 	default:	// en_land, en_lor
 		//ap1 = GetTempRegister();
 		//ap2 = GenerateExpression(node,F_REG,8);
@@ -229,7 +304,7 @@ AMODE *GenExpr(ENODE *node)
 		ReleaseTempRegister(ap2);
 		ReleaseTempRegister(ap1);
 		GenerateDiadic(op_not,0,ap3,ap3);
-		return ap3;
+		return (ap3);
 	case en_ne:
 		size = GetNaturalSize(node);
 		ap3 = GetTempRegister();         
@@ -238,7 +313,7 @@ AMODE *GenExpr(ENODE *node)
 		GenerateTriadic(op_cmp,0,ap3,ap1,ap2);
 		ReleaseTempRegister(ap2);
 		ReleaseTempRegister(ap1);
-		return ap3;
+		return (ap3);
 	case en_lt:
 		size = GetNaturalSize(node);
 		ap3 = GetTempRegister();         
@@ -248,7 +323,7 @@ AMODE *GenExpr(ENODE *node)
 		ReleaseTempRegister(ap2);
 		ReleaseTempRegister(ap1);
 		GenerateDiadic(op_slt,0,ap3,ap3);
-		return ap3;
+		return (ap3);
 	case en_le:
 		size = GetNaturalSize(node);
 		ap3 = GetTempRegister();         
@@ -258,7 +333,7 @@ AMODE *GenExpr(ENODE *node)
 		ReleaseTempRegister(ap2);
 		ReleaseTempRegister(ap1);
 		GenerateDiadic(op_sle,0,ap3,ap3);
-		return ap3;
+		return (ap3);
 	case en_gt:
 		size = GetNaturalSize(node);
 		ap3 = GetTempRegister();         
@@ -268,7 +343,7 @@ AMODE *GenExpr(ENODE *node)
 		ReleaseTempRegister(ap2);
 		ReleaseTempRegister(ap1);
 		GenerateDiadic(op_sgt,0,ap3,ap3);
-		return ap3;
+		return (ap3);
 	case en_ge:
 		size = GetNaturalSize(node);
 		ap3 = GetTempRegister();         
@@ -278,7 +353,7 @@ AMODE *GenExpr(ENODE *node)
 		ReleaseTempRegister(ap2);
 		ReleaseTempRegister(ap1);
 		GenerateDiadic(op_sge,0,ap3,ap3);
-		return ap3;
+		return (ap3);
 	case en_ult:
 		size = GetNaturalSize(node);
 		ap3 = GetTempRegister();         
@@ -288,7 +363,7 @@ AMODE *GenExpr(ENODE *node)
 		ReleaseTempRegister(ap2);
 		ReleaseTempRegister(ap1);
 		GenerateDiadic(op_slt,0,ap3,ap3);
-		return ap3;
+		return (ap3);
 	case en_ule:
 		size = GetNaturalSize(node);
 		ap3 = GetTempRegister();         
@@ -298,7 +373,7 @@ AMODE *GenExpr(ENODE *node)
 		ReleaseTempRegister(ap2);
 		ReleaseTempRegister(ap1);
 		GenerateDiadic(op_sle,0,ap3,ap3);
-		return ap3;
+		return (ap3);
 	case en_ugt:
 		size = GetNaturalSize(node);
 		ap3 = GetTempRegister();         
@@ -308,7 +383,7 @@ AMODE *GenExpr(ENODE *node)
 		ReleaseTempRegister(ap2);
 		ReleaseTempRegister(ap1);
 		GenerateDiadic(op_sgt,0,ap3,ap3);
-		return ap3;
+		return (ap3);
 	case en_uge:
 		size = GetNaturalSize(node);
 		ap3 = GetTempRegister();         
@@ -318,7 +393,7 @@ AMODE *GenExpr(ENODE *node)
 		ReleaseTempRegister(ap2);
 		ReleaseTempRegister(ap1);
 		GenerateDiadic(op_sge,0,ap3,ap3);
-		return ap3;
+		return (ap3);
 /*
 	case en_ne:
 	case en_lt:
@@ -727,7 +802,7 @@ void GenerateFunction(SYM *sym)
 	if (sym->IsInterrupt) {
        if (sym->stkname)
            GenerateDiadic(op_lea,0,makereg(SP),make_string(sym->stkname));
-	   for (nn = 30; nn > 0; nn--)
+	   for (nn = 1; nn < 31; nn--)
 		   GenerateMonadic(op_push,0,makereg(nn));
 	}
 	// The prolog code can't be optimized because it'll run *before* any variables
@@ -861,16 +936,24 @@ void GenerateReturn(Statement *stmt)
 					// ToDo compiler error
 				}
             }
-            else
-			    GenerateDiadic(op_mov, 0, makereg(1),ap);
+            else {
+				if (sym->tp->GetBtp()->IsVectorType())
+					GenerateDiadic(op_mov, 0, makevreg(1),ap);
+				else
+					GenerateDiadic(op_mov, 0, makereg(1),ap);
+			}
         }
 		else if (ap->mode == am_fpreg)
 			GenerateDiadic(op_mov, 0, makereg(1),ap);
-		else if (ap->isFloat) {
+		else if (ap->type==stddouble.GetIndex()) {
 			GenerateDiadic(op_lw,0,makereg(1),ap);
 		}
-		else
-		    GenLoad(makereg(1),ap,sizeOfWord,sizeOfWord);
+		else {
+			if (sym->tp->GetBtp()->IsVectorType())
+				GenLoad(makevreg(1),ap,sizeOfWord,sizeOfWord);
+			else
+				GenLoad(makereg(1),ap,sizeOfWord,sizeOfWord);
+		}
 		ReleaseTempRegister(ap);
 	}
 
@@ -915,9 +998,9 @@ void GenerateReturn(Statement *stmt)
 	// Generate the return instruction. For the Pascal calling convention pop the parameters
 	// from the stack.
 	if (sym->IsInterrupt) {
-		for (nn = 1; nn < 31; nn++)
+		for (nn = 30; nn > (sym->tp->GetBtp()->type!=bt_void ? 1 : 0); nn++)
 			GenerateMonadic(op_pop,0,makereg(nn));
-		GenerateZeradic(op_iret);
+		GenerateZeradic(op_rti);
 		return;
 	}
 
@@ -1129,7 +1212,7 @@ static int GeneratePushParameter(ENODE *ep, int regno)
 					nn = 1;
 				}
 				else {
-					if (ap->isFloat) {
+					if (ap->type=stddouble.GetIndex()) {
 						GenerateMonadic(op_push,ap->FloatSize,ap);
 						nn = sz;
 					}
@@ -1269,6 +1352,8 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
 		;
 	if (sym && sym->tp && sym->tp->GetBtp()->IsFloatType() && (flags & F_FPREG))
 		return (makereg(1));
+	if (sym && sym->tp->IsVectorType())
+		return (makevreg(1));
 	return (makereg(1));
 	/*
 	else {
