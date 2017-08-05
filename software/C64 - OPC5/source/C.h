@@ -422,6 +422,7 @@ class Compiler
 public:
 	int typenum;
 	int symnum;
+	int throwlab;
 	SYM symbolTable[32768];
 	TYP typeTable[32768];
 public:

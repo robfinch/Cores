@@ -73,7 +73,7 @@ int GetReturnBlockSize()
 		if (currentFn->IsInterrupt)
 			return 0;
 		if (currentFn->IsLeaf) {
-		    return (exceptions ? sizeOfWord*3 : sizeOfWord*1);
+		    return (exceptions ? sizeOfWord* (1 + currentFn->DoesThrow) : sizeOfWord*1);
 		}
 	}
 	else

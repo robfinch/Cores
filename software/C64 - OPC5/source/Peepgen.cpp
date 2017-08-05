@@ -1000,18 +1000,16 @@ static void SetLabelReference()
 		if (p->opcode==op_label) {
 			p->isReferenced = false;
 			for (q = peep_head; q; q = q->fwd) {
-				if (IsFlowCtrl(q)) {
-					if (q->oper3 && q->oper3->mode==am_direct) {
-						if (q->oper3->offset->i == (int)p->oper1) {
-							p->isReferenced = true;
-							break;
-						}
+				if (q->oper3 && (q->oper3->mode==am_direct||q->oper3->mode==am_immed)) {
+					if (q->oper3->offset->i == (int)p->oper1) {
+						p->isReferenced = true;
+						break;
 					}
-					if (q->oper2->mode==am_direct) {
-						if (q->oper2->offset->i == (int)p->oper1) {
-							p->isReferenced = true;
-							break;
-						}
+				}
+				if (q->oper2 && q->oper2->mode==am_direct) {
+					if (q->oper2->offset->i == (int)p->oper1) {
+						p->isReferenced = true;
+						break;
 					}
 				}
 			}
@@ -1019,15 +1017,19 @@ static void SetLabelReference()
 	}
 }
 
-static void EliminateUnreferencedLabels()
+static int EliminateUnreferencedLabels()
 {
 	struct ocode *p;
+	int cnt;
 
+	cnt = 0;
 	for (p = peep_head; p; p = p->fwd) {
 		if (p->opcode==op_label && !p->isReferenced) {
 			Remove(p);
+			cnt++;
 		}
 	}
+	return cnt;
 }
 
 /*

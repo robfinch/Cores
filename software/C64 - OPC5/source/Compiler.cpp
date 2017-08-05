@@ -37,6 +37,7 @@ extern char *rtrim(char *);
 
 Compiler::Compiler()
 {
+	throwlab = -1;
 }
 
 int Compiler::main2(int argc, char **argv)

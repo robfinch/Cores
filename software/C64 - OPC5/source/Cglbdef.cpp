@@ -52,11 +52,11 @@ int regSP = 14;
 int regLR = 13;
 int regBP = 12;
 int regCLP = 11;                // class pointer
+int regXLR = 10;
 int regZero = 0;
-int regXLR = 28;
 int regGP = 27;
 int regFirstParm = 8;
-int regLastParm = 10;
+int regLastParm = 9;
 
 int farcode = 0;
 int wcharSupport = 1;
@@ -123,12 +123,11 @@ int opt_noregs = FALSE;
 int opt_nopeep;
 int opt_noexpr = FALSE;
 int opt_nocgo = FALSE;
-int exceptions = FALSE;
+int exceptions = TRUE;
 int mixedSource = FALSE;
 SYM *currentFn = (SYM *)NULL;
 int callsFn = FALSE;
 
 char nmspace[20][100];
-
 
 

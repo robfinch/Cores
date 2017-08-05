@@ -51,6 +51,7 @@ public:
 	ENODE *incrExpr;    // increment expression - for loops
 	Statement *s1, *s2; // internal statements
 	int num;			// resulting expression type (hash code for throw)
+	int throwlab;		// label for throw statement
 	int *label;         // label number for goto
 	int *casevals;		// case values
 	TABLE ssyms;		// local symbols associated with statement

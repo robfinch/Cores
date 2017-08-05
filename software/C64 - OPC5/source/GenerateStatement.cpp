@@ -49,7 +49,6 @@ extern int caselit(scase *casetab,int);
 int     breaklab;
 int     contlab;
 int     retlab;
-int		throwlab;
 
 int lastsph;
 char *semaphores[20];
@@ -571,30 +570,27 @@ void Statement::GenerateTry()
 	Statement *stmt;
 
 	lab1 = nextlabel++;
-	oldthrow = throwlab;
-	throwlab = nextlabel++;
+	oldthrow = compiler.throwlab;
+	compiler.throwlab = nextlabel++;
 
-	a = make_clabel(throwlab);
-	a->mode = am_immed;
-	GenLdi(makereg(regXLR),a);
+	a = make_clabel(compiler.throwlab);
+	GenerateTriadic(op_mov,0,makereg(regXLR),makereg(regZero),a);
 	s1->Generate();
 	GenerateUBranch(lab1);
-	GenerateLabel(throwlab);
+	GenerateLabel(compiler.throwlab);
 	// Generate catch statements
 	// r1 holds the value to be assigned to the catch variable
 	// r2 holds the type number
 	for (stmt = s2; stmt; stmt = stmt->next) {
 		stmt->GenMixedSource();
-		throwlab = oldthrow;
+		compiler.throwlab = oldthrow;
 		curlab = nextlabel++;
 		GenerateLabel(curlab);
 		if (stmt->num==99999)
 			;
 		else {
-			ap2 = GetTempRegister();
-			GenLdi(ap2,make_immed(stmt->num));
-			ReleaseTempReg(ap2);
-			GenerateTriadic(op_bne,0,makereg(2),ap2,make_clabel(nextlabel));
+			GenerateTriadic(op_cmp,0,makereg(2),makereg(regZero),make_immed(stmt->num));
+			GeneratePredicatedTriadic(pop_nz,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(nextlabel));
 		}
 		// move the throw expression result in 'r1' into the catch variable.
 		node = stmt->exp;
@@ -611,8 +607,7 @@ void Statement::GenerateTry()
 	nextlabel++;
 	GenerateLabel(lab1);
 	a = make_clabel(oldthrow);
-	a->mode = am_immed;
-	GenLdi(makereg(regXLR),a);
+	GenerateTriadic(op_mov,0,makereg(regXLR),makereg(regZero),a);
 }
 
 void Statement::GenerateThrow()
@@ -632,7 +627,7 @@ void Statement::GenerateThrow()
 		ReleaseTempRegister(ap);
 		GenLdi(makereg(2),make_immed(num));
 	}
-	GenerateUBranch(throwlab);
+	GenerateUBranch(compiler.throwlab);
 }
 
 void Statement::GenerateCheck()

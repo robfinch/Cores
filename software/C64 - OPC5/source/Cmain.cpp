@@ -68,7 +68,7 @@ int main(int argc, char **argv)
 	opt_nopeep = FALSE;
 	uctran_off = 0;
 	optimize =1;
-	exceptions=0;
+	exceptions=1;
 //	printf("c64 starting...\r\n");
 	while(--argc) {
     if( **++argv == '-')
@@ -118,8 +118,10 @@ int	options(char *s)
         }
     }
 	else if (s[1]=='f') {
-		if (strcmp(&s[2],"no-exceptions")==0)
+		if (strcmp(&s[2],"no-exceptions")==0) {
 			exceptions = 0;
+			regLastParm = 10;
+		}
 		if (strcmp(&s[2],"farcode")==0)
 			farcode = 1;
 	}

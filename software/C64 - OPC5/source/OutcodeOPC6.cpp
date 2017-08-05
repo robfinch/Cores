@@ -222,6 +222,8 @@ static void PutConstant(ENODE *offset, unsigned int lowhigh, unsigned int rshift
 j1:
 			sprintf_s(buf, sizeof(buf), "%s_%ld",GetNamespace(),offset->i);
 			ofs.write(buf);
+			if (offset->sp)
+				ofs.write((char *)offset->sp->c_str());
             if (rshift > 0) {
                 sprintf_s(buf, sizeof(buf), ">>%d", rshift);
 				ofs.write(buf);

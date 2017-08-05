@@ -25,7 +25,6 @@
 
 extern int lastsph;
 extern char *semaphores[20];
-extern int throwlab;
 extern int breaklab;
 extern int contlab;
 extern int retlab;
@@ -148,13 +147,11 @@ int AllocateRegisterVars()
     	}
 	}
 
-	// Push temporaries on the stack.
+	// Push registers on the stack.
 	if( mask != 0 ) {
 		cnt = 0;
-		//GenerateTriadic(op_sub,0,makereg(regSP),makereg(regZero),make_immed(popcnt(mask)*sizeOfWord));
 		for (nn = 0; nn < 64; nn++) {
 			if (rmask & (0x8000000000000000ULL >> nn)) {
-				//GenerateDiadic(op_sto,0,makereg(nn&15),make_indexed(cnt,regSP));
 				GenerateMonadic(op_push,0,makereg(nn&15));
 				cnt+=sizeOfWord;
 			}
@@ -174,19 +171,17 @@ int AllocateRegisterVars()
             if( !IsLValue(exptr) || (exptr->p[0] && exptr->p[0]->i > 0) || (exptr->nodetype==en_struct_ref))
             {
                 initstack();
-				{
-                    ap = GenerateExpression(exptr,F_REG|F_IMMED|F_MEM,sizeOfWord);
-    				ap2 = makereg(csp->reg);
-    				if (ap->mode==am_immed)
-                        GenLdi(ap2,ap);
-    				else if (ap->mode==am_reg)
-    					GenerateDiadic(op_mov,0,ap2,ap);
-    				else {
-    					size = GetNaturalSize(exptr);
-    					ap->isUnsigned = exptr->isUnsigned;
-    					GenLoad(ap2,ap,size,size);
-    				}
-                }
+                ap = GenerateExpression(exptr,F_REG|F_IMMED|F_MEM,sizeOfWord);
+    			ap2 = makereg(csp->reg);
+    			if (ap->mode==am_immed)
+                    GenLdi(ap2,ap);
+    			else if (ap->mode==am_reg)
+    				GenerateDiadic(op_mov,0,ap2,ap);
+    			else {
+    				size = GetNaturalSize(exptr);
+    				ap->isUnsigned = exptr->isUnsigned;
+    				GenLoad(ap2,ap,size,size);
+    			}
                 ReleaseTempReg(ap);
             }
         }
@@ -572,19 +567,18 @@ void GenerateCmp(ENODE *node, int label, int predreg, unsigned int prediction)
 
 static void GenerateDefaultCatch(SYM *sym)
 {
-	//GenerateLabel(throwlab);
-	//if (sym->IsLeaf){
-	//	if (sym->DoesThrow) {
-	//		GenerateDiadic(op_lw,0,makereg(regLR),make_indexed(sizeOfWord,regBP));		// load throw return address from stack into LR
-	//		GenerateDiadic(op_sw,0,makereg(regLR),make_indexed(sizeOfWord*2,regBP));		// and store it back (so it can be loaded with the lm)
-	//		GenerateDiadic(op_bra,0,make_label(retlab),NULL);				// goto regular return cleanup code
-	//	}
-	//}
-	//else {
-	//	GenerateDiadic(op_lw,0,makereg(regLR),make_indexed(sizeOfWord,regBP));		// load throw return address from stack into LR
-	//	GenerateDiadic(op_sw,0,makereg(regLR),make_indexed(sizeOfWord*2,regBP));		// and store it back (so it can be loaded with the lm)
-	//	GenerateDiadic(op_bra,0,make_label(retlab),NULL);				// goto regular return cleanup code
-	//}
+	GenerateLabel(compiler.throwlab);
+	if (sym->IsLeaf){
+		if (sym->DoesThrow) {
+			GenerateDiadic(op_ld,0,makereg(regLR),make_indexed(sizeOfWord*1,regBP));		// load throw return address from stack into LR
+			GenerateTriadic(op_mov,0,makereg(regPC),makereg(regZero),make_label(retlab));				// goto regular return cleanup code
+		}
+	}
+	else {
+		GenerateDiadic(op_ld,0,makereg(regLR),make_indexed(sizeOfWord*2,regBP));		// load throw return address from stack into LR
+		GenerateDiadic(op_sto,0,makereg(regLR),make_indexed(sizeOfWord*1,regBP));		// and store it back (so it can be loaded with the lm)
+		GenerateTriadic(op_mov,0,makereg(regPC),makereg(regZero),make_label(retlab));				// goto regular return cleanup code
+	}
 }
 
 // Generate a function body.
@@ -598,32 +592,26 @@ void GenerateFunction(SYM *sym)
 	int lab0;
 	int o_throwlab, o_retlab, o_contlab, o_breaklab;
 
-	o_throwlab = throwlab;
+	o_throwlab = compiler.throwlab;
 	o_retlab = retlab;
 	o_contlab = contlab;
 	o_breaklab = breaklab;
 
-	throwlab = retlab = contlab = breaklab = -1;
+	compiler.throwlab = retlab = contlab = breaklab = -1;
 	lastsph = 0;
 	memset(semaphores,0,sizeof(semaphores));
-	throwlab = nextlabel++;
+	compiler.throwlab = nextlabel++;
 	defcatch = nextlabel++;
 	lab0 = nextlabel++;
 	gd->GenMixedSource();
-	//GenerateZeradic(op_calltgt);
-	while( lc_auto & 1 )	/* round frame size to word */
-		++lc_auto;
+
+	// For interrupt routine don't push r1 if the routine returns a value.
 	if (sym->IsInterrupt) {
-		//GenerateTriadic(op_sub,0,makereg(regSP),makereg(regZero),make_immed(13*sizeOfWord));
-		for (nn = 1; nn < 14; nn++) {
-			//GenerateTriadic(op_sto,0,makereg(nn),makereg(regSP),make_immed((nn-1)*sizeOfWord));
+		for (nn = 1 + (sym->tp->GetBtp()->type != bt_void); nn < 14; nn++) {
 			GenerateMonadic(op_push,0,makereg(nn));
 		}
-    //   if (sym->stkname)
-    //       GenerateDiadic(op_lea,0,makereg(SP),make_string(sym->stkname));
-	   //for (nn = 30; nn > 0; nn--)
-		  // GenerateMonadic(op_push,0,makereg(nn));
 	}
+
 	// The prolog code can't be optimized because it'll run *before* any variables
 	// assigned to registers are available. About all we can do here is constant
 	// optimizations.
@@ -632,34 +620,28 @@ void GenerateFunction(SYM *sym)
 	    sym->prolog->Generate();
 	}
 	if (!sym->IsNocall) {
-		/*
-		// For a leaf routine don't bother to store the link register.
-		if (sym->IsLeaf) {
-    		//GenerateTriadic(op_addi,0,makereg(regSP),makereg(regSP),make_immed(-4));
-			if (exceptions)
-				GenerateMonadic(op_push, 0, makereg(regXLR));
-			GenerateMonadic(op_push,0,makereg(regBP));
-        }
-		else
-		*/
-		{
-			//GenerateMonadic(op_push, 0, makereg(regBP));
-			ap = make_label(throwlab);
-			ap->mode = am_immed;
+    	//GenerateTriadic(op_addi,0,makereg(regSP),makereg(regSP),make_immed(-4));
+		if (exceptions) {
+			if (!sym->IsLeaf || sym->DoesThrow) {
+				//ap = GetTempRegister();
+				//GenerateDiadic(op_ld,0,ap,make_string("_xhandler"));	// <- this isn't rhread safe
+				//GenerateMonadic(op_push, 0, ap);
+				GenerateMonadic(op_push,0,makereg(regXLR));
+			}
 		}
+		ap = make_label(compiler.throwlab);
+		ap->mode = am_immed;
+
 		// The stack doesn't need to be linked if there is no stack space in use and there
 		// are no parameters passed to the function. Since function parameters are
 		// referenced to the BP register the stack needs to be linked if there are any.
 		// Stack link/unlink is optimized away by the peephole optimizer if they aren't
 		// needed. So they are just always spit out here.
 		//snprintf(buf, sizeof(buf), "#-%sSTKSIZE_-8",sym->mangledName->c_str());
-		GenerateMonadic(op_hint,0,make_immed(4));
-		//GenerateTriadic(op_sub,0,makereg(regSP),makereg(regZero),make_immed(sym->IsLeaf ? sizeOfWord: sizeOfWord*2));
 		if (!sym->IsLeaf) {
-			//GenerateDiadic(op_sto,0,makereg(regLR),make_indexed(0,regSP));
 			GenerateMonadic(op_push,0,makereg(regLR));
 		}
-		//GenerateDiadic(op_sto,0,makereg(regBP),make_indexed(sym->IsLeaf ?0 : sizeOfWord,regSP));
+		GenerateMonadic(op_hint,0,make_immed(4));
 		GenerateMonadic(op_push,0,makereg(regBP));
 		GenerateDiadic(op_mov,0,makereg(regBP), makereg(regSP));
 		if (sym->stkspace!=0) {
@@ -676,8 +658,13 @@ void GenerateFunction(SYM *sym)
     GenerateReturn(nullptr);
 	if (exceptions && sym->IsInline)
 		GenerateTriadic(op_mov,0,makereg(regPC),makereg(regZero),make_label(lab0));
+	// Generate code for the hidden default catch
+	if (exceptions)
+		GenerateDefaultCatch(sym);
+	if (exceptions && sym->IsInline)
+		GenerateLabel(lab0);
 
-	throwlab = o_throwlab;
+	compiler.throwlab = o_throwlab;
 	retlab = o_retlab;
 	contlab = o_contlab;
 	breaklab = o_breaklab;
@@ -691,11 +678,15 @@ static void UnlinkStack(SYM * sym)
 {
 	GenerateMonadic(op_hint,0,make_immed(6));
 	GenerateDiadic(op_mov,0,makereg(regSP),makereg(regBP));
+	GenerateMonadic(op_pop,0,makereg(regBP));
+	GenerateMonadic(op_hint,0,make_immed(7));
 	if (!sym->IsLeaf) {
 		GenerateMonadic(op_pop,0,makereg(regLR));
 	}
-	GenerateMonadic(op_pop,0,makereg(regBP));
-	GenerateMonadic(op_hint,0,make_immed(7));
+	if (exceptions) {
+		if (!sym->IsLeaf || sym->DoesThrow)
+			GenerateMonadic(op_pop,0,makereg(regXLR));
+	}
 }
 
 
@@ -710,12 +701,10 @@ static void RestoreRegisterVars()
 		cnt2 = cnt = bitsset(save_mask)*sizeOfWord;
 		for (nn = 31; nn >=1 ; nn--) {
 			if (save_mask & (1LL << nn)) {
-				//GenerateDiadic(op_ld,0,makereg(nn),make_indexed(cnt,regSP));
 				GenerateMonadic(op_pop,0,makereg(nn));
 				cnt -= sizeOfWord;
 			}
 		}
-		//GenerateTriadic(op_add,0,makereg(regSP),makereg(regZero),make_immed(bitsset(save_mask)*sizeOfWord));
 	}
 }
 
@@ -820,47 +809,26 @@ void GenerateReturn(Statement *stmt)
 		sym->epilog->Generate();
 		return;
 	}
-        
-	// Generate the return instruction. For the Pascal calling convention pop the parameters
-	// from the stack.
+
+	// For interrupt function pop the registers from the stack. If the
+	// interrupt returns a value, don't pop r1.
 	if (sym->IsInterrupt) {
-		for (nn = 1; nn < 14; nn++) {
-			if (sym->tp->GetBtp()->type!=bt_long || nn != 1)
-				GenerateTriadic(op_ld,0,makereg(nn),makereg(regSP),make_immed((nn-1)*sizeOfWord));
-		}
-		GenerateTriadic(op_add,0,makereg(regSP),makereg(regZero),make_immed(13*sizeOfWord));
+		for (nn = 13; nn > (1 - (sym->tp->GetBtp()->type!=bt_void)); nn--)
+			GenerateMonadic(op_pop,0,makereg(nn));
 		GenerateZeradic(op_rti);
 		return;
 	}
 
-	// If Pascal calling convention remove parameters from stack by adding to stack pointer
-	// based on the number of parameters. However if a non-auto register parameter is
-	// present, then don't add to the stack pointer for it. (Remove the previous add effect).
+	// If Pascal calling convention remove parameters from stack by adding to
+	// stack pointer based on the number of parameters. However if a non-auto
+	// register parameter is present, then don't add to the stack pointer for
+	// it. (Remove the previous add effect).
 	if (sym->IsPascal) {
 		TypeArray *ta;
 		int nn;
 		ta = sym->GetProtoTypes();
 		for (nn = 0; nn < ta->length; nn++) {
 			switch(ta->types[nn]) {
-			case bt_float:
-			case bt_quad:
-				if (ta->preg[nn] && (ta->preg[nn] & 0x8000)==0)
-					;
-				else
-					toAdd += sizeOfFPQ;
-				break;
-			case bt_double:
-				if (ta->preg[nn] && (ta->preg[nn] & 0x8000)==0)
-					;
-				else
-					toAdd += sizeOfFPD;
-				break;
-			case bt_triple:
-				if (ta->preg[nn] && (ta->preg[nn] & 0x8000)==0)
-					;
-				else
-					toAdd += sizeOfFPT;
-				break;
 			default:
 				if (ta->preg[nn] && (ta->preg[nn] & 0x8000)==0)
 					;
@@ -927,17 +895,8 @@ static void SaveRegisterParameters(SYM *sym)
 		int nn;
 		nn = CountPreg(ta);
 		if (nn > 0) {
-			//GenerateTriadic(op_sub,0,makereg(regSP),makereg(regZero),make_immed(nn * sizeOfWord));
 			for (nn = 0; nn < ta->length; nn++) {
 				if (ta->preg[nn]) {
-					//switch(ta->types[nn]) {
-					//case bt_quad:	GenerateMonadic(op_push,0,makereg(ta->preg[nn]& 0x7fff)); break;
-					//case bt_float:	GenerateMonadic(op_push,0,makereg(ta->preg[nn]& 0x7fff)); break;
-					//case bt_double:	GenerateMonadic(op_push,0,makereg(ta->preg[nn]& 0x7fff)); break;
-					//case bt_triple:	GenerateMonadic(op_push,0,makereg(ta->preg[nn]& 0x7fff)); break;
-					//default:	GenerateDiadic(op_sto,0,makereg(ta->preg[nn]& 0x7fff),make_indexed(nn * sizeOfWord,regSP)); break;
-					//}
-					//GenerateDiadic(op_sto,0,makereg(ta->preg[nn]& 0x7fff),make_indexed(nn * sizeOfWord,regSP));
 					GenerateMonadic(op_push,0,makereg(ta->preg[nn]& 0x7fff));
 				}
 			}
@@ -959,18 +918,9 @@ static void RestoreRegisterParameters(SYM *sym)
 		if (nn > 0) {
 			for (nn = ta->length - 1; nn >= 0; nn--) {
 				if (ta->preg[nn]) {
-					//switch(ta->types[nn]) {
-					//case bt_quad:	GenerateMonadic(op_pop,0,makereg(ta->preg[nn]& 0x7fff)); break;
-					//case bt_float:	GenerateMonadic(op_pop,0,makereg(ta->preg[nn]& 0x7fff)); break;
-					//case bt_double:	GenerateMonadic(op_pop,0,makereg(ta->preg[nn]& 0x7fff)); break;
-					//case bt_triple:	GenerateMonadic(op_pop,0,makereg(ta->preg[nn]& 0x7fff)); break;
-					//default:	GenerateMonadic(op_pop,0,makereg(ta->preg[nn]& 0x7fff)); break;
-					//}
-					//GenerateDiadic(op_ld,0,makereg(ta->preg[nn]& 0x7fff),make_indexed(nn * sizeOfWord,regSP));
 					GenerateMonadic(op_pop,0,makereg(ta->preg[nn]& 0x7fff));
 				}
 			}
-			//GenerateTriadic(op_add,0,makereg(regSP),makereg(regZero),make_immed(cn * sizeOfWord));
 		}
 	}
 }
@@ -993,14 +943,6 @@ static int GeneratePushParameter(ENODE *ep, int regno)
 		else
 			ap = GenerateExpression(ep,F_REG|F_IMM0,sizeOfWord);
 	}
-	else if (ep->etype==bt_quad)
-		ap = GenerateExpression(ep,F_REG,sz);
-	else if (ep->etype==bt_double)
-		ap = GenerateExpression(ep,F_REG,sz);
-	else if (ep->etype==bt_triple)
-		ap = GenerateExpression(ep,F_REG,sz);
-	else if (ep->etype==bt_float)
-		ap = GenerateExpression(ep,F_REG,sz);
 	else
 		ap = GenerateExpression(ep,F_REG|F_IMM0,sz);
 	switch(ap->mode) {
@@ -1164,6 +1106,9 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
 		}
 		else {
 			//GenerateTriadic(op_mov,0,makereg(regLR),makereg(regPC),make_immed(2));
+			if (exceptions) {
+
+			}
 			GenerateDiadic(op_jsr,0,makereg(regLR),ap);
 		}
 		ReleaseTempRegister(ap);

@@ -65,7 +65,6 @@ void GenLoad(AMODE *ap3, AMODE *ap1, int ssize, int size);
 void GenerateZeroExtend(AMODE *ap, int isize, int osize);
 void GenerateSignExtend(AMODE *ap, int isize, int osize, int flags);
 
-extern int throwlab;
 static int nest_level = 0;
 
 static void Enter(char *p)
