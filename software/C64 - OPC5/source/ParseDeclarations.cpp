@@ -1455,7 +1455,7 @@ dfs.printf("E");
             op = en_assign;
 //            NextToken();
             tp2 = asnop(&ep2);
-            if( tp2 == 0 || !IsLValue(ep1) )
+            if( tp2 == 0 || !IsLValue(ep1,true) )
                   error(ERR_LVALUE);
             else    {
                     tp1 = forcefit(&ep1,tp1,&ep2,tp2,false);

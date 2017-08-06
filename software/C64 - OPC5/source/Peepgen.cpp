@@ -41,11 +41,11 @@ int preload_count = 0;
 AMODE *copy_addr(AMODE *ap)
 {
 	AMODE *newap;
-  if( ap == NULL )
-    return NULL;
-  newap = allocAmode();
+	if( ap == NULL )
+		return NULL;
+	newap = allocAmode();
 	memcpy(newap,ap,sizeof(AMODE));
-  return newap;
+	return newap;
 }
 
 void GeneratePredicatedMonadic(int pr, int pop, int op, int len, AMODE *ap1)
@@ -252,12 +252,50 @@ static void AddToPeepList(struct ocode *cd)
 	}
 }
 
-static inline void Remove(struct ocode *cd)
+static void MarkAllKeep()
 {
-	if (cd->fwd)
-		cd->fwd->back = cd->back;
-	if (cd->back)
-		cd->back->fwd = cd->fwd;
+	struct ocode *ip;
+	
+	for (ip = peep_head; ip; ip = ip->fwd)
+		ip->remove = false;
+}
+
+static inline void MarkRemove(struct ocode *cd)
+{
+	cd->remove = true;	
+}
+
+void MarkRemoveRange(struct ocode *bp, struct ocode *ep)
+{
+	for (; bp != ep && bp; bp = bp->fwd)
+		MarkRemove(bp);
+	if (bp)
+		MarkRemove(bp);
+}
+
+static void Remove()
+{
+	struct ocode *cd;
+	struct ocode *ip1, *ip2;
+
+	for (cd = peep_head; cd; cd = cd->fwd) {
+		ip1 = cd->back;
+		ip2 = cd->fwd;
+		if (cd->remove) {
+			if (cd->comment)
+				if (cd->back && cd->back->comment==nullptr)
+					cd->back->comment = cd->comment;
+			if (ip2)
+				ip2->back = ip1;
+			if (ip1)
+				ip1->fwd = ip2;
+		}
+	}
+}
+
+void PeepRemove()
+{
+	Remove();
 }
 
 int PeepCount(struct ocode *ip)
@@ -340,7 +378,7 @@ void peep_move(struct ocode	*ip)
 					return;
 			}
 		}
-		Remove(ip);
+		MarkRemove(ip);
 	}
 	return;
 	if (ip->back) {
@@ -407,7 +445,7 @@ void peep_add(struct ocode *ip)
                             if (ip->fwd->oper1->preg == regSP) {
                                 if (ip->back==NULL)
                                     return;
-								Remove(ip);
+								MarkRemove(ip);
                             }
                         }
                     }
@@ -446,7 +484,7 @@ static void MergeSubi(struct ocode *first, struct ocode *last, int amt)
 	// First remove all the excess subtracts
 	for (ip = first; ip && ip != last; ip = ip->fwd) {
 		if (IsSubiSP(ip)) {
-			Remove(ip);
+			MarkRemove(ip);
 		}
 	}
 	// Set the amount of the last subtract to the total amount
@@ -507,7 +545,7 @@ void PeepoptMuldiv(struct ocode *ip, int op)
   // remove multiply / divide by 1
 	// This shouldn't get through Optimize, but does sometimes.
   if (num==1) {
-	  Remove(ip);
+	  MarkRemove(ip);
 		return;
 	}
   for (shcnt = 1; shcnt < 32; shcnt++) {
@@ -530,11 +568,12 @@ void PeepoptMuldiv(struct ocode *ip, int op)
 void PeepoptUctran(struct ocode *ip)
 {
 	if (uctran_off) return;
-	while( ip->fwd != NULL && ip->fwd->opcode != op_label)
+	for(ip = ip->fwd; ip != NULL && ip->opcode != op_label; ip = ip->fwd)
 	{
-		ip->fwd = ip->fwd->fwd;
-		if( ip->fwd != NULL )
-			ip->fwd->back = ip;
+		if (ip->fwd && ip->fwd->comment==nullptr) {
+			ip->fwd->comment = ip->comment;
+		}
+		MarkRemove(ip);
 	}
 }
 
@@ -554,7 +593,7 @@ void PeepoptBranch(struct ocode *ip)
 
 	for (p = ip->fwd; p && p->opcode==op_label; p = p->fwd)
 		if (ip->oper3 && ip->oper3->offset->i == (int)p->oper1) {
-			Remove(ip);
+			MarkRemove(ip);
 			return;
 		}
 		if (ip->opcode==op_mov
@@ -701,6 +740,24 @@ static void opt_nbr()
 	//}
 }
 
+// Detect if the instruction has a target register.
+
+static bool HasTargetReg(struct ocode *ip)
+{
+	switch(ip->opcode) {
+	case op_add:
+	case op_adc:
+	case op_sub:
+	case op_and:
+	case op_or:
+	case op_xor:
+	case op_ror:
+	case op_ld:
+	case op_mov:
+		return true;
+	}
+	return false;
+}
 
 // Process compiler hint opcodes
 
@@ -722,20 +779,16 @@ static void PeepoptHint(struct ocode *ip)
 		if (ip->back->opcode==op_label || ip->fwd->opcode==op_label)
 			return;
 		if (ip->fwd->opcode != op_mov) {
-			Remove(ip);
 			return;
 		}
 		if (ip->back->opcode != op_mov) {
-			Remove(ip);
 			return;
 		}
-		if (equal_address(ip->fwd->oper2, ip->back->oper1) && ip->back->oper2->mode==am_immed) {
-			ip->back->oper1 = ip->fwd->oper1;
-			ip->back->fwd = ip->fwd->fwd;
-			ip->fwd->fwd->back = ip->back;
-		}
-		else {
-			Remove(ip);
+		if (HasTargetReg(ip->back)) {
+			if (equal_address(ip->fwd->oper2, ip->back->oper1) && ip->back->oper2->mode==am_immed) {
+				ip->back->oper1 = ip->fwd->oper1;
+				MarkRemove(ip->fwd);
+			}
 		}
 		break;
 
@@ -750,13 +803,11 @@ static void PeepoptHint(struct ocode *ip)
 		if (ip->back->opcode==op_label || ip->fwd->opcode==op_label)
 			return;
 		if (ip->back && ip->back->oper1 && ip->fwd && ip->fwd->oper2) {
-			if (equal_address(ip->fwd->oper2, ip->back->oper1)) {
-				ip->back->oper1 = ip->fwd->oper1;
-				ip->back->fwd = ip->fwd->fwd;
-				ip->fwd->fwd->back = ip->back;
-			}
-			else {
-				Remove(ip);
+			if (HasTargetReg(ip->back)) {
+				if (equal_address(ip->fwd->oper2, ip->back->oper1)) {
+					ip->back->oper1 = ip->fwd->oper1;
+					MarkRemove(ip->fwd);
+				}
 			}
 		}
 		break;
@@ -771,8 +822,7 @@ static void PeepoptHint(struct ocode *ip)
 				return;
 			if (equal_address(ip2->oper2, ip1->oper1)) {
 				ip1->oper1 = ip2->oper1;
-				ip1->fwd = ip2->fwd;
-				ip2->fwd->back = ip1;
+				MarkRemove(ip2);
 			}
 		}
 		break;
@@ -780,7 +830,8 @@ static void PeepoptHint(struct ocode *ip)
 }
 
 // A store followed by a load of the same address removes
-// the load operation.
+// the load operation. However volatile loads are not
+// removed.
 // Eg.
 // SH   r3,Address
 // LH	r3,Address
@@ -797,8 +848,8 @@ static void PeepoptStore(struct ocode *ip)
 		return;
 	if (ip->opcode==op_sto && ip->fwd->opcode!=op_ld)
 		return;
-	ip->fwd = ip->fwd->fwd;
-	ip->fwd->back = ip;
+	if (!ip->isVolatile)
+		MarkRemove(ip->fwd);
 }
 
 // This optimization eliminates an 'AND' instruction when the value
@@ -1025,11 +1076,88 @@ static int EliminateUnreferencedLabels()
 	cnt = 0;
 	for (p = peep_head; p; p = p->fwd) {
 		if (p->opcode==op_label && !p->isReferenced) {
-			Remove(p);
+			MarkRemove(p);
 			cnt++;
 		}
 	}
 	return cnt;
+}
+
+// Count the references to the BP register. Exclude the function prolog /
+// epilog code from the count.
+
+static int CountBPReferences()
+{
+	struct ocode *ip;
+	int refBP;
+
+	refBP = 0;
+	for (ip = peep_head; ip != NULL; ip = ip->fwd)
+	{
+		if (ip->opcode != op_label && ip->opcode != op_preload && ip->opcode!=op_nop) {
+			if (ip->opcode==op_hint) {
+				if (ip->oper1->offset) {
+					if ((ip->oper1->offset->i==4) || ip->oper1->offset->i==6) {
+						ip = ip->fwd;
+					while (ip && ip->opcode != op_hint)
+						ip = ip->fwd;
+					}
+				}
+			}
+			if (ip->oper1) {
+				if (ip->oper1->preg==regBP || ip->oper1->sreg==regBP)
+					refBP++;
+			}
+			if (ip->oper2) {
+				if (ip->oper2->preg==regBP || ip->oper2->sreg==regBP)
+					refBP++;
+			}
+			if (ip->oper3) {
+				if (ip->oper3->preg==regBP || ip->oper3->sreg==regBP)
+					refBP++;
+			}
+			if (ip->oper4) {
+				if (ip->oper4->preg==regBP || ip->oper4->sreg==regBP)
+					refBP++;
+			}
+		}
+	}
+	return (refBP);
+}
+
+
+// Remove the stack linkage code, used when there are no references to BP.
+
+static void RemoveLinkUnlink()
+{
+	struct ocode *ip;
+
+	for (ip = peep_head; ip != NULL; ip = ip->fwd)
+	{
+		if (ip->opcode==op_hint && (ip->oper1->offset->i==4 || ip->oper1->offset->i==6)) {
+			MarkRemove(ip);
+			ip = ip->fwd;
+			while (ip && ip->opcode != op_hint) {
+				MarkRemove(ip);
+				ip = ip->fwd;
+			}
+		}
+	}
+}
+
+// Remove all the compiler hints that didn't work out. Note hints are
+// removed even if optimizations are turned off. Also remove all the
+// preloads that didn't pan out.
+static void RemoveHints()
+{
+	struct ocode *ip;
+
+	for(ip = peep_head; ip != NULL; ip = ip->fwd )
+	{
+		if (ip->opcode==op_hint || ip->opcode==op_preload || ip->opcode==op_nop) {
+			MarkRemove(ip);
+		}
+	}
 }
 
 /*
@@ -1039,7 +1167,7 @@ static int EliminateUnreferencedLabels()
  */
 static void opt_peep()
 {  
-	struct ocode    *ip;
+	struct ocode *ip;
 	int rep;
 	int refBP;
 	
@@ -1049,138 +1177,79 @@ static void opt_peep()
 		{
 			SetLabelReference();
 			EliminateUnreferencedLabels();
-		ip = peep_head;
-		while( ip != NULL )
-		{
-			switch( ip->opcode )
+			MarkAllKeep();
+			for (ip = peep_head; ip != NULL; ip = ip->fwd )
 			{
-			case op_rem:
-				if (ip->fwd) {
-					ip->fwd->comment = ip;
-					if (ip->back)
-						ip->back->fwd = ip->fwd;
-					ip->fwd->back = ip->back;
+				switch( ip->opcode )
+				{
+				case op_rem:
+					if (ip->fwd) {
+						if (ip->fwd->comment==nullptr)
+							ip->fwd->comment = ip;
+					}
+					MarkRemove(ip);
+					break;
+				case op_ld:
+					peep_ld(ip);
+					PeepoptLd(ip);
+					break;
+				case op_mov:
+						peep_move(ip);
+						break;
+				case op_add:
+						peep_add(ip);
+						break;
+				case op_sub:
+						PeepoptSub(ip);
+						break;
+				case op_cmp:
+						peep_cmp(ip);
+						break;
+				case op_pop:
+				case op_push:
+						PeepoptPushPop(ip);
+						break;
+				case op_rti:
+						PeepoptUctran(ip);
+						break;
+				case op_label:
+						PeepoptLabel(ip);
+						break;
+				case op_hint:
+						PeepoptHint(ip);
+						break;
+				case op_sto:
+						PeepoptStore(ip);
+						break;
+				case op_and:
+						PeepoptAnd(ip);
+						break;
 				}
-				break;
-			case op_ld:
-				peep_ld(ip);
-				PeepoptLd(ip);
-				break;
-			case op_mov:
-					peep_move(ip);
-					break;
-			case op_add:
-					peep_add(ip);
-					break;
-			case op_sub:
-					PeepoptSub(ip);
-					break;
-			case op_cmp:
-					peep_cmp(ip);
-					break;
-			case op_pop:
-			case op_push:
-					PeepoptPushPop(ip);
-					break;
-			case op_rti:
+				if (IsRet(ip))
 					PeepoptUctran(ip);
-					break;
-			case op_label:
-					PeepoptLabel(ip);
-					break;
-			case op_hint:
-					PeepoptHint(ip);
-					break;
-			case op_sto:
-					PeepoptStore(ip);
-					break;
-			case op_and:
-					PeepoptAnd(ip);
-					break;
+				if (IsFlowCtrl(ip))
+					PeepoptPred(ip);
+				if (IsFlowCtrl(ip))
+					PeepoptBranch(ip);
 			}
-			if (IsRet(ip))
-				PeepoptUctran(ip);
-			if (IsFlowCtrl(ip))
-				PeepoptPred(ip);
-			if (IsFlowCtrl(ip))
-				PeepoptBranch(ip);
-			ip = ip->fwd;
-		}
+			Remove();
 		}
 		PeepoptSubSP();
 		ip = peep_head;
 
 		// Check for references to the base pointer
-		refBP = 0;
-		for (ip = peep_head; ip != NULL; ip = ip->fwd)
-		{
-			if (ip->opcode != op_label && ip->opcode != op_preload && ip->opcode!=op_nop) {
-				if (ip->opcode==op_hint) {
-					if (ip->oper1->offset) {
-						if ((ip->oper1->offset->i==4) || ip->oper1->offset->i==6) {
-							ip = ip->fwd;
-						while (ip && ip->opcode != op_hint)
-							ip = ip->fwd;
-						}
-					}
-				}
-				if (ip->oper1) {
-					if (ip->oper1->preg==regBP || ip->oper1->sreg==regBP)
-						refBP++;
-				}
-				if (ip->oper2) {
-					if (ip->oper2->preg==regBP || ip->oper2->sreg==regBP)
-						refBP++;
-				}
-				if (ip->oper3) {
-					if (ip->oper3->preg==regBP || ip->oper3->sreg==regBP)
-						refBP++;
-				}
-				if (ip->oper4) {
-					if (ip->oper4->preg==regBP || ip->oper4->sreg==regBP)
-						refBP++;
-				}
-			}
-		}
-
 		// Remove the link and unlink instructions if no references
 		// to BP. 
-		if (refBP==0) {
-			for (ip = peep_head; ip != NULL; ip = ip->fwd)
-			{
-				if (ip->opcode==op_hint && (ip->oper1->offset->i==4 || ip->oper1->offset->i==6)) {
-					Remove(ip);
-					ip = ip->fwd;
-					while (ip && ip->opcode != op_hint) {
-						Remove(ip);
-						ip = ip->fwd;
-					}
-				}
-			}
-		}
+		if (CountBPReferences()==0)
+			RemoveLinkUnlink();
 	}
 	// Unreferenced labels are removed even if optimization is turned off.
 	SetLabelReference();
 	EliminateUnreferencedLabels();
+
 	// Remove all the compiler hints that didn't work out. Note hints are
 	// removed even if optimizations are turned off. Also remove all the
 	// preloads that didn't pan out.
-	for(ip = peep_head; ip != NULL; ip = ip->fwd )
-	{
-		if (ip->opcode==op_hint || ip->opcode==op_preload || ip->opcode==op_nop) {
-			Remove(ip);
-		}
-	}
-	// The above code doesn't remove all the hints, not sure why. So if there
-	// are any remaining they are switched to NOP's.
-	for(ip = peep_head; ip != NULL; ip = ip->fwd )
-	{
-		if (ip->opcode==op_hint || ip->opcode==op_preload || ip->opcode==op_nop) {
-			ip->opcode = op_nop;
-			ip->oper1 = nullptr;
-			ip->oper2 = nullptr;
-			ip->oper3 = nullptr;
-			ip->oper4 = nullptr;
-		}
-	}
+	RemoveHints();
+	Remove();
 }

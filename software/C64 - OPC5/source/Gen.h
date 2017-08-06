@@ -52,6 +52,7 @@ struct ocode {
 	short length;
 	unsigned int isVolatile : 1;
 	unsigned int isReferenced : 1;		// set if label is referenced
+	unsigned int remove : 1;			// set to remove instruction in peephole opt.
 	short pregreg;
 	short predop;
 	AMODE *oper1, *oper2, *oper3, *oper4;

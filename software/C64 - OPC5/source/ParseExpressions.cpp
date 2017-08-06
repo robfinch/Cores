@@ -487,6 +487,7 @@ TYP *CondDeref(ENODE **node, TYP *tp)
 		tp =(TYP *) TYP::Make(bt_pointer,sizeOfWord);
 		tp->dimen = dimen;
 		tp->numele = numele;
+		tp->isArray = true;
 		tp->btp = tp1->GetIndex();
 	}
 	else if (tp->type==bt_pointer)
@@ -1114,7 +1115,8 @@ TYP *ParsePrimaryExpression(ENODE **node, int got_pa)
  *      this can be qualified by the fact that an IsLValue must have
  *      one of the dereference operators as it's top node.
  */
-int IsLValue(ENODE *node)
+// opt indicates if an array reference is an LValue or not.
+int IsLValue(ENODE *node, bool opt)
 {
 	if (node==nullptr)
 		return FALSE;
@@ -1159,15 +1161,14 @@ int IsLValue(ENODE *node)
 	case en_cubu:
 	case en_cucu:
 	case en_cuhu:
-            return IsLValue(node->p[0]);
+            return IsLValue(node->p[0],opt);
 	case en_add:
 		if (node->tp)
-			return node->tp->type==bt_pointer;
+			return node->tp->type==bt_pointer && node->tp->isArray && opt;
 		else
 			return FALSE;
-			
-	//case en_autocon:
-	//		return node->etype==bt_pointer;
+	case en_autocon:
+		return node->etype==bt_pointer && node->tp->isArray && opt;
     }
     return FALSE;
 }
@@ -1181,7 +1182,7 @@ TYP *Autoincdec(TYP *tp, ENODE **node, int flag)
 	int su;
 
 	ep1 = *node;
-	if( IsLValue(ep1) ) {
+	if( IsLValue(ep1,false) ) {
 		if (tp->type == bt_pointer) {
 			typ = tp->GetBtp();
 			ep2 = makeinode(en_icon,typ->size);
@@ -1699,7 +1700,7 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
             error(ERR_IDEXPECT);
             return (TYP *)NULL;
         }
-        if( IsLValue(ep1))
+        if( IsLValue(ep1,true))
             ep1 = ep1->p[0];
         ep1->esize = sizeOfWord;     // converted to a pointer so size is now 8
         tp1 = TYP::Make(bt_pointer,sizeOfWord);
@@ -2695,7 +2696,7 @@ ascomm2:
 				//	tp3->val_flag = FALSE;
 				//	tp1 = tp3;
 				//}
-		        if( tp2 == 0 || !IsLValue(ep1) )
+		        if( tp2 == 0 || !IsLValue(ep1,true) )
                     error(ERR_LVALUE);
 				else {
 					tp1 = forcefit(&ep2,tp2,&ep1,tp1,false);

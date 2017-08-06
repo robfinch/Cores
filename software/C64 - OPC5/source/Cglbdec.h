@@ -261,7 +261,7 @@ extern ENODE *makesnode(int nt, std::string *v1, std::string *v2, int i);
 extern TYP *nameref(ENODE **node,int);
 extern TYP *forcefit(ENODE **node1,TYP *tp1,ENODE **node2,TYP *tp2,bool);
 extern TYP *expression(ENODE **node);
-extern int IsLValue(ENODE *node);
+extern int IsLValue(ENODE *node,bool opt);
 extern AMODE *GenerateExpression(ENODE *node, int flags, int size);
 extern int GetNaturalSize(ENODE *node);
 extern TYP *asnop(ENODE **node);
@@ -303,6 +303,8 @@ extern void put_code(struct ocode *);
 extern char *put_label(int lab, char*, char*, char);
 extern char *opstr(int op);
 // Peepgen.c
+extern void MarkRemoveRange(struct ocode *bp, struct ocode *ep);
+extern void PeepRemove();
 extern void PeepNop(struct ocode *ip1, struct ocode *ip2);
 extern void flush_peep();
 extern int equal_address(AMODE *ap1, AMODE *ap2);

@@ -56,7 +56,7 @@ static int OptimizationDesireability(CSE *csp)
         return 0;
 	if (csp->exp->isVolatile)
 		return 0;
-    if( IsLValue(csp->exp) )
+    if( IsLValue(csp->exp,true) )
 	    return 2 * csp->uses;
     return csp->uses;
 }
@@ -168,7 +168,8 @@ int AllocateRegisterVars()
         if( csp->reg != -1 )
         {               // see if preload needed
             exptr = csp->exp;
-            if( !IsLValue(exptr) || (exptr->p[0] && exptr->p[0]->i > 0) || (exptr->nodetype==en_struct_ref))
+            if( !IsLValue(exptr,false) 
+				|| (exptr->p[0] && exptr->p[0]->i > 0) || (exptr->nodetype==en_struct_ref))
             {
                 initstack();
                 ap = GenerateExpression(exptr,F_REG|F_IMMED|F_MEM,sizeOfWord);

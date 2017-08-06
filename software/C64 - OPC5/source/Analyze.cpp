@@ -103,7 +103,7 @@ int equalnode(ENODE *node1, ENODE *node2)
 	  case en_cnacon:
 			return (node1->sp->compare(*node2->sp)==0);
       default:
-	        if( IsLValue(node1) && equalnode(node1->p[0], node2->p[0])  )
+	        if( IsLValue(node1,true) && equalnode(node1->p[0], node2->p[0])  )
 		        return TRUE;
 		return FALSE;
     }
@@ -183,7 +183,7 @@ int voidauto2(ENODE *node)
     uses = 0;
     voided = 0;
 	for (cnt = 0; cnt < csendx; cnt++) {
-        if( IsLValue(CSETable[cnt].exp) && equalnode(node,CSETable[cnt].exp->p[0]) ) {
+        if( IsLValue(CSETable[cnt].exp,true) && equalnode(node,CSETable[cnt].exp->p[0]) ) {
             CSETable[cnt].voidf = 1;
             voided = 1;
             uses += CSETable[cnt].uses;
@@ -362,7 +362,7 @@ static void scanexpr(ENODE *node, int duse)
                 scanexpr(node->p[1],0);
                 break;
 		case en_assign:
-                //scanexpr(node->p[0],0);
+                scanexpr(node->p[0],0);
                 scanexpr(node->p[1],0);
                 break;
         case en_fcall:
@@ -474,7 +474,7 @@ int OptimizationDesireability(CSE *csp)
 		return 0;
 	if (csp->exp->isVolatile)
 		return 0;
-    if( IsLValue(csp->exp) )
+    if( IsLValue(csp->exp,true) )
 	    return 2 * csp->uses;
     return csp->uses;
 }

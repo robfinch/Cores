@@ -622,6 +622,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
 		ap1->isUnsigned = !su;//node->isUnsigned;
 		// *** may have to fix for stackseg
 		ap1->segment = dataseg;
+		ap1->isAddress = true;
 //		ap2->mode = ap1->mode;
 //		ap2->segment = dataseg;
 //		ap2->offset = ap1->offset;
@@ -657,6 +658,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
         ap1->offset = makeinode(en_icon,node->p[0]->i);
 		ap1->offset->sym = node->p[0]->sym;
 		ap1->isUnsigned = !su;
+		ap1->isAddress = true;
 		if (!node->isUnsigned)
 	        GenerateSignExtend(ap1,siz1,size,flags);
 		else
@@ -681,6 +683,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
 			ap1->FloatSize = 'd';
 		ap1->segment = stackseg;
 		ap1->isFloat = TRUE;
+		ap1->isAddress = true;
 //	    MakeLegalAmode(ap1,flags,siz1);
         MakeLegalAmode(ap1,flags,size);
 		goto xit;
@@ -693,6 +696,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
 		ap1->segment = dataseg;
         ap1->offset = node->p[0];//makeinode(en_icon,node->p[0]->i);
 		ap1->isUnsigned = !su;
+		ap1->isAddress = true;
 		if (!node->isUnsigned)
 	        GenerateSignExtend(ap1,siz1,size,flags);
 		else
@@ -709,6 +713,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
 		ap1->mode = node->p[0]->i < 7 ? am_ind : am_reg;
 //		ap1->mode = node->p[0]->tp->val_flag ? am_reg : am_ind;
 		ap1->preg = node->p[0]->i;
+		ap1->isAddress = true;
         MakeLegalAmode(ap1,flags,size);
 	    Leave("Genderef",3);
         return ap1;
@@ -719,6 +724,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
 		ap1->mode = node->p[0]->i < 7 ? am_ind : am_fpreg;
 		ap1->preg = node->p[0]->i;
 		ap1->isFloat = TRUE;
+		ap1->isAddress = true;
         MakeLegalAmode(ap1,flags,size);
 	    Leave("Genderef",3);
         return ap1;
@@ -738,6 +744,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
 		  else
 			ap1->offset = nullptr;	// ****
 		ap1->isUnsigned = !su;
+		ap1->isAddress = true;
 		if (!node->isUnsigned)
 	        GenerateSignExtend(ap1,siz1,size,flags);
 		else
@@ -757,6 +764,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
              ap1->mode = am_ind;
 		ap1->offset = 0;	// ****
 		ap1->isUnsigned = !su;
+		ap1->isAddress = true;
 		if (!node->isUnsigned)
 	        GenerateSignExtend(ap1,siz1,size,flags);
 		else
@@ -786,6 +794,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
 	else
 		MakeLegalAmode(ap1,flags,siz1);
     ap1->isVolatile = node->isVolatile;
+	ap1->isAddress = true;
     MakeLegalAmode(ap1,flags,size);
 xit:
     Leave("Genderef",0);
@@ -846,6 +855,7 @@ AMODE *GenerateBinary(ENODE *node,int flags, int size, int op)
 		ReleaseTempReg(ap2);
 		ap1->isAddress = ap2->isAddress | ap1->isAddress;
 	}
+	ap3->isAddress = ap1->isAddress | ap2->isAddress;
 	ReleaseTempReg(ap1);
     MakeLegalAmode(ap3,flags,size);
     return (ap3);
@@ -945,8 +955,8 @@ AMODE *GenerateHook(ENODE *node,int flags, int size)
 {
 	AMODE *ap1, *ap2;
     int false_label, end_label;
-	struct ocode *ip1, *ip2, *ip0, *ip4, *ip5;
-	int n1, n2, which;
+	struct ocode *ip1, *ip2, *ip3, *ip0, *ip4, *ip5;
+	int n1, n2, n3, which;
 	int predop;
 
     false_label = nextlabel++;
@@ -957,73 +967,62 @@ AMODE *GenerateHook(ENODE *node,int flags, int size)
 	// The following code attempts to make use of predicated logic. Predicated
 	// logic only works on a single line of code so if there's more than one
 	// line of code then this code is aborted and the regular code used.
-	// Unfortunately it doesn't work right yet. So it's just bypassed for now.
-	goto j1;
 
-	//ap0 = GenerateExpression(node->p[0],flags,size);
-	//ReleaseTempReg(ap0);
-	ip1 = peep_tail;
-    ap1 = GenerateExpression(node->p[1]->p[0],flags,size);
-	ReleaseTempReg(ap1);
-	n1 = PeepCount(ip1);
-	ip2 = peep_tail;
-    ap2 = GenerateExpression(node->p[1]->p[1],flags,size);
-	ReleaseTempReg(ap2);
-	n2 = PeepCount(ip2);
-	if (n1 > 1 && n2 > 1)
-		which = 0;
-	else if (n1 > 1)
-		which = 2;
-	else
-		which = 1;
-	// Now discard the code.
-	peep_tail = ip0 = ip1;
-	peep_tail->fwd = nullptr;
-
-	//ip3 = peep_tail;
-	//GenerateFalseJump(node->p[0],false_label,0);
-	//ip4 = peep_tail;
-	// Don't want to preload if there will be more than three instructions
-	// predicated.
-	peep_tail = ip0;
-	peep_tail->fwd = nullptr;
-	// Do the standard sequence
-	if (which==1)
+	if (!opt_nocgo) {
+		ip1 = peep_tail;
 		ap1 = GenerateExpression(node->p[1]->p[0],flags,size);
-	else if (which==2)
-		ap1 = GenerateExpression(node->p[1]->p[1],flags,size);
-	else {
-		peep_tail = ip0;
-		peep_tail->fwd = nullptr;
-		goto j1;
-	}
-	ReleaseTempReg(ap1);
-	ip4 = peep_tail;
-	GenerateFalseJump(node->p[0],false_label,0);
-	ip5 = peep_tail;
-	predop = peep_tail->back->predop;
-	if (which==1) {
+		ReleaseTempReg(ap1);
+		n1 = PeepCount(ip1);
+		ip2 = peep_tail;
 		ap2 = GenerateExpression(node->p[1]->p[1],flags,size);
-		peep_tail->predop = predop;
-		if (!equal_address(ap1,ap2)) {
-			peep_tail = ip0;
-			peep_tail->fwd = nullptr;
-			goto j1;
+		ReleaseTempReg(ap2);
+		ip3 = peep_tail;
+		n2 = PeepCount(ip2);
+		if (n1 > 1 && n2 > 1) {
+			which = 0;
+			MarkRemoveRange(ip1->fwd,ip3);
 		}
-	}
-	else if (which==2) {
-		ap2 = GenerateExpression(node->p[1]->p[0],flags,size);
-		peep_tail->predop = predop;
-		if (!equal_address(ap1,ap2)) {
-			peep_tail = ip0;
-			peep_tail->fwd = nullptr;
-			goto j1;
+		else if (n1 > 1) {
+			which = 2;
+			MarkRemoveRange(ip1->fwd,ip2);
 		}
+		else {
+			which = 1;
+			MarkRemoveRange(ip2->fwd,ip3);
+		}
+		ip4 = peep_tail;
+		GenerateFalseJump(node->p[0],false_label,0);
+		ip5 = peep_tail;
+		n3 = PeepCount(ip4);
+		if (n3 < 3) {
+			predop = peep_tail->predop;
+			if (which==1) {
+				MarkRemoveRange(ip4->fwd->fwd,ip5);
+				ap2 = GenerateExpression(node->p[1]->p[1],flags,size);
+				ip5->fwd->predop = predop^1;
+			}
+			else if (which==2) {
+				MarkRemoveRange(ip4->fwd->fwd,ip5);
+				ap2 = GenerateExpression(node->p[1]->p[0],flags,size);
+				ip5->fwd->predop = predop;
+			}
+		}
+		else {
+			if (which==1) {
+				ap2 = GenerateExpression(node->p[1]->p[1],flags,size);
+				GenerateLabel(false_label);
+			}
+			else {	// which==2
+				MarkRemoveRange(ip4->fwd,ip5);	// remove the old jump
+				GenerateTrueJump(node->p[0],false_label,0);
+				ap2 = GenerateExpression(node->p[1]->p[0],flags,size);
+				GenerateLabel(false_label);
+			}
+		}
+		PeepRemove();
+		return (ap2);
 	}
-	PeepNop(ip4->fwd,ip5);
-	ReleaseTempReg(ap2);
-	return (ap1);
-j1:
+	// Unoptimized code
 	GenerateFalseJump(node->p[0],false_label,0);
 	node = node->p[1];
 	ap1 = GenerateExpression(node->p[0],flags,size);
