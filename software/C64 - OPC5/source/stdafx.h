@@ -5,11 +5,15 @@
 
 #pragma once
 
-#include "targetver.h"
-
-#include <Windows.h>
 #include <stdio.h>
+
+#include "compat.h"
+
+#ifndef __GNUC__
+#include "targetver.h"
+#include <Windows.h>
 #include <tchar.h>
+#endif
 
 #ifdef _MSC_VER
 typedef __int8 int8_t;
@@ -31,7 +35,7 @@ typedef unsigned __int64 uint64_t;
 
 #define snprintf	sprintf_s
 
-#include "Rand.h"
+#include "rand.h"
 #include "txtStream.h"
 #include "Value.h"
 #include "C.h"

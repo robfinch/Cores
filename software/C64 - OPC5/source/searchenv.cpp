@@ -27,7 +27,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#ifndef __GNUC__
 #include <io.h>
+#endif
+
 //#include <unistd.h>
 
 /* ---------------------------------------------------------------------------
