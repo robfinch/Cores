@@ -335,7 +335,7 @@ extern int IdentifyKeyword();
 // Preproc.c
 extern int preprocess();
 // OPC6.cpp
-extern void GenerateCmp(ENODE *node, int label, int predreg, unsigned int prediction);
+extern void GenerateCmp(ENODE *node, int label, int predreg, unsigned int prediction, int type);
 // CodeGenerator.c
 extern AMODE *make_indirect(int i);
 extern AMODE *make_indexed(int o, int i);

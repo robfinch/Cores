@@ -385,7 +385,7 @@ AMODE *GenExpr(ENODE *node)
     return (ap3);
 }
 
-void GenerateCmp(ENODE *node, int label, int predreg, unsigned int prediction)
+void GenerateCmp(ENODE *node, int label, int predreg, unsigned int prediction, int type)
 {
 	int size;
 	AMODE *ap1, *ap2;
@@ -394,7 +394,7 @@ void GenerateCmp(ENODE *node, int label, int predreg, unsigned int prediction)
 	size = GetNaturalSize(node);
     ap1 = GenerateExpression(node->p[0],F_REG, size);
 	ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
-	switch(node->nodetype) {
+	switch(type) {
 	case en_eq:
 		size = GetNaturalSize(node);
 		if (ap2->mode==am_immed) {

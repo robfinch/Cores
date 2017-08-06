@@ -2135,10 +2135,10 @@ int GetNaturalSize(ENODE *node)
 }
 
 
-static void GenerateCmp(ENODE *node, int label, unsigned int prediction)
+static void GenerateCmp(ENODE *node, int label, unsigned int prediction, int type)
 {
 	Enter("GenCmp");
-	GenerateCmp(node, label, 0, prediction);
+	GenerateCmp(node, label, 0, prediction, type);
 	Leave("GenCmp",0);
 }
 
@@ -2156,16 +2156,16 @@ void GenerateTrueJump(ENODE *node, int label, unsigned int prediction)
 		return;
 	switch( node->nodetype )
 	{
-	case en_eq:	GenerateCmp(node, label, prediction); break;
-	case en_ne: GenerateCmp(node, label, prediction); break;
-	case en_lt: GenerateCmp(node, label, prediction); break;
-	case en_le:	GenerateCmp(node, label, prediction); break;
-	case en_gt: GenerateCmp(node, label, prediction); break;
-	case en_ge: GenerateCmp(node, label, prediction); break;
-	case en_ult: GenerateCmp(node, label, prediction); break;
-	case en_ule: GenerateCmp(node, label, prediction); break;
-	case en_ugt: GenerateCmp(node, label, prediction); break;
-	case en_uge: GenerateCmp(node, label, prediction); break;
+	case en_eq:	GenerateCmp(node, label, prediction, en_eq); break;
+	case en_ne: GenerateCmp(node, label, prediction, en_ne); break;
+	case en_lt: GenerateCmp(node, label, prediction, en_lt); break;
+	case en_le:	GenerateCmp(node, label, prediction, en_le); break;
+	case en_gt: GenerateCmp(node, label, prediction, en_gt); break;
+	case en_ge: GenerateCmp(node, label, prediction, en_ge); break;
+	case en_ult: GenerateCmp(node, label, prediction, en_ult); break;
+	case en_ule: GenerateCmp(node, label, prediction, en_ule); break;
+	case en_ugt: GenerateCmp(node, label, prediction, en_ugt); break;
+	case en_uge: GenerateCmp(node, label, prediction, en_uge); break;
 	case en_land:
 		lab0 = nextlabel++;
 		GenerateFalseJump(node->p[0],lab0,prediction);
@@ -2204,16 +2204,16 @@ void GenerateFalseJump(ENODE *node,int label, unsigned int prediction)
 		return;
 	switch( node->nodetype )
 	{
-	case en_eq:	GenerateCmp(node, label, prediction); break;
-	case en_ne: GenerateCmp(node, label, prediction); break;
-	case en_lt: GenerateCmp(node, label, prediction); break;
-	case en_le: GenerateCmp(node, label, prediction); break;
-	case en_gt: GenerateCmp(node, label, prediction); break;
-	case en_ge: GenerateCmp(node, label, prediction); break;
-	case en_ult: GenerateCmp(node, label, prediction); break;
-	case en_ule: GenerateCmp(node, label, prediction); break;
-	case en_ugt: GenerateCmp(node, label, prediction); break;
-	case en_uge: GenerateCmp(node, label, prediction); break;
+	case en_eq:	GenerateCmp(node, label, prediction, en_ne); break;
+	case en_ne: GenerateCmp(node, label, prediction, en_eq); break;
+	case en_lt: GenerateCmp(node, label, prediction, en_ge); break;
+	case en_le: GenerateCmp(node, label, prediction, en_gt); break;
+	case en_gt: GenerateCmp(node, label, prediction, en_le); break;
+	case en_ge: GenerateCmp(node, label, prediction, en_lt); break;
+	case en_ult: GenerateCmp(node, label, prediction, en_uge); break;
+	case en_ule: GenerateCmp(node, label, prediction, en_ugt); break;
+	case en_ugt: GenerateCmp(node, label, prediction, en_ule); break;
+	case en_uge: GenerateCmp(node, label, prediction, en_ult); break;
 	case en_land:
 		GenerateFalseJump(node->p[0],label,prediction^1);
 		GenerateFalseJump(node->p[1],label,prediction^1);

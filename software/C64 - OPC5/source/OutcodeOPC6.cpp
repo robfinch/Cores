@@ -111,28 +111,6 @@ char *opstr(int op)
 	return (char *)NULL;
 }
 
-/*
-static char *segstr(int op)
-{
-	static char buf[20];
-
-	switch(op & 0xff00) {
-	case op_cs:
-		return "cs";
-	case op_ss:
-		return "ss";
-	case op_ds:
-		return "ds";
-	case op_bs:
-		return "bs";
-	case op_ts:
-		return "ts";
-	default:
-		sprintf(buf, "seg%d", op >> 8);
-		return buf;
-	}
-}
-*/
 void putpop(int pop)
 {
 	switch(pop) {

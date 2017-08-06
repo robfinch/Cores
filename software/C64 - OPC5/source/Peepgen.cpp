@@ -585,6 +585,7 @@ void PeepoptJAL(struct ocode *ip)
 }
 
 // Remove instructions that branch to the next label.
+// Convert moves to PC to inc/dec operations where possible.
 //
 void PeepoptBranch(struct ocode *ip)
 {
