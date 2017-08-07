@@ -71,8 +71,6 @@ short int csendx;
  *      opt1 will replace during the second optimization pass.
  */
 
-CSE *olist;         /* list of optimizable expressions */
-
 /*
  *      equalnode will return 1 if the expressions pointed to by
  *      node1 and node2 are equivalent.
@@ -124,22 +122,6 @@ static CSE *SearchCSEList(ENODE *node)
     return (CSE *)NULL;
 }
 
-/*
- *      copy the node passed into a new enode so it wont get
- *      corrupted during substitution.
- */
-static ENODE *DuplicateEnode(ENODE *node)
-{       
-	ENODE *temp;
-
-    if( node == NULL )
-        return (ENODE *)NULL;
-    temp = allocEnode();
-	memcpy(temp,node,sizeof(ENODE));	// copy all the fields
-    return temp;
-}
-
-
 // InsertNodeIntoCSEList will enter a reference to an expression node into the
 // common expression table. duse is a flag indicating whether or not
 // this reference will be dereferenced.
@@ -153,14 +135,11 @@ CSE *InsertNodeIntoCSEList(ENODE *node, int duse)
 			throw new C64PException(ERR_CSETABLE,0x01);
 		csp = &CSETable[csendx];
 		csendx++;
-//        csp = allocCSE();
-        csp->next = olist;
         csp->uses = 1;
         csp->duses = (duse != 0);
-        csp->exp = DuplicateEnode(node);
+        csp->exp = node->Duplicate();
         csp->voidf = 0;
 		csp->reg = 0;
-        olist = csp;
         return csp;
     }
     ++(csp->uses);
@@ -251,6 +230,8 @@ static void scanexpr(ENODE *node, int duse)
 		case en_uhfieldref:
 		case en_wfieldref:
 		case en_uwfieldref:
+		case en_lw_ref:
+		case en_ulw_ref:
         case en_struct_ref:
                 // There is something wrong with the following code that causes
                 // it to remove zero extension conversion from a byte to a word.
@@ -390,36 +371,36 @@ void scan(Statement *block)
             case st_return:
 			case st_throw:
             case st_expr:
-                    opt_const(&block->exp);
+                    block->exp->OptimizeConstants();
                     scanexpr(block->exp,0);
                     break;
             case st_while:
 			case st_until:
             case st_do:
 			case st_dountil:
-                    opt_const(&block->exp);
+                    block->exp->OptimizeConstants();
                     scanexpr(block->exp,0);
 			case st_doloop:
 			case st_forever:
                     scan(block->s1);
                     break;
             case st_for:
-                    opt_const(&block->initExpr);
+                    block->initExpr->OptimizeConstants();
                     scanexpr(block->initExpr,0);
-                    opt_const(&block->exp);
+                    block->exp->OptimizeConstants();
                     scanexpr(block->exp,0);
                     scan(block->s1);
-                    opt_const(&block->incrExpr);
+                    block->incrExpr->OptimizeConstants();
                     scanexpr(block->incrExpr,0);
                     break;
             case st_if:
-                    opt_const(&block->exp);
+                    block->exp->OptimizeConstants();
                     scanexpr(block->exp,0);
                     scan(block->s1);
                     scan(block->s2);
                     break;
             case st_switch:
-                    opt_const(&block->exp);
+                    block->exp->OptimizeConstants();
                     scanexpr(block->exp,0);
                     scan(block->s1);
                     break;
@@ -450,7 +431,7 @@ static void scan_compound(Statement *stmt)
 	sp = sp->GetPtr(stmt->ssyms.GetHead());
 	while (sp) {
 		if (sp->initexp) {
-			opt_const(&sp->initexp);
+			sp->initexp->OptimizeConstants();
             scanexpr(sp->initexp,0);
 		}
 		sp = sp->GetNextPtr();
@@ -525,6 +506,8 @@ void repexpr(ENODE *node)
 				case en_uc_ref:
 				case en_uh_ref:
                 case en_uw_ref:
+				case en_lw_ref:
+				case en_ulw_ref:
 				case en_bfieldref:
 				case en_ubfieldref:
 				case en_cfieldref:
@@ -706,7 +689,6 @@ int opt1(Statement *block)
 
 	csendx = 0;
     nn = 0;
-	olist = (CSE *)NULL;
     if (opt_noregs==FALSE) {
 	    scan(block);            /* collect expressions */
         nn = AllocateRegisterVars();

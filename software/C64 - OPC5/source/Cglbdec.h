@@ -192,7 +192,6 @@ extern int equalnode(ENODE *node1, ENODE *node2);
 extern int bsort(CSE **list);
 extern int OptimizationDesireability(CSE *csp);
 extern int opt1(Statement *stmt);
-extern CSE *olist;         /* list of optimizable expressions */
 // CMain.c
 extern void closefiles();
 
@@ -303,6 +302,7 @@ extern void put_code(struct ocode *);
 extern char *put_label(int lab, char*, char*, char);
 extern char *opstr(int op);
 // Peepgen.c
+extern AMODE *copy_addr(AMODE *ap);
 extern void MarkRemoveRange(struct ocode *bp, struct ocode *ep);
 extern void PeepRemove();
 extern void PeepNop(struct ocode *ip1, struct ocode *ip2);
@@ -354,6 +354,7 @@ extern void ListTable(TABLE *t, int i);
 // Register.c
 extern AMODE *GetTempRegister();
 extern AMODE *GetTempRegister2(int *pushed);
+extern AMODE *GetTempRegisterPair();
 extern AMODE *GetTempBrRegister();
 extern AMODE *GetTempFPRegister();
 extern void ReleaseTempRegister(AMODE *ap);

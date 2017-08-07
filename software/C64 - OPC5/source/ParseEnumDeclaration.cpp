@@ -56,7 +56,7 @@ void ParseEnumDeclaration(TABLE *table)
         head = sp->tp;
     }
     else {
-        tp = allocTYP();	// fix here
+        tp = TYP::alloc();	// fix here
         tp->type = bt_enum;
 		tp->size = 1;
         if( lastst != begin)

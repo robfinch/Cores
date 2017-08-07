@@ -211,29 +211,7 @@ SYM *allocSYM() {
 	return sym;
 };
 
-TYP *allocTYP()
-{
-//  printf("allocTYP()\r\n");
-	TYP *tp = (TYP *)&compiler.typeTable[compiler.typenum];
-	ZeroMemory(tp,sizeof(TYP));
-	tp->sname = new std::string("");
-  tp->bit_width = -1;
-//	printf("Leave allocTYP():%p\r\n",tp);
-  compiler.typenum++;
-	if (compiler.typenum > 32760) {
-	  dfs.printf("Too many types\n");
-    throw new C64PException(ERR_TOOMANY_SYMBOLS,1);
-  }
-	return tp;
-};
-
 Statement *allocSnode() { return (Statement *)xalloc(sizeof(Statement)); };
-ENODE *allocEnode() {
-  ENODE *p;
-  p = (ENODE *)allocx(sizeof(ENODE));
-  p->sp = new std::string();
-  return p;
-};
 AMODE *allocAmode() { return (AMODE *)xalloc(sizeof(AMODE)); };
 CSE *allocCSE() { return (CSE *)xalloc(sizeof(CSE)); };
 

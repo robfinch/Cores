@@ -47,7 +47,7 @@
 	Robert Finch	robfinch<remove>@opencores.org
 */
 
-static void fold_const(ENODE **node);
+void fold_const(ENODE **node);
 
 /*
  *      dooper will execute a constant operation in a node and
@@ -204,7 +204,7 @@ int mod_mask(int i)
  *      combine name and label constants but will combine icon type
  *      nodes.
  */
-static void opt0(ENODE **node)
+void opt0(ENODE **node)
 {
 	ENODE *ep;
     int val, sc;
@@ -222,6 +222,8 @@ static void opt0(ENODE **node)
 			case en_uc_ref:
 			case en_uh_ref:
             case en_uw_ref:          /* optimize unary node */
+			case en_lw_ref:
+			case en_ulw_ref:
 			case en_flt_ref:
 			case en_dbl_ref:
 			case en_quad_ref:
@@ -581,7 +583,7 @@ static int xfold(ENODE *node)
 /*
  *      reorganize an expression for optimal constant grouping.
  */
-static void fold_const(ENODE **node)
+void fold_const(ENODE **node)
 {       ENODE *ep;
         int i;
         ep = *node;
@@ -620,16 +622,4 @@ static void fold_const(ENODE **node)
                 ep = makenode(en_add,ep,*node);
                 *node = ep;
                 }
-}
-
-//
-//      apply all constant optimizations.
-//
-void opt_const(ENODE **node)
-{
-    if (opt_noexpr==FALSE) {
-    	opt0(node);
-    	fold_const(node);
-    	opt0(node);
-    }
 }

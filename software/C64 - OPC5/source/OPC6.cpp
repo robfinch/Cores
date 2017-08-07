@@ -124,14 +124,16 @@ int AllocateRegisterVars()
 	// Make multiple passes over the CSE table in order to use
 	// up all temporary registers. Allocates on the progressively
 	// less desirable.
-	for (nn = 0; nn < 6; nn++) {
-		for (csecnt = 0; csecnt < csendx; csecnt++)	{
-			csp = &CSETable[csecnt];
-			if (csp->reg==-1) {
-				if( OptimizationDesireability(csp) >= 4-nn ) {
-   					//if(( csp->duses > csp->uses / 2) && reg < 5 )
-					if (csp->uses > 3 && reg < 5)
-   						csp->reg = reg++;
+	if (currentFn->AllowRegVars) {
+		for (nn = 0; nn < 6; nn++) {
+			for (csecnt = 0; csecnt < csendx; csecnt++)	{
+				csp = &CSETable[csecnt];
+				if (csp->reg==-1) {
+					if( OptimizationDesireability(csp) >= 4-nn ) {
+   						//if(( csp->duses > csp->uses / 2) && reg < 5 )
+						if (csp->uses > 3 && reg < 5)
+   							csp->reg = reg++;
+					}
 				}
 			}
 		}
@@ -160,7 +162,6 @@ int AllocateRegisterVars()
 
     save_mask = mask;
     fpsave_mask = fpmask;
-    csp = olist;
 
 	// Initialize temporaries
 	for (csecnt = 0; csecnt < csendx; csecnt++) {
@@ -385,6 +386,31 @@ AMODE *GenExpr(ENODE *node)
     return (ap3);
 }
 
+static void GenCmp(ENODE *node, AMODE *ap1, AMODE *ap2)
+{
+	int size;
+
+	size = GetNaturalSize(node);
+	if (ap2->mode==am_immed) {
+		if (ap2->offset->i==0)
+			GenerateDiadic(op_cmp,0,ap1,makereg(regZero));
+		else
+			GenerateTriadic(op_cmp,0,ap1,makereg(regZero),ap2);
+		if (size==2) {
+			if (ap2->amode2->offset->i==0)
+				GenerateDiadic(op_cmpc,0,ap1->amode2,makereg(regZero));
+			else
+				GenerateTriadic(op_cmpc,0,ap1->amode2,makereg(regZero),ap2->amode2);
+		}
+	}
+	else {
+		GenerateDiadic(op_cmp,0,ap1,ap2);
+		if (size==2) {
+			GenerateDiadic(op_cmpc,0,ap1->amode2,ap2->amode2);
+		}
+	}
+}
+
 void GenerateCmp(ENODE *node, int label, int predreg, unsigned int prediction, int type)
 {
 	int size;
@@ -396,165 +422,57 @@ void GenerateCmp(ENODE *node, int label, int predreg, unsigned int prediction, i
 	ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
 	switch(type) {
 	case en_eq:
-		size = GetNaturalSize(node);
-		if (ap2->mode==am_immed) {
-			if (ap2->offset->i==0)
-				GenerateDiadic(op_cmp,0,ap1,makereg(regZero));
-			else
-				GenerateTriadic(op_cmp,0,ap1,makereg(regZero),ap2);
-		}
-		else
-			GenerateDiadic(op_cmp,0,ap1,ap2);
+		GenCmp(node,ap1,ap2);
 		GeneratePredicatedTriadic(pop_z,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(label));
 		break;
 	case en_ne:
-		size = GetNaturalSize(node);
-		if (ap2->mode==am_immed) {
-			if (ap2->offset->i==0)
-				GenerateDiadic(op_cmp,0,ap1,makereg(regZero));
-			else
-				GenerateTriadic(op_cmp,0,ap1,makereg(regZero),ap2);
-		}
-		else
-			GenerateDiadic(op_cmp,0,ap1,ap2);
+		GenCmp(node,ap1,ap2);
 		GeneratePredicatedTriadic(pop_nz,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(label));
 		break;
 	case en_lt:
-		size = GetNaturalSize(node);
-		if (ap2->mode==am_immed) {
-			if (ap2->offset->i==0)
-				GenerateDiadic(op_cmp,0,ap1,makereg(regZero));
-			else
-				GenerateTriadic(op_cmp,0,ap1,makereg(regZero),ap2);
-		}
-		else
-			GenerateDiadic(op_cmp,0,ap1,ap2);
+		GenCmp(node,ap1,ap2);
 		GeneratePredicatedTriadic(pop_mi,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(label));
 		break;
 	case en_le:
-		size = GetNaturalSize(node);
-		if (ap2->mode==am_immed) {
-			if (ap2->offset->i==0)
-				GenerateDiadic(op_cmp,0,ap1,makereg(regZero));
-			else
-				GenerateTriadic(op_cmp,0,ap1,makereg(regZero),ap2);
-		}
-		else
-			GenerateDiadic(op_cmp,0,ap1,ap2);
+		GenCmp(node,ap1,ap2);
 		GeneratePredicatedTriadic(pop_mi,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(label));
-		if (ap2->mode==am_immed) {
-			if (ap2->offset->i==0)
-				GenerateDiadic(op_cmp,0,ap1,makereg(regZero));
-			else
-				GenerateTriadic(op_cmp,0,ap1,makereg(regZero),ap2);
-		}
-		else
-			GenerateDiadic(op_cmp,0,ap1,ap2);
+		GenCmp(node,ap1,ap2);
 		GeneratePredicatedTriadic(pop_z,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(label));
 		break;
 	case en_gt:
-		size = GetNaturalSize(node);
-		if (ap2->mode==am_immed) {
-			if (ap2->offset->i==0)
-				GenerateDiadic(op_cmp,0,ap1,makereg(regZero));
-			else
-				GenerateTriadic(op_cmp,0,ap1,makereg(regZero),ap2);
-		}
-		else
-			GenerateDiadic(op_cmp,0,ap1,ap2);
+		GenCmp(node,ap1,ap2);
 		lab1 = nextlabel++;
 		GeneratePredicatedTriadic(pop_z,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(lab1));
-		if (ap2->mode==am_immed) {
-			if (ap2->offset->i==0)
-				GenerateDiadic(op_cmp,0,ap1,makereg(regZero));
-			else
-				GenerateTriadic(op_cmp,0,ap1,makereg(regZero),ap2);
-		}
-		else
-			GenerateDiadic(op_cmp,0,ap1,ap2);
+		GenCmp(node,ap1,ap2);
 		GeneratePredicatedTriadic(pop_pl,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(label));
 		GenerateLabel(lab1);
 		break;
 	case en_ge:
-		size = GetNaturalSize(node);
-		if (ap2->mode==am_immed) {
-			if (ap2->offset->i==0)
-				GenerateDiadic(op_cmp,0,ap1,makereg(regZero));
-			else
-				GenerateTriadic(op_cmp,0,ap1,makereg(regZero),ap2);
-		}
-		else
-			GenerateDiadic(op_cmp,0,ap1,ap2);
+		GenCmp(node,ap1,ap2);
 		lab1 = nextlabel++;
 		GeneratePredicatedTriadic(pop_pl,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(label));
 		GenerateLabel(lab1);
 		break;
 	case en_ult:
-		size = GetNaturalSize(node);
-		if (ap2->mode==am_immed) {
-			if (ap2->offset->i==0)
-				GenerateDiadic(op_cmp,0,ap1,makereg(regZero));
-			else
-				GenerateTriadic(op_cmp,0,ap1,makereg(regZero),ap2);
-		}
-		else
-			GenerateDiadic(op_cmp,0,ap1,ap2);
+		GenCmp(node,ap1,ap2);
 		GeneratePredicatedTriadic(pop_c,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(label));
 		break;
 	case en_ule:
-		size = GetNaturalSize(node);
-		if (ap2->mode==am_immed) {
-			if (ap2->offset->i==0)
-				GenerateDiadic(op_cmp,0,ap1,makereg(regZero));
-			else
-				GenerateTriadic(op_cmp,0,ap1,makereg(regZero),ap2);
-		}
-		else
-			GenerateDiadic(op_cmp,0,ap1,ap2);
+		GenCmp(node,ap1,ap2);
 		GeneratePredicatedTriadic(pop_c,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(label));
-		if (ap2->mode==am_immed) {
-			if (ap2->offset->i==0)
-				GenerateDiadic(op_cmp,0,ap1,makereg(regZero));
-			else
-				GenerateTriadic(op_cmp,0,ap1,makereg(regZero),ap2);
-		}
-		else
-			GenerateDiadic(op_cmp,0,ap1,ap2);
+		GenCmp(node,ap1,ap2);
 		GeneratePredicatedTriadic(pop_z,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(label));
 		break;
 	case en_ugt:
-		size = GetNaturalSize(node);
-		if (ap2->mode==am_immed) {
-			if (ap2->offset->i==0)
-				GenerateDiadic(op_cmp,0,ap1,makereg(regZero));
-			else
-				GenerateTriadic(op_cmp,0,ap1,makereg(regZero),ap2);
-		}
-		else
-			GenerateDiadic(op_cmp,0,ap1,ap2);
+		GenCmp(node,ap1,ap2);
 		lab1 = nextlabel++;
 		GeneratePredicatedTriadic(pop_z,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(lab1));
-		if (ap2->mode==am_immed) {
-			if (ap2->offset->i==0)
-				GenerateDiadic(op_cmp,0,ap1,makereg(regZero));
-			else
-				GenerateTriadic(op_cmp,0,ap1,makereg(regZero),ap2);
-		}
-		else
-			GenerateDiadic(op_cmp,0,ap1,ap2);
+		GenCmp(node,ap1,ap2);
 		GeneratePredicatedTriadic(pop_nc,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(label));
 		GenerateLabel(lab1);
 		break;
 	case en_uge:
-		size = GetNaturalSize(node);
-		if (ap2->mode==am_immed) {
-			if (ap2->offset->i==0)
-				GenerateDiadic(op_cmp,0,ap1,makereg(regZero));
-			else
-				GenerateTriadic(op_cmp,0,ap1,makereg(regZero),ap2);
-		}
-		else
-			GenerateDiadic(op_cmp,0,ap1,ap2);
+		GenCmp(node,ap1,ap2);
 		lab1 = nextlabel++;
 		GeneratePredicatedTriadic(pop_nc,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(label));
 		GenerateLabel(lab1);
@@ -779,11 +697,21 @@ void GenerateReturn(Statement *stmt)
 					// ToDo compiler error
 				}
             }
-            else
+            else {
 			    GenerateDiadic(op_mov, 0, makereg(1),ap);
+				if (currentFn->tp->GetBtp()->type==bt_long
+					|| currentFn->tp->GetBtp()->type==bt_ulong) {
+						GenerateDiadic(op_mov, 0, makereg(2),ap->amode2);
+				}
+			}
         }
-		else
+		else {
 		    GenLoad(makereg(1),ap,sizeOfWord,sizeOfWord);
+			if (currentFn->tp->GetBtp()->type==bt_long
+				|| currentFn->tp->GetBtp()->type==bt_ulong) {
+					GenerateDiadic(op_mov, 0, makereg(2),ap->amode2);
+			}
+		}
 		ReleaseTempRegister(ap);
 	}
 
@@ -1141,6 +1069,8 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
 void GenLdi(AMODE *ap1, AMODE *ap2)
 {
 	GenerateTriadic(op_mov,0,ap1,makereg(0),ap2);
-  return;
+	if (ap1->amode2)
+		GenerateTriadic(op_mov,0,ap1->amode2,makereg(0),ap2->amode2);
+	return;
 }
 

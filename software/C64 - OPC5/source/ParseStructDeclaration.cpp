@@ -76,7 +76,7 @@ int StructDeclaration::Parse(int ztype)
     if((sp = tagtable.Find(lastid,false)) == NULL) {
       sp = allocSYM();
   		sp->SetName(*(new std::string(lastid)));
-      sp->tp = allocTYP();
+      sp->tp = TYP::alloc();
       sp->tp->type = (e_bt)ztype;
 		  sp->tp->typeno = typeno++;
       sp->tp->lst.Clear();
@@ -125,7 +125,7 @@ int StructDeclaration::Parse(int ztype)
   }
   // Else there was no tag identifier
   else {
-    tp = allocTYP();
+    tp = TYP::alloc();
     tp->type = (e_bt)ztype;
 	  tp->typeno = typeno++;
     tp->sname = new std::string("");

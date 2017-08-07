@@ -140,7 +140,7 @@ bool TypeArray::IsEqual(TypeArray *ta)
   return true;
 }
 
-TypeArray *TypeArray::Alloc()
+TypeArray *TypeArray::alloc()
 {
   TypeArray *tp = (TypeArray *)allocx(sizeof(TypeArray)); 
   return tp;

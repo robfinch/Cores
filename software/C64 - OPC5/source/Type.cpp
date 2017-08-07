@@ -25,15 +25,31 @@
 //
 #include "stdafx.h"
 
+TYP *TYP::alloc()
+{
+//  printf("TYP::alloc()\r\n");
+	TYP *tp = (TYP *)&compiler.typeTable[compiler.typenum];
+	ZeroMemory(tp,sizeof(TYP));
+	tp->sname = new std::string("");
+	tp->bit_width = -1;
+	//	printf("Leave TYP::alloc():%p\r\n",tp);
+	compiler.typenum++;
+	if (compiler.typenum > 32760) {
+		dfs.printf("Too many types\n");
+		throw new C64PException(ERR_TOOMANY_SYMBOLS,1);
+	}
+	return tp;
+};
+
 TYP *TYP::GetBtp() {
     if (btp==0)
-      return nullptr;
+		return nullptr;
     return &compiler.typeTable[btp];
 };
 TYP *TYP::GetPtr(int n) {
-  if (n==0)
-    return nullptr;
-  return &compiler.typeTable[n];
+	if (n==0)
+		return nullptr;
+	return &compiler.typeTable[n];
 };
 int TYP::GetIndex() { return this - &compiler.typeTable[0]; };
 
@@ -41,9 +57,9 @@ TYP *TYP::Copy(TYP *src)
 {
 	TYP *dst = nullptr;
  
-  dfs.printf("<TYP__Copy>\n");
+	dfs.printf("<TYP__Copy>\n");
 	if (src) {
-		dst = allocTYP();
+		dst = TYP::alloc();
 //		if (dst==nullptr)
 //			throw gcnew C64::C64Exception();
 		memcpy(dst,src,sizeof(TYP));
@@ -60,7 +76,7 @@ TYP *TYP::Copy(TYP *src)
 		dfs.printf("D");
 		TABLE::CopySymbolTable(&dst->lst,&src->lst);
 	}
-  dfs.printf("</TYP__Copy>\n");
+	dfs.printf("</TYP__Copy>\n");
 	return dst;
 }
 
@@ -68,7 +84,7 @@ TYP *TYP::Make(int bt, int siz)
 {
 	TYP *tp;
 	dfs.puts("<TYP__Make>\n");
-	tp = allocTYP();
+	tp = TYP::alloc();
 	if (tp == nullptr)
 		return nullptr;
 	tp->val_flag = 0;

@@ -141,7 +141,7 @@ int ClassDeclaration::Parse(int ztype)
 			// Copy the type chain of base class
 			//sp->tp = TYP::Copy(bcsp->tp);
 			// Start off at the size of the base.
-			sp->tp = allocTYP();
+			sp->tp = TYP::alloc();
 			sp->tp->lst.SetBase(bcsp->GetIndex());
 			dfs.printf("Set base class: %d\n", sp->tp->lst.base);
 			sp->tp->size = bcsp->tp->size;
@@ -156,7 +156,7 @@ int ClassDeclaration::Parse(int ztype)
 				goto lxit;
 			}
 			/*
-			sp->tp = allocTYP();
+			sp->tp = TYP::alloc();
 			sp->tp->typeno = typeno++;
       sp->tp->sname =  new std::string(*sp->name);
       sp->tp->alignment = alignment;
@@ -175,7 +175,7 @@ int ClassDeclaration::Parse(int ztype)
       error(ERR_INCOMPLETE);
     else {
 			if (sp->tp == nullptr) {
-				sp->tp = allocTYP();
+				sp->tp = TYP::alloc();
 			}
 			sp->tp->size = 0;
 			sp->tp->typeno = typeno++;

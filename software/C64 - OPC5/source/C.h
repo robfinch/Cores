@@ -97,6 +97,12 @@ enum e_bt {
 		bt_exception, bt_ellipsis,
         bt_last};
 
+class CompilerType
+{
+public:
+	static CompilerType *alloc() {};
+};
+
 class MBlk
 {
 	static MBlk *first;
@@ -183,19 +189,19 @@ public:
 	void SetBase(int b) { base = b; };
 };
 
-class SYM {
+class SYM : public CompilerType {
 public:
-  int id;
-  int parent;
-  int next;
-  std::string *name;
-  std::string *name2;
-  std::string *name3;
+	int id;
+	int parent;
+	int next;
+	std::string *name;
+	std::string *name2;
+	std::string *name3;
 	std::string *shortname;
 	std::string *mangledName;
 	char nameext[4];
-  char *realname;
-  char *stkname;
+	char *realname;
+	char *stkname;
     __int8 storage_class;
 	unsigned int pos : 4;			// position of the symbol (param, auto or return type)
 	// Function attributes
@@ -231,6 +237,7 @@ public:
 	unsigned int IsUndefined : 1;  // undefined function
 	unsigned int ctor : 1;
 	unsigned int dtor : 1;
+	unsigned int AllowRegVars : 1;
 	ENODE *initexp;
 	__int16 reg;
     union {
@@ -240,12 +247,13 @@ public:
         uint16_t wa[8];
         char *s;
     } value;
-  TYP *tp;
+	TYP *tp;
     Statement *stmt;
     Statement *prolog;
     Statement *epilog;
     unsigned int stksize;
 
+	static SYM *alloc();
 	TypeArray *GetParameterTypes();
 	TypeArray *GetProtoTypes();
 	void PrintParameterTypes();
@@ -269,24 +277,21 @@ public:
 	static SYM *GetPtr(int n);
 	SYM *GetParentPtr();
 	void SetName(std::string nm) {
-       name = new std::string(nm);
-       name2 = new std::string(nm);
-       name3 = new std::string(nm); };
+		name = new std::string(nm);
+		name2 = new std::string(nm);
+		name3 = new std::string(nm);
+	};
 	void SetNext(int nxt) { next = nxt; };
-  int GetNext() { return next; };
+	int GetNext() { return next; };
 	SYM *GetNextPtr();
-  int GetIndex();
-  void AddDerived(SYM *sym);
-  void SetType(TYP *t) { 
-     if (t == (TYP *)0x500000005) {
-       getchar();
-     }
-     else
-       tp = t;
-} ;
+	int GetIndex();
+	void AddDerived(SYM *sym);
+	void SetType(TYP *t) { 
+		tp = t;
+	};
 };
 
-class TYP {
+class TYP : public CompilerType {
 public:
     e_bt type;
 	__int16 typeno;			// number of the type
@@ -306,6 +311,7 @@ public:
 	long		dimen;			// number of the dimension
 	TABLE lst;
 	int btp;
+	static TYP *alloc();
 	TYP *GetBtp();
 	static TYP *GetPtr(int n);
 	int GetIndex();
@@ -326,23 +332,23 @@ public:
 class TypeArray
 {
 public:
-  int types[40];
-  __int16 preg[40];
-  int length;
-  TypeArray();
-  void Add(int tp, __int16 regno);
-  void Add(TYP *tp, __int16 regno);
-  bool IsEmpty();
-  bool IsEqual(TypeArray *);
-  bool IsLong(int);
-  bool IsShort(int);
-  bool IsChar(int);
-  bool IsInt(int);
-  void Clear();
-  TypeArray *Alloc();
-  void Print(txtoStream *);
-  void Print();
-  std::string *BuildSignature();
+	int types[40];
+	__int16 preg[40];
+	int length;
+	TypeArray();
+	void Add(int tp, __int16 regno);
+	void Add(TYP *tp, __int16 regno);
+	bool IsEmpty();
+	bool IsEqual(TypeArray *);
+	bool IsLong(int);
+	bool IsShort(int);
+	bool IsChar(int);
+	bool IsInt(int);
+	void Clear();
+	TypeArray *alloc();
+	void Print(txtoStream *);
+	void Print();
+	std::string *BuildSignature();
 };
 
 class Stringx

@@ -62,7 +62,7 @@ struct oplst {
         }       opl[] =
 {       {"add",op_add}, {"adc",op_adc}, {"mov", op_mov},
 		{"ld", op_ld}, 	{"sto", op_sto},
-		{"addi",op_addi}, {"sub",op_sub},
+		{"addi",op_addi}, {"sub",op_sub}, {"sbc", op_sbc},
 		{"subi",op_subi}, {"and",op_and},
 		{"not", op_not},
 		{"ror", op_ror}, {"rori", op_rori},
@@ -70,7 +70,7 @@ struct oplst {
 		{"rti", op_rti},
 		{"or",op_or}, {"ori",op_ori}, {"andi", op_andi},
 		{"xor",op_xor}, {"xori", op_xori},
-		{"cmp",op_cmp},	{"cmpi",op_cmpi},
+		{"cmp",op_cmp},	{"cmpi",op_cmpi}, {"cmpc", op_cmpc},
 		{"out", op_out}, {"in", op_in},
 		{"push",op_push}, {"pop", op_pop},
 		{"",op_empty}, {"",op_asm}, {"", op_fnname},

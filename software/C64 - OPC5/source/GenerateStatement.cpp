@@ -135,7 +135,7 @@ AMODE *make_indexed2(int lab, int i)
 {
 	AMODE *ap;
     ENODE *ep;
-    ep = allocEnode();
+    ep = ENODE::alloc();
     ep->nodetype = en_clabcon;
     ep->i = lab;
     ap = allocAmode();

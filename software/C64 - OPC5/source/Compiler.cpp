@@ -190,7 +190,7 @@ void Compiler::AddStandardTypes()
 	p->precision = 8;
 	stdubyte = p;
   
-	p = allocTYP();
+	p = TYP::alloc();
 	p->type = bt_pointer;
 	p->typeno = bt_pointer;
 	p->val_flag = 1;
@@ -200,7 +200,7 @@ void Compiler::AddStandardTypes()
 	p->precision = 16;
 	stdstring = p;
   
-	p = allocTYP();
+	p = TYP::alloc();
 	p->type = bt_double;
 	p->typeno = bt_double;
 	p->size = 4;
@@ -209,7 +209,7 @@ void Compiler::AddStandardTypes()
 	stddbl = p;
 	stddouble = p;
   
-	p = allocTYP();
+	p = TYP::alloc();
 	p->type = bt_triple;
 	p->typeno = bt_triple;
 	p->size = 6;
@@ -217,7 +217,7 @@ void Compiler::AddStandardTypes()
 	p->precision = 96;
 	stdtriple = p;
   
-	p = allocTYP();
+	p = TYP::alloc();
 	p->type = bt_quad;
 	p->typeno = bt_quad;
 	p->size = 8;
@@ -225,7 +225,7 @@ void Compiler::AddStandardTypes()
 	p->precision = 128;
 	stdquad = p;
   
-	p = allocTYP();
+	p = TYP::alloc();
 	p->type = bt_float;
 	p->typeno = bt_float;
 	p->size = 2;
@@ -237,7 +237,7 @@ void Compiler::AddStandardTypes()
 	p->btp = pint->GetIndex();
 	stdfunc = p;
 
-	p = allocTYP();
+	p = TYP::alloc();
 	p->type = bt_exception;
 	p->typeno = bt_exception;
 	p->size = 1;
@@ -246,7 +246,7 @@ void Compiler::AddStandardTypes()
 	p->bit_width = -1;
 	stdexception = p;
 
-	p = allocTYP();
+	p = TYP::alloc();
 	p->type = bt_short;
 	p->typeno = bt_short;
 	p->val_flag = 1;

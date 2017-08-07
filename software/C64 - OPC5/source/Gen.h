@@ -23,7 +23,8 @@
 
 /*      addressing mode structure       */
 
-typedef struct amode {
+class AMODE {
+public:
 	unsigned int mode : 6;
 	unsigned int preg : 8;
 	unsigned int sreg : 8;
@@ -42,7 +43,8 @@ typedef struct amode {
 	short int deep2;
 	ENODE *offset;
 	int8_t scale;
-} AMODE;
+	AMODE *amode2;
+};
 
 // output code structure
 
@@ -61,7 +63,7 @@ struct ocode {
 enum e_pop { pop_always, pop_nop, pop_z, pop_nz, pop_c, pop_nc, pop_mi, pop_pl };
 
 enum e_op {
-        op_add, op_addi, op_adc, op_sub, op_subi, op_mov,
+        op_add, op_addi, op_adc, op_sub, op_sbc, op_subi, op_mov,
 		op_ld, op_sto,
         op_and, op_andi,
         op_or, op_ori, op_xor, op_xori,
@@ -75,15 +77,15 @@ enum e_op {
 		op_inc, op_dec,
         op_rti,
 		op_push, op_pop,
-        op_not, op_cmp, op_label, op_ilabel,
+        op_not, op_cmp, op_cmpc, op_label, op_ilabel,
         op_cmpi, op_asm,
 		op_nop, op_rem,
 		op_hint,
 		op_preload,
 		op_fnname,
 		op_dc,
-		op_mul,
-		op_mulu,
+		op_mul, op_div,
+		op_mulu, op_divu,
         op_empty };
 
 enum e_seg {

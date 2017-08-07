@@ -41,10 +41,16 @@ int preload_count = 0;
 AMODE *copy_addr(AMODE *ap)
 {
 	AMODE *newap;
+
 	if( ap == NULL )
 		return NULL;
 	newap = allocAmode();
 	memcpy(newap,ap,sizeof(AMODE));
+	if (ap->offset) {
+		if (ap->offset->nodetype==en_icon) {
+			newap->offset = ap->offset->Duplicate();
+		}
+	}
 	return newap;
 }
 
@@ -315,8 +321,8 @@ void GenerateLabel(int labno)
 	struct ocode *newl;
 	newl = (struct ocode *)allocx(sizeof(struct ocode));
 	newl->opcode = op_label;
-	newl->oper1 = (struct amode *)labno;
-	newl->oper2 = (struct amode *)my_strdup((char *)currentFn->name->c_str());
+	newl->oper1 = (AMODE *)labno;
+	newl->oper2 = (AMODE *)my_strdup((char *)currentFn->name->c_str());
 	newl->oper3 = nullptr;
 	newl->oper4 = nullptr;
 	AddToPeepList(newl);
@@ -1170,7 +1176,6 @@ static void opt_peep()
 {  
 	struct ocode *ip;
 	int rep;
-	int refBP;
 	
 	if (!::opt_nopeep) {
 		opt_nbr();

@@ -139,6 +139,7 @@ int ParseFunction(SYM *sp)
 		sp->IsLeaf = false;
 	else
 		sp->IsLeaf = true;
+	sp->AllowRegVars = true;
   dfs.puts("<ParseFunction>\n");
   isFuncBody = true;
 	if (sp==NULL) {
@@ -457,7 +458,6 @@ static Statement *ParseFunctionBody(SYM *sp)
 	currentFn->DoesThrow = FALSE;
 	currentFn->UsesPredicate = FALSE;
 	regmask = 0;
-	bregmask = 0;
 	currentStmt = (Statement *)NULL;
   dfs.printf("C");
 	sp->stmt = Statement::ParseCompound();

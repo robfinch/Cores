@@ -147,19 +147,21 @@ void Declaration::ParseNaked()
 
 void Declaration::ParseLong()
 {
+	if (currentFn)
+		currentFn->AllowRegVars = false;
 	NextToken();
 	if (lastst==kw_int) {
-		bit_max = 64;
+		bit_max = 32;
 		NextToken();
 	}
 	else {
 		if (isUnsigned) {
-			head =(TYP *)TYP::Make(bt_ulong,8);
+			head =(TYP *)TYP::Make(bt_ulong,2);
 			tail = head;
 			bit_max = head->precision;
 		}
 		else {
-			head = (TYP *)TYP::Make(bt_long,8);
+			head = (TYP *)TYP::Make(bt_long,2);
 			tail = head;
 			bit_max = head->precision;
 		}
@@ -173,12 +175,12 @@ void Declaration::ParseLong()
 	if (lastst==kw_oscall) {
 		isOscall = TRUE;
 		NextToken();
-		bit_max = 64;
+		bit_max = 32;
 	}
 	else if (lastst==kw_nocall || lastst==kw_naked) {
 		isNocall = TRUE;
 		NextToken();
-		bit_max = 64;
+		bit_max = 32;
 	}
 	head->isUnsigned = isUnsigned;
 	head->isVolatile = isVolatile;

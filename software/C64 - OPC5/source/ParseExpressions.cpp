@@ -185,7 +185,7 @@ ENODE *makefcnode(int nt, ENODE *v1, ENODE *v2, SYM *sp)
 ENODE *makesnode(int nt, std::string *v1, std::string *v2, int i)
 {
 	ENODE *ep;
-  ep = allocEnode();
+  ep = ENODE::alloc();
   ep->nodetype = (enum e_node)nt;
   ep->constflag = FALSE;
 	ep->isUnsigned = FALSE;
@@ -203,7 +203,7 @@ ENODE *makesnode(int nt, std::string *v1, std::string *v2, int i)
 ENODE *makenodei(int nt, ENODE *v1, int i)
 {
 	ENODE *ep;
-  ep = allocEnode();
+  ep = ENODE::alloc();
   ep->nodetype = (enum e_node)nt;
   ep->constflag = FALSE;
 	ep->isUnsigned = FALSE;
@@ -219,13 +219,13 @@ ENODE *makenodei(int nt, ENODE *v1, int i)
 ENODE *makeinode(int nt, int v1)
 {
 	ENODE *ep;
-  ep = allocEnode();
-  ep->nodetype = (enum e_node)nt;
-  ep->constflag = TRUE;
+	ep = ENODE::alloc();
+	ep->nodetype = (enum e_node)nt;
+	ep->constflag = TRUE;
 	ep->isUnsigned = FALSE;
 	ep->etype = bt_void;
 	ep->esize = -1;
-  ep->i = v1;
+	ep->i = v1;
 	ep->p[1] = 0;
 	ep->p[0] = 0;
 	ep->p[2] = 0;
@@ -235,19 +235,19 @@ ENODE *makeinode(int nt, int v1)
 ENODE *makefnode(int nt, double v1)
 {
 	ENODE *ep;
-  ep = allocEnode();
-  ep->nodetype = (enum e_node)nt;
-  ep->constflag = TRUE;
+	ep = ENODE::alloc();
+	ep->nodetype = (enum e_node)nt;
+	ep->constflag = TRUE;
 	ep->isUnsigned = FALSE;
 	ep->etype = bt_void;
 	ep->esize = -1;
 	ep->f = v1;
-  ep->f1 = v1;
+	ep->f1 = v1;
 //    ep->f2 = v2;
 	ep->p[0] = 0;
 	ep->p[1] = 0;
 	ep->p[2] = 0;
-  return ep;
+	return ep;
 }
 
 void AddToList(ENODE *list, ENODE *ele)
@@ -269,7 +269,7 @@ void AddToList(ENODE *list, ENODE *ele)
 
 bool IsMemberOperator(int op)
 {
-  return op==dot || op==pointsto || op==double_colon;
+	return op==dot || op==pointsto || op==double_colon;
 }
 
 bool IsClassExpr()
@@ -380,10 +380,10 @@ TYP *deref(ENODE **node, TYP *tp)
 			(*node)->etype = (enum e_bt)tp->type;
 			if (tp->isUnsigned) {
 				(*node)->isUnsigned = TRUE;
-				*node = makenode(en_uw_ref,*node,(ENODE *)NULL);
+				*node = makenode(en_ulw_ref,*node,(ENODE *)NULL);
 			}
 			else {
-				*node = makenode(en_w_ref,*node,(ENODE *)NULL);
+				*node = makenode(en_lw_ref,*node,(ENODE *)NULL);
 			}
 			break;
 
@@ -1001,9 +1001,12 @@ TYP *ParsePrimaryExpression(ENODE **node, int got_pa)
 		if (ival >= -128 && ival < 128)
 			pnode->esize = 1;
 		else if (ival >= -32768 && ival < 32768)
+			pnode->esize = 1;
+		else if (ival >= -2147483648LL && ival < 2147483648LL) {
+			pnode->nodetype = en_licon;
 			pnode->esize = 2;
-		else if (ival >= -2147483648LL && ival < 2147483648LL)
-			pnode->esize = 4;
+			tptr = stdlong;
+		}
 		else
 			pnode->esize = 2;
         pnode->SetType(tptr);
@@ -1129,6 +1132,8 @@ int IsLValue(ENODE *node, bool opt)
 	case en_uc_ref:
 	case en_uh_ref:
     case en_uw_ref:
+	case en_lw_ref:
+	case en_ulw_ref:
 	case en_wfieldref:
 	case en_uwfieldref:
 	case en_bfieldref:
@@ -2038,8 +2043,8 @@ TYP *forcefit(ENODE **node1,TYP *tp1,ENODE **node2,TYP *tp2, bool promote)
 	case bt_ushort:
 		if (promote)
 		switch(tp2->type) {
-		case bt_long:	*node1 = makenode(en_cuhw,*node1,*node2); (*node1)->esize = 2; return stdlong;
-		case bt_ulong:	*node1 = makenode(en_cuhu,*node1,*node2); (*node1)->esize = 2; return stdulong;
+		case bt_long:	*node1 = makenode(en_cuwl,*node1,*node2); (*node1)->esize = 2; return stdlong;
+		case bt_ulong:	*node1 = makenode(en_cuwul,*node1,*node2); (*node1)->esize = 2; return stdulong;
 		case bt_short:	*node1 = makenode(en_cuhw,*node1,*node2); (*node1)->esize = 2; return stdlong;
 		case bt_ushort:	*node1 = makenode(en_cuhu,*node1,*node2); (*node1)->esize = 2; return stdulong;
 		case bt_char:	*node1 = makenode(en_cuhw,*node1,*node2); (*node1)->esize = 2; return stdlong;
@@ -2054,8 +2059,8 @@ TYP *forcefit(ENODE **node1,TYP *tp1,ENODE **node2,TYP *tp2, bool promote)
 	case bt_short:
 		if (promote)
 		switch(tp2->type) {
-		case bt_long:	*node1 = makenode(en_chw,*node1,*node2); (*node1)->esize = 2; return stdlong;
-		case bt_ulong:	*node1 = makenode(en_chu,*node1,*node2); (*node1)->esize = 2; return stdulong;
+		case bt_long:	*node1 = makenode(en_cwl,*node1,*node2); (*node1)->esize = 2; return stdlong;
+		case bt_ulong:	*node1 = makenode(en_cwul,*node1,*node2); (*node1)->esize = 2; return stdulong;
 		case bt_short:	*node1 = makenode(en_chw,*node1,*node2); (*node1)->esize = 2; return stdlong;
 		case bt_ushort:	*node1 = makenode(en_chu,*node1,*node2); (*node1)->esize = 2; return stdulong;
 		case bt_char:	*node1 = makenode(en_chw,*node1,*node2); (*node1)->esize = 2; return stdlong;
@@ -2706,8 +2711,9 @@ ascomm2:
 					ep1->isUnsigned = tp1->isUnsigned;
 					// Struct assign calls memcpy, so function is no
 					// longer a leaf routine.
-					if (tp1->size > sizeOfWord)
+					if (tp1->size > sizeOfWord && tp1->type!= bt_long && tp1->type != bt_ulong) {
 						currentFn->IsLeaf = FALSE;
+					}
 				}
 				break;
 			case asplus:

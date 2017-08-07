@@ -1,3 +1,5 @@
+#include "stdafx.h"
+
 // ============================================================================
 //        __
 //   \\__/ o\    (C) 2012-2017  Robert Finch, Waterloo
@@ -6,7 +8,6 @@
 //       ||
 //
 // C64 - 'C' derived language compiler
-//  - 64 bit CPU
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -23,30 +24,46 @@
 //                                                                          
 // ============================================================================
 //
-#include "stdafx.h"
 
-int GetIntegerExpression(ENODE **pnode)       /* simple integer value */
-{ 
-	TYP *tp;
-	ENODE *node;
+//
+// Copy the node passed into a new enode so it wont get corrupted during
+// substitution.
+//
+ENODE *ENODE::Duplicate()
+{       
+	ENODE *temp;
 
-	tp = NonCommaExpression(&node);
-	if (node==NULL) {
-		error(ERR_SYNTAX);
-		return 0;
-	}
-	node->OptimizeConstants();	// This should reduce to a single integer expression
-	if (node==NULL) {
-		fatal("Compiler Error: GetIntegerExpression: node is NULL");
-		return 0;
-	}
-	if (node->nodetype != en_icon && node->nodetype != en_cnacon) {
-        printf("\r\nnode:%d \r\n", node->nodetype);
-		error(ERR_INT_CONST);
-		return 0;
-	}
-	if (pnode)
-		*pnode = node;
-	return node->i;
+    if( this == NULL )
+        return (ENODE *)NULL;
+    temp = ENODE::alloc();
+	memcpy(temp,this,sizeof(ENODE));	// copy all the fields
+    return (temp);
+}
+
+
+ENODE *ENODE::alloc()
+{
+	ENODE *p;
+	p = (ENODE *)allocx(sizeof(ENODE));
+	p->sp = new std::string();
+	return p;
+};
+
+
+//
+// Apply all constant optimizations.
+//
+extern void opt0(ENODE **);
+extern void fold_const(ENODE **);
+
+void ENODE::OptimizeConstants()
+{
+	ENODE *pnode = this;
+
+    if (opt_noexpr==FALSE) {
+    	opt0(&pnode);
+    	fold_const(&pnode);
+    	opt0(&pnode);
+    }
 }
 

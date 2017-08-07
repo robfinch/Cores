@@ -3,13 +3,12 @@
 
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2016  Robert Finch, Stratford
+//   \\__/ o\    (C) 2012-2017  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-// C32 - 'C' derived language compiler
-//  - 32 bit CPU
+// C64 - 'C' derived language compiler
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -53,17 +52,18 @@ enum e_node {
 		en_cubu, en_cucu, en_cuhu,
 		en_cbw, en_ccw, en_chw,
 		en_cubw, en_cucw, en_cuhw,
-		en_lul,
+		en_lul, en_cuwul, en_cwl, en_cuwl, en_cwul,
 
         en_cbc, en_cbh,
 		en_cch,
-		en_cwl, en_cld, en_cfd,
-        en_icon, en_fcon, en_fqcon, en_dcon, en_tcon, en_labcon, en_nacon, en_autocon, en_autofcon, en_classcon,
+		en_cld, en_cfd,
+        en_icon, en_licon, en_fcon, en_fqcon, en_dcon, en_tcon, en_labcon, en_nacon, en_autocon, en_autofcon, en_classcon,
 		en_clabcon, en_cnacon,
 		en_dlabcon, en_dnacon, // 30<-
 		
 		en_c_ref, en_uc_ref, en_h_ref, en_uh_ref,
         en_b_ref, en_w_ref, en_ub_ref, en_uw_ref,
+		en_lw_ref, en_ulw_ref,
 		en_ref32, en_ref32u,
 		en_struct_ref, en_array_ref,
         en_fcall, en_ifcall,
@@ -109,16 +109,19 @@ public:
 	__int8 bit_offset;
 	__int8 scale;
 	// The following could be in a value union
-  int i;
-  double f;
-  double f1, f2;
-  std::string *sp;
-  std::string *msp;
+	int i;
+	double f;
+	double f1, f2;
+	std::string *sp;
+	std::string *msp;
 	std::string *udnm;			// undecorated name
 	void *ctor;
 	void *dtor;
-  ENODE *p[3];
-  void SetType(TYP *t) { tp = t; };
+	ENODE *p[3];
+	void SetType(TYP *t) { tp = t; };
+	static ENODE *alloc();
+	ENODE *Duplicate();
+	void OptimizeConstants();
 };
 
 //typedef struct enode ENODE;
