@@ -31,6 +31,7 @@ extern int retlab;
 
 extern TYP *stdfunc;
 
+extern void DumpCSETable();
 extern void scan(Statement *);
 extern int GetReturnBlockSize();
 void GenerateReturn(Statement *stmt);
@@ -44,22 +45,8 @@ void GenLdi(AMODE *, AMODE *);
 extern AMODE *copy_addr(AMODE *ap);
 extern void GenLoad(AMODE *ap1, AMODE *ap3, int ssize, int size);
 
-/*
- *      returns the desirability of optimization for a subexpression.
- */
-static int OptimizationDesireability(CSE *csp)
-{
-	if( csp->voidf || (csp->exp->nodetype == en_icon &&
-                       csp->exp->i < 32767 && csp->exp->i >= -32767))
-        return 0;
-    if (csp->exp->nodetype==en_cnacon)
-        return 0;
-	if (csp->exp->isVolatile)
-		return 0;
-    if( IsLValue(csp->exp,true) )
-	    return 2 * csp->uses;
-    return csp->uses;
-}
+// The table should be ordered with the highest desired register placements
+// first. To go from highest to lowest the compare is switched.
 
 static int CSECmp(const void *a, const void *b)
 {
@@ -71,21 +58,11 @@ static int CSECmp(const void *a, const void *b)
 	aa = OptimizationDesireability(csp1);
 	bb = OptimizationDesireability(csp2);
 	if (aa < bb)
-		return (-1);
+		return (1);
 	else if (aa == bb)
 		return (0);
 	else
-		return (1);
-}
-
-static int CSECount(CSE *p)
-{
-	int count;
-
-	for(count = 0; p; count++) {
-		p = p->next;
-	}
-	return (count);
+		return (-1);
 }
 
 // ----------------------------------------------------------------------------
@@ -111,7 +88,6 @@ int AllocateRegisterVars()
 	rmask = 0;
 	fpmask = 0;
 	fprmask = 0;
-//	printf("Count:%d\r\n", CSECount(olist));
 
 	// Sort the CSE table according to desirability of allocating
 	// a register.
@@ -138,6 +114,8 @@ int AllocateRegisterVars()
 			}
 		}
 	}
+
+	DumpCSETable();
 
 	// Generate bit masks of allocated registers
 	for (csecnt = 0; csecnt < csendx; csecnt++) {

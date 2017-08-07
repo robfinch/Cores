@@ -52,6 +52,7 @@ static void repcse_compound(Statement *stmt);
 
 CSE CSETable[500];
 short int csendx;
+int loop_active;
 
 /*
  *      this module will step through the parse tree and find all
@@ -142,9 +143,9 @@ CSE *InsertNodeIntoCSEList(ENODE *node, int duse)
 		csp->reg = 0;
         return csp;
     }
-    ++(csp->uses);
+    (csp->uses) += loop_active;
     if( duse )
-            ++(csp->duses);
+            (csp->duses) += loop_active;
     return csp;
 }
 
@@ -360,6 +361,7 @@ static void scanexpr(ENODE *node, int duse)
  */
 void scan(Statement *block)
 {
+	loop_active = 1;
 	while( block != NULL ) {
         switch( block->stype ) {
 			case st_compound:
@@ -378,13 +380,18 @@ void scan(Statement *block)
 			case st_until:
             case st_do:
 			case st_dountil:
+					loop_active++;
                     block->exp->OptimizeConstants();
                     scanexpr(block->exp,0);
+					loop_active--;
 			case st_doloop:
 			case st_forever:
+					loop_active++;
                     scan(block->s1);
+					loop_active--;
                     break;
             case st_for:
+					loop_active++;
                     block->initExpr->OptimizeConstants();
                     scanexpr(block->initExpr,0);
                     block->exp->OptimizeConstants();
@@ -392,6 +399,7 @@ void scan(Statement *block)
                     scan(block->s1);
                     block->incrExpr->OptimizeConstants();
                     scanexpr(block->incrExpr,0);
+					loop_active--;
                     break;
             case st_if:
                     block->exp->OptimizeConstants();
@@ -439,13 +447,12 @@ static void scan_compound(Statement *stmt)
     scan(stmt->s1);
 }
 
-/*
- *      returns the desirability of optimization for a subexpression.
- */
+//
+// Returns the desirability of optimization for a subexpression.
+//
 int OptimizationDesireability(CSE *csp)
 {
-	if( csp->voidf || (csp->exp->nodetype == en_icon &&
-                       csp->exp->i < 128 && csp->exp->i >= -128))
+	if( csp->voidf)
         return 0;
  /* added this line to disable register optimization of global variables.
     The compiler would assign a register to a global variable ignoring
@@ -696,3 +703,21 @@ int opt1(Statement *block)
     }
 	return nn;
 }
+
+void DumpCSETable()
+{
+	int nn;
+	CSE *csp;
+
+	dfs.printf("N Uses DUses Void Reg\n");
+	for (nn = 0; nn < csendx; nn++) {
+		csp = &CSETable[nn];
+		dfs.printf("%d: %d  ",nn,csp->uses);
+		dfs.printf("%d   ",csp->duses);
+		dfs.printf("%d   ",csp->voidf);
+		dfs.printf("%d   ",csp->reg);
+		dfs.printf("%s   ",csp->exp->nodetype == en_icon ? "imm" : "   ");
+		dfs.printf("\n");
+	}
+}
+
