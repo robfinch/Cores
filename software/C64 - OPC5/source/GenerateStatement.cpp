@@ -507,7 +507,7 @@ void Statement::GenerateSwitch()
 	// check case density
 	// If there are enough cases
 	// and if the case is dense enough use a computed jump
-	if (mm * 100 / (maxv-minv) > 50 && (maxv-minv) > (nkd ? 7 : 12)) {
+	if (mm * 100 / max((maxv-minv),1) > 50 && (maxv-minv) > (nkd ? 7 : 12)) {
 		if (deflbl==0)
 			deflbl = nextlabel++;
 		for (nn = mm; nn < 512; nn++) {

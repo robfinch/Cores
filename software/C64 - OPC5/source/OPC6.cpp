@@ -32,7 +32,6 @@ extern int retlab;
 extern TYP *stdfunc;
 
 extern void DumpCSETable();
-extern void scan(Statement *);
 extern int GetReturnBlockSize();
 void GenerateReturn(Statement *stmt);
 int TempFPInvalidate();
@@ -55,12 +54,18 @@ static int CSECmp(const void *a, const void *b)
 
 	csp1 = (CSE *)a;
 	csp2 = (CSE *)b;
-	aa = OptimizationDesireability(csp1);
-	bb = OptimizationDesireability(csp2);
+	aa = csp1->OptimizationDesireability();
+	bb = csp2->OptimizationDesireability();
 	if (aa < bb)
 		return (1);
-	else if (aa == bb)
-		return (0);
+	else if (aa == bb) {
+		if (csp1->duses < csp2->duses)
+			return (1);
+		else if (csp1->duses == csp2->duses)
+			return (0);
+		else
+			return (-1);
+	}
 	else
 		return (-1);
 }
@@ -91,11 +96,11 @@ int AllocateRegisterVars()
 
 	// Sort the CSE table according to desirability of allocating
 	// a register.
-	qsort(CSETable,csendx,sizeof(CSE),CSECmp);
+	qsort(&CSETable.CSETable,csendx,sizeof(CSE),CSECmp);
 
 	// Initialize to no allocated registers
 	for (csecnt = 0; csecnt < csendx; csecnt++)
-		CSETable[csecnt].reg = -1;
+		CSETable.CSETable[csecnt].reg = -1;
 
 	// Make multiple passes over the CSE table in order to use
 	// up all temporary registers. Allocates on the progressively
@@ -103,9 +108,9 @@ int AllocateRegisterVars()
 	if (currentFn->AllowRegVars) {
 		for (nn = 0; nn < 6; nn++) {
 			for (csecnt = 0; csecnt < csendx; csecnt++)	{
-				csp = &CSETable[csecnt];
+				csp = &CSETable.CSETable[csecnt];
 				if (csp->reg==-1) {
-					if( OptimizationDesireability(csp) >= 4-nn ) {
+					if( csp->OptimizationDesireability() >= 4-nn ) {
    						//if(( csp->duses > csp->uses / 2) && reg < 5 )
 						if (csp->uses > 3 && reg < 5)
    							csp->reg = reg++;
@@ -115,11 +120,11 @@ int AllocateRegisterVars()
 		}
 	}
 
-	DumpCSETable();
+	CSETable.Dump();
 
 	// Generate bit masks of allocated registers
 	for (csecnt = 0; csecnt < csendx; csecnt++) {
-		csp = &CSETable[csecnt];
+		csp = &CSETable.CSETable[csecnt];
 		if( csp->reg != -1 )
     	{
     		rmask = rmask | (1LL << (63 - csp->reg));
@@ -143,7 +148,7 @@ int AllocateRegisterVars()
 
 	// Initialize temporaries
 	for (csecnt = 0; csecnt < csendx; csecnt++) {
-		csp = &CSETable[csecnt];
+		csp = &CSETable.CSETable[csecnt];
         if( csp->reg != -1 )
         {               // see if preload needed
             exptr = csp->exp;
@@ -527,7 +532,7 @@ void GenerateFunction(SYM *sym)
 	// assigned to registers are available. About all we can do here is constant
 	// optimizations.
 	if (sym->prolog) {
-		scan(sym->prolog);
+		sym->prolog->scan();
 	    sym->prolog->Generate();
 	}
 	if (!sym->IsNocall) {
@@ -564,7 +569,7 @@ void GenerateFunction(SYM *sym)
 		GenerateMonadic(op_hint,0,make_immed(5));
 	}
 	if (optimize)
-		opt1(stmt);
+		stmt->CSEOptimize();
     stmt->Generate();
     GenerateReturn(nullptr);
 	if (exceptions && sym->IsInline)
@@ -691,16 +696,16 @@ void GenerateReturn(Statement *stmt)
             }
             else {
 			    GenerateDiadic(op_mov, 0, makereg(1),ap);
-				if (currentFn->tp->GetBtp()->type==bt_long
-					|| currentFn->tp->GetBtp()->type==bt_ulong) {
+				if (currentFn->tp->GetBtp() && (currentFn->tp->GetBtp()->type==bt_long
+					|| currentFn->tp->GetBtp()->type==bt_ulong)) {
 						GenerateDiadic(op_mov, 0, makereg(2),ap->amode2);
 				}
 			}
         }
 		else {
 		    GenLoad(makereg(1),ap,sizeOfWord,sizeOfWord);
-			if (currentFn->tp->GetBtp()->type==bt_long
-				|| currentFn->tp->GetBtp()->type==bt_ulong) {
+			if (currentFn->tp->GetBtp() && (currentFn->tp->GetBtp()->type==bt_long
+				|| currentFn->tp->GetBtp()->type==bt_ulong)) {
 					GenerateDiadic(op_mov, 0, makereg(2),ap->amode2);
 			}
 		}

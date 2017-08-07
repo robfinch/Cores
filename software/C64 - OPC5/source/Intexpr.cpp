@@ -35,7 +35,7 @@ int GetIntegerExpression(ENODE **pnode)       /* simple integer value */
 		error(ERR_SYNTAX);
 		return 0;
 	}
-	node->OptimizeConstants();	// This should reduce to a single integer expression
+	ENODE::OptimizeConstants(&node);	// This should reduce to a single integer expression
 	if (node==NULL) {
 		fatal("Compiler Error: GetIntegerExpression: node is NULL");
 		return 0;

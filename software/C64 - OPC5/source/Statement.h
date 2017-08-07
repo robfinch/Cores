@@ -83,6 +83,12 @@ public:
 	static Statement *ParseSwitch(int);
 	static Statement *Parse(int);
 
+	void scan();
+	void ScanCompound();
+	int CSEOptimize();
+	void repcse();
+	void repcseCompound();
+
 	void GenMixedSource();
 	void GenerateStop();
 	void GenerateAsm();

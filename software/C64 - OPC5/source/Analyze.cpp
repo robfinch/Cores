@@ -47,10 +47,10 @@
 int bsave_mask;
 extern int popcnt(int m);
 extern int AllocateRegisterVars();
-static void scan_compound(Statement *stmt);
 static void repcse_compound(Statement *stmt);
 
-CSE CSETable[500];
+//CSE CSETable[500];
+CSEList CSETable;
 short int csendx;
 int loop_active;
 
@@ -71,106 +71,6 @@ int loop_active;
  *      scan will build a list of optimizable expressions which
  *      opt1 will replace during the second optimization pass.
  */
-
-/*
- *      equalnode will return 1 if the expressions pointed to by
- *      node1 and node2 are equivalent.
- */
-int equalnode(ENODE *node1, ENODE *node2)
-{
-    if (node1 == NULL || node2 == NULL) {
-		return FALSE;
-    }
-    if (node1->nodetype != node2->nodetype) {
-		return FALSE;
-    }
-    switch (node1->nodetype) {
-//			return (node1->f == node2->f);
-	case en_regvar:
-	case en_fpregvar:
-      case en_icon:
-      case en_labcon:
-	  case en_classcon:	// Check type ?
-      case en_autocon:
-	  case en_autofcon:
-		  {
-			return (node1->i == node2->i);
-	   }
-      case en_nacon:{
-			return (node1->sp->compare(*node2->sp)==0);
-	    }
-	  case en_cnacon:
-			return (node1->sp->compare(*node2->sp)==0);
-      default:
-	        if( IsLValue(node1,true) && equalnode(node1->p[0], node2->p[0])  )
-		        return TRUE;
-		return FALSE;
-    }
-}
-
-//
-// SearchCSEList will search the common expression table for an entry
-// that matches the node passed and return a pointer to it.
-//
-static CSE *SearchCSEList(ENODE *node)
-{
-	int cnt;
-
-	for (cnt = 0; cnt < csendx; cnt++) {
-        if( equalnode(node,CSETable[cnt].exp) )
-            return &CSETable[cnt];
-	}
-    return (CSE *)NULL;
-}
-
-// InsertNodeIntoCSEList will enter a reference to an expression node into the
-// common expression table. duse is a flag indicating whether or not
-// this reference will be dereferenced.
-
-CSE *InsertNodeIntoCSEList(ENODE *node, int duse)
-{
-	CSE *csp;
-
-    if( (csp = SearchCSEList(node)) == NULL ) {   /* add to tree */
-		if (csendx > 499)
-			throw new C64PException(ERR_CSETABLE,0x01);
-		csp = &CSETable[csendx];
-		csendx++;
-        csp->uses = 1;
-        csp->duses = (duse != 0);
-        csp->exp = node->Duplicate();
-        csp->voidf = 0;
-		csp->reg = 0;
-        return csp;
-    }
-    (csp->uses) += loop_active;
-    if( duse )
-            (csp->duses) += loop_active;
-    return csp;
-}
-
-// voidauto2 searches the entire CSE list for auto dereferenced node which
-// point to the passed node. There might be more than one LValue that matches.
-// voidauto will void an auto dereference node which points to
-// the same auto constant as node.
-//
-int voidauto2(ENODE *node)
-{
-    int uses;
-    int voided;
-	int cnt;
-
-    uses = 0;
-    voided = 0;
-	for (cnt = 0; cnt < csendx; cnt++) {
-        if( IsLValue(CSETable[cnt].exp,true) && equalnode(node,CSETable[cnt].exp->p[0]) ) {
-            CSETable[cnt].voidf = 1;
-            voided = 1;
-            uses += CSETable[cnt].uses;
-        }
-	}
-    return voided ? uses : -1;
-}
 
 /*
  *      scanexpr will scan the expression pointed to by node for optimizable
@@ -198,15 +98,15 @@ static void scanexpr(ENODE *node, int duse)
         case en_icon:
         case en_labcon:
         case en_nacon:
-                InsertNodeIntoCSEList(node,duse);
+                CSETable.Insert(node,duse);
                 break;
 		case en_autofcon:
         case en_autocon:
 		case en_classcon:
         case en_tempfpref:
         case en_tempref:
-                csp1 = InsertNodeIntoCSEList(node,duse);
-                if ((nn = voidauto2(node)) > 0) {
+                csp1 = CSETable.Insert(node,duse);
+                if ((nn = CSETable.voidauto(node)) > 0) {
 					csp1->duses += 1;
                     csp1->uses = csp1->duses + nn - 1;
 				}
@@ -238,13 +138,13 @@ static void scanexpr(ENODE *node, int duse)
                 // it to remove zero extension conversion from a byte to a word.
                 if( node->p[0]->nodetype == en_autocon || node->p[0]->nodetype==en_autofcon
 					|| node->p[0]->nodetype == en_classcon) {
-					first = (SearchCSEList(node)==NULL);	// Detect if this is the first insert
-                    csp = InsertNodeIntoCSEList(node,duse);
+					first = (CSETable.Find(node)==NULL);	// Detect if this is the first insert
+                    csp = CSETable.Insert(node,duse);
 					if (csp->voidf)
 						scanexpr(node->p[0], 1);
 					// take care: the non-derereferenced use of the autocon node may
 					// already be in the list. In this case, set voidf to 1
-					if (SearchCSEList(node->p[0]) != NULL) {
+					if (CSETable.Find(node->p[0]) != NULL) {
 						csp->voidf = 1;
 						scanexpr(node->p[0], 1);
 					}
@@ -359,21 +259,23 @@ static void scanexpr(ENODE *node, int duse)
  *      scan will gather all optimizable expressions into the expression
  *      list for a block of statements.
  */
-void scan(Statement *block)
+void Statement::scan()
 {
+	Statement *block = this;
+
 	loop_active = 1;
 	while( block != NULL ) {
         switch( block->stype ) {
 			case st_compound:
-					scan(block->prolog);
-					scan_compound(block);
-					scan(block->epilog);
+					block->prolog->scan();
+					block->ScanCompound();
+					block->epilog->scan();
 					break;
 			case st_check:
             case st_return:
 			case st_throw:
             case st_expr:
-                    block->exp->OptimizeConstants();
+                    ENODE::OptimizeConstants(&block->exp);
                     scanexpr(block->exp,0);
                     break;
             case st_while:
@@ -381,45 +283,41 @@ void scan(Statement *block)
             case st_do:
 			case st_dountil:
 					loop_active++;
-                    block->exp->OptimizeConstants();
+                    ENODE::OptimizeConstants(&block->exp);
                     scanexpr(block->exp,0);
 					loop_active--;
 			case st_doloop:
 			case st_forever:
 					loop_active++;
-                    scan(block->s1);
+                    block->s1->scan();
 					loop_active--;
                     break;
             case st_for:
 					loop_active++;
-                    block->initExpr->OptimizeConstants();
+                    ENODE::OptimizeConstants(&block->initExpr);
                     scanexpr(block->initExpr,0);
-                    block->exp->OptimizeConstants();
+                    ENODE::OptimizeConstants(&block->exp);
                     scanexpr(block->exp,0);
-                    scan(block->s1);
-                    block->incrExpr->OptimizeConstants();
+                    block->s1->scan();
+                    ENODE::OptimizeConstants(&block->incrExpr);
                     scanexpr(block->incrExpr,0);
 					loop_active--;
                     break;
             case st_if:
-                    block->exp->OptimizeConstants();
+                    ENODE::OptimizeConstants(&block->exp);
                     scanexpr(block->exp,0);
-                    scan(block->s1);
-                    scan(block->s2);
+                    block->s1->scan();
+                    block->s2->scan();
                     break;
             case st_switch:
-                    block->exp->OptimizeConstants();
+                    ENODE::OptimizeConstants(&block->exp);
                     scanexpr(block->exp,0);
-                    scan(block->s1);
+                    block->s1->scan();
                     break;
             case st_firstcall:
             case st_case:
 			case st_default:
-                    scan(block->s1);
-                    break;
-            case st_spinlock:
-                    scan(block->s1);
-                    scan(block->s2);
+                    block->s1->scan();
                     break;
             // nothing to process for these statement
             case st_break:
@@ -432,39 +330,19 @@ void scan(Statement *block)
     }
 }
 
-static void scan_compound(Statement *stmt)
+void Statement::ScanCompound()
 {
 	SYM *sp;
 
-	sp = sp->GetPtr(stmt->ssyms.GetHead());
+	sp = sp->GetPtr(ssyms.GetHead());
 	while (sp) {
 		if (sp->initexp) {
-			sp->initexp->OptimizeConstants();
+			ENODE::OptimizeConstants(&sp->initexp);
             scanexpr(sp->initexp,0);
 		}
 		sp = sp->GetNextPtr();
 	}
-    scan(stmt->s1);
-}
-
-//
-// Returns the desirability of optimization for a subexpression.
-//
-int OptimizationDesireability(CSE *csp)
-{
-	if( csp->voidf)
-        return 0;
- /* added this line to disable register optimization of global variables.
-    The compiler would assign a register to a global variable ignoring
-    the fact that the value might change due to a subroutine call.
-  */
-	if (csp->exp->nodetype == en_nacon)
-		return 0;
-	if (csp->exp->isVolatile)
-		return 0;
-    if( IsLValue(csp->exp,true) )
-	    return 2 * csp->uses;
-    return csp->uses;
+    s1->scan();
 }
 
 /*
@@ -473,7 +351,7 @@ int OptimizationDesireability(CSE *csp)
  */
 void repexpr(ENODE *node)
 {
-	struct cse      *csp;
+	CSE *csp;
         if( node == NULL )
                 return;
         switch( node->nodetype ) {
@@ -497,7 +375,7 @@ void repexpr(ENODE *node)
 				case en_cnacon:
 				case en_clabcon:
                 case en_tempref:
-					if( (csp = SearchCSEList(node)) != NULL ) {
+					if( (csp = CSETable.Find(node)) != NULL ) {
 						if( csp->reg > 0 ) {
 							node->nodetype = en_regvar;
 							node->i = csp->reg;
@@ -524,7 +402,7 @@ void repexpr(ENODE *node)
 				case en_wfieldref:
 				case en_uwfieldref:
                 case en_struct_ref:
-					if( (csp = SearchCSEList(node)) != NULL ) {
+					if( (csp = CSETable.Find(node)) != NULL ) {
 						if( csp->reg > 0 ) {
 							node->nodetype = en_regvar;
 							node->i = csp->reg;
@@ -538,7 +416,7 @@ void repexpr(ENODE *node)
 				case en_dbl_ref:
 				case en_flt_ref:
 				case en_quad_ref:
-					if( (csp = SearchCSEList(node)) != NULL ) {
+					if( (csp = CSETable.Find(node)) != NULL ) {
 						if( csp->reg > 0 ) {
 							node->nodetype = en_regvar;
 							node->i = csp->reg;
@@ -609,18 +487,20 @@ void repexpr(ENODE *node)
                 }
 }
 
-/*
- *      repcse will scan through a block of statements replacing the
- *      optimized expressions with their temporary references.
- */
-void repcse(Statement *block)
+//
+// Repcse will scan through a block of statements replacing the
+// optimized expressions with their temporary references.
+//
+void Statement::repcse()
 {    
+	Statement *block = this;
+
 	while( block != NULL ) {
         switch( block->stype ) {
 			case st_compound:
-					repcse(block->prolog);
-					repcse_compound(block);
-					repcse(block->epilog);
+					block->prolog->repcse();
+					block->repcseCompound();
+					block->epilog->repcse();
 					break;
 			case st_return:
 			case st_throw:
@@ -639,48 +519,48 @@ void repcse(Statement *block)
 					repexpr(block->exp);
 			case st_doloop:
 			case st_forever:
-					repcse(block->s1);
-					repcse(block->s2);
+					block->s1->repcse();
+					block->s2->repcse();
 					break;
 			case st_for:
 					repexpr(block->initExpr);
 					repexpr(block->exp);
-					repcse(block->s1);
+					block->s1->repcse();
 					repexpr(block->incrExpr);
 					break;
 			case st_if:
 					repexpr(block->exp);
-					repcse(block->s1);
-					repcse(block->s2);
+					block->s1->repcse();
+					block->s2->repcse();
 					break;
 			case st_switch:
 					repexpr(block->exp);
-					repcse(block->s1);
+					block->s1->repcse();
 					break;
 			case st_try:
 			case st_catch:
 			case st_case:
 			case st_default:
             case st_firstcall:
-					repcse(block->s1);
+					block->s1->repcse();
 					break;
        }
         block = block->next;
     }
 }
 
-static void repcse_compound(Statement *stmt)
+void Statement::repcseCompound()
 {
 	SYM *sp;
 
-	sp = sp->GetPtr(stmt->ssyms.GetHead());
+	sp = sp->GetPtr(ssyms.GetHead());
 	while (sp) {
 		if (sp->initexp) {
 			repexpr(sp->initexp);
 		}
 		sp = sp->GetNextPtr();
 	}
-	repcse(stmt->s1);
+	s1->repcse();
 }
 
 /*
@@ -690,34 +570,17 @@ static void repcse_compound(Statement *stmt)
  *
  *		optimizer is currently turned off...
  */
-int opt1(Statement *block)
+int Statement::CSEOptimize()
 {
 	int nn;
 
 	csendx = 0;
     nn = 0;
     if (opt_noregs==FALSE) {
-	    scan(block);            /* collect expressions */
+	    scan();         /* collect expressions */
         nn = AllocateRegisterVars();
-    	repcse(block);          /* replace allocated expressions */
+    	repcse();			/* replace allocated expressions */
     }
 	return nn;
-}
-
-void DumpCSETable()
-{
-	int nn;
-	CSE *csp;
-
-	dfs.printf("N Uses DUses Void Reg\n");
-	for (nn = 0; nn < csendx; nn++) {
-		csp = &CSETable[nn];
-		dfs.printf("%d: %d  ",nn,csp->uses);
-		dfs.printf("%d   ",csp->duses);
-		dfs.printf("%d   ",csp->voidf);
-		dfs.printf("%d   ",csp->reg);
-		dfs.printf("%s   ",csp->exp->nodetype == en_icon ? "imm" : "   ");
-		dfs.printf("\n");
-	}
 }
 

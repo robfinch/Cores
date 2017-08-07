@@ -49,6 +49,38 @@ ENODE *ENODE::alloc()
 	return p;
 };
 
+bool ENODE::IsEqual(ENODE *node1, ENODE *node2)
+{
+    if (node1 == NULL || node2 == NULL) {
+		return false;
+    }
+    if (node1->nodetype != node2->nodetype) {
+		return false;
+    }
+    switch (node1->nodetype) {
+//			return (node1->f == node2->f);
+	case en_regvar:
+	case en_fpregvar:
+	case en_icon:
+	case en_labcon:
+	case en_classcon:	// Check type ?
+	case en_autocon:
+	case en_autofcon:
+	{
+		return (node1->i == node2->i);
+	}
+	case en_nacon:{
+		return (node1->sp->compare(*node2->sp)==0);
+	}
+	case en_cnacon:
+		return (node1->sp->compare(*node2->sp)==0);
+	default:
+		if( IsLValue(node1,true) && IsEqual(node1->p[0], node2->p[0])  )
+			return true;
+		return false;
+	}
+}
+
 
 //
 // Apply all constant optimizations.
@@ -56,14 +88,12 @@ ENODE *ENODE::alloc()
 extern void opt0(ENODE **);
 extern void fold_const(ENODE **);
 
-void ENODE::OptimizeConstants()
+void ENODE::OptimizeConstants(ENODE **pnode)
 {
-	ENODE *pnode = this;
-
     if (opt_noexpr==FALSE) {
-    	opt0(&pnode);
-    	fold_const(&pnode);
-    	opt0(&pnode);
+    	opt0(pnode);
+    	fold_const(pnode);
+    	opt0(pnode);
     }
 }
 

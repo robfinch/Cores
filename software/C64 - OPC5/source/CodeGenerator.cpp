@@ -854,7 +854,7 @@ AMODE *GenerateBinary(ENODE *node,int flags, int size, int op)
 		ap4 = nullptr;
 	}
 	ap3->amode2 = ap4;
-	if (equalnode(node->p[0],node->p[1]) && !opt_nocgo) {
+	if (ENODE::IsEqual(node->p[0],node->p[1]) && !opt_nocgo) {
 		ap1 = GenerateExpression(node->p[0],F_REG,size);
 		ap2 = nullptr;
 	}

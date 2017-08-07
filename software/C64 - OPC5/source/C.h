@@ -141,6 +141,31 @@ public:
 };
 
 
+class CSE : public CompilerType
+{
+public:
+	short int nxt;
+    ENODE *exp;				/* optimizable expression */
+    short int uses;           /* number of uses */
+    short int duses;          /* number of dereferenced uses */
+    unsigned int voidf : 1;   /* cannot optimize flag */
+    unsigned int isfp : 1;
+    short int reg;            /* Allocated Register register */
+public:
+	int OptimizationDesireability();
+};
+
+class CSEList : public CompilerType
+{
+public:
+	CSE CSETable[500];
+public:
+	CSE *Insert(ENODE *node, int duse);
+	CSE *Find(ENODE *);
+	int voidauto(ENODE *);
+	void Dump();
+};
+
 struct typ;
 Statement;
 
