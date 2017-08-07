@@ -167,7 +167,11 @@ public:
 };
 
 struct typ;
+
+#ifndef __GNUC__
+// Not sure what this is doing, but causes GCC to complain
 Statement;
+#endif
 
 class TYP;
 class SYM;

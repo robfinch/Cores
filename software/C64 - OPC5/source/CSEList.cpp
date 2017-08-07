@@ -80,7 +80,13 @@ void CSEList::Dump()
 		dfs.printf("%d   ",csp->duses);
 		dfs.printf("%d   ",(int)csp->voidf);
 		dfs.printf("%d   ",csp->reg);
+#ifdef __GNUC__
+      // GCC needs a case otherwise you get:
+      // CSEList.cpp:88:67: error: call of overloaded ‘printf(const char [6], const char [4])’ is ambiguous
+		dfs.printf("%s   ",(char *)(csp->exp->nodetype == en_icon ? "imm" : "   "));
+#else
 		dfs.printf("%s   ",csp->exp->nodetype == en_icon ? "imm" : "   ");
+#endif
 		dfs.printf("\n");
 	}
 	dfs.printf("</CSETable>\n");

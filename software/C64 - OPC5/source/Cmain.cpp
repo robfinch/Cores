@@ -164,7 +164,7 @@ int PreProcessFile(char *nm)
 
 	strcpy_s(outname, sizeof(outname), nm);
 	makename(outname,sizeof(outname)-1,".fpp");
-	snprintf(sysbuf, sizeof(sysbuf), "fpp -b %s %s", nm, outname);
+	snprintf(sysbuf, sizeof(sysbuf), PREPROCESSOR_CMD, nm, outname);
 	return system(sysbuf);
 }
 
@@ -266,7 +266,7 @@ void summary()
 {
 //    if (verbose > 0)
 	dfs.printf("Enter summary\n");
-	printf("\n -- %d errors found.",total_errors);
+	printf("\n -- %d errors found.\n",total_errors);
 	lfs.write("\f\n *** global scope typedef symbol table ***\n\n");
 	ListTable(&gsyms[0],0);
 	lfs.write("\n *** structures and unions ***\n\n");

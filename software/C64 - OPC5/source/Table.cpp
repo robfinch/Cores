@@ -29,8 +29,10 @@ extern char *prefix;
 SYM *search2(char *na,TABLE *tbl,TypeArray *typearray);
 uint8_t hashadd(char *nm);
 
+#ifndef __GNUC__
 #ifndef min
 int min (int a, int b) { return a < b ? a : b; }
+#endif
 #endif
 
 SYM *TABLE::match[100];
