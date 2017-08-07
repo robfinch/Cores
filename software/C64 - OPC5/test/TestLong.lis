@@ -1,0 +1,42 @@
+     1	
+     2	long TestLong(int a, int b)
+     3	{
+     4		long c, d, e;
+     5		long x;
+     6		int r;
+     7		long r2;
+     8	
+     9		for (x = 0; x < 100000L; x++) {
+    10			c = d + e + b - a;
+    11			c = e * x;
+    12		}
+    13		x = c / d;
+    14		d = (x >> 15) | (x << (31-15));
+    15	
+    16		r = d < x;
+    17		r2 = d > x;
+    18		return c;
+    19	}
+
+
+*** local symbol table ***
+
+_c         =fffffffe   -    Auto        Long
+_d         =fffffffc   -    Auto        Long
+_e         =fffffffa   -    Auto        Long
+_x         =fffffff8   -    Auto        Long
+_r         =fffffff7   -    Auto        Short
+_r2        =fffffff4   -    Auto        Long
+
+
+
+
+ *** global scope typedef symbol table ***
+
+_TestLong  =000000   -    External    Function returning Long
+		Parameters:
+			Type array:
+   016 016 
+
+ *** structures and unions ***
+

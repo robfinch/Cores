@@ -1,0 +1,82 @@
+     1	
+     2	int TestDo(int c)
+     3	{
+     4		do {
+     5			c--;
+     6		} while (c > 0);
+     7	}
+     8	
+
+
+*** local symbol table ***
+
+
+
+
+     9	int TestDo1(int d)
+    10	{
+    11		do {
+    12			d++;
+    13		} until (d==10);
+    14	}
+    15	
+
+
+*** local symbol table ***
+
+
+
+
+    16	int TestWhile(int e)
+    17	{
+    18		while (e >= 0) {
+    19			e--;
+    20		};
+    21	}
+    22	
+
+
+*** local symbol table ***
+
+
+
+
+    23	void TestWhile2(int g)
+    24	{
+    25		int x;
+    26		x = 0;
+    27	
+    28		do {
+    29			g++;
+    30		} while (g <= x);
+    31	}
+
+
+*** local symbol table ***
+
+_x         =ffffffff   -    Auto        Short
+
+
+
+
+ *** global scope typedef symbol table ***
+
+_TestWhile2 =000000   -    External    Function returning 
+		Parameters:
+			Type array:
+   016 
+_TestDo    =000000   -    External    Function returning Short
+		Parameters:
+			Type array:
+   016 
+_TestDo1   =000000   -    External    Function returning Short
+		Parameters:
+			Type array:
+   016 
+_TestWhile =000000   -    External    Function returning Short
+		Parameters:
+			Type array:
+   016 
+
+ *** structures and unions ***
+

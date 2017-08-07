@@ -1,9 +1,8 @@
-     1	
-     2	int abs(register int a)
-     3	{
-     4		return a < 0 ? -a : a;
-     5	}
-     6	
+     1	int abs(register int a)
+     2	{
+     3		return a < 0 ? -a : a;
+     4	}
+     5	
 
 
 *** local symbol table ***
@@ -11,11 +10,11 @@
 
 
 
-     7	int min(register int a, register int b)
-     8	{
-     9		return a < b ? a : b;
-    10	}
-    11	
+     6	int min(register int a, register int b)
+     7	{
+     8		return a < b ? a : b;
+     9	}
+    10	
 
 
 *** local symbol table ***
@@ -23,11 +22,11 @@
 
 
 
-    12	int max(register int a, register int b)
-    13	{
-    14		return a > b ? a : b;
-    15	}
-    16	
+    11	int max(register int a, register int b)
+    12	{
+    13		return a > b ? a : b;
+    14	}
+    15	
 
 
 *** local symbol table ***
@@ -35,11 +34,11 @@
 
 
 
-    17	unsigned int minu(register unsigned int a, register unsigned int b)
-    18	{
-    19		return a < b ? a : b;
-    20	}
-    21	
+    16	unsigned int minu(register unsigned int a, register unsigned int b)
+    17	{
+    18		return a < b ? a : b;
+    19	}
+    20	
 
 
 *** local symbol table ***

@@ -1,0 +1,49 @@
+     1	
+     2	int TestIf(int a, int b)
+     3	{
+     4		if (a < b)
+     5			return a;
+     6		elsif (a==10)
+     7			return 10;
+     8		else
+     9			return b;
+    10	}
+    11	
+
+
+*** local symbol table ***
+
+
+
+
+    12	int TestIf2(int a, int b)
+    13	{
+    14		if (a and b)
+    15			return a;
+    16		elsif (a or b)
+    17			return 10;
+    18		else
+    19			return b;
+    20	}
+    21	
+
+
+*** local symbol table ***
+
+
+
+
+
+ *** global scope typedef symbol table ***
+
+_TestIf    =000000   -    External    Function returning Short
+		Parameters:
+			Type array:
+   016 016 
+_TestIf2   =000000   -    External    Function returning Short
+		Parameters:
+			Type array:
+   016 016 
+
+ *** structures and unions ***
+

@@ -38,8 +38,11 @@ AMODE *GenerateShift(ENODE *node,int flags, int size)
 	case en_shl:
 		switch(ap2->mode) {
 		case am_immed:
-			for (nn = 0; nn < ap2->offset->i && nn < 17; nn++)
+			for (nn = 0; nn < ap2->offset->i && nn < 33; nn++) {
 				GenerateTriadic(op_add,0,ap1,makereg(regZero),make_immed(0));
+				if (size==2)
+					GenerateTriadic(op_adc,0,ap1->amode2,makereg(regZero),make_immed(0));
+			}
 			ReleaseTempRegister(ap2);
 			MakeLegalAmode(ap1,flags,size);
 			return ap1;
@@ -47,6 +50,8 @@ AMODE *GenerateShift(ENODE *node,int flags, int size)
 			lab1 = nextlabel++;
 			GenerateLabel(lab1);
 			GenerateTriadic(op_add,0,ap1,makereg(regZero),make_immed(0));
+			if (size==2)
+				GenerateTriadic(op_adc,0,ap1->amode2,makereg(regZero),make_immed(0));
 			GenerateTriadic(op_sub,0,ap2,makereg(regZero),make_immed(1));
 			GeneratePredicatedTriadic(pop_nz,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(lab1));
 			ReleaseTempRegister(ap2);
@@ -58,8 +63,10 @@ AMODE *GenerateShift(ENODE *node,int flags, int size)
 	case en_shr:
 		switch(ap2->mode) {
 		case am_immed:
-			for (nn = 0; nn < ap2->offset->i && nn < 17; nn++) {
+			for (nn = 0; nn < ap2->offset->i && nn < 33; nn++) {
 				GenerateTriadic(op_add,0,makereg(0),makereg(0),make_immed(0));	// clear carry
+				if (size==2)
+					GenerateTriadic(op_ror,0,ap1->amode2,makereg(regZero),make_immed(0));
 				GenerateTriadic(op_ror,0,ap1,makereg(regZero),make_immed(0));
 			}
 			ReleaseTempRegister(ap2);
@@ -69,6 +76,8 @@ AMODE *GenerateShift(ENODE *node,int flags, int size)
 			lab1 = nextlabel++;
 			GenerateLabel(lab1);
 			GenerateTriadic(op_add,0,makereg(0),makereg(0),make_immed(0));	// clear carry
+			if (size==2)
+				GenerateTriadic(op_ror,0,ap1->amode2,makereg(regZero),make_immed(0));
 			GenerateTriadic(op_ror,0,ap1,makereg(regZero),make_immed(0));
 			GenerateTriadic(op_sub,0,ap2,makereg(regZero),make_immed(1));
 			GeneratePredicatedTriadic(pop_nz,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(lab1));
@@ -80,10 +89,12 @@ AMODE *GenerateShift(ENODE *node,int flags, int size)
 	case en_asr:
 		switch(ap2->mode) {
 		case am_immed:
-			for (nn = 0; nn < ap2->offset->i && nn < 17; nn++) {
+			for (nn = 0; nn < ap2->offset->i && nn < 33; nn++) {
 				GenerateTriadic(op_add,0,ap1,makereg(0),make_immed(0));	// get sign bit
 				GeneratePredicatedTriadic(pop_pl,op_add,0,makereg(0),makereg(0),make_immed(0));	// clear carry
 				GeneratePredicatedTriadic(pop_mi,op_sub,0,makereg(0),makereg(0),make_immed(1));	// set carry
+				if (size==2)
+					GenerateTriadic(op_ror,0,ap1->amode2,makereg(regZero),make_immed(0));
 				GenerateTriadic(op_ror,0,ap1,makereg(regZero),make_immed(0));
 			}
 			ReleaseTempRegister(ap2);
@@ -95,6 +106,8 @@ AMODE *GenerateShift(ENODE *node,int flags, int size)
 			GenerateTriadic(op_add,0,ap1,makereg(0),make_immed(0));	// get sign bit
 			GeneratePredicatedTriadic(pop_pl,op_add,0,makereg(0),makereg(0),make_immed(0));	// clear carry
 			GeneratePredicatedTriadic(pop_mi,op_sub,0,makereg(0),makereg(0),make_immed(1));	// set carry
+			if (size==2)
+				GenerateTriadic(op_ror,0,ap1->amode2,makereg(regZero),make_immed(0));
 			GenerateTriadic(op_ror,0,ap1,makereg(regZero),make_immed(0));
 			GenerateTriadic(op_sub,0,ap2,makereg(regZero),make_immed(1));
 			GeneratePredicatedTriadic(pop_nz,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(lab1));
@@ -152,8 +165,11 @@ AMODE *GenerateAssignShift(ENODE *node,int flags,int size)
 	case en_shl:
 		switch(ap2->mode) {
 		case am_immed:
-			for (nn = 0; nn < ap2->offset->i && nn < 17; nn++)
+			for (nn = 0; nn < ap2->offset->i && nn < 33; nn++) {
 				GenerateTriadic(op_add,0,ap1,makereg(regZero),make_immed(0));
+				if (size==2)
+					GenerateTriadic(op_adc,0,ap1->amode2,makereg(regZero),make_immed(0));
+			}
 			ReleaseTempRegister(ap2);
 			MakeLegalAmode(ap1,flags,size);
 			return ap1;
@@ -161,6 +177,8 @@ AMODE *GenerateAssignShift(ENODE *node,int flags,int size)
 			lab1 = nextlabel++;
 			GenerateLabel(lab1);
 			GenerateTriadic(op_add,0,ap1,makereg(regZero),make_immed(0));
+			if (size==2)
+				GenerateTriadic(op_adc,0,ap1->amode2,makereg(regZero),make_immed(0));
 			GenerateTriadic(op_sub,0,ap2,makereg(regZero),make_immed(1));
 			GeneratePredicatedTriadic(pop_nz,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(lab1));
 			ReleaseTempRegister(ap2);
@@ -168,12 +186,15 @@ AMODE *GenerateAssignShift(ENODE *node,int flags,int size)
 			return ap1;
 		}
 		break;
+
 	case en_shru:
 	case en_shr:
 		switch(ap2->mode) {
 		case am_immed:
-			for (nn = 0; nn < ap2->offset->i && nn < 17; nn++) {
+			for (nn = 0; nn < ap2->offset->i && nn < 33; nn++) {
 				GenerateTriadic(op_add,0,makereg(0),makereg(0),make_immed(0));	// clear carry
+				if (size==2)
+					GenerateTriadic(op_ror,0,ap1->amode2,makereg(regZero),make_immed(0));
 				GenerateTriadic(op_ror,0,ap1,makereg(regZero),make_immed(0));
 			}
 			ReleaseTempRegister(ap2);
@@ -183,6 +204,8 @@ AMODE *GenerateAssignShift(ENODE *node,int flags,int size)
 			lab1 = nextlabel++;
 			GenerateLabel(lab1);
 			GenerateTriadic(op_add,0,makereg(0),makereg(0),make_immed(0));	// clear carry
+			if (size==2)
+				GenerateTriadic(op_ror,0,ap1->amode2,makereg(regZero),make_immed(0));
 			GenerateTriadic(op_ror,0,ap1,makereg(regZero),make_immed(0));
 			GenerateTriadic(op_sub,0,ap2,makereg(regZero),make_immed(1));
 			GeneratePredicatedTriadic(pop_nz,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(lab1));
@@ -191,13 +214,16 @@ AMODE *GenerateAssignShift(ENODE *node,int flags,int size)
 			return ap1;
 		}
 		break;
+
 	case en_asr:
 		switch(ap2->mode) {
 		case am_immed:
-			for (nn = 0; nn < ap2->offset->i && nn < 17; nn++) {
+			for (nn = 0; nn < ap2->offset->i && nn < 33; nn++) {
 				GenerateTriadic(op_add,0,ap1,makereg(0),make_immed(0));	// get sign bit
 				GeneratePredicatedTriadic(pop_pl,op_add,0,makereg(0),makereg(0),make_immed(0));	// clear carry
 				GeneratePredicatedTriadic(pop_mi,op_sub,0,makereg(0),makereg(0),make_immed(1));	// set carry
+				if (size==2)
+					GenerateTriadic(op_ror,0,ap1->amode2,makereg(regZero),make_immed(0));
 				GenerateTriadic(op_ror,0,ap1,makereg(regZero),make_immed(0));
 			}
 			ReleaseTempRegister(ap2);
@@ -209,6 +235,8 @@ AMODE *GenerateAssignShift(ENODE *node,int flags,int size)
 			GenerateTriadic(op_add,0,ap1,makereg(0),make_immed(0));	// get sign bit
 			GeneratePredicatedTriadic(pop_pl,op_add,0,makereg(0),makereg(0),make_immed(0));	// clear carry
 			GeneratePredicatedTriadic(pop_mi,op_sub,0,makereg(0),makereg(0),make_immed(1));	// set carry
+			if (size==2)
+				GenerateTriadic(op_ror,0,ap1->amode2,makereg(regZero),make_immed(0));
 			GenerateTriadic(op_ror,0,ap1,makereg(regZero),make_immed(0));
 			GenerateTriadic(op_sub,0,ap2,makereg(regZero),make_immed(1));
 			GeneratePredicatedTriadic(pop_nz,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(lab1));

@@ -1,0 +1,810 @@
+<title>C64D Compiler debug file</title>
+<compile>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+</Find>
+_int</Find>
+<Parsing GlobalDecl>
+<ParseGlobalDecl>
+Enter declare()
+A<ParseSpecifier>
+A</Find>
+_TestDo</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_TestDo|CDE<ParseDeclSuffix>
+<openpa>
+****************************
+****************************
+Function: _TestDo
+****************************
+****************************
+</Find>
+_int</Find>
+<TYP__Make>
+</TYP__Make>
+o p q rsYParameter types(_TestDo)
+Type array:
+   
+Proto types(_TestDo)
+Type array:
+   
+X</openpa>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_TestDo</Find>
+hh1h2ikIIbIcinsert type: 33
+***Inserting:_TestDo into 01308F48
+<BuildSignature>:_TestDo</BuildSignature>Insert _TestDo into 01308F48()
+Insert into global table
+</Find>
+_TestDo</Find>
+At insert:
+Type array:
+   
+J<ParseFunction>
+***********************************
+***********************************
+***********************************
+Parsing function: _TestDo
+***********************************
+***********************************
+***********************************
+A<BuildParameterList
+><ParseParmDecls>
+A(54)CEnter declare()
+A<ParseSpecifier>
+A</Find>
+_c</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_c|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_c</Find>
+hh1kIIbIcinsert type: 16
+***Inserting:_c into 0131643C
+<BuildSignature>:_c</BuildSignature>Insert _c into 0131643C(_TestDo)
+</Find>
+_c</Find>
+At insert:
+Type array:
+   
+JKEA(45)</ParseParmDecls>
+B</Find>
+_cMatch
+</Find>
+</BuildParameterList>
+B<BuildSignature>:_TestDo</BuildSignature></Find>
+_TestDoMatch
+</Find>
+CDEG<Parse function body>:_TestDo|
+</Find>
+_do</Find>
+Bb<GenerateMonadic>
+ABCD</GenerateMonadic>
+C<Parse><Parse></Find>
+_c</Find>
+Found _c
+</Find>
+_c</Find>
+</Find>
+_c</Find>
+<Parse><ParseExpression>
+<Nameref>
+GSearchfor:_c|
+<gsearch2> for: |_c|
+Looking in statement table
+</Find>
+_c</Find>
+Looking in outer statement table
+</Find>
+_c</Find>
+Looking in function's symbol table
+</Find>
+_c</Find>
+Searching method/class:_TestDo|013163F0
+Looking at params 0131643C
+</Find>
+_cMatch
+</Find>
+Found as parameter
+</gsearch2>
+<nameref2>
+A:1:_cIsEqual:T2sp is not null
+Type array:
+   
+tp:0188B7D8 <Deref></Deref>deref tp:0188B378 </nameref2>
+</Nameref>
+</ParseExpression>
+</Parse></Find>
+_while</Find>
+</Find>
+_c</Find>
+</Find>
+_c</Find>
+</Find>
+_c</Find>
+<Nameref>
+GSearchfor:_c|
+<gsearch2> for: |_c|
+Looking in statement table
+</Find>
+_c</Find>
+Looking in outer statement table
+</Find>
+_c</Find>
+Looking in outer statement table
+</Find>
+_c</Find>
+Looking in function's symbol table
+</Find>
+_c</Find>
+Searching method/class:_TestDo|013163F0
+Looking at params 0131643C
+</Find>
+_cMatch
+</Find>
+Found as parameter
+</gsearch2>
+<nameref2>
+A:1:_cIsEqual:T2sp is not null
+Type array:
+   
+tp:0188B7D8 <Deref></Deref>deref tp:0188B378 </nameref2>
+</Nameref>
+</Parse></Find>
+_int</Find>
+D<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+E</ParseFunctionBody>
+Enter funcbottom
+Leave funcbottom
+F</ParseFunction>
+Enter declare()
+A<ParseSpecifier>
+A</Find>
+_TestDo1</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_TestDo1|CDE<ParseDeclSuffix>
+<openpa>
+****************************
+****************************
+Function: _TestDo1
+****************************
+****************************
+</Find>
+_int</Find>
+<TYP__Make>
+</TYP__Make>
+o p q rsYParameter types(_TestDo1)
+Type array:
+   
+Proto types(_TestDo1)
+Type array:
+   
+X</openpa>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_TestDo1</Find>
+hh1h2ikIIbIcinsert type: 33
+***Inserting:_TestDo1 into 01308F48
+<BuildSignature>:_TestDo1</BuildSignature>Insert _TestDo1 into 01308F48()
+Insert into global table
+</Find>
+_TestDo1</Find>
+At insert:
+Type array:
+   
+J<ParseFunction>
+***********************************
+***********************************
+***********************************
+Parsing function: _TestDo1
+***********************************
+***********************************
+***********************************
+A<BuildParameterList
+><ParseParmDecls>
+A(54)CEnter declare()
+A<ParseSpecifier>
+A</Find>
+_d</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_d|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_d</Find>
+hh1kIIbIcinsert type: 16
+***Inserting:_d into 0131659C
+<BuildSignature>:_d</BuildSignature>Insert _d into 0131659C(_TestDo1)
+</Find>
+_d</Find>
+At insert:
+Type array:
+   
+JKEA(45)</ParseParmDecls>
+B</Find>
+_dMatch
+</Find>
+</BuildParameterList>
+B<BuildSignature>:_TestDo1</BuildSignature></Find>
+_TestDo1Match
+</Find>
+CDEG<Parse function body>:_TestDo1|
+</Find>
+_do</Find>
+Bb<GenerateMonadic>
+ABCD</GenerateMonadic>
+C<Parse><Parse></Find>
+_d</Find>
+Found _d
+</Find>
+_d</Find>
+</Find>
+_d</Find>
+<Parse><ParseExpression>
+<Nameref>
+GSearchfor:_d|
+<gsearch2> for: |_d|
+Looking in statement table
+</Find>
+_d</Find>
+Looking in outer statement table
+</Find>
+_d</Find>
+Looking in function's symbol table
+</Find>
+_d</Find>
+Searching method/class:_TestDo1|01316550
+Looking at params 0131659C
+</Find>
+_dMatch
+</Find>
+Found as parameter
+</gsearch2>
+<nameref2>
+A:1:_dIsEqual:T2sp is not null
+Type array:
+   
+tp:0188B880 <Deref></Deref>deref tp:0188B378 </nameref2>
+</Nameref>
+</ParseExpression>
+</Parse></Find>
+_until</Find>
+</Find>
+_d</Find>
+</Find>
+_d</Find>
+</Find>
+_d</Find>
+<Nameref>
+GSearchfor:_d|
+<gsearch2> for: |_d|
+Looking in statement table
+</Find>
+_d</Find>
+Looking in outer statement table
+</Find>
+_d</Find>
+Looking in outer statement table
+</Find>
+_d</Find>
+Looking in function's symbol table
+</Find>
+_d</Find>
+Searching method/class:_TestDo1|01316550
+Looking at params 0131659C
+</Find>
+_dMatch
+</Find>
+Found as parameter
+</gsearch2>
+<nameref2>
+A:1:_dIsEqual:T2sp is not null
+Type array:
+   
+tp:0188B880 <Deref></Deref>deref tp:0188B378 </nameref2>
+</Nameref>
+</Parse></Find>
+_int</Find>
+D<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+E</ParseFunctionBody>
+Enter funcbottom
+Leave funcbottom
+F</ParseFunction>
+Enter declare()
+A<ParseSpecifier>
+A</Find>
+_TestWhile</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_TestWhile|CDE<ParseDeclSuffix>
+<openpa>
+****************************
+****************************
+Function: _TestWhile
+****************************
+****************************
+</Find>
+_int</Find>
+<TYP__Make>
+</TYP__Make>
+o p q rsYParameter types(_TestWhile)
+Type array:
+   
+Proto types(_TestWhile)
+Type array:
+   
+X</openpa>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_TestWhile</Find>
+hh1h2ikIIbIcinsert type: 33
+***Inserting:_TestWhile into 01308F48
+<BuildSignature>:_TestWhile</BuildSignature>Insert _TestWhile into 01308F48()
+Insert into global table
+</Find>
+_TestWhile</Find>
+At insert:
+Type array:
+   
+J<ParseFunction>
+***********************************
+***********************************
+***********************************
+Parsing function: _TestWhile
+***********************************
+***********************************
+***********************************
+A<BuildParameterList
+><ParseParmDecls>
+A(54)CEnter declare()
+A<ParseSpecifier>
+A</Find>
+_e</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_e|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_e</Find>
+hh1kIIbIcinsert type: 16
+***Inserting:_e into 013166FC
+<BuildSignature>:_e</BuildSignature>Insert _e into 013166FC(_TestWhile)
+</Find>
+_e</Find>
+At insert:
+Type array:
+   
+JKEA(45)</ParseParmDecls>
+B</Find>
+_eMatch
+</Find>
+</BuildParameterList>
+B<BuildSignature>:_TestWhile</BuildSignature></Find>
+_TestWhileMatch
+</Find>
+CDEG<Parse function body>:_TestWhile|
+</Find>
+_while</Find>
+Bb<GenerateMonadic>
+ABCD</GenerateMonadic>
+C<Parse></Find>
+_e</Find>
+<Nameref>
+GSearchfor:_e|
+<gsearch2> for: |_e|
+Looking in statement table
+</Find>
+_e</Find>
+Looking in function's symbol table
+</Find>
+_e</Find>
+Searching method/class:_TestWhile|013166B0
+Looking at params 013166FC
+</Find>
+_eMatch
+</Find>
+Found as parameter
+</gsearch2>
+<nameref2>
+A:1:_eIsEqual:T2sp is not null
+Type array:
+   
+tp:0188B928 <Deref></Deref>deref tp:0188B378 </nameref2>
+</Nameref>
+<Parse></Find>
+_e</Find>
+Found _e
+</Find>
+_e</Find>
+</Find>
+_e</Find>
+<Parse><ParseExpression>
+<Nameref>
+GSearchfor:_e|
+<gsearch2> for: |_e|
+Looking in statement table
+</Find>
+_e</Find>
+Looking in outer statement table
+</Find>
+_e</Find>
+Looking in function's symbol table
+</Find>
+_e</Find>
+Searching method/class:_TestWhile|013166B0
+Looking at params 013166FC
+</Find>
+_eMatch
+</Find>
+Found as parameter
+</gsearch2>
+<nameref2>
+A:1:_eIsEqual:T2sp is not null
+Type array:
+   
+tp:0188B928 <Deref></Deref>deref tp:0188B378 </nameref2>
+</Nameref>
+</ParseExpression>
+</Parse></Parse><Parse></Parse></Find>
+_void</Find>
+D<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+E</ParseFunctionBody>
+Enter funcbottom
+Leave funcbottom
+F</ParseFunction>
+Enter declare()
+A<ParseSpecifier>
+A<TYP__Make>
+</TYP__Make>
+</Find>
+_TestWhile2</Find>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_TestWhile2|CDE<ParseDeclSuffix>
+<openpa>
+****************************
+****************************
+Function: _TestWhile2
+****************************
+****************************
+</Find>
+_int</Find>
+<TYP__Make>
+</TYP__Make>
+o p q rsYParameter types(_TestWhile2)
+Type array:
+   
+Proto types(_TestWhile2)
+Type array:
+   
+X</openpa>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_TestWhile2</Find>
+hh1h2ikIIbIcinsert type: 33
+***Inserting:_TestWhile2 into 01308F48
+<BuildSignature>:_TestWhile2</BuildSignature>Insert _TestWhile2 into 01308F48()
+Insert into global table
+</Find>
+_TestWhile2</Find>
+At insert:
+Type array:
+   
+J<ParseFunction>
+***********************************
+***********************************
+***********************************
+Parsing function: _TestWhile2
+***********************************
+***********************************
+***********************************
+A<BuildParameterList
+><ParseParmDecls>
+A(54)CEnter declare()
+A<ParseSpecifier>
+A</Find>
+_g</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_g|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_g</Find>
+hh1kIIbIcinsert type: 16
+***Inserting:_g into 0131685C
+<BuildSignature>:_g</BuildSignature>Insert _g into 0131685C(_TestWhile2)
+</Find>
+_g</Find>
+At insert:
+Type array:
+   
+JKEA(45)</ParseParmDecls>
+B</Find>
+_gMatch
+</Find>
+</BuildParameterList>
+B<BuildSignature>:_TestWhile2</BuildSignature></Find>
+_TestWhile2Match
+</Find>
+CDEG<Parse function body>:_TestWhile2|
+</Find>
+_int</Find>
+Bb<GenerateMonadic>
+ABCD</GenerateMonadic>
+CEnter declare()
+A<ParseSpecifier>
+A</Find>
+_x</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_x|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_x</Find>
+hh1kIIbIcinsert type: 16
+***Inserting:_x into 01DEFDC4
+<BuildSignature>:_x</BuildSignature>Insert _x into 01DEFDC4()
+</Find>
+_x</Find>
+At insert:
+Type array:
+   
+JK</Find>
+_x</Find>
+Found _x
+</Find>
+_x</Find>
+</Find>
+_x</Find>
+<Parse><ParseExpression>
+<Nameref>
+GSearchfor:_x|
+<gsearch2> for: |_x|
+Looking in statement table
+</Find>
+_xMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_xIsEqual:T2sp is not null
+Type array:
+   
+tp:0188BA08 <Deref></Deref>deref tp:0188B378 </nameref2>
+</Nameref>
+</Find>
+_do</Find>
+</ParseExpression>
+</Parse><Parse><Parse></Find>
+_g</Find>
+Found _g
+</Find>
+_g</Find>
+</Find>
+_g</Find>
+<Parse><ParseExpression>
+<Nameref>
+GSearchfor:_g|
+<gsearch2> for: |_g|
+Looking in statement table
+</Find>
+_g</Find>
+Looking in outer statement table
+</Find>
+_g</Find>
+Looking in function's symbol table
+</Find>
+_g</Find>
+Searching method/class:_TestWhile2|01316810
+Looking at params 0131685C
+</Find>
+_gMatch
+</Find>
+Found as parameter
+</gsearch2>
+<nameref2>
+A:1:_gIsEqual:T2sp is not null
+Type array:
+   
+tp:0188B9D0 <Deref></Deref>deref tp:0188B378 </nameref2>
+</Nameref>
+</ParseExpression>
+</Parse></Find>
+_while</Find>
+</Find>
+_g</Find>
+</Find>
+_g</Find>
+</Find>
+_g</Find>
+<Nameref>
+GSearchfor:_g|
+<gsearch2> for: |_g|
+Looking in statement table
+</Find>
+_g</Find>
+Looking in outer statement table
+</Find>
+_g</Find>
+Looking in outer statement table
+</Find>
+_g</Find>
+Looking in function's symbol table
+</Find>
+_g</Find>
+Searching method/class:_TestWhile2|01316810
+Looking at params 0131685C
+</Find>
+_gMatch
+</Find>
+Found as parameter
+</gsearch2>
+<nameref2>
+A:1:_gIsEqual:T2sp is not null
+Type array:
+   
+tp:0188B9D0 <Deref></Deref>deref tp:0188B378 </nameref2>
+</Nameref>
+</Find>
+_x</Find>
+<Nameref>
+GSearchfor:_x|
+<gsearch2> for: |_x|
+Looking in statement table
+</Find>
+_x</Find>
+Looking in outer statement table
+</Find>
+_x</Find>
+Looking in outer statement table
+</Find>
+_xMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_xIsEqual:T2sp is not null
+Type array:
+   
+tp:0188BA08 <Deref></Deref>deref tp:0188B378 </nameref2>
+</Nameref>
+</Parse>Returning EOF from NextToken.
+D<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+E</ParseFunctionBody>
+Enter funcbottom
+Leave funcbottom
+F</ParseFunction>
+</ParseGlobalDecl>
+</Parsing GlobalDecl>
+</compile>
+<Dumplits>
+</Dumplits>
+Enter summary
+Leave summary
+<closefiles>
+ABC</closefiles>
+Next on command line (1).
+Exiting

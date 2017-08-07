@@ -8,7 +8,7 @@ int main()
 
 	c1 = 0;
 	c2 = 1;
-	for (n = 0; n < 23; n = n + 1) {
+	for (n = 0; n < 23; n++) {
 		if (n < 1) {
 			nums[0] = 1;
 			c = 1;

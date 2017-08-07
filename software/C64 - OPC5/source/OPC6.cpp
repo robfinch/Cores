@@ -192,200 +192,6 @@ int AllocateRegisterVars()
 }
 
 
-AMODE *GenExpr(ENODE *node)
-{
-	AMODE *ap1,*ap2,*ap3;
-	int lab0, lab1;
-	int size;
-	int pop;
-	int pl,pushed;
-
-    lab0 = nextlabel++;
-    lab1 = nextlabel++;
-
-	switch(node->nodetype) {
-	case en_eq:		break;
-	case en_ne:		break;
-	case en_lt:		break;
-	case en_ult:	break;
-	case en_le:		break;
-	case en_ule:	break;
-	case en_gt:		break;
-	case en_ugt:	break;
-	case en_ge:		break;
-	case en_uge:	break;
-	default:	// en_land, en_lor
-		pl = GeneratePreload();
-		GenerateFalseJump(node,lab0,0);
-		ap1 = GetTempRegister2(&pushed);
-		if (pushed) {
-			GenerateTriadic(op_mov,0,ap1,makereg(regZero),make_immed(1));
-			GenLdi(ap1,make_immed(1));
-			GenerateTriadic(op_mov,0,makereg(regPC),makereg(0),make_label(lab1));
-			GenerateLabel(lab0);
-			GenerateDiadic(op_mov,0,ap1,makereg(regZero));
-			GenerateLabel(lab1);
-		}
-		else {
-			pop = peep_tail->back->predop;
-			OverwritePreload(pl,op_mov,0,ap1,makereg(regZero),make_immed(1),nullptr);
-			GeneratePredicatedTriadic(pop,op_mov,0,ap1,makereg(regZero),nullptr);
-		}
-		return ap1;
-	}
-
-	switch(node->nodetype) {
-	case en_eq:
-		size = GetNaturalSize(node);
-		ap3 = GetTempRegister();
-		GenerateTriadic(op_mov,0,ap3,makereg(regZero),make_immed(1));
-		ap1 = GenerateExpression(node->p[0],F_REG,size);
-		ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
-		if (ap2->mode==am_immed)
-			GenerateTriadic(op_cmp,0,ap1,makereg(regZero),ap2);
-		else
-			GenerateDiadic(op_cmp,0,ap1,ap2);
-		GeneratePredicatedTriadic(pop_nz,op_mov,0,ap3,makereg(regZero),nullptr);
-		ReleaseTempRegister(ap2);
-		ReleaseTempRegister(ap1);
-		return (ap3);
-	case en_ne:
-		size = GetNaturalSize(node);
-		ap3 = GetTempRegister();
-		GenerateTriadic(op_mov,0,ap3,makereg(regZero),make_immed(1));
-		ap1 = GenerateExpression(node->p[0],F_REG,size);
-		ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
-		if (ap2->mode==am_immed)
-			GenerateTriadic(op_cmp,0,ap1,makereg(regZero),ap2);
-		else
-			GenerateDiadic(op_cmp,0,ap1,ap2);
-		GeneratePredicatedTriadic(pop_z,op_mov,0,ap3,makereg(regZero),nullptr);
-		ReleaseTempRegister(ap2);
-		ReleaseTempRegister(ap1);
-		return (ap3);
-	case en_lt:
-		size = GetNaturalSize(node);
-		ap3 = GetTempRegister();
-		GenerateTriadic(op_mov,0,ap3,makereg(regZero),make_immed(1));
-		ap1 = GenerateExpression(node->p[0],F_REG,size);
-		ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
-		if (ap2->mode==am_immed)
-			GenerateTriadic(op_cmp,0,ap1,makereg(regZero),ap2);
-		else
-			GenerateDiadic(op_cmp,0,ap1,ap2);
-		GeneratePredicatedTriadic(pop_pl,op_mov,0,ap3,makereg(regZero),nullptr);
-		ReleaseTempRegister(ap2);
-		ReleaseTempRegister(ap1);
-		return (ap3);
-	case en_le:
-		size = GetNaturalSize(node);
-		ap3 = GetTempRegister();
-		GenerateTriadic(op_mov,0,ap3,makereg(regZero),make_immed(1));
-		ap1 = GenerateExpression(node->p[0],F_REG,size);
-		ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
-		if (ap2->mode==am_immed)
-			GenerateTriadic(op_cmp,0,ap1,makereg(regZero),ap2);
-		else
-			GenerateDiadic(op_cmp,0,ap1,ap2);
-		GeneratePredicatedTriadic(pop_pl,op_mov,0,ap3,makereg(regZero),nullptr);
-		ReleaseTempRegister(ap2);
-		ReleaseTempRegister(ap1);
-		return (ap3);
-	case en_gt:
-		size = GetNaturalSize(node);
-		ap3 = GetTempRegister();
-		GenerateDiadic(op_mov,0,ap3,makereg(regZero));
-		ap1 = GenerateExpression(node->p[0],F_REG,size);
-		ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
-		if (ap2->mode==am_immed)
-			GenerateTriadic(op_cmp,0,ap1,makereg(regZero),ap2);
-		else
-			GenerateDiadic(op_cmp,0,ap1,ap2);
-		GeneratePredicatedTriadic(pop_pl,op_mov,0,ap3,makereg(regZero),make_immed(1));
-		ReleaseTempRegister(ap2);
-		ReleaseTempRegister(ap1);
-		return (ap3);
-	case en_ge:
-		size = GetNaturalSize(node);
-		ap3 = GetTempRegister();
-		GenerateDiadic(op_mov,0,ap3,makereg(regZero));
-		ap1 = GenerateExpression(node->p[0],F_REG,size);
-		ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
-		if (ap2->mode==am_immed)
-			GenerateTriadic(op_cmp,0,ap1,makereg(regZero),ap2);
-		else
-			GenerateDiadic(op_cmp,0,ap1,ap2);
-		GeneratePredicatedTriadic(pop_pl,op_mov,0,ap3,makereg(regZero),make_immed(1));
-		ReleaseTempRegister(ap2);
-		ReleaseTempRegister(ap1);
-		return (ap3);
-	case en_ult:
-		size = GetNaturalSize(node);
-		ap3 = GetTempRegister();
-		GenerateTriadic(op_mov,0,ap3,makereg(regZero),make_immed(1));
-		ap1 = GenerateExpression(node->p[0],F_REG,size);
-		ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
-		if (ap2->mode==am_immed)
-			GenerateTriadic(op_cmp,0,ap1,makereg(regZero),ap2);
-		else
-			GenerateDiadic(op_cmp,0,ap1,ap2);
-		GeneratePredicatedTriadic(pop_nc,op_mov,0,ap3,makereg(regZero),nullptr);
-		ReleaseTempRegister(ap2);
-		ReleaseTempRegister(ap1);
-		return (ap3);
-	case en_ule:
-		size = GetNaturalSize(node);
-		ap3 = GetTempRegister();
-		GenerateTriadic(op_mov,0,ap3,makereg(regZero),make_immed(1));
-		ap1 = GenerateExpression(node->p[0],F_REG,size);
-		ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
-		if (ap2->mode==am_immed)
-			GenerateTriadic(op_cmp,0,ap1,makereg(regZero),ap2);
-		else
-			GenerateDiadic(op_cmp,0,ap1,ap2);
-		GeneratePredicatedTriadic(pop_nc,op_mov,0,ap3,makereg(regZero),nullptr);
-		ReleaseTempRegister(ap2);
-		ReleaseTempRegister(ap1);
-		return (ap3);
-	case en_ugt:
-		size = GetNaturalSize(node);
-		ap3 = GetTempRegister();
-		GenerateDiadic(op_mov,0,ap3,makereg(regZero));
-		ap1 = GenerateExpression(node->p[0],F_REG,size);
-		ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
-		if (ap2->mode==am_immed)
-			GenerateTriadic(op_cmp,0,ap1,makereg(regZero),ap2);
-		else
-			GenerateDiadic(op_cmp,0,ap1,ap2);
-		GeneratePredicatedTriadic(pop_nc,op_mov,0,ap3,makereg(regZero),make_immed(1));
-		ReleaseTempRegister(ap2);
-		ReleaseTempRegister(ap1);
-		return (ap3);
-	case en_uge:
-		size = GetNaturalSize(node);
-		ap3 = GetTempRegister();
-		GenerateDiadic(op_mov,0,ap3,makereg(regZero));
-		ap1 = GenerateExpression(node->p[0],F_REG,size);
-		ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
-		if (ap2->mode==am_immed)
-			GenerateTriadic(op_cmp,0,ap1,makereg(regZero),ap2);
-		else
-			GenerateDiadic(op_cmp,0,ap1,ap2);
-		GeneratePredicatedTriadic(pop_nc,op_mov,0,ap3,makereg(regZero),make_immed(1));
-		ReleaseTempRegister(ap2);
-		ReleaseTempRegister(ap1);
-		return (ap3);
-	}
-	//size = GetNaturalSize(node);
-    ap3 = GetTempRegister();         
-	//ap1 = GenerateExpression(node->p[0],F_REG,size);
-	//ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
-	//GenerateTriadic(op,0,ap3,ap1,ap2);
- //   ReleaseTempRegister(ap2);
- //   ReleaseTempRegister(ap1);
-    return (ap3);
-}
-
 static void GenCmp(ENODE *node, AMODE *ap1, AMODE *ap2)
 {
 	int size;
@@ -409,6 +215,214 @@ static void GenCmp(ENODE *node, AMODE *ap1, AMODE *ap2)
 			GenerateDiadic(op_cmpc,0,ap1->amode2,ap2->amode2);
 		}
 	}
+}
+
+AMODE *GenExpr(ENODE *node)
+{
+	AMODE *ap1,*ap2,*ap3;
+	int lab0, lab1;
+	int size;
+	int pop;
+	int pl,pushed;
+
+    lab0 = nextlabel++;
+    lab1 = nextlabel++;
+
+	switch(node->nodetype) {
+	case en_eq:		break;
+	case en_ne:		break;
+	case en_lt:		break;
+	case en_ult:	break;
+	case en_le:		break;
+	case en_ule:	break;
+	case en_gt:		break;
+	case en_ugt:	break;
+	case en_ge:		break;
+	case en_uge:	break;
+	default:	// en_land, en_lor
+		size = GetNaturalSize(node);
+		pl = GeneratePreload();
+		GenerateFalseJump(node,lab0,0);
+		ap1 = GetTempRegister2(&pushed);
+		if (size==2)
+			ap1->amode2 = GetTempRegister();
+		if (pushed || size==2) {
+			GenerateTriadic(op_mov,0,ap1,makereg(regZero),make_immed(1));
+			if (size==2)
+				GenerateDiadic(op_mov,0,ap1->amode2,makereg(regZero));
+			GenerateTriadic(op_mov,0,makereg(regPC),makereg(0),make_label(lab1));
+			GenerateLabel(lab0);
+			GenerateDiadic(op_mov,0,ap1,makereg(regZero));
+			GenerateLabel(lab1);
+		}
+		else {
+			pop = peep_tail->back->predop;
+			OverwritePreload(pl,op_mov,0,ap1,makereg(regZero),make_immed(1),nullptr);
+			GeneratePredicatedTriadic(pop,op_mov,0,ap1,makereg(regZero),nullptr);
+		}
+		return (ap1);
+	}
+
+	switch(node->nodetype) {
+	case en_eq:
+		size = GetNaturalSize(node);
+		ap3 = GetTempRegister();
+		if (size==2)
+			ap3->amode2 = GetTempRegister();
+		GenerateTriadic(op_mov,0,ap3,makereg(regZero),make_immed(1));
+		if (size==2)
+			GenerateDiadic(op_mov,0,ap3->amode2,makereg(regZero));
+		ap1 = GenerateExpression(node->p[0],F_REG,size);
+		ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
+		GenCmp(node->p[0],ap1,ap2);
+		GeneratePredicatedTriadic(pop_nz,op_mov,0,ap3,makereg(regZero),nullptr);
+		ReleaseTempRegister(ap2);
+		ReleaseTempRegister(ap1);
+		return (ap3);
+	case en_ne:
+		size = GetNaturalSize(node);
+		ap3 = GetTempRegister();
+		if (size==2)
+			ap3->amode2 = GetTempRegister();
+		GenerateTriadic(op_mov,0,ap3,makereg(regZero),make_immed(1));
+		if (size==2)
+			GenerateDiadic(op_mov,0,ap3->amode2,makereg(regZero));
+		ap1 = GenerateExpression(node->p[0],F_REG,size);
+		ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
+		GenCmp(node->p[0],ap1,ap2);
+		GeneratePredicatedTriadic(pop_z,op_mov,0,ap3,makereg(regZero),nullptr);
+		ReleaseTempRegister(ap2);
+		ReleaseTempRegister(ap1);
+		return (ap3);
+	case en_lt:
+		size = GetNaturalSize(node);
+		ap3 = GetTempRegister();
+		if (size==2)
+			ap3->amode2 = GetTempRegister();
+		GenerateTriadic(op_mov,0,ap3,makereg(regZero),make_immed(1));
+		if (size==2)
+			GenerateDiadic(op_mov,0,ap3->amode2,makereg(regZero));
+		ap1 = GenerateExpression(node->p[0],F_REG,size);
+		ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
+		GenCmp(node->p[0],ap1,ap2);
+		GeneratePredicatedTriadic(pop_pl,op_mov,0,ap3,makereg(regZero),nullptr);
+		ReleaseTempRegister(ap2);
+		ReleaseTempRegister(ap1);
+		return (ap3);
+	case en_le:
+		size = GetNaturalSize(node);
+		ap3 = GetTempRegister();
+		if (size==2)
+			ap3->amode2 = GetTempRegister();
+		GenerateTriadic(op_mov,0,ap3,makereg(regZero),make_immed(1));
+		if (size==2)
+			GenerateDiadic(op_mov,0,ap3->amode2,makereg(regZero));
+		ap1 = GenerateExpression(node->p[0],F_REG,size);
+		ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
+		GenCmp(node->p[0],ap1,ap2);
+		GeneratePredicatedTriadic(pop_pl,op_mov,0,ap3,makereg(regZero),nullptr);
+		ReleaseTempRegister(ap2);
+		ReleaseTempRegister(ap1);
+		return (ap3);
+	case en_gt:
+		size = GetNaturalSize(node);
+		ap3 = GetTempRegister();
+		if (size==2)
+			ap3->amode2 = GetTempRegister();
+		GenerateDiadic(op_mov,0,ap3,makereg(regZero));
+		if (size==2)
+			GenerateDiadic(op_mov,0,ap3->amode2,makereg(regZero));
+		ap1 = GenerateExpression(node->p[0],F_REG,size);
+		ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
+		GenCmp(node->p[0],ap1,ap2);
+		GeneratePredicatedTriadic(pop_pl,op_mov,0,ap3,makereg(regZero),make_immed(1));
+		ReleaseTempRegister(ap2);
+		ReleaseTempRegister(ap1);
+		return (ap3);
+	case en_ge:
+		size = GetNaturalSize(node);
+		ap3 = GetTempRegister();
+		if (size==2)
+			ap3->amode2 = GetTempRegister();
+		GenerateDiadic(op_mov,0,ap3,makereg(regZero));
+		if (size==2)
+			GenerateDiadic(op_mov,0,ap3->amode2,makereg(regZero));
+		ap1 = GenerateExpression(node->p[0],F_REG,size);
+		ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
+		GenCmp(node->p[0],ap1,ap2);
+		GeneratePredicatedTriadic(pop_pl,op_mov,0,ap3,makereg(regZero),make_immed(1));
+		ReleaseTempRegister(ap2);
+		ReleaseTempRegister(ap1);
+		return (ap3);
+	case en_ult:
+		size = GetNaturalSize(node);
+		ap3 = GetTempRegister();
+		if (size==2)
+			ap3->amode2 = GetTempRegister();
+		GenerateTriadic(op_mov,0,ap3,makereg(regZero),make_immed(1));
+		if (size==2)
+			GenerateDiadic(op_mov,0,ap3->amode2,makereg(regZero));
+		ap1 = GenerateExpression(node->p[0],F_REG,size);
+		ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
+		GenCmp(node->p[0],ap1,ap2);
+		GeneratePredicatedTriadic(pop_nc,op_mov,0,ap3,makereg(regZero),nullptr);
+		ReleaseTempRegister(ap2);
+		ReleaseTempRegister(ap1);
+		return (ap3);
+	case en_ule:
+		size = GetNaturalSize(node);
+		ap3 = GetTempRegister();
+		if (size==2)
+			ap3->amode2 = GetTempRegister();
+		GenerateTriadic(op_mov,0,ap3,makereg(regZero),make_immed(1));
+		if (size==2)
+			GenerateDiadic(op_mov,0,ap3->amode2,makereg(regZero));
+		ap1 = GenerateExpression(node->p[0],F_REG,size);
+		ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
+		GenCmp(node->p[0],ap1,ap2);
+		GeneratePredicatedTriadic(pop_nc,op_mov,0,ap3,makereg(regZero),nullptr);
+		ReleaseTempRegister(ap2);
+		ReleaseTempRegister(ap1);
+		return (ap3);
+	case en_ugt:
+		size = GetNaturalSize(node);
+		ap3 = GetTempRegister();
+		if (size==2)
+			ap3->amode2 = GetTempRegister();
+		GenerateDiadic(op_mov,0,ap3,makereg(regZero));
+		if (size==2)
+			GenerateDiadic(op_mov,0,ap3->amode2,makereg(regZero));
+		ap1 = GenerateExpression(node->p[0],F_REG,size);
+		ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
+		GenCmp(node->p[0],ap1,ap2);
+		GeneratePredicatedTriadic(pop_nc,op_mov,0,ap3,makereg(regZero),make_immed(1));
+		ReleaseTempRegister(ap2);
+		ReleaseTempRegister(ap1);
+		return (ap3);
+	case en_uge:
+		size = GetNaturalSize(node);
+		ap3 = GetTempRegister();
+		if (size==2)
+			ap3->amode2 = GetTempRegister();
+		GenerateDiadic(op_mov,0,ap3,makereg(regZero));
+		if (size==2)
+			GenerateDiadic(op_mov,0,ap3->amode2,makereg(regZero));
+		ap1 = GenerateExpression(node->p[0],F_REG,size);
+		ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
+		GenCmp(node->p[0],ap1,ap2);
+		GeneratePredicatedTriadic(pop_nc,op_mov,0,ap3,makereg(regZero),make_immed(1));
+		ReleaseTempRegister(ap2);
+		ReleaseTempRegister(ap1);
+		return (ap3);
+	}
+	//size = GetNaturalSize(node);
+    ap3 = GetTempRegister();         
+	//ap1 = GenerateExpression(node->p[0],F_REG,size);
+	//ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
+	//GenerateTriadic(op,0,ap3,ap1,ap2);
+ //   ReleaseTempRegister(ap2);
+ //   ReleaseTempRegister(ap1);
+    return (ap3);
 }
 
 void GenerateCmp(ENODE *node, int label, int predreg, unsigned int prediction, int type)

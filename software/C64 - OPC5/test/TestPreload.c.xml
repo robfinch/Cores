@@ -57,8 +57,8 @@ X</openpa>
 CDEGH</Find>
 _TestPreload</Find>
 hh1h2ikIIbIcinsert type: 33
-***Inserting:_TestPreload into 013F8F48
-<BuildSignature>:_TestPreload</BuildSignature>Insert _TestPreload into 013F8F48()
+***Inserting:_TestPreload into 01308F48
+<BuildSignature>:_TestPreload</BuildSignature>Insert _TestPreload into 01308F48()
 Insert into global table
 </Find>
 _TestPreload</Find>
@@ -89,8 +89,8 @@ Bb<ParseDeclPrefix>(1)
 CDEGH</Find>
 _a</Find>
 hh1kIIbIcinsert type: 16
-***Inserting:_a into 01406434
-<BuildSignature>:_a</BuildSignature>Insert _a into 01406434(_TestPreload)
+***Inserting:_a into 0131643C
+<BuildSignature>:_a</BuildSignature>Insert _a into 0131643C(_TestPreload)
 </Find>
 _a</Find>
 At insert:
@@ -123,8 +123,8 @@ Bb<ParseDeclPrefix>(1)
 CDEGH</Find>
 _x</Find>
 hh1kIIbIcinsert type: 16
-***Inserting:_x into 00D31110
-<BuildSignature>:_x</BuildSignature>Insert _x into 00D31110()
+***Inserting:_x into 01BE1114
+<BuildSignature>:_x</BuildSignature>Insert _x into 01BE1114()
 </Find>
 _x</Find>
 At insert:
@@ -143,7 +143,7 @@ Found as an auto var
 A:1:_xIsEqual:T2sp is not null
 Type array:
    
-tp:0197B808 <Deref></Deref>deref tp:0197B370 </Find>
+tp:0188B810 <Deref></Deref>deref tp:0188B378 </Find>
 _a</Find>
 </nameref2>
 </Nameref>
@@ -156,8 +156,8 @@ _a</Find>
 Looking in function's symbol table
 </Find>
 _a</Find>
-Searching method/class:_TestPreload|014063E8
-Looking at params 01406434
+Searching method/class:_TestPreload|013163F0
+Looking at params 0131643C
 </Find>
 _aMatch
 </Find>
@@ -167,7 +167,7 @@ Found as parameter
 A:1:_aIsEqual:T2sp is not null
 Type array:
    
-tp:0197B7D0 <Deref></Deref>deref tp:0197B370 </nameref2>
+tp:0188B7D8 <Deref></Deref>deref tp:0188B378 </nameref2>
 </Nameref>
 </Find>
 _return</Find>
@@ -190,7 +190,7 @@ Found as an auto var
 A:1:_xIsEqual:T2sp is not null
 Type array:
    
-tp:0197B808 <Deref></Deref>deref tp:0197B370 </nameref2>
+tp:0188B810 <Deref></Deref>deref tp:0188B378 </nameref2>
 </Nameref>
 </Parse>Returning EOF from NextToken.
 D<GenerateMonadic>

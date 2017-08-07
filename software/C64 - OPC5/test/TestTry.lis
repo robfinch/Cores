@@ -1,0 +1,41 @@
+     1	int printf(register char *s);
+     2	
+     3	int main()
+     4	{
+     5		printf("Hello World!");
+     6	/*
+     7		try {
+     8			printf("Hello World!");
+     9		}
+    10		catch(int x) {
+    11			printf("x is%d", x);
+    12		}
+    13		catch (char *s) {
+    14			printf(s);
+    15		}
+    16		catch() {
+    17			throw 21;
+    18		}
+    19	*/
+    20	}
+
+
+*** local symbol table ***
+
+
+
+
+
+ *** global scope typedef symbol table ***
+
+_main      =000000   -    Global      Function returning Short
+		Parameters:
+			Type array:
+   
+_printf    =000000   -    External    Function returning Short
+		Parameters:
+			Type array:
+   022 
+
+ *** structures and unions ***
+

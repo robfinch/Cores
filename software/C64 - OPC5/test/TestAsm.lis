@@ -1,0 +1,45 @@
+     1	
+     2	int TestAsm(register int a, register int b)
+     3	{
+     4		asm __leafs {
+     5			push	r8
+     6			push	r9
+     7			jsr		a_sub
+     8			inc		r14,2
+     9		};
+    10	}
+    11	
+
+
+*** local symbol table ***
+
+
+
+
+    12	naked int TestAsm2(register int a)
+    13	{
+    14		asm {
+    15			add		r8,r0,1
+    16		}
+    17	}
+
+
+*** local symbol table ***
+
+
+
+
+
+ *** global scope typedef symbol table ***
+
+_TestAsm   =000000   -    External    Function returning Short
+		Parameters:
+			Type array:
+   016 016 
+_TestAsm2  =000000   -    External    Function returning Short
+		Parameters:
+			Type array:
+   016 
+
+ *** structures and unions ***
+

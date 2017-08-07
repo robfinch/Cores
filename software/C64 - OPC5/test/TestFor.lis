@@ -14,7 +14,16 @@
     14		}
     15	
     16		for (z = 1; z < 10; ) ;
-    17	}
+    17	
+    18		for (x = 1; x < 100; x++) {
+    19			for (y = 50; y > 0; --y) {
+    20				for (z = 1; z < 10; z++) {
+    21					putch(rand());
+    22				}
+    23			}
+    24		}
+    25	}
+    26	
 
 
 *** local symbol table ***
@@ -25,10 +34,30 @@ _z         =fffffffd   -    Auto        Short
 
 
 
+    27	void TestFor2()
+    28	{
+    29		for (;;)
+    30			putch('h');
+    31	}
+
+
+*** local symbol table ***
+
+
+
+
 
  *** global scope typedef symbol table ***
 
+_rand      =000000   -    External    Function returning Long
+		Parameters:
+			Type array:
+   
 _TestFor   =000000   -    Global      Function returning Short
+		Parameters:
+			Type array:
+   
+_TestFor2  =000000   -    Global      Function returning 
 		Parameters:
 			Type array:
    

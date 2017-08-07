@@ -2,6 +2,8 @@ set path=$PATH;C:\Cores5\OPC5\C5\debug\
 set FPPINC=c:\Cores5\OPC5\C5\test\
 c5 -S Test1.c
 c5 -S Test2.c
+c5 -S TestIf.c
+c5 -S TestDo.c
 c5 -S TestArrayAssign.c
 c5 -S TestDivmod.c
 c5 -S TestAbs.c
@@ -14,3 +16,5 @@ c5 -S TestShift.c
 c5 -S TestStruct.c
 c5 -S TestLValue.c
 c5 -S ClassTest.cpp
+
+

@@ -23,28 +23,25 @@ _myint:
 	      	   jsr  	r13,r0,_printf
 	      	   inc  	r14,1
 	      	   mov  	r14,r12
+	      	   pop  	r12
+	      	   pop  	r13
 	      	   pop  	r13
 	      	   pop  	r12
-	      	   ld   	r1,r14,0
-	      	   ld   	r2,r14,1
-	      	   ld   	r3,r14,2
-	      	   ld   	r4,r14,3
-	      	   ld   	r5,r14,4
-	      	   ld   	r6,r14,5
-	      	   ld   	r7,r14,6
-	      	   ld   	r8,r14,7
-	      	   ld   	r9,r14,8
-	      	   ld   	r10,r14,9
-	      	   ld   	r11,r14,10
-	      	   ld   	r12,r14,11
-	      	   ld   	r13,r14,12
-	      	   add  	r14,r0,13
+	      	   pop  	r11
+	      	   pop  	r10
+	      	   pop  	r9
+	      	   pop  	r8
+	      	   pop  	r7
+	      	   pop  	r6
+	      	   pop  	r5
+	      	   pop  	r4
+	      	   pop  	r3
+	      	   pop  	r2
 	      	   rti  
 
 
 _BIOScall:
 	# void interrupt myint()
-	      	   push 	r1
 	      	   push 	r2
 	      	   push 	r3
 	      	   push 	r4
@@ -58,24 +55,24 @@ _BIOScall:
 	      	   push 	r12
 	      	   push 	r13
 	      	   push 	r12
+	# 	return -1;
 	      	   mov  	r12,r14
 	      	   mov  	r1,r0,-1
 	      	   mov  	r14,r12
 	      	   pop  	r12
-	      	   ld   	r1,r14,0
-	      	   ld   	r2,r14,1
-	      	   ld   	r3,r14,2
-	      	   ld   	r4,r14,3
-	      	   ld   	r5,r14,4
-	      	   ld   	r6,r14,5
-	      	   ld   	r7,r14,6
-	      	   ld   	r8,r14,7
-	      	   ld   	r9,r14,8
-	      	   ld   	r10,r14,9
-	      	   ld   	r11,r14,10
-	      	   ld   	r12,r14,11
-	      	   ld   	r13,r14,12
-	      	   add  	r14,r0,13
+	      	   pop  	r13
+	      	   pop  	r12
+	      	   pop  	r11
+	      	   pop  	r10
+	      	   pop  	r9
+	      	   pop  	r8
+	      	   pop  	r7
+	      	   pop  	r6
+	      	   pop  	r5
+	      	   pop  	r4
+	      	   pop  	r3
+	      	   pop  	r2
+	      	   pop  	r1
 	      	   rti  
 
 
