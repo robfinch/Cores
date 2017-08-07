@@ -36,6 +36,7 @@ AMODE *GenerateShift(ENODE *node,int flags, int size)
     ap2 = GenerateExpression(node->p[1],F_REG | F_IMMED,sizeOfWord);
 	switch (node->nodetype) {
 	case en_shl:
+	case en_shlu:
 		switch(ap2->mode) {
 		case am_immed:
 			for (nn = 0; nn < ap2->offset->i && nn < 33; nn++) {
