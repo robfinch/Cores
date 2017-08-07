@@ -67,7 +67,7 @@ enum e_op {
 		op_ld, op_sto,
         op_and, op_andi,
         op_or, op_ori, op_xor, op_xori,
-		op_ror,
+		op_ror, op_asr,
 		op_rori,
 		op_jsr,
 		op_bmi,

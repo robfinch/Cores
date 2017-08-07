@@ -41,7 +41,7 @@ int GetIntegerExpression(ENODE **pnode)       /* simple integer value */
 		return 0;
 	}
 	if (node->nodetype != en_icon && node->nodetype != en_cnacon) {
-        printf("\r\nnode:%d \r\n", node->nodetype);
+        printf("\r\nnode:%d \n", node->nodetype);
 		error(ERR_INT_CONST);
 		return 0;
 	}

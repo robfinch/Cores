@@ -107,7 +107,7 @@ int getline(int listflag)
     ifs->getline(inpline,512);
 	strcat_s(inpline,sizeof(inpline),"\n");
 	rv = ifs->gcount()==0;
-	//printf("line:%.60s\r\n", inpline);
+	//printf("line:%.60s\n", inpline);
     if( rv && incldepth > 0 ) {
         ifs->close();
         ifs = inclfile[--incldepth];
@@ -415,7 +415,7 @@ j1:
     numstrptr[-1]='\0';
     numstrptr = NULL;
 //    dd_real::read(numstr,rval);
-//    printf("leave getnum=%s\r\n", numstr);
+//    printf("leave getnum=%s\n", numstr);
 				
 }
 
@@ -757,8 +757,8 @@ void needpunc(enum e_sym p,int clue)
 	if( lastst == p)
         NextToken();
 	else {
-		//printf("%d %s\r\n", lineno, inpline);
-		printf("*************clue:%d************\r\n",clue);
+		//printf("%d %s\n", lineno, inpline);
+		printf("*************clue:%d************\n",clue);
         error(ERR_PUNCT);
 	}
 }

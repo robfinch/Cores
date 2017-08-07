@@ -104,7 +104,7 @@ void GenerateTempRegPush(int reg, int rmode, int number, int stkpos)
 
 
 	GenerateMonadic(op_push,0,ap1);
-	TRACE(printf("pushing r%d\r\n", reg);)
+	TRACE(printf("pushing r%d\n", reg);)
     reg_stack[reg_stack_ptr].mode = (enum e_am)rmode;
     reg_stack[reg_stack_ptr].reg = reg;
     reg_stack[reg_stack_ptr].f.allocnum = number;
@@ -126,7 +126,7 @@ void GenerateTempRegPop(int reg, int rmode, int number, int stkpos)
 		fatal("GenerateTempRegPop()/2");
 	if (reg_in_use[reg] >= 0)
 		fatal("GenerateTempRegPop():register still in use");
-	TRACE(printf("popped r%d\r\n", reg);)
+	TRACE(printf("popped r%d\n", reg);)
 	reg_in_use[reg] = number;
 	ap1 = allocAmode();
 	ap1->preg = reg;
@@ -158,7 +158,7 @@ AMODE *GetTempRegister2(int *pushed)
 		*pushed = TRUE;
 		GenerateTempRegPush(tmpregs[next_reg], am_reg, reg_in_use[tmpregs[next_reg]],0);
 	}
-	TRACE(printf("GetTempRegister:r%d\r\n", next_reg);)
+	TRACE(printf("GetTempRegister:r%d\n", next_reg);)
     reg_in_use[tmpregs[next_reg]] = reg_alloc_ptr;
     ap = allocAmode();
     ap->mode = am_reg;
@@ -182,7 +182,7 @@ AMODE *GetTempFPRegister()
 	if (reg_in_use[next_reg] >= 0) {
 		GenerateTempRegPush(next_reg, am_reg, reg_in_use[next_reg],0);
 	}
-	TRACE(printf("GetTempRegister:r%d\r\n", next_reg);)
+	TRACE(printf("GetTempRegister:r%d\n", next_reg);)
     reg_in_use[next_reg] = reg_alloc_ptr;
     ap = allocAmode();
     ap->mode = am_fpreg;
@@ -210,7 +210,7 @@ void checkstack()
         if (reg_in_use[i] != -1)
             fatal("checkstack()/1");
 	if (next_reg != sym->IsLeaf ? 1 : 3) {
-		//printf("Nextreg: %d\r\n", next_reg);
+		//printf("Nextreg: %d\n", next_reg);
         fatal("checkstack()/3");
 	}
     if (reg_stack_ptr != 0)
@@ -286,13 +286,13 @@ void ReleaseTempRegister(AMODE *ap)
     SYM *sym = currentFn;
 	int frg = MINTMPREG;
 
-	TRACE(printf("ReleaseTempRegister:r%d r%d\r\n", ap->preg, ap->sreg);)
+	TRACE(printf("ReleaseTempRegister:r%d r%d\n", ap->preg, ap->sreg);)
 
 	if (ap->amode2)
 		ReleaseTempRegister(ap->amode2);
 
 	if (ap==NULL) {
-		printf("DIAG - NULL pointer in ReleaseTempRegister\r\n");
+		printf("DIAG - NULL pointer in ReleaseTempRegister\n");
 		return;
 	}
 
@@ -334,7 +334,7 @@ common:
     }
  //   /* some consistency checks */
 	//if (number != ap->deep) {
-	//	printf("number %d ap->deep %d\r\n", number, ap->deep);
+	//	printf("number %d ap->deep %d\n", number, ap->deep);
 	//	//fatal("ReleaseTempRegister()/1");
 	//}
 }
@@ -350,7 +350,7 @@ int TempInvalidate()
 	int sp;
 
 	sp = 0;
-	TRACE(printf("TempInvalidate()\r\n");)
+	TRACE(printf("TempInvalidate()\n");)
 	save_reg_alloc_ptr = reg_alloc_ptr;
 	memcpy(save_reg_alloc, reg_alloc, sizeof(save_reg_alloc));
 	memcpy(save_reg_in_use, reg_in_use, sizeof(save_reg_in_use));
@@ -398,7 +398,7 @@ void initRegStack()
 void ReleaseTempRegister(AMODE *ap)
 {
 	if (ap==NULL) {
-		printf("DIAG - NULL pointer in ReleaseTempRegister\r\n");
+		printf("DIAG - NULL pointer in ReleaseTempRegister\n");
 		return;
 	}
 	if( ap->mode == am_immed || ap->mode == am_direct )

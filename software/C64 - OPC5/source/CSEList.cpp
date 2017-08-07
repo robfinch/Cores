@@ -16,7 +16,7 @@ int CSEList::voidauto(ENODE *node)
     uses = 0;
     voided = 0;
 	for (cnt = 0; cnt < csendx; cnt++) {
-        if( IsLValue(CSETable[cnt].exp,true) && ENODE::IsEqual(node,CSETable[cnt].exp->p[0]) ) {
+        if( CSETable[cnt].exp->IsLValue(true) && ENODE::IsEqual(node,CSETable[cnt].exp->p[0]) ) {
             CSETable[cnt].voidf = 1;
             voided = 1;
             uses += CSETable[cnt].uses;
@@ -107,7 +107,7 @@ int CSE::OptimizationDesireability()
 		return 0;
 	if (exp->isVolatile)
 		return 0;
-    if( IsLValue(exp,true) )
+    if( exp->IsLValue(true) )
 	    return 2 * uses;
     return uses;
 }

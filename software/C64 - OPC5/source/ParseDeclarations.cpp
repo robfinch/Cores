@@ -190,7 +190,7 @@ void Declaration::ParseLong()
 
 void Declaration::ParseInt()
 {
-//printf("Enter ParseInt\r\n");
+//printf("Enter ParseInt\n");
 	if (isUnsigned) {
 		head = TYP::Make(bt_ushort,sizeOfWord);
 		tail = head;
@@ -219,7 +219,7 @@ void Declaration::ParseInt()
 		isNocall = TRUE;
 		NextToken();
 	}
-//printf("Leave ParseInt\r\n");
+//printf("Leave ParseInt\n");
 }
 
 void Declaration::ParseInt32()
@@ -343,7 +343,7 @@ SYM *Declaration::ParseId()
 	if (sp==nullptr)
 		sp = gsyms[0].Find(lastid,false);
 	if (sp) {
-		dfs.printf("Actually found type.\r\n");
+		dfs.printf("Actually found type.\n");
 		if (sp->storage_class==sc_typedef || sp->storage_class==sc_type) {
 			NextToken();
 			head = tail = sp->tp;
@@ -570,7 +570,7 @@ void Declaration::ParseDoubleColon(SYM *sp)
 		NextToken();
 	currentClass = sp->GetParentPtr();
 	if (sp->parent)
-		dfs.printf("Setting parent:%s|\r\n",
+		dfs.printf("Setting parent:%s|\n",
 		(char *)sp->GetParentPtr()->name->c_str());
 }
 
@@ -925,7 +925,7 @@ j2:
 		else
   			error(ERR_SYNTAX);
   	  }
-      dfs.printf("Z\r\n");
+      dfs.printf("Z\n");
 //				if (isFuncPtr)
 //					temp1->type = bt_func;
 //				if (lastst != begin)
@@ -980,7 +980,7 @@ lxit:
 
 int alignment(TYP *tp)
 {
-	//printf("DIAG: type NULL in alignment()\r\n");
+	//printf("DIAG: type NULL in alignment()\n");
 	if (tp==NULL)
 		return AL_BYTE;
 	switch(tp->type) {
@@ -1015,7 +1015,7 @@ int walignment(TYP *tp)
 {
 	SYM *sp;
 
-	//printf("DIAG: type NULL in alignment()\r\n");
+	//printf("DIAG: type NULL in alignment()\n");
 	if (tp==NULL)
 		return imax(AL_BYTE,worstAlignment);
 	switch(tp->type) {
@@ -1134,7 +1134,7 @@ int Declaration::declare(SYM *parent,TABLE *table,int al,int ilc,int ztype)
     static long old_nbytes;
     int nbytes;
 
-	dfs.printf("Enter declare()\r\n");
+	dfs.printf("Enter declare()\n");
 	nbytes = 0;
   dfs.printf("A");
 	classname = new std::string("");
@@ -1288,7 +1288,7 @@ dfs.printf("E");
       // string. There's nothing to insert in the symbol table.
       name = *sp->name;
       if (sp->name->length() > 0) {
-        //dfs.printf("Table:%p, sp:%p Fn:%p\r\n", table, sp, currentFn);
+        //dfs.printf("Table:%p, sp:%p Fn:%p\n", table, sp, currentFn);
         if (sp->parent) {
           int nn;
           // If a function body is being processed we want to look for
@@ -1337,7 +1337,7 @@ dfs.printf("E");
   			if (sp->tp->type == bt_ifunc && flag)
   			{
   dfs.printf("Ia");
-  				dfs.printf("bt_ifunc\r\n");
+  				dfs.printf("bt_ifunc\n");
   				sp1->SetType(sp->tp);
   				sp1->storage_class = sp->storage_class;
           sp1->value.i = sp->value.i;
@@ -1457,7 +1457,7 @@ dfs.printf("E");
             op = en_assign;
 //            NextToken();
             tp2 = asnop(&ep2);
-            if( tp2 == 0 || !IsLValue(ep1,true) )
+            if( tp2 == 0 || !ep1->IsLValue(true) )
                   error(ERR_LVALUE);
             else    {
                     tp1 = forcefit(&ep1,tp1,&ep2,tp2,false);
@@ -1474,7 +1474,7 @@ dfs.printf("E");
     }
     NextToken();
 xit1:
-//	printf("Leave declare()\r\n");
+//	printf("Leave declare()\n");
     return nbytes;
 }
 
@@ -1605,7 +1605,7 @@ void AutoDeclaration::Parse(SYM *parent, TABLE *ssyms)
 	SYM *sp;
 
   isFuncPtr = false;
-//	printf("Enter ParseAutoDecls\r\n");
+//	printf("Enter ParseAutoDecls\n");
 	funcdecl = 0;
     for(;;) {
 		worstAlignment = 0;
@@ -1671,7 +1671,7 @@ void AutoDeclaration::Parse(SYM *parent, TABLE *ssyms)
 	}
 xit:
 	;
-//	printf("Leave ParseAutoDecls\r\n");
+//	printf("Leave ParseAutoDecls\n");
 }
 
 int ParameterDeclaration::Parse(int fd)

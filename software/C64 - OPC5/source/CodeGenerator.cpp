@@ -147,7 +147,7 @@ AMODE *make_clabel(int lab)
     lnode->i = lab;
 	lnode->sp = nullptr;
 	if (lab==-1)
-		printf("-1\r\n");
+		printf("-1\n");
     ap = allocAmode();
     ap->mode = am_direct;
     ap->offset = lnode;
@@ -168,7 +168,7 @@ AMODE *make_clabel2(int lab,char *s)
 	else
 		lnode->sp = nullptr;
 	if (lab==-1)
-		printf("-1\r\n");
+		printf("-1\n");
     ap = allocAmode();
     ap->mode = am_direct;
     ap->offset = lnode;

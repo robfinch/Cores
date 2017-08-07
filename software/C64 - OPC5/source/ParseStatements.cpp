@@ -670,9 +670,9 @@ Statement *Statement::ParseCompound()
 	head = 0;
 	if (lastst==colon) {
 		NextToken();
-		TRACE(printf("Compound <%s>\r\n",lastid);)
+		TRACE(printf("Compound <%s>\n",lastid);)
 		if (strcmp(lastid,"clockbug")==0)
-		printf("clockbug\r\n");
+		printf("clockbug\n");
 		NextToken();
 	}
 	AutoDeclaration::Parse(NULL,&snp->ssyms);

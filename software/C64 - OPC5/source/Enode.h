@@ -102,6 +102,7 @@ public:
 	void SetType(TYP *t) { tp = t; };
 	static ENODE *alloc();
 	ENODE *Duplicate();
+	bool IsLValue(bool opt);
 	static bool IsEqual(ENODE *, ENODE *);
 	static void OptimizeConstants(ENODE **);
 };

@@ -45,7 +45,7 @@ int Compiler::main2(int argc, char **argv)
 	uctran_off = 0;
 	optimize =1;
 	exceptions=1;
-	dfs.printf("c64 starting...\r\n");
+	dfs.printf("c64 starting...\n");
 	while(--argc) {
         if( **++argv == '-')
             options(*argv);

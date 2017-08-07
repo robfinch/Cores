@@ -75,10 +75,79 @@ bool ENODE::IsEqual(ENODE *node1, ENODE *node2)
 	case en_cnacon:
 		return (node1->sp->compare(*node2->sp)==0);
 	default:
-		if( IsLValue(node1,true) && IsEqual(node1->p[0], node2->p[0])  )
+		if( node1->IsLValue(true) && IsEqual(node1->p[0], node2->p[0])  )
 			return true;
 		return false;
 	}
+}
+
+//
+// This function returns true if the node passed is an IsLValue.
+// this can be qualified by the fact that an IsLValue must have
+// one of the dereference operators as it's top node.
+//
+// opt indicates if an array reference is an LValue or not.
+bool ENODE::IsLValue(bool opt)
+{
+	if (this==nullptr)
+		return false;
+	switch( nodetype ) {
+    case en_b_ref:
+	case en_c_ref:
+	case en_h_ref:
+    case en_w_ref:
+	case en_ub_ref:
+	case en_uc_ref:
+	case en_uh_ref:
+    case en_uw_ref:
+	case en_lw_ref:
+	case en_ulw_ref:
+	case en_wfieldref:
+	case en_uwfieldref:
+	case en_bfieldref:
+	case en_ubfieldref:
+	case en_cfieldref:
+	case en_ucfieldref:
+	case en_hfieldref:
+	case en_uhfieldref:
+    case en_triple_ref:
+	case en_dbl_ref:
+	case en_quad_ref:
+	case en_flt_ref:
+	case en_struct_ref:
+	case en_ref32:
+	case en_ref32u:
+            return true;
+	case en_cbc:
+	case en_cbh:
+    case en_cbw:
+	case en_cch:
+	case en_ccw:
+	case en_chw:
+	case en_cfd:
+	case en_cubw:
+	case en_cucw:
+	case en_cuhw:
+	case en_cbu:
+	case en_ccu:
+	case en_chu:
+	case en_cubu:
+	case en_cucu:
+	case en_cuhu:
+            return p[0]->IsLValue(opt);
+	// Array references typically begin with an add node. This evaluates to an
+	// address pointer which is an LValue. Similarly for an array auto. Sometimes
+	// it's desirable not to have these as LValues. Seems like a problem with
+	// references, but this seems to work.
+	case en_add:
+		if (tp)
+			return tp->type==bt_pointer && tp->isArray && opt;
+		else
+			return false;
+	case en_autocon:
+		return etype==bt_pointer && tp->isArray && opt;
+    }
+    return false;
 }
 
 

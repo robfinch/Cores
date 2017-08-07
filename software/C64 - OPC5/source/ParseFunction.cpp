@@ -143,7 +143,7 @@ int ParseFunction(SYM *sp)
   dfs.puts("<ParseFunction>\n");
   isFuncBody = true;
 	if (sp==NULL) {
-		fatal("Compiler error: ParseFunction: SYM is NULL\r\n");
+		fatal("Compiler error: ParseFunction: SYM is NULL\n");
 	}
 	dfs.printf("***********************************\n");
 	dfs.printf("***********************************\n");
@@ -155,7 +155,7 @@ int ParseFunction(SYM *sp)
 	dfs.printf("***********************************\n");
 	dfs.printf("***********************************\n");
 	sp->stkname = stkname;
-	if (verbose) printf("Parsing function: %s\r\n", (char *)sp->name->c_str());
+	if (verbose) printf("Parsing function: %s\n", (char *)sp->name->c_str());
   nump = nparms;
   iflevel = 0;
   looplevel = 0;
@@ -379,7 +379,7 @@ void funcbottom(Statement *stmt)
     ListTable(&currentFn->lsyms,0);
 	// Should recurse into all the compound statements
 	if (stmt==NULL)
-		dfs.printf("DIAG: null statement in funcbottom.\r\n");
+		dfs.printf("DIAG: null statement in funcbottom.\n");
 	else {
 		if (stmt->stype==st_compound)
 			ListCompound(stmt);
@@ -472,7 +472,7 @@ static Statement *ParseFunctionBody(SYM *sp)
 	flush_peep();
 	if (sp->storage_class == sc_global) {
 //		ofs.printf("endpublic\r\n\r\n");
-		ofs.printf("\r\n\r\n");
+		ofs.printf("\n\n");
 	}
   }
 	//if (sp->stkspace)

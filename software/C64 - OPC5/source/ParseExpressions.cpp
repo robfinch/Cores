@@ -483,7 +483,7 @@ TYP *CondDeref(ENODE **node, TYP *tp)
 		tp1 = tp->GetBtp();
 		tp1->dimen = tp->dimen;
 		if (tp1==NULL)
-			printf("DIAG: CondDeref: tp1 is NULL\r\n");
+			printf("DIAG: CondDeref: tp1 is NULL\n");
 		tp =(TYP *) TYP::Make(bt_pointer,sizeOfWord);
 		tp->dimen = dimen;
 		tp->numele = numele;
@@ -559,7 +559,7 @@ TYP *nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeArray *typear
 			sp->SetName(*(new std::string(lastid)));
 			sp->storage_class = sc_external;
 			sp->IsUndefined = TRUE;
-			dfs.printf("Insert at nameref\r\n");
+			dfs.printf("Insert at nameref\n");
 			typearray->Print();
 			//    gsyms[0].insert(sp);
 			tp = stdfunc;
@@ -571,7 +571,7 @@ TYP *nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeArray *typear
 			(*node)->esize = 8;
 		}
 		else {
-			dfs.printf("Undefined symbol2 in nameref\r\n");
+			dfs.printf("Undefined symbol2 in nameref\n");
 			tp = (TYP *)NULL;
 			*node = makeinode(en_labcon,9999);
 			error(ERR_UNDEFINED);
@@ -802,7 +802,7 @@ static int IsIntrinsicType(int st)
 				st == kw_const;
 }
 
-int IsBeginningOfTypecast(int st)
+static int IsBeginningOfTypecast(int st)
 {
 	SYM *sp;
 	if (st==id) {
@@ -848,69 +848,6 @@ SYM *makeStructPtr(std::string name)
 	return sp;
 }
 
-// Dead code
-// Create a list of dummy parameters based on argument types.
-// This is needed in order to add a function to the tables if
-// the function hasn't been encountered before.
-
-SYM *CreateDummyParameters(ENODE *ep, SYM *parent, TYP *tp)
-{
-	int poffset;
-	SYM *sp1;
-	SYM *list;
-	int nn;
-	ENODE *p;
-	static char buf[20];
-
-	list = nullptr;
-	poffset = GetReturnBlockSize();
-
-	// Process hidden parameter
-	if (tp) {
-		if (tp->GetBtp()) {
-			if (tp->GetBtp()->type==bt_struct || tp->GetBtp()->type==bt_union || tp->GetBtp()->type==bt_class ) {
-				sp1 = makeint2(std::string(my_strdup("_pHiddenStructPtr")));
-				sp1->parent = parent->GetIndex();
-				sp1->value.i = poffset;
-				poffset += sizeOfWord;
-				sp1->storage_class = sc_auto;
-				sp1->next = 0;
-				list = sp1;
-			}
-		}
-	}
-	nn = 0;
-	for(p = ep; p; p = p->p[1]) {
-		sprintf_s(buf,sizeof(buf),"_p%d", nn);
-		sp1 = makeint2(std::string(my_strdup(buf)));
-		if (p->p[0]==nullptr)
-			sp1->tp =(TYP *) TYP::Make(bt_long,sizeOfWord);
-		else
-			sp1->SetType(p->p[0]->tp);
-		sp1->parent = parent->GetIndex();
-		sp1->value.i = poffset;
-		// Check for aggregate types passed as parameters. Structs
-		// and unions use the type size. There could also be arrays
-		// passed.
-		poffset += sp1->tp->size;
-//		if (round8(sp1->tp->size) > 8)
-		sp1->storage_class = sc_auto;
-		sp1->next = 0;
-
-		// record parameter list
-		if (list == nullptr) {
-			list = sp1;
-		}
-		else {
-			sp1->SetNext(list->GetIndex());
-			list = sp1;
-		}
-		nn++;
-	}
-	return list;
-}
-
-
 // ----------------------------------------------------------------------------
 //      primary will parse a primary expression and set the node pointer
 //      returning the type of the expression parsed. primary expressions
@@ -937,7 +874,7 @@ TYP *ParsePrimaryExpression(ENODE **node, int got_pa)
         needpunc(closepa,7);
         *node = pnode;
         if (pnode==NULL)
-           dfs.printf("pnode is NULL\r\n");
+           dfs.printf("pnode is NULL\n");
         else
            (*node)->SetType(tptr);
         if (tptr)
@@ -1113,71 +1050,6 @@ TYP *ParsePrimaryExpression(ENODE **node, int got_pa)
     return tptr;
 }
 
-/*
- *      this function returns true if the node passed is an IsLValue.
- *      this can be qualified by the fact that an IsLValue must have
- *      one of the dereference operators as it's top node.
- */
-// opt indicates if an array reference is an LValue or not.
-int IsLValue(ENODE *node, bool opt)
-{
-	if (node==nullptr)
-		return FALSE;
-	switch( node->nodetype ) {
-    case en_b_ref:
-	case en_c_ref:
-	case en_h_ref:
-    case en_w_ref:
-	case en_ub_ref:
-	case en_uc_ref:
-	case en_uh_ref:
-    case en_uw_ref:
-	case en_lw_ref:
-	case en_ulw_ref:
-	case en_wfieldref:
-	case en_uwfieldref:
-	case en_bfieldref:
-	case en_ubfieldref:
-	case en_cfieldref:
-	case en_ucfieldref:
-	case en_hfieldref:
-	case en_uhfieldref:
-    case en_triple_ref:
-	case en_dbl_ref:
-	case en_quad_ref:
-	case en_flt_ref:
-	case en_struct_ref:
-	case en_ref32:
-	case en_ref32u:
-            return TRUE;
-	case en_cbc:
-	case en_cbh:
-    case en_cbw:
-	case en_cch:
-	case en_ccw:
-	case en_chw:
-	case en_cfd:
-	case en_cubw:
-	case en_cucw:
-	case en_cuhw:
-	case en_cbu:
-	case en_ccu:
-	case en_chu:
-	case en_cubu:
-	case en_cucu:
-	case en_cuhu:
-            return IsLValue(node->p[0],opt);
-	case en_add:
-		if (node->tp)
-			return node->tp->type==bt_pointer && node->tp->isArray && opt;
-		else
-			return FALSE;
-	case en_autocon:
-		return node->etype==bt_pointer && node->tp->isArray && opt;
-    }
-    return FALSE;
-}
-
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
 TYP *Autoincdec(TYP *tp, ENODE **node, int flag)
@@ -1187,7 +1059,7 @@ TYP *Autoincdec(TYP *tp, ENODE **node, int flag)
 	int su;
 
 	ep1 = *node;
-	if( IsLValue(ep1,false) ) {
+	if( ep1->IsLValue(false) ) {
 		if (tp->type == bt_pointer) {
 			typ = tp->GetBtp();
 			ep2 = makeinode(en_icon,typ->size);
@@ -1247,7 +1119,7 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 	if (ep1==NULL) {
 //		ep1 = makeinode(en_icon, 0);
 //		goto j1;
-//	   printf("DIAG: ParsePostFix: ep1 is NULL\r\n");
+//	   printf("DIAG: ParsePostFix: ep1 is NULL\n");
 	}
 	if (tp1 == NULL) {
         Leave("</ParsePostfix>",0);
@@ -1468,7 +1340,7 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 				error(ERR_IDEXPECT);
 				break;
 			}
-			dfs.printf("dot search: %p\r\n", (char *)&tp1->lst);
+			dfs.printf("dot search: %p\n", (char *)&tp1->lst);
 			ptp1 = tp1;
 			pep1 = ep1;
 			name = lastid;
@@ -1705,7 +1577,7 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
             error(ERR_IDEXPECT);
             return (TYP *)NULL;
         }
-        if( IsLValue(ep1,true))
+        if( ep1->IsLValue(true))
             ep1 = ep1->p[0];
         ep1->esize = sizeOfWord;     // converted to a pointer so size is now 8
         tp1 = TYP::Make(bt_pointer,sizeOfWord);
@@ -1802,11 +1674,11 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
         std::string *name = new std::string("_free");
         
   			if (lastst==openbr) {
-  	      NextToken();
+				NextToken();
     			needpunc(closebr,50);
 		    }
-        tp1 = ParseCastExpression(&ep1);
-        tp1 = deref(&ep1, tp1);
+			tp1 = ParseCastExpression(&ep1);
+			tp1 = deref(&ep1, tp1);
   			ep2 = makesnode(en_cnacon, name, name, 0);
   			ep1 = makefcnode(en_fcall, ep2, ep1, nullptr);
       }
@@ -2229,15 +2101,15 @@ static int isscalar(TYP *tp)
 		tp->type == bt_unsigned;
 }
 
-/*
- *      multops parses the multiply priority operators. the syntax of
- *      this group is:
- *
- *              unary
- *              unary * unary
- *              unary / unary
- *              unary % unary
- */
+//
+// multops parses the multiply priority operators. the syntax of
+// this group is (std C grammar):
+//
+//         cast_expression
+//         cast_expression * cast_expression
+//         cast_expression / cast_expression
+//         cast_expression % cast_expression
+//
 TYP *multops(ENODE **node)
 {
 	ENODE *ep1, *ep2;
@@ -2351,7 +2223,7 @@ static TYP *addops(ENODE **node)
         goto xit;
 	if (tp1->type == bt_pointer) {
         if (tp1->GetBtp()==NULL) {
-            printf("DIAG: pointer to NULL type.\r\n");
+            printf("DIAG: pointer to NULL type.\n");
             goto xit;    
         }
         else {
@@ -2701,7 +2573,7 @@ ascomm2:
 				//	tp3->val_flag = FALSE;
 				//	tp1 = tp3;
 				//}
-		        if( tp2 == 0 || !IsLValue(ep1,true) )
+		        if( tp2 == 0 || !ep1->IsLValue(true) )
                     error(ERR_LVALUE);
 				else {
 					tp1 = forcefit(&ep2,tp2,&ep1,tp1,false);
@@ -2876,7 +2748,7 @@ TYP *expression(ENODE **node)
   tp = commaop(node);
   if( tp == (TYP *)NULL )
       *node = (ENODE *)NULL;
-  TRACE(printf("leave exp\r\n"));
+  TRACE(printf("leave exp\n"));
   if (tp) {
      if (*node)
         (*node)->SetType(tp);

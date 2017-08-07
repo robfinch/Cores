@@ -27,12 +27,12 @@
 
 TYP *TYP::alloc()
 {
-//  printf("TYP::alloc()\r\n");
+//  printf("TYP::alloc()\n");
 	TYP *tp = (TYP *)&compiler.typeTable[compiler.typenum];
 	ZeroMemory(tp,sizeof(TYP));
 	tp->sname = new std::string("");
 	tp->bit_width = -1;
-	//	printf("Leave TYP::alloc():%p\r\n",tp);
+	//	printf("Leave TYP::alloc():%p\n",tp);
 	compiler.typenum++;
 	if (compiler.typenum > 32760) {
 		dfs.printf("Too many types\n");

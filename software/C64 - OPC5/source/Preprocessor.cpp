@@ -106,7 +106,7 @@ int doinclude()
     inclline[incldepth] = lineno;
     inclfile[incldepth++] = ifs;  /* push current input file */
 	ifs = new std::ifstream();
-    printf("%s\r\n", pathname);
+    printf("%s\n", pathname);
     if( ifs == nullptr ) {
             ifs = inclfile[--incldepth];
             error(ERR_CANTOPEN);

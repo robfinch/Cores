@@ -72,7 +72,7 @@ void GeneratePredicatedMonadic(int pr, int pop, int op, int len, AMODE *ap1)
 
 void GenerateZeradic(int op)
 {
-	dfs.printf("<GenerateZeradic>\r\n");
+	dfs.printf("<GenerateZeradic>\n");
 	struct ocode *cd;
 	dfs.printf("A");
 	cd = (struct ocode *)allocx(sizeof(struct ocode));
@@ -88,14 +88,14 @@ void GenerateZeradic(int op)
 	cd->oper4 = NULL;
 	dfs.printf("D");
 	AddToPeepList(cd);
-	dfs.printf("</GenerateZeradic>\r\n");
+	dfs.printf("</GenerateZeradic>\n");
 }
 
 void GenerateMonadic(int op, int len, AMODE *ap1)
 {
 	struct ocode *cd;
 
-	dfs.printf("<GenerateMonadic>\r\n");
+	dfs.printf("<GenerateMonadic>\n");
 	dfs.printf("A");
 	cd = (struct ocode *)allocx(sizeof(struct ocode));
 	dfs.printf("B");
@@ -110,7 +110,7 @@ void GenerateMonadic(int op, int len, AMODE *ap1)
 	cd->oper4 = NULL;
 	dfs.printf("D");
 	AddToPeepList(cd);
-	dfs.printf("</GenerateMonadic>\r\n");
+	dfs.printf("</GenerateMonadic>\n");
 }
 
 void GeneratePredicatedDiadic(int pop, int pr, int op, int len, AMODE *ap1, AMODE *ap2)

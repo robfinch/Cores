@@ -123,7 +123,7 @@ void TABLE::insert(SYM *sp)
 		delete ta;
 //  p = tab->GetHead();
 //  while(p) {
-//    printf("Xele:%p|%s|\r\n", p, p->name.c_str());
+//    printf("Xele:%p|%s|\n", p, p->name.c_str());
 //    p = p->GetNext();
 //  }
 }

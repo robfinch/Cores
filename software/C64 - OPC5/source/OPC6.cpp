@@ -152,7 +152,7 @@ int AllocateRegisterVars()
         if( csp->reg != -1 )
         {               // see if preload needed
             exptr = csp->exp;
-            if( !IsLValue(exptr,false) 
+            if( !exptr->IsLValue(false) 
 				|| (exptr->p[0] && exptr->p[0]->i > 0) || (exptr->nodetype==en_struct_ref))
             {
                 initstack();
@@ -629,7 +629,7 @@ static void RestoreRegisterVars()
 void GenerateReturn(Statement *stmt)
 {
 	AMODE *ap, *ap1;
-	int nn;
+	int nn, type;
 	int toAdd;
 	SYM *sym = currentFn;
 	SYM *p;
@@ -638,7 +638,12 @@ void GenerateReturn(Statement *stmt)
   if( stmt != NULL && stmt->exp != NULL )
   {
 		initstack();
-		ap = GenerateExpression(stmt->exp,F_REG|F_IMMED,sizeOfWord);
+		if (currentFn->tp->GetBtp())
+			type = currentFn->tp->GetBtp()->type;
+		else
+			type = bt_short;
+		ap = GenerateExpression(stmt->exp,F_REG|F_IMMED,
+			(type==bt_long || type==bt_ulong) ? sizeOfWord * 2 : sizeOfWord);
 		GenerateMonadic(op_hint,0,make_immed(2));
 		if (ap->mode == am_immed)
 		    GenLdi(makereg(1),ap);

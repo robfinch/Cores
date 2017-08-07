@@ -82,7 +82,7 @@ TypeArray *SYM::GetParameterTypes()
 	SYM *sp;
 	int nn;
 
-//	printf("Enter GetParameterTypes()\r\n");
+//	printf("Enter GetParameterTypes()\n");
 	i16 = new TypeArray();
 	i16->Clear();
 	sp = GetPtr(params.GetHead());
@@ -90,7 +90,7 @@ TypeArray *SYM::GetParameterTypes()
 		i16->Add(sp->tp,(__int16)(sp->IsRegister ? sp->reg : 0));
 		sp = sp->GetNextPtr();
 	}
-//	printf("Leave GetParameterTypes()\r\n");
+//	printf("Leave GetParameterTypes()\n");
 	return i16;
 }
 
@@ -100,7 +100,7 @@ TypeArray *SYM::GetProtoTypes()
 	SYM *sp;
 	int nn;
 
-//	printf("Enter GetParameterTypes()\r\n");
+//	printf("Enter GetParameterTypes()\n");
 	nn = 0;
 	i16 = new TypeArray();
 	i16->Clear();
@@ -112,7 +112,7 @@ TypeArray *SYM::GetProtoTypes()
 		i16->Add(sp->tp,(__int16)sp->IsRegister ? sp->reg : 0);
 		sp = sp->GetNextPtr();
 	}
-//	printf("Leave GetParameterTypes()\r\n");
+//	printf("Leave GetParameterTypes()\n");
 	return i16;
 }
 
@@ -132,7 +132,7 @@ SYM *search2(std::string na,TABLE *tbl,TypeArray *typearray)
 
 	if (na=="" || tbl==nullptr)
 		return nullptr;
-//	printf("Enter search2\r\n");
+//	printf("Enter search2\n");
 	if (tbl==&gsyms[0])
 		thead = compiler.symbolTable[0].GetPtr(hashadd((char *)na.c_str()));
 	else
@@ -160,7 +160,7 @@ SYM *search2(std::string na,TABLE *tbl,TypeArray *typearray)
 		}
     thead = thead->GetNextPtr();
     }
-//	printf("Leave search2\r\n");
+//	printf("Leave search2\n");
     return thead;
 }
 
@@ -340,14 +340,14 @@ SYM *SYM::Find(std::string nme)
 {
 	SYM *sp;
 
-//	printf("Enter Find(char *)\r\n");
+//	printf("Enter Find(char *)\n");
 	sp = tp->lst.Find(nme,false);
 	if (sp==nullptr) {
 		if (parent) {
 			sp = GetPtr(parent)->Find(nme);
 		}
 	}
-//	printf("Leave Find(char *):%p\r\n",sp);
+//	printf("Leave Find(char *):%p\n",sp);
 	return sp;
 }
 

@@ -65,7 +65,7 @@ struct oplst {
 		{"addi",op_addi}, {"sub",op_sub}, {"sbc", op_sbc},
 		{"subi",op_subi}, {"and",op_and},
 		{"not", op_not},
-		{"ror", op_ror}, {"rori", op_rori},
+		{"ror", op_ror}, {"rori", op_rori}, {"asr", op_asr},
 		{"jsr", op_jsr},
 		{"rti", op_rti},
 		{"or",op_or}, {"ori",op_ori}, {"andi", op_andi},

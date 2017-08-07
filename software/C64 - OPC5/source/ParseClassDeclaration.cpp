@@ -112,14 +112,14 @@ int ClassDeclaration::Parse(int ztype)
 		if (lastst==semicolon) {
       dfs.printf("B");
 			ret = 1;
-			printf("classdecl insert1\r\n");
+			printf("classdecl insert1\n");
       tagtable.insert(sp);
       NextToken();
 		}
 		// Defining a pointer to an unknown struct ?
 		else if (lastst == star) {
       dfs.printf("C");
-			printf("classdecl insert2\r\n");
+			printf("classdecl insert2\n");
       tagtable.insert(sp);
 		}
 		else if (lastst==colon) {
