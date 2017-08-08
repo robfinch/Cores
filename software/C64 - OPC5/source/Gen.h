@@ -85,7 +85,7 @@ enum e_op {
 		op_fnname,
 		op_dc,
 		op_mul, op_div,
-		op_mulu, op_divu,
+		op_mulu, op_divu, op_putpsr,
         op_empty };
 
 enum e_seg {

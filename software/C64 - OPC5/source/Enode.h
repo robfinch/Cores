@@ -71,34 +71,35 @@ enum e_node {
 		en_chk, en_mac
 		};
 
-class ENODE {
+class ENODE : public CompilerType {
 public:
     enum e_node nodetype;
 	enum e_bt etype;
-	long      esize;
+	long esize;
     TYP *tp;
     SYM *sym;
-    __int8 constflag;
-    unsigned int predreg : 4;
-	unsigned int isVolatile : 1;
+    unsigned int constflag : 1;		// expression is constant
+    unsigned int predreg : 6;		// predicate register (not used)
+	unsigned int isVolatile : 1;	// volatile expression
 	unsigned int isIO : 1;
 	unsigned int isUnsigned : 1;
-	unsigned int isDouble : 1;
+	unsigned int isDouble : 1;		// floating point double
 	unsigned int isCheckExpr : 1;
-	unsigned int isPascal : 1;
-	__int8 bit_width;
-	__int8 bit_offset;
-	__int8 scale;
+	unsigned int isPascal : 1;		// pascal calling convention
+	__int8 bit_width;				// width of bitfield
+	__int8 bit_offset;				// offset of bitfield
+	__int8 scale;					// index scaling factor
 	// The following could be in a value union
 	int i;
 	double f;
 	double f1, f2;
 	std::string *sp;
 	std::string *msp;
-	std::string *udnm;			// undecorated name
+	std::string *udnm;				// undecorated name
 	void *ctor;
 	void *dtor;
-	ENODE *p[3];
+	ENODE *p[3];					// pointers for expression tree
+
 	void SetType(TYP *t) { tp = t; };
 	static ENODE *alloc();
 	ENODE *Duplicate();

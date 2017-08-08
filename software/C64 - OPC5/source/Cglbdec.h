@@ -45,18 +45,6 @@
  */
 
 /*      global ParseSpecifierarations     */
-#define THOR		0
-#define TABLE888	888
-#define RAPTOR64	64
-#define W65C816     816
-#define FISA64      164
-#define DSD7        7
-#define isThor		(gCpu==THOR)
-#define isTable888	(gCpu==TABLE888)
-#define isRaptor64	(gCpu==RAPTOR64)
-#define is816       (gCpu==W65C816)
-#define isFISA64    (gCpu==FISA64)
-#define isDSD7      (gCpu==DSD7)
 //#define DOTRACE	1
 #ifdef DOTRACE
 #define TRACE(x)	x
@@ -369,12 +357,6 @@ extern AMODE *GenerateBitfieldDereference(ENODE *node, int flags, int size);
 extern AMODE *GenerateBitfieldAssign(ENODE *node, int flags, int size);
 // err.c
 extern void fatal(char *str);
-
-extern int tmpVarSpace();
-extern void tmpFreeAll();
-extern void tmpReset();
-extern int tmpAlloc(int);
-extern void tmpFree(int);
 
 extern int GetReturnBlockSize();
 

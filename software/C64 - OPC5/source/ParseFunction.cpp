@@ -429,7 +429,6 @@ static Statement *ParseFunctionBody(SYM *sp)
 	lbl = std::string("");
 	needpunc(begin,47);
      
-  tmpReset();
     //ParseAutoDeclarations();
 	cseg();
 	if (sp->storage_class == sc_static)
@@ -463,7 +462,7 @@ static Statement *ParseFunctionBody(SYM *sp)
 	sp->stmt = Statement::ParseCompound();
   dfs.printf("D");
 //	stmt->stype = st_funcbody;
-  sp->stkspace = tmpVarSpace() + lc_auto;
+  sp->stkspace = lc_auto;
   if (!sp->IsInline) {
 
 	GenerateFunction(sp);

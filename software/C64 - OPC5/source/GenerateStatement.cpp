@@ -6,7 +6,6 @@
 //       ||
 //
 // C64 - 'C' derived language compiler
-//  - 64 bit CPU
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -45,6 +44,8 @@ extern int caselit(scase *casetab,int);
  *		Box 920337
  *		Norcross, Ga 30092
  */
+
+#define SWI15	15
 
 int     breaklab;
 int     contlab;
@@ -632,6 +633,25 @@ void Statement::GenerateThrow()
 
 void Statement::GenerateCheck()
 {
+	AMODE *ap1, *ap2, *ap3;
+	int lab1, lab2;
+
+	lab1 = nextlabel++;
+	lab2 = nextlabel++;
+	initstack();
+	ap1 = GenerateExpression(exp,F_REG,sizeOfWord);
+	ap2 = GenerateExpression(initExpr,F_REG,sizeOfWord);
+	ap3 = GenerateExpression(incrExpr,F_REG,sizeOfWord);
+	ReleaseTempReg(ap3);
+	ReleaseTempReg(ap2);
+	ReleaseTempReg(ap1);
+	GenerateDiadic(op_cmp,0,ap1,ap2);
+	GeneratePredicatedTriadic(ap1->isUnsigned ? pop_c : pop_mi,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(lab1));
+	GenerateDiadic(op_cmp,0,ap1,ap3);
+	GeneratePredicatedTriadic(ap1->isUnsigned ? pop_c : pop_mi,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(lab2));
+	GenerateLabel(lab1);
+	GenerateMonadic(op_putpsr,0,make_immed(SWI15));
+	GenerateLabel(lab2);
 }
 
 void Statement::GenerateCompound()
@@ -642,7 +662,7 @@ void Statement::GenerateCompound()
 	while (sp) {
 		if (sp->initexp) {
         	initstack();
-			ReleaseTempRegister(GenerateExpression(sp->initexp,F_ALL,8));
+			ReleaseTempRegister(GenerateExpression(sp->initexp,F_ALL,sizeOfWord));
         }
 		sp = sp->GetNextPtr();
 	}
@@ -661,7 +681,7 @@ void Statement::GenerateFuncBody()
 	while (sp) {
 		if (sp->initexp) {
         	initstack();
-			ReleaseTempRegister(GenerateExpression(sp->initexp,F_ALL,8));
+			ReleaseTempRegister(GenerateExpression(sp->initexp,F_ALL,sizeOfWord));
         }
 		sp = sp->GetNextPtr();
 	}
@@ -715,7 +735,6 @@ void Statement::Generate()
                 ap = GenerateExpression(stmt->exp,F_ALL | F_NOVALUE,
                         GetNaturalSize(stmt->exp));
 				ReleaseTempRegister(ap);
-				tmpFreeAll();
                 break;
         case st_return:
 				GenerateReturn(stmt);

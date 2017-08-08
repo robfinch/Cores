@@ -37,14 +37,14 @@ enum e_stmt {
         st_case, st_goto, st_break, st_continue, st_label,
         st_return, st_vortex, st_intoff, st_inton, st_stop, st_check };
 
-class Statement {
+class Statement : public CompilerType {
 public:
-	__int8 stype;
-	Statement *outer;
-	Statement *next;
-	Statement *prolog;
-	Statement *epilog;
-	bool nkd;
+	__int8 stype;		// type see above (if, else, return, etc)
+	Statement *outer;	// more outer statement used for searching heirarchy
+	Statement *next;	// next statement in list
+	Statement *prolog;	// compound statements prolog code
+	Statement *epilog;	// epilog code
+	bool nkd;			// statement is naked (reduced code generation)
 	int predreg;		// assigned predicate register
 	ENODE *exp;         // condition or expression
 	ENODE *initExpr;    // initialization expression - for loops
@@ -56,9 +56,12 @@ public:
 	int *casevals;		// case values
 	TABLE ssyms;		// local symbols associated with statement
 	char *fcname;       // firstcall block var name
-	char *lptr;
+	char *lptr;			// pointer to copy of input line
 	unsigned int prediction : 2;	// static prediction for if statements
-	
+
+	static Statement *NewStatement(int typ, int gt);
+
+	// Parsing
 	static Statement *ParseStop();
 	static Statement *ParseCompound();
 	static Statement *ParseDo();
@@ -81,14 +84,17 @@ public:
 	static Statement *ParseReturn();
 	static Statement *ParseBreak();
 	static Statement *ParseSwitch(int);
+	static Statement *ParseCheck();
 	static Statement *Parse(int);
 
+	// Optimization
 	void scan();
 	void ScanCompound();
 	int CSEOptimize();
 	void repcse();
 	void repcseCompound();
 
+	// Code generation
 	void GenMixedSource();
 	void GenerateStop();
 	void GenerateAsm();

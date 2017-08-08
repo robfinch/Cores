@@ -966,7 +966,7 @@ TYP *ParsePrimaryExpression(ENODE **node, int got_pa)
 		if (sizeof_flag == 0)
 			pnode->i = stringlit(laststr);
 		pnode->etype = bt_pointer;
-		pnode->esize = 2;
+		pnode->esize = 1;
         pnode->constflag = TRUE;
         pnode->SetType(tptr);
      	tptr->isConst = TRUE;
@@ -975,23 +975,9 @@ TYP *ParsePrimaryExpression(ENODE **node, int got_pa)
 
     case openpa:
         NextToken();
-
-//        if( !IsBeginningOfTypecast(lastst) ) {
-//		expr_flag = 0;
         tptr = expression(&pnode);
         pnode->SetType(tptr);
         needpunc(closepa,8);
-//        }
-        //else {			/* cast operator */
-        //    ParseSpecifier(0); /* do cast ParseSpecifieraration */
-        //    ParseDeclarationPrefix(FALSE);
-        //    tptr = head;
-        //    needpunc(closepa);
-        //    if( ParseUnaryExpression(&pnode) == NULL ) {
-        //        error(ERR_IDEXPECT);
-        //        tptr = NULL;
-        //    }
-        //}
         break;
 
     case kw_this:
@@ -2512,8 +2498,6 @@ TYP *conditional(ENODE **node)
         goto xit;
     if( lastst == hook ) {
 			iflevel++;
-	        if ((iflevel > maxPn-1) && isThor)
-	            error(ERR_OUTOFPREDS);
             NextToken();
             if( (tp2 = conditional(&ep2)) == NULL) {
                     error(ERR_IDEXPECT);

@@ -75,7 +75,7 @@ struct oplst {
 		{"push",op_push}, {"pop", op_pop},
 		{"",op_empty}, {"",op_asm}, {"", op_fnname},
 		{"inc", op_inc}, {"dec", op_dec},
-		{"#", op_rem},
+		{"#", op_rem}, {"putpsr", op_putpsr},
 		{"nop", op_nop},
 		{"hint", op_hint},
 		{"preload", op_preload},

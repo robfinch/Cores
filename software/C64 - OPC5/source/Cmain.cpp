@@ -133,16 +133,6 @@ int	options(char *s)
         address_bits = atoi(&s[2]);
     }
 	else if (s[1]=='p') {
-        if (strcmp(&s[2],"FISA64")==0) {
-             gCpu = FISA64;
-             regLR = 31;
-             regPC = 29;
-             regSP = 30;
-             regBP = 27;
-             regGP = 26;
-             regXLR = 28;
-             use_gp = TRUE;
-        }
 	}
 	else if (s[1]=='w')
 		wcharSupport = 0;

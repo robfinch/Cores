@@ -1,0 +1,22 @@
+     1	
+     2	void TestCheck(int a, int b, int c)
+     3	{
+     4		__check(a;b;c);
+     5	}
+
+
+*** local symbol table ***
+
+
+
+
+
+ *** global scope typedef symbol table ***
+
+_TestCheck =000000   -    External    Function returning 
+		Parameters:
+			Type array:
+   016 016 016 
+
+ *** structures and unions ***
+

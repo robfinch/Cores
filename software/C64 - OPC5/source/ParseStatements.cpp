@@ -38,7 +38,8 @@ char *llptr;
 extern char *lptr;
 extern char inpline[132];
 
-Statement *NewStatement(int typ, int gt) {
+Statement *Statement::NewStatement(int typ, int gt)
+{
 	Statement *s = (Statement *)xalloc(sizeof(Statement));
 	memset(s, '\0', sizeof(Statement));
 	s->stype = typ;
@@ -71,14 +72,20 @@ int GetTypeHash(TYP *p)
 	return n;
 }
 
-
-Statement *ParseCheckStatement() 
+Statement *Statement::ParseCheck()
 {       
 	Statement *snp;
-    snp = NewStatement(st_check, TRUE);
-    if( expression(&(snp->exp)) == 0 ) 
+    snp = Statement::NewStatement(st_check, TRUE);
+    needpunc( openpa,31 );
+    if( NonCommaExpression(&(snp->exp)) == 0 ) 
         error(ERR_EXPREXPECT); 
     needpunc( semicolon,31 );
+    if( NonCommaExpression(&(snp->initExpr)) == 0 ) 
+        error(ERR_EXPREXPECT); 
+    needpunc( semicolon,31 );
+    if( NonCommaExpression(&(snp->incrExpr)) == 0 ) 
+        error(ERR_EXPREXPECT); 
+    needpunc( closepa,31 );
     return snp; 
 } 
   
@@ -91,8 +98,6 @@ Statement *Statement::ParseWhile()
 	snp->predreg = iflevel;
 	iflevel++;
 	looplevel++;
-	if ((iflevel > maxPn-1) && isThor)
-	    error(ERR_OUTOFPREDS);
     if( lastst != openpa ) 
         error(ERR_EXPREXPECT); 
     else { 
@@ -121,8 +126,6 @@ Statement *Statement::ParseUntil()
 	snp->predreg = iflevel;
 	iflevel++;
 	looplevel++;
-	if ((iflevel > maxPn-1) && isThor)
-	    error(ERR_OUTOFPREDS);
     if( lastst != openpa ) 
         error(ERR_EXPREXPECT); 
     else { 
@@ -149,8 +152,6 @@ Statement *Statement::ParseDo()
 	snp->predreg = iflevel;
 	iflevel++;
 	looplevel++;
-	if ((iflevel > maxPn-1) && isThor)
-	    error(ERR_OUTOFPREDS);
     snp->s1 = Statement::Parse(0); 
 	// Empty statements return NULL
 	if (snp->s1)
@@ -184,8 +185,6 @@ Statement *Statement::ParseFor()
 	snp->predreg = iflevel;
 	iflevel++;
 	looplevel++;
-	if ((iflevel > maxPn-1) && isThor)
-	    error(ERR_OUTOFPREDS);
     needpunc(openpa,16); 
     if( expression(&(snp->initExpr)) == NULL ) 
         snp->initExpr = (ENODE *)NULL; 
@@ -269,8 +268,6 @@ Statement *Statement::ParseIf()
 	snp = NewStatement(st_if, FALSE);
 	snp->predreg = iflevel;
 	iflevel++;
-	if ((iflevel > maxPn-1) && isThor)
-		error(ERR_OUTOFPREDS);
 	if( lastst != openpa ) 
 		error(ERR_EXPREXPECT); 
 	else {
@@ -803,7 +800,7 @@ Statement *Statement::Parse(int nkd)
         snp = ParseCompound();
         return snp; 
     case kw_check:
-         snp = ParseCheckStatement();
+         snp = ParseCheck();
          break;
 	case kw_naked:
 		 NextToken();
