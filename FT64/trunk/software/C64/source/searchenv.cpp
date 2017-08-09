@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012,2013  Robert Finch, Stratford
+//   \\__/ o\    (C) 2012-2017  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -27,7 +27,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#ifndef __GNUC__
 #include <io.h>
+#endif
+
 //#include <unistd.h>
 
 /* ---------------------------------------------------------------------------
@@ -51,7 +55,7 @@
 void searchenv(char *filename, int fnsz, char *envname, char *pathname, int pthsz)
 {
    static char pbuf[5000];
-   char *p;
+   char *p, *np;
    size_t len;
 //   char *strpbrk(), *strtok(), *getenv();
 
@@ -72,16 +76,20 @@ void searchenv(char *filename, int fnsz, char *envname, char *pathname, int pths
    }
 
    strncpy_s(pbuf, sizeof(pbuf), p, sizeof(pbuf));
-   if (p = strtok(pbuf, ";"))
+   np = nullptr;
+   if (p = strtok_s(pbuf, ";", &np))
    {
       do
       {
-         sprintf_s(pathname, pthsz, "%0.90s\\%s", p, filename);
+		  if (p[strlen(p)-1]=='\\')
+	         sprintf_s(pathname, pthsz-1, "%0.90s%s", p, filename);
+		  else
+	         sprintf_s(pathname, pthsz, "%0.90s\\%s", p, filename);
 
          if (_access(pathname, 0) >= 0)
             return;
       }
-      while(p = strtok(NULL, ";"));
+      while(p = strtok_s(NULL, ";", &np));
    }
    *pathname = 0;
 }

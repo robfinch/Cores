@@ -1,5 +1,5 @@
-#ifndef CGBLDEC_H
-#define CGBLDEC_H
+#ifndef _CGBLDEC_H
+#define _CGBLDEC_H
 
 // ============================================================================
 //        __
@@ -64,6 +64,7 @@
 #define TRACE(x)
 #endif
 
+extern CPU cpu;
 extern int maxPn;
 extern int hook_predreg;
 extern int gCpu;
@@ -74,6 +75,9 @@ extern int regLR;
 extern int regXLR;
 extern int regPC;
 extern int regCLP;
+extern int regZero;
+extern int regFirstRegvar;
+extern int regLastRegvar;
 extern int farcode;
 extern int wcharSupport;
 extern int verbose;
@@ -249,13 +253,13 @@ extern void doinit(SYM *sp);
 extern SYM *makeint(char *);
 extern void funcbody(SYM *sp);
 // Intexpr.c
-extern int GetIntegerExpression(ENODE **p);
+extern int64_t GetIntegerExpression(ENODE **p);
 extern Float128 *GetFloatExpression(ENODE **pnode);
 // Expr.c
 extern SYM *makeStructPtr(std::string name);
 extern ENODE *makenode(int nt, ENODE *v1, ENODE *v2);
-extern ENODE *makeinode(int nt, int v1);
-extern ENODE *makesnode(int nt, std::string *v1, std::string *v2, int i);
+extern ENODE *makeinode(int nt, int64_t v1);
+extern ENODE *makesnode(int nt, std::string *v1, std::string *v2, int64_t i);
 extern TYP *nameref(ENODE **node,int);
 extern TYP *forcefit(ENODE **node1,TYP *tp1,ENODE **node2,TYP *tp2,bool);
 extern TYP *expression(ENODE **node);
@@ -285,7 +289,7 @@ extern void GenerateByte(int val);
 extern void GenerateChar(int val);
 extern void genhalf(int val);
 extern void GenerateWord(int val);
-extern void GenerateLong(int val);
+extern void GenerateLong(int64_t val);
 extern void GenerateFloat(Float128 *val);
 extern void GenerateQuad(Float128 *);
 extern void genstorage(int nbytes);
@@ -305,6 +309,7 @@ extern void put_code(struct ocode *);
 extern char *put_label(int lab, char*, char*, char);
 extern char *opstr(int op);
 // Peepgen.c
+extern void MarkRemove(struct ocode *ip);
 extern int PeepCount(struct ocode *);
 extern void flush_peep();
 extern int equal_address(AMODE *ap1, AMODE *ap2);
@@ -319,7 +324,7 @@ extern void GeneratePredicatedDiadic(int pop, int pr, int op, int len, AMODE *ap
 // Gencode.c
 extern AMODE *make_label(int lab);
 extern AMODE *make_clabel(int lab);
-extern AMODE *make_immed(int i);
+extern AMODE *make_immed(int64_t i);
 extern AMODE *make_indirect(int i);
 extern AMODE *make_offset(ENODE *node);
 extern void swap_nodes(ENODE *node);
@@ -330,7 +335,7 @@ extern int IdentifyKeyword();
 extern int preprocess();
 // CodeGenerator.c
 extern AMODE *make_indirect(int i);
-extern AMODE *make_indexed(int o, int i);
+extern AMODE *make_indexed(int64_t o, int i);
 extern AMODE *make_indx(ENODE *node, int reg);
 extern AMODE *make_string(char *s);
 extern void GenerateFalseJump(ENODE *node,int label, unsigned int);

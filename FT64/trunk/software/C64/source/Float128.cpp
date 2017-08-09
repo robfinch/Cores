@@ -132,7 +132,7 @@ bool Float128::AddMan(Float128 *s, Float128 *a, Float128 *b)
 	for (nn = 0; nn < FLT128_WORDS; nn++) {
 		s->man[nn] = (unsigned __int32)sum[nn];
 	}
-	return (sum[FLT128_WORDS-1] & 0x80000000);
+	return ((sum[FLT128_WORDS-1] & 0x80000000)!=0);
 }
 
 // Does nothing but subtract the mantissas.
@@ -151,7 +151,7 @@ bool Float128::SubMan(Float128 *d, Float128 *a, Float128 *b)
 	for (nn = 0; nn < FLT128_WORDS; nn++) {
 		d->man[nn] = (unsigned __int32)sum[nn];
 	}
-	return (sum[FLT128_WORDS-1] & 0x80000000);
+	return ((sum[FLT128_WORDS-1] & 0x80000000)!=0);
 }
 
 
@@ -579,8 +579,6 @@ bool Float128::IsManZero() const
 // Zero could be either + or -.
 bool Float128::IsZero() const
 {
-	int nn;
-
 	if (exp != 0)
 		return (false);
 	return (IsManZero());

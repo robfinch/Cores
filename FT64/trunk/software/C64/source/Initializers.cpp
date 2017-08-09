@@ -103,7 +103,7 @@ void doinit(SYM *sp)
 		nl();                   /* start a new line in object */
 	}
 	if(sp->storage_class == sc_static || sp->storage_class == sc_thread) {
-		sp->realname = my_strdup(put_label(sp->value.i, (char *)sp->name->c_str(), GetNamespace(), 'D'));
+		sp->realname = my_strdup(put_label((int)sp->value.i, (char *)sp->name->c_str(), GetNamespace(), 'D'));
 	}
 	else {
 		if (sp->storage_class == sc_global) {
@@ -260,19 +260,19 @@ int InitializeStructure(TYP *tp)
 
 int initbyte()
 {   
-	GenerateByte(GetIntegerExpression((ENODE **)NULL));
+	GenerateByte((int)GetIntegerExpression((ENODE **)NULL));
     return 1;
 }
 
 int initchar()
 {   
-	GenerateChar(GetIntegerExpression((ENODE **)NULL));
+	GenerateChar((int)GetIntegerExpression((ENODE **)NULL));
     return 2;
 }
 
 int initshort()
 {
-	GenerateWord(GetIntegerExpression((ENODE **)NULL));
+	GenerateWord((int)GetIntegerExpression((ENODE **)NULL));
     return 4;
 }
 
@@ -304,7 +304,7 @@ int InitializePointer()
 {   
 	SYM *sp;
 	ENODE *n;
-	long lng;
+	int64_t lng;
 
     if(lastst == bitandd) {     /* address of a variable */
         NextToken();
@@ -315,7 +315,7 @@ int InitializePointer()
         else {
             NextToken();
             if( lastst == plus || lastst == minus)
-                GenerateReference(sp,GetIntegerExpression((ENODE **)NULL));
+                GenerateReference(sp,(int)GetIntegerExpression((ENODE **)NULL));
             else
                 GenerateReference(sp,0);
             if( sp->storage_class == sc_auto)

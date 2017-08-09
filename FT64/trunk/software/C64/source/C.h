@@ -100,7 +100,7 @@ struct slit {
 
 struct scase {
 	int label;
-	int val;
+	int64_t val;
 };
 
 struct clit {
@@ -219,8 +219,8 @@ public:
 	ENODE *initexp;
 	__int16 reg;
     union {
-        int i;
-        unsigned int u;
+        int64_t i;
+        uint64_t u;
         double f;
         uint16_t wa[8];
         char *s;

@@ -183,7 +183,7 @@ ENODE *makefcnode(int nt, ENODE *v1, ENODE *v2, SYM *sp)
   return ep;
 }
 
-ENODE *makesnode(int nt, std::string *v1, std::string *v2, int i)
+ENODE *makesnode(int nt, std::string *v1, std::string *v2, int64_t i)
 {
 	ENODE *ep;
   ep = allocEnode();
@@ -217,16 +217,16 @@ ENODE *makenodei(int nt, ENODE *v1, int i)
     return ep;
 }
 
-ENODE *makeinode(int nt, int v1)
+ENODE *makeinode(int nt, int64_t v1)
 {
 	ENODE *ep;
-  ep = allocEnode();
-  ep->nodetype = (enum e_node)nt;
-  ep->constflag = TRUE;
+	ep = allocEnode();
+	ep->nodetype = (enum e_node)nt;
+	ep->constflag = TRUE;
 	ep->isUnsigned = FALSE;
 	ep->etype = bt_void;
 	ep->esize = -1;
-  ep->i = v1;
+	ep->i = v1;
 	ep->p[1] = 0;
 	ep->p[0] = 0;
 	ep->p[2] = 0;
@@ -527,24 +527,31 @@ TYP *deref(ENODE **node, TYP *tp)
 */
 TYP *CondDeref(ENODE **node, TYP *tp)
 {
-  TYP *tp1;
-  int64_t sz;
+	TYP *tp1;
+	int64_t sz;
+	int dimen;
+	int numele;
   
-  if (tp->val_flag == 0)
-    return deref(node, tp);
-  if (tp->type == bt_pointer && sizeof_flag == 0) {
-   	sz = tp->size;
-    tp1 = tp->GetBtp();
-    if (tp1==NULL)
-      printf("DIAG: CondDeref: tp1 is NULL\r\n");
-    tp =(TYP *) TYP::Make(bt_pointer, 8);
-    tp->btp = tp1->GetIndex();
-  }
-  else if (tp->type==bt_pointer)
-    return tp;
-  //    else if (tp->type==bt_struct || tp->type==bt_union)
-  //       return deref(node, tp);
-  return tp;
+	if (tp->isArray == false)
+		return deref(node, tp);
+	if (tp->type == bt_pointer && sizeof_flag == 0) {
+		sz = tp->size;
+		dimen = tp->dimen;
+		numele = tp->numele;
+		tp1 = tp->GetBtp();
+		if (tp1==NULL)
+			printf("DIAG: CondDeref: tp1 is NULL\r\n");
+		tp =(TYP *) TYP::Make(bt_pointer, 8);
+		tp->isArray = true;
+		tp->dimen = dimen;
+		tp->numele = numele;
+		tp->btp = tp1->GetIndex();
+	}
+	else if (tp->type==bt_pointer)
+		return tp;
+	//    else if (tp->type==bt_struct || tp->type==bt_union)
+	//       return deref(node, tp);
+	return tp;
 }
 /*
 TYP *CondDeref(ENODE **node, TYP *tp)
@@ -1264,6 +1271,14 @@ int IsLValue(ENODE *node)
 	case en_cucu:
 	case en_cuhu:
             return IsLValue(node->p[0]);
+	// For an array reference there will be an add node at the top of the
+	// expression tree. This evaluates to an address which is essentially
+	// the same as an *_ref node. It's an LValue.
+	case en_add:
+		if (node->tp)
+			return node->tp->type==bt_pointer && node->tp->isArray;
+		else
+			return FALSE;
     }
     return FALSE;
 }
@@ -1342,8 +1357,9 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 	TypeArray typearray;
 	std::string name;
 	int cf, uf, numdimen;
-	int sz1, sz2, cnt, cnt2, totsz;
+	int sz1, cnt, cnt2, totsz;
 	int sa[20];
+	bool firstBr = true;
 
     ep1 = (ENODE *)NULL;
     Enter("<ParsePostfix>");
@@ -1359,7 +1375,8 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 		return ((TYP *)NULL);
     }
 	pep1 = nullptr;
-	for (cnt = 0; 1; cnt = cnt+1) {
+	cnt = 0;
+	while (1) {
 		pop = lastst;
 		switch(lastst) {
 		case openbr:
@@ -1387,51 +1404,54 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 				numdimen = tp1->dimen;
 				cnt2 = 1;
 				for (tp4 = tp1; tp4; tp4 = tp4->GetBtp()) {
-					sa[cnt2] = max(tp4->numele,sizeOfWord);
+					sa[cnt2] = max(tp4->numele,1);
 					cnt2++;
 					if (cnt2 > 19) {
 						error(ERR_TOOMANYDIMEN);
 						break;
 					}
 				}
+				sa[numdimen+1] = tp1->size;
 			}
 			if (cnt==0)
 				totsz = tp1->size;
+			firstBr = false;
 			if (tp1->type != bt_pointer)
 				error(ERR_NOPOINTER);
 			else
 				tp1 = tp1->GetBtp();
-			if (cnt==0) {
-				switch(numdimen) {
-				case 1: sz1 = sa[numdimen+1]; break;
-				case 2: sz1 = sa[1]*sa[numdimen+1]; break;
-				case 3: sz1 = sa[1]*sa[2]*sa[numdimen+1]; break;
-				default:
-					sz1 = sa[numdimen+1];	// could be a void = 0
-					for (cnt2 = 1; cnt2 < numdimen; cnt2++)
-						sz1 = sz1 * sa[cnt2];
-				}
-			}
-			else if (cnt==1) {
-				switch(numdimen) {
-				case 2:	sz1 = sa[numdimen+1]; break;
-				case 3: sz1 = sa[1]*sa[numdimen+1]; break;
-				default:
-					sz1 = sa[numdimen+1];	// could be a void = 0
-					for (cnt2 = 1; cnt2 < numdimen-1; cnt2++)
-						sz1 = sz1 * sa[cnt2];
-				}
-			}
-			else if (cnt==2) {
-				switch(numdimen) {
-				case 3: sz1 = sa[numdimen+1]; break;
-				default:
-					sz1 = sa[numdimen+1];	// could be a void = 0
-					for (cnt2 = 1; cnt2 < numdimen-2; cnt2++)
-						sz1 = sz1 * sa[cnt2];
-				}
-			}
-			else {
+			//if (cnt==0) {
+			//	switch(numdimen) {
+			//	case 1: sz1 = sa[numdimen+1]; break;
+			//	case 2: sz1 = sa[1]*sa[numdimen+1]; break;
+			//	case 3: sz1 = sa[1]*sa[2]*sa[numdimen+1]; break;
+			//	default:
+			//		sz1 = sa[numdimen+1];	// could be a void = 0
+			//		for (cnt2 = 1; cnt2 < numdimen; cnt2++)
+			//			sz1 = sz1 * sa[cnt2];
+			//	}
+			//}
+			//else if (cnt==1) {
+			//	switch(numdimen) {
+			//	case 2:	sz1 = sa[numdimen+1]; break;
+			//	case 3: sz1 = sa[1]*sa[numdimen+1]; break;
+			//	default:
+			//		sz1 = sa[numdimen+1];	// could be a void = 0
+			//		for (cnt2 = 1; cnt2 < numdimen-1; cnt2++)
+			//			sz1 = sz1 * sa[cnt2];
+			//	}
+			//}
+			//else if (cnt==2) {
+			//	switch(numdimen) {
+			//	case 3: sz1 = sa[numdimen+1]; break;
+			//	default:
+			//		sz1 = sa[numdimen+1];	// could be a void = 0
+			//		for (cnt2 = 1; cnt2 < numdimen-2; cnt2++)
+			//			sz1 = sz1 * sa[cnt2];
+			//	}
+			//}
+			//else
+			{
 				sz1 = sa[numdimen+1];	// could be a void = 0
 				for (cnt2 = 1; cnt2 < numdimen-cnt; cnt2++)
 					sz1 = sz1 * sa[cnt2];
@@ -1462,9 +1482,11 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 			pnode->tp = tp1;
 			ep1 = pnode;
 			needpunc(closebr,9);
+			cnt++;
 			break;
 
 		case openpa:
+			cnt = 0;
 			if (tp1==NULL) {
 				error(ERR_UNDEFINED);
 				goto j1;
@@ -1544,6 +1566,7 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 			break;
 
 		case pointsto:
+			cnt = 0;
 			if (tp1==NULL) {
 				error(ERR_UNDEFINED);
 				goto j1;
@@ -1558,6 +1581,7 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 
 		 // fall through to dot operation
 		case dot:
+			cnt = 0;
 			if (tp1==NULL) {
 				error(ERR_UNDEFINED);
 				goto j1;
@@ -1656,10 +1680,12 @@ j2:
 			break;
 
 		case autodec:
+			cnt = 0;
 			NextToken();
 			Autoincdec(tp1,&ep1,1);
 			break;
 		case autoinc:
+			cnt = 0;
 			NextToken();
 			Autoincdec(tp1,&ep1,0);
 			break;

@@ -51,8 +51,8 @@ public:
 	ENODE *incrExpr;    // increment expression - for loops
 	Statement *s1, *s2; // internal statements
 	int num;			// resulting expression type (hash code for throw)
-	int *label;         // label number for goto
-	int *casevals;		// case values
+	int64_t *label;     // label number for goto
+	int64_t *casevals;	// case values
 	TABLE ssyms;		// local symbols associated with statement
 	char *fcname;       // firstcall block var name
 	char *lptr;
@@ -79,8 +79,8 @@ public:
 	static Statement *ParseGoto();
 	static Statement *ParseReturn();
 	static Statement *ParseBreak();
-	static Statement *ParseSwitch(int);
-	static Statement *Parse(int);
+	static Statement *ParseSwitch(bool);
+	static Statement *Parse(bool);
 
 	void GenMixedSource();
 	void GenerateStop();

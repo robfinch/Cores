@@ -116,7 +116,7 @@ public:
 	__int8 bit_offset;
 	__int8 scale;
 	// The following could be in a value union
-  int i;
+  int64_t i;
   double f;
   double f1, f2;
   Float128 f128;

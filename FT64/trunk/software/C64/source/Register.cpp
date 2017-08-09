@@ -38,9 +38,9 @@ int bregstack[6];
 int brsp=5;
 int bregmask = 0;
 */
-static short int next_reg;
-static short int next_vreg;
-static short int next_vmreg;
+static unsigned short int next_reg;
+static unsigned short int next_vreg;
+static unsigned short int next_vmreg;
 static short int next_breg;
 #define MAX_REG 4			/* max. scratch data	register (D2) */
 #define	MAX_REG_STACK	30
@@ -391,7 +391,7 @@ void checkbrstack()
 void validate(AMODE *ap)
 {
     SYM *sym = currentFn;
-	int frg = sym->IsLeaf ? 1 : 3;
+	unsigned int frg = sym->IsLeaf ? 1 : 3;
 
 	if (ap->type!=stdvector.GetIndex())
     switch (ap->mode) {
@@ -443,7 +443,7 @@ void ReleaseTempRegister(AMODE *ap)
 {
     int number;
     SYM *sym = currentFn;
-	int frg = sym->IsLeaf ? 1 : 3;
+	unsigned int frg = sym->IsLeaf ? 1 : 3;
 
 	TRACE(printf("ReleaseTempRegister:r%d r%d\r\n", ap->preg, ap->sreg);)
 

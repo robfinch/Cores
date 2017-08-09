@@ -156,9 +156,9 @@ void list_var(SYM *sp, int i)
         for(j = i; j; --j)
                 lfs.printf("    ");
 		if (sp->name->length()== 0)
-			lfs.printf("%-10s =%06x ","<unnamed>",sp->value.u);
+			lfs.printf("%-10s =%06x ","<unnamed>",(unsigned int)sp->value.u);
 		else {
-			lfs.printf("%-10s =%06x",(char *)sp->name->c_str(),sp->value.u);
+			lfs.printf("%-10s =%06x",(char *)sp->name->c_str(),(unsigned int)sp->value.u);
 			if (sp->tp)
 				if (sp->tp->bit_width != -1)
 					lfs.printf("  %d %d",sp->tp->bit_offset,sp->tp->bit_width);

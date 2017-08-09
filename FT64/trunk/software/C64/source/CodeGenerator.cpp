@@ -173,7 +173,7 @@ AMODE *make_string(char *s)
 /*
  *      make a node to reference an immediate value i.
  */
-AMODE *make_immed(int i)
+AMODE *make_immed(int64_t i)
 {
 	AMODE *ap;
     ENODE *ep;
@@ -200,7 +200,7 @@ AMODE *make_indirect(int i)
     return ap;
 }
 
-AMODE *make_indexed(int o, int i)
+AMODE *make_indexed(int64_t o, int i)
 {
 	AMODE *ap;
     ENODE *ep;
@@ -235,6 +235,17 @@ AMODE *make_indx(ENODE *node, int rg)
     ap->preg = rg;
     return ap;
 }
+
+void GenerateHint(int num)
+{
+	GenerateMonadic(op_hint,0,make_immed(num));
+}
+
+void GenerateComment(char *cm)
+{
+	GenerateMonadic(op_rem2,0,make_string(cm));
+}
+
 
 // ----------------------------------------------------------------------------
 //      MakeLegalAmode will coerce the addressing mode in ap1 into a
@@ -504,25 +515,30 @@ AMODE *GenerateIndex(ENODE *node)
     	 && (node->p[1]->nodetype == en_tempref || node->p[1]->nodetype==en_regvar))
     {       /* both nodes are registers */
     	// Don't need to free ap2 here. It is included in ap1.
+		GenerateHint(8);
         ap1 = GenerateExpression(node->p[0],F_REG,8);
         ap2 = GenerateExpression(node->p[1],F_REG,8);
+		GenerateHint(9);
         ap1->mode = am_indx2;
         ap1->sreg = ap2->preg;
 		ap1->deep2 = ap2->deep2;
 		ap1->offset = makeinode(en_icon,0);
 		ap1->scale = node->scale;
-        return ap1;
+        return (ap1);
     }
+	GenerateHint(8);
     ap1 = GenerateExpression(node->p[0],F_REG | F_IMMED,8);
     if( ap1->mode == am_immed )
     {
 		ap2 = GenerateExpression(node->p[1],F_REG,8);
+		GenerateHint(9);
 		ap2->mode = am_indx;
 		ap2->offset = ap1->offset;
 		ap2->isUnsigned = ap1->isUnsigned;
 		return ap2;
     }
     ap2 = GenerateExpression(node->p[1],F_ALL,8);   /* get right op */
+	GenerateHint(9);
     if( ap2->mode == am_immed && ap1->mode == am_reg ) /* make am_indx */
     {
         ap2->mode = am_indx;
@@ -941,7 +957,45 @@ AMODE *GenerateBinary(ENODE *node,int flags, int size, int op)
 		else {
 			ap1 = GenerateExpression(node->p[0],F_REG,size);
 			ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
-		    GenerateTriadic(op,0,ap3,ap1,ap2);
+			if (ap2->mode==am_immed) {
+				switch(op) {
+				case op_and:
+					GenerateTriadic(op,0,ap3,ap1,make_immed(ap2->offset->i & 0xFFFFLL));
+					if (ap2->offset->i & 0xFFFF0000LL)
+						GenerateDiadic(op_andq1,0,ap3,make_immed((ap2->offset->i >> 16) & 0xFFFFLL));
+					if (ap2->offset->i & 0xFFFF00000000LL)
+						GenerateDiadic(op_andq2,0,ap3,make_immed((ap2->offset->i >> 32) & 0xFFFFLL));
+					if (ap2->offset->i & 0xFFFF000000000000LL)
+						GenerateDiadic(op_andq3,0,ap3,make_immed((ap2->offset->i >> 48) & 0xFFFFLL));
+					break;
+				case op_or:
+					GenerateTriadic(op,0,ap3,ap1,make_immed(ap2->offset->i & 0xFFFFLL));
+					if (ap2->offset->i & 0xFFFF0000LL)
+						GenerateDiadic(op_orq1,0,ap3,make_immed((ap2->offset->i >> 16) & 0xFFFFLL));
+					if (ap2->offset->i & 0xFFFF00000000LL)
+						GenerateDiadic(op_orq2,0,ap3,make_immed((ap2->offset->i >> 32) & 0xFFFFLL));
+					if (ap2->offset->i & 0xFFFF000000000000LL)
+						GenerateDiadic(op_orq3,0,ap3,make_immed((ap2->offset->i >> 48) & 0xFFFFLL));
+					break;
+				// Most ops handle a max 16 bit immediate operand. If the operand is over 16 bits
+				// it has to be loaded into a register.
+				default:
+					if (ap2->offset->i < -32768LL || ap2->offset->i > 32767LL) {
+						ap4 = GetTempRegister();
+						GenerateTriadic(op_or,0,ap4,makereg(regZero),make_immed(ap2->offset->i & 0xFFFFLL));
+						if (ap2->offset->i & 0xFFFF0000LL)
+							GenerateDiadic(op_orq1,0,ap4,make_immed((ap2->offset->i >> 16) & 0xFFFFLL));
+						if (ap2->offset->i & 0xFFFF00000000LL)
+							GenerateDiadic(op_orq2,0,ap4,make_immed((ap2->offset->i >> 32) & 0xFFFFLL));
+						if (ap2->offset->i & 0xFFFF000000000000LL)
+							GenerateDiadic(op_orq3,0,ap4,make_immed((ap2->offset->i >> 48) & 0xFFFFLL));
+						GenerateTriadic(op,0,ap3,ap1,ap4);
+						ReleaseTempReg(ap4);
+					}
+				}
+			}
+			else
+				GenerateTriadic(op,0,ap3,ap1,ap2);
 		}
 	}
 	if (ap2)
@@ -1360,11 +1414,11 @@ AMODE *GenerateAssign(ENODE *node, int flags, int size);
 // Generate an assignment to a structure type. The type passed must be a
 // structure type.
 
-void GenerateStructAssign(TYP *tp, int offset, ENODE *ep, AMODE *base)
+void GenerateStructAssign(TYP *tp, int64_t offset, ENODE *ep, AMODE *base)
 {
 	SYM *thead, *first;
 	AMODE *ap1, *ap2;
-	int offset2;
+	int64_t offset2;
 
 	first = thead = SYM::GetPtr(tp->lst.GetHead());
 	ep = ep->p[0];
@@ -1394,10 +1448,11 @@ void GenerateStructAssign(TYP *tp, int offset, ENODE *ep, AMODE *base)
 				offset2 = offset;
 			switch(thead->tp->size)
 			{
-			case 1:	GenerateTriadic(op_sb,0,ap2,makereg(base->preg),make_immed(offset2)); break;
-			case 2:	GenerateTriadic(op_sc,0,ap2,makereg(base->preg),make_immed(offset2)); break;
-			case 4:	GenerateTriadic(op_sh,0,ap2,makereg(base->preg),make_immed(offset2)); break;
-			default:	GenerateTriadic(op_sw,0,ap2,makereg(base->preg),make_immed(offset2)); break;
+			case 1:	GenerateDiadic(op_sb,0,ap2,make_indexed(offset,base->preg)); break;
+			case 2:	GenerateDiadic(op_sc,0,ap2,make_indexed(offset,base->preg)); break;
+			case 4:	GenerateDiadic(op_sh,0,ap2,make_indexed(offset,base->preg)); break;
+			case 512:	GenerateDiadic(op_sv,0,ap2,make_indexed(offset,base->preg)); break;
+			default:	GenerateDiadic(op_sw,0,ap2,make_indexed(offset,base->preg)); break;
 			}
 			if (ap2)
 				ReleaseTempReg(ap2);
@@ -1423,7 +1478,7 @@ void GenerateArrayAssign(TYP *tp, ENODE *node1, ENODE *node2, AMODE *base)
 	ENODE *ep1;
 	AMODE *ap1, *ap2;
 	int size = tp->size;
-	int offset, offset2;
+	int64_t offset, offset2;
 
 	offset = 0;
 	if (node1->tp)
@@ -1465,11 +1520,13 @@ void GenerateArrayAssign(TYP *tp, ENODE *node1, ENODE *node2, AMODE *base)
 			}
 			switch(tp->GetElementSize())
 			{
-			case 1:	GenerateTriadic(op_sb,0,ap2,makereg(base->preg),make_immed(offset)); offset += 1; break;
-			case 2:	GenerateTriadic(op_sc,0,ap2,makereg(base->preg),make_immed(offset)); offset += 2; break;
-			case 4:	GenerateTriadic(op_sh,0,ap2,makereg(base->preg),make_immed(offset)); offset += 4; break;
-			default:	GenerateTriadic(op_sw,0,ap2,makereg(base->preg),make_immed(offset)); offset += 8; break;
+			case 1:	GenerateDiadic(op_sb,0,ap2,make_indexed(offset,base->preg)); break;
+			case 2:	GenerateDiadic(op_sc,0,ap2,make_indexed(offset,base->preg)); break;
+			case 4:	GenerateDiadic(op_sh,0,ap2,make_indexed(offset,base->preg)); break;
+			case 512:	GenerateDiadic(op_sv,0,ap2,make_indexed(offset,base->preg)); break;
+			default:	GenerateDiadic(op_sw,0,ap2,make_indexed(offset,base->preg)); break;
 			}
+			offset += tp->GetElementSize();
 			ReleaseTempReg(ap2);
 			ReleaseTempReg(ap1);
 			ep1 = ep1->p[2];
@@ -1479,11 +1536,9 @@ void GenerateArrayAssign(TYP *tp, ENODE *node1, ENODE *node2, AMODE *base)
 
 AMODE *GenerateAggregateAssign(ENODE *node1, ENODE *node2)
 {
-	ENODE *ep1, *ep2;
-	AMODE *ap1, *ap2, *ap3, *base;
-	SYM *thead, *first, *thead2, *first2;
+	AMODE *base;
 	TYP *tp;
-	int offset = 0;
+	int64_t offset = 0;
 
 	if (node1==nullptr || node2==nullptr)
 		return nullptr;
@@ -1567,8 +1622,10 @@ AMODE *GenerateAssign(ENODE *node, int flags, int size)
 		    GenerateZeroExtend(ap2,size,ssize);
 //	}
 	if (ap1->mode == am_reg || ap1->mode==am_fpreg) {
-		if (ap2->mode==am_reg)
+		if (ap2->mode==am_reg) {
+			GenerateHint(2);
 			GenerateDiadic(op_mov,0,ap1,ap2);
+		}
 		else if (ap2->mode==am_immed) {
 			GenerateDiadic(op_ldi,0,ap1,ap2);
 		}
@@ -1787,7 +1844,7 @@ AMODE *GenAutocon(ENODE *node, int flags, int size, int type)
 //
 AMODE *GenerateExpression(ENODE *node, int flags, int size)
 {   
-	AMODE *ap1, *ap2, *ap3;
+	AMODE *ap1, *ap2;
     int natsize;
 	static char buf[4][20];
 	static int ndx;
@@ -2378,7 +2435,7 @@ void GenerateTrueJump(ENODE *node, int label, unsigned int prediction)
 //
 void GenerateFalseJump(ENODE *node,int label, unsigned int prediction)
 {
-	AMODE *ap, *ap1, *ap2;
+	AMODE *ap;
 	int siz1;
 	int lab0;
 

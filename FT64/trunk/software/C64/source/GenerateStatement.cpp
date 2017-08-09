@@ -26,7 +26,7 @@
 #include "stdafx.h"
 
 extern char *rtrim(char *);
-extern int caselit(scase *casetab,int);
+extern int caselit(scase *casetab,int64_t);
 
 /*
  *	68000 C compiler
@@ -56,7 +56,7 @@ char *semaphores[20];
 char last_rem[132];
 
 extern TYP              stdfunc;
-extern int pwrof2(int);
+extern int pwrof2(int64_t);
 
 int bitsset(int64_t mask)
 {
@@ -402,7 +402,7 @@ void Statement::GenerateLinearSwitch()
 		stmt->GenMixedSource();
         if( stmt->s2 )          /* default case ? */
         {
-			stmt->label = (int *)curlab;
+			stmt->label = (int64_t *)curlab;
 			defcase = stmt;
         }
         else
@@ -423,7 +423,7 @@ void Statement::GenerateLinearSwitch()
 				}
 			}
 	        //GenerateDiadic(op_dw,0,make_label(curlab), make_direct(stmt->label));
-            stmt->label = (int *)curlab;
+            stmt->label = (int64_t *)curlab;
         }
         if( stmt->s1 != NULL && stmt->next != NULL )
             curlab = nextlabel++;
@@ -457,7 +457,7 @@ void Statement::GenerateCase()
 
 static int casevalcmp(const void *a, const void *b)
 {
-	int aa,bb;
+	int64_t aa,bb;
 	aa = ((scase *)a)->val;
 	bb = ((scase *)b)->val;
 	if (aa < bb)
@@ -483,14 +483,15 @@ void Statement::GenerateSwitch()
 	Statement *st, *defcase;
 	int oldbreak;
 	int tablabel;
-	int *bf;
-	int nn,mm,kk;
-	int minv,maxv;
+	int64_t *bf;
+	int64_t nn;
+	int64_t mm,kk;
+	int64_t minv,maxv;
 	int deflbl;
 	int curlab;
     oldbreak = breaklab;
     breaklab = nextlabel++;
-	bf = (int *)label;
+	bf = (int64_t *)label;
 	minv = 0x7FFFFFFFL;
 	maxv = 0;
 	struct scase casetab[512];
@@ -514,7 +515,7 @@ void Statement::GenerateSwitch()
 			for (nn = bf[0]; nn >= 1; nn--) {
 				minv = min(bf[nn],minv);
 				maxv = max(bf[nn],maxv);
-				st->label = (int *)curlab;
+				st->label = (int64_t *)curlab;
 				casetab[mm].label = curlab;
 				casetab[mm].val = bf[nn];
 				mm++;
@@ -526,7 +527,7 @@ void Statement::GenerateSwitch()
 	// check case density
 	// If there are enough cases
 	// and if the case is dense enough use a computed jump
-	if (mm * 100 / (maxv-minv) > 50 && (maxv-minv) > (nkd ? 7 : 12)) {
+	if (mm * 100 / max((maxv-minv),1) > 50 && (maxv-minv) > (nkd ? 7 : 12)) {
 		if (deflbl==0)
 			deflbl = nextlabel++;
 		for (nn = mm; nn < 512; nn++) {

@@ -32,9 +32,11 @@ extern int retlab;
 
 extern TYP              stdfunc;
 
+extern void DumpCSETable();
 extern void scan(Statement *);
 extern int GetReturnBlockSize();
 void GenerateReturn(Statement *stmt);
+extern void GenerateComment(char *);
 int TempFPInvalidate();
 int TempInvalidate();
 void TempRevalidate(int);
@@ -45,13 +47,13 @@ void GenLdi(AMODE *, AMODE *);
 extern AMODE *copy_addr(AMODE *ap);
 extern void GenLoad(AMODE *ap1, AMODE *ap3, int ssize, int size);
 
-/*
- *      returns the desirability of optimization for a subexpression.
- */
+//
+// Returns the desirability of optimization for a subexpression.
+//
 static int OptimizationDesireability(CSE *csp)
 {
 	if( csp->voidf || (csp->exp->nodetype == en_icon &&
-                       csp->exp->i < 32767 && csp->exp->i >= -32767))
+                       csp->exp->i < 32768 && csp->exp->i >= -32768))
         return 0;
     if (csp->exp->nodetype==en_cnacon)
         return 0;
@@ -72,11 +74,98 @@ static int CSECmp(const void *a, const void *b)
 	aa = OptimizationDesireability(csp1);
 	bb = OptimizationDesireability(csp2);
 	if (aa < bb)
-		return (-1);
+		return (1);
 	else if (aa == bb)
 		return (0);
 	else
-		return (1);
+		return (-1);
+}
+
+static int AllocateRegisters1()
+{
+	int nn,csecnt,reg;
+	CSE *csp;
+
+	reg = regFirstRegvar;
+	for (nn = 0; nn < 3; nn++) {
+		for (csecnt = 0; csecnt < csendx; csecnt++)	{
+			csp = &CSETable[csecnt];
+			if (csp->reg==-1) {
+				if( OptimizationDesireability(csp) >= 4-nn ) {
+					if (csp->exp->etype!=bt_vector) {
+    					if(( csp->duses > csp->uses / (8 << nn)) && reg < regLastRegvar )
+    						csp->reg = reg++;
+    					else
+    						csp->reg = -1;
+					}
+				}
+			}
+		}
+	}
+	return reg;
+}
+
+static int FinalAllocateRegisters(int reg)
+{
+	int csecnt;
+	CSE *csp;
+
+	for (csecnt = 0; csecnt < csendx; csecnt++)	{
+		csp = &CSETable[csecnt];
+		if (!csp->voidf && csp->reg==-1) {
+			if (csp->exp->etype!=bt_vector) {
+    			if(( csp->uses > 3) && reg < regLastRegvar )
+    				csp->reg = reg++;
+    			else
+    				csp->reg = -1;
+			}
+		}
+	}
+	return reg;
+}
+
+static int AllocateVectorRegisters1()
+{
+	int nn,csecnt,vreg;
+	CSE *csp;
+
+	vreg = 11;
+	for (nn = 0; nn < 3; nn++) {
+		for (csecnt = 0; csecnt < csendx; csecnt++)	{
+			csp = &CSETable[csecnt];
+			if (csp->reg==-1) {
+				if( OptimizationDesireability(csp) >= 4-nn ) {
+					if (csp->exp->etype==bt_vector) {
+    					if(( csp->duses > csp->uses / (8 << nn)) && vreg < 18 )
+    						csp->reg = vreg++;
+    					else
+    						csp->reg = -1;
+					}
+				}
+			}
+		}
+	}
+	return vreg;
+}
+
+static int FinalAllocateVectorRegisters(int vreg)
+{
+	int csecnt;
+	CSE *csp;
+
+	vreg = 11;
+	for (csecnt = 0; csecnt < csendx; csecnt++)	{
+		csp = &CSETable[csecnt];
+		if (!csp->voidf && csp->reg==-1) {
+			if (csp->exp->etype==bt_vector) {
+    			if(( csp->uses > 3) && vreg < 18 )
+    				csp->reg = vreg++;
+    			else
+    				csp->reg = -1;
+			}
+		}
+	}
+	return vreg;
 }
 
 // ----------------------------------------------------------------------------
@@ -98,7 +187,7 @@ int AllocateRegisterVars()
 	int size;
 	int csecnt;
 
-	reg = 11;
+	reg = regFirstRegvar;
 	vreg = 11;
     mask = 0;
 	rmask = 0;
@@ -118,27 +207,12 @@ int AllocateRegisterVars()
 	// Make multiple passes over the CSE table in order to use
 	// up all temporary registers. Allocates on the progressively
 	// less desirable.
-	for (nn = 0; nn < 3; nn++) {
-		for (csecnt = 0; csecnt < csendx; csecnt++)	{
-			csp = &CSETable[csecnt];
-			if (csp->reg==-1) {
-				if( OptimizationDesireability(csp) >= 4-nn ) {
-					if (csp->exp->etype==bt_vector) {
-    					if( csp->duses > csp->uses / (8 >> nn) && vreg < 18 )
-    						csp->reg = vreg++;
-    					else
-    						csp->reg = -1;
-					}
-					else {
-    					if( csp->duses > csp->uses / (8 >> nn) && reg < 18 )
-    						csp->reg = reg++;
-    					else
-    						csp->reg = -1;
-					}
-				}
-			}
-		}
-	}
+	reg = AllocateRegisters1();
+	vreg = AllocateVectorRegisters1();
+	if (reg < regLastRegvar)
+		reg = FinalAllocateRegisters(reg);
+	if (vreg < 18)
+		vreg = FinalAllocateVectorRegisters(vreg);
 
 	// Generate bit masks of allocated registers
 	for (csecnt = 0; csecnt < csendx; csecnt++) {
@@ -159,12 +233,19 @@ int AllocateRegisterVars()
 		}
 	}
 
+	DumpCSETable();
+
 	// Push temporaries on the stack.
 	if( mask != 0 ) {
 		cnt = 0;
+		if (!cpu.SupportsPush)
+			GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(popcnt(mask)*8));
 		for (nn = 0; nn < 64; nn++) {
 			if (rmask & (0x8000000000000000ULL >> nn)) {
-				GenerateMonadic(op_push,0,makereg(nn&31));
+				if (!cpu.SupportsPush)
+					GenerateDiadic(op_sw,0,makereg(nn),make_indexed(cnt,regSP));
+				else
+					GenerateMonadic(op_push,0,makereg(nn&31));
 				cnt+=sizeOfWord;
 			}
 		}
@@ -447,11 +528,30 @@ AMODE *GenExpr(ENODE *node)
 	*/
 }
 
+void GenCompareI(AMODE *ap3, AMODE *ap1, AMODE *ap2, int su)
+{
+	AMODE *ap4;
+
+	if (ap2->offset->i < -32768LL || ap2->offset->i > 32767LL) {
+		ap4 = GetTempRegister();
+		GenerateTriadic(op_or,0,ap4,makereg(regZero),make_immed(ap2->offset->i & 0xFFFFLL));
+		if (ap2->offset->i & 0xFFFF0000LL)
+			GenerateDiadic(op_orq1,0,ap4,make_immed((ap2->offset->i >> 16) & 0xFFFFLL));
+		if (ap2->offset->i & 0xFFFF00000000LL)
+			GenerateDiadic(op_orq2,0,ap4,make_immed((ap2->offset->i >> 32) & 0xFFFFLL));
+		if (ap2->offset->i & 0xFFFF000000000000LL)
+			GenerateDiadic(op_orq3,0,ap4,make_immed((ap2->offset->i >> 48) & 0xFFFFLL));
+		GenerateTriadic(op_cmp,0,ap3,ap1,ap4);
+		ReleaseTempReg(ap4);
+	}
+	else
+		GenerateTriadic(su ? op_cmp : op_cmpu,0,ap3,ap1,ap2);
+}
+
 void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int prediction)
 {
 	int size, sz;
 	AMODE *ap1, *ap2, *ap3;
-	int lab1;
 
 	size = GetNaturalSize(node);
     if (op==op_flt || op==op_fle || op==op_fgt || op==op_fge || op==op_feq || op==op_fne) {
@@ -607,7 +707,7 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int predi
 			}
 			else if (ap2->mode==am_immed) {
 				ap3 = GetTempRegister();
-				GenerateTriadic(op_cmp,0,ap3,ap1,ap2);
+				GenCompareI(ap3,ap1,ap2,1);
 				ReleaseTempRegister(ap3);
 				Generate4adic(op_beq,0,ap3,makereg(0),make_clabel(label),make_immed(prediction));
 			}
@@ -620,7 +720,7 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int predi
 					GenerateTriadic(op_bne,0,ap1,makereg(0),make_clabel(label));
 				else {
 					ap3 = GetTempRegister();
-					GenerateTriadic(op_cmp,0,ap3,ap1,ap2);
+					GenCompareI(ap3,ap1,ap2,1);
 					ReleaseTempRegister(ap3);
 					Generate4adic(op_bne,0,ap3,makereg(0),make_clabel(label), make_immed(prediction));
 				}
@@ -635,7 +735,7 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int predi
 					GenerateTriadic(op_blt,0,ap1,makereg(0),make_clabel(label));
 				else {
 					ap3 = GetTempRegister();
-					GenerateTriadic(op_cmp,0,ap3,ap1,ap2);
+					GenCompareI(ap3,ap1,ap2,1);
 					ReleaseTempRegister(ap3);
 					Generate4adic(op_blt,0,ap3,makereg(0),make_clabel(label), make_immed(prediction));
 				}
@@ -649,7 +749,7 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int predi
 					GenerateTriadic(op_bge,0,makereg(0),ap1,make_clabel(label));
 				else {
 					ap3 = GetTempRegister();
-					GenerateTriadic(op_cmp,0,ap3,ap1,ap2);
+					GenCompareI(ap3,ap1,ap2,1);
 					ReleaseTempRegister(ap3);
 					Generate4adic(op_bge,0,makereg(0),ap3,make_clabel(label), make_immed(prediction));
 				}
@@ -663,7 +763,7 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int predi
 					GenerateTriadic(op_blt,0,makereg(0),ap1,make_clabel(label));
 				else {
 					ap3 = GetTempRegister();
-					GenerateTriadic(op_cmp,0,ap3,ap1,ap2);
+					GenCompareI(ap3,ap1,ap2,1);
 					ReleaseTempRegister(ap3);
 					Generate4adic(op_blt,0,makereg(0),ap3,make_clabel(label), make_immed(prediction));
 				}
@@ -678,7 +778,7 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int predi
 				}
 				else {
 					ap3 = GetTempRegister();
-					GenerateTriadic(op_cmp,0,ap3,ap1,ap2);
+					GenCompareI(ap3,ap1,ap2,1);
 					ReleaseTempRegister(ap3);
 					Generate4adic(op_bge,0,ap3,makereg(0),make_clabel(label), make_immed(prediction));
 				}
@@ -695,7 +795,7 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int predi
 					error(ERR_UBLTZ);	//GenerateTriadic(op_bltu,0,ap1,makereg(0),make_clabel(label));
 				else {
 					ap3 = GetTempRegister();
-					GenerateTriadic(op_cmpu,0,ap3,ap1,ap2);
+					GenCompareI(ap3,ap1,ap2,0);
 					ReleaseTempRegister(ap3);
 					Generate4adic(op_blt,0,ap3,makereg(0),make_clabel(label), make_immed(prediction));
 				}
@@ -709,7 +809,7 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int predi
 					GenerateTriadic(op_bgeu,0,makereg(0),ap1,make_clabel(label));
 				else {
 					ap3 = GetTempRegister();
-					GenerateTriadic(op_cmpu,0,ap3,ap1,ap2);
+					GenCompareI(ap3,ap1,ap2,0);
 					ReleaseTempRegister(ap3);
 					Generate4adic(op_bge,0,makereg(0),ap3,make_clabel(label), make_immed(prediction));
 				}
@@ -723,7 +823,7 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int predi
 					GenerateTriadic(op_bltu,0,makereg(0),ap1,make_clabel(label));
 				else {
 					ap3 = GetTempRegister();
-					GenerateTriadic(op_cmpu,0,ap3,ap1,ap2);
+					GenCompareI(ap3,ap1,ap2,0);
 					ReleaseTempRegister(ap3);
 					Generate4adic(op_blt,0,makereg(0),ap3,make_clabel(label), make_immed(prediction));
 				}
@@ -740,7 +840,7 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int predi
 				}
 				else {
 					ap3 = GetTempRegister();
-					GenerateTriadic(op_cmpu,0,ap3,ap1,ap2);
+					GenCompareI(ap3,ap1,ap2,0);
 					ReleaseTempRegister(ap3);
 					Generate4adic(op_bge,0,ap3,makereg(0),make_clabel(label), make_immed(prediction));
 				}
@@ -777,7 +877,6 @@ static void GenerateDefaultCatch(SYM *sym)
 //
 void GenerateFunction(SYM *sym)
 {
-	char buf[200];
 	AMODE *ap;
     int defcatch;
 	int nn;
@@ -802,7 +901,7 @@ void GenerateFunction(SYM *sym)
 	if (sym->IsInterrupt) {
        if (sym->stkname)
            GenerateDiadic(op_lea,0,makereg(SP),make_string(sym->stkname));
-	   for (nn = 1; nn < 31; nn--)
+	   for (nn = 1 + (sym->tp->GetBtp()->type!=bt_void ? 1 : 0); nn < 31; nn++)
 		   GenerateMonadic(op_push,0,makereg(nn));
 	}
 	// The prolog code can't be optimized because it'll run *before* any variables
@@ -842,7 +941,14 @@ void GenerateFunction(SYM *sym)
 		// Stack link/unlink is optimized away by the peephole optimizer if they aren't
 		// needed. So they are just always spit out here.
 //			snprintf(buf, sizeof(buf), "#-%sSTKSIZE_-8",sym->mangledName->c_str());
-		GenerateMonadic(op_link,0,make_immed(sym->stkspace));//make_string(my_strdup(buf)));
+		if (cpu.SupportsLink)
+			GenerateDiadic(op_link,0,makereg(regBP),make_immed(sym->stkspace));//make_string(my_strdup(buf)));
+		else {
+			// Alternate code for lacking a link instruction
+			GenerateMonadic(op_push,0,makereg(regBP));
+			GenerateDiadic(op_mov,0,makereg(regBP),makereg(regSP));
+			GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(sym->stkspace));
+		}
 	}
 	if (optimize)
 		opt1(stmt);
@@ -868,9 +974,13 @@ void GenerateFunction(SYM *sym)
 
 static void UnlinkStack(SYM * sym)
 {
-	//GenerateDiadic(op_mov,0,makereg(regSP),makereg(regBP));
-	//GenerateMonadic(op_pop,0,makereg(regBP));
-	GenerateZeradic(op_unlk);
+	// Alternate code for when there's no link/unlink instructions
+	if (!cpu.SupportsUnlink) {
+		GenerateDiadic(op_mov,0,makereg(regSP),makereg(regBP));
+		GenerateMonadic(op_pop,0,makereg(regBP));
+	}
+	else
+		GenerateMonadic(op_unlk,0,makereg(regBP));
 	if (exceptions) {
 		if (!sym->IsLeaf || sym->DoesThrow)
 			GenerateMonadic(op_pop,0,makereg(regXLR));
@@ -998,7 +1108,7 @@ void GenerateReturn(Statement *stmt)
 	// Generate the return instruction. For the Pascal calling convention pop the parameters
 	// from the stack.
 	if (sym->IsInterrupt) {
-		for (nn = 30; nn > (sym->tp->GetBtp()->type!=bt_void ? 1 : 0); nn++)
+		for (nn = 30; nn > (sym->tp->GetBtp()->type!=bt_void ? 1 : 0); nn--)
 			GenerateMonadic(op_pop,0,makereg(nn));
 		GenerateZeradic(op_rti);
 		return;
@@ -1040,8 +1150,12 @@ void GenerateReturn(Statement *stmt)
 			}
 		}
 	}
-	if (!sym->IsInline)
-		GenerateMonadic(op_ret,0,make_immed(toAdd));
+	if (!sym->IsInline) {
+		if (toAdd != 8)
+			GenerateMonadic(op_ret,0,make_immed(toAdd));
+		else
+			GenerateZeradic(op_ret);
+	}
 }
 
 static int round4(int n)
@@ -1132,7 +1246,7 @@ static void RestoreRegisterParameters(SYM *sym)
 // 8 we assume a structure variable and we assume we have the address in a reg.
 // Returns: number of stack words pushed.
 //
-static int GeneratePushParameter(ENODE *ep, int regno)
+static int GeneratePushParameter(ENODE *ep, int regno, int stkoffs)
 {    
 	AMODE *ap;
 	int nn = 0;
@@ -1188,37 +1302,55 @@ static int GeneratePushParameter(ENODE *ep, int regno)
 					GenerateDiadic(op_ldi,0,makereg(regno & 0x7fff), ap);
 					if (regno & 0x8000) {
 						GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(sizeOfWord));
-						nn = 8;
+						nn = 1;
 					}
 				}
 				else if (ap->mode==am_fpreg) {
 					GenerateDiadic(op_mov,0,makereg(regno & 0x7fff), ap);
 					if (regno & 0x8000) {
 						GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(sz));
-						nn = sz;
+						nn = sz/sizeOfWord;
 					}
 				}
 				else {
 					GenerateDiadic(op_mov,0,makereg(regno & 0x7fff), ap);
 					if (regno & 0x8000) {
 						GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(sizeOfWord));
-						nn = 8;
+						nn = 1;
 					}
 				}
 			}
 			else {
-				if (ap->mode==am_immed) {	// must have been a zero
-         			GenerateMonadic(op_push,0,makereg(0));
-					nn = 1;
-				}
-				else {
-					if (ap->type=stddouble.GetIndex()) {
-						GenerateMonadic(op_push,ap->FloatSize,ap);
-						nn = sz;
+				if (cpu.SupportsPush) {
+					if (ap->mode==am_immed) {	// must have been a zero
+         				GenerateMonadic(op_push,0,makereg(0));
+						nn = 1;
 					}
 					else {
-          				GenerateMonadic(op_push,0,ap);
+						if (ap->type=stddouble.GetIndex()) {
+							GenerateMonadic(op_push,ap->FloatSize,ap);
+							nn = sz/sizeOfWord;
+						}
+						else {
+          					GenerateMonadic(op_push,0,ap);
+							nn = 1;
+						}
+					}
+				}
+				else {
+					if (ap->mode==am_immed) {	// must have been a zero
+         				GenerateDiadic(op_sw,0,makereg(0),make_indexed(stkoffs,regSP));
 						nn = 1;
+					}
+					else {
+						if (ap->type=stddouble.GetIndex()) {
+							GenerateDiadic(op_sw,0,ap,make_indexed(stkoffs,regSP));
+							nn = sz/sizeOfWord;
+						}
+						else {
+          					GenerateDiadic(op_sw,0,ap,make_indexed(stkoffs,regSP));
+							nn = 1;
+						}
 					}
 				}
 			}
@@ -1235,16 +1367,27 @@ static int GeneratePushParameterList(SYM *sym, ENODE *plist)
 {
 	TypeArray *ta = nullptr;
 	int i,sum;
+	struct ocode *ip;
 
 	sum = 0;
 	if (sym)
 		ta = sym->GetProtoTypes();
 
+	ip = peep_tail;
+	if (!cpu.SupportsPush) {
+		GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(0));
+	}
 	for(i = 0; plist != NULL; i++ )
     {
-		sum += GeneratePushParameter(plist->p[0],ta ? ta->preg[ta->length - i - 1] : 0);
+		sum += GeneratePushParameter(plist->p[0],ta ? ta->preg[ta->length - i - 1] : 0,sum*8);
 		plist = plist->p[1];
     }
+	if (!cpu.SupportsPush) {
+		if (sum==0)
+			MarkRemove(ip->fwd);
+		else
+			ip->fwd->oper3 = make_immed(sum*8);
+	}
 	if (ta)
 		delete ta;
     return sum;
@@ -1348,8 +1491,6 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
             result = GetTempRegister();
     }
 	*/
-	if (flags & F_NOVALUE)
-		;
 	if (sym && sym->tp && sym->tp->GetBtp()->IsFloatType() && (flags & F_FPREG))
 		return (makereg(1));
 	if (sym && sym->tp->IsVectorType())

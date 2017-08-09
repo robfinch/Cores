@@ -7,9 +7,13 @@
 
 #include "targetver.h"
 
+#include "compat.h"
+
+#ifndef __GNUC__
+#include "targetver.h"
 #include <Windows.h>
-#include <stdio.h>
 #include <tchar.h>
+#endif
 
 #ifdef _MSC_VER
 typedef __int8 int8_t;
@@ -34,6 +38,7 @@ typedef unsigned __int64 uint64_t;
 #include "Float128.h"
 #include "Rand.h"
 #include "txtStream.h"
+#include "cpu.h"
 #include "C.h"
 #include "Expr.h"
 #include "Statement.h"

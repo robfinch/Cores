@@ -688,7 +688,7 @@ void Declaration::ParseBitfieldSpec(bool isUnion)
 {
 	dfs.puts("<ParseBitfieldSpec>");
 	NextToken();
-	bit_width = GetIntegerExpression((ENODE **)NULL);
+	bit_width = (int)GetIntegerExpression((ENODE **)NULL);
 	if (isUnion)
 		bit_offset = 0;
 	else
@@ -848,7 +848,7 @@ void Declaration::ParseSuffixOpenbr()
 		NextToken();
 	}
 	else if(head != NULL) {
-		sz2 = GetIntegerExpression((ENODE **)NULL);
+		sz2 = (int)GetIntegerExpression((ENODE **)NULL);
 		temp1->size = sz2 * head->size;
 		temp1->numele = sz2;
 		temp1->dimen = head->dimen + 1;
@@ -857,7 +857,7 @@ void Declaration::ParseSuffixOpenbr()
 		needpunc(closebr,21);
 	}
 	else {
-		sz2 = GetIntegerExpression((ENODE **)NULL);
+		sz2 = (int)GetIntegerExpression((ENODE **)NULL);
 		temp1->size = sz2;
 		temp1->numele = sz2;
 		temp1->dimen = 1;

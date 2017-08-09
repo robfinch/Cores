@@ -160,7 +160,7 @@ struct oplst {
 		{"ldpu", op_ldpu}, {"ldwu", op_ldwu}, {"ldbu", op_ldbu}, {"ldt", op_ldt}, {"ldtu", op_ldtu},
 		{"std", op_std}, {"stp", op_stp}, {"stw", op_stw}, {"stb", op_stb}, {"stt", op_stt},
 		{"tgt", op_calltgt},
-		{"hint", op_hint},
+		{"hint", op_hint}, {"hint2",op_hint2},
 		{"abs", op_abs},
 		// Vector operations
 		{"lv", op_lv}, {"sv", op_sv},
@@ -169,6 +169,9 @@ struct oplst {
 		{"vslt", op_vslt}, {"vsge", op_vsge}, {"vsle", op_vsle}, {"vsgt", op_vsgt},
 		{"vadds", op_vadds}, {"vsubs", op_vsubs}, {"vmuls", op_vmuls}, {"vdivs", op_vdivs},
 		{"vex", op_vex}, {"veins",op_veins},
+		{"addq1", op_addq1 }, {"addq2", op_addq2 }, {"addq3", op_addq3 },
+		{"andq1", op_andq1 }, {"andq2", op_andq2 }, {"andq3", op_andq3 },
+		{"orq1", op_orq1 }, {"orq2", op_orq2 }, {"orq3", op_orq3 },
                 {0,0} };
 
 static char *pad(char *op)
@@ -409,7 +412,7 @@ void PutAddressMode(AMODE *ap)
 			ofs.printf("vm%d", (int)ap->preg);
             break;
     case am_fpreg:
-            ofs.printf("fp%d", (int)ap->preg);
+            ofs.printf("r%d", (int)ap->preg);
             break;
     case am_ind:
 			ofs.printf("[%s]",RegMoniker(ap->preg));
@@ -489,9 +492,18 @@ void put_code(struct ocode *p)
 		}
 	else if (op != op_fnname)
 		{
-			ofs.printf("\t");
-			ofs.printf("%6.6s\t", "");
-			putop(op,len);
+			if (op==op_rem2) {
+				ofs.printf(";\t");
+				ofs.printf("%6.6s\t", "");
+				ofs.printf(aps->offset->sp->c_str());
+		        ofs.printf("\n");
+				return;
+			}
+			else {
+				ofs.printf("\t");
+				ofs.printf("%6.6s\t", "");
+				putop(op,len);
+			}
 		}
 	if (op==op_fnname) {
 		ep = (ENODE *)p->oper1->offset;
@@ -638,15 +650,15 @@ void GenerateWord(int val)
     }
 }
 
-void GenerateLong(int val)
+void GenerateLong(int64_t val)
 { 
 	if( gentype == longgen && outcol < 56) {
-                ofs.printf(",%ld",val);
+                ofs.printf(",%lld",val);
                 outcol += 10;
                 }
         else    {
                 nl();
-                ofs.printf("\tdw\t%ld",val);
+                ofs.printf("\tdw\t%lld",val);
                 gentype = longgen;
                 outcol = 25;
                 }
@@ -778,16 +790,16 @@ int stringlit(char *s)
 	return lp->label;
 }
 
-int caselit(struct scase *cases, int num)
+int caselit(struct scase *cases, int64_t num)
 {
 	struct clit *lp;
 
 	lp = (struct clit *)allocx(sizeof(struct clit));
 	lp->label = nextlabel++;
 	lp->nmspace = my_strdup(GetNamespace());
-	lp->cases = (struct scase *)allocx(sizeof(struct scase)*num);
-	lp->num = num;
-	memcpy(lp->cases, cases, num * sizeof(struct scase));
+	lp->cases = (struct scase *)allocx(sizeof(struct scase)*(int)num);
+	lp->num = (int)num;
+	memcpy(lp->cases, cases, (int)num * sizeof(struct scase));
 	lp->next = casetab;
 	casetab = lp;
 	return lp->label;

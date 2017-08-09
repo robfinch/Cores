@@ -44,6 +44,7 @@
 
 /*      global definitions      */
 
+CPU cpu;
 int maxPn = 15;
 int gCpu = 7;
 int regPC = 254;
@@ -53,6 +54,9 @@ int regLR = 29;
 int regXLR = 28;
 int regGP = 27;
 int regCLP = 25;                // class pointer
+int regZero = 0;
+int regFirstRegvar = 11;
+int regLastRegvar = 17;
 int farcode = 0;
 int wcharSupport = 1;
 int verbose = 0;

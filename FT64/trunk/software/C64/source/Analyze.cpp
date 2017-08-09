@@ -52,6 +52,7 @@ static void repcse_compound(Statement *stmt);
 
 CSE CSETable[500];
 short int csendx;
+short int loop_active;
 
 /*
  *      this module will step through the parse tree and find all
@@ -158,21 +159,40 @@ CSE *InsertNodeIntoCSEList(ENODE *node, int duse)
 			throw new C64PException(ERR_CSETABLE,0x01);
 		csp = &CSETable[csendx];
 		csendx++;
-//        csp = allocCSE();
-        //csp->next = olist;
-        csp->uses = 1;
-        csp->duses = (duse != 0);
+        csp->uses = loop_active;
+        csp->duses = (duse != 0) * loop_active;
         csp->exp = DuplicateEnode(node);
         csp->voidf = 0;
 		csp->reg = 0;
-        olist = csp;
         return csp;
     }
-    ++(csp->uses);
+    (csp->uses) += loop_active;
     if( duse )
-            ++(csp->duses);
+            (csp->duses) += loop_active;
     return csp;
 }
+
+// Immediate constants have low priority.
+// Even though their use might be high, they are given a low priority.
+
+void DumpCSETable()
+{
+	int nn;
+	CSE *csp;
+
+	dfs.printf("<CSETable>\n");
+	dfs.printf("N Uses DUses Void Reg\n");
+	for (nn = 0; nn < csendx; nn++) {
+		csp = &CSETable[nn];
+		dfs.printf("%d: %d  ",nn,csp->uses);
+		dfs.printf("%d   ",csp->duses);
+		dfs.printf("%d   ",csp->voidf);
+		dfs.printf("%d   ",csp->reg);
+		dfs.printf("\n");
+	}
+	dfs.printf("</CSETable>\n");
+}
+
 
 // voidauto2 searches the entire CSE list for auto dereferenced node which
 // point to the passed node. There might be more than one LValue that matches.
@@ -182,15 +202,15 @@ CSE *InsertNodeIntoCSEList(ENODE *node, int duse)
 int voidauto2(ENODE *node)
 {
     int uses;
-    int voided;
+    bool voided;
 	int cnt;
 
     uses = 0;
-    voided = 0;
+    voided = false;
 	for (cnt = 0; cnt < csendx; cnt++) {
         if( IsLValue(CSETable[cnt].exp) && equalnode(node,CSETable[cnt].exp->p[0]) ) {
             CSETable[cnt].voidf = 1;
-            voided = 1;
+            voided = true;
             uses += CSETable[cnt].uses;
         }
 	}
@@ -233,8 +253,8 @@ static void scanexpr(ENODE *node, int duse)
         case en_tempref:
                 csp1 = InsertNodeIntoCSEList(node,duse);
                 if ((nn = voidauto2(node)) > 0) {
-					csp1->duses += 1;
-                    csp1->uses = csp1->duses + nn - 1;
+					csp1->duses += loop_active;
+                    csp1->uses = csp1->duses + nn - loop_active;
 				}
                 break;
 		case en_ref32: case en_ref32u:
@@ -307,7 +327,7 @@ static void scanexpr(ENODE *node, int duse)
 						//}
 
                         //if( csp->voidf )
-                        //        scanexpr(node->p[0],1);
+                        //    scanexpr(node->p[0],1);
                         }
                     }
 				}
@@ -378,7 +398,7 @@ static void scanexpr(ENODE *node, int duse)
                 scanexpr(node->p[1],0);
                 break;
 		case en_assign:
-                //scanexpr(node->p[0],0);
+                scanexpr(node->p[0],0);
                 scanexpr(node->p[1],0);
                 break;
         case en_fcall:
@@ -395,6 +415,7 @@ static void scanexpr(ENODE *node, int duse)
  */
 void scan(Statement *block)
 {
+	loop_active = 1;
 	while( block != NULL ) {
         switch( block->stype ) {
 			case st_compound:
@@ -413,13 +434,20 @@ void scan(Statement *block)
 			case st_until:
             case st_do:
 			case st_dountil:
+					loop_active++;
                     opt_const(&block->exp);
                     scanexpr(block->exp,0);
+                    scan(block->s1);
+					loop_active--;
+                    break;
 			case st_doloop:
 			case st_forever:
+					loop_active++;
                     scan(block->s1);
+					loop_active--;
                     break;
             case st_for:
+					loop_active++;
                     opt_const(&block->initExpr);
                     scanexpr(block->initExpr,0);
                     opt_const(&block->exp);
@@ -427,6 +455,7 @@ void scan(Statement *block)
                     scan(block->s1);
                     opt_const(&block->incrExpr);
                     scanexpr(block->incrExpr,0);
+					loop_active--;
                     break;
             case st_if:
                     opt_const(&block->exp);
@@ -444,10 +473,10 @@ void scan(Statement *block)
 			case st_default:
                     scan(block->s1);
                     break;
-            case st_spinlock:
-                    scan(block->s1);
-                    scan(block->s2);
-                    break;
+            //case st_spinlock:
+            //        scan(block->s1);
+            //        scan(block->s2);
+            //        break;
             // nothing to process for these statement
             case st_break:
             case st_continue:
@@ -474,13 +503,17 @@ static void scan_compound(Statement *stmt)
     scan(stmt->s1);
 }
 
-/*
- *      returns the desirability of optimization for a subexpression.
- */
+//
+// Returns the desirability of optimization for a subexpression.
+//
+// Immediate constants have low priority because small constants
+// can be directly encoded in the instruction. There's no value to
+// placing them in registers.
+
 int OptimizationDesireability(CSE *csp)
 {
 	if( csp->voidf || (csp->exp->nodetype == en_icon &&
-                       csp->exp->i < 128 && csp->exp->i >= -128))
+                       csp->exp->i < 32768 && csp->exp->i >= -32768))
         return 0;
  /* added this line to disable register optimization of global variables.
     The compiler would assign a register to a global variable ignoring

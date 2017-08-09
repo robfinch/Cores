@@ -128,7 +128,11 @@ enum e_op {
 		op_ldd, op_ldb, op_ldp, op_ldw, op_ldbu, op_ldwu, op_ldpu, op_ldt, op_ldtu,
 		op_std, op_stb, op_stp, op_stw, op_stt, op_calltgt,
 		op_csrrw, op_nop,
-		op_hint,
+		op_hint, op_hint2, op_rem2,
+		// FT64
+		op_addq1, op_addq2, op_addq3,
+		op_andq1, op_andq2, op_andq3,
+		op_orq1, op_orq2, op_orq3,
 		// Built in functions
 		op_abs,
         op_empty };

@@ -27,7 +27,7 @@
 
 static void AddToPeepList(struct ocode *newc);
 static void Remove();
-static void MarkRemove(struct ocode *ip);
+void MarkRemove(struct ocode *ip);
 void peep_add(struct ocode *ip);
 static void PeepoptSub(struct ocode *ip);
 void peep_move(struct ocode	*ip);
@@ -444,7 +444,7 @@ static bool IsSubiSP(struct ocode *ip)
 	return (false);
 }
 
-static void MergeSubi(struct ocode *first, struct ocode *last, int amt)
+static void MergeSubi(struct ocode *first, struct ocode *last, int64_t amt)
 {
 	struct ocode *ip;
 
@@ -454,8 +454,7 @@ static void MergeSubi(struct ocode *first, struct ocode *last, int amt)
 	// First remove all the excess subtracts
 	for (ip = first; ip && ip != last; ip = ip->fwd) {
 		if (IsSubiSP(ip)) {
-			ip->back->fwd = ip->fwd;
-			ip->fwd->back = ip->back;
+			MarkRemove(ip);
 			optimized++;
 		}
 	}
@@ -504,7 +503,7 @@ static void PeepoptSubSP()
 	struct ocode *ip;
 	struct ocode *first_subi = nullptr;
 	struct ocode *last_subi = nullptr;
-	int amt = 0;
+	int64_t amt = 0;
 
 	for (ip = peep_head; ip; ip = ip->fwd) {
 		if (IsSubiSP(ip)) {
@@ -537,14 +536,15 @@ void peep_cmp(struct ocode *ip)
  */
 void PeepoptMuldiv(struct ocode *ip, int op)
 {  
-	int shcnt, num;
+	int shcnt;
+	int64_t num;
 
-  if( ip->oper1->mode != am_immed )
-    return;
-  if( ip->oper1->offset->nodetype != en_icon )
-    return;
+	if( ip->oper1->mode != am_immed )
+		return;
+	if( ip->oper1->offset->nodetype != en_icon )
+		return;
 
-  num = ip->oper1->offset->i;
+	num = ip->oper1->offset->i;
 
   // remove multiply / divide by 1
 	// This shouldn't get through Optimize, but does sometimes.
@@ -557,7 +557,7 @@ void PeepoptMuldiv(struct ocode *ip, int op)
 		return;
 	}
   for (shcnt = 1; shcnt < 32; shcnt++) {
-    if (num == (int)1 << shcnt) {
+    if (num == (int64_t)1 << shcnt) {
       num = shcnt;
 		optimized++;
       break;
@@ -923,6 +923,31 @@ static void opt_nbr()
 }
 
 
+// Return true if the instruction has a target register.
+
+static bool HasTargetReg(struct ocode *ip)
+{
+	switch(ip->opcode) {
+	case op_lb:
+	case op_lc:
+	case op_lh:
+	case op_lbu:
+	case op_lcu:
+	case op_lhu:
+	case op_lw:
+	case op_add:
+	case op_sub:
+	case op_and:
+	case op_or:
+	case op_mul:
+	case op_div:
+	case op_mulu:
+	case op_divu:
+		return true;
+	}
+	return false;
+}
+
 // Process compiler hint opcodes
 
 static void PeepoptHint(struct ocode *ip)
@@ -972,13 +997,39 @@ static void PeepoptHint(struct ocode *ip)
 		if (ip->fwd==nullptr || ip->back==nullptr)
 			break;
 		if (equal_address(ip->fwd->oper2, ip->back->oper1)) {
-			ip->back->oper1 = ip->fwd->oper1;
-			MarkRemove(ip);
-			optimized++;
+			if (HasTargetReg(ip->back)) {
+				ip->back->oper1 = ip->fwd->oper1;
+				MarkRemove(ip->fwd);
+				optimized++;
+			}
 		}
 		else {
 			MarkRemove(ip);
 			optimized++;
+		}
+		break;
+
+	// hint #9
+	// Index calc.
+	//		shl r1,r3,#3
+	//		sw r4,[r11+r1]
+	// Becomes:
+	//		sw r4,[r11+r3*8]
+	case 9:
+		if (ip->fwd==nullptr || ip->back==nullptr)
+			break;
+		if (ip->fwd->oper2==nullptr || ip->back->oper3==nullptr)
+			break;
+		if (ip->fwd->oper2->preg == ip->back->oper1->preg) {
+			if ((ip->back->opcode==op_shl) && ip->back->oper3->offset &&
+				(ip->back->oper3->offset->i == 1 
+				|| ip->back->oper3->offset->i == 2
+				|| ip->back->oper3->offset->i == 3)) {
+					ip->fwd->oper2->preg = ip->back->oper2->preg;
+					ip->fwd->oper2->scale = 1 << ip->back->oper3->offset->i;
+					MarkRemove(ip->back);
+					optimized++;
+			}
 		}
 		break;
 	}
@@ -1068,7 +1119,8 @@ static int CountBPReferences()
 
 	for (ip = peep_head; ip != NULL; ip = ip->fwd)
 	{
-		if (ip->opcode != op_label && ip->opcode!=op_nop) {
+		if (ip->opcode != op_label && ip->opcode!=op_nop
+			&& ip->opcode != op_link && ip->opcode != op_unlk) {
 			if (ip->oper1) {
 				if (ip->oper1->preg==regBP || ip->oper1->sreg==regBP)
 					refBP++;
@@ -1090,9 +1142,19 @@ static int CountBPReferences()
 	return (refBP);
 }
 
-static void MarkRemove(struct ocode *ip)
+void MarkRemove(struct ocode *ip)
 {
 	ip->remove = true;
+}
+
+static void MarkAllKeep()
+{
+	struct ocode *ip;
+
+	for (ip = peep_head; ip != NULL; ip = ip->fwd )
+	{
+		ip->remove = false;
+	}
 }
 
 static void Remove()
@@ -1150,6 +1212,9 @@ static void opt_peep()
 	struct ocode *ip;
 	int rep;
 	
+	// Remove any dead code identified by the code generator.
+	Remove();
+
 	if (!::opt_nopeep) {
 
 		opt_nbr();
@@ -1164,9 +1229,10 @@ static void opt_peep()
 			SetLabelReference();
 			EliminateUnreferencedLabels();
 			Remove();
+			MarkAllKeep();
 			for (ip = peep_head; ip != NULL; ip = ip->fwd )
 			{
-				ip->remove = false;
+				if (!ip->remove)
 				switch( ip->opcode )
 				{
 				case op_rem:
@@ -1195,9 +1261,6 @@ static void opt_peep()
 						break;
 				case op_mul:
 	//                    PeepoptMuldiv(ip,op_shl);
-						break;
-				case op_lc0i:
-						PeepoptLc0i(ip);
 						break;
 				case op_lc:
 						PeepoptLc(ip);
@@ -1249,6 +1312,7 @@ static void opt_peep()
 						break;
 				}
 			}
+			Remove();
 		}
 		PeepoptSubSP();
 

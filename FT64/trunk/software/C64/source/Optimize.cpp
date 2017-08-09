@@ -167,10 +167,10 @@ void dooper(ENODE **node)
 /*
  *      return which power of two i is or -1.
  */
-int pwrof2(int i)
+int pwrof2(int64_t i)
 {       
 	int p;
-	int q;
+	int64_t q;
 
     q = 1;
     p = 0;
@@ -208,7 +208,8 @@ int mod_mask(int i)
 static void opt0(ENODE **node)
 {
 	ENODE *ep;
-    int val, sc;
+    int sc;
+	int64_t val;
 
     ep = *node;
     if( ep == (ENODE *)NULL )
@@ -513,9 +514,9 @@ static void opt0(ENODE **node)
  *      xfold will remove constant nodes and return the values to
  *      the calling routines.
  */
-static int xfold(ENODE *node)
+static int64_t xfold(ENODE *node)
 {
-	int i;
+	int64_t i;
 
         if( node == NULL )
                 return 0;
@@ -577,8 +578,10 @@ static int xfold(ENODE *node)
  *      reorganize an expression for optimal constant grouping.
  */
 static void fold_const(ENODE **node)
-{       ENODE *ep;
-        int i;
+{       
+	ENODE *ep;
+    int64_t i;
+
         ep = *node;
         if( ep == 0 )
                 return;

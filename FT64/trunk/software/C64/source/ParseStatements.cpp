@@ -317,7 +317,7 @@ Statement *Statement::ParseCatch()
 	snp = NewStatement(st_catch, TRUE);
 	currentStmt = snp;
 	if (lastst != openpa) {
-		snp->label = (int *)NULL;
+		snp->label = (int64_t *)NULL;
 		snp->s2 = (Statement *)99999;
 		snp->s1 = Statement::Parse(0);
 		// Empty statements return NULL
@@ -364,9 +364,9 @@ Statement *Statement::ParseCase()
 {
 	Statement *snp; 
     Statement *head, *tail;
-	int buf[256];
+	int64_t buf[256];
 	int nn;
-	int *bf;
+	int64_t *bf;
 
     snp = NewStatement(st_case, FALSE); 
 	if (lastst == kw_fallthru)	// ignore "fallthru"
@@ -384,11 +384,11 @@ Statement *Statement::ParseCase()
 		} while (nn < 256);
 		if (nn==256)
 			error(ERR_TOOMANYCASECONSTANTS);
-		bf = (int *)xalloc(sizeof(int)*(nn+1));
+		bf = (int64_t *)xalloc(sizeof(int64_t)*(nn+1));
 		bf[0] = nn;
 		for (; nn > 0; nn--)
 			bf[nn]=buf[nn-1];
-		snp->casevals = (int *)bf;
+		snp->casevals = (int64_t *)bf;
     }
     else if( lastst == kw_default) { 
         NextToken(); 
@@ -425,7 +425,7 @@ int Statement::CheckForDuplicateCases()
 	Statement *head;
 	Statement *top, *cur, *def;
 	int cnt, cnt2;
-	static int buf[1000];
+	static int64_t buf[1000];
 	int ndx;
 
 	ndx = 0;
@@ -458,7 +458,7 @@ int Statement::CheckForDuplicateCases()
 	return (FALSE);
 } 
   
-Statement *Statement::ParseSwitch(int nkd) 
+Statement *Statement::ParseSwitch(bool nkd) 
 {       
 	Statement *snp; 
     Statement *head, *tail; 
@@ -550,7 +550,7 @@ Statement *Statement::ParseStop()
 	Statement *snp; 
 
 	snp = NewStatement(st_stop, TRUE); 
-	snp->num = GetIntegerExpression(NULL);
+	snp->num = (int)GetIntegerExpression(NULL);
 	if( lastst != end )
 		needpunc( semicolon,43 );
 	return snp;
@@ -603,7 +603,7 @@ j1:
 	if (nn >= 3500)
 		error(ERR_ASMTOOLONG);
 	buf[nn] = '\0';
-	snp->label = (int *)my_strdup(buf);
+	snp->label = (int64_t *)my_strdup(buf);
     return snp;
 } 
 
@@ -749,7 +749,7 @@ Statement *Statement::ParseLabel()
 	NextToken();       /* get past id */ 
 	needpunc(colon,45); 
 	if( sp->storage_class == sc_label ) { 
-		snp->label = (int *)sp->value.i; 
+		snp->label = (int64_t *)sp->value.i; 
 		snp->next = (Statement *)NULL; 
 		return snp; 
 	} 
@@ -783,14 +783,14 @@ Statement *Statement::ParseGoto()
         error( ERR_LABEL );
     else { 
         snp->stype = st_goto;
-        snp->label = (int *)sp->value.i;
+        snp->label = (int64_t *)sp->value.i;
         snp->next = (Statement *)NULL;
         return (snp); 
     } 
     return ((Statement *)NULL);
 } 
   
-Statement *Statement::Parse(int nkd) 
+Statement *Statement::Parse(bool nkd) 
 {
 	Statement *snp; 
 	dfs.puts("<Parse>");

@@ -87,7 +87,7 @@ int StructDeclaration::Parse(int ztype)
 
 			if (lastst == kw_align) {
         NextToken();
-        sp->tp->alignment = GetIntegerExpression(&pnd);
+        sp->tp->alignment = (int)GetIntegerExpression(&pnd);
       }
 
 			// Could be a forward structure declaration like:
@@ -114,7 +114,7 @@ int StructDeclaration::Parse(int ztype)
       NextToken();
       if (lastst==kw_align) {
         NextToken();
-        sp->tp->alignment = GetIntegerExpression(&pnd);
+        sp->tp->alignment = (int)GetIntegerExpression(&pnd);
       }
 			if (lastst==begin) {
         NextToken();
@@ -132,7 +132,7 @@ int StructDeclaration::Parse(int ztype)
 
     if (lastst==kw_align) {
       NextToken();
-      tp->alignment = GetIntegerExpression(&pnd);
+      tp->alignment = (int)GetIntegerExpression(&pnd);
     }
 
     if( lastst != begin)

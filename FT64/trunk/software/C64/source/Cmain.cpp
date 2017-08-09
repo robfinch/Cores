@@ -69,6 +69,11 @@ int main(int argc, char **argv)
 	uctran_off = 0;
 	optimize =1;
 	exceptions=1;
+	cpu.SupportsPop = true;
+	cpu.SupportsPush = true;
+	cpu.SupportsLink = true;
+	cpu.SupportsUnlink = true;
+
 //	printf("c64 starting...\r\n");
 	while(--argc) {
     if( **++argv == '-')
