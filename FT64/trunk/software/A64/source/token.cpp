@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2014  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2014-2017  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -1114,7 +1114,7 @@ int NextToken()
              }
              break;
 
-        // end eor eori endpublic extern equ eret es
+        // end eor eori endif endpublic extern equ eret es
         case 'e': case 'E':
              if ((inptr[1]=='q' || inptr[1]=='Q') &&
                  (inptr[2]=='u' || inptr[2]=='U') &&
@@ -1140,6 +1140,21 @@ int NextToken()
                  isspace(inptr[3])) {
                  inptr += 3;
                  return token = tk_end;
+             }
+             if ((inptr[1]=='n' || inptr[1]=='O') &&
+                 (inptr[2]=='d' || inptr[2]=='R') &&
+                 (inptr[3]=='i' || inptr[3]=='I') &&
+                 (inptr[4]=='f' || inptr[4]=='F') &&
+                 isspace(inptr[5])) {
+                 inptr += 5;
+                 return token = tk_endif;
+             }
+             if ((inptr[1]=='l' || inptr[1]=='L') &&
+                 (inptr[2]=='s' || inptr[2]=='S') &&
+                 (inptr[3]=='e' || inptr[3]=='E') &&
+                 isspace(inptr[4])) {
+                 inptr += 4;
+                 return token = tk_else;
              }
              if ((inptr[1]=='n' || inptr[1]=='N') &&
                  (inptr[2]=='d' || inptr[2]=='D') &&
@@ -1176,6 +1191,13 @@ int NextToken()
 					 return token = tk_eret;
 				 }
 			 }
+             if ((inptr[1]=='n' || inptr[1]=='N') &&
+                 (inptr[2]=='d' || inptr[2]=='D') &&
+                 (inptr[3]=='m' || inptr[3]=='M') &&
+                 isspace(inptr[4])) {
+                 inptr += 4;
+                 return token = tk_endm;
+             }
              break;
 
         // fill fabs fadd fb__
@@ -1413,7 +1435,7 @@ int NextToken()
              }
              break;
              
-        // ios inc int iret ipush ipop itof
+        // if ifdef ifndef ios inc int iret ipush ipop itof
         case 'i': case 'I':
              if ((inptr[1]=='o' || inptr[1]=='O') &&
                  (inptr[2]=='s' || inptr[2]=='S') &&
@@ -1466,6 +1488,27 @@ int NextToken()
 					 return token = tk_itof;
 				 }
 			 }
+             if (inptr[1]=='f' || inptr[1]=='F') {
+				if ((inptr[2]=='d' || inptr[2]=='D')
+					&& (inptr[3]=='e' || inptr[3]=='E')
+					&& (inptr[4]=='f' || inptr[3]=='F')
+					&& (isspace(inptr[5]) || inptr[5]=='.')) {
+						inptr += 5;
+						return token = tk_ifdef;
+				}
+				if ((inptr[2]=='n' || inptr[2]=='N')
+					&& (inptr[3]=='d' || inptr[3]=='D')
+					&& (inptr[4]=='e' || inptr[4]=='E')
+					&& (inptr[5]=='f' || inptr[5]=='F')
+					&& (isspace(inptr[6]) || inptr[6]=='.')) {
+						inptr += 6;
+						return token = tk_ifndef;
+				}
+				if (isspace(inptr[2]) || inptr[2]=='.') {
+					inptr += 2;
+					return token = tk_if;
+				}
+             }
              break;
 
         // jal jgr jmp jsf jsr jsp jci jhi
@@ -1888,6 +1931,14 @@ int NextToken()
                     return token = tk_mark2;
                 }
 			}
+            if ((inptr[1]=='a' || inptr[1]=='A') &&
+                (inptr[2]=='r' || inptr[2]=='R') &&
+                (inptr[3]=='c' || inptr[3]=='C') &&
+                (inptr[4]=='o' || inptr[4]=='O') &&
+                isspace(inptr[5])) {
+                inptr += 5;
+                return token = tk_macro;
+            }
             break;
 
         // not neg nop
@@ -2401,13 +2452,6 @@ int NextToken()
                     inptr += 4;
                     return token = tk_stsw;
                 }
-                if ((inptr[1]=='y' || inptr[1]=='Y') && 
-                    (inptr[2]=='n' || inptr[2]=='N') && 
-                    (inptr[3]=='c' || inptr[3]=='C') && 
-                    isspace(inptr[4])) {
-                    inptr += 4;
-                    return token = tk_sync;
-                }
                 if ((inptr[1]=='w' || inptr[1]=='W') &&
                     (inptr[2]=='s' || inptr[2]=='S') &&
                     isspace(inptr[3])) {
@@ -2451,6 +2495,13 @@ int NextToken()
                     inptr += 3;
                     return token = tk_shr;
                 }
+            }
+            if ((inptr[1]=='y' || inptr[1]=='Y') && 
+                (inptr[2]=='n' || inptr[2]=='N') && 
+                (inptr[3]=='c' || inptr[3]=='C') && 
+                isspace(inptr[4])) {
+                inptr += 4;
+                return token = tk_sync;
             }
             if ((inptr[1]=='w' || inptr[1]=='W') && (inptr[2]=='c' || inptr[2]=='C') && (inptr[3]=='r' || inptr[3]=='R') && isspace(inptr[4])) {
                 inptr += 4;

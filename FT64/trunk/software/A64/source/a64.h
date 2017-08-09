@@ -26,6 +26,7 @@
 #ifndef A64_H
 #define A64_H
 
+#include <Windows.h>
 #include "token.h"
 #include "elf.hpp"
 #include "NameTable.hpp"
@@ -74,6 +75,7 @@ extern NameTable nmTable;
 extern int num_bytes;
 extern int num_insns;
 
+extern void doif();
 extern int64_t expr();
 extern Int128 expr128();
 void Table888_processMaster();
@@ -98,6 +100,7 @@ extern void process_public();
 extern void process_label();
 extern void process_hint();
 extern void bump_address();
+extern int getIdentifier();
 
 extern int NumSections;
 extern clsElf64Section sections[12];

@@ -42,8 +42,10 @@ int pass;
 int lineno;
 char *inptr;
 char *stptr;
+char *pif1, *pif2;
 int token;
 int phasing_errors;
+int pe1, pe2, pe3;
 int bGen = 0;
 bool bGenListing = false;
 char fSeg = 0;
@@ -416,7 +418,7 @@ void process_public()
 	            if (sym->value.low != ca) {
 	                phasing_errors++;
 	                sym->phaserr = '*';
-	                 if (bGen) printf("%s=%06I64x ca=%06I64x\r\n", nmTable.GetName(sym->name),  sym->value, code_address);
+	                 //if (bGen) printf("%s=%06I64x ca=%06I64x\r\n", nmTable.GetName(sym->name),  sym->value, code_address);
 	            }
 	            else
 	                 sym->phaserr = ' ';
@@ -1107,7 +1109,7 @@ void process_label()
 				 if (sym->value.low != ca) {
                      phasing_errors++;
                      sym->phaserr = '*';
-                     if (bGen) printf("%s=%06llx ca=%06llx\r\n", nmTable.GetName(sym->name),  sym->value, code_address);
+                     //if (bGen) printf("%s=%06llx ca=%06llx\r\n", nmTable.GetName(sym->name),  sym->value, code_address);
                  }
                  else
                      sym->phaserr = ' ';
@@ -1231,6 +1233,100 @@ j1:
     }
 }
 
+void skipif(int64_t val)
+{
+	int iflevel = 1;
+	char *p1, *p2, *p3;
+	bool codecut = false;
+
+	// Cut out the if statement
+	p1 = pif1;
+	memmove(pif1,pif2,sizeof(masterFile)-(pif2-masterFile));
+
+	p1 = inptr = pif1;
+	while(*inptr) {
+		SkipSpaces();
+		p2 = inptr;
+		NextToken();
+		p3 = inptr;
+		if (token==tk_if || token==tk_ifdef || token==tk_ifndef)
+			iflevel++;
+		else if (token==tk_endif) {
+			iflevel--;
+			if (iflevel==0) {
+				// If the if was false cut out the code between
+				// if and endif
+				if (val==0 && !codecut) {
+					memmove(pif1,p3,sizeof(masterFile)-(p3-masterFile));
+					inptr = pif1;
+					return;
+				}
+				else {
+					// remove endif but leave remaining text
+					memmove(p2,inptr,sizeof(masterFile)-(inptr-masterFile));
+					inptr = p2;
+				}
+			}
+		}
+		else if (token==tk_else) {
+			if (iflevel==0) {
+				// cut out code between if and else
+				// and keep going until endif
+				if (val==0) {
+					memmove(pif1,p2+4,sizeof(masterFile)-(p2+4-masterFile));
+					inptr = pif1;
+					codecut = true;
+				}
+				else {
+					// remove the else from text
+					// and keep going until endif
+					memmove(p2,inptr,sizeof(masterFile)-(inptr-masterFile));
+					inptr = p2;
+				}
+			}
+		}
+		else
+			ScanToEOL();
+		if (*inptr=='\n')
+			inptr++;
+	}
+}
+
+void doif()
+{
+	int64_t val;
+
+	NextToken();
+	val = expr();
+	pif2 = inptr;
+	ScanToEOL();
+	skipif(val);
+}
+
+void doifdef()
+{
+	int64_t val;
+
+	if (getIdentifier()==0)
+		printf("Expecting an identifier %d.\n", lineno);
+    val = (find_symbol(lastid)!=nullptr);
+	ScanToEOL();
+	pif2 = inptr;
+	skipif(val);
+}
+
+void doifndef()
+{
+	int64_t val;
+
+	if (getIdentifier()==0)
+		printf("Expecting an identifier %d.\n", lineno);
+    val = (find_symbol(lastid)==nullptr);
+	ScanToEOL();
+	pif2 = inptr;
+	skipif(val);
+}
+
 // ----------------------------------------------------------------------------
 // Look for .include directives and include the files.
 // ----------------------------------------------------------------------------
@@ -1308,6 +1404,7 @@ j1:
      while (!feof(fp)) {
          fgets(buf, sizeof(buf)/sizeof(char), fp);
          processLine(buf);
+		 ZeroMemory(buf,sizeof(buf));
      }
      fclose(fp);
 j2:
@@ -1671,6 +1768,18 @@ int checkbits(unsigned int i)
 	return o;	
 }
 
+/*
+int PreProcessFile(char *nm)
+{
+	static char outname[1000];
+	static char sysbuf[500];
+
+	strcpy_s(outname, sizeof(outname), nm);
+	strcat_s(outname,sizeof(outname),".app.asm");
+	sprintf_s(sysbuf, sizeof(sysbuf), "app -V %s %s", nm, outname);
+	return system(sysbuf);
+}
+*/
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
 
@@ -1706,6 +1815,8 @@ int main(int argc, char *argv[])
     nmTable.Clear();
     memset(masterFile,0,sizeof(masterFile));
     if (verbose) printf("Pass 1 - collect all input files.\r\n");
+	//PreProcessFile(fname);
+	//strcat_s(fname,sizeof(fname),".app.asm");
     processFile(fname,0);   // Pass 1, collect all include files
     if (debug) {
         FILE *fp;
@@ -1715,6 +1826,7 @@ int main(int argc, char *argv[])
                 fclose(fp);
         }
     }
+
     if (verbose) printf("Pass 2 - group and reorder segments\r\n");
     first_org = 1;
     processSegments();     // Pass 2, group and order segments
@@ -1735,6 +1847,7 @@ int main(int argc, char *argv[])
     processMaster();
     if (verbose) printf("Pass 6: phase errors: %d\r\n", phasing_errors);
     pass = 6;
+	pe3 = pe2 = pe1 = 0;
     while (phasing_errors && pass < 40) {
         phasing_errors = 0;
         num_bytes = 0;
@@ -1743,6 +1856,14 @@ int main(int argc, char *argv[])
         processMaster();
         if (verbose) printf("Pass %d: phase errors: %d\r\n", pass, phasing_errors);
         pass++;
+		pe3 = pe2;
+		pe2 = pe1;
+		pe1 = phasing_errors;
+		if (pe1==pe2 && pe2==pe3 && pe1==pe3) {
+			if (verbose)
+				printf("Non converging phase errors\r\n");
+			break;
+		}
     }
     //processMaster();
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

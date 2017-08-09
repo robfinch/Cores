@@ -38,6 +38,7 @@ int64_t primary()
     SYM *sym;
     static char buf[500];
 
+	ZeroMemory(buf,sizeof(buf));
     switch(token) {
     case tk_id:
          if (lastid[0]=='.')  // local label
