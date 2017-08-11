@@ -937,15 +937,15 @@ AMODE *GenerateModDiv(ENODE *node,int flags,int size)
 	ap3 = GetTempRegister();
 	if (size==2)
 		ap3->amode2 = GetTempRegister();
-	ap1 = GenerateExpression(node->p[0],F_REG,8);
-	ap2 = GenerateExpression(node->p[1],F_REG | F_IMMED,8);
+	ap1 = GenerateExpression(node->p[0],F_REG,size);
+	ap2 = GenerateExpression(node->p[1],F_REG | F_IMMED,size);
 	if (size==1) {
-		GenerateTriadic(op_mov,0,makereg(1),ap1,make_immed(0));
+		GenerateDiadic(op_mov,0,makereg(1),ap1);
 		if (ap2->mode==am_immed)
 			GenerateTriadic(op_mov,0,makereg(2),makereg(regZero),ap2);
 		else
-			GenerateTriadic(op_mov,0,makereg(2),ap2,make_immed(0));
-		GenerateTriadic(op_mov,0,makereg(regLR),makereg(regPC),make_immed(2));
+			GenerateDiadic(op_mov,0,makereg(2),ap2);
+		//GenerateTriadic(op_mov,0,makereg(regLR),makereg(regPC),make_immed(2));
 		switch(node->nodetype) {
 		case en_div:	GenerateTriadic(op_jsr,0,makereg(regLR),makereg(regZero),make_string("__div")); break;
 		case en_udiv:	GenerateTriadic(op_jsr,0,makereg(regLR),makereg(regZero),make_string("__divu")); break;
