@@ -514,9 +514,11 @@ AMODE *GenerateIndex(ENODE *node)
 		ReleaseTempReg(ap1);
         return (ap3);
     }
+	ap3 = GetTempRegister();
     ap1 = GenerateExpression(node->p[0],F_REG | F_IMMED,sizeOfWord);
     if( ap1->mode == am_immed )
     {
+		ReleaseTempReg(ap3);
 		ap2 = GenerateExpression(node->p[1],F_REG,sizeOfWord);
 		ap2->mode = am_indx;
 		ap2->offset = ap1->offset;
@@ -524,47 +526,46 @@ AMODE *GenerateIndex(ENODE *node)
 		return (ap2);
     }
     ap2 = GenerateExpression(node->p[1],F_ALL,sizeOfWord);   /* get right op */
-	ap3 = GetTempRegister();
     if( ap2->mode == am_immed && ap1->mode == am_reg ) /* make am_indx */
     {
-		ReleaseTempReg(ap3);
-        ap2->mode = am_indx;
-        ap2->preg = ap1->preg;
-        ap2->deep = ap1->deep;
-        return (ap2);
+		GenerateDiadic(op_mov,0,ap3,ap1);
+		ReleaseTempReg(ap1);
+        ap3->mode = am_indx;
+		ap3->offset = makeinode(en_icon,ap2->offset->i);
+        return (ap3);
     }
 	if (ap2->mode == am_ind && ap1->mode == am_reg) {
 		GenerateDiadic(op_mov,0,ap3,ap1);
-		GenerateDiadic(op_add,0,ap1,ap2);
-		ReleaseTempReg(ap3);
+		GenerateDiadic(op_add,0,ap3,ap2);
 		ReleaseTempReg(ap2);
+		ReleaseTempReg(ap1);
   //      ap2->mode = am_indx2;
   //      ap2->sreg = ap1->preg;
 		//ap2->deep2 = ap1->deep;
-        return (ap1);
+        return (ap3);
 	}
 	if (ap2->mode == am_direct && ap1->mode==am_reg) {
 		GenerateDiadic(op_mov,0,ap3,ap1);
-		GenerateDiadic(op_add,0,ap1,ap2);
-		ReleaseTempReg(ap3);
+		GenerateDiadic(op_add,0,ap3,ap2);
 		ReleaseTempReg(ap2);
+		ReleaseTempReg(ap1);
         //ap2->mode = am_indx;
         //ap2->preg = ap1->preg;
         //ap2->deep = ap1->deep;
-        return (ap1);
+        return (ap3);
     }
 	// ap1->mode must be F_REG
-	MakeLegalAmode(ap2,F_REG,8);
+	MakeLegalAmode(ap2,F_REG,1);
 	GenerateDiadic(op_mov,0,ap3,ap1);
-	GenerateDiadic(op_add,0,ap1,ap2);
-	ReleaseTempReg(ap3);
+	GenerateDiadic(op_add,0,ap3,ap2);
 	ReleaseTempReg(ap2);
+	ReleaseTempReg(ap1);
  //   ap1->mode = am_indx2;            /* make indexed */
 	//ap1->sreg = ap2->preg;
 	//ap1->deep2 = ap2->deep;
 	//ap1->offset = makeinode(en_icon,0);
 	//ap1->scale = node->scale;
-    return (ap1);                     /* return indexed */
+    return (ap3);                     /* return indexed */
 }
 
 long GetReferenceSize(ENODE *node)
@@ -912,13 +913,13 @@ void GenMuldiv32(AMODE *ap3, AMODE *ap1, AMODE *ap2, char *func)
 {
 	GenerateDiadic(op_mov,0,makereg(1),ap1);
 	GenerateDiadic(op_mov,0,makereg(2),ap1->amode2);
-	GenerateMonadic(op_push,0,makereg(3));
-	GenerateMonadic(op_push,0,makereg(4));
+	GenerateDiadic(op_push,0,makereg(3),makereg(regSP));
+	GenerateDiadic(op_push,0,makereg(4),makereg(regSP));
 	GenerateDiadic(op_mov,0,makereg(3),ap2);
 	GenerateDiadic(op_mov,0,makereg(4),ap2->amode2);
 	GenerateTriadic(op_jsr,0,makereg(regLR),makereg(regZero),make_string(func));
-	GenerateMonadic(op_pop,0,makereg(4));
-	GenerateMonadic(op_pop,0,makereg(3));
+	GenerateDiadic(op_pop,0,makereg(4),makereg(regSP));
+	GenerateDiadic(op_pop,0,makereg(3),makereg(regSP));
 	GenerateDiadic(op_mov,0,ap3,makereg(1));
 	GenerateDiadic(op_mov,0,ap3->amode2,makereg(2));
 }
@@ -1952,6 +1953,11 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
         ap1->mode = am_immed;
         ap1->offset = node;
         MakeLegalAmode(ap1,flags,size);
+		ap1->amode2 = allocAmode();
+		ap1->amode2->offset = node->Duplicate();
+		ap1->amode2->offset->i = ap1->amode2->offset->i >> 16;
+		ap1->offset->i = ap1->offset->i & 0xffff;
+		ap1->amode2->offset->nodetype = en_icon;
         Leave("GenExperssion",3); 
         return ap1;
 

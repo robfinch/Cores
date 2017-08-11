@@ -137,7 +137,7 @@ int AllocateRegisterVars()
 		cnt = 0;
 		for (nn = 0; nn < 64; nn++) {
 			if (rmask & (0x8000000000000000ULL >> nn)) {
-				GenerateMonadic(op_push,0,makereg(nn&15));
+				GenerateDiadic(op_push,0,makereg(nn&15),makereg(regSP));
 				cnt+=sizeOfWord;
 			}
 		}
@@ -152,8 +152,8 @@ int AllocateRegisterVars()
         if( csp->reg != -1 )
         {               // see if preload needed
             exptr = csp->exp;
-            if( !exptr->IsLValue(false) 
-				|| (exptr->p[0] && exptr->p[0]->i > 0) || (exptr->nodetype==en_struct_ref))
+            if( !exptr->IsLValue(false) || 1 ||
+				 (exptr->p[0] && exptr->p[0]->i > 0) || (exptr->nodetype==en_struct_ref))
             {
                 initstack();
                 ap = GenerateExpression(exptr,F_REG|F_IMMED|F_MEM,sizeOfWord);
@@ -210,41 +210,6 @@ AMODE *GenExpr(ENODE *node)
 
     lab0 = nextlabel++;
     lab1 = nextlabel++;
-
-	switch(node->nodetype) {
-	case en_eq:		break;
-	case en_ne:		break;
-	case en_lt:		break;
-	case en_ult:	break;
-	case en_le:		break;
-	case en_ule:	break;
-	case en_gt:		break;
-	case en_ugt:	break;
-	case en_ge:		break;
-	case en_uge:	break;
-	default:	// en_land, en_lor
-		size = GetNaturalSize(node);
-		pl = GeneratePreload();
-		GenerateFalseJump(node,lab0,0);
-		ap1 = GetTempRegister2(&pushed);
-		if (size==2)
-			ap1->amode2 = GetTempRegister();
-		if (pushed || size==2) {
-			GenerateTriadic(op_mov,0,ap1,makereg(regZero),make_immed(1));
-			if (size==2)
-				GenerateDiadic(op_mov,0,ap1->amode2,makereg(regZero));
-			GenerateTriadic(op_mov,0,makereg(regPC),makereg(0),make_label(lab1));
-			GenerateLabel(lab0);
-			GenerateDiadic(op_mov,0,ap1,makereg(regZero));
-			GenerateLabel(lab1);
-		}
-		else {
-			pop = peep_tail->back->predop;
-			OverwritePreload(pl,op_mov,0,ap1,makereg(regZero),make_immed(1),nullptr);
-			GeneratePredicatedTriadic(pop,op_mov,0,ap1,makereg(regZero),nullptr);
-		}
-		return (ap1);
-	}
 
 	switch(node->nodetype) {
 	case en_eq:
@@ -397,6 +362,28 @@ AMODE *GenExpr(ENODE *node)
 		ReleaseTempRegister(ap2);
 		ReleaseTempRegister(ap1);
 		return (ap3);
+	default:	// en_land, en_lor
+		size = GetNaturalSize(node);
+		pl = GeneratePreload();
+		GenerateFalseJump(node,lab0,0);
+		ap1 = GetTempRegister2(&pushed);
+		if (size==2)
+			ap1->amode2 = GetTempRegister();
+		if (pushed || size==2) {
+			GenerateTriadic(op_mov,0,ap1,makereg(regZero),make_immed(1));
+			if (size==2)
+				GenerateDiadic(op_mov,0,ap1->amode2,makereg(regZero));
+			GenerateTriadic(op_mov,0,makereg(regPC),makereg(0),make_label(lab1));
+			GenerateLabel(lab0);
+			GenerateDiadic(op_mov,0,ap1,makereg(regZero));
+			GenerateLabel(lab1);
+		}
+		else {
+			pop = peep_tail->back->predop;
+			OverwritePreload(pl,op_mov,0,ap1,makereg(regZero),make_immed(1),nullptr);
+			GeneratePredicatedTriadic(pop,op_mov,0,ap1,makereg(regZero),nullptr);
+		}
+		return (ap1);
 	}
 	//size = GetNaturalSize(node);
     ap3 = GetTempRegister();         
@@ -524,7 +511,7 @@ void GenerateFunction(SYM *sym)
 	// For interrupt routine don't push r1 if the routine returns a value.
 	if (sym->IsInterrupt) {
 		for (nn = 1 + (sym->tp->GetBtp()->type != bt_void); nn < 14; nn++) {
-			GenerateMonadic(op_push,0,makereg(nn));
+			GenerateDiadic(op_push,0,makereg(nn),makereg(regSP));
 		}
 	}
 
@@ -542,7 +529,7 @@ void GenerateFunction(SYM *sym)
 				//ap = GetTempRegister();
 				//GenerateDiadic(op_ld,0,ap,make_string("_xhandler"));	// <- this isn't rhread safe
 				//GenerateMonadic(op_push, 0, ap);
-				GenerateMonadic(op_push,0,makereg(regXLR));
+				GenerateDiadic(op_push,0,makereg(regXLR),makereg(regSP));
 			}
 		}
 		ap = make_label(compiler.throwlab);
@@ -555,10 +542,10 @@ void GenerateFunction(SYM *sym)
 		// needed. So they are just always spit out here.
 		//snprintf(buf, sizeof(buf), "#-%sSTKSIZE_-8",sym->mangledName->c_str());
 		if (!sym->IsLeaf) {
-			GenerateMonadic(op_push,0,makereg(regLR));
+			GenerateDiadic(op_push,0,makereg(regLR),makereg(regSP));
 		}
 		GenerateMonadic(op_hint,0,make_immed(4));
-		GenerateMonadic(op_push,0,makereg(regBP));
+		GenerateDiadic(op_push,0,makereg(regBP),makereg(regSP));
 		GenerateDiadic(op_mov,0,makereg(regBP), makereg(regSP));
 		if (sym->stkspace!=0) {
 			if (sym->stkspace < 16)
@@ -594,14 +581,14 @@ static void UnlinkStack(SYM * sym)
 {
 	GenerateMonadic(op_hint,0,make_immed(6));
 	GenerateDiadic(op_mov,0,makereg(regSP),makereg(regBP));
-	GenerateMonadic(op_pop,0,makereg(regBP));
+	GenerateDiadic(op_pop,0,makereg(regBP),makereg(regSP));
 	GenerateMonadic(op_hint,0,make_immed(7));
 	if (!sym->IsLeaf) {
-		GenerateMonadic(op_pop,0,makereg(regLR));
+		GenerateDiadic(op_pop,0,makereg(regLR),makereg(regSP));
 	}
 	if (exceptions) {
 		if (!sym->IsLeaf || sym->DoesThrow)
-			GenerateMonadic(op_pop,0,makereg(regXLR));
+			GenerateDiadic(op_pop,0,makereg(regXLR),makereg(regSP));
 	}
 }
 
@@ -617,7 +604,7 @@ static void RestoreRegisterVars()
 		cnt2 = cnt = bitsset(save_mask)*sizeOfWord;
 		for (nn = 31; nn >=1 ; nn--) {
 			if (save_mask & (1LL << nn)) {
-				GenerateMonadic(op_pop,0,makereg(nn));
+				GenerateDiadic(op_pop,0,makereg(nn),makereg(regSP));
 				cnt -= sizeOfWord;
 			}
 		}
@@ -652,9 +639,9 @@ void GenerateReturn(Statement *stmt)
 				p = sym->params.Find("_pHiddenStructPtr",false);
 				if (p) {
 					if (sym->tp->GetBtp()->size > 4) {
-						GenerateMonadic(op_push,0,makereg(8));
-						GenerateMonadic(op_push,0,makereg(9));
-						GenerateMonadic(op_push,0,makereg(10));
+						GenerateDiadic(op_push,0,makereg(8),makereg(regSP));
+						GenerateDiadic(op_push,0,makereg(9),makereg(regSP));
+						GenerateDiadic(op_push,0,makereg(10),makereg(regSP));
 						if (p->IsRegister)
 							GenerateDiadic(op_mov,0,makereg(8),makereg(p->reg));
 						else {
@@ -665,9 +652,9 @@ void GenerateReturn(Statement *stmt)
 						GenerateDiadic(op_mov,0,makereg(9),ap);
 						GenLdi(makereg(10),make_immed(sym->tp->GetBtp()->size));
 						GenerateTriadic(op_jsr,0,makereg(regLR),makereg(regZero),make_string("_memcpy"));
-						GenerateMonadic(op_pop,0,makereg(10));
-						GenerateMonadic(op_pop,0,makereg(9));
-						GenerateMonadic(op_pop,0,makereg(8));
+						GenerateDiadic(op_pop,0,makereg(10),makereg(regSP));
+						GenerateDiadic(op_pop,0,makereg(9),makereg(regSP));
+						GenerateDiadic(op_pop,0,makereg(8),makereg(regSP));
 					}
 					else {
 						AMODE *ap2, *ap3;
@@ -745,7 +732,7 @@ void GenerateReturn(Statement *stmt)
 	// interrupt returns a value, don't pop r1.
 	if (sym->IsInterrupt) {
 		for (nn = 13; nn > (1 - (sym->tp->GetBtp()->type!=bt_void)); nn--)
-			GenerateMonadic(op_pop,0,makereg(nn));
+			GenerateDiadic(op_pop,0,makereg(nn),makereg(regSP));
 		GenerateZeradic(op_rti);
 		return;
 	}
@@ -759,13 +746,10 @@ void GenerateReturn(Statement *stmt)
 		int nn;
 		ta = sym->GetProtoTypes();
 		for (nn = 0; nn < ta->length; nn++) {
-			switch(ta->types[nn]) {
-			default:
-				if (ta->preg[nn] && (ta->preg[nn] & 0x8000)==0)
-					;
-				else
-					toAdd += sizeOfWord;
-			}
+			if (ta->preg[nn] && (ta->preg[nn] & 0x8000)==0)
+				;
+			else
+				toAdd += sizeOfWord;
 		}
 	}
 	if (!sym->IsInline)
@@ -828,7 +812,7 @@ static void SaveRegisterParameters(SYM *sym)
 		if (nn > 0) {
 			for (nn = 0; nn < ta->length; nn++) {
 				if (ta->preg[nn]) {
-					GenerateMonadic(op_push,0,makereg(ta->preg[nn]& 0x7fff));
+					GenerateDiadic(op_push,0,makereg(ta->preg[nn]& 0x7fff),makereg(regSP));
 				}
 			}
 		}
@@ -849,7 +833,7 @@ static void RestoreRegisterParameters(SYM *sym)
 		if (nn > 0) {
 			for (nn = ta->length - 1; nn >= 0; nn--) {
 				if (ta->preg[nn]) {
-					GenerateMonadic(op_pop,0,makereg(ta->preg[nn]& 0x7fff));
+					GenerateDiadic(op_pop,0,makereg(ta->preg[nn]& 0x7fff),makereg(regSP));
 				}
 			}
 		}
@@ -902,7 +886,7 @@ static int GeneratePushParameter(ENODE *ep, int regno)
 				if (ap->mode==am_immed) {
 					GenerateTriadic(op_mov,0,makereg(regno & 0x7fff), makereg(regZero), ap);
 					if (regno & 0x8000) {
-						GenerateMonadic(op_push,0,makereg(regno & 0x7fff));
+						GenerateDiadic(op_push,0,makereg(regno & 0x7fff),makereg(regSP));
 						//GenerateTriadic(op_sub,0,makereg(regSP),makereg(regZero),make_immed(sizeOfWord));
 						nn = sz;
 					}
@@ -910,7 +894,7 @@ static int GeneratePushParameter(ENODE *ep, int regno)
 				else {
 					GenerateDiadic(op_mov,0,makereg(regno & 0x7fff), ap);
 					if (regno & 0x8000) {
-						GenerateMonadic(op_push,0,makereg(regno & 0x7fff));
+						GenerateDiadic(op_push,0,makereg(regno & 0x7fff),makereg(regSP));
 						//GenerateTriadic(op_sub,0,makereg(regSP),makereg(regZero),make_immed(sizeOfWord));
 						nn = 8;
 					}
@@ -920,20 +904,14 @@ static int GeneratePushParameter(ENODE *ep, int regno)
 				if (ap->mode==am_immed) {	// must have been a zero
 					//GenerateTriadic(op_sub,0,makereg(regSP),makereg(regZero),make_immed(sizeOfWord));
 					//GenerateDiadic(op_sto,0,makereg(regZero),make_indexed(0,regSP));
-					GenerateMonadic(op_push,0,makereg(regZero));
+					GenerateDiadic(op_push,0,makereg(regZero),makereg(regSP));
 					nn = 1;
 				}
 				else {
-					if (ap->isFloat) {
-						GenerateMonadic(op_push,ap->FloatSize,ap);
-						nn = sz;
-					}
-					else {
-						//GenerateTriadic(op_sub,0,makereg(regSP),makereg(regZero),make_immed(sizeOfWord));
-						//GenerateDiadic(op_sto,0,ap,make_indexed(0,regSP));
-          				GenerateMonadic(op_push,0,ap);
-						nn = 1;
-					}
+					//GenerateTriadic(op_sub,0,makereg(regSP),makereg(regZero),make_immed(sizeOfWord));
+					//GenerateDiadic(op_sto,0,ap,make_indexed(0,regSP));
+          			GenerateDiadic(op_push,0,ap,makereg(regSP));
+					nn = 1;
 				}
 			}
 //        }

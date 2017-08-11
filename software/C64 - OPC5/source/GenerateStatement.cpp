@@ -635,23 +635,29 @@ void Statement::GenerateCheck()
 {
 	AMODE *ap1, *ap2, *ap3;
 	int lab1, lab2;
+	int size;
 
 	lab1 = nextlabel++;
 	lab2 = nextlabel++;
 	initstack();
+	size = GetNaturalSize(exp);
 	ap1 = GenerateExpression(exp,F_REG,sizeOfWord);
 	ap2 = GenerateExpression(initExpr,F_REG,sizeOfWord);
 	ap3 = GenerateExpression(incrExpr,F_REG,sizeOfWord);
-	ReleaseTempReg(ap3);
-	ReleaseTempReg(ap2);
-	ReleaseTempReg(ap1);
 	GenerateDiadic(op_cmp,0,ap1,ap2);
+	if (size==2)
+		GenerateDiadic(op_cmpc,0,ap1->amode2,ap2->amode2);
 	GeneratePredicatedTriadic(ap1->isUnsigned ? pop_c : pop_mi,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(lab1));
 	GenerateDiadic(op_cmp,0,ap1,ap3);
+	if (size==2)
+		GenerateDiadic(op_cmpc,0,ap1->amode2,ap3->amode2);
 	GeneratePredicatedTriadic(ap1->isUnsigned ? pop_c : pop_mi,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(lab2));
 	GenerateLabel(lab1);
 	GenerateMonadic(op_putpsr,0,make_immed(SWI15));
 	GenerateLabel(lab2);
+	ReleaseTempReg(ap3);
+	ReleaseTempReg(ap2);
+	ReleaseTempReg(ap1);
 }
 
 void Statement::GenerateCompound()

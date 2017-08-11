@@ -379,7 +379,7 @@ void put_code(struct ocode *p)
 		switch( len )
 			{
 			case 1: ofs.printf("\tdh"); break;
-			case 2: ofs.printf("\tword"); break;
+			case 2: ofs.printf("\tWORD"); break;
 			}
 		}
 	else if (op != op_fnname)
@@ -399,24 +399,15 @@ void put_code(struct ocode *p)
 					PutAddressMode(aps);
 					if( apd != 0 )
 					{
-						if (op==op_push || op==op_pop)
-							ofs.printf("/");
-						else
 							ofs.printf(",");
 							if (op==op_cmp && apd->mode != am_reg)
 								printf("aha\r\n");
                        		PutAddressMode(apd);
 							if (ap3 != NULL) {
-								if (op==op_push || op==op_pop)
-									ofs.printf("/");
-								else
-									ofs.printf(",");
+								ofs.printf(",");
 								PutAddressMode(ap3);
 								if (ap4 != NULL) {
-									if (op==op_push || op==op_pop)
-										ofs.printf("/");
-									else
-										ofs.printf(",");
+									ofs.printf(",");
 									PutAddressMode(ap4);
 								}
 					}
@@ -486,7 +477,7 @@ void GenerateByte(int val)
     }
     else {
         nl();
-        ofs.printf("\tword\t%d",val & 0x00ff);
+        ofs.printf("\tWORD\t%d",val & 0x00ff);
         gentype = bytegen;
         outcol = 19;
     }
@@ -500,7 +491,7 @@ void GenerateChar(int val)
     }
     else {
         nl();
-        ofs.printf("\tword\t%d",val & 0xffff);
+        ofs.printf("\tWORD\t%d",val & 0xffff);
         gentype = chargen;
         outcol = 21;
     }
@@ -514,7 +505,7 @@ void GenerateWord(int val)
     }
     else {
         nl();
-        ofs.printf("\tword\t%ld",val);
+        ofs.printf("\tWORD\t%ld",val);
         gentype = wordgen;
         outcol = 33;
     }
@@ -528,7 +519,7 @@ void GenerateLong(int val)
                 }
         else    {
                 nl();
-                ofs.printf("\tdword\t%ld",val);
+                ofs.printf("\tdWORD\t%ld",val);
                 gentype = longgen;
                 outcol = 25;
                 }
@@ -575,7 +566,7 @@ void GenerateReference(SYM *sp,int offset)
     else {
         nl();
         if(sp->storage_class == sc_static) {
-			ofs.printf("\tword\t%s",GetNamespace());
+			ofs.printf("\tWORD\t%s",GetNamespace());
 			ofs.printf("_%ld",sp->value.i);
 			ofs.putch(sign);
 			ofs.printf("%d",offset);
@@ -583,17 +574,17 @@ void GenerateReference(SYM *sp,int offset)
 		}
         else if(sp->storage_class == sc_thread) {
 //            fprintf(output,"\tdw\t%s_%ld%c%d",GetNamespace(),sp->value.i,sign,offset);
-			ofs.printf("\tword\t%s",GetNamespace());
+			ofs.printf("\tWORD\t%s",GetNamespace());
 			ofs.printf("_%ld",sp->value.i);
 			ofs.putch(sign);
 			ofs.printf("%d",offset);
 		}
 		else {
 			if (offset==0) {
-				ofs.printf("\tword\t%s",(char *)sp->name->c_str());
+				ofs.printf("\tWORD\t%s",(char *)sp->name->c_str());
 			}
 			else {
-				ofs.printf("\tword\t%s",(char *)sp->name->c_str());
+				ofs.printf("\tWORD\t%s",(char *)sp->name->c_str());
 				ofs.putch(sign);
 				ofs.printf("%d", offset);
 //				fprintf(output,"\tdw\t%s%c%d",sp->name,sign,offset);
@@ -611,7 +602,7 @@ void genstorage(int nbytes)
 	nl();
 	if (nbytes < 1000)
 		for (nn = 0; nn < nbytes; nn++)
-			ofs.printf("\tword\t0\n");
+			ofs.printf("\tWORD\t0\n");
 	else
 		ofs.printf("\tfill.w\t%d,0x00\n",(nbytes+1)/2);
 }
@@ -624,7 +615,7 @@ void GenerateLabelReference(int n)
     }
     else {
         nl();
-        ofs.printf("\tword\t%s_%d",GetNamespace(),n);
+        ofs.printf("\tWORD\t%s_%d",GetNamespace(),n);
         outcol = 22;
         gentype = longgen;
     }
@@ -728,7 +719,7 @@ void nl()
 
 void align(int n)
 {
-	ofs.printf("\talign\t%d\n",n);
+	ofs.printf("#\talign\t%d\n",n);
 }
 
 void cseg()

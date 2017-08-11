@@ -103,7 +103,7 @@ void GenerateTempRegPush(int reg, int rmode, int number, int stkpos)
     ap1->mode = rmode;
 
 
-	GenerateMonadic(op_push,0,ap1);
+	GenerateDiadic(op_push,0,ap1,makereg(regSP));
 	TRACE(printf("pushing r%d\n", reg);)
     reg_stack[reg_stack_ptr].mode = (enum e_am)rmode;
     reg_stack[reg_stack_ptr].reg = reg;
@@ -131,7 +131,7 @@ void GenerateTempRegPop(int reg, int rmode, int number, int stkpos)
 	ap1 = allocAmode();
 	ap1->preg = reg;
 	ap1->mode = rmode;
-	GenerateMonadic(op_pop,0,ap1);
+	GenerateDiadic(op_pop,0,ap1,makereg(regSP));
     reg_alloc[number].f.isPushed = 'F';
 }
 
@@ -167,9 +167,11 @@ AMODE *GetTempRegister2(int *pushed)
     reg_alloc[reg_alloc_ptr].reg = tmpregs[next_reg];
     reg_alloc[reg_alloc_ptr].mode = am_reg;
     reg_alloc[reg_alloc_ptr].f.isPushed = 'F';
-    if (next_reg++ >= MAXTMPREG)
+	next_reg++;
+    if (next_reg > MAXTMPREG)
 		next_reg = MINTMPREG;		/* wrap around */
-    if (reg_alloc_ptr++ == MAX_REG_STACK)
+	reg_alloc_ptr++;
+    if (reg_alloc_ptr == MAX_REG_STACK)
 		fatal("GetTempRegister(): register stack overflow");
 	return ap;
 }

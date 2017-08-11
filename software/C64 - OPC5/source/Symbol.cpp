@@ -41,36 +41,36 @@ int round2(int n)
 
 SYM *SYM::GetPtr(int n)
 { 
-  if (n==0)
-    return nullptr;
-  if (n > 32767)
-     return nullptr;
-  return &compiler.symbolTable[n]; 
+	if (n==0)
+		return nullptr;
+	if (n < 0 || n > 32767)
+		return nullptr;
+	return &compiler.symbolTable[n]; 
 }
 
 SYM *SYM::GetNextPtr()
 { 
-  if (next==0)
-     return nullptr;
-  if (next > 32767)
-     return nullptr;
-  return &compiler.symbolTable[next];
+	if (next==0)
+		return nullptr;
+	if (next < 0 || next > 32767)
+		return nullptr;
+	return &compiler.symbolTable[next];
 }
 
 SYM *SYM::GetParentPtr()
 {
 	if (parent==0)
 	   return nullptr;
-  if (parent > 32767)
-     return nullptr;
-   return &compiler.symbolTable[parent];
+	if (parent < 0 || parent > 32767)
+		return nullptr;
+	return &compiler.symbolTable[parent];
 };
 
 int SYM::GetIndex()
 {
-  if (this==nullptr)
-     return 0; 
-  return this - &compiler.symbolTable[0];
+	if (this==nullptr)
+		return 0; 
+	return this - &compiler.symbolTable[0];
 };
 
 // Get the parameter types into an array of short integers.
@@ -708,8 +708,8 @@ void SYM::BuildParameterList(int *num, int *numa)
 		// passed.
 		if (!noParmOffset)
 			poffset += sp1->tp->size;
-		if (sp1->tp->size > 1)
-			IsLeaf = FALSE;
+		if (sp1->tp->size > 1 && sp1->tp->type != bt_long && sp1->tp->type != bt_ulong)
+			IsLeaf = false;
 		sp1->storage_class = sc_auto;
 	}
 	// Process extra hidden parameter

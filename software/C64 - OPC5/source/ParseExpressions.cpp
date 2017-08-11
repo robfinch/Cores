@@ -2111,6 +2111,7 @@ TYP *multops(ENODE **node)
 		return 0;
     }
         while( lastst == star || lastst == divide || lastst == modop) {
+			currentFn->IsLeaf = false;
                 oper = lastst;
                 NextToken();       /* move on to next unary op */
                 tp2 = ParseCastExpression(&ep2);

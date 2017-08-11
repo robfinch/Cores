@@ -610,7 +610,7 @@ void PeepoptBranch(struct ocode *ip)
 			&& ip->oper2->preg==regZero
 			) {
 			n = 0;
-			for (q = ip; n < 15 && q; q = q->fwd) {
+			for (q = ip; n < 13 && q; q = q->fwd) {
 				if (q->opcode==op_label
 					&& (int)q->oper1==ip->oper3->offset->i) {
 					ip->opcode = op_inc;
@@ -624,10 +624,10 @@ void PeepoptBranch(struct ocode *ip)
 					n++;
 			}
 			n= 0;
-			for (q = ip; n < 15 && q; q = q->back) {
+			for (q = ip; n < 13 && q; q = q->back) {
 				if (q->opcode==op_label
 					&& (int)q->oper1==ip->oper3->offset->i) {
-					ip->opcode = op_dec;
+					ip->opcode = op_inc;
 					ip->oper2 = ip->oper3;
 					ip->oper3 = nullptr;
 					ip->oper2->offset->sp = new std::string("-PC");
