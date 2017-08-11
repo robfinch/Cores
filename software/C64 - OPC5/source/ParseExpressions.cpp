@@ -1038,9 +1038,9 @@ TYP *ParsePrimaryExpression(ENODE **node, int got_pa)
 
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
-TYP *Autoincdec(TYP *tp, ENODE **node, int flag)
+TYP *Autoincdec(TYP *tp, ENODE **node, int flag, int swap)
 {
-	ENODE *ep1, *ep2;
+	ENODE *ep1, *ep2, *ep3;
 	TYP *typ;
 	int su;
 
@@ -1055,10 +1055,20 @@ TYP *Autoincdec(TYP *tp, ENODE **node, int flag)
 			ep2 = makeinode(en_icon,1);
 			ep2->esize = 1;
 		}
-		ep2->constflag = TRUE;
-		ep2->isUnsigned = tp->isUnsigned;
-		su = ep1->isUnsigned;
-		ep1 = makenode(flag ? en_assub : en_asadd,ep1,ep2);
+		if (swap) {
+			// ToDo: code to swap nodes around
+			//ep2->constflag = TRUE;
+			//ep2->isUnsigned = tp->isUnsigned;
+			//ep1 = makenode(flag ? en_assub : en_asadd,ep1->p[0],ep2);
+			//ep1 = makenode(en_uw_ref,ep1,nullptr);
+			//su = ep1->isUnsigned;
+		}
+		else {
+			ep2->constflag = TRUE;
+			ep2->isUnsigned = tp->isUnsigned;
+			su = ep1->isUnsigned;
+			ep1 = makenode(flag ? en_assub : en_asadd,ep1,ep2);
+		}
 		ep1->isUnsigned = tp->isUnsigned;
 		ep1->esize = tp->size;
 	}
@@ -1092,6 +1102,7 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 	int iu, totsz,sz1;
 	int ii;
 	bool classdet = false;
+	bool simpleId = true;
 	TypeArray typearray;
 	std::string name;
 	int cf, uf;
@@ -1116,6 +1127,7 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 		pop = lastst;
 		switch(lastst) {
 		case openbr:
+			simpleId = false;
 			pnode = ep1;
 			if (tp1==NULL) {
 				error(ERR_UNDEFINED);
@@ -1232,6 +1244,7 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 			break;
 
 		case openpa:
+			simpleId = false;
 			if (tp1==NULL) {
 				error(ERR_UNDEFINED);
 				goto j1;
@@ -1303,6 +1316,7 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 			break;
 
 		case pointsto:
+			simpleId = false;
 			if (tp1==NULL) {
 				error(ERR_UNDEFINED);
 				goto j1;
@@ -1317,6 +1331,7 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 
 		 // fall through to dot operation
 		case dot:
+			simpleId = false;
 			if (tp1==NULL) {
 				error(ERR_UNDEFINED);
 				goto j1;
@@ -1405,11 +1420,11 @@ j2:
 
 		case autodec:
 			NextToken();
-			Autoincdec(tp1,&ep1,1);
+			Autoincdec(tp1,&ep1,1,simpleId & 0);	// simple id disabled for now
 			break;
 		case autoinc:
 			NextToken();
-			Autoincdec(tp1,&ep1,0);
+			Autoincdec(tp1,&ep1,0,simpleId & 0);
 			break;
 		default:	goto j1;
 		}
@@ -1470,12 +1485,12 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
     case autodec:
 		NextToken();
 		tp = ParseUnaryExpression(&ep1, got_pa);
-		Autoincdec(tp,&ep1,1);
+		Autoincdec(tp,&ep1,1,0);
 		break;
     case autoinc:
 		NextToken();
 		tp = ParseUnaryExpression(&ep1, got_pa);
-		Autoincdec(tp,&ep1,0);
+		Autoincdec(tp,&ep1,0,0);
 		break;
 	case plus:
         NextToken();

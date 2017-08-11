@@ -505,6 +505,7 @@ AMODE *GenerateIndex(ENODE *node)
         ap2 = GenerateExpression(node->p[1],F_REG,sizeOfWord);
 		GenerateDiadic(op_mov,0,ap3,ap1);
 		GenerateDiadic(op_add,0,ap3,ap2);
+		ap3->mode = am_ind;
   //      ap1->mode = am_indx2;
   //      ap1->sreg = ap2->preg;
 		//ap1->deep2 = ap2->deep2;
@@ -537,6 +538,7 @@ AMODE *GenerateIndex(ENODE *node)
 	if (ap2->mode == am_ind && ap1->mode == am_reg) {
 		GenerateDiadic(op_mov,0,ap3,ap1);
 		GenerateDiadic(op_add,0,ap3,ap2);
+		ap3->mode = am_ind;
 		ReleaseTempReg(ap2);
 		ReleaseTempReg(ap1);
   //      ap2->mode = am_indx2;
@@ -547,6 +549,7 @@ AMODE *GenerateIndex(ENODE *node)
 	if (ap2->mode == am_direct && ap1->mode==am_reg) {
 		GenerateDiadic(op_mov,0,ap3,ap1);
 		GenerateDiadic(op_add,0,ap3,ap2);
+		ap3->mode = am_ind;
 		ReleaseTempReg(ap2);
 		ReleaseTempReg(ap1);
         //ap2->mode = am_indx;
@@ -558,6 +561,7 @@ AMODE *GenerateIndex(ENODE *node)
 	MakeLegalAmode(ap2,F_REG,1);
 	GenerateDiadic(op_mov,0,ap3,ap1);
 	GenerateDiadic(op_add,0,ap3,ap2);
+	ap3->mode = am_ind;
 	ReleaseTempReg(ap2);
 	ReleaseTempReg(ap1);
  //   ap1->mode = am_indx2;            /* make indexed */
@@ -1893,16 +1897,18 @@ AMODE *GenAutocon(ENODE *node, int flags, int size, bool isFloat)
 {
 	AMODE *ap1, *ap2;
 
-	ap1 = GetTempRegister();
+//	ap1 = GetTempRegister();
 	ap2 = allocAmode();
 	ap2->mode = am_indx;
 	ap2->preg = regBP;          /* frame pointer */
 	ap2->offset = node;     /* use as constant node */
 	ap2->isFloat = isFloat;
 	ap2->isAddress = true;
-	GenerateTriadic(op_mov,0,ap1,makereg(regBP),make_immed(ap2->offset->i));
-	MakeLegalAmode(ap1,flags,size);
-	return ap1;             /* return reg */
+//	GenerateTriadic(op_mov,0,ap1,makereg(regBP),make_immed(ap2->offset->i));
+//	MakeLegalAmode(ap1,flags,size);
+	MakeLegalAmode(ap2,flags,size);
+//	return ap1;             /* return reg */
+	return (ap2);           /* return reg */
 }
 
 /*
