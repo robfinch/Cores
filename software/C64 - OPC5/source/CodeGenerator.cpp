@@ -390,17 +390,28 @@ void GenLoad(AMODE *ap3, AMODE *ap1, int ssize, int size)
     if (ap3->isUnsigned) {
         GenerateDiadic(op_ld,0,ap3,ap1);
 		if (size==2) {
-			i = ap1->offset->i++;
-			GenerateDiadic(op_ld,0,ap3->amode2,ap1);
-			ap1->offset->i--;
+			// am_ind has no offset (offset == 0)
+			if (!ap1->offset) {
+				GenerateTriadic(op_ld,0,ap3->amode2,ap1,make_immed(1));
+			}
+			else {
+				i = ap1->offset->i++;
+				GenerateDiadic(op_ld,0,ap3->amode2,ap1);
+				ap1->offset->i--;
+			}
 		}
     }
     else {
         GenerateDiadic(op_ld,0,ap3,ap1);
 		if (size==2) {
-			i = ap1->offset->i++;
-			GenerateDiadic(op_ld,0,ap3->amode2,ap1);
-			ap1->offset->i--;
+			if (!ap1->offset) {
+				GenerateTriadic(op_ld,0,ap3->amode2,ap1,make_immed(1));
+			}
+			else {
+				i = ap1->offset->i++;
+				GenerateDiadic(op_ld,0,ap3->amode2,ap1);
+				ap1->offset->i--;
+			}
 		}
     }
 }
@@ -410,17 +421,27 @@ void GenStore(AMODE *ap1, AMODE *ap3, int size)
 	if (ap3->mode==am_direct) {
 		GenerateTriadic(op_sto,0,ap1,makereg(regZero),ap3);
 		if (size==2) {
-			ap3->offset->i++;
-			GenerateDiadic(op_sto,0,ap1->amode2,ap3);
-			ap3->offset->i--;
+			if (!ap3->offset) {
+				GenerateTriadic(op_sto,0,ap1->amode2,ap3,make_immed(1));
+			}
+			else {
+				ap3->offset->i++;
+				GenerateDiadic(op_sto,0,ap1->amode2,ap3);
+				ap3->offset->i--;
+			}
 		}
 	}
 	else {
 		GenerateDiadic(op_sto,0,ap1,ap3);
 		if (size==2) {
-			ap3->offset->i++;
-			GenerateDiadic(op_sto,0,ap1->amode2,ap3);
-			ap3->offset->i--;
+			if (!ap3->offset) {
+				GenerateTriadic(op_sto,0,ap1->amode2,ap3,make_immed(1));
+			}
+			else {
+				ap3->offset->i++;
+				GenerateDiadic(op_sto,0,ap1->amode2,ap3);
+				ap3->offset->i--;
+			}
 		}
 	}
 }
@@ -1900,14 +1921,13 @@ AMODE *GenAutocon(ENODE *node, int flags, int size, bool isFloat)
 	ap1 = GetTempRegister();
 	ap2 = allocAmode();
 	ap2->mode = am_indx;
-	ap2->preg = regBP;          /* frame pointer */
-	ap2->offset = node;     /* use as constant node */
+	ap2->preg = regBP;
+	ap2->offset = node;
 	ap2->isFloat = isFloat;
 	ap2->isAddress = true;
-	GenerateTriadic(op_mov,0,ap1,makereg(regBP),make_immed(ap2->offset->i));
+	GenerateTriadic(op_mov,0,ap1,makereg(regBP),make_immed(ap2->offset->i));	// LEA
 	MakeLegalAmode(ap1,flags,size);
-//	MakeLegalAmode(ap2,flags,size);
-	return (ap1);           /* return reg */
+	return (ap1);
 }
 
 /*
