@@ -1,0 +1,75 @@
+<title>C64D Compiler debug file</title>
+<compile>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+</Find>
+_int</Find>
+<Parsing GlobalDecl>
+<ParseGlobalDecl>
+Enter declare()
+A<ParseSpecifier>
+A</Find>
+_bug15</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_bug15|CDE<ParseDeclSuffix>
+<openpa>
+****************************
+****************************
+Function: _bug15
+****************************
+****************************
+<TYP__Make>
+</TYP__Make>
+o p q </openpa>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_bug15</Find>
+hh1h2ikIIbIcinsert type: 34
+***Inserting:_bug15 into 01260790
+<BuildSignature>:_bug15</BuildSignature>Insert _bug15 into 01260790()
+Insert into global table
+</Find>
+_bug15</Find>
+At insert:
+Type array:
+   
+J<ParseFunction>
+***********************************
+***********************************
+***********************************
+Parsing function: _bug15
+***********************************
+***********************************
+***********************************
+A<BuildParameterList
+><ParseParmDecls>
+A(42)</ParseParmDecls>
+B</BuildParameterList>
+B<BuildSignature>:_bug15</BuildSignature></Find>
+_bug15Match
+</Find>
+CDEG<Parse function body>:_bug15|

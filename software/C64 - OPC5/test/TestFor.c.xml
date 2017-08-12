@@ -26,7 +26,7 @@
 _int</Find>
 <Parsing GlobalDecl>
 <ParseGlobalDecl>
-Enter declare()
+Enter declare()
 A<ParseSpecifier>
 A</Find>
 _TestFor</Find>
@@ -49,8 +49,8 @@ o p q </openpa>
 CDEGH</Find>
 _TestFor</Find>
 hh1h2ikIIbIcinsert type: 34
-***Inserting:_TestFor into 01308F48
-<BuildSignature>:_TestFor</BuildSignature>Insert _TestFor into 01308F48()
+***Inserting:_TestFor into 001D0790
+<BuildSignature>:_TestFor</BuildSignature>Insert _TestFor into 001D0790()
 Insert into global table
 </Find>
 _TestFor</Find>
@@ -75,9 +75,9 @@ _TestForMatch
 CDEG<Parse function body>:_TestFor|
 </Find>
 _int</Find>
-Bb<GenerateMonadic>
-ABCD</GenerateMonadic>
-CEnter declare()
+Bb<GenerateMonadic>
+ABCD</GenerateMonadic>
+CEnter declare()
 A<ParseSpecifier>
 A</Find>
 _x</Find>
@@ -91,8 +91,8 @@ Bb<ParseDeclPrefix>(1)
 CDEGH</Find>
 _x</Find>
 hh1kIIbIcinsert type: 16
-***Inserting:_x into 0127BFF4
-<BuildSignature>:_x</BuildSignature>Insert _x into 0127BFF4()
+***Inserting:_x into 01541124
+<BuildSignature>:_x</BuildSignature>Insert _x into 01541124()
 </Find>
 _x</Find>
 At insert:
@@ -107,8 +107,8 @@ b<ParseDeclPrefix>(1)
 CDEGH</Find>
 _y</Find>
 hh1kIIbIcinsert type: 16
-***Inserting:_y into 0127BFF4
-<BuildSignature>:_y</BuildSignature>Insert _y into 0127BFF4()
+***Inserting:_y into 01541124
+<BuildSignature>:_y</BuildSignature>Insert _y into 01541124()
 </Find>
 _y</Find>
 At insert:
@@ -123,8 +123,8 @@ b<ParseDeclPrefix>(1)
 CDEGH</Find>
 _z</Find>
 hh1kIIbIcinsert type: 16
-***Inserting:_z into 0127BFF4
-<BuildSignature>:_z</BuildSignature>Insert _z into 0127BFF4()
+***Inserting:_z into 01541124
+<BuildSignature>:_z</BuildSignature>Insert _z into 01541124()
 </Find>
 _z</Find>
 At insert:
@@ -147,7 +147,7 @@ Found as an auto var
 A:1:_xIsEqual:T2sp is not null
 Type array:
    
-tp:0188B7D8 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753020 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 </Find>
 _x</Find>
@@ -164,7 +164,7 @@ Found as an auto var
 A:1:_xIsEqual:T2sp is not null
 Type array:
    
-tp:0188B7D8 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753020 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 </Find>
 _x</Find>
@@ -181,7 +181,7 @@ Found as an auto var
 A:1:_xIsEqual:T2sp is not null
 Type array:
    
-tp:0188B7D8 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753020 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 <Parse></Find>
 _putch</Find>
@@ -203,17 +203,17 @@ _putch</Find>
 Looking in function's symbol table
 </Find>
 _putch</Find>
-Searching method/class:_TestFor|013163F0
-Looking at params 0131643C
+Searching method/class:_TestFor|001DDC38
+Looking at params 001DDC84
 </Find>
 _putch</Find>
-Looking at class members 0188B7BC
+Looking at class members 00753004
 Looking at global symbols
 </Find>
 _putch</Find>
 </gsearch2>
 <nameref2>
-A:0:_putchInsert at nameref
+A:0:_putchInsert at nameref
 Type array:
    
 <BuildSignature>:_putch</BuildSignature></nameref2>
@@ -235,11 +235,11 @@ _putch</Find>
 Looking in function's symbol table
 </Find>
 _putch</Find>
-Searching method/class:_TestFor|013163F0
-Looking at params 0131643C
+Searching method/class:_TestFor|001DDC38
+Looking at params 001DDC84
 </Find>
 _putch</Find>
-Looking at class members 0188B7BC
+Looking at class members 00753004
 Looking at global symbols
 </Find>
 _putch</Find>
@@ -250,13 +250,13 @@ _putch</Find>
 </TYP__Make>
 <TYP__Make>
 </TYP__Make>
-Insert _p0 into 0131679C(_putch)
+Insert _p0 into 001DDFE4(_putch)
 </Find>
 _p0</Find>
 At insert:
 Type array:
    
-<BuildSignature>:_putch</BuildSignature>Insert _putch into 01308F48()
+<BuildSignature>:_putch</BuildSignature>Insert _putch into 001D0790()
 Insert into global table
 </Find>
 _putch</Find>
@@ -286,7 +286,7 @@ Found as an auto var
 A:1:_yIsEqual:T2sp is not null
 Type array:
    
-tp:0188B7D8 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753020 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 </Find>
 _for</Find>
@@ -312,7 +312,7 @@ Found as an auto var
 A:1:_yIsEqual:T2sp is not null
 Type array:
    
-tp:0188B7D8 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753020 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 <Parse></Find>
 _putch</Find>
@@ -342,11 +342,11 @@ _putch</Find>
 Looking in function's symbol table
 </Find>
 _putch</Find>
-Searching method/class:_TestFor|013163F0
-Looking at params 0131643C
+Searching method/class:_TestFor|001DDC38
+Looking at params 001DDC84
 </Find>
 _putch</Find>
-Looking at class members 0188B7BC
+Looking at class members 00753004
 Looking at global symbols
 </Find>
 _putchMatch
@@ -357,7 +357,7 @@ Found in global symbol table
 A:1:_putchIsEqual:F1sp is not null
 Type array:
    
-tp:0188B810 deref tp:0188B810 </nameref2>
+tp:00753058 deref tp:00753058 </nameref2>
 </Nameref>
 tp2->type=33<ArgumentList>015 lastst=45</ArgumentList>
 Type array:
@@ -382,11 +382,11 @@ _putch</Find>
 Looking in function's symbol table
 </Find>
 _putch</Find>
-Searching method/class:_TestFor|013163F0
-Looking at params 0131643C
+Searching method/class:_TestFor|001DDC38
+Looking at params 001DDC84
 </Find>
 _putch</Find>
-Looking at class members 0188B7BC
+Looking at class members 00753004
 Looking at global symbols
 </Find>
 _putchMatch
@@ -422,7 +422,7 @@ Found as an auto var
 A:1:_yIsEqual:T2sp is not null
 Type array:
    
-tp:0188B7D8 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753020 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 </ParseExpression>
 </Parse></Find>
@@ -448,7 +448,7 @@ Found as an auto var
 A:1:_zIsEqual:T2sp is not null
 Type array:
    
-tp:0188B7D8 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753020 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 </Find>
 _z</Find>
@@ -471,7 +471,7 @@ Found as an auto var
 A:1:_zIsEqual:T2sp is not null
 Type array:
    
-tp:0188B7D8 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753020 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 <Parse></Find>
 _for</Find>
@@ -496,7 +496,7 @@ Found as an auto var
 A:1:_xIsEqual:T2sp is not null
 Type array:
    
-tp:0188B7D8 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753020 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 </Find>
 _x</Find>
@@ -519,7 +519,7 @@ Found as an auto var
 A:1:_xIsEqual:T2sp is not null
 Type array:
    
-tp:0188B7D8 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753020 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 </Find>
 _x</Find>
@@ -542,7 +542,7 @@ Found as an auto var
 A:1:_xIsEqual:T2sp is not null
 Type array:
    
-tp:0188B7D8 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753020 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 <Parse></Find>
 _for</Find>
@@ -570,7 +570,7 @@ Found as an auto var
 A:1:_yIsEqual:T2sp is not null
 Type array:
    
-tp:0188B7D8 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753020 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 </Find>
 _y</Find>
@@ -596,7 +596,7 @@ Found as an auto var
 A:1:_yIsEqual:T2sp is not null
 Type array:
    
-tp:0188B7D8 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753020 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 </Find>
 _y</Find>
@@ -622,7 +622,7 @@ Found as an auto var
 A:1:_yIsEqual:T2sp is not null
 Type array:
    
-tp:0188B7D8 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753020 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 <Parse></Find>
 _for</Find>
@@ -653,7 +653,7 @@ Found as an auto var
 A:1:_zIsEqual:T2sp is not null
 Type array:
    
-tp:0188B7D8 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753020 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 </Find>
 _z</Find>
@@ -682,7 +682,7 @@ Found as an auto var
 A:1:_zIsEqual:T2sp is not null
 Type array:
    
-tp:0188B7D8 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753020 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 </Find>
 _z</Find>
@@ -711,7 +711,7 @@ Found as an auto var
 A:1:_zIsEqual:T2sp is not null
 Type array:
    
-tp:0188B7D8 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753020 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 <Parse></Find>
 _putch</Find>
@@ -747,11 +747,11 @@ _putch</Find>
 Looking in function's symbol table
 </Find>
 _putch</Find>
-Searching method/class:_TestFor|013163F0
-Looking at params 0131643C
+Searching method/class:_TestFor|001DDC38
+Looking at params 001DDC84
 </Find>
 _putch</Find>
-Looking at class members 0188B7BC
+Looking at class members 00753004
 Looking at global symbols
 </Find>
 _putchMatch
@@ -762,7 +762,7 @@ Found in global symbol table
 A:1:_putchIsEqual:F1sp is not null
 Type array:
    
-tp:0188B810 deref tp:0188B810 </nameref2>
+tp:00753058 deref tp:00753058 </nameref2>
 </Nameref>
 tp2->type=33</Find>
 _rand</Find>
@@ -790,17 +790,17 @@ _rand</Find>
 Looking in function's symbol table
 </Find>
 _rand</Find>
-Searching method/class:_TestFor|013163F0
-Looking at params 0131643C
+Searching method/class:_TestFor|001DDC38
+Looking at params 001DDC84
 </Find>
 _rand</Find>
-Looking at class members 0188B7BC
+Looking at class members 00753004
 Looking at global symbols
 </Find>
 _rand</Find>
 </gsearch2>
 <nameref2>
-A:0:_randInsert at nameref
+A:0:_randInsert at nameref
 Type array:
    
 <BuildSignature>:_rand</BuildSignature></nameref2>
@@ -834,11 +834,11 @@ _rand</Find>
 Looking in function's symbol table
 </Find>
 _rand</Find>
-Searching method/class:_TestFor|013163F0
-Looking at params 0131643C
+Searching method/class:_TestFor|001DDC38
+Looking at params 001DDC84
 </Find>
 _rand</Find>
-Looking at class members 0188B7BC
+Looking at class members 00753004
 Looking at global symbols
 </Find>
 _rand</Find>
@@ -847,7 +847,7 @@ _rand</Find>
 </TYP__Make>
 <TYP__Make>
 </TYP__Make>
-<BuildSignature>:_rand</BuildSignature>Insert _rand into 01308F48()
+<BuildSignature>:_rand</BuildSignature>Insert _rand into 001D0790()
 Insert into global table
 </Find>
 _rand</Find>
@@ -883,11 +883,11 @@ _putch</Find>
 Looking in function's symbol table
 </Find>
 _putch</Find>
-Searching method/class:_TestFor|013163F0
-Looking at params 0131643C
+Searching method/class:_TestFor|001DDC38
+Looking at params 001DDC84
 </Find>
 _putch</Find>
-Looking at class members 0188B7BC
+Looking at class members 00753004
 Looking at global symbols
 </Find>
 _putchMatch
@@ -900,26 +900,33 @@ Found in global symbol table
 Got direct function _putch </ParseExpression>
 </Parse></Parse></Parse></Parse></Find>
 _void</Find>
-D<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
+D<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<CSETable>
+N Uses DUses Void Reg
+0: 8  0   0   3         
+1: 7  0   0   4         
+2: 7  0   0   -1         
+3: 11  0   0   -1   imm   
+4: 3  3   0   -1         
+5: 3  0   0   -1   imm   
+6: 3  0   0   -1   imm   
+7: 3  0   0   -1   imm   
+8: 2  0   0   -1   imm   
+9: 1  1   0   -1         
+10: 1  0   0   -1   imm   
+11: 1  0   0   -1   imm   
+</CSETable>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
 
 <gsearch2> for: |_putch|
 Looking in statement table
@@ -928,25 +935,23 @@ _putch</Find>
 Looking in function's symbol table
 </Find>
 _putch</Find>
-Searching method/class:_TestFor|013163F0
-Looking at params 0131643C
+Searching method/class:_TestFor|001DDC38
+Looking at params 001DDC84
 </Find>
 _putch</Find>
-Looking at class members 0188B7BC
+Looking at class members 00753004
 Looking at global symbols
 </Find>
 _putchMatch
 </Find>
 Found in global symbol table
 </gsearch2>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
 
 <gsearch2> for: |_putch|
 Looking in statement table
@@ -955,31 +960,29 @@ _putch</Find>
 Looking in function's symbol table
 </Find>
 _putch</Find>
-Searching method/class:_TestFor|013163F0
-Looking at params 0131643C
+Searching method/class:_TestFor|001DDC38
+Looking at params 001DDC84
 </Find>
 _putch</Find>
-Looking at class members 0188B7BC
+Looking at class members 00753004
 Looking at global symbols
 </Find>
 _putchMatch
 </Find>
 Found in global symbol table
 </gsearch2>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
 
 <gsearch2> for: |_putch|
 Looking in statement table
@@ -988,11 +991,11 @@ _putch</Find>
 Looking in function's symbol table
 </Find>
 _putch</Find>
-Searching method/class:_TestFor|013163F0
-Looking at params 0131643C
+Searching method/class:_TestFor|001DDC38
+Looking at params 001DDC84
 </Find>
 _putch</Find>
-Looking at class members 0188B7BC
+Looking at class members 00753004
 Looking at global symbols
 </Find>
 _putchMatch
@@ -1007,36 +1010,26 @@ _rand</Find>
 Looking in function's symbol table
 </Find>
 _rand</Find>
-Searching method/class:_TestFor|013163F0
-Looking at params 0131643C
+Searching method/class:_TestFor|001DDC38
+Looking at params 001DDC84
 </Find>
 _rand</Find>
-Looking at class members 0188B7BC
+Looking at class members 00753004
 Looking at global symbols
 </Find>
 _randMatch
 </Find>
 Found in global symbol table
 </gsearch2>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
 E</ParseFunctionBody>
 Enter funcbottom
 Leave funcbottom
 F</ParseFunction>
-Enter declare()
+Enter declare()
 A<ParseSpecifier>
 A<TYP__Make>
 </TYP__Make>
@@ -1059,8 +1052,8 @@ o p q </openpa>
 CDEGH</Find>
 _TestFor2</Find>
 hh1h2ikIIbIcinsert type: 34
-***Inserting:_TestFor2 into 01308F48
-<BuildSignature>:_TestFor2</BuildSignature>Insert _TestFor2 into 01308F48()
+***Inserting:_TestFor2 into 001D0790
+<BuildSignature>:_TestFor2</BuildSignature>Insert _TestFor2 into 001D0790()
 Insert into global table
 </Find>
 _TestFor2</Find>
@@ -1085,8 +1078,8 @@ _TestFor2Match
 CDEG<Parse function body>:_TestFor2|
 </Find>
 _for</Find>
-Bb<GenerateMonadic>
-ABCD</GenerateMonadic>
+Bb<GenerateMonadic>
+ABCD</GenerateMonadic>
 C<Parse></Find>
 _putch</Find>
 <Parse><ParseExpression>
@@ -1099,11 +1092,11 @@ _putch</Find>
 Looking in function's symbol table
 </Find>
 _putch</Find>
-Searching method/class:_TestFor2|01316A20
-Looking at params 01316A6C
+Searching method/class:_TestFor2|001DE268
+Looking at params 001DE2B4
 </Find>
 _putch</Find>
-Looking at class members 0188B97C
+Looking at class members 007531C4
 Looking at global symbols
 </Find>
 _putchMatch
@@ -1114,7 +1107,7 @@ Found in global symbol table
 A:1:_putchIsEqual:F1sp is not null
 Type array:
    
-tp:0188B810 deref tp:0188B810 </nameref2>
+tp:00753058 deref tp:00753058 </nameref2>
 </Nameref>
 tp2->type=33<ArgumentList>015 lastst=45</ArgumentList>
 Type array:
@@ -1130,11 +1123,11 @@ _putch</Find>
 Looking in function's symbol table
 </Find>
 _putch</Find>
-Searching method/class:_TestFor2|01316A20
-Looking at params 01316A6C
+Searching method/class:_TestFor2|001DE268
+Looking at params 001DE2B4
 </Find>
 _putch</Find>
-Looking at class members 0188B97C
+Looking at class members 007531C4
 Looking at global symbols
 </Find>
 _putchMatch
@@ -1146,20 +1139,21 @@ Found in global symbol table
 </gsearch2>
 Got direct function _putch </ParseExpression>
 </Parse></Parse>Returning EOF from NextToken.
-D<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
+D<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<CSETable>
+N Uses DUses Void Reg
+0: 1  1   0   -1         
+1: 1  0   0   -1   imm   
+</CSETable>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
 
 <gsearch2> for: |_putch|
 Looking in statement table
@@ -1168,27 +1162,21 @@ _putch</Find>
 Looking in function's symbol table
 </Find>
 _putch</Find>
-Searching method/class:_TestFor2|01316A20
-Looking at params 01316A6C
+Searching method/class:_TestFor2|001DE268
+Looking at params 001DE2B4
 </Find>
 _putch</Find>
-Looking at class members 0188B97C
+Looking at class members 007531C4
 Looking at global symbols
 </Find>
 _putchMatch
 </Find>
 Found in global symbol table
 </gsearch2>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
 E</ParseFunctionBody>
 Enter funcbottom
 Leave funcbottom

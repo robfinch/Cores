@@ -1,0 +1,26 @@
+     1	
+     2	void TestIncDec()
+     3	{
+     4		int x[4][5];
+     5	
+     6		(x[2])++ = {1,2,3,4,5};
+ *** error 17: E LValue required
+     7	}
+
+
+*** local symbol table ***
+
+_x         =ffffffec   -    Auto        Array of Array of Short
+
+
+
+
+ *** global scope typedef symbol table ***
+
+_TestIncDec =000000   -    Global      Function returning 
+		Parameters:
+			Type array:
+   
+
+ *** structures and unions ***
+

@@ -1,0 +1,228 @@
+<title>C64D Compiler debug file</title>
+<compile>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+</Find>
+_int</Find>
+<Parsing GlobalDecl>
+<ParseGlobalDecl>
+Enter declare()
+A<ParseSpecifier>
+A</Find>
+_bug12</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_bug12|CDE<ParseDeclSuffix>
+<openpa>
+****************************
+****************************
+Function: _bug12
+****************************
+****************************
+<TYP__Make>
+</TYP__Make>
+o p q </openpa>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_bug12</Find>
+hh1h2ikIIbIcinsert type: 34
+***Inserting:_bug12 into 0019A610
+<BuildSignature>:_bug12</BuildSignature>Insert _bug12 into 0019A610()
+Insert into global table
+</Find>
+_bug12</Find>
+At insert:
+Type array:
+   
+J<ParseFunction>
+***********************************
+***********************************
+***********************************
+Parsing function: _bug12
+***********************************
+***********************************
+***********************************
+A<BuildParameterList
+><ParseParmDecls>
+A(42)</ParseParmDecls>
+B</BuildParameterList>
+B<BuildSignature>:_bug12</BuildSignature></Find>
+_bug12Match
+</Find>
+CDEG<Parse function body>:_bug12|
+</Find>
+_int</Find>
+Bb<GenerateMonadic>
+ABCD</GenerateMonadic>
+CEnter declare()
+A<ParseSpecifier>
+A</Find>
+_a</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_a|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_a</Find>
+hh1kIIbIcinsert type: 16
+***Inserting:_a into 00A8BFFC
+<BuildSignature>:_a</BuildSignature>Insert _a into 00A8BFFC()
+</Find>
+_a</Find>
+At insert:
+Type array:
+   
+JK<Nameref>
+GSearchfor:_a|
+<gsearch2> for: |_a|
+Looking in statement table
+</Find>
+_aMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_aIsEqual:T2sp is not null
+Type array:
+   
+tp:0071CEA0 <Deref></Deref>deref tp:0071CA40 </nameref2>
+</Nameref>
+</Find>
+_int</Find>
+Enter declare()
+A<ParseSpecifier>
+A</Find>
+_b</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_b|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_b</Find>
+hh1kIIbIcinsert type: 16
+***Inserting:_b into 00A8BFFC
+<BuildSignature>:_b</BuildSignature>Insert _b into 00A8BFFC()
+</Find>
+_b</Find>
+At insert:
+Type array:
+   
+JK<Nameref>
+GSearchfor:_b|
+<gsearch2> for: |_b|
+Looking in statement table
+</Find>
+_bMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_bIsEqual:T2sp is not null
+Type array:
+   
+tp:0071CED8 <Deref></Deref>deref tp:0071CA40 </Find>
+_a</Find>
+</nameref2>
+</Nameref>
+<Nameref>
+GSearchfor:_a|
+<gsearch2> for: |_a|
+Looking in statement table
+</Find>
+_aMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_aIsEqual:T2sp is not null
+Type array:
+   
+tp:0071CEA0 <Deref></Deref>deref tp:0071CA40 </nameref2>
+</Nameref>
+</Find>
+_return</Find>
+<Parse></Find>
+_b</Find>
+<Nameref>
+GSearchfor:_b|
+<gsearch2> for: |_b|
+Looking in statement table
+</Find>
+_bMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_bIsEqual:T2sp is not null
+Type array:
+   
+tp:0071CED8 <Deref></Deref>deref tp:0071CA40 </nameref2>
+</Nameref>
+</Parse>Returning EOF from NextToken.
+D<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<CSETable>
+N Uses DUses Void Reg
+0: 2  0   0   -1         
+1: 2  0   0   -1         
+2: 1  0   0   -1   imm   
+3: 1  0   0   -1   imm   
+</CSETable>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+E</ParseFunctionBody>
+Enter funcbottom
+Leave funcbottom
+F</ParseFunction>
+</ParseGlobalDecl>
+</Parsing GlobalDecl>
+</compile>
+<Dumplits>
+</Dumplits>
+Enter summary
+Leave summary
+<closefiles>
+ABC</closefiles>
+Next on command line (1).
+Exiting

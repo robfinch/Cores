@@ -26,7 +26,7 @@
 _int</Find>
 <Parsing GlobalDecl>
 <ParseGlobalDecl>
-Enter declare()
+Enter declare()
 A<ParseSpecifier>
 A</Find>
 _TestPreload</Find>
@@ -57,8 +57,8 @@ X</openpa>
 CDEGH</Find>
 _TestPreload</Find>
 hh1h2ikIIbIcinsert type: 33
-***Inserting:_TestPreload into 01308F48
-<BuildSignature>:_TestPreload</BuildSignature>Insert _TestPreload into 01308F48()
+***Inserting:_TestPreload into 001D0790
+<BuildSignature>:_TestPreload</BuildSignature>Insert _TestPreload into 001D0790()
 Insert into global table
 </Find>
 _TestPreload</Find>
@@ -75,7 +75,7 @@ Parsing function: _TestPreload
 ***********************************
 A<BuildParameterList
 ><ParseParmDecls>
-A(54)CEnter declare()
+A(54)CEnter declare()
 A<ParseSpecifier>
 A</Find>
 _a</Find>
@@ -89,8 +89,8 @@ Bb<ParseDeclPrefix>(1)
 CDEGH</Find>
 _a</Find>
 hh1kIIbIcinsert type: 16
-***Inserting:_a into 0131643C
-<BuildSignature>:_a</BuildSignature>Insert _a into 0131643C(_TestPreload)
+***Inserting:_a into 001DDC84
+<BuildSignature>:_a</BuildSignature>Insert _a into 001DDC84(_TestPreload)
 </Find>
 _a</Find>
 At insert:
@@ -107,9 +107,9 @@ _TestPreloadMatch
 CDEG<Parse function body>:_TestPreload|
 </Find>
 _int</Find>
-Bb<GenerateMonadic>
-ABCD</GenerateMonadic>
-CEnter declare()
+Bb<GenerateMonadic>
+ABCD</GenerateMonadic>
+CEnter declare()
 A<ParseSpecifier>
 A</Find>
 _x</Find>
@@ -123,8 +123,8 @@ Bb<ParseDeclPrefix>(1)
 CDEGH</Find>
 _x</Find>
 hh1kIIbIcinsert type: 16
-***Inserting:_x into 01BE1114
-<BuildSignature>:_x</BuildSignature>Insert _x into 01BE1114()
+***Inserting:_x into 01551124
+<BuildSignature>:_x</BuildSignature>Insert _x into 01551124()
 </Find>
 _x</Find>
 At insert:
@@ -143,7 +143,7 @@ Found as an auto var
 A:1:_xIsEqual:T2sp is not null
 Type array:
    
-tp:0188B810 <Deref></Deref>deref tp:0188B378 </Find>
+tp:00753058 <Deref></Deref>deref tp:00752BC0 </Find>
 _a</Find>
 </nameref2>
 </Nameref>
@@ -156,8 +156,8 @@ _a</Find>
 Looking in function's symbol table
 </Find>
 _a</Find>
-Searching method/class:_TestPreload|013163F0
-Looking at params 0131643C
+Searching method/class:_TestPreload|001DDC38
+Looking at params 001DDC84
 </Find>
 _aMatch
 </Find>
@@ -167,7 +167,7 @@ Found as parameter
 A:1:_aIsEqual:T2sp is not null
 Type array:
    
-tp:0188B7D8 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753020 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 </Find>
 _return</Find>
@@ -190,29 +190,31 @@ Found as an auto var
 A:1:_xIsEqual:T2sp is not null
 Type array:
    
-tp:0188B810 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753058 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 </Parse>Returning EOF from NextToken.
-D<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
+D<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<CSETable>
+N Uses DUses Void Reg
+0: 2  0   0   -1         
+1: 1  0   0   -1         
+2: 1  0   0   -1   imm   
+</CSETable>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
 E</ParseFunctionBody>
 Enter funcbottom
 Leave funcbottom

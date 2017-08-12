@@ -1,0 +1,29 @@
+     1	
+     2	int print(char *ptr)
+     3	{
+     4		while (*ptr++) {
+     5			outch(*ptr);
+     6		}
+     7	}
+     8	
+
+
+*** local symbol table ***
+
+
+
+
+
+ *** global scope typedef symbol table ***
+
+_outch     =000000   -    External    Function returning Long
+		Parameters:
+			Type array:
+   015 
+_print     =000000   -    External    Function returning Short
+		Parameters:
+			Type array:
+   022 
+
+ *** structures and unions ***
+

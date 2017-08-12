@@ -1,0 +1,27 @@
+     1	void bug10() {
+     2		int x;
+     3		int pi[333+1];
+     4	
+     5		for (x = 333; x > 0; x--) {
+     6			pi[x] = 2;
+     7		}
+     8	}
+
+
+*** local symbol table ***
+
+_x         =ffffffff   -    Auto        Short
+_pi        =fffffeb1   -    Auto        Array of Short
+
+
+
+
+ *** global scope typedef symbol table ***
+
+_bug10     =000000   -    Global      Function returning 
+		Parameters:
+			Type array:
+   
+
+ *** structures and unions ***
+

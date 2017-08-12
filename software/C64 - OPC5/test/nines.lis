@@ -1,0 +1,32 @@
+     1	int main()
+     2	{
+     3		int nines;
+     4	
+     5		while(nines)
+     6		{
+     7			putchar('0');
+     8			nines--;
+     9		}
+    10	}
+
+
+*** local symbol table ***
+
+_nines     =ffffffff   -    Auto        Short
+
+
+
+
+ *** global scope typedef symbol table ***
+
+_main      =000000   -    Global      Function returning Short
+		Parameters:
+			Type array:
+   
+_putchar   =000000   -    External    Function returning Long
+		Parameters:
+			Type array:
+   015 
+
+ *** structures and unions ***
+

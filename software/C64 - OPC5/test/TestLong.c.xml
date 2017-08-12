@@ -57,8 +57,8 @@ X</openpa>
 CDEGH</Find>
 _TestLong</Find>
 hh1h2ikIIbIcinsert type: 33
-***Inserting:_TestLong into 00C3BF48
-<BuildSignature>:_TestLong</BuildSignature>Insert _TestLong into 00C3BF48()
+***Inserting:_TestLong into 00D7BF60
+<BuildSignature>:_TestLong</BuildSignature>Insert _TestLong into 00D7BF60()
 Insert into global table
 </Find>
 _TestLong</Find>
@@ -89,8 +89,8 @@ Bb<ParseDeclPrefix>(1)
 CDEGH</Find>
 _a</Find>
 hh1kIIbIcinsert type: 16
-***Inserting:_a into 00C4943C
-<BuildSignature>:_a</BuildSignature>Insert _a into 00C4943C(_TestLong)
+***Inserting:_a into 00D89454
+<BuildSignature>:_a</BuildSignature>Insert _a into 00D89454(_TestLong)
 </Find>
 _a</Find>
 At insert:
@@ -112,8 +112,8 @@ Bb<ParseDeclPrefix>(1)
 CDEGH</Find>
 _b</Find>
 hh1kIIbIcinsert type: 16
-***Inserting:_b into 00C4943C
-<BuildSignature>:_b</BuildSignature>Insert _b into 00C4943C(_TestLong)
+***Inserting:_b into 00D89454
+<BuildSignature>:_b</BuildSignature>Insert _b into 00D89454(_TestLong)
 </Find>
 _b</Find>
 At insert:
@@ -149,8 +149,8 @@ Bb<ParseDeclPrefix>(1)
 CDEGH</Find>
 _c</Find>
 hh1kIIbIcinsert type: 17
-***Inserting:_c into 016ADD8C
-<BuildSignature>:_c</BuildSignature>Insert _c into 016ADD8C()
+***Inserting:_c into 00ADDD8C
+<BuildSignature>:_c</BuildSignature>Insert _c into 00ADDD8C()
 </Find>
 _c</Find>
 At insert:
@@ -165,8 +165,8 @@ b<ParseDeclPrefix>(1)
 CDEGH</Find>
 _d</Find>
 hh1kIIbIcinsert type: 17
-***Inserting:_d into 016ADD8C
-<BuildSignature>:_d</BuildSignature>Insert _d into 016ADD8C()
+***Inserting:_d into 00ADDD8C
+<BuildSignature>:_d</BuildSignature>Insert _d into 00ADDD8C()
 </Find>
 _d</Find>
 At insert:
@@ -181,8 +181,8 @@ b<ParseDeclPrefix>(1)
 CDEGH</Find>
 _e</Find>
 hh1kIIbIcinsert type: 17
-***Inserting:_e into 016ADD8C
-<BuildSignature>:_e</BuildSignature>Insert _e into 016ADD8C()
+***Inserting:_e into 00ADDD8C
+<BuildSignature>:_e</BuildSignature>Insert _e into 00ADDD8C()
 </Find>
 _e</Find>
 At insert:
@@ -204,8 +204,8 @@ Bb<ParseDeclPrefix>(1)
 CDEGH</Find>
 _x</Find>
 hh1kIIbIcinsert type: 17
-***Inserting:_x into 016ADD8C
-<BuildSignature>:_x</BuildSignature>Insert _x into 016ADD8C()
+***Inserting:_x into 00ADDD8C
+<BuildSignature>:_x</BuildSignature>Insert _x into 00ADDD8C()
 </Find>
 _x</Find>
 At insert:
@@ -227,8 +227,8 @@ Bb<ParseDeclPrefix>(1)
 CDEGH</Find>
 _r</Find>
 hh1kIIbIcinsert type: 16
-***Inserting:_r into 016ADD8C
-<BuildSignature>:_r</BuildSignature>Insert _r into 016ADD8C()
+***Inserting:_r into 00ADDD8C
+<BuildSignature>:_r</BuildSignature>Insert _r into 00ADDD8C()
 </Find>
 _r</Find>
 At insert:
@@ -250,8 +250,8 @@ Bb<ParseDeclPrefix>(1)
 CDEGH</Find>
 _r2</Find>
 hh1kIIbIcinsert type: 17
-***Inserting:_r2 into 016ADD8C
-<BuildSignature>:_r2</BuildSignature>Insert _r2 into 016ADD8C()
+***Inserting:_r2 into 00ADDD8C
+<BuildSignature>:_r2</BuildSignature>Insert _r2 into 00ADDD8C()
 </Find>
 _r2</Find>
 At insert:
@@ -274,7 +274,7 @@ Found as an auto var
 A:1:_xIsEqual:T2sp is not null
 Type array:
    
-tp:011BE880 <Deref></Deref>deref tp:011BE880 </nameref2>
+tp:012FE898 <Deref></Deref>deref tp:012FE898 </nameref2>
 </Nameref>
 </Find>
 _x</Find>
@@ -291,7 +291,7 @@ Found as an auto var
 A:1:_xIsEqual:T2sp is not null
 Type array:
    
-tp:011BE880 <Deref></Deref>deref tp:011BE880 </nameref2>
+tp:012FE898 <Deref></Deref>deref tp:012FE898 </nameref2>
 </Nameref>
 </Find>
 _x</Find>
@@ -308,7 +308,7 @@ Found as an auto var
 A:1:_xIsEqual:T2sp is not null
 Type array:
    
-tp:011BE880 <Deref></Deref>deref tp:011BE880 </nameref2>
+tp:012FE898 <Deref></Deref>deref tp:012FE898 </nameref2>
 </Nameref>
 <Parse></Find>
 _c</Find>
@@ -334,7 +334,7 @@ Found as an auto var
 A:1:_cIsEqual:T2sp is not null
 Type array:
    
-tp:011BE848 <Deref></Deref>deref tp:011BE848 </nameref2>
+tp:012FE860 <Deref></Deref>deref tp:012FE860 </nameref2>
 </Nameref>
 </Find>
 _d</Find>
@@ -354,7 +354,7 @@ Found as an auto var
 A:1:_dIsEqual:T2sp is not null
 Type array:
    
-tp:011BE848 <Deref></Deref>deref tp:011BE848 </nameref2>
+tp:012FE860 <Deref></Deref>deref tp:012FE860 </nameref2>
 </Nameref>
 </Find>
 _e</Find>
@@ -374,7 +374,7 @@ Found as an auto var
 A:1:_eIsEqual:T2sp is not null
 Type array:
    
-tp:011BE848 <Deref></Deref>deref tp:011BE848 </nameref2>
+tp:012FE860 <Deref></Deref>deref tp:012FE860 </nameref2>
 </Nameref>
 </Find>
 _b</Find>
@@ -390,8 +390,8 @@ _b</Find>
 Looking in function's symbol table
 </Find>
 _b</Find>
-Searching method/class:_TestLong|00C493F0
-Looking at params 00C4943C
+Searching method/class:_TestLong|00D89408
+Looking at params 00D89454
 </Find>
 _bMatch
 </Find>
@@ -401,7 +401,7 @@ Found as parameter
 A:1:_bIsEqual:T2sp is not null
 Type array:
    
-tp:011BE810 <Deref></Deref>deref tp:011BE378 </nameref2>
+tp:012FE828 <Deref></Deref>deref tp:012FE390 </nameref2>
 </Nameref>
 </Find>
 _a</Find>
@@ -417,8 +417,8 @@ _a</Find>
 Looking in function's symbol table
 </Find>
 _a</Find>
-Searching method/class:_TestLong|00C493F0
-Looking at params 00C4943C
+Searching method/class:_TestLong|00D89408
+Looking at params 00D89454
 </Find>
 _aMatch
 </Find>
@@ -428,7 +428,7 @@ Found as parameter
 A:1:_aIsEqual:T2sp is not null
 Type array:
    
-tp:011BE7D8 <Deref></Deref>deref tp:011BE378 </nameref2>
+tp:012FE7F0 <Deref></Deref>deref tp:012FE390 </nameref2>
 </Nameref>
 </Find>
 _c</Find>
@@ -450,7 +450,7 @@ Found as an auto var
 A:1:_cIsEqual:T2sp is not null
 Type array:
    
-tp:011BE848 <Deref></Deref>deref tp:011BE848 </nameref2>
+tp:012FE860 <Deref></Deref>deref tp:012FE860 </nameref2>
 </Nameref>
 </Find>
 _e</Find>
@@ -470,7 +470,7 @@ Found as an auto var
 A:1:_eIsEqual:T2sp is not null
 Type array:
    
-tp:011BE848 <Deref></Deref>deref tp:011BE848 </nameref2>
+tp:012FE860 <Deref></Deref>deref tp:012FE860 </nameref2>
 </Nameref>
 </Find>
 _x</Find>
@@ -490,7 +490,7 @@ Found as an auto var
 A:1:_xIsEqual:T2sp is not null
 Type array:
    
-tp:011BE880 <Deref></Deref>deref tp:011BE880 </nameref2>
+tp:012FE898 <Deref></Deref>deref tp:012FE898 </nameref2>
 </Nameref>
 </ParseExpression>
 </Parse></Find>
@@ -515,7 +515,7 @@ Found as an auto var
 A:1:_xIsEqual:T2sp is not null
 Type array:
    
-tp:011BE880 <Deref></Deref>deref tp:011BE880 </nameref2>
+tp:012FE898 <Deref></Deref>deref tp:012FE898 </nameref2>
 </Nameref>
 </Find>
 _c</Find>
@@ -538,7 +538,7 @@ Found as an auto var
 A:1:_cIsEqual:T2sp is not null
 Type array:
    
-tp:011BE848 <Deref></Deref>deref tp:011BE848 </nameref2>
+tp:012FE860 <Deref></Deref>deref tp:012FE860 </nameref2>
 </Nameref>
 </Find>
 _d</Find>
@@ -561,7 +561,7 @@ Found as an auto var
 A:1:_dIsEqual:T2sp is not null
 Type array:
    
-tp:011BE848 <Deref></Deref>deref tp:011BE848 </nameref2>
+tp:012FE860 <Deref></Deref>deref tp:012FE860 </nameref2>
 </Nameref>
 </Find>
 _d</Find>
@@ -586,7 +586,7 @@ Found as an auto var
 A:1:_dIsEqual:T2sp is not null
 Type array:
    
-tp:011BE848 <Deref></Deref>deref tp:011BE848 </nameref2>
+tp:012FE860 <Deref></Deref>deref tp:012FE860 </nameref2>
 </Nameref>
 </Find>
 _x</Find>
@@ -613,7 +613,7 @@ Found as an auto var
 A:1:_xIsEqual:T2sp is not null
 Type array:
    
-tp:011BE880 <Deref></Deref>deref tp:011BE880 </nameref2>
+tp:012FE898 <Deref></Deref>deref tp:012FE898 </nameref2>
 </Nameref>
 </Find>
 _x</Find>
@@ -640,7 +640,7 @@ Found as an auto var
 A:1:_xIsEqual:T2sp is not null
 Type array:
    
-tp:011BE880 <Deref></Deref>deref tp:011BE880 </nameref2>
+tp:012FE898 <Deref></Deref>deref tp:012FE898 </nameref2>
 </Nameref>
 </Find>
 _r</Find>
@@ -665,7 +665,7 @@ Found as an auto var
 A:1:_rIsEqual:T2sp is not null
 Type array:
    
-tp:011BE8B8 <Deref></Deref>deref tp:011BE378 </nameref2>
+tp:012FE8D0 <Deref></Deref>deref tp:012FE390 </nameref2>
 </Nameref>
 </Find>
 _d</Find>
@@ -688,7 +688,7 @@ Found as an auto var
 A:1:_dIsEqual:T2sp is not null
 Type array:
    
-tp:011BE848 <Deref></Deref>deref tp:011BE848 </nameref2>
+tp:012FE860 <Deref></Deref>deref tp:012FE860 </nameref2>
 </Nameref>
 </Find>
 _x</Find>
@@ -711,7 +711,7 @@ Found as an auto var
 A:1:_xIsEqual:T2sp is not null
 Type array:
    
-tp:011BE880 <Deref></Deref>deref tp:011BE880 </nameref2>
+tp:012FE898 <Deref></Deref>deref tp:012FE898 </nameref2>
 </Nameref>
 </Find>
 _r2</Find>
@@ -736,7 +736,7 @@ Found as an auto var
 A:1:_r2IsEqual:T2sp is not null
 Type array:
    
-tp:011BE8F0 <Deref></Deref>deref tp:011BE8F0 </nameref2>
+tp:012FE908 <Deref></Deref>deref tp:012FE908 </nameref2>
 </Nameref>
 </Find>
 _d</Find>
@@ -759,7 +759,7 @@ Found as an auto var
 A:1:_dIsEqual:T2sp is not null
 Type array:
    
-tp:011BE848 <Deref></Deref>deref tp:011BE848 </nameref2>
+tp:012FE860 <Deref></Deref>deref tp:012FE860 </nameref2>
 </Nameref>
 </Find>
 _x</Find>
@@ -782,7 +782,7 @@ Found as an auto var
 A:1:_xIsEqual:T2sp is not null
 Type array:
    
-tp:011BE880 <Deref></Deref>deref tp:011BE880 </nameref2>
+tp:012FE898 <Deref></Deref>deref tp:012FE898 </nameref2>
 </Nameref>
 </Find>
 _return</Find>
@@ -808,7 +808,7 @@ Found as an auto var
 A:1:_cIsEqual:T2sp is not null
 Type array:
    
-tp:011BE848 <Deref></Deref>deref tp:011BE848 </nameref2>
+tp:012FE860 <Deref></Deref>deref tp:012FE860 </nameref2>
 </Nameref>
 </Parse>Returning EOF from NextToken.
 D<GenerateMonadic>
@@ -824,6 +824,15 @@ Uncoded node in scanexpr():17
 Uncoded node in scanexpr():17
 Uncoded node in scanexpr():17
 Uncoded node in scanexpr():17
+N Uses DUses Void Reg
+0: 5  0   0   -1   
+1: 2  0   0   -1   
+2: 2  0   0   -1   
+3: 1  0   0   -1   
+4: 1  0   0   -1   
+5: 1  0   0   -1   
+6: 1  0   0   -1   
+7: 1  0   0   -1   
 Uncoded node in repexr():26
 Uncoded node in repexr():17
 Uncoded node in repexr():17

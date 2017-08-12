@@ -1,7 +1,7 @@
 #	code
 	# int TestIf(int a, int b)
 _TestIf:
-	      	   push 	r12
+	      	   push 	r12,r14
 	      	   mov  	r12,r14
 	# 	if (a < b)
 	      	   ld   	r1,r12,1
@@ -12,7 +12,7 @@ _TestIf:
 	      	   ld   	r1,r12,1
 TestIf_7:
 	      	   mov  	r14,r12
-	      	   pop  	r12
+	      	   pop  	r12,r14
 	      	   mov  	r15,r13
 TestIf_4:
 	# 	elsif (a==10)
@@ -31,12 +31,12 @@ TestIf_9:
 	      	   mov  	r15,r0,TestIf_7
 	# int TestIf(int a, int b)
 _TestIf2:
-	      	   push 	r12
+	      	   push 	r12,r14
 	      	   mov  	r12,r14
 	# 	if (a and b)
 	      	   ld   	r1,r12,1
 	      	   add  	r1,r0
-	      	 z.inc  	r15,TestIf_13-PC
+	      	 z.mov  	r15,r0,TestIf_13
 	      	   ld   	r1,r12,2
 	      	   add  	r1,r0
 	      	 z.inc  	r15,TestIf_13-PC
@@ -44,7 +44,7 @@ _TestIf2:
 	      	   ld   	r1,r12,1
 TestIf_15:
 	      	   mov  	r14,r12
-	      	   pop  	r12
+	      	   pop  	r12,r14
 	      	   mov  	r15,r13
 TestIf_13:
 	# 	elsif (a or b)

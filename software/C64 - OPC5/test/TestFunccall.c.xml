@@ -26,7 +26,7 @@
 _int</Find>
 <Parsing GlobalDecl>
 <ParseGlobalDecl>
-Enter declare()
+Enter declare()
 A<ParseSpecifier>
 A</Find>
 _SomeFunc</Find>
@@ -57,8 +57,8 @@ X</openpa>
 CDEGH</Find>
 _SomeFunc</Find>
 hh1h2ikIIbIcinsert type: 33
-***Inserting:_SomeFunc into 01308F48
-<BuildSignature>:_SomeFunc</BuildSignature>Insert _SomeFunc into 01308F48()
+***Inserting:_SomeFunc into 001D0790
+<BuildSignature>:_SomeFunc</BuildSignature>Insert _SomeFunc into 001D0790()
 Insert into global table
 </Find>
 _SomeFunc</Find>
@@ -75,7 +75,7 @@ Parsing function: _SomeFunc
 ***********************************
 A<BuildParameterList
 ><ParseParmDecls>
-A(54)CEnter declare()
+A(54)CEnter declare()
 A<ParseSpecifier>
 A</Find>
 _a</Find>
@@ -89,8 +89,8 @@ Bb<ParseDeclPrefix>(1)
 CDEGH</Find>
 _a</Find>
 hh1kIIbIcinsert type: 16
-***Inserting:_a into 0131643C
-<BuildSignature>:_a</BuildSignature>Insert _a into 0131643C(_SomeFunc)
+***Inserting:_a into 001DDC84
+<BuildSignature>:_a</BuildSignature>Insert _a into 001DDC84(_SomeFunc)
 </Find>
 _a</Find>
 At insert:
@@ -98,7 +98,7 @@ Type array:
    
 JK</Find>
 _int</Find>
-EA(54)CEnter declare()
+EA(54)CEnter declare()
 A<ParseSpecifier>
 A</Find>
 _b</Find>
@@ -112,8 +112,8 @@ Bb<ParseDeclPrefix>(1)
 CDEGH</Find>
 _b</Find>
 hh1kIIbIcinsert type: 16
-***Inserting:_b into 0131643C
-<BuildSignature>:_b</BuildSignature>Insert _b into 0131643C(_SomeFunc)
+***Inserting:_b into 001DDC84
+<BuildSignature>:_b</BuildSignature>Insert _b into 001DDC84(_SomeFunc)
 </Find>
 _b</Find>
 At insert:
@@ -123,7 +123,7 @@ JK</Find>
 _register</Find>
 EA(78)</Find>
 _int</Find>
-EA(54)CEnter declare()
+EA(54)CEnter declare()
 A<ParseSpecifier>
 A</Find>
 _c</Find>
@@ -137,8 +137,8 @@ Bb<ParseDeclPrefix>(1)
 CDEGH</Find>
 _c</Find>
 hh1kIIbIcinsert type: 16
-***Inserting:_c into 0131643C
-<BuildSignature>:_c</BuildSignature>Insert _c into 0131643C(_SomeFunc)
+***Inserting:_c into 001DDC84
+<BuildSignature>:_c</BuildSignature>Insert _c into 001DDC84(_SomeFunc)
 </Find>
 _c</Find>
 At insert:
@@ -161,8 +161,8 @@ _SomeFuncMatch
 CDEG<Parse function body>:_SomeFunc|
 </Find>
 _return</Find>
-Bb<GenerateMonadic>
-ABCD</GenerateMonadic>
+Bb<GenerateMonadic>
+ABCD</GenerateMonadic>
 C<Parse></Find>
 _a</Find>
 <Nameref>
@@ -174,8 +174,8 @@ _a</Find>
 Looking in function's symbol table
 </Find>
 _a</Find>
-Searching method/class:_SomeFunc|013163F0
-Looking at params 0131643C
+Searching method/class:_SomeFunc|001DDC38
+Looking at params 001DDC84
 </Find>
 _aMatch
 </Find>
@@ -185,7 +185,7 @@ Found as parameter
 A:1:_aIsEqual:T2sp is not null
 Type array:
    
-tp:0188B7D8 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753020 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 </Find>
 _b</Find>
@@ -198,8 +198,8 @@ _b</Find>
 Looking in function's symbol table
 </Find>
 _b</Find>
-Searching method/class:_SomeFunc|013163F0
-Looking at params 0131643C
+Searching method/class:_SomeFunc|001DDC38
+Looking at params 001DDC84
 </Find>
 _bMatch
 </Find>
@@ -209,7 +209,7 @@ Found as parameter
 A:1:_bIsEqual:T2sp is not null
 Type array:
    
-tp:0188B810 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753058 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 </Find>
 _c</Find>
@@ -222,8 +222,8 @@ _c</Find>
 Looking in function's symbol table
 </Find>
 _c</Find>
-Searching method/class:_SomeFunc|013163F0
-Looking at params 0131643C
+Searching method/class:_SomeFunc|001DDC38
+Looking at params 001DDC84
 </Find>
 _cMatch
 </Find>
@@ -233,33 +233,34 @@ Found as parameter
 A:1:_cIsEqual:T2sp is not null
 Type array:
    
-tp:0188B848 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753090 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 </Parse></Find>
 _int</Find>
-D<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
+D<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<CSETable>
+N Uses DUses Void Reg
+0: 1  0   0   -1         
+1: 1  0   0   -1         
+</CSETable>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
 E</ParseFunctionBody>
 Enter funcbottom
 Leave funcbottom
 F</ParseFunction>
-Enter declare()
+Enter declare()
 A<ParseSpecifier>
 A</Find>
 _main</Find>
@@ -282,8 +283,8 @@ o p q </openpa>
 CDEGH</Find>
 _main</Find>
 hh1h2ikIIbIcinsert type: 34
-***Inserting:_main into 01308F48
-<BuildSignature>:_main</BuildSignature>Insert _main into 01308F48()
+***Inserting:_main into 001D0790
+<BuildSignature>:_main</BuildSignature>Insert _main into 001D0790()
 Insert into global table
 </Find>
 _main</Find>
@@ -308,8 +309,8 @@ _mainMatch
 CDEG<Parse function body>:_main|
 </Find>
 _SomeFunc</Find>
-Bb<GenerateMonadic>
-ABCD</GenerateMonadic>
+Bb<GenerateMonadic>
+ABCD</GenerateMonadic>
 CFound _SomeFunc
 </Find>
 _SomeFunc</Find>
@@ -327,11 +328,11 @@ _SomeFunc</Find>
 Looking in function's symbol table
 </Find>
 _SomeFunc</Find>
-Searching method/class:_main|013166B0
-Looking at params 013166FC
+Searching method/class:_main|001DDEF8
+Looking at params 001DDF44
 </Find>
 _SomeFunc</Find>
-Looking at class members 0188B8D4
+Looking at class members 0075311C
 Looking at global symbols
 </Find>
 _SomeFuncMatch
@@ -342,7 +343,7 @@ Found in global symbol table
 A:1:_SomeFuncIsEqual:F1sp is not null
 Type array:
    
-tp:0188B7A0 deref tp:0188B7A0 </nameref2>
+tp:00752FE8 deref tp:00752FE8 </nameref2>
 </Nameref>
 tp2->type=33<ArgumentList>016 016 016 lastst=45</ArgumentList>
 Type array:
@@ -358,11 +359,11 @@ _SomeFunc</Find>
 Looking in function's symbol table
 </Find>
 _SomeFunc</Find>
-Searching method/class:_main|013166B0
-Looking at params 013166FC
+Searching method/class:_main|001DDEF8
+Looking at params 001DDF44
 </Find>
 _SomeFunc</Find>
-Looking at class members 0188B8D4
+Looking at class members 0075311C
 Looking at global symbols
 </Find>
 _SomeFuncMatch
@@ -374,18 +375,21 @@ Found in global symbol table
 </gsearch2>
 Got direct function _SomeFunc </ParseExpression>
 </Parse>Returning EOF from NextToken.
-D<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
+D<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<CSETable>
+N Uses DUses Void Reg
+0: 1  1   0   -1         
+1: 1  0   0   -1   imm   
+2: 1  0   0   -1   imm   
+3: 1  0   0   -1   imm   
+</CSETable>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
 
 <gsearch2> for: |_SomeFunc|
 Looking in statement table
@@ -394,33 +398,21 @@ _SomeFunc</Find>
 Looking in function's symbol table
 </Find>
 _SomeFunc</Find>
-Searching method/class:_main|013166B0
-Looking at params 013166FC
+Searching method/class:_main|001DDEF8
+Looking at params 001DDF44
 </Find>
 _SomeFunc</Find>
-Looking at class members 0188B8D4
+Looking at class members 0075311C
 Looking at global symbols
 </Find>
 _SomeFuncMatch
 </Find>
 Found in global symbol table
 </gsearch2>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
 E</ParseFunctionBody>
 Enter funcbottom
 Leave funcbottom

@@ -1,0 +1,28 @@
+     1	int pi[20];
+     2	
+     3	int main()
+     4	{
+     5		int x, i;
+     6	
+     7		x = 10 * pi[i];
+     8	}
+
+
+*** local symbol table ***
+
+_x         =ffffffff   -    Auto        Short
+_i         =fffffffe   -    Auto        Short
+
+
+
+
+ *** global scope typedef symbol table ***
+
+_main      =000014   -    Global      Function returning Short
+		Parameters:
+			Type array:
+   
+_pi        =000000   -    Global      Array of Short
+
+ *** structures and unions ***
+

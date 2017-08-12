@@ -220,6 +220,9 @@ void BasicBlock::ComputeLiveVars()
 		changed = true;
 }
 
+// Keeps iterating until there are no changes detected in the LiveIn / LiveOut
+// sets. Also has an iteration limit in case something's wrong with the compiler.
+
 void ComputeLiveVars()
 {
 	BasicBlock *b;

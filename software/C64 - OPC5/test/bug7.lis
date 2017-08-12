@@ -1,0 +1,23 @@
+     1	
+     2	int bug7(int d)
+     3	{
+     4		return (d/1000) % 10;
+     5	}
+     6	
+
+
+*** local symbol table ***
+
+
+
+
+
+ *** global scope typedef symbol table ***
+
+_bug7      =000000   -    External    Function returning Short
+		Parameters:
+			Type array:
+   016 
+
+ *** structures and unions ***
+

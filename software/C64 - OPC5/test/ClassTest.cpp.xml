@@ -37,7 +37,6 @@ _class</Find>
 <Parsing GlobalDecl>
 <ParseGlobalDecl>
 Enter declare()
-
 A<ParseSpecifier>
 A<ParseClassDeclaration>
 </Find>
@@ -56,7 +55,7 @@ Type array:
 _public</Find>
 <TYP__Make>
 </TYP__Make>
-Insert _typeno into 0188B784()
+Insert _typeno into 00752FCC()
 </Find>
 _typeno</Find>
 At insert:
@@ -65,7 +64,6 @@ Type array:
 </Find>
 _int</Find>
 Enter declare()
-
 A<ParseSpecifier>
 A</Find>
 _a</Find>
@@ -79,10 +77,10 @@ Bb<ParseDeclPrefix>(1)
 CDEGH</Find>
 _a</Find>
 hh1kIIbIcinsert type: 16
-***Inserting:_a into 0188B784
-<BuildSignature>A<GetNameHash>tp:0188B7D8<TypenoToChars>ABCD:QAAA</TypenoToChars>A<GetNameHash>tp:0188B768<TypenoToChars>ABCD:MBAA</TypenoToChars>A</GetNameHash>
+***Inserting:_a into 00752FCC
+<BuildSignature>A<GetNameHash>tp:00753020<TypenoToChars>ABCD:QAAA</TypenoToChars>A<GetNameHash>tp:00752FB0<TypenoToChars>ABCD:MBAA</TypenoToChars>A</GetNameHash>
 B</GetNameHash>
-BCDF:_ZQAAAMBAA_a</BuildSignature>Insert _a into 0188B784()
+BCDF:_ZQAAAMBAA_a</BuildSignature>Insert _a into 00752FCC()
 </Find>
 _a</Find>
 At insert:
@@ -91,7 +89,6 @@ Type array:
 JK</Find>
 _int</Find>
 Enter declare()
-
 A<ParseSpecifier>
 A</Find>
 _b</Find>
@@ -105,10 +102,10 @@ Bb<ParseDeclPrefix>(1)
 CDEGH</Find>
 _b</Find>
 hh1kIIbIcinsert type: 16
-***Inserting:_b into 0188B784
-<BuildSignature>A<GetNameHash>tp:0188B810<TypenoToChars>ABCD:QAAA</TypenoToChars>A<GetNameHash>tp:0188B768<TypenoToChars>ABCD:MBAA</TypenoToChars>A</GetNameHash>
+***Inserting:_b into 00752FCC
+<BuildSignature>A<GetNameHash>tp:00753058<TypenoToChars>ABCD:QAAA</TypenoToChars>A<GetNameHash>tp:00752FB0<TypenoToChars>ABCD:MBAA</TypenoToChars>A</GetNameHash>
 B</GetNameHash>
-BCDF:_ZQAAAMBAA_b</BuildSignature>Insert _b into 0188B784()
+BCDF:_ZQAAAMBAA_b</BuildSignature>Insert _b into 00752FCC()
 </Find>
 _b</Find>
 At insert:
@@ -117,7 +114,6 @@ Type array:
 JK</Find>
 _int</Find>
 Enter declare()
-
 A<ParseSpecifier>
 A</Find>
 _Add</Find>
@@ -140,7 +136,6 @@ o p q rss Set false
 <BuildParameterList
 ><ParseParmDecls>
 A(54)CEnter declare()
-
 A<ParseSpecifier>
 A</Find>
 _a</Find>
@@ -154,9 +149,9 @@ Bb<ParseDeclPrefix>(1)
 CDEGH</Find>
 _a</Find>
 hh1kIIbIcinsert type: 16
-***Inserting:_a into 013166FC
-<BuildSignature>A<GetNameHash>tp:0188B8B8<TypenoToChars>ABCD:QAAA</TypenoToChars>A</GetNameHash>
-BCDF:_ZQAAA_a</BuildSignature>Insert _a into 013166FC(_Add)
+***Inserting:_a into 001DDF44
+<BuildSignature>A<GetNameHash>tp:00753100<TypenoToChars>ABCD:QAAA</TypenoToChars>A</GetNameHash>
+BCDF:_ZQAAA_a</BuildSignature>Insert _a into 001DDF44(_Add)
 </Find>
 _a</Find>
 At insert:
@@ -165,7 +160,6 @@ Type array:
 JK</Find>
 _int</Find>
 EA(54)CEnter declare()
-
 A<ParseSpecifier>
 A</Find>
 _b</Find>
@@ -179,9 +173,9 @@ Bb<ParseDeclPrefix>(1)
 CDEGH</Find>
 _b</Find>
 hh1kIIbIcinsert type: 16
-***Inserting:_b into 013166FC
-<BuildSignature>A<GetNameHash>tp:0188B8F0<TypenoToChars>ABCD:QAAA</TypenoToChars>A</GetNameHash>
-BCDF:_ZQAAA_b</BuildSignature>Insert _b into 013166FC(_Add)
+***Inserting:_b into 001DDF44
+<BuildSignature>A<GetNameHash>tp:00753138<TypenoToChars>ABCD:QAAA</TypenoToChars>A</GetNameHash>
+BCDF:_ZQAAA_b</BuildSignature>Insert _b into 001DDF44(_Add)
 </Find>
 _b</Find>
 At insert:
@@ -197,7 +191,6 @@ _bMatch
 </BuildParameterList>
 Set false
 Z
-
 YParameter types(_Add)
 Type array:
    016 016 
@@ -210,10 +203,10 @@ X</openpa>
 CDEGH</Find>
 _Add</Find>
 hh1h2ikIIbIcinsert type: 33
-***Inserting:_Add into 0188B784
-<BuildSignature>A<GetNameHash>tp:0188B880<TypenoToChars>ABCD:BBAA</TypenoToChars>A<GetNameHash>tp:0188B768<TypenoToChars>ABCD:MBAA</TypenoToChars>A</GetNameHash>
+***Inserting:_Add into 00752FCC
+<BuildSignature>A<GetNameHash>tp:007530C8<TypenoToChars>ABCD:BBAA</TypenoToChars>A<GetNameHash>tp:00752FB0<TypenoToChars>ABCD:MBAA</TypenoToChars>A</GetNameHash>
 B</GetNameHash>
-BCDF<TypenoToChars>ABCD:QAAA</TypenoToChars><TypenoToChars>ABCD:QAAA</TypenoToChars>:_ZBBAAMBAA_AddQAAAQAAA</BuildSignature><InsertMethod>_Add type 33 Insert _Add into 0188B784()
+BCDF<TypenoToChars>ABCD:QAAA</TypenoToChars><TypenoToChars>ABCD:QAAA</TypenoToChars>:_ZBBAAMBAA_AddQAAAQAAA</BuildSignature><InsertMethod>_Add type 33 Insert _Add into 00752FCC()
 </Find>
 _Add</Find>
 At insert:
@@ -242,7 +235,6 @@ _ClassTest</Find>
 hh1kIIbIcJK</Find>
 _int</Find>
 Enter declare()
-
 A<ParseSpecifier>
 A</Find>
 _ClassTest</Find>
@@ -265,9 +257,9 @@ o p q </openpa>
 CDEGH</Find>
 _ClassTest</Find>
 hh1h2ikIIbIcinsert type: 34
-***Inserting:_ClassTest into 01308F48
-<BuildSignature>A<GetNameHash>tp:0188B960<TypenoToChars>ABCD:BBAA</TypenoToChars>A</GetNameHash>
-BCDF:_ZBBAA_ClassTest</BuildSignature>Insert _ClassTest into 01308F48()
+***Inserting:_ClassTest into 001D0790
+<BuildSignature>A<GetNameHash>tp:007531A8<TypenoToChars>ABCD:BBAA</TypenoToChars>A</GetNameHash>
+BCDF:_ZBBAA_ClassTest</BuildSignature>Insert _ClassTest into 001D0790()
 Insert into global table
 </Find>
 _ClassTest</Find>
@@ -286,7 +278,7 @@ A<BuildParameterList
 ><ParseParmDecls>
 A(42)</ParseParmDecls>
 B</BuildParameterList>
-B<BuildSignature>A<GetNameHash>tp:0188B960<TypenoToChars>ABCD:BBAA</TypenoToChars>A</GetNameHash>
+B<BuildSignature>A<GetNameHash>tp:007531A8<TypenoToChars>ABCD:BBAA</TypenoToChars>A</GetNameHash>
 BCDE:_ZBBAA_ClassTest</BuildSignature></Find>
 _ClassTestMatch
 </Find>
@@ -294,9 +286,7 @@ CDEG<Parse function body>:_ClassTest|
 </Find>
 _ClassTest</Find>
 Bb<GenerateMonadic>
-
 ABCD</GenerateMonadic>
-
 CFound _ClassTest
 </Find>
 _ClassTestMatch
@@ -304,13 +294,11 @@ _ClassTestMatch
 Found in tagtablesp okay sc=5
 Declaring var of type
 Enter declare()
-
 A<ParseSpecifier>
 A<ParseId>_ClassTest</Find>
 _ClassTestMatch
 </Find>
 Actually found type.
-
 </Find>
 _a</Find>
 </ParseId></ParseSpecifier>
@@ -321,9 +309,9 @@ Bb<ParseDeclPrefix>(1)
 CDEGH</Find>
 _a</Find>
 hh1kIIbIcinsert type: 30
-***Inserting:_a into 01DE84B4
-<BuildSignature>A<GetNameHash>tp:0188B768<TypenoToChars>ABCD:MBAA</TypenoToChars>A</GetNameHash>
-BCDF:_ZMBAA_a</BuildSignature>Insert _a into 01DE84B4()
+***Inserting:_a into 019484C4
+<BuildSignature>A<GetNameHash>tp:00752FB0<TypenoToChars>ABCD:MBAA</TypenoToChars>A</GetNameHash>
+BCDF:_ZMBAA_a</BuildSignature>Insert _a into 019484C4()
 </Find>
 _a</Find>
 At insert:
@@ -338,9 +326,9 @@ b<ParseDeclPrefix>(1)
 CDEGH</Find>
 _b</Find>
 hh1kIIbIcinsert type: 30
-***Inserting:_b into 01DE84B4
-<BuildSignature>A<GetNameHash>tp:0188B768<TypenoToChars>ABCD:MBAA</TypenoToChars>A</GetNameHash>
-BCDF:_ZMBAA_b</BuildSignature>Insert _b into 01DE84B4()
+***Inserting:_b into 019484C4
+<BuildSignature>A<GetNameHash>tp:00752FB0<TypenoToChars>ABCD:MBAA</TypenoToChars>A</GetNameHash>
+BCDF:_ZMBAA_b</BuildSignature>Insert _b into 019484C4()
 </Find>
 _b</Find>
 At insert:
@@ -370,12 +358,11 @@ Found as an auto var
 A:1:_aIsEqual:T2sp is not null
 Type array:
    
-tp:0188B768 deref tp:0188B768 </nameref2>
+tp:00752FB0 deref tp:00752FB0 </nameref2>
 </Nameref>
 </Find>
 _a</Find>
-dot search: 0188B784
-
+dot search: 00752FCC
 <FindRising>_a 
 </Find>
 _aMatch
@@ -402,12 +389,11 @@ Found as an auto var
 A:1:_aIsEqual:T2sp is not null
 Type array:
    
-tp:0188B768 deref tp:0188B768 </nameref2>
+tp:00752FB0 deref tp:00752FB0 </nameref2>
 </Nameref>
 </Find>
 _a</Find>
-dot search: 0188B784
-
+dot search: 00752FCC
 <FindRising>_a 
 </Find>
 _aMatch
@@ -434,12 +420,11 @@ Found as an auto var
 A:1:_bIsEqual:T2sp is not null
 Type array:
    
-tp:0188B768 deref tp:0188B768 </nameref2>
+tp:00752FB0 deref tp:00752FB0 </nameref2>
 </Nameref>
 </Find>
 _a</Find>
-dot search: 0188B784
-
+dot search: 00752FCC
 <FindRising>_a 
 </Find>
 _aMatch
@@ -469,12 +454,11 @@ Found as an auto var
 A:1:_aIsEqual:T2sp is not null
 Type array:
    
-tp:0188B768 deref tp:0188B768 </nameref2>
+tp:00752FB0 deref tp:00752FB0 </nameref2>
 </Nameref>
 </Find>
 _a</Find>
-dot search: 0188B784
-
+dot search: 00752FCC
 <FindRising>_a 
 </Find>
 _aMatch
@@ -489,71 +473,34 @@ Found method:IsEqual:T3Found in a base class:</FindRisingMatch>
 tp1->type:16tp1->type:16<Deref></Deref>tp1->type:16B</Parse></Find>
 _int</Find>
 D<GenerateMonadic>
-
 ABCD</GenerateMonadic>
-
 <GenerateMonadic>
-
 ABCD</GenerateMonadic>
-
 <GenerateMonadic>
-
 ABCD</GenerateMonadic>
-
+<CSETable>
+N Uses DUses Void Reg
+0: 4  4   0   3   imm   
+1: 3  3   0   -1         
+2: 1  1   0   -1         
+</CSETable>
 <GenerateMonadic>
-
 ABCD</GenerateMonadic>
-
 <GenerateMonadic>
-
 ABCD</GenerateMonadic>
-
 <GenerateMonadic>
-
 ABCD</GenerateMonadic>
-
 <GenerateMonadic>
-
 ABCD</GenerateMonadic>
-
 <GenerateMonadic>
-
 ABCD</GenerateMonadic>
-
 <GenerateMonadic>
-
 ABCD</GenerateMonadic>
-
-<GenerateMonadic>
-
-ABCD</GenerateMonadic>
-
-<GenerateMonadic>
-
-ABCD</GenerateMonadic>
-
-<GenerateMonadic>
-
-ABCD</GenerateMonadic>
-
-<GenerateMonadic>
-
-ABCD</GenerateMonadic>
-
-<GenerateMonadic>
-
-ABCD</GenerateMonadic>
-
-<GenerateMonadic>
-
-ABCD</GenerateMonadic>
-
 E</ParseFunctionBody>
 Enter funcbottom
 Leave funcbottom
 F</ParseFunction>
 Enter declare()
-
 A<ParseSpecifier>
 A</Find>
 _ClassTest</Find>
@@ -567,7 +514,6 @@ _ClassTestMatch
 </Find>
 _Add</Find>
 Setting parent:_ClassTest|
-
 E<ParseDeclSuffix>
 <openpa>
 ****************************
@@ -592,10 +538,10 @@ CDEGH</Find>
 _AddMatch
 </Find>
 0IsEqual:F2hh1h20IsEqual:F2ikIIbIcinsert type: 33
-***Inserting:_Add into 01308F48
-<BuildSignature>A<GetNameHash>tp:0188B9D0<TypenoToChars>ABCD:BBAA</TypenoToChars>A<GetNameHash>tp:0188B768<TypenoToChars>ABCD:MBAA</TypenoToChars>A</GetNameHash>
+***Inserting:_Add into 001D0790
+<BuildSignature>A<GetNameHash>tp:00753218<TypenoToChars>ABCD:BBAA</TypenoToChars>A<GetNameHash>tp:00752FB0<TypenoToChars>ABCD:MBAA</TypenoToChars>A</GetNameHash>
 B</GetNameHash>
-BCDF:_ZBBAAMBAA_Add</BuildSignature><InsertMethod>_Add type 33 Insert _Add into 0188B784()
+BCDF:_ZBBAAMBAA_Add</BuildSignature><InsertMethod>_Add type 33 Insert _Add into 00752FCC()
 </Find>
 _AddMatch
 IsEqual:F2Type array:
@@ -632,7 +578,6 @@ Parsing function: _Add
 A<BuildParameterList
 ><ParseParmDecls>
 A(54)CEnter declare()
-
 A<ParseSpecifier>
 A</Find>
 _c</Find>
@@ -646,9 +591,9 @@ Bb<ParseDeclPrefix>(1)
 CDEGH</Find>
 _c</Find>
 hh1kIIbIcinsert type: 16
-***Inserting:_c into 01316BCC
-<BuildSignature>A<GetNameHash>tp:0188BA08<TypenoToChars>ABCD:QAAA</TypenoToChars>A</GetNameHash>
-BCDF:_ZQAAA_c</BuildSignature>Insert _c into 01316BCC(_Add)
+***Inserting:_c into 001DE414
+<BuildSignature>A<GetNameHash>tp:00753250<TypenoToChars>ABCD:QAAA</TypenoToChars>A</GetNameHash>
+BCDF:_ZQAAA_c</BuildSignature>Insert _c into 001DE414(_Add)
 </Find>
 _c</Find>
 At insert:
@@ -657,7 +602,6 @@ Type array:
 JK</Find>
 _int</Find>
 EA(54)CEnter declare()
-
 A<ParseSpecifier>
 A</Find>
 _d</Find>
@@ -671,9 +615,9 @@ Bb<ParseDeclPrefix>(1)
 CDEGH</Find>
 _d</Find>
 hh1kIIbIcinsert type: 16
-***Inserting:_d into 01316BCC
-<BuildSignature>A<GetNameHash>tp:0188BA40<TypenoToChars>ABCD:QAAA</TypenoToChars>A</GetNameHash>
-BCDF:_ZQAAA_d</BuildSignature>Insert _d into 01316BCC(_Add)
+***Inserting:_d into 001DE414
+<BuildSignature>A<GetNameHash>tp:00753288<TypenoToChars>ABCD:QAAA</TypenoToChars>A</GetNameHash>
+BCDF:_ZQAAA_d</BuildSignature>Insert _d into 001DE414(_Add)
 </Find>
 _d</Find>
 At insert:
@@ -687,7 +631,7 @@ _cMatch
 _dMatch
 </Find>
 </BuildParameterList>
-B<BuildSignature>A<GetNameHash>tp:0188B9D0<TypenoToChars>ABCD:BBAA</TypenoToChars>A<GetNameHash>tp:0188B768<TypenoToChars>ABCD:MBAA</TypenoToChars>A</GetNameHash>
+B<BuildSignature>A<GetNameHash>tp:00753218<TypenoToChars>ABCD:BBAA</TypenoToChars>A<GetNameHash>tp:00752FB0<TypenoToChars>ABCD:MBAA</TypenoToChars>A</GetNameHash>
 B</GetNameHash>
 BCDE<TypenoToChars>ABCD:QAAA</TypenoToChars><TypenoToChars>ABCD:QAAA</TypenoToChars>:_ZBBAAMBAA_AddQAAAQAAA</BuildSignature>Parent Class:_ClassTest|</Find>
 _AddMatch
@@ -704,9 +648,7 @@ DEG<Parse function body>:_Add|
 </Find>
 _return</Find>
 Bb<GenerateMonadic>
-
 ABCD</GenerateMonadic>
-
 C<Parse></Find>
 _a</Find>
 <Nameref>
@@ -718,13 +660,13 @@ _a</Find>
 Looking in function's symbol table
 </Find>
 _a</Find>
-Searching method/class:_Add|013166B0
-Looking at params 013166FC
+Searching method/class:_Add|001DDEF8
+Looking at params 001DDF44
 </Find>
 _a</Find>
-Looking at class members 0188B89C
-Searching method/class:_ClassTest|013163F0
-Looking at class members 0188B784
+Looking at class members 007530E4
+Searching method/class:_ClassTest|001DDC38
+Looking at class members 00752FCC
 </Find>
 _aMatch
 </Find>
@@ -734,7 +676,7 @@ Found in class
 A:1:_aIsEqual:T2sp is not null
 Type array:
    
-tp:0188B7D8 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753020 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 </Find>
 _b</Find>
@@ -747,13 +689,13 @@ _b</Find>
 Looking in function's symbol table
 </Find>
 _b</Find>
-Searching method/class:_Add|013166B0
-Looking at params 013166FC
+Searching method/class:_Add|001DDEF8
+Looking at params 001DDF44
 </Find>
 _b</Find>
-Looking at class members 0188B89C
-Searching method/class:_ClassTest|013163F0
-Looking at class members 0188B784
+Looking at class members 007530E4
+Searching method/class:_ClassTest|001DDC38
+Looking at class members 00752FCC
 </Find>
 _bMatch
 </Find>
@@ -763,7 +705,7 @@ Found in class
 A:1:_bIsEqual:T2sp is not null
 Type array:
    
-tp:0188B810 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753058 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 </Find>
 _c</Find>
@@ -776,8 +718,8 @@ _c</Find>
 Looking in function's symbol table
 </Find>
 _c</Find>
-Searching method/class:_Add|013166B0
-Looking at params 013166FC
+Searching method/class:_Add|001DDEF8
+Looking at params 001DDF44
 </Find>
 _cMatch
 </Find>
@@ -787,7 +729,7 @@ Found as parameter
 A:1:_cIsEqual:T2sp is not null
 Type array:
    
-tp:0188BA08 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753250 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 </Find>
 _d</Find>
@@ -800,8 +742,8 @@ _d</Find>
 Looking in function's symbol table
 </Find>
 _d</Find>
-Searching method/class:_Add|013166B0
-Looking at params 013166FC
+Searching method/class:_Add|001DDEF8
+Looking at params 001DDF44
 </Find>
 _dMatch
 </Find>
@@ -811,69 +753,30 @@ Found as parameter
 A:1:_dIsEqual:T2sp is not null
 Type array:
    
-tp:0188BA40 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753288 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 </Parse>Returning EOF from NextToken.
 D<GenerateMonadic>
-
 ABCD</GenerateMonadic>
-
 <GenerateMonadic>
-
 ABCD</GenerateMonadic>
-
 <GenerateMonadic>
-
 ABCD</GenerateMonadic>
-
+<CSETable>
+N Uses DUses Void Reg
+0: 1  0   0   -1         
+1: 1  0   0   -1         
+2: 1  0   0   -1         
+3: 1  0   0   -1         
+</CSETable>
 <GenerateMonadic>
-
 ABCD</GenerateMonadic>
-
 <GenerateMonadic>
-
 ABCD</GenerateMonadic>
-
 <GenerateMonadic>
-
 ABCD</GenerateMonadic>
-
 <GenerateMonadic>
-
 ABCD</GenerateMonadic>
-
-<GenerateMonadic>
-
-ABCD</GenerateMonadic>
-
-<GenerateMonadic>
-
-ABCD</GenerateMonadic>
-
-<GenerateMonadic>
-
-ABCD</GenerateMonadic>
-
-<GenerateMonadic>
-
-ABCD</GenerateMonadic>
-
-<GenerateMonadic>
-
-ABCD</GenerateMonadic>
-
-<GenerateMonadic>
-
-ABCD</GenerateMonadic>
-
-<GenerateMonadic>
-
-ABCD</GenerateMonadic>
-
-<GenerateMonadic>
-
-ABCD</GenerateMonadic>
-
 E</ParseFunctionBody>
 Enter funcbottom
 Leave funcbottom

@@ -1,0 +1,21 @@
+     1	int bug8(int a, int b)
+     2	{
+     3		return a*b;
+     4	}
+
+
+*** local symbol table ***
+
+
+
+
+
+ *** global scope typedef symbol table ***
+
+_bug8      =000000   -    External    Function returning Short
+		Parameters:
+			Type array:
+   016 016 
+
+ *** structures and unions ***
+

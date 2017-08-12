@@ -912,18 +912,23 @@ AMODE *GenerateBinary(ENODE *node,int flags, int size, int op)
 		//	GenerateDiadic(op_dec,0,ap1,ap2);
 		//else
 			if (size==2) {
-				GenerateTriadic(op,0,ap3,ap1,ap2);
+				GenerateDiadic(op_mov,0,ap3,ap1);
+				GenerateDiadic(op_mov,0,ap4,ap1->amode2);
+				GenerateTriadic(op,0,ap3,makereg(regZero),ap2);
 				if (op==op_add)
-					GenerateTriadic(op_adc,0,ap4,ap1->amode2,ap2->amode2);
+					GenerateTriadic(op_adc,0,ap4,makereg(regZero),ap2->amode2);
 				else if (op==op_sub)
-					GenerateTriadic(op_sbc,0,ap4,ap1->amode2,ap2->amode2);
+					GenerateTriadic(op_sbc,0,ap4,makereg(regZero),ap2->amode2);
 				else
-					GenerateTriadic(op,0,ap4,ap2->amode2,ap2->amode2);
+					GenerateTriadic(op,0,ap4,makereg(regZero),ap2->amode2);
 			}
-			else
-				GenerateTriadic(op,0,ap3,ap1,ap2);
+			else {
+				GenerateDiadic(op_mov,0,ap3,ap1);
+				GenerateTriadic(op,0,ap3,makereg(regZero),ap2);
+			}
 	}
-	else {
+	else
+	{
 		if (size==2) {
 			GenerateDiadic(op_mov,0,ap3,ap1);
 			GenerateDiadic(op_mov,0,ap4,ap1->amode2);

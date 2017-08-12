@@ -26,7 +26,7 @@
 _int</Find>
 <Parsing GlobalDecl>
 <ParseGlobalDecl>
-Enter declare()
+Enter declare()
 A<ParseSpecifier>
 A</Find>
 _TestDo</Find>
@@ -57,8 +57,8 @@ X</openpa>
 CDEGH</Find>
 _TestDo</Find>
 hh1h2ikIIbIcinsert type: 33
-***Inserting:_TestDo into 01308F48
-<BuildSignature>:_TestDo</BuildSignature>Insert _TestDo into 01308F48()
+***Inserting:_TestDo into 001D0790
+<BuildSignature>:_TestDo</BuildSignature>Insert _TestDo into 001D0790()
 Insert into global table
 </Find>
 _TestDo</Find>
@@ -75,7 +75,7 @@ Parsing function: _TestDo
 ***********************************
 A<BuildParameterList
 ><ParseParmDecls>
-A(54)CEnter declare()
+A(54)CEnter declare()
 A<ParseSpecifier>
 A</Find>
 _c</Find>
@@ -89,8 +89,8 @@ Bb<ParseDeclPrefix>(1)
 CDEGH</Find>
 _c</Find>
 hh1kIIbIcinsert type: 16
-***Inserting:_c into 0131643C
-<BuildSignature>:_c</BuildSignature>Insert _c into 0131643C(_TestDo)
+***Inserting:_c into 001DDC84
+<BuildSignature>:_c</BuildSignature>Insert _c into 001DDC84(_TestDo)
 </Find>
 _c</Find>
 At insert:
@@ -107,8 +107,8 @@ _TestDoMatch
 CDEG<Parse function body>:_TestDo|
 </Find>
 _do</Find>
-Bb<GenerateMonadic>
-ABCD</GenerateMonadic>
+Bb<GenerateMonadic>
+ABCD</GenerateMonadic>
 C<Parse><Parse></Find>
 _c</Find>
 Found _c
@@ -129,8 +129,8 @@ _c</Find>
 Looking in function's symbol table
 </Find>
 _c</Find>
-Searching method/class:_TestDo|013163F0
-Looking at params 0131643C
+Searching method/class:_TestDo|001DDC38
+Looking at params 001DDC84
 </Find>
 _cMatch
 </Find>
@@ -140,7 +140,7 @@ Found as parameter
 A:1:_cIsEqual:T2sp is not null
 Type array:
    
-tp:0188B7D8 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753020 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 </ParseExpression>
 </Parse></Find>
@@ -166,8 +166,8 @@ _c</Find>
 Looking in function's symbol table
 </Find>
 _c</Find>
-Searching method/class:_TestDo|013163F0
-Looking at params 0131643C
+Searching method/class:_TestDo|001DDC38
+Looking at params 001DDC84
 </Find>
 _cMatch
 </Find>
@@ -177,33 +177,35 @@ Found as parameter
 A:1:_cIsEqual:T2sp is not null
 Type array:
    
-tp:0188B7D8 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753020 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 </Parse></Find>
 _int</Find>
-D<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
+D<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<CSETable>
+N Uses DUses Void Reg
+0: 3  0   0   -1         
+1: 2  0   0   -1   imm   
+2: 1  0   0   -1   imm   
+</CSETable>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
 E</ParseFunctionBody>
 Enter funcbottom
 Leave funcbottom
 F</ParseFunction>
-Enter declare()
+Enter declare()
 A<ParseSpecifier>
 A</Find>
 _TestDo1</Find>
@@ -234,8 +236,8 @@ X</openpa>
 CDEGH</Find>
 _TestDo1</Find>
 hh1h2ikIIbIcinsert type: 33
-***Inserting:_TestDo1 into 01308F48
-<BuildSignature>:_TestDo1</BuildSignature>Insert _TestDo1 into 01308F48()
+***Inserting:_TestDo1 into 001D0790
+<BuildSignature>:_TestDo1</BuildSignature>Insert _TestDo1 into 001D0790()
 Insert into global table
 </Find>
 _TestDo1</Find>
@@ -252,7 +254,7 @@ Parsing function: _TestDo1
 ***********************************
 A<BuildParameterList
 ><ParseParmDecls>
-A(54)CEnter declare()
+A(54)CEnter declare()
 A<ParseSpecifier>
 A</Find>
 _d</Find>
@@ -266,8 +268,8 @@ Bb<ParseDeclPrefix>(1)
 CDEGH</Find>
 _d</Find>
 hh1kIIbIcinsert type: 16
-***Inserting:_d into 0131659C
-<BuildSignature>:_d</BuildSignature>Insert _d into 0131659C(_TestDo1)
+***Inserting:_d into 001DDDE4
+<BuildSignature>:_d</BuildSignature>Insert _d into 001DDDE4(_TestDo1)
 </Find>
 _d</Find>
 At insert:
@@ -284,8 +286,8 @@ _TestDo1Match
 CDEG<Parse function body>:_TestDo1|
 </Find>
 _do</Find>
-Bb<GenerateMonadic>
-ABCD</GenerateMonadic>
+Bb<GenerateMonadic>
+ABCD</GenerateMonadic>
 C<Parse><Parse></Find>
 _d</Find>
 Found _d
@@ -306,8 +308,8 @@ _d</Find>
 Looking in function's symbol table
 </Find>
 _d</Find>
-Searching method/class:_TestDo1|01316550
-Looking at params 0131659C
+Searching method/class:_TestDo1|001DDD98
+Looking at params 001DDDE4
 </Find>
 _dMatch
 </Find>
@@ -317,7 +319,7 @@ Found as parameter
 A:1:_dIsEqual:T2sp is not null
 Type array:
    
-tp:0188B880 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:007530C8 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 </ParseExpression>
 </Parse></Find>
@@ -343,8 +345,8 @@ _d</Find>
 Looking in function's symbol table
 </Find>
 _d</Find>
-Searching method/class:_TestDo1|01316550
-Looking at params 0131659C
+Searching method/class:_TestDo1|001DDD98
+Looking at params 001DDDE4
 </Find>
 _dMatch
 </Find>
@@ -354,33 +356,35 @@ Found as parameter
 A:1:_dIsEqual:T2sp is not null
 Type array:
    
-tp:0188B880 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:007530C8 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 </Parse></Find>
 _int</Find>
-D<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
+D<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<CSETable>
+N Uses DUses Void Reg
+0: 3  0   0   -1         
+1: 2  0   0   -1   imm   
+2: 1  0   0   -1   imm   
+</CSETable>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
 E</ParseFunctionBody>
 Enter funcbottom
 Leave funcbottom
 F</ParseFunction>
-Enter declare()
+Enter declare()
 A<ParseSpecifier>
 A</Find>
 _TestWhile</Find>
@@ -411,8 +415,8 @@ X</openpa>
 CDEGH</Find>
 _TestWhile</Find>
 hh1h2ikIIbIcinsert type: 33
-***Inserting:_TestWhile into 01308F48
-<BuildSignature>:_TestWhile</BuildSignature>Insert _TestWhile into 01308F48()
+***Inserting:_TestWhile into 001D0790
+<BuildSignature>:_TestWhile</BuildSignature>Insert _TestWhile into 001D0790()
 Insert into global table
 </Find>
 _TestWhile</Find>
@@ -429,7 +433,7 @@ Parsing function: _TestWhile
 ***********************************
 A<BuildParameterList
 ><ParseParmDecls>
-A(54)CEnter declare()
+A(54)CEnter declare()
 A<ParseSpecifier>
 A</Find>
 _e</Find>
@@ -443,8 +447,8 @@ Bb<ParseDeclPrefix>(1)
 CDEGH</Find>
 _e</Find>
 hh1kIIbIcinsert type: 16
-***Inserting:_e into 013166FC
-<BuildSignature>:_e</BuildSignature>Insert _e into 013166FC(_TestWhile)
+***Inserting:_e into 001DDF44
+<BuildSignature>:_e</BuildSignature>Insert _e into 001DDF44(_TestWhile)
 </Find>
 _e</Find>
 At insert:
@@ -461,8 +465,8 @@ _TestWhileMatch
 CDEG<Parse function body>:_TestWhile|
 </Find>
 _while</Find>
-Bb<GenerateMonadic>
-ABCD</GenerateMonadic>
+Bb<GenerateMonadic>
+ABCD</GenerateMonadic>
 C<Parse></Find>
 _e</Find>
 <Nameref>
@@ -474,8 +478,8 @@ _e</Find>
 Looking in function's symbol table
 </Find>
 _e</Find>
-Searching method/class:_TestWhile|013166B0
-Looking at params 013166FC
+Searching method/class:_TestWhile|001DDEF8
+Looking at params 001DDF44
 </Find>
 _eMatch
 </Find>
@@ -485,7 +489,7 @@ Found as parameter
 A:1:_eIsEqual:T2sp is not null
 Type array:
    
-tp:0188B928 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753170 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 <Parse></Find>
 _e</Find>
@@ -507,8 +511,8 @@ _e</Find>
 Looking in function's symbol table
 </Find>
 _e</Find>
-Searching method/class:_TestWhile|013166B0
-Looking at params 013166FC
+Searching method/class:_TestWhile|001DDEF8
+Looking at params 001DDF44
 </Find>
 _eMatch
 </Find>
@@ -518,36 +522,38 @@ Found as parameter
 A:1:_eIsEqual:T2sp is not null
 Type array:
    
-tp:0188B928 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753170 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 </ParseExpression>
 </Parse></Parse><Parse></Parse></Find>
 _void</Find>
-D<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
+D<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<CSETable>
+N Uses DUses Void Reg
+0: 3  0   0   -1         
+1: 2  0   0   -1   imm   
+2: 1  0   0   -1   imm   
+</CSETable>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
 E</ParseFunctionBody>
 Enter funcbottom
 Leave funcbottom
 F</ParseFunction>
-Enter declare()
+Enter declare()
 A<ParseSpecifier>
 A<TYP__Make>
 </TYP__Make>
@@ -578,8 +584,8 @@ X</openpa>
 CDEGH</Find>
 _TestWhile2</Find>
 hh1h2ikIIbIcinsert type: 33
-***Inserting:_TestWhile2 into 01308F48
-<BuildSignature>:_TestWhile2</BuildSignature>Insert _TestWhile2 into 01308F48()
+***Inserting:_TestWhile2 into 001D0790
+<BuildSignature>:_TestWhile2</BuildSignature>Insert _TestWhile2 into 001D0790()
 Insert into global table
 </Find>
 _TestWhile2</Find>
@@ -596,7 +602,7 @@ Parsing function: _TestWhile2
 ***********************************
 A<BuildParameterList
 ><ParseParmDecls>
-A(54)CEnter declare()
+A(54)CEnter declare()
 A<ParseSpecifier>
 A</Find>
 _g</Find>
@@ -610,8 +616,8 @@ Bb<ParseDeclPrefix>(1)
 CDEGH</Find>
 _g</Find>
 hh1kIIbIcinsert type: 16
-***Inserting:_g into 0131685C
-<BuildSignature>:_g</BuildSignature>Insert _g into 0131685C(_TestWhile2)
+***Inserting:_g into 001DE0A4
+<BuildSignature>:_g</BuildSignature>Insert _g into 001DE0A4(_TestWhile2)
 </Find>
 _g</Find>
 At insert:
@@ -628,9 +634,9 @@ _TestWhile2Match
 CDEG<Parse function body>:_TestWhile2|
 </Find>
 _int</Find>
-Bb<GenerateMonadic>
-ABCD</GenerateMonadic>
-CEnter declare()
+Bb<GenerateMonadic>
+ABCD</GenerateMonadic>
+CEnter declare()
 A<ParseSpecifier>
 A</Find>
 _x</Find>
@@ -644,8 +650,8 @@ Bb<ParseDeclPrefix>(1)
 CDEGH</Find>
 _x</Find>
 hh1kIIbIcinsert type: 16
-***Inserting:_x into 01DEFDC4
-<BuildSignature>:_x</BuildSignature>Insert _x into 01DEFDC4()
+***Inserting:_x into 019616E4
+<BuildSignature>:_x</BuildSignature>Insert _x into 019616E4()
 </Find>
 _x</Find>
 At insert:
@@ -672,7 +678,7 @@ Found as an auto var
 A:1:_xIsEqual:T2sp is not null
 Type array:
    
-tp:0188BA08 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753250 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 </Find>
 _do</Find>
@@ -697,8 +703,8 @@ _g</Find>
 Looking in function's symbol table
 </Find>
 _g</Find>
-Searching method/class:_TestWhile2|01316810
-Looking at params 0131685C
+Searching method/class:_TestWhile2|001DE058
+Looking at params 001DE0A4
 </Find>
 _gMatch
 </Find>
@@ -708,7 +714,7 @@ Found as parameter
 A:1:_gIsEqual:T2sp is not null
 Type array:
    
-tp:0188B9D0 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753218 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 </ParseExpression>
 </Parse></Find>
@@ -734,8 +740,8 @@ _g</Find>
 Looking in function's symbol table
 </Find>
 _g</Find>
-Searching method/class:_TestWhile2|01316810
-Looking at params 0131685C
+Searching method/class:_TestWhile2|001DE058
+Looking at params 001DE0A4
 </Find>
 _gMatch
 </Find>
@@ -745,7 +751,7 @@ Found as parameter
 A:1:_gIsEqual:T2sp is not null
 Type array:
    
-tp:0188B9D0 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753218 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 </Find>
 _x</Find>
@@ -768,31 +774,34 @@ Found as an auto var
 A:1:_xIsEqual:T2sp is not null
 Type array:
    
-tp:0188BA08 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753250 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 </Parse>Returning EOF from NextToken.
-D<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
+D<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<CSETable>
+N Uses DUses Void Reg
+0: 3  0   0   -1         
+1: 3  0   0   -1         
+2: 1  0   0   -1   imm   
+3: 1  0   0   -1   imm   
+</CSETable>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
 E</ParseFunctionBody>
 Enter funcbottom
 Leave funcbottom

@@ -1,0 +1,31 @@
+     1	
+     2	long main()
+     3	{
+     4		long pi[333];
+     5		long x;
+     6		long i;
+     7		long q;
+     8	
+     9		x = 10 * pi[i] + q * i;
+    10	}
+
+
+*** local symbol table ***
+
+_pi        =fffffd66   -    Auto        Array of Long
+_x         =fffffd64   -    Auto        Long
+_i         =fffffd62   -    Auto        Long
+_q         =fffffd60   -    Auto        Long
+
+
+
+
+ *** global scope typedef symbol table ***
+
+_main      =000000   -    Global      Function returning Long
+		Parameters:
+			Type array:
+   
+
+ *** structures and unions ***
+

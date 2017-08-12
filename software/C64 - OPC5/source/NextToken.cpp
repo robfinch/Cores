@@ -131,13 +131,14 @@ int getch()
 	while( (lastch = *lptr++) == '\0') {
         if( lstackptr > 0 ) {
             lptr = linstack[--lstackptr];
-            lastch = chstack[lstackptr];
+            lastch = chstack[lstackptr] & 0x7F;
             goto j1;
         }
         if(getline(incldepth == 0))
             return lastch = -1;
     }
- j1:
+j1:
+	lastch &= 0x7F;
     if (numstrptr >= &numstr[0] && numstrptr < &numstr[98]) {
        *numstrptr = lastch;
        numstrptr++;

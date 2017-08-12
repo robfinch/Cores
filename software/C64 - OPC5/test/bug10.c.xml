@@ -1,0 +1,269 @@
+<title>C64D Compiler debug file</title>
+<compile>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+</Find>
+_void</Find>
+<Parsing GlobalDecl>
+<ParseGlobalDecl>
+Enter declare()
+A<ParseSpecifier>
+A<TYP__Make>
+</TYP__Make>
+</Find>
+_bug10</Find>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_bug10|CDE<ParseDeclSuffix>
+<openpa>
+****************************
+****************************
+Function: _bug10
+****************************
+****************************
+<TYP__Make>
+</TYP__Make>
+o p q </openpa>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_bug10</Find>
+hh1h2ikIIbIcinsert type: 34
+***Inserting:_bug10 into 001D0790
+<BuildSignature>:_bug10</BuildSignature>Insert _bug10 into 001D0790()
+Insert into global table
+</Find>
+_bug10</Find>
+At insert:
+Type array:
+   
+J<ParseFunction>
+***********************************
+***********************************
+***********************************
+Parsing function: _bug10
+***********************************
+***********************************
+***********************************
+A<BuildParameterList
+><ParseParmDecls>
+A(42)</ParseParmDecls>
+B</BuildParameterList>
+B<BuildSignature>:_bug10</BuildSignature></Find>
+_bug10Match
+</Find>
+CDEG<Parse function body>:_bug10|
+</Find>
+_int</Find>
+Bb<GenerateMonadic>
+ABCD</GenerateMonadic>
+CEnter declare()
+A<ParseSpecifier>
+A</Find>
+_x</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_x|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_x</Find>
+hh1kIIbIcinsert type: 16
+***Inserting:_x into 013E1124
+<BuildSignature>:_x</BuildSignature>Insert _x into 013E1124()
+</Find>
+_x</Find>
+At insert:
+Type array:
+   
+JK</Find>
+_int</Find>
+Enter declare()
+A<ParseSpecifier>
+A</Find>
+_pi</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_pi|CDE<ParseDeclSuffix>
+<TYP__Make>
+</TYP__Make>
+Setting array size:334
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_pi</Find>
+hh1kIIbIcinsert type: 22
+***Inserting:_pi into 013E1124
+<BuildSignature>:_pi</BuildSignature>Insert _pi into 013E1124()
+</Find>
+_pi</Find>
+At insert:
+Type array:
+   
+JK</Find>
+_for</Find>
+<Parse></Find>
+_x</Find>
+<Nameref>
+GSearchfor:_x|
+<gsearch2> for: |_x|
+Looking in statement table
+</Find>
+_xMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_xIsEqual:T2sp is not null
+Type array:
+   
+tp:00753020 <Deref></Deref>deref tp:00752BC0 </nameref2>
+</Nameref>
+</Find>
+_x</Find>
+<Nameref>
+GSearchfor:_x|
+<gsearch2> for: |_x|
+Looking in statement table
+</Find>
+_xMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_xIsEqual:T2sp is not null
+Type array:
+   
+tp:00753020 <Deref></Deref>deref tp:00752BC0 </nameref2>
+</Nameref>
+</Find>
+_x</Find>
+<Nameref>
+GSearchfor:_x|
+<gsearch2> for: |_x|
+Looking in statement table
+</Find>
+_xMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_xIsEqual:T2sp is not null
+Type array:
+   
+tp:00753020 <Deref></Deref>deref tp:00752BC0 </nameref2>
+</Nameref>
+<Parse></Find>
+_pi</Find>
+Found _pi
+</Find>
+_pi</Find>
+</Find>
+_pi</Find>
+<Parse><ParseExpression>
+<Nameref>
+GSearchfor:_pi|
+<gsearch2> for: |_pi|
+Looking in statement table
+</Find>
+_pi</Find>
+Looking in outer statement table
+</Find>
+_piMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_piIsEqual:T2sp is not null
+Type array:
+   
+tp:00753090 <TYP__Make>
+</TYP__Make>
+deref tp:007530C8 </nameref2>
+</Nameref>
+</Find>
+_x</Find>
+<Nameref>
+GSearchfor:_x|
+<gsearch2> for: |_x|
+Looking in statement table
+</Find>
+_x</Find>
+Looking in outer statement table
+</Find>
+_xMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_xIsEqual:T2sp is not null
+Type array:
+   
+tp:00753020 <Deref></Deref>deref tp:00752BC0 </nameref2>
+</Nameref>
+<Deref></Deref></ParseExpression>
+</Parse></Parse>Returning EOF from NextToken.
+D<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<CSETable>
+N Uses DUses Void Reg
+0: 6  1   0   3         
+1: 1  1   0   -1         
+2: 2  0   0   -1   imm   
+3: 2  0   0   -1   imm   
+4: 1  0   0   -1   imm   
+5: 1  0   0   -1   imm   
+</CSETable>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+E</ParseFunctionBody>
+Enter funcbottom
+Leave funcbottom
+F</ParseFunction>
+</ParseGlobalDecl>
+</Parsing GlobalDecl>
+</compile>
+<Dumplits>
+</Dumplits>
+Enter summary
+Leave summary
+<closefiles>
+ABC</closefiles>
+Next on command line (1).
+Exiting

@@ -15,6 +15,9 @@ c5 -S TestRotate.c
 c5 -S TestShift.c
 c5 -S TestStruct.c
 c5 -S TestLValue.c
+c5 -S TestCheck.c
+c5 -S bug8.c
+c5 -S bug10.c
+c5 -S pi.c
+c5 -S pi2.c
 c5 -S ClassTest.cpp
-
-

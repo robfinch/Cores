@@ -26,7 +26,7 @@
 _int</Find>
 <Parsing GlobalDecl>
 <ParseGlobalDecl>
-Enter declare()
+Enter declare()
 A<ParseSpecifier>
 A</Find>
 _TestLValue</Find>
@@ -49,8 +49,8 @@ o p q </openpa>
 CDEGH</Find>
 _TestLValue</Find>
 hh1h2ikIIbIcinsert type: 34
-***Inserting:_TestLValue into 01308F48
-<BuildSignature>:_TestLValue</BuildSignature>Insert _TestLValue into 01308F48()
+***Inserting:_TestLValue into 001D0790
+<BuildSignature>:_TestLValue</BuildSignature>Insert _TestLValue into 001D0790()
 Insert into global table
 </Find>
 _TestLValue</Find>
@@ -75,9 +75,9 @@ _TestLValueMatch
 CDEG<Parse function body>:_TestLValue|
 </Find>
 _int</Find>
-Bb<GenerateMonadic>
-ABCD</GenerateMonadic>
-CEnter declare()
+Bb<GenerateMonadic>
+ABCD</GenerateMonadic>
+CEnter declare()
 A<ParseSpecifier>
 A</Find>
 _x</Find>
@@ -91,8 +91,8 @@ Bb<ParseDeclPrefix>(1)
 CDEGH</Find>
 _x</Find>
 hh1kIIbIcinsert type: 16
-***Inserting:_x into 01EE1114
-<BuildSignature>:_x</BuildSignature>Insert _x into 01EE1114()
+***Inserting:_x into 014D1124
+<BuildSignature>:_x</BuildSignature>Insert _x into 014D1124()
 </Find>
 _x</Find>
 At insert:
@@ -100,7 +100,7 @@ Type array:
    
 JK</Find>
 _int</Find>
-Enter declare()
+Enter declare()
 A<ParseSpecifier>
 A</Find>
 _y</Find>
@@ -114,8 +114,8 @@ Bb<ParseDeclPrefix>(1)
 CDEGH</Find>
 _y</Find>
 hh1kIIbIcinsert type: 16
-***Inserting:_y into 01EE1114
-<BuildSignature>:_y</BuildSignature>Insert _y into 01EE1114()
+***Inserting:_y into 014D1124
+<BuildSignature>:_y</BuildSignature>Insert _y into 014D1124()
 </Find>
 _y</Find>
 At insert:
@@ -130,8 +130,8 @@ b<ParseDeclPrefix>(1)
 CDEGH</Find>
 _z</Find>
 hh1kIIbIcinsert type: 16
-***Inserting:_z into 01EE1114
-<BuildSignature>:_z</BuildSignature>Insert _z into 01EE1114()
+***Inserting:_z into 014D1124
+<BuildSignature>:_z</BuildSignature>Insert _z into 014D1124()
 </Find>
 _z</Find>
 At insert:
@@ -158,7 +158,7 @@ Found as an auto var
 A:1:_xIsEqual:T2sp is not null
 Type array:
    
-tp:0188B7D8 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753020 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 </Find>
 _y</Find>
@@ -175,7 +175,7 @@ Found as an auto var
 A:1:_yIsEqual:T2sp is not null
 Type array:
    
-tp:0188B810 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753058 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 </Find>
 _z</Find>
@@ -192,7 +192,7 @@ Found as an auto var
 A:1:_zIsEqual:T2sp is not null
 Type array:
    
-tp:0188B810 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753058 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 </Find>
 _x</Find>
@@ -211,7 +211,7 @@ Found as an auto var
 A:1:_xIsEqual:T2sp is not null
 Type array:
    
-tp:0188B7D8 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753020 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 </Find>
 _y</Find>
@@ -228,7 +228,7 @@ Found as an auto var
 A:1:_yIsEqual:T2sp is not null
 Type array:
    
-tp:0188B810 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753058 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 <TYP__Make>
 </TYP__Make>
@@ -249,7 +249,7 @@ Found as an auto var
 A:1:_xIsEqual:T2sp is not null
 Type array:
    
-tp:0188B7D8 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753020 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 </Find>
 _y</Find>
@@ -266,7 +266,7 @@ Found as an auto var
 A:1:_yIsEqual:T2sp is not null
 Type array:
    
-tp:0188B810 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753058 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 </Find>
 _x</Find>
@@ -283,38 +283,39 @@ Found as an auto var
 A:1:_xIsEqual:T2sp is not null
 Type array:
    
-tp:0188B7D8 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753020 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 <TYP__Make>
 </TYP__Make>
 </ParseExpression>
 </Parse>Returning EOF from NextToken.
-D<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
+D<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<CSETable>
+N Uses DUses Void Reg
+0: 6  5   0   3         
+1: 3  1   0   -1         
+2: 1  0   0   -1         
+3: 1  0   0   -1   imm   
+4: 2  0   1   -1         
+5: 3  0   1   -1         
+</CSETable>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
 E</ParseFunctionBody>
 Enter funcbottom
 Leave funcbottom

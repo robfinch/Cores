@@ -26,7 +26,7 @@
 _int</Find>
 <Parsing GlobalDecl>
 <ParseGlobalDecl>
-Enter declare()
+Enter declare()
 A<ParseSpecifier>
 A</Find>
 _TestRotate</Find>
@@ -57,8 +57,8 @@ X</openpa>
 CDEGH</Find>
 _TestRotate</Find>
 hh1h2ikIIbIcinsert type: 33
-***Inserting:_TestRotate into 01308F48
-<BuildSignature>:_TestRotate</BuildSignature>Insert _TestRotate into 01308F48()
+***Inserting:_TestRotate into 001D0790
+<BuildSignature>:_TestRotate</BuildSignature>Insert _TestRotate into 001D0790()
 Insert into global table
 </Find>
 _TestRotate</Find>
@@ -75,7 +75,7 @@ Parsing function: _TestRotate
 ***********************************
 A<BuildParameterList
 ><ParseParmDecls>
-A(54)CEnter declare()
+A(54)CEnter declare()
 A<ParseSpecifier>
 A</Find>
 _a</Find>
@@ -89,8 +89,8 @@ Bb<ParseDeclPrefix>(1)
 CDEGH</Find>
 _a</Find>
 hh1kIIbIcinsert type: 16
-***Inserting:_a into 0131643C
-<BuildSignature>:_a</BuildSignature>Insert _a into 0131643C(_TestRotate)
+***Inserting:_a into 001DDC84
+<BuildSignature>:_a</BuildSignature>Insert _a into 001DDC84(_TestRotate)
 </Find>
 _a</Find>
 At insert:
@@ -98,7 +98,7 @@ Type array:
    
 JK</Find>
 _int</Find>
-EA(54)CEnter declare()
+EA(54)CEnter declare()
 A<ParseSpecifier>
 A</Find>
 _b</Find>
@@ -112,8 +112,8 @@ Bb<ParseDeclPrefix>(1)
 CDEGH</Find>
 _b</Find>
 hh1kIIbIcinsert type: 16
-***Inserting:_b into 0131643C
-<BuildSignature>:_b</BuildSignature>Insert _b into 0131643C(_TestRotate)
+***Inserting:_b into 001DDC84
+<BuildSignature>:_b</BuildSignature>Insert _b into 001DDC84(_TestRotate)
 </Find>
 _b</Find>
 At insert:
@@ -133,8 +133,8 @@ _TestRotateMatch
 CDEG<Parse function body>:_TestRotate|
 </Find>
 _return</Find>
-Bb<GenerateMonadic>
-ABCD</GenerateMonadic>
+Bb<GenerateMonadic>
+ABCD</GenerateMonadic>
 C<Parse></Find>
 _a</Find>
 </Find>
@@ -150,8 +150,8 @@ _a</Find>
 Looking in function's symbol table
 </Find>
 _a</Find>
-Searching method/class:_TestRotate|013163F0
-Looking at params 0131643C
+Searching method/class:_TestRotate|001DDC38
+Looking at params 001DDC84
 </Find>
 _aMatch
 </Find>
@@ -161,7 +161,7 @@ Found as parameter
 A:1:_aIsEqual:T2sp is not null
 Type array:
    
-tp:0188B7D8 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753020 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 </Find>
 _b</Find>
@@ -174,8 +174,8 @@ _b</Find>
 Looking in function's symbol table
 </Find>
 _b</Find>
-Searching method/class:_TestRotate|013163F0
-Looking at params 0131643C
+Searching method/class:_TestRotate|001DDC38
+Looking at params 001DDC84
 </Find>
 _bMatch
 </Find>
@@ -185,7 +185,7 @@ Found as parameter
 A:1:_bIsEqual:T2sp is not null
 Type array:
    
-tp:0188B810 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753058 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 </Find>
 _a</Find>
@@ -202,8 +202,8 @@ _a</Find>
 Looking in function's symbol table
 </Find>
 _a</Find>
-Searching method/class:_TestRotate|013163F0
-Looking at params 0131643C
+Searching method/class:_TestRotate|001DDC38
+Looking at params 001DDC84
 </Find>
 _aMatch
 </Find>
@@ -213,7 +213,7 @@ Found as parameter
 A:1:_aIsEqual:T2sp is not null
 Type array:
    
-tp:0188B7D8 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753020 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 </Find>
 _b</Find>
@@ -226,8 +226,8 @@ _b</Find>
 Looking in function's symbol table
 </Find>
 _b</Find>
-Searching method/class:_TestRotate|013163F0
-Looking at params 0131643C
+Searching method/class:_TestRotate|001DDC38
+Looking at params 001DDC84
 </Find>
 _bMatch
 </Find>
@@ -237,41 +237,35 @@ Found as parameter
 A:1:_bIsEqual:T2sp is not null
 Type array:
    
-tp:0188B810 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753058 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 </Parse></Find>
 _int</Find>
-D<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
+D<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<CSETable>
+N Uses DUses Void Reg
+0: 2  0   0   -1         
+1: 2  0   0   -1         
+2: 1  0   0   -1   imm   
+</CSETable>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
 E</ParseFunctionBody>
 Enter funcbottom
 Leave funcbottom
 F</ParseFunction>
-Enter declare()
+Enter declare()
 A<ParseSpecifier>
 A</Find>
 _TestRotate2</Find>
@@ -302,8 +296,8 @@ X</openpa>
 CDEGH</Find>
 _TestRotate2</Find>
 hh1h2ikIIbIcinsert type: 33
-***Inserting:_TestRotate2 into 01308F48
-<BuildSignature>:_TestRotate2</BuildSignature>Insert _TestRotate2 into 01308F48()
+***Inserting:_TestRotate2 into 001D0790
+<BuildSignature>:_TestRotate2</BuildSignature>Insert _TestRotate2 into 001D0790()
 Insert into global table
 </Find>
 _TestRotate2</Find>
@@ -322,7 +316,7 @@ A<BuildParameterList
 ><ParseParmDecls>
 A(78)</Find>
 _int</Find>
-EA(54)CEnter declare()
+EA(54)CEnter declare()
 A<ParseSpecifier>
 A</Find>
 _a</Find>
@@ -336,8 +330,8 @@ Bb<ParseDeclPrefix>(1)
 CDEGH</Find>
 _a</Find>
 hh1kIIbIcinsert type: 16
-***Inserting:_a into 0131664C
-<BuildSignature>:_a</BuildSignature>Insert _a into 0131664C(_TestRotate2)
+***Inserting:_a into 001DDE94
+<BuildSignature>:_a</BuildSignature>Insert _a into 001DDE94(_TestRotate2)
 </Find>
 _a</Find>
 At insert:
@@ -347,7 +341,7 @@ JK</Find>
 _register</Find>
 EA(78)</Find>
 _int</Find>
-EA(54)CEnter declare()
+EA(54)CEnter declare()
 A<ParseSpecifier>
 A</Find>
 _b</Find>
@@ -361,8 +355,8 @@ Bb<ParseDeclPrefix>(1)
 CDEGH</Find>
 _b</Find>
 hh1kIIbIcinsert type: 16
-***Inserting:_b into 0131664C
-<BuildSignature>:_b</BuildSignature>Insert _b into 0131664C(_TestRotate2)
+***Inserting:_b into 001DDE94
+<BuildSignature>:_b</BuildSignature>Insert _b into 001DDE94(_TestRotate2)
 </Find>
 _b</Find>
 At insert:
@@ -382,8 +376,8 @@ _TestRotate2Match
 CDEG<Parse function body>:_TestRotate2|
 </Find>
 _return</Find>
-Bb<GenerateMonadic>
-ABCD</GenerateMonadic>
+Bb<GenerateMonadic>
+ABCD</GenerateMonadic>
 C<Parse></Find>
 _a</Find>
 </Find>
@@ -399,8 +393,8 @@ _a</Find>
 Looking in function's symbol table
 </Find>
 _a</Find>
-Searching method/class:_TestRotate2|01316600
-Looking at params 0131664C
+Searching method/class:_TestRotate2|001DDE48
+Looking at params 001DDE94
 </Find>
 _aMatch
 </Find>
@@ -410,7 +404,7 @@ Found as parameter
 A:1:_aIsEqual:T2sp is not null
 Type array:
    
-tp:0188B8B8 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753100 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 </Find>
 _b</Find>
@@ -423,8 +417,8 @@ _b</Find>
 Looking in function's symbol table
 </Find>
 _b</Find>
-Searching method/class:_TestRotate2|01316600
-Looking at params 0131664C
+Searching method/class:_TestRotate2|001DDE48
+Looking at params 001DDE94
 </Find>
 _bMatch
 </Find>
@@ -434,7 +428,7 @@ Found as parameter
 A:1:_bIsEqual:T2sp is not null
 Type array:
    
-tp:0188B8F0 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753138 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 </Find>
 _a</Find>
@@ -451,8 +445,8 @@ _a</Find>
 Looking in function's symbol table
 </Find>
 _a</Find>
-Searching method/class:_TestRotate2|01316600
-Looking at params 0131664C
+Searching method/class:_TestRotate2|001DDE48
+Looking at params 001DDE94
 </Find>
 _aMatch
 </Find>
@@ -462,7 +456,7 @@ Found as parameter
 A:1:_aIsEqual:T2sp is not null
 Type array:
    
-tp:0188B8B8 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753100 <Deref></Deref>deref tp:00752BC0 </nameref2>
 </Nameref>
 </Find>
 _b</Find>
@@ -475,8 +469,8 @@ _b</Find>
 Looking in function's symbol table
 </Find>
 _b</Find>
-Searching method/class:_TestRotate2|01316600
-Looking at params 0131664C
+Searching method/class:_TestRotate2|001DDE48
+Looking at params 001DDE94
 </Find>
 _bMatch
 </Find>
@@ -486,27 +480,509 @@ Found as parameter
 A:1:_bIsEqual:T2sp is not null
 Type array:
    
-tp:0188B8F0 <Deref></Deref>deref tp:0188B378 </nameref2>
+tp:00753138 <Deref></Deref>deref tp:00752BC0 </nameref2>
+</Nameref>
+</Parse></Find>
+_long</Find>
+D<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<CSETable>
+N Uses DUses Void Reg
+0: 1  0   0   -1   imm   
+</CSETable>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+E</ParseFunctionBody>
+Enter funcbottom
+Leave funcbottom
+F</ParseFunction>
+Enter declare()
+A<ParseSpecifier>
+A</Find>
+_TestRotate3</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_TestRotate3|CDE<ParseDeclSuffix>
+<openpa>
+****************************
+****************************
+Function: _TestRotate3
+****************************
+****************************
+</Find>
+_long</Find>
+<TYP__Make>
+</TYP__Make>
+o p q rsYParameter types(_TestRotate3)
+Type array:
+   
+Proto types(_TestRotate3)
+Type array:
+   
+X</openpa>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_TestRotate3</Find>
+hh1h2ikIIbIcinsert type: 33
+***Inserting:_TestRotate3 into 001D0790
+<BuildSignature>:_TestRotate3</BuildSignature>Insert _TestRotate3 into 001D0790()
+Insert into global table
+</Find>
+_TestRotate3</Find>
+At insert:
+Type array:
+   
+J<ParseFunction>
+***********************************
+***********************************
+***********************************
+Parsing function: _TestRotate3
+***********************************
+***********************************
+***********************************
+A<BuildParameterList
+><ParseParmDecls>
+A(73)CEnter declare()
+A<ParseSpecifier>
+A</Find>
+_a</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_a|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_a</Find>
+hh1kIIbIcinsert type: 17
+***Inserting:_a into 001DE0A4
+<BuildSignature>:_a</BuildSignature>Insert _a into 001DE0A4(_TestRotate3)
+</Find>
+_a</Find>
+At insert:
+Type array:
+   
+JK</Find>
+_long</Find>
+EA(73)CEnter declare()
+A<ParseSpecifier>
+A</Find>
+_b</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_b|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_b</Find>
+hh1kIIbIcinsert type: 17
+***Inserting:_b into 001DE0A4
+<BuildSignature>:_b</BuildSignature>Insert _b into 001DE0A4(_TestRotate3)
+</Find>
+_b</Find>
+At insert:
+Type array:
+   
+JKEA(45)</ParseParmDecls>
+B</Find>
+_aMatch
+</Find>
+</Find>
+_bMatch
+</Find>
+</BuildParameterList>
+B<BuildSignature>:_TestRotate3</BuildSignature></Find>
+_TestRotate3Match
+</Find>
+CDEG<Parse function body>:_TestRotate3|
+</Find>
+_return</Find>
+Bb<GenerateMonadic>
+ABCD</GenerateMonadic>
+C<Parse></Find>
+_a</Find>
+</Find>
+_a</Find>
+</Find>
+_a</Find>
+<Nameref>
+GSearchfor:_a|
+<gsearch2> for: |_a|
+Looking in statement table
+</Find>
+_a</Find>
+Looking in function's symbol table
+</Find>
+_a</Find>
+Searching method/class:_TestRotate3|001DE058
+Looking at params 001DE0A4
+</Find>
+_aMatch
+</Find>
+Found as parameter
+</gsearch2>
+<nameref2>
+A:1:_aIsEqual:T2sp is not null
+Type array:
+   
+tp:007531E0 <Deref></Deref>deref tp:007531E0 </nameref2>
+</Nameref>
+</Find>
+_b</Find>
+<Nameref>
+GSearchfor:_b|
+<gsearch2> for: |_b|
+Looking in statement table
+</Find>
+_b</Find>
+Looking in function's symbol table
+</Find>
+_b</Find>
+Searching method/class:_TestRotate3|001DE058
+Looking at params 001DE0A4
+</Find>
+_bMatch
+</Find>
+Found as parameter
+</gsearch2>
+<nameref2>
+A:1:_bIsEqual:T2sp is not null
+Type array:
+   
+tp:00753218 <Deref></Deref>deref tp:00753218 </nameref2>
+</Nameref>
+</Find>
+_a</Find>
+</Find>
+_a</Find>
+</Find>
+_a</Find>
+<Nameref>
+GSearchfor:_a|
+<gsearch2> for: |_a|
+Looking in statement table
+</Find>
+_a</Find>
+Looking in function's symbol table
+</Find>
+_a</Find>
+Searching method/class:_TestRotate3|001DE058
+Looking at params 001DE0A4
+</Find>
+_aMatch
+</Find>
+Found as parameter
+</gsearch2>
+<nameref2>
+A:1:_aIsEqual:T2sp is not null
+Type array:
+   
+tp:007531E0 <Deref></Deref>deref tp:007531E0 </nameref2>
+</Nameref>
+</Find>
+_b</Find>
+<Nameref>
+GSearchfor:_b|
+<gsearch2> for: |_b|
+Looking in statement table
+</Find>
+_b</Find>
+Looking in function's symbol table
+</Find>
+_b</Find>
+Searching method/class:_TestRotate3|001DE058
+Looking at params 001DE0A4
+</Find>
+_bMatch
+</Find>
+Found as parameter
+</gsearch2>
+<nameref2>
+A:1:_bIsEqual:T2sp is not null
+Type array:
+   
+tp:00753218 <Deref></Deref>deref tp:00753218 </nameref2>
+</Nameref>
+</Parse></Find>
+_unsigned</Find>
+D<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<CSETable>
+N Uses DUses Void Reg
+0: 2  0   0   -1         
+1: 2  0   0   -1         
+2: 1  0   0   -1   imm   
+</CSETable>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+E</ParseFunctionBody>
+Enter funcbottom
+Leave funcbottom
+F</ParseFunction>
+Enter declare()
+A<ParseSpecifier>
+A</Find>
+_long</Find>
+</Find>
+_TestRotate4</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_TestRotate4|CDE<ParseDeclSuffix>
+<openpa>
+****************************
+****************************
+Function: _TestRotate4
+****************************
+****************************
+</Find>
+_unsigned</Find>
+<TYP__Make>
+</TYP__Make>
+o p q rsYParameter types(_TestRotate4)
+Type array:
+   
+Proto types(_TestRotate4)
+Type array:
+   
+X</openpa>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_TestRotate4</Find>
+hh1h2ikIIbIcinsert type: 33
+***Inserting:_TestRotate4 into 001D0790
+<BuildSignature>:_TestRotate4</BuildSignature>Insert _TestRotate4 into 001D0790()
+Insert into global table
+</Find>
+_TestRotate4</Find>
+At insert:
+Type array:
+   
+J<ParseFunction>
+***********************************
+***********************************
+***********************************
+Parsing function: _TestRotate4
+***********************************
+***********************************
+***********************************
+A<BuildParameterList
+><ParseParmDecls>
+A(75)CEnter declare()
+A<ParseSpecifier>
+A</Find>
+_long</Find>
+</Find>
+_a</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_a|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_a</Find>
+hh1kIIbIcinsert type: 25
+***Inserting:_a into 001DE2B4
+<BuildSignature>:_a</BuildSignature>Insert _a into 001DE2B4(_TestRotate4)
+</Find>
+_a</Find>
+At insert:
+Type array:
+   
+JK</Find>
+_long</Find>
+EA(73)CEnter declare()
+A<ParseSpecifier>
+A</Find>
+_b</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_b|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_b</Find>
+hh1kIIbIcinsert type: 17
+***Inserting:_b into 001DE2B4
+<BuildSignature>:_b</BuildSignature>Insert _b into 001DE2B4(_TestRotate4)
+</Find>
+_b</Find>
+At insert:
+Type array:
+   
+JKEA(45)</ParseParmDecls>
+B</Find>
+_aMatch
+</Find>
+</Find>
+_bMatch
+</Find>
+</BuildParameterList>
+B<BuildSignature>:_TestRotate4</BuildSignature></Find>
+_TestRotate4Match
+</Find>
+CDEG<Parse function body>:_TestRotate4|
+</Find>
+_return</Find>
+Bb<GenerateMonadic>
+ABCD</GenerateMonadic>
+C<Parse></Find>
+_a</Find>
+</Find>
+_a</Find>
+</Find>
+_a</Find>
+<Nameref>
+GSearchfor:_a|
+<gsearch2> for: |_a|
+Looking in statement table
+</Find>
+_a</Find>
+Looking in function's symbol table
+</Find>
+_a</Find>
+Searching method/class:_TestRotate4|001DE268
+Looking at params 001DE2B4
+</Find>
+_aMatch
+</Find>
+Found as parameter
+</gsearch2>
+<nameref2>
+A:1:_aIsEqual:T2sp is not null
+Type array:
+   
+tp:007532C0 <Deref></Deref>deref tp:007532C0 </nameref2>
+</Nameref>
+</Find>
+_b</Find>
+<Nameref>
+GSearchfor:_b|
+<gsearch2> for: |_b|
+Looking in statement table
+</Find>
+_b</Find>
+Looking in function's symbol table
+</Find>
+_b</Find>
+Searching method/class:_TestRotate4|001DE268
+Looking at params 001DE2B4
+</Find>
+_bMatch
+</Find>
+Found as parameter
+</gsearch2>
+<nameref2>
+A:1:_bIsEqual:T2sp is not null
+Type array:
+   
+tp:007532F8 <Deref></Deref>deref tp:007532F8 </nameref2>
+</Nameref>
+</Find>
+_a</Find>
+</Find>
+_a</Find>
+</Find>
+_a</Find>
+<Nameref>
+GSearchfor:_a|
+<gsearch2> for: |_a|
+Looking in statement table
+</Find>
+_a</Find>
+Looking in function's symbol table
+</Find>
+_a</Find>
+Searching method/class:_TestRotate4|001DE268
+Looking at params 001DE2B4
+</Find>
+_aMatch
+</Find>
+Found as parameter
+</gsearch2>
+<nameref2>
+A:1:_aIsEqual:T2sp is not null
+Type array:
+   
+tp:007532C0 <Deref></Deref>deref tp:007532C0 </nameref2>
+</Nameref>
+</Find>
+_b</Find>
+<Nameref>
+GSearchfor:_b|
+<gsearch2> for: |_b|
+Looking in statement table
+</Find>
+_b</Find>
+Looking in function's symbol table
+</Find>
+_b</Find>
+Searching method/class:_TestRotate4|001DE268
+Looking at params 001DE2B4
+</Find>
+_bMatch
+</Find>
+Found as parameter
+</gsearch2>
+<nameref2>
+A:1:_bIsEqual:T2sp is not null
+Type array:
+   
+tp:007532F8 <Deref></Deref>deref tp:007532F8 </nameref2>
 </Nameref>
 </Parse>Returning EOF from NextToken.
-D<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
-<GenerateMonadic>
-ABCD</GenerateMonadic>
+D<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<CSETable>
+N Uses DUses Void Reg
+0: 2  0   0   -1         
+1: 2  0   0   -1         
+2: 1  0   0   -1   imm   
+</CSETable>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
 E</ParseFunctionBody>
 Enter funcbottom
 Leave funcbottom

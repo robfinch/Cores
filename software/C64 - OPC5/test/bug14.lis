@@ -1,0 +1,24 @@
+     1	int bug14() {
+     2	   int a = 123;
+     3	   int b = a * 2 - 1;
+     4	   return b;
+     5	}
+
+
+*** local symbol table ***
+
+_a         =ffffffff   -    Auto        Short
+_b         =fffffffe   -    Auto        Short
+
+
+
+
+ *** global scope typedef symbol table ***
+
+_bug14     =000000   -    Global      Function returning Short
+		Parameters:
+			Type array:
+   
+
+ *** structures and unions ***
+

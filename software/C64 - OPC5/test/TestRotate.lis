@@ -15,6 +15,31 @@
      8	{
      9		return ((a << b) | (a >> (16-b)));
     10	}
+    11	
+
+
+*** local symbol table ***
+
+
+
+
+    12	long TestRotate3(long a, long b)
+    13	{
+    14		return ((a << b) | (a >> (32-b)));
+    15	}
+    16	
+
+
+*** local symbol table ***
+
+
+
+
+    17	unsigned long TestRotate4(unsigned long a, long b)
+    18	{
+    19		return ((a << b) | (a >> (32-b)));
+    20	}
+    21	
 
 
 *** local symbol table ***
@@ -33,6 +58,14 @@ _TestRotate2 =000000   -    External    Function returning Short
 		Parameters:
 			Type array:
    016 016 
+_TestRotate3 =000000   -    External    Function returning Long
+		Parameters:
+			Type array:
+   017 017 
+_TestRotate4 =000000   -    External    Function returning 
+		Parameters:
+			Type array:
+   025 017 
 
  *** structures and unions ***
 

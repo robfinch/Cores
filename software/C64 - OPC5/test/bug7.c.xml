@@ -1,0 +1,175 @@
+<title>C64D Compiler debug file</title>
+<compile>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+</Find>
+_int</Find>
+<Parsing GlobalDecl>
+<ParseGlobalDecl>
+Enter declare()
+A<ParseSpecifier>
+A</Find>
+_bug7</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_bug7|CDE<ParseDeclSuffix>
+<openpa>
+****************************
+****************************
+Function: _bug7
+****************************
+****************************
+</Find>
+_int</Find>
+<TYP__Make>
+</TYP__Make>
+o p q rsYParameter types(_bug7)
+Type array:
+   
+Proto types(_bug7)
+Type array:
+   
+X</openpa>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_bug7</Find>
+hh1h2ikIIbIcinsert type: 33
+***Inserting:_bug7 into 0133A610
+<BuildSignature>:_bug7</BuildSignature>Insert _bug7 into 0133A610()
+Insert into global table
+</Find>
+_bug7</Find>
+At insert:
+Type array:
+   
+J<ParseFunction>
+***********************************
+***********************************
+***********************************
+Parsing function: _bug7
+***********************************
+***********************************
+***********************************
+A<BuildParameterList
+><ParseParmDecls>
+A(54)CEnter declare()
+A<ParseSpecifier>
+A</Find>
+_d</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_d|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_d</Find>
+hh1kIIbIcinsert type: 16
+***Inserting:_d into 01347B04
+<BuildSignature>:_d</BuildSignature>Insert _d into 01347B04(_bug7)
+</Find>
+_d</Find>
+At insert:
+Type array:
+   
+JKEA(45)</ParseParmDecls>
+B</Find>
+_dMatch
+</Find>
+</BuildParameterList>
+B<BuildSignature>:_bug7</BuildSignature></Find>
+_bug7Match
+</Find>
+CDEG<Parse function body>:_bug7|
+</Find>
+_return</Find>
+Bb<GenerateMonadic>
+ABCD</GenerateMonadic>
+C<Parse></Find>
+_d</Find>
+</Find>
+_d</Find>
+</Find>
+_d</Find>
+<Nameref>
+GSearchfor:_d|
+<gsearch2> for: |_d|
+Looking in statement table
+</Find>
+_d</Find>
+Looking in function's symbol table
+</Find>
+_d</Find>
+Searching method/class:_bug7|01347AB8
+Looking at params 01347B04
+</Find>
+_dMatch
+</Find>
+Found as parameter
+</gsearch2>
+<nameref2>
+A:1:_dIsEqual:T2sp is not null
+Type array:
+   
+tp:018BCEA0 <Deref></Deref>deref tp:018BCA40 </nameref2>
+</Nameref>
+</Parse>Returning EOF from NextToken.
+D<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<CSETable>
+N Uses DUses Void Reg
+0: 1  0   0   -1         
+1: 1  0   0   -1   imm   
+2: 1  0   0   -1   imm   
+</CSETable>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+E</ParseFunctionBody>
+Enter funcbottom
+Leave funcbottom
+F</ParseFunction>
+</ParseGlobalDecl>
+</Parsing GlobalDecl>
+</compile>
+<Dumplits>
+</Dumplits>
+Enter summary
+Leave summary
+<closefiles>
+ABC</closefiles>
+Next on command line (1).
+Exiting

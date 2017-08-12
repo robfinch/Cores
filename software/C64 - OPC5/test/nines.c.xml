@@ -1,0 +1,282 @@
+<title>C64D Compiler debug file</title>
+<compile>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+</Find>
+_int</Find>
+<Parsing GlobalDecl>
+<ParseGlobalDecl>
+Enter declare()
+A<ParseSpecifier>
+A</Find>
+_main</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_main|CDE<ParseDeclSuffix>
+<openpa>
+****************************
+****************************
+Function: _main
+****************************
+****************************
+<TYP__Make>
+</TYP__Make>
+o p q </openpa>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_main</Find>
+hh1h2ikIIbIcinsert type: 34
+***Inserting:_main into 013BA610
+<BuildSignature>:_main</BuildSignature>Insert _main into 013BA610()
+Insert into global table
+</Find>
+_main</Find>
+At insert:
+Type array:
+   
+J<ParseFunction>
+***********************************
+***********************************
+***********************************
+Parsing function: _main
+***********************************
+***********************************
+***********************************
+A<BuildParameterList
+><ParseParmDecls>
+A(42)</ParseParmDecls>
+B</BuildParameterList>
+B<BuildSignature>:_main</BuildSignature></Find>
+_mainMatch
+</Find>
+CDEG<Parse function body>:_main|
+</Find>
+_int</Find>
+Bb<GenerateMonadic>
+ABCD</GenerateMonadic>
+CEnter declare()
+A<ParseSpecifier>
+A</Find>
+_nines</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_nines|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_nines</Find>
+hh1kIIbIcinsert type: 16
+***Inserting:_nines into 0005C004
+<BuildSignature>:_nines</BuildSignature>Insert _nines into 0005C004()
+</Find>
+_nines</Find>
+At insert:
+Type array:
+   
+JK</Find>
+_while</Find>
+<Parse></Find>
+_nines</Find>
+<Nameref>
+GSearchfor:_nines|
+<gsearch2> for: |_nines|
+Looking in statement table
+</Find>
+_ninesMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_ninesIsEqual:T2sp is not null
+Type array:
+   
+tp:0193CEA0 <Deref></Deref>deref tp:0193CA40 </nameref2>
+</Nameref>
+<Parse></Find>
+_putchar</Find>
+Found _putchar
+</Find>
+_putchar</Find>
+</Find>
+_putchar</Find>
+<Parse><ParseExpression>
+<Nameref>
+GSearchfor:_putchar|
+<gsearch2> for: |_putchar|
+Looking in statement table
+</Find>
+_putchar</Find>
+Looking in outer statement table
+</Find>
+_putchar</Find>
+Looking in function's symbol table
+</Find>
+_putchar</Find>
+Searching method/class:_main|013C7AB8
+Looking at params 013C7B04
+</Find>
+_putchar</Find>
+Looking at class members 0193CE84
+Looking at global symbols
+</Find>
+_putchar</Find>
+</gsearch2>
+<nameref2>
+A:0:_putcharInsert at nameref
+Type array:
+   
+<BuildSignature>:_putchar</BuildSignature></nameref2>
+</Nameref>
+tp2->type=33<ArgumentList>015 lastst=45</ArgumentList>
+Type array:
+   015 
+Got Type: 33openpa calling gsearch2<FindRising>_putchar 
+</Find>
+_putchar</Find>
+</FindRising>
+<gsearch2> for: |_putchar|
+Looking in statement table
+</Find>
+_putchar</Find>
+Looking in outer statement table
+</Find>
+_putchar</Find>
+Looking in function's symbol table
+</Find>
+_putchar</Find>
+Searching method/class:_main|013C7AB8
+Looking at params 013C7B04
+</Find>
+_putchar</Find>
+Looking at class members 0193CE84
+Looking at global symbols
+</Find>
+_putchar</Find>
+</gsearch2>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+Insert _p0 into 013C7D04(_putchar)
+</Find>
+_p0</Find>
+At insert:
+Type array:
+   
+<BuildSignature>:_putchar</BuildSignature>Insert _putchar into 013BA610()
+Insert into global table
+</Find>
+_putchar</Find>
+At insert:
+Type array:
+   015 
+Got direct function _putchar </Find>
+_nines</Find>
+</ParseExpression>
+</Parse><Parse><ParseExpression>
+<Nameref>
+GSearchfor:_nines|
+<gsearch2> for: |_nines|
+Looking in statement table
+</Find>
+_nines</Find>
+Looking in outer statement table
+</Find>
+_ninesMatch
+</Find>
+Found as an auto var
+</gsearch2>
+<nameref2>
+A:1:_ninesIsEqual:T2sp is not null
+Type array:
+   
+tp:0193CEA0 <Deref></Deref>deref tp:0193CA40 </nameref2>
+</Nameref>
+</ParseExpression>
+</Parse></Parse>Returning EOF from NextToken.
+D<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<CSETable>
+N Uses DUses Void Reg
+0: 3  0   0   -1         
+1: 1  1   0   -1         
+2: 1  0   0   -1   imm   
+3: 1  0   0   -1   imm   
+</CSETable>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+
+<gsearch2> for: |_putchar|
+Looking in statement table
+</Find>
+_putchar</Find>
+Looking in function's symbol table
+</Find>
+_putchar</Find>
+Searching method/class:_main|013C7AB8
+Looking at params 013C7B04
+</Find>
+_putchar</Find>
+Looking at class members 0193CE84
+Looking at global symbols
+</Find>
+_putcharMatch
+</Find>
+Found in global symbol table
+</gsearch2>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+<GenerateMonadic>
+ABCD</GenerateMonadic>
+E</ParseFunctionBody>
+Enter funcbottom
+Leave funcbottom
+F</ParseFunction>
+</ParseGlobalDecl>
+</Parsing GlobalDecl>
+</compile>
+<Dumplits>
+</Dumplits>
+Enter summary
+Leave summary
+<closefiles>
+ABC</closefiles>
+Next on command line (1).
+Exiting
