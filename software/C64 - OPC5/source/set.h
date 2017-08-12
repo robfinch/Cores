@@ -28,7 +28,7 @@ class CSet //: public CObject
    unsigned __int16 MemberPtr;    // for NextMember
    unsigned __int16 nbits;        // Number of bits in map.
    unsigned __int8 size;          // number of int's of bitmap.
-   unsigned __int8 compl;         // Negative true set if compl is true
+   unsigned __int8 comp;         // Negative true set if comp is true
 
    void enlarge(int);            // increase size of set
    int cmp(CSet&) const;
@@ -40,7 +40,7 @@ public:
 		size = SET_DEFAULT_SIZE;
 		nbits = SET_DEFAULT_SIZE * sizeof(int) << 3;
 		MemberPtr = 0;
-		compl = 0;
+		comp = 0;
 		clear(); 
 	};
 	static CSet *MakeNew() {
@@ -126,7 +126,7 @@ public:
 	int isIntersecting(CSet &s) { return (SetTest(s) == SET_INTER); };
 	int isEmpty() { return NumMember() == 0; };
 	int isMember(int bit) { return ((bit >= nbits)||bit < 0 ? 0 : map[bit >> SET_NBIT] & (1 << (bit & SET_BMASK))); }; // is n a member of s ?
-	int test(int x) { return (isMember(x)) ? !compl : compl; };
+	int test(int x) { return (isMember(x)) ? !comp : comp; };
 
 //	void Serialize(CArchive& ar);
 };

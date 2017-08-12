@@ -35,7 +35,7 @@ void CSet::copy(const CSet &s)
 {
 	if (map != dmap)	// get rid of an old map
 		delete[] map;
-	compl = s.compl;
+	comp = s.comp;
 	size = s.size;
 	nbits = s.nbits;
 	MemberPtr = s.MemberPtr;
@@ -52,7 +52,7 @@ CSet& CSet::operator=(CSet &s)
 {
 	if (map != dmap)
 		delete[] map;
-	compl = s.compl;
+	comp = s.comp;
 	size = s.size;
 	nbits = s.nbits;
 	MemberPtr = s.MemberPtr;
@@ -334,7 +334,7 @@ inline void CSet::clear()   // Zero all bits
     { memset((char *)map, 0, size * sizeof(int)); };
 inline void CSet::fill()    // Set all bits
     { memset((char *)map, ~0, size * sizeof(int)); };
-inline void CSet::complement() { compl = ~compl; };
+inline void CSet::complement() { comp = ~comp; };
 
 /* --------------------------------------------------------------------
 	Remove member - clears bit in map
@@ -588,7 +588,7 @@ void CSet::Serialize(CArchive& ar)
 		ar << MemberPtr;
 		ar << nbits;
 		ar << size;
-		ar << compl;
+		ar << comp;
 		for (nn = 0; nn < size; nn++)
 			ar << map[nn];
 	}
@@ -596,7 +596,7 @@ void CSet::Serialize(CArchive& ar)
 		ar >> MemberPtr;
 		ar >> nbits;
 		ar >> size;
-		ar >> compl;
+		ar >> comp;
 		enlarge(size);
 		for (nn = 0; nn < size; nn++)
 			ar >> map[nn];

@@ -141,6 +141,19 @@ static inline int strcat_s(
    return 0;
 }
 
+static inline int _itoa_s(int value, char *buffer,  size_t sizeInCharacters,  int radix) {
+   if (radix == 8) {
+      snprintf(buffer, sizeInCharacters, "%o", value);
+   } else if (radix == 10) {
+      snprintf(buffer, sizeInCharacters, "%d", value);
+   } else if (radix == 16) {
+      snprintf(buffer, sizeInCharacters, "%x", value);
+   } else {
+      return EINVAL;
+   }
+   return 0;
+}   
+
 static inline int sprintf_s(char* buffer, size_t sizeOfBuffer, const char* format, ...)
 {
     va_list ap;
