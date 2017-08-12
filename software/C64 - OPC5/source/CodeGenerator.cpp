@@ -553,7 +553,7 @@ AMODE *GenerateIndex(ENODE *node)
 		GenerateDiadic(op_mov,0,ap3,ap1);
 		ReleaseTempReg(ap1);
         ap3->mode = am_indx;
-		ap3->offset = makeinode(en_icon,ap2->offset->i);
+		ap3->offset = ap2->offset;//makeinode(en_icon,ap2->offset->i);
         return (ap3);
     }
 	if (ap2->mode == am_ind && ap1->mode == am_reg) {
@@ -736,6 +736,22 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
         ap1->mode = am_indx;
         ap1->preg = regGP;
 		ap1->segment = dataseg;
+        ap1->offset = node->p[0];//makeinode(en_icon,node->p[0]->i);
+		ap1->isUnsigned = !su;
+		ap1->isAddress = true;
+		if (!node->isUnsigned)
+	        GenerateSignExtend(ap1,siz1,size,flags);
+		else
+		    MakeLegalAmode(ap1,flags,siz1);
+        ap1->isVolatile = node->isVolatile;
+        MakeLegalAmode(ap1,flags,size);
+		goto xit;
+    }
+    else if(( node->p[0]->nodetype == en_labcon || node->p[0]->nodetype==en_nacon ))
+    {
+        ap1 = allocAmode();
+        ap1->mode = am_direct;
+        ap1->preg = regZero;
         ap1->offset = node->p[0];//makeinode(en_icon,node->p[0]->i);
 		ap1->isUnsigned = !su;
 		ap1->isAddress = true;
