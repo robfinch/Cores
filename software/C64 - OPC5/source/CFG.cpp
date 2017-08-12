@@ -15,8 +15,8 @@ void CreateControlFlowGraph()
 			ip->bb->MakeInputEdge(ip->back->bb);
 		}
 		if (ip->opcode==op_inc || ip->opcode==op_dec) {
-			if (ip->oper1->preg==regPC) {
-				if (ip->oper2->offset) {
+			if (ip->oper1 && ip->oper1->preg==regPC) {
+				if (ip->oper2 && ip->oper2->offset) {
 					if (ip1 = FindLabel(ip->oper2->offset->i)) {
 						ip->bb->MakeOutputEdge(ip1->bb);
 						ip1->bb->MakeInputEdge(ip->bb);

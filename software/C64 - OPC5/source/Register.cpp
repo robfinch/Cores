@@ -295,7 +295,7 @@ void ReleaseTempRegister(AMODE *ap)
 
 	if (ap==NULL) {
 		printf("DIAG - NULL pointer in ReleaseTempRegister\n");
-		return;
+		goto xit;
 	}
 
 	validate(ap);
@@ -308,7 +308,7 @@ void ReleaseTempRegister(AMODE *ap)
 common:
 		if (IsTmpReg(ap->preg)) {
 			if (reg_in_use[ap->preg]==-1)
-				return;
+				goto xit;
 			if (next_reg-- <= frg)
 				next_reg = MAXTMPREG;
 			number = reg_in_use[ap->preg];
@@ -318,12 +318,12 @@ common:
 			if (reg_alloc[number].f.isPushed=='T')
 				fatal("ReleaseTempRegister(): register on stack");
 		}
-		return;
+		goto xit;
     case am_indx2:
 	case am_indx3:
 		if (IsTmpReg(ap->sreg)) {
 			if (reg_in_use[ap->sreg]==-1)
-				return;
+				goto xit;
 			if (next_reg-- <= frg)
 				next_reg = MAXTMPREG;
 			number = reg_in_use[ap->sreg];
@@ -332,13 +332,14 @@ common:
 		}
 		goto common;
     default:
-		return;
+		goto xit;
     }
  //   /* some consistency checks */
 	//if (number != ap->deep) {
 	//	printf("number %d ap->deep %d\n", number, ap->deep);
 	//	//fatal("ReleaseTempRegister()/1");
 	//}
+xit:	;
 }
 
 // The following is used to save temporary registers across function calls.

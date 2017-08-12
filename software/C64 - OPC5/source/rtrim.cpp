@@ -17,7 +17,7 @@ char *rtrim(char *str)
    if (ii)
    {
       --ii;
-      while(ii >= 0 && isspace(str[ii])) --ii;
+      while(ii >= 0 && isspace(str[ii] & 0x7F)) --ii;
       ii++;
       str[ii] = '\0';
    }
