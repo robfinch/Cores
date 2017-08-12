@@ -87,7 +87,6 @@ void Compiler::compile()
 	ZeroMemory(&typeTable,sizeof(typeTable));
 	AddStandardTypes();
 
-	RTFClasses::Random::srand((RANDOM_TYPE)time(NULL));
 	decls = GlobalDeclaration::Make();
 	gd = decls;
 	lastst = tk_nop;

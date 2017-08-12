@@ -169,9 +169,9 @@ extern TYP *stdquad;
 extern std::string *declid;
 extern Compiler compiler;
 
-extern struct ocode *peep_head;
-extern struct ocode *peep_tail;
-extern int PeepCount(struct ocode *ip);
+extern OCODE *peep_head;
+extern OCODE *peep_tail;
+extern int PeepCount(OCODE *ip);
 
 // Analyze.c
 extern short int csendx;
@@ -283,14 +283,14 @@ extern void cseg();
 extern void dseg();
 extern void tseg();
 //extern void put_code(int op, int len,AMODE *aps, AMODE *apd, AMODE *);
-extern void put_code(struct ocode *);
+extern void put_code(OCODE *);
 extern char *put_label(int lab, char*, char*, char);
 extern char *opstr(int op);
 // Peepgen.c
 extern AMODE *copy_addr(AMODE *ap);
-extern void MarkRemoveRange(struct ocode *bp, struct ocode *ep);
+extern void MarkRemoveRange(OCODE *bp, OCODE *ep);
 extern void PeepRemove();
-extern void PeepNop(struct ocode *ip1, struct ocode *ip2);
+extern void PeepNop(OCODE *ip1, OCODE *ip2);
 extern void flush_peep();
 extern int equal_address(AMODE *ap1, AMODE *ap2);
 extern int GeneratePreload();

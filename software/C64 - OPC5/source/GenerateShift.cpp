@@ -33,6 +33,8 @@ AMODE *GenerateShift(ENODE *node,int flags, int size)
 	int lab1;
 
 	ap3 = GetTempRegister();
+	if (size==2)
+		ap3->amode2 = GetTempRegister();
     ap1 = GenerateExpression(node->p[0],F_REG,size);
     ap2 = GenerateExpression(node->p[1],F_REG | F_IMMED,sizeOfWord);
 	GenerateDiadic(op_mov,0,ap3,ap1);
@@ -164,6 +166,8 @@ AMODE *GenerateAssignShift(ENODE *node,int flags,int size)
 	int lab1, nn;
 
 	ap1 = GetTempRegister();
+	if (size==2)
+		ap1->amode2 = GetTempRegister();
 	//size = GetNaturalSize(node->p[0]);
     ap3 = GenerateExpression(node->p[0],F_ALL,size);
     ap2 = GenerateExpression(node->p[1],F_REG | F_IMMED,size);

@@ -23,29 +23,6 @@
 
 /*      addressing mode structure       */
 
-class AMODE {
-public:
-	unsigned int mode : 6;
-	unsigned int preg : 8;
-	unsigned int sreg : 8;
-	unsigned int segment : 4;
-	unsigned int defseg : 1;
-	unsigned int tempflag : 1;
-	unsigned int isFloat : 1;
-	char FloatSize;
-	unsigned int isAddress : 1;
-	unsigned int isUnsigned : 1;
-	unsigned int lowhigh : 2;
-	unsigned int isVolatile : 1;
-	unsigned int isPascal : 1;
-	unsigned int rshift : 8;
-	short int deep;           /* stack depth on allocation */
-	short int deep2;
-	ENODE *offset;
-	int8_t scale;
-	AMODE *amode2;
-};
-
 // output code structure
 
 struct ocode {

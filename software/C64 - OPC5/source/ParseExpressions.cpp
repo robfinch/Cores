@@ -1040,7 +1040,7 @@ TYP *ParsePrimaryExpression(ENODE **node, int got_pa)
 // ----------------------------------------------------------------------------
 TYP *Autoincdec(TYP *tp, ENODE **node, int flag, int swap)
 {
-	ENODE *ep1, *ep2, *ep3;
+	ENODE *ep1, *ep2;
 	TYP *typ;
 	int su;
 

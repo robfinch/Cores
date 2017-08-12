@@ -25,17 +25,18 @@
 //
 #include "stdafx.h"
 
-static void AddToPeepList(struct ocode *newc);
-bool IsFlowCtrl(struct ocode *ip);
-void peep_add(struct ocode *ip);
-static void PeepoptSub(struct ocode *ip);
-void peep_move(struct ocode	*ip);
-void peep_cmp(struct ocode *ip);
+extern void CreateControlFlowGraph();
+static void AddToPeepList(OCODE *newc);
+bool IsFlowCtrl(OCODE *ip);
+void peep_add(OCODE *ip);
+static void PeepoptSub(OCODE *ip);
+void peep_move(OCODE	*ip);
+void peep_cmp(OCODE *ip);
 static void opt_peep();
-void put_ocode(struct ocode *p);
+void put_ocode(OCODE *p);
 
-struct ocode *peep_head = NULL;
-struct ocode *peep_tail = NULL;
+OCODE *peep_head = NULL;
+OCODE *peep_tail = NULL;
 int preload_count = 0;
 
 AMODE *copy_addr(AMODE *ap)
@@ -56,8 +57,8 @@ AMODE *copy_addr(AMODE *ap)
 
 void GeneratePredicatedMonadic(int pr, int pop, int op, int len, AMODE *ap1)
 {
-	struct ocode *cd;
-	cd = (struct ocode *)allocx(sizeof(struct ocode));
+	OCODE *cd;
+	cd = (OCODE *)allocx(sizeof(OCODE));
 	cd->predop = pop;
 	cd->pregreg = pr;
 	cd->opcode = op;
@@ -73,9 +74,9 @@ void GeneratePredicatedMonadic(int pr, int pop, int op, int len, AMODE *ap1)
 void GenerateZeradic(int op)
 {
 	dfs.printf("<GenerateZeradic>\n");
-	struct ocode *cd;
+	OCODE *cd;
 	dfs.printf("A");
-	cd = (struct ocode *)allocx(sizeof(struct ocode));
+	cd = (OCODE *)allocx(sizeof(OCODE));
 	dfs.printf("B");
 	cd->predop = 0;
 	cd->pregreg = 15;
@@ -93,11 +94,11 @@ void GenerateZeradic(int op)
 
 void GenerateMonadic(int op, int len, AMODE *ap1)
 {
-	struct ocode *cd;
+	OCODE *cd;
 
 	dfs.printf("<GenerateMonadic>\n");
 	dfs.printf("A");
-	cd = (struct ocode *)allocx(sizeof(struct ocode));
+	cd = (OCODE *)allocx(sizeof(OCODE));
 	dfs.printf("B");
 	cd->predop = 0;
 	cd->pregreg = 15;
@@ -115,8 +116,8 @@ void GenerateMonadic(int op, int len, AMODE *ap1)
 
 void GeneratePredicatedDiadic(int pop, int pr, int op, int len, AMODE *ap1, AMODE *ap2)
 {
-	struct ocode *cd;
-	cd = (struct ocode *)allocx(sizeof(struct ocode));
+	OCODE *cd;
+	cd = (OCODE *)allocx(sizeof(OCODE));
 	cd->predop = pop;
 	cd->pregreg = pr;
 	cd->opcode = op;
@@ -131,8 +132,8 @@ void GeneratePredicatedDiadic(int pop, int pr, int op, int len, AMODE *ap1, AMOD
 
 void GenerateDiadic(int op, int len, AMODE *ap1, AMODE *ap2)
 {
-	struct ocode *cd;
-	cd = (struct ocode *)xalloc(sizeof(struct ocode));
+	OCODE *cd;
+	cd = (OCODE *)xalloc(sizeof(OCODE));
 	cd->predop = 0;
 	cd->pregreg = 15;
 	cd->opcode = op;
@@ -152,8 +153,8 @@ void GenerateDiadic(int op, int len, AMODE *ap1, AMODE *ap2)
 
 void GenerateTriadic(int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3)
 {
-	struct ocode *cd;
-	cd = (struct ocode *)allocx(sizeof(struct ocode));
+	OCODE *cd;
+	cd = (OCODE *)allocx(sizeof(OCODE));
 	cd->predop = 0;
 	cd->pregreg = 15;
 	cd->opcode = op;
@@ -167,8 +168,8 @@ void GenerateTriadic(int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3)
 
 void GeneratePredicatedTriadic(int pop, int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3)
 {
-	struct ocode *cd;
-	cd = (struct ocode *)allocx(sizeof(struct ocode));
+	OCODE *cd;
+	cd = (OCODE *)allocx(sizeof(OCODE));
 	cd->predop = pop;
 	cd->pregreg = 15;
 	cd->opcode = op;
@@ -182,8 +183,8 @@ void GeneratePredicatedTriadic(int pop, int op, int len, AMODE *ap1, AMODE *ap2,
 
 void Generate4adic(int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3, AMODE *ap4)
 {
-	struct ocode *cd;
-	cd = (struct ocode *)allocx(sizeof(struct ocode));
+	OCODE *cd;
+	cd = (OCODE *)allocx(sizeof(OCODE));
 	cd->predop = 0;
 	cd->pregreg = 15;
 	cd->opcode = op;
@@ -197,8 +198,8 @@ void Generate4adic(int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3, AMODE *a
 
 int GeneratePreload()
 {
-	struct ocode *cd;
-	cd = (struct ocode *)allocx(sizeof(struct ocode));
+	OCODE *cd;
+	cd = (OCODE *)allocx(sizeof(OCODE));
 	cd->predop = 0;
 	cd->pregreg = 0;
 	cd->opcode = op_preload;
@@ -213,7 +214,7 @@ int GeneratePreload()
 
 void OverwritePreload(int handle, int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3, AMODE *ap4)
 {
-	struct ocode *ip;
+	OCODE *ip;
 
 	for (ip = peep_tail; ip; ip=ip->back) {
 		if (ip->opcode==op_preload && ip->length==handle) {
@@ -230,7 +231,7 @@ void OverwritePreload(int handle, int op, int len, AMODE *ap1, AMODE *ap2, AMODE
 
 
 // NOP out a range in the peep buffer.
-void PeepNop(struct ocode *ip1, struct ocode *ip2)
+void PeepNop(OCODE *ip1, OCODE *ip2)
 {
 	for (; ip1 != ip2; ip1 = ip1->fwd) {
 		ip1->opcode = op_nop;
@@ -238,7 +239,7 @@ void PeepNop(struct ocode *ip1, struct ocode *ip2)
 	ip1->opcode = op_nop;
 }
 
-static void AddToPeepList(struct ocode *cd)
+static void AddToPeepList(OCODE *cd)
 {
 	if (!dogen)
 		return;
@@ -260,18 +261,18 @@ static void AddToPeepList(struct ocode *cd)
 
 static void MarkAllKeep()
 {
-	struct ocode *ip;
+	OCODE *ip;
 	
 	for (ip = peep_head; ip; ip = ip->fwd)
 		ip->remove = false;
 }
 
-static inline void MarkRemove(struct ocode *cd)
+static inline void MarkRemove(OCODE *cd)
 {
 	cd->remove = true;	
 }
 
-void MarkRemoveRange(struct ocode *bp, struct ocode *ep)
+void MarkRemoveRange(OCODE *bp, OCODE *ep)
 {
 	for (; bp != ep && bp; bp = bp->fwd)
 		MarkRemove(bp);
@@ -281,8 +282,8 @@ void MarkRemoveRange(struct ocode *bp, struct ocode *ep)
 
 static void Remove()
 {
-	struct ocode *cd;
-	struct ocode *ip1, *ip2;
+	OCODE *cd;
+	OCODE *ip1, *ip2;
 
 	for (cd = peep_head; cd; cd = cd->fwd) {
 		ip1 = cd->back;
@@ -304,7 +305,7 @@ void PeepRemove()
 	Remove();
 }
 
-int PeepCount(struct ocode *ip)
+int PeepCount(OCODE *ip)
 {
 	int cnt;
 
@@ -318,8 +319,8 @@ int PeepCount(struct ocode *ip)
  */
 void GenerateLabel(int labno)
 {      
-	struct ocode *newl;
-	newl = (struct ocode *)allocx(sizeof(struct ocode));
+	OCODE *newl;
+	newl = (OCODE *)allocx(sizeof(OCODE));
 	newl->opcode = op_label;
 	newl->oper1 = (AMODE *)labno;
 	newl->oper2 = (AMODE *)my_strdup((char *)currentFn->name->c_str());
@@ -330,8 +331,8 @@ void GenerateLabel(int labno)
 
 //void gen_ilabel(char *name)
 //{      
-//	struct ocode    *new;
-//    new = (struct ocode *)xalloc(sizeof(struct ocode));
+//	OCODE    *new;
+//    new = (OCODE *)xalloc(sizeof(OCODE));
 //    new->opcode = op_ilabel;
 //    new->oper1 = (struct amode *)name;
 //    add_peep(new);
@@ -356,7 +357,7 @@ void flush_peep()
 /*
  *      output the instruction passed.
  */
-void put_ocode(struct ocode *p)
+void put_ocode(OCODE *p)
 {
 	put_code(p);
 //	put_code(p->opcode,p->length,p->oper1,p->oper2,p->oper3,p->oper4);
@@ -371,7 +372,7 @@ void put_ocode(struct ocode *p)
 // Changed to:
 //		mov		r3,r5
 
-void peep_move(struct ocode	*ip)
+void peep_move(OCODE	*ip)
 {
 	if (ip==nullptr)
 		return;
@@ -433,7 +434,7 @@ int equal_address(AMODE *ap1, AMODE *ap2)
  *      peephole optimization for add instructions.
  *      makes quick immediates out of small constants.
  */
-void peep_add(struct ocode *ip)
+void peep_add(OCODE *ip)
 {
      AMODE *a;
      
@@ -463,12 +464,12 @@ void peep_add(struct ocode *ip)
 
 // 'subui' followed by a 'bne' gets turned into 'loop'
 //
-static void PeepoptSub(struct ocode *ip)
+static void PeepoptSub(OCODE *ip)
 {  
 	return;
 }
 
-static bool IsSubiSP(struct ocode *ip)
+static bool IsSubiSP(OCODE *ip)
 {
 	if (ip->opcode==op_sub) {
 		if (ip->oper3 && ip->oper3->mode==am_immed) {
@@ -480,9 +481,9 @@ static bool IsSubiSP(struct ocode *ip)
 	return (false);
 }
 
-static void MergeSubi(struct ocode *first, struct ocode *last, int amt)
+static void MergeSubi(OCODE *first, OCODE *last, int amt)
 {
-	struct ocode *ip;
+	OCODE *ip;
 
 	if (first==nullptr)
 		return;
@@ -503,9 +504,9 @@ static void MergeSubi(struct ocode *first, struct ocode *last, int amt)
 //
 static void PeepoptSubSP()
 {  
-	struct ocode *ip;
-	struct ocode *first_subi = nullptr;
-	struct ocode *last_subi = nullptr;
+	OCODE *ip;
+	OCODE *first_subi = nullptr;
+	OCODE *last_subi = nullptr;
 	int amt = 0;
 
 	for (ip = peep_head; ip; ip = ip->fwd) {
@@ -527,7 +528,7 @@ static void PeepoptSubSP()
 /*
  *      peephole optimization for compare instructions.
  */
-void peep_cmp(struct ocode *ip)
+void peep_cmp(OCODE *ip)
 {
 	return;
 }
@@ -537,7 +538,7 @@ void peep_cmp(struct ocode *ip)
  *      to shift operations. op should be either op_asl or
  *      op_asr (for divide).
  */
-void PeepoptMuldiv(struct ocode *ip, int op)
+void PeepoptMuldiv(OCODE *ip, int op)
 {  
 	int shcnt, num;
 
@@ -571,7 +572,7 @@ void PeepoptMuldiv(struct ocode *ip, int op)
 // Instructions that follow an unconditional transfer won't be executed
 // unless there is a label to branch to them.
 //
-void PeepoptUctran(struct ocode *ip)
+void PeepoptUctran(OCODE *ip)
 {
 	if (uctran_off) return;
 	for(ip = ip->fwd; ip != NULL && ip->opcode != op_label; ip = ip->fwd)
@@ -583,7 +584,7 @@ void PeepoptUctran(struct ocode *ip)
 	}
 }
 
-void PeepoptJAL(struct ocode *ip)
+void PeepoptJAL(OCODE *ip)
 {
 	if (ip->oper1->preg!=0)
 		return;
@@ -593,9 +594,9 @@ void PeepoptJAL(struct ocode *ip)
 // Remove instructions that branch to the next label.
 // Convert moves to PC to inc/dec operations where possible.
 //
-void PeepoptBranch(struct ocode *ip)
+void PeepoptBranch(OCODE *ip)
 {
-	struct ocode *p, *q;
+	OCODE *p, *q;
 	int n;
 
 	for (p = ip->fwd; p && p->opcode==op_label; p = p->fwd)
@@ -649,11 +650,11 @@ void PeepoptBranch(struct ocode *ip)
 // ldi  rn,#0
 // lab2:
         
-void PeepoptBcc(struct ocode * ip)
+void PeepoptBcc(OCODE * ip)
 {
 }
 
-void PeepoptLc(struct ocode *ip)
+void PeepoptLc(OCODE *ip)
 {
 	return;
 }
@@ -662,26 +663,26 @@ void PeepoptLc(struct ocode *ip)
 // If LEA is followed by the push of more than one register, then leave it
 // alone. The register order of the push matters.
 
-void PeepoptLea(struct ocode *ip)
+void PeepoptLea(OCODE *ip)
 {
 }
 
 // LW followed by a push of the same register gets translated to PUSH.
 
-void PeepoptLw(struct ocode *ip)
+void PeepoptLw(OCODE *ip)
 {
 }
 
 // Combine a chain of push operations into a single push
 
-void PeepoptPushPop(struct ocode *ip)
+void PeepoptPushPop(OCODE *ip)
 {
 }
 
 
 // Strip out useless masking operations generated by type conversions.
 
-void peep_ld(struct ocode *ip)
+void peep_ld(OCODE *ip)
 {
 	if (ip->oper2->mode != am_immed)
 		return;
@@ -708,7 +709,7 @@ void peep_ld(struct ocode *ip)
 }
 
 
-void PeepoptLd(struct ocode *ip)
+void PeepoptLd(OCODE *ip)
 {
     return;
 }
@@ -716,7 +717,7 @@ void PeepoptLd(struct ocode *ip)
 
 // Remove extra labels at end of subroutines
 
-void PeepoptLabel(struct ocode *ip)
+void PeepoptLabel(OCODE *ip)
 {
     if (!ip)
         return;
@@ -729,7 +730,7 @@ void PeepoptLabel(struct ocode *ip)
 
 static void opt_nbr()
 {
-	//struct ocode *ip,*pip;
+	//OCODE *ip,*pip;
 	//
 	//ip = peep_head;
 	//pip = peep_head;
@@ -749,7 +750,7 @@ static void opt_nbr()
 
 // Detect if the instruction has a target register.
 
-static bool HasTargetReg(struct ocode *ip)
+static bool HasTargetReg(OCODE *ip)
 {
 	switch(ip->opcode) {
 	case op_add:
@@ -768,7 +769,7 @@ static bool HasTargetReg(struct ocode *ip)
 
 // Process compiler hint opcodes
 
-static void PeepoptHint(struct ocode *ip)
+static void PeepoptHint(OCODE *ip)
 {
 	//if (ip->back->opcode==op_label || ip->fwd->opcode==op_label)
 	//	return;
@@ -821,8 +822,8 @@ static void PeepoptHint(struct ocode *ip)
 
 	case 8:
 		{
-			struct ocode *ip1 = ip->fwd;
-			struct ocode *ip2;
+			OCODE *ip1 = ip->fwd;
+			OCODE *ip2;
 			if (ip1)
 				ip2 = ip1->fwd;
 			if (ip1==nullptr || ip2==nullptr)
@@ -845,7 +846,7 @@ static void PeepoptHint(struct ocode *ip)
 // Turns into
 // SH   r3,Address
 
-static void PeepoptStore(struct ocode *ip)
+static void PeepoptStore(OCODE *ip)
 {
 	if (ip->opcode==op_label || ip->fwd->opcode==op_label)
 		return;
@@ -869,7 +870,7 @@ static void PeepoptStore(struct ocode *ip)
 //		and		r3,r3,#255
 // Eliminates the useless 'and' operation.
 
-static void PeepoptAnd(struct ocode *ip)
+static void PeepoptAnd(OCODE *ip)
 {
 	// This doesn't work properly yet in all cases.
 	return;
@@ -906,7 +907,7 @@ static void PeepoptAnd(struct ocode *ip)
 	}
 }
 
-int IsRet(struct ocode *ip)
+int IsRet(OCODE *ip)
 {
 	if (ip==nullptr)
 		return 0;
@@ -920,7 +921,7 @@ int IsRet(struct ocode *ip)
 	return 0;
 }
 
-bool IsFlowCtrl(struct ocode *ip)
+bool IsFlowCtrl(OCODE *ip)
 {
 	if (ip==nullptr)
 		return false;
@@ -939,9 +940,9 @@ bool IsFlowCtrl(struct ocode *ip)
 	return false;
 }
 
-void PeepoptPred(struct ocode *ip)
+void PeepoptPred(OCODE *ip)
 {
-	struct ocode *ip1, *ip2, *ip3, *ip4;
+	OCODE *ip1, *ip2, *ip3, *ip4;
 	ip1 = ip->fwd;
 	if (ip1)
 		ip2 = ip1->fwd;
@@ -1052,7 +1053,7 @@ void PeepoptPred(struct ocode *ip)
 
 static void SetLabelReference()
 {
-	struct ocode *p, *q;
+	OCODE *p, *q;
 
 	for (p = peep_head; p; p = p->fwd) {
 		if (p->opcode==op_label) {
@@ -1077,7 +1078,7 @@ static void SetLabelReference()
 
 static int EliminateUnreferencedLabels()
 {
-	struct ocode *p;
+	OCODE *p;
 	int cnt;
 
 	cnt = 0;
@@ -1095,7 +1096,7 @@ static int EliminateUnreferencedLabels()
 
 static int CountBPReferences()
 {
-	struct ocode *ip;
+	OCODE *ip;
 	int refBP;
 
 	refBP = 0;
@@ -1137,7 +1138,7 @@ static int CountBPReferences()
 
 static void RemoveLinkUnlink()
 {
-	struct ocode *ip;
+	OCODE *ip;
 
 	for (ip = peep_head; ip != NULL; ip = ip->fwd)
 	{
@@ -1157,7 +1158,7 @@ static void RemoveLinkUnlink()
 // preloads that didn't pan out.
 static void RemoveHints()
 {
-	struct ocode *ip;
+	OCODE *ip;
 
 	for(ip = peep_head; ip != NULL; ip = ip->fwd )
 	{
@@ -1167,6 +1168,19 @@ static void RemoveHints()
 	}
 }
 
+OCODE *FindLabel(int64_t i)
+{
+	OCODE *ip;
+
+	for (ip = peep_head; ip; ip = ip->fwd) {
+		if (ip->opcode==op_label) {
+			if ((int)ip->oper1==i)
+				return (ip);
+		}
+	}
+	return nullptr;
+}
+
 /*
  *      peephole optimizer. This routine calls the instruction
  *      specific optimization routines above for each instruction
@@ -1174,7 +1188,7 @@ static void RemoveHints()
  */
 static void opt_peep()
 {  
-	struct ocode *ip;
+	OCODE *ip;
 	int rep;
 	
 	if (!::opt_nopeep) {
@@ -1258,4 +1272,8 @@ static void opt_peep()
 	// preloads that didn't pan out.
 	RemoveHints();
 	Remove();
+
+	// In the works: code to support further optimizations
+	BasicBlock::Blockize(peep_head);
+	CreateControlFlowGraph();
 }

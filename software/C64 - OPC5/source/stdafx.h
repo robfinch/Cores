@@ -35,13 +35,11 @@ typedef unsigned __int64 uint64_t;
 
 #define snprintf	sprintf_s
 
-#include "rand.h"
+#include "const.h"
 #include "txtStream.h"
+#include "set.h"
 #include "Value.h"
-#include "C.h"
-#include "Enode.h"
-#include "Statement.h"
-#include "Gen.h"
+#include "types.h"
 #include "Cglbdec.h"
 
 // TODO: reference additional headers your program requires here

@@ -1081,7 +1081,7 @@ AMODE *GenerateHook(ENODE *node,int flags, int size)
 {
 	AMODE *ap1, *ap2;
     int false_label, end_label;
-	struct ocode *ip1, *ip2, *ip3, *ip0, *ip4, *ip5;
+	OCODE *ip1, *ip2, *ip3, *ip0, *ip4, *ip5;
 	int n1, n2, n3, which;
 	int predop;
 

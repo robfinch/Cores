@@ -358,7 +358,7 @@ void PutAddressMode(AMODE *ap)
  *      output a generic instruction.
  */
 //void put_code(int op, int len,AMODE *aps,AMODE *apd,AMODE *ap3,AMODE *ap4)
-void put_code(struct ocode *p)
+void put_code(OCODE *p)
 {
 	int op = p->opcode;
 	int pop = p->predop;
