@@ -26,7 +26,7 @@
 
 extern char *rtrim(char *);
 extern int caselit(scase *casetab,int);
-
+extern void validate(AMODE *ap);
 /*
  *	68000 C compiler
  *
@@ -384,6 +384,8 @@ void Statement::GenerateLinearSwitch()
 		return;
 	}
     ap = GenerateExpression(exp,F_REG,GetNaturalSize(exp));
+	GenerateDiadic(op_mov,0,makereg(2),ap);
+	ReleaseTempReg(ap);
 //        if( ap->preg != 0 )
 //                GenerateDiadic(op_mov,0,makereg(1),ap);
 //		ReleaseTempRegister(ap);
@@ -399,9 +401,7 @@ void Statement::GenerateLinearSwitch()
         {
 			bf = (int *)stmt->casevals;
 			for (nn = bf[0]; nn >= 1; nn--) {
-				ap1 = GetTempRegister();
-				GenerateTriadic(op_cmp,0,ap1,ap,make_immed(bf[nn]));
-				ReleaseTempRegister(ap1);
+				GenerateTriadic(op_cmp,0,makereg(2),makereg(regZero),make_immed(bf[nn]));
 				GeneratePredicatedTriadic(pop_z,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(curlab));
 			}
 	        //GenerateDiadic(op_dw,0,make_label(curlab), make_direct(stmt->label));
@@ -414,7 +414,6 @@ void Statement::GenerateLinearSwitch()
         GenerateTriadic(op_mov,0,makereg(regPC),makereg(regZero),make_clabel(breaklab));
     else
 		GenerateTriadic(op_mov,0,makereg(regPC),makereg(regZero),make_clabel((int)defcase->label));
-    ReleaseTempRegister(ap);
 }
 
 
@@ -529,18 +528,19 @@ j1:	;
 		qsort(&casetab[0],512,sizeof(struct scase),casevalcmp);
 		tablabel = caselit(casetab,maxv-minv+1);
 	    ap = GenerateExpression(exp,F_REG,GetNaturalSize(exp));
-		ap1 = GetTempRegister();
-		ap2 = GetTempRegister();
+		validate(ap);
+		ap1 = makereg(2);
 		if (!nkd) {
 			GenerateTriadic(op_cmp,0,ap1,makereg(regZero),make_immed(minv));
 			GeneratePredicatedTriadic(pop_mi,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(defcase ? (int)defcase->label : breaklab));
 			GenerateTriadic(op_cmp,0,ap1,makereg(regZero),make_immed(maxv+1));
 			GeneratePredicatedTriadic(pop_pl,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(defcase ? (int)defcase->label : breaklab));
 		}
-		GenerateTriadic(op_sub,0,ap,ap,make_immed(minv));
-		GenerateTriadic(op_add,0,ap,ap,make_immed(0));
+		GenerateTriadic(op_sub,0,ap,makereg(regZero),make_immed(minv));
+		//GenerateTriadic(op_add,0,ap,ap,make_immed(0));
 		GenerateDiadic(op_ld,0,ap,make_indexed2(tablabel,ap->preg));
 		GenerateTriadic(op_mov,0,makereg(regPC),makereg(ap->preg),make_immed(0));
+		ReleaseTempReg(ap);
 		s1->GenerateCase();
 		GenerateLabel(breaklab);
 		return;

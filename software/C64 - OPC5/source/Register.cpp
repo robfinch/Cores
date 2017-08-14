@@ -45,13 +45,19 @@ static short int next_breg;
 // Only registers 5,6,7 and 8 are used for temporaries
 static short int reg_in_use[256];	// 0 to 15
 static short int save_reg_in_use[256];
+static bool reg_inuse[30];
+static int8_t cycle;
+static int8_t reg_cycle[30];
+
+static int cnt;
 
 static struct {
     enum e_am mode;
     short int reg;
-	union {
+	struct {
 		char isPushed;	/* flags if pushed or corresponding reg_alloc * number */
 		char allocnum;
+		bool inuse;
 	} f;
 } 
 	reg_stack[MAX_REG_STACK + 1],
@@ -65,11 +71,11 @@ static short int save_reg_alloc_ptr;
 static short int breg_stack_ptr;
 static short int breg_alloc_ptr;
 
-#define MAXTMPREG	(sym->AllowRegVars ? 3 : 5)
+#define MAXTMPREG	(sym->AllowRegVars ? 3 : 7)
 #define MINTMPREG	(sym->IsLeaf ? 0 : 1)
 #define NTMPREG		2
 
-char tmpregs[] = {1,5,6,7,3,4};
+char tmpregs[] = {1,5,6,7,3,4,8,9};
 char regstack[18];
 int rsp=17;
 int regmask=0;
@@ -93,6 +99,8 @@ void initRegStack()
     memset(reg_alloc,0,sizeof(reg_alloc));
     memset(stacked_regs,0,sizeof(stacked_regs));
     memset(save_reg_alloc,0,sizeof(save_reg_alloc));
+	cycle = 0;
+	ZeroMemory(reg_cycle,sizeof(reg_cycle));
 }
 
 void GenerateTempRegPush(int reg, int rmode, int number, int stkpos)
@@ -102,7 +110,7 @@ void GenerateTempRegPush(int reg, int rmode, int number, int stkpos)
     ap1->preg = reg;
     ap1->mode = rmode;
 
-
+	dfs.printf("<PushTempRegister:r%d>",reg);
 	GenerateDiadic(op_push,0,ap1,makereg(regSP));
 	TRACE(printf("pushing r%d\n", reg);)
     reg_stack[reg_stack_ptr].mode = (enum e_am)rmode;
@@ -113,19 +121,21 @@ void GenerateTempRegPush(int reg, int rmode, int number, int stkpos)
     reg_alloc[number].f.isPushed = 'T';
 	if (++reg_stack_ptr > MAX_REG_STACK)
 		fatal("GenerateTempRegPush(): register stack overflow");
+	dfs.printf("</PushTempRegister>\n",reg);
 }
 
 void GenerateTempRegPop(int reg, int rmode, int number, int stkpos)
 {
 	AMODE *ap1;
  
+	dfs.printf("</PopTempRegister>");
     if (reg_stack_ptr-- == -1)
 		fatal("GenerateTempRegPop(): register stack underflow");
     /* check if the desired register really is on stack */
-    if (reg_stack[reg_stack_ptr].f.allocnum != number)
-		fatal("GenerateTempRegPop()/2");
-	if (reg_in_use[reg] >= 0)
-		fatal("GenerateTempRegPop():register still in use");
+  //  if (reg_stack[reg_stack_ptr].f.allocnum != number)
+		//fatal("GenerateTempRegPop()/2");
+	//if (reg_in_use[reg] >= 0)
+	//	fatal("GenerateTempRegPop():register still in use");
 	TRACE(printf("popped r%d\n", reg);)
 	reg_in_use[reg] = number;
 	ap1 = allocAmode();
@@ -133,6 +143,7 @@ void GenerateTempRegPop(int reg, int rmode, int number, int stkpos)
 	ap1->mode = rmode;
 	GenerateDiadic(op_pop,0,ap1,makereg(regSP));
     reg_alloc[number].f.isPushed = 'F';
+	dfs.printf("</PopTempRegister:r%d>\n",reg);
 }
 
 void initstack()
@@ -148,18 +159,32 @@ AMODE *GetTempRegister()
 	return (GetTempRegister2(&pushed));
 }
 
+bool RegInUse(int reg)
+{
+	int nn;
+
+	for (nn = reg_alloc_ptr; nn >= 0; nn--) {
+		if (reg_alloc[nn].reg == reg)
+			return (true);
+	}
+	return (false);
+}
+
 AMODE *GetTempRegister2(int *pushed)
 {
 	AMODE *ap;
     SYM *sym = currentFn;
 
+	dfs.printf("<GetTempRegister2>");
 	*pushed = FALSE;
-	if (reg_in_use[tmpregs[next_reg]] >= 0) {
+	if (reg_in_use[tmpregs[next_reg]]>=0) {
 		*pushed = TRUE;
 		GenerateTempRegPush(tmpregs[next_reg], am_reg, reg_in_use[tmpregs[next_reg]],0);
+//		reg_inuse[tmpregs[next_reg]] = false;
 	}
 	TRACE(printf("GetTempRegister:r%d\n", next_reg);)
     reg_in_use[tmpregs[next_reg]] = reg_alloc_ptr;
+	reg_alloc[reg_alloc_ptr].f.inuse = true;
     ap = allocAmode();
     ap->mode = am_reg;
     ap->preg = tmpregs[next_reg];
@@ -168,12 +193,14 @@ AMODE *GetTempRegister2(int *pushed)
     reg_alloc[reg_alloc_ptr].mode = am_reg;
     reg_alloc[reg_alloc_ptr].f.isPushed = 'F';
 	next_reg++;
-    if (next_reg > MAXTMPREG)
+    if (next_reg > MAXTMPREG) {
 		next_reg = MINTMPREG;		/* wrap around */
+	}
 	reg_alloc_ptr++;
     if (reg_alloc_ptr == MAX_REG_STACK)
 		fatal("GetTempRegister(): register stack overflow");
-	return ap;
+	dfs.printf("</GetTempRegister2:%d>\n",(int)ap->preg);
+	return (ap);
 }
 
 AMODE *GetTempFPRegister()
@@ -241,6 +268,7 @@ void validate(AMODE *ap)
     SYM *sym = currentFn;
 	int frg = MINTMPREG;
 
+	dfs.printf("<validate:r%d>",(int)ap->preg);
 	if (ap->amode2)
 		validate(ap->amode2);
     switch (ap->mode) {
@@ -255,15 +283,11 @@ void validate(AMODE *ap)
 		}
 		if (IsTmpReg(ap->sreg) && reg_alloc[ap->deep2].f.isPushed  == 'T') {
 			GenerateTempRegPop(ap->sreg, am_reg, (int) ap->deep2, 0);
-//			if (isThor)
-//				GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(8));
 		}
 		break;
     case am_indx3:
 		if (IsTmpReg(ap->sreg) && reg_alloc[ap->deep2].f.isPushed == 'T') {
 			GenerateTempRegPop(ap->sreg, am_reg, (int) ap->deep2, 0);
-//			if (isThor)
-//				GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(8));
 		}
 		goto common;
     case am_ind:
@@ -276,6 +300,7 @@ common:
 		}
 		break;
     }
+	dfs.printf("</validate>");
 }
 
 
@@ -287,8 +312,10 @@ void ReleaseTempRegister(AMODE *ap)
     int number;
     SYM *sym = currentFn;
 	int frg = MINTMPREG;
+	int nn;
 
 	TRACE(printf("ReleaseTempRegister:r%d r%d\n", ap->preg, ap->sreg);)
+	dfs.printf("<ReleaseTempRegister>%d",(int)ap->preg);
 
 	if (ap->amode2)
 		ReleaseTempRegister(ap->amode2);
@@ -307,14 +334,22 @@ void ReleaseTempRegister(AMODE *ap)
 	case am_reg:
 common:
 		if (IsTmpReg(ap->preg)) {
-			if (reg_in_use[ap->preg]==-1)
+			if (reg_in_use[ap->preg] < 0)
 				goto xit;
 			if (next_reg-- <= frg)
 				next_reg = MAXTMPREG;
 			number = reg_in_use[ap->preg];
+			reg_alloc[reg_alloc_ptr-1].reg = 0;
 			reg_in_use[ap->preg] = -1;
-			if (reg_alloc_ptr-- == 0)
+			for (nn = reg_alloc_ptr-1; nn >= 0; nn--)
+				if (reg_alloc[nn].reg == ap->preg) {
+					reg_in_use[ap->preg] = nn;
+					if (reg_alloc[nn].f.isPushed=='T')
+						GenerateTempRegPop(ap->preg,am_reg,nn,0);
+				}
+			if (reg_alloc_ptr == 0)
 				fatal("ReleaseTempRegister(): no registers are allocated");
+			reg_alloc_ptr--;
 			if (reg_alloc[number].f.isPushed=='T')
 				fatal("ReleaseTempRegister(): register on stack");
 		}
@@ -322,12 +357,20 @@ common:
     case am_indx2:
 	case am_indx3:
 		if (IsTmpReg(ap->sreg)) {
-			if (reg_in_use[ap->sreg]==-1)
+			if (reg_in_use[ap->sreg] < 0)
 				goto xit;
 			if (next_reg-- <= frg)
 				next_reg = MAXTMPREG;
 			number = reg_in_use[ap->sreg];
 			reg_in_use[ap->sreg] = -1;
+			for (nn = reg_alloc_ptr-2; nn >= 0; nn--)
+				if (reg_alloc[nn].reg == ap->sreg) {
+					reg_in_use[ap->sreg] = nn;
+					if (reg_alloc[nn].f.isPushed=='T')
+						GenerateTempRegPop(ap->sreg,am_reg,nn,0);
+				}
+			//reg_alloc[reg_alloc_ptr].f.inuse = false;
+			//reg_in_use[ap->sreg] = -1;
 			//break;
 		}
 		goto common;
@@ -339,7 +382,8 @@ common:
 	//	printf("number %d ap->deep %d\n", number, ap->deep);
 	//	//fatal("ReleaseTempRegister()/1");
 	//}
-xit:	;
+xit:
+	dfs.printf("</ReleaseTempRegister>\n");
 }
 
 // The following is used to save temporary registers across function calls.
@@ -430,4 +474,3 @@ void ReleaseTempReg(AMODE *ap)
          ReleaseTempRegister(ap);
 	 }
 }
-
