@@ -64,6 +64,7 @@ std::string *classname;
 bool isPrivate = true;
 SYM *currentClass;
 int mangledNames = FALSE;
+bool useRegisters = true;
 
 /* variable for bit fields */
 static int		bit_max;	// largest bitnumber
@@ -761,6 +762,11 @@ void Declaration::ParseFunctionAttribute(SYM *sym)
 		switch(lastst) {
 		case kw_no_temps:
 			sym->UsesTemps = false;
+			NextToken();
+			break;
+		case kw_no_regs:
+			sym->AllowRegVars = false;
+			useRegisters = false;
 			NextToken();
 			break;
 		/*

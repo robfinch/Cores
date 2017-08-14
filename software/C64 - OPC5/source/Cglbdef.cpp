@@ -24,26 +24,6 @@
 // ============================================================================
 //
 #include "stdafx.h"
-/*
- *	68000 C compiler
- *
- *	Copyright 1984, 1985, 1986 Matthew Brandt.
- *  all commercial rights reserved.
- *
- *	This compiler is intended as an instructive tool for personal use. Any
- *	use for profit without the written consent of the author is prohibited.
- *
- *	This compiler may be distributed freely for non-commercial use as long
- *	as this notice stays intact. Please forward any enhancements or questions
- *	to:
- *
- *		Matthew Brandt
- *		Box 920337
- *		Norcross, Ga 30092
- */
-
-/*      global definitions      */
-
 int maxPn = 1;
 int gCpu = 5;
 
@@ -123,6 +103,7 @@ int opt_noregs = FALSE;
 int opt_nopeep;
 int opt_noexpr = FALSE;
 int opt_nocgo = FALSE;
+bool opt_allowregs = true;
 int exceptions = TRUE;
 int mixedSource = FALSE;
 SYM *currentFn = (SYM *)NULL;

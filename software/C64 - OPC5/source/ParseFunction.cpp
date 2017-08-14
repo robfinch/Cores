@@ -51,7 +51,11 @@ extern char *stkname;
 extern int isVirtual;
 extern bool isFuncBody;
 extern bool isInline;
-
+extern int pass;
+extern int regstackbot;
+extern int mrd;
+extern int MaxRegDepth();
+extern bool useRegisters;
 static Statement *ParseFunctionBody(SYM *sp);
 void funcbottom(Statement *stmt);
 void ListCompound(Statement *stmt);
@@ -465,9 +469,24 @@ static Statement *ParseFunctionBody(SYM *sp)
   sp->stkspace = lc_auto;
   if (!sp->IsInline) {
 
+	  mrd = 0;
+	  pass = 1;
+	useRegisters &= opt_allowregs;
 	GenerateFunction(sp);
 	dfs.putch('E');
-
+	sp->stkspace += mrd;
+	regstackbot = sp->stkspace;
+	pass = 2;
+	if (mrd < 4 || 1) {
+		useRegisters &= opt_allowregs;
+		peep_head = nullptr;
+		GenerateFunction(sp);
+	}
+	else {
+		useRegisters = false;
+		peep_head = nullptr;
+		GenerateFunction(sp);
+	}
 	flush_peep();
 	if (sp->storage_class == sc_global) {
 //		ofs.printf("endpublic\r\n\r\n");

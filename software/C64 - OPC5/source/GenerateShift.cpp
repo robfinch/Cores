@@ -24,30 +24,90 @@
 //
 #include "stdafx.h"
 
-
 AMODE *GenerateShift(ENODE *node,int flags, int size)
 {
 	AMODE *ap1, *ap2, *ap3;
 	int nn;
 	int lab1;
+	int op1, op2;
 
 	ap3 = GetTempRegister();
 	if (size==2)
 		ap3->amode2 = GetTempRegister();
-    ap1 = GenerateExpression(node->p[0],F_REG,size);
-    ap2 = GenerateExpression(node->p[1],F_REG | F_IMMED,sizeOfWord);
-	GenerateDiadic(op_mov,0,ap3,ap1);
-	if (size==2)
-		GenerateDiadic(op_mov,0,ap3->amode2,ap1->amode2);
+    ap1 = GenerateExpression(node->p[0],F_REG|F_MEM,size);
+    ap2 = GenerateExpression(node->p[1],F_REG|F_MEM|F_IMMED,sizeOfWord);
+	if (ap1->mode==am_reg) {
+		if (ap3->mode==am_reg)
+			GenerateDiadic(op_mov,0,ap3,ap1);
+		else
+			GenerateDiadic(op_sto,0,ap1,ap3);
+	}
+	else {
+		if (ap3->mode==am_reg)
+			GenerateDiadic(op_ld,0,ap3,ap1);
+		else {
+			GenerateDiadic(op_ld,0,makereg(1),ap1);
+			GenerateDiadic(op_sto,0,makereg(1),ap3);
+		}
+	}
+	if (size==2) {
+		if (ap1->mode==am_reg) {
+			if (ap3->mode==am_reg)
+				GenerateDiadic(op_mov,0,ap3->amode2,ap1->amode2);
+			else
+				GenerateDiadic(op_ld,0,ap3->amode2,ap1->amode2);
+		}
+		else {
+			if (ap3->mode==am_reg)
+				GenerateDiadic(op_ld,0,ap3->amode2,ap1->amode2);
+			else {
+				GenerateDiadic(op_ld,0,makereg(1),ap1->amode2);
+				GenerateDiadic(op_sto,0,makereg(1),ap3->amode2);
+			}
+		}
+	}
+
+	switch (node->nodetype) {
+	case en_shl:
+	case en_shlu:
+		op1 = op_add;
+		op2 = op_adc;
+		break;
+	case en_shr:
+	case en_shru:
+		op1 = op_lsr;
+		op2 = op_ror;
+		break;
+	case en_asr:
+		op1 = op_asr;
+		op2 = op_ror;
+		break;
+	}
+
 	switch (node->nodetype) {
 	case en_shl:
 	case en_shlu:
 		switch(ap2->mode) {
 		case am_immed:
-			for (nn = 0; nn < ap2->offset->i && nn < 33; nn++) {
-				GenerateDiadic(op_add,0,ap3,ap3);
+			if (ap3->mode==am_reg) {
+				for (nn = 0; nn < ap2->offset->i && nn < 33; nn++) {
+					GenerateDiadic(op1,0,ap3,ap3);
+					if (size==2)
+						GenerateDiadic(op2,0,ap3->amode2,ap3->amode2);
+				}
+			}
+			else {
+				GenerateDiadic(op_ld,0,makereg(1),ap3);
 				if (size==2)
-					GenerateDiadic(op_adc,0,ap3->amode2,ap3->amode2);
+					GenerateDiadic(op_ld,0,makereg(2),ap3->amode2);
+				for (nn = 0; nn < ap2->offset->i && nn < 33; nn++) {
+					GenerateDiadic(op1,0,makereg(1),makereg(1));
+					if (size==2)
+						GenerateDiadic(op2,0,makereg(2),makereg(2));
+				}
+				GenerateDiadic(op_sto,0,makereg(1),ap3);
+				if (size==2)
+					GenerateDiadic(op_sto,0,makereg(2),ap3->amode2);
 			}
 			ReleaseTempRegister(ap2);
 			ReleaseTempRegister(ap1);
@@ -55,12 +115,59 @@ AMODE *GenerateShift(ENODE *node,int flags, int size)
 			return (ap3);
 		case am_reg:
 			lab1 = nextlabel++;
-			GenerateLabel(lab1);
-			GenerateDiadic(op_add,0,ap3,ap3);
-			if (size==2)
-				GenerateDiadic(op_adc,0,ap3->amode2,ap3->amode2);
-			GenerateTriadic(op_sub,0,ap2,makereg(regZero),make_immed(1));
-			GeneratePredicatedTriadic(pop_nz,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(lab1));
+			if (ap3->mode==am_reg) {
+				GenerateLabel(lab1);
+				GenerateDiadic(op1,0,ap3,ap3);
+				if (size==2)
+					GenerateDiadic(op2,0,ap3->amode2,ap3->amode2);
+				GenerateTriadic(op_sub,0,ap2,makereg(regZero),make_immed(1));
+				GeneratePredicatedTriadic(pop_nz,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(lab1));
+			}
+			else {
+				GenerateDiadic(op_ld,0,makereg(1),ap3);
+				if (size==2)
+					GenerateDiadic(op_ld,0,makereg(2),ap3->amode2);
+				GenerateLabel(lab1);
+				GenerateDiadic(op1,0,makereg(1),makereg(1));
+				if (size==2)
+					GenerateDiadic(op2,0,makereg(2),makereg(2));
+				GenerateTriadic(op_sub,0,ap2,makereg(regZero),make_immed(1));
+				GeneratePredicatedTriadic(pop_nz,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(lab1));
+				GenerateDiadic(op_sto,0,makereg(1),ap3);
+				if (size==2)
+					GenerateDiadic(op_sto,0,makereg(2),ap3->amode2);
+			}
+			ReleaseTempRegister(ap2);
+			ReleaseTempRegister(ap1);
+			MakeLegalAmode(ap3,flags,size);
+			return (ap3);
+		default:	// memory
+			lab1 = nextlabel++;
+			GenerateMonadic(op_push,0,makereg(3));
+			GenerateDiadic(op_ld,0,makereg(3),ap2);
+			if (ap3->mode==am_reg) {
+				GenerateLabel(lab1);
+				GenerateDiadic(op1,0,ap3,ap3);
+				if (size==2)
+					GenerateDiadic(op2,0,ap3->amode2,ap3->amode2);
+				GenerateTriadic(op_sub,0,makereg(3),makereg(regZero),make_immed(1));
+				GeneratePredicatedTriadic(pop_nz,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(lab1));
+			}
+			else {
+				GenerateDiadic(op_ld,0,makereg(1),ap3);
+				if (size==2)
+					GenerateDiadic(op_ld,0,makereg(2),ap3->amode2);
+				GenerateLabel(lab1);
+				GenerateDiadic(op1,0,makereg(1),makereg(1));
+				if (size==2)
+					GenerateDiadic(op2,0,makereg(2),makereg(2));
+				GenerateTriadic(op_sub,0,makereg(3),makereg(regZero),make_immed(1));
+				GeneratePredicatedTriadic(pop_nz,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(lab1));
+				GenerateDiadic(op_sto,0,makereg(1),ap3);
+				if (size==2)
+					GenerateDiadic(op_sto,0,makereg(2),ap3->amode2);
+			}
+			GenerateMonadic(op_pop,0,makereg(3));
 			ReleaseTempRegister(ap2);
 			ReleaseTempRegister(ap1);
 			MakeLegalAmode(ap3,flags,size);
@@ -69,47 +176,34 @@ AMODE *GenerateShift(ENODE *node,int flags, int size)
 		break;
 	case en_shru:
 	case en_shr:
-		switch(ap2->mode) {
-		case am_immed:
-			for (nn = 0; nn < ap2->offset->i && nn < 33; nn++) {
-				if (size==2) {
-					GenerateDiadic(op_lsr,0,ap3->amode2,ap3->amode2);
-					GenerateDiadic(op_ror,0,ap3,ap3);
-				}
-				else
-					GenerateDiadic(op_lsr,0,ap3,ap3);
-			}
-			ReleaseTempRegister(ap2);
-			ReleaseTempRegister(ap1);
-			MakeLegalAmode(ap3,flags,size);
-			return (ap3);
-		case am_reg:
-			lab1 = nextlabel++;
-			GenerateLabel(lab1);
-			if (size==2) {
-				GenerateDiadic(op_lsr,0,ap3->amode2,ap3->amode2);
-				GenerateDiadic(op_ror,0,ap1,ap1);
-			}
-			else
-				GenerateDiadic(op_lsr,0,ap1,ap1);
-			GenerateTriadic(op_sub,0,ap2,makereg(regZero),make_immed(1));
-			GeneratePredicatedTriadic(pop_nz,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(lab1));
-			ReleaseTempRegister(ap2);
-			ReleaseTempRegister(ap1);
-			MakeLegalAmode(ap1,flags,size);
-			return (ap3);
-		}
-		break;
 	case en_asr:
 		switch(ap2->mode) {
 		case am_immed:
-			for (nn = 0; nn < ap2->offset->i && nn < 33; nn++) {
-				if (size==2) {
-					GenerateDiadic(op_asr,0,ap3->amode2,ap3->amode2);
-					GenerateDiadic(op_ror,0,ap3,ap3);
+			if (ap3->mode==am_reg) {
+				for (nn = 0; nn < ap2->offset->i && nn < 33; nn++) {
+					if (size==2) {
+						GenerateDiadic(op1,0,ap3->amode2,ap3->amode2);
+						GenerateDiadic(op2,0,ap3,ap3);
+					}
+					else
+						GenerateDiadic(op1,0,ap3,ap3);
 				}
-				else
-					GenerateDiadic(op_asr,0,ap3,ap3);
+			}
+			else {
+				GenerateDiadic(op_ld,0,makereg(1),ap3);
+				if (size==2)
+					GenerateDiadic(op_ld,0,makereg(2),ap3->amode2);
+				for (nn = 0; nn < ap2->offset->i && nn < 33; nn++) {
+					if (size==2) {
+						GenerateDiadic(op1,0,makereg(2),makereg(2));
+						GenerateDiadic(op2,0,makereg(1),makereg(1));
+					}
+					else
+						GenerateDiadic(op1,0,makereg(1),makereg(1));
+				}
+				GenerateDiadic(op_sto,0,makereg(1),ap3);
+				if (size==2)
+					GenerateDiadic(op_sto,0,makereg(2),ap3->amode2);
 			}
 			ReleaseTempRegister(ap2);
 			ReleaseTempRegister(ap1);
@@ -117,15 +211,71 @@ AMODE *GenerateShift(ENODE *node,int flags, int size)
 			return (ap3);
 		case am_reg:
 			lab1 = nextlabel++;
-			GenerateLabel(lab1);
-			if (size==2) {
-				GenerateDiadic(op_asr,0,ap3->amode2,ap3->amode2);
-				GenerateDiadic(op_ror,0,ap3,ap3);
+			if (ap3->mode==am_reg) {
+				GenerateLabel(lab1);
+				if (size==2) {
+					GenerateDiadic(op1,0,ap3->amode2,ap3->amode2);
+					GenerateDiadic(op2,0,ap3,ap3);
+				}
+				else
+					GenerateDiadic(op1,0,ap3,ap3);
+				GenerateTriadic(op_sub,0,ap2,makereg(regZero),make_immed(1));
+				GeneratePredicatedTriadic(pop_nz,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(lab1));
 			}
-			else
-				GenerateDiadic(op_asr,0,ap3,ap3);
-			GenerateTriadic(op_sub,0,ap2,makereg(regZero),make_immed(1));
-			GeneratePredicatedTriadic(pop_nz,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(lab1));
+			else {
+				GenerateDiadic(op_ld,0,makereg(1),ap3);
+				if (size==2)
+					GenerateDiadic(op_ld,0,makereg(2),ap3->amode2);
+				GenerateLabel(lab1);
+				if (size==2) {
+					GenerateDiadic(op1,0,makereg(2),makereg(2));
+					GenerateDiadic(op2,0,makereg(1),makereg(1));
+				}
+				else
+					GenerateDiadic(op1,0,makereg(1),makereg(1));
+				GenerateTriadic(op_sub,0,ap2,makereg(regZero),make_immed(1));
+				GeneratePredicatedTriadic(pop_nz,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(lab1));
+				GenerateDiadic(op_sto,0,makereg(1),ap3);
+				if (size==2)
+					GenerateDiadic(op_sto,0,makereg(2),ap3->amode2);
+			}
+			ReleaseTempRegister(ap2);
+			ReleaseTempRegister(ap1);
+			MakeLegalAmode(ap3,flags,size);
+			return (ap3);
+		default:	// memory
+			lab1 = nextlabel++;
+			GenerateMonadic(op_push,0,makereg(3));
+			GenerateDiadic(op_ld,0,makereg(3),ap2);
+			if (ap3->mode==am_reg) {
+				GenerateLabel(lab1);
+				if (size==2) {
+					GenerateDiadic(op1,0,ap3->amode2,ap3->amode2);
+					GenerateDiadic(op2,0,ap3,ap3);
+				}
+				else
+					GenerateDiadic(op1,0,ap3,ap3);
+				GenerateTriadic(op_sub,0,makereg(3),makereg(regZero),make_immed(1));
+				GeneratePredicatedTriadic(pop_nz,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(lab1));
+			}
+			else {
+				GenerateDiadic(op_ld,0,makereg(1),ap3);
+				if (size==2)
+					GenerateDiadic(op_ld,0,makereg(2),ap3->amode2);
+				GenerateLabel(lab1);
+				if (size==2) {
+					GenerateDiadic(op1,0,makereg(2),makereg(2));
+					GenerateDiadic(op2,0,makereg(1),makereg(1));
+				}
+				else
+					GenerateDiadic(op1,0,makereg(1),makereg(1));
+				GenerateTriadic(op_sub,0,makereg(3),makereg(regZero),make_immed(1));
+				GeneratePredicatedTriadic(pop_nz,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(lab1));
+				GenerateDiadic(op_sto,0,makereg(1),ap3);
+				if (size==2)
+					GenerateDiadic(op_sto,0,makereg(2),ap3->amode2);
+			}
+			GenerateMonadic(op_pop,0,makereg(3));
 			ReleaseTempRegister(ap2);
 			ReleaseTempRegister(ap1);
 			MakeLegalAmode(ap3,flags,size);
@@ -173,7 +323,7 @@ AMODE *GenerateAssignShift(ENODE *node,int flags,int size)
 		ap1->amode2 = GetTempRegister();
 	//size = GetNaturalSize(node->p[0]);
     ap3 = GenerateExpression(node->p[0],F_ALL,size);
-    ap2 = GenerateExpression(node->p[1],F_REG | F_IMMED,size);
+    ap2 = GenerateExpression(node->p[1],F_REG|F_MEM|F_IMMED,size);
 	if (ap3->mode==am_reg)
 		GenerateTriadic(op_mov,0,ap1,ap3,make_immed(0));
 	else if (ap3->mode == am_immed) {
@@ -203,6 +353,18 @@ AMODE *GenerateAssignShift(ENODE *node,int flags,int size)
 			if (size==2)
 				GenerateDiadic(op_adc,0,ap1->amode2,ap1->amode2);
 			GenerateTriadic(op_sub,0,ap2,makereg(regZero),make_immed(1));
+			GeneratePredicatedTriadic(pop_nz,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(lab1));
+			ReleaseTempRegister(ap2);
+			MakeLegalAmode(ap1,flags,size);
+			return (ap1);
+		default:
+			lab1 = nextlabel++;
+			GenerateDiadic(op_ld,0,makereg(1),ap2);
+			GenerateLabel(lab1);
+			GenerateDiadic(op_add,0,ap1,makereg(regZero));
+			if (size==2)
+				GenerateDiadic(op_adc,0,ap1->amode2,ap1->amode2);
+			GenerateTriadic(op_sub,0,makereg(1),makereg(regZero),make_immed(1));
 			GeneratePredicatedTriadic(pop_nz,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(lab1));
 			ReleaseTempRegister(ap2);
 			MakeLegalAmode(ap1,flags,size);
@@ -239,6 +401,21 @@ AMODE *GenerateAssignShift(ENODE *node,int flags,int size)
 			ReleaseTempRegister(ap2);
 			MakeLegalAmode(ap1,flags,size);
 			return ap1;
+		default:
+			lab1 = nextlabel++;
+			GenerateDiadic(op_ld,0,makereg(1),ap2);
+			GenerateLabel(lab1);
+			if (size==2) {
+				GenerateDiadic(op_lsr,0,ap1->amode2,ap1->amode2);
+				GenerateDiadic(op_ror,0,ap1,ap1);
+			}
+			else
+				GenerateDiadic(op_lsr,0,ap1,ap1);
+			GenerateTriadic(op_sub,0,makereg(1),makereg(regZero),make_immed(1));
+			GeneratePredicatedTriadic(pop_nz,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(lab1));
+			ReleaseTempRegister(ap2);
+			MakeLegalAmode(ap1,flags,size);
+			return ap1;
 		}
 		break;
 
@@ -266,6 +443,21 @@ AMODE *GenerateAssignShift(ENODE *node,int flags,int size)
 			else
 				GenerateDiadic(op_asr,0,ap1,ap1);
 			GenerateTriadic(op_sub,0,ap2,makereg(regZero),make_immed(1));
+			GeneratePredicatedTriadic(pop_nz,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(lab1));
+			ReleaseTempRegister(ap2);
+			MakeLegalAmode(ap1,flags,size);
+			return (ap1);
+		default:
+			lab1 = nextlabel++;
+			GenerateDiadic(op_ld,0,makereg(1),ap2);
+			GenerateLabel(lab1);
+			if (size==2) {
+				GenerateDiadic(op_asr,0,ap1->amode2,ap1->amode2);
+				GenerateDiadic(op_ror,0,ap1,ap1);
+			}
+			else
+				GenerateDiadic(op_asr,0,ap1,ap1);
+			GenerateTriadic(op_sub,0,makereg(1),makereg(regZero),make_immed(1));
 			GeneratePredicatedTriadic(pop_nz,op_mov,0,makereg(regPC),makereg(regZero),make_clabel(lab1));
 			ReleaseTempRegister(ap2);
 			MakeLegalAmode(ap1,flags,size);

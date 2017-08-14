@@ -109,7 +109,7 @@ int AllocateRegisterVars()
 		for (nn = 0; nn < 6; nn++) {
 			for (csecnt = 0; csecnt < csendx; csecnt++)	{
 				csp = &CSETable.CSETable[csecnt];
-				if (csp->reg==-1) {
+				if (csp->reg==-1 && !csp->voidf) {
 					if( csp->OptimizationDesireability() >= 4-nn ) {
    						//if(( csp->duses > csp->uses / 2) && reg < 5 )
 						if (csp->uses > 3 && reg < 5)
@@ -1046,11 +1046,22 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
 	return (makereg(1));
 }
 
+
 void GenLdi(AMODE *ap1, AMODE *ap2)
 {
-	GenerateTriadic(op_mov,0,ap1,makereg(0),ap2);
-	if (ap1->amode2)
-		GenerateTriadic(op_mov,0,ap1->amode2,makereg(0),ap2->amode2);
+	if (ap1->mode==am_reg) {
+		GenerateTriadic(op_mov,0,ap1,makereg(0),ap2);
+		if (ap1->amode2)
+			GenerateTriadic(op_mov,0,ap1->amode2,makereg(0),ap2->amode2);
+	}
+	else {
+		GenerateTriadic(op_mov,0,makereg(1),makereg(0),ap2);
+		if (ap1->amode2)
+			GenerateTriadic(op_mov,0,makereg(2),makereg(0),ap2->amode2);
+		GenerateDiadic(op_sto,0,makereg(1),ap1);
+		if (ap1->amode2)
+			GenerateDiadic(op_sto,0,makereg(2),ap1->amode2);
+	}
 	return;
 }
 

@@ -374,7 +374,7 @@ void Statement::GenerateLinearSwitch()
 	int *bf;
 	int nn;
 	Statement *defcase, *stmt;
-	AMODE *ap, *ap1;
+	AMODE *ap;
 
 	curlab = nextlabel++;
 	defcase = 0;
@@ -460,7 +460,7 @@ void Statement::GenerateTabularSwitch()
 //
 void Statement::GenerateSwitch()
 { 
-	AMODE *ap, *ap1, *ap2;
+	AMODE *ap, *ap1;
 	Statement *st, *defcase;
 	int oldbreak;
 	int tablabel;

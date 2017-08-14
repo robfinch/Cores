@@ -17,8 +17,8 @@ int CSEList::voidauto(ENODE *node)
     voided = 0;
 	for (cnt = 0; cnt < csendx; cnt++) {
         if( CSETable[cnt].exp->IsLValue(true) && ENODE::IsEqual(node,CSETable[cnt].exp->p[0]) ) {
-            CSETable[cnt].voidf = 1;
-            voided = 1;
+            CSETable[cnt].voidf = TRUE;
+            voided = TRUE;
             uses += CSETable[cnt].uses;
         }
 	}

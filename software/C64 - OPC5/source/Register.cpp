@@ -25,6 +25,10 @@
 //
 #include "stdafx.h"
 
+int MaxRegDepth();
+int regstackbot;
+int pass;
+extern bool useRegisters;
 extern void initFPRegStack();
 extern void ReleaseTempFPRegister(AMODE *);
 /*
@@ -71,11 +75,11 @@ static short int save_reg_alloc_ptr;
 static short int breg_stack_ptr;
 static short int breg_alloc_ptr;
 
-#define MAXTMPREG	(sym->AllowRegVars ? 3 : 7)
-#define MINTMPREG	(sym->IsLeaf ? 0 : 1)
+#define MAXTMPREG	(sym->AllowRegVars ? 2 : 6)
+#define MINTMPREG	(sym->IsLeaf ? 0 : 0)
 #define NTMPREG		2
 
-char tmpregs[] = {1,5,6,7,3,4,8,9};
+char tmpregs[] = {5,6,7,3,4,8,9};
 char regstack[18];
 int rsp=17;
 int regmask=0;
@@ -127,7 +131,9 @@ void GenerateTempRegPush(int reg, int rmode, int number, int stkpos)
 void GenerateTempRegPop(int reg, int rmode, int number, int stkpos)
 {
 	AMODE *ap1;
- 
+
+//	if (pass != 1)
+//		return;
 	dfs.printf("</PopTempRegister>");
     if (reg_stack_ptr-- == -1)
 		fatal("GenerateTempRegPop(): register stack underflow");
@@ -177,7 +183,7 @@ AMODE *GetTempRegister2(int *pushed)
 
 	dfs.printf("<GetTempRegister2>");
 	*pushed = FALSE;
-	if (reg_in_use[tmpregs[next_reg]]>=0) {
+	if (reg_in_use[tmpregs[next_reg]]>=0 && pass==1) {
 		*pushed = TRUE;
 		GenerateTempRegPush(tmpregs[next_reg], am_reg, reg_in_use[tmpregs[next_reg]],0);
 //		reg_inuse[tmpregs[next_reg]] = false;
@@ -186,8 +192,15 @@ AMODE *GetTempRegister2(int *pushed)
     reg_in_use[tmpregs[next_reg]] = reg_alloc_ptr;
 	reg_alloc[reg_alloc_ptr].f.inuse = true;
     ap = allocAmode();
-    ap->mode = am_reg;
-    ap->preg = tmpregs[next_reg];
+	if (useRegisters) {
+		ap->mode = am_reg;
+		ap->preg = tmpregs[next_reg];
+	}
+	else {
+		ap->mode = am_indx;
+		ap->preg = regBP;
+		ap->offset = makeinode(en_icon,-(reg_alloc_ptr+regstackbot));
+	}
     ap->deep = reg_alloc_ptr;
     reg_alloc[reg_alloc_ptr].reg = tmpregs[next_reg];
     reg_alloc[reg_alloc_ptr].mode = am_reg;
@@ -200,6 +213,7 @@ AMODE *GetTempRegister2(int *pushed)
     if (reg_alloc_ptr == MAX_REG_STACK)
 		fatal("GetTempRegister(): register stack overflow");
 	dfs.printf("</GetTempRegister2:%d>\n",(int)ap->preg);
+	MaxRegDepth();
 	return (ap);
 }
 
@@ -393,7 +407,7 @@ xit:
 
 int TempInvalidate()
 {
-    int i;
+    int i,nn;
 	int sp;
 
 	sp = 0;
@@ -410,8 +424,12 @@ int TempInvalidate()
     			stacked_regs[sp].f.allocnum = i;
     			sp++;
     			// mark the register void
-    			reg_in_use[reg_alloc[i].reg] = -1;
-    		}
+//    			reg_in_use[reg_alloc[i].reg] = -1;
+				for (nn = reg_alloc_ptr-2; nn >= 0; nn--)
+					if (reg_alloc[nn].reg == reg_alloc[i].reg) {
+						reg_in_use[reg_alloc[i].reg] = nn;
+	    		}
+			}
         }
 	}
 	return sp;
@@ -473,4 +491,11 @@ void ReleaseTempReg(AMODE *ap)
 			 ReleaseTempRegister(ap->amode2);
          ReleaseTempRegister(ap);
 	 }
+}
+
+int mrd = 0;
+int MaxRegDepth()
+{
+	mrd = max(mrd,reg_alloc_ptr);
+	return (mrd);
 }

@@ -48,6 +48,7 @@ int bsave_mask;
 extern int popcnt(int m);
 extern int AllocateRegisterVars();
 static void repcse_compound(Statement *stmt);
+extern int pass;
 
 //CSE CSETable[500];
 CSEList CSETable;
@@ -84,6 +85,7 @@ static void scanexpr(ENODE *node, int duse)
 	CSE *csp, *csp1;
 	int first;
 	int nn;
+	bool v;
 
     if( node == NULL )
         return;
@@ -107,6 +109,7 @@ static void scanexpr(ENODE *node, int duse)
         case en_tempref:
                 csp1 = CSETable.Insert(node,duse);
                 if ((nn = CSETable.voidauto(node)) > 0) {
+					csp1->voidf = TRUE;
 					csp1->duses += 1;
                     csp1->uses = csp1->duses + nn - 1;
 				}
@@ -138,6 +141,7 @@ static void scanexpr(ENODE *node, int duse)
                 // it to remove zero extension conversion from a byte to a word.
                 if( node->p[0]->nodetype == en_autocon || node->p[0]->nodetype==en_autofcon
 					|| node->p[0]->nodetype == en_classcon) {
+					//v = CSETable.voidauto(node->p[0]) > 0;
 					first = (CSETable.Find(node)==NULL);	// Detect if this is the first insert
                     csp = CSETable.Insert(node,duse);
 					if (csp->voidf)
@@ -574,13 +578,17 @@ int Statement::CSEOptimize()
 {
 	int nn;
 
-	csendx = 0;
-    nn = 0;
-    if (opt_noregs==FALSE) {
-	    scan();         /* collect expressions */
-        nn = AllocateRegisterVars();
-    	repcse();			/* replace allocated expressions */
-    }
+	nn = 0;
+	if (pass==1) {
+		csendx = 0;
+		nn = 0;
+		ZeroMemory(CSETable.CSETable,sizeof(CSETable.CSETable));
+		if (opt_noregs==FALSE) {
+			scan();         /* collect expressions */
+			nn = AllocateRegisterVars();
+    		repcse();			/* replace allocated expressions */
+		}
+	}
 	return nn;
 }
 

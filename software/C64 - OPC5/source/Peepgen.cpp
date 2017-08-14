@@ -285,7 +285,7 @@ static void Remove()
 	OCODE *cd;
 	OCODE *ip1, *ip2;
 
-	for (cd = peep_head; cd; cd = cd->fwd) {
+	for (cd = peep_head; cd; cd = ip2) {
 		ip1 = cd->back;
 		ip2 = cd->fwd;
 		if (cd->remove) {
@@ -296,6 +296,10 @@ static void Remove()
 				ip2->back = ip1;
 			if (ip1)
 				ip1->fwd = ip2;
+			cd->fwd = nullptr;
+			cd->back = nullptr;
+			if (cd==peep_head)
+				peep_head = ip2;
 		}
 	}
 }
@@ -684,6 +688,8 @@ void PeepoptPushPop(OCODE *ip)
 
 void peep_ld(OCODE *ip)
 {
+	if (ip->oper2==nullptr)
+		return;
 	if (ip->oper2->mode != am_immed)
 		return;
 	if (ip->oper2->offset->i==0) {

@@ -40,7 +40,7 @@ void GenerateTable888Cmp(ENODE *node, int op, int label, int predreg);
 void GenerateThorCmp(ENODE *node, int op, int label, int predreg);
 void GenLoad(AMODE *ap3, AMODE *ap1, int ssize, int size);
 void GenerateZeroExtend(AMODE *ap, int isize, int osize);
-void GenerateSignExtend(AMODE *ap, int isize, int osize, int flags);
+void GenerateSignExtend(AMODE *ap, int isize, int osize);
 
 static int nest_level = 0;
 
@@ -313,13 +313,17 @@ void MakeLegalAmode(AMODE *ap,int flags, int size)
 				else
                     GenLoad(ap2,ap,size,size);
 			}
-            ap->mode = am_reg;
+            ap->mode = ap2->mode;
             ap->preg = ap2->preg;
             ap->deep = ap2->deep;
+			ap->offset = ap2->offset;
             ap->tempflag = 1;
 			ap->amode2 = ap2->amode2;
-			if (ap->amode2)
+			if (ap->amode2) {
+				ap->amode2->mode = ap->mode;
 				ap->amode2->tempflag = 1;
+				ap->amode2->offset = ap2->amode2->offset;
+			}
             return;
         }
 		// Here we wanted the mode to be non-register (memory/immed)
@@ -341,20 +345,29 @@ void MakeLegalAmode(AMODE *ap,int flags, int size)
 			ap->deep = ap2->deep;
 			size = 2;
         }
+		return;
         ap2 = GetTempRegister();
 		switch(ap->mode) {
+		case am_immed:
+			GenLdi(ap2,ap);
+			break;
+		default:
+			GenLoad(makereg(1),ap,size,size);
+			if (size==2)
+				GenLoad(makereg(2),ap->amode2,size,size);
+			GenStore(makereg(1),ap2,size);
+			if (size==2)
+				GenStore(makereg(2),ap2->amode2,size);
+			return;
 		case am_ind:
 		case am_indx:
             GenLoad(ap2,ap,size,size);
 			break;
-		case am_immed:
-			GenLdi(ap2,ap);
-			break;
 		case am_reg:
 			GenerateDiadic(op_mov,0,ap2,ap);
 			break;
-		default:
-            GenLoad(ap2,ap,size,size);
+		//default:
+  //          GenLoad(ap2,ap,size,size);
 		}
     ap->mode = am_reg;
     ap->preg = ap2->preg;
@@ -399,66 +412,109 @@ void GenLoad(AMODE *ap3, AMODE *ap1, int ssize, int size)
 void GenStore(AMODE *ap1, AMODE *ap3, int size)
 {
 	if (ap3->mode==am_direct) {
-		GenerateTriadic(op_sto,0,ap1,makereg(regZero),ap3);
-		if (size==2) {
-			if (!ap3->offset) {
-				GenerateTriadic(op_sto,0,ap1->amode2,ap3,make_immed(1));
+		if (ap1->mode != am_reg) {
+			GenerateDiadic(op_ld,0,makereg(1),ap1);
+			GenerateTriadic(op_sto,0,makereg(1),makereg(regZero),ap3);
+			if (size==2) {
+				if (!ap3->offset) {
+					GenerateDiadic(op_ld,0,makereg(1),ap1->amode2);
+					GenerateTriadic(op_sto,0,makereg(1),ap3,make_immed(1));
+				}
+				else {
+					GenerateDiadic(op_ld,0,makereg(1),ap1->amode2);
+					ap3->offset->i++;
+					GenerateDiadic(op_sto,0,makereg(1),ap3);
+					ap3->offset->i--;
+				}
 			}
-			else {
-				ap3->offset->i++;
-				GenerateDiadic(op_sto,0,ap1->amode2,ap3);
-				ap3->offset->i--;
+		}
+		else {
+			GenerateTriadic(op_sto,0,ap1,makereg(regZero),ap3);
+			if (size==2) {
+				if (!ap3->offset) {
+					GenerateTriadic(op_sto,0,ap1->amode2,ap3,make_immed(1));
+				}
+				else {
+					ap3->offset->i++;
+					GenerateDiadic(op_sto,0,ap1->amode2,ap3);
+					ap3->offset->i--;
+				}
 			}
 		}
 	}
 	else {
-		GenerateDiadic(op_sto,0,ap1,ap3);
-		if (size==2) {
-			if (!ap3->offset) {
-				GenerateTriadic(op_sto,0,ap1->amode2,ap3,make_immed(1));
+		if (ap1->mode != am_reg) {
+			GenerateDiadic(op_ld,0,makereg(1),ap1);
+			GenerateDiadic(op_sto,0,makereg(1),ap3);
+			if (size==2) {
+				GenerateDiadic(op_ld,0,makereg(1),ap1->amode2);
+				GenerateDiadic(op_sto,0,makereg(1),ap3->amode2);
 			}
-			else {
-				ap3->offset->i++;
-				GenerateDiadic(op_sto,0,ap1->amode2,ap3);
-				ap3->offset->i--;
+		}
+		else {
+			GenerateDiadic(op_sto,0,ap1,ap3);
+			if (size==2) {
+				if (!ap3->offset) {
+					GenerateTriadic(op_sto,0,ap1->amode2,ap3,make_immed(1));
+				}
+				else {
+					ap3->offset->i++;
+					GenerateDiadic(op_sto,0,ap1->amode2,ap3);
+					ap3->offset->i--;
+				}
 			}
 		}
 	}
 }
 
-/*
- *      if isize is not equal to osize then the operand ap will be
- *      loaded into a register (if not already) and if osize is
- *      greater than isize it will be extended to match.
- */
-void GenerateSignExtend(AMODE *ap, int isize, int osize, int flags)
+//
+// if isize is not equal to osize then the operand ap will be
+// loaded into a register (if not already) and if osize is
+// greater than isize it will be extended to match.
+//
+void GenerateSignExtend(AMODE *ap, int isize, int osize)
 {    
-	AMODE *ap1;
-
 	if( isize == osize )
         return;
 	if (ap->isUnsigned)
 		return;
-    if(ap->mode != am_reg && ap->mode != am_fpreg) {
-		ap1 = GetTempRegister();
-		GenLoad(ap1,ap,isize,isize);
-		GenStore(ap1,ap,osize);
-		ReleaseTempRegister(ap1);
+	switch(ap->mode) {
+	case am_reg:
+		if (ap->amode2) {
+			GenerateDiadic(op_mov,0,ap->amode2,makereg(regZero));
+			GenerateDiadic(op_add,0,ap,makereg(0));
+			GeneratePredicatedTriadic(pop_mi,op_mov,0,ap->amode2,makereg(regZero),make_immed(-1));
+		}
 		return;
-        //MakeLegalAmode(ap,flags & (F_REG|F_FPREG),isize);
+	default:
+		if (ap->amode2) {
+			GenerateDiadic(op_sto,0,makereg(regZero),ap->amode2);
+			GenerateTriadic(op_mov,0,makereg(2),makereg(regZero),make_immed(-1));
+			GenerateDiadic(op_ld,0,makereg(1),ap);
+			GeneratePredicatedTriadic(pop_mi,op_sto,0,makereg(2),ap->amode2,nullptr);
+		}
+		return;
 	}
 }
 
 void GenerateZeroExtend(AMODE *ap, int isize, int osize)
 {    
-    if(ap->mode != am_reg)
-        MakeLegalAmode(ap,F_REG,isize);
-	switch( osize )
-	{
-	case 1:	GenerateTriadic(op_and,0,ap,ap,make_immed(0xFF)); break;
-	case 2:	GenerateTriadic(op_and,0,ap,ap,make_immed(0xFFFF)); break;
-	case 4:	GenerateTriadic(op_and,0,ap,ap,make_immed(0xFFFFFFFF)); break;
-    }
+	if( isize == osize )
+        return;
+	if (ap->isUnsigned)
+		return;
+	switch(ap->mode) {
+	case am_reg:
+		if (ap->amode2) {
+			GenerateDiadic(op_mov,0,ap->amode2,makereg(regZero));
+		}
+		return;
+	default:
+		if (ap->amode2) {
+			GenerateDiadic(op_sto,0,makereg(regZero),ap->amode2);
+		}
+		return;
+	}
 }
 
 /*
@@ -498,7 +554,8 @@ int ischar(ENODE *node)
 AMODE *GenerateIndex(ENODE *node)
 {       
 	AMODE *ap1, *ap2, *ap3;
-	
+	int mode;
+
     if( (node->p[0]->nodetype == en_tempref || node->p[0]->nodetype==en_regvar) && (node->p[1]->nodetype == en_tempref || node->p[1]->nodetype==en_regvar))
     {       /* both nodes are registers */
 		ap3 = GetTempRegister();
@@ -506,8 +563,53 @@ AMODE *GenerateIndex(ENODE *node)
         ap2 = GenerateExpression(node->p[1],F_REG,sizeOfWord);
 		validate(ap2);
 		validate(ap1);
-		GenerateDiadic(op_mov,0,ap3,ap1);
-		GenerateDiadic(op_add,0,ap3,ap2);
+		mode = ((ap3->mode==am_reg) << 2) | ((ap1->mode==am_reg) << 1) | (ap2->mode==am_reg);
+		switch (mode) {
+		case 0:	// mmm
+			GenerateDiadic(op_ld,0,makereg(1),ap1);
+			GenerateDiadic(op_ld,0,makereg(2),ap2);
+			GenerateDiadic(op_add,0,makereg(1),makereg(2));
+			GenerateDiadic(op_sto,0,makereg(1),ap3);
+			break;
+		case 1:	// mmr
+			GenerateDiadic(op_ld,0,makereg(1),ap1);
+			GenerateDiadic(op_add,0,makereg(1),ap2);
+			GenerateDiadic(op_sto,0,makereg(1),ap3);
+			break;
+		case 2:	// mrm
+			GenerateDiadic(op_mov,0,makereg(1),ap1);
+			GenerateDiadic(op_ld,0,makereg(2),ap2);
+			GenerateDiadic(op_add,0,makereg(1),makereg(2));
+			GenerateDiadic(op_sto,0,makereg(1),ap3);
+			break;
+		case 3:	// mrr
+			GenerateDiadic(op_mov,0,makereg(1),ap1);
+			GenerateDiadic(op_add,0,makereg(1),ap2);
+			GenerateDiadic(op_sto,0,makereg(1),ap3);
+			break;
+		case 4:	// rmm
+			GenerateDiadic(op_ld,0,ap3,ap1);
+			GenerateDiadic(op_ld,0,makereg(1),ap2);
+			GenerateDiadic(op_add,0,ap3,makereg(1));
+			break;
+		case 5:	// rmr
+			GenerateDiadic(op_ld,0,ap3,ap1);
+			GenerateDiadic(op_add,0,ap3,ap2);
+			break;
+		case 6:	// rrm
+			if (ap2->mode==am_immed) {
+				GenerateTriadic(op_mov,0,ap3,ap1,ap2);
+				break;
+			}
+			GenerateDiadic(op_mov,0,ap3,ap1);
+			GenerateDiadic(op_ld,0,makereg(1),ap2);
+			GenerateDiadic(op_add,0,ap3,makereg(1));
+			break;
+		case 7:	// rrr
+			GenerateDiadic(op_mov,0,ap3,ap1);
+			GenerateDiadic(op_add,0,ap3,ap2);
+			break;
+		}
 		ap3->mode = am_ind;
   //      ap1->mode = am_indx2;
   //      ap1->sreg = ap2->preg;
@@ -519,7 +621,79 @@ AMODE *GenerateIndex(ENODE *node)
         return (ap3);
     }
 	ap3 = GetTempRegister();
-    ap1 = GenerateExpression(node->p[0],F_REG | F_IMMED,sizeOfWord);
+    ap1 = GenerateExpression(node->p[0],F_REG | F_MEM | F_IMMED,sizeOfWord);
+    ap2 = GenerateExpression(node->p[1],F_ALL,sizeOfWord);   /* get right op */
+	mode = ((ap3->mode==am_reg) << 2) | ((ap1->mode==am_reg) << 1) | (ap2->mode==am_reg);
+	switch (mode) {
+	case 0:	// mmm
+		if (ap1->mode==am_immed)
+			GenerateTriadic(op_mov,0,makereg(1),makereg(regZero),ap1);
+		else
+			GenerateDiadic(op_ld,0,makereg(1),ap1);
+		if (ap2->mode==am_immed)
+			GenerateTriadic(op_mov,0,makereg(2),makereg(regZero),ap2);
+		else
+			GenerateDiadic(op_ld,0,makereg(2),ap2);
+		GenerateDiadic(op_add,0,makereg(1),makereg(2));
+		GenerateDiadic(op_sto,0,makereg(1),ap3);
+		goto j1;
+	case 1:	// mmr
+		if (ap1->mode==am_immed)
+			GenerateTriadic(op_mov,0,makereg(1),makereg(regZero),ap1);
+		else
+			GenerateDiadic(op_ld,0,makereg(1),ap1);
+		GenerateDiadic(op_add,0,makereg(1),ap2);
+		GenerateDiadic(op_sto,0,makereg(1),ap3);
+		goto j1;
+	case 2:	// mrm
+		GenerateDiadic(op_mov,0,makereg(1),ap1);
+		if (ap2->mode==am_immed)
+			GenerateTriadic(op_mov,0,makereg(2),makereg(regZero),ap2);
+		else
+			GenerateDiadic(op_ld,0,makereg(2),ap2);
+		GenerateDiadic(op_add,0,makereg(1),makereg(2));
+		GenerateDiadic(op_sto,0,makereg(1),ap3);
+		goto j1;
+	case 3:	// mrr
+		GenerateDiadic(op_mov,0,makereg(1),ap1);
+		GenerateDiadic(op_add,0,makereg(1),ap2);
+		GenerateDiadic(op_sto,0,makereg(1),ap3);
+		goto j1;
+	case 4:	// rmm
+		if (ap1->mode==am_immed)
+			GenerateTriadic(op_mov,0,ap3,makereg(regZero),ap1);
+		else
+			GenerateDiadic(op_ld,0,ap3,ap1);
+		if (ap2->mode==am_immed)
+			GenerateTriadic(op_mov,0,makereg(1),makereg(regZero),ap2);
+		else
+			GenerateDiadic(op_ld,0,makereg(1),ap2);
+		GenerateDiadic(op_add,0,ap3,makereg(1));
+		goto j1;
+	case 5:	// rmr
+		if (ap1->mode==am_immed)
+			GenerateTriadic(op_mov,0,ap3,makereg(regZero),ap1);
+		else
+			GenerateDiadic(op_ld,0,ap3,ap1);
+		GenerateDiadic(op_add,0,ap3,ap2);
+		goto j1;
+	case 6:	// rrm
+		if (ap2->mode==am_immed) {
+			GenerateTriadic(op_mov,0,ap3,ap1,ap2);
+			goto j1;
+		}
+		GenerateDiadic(op_mov,0,ap3,ap1);
+		GenerateDiadic(op_ld,0,makereg(1),ap2);
+		GenerateDiadic(op_add,0,ap3,makereg(1));
+		goto j1;
+	case 7:	// rrr
+		GenerateDiadic(op_mov,0,ap3,ap1);
+		GenerateDiadic(op_add,0,ap3,ap2);
+		goto j1;
+	default:
+		printf("GenerateIndex() Error\n");
+		goto j1;
+	}
     if( ap1->mode == am_immed )
     {
 		ReleaseTempReg(ap3);
@@ -572,9 +746,10 @@ AMODE *GenerateIndex(ENODE *node)
 	MakeLegalAmode(ap2,F_REG,1);
 	GenerateDiadic(op_mov,0,ap3,ap1);
 	GenerateDiadic(op_add,0,ap3,ap2);
+j1:
 	validate(ap2);
 	validate(ap1);
-	ap3->mode = am_ind;
+	//ap3->mode = am_ind;
 	ReleaseTempReg(ap2);
 	ReleaseTempReg(ap1);
  //   ap1->mode = am_indx2;            /* make indexed */
@@ -661,8 +836,13 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
 //		ap2->segment = dataseg;
 //		ap2->offset = ap1->offset;
 //		ReleaseTempRegister(ap1);
+		if (size==2) {
+			ap1->amode2 = copy_addr(ap1);
+			if (ap1->offset)
+				ap1->amode2->offset = makeinode(en_icon,ap1->offset->i+1);
+		}
 		if (!node->isUnsigned)
-			GenerateSignExtend(ap1,siz1,size,flags);
+			GenerateSignExtend(ap1,siz1,size);
 		else
 		    MakeLegalAmode(ap1,flags,siz1);
         MakeLegalAmode(ap1,flags,size);
@@ -687,7 +867,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
 			ap1->amode2->isAddress = true;
 		}
 		if (!node->isUnsigned)
-	        GenerateSignExtend(ap1,siz1,size,flags);
+	        GenerateSignExtend(ap1,siz1,size);
 		else
 		    MakeLegalAmode(ap1,flags,siz1);
         MakeLegalAmode(ap1,flags,size);
@@ -703,7 +883,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
 		ap1->isUnsigned = !su;
 		ap1->isAddress = true;
 		if (!node->isUnsigned)
-	        GenerateSignExtend(ap1,siz1,size,flags);
+	        GenerateSignExtend(ap1,siz1,size);
 		else
 		    MakeLegalAmode(ap1,flags,siz1);
         MakeLegalAmode(ap1,flags,size);
@@ -741,7 +921,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
 		ap1->isUnsigned = !su;
 		ap1->isAddress = true;
 		if (!node->isUnsigned)
-	        GenerateSignExtend(ap1,siz1,size,flags);
+	        GenerateSignExtend(ap1,siz1,size);
 		else
 		    MakeLegalAmode(ap1,flags,siz1);
         ap1->isVolatile = node->isVolatile;
@@ -757,7 +937,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
 		ap1->isUnsigned = !su;
 		ap1->isAddress = true;
 		if (!node->isUnsigned)
-	        GenerateSignExtend(ap1,siz1,size,flags);
+	        GenerateSignExtend(ap1,siz1,size);
 		else
 		    MakeLegalAmode(ap1,flags,siz1);
         ap1->isVolatile = node->isVolatile;
@@ -805,7 +985,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
 		ap1->isUnsigned = !su;
 		ap1->isAddress = true;
 		if (!node->isUnsigned)
-	        GenerateSignExtend(ap1,siz1,size,flags);
+	        GenerateSignExtend(ap1,siz1,size);
 		else
 		    MakeLegalAmode(ap1,flags,siz1);
         ap1->isVolatile = node->isVolatile;
@@ -825,7 +1005,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
 		ap1->isUnsigned = !su;
 		ap1->isAddress = true;
 		if (!node->isUnsigned)
-	        GenerateSignExtend(ap1,siz1,size,flags);
+	        GenerateSignExtend(ap1,siz1,size);
 		else
 		    MakeLegalAmode(ap1,flags,siz1);
         MakeLegalAmode(ap1,flags,size);
@@ -849,7 +1029,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
 //    ap1->offset = makeinode(en_icon,node->p[0]->i);
     ap1->isUnsigned = !su;
 	if (!node->isUnsigned)
-	    GenerateSignExtend(ap1,siz1,size,flags);
+	    GenerateSignExtend(ap1,siz1,size);
 	else
 		MakeLegalAmode(ap1,flags,siz1);
     ap1->isVolatile = node->isVolatile;
@@ -871,15 +1051,25 @@ AMODE *GenerateUnary(ENODE *node,int flags, int size)
 	switch(node->nodetype) {
 	case en_uminus:
 	    ap = GenerateExpression(node->p[0],F_REG,size);
-		GenerateTriadic(op_not,0,ap2,ap,make_immed(-1));
+		if (ap2->mode != am_reg) {
+			GenerateTriadic(op_not,0,makereg(1),ap,make_immed(-1));
+			GenerateDiadic(op_sto,0,makereg(1),ap2);
+		}
+		else
+			GenerateTriadic(op_not,0,ap2,ap,make_immed(-1));
 		break;
 	default:
 	    ap = GenerateExpression(node->p[0],F_REG,size);
-		GenerateDiadic(op_not,0,ap2,ap);
+		if (ap2->mode != am_reg) {
+			GenerateDiadic(op_not,0,makereg(1),ap);
+			GenerateDiadic(op_sto,0,makereg(1),ap2);
+		}
+		else
+			GenerateDiadic(op_not,0,ap2,ap);
 	}
     ReleaseTempReg(ap);
     MakeLegalAmode(ap2,flags,size);
-    return ap2;
+    return (ap2);
 }
 
 // Generate code for a binary expression
@@ -889,13 +1079,13 @@ AMODE *GenerateBinary(ENODE *node,int flags, int size, int op)
 	AMODE *ap1, *ap2, *ap3;
 	
 	if (ENODE::IsEqual(node->p[0],node->p[1]) && !opt_nocgo) {
-		ap1 = GenerateExpression(node->p[0],F_REG,size);
+		ap1 = GenerateExpression(node->p[0],F_REG|F_MEM,size);
 		ap2 = nullptr;
 	}
 	else
 	{
-		ap1 = GenerateExpression(node->p[0],F_REG,size);
-		ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
+		ap1 = GenerateExpression(node->p[0],F_REG|F_MEM,size);
+		ap2 = GenerateExpression(node->p[1],F_REG|F_MEM|F_IMMED,size);
 	}
 	//if (ap2)
 	//	validate(ap2);
@@ -907,8 +1097,14 @@ AMODE *GenerateBinary(ENODE *node,int flags, int size, int op)
 		//	GenerateDiadic(op_dec,0,ap1,ap2);
 		//else
 			if (size==2) {
-				GenerateDiadic(op_mov,0,makereg(1),ap1);
-				GenerateDiadic(op_mov,0,makereg(2),ap1->amode2);
+				if (ap1->mode==am_reg) {
+					GenerateDiadic(op_mov,0,makereg(1),ap1);
+					GenerateDiadic(op_mov,0,makereg(2),ap1->amode2);
+				}
+				else {
+					GenerateDiadic(op_ld,0,makereg(1),ap1);
+					GenerateDiadic(op_ld,0,makereg(2),ap1->amode2);
+				}
 				GenerateTriadic(op,0,makereg(1),makereg(regZero),ap2);
 				if (op==op_add)
 					GenerateTriadic(op_adc,0,makereg(2),makereg(regZero),ap2->amode2);
@@ -917,47 +1113,163 @@ AMODE *GenerateBinary(ENODE *node,int flags, int size, int op)
 				else
 					GenerateTriadic(op,0,makereg(2),makereg(regZero),ap2->amode2);
 				ReleaseTempReg(ap1);
+				ap3 = makereg(1);
+				ap3->amode2 = makereg(2);
+				/*
 				ap3 = GetTempRegister();
 				ap3->amode2 = GetTempRegister();
+				if (ap3->mode==am_reg) {
+					GenerateDiadic(op_mov,0,ap3,makereg(1));
+					GenerateDiadic(op_mov,0,ap3->amode2,makereg(2));
+				}
+				else {
+					GenerateDiadic(op_sto,0,makereg(1),ap3);
+					GenerateDiadic(op_sto,0,makereg(2),ap3->amode2);
+				}
+				*/
+			}
+			else {
+				if (ap1->mode==am_reg)
+					GenerateDiadic(op_mov,0,makereg(1),ap1);
+				else
+					GenerateDiadic(op_ld,0,makereg(1),ap1);
+				GenerateTriadic(op,0,makereg(1),makereg(regZero),ap2);
+				ReleaseTempReg(ap1);
+				ap3 = makereg(1);
+				/*
+				ap3 = GetTempRegister();
+				if (ap3->mode==am_reg)
+					GenerateDiadic(op_mov,0,ap3,makereg(1));
+				else
+					GenerateDiadic(op_sto,0,makereg(1),ap3);
+				*/
+			}
+	}
+	else if (ap2->mode == am_reg)
+	{
+		if (size==2) {
+			if (ap1->mode==am_reg) {
+				GenerateDiadic(op_mov,0,makereg(1),ap1);
+				GenerateDiadic(op_mov,0,makereg(2),ap1->amode2);
+			}
+			else {
+				GenerateDiadic(op_ld,0,makereg(1),ap1);
+				GenerateDiadic(op_ld,0,makereg(2),ap1->amode2);
+			}
+			GenerateDiadic(op,0,makereg(1),ap2?ap2:makereg(1));
+			if (op==op_add)
+				GenerateDiadic(op_adc,0,makereg(2),ap2?ap2->amode2:makereg(2));
+			else if (op==op_sub)
+				GenerateDiadic(op_sbc,0,makereg(2),ap2?ap2->amode2:makereg(2));
+			else
+				GenerateDiadic(op,0,makereg(2),ap2?ap2->amode2:makereg(2));
+			if (ap2)
+				ReleaseTempReg(ap2);
+			ap3 = makereg(1);
+			ap3->amode2 = makereg(2);
+			ReleaseTempReg(ap1);
+			/*
+			ap3 = GetTempRegister();
+			ap3->amode2 = GetTempRegister();
+			if (ap3->mode==am_reg) {
 				GenerateDiadic(op_mov,0,ap3,makereg(1));
 				GenerateDiadic(op_mov,0,ap3->amode2,makereg(2));
 			}
 			else {
-				GenerateDiadic(op_mov,0,makereg(1),ap1);
-				GenerateTriadic(op,0,makereg(1),makereg(regZero),ap2);
-				ReleaseTempReg(ap1);
-				ap3 = GetTempRegister();
-				GenerateDiadic(op_mov,0,ap3,makereg(1));
+				GenerateDiadic(op_sto,0,makereg(1),ap3);
+				GenerateDiadic(op_sto,0,makereg(2),ap3->amode2);
 			}
-	}
-	else
-	{
-		if (size==2) {
-			GenerateDiadic(op_mov,0,makereg(1),ap1);
-			GenerateDiadic(op_mov,0,makereg(2),ap1->amode2);
-			GenerateDiadic(op,0,makereg(1),ap2?ap2:ap1);
-			if (op==op_add)
-				GenerateDiadic(op_adc,0,makereg(2),ap2?ap2->amode2:ap1->amode2);
-			else if (op==op_sub)
-				GenerateDiadic(op_sbc,0,makereg(2),ap2?ap2->amode2:ap1->amode2);
-			else
-				GenerateDiadic(op,0,makereg(2),ap2?ap2->amode2:ap1->amode2);
-			if (ap2)
-				ReleaseTempReg(ap2);
-			ReleaseTempReg(ap1);
-			ap3 = GetTempRegister();
-			ap3->amode2 = GetTempRegister();
-			GenerateDiadic(op_mov,0,ap3,makereg(1));
-			GenerateDiadic(op_mov,0,ap3->amode2,makereg(2));
+			*/
 		}
 		else {
-			GenerateDiadic(op_mov,0,makereg(1),ap1);
-			GenerateDiadic(op,0,makereg(1),ap2?ap2:ap1);
+			if (ap1->mode==am_reg) {
+				GenerateDiadic(op_mov,0,makereg(1),ap1);
+				GenerateDiadic(op,0,makereg(1),ap2?ap2:ap1);
+			}
+			else {
+				GenerateDiadic(op_ld,0,makereg(1),ap1);
+				GenerateDiadic(op,0,makereg(1),ap2?ap2:makereg(1));
+			}
 			if (ap2)
 				ReleaseTempReg(ap2);
 			ReleaseTempReg(ap1);
+			ap3 = makereg(1);
+			/*
 			ap3 = GetTempRegister();
-			GenerateDiadic(op_mov,0,ap3,makereg(1));
+			if (ap3->mode==am_reg)
+				GenerateDiadic(op_mov,0,ap3,makereg(1));
+			else
+				GenerateDiadic(op_sto,0,makereg(1),ap3);
+			*/
+		}
+	}
+	// ap2 is memory
+	else {
+		if (size==2) {
+			if (ap1->mode==am_reg) {
+				GenerateDiadic(op_mov,0,makereg(1),ap1);
+				GenerateDiadic(op_mov,0,makereg(2),ap1->amode2);
+			}
+			else {
+				GenerateDiadic(op_ld,0,makereg(1),ap1);
+				GenerateDiadic(op_ld,0,makereg(2),ap1->amode2);
+			}
+			if (ap2) {
+				GenerateDiadic(op_ld,0,makereg(3),ap2);
+				GenerateDiadic(op_ld,0,makereg(4),ap2->amode2);
+				GenerateDiadic(op,0,makereg(1),makereg(3));
+				if (op==op_add)
+					GenerateDiadic(op_adc,0,makereg(2),makereg(4));
+				else if (op==op_sub)
+					GenerateDiadic(op_sbc,0,makereg(2),makereg(4));
+				else
+					GenerateDiadic(op,0,makereg(2),makereg(4));
+			}
+			else {
+				GenerateDiadic(op,0,makereg(1),makereg(1));
+				if (op==op_add)
+					GenerateDiadic(op_adc,0,makereg(2),makereg(2));
+				else if (op==op_sub)
+					GenerateDiadic(op_sbc,0,makereg(2),makereg(2));
+				else
+					GenerateDiadic(op,0,makereg(2),makereg(2));
+			}
+			if (ap2)
+				ReleaseTempReg(ap2);
+			ReleaseTempReg(ap1);
+			ap3 = makereg(1);
+			ap3->amode2 = makereg(2);
+			/*
+			ap3 = GetTempRegister();
+			ap3->amode2 = GetTempRegister();
+			if (ap3->mode==am_reg) {
+				GenerateDiadic(op_mov,0,ap3,makereg(1));
+				GenerateDiadic(op_mov,0,ap3->amode2,makereg(2));
+			}
+			else {
+				GenerateDiadic(op_sto,0,makereg(1),ap3);
+				GenerateDiadic(op_sto,0,makereg(2),ap3->amode2);
+			}
+			*/
+		}
+		else {
+			if (ap1->mode==am_reg)
+				GenerateDiadic(op_mov,0,makereg(1),ap1);
+			else
+				GenerateDiadic(op_ld,0,makereg(1),ap1);
+			GenerateDiadic(op_ld,0,makereg(2),ap2);
+			GenerateDiadic(op,0,makereg(1),ap2?makereg(2):makereg(1));
+			if (ap2)
+				ReleaseTempReg(ap2);
+			ReleaseTempReg(ap1);
+			ap3 = makereg(1);
+			/*
+			ap3 = GetTempRegister();
+			if (ap3->mode==am_reg)
+				GenerateDiadic(op_mov,0,ap3,makereg(1));
+			else
+				GenerateDiadic(op_sto,0,makereg(1),ap3);
+			*/
 		}
 	}
 	if (ap2) {
@@ -971,23 +1283,33 @@ AMODE *GenerateBinary(ENODE *node,int flags, int size, int op)
 }
 
 // Parameters:
-//  ap1 = reg
-//	ap2 = reg or immediate
+//  ap1 = reg or mem
+//	ap2 = reg or mem or immediate
 AMODE *GenMuldiv32(AMODE *ap1, AMODE *ap2, char *func)
 {
 	AMODE *ap3;
 
-	GenerateDiadic(op_mov,0,makereg(1),ap1);
-	GenerateDiadic(op_mov,0,makereg(2),ap1->amode2);
+	if (ap1->mode==am_reg) {
+		GenerateDiadic(op_mov,0,makereg(1),ap1);
+		GenerateDiadic(op_mov,0,makereg(2),ap1->amode2);
+	}
+	else {
+		GenerateDiadic(op_ld,0,makereg(1),ap1);
+		GenerateDiadic(op_ld,0,makereg(2),ap1->amode2);
+	}
 	GenerateDiadic(op_push,0,makereg(3),makereg(regSP));
 	GenerateDiadic(op_push,0,makereg(4),makereg(regSP));
 	if (ap2->mode==am_reg) {
 		GenerateDiadic(op_mov,0,makereg(3),ap2);
 		GenerateDiadic(op_mov,0,makereg(4),ap2->amode2);
 	}
-	else {
+	else if (ap2->mode==am_immed) {
 		GenerateTriadic(op_mov,0,makereg(3),makereg(regZero),ap2);
 		GenerateTriadic(op_mov,0,makereg(4),makereg(regZero),ap2->amode2);
+	}
+	else {
+		GenerateDiadic(op_ld,0,makereg(3),ap2);
+		GenerateDiadic(op_ld,0,makereg(4),ap2->amode2);
 	}
 	GenerateTriadic(op_jsr,0,makereg(regLR),makereg(regZero),make_string(func));
 	GenerateDiadic(op_pop,0,makereg(4),makereg(regSP));
@@ -1010,14 +1332,19 @@ AMODE *GenerateModDiv(ENODE *node,int flags,int size)
 	//if( node->p[0]->nodetype == en_icon ) //???
 	//	swap_nodes(node);
 	if (size==1) {
-		ap1 = GenerateExpression(node->p[0],F_REG,size);
-		ap2 = GenerateExpression(node->p[1],F_REG | F_IMMED,size);
-		validate(ap1);
-		GenerateDiadic(op_mov,0,makereg(1),ap1);
-		if (ap2->mode==am_immed)
+		ap1 = GenerateExpression(node->p[0],F_REG|F_MEM,size);
+		ap2 = GenerateExpression(node->p[1],F_REG|F_MEM|F_IMMED,size);
+		//validate(ap1);
+		if (ap1->mode==am_reg)
+			GenerateDiadic(op_mov,0,makereg(1),ap1);
+		else
+			GenerateDiadic(op_ld,0,makereg(1),ap1);
+		if (ap1->mode==am_reg)
+			GenerateDiadic(op_mov,0,makereg(2),ap2);
+		else if (ap2->mode==am_immed)
 			GenerateTriadic(op_mov,0,makereg(2),makereg(regZero),ap2);
 		else
-			GenerateDiadic(op_mov,0,makereg(2),ap2);
+			GenerateDiadic(op_ld,0,makereg(2),ap2);
 		ReleaseTempReg(ap2);
 		ReleaseTempReg(ap1);
 		//GenerateTriadic(op_mov,0,makereg(regLR),makereg(regPC),make_immed(2));
@@ -1029,16 +1356,19 @@ AMODE *GenerateModDiv(ENODE *node,int flags,int size)
 		default:		GenerateTriadic(op_jsr,0,makereg(regLR),makereg(regZero),make_string("__div")); break;
 		}
 		ap3 = GetTempRegister();
-		GenerateDiadic(op_mov,0,ap3,makereg(1));
+		if (ap3->mode==am_reg)
+			GenerateDiadic(op_mov,0,ap3,makereg(1));
+		else
+			GenerateDiadic(op_sto,0,makereg(1),ap3);
 		//GenerateDiadic(op_mov,0,ap3,makereg(1));
-		GenerateSignExtend(ap3,size,size,flags);
+		GenerateSignExtend(ap3,size,size);
 		MakeLegalAmode(ap3,flags,size);
 		MakeLegalAmode(ap3,flags,sizeOfWord);
 		return (ap3);
 	}
 	else {
-		ap1 = GenerateExpression(node->p[0],F_REG,size);
-		ap2 = GenerateExpression(node->p[1],F_REG | F_IMMED,size);
+		ap1 = GenerateExpression(node->p[0],F_REG|F_MEM,size);
+		ap2 = GenerateExpression(node->p[1],F_REG|F_MEM|F_IMMED,size);
 		switch(node->nodetype) {
 		case en_div:	ap3 = GenMuldiv32(ap1,ap2,"__div32"); break;
 		case en_udiv:	ap3 = GenMuldiv32(ap1,ap2,"__divu32"); break;
@@ -1049,8 +1379,14 @@ AMODE *GenerateModDiv(ENODE *node,int flags,int size)
 		ReleaseTempReg(ap1);
 		ap4 = GetTempRegister();
 		ap4->amode2 = GetTempRegister();
-		GenerateDiadic(op_mov,0,ap4,ap3);
-		GenerateDiadic(op_mov,0,ap4->amode2,ap3->amode2);
+		if (ap4->mode==am_reg) {
+			GenerateDiadic(op_mov,0,ap4,ap3);
+			GenerateDiadic(op_mov,0,ap4->amode2,ap3->amode2);
+		}
+		else {
+			GenerateDiadic(op_sto,0,ap3,ap4);
+			GenerateDiadic(op_sto,0,ap3->amode2,ap4->amode2);
+		}
 		return (ap4);
 	}
 }
@@ -1076,8 +1412,8 @@ AMODE *GenerateMultiply(ENODE *node, int flags, int size, int op)
 	dfs.printf("<GenerateMultiply>");
     if( node->p[0]->nodetype == en_icon )
         swap_nodes(node);
-    ap1 = GenerateExpression(node->p[0],F_REG,sizeOfWord);
-    ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,sizeOfWord);
+    ap1 = GenerateExpression(node->p[0],F_REG|F_MEM,size);
+    ap2 = GenerateExpression(node->p[1],F_REG|F_MEM|F_IMMED,size);
 	if (size==2) {
 		ap3 = GenMuldiv32(ap1,ap2,node->nodetype==en_mul ? "__mul32" : "__mulu32");
 		ReleaseTempReg(ap2);
@@ -1085,24 +1421,38 @@ AMODE *GenerateMultiply(ENODE *node, int flags, int size, int op)
 		ap4 = GetTempRegister();
 		if (size==2)
 			ap4->amode2 = GetTempRegister();
-		GenerateDiadic(op_mov,0,ap4,ap3);
-		GenerateDiadic(op_mov,0,ap4->amode2,ap3->amode2);
+		if (ap4->mode==am_reg) {
+			GenerateDiadic(op_mov,0,ap4,ap3);
+			GenerateDiadic(op_mov,0,ap4->amode2,ap3->amode2);
+		}
+		else {
+			GenerateDiadic(op_sto,0,ap3,ap4);
+			GenerateDiadic(op_sto,0,ap3->amode2,ap4->amode2);
+		}
 	}
 	else {
-		GenerateDiadic(op_mov,0,makereg(1),ap1);
+		if (ap1->mode==am_reg)
+			GenerateDiadic(op_mov,0,makereg(1),ap1);
+		else
+			GenerateDiadic(op_ld,0,makereg(1),ap1);
 		if (ap2->mode==am_reg)
 			GenerateDiadic(op_mov,0,makereg(2),ap2);
-		else	// immed
+		else if (ap2->mode==am_immed)	// immed
 			GenerateTriadic(op_mov,0,makereg(2),makereg(regZero),ap2);
+		else	// memory
+			GenerateDiadic(op_ld,0,makereg(2),ap2);
 		GenerateTriadic(op_jsr,0,makereg(regLR),makereg(regZero),make_string(node->nodetype==en_mul ? "__mul" : "__mulu"));
 		ReleaseTempReg(ap2);
 		ReleaseTempReg(ap1);
 		ap3 = makereg(1);
 		ap4 = GetTempRegister();
-		GenerateDiadic(op_mov,0,ap4,ap3);
+		if (ap4->mode==am_reg)
+			GenerateDiadic(op_mov,0,ap4,ap3);
+		else
+			GenerateDiadic(op_sto,0,ap3,ap4);
 	}
 //		GenerateTriadic(op,0,ap3,ap1,ap2);
-	MakeLegalAmode(ap4,flags,sizeOfWord);
+	MakeLegalAmode(ap4,flags,size);
 	ap4->isAddress = ap2->isAddress | ap1->isAddress;
 	if (size==2)
 		ap4->amode2->isAddress = ap4->isAddress;
@@ -1256,8 +1606,10 @@ void GenMemop(int op, AMODE *ap1, AMODE *ap2, int ssize)
 		else {
 			if (ap2->mode==am_reg)
 				GenerateDiadic(op_mov,0,makereg(2),ap2);
-			else
+			else if (ap2->mode==am_immed)
 				GenerateTriadic(op_mov,0,makereg(2),makereg(regZero),ap2);
+			else
+				GenerateDiadic(op_ld,0,makereg(2),ap2);
 			GenerateTriadic(op_jsr,0,makereg(regLR),makereg(regZero),make_string("__mul"));
 			GenerateDiadic(op_mov,0,ap5,makereg(1));
 		}
@@ -1281,8 +1633,10 @@ void GenMemop(int op, AMODE *ap1, AMODE *ap2, int ssize)
 		else {
 			if (ap2->mode==am_reg)
 				GenerateDiadic(op_mov,0,makereg(2),ap2);
-			else
+			else if (ap2->mode==am_immed)
 				GenerateTriadic(op_mov,0,makereg(2),makereg(regZero),ap2);
+			else
+				GenerateDiadic(op_ld,0,makereg(2),ap2);
 			GenerateTriadic(op_jsr,0,makereg(regLR),makereg(regZero),make_string("__mulu"));
 			GenerateDiadic(op_mov,0,ap5,makereg(1));
 		}
@@ -1306,8 +1660,10 @@ void GenMemop(int op, AMODE *ap1, AMODE *ap2, int ssize)
 		else {
 			if (ap2->mode==am_reg)
 				GenerateDiadic(op_mov,0,makereg(2),ap2);
-			else
+			else if (ap2->mode==am_immed)
 				GenerateTriadic(op_mov,0,makereg(2),makereg(regZero),ap2);
+			else
+				GenerateDiadic(op_ld,0,makereg(2),ap2);
 			GenerateTriadic(op_jsr,0,makereg(regLR),makereg(regZero),make_string("__div"));
 			GenerateDiadic(op_mov,0,ap5,makereg(1));
 		}
@@ -1331,8 +1687,10 @@ void GenMemop(int op, AMODE *ap1, AMODE *ap2, int ssize)
 		else {
 			if (ap2->mode==am_reg)
 				GenerateDiadic(op_mov,0,makereg(2),ap2);
-			else
+			else if (ap2->mode==am_immed)
 				GenerateTriadic(op_mov,0,makereg(2),makereg(regZero),ap2);
+			else
+				GenerateDiadic(op_ld,0,makereg(2),ap2);
 			GenerateTriadic(op_jsr,0,makereg(regLR),makereg(regZero),make_string("__divu"));
 			GenerateDiadic(op_mov,0,ap5,makereg(1));
 		}
@@ -1350,10 +1708,24 @@ void GenMemop(int op, AMODE *ap1, AMODE *ap2, int ssize)
 			if (ssize==2)
 				GenerateDiadic(op_adc,0,ap3->amode2,makereg(regZero));
 		}
-		else {
-			GenerateDiadic(op,0,ap3,ap2);
+		else if (ap2->mode==am_immed) {
+			GenerateTriadic(op_add,0,ap3,makereg(regZero),ap2);
+			if (ssize==2)
+				GenerateTriadic(op_adc,0,ap3,makereg(regZero),ap2->amode2);
+		}
+		else if (ap2->mode==am_reg) {
+			GenerateDiadic(op_add,0,ap3,ap2);
 			if (ssize==2)
 				GenerateDiadic(op_adc,0,ap3->amode2,ap2->amode2);
+		}
+		else {
+			ap4 = makereg(1);
+			if (ssize==2)
+				ap4->amode2 = makereg(2);
+			GenLoad(ap4,ap2,ssize,ssize);
+			GenerateDiadic(op,0,ap3,ap4);
+			if (ssize==2)
+				GenerateDiadic(op_adc,0,ap3->amode2,ap4->amode2);
 		}
 		GenStore(ap3,ap1,ssize);
 		ReleaseTempReg(ap3);
@@ -1367,16 +1739,32 @@ void GenMemop(int op, AMODE *ap1, AMODE *ap2, int ssize)
 		if (ap2->mode==am_immed && ap2->offset->i < 16) {
 			GenerateDiadic(op_dec,0,ap3,ap2);
 			if (ssize==2)
-				GenerateDiadic(op_sbc,0,ap3,makereg(regZero));
+				GenerateDiadic(op_sbc,0,ap3->amode2,makereg(regZero));
 		}
-		else {
-			GenerateDiadic(op,0,ap3,ap2);
+		else if (ap2->mode==am_immed) {
+			GenerateTriadic(op_sub,0,ap3,makereg(regZero),ap2);
+			if (ssize==2)
+				GenerateTriadic(op_sbc,0,ap3,makereg(regZero),ap2->amode2);
+		}
+		else if (ap2->mode==am_reg) {
+			GenerateDiadic(op_sub,0,ap3,ap2);
 			if (ssize==2)
 				GenerateDiadic(op_sbc,0,ap3->amode2,ap2->amode2);
+		}
+		else {
+			ap4 = makereg(1);
+			if (ssize==2)
+				ap4->amode2 = makereg(2);
+			GenLoad(ap4,ap2,ssize,ssize);
+			GenerateDiadic(op,0,ap3,ap4);
+			if (ssize==2)
+				GenerateDiadic(op_sbc,0,ap3->amode2,ap4->amode2);
 		}
 		GenStore(ap3,ap1,ssize);
 		ReleaseTempReg(ap3);
 		break;
+
+	// ToDo: shift
 
 	// and,or,xor
 	default:
@@ -1389,10 +1777,19 @@ void GenMemop(int op, AMODE *ap1, AMODE *ap2, int ssize)
 			if (ssize==2)
 				GenerateTriadic(op,0,ap3->amode2,makereg(regZero),ap2->amode2);
 		}
-		else {
+		else if (ap2->mode==am_reg) {
 			GenerateDiadic(op,0,ap3,ap2);
 			if (ssize==2)
 				GenerateDiadic(op,0,ap3->amode2,ap2->amode2);
+		}
+		else {
+			ap4 = makereg(1);
+			if (ssize==2)
+				ap4->amode2 = makereg(2);
+			GenLoad(ap4,ap2,ssize,ssize);
+			GenerateDiadic(op,0,ap3,ap4);
+			if (ssize==2)
+				GenerateDiadic(op,0,ap3->amode2,ap4->amode2);
 		}
 		GenStore(ap3,ap1,ssize);
 		ReleaseTempReg(ap3);
@@ -1409,15 +1806,19 @@ AMODE *GenerateAssignAdd(ENODE *node,int flags, int size, int op)
     if( ssize > size )
             size = ssize;
     ap1 = GenerateExpression(node->p[0],F_ALL,ssize);
-    ap2 = GenerateExpression(node->p[1],F_REG | F_IMMED,size);
+    ap2 = GenerateExpression(node->p[1],F_REG|F_MEM|F_IMMED,size);
 	if (ap1->mode==am_reg) {
 		if (ap2->mode==am_reg)
 			GenerateDiadic(op,0,ap1,ap2);
-		else {
+		else if (ap2->mode==am_immed) {
 			if (ap2->offset->i < 16)
 				GenerateDiadic(node->nodetype==en_asadd ? op_inc : op_dec,0,ap1,make_immed(ap2->offset->i));
 			else
 				GenerateTriadic(node->nodetype==en_asadd ? op_add : op_sub, 0, ap1, makereg(regZero),make_immed(ap2->offset->i));
+		}
+		else {
+			GenerateDiadic(op_ld,0,makereg(2),ap2);
+			GenerateDiadic(node->nodetype==en_asadd ? op_add : op_sub, 0, ap1, ap2);
 		}
 	}
 	else {
@@ -1425,7 +1826,7 @@ AMODE *GenerateAssignAdd(ENODE *node,int flags, int size, int op)
 	}
     ReleaseTempReg(ap2);
 	if (!ap1->isFloat && !ap1->isUnsigned)
-		GenerateSignExtend(ap1,ssize,size,flags);
+		GenerateSignExtend(ap1,ssize,size);
     MakeLegalAmode(ap1,flags,size);
     return ap1;
 }
@@ -1438,16 +1839,23 @@ AMODE *GenerateAssignLogic(ENODE *node,int flags, int size, int op)
     if( ssize > size )
             size = ssize;
     ap1 = GenerateExpression(node->p[0],F_ALL,ssize);
-    ap2 = GenerateExpression(node->p[1],F_REG | F_IMMED,size);
+    ap2 = GenerateExpression(node->p[1],F_REG|F_MEM|F_IMMED,size);
 	if (ap1->mode==am_reg) {
-	    GenerateTriadic(op,0,ap1,ap1,ap2);
+		if (ap2->mode==am_reg)
+			GenerateDiadic(op,0,ap1,ap2);
+		else if (ap2->mode==am_immed)
+			GenerateTriadic(op,0,ap1,makereg(regZero),ap2);
+		else {
+			GenerateDiadic(op_ld,0,makereg(2),ap2);
+			GenerateDiadic(op,0,ap1,makereg(2));
+		}
 	}
 	else {
 		GenMemop(op, ap1, ap2, ssize);
 	}
     ReleaseTempRegister(ap2);
 	if (!ap1->isUnsigned)
-		GenerateSignExtend(ap1,ssize,size,flags);
+		GenerateSignExtend(ap1,ssize,size);
     MakeLegalAmode(ap1,flags,size);
     return (ap1);
 }
@@ -1479,7 +1887,7 @@ AMODE *GenerateAssignMultiply(ENODE *node,int flags, int size, int op)
 			GenerateTriadic(op_jsr,0,makereg(regLR),makereg(regZero),make_string(node->nodetype==en_mul ? "__mul" : "__mulu"));
 			GenerateDiadic(op_mov,0,ap1,makereg(1));
 			ReleaseTempReg(ap2);
-			GenerateSignExtend(ap1,ssize,size,flags);
+			GenerateSignExtend(ap1,ssize,size);
 			MakeLegalAmode(ap1,flags,size);
 	//	    GenerateTriadic(op,0,ap1,ap1,ap2);
 			return (ap1);
@@ -1493,7 +1901,7 @@ AMODE *GenerateAssignMultiply(ENODE *node,int flags, int size, int op)
 	//if (size==2)
 	//	ap3->amode2 = GetTempRegister();
 	//GenerateDiadic(op_ld,0,ap3,ap1);
-    GenerateSignExtend(ap1,ssize,size,flags);
+    GenerateSignExtend(ap1,ssize,size);
     MakeLegalAmode(ap1,flags,size);
     return (ap1);
 }
@@ -1561,7 +1969,7 @@ AMODE *GenerateAssignModiv(ENODE *node,int flags,int size)
 		}
 		ReleaseTempReg(ap3);
 		ap1 = makereg(1);
-		GenerateSignExtend(ap1,size,size,flags);
+		GenerateSignExtend(ap1,size,size);
 		MakeLegalAmode(ap1,flags,size);
 		//GenerateDiadic(op_ext,0,ap1,0);
 		if (ap2->mode==am_reg)
@@ -1664,7 +2072,12 @@ AMODE *GenerateStructAssign(TYP *tp, int offset, ENODE *ep, AMODE *base)
 				offset2 = base->offset->i + offset;
 			else
 				offset2 = offset;
-			GenerateTriadic(op_sto,0,ap2,makereg(base->preg),make_immed(offset2));
+			if (ap2->mode!=am_reg) {
+				GenerateDiadic(op_ld,0,makereg(1),ap2);
+				GenerateTriadic(op_sto,0,makereg(1),makereg(base->preg),make_immed(offset2));
+			}
+			else
+				GenerateTriadic(op_sto,0,ap2,makereg(base->preg),make_immed(offset2));
 			if (ap2)
 				ReleaseTempReg(ap2);
 		}
@@ -1724,8 +2137,10 @@ AMODE *GenerateArrayAssign(TYP *tp, ENODE *node1, ENODE *node2, AMODE *base)
 			offset = base->offset->i;
 		ep1 = ep1->p[2];
 		while (ep1) {
-			ap1 = GenerateExpression(ep1,F_REG|F_IMMED,sizeOfWord);
+			ap1 = GenerateExpression(ep1,F_REG|F_IMMED,size);
 			ap2 = GetTempRegister();
+			if (size==2)
+				ap2->amode2 = GetTempRegister();
 			if (ap1->mode==am_immed)
 				GenLdi(ap2,ap1);
 			else {
@@ -1733,10 +2148,48 @@ AMODE *GenerateArrayAssign(TYP *tp, ENODE *node1, ENODE *node2, AMODE *base)
 					offset2 = ap1->offset->i;
 				else
 					offset2 = 0;
-				GenerateDiadic(op_mov,0,ap2,ap1);
+				if (ap2->mode==am_reg) {
+					if (ap1->mode==am_reg) {
+						GenerateDiadic(op_mov,0,ap2,ap1);
+						if (size==2)
+							GenerateDiadic(op_mov,0,ap2->amode2,ap1->amode2);
+					}
+					else {
+						GenerateDiadic(op_ld,0,ap2,ap1);
+						if (size==2)
+							GenerateDiadic(op_ld,0,ap2->amode2,ap1->amode2);
+					}
+				}
+				else {
+					if (ap1->mode==am_reg) {
+						GenerateDiadic(op_sto,0,ap1,ap2);
+						if (size==2)
+							GenerateDiadic(op_sto,0,ap1->amode2,ap2->amode2);
+					}
+					else {
+						GenerateDiadic(op_ld,0,makereg(1),ap1);
+						GenerateDiadic(op_sto,0,makereg(1),ap2);
+						if (size==2) {
+							GenerateDiadic(op_ld,0,makereg(1),ap1->amode2);
+							GenerateDiadic(op_sto,0,makereg(1),ap2->amode2);
+						}
+					}
+				}
 			}
-			GenerateTriadic(op_sto,0,ap2,makereg(base->preg),make_immed(offset));
-			offset += 1;
+			if (ap2->mode==am_reg) {
+				GenerateTriadic(op_sto,0,ap2,makereg(base->preg),make_immed(offset));
+				if (size==2)
+					GenerateTriadic(op_sto,0,ap2->amode2,makereg(base->preg),make_immed(offset+1));
+			}
+			else {
+				GenerateDiadic(op_ld,0,makereg(1),ap2);
+				GenerateTriadic(op_sto,0,makereg(1),makereg(base->preg),make_immed(offset));
+				if (size==2) {
+					GenerateDiadic(op_ld,0,makereg(1),ap2->amode2);
+					GenerateTriadic(op_sto,0,makereg(1),makereg(base->preg),make_immed(offset+1));
+				}
+			}
+			offset += size;
 			ReleaseTempReg(ap2);
 			ep1 = ep1->p[2];
 			if (ep1)
@@ -1911,7 +2364,13 @@ AMODE *GenerateAssign(ENODE *node, int flags, int size)
 				ReleaseTempRegister(ap3);
 			}
 			else {
-                GenLoad(ap3,ap2,ssize,size);
+				GenLoad(makereg(1),ap2,ssize,size);
+				if (size==2)
+					GenLoad(makereg(2),ap2,ssize,size);
+				GenStore(makereg(1),ap1,size);
+				if (size==2)
+					GenStore(makereg(2),ap1->amode2,size);
+                //GenLoad(ap3,ap2,ssize,size);
 /*                
 				if (ap1->isUnsigned) {
 					switch(size) {
@@ -1937,8 +2396,8 @@ AMODE *GenerateAssign(ENODE *node, int flags, int size)
 					}
 				}
 */
-				GenStore(ap3,ap1,ssize);
-				ReleaseTempRegister(ap3);
+				//GenStore(ap3,ap1,ssize);
+				//ReleaseTempRegister(ap3);
 			}
 		}
 	}
@@ -2050,7 +2509,12 @@ AMODE *GenAutocon(ENODE *node, int flags, int size, bool isFloat)
 	ap2->offset = node;
 	ap2->isFloat = isFloat;
 	ap2->isAddress = true;
-	GenerateTriadic(op_mov,0,ap1,makereg(regBP),make_immed(ap2->offset->i));	// LEA
+	if (ap1->mode==am_reg)
+		GenerateTriadic(op_mov,0,ap1,makereg(regBP),make_immed(ap2->offset->i));	// LEA
+	else {
+		GenerateDiadic(op_mov,0,makereg(1),ap2);
+		GenerateDiadic(op_sto,0,makereg(1),ap1);
+	}
 	MakeLegalAmode(ap1,flags,size);
 	return (ap1);
 }
@@ -2102,12 +2566,12 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
         ap1 = allocAmode();
         ap1->mode = am_immed;
         ap1->offset = node;
-        MakeLegalAmode(ap1,flags,size);
 		ap1->amode2 = allocAmode();
 		ap1->amode2->offset = node->Duplicate();
 		ap1->amode2->offset->i = ap1->amode2->offset->i >> 16;
 		ap1->offset->i = ap1->offset->i & 0xffff;
 		ap1->amode2->offset->nodetype = en_icon;
+        MakeLegalAmode(ap1,flags,size);
         Leave("GenExperssion",3); 
         return ap1;
 
@@ -2387,23 +2851,19 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
 			//GenerateDiadic(op_sxh,0,ap1,ap1);
 			return ap1;
 	case en_lul:	// long to unsigned long
-			ap1 = GenerateExpression(node->p[0],F_REG,size);
-			GenerateTriadic(op_add,0,ap1,ap1,make_immed(0));
-			GeneratePredicatedTriadic(pop_mi,op_sub,0,ap1,ap1,make_immed(0));
+			ap1 = GenerateExpression(node->p[0],F_REG|F_MEM,2);
+			//GenerateTriadic(op_add,0,ap1,ap1,make_immed(0));
+			//GeneratePredicatedTriadic(pop_mi,op_sub,0,ap1,ap1,make_immed(0));
 			return ap1;
 	case en_cwl:
-	case en_cwul:
-			ap1 = GenerateExpression(node->p[0],F_REG,size);
-			ap1->amode2 = GetTempRegister();
-			GenerateDiadic(op_mov,0,ap1->amode2,makereg(regZero));
-			GenerateDiadic(op_or,0,ap1,ap1);
-			GeneratePredicatedTriadic(pop_mi,op_mov,0,ap1->amode2,makereg(regZero),make_immed(-1));
+			ap1 = GenerateExpression(node->p[0],F_REG|F_MEM,2);
+			GenerateSignExtend(ap1,1,2);
 			return (ap1);
+	case en_cwul:
 	case en_cuwl:
 	case en_cuwul:
-			ap1 = GenerateExpression(node->p[0],F_REG,size);
-			ap1->amode2 = GetTempRegister();
-			GenerateDiadic(op_mov,0,ap1->amode2,makereg(regZero));
+			ap1 = GenerateExpression(node->p[0],F_REG|F_MEM,2);
+			GenerateZeroExtend(ap1,1,2);
 			return (ap1);
     default:
             printf("DIAG - uncoded node (%d) in GenerateExpression.\n", node->nodetype);

@@ -134,6 +134,7 @@ extern int opt_noregs;
 extern int opt_nopeep;
 extern int opt_noexpr;
 extern int opt_nocgo;
+extern bool opt_allowregs;
 extern int exceptions;
 extern int mixedSource;
 extern SYM *currentFn;

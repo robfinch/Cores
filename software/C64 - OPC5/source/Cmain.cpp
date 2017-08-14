@@ -78,6 +78,7 @@ int main(int argc, char **argv)
 				break;
 			if( openfiles(*argv)) {
 				lineno = 0;
+				ofs.printf("\tmov\tr15,r0,_main\n");
 				initsym();
 	compiler.compile();
 //				compile();
@@ -128,6 +129,9 @@ int	options(char *s)
 		}
 		if (strcmp(&s[2],"farcode")==0)
 			farcode = 1;
+		if (strcmp(&s[2],"no-regs")==0) {
+			opt_allowregs = false;
+		}
 	}
 	else if (s[1]=='a') {
         address_bits = atoi(&s[2]);
