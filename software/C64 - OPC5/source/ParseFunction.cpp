@@ -427,6 +427,7 @@ static Statement *ParseFunctionBody(SYM *sp)
 {    
 	std::string lbl;
 	char *p;
+	OCODE *ip;
 
   dfs.printf("<Parse function body>:%s|\n", (char *)sp->name->c_str());
 
@@ -455,8 +456,10 @@ static Statement *ParseFunctionBody(SYM *sp)
   dfs.printf("B");
   p = my_strdup((char *)lbl.c_str());
   dfs.printf("b");
-	if (!sp->IsInline)
+	if (!sp->IsInline) {
 		GenerateMonadic(op_fnname,0,make_string(p));
+		ip = peep_tail;
+	}
 	currentFn = sp;
 	currentFn->DoesThrow = FALSE;
 	currentFn->UsesPredicate = FALSE;
@@ -479,12 +482,14 @@ static Statement *ParseFunctionBody(SYM *sp)
 	pass = 2;
 	if (mrd < 4 || 1) {
 		useRegisters &= opt_allowregs;
-		peep_head = nullptr;
+		peep_tail = ip;
+		ip->fwd = nullptr;
 		GenerateFunction(sp);
 	}
 	else {
 		useRegisters = false;
-		peep_head = nullptr;
+		peep_tail = ip;
+		ip->fwd = nullptr;
 		GenerateFunction(sp);
 	}
 	flush_peep();

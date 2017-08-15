@@ -141,49 +141,24 @@ void BasicBlock::ComputeLiveVars()
 	for (ip = code; ip && (!ip->leader || ip == code); ip = ip->fwd) {
 		if (ip->opcode!=op_label) {
 			if (HasTargetReg(ip)) {
-				if (ip->oper1->preg >= 0x800) {
-					kill->add(ip->oper1->preg-0x780);
-				}
-				else {
-					kill->add(ip->oper1->preg);
-				}
+				kill->add(ip->oper1->vpreg & 0xfffL);
 			}
-			else if (ip->oper1->mode == am_reg) {
-				if (ip->oper1->preg >= 0x800) {
-					gen->add(ip->oper1->preg-0x780);
-				}
-				else {
-					gen->add(ip->oper1->preg);
-				}
+			else if (ip->oper1 && ip->oper1->mode == am_reg) {
+				gen->add(ip->oper1->vpreg & 0xfffL);
 			}
 			if (ip->oper2) {
 				if (ip->oper2->mode == am_reg) {
-					if (ip->oper2->preg >= 0x800) {
-						gen->add(ip->oper2->preg-0x780);
-					}
-					else {
-						gen->add(ip->oper2->preg);
-					}
+					gen->add(ip->oper2->vpreg & 0xfffL);
 				}
 			}
 			if (ip->oper3) {
 				if (ip->oper3->mode == am_reg) {
-					if (ip->oper3->preg >= 0x800) {
-						gen->add(ip->oper3->preg-0x780);
-					}
-					else {
-						gen->add(ip->oper3->preg);
-					}
+					gen->add(ip->oper3->vpreg & 0xfffL);
 				}
 			}
 			if (ip->oper4) {
 				if (ip->oper4->mode == am_reg) {
-					if (ip->oper4->preg >= 0x800) {
-						gen->add(ip->oper4->preg-0x780);
-					}
-					else {
-						gen->add(ip->oper4->preg);
-					}
+					gen->add(ip->oper4->vpreg & 0xfffL);
 				}
 			}
 		}

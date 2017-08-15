@@ -41,5 +41,6 @@ typedef unsigned __int64 uint64_t;
 #include "Value.h"
 #include "types.h"
 #include "Cglbdec.h"
+#include "proto.h"
 
 // TODO: reference additional headers your program requires here

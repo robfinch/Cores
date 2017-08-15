@@ -34,6 +34,9 @@ void peep_move(OCODE	*ip);
 void peep_cmp(OCODE *ip);
 static void opt_peep();
 void put_ocode(OCODE *p);
+void CreateVars();
+void RemoveMoves();
+extern Var *varlist;
 
 OCODE *peep_head = NULL;
 OCODE *peep_tail = NULL;
@@ -1282,4 +1285,34 @@ static void opt_peep()
 	// In the works: code to support further optimizations
 	BasicBlock::Blockize(peep_head);
 	CreateControlFlowGraph();
+	ComputeLiveVars();
+	DumpLiveVars();
+	CreateVars();
+	Var::CreateForests();
+	RemoveMoves();
+	Var::DumpForests();
 }
+
+// Remove the mov operation from consideration.
+// mov will create a false interference. Other instructions that copy from
+// input to output could also create false interferences.
+
+void RemoveMoves()
+{
+	OCODE *ip;
+	BasicBlock *b;
+	Var *v;
+	Tree *t;
+
+	for (ip = peep_head; ip; ip = ip->fwd) {
+		if (ip->opcode==op_mov) {
+			b = ip->bb;
+			for (v = varlist; v; v = v->next) {
+				for (t = v->trees; t; t = t->next) {
+					t->tree->remove(b->num);
+				}
+			}
+		}
+	}
+}
+

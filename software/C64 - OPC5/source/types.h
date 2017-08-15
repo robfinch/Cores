@@ -155,6 +155,8 @@ public:
 	unsigned int mode : 6;
 	unsigned int preg : 8;
 	unsigned int sreg : 8;
+	int vpreg;					// virtual register number
+	int vsreg;					// virtual register number
 	unsigned int segment : 4;
 	unsigned int defseg : 1;
 	unsigned int tempflag : 1;
@@ -223,6 +225,44 @@ public:
 	Edge *MakeOutputEdge(BasicBlock *dst);
 	Edge *MakeInputEdge(BasicBlock *src);
 	void ComputeLiveVars();
+};
+
+
+// This tree structure is used to track live ranges of a variable.
+
+class Tree : public CompilerType
+{
+public:
+	int num;
+	Tree *next;
+	CSet *tree;
+public:
+	static Tree *MakeNew() {
+		Tree *t;
+		t = (Tree*)allocx(sizeof(Tree));
+		t->tree = CSet::MakeNew();
+		return (t);
+	};
+};
+
+// Each variable, including compiler generate temporaries, has an associated
+// Var object.
+
+class Var : public CompilerType
+{
+public:
+	Var *next;
+	int num;
+	Tree *trees;
+	CSet *forest;
+public:
+	static Var *MakeNew();
+	// Create a forest for a specific Var
+	void CreateForest();
+	// Create a forest for each Var object
+	static void CreateForests();
+	static Var *Find(int);
+	static void DumpForests();
 };
 
 class DerivedMethod

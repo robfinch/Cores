@@ -201,6 +201,7 @@ AMODE *GetTempRegister2(int *pushed)
 		ap->preg = regBP;
 		ap->offset = makeinode(en_icon,-(reg_alloc_ptr+regstackbot));
 	}
+	ap->vpreg = (tmpregs[next_reg] << 24) | ((reg_alloc_ptr+16) & 0xfffL);
     ap->deep = reg_alloc_ptr;
     reg_alloc[reg_alloc_ptr].reg = tmpregs[next_reg];
     reg_alloc[reg_alloc_ptr].mode = am_reg;
