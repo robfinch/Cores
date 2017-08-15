@@ -832,14 +832,20 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
 		// *** may have to fix for stackseg
 		ap1->segment = dataseg;
 		ap1->isAddress = true;
+		ap1->mode = am_ind;
 //		ap2->mode = ap1->mode;
 //		ap2->segment = dataseg;
 //		ap2->offset = ap1->offset;
 //		ReleaseTempRegister(ap1);
 		if (size==2) {
+			ap1->mode = am_indx;
 			ap1->amode2 = copy_addr(ap1);
 			if (ap1->offset)
 				ap1->amode2->offset = makeinode(en_icon,ap1->offset->i+1);
+			else {
+				ap1->offset = makeinode(en_icon,0);
+				ap1->amode2->offset = makeinode(en_icon,1);
+			}
 		}
 		if (!node->isUnsigned)
 			GenerateSignExtend(ap1,siz1,size);
