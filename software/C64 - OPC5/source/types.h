@@ -251,12 +251,15 @@ public:
 class Var : public CompilerType
 {
 public:
+	static int count;
 	Var *next;
 	int num;
 	Tree *trees;
 	CSet *forest;
 public:
+	static int GetCount() { return (count); };
 	static Var *MakeNew();
+	static void CreateVars();
 	// Create a forest for a specific Var
 	void CreateForest();
 	// Create a forest for each Var object

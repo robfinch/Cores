@@ -6,7 +6,6 @@
 //       ||
 //
 // C64 - 'C' derived language compiler
-//  - 64 bit CPU
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -393,6 +392,17 @@ void peep_move(OCODE	*ip)
 			}
 		}
 		MarkRemove(ip);
+	}
+	// mov	r1,r5
+	// mov	r5,r1
+	if (ip->fwd) {
+		if (ip->fwd->opcode==op_mov
+			&& ip->fwd->oper3==nullptr 
+			&& ip->oper3==nullptr) {
+			if (equal_address(ip->oper1, ip->fwd->oper2)
+				&& equal_address(ip->oper2, ip->fwd->oper1))
+				MarkRemove(ip->fwd);
+		}
 	}
 	return;
 	if (ip->back) {
@@ -1287,7 +1297,13 @@ static void opt_peep()
 	CreateControlFlowGraph();
 	ComputeLiveVars();
 	DumpLiveVars();
-	CreateVars();
+	Var::CreateVars();
+	// If there are the same or fewer number of variables in the function as there
+	// are machine registers available, then just allocate each var a register in a
+	// simple fashion.
+	if (Var::count < 4) {
+		return;
+	}
 	Var::CreateForests();
 	RemoveMoves();
 	Var::DumpForests();
@@ -1305,7 +1321,7 @@ void RemoveMoves()
 	Tree *t;
 
 	for (ip = peep_head; ip; ip = ip->fwd) {
-		if (ip->opcode==op_mov) {
+		if (ip->opcode==op_mov && ip->oper1 && ip->oper1->preg != regPC) {
 			b = ip->bb;
 			for (v = varlist; v; v = v->next) {
 				for (t = v->trees; t; t = t->next) {

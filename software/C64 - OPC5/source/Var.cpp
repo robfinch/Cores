@@ -3,6 +3,7 @@
 extern BasicBlock *RootBlock;
 extern BasicBlock *LastBlock;
 Var *varlist;
+int Var::count;
 
 // This class is currently only used by the CreateForest() function.
 // It maintains a stack for tree traversal.
@@ -115,6 +116,7 @@ Var *Var::Find(int num)
 		vp->num = num;
 		vp->next = varlist;
 		varlist = vp;
+		count++;
 	}
 	return (vp);
 }
@@ -129,27 +131,28 @@ void Var::DumpForests()
 	for (vp = varlist; vp; vp = vp->next) {
 		dfs.printf("Var%d:\n", vp->num);
 		for (rg = vp->trees; rg; rg = rg->next) {
-//			if (!rg->tree->isEmpty()) {
+			if (!rg->tree->isEmpty()) {
 				rg->tree->sprint(buf, sizeof(buf));
 				dfs.printf(buf);
 				dfs.printf("\n");
-//			}
+			}
 		}
 	}
 	dfs.printf("</VarForests>\n");
 }
 
-void CreateVars()
+void Var::CreateVars()
 {
 	BasicBlock *b;
 	int nn;
 	int num;
 
+	count = 0;
 	for (b = RootBlock; b; b = b->next) {
 		b->LiveOut->resetPtr();
 		for (nn = 0; nn < b->LiveOut->NumMember(); nn++) {
 			num = b->LiveOut->nextMember();
-			Var::Find(num);
+			Find(num);
 		}
 	}
 }

@@ -949,13 +949,14 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
 		// For parameters we want Rn, for others [Rn]
 		// This seems like an error earlier in the compiler
 		// See setting val_flag in ParseExpressions
-		ap1->mode = node->p[0]->i < 7 ? am_ind : am_reg;
+//		ap1->mode = node->p[0]->i < 7 ? am_ind : am_reg;
+		ap1->mode = am_reg;
 //		ap1->mode = node->p[0]->tp->val_flag ? am_reg : am_ind;
 		ap1->preg = node->p[0]->i;
-		ap1->isAddress = true;
+		//ap1->isAddress = true;
         MakeLegalAmode(ap1,flags,size);
 	    Leave("Genderef",3);
-        return ap1;
+        return (ap1);
 	}
 	else if (node->p[0]->nodetype == en_fpregvar) {
 		//error(ERR_DEREF);
@@ -1113,9 +1114,6 @@ AMODE *GenerateBinary(ENODE *node,int flags, int size, int op)
 				else
 					GenerateTriadic(op,0,makereg(2),makereg(regZero),ap2->amode2);
 				ReleaseTempReg(ap1);
-				ap3 = makereg(1);
-				ap3->amode2 = makereg(2);
-				/*
 				ap3 = GetTempRegister();
 				ap3->amode2 = GetTempRegister();
 				if (ap3->mode==am_reg) {
@@ -1126,7 +1124,6 @@ AMODE *GenerateBinary(ENODE *node,int flags, int size, int op)
 					GenerateDiadic(op_sto,0,makereg(1),ap3);
 					GenerateDiadic(op_sto,0,makereg(2),ap3->amode2);
 				}
-				*/
 			}
 			else {
 				if (ap1->mode==am_reg)
@@ -1135,14 +1132,11 @@ AMODE *GenerateBinary(ENODE *node,int flags, int size, int op)
 					GenerateDiadic(op_ld,0,makereg(1),ap1);
 				GenerateTriadic(op,0,makereg(1),makereg(regZero),ap2);
 				ReleaseTempReg(ap1);
-				ap3 = makereg(1);
-				/*
 				ap3 = GetTempRegister();
 				if (ap3->mode==am_reg)
 					GenerateDiadic(op_mov,0,ap3,makereg(1));
 				else
 					GenerateDiadic(op_sto,0,makereg(1),ap3);
-				*/
 			}
 	}
 	else if (ap2->mode == am_reg)
@@ -1165,10 +1159,7 @@ AMODE *GenerateBinary(ENODE *node,int flags, int size, int op)
 				GenerateDiadic(op,0,makereg(2),ap2?ap2->amode2:makereg(2));
 			if (ap2)
 				ReleaseTempReg(ap2);
-			ap3 = makereg(1);
-			ap3->amode2 = makereg(2);
 			ReleaseTempReg(ap1);
-			/*
 			ap3 = GetTempRegister();
 			ap3->amode2 = GetTempRegister();
 			if (ap3->mode==am_reg) {
@@ -1179,7 +1170,6 @@ AMODE *GenerateBinary(ENODE *node,int flags, int size, int op)
 				GenerateDiadic(op_sto,0,makereg(1),ap3);
 				GenerateDiadic(op_sto,0,makereg(2),ap3->amode2);
 			}
-			*/
 		}
 		else {
 			if (ap1->mode==am_reg) {
@@ -1193,14 +1183,11 @@ AMODE *GenerateBinary(ENODE *node,int flags, int size, int op)
 			if (ap2)
 				ReleaseTempReg(ap2);
 			ReleaseTempReg(ap1);
-			ap3 = makereg(1);
-			/*
 			ap3 = GetTempRegister();
 			if (ap3->mode==am_reg)
 				GenerateDiadic(op_mov,0,ap3,makereg(1));
 			else
 				GenerateDiadic(op_sto,0,makereg(1),ap3);
-			*/
 		}
 	}
 	// ap2 is memory
@@ -1237,9 +1224,6 @@ AMODE *GenerateBinary(ENODE *node,int flags, int size, int op)
 			if (ap2)
 				ReleaseTempReg(ap2);
 			ReleaseTempReg(ap1);
-			ap3 = makereg(1);
-			ap3->amode2 = makereg(2);
-			/*
 			ap3 = GetTempRegister();
 			ap3->amode2 = GetTempRegister();
 			if (ap3->mode==am_reg) {
@@ -1250,7 +1234,6 @@ AMODE *GenerateBinary(ENODE *node,int flags, int size, int op)
 				GenerateDiadic(op_sto,0,makereg(1),ap3);
 				GenerateDiadic(op_sto,0,makereg(2),ap3->amode2);
 			}
-			*/
 		}
 		else {
 			if (ap1->mode==am_reg)
@@ -1262,14 +1245,11 @@ AMODE *GenerateBinary(ENODE *node,int flags, int size, int op)
 			if (ap2)
 				ReleaseTempReg(ap2);
 			ReleaseTempReg(ap1);
-			ap3 = makereg(1);
-			/*
 			ap3 = GetTempRegister();
 			if (ap3->mode==am_reg)
 				GenerateDiadic(op_mov,0,ap3,makereg(1));
 			else
 				GenerateDiadic(op_sto,0,makereg(1),ap3);
-			*/
 		}
 	}
 	if (ap2) {
@@ -1339,7 +1319,7 @@ AMODE *GenerateModDiv(ENODE *node,int flags,int size)
 			GenerateDiadic(op_mov,0,makereg(1),ap1);
 		else
 			GenerateDiadic(op_ld,0,makereg(1),ap1);
-		if (ap1->mode==am_reg)
+		if (ap2->mode==am_reg)
 			GenerateDiadic(op_mov,0,makereg(2),ap2);
 		else if (ap2->mode==am_immed)
 			GenerateTriadic(op_mov,0,makereg(2),makereg(regZero),ap2);

@@ -581,13 +581,14 @@ int Statement::CSEOptimize()
 	nn = 0;
 	if (pass==1) {
 		csendx = 0;
-		nn = 0;
 		ZeroMemory(CSETable.CSETable,sizeof(CSETable.CSETable));
-		if (opt_noregs==FALSE) {
-			scan();         /* collect expressions */
-			nn = AllocateRegisterVars();
-    		repcse();			/* replace allocated expressions */
-		}
+	}
+	if (opt_noregs==FALSE) {
+		if (pass==1)
+		scan();         /* collect expressions */
+		nn = AllocateRegisterVars();
+		if (pass==2)
+    	repcse();			/* replace allocated expressions */
 	}
 	return nn;
 }
