@@ -185,27 +185,27 @@ ENODE *makefcnode(int nt, ENODE *v1, ENODE *v2, SYM *sp)
 ENODE *makesnode(int nt, std::string *v1, std::string *v2, int i)
 {
 	ENODE *ep;
-  ep = ENODE::alloc();
-  ep->nodetype = (enum e_node)nt;
-  ep->constflag = FALSE;
+	ep = ENODE::alloc();
+	ep->nodetype = (enum e_node)nt;
+	ep->constflag = FALSE;
 	ep->isUnsigned = FALSE;
 	ep->etype = bt_void;
 	ep->esize = -1;
 	ep->sp = v1;
-  ep->msp = v2;
+	ep->msp = v2;
 	ep->i = i;
 	ep->p[0] = 0;
 	ep->p[1] = 0;
 	ep->p[2] = 0;
-  return ep;
+	return (ep);
 }
 
 ENODE *makenodei(int nt, ENODE *v1, int i)
 {
 	ENODE *ep;
-  ep = ENODE::alloc();
-  ep->nodetype = (enum e_node)nt;
-  ep->constflag = FALSE;
+	ep = ENODE::alloc();
+	ep->nodetype = (enum e_node)nt;
+	ep->constflag = FALSE;
 	ep->isUnsigned = FALSE;
 	ep->etype = bt_void;
 	ep->esize = -1;
@@ -213,7 +213,7 @@ ENODE *makenodei(int nt, ENODE *v1, int i)
 	ep->p[0] = v1;
 	ep->p[1] = (ENODE *)NULL;
 	ep->p[2] = 0;
-    return ep;
+    return (ep);
 }
 
 ENODE *makeinode(int nt, int v1)
@@ -229,7 +229,7 @@ ENODE *makeinode(int nt, int v1)
 	ep->p[1] = 0;
 	ep->p[0] = 0;
 	ep->p[2] = 0;
-    return ep;
+    return (ep);
 }
 
 ENODE *makefnode(int nt, double v1)
@@ -247,7 +247,7 @@ ENODE *makefnode(int nt, double v1)
 	ep->p[0] = 0;
 	ep->p[1] = 0;
 	ep->p[2] = 0;
-	return ep;
+	return (ep);
 }
 
 void AddToList(ENODE *list, ENODE *ele)
@@ -940,7 +940,6 @@ TYP *ParsePrimaryExpression(ENODE **node, int got_pa)
 		else if (ival >= -32768 && ival < 32768)
 			pnode->esize = 1;
 		else if (ival >= -2147483648LL && ival < 2147483648LL) {
-			pnode->nodetype = en_licon;
 			pnode->esize = 2;
 			tptr = stdlong;
 		}

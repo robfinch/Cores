@@ -615,11 +615,12 @@ static void RestoreRegisterVars()
 //
 void GenerateReturn(Statement *stmt)
 {
-	AMODE *ap, *ap1;
+	AMODE *ap, *ap1, *ap2;
 	int nn, type;
 	int toAdd;
 	SYM *sym = currentFn;
 	SYM *p;
+	int size;
 
   // Generate the return expression and force the result into r1.
   if( stmt != NULL && stmt->exp != NULL )
@@ -629,11 +630,18 @@ void GenerateReturn(Statement *stmt)
 			type = currentFn->tp->GetBtp()->type;
 		else
 			type = bt_short;
-		ap = GenerateExpression(stmt->exp,F_REG|F_IMMED,
-			(type==bt_long || type==bt_ulong) ? sizeOfWord * 2 : sizeOfWord);
+		if (type==bt_long || type==bt_ulong)
+			size = 2;
+		else
+			size = 1;
+		ap = GenerateExpression(stmt->exp,F_REG|F_IMMED,sizeOfWord * size);
 		GenerateMonadic(op_hint,0,make_immed(2));
-		if (ap->mode == am_immed)
-		    GenLdi(makereg(1),ap);
+		if (ap->mode == am_immed) {
+			ap2 = makereg(1);
+			if (size==2)
+				ap2->amode2 = makereg(2);
+		    GenLdi(ap2,ap);
+		}
 		else if (ap->mode == am_reg) {
             if (sym->tp->GetBtp() && (sym->tp->GetBtp()->type==bt_struct || sym->tp->GetBtp()->type==bt_union)) {
 				p = sym->params.Find("_pHiddenStructPtr",false);
@@ -687,19 +695,18 @@ void GenerateReturn(Statement *stmt)
 				}
             }
             else {
-			    GenerateDiadic(op_mov, 0, makereg(1),ap);
+			    GenerateDiadic(op_mov, 0, makereg(1),makereg(ap->preg));
 				if (currentFn->tp->GetBtp() && (currentFn->tp->GetBtp()->type==bt_long
 					|| currentFn->tp->GetBtp()->type==bt_ulong)) {
-						GenerateDiadic(op_mov, 0, makereg(2),ap->amode2);
+						GenerateDiadic(op_mov, 0, makereg(2),makereg(ap->amode2->preg));
 				}
 			}
         }
 		else {
-		    GenLoad(makereg(1),ap,sizeOfWord,sizeOfWord);
-			if (currentFn->tp->GetBtp() && (currentFn->tp->GetBtp()->type==bt_long
-				|| currentFn->tp->GetBtp()->type==bt_ulong)) {
-					GenerateDiadic(op_mov, 0, makereg(2),ap->amode2);
-			}
+			ap1 = makereg(1);
+			if (size==2)
+				ap1->amode2 = makereg(2);
+		    GenLoad(ap1,ap,size,size);
 		}
 		ReleaseTempRegister(ap);
 	}
@@ -1049,15 +1056,49 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
 
 void GenLdi(AMODE *ap1, AMODE *ap2)
 {
+	int valh, vall;
+
+	if (ap2->offset->nodetype==en_nacon || ap2->offset->nodetype==en_cnacon
+		|| ap2->offset->nodetype==en_labcon || ap2->offset->nodetype==en_clabcon
+		) {
+		if (ap1->mode==am_reg) {
+			GenerateTriadic(op_mov,0,ap1,makereg(0),ap2);
+		}
+		else {
+			GenerateTriadic(op_mov,0,makereg(1),makereg(0),ap2);
+			GenerateDiadic(op_sto,0,makereg(1),ap1);
+		}
+		return;
+	}
+
+	vall = ap2->offset->i & 0xffffL;
+	if (ap2->amode2)
+		valh = ap2->amode2->offset->i;
+	else
+		valh = 0;
 	if (ap1->mode==am_reg) {
-		GenerateTriadic(op_mov,0,ap1,makereg(0),ap2);
-		if (ap1->amode2)
-			GenerateTriadic(op_mov,0,ap1->amode2,makereg(0),ap2->amode2);
+		if (vall==0)
+			GenerateDiadic(op_mov,0,ap1,makereg(0));
+		else
+			GenerateTriadic(op_mov,0,ap1,makereg(0),make_immed(vall));
+		if (ap1->amode2) {
+			if (valh==0)
+				GenerateDiadic(op_mov,0,ap1->amode2,makereg(0));
+			else
+				GenerateTriadic(op_mov,0,ap1->amode2,makereg(0),make_immed(valh));
+		}
 	}
 	else {
-		GenerateTriadic(op_mov,0,makereg(1),makereg(0),ap2);
-		if (ap1->amode2)
-			GenerateTriadic(op_mov,0,makereg(2),makereg(0),ap2->amode2);
+		if (vall==0)
+			GenerateDiadic(op_mov,0,makereg(1),makereg(0));
+		else
+			GenerateTriadic(op_mov,0,makereg(1),makereg(0),make_immed(vall));
+		if (ap1->amode2) {
+			if (valh==0)
+				GenerateDiadic(op_mov,0,makereg(2),makereg(0));
+			else
+				GenerateTriadic(op_mov,0,makereg(2),makereg(0),make_immed(valh));
+		}
 		GenerateDiadic(op_sto,0,makereg(1),ap1);
 		if (ap1->amode2)
 			GenerateDiadic(op_sto,0,makereg(2),ap1->amode2);

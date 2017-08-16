@@ -86,7 +86,7 @@ enum e_node {
         en_cbc, en_cbh,
 		en_cch,
 		en_cld, en_cfd,
-        en_icon, en_licon, en_fcon, en_fqcon, en_dcon, en_tcon, en_labcon, en_nacon, en_autocon, en_autofcon, en_classcon,
+        en_icon, en_fcon, en_fqcon, en_dcon, en_tcon, en_labcon, en_nacon, en_autocon, en_autofcon, en_classcon,
 		en_clabcon, en_cnacon,
 		en_dlabcon, en_dnacon, // 30<-
 		

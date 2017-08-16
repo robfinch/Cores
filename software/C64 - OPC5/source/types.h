@@ -100,6 +100,7 @@ public:
 	__int8 scale;					// index scaling factor
 	// The following could be in a value union
 	int i;
+	int oi;							// original value of i for pass2
 	double f;
 	double f1, f2;
 	std::string *sp;

@@ -25,6 +25,7 @@
 //
 #include "stdafx.h"
 
+extern int pass;
 int hook_predreg=15;
 extern void validate(AMODE *ap);
 AMODE *GenerateExpression();            /* forward ParseSpecifieraration */
@@ -1084,10 +1085,12 @@ AMODE *GenerateUnary(ENODE *node,int flags, int size)
 AMODE *GenerateBinary(ENODE *node,int flags, int size, int op)
 {
 	AMODE *ap1, *ap2, *ap3;
+	bool flag = false;
 	
 	if (ENODE::IsEqual(node->p[0],node->p[1]) && !opt_nocgo) {
 		ap1 = GenerateExpression(node->p[0],F_REG|F_MEM,size);
-		ap2 = nullptr;
+		ap2 = ap1;
+		flag = true;
 	}
 	else
 	{
@@ -1163,7 +1166,7 @@ AMODE *GenerateBinary(ENODE *node,int flags, int size, int op)
 				GenerateDiadic(op_sbc,0,makereg(2),ap2?ap2->amode2:makereg(2));
 			else
 				GenerateDiadic(op,0,makereg(2),ap2?ap2->amode2:makereg(2));
-			if (ap2)
+			if (!flag)
 				ReleaseTempReg(ap2);
 			ReleaseTempReg(ap1);
 			ap3 = GetTempRegister();
@@ -1186,7 +1189,7 @@ AMODE *GenerateBinary(ENODE *node,int flags, int size, int op)
 				GenerateDiadic(op_ld,0,makereg(1),ap1);
 				GenerateDiadic(op,0,makereg(1),ap2?ap2:makereg(1));
 			}
-			if (ap2)
+			if (!flag)
 				ReleaseTempReg(ap2);
 			ReleaseTempReg(ap1);
 			ap3 = GetTempRegister();
@@ -1227,7 +1230,7 @@ AMODE *GenerateBinary(ENODE *node,int flags, int size, int op)
 				else
 					GenerateDiadic(op,0,makereg(2),makereg(2));
 			}
-			if (ap2)
+			if (!flag)
 				ReleaseTempReg(ap2);
 			ReleaseTempReg(ap1);
 			ap3 = GetTempRegister();
@@ -1248,7 +1251,7 @@ AMODE *GenerateBinary(ENODE *node,int flags, int size, int op)
 				GenerateDiadic(op_ld,0,makereg(1),ap1);
 			GenerateDiadic(op_ld,0,makereg(2),ap2);
 			GenerateDiadic(op,0,makereg(1),ap2?makereg(2):makereg(1));
-			if (ap2)
+			if (!flag)
 				ReleaseTempReg(ap2);
 			ReleaseTempReg(ap1);
 			ap3 = GetTempRegister();
@@ -1258,7 +1261,7 @@ AMODE *GenerateBinary(ENODE *node,int flags, int size, int op)
 				GenerateDiadic(op_sto,0,makereg(1),ap3);
 		}
 	}
-	if (ap2) {
+	if (!flag) {
 		ap1->isAddress = ap2->isAddress | ap1->isAddress;
 		ap3->isAddress = ap1->isAddress | ap2->isAddress;
 	}
@@ -1455,7 +1458,7 @@ AMODE *GenerateMac(ENODE *node,int flags, int size)
 	ap2 = GenerateExpression(node->p[2],F_REG|F_IMMED,size);
 	if (ap2->mode==am_immed) {
 		if (ap2->offset->i!=0)
-			GenerateTriadic(op_add,0,ap1,makereg(regZero),make_immed(ap2->offset->i));
+			GenerateTriadic(op_add,0,ap1,makereg(regZero),ap2);
 	}
 	else 
 		GenerateDiadic(op_add,0,ap1,ap2);
@@ -1797,10 +1800,10 @@ AMODE *GenerateAssignAdd(ENODE *node,int flags, int size, int op)
 		if (ap2->mode==am_reg)
 			GenerateDiadic(op,0,ap1,ap2);
 		else if (ap2->mode==am_immed) {
-			if (ap2->offset->i < 16)
+			if (ap2->offset->i < 16 && ap2->offset->nodetype != en_cnacon && ap2->offset->nodetype!=en_nacon)
 				GenerateDiadic(node->nodetype==en_asadd ? op_inc : op_dec,0,ap1,make_immed(ap2->offset->i));
 			else
-				GenerateTriadic(node->nodetype==en_asadd ? op_add : op_sub, 0, ap1, makereg(regZero),make_immed(ap2->offset->i));
+				GenerateTriadic(node->nodetype==en_asadd ? op_add : op_sub, 0, ap1, makereg(regZero),ap2);
 		}
 		else {
 			GenerateDiadic(op_ld,0,makereg(2),ap2);
@@ -2320,7 +2323,8 @@ AMODE *GenerateAssign(ENODE *node, int flags, int size)
 		    GenStore(ap2,ap1,ssize);
         }
 		else if (ap2->mode == am_immed) {
-            if (ap2->offset->i == 0 && ap2->offset->nodetype != en_labcon) {
+            if (ap2->offset->i == 0 && (ssize!=2 || (ap2->amode2 && ap2->amode2->offset->i==0))
+				&& ap2->offset->nodetype != en_labcon) {
 				ap4 = makereg(regZero);
 				if (ssize==2)
 					ap4->amode2 = makereg(regZero);
@@ -2496,7 +2500,7 @@ AMODE *GenAutocon(ENODE *node, int flags, int size, bool isFloat)
 	ap2->isFloat = isFloat;
 	ap2->isAddress = true;
 	if (ap1->mode==am_reg)
-		GenerateTriadic(op_mov,0,ap1,makereg(regBP),make_immed(ap2->offset->i));	// LEA
+		GenerateDiadic(op_mov,0,ap1,ap2);	// LEA
 	else {
 		GenerateDiadic(op_mov,0,makereg(1),ap2);
 		GenerateDiadic(op_sto,0,makereg(1),ap1);
@@ -2553,28 +2557,15 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
         ap1->mode = am_immed;
         ap1->offset = node;
 		ap1->amode2 = allocAmode();
+		ap1->amode2->mode = am_immed;
 		ap1->amode2->offset = node->Duplicate();
-		ap1->amode2->offset->i = ap1->amode2->offset->i >> 16;
-		ap1->offset->i = ap1->offset->i & 0xffff;
+		ap1->amode2->offset->i = ap1->amode2->offset->oi >> 16;
 		ap1->amode2->offset->nodetype = en_icon;
+		ap1->offset->oi = ap1->offset->i;
+		ap1->offset->i &= 0xffffL;
         MakeLegalAmode(ap1,flags,size);
         Leave("GenExperssion",3); 
         return ap1;
-
-    case en_licon:
-        ap1 = allocAmode();
-        ap1->mode = am_immed;
-        ap1->offset = node;
-		ap1->offset->nodetype = en_icon;
-		ap1->amode2 = allocAmode();
-		ap1->amode2->mode = am_immed;
-		ap1->amode2->offset = node->Duplicate();
-		ap1->amode2->offset->i = ap1->amode2->offset->i >> 16;
-		ap1->offset->i = ap1->offset->i & 0xffff;
-		ap1->amode2->offset->nodetype = en_icon;
-        MakeLegalAmode(ap1,flags,2);
-        Leave("GenExperssion",3); 
-        return (ap1);
 
 	case en_labcon:
             if (use_gp) {
@@ -2884,8 +2875,6 @@ int GetNaturalSize(ENODE *node)
 		if (-2147483648LL <= node->i && node->i <= 2147483647LL)
 			return 2;
 		return 4;
-	case en_licon:
-		return 2;
 	case en_fcon:
 		return node->tp->precision / 16;
 	case en_tcon: return 6;

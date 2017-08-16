@@ -24,7 +24,7 @@
 //                                                                          
 // ============================================================================
 //
-
+extern int pass;
 //
 // Copy the node passed into a new enode so it wont get corrupted during
 // substitution.

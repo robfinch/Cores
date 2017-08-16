@@ -384,6 +384,12 @@ void peep_move(OCODE	*ip)
 		return;
 	if (ip->oper1==nullptr || ip->oper2==nullptr)
 		return;
+	if (ip->oper3) {
+		if (ip->oper3->offset) {
+			if (ip->oper3->offset->i==0)
+				ip->oper3 = nullptr;
+		}
+	}
 	if (equal_address(ip->oper1, ip->oper2)) {
 		if (ip->oper3) {
 			if (ip->oper3->offset) {
