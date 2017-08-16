@@ -40,8 +40,8 @@ void GenerateRaptor64Cmp(ENODE *node, int op, int label, int predreg);
 void GenerateTable888Cmp(ENODE *node, int op, int label, int predreg);
 void GenerateThorCmp(ENODE *node, int op, int label, int predreg);
 void GenLoad(AMODE *ap3, AMODE *ap1, int ssize, int size);
-void GenerateZeroExtend(AMODE *ap, int isize, int osize);
-void GenerateSignExtend(AMODE *ap, int isize, int osize);
+void GenerateZeroExtend(AMODE *ap, AMODE *ap2, int isize, int osize);
+void GenerateSignExtend(AMODE *ap, AMODE *ap2, int isize, int osize);
 
 static int nest_level = 0;
 
@@ -473,48 +473,71 @@ void GenStore(AMODE *ap1, AMODE *ap3, int size)
 // loaded into a register (if not already) and if osize is
 // greater than isize it will be extended to match.
 //
-void GenerateSignExtend(AMODE *ap, int isize, int osize)
-{    
+void GenerateSignExtend(AMODE *ap, AMODE *ap1, int isize, int osize)
+{   
 	if( isize == osize )
         return;
-	if (ap->isUnsigned)
-		return;
+
+	ap1 = GetTempRegister();
+	ap1->amode2 = GetTempRegister();
+
 	switch(ap->mode) {
 	case am_reg:
-		if (ap->amode2) {
-			GenerateDiadic(op_mov,0,ap->amode2,makereg(regZero));
-			GenerateDiadic(op_add,0,ap,makereg(0));
-			GeneratePredicatedTriadic(pop_mi,op_mov,0,ap->amode2,makereg(regZero),make_immed(-1));
+		if (ap1->mode==am_reg) {
+			GenerateDiadic(op_mov,0,ap1,ap);
+			GenerateDiadic(op_mov,0,ap1->amode2,makereg(regZero));	// assume positive
+			GenerateDiadic(op_or,0,ap,makereg(regZero));
+			GeneratePredicatedTriadic(pop_mi,op_mov,0,ap1->amode2,makereg(regZero),make_immed(-1));
 		}
-		return;
+		else {
+			GenerateDiadic(op_sto,0,ap,ap1);
+			GenerateDiadic(op_sto,0,makereg(regZero),ap1->amode2);
+			GenerateTriadic(op_mov,0,makereg(1),makereg(regZero),make_immed(-1));
+			GenerateDiadic(op_or,0,ap,makereg(regZero));
+			GeneratePredicatedTriadic(pop_mi,op_sto,0,makereg(1),ap1->amode2,nullptr);
+		}
+		break;
 	default:
-		if (ap->amode2) {
-			GenerateDiadic(op_sto,0,makereg(regZero),ap->amode2);
+		if (ap1->mode==am_reg) {
+			GenerateDiadic(op_ld,0,makereg(1),ap);
+			GenerateDiadic(op_mov,0,ap1,makereg(1));
+			GenerateDiadic(op_mov,0,ap1->amode2,makereg(regZero));
 			GenerateTriadic(op_mov,0,makereg(2),makereg(regZero),make_immed(-1));
 			GenerateDiadic(op_ld,0,makereg(1),ap);
-			GeneratePredicatedTriadic(pop_mi,op_sto,0,makereg(2),ap->amode2,nullptr);
+			GeneratePredicatedTriadic(pop_mi,op_mov,0,ap1->amode2,makereg(2),nullptr);
 		}
-		return;
+		else {
+			GenerateDiadic(op_ld,0,makereg(1),ap);
+			GenerateDiadic(op_sto,0,makereg(1),ap1);
+			GenerateDiadic(op_sto,0,makereg(regZero),ap1->amode2);
+			GenerateTriadic(op_mov,0,makereg(2),makereg(regZero),make_immed(-1));
+			GenerateDiadic(op_ld,0,makereg(1),ap);
+			GeneratePredicatedTriadic(pop_mi,op_sto,0,makereg(2),ap1->amode2,nullptr);
+		}
+		break;
 	}
 }
 
-void GenerateZeroExtend(AMODE *ap, int isize, int osize)
+void GenerateZeroExtend(AMODE *ap, AMODE *ap1, int isize, int osize)
 {    
 	if( isize == osize )
         return;
-	if (ap->isUnsigned)
-		return;
-	switch(ap->mode) {
-	case am_reg:
-		if (ap->amode2) {
-			GenerateDiadic(op_mov,0,ap->amode2,makereg(regZero));
+
+	if (ap1->mode==am_reg) {
+		if (ap->mode==am_reg)
+			GenerateDiadic(op_mov,0,ap1,ap);
+		else
+			GenerateDiadic(op_ld,0,ap1,ap);
+		GenerateDiadic(op_mov,0,ap1->amode2,makereg(regZero));
+	}
+	else {
+		if (ap->mode==am_reg)
+			GenerateDiadic(op_sto,0,ap,ap1);
+		else {
+			GenerateDiadic(op_ld,0,makereg(1),ap);
+			GenerateDiadic(op_sto,0,makereg(1),ap1);
 		}
-		return;
-	default:
-		if (ap->amode2) {
-			GenerateDiadic(op_sto,0,makereg(regZero),ap->amode2);
-		}
-		return;
+		GenerateDiadic(op_sto,0,makereg(regZero),ap1->amode2);
 	}
 }
 
@@ -809,12 +832,44 @@ long GetReferenceSize(ENODE *node)
 	return 1;
 }
 
+void GenCopy(AMODE *tgt, AMODE *src)
+{
+	switch(src->mode) {
+	case am_reg:
+		if (tgt->mode==am_reg) {
+			GenerateDiadic(op_mov,0,tgt,src);
+			if (src->amode2)
+				GenerateDiadic(op_mov,0,tgt->amode2,src->amode2);
+		}
+		else {
+			GenerateDiadic(op_sto,0,src,tgt);
+			if (src->amode2)
+				GenerateDiadic(op_sto,0,src->amode2,tgt->amode2);
+		}
+		break;
+	default:
+		if (tgt->mode==am_reg) {
+			GenerateDiadic(op_ld,0,tgt,src);
+			if (src->amode2)
+				GenerateDiadic(op_ld,0,tgt->amode2,src->amode2);
+		}
+		else {
+			GenerateDiadic(op_ld,0,makereg(1),src);
+			GenerateDiadic(op_sto,0,makereg(1),tgt);
+			if (src->amode2) {
+				GenerateDiadic(op_ld,0,makereg(1),src->amode2);
+				GenerateDiadic(op_sto,0,makereg(1),tgt->amode2);
+			}
+		}
+	}
+}
+
 //
 //  Return the addressing mode of a dereferenced node.
 //
 AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
 {    
-	AMODE *ap1;
+	AMODE *ap1, *ap2;
     int siz1;
 
     Enter("Genderef");
@@ -826,132 +881,242 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
 //    }
     if( node->p[0]->nodetype == en_add )
     {
-//        ap2 = GetTempRegister();
-        ap1 = GenerateIndex(node->p[0]);
-//        GenerateTriadic(op_add,0,ap2,makereg(ap1->preg),makereg(regGP));
-		ap1->isUnsigned = !su;//node->isUnsigned;
-		// *** may have to fix for stackseg
-		ap1->segment = dataseg;
-		ap1->isAddress = true;
-		ap1->mode = am_ind;
-//		ap2->mode = ap1->mode;
-//		ap2->segment = dataseg;
-//		ap2->offset = ap1->offset;
-//		ReleaseTempRegister(ap1);
-		if (size==2) {
-			ap1->mode = am_indx;
-			ap1->amode2 = copy_addr(ap1);
-			if (ap1->offset)
-				ap1->amode2->offset = makeinode(en_icon,ap1->offset->i+1);
+		if (siz1 != size) {
+			ap2 = GetTempRegister();
+			if (size==2)
+				ap2->amode2 = GetTempRegister();
+			ap1 = GenerateIndex(node->p[0]);
+	//        GenerateTriadic(op_add,0,ap2,makereg(ap1->preg),makereg(regGP));
+			ap1->isUnsigned = !su;//node->isUnsigned;
+			// *** may have to fix for stackseg
+			ap1->segment = dataseg;
+			ap1->isAddress = true;
+			ap1->mode = am_ind;
+	//		ap2->mode = ap1->mode;
+	//		ap2->segment = dataseg;
+	//		ap2->offset = ap1->offset;
+	//		ReleaseTempRegister(ap1);
+			if (size==2) {
+				ap1->mode = am_indx;
+				ap1->amode2 = copy_addr(ap1);
+				if (ap1->offset)
+					ap1->amode2->offset = makeinode(en_icon,ap1->offset->i+1);
+				else {
+					ap1->offset = makeinode(en_icon,0);
+					ap1->amode2->offset = makeinode(en_icon,1);
+				}
+			}
+			if (!node->isUnsigned) {
+				GenerateSignExtend(ap1,ap2,siz1,size);
+				ReleaseTempReg(ap1);
+				MakeLegalAmode(ap2,flags,siz1);
+				return (ap2);
+			}
 			else {
-				ap1->offset = makeinode(en_icon,0);
-				ap1->amode2->offset = makeinode(en_icon,1);
+				GenerateZeroExtend(ap1,ap2,siz1,size);
+				ReleaseTempReg(ap1);
+				MakeLegalAmode(ap2,flags,siz1);
+				return (ap2);
 			}
 		}
-		if (!node->isUnsigned)
-			GenerateSignExtend(ap1,siz1,size);
-		else
-		    MakeLegalAmode(ap1,flags,siz1);
-        MakeLegalAmode(ap1,flags,size);
-		goto xit;
+		else {
+			ap1 = GenerateIndex(node->p[0]);
+	//        GenerateTriadic(op_add,0,ap2,makereg(ap1->preg),makereg(regGP));
+			ap1->isUnsigned = !su;//node->isUnsigned;
+			// *** may have to fix for stackseg
+			ap1->segment = dataseg;
+			ap1->isAddress = true;
+			ap1->mode = am_ind;
+			if (size==2) {
+				ap1->mode = am_indx;
+				ap1->amode2 = copy_addr(ap1);
+				if (ap1->offset)
+					ap1->amode2->offset = makeinode(en_icon,ap1->offset->i+1);
+				else {
+					ap1->offset = makeinode(en_icon,0);
+					ap1->amode2->offset = makeinode(en_icon,1);
+				}
+			}
+			MakeLegalAmode(ap1,flags,size);
+			return (ap1);
+		}
     }
     else if( node->p[0]->nodetype == en_autocon )
     {
-        ap1 = allocAmode();
-        ap1->mode = am_indx;
-        ap1->preg = regBP;
-        ap1->offset = makeinode(en_icon,node->p[0]->i);
-		ap1->offset->sym = node->p[0]->sym;
-		ap1->isUnsigned = !su;
-		ap1->isAddress = true;
-		if (size==2) {
-			ap1->amode2 = allocAmode();
-			ap1->amode2->mode = am_indx;
-			ap1->amode2->preg = regBP;
-			ap1->amode2->offset = makeinode(en_icon,node->p[0]->i+1);
-			ap1->amode2->offset->sym = node->p[0]->sym;
-			ap1->amode2->isUnsigned = !su;
-			ap1->amode2->isAddress = true;
+		if (siz1 != size) {
+			ap2 = GetTempRegister();
+			if (size==2)
+				ap2->amode2 = GetTempRegister();
+			ap1 = allocAmode();
+			ap1->mode = am_indx;
+			ap1->preg = regBP;
+			ap1->offset = makeinode(en_icon,node->p[0]->i);
+			ap1->offset->sym = node->p[0]->sym;
+			ap1->isUnsigned = !su;
+			ap1->isAddress = true;
+			if (size==2) {
+				ap1->amode2 = allocAmode();
+				ap1->amode2->mode = am_indx;
+				ap1->amode2->preg = regBP;
+				ap1->amode2->offset = makeinode(en_icon,node->p[0]->i+1);
+				ap1->amode2->offset->sym = node->p[0]->sym;
+				ap1->amode2->isUnsigned = !su;
+				ap1->amode2->isAddress = true;
+			}
+			if (!node->isUnsigned) {
+				GenerateSignExtend(ap1,ap2,siz1,size);
+				ReleaseTempReg(ap1);
+				MakeLegalAmode(ap2,flags,siz1);
+				return (ap2);
+			}
+			else {
+				GenerateZeroExtend(ap1,ap2,siz1,size);
+				ReleaseTempReg(ap1);
+				MakeLegalAmode(ap2,flags,siz1);
+				return (ap2);
+			}
 		}
-		if (!node->isUnsigned)
-	        GenerateSignExtend(ap1,siz1,size);
-		else
-		    MakeLegalAmode(ap1,flags,siz1);
-        MakeLegalAmode(ap1,flags,size);
-		goto xit;
+		else {
+			ap1 = allocAmode();
+			ap1->mode = am_indx;
+			ap1->preg = regBP;
+			ap1->offset = makeinode(en_icon,node->p[0]->i);
+			ap1->offset->sym = node->p[0]->sym;
+			ap1->isUnsigned = !su;
+			ap1->isAddress = true;
+			if (size==2) {
+				ap1->amode2 = allocAmode();
+				ap1->amode2->mode = am_indx;
+				ap1->amode2->preg = regBP;
+				ap1->amode2->offset = makeinode(en_icon,node->p[0]->i+1);
+				ap1->amode2->offset->sym = node->p[0]->sym;
+				ap1->amode2->isUnsigned = !su;
+				ap1->amode2->isAddress = true;
+			}
+			MakeLegalAmode(ap1,flags,size);
+			return(ap1);
+		}
     }
     else if( node->p[0]->nodetype == en_classcon )
     {
-        ap1 = allocAmode();
-        ap1->mode = am_indx;
-        ap1->preg = regCLP;
-        ap1->offset = makeinode(en_icon,node->p[0]->i);
-		ap1->offset->sym = node->p[0]->sym;
-		ap1->isUnsigned = !su;
-		ap1->isAddress = true;
-		if (!node->isUnsigned)
-	        GenerateSignExtend(ap1,siz1,size);
-		else
-		    MakeLegalAmode(ap1,flags,siz1);
-        MakeLegalAmode(ap1,flags,size);
-		goto xit;
-    }
-    else if( node->p[0]->nodetype == en_autofcon )
-    {
-        ap1 = allocAmode();
-        ap1->mode = am_indx;
-        ap1->preg = regBP;
-        ap1->offset = makeinode(en_icon,node->p[0]->i);
-		ap1->offset->sym = node->p[0]->sym;
-		if (node->p[0]->tp)
-			switch(node->p[0]->tp->precision) {
-			case 32: ap1->FloatSize = 's'; break;
-			case 64: ap1->FloatSize = 'd'; break;
-			default: ap1->FloatSize = 'd'; break;
+		if (siz1 != size) {
+			ap2 = GetTempRegister();
+			if (size==2)
+				ap2->amode2 = GetTempRegister();
+			ap1 = allocAmode();
+			ap1->mode = am_indx;
+			ap1->preg = regCLP;
+			ap1->offset = makeinode(en_icon,node->p[0]->i);
+			ap1->offset->sym = node->p[0]->sym;
+			ap1->isUnsigned = !su;
+			ap1->isAddress = true;
+			if (!node->isUnsigned) {
+				GenerateSignExtend(ap1,ap2,siz1,size);
+				ReleaseTempReg(ap1);
+				MakeLegalAmode(ap2,flags,siz1);
+				return (ap2);
 			}
-		else
-			ap1->FloatSize = 'd';
-		ap1->segment = stackseg;
-		ap1->isFloat = TRUE;
-		ap1->isAddress = true;
-//	    MakeLegalAmode(ap1,flags,siz1);
-        MakeLegalAmode(ap1,flags,size);
-		goto xit;
+			else {
+				GenerateZeroExtend(ap1,ap2,siz1,size);
+				ReleaseTempReg(ap1);
+				MakeLegalAmode(ap2,flags,siz1);
+				return (ap2);
+			}
+		}
+		else {
+			ap1 = allocAmode();
+			ap1->mode = am_indx;
+			ap1->preg = regCLP;
+			ap1->offset = makeinode(en_icon,node->p[0]->i);
+			ap1->offset->sym = node->p[0]->sym;
+			ap1->isUnsigned = !su;
+			ap1->isAddress = true;
+			if (size==2) {
+				ap1->amode2 = allocAmode();
+				ap1->amode2->mode = am_indx;
+				ap1->amode2->preg = regCLP;
+				ap1->amode2->offset = makeinode(en_icon,0);
+				ap1->amode2->offset->sym = node->p[0]->sym;
+				ap1->amode2->isUnsigned = !su;
+				ap1->amode2->isAddress = true;
+			}
+			MakeLegalAmode(ap1,flags,size);
+			return (ap1);
+		}
     }
-    else if(( node->p[0]->nodetype == en_labcon || node->p[0]->nodetype==en_nacon ) && use_gp)
-    {
-        ap1 = allocAmode();
-        ap1->mode = am_indx;
-        ap1->preg = regGP;
-		ap1->segment = dataseg;
-        ap1->offset = node->p[0];//makeinode(en_icon,node->p[0]->i);
-		ap1->isUnsigned = !su;
-		ap1->isAddress = true;
-		if (!node->isUnsigned)
-	        GenerateSignExtend(ap1,siz1,size);
-		else
-		    MakeLegalAmode(ap1,flags,siz1);
-        ap1->isVolatile = node->isVolatile;
-        MakeLegalAmode(ap1,flags,size);
-		goto xit;
-    }
+  //  else if(( node->p[0]->nodetype == en_labcon || node->p[0]->nodetype==en_nacon ) && use_gp)
+  //  {
+  //      ap1 = allocAmode();
+  //      ap1->mode = am_indx;
+  //      ap1->preg = regGP;
+		//ap1->segment = dataseg;
+  //      ap1->offset = node->p[0];//makeinode(en_icon,node->p[0]->i);
+		//ap1->isUnsigned = !su;
+		//ap1->isAddress = true;
+		//if (!node->isUnsigned)
+	 //       GenerateSignExtend(ap1,siz1,size);
+		//else
+		//    MakeLegalAmode(ap1,flags,siz1);
+  //      ap1->isVolatile = node->isVolatile;
+  //      MakeLegalAmode(ap1,flags,size);
+		//goto xit;
+  //  }
     else if(( node->p[0]->nodetype == en_labcon || node->p[0]->nodetype==en_nacon ))
     {
+		if (siz1 != size) {
+			ap2 = GetTempRegister();
+			if (size==2)
+				ap2->amode2 = GetTempRegister();
+			ap1 = allocAmode();
+			ap1->mode = am_direct;
+			ap1->preg = regZero;
+			ap1->offset = node->p[0];//makeinode(en_icon,node->p[0]->i);
+			ap1->isUnsigned = !su;
+			ap1->isAddress = true;
+			if (!node->isUnsigned) {
+				GenerateSignExtend(ap1,ap2,siz1,size);
+				ReleaseTempReg(ap1);
+				MakeLegalAmode(ap2,flags,siz1);
+				return (ap2);
+			}
+			else {
+				GenerateZeroExtend(ap1,ap2,siz1,size);
+				ReleaseTempReg(ap1);
+				MakeLegalAmode(ap2,flags,siz1);
+				return (ap2);
+			}
+		}
         ap1 = allocAmode();
         ap1->mode = am_direct;
         ap1->preg = regZero;
         ap1->offset = node->p[0];//makeinode(en_icon,node->p[0]->i);
 		ap1->isUnsigned = !su;
 		ap1->isAddress = true;
-		if (!node->isUnsigned)
-	        GenerateSignExtend(ap1,siz1,size);
-		else
-		    MakeLegalAmode(ap1,flags,siz1);
         ap1->isVolatile = node->isVolatile;
         MakeLegalAmode(ap1,flags,size);
-		goto xit;
+		return (ap1);
     }
 	else if (node->p[0]->nodetype == en_regvar) {
+		if (siz1 != size) {
+			ap2 = GetTempRegister();
+			if (size==2)
+				ap2->amode2 = GetTempRegister();
+		    ap1 = allocAmode();
+			ap1->mode = am_reg;
+			ap1->preg = node->p[0]->i;
+			if (!node->isUnsigned) {
+				GenerateSignExtend(ap1,ap2,siz1,size);
+				ReleaseTempReg(ap1);
+				MakeLegalAmode(ap2,flags,siz1);
+				return (ap2);
+			}
+			else {
+				GenerateZeroExtend(ap1,ap2,siz1,size);
+				ReleaseTempReg(ap1);
+				MakeLegalAmode(ap2,flags,siz1);
+				return (ap2);
+			}
+		}
         ap1 = allocAmode();
 		// For parameters we want Rn, for others [Rn]
 		// This seems like an error earlier in the compiler
@@ -965,20 +1130,52 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
 	    Leave("Genderef",3);
         return (ap1);
 	}
-	else if (node->p[0]->nodetype == en_fpregvar) {
-		//error(ERR_DEREF);
-        ap1 = allocAmode();
-		ap1->mode = node->p[0]->i < 7 ? am_ind : am_fpreg;
-		ap1->preg = node->p[0]->i;
-		ap1->isFloat = TRUE;
-		ap1->isAddress = true;
-        MakeLegalAmode(ap1,flags,size);
-	    Leave("Genderef",3);
-        return ap1;
+	//else if (node->p[0]->nodetype == en_fpregvar) {
+	//	//error(ERR_DEREF);
+ //       ap1 = allocAmode();
+	//	ap1->mode = node->p[0]->i < 7 ? am_ind : am_fpreg;
+	//	ap1->preg = node->p[0]->i;
+	//	ap1->isFloat = TRUE;
+	//	ap1->isAddress = true;
+ //       MakeLegalAmode(ap1,flags,size);
+	//    Leave("Genderef",3);
+ //       return ap1;
+	//}
+	if (siz1 != size) {
+		ap2 = GetTempRegister();
+		if (size==2)
+			ap2->amode2 = GetTempRegister();
 	}
     ap1 = GenerateExpression(node->p[0],F_REG | F_IMMED,1); /* generate address */
     if( ap1->mode == am_reg || ap1->mode==am_fpreg)
     {
+		if (siz1 != size) {
+			if (use_gp) {
+				ap1->mode = am_indx;
+				ap1->sreg = regGP;
+			}
+			else
+				ap1->mode = am_ind;
+			if (node->p[0]->constflag==TRUE)
+				ap1->offset = node->p[0];
+			else
+				ap1->offset = nullptr;	// ****
+			ap1->isUnsigned = !su;
+			ap1->isAddress = true;
+	        ap1->isVolatile = node->isVolatile;
+			if (!node->isUnsigned) {
+				GenerateSignExtend(ap1,ap2,siz1,size);
+				ReleaseTempReg(ap1);
+				MakeLegalAmode(ap2,flags,siz1);
+				return (ap2);
+			}
+			else {
+				GenerateZeroExtend(ap1,ap2,siz1,size);
+				ReleaseTempReg(ap1);
+				MakeLegalAmode(ap2,flags,siz1);
+				return (ap2);
+			}
+		}
 //        ap1->mode = am_ind;
           if (use_gp) {
               ap1->mode = am_indx;
@@ -992,33 +1189,37 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
 			ap1->offset = nullptr;	// ****
 		ap1->isUnsigned = !su;
 		ap1->isAddress = true;
-		if (!node->isUnsigned)
-	        GenerateSignExtend(ap1,siz1,size);
-		else
-		    MakeLegalAmode(ap1,flags,siz1);
         ap1->isVolatile = node->isVolatile;
         MakeLegalAmode(ap1,flags,size);
-		goto xit;
+		return (ap1);
     }
-    if( ap1->mode == am_fpreg )
-    {
-//        ap1->mode = am_ind;
-          if (use_gp) {
-              ap1->mode = am_indx;
-              ap1->sreg = regGP;
-          }
-          else
-             ap1->mode = am_ind;
-		ap1->offset = 0;	// ****
+	if (siz1 != size) {
+		if (use_gp) {
+			ap1->mode = am_indx;
+			ap1->preg = regGP;
+    		ap1->segment = dataseg;
+		}
+		else {
+			ap1->mode = am_direct;
+			ap1->isUnsigned = !su;
+		}
+	//    ap1->offset = makeinode(en_icon,node->p[0]->i);
 		ap1->isUnsigned = !su;
+		ap1->isVolatile = node->isVolatile;
 		ap1->isAddress = true;
-		if (!node->isUnsigned)
-	        GenerateSignExtend(ap1,siz1,size);
-		else
-		    MakeLegalAmode(ap1,flags,siz1);
-        MakeLegalAmode(ap1,flags,size);
-		goto xit;
-    }
+		if (!node->isUnsigned) {
+			GenerateSignExtend(ap1,ap2,siz1,size);
+			ReleaseTempReg(ap1);
+			MakeLegalAmode(ap2,flags,siz1);
+			return (ap2);
+		}
+		else {
+			GenerateZeroExtend(ap1,ap2,siz1,size);
+			ReleaseTempReg(ap1);
+			MakeLegalAmode(ap2,flags,siz1);
+			return (ap2);
+		}
+	}
 	// See segments notes
 	//if (node->p[0]->nodetype == en_labcon &&
 	//	node->p[0]->etype == bt_pointer && node->p[0]->constflag)
@@ -1036,16 +1237,12 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
     }
 //    ap1->offset = makeinode(en_icon,node->p[0]->i);
     ap1->isUnsigned = !su;
-	if (!node->isUnsigned)
-	    GenerateSignExtend(ap1,siz1,size);
-	else
-		MakeLegalAmode(ap1,flags,siz1);
     ap1->isVolatile = node->isVolatile;
 	ap1->isAddress = true;
     MakeLegalAmode(ap1,flags,size);
-xit:
+
     Leave("Genderef",0);
-    return ap1;
+    return (ap1);
 }
 
 //
@@ -1350,9 +1547,8 @@ AMODE *GenerateModDiv(ENODE *node,int flags,int size)
 		else
 			GenerateDiadic(op_sto,0,makereg(1),ap3);
 		//GenerateDiadic(op_mov,0,ap3,makereg(1));
-		GenerateSignExtend(ap3,size,size);
+		//GenerateSignExtend(ap3,size,size);
 		MakeLegalAmode(ap3,flags,size);
-		MakeLegalAmode(ap3,flags,sizeOfWord);
 		return (ap3);
 	}
 	else {
@@ -1814,8 +2010,8 @@ AMODE *GenerateAssignAdd(ENODE *node,int flags, int size, int op)
 		GenMemop(op, ap1, ap2, ssize);
 	}
     ReleaseTempReg(ap2);
-	if (!ap1->isFloat && !ap1->isUnsigned)
-		GenerateSignExtend(ap1,ssize,size);
+	//if (!ap1->isFloat && !ap1->isUnsigned)
+	//	GenerateSignExtend(ap1,ssize,size);
     MakeLegalAmode(ap1,flags,size);
     return ap1;
 }
@@ -1843,8 +2039,8 @@ AMODE *GenerateAssignLogic(ENODE *node,int flags, int size, int op)
 		GenMemop(op, ap1, ap2, ssize);
 	}
     ReleaseTempRegister(ap2);
-	if (!ap1->isUnsigned)
-		GenerateSignExtend(ap1,ssize,size);
+	//if (!ap1->isUnsigned)
+	//	GenerateSignExtend(ap1,ssize,size);
     MakeLegalAmode(ap1,flags,size);
     return (ap1);
 }
@@ -1876,7 +2072,7 @@ AMODE *GenerateAssignMultiply(ENODE *node,int flags, int size, int op)
 			GenerateTriadic(op_jsr,0,makereg(regLR),makereg(regZero),make_string(node->nodetype==en_mul ? "__mul" : "__mulu"));
 			GenerateDiadic(op_mov,0,ap1,makereg(1));
 			ReleaseTempReg(ap2);
-			GenerateSignExtend(ap1,ssize,size);
+			//GenerateSignExtend(ap1,ssize,size);
 			MakeLegalAmode(ap1,flags,size);
 	//	    GenerateTriadic(op,0,ap1,ap1,ap2);
 			return (ap1);
@@ -1890,7 +2086,7 @@ AMODE *GenerateAssignMultiply(ENODE *node,int flags, int size, int op)
 	//if (size==2)
 	//	ap3->amode2 = GetTempRegister();
 	//GenerateDiadic(op_ld,0,ap3,ap1);
-    GenerateSignExtend(ap1,ssize,size);
+//    GenerateSignExtend(ap1,ssize,size);
     MakeLegalAmode(ap1,flags,size);
     return (ap1);
 }
@@ -1958,7 +2154,7 @@ AMODE *GenerateAssignModiv(ENODE *node,int flags,int size)
 		}
 		ReleaseTempReg(ap3);
 		ap1 = makereg(1);
-		GenerateSignExtend(ap1,size,size);
+//		GenerateSignExtend(ap1,size,size);
 		MakeLegalAmode(ap1,flags,size);
 		//GenerateDiadic(op_ext,0,ap1,0);
 		if (ap2->mode==am_reg)
@@ -2275,8 +2471,8 @@ AMODE *GenerateAssign(ENODE *node, int flags, int size)
   	ap2 = GenerateExpression(node->p[1],F_ALL,size);
 	validate(ap2);
 	validate(ap1);
-	if (node->p[0]->isUnsigned && !node->p[1]->isUnsigned)
-		GenerateZeroExtend(ap2,size,ssize);
+	//if (node->p[0]->isUnsigned && !node->p[1]->isUnsigned)
+	//	GenerateZeroExtend(ap2,size,ssize);
 	if (ap1->mode == am_reg) {
 		if (ap2->mode==am_reg) {
 			if (ap1->isAddress) {
@@ -2833,15 +3029,21 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
 			//GeneratePredicatedTriadic(pop_mi,op_sub,0,ap1,ap1,make_immed(0));
 			return ap1;
 	case en_cwl:
+			ap2 = GetTempRegister();
+			ap2->amode2 = GetTempRegister();
 			ap1 = GenerateExpression(node->p[0],F_REG|F_MEM,2);
-			GenerateSignExtend(ap1,1,2);
-			return (ap1);
+			GenerateSignExtend(ap1,ap2,1,2);
+			ReleaseTempReg(ap1);
+			return (ap2);
 	case en_cwul:
 	case en_cuwl:
 	case en_cuwul:
+			ap2 = GetTempRegister();
+			ap2->amode2 = GetTempRegister();
 			ap1 = GenerateExpression(node->p[0],F_REG|F_MEM,2);
-			GenerateZeroExtend(ap1,1,2);
-			return (ap1);
+			GenerateZeroExtend(ap1,ap2,1,2);
+			ReleaseTempReg(ap1);
+			return (ap2);
     default:
             printf("DIAG - uncoded node (%d) in GenerateExpression.\n", node->nodetype);
             return 0;

@@ -325,7 +325,7 @@ AMODE *GenerateAssignShift(ENODE *node,int flags,int size)
     ap3 = GenerateExpression(node->p[0],F_ALL,size);
     ap2 = GenerateExpression(node->p[1],F_REG|F_MEM|F_IMMED,size);
 	if (ap3->mode==am_reg)
-		GenerateTriadic(op_mov,0,ap1,ap3,make_immed(0));
+		GenerateDiadic(op_mov,0,ap1,ap3);
 	else if (ap3->mode == am_immed) {
 		error(ERR_LVALUE);
 	    GenLdi(ap1,ap3);
@@ -349,7 +349,7 @@ AMODE *GenerateAssignShift(ENODE *node,int flags,int size)
 		case am_reg:
 			lab1 = nextlabel++;
 			GenerateLabel(lab1);
-			GenerateDiadic(op_add,0,ap1,makereg(regZero));
+			GenerateDiadic(op_add,0,ap1,ap1);
 			if (size==2)
 				GenerateDiadic(op_adc,0,ap1->amode2,ap1->amode2);
 			GenerateTriadic(op_sub,0,ap2,makereg(regZero),make_immed(1));
@@ -361,7 +361,7 @@ AMODE *GenerateAssignShift(ENODE *node,int flags,int size)
 			lab1 = nextlabel++;
 			GenerateDiadic(op_ld,0,makereg(1),ap2);
 			GenerateLabel(lab1);
-			GenerateDiadic(op_add,0,ap1,makereg(regZero));
+			GenerateDiadic(op_add,0,ap1,ap1);
 			if (size==2)
 				GenerateDiadic(op_adc,0,ap1->amode2,ap1->amode2);
 			GenerateTriadic(op_sub,0,makereg(1),makereg(regZero),make_immed(1));
@@ -425,7 +425,7 @@ AMODE *GenerateAssignShift(ENODE *node,int flags,int size)
 			for (nn = 0; nn < ap2->offset->i && nn < 33; nn++) {
 				if (size==2) {
 					GenerateDiadic(op_asr,0,ap1->amode2,ap1->amode2);
-					GenerateDiadic(op_ror,0,ap1,makereg(regZero));
+					GenerateDiadic(op_ror,0,ap1,ap1);
 				}
 				else
 					GenerateDiadic(op_asr,0,ap1,ap1);

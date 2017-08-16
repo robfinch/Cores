@@ -6,7 +6,6 @@
 //       ||
 //
 // C64 - 'C' derived language compiler
-//  - 64 bit CPU
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -60,7 +59,7 @@ AMODE *GenerateBitfieldDereference(ENODE *node, int flags, int size)
 	ReleaseTempRegister(ap);
 	if (node->bit_offset > 0) {
 		for (nn = 0; nn < node->bit_offset; nn++)
-			GenerateTriadic(op_ror, 0, ap3, makereg(regZero), make_immed(0));
+			GenerateDiadic(op_ror, 0, ap3, ap3);
 	}
 	GenerateTriadic(op_and, 0, ap3, makereg(regZero), make_immed(mask));
 	if (isSigned)
@@ -80,13 +79,13 @@ void GenerateBitfieldInsert(AMODE *ap1, AMODE *ap2, int offset, int width)
 	GenerateTriadic(op_and,0,ap2,makereg(regZero),make_immed(~mask));		// clear unwanted bits in source
 	if (offset > 0) {
 		for (nn = 0; nn < offset; nn++)
-			GenerateTriadic(op_ror,0,ap1,makereg(regZero),make_immed(0));
+			GenerateDiadic(op_ror,0,ap1,ap1);
 	}
 	GenerateTriadic(op_and,0,ap1,makereg(regZero),make_immed(mask));		// clear bits in target field
-	GenerateTriadic(op_or,0,ap1,ap2,make_immed(0));
+	GenerateDiadic(op_or,0,ap1,ap2);
 	if (offset > 0) {
 		for (nn = 0; nn < offset; nn++)
-			GenerateTriadic(op_adc,0,ap1,makereg(regZero),make_immed(offset));
+			GenerateDiadic(op_adc,0,ap1,ap1);
 	}
 }
 
