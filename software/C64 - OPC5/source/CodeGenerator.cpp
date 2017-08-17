@@ -3095,7 +3095,7 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
 			else {
 				ap2 = GetTempRegister();
 				ap2->amode2 = GetTempRegister();
-				ap1 = GenerateExpression(node->p[0],F_REG|F_MEM,2);
+				ap1 = GenerateExpression(node->p[0],F_REG|F_MEM,1);
 				GenerateSignExtend(ap1,ap2,1,2);
 				ReleaseTempReg(ap1);
 			}
@@ -3105,7 +3105,7 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
 	case en_cuwul:
 			ap2 = GetTempRegister();
 			ap2->amode2 = GetTempRegister();
-			ap1 = GenerateExpression(node->p[0],F_REG|F_MEM,2);
+			ap1 = GenerateExpression(node->p[0],F_REG|F_MEM,1);
 			GenerateZeroExtend(ap1,ap2,1,2);
 			ReleaseTempReg(ap1);
 			return (ap2);

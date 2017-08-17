@@ -2167,11 +2167,7 @@ TYP *multops(ENODE **node)
                 tp1 = forcefit(&ep2,tp2,&ep1,tp1,true);
                 switch( oper ) {
                         case star:
-                                if (tp1->type==bt_triple) {
-									ep1 = makenode(en_fmul,ep1,ep2);
-									ep1->esize = 6;
-                                }  
-								else if (tp1->type==bt_double) {
+								if (tp1->type==bt_double) {
 									ep1 = makenode(en_fmul,ep1,ep2);
 									ep1->esize = 4;
 								}
