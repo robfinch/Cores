@@ -1466,8 +1466,11 @@ dfs.printf("E");
             if( tp2 == 0 || !ep1->IsLValue(true) )
                   error(ERR_LVALUE);
             else    {
-                    tp1 = forcefit(&ep1,tp1,&ep2,tp2,false);
+                    tp1 = forcefit(&ep2,tp2,&ep1,tp1,false);
                     ep1 = makenode(op,ep1,ep2);
+					ep1->esize = tp1->size;
+					ep1->etype = tp1->type;
+					ep1->isUnsigned = tp1->isUnsigned;
                     }
 			sp->initexp = ep1;
 			if (lastst==semicolon)

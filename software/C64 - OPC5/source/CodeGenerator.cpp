@@ -292,11 +292,8 @@ void MakeLegalAmode(AMODE *ap,int flags, int size)
 		if (flags & F_MEM) {
 			if (ap->mode==am_mem_indx) {
 				ap->mode = am_indx;
-				ap->amode2->mode = am_indx;
 				GenerateDiadic(op_ld,0,makereg(1),ap);
-				GenerateDiadic(op_ld,0,makereg(2),ap->amode2);
 				GenerateDiadic(op_sto,0,makereg(1),ap);
-				GenerateDiadic(op_sto,0,makereg(2),ap->amode2);
 				return;
 			}
 		}
@@ -2153,7 +2150,7 @@ AMODE *GenerateAssignModiv(ENODE *node,int flags,int size)
 		else
 			GenLoad(ap1,ap2,siz1,siz1);
 		//GenerateSignExtend(ap1,siz1,2,flags);
-		ap3 = GenerateExpression(node->p[1],F_REG|F_IMMED,sizeOfWord);
+		ap3 = GenerateExpression(node->p[1],F_REG|F_IMMED,GetNaturalSize(node->p[1]));
 		switch(node->nodetype) {
 		case en_asdiv:
 		case en_div:

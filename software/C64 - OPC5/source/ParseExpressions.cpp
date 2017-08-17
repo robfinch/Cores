@@ -754,6 +754,7 @@ ENODE *ArgumentList(ENODE *hidden, TypeArray *typearray)
 	ep1 = 0;
 	if (hidden) {
 		ep1 = makenode(en_void,hidden,ep1);
+		ep1->esize = sizeOfWord;
 	}
 	typearray->Clear();
 	while( lastst != closepa)
@@ -763,8 +764,10 @@ ENODE *ArgumentList(ENODE *hidden, TypeArray *typearray)
 			dfs.printf("%03d ", typ->typeno);
 		else
 			dfs.printf("%03d ", 0);
-		if (ep2==nullptr)
+		if (ep2==nullptr) {
 			ep2 = makeinode(en_icon, 0);
+			ep2->esize = sizeOfWord;
+		}
 		if (typ==nullptr) {
 			error(ERR_BADARG);
 			typearray->Add((int)bt_long,0);
@@ -777,6 +780,8 @@ ENODE *ArgumentList(ENODE *hidden, TypeArray *typearray)
 				typearray->Add(typ,0);
 		}
 		ep1 = makenode(en_void,ep2,ep1);
+		ep1->esize = typ->size;
+		ep1->SetType(typ);
 		if(lastst != comma) {
 			dfs.printf("lastst=%d", lastst);
 			break;
@@ -2019,6 +2024,8 @@ TYP *forcefit(ENODE **node1,TYP *tp1,ENODE **node2,TYP *tp2, bool promote)
 		}
 		else {
 			switch(tp2->type) {
+			case bt_long:	(*node1)->esize = 2; return (stdlong);
+			case bt_ulong:	(*node1)->esize = 2; (*node1)->isUnsigned = TRUE; return (stdlong);
 			case bt_float:	*node1 = makenode(en_d2i,*node1,*node2); (*node1)->esize = 2; return stdlong;
 			case bt_triple:	*node1 = makenode(en_t2i,*node1,*node2); (*node1)->esize = 2; return stdlong;
 			case bt_quad:	*node1 = makenode(en_q2i,*node1,*node2); (*node1)->esize = 2; return stdlong;
@@ -2204,9 +2211,9 @@ TYP *multops(ENODE **node)
                                     ep1 = makenode(en_udiv,ep1,ep2);
                                 else
                                     ep1 = makenode(en_div,ep1,ep2);
-                                break;
 								ep1->esize = tp1->size;
 								ep1->etype = (e_bt)tp1->type;
+                                break;
                         case modop:
                                 if( tp1->isUnsigned )
                                         ep1 = makenode(en_umod,ep1,ep2);

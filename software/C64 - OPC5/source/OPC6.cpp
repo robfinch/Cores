@@ -857,13 +857,13 @@ static int GeneratePushParameter(ENODE *ep, int regno)
 {    
 	AMODE *ap;
 	int nn = 0;
-	int sz = sizeOfWord;
+	int sz = GetNaturalSize(ep);
 	
 	if (ep->tp) {
 		if (ep->tp->IsFloatType())
 			ap = GenerateExpression(ep,F_REG,sizeOfFP);
 		else
-			ap = GenerateExpression(ep,F_REG|F_IMM0,sizeOfWord);
+			ap = GenerateExpression(ep,F_REG|F_IMM0,sz);
 	}
 	else
 		ap = GenerateExpression(ep,F_REG|F_IMM0,sz);
@@ -903,7 +903,7 @@ static int GeneratePushParameter(ENODE *ep, int regno)
 					if (regno & 0x8000) {
 						GenerateDiadic(op_push,0,makereg(regno & 0x7fff),makereg(regSP));
 						//GenerateTriadic(op_sub,0,makereg(regSP),makereg(regZero),make_immed(sizeOfWord));
-						nn = 8;
+						nn = sz;
 					}
 				}
 			}
@@ -912,13 +912,17 @@ static int GeneratePushParameter(ENODE *ep, int regno)
 					//GenerateTriadic(op_sub,0,makereg(regSP),makereg(regZero),make_immed(sizeOfWord));
 					//GenerateDiadic(op_sto,0,makereg(regZero),make_indexed(0,regSP));
 					GenerateDiadic(op_push,0,makereg(regZero),makereg(regSP));
-					nn = 1;
+					if (sz==2)
+						GenerateDiadic(op_push,0,makereg(regZero),makereg(regSP));
+					nn = sz;
 				}
 				else {
 					//GenerateTriadic(op_sub,0,makereg(regSP),makereg(regZero),make_immed(sizeOfWord));
 					//GenerateDiadic(op_sto,0,ap,make_indexed(0,regSP));
           			GenerateDiadic(op_push,0,ap,makereg(regSP));
-					nn = 1;
+					if (sz==2)
+						GenerateDiadic(op_push,0,ap->amode2,makereg(regSP));
+					nn = sz;
 				}
 			}
 //        }

@@ -618,7 +618,7 @@ void Statement::GenerateThrow()
     if(exp != NULL )
 	{
 		initstack();
-		ap = GenerateExpression(exp,F_ALL,8);
+		ap = GenerateExpression(exp,F_ALL,GetNaturalSize(exp));
 		if (ap->mode==am_immed)
            	GenLdi(makereg(1),ap);
 		else if( ap->mode != am_reg)
@@ -641,9 +641,9 @@ void Statement::GenerateCheck()
 	lab2 = nextlabel++;
 	initstack();
 	size = GetNaturalSize(exp);
-	ap1 = GenerateExpression(exp,F_REG,sizeOfWord);
-	ap2 = GenerateExpression(initExpr,F_REG,sizeOfWord);
-	ap3 = GenerateExpression(incrExpr,F_REG,sizeOfWord);
+	ap1 = GenerateExpression(exp,F_REG,size);
+	ap2 = GenerateExpression(initExpr,F_REG,size);
+	ap3 = GenerateExpression(incrExpr,F_REG,size);
 	GenerateDiadic(op_cmp,0,ap1,ap2);
 	if (size==2)
 		GenerateDiadic(op_cmpc,0,ap1->amode2,ap2->amode2);
@@ -668,7 +668,7 @@ void Statement::GenerateCompound()
 	while (sp) {
 		if (sp->initexp) {
         	initstack();
-			ReleaseTempRegister(GenerateExpression(sp->initexp,F_ALL,sizeOfWord));
+			ReleaseTempRegister(GenerateExpression(sp->initexp,F_ALL,GetNaturalSize(sp->initexp)));
         }
 		sp = sp->GetNextPtr();
 	}
@@ -687,7 +687,7 @@ void Statement::GenerateFuncBody()
 	while (sp) {
 		if (sp->initexp) {
         	initstack();
-			ReleaseTempRegister(GenerateExpression(sp->initexp,F_ALL,sizeOfWord));
+			ReleaseTempRegister(GenerateExpression(sp->initexp,F_ALL,GetNaturalSize(sp->initexp)));
         }
 		sp = sp->GetNextPtr();
 	}

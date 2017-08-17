@@ -588,9 +588,11 @@ static int xfold(ENODE *node)
 void fold_const(ENODE **node)
 {       ENODE *ep;
         int i;
+		int sz;
         ep = *node;
         if( ep == 0 )
                 return;
+		sz = ep->esize;
         if( ep->nodetype == en_add )
                 {
                 if( ep->p[0]->nodetype == en_icon )
@@ -621,7 +623,9 @@ void fold_const(ENODE **node)
         if( i != 0 )
                 {
                 ep = makeinode(en_icon,i);
+				ep->esize = sz;
                 ep = makenode(en_add,ep,*node);
+				ep->esize = sz;
                 *node = ep;
                 }
 }
