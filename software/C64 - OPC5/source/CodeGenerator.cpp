@@ -2155,10 +2155,25 @@ AMODE *GenerateAssignModiv(ENODE *node,int flags,int size)
 		//GenerateSignExtend(ap1,siz1,2,flags);
 		ap3 = GenerateExpression(node->p[1],F_REG|F_IMMED,sizeOfWord);
 		switch(node->nodetype) {
-		case en_div:	ap4 = GenMuldiv32(ap1,ap3,"__div32");
-		case en_udiv:	ap4 = GenMuldiv32(ap1,ap3,"__udiv32");
-		case en_mod:	ap4 = GenMuldiv32(ap1,ap3,"__mod32");
-		case en_umod:	ap4 = GenMuldiv32(ap1,ap3,"__umod32");
+		case en_asdiv:
+		case en_div:
+			ap4 = GenMuldiv32(ap1,ap3,"__div32");
+			break;
+		case en_udiv:
+		case en_asdivu:
+			ap4 = GenMuldiv32(ap1,ap3,"__udiv32");
+			break;
+		case en_mod:
+		case en_asmod:
+			ap4 = GenMuldiv32(ap1,ap3,"__mod32");
+			break;
+		case en_umod:
+		case en_asmodu:
+			ap4 = GenMuldiv32(ap1,ap3,"__umod32");
+			break;
+		default:
+			printf("DIAG - bad nodetype in asmodiv()\n");
+			ap4 = nullptr;
 		}
 		ReleaseTempReg(ap3);
 		if (ap2->mode != am_reg)
@@ -2189,9 +2204,13 @@ AMODE *GenerateAssignModiv(ENODE *node,int flags,int size)
 		else
 			GenerateDiadic(op_mov,0,makereg(2),ap3);
 		switch(node->nodetype) {
+		case en_asdiv:
 		case en_div:	GenerateTriadic(op_jsr,0,makereg(regLR),makereg(regZero),make_string("__div")); break;
+		case en_asdivu:
 		case en_udiv:	GenerateTriadic(op_jsr,0,makereg(regLR),makereg(regZero),make_string("__divu")); break;
+		case en_asmod:
 		case en_mod:	GenerateTriadic(op_jsr,0,makereg(regLR),makereg(regZero),make_string("__mod")); break;
+		case en_asmodu:
 		case en_umod:	GenerateTriadic(op_jsr,0,makereg(regLR),makereg(regZero),make_string("__modu")); break;
 		default:		GenerateTriadic(op_jsr,0,makereg(regLR),makereg(regZero),make_string("__div")); break;
 		}
