@@ -949,6 +949,17 @@ TYP *ParsePrimaryExpression(ENODE **node, int got_pa)
         NextToken();
         break;
 
+    case lconst:
+        tptr = stdint;
+        tptr->isConst = TRUE;
+        pnode = makeinode(en_icon,(int)ival);
+        pnode->constflag = TRUE;
+		pnode->esize = 2;
+		tptr = stdlong;
+        pnode->SetType(tptr);
+        NextToken();
+        break;
+
 	case sconst:
 		if (sizeof_flag) {
 			tptr = (TYP *)TYP::Make(bt_pointer, 0);
@@ -1994,6 +2005,16 @@ TYP *forcefit(ENODE **node1,TYP *tp1,ENODE **node2,TYP *tp2, bool promote)
 			if (tp2->type==bt_ulong && tp1->type==bt_long) {
 				*node1 = makenode(en_lul,*node1, *node2);
 				return tp2;
+			}
+			if (tp2->type==bt_ushort) {
+				*node2 = makenode(en_cuwl,*node2,*node1);
+				(*node2)->esize = 2;
+				return (tp1);
+			}
+			if (tp2->type==bt_short) {
+				*node2 = makenode(en_cwl,*node2,*node1);
+				(*node2)->esize = 2;
+				return (tp1);
 			}
 		}
 		else {

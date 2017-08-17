@@ -283,6 +283,10 @@ void getbase(int64_t b)
                         }
                 else break;
                 }
+		if (lastch=='L')
+			lastst = lconst;
+		else
+			lastst = iconst;
 		if (lastch=='L' || lastch=='U')	// ignore a 'L'ong suffix and 'U'nsigned
 			getch();
         ival = i;
@@ -303,7 +307,7 @@ void getbase(int64_t b)
              rval.man5 = (rval.man5 << 1);
         }
 */
-        lastst = iconst;
+//        lastst = iconst;
 }
  
 //

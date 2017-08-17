@@ -202,6 +202,7 @@ static void scanexpr(ENODE *node, int duse)
 		case en_ccw:
 		case en_chw:
 		case en_lul:
+		case en_clw:	case en_cluw:
         case en_uminus:
         case en_compl:  case en_ainc:
         case en_adec:   case en_not:
@@ -440,6 +441,7 @@ void repexpr(ENODE *node)
 				case en_ccw:
 				case en_chw:
 				case en_lul:
+				case en_clw:	case en_cluw:
                 case en_uminus:
                 case en_not:    case en_compl:
                 case en_ainc:   case en_adec:

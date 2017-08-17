@@ -82,6 +82,7 @@ enum e_node {
 		en_cbw, en_ccw, en_chw,
 		en_cubw, en_cucw, en_cuhw,
 		en_lul, en_cuwul, en_cwl, en_cuwl, en_cwul,
+		en_clw, en_cluw,
 
         en_cbc, en_cbh,
 		en_cch,
@@ -181,6 +182,7 @@ enum e_sg { noseg, codeseg, dataseg, stackseg, bssseg, idataseg, tlsseg, rodatas
 
 enum e_am {
         am_reg, am_sreg, am_breg, am_fpreg, am_ind, am_brind, am_ainc, am_adec, am_indx, am_indx2,
+		am_mem_ind, am_mem_indx,
         am_direct, am_jdirect, am_immed, am_mask, am_none, am_indx3, am_predreg
 	};
 
@@ -270,6 +272,7 @@ enum e_am {
 #define ERR_INFINITELOOP	57
 #define ERR_TOOMANYELEMENTS 58
 #define ERR_INTEGER			59
+#define ERR_CVTLS			60
 #define ERR_NULLPOINTER		1000
 #define ERR_CIRCULAR_LIST 1001
 
