@@ -138,15 +138,12 @@ wire [63:0] bfout,shfto;
 wire [7:0] shftob;
 wire [15:0] shftco;
 
-FT64_bitfield ubf1
+FT64_bitfield #(DBW) ubf1
 (
-    .op(instr[24:21]),
+    .inst(instr),
     .a(a),
     .b(b),
-    // The lower 16 bits of the immediate are the trailing bits of
-    // the instruction.
-    .imm({49'd0,imm[41:32],instr[15:11]}),
-    .m(imm[31:16]),
+    .imm(imm),
     .o(bfout),
     .masko()
 );
@@ -258,7 +255,7 @@ wire [63:0] redor64 = {63'd0,|a};
 wire [63:0] redor32 = {63'd0,|a[31:0]};
 wire [63:0] redor16 = {63'd0,|a[15:0]};
 wire [63:0] redor8 = {63'd0,|a[7:0]};
-integer n;
+
 reg [15:0] mask;
 wire [4:0] cpopom;
 
@@ -286,6 +283,15 @@ flz24 uflo1
 (
     .i(~{8'h00,a[15:0]}),
     .o(fsto)
+);
+
+wire [DBW-1:0] bmmo;
+FT64_BMM ubmm1
+(
+	.op(1'b0),
+	.a(a),
+	.b(b),
+	.o(bmmo)
 );
 
 always @*
@@ -419,7 +425,7 @@ case(instr[`INSTRUCTION_OP])
         `SGT:   o = a==64'd1;
         default:    o = 64'hDEADDEADDEADDEAD;
         endcase
-    `BITFIELD:  o = BIG ? bfout : 64'hCCCCCCCCCCCCCCCC;
+    `BMM:		o = BIG ? bmmo : 64'hCCCCCCCCCCCCCCCC;
     `SHIFT:     o = BIG ? shfto : 64'hCCCCCCCCCCCCCCCC;
     `SHIFTB:    o = BIG ? {{56{shftob[7]}},shftob} : 64'hCCCCCCCCCCCCCCCC;
     `SHIFTC:    o = BIG ? {{48{shftco[15]}},shftco} : 64'hCCCCCCCCCCCCCCCC;
@@ -505,6 +511,24 @@ case(instr[`INSTRUCTION_OP])
  `ANDI:  o = a & b;
  `ORI:   o = a | b;
  `XORI:  o = a ^ b;
+ `ADDQI:    case(instr[7:6])
+            2'd0:   o = a + b;
+            2'd1:   o = a + {b,16'h0};
+            2'd2:   o = a + {b,32'h0};
+            2'd3:   o = a + {b,48'h0};
+            endcase
+ `ANDQI:    case(instr[7:6])
+            2'd0:   o = a & {48'hFFFFFFFFFFFF,b[15:0]};
+            2'd1:   o = a & {32'hFFFFFFFF,b[15:0],16'hFFFF};
+            2'd2:   o = a & {16'hFFFF,b[15:0],32'hFFFFFFFF};
+            2'd3:   o = a & {b[15:0],48'hFFFFFFFFFFFF};
+            endcase
+ `ORQI:     case(instr[7:6])
+            2'd0:   o = a | {48'h000000000000,b[15:0]};
+            2'd1:   o = a | {32'h00000000,b[15:0],16'h0000};
+            2'd2:   o = a | {16'h0000,b[15:0],32'h00000000};
+            2'd3:   o = a | {b[15:0],48'h000000000000};
+            endcase
  `MULUI:     o = prod[DBW-1:0];
  `MULSUI:    o = prod[DBW-1:0];
  `MULI:      o = prod[DBW-1:0];
@@ -519,6 +543,7 @@ case(instr[`INSTRUCTION_OP])
  `CSRRW:     o = BIG ? csr : 64'hCCCCCCCCCCCCCCCC;
  `RET:       o = a;
  `LINK:      o = a - 32'd8;
+ `BITFIELD:   o = BIG ? bfout : 64'hCCCCCCCCCCCCCCCC;
   default:    o = 64'hDEADDEADDEADDEAD;
 endcase  
 

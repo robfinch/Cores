@@ -6,7 +6,7 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	DSD9_bitfield.v
+//	FT64_bitfield.v
 //		
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -26,22 +26,21 @@
 // ============================================================================
 //
 `ifndef BFSET
-`define BFSET     5'd0
-`define BFCLR     5'd1
-`define BFCHG     5'd2 
-`define BFINS     5'd3
-`define BFINSI    5'd4
-`define BFEXT     5'd5
-`define BFEXTU    5'd6
+`define BFSET     4'd0
+`define BFCLR     4'd1
+`define BFCHG     4'd2 
+`define BFINS     4'd3
+`define BFINSI    4'd4
+`define BFEXT     4'd5
+`define BFEXTU    4'd6
 `endif
 
-module FT64_bitfield(op, a, b, imm, m, o, masko);
+module FT64_bitfield(inst, a, b, imm, o, masko);
 parameter DWIDTH=64;
-input [3:0] op;
+input [31:0] inst;
 input [DWIDTH-1:0] a;
 input [DWIDTH-1:0] b;
 input [DWIDTH-1:0] imm;
-input [15:0] m;
 output [DWIDTH-1:0] o;
 reg [DWIDTH-1:0] o;
 output [DWIDTH-1:0] masko;
@@ -52,8 +51,9 @@ reg [DWIDTH-1:0] o2;
 // generate mask
 reg [DWIDTH-1:0] mask;
 assign masko = mask;
-wire [5:0] mb = m[ 5:0];
-wire [5:0] me = m[13:8];
+wire [3:0] op = inst[25:22];
+wire [5:0] mb = {inst[21],inst[15:11]};
+wire [5:0] me = inst[31:26];
 wire [5:0] ml = me-mb;		// mask length-1
 
 integer nn,n;
@@ -72,7 +72,7 @@ case (op)
 				for (n = 0; n < DWIDTH; n = n + 1) o[n] = (mask[n] ? o2[n] : b[n]);
 			end
 `BFSET: 	begin for (n = 0; n < DWIDTH; n = n + 1) o[n] = mask[n] ? 1'b1 : a[n]; end
-`BFCLR: 	begin for (n = 0; n < DWIDTH; n = n + 1) o[n] = mask[n] ? 1'b0 : a[n]; end
+//`BFCLR: 	begin for (n = 0; n < DWIDTH; n = n + 1) o[n] = mask[n] ? 1'b0 : a[n]; end
 `BFCHG: 	begin for (n = 0; n < DWIDTH; n = n + 1) o[n] = mask[n] ? ~a[n] : a[n]; end
 `BFEXTU:	begin
 				for (n = 0; n < DWIDTH; n = n + 1)

@@ -31,7 +31,7 @@
 `define VSHR        6'h0D
 `define VASR        6'h0E
 `define RR      6'h02
-`define SHIFT   6'h03
+`define SHIFT   6'h0F
 `define SHL     4'h0
 `define SHR     4'h1
 `define ASL     4'h2

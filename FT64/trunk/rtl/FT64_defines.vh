@@ -27,6 +27,7 @@
 `define LOW         1'b0
 `define TRUE        1'b1
 `define FALSE       1'b0
+//`define Q2VECTORS   1'b1
 
 `define ZERO		64'd0
 
@@ -91,7 +92,6 @@
 `define BCDSUB          5'h01
 `define BCDMUL          5'h02
 `define BITFIELD    6'h02
-`define SHIFT       6'h03
 `define BccR    6'h03
 `define SHL     4'h0
 `define SHR     4'h1
@@ -116,6 +116,7 @@
 `define SGE             5'h09
 `define SLE             5'h0A
 `define SGT             5'h0B
+`define BMM			6'h03
 `define ADD	        6'h04
 `define SUB         6'h05
 `define CMP         6'd6
@@ -126,6 +127,7 @@
 `define NAND        6'h0C
 `define NOR         6'h0D
 `define XNOR        6'h0E
+`define SHIFT       6'h0F
 `define LHX         6'h10
 `define LHUX        6'h11
 `define LWX         6'h12
@@ -194,13 +196,14 @@
 `define SWC     6'h17
 `define JAL	    6'h18
 `define CALL    6'h19
-`define IMML    6'h1A
-`define IMMM    6'h1B
+`define ORQI    6'h1A
+`define ADDQI   6'h1B
 `define NOP     6'h1C
 `define LWR     6'h1D
 `define CACHE   6'h1E
 `define LC      6'h20
 `define LCU     6'h21
+`define BITFIELD    6'h22
 `define LBU     6'h23
 `define SC      6'h24
 `define CAS     6'h25
@@ -231,6 +234,7 @@
 `define MULUI   6'h38
 `define MULSUI  6'h39
 `define MULI    6'h3A
+`define ANDQI   6'h3B
 `define DIVUI   6'h3C
 `define DIVSUI  6'h3D
 `define DIVI    6'h3E
@@ -269,6 +273,7 @@
 `define CSR_CAUSE   11'h006
 `define CSR_BADADR  11'h007
 `define CSR_PCR2    11'h008
+`define CSR_SCRATCH 11'h009
 `define CSR_SEMA    11'h00C
 `define CSR_SBL     11'h00E
 `define CSR_SBU     11'h00F
@@ -374,3 +379,5 @@
 `define PANIC_INVALIDIQSTATE	4'd10
 `define PANIC_BRANCHBACK	4'd11
 `define PANIC_BADTARGETID	4'd12
+
+ 
