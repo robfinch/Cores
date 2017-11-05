@@ -1,7 +1,9 @@
 // ============================================================================
-// (C) 2016 Robert Finch
-// rob<remove>@finitron.ca
-// All Rights Reserved.
+//        __
+//   \\__/ o\    (C) 2016-2017  Robert Finch, Waterloo
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
 //
 //	FAL6567_clkgen.v
 //
@@ -22,30 +24,29 @@
 //
 module FAL6567_clkgen(rst, xclk, clk33, locked);
 input rst;
-input xclk;
+input xclk;     // 14.31818MHz color reference
 output clk33;
 output locked;
 
+wire clk8u, clk33u;
 BUFG bg2 (.I(clk33u), 	.O(clk33) );
 wire clkfb,clkfbo;
 BUFG clkbufg (.I(clkfbo), .O(clkfb));
 
-PLLE2_BASE u1
+// MMCM must be used rather than a PLL because the PLL min frequency is
+// 19 MHz, just a bit too high for the 14.318MHz color reference clock.
+// The MMCM has a min frequency of 10MHz.
+MMCM_BASE u1
 (
     .RST(rst),
     .CLKIN1(xclk),
     .CLKFBIN(clkfb),
     .CLKFBOUT(clkfbo),
     .LOCKED(locked),
-    .CLKOUT0(clk33u),
-    .CLKOUT1(),
-    .CLKOUT2(),
-    .CLKOUT3(),
-    .CLKOUT4(),
-    .CLKOUT5()
+    .CLKOUT0(clk33u)
 );
-defparam u1.CLKFBOUT_MULT = 12;     // must place VCO frequency 800-1600 MHz (1200)
-defparam u1.CLKOUT0_DIVIDE = 36;
-defparam u1.CLKIN1_PERIOD = 10;
+defparam u1.CLKFBOUT_MULT_F = 66.000;     // must place VCO frequency 800-1600 MHz (945Mhz)
+defparam u1.CLKOUT0_DIVIDE_F = 28.000;
+defparam u1.CLKIN1_PERIOD = 69.8412;
 
 endmodule

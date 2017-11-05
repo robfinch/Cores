@@ -43,16 +43,15 @@ initial begin
   #30 rst = 1'b0;
 end
 
-always #5 clk = ~clk;
+always #34.92 clk = ~clk;
 
-FAL6567 #(
+FAL6567e #(
   .pSimRasterEnable(1)
 ) u1
 (
-  .chip(2'b00),
-  .clk100(clk),
+  .cr_clk(clk),
   .phi02(phi02),
-  .rst_n_o(),
+  .rst_o(),
   .irq(),
   .aec(aec),
   .ba(ba),
@@ -118,7 +117,7 @@ else if (phi02 && !phi02a) begin
 case(state)
 5:   dbi <= 12'h10;
 6:   dbi <= 12'h20;
-7:   dbi <= 12'hFF;
+7:   dbi <= 12'hFE;
 default:
 casex (ad)
 14'b000xxxxxxxxxxx: dbi <= ad[11:0];

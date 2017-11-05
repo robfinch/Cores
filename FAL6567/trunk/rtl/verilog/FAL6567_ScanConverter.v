@@ -96,8 +96,8 @@ else if (!hSync33_i && phSync33)
 end
 
 always @(posedge clk33)
-  if (clken8)
-    mem[adr8] <= color_i;
+    if (clken8)
+        mem[adr8] <= color_i;
 
 always @(posedge clk33)
   color_o <= mem[adr33];
