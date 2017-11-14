@@ -255,7 +255,8 @@ wire [63:0] redor64 = {63'd0,|a};
 wire [63:0] redor32 = {63'd0,|a[31:0]};
 wire [63:0] redor16 = {63'd0,|a[15:0]};
 wire [63:0] redor8 = {63'd0,|a[7:0]};
-
+wire [63:0] zxb12 = {52'd0,b[11:0]};
+wire [63:0] sxb12 = {{52{b[11]}},b[11:0]};
 reg [15:0] mask;
 wire [4:0] cpopom;
 
@@ -442,18 +443,108 @@ case(instr[`INSTRUCTION_OP])
             2'd2:   o = {{32{d32[31]}},d32};
             2'd3:   o = a - b;
             endcase
-    `CMP:   case(sz)
-            2'd0:   o = $signed(a[7:0]) < $signed(b[7:0]) ? 64'hFFFFFFFFFFFFFFFF : a[7:0]==b[7:0] ? 64'd0 : 64'd1;
-            2'd1:   o = $signed(a[15:0]) < $signed(b[15:0]) ? 64'hFFFFFFFFFFFFFFFF : a[15:0]==b[15:0] ? 64'd0 : 64'd1;
-            2'd2:   o = $signed(a[31:0]) < $signed(b[31:0]) ? 64'hFFFFFFFFFFFFFFFF : a[31:0]==b[31:0] ? 64'd0 : 64'd1;
-            2'd3:   o = $signed(a) < $signed(b) ? 64'hFFFFFFFFFFFFFFFF : a==b ? 64'd0 : 64'd1;
-            endcase
-    `CMPU:  case(sz)
-            2'd0:   o = a[7:0] < b[7:0] ? 64'hFFFFFFFFFFFFFFFF : a[7:0]==b[7:0] ? 64'd0 : 64'd1;
-            2'd1:   o = a[15:0] < b[15:0] ? 64'hFFFFFFFFFFFFFFFF : a[15:0]==b[15:0] ? 64'd0 : 64'd1;
-            2'd2:   o = a[31:0] < b[31:0] ? 64'hFFFFFFFFFFFFFFFF : a[31:0]==b[31:0] ? 64'd0 : 64'd1;
-            2'd3:   o = a < b ? 64'hFFFFFFFFFFFFFFFF : a==b ? 64'd0 : 64'd1;
-            endcase
+    `CMP:   case(instr[25:23])
+    		3'd0,3'd1:	// CMP
+	    		case(sz)
+	            2'd0:   o = $signed(a[7:0]) < $signed(b[7:0]) ? 64'hFFFFFFFFFFFFFFFF : a[7:0]==b[7:0] ? 64'd0 : 64'd1;
+	            2'd1:   o = $signed(a[15:0]) < $signed(b[15:0]) ? 64'hFFFFFFFFFFFFFFFF : a[15:0]==b[15:0] ? 64'd0 : 64'd1;
+	            2'd2:   o = $signed(a[31:0]) < $signed(b[31:0]) ? 64'hFFFFFFFFFFFFFFFF : a[31:0]==b[31:0] ? 64'd0 : 64'd1;
+	            2'd3:   o = $signed(a) < $signed(b) ? 64'hFFFFFFFFFFFFFFFF : a==b ? 64'd0 : 64'd1;
+	            endcase
+	        3'd2:	// SEQ
+	        	case(sz)
+	        	2'd0:	o = a[7:0]==b[7:0];
+	        	2'd1:	o = a[15:0]==b[15:0];
+	        	2'd2:	o = a[31:0]==b[31:0];
+	        	2'd3:	o = a==b;
+	        	endcase
+	        3'd3:	// SNE
+	        	case(sz)
+	        	2'd0:	o = a[7:0]!=b[7:0];
+	        	2'd1:	o = a[15:0]!=b[15:0];
+	        	2'd2:	o = a[31:0]!=b[31:0];
+	        	2'd3:	o = a!=b;
+	        	endcase
+    		3'd4:	// SLT
+	    		case(sz)
+	            2'd0:   o = $signed(a[7:0]) < $signed(b[7:0]);
+	            2'd1:   o = $signed(a[15:0]) < $signed(b[15:0]);
+	            2'd2:   o = $signed(a[31:0]) < $signed(b[31:0]);
+	            2'd3:   o = $signed(a) < $signed(b);
+	            endcase
+    		3'd5:	// SGE
+	    		case(sz)
+	            2'd0:   o = $signed(a[7:0]) >= $signed(b[7:0]);
+	            2'd1:   o = $signed(a[15:0]) >= $signed(b[15:0]);
+	            2'd2:   o = $signed(a[31:0]) >= $signed(b[31:0]);
+	            2'd3:   o = $signed(a) >= $signed(b);
+	            endcase
+    		3'd6:	// SLE
+	    		case(sz)
+	            2'd0:   o = $signed(a[7:0]) <= $signed(b[7:0]);
+	            2'd1:   o = $signed(a[15:0]) <= $signed(b[15:0]);
+	            2'd2:   o = $signed(a[31:0]) <= $signed(b[31:0]);
+	            2'd3:   o = $signed(a) <= $signed(b);
+	            endcase
+    		3'd7:	// SGT
+	    		case(sz)
+	            2'd0:   o = $signed(a[7:0]) > $signed(b[7:0]);
+	            2'd1:   o = $signed(a[15:0]) > $signed(b[15:0]);
+	            2'd2:   o = $signed(a[31:0]) > $signed(b[31:0]);
+	            2'd3:   o = $signed(a) > $signed(b);
+	            endcase
+	        endcase
+    `CMPU:  case(instr[25:23])
+    		3'd0,3'd1:	// CMPU
+	    		case(sz)
+	            2'd0:   o = a[7:0] < b[7:0] ? 64'hFFFFFFFFFFFFFFFF : a[7:0]==b[7:0] ? 64'd0 : 64'd1;
+	            2'd1:   o = a[15:0] < b[15:0] ? 64'hFFFFFFFFFFFFFFFF : a[15:0]==b[15:0] ? 64'd0 : 64'd1;
+	            2'd2:   o = a[31:0] < b[31:0] ? 64'hFFFFFFFFFFFFFFFF : a[31:0]==b[31:0] ? 64'd0 : 64'd1;
+	            2'd3:   o = a < b ? 64'hFFFFFFFFFFFFFFFF : a==b ? 64'd0 : 64'd1;
+	            endcase
+	        3'd2:	// SEQ
+	        	case(sz)
+	        	2'd0:	o = a[7:0]==b[7:0];
+	        	2'd1:	o = a[15:0]==b[15:0];
+	        	2'd2:	o = a[31:0]==b[31:0];
+	        	2'd3:	o = a==b;
+	        	endcase
+	        3'd3:	// SNE
+	        	case(sz)
+	        	2'd0:	o = a[7:0]!=b[7:0];
+	        	2'd1:	o = a[15:0]!=b[15:0];
+	        	2'd2:	o = a[31:0]!=b[31:0];
+	        	2'd3:	o = a!=b;
+	        	endcase
+    		3'd4:	// SLTU
+	    		case(sz)
+	            2'd0:   o = a[7:0] < b[7:0];
+	            2'd1:   o = a[15:0] < b[15:0];
+	            2'd2:   o = a[31:0] < b[31:0];
+	            2'd3:   o = a < b;
+	            endcase
+    		3'd5:	// SGEU
+	    		case(sz)
+	            2'd0:   o = a[7:0] >= b[7:0];
+	            2'd1:   o = a[15:0] >= b[15:0];
+	            2'd2:   o = a[31:0] >= b[31:0];
+	            2'd3:   o = a >= b;
+	            endcase
+    		3'd6:	// SLEU
+	    		case(sz)
+	            2'd0:   o = a[7:0] <= b[7:0];
+	            2'd1:   o = a[15:0] <= b[15:0];
+	            2'd2:   o = a[31:0] <= b[31:0];
+	            2'd3:   o = a <= b;
+	            endcase
+    		3'd7:	// SGTU
+	    		case(sz)
+	            2'd0:   o = a[7:0] > b[7:0];
+	            2'd1:   o = a[15:0] > b[15:0];
+	            2'd2:   o = a[31:0] > b[31:0];
+	            2'd3:   o = a > b;
+	            endcase
+	        endcase
     `AND:   case(sz)
             2'd0:   o = {{56{and64[7]}},and64[7:0]};
             2'd1:   o = {{48{and64[15]}},and64[15:0]};
@@ -476,6 +567,7 @@ case(instr[`INSTRUCTION_OP])
     `NOR:   o = ~(a | b);
     `XNOR:  o = ~(a ^ b);
     `SEI:       o = a | b;
+    `RTI:       o = a | b;
     `CMOVEQ:    o = (a==64'd0) ? b : c;
     `CMOVNE:    o = (a!=64'd0) ? b : c;
     `MUX:       for (n = 0; n < 64; n = n + 1)
@@ -511,23 +603,50 @@ case(instr[`INSTRUCTION_OP])
  `ANDI:  o = a & b;
  `ORI:   o = a | b;
  `XORI:  o = a ^ b;
- `ADDQI:    case(instr[7:6])
-            2'd0:   o = a + b;
-            2'd1:   o = a + {b,16'h0};
-            2'd2:   o = a + {b,32'h0};
-            2'd3:   o = a + {b,48'h0};
+ `QOPI:     case(instr[10:8])
+            `QORI:
+                case(instr[7:6])
+                2'd0:   o = a | {48'h000000000000,b[15:0]};
+                2'd1:   o = a | {32'h00000000,b[15:0],16'h0000};
+                2'd2:   o = a | {16'h0000,b[15:0],32'h00000000};
+                2'd3:   o = a | {b[15:0],48'h000000000000};
+                endcase
+            `QXORI:
+                case(instr[7:6])
+                2'd0:   o = a ^ {48'h000000000000,b[15:0]};
+                2'd1:   o = a ^ {32'h00000000,b[15:0],16'h0000};
+                2'd2:   o = a ^ {16'h0000,b[15:0],32'h00000000};
+                2'd3:   o = a ^ {b[15:0],48'h000000000000};
+                endcase
+            `QANDI:
+                case(instr[7:6])
+                2'd0:   o = a & {48'hFFFFFFFFFFFF,b[15:0]};
+                2'd1:   o = a & {32'hFFFFFFFF,b[15:0],16'hFFFF};
+                2'd2:   o = a & {16'hFFFF,b[15:0],32'hFFFFFFFF};
+                2'd3:   o = a & {b[15:0],48'hFFFFFFFFFFFF};
+                endcase
+             `QADDI:
+                case(instr[7:6])
+                2'd0:   o = a + b;
+                2'd1:   o = a + {b,16'h0};
+                2'd2:   o = a + {b,32'h0};
+                2'd3:   o = a + {b,48'h0};
+                endcase
+            default:    o = 64'hDEADDEADDEADDEAD;
             endcase
- `ANDQI:    case(instr[7:6])
-            2'd0:   o = a & {48'hFFFFFFFFFFFF,b[15:0]};
-            2'd1:   o = a & {32'hFFFFFFFF,b[15:0],16'hFFFF};
-            2'd2:   o = a & {16'hFFFF,b[15:0],32'hFFFFFFFF};
-            2'd3:   o = a & {b[15:0],48'hFFFFFFFFFFFF};
-            endcase
- `ORQI:     case(instr[7:6])
-            2'd0:   o = a | {48'h000000000000,b[15:0]};
-            2'd1:   o = a | {32'h00000000,b[15:0],16'h0000};
-            2'd2:   o = a | {16'h0000,b[15:0],32'h00000000};
-            2'd3:   o = a | {b[15:0],48'h000000000000};
+ `SccI:
+            case(instr[31:28])
+            `SEQ:   o = a == sxb12;
+            `SNE:   o = a != sxb12;
+            `SLT:   o = $signed(a) < $signed(sxb12);
+            `SGE:   o = $signed(a) >= $signed(sxb12);
+            `SLE:   o = $signed(a) <= $signed(sxb12);
+            `SGT:   o = $signed(a) > $signed(sxb12);
+            `SLTU:  o = a < zxb12;
+            `SGEU:  o = a >= zxb12;
+            `SLEU:  o = a <= zxb12;
+            `SGTU:  o = a > zxb12;
+            default:    o = 64'hDEADDEADDEADDEAD;
             endcase
  `MULUI:     o = prod[DBW-1:0];
  `MULSUI:    o = prod[DBW-1:0];

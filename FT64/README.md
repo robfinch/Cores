@@ -3,10 +3,9 @@
 ## Overview
 FT64 is a superscalar core with the following features:
 - 32 general purpose registers
-- 32 vector registers of 64 elements (only 13, 16 element registers are currently supported)
+- 32 vector registers of 64 elements
 - 32 bit fixed size instruction set
 - 64 bit data width
-- immediate prefix instructions for large immediates
 - branch prediction with branch target buffer (BTB)
 - return address prediction (RSB)
 - register renaming
