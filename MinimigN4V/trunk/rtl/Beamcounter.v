@@ -36,8 +36,8 @@ module beamcounter
 	input	[15:0] data_in,			// bus data in
 	output	reg [15:0] data_out,	// bus data out
 	input 	[8:1] reg_address_in,	// register address inputs
-	output	reg [8:0] hpos,			// horizontal beam counter (140ns)
-	output	reg [10:0] vpos,		// vertical beam counter
+	output	reg [8:0] hpos = 9'd0,		// horizontal beam counter (140ns)
+	output	reg [10:0] vpos = 11'd0,	// vertical beam counter
 	input	_hsync,				      // horizontal sync
 	input	_vsync,				      // vertical sync
 	output	_csync,					// composite sync
@@ -51,11 +51,11 @@ module beamcounter
 );
 
 // local beam position counters
-reg		ersy;
+reg		ersy = 0;
 reg		lace;
 
 //local signals for beam counters and sync generator
-reg		long_frame;		// 1 : long frame (313 lines); 0 : normal frame (312 lines)
+reg		long_frame = 1'b1;		// 1 : long frame (313 lines); 0 : normal frame (312 lines)
 reg		pal;			// pal mode switch
 reg		long_line;		// long line signal for NTSC compatibility (actually long lines are not supported yet)
 reg		vser;			// vertical sync serration pulses for composite sync
@@ -98,13 +98,13 @@ wire	end_of_frame;
 
 reg 	vpos_inc;			// increase vertical position counter
 wire 	vpos_equ_vtotal;	// vertical beam counter is equal to its maximum count (in interlaced mode it counts one line more)
-reg		extra_line;			// extra line (used in interlaced mode)
+reg		extra_line = 1'b0;			// extra line (used in interlaced mode)
 wire	last_line;			// indicates the last line is displayed (in non-interlaced mode vpos equals to vtotal, in interlaced mode vpos equals to vtotal+1)
 
 
 //beam position output signals
-assign	htotal = 209;//227-1;					// line length of 227 CCKs in PAL mode (NTSC line length of 227.5 CCKs is not supported)
-assign	vtotal = 794;//pal ? 312-1 : 262-1;	// total number of lines (PAL: 312 lines, NTSC: 262)
+assign	htotal = 226;//227-1;					// line length of 227 CCKs in PAL mode (NTSC line length of 227.5 CCKs is not supported)
+assign	vtotal = 627;//pal ? 312-1 : 262-1;	// total number of lines (PAL: 312 lines, NTSC: 262)
 assign	vbstop = pal ? 25 : 20;			// vertical blanking end (PAL 26 lines, NTSC vblank 21 lines)
 
 //first visible line $1A (PAL) or $15 (NTSC)

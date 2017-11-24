@@ -163,6 +163,8 @@ module Agnus
 	output 	[8:1] reg_address_out,		// 256 words (512 bytes) register address out,
 	output	reg dbr,					// agnus requests data bus
 	output	reg dbwe,					// agnus does a memory write cycle (only disk and blitter dma channels may do this)
+	input   eol,
+	input   eof,
 	input	_hsync,						// horizontal sync
 	input	_vsync,						// vertical sync
 	output	_csync,						// composite sync

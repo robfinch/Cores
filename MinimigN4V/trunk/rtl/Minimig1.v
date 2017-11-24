@@ -129,11 +129,16 @@
 // 2010-08-05	- added cache for the CPU
 // 2010-08-15	- added joystick emulation
 
+// RF:
+// 2017-11-21	- add 80/400MHz clock outputs
+// 2017-11-22	- change video sync to input
+// 2017-11-23	- add diagnostic led output, 32 bit addresses
+//
 module Minimig1
 (
 	// m68k pins
 	inout 	[15:0] cpu_data,	// m68k data bus
-	input	[23:1] cpu_address,	// m68k address bus
+	input	[31:1] cpu_address,	// m68k address bus
 	output	[2:0] _cpu_ipl,		// m68k interrupt request
 	input	_cpu_as,			// m68k address strobe
 	input	_cpu_uds,			// m68k upper data strobe
@@ -144,8 +149,8 @@ module Minimig1
 	output	cpu_clk,			// m68k clock
 	// sram pins
 	inout	[15:0] ram_data,	// sram data bus
-	output	[19:1] ram_address,	// sram address bus
-	output	[3:0] _ram_ce,		// sram chip enable
+	output	[31:1] ram_address,	// sram address bus
+	output	_ram_ce,		      // sram chip enable
 	output	_ram_bhe,			// sram upper byte select
 	output	_ram_ble,			// sram lower byte select
 	output	_ram_we,			// sram write enable
@@ -174,8 +179,10 @@ module Minimig1
 	inout	sdo,				// SPI data output
 	input	sck,				// SPI clock
 	// video
-	output	_hsync,				// horizontal sync
-	output	_vsync,				// vertical sync
+	input   eol,
+	input   eof,
+	input	_hsync,				// horizontal sync
+	input	_vsync,				// vertical sync
 	output	[3:0] red,			// red
 	output	[3:0] green,		// green
 	output	[3:0] blue,			// blue
@@ -185,15 +192,17 @@ module Minimig1
 	output	right,				// audio bitstream right
 	// user i/o
 	output	gpio,
+	output reg [7:0] leds,		// diagnostic leds
 	// unused pins
 	output	init_b,				// vertical sync for MCU (sync OSD update)
-	output clk400,
-	output clk80
+	output sel_boot,
+	output clk200,
+	output clk40
 );
 
 //--------------------------------------------------------------------------------------
-
-	parameter NTSC = 0;			// Agnus type (PAL/NTSC)
+parameter SIM = 0;
+parameter NTSC = 0;			// Agnus type (PAL/NTSC)
 
 //--------------------------------------------------------------------------------------
 
@@ -219,9 +228,9 @@ wire		paula_sdo; 				// paula spi data out
 wire		user_sdo;				// userio spi data out
 
 // local signals for address bus
-wire		[23:1] cpu_address_out;	// cpu address out
-wire		[20:1] dma_address_out;	// agnus address out
-wire		[18:1] ram_address_out;	// ram address out
+wire		[31:1] cpu_address_out;	// cpu address out
+wire		[31:1] dma_address_out;	// agnus address out
+wire		[31:1] ram_address_out;	// ram address out
 
 // local signals for control bus
 wire		ram_rd;					// ram read enable
@@ -250,7 +259,7 @@ wire		xbs;					// cross bridge access (memory and custom registers)
 wire		ovl;					// kickstart overlay enable
 wire		_led;					// power led
 wire		boot;    				// bootrom overlay enable
-wire		[3:0] sel_chip;			// chip ram select
+wire		[3:0] sel_chip;		    // chip ram select
 wire		[2:0] sel_slow;			// slow ram select
 wire		sel_kick;				// rom select
 wire		sel_cia;				// CIA address space
@@ -258,6 +267,7 @@ wire		sel_reg;				// chip register select
 wire		sel_cia_a;				// cia A select
 wire		sel_cia_b;				// cia B select
 wire		sel_boot;				// boot rom select
+wire        sel_leds;
 wire		int2;					// intterrupt 2
 wire		int3;					// intterrupt 3 
 wire		int6;					// intterrupt 6
@@ -387,6 +397,10 @@ always @(posedge clk)
 
 assign init_b = vsync_t;
 
+always @(posedge clk)
+	if (sel_leds & (cpu_lwr|cpu_hwr))
+		leds <= cpu_data_out[7:0];
+
 //--------------------------------------------------------------------------------------
 
 // instantiate agnus
@@ -403,10 +417,12 @@ Agnus AGNUS1
 	.data_in(custom_data_in),
 	.data_out(agnus_data_out),
 	.address_in(cpu_address_out[8:1]),
-	.address_out(dma_address_out),
+	.address_out(dma_address_out[20:1]),
 	.reg_address_out(reg_address),
 	.dbr(dbr),
 	.dbwe(dbwe),
+	.eol(eol),
+	.eof(eof),
 	._hsync(_hsync_i),
 	._vsync(_vsync_i),
 	._csync(_csync_i),
@@ -429,6 +445,7 @@ Agnus AGNUS1
 	.floppy_speed(floppy_config[0]),
 	.turbo(turbo)
 );
+assign dma_address_out[31:21] = 11'h000;
 
 // instantiate paula
 Paula PAULA1
@@ -443,7 +460,7 @@ Paula PAULA1
 	.txd(txd),
 	.rxd(rxd),
 	.ntsc(ntsc),
-	.sof(sof),
+	.sof(eof),
 	.strhor(strhor_paula),
 	.vblint(vbl_int),
 	.int2(int2|gayle_irq),
@@ -495,8 +512,8 @@ userio USERIO1
 	.clk28m(clk28m),
 	.c1(c1),
 	.c3(c3),
-	.sol(sol),
-	.sof(sof),
+	.sol(eol),
+	.sof(eof),
 	.reg_address_in(reg_address),
 	.data_in(custom_data_in),
 	.data_out(user_data_out),
@@ -635,7 +652,7 @@ m68k_bridge CPU1
 	.clk(clk),
 	.cpu_clk(cpu_clk),
 	.eclk(eclk),
-	.vpa(sel_cia),
+	.vpa(sel_cia|sel_leds),
 	.dbr(dbr),
 	.dbs(dbs),
 	.xbs(xbs),
@@ -663,9 +680,9 @@ m68k_bridge CPU1
 bank_mapper BMAP1
 (
 	.chip0((~ovr|~cpu_rd|dbr) & sel_chip[0]),
-	.chip1(sel_chip[1]),
-	.chip2(sel_chip[2]),
-	.chip3(sel_chip[3]),	
+	.chip1((~ovr|~cpu_rd|dbr) & sel_chip[1]),
+	.chip2((~ovr|~cpu_rd|dbr) & sel_chip[2]),
+	.chip3((~ovr|~cpu_rd|dbr) & sel_chip[3]),
 	.slow0(sel_slow[0]),
 	.slow1(sel_slow[1]),
 	.slow2(sel_slow[2]),
@@ -693,7 +710,7 @@ sram_bridge RAM1
 	._ble(_ram_ble),
 	._we(_ram_we),
 	._oe(_ram_oe),
-	._ce({_ram_ce[3],_ram_ce[2],_ram_ce[1],_ram_ce[0]}),
+	._ce(_ram_ce),
 	.address(ram_address),
 	.data(ram_data)	
 );
@@ -760,14 +777,15 @@ gary GARY1
 	.sel_cia_a(sel_cia_a),
 	.sel_cia_b(sel_cia_b),
 	.sel_ide(sel_ide),
-	.sel_gayle(sel_gayle)
+	.sel_gayle(sel_gayle),
+	.sel_leds(sel_leds)
 );
 
 gayle GAYLE1
 (
 	.clk(clk),
 	.reset(reset),
-	.address_in(cpu_address_out),
+	.address_in(cpu_address_out[15:1]),
 	.data_in(cpu_data_out),
 	.data_out(gayle_data_out),
 	.rd(cpu_rd),
@@ -804,8 +822,8 @@ bootrom BOOTROM1
 // instantiate system control
 syscontrol CONTROL1 
 (	
-	.clk(clk),
-	.cnt(sof),
+	.clk(clk28m),
+	.cnt(SIM ? eol : eof),
 	.mrst(kbdrst | usrrst),
 	.boot_done(sel_cia_a & sel_cia_b),
 	.reset(reset_out),
@@ -825,8 +843,8 @@ clock_generator CLOCK1
 	.cck(cck),			// colour clock enable
 	.clk(clk),			// 7.09379  MHz clock output
 	.cpu_clk(cpu_clk),
-	.clk400(clk400),
-	.clk80(clk80),
+	.clk200(clk200),
+	.clk40(clk40),
 	.turbo(turbo),
 	.eclk(eclk)			// ECLK enable (1/10th of CLK)
 );
@@ -901,7 +919,7 @@ module syscontrol
 );
 
 // local signals
-reg		smrst;					// registered input
+reg		smrst = 0;				// registered input
 reg		_boot = 0;
 reg		[1:0] rst_cnt = 0;		// reset timer SHOULD BE CLEARED BY CONFIG
 wire	_rst;					// local reset signal
@@ -941,10 +959,10 @@ endmodule
 // This module maps physical 512KB blocks of every memory chip to different memory ranges in Amiga
 module bank_mapper
 (
-	input	chip0,				// chip ram select: 1st 512 KB block
-	input	chip1,				// chip ram select: 2nd 512 KB block
-	input	chip2,				// chip ram select: 3rd 512 KB block
-	input	chip3,				// chip ram select: 4th 512 KB block
+	input	chip0,   			// chip ram select: 1st 512 KB block
+	input	chip1,   			// chip ram select: 1st 512 KB block
+	input	chip2,   			// chip ram select: 1st 512 KB block
+	input	chip3,   			// chip ram select: 1st 512 KB block
 	input	slow0,				// slow ram select: 1st 512 KB block 
 	input	slow1,				// slow ram select: 2nd 512 KB block 
 	input	slow2,				// slow ram select: 3rd 512 KB block 
@@ -959,7 +977,7 @@ module bank_mapper
 always @(aron or memory_config or chip0 or chip1 or chip2 or chip3 or slow0 or slow1 or slow2 or kick or cart)
 begin
 	case ({aron,memory_config})
-		5'b0_0000 : bank = {  1'b0,  1'b0,  1'b0,  1'b0,     kick,  1'b0,  1'b0, chip0 | chip1 | chip2 | chip3 }; // 0.5M CHIP
+		5'b0_0000 : bank = {  1'b0,  1'b0,  1'b0,  1'b0,     kick,  1'b0,  1'b0, chip1 | chip3 | chip0 | chip2  }; // 0.5M CHIP
 		5'b0_0001 : bank = {  1'b0,  1'b0,  1'b0,  1'b0,     kick,  1'b0, chip1 | chip3, chip0 | chip2 }; // 1.0M CHIP
 		5'b0_0010 : bank = {  1'b0,  1'b0,  1'b0,  1'b0,     kick, chip2, chip1, chip0 }; // 1.5M CHIP
 		5'b0_0011 : bank = {  1'b0,  1'b0, chip3,  1'b0,     kick, chip2, chip1, chip0 }; // 2.0M CHIP
@@ -1015,7 +1033,7 @@ module sram_bridge
 	input	c3,							// clock enable signal	
 	// chipset internal port
 	input	[7:0] bank,					// memory bank select (512KB)
-	input	[18:1] address_in,			// bus address
+	input	[31:1] address_in,			// bus address
 	input	[15:0] data_in,				// bus data in
 	output	[15:0] data_out,			// bus data out
 	input	rd,			   				// bus read
@@ -1026,8 +1044,8 @@ module sram_bridge
 	output	reg _ble = 1,   			// sram lower byte
 	output	reg _we = 1,				// sram write enable
 	output	reg _oe = 1,				// sram output enable
-	output	reg [3:0] _ce = 4'b1111,	// sram chip enable
-	output	reg [19:1] address,			// sram address bus
+	output	reg _ce = 1'b1,	            // sram chip enable
+	output	reg [31:1] address,			// sram address bus
 	inout	[15:0] data		  			// sram data das
 );	 
 
@@ -1110,14 +1128,14 @@ always @(posedge clk28m)
 // generate sram chip selects (every sram chip is 512K x 16bits)
 always @(posedge clk28m)
 	if (!c1 && !c3) // deassert chip selects in Q0
-		_ce[3:0] <= 4'b1111;
+		_ce <= 4'b1;
 	else if (c1 && !c3) // assert chip selects in Q1
-		_ce[3:0] <= {~|bank[7:6],~|bank[5:4],~|bank[3:2],~|bank[1:0]};
+		_ce <= ~|bank;
 
 // ram address bus
 always @(posedge clk28m)
 	if (c1 && !c3 && enable)	// set address in Q1		
-		address <= {bank[7]|bank[5]|bank[3]|bank[1],address_in[18:1]};
+		address <= address_in[31:1];
 			
 // data_out multiplexer
 assign data_out[15:0] = (enable && rd) ? data[15:0] : 16'b0000000000000000;
@@ -1176,7 +1194,7 @@ module m68k_bridge
 	input	cck,					// colour clock enable, active when dma can access the memory bus
 	input	cpu_speed,				// CPU speed select request
 	input	[3:0] memory_config,	// system memory config
-	output	reg turbo,				// indicates current CPU speed mode
+	output	reg turbo = 0,				// indicates current CPU speed mode
 	input	_as,					// m68k adress strobe
 	input	_lds,					// m68k lower data strobe d0-d7
 	input	_uds,					// m68k upper data strobe d8-d15
@@ -1185,8 +1203,8 @@ module m68k_bridge
 	output	rd,						// bus read 
 	output	hwr,					// bus high write
 	output	lwr,					// bus low write
-	input	[23:1] address,			// external cpu address bus
-	output	reg [23:1] address_out,	// internal cpu address bus output
+	input	[31:1] address,			// external cpu address bus
+	output	reg [31:1] address_out,	// internal cpu address bus output
 	inout	[15:0] data,			// external cpu data bus
 	output	reg [15:0] data_out,	// internal data bus output
 	input	[15:0] data_in			// internal data bus input
@@ -1280,10 +1298,10 @@ always @(negedge cpu_clk)
 	
 // cached memory ranges
 wire [3:0] cache_bank;
-assign cache_bank[0] = address[23:19] == 5'b1100_0 ? VCC : GND;	// SLOW RAM $C00000-$C7FFFF
-assign cache_bank[1] = address[23:19] == 5'b1100_1 ? VCC : GND;	// SLOW RAM $C80000-$CFFFFF	
-assign cache_bank[2] = address[23:19] == 5'b1101_0 ? VCC : GND;	// SLOW RAM $D00000-$D7FFFF	
-assign cache_bank[3] = address[23:19] == 5'b1111_1 ? VCC : GND;	// KICK ROM $F80000-$FFFFFF	
+assign cache_bank[0] = address[31:19] == 5'b1100_0 ? VCC : GND;	// SLOW RAM $C00000-$C7FFFF
+assign cache_bank[1] = address[31:19] == 5'b1100_1 ? VCC : GND;	// SLOW RAM $C80000-$CFFFFF	
+assign cache_bank[2] = address[31:19] == 5'b1101_0 ? VCC : GND;	// SLOW RAM $D00000-$D7FFFF	
+assign cache_bank[3] = address[31:19] == 5'b1111_1 ? VCC : GND;	// KICK ROM $F80000-$FFFFFF	
 
 // enable caching of selected memory range
 wire [3:0] bank_enable;
@@ -1436,7 +1454,7 @@ always @(clk or data_in)
 assign data[15:0] = doe ? cache_hit ? cache_out : ldata_in[15:0] : 16'bz;
 
 always @(posedge clk)
-	address_out[23:1] <= address[23:1];
+	address_out <= address;
 
 endmodule
 

@@ -22,13 +22,20 @@
 //
 // ============================================================================
 //
-module MinimigGrid(cpu_resetn, xclk, led,
+module MinimigGrid(cpu_resetn, xclk, led, btnu, btnd, btnl, btnr, btnc,
     kd, kclk,
-    TMDS_OUT_clk_p, TMDS_OUT_clk_n, TMDS_OUT_data_p, TMDS_OUT_data_n
+    TMDS_OUT_clk_p, TMDS_OUT_clk_n, TMDS_OUT_data_p, TMDS_OUT_data_n,
+    ddr3_ck_p,ddr3_ck_n,ddr3_cke,ddr3_reset_n,ddr3_ras_n,ddr3_cas_n,ddr3_we_n,
+    ddr3_ba,ddr3_addr,ddr3_dq,ddr3_dqs_p,ddr3_dqs_n,ddr3_dm,ddr3_odt
 );
 input cpu_resetn;
 input xclk;
 output [7:0] led;
+input btnu;
+input btnd;
+input btnl;
+input btnr;
+input btnc;
 inout tri kd;
 inout tri kclk;
 output TMDS_OUT_clk_p;
@@ -36,7 +43,24 @@ output TMDS_OUT_clk_n;
 output [2:0] TMDS_OUT_data_p;
 output [2:0] TMDS_OUT_data_n;
 
-wire clk400,clk80;
+output [0:0] ddr3_ck_p;
+output [0:0] ddr3_ck_n;
+output [0:0] ddr3_cke;
+output ddr3_reset_n;
+output ddr3_ras_n;
+output ddr3_cas_n;
+output ddr3_we_n;
+output [2:0] ddr3_ba;
+output [14:0] ddr3_addr;
+inout [15:0] ddr3_dq;
+inout [1:0] ddr3_dqs_p;
+inout [1:0] ddr3_dqs_n;
+output [1:0] ddr3_dm;
+output [0:0] ddr3_odt;
+
+parameter SIM = 1'b0;
+
+wire clk200,clk40;
 wire locked;
 wire cpu_clk;
 wire _cpu_reset;
@@ -46,7 +70,7 @@ wire _cpu_dtack;
 wire cpu_dd;
 wire [31:0] cpu_addr;
 wire [15:0] cpu_data_o;
-wire [15:0] cpu_data =  cpu_dd ? cpu_data_o : 16'bz;
+wire [15:0] cpu_data =  cpu_r_w ? 16'bz : cpu_data_o; //cpu_dd ? cpu_data_o : 16'bz;
 wire [15:0] cpu_data_i = cpu_data;
 wire _cpu_as;
 wire _cpu_lds;
@@ -54,7 +78,10 @@ wire _cpu_uds;
 wire cpu_r_w;
 //assign _cpu_reset = locked ? 1'b1 : 1'b0;
 
+wire eol, eof;
 wire hSync, vSync;
+wire hSync_n = ~hSync;
+wire vSync_n = ~vSync;
 wire [7:0] red;
 wire [7:0] green;
 wire [7:0] blue;
@@ -62,22 +89,31 @@ wire blank;
 
 wire _ram_bhe,_ram_ble;
 wire _ram_we,_ram_oe;
-wire [3:0] _ram_ce;
-wire _ram_ce1 = &_ram_ce;
-wire [15:0] ram_data, ram_data_o;
+wire _ram_ce;
+wire [15:0] ram_data;
+wire [15:0] ram_data_i = ram_data;
+wire [15:0] ram_data_o;
 assign ram_data = _ram_we ? (&_ram_ce ? 16'd0000 : ram_data_o) : 16'bz;
-wire [21:0] ram_addr;
-assign ram_addr[21] = ~_ram_ce[3] | ~_ram_ce[2];
-assign ram_addr[20] = ~_ram_ce[3] | ~_ram_ce[1];
-assign ram_addr[0] = 1'b0;
+wire [31:1] ram_addr,ram_addr1;
 wire [15:0] chip_ram_dat_o;
 
-WXGASyncGen1280x768_60Hz u4
+wire sel_boot;
+
+wire btnuo, btndd, btnld, btnrd, btncd;
+BtnDebounce ubdb1 (clk40, btnu, btnud);
+BtnDebounce ubdb2 (clk40, btnd, btndd);
+BtnDebounce ubdb3 (clk40, btnl, btnld);
+BtnDebounce ubdb4 (clk40, btnr, btnrd);
+BtnDebounce ubdb5 (clk40, btnc, btncd);
+
+VGASyncGen800x600_60Hz u4
 (
 	.rst(rst),
-	.clk(clk80),
+	.clk(clk40),
 	.hSync(hSync),
 	.vSync(vSync),
+	.eol(eol),
+	.eof(eof),
 	.blank(blank),
 	.border(border)
 );
@@ -87,7 +123,7 @@ WXGASyncGen1280x768_60Hz u4
 rgb2dvi #(
     .kGenerateSerialClk(1'b0),
     .kClkPrimitive("MMCM"),
-    .kClkRange(2),
+    .kClkRange(3),
     .kRstActiveHigh(1'b1)
 )
 ur2d1 
@@ -100,10 +136,10 @@ ur2d1
     .aRst_n(~rst),
     .vid_pData({red,blue,green}),
     .vid_pVDE(~blank),
-    .vid_pHSync(~hSync),
+    .vid_pHSync(hSync),
     .vid_pVSync(vSync),
-    .PixelClk(clk80),
-    .SerialClk(clk400)
+    .PixelClk(clk40),
+    .SerialClk(clk200)
 );
 /*
 TG68KdotC_Kernel utg68kk
@@ -126,6 +162,7 @@ TG68KdotC_Kernel utg68kk
     .dtack(_cpu_dtack)
 );
 */
+
 TG68 utg68k
 (        
 	.clk(cpu_clk),
@@ -135,7 +172,7 @@ TG68 utg68k
     .IPL(_cpu_ipl),
     .dtack(_cpu_dtack),
     .addr(cpu_addr),
-    .data_out(cpu_dat_o),
+    .data_out(cpu_data_o),
     .as(_cpu_as),
     .uds(_cpu_uds),
     .lds(_cpu_lds),
@@ -183,26 +220,69 @@ TG68K utg68k1
     .VBR_out()
 );
 */
-chipram chipram1 (
-  .clka(clk80),    // input wire clka
-  .ena(1'b0),      // input wire ena
-  .wea({2{~cpu_r_w & 1'b0}} & ~{_cpu_uds,_cpu_lds}),      // input wire [1 : 0] wea
-  .addra(cpu_addr[19:1]),  // input wire [18 : 0] addra
-  .dina(cpu_data_o),    // input wire [15 : 0] dina
-  .douta(chip_ram_dat_o),  // output wire [15 : 0] douta
-  .clkb(clk80),    // input wire clkb
-  .enb(~_ram_ce[0]),      // input wire enb
-  .web({2{~_ram_we & ~_ram_ce[0]}} & {~{_ram_bhe,_ram_ble}}),      // input wire [1 : 0] web
-  .addrb(ram_addr[19:1]),  // input wire [18 : 0] addrb
-  .dinb(ram_data),    // input wire [15 : 0] dinb
-  .doutb(ram_data_o)  // output wire [15 : 0] doutb
-);
+Manni umni1 (ram_addr1, ram_addr);
 
-Minimig1 umm1
+generate begin : gram
+if (SIM) begin
+chipram chipram1
+(
+	.clka(clk200),    // input wire clka
+	.ena(1'b0),      // input wire ena
+	.wea({2{~cpu_r_w & 1'b0}} & ~{_cpu_uds,_cpu_lds}),      // input wire [1 : 0] wea
+	.addra(cpu_addr[19:1]),  // input wire [18 : 0] addra
+	.dina(cpu_data_o),    // input wire [15 : 0] dina
+	.douta(chip_ram_dat_o),  // output wire [15 : 0] douta
+	.clkb(clk200),    // input wire clkb
+	.enb(~_ram_ce),      // input wire enb
+	.web({2{~_ram_we & ~_ram_ce}} & ~{_ram_bhe,_ram_ble}),      // input wire [1 : 0] web
+	.addrb(ram_addr[19:1]),  // input wire [18 : 0] addrb
+	.dinb(ram_data_i),    // input wire [15 : 0] dinb
+	.doutb(ram_data_o)  // output wire [15 : 0] doutb
+);
+end
+else begin
+DDRcontrol DDRCtrl1
+(
+	// Common
+	.clk_200MHz_i(clk200),	// 200 MHz system clock
+	.rst_i(rst),              // active high system reset
+
+	// RAM interface
+	.ram_a({ram_addr[28:1],1'b0}),
+	.ram_dq_i(ram_data_i),
+	.ram_dq_o(ram_data_o),
+	.ram_cen(_ram_ce),
+	.ram_oen(_ram_oe),
+	.ram_wen(_ram_we),
+	.ram_bhe(_ram_bhe),
+	.ram_ble(_ram_ble),
+	.data_valid(),
+      
+	// DDR3 interface
+	.ddr3_dq(ddr3_dq),
+	.ddr3_dqs_n(ddr3_dqs_n),
+	.ddr3_dqs_p(ddr3_dqs_p),
+	.ddr3_addr(ddr3_addr),
+	.ddr3_ba(ddr3_ba),
+	.ddr3_ras_n(ddr3_ras_n),
+	.ddr3_cas_n(ddr3_cas_n),
+	.ddr3_we_n(ddr3_we_n),
+	.ddr3_ck_p(ddr3_ck_p),
+	.ddr3_ck_n(ddr3_ck_n),
+	.ddr3_cke(ddr3_cke),
+	.ddr3_reset_n(ddr3_reset_n),
+	.ddr3_dm(ddr3_dm),
+	.ddr3_odt(ddr3_odt)
+);
+end
+end
+endgenerate
+
+Minimig1 #(.SIM(SIM)) umm1
 (
 	// m68k pins
 	.cpu_data(cpu_data),	  // m68k data bus
-	.cpu_address(cpu_addr[23:1]),	// m68k address bus
+	.cpu_address(cpu_addr[31:1]),	// m68k address bus
 	._cpu_ipl(_cpu_ipl),		// m68k interrupt request
 	._cpu_as(_cpu_as),			// m68k address strobe
 	._cpu_uds(_cpu_uds),		// m68k upper data strobe
@@ -213,7 +293,7 @@ Minimig1 umm1
 	.cpu_clk(cpu_clk),			// m68k clock
 	// sram pins
 	.ram_data(ram_data),	    // sram data bus
-	.ram_address(ram_addr[19:1]),	// sram address bus
+	.ram_address(ram_addr1),	   // sram address bus
 	._ram_ce(_ram_ce),     		// sram chip enable
 	._ram_bhe(_ram_bhe),		// sram upper byte select
 	._ram_ble(_ram_ble),		// sram lower byte select
@@ -232,7 +312,7 @@ Minimig1 umm1
 	._joy1(),			// joystick 1 [fire2,fire,up,down,left,right] (default mouse port)
 	._joy2(),			// joystick 2 [fire2,fire,up,down,left,right] (default joystick port)
 	._15khz(1'b1),				// scandoubler disable
-	.pwrled(led[7]),		// power led
+	.pwrled(),		// power led
 	.msdat(),				// PS2 mouse data
 	.msclk(),				// PS2 mouse clk
 	.kbddat(kd),				// PS2 keyboard data
@@ -243,10 +323,10 @@ Minimig1 umm1
 	.sdo(),				// SPI data output
 	.sck(),				// SPI clock
 	// video
-	._hsync(~hSync),
-	._vsync(~vSync),
-//	._hsync(_hsync),			// horizontal sync
-//	._vsync(_vsync),			// vertical sync
+	.eol(eol),
+	.eof(eof),
+	._hsync(hSync_n),        // hSync active low
+	._vsync(vSync_n),
 	.red(red[7:4]),			// red
 	.green(green[7:4]),		// green
 	.blue(blue[7:4]),			// blue
@@ -256,14 +336,18 @@ Minimig1 umm1
 	.right(),				// audio bitstream right
 	// user i/o
 	.gpio(),
+	.leds(),
 	// unused pins
 	.init_b(),				// vertical sync for MCU (sync OSD update)
-
-	.clk400(clk400),
-	.clk80(clk80)
+    .sel_boot(sel_boot),
+	.clk200(clk200),
+	.clk40(clk40)
 );
 
-assign led = cpu_addr[8:1];
+assign led = btndd ? cpu_addr[23:16] : btnrd ? cpu_addr[15:8] : cpu_addr[7:0];
+//assign led[1] = sel_boot;
+//assign led[0] = vSync;
+//assign led[1] = locked;
 /*
 assign led[1:0] = 2'h0;
 assign led[6] = locked;

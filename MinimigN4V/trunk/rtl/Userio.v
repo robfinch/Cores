@@ -563,8 +563,8 @@ module spi8
 	input	sck,	  		// SPI clock
 	input	[7:0] in,		// parallel input data
 	output	[7:0] out,		// parallel output data
-	output	reg rx,			// byte received
-	output	reg cmd			// first byte received
+	output	reg rx = 0,			// byte received
+	output	reg cmd = 0			// first byte received
 );
 
 // locals

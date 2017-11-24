@@ -27,17 +27,17 @@ module clock_generator
 (
     input   reset,
     output  locked,
-	input	mclk,		// 4.433619 MHz master clock input
-	output	clk28m,	 	// 28.37516 MHz clock output
-	output	reg c1,		// clk28m clock domain signal synchronous with clk signal
-	output	reg c3,		// clk28m clock domain signal synchronous with clk signal delayed by 90 degrees
-	output	cck,		// colour clock output (3.54 MHz)
-	output 	clk, 		// 7.09379  MHz clock output
-	output	cpu_clk,
-	output  clk400,
-	output  clk80,
+	input	mclk,		// 100.000 MHz master clock input
+	output	clk28m,	 	// 40.000 MHz clock output
+	output	reg c1,		    // 10.000 MHz
+	output	reg c3,		    // 10.000 MHz delayed by 90 degrees
+	output	cck,		// colour clock output (5.000 MHz)
+	output 	clk, 		// 10.000  MHz clock output
+	output	cpu_clk,    // 10.000 or 40.000 MHz turbo
+	output  clk200,
+	output  clk40,
 	input	turbo,
-	output 	reg [9:0] eclk	// 0.709379 MHz clock enable output (clk domain pulse)
+	output 	reg [9:0] eclk	// 1.000 MHz clock enable output (clk domain pulse)
 );
 
 //            __    __    __    __    __
@@ -60,19 +60,26 @@ IBUFG mclk_buf ( .I(mclk), .O(pll_mclk) );
 //  Output     Output      Phase    Duty Cycle   Pk-to-Pk     Phase
 //   Clock     Freq (MHz)  (degrees)    (%)     Jitter (ps)  Error (ps)
 //----------------------------------------------------------------------------
-// clk_out1___100.000______0.000______50.0______141.599____119.546
-// clk_out2____28.646______0.000______50.0______183.065____119.546
-// clk_out3_____7.161______0.000______50.0______240.909____119.546
-// clk_out4____57.292______0.000______50.0______159.115____119.546
-// clk_out5____28.646_____90.000______50.0______183.065____119.546
+// clk_out1___100.000______0.000______50.0______144.719____114.212
+// clk_out2___400.000______0.000______50.0______111.164____114.212
+// clk_out3____80.000______0.000______50.0______151.652____114.212
+// clk_out4____40.000______0.000______50.0______174.629____114.212
+// clk_out5____10.000______0.000______50.0______229.362____114.212
+// clk_out6____10.000_____90.000______50.0______229.362____114.212
 //
+//----------------------------------------------------------------------------
+// Input Clock   Freq (MHz)    Input Jitter (UI)
+//----------------------------------------------------------------------------
+// __primary_________100.000____________0.010
+
 clk_wiz clk_wiz1
 (
     // Clock out ports
-    .clk_out2(clk400),
-    .clk_out3(clk80),
+    .clk_out2(clk200),
+    .clk_out3(clk40),
     .clk_out4(clk28m),  // 40MHz
     .clk_out5(clk10),   // 10MHz
+    .clk_out6(clk10_90),    // 10 MHZ 90deg phase shift
     // Status and control signals
     .reset(reset), // input reset
     .locked(locked),       // output locked
@@ -92,22 +99,32 @@ reg	[3:0] e_cnt;	//used to generate e clock enable
 
 // E clock counter
 always @(posedge clk10)
-	if (e_cnt[3] && e_cnt[0]) begin
-		e_cnt[3:0] <= 0;
-		eclk <= 10'b0000000001;
-	end
-	else begin
-		e_cnt[3:0] <= e_cnt[3:0] + 1;
-		eclk <= {eclk[8:0],eclk[9]};
+    if (reset) begin
+        e_cnt <= 4'h0;
+        eclk <= 10'b0000000001;
+    end
+    else begin
+        if (e_cnt[3] && e_cnt[0]) begin
+            e_cnt[3:0] <= 0;
+            eclk <= 10'b0000000001;
+        end
+        else begin
+            e_cnt[3:0] <= e_cnt[3:0] + 1;
+            eclk <= {eclk[8:0],eclk[9]};
+        end
 	end
 
 // CCK clock output
 assign cck = ~e_cnt[0];
-		
+assign clk = clk10;
 always @(posedge clk28m)
-	c3 <= clk10;
+	c3 <= clk;
 	
 always @(posedge clk28m)
 	c1 <= ~c3;
+
+
+//assign c1 = clk10;
+//assign c3 = clk10_90;
 	
 endmodule

@@ -374,7 +374,7 @@ BEGIN
 	RWindex_A <= conv_integer(rf_dest_addr(4)&(rf_dest_addr(3 downto 0) XOR "1111"));
 	RWindex_B <= conv_integer(rf_source_addr(4)&(rf_source_addr(3 downto 0) XOR "1111"));
 	
-	PROCESS (clk)
+	PROCESS (clk, clkena, RWIndex_A, RWIndex_B, registerin, Lwrena, HWrena)
 	BEGIN
 		IF falling_edge(clk) THEN
 		    IF clkena='1' THEN
@@ -973,7 +973,7 @@ PROCESS (OP2out, reg_QB, opcode, datatype, OP2out_one, exec_EXT, exec_MOVEQ, EXE
 			OP2out <= ea_data;	
 		ELSIF exec_MOVEQ='1' THEN
 			OP2out(7 downto 0) <= opcode(7 downto 0);
-			OP2out(15 downto 8) <= (OTHERS => opcode(7));
+			OP2out(31 downto 8) <= (OTHERS => opcode(7));
 		ELSIF exec_ADDQ='1' THEN
 			OP2out(2 downto 0) <= opcode(11 downto 9);
 			IF opcode(11 downto 9)="000" THEN

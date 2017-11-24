@@ -5,8 +5,8 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	WXGASyncGen1280x768_60Hz.v
-//		WXGA sync generator
+//	VGASyncGen800x600_60Hz.v
+//		VGA sync generator
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -25,31 +25,31 @@
 //
 //	WXGA video sync generator.
 //
-//	Input clock:     80.00 MHz (100 MHz * 12/15)
-//	Horizontal freq: 47.7 kHz	(generated) (47.619KHz)
-//	Vertical freq:   60.00  Hz (generated)  (59.89 Hz)
+//	Input clock:     40.00 MHz (100 MHz * 12/30)
+//	Horizontal freq: 37.9 kHz	(generated) (37.879 KHz)
+//	Vertical freq:   60.32  Hz (generated)  (60.316 Hz)
 //
 //	This module generates the basic sync timing signals required for a
 //	WXGA display.
 //
 // ============================================================================
 
-module WXGASyncGen1280x768_60Hz(rst, clk, eol, eof, hSync, vSync, hCtr, vCtr, blank, border);
-parameter phSyncOn  = 67;		//   72 front porch
-parameter phSyncOff = 201;		//  144 sync
-parameter phBlankOff = 400;		//  212 back porch
-parameter phBorderOff = 468;	//    0 border
-parameter phBorderOn = 1748;	// 1366 display
-parameter phBlankOn = 1816;		//    0 border
-parameter phTotal = 1816;		// 1800 total clocks (1680 for 1280 display)
+module VGASyncGen800x600_60Hz(rst, clk, eol, eof, hSync, vSync, hCtr, vCtr, blank, border);
+parameter phSyncOn  = 40;		//   40 front porch
+parameter phSyncOff = 168;		//  128 sync
+parameter phBlankOff = 256;		//   88 back porch
+parameter phBorderOff = 262;	//   80 border
+parameter phBorderOn = 902;		//  640 display
+parameter phBlankOn = 908;		//   80 border
+parameter phTotal = 908;		// 1056 total clocks
 // 47.7 = 60 * 795 kHz
-parameter pvSyncOn  = 2;		//    1 front porch
-parameter pvSyncOff = 5;		//    3 vertical sync
-parameter pvBlankOff = 27;		//   23 back porch
-parameter pvBorderOff = 27;		//    2 border	0
-parameter pvBorderOn = 795;		//  768 display
-parameter pvBlankOn = 795;  	//    1 border	0
-parameter pvTotal = 795;		//  795 total scan lines
+parameter pvSyncOn  = 1;		//    1 front porch
+parameter pvSyncOff = 5;		//    4 vertical sync
+parameter pvBlankOff = 28;		//   23 back porch
+parameter pvBorderOff = 72;		//   44 border	0
+parameter pvBorderOn = 584;		//  512 display
+parameter pvBlankOn = 628;  	//   44 border	0
+parameter pvTotal = 628;		//  628 total scan lines
 // 60 Hz
 // 1280x768
 input rst;			// reset
@@ -75,7 +75,7 @@ wire eol1 = hCtr==phTotal;
 wire eof1 = vCtr==pvTotal && eol;
 
 assign vSync1 = vCtr >= pvSyncOn && vCtr < pvSyncOff;
-assign hSync1 = !(hCtr >= phSyncOn && hCtr < phSyncOff);
+assign hSync1 = hCtr >= phSyncOn && hCtr < phSyncOff;
 assign vBlank = vCtr >= pvBlankOn || vCtr < pvBlankOff;
 assign hBlank = hCtr >= phBlankOn || hCtr < phBlankOff;
 assign vBorder = vCtr >= pvBorderOn || vCtr < pvBorderOff;
