@@ -19,13 +19,13 @@ extern int min(int, int);
       The length of the identifier (0 if not found)
 ----------------------------------------------------------------------------- */
 
-int CBuf::GetIdentifier(char **sptr, char **eptr)
+int CBuf::GetIdentifier(char **sptr, char **eptr, char pt)
 {
    char *sp, *ep;
         
    skipSpacesLF();
    sp = ptr;
-   if (IsFirstIdentChar(*ptr))
+   if (IsFirstIdentChar(*ptr) || (*ptr=='.' && pt))
       do { ptr++; } while(IsIdentChar(*ptr));
    ep = ptr;
    if (eptr)

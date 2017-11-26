@@ -261,7 +261,7 @@ int m_macro(SOp *o)
    gNargs = 0;
    macrobufndx = 0;
    memset(macrobuf, '\0', sizeof(macrobuf));
-   idlen = ibuf.GetIdentifier(&sptr, &eptr);
+   idlen = ibuf.GetIdentifier(&sptr, &eptr, FALSE);
    if (idlen == 0)
    {
       Err(E_MACRONAME);
@@ -475,7 +475,7 @@ int m_public(SOp *o)
    CSymbol tdef, *p;
    char labeln[100];
 
-   len = ibuf.GetIdentifier(&sptr, &eptr);
+   len = ibuf.GetIdentifier(&sptr, &eptr,FALSE);
    if (len < 1)
    {
       Err(E_PUBLIC);

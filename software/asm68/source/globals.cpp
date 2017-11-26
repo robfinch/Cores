@@ -2,8 +2,8 @@
 #include "sym.h"
 #include "fasm68.h"
 
-char *verstr = "Finitron asm68 assembler    version 5.5   %.24s     Page %d\r\n";
-char *verstr2 = "asm68 V5.5  (c) 1995-2017 Robert Finch - 680xx cross assembler\r\n";
+char *verstr = "Finitron asm68 assembler    version 5.6   %.24s     Page %d\r\n";
+char *verstr2 = "asm68 V5.6  (c) 1995-2017 Robert Finch - 680xx cross assembler\r\n";
 
 int lineno;        // current assembler line
 int pass;          // assembler's current pass

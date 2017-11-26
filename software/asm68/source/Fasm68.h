@@ -252,7 +252,7 @@ typedef struct
 #define MACRO_PARM_MARKER       0x14    // Special character used to identify macro parameter
 
 
-int GetIdentifier(char *ptr, char **sptr, char **eptr);
+int GetIdentifier(char *ptr, char **sptr, char **eptr, char);
 long GetNumeric(char *ptr, char **eptr, int base); // get numeric value from input
 
 
@@ -320,6 +320,7 @@ E char firstword;         // true if processing first word of opcode
 E char DoingDef;           // Indicates processing def instruction
 E char ForceErr;
 E CSymbolTbl *LocalSymTbl;
+E char current_label[NAME_MAX*2+1];
 
 // Macro handling
 E int CollectingMacro;    // TRUE if collecting macro lines

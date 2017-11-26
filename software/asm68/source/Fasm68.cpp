@@ -481,14 +481,22 @@ void label(char *label, int oclass)
 {
    CSymbol *p, *q = NULL;
    CSymbol tdef;
+   static char nm[500];
 
+    if (label[0]=='.') {
+        sprintf_s(nm, sizeof(nm), "%s%s", current_label, label);
+    }
+    else { 
+        strcpy(current_label, label);
+        strcpy_s(nm, sizeof(nm), label);
+    }
    /* -----------------------------------------------------------------
          See if the symbol exists in the symbol table already. If it
       does then the label is being multiply defined.
    ------------------------------------------------------------------ */
 //   printf("label:%s|\n", label);
    p = NULL;
-   tdef.SetName(label);
+   tdef.SetName(nm);
    if (oclass == PUB || FileLevel == 0)
       p = SymbolTbl->find(&tdef);
    else
@@ -520,7 +528,7 @@ void label(char *label, int oclass)
             Err(E_MEMORY);
             return;
          }
-         q->SetName(label);
+         q->SetName(nm);
          if (oclass == PUB || FileLevel == 0)
             p = SymbolTbl->insert(q);
          else {
@@ -553,7 +561,7 @@ void label(char *label, int oclass)
     // the section counter or there is an error.
 	if (pass==lastpass)
 		if (p->Value() != Counter()) {
-			Err(E_PHASE, label);
+			Err(E_PHASE, nm);
 		}
 	if (p->Value() != Counter()) {
 		PhaseErr = TRUE;
@@ -826,7 +834,7 @@ int PrcLine()
       if (!InComment && !InComment2)
       {
          bptr = ibuf.Ptr();
-         idlen = ibuf.GetIdentifier(&sptr, &eptr); // will skip leading spaces
+         idlen = ibuf.GetIdentifier(&sptr, &eptr,FALSE); // will skip leading spaces
          if (idlen == 4)
          {
             if (strnicmp(sptr, "endm", 4) == 0)
@@ -930,7 +938,7 @@ LoopStart:
          break;
       }
 
-      idlen = ibuf.GetIdentifier(&sptr, &eptr);
+      idlen = ibuf.GetIdentifier(&sptr, &eptr,TRUE);
       if (idlen > 0)
       {
          memset(idbuf, '\0', sizeof(idbuf));
@@ -1227,7 +1235,7 @@ void SearchAndSub()
       }
 
       sptr1 = ibuf.Ptr();
-      idlen = ibuf.GetIdentifier(&sptr, &eptr); // look for an identifier
+      idlen = ibuf.GetIdentifier(&sptr, &eptr,FALSE); // look for an identifier
       if (idlen) {
          if ((strncmp(sptr, "comment", 7)==0) && !IsIdentChar(sptr[7])) {
             ic1++;

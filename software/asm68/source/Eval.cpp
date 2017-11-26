@@ -157,8 +157,9 @@ void CAsmBuf::Constant(SValue *val)
    /* -----------------------------
       Check if numeric constant.
    ----------------------------- */
-   if (isdigit(PeekCh()))
+   if (isdigit(PeekCh()) || PeekCh()=='%')
    {
+j1:
 	   val->fLabel = FALSE;
        value = stouxl(Ptr(), &ep1);
 	   fval.d = strtod(Ptr(), &ep2);
@@ -193,6 +194,10 @@ void CAsmBuf::Constant(SValue *val)
 	else if (PeekCh() == '$')
 	{
 		NextCh();
+		if (IsIdentChar(PeekCh())) {
+			unNextCh();
+			goto j1;
+		}
 		value = Counter();
 		val->size = 'L';
 		val->value = value;
@@ -308,7 +313,7 @@ void CAsmBuf::Func(SValue *val, int ch)
          break;
 
       case 's':
-         id = GetIdentifier(&sptr, &eptr);
+         id = GetIdentifier(&sptr, &eptr, FALSE);
          if (!id)
             Err(E_SIZEOP);
          else
@@ -342,7 +347,7 @@ void CAsmBuf::Func(SValue *val, int ch)
          break;
 
       case 'd':
-         id = GetIdentifier(&sptr, &eptr);
+         id = GetIdentifier(&sptr, &eptr, FALSE);
          if (!id)
             Err(E_DEFINE);
          else
@@ -396,12 +401,15 @@ void CAsmBuf::Factor(SValue *val)
    int id;
    char ch, ch2;
    char *sptr, *eptr, sz;
+   char buf[500];
    CSymbol ts, *pts;
+	char localLabel = FALSE;
 
    val->fLabel = FALSE;
    val->fForcedSize = FALSE;
    val->fForwardRef = FALSE;
-   id = GetIdentifier(&sptr, &eptr);
+   skipSpacesLF();
+   id = GetIdentifier(&sptr, &eptr, TRUE);
    setptr(eptr);
    if (id)
    {
@@ -415,8 +423,12 @@ void CAsmBuf::Factor(SValue *val)
       }
       else
       {
+         if (sptr[0]=='.')  // local label
+            sprintf(buf, "%s%s", current_label, sptr);
+         else
+             strcpy(buf, sptr);
          pts = NULL;
-         ts.SetName(sptr);
+         ts.SetName(buf);
          if (LocalSymTbl)
             pts = LocalSymTbl->find(&ts);
          if (pts == NULL)

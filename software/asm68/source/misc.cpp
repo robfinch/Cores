@@ -493,7 +493,7 @@ int GetCReg(char *buf, int *num)
    CBuf bbuf;
 
    bbuf.set(buf, strlen(buf));
-   idlen = bbuf.GetIdentifier(&sptr, NULL);
+   idlen = bbuf.GetIdentifier(&sptr, NULL, FALSE);
    if (idlen == 0)
       return (FALSE);
                 
@@ -524,7 +524,7 @@ int GetMMUReg(char *buf, int *num)
    CBuf bbuf;
 
    bbuf.set(buf, strlen(buf));
-   idlen = bbuf.GetIdentifier(&sptr, NULL);
+   idlen = bbuf.GetIdentifier(&sptr, NULL, FALSE);
    if (idlen == 0)
       return (FALSE);
                 

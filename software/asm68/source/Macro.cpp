@@ -80,7 +80,7 @@ StartOfLoop:
          
       // First search for an identifier to substitute with parameter
       p1 = tb.Ptr();
-      idlen = tb.GetIdentifier(&sptr, &eptr);
+      idlen = tb.GetIdentifier(&sptr, &eptr, FALSE);
       if (idlen)
       {
          for (found = ii = 0; plist[ii]; ii++)

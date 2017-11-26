@@ -28,6 +28,10 @@ unsigned __int64 stouxl(char *instr, char **outstr)
    while(isspace(*str))
       ++*str;
 
+   if (*str=='%')
+		goto doBin;
+   if (*str=='$')
+	   goto doHex;
    if (*str != '0')
    {
       while(isdigit(*str))
@@ -40,6 +44,7 @@ unsigned __int64 stouxl(char *instr, char **outstr)
       {
          case 'x':
          case 'X':
+doHex:
 			 for(++str; isxdigit(*str) || *str=='_'; ++str) {
 				 if (*str=='_') continue;
                num = (num * 16) + (isdigit(*str) ? *str - '0' : toupper(*str) - 'A' + 10);
@@ -56,9 +61,11 @@ unsigned __int64 stouxl(char *instr, char **outstr)
 
          case 'b':
          case 'B':
-            for(++str; (*str == '0' || *str == '1') || *str=='_'; ++str)
+doBin:
+            for(++str; (*str == '0' || *str == '1') || *str=='_'; ++str) {
 				 if (*str=='_') continue;
-               num = (num + num) + *str - '0';
+               num = (num + num) + (*str - '0');
+			}
             break;
 
          default:

@@ -987,7 +987,7 @@ int m_equ(char *iid)
    /* --------------------------------------------------------------
    -------------------------------------------------------------- */
    ptr = ibuf.Ptr();    // Save off starting point // inptr;
-   idlen = ibuf.GetIdentifier(&sptr, &eptr);
+   idlen = ibuf.GetIdentifier(&sptr, &eptr, FALSE);
    if (idlen == 0)
    {
       ibuf.setptr(ptr); // restore starting point
@@ -1273,7 +1273,7 @@ int m_extern(SOp *o)
 
    do
    {
-      len = ibuf.GetIdentifier(&sptr, &eptr);
+      len = ibuf.GetIdentifier(&sptr, &eptr, FALSE);
       if (first)
       {
          if (len < 1)
