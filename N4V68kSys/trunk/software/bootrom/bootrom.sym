@@ -1,0 +1,42 @@
+Global symbols:
+
+Symbol Table:
+ #  Name                            OCLS  Base Len        Value       Def Line     File        References
+  0 DisplayHexNumber                 PRI  CODE   L   FFFFFFFFFFFF0100       156   bootrom.asm   FFFF0180 FFFF01B4 FFFF01E4 FFFF01E8 FFFF020A 
+  1 Start                            PRI  CODE   L   FFFFFFFFFFFF0010        66   bootrom.asm   
+  2 VDGBUF                           NON  DATA   D   00000000FF800000        48   bootrom.asm   FFFF006A 
+  3 VDGREG                           NON  DATA   D   00000000FFE00000        49   bootrom.asm   
+  4 VirtScreen                       NON  DATA   L   000000001FFF0000        50   bootrom.asm   
+  5 clrscr_loop1                     PRI  CODE   L   FFFFFFFFFFFF0064       102   bootrom.asm   FFFF0072 
+  6 cpyfnt                           PRI  CODE   L   FFFFFFFFFFFF0094       118   bootrom.asm   FFFF009A 
+  7 disphnum1                        PRI  CODE   L   FFFFFFFFFFFF0112       160   bootrom.asm   FFFF0158 FFFF015C 
+  8 disphnum2                        PRI  CODE   L   FFFFFFFFFFFF0120       166   bootrom.asm   FFFF011E 
+  9 disphnum3                        PRI  CODE   L   FFFFFFFFFFFF0128       170   bootrom.asm   FFFF0132 
+ 10 font8                            PRI  CODE   L   FFFFFFFFFFFF0254       293   bootrom.asm   FFFF007C 
+ 11 fpga_version                     PRI  CODE   L   FFFFFFFFFFFF0008        62   bootrom.asm   
+ 12 j1                               PRI  CODE   L   FFFFFFFFFFFF00FE       151   bootrom.asm   FFFF00F8 FFFF0100 
+ 13 j3                               PRI  CODE   L   FFFFFFFFFFFF00BA       131   bootrom.asm   FFFF00C4 FFFF00EE 
+ 14 j4                               PRI  CODE   L   FFFFFFFFFFFF00EE       147   bootrom.asm   FFFF00C8 
+ 15 leds                             NON  DATA   D   00000000FFDC0600        51   bootrom.asm   FFFF0176 FFFF018A FFFF01A4 FFFF01DA 
+ 16 msg_start                        PRI  CODE   L   FFFFFFFFFFFF023C       289   bootrom.asm   FFFF00A6 
+ 17 ramtest                          PRI  CODE   L   FFFFFFFFFFFF015C       191   bootrom.asm   FFFF00FE 
+ 18 ramtest1                         PRI  CODE   L   FFFFFFFFFFFF0170       200   bootrom.asm   FFFF0190 
+ 19 ramtest2                         PRI  CODE   L   FFFFFFFFFFFF01A0       221   bootrom.asm   FFFF01BE 
+ 20 ramtest3                         PRI  CODE   L   FFFFFFFFFFFF01C0       238   bootrom.asm   FFFF01A6 FFFF01AA 
+ 21 ramtest4                         PRI  CODE   L   FFFFFFFFFFFF01D4       242   bootrom.asm   FFFF01EE FFFF01FA 
+ 22 ramtest5                         PRI  CODE   L   FFFFFFFFFFFF01F6       255   bootrom.asm   FFFF0214 
+ 23 ramtest6                         PRI  CODE   L   FFFFFFFFFFFF0190       214   bootrom.asm   
+ 24 ramtest7                         PRI  CODE   L   FFFFFFFFFFFF0238       284   bootrom.asm   FFFF01C0 FFFF0216 FFFF023C 
+ 25 ramtest8                         PRI  CODE   L   FFFFFFFFFFFF01EE       252   bootrom.asm   
+ 26 rand                             NON  DATA   D   00000000FFDC0C00        52   bootrom.asm   
+ 27 rmtst1                           PRI  CODE   L   FFFFFFFFFFFF0180       207   bootrom.asm   FFFF0178 FFFF017A 
+ 28 rmtst2                           PRI  CODE   L   FFFFFFFFFFFF01B6       230   bootrom.asm   FFFF01AC FFFF01AE 
+ 29 rmtst3                           PRI  CODE   L   FFFFFFFFFFFF01E6       249   bootrom.asm   FFFF01DC FFFF01DE 
+ 30 rmtst4                           PRI  CODE   L   FFFFFFFFFFFF020C       264   bootrom.asm   FFFF0202 
+ 31 rmtst5                           PRI  CODE   L   FFFFFFFFFFFF0216       271   bootrom.asm   FFFF01FC FFFF0200 
+
+
+Local symbols:
+
+Macro Table:
+ #  Name                            Nargs  Line   File

@@ -1,0 +1,575 @@
+Finitron asm68 assembler    version 5.5   Sun Nov 26 02:11:24 2017     Page 1
+bootrom.asm
+
+                                             ; N4V68kSys bootrom - (C) 2017 Robert Finch, Waterloo
+                                             ;
+                                             ; This file is part of N4V68kSys
+                                             ;
+                                             ; how to build:
+                                             ; 1. assemble using "asm68 bootrom.asm /G00 /olyebvm"
+                                             ; 2. copy bootrom.vh to the correct directory if not already there
+                                             ;
+                                             ;------------------------------------------------------------------------------
+                                             ;
+                                             ; system memory map
+                                             ;
+                                             ;
+                                             ; 00000000 +----------------+
+                                             ;          | startup sp,pc  | 8 B
+                                             ; 00000008 +----------------+
+                                             ;          |                |
+                                             ;          :  dram memory   : 512 MB
+                                             ;          |                |
+                                             ; 20000000 +----------------+
+                                             ;          |                |
+                                             ;          :     unused     :
+                                             ;          |                |
+                                             ; FF800000 +----------------+
+                                             ;          |                |
+                                             ;          : display buffer : 1.5 M
+                                             ;          |                |
+                                             ; FF980000 +----------------+
+                                             ;          |                |
+                                             ;          :     unused     :
+                                             ;          |                |
+                                             ; FFD00000 +----------------+
+                                             ;          |                |
+                                             ;          :    I/O area    : 1.0 M
+                                             ;          |                |
+                                             ; FFE00000 +----------------+
+                                             ;          |   VDG regs     |
+                                             ; FFE01000 +----------------+
+                                             ;          |                |
+                                             ;          :     unused     :
+                                             ;          |                |
+                                             ; FFFF0000 +----------------+
+                                             ;          |                |
+                                             ;          :    boot rom    :
+                                             ;          |                |
+                                             ; FFFFFFFF +----------------+
+                                             ;
+                                             VDGBUF		EQU	0xFF800000
+                                             VDGREG		EQU	0xFFE00000
+                                             VirtScreen	EQU	0x1FFF0000
+                                             leds		EQU	0xFFDC0600
+                                             rand		EQU	0xFFDC0C00
+                                             
+                                             	org		0xFFFF0000
+                                             
+                                             ;------------------------------------------------------------------------------
+                                             
+     58 FFFF0000 00010000                    	dc.l	0x00010000	; initial SSP
+     59 FFFF0004 FFFF0010                    	dc.l	Start		; initial PC
+Finitron asm68 assembler    version 5.5   Sun Nov 26 02:11:24 2017     Page 2
+bootrom.asm
+                                             	
+                                             ;------------------------------------------------------------------------------
+     62 FFFF0008                             fpga_version:
+     63 FFFF0008 41 41 30 30 30 30 30 30     	dc.b	"AA000000"	; FPGA core version - 8 ASCII characters
+                                             
+                                             
+                                             ;------------------------------------------------------------------------------
+     67 FFFF0010                             	Start:
+                                             ;------------------------------------------------------------------------------
+     69 FFFF0010 33FC A1A1 FFDC 0600         	move.w	#0xA1A1,leds		; diagnostics
+                                             
+                                             	; SIM croaked because the upper half of D1 was undefined. This caused
+                                             	; problems with a dbra instruction. So the contents of all the registers
+                                             	; are defined at startup. This is only needed for SIM.
+     74 FFFF0018 7000                        	moveq	#0,D0
+     75 FFFF001A 7200                        	moveq	#0,D1				; for SIM
+     76 FFFF001C 7400                        	moveq	#0,D2
+     77 FFFF001E 7600                        	moveq	#0,D3
+     78 FFFF0020 7800                        	moveq	#0,D4
+     79 FFFF0022 7A00                        	moveq	#0,D5
+     80 FFFF0024 7C00                        	moveq	#0,D6
+     81 FFFF0026 7E00                        	moveq	#0,D7
+     82 FFFF0028 4288                        	clr.l	A0
+     83 FFFF002A 4289                        	clr.l	A1
+     84 FFFF002C 428A                        	clr.l	A2
+     85 FFFF002E 428B                        	clr.l	A3
+     86 FFFF0030 428C                        	clr.l	A4
+     87 FFFF0032 428D                        	clr.l	A5
+     88 FFFF0034 428E                        	clr.l	A6
+     89 FFFF0036 4E67                        	move.l	A7,usp
+                                             
+     91 FFFF0038 4DF9 FFDC 0000              	lea	0xFFDC0000,A6	; I/O base
+                                             
+                                             	; Initialize random number generator
+                                             
+     95 FFFF003E 426E 0C06                   	clr.w	0x0C06(a6)				; select stream #0
+     96 FFFF0042 2D7C 8888 8888 0C08         	move.l	#0x88888888,0x0C08(a6)	; set initial m_z
+     97 FFFF004A 2D7C 0123 4567 0C0C         	move.l	#0x01234567,0x0C0C(a6)	; set initial m_w
+                                             	
+                                             	; clear screen	
+    100 FFFF0052 207C FF80 0000              	move.l	#VDGBUF,A0
+    101 FFFF0058 203C 0000 00DF              	move.l	#0b011011111,D0		; light blue
+    102 FFFF005E 223C 0005 0000              	move.l	#640*512,D1
+    103 FFFF0064                             clrscr_loop1:
+    104 FFFF0064 202E 0C00                   	move.l	0x0C00(a6),d0			; get a random number
+    105 FFFF0068 426E 0C04                   	clr.w	0x0C04(a6)				; generate next number
+    106 FFFF006C 30C0                        	move.w	d0,(a0)+				; store it to the screen
+    107 FFFF006E 5381                        	sub.l	#1,d1
+    108 FFFF0070 66F2                        	bne		clrscr_loop1
+                                             
+    110 FFFF0072 33FC A2A2 FFDC 0600         	move.w	#0xA2A2,leds		; diagnostics
+                                             
+                                             	; copy font to VDG ram
+                                             
+    114 FFFF007A 41F9 FFFF 0254              	lea		font8,a0
+    115 FFFF0080 223C 0000 1000              	move.l	#8*512,d1			; 512 chars * 8 bytes per char
+    116 FFFF0086 227C FF97 0000              	move.l	#0xFF970000,a1		; font table address
+    117 FFFF008C 247C FF80 0000              	move.l	#VDGBUF,a2
+    118 FFFF0092 7000                        	moveq	#0,d0
+    119 FFFF0094                             cpyfnt:
+Finitron asm68 assembler    version 5.5   Sun Nov 26 02:11:24 2017     Page 3
+bootrom.asm
+    120 FFFF0094 1018                        	move.b	(a0)+,d0			; get a byte
+    121 FFFF0096 32C0                        	move.w	d0,(a1)+			; store in font table
+    122 FFFF0098 51C9 FFFA                   	dbra	d1,cpyfnt
+    123 FFFF009C 33FC A3A3 FFDC 0600         	move.w	#0xA3A3,leds		; diagnostics
+                                             
+                                             	; Write startup message to screen
+                                             
+    127 FFFF00A4 41F9 FFFF 023C              	lea		msg_start,a0
+    128 FFFF00AA 247C 1FFF 0000              	move.l	#VirtScreen,a2
+    129 FFFF00B0 227C FFE0 0000              	move.l	#VDGREG,a1
+    130 FFFF00B6 7200                        	moveq	#0,d1					; xpos
+    131 FFFF00B8 7400                        	moveq	#0,d2					; ypos
+    132 FFFF00BA                             j3:									; wait for character que to empty
+    133 FFFF00BA 3029 042A                   	move.w	0x42A(a1),d0			; read character queue index into d0
+    134 FFFF00BE B07C 001C                   	cmp.w	#28,d0					; allow up 28 entries to be in progress
+    135 FFFF00C2 64F6                        	bhs		j3						; branch if too many chars queued
+    136 FFFF00C4 1018                        	move.b	(a0)+,d0				; get character from string into d0
+    137 FFFF00C6 6726                        	beq		j4						; end of string ?
+    138 FFFF00C8 48C0                        	ext.b	d0						; zero out high order bits
+    139 FFFF00CA 14C0                        	move.b	d0,(a2)+				; copy to virtual screen
+    140 FFFF00CC 3340 0420                   	move.w	d0,0x420(a1)			; set char code
+    141 FFFF00D0 337C 01FF 0422              	move.w	#0b111111111,0x422(a1)	; set fg color
+    142 FFFF00D6 337C 0003 0424              	move.w	#0b000000011,0x424(a1)	; set bk color
+    143 FFFF00DC 3341 0426                   	move.w	d1,0x426(a1)			; set x pos
+    144 FFFF00E0 3342 0428                   	move.w	d2,0x428(a1)			; set y pos
+    145 FFFF00E4 337C 0000 042E              	move.w	#0,0x42E(a1)			; pulse character queue write signal
+    146 FFFF00EA 5041                        	add.w	#8,d1					; increment xpos
+    147 FFFF00EC 60CC                        	bra		j3
+    148 FFFF00EE                             j4:
+    149 FFFF00EE 33FC A4A4 FFDC 0600         	move.w	#0xA4A4,leds		; diagnostics
+    150 FFFF00F6 47F9 FFFF 00FE              	lea		j1,a3
+    151 FFFF00FC 605E                        	bra		ramtest
+    152 FFFF00FE 60FE                        j1:	bra		j1
+                                             
+                                             ;------------------------------------------------------------------------------
+                                             ;------------------------------------------------------------------------------
+                                             ;
+    157 FFFF0100                             DisplayHexNumber:
+    158 FFFF0100 33FC A6A6 FFDC 0600         		move.w	#0xA6A6,leds		; diagnostics
+    159 FFFF0108 2C7C FFE0 0000              		move.l	#VDGREG,a6
+    160 FFFF010E 343C 0007                   		move.w	#7,d2		; number-1 of digits to display
+    161 FFFF0112                             disphnum1:
+    162 FFFF0112 1001                        		move.b	d1,d0		; get digit into d0.b
+    163 FFFF0114 0240 000F                   		andi.w	#0x0f,d0
+    164 FFFF0118 0C40 0009                   		cmpi.w	#0x09,d0
+    165 FFFF011C 6302                        		bls.s	disphnum2
+    166 FFFF011E 5E40                        		addi.w	#0x7,d0
+    167 FFFF0120                             disphnum2:
+    168 FFFF0120 0640 0030                   		addi.w	#0x30,d0	; convert to display char
+    169 FFFF0124 3602                        		move.w	d2,d3		; char count into d3
+    170 FFFF0126 E743                        		asl.w	#3,d3		; scale * 8
+    171 FFFF0128                             disphnum3:
+    172 FFFF0128 382E 042A                   		move.w	0x42A(a6),d4			; read character queue index into d4
+    173 FFFF012C B87C 001C                   		cmp.w	#28,d4					; allow up 28 entries to be in progress
+    174 FFFF0130 64F6                        		bhs.s	disphnum3				; branch if too many chars queued
+    175 FFFF0132 48C0                        		ext.b	d0						; zero out high order bits
+    176 FFFF0134 3D40 0420                   		move.w	d0,0x420(a6)			; set char code
+    177 FFFF0138 3D7C 01FF 0422              		move.w	#0b111111111,0x422(a6)	; set fg color
+    178 FFFF013E 3D7C 0003 0424              		move.w	#0b000000011,0x424(a6)	; set bk color
+    179 FFFF0144 3D43 0426                   		move.w	d3,0x426(a6)			; set x pos
+Finitron asm68 assembler    version 5.5   Sun Nov 26 02:11:24 2017     Page 4
+bootrom.asm
+    180 FFFF0148 3D7C 0008 0428              		move.w	#8,0x428(a6)			; set y pos
+    181 FFFF014E 3D7C 0000 042E              		move.w	#0,0x42E(a6)			; pulse character queue write signal
+    182 FFFF0154 E899                        		ror.l	#4,d1					; rot to next digit
+    183 FFFF0156 57CA FFBA                   		dbeq	d2,disphnum1
+    184 FFFF015A 4ED5                        		jmp		(a5)
+                                             
+                                             ;===============================================================================
+                                             ;    Perform ram test. (Uses checkerboard testing).
+                                             ; 
+                                             ;    Return address must be stored in a3 since the stack cannot be used (it
+                                             ; would get overwritten in test). Note this routine uses no ram at all.
+                                             ;===============================================================================
+    192 FFFF015C                             ramtest:
+    193 FFFF015C 33FC A5A5 FFDC 0600         		move.w	#0xA5A5,leds		; diagnostics
+    194 FFFF0164 207C 0000 0008                      movea.l #8,a0
+    195 FFFF016A 203C AAAA 5555                      move.l #0xaaaa5555,d0
+                                             ;-----------------------------------------------------------
+                                             ;   Write checkerboard pattern to ram then read it back to
+                                             ; find the highest usable ram address (maybe). This address
+                                             ; must be lower than the start of the rom (0xe00000).
+                                             ;-----------------------------------------------------------
+    201 FFFF0170                             ramtest1:
+    202 FFFF0170 20C0                                move.l 	d0,(a0)+
+    203 FFFF0172 2208                                move.l	a0,d1
+    204 FFFF0174 4A41                                tst.w	d1
+    205 FFFF0176 6608                                bne.s	rmtst1
+    206 FFFF0178 4BF9 FFFF 0180                      lea		rmtst1,a5
+    207 FFFF017E 6080                                bra		DisplayHexNumber
+    208 FFFF0180                             rmtst1:
+    209 FFFF0180 33FC A9A9 FFDC 0600         		move.w	#0xA9A9,leds		; diagnostics
+    210 FFFF0188 B1FC 1FFF FFFC                      cmpa.l 	#0x1FFFFFFC,a0
+    211 FFFF018E 66E0                                bne.s 	ramtest1
+                                             ;------------------------------------------------------
+                                             ;   Save maximum useable address for later comparison.
+                                             ;------------------------------------------------------
+    215 FFFF0190                             ramtest6:
+    216 FFFF0190 33FC A7A7 FFDC 0600         		move.w	#0xA7A7,leds		; diagnostics
+    217 FFFF0198 2448                                movea.l a0,a2
+    218 FFFF019A 207C 0000 0008                      movea.l #8,a0
+                                             ;--------------------------------------------
+                                             ;   Read back checkerboard pattern from ram.
+                                             ;--------------------------------------------
+    222 FFFF01A0                             ramtest2:
+    223 FFFF01A0 2018                                move.l  (a0)+,d0
+    224 FFFF01A2 B5C8                                cmpa.l	a0,a2
+    225 FFFF01A4 671A                                beq.s	ramtest3
+    226 FFFF01A6 2208                                move.l	a0,d1
+    227 FFFF01A8 4A41                                tst.w	d1
+    228 FFFF01AA 660A                                bne.s	rmtst2
+    229 FFFF01AC 4BF9 FFFF 01B6                      lea		rmtst2,a5
+    230 FFFF01B2 6000 FF4C                           bra		DisplayHexNumber
+    231 FFFF01B6                             rmtst2:
+    232 FFFF01B6 0C80 AAAA 5555                      cmpi.l 	#0xaaaa5555,d0
+    233 FFFF01BC 67E2                                beq.s 	ramtest2
+    234 FFFF01BE 6678                                bne.s 	ramtest7
+                                             ;---------------------------------------------------
+                                             ;   The following section does the same test except
+                                             ; with the checkerboard order switched around.
+                                             ;---------------------------------------------------
+    239 FFFF01C0                             ramtest3:                
+Finitron asm68 assembler    version 5.5   Sun Nov 26 02:11:24 2017     Page 5
+bootrom.asm
+    240 FFFF01C0 33FC A8A8 FFDC 0600         		move.w	#0xA8A8,leds		; diagnostics
+    241 FFFF01C8 207C 0000 0008                      movea.l #8,a0
+    242 FFFF01CE 203C 5555 AAAA                      move.l 	#0x5555aaaa,d0
+    243 FFFF01D4                             ramtest4:
+    244 FFFF01D4 20C0                                move.l 	d0,(a0)+
+    245 FFFF01D6 2208                                move.l 	a0,d1
+    246 FFFF01D8 4A41                                tst.w	d1
+    247 FFFF01DA 660A                                bne.s   rmtst3
+    248 FFFF01DC 4BF9 FFFF 01E6                      lea		rmtst3,a5
+    249 FFFF01E2 6000 FF1C                           bra		DisplayHexNumber
+    250 FFFF01E6                             rmtst3:
+    251 FFFF01E6 B1FC 1FFF FFFC                      cmpa.l 	#0x1FFFFFFC,a0
+    252 FFFF01EC 66E6                                bne.s 	ramtest4
+    253 FFFF01EE                             ramtest8:
+    254 FFFF01EE 2448                                movea.l a0,a2
+    255 FFFF01F0 207C 0000 0008                      movea.l #8,a0
+    256 FFFF01F6                             ramtest5:
+    257 FFFF01F6 2018                                move.l 	(a0)+,d0
+    258 FFFF01F8 B5C8                                cmpa.l	a0,a2
+    259 FFFF01FA 671A                                beq.s	rmtst5
+    260 FFFF01FC 2208                                move.l 	a0,d1
+    261 FFFF01FE 4A41                                tst.w	d1
+    262 FFFF0200 660A                                bne.s	rmtst4
+    263 FFFF0202 4BF9 0000 0000                      lea		tmtst4,a5
+    264 FFFF0208 6000 FEF6                           bra		DisplayHexNumber
+    265 FFFF020C                             rmtst4:
+    266 FFFF020C 0C80 5555 AAAA                      cmpi.l 	#0x5555aaaa,d0
+    267 FFFF0212 67E2                                beq.s 	ramtest5
+    268 FFFF0214 6622                                bne.s 	ramtest7
+                                             ;---------------------------------------------------
+                                             ;   Save last ram address in end of memory pointer.
+                                             ;---------------------------------------------------
+    272 FFFF0216                             rmtst5:
+    273 FFFF0216 23C8 0000 0000                      move.l a0,memend
+                                             ;-----------------------------------
+                                             ;   Create very first memory block.
+                                             ;-----------------------------------
+    277 FFFF021C 91FC 0000 000C                      suba.l 	#12,a0
+    278 FFFF0222 21C8 0404                           move.l 	a0,0x0404
+    279 FFFF0226 21FC 4652 4545 0400                 move.l 	#0x46524545,0x0400
+    280 FFFF022E 21FC 0000 0408 0408                 move.l 	#0x408,0x408			; point back-link to self
+    281 FFFF0236 4ED3                                jmp 	(a3)
+                                             ;----------------------------------
+                                             ; Error in ram - go no farther.
+                                             ;----------------------------------
+    285 FFFF0238                             ramtest7:
+    286 FFFF0238 4ED3                        		jmp 	(a3)
+    287 FFFF023A 60FC                                bra.s 	ramtest7
+                                             
+                                             
+    290 FFFF023C                             msg_start:
+    291 FFFF023C 4E 34 56 20 36 38 6B 20     	dc.b	"N4V 68k System Starting",0
+    292 FFFF0244 53 79 73 74 65 6D 20 53     
+    293 FFFF024C 74 61 72 74 69 6E 67 00     
+                                             
+                                             
+                                             ;------------------------------------------------------------------------------
+    297 FFFF0254                             font8:
+    298 FFFF0254 00 00 00 00 00 00 00 00     	dc.b	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; 0x00
+                                             
+Finitron asm68 assembler    version 5.5   Sun Nov 26 02:11:24 2017     Page 6
+bootrom.asm
+    300 FFFF025C 00 00 00 00 00 00 00 00     	dc.b	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; 
+                                             
+    302 FFFF0264 00 00 00 00 00 00 00 00     	dc.b	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; 
+                                             
+    304 FFFF026C 00 00 00 00 00 00 00 00     	dc.b	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; 
+                                             
+    306 FFFF0274 00 00 00 00 00 00 00 00     	dc.b	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; 0x04
+                                             
+    308 FFFF027C 00 00 00 00 00 00 00 00     	dc.b	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; 
+                                             
+    310 FFFF0284 00 00 00 00 00 00 00 00     	dc.b	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; 
+                                             
+    312 FFFF028C 00 00 00 00 00 00 00 00     	dc.b	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; 
+                                             
+    314 FFFF0294 00 00 00 00 00 00 00 00     	dc.b	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; 0x08
+                                             
+    316 FFFF029C 00 00 00 00 00 00 00 00     	dc.b	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; 
+                                             
+    318 FFFF02A4 00 00 00 00 00 00 00 00     	dc.b	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; 
+                                             
+    320 FFFF02AC 00 00 00 00 00 00 00 00     	dc.b	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; 
+                                             
+    322 FFFF02B4 00 00 00 00 00 00 00 00     	dc.b	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; 0x0C
+                                             
+    324 FFFF02BC 00 00 00 00 00 00 00 00     	dc.b	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; 
+                                             
+    326 FFFF02C4 00 00 00 00 00 00 00 00     	dc.b	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; 
+                                             
+    328 FFFF02CC 00 00 00 00 00 00 00 00     	dc.b	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; 
+                                             
+    330 FFFF02D4 00 00 00 00 00 00 00 00     	dc.b	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; 0x10
+                                             
+    332 FFFF02DC 00 00 00 00 00 00 00 00     	dc.b	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; 
+                                             
+    334 FFFF02E4 00 00 00 00 00 00 00 00     	dc.b	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; 
+                                             
+    336 FFFF02EC 00 00 00 00 00 00 00 00     	dc.b	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; 
+                                             
+    338 FFFF02F4 00 00 00 00 00 00 00 00     	dc.b	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; 0x14
+                                             
+    340 FFFF02FC 00 00 00 00 00 00 00 00     	dc.b	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; 
+                                             
+    342 FFFF0304 00 00 00 00 00 00 00 00     	dc.b	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; 
+                                             
+    344 FFFF030C 00 00 00 00 00 00 00 00     	dc.b	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; 
+                                             
+    346 FFFF0314 00 00 00 00 00 00 00 00     	dc.b	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; 0x18
+                                             
+    348 FFFF031C 00 00 00 00 00 00 00 00     	dc.b	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; 
+                                             
+    350 FFFF0324 00 00 00 00 00 00 00 00     	dc.b	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; 
+                                             
+    352 FFFF032C 00 00 00 00 00 00 00 00     	dc.b	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; 
+                                             
+    354 FFFF0334 00 00 00 00 00 00 00 00     	dc.b	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; 0x1C
+                                             
+    356 FFFF033C 00 00 00 00 00 00 00 00     	dc.b	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; 
+                                             
+    358 FFFF0344 00 00 00 00 00 00 00 00     	dc.b	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; 
+                                             
+Finitron asm68 assembler    version 5.5   Sun Nov 26 02:11:24 2017     Page 7
+bootrom.asm
+    360 FFFF034C 00 00 00 00 00 00 00 00     	dc.b	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; 
+                                             
+    362 FFFF0354 00 00 00 00 00 00 00 00     	dc.b	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00	; SPACE
+                                             
+    364 FFFF035C 18 18 18 18 18 00 18 00     	dc.b	0x18,0x18,0x18,0x18,0x18,0x00,0x18,0x00	; !
+                                             
+    366 FFFF0364 6C 6C 00 00 00 00 00 00     	dc.b	0x6C,0x6C,0x00,0x00,0x00,0x00,0x00,0x00	; "
+                                             
+    368 FFFF036C 6C 6C FE 6C FE 6C 6C 00     	dc.b	0x6C,0x6C,0xFE,0x6C,0xFE,0x6C,0x6C,0x00	; #
+                                             
+    370 FFFF0374 18 3E 60 3C 06 7C 18 00     	dc.b	0x18,0x3E,0x60,0x3C,0x06,0x7C,0x18,0x00	; 0x
+                                             
+    372 FFFF037C 00 66 AC D8 36 6A CC 00     	dc.b	0x00,0x66,0xAC,0xD8,0x36,0x6A,0xCC,0x00	; %
+                                             
+    374 FFFF0384 38 6C 68 76 DC CE 7B 00     	dc.b	0x38,0x6C,0x68,0x76,0xDC,0xCE,0x7B,0x00	; &
+                                             
+    376 FFFF038C 18 18 30 00 00 00 00 00     	dc.b	0x18,0x18,0x30,0x00,0x00,0x00,0x00,0x00	; '
+                                             
+    378 FFFF0394 0C 18 30 30 30 18 0C 00     	dc.b	0x0C,0x18,0x30,0x30,0x30,0x18,0x0C,0x00	; (
+                                             
+    380 FFFF039C 30 18 0C 0C 0C 18 30 00     	dc.b	0x30,0x18,0x0C,0x0C,0x0C,0x18,0x30,0x00	; )
+                                             
+    382 FFFF03A4 00 66 3C FF 3C 66 00 00     	dc.b	0x00,0x66,0x3C,0xFF,0x3C,0x66,0x00,0x00	; *
+                                             
+    384 FFFF03AC 00 18 18 7E 18 18 00 00     	dc.b	0x00,0x18,0x18,0x7E,0x18,0x18,0x00,0x00	; +
+                                             
+    386 FFFF03B4 00 00 00 00 00 18 18 30     	dc.b	0x00,0x00,0x00,0x00,0x00,0x18,0x18,0x30	; ,
+                                             
+    388 FFFF03BC 00 00 00 7E 00 00 00 00     	dc.b	0x00,0x00,0x00,0x7E,0x00,0x00,0x00,0x00	; -
+                                             
+    390 FFFF03C4 00 00 00 00 00 18 18 00     	dc.b	0x00,0x00,0x00,0x00,0x00,0x18,0x18,0x00	; .
+                                             
+    392 FFFF03CC 03 06 0C 18 30 60 C0 00     	dc.b	0x03,0x06,0x0C,0x18,0x30,0x60,0xC0,0x00	; /
+                                             
+    394 FFFF03D4 3C 66 6E 7E 76 66 3C 00     	dc.b	0x3C,0x66,0x6E,0x7E,0x76,0x66,0x3C,0x00	; 0
+                                             
+    396 FFFF03DC 18 38 78 18 18 18 18 00     	dc.b	0x18,0x38,0x78,0x18,0x18,0x18,0x18,0x00	; 1
+                                             
+    398 FFFF03E4 3C 66 06 0C 18 30 7E 00     	dc.b	0x3C,0x66,0x06,0x0C,0x18,0x30,0x7E,0x00	; 2
+                                             
+    400 FFFF03EC 3C 66 06 1C 06 66 3C 00     	dc.b	0x3C,0x66,0x06,0x1C,0x06,0x66,0x3C,0x00	; 3
+                                             
+    402 FFFF03F4 1C 3C 6C CC FE 0C 0C 00     	dc.b	0x1C,0x3C,0x6C,0xCC,0xFE,0x0C,0x0C,0x00	; 4
+                                             
+    404 FFFF03FC 7E 60 7C 06 06 66 3C 00     	dc.b	0x7E,0x60,0x7C,0x06,0x06,0x66,0x3C,0x00	; 5
+                                             
+    406 FFFF0404 1C 30 60 7C 66 66 3C 00     	dc.b	0x1C,0x30,0x60,0x7C,0x66,0x66,0x3C,0x00	; 6
+                                             
+    408 FFFF040C 7E 06 06 0C 18 18 18 00     	dc.b	0x7E,0x06,0x06,0x0C,0x18,0x18,0x18,0x00	; 7
+                                             
+    410 FFFF0414 3C 66 66 3C 66 66 3C 00     	dc.b	0x3C,0x66,0x66,0x3C,0x66,0x66,0x3C,0x00	; 8
+                                             
+    412 FFFF041C 3C 66 66 3E 06 0C 38 00     	dc.b	0x3C,0x66,0x66,0x3E,0x06,0x0C,0x38,0x00	; 9
+                                             
+    414 FFFF0424 00 18 18 00 00 18 18 00     	dc.b	0x00,0x18,0x18,0x00,0x00,0x18,0x18,0x00	; :
+                                             
+    416 FFFF042C 00 18 18 00 00 18 18 30     	dc.b	0x00,0x18,0x18,0x00,0x00,0x18,0x18,0x30	; ;
+                                             
+    418 FFFF0434 00 06 18 60 18 06 00 00     	dc.b	0x00,0x06,0x18,0x60,0x18,0x06,0x00,0x00	; <
+                                             
+Finitron asm68 assembler    version 5.5   Sun Nov 26 02:11:24 2017     Page 8
+bootrom.asm
+    420 FFFF043C 00 00 7E 00 7E 00 00 00     	dc.b	0x00,0x00,0x7E,0x00,0x7E,0x00,0x00,0x00	; =
+                                             
+    422 FFFF0444 00 60 18 06 18 60 00 00     	dc.b	0x00,0x60,0x18,0x06,0x18,0x60,0x00,0x00	; >
+                                             
+    424 FFFF044C 3C 66 06 0C 18 00 18 00     	dc.b	0x3C,0x66,0x06,0x0C,0x18,0x00,0x18,0x00	; ?
+                                             
+    426 FFFF0454 7C C6 DE D6 DE C0 78 00     	dc.b	0x7C,0xC6,0xDE,0xD6,0xDE,0xC0,0x78,0x00	; @
+                                             
+    428 FFFF045C 3C 66 66 7E 66 66 66 00     	dc.b	0x3C,0x66,0x66,0x7E,0x66,0x66,0x66,0x00	; A
+                                             
+    430 FFFF0464 7C 66 66 7C 66 66 7C 00     	dc.b	0x7C,0x66,0x66,0x7C,0x66,0x66,0x7C,0x00	; B
+                                             
+    432 FFFF046C 1E 30 60 60 60 30 1E 00     	dc.b	0x1E,0x30,0x60,0x60,0x60,0x30,0x1E,0x00	; C
+                                             
+    434 FFFF0474 78 6C 66 66 66 6C 78 00     	dc.b	0x78,0x6C,0x66,0x66,0x66,0x6C,0x78,0x00	; D
+                                             
+    436 FFFF047C 7E 60 60 78 60 60 7E 00     	dc.b	0x7E,0x60,0x60,0x78,0x60,0x60,0x7E,0x00	; E
+                                             
+    438 FFFF0484 7E 60 60 78 60 60 60 00     	dc.b	0x7E,0x60,0x60,0x78,0x60,0x60,0x60,0x00	; F
+                                             
+    440 FFFF048C 3C 66 60 6E 66 66 3E 00     	dc.b	0x3C,0x66,0x60,0x6E,0x66,0x66,0x3E,0x00	; G
+                                             
+    442 FFFF0494 66 66 66 7E 66 66 66 00     	dc.b	0x66,0x66,0x66,0x7E,0x66,0x66,0x66,0x00	; H
+                                             
+    444 FFFF049C 3C 18 18 18 18 18 3C 00     	dc.b	0x3C,0x18,0x18,0x18,0x18,0x18,0x3C,0x00	; I
+                                             
+    446 FFFF04A4 06 06 06 06 06 66 3C 00     	dc.b	0x06,0x06,0x06,0x06,0x06,0x66,0x3C,0x00	; J
+                                             
+    448 FFFF04AC C6 CC D8 F0 D8 CC C6 00     	dc.b	0xC6,0xCC,0xD8,0xF0,0xD8,0xCC,0xC6,0x00	; K
+                                             
+    450 FFFF04B4 60 60 60 60 60 60 7E 00     	dc.b	0x60,0x60,0x60,0x60,0x60,0x60,0x7E,0x00	; L
+                                             
+    452 FFFF04BC C6 EE FE D6 C6 C6 C6 00     	dc.b	0xC6,0xEE,0xFE,0xD6,0xC6,0xC6,0xC6,0x00	; M
+                                             
+    454 FFFF04C4 C6 E6 F6 DE CE C6 C6 00     	dc.b	0xC6,0xE6,0xF6,0xDE,0xCE,0xC6,0xC6,0x00	; N
+                                             
+    456 FFFF04CC 3C 66 66 66 66 66 3C 00     	dc.b	0x3C,0x66,0x66,0x66,0x66,0x66,0x3C,0x00	; O
+                                             
+    458 FFFF04D4 7C 66 66 7C 60 60 60 00     	dc.b	0x7C,0x66,0x66,0x7C,0x60,0x60,0x60,0x00	; P
+                                             
+    460 FFFF04DC 78 CC CC CC CC DC 7E 00     	dc.b	0x78,0xCC,0xCC,0xCC,0xCC,0xDC,0x7E,0x00	; Q
+                                             
+    462 FFFF04E4 7C 66 66 7C 6C 66 66 00     	dc.b	0x7C,0x66,0x66,0x7C,0x6C,0x66,0x66,0x00	; R
+                                             
+    464 FFFF04EC 3C 66 70 3C 0E 66 3C 00     	dc.b	0x3C,0x66,0x70,0x3C,0x0E,0x66,0x3C,0x00	; S
+                                             
+    466 FFFF04F4 7E 18 18 18 18 18 18 00     	dc.b	0x7E,0x18,0x18,0x18,0x18,0x18,0x18,0x00	; T
+                                             
+    468 FFFF04FC 66 66 66 66 66 66 3C 00     	dc.b	0x66,0x66,0x66,0x66,0x66,0x66,0x3C,0x00	; U
+                                             
+    470 FFFF0504 66 66 66 66 3C 3C 18 00     	dc.b	0x66,0x66,0x66,0x66,0x3C,0x3C,0x18,0x00	; V
+                                             
+    472 FFFF050C C6 C6 C6 D6 FE EE C6 00     	dc.b	0xC6,0xC6,0xC6,0xD6,0xFE,0xEE,0xC6,0x00	; W
+                                             
+    474 FFFF0514 C3 66 3C 18 3C 66 C3 00     	dc.b	0xC3,0x66,0x3C,0x18,0x3C,0x66,0xC3,0x00	; X
+                                             
+    476 FFFF051C C3 66 3C 18 18 18 18 00     	dc.b	0xC3,0x66,0x3C,0x18,0x18,0x18,0x18,0x00	; Y
+                                             
+    478 FFFF0524 FE 0C 18 30 60 C0 FE 00     	dc.b	0xFE,0x0C,0x18,0x30,0x60,0xC0,0xFE,0x00	; Z
+                                             
+Finitron asm68 assembler    version 5.5   Sun Nov 26 02:11:24 2017     Page 9
+bootrom.asm
+    480 FFFF052C 3C 30 30 30 30 30 3C 00     	dc.b	0x3C,0x30,0x30,0x30,0x30,0x30,0x3C,0x00	; [
+                                             
+    482 FFFF0534 C0 60 30 18 0C 06 03 00     	dc.b	0xC0,0x60,0x30,0x18,0x0C,0x06,0x03,0x00	; \
+                                             
+    484 FFFF053C 3C 0C 0C 0C 0C 0C 3C 00     	dc.b	0x3C,0x0C,0x0C,0x0C,0x0C,0x0C,0x3C,0x00	; ]
+                                             
+    486 FFFF0544 10 38 6C C6 00 00 00 00     	dc.b	0x10,0x38,0x6C,0xC6,0x00,0x00,0x00,0x00	; ^
+                                             
+    488 FFFF054C 00 00 00 00 00 00 00 FE     	dc.b	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xFE	; _
+                                             
+    490 FFFF0554 18 18 0C 00 00 00 00 00     	dc.b	0x18,0x18,0x0C,0x00,0x00,0x00,0x00,0x00	; `
+                                             
+    492 FFFF055C 00 00 3C 06 3E 66 3E 00     	dc.b	0x00,0x00,0x3C,0x06,0x3E,0x66,0x3E,0x00	; a
+                                             
+    494 FFFF0564 60 60 7C 66 66 66 7C 00     	dc.b	0x60,0x60,0x7C,0x66,0x66,0x66,0x7C,0x00	; b
+                                             
+    496 FFFF056C 00 00 3C 60 60 60 3C 00     	dc.b	0x00,0x00,0x3C,0x60,0x60,0x60,0x3C,0x00	; c
+                                             
+    498 FFFF0574 06 06 3E 66 66 66 3E 00     	dc.b	0x06,0x06,0x3E,0x66,0x66,0x66,0x3E,0x00	; d
+                                             
+    500 FFFF057C 00 00 3C 66 7E 60 3C 00     	dc.b	0x00,0x00,0x3C,0x66,0x7E,0x60,0x3C,0x00	; e
+                                             
+    502 FFFF0584 1C 30 7C 30 30 30 30 00     	dc.b	0x1C,0x30,0x7C,0x30,0x30,0x30,0x30,0x00	; f
+                                             
+    504 FFFF058C 00 00 3E 66 66 3E 06 3C     	dc.b	0x00,0x00,0x3E,0x66,0x66,0x3E,0x06,0x3C	; g
+                                             
+    506 FFFF0594 60 60 7C 66 66 66 66 00     	dc.b	0x60,0x60,0x7C,0x66,0x66,0x66,0x66,0x00	; h
+                                             
+    508 FFFF059C 18 00 18 18 18 18 0C 00     	dc.b	0x18,0x00,0x18,0x18,0x18,0x18,0x0C,0x00	; i
+                                             
+    510 FFFF05A4 0C 00 0C 0C 0C 0C 0C 78     	dc.b	0x0C,0x00,0x0C,0x0C,0x0C,0x0C,0x0C,0x78	; j
+                                             
+    512 FFFF05AC 60 60 66 6C 78 6C 66 00     	dc.b	0x60,0x60,0x66,0x6C,0x78,0x6C,0x66,0x00	; k
+                                             
+    514 FFFF05B4 18 18 18 18 18 18 0C 00     	dc.b	0x18,0x18,0x18,0x18,0x18,0x18,0x0C,0x00	; l
+                                             
+    516 FFFF05BC 00 00 EC FE D6 C6 C6 00     	dc.b	0x00,0x00,0xEC,0xFE,0xD6,0xC6,0xC6,0x00	; m
+                                             
+    518 FFFF05C4 00 00 7C 66 66 66 66 00     	dc.b	0x00,0x00,0x7C,0x66,0x66,0x66,0x66,0x00	; n
+                                             
+    520 FFFF05CC 00 00 3C 66 66 66 3C 00     	dc.b	0x00,0x00,0x3C,0x66,0x66,0x66,0x3C,0x00	; o
+                                             
+    522 FFFF05D4 00 00 7C 66 66 7C 60 60     	dc.b	0x00,0x00,0x7C,0x66,0x66,0x7C,0x60,0x60	; p
+                                             
+    524 FFFF05DC 00 00 3E 66 66 3E 06 06     	dc.b	0x00,0x00,0x3E,0x66,0x66,0x3E,0x06,0x06	; q
+                                             
+    526 FFFF05E4 00 00 7C 66 60 60 60 00     	dc.b	0x00,0x00,0x7C,0x66,0x60,0x60,0x60,0x00	; r
+                                             
+    528 FFFF05EC 00 00 3C 60 3C 06 7C 00     	dc.b	0x00,0x00,0x3C,0x60,0x3C,0x06,0x7C,0x00	; s
+                                             
+    530 FFFF05F4 30 30 7C 30 30 30 1C 00     	dc.b	0x30,0x30,0x7C,0x30,0x30,0x30,0x1C,0x00	; t
+                                             
+    532 FFFF05FC 00 00 66 66 66 66 3E 00     	dc.b	0x00,0x00,0x66,0x66,0x66,0x66,0x3E,0x00	; u
+                                             
+    534 FFFF0604 00 00 66 66 66 3C 18 00     	dc.b	0x00,0x00,0x66,0x66,0x66,0x3C,0x18,0x00	; v
+                                             
+    536 FFFF060C 00 00 C6 C6 D6 FE 6C 00     	dc.b	0x00,0x00,0xC6,0xC6,0xD6,0xFE,0x6C,0x00	; w
+                                             
+    538 FFFF0614 00 00 C6 6C 38 6C C6 00     	dc.b	0x00,0x00,0xC6,0x6C,0x38,0x6C,0xC6,0x00	; x
+                                             
+Finitron asm68 assembler    version 5.5   Sun Nov 26 02:11:24 2017     Page 10
+bootrom.asm
+    540 FFFF061C 00 00 66 66 66 3C 18 30     	dc.b	0x00,0x00,0x66,0x66,0x66,0x3C,0x18,0x30	; y
+                                             
+    542 FFFF0624 00 00 7E 0C 18 30 7E 00     	dc.b	0x00,0x00,0x7E,0x0C,0x18,0x30,0x7E,0x00	; z
+                                             
+    544 FFFF062C 0E 18 18 70 18 18 0E 00     	dc.b	0x0E,0x18,0x18,0x70,0x18,0x18,0x0E,0x00	; {
+                                             
+    546 FFFF0634 18 18 18 18 18 18 18 00     	dc.b	0x18,0x18,0x18,0x18,0x18,0x18,0x18,0x00	; |
+                                             
+    548 FFFF063C 70 18 18 0E 18 18 70 00     	dc.b	0x70,0x18,0x18,0x0E,0x18,0x18,0x70,0x00	; }
+                                             
+    550 FFFF0644 72 9C 00 00 00 00 00 00     	dc.b	0x72,0x9C,0x00,0x00,0x00,0x00,0x00,0x00	; ~
+                                             
+    552 FFFF064C FE FE FE FE FE FE FE 00     	dc.b	0xFE,0xFE,0xFE,0xFE,0xFE,0xFE,0xFE,0x00	; 
+                                             
+
