@@ -90,7 +90,7 @@ input clk_i;
 input cs_i;
 input cyc_i;
 input stb_i;
-output ack_o;
+output reg ack_o;
 input we_i;
 input [3:0] adr_i;
 input [15:0] dat_i;
@@ -98,7 +98,8 @@ output [15:0] dat_o;
 reg [15:0] dat_o;
 
 wire cs = cs_i && cyc_i && stb_i;
-assign ack_o = cs;
+always @(posedge clk_i)
+	ack_o <= cs & ~ack_o;
 
 reg [9:0] stream;
 reg [31:0] m_z [0:1023];

@@ -37,7 +37,7 @@ input rst_i;
 input clk_i;
 input cyc_i;
 input stb_i;
-output ack_o;
+output reg ack_o;
 input we_i;
 input sel_i;
 input [23:0] adr_i;
@@ -96,6 +96,7 @@ wire [9:0] ram_data_o;
 reg ram_we;
 
 reg [ 9:0] pixcnt;
+reg [3:0] pixhc,pixvc;
 
 reg [19:0] blt_addr [0:63];			// base address of BLT bitmap
 reg [ 9:0] blt_pix  [0:63];			// number of pixels in BLT
@@ -119,8 +120,9 @@ reg [9:0] bltcolor;					// blt color as read
 reg [3:0] loopcnt;
 
 reg [ 8:0] charcode;                // character code being processed
-reg [ 7:0] charbmp;					// hold character bitmap scanline
+reg [ 9:0] charbmp;					// hold character bitmap scanline
 reg [8:0] fgcolor,bkcolor;			// character colors
+reg [3:0] pixxm, pixym;             // maximum # pixels for char
 
 
 chipram chipram1
@@ -173,16 +175,18 @@ wire cs_ram = cyc_i & stb_i & cs_ram_i;
 
 wire cs_chrq = cs_reg && adr_i[10:1]==10'b100_0010_111 && chrp && we_i;
 
-reg [50:0] chrq_in;
-wire [50:0] chrq_out;
+reg [58:0] chrq_in;
+wire [58:0] chrq_out;
 
-vtdl #(.WID(51), .DEP(32)) char_q (.clk(clk_i), .ce(cs_chrq), .a(chrq_ndx), .d(chrq_in), .q(chrq_out));
+vtdl #(.WID(59), .DEP(32)) char_q (.clk(clk_i), .ce(cs_chrq), .a(chrq_ndx), .d(chrq_in), .q(chrq_out));
 
 wire [8:0] charcode_qo = chrq_out[8:0];
 wire [8:0] charfg_qo = chrq_out[17:9];
 wire [8:0] charbk_qo = chrq_out[26:18];
 wire [11:0] charx_qo = chrq_out[38:27];
 wire [11:0] chary_qo = chrq_out[50:39];
+wire [3:0] charxm_qo = chrq_out[54:51];
+wire [3:0] charym_qo = chrq_out[58:55];
 
 reg [9:0] sra;						// shadow ram address
 reg [15:0] shadow_ram [0:1023];		// register shadow ram
@@ -198,7 +202,8 @@ always @(posedge clk_i)
 	rwsr <= cs_reg;
 always @(posedge clk_i)
 	rdy <= rwsr & cs_reg;
-assign ack_o = cs_reg ? rdy : cs_ram ? ack : 1'b0;
+always @(posedge clk_i)
+	ack_o <= (cs_reg ? rdy : cs_ram ? ack : 1'b0) & ~ack_o;
 
 // Widen the eof pulse so it can be seen by clk_i
 reg [11:0] vrst;
@@ -247,13 +252,14 @@ if (cs_reg) begin
 		10'b100_0010_010:	chrq_in[26:18] <= dat_i[8:0];
 		10'b100_0010_011:	chrq_in[38:27] <= dat_i[11:0];
 		10'b100_0010_100:	chrq_in[50:39] <= dat_i[11:0];
-		10'b100_0010_101: chrq_ndx <= dat_i[4:0];
+		10'b100_0010_101:   chrq_in[58:51] <= {dat_i[11:8],dat_i[3:0]};
+		10'b100_0010_110: chrq_ndx <= dat_i[4:0];
 		default:	;	// do nothing
 		endcase
 	end
 	else begin
 		case(adr_i[10:1])
-		10'b1000010101:	dat_o <= {7'h00,chrq_ndx};
+		10'b1000010110:	dat_o <= {11'h00,chrq_ndx};
 		default:	dat_o <= srdo;
 		endcase
 	end
@@ -301,16 +307,20 @@ ST_RW:
 
 ST_CHAR_INIT:
 	begin
-		pixcnt <= 10'h000;
+//		pixcnt <= 10'h000;
+		pixhc <= 4'd0;
+		pixvc <= 4'd0;
 		charcode <= charcode_qo;
 		fgcolor <= charfg_qo;
 		bkcolor <= charbk_qo;
+		pixxm <= charxm_qo;
+		pixym <= charym_qo;
 		tgtaddr <= {8'h00,chary_qo} * bitmapWidth + {bmpBase[19:12],charx_qo};
 		state <= ST_READ_CHAR_BITMAP;
 	end
 ST_READ_CHAR_BITMAP:
 	begin
-		ram_addr <= charBmpBase + {charcode,pixcnt[5:3]};
+		ram_addr <= charBmpBase + charcode * (pixym + 4'd1) + pixvc;
 		state <= ST_READ_CHAR_BITMAP2;
 	end
 	// Two ram wait states
@@ -325,24 +335,34 @@ ST_READ_CHAR_BITMAP_DAT:
 	end
 ST_CALC_INDEX:
 	begin
-		tgtindex <= pixcnt[5:3] * bitmapWidth;
+		tgtindex <= pixvc * bitmapWidth;
 		state <= ST_WRITE_CHAR;
 	end
 ST_WRITE_CHAR:
 	begin
 		ram_we <= `HIGH;
-		ram_addr <= tgtaddr + tgtindex + pixcnt[2:0];
-		ram_data_i <= charbmp[7] ? fgcolor : bkcolor;
+		ram_addr <= tgtaddr + tgtindex + pixhc;
+		ram_data_i <= charbmp[pixxm] ? fgcolor : bkcolor;
 		state <= ST_NEXT;
 	end
 ST_NEXT:
 	begin
+	    state <= ST_CALC_INDEX;
 		ram_we <= `LOW;
-		charbmp <= {charbmp[6:0],1'b0};
-		pixcnt <= pixcnt + 10'd1;
-		state <= pixcnt==10'd63 ? ST_IDLE :
-			pixcnt[2:0]==3'd7 ? ST_READ_CHAR_BITMAP :
-			ST_CALC_INDEX;
+		charbmp <= {charbmp[9:0],1'b0};
+		pixhc <= pixhc + 4'd1;
+		if (pixhc==pixxm) begin
+		    state <= ST_READ_CHAR_BITMAP;
+		    pixhc <= 4'd0;
+		    pixvc <= pixvc + 4'd1;
+		    if (pixvc==pixym) begin
+		        state <= ST_IDLE;
+		    end
+		end
+//		pixcnt <= pixcnt + 10'd1;
+//		state <= pixcnt==10'd63 ? ST_IDLE :
+//			pixcnt[2:0]==3'd7 ? ST_READ_CHAR_BITMAP :
+//			ST_CALC_INDEX;
 	end
 
 ST_BLT_INIT:

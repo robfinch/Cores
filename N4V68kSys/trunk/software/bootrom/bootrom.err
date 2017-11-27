@@ -1,31 +1,32 @@
 
 Pass 1
 File: bootrom.asm
-asm68 V5.5  (c) 1995-2017 Robert Finch - 680xx cross assembler
+asm68 V5.6  (c) 1995-2017 Robert Finch - 680xx cross assembler
 
 
 Pass 2
 File: bootrom.asm
-asm68 V5.5  (c) 1995-2017 Robert Finch - 680xx cross assembler
+asm68 V5.6  (c) 1995-2017 Robert Finch - 680xx cross assembler
 
 
 Pass 3
 File: bootrom.asm
-asm68 V5.5  (c) 1995-2017 Robert Finch - 680xx cross assembler
+asm68 V5.6  (c) 1995-2017 Robert Finch - 680xx cross assembler
 
 
 Pass 4
 File: bootrom.asm
-asm68 V5.5  (c) 1995-2017 Robert Finch - 680xx cross assembler
+asm68 V5.6  (c) 1995-2017 Robert Finch - 680xx cross assembler
 
 
 Pass 5
 File: bootrom.asm
-asm68 V5.5  (c) 1995-2017 Robert Finch - 680xx cross assembler
+asm68 V5.6  (c) 1995-2017 Robert Finch - 680xx cross assembler
 
- E2005 (line 137): wrong length
- E2005 (line 174): wrong length
- E2003 (line 262): undefined symbol 'tmtst4'
- E2003 (line 272): undefined symbol 'memend'
-Errors: 4
+ E2048 (line 142): expecting 1 operand(s)
+ E2008 (line 142): invalid instruction or argument
+ E2005 (line 234): wrong length
+ E2003 (line 322): undefined symbol 'tmtst4'
+ E2003 (line 332): undefined symbol 'memend'
+Errors: 5
 Warnings: 0

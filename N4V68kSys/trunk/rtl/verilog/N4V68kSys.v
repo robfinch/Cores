@@ -63,7 +63,7 @@ parameter SIM = 1'b0;
 
 wire clk200,clk40;
 wire locked;
-wire cpu_clk = clk40;
+wire cpu_clk;// = clk40;
 wire _cpu_reset;
 wire rst = ~locked;
 wire [2:0] _cpu_ipl;
@@ -105,33 +105,43 @@ assign ram_data = _ram_we ? (&_ram_ce ? 16'd0000 : ram_data_o) : 16'bz;
 wire [31:1] ram_addr,ram_addr1;
 wire [15:0] chip_ram_dat_o;
 
+wire [15:0] stack_data_o;
 wire br_ack;
 wire [15:0] br_data_o;
 
-wire kbd_ack;
-wire [15:0] kbd_data_o;
 wire rand_ack;
 wire [15:0] rand_data_o;
+wire kbd_ack;
+wire [7:0] kbd_data_o;
 
 wire sel_boot;
 reg [7:0] ledo;
 
-wire cs_boot = cpu_addr[31:20]==12'hFFF || cpu_addr[31:3]==29'h0;
-wire cs_dram = cpu_addr[31:29]==3'b000 && !_cpu_as && !cs_boot;
+// Address decoding
+wire cpu_stb = ~(_cpu_uds & _cpu_lds);
+wire cs_boot = cpu_addr[31:16]==16'hFFFC || cpu_addr[31:3]==29'h0;
+wire cs_dram = cpu_addr[31:29]==3'b000 && !cs_boot;
+wire cs_stack = cpu_addr[31:20]==12'hFF4;
 wire cs_vdg_reg = cpu_addr[31:12]==20'hFFE00;
 wire cs_vdg_ram = cpu_addr[31:21]==11'b1111_1111_100;
 wire cs_led  = cpu_addr[31:4]==28'hFFDC060;
 wire cs_rand = cpu_addr[31:4]==28'hFFDC0C0;
+wire cs_kbd = cpu_addr[31:4]==28'hFFDC000;
 
-assign cpu_data_i = cs_dram ? dram_data_o :
-                    cs_boot ? br_data_o :
+assign cpu_data_i = cs_boot ? br_data_o :
+                    cs_stack ? stack_data_o :
+                    cs_dram ? dram_data_o :
                     (cs_vdg_reg | cs_vdg_ram) ? vdg_data_o :
                     cs_rand ? rand_data_o :
-                    kbd_data_o;
+                    cs_led ? sw :
+                    {2{kbd_data_o}};
 
-wire _dram_dtack = cpu_r_w ? ~dram_dvalid | ~cs_dram : ~cs_dram;
-wire led_ack = cs_led & ~cpu_as;
-assign _cpu_dtack = _dram_dtack & ~vdg_ack & ~br_ack & ~kbd_ack & ~led_ack & ~rand_ack; 
+wire _stack_dtack; 
+wire _dram_dtack;
+reg led_ack;
+always @(cpu_clk)
+    led_ack <= cs_led & cpu_stb & ~led_ack;
+assign _cpu_dtack = _dram_dtack & _stack_dtack & ~vdg_ack & ~br_ack & ~kbd_ack & ~led_ack & ~rand_ack; 
 assign _cpu_ipl = 3'b111;
 
 wire btnuo, btndd, btnld, btnrd, btncd;
@@ -142,7 +152,7 @@ BtnDebounce ubdb4 (clk40, btnr, btnrd);
 BtnDebounce ubdb5 (clk40, btnc, btncd);
 
 always @(posedge cpu_clk)
-    if (cs_led)
+    if (cs_led & cpu_stb & ~cpu_r_w)
         ledo <= cpu_data_o[7:0];
 
 clk_wiz_0 ucg1
@@ -151,7 +161,7 @@ clk_wiz_0 ucg1
     .clk_out1(),
     .clk_out2(clk200),
     .clk_out3(clk40),
-    .clk_out4(),
+    .clk_out4(cpu_clk),
     // Status and control signals
     .reset(~cpu_resetn),
     .locked(locked),
@@ -206,6 +216,7 @@ TG68 utg68k
     .data_in(cpu_data_i),
     .IPL(_cpu_ipl),
     .dtack(_cpu_dtack),
+//    .berr(1'b1),
     .addr(cpu_addr),
     .data_out(cpu_data_o),
     .as(_cpu_as),
@@ -215,31 +226,52 @@ TG68 utg68k
     .drive_data(cpu_dd)
 );
 
-bootrom(
+bootrom ubr1 (
     .clk_i(cpu_clk),
     .cs_i(cs_boot),
-    .cyc_i(~cpu_as),
+    .cyc_i(cpu_stb),
     .ack_o(br_ack),
     .adr_i(cpu_addr[15:0]),
     .dat_o(br_data_o)
+);
+
+reg rdy1,rdy2,rdy3;
+always @(posedge cpu_clk)
+    rdy1 <= cs_stack & cpu_stb;
+always @(posedge cpu_clk)
+    rdy2 <= rdy1 & cs_stack & cpu_stb;
+always @(posedge cpu_clk)
+    rdy3 <= rdy2 & cs_stack & cpu_stb & ~rdy3;
+assign _stack_dtack = ~rdy3;
+
+stackram ustk1
+(
+    .clka(cpu_clk),
+    .ena(1'b1),
+    .wea({2{cs_stack & ~cpu_r_w}} & ~{_cpu_uds, _cpu_lds}),
+    .addra(cpu_addr[16:1]),
+    .dina(cpu_data_o),
+    .douta(stack_data_o)
 );
 
 DDRcontrol DDRCtrl1
 (
 	// Common
 	.clk_200MHz_i(clk200),	// 200 MHz system clock
+	.cpu_clk(cpu_clk),
 	.rst_i(rst),              // active high system reset
 
 	// RAM interface
-	.ram_a({cpu_addr[28:1],1'b0}),
+	.ram_a(cpu_addr[28:1]),
 	.ram_dq_i(cpu_data_o),
 	.ram_dq_o(dram_data_o),
-	.ram_cen(~cs_dram),
+	.ram_cen(~(cs_dram & cpu_stb)),
 	.ram_oen(~cpu_r_w),
 	.ram_wen(cpu_r_w),
 	.ram_bhe(_cpu_uds),
 	.ram_ble(_cpu_lds),
-	.data_valid(dram_dvalid),
+	.dtack(_dram_dtack),
+	.data_valid(),
       
 	// DDR3 interface
 	.ddr3_dq(ddr3_dq),
@@ -263,7 +295,7 @@ BitmapDisplay uvdg1
 	.rst_i(rst),
 	.clk_i(cpu_clk),
 	.cyc_i(~_cpu_as),
-	.stb_i(~_cpu_as),
+	.stb_i(cpu_stb),
 	.ack_o(vdg_ack),
 	.we_i(~cpu_r_w),
 	.sel_i(1'b1),
@@ -286,12 +318,29 @@ random	uprg1
 	.clk_i(cpu_clk),
 	.cs_i(cs_rand),
 	.cyc_i(~_cpu_as),
-	.stb_i(1'b1),
+	.stb_i(cpu_stb),
 	.ack_o(rand_ack),
 	.we_i(~cpu_r_w),
 	.adr_i(cpu_addr[3:0]),
 	.dat_i(cpu_data_o),
 	.dat_o(rand_data_o)
+);
+
+Ps2Keyboard ukbd1
+(
+	.rst_i(rst),
+	.clk_i(cpu_clk),
+	.cs_i(cs_kbd),
+	.cyc_i(~_cpu_as),
+	.stb_i(cpu_stb),
+	.ack_o(kbd_ack),
+	.we_i(~cpu_r_w),
+	.adr_i(cpu_addr[3:0]),
+	.dat_i(cpu_data_o[7:0]),
+	.dat_o(kbd_data_o),
+	.kclk(kclk),
+	.kd(kd),
+	.irq_o()
 );
 
 
