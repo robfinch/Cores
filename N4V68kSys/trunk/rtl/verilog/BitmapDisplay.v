@@ -159,10 +159,18 @@ reg [2:0] bitcnt, bitinc;
 reg [19:0] bltSrcWid;
 reg [19:0] bltDstWid;
 reg [19:0] bltCount;
+//  ch  321033221100       
+//  TBD-ddddebebebeb
+//  |||   |       |+- bitmap mode
+//  |||   |       +-- channel enabled
+//  |||   +---------- direction 0=normal,1=decrement
+//  ||+-------------- done indicator
+//  |+--------------- busy indicator
+//  +---------------- trigger bit
 reg [15:0] bltCtrl;
 
-reg [19:0] srcA_badr;
-reg [19:0] srcA_mod;
+reg [19:0] srcA_badr;               // base address
+reg [19:0] srcA_mod;                // modulo
 reg [19:0] srcA_wadr;				// working address
 reg [19:0] srcA_wcnt;				// working count
 reg [19:0] srcA_hcnt;
@@ -187,18 +195,24 @@ reg [19:0] dstD_hcnt;
 
 reg [15:0] blt_op;
 
-reg [3:0] bltAa,bltBa,bltCa;
-reg [17:0] wrA, wrB, wrC;
+// May need to set the pipeline depth to zero if copying neighbouring pixels
+// during a blit. So the app is allowed to control the pipeline depth. Depth
+// should not be set >28.
+reg [4:0] bltPipedepth = 5'd15;
+reg [19:0] bltinc;
+reg [4:0] bltAa,bltBa,bltCa;
+reg [18:0] wrA, wrB, wrC;
 reg [9:0] blt_bmpA;
 reg [9:0] blt_bmpB;
 reg [9:0] blt_bmpC;
+reg srst;
+wire [9:0] bltA_out, bltB_out, bltC_out;
 wire [9:0] bltA_in = bltCtrl[0] ? (blt_bmpA[bitcnt] ? 10'h1FF : 10'h000) : blt_bmpA;
 wire [9:0] bltB_in = bltCtrl[2] ? (blt_bmpB[bitcnt] ? 10'h1FF : 10'h000) : blt_bmpB;
 wire [9:0] bltC_in = bltCtrl[4] ? (blt_bmpC[bitcnt] ? 10'h1FF : 10'h000) : blt_bmpC;
-vtdl #(.WID(10), .DEP(16)) bltA (.clk(clk_i), .ce(wrA[0]), .a(bltAa), .d(bltA_in), .q(bltA_out));
-vtdl #(.WID(10), .DEP(16)) bltB (.clk(clk_i), .ce(wrB[0]), .a(bltBa), .d(bltB_in), .q(bltB_out));
-vtdl #(.WID(10), .DEP(16)) bltC (.clk(clk_i), .ce(wrC[0]), .a(bltCa), .d(bltC_in), .q(bltC_out));
-
+vtdl #(.WID(10), .DEP(32)) bltA (.clk(clk_i), .ce(wrA[0]), .a(bltAa), .d(bltA_in), .q(bltA_out));
+vtdl #(.WID(10), .DEP(32)) bltB (.clk(clk_i), .ce(wrB[0]), .a(bltBa), .d(bltB_in), .q(bltB_out));
+vtdl #(.WID(10), .DEP(32)) bltC (.clk(clk_i), .ce(wrC[0]), .a(bltCa), .d(bltC_in), .q(bltC_out));
 
 reg [9:0] bltab;
 reg [9:0] bltabc;
@@ -304,7 +318,7 @@ always @(posedge clk)
 		cy <= cy + 4'd1;
 
 always @(posedge clk)
-	if ((flashcnt[5:2] & flashrate[3:0])!=4'b000 || flashrate[3]) begin
+	if ((flashcnt[5:2] & flashrate[3:0])!=4'b000 || flashrate[4]) begin
 		if ((vpos >= cursor_v && vpos <= cursor_v + cursor_sv) &&
 			(hpos >= cursor_h && hpos <= cursor_h + cursor_sh))
 			cursor <= cursor_bmp[cy][cx];
@@ -461,12 +475,14 @@ if (cs_reg) begin
 		10'b100_1010_101:	bltCount[15:0] <= dat_i;
 		10'b100_1010_110:	bltCtrl <= dat_i;
 		10'b100_1010_111:	blt_op <= dat_i;
+		10'b100_1011_000:   bltPipedepth <= dat_i[4:0];
 		default:	;	// do nothing
 		endcase
 	end
 	else begin
 		case(adr_i[10:1])
 		10'b1000010110:	dat_o <= {11'h00,cmdq_ndx};
+		10'b1001010110:	dat_o <= bltCtrl;
 		default:	dat_o <= srdo;
 		endcase
 	end
@@ -508,34 +524,37 @@ ST_IDLE:
 		end
 		
 		else if (bltCtrl[14]) begin
-			bltAa <= 4'd0;
-			bltBa <= 4'd0;
-			bltCa <= 4'd0;
+			bltAa <= 5'd0;
+			bltBa <= 5'd0;
+			bltCa <= 5'd0;
 			if (bltCtrl[1])
 				state <= ST_BLTDMA1;
 			else if (bltCtrl[3])
 				state <= ST_BLTDMA3;
 			else if (bltCtrl[5])
 				state <= ST_BLTDMA5;
-			else if (bltCtrl[7])
+			else
 				state <= ST_BLTDMA7;
 		end
 		else if (bltCtrl[15]) begin
 			bltCtrl[15] <= 1'b0;
 			bltCtrl[14] <= 1'b1;
 			bltCtrl[13] <= 1'b0;
-			bltAa <= 4'd0;
-			bltBa <= 4'd0;
-			bltCa <= 4'd0;
+			bltAa <= 5'd0;
+			bltBa <= 5'd0;
+			bltCa <= 5'd0;
 			srcA_wadr <= srcA_badr;
 			srcB_wadr <= srcB_badr;
 			srcC_wadr <= srcC_badr;
+			dstD_wadr <= dstD_badr;
 			srcA_wcnt <= 20'd0;
 			srcB_wcnt <= 20'd0;
 			srcC_wcnt <= 20'd0;
+			dstD_wcnt <= 20'd0;
 			srcA_hcnt <= 20'd0;
 			srcB_hcnt <= 20'd0;
 			srcC_hcnt <= 20'd0;
+			dstD_hcnt <= 20'd0;
 			if (bltCtrl[1])
 				state <= ST_BLTDMA1;
 			else if (bltCtrl[3])
@@ -689,9 +708,10 @@ ST_BLTDMA1:
 		ram_we <= `LOW;
 		bitcnt <= bltCtrl[0] ? 3'd7 : 3'd0;
 		bitinc <= bltCtrl[0] ? 3'd1 : 3'd0;
-		loopcnt <= 5'd17;
-		wrA <= 18'h111111111111111100;
-		bltAa <= 4'd0;
+		bltinc <= bltCtrl[8] ? 20'hFFFFF : 20'd1;
+		loopcnt <= bltPipedepth + 5'd3;
+		wrA <= 19'b1111111111111111000;
+		bltAa <= 5'd0;
 		state <= ST_BLTDMA2;
 	end
 ST_BLTDMA2:
@@ -700,18 +720,18 @@ ST_BLTDMA2:
 			ram_addr <= srcA_wadr;
 			bitcnt <= bitcnt - bitinc;	// bitinc = 3'd0 unless bitmap
 			if (bitcnt==3'd0)
-				srcA_wadr <= srcA_wadr + 20'd1;
+				srcA_wadr <= srcA_wadr + bltinc;
 			srcA_wcnt <= srcA_wcnt + 20'd1;
 			srcA_hcnt <= srcA_hcnt + 20'd1;
 			if (srcA_hcnt==bltSrcWid) begin
 				srcA_hcnt <= 20'd0;
-				srcA_wadr <= srcA_wadr + srcA_mod;
+				srcA_wadr <= srcA_wadr + srcA_mod + bltinc;
 				bitcnt <= bltCtrl[0] ? 3'd7 : 3'd0;
 			end
-			wrA <= {1'b0,wrA[17:1]};
 		end
+		wrA <= {1'b0,wrA[18:1]};
 		if (wrA[0])
-			bltAa <= bltAa + 4'd1;
+			bltAa <= bltAa + 5'd1;
 		blt_bmpA <= ram_data_o;
 		loopcnt <= loopcnt - 5'd1;
 		if (loopcnt==5'd0 || srcA_wcnt==bltCount) begin
@@ -726,12 +746,14 @@ ST_BLTDMA2:
 	// Do channel B
 ST_BLTDMA3:
 	begin
+	    srst <= `FALSE;
 		ram_we <= `LOW;
 		bitcnt <= bltCtrl[2] ? 3'd7 : 3'd0;
 		bitinc <= bltCtrl[2] ? 3'd1 : 3'd0;
-		loopcnt <= 5'd17;
-		wrB <= 18'h111111111111111100;
-		bltBa <= 4'd0;
+		bltinc <= bltCtrl[9] ? 20'hFFFFF : 20'd1;
+		loopcnt <= bltPipedepth + 5'd3;
+		wrB <= 19'b1111111111111111000;
+		bltBa <= 5'd0;
 		state <= ST_BLTDMA4;
 	end
 ST_BLTDMA4:
@@ -740,18 +762,18 @@ ST_BLTDMA4:
 			ram_addr <= srcB_wadr;
 			bitcnt <= bitcnt - bitinc;	// bitinc = 3'd0 unless bitmap
 			if (bitcnt==3'd0)
-				srcB_wadr <= srcB_wadr + 20'd1;
+				srcB_wadr <= srcB_wadr + bltinc;
 			srcB_wcnt <= srcB_wcnt + 20'd1;
 			srcB_hcnt <= srcB_hcnt + 20'd1;
 			if (srcB_hcnt==bltSrcWid) begin
 				srcB_hcnt <= 20'd0;
-				srcB_wadr <= srcB_wadr + srcB_mod;
+				srcB_wadr <= srcB_wadr + srcB_mod + bltinc;
 				bitcnt <= bltCtrl[2] ? 3'd7 : 3'd0;
 			end
 			wrB <= {1'b0,wrB[17:1]};
 		end
 		if (wrB[0])
-			bltBa <= bltBa + 4'd1;
+			bltBa <= bltBa + 5'd1;
 		blt_bmpB <= ram_data_o;
 		loopcnt <= loopcnt - 5'd1;
 		if (loopcnt==5'd0 || srcB_wcnt==bltCount) begin
@@ -764,12 +786,14 @@ ST_BLTDMA4:
 	// Do channel C
 ST_BLTDMA5:
 	begin
+	    srst <= `FALSE;
 		ram_we <= `LOW;
 		bitcnt <= bltCtrl[4] ? 3'd7 : 3'd0;
 		bitinc <= bltCtrl[4] ? 3'd1 : 3'd0;
-		loopcnt <= 5'd17;
-		wrC <= 18'h111111111111111100;
-		bltCa <= 4'd0;
+		bltinc <= bltCtrl[10] ? 20'hFFFFF : 20'd1;
+		loopcnt <= bltPipedepth + 5'd3;
+		wrC <= 19'b1111111111111111000;
+		bltCa <= 5'd0;
 		state <= ST_BLTDMA6;
 	end
 ST_BLTDMA6:
@@ -778,12 +802,12 @@ ST_BLTDMA6:
 			ram_addr <= srcC_wadr;
 			bitcnt <= bitcnt - bitinc;	// bitinc = 3'd0 unless bitmap
 			if (bitcnt==3'd0)
-				srcC_wadr <= srcC_wadr + 20'd1;
+				srcC_wadr <= srcC_wadr + bltinc;
 			srcC_wcnt <= srcC_wcnt + 20'd1;
 			srcC_hcnt <= srcC_hcnt + 20'd1;
 			if (srcC_hcnt==bltSrcWid) begin
 				srcC_hcnt <= 20'd0;
-				srcC_wadr <= srcC_wadr + srcC_mod;
+				srcC_wadr <= srcC_wadr + srcC_mod + bltinc;
 				bitcnt <= bltCtrl[4] ? 3'd7 : 3'd0;
 			end
 			wrC <= {1'b0,wrC[17:1]};
@@ -800,7 +824,11 @@ ST_BLTDMA7:
 	begin
 		bitcnt <= bltCtrl[6] ? 3'd7 : 3'd0;
 		bitinc <= bltCtrl[6] ? 3'd1 : 3'd0;
-		loopcnt <= 5'd16;
+		bltinc <= bltCtrl[11] ? 20'hFFFFF : 20'd1;
+		loopcnt <= bltPipedepth;
+		bltAa <= bltAa - 5'd1;	// move to next queue entry
+        bltBa <= bltBa - 5'd1;
+        bltCa <= bltCa - 5'd1;
 		state <= ST_BLTDMA8;
 	end
 ST_BLTDMA8:
@@ -808,7 +836,7 @@ ST_BLTDMA8:
 		ram_we <= `HIGH;
 		ram_addr <= dstD_wadr;
 		// If there's no source then a fill operation muct be taking place.
-		if (bltCtrl[0]|bltCtrl[2]|bltCtrl[4]) begin
+		if (bltCtrl[1]|bltCtrl[3]|bltCtrl[5]) begin
 /*		if (dstD_ctrl[0])
 			ram_data_i <= bltabc[bitcnt] ? 10'h1FF : 10'h000;
 		else
@@ -818,28 +846,26 @@ ST_BLTDMA8:
 			ram_data_i <= cmdq_in[27:18]; 	// fill color
 		bitcnt <= bitcnt - bitinc;	// bitinc = 3'd0 unless bitmap
 		if (bitcnt==3'd0)
-			dstD_wadr <= dstD_wadr + 20'd1;
+			dstD_wadr <= dstD_wadr + bltinc;
 		dstD_wcnt <= dstD_wcnt + 20'd1;
 		dstD_hcnt <= dstD_hcnt + 20'd1;
 		if (dstD_hcnt==bltDstWid) begin
 			dstD_hcnt <= 20'd0;
-			dstD_wadr <= dstD_wadr + dstD_mod;
+			dstD_wadr <= dstD_wadr + dstD_mod + bltinc;
 			bitcnt <= bltCtrl[6] ? 3'd7 : 3'd0;
 		end
-		bltAa <= bltAa - 4'd1;	// move to next queue entry
-		bltBa <= bltBa - 4'd1;
-		bltCa <= bltCa - 4'd1;
+		bltAa <= bltAa - 5'd1;	// move to next queue entry
+		bltBa <= bltBa - 5'd1;
+		bltCa <= bltCa - 5'd1;
 		loopcnt <= loopcnt - 5'd1;
 		if (dstD_wcnt==bltCount) begin
 			state <= ST_IDLE;
 			bltCtrl[14] <= 1'b0;
 			bltCtrl[13] <= 1'b1;
 		end
-		else if (loopcnt==5'd0 ||
-			(bltAa==4'd0 && bltCtrl[0]) ||
-			(bltBa==4'd0 && bltCtrl[2]) ||
-			(bltCa==4'd0 && bltCtrl[4]))
+		else if (loopcnt==5'd0) begin
 			state <= ST_IDLE;
+        end
 	end
 
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
@@ -926,6 +952,10 @@ ST_BLT_NEXT:
 		end
 	end
 
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+// Line draw states
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
 DL_INIT:
 	begin
 		bkcolor <= cmdq_out[27:18];
@@ -1010,3 +1040,4 @@ default:
 endcase
 end
 endmodule
+
