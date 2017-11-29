@@ -49,15 +49,55 @@
 ;          |                |
 ; FFFFFFFF +----------------+
 ;
+;
+CR		EQU		$0D
+LF		EQU		$0A
+
+SC_F12  EQU    $07
+SC_C    EQU    $21
+SC_T    EQU    $2C
+SC_Z    EQU    $1A
+SC_KEYUP	EQU		$F0
+SC_EXTEND   EQU		$E0
+SC_CTRL		EQU		$14
+SC_RSHIFT	EQU		$59
+SC_NUMLOCK	EQU		$77
+SC_SCROLLLOCK	EQU	$7E
+SC_CAPSLOCK		EQU	$58
+SC_ALT		EQU		$11
+SC_LSHIFT	EQU		$12
+SC_DEL		EQU		$71		; extend
+SC_LCTRL	EQU		$58
+SC_TAB      EQU		$0D
+
+
 VDGBUF		EQU	$FF800000
 VDGREG		EQU	$FFE00000
+VDG_CURX	EQU	$0440
+VDG_CURY	EQU	$0442
+VDG_CURSZ	EQU	$0444
+VDG_CURCLR	EQU	$0446
+VDG_CURIMG	EQU	$0460
 VirtScreen	EQU	$1FFF0000
+KEYBD		EQU	$FFDC0000
 leds		EQU	$FFDC0600
 rand		EQU	$FFDC0C00
 
 fgcolor		EQU	$FF400000
 bkcolor		EQU	$FF400002
 fntsz		EQU	$FF400004
+memend		EQU	$F4000008
+CursorRow	EQU	$FF400418
+CursorCol	EQU $FF400419
+TextRows	EQU	$FF40041A
+TextCols	EQU	$FF40041B
+TextCurpos	EQU	$FF40041C
+TextScr		EQU	$FF400420
+KeybdEcho		EQU	$FF400424
+KeybdWaitFlag	EQU	$FF400425
+_KeyState1		EQU	$FF400426
+_KeyState2		EQU	$FF400427
+KeybdLEDs		EQU	$FF400428
 
 	org		$FFFC0000
 
@@ -95,6 +135,16 @@ fpga_version:
 		clr.l	A6
 		move.l	A7,usp
 
+		move.b	#80,TextCols
+		move.b	#64,TextRows
+		clr.b	CursorCol
+		clr.b	CursorRow
+		clr.w	TextCurpos
+		move.l	#$FF401000,TextScr		; set virtual screen location
+
+		bsr		SetCursorColor
+		bsr		SetCursorImage
+
 		lea	$FFDC0000,A6	; I/O base
 
 		; Initialize random number generator
@@ -105,6 +155,9 @@ fpga_version:
 
 		bsr		BootClearScreen		
 		move.w	#$A2A2,leds			; diagnostics
+		
+		bsr		DrawLines
+		bsr		TestBlitter
 
 		bsr		BootCopyFont
 		move.w	#$A3A3,leds			; diagnostics
@@ -125,6 +178,250 @@ fpga_version:
 j1:
 		bra		j1
 
+CRLF:
+		move.l	d1,-(a7)
+		move.b	#'\r',d1
+		jsr		DisplayChar
+		move.b	#'\n',d1
+		jsr		DisplayChar
+		move.l	(a7)+,d1
+		rts
+
+;------------------------------------------------------------------------------
+; Calculate screen memory location from CursorRow,CursorCol.
+; Destroys d0,d2,a0
+;------------------------------------------------------------------------------
+;
+CalcScreenLoc:
+		move.b	CursorRow,d0		; compute screen location
+		andi.w	#0x7f,d0
+		move.b	TextCols,d2
+		ext.w	d2
+		mulu.w	d2,d0
+		move.b	CursorCol,d2
+		andi.w	#0xff,d2
+		add.w	d2,d0
+		move.w	d0,TextCurpos
+		add.l	TextScr,d0
+		move.l	d0,a0				; a0 = screen location
+		rts
+
+;------------------------------------------------------------------------------
+; Display a character on the screen
+; d1.b = char to display
+;------------------------------------------------------------------------------
+;
+DisplayChar:
+		cmpi.b	#'\r',d1			; carriage return ?
+		bne.s	dccr
+		clr.b	CursorCol			; just set cursor column to zero on a CR
+		rts
+dccr:
+		cmpi.b	#0x91,d1			; cursor right ?
+		bne.s   dcx6
+		cmpi.b	#79,CursorCol
+		beq.s	dcx7
+		addi.b	#1,CursorCol
+		bra		DispCursor
+dcx7:
+		rts
+dcx6:
+		cmpi.b	#0x90,d1			; cursor up ?
+		bne.s	dcx8
+		cmpi.b	#0,CursorRow
+		beq.s	dcx7
+		subi.b	#1,CursorRow
+		bra		DispCursor
+dcx8:
+		cmpi.b	#0x93,d1			; cursor left?
+		bne.s	dcx9
+		cmpi.b	#0,CursorCol
+		beq.s	dcx7
+		subi.b	#1,CursorCol
+		bra		DispCursor
+dcx9:
+		cmpi.b	#0x92,d1			; cursor down ?
+		bne		dcx10
+		cmpi.b	#63,CursorRow
+		beq		dcx7
+		addi.w	#1,CursorRow
+		bra		DispCursor
+dcx10:
+		cmpi.b	#0x94,d1			; cursor home ?
+		bne.s	dcx11
+		cmpi.b	#0,CursorCol
+		beq.s	dcx12
+		clr.b	CursorCol
+		bra		DispCursor
+dcx12:
+		clr.b	CursorRow
+		bra		DispCursor
+dcx11:
+		movem.l	d0/d1/d2/a0,-(a7)
+		cmpi.b	#0x99,d1			; delete ?
+		bne.s	dcx13
+		bsr		CalcScreenLoc
+		move.b	CursorCol,d0
+		bra.s	dcx5
+dcx13:
+		cmpi.b	#CTRLH,d1			; backspace ?
+		bne.s   dcx3
+		cmpi.b	#0,CursorCol
+		beq.s   dcx4
+		subi.b	#1,CursorCol
+		bsr		CalcScreenLoc		; a0 = screen location
+		move.b	CursorCol,d0
+dcx5:
+		move.b	1(a0),(a0)+
+		addi.b	#1,d0
+		cmp.b	TextCols,d0
+		blo.s	dcx5
+		move.b	#32,d0
+		move.b	d0,-1(a0)
+		bra.s	dcx4
+dcx3:
+		cmpi.b	#'\n',d1		; linefeed ?
+		beq.s	dclf
+
+		bsr		CalcScreenLoc	; a0 = screen location
+		;bsr		AsciiToScreen	; convert ascii char to screen char
+		move.b	d1,(a0)
+		move.b	d1,d0
+		ext.w	d0
+		bsr		DispChar
+		bsr		IncCursorPos
+		bsr		DispCursor
+		movem.l	(a7)+,d0/d1/d2/a0
+		rts
+dclf:
+		bsr		IncCursorRow
+		bsr		DispCursor
+dcx4:
+		movem.l	(a7)+,d0/d1/d2/a0		; get back a0
+		rts
+
+;------------------------------------------------------------------------------
+; Increment the cursor position, scroll the screen if needed.
+;------------------------------------------------------------------------------
+;
+IncCursorPos:
+		addi.w	#1,TextCurpos
+		addi.b	#1,CursorCol
+		move.b	TextCols,d0
+		cmp.b	CursorCol,d0
+		bhs.s	icc1
+		clr.b	CursorCol
+IncCursorRow:
+		addi.b	#1,CursorRow
+		move.b	TextRows,d0
+		cmp.b	CursorRow,d0
+		bhi.s	icc1
+		move.b	TextRows,d0
+		move.b	d0,CursorRow		; in case CursorRow is way over
+		subi.b	#1,CursorRow
+		ext.w	d0
+		asl.w	#1,d0
+		sub.w	d0,TextCurpos
+		bsr		ScrollUp
+icc1:
+		rts
+
+;------------------------------------------------------------------------------
+; Display a string on the screen.
+;------------------------------------------------------------------------------
+;
+DisplayString:
+		movem.l	d0/d1/a1,-(a7)
+dspj1:
+		clr.l	d1				; clear upper bits of d1
+		move.b	(a1)+,d1		; move string char into d1
+		cmpi.b	#0,d1			; is it end of string ?
+		beq		dsret			
+		bsr		DisplayChar		; display character
+		bra		dspj1			; go back for next character
+dsret:
+		movem.l	(a7)+,d0/d1/a1
+		rts
+
+DisplayStringCRLF:
+		bsr		DisplayString
+		bra		CRLF
+
+;------------------------------------------------------------------------------
+; Display a string on the screen. Stop at 255 chars, or NULL or D1.W
+;------------------------------------------------------------------------------
+;
+DisplayString1:
+		movem.l	d0/d1/a1,-(a7)
+		andi.w	#255,d1			; max 255 chars
+		move.l	d1,d0
+dspj11:
+		move.b	(a1)+,d1		; move string char into d1
+		cmpi.b	#0,d1			; is it end of string ?
+		beq		dsret1			
+		bsr		DisplayChar		; display character
+		dbeq	d0,dspj11		; go back for next character
+dsret1:
+		movem.l	(a7)+,d0/d1/a1
+		rts
+
+;------------------------------------------------------------------------------
+; Display a string on the screen. Stop at 255 chars, or NULL or D1.W
+; end string with CR,LF
+;------------------------------------------------------------------------------
+;
+DisplayString0:
+		bsr		DisplayString1
+		bra		CRLF
+
+;------------------------------------------------------------------------------
+; Dispatch cursor functions
+;------------------------------------------------------------------------------
+;
+Cursor1:
+		cmpi.w	#0x00ff,d1
+		beq		GetCursorPos
+		cmpi.w	#0xFF00,d1
+		beq		SetCursorPos
+		jsr		ClearScreen
+		rts
+
+;------------------------------------------------------------------------------
+; Get the cursor position.
+; d1.b0 = row
+; d1.b1 = col
+;------------------------------------------------------------------------------
+;
+GetCursorPos:
+		move.b	CursorCol,d1
+		asl.w	#8,d1
+		move.b	CursorRow,d1
+		rts
+
+;------------------------------------------------------------------------------
+; Set the position of the cursor, update the linear screen pointer.
+; d1.b0 = row
+; d1.b1 = col
+;------------------------------------------------------------------------------
+;
+SetCursorPos:
+		movem.l	d1/d2,-(a7)
+		move.b	d1,CursorRow
+		lsr.w	#8,d1
+		move.b	d1,CursorCol
+		move.b	CursorRow,d1
+		ext.w	d1
+		move.b	TextCols,d2
+		ext.w	d2
+		mulu.w	d2,d1
+		move.b	CursorCol,d2
+		add.w	d2,d1
+		move.w	d1,TextCurpos
+scp1:
+		movem.l	(a7)+,d1/d2
+		rts
+
+
 ;------------------------------------------------------------------------------
 ; clear screen	
 ;
@@ -139,7 +436,7 @@ BootClearScreen:
 .loop1:
 		move.w	d0,(a0)+				; store it to the screen
 		sub.l	#1,d1					; can't use dbra here
-		bne.s	d1,.loop1
+		bne.s	.loop1
 		rts
 
 ;------------------------------------------------------------------------------
@@ -189,6 +486,114 @@ DispCharAt:
 
 ;------------------------------------------------------------------------------
 ; Parameters:
+;	d0.w		character to display
+;------------------------------------------------------------------------------
+
+DispChar:
+		movem.l	d1/a6,-(a7)
+		move.l	#VDGREG,a6
+		swap	d0					; save off d0 low
+.0001:								; wait for character que to empty
+		move.w	$42C(a6),d0			; read character queue index into d0
+		cmp.w	#28,d0				; allow up 28 entries to be in progress
+		bhs.s	.0001				; branch if too many chars queued
+		swap	d0					; get back d0 low
+		move.w	d0,$420(a6)			; set char code
+		move.w	fgcolor,$422(a6)	; set fg color
+		move.w	bkcolor,$424(a6)	; set bk color
+		move.b	CursorCol,d1
+		ext.w	d1
+		asl.w	#3,d1
+		move.w	d1,$426(a6)			; set x pos
+		move.b	CursorRow,d1
+		ext.w	d1
+		asl.w	#3,d1
+		move.w	d1,$428(a6)			; set y pos
+		move.w	#$0707,$42A(a6)		; set font x,y extent
+		move.w	#0,$42E(a6)			; pulse character queue write signal
+		movem.l	(a7)+,d1/a6
+		rts
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+DispCursor:
+		movem.l	d1/a6,-(a7)
+		move.l	#VDGREG,a6
+		move.w	#$0A0A,VDG_CURSZ(a6)
+		move.b	CursorCol,d1
+		ext.w	d1
+		asl.w	#3,d1
+		sub.w	#1,d1
+		move.w	d1,VDG_CURX(a6)
+		move.b	CursorRow,d1
+		ext.w	d1
+		asl.w	#3,d1
+		sub.w	#1,d1
+		move.w	d1,VDG_CURY(a6)
+		movem.l	(a7)+,d1/a6
+		rts
+
+;------------------------------------------------------------------------------
+; Cursor Color
+;
+;	fffff-irrrgggbbb
+;	  |   | |  |  |
+;     |   | |  |  +- blue
+;	  |   | |  +---- green
+;     |   | +------- red
+;     |   +--------- invert video (rgb ignored)
+;     +------------- flash rate
+;					 1xxxx = no flash
+;                    00001 = 1/8 vsync (7.5 Hz)
+;				     00010 = 1/16 vsync (3.75 Hz)
+;                    00100 = 1/32 vsync (1.875 Hz)
+;------------------------------------------------------------------------------
+
+SetCursorColor:
+		move.l  a6,-(a7)
+		move.l	#VDGREG,a6
+		move.w	#%0100001111111111,VDG_CURCLR(a6)
+		move.l	(a7)+,a6
+		rts
+		
+;------------------------------------------------------------------------------
+; Cursor Image
+; Cursor may be up to 16x16 pixels.
+;------------------------------------------------------------------------------
+
+SetCursorImage:
+		movem.l	d1/a0/a6,-(a7)
+		lea		CursorImage,a0
+		move.l	#VDGREG+VDG_CURIMG,a6
+		moveq	#15,d1
+.0001:
+		move.w	(a0)+,(a6)+
+		dbra	d1,.0001
+		movem.l	(a7)+,d1/a0/a6
+		rts
+
+	align	2
+CursorImage:
+	dc.w	%1111111111
+	dc.w	%1000000001
+	dc.w	%1000000001
+	dc.w	%1000000001
+	dc.w	%1000000001
+	dc.w	%1000000001
+	dc.w	%1000000001
+	dc.w	%1000000001
+	dc.w	%1000110001
+	dc.w	%1111111111
+	dc.w	%0000000000
+	dc.w	%0000000000
+	dc.w	%0000000000
+	dc.w	%0000000000
+	dc.w	%0000000000
+	dc.w	%0000000000
+
+;------------------------------------------------------------------------------
+; Parameters:
 ;	a0			pointer to string
 ;	d1.w		x position
 ;	d2.w		y position
@@ -211,6 +616,869 @@ DispStringAt:
 		rts
 
 ;------------------------------------------------------------------------------
+; Display nybble in D1.B
+;------------------------------------------------------------------------------
+;
+DisplayNybble:
+		move.w	d1,-(a7)
+		andi.b	#0xF,d1
+		addi.b	#'0',d1
+		cmpi.b	#'9',d1
+		bls.s	dispnyb1
+		addi.b	#7,d1
+dispnyb1:
+		bsr		DisplayChar
+		move.w	(a7)+,d1
+		rts
+
+;------------------------------------------------------------------------------
+; Display the byte in D1.B
+;------------------------------------------------------------------------------
+;
+DisplayByte:
+		move.w	d1,-(a7)
+		ror.b	#4,d1
+		bsr		DisplayNybble
+		rol.b	#4,d1
+		bsr		DisplayNybble
+		move.w	(a7)+,d1
+		rts
+
+;------------------------------------------------------------------------------
+; Display the 32 bit word in D1.L
+;------------------------------------------------------------------------------
+;
+DisplayWord:
+		rol.l	#8,d1
+		bsr		DisplayByte
+		rol.l	#8,d1
+		bsr		DisplayByte
+		rol.l	#8,d1
+		bsr		DisplayByte
+		rol.l	#8,d1
+		bsr		DisplayByte
+		rts
+
+DisplayMem:
+		move.b	#':',d1
+		jsr		DisplayChar
+		move.l	a0,d1
+		jsr		DisplayWord
+		moveq	#7,d2
+dspmem1:
+		move.b	#' ',d1
+		jsr		DisplayChar
+		move.b	(a0)+,d1
+		jsr		DisplayByte
+		dbra	d2,dspmem1
+		jmp		CRLF
+
+;==============================================================================
+; Keyboard stuff
+;
+; KeyState2_
+; 876543210
+; ||||||||+ = shift
+; |||||||+- = alt
+; ||||||+-- = control
+; |||||+--- = numlock
+; ||||+---- = capslock
+; |||+----- = scrolllock
+; ||+------ =
+; |+------- = 
+; +-------- = extended
+;
+;==============================================================================
+
+_KeybdGetStatus:
+		move.b	KEYBD+1,d1
+		rts
+
+; Get the scancode from the keyboard port
+;
+_KeybdGetScancode:
+		moveq	#0,d1
+		move.b	KEYBD,d1				; get the scan code
+		move.b	#0,KEYBD+1				; clear receive register
+		rts
+
+; Recieve a byte from the keyboard, used after a command is sent to the
+; keyboard in order to wait for a response.
+;
+KeybdRecvByte:
+		move.l	d3,-(a7)
+		move.w	#100,d3		; wait up to 1s
+.0003:
+		bsr		_KeybdGetStatus	; wait for response from keyboard
+		tst.b	d1
+		bmi		.0004		; is input buffer full ? yes, branch
+		bsr		Wait10ms		; wait a bit
+		dbra	d3,.0003	; go back and try again
+		move.l	(a7)+,d3
+		moveq	#-1,d1			; return -1
+		rts
+.0004:
+		bsr		_KeybdGetScancode
+		move.l	(a7)+,d3
+		rts
+
+
+; Wait until the keyboard transmit is complete
+; Returns .CF = 1 if successful, .CF=0 timeout
+;
+KeybdWaitTx:
+		movem.l	d2/d3,-(a7)
+		moveq	#100,d3		; wait a max of 1s
+.0001:
+		bsr		_KeybdGetStatus
+		btst	#6,d1		; check for transmit complete bit
+		bne	    .0002		; branch if bit set
+		bsr		Wait10ms		; delay a little bit
+		dbra	d3,.0001	; go back and try again
+		movem.l	(a7)+,d2/d3
+		moveq	#-1,d1		; return -1
+		rts
+.0002:
+		movem.l	(a7)+,d2/d3
+		moveq	#0,d1		; return 0
+		rts
+
+
+;------------------------------------------------------------------------------
+; get key pending status into d1.b
+;------------------------------------------------------------------------------
+;
+CheckForKey:
+		move.b	KEYBD+1,d1
+		bpl.s	cfk1
+		move.b	#1,d1
+		rts
+cfk1:
+		clr.b	d1
+		rts
+
+GetKey:
+		bsr		KeybdGetCharWait
+		cmpi.b	#0,KeybdEcho	; is keyboard echo on ?
+		beq.s	gk1
+		cmpi.b	#'\r',d1		; convert CR keystroke into CRLF
+		beq		CRLF
+		bsr		DisplayChar
+gk1:
+		rts
+
+
+KeybdGetCharNoWait:
+	clr.b	KeybdWaitFlag
+	bra		KeybdGetChar
+
+KeybdGetCharWait:
+	move.b	#-1,KeybdWaitFlag
+
+KeybdGetChar:
+	movem.l	d2/d3/a0,-(a7)
+.0003:
+	bsr		_KeybdGetStatus			; check keyboard status for key available
+	bmi		.0006					; yes, go process
+	tst.b	KeybdWaitFlag			; are we willing to wait for a key ?
+	bmi		.0003					; yes, branch back
+	movem.l	(a7)+,d2/d3/a0
+	moveq	#-1,d1					; flag no char available
+	rts
+.0006:
+	bsr		_KeybdGetScancode
+.0001:
+	move.w	#1,leds
+	cmp.b	#SC_KEYUP,d1
+	beq		.doKeyup
+	cmp.b	#SC_EXTEND,d1
+	beq		.doExtend
+	cmp.b	#SC_CTRL,d1
+	beq		.doCtrl
+	cmp.b	#SC_LSHIFT,d1
+	beq		.doShift
+	cmp.b	#SC_RSHIFT,d1
+	beq		.doShift
+	cmp.b	#SC_NUMLOCK,d1
+	beq		.doNumLock
+	cmp.b	#SC_CAPSLOCK,d1
+	beq		.doCapsLock
+	cmp.b	#SC_SCROLLLOCK,d1
+	beq		.doScrollLock
+	cmp.b   #SC_ALT,d1
+	beq     .doAlt
+	move.b	_KeyState1,d2			; check key up/down
+	move.b	#0,_KeyState1			; clear keyup status
+	tst.b	d2
+	bne	    .0003					; ignore key up
+	cmp.b   #SC_TAB,d1
+	beq     .doTab
+.0013:
+	move.b	_KeyState2,d2
+	bpl		.0010					; is it extended code ?
+	and.b	#$7F,d2					; clear extended bit
+	move.b	d2,_KeyState2
+	move.b	#0,_KeyState1			; clear keyup
+	lea		_keybdExtendedCodes,a0
+	move.b	(a0,d1.w),d1
+	bra		.0008
+.0010:
+	btst	#2,d2					; is it CTRL code ?
+	beq		.0009
+	and.w	#$7F,d1
+	lea		_keybdControlCodes,a0
+	move.b	(a0,d1.w),d1
+	bra		.0008
+.0009:
+	btst	#0,d2					; is it shift down ?
+	beq  	.0007
+	lea		_shiftedScanCodes,a0
+	move.b	(a0,d1.w),d1
+	bra		.0008
+.0007:
+	lea		_unshiftedScanCodes,a0
+	move.b	(a0,d1.w),d1
+	move.w	#$0202,leds
+.0008:
+		move.w	#$0303,leds
+		movem.l	(a7)+,d2/d3/a0
+		rts
+.doKeyup:
+		move.b	#-1,_KeyState1
+		bra		.0003
+.doExtend:
+		or.b	#$80,_KeyState2
+		bra		.0003
+.doCtrl:
+		move.b	_KeyState1,d1
+		clr.b	_KeyState1
+		tst.b	d1
+		bpl.s	.0004
+		bclr	#2,_KeyState2
+		bra		.0003
+.0004:
+		bset	#2,_KeyState2
+		bra		.0003
+.doAlt:
+		move.b	_KeyState1,d1
+		clr.b	_KeyState1
+		tst.b	d1
+		bpl		.0011
+		bclr	#1,_KeyState2
+		bra		.0003
+.0011:
+		bset	#1,_KeyState2
+		bra		.0003
+.doTab:
+		move.l	d1,-(a7)
+	    move.b  _KeyState2,d1
+	    btst	#0,d1                 ; is ALT down ?
+	    beq     .0012
+;    	inc     _iof_switch
+	    move.l	(a7)+,d1
+	    bra     .0003
+.0012:
+	    move.l	(a7)+,d1
+	    bra     .0013
+.doShift:
+		move.b	_KeyState1,d1
+		clr.b	_KeyState1
+		tst.b	d1
+		bpl.s	.0005
+		bclr	#0,_KeyState2
+		bra		.0003
+.0005:
+		bset	#0,_KeyState2
+		bra		.0003
+.doNumLock:
+		bchg	#4,_KeyState2
+		bsr		KeybdSetLEDStatus
+		bra		.0003
+.doCapsLock:
+		bchg	#5,_KeyState2
+		bsr		KeybdSetLEDStatus
+		bra		.0003
+.doScrollLock:
+		bchg	#6,_KeyState2
+		bsr		KeybdSetLEDStatus
+		bra		.0003
+
+KeybdSetLEDStatus:
+	movem.l	d2/d3,-(a7)
+	clr.b	KeybdLEDs
+	btst	#4,_KeyState2
+	beq.s	.0002
+	move.b	#2,KeybdLEDs
+.0002:
+	btst	#5,_KeyState2
+	beq.s	.0003
+	bset	#2,KeybdLEDs
+.0003:
+	btst	#6,_KeyState2
+	beq.s	.0004
+	bset	#0,KeybdLEDs
+.0004:
+	move.b	#$ED,d1
+	bsr		KeybdSendByte
+	bsr		KeybdWaitTx
+	bsr		KeybdRecvByte
+	tst.b	d1
+	bmi		.0001
+	cmp		d1,#$FA
+	move.b	KeybdLEDs,d1
+	bsr		KeybdSendByte
+	bsr		KeybdWaitTx
+	bsr		KeybdRecvByte
+.0001:
+	movem.l	(a7)+,d2/d3
+	rts
+
+KeybdSendByte:
+		move.b	d1,KEYBD
+		rts
+	
+Wait10ms:
+		move.l	d3,-(a7)
+		move.l	#1000,d3
+.0001:
+		dbra	d3,.0001
+		move.l	(a7)+,d3
+		rts
+
+
+;--------------------------------------------------------------------------
+; PS2 scan codes to ascii conversion tables.
+;--------------------------------------------------------------------------
+;
+_unshiftedScanCodes:
+	dc.b	$2e,$a9,$2e,$a5,$a3,$a1,$a2,$ac
+	dc.b	$2e,$aa,$a8,$a6,$a4,$09,$60,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$71,$31,$2e
+	dc.b	$2e,$2e,$7a,$73,$61,$77,$32,$2e
+	dc.b	$2e,$63,$78,$64,$65,$34,$33,$2e
+	dc.b	$2e,$20,$76,$66,$74,$72,$35,$2e
+	dc.b	$2e,$6e,$62,$68,$67,$79,$36,$2e
+	dc.b	$2e,$2e,$6d,$6a,$75,$37,$38,$2e
+	dc.b	$2e,$2c,$6b,$69,$6f,$30,$39,$2e
+	dc.b	$2e,$2e,$2f,$6c,$3b,$70,$2d,$2e
+	dc.b	$2e,$2e,$27,$2e,$5b,$3d,$2e,$2e
+	dc.b	$ad,$2e,$0d,$5d,$2e,$5c,$2e,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$08,$2e
+	dc.b	$2e,$95,$2e,$93,$94,$2e,$2e,$2e
+	dc.b	$98,$7f,$92,$2e,$91,$90,$1b,$af
+	dc.b	$ab,$2e,$97,$2e,$2e,$96,$ae,$2e
+
+	dc.b	$2e,$2e,$2e,$a7,$2e,$2e,$2e,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+	dc.b	$2e,$2e,$fa,$2e,$2e,$2e,$2e,$2e
+
+_shiftedScanCodes:
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$09,$7e,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$51,$21,$2e
+	dc.b	$2e,$2e,$5a,$53,$41,$57,$40,$2e
+	dc.b	$2e,$43,$58,$44,$45,$24,$23,$2e
+	dc.b	$2e,$20,$56,$46,$54,$52,$25,$2e
+	dc.b	$2e,$4e,$42,$48,$47,$59,$5e,$2e
+	dc.b	$2e,$2e,$4d,$4a,$55,$26,$2a,$2e
+	dc.b	$2e,$3c,$4b,$49,$4f,$29,$28,$2e
+	dc.b	$2e,$3e,$3f,$4c,$3a,$50,$5f,$2e
+	dc.b	$2e,$2e,$22,$2e,$7b,$2b,$2e,$2e
+	dc.b	$2e,$2e,$0d,$7d,$2e,$7c,$2e,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$08,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+	dc.b	$2e,$7f,$2e,$2e,$2e,$2e,$1b,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+
+; control
+_keybdControlCodes:
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$09,$7e,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$11,$21,$2e
+	dc.b	$2e,$2e,$1a,$13,$01,$17,$40,$2e
+	dc.b	$2e,$03,$18,$04,$05,$24,$23,$2e
+	dc.b	$2e,$20,$16,$06,$14,$12,$25,$2e
+	dc.b	$2e,$0e,$02,$08,$07,$19,$5e,$2e
+	dc.b	$2e,$2e,$0d,$0a,$15,$26,$2a,$2e
+	dc.b	$2e,$3c,$0b,$09,$0f,$29,$28,$2e
+	dc.b	$2e,$3e,$3f,$0c,$3a,$10,$5f,$2e
+	dc.b	$2e,$2e,$22,$2e,$7b,$2b,$2e,$2e
+	dc.b	$2e,$2e,$0d,$7d,$2e,$7c,$2e,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$08,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+	dc.b	$2e,$7f,$2e,$2e,$2e,$2e,$1b,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+
+_keybdExtendedCodes:
+	dc.b	$2e,$2e,$2e,$2e,$a3,$a1,$a2,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+	dc.b	$2e,$2e,$2e,$2e,$2e,$2e,$2e,$2e
+	dc.b	$2e,$95,$2e,$93,$94,$2e,$2e,$2e
+	dc.b	$98,$99,$92,$2e,$91,$90,$2e,$2e
+	dc.b	$2e,$2e,$97,$2e,$2e,$96,$2e,$2e
+
+
+;==============================================================================
+; Monitor
+;==============================================================================
+;
+StartMon:
+Monitor:
+;	lea		STACK,a7		; reset the stack pointer
+		clr.b	KeybdEcho		; turn off keyboard echo
+PromptLn:
+		bsr		CRLF
+		move.b	#'$',d1
+		bsr		DisplayChar
+
+; Get characters until a CR is keyed
+;
+Prompt3:
+		bsr		GetKey
+		cmpi.b	#CR,d1
+		beq.s	Prompt1
+		bsr		DisplayChar
+		bra.s	Prompt3
+
+; Process the screen line that the CR was keyed on
+;
+Prompt1:
+		clr.b	CursorCol		; go back to the start of the line
+		bsr		CalcScreenLoc	; a0 = screen memory location
+		move.b	(a0)+,d1
+		;bsr		ScreenToAscii
+		cmpi.b	#'$',d1			; skip over '$' prompt character
+		bne.s	Prompt2
+		move.b	(a0)+,d1
+		;bsr		ScreenToAscii
+	
+; Dispatch based on command character
+;
+Prompt2:
+		cmpi.b	#':',d1			; $: - edit memory
+		beq		EditMem
+		cmpi.b	#'D',d1			; $D - dump memory
+		beq		DumpMem
+		cmpi.b	#'F',d1
+		beq		FillMem
+		cmpi.b	#'B',d1			; $B - start tiny basic
+		beq		START
+		cmpi.b	#'J',d1			; $J - execute code
+		beq		ExecuteCode
+		cmpi.b	#'L',d1			; $L - load S19 file
+		beq		LoadS19
+		cmpi.b	#'?',d1			; $? - display help
+		beq		DisplayHelp
+		cmpi.b	#'C',d1			; $C - clear screen
+		beq		TestCLS
+		bra		Monitor
+
+TestCLS:
+		move.b	(a0)+,d1
+		cmpi.b	#'L',d1
+		bne		Monitor
+		move.b	(a0)+,d1
+		cmpi.b	#'S',d1
+		bne		Monitor
+		bsr		ClearScreen
+		bra		Monitor
+	
+DisplayHelp:
+		lea		HelpMsg,a1
+		jsr		DisplayString
+		bra		Monitor
+
+HelpMsg:
+		dc.b	"? = Display help",CR,LF
+		dc.b	"CLS = clear screen",CR,LF
+		dc.b	": = Edit memory bytes",CR,LF
+		dc.b	"F = Fill memory",CR,LF
+		dc.b	"L = Load S19 file",CR,LF
+		dc.b	"D = Dump memory",CR,LF
+		dc.b	"B = start tiny basic",CR,LF
+		dc.b	"J = Jump to code",CR,LF,0
+		even
+
+;------------------------------------------------------------------------------
+; Fill memory
+; FB = fill bytes		FB 00000010 100 FF	; fill starting at 10 for 256 bytes
+; FW = fill words
+; FL = fill longs
+; F = fill bytes
+;------------------------------------------------------------------------------
+;
+FillMem:
+		move.b	(a0)+,d1
+		;bsr		ScreenToAscii
+		move.b	d1,d4			; d4 = fill size
+		bsr		ignBlanks
+		bsr		GetHexNumber
+		move.l	d1,a1			; a1 = start
+		bsr		ignBlanks
+		bsr		GetHexNumber
+		move.l	d1,d3			; d3 = count
+		bsr		ignBlanks
+		bsr		GetHexNumber	; fill value
+		cmpi.b	#'L',d4
+		bne		fmem1
+fmemL:
+		move.l	d1,(a1)+
+		dbra	d3,fmemL
+		bra		Monitor
+fmem1
+		cmpi.b	#'W',d4
+		bne		fmemB
+fmemW:
+		move.w	d1,(a1)+
+		dbra	d3,fmemW
+		bra		Monitor
+fmemB:
+		move.b	d1,(a1)+
+		dbra	d3,fmemB
+		bra		Monitor
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+;
+ignBlanks:
+		move.b	(a0)+,d1
+		cmpi.b	#' ',d1
+		beq		ignBlanks
+		subq	#1,a0
+		rts
+
+;------------------------------------------------------------------------------
+; Edit memory byte.
+;------------------------------------------------------------------------------
+;
+EditMem:
+		bsr		ignBlanks
+		bsr		GetHexNumber
+		move.l	d1,a1
+edtmem1:
+		bsr		ignBlanks
+		bsr		GetHexNumber
+		move.b	d1,(a1)+
+		bsr		ignBlanks
+		bsr		GetHexNumber
+		move.b	d1,(a1)+
+		bsr		ignBlanks
+		bsr		GetHexNumber
+		move.b	d1,(a1)+
+		bsr		ignBlanks
+		bsr		GetHexNumber
+		move.b	d1,(a1)+
+		bsr		ignBlanks
+		bsr		GetHexNumber
+		move.b	d1,(a1)+
+		bsr		ignBlanks
+		bsr		GetHexNumber
+		move.b	d1,(a1)+
+		bsr		ignBlanks
+		bsr		GetHexNumber
+		move.b	d1,(a1)+
+		bsr		ignBlanks
+		bsr		GetHexNumber
+		move.b	d1,(a1)+
+		bra		Monitor
+
+;------------------------------------------------------------------------------
+; Execute code at the specified address.
+;------------------------------------------------------------------------------
+;
+ExecuteCode:
+		bsr		ignBlanks
+		bsr		GetHexNumber
+		move.l	d1,a0
+		jsr		(a0)
+		bra     Monitor
+
+;------------------------------------------------------------------------------
+; Do a memory dump of the requested location.
+;------------------------------------------------------------------------------
+;
+DumpMem:
+		bsr		ignBlanks
+		bsr		GetHexNumber
+DumpMem1:
+		move.l	d1,a0
+		jsr		CRLF
+		bsr		DisplayMem
+		bsr		DisplayMem
+		bsr		DisplayMem
+		bsr		DisplayMem
+		bsr		DisplayMem
+		bsr		DisplayMem
+		bsr		DisplayMem
+		bsr		DisplayMem
+		bra		Monitor
+
+;------------------------------------------------------------------------------
+; Get a hexidecimal number. Maximum of eight digits.
+;------------------------------------------------------------------------------
+;
+GetHexNumber:
+		movem.l	d0/d2,-(a7)
+		clr.l	d2
+		moveq	#7,d0
+gthxn2:
+		move.b	(a0)+,d1
+		bsr		AsciiToHexNybble
+		cmp.b	#0xff,d1
+		beq		gthxn1
+		lsl.l	#4,d2
+		andi.l	#0x0f,d1
+		or.l	d1,d2
+		dbra	d0,gthxn2
+gthxn1:
+		move.l	d2,d1
+		movem.l	(a7)+,d0/d2
+		rts	
+
+;------------------------------------------------------------------------------
+; Convert ASCII character in the range '0' to '9', 'a' tr 'f' or 'A' to 'F'
+; to a hex nybble.
+;------------------------------------------------------------------------------
+;
+AsciiToHexNybble:
+		cmpi.b	#'0',d1
+		blo.s	gthx3
+		cmpi.b	#'9',d1
+		bhi.s	gthx5
+		subi.b	#'0',d1
+		rts
+gthx5:
+		cmpi.b	#'A',d1
+		blo.s	gthx3
+		cmpi.b	#'F',d1
+		bhi.s	gthx6
+		subi.b	#'A',d1
+		addi.b	#10,d1
+		rts
+gthx6:
+		cmpi.b	#'a',d1
+		blo.s	gthx3
+		cmpi.b	#'f',d1
+		bhi.s	gthx3
+		subi.b	#'a',d1
+		addi.b	#10,d1
+		rts
+gthx3:
+		moveq	#-1,d1		; not a hex number
+		rts
+
+;==============================================================================
+; Load an S19 format file
+;==============================================================================
+;
+LoadS19:
+	bra		ProcessRec
+NextRec:
+	bsr		sGetChar
+	cmpi.b	#LF,d0
+	bne		NextRec
+ProcessRec
+	bsr		sGetChar
+	move.b	d0,d4
+	cmpi.b	#26,d4		; CTRL-Z ?
+	beq		Monitor
+	cmpi.b	#'S',d4
+	bne		NextRec
+	bsr		sGetChar
+	move.b	d0,d4
+	cmpi.b	#'0',d4
+	blo		NextRec
+	cmpi.b	#'9',d4		; d4 = record type
+	bhi		NextRec
+	bsr		sGetChar
+	bsr		AsciiToHexNybble
+	move.b	d1,d2
+	bsr		sGetChar
+	bsr		AsciiToHexNybble
+	lsl.b	#4,d2
+	or.b	d2,d1		; d1 = byte count
+	move.b	d1,d3		; d3 = byte count
+	cmpi.b	#'0',d4		; manufacturer ID record, ignore
+	beq		NextRec
+	cmpi.b	#'1',d4
+	beq		ProcessS1
+	cmpi.b	#'2',d4
+	beq		ProcessS2
+	cmpi.b	#'3',d4
+	beq		ProcessS3
+	cmpi.b	#'5',d4		; record count record, ignore
+	beq		NextRec
+	cmpi.b	#'7',d4
+	beq		ProcessS7
+	cmpi.b	#'8',d4
+	beq		ProcessS8
+	cmpi.b	#'9',d4
+	beq		ProcessS9
+	bra		NextRec
+
+pcssxa
+	andi.w	#0xff,d3
+	subi.w	#1,d3			; one less for dbra
+pcss1a
+	clr.l	d2
+	bsr		sGetChar
+	bsr		AsciiToHexNybble
+	lsl.l	#4,d2
+	or.b	d1,d2
+	bsr		sGetChar
+	bsr		AsciiToHexNybble
+	lsl.l	#4,d2
+	or.b	d1,d2
+	move.b	d2,(a1)+
+	dbra	d3,pcss1a
+; Get the checksum byte
+	clr.l	d2
+	bsr		sGetChar
+	bsr		AsciiToHexNybble
+	lsl.l	#4,d2
+	or.b	d1,d2
+	bsr		sGetChar
+	bsr		AsciiToHexNybble
+	lsl.l	#4,d2
+	or.b	d1,d2
+	bra		NextRec
+
+ProcessS1:
+	bsr		S19Get16BitAddress
+	bra		pcssxa
+ProcessS2:
+	bsr		S19Get24BitAddress
+	bra		pcssxa
+ProcessS3:
+	bsr		S19Get32BitAddress
+	bra		pcssxa
+ProcessS7:
+	bsr		S19Get32BitAddress
+	move.l	a1,S19StartAddress
+	bra		Monitor
+ProcessS8:
+	bsr		S19Get24BitAddress
+	move.l	a1,S19StartAddress
+	bra		Monitor
+ProcessS9:
+	bsr		S19Get16BitAddress
+	move.l	a1,S19StartAddress
+	bra		Monitor
+
+S19Get16BitAddress:
+	clr.l	d2
+	bsr		sGetChar
+	bsr		AsciiToHexNybble
+	move.b	d1,d2
+	bra		S1932b
+
+S19Get24BitAddress:
+	clr.l	d2
+	bsr		sGetChar
+	bsr		AsciiToHexNybble
+	move.b	d1,d2
+	bra		S1932a
+
+S19Get32BitAddress:
+	clr.l	d2
+	bsr		sGetChar
+	bsr		AsciiToHexNybble
+	move.b	d1,d2
+	bsr		sGetChar
+	bsr		AsciiToHexNybble
+	lsl.l	#4,d2
+	or.b	d1,d2
+	bsr		sGetChar
+	bsr		AsciiToHexNybble
+	lsl.l	#4,d2
+	or.b	d1,d2
+S1932a:
+	bsr		sGetChar
+	bsr		AsciiToHexNybble
+	lsl.l	#4,d2
+	or.b	d1,d2
+	bsr		sGetChar
+	bsr		AsciiToHexNybble
+	lsl.l	#4,d2
+	or.b	d1,d2
+S1932b:
+	bsr		sGetChar
+	bsr		AsciiToHexNybble
+	lsl.l	#4,d2
+	or.b	d1,d2
+	bsr		sGetChar
+	bsr		AsciiToHexNybble
+	lsl.l	#4,d2
+	or.b	d1,d2
+	bsr		sGetChar
+	bsr		AsciiToHexNybble
+	lsl.l	#4,d2
+	or.b	d1,d2
+	clr.l	d4
+	move.l	d2,a1
+	rts
+
+;------------------------------------------------------------------------------
+; Get a character from auxillary input, checking the keyboard status for a
+; CTRL-C
+;------------------------------------------------------------------------------
+;
+sGetChar:
+	bsr		CheckForKey
+	beq		sgc1
+	bsr		GetKey
+	cmpi.b	#CTRLC,d1
+	beq		Monitor
+sgc1:
+	bsr		AUXIN
+	beq		sGetChar
+	move.b	d0,d1
+	rts
+
+;==============================================================================
+;==============================================================================
+
+;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
 ;
 DisplayHexNumber:
@@ -228,15 +1496,16 @@ disphnum2:
 		move.w	d2,d3		; char count into d3
 		asl.w	#3,d3		; scale * 8
 disphnum3:
-		move.w	$42A(a6),d4			; read character queue index into d4
+		move.w	$42C(a6),d4			; read character queue index into d4
 		cmp.w	#28,d4					; allow up 28 entries to be in progress
 		bhs.s	disphnum3				; branch if too many chars queued
-		ext.b	d0						; zero out high order bits
+		ext.w	d0						; zero out high order bits
 		move.w	d0,$420(a6)			; set char code
 		move.w	#%111111111,$422(a6)	; set fg color
 		move.w	#%000000011,$424(a6)	; set bk color
 		move.w	d3,$426(a6)			; set x pos
 		move.w	#8,$428(a6)			; set y pos
+		move.w	#$0707,$42A(a6)		; set font x,y extent
 		move.w	#0,$42E(a6)			; pulse character queue write signal
 		ror.l	#4,d1					; rot to next digit
 		dbeq	d2,disphnum1
@@ -266,8 +1535,11 @@ ramtest1:
         bra		DisplayHexNumber
 rmtst1:
 		move.w	#$A9A9,leds		; diagnostics
-        cmpa.l 	#$1FFFFFFC,a0
+        cmpa.l 	#$1FFFC,a0
         bne.s 	ramtest1
+        move.l	#0,d1
+        bra		DumpMem1
+
 ;------------------------------------------------------
 ;   Save maximum useable address for later comparison.
 ;------------------------------------------------------
@@ -319,7 +1591,7 @@ ramtest5:
         move.l 	a0,d1
         tst.w	d1
         bne.s	rmtst4
-        lea		tmtst4,a5
+        lea		rmtst4,a5
         bra		DisplayHexNumber
 rmtst4:
         cmpi.l 	#$5555aaaa,d0
@@ -344,6 +1616,62 @@ rmtst5:
 ramtest7:
 		jmp 	(a3)
         bra.s 	ramtest7
+
+;===============================================================================
+; Draw lines randomly on the screen.
+;===============================================================================
+
+DrawLines:
+		lea		$FFDC0000,A6	; I/O base
+		lea		VDGREG,a5
+		move.l	#1000000,d6		; repeat a few times
+.0001:
+		move.l	$0C00(a6),d0	; get 32 bit number
+		move.w	d0,d1			; use bits 0 to 8 for y0
+		swap	d0				; and bits 16 to 24 for x0
+		and.w	#$1FF,d0		; 0 to 511
+		and.w	#$1FF,d1		; 0 to 511
+		clr.w	$0C04(a6)		; gen next number
+		move.l	$0C00(a6),d2
+		move.w	d2,d3
+		swap	d2
+		and.w	#$1FF,d2		; 0 to 511
+		and.w	#$1FF,d3		; 0 to 511
+		clr.w	$0C04(a6)		; gen next number
+		move.l	$0C00(a6),d4
+		and.w	#$1FF,d4		; 9 bits color
+		clr.w	$0C04(a6)		; gen next number
+.0002:
+		move.w	$42C(a5),d7		; check # queued
+		cmp.w	#28,d7			; more than 28 queued ?
+		bhs.s	.0002			; too many, wait for queue to empty
+		move.w	#1,$422(a5)		; raster op = COPY
+		move.w	d4,$424(a5)		; set color
+		move.w	d0,$426(a5)		; set x0
+		move.w	d1,$428(a5)		; set y0
+		move.w	d2,$430(a5)		; set x1
+		move.w	d3,$432(a5)		; set y1
+		move.w	#2,$42E(a5)		; pulse command queue (2 = draw line)
+		sub.l	#1,d6
+		bne		.0001			; go back and do more lines
+		rts
+
+;===============================================================================
+; Test Blitter
+;===============================================================================
+
+TestBlitter:
+		lea		VDGREG,a5
+		move.l	#800,$4A8(a5)		; set transfer count 800 pixels
+		move.l	#0,$480(a5)			; set source bitmap address (address in graphics mem)
+		move.l	#40,$4A0(a5)		; set source width
+		move.l	#600,$484(a5)		; set src modulo
+		move.l	#520,$498(a5)		; set destination address
+		move.l	#40,$4A4(a5)		; set destination width
+		move.l	#600,$49C(a5)		; set dst modulo
+		move.w	#$11,$4AE(a5)		; set op (copy A)
+		move.w	#%1000000010000010,$4AC(a5)		; enable channel A,D, start transfer
+		rts
 
 
 ; Randomize the screen	

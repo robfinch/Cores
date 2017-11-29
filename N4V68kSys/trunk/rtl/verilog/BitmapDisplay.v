@@ -76,9 +76,37 @@ parameter ST_READ_BLT_PIX2 = 6'd17;
 parameter ST_READ_BLT_PIX3= 6'd18;
 parameter ST_WRITE_BLT_PIX = 6'd19;
 parameter ST_BLT_NEXT = 6'd20;
+parameter ST_PLOT = 6'd21;
+parameter ST_PLOT_READ = 6'd22;
+parameter ST_PLOT_READ2 = 6'd23;
+parameter ST_PLOT_READ3 = 6'd24;
+parameter ST_PLOT_WRITE = 6'd25;
+parameter ST_BLTDMA = 6'd30;
+parameter ST_BLTDMA1 = 6'd31;
+parameter ST_BLTDMA2 = 6'd32;
+parameter ST_BLTDMA3 = 6'd33;
+parameter ST_BLTDMA4 = 6'd34;
+parameter ST_BLTDMA5 = 6'd35;
+parameter ST_BLTDMA6 = 6'd36;
+parameter ST_BLTDMA7 = 6'd37;
+parameter ST_BLTDMA8 = 6'd38;
+parameter DL_INIT = 6'd40;
+parameter DL_PRECALC = 6'd41;
+parameter DL_GETPIXEL = 6'd42;
+parameter DL_GETPIXEL2 = 6'd43;
+parameter DL_GETPIXEL3 = 6'd44;
+parameter DL_SETPIXEL = 6'd45;
+parameter DL_TEST = 6'd46;
+parameter ST_CMD = 6'd47;
 
 integer n;
 reg [5:0] state = ST_IDLE;
+// ctrl
+// -b--- rrrr ---- cccc
+//  |      |         +-- grpahics command
+//  |      +------------ raster op
+// +-------------------- busy indicator
+reg [15:0] ctrl;
 reg [19:0] bmpBase = 20'h00000;		// base address of bitmap
 reg [19:0] charBmpBase = 20'hB8000;	// base address of character bitmaps
 reg [11:0] hstart = 12'hEB3;		// -333
@@ -89,7 +117,36 @@ reg [11:0] bitmapWidth = 12'd640;
 reg [8:0] borderColor;
 wire [9:0] rgb_i;					// internal rgb output from ram
 
-wire [19:0] rdndx;					// video read index
+reg [91:0] cmdq_in;
+wire [91:0] cmdq_out;
+
+// Line draw
+reg [13:0] x0,y0,x1,y1,x2,y2;
+reg [13:0] x0a,y0a,x1a,y1a,x2a,y2a;
+wire signed [13:0] absx1mx0 = (x1 < x0) ? x0-x1 : x1-x0;
+wire signed [13:0] absy1my0 = (y1 < y0) ? y0-y1 : y1-y0;
+reg [13:0] gcx,gcy;		// graphics cursor position
+reg [11:0] ppl;
+wire [19:0] cyPPL = gcy * bitmapWidth;
+wire [19:0] offset = cyPPL + gcx;
+wire [19:0] ma = bmpBase + offset;
+reg signed [13:0] dx,dy;
+reg signed [13:0] sx,sy;
+reg signed [13:0] err;
+wire signed [13:0] e2 = err << 1;
+
+reg [5:0] flashcnt;
+reg cursor;
+reg [11:0] cursor_v;
+reg [11:0] cursor_h;
+reg [3:0] cx, cy;
+reg [9:0] cursor_color;
+reg [3:0] flashrate;
+
+reg [3:0] cursor_sv;				// cursor size
+reg [3:0] cursor_sh;
+reg [9:0] cursor_bmp [0:15];
+reg [19:0] rdndx;					// video read index
 reg [19:0] ram_addr;
 reg [9:0] ram_data_i;
 wire [9:0] ram_data_o;
@@ -97,12 +154,85 @@ reg ram_we;
 
 reg [ 9:0] pixcnt;
 reg [3:0] pixhc,pixvc;
+reg [2:0] bitcnt, bitinc;
+
+reg [19:0] bltSrcWid;
+reg [19:0] bltDstWid;
+reg [19:0] bltCount;
+reg [15:0] bltCtrl;
+
+reg [19:0] srcA_badr;
+reg [19:0] srcA_mod;
+reg [19:0] srcA_wadr;				// working address
+reg [19:0] srcA_wcnt;				// working count
+reg [19:0] srcA_hcnt;
+
+reg [19:0] srcB_badr;
+reg [19:0] srcB_mod;
+reg [19:0] srcB_wadr;				// working address
+reg [19:0] srcB_wcnt;				// working count
+reg [19:0] srcB_hcnt;
+
+reg [19:0] srcC_badr;
+reg [19:0] srcC_mod;
+reg [19:0] srcC_wadr;				// working address
+reg [19:0] srcC_wcnt;				// working count
+reg [19:0] srcC_hcnt;
+
+reg [19:0] dstD_badr;
+reg [19:0] dstD_mod;
+reg [19:0] dstD_wadr;				// working address
+reg [19:0] dstD_wcnt;				// working count
+reg [19:0] dstD_hcnt;
+
+reg [15:0] blt_op;
+
+reg [3:0] bltAa,bltBa,bltCa;
+reg [17:0] wrA, wrB, wrC;
+reg [9:0] blt_bmpA;
+reg [9:0] blt_bmpB;
+reg [9:0] blt_bmpC;
+wire [9:0] bltA_in = bltCtrl[0] ? (blt_bmpA[bitcnt] ? 10'h1FF : 10'h000) : blt_bmpA;
+wire [9:0] bltB_in = bltCtrl[2] ? (blt_bmpB[bitcnt] ? 10'h1FF : 10'h000) : blt_bmpB;
+wire [9:0] bltC_in = bltCtrl[4] ? (blt_bmpC[bitcnt] ? 10'h1FF : 10'h000) : blt_bmpC;
+vtdl #(.WID(10), .DEP(16)) bltA (.clk(clk_i), .ce(wrA[0]), .a(bltAa), .d(bltA_in), .q(bltA_out));
+vtdl #(.WID(10), .DEP(16)) bltB (.clk(clk_i), .ce(wrB[0]), .a(bltBa), .d(bltB_in), .q(bltB_out));
+vtdl #(.WID(10), .DEP(16)) bltC (.clk(clk_i), .ce(wrC[0]), .a(bltCa), .d(bltC_in), .q(bltC_out));
+
+
+reg [9:0] bltab;
+reg [9:0] bltabc;
+always @*
+	case(blt_op[3:0])
+	4'h0:	bltab = 10'h000;
+	4'h1:	bltab = bltA_out;
+	4'h2:	bltab = bltB_out;
+	4'h8:	bltab = bltA_out & bltB_out;
+	4'h9:	bltab = bltA_out | bltB_out;
+	4'hA:	bltab = bltA_out ^ bltB_out;
+	4'hB:	bltab = bltA_out & ~bltB_out;
+	4'hF:	bltab = 10'h1FF;
+	endcase
+always @*
+	case(blt_op[7:4])
+	4'h0:	bltabc = 10'h000;
+	4'h1:	bltabc = bltab;
+	4'h2:	bltabc = bltC_out;
+	4'h8:	bltabc = bltab & bltC_out;
+	4'h9:	bltabc = bltab | bltC_out;
+	4'hA:	bltabc = bltab ^ bltC_out;
+	4'hB:	bltabc = bltab & ~bltC_out;
+	4'hF:	bltabc = 10'h1FF;
+	endcase
 
 reg [19:0] blt_addr [0:63];			// base address of BLT bitmap
 reg [ 9:0] blt_pix  [0:63];			// number of pixels in BLT
 reg [ 9:0] blt_hmax [0:63];			// horizontal size of BLT
+reg [11:0] blt_mod	[0:63];			// modulo value
+
 reg [ 9:0] blt_x	[0:63];			// BLT's x position
 reg [ 9:0] blt_y	[0:63];			// BLT's y position
+reg [19:0] blt_cadr [0:63];			// current address
 reg [ 9:0] blt_pc	[0:63];			// current pixel count
 reg [ 9:0] blt_hctr	[0:63];			// current horizontal count
 reg [ 9:0] blt_vctr	[0:63];			// current vertical count
@@ -117,11 +247,12 @@ reg [9:0] blt_hctrx;
 reg [9:0] blt_vctrx;
 reg [5:0] bltno;					// working blit number
 reg [9:0] bltcolor;					// blt color as read
-reg [3:0] loopcnt;
+reg [4:0] loopcnt;
 
 reg [ 8:0] charcode;                // character code being processed
 reg [ 9:0] charbmp;					// hold character bitmap scanline
-reg [8:0] fgcolor,bkcolor;			// character colors
+reg [8:0] fgcolor;					// character colors
+reg [9:0] bkcolor;					// top bit indicates overlay mode
 reg [3:0] pixxm, pixym;             // maximum # pixels for char
 
 
@@ -157,15 +288,41 @@ always @(posedge clk)
 	else if (eol)
 		vpos <= vpos + 12'd1;
 
-assign rdndx = {bmpBase[19:12],hpos} + {8'h00,vpos} * {8'h00,bitmapWidth};
+always @(posedge clk)
+	if (eof)
+		flashcnt <= flashcnt + 6'd1;
 
 always @(posedge clk)
-	rgb <= blank ? 9'h000 : border ? borderColor : rgb_i[8:0];
+	if (hpos == cursor_h)
+		cx <= 0;
+	else
+		cx <= cx + 4'd1;
+always @(posedge clk)
+	if (vpos == cursor_v)
+		cy <= 0;
+	else if (eol)
+		cy <= cy + 4'd1;
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+always @(posedge clk)
+	if ((flashcnt[5:2] & flashrate[3:0])!=4'b000 || flashrate[3]) begin
+		if ((vpos >= cursor_v && vpos <= cursor_v + cursor_sv) &&
+			(hpos >= cursor_h && hpos <= cursor_h + cursor_sh))
+			cursor <= cursor_bmp[cy][cx];
+		else
+			cursor <= 1'b0;
+	end
+	else
+		cursor <= 1'b0;
 
-reg [4:0] chrq_ndx;
+always @(posedge clk)
+	rdndx <= {8'h00,vpos} * {8'h00,bitmapWidth} + {bmpBase[19:12],hpos};
+
+always @(posedge clk)
+	rgb <= 	blank ? 9'h000 :
+		   	border ? borderColor :
+       		cursor ? (
+				cursor_color[9] ? rgb_i[8:0] ^ 9'h1FF : cursor_color) :
+			rgb_i[8:0];
 
 reg ack,rdy;
 reg rwsr;							// read / write shadow ram
@@ -173,20 +330,30 @@ wire chrp = rwsr & ~rdy;			// chrq pulse
 wire cs_reg = cyc_i & stb_i & cs_i;
 wire cs_ram = cyc_i & stb_i & cs_ram_i;
 
-wire cs_chrq = cs_reg && adr_i[10:1]==10'b100_0010_111 && chrp && we_i;
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// Command queue
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-reg [58:0] chrq_in;
-wire [58:0] chrq_out;
+reg [4:0] cmdq_ndx;
 
-vtdl #(.WID(59), .DEP(32)) char_q (.clk(clk_i), .ce(cs_chrq), .a(chrq_ndx), .d(chrq_in), .q(chrq_out));
+wire cs_cmdq = cs_reg && adr_i[10:1]==10'b100_0010_111 && chrp && we_i;
 
-wire [8:0] charcode_qo = chrq_out[8:0];
-wire [8:0] charfg_qo = chrq_out[17:9];
-wire [8:0] charbk_qo = chrq_out[26:18];
-wire [11:0] charx_qo = chrq_out[38:27];
-wire [11:0] chary_qo = chrq_out[50:39];
-wire [3:0] charxm_qo = chrq_out[54:51];
-wire [3:0] charym_qo = chrq_out[58:55];
+
+vtdl #(.WID(92), .DEP(32)) char_q (.clk(clk_i), .ce(cs_cmdq), .a(cmdq_ndx), .d(cmdq_in), .q(cmdq_out));
+
+wire [8:0] charcode_qo = cmdq_out[8:0];
+wire [8:0] charfg_qo = cmdq_out[17:9];
+wire [9:0] charbk_qo = cmdq_out[27:18];
+wire [11:0] cmdx1_qo = cmdq_out[39:28];
+wire [11:0] cmdy1_qo = cmdq_out[51:40];
+wire [3:0] charxm_qo = cmdq_out[55:52];
+wire [3:0] charym_qo = cmdq_out[59:56];
+wire [7:0] cmd_qo = cmdq_out[67:60];
+wire [11:0] cmdx2_qo = cmdq_out[79:68];
+wire [11:0] cmdy2_qo = cmdq_out[91:80];
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 reg [9:0] sra;						// shadow ram address
 reg [15:0] shadow_ram [0:1023];		// register shadow ram
@@ -215,6 +382,7 @@ always @(posedge clk)
 	
 always @(posedge clk_i)
 begin
+
 if (cs_reg) begin
 	if (we_i) begin
 		casex(adr_i[10:1])
@@ -247,25 +415,64 @@ if (cs_reg) begin
 		10'b1000001001: blt_dirty[31:16] <= blt_dirty[31:16] | dat_i;
 		10'b1000001010:	blt_dirty[47:32] <= blt_dirty[47:32] | dat_i;
 		10'b1000001011:	blt_dirty[63:48] <= blt_dirty[63:48] | dat_i;
-		10'b100_0010_000:	chrq_in[8:0] <= dat_i[8:0];
-		10'b100_0010_001:	chrq_in[17:9] <= dat_i[8:0];
-		10'b100_0010_010:	chrq_in[26:18] <= dat_i[8:0];
-		10'b100_0010_011:	chrq_in[38:27] <= dat_i[11:0];
-		10'b100_0010_100:	chrq_in[50:39] <= dat_i[11:0];
-		10'b100_0010_101:   chrq_in[58:51] <= {dat_i[11:8],dat_i[3:0]};
-		10'b100_0010_110: chrq_ndx <= dat_i[4:0];
+		10'b100_0010_000:	cmdq_in[8:0] <= dat_i[8:0];		// char code
+		10'b100_0010_001:	cmdq_in[17:9] <= dat_i[8:0];	// fgcolor
+		10'b100_0010_010:	cmdq_in[27:18] <= dat_i[9:0];	// bkcolor
+		10'b100_0010_011:	cmdq_in[39:28] <= dat_i[11:0];	// xpos1
+		10'b100_0010_100:	cmdq_in[51:40] <= dat_i[11:0];	// ypos1
+		10'b100_0010_101:   cmdq_in[59:52] <= {dat_i[11:8],dat_i[3:0]};	// fntsz
+		10'b100_0010_110: cmdq_ndx <= dat_i[4:0];
+		10'b100_0010_111:	cmdq_in[67:60] <= dat_i[7:0];	// cmd
+		10'b100_0011_000:	cmdq_in[79:68] <= dat_i[11:0];	// xpos2
+		10'b100_0011_001:	cmdq_in[91:80] <= dat_i[11:0];	// ypos2
+		10'b100_0100_000:	cursor_h <= dat_i[11:0];
+		10'b100_0100_001:	cursor_v <= dat_i[11:0];
+		10'b100_0100_010:	begin
+								cursor_sh <= dat_i[3:0];
+								cursor_sv <= dat_i[11:8];
+							end
+		10'b100_0100_011:	begin
+								cursor_color <= dat_i[9:0];
+								flashrate <= dat_i[15:11];
+							end
+		10'b100_011x_xxx:	cursor_bmp[adr_i[4:1]] <= dat_i[9:0];
+	
+		10'b100_1000_000:	srcA_badr[19:16] <= dat_i[3:0];
+		10'b100_1000_001:	srcA_badr[15: 0] <= dat_i;
+		10'b100_1000_010:	srcA_mod[19:16] <= dat_i[3:0];
+		10'b100_1000_011:	srcA_mod[15: 0] <= dat_i;
+		10'b100_1000_100:	srcB_badr[19:16] <= dat_i[3:0];
+		10'b100_1000_101:	srcB_badr[15: 0] <= dat_i;
+		10'b100_1000_110:	srcB_mod[19:16] <= dat_i[3:0];
+		10'b100_1000_111:	srcB_mod[15: 0] <= dat_i;
+		10'b100_1001_000:	srcC_badr[19:16] <= dat_i[3:0];
+		10'b100_1001_001:	srcC_badr[15: 0] <= dat_i;
+		10'b100_1001_010:	srcC_mod[19:16] <= dat_i[3:0];
+		10'b100_1001_011:	srcC_mod[15: 0] <= dat_i;
+		10'b100_1001_100:	dstD_badr[19:16] <= dat_i[3:0];
+		10'b100_1001_101:	dstD_badr[15: 0] <= dat_i;
+		10'b100_1001_110:	dstD_mod[19:16] <= dat_i[3:0];
+		10'b100_1001_111:	dstD_mod[15: 0] <= dat_i;
+		10'b100_1010_000:	bltSrcWid[19:16] <= dat_i[3:0];
+		10'b100_1010_001:	bltSrcWid[15:0] <= dat_i;
+		10'b100_1010_010:	bltDstWid[19:16] <= dat_i[3:0];
+		10'b100_1010_011:	bltDstWid[15:0] <= dat_i;
+		10'b100_1010_100:	bltCount[19:16] <= dat_i[3:0];
+		10'b100_1010_101:	bltCount[15:0] <= dat_i;
+		10'b100_1010_110:	bltCtrl <= dat_i;
+		10'b100_1010_111:	blt_op <= dat_i;
 		default:	;	// do nothing
 		endcase
 	end
 	else begin
 		case(adr_i[10:1])
-		10'b1000010110:	dat_o <= {11'h00,chrq_ndx};
+		10'b1000010110:	dat_o <= {11'h00,cmdq_ndx};
 		default:	dat_o <= srdo;
 		endcase
 	end
 end
-if (cs_chrq)
-	chrq_ndx <= chrq_ndx + 5'd1;
+if (cs_cmdq)
+	cmdq_ndx <= cmdq_ndx + 5'd1;
 
 case(state)
 ST_IDLE:
@@ -279,9 +486,16 @@ ST_IDLE:
 			state <= ST_RW;
 		end
 
-		else if (|chrq_ndx) begin
-			chrq_ndx <= chrq_ndx - 5'd1;
-			state <= ST_CHAR_INIT;
+		// busy with a graphics command ?
+		else if (ctrl[14]) begin
+			case(ctrl[3:0])
+			4'd2:	state <= DL_PRECALC;
+			endcase
+		end
+
+		else if (|cmdq_ndx) begin
+			cmdq_ndx <= cmdq_ndx - 5'd1;
+			state <= ST_CMD;
 		end
 
 		else if (|blt_dirty) begin
@@ -292,18 +506,112 @@ ST_IDLE:
 			loopcnt <= 4'h0;
 			state <= ST_BLT_INIT;
 		end
+		
+		else if (bltCtrl[14]) begin
+			bltAa <= 4'd0;
+			bltBa <= 4'd0;
+			bltCa <= 4'd0;
+			if (bltCtrl[1])
+				state <= ST_BLTDMA1;
+			else if (bltCtrl[3])
+				state <= ST_BLTDMA3;
+			else if (bltCtrl[5])
+				state <= ST_BLTDMA5;
+			else if (bltCtrl[7])
+				state <= ST_BLTDMA7;
+		end
+		else if (bltCtrl[15]) begin
+			bltCtrl[15] <= 1'b0;
+			bltCtrl[14] <= 1'b1;
+			bltCtrl[13] <= 1'b0;
+			bltAa <= 4'd0;
+			bltBa <= 4'd0;
+			bltCa <= 4'd0;
+			srcA_wadr <= srcA_badr;
+			srcB_wadr <= srcB_badr;
+			srcC_wadr <= srcC_badr;
+			srcA_wcnt <= 20'd0;
+			srcB_wcnt <= 20'd0;
+			srcC_wcnt <= 20'd0;
+			srcA_hcnt <= 20'd0;
+			srcB_hcnt <= 20'd0;
+			srcC_hcnt <= 20'd0;
+			if (bltCtrl[1])
+				state <= ST_BLTDMA1;
+			else if (bltCtrl[3])
+				state <= ST_BLTDMA3;
+			else if (bltCtrl[5])
+				state <= ST_BLTDMA5;
+			else
+				state <= ST_BLTDMA7;
+		end
 	end
+
+ST_CMD:
+	begin
+		ctrl[3:0] <= cmd_qo[3:0];
+		ctrl[14] <= 1'b0;
+		case(cmd_qo[3:0])
+		4'd0:	state <= ST_CHAR_INIT;	// draw character
+		4'd1:	state <= ST_PLOT;
+		4'd2:	begin
+				ctrl[11:8] <= cmdq_out[12:9];	// raster op
+				state <= DL_INIT;			// draw line
+				end
+		default:	state <= ST_IDLE;
+		endcase
+	end
+
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+// Standard RAM read/write
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
 ST_RW:
 	begin
-	    ram_we <= `LOW;
 		ack <= `HIGH;
 		dat_o <= {6'd0,ram_data_o};
 		if (~cs_ram) begin
+		    ram_we <= `LOW;
 			ack <= `LOW;
 			state <= ST_IDLE;
 		end
 	end
+
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+// Pixel plot acceleration states
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+ST_PLOT:
+	begin
+		bkcolor <= charbk_qo;
+		tgtaddr <= {8'h00,cmdy1_qo} * {8'h00,bitmapWidth} + {bmpBase[19:12],cmdx1_qo};
+		state <= charbk_qo[9] ? ST_PLOT_READ : ST_PLOT_WRITE;
+	end
+ST_PLOT_READ:
+	begin
+		ram_addr <= tgtaddr;
+		state <= ST_PLOT_READ2;
+	end
+ST_PLOT_READ2:
+	state <= ST_PLOT_READ3;
+ST_PLOT_READ3:
+	state <= ST_PLOT_WRITE;
+ST_PLOT_WRITE:
+	begin
+		ram_we <= `HIGH;
+		if (bkcolor[9]) begin
+			ram_data_i[2:0] <= ram_data_o[2:0] >> bkcolor[1:0];
+			ram_data_i[5:3] <= ram_data_o[5:3] >> bkcolor[3:2];
+			ram_data_i[8:6] <= ram_data_o[8:6] >> bkcolor[5:4];
+		end
+		else
+			ram_data_i <= bkcolor;
+		state <= ST_IDLE;
+	end
+
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+// Character draw acceleration states
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
 ST_CHAR_INIT:
 	begin
@@ -315,7 +623,7 @@ ST_CHAR_INIT:
 		bkcolor <= charbk_qo;
 		pixxm <= charxm_qo;
 		pixym <= charym_qo;
-		tgtaddr <= {8'h00,chary_qo} * bitmapWidth + {bmpBase[19:12],charx_qo};
+		tgtaddr <= {8'h00,cmdy1_qo} * {8'h00,bitmapWidth} + {bmpBase[19:12],cmdx1_qo};
 		state <= ST_READ_CHAR_BITMAP;
 	end
 ST_READ_CHAR_BITMAP:
@@ -335,14 +643,22 @@ ST_READ_CHAR_BITMAP_DAT:
 	end
 ST_CALC_INDEX:
 	begin
-		tgtindex <= pixvc * bitmapWidth;
+		tgtindex <= {14'h00,pixvc} * {8'h00,bitmapWidth} + {14'h00,pixhc};
 		state <= ST_WRITE_CHAR;
 	end
 ST_WRITE_CHAR:
 	begin
-		ram_we <= `HIGH;
-		ram_addr <= tgtaddr + tgtindex + pixhc;
-		ram_data_i <= charbmp[pixxm] ? fgcolor : bkcolor;
+		ram_addr <= tgtaddr + tgtindex;
+		if (~bkcolor[9]) begin
+			ram_we <= `HIGH;
+			ram_data_i <= charbmp[pixxm] ? fgcolor : bkcolor;
+		end
+		else begin
+			if (charbmp[pixxm]) begin
+				ram_we <= `HIGH;
+				ram_data_i <= fgcolor;
+			end
+		end
 		state <= ST_NEXT;
 	end
 ST_NEXT:
@@ -364,6 +680,171 @@ ST_NEXT:
 //			pixcnt[2:0]==3'd7 ? ST_READ_CHAR_BITMAP :
 //			ST_CALC_INDEX;
 	end
+
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+ST_BLTDMA1:
+	begin
+		ram_we <= `LOW;
+		bitcnt <= bltCtrl[0] ? 3'd7 : 3'd0;
+		bitinc <= bltCtrl[0] ? 3'd1 : 3'd0;
+		loopcnt <= 5'd17;
+		wrA <= 18'h111111111111111100;
+		bltAa <= 4'd0;
+		state <= ST_BLTDMA2;
+	end
+ST_BLTDMA2:
+	begin
+		if (loopcnt > 5'd2) begin
+			ram_addr <= srcA_wadr;
+			bitcnt <= bitcnt - bitinc;	// bitinc = 3'd0 unless bitmap
+			if (bitcnt==3'd0)
+				srcA_wadr <= srcA_wadr + 20'd1;
+			srcA_wcnt <= srcA_wcnt + 20'd1;
+			srcA_hcnt <= srcA_hcnt + 20'd1;
+			if (srcA_hcnt==bltSrcWid) begin
+				srcA_hcnt <= 20'd0;
+				srcA_wadr <= srcA_wadr + srcA_mod;
+				bitcnt <= bltCtrl[0] ? 3'd7 : 3'd0;
+			end
+			wrA <= {1'b0,wrA[17:1]};
+		end
+		if (wrA[0])
+			bltAa <= bltAa + 4'd1;
+		blt_bmpA <= ram_data_o;
+		loopcnt <= loopcnt - 5'd1;
+		if (loopcnt==5'd0 || srcA_wcnt==bltCount) begin
+			if (bltCtrl[3])
+				state <= ST_BLTDMA3;
+			else if (bltCtrl[5])
+				state <= ST_BLTDMA5;
+			else
+				state <= ST_BLTDMA7;
+		end
+	end
+	// Do channel B
+ST_BLTDMA3:
+	begin
+		ram_we <= `LOW;
+		bitcnt <= bltCtrl[2] ? 3'd7 : 3'd0;
+		bitinc <= bltCtrl[2] ? 3'd1 : 3'd0;
+		loopcnt <= 5'd17;
+		wrB <= 18'h111111111111111100;
+		bltBa <= 4'd0;
+		state <= ST_BLTDMA4;
+	end
+ST_BLTDMA4:
+	begin
+		if (loopcnt > 5'd2) begin
+			ram_addr <= srcB_wadr;
+			bitcnt <= bitcnt - bitinc;	// bitinc = 3'd0 unless bitmap
+			if (bitcnt==3'd0)
+				srcB_wadr <= srcB_wadr + 20'd1;
+			srcB_wcnt <= srcB_wcnt + 20'd1;
+			srcB_hcnt <= srcB_hcnt + 20'd1;
+			if (srcB_hcnt==bltSrcWid) begin
+				srcB_hcnt <= 20'd0;
+				srcB_wadr <= srcB_wadr + srcB_mod;
+				bitcnt <= bltCtrl[2] ? 3'd7 : 3'd0;
+			end
+			wrB <= {1'b0,wrB[17:1]};
+		end
+		if (wrB[0])
+			bltBa <= bltBa + 4'd1;
+		blt_bmpB <= ram_data_o;
+		loopcnt <= loopcnt - 5'd1;
+		if (loopcnt==5'd0 || srcB_wcnt==bltCount) begin
+			if (bltCtrl[5])
+				state <= ST_BLTDMA5;
+			else
+				state <= ST_BLTDMA7;
+		end
+	end
+	// Do channel C
+ST_BLTDMA5:
+	begin
+		ram_we <= `LOW;
+		bitcnt <= bltCtrl[4] ? 3'd7 : 3'd0;
+		bitinc <= bltCtrl[4] ? 3'd1 : 3'd0;
+		loopcnt <= 5'd17;
+		wrC <= 18'h111111111111111100;
+		bltCa <= 4'd0;
+		state <= ST_BLTDMA6;
+	end
+ST_BLTDMA6:
+	begin
+		if (loopcnt > 5'd2) begin
+			ram_addr <= srcC_wadr;
+			bitcnt <= bitcnt - bitinc;	// bitinc = 3'd0 unless bitmap
+			if (bitcnt==3'd0)
+				srcC_wadr <= srcC_wadr + 20'd1;
+			srcC_wcnt <= srcC_wcnt + 20'd1;
+			srcC_hcnt <= srcC_hcnt + 20'd1;
+			if (srcC_hcnt==bltSrcWid) begin
+				srcC_hcnt <= 20'd0;
+				srcC_wadr <= srcC_wadr + srcC_mod;
+				bitcnt <= bltCtrl[4] ? 3'd7 : 3'd0;
+			end
+			wrC <= {1'b0,wrC[17:1]};
+		end
+		if (wrC[0])
+			bltCa <= bltCa + 4'd1;
+		blt_bmpC <= ram_data_o;
+		loopcnt <= loopcnt - 5'd1;
+		if (loopcnt==5'd0 || srcC_wcnt==bltCount)
+			state <= ST_BLTDMA7;
+	end
+	// Do channel D
+ST_BLTDMA7:
+	begin
+		bitcnt <= bltCtrl[6] ? 3'd7 : 3'd0;
+		bitinc <= bltCtrl[6] ? 3'd1 : 3'd0;
+		loopcnt <= 5'd16;
+		state <= ST_BLTDMA8;
+	end
+ST_BLTDMA8:
+	begin
+		ram_we <= `HIGH;
+		ram_addr <= dstD_wadr;
+		// If there's no source then a fill operation muct be taking place.
+		if (bltCtrl[0]|bltCtrl[2]|bltCtrl[4]) begin
+/*		if (dstD_ctrl[0])
+			ram_data_i <= bltabc[bitcnt] ? 10'h1FF : 10'h000;
+		else
+*/			ram_data_i <= bltabc;
+		end
+		else
+			ram_data_i <= cmdq_in[27:18]; 	// fill color
+		bitcnt <= bitcnt - bitinc;	// bitinc = 3'd0 unless bitmap
+		if (bitcnt==3'd0)
+			dstD_wadr <= dstD_wadr + 20'd1;
+		dstD_wcnt <= dstD_wcnt + 20'd1;
+		dstD_hcnt <= dstD_hcnt + 20'd1;
+		if (dstD_hcnt==bltDstWid) begin
+			dstD_hcnt <= 20'd0;
+			dstD_wadr <= dstD_wadr + dstD_mod;
+			bitcnt <= bltCtrl[6] ? 3'd7 : 3'd0;
+		end
+		bltAa <= bltAa - 4'd1;	// move to next queue entry
+		bltBa <= bltBa - 4'd1;
+		bltCa <= bltCa - 4'd1;
+		loopcnt <= loopcnt - 5'd1;
+		if (dstD_wcnt==bltCount) begin
+			state <= ST_IDLE;
+			bltCtrl[14] <= 1'b0;
+			bltCtrl[13] <= 1'b1;
+		end
+		else if (loopcnt==5'd0 ||
+			(bltAa==4'd0 && bltCtrl[0]) ||
+			(bltBa==4'd0 && bltCtrl[2]) ||
+			(bltCa==4'd0 && bltCtrl[4]))
+			state <= ST_IDLE;
+	end
+
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+// Blit draw states
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
 ST_BLT_INIT:
 	begin
@@ -444,6 +925,86 @@ ST_BLT_NEXT:
 			state <= ST_IDLE;
 		end
 	end
+
+DL_INIT:
+	begin
+		bkcolor <= cmdq_out[27:18];
+		x0 <= cmdq_out[39:28];
+		y0 <= cmdq_out[51:40];
+		x1 <= cmdq_out[79:68];
+		y1 <= cmdq_out[91:80];
+		state <= DL_PRECALC;
+	end
+
+// State to setup invariants for DRAWLINE
+DL_PRECALC:
+	begin
+		loopcnt <= 5'd17;
+		if (!ctrl[14]) begin
+			ctrl[14] <= 1'b1;
+			gcx <= x0;
+			gcy <= y0;
+			dx <= absx1mx0;
+			dy <= absy1my0;
+			if (x0 < x1) sx <= 14'h0001; else sx <= 14'h3FFF;
+			if (y0 < y1) sy <= 14'h0001; else sy <= 14'h3FFF;
+			err <= absx1mx0-absy1my0;
+		end
+		else if ((ctrl[11:8] != 4'h1) &&
+			(ctrl[11:8] != 4'h0) &&
+			(ctrl[11:8] != 4'hF))
+			state <= DL_GETPIXEL;
+		else
+			state <= DL_SETPIXEL;
+	end
+DL_GETPIXEL:
+	begin
+		ram_addr <= ma;
+		state <= DL_GETPIXEL2;
+	end
+DL_GETPIXEL2:
+	state <= DL_GETPIXEL3;
+DL_GETPIXEL3:
+	state <= DL_SETPIXEL;
+DL_SETPIXEL:
+	begin
+		ram_addr <= ma;
+		ram_we <= `HIGH;
+		case(ctrl[11:8])
+		4'd0:	ram_data_i <= 10'h000;
+		4'd1:	ram_data_i <= bkcolor;
+		4'd4:	ram_data_i <= bkcolor & ram_data_o;
+		4'd5:	ram_data_i <= bkcolor | ram_data_o;
+		4'd6:	ram_data_i <= bkcolor ^ ram_data_o;
+		4'd7:	ram_data_i <= bkcolor & ~ram_data_o;
+		4'hF:	ram_data_i <= 10'h1FF;
+		endcase
+		loopcnt <= loopcnt - 5'd1;
+		if (gcx==x1 && gcy==y1) begin
+			state <= ST_IDLE;
+			ctrl[14] <= 1'b0;
+		end
+		else
+			state <= DL_TEST;
+	end
+DL_TEST:
+	begin
+		err <= err - ((e2 > -dy) ? dy : 14'd0) + ((e2 < dx) ? dx : 14'd0);
+		if (e2 > -dy)
+			gcx <= gcx + sx;
+		if (e2 <  dx)
+			gcy <= gcy + sy;
+		if (loopcnt==5'd0)
+			state <= ST_IDLE;
+		else if ((ctrl[11:8] != 4'h1) &&
+			(ctrl[11:8] != 4'h0) &&
+			(ctrl[11:8] != 4'hF))
+			state <= DL_GETPIXEL;
+		else
+			state <= DL_SETPIXEL;
+	end
+
+
 default:
 	state <= ST_IDLE;
 endcase

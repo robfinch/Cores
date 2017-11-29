@@ -23,10 +23,30 @@ Pass 5
 File: bootrom.asm
 asm68 V5.6  (c) 1995-2017 Robert Finch - 680xx cross assembler
 
- E2048 (line 142): expecting 1 operand(s)
- E2008 (line 142): invalid instruction or argument
- E2005 (line 234): wrong length
- E2003 (line 322): undefined symbol 'tmtst4'
- E2003 (line 332): undefined symbol 'memend'
-Errors: 5
+
+Pass 6
+File: bootrom.asm
+asm68 V5.6  (c) 1995-2017 Robert Finch - 680xx cross assembler
+
+
+Pass 7
+File: bootrom.asm
+asm68 V5.6  (c) 1995-2017 Robert Finch - 680xx cross assembler
+
+ E2003 (line 267): undefined symbol 'CTRLH'
+ E2003 (line 325): undefined symbol 'ScrollUp'
+ E2028 (line 325): branch out of range - displacement 3FD72
+ E2003 (line 386): undefined symbol 'ClearScreen'
+ E2008 (line 927): invalid instruction or argument
+ E2003 (line 1105): undefined symbol 'START'
+ E2028 (line 1105): branch out of range - displacement 3F49C
+ E2003 (line 1123): undefined symbol 'ClearScreen'
+ E2028 (line 1123): branch out of range - displacement 3F468
+ E2003 (line 1397): undefined symbol 'S19StartAddress'
+ E2003 (line 1401): undefined symbol 'S19StartAddress'
+ E2003 (line 1405): undefined symbol 'S19StartAddress'
+ E2003 (line 1470): undefined symbol 'CTRLC'
+ E2003 (line 1473): undefined symbol 'AUXIN'
+ E2028 (line 1473): branch out of range - displacement 3F0C0
+Errors: 15
 Warnings: 0

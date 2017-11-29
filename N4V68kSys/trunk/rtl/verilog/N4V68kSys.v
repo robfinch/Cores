@@ -139,9 +139,10 @@ assign cpu_data_i = cs_boot ? br_data_o :
 wire _stack_dtack; 
 wire _dram_dtack;
 reg led_ack;
-always @(cpu_clk)
+always @(posedge cpu_clk)
     led_ack <= cs_led & cpu_stb & ~led_ack;
-assign _cpu_dtack = _dram_dtack & _stack_dtack & ~vdg_ack & ~br_ack & ~kbd_ack & ~led_ack & ~rand_ack; 
+assign _cpu_dtack = _dram_dtack &
+                     _stack_dtack & ~vdg_ack & ~br_ack & ~kbd_ack & ~led_ack & ~rand_ack; 
 assign _cpu_ipl = 3'b111;
 
 wire btnuo, btndd, btnld, btnrd, btncd;
