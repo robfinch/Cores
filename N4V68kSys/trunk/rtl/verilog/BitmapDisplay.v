@@ -98,6 +98,18 @@ parameter DL_GETPIXEL3 = 6'd44;
 parameter DL_SETPIXEL = 6'd45;
 parameter DL_TEST = 6'd46;
 parameter ST_CMD = 6'd47;
+parameter ST_COPPER_IFETCH = 6'd50;
+parameter ST_COPPER_IFETCH1 = 6'd51;
+parameter ST_COPPER_IFETCH2 = 6'd52;
+parameter ST_COPPER_IFETCH3 = 6'd53;
+parameter ST_COPPER_IFETCH4 = 6'd54;
+parameter ST_COPPER_IFETCH5 = 6'd55;
+parameter ST_COPPER_IFETCH6 = 6'd56;
+parameter ST_COPPER_IFETCH7 = 6'd57;
+parameter ST_COPPER_IFETCH8 = 6'd58;
+parameter ST_COPPER_IFETCH9 = 6'd59;
+parameter ST_COPPER_EXECUTE = 6'd60;
+parameter ST_COPPER_SKIP	= 6'd61;
 
 integer n;
 reg [5:0] state = ST_IDLE;
@@ -113,6 +125,7 @@ reg [11:0] hstart = 12'hEB3;		// -333
 reg [11:0] vstart = 12'hFB0;		// -80
 reg [11:0] hpos;
 reg [11:0] vpos;
+reg [3:0] fpos;
 reg [11:0] bitmapWidth = 12'd640;
 reg [8:0] borderColor;
 wire [9:0] rgb_i;					// internal rgb output from ram
@@ -286,6 +299,17 @@ chipram chipram1
 	.doutb(rgb_i)
 );
 
+reg [1:0] copper_op;
+reg copper_b;
+reg [3:0] copper_f, copper_mf;
+reg [11:0] copper_h, copper_v;
+reg [11:0] copper_mh, copper_mv;
+reg copper_go;
+
+wire [27:0] cmppos = {fpos,vpos,hpos} & {copper_mf,copper_mv,copper_mh};
+
+reg [15:0] rasti_en [0:63];
+
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // RGB output display side
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -303,8 +327,10 @@ always @(posedge clk)
 		vpos <= vpos + 12'd1;
 
 always @(posedge clk)
-	if (eof)
+	if (eof) begin
+		fpos <= fpos + 5'd1;
 		flashcnt <= flashcnt + 6'd1;
+	end
 
 always @(posedge clk)
 	if (hpos == cursor_h)
@@ -379,12 +405,15 @@ always @(posedge clk_i)
 		shadow_ram[sra] <= dat_i;
 assign srdo = shadow_ram[sra];
 
+reg rdy2;
 always @(posedge clk_i)
 	rwsr <= cs_reg;
 always @(posedge clk_i)
 	rdy <= rwsr & cs_reg;
 always @(posedge clk_i)
-	ack_o <= (cs_reg ? rdy : cs_ram ? ack : 1'b0) & ~ack_o;
+	rdy2 <= rdy & cs_reg;
+always @(posedge clk_i)
+	ack_o <= (cs_reg ? rdy2 : cs_ram ? ack : 1'b0) & ~ack_o;
 
 // Widen the eof pulse so it can be seen by clk_i
 reg [11:0] vrst;
@@ -393,94 +422,117 @@ always @(posedge clk)
 		vrst <= 12'hFFF;
 	else
 		vrst <= {vrst[10:0],1'b0};
+
+reg [15:0] copper_ctrl;
+wire copper_en = copper_ctrl[0];
+reg [59:0] copper_ir;
+reg [19:0] copper_pc;
+reg [1:0] copper_state;
+reg [19:0] copper_adr [0:15];
+reg reg_copper;
+reg reg_cs;
+reg reg_we;
+reg [10:0] reg_adr;
+reg [15:0] reg_dat;
 	
 always @(posedge clk_i)
-begin
-
-if (cs_reg) begin
-	if (we_i) begin
-		casex(adr_i[10:1])
+if (rst_i) begin
+	bltCtrl <= 16'b0010_0000_0000_0000;
+end
+else begin
+reg_copper <= `FALSE;
+reg_cs <= cs_reg;
+reg_we <= we_i;
+reg_adr <= adr_i[10:0];
+reg_dat <= dat_i;
+if (reg_cs|reg_copper) begin
+	if (reg_we) begin
+		casex(reg_adr[10:1])
 		10'b0xxxxxx000:	begin
-						blt_addr[adr_i[9:4]][19:4] <= dat_i;
-						blt_addr[adr_i[9:4]][3:0] <= 4'h0;
+						blt_addr[reg_adr[9:4]][19:4] <= reg_dat;
+						blt_addr[reg_adr[9:4]][3:0] <= 4'h0;
 						end
-		10'b0xxxxxx001:	blt_pix[adr_i[9:4]] <= dat_i[9:0];
-		10'b0xxxxxx010:	blt_hmax[adr_i[9:4]] <= dat_i[9:0];
-		10'b0xxxxxx011:	blt_x[adr_i[9:4]] <= dat_i[9:0];
-		10'b0xxxxxx100:	blt_y[adr_i[9:4]] <= dat_i[9:0];
-		10'b0xxxxxx101:	blt_pc[adr_i[9:4]] <= dat_i[9:0];
-		10'b0xxxxxx110:	blt_hctr[adr_i[9:4]] <= dat_i[9:0];
-		10'b0xxxxxx111:	blt_vctr[adr_i[9:4]] <= dat_i[9:0];
+		10'b0xxxxxx001:	blt_pix[reg_adr[9:4]] <= reg_dat[9:0];
+		10'b0xxxxxx010:	blt_hmax[reg_adr[9:4]] <= reg_dat[9:0];
+		10'b0xxxxxx011:	blt_x[reg_adr[9:4]] <= reg_dat[9:0];
+		10'b0xxxxxx100:	blt_y[reg_adr[9:4]] <= reg_dat[9:0];
+		10'b0xxxxxx101:	blt_pc[reg_adr[9:4]] <= reg_dat[9:0];
+		10'b0xxxxxx110:	blt_hctr[reg_adr[9:4]] <= reg_dat[9:0];
+		10'b0xxxxxx111:	blt_vctr[reg_adr[9:4]] <= reg_dat[9:0];
 		10'b1000000000:	begin
-							bmpBase[19:12] <= dat_i[7:0];
+							bmpBase[19:12] <= reg_dat[7:0];
 							bmpBase[11:0] <= 12'h000;
 						end
 		10'b1000000001:	begin
-							charBmpBase[19:12] <= dat_i[7:0];
+							charBmpBase[19:12] <= reg_dat[7:0];
 							charBmpBase[11:0] <= 12'h000;
 						end
 		// Clear dirty bits
-		10'b1000000100:	blt_dirty[15:0] <= blt_dirty[15:0] & ~dat_i;
-		10'b1000000101: blt_dirty[31:16] <= blt_dirty[31:16] & ~dat_i;
-		10'b1000000110:	blt_dirty[47:32] <= blt_dirty[47:32] & ~dat_i;
-		10'b1000000111:	blt_dirty[63:48] <= blt_dirty[63:48] & ~dat_i;
+		10'b1000000100:	blt_dirty[15:0] <= blt_dirty[15:0] & ~reg_dat;
+		10'b1000000101: blt_dirty[31:16] <= blt_dirty[31:16] & ~reg_dat;
+		10'b1000000110:	blt_dirty[47:32] <= blt_dirty[47:32] & ~reg_dat;
+		10'b1000000111:	blt_dirty[63:48] <= blt_dirty[63:48] & ~reg_dat;
 		// Set dirty bits
-		10'b1000001000:	blt_dirty[15:0] <= blt_dirty[15:0] | dat_i;
-		10'b1000001001: blt_dirty[31:16] <= blt_dirty[31:16] | dat_i;
-		10'b1000001010:	blt_dirty[47:32] <= blt_dirty[47:32] | dat_i;
-		10'b1000001011:	blt_dirty[63:48] <= blt_dirty[63:48] | dat_i;
-		10'b100_0010_000:	cmdq_in[8:0] <= dat_i[8:0];		// char code
-		10'b100_0010_001:	cmdq_in[17:9] <= dat_i[8:0];	// fgcolor
-		10'b100_0010_010:	cmdq_in[27:18] <= dat_i[9:0];	// bkcolor
-		10'b100_0010_011:	cmdq_in[39:28] <= dat_i[11:0];	// xpos1
-		10'b100_0010_100:	cmdq_in[51:40] <= dat_i[11:0];	// ypos1
-		10'b100_0010_101:   cmdq_in[59:52] <= {dat_i[11:8],dat_i[3:0]};	// fntsz
-		10'b100_0010_110: cmdq_ndx <= dat_i[4:0];
-		10'b100_0010_111:	cmdq_in[67:60] <= dat_i[7:0];	// cmd
-		10'b100_0011_000:	cmdq_in[79:68] <= dat_i[11:0];	// xpos2
-		10'b100_0011_001:	cmdq_in[91:80] <= dat_i[11:0];	// ypos2
-		10'b100_0100_000:	cursor_h <= dat_i[11:0];
-		10'b100_0100_001:	cursor_v <= dat_i[11:0];
+		10'b1000001000:	blt_dirty[15:0] <= blt_dirty[15:0] | reg_dat;
+		10'b1000001001: blt_dirty[31:16] <= blt_dirty[31:16] | reg_dat;
+		10'b1000001010:	blt_dirty[47:32] <= blt_dirty[47:32] | reg_dat;
+		10'b1000001011:	blt_dirty[63:48] <= blt_dirty[63:48] | reg_dat;
+		10'b100_0010_000:	cmdq_in[8:0] <= reg_dat[8:0];		// char code
+		10'b100_0010_001:	cmdq_in[17:9] <= reg_dat[8:0];	// fgcolor
+		10'b100_0010_010:	cmdq_in[27:18] <= reg_dat[9:0];	// bkcolor
+		10'b100_0010_011:	cmdq_in[39:28] <= reg_dat[11:0];	// xpos1
+		10'b100_0010_100:	cmdq_in[51:40] <= reg_dat[11:0];	// ypos1
+		10'b100_0010_101:   cmdq_in[59:52] <= {reg_dat[11:8],reg_dat[3:0]};	// fntsz
+		10'b100_0010_110: cmdq_ndx <= reg_dat[4:0];
+		10'b100_0010_111:	cmdq_in[67:60] <= reg_dat[7:0];	// cmd
+		10'b100_0011_000:	cmdq_in[79:68] <= reg_dat[11:0];	// xpos2
+		10'b100_0011_001:	cmdq_in[91:80] <= reg_dat[11:0];	// ypos2
+		10'b100_0100_000:	cursor_h <= reg_dat[11:0];
+		10'b100_0100_001:	cursor_v <= reg_dat[11:0];
 		10'b100_0100_010:	begin
-								cursor_sh <= dat_i[3:0];
-								cursor_sv <= dat_i[11:8];
+								cursor_sh <= reg_dat[3:0];
+								cursor_sv <= reg_dat[11:8];
 							end
 		10'b100_0100_011:	begin
-								cursor_color <= dat_i[9:0];
-								flashrate <= dat_i[15:11];
+								cursor_color <= reg_dat[9:0];
+								flashrate <= reg_dat[15:11];
 							end
-		10'b100_011x_xxx:	cursor_bmp[adr_i[4:1]] <= dat_i[9:0];
+		10'b100_011x_xxx:	cursor_bmp[reg_adr[4:1]] <= reg_dat[9:0];
 	
-		10'b100_1000_000:	srcA_badr[19:16] <= dat_i[3:0];
-		10'b100_1000_001:	srcA_badr[15: 0] <= dat_i;
-		10'b100_1000_010:	srcA_mod[19:16] <= dat_i[3:0];
-		10'b100_1000_011:	srcA_mod[15: 0] <= dat_i;
-		10'b100_1000_100:	srcB_badr[19:16] <= dat_i[3:0];
-		10'b100_1000_101:	srcB_badr[15: 0] <= dat_i;
-		10'b100_1000_110:	srcB_mod[19:16] <= dat_i[3:0];
-		10'b100_1000_111:	srcB_mod[15: 0] <= dat_i;
-		10'b100_1001_000:	srcC_badr[19:16] <= dat_i[3:0];
-		10'b100_1001_001:	srcC_badr[15: 0] <= dat_i;
-		10'b100_1001_010:	srcC_mod[19:16] <= dat_i[3:0];
-		10'b100_1001_011:	srcC_mod[15: 0] <= dat_i;
-		10'b100_1001_100:	dstD_badr[19:16] <= dat_i[3:0];
-		10'b100_1001_101:	dstD_badr[15: 0] <= dat_i;
-		10'b100_1001_110:	dstD_mod[19:16] <= dat_i[3:0];
-		10'b100_1001_111:	dstD_mod[15: 0] <= dat_i;
-		10'b100_1010_000:	bltSrcWid[19:16] <= dat_i[3:0];
-		10'b100_1010_001:	bltSrcWid[15:0] <= dat_i;
-		10'b100_1010_010:	bltDstWid[19:16] <= dat_i[3:0];
-		10'b100_1010_011:	bltDstWid[15:0] <= dat_i;
-		10'b100_1010_100:	bltCount[19:16] <= dat_i[3:0];
-		10'b100_1010_101:	bltCount[15:0] <= dat_i;
-		10'b100_1010_110:	bltCtrl <= dat_i;
-		10'b100_1010_111:	blt_op <= dat_i;
-		10'b100_1011_000:   bltPipedepth <= dat_i[4:0];
+		10'b100_1000_000:	srcA_badr[19:16] <= reg_dat[3:0];
+		10'b100_1000_001:	srcA_badr[15: 0] <= reg_dat;
+		10'b100_1000_010:	srcA_mod[19:16] <= reg_dat[3:0];
+		10'b100_1000_011:	srcA_mod[15: 0] <= reg_dat;
+		10'b100_1000_100:	srcB_badr[19:16] <= reg_dat[3:0];
+		10'b100_1000_101:	srcB_badr[15: 0] <= reg_dat;
+		10'b100_1000_110:	srcB_mod[19:16] <= reg_dat[3:0];
+		10'b100_1000_111:	srcB_mod[15: 0] <= reg_dat;
+		10'b100_1001_000:	srcC_badr[19:16] <= reg_dat[3:0];
+		10'b100_1001_001:	srcC_badr[15: 0] <= reg_dat;
+		10'b100_1001_010:	srcC_mod[19:16] <= reg_dat[3:0];
+		10'b100_1001_011:	srcC_mod[15: 0] <= reg_dat;
+		10'b100_1001_100:	dstD_badr[19:16] <= reg_dat[3:0];
+		10'b100_1001_101:	dstD_badr[15: 0] <= reg_dat;
+		10'b100_1001_110:	dstD_mod[19:16] <= reg_dat[3:0];
+		10'b100_1001_111:	dstD_mod[15: 0] <= reg_dat;
+		10'b100_1010_000:	bltSrcWid[19:16] <= reg_dat[3:0];
+		10'b100_1010_001:	bltSrcWid[15:0] <= reg_dat;
+		10'b100_1010_010:	bltDstWid[19:16] <= reg_dat[3:0];
+		10'b100_1010_011:	bltDstWid[15:0] <= reg_dat;
+		10'b100_1010_100:	bltCount[19:16] <= reg_dat[3:0];
+		10'b100_1010_101:	bltCount[15:0] <= reg_dat;
+		10'b100_1010_110:	bltCtrl <= reg_dat;
+		10'b100_1010_111:	blt_op <= reg_dat;
+		10'b100_1011_000:   bltPipedepth <= reg_dat[4:0];
+		10'b100_110x_xx0:	copper_adr[reg_adr[4:2]][19:16] <= reg_dat[3:0];
+		10'b100_110x_xx1:	copper_adr[reg_adr[4:2]][15:0] <= reg_dat;
+		10'b100_1110_000:	copper_ctrl <= reg_dat;
+		10'b101_0xxx_xxx:	rasti_en[reg_adr[6:1]] <= reg_dat;
 		default:	;	// do nothing
 		endcase
 	end
 	else begin
-		case(adr_i[10:1])
+		case(reg_adr[10:1])
 		10'b1000010110:	dat_o <= {11'h00,cmdq_ndx};
 		10'b1001010110:	dat_o <= bltCtrl;
 		default:	dat_o <= srdo;
@@ -489,6 +541,9 @@ if (cs_reg) begin
 end
 if (cs_cmdq)
 	cmdq_ndx <= cmdq_ndx + 5'd1;
+
+if (copper_state==2'b10 && (cmppos > {copper_f,copper_v,copper_h})&&(copper_b ? bltCtrl[13] : 1'b1))
+	copper_state <= 2'b01;
 
 case(state)
 ST_IDLE:
@@ -501,9 +556,14 @@ ST_IDLE:
 			ram_we <= we_i;
 			state <= ST_RW;
 		end
+		
+		else if (copper_state==2'b01 && copper_en) begin
+			state <= ST_COPPER_IFETCH;
+		end
 
 		// busy with a graphics command ?
 		else if (ctrl[14]) begin
+//			bltCtrl[13] <= 1'b0;
 			case(ctrl[3:0])
 			4'd2:	state <= DL_PRECALC;
 			endcase
@@ -1013,6 +1073,7 @@ DL_SETPIXEL:
 		if (gcx==x1 && gcy==y1) begin
 			state <= ST_IDLE;
 			ctrl[14] <= 1'b0;
+//			bltCtrl[13] <= 1'b1;
 		end
 		else
 			state <= DL_TEST;
@@ -1034,10 +1095,124 @@ DL_TEST:
 			state <= DL_SETPIXEL;
 	end
 
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+// Copper
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
+ST_COPPER_IFETCH:
+	begin
+		ram_addr <= copper_pc;
+		state <= ST_COPPER_IFETCH2;
+	end
+ST_COPPER_IFETCH2:
+	begin
+		ram_addr <= ram_addr + 20'd1;
+		state <= ST_COPPER_IFETCH4;
+	end
+ST_COPPER_IFETCH4:
+	begin
+		ram_addr <= ram_addr + 20'd1;
+		copper_ir[9:0] <= ram_data_o;
+		state <= ST_COPPER_IFETCH5;
+	end
+ST_COPPER_IFETCH5:
+	begin
+		ram_addr <= ram_addr + 20'd1;
+		copper_ir[19:10] <= ram_data_o;
+		state <= ST_COPPER_IFETCH6;
+	end
+ST_COPPER_IFETCH6:
+	begin
+		ram_addr <= ram_addr + 20'd1;
+		copper_ir[29:20] <= ram_data_o;
+		state <= ST_COPPER_IFETCH7;
+	end
+ST_COPPER_IFETCH7:
+	begin
+		ram_addr <= ram_addr + 20'd1;
+		copper_ir[39:30] <= ram_data_o;
+		state <= ST_COPPER_IFETCH8;
+	end
+ST_COPPER_IFETCH8:
+	begin
+		ram_addr <= ram_addr + 20'd1;
+		copper_ir[49:40] <= ram_data_o;
+		state <= ST_COPPER_IFETCH9;
+	end
+ST_COPPER_IFETCH9:
+	begin
+		copper_pc <= copper_pc + 20'd6;
+		ram_addr <= ram_addr + 20'd1;
+		copper_ir[59:50] <= ram_data_o;
+		state <= ST_COPPER_EXECUTE;
+	end
+ST_COPPER_EXECUTE:
+	begin
+		case(copper_ir[59:58])
+		2'd00:	// WAIT
+			begin
+				copper_b <= copper_ir[57];
+				copper_f <= copper_ir[56:53];
+				copper_v <= copper_ir[52:41];
+				copper_h <= copper_ir[40:29];
+				copper_mf <= copper_ir[28:24];
+				copper_mv <= copper_ir[23:12];
+				copper_mh <= copper_ir[11:0];
+				copper_state <= 2'b10;
+				state <= ST_IDLE;
+			end
+		2'd01:	// MOVE
+			begin
+				reg_copper <= `TRUE;
+				reg_we <= `TRUE;
+				reg_adr <= copper_ir[30:20];
+				reg_dat <= {copper_ir[17:10],copper_ir[7:0]};
+				state <= ST_IDLE;
+			end
+		2'd10:	// SKIP
+			begin
+				copper_b <= copper_ir[57];
+				copper_f <= copper_ir[56:53];
+				copper_v <= copper_ir[52:41];
+				copper_h <= copper_ir[40:29];
+				copper_mf <= copper_ir[28:24];
+				copper_mv <= copper_ir[23:12];
+				copper_mh <= copper_ir[11:0];
+				state <= ST_COPPER_SKIP;
+			end
+		2'd11:	// JUMP
+			begin
+				copper_adr[copper_ir[55:52]] <= copper_pc;
+				casex({copper_ir[51:49],bltCtrl[13]})
+				4'b000x:	copper_pc <= copper_ir[19:0];
+				4'b0010:	copper_pc <= copper_pc - 20'd6;
+				4'b0011:	copper_pc <= copper_ir[19:0];
+				4'b0100:	copper_pc <= copper_ir[19:0];
+				4'b0101:	copper_pc <= copper_pc - 20'd6;
+				4'b100x:	copper_pc <= copper_adr[copper_ir[47:44]];
+				4'b1010:	copper_pc <= copper_pc - 20'd6;
+				4'b1011:	copper_pc <= copper_adr[copper_ir[47:44]];
+				4'b1100:	copper_pc <= copper_adr[copper_ir[47:44]];
+				4'b1101:	copper_pc <= copper_pc - 20'd6;
+				default:	copper_pc <= copper_ir[19:0];
+				endcase
+				state <= ST_IDLE;
+			end
+		endcase
+	end
+ST_COPPER_SKIP:
+	begin
+		if ((cmppos > {copper_f,copper_v,copper_h})&&(copper_b ? bltCtrl[13] : 1'b1))
+			copper_pc <= copper_pc + 20'd6;
+		state <= ST_IDLE;
+	end
 default:
 	state <= ST_IDLE;
 endcase
+if (hpos==12'd1 && vpos==12'd1 && (fpos==4'd1 || copper_ctrl[1])) begin
+	copper_pc <= copper_adr[0];
+	copper_state <= {1'b0,copper_en};
+end
 end
 endmodule
 
