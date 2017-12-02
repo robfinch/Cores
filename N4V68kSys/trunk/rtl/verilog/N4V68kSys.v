@@ -91,6 +91,7 @@ wire [31:0] cpu_addr;
 wire [15:0] cpu_data_o;
 wire [15:0] cpu_data =  cpu_r_w ? 16'bz : cpu_data_o; //cpu_dd ? cpu_data_o : 16'bz;
 wire [15:0] cpu_data_i;
+wire [1:0] cpu_sel = ~{_cpu_uds,_cpu_lds};
 
 //assign _cpu_reset = locked ? 1'b1 : 1'b0;
 
@@ -323,16 +324,16 @@ DDRcontrol2 DDRCtrl1
 	.ddr3_odt(ddr3_odt)
 );
 
-DisplayController uvdg1
+AVController uvdg1
 (
     .clk200_i(clk200),
 	.rst_i(rst),
 	.clk_i(cpu_clk),
-	.cyc_i(~_cpu_as),
+	.cyc_i(cpu_cyc),
 	.stb_i(cpu_stb),
 	.ack_o(vdg_ack),
 	.we_i(~cpu_r_w),
-	.sel_i(1'b1),
+	.sel_i(cpu_sel),
 	.adr_i(cpu_addr[23:0]),
 	.dat_i(cpu_data_o),
 	.dat_o(vdg_data_o),

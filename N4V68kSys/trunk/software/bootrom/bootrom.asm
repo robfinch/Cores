@@ -170,7 +170,7 @@ fpga_version:
 		move.l	A7,usp
 
 		bsr		i2c_setup
-		bsr		rtc_read
+;		bsr		rtc_read
 		move.w	#$A2A2,leds		; diagnostics
 
 		move.b	#TEXTCOLS,TextCols
@@ -194,6 +194,12 @@ fpga_version:
 		bsr		BootClearScreen		
 		move.w	#$A2A2,leds			; diagnostics
 		
+		; turn on audio test mode
+		lea		$FFDC0000,A6		; set I/O base
+		move.w	#$FFFF,$0700(a6)	; turn on audio clocks
+		movea.l	#VDGREG,a5
+		move.w	#%0100000000000000,$584(a5)
+
 		bsr		DrawLines
 		bsr		TestBlitter
 
@@ -1098,7 +1104,9 @@ _keybdExtendedCodes:
 
 
 ;==============================================================================
+;==============================================================================
 ; Monitor
+;==============================================================================
 ;==============================================================================
 ;
 StartMon:
@@ -1134,6 +1142,8 @@ Prompt1:
 ; Dispatch based on command character
 ;
 Prompt2:
+		cmpi.b	#'g',d1
+		beq		GraphicsDemo
 		cmpi.b	#':',d1			; $: - edit memory
 		beq		EditMem
 		cmpi.b	#'D',d1			; $D - dump memory
@@ -1357,9 +1367,9 @@ ClearScreen:
 		btst	#13,d0				; bit 13 = done bit
 		beq.s	.0003				; branch if not done
 		move.l	#320*256,$4BC(a5)		; set transfer count  pixels
-		move.w	#DARK_BLUE,$4A8(a5)	; set color dark blue
+		move.w	bkcolor,$4A8(a5)	; set color dark blue
 		move.l	#0,$498(a5)			; set destination address
-		move.l	#319,$4A4(a5)		; set destination width
+		move.l	#320,$4A4(a5)		; set destination width
 		move.l	#0,$49C(a5)			; set dst modulo
 		move.w	#%1000000010000000,$4AC(a5)		; enable channel D, start transfer
 		rts
@@ -1371,7 +1381,6 @@ ScrollUp:
 		move.w	$4AC(a5),d0			; get done status
 		btst	#13,d0				; bit 13 = done bit
 		beq.s	.0003				; branch if not done
-		move.l	#320*248,$4BC(a5)		; set transfer count  pixels
 		; Channel A
 		move.l	#320*248,$4B0(a5)	; set source transfer count pixels
 		move.l	#320*8,$480(a5)		; set source bitmap address (address in graphics mem)
@@ -1381,10 +1390,10 @@ ScrollUp:
 		move.l	#0,$498(a5)			; set destination address
 		move.l	#0,$49C(a5)			; set dst modulo
 
-		move.l	#319,$4A0(a5)		; set source width
-		move.l	#319,$4A4(a5)		; set destination width
+		move.l	#-1,$4A0(a5)		; set source width
+		move.l	#-1,$4A4(a5)		; set destination width
 		move.w	#$11,$4AE(a5)		; set op A ($11 = copy A)
-		move.w	#%1000000010000010,$4AC(a5)		; enable channel A,C,D, start transfer
+		move.w	#%1000000010000010,$4AC(a5)		; enable channel A,D, start transfer
 		movem.l	(a7)+,d0/a5
 
 BlankLastLine:
@@ -1398,8 +1407,8 @@ BlankLastLine:
 		move.l	#320*8,$4BC(a5)		; set destination transfer count pixels
 		move.l	#320*248,$498(a5)	; set destination address
 		move.l	#0,$49C(a5)			; set dst modulo
-		move.l	#319,$4A4(a5)		; set destination width
-		move.w	#DARK_BLUE,$4A8(a5)	; set color dark blue
+		move.l	#-1,$4A4(a5)		; set destination width
+		move.w	bkcolor,$4A8(a5)	; set color dark blue
 		move.w	#%1000000010000000,$4AC(a5)		; enable channel D, start transfer
 		movem.l	(a7)+,d0/a5
 		rts
@@ -1715,14 +1724,21 @@ ramtest7:
 		jmp 	(a3)
         bra.s 	ramtest7
 
+
 ;===============================================================================
-; Draw lines randomly on the screen.
+;===============================================================================
+;===============================================================================
 ;===============================================================================
 
-DrawLines:
+GraphicsDemo:
+		bsr		DrawLines
+		bsr		DrawRects
+		bra		Monitor
+
+DrawRects:
 		lea		$FFDC0000,A6	; I/O base
 		lea		VDGREG,a5
-		move.l	#200000,d6		; repeat a few times
+		move.l	#20000,d6		; repeat a few times
 .0001:
 		move.l	$0C00(a6),d0	; get 32 bit number
 		move.w	d0,d1			; use bits 0 to 8 for y0
@@ -1749,6 +1765,56 @@ DrawLines:
 		move.w	d1,$428(a5)		; set y0
 		move.w	d2,$430(a5)		; set x1
 		move.w	d3,$432(a5)		; set y1
+		move.w	#3,$42E(a5)		; pulse command queue (3 = draw rect)
+		sub.l	#1,d6
+		bne		.0001			; go back and do more lines
+		rts
+
+;===============================================================================
+; Draw lines randomly on the screen.
+;===============================================================================
+
+DrawLines:
+		lea		$FFDC0000,A6	; I/O base
+		lea		VDGREG,a5
+		move.l	#200000,d6		; repeat a few times
+.0001:
+		; Wait for blitter to be done
+.0003:								
+		move.w	#10,leds
+		move.w	$4AC(a5),d0			; get done status
+		btst	#14,d0
+		beq.s	.0004
+		btst	#13,d0				; bit 13 = done bit
+		beq.s	.0003				; branch if not done
+.0004:
+		move.w	#11,leds
+		move.l	$0C00(a6),d0	; get 32 bit number
+		move.w	d0,d1			; use bits 0 to 8 for y0
+		swap	d0				; and bits 16 to 24 for x0
+		and.w	#$FF,d0		; 0 to 511
+		and.w	#$FF,d1		; 0 to 511
+		clr.w	$0C04(a6)		; gen next number
+		move.l	$0C00(a6),d2
+		move.w	d2,d3
+		swap	d2
+		and.w	#$FF,d2		; 0 to 511
+		and.w	#$FF,d3		; 0 to 511
+		clr.w	$0C04(a6)		; gen next number
+		move.l	$0C00(a6),d4
+		and.w	#RGBMASK,d4		; 9/15 bits color
+		clr.w	$0C04(a6)		; gen next number
+.0002:
+		move.w	$42C(a5),d7		; check # queued
+		cmp.w	#28,d7			; more than 28 queued ?
+		bhs.s	.0002			; too many, wait for queue to empty
+		move.w	#12,leds
+		move.w	#1,$422(a5)		; raster op = COPY
+		move.w	d4,$424(a5)		; set color
+		move.w	d0,$426(a5)		; set x0
+		move.w	d1,$428(a5)		; set y0
+		move.w	d2,$430(a5)		; set x1
+		move.w	d3,$432(a5)		; set y1
 		move.w	#2,$42E(a5)		; pulse command queue (2 = draw line)
 		sub.l	#1,d6
 		bne		.0001			; go back and do more lines
@@ -1765,10 +1831,10 @@ TestBlitter:
 		move.w	$4AC(a5),d0			; get done status
 		btst	#13,d0				; bit 13 = done bit
 		beq.s	.0003				; branch if not done
-		move.l	#7999,$4BC(a5)		; set transfer count 8000 pixels
+		move.l	#8000,$4BC(a5)		; set transfer count 8000 pixels
 		move.w	#RED,$4A8(a5)		; set color red
 		move.l	#280,$498(a5)		; set destination address
-		move.l	#39,$4A4(a5)		; set destination width
+		move.l	#40,$4A4(a5)		; set destination width
 		move.l	#280,$49C(a5)		; set dst modulo
 		move.w	#%1000000010000000,$4AC(a5)		; enable channel D, start transfer
 
@@ -1778,20 +1844,20 @@ TestBlitter:
 		btst	#13,d0				; bit 13 = done bit
 		beq.s	.0001				; branch if not done
 		; Channel A
-		move.l	#999,$4B0(a5)		; set source transfer count 8000 pixels
+		move.l	#1000,$4B0(a5)		; set source transfer count 8000 pixels
 		move.l	#0,$480(a5)			; set source bitmap address (address in graphics mem)
 		move.l	#280,$484(a5)		; set src modulo
 		; Channel C
-		move.l	#999,$4B8(a5)		; set source transfer count 8000 pixels
+		move.l	#1000,$4B8(a5)		; set source transfer count 8000 pixels
 		move.l	#0,$490(a5)			; set source bitmap address (address in graphics mem)
 		move.l	#280,$494(a5)		; set src modulo
 		; Channel D
-		move.l	#7999,$4BC(a5)		; set destination transfer count 8000 pixels
+		move.l	#8000,$4BC(a5)		; set destination transfer count 8000 pixels
 		move.l	#240,$498(a5)		; set destination address
 		move.l	#280,$49C(a5)		; set dst modulo
 		
-		move.l	#39,$4A0(a5)		; set source width
-		move.l	#39,$4A4(a5)		; set destination width
+		move.l	#40,$4A0(a5)		; set source width
+		move.l	#40,$4A4(a5)		; set destination width
 		move.w	#$91,$4AE(a5)		; set op A|C	($11 = copy A)
 		move.w	#%1000000010100010,$4AC(a5)		; enable channel A,C,D, start transfer
 .0002:								
