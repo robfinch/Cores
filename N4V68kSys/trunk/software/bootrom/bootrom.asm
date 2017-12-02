@@ -15,21 +15,21 @@
 ;          | startup sp,pc  | 8 B
 ; 00000008 +----------------+
 ;          |                |
+;          |                |
+;          |                |
 ;          :  dram memory   : 512 MB
+;          |                |
+;          |                |
 ;          |                |
 ; 20000000 +----------------+
 ;          |                |
 ;          :     unused     :
 ;          |                |
-; FF400000 +----------------+
-;          :  scratch ram   : 128k
-; FF420000 +----------------+
-;          :     unused     :
 ; FF800000 +----------------+
 ;          |                |
-;          : display buffer : 768k x 10 bits wide memory
+;          : display buffer : 896k
 ;          |                |
-; FF980000 +----------------+
+; FF8E0000 +----------------+
 ;          |                |
 ;          :     unused     :
 ;          |                |
@@ -50,6 +50,12 @@
 ; FFFFFFFF +----------------+
 ;
 ;
+RGBMASK		EQU		%0111111111111111
+RED			EQU		%0111110000000000
+DARK_BLUE	EQU		%0000000000001111
+BLACK		EQU		%0000000000000000
+WHITE		EQU		%0111111111111111
+
 CR		EQU		$0D
 LF		EQU		$0A
 
@@ -70,6 +76,8 @@ SC_DEL		EQU		$71		; extend
 SC_LCTRL	EQU		$58
 SC_TAB      EQU		$0D
 
+TEXTCOLS	EQU	40
+TEXTROWS	EQU	32
 
 VDGBUF		EQU	$FF800000
 VDGREG		EQU	$FFE00000
@@ -77,33 +85,59 @@ VDG_CURX	EQU	$0440
 VDG_CURY	EQU	$0442
 VDG_CURSZ	EQU	$0444
 VDG_CURCLR	EQU	$0446
+VDG_CURFLSH	EQU	$0448
 VDG_CURIMG	EQU	$0460
+I2C			EQU	$FFDC0E00
+I2C2		EQU	$FFDC0E10
 VirtScreen	EQU	$1FFF0000
 KEYBD		EQU	$FFDC0000
 leds		EQU	$FFDC0600
 rand		EQU	$FFDC0C00
 
-fgcolor		EQU	$FF400000
-bkcolor		EQU	$FF400002
-fntsz		EQU	$FF400004
-memend		EQU	$F4000008
-CursorRow	EQU	$FF400418
-CursorCol	EQU $FF400419
-TextRows	EQU	$FF40041A
-TextCols	EQU	$FF40041B
-TextCurpos	EQU	$FF40041C
-TextScr		EQU	$FF400420
-KeybdEcho		EQU	$FF400424
-KeybdWaitFlag	EQU	$FF400425
-_KeyState1		EQU	$FF400426
-_KeyState2		EQU	$FF400427
-KeybdLEDs		EQU	$FF400428
+fgcolor		EQU	$10002
+bkcolor		EQU	$10004
+fntsz		EQU	$10006
+memend		EQU	$10008
+CursorRow	EQU	$10418
+CursorCol	EQU $10419
+TextRows	EQU	$1041A
+TextCols	EQU	$1041B
+TextCurpos	EQU	$1041C
+TextScr		EQU	$10420
+KeybdEcho		EQU	$10424
+KeybdWaitFlag	EQU	$10425
+_KeyState1		EQU	$10426
+_KeyState2		EQU	$10427
+KeybdLEDs		EQU	$10428
+
+reg_d0			EQU	$10500
+reg_d1			EQU	$10504
+reg_d2			EQU	$10508
+reg_d3			EQU	$1050C
+reg_d4			EQU $10510
+reg_d5			EQU $10514
+reg_d6			EQU	$10518
+reg_d7			EQU	$1051C
+reg_a0			EQU $10520
+reg_a1			EQU	$10524
+reg_a2			EQU	$10528
+reg_a3			EQU $1052C
+reg_a4			EQU $10530
+reg_a5			EQU $10534
+reg_a6			EQU $10538
+reg_ssp			EQU	$1053C
+reg_usp			EQU	$10540
+reg_pc			EQU $10544
+reg_sr			EQU	$10548
+
+RTCBuf			EQU	$10600
+RTFBufEnd		EQU	$10660
 
 	org		$FFFC0000
 
 ;------------------------------------------------------------------------------
 
-	dc.l	$FF41FFFC	; initial SSP
+	dc.l	$FF401000	; initial SSP
 	dc.l	Start		; initial PC
 	
 ;------------------------------------------------------------------------------
@@ -135,12 +169,16 @@ fpga_version:
 		clr.l	A6
 		move.l	A7,usp
 
-		move.b	#80,TextCols
-		move.b	#64,TextRows
+		bsr		i2c_setup
+		bsr		rtc_read
+		move.w	#$A2A2,leds		; diagnostics
+
+		move.b	#TEXTCOLS,TextCols
+		move.b	#TEXTROWS,TextRows
 		clr.b	CursorCol
 		clr.b	CursorRow
 		clr.w	TextCurpos
-		move.l	#$FF401000,TextScr		; set virtual screen location
+		move.l	#$00020000,TextScr		; set virtual screen location
 
 		bsr		SetCursorColor
 		bsr		SetCursorImage
@@ -162,8 +200,8 @@ fpga_version:
 		bsr		BootCopyFont
 		move.w	#$A3A3,leds			; diagnostics
 
-		move.w	#%111111111,fgcolor	; set text colors
-		move.w	#%000000011,bkcolor
+		move.w	#WHITE,fgcolor		; set text colors
+		move.w	#DARK_BLUE,bkcolor
 
 		; Write startup message to screen
 
@@ -431,8 +469,8 @@ scp1:
 
 BootClearScreen:
 		move.l	#VDGBUF,A0
-		moveq	#%000000011,D0			; dark blue
-		move.l	#640*512,D1				; number of pixels
+		moveq	#DARK_BLUE,D0			; dark blue
+		move.l	#320*256,D1				; number of pixels
 .loop1:
 		move.w	d0,(a0)+				; store it to the screen
 		sub.l	#1,d1					; can't use dbra here
@@ -450,7 +488,7 @@ BootCopyFont:
 		move.w	#$0707,fntsz		; set font size
 		lea		font8,a0
 		move.l	#8*512,d1			; 512 chars * 8 bytes per char
-		move.l	#$FF970000,a1		; font table address
+		move.l	#$FF8B8000,a1		; font table address
 		moveq	#0,d0				; zero out high order bits
 cpyfnt:
 		move.b	(a0)+,d0			; get a byte
@@ -553,7 +591,8 @@ DispCursor:
 SetCursorColor:
 		move.l  a6,-(a7)
 		move.l	#VDGREG,a6
-		move.w	#%0100001111111111,VDG_CURCLR(a6)
+		move.w	#%0111111111111111,VDG_CURCLR(a6)
+		move.w	#%00100,VDG_CURFLSH(a6)
 		move.l	(a7)+,a6
 		rts
 		
@@ -769,76 +808,76 @@ gk1:
 
 
 KeybdGetCharNoWait:
-	clr.b	KeybdWaitFlag
-	bra		KeybdGetChar
+		clr.b	KeybdWaitFlag
+		bra		KeybdGetChar
 
 KeybdGetCharWait:
-	move.b	#-1,KeybdWaitFlag
+		move.b	#-1,KeybdWaitFlag
 
 KeybdGetChar:
-	movem.l	d2/d3/a0,-(a7)
+		movem.l	d2/d3/a0,-(a7)
 .0003:
-	bsr		_KeybdGetStatus			; check keyboard status for key available
-	bmi		.0006					; yes, go process
-	tst.b	KeybdWaitFlag			; are we willing to wait for a key ?
-	bmi		.0003					; yes, branch back
-	movem.l	(a7)+,d2/d3/a0
-	moveq	#-1,d1					; flag no char available
-	rts
+		bsr		_KeybdGetStatus			; check keyboard status for key available
+		bmi		.0006					; yes, go process
+		tst.b	KeybdWaitFlag			; are we willing to wait for a key ?
+		bmi		.0003					; yes, branch back
+		movem.l	(a7)+,d2/d3/a0
+		moveq	#-1,d1					; flag no char available
+		rts
 .0006:
-	bsr		_KeybdGetScancode
+		bsr		_KeybdGetScancode
 .0001:
-	move.w	#1,leds
-	cmp.b	#SC_KEYUP,d1
-	beq		.doKeyup
-	cmp.b	#SC_EXTEND,d1
-	beq		.doExtend
-	cmp.b	#SC_CTRL,d1
-	beq		.doCtrl
-	cmp.b	#SC_LSHIFT,d1
-	beq		.doShift
-	cmp.b	#SC_RSHIFT,d1
-	beq		.doShift
-	cmp.b	#SC_NUMLOCK,d1
-	beq		.doNumLock
-	cmp.b	#SC_CAPSLOCK,d1
-	beq		.doCapsLock
-	cmp.b	#SC_SCROLLLOCK,d1
-	beq		.doScrollLock
-	cmp.b   #SC_ALT,d1
-	beq     .doAlt
-	move.b	_KeyState1,d2			; check key up/down
-	move.b	#0,_KeyState1			; clear keyup status
-	tst.b	d2
-	bne	    .0003					; ignore key up
-	cmp.b   #SC_TAB,d1
-	beq     .doTab
+		move.w	#1,leds
+		cmp.b	#SC_KEYUP,d1
+		beq		.doKeyup
+		cmp.b	#SC_EXTEND,d1
+		beq		.doExtend
+		cmp.b	#SC_CTRL,d1
+		beq		.doCtrl
+		cmp.b	#SC_LSHIFT,d1
+		beq		.doShift
+		cmp.b	#SC_RSHIFT,d1
+		beq		.doShift
+		cmp.b	#SC_NUMLOCK,d1
+		beq		.doNumLock
+		cmp.b	#SC_CAPSLOCK,d1
+		beq		.doCapsLock
+		cmp.b	#SC_SCROLLLOCK,d1
+		beq		.doScrollLock
+		cmp.b   #SC_ALT,d1
+		beq     .doAlt
+		move.b	_KeyState1,d2			; check key up/down
+		move.b	#0,_KeyState1			; clear keyup status
+		tst.b	d2
+		bne	    .0003					; ignore key up
+		cmp.b   #SC_TAB,d1
+		beq     .doTab
 .0013:
-	move.b	_KeyState2,d2
-	bpl		.0010					; is it extended code ?
-	and.b	#$7F,d2					; clear extended bit
-	move.b	d2,_KeyState2
-	move.b	#0,_KeyState1			; clear keyup
-	lea		_keybdExtendedCodes,a0
-	move.b	(a0,d1.w),d1
-	bra		.0008
+		move.b	_KeyState2,d2
+		bpl		.0010					; is it extended code ?
+		and.b	#$7F,d2					; clear extended bit
+		move.b	d2,_KeyState2
+		move.b	#0,_KeyState1			; clear keyup
+		lea		_keybdExtendedCodes,a0
+		move.b	(a0,d1.w),d1
+		bra		.0008
 .0010:
-	btst	#2,d2					; is it CTRL code ?
-	beq		.0009
-	and.w	#$7F,d1
-	lea		_keybdControlCodes,a0
-	move.b	(a0,d1.w),d1
-	bra		.0008
+		btst	#2,d2					; is it CTRL code ?
+		beq		.0009
+		and.w	#$7F,d1
+		lea		_keybdControlCodes,a0
+		move.b	(a0,d1.w),d1
+		bra		.0008
 .0009:
-	btst	#0,d2					; is it shift down ?
-	beq  	.0007
-	lea		_shiftedScanCodes,a0
-	move.b	(a0,d1.w),d1
-	bra		.0008
+		btst	#0,d2					; is it shift down ?
+		beq  	.0007
+		lea		_shiftedScanCodes,a0
+		move.b	(a0,d1.w),d1
+		bra		.0008
 .0007:
-	lea		_unshiftedScanCodes,a0
-	move.b	(a0,d1.w),d1
-	move.w	#$0202,leds
+		lea		_unshiftedScanCodes,a0
+		move.b	(a0,d1.w),d1
+		move.w	#$0202,leds
 .0008:
 		move.w	#$0303,leds
 		movem.l	(a7)+,d2/d3/a0
@@ -904,34 +943,34 @@ KeybdGetChar:
 		bra		.0003
 
 KeybdSetLEDStatus:
-	movem.l	d2/d3,-(a7)
-	clr.b	KeybdLEDs
-	btst	#4,_KeyState2
-	beq.s	.0002
-	move.b	#2,KeybdLEDs
+		movem.l	d2/d3,-(a7)
+		clr.b	KeybdLEDs
+		btst	#4,_KeyState2
+		beq.s	.0002
+		move.b	#2,KeybdLEDs
 .0002:
-	btst	#5,_KeyState2
-	beq.s	.0003
-	bset	#2,KeybdLEDs
+		btst	#5,_KeyState2
+		beq.s	.0003
+		bset	#2,KeybdLEDs
 .0003:
-	btst	#6,_KeyState2
-	beq.s	.0004
-	bset	#0,KeybdLEDs
+		btst	#6,_KeyState2
+		beq.s	.0004
+		bset	#0,KeybdLEDs
 .0004:
-	move.b	#$ED,d1
-	bsr		KeybdSendByte
-	bsr		KeybdWaitTx
-	bsr		KeybdRecvByte
-	tst.b	d1
-	bmi		.0001
-	cmp		d1,#$FA
-	move.b	KeybdLEDs,d1
-	bsr		KeybdSendByte
-	bsr		KeybdWaitTx
-	bsr		KeybdRecvByte
+		move.b	#$ED,d1
+		bsr		KeybdSendByte
+		bsr		KeybdWaitTx
+		bsr		KeybdRecvByte
+		tst.b	d1
+		bmi		.0001
+		cmp		#$FA,d1
+		move.b	KeybdLEDs,d1
+		bsr		KeybdSendByte
+		bsr		KeybdWaitTx
+		bsr		KeybdRecvByte
 .0001:
-	movem.l	(a7)+,d2/d3
-	rts
+		movem.l	(a7)+,d2/d3
+		rts
 
 KeybdSendByte:
 		move.b	d1,KEYBD
@@ -1307,6 +1346,64 @@ gthx3:
 		moveq	#-1,d1		; not a hex number
 		rts
 
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+; The fast way to clear the screen. Uses the blitter.
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+ClearScreen:
+		lea		VDGREG,a5
+.0003:								
+		move.w	$4AC(a5),d0			; get done status
+		btst	#13,d0				; bit 13 = done bit
+		beq.s	.0003				; branch if not done
+		move.l	#320*256,$4BC(a5)		; set transfer count  pixels
+		move.w	#DARK_BLUE,$4A8(a5)	; set color dark blue
+		move.l	#0,$498(a5)			; set destination address
+		move.l	#319,$4A4(a5)		; set destination width
+		move.l	#0,$49C(a5)			; set dst modulo
+		move.w	#%1000000010000000,$4AC(a5)		; enable channel D, start transfer
+		rts
+
+ScrollUp:
+		movem.l	d0/a5,-(a7)
+		lea		VDGREG,a5
+.0003:								
+		move.w	$4AC(a5),d0			; get done status
+		btst	#13,d0				; bit 13 = done bit
+		beq.s	.0003				; branch if not done
+		move.l	#320*248,$4BC(a5)		; set transfer count  pixels
+		; Channel A
+		move.l	#320*248,$4B0(a5)	; set source transfer count pixels
+		move.l	#320*8,$480(a5)		; set source bitmap address (address in graphics mem)
+		move.l	#0,$484(a5)			; set src modulo
+		; Channel D
+		move.l	#320*248,$4BC(a5)	; set destination transfer count pixels
+		move.l	#0,$498(a5)			; set destination address
+		move.l	#0,$49C(a5)			; set dst modulo
+
+		move.l	#319,$4A0(a5)		; set source width
+		move.l	#319,$4A4(a5)		; set destination width
+		move.w	#$11,$4AE(a5)		; set op A ($11 = copy A)
+		move.w	#%1000000010000010,$4AC(a5)		; enable channel A,C,D, start transfer
+		movem.l	(a7)+,d0/a5
+
+BlankLastLine:
+		movem.l	d0/a5,-(a7)
+		; Channel D
+		lea		VDGREG,a5
+.0003:								
+		move.w	$4AC(a5),d0			; get done status
+		btst	#13,d0				; bit 13 = done bit
+		beq.s	.0003				; branch if not done
+		move.l	#320*8,$4BC(a5)		; set destination transfer count pixels
+		move.l	#320*248,$498(a5)	; set destination address
+		move.l	#0,$49C(a5)			; set dst modulo
+		move.l	#319,$4A4(a5)		; set destination width
+		move.w	#DARK_BLUE,$4A8(a5)	; set color dark blue
+		move.w	#%1000000010000000,$4AC(a5)		; enable channel D, start transfer
+		movem.l	(a7)+,d0/a5
+		rts
+
 ;==============================================================================
 ; Load an S19 format file
 ;==============================================================================
@@ -1501,8 +1598,8 @@ disphnum3:
 		bhs.s	disphnum3				; branch if too many chars queued
 		ext.w	d0						; zero out high order bits
 		move.w	d0,$420(a6)			; set char code
-		move.w	#%111111111,$422(a6)	; set fg color
-		move.w	#%000000011,$424(a6)	; set bk color
+		move.w	#WHITE,$422(a6)		; set fg color
+		move.w	#DARK_BLUE,$424(a6)	; set bk color
 		move.w	d3,$426(a6)			; set x pos
 		move.w	#8,$428(a6)			; set y pos
 		move.w	#$0707,$42A(a6)		; set font x,y extent
@@ -1519,7 +1616,7 @@ disphnum3:
 ;===============================================================================
 ramtest:
 		move.w	#$A5A5,leds		; diagnostics
-        movea.l #8,a0
+        movea.l #$30000,a0
         move.l #$aaaa5555,d0
 ;-----------------------------------------------------------
 ;   Write checkerboard pattern to ram then read it back to
@@ -1535,9 +1632,10 @@ ramtest1:
         bra		DisplayHexNumber
 rmtst1:
 		move.w	#$A9A9,leds		; diagnostics
-        cmpa.l 	#$1FFFC,a0
+        cmpa.l 	#$5FFFC,a0
         bne.s 	ramtest1
         move.l	#0,d1
+        bsr		CalcScreenLoc
         bra		DumpMem1
 
 ;------------------------------------------------------
@@ -1546,7 +1644,7 @@ rmtst1:
 ramtest6:
 		move.w	#$A7A7,leds		; diagnostics
         movea.l a0,a2
-        movea.l #8,a0
+        movea.l #$30000,a0
 ;--------------------------------------------
 ;   Read back checkerboard pattern from ram.
 ;--------------------------------------------
@@ -1569,7 +1667,7 @@ rmtst2:
 ;---------------------------------------------------
 ramtest3:                
 		move.w	#$A8A8,leds		; diagnostics
-        movea.l #8,a0
+        movea.l #$30000,a0
         move.l 	#$5555aaaa,d0
 ramtest4:
         move.l 	d0,(a0)+
@@ -1583,7 +1681,7 @@ rmtst3:
         bne.s 	ramtest4
 ramtest8:
         movea.l a0,a2
-        movea.l #8,a0
+        movea.l #$30000,a0
 ramtest5:
         move.l 	(a0)+,d0
         cmpa.l	a0,a2
@@ -1624,22 +1722,22 @@ ramtest7:
 DrawLines:
 		lea		$FFDC0000,A6	; I/O base
 		lea		VDGREG,a5
-		move.l	#1000000,d6		; repeat a few times
+		move.l	#200000,d6		; repeat a few times
 .0001:
 		move.l	$0C00(a6),d0	; get 32 bit number
 		move.w	d0,d1			; use bits 0 to 8 for y0
 		swap	d0				; and bits 16 to 24 for x0
-		and.w	#$1FF,d0		; 0 to 511
-		and.w	#$1FF,d1		; 0 to 511
+		and.w	#$FF,d0		; 0 to 511
+		and.w	#$FF,d1		; 0 to 511
 		clr.w	$0C04(a6)		; gen next number
 		move.l	$0C00(a6),d2
 		move.w	d2,d3
 		swap	d2
-		and.w	#$1FF,d2		; 0 to 511
-		and.w	#$1FF,d3		; 0 to 511
+		and.w	#$FF,d2		; 0 to 511
+		and.w	#$FF,d3		; 0 to 511
 		clr.w	$0C04(a6)		; gen next number
 		move.l	$0C00(a6),d4
-		and.w	#$1FF,d4		; 9 bits color
+		and.w	#RGBMASK,d4		; 9/15 bits color
 		clr.w	$0C04(a6)		; gen next number
 .0002:
 		move.w	$42C(a5),d7		; check # queued
@@ -1661,19 +1759,321 @@ DrawLines:
 ;===============================================================================
 
 TestBlitter:
+		; puts a red rectangle on screen
 		lea		VDGREG,a5
-		move.l	#800,$4A8(a5)		; set transfer count 800 pixels
+.0003:								
+		move.w	$4AC(a5),d0			; get done status
+		btst	#13,d0				; bit 13 = done bit
+		beq.s	.0003				; branch if not done
+		move.l	#7999,$4BC(a5)		; set transfer count 8000 pixels
+		move.w	#RED,$4A8(a5)		; set color red
+		move.l	#280,$498(a5)		; set destination address
+		move.l	#39,$4A4(a5)		; set destination width
+		move.l	#280,$49C(a5)		; set dst modulo
+		move.w	#%1000000010000000,$4AC(a5)		; enable channel D, start transfer
+
+		; makes a copy of the upper left corner of the screen
+.0001:								
+		move.w	$4AC(a5),d0			; get blit status
+		btst	#13,d0				; bit 13 = done bit
+		beq.s	.0001				; branch if not done
+		; Channel A
+		move.l	#999,$4B0(a5)		; set source transfer count 8000 pixels
 		move.l	#0,$480(a5)			; set source bitmap address (address in graphics mem)
-		move.l	#40,$4A0(a5)		; set source width
-		move.l	#600,$484(a5)		; set src modulo
-		move.l	#520,$498(a5)		; set destination address
-		move.l	#40,$4A4(a5)		; set destination width
-		move.l	#600,$49C(a5)		; set dst modulo
-		move.w	#$11,$4AE(a5)		; set op (copy A)
-		move.w	#%1000000010000010,$4AC(a5)		; enable channel A,D, start transfer
+		move.l	#280,$484(a5)		; set src modulo
+		; Channel C
+		move.l	#999,$4B8(a5)		; set source transfer count 8000 pixels
+		move.l	#0,$490(a5)			; set source bitmap address (address in graphics mem)
+		move.l	#280,$494(a5)		; set src modulo
+		; Channel D
+		move.l	#7999,$4BC(a5)		; set destination transfer count 8000 pixels
+		move.l	#240,$498(a5)		; set destination address
+		move.l	#280,$49C(a5)		; set dst modulo
+		
+		move.l	#39,$4A0(a5)		; set source width
+		move.l	#39,$4A4(a5)		; set destination width
+		move.w	#$91,$4AE(a5)		; set op A|C	($11 = copy A)
+		move.w	#%1000000010100010,$4AC(a5)		; enable channel A,C,D, start transfer
+.0002:								
+		move.w	$4AC(a5),d0			; get blit status
+		btst	#13,d0				; bit 13 = done bit
+		beq.s	.0002				; branch if not done
 		rts
 
+;===============================================================================
+; Generic I2C routines
+;===============================================================================
 
+I2C_PREL	EQU		$0
+I2C_PREH	EQU		$2
+I2C_CTRL	EQU		$4
+I2C_RXR		EQU		$6
+I2C_TXR		EQU		$6
+I2C_CMD		EQU		$8
+I2C_STAT	EQU		$A
+
+; i2c
+i2c_setup:
+		lea		I2C,a6				
+		move.w	#19,I2C_PREL(a6)	; setup prescale for 400kHz clock
+		move.w	#0,I2C_PREH(a6)
+		lea		I2C2,a6				
+		move.w	#19,I2C_PREL(a6)	; setup prescale for 400kHz clock
+		move.w	#0,I2C_PREH(a6)
+		rts
+
+; Wait for I2C transfer to complete
+;
+; Parameters
+; 	a6 - I2C controller base address
+
+i2c_wait_tip:
+		move.w	d0,-(a7)
+.0001:					
+		move.w	I2C_STAT(a6),d0		; wait for tip to clear
+		btst	#1,d0
+		bne.s	.0001
+		move.w	(a7)+,d0
+		rts
+
+; Parameters
+;	d0.w - data to transmit
+;	d1.w - command value
+;	a6	 - I2C controller base address
+;
+i2c_wr_cmd:
+		move.w	d0,I2C_TXR(a6)
+		move.w	d1,I2C_CMD(a6)
+		bsr		i2c_wait_tip
+		move.w	I2C_STAT(a6),d0
+		rts
+
+i2c_xmit1:
+		move.w	d0,-(a7)
+		move.w	#1,I2C_CTRL(a6)		; enable the core
+		moveq	#$76,d0				; set slave address = %0111011
+		move.w	#$90,d1				; set STA, WR
+		bsr		i2c_wr_cmd
+		bsr		i2c_wait_rx_nack
+		move.w	(a7)+,d0
+		move.w	#$50,d1				; set STO, WR
+		bsr		i2c_wr_cmd
+		bsr		i2c_wait_rx_nack
+
+i2c_wait_rx_nack:
+		move.w	d0,-(a7)
+.0001:							
+		move.w	I2C_STAT(a6),d0		; wait for RXack = 0
+		btst	#7,d0
+		bne.s	.0001
+		move.w	(a7)+,d0
+		rts
+
+;===============================================================================
+; Audio
+;===============================================================================
+
+
+audio_pll_config:
+		moveq	#0,d0
+		moveq	#$0E,d1
+		bsr		audio_write_reg
+		moveq	#2,d0
+		lea		audio_tbl1,a0
+		bsr		audio_write_reg6
+		rts
+
+audio_startup_config:
+		rts
+
+audio_init:
+		bsr		audio_pll_config
+		bsr		audio_startup_config
+		rts
+
+; d0.w = register number
+; d1.w = data to write
+		
+audio_write_reg:
+		lea		I2C,a6				
+		move.w	#1,I2C_CTRL(a6)		; enable the core
+		move.w	#$76,I2C_TXR(a6)	; set slave address = %0111011
+		move.w	#$90,I2C_CMD(a6)	; set STA, WR
+		bsr		i2c_wait_tip	; wait for tip to clear
+		bsr		i2c_wait_rx_nack
+		move.w	#$40,I2C_TXR(a6)	; all regsister are $40xx
+		move.w	#$10,I2C_CMD(a6)	; set WR
+		bsr		i2c_wait_tip	; wait for tip to clear
+		bsr		i2c_wait_rx_nack
+		move.w	d0,I2C_TXR(a6)		; send register address
+		move.w	#$10,I2C_CMD(a6)	; set WR
+		bsr		i2c_wait_tip	; wait for tip to clear
+		bsr		i2c_wait_rx_nack
+		move.w	d1,I2C_TXR(a6)		; send data
+		move.w	#$50,I2C_CMD(a6)	; set STO, WR
+		bsr		i2c_wait_tip	; wait for tip to clear
+		bsr		i2c_wait_rx_nack
+		rts
+
+audio_tbl1:
+		dc.w	$00,$7D,$00,$0C,$20,$01
+; a0
+;
+audio_write_reg6:
+		lea		audio_tbl1,a0
+		lea		I2C,a6				
+		move.w	#1,I2C_CTRL(a6)		; enable the core
+		move.w	#$76,I2C_TXR(a6)	; set slave address = %0111011
+		move.w	#$90,I2C_CMD(a6)	; set STA, WR
+		bsr		i2c_wait_tip	; wait for tip to clear
+		bsr		i2c_wait_rx_nack
+		move.w	#$40,I2C_TXR(a6)	; all regsister are $40xx
+		move.w	#$10,I2C_CMD(a6)	; set WR
+		bsr		i2c_wait_tip	; wait for tip to clear
+		bsr		i2c_wait_rx_nack
+
+		move.w	d0,I2C_TXR(a6)		; send register address
+		move.w	#$10,I2C_CMD(a6)	; set WR
+		bsr		i2c_wait_tip	; wait for tip to clear
+		bsr		i2c_wait_rx_nack
+		
+		move.w	(a0)+,I2C_TXR(a6)	; send data #0
+		move.w	#$10,I2C_CMD(a6)	; set WR
+		bsr		i2c_wait_tip	; wait for tip to clear
+		bsr		i2c_wait_rx_nack
+
+		move.w	(a0)+,I2C_TXR(a6)	; send data #1
+		move.w	#$10,I2C_CMD(a6)	; set WR
+		bsr		i2c_wait_tip	; wait for tip to clear
+		bsr		i2c_wait_rx_nack
+
+		move.w	(a0)+,I2C_TXR(a6)	; send data #2
+		move.w	#$10,I2C_CMD(a6)	; set WR
+		bsr		i2c_wait_tip	; wait for tip to clear
+		bsr		i2c_wait_rx_nack
+
+		move.w	(a0)+,I2C_TXR(a6)	; send data #3
+		move.w	#$10,I2C_CMD(a6)	; set WR
+		bsr		i2c_wait_tip	; wait for tip to clear
+		bsr		i2c_wait_rx_nack
+
+		move.w	(a0)+,I2C_TXR(a6)	; send data #4
+		move.w	#$10,I2C_CMD(a6)	; set WR
+		bsr		i2c_wait_tip	; wait for tip to clear
+		bsr		i2c_wait_rx_nack
+
+		move.w	(a0)+,I2C_TXR(a6)	; send data #5
+		move.w	#$50,I2C_CMD(a6)	; set WR, STO
+		bsr		i2c_wait_tip		; wait for tip to clear
+		bsr		i2c_wait_rx_nack
+		rts
+
+set_hp_output:
+		moveq	#$21,d0				;
+		moveq	#0,d1
+		bsr		audio_write_reg
+		moveq	#$20,d0				;
+		bsr		audio_write_reg
+		moveq	#$23,d0
+		move.w	#$E7,d1		
+		bsr		audio_write_reg
+		moveq	#$24,d0
+		move.w	#$E7,d1		
+		bsr		audio_write_reg
+		rts
+
+;===============================================================================
+; Realtime clock routines
+;===============================================================================
+
+rtc_read:
+		movea.l	#I2C2,a6
+		lea		RTCBuf,a5
+		move.w	#$80,I2C_CTRL(a6)	; enable I2C
+		move.w	#$DE,d0				; read address, write op
+		move.w	#$90,d1				; STA + wr bit
+		bsr		i2c_wr_cmd
+		tst.b	d0
+		bmi		.rxerr
+		move.w	#$00,d0				; address zero
+		move.w	#$10,d1				; wr bit
+		bsr		i2c_wr_cmd
+		tst.b	d0
+		bmi		.rxerr
+		move.w	#$DF,d0				; read address, read op
+		move.w	#$90,d1				; STA + wr bit
+		bsr		i2c_wr_cmd
+		tst.b	d0
+		bmi		.rxerr
+		
+		move.w	#$20,d2
+.0001:
+		move.w	#$20,I2C_CMD(a6)	; rd bit
+		bsr		i2c_wait_tip
+		bsr		i2c_wait_rx_nack
+		move.w	I2C_STAT(a6),d0
+		tst.b	d0
+		bmi		.rxerr
+		move.w	I2C_RXR(a6),d0
+		move.b	d0,(a5,d2.w)
+		add.w	#1,d2
+		cmp.w	#$5F,d2
+		bne		.0001
+		move.w	#$68,I2C_CMD(a6)	; STO, rd bit + nack
+		bsr		i2c_wait_tip
+		bsr		i2c_wait_rx_nack
+		move.w	I2C_STAT(a6),d0
+		tst.b	d0
+		bmi		.rxerr
+		move.w	I2C_RXR(a6),d0
+		move.b	d0,(a5,d2.w)
+		move.w	#0,I2C_CTRL(a6)		; disable I2C and return 0
+		moveq	#0,d0
+		rts
+.rxerr:
+		move.w	#0,I2C_CTRL(a6)		; disable I2C and return status
+		rts
+
+rtc_write:
+		movea.l	#I2C2,a6
+		lea		RTCBuf,a5
+		move.w	#$80,I2C_CTRL(a6)	; enable I2C
+		move.w	#$DE,d0				; read address, write op
+		move.w	#$90,d1				; STA + wr bit
+		bsr		i2c_wr_cmd
+		tst.b	d0
+		bmi		.rxerr
+		move.w	#$00,d0				; address zero
+		move.w	#$10,d1				; wr bit
+		bsr		i2c_wr_cmd
+		tst.b	d0
+		bmi		.rxerr
+		move.w	#$20,d2
+.0001:
+		move.b	(a5,d2.w),d0
+		move.w	#$10,d1
+		bsr		i2c_wr_cmd
+		tst.b	d0
+		bmi		.rxerr
+		add.w	#1,d2
+		cmp.w	#$5F,d2
+		bne.s	.0001
+		move.b	(a5,d2.w),d0
+		move.w	#$50,d1				; STO, wr bit
+		bsr		i2c_wr_cmd
+		tst.b	d0
+		bmi		.rxerr
+		move.w	#0,I2C_CTRL(a6)		; disable I2C and return 0
+		moveq	#0,d0
+		rts
+.rxerr:
+		move.w	#0,I2C_CTRL(a6)		; disable I2C and return status
+		rts
+
+msgRtcReadFail:
+		dc.b	"RTC read/write failed.",$0D,$0A,$00
+
+		
 ; Randomize the screen	
 ;		move.l	#VDGBUF,A0
 ;		move.l	#%011011111,D0		; light blue
