@@ -486,15 +486,27 @@ BootClearScreen:
 ;------------------------------------------------------------------------------
 ; copy font to VDG ram
 ;
+; The font address is 1/2 of the memory address that the cpu sees because
+; the AV controller only deals with word accesses.
+;
 ; Trashes:
-;	a0,a1,d0,d1
+;	a0,a1,a6,d0,d1
 ;------------------------------------------------------------------------------
 
 BootCopyFont:
-		move.w	#$0707,fntsz		; set font size
+		movea.l	#VDGREG,a6
+		; Setup font table
+		move.l	#$5C000,$590(a6)	; set font table address 1/2 B8000
+		move.w	#$8707,$FF8B8000	; set font fixed, width, height
+		movea.l	#$FF8B8008,a1		; font table address
+		move.l	#$5C004,$FF8B8004	; set bitmap address (directly follows)
+
+;		move.w	#$0707,fntsz		; set font size
 		lea		font8,a0
 		move.l	#8*512,d1			; 512 chars * 8 bytes per char
-		move.l	#$FF8B8000,a1		; font table address
+
+		move.w	#0,$594(a6)			; select font id (0)
+
 		moveq	#0,d0				; zero out high order bits
 cpyfnt:
 		move.b	(a0)+,d0			; get a byte
@@ -581,17 +593,19 @@ DispCursor:
 ;------------------------------------------------------------------------------
 ; Cursor Color
 ;
-;	fffff-irrrgggbbb
-;	  |   | |  |  |
-;     |   | |  |  +- blue
-;	  |   | |  +---- green
-;     |   | +------- red
-;     |   +--------- invert video (rgb ignored)
-;     +------------- flash rate
-;					 1xxxx = no flash
-;                    00001 = 1/8 vsync (7.5 Hz)
-;				     00010 = 1/16 vsync (3.75 Hz)
-;                    00100 = 1/32 vsync (1.875 Hz)
+;	irrrrrgggggbbbbb
+;	|  |    |    |
+;   |  |    |    +-- blue
+;	|  |    +------- green
+;   |  +------------ red
+;   +--------------- invert video (rgb ignored)
+;
+;
+;   flash rate
+;		 1xxxx = no flash
+;        00001 = 1/8 vsync (7.5 Hz)
+;	     00010 = 1/16 vsync (3.75 Hz)
+;        00100 = 1/32 vsync (1.875 Hz)
 ;------------------------------------------------------------------------------
 
 SetCursorColor:

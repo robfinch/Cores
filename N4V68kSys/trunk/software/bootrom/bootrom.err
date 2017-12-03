@@ -33,14 +33,14 @@ Pass 7
 File: bootrom.asm
 asm68 V5.6  (c) 1995-2017 Robert Finch - 680xx cross assembler
 
- E2003 (line 309): undefined symbol 'CTRLH'
- E2003 (line 1152): undefined symbol 'START'
- E2028 (line 1152): branch out of range - displacement 3F470
- E2003 (line 1501): undefined symbol 'S19StartAddress'
- E2003 (line 1505): undefined symbol 'S19StartAddress'
- E2003 (line 1509): undefined symbol 'S19StartAddress'
- E2003 (line 1574): undefined symbol 'CTRLC'
- E2003 (line 1577): undefined symbol 'AUXIN'
- E2028 (line 1577): branch out of range - displacement 3EFA6
+ E2003 (line 311): undefined symbol 'CTRLH'
+ E2003 (line 1168): undefined symbol 'START'
+ E2028 (line 1168): branch out of range - displacement 3F446
+ E2003 (line 1517): undefined symbol 'S19StartAddress'
+ E2003 (line 1521): undefined symbol 'S19StartAddress'
+ E2003 (line 1525): undefined symbol 'S19StartAddress'
+ E2003 (line 1590): undefined symbol 'CTRLC'
+ E2003 (line 1593): undefined symbol 'AUXIN'
+ E2028 (line 1593): branch out of range - displacement 3EF7C
 Errors: 9
 Warnings: 0

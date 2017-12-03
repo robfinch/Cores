@@ -172,6 +172,14 @@ parameter ST_FILLRECT2 = 7'd82;
 parameter ST_TILERECT = 7'd83;
 parameter ST_TILERECT1 = 7'd84;
 parameter ST_TILERECT2 = 7'd85;
+parameter ST_READ_FONT_TBL = 7'd90;
+parameter ST_READ_FONT_TBL2 = 7'd91;
+parameter ST_READ_FONT_TBL3 = 7'd92;
+parameter ST_READ_FONT_TBL4 = 7'd93;
+parameter ST_READ_FONT_TBL5 = 7'd94;
+parameter ST_READ_GLYPH_ENTRY = 7'd95;
+parameter ST_READ_GLYPH_ENTRY2 = 7'd96;
+parameter ST_READ_CHAR_BITMAP_DAT2 = 7'd97;
 
 integer n;
 reg [6:0] state = ST_IDLE;
@@ -232,8 +240,15 @@ reg [15:0] ram_data_i;
 wire [15:0] ram_data_o;
 reg [1:0] ram_we;
 
-reg [ 9:0] pixcnt;
-reg [3:0] pixhc,pixvc;
+reg [19:0] font_tbl_adr;			// address of the font table
+reg [15:0] font_id;
+reg font_fixed;						// 1 = fixed width font
+reg [4:0] font_height;
+reg [4:0] font_width;
+reg [19:0] glyph_tbl_adr;			// address of the glyph table
+
+reg [9:0] pixcnt;
+reg [4:0] pixhc,pixvc;
 reg [3:0] bitcnt, bitinc;
 
 reg [19:0] bltSrcWid;
@@ -436,7 +451,7 @@ reg [15:0] bltcolor;					// blt color as read
 reg [4:0] loopcnt;
 
 reg [ 8:0] charcode;                // character code being processed
-reg [15:0] charbmp;					// hold character bitmap scanline
+reg [31:0] charbmp;					// hold character bitmap scanline
 reg [15:0] fgcolor;					// character colors
 reg [15:0] bkcolor;					// top bit indicates overlay mode
 reg [3:0] pixxm, pixym;             // maximum # pixels for char
@@ -635,11 +650,11 @@ reg [75:0] TextureDesc [0:511];
 always @(posedge clk_i)
 	if (wrtx)
 		TextureDesc[hwTexture] <= {
-			cmdq_out[`BASEADRL],
-			cmdq_out[`BASEADRH],
-			cmdq_out[`TXCOUNT],
+			cmdq_out[`TXMOD],
 			cmdq_out[`TXWIDTH],
-			cmdq_out[`TXMOD]
+			cmdq_out[`TXCOUNT],
+			cmdq_out[`BASEADRH],
+			cmdq_out[`BASEADRL]
 		};
 wire [75:0] TextureDesco = TextureDesc[hrTexture];
 
@@ -792,6 +807,10 @@ if (reg_cs|reg_copper) begin
 		10'b101_0xxx_xxx:	rasti_en[reg_adr[6:1]] <= reg_dat;
 		10'b101_1000_000:	irq_en <= reg_dat;
 		10'b101_1000_001:	irq_status <= irq_status & ~reg_dat;
+
+		10'b101_1001_000:	font_tbl_adr[19:16] <= reg_dat[3:0];
+		10'b101_1001_001:	font_tbl_adr[15:0] <= reg_dat;
+		10'b101_1001_010:	font_id <= reg_dat;
 
         10'b101_1000_010:	aud_ctrl <= reg_dat;
 		10'b110_0000_000:   aud0_adr[19:16] <= reg_dat[3:0];
@@ -974,6 +993,7 @@ ST_IDLE:
 		else if (ctrl[14]) begin
 //			bltCtrl[13] <= 1'b0;
 			case(ctrl[3:0])
+			4'd0:	state <= ST_READ_CHAR_BITMAP;
 			4'd2:	state <= DL_PRECALC;
 			default:	ctrl[14] <= 1'b0;
 			endcase
@@ -999,7 +1019,7 @@ ST_CMD:
 		ctrl[3:0] <= cmd_qo[3:0];
 		ctrl[14] <= 1'b0;
 		case(cmd_qo[3:0])
-		4'd0:	state <= ST_CHAR_INIT;	// draw character
+		4'd0:	state <= ST_READ_FONT_TBL;	// draw character
 		4'd1:	state <= ST_PLOT;
 		4'd2:	begin
 				ctrl[11:8] <= cmdq_out[12:9];	// raster op
@@ -1132,8 +1152,80 @@ ST_PLOT_WRITE:
 
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 // Character draw acceleration states
+//
+// Font Table - An entry for each font
+// f--wwwww---hhhhh		- width and height
+// ----------------		- reserved
+// ------------AAAA		- address offset of gylph table, or char bitmap address
+// aaaaaaaaaaaaaaaa		- low order address offset bits
+//
+// Glyph Table Entry
+// ---wwwww----AAAA		- width + high order address offset bits
+// aaaaaaaaaaaaaaaa		- low order address offset
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
+ST_READ_FONT_TBL:
+	begin
+		pixhc <= 5'd0;
+		pixvc <= 5'd0;
+		charcode <= charcode_qo;
+		fgcolor <= charfg_qo;
+		bkcolor <= charbk_qo;
+		ram_addr <= font_tbl_adr + {font_id,2'b0};
+		state <= ST_READ_FONT_TBL2;
+	end
+ST_READ_FONT_TBL2:
+	begin
+		ram_addr <= ram_addr + 20'd2;
+		font_fixed <= ram_data_o[15];
+		font_width <= ram_data_o[12:8];
+		font_height <= ram_data_o[4:0];
+		state <= ST_READ_FONT_TBL3;
+	end
+ST_READ_FONT_TBL3:
+	begin
+		ram_addr <= ram_addr + 20'd1;
+		if (font_fixed)
+			charBmpBase[19:16] <= ram_data_o[3:0];
+		else
+			glyph_tbl_adr[19:16] <= ram_data_o[3:0];
+		state <= ST_READ_FONT_TBL4;
+	end
+ST_READ_FONT_TBL4:
+	begin
+		if (font_fixed)
+			charBmpBase[15:0] <= ram_data_o;
+		else
+			glyph_tbl_adr[15:0] <= ram_data_o;
+		state <= ST_READ_FONT_TBL5;
+	end
+ST_READ_FONT_TBL5:
+	begin
+		tgtaddr <= {8'h00,cmdy1_qo} * {8'h00,bitmapWidth} + {bmpBase[19:12],cmdx1_qo};
+		if (font_fixed) begin
+			charBmpBase <= charBmpBase + (charcode << font_width[4]) * (font_height + 7'd1);
+			ctrl[14] <= 1'b1;
+			state <= ST_IDLE;
+		end
+		else begin
+			ram_addr <= glyph_tbl_adr + {charcode,1'b0};
+			state <= ST_READ_GLYPH_ENTRY;
+		end
+	end
+ST_READ_GLYPH_ENTRY:
+	begin
+		font_width <= ram_data_o[11:8];
+		charBmpBase[19:16] <= ram_data_o[3:0];
+		ram_addr <= ram_addr + 20'd1;
+		state <= ST_READ_GLYPH_ENTRY2;
+	end
+ST_READ_GLYPH_ENTRY2:
+	begin
+		charBmpBase[15:0] <= ram_data_o;
+		ctrl[14] <= 1'b1;
+		state <= ST_IDLE;
+	end
+/*
 ST_CHAR_INIT:
 	begin
 //		pixcnt <= 10'h000;
@@ -1147,54 +1239,49 @@ ST_CHAR_INIT:
 		tgtaddr <= {8'h00,cmdy1_qo} * {8'h00,bitmapWidth} + {bmpBase[19:12],cmdx1_qo};
 		state <= ST_READ_CHAR_BITMAP;
 	end
+*/
 ST_READ_CHAR_BITMAP:
 	begin
-		ram_addr <= charBmpBase + charcode * (pixym + 4'd1) + pixvc;
+//		ram_addr <= charBmpBase + charcode * (pixym + 4'd1) + pixvc;
+		ram_addr <= charBmpBase + (pixvc << font_width[4]);
 		state <= ST_READ_CHAR_BITMAP_DAT;
 	end
 ST_READ_CHAR_BITMAP_DAT:
 	begin
-		charbmp <= ram_data_o;
-		state <= ST_CALC_INDEX;
+		ram_addr <= ram_addr + 20'd1;
+		charbmp[15:0] <= ram_data_o;
+		tgtindex <= {14'h00,pixvc} * {8'h00,bitmapWidth};
+		state <= font_width[4] ? ST_READ_CHAR_BITMAP_DAT2 : ST_WRITE_CHAR;
 	end
-ST_CALC_INDEX:
+ST_READ_CHAR_BITMAP_DAT2:
 	begin
-		tgtindex <= {14'h00,pixvc} * {8'h00,bitmapWidth} + {14'h00,pixhc};
+		charbmp[31:16] <= ram_data_o;
 		state <= ST_WRITE_CHAR;
 	end
 ST_WRITE_CHAR:
 	begin
-		ram_addr <= tgtaddr + tgtindex;
+		ram_addr <= tgtaddr + tgtindex + {14'h00,pixhc};
 		if (~bkcolor[`A]) begin
 			ram_we <= {2{`HIGH}};
-			ram_data_i <= charbmp[pixxm] ? fgcolor : bkcolor;
+			ram_data_i <= charbmp[font_width] ? fgcolor : bkcolor;
 		end
 		else begin
-			if (charbmp[pixxm]) begin
+			if (charbmp[font_width]) begin
 				ram_we <= {2{`HIGH}};
 				ram_data_i <= fgcolor;
 			end
+			else
+				ram_we <= {2{`LOW}};
 		end
-		state <= ST_NEXT;
-	end
-ST_NEXT:
-	begin
-	    state <= ST_CALC_INDEX;
-		ram_we <= {2{`LOW}};
-		charbmp <= {charbmp[15:0],1'b0};
-		pixhc <= pixhc + 4'd1;
-		if (pixhc==pixxm) begin
-		    state <= ST_READ_CHAR_BITMAP;
-		    pixhc <= 4'd0;
-		    pixvc <= pixvc + 4'd1;
-		    if (pixvc==pixym) begin
-		        state <= ST_IDLE;
-		    end
+		charbmp <= {charbmp[30:0],1'b0};
+		pixhc <= pixhc + 5'd1;
+		if (pixhc==font_width) begin
+	        state <= ST_IDLE;
+		    pixhc <= 5'd0;
+		    pixvc <= pixvc + 5'd1;
+		    if (pixvc==font_height)
+		    	ctrl[14] <= 1'b0;
 		end
-//		pixcnt <= pixcnt + 10'd1;
-//		state <= pixcnt==10'd63 ? ST_IDLE :
-//			pixcnt[2:0]==3'd7 ? ST_READ_CHAR_BITMAP :
-//			ST_CALC_INDEX;
 	end
 
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
