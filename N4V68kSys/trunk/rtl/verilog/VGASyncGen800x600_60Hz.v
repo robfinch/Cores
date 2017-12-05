@@ -39,15 +39,19 @@ module VGASyncGen800x600_60Hz(rst, clk, eol, eof, hSync, vSync, hCtr, vCtr,
 parameter phSyncOn  = 40;		//   40 front porch
 parameter phSyncOff = 168;		//  128 sync
 parameter phBlankOff = 256;		//   88 back porch
-parameter phBorderOff = 336;	//   80 border
-parameter phBorderOn = 976;		//  640 display
+//parameter phBorderOff = 336;	//   80 border
+parameter phBorderOff = 256;	//   80 border
+//parameter phBorderOn = 976;		//  640 display
+parameter phBorderOn = 1056;		//  640 display
 parameter phBlankOn = 1056;		//   80 border
 parameter phTotal = 1056;		// 1056 total clocks
 parameter pvSyncOn  = 1;		//    1 front porch
 parameter pvSyncOff = 5;		//    4 vertical sync
 parameter pvBlankOff = 28;		//   23 back porch
-parameter pvBorderOff = 72;		//   44 border	0
-parameter pvBorderOn = 584;		//  512 display
+parameter pvBorderOff = 28;		//   44 border	0
+//parameter pvBorderOff = 72;		//   44 border	0
+parameter pvBorderOn = 628;		//  512 display
+//parameter pvBorderOn = 584;		//  512 display
 parameter pvBlankOn = 628;  	//   44 border	0
 parameter pvTotal = 628;		//  628 total scan lines
 // 60 Hz

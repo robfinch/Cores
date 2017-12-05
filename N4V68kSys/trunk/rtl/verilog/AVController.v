@@ -201,12 +201,12 @@ reg [15:0] ctrl;
 reg lowres = `TRUE;
 reg [19:0] bmpBase = 20'h00000;		// base address of bitmap
 reg [19:0] charBmpBase = 20'h5C000;	// base address of character bitmaps
-reg [11:0] hstart = 12'hEB3;		// -333
-reg [11:0] vstart = 12'hFB0;		// -80
+reg [11:0] hstart = 12'hF03;		// -253
+reg [11:0] vstart = 12'hFDC;		// -36
 reg [11:0] hpos;
 reg [11:0] vpos;
 reg [4:0] fpos;
-reg [11:0] bitmapWidth = 12'd320;
+reg [11:0] bitmapWidth = 12'd400;
 reg [15:0] borderColor;
 wire [15:0] rgb_i;					// internal rgb output from ram
 
@@ -235,12 +235,14 @@ reg [11:0] cursor_h;
 reg [11:0] cursor_pv [0:15];
 reg [11:0] cursor_ph [0:15];
 reg [4:0] cx, cy;
-reg [5:0] cxa [0:15];
-reg [7:0] cya [0:15];
-reg [15:0] cursor_color [0:63];
+reg [9:0] cya [0:15];
+reg [22:0] cursor_color [0:63];
 reg [15:0] cursor_color0;
 reg [3:0] flashrate;
-reg [7:0] cursor_on;
+reg [15:0] cursor_on;
+reg [15:0] cursor_on_d1;
+reg [15:0] cursor_on_d2;
+reg [15:0] cursor_on_d3;
 reg [19:0] cursorAddr [0:15];
 reg [63:0] cursorBmp [0:15];
 reg [15:0] cursorColor [0:15];
@@ -250,7 +252,7 @@ reg [5:0] cursorColorNdx [0:15];
 
 reg [4:0] cursor_sv;				// cursor size
 reg [4:0] cursor_sh;
-reg [7:0] cursor_szv [0:15];
+reg [9:0] cursor_szv [0:15];
 reg [4:0] cursor_szh [0:15];
 reg [15:0] cursor_bmp [0:15];
 reg [19:0] rdndx;					// video read index
@@ -533,7 +535,7 @@ chipram16 chipram1
 	.addra(ram_addr),
 	.dina(ram_data_i),
 	.douta(ram_data_o),
-	.clkb(clk),
+	.clkb(clk200_i),
 	.enb(1'b1),
 	.web(1'b0),
 	.addrb(rdndx),
@@ -578,7 +580,7 @@ always @(posedge clk)
 	if ((hpos >> lowres) == cursor_h)
 		cx <= 0;
 	else
-		cx <= cx + 5'd1;
+		cx <= cx + 6'd1;
 always @(posedge clk)
 	if ((vpos >> lowres) == cursor_v)
 		cy <= 0;
@@ -587,82 +589,78 @@ always @(posedge clk)
 always @(posedge clk)
 begin
 	for (n = 0; n < 16; n = n + 1)
-		if ((hpos >> lowres) == cursor_ph[n])
-			cxa[n] <= 0;
-		else
-			cxa[n] <= cxa[n] + 5'd1;
-end
-always @(posedge clk)
-begin
-	for (n = 0; n < 16; n = n + 1)
-		if ((vpos >> lowres) == cursor_pv[n])
+		if (((vpos >> lowres) == cursor_pv[n]) && (lowres ? vpos[0]==1'b0 : 1'b1))
 			cya[n] <= 0;
 		else if (eol)
-			cya[n] <= cya[n] + 8'd1;
+			cya[n] <= cya[n] + 10'd1;
 end
 
 always @(posedge clk)
 begin
     casex(hpos)
-    12'b1110_11xx_xx00: cursorBmp[hpos[5:2]][15:0] <= rgb_i;
-    12'b1110_11xx_xx01: cursorBmp[hpos[5:2]][31:16] <= rgb_i;
-    12'b1110_11xx_xx10: cursorBmp[hpos[5:2]][47:32] <= rgb_i;
-    12'b1110_11xx_xx11: cursorBmp[hpos[5:2]][63:48] <= rgb_i;
+    12'b1111_10xx_xx00: cursorBmp[hpos[5:2]][63:48] <= rgb_i;
+    12'b1111_10xx_xx01: cursorBmp[hpos[5:2]][47:32] <= rgb_i;
+    12'b1111_10xx_xx10: cursorBmp[hpos[5:2]][31:16] <= rgb_i;
+    12'b1111_10xx_xx11: cursorBmp[hpos[5:2]][15:0] <= rgb_i;
     endcase
-	if ((flashcnt[5:2] & flashrate[3:0])!=4'b000 || flashrate[4]) begin
-		if (lowres) begin
-			if ((vpos[11:1] >= cursor_v && vpos[11:1] <= cursor_v + cursor_sv) &&
-				(hpos[11:1] >= cursor_h && hpos[11:1] <= cursor_h + cursor_sh)) begin
-				cursor <= cursor_bmp[cy[4:1]][cx[4:1]];
+    // Determine when cursor output should appear
+	if (lowres) begin
+		if ((vpos[11:1] >= cursor_v && vpos <= {cursor_v + cursor_sv,1'b1}) &&
+			(hpos[11:1] >= cursor_h && hpos <= {cursor_h + cursor_sh,1'b1})) begin
+			cursor <= cursor_bmp[cy[4:1]][cx[4:1]];
+		end
+		else
+			cursor <= 1'b0;
+		for (n = 0; n < 16; n = n + 1)
+			if ((vpos[11:1] >= cursor_pv[n] && vpos <= {cursor_pv[n] + cursor_szv[n],1'b1}) &&
+				(hpos[11:1] >= cursor_ph[n] && hpos <= {cursor_ph[n] + cursor_szh[n],1'b1})) begin
+				if (hpos[0])
+					cursorBmp[n] <= {cursorBmp[n][61:0],2'b00};
+				cursor_on[n] <=
+				    cursorLink2[n] ? |{ cursorBmp[(n+2)&15][63:62],cursorBmp[(n+1)&15][63:62],cursorBmp[n][63:62]} :
+				    cursorLink1[n] ? |{ cursorBmp[(n+1)&15][63:62],cursorBmp[n][63:62]} : 
+				    |cursorBmp[n][63:62];
 			end
 			else
-				cursor <= 1'b0;
-			for (n = 0; n < 16; n = n + 1)
-				if ((vpos[11:1] >= cursor_pv[n] && vpos[11:1] <= cursor_pv[n] + cursor_szv[n]) &&
-					(hpos[11:1] >= cursor_ph[n] && hpos[11:1] <= cursor_ph[n] + cursor_szh[n])) begin
-					cursorBmp[n] <= {cursorBmp[n][61:0],2'b00};
-					cursor_on[n] <= |cursorBmp[n][63:62];
-				end
-				else
-					cursor_on[n] <= 1'b0;
-		end
-		else begin
-			if ((vpos >= cursor_v && vpos <= cursor_v + cursor_sv) &&
-				(hpos >= cursor_h && hpos <= cursor_h + cursor_sh))
-				cursor <= cursor_bmp[cy[3:0]][cx[3:0]];
-			else
-				cursor <= 1'b0;
-		end
+				cursor_on[n] <= 1'b0;
 	end
-	else
-		cursor <= 1'b0;
+	else begin
+		if ((vpos >= cursor_v && vpos <= cursor_v + cursor_sv) &&
+			(hpos >= cursor_h && hpos <= cursor_h + cursor_sh))
+			cursor <= cursor_bmp[cy[3:0]][cx[3:0]];
+		else
+			cursor <= 1'b0;
+		for (n = 0; n < 16; n = n + 1)
+			if ((vpos >= cursor_pv[n] && vpos <= cursor_pv[n] + cursor_szv[n]) &&
+				(hpos >= cursor_ph[n] && hpos <= cursor_ph[n] + cursor_szh[n])) begin
+				cursorBmp[n] <= {cursorBmp[n][61:0],2'b00};
+				cursor_on[n] <=
+                    cursorLink2[n] ? |{ cursorBmp[(n+2)&15][63:62],cursorBmp[(n+1)&15][63:62],cursorBmp[n][63:62]} :
+                    cursorLink1[n] ? |{ cursorBmp[(n+1)&15][63:62],cursorBmp[n][63:62]} : 
+                    |cursorBmp[n][63:62];
+			end
+			else
+				cursor_on[n] <= 1'b0;
+	end
 end
 
-always @*
-for (n = 0; n < 16; n = n + 1)
-if (cursorLink2[n])
-    cursorColorNdx[n] <= {cursorBmp[(n+2)&15][63:62],cursorBmp[(n+1)&15][63:62],cursorBmp[n][63:62]};
-else if (cursorLink1[n])
-    cursorColorNdx[n] <= {2'h0,cursorBmp[(n+1)&15][63:62],cursorBmp[n][63:62]};
-else
-    cursorColorNdx[n] <= {4'h0,cursorBmp[n][63:62]};
-
-
+// Compute display ram index
 always @(posedge clk)
 begin
     casex(hpos)
-    12'hEBF: 	if (lowres)
-    				rdndx <= cursorAddr[hpos[5:2]+3'd1] + {cya[hpos[5:2]+3'd1][7:1],cxa[hpos[5:2]+3'd1][4]};
-    			else
-	    			rdndx <= cursorAddr[hpos[5:2]+3'd1] + {cya[hpos[5:2]+3'd1][7:0],cxa[hpos[5:2]+3'd1][3]};
-    12'b1110_11xx_xx00: rdndx <= rdndx + 20'd1;
-    12'b1110_11xx_xx01: rdndx <= rdndx + 20'd1;
-    12'b1110_11xx_xx10: rdndx <= rdndx + 20'd1;
-    12'b1110_11xx_xx11:
-    	if (lowres)
-    		rdndx <= cursorAddr[hpos[5:2]+3'd1] + {cya[hpos[5:2]+3'd1][7:1],cxa[hpos[5:2]+3'd1][4]};
+    12'hF7F:
+     	if (lowres)
+    		rdndx <= cursorAddr[hpos[5:2]+3'd1] + {cya[hpos[5:2]+3'd1][9:1],2'b00};
     	else
-    		rdndx <= cursorAddr[hpos[5:2]+3'd1] + {cya[hpos[5:2]+3'd1][7:0],cxa[hpos[5:2]+3'd1][3]};
+			rdndx <= cursorAddr[hpos[5:2]+3'd1] + {cya[hpos[5:2]+3'd1][9:0],2'b00};
+    12'b1111_10xx_xx00: rdndx <= rdndx + 20'd1;
+    12'b1111_10xx_xx01: rdndx <= rdndx + 20'd1;
+    12'b1111_10xx_xx10: rdndx <= rdndx + 20'd1;
+    12'b1111_10xx_xx11:
+    	if (lowres)
+    		rdndx <= cursorAddr[hpos[5:2]+3'd1] + {cya[hpos[5:2]+3'd1][9:1],2'b00};
+    	else
+    		rdndx <= cursorAddr[hpos[5:2]+3'd1] + {cya[hpos[5:2]+3'd1][9:0],2'b00};
     default:
         if (lowres)
             rdndx <= {9'h00,vpos[11:1]} * {8'h00,bitmapWidth} + {bmpBase[19:12],1'b0,hpos[11:1]};
@@ -671,29 +669,64 @@ begin
     endcase
 end
 
+
+// Compute index into sprite color palette
+// If none of the sprites are linked, each sprite has it's own set of colors.
+// If the sprites are linked once the colors are available in groups.
+// If the sprites are linked twice they all share the same set of colors.
+
+always @(posedge clk)
+for (n = 0; n < 16; n = n + 1)
+if (cursorLink2[n])
+    cursorColorNdx[n] <= {cursorBmp[(n+2)&15][63:62],cursorBmp[(n+1)&15][63:62],cursorBmp[n][63:62]};
+else if (cursorLink1[n])
+    cursorColorNdx[n] <= {n[3:2],cursorBmp[(n+1)&15][63:62],cursorBmp[n][63:62]};
+else
+    cursorColorNdx[n] <= {n[3:0],cursorBmp[n][63:62]};
+
+always @(posedge clk)
+    cursor_on_d1 <= cursor_on;
+reg [22:0] cursorColorOut; 
+always @(posedge clk)
+    cursorColorOut <= 
+	       		cursor_color[
+	       		cursor_on_d1[0] ? cursorColorNdx[0] :
+	       		cursor_on_d1[1] ? cursorColorNdx[1] :
+	       		cursor_on_d1[2] ? cursorColorNdx[2] :
+	       		cursor_on_d1[3] ? cursorColorNdx[3] :
+	       		cursor_on_d1[4] ? cursorColorNdx[4] :
+	       		cursor_on_d1[5] ? cursorColorNdx[5] :
+	       		cursor_on_d1[6] ? cursorColorNdx[6] :
+	       		cursor_on_d1[7] ? cursorColorNdx[7] :
+	       		cursor_on_d1[8] ? cursorColorNdx[8] :
+	       		cursor_on_d1[9] ? cursorColorNdx[9] :
+	       		cursor_on_d1[10] ? cursorColorNdx[10] :
+	       		cursor_on_d1[11] ? cursorColorNdx[11] :
+	       		cursor_on_d1[12] ? cursorColorNdx[12] :
+	       		cursor_on_d1[13] ? cursorColorNdx[13] :
+	       		cursor_on_d1[14] ? cursorColorNdx[14] :
+	       		cursorColorNdx[15]];
+
+wire [12:0] alphaRed = rgb_i[14:10] * cursorColorOut[7:0];
+wire [12:0] alphaGreen = rgb_i[9:5] * cursorColorOut[7:0];
+wire [12:0] alphaBlue = rgb_i[4:0] * cursorColorOut[7:0];
+reg [14:0] alphaOut;
+
+always @(posedge clk)
+    cursor_on_d2 <= cursor_on_d1;
+always @(posedge clk)
+    alphaOut = cursorColorOut[22] ?
+				{alphaRed[12:8],alphaGreen[12:8],alphaBlue[12:8]} :
+				cursorColorOut[14:0];
+
+wire [14:0] reverseVideoOut = cursorColorOut[21] ? alphaOut ^ 15'h7FFF : alphaOut;
+wire [14:0] flashOut = cursorColorOut[20] ? (((flashcnt[5:2] & cursorColorOut[19:16])!=4'b000) ? reverseVideoOut : rgb_i) : reverseVideoOut;
+
 always @(posedge clk)
 	rgb <= 	blank ? 15'h0000 :
 		   	border ? borderColor :
        		cursor ? (cursor_color0[15] ? rgb_i[14:0] ^ 15'h7FFF : cursor_color0) :
-       		|cursor_on ?
-	       		cursor_color[
-	       		cursor_on[0] ? cursorColorNdx[0] :
-	       		cursor_on[1] ? cursorColorNdx[1] :
-	       		cursor_on[2] ? cursorColorNdx[2] :
-	       		cursor_on[3] ? cursorColorNdx[3] :
-	       		cursor_on[4] ? cursorColorNdx[4] :
-	       		cursor_on[5] ? cursorColorNdx[5] :
-	       		cursor_on[6] ? cursorColorNdx[6] :
-	       		cursor_on[7] ? cursorColorNdx[7] :
-	       		cursor_on[8] ? cursorColorNdx[8] :
-	       		cursor_on[9] ? cursorColorNdx[9] :
-	       		cursor_on[10] ? cursorColorNdx[10] :
-	       		cursor_on[11] ? cursorColorNdx[11] :
-	       		cursor_on[12] ? cursorColorNdx[12] :
-	       		cursor_on[13] ? cursorColorNdx[13] :
-	       		cursor_on[14] ? cursorColorNdx[14] :
-	       		cursorColorNdx[15]] :
-			rgb_i[14:0];
+       		|cursor_on_d2 ? flashOut : rgb_i[14:0];
 /*
 always @(posedge clk)
 case(cursor_on)
@@ -889,16 +922,17 @@ reg_dat <= dat_i;
 if (reg_cs|reg_copper) begin
 	if (reg_we) begin
 		casex(reg_adr[10:1])
-		10'b0000xxxxxx:   cursor_color[reg_adr[6:1]] <= reg_dat;
-		10'b0001000000:   cursorLink1 <= reg_dat;
-		10'b0001000001:   cursorLink2 <= reg_dat;
+		10'b000xxxxxx0:   cursor_color[reg_adr[7:2]][22:16] <= reg_dat[6:0];
+		10'b000xxxxxx1:   cursor_color[reg_adr[7:2]][15:0] <= reg_dat;
+		10'b0010000000:   cursorLink1 <= reg_dat;
+		10'b0010000001:   cursorLink2 <= reg_dat;
         10'b010_xxxx_000:   cursorAddr[reg_adr[7:4]][19:16] <= reg_dat[3:0];
         10'b010_xxxx_001:   cursorAddr[reg_adr[7:4]][15:0] <= reg_dat;
         10'b010_xxxx_010:   cursor_ph[reg_adr[7:4]] <= reg_dat[11:0];
         10'b010_xxxx_011:   cursor_pv[reg_adr[7:4]] <= reg_dat[11:0];
         10'b010_xxxx_100:   begin
                                 cursor_szh[reg_adr[7:4]] <= reg_dat[4:0];
-                                cursor_szv[reg_adr[7:4]] <= reg_dat[15:8];
+                                cursor_szv[reg_adr[7:4]] <= reg_dat[15:6];
                             end
 /*                          
 		10'b0xxxxxx000:	begin

@@ -2,348 +2,351 @@ Global symbols:
 
 Symbol Table:
  #  Name                            OCLS  Base Len        Value       Def Line     File        References
-  0 AsciiToHexNybble                 PRI  CODE   L   FFFFFFFFFFFC0FBC      1533   bootrom.asm   FFFC0F9E FFFC0FA2 FFFC1160 FFFC116A FFFC11B2 FFFC11BE FFFC11D2 FFFC11DE FFFC122C FFFC123A FFFC1248 FFFC1252 FFFC125E FFFC126A FFFC1276 FFFC1282 FFFC128E FFFC129A 
-  1 AudioInputTest                   PRI  CODE   L   FFFFFFFFFFFC1660      2167   bootrom.asm   FFFC0D84 
-  2 AudioInputTest.0003              PRI  CODE   L   FFFFFFFFFFFC1686      2177   bootrom.asm   FFFC1690 FFFC16C8 
-  3 AudioInputTest.0004              PRI  CODE   L   FFFFFFFFFFFC16C2      2190   bootrom.asm   FFFC16C6 
+  0 AsciiToHexNybble                 PRI  CODE   L   FFFFFFFFFFFC0FFC      1555   bootrom.asm   FFFC0FDE FFFC0FE2 FFFC11A0 FFFC11AA FFFC11F2 FFFC11FE FFFC1212 FFFC121E FFFC126C FFFC127A FFFC1288 FFFC1292 FFFC129E FFFC12AA FFFC12B6 FFFC12C2 FFFC12CE FFFC12DA 
+  1 AudioInputTest                   PRI  CODE   L   FFFFFFFFFFFC16A0      2189   bootrom.asm   FFFC0DC4 
+  2 AudioInputTest.0003              PRI  CODE   L   FFFFFFFFFFFC16C6      2199   bootrom.asm   FFFC16D0 FFFC1708 
+  3 AudioInputTest.0004              PRI  CODE   L   FFFFFFFFFFFC1702      2212   bootrom.asm   FFFC1706 
   4 BLACK                            NON  DATA   B   0000000000000000        56   bootrom.asm   
-  5 BlankLastLine                    PRI  CODE   L   FFFFFFFFFFFC10D0      1619   bootrom.asm   
-  6 BlankLastLine.0001               PRI  CODE   L   FFFFFFFFFFFC111A      1635   bootrom.asm   FFFC1120 
-  7 BlankLastLine.0003               PRI  CODE   L   FFFFFFFFFFFC10DA      1623   bootrom.asm   FFFC10E4 
+  5 BlankLastLine                    PRI  CODE   L   FFFFFFFFFFFC1110      1641   bootrom.asm   
+  6 BlankLastLine.0001               PRI  CODE   L   FFFFFFFFFFFC115A      1657   bootrom.asm   FFFC1160 
+  7 BlankLastLine.0003               PRI  CODE   L   FFFFFFFFFFFC111A      1645   bootrom.asm   FFFC1124 
   8 BootClearScreen                  PRI  CODE   L   FFFFFFFFFFFC0492       614   bootrom.asm   FFFC00CA 
   9 BootClearScreen.loop1            PRI  CODE   L   FFFFFFFFFFFC04A0       618   bootrom.asm   FFFC04A6 
  10 BootCopyFont                     PRI  CODE   L   FFFFFFFFFFFC04A8       634   bootrom.asm   FFFC00F6 
- 11 CR                               NON  DATA   B   000000000000000D        62   bootrom.asm   FFFC0D58 FFFCC494 FFFCC4DE FFFCC542 FFFCC838 FFFCC8B8 FFFCC8CA FFFCC960 FFFCC9C6 FFFCCB0C 
- 12 CRLF                             PRI  CODE   L   FFFFFFFFFFFC0232       359   bootrom.asm   FFFC040C FFFC0434 FFFC073E FFFC07CE FFFC0D48 FFFC0F6A 
- 13 CTRLC                            NON  DATA   B   0000000000000003        59   bootrom.asm   FFFC12B2 FFFCCB56 
+ 11 CR                               NON  DATA   B   000000000000000D        62   bootrom.asm   FFFC0D98 FFFCC494 FFFCC4DE FFFCC542 FFFCC838 FFFCC8B8 FFFCC8CA FFFCC960 FFFCC9C6 FFFCCB0C 
+ 12 CRLF                             PRI  CODE   L   FFFFFFFFFFFC0232       359   bootrom.asm   FFFC040C FFFC0434 FFFC077E FFFC080E FFFC0D88 FFFC0FAA 
+ 13 CTRLC                            NON  DATA   B   0000000000000003        59   bootrom.asm   FFFC12F2 FFFCCB56 
  14 CTRLH                            NON  DATA   B   0000000000000008        60   bootrom.asm   FFFC0330 FFFCC8AC 
- 15 CalcScreenLoc                    PRI  CODE   L   FFFFFFFFFFFC024C       373   bootrom.asm   FFFC0324 FFFC0346 FFFC036E FFFC0D6A FFFC135E 
- 16 CheckForKey                      PRI  CODE   L   FFFFFFFFFFFC07A8       982   bootrom.asm   FFFC12A8 
- 17 ClearScreen                      PRI  CODE   L   FFFFFFFFFFFC0FFE      1564   bootrom.asm   FFFC0444 FFFC0DE8 
- 18 ClearScreen.0001                 PRI  CODE   L   FFFFFFFFFFFC1048      1581   bootrom.asm   FFFC104C 
- 19 ClearScreen.0003                 PRI  CODE   L   FFFFFFFFFFFC1004      1566   bootrom.asm   FFFC100E 
+ 15 CalcScreenLoc                    PRI  CODE   L   FFFFFFFFFFFC024C       373   bootrom.asm   FFFC0324 FFFC0346 FFFC036E FFFC0DAA FFFC139E 
+ 16 CheckForKey                      PRI  CODE   L   FFFFFFFFFFFC07E8      1004   bootrom.asm   FFFC12E8 
+ 17 ClearScreen                      PRI  CODE   L   FFFFFFFFFFFC103E      1586   bootrom.asm   FFFC0444 FFFC0E28 
+ 18 ClearScreen.0001                 PRI  CODE   L   FFFFFFFFFFFC1088      1603   bootrom.asm   FFFC108C 
+ 19 ClearScreen.0003                 PRI  CODE   L   FFFFFFFFFFFC1044      1588   bootrom.asm   FFFC104E 
  20 Cursor1                          PRI  CODE   L   FFFFFFFFFFFC0436       563   bootrom.asm   
- 21 CursorCol                        NON  DATA   L   0000000000010419       107   bootrom.asm   FFFC0088 FFFC0284 FFFC0292 FFFC029C FFFC02C8 FFFC02D2 FFFC02FC FFFC0306 FFFC0336 FFFC0340 FFFC039E FFFC03AA FFFC03B2 FFFC0486 FFFC0D64 
- 22 CursorImage                      PRI  CODE   L   FFFFFFFFFFFC060A       780   bootrom.asm   FFFC05F2 
- 23 CursorImage64                    PRI  CODE   L   FFFFFFFFFFFC065C       812   bootrom.asm   FFFC0630 
+ 21 CursorCol                        NON  DATA   L   0000000000010419       107   bootrom.asm   FFFC0088 FFFC0284 FFFC0292 FFFC029C FFFC02C8 FFFC02D2 FFFC02FC FFFC0306 FFFC0336 FFFC0340 FFFC039E FFFC03AA FFFC03B2 FFFC0486 FFFC0DA4 
+ 22 CursorImage                      PRI  CODE   L   FFFFFFFFFFFC0614       787   bootrom.asm   FFFC05FC 
+ 23 CursorImage64                    PRI  CODE   L   FFFFFFFFFFFC069C       834   bootrom.asm   FFFC063A 
  24 CursorRow                        NON  DATA   L   0000000000010418       106   bootrom.asm   FFFC008E FFFC02AE FFFC02B8 FFFC02E2 FFFC02EC FFFC0310 FFFC03B8 FFFC03C4 FFFC03D8 
  25 DARK_BLUE                        NON  DATA   B   000000000000000F        55   bootrom.asm   
  26 DispChar                         PRI  CODE   L   FFFFFFFFFFFC0532       689   bootrom.asm   FFFC0378 
  27 DispChar.0001                    PRI  CODE   L   FFFFFFFFFFFC053E       693   bootrom.asm   FFFC0548 
- 28 DispCharAt                       PRI  CODE   L   FFFFFFFFFFFC04F4       667   bootrom.asm   FFFC06C4 
+ 28 DispCharAt                       PRI  CODE   L   FFFFFFFFFFFC04F4       667   bootrom.asm   FFFC0704 
  29 DispCharAt.0001                  PRI  CODE   L   FFFFFFFFFFFC04FC       670   bootrom.asm   FFFC0506 
  30 DispCursor                       PRI  CODE   L   FFFFFFFFFFFC058C       717   bootrom.asm   FFFC02A2 FFFC02BE FFFC02D8 FFFC02F2 FFFC030C FFFC0316 FFFC0380 FFFC038E 
- 31 DispStringAt                     PRI  CODE   L   FFFFFFFFFFFC06BC       838   bootrom.asm   FFFC011C 
- 32 DispStringAt.0002                PRI  CODE   L   FFFFFFFFFFFC06CA       846   bootrom.asm   FFFC06C2 
- 33 DispStringAt.0003                PRI  CODE   L   FFFFFFFFFFFC06BC       839   bootrom.asm   FFFC06CA 
- 34 DisplayByte                      PRI  CODE   L   FFFFFFFFFFFC06E6       869   bootrom.asm   FFFC06FC FFFC0702 FFFC0708 FFFC070E FFFC0734 
- 35 DisplayChar                      PRI  CODE   L   FFFFFFFFFFFC027C       392   bootrom.asm   FFFC023A FFFC0244 FFFC03FC FFFC0422 FFFC06E0 FFFC0718 FFFC072C FFFC07D2 FFFC0D50 FFFC0D5E 
- 36 DisplayHelp                      PRI  CODE   L   FFFFFFFFFFFC0DEE      1373   bootrom.asm   FFFC0DC8 
- 37 DisplayHexNumber                 PRI  CODE   L   FFFFFFFFFFFC12C2      1815   bootrom.asm   FFFC1348 FFFC1388 FFFC13B8 FFFC13BC FFFC13DE 
- 38 DisplayMem                       PRI  CODE   L   FFFFFFFFFFFC0712       893   bootrom.asm   FFFC0F70 FFFC0F74 FFFC0F78 FFFC0F7C FFFC0F80 FFFC0F84 FFFC0F88 FFFC0F8C 
- 39 DisplayNybble                    PRI  CODE   L   FFFFFFFFFFFC06CC       853   bootrom.asm   FFFC06EC FFFC06F2 
- 40 DisplayString                    PRI  CODE   L   FFFFFFFFFFFC03EC       511   bootrom.asm   FFFC0154 FFFC0408 FFFC0DF6 
+ 31 DispStringAt                     PRI  CODE   L   FFFFFFFFFFFC06FC       860   bootrom.asm   FFFC011C 
+ 32 DispStringAt.0002                PRI  CODE   L   FFFFFFFFFFFC070A       868   bootrom.asm   FFFC0702 
+ 33 DispStringAt.0003                PRI  CODE   L   FFFFFFFFFFFC06FC       861   bootrom.asm   FFFC070A 
+ 34 DisplayByte                      PRI  CODE   L   FFFFFFFFFFFC0726       891   bootrom.asm   FFFC073C FFFC0742 FFFC0748 FFFC074E FFFC0774 
+ 35 DisplayChar                      PRI  CODE   L   FFFFFFFFFFFC027C       392   bootrom.asm   FFFC023A FFFC0244 FFFC03FC FFFC0422 FFFC0720 FFFC0758 FFFC076C FFFC0812 FFFC0D90 FFFC0D9E 
+ 36 DisplayHelp                      PRI  CODE   L   FFFFFFFFFFFC0E2E      1395   bootrom.asm   FFFC0E08 
+ 37 DisplayHexNumber                 PRI  CODE   L   FFFFFFFFFFFC1302      1837   bootrom.asm   FFFC1388 FFFC13C8 FFFC13F8 FFFC13FC FFFC141E 
+ 38 DisplayMem                       PRI  CODE   L   FFFFFFFFFFFC0752       915   bootrom.asm   FFFC0FB0 FFFC0FB4 FFFC0FB8 FFFC0FBC FFFC0FC0 FFFC0FC4 FFFC0FC8 FFFC0FCC 
+ 39 DisplayNybble                    PRI  CODE   L   FFFFFFFFFFFC070C       875   bootrom.asm   FFFC072C FFFC0732 
+ 40 DisplayString                    PRI  CODE   L   FFFFFFFFFFFC03EC       511   bootrom.asm   FFFC0154 FFFC0408 FFFC0E36 
  41 DisplayString0                   PRI  CODE   L   FFFFFFFFFFFC042E       555   bootrom.asm   
  42 DisplayString1                   PRI  CODE   L   FFFFFFFFFFFC040E       536   bootrom.asm   FFFC0430 
  43 DisplayStringCRLF                PRI  CODE   L   FFFFFFFFFFFC0406       528   bootrom.asm   
- 44 DisplayWord                      PRI  CODE   L   FFFFFFFFFFFC06F8       882   bootrom.asm   FFFC0720 
- 45 DrawLines                        PRI  CODE   L   FFFFFFFFFFFC1492      2002   bootrom.asm   FFFC00EE FFFC1412 
- 46 DrawLines.0001                   PRI  CODE   L   FFFFFFFFFFFC14A4      2006   bootrom.asm   FFFC152E 
- 47 DrawLines.0002                   PRI  CODE   L   FFFFFFFFFFFC14F8      2032   bootrom.asm   FFFC1502 
- 48 DrawLines.0003                   PRI  CODE   L   FFFFFFFFFFFC14A4      2008   bootrom.asm   FFFC14BC 
- 49 DrawLines.0004                   PRI  CODE   L   FFFFFFFFFFFC14BC      2015   bootrom.asm   FFFC14B6 
- 50 DrawRects                        PRI  CODE   L   FFFFFFFFFFFC141C      1963   bootrom.asm   FFFC1416 
- 51 DrawRects.0001                   PRI  CODE   L   FFFFFFFFFFFC142E      1967   bootrom.asm   FFFC1490 FFFC1494 
- 52 DrawRects.0002                   PRI  CODE   L   FFFFFFFFFFFC1462      1983   bootrom.asm   FFFC146C 
- 53 DumpMem                          PRI  CODE   L   FFFFFFFFFFFC0F5E      1490   bootrom.asm   FFFC0D9C 
- 54 DumpMem1                         PRI  CODE   L   FFFFFFFFFFFC0F66      1493   bootrom.asm   FFFC1362 
- 55 EditMem                          PRI  CODE   L   FFFFFFFFFFFC0EF0      1444   bootrom.asm   FFFC0D94 
- 56 ExecuteCode                      PRI  CODE   L   FFFFFFFFFFFC0F4E      1479   bootrom.asm   FFFC0DB8 
- 57 FillMem                          PRI  CODE   L   FFFFFFFFFFFC0E9A      1397   bootrom.asm   FFFC0DA4 
- 58 GFX_ACTIVE_POINT0                NON  DATA   B   0000000000000000       131   bootrom.asm   FFFC1A8E 
- 59 GFX_ACTIVE_POINT1                NON  DATA   L   0000000000010000       132   bootrom.asm   FFFC1AE0 
+ 44 DisplayWord                      PRI  CODE   L   FFFFFFFFFFFC0738       904   bootrom.asm   FFFC0760 
+ 45 DrawLines                        PRI  CODE   L   FFFFFFFFFFFC14D2      2024   bootrom.asm   FFFC00EE FFFC1452 
+ 46 DrawLines.0001                   PRI  CODE   L   FFFFFFFFFFFC14E4      2028   bootrom.asm   FFFC156E 
+ 47 DrawLines.0002                   PRI  CODE   L   FFFFFFFFFFFC1538      2054   bootrom.asm   FFFC1542 
+ 48 DrawLines.0003                   PRI  CODE   L   FFFFFFFFFFFC14E4      2030   bootrom.asm   FFFC14FC 
+ 49 DrawLines.0004                   PRI  CODE   L   FFFFFFFFFFFC14FC      2037   bootrom.asm   FFFC14F6 
+ 50 DrawRects                        PRI  CODE   L   FFFFFFFFFFFC145C      1985   bootrom.asm   FFFC1456 
+ 51 DrawRects.0001                   PRI  CODE   L   FFFFFFFFFFFC146E      1989   bootrom.asm   FFFC14D0 FFFC14D4 
+ 52 DrawRects.0002                   PRI  CODE   L   FFFFFFFFFFFC14A2      2005   bootrom.asm   FFFC14AC 
+ 53 DumpMem                          PRI  CODE   L   FFFFFFFFFFFC0F9E      1512   bootrom.asm   FFFC0DDC 
+ 54 DumpMem1                         PRI  CODE   L   FFFFFFFFFFFC0FA6      1515   bootrom.asm   FFFC13A2 
+ 55 EditMem                          PRI  CODE   L   FFFFFFFFFFFC0F30      1466   bootrom.asm   FFFC0DD4 
+ 56 ExecuteCode                      PRI  CODE   L   FFFFFFFFFFFC0F8E      1501   bootrom.asm   FFFC0DF8 
+ 57 FillMem                          PRI  CODE   L   FFFFFFFFFFFC0EDA      1419   bootrom.asm   FFFC0DE4 
+ 58 GFX_ACTIVE_POINT0                NON  DATA   B   0000000000000000       131   bootrom.asm   FFFC1ACE 
+ 59 GFX_ACTIVE_POINT1                NON  DATA   L   0000000000010000       132   bootrom.asm   FFFC1B20 
  60 GFX_COLOR0                       NON  DATA   W   0000000000000084       129   bootrom.asm   
  61 GFX_CONTROL                      NON  DATA   B   0000000000000000       121   bootrom.asm   
  62 GFX_DEST_PIXEL_X                 NON  DATA   B   0000000000000038       126   bootrom.asm   
  63 GFX_DEST_PIXEL_Y                 NON  DATA   B   000000000000003C       127   bootrom.asm   
  64 GFX_DEST_PIXEL_Z                 NON  DATA   B   0000000000000040       128   bootrom.asm   
- 65 GFX_LINE                         NON  DATA   W   0000000000000200       133   bootrom.asm   FFFC1AF8 
+ 65 GFX_LINE                         NON  DATA   W   0000000000000200       133   bootrom.asm   FFFC1B38 
  66 GFX_STATUS                       NON  DATA   B   0000000000000004       122   bootrom.asm   
  67 GFX_TARGET_BASE                  NON  DATA   B   0000000000000010       123   bootrom.asm   
  68 GFX_TARGET_SIZE_X                NON  DATA   B   0000000000000014       124   bootrom.asm   
  69 GFX_TARGET_SIZE_Y                NON  DATA   B   0000000000000018       125   bootrom.asm   
  70 GetCursorPos                     PRI  CODE   L   FFFFFFFFFFFC044A       577   bootrom.asm   FFFC043C 
- 71 GetHexNumber                     PRI  CODE   L   FFFFFFFFFFFC0F92      1510   bootrom.asm   FFFC0EA4 FFFC0EAE FFFC0EB8 FFFC0EF6 FFFC0F00 FFFC0F0A FFFC0F14 FFFC0F1E FFFC0F28 FFFC0F32 FFFC0F3C FFFC0F46 FFFC0F54 FFFC0F5A FFFC0F64 
- 72 GetKey                           PRI  CODE   L   FFFFFFFFFFFC07BA       994   bootrom.asm   FFFC0D54 FFFC12AE 
- 73 GraphicsDemo                     PRI  CODE   L   FFFFFFFFFFFC1410      1958   bootrom.asm   FFFC0D8C 
- 74 HelpMsg                          PRI  CODE   L   FFFFFFFFFFFC0DFE      1378   bootrom.asm   FFFC0DF0 
- 75 I2C                              NON  DATA   D   00000000FFDC0E00        95   bootrom.asm   FFFC15EA FFFC16EC FFFC1758 
- 76 I2C2                             NON  DATA   D   00000000FFDC0E10        96   bootrom.asm   FFFC15FA 
- 77 I2C_CMD                          NON  DATA   B   0000000000000008      2103   bootrom.asm   
- 78 I2C_CTRL                         NON  DATA   B   0000000000000004      2100   bootrom.asm   
- 79 I2C_PREH                         NON  DATA   B   0000000000000002      2099   bootrom.asm   
- 80 I2C_PREL                         NON  DATA   B   0000000000000000      2098   bootrom.asm   
- 81 I2C_RXR                          NON  DATA   B   0000000000000006      2101   bootrom.asm   
- 82 I2C_STAT                         NON  DATA   B   000000000000000A      2104   bootrom.asm   FFFC1888 FFFC18AE 
- 83 I2C_TXR                          NON  DATA   B   0000000000000006      2102   bootrom.asm   
+ 71 GetHexNumber                     PRI  CODE   L   FFFFFFFFFFFC0FD2      1532   bootrom.asm   FFFC0EE4 FFFC0EEE FFFC0EF8 FFFC0F36 FFFC0F40 FFFC0F4A FFFC0F54 FFFC0F5E FFFC0F68 FFFC0F72 FFFC0F7C FFFC0F86 FFFC0F94 FFFC0F9A FFFC0FA4 
+ 72 GetKey                           PRI  CODE   L   FFFFFFFFFFFC07FA      1016   bootrom.asm   FFFC0D94 FFFC12EE 
+ 73 GraphicsDemo                     PRI  CODE   L   FFFFFFFFFFFC1450      1980   bootrom.asm   FFFC0DCC 
+ 74 HelpMsg                          PRI  CODE   L   FFFFFFFFFFFC0E3E      1400   bootrom.asm   FFFC0E30 
+ 75 I2C                              NON  DATA   D   00000000FFDC0E00        95   bootrom.asm   FFFC162A FFFC172C FFFC1798 
+ 76 I2C2                             NON  DATA   D   00000000FFDC0E10        96   bootrom.asm   FFFC163A 
+ 77 I2C_CMD                          NON  DATA   B   0000000000000008      2125   bootrom.asm   
+ 78 I2C_CTRL                         NON  DATA   B   0000000000000004      2122   bootrom.asm   
+ 79 I2C_PREH                         NON  DATA   B   0000000000000002      2121   bootrom.asm   
+ 80 I2C_PREL                         NON  DATA   B   0000000000000000      2120   bootrom.asm   
+ 81 I2C_RXR                          NON  DATA   B   0000000000000006      2123   bootrom.asm   
+ 82 I2C_STAT                         NON  DATA   B   000000000000000A      2126   bootrom.asm   FFFC18C8 FFFC18EE 
+ 83 I2C_TXR                          NON  DATA   B   0000000000000006      2124   bootrom.asm   
  84 IllegalInstruction               PRI  CODE   L   FFFFFFFFFFFC014C       278   bootrom.asm   FFFC0044 
  85 IncCursorPos                     PRI  CODE   L   FFFFFFFFFFFC0396       485   bootrom.asm   FFFC037C 
  86 IncCursorRow                     PRI  CODE   L   FFFFFFFFFFFC03B6       492   bootrom.asm   FFFC038A 
  87 KEYBD                            NON  DATA   D   00000000FFDC0000        98   bootrom.asm   
- 88 KeybdEcho                        NON  DATA   L   0000000000010424       112   bootrom.asm   FFFC07C0 FFFC0D42 
- 89 KeybdGetChar                     PRI  CODE   L   FFFFFFFFFFFC07E6      1015   bootrom.asm   FFFC07DE 
- 90 KeybdGetChar.0001                PRI  CODE   L   FFFFFFFFFFFC0804      1027   bootrom.asm   
- 91 KeybdGetChar.0003                PRI  CODE   L   FFFFFFFFFFFC07EA      1017   bootrom.asm   FFFC07F8 FFFC0866 FFFC08E6 FFFC08F2 FFFC090E FFFC091A FFFC0936 FFFC0942 FFFC0956 FFFC0978 FFFC0984 FFFC0994 FFFC09A4 FFFC09B4 
- 92 KeybdGetChar.0004                PRI  CODE   L   FFFFFFFFFFFC0910      1096   bootrom.asm   FFFC0904 
- 93 KeybdGetChar.0005                PRI  CODE   L   FFFFFFFFFFFC097A      1127   bootrom.asm   FFFC096E 
- 94 KeybdGetChar.0006                PRI  CODE   L   FFFFFFFFFFFC0800      1025   bootrom.asm   FFFC07F0 
- 95 KeybdGetChar.0007                PRI  CODE   L   FFFFFFFFFFFC08BC      1075   bootrom.asm   FFFC08B0 
- 96 KeybdGetChar.0008                PRI  CODE   L   FFFFFFFFFFFC08CE      1079   bootrom.asm   FFFC0894 FFFC08AA FFFC08BC 
- 97 KeybdGetChar.0009                PRI  CODE   L   FFFFFFFFFFFC08AA      1069   bootrom.asm   FFFC089A 
- 98 KeybdGetChar.0010                PRI  CODE   L   FFFFFFFFFFFC0894      1062   bootrom.asm   FFFC0876 
- 99 KeybdGetChar.0011                PRI  CODE   L   FFFFFFFFFFFC0938      1106   bootrom.asm   FFFC092C 
-100 KeybdGetChar.0012                PRI  CODE   L   FFFFFFFFFFFC0958      1117   bootrom.asm   FFFC0952 
-101 KeybdGetChar.0013                PRI  CODE   L   FFFFFFFFFFFC086E      1053   bootrom.asm   FFFC095C 
-102 KeybdGetChar.doAlt               PRI  CODE   L   FFFFFFFFFFFC091C      1099   bootrom.asm   FFFC0852 
-103 KeybdGetChar.doCapsLock          PRI  CODE   L   FFFFFFFFFFFC0996      1134   bootrom.asm   FFFC0842 
-104 KeybdGetChar.doCtrl              PRI  CODE   L   FFFFFFFFFFFC08F4      1089   bootrom.asm   FFFC0822 
-105 KeybdGetChar.doExtend            PRI  CODE   L   FFFFFFFFFFFC08E8      1086   bootrom.asm   FFFC081A 
-106 KeybdGetChar.doKeyup             PRI  CODE   L   FFFFFFFFFFFC08DC      1083   bootrom.asm   FFFC0812 
-107 KeybdGetChar.doNumLock           PRI  CODE   L   FFFFFFFFFFFC0986      1130   bootrom.asm   FFFC083A 
-108 KeybdGetChar.doScrollLock        PRI  CODE   L   FFFFFFFFFFFC09A6      1138   bootrom.asm   FFFC084A 
-109 KeybdGetChar.doShift             PRI  CODE   L   FFFFFFFFFFFC095E      1120   bootrom.asm   FFFC082A FFFC0832 
-110 KeybdGetChar.doTab               PRI  CODE   L   FFFFFFFFFFFC0944      1109   bootrom.asm   FFFC086C 
-111 KeybdGetCharNoWait               PRI  CODE   L   FFFFFFFFFFFC07D6      1008   bootrom.asm   
-112 KeybdGetCharWait                 PRI  CODE   L   FFFFFFFFFFFC07DE      1012   bootrom.asm   FFFC07BC 
-113 KeybdLEDs                        NON  DATA   L   0000000000010428       116   bootrom.asm   FFFC09BC 
-114 KeybdRecvByte                    PRI  CODE   L   FFFFFFFFFFFC075C       939   bootrom.asm   FFFC0A04 FFFC0A08 FFFC0A20 
-115 KeybdRecvByte.0003               PRI  CODE   L   FFFFFFFFFFFC0762       942   bootrom.asm   FFFC0770 
-116 KeybdRecvByte.0004               PRI  CODE   L   FFFFFFFFFFFC0778       951   bootrom.asm   FFFC076A 
-117 KeybdSendByte                    PRI  CODE   L   FFFFFFFFFFFC0A28      1173   bootrom.asm   FFFC09FC FFFC0A18 
-118 KeybdSetLEDStatus                PRI  CODE   L   FFFFFFFFFFFC09B6      1143   bootrom.asm   FFFC0990 FFFC09A0 FFFC09B0 
-119 KeybdSetLEDStatus.0001           PRI  CODE   L   FFFFFFFFFFFC0A22      1169   bootrom.asm   FFFC0A0A FFFC0A0C 
-120 KeybdSetLEDStatus.0002           PRI  CODE   L   FFFFFFFFFFFC09D2      1149   bootrom.asm   FFFC09CA 
-121 KeybdSetLEDStatus.0003           PRI  CODE   L   FFFFFFFFFFFC09E4      1153   bootrom.asm   FFFC09DC 
-122 KeybdSetLEDStatus.0004           PRI  CODE   L   FFFFFFFFFFFC09F6      1157   bootrom.asm   FFFC09EE 
-123 KeybdWaitFlag                    NON  DATA   L   0000000000010425       113   bootrom.asm   FFFC07D8 FFFC07F2 
-124 KeybdWaitTx                      PRI  CODE   L   FFFFFFFFFFFC0780       960   bootrom.asm   FFFC0A00 FFFC0A1C 
-125 KeybdWaitTx.0001                 PRI  CODE   L   FFFFFFFFFFFC0786       963   bootrom.asm   FFFC0796 
-126 KeybdWaitTx.0002                 PRI  CODE   L   FFFFFFFFFFFC07A0       972   bootrom.asm   FFFC0790 
-127 LF                               NON  DATA   B   000000000000000A        61   bootrom.asm   FFFC1130 FFFCC9EA 
-128 LoadS19                          PRI  CODE   L   FFFFFFFFFFFC1128      1645   bootrom.asm   FFFC0DC0 
+ 88 KeybdEcho                        NON  DATA   L   0000000000010424       112   bootrom.asm   FFFC0800 FFFC0D82 
+ 89 KeybdGetChar                     PRI  CODE   L   FFFFFFFFFFFC0826      1037   bootrom.asm   FFFC081E 
+ 90 KeybdGetChar.0001                PRI  CODE   L   FFFFFFFFFFFC0844      1049   bootrom.asm   
+ 91 KeybdGetChar.0003                PRI  CODE   L   FFFFFFFFFFFC082A      1039   bootrom.asm   FFFC0838 FFFC08A6 FFFC0926 FFFC0932 FFFC094E FFFC095A FFFC0976 FFFC0982 FFFC0996 FFFC09B8 FFFC09C4 FFFC09D4 FFFC09E4 FFFC09F4 
+ 92 KeybdGetChar.0004                PRI  CODE   L   FFFFFFFFFFFC0950      1118   bootrom.asm   FFFC0944 
+ 93 KeybdGetChar.0005                PRI  CODE   L   FFFFFFFFFFFC09BA      1149   bootrom.asm   FFFC09AE 
+ 94 KeybdGetChar.0006                PRI  CODE   L   FFFFFFFFFFFC0840      1047   bootrom.asm   FFFC0830 
+ 95 KeybdGetChar.0007                PRI  CODE   L   FFFFFFFFFFFC08FC      1097   bootrom.asm   FFFC08F0 
+ 96 KeybdGetChar.0008                PRI  CODE   L   FFFFFFFFFFFC090E      1101   bootrom.asm   FFFC08D4 FFFC08EA FFFC08FC 
+ 97 KeybdGetChar.0009                PRI  CODE   L   FFFFFFFFFFFC08EA      1091   bootrom.asm   FFFC08DA 
+ 98 KeybdGetChar.0010                PRI  CODE   L   FFFFFFFFFFFC08D4      1084   bootrom.asm   FFFC08B6 
+ 99 KeybdGetChar.0011                PRI  CODE   L   FFFFFFFFFFFC0978      1128   bootrom.asm   FFFC096C 
+100 KeybdGetChar.0012                PRI  CODE   L   FFFFFFFFFFFC0998      1139   bootrom.asm   FFFC0992 
+101 KeybdGetChar.0013                PRI  CODE   L   FFFFFFFFFFFC08AE      1075   bootrom.asm   FFFC099C 
+102 KeybdGetChar.doAlt               PRI  CODE   L   FFFFFFFFFFFC095C      1121   bootrom.asm   FFFC0892 
+103 KeybdGetChar.doCapsLock          PRI  CODE   L   FFFFFFFFFFFC09D6      1156   bootrom.asm   FFFC0882 
+104 KeybdGetChar.doCtrl              PRI  CODE   L   FFFFFFFFFFFC0934      1111   bootrom.asm   FFFC0862 
+105 KeybdGetChar.doExtend            PRI  CODE   L   FFFFFFFFFFFC0928      1108   bootrom.asm   FFFC085A 
+106 KeybdGetChar.doKeyup             PRI  CODE   L   FFFFFFFFFFFC091C      1105   bootrom.asm   FFFC0852 
+107 KeybdGetChar.doNumLock           PRI  CODE   L   FFFFFFFFFFFC09C6      1152   bootrom.asm   FFFC087A 
+108 KeybdGetChar.doScrollLock        PRI  CODE   L   FFFFFFFFFFFC09E6      1160   bootrom.asm   FFFC088A 
+109 KeybdGetChar.doShift             PRI  CODE   L   FFFFFFFFFFFC099E      1142   bootrom.asm   FFFC086A FFFC0872 
+110 KeybdGetChar.doTab               PRI  CODE   L   FFFFFFFFFFFC0984      1131   bootrom.asm   FFFC08AC 
+111 KeybdGetCharNoWait               PRI  CODE   L   FFFFFFFFFFFC0816      1030   bootrom.asm   
+112 KeybdGetCharWait                 PRI  CODE   L   FFFFFFFFFFFC081E      1034   bootrom.asm   FFFC07FC 
+113 KeybdLEDs                        NON  DATA   L   0000000000010428       116   bootrom.asm   FFFC09FC 
+114 KeybdRecvByte                    PRI  CODE   L   FFFFFFFFFFFC079C       961   bootrom.asm   FFFC0A44 FFFC0A48 FFFC0A60 
+115 KeybdRecvByte.0003               PRI  CODE   L   FFFFFFFFFFFC07A2       964   bootrom.asm   FFFC07B0 
+116 KeybdRecvByte.0004               PRI  CODE   L   FFFFFFFFFFFC07B8       973   bootrom.asm   FFFC07AA 
+117 KeybdSendByte                    PRI  CODE   L   FFFFFFFFFFFC0A68      1195   bootrom.asm   FFFC0A3C FFFC0A58 
+118 KeybdSetLEDStatus                PRI  CODE   L   FFFFFFFFFFFC09F6      1165   bootrom.asm   FFFC09D0 FFFC09E0 FFFC09F0 
+119 KeybdSetLEDStatus.0001           PRI  CODE   L   FFFFFFFFFFFC0A62      1191   bootrom.asm   FFFC0A4A FFFC0A4C 
+120 KeybdSetLEDStatus.0002           PRI  CODE   L   FFFFFFFFFFFC0A12      1171   bootrom.asm   FFFC0A0A 
+121 KeybdSetLEDStatus.0003           PRI  CODE   L   FFFFFFFFFFFC0A24      1175   bootrom.asm   FFFC0A1C 
+122 KeybdSetLEDStatus.0004           PRI  CODE   L   FFFFFFFFFFFC0A36      1179   bootrom.asm   FFFC0A2E 
+123 KeybdWaitFlag                    NON  DATA   L   0000000000010425       113   bootrom.asm   FFFC0818 FFFC0832 
+124 KeybdWaitTx                      PRI  CODE   L   FFFFFFFFFFFC07C0       982   bootrom.asm   FFFC0A40 FFFC0A5C 
+125 KeybdWaitTx.0001                 PRI  CODE   L   FFFFFFFFFFFC07C6       985   bootrom.asm   FFFC07D6 
+126 KeybdWaitTx.0002                 PRI  CODE   L   FFFFFFFFFFFC07E0       994   bootrom.asm   FFFC07D0 
+127 LF                               NON  DATA   B   000000000000000A        61   bootrom.asm   FFFC1170 FFFCC9EA 
+128 LoadS19                          PRI  CODE   L   FFFFFFFFFFFC1168      1667   bootrom.asm   FFFC0E00 
 129 MSG_ILLEGAL_INSN                 PRI  CODE   L   FFFFFFFFFFFC015A       283   bootrom.asm   FFFC014E 
-130 Monitor                          PRI  CODE   L   FFFFFFFFFFFC0D40      1305   bootrom.asm   FFFC0DD0 FFFC0DDA FFFC0DE4 FFFC0DEC FFFC0DFC FFFC0EC8 FFFC0ED8 FFFC0EE2 FFFC0F4C FFFC0F5C FFFC0F90 FFFC0F98 FFFC1140 FFFC1206 FFFC1214 FFFC1222 FFFC1226 FFFC12B6 FFFC141A FFFC141E 
-131 NextRec                          PRI  CODE   L   FFFFFFFFFFFC112A      1647   bootrom.asm   FFFC1134 FFFC1148 FFFC1154 FFFC115A FFFC1178 FFFC1190 FFFC11A4 FFFC11E6 
-132 ProcessRec                       PRI  CODE   L   FFFFFFFFFFFC1134      1651   bootrom.asm   FFFC112A 
-133 ProcessS1                        PRI  CODE   L   FFFFFFFFFFFC11E8      1717   bootrom.asm   FFFC117E 
-134 ProcessS2                        PRI  CODE   L   FFFFFFFFFFFC11EE      1720   bootrom.asm   FFFC1184 
-135 ProcessS3                        PRI  CODE   L   FFFFFFFFFFFC11F4      1723   bootrom.asm   FFFC118A 
-136 ProcessS7                        PRI  CODE   L   FFFFFFFFFFFC11FA      1726   bootrom.asm   FFFC1196 
-137 ProcessS8                        PRI  CODE   L   FFFFFFFFFFFC1208      1730   bootrom.asm   FFFC119C 
-138 ProcessS9                        PRI  CODE   L   FFFFFFFFFFFC1216      1734   bootrom.asm   FFFC11A2 
-139 Prompt1                          PRI  CODE   L   FFFFFFFFFFFC0D62      1324   bootrom.asm   FFFC0D5C 
-140 Prompt2                          PRI  CODE   L   FFFFFFFFFFFC0D76      1336   bootrom.asm   FFFC0D74 
-141 Prompt2.0001                     PRI  CODE   L   FFFFFFFFFFFC0DB2      1352   bootrom.asm   FFFC0DAC FFFC0DAE 
-142 Prompt3                          PRI  CODE   L   FFFFFFFFFFFC0D52      1315   bootrom.asm   FFFC0D62 
-143 PromptLn                         PRI  CODE   L   FFFFFFFFFFFC0D46      1308   bootrom.asm   
+130 Monitor                          PRI  CODE   L   FFFFFFFFFFFC0D80      1327   bootrom.asm   FFFC0E10 FFFC0E1A FFFC0E24 FFFC0E2C FFFC0E3C FFFC0F08 FFFC0F18 FFFC0F22 FFFC0F8C FFFC0F9C FFFC0FD0 FFFC0FD8 FFFC1180 FFFC1246 FFFC1254 FFFC1262 FFFC1266 FFFC12F6 FFFC145A FFFC145E 
+131 NextRec                          PRI  CODE   L   FFFFFFFFFFFC116A      1669   bootrom.asm   FFFC1174 FFFC1188 FFFC1194 FFFC119A FFFC11B8 FFFC11D0 FFFC11E4 FFFC1226 
+132 ProcessRec                       PRI  CODE   L   FFFFFFFFFFFC1174      1673   bootrom.asm   FFFC116A 
+133 ProcessS1                        PRI  CODE   L   FFFFFFFFFFFC1228      1739   bootrom.asm   FFFC11BE 
+134 ProcessS2                        PRI  CODE   L   FFFFFFFFFFFC122E      1742   bootrom.asm   FFFC11C4 
+135 ProcessS3                        PRI  CODE   L   FFFFFFFFFFFC1234      1745   bootrom.asm   FFFC11CA 
+136 ProcessS7                        PRI  CODE   L   FFFFFFFFFFFC123A      1748   bootrom.asm   FFFC11D6 
+137 ProcessS8                        PRI  CODE   L   FFFFFFFFFFFC1248      1752   bootrom.asm   FFFC11DC 
+138 ProcessS9                        PRI  CODE   L   FFFFFFFFFFFC1256      1756   bootrom.asm   FFFC11E2 
+139 Prompt1                          PRI  CODE   L   FFFFFFFFFFFC0DA2      1346   bootrom.asm   FFFC0D9C 
+140 Prompt2                          PRI  CODE   L   FFFFFFFFFFFC0DB6      1358   bootrom.asm   FFFC0DB4 
+141 Prompt2.0001                     PRI  CODE   L   FFFFFFFFFFFC0DF2      1374   bootrom.asm   FFFC0DEC FFFC0DEE 
+142 Prompt3                          PRI  CODE   L   FFFFFFFFFFFC0D92      1337   bootrom.asm   FFFC0DA2 
+143 PromptLn                         PRI  CODE   L   FFFFFFFFFFFC0D86      1330   bootrom.asm   
 144 Pulse1000                        PRI  CODE   L   FFFFFFFFFFFC0132       266   bootrom.asm   FFFC004E 
 145 Pulse31                          PRI  CODE   L   FFFFFFFFFFFC014A       272   bootrom.asm   FFFC0148 
 146 RED                              NON  DATA   W   0000000000007C00        54   bootrom.asm   
-147 RGBMASK                          NON  DATA   W   0000000000007FFF        53   bootrom.asm   FFFC145C FFFC1460 FFFC1468 FFFC14F2 FFFC14F6 FFFC14FE FFFC1B46 FFFC1B4A 
-148 RTCBuf                           NON  DATA   L   0000000000010600       155   bootrom.asm   FFFC1836 FFFC18D2 
+147 RGBMASK                          NON  DATA   W   0000000000007FFF        53   bootrom.asm   FFFC149C FFFC14A0 FFFC14A8 FFFC1532 FFFC1536 FFFC153E FFFC1B86 FFFC1B8A 
+148 RTCBuf                           NON  DATA   L   0000000000010600       155   bootrom.asm   FFFC1876 FFFC1912 
 149 RTFBufEnd                        NON  DATA   L   0000000000010660       156   bootrom.asm   
-150 S1932a                           PRI  CODE   L   FFFFFFFFFFFC1264      1766   bootrom.asm   FFFC1240 FFFC1242 
-151 S1932b                           PRI  CODE   L   FFFFFFFFFFFC127C      1775   bootrom.asm   FFFC1232 FFFC1234 
-152 S19Get16BitAddress               PRI  CODE   L   FFFFFFFFFFFC1224      1739   bootrom.asm   FFFC11EA FFFC1218 
-153 S19Get24BitAddress               PRI  CODE   L   FFFFFFFFFFFC1232      1746   bootrom.asm   FFFC11F0 FFFC120A 
-154 S19Get32BitAddress               PRI  CODE   L   FFFFFFFFFFFC1240      1753   bootrom.asm   FFFC11F6 FFFC11FC 
-155 SC_ALT                           NON  DATA   B   0000000000000011        75   bootrom.asm   FFFC084E 
+150 S1932a                           PRI  CODE   L   FFFFFFFFFFFC12A4      1788   bootrom.asm   FFFC1280 FFFC1282 
+151 S1932b                           PRI  CODE   L   FFFFFFFFFFFC12BC      1797   bootrom.asm   FFFC1272 FFFC1274 
+152 S19Get16BitAddress               PRI  CODE   L   FFFFFFFFFFFC1264      1761   bootrom.asm   FFFC122A FFFC1258 
+153 S19Get24BitAddress               PRI  CODE   L   FFFFFFFFFFFC1272      1768   bootrom.asm   FFFC1230 FFFC124A 
+154 S19Get32BitAddress               PRI  CODE   L   FFFFFFFFFFFC1280      1775   bootrom.asm   FFFC1236 FFFC123C 
+155 SC_ALT                           NON  DATA   B   0000000000000011        75   bootrom.asm   FFFC088E 
 156 SC_C                             NON  DATA   B   0000000000000021        65   bootrom.asm   
-157 SC_CAPSLOCK                      NON  DATA   B   0000000000000058        74   bootrom.asm   FFFC083E 
-158 SC_CTRL                          NON  DATA   B   0000000000000014        70   bootrom.asm   FFFC081E 
+157 SC_CAPSLOCK                      NON  DATA   B   0000000000000058        74   bootrom.asm   FFFC087E 
+158 SC_CTRL                          NON  DATA   B   0000000000000014        70   bootrom.asm   FFFC085E 
 159 SC_DEL                           NON  DATA   B   0000000000000071        77   bootrom.asm   
-160 SC_EXTEND                        NON  DATA   W   00000000000000E0        69   bootrom.asm   FFFC0816 
+160 SC_EXTEND                        NON  DATA   W   00000000000000E0        69   bootrom.asm   FFFC0856 
 161 SC_F12                           NON  DATA   B   0000000000000007        64   bootrom.asm   
-162 SC_KEYUP                         NON  DATA   W   00000000000000F0        68   bootrom.asm   FFFC080E 
+162 SC_KEYUP                         NON  DATA   W   00000000000000F0        68   bootrom.asm   FFFC084E 
 163 SC_LCTRL                         NON  DATA   B   0000000000000058        78   bootrom.asm   
-164 SC_LSHIFT                        NON  DATA   B   0000000000000012        76   bootrom.asm   FFFC0826 
-165 SC_NUMLOCK                       NON  DATA   B   0000000000000077        72   bootrom.asm   FFFC0836 
-166 SC_RSHIFT                        NON  DATA   B   0000000000000059        71   bootrom.asm   FFFC082E 
-167 SC_SCROLLLOCK                    NON  DATA   B   000000000000007E        73   bootrom.asm   FFFC0846 
+164 SC_LSHIFT                        NON  DATA   B   0000000000000012        76   bootrom.asm   FFFC0866 
+165 SC_NUMLOCK                       NON  DATA   B   0000000000000077        72   bootrom.asm   FFFC0876 
+166 SC_RSHIFT                        NON  DATA   B   0000000000000059        71   bootrom.asm   FFFC086E 
+167 SC_SCROLLLOCK                    NON  DATA   B   000000000000007E        73   bootrom.asm   FFFC0886 
 168 SC_T                             NON  DATA   B   000000000000002C        66   bootrom.asm   
-169 SC_TAB                           NON  DATA   B   000000000000000D        79   bootrom.asm   FFFC0868 
+169 SC_TAB                           NON  DATA   B   000000000000000D        79   bootrom.asm   FFFC08A8 
 170 SC_Z                             NON  DATA   B   000000000000001A        67   bootrom.asm   
-171 ScrollUp                         PRI  CODE   L   FFFFFFFFFFFC1050      1586   bootrom.asm   FFFC03E8 FFFC03F2 
-172 ScrollUp.0001                    PRI  CODE   L   FFFFFFFFFFFC10C6      1614   bootrom.asm   FFFC10CA 
-173 ScrollUp.0003                    PRI  CODE   L   FFFFFFFFFFFC105A      1589   bootrom.asm   FFFC1064 
-174 SetCursorColor                   PRI  CODE   L   FFFFFFFFFFFC05C2       752   bootrom.asm   FFFC00A4 
-175 SetCursorImage                   PRI  CODE   L   FFFFFFFFFFFC05EC       768   bootrom.asm   FFFC00A8 
-176 SetCursorImage.0001              PRI  CODE   L   FFFFFFFFFFFC05FE       773   bootrom.asm   FFFC0602 
-177 SetCursorImage64                 PRI  CODE   L   FFFFFFFFFFFC062A       798   bootrom.asm   FFFC00AC FFFC00B0 FFFC00B6 
-178 SetCursorImage64.0001            PRI  CODE   L   FFFFFFFFFFFC063C       803   bootrom.asm   FFFC0640 
-179 SetCursorPos                     PRI  CODE   L   FFFFFFFFFFFC045A       589   bootrom.asm   FFFC0442 
-180 SetKeyboardEcho                  PRI  CODE   L   FFFFFFFFFFFC022A       354   bootrom.asm   
-181 Start                            PRI  CODE   L   FFFFFFFFFFFC0010       170   bootrom.asm   
-182 StartMon                         PRI  CODE   L   FFFFFFFFFFFC0D40      1304   bootrom.asm   
-183 StubRout                         PRI  CODE   L   FFFFFFFFFFFC0228       348   bootrom.asm   
-184 T15DispatchTable                 PRI  CODE   L   FFFFFFFFFFFC0188       302   bootrom.asm   FFFC0174 
-185 TEXTCOLS                         NON  DATA   B   0000000000000028        81   bootrom.asm   
-186 TEXTROWS                         NON  DATA   B   0000000000000020        82   bootrom.asm   
-187 TRAP15                           PRI  CODE   L   FFFFFFFFFFFC016E       292   bootrom.asm   FFFC0062 
-188 TestBlitter                      PRI  CODE   L   FFFFFFFFFFFC1532      2052   bootrom.asm   FFFC00F2 
-189 TestBlitter.0001                 PRI  CODE   L   FFFFFFFFFFFC156E      2067   bootrom.asm   FFFC1578 
-190 TestBlitter.0002                 PRI  CODE   L   FFFFFFFFFFFC15DC      2088   bootrom.asm   FFFC15E6 
-191 TestBlitter.0003                 PRI  CODE   L   FFFFFFFFFFFC1538      2055   bootrom.asm   FFFC1542 
-192 TestCLS                          PRI  CODE   L   FFFFFFFFFFFC0DD2      1363   bootrom.asm   FFFC0DCE 
-193 TextCols                         NON  DATA   L   000000000001041B       109   bootrom.asm   FFFC0260 FFFC0356 FFFC047E FFFC10C2 FFFC10C4 
-194 TextCurpos                       NON  DATA   L   000000000001041C       110   bootrom.asm   FFFC0094 FFFC0398 FFFC03E2 
-195 TextRows                         NON  DATA   L   000000000001041A       108   bootrom.asm   
-196 TextScr                          NON  DATA   L   0000000000010420       111   bootrom.asm   FFFC0274 
-197 VDGBUF                           NON  DATA   D   00000000FF800000        84   bootrom.asm   
-198 VDGREG                           NON  DATA   D   00000000FFE00000        85   bootrom.asm   FFFC0502 FFFC0544 FFFC1000 FFFC1056 FFFC10D6 FFFC1424 FFFC149A FFFC1534 FFFC1662 FFFC195A FFFC1982 FFFC19BA FFFC19F0 FFFC1A2A FFFC1A48 
-199 VDG_CURCLR0                      NON  DATA   W   0000000000000448        90   bootrom.asm   
-200 VDG_CURCLR1                      NON  DATA   W   000000000000044A        91   bootrom.asm   
-201 VDG_CURCLR2                      NON  DATA   W   000000000000044C        92   bootrom.asm   
-202 VDG_CURCLR3                      NON  DATA   W   000000000000044E        93   bootrom.asm   
-203 VDG_CURFLSH                      NON  DATA   W   0000000000000446        89   bootrom.asm   
-204 VDG_CURIMG                       NON  DATA   W   0000000000000460        94   bootrom.asm   
-205 VDG_CURSZ                        NON  DATA   W   0000000000000444        88   bootrom.asm   
-206 VDG_CURX                         NON  DATA   W   0000000000000440        86   bootrom.asm   
-207 VDG_CURY                         NON  DATA   W   0000000000000442        87   bootrom.asm   
-208 VirtScreen                       NON  DATA   L   000000001FFF0000        97   bootrom.asm   FFFC1044 FFFC10B2 FFFC1114 
-209 WHITE                            NON  DATA   W   0000000000007FFF        57   bootrom.asm   
-210 Wait10ms                         PRI  CODE   L   FFFFFFFFFFFC0A30      1177   bootrom.asm   FFFC076C FFFC0792 
-211 Wait10ms.0001                    PRI  CODE   L   FFFFFFFFFFFC0A38      1180   bootrom.asm   FFFC0A3A 
-212 _KeyState1                       NON  DATA   L   0000000000010426       114   bootrom.asm   FFFC0864 FFFC08FC FFFC0902 FFFC0924 FFFC092A FFFC0966 FFFC096C 
-213 _KeyState2                       NON  DATA   L   0000000000010427       115   bootrom.asm   
-214 _KeybdGetScancode                PRI  CODE   L   FFFFFFFFFFFC074A       930   bootrom.asm   FFFC077A FFFC0802 
-215 _KeybdGetStatus                  PRI  CODE   L   FFFFFFFFFFFC0742       924   bootrom.asm   FFFC0764 FFFC0768 FFFC0788 FFFC07EC 
-216 _keybdControlCodes               PRI  CODE   L   FFFFFFFFFFFC0C40      1261   bootrom.asm   FFFC08A0 
-217 _keybdExtendedCodes              PRI  CODE   L   FFFFFFFFFFFC0CC0      1279   bootrom.asm   FFFC088A 
-218 _shiftedScanCodes                PRI  CODE   L   FFFFFFFFFFFC0B40      1225   bootrom.asm   FFFC08B2 
-219 _unshiftedScanCodes              PRI  CODE   L   FFFFFFFFFFFC0A40      1190   bootrom.asm   FFFC08BE 
-220 audio_init                       PRI  CODE   L   FFFFFFFFFFFC16E0      2208   bootrom.asm   
-221 audio_pll_config                 PRI  CODE   L   FFFFFFFFFFFC16C8      2196   bootrom.asm   FFFC16E2 
-222 audio_startup_config             PRI  CODE   L   FFFFFFFFFFFC16DE      2205   bootrom.asm   FFFC16E6 
-223 audio_tbl1                       PRI  CODE   L   FFFFFFFFFFFC1744      2237   bootrom.asm   FFFC16D4 FFFC1752 
-224 audio_write_reg                  PRI  CODE   L   FFFFFFFFFFFC16EA      2216   bootrom.asm   FFFC16CE FFFC1810 FFFC1816 FFFC1820 FFFC182A 
-225 audio_write_reg6                 PRI  CODE   L   FFFFFFFFFFFC1750      2241   bootrom.asm   FFFC16DA 
-226 bkcolor                          NON  DATA   L   0000000000010004       103   bootrom.asm   
-227 cfk1                             PRI  CODE   L   FFFFFFFFFFFC07B6       987   bootrom.asm   FFFC07B0 FFFC07B8 
-228 cpyfnt                           PRI  CODE   L   FFFFFFFFFFFC04EA       652   bootrom.asm   FFFC04F0 
-229 dccr                             PRI  CODE   L   FFFFFFFFFFFC028A       397   bootrom.asm   FFFC0282 
-230 dclf                             PRI  CODE   L   FFFFFFFFFFFC0388       474   bootrom.asm   FFFC036C 
-231 dcx10                            PRI  CODE   L   FFFFFFFFFFFC02F4       427   bootrom.asm   FFFC02E0 
-232 dcx11                            PRI  CODE   L   FFFFFFFFFFFC0318       437   bootrom.asm   FFFC02FA 
-233 dcx12                            PRI  CODE   L   FFFFFFFFFFFC030E       434   bootrom.asm   FFFC0304 
-234 dcx13                            PRI  CODE   L   FFFFFFFFFFFC032E       444   bootrom.asm   FFFC0322 
-235 dcx3                             PRI  CODE   L   FFFFFFFFFFFC0366       460   bootrom.asm   FFFC0334 
-236 dcx4                             PRI  CODE   L   FFFFFFFFFFFC0390       477   bootrom.asm   FFFC033E FFFC0366 
-237 dcx5                             PRI  CODE   L   FFFFFFFFFFFC034E       452   bootrom.asm   FFFC032E FFFC035C 
-238 dcx6                             PRI  CODE   L   FFFFFFFFFFFC02A6       406   bootrom.asm   FFFC0290 
-239 dcx7                             PRI  CODE   L   FFFFFFFFFFFC02A4       404   bootrom.asm   FFFC029A FFFC02B6 FFFC02D0 FFFC02EA 
-240 dcx8                             PRI  CODE   L   FFFFFFFFFFFC02C0       413   bootrom.asm   FFFC02AC 
-241 dcx9                             PRI  CODE   L   FFFFFFFFFFFC02DA       420   bootrom.asm   FFFC02C6 
-242 disphnum1                        PRI  CODE   L   FFFFFFFFFFFC12D4      1819   bootrom.asm   FFFC1320 FFFC1324 
-243 disphnum2                        PRI  CODE   L   FFFFFFFFFFFC12E2      1825   bootrom.asm   FFFC12E0 
-244 disphnum3                        PRI  CODE   L   FFFFFFFFFFFC12EA      1829   bootrom.asm   FFFC12F4 
-245 dispnyb1                         PRI  CODE   L   FFFFFFFFFFFC06DE       860   bootrom.asm   FFFC06DC 
-246 dspj1                            PRI  CODE   L   FFFFFFFFFFFC03F0       513   bootrom.asm   FFFC0400 
-247 dspj11                           PRI  CODE   L   FFFFFFFFFFFC0418       540   bootrom.asm   FFFC0426 
-248 dspmem1                          PRI  CODE   L   FFFFFFFFFFFC0726       899   bootrom.asm   FFFC073A 
-249 dsret                            PRI  CODE   L   FFFFFFFFFFFC0400       520   bootrom.asm   FFFC03FA 
-250 dsret1                           PRI  CODE   L   FFFFFFFFFFFC0428       546   bootrom.asm   FFFC0420 
-251 edtmem1                          PRI  CODE   L   FFFFFFFFFFFC0EFA      1448   bootrom.asm   
-252 fgcolor                          NON  DATA   L   0000000000010002       102   bootrom.asm   
-253 fmem1                            PRI  CODE   L   FFFFFFFFFFFC0ECA      1416   bootrom.asm   FFFC0EC0 
-254 fmemB                            PRI  CODE   L   FFFFFFFFFFFC0EDA      1424   bootrom.asm   FFFC0ED0 FFFC0EE0 
-255 fmemL                            PRI  CODE   L   FFFFFFFFFFFC0EC0      1411   bootrom.asm   FFFC0EC6 
-256 fmemW                            PRI  CODE   L   FFFFFFFFFFFC0ED0      1419   bootrom.asm   FFFC0ED6 
-257 fntsz                            NON  DATA   L   0000000000010006       104   bootrom.asm   
-258 font8                            PRI  CODE   L   FFFFFFFFFFFC1C14      2589   bootrom.asm   FFFC04D8 
-259 fpga_version                     PRI  CODE   L   FFFFFFFFFFFC0008       166   bootrom.asm   
-260 gfx_control_reg_mem              NON  DATA   L   000000000001042C       117   bootrom.asm   
-261 gfx_demo                         PRI  CODE   L   FFFFFFFFFFFC1B0A      2491   bootrom.asm   FFFC0D7C 
-262 gfx_demo.0001                    PRI  CODE   L   FFFFFFFFFFFC1B12      2494   bootrom.asm   FFFC1B5C 
-263 gfx_init                         PRI  CODE   L   FFFFFFFFFFFC19B4      2424   bootrom.asm   FFFC1B0C 
-264 gfx_line                         PRI  CODE   L   FFFFFFFFFFFC1A42      2453   bootrom.asm   FFFC1B58 
-265 gfx_set_320x256                  PRI  CODE   L   FFFFFFFFFFFC197C      2413   bootrom.asm   FFFC1B10 FFFC1B14 
-266 gfx_set_color                    PRI  CODE   L   FFFFFFFFFFFC1A24      2445   bootrom.asm   FFFC1B52 
-267 gfx_set_color_depth              PRI  CODE   L   FFFFFFFFFFFC19EE      2435   bootrom.asm   
-268 gfx_wait                         PRI  CODE   L   FFFFFFFFFFFC1954      2401   bootrom.asm   FFFC197E FFFC19B6 FFFC1A0A FFFC1A26 FFFC1A44 
-269 gfx_wait.0001                    PRI  CODE   L   FFFFFFFFFFFC1966      2405   bootrom.asm   FFFC1976 
-270 gk1                              PRI  CODE   L   FFFFFFFFFFFC07D4      1001   bootrom.asm   FFFC07C8 
-271 gthx3                            PRI  CODE   L   FFFFFFFFFFFC0FFA      1556   bootrom.asm   FFFC0FC2 FFFC0FD4 FFFC0FEA FFFC0FF0 
-272 gthx5                            PRI  CODE   L   FFFFFFFFFFFC0FCE      1540   bootrom.asm   FFFC0FC8 
-273 gthx6                            PRI  CODE   L   FFFFFFFFFFFC0FE4      1548   bootrom.asm   FFFC0FDA 
-274 gthxn1                           PRI  CODE   L   FFFFFFFFFFFC0FB4      1523   bootrom.asm   FFFC0FA6 
-275 gthxn2                           PRI  CODE   L   FFFFFFFFFFFC0F9A      1514   bootrom.asm   FFFC0FB2 
-276 i2c_setup                        PRI  CODE   L   FFFFFFFFFFFC15E8      2107   bootrom.asm   FFFC006C 
-277 i2c_wait_rx_nack                 PRI  CODE   L   FFFFFFFFFFFC1650      2154   bootrom.asm   FFFC1640 FFFC164E FFFC1708 FFFC171C FFFC172E FFFC1740 FFFC1774 FFFC1788 FFFC179A FFFC17AC FFFC17BE FFFC17D0 FFFC17E2 FFFC17F4 FFFC1806 FFFC1880 FFFC18A6 
-278 i2c_wait_rx_nack.0001            PRI  CODE   L   FFFFFFFFFFFC1652      2156   bootrom.asm   FFFC165C 
-279 i2c_wait_tip                     PRI  CODE   L   FFFFFFFFFFFC160A      2121   bootrom.asm   FFFC1624 FFFC1704 FFFC1718 FFFC172A FFFC173C FFFC1770 FFFC1784 FFFC1796 FFFC17A8 FFFC17BA FFFC17CC FFFC17DE FFFC17F0 FFFC1802 FFFC187C FFFC18A2 
-280 i2c_wait_tip.0001                PRI  CODE   L   FFFFFFFFFFFC160C      2123   bootrom.asm   FFFC1616 
-281 i2c_wr_cmd                       PRI  CODE   L   FFFFFFFFFFFC161A      2135   bootrom.asm   FFFC163C FFFC164A FFFC184A FFFC184E FFFC185A FFFC185E FFFC186A FFFC186E FFFC18E6 FFFC18EA FFFC18F6 FFFC18FA FFFC190A FFFC190E FFFC1922 FFFC1926 
-282 i2c_xmit1                        PRI  CODE   L   FFFFFFFFFFFC162C      2142   bootrom.asm   
-283 icc1                             PRI  CODE   L   FFFFFFFFFFFC03EA       504   bootrom.asm   FFFC03B0 FFFC03CA 
-284 ignBlanks                        PRI  CODE   L   FFFFFFFFFFFC0EE4      1433   bootrom.asm   FFFC0EA0 FFFC0EAA FFFC0EB4 FFFC0EEC FFFC0EF2 FFFC0EFC FFFC0F06 FFFC0F10 FFFC0F1A FFFC0F24 FFFC0F2E FFFC0F38 FFFC0F42 FFFC0F50 FFFC0F60 
-285 j1                               PRI  CODE   L   FFFFFFFFFFFC0130       259   bootrom.asm   FFFC0128 FFFC0132 
-286 leds                             NON  DATA   D   00000000FFDC0600        99   bootrom.asm   FFFC00D6 FFFC133E FFFC1354 FFFC1378 FFFC13AE 
-287 memend                           NON  DATA   L   0000000000010008       105   bootrom.asm   FFFC13F2 FFFC140C FFFC140E 
-288 milliseconds                     NON  DATA   L   0000000000010430       118   bootrom.asm   FFFC0134 
-289 mmu_init                         PRI  CODE   L   FFFFFFFFFFFC1B74      2537   bootrom.asm   
-290 mmu_init.0001                    PRI  CODE   L   FFFFFFFFFFFC1B8A      2542   bootrom.asm   FFFC1B96 
-291 mmu_init.0002                    PRI  CODE   L   FFFFFFFFFFFC1BD0      2568   bootrom.asm   FFFC1BF6 
-292 mmu_init.0003                    PRI  CODE   L   FFFFFFFFFFFC1BAE      2559   bootrom.asm   FFFC1BB2 
-293 msgRtcReadFail                   PRI  CODE   L   FFFFFFFFFFFC193A      2392   bootrom.asm   
-294 msg_start                        PRI  CODE   L   FFFFFFFFFFFC1B5C      2530   bootrom.asm   FFFC0112 
-295 pcss1a                           PRI  CODE   L   FFFFFFFFFFFC11AA      1693   bootrom.asm   FFFC11C8 FFFC11CC 
-296 pcssxa                           PRI  CODE   L   FFFFFFFFFFFC11A4      1690   bootrom.asm   FFFC11EE FFFC11F4 FFFC11FA 
-297 ramtest                          PRI  CODE   L   FFFFFFFFFFFC1324      1851   bootrom.asm   FFFC012E 
-298 ramtest1                         PRI  CODE   L   FFFFFFFFFFFC1338      1860   bootrom.asm   FFFC135A 
-299 ramtest2                         PRI  CODE   L   FFFFFFFFFFFC1374      1885   bootrom.asm   FFFC1392 
-300 ramtest3                         PRI  CODE   L   FFFFFFFFFFFC1394      1902   bootrom.asm   FFFC137A FFFC137E 
-301 ramtest4                         PRI  CODE   L   FFFFFFFFFFFC13A8      1906   bootrom.asm   FFFC13C2 FFFC13CE 
-302 ramtest5                         PRI  CODE   L   FFFFFFFFFFFC13CA      1919   bootrom.asm   FFFC13E8 
-303 ramtest6                         PRI  CODE   L   FFFFFFFFFFFC1364      1878   bootrom.asm   
-304 ramtest7                         PRI  CODE   L   FFFFFFFFFFFC140C      1948   bootrom.asm   FFFC1394 FFFC13EA FFFC1410 
-305 ramtest8                         PRI  CODE   L   FFFFFFFFFFFC13C2      1916   bootrom.asm   
-306 rand                             NON  DATA   D   00000000FFDC0C00       100   bootrom.asm   
-307 reg_a0                           NON  DATA   L   0000000000010520       143   bootrom.asm   
-308 reg_a1                           NON  DATA   L   0000000000010524       144   bootrom.asm   
-309 reg_a2                           NON  DATA   L   0000000000010528       145   bootrom.asm   
-310 reg_a3                           NON  DATA   L   000000000001052C       146   bootrom.asm   
-311 reg_a4                           NON  DATA   L   0000000000010530       147   bootrom.asm   
-312 reg_a5                           NON  DATA   L   0000000000010534       148   bootrom.asm   
-313 reg_a6                           NON  DATA   L   0000000000010538       149   bootrom.asm   
-314 reg_d0                           NON  DATA   L   0000000000010500       135   bootrom.asm   
-315 reg_d1                           NON  DATA   L   0000000000010504       136   bootrom.asm   
-316 reg_d2                           NON  DATA   L   0000000000010508       137   bootrom.asm   
-317 reg_d3                           NON  DATA   L   000000000001050C       138   bootrom.asm   
-318 reg_d4                           NON  DATA   L   0000000000010510       139   bootrom.asm   
-319 reg_d5                           NON  DATA   L   0000000000010514       140   bootrom.asm   
-320 reg_d6                           NON  DATA   L   0000000000010518       141   bootrom.asm   
-321 reg_d7                           NON  DATA   L   000000000001051C       142   bootrom.asm   
-322 reg_pc                           NON  DATA   L   0000000000010544       152   bootrom.asm   
-323 reg_sr                           NON  DATA   L   0000000000010548       153   bootrom.asm   
-324 reg_ssp                          NON  DATA   L   000000000001053C       150   bootrom.asm   
-325 reg_usp                          NON  DATA   L   0000000000010540       151   bootrom.asm   
-326 rmtst1                           PRI  CODE   L   FFFFFFFFFFFC134A      1867   bootrom.asm   FFFC1340 FFFC1342 
-327 rmtst2                           PRI  CODE   L   FFFFFFFFFFFC138A      1894   bootrom.asm   FFFC1380 FFFC1382 
-328 rmtst3                           PRI  CODE   L   FFFFFFFFFFFC13BA      1913   bootrom.asm   FFFC13B0 FFFC13B2 
-329 rmtst4                           PRI  CODE   L   FFFFFFFFFFFC13E0      1928   bootrom.asm   FFFC13D6 FFFC13D8 
-330 rmtst5                           PRI  CODE   L   FFFFFFFFFFFC13EA      1935   bootrom.asm   FFFC13D0 FFFC13D4 
-331 rtc_read                         PRI  CODE   L   FFFFFFFFFFFC182E      2308   bootrom.asm   
-332 rtc_read.0001                    PRI  CODE   L   FFFFFFFFFFFC1874      2329   bootrom.asm   FFFC189A 
-333 rtc_read.rxerr                   PRI  CODE   L   FFFFFFFFFFFC18C2      2352   bootrom.asm   FFFC1850 FFFC1860 FFFC1870 FFFC188A FFFC18B0 
-334 rtc_write                        PRI  CODE   L   FFFFFFFFFFFC18CA      2356   bootrom.asm   
-335 rtc_write.0001                   PRI  CODE   L   FFFFFFFFFFFC1900      2371   bootrom.asm   FFFC1918 
-336 rtc_write.rxerr                  PRI  CODE   L   FFFFFFFFFFFC1932      2388   bootrom.asm   FFFC18EC FFFC18FC FFFC1910 FFFC1928 
-337 sGetChar                         PRI  CODE   L   FFFFFFFFFFFC12A6      1797   bootrom.asm   FFFC112C FFFC1136 FFFC114A FFFC115C FFFC1166 FFFC11AE FFFC11BA FFFC11CE FFFC11DA FFFC1228 FFFC1236 FFFC1244 FFFC124E FFFC125A FFFC1266 FFFC1272 FFFC127E FFFC128A FFFC1296 FFFC12BE 
-338 scp1                             PRI  CODE   L   FFFFFFFFFFFC048C       602   bootrom.asm   
-339 set_hp_output                    PRI  CODE   L   FFFFFFFFFFFC180A      2290   bootrom.asm   
-340 sgc1                             PRI  CODE   L   FFFFFFFFFFFC12B8      1803   bootrom.asm   FFFC12AC 
-341 systick                          NON  DATA   L   0000000000010434       119   bootrom.asm   FFFC013A 
+171 ScrollUp                         PRI  CODE   L   FFFFFFFFFFFC1090      1608   bootrom.asm   FFFC03E8 FFFC03F2 
+172 ScrollUp.0001                    PRI  CODE   L   FFFFFFFFFFFC1106      1636   bootrom.asm   FFFC110A 
+173 ScrollUp.0003                    PRI  CODE   L   FFFFFFFFFFFC109A      1611   bootrom.asm   FFFC10A4 
+174 SetCursorColor                   PRI  CODE   L   FFFFFFFFFFFC05C2       754   bootrom.asm   FFFC00BE 
+175 SetCursorColor.0001              PRI  CODE   L   FFFFFFFFFFFC05DE       761   bootrom.asm   FFFC05F0 
+176 SetCursorImage                   PRI  CODE   L   FFFFFFFFFFFC05F6       775   bootrom.asm   FFFC00C2 
+177 SetCursorImage.0001              PRI  CODE   L   FFFFFFFFFFFC0608       780   bootrom.asm   FFFC060C 
+178 SetCursorImage64                 PRI  CODE   L   FFFFFFFFFFFC0634       805   bootrom.asm   FFFC00C6 
+179 SetCursorImage64.0001            PRI  CODE   L   FFFFFFFFFFFC0646       810   bootrom.asm   FFFC064A 
+180 SetCursorImage64.0002            PRI  CODE   L   FFFFFFFFFFFC065C       816   bootrom.asm   FFFC0694 
+181 SetCursorPos                     PRI  CODE   L   FFFFFFFFFFFC045A       589   bootrom.asm   FFFC0442 
+182 SetKeyboardEcho                  PRI  CODE   L   FFFFFFFFFFFC022A       354   bootrom.asm   
+183 Start                            PRI  CODE   L   FFFFFFFFFFFC0010       170   bootrom.asm   
+184 StartMon                         PRI  CODE   L   FFFFFFFFFFFC0D80      1326   bootrom.asm   
+185 StubRout                         PRI  CODE   L   FFFFFFFFFFFC0228       348   bootrom.asm   
+186 T15DispatchTable                 PRI  CODE   L   FFFFFFFFFFFC0188       302   bootrom.asm   FFFC0174 
+187 TEXTCOLS                         NON  DATA   B   0000000000000032        81   bootrom.asm   
+188 TEXTROWS                         NON  DATA   B   0000000000000025        82   bootrom.asm   
+189 TRAP15                           PRI  CODE   L   FFFFFFFFFFFC016E       292   bootrom.asm   FFFC0062 
+190 TestBlitter                      PRI  CODE   L   FFFFFFFFFFFC1572      2074   bootrom.asm   FFFC00F2 
+191 TestBlitter.0001                 PRI  CODE   L   FFFFFFFFFFFC15AE      2089   bootrom.asm   FFFC15B8 
+192 TestBlitter.0002                 PRI  CODE   L   FFFFFFFFFFFC161C      2110   bootrom.asm   FFFC1626 
+193 TestBlitter.0003                 PRI  CODE   L   FFFFFFFFFFFC1578      2077   bootrom.asm   FFFC1582 
+194 TestCLS                          PRI  CODE   L   FFFFFFFFFFFC0E12      1385   bootrom.asm   FFFC0E0E 
+195 TextCols                         NON  DATA   L   000000000001041B       109   bootrom.asm   FFFC0260 FFFC0356 FFFC047E FFFC1102 FFFC1104 
+196 TextCurpos                       NON  DATA   L   000000000001041C       110   bootrom.asm   FFFC0094 FFFC0398 FFFC03E2 
+197 TextRows                         NON  DATA   L   000000000001041A       108   bootrom.asm   
+198 TextScr                          NON  DATA   L   0000000000010420       111   bootrom.asm   FFFC00A4 FFFC00AA FFFC0274 
+199 VDGBUF                           NON  DATA   D   00000000FF800000        84   bootrom.asm   
+200 VDGREG                           NON  DATA   D   00000000FFE00000        85   bootrom.asm   FFFC0502 FFFC0544 FFFC1040 FFFC1096 FFFC1116 FFFC1464 FFFC14DA FFFC1574 FFFC16A2 FFFC199A FFFC19C2 FFFC19FA FFFC1A30 FFFC1A6A FFFC1A88 
+201 VDG_CURCLR0                      NON  DATA   W   0000000000000448        90   bootrom.asm   
+202 VDG_CURCLR1                      NON  DATA   W   000000000000044A        91   bootrom.asm   
+203 VDG_CURCLR2                      NON  DATA   W   000000000000044C        92   bootrom.asm   
+204 VDG_CURCLR3                      NON  DATA   W   000000000000044E        93   bootrom.asm   
+205 VDG_CURFLSH                      NON  DATA   W   0000000000000446        89   bootrom.asm   
+206 VDG_CURIMG                       NON  DATA   W   0000000000000460        94   bootrom.asm   
+207 VDG_CURSZ                        NON  DATA   W   0000000000000444        88   bootrom.asm   
+208 VDG_CURX                         NON  DATA   W   0000000000000440        86   bootrom.asm   
+209 VDG_CURY                         NON  DATA   W   0000000000000442        87   bootrom.asm   
+210 VirtScreen                       NON  DATA   L   000000001FFF0000        97   bootrom.asm   FFFC1084 FFFC10F2 FFFC1154 
+211 WHITE                            NON  DATA   W   0000000000007FFF        57   bootrom.asm   
+212 Wait10ms                         PRI  CODE   L   FFFFFFFFFFFC0A70      1199   bootrom.asm   FFFC07AC FFFC07D2 
+213 Wait10ms.0001                    PRI  CODE   L   FFFFFFFFFFFC0A78      1202   bootrom.asm   FFFC0A7A 
+214 _KeyState1                       NON  DATA   L   0000000000010426       114   bootrom.asm   FFFC08A4 FFFC093C FFFC0942 FFFC0964 FFFC096A FFFC09A6 FFFC09AC 
+215 _KeyState2                       NON  DATA   L   0000000000010427       115   bootrom.asm   
+216 _KeybdGetScancode                PRI  CODE   L   FFFFFFFFFFFC078A       952   bootrom.asm   FFFC07BA FFFC0842 
+217 _KeybdGetStatus                  PRI  CODE   L   FFFFFFFFFFFC0782       946   bootrom.asm   FFFC07A4 FFFC07A8 FFFC07C8 FFFC082C 
+218 _keybdControlCodes               PRI  CODE   L   FFFFFFFFFFFC0C80      1283   bootrom.asm   FFFC08E0 
+219 _keybdExtendedCodes              PRI  CODE   L   FFFFFFFFFFFC0D00      1301   bootrom.asm   FFFC08CA 
+220 _shiftedScanCodes                PRI  CODE   L   FFFFFFFFFFFC0B80      1247   bootrom.asm   FFFC08F2 
+221 _unshiftedScanCodes              PRI  CODE   L   FFFFFFFFFFFC0A80      1212   bootrom.asm   FFFC08FE 
+222 audio_init                       PRI  CODE   L   FFFFFFFFFFFC1720      2230   bootrom.asm   
+223 audio_pll_config                 PRI  CODE   L   FFFFFFFFFFFC1708      2218   bootrom.asm   FFFC1722 
+224 audio_startup_config             PRI  CODE   L   FFFFFFFFFFFC171E      2227   bootrom.asm   FFFC1726 
+225 audio_tbl1                       PRI  CODE   L   FFFFFFFFFFFC1784      2259   bootrom.asm   FFFC1714 FFFC1792 
+226 audio_write_reg                  PRI  CODE   L   FFFFFFFFFFFC172A      2238   bootrom.asm   FFFC170E FFFC1850 FFFC1856 FFFC1860 FFFC186A 
+227 audio_write_reg6                 PRI  CODE   L   FFFFFFFFFFFC1790      2263   bootrom.asm   FFFC171A 
+228 bkcolor                          NON  DATA   L   0000000000010004       103   bootrom.asm   
+229 cfk1                             PRI  CODE   L   FFFFFFFFFFFC07F6      1009   bootrom.asm   FFFC07F0 FFFC07F8 
+230 cpyfnt                           PRI  CODE   L   FFFFFFFFFFFC04EA       652   bootrom.asm   FFFC04F0 
+231 dccr                             PRI  CODE   L   FFFFFFFFFFFC028A       397   bootrom.asm   FFFC0282 
+232 dclf                             PRI  CODE   L   FFFFFFFFFFFC0388       474   bootrom.asm   FFFC036C 
+233 dcx10                            PRI  CODE   L   FFFFFFFFFFFC02F4       427   bootrom.asm   FFFC02E0 
+234 dcx11                            PRI  CODE   L   FFFFFFFFFFFC0318       437   bootrom.asm   FFFC02FA 
+235 dcx12                            PRI  CODE   L   FFFFFFFFFFFC030E       434   bootrom.asm   FFFC0304 
+236 dcx13                            PRI  CODE   L   FFFFFFFFFFFC032E       444   bootrom.asm   FFFC0322 
+237 dcx3                             PRI  CODE   L   FFFFFFFFFFFC0366       460   bootrom.asm   FFFC0334 
+238 dcx4                             PRI  CODE   L   FFFFFFFFFFFC0390       477   bootrom.asm   FFFC033E FFFC0366 
+239 dcx5                             PRI  CODE   L   FFFFFFFFFFFC034E       452   bootrom.asm   FFFC032E FFFC035C 
+240 dcx6                             PRI  CODE   L   FFFFFFFFFFFC02A6       406   bootrom.asm   FFFC0290 
+241 dcx7                             PRI  CODE   L   FFFFFFFFFFFC02A4       404   bootrom.asm   FFFC029A FFFC02B6 FFFC02D0 FFFC02EA 
+242 dcx8                             PRI  CODE   L   FFFFFFFFFFFC02C0       413   bootrom.asm   FFFC02AC 
+243 dcx9                             PRI  CODE   L   FFFFFFFFFFFC02DA       420   bootrom.asm   FFFC02C6 
+244 disphnum1                        PRI  CODE   L   FFFFFFFFFFFC1314      1841   bootrom.asm   FFFC1360 FFFC1364 
+245 disphnum2                        PRI  CODE   L   FFFFFFFFFFFC1322      1847   bootrom.asm   FFFC1320 
+246 disphnum3                        PRI  CODE   L   FFFFFFFFFFFC132A      1851   bootrom.asm   FFFC1334 
+247 dispnyb1                         PRI  CODE   L   FFFFFFFFFFFC071E       882   bootrom.asm   FFFC071C 
+248 dspj1                            PRI  CODE   L   FFFFFFFFFFFC03F0       513   bootrom.asm   FFFC0400 
+249 dspj11                           PRI  CODE   L   FFFFFFFFFFFC0418       540   bootrom.asm   FFFC0426 
+250 dspmem1                          PRI  CODE   L   FFFFFFFFFFFC0766       921   bootrom.asm   FFFC077A 
+251 dsret                            PRI  CODE   L   FFFFFFFFFFFC0400       520   bootrom.asm   FFFC03FA 
+252 dsret1                           PRI  CODE   L   FFFFFFFFFFFC0428       546   bootrom.asm   FFFC0420 
+253 edtmem1                          PRI  CODE   L   FFFFFFFFFFFC0F3A      1470   bootrom.asm   
+254 fgcolor                          NON  DATA   L   0000000000010002       102   bootrom.asm   
+255 fmem1                            PRI  CODE   L   FFFFFFFFFFFC0F0A      1438   bootrom.asm   FFFC0F00 
+256 fmemB                            PRI  CODE   L   FFFFFFFFFFFC0F1A      1446   bootrom.asm   FFFC0F10 FFFC0F20 
+257 fmemL                            PRI  CODE   L   FFFFFFFFFFFC0F00      1433   bootrom.asm   FFFC0F06 
+258 fmemW                            PRI  CODE   L   FFFFFFFFFFFC0F10      1441   bootrom.asm   FFFC0F16 
+259 fntsz                            NON  DATA   L   0000000000010006       104   bootrom.asm   
+260 font10x12                        PRI  CODE   L   FFFFFFFFFFFC2054      2741   bootrom.asm   
+261 font8                            PRI  CODE   L   FFFFFFFFFFFC1C54      2611   bootrom.asm   FFFC04D8 
+262 fpga_version                     PRI  CODE   L   FFFFFFFFFFFC0008       166   bootrom.asm   
+263 gfx_control_reg_mem              NON  DATA   L   000000000001042C       117   bootrom.asm   
+264 gfx_demo                         PRI  CODE   L   FFFFFFFFFFFC1B4A      2513   bootrom.asm   FFFC0DBC 
+265 gfx_demo.0001                    PRI  CODE   L   FFFFFFFFFFFC1B52      2516   bootrom.asm   FFFC1B9C 
+266 gfx_init                         PRI  CODE   L   FFFFFFFFFFFC19F4      2446   bootrom.asm   FFFC1B4C 
+267 gfx_line                         PRI  CODE   L   FFFFFFFFFFFC1A82      2475   bootrom.asm   FFFC1B98 
+268 gfx_set_400x300                  PRI  CODE   L   FFFFFFFFFFFC19BC      2435   bootrom.asm   FFFC1B50 FFFC1B54 
+269 gfx_set_color                    PRI  CODE   L   FFFFFFFFFFFC1A64      2467   bootrom.asm   FFFC1B92 
+270 gfx_set_color_depth              PRI  CODE   L   FFFFFFFFFFFC1A2E      2457   bootrom.asm   
+271 gfx_wait                         PRI  CODE   L   FFFFFFFFFFFC1994      2423   bootrom.asm   FFFC19BE FFFC19F6 FFFC1A4A FFFC1A66 FFFC1A84 
+272 gfx_wait.0001                    PRI  CODE   L   FFFFFFFFFFFC19A6      2427   bootrom.asm   FFFC19B6 
+273 gk1                              PRI  CODE   L   FFFFFFFFFFFC0814      1023   bootrom.asm   FFFC0808 
+274 gthx3                            PRI  CODE   L   FFFFFFFFFFFC103A      1578   bootrom.asm   FFFC1002 FFFC1014 FFFC102A FFFC1030 
+275 gthx5                            PRI  CODE   L   FFFFFFFFFFFC100E      1562   bootrom.asm   FFFC1008 
+276 gthx6                            PRI  CODE   L   FFFFFFFFFFFC1024      1570   bootrom.asm   FFFC101A 
+277 gthxn1                           PRI  CODE   L   FFFFFFFFFFFC0FF4      1545   bootrom.asm   FFFC0FE6 
+278 gthxn2                           PRI  CODE   L   FFFFFFFFFFFC0FDA      1536   bootrom.asm   FFFC0FF2 
+279 i2c_setup                        PRI  CODE   L   FFFFFFFFFFFC1628      2129   bootrom.asm   FFFC006C 
+280 i2c_wait_rx_nack                 PRI  CODE   L   FFFFFFFFFFFC1690      2176   bootrom.asm   FFFC1680 FFFC168E FFFC1748 FFFC175C FFFC176E FFFC1780 FFFC17B4 FFFC17C8 FFFC17DA FFFC17EC FFFC17FE FFFC1810 FFFC1822 FFFC1834 FFFC1846 FFFC18C0 FFFC18E6 
+281 i2c_wait_rx_nack.0001            PRI  CODE   L   FFFFFFFFFFFC1692      2178   bootrom.asm   FFFC169C 
+282 i2c_wait_tip                     PRI  CODE   L   FFFFFFFFFFFC164A      2143   bootrom.asm   FFFC1664 FFFC1744 FFFC1758 FFFC176A FFFC177C FFFC17B0 FFFC17C4 FFFC17D6 FFFC17E8 FFFC17FA FFFC180C FFFC181E FFFC1830 FFFC1842 FFFC18BC FFFC18E2 
+283 i2c_wait_tip.0001                PRI  CODE   L   FFFFFFFFFFFC164C      2145   bootrom.asm   FFFC1656 
+284 i2c_wr_cmd                       PRI  CODE   L   FFFFFFFFFFFC165A      2157   bootrom.asm   FFFC167C FFFC168A FFFC188A FFFC188E FFFC189A FFFC189E FFFC18AA FFFC18AE FFFC1926 FFFC192A FFFC1936 FFFC193A FFFC194A FFFC194E FFFC1962 FFFC1966 
+285 i2c_xmit1                        PRI  CODE   L   FFFFFFFFFFFC166C      2164   bootrom.asm   
+286 icc1                             PRI  CODE   L   FFFFFFFFFFFC03EA       504   bootrom.asm   FFFC03B0 FFFC03CA 
+287 ignBlanks                        PRI  CODE   L   FFFFFFFFFFFC0F24      1455   bootrom.asm   FFFC0EE0 FFFC0EEA FFFC0EF4 FFFC0F2C FFFC0F32 FFFC0F3C FFFC0F46 FFFC0F50 FFFC0F5A FFFC0F64 FFFC0F6E FFFC0F78 FFFC0F82 FFFC0F90 FFFC0FA0 
+288 j1                               PRI  CODE   L   FFFFFFFFFFFC0130       259   bootrom.asm   FFFC0128 FFFC0132 
+289 leds                             NON  DATA   D   00000000FFDC0600        99   bootrom.asm   FFFC00D6 FFFC137E FFFC1394 FFFC13B8 FFFC13EE 
+290 memend                           NON  DATA   L   0000000000010008       105   bootrom.asm   FFFC1432 FFFC144C FFFC144E 
+291 milliseconds                     NON  DATA   L   0000000000010430       118   bootrom.asm   FFFC0134 
+292 mmu_init                         PRI  CODE   L   FFFFFFFFFFFC1BB4      2559   bootrom.asm   
+293 mmu_init.0001                    PRI  CODE   L   FFFFFFFFFFFC1BCA      2564   bootrom.asm   FFFC1BD6 
+294 mmu_init.0002                    PRI  CODE   L   FFFFFFFFFFFC1C10      2590   bootrom.asm   FFFC1C36 
+295 mmu_init.0003                    PRI  CODE   L   FFFFFFFFFFFC1BEE      2581   bootrom.asm   FFFC1BF2 
+296 msgRtcReadFail                   PRI  CODE   L   FFFFFFFFFFFC197A      2414   bootrom.asm   
+297 msg_start                        PRI  CODE   L   FFFFFFFFFFFC1B9C      2552   bootrom.asm   FFFC0112 
+298 pcss1a                           PRI  CODE   L   FFFFFFFFFFFC11EA      1715   bootrom.asm   FFFC1208 FFFC120C 
+299 pcssxa                           PRI  CODE   L   FFFFFFFFFFFC11E4      1712   bootrom.asm   FFFC122E FFFC1234 FFFC123A 
+300 ramtest                          PRI  CODE   L   FFFFFFFFFFFC1364      1873   bootrom.asm   FFFC012E 
+301 ramtest1                         PRI  CODE   L   FFFFFFFFFFFC1378      1882   bootrom.asm   FFFC139A 
+302 ramtest2                         PRI  CODE   L   FFFFFFFFFFFC13B4      1907   bootrom.asm   FFFC13D2 
+303 ramtest3                         PRI  CODE   L   FFFFFFFFFFFC13D4      1924   bootrom.asm   FFFC13BA FFFC13BE 
+304 ramtest4                         PRI  CODE   L   FFFFFFFFFFFC13E8      1928   bootrom.asm   FFFC1402 FFFC140E 
+305 ramtest5                         PRI  CODE   L   FFFFFFFFFFFC140A      1941   bootrom.asm   FFFC1428 
+306 ramtest6                         PRI  CODE   L   FFFFFFFFFFFC13A4      1900   bootrom.asm   
+307 ramtest7                         PRI  CODE   L   FFFFFFFFFFFC144C      1970   bootrom.asm   FFFC13D4 FFFC142A FFFC1450 
+308 ramtest8                         PRI  CODE   L   FFFFFFFFFFFC1402      1938   bootrom.asm   
+309 rand                             NON  DATA   D   00000000FFDC0C00       100   bootrom.asm   
+310 reg_a0                           NON  DATA   L   0000000000010520       143   bootrom.asm   
+311 reg_a1                           NON  DATA   L   0000000000010524       144   bootrom.asm   
+312 reg_a2                           NON  DATA   L   0000000000010528       145   bootrom.asm   
+313 reg_a3                           NON  DATA   L   000000000001052C       146   bootrom.asm   
+314 reg_a4                           NON  DATA   L   0000000000010530       147   bootrom.asm   
+315 reg_a5                           NON  DATA   L   0000000000010534       148   bootrom.asm   
+316 reg_a6                           NON  DATA   L   0000000000010538       149   bootrom.asm   
+317 reg_d0                           NON  DATA   L   0000000000010500       135   bootrom.asm   
+318 reg_d1                           NON  DATA   L   0000000000010504       136   bootrom.asm   
+319 reg_d2                           NON  DATA   L   0000000000010508       137   bootrom.asm   
+320 reg_d3                           NON  DATA   L   000000000001050C       138   bootrom.asm   
+321 reg_d4                           NON  DATA   L   0000000000010510       139   bootrom.asm   
+322 reg_d5                           NON  DATA   L   0000000000010514       140   bootrom.asm   
+323 reg_d6                           NON  DATA   L   0000000000010518       141   bootrom.asm   
+324 reg_d7                           NON  DATA   L   000000000001051C       142   bootrom.asm   
+325 reg_pc                           NON  DATA   L   0000000000010544       152   bootrom.asm   
+326 reg_sr                           NON  DATA   L   0000000000010548       153   bootrom.asm   
+327 reg_ssp                          NON  DATA   L   000000000001053C       150   bootrom.asm   
+328 reg_usp                          NON  DATA   L   0000000000010540       151   bootrom.asm   
+329 rmtst1                           PRI  CODE   L   FFFFFFFFFFFC138A      1889   bootrom.asm   FFFC1380 FFFC1382 
+330 rmtst2                           PRI  CODE   L   FFFFFFFFFFFC13CA      1916   bootrom.asm   FFFC13C0 FFFC13C2 
+331 rmtst3                           PRI  CODE   L   FFFFFFFFFFFC13FA      1935   bootrom.asm   FFFC13F0 FFFC13F2 
+332 rmtst4                           PRI  CODE   L   FFFFFFFFFFFC1420      1950   bootrom.asm   FFFC1416 FFFC1418 
+333 rmtst5                           PRI  CODE   L   FFFFFFFFFFFC142A      1957   bootrom.asm   FFFC1410 FFFC1414 
+334 rtc_read                         PRI  CODE   L   FFFFFFFFFFFC186E      2330   bootrom.asm   
+335 rtc_read.0001                    PRI  CODE   L   FFFFFFFFFFFC18B4      2351   bootrom.asm   FFFC18DA 
+336 rtc_read.rxerr                   PRI  CODE   L   FFFFFFFFFFFC1902      2374   bootrom.asm   FFFC1890 FFFC18A0 FFFC18B0 FFFC18CA FFFC18F0 
+337 rtc_write                        PRI  CODE   L   FFFFFFFFFFFC190A      2378   bootrom.asm   
+338 rtc_write.0001                   PRI  CODE   L   FFFFFFFFFFFC1940      2393   bootrom.asm   FFFC1958 
+339 rtc_write.rxerr                  PRI  CODE   L   FFFFFFFFFFFC1972      2410   bootrom.asm   FFFC192C FFFC193C FFFC1950 FFFC1968 
+340 sGetChar                         PRI  CODE   L   FFFFFFFFFFFC12E6      1819   bootrom.asm   FFFC116C FFFC1176 FFFC118A FFFC119C FFFC11A6 FFFC11EE FFFC11FA FFFC120E FFFC121A FFFC1268 FFFC1276 FFFC1284 FFFC128E FFFC129A FFFC12A6 FFFC12B2 FFFC12BE FFFC12CA FFFC12D6 FFFC12FE 
+341 scp1                             PRI  CODE   L   FFFFFFFFFFFC048C       602   bootrom.asm   
+342 set_hp_output                    PRI  CODE   L   FFFFFFFFFFFC184A      2312   bootrom.asm   
+343 sgc1                             PRI  CODE   L   FFFFFFFFFFFC12F8      1825   bootrom.asm   FFFC12EC 
+344 systick                          NON  DATA   L   0000000000010434       119   bootrom.asm   FFFC013A 
 
 
 Local symbols:
