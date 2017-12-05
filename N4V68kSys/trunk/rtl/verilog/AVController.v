@@ -55,13 +55,15 @@
 `define TXWIDTH		52:41
 
 //`define USE_FIFO
+`define AUD_PLOT
+//`define ORGFX
 
 module AVController(
 	clk200_i,
 	rst_i, clk_i, cyc_i, stb_i, ack_o, we_i, sel_i, adr_i, dat_i, dat_o,
 	cs_i, cs_ram_i, irq_o,
 	clk, eol, eof, blank, border, vbl_int, rgb,
-	aud0_out, aud1_out, aud2_out, aud3_out
+	aud0_out, aud1_out, aud2_out, aud3_out, aud_in
 );
 input clk200_i;
 // Wishbone slave port
@@ -93,6 +95,7 @@ output reg [15:0] aud0_out;
 output reg [15:0] aud1_out;
 output reg [15:0] aud2_out;
 output reg [15:0] aud3_out;
+input [15:0] aud_in;
 
 parameter ST_IDLE = 7'd0;
 parameter ST_RW = 7'd1;
@@ -151,21 +154,9 @@ parameter ST_COPPER_EXECUTE = 7'd60;
 parameter ST_COPPER_SKIP	= 7'd61;
 parameter ST_RW2 = 7'd62;
 parameter ST_AUD0 = 7'd64;
-parameter ST_AUD0_1 = 7'd65;
-parameter ST_AUD0_2 = 7'd66;
-parameter ST_AUD0_3 = 7'd67;
 parameter ST_AUD1 = 7'd68;
-parameter ST_AUD1_1 = 7'd69;
-parameter ST_AUD1_2 = 7'd70;
-parameter ST_AUD1_3 = 7'd71;
 parameter ST_AUD2 = 7'd72;
-parameter ST_AUD2_1 = 7'd73;
-parameter ST_AUD2_2 = 7'd74;
-parameter ST_AUD2_3 = 7'd75;
 parameter ST_AUD3 = 7'd76;
-parameter ST_AUD3_1 = 7'd77;
-parameter ST_AUD3_2 = 7'd78;
-parameter ST_AUD3_3 = 7'd79;
 parameter ST_FILLRECT = 7'd80;
 parameter ST_FILLRECT1 = 7'd81;
 parameter ST_FILLRECT2 = 7'd82;
@@ -180,9 +171,23 @@ parameter ST_READ_FONT_TBL5 = 7'd94;
 parameter ST_READ_GLYPH_ENTRY = 7'd95;
 parameter ST_READ_GLYPH_ENTRY2 = 7'd96;
 parameter ST_READ_CHAR_BITMAP_DAT2 = 7'd97;
+parameter ST_AUD_PLOT = 7'd98;
+parameter ST_AUD_PLOT_WRITE = 7'd99;
+parameter ST_GFX_RW = 7'd100;
+parameter ST_GFXS_RW = 7'd101;
+parameter ST_GFXS_RW2 = 7'd102;
 
 integer n;
 reg [6:0] state = ST_IDLE;
+// Interrupt sources
+//    i3210 3210i
+// ---aaaaa aaaaarbv
+//      |     |  ||+-- vertical blank  
+//      |     |  |+--- blitter done
+//      |     |  +---- raster
+//      |     +------- audio channel low buffer empty
+//      +------------- audio channel high buffer empty
+
 reg [15:0] irq_en = 16'h0;
 reg [15:0] irq_status;
 assign irq_o = |(irq_status & irq_en);
@@ -227,18 +232,33 @@ reg [5:0] flashcnt;
 reg cursor;
 reg [11:0] cursor_v;
 reg [11:0] cursor_h;
+reg [11:0] cursor_pv [0:15];
+reg [11:0] cursor_ph [0:15];
 reg [4:0] cx, cy;
-reg [15:0] cursor_color;
+reg [5:0] cxa [0:15];
+reg [7:0] cya [0:15];
+reg [15:0] cursor_color [0:63];
+reg [15:0] cursor_color0;
 reg [3:0] flashrate;
+reg [7:0] cursor_on;
+reg [19:0] cursorAddr [0:15];
+reg [63:0] cursorBmp [0:15];
+reg [15:0] cursorColor [0:15];
+reg [15:0] cursorLink1;
+reg [15:0] cursorLink2;
+reg [5:0] cursorColorNdx [0:15];
 
-reg [3:0] cursor_sv;				// cursor size
-reg [3:0] cursor_sh;
+reg [4:0] cursor_sv;				// cursor size
+reg [4:0] cursor_sh;
+reg [7:0] cursor_szv [0:15];
+reg [4:0] cursor_szh [0:15];
 reg [15:0] cursor_bmp [0:15];
 reg [19:0] rdndx;					// video read index
 reg [19:0] ram_addr;
-reg [15:0] ram_data_i;
-wire [15:0] ram_data_o;
-reg [1:0] ram_we;
+reg [31:0] ram_data_i;
+wire [31:0] ram_data_o;
+reg [3:0] ram_we;
+reg ram_ul;
 
 reg [19:0] font_tbl_adr;			// address of the font table
 reg [15:0] font_id;
@@ -263,6 +283,7 @@ reg [19:0] bltCount;
 //  |+--------------- busy indicator
 //  +---------------- trigger bit
 reg [15:0] bltCtrl;
+reg [15:0] bltShift;
 
 reg [19:0] srcA_badr;               // base address
 reg [19:0] srcA_mod;                // modulo
@@ -297,40 +318,71 @@ reg [19:0] dstD_hcnt;
 
 reg [15:0] blt_op;
 
-//      3210      3210
-// -t-- rrrr ---- eeee
-//  |     |         +--- channel enables
-//  |     +------------- chennel reset
+//     i3210   31 i3210
+// -t- rrrrr p mm eeeee
+//  |    |   |  |   +--- channel enables
+//  |    |   |  +------- mix channels 1 into 0, 3 into 2
+//  |    |   +---------- input plot mode
+//  |    +-------------- chennel reset
 //  +------------------- test mode
 //
 // The channel needs to be reset for use as this loads the working address
 // register with the audio sample base address.
 //
 reg [15:0] aud_ctrl;
+wire aud_mix1 = aud_ctrl[5];
+wire aud_mix3 = aud_ctrl[6];
+//
+//           3210 3210
+// ---- ---- -fff -aaa
+//             |    +--- amplitude modulate next channel
+//             +-------- frequency modulate next channel
+//
+reg [15:0] aud_ctrl2;
 reg [19:0] aud0_adr;
 reg [15:0] aud0_length;
 reg [15:0] aud0_period;
 reg [15:0] aud0_volume;
-reg [15:0] aud0_dat;
-reg [15:0] aud0_dat2;		// double buffering
+reg signed [15:0] aud0_dat;
+reg signed [15:0] aud0_dat2;		// double buffering
 reg [19:0] aud1_adr;
 reg [15:0] aud1_length;
 reg [15:0] aud1_period;
 reg [15:0] aud1_volume;
-reg [15:0] aud1_dat;
-reg [15:0] aud1_dat2;
+reg signed [15:0] aud1_dat;
+reg signed [15:0] aud1_dat2;
 reg [19:0] aud2_adr;
 reg [15:0] aud2_length;
 reg [15:0] aud2_period;
 reg [15:0] aud2_volume;
-reg [15:0] aud2_dat;
-reg [15:0] aud2_dat2;
+reg signed [15:0] aud2_dat;
+reg signed [15:0] aud2_dat2;
 reg [19:0] aud3_adr;
 reg [15:0] aud3_length;
 reg [15:0] aud3_period;
 reg [15:0] aud3_volume;
-reg [15:0] aud3_dat;
-reg [15:0] aud3_dat2;
+reg signed [15:0] aud3_dat;
+reg signed [15:0] aud3_dat2;
+reg [19:0] audi_adr;
+reg [19:0] audi_length;
+reg [15:0] audi_period;
+reg signed [15:0] audi_dat;
+
+wire gfx_cyc;
+wire gfx_stb;
+wire gfx_we;
+wire [31:0] gfx_adr;
+wire [3:0] gfx_sel;
+reg gfx_ack_i;
+reg [31:0] gfx_dat_i;
+wire [31:0] gfx_dat_o;
+
+reg [15:0] gfxs_ctrl;
+wire gfxs_ack_o;
+wire [31:0] gfxs_dat_o;
+reg [31:0] gfxs_ldat_o; // latched data out
+reg [31:0] gfxs_dat_i;
+reg [31:0] gfxs_adr_i;
 
 // May need to set the pipeline depth to zero if copying neighbouring pixels
 // during a blit. So the app is allowed to control the pipeline depth. Depth
@@ -342,12 +394,20 @@ reg wrA, wrB, wrC;
 reg [15:0] blt_bmpA;
 reg [15:0] blt_bmpB;
 reg [15:0] blt_bmpC;
+reg [15:0] bltA_residue;
+reg [15:0] bltB_residue;
+reg [15:0] bltC_residue;
+reg [15:0] bltD_residue;
 
 wire [15:0] bltA_out, bltB_out, bltC_out;
-reg  [15:0] bltD_dat;
+wire [15:0] bltA_out1, bltB_out1, bltC_out1;
+reg  [15:0] bltA_dat, bltB_dat, bltC_dat, bltD_dat;
 wire [15:0] bltA_in = bltCtrl[0] ? (blt_bmpA[bitcnt] ? 16'h7FFF : 16'h0000) : blt_bmpA;
 wire [15:0] bltB_in = bltCtrl[2] ? (blt_bmpB[bitcnt] ? 16'h7FFF : 16'h0000) : blt_bmpB;
 wire [15:0] bltC_in = bltCtrl[4] ? (blt_bmpC[bitcnt] ? 16'h7FFF : 16'h0000) : blt_bmpC;
+assign bltA_out = bltCtrl[1] ? bltA_out1 : bltA_dat;
+assign bltB_out = bltCtrl[3] ? bltB_out1 : bltB_dat;
+assign bltC_out = bltCtrl[5] ? bltC_out1 : bltC_dat;
 
 reg srstA, srstB, srstC;
 reg bltRdf;
@@ -389,17 +449,24 @@ bltFifo ubfC
   .empty()
 );
 `else
-vtdl #(.WID(16), .DEP(32)) bltA (.clk(clk_i), .ce(wrA), .a(bltAa), .d(bltA_in), .q(bltA_out));
-vtdl #(.WID(16), .DEP(32)) bltB (.clk(clk_i), .ce(wrB), .a(bltBa), .d(bltB_in), .q(bltB_out));
-vtdl #(.WID(16), .DEP(32)) bltC (.clk(clk_i), .ce(wrC), .a(bltCa), .d(bltC_in), .q(bltC_out));
+vtdl #(.WID(16), .DEP(32)) bltA (.clk(clk_i), .ce(wrA), .a(bltAa), .d(bltA_in), .q(bltA_out1));
+vtdl #(.WID(16), .DEP(32)) bltB (.clk(clk_i), .ce(wrB), .a(bltBa), .d(bltB_in), .q(bltB_out1));
+vtdl #(.WID(16), .DEP(32)) bltC (.clk(clk_i), .ce(wrC), .a(bltCa), .d(bltC_in), .q(bltC_out1));
 `endif
 
 reg [15:0] bltab;
 reg [15:0] bltabc;
+
+wire [12:0] blndR = (bltB_out[`R] * bltA_out[7:0]) + (bltC_out[`R])*(8'hFF-bltA_out[7:0]);
+wire [12:0] blndG = (bltB_out[`G] * bltA_out[7:0]) + (bltC_out[`G])*(8'hFF-bltA_out[7:0]);
+wire [12:0] blndB = (bltB_out[`B] * bltA_out[7:0]) + (bltC_out[`B])*(8'hFF-bltA_out[7:0]);
+
 always @*
 	case(blt_op[3:0])
 	4'h1:	bltab <= bltA_out;
 	4'h2:	bltab <= bltB_out;
+	4'h3:	bltab <= ~bltA_out;
+	4'h4:	bltab <= ~bltB_out;
 	4'h8:	bltab <= bltA_out & bltB_out;
 	4'h9:	bltab <= bltA_out | bltB_out;
 	4'hA:	bltab <= bltA_out ^ bltB_out;
@@ -418,6 +485,7 @@ always @*
 			end
 			else
 				bltabc <= bltab;
+	4'h4:	bltabc <= {blndR[12:8],blndG[12:8],blndB[12:8]};
 	4'h8:	bltabc <= bltab & bltC_out;
 	4'h9:	bltabc <= bltab | bltC_out;
 	4'hA:	bltabc <= bltab ^ bltC_out;
@@ -516,15 +584,47 @@ always @(posedge clk)
 		cy <= 0;
 	else if (eol)
 		cy <= cy + 5'd1;
+always @(posedge clk)
+begin
+	for (n = 0; n < 16; n = n + 1)
+		if ((hpos >> lowres) == cursor_ph[n])
+			cxa[n] <= 0;
+		else
+			cxa[n] <= cxa[n] + 5'd1;
+end
+always @(posedge clk)
+begin
+	for (n = 0; n < 16; n = n + 1)
+		if ((vpos >> lowres) == cursor_pv[n])
+			cya[n] <= 0;
+		else if (eol)
+			cya[n] <= cya[n] + 8'd1;
+end
 
 always @(posedge clk)
+begin
+    casex(hpos)
+    12'b1110_11xx_xx00: cursorBmp[hpos[5:2]][15:0] <= rgb_i;
+    12'b1110_11xx_xx01: cursorBmp[hpos[5:2]][31:16] <= rgb_i;
+    12'b1110_11xx_xx10: cursorBmp[hpos[5:2]][47:32] <= rgb_i;
+    12'b1110_11xx_xx11: cursorBmp[hpos[5:2]][63:48] <= rgb_i;
+    endcase
 	if ((flashcnt[5:2] & flashrate[3:0])!=4'b000 || flashrate[4]) begin
 		if (lowres) begin
 			if ((vpos[11:1] >= cursor_v && vpos[11:1] <= cursor_v + cursor_sv) &&
-				(hpos[11:1] >= cursor_h && hpos[11:1] <= cursor_h + cursor_sh))
+				(hpos[11:1] >= cursor_h && hpos[11:1] <= cursor_h + cursor_sh)) begin
 				cursor <= cursor_bmp[cy[4:1]][cx[4:1]];
+			end
 			else
 				cursor <= 1'b0;
+			for (n = 0; n < 16; n = n + 1)
+				if ((vpos[11:1] >= cursor_pv[n] && vpos[11:1] <= cursor_pv[n] + cursor_szv[n]) &&
+					(hpos[11:1] >= cursor_ph[n] && hpos[11:1] <= cursor_ph[n] + cursor_szh[n])) begin
+					cursorBmp[n] <= {cursorBmp[n][61:0],2'b00};
+					cursor_on[n] <= |cursorBmp[n][63:62];
+				end
+				else
+					cursor_on[n] <= 1'b0;
 		end
 		else begin
 			if ((vpos >= cursor_v && vpos <= cursor_v + cursor_sv) &&
@@ -536,19 +636,79 @@ always @(posedge clk)
 	end
 	else
 		cursor <= 1'b0;
+end
+
+always @*
+for (n = 0; n < 16; n = n + 1)
+if (cursorLink2[n])
+    cursorColorNdx[n] <= {cursorBmp[(n+2)&15][63:62],cursorBmp[(n+1)&15][63:62],cursorBmp[n][63:62]};
+else if (cursorLink1[n])
+    cursorColorNdx[n] <= {2'h0,cursorBmp[(n+1)&15][63:62],cursorBmp[n][63:62]};
+else
+    cursorColorNdx[n] <= {4'h0,cursorBmp[n][63:62]};
+
 
 always @(posedge clk)
-	if (lowres)
-		rdndx <= {9'h00,vpos[11:1]} * {8'h00,bitmapWidth} + {bmpBase[19:12],1'b0,hpos[11:1]};
-	else
-		rdndx <= {8'h00,vpos} * {8'h00,bitmapWidth} + {bmpBase[19:12],hpos};
+begin
+    casex(hpos)
+    12'hEBF: 	if (lowres)
+    				rdndx <= cursorAddr[hpos[5:2]+3'd1] + {cya[hpos[5:2]+3'd1][7:1],cxa[hpos[5:2]+3'd1][4]};
+    			else
+	    			rdndx <= cursorAddr[hpos[5:2]+3'd1] + {cya[hpos[5:2]+3'd1][7:0],cxa[hpos[5:2]+3'd1][3]};
+    12'b1110_11xx_xx00: rdndx <= rdndx + 20'd1;
+    12'b1110_11xx_xx01: rdndx <= rdndx + 20'd1;
+    12'b1110_11xx_xx10: rdndx <= rdndx + 20'd1;
+    12'b1110_11xx_xx11:
+    	if (lowres)
+    		rdndx <= cursorAddr[hpos[5:2]+3'd1] + {cya[hpos[5:2]+3'd1][7:1],cxa[hpos[5:2]+3'd1][4]};
+    	else
+    		rdndx <= cursorAddr[hpos[5:2]+3'd1] + {cya[hpos[5:2]+3'd1][7:0],cxa[hpos[5:2]+3'd1][3]};
+    default:
+        if (lowres)
+            rdndx <= {9'h00,vpos[11:1]} * {8'h00,bitmapWidth} + {bmpBase[19:12],1'b0,hpos[11:1]};
+        else
+            rdndx <= {8'h00,vpos} * {8'h00,bitmapWidth} + {bmpBase[19:12],hpos};
+    endcase
+end
 
 always @(posedge clk)
 	rgb <= 	blank ? 15'h0000 :
 		   	border ? borderColor :
-       		cursor ? (cursor_color[15] ? rgb_i[14:0] ^ 15'h7FFF : cursor_color) :
+       		cursor ? (cursor_color0[15] ? rgb_i[14:0] ^ 15'h7FFF : cursor_color0) :
+       		|cursor_on ?
+	       		cursor_color[
+	       		cursor_on[0] ? cursorColorNdx[0] :
+	       		cursor_on[1] ? cursorColorNdx[1] :
+	       		cursor_on[2] ? cursorColorNdx[2] :
+	       		cursor_on[3] ? cursorColorNdx[3] :
+	       		cursor_on[4] ? cursorColorNdx[4] :
+	       		cursor_on[5] ? cursorColorNdx[5] :
+	       		cursor_on[6] ? cursorColorNdx[6] :
+	       		cursor_on[7] ? cursorColorNdx[7] :
+	       		cursor_on[8] ? cursorColorNdx[8] :
+	       		cursor_on[9] ? cursorColorNdx[9] :
+	       		cursor_on[10] ? cursorColorNdx[10] :
+	       		cursor_on[11] ? cursorColorNdx[11] :
+	       		cursor_on[12] ? cursorColorNdx[12] :
+	       		cursor_on[13] ? cursorColorNdx[13] :
+	       		cursor_on[14] ? cursorColorNdx[14] :
+	       		cursorColorNdx[15]] :
 			rgb_i[14:0];
-
+/*
+always @(posedge clk)
+case(cursor_on)
+8'b00000000,
+8'b00000001,
+8'b00000010,
+8'b00000100,
+8'b00001000,
+8'b00010000,
+8'b00100000,
+8'b01000000,
+8'b10000000:	;
+default:	collision <= collision | cursor_on;
+endcase
+*/
 reg ack,rdy;
 reg rwsr;							// read / write shadow ram
 wire chrp = rwsr & ~rdy;			// chrq pulse
@@ -562,6 +722,7 @@ wire cs_ram = cyc_i & stb_i & cs_ram_i;
 reg [4:0] cmdq_ndx;
 
 wire cs_cmdq = cs_reg && adr_i[10:1]==10'b100_0010_111 && chrp && we_i;
+wire cs_gfx = cs_reg && adr_i[10:1]==10'b111_0000_100;
 
 
 vtdl #(.WID(105), .DEP(32)) char_q (.clk(clk_i), .ce(cs_cmdq), .a(cmdq_ndx), .d(cmdq_in), .q(cmdq_out));
@@ -581,15 +742,15 @@ wire [11:0] cmdy2_qo = cmdq_out[`Y1POS];
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 reg [23:0] aud_test;
-reg [19:0] aud0_wadr, aud1_wadr, aud2_wadr, aud3_wadr;
-reg [19:0] ch0_cnt, ch1_cnt, ch2_cnt, ch3_cnt;
+reg [19:0] aud0_wadr, aud1_wadr, aud2_wadr, aud3_wadr, audi_wadr;
+reg [19:0] ch0_cnt, ch1_cnt, ch2_cnt, ch3_cnt, chi_cnt;
 // The request counter keeps track of the number of times a request was issued
 // without being serviced. There may be the occasional request missed by the
 // timing budget. The counter allows the sample to remain on-track and in
 // sync with other samples being read.
-reg [5:0] aud0_req, aud1_req, aud2_req, aud3_req;
+reg [5:0] aud0_req, aud1_req, aud2_req, aud3_req, audi_req;
 // The following request signals pulse for 1 clock cycle only.
-reg aud0_req2, aud1_req2, aud2_req2, aud3_req2;
+reg aud0_req2, aud1_req2, aud2_req2, aud3_req2, audi_req2;
 
 always @(posedge clk_i)
 	if (ch0_cnt>=aud0_period || aud_ctrl[8])
@@ -597,20 +758,25 @@ always @(posedge clk_i)
 	else if (aud_ctrl[0])
 		ch0_cnt <= ch0_cnt + 20'd1;
 always @(posedge clk_i)
-	if (ch1_cnt>=aud1_period || aud_ctrl[9])
+	if (ch1_cnt>= aud1_period || aud_ctrl[9])
 		ch1_cnt <= 20'd1;
 	else if (aud_ctrl[1])
-		ch1_cnt <= ch1_cnt + 20'd1;
+		ch1_cnt <= ch1_cnt + (aud_ctrl2[4] ? aud0_out[15:8] + 20'd1 : 20'd1);
 always @(posedge clk_i)
-	if (ch2_cnt>=aud2_period || aud_ctrl[10])
+	if (ch2_cnt>= aud2_period || aud_ctrl[10])
 		ch2_cnt <= 20'd1;
 	else if (aud_ctrl[2])
-		ch2_cnt <= ch2_cnt + 20'd1;
+		ch2_cnt <= ch2_cnt + (aud_ctrl2[5] ? aud1_out[15:8] + 20'd1 : 20'd1);
 always @(posedge clk_i)
-	if (ch3_cnt>=aud3_period || aud_ctrl[11])
+	if (ch3_cnt>= aud3_period || aud_ctrl[11])
 		ch3_cnt <= 20'd1;
 	else if (aud_ctrl[3])
-		ch3_cnt <= ch3_cnt + 20'd1;
+		ch3_cnt <= ch3_cnt + (aud_ctrl2[6] ? aud2_out[15:8] + 20'd1 : 20'd1);
+always @(posedge clk_i)
+	if (chi_cnt>=audi_period || aud_ctrl[12])
+		chi_cnt <= 20'd1;
+	else if (aud_ctrl[4])
+		chi_cnt <= chi_cnt + 20'd1;
 
 // Double buffering to eliminate "jitter" distortion
 always @(posedge clk_i)
@@ -626,12 +792,17 @@ always @(posedge clk_i)
 	if (aud3_req2)
 		aud3_dat2 <= aud3_dat;
 	
-wire [31:0] aud0_tmp = aud0_dat2 * aud0_volume;
-wire [31:0] aud1_tmp = aud1_dat2 * aud1_volume;
-wire [31:0] aud2_tmp = aud2_dat2 * aud2_volume;
-wire [31:0] aud3_tmp = aud3_dat2 * aud3_volume;
+wire signed [31:0] aud1_tmp;
+wire signed [31:0] aud0_tmp = aud_mix1 ? ((aud0_dat2 * aud0_volume + aud1_tmp) >> 1): aud0_dat2 * aud0_volume;
+wire signed [31:0] aud3_tmp;
+wire signed [31:0] aud2_dat3 = aud_ctrl2[1] ? aud2_dat2 * aud2_volume * aud1_dat2 : aud2_dat2 * aud2_volume;
+wire signed [31:0] aud2_tmp = aud_mix3 ? ((aud2_dat3 + aud3_tmp) >> 1): aud2_dat3;
 
-always @*
+assign aud1_tmp = aud_ctrl2[0] ? aud1_dat2 * aud1_volume * aud0_dat2 : aud1_dat2 * aud1_volume;
+assign aud3_tmp = aud_ctrl2[2] ? aud3_dat2 * aud3_volume * aud2_dat2 : aud3_dat2 * aud3_volume;
+					
+
+always @(posedge clk_i)
 begin
 	aud0_out <= aud_ctrl[14] ? aud_test[15:0] : aud_ctrl[0] ? aud0_tmp >> 16 : 16'h0000;
 	aud1_out <= aud_ctrl[14] ? aud_test[15:0] : aud_ctrl[1] ? aud1_tmp >> 16 : 16'h0000;
@@ -679,7 +850,7 @@ always @(posedge clk_i)
 always @(posedge clk_i)
 	rdy2 <= rdy & cs_reg;
 always @(posedge clk_i)
-	ack_o <= (cs_reg ? rdy2 : cs_ram ? ack : 1'b0) & ~ack_o;
+	ack_o <= (cs_gfx|cs_ram) ? ack & ~ack_o: cs_reg ? rdy2 & ~ack_o : 1'b0;
 
 // Widen the eof pulse so it can be seen by clk_i
 reg [11:0] vrst;
@@ -697,7 +868,7 @@ reg [19:0] copper_pc;
 reg [1:0] copper_state;
 reg [19:0] copper_adr [0:15];
 reg reg_copper;
-reg reg_cs;
+reg reg_cs, reg_cs_gfx;
 reg reg_we;
 reg [10:0] reg_adr;
 reg [15:0] reg_dat;
@@ -711,12 +882,25 @@ end
 else begin
 reg_copper <= `FALSE;
 reg_cs <= cs_reg;
+reg_cs_gfx <= cs_gfx;
 reg_we <= we_i;
 reg_adr <= adr_i[10:0];
 reg_dat <= dat_i;
 if (reg_cs|reg_copper) begin
 	if (reg_we) begin
 		casex(reg_adr[10:1])
+		10'b0000xxxxxx:   cursor_color[reg_adr[6:1]] <= reg_dat;
+		10'b0001000000:   cursorLink1 <= reg_dat;
+		10'b0001000001:   cursorLink2 <= reg_dat;
+        10'b010_xxxx_000:   cursorAddr[reg_adr[7:4]][19:16] <= reg_dat[3:0];
+        10'b010_xxxx_001:   cursorAddr[reg_adr[7:4]][15:0] <= reg_dat;
+        10'b010_xxxx_010:   cursor_ph[reg_adr[7:4]] <= reg_dat[11:0];
+        10'b010_xxxx_011:   cursor_pv[reg_adr[7:4]] <= reg_dat[11:0];
+        10'b010_xxxx_100:   begin
+                                cursor_szh[reg_adr[7:4]] <= reg_dat[4:0];
+                                cursor_szv[reg_adr[7:4]] <= reg_dat[15:8];
+                            end
+/*                          
 		10'b0xxxxxx000:	begin
 						blt_addr[reg_adr[9:4]][19:4] <= reg_dat;
 						blt_addr[reg_adr[9:4]][3:0] <= 4'h0;
@@ -728,6 +912,7 @@ if (reg_cs|reg_copper) begin
 		10'b0xxxxxx101:	blt_pc[reg_adr[9:4]] <= reg_dat[9:0];
 		10'b0xxxxxx110:	blt_hctr[reg_adr[9:4]] <= reg_dat[9:0];
 		10'b0xxxxxx111:	blt_vctr[reg_adr[9:4]] <= reg_dat[9:0];
+*/
 		10'b1000000000:	bmpBase[19:16] <= reg_dat[3:0];
 		10'b1000000001:	bmpBase[15:0] <= reg_dat;
 		10'b1000000010:	charBmpBase[19:16] <= reg_dat[3:0];
@@ -765,8 +950,11 @@ if (reg_cs|reg_copper) begin
 								cursor_sh <= reg_dat[3:0];
 								cursor_sv <= reg_dat[11:8];
 							end
-		10'b100_0100_011:	cursor_color <= reg_dat[15:0];
-		10'b100_0100_100:	flashrate <= reg_dat[4:0];
+		10'b100_0100_011:	flashrate <= reg_dat[4:0];
+		10'b100_0100_100:	cursor_color0 <= reg_dat[15:0];
+//		10'b100_0100_101:	cursor_color1 <= reg_dat[15:0];
+//		10'b100_0100_110:	cursor_color2 <= reg_dat[15:0];
+//		10'b100_0100_111:	cursor_color3 <= reg_dat[15:0];
 		10'b100_011x_xxx:	cursor_bmp[reg_adr[4:1]] <= reg_dat;
 	
 		10'b100_1000_000:	srcA_badr[19:16] <= reg_dat[3:0];
@@ -811,8 +999,13 @@ if (reg_cs|reg_copper) begin
 		10'b101_1001_000:	font_tbl_adr[19:16] <= reg_dat[3:0];
 		10'b101_1001_001:	font_tbl_adr[15:0] <= reg_dat;
 		10'b101_1001_010:	font_id <= reg_dat;
+		10'b101_1001_100:	bltA_dat <= reg_dat;
+		10'b101_1001_101:	bltB_dat <= reg_dat;
+		10'b101_1001_110:	bltC_dat <= reg_dat;
+		10'b101_1001_111:	bltShift <= reg_dat;
 
         10'b101_1000_010:	aud_ctrl <= reg_dat;
+        10'b101_1000_011:	aud_ctrl2 <= reg_dat;
 		10'b110_0000_000:   aud0_adr[19:16] <= reg_dat[3:0];
 		10'b110_0000_001:   aud0_adr[15:0] <= reg_dat;
 		10'b110_0000_010:   aud0_length <= reg_dat;
@@ -837,6 +1030,27 @@ if (reg_cs|reg_copper) begin
         10'b110_0011_011:   aud3_period <= reg_dat;
         10'b110_0011_100:   aud3_volume <= reg_dat;
         10'b110_0011_101:   aud3_dat <= reg_dat;
+        10'b110_0100_000:	audi_adr[19:16] <= reg_dat[3:0];
+        10'b110_0100_001:	audi_adr[15:0] <= reg_dat;
+        10'b110_0100_010:	audi_length <= reg_dat;
+        10'b110_0100_011:	audi_period <= reg_dat;
+        10'b110_0100_101:	audi_dat <= reg_dat;
+        
+        10'b110_1xxx_000:	cursorAddr[reg_adr[6:4]][19:16] <= reg_dat[3:0];
+        10'b110_1xxx_001:	cursorAddr[reg_adr[6:4]][15:0] <= reg_dat;
+		10'b110_1xxx_010:	cursor_ph[reg_adr[6:4]] <= reg_dat[11:0];
+		10'b110_1xxx_011:	cursor_pv[reg_adr[6:4]] <= reg_dat[11:0];
+		10'b110_1xxx_100:	begin
+								cursor_szh[reg_adr[6:4]] <= reg_dat[4:0];
+								cursor_szv[reg_adr[6:4]] <= reg_dat[12:8];
+							end
+
+		10'b111_0000_000:	gfxs_adr_i[31:16] <= reg_dat;
+		10'b111_0000_001:	gfxs_adr_i[15:0] <= reg_dat;
+        10'b111_0000_010:	gfxs_dat_i[31:16] <= reg_dat;
+        10'b111_0000_011:	gfxs_dat_i[15:0] <= reg_dat;
+        10'b111_0000_100:	gfxs_ctrl <= reg_dat;
+        
 		default:	;	// do nothing
 		endcase
 	end
@@ -845,6 +1059,8 @@ if (reg_cs|reg_copper) begin
 		10'b1000010110:	dat_o <= {11'h00,cmdq_ndx};
 		10'b1001010110:	dat_o <= bltCtrl;
 		10'b1011000001:	dat_o <= irq_status;
+		10'b1110000010:	dat_o <= gfxs_ldat_o[31:16];
+		10'b1110000011:	dat_o <= gfxs_ldat_o[15:0];
 		default:	dat_o <= srdo;
 		endcase
 	end
@@ -858,6 +1074,7 @@ aud0_req2 <= 1'b0;
 aud1_req2 <= 1'b0;
 aud2_req2 <= 1'b0;
 aud3_req2 <= 1'b0;
+audi_req2 <= 1'b0;
 
 if (aud_ctrl[8])
 	aud0_wadr <= aud0_adr;
@@ -867,6 +1084,8 @@ if (aud_ctrl[10])
 	aud2_wadr <= aud2_adr;
 if (aud_ctrl[11])
 	aud3_wadr <= aud3_adr;
+if (aud_ctrl[12])
+	audi_wadr <= audi_adr;
 // IF channel count == 1
 // A count value of zero is not possible so there will be no requests unless
 // the audio channel is enabled.
@@ -886,6 +1105,10 @@ if (ch3_cnt==aud_ctrl[3] & ~aud_ctrl[11]) begin
 	aud3_req <= aud3_req + 6'd1;
 	aud3_req2 <= 1'b1;
 end
+if (chi_cnt==aud_ctrl[4] & ~aud_ctrl[12]) begin
+	audi_req <= audi_req + 6'd1;
+	audi_req2 <= 1'b1;
+end
 
 // Audio test mode generates about a 600Hz signal for 0.5 secs on all the
 // audio channels.
@@ -896,6 +1119,12 @@ if (aud_test==24'hFFFFFF) begin
     aud_ctrl[14] <= 1'b0;
 end
 
+if (audi_req2)
+	audi_dat <= aud_in;
+
+//if (bltCtrl[1]) bltA_dat <= bltA_out1;
+//if (bltCtrl[3]) bltB_dat <= bltB_out1;
+//if (bltCtrl[5]) bltC_dat <= bltC_out1;
 
 bltDone1 <= bltCtrl[13];
 if (vbl_int)
@@ -914,23 +1143,91 @@ if (copper_state==2'b10 && (cmppos > {copper_f,copper_v,copper_h})&&(copper_b ? 
 case(state)
 ST_IDLE:
 	begin
-		ram_we <= {2{`LOW}};
+		ram_we <= {4{`LOW}};
 		ack <= `LOW;
 		
 		// Audio takes precedence to avoid audio distortion.
 		// Fortunately audio DMA is fast and infrequent.
-		if (|aud0_req)
+		if (|aud0_req) begin
+			ram_addr <= aud0_wadr[19:1];
+			ram_ul <= aud0_wadr[0];
+			aud0_wadr <= aud0_wadr + aud0_req;
+			aud0_req <= 6'd0;
+			if (aud0_wadr + aud0_req >= aud0_adr + aud0_length) begin
+				aud0_wadr <= aud0_adr + (aud0_wadr + aud0_req - (aud0_adr + aud0_length));
+				irq_status[8] <= 1'b1;
+			end
+			if (aud0_wadr < ((aud0_adr + aud0_length) >> 1) &&
+				(aud0_wadr + aud0_req >= ((aud0_adr + aud0_length) >> 1)))
+				irq_status[4] <= 1'b1;
 			state <= ST_AUD0;
-		else if (|aud1_req)
+		end
+		else if (|aud1_req)	begin
+			ram_addr <= aud1_wadr[19:1];
+			ram_ul <= aud1_wadr[0];
+			aud1_wadr <= aud1_wadr + aud1_req;
+			aud1_req <= 6'd0;
+			if (aud1_wadr + aud1_req >= aud1_adr + aud1_length) begin
+				aud1_wadr <= aud1_adr + (aud1_wadr + aud1_req - (aud1_adr + aud1_length));
+				irq_status[9] <= 1'b1;
+			end
+			if (aud1_wadr < ((aud1_adr + aud1_length) >> 1) &&
+				(aud1_wadr + aud1_req >= ((aud1_adr + aud1_length) >> 1)))
+				irq_status[5] <= 1'b1;
 			state <= ST_AUD1;
-		else if (|aud2_req)
+		end
+		else if (|aud2_req) begin
+			ram_addr <= aud2_wadr[19:1];
+			ram_ul <= aud2_wadr[0];
+			aud2_wadr <= aud2_wadr + aud2_req;
+			aud2_req <= 6'd0;
+			if (aud2_wadr + aud2_req >= aud2_adr + aud2_length) begin
+				aud2_wadr <= aud2_adr + (aud2_wadr + aud2_req - (aud2_adr + aud2_length));
+				irq_status[10] <= 1'b1;
+			end
+			if (aud2_wadr < ((aud2_adr + aud2_length) >> 1) &&
+				(aud2_wadr + aud2_req >= ((aud2_adr + aud2_length) >> 1)))
+				irq_status[6] <= 1'b1;
 			state <= ST_AUD2;
-		else if (|aud3_req)
+		end
+		else if (|aud3_req)	begin
+			ram_addr <= aud3_wadr[19:1];
+			ram_ul <= aud3_wadr[0];
+			aud3_wadr <= aud3_wadr + aud3_req;
+			aud3_req <= 6'd0;
+			if (aud3_wadr + aud3_req >= aud3_adr + aud3_length) begin
+				aud3_wadr <= aud3_adr + (aud3_wadr + aud3_req - (aud3_adr + aud3_length));
+				irq_status[11] <= 1'b1;
+			end
+			if (aud3_wadr < ((aud3_adr + aud3_length) >> 1) &&
+				(aud3_wadr + aud3_req >= ((aud3_adr + aud3_length) >> 1)))
+				irq_status[7] <= 1'b1;
 			state <= ST_AUD3;
+		end
+		else if (|audi_req) begin
+			ram_we <= audi_wadr[0] ? 4'b1100 : 4'b0011;
+			ram_addr <= audi_wadr[19:1];
+			ram_ul <= audi_wadr[0];
+			ram_data_i <= {2{audi_dat}};
+			audi_wadr <= audi_wadr + audi_req;
+			audi_req <= 6'd0;
+			if (audi_wadr + audi_req >= audi_adr + audi_length) begin
+				audi_wadr <= audi_adr + (audi_wadr + audi_req - (audi_adr + audi_length));
+				irq_status[12] <= 1'b1;
+			end
+			if (audi_wadr < ((audi_adr + audi_length) >> 1) &&
+				(audi_wadr + audi_req >= ((audi_adr + audi_length) >> 1)))
+				irq_status[3] <= 1'b1;
+`ifdef AUD_PLOT
+			if (aud_ctrl[7])
+				state <= ST_AUD_PLOT;
+`endif
+		end
 		else if (cs_ram) begin
-			ram_data_i <= dat_i;
-			ram_addr <= adr_i[20:1];
-			ram_we <= {2{we_i}} & sel_i;
+			ram_data_i <= {2{dat_i}};
+			ram_addr <= adr_i[20:2];
+			ram_ul <= adr_i[1];
+			ram_we <= adr_i[1] ? {{2{we_i}} & sel_i,2'b00} : {2'b00,{2{we_i}} & sel_i};
 			state <= ST_RW;
 		end
 		
@@ -979,6 +1276,7 @@ ST_IDLE:
 			srcB_hcnt <= 20'd1;
 			srcC_hcnt <= 20'd1;
 			dstD_hcnt <= 20'd1;
+			bltA_residue <= 16'h0000;
 			if (bltCtrl[1])
 				state <= ST_BLTDMA1;
 			else if (bltCtrl[3])
@@ -1011,6 +1309,18 @@ ST_IDLE:
 			tgtaddr <= bmpBase;
 			loopcnt <= 4'h0;
 			state <= ST_BLT_INIT;
+		end
+		
+		else if (gfxs_ctrl[0]) begin
+			state <= ST_GFXS_RW;
+		end
+
+		else if (gfx_cyc) begin
+			ram_we <= {4{gfx_we}} & gfx_sel;
+			ram_addr <= gfx_adr[19:2];
+			ram_ul <= 1'b0;
+			ram_data_i <= gfx_dat_o;
+			state <= ST_GFX_RW;
 		end
 	end
 
@@ -1046,81 +1356,79 @@ ST_CMD:
 ST_RW:
 	begin
         ack <= `HIGH;
-        dat_o <= ram_data_o;
+        dat_o <= adr_i[1] ? ram_data_o[31:16] : ram_data_o[15:0];
         if (~cs_ram) begin
-            ram_we <= {2{`LOW}};
+            ram_we <= {4{`LOW}};
             ack <= `LOW;
             state <= ST_IDLE;
         end
     end
 
+ST_GFX_RW:
+	begin
+        gfx_ack_i <= `HIGH;
+        gfx_dat_i <= ram_data_o;
+        if (!gfx_cyc) begin
+            ram_we <= {4{`LOW}};
+            gfx_ack_i <= `LOW;
+            state <= ST_IDLE;
+        end
+    end
+
+ST_GFXS_RW:
+	if (gfxs_ack_o) begin
+	    ack <= `HIGH;
+	    gfxs_ldat_o <= gfxs_dat_o;
+	    dat_o <= gfxs_adr_i[1] ? gfxs_dat_o[31:16] : gfxs_dat_o[15:0];
+		gfxs_ctrl <= 16'h0000;
+        state <= ST_GFXS_RW2;
+    end
+ST_GFXS_RW2:
+    if (~cs_reg) begin
+        ack <= `LOW;
+        state <= ST_IDLE;
+    end  
+  
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 // Audio DMA states
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
 ST_AUD0:
 	begin
-		ram_addr <= aud0_wadr;
-		aud0_wadr <= aud0_wadr + aud0_req;
-		aud0_req <= 6'd0;
-		if (aud0_wadr + aud0_req >= aud0_adr + aud0_length) begin
-			aud0_wadr <= aud0_adr + (aud0_wadr + aud0_req - (aud0_adr + aud0_length));
-		end
-		state <= ST_AUD0_3;
-	end
-ST_AUD0_3:
-	begin
-		aud0_dat <= ram_data_o;
+		aud0_dat <= ram_ul ? ram_data_o[31:16] : ram_data_o[15:0];
 		state <= ST_IDLE;
 	end
-
 ST_AUD1:
 	begin
-		ram_addr <= aud1_wadr;
-		aud1_wadr <= aud1_wadr + aud1_req;
-		aud1_req <= 6'd0;
-		if (aud1_wadr + aud1_req >= aud1_adr + aud1_length) begin
-			aud1_wadr <= aud1_adr + (aud1_wadr + aud1_req - (aud1_adr + aud1_length));
-		end
-		state <= ST_AUD1_3;
-	end
-ST_AUD1_3:
-	begin
-		aud1_dat <= ram_data_o;
+		aud1_dat <= ram_ul ? ram_data_o[31:16] : ram_data_o[15:0];
 		state <= ST_IDLE;
 	end
-
 ST_AUD2:
 	begin
-		ram_addr <= aud2_wadr;
-		aud2_wadr <= aud2_wadr + aud2_req;
-		aud2_req <= 6'd0;
-		if (aud2_wadr + aud2_req >= aud2_adr + aud2_length) begin
-			aud2_wadr <= aud2_adr + (aud2_wadr + aud2_req - (aud2_adr + aud2_length));
-		end
-		state <= ST_AUD2_3;
-	end
-ST_AUD2_3:
-	begin
-		aud2_dat <= ram_data_o;
+		aud2_dat <= ram_ul ? ram_data_o[31:16] : ram_data_o[15:0];
 		state <= ST_IDLE;
 	end
-
 ST_AUD3:
 	begin
-		ram_addr <= aud3_wadr;
-		aud3_wadr <= aud3_wadr + aud3_req;
-		aud3_req <= 6'd0;
-		if (aud3_wadr + aud3_req >= aud3_adr + aud3_length) begin
-			aud3_wadr <= aud3_adr + (aud3_wadr + aud3_req - (aud3_adr + aud3_length));
-		end
-		state <= ST_AUD3_3;
-	end
-ST_AUD3_3:
-	begin
-		aud3_dat <= ram_data_o;
+		aud3_dat <= ram_ul ? ram_data_o[31:16] : ram_data_o[15:0];
 		state <= ST_IDLE;
 	end
+`ifdef AUD_PLOT
+ST_AUD_PLOT:
+	begin
+		bkcolor <= 16'h7FFF;
+		tgtaddr <= {12'h00,audi_dat[15:8]^8'h80} * {8'h00,bitmapWidth} + {bmpBase[19:12],4'h0,audi_wadr[7:0]};
+		state <= ST_AUD_PLOT_WRITE;
+	end
+ST_AUD_PLOT_WRITE:
+	begin
+		ram_we <= tgtaddr[0] ? 4'b1100 : 4'b0011;
+		ram_addr <= tgtaddr[19:1];
+		ram_ul <= tgtaddr[0];
+		ram_data_i <= {2{bkcolor}};
+		state <= ST_IDLE;
+	end
+`endif
 
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 // Pixel plot acceleration states
@@ -1134,19 +1442,23 @@ ST_PLOT:
 	end
 ST_PLOT_READ:
 	begin
-		ram_addr <= tgtaddr;
+		ram_addr <= tgtaddr[19:1];
+		ram_ul <= tgtaddr[0];
 		state <= ST_PLOT_WRITE;
 	end
 ST_PLOT_WRITE:
 	begin
-		ram_we <= {2{`HIGH}};
+		ram_we <= tgtaddr[0] ? 4'b1100 : 4'b0011;
 		if (bkcolor[`A]) begin
 			ram_data_i[`R] <= ram_data_o[`R] >> bkcolor[2:0];
 			ram_data_i[`G] <= ram_data_o[`G] >> bkcolor[5:3];
 			ram_data_i[`B] <= ram_data_o[`B] >> bkcolor[8:6];
+			ram_data_i[30:26] <= ram_data_o[30:26] >> bkcolor[2:0];
+			ram_data_i[25:21] <= ram_data_o[25:21] >> bkcolor[5:3];
+			ram_data_i[20:16] <= ram_data_o[20:16] >> bkcolor[8:6];
 		end
 		else
-			ram_data_i <= bkcolor;
+			ram_data_i <= {2{bkcolor}};
 		state <= ST_IDLE;
 	end
 
@@ -1154,14 +1466,14 @@ ST_PLOT_WRITE:
 // Character draw acceleration states
 //
 // Font Table - An entry for each font
-// f--wwwww---hhhhh		- width and height
-// ----------------		- reserved
-// ------------AAAA		- address offset of gylph table, or char bitmap address
+// fwwwwwhhhhh-aaaa		- width and height
+// aaaaaaaaaaaaaaaa		- char bitmap address
+// ------------aaaa		- address offset of gylph width table
 // aaaaaaaaaaaaaaaa		- low order address offset bits
 //
 // Glyph Table Entry
-// ---wwwww----AAAA		- width + high order address offset bits
-// aaaaaaaaaaaaaaaa		- low order address offset
+// ---wwwww---wwwww		- width
+// ---wwwww---wwwww		- 
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
 ST_READ_FONT_TBL:
@@ -1171,57 +1483,42 @@ ST_READ_FONT_TBL:
 		charcode <= charcode_qo;
 		fgcolor <= charfg_qo;
 		bkcolor <= charbk_qo;
-		ram_addr <= font_tbl_adr + {font_id,2'b0};
+		ram_addr <= {font_tbl_adr[19:2],1'b0} + {font_id,1'b0};
+		ram_ul <= 1'b0;
 		state <= ST_READ_FONT_TBL2;
 	end
 ST_READ_FONT_TBL2:
 	begin
-		ram_addr <= ram_addr + 20'd2;
+		ram_addr <= ram_addr + 20'd1;
 		font_fixed <= ram_data_o[15];
-		font_width <= ram_data_o[12:8];
-		font_height <= ram_data_o[4:0];
+		font_width <= ram_data_o[14:10];
+		font_height <= ram_data_o[9:5];
+		charBmpBase <= {ram_data_o[3:0],ram_data_o[31:16]};//ram_data_o[19:0];
 		state <= ST_READ_FONT_TBL3;
 	end
 ST_READ_FONT_TBL3:
 	begin
 		ram_addr <= ram_addr + 20'd1;
-		if (font_fixed)
-			charBmpBase[19:16] <= ram_data_o[3:0];
-		else
-			glyph_tbl_adr[19:16] <= ram_data_o[3:0];
-		state <= ST_READ_FONT_TBL4;
-	end
-ST_READ_FONT_TBL4:
-	begin
-		if (font_fixed)
-			charBmpBase[15:0] <= ram_data_o;
-		else
-			glyph_tbl_adr[15:0] <= ram_data_o;
+		glyph_tbl_adr[19:16] <= ram_data_o[3:0];
+		glyph_tbl_adr[15:0] <= ram_data_o[31:16];
 		state <= ST_READ_FONT_TBL5;
 	end
 ST_READ_FONT_TBL5:
 	begin
 		tgtaddr <= {8'h00,cmdy1_qo} * {8'h00,bitmapWidth} + {bmpBase[19:12],cmdx1_qo};
+		charBmpBase <= charBmpBase + (charcode << font_width[4]) * (font_height + 7'd1);
 		if (font_fixed) begin
-			charBmpBase <= charBmpBase + (charcode << font_width[4]) * (font_height + 7'd1);
 			ctrl[14] <= 1'b1;
 			state <= ST_IDLE;
 		end
 		else begin
-			ram_addr <= glyph_tbl_adr + {charcode,1'b0};
+			ram_addr <= glyph_tbl_adr[19:1] + charcode[8:2];
 			state <= ST_READ_GLYPH_ENTRY;
 		end
 	end
 ST_READ_GLYPH_ENTRY:
 	begin
-		font_width <= ram_data_o[11:8];
-		charBmpBase[19:16] <= ram_data_o[3:0];
-		ram_addr <= ram_addr + 20'd1;
-		state <= ST_READ_GLYPH_ENTRY2;
-	end
-ST_READ_GLYPH_ENTRY2:
-	begin
-		charBmpBase[15:0] <= ram_data_o;
+		font_width <= ram_data_o >> {charcode[1:0],3'b0};
 		ctrl[14] <= 1'b1;
 		state <= ST_IDLE;
 	end
@@ -1243,35 +1540,38 @@ ST_CHAR_INIT:
 ST_READ_CHAR_BITMAP:
 	begin
 //		ram_addr <= charBmpBase + charcode * (pixym + 4'd1) + pixvc;
-		ram_addr <= charBmpBase + (pixvc << font_width[4]);
+		ram_addr <= (charBmpBase + (pixvc << font_width[4])) >> 1;
+		ram_ul <= (charBmpBase + (pixvc << font_width[4])) & 1'b1;
 		state <= ST_READ_CHAR_BITMAP_DAT;
 	end
 ST_READ_CHAR_BITMAP_DAT:
 	begin
-		ram_addr <= ram_addr + 20'd1;
-		charbmp[15:0] <= ram_data_o;
+		ram_addr <= ram_addr + ram_ul;
+		ram_ul <= ram_ul ^ 1'b1;
+		charbmp[15:0] <= ram_ul ? ram_data_o[31:16] : ram_data_o[15:0];
 		tgtindex <= {14'h00,pixvc} * {8'h00,bitmapWidth};
 		state <= font_width[4] ? ST_READ_CHAR_BITMAP_DAT2 : ST_WRITE_CHAR;
 	end
 ST_READ_CHAR_BITMAP_DAT2:
 	begin
-		charbmp[31:16] <= ram_data_o;
+		charbmp[31:16] <= ram_ul ? ram_data_o[31:16] : ram_data_o[15:0];
 		state <= ST_WRITE_CHAR;
 	end
 ST_WRITE_CHAR:
 	begin
-		ram_addr <= tgtaddr + tgtindex + {14'h00,pixhc};
+		ram_addr <= (tgtaddr + tgtindex + {14'h00,pixhc}) >> 1;
+		ram_ul <= (tgtaddr + tgtindex + {14'h00,pixhc}) & 1'b1;
 		if (~bkcolor[`A]) begin
-			ram_we <= {2{`HIGH}};
-			ram_data_i <= charbmp[font_width] ? fgcolor : bkcolor;
+			ram_we <= ((tgtaddr + tgtindex + {14'h00,pixhc}) & 1'b1) ? 4'b1100 : 4'b0011;
+			ram_data_i <= {2{charbmp[font_width] ? fgcolor : bkcolor}};
 		end
 		else begin
 			if (charbmp[font_width]) begin
-				ram_we <= {2{`HIGH}};
-				ram_data_i <= fgcolor;
+				ram_we <= ((tgtaddr + tgtindex + {14'h00,pixhc}) & 1'b1) ? 4'b1100 : 4'b0011;
+				ram_data_i <= {2{fgcolor}};
 			end
 			else
-				ram_we <= {2{`LOW}};
+				ram_we <= {4{`LOW}};
 		end
 		charbmp <= {charbmp[30:0],1'b0};
 		pixhc <= pixhc + 5'd1;
@@ -1290,9 +1590,9 @@ ST_WRITE_CHAR:
 
 ST_BLTDMA1:
 	begin
-		ram_we <= {2{`LOW}};
-		bitcnt <= bltCtrl[0] ? 3'd7 : 3'd0;
-		bitinc <= bltCtrl[0] ? 3'd1 : 3'd0;
+		ram_we <= {4{`LOW}};
+		bitcnt <= bltCtrl[0] ? 4'd15 : 4'd0;
+		bitinc <= bltCtrl[0] ? 4'd1 : 4'd0;
 		bltinc <= bltCtrl[8] ? 20'hFFFFF : 20'd1;
 		loopcnt <= bltPipedepth + 5'd1;
 		bltAa <= 5'd0;
@@ -1302,29 +1602,36 @@ ST_BLTDMA1:
 ST_BLTDMA2:
 	begin
 		if (loopcnt > 5'd0) begin
-			ram_addr <= srcA_wadr;
+			ram_addr <= srcA_wadr >> 1;
+			ram_ul <= srcA_wadr & 1'b1;
 			bitcnt <= bitcnt - bitinc;	// bitinc = 3'd0 unless bitmap
-			if (bitcnt==3'd0)
+			if (bitcnt==4'd0)
 				srcA_wadr <= srcA_wadr + bltinc;
-			srcA_wcnt <= srcA_wcnt + 20'd1;
-			srcA_dcnt <= srcA_dcnt + 20'd1;
 			srcA_hcnt <= srcA_hcnt + 20'd1;
-			if (srcA_wcnt==srcA_cnt) begin
-	            srcA_wadr <= srcA_badr;
-	            srcA_wcnt <= 20'd1;
-	            srcA_hcnt <= 20'd1;
-				bitcnt <= bltCtrl[0] ? 3'd7 : 3'd0;
-	        end
-			else if (srcA_hcnt==bltSrcWid) begin
+			if (srcA_hcnt==bltSrcWid) begin
 				srcA_hcnt <= 20'd1;
 				srcA_wadr <= srcA_wadr + srcA_mod + bltinc;
-				bitcnt <= bltCtrl[0] ? 3'd7 : 3'd0;
+				bitcnt <= bltCtrl[0] ? 4'd15 : 4'd0;
+			end
+			if (bitcnt==4'd0) begin
+				srcA_wcnt <= srcA_wcnt + 20'd1;
+				srcA_dcnt <= srcA_dcnt + 20'd1;
+				if (srcA_wcnt==srcA_cnt) begin
+		            srcA_wadr <= srcA_badr;
+		            srcA_wcnt <= 20'd1;
+		            srcA_hcnt <= 20'd1;
+					bitcnt <= bltCtrl[0] ? 4'd15 : 4'd0;
+		        end
 			end
 		end
 		if (loopcnt < bltPipedepth + 5'd1) begin
 			wrA <= 1'b1;
 			bltAa <= bltAa + 5'd1;
-			blt_bmpA <= ram_data_o;
+			blt_bmpA <= ram_ul ? ram_data_o[31:16] : ram_data_o[15:0];
+//			blt_bmpA <=   ((ram_data_o >> bltShift[3:0]) | bltA_residue)
+//						& ((srcA_hcnt==bltSrcWid) ? bltLWMask : 16'hFFFF)
+//						& ((srcA_hcnt==20'd1) ? bltFWMask : 16'hFFFF);
+//			bltA_residue <= ram_data_o << (5'd16-bltShift[3:0]);
 		end
 		loopcnt <= loopcnt - 5'd1;
 		if (loopcnt==5'd0 || srcA_dcnt==dstD_cnt) begin
@@ -1339,9 +1646,9 @@ ST_BLTDMA2:
 	// Do channel B
 ST_BLTDMA3:
 	begin
-		ram_we <= {2{`LOW}};
-		bitcnt <= bltCtrl[2] ? 3'd7 : 3'd0;
-		bitinc <= bltCtrl[2] ? 3'd1 : 3'd0;
+		ram_we <= {4{`LOW}};
+		bitcnt <= bltCtrl[2] ? 4'd15 : 4'd0;
+		bitinc <= bltCtrl[2] ? 4'd1 : 4'd0;
 		bltinc <= bltCtrl[9] ? 20'hFFFFF : 20'd1;
 		loopcnt <= bltPipedepth + 5'd1;
 		bltBa <= 5'd0;
@@ -1351,29 +1658,32 @@ ST_BLTDMA3:
 ST_BLTDMA4:
 	begin
 		if (loopcnt > 5'd0) begin
-			ram_addr <= srcB_wadr;
+			ram_addr <= srcB_wadr >> 1;
+			ram_ul <= srcB_wadr & 1'b1;
 			bitcnt <= bitcnt - bitinc;	// bitinc = 3'd0 unless bitmap
-			if (bitcnt==3'd0)
+			if (bitcnt==4'd0)
 				srcB_wadr <= srcB_wadr + bltinc;
-			srcB_wcnt <= srcB_wcnt + 20'd1;
-			srcB_dcnt <= srcB_dcnt + 20'd1;
 			srcB_hcnt <= srcB_hcnt + 20'd1;
-			if (srcB_wcnt==srcB_cnt) begin
-	            srcB_wadr <= srcB_badr;
-	            srcB_wcnt <= 20'd1;
-	            srcB_hcnt <= 20'd1;
-	            bitcnt <= bltCtrl[2] ? 3'd7 : 3'd0;
-	        end
-			else if (srcB_hcnt==bltSrcWid) begin
+			if (srcB_hcnt==bltSrcWid) begin
 				srcB_hcnt <= 20'd1;
 				srcB_wadr <= srcB_wadr + srcB_mod + bltinc;
-				bitcnt <= bltCtrl[2] ? 3'd7 : 3'd0;
+				bitcnt <= bltCtrl[2] ? 4'd15 : 4'd0;
+			end
+			if (bitcnt==4'd0) begin
+				srcB_wcnt <= srcB_wcnt + 20'd1;
+				srcB_dcnt <= srcB_dcnt + 20'd1;
+				if (srcB_wcnt==srcB_cnt) begin
+		            srcB_wadr <= srcB_badr;
+		            srcB_wcnt <= 20'd1;
+		            srcB_hcnt <= 20'd1;
+		            bitcnt <= bltCtrl[2] ? 4'd15 : 4'd0;
+		        end
 			end
 		end
 		if (loopcnt < bltPipedepth + 5'd1) begin
 			wrB <= 1'b1;
 			bltBa <= bltBa + 5'd1;
-			blt_bmpB <= ram_data_o;
+			blt_bmpB <= ram_ul ? ram_data_o[31:16] : ram_data_o[15:0];
 		end
 		loopcnt <= loopcnt - 5'd1;
 		if (loopcnt==5'd0 || srcB_dcnt==dstD_cnt) begin
@@ -1387,8 +1697,8 @@ ST_BLTDMA4:
 ST_BLTDMA5:
 	begin
 		ram_we <= {2{`LOW}};
-		bitcnt <= bltCtrl[4] ? 3'd7 : 3'd0;
-		bitinc <= bltCtrl[4] ? 3'd1 : 3'd0;
+		bitcnt <= bltCtrl[4] ? 4'd15 : 4'd0;
+		bitinc <= bltCtrl[4] ? 4'd1 : 4'd0;
 		bltinc <= bltCtrl[10] ? 20'hFFFFF : 20'd1;
 		loopcnt <= bltPipedepth + 5'd1;
 		bltCa <= 5'd0;
@@ -1398,29 +1708,32 @@ ST_BLTDMA5:
 ST_BLTDMA6:
 	begin
 		if (loopcnt > 5'd0) begin
-			ram_addr <= srcC_wadr;
+			ram_addr <= srcC_wadr >> 1;
+			ram_ul <= srcC_wadr & 1'b1;
 			bitcnt <= bitcnt - bitinc;	// bitinc = 3'd0 unless bitmap
-			if (bitcnt==3'd0)
+			if (bitcnt==4'd0)
 				srcC_wadr <= srcC_wadr + bltinc;
-			srcC_wcnt <= srcC_wcnt + 20'd1;
-			srcC_dcnt <= srcC_dcnt + 20'd1;
 			srcC_hcnt <= srcC_hcnt + 20'd1;
-			if (srcC_wcnt==srcC_cnt) begin
-	            srcC_wadr <= srcC_badr;
-	            srcC_wcnt <= 20'd1;
-	            srcC_hcnt <= 20'd1;
-	            bitcnt <= bltCtrl[4] ? 3'd7 : 3'd0;
-	        end
-			else if (srcC_hcnt==bltSrcWid) begin
+			if (srcC_hcnt==bltSrcWid) begin
 				srcC_hcnt <= 20'd1;
 				srcC_wadr <= srcC_wadr + srcC_mod + bltinc;
-				bitcnt <= bltCtrl[4] ? 3'd7 : 3'd0;
+				bitcnt <= bltCtrl[4] ? 4'd15 : 4'd0;
+			end
+			if (bitcnt==4'd0) begin
+				srcC_wcnt <= srcC_wcnt + 20'd1;
+				srcC_dcnt <= srcC_dcnt + 20'd1;
+				if (srcC_wcnt==srcC_cnt) begin
+		            srcC_wadr <= srcC_badr;
+		            srcC_wcnt <= 20'd1;
+		            srcC_hcnt <= 20'd1;
+		            bitcnt <= bltCtrl[4] ? 4'd15 : 4'd0;
+		        end
 			end
 		end
 		if (loopcnt < bltPipedepth + 5'd1) begin
 			wrC <= 1'b1;
 			bltCa <= bltCa + 5'd1;
-			blt_bmpC <= ram_data_o;
+			blt_bmpC <= ram_ul ? ram_data_o[31:16] : ram_data_o[15:0];
 		end
 		loopcnt <= loopcnt - 5'd1;
 		if (loopcnt==5'd0 || srcC_dcnt==dstD_cnt)
@@ -1429,8 +1742,8 @@ ST_BLTDMA6:
 	// Do channel D
 ST_BLTDMA7:
 	begin
-		bitcnt <= bltCtrl[6] ? 3'd7 : 3'd0;
-		bitinc <= bltCtrl[6] ? 3'd1 : 3'd0;
+		bitcnt <= bltCtrl[6] ? 4'd15 : 4'd0;
+		bitinc <= bltCtrl[6] ? 4'd1 : 4'd0;
 		bltinc <= bltCtrl[11] ? 20'hFFFFF : 20'd1;
 		loopcnt <= bltPipedepth;
 		bltAa <= bltAa - 5'd1;	// move to next queue entry
@@ -1441,26 +1754,28 @@ ST_BLTDMA7:
 	end
 ST_BLTDMA8:
 	begin
-		ram_we <= {2{`HIGH}};
-		ram_addr <= dstD_wadr;
+		ram_we <= (dstD_wadr & 1'b1) ? 4'b1100 : 4'b0011;
+		ram_addr <= dstD_wadr >> 1;
+		ram_ul <= dstD_wadr & 1'b1;
 		// If there's no source then a fill operation muct be taking place.
 		if (bltCtrl[1]|bltCtrl[3]|bltCtrl[5]) begin
-/*		if (dstD_ctrl[0])
-			ram_data_i <= bltabc[bitcnt] ? 10'h1FF : 10'h000;
-		else
-*/			ram_data_i <= bltabc;
+			if (bltCtrl[6])
+				ram_data_i <= {2{bltC_out & ~(16'd1<<bitcnt) | (bltab[14] << bitcnt)}};
+			else
+				ram_data_i <= {2{bltabc}};
 		end
 		else
-			ram_data_i <= bltD_dat;	// fill color
+			ram_data_i <= {2{bltD_dat}};	// fill color
 		bitcnt <= bitcnt - bitinc;	// bitinc = 3'd0 unless bitmap
-		if (bitcnt==3'd0)
+		if (bitcnt==4'd0) begin
 			dstD_wadr <= dstD_wadr + bltinc;
-		dstD_wcnt <= dstD_wcnt + 20'd1;
-		dstD_hcnt <= dstD_hcnt + 20'd1;
+			dstD_wcnt <= dstD_wcnt + 20'd1;
+		end
+		dstD_hcnt <= dstD_hcnt + 24'd1;
 		if (dstD_hcnt==bltDstWid) begin
-			dstD_hcnt <= 20'd1;
+			dstD_hcnt <= 24'd1;
 			dstD_wadr <= dstD_wadr + dstD_mod + bltinc;
-			bitcnt <= bltCtrl[6] ? 3'd7 : 3'd0;
+			bitcnt <= bltCtrl[6] ? 4'd15 : 4'd0;
 		end
 		bltAa <= bltAa - 5'd1;	// move to next queue entry
 		bltBa <= bltBa - 5'd1;
@@ -1600,21 +1915,23 @@ DL_PRECALC:
 	end
 DL_GETPIXEL:
 	begin
-		ram_addr <= ma;
+		ram_addr <= ma[19:1];
+		ram_ul <= ma[0];
 		state <= DL_SETPIXEL;
 	end
 DL_SETPIXEL:
 	begin
-		ram_addr <= ma;
-		ram_we <= {2{`HIGH}};
+		ram_addr <= ma[19:1];
+		ram_ul <= ma[0];
+		ram_we <= ma[0] ? 4'b1100 : 4'b0011;
 		case(ctrl[11:8])
-		4'd0:	ram_data_i <= 16'h0000;
-		4'd1:	ram_data_i <= bkcolor;
-		4'd4:	ram_data_i <= bkcolor & ram_data_o;
-		4'd5:	ram_data_i <= bkcolor | ram_data_o;
-		4'd6:	ram_data_i <= bkcolor ^ ram_data_o;
-		4'd7:	ram_data_i <= bkcolor & ~ram_data_o;
-		4'hF:	ram_data_i <= 16'h7FFF;
+		4'd0:	ram_data_i <= 32'h0000;
+		4'd1:	ram_data_i <= {2{bkcolor}};
+		4'd4:	ram_data_i <= {2{bkcolor}} & ram_data_o;
+		4'd5:	ram_data_i <= {2{bkcolor}} | ram_data_o;
+		4'd6:	ram_data_i <= {2{bkcolor}} ^ ram_data_o;
+		4'd7:	ram_data_i <= {2{bkcolor}} & ~ram_data_o;
+		4'hF:	ram_data_i <= 32'h7FFF7FFF;
 		endcase
 		loopcnt <= loopcnt - 5'd1;
 		if (gcx==x1 && gcy==y1) begin
@@ -1627,7 +1944,7 @@ DL_SETPIXEL:
 	end
 DL_TEST:
 	begin
-		ram_we <= {2{`LOW}};
+		ram_we <= {4{`LOW}};
 		err <= err - ((e2 > -dy) ? dy : 14'd0) + ((e2 < dx) ? dx : 14'd0);
 		if (e2 > -dy)
 			gcx <= gcx + sx;
@@ -1717,7 +2034,7 @@ ST_TILERECT2:
 
 ST_COPPER_IFETCH:
 	begin
-		ram_addr <= copper_pc;
+		ram_addr <= copper_pc[19:1];
 		state <= ST_COPPER_IFETCH2;
 	end
 ST_COPPER_IFETCH2:
@@ -1728,32 +2045,18 @@ ST_COPPER_IFETCH2:
 ST_COPPER_IFETCH4:
 	begin
 		ram_addr <= ram_addr + 20'd1;
-		copper_ir[15:0] <= ram_data_o;
+		copper_ir[31:0] <= ram_data_o;
 		state <= ST_COPPER_IFETCH5;
 	end
 ST_COPPER_IFETCH5:
 	begin
-		ram_addr <= ram_addr + 20'd1;
-		copper_ir[31:16] <= ram_data_o;
-		state <= ST_COPPER_IFETCH6;
-	end
-ST_COPPER_IFETCH6:
-	begin
-		ram_addr <= ram_addr + 20'd1;
-		copper_ir[47:32] <= ram_data_o;
-		state <= ST_COPPER_IFETCH7;
-	end
-ST_COPPER_IFETCH7:
-	begin
-		copper_pc <= copper_pc + 20'd4;
-		ram_addr <= ram_addr + 20'd1;
-		copper_ir[63:48] <= ram_data_o;
+		copper_ir[63:32] <= ram_data_o;
 		state <= ST_COPPER_EXECUTE;
 	end
 ST_COPPER_EXECUTE:
 	begin
 		case(copper_ir[63:62])
-		2'd00:	// WAIT
+		2'b00:	// WAIT
 			begin
 				copper_b <= copper_ir[58];
 				copper_f <= copper_ir[57:53];
@@ -1765,7 +2068,7 @@ ST_COPPER_EXECUTE:
 				copper_state <= 2'b10;
 				state <= ST_IDLE;
 			end
-		2'd01:	// MOVE
+		2'b01:	// MOVE
 			begin
 				reg_copper <= `TRUE;
 				reg_we <= {2{`HIGH}};
@@ -1773,7 +2076,7 @@ ST_COPPER_EXECUTE:
 				reg_dat <= copper_ir[15:0];
 				state <= ST_IDLE;
 			end
-		2'd10:	// SKIP
+		2'b10:	// SKIP
 			begin
 				copper_b <= copper_ir[58];
 				copper_f <= copper_ir[57:53];
@@ -1784,7 +2087,7 @@ ST_COPPER_EXECUTE:
 				copper_mh <= copper_ir[11:0];
 				state <= ST_COPPER_SKIP;
 			end
-		2'd11:	// JUMP
+		2'b11:	// JUMP
 			begin
 				copper_adr[copper_ir[55:52]] <= copper_pc;
 				casex({copper_ir[51:49],bltCtrl[13]})
@@ -1818,5 +2121,39 @@ if (hpos==12'd1 && vpos==12'd1 && (fpos==4'd1 || copper_ctrl[1])) begin
 	copper_state <= {1'b0,copper_en};
 end
 end
+
+`ifdef ORGFX
+gfx_top ugfx1
+(
+	.wb_clk_i(clk_i),
+	.wb_rst_i(rst_i),
+	.wb_inta_o(),
+	  // Wishbone master signals (interfaces with video memory, write)
+  	.wbm_cyc_o(gfx_cyc),
+  	.wbm_stb_o(gfx_stb),
+  	.wbm_cti_o(),
+  	.wbm_bte_o(),
+  	.wbm_we_o(gfx_we),
+  	.wbm_adr_o(gfx_adr),
+  	.wbm_sel_o(gfx_sel),
+  	.wbm_ack_i(gfx_ack_i),
+  	.wbm_err_i(),
+  	.wbm_dat_i(gfx_dat_i),
+  	.wbm_dat_o(gfx_dat_o),
+	 // Wishbone slave signals (interfaces with main bus/CPU)
+  	.wbs_cyc_i(gfxs_ctrl[0]),
+  	.wbs_stb_i(gfxs_ctrl[1]),
+  	.wbs_cti_i(),
+  	.wbs_bte_i(),
+  	.wbs_we_i(gfxs_ctrl[2]),
+  	.wbs_adr_i(gfxs_adr_i),
+  	.wbs_sel_i(gfxs_ctrl[7:4]),
+  	.wbs_ack_o(gfxs_ack_o),
+  	.wbs_err_o(),
+  	.wbs_dat_i(gfxs_dat_i),
+  	.wbs_dat_o(gfxs_dat_o)
+);
+`endif
+
 endmodule
 

@@ -3,44 +3,70 @@ Pass 1
 File: bootrom.asm
 asm68 V5.6  (c) 1995-2017 Robert Finch - 680xx cross assembler
 
+File: C:\cores5\N4V68kSys\software\bootrom\MyTinyB.asm
+asm68 V5.6  (c) 1995-2017 Robert Finch - 680xx cross assembler
+
+File: bootrom.asm
 
 Pass 2
 File: bootrom.asm
 asm68 V5.6  (c) 1995-2017 Robert Finch - 680xx cross assembler
 
+File: C:\cores5\N4V68kSys\software\bootrom\MyTinyB.asm
+asm68 V5.6  (c) 1995-2017 Robert Finch - 680xx cross assembler
+
+File: bootrom.asm
 
 Pass 3
 File: bootrom.asm
 asm68 V5.6  (c) 1995-2017 Robert Finch - 680xx cross assembler
 
+File: C:\cores5\N4V68kSys\software\bootrom\MyTinyB.asm
+asm68 V5.6  (c) 1995-2017 Robert Finch - 680xx cross assembler
+
+File: bootrom.asm
 
 Pass 4
 File: bootrom.asm
 asm68 V5.6  (c) 1995-2017 Robert Finch - 680xx cross assembler
 
+File: C:\cores5\N4V68kSys\software\bootrom\MyTinyB.asm
+asm68 V5.6  (c) 1995-2017 Robert Finch - 680xx cross assembler
+
+File: bootrom.asm
 
 Pass 5
 File: bootrom.asm
 asm68 V5.6  (c) 1995-2017 Robert Finch - 680xx cross assembler
 
+File: C:\cores5\N4V68kSys\software\bootrom\MyTinyB.asm
+asm68 V5.6  (c) 1995-2017 Robert Finch - 680xx cross assembler
+
+File: bootrom.asm
 
 Pass 6
 File: bootrom.asm
 asm68 V5.6  (c) 1995-2017 Robert Finch - 680xx cross assembler
 
+File: C:\cores5\N4V68kSys\software\bootrom\MyTinyB.asm
+asm68 V5.6  (c) 1995-2017 Robert Finch - 680xx cross assembler
+
+File: bootrom.asm
 
 Pass 7
 File: bootrom.asm
 asm68 V5.6  (c) 1995-2017 Robert Finch - 680xx cross assembler
 
- E2003 (line 311): undefined symbol 'CTRLH'
- E2003 (line 1168): undefined symbol 'START'
- E2028 (line 1168): branch out of range - displacement 3F446
- E2003 (line 1517): undefined symbol 'S19StartAddress'
- E2003 (line 1521): undefined symbol 'S19StartAddress'
- E2003 (line 1525): undefined symbol 'S19StartAddress'
- E2003 (line 1590): undefined symbol 'CTRLC'
- E2003 (line 1593): undefined symbol 'AUXIN'
- E2028 (line 1593): branch out of range - displacement 3EF7C
-Errors: 9
+ E2003 (line 196): undefined symbol 'BusError'
+ E2003 (line 202): undefined symbol 'KeybdNMI'
+ E2003 (line 1728): undefined symbol 'S19StartAddress'
+ E2003 (line 1732): undefined symbol 'S19StartAddress'
+ E2003 (line 1736): undefined symbol 'S19StartAddress'
+ E2003 (line 1804): undefined symbol 'AUXIN'
+ E2028 (line 1804): branch out of range - displacement 3ED46
+File: C:\cores5\N4V68kSys\software\bootrom\MyTinyB.asm
+asm68 V5.6  (c) 1995-2017 Robert Finch - 680xx cross assembler
+
+File: bootrom.asm
+Errors: 7
 Warnings: 0

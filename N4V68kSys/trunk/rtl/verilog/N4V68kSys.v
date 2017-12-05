@@ -87,7 +87,11 @@ wire _cpu_uds;
 wire cpu_r_w;
 wire _cpu_dtack;
 wire cpu_dd;
-wire [31:0] cpu_addr;
+wire [31:0] cpu_addr, cpu_addr1;
+wire cpu_cyc;
+wire cpu_stb;
+wire cpu_dtack;
+wire cpu_we;
 wire [15:0] cpu_data_o;
 wire [15:0] cpu_data =  cpu_r_w ? 16'bz : cpu_data_o; //cpu_dd ? cpu_data_o : 16'bz;
 wire [15:0] cpu_data_i;
@@ -135,11 +139,9 @@ reg [7:0] ledo;
 wire gpio_ack;
 
 wire [15:0] aud0, aud1, aud2, aud3;
+reg [15:0] audi;
 
 // Address decoding
-wire cpu_cyc = ~_cpu_as;
-wire cpu_stb = ~(_cpu_uds & _cpu_lds);
-wire cpu_wr = ~cpu_r_w;
 wire cs_boot = cpu_addr[31:16]==16'hFFFC || cpu_addr[31:3]==29'h0;
 wire cs_dram = cpu_addr[31:29]==3'b000 && !cs_boot;
 wire cs_stack = cpu_addr[31:20]==12'hFF4;
@@ -183,7 +185,7 @@ BtnDebounce ubdb4 (clk40, btnr, btnrd);
 BtnDebounce ubdb5 (clk40, btnc, btncd);
 
 always @(posedge cpu_clk)
-    if (cs_led & cpu_stb & ~cpu_r_w)
+    if (cs_led & cpu_stb & cpu_we)
         ledo <= cpu_data_o[7:0];
 
 clk_wiz_0 ucg1
@@ -247,15 +249,32 @@ TG68 utg68k
     .clkena_in(1'b1),
     .data_in(cpu_data_i),
     .IPL(_cpu_ipl),
-    .dtack(_cpu_dtack),
+    .dtack(~cpu_dtack),
 //    .berr(1'b1),
-    .addr(cpu_addr),
+    .addr(cpu_addr1),
     .data_out(cpu_data_o),
     .as(_cpu_as),
     .uds(_cpu_uds),
     .lds(_cpu_lds),
     .rw(cpu_r_w),
     .drive_data(cpu_dd)
+);
+
+N4Vmmu ummu1
+(
+	.clk_i(cpu_clk),
+	.cyc_i(~_cpu_as),
+	.stb_i(~(_cpu_uds&_cpu_lds)),
+	.ack_i(~_cpu_dtack),
+	.we_i(~cpu_r_w),
+	.adr_i(cpu_addr1),
+	.dat_i(cpu_data_i),
+	.cyc_o(cpu_cyc),
+	.stb_o(cpu_stb),
+	.ack_o(cpu_dtack),
+	.we_o(cpu_we),
+	.adr_o(cpu_addr),
+	.ctrl_dat_i(cpu_data_o)
 );
 
 bootrom ubr1 (
@@ -282,7 +301,7 @@ stackram ustk1
 (
     .clka(cpu_clk),
     .ena(1'b1),
-    .wea({2{cs_stack & ~cpu_r_w}} & ~{_cpu_uds,_cpu_lds}),
+    .wea({2{cs_stack & cpu_we}} & ~{_cpu_uds,_cpu_lds}),
     .addra(cpu_addr[16:1]),
     .dina(cpu_data_o),
     .douta(stack_data_o)
@@ -300,8 +319,8 @@ DDRcontrol2 DDRCtrl1
 	.ram_dq_i(cpu_data_o),
 	.ram_dq_o(dram_data_o),
 	.ram_cen(~(cs_dram & cpu_stb)),
-	.ram_oen(~cpu_r_w),
-	.ram_wen(cpu_r_w),
+	.ram_oen(cpu_we),
+	.ram_wen(~cpu_we),
 	.ram_bhe(_cpu_uds),
 	.ram_ble(_cpu_lds),
 	.dtack(_dram_dtack),
@@ -332,7 +351,7 @@ AVController uvdg1
 	.cyc_i(cpu_cyc),
 	.stb_i(cpu_stb),
 	.ack_o(vdg_ack),
-	.we_i(~cpu_r_w),
+	.we_i(cpu_we),
 	.sel_i(cpu_sel),
 	.adr_i(cpu_addr[23:0]),
 	.dat_i(cpu_data_o),
@@ -348,7 +367,8 @@ AVController uvdg1
 	.aud0_out(aud0),
 	.aud1_out(aud1),
 	.aud2_out(aud2),
-	.aud3_out(aud3)
+	.aud3_out(aud3),
+	.aud_in(audi)
 );
 
 random	uprg1
@@ -359,7 +379,7 @@ random	uprg1
 	.cyc_i(cpu_cyc),
 	.stb_i(cpu_stb),
 	.ack_o(rand_ack),
-	.we_i(~cpu_r_w),
+	.we_i(cpu_we),
 	.adr_i(cpu_addr[3:0]),
 	.dat_i(cpu_data_o),
 	.dat_o(rand_data_o)
@@ -370,10 +390,10 @@ Ps2Keyboard ukbd1
 	.rst_i(rst),
 	.clk_i(cpu_clk),
 	.cs_i(cs_kbd),
-	.cyc_i(~_cpu_as),
+	.cyc_i(cpu_cyc),
 	.stb_i(cpu_stb),
 	.ack_o(kbd_ack),
-	.we_i(~cpu_r_w),
+	.we_i(cpu_we),
 	.adr_i(cpu_addr[3:0]),
 	.dat_i(cpu_data_o[7:0]),
 	.dat_o(kbd_data_o),
@@ -395,7 +415,7 @@ i2c_master_top ui2c1
 	.wb_adr_i(cpu_addr[3:1]),
 	.wb_dat_i(cpu_data_o[7:0]),
 	.wb_dat_o(i2c_data_o),
-	.wb_we_i(~cpu_r_w),
+	.wb_we_i(cpu_we),
 	.wb_stb_i(cs_i2c & cpu_stb),
 	.wb_cyc_i(cpu_cyc),
 	.wb_ack_o(i2c_ack),
@@ -420,7 +440,7 @@ i2c_master_top ui2c2
 	.wb_adr_i(cpu_addr[3:1]),
 	.wb_dat_i(cpu_data_o[7:0]),
 	.wb_dat_o(i2c2_data_o),
-	.wb_we_i(~cpu_r_w),
+	.wb_we_i(cpu_we),
 	.wb_stb_i(cs_i2c2 & cpu_stb),
 	.wb_cyc_i(cpu_cyc),
 	.wb_ack_o(i2c2_ack),
@@ -457,7 +477,7 @@ reg en_tx;
 reg en_rx;
 
 always @(posedge cpu_clk)
-	if (cs_gpio & ~cpu_r_w) begin
+	if (cs_gpio & cpu_we) begin
 		en_tx <= cpu_data_o[1];
 		en_rx <= cpu_data_o[0];
 	end
@@ -466,7 +486,7 @@ assign gpio_ack = cs_gpio & cpu_stb;
 wire en_rxtx = en_tx|en_rx;
 reg [3:0] bclk;
 reg [63:0] lrclk;
-reg [31:0] ldato, rdato;
+reg [31:0] ldato, rdato, ain;
 reg [63:0] sdato;
 assign ac_mclk = clk12;
 assign ac_bclk = en_rxtx ? bclk[3] : 1'bz;
@@ -491,9 +511,14 @@ if (rst)
 else begin
     if (bclk==4'b1001) begin
         if (lrclk==64'h800000007FFFFFFF)
-            sdato <= {aud0,16'h0000,aud1,16'h0000};
+            sdato <= {aud0,16'h0000,aud2,16'h0000};
         else
             sdato <= {sdato[62:0],1'b0};
+    end
+    if (bclk==4'b1100) begin
+        ain <= {ain[30:0],ac_adc_sdata};
+        if (lrclk==64'hFFFFFFFC00000003 || lrclk==64'h00000003FFFFFFFC)
+            audi <= {ain[14:0],ac_adc_sdata};
     end
 end
 

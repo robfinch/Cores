@@ -56,8 +56,10 @@ DARK_BLUE	EQU		%0000000000001111
 BLACK		EQU		%0000000000000000
 WHITE		EQU		%0111111111111111
 
-CR		EQU		$0D
+CTRLC	EQU		$03
+CTRLH	EQU		$08
 LF		EQU		$0A
+CR		EQU		$0D
 
 SC_F12  EQU    $07
 SC_C    EQU    $21
@@ -84,8 +86,11 @@ VDGREG		EQU	$FFE00000
 VDG_CURX	EQU	$0440
 VDG_CURY	EQU	$0442
 VDG_CURSZ	EQU	$0444
-VDG_CURCLR	EQU	$0446
-VDG_CURFLSH	EQU	$0448
+VDG_CURFLSH	EQU	$0446
+VDG_CURCLR0	EQU	$0448
+VDG_CURCLR1	EQU	$044A
+VDG_CURCLR2	EQU	$044C
+VDG_CURCLR3	EQU	$044E
 VDG_CURIMG	EQU	$0460
 I2C			EQU	$FFDC0E00
 I2C2		EQU	$FFDC0E10
@@ -109,6 +114,23 @@ KeybdWaitFlag	EQU	$10425
 _KeyState1		EQU	$10426
 _KeyState2		EQU	$10427
 KeybdLEDs		EQU	$10428
+gfx_control_reg_mem		EQU	$1042C
+milliseconds	EQU	$10430
+systick			EQU	$10434
+
+GFX_CONTROL			EQU		$00
+GFX_STATUS			EQU		$04
+GFX_TARGET_BASE		EQU		$10
+GFX_TARGET_SIZE_X	EQU		$14
+GFX_TARGET_SIZE_Y	EQU		$18
+GFX_DEST_PIXEL_X	EQU		$38
+GFX_DEST_PIXEL_Y	EQU		$3C
+GFX_DEST_PIXEL_Z	EQU		$40
+GFX_COLOR0			EQU		$84
+
+GFX_ACTIVE_POINT0	EQU		0
+GFX_ACTIVE_POINT1	EQU		$10000
+GFX_LINE			EQU		$200
 
 reg_d0			EQU	$10500
 reg_d1			EQU	$10504
@@ -169,6 +191,20 @@ fpga_version:
 		clr.l	A6
 		move.l	A7,usp
 
+		; setup vector table
+		;
+		lea		BusError,a0
+		move.l	a0,0x008		; set bus error vector
+		lea		IllegalInstruction,a0
+		move.l	a0,0x010
+		lea		Pulse1000,a0
+		move.l	a0,0x078		; set autovector 6
+		lea		KeybdNMI,a0
+		move.l	a0,0x07C		; set autovector 7
+		lea		TRAP15,a0
+		move.l	a0,188			; set trap 15 vector
+
+;		bsr		mmu_init
 		bsr		i2c_setup
 ;		bsr		rtc_read
 		move.w	#$A2A2,leds		; diagnostics
@@ -182,6 +218,7 @@ fpga_version:
 
 		bsr		SetCursorColor
 		bsr		SetCursorImage
+		bsr		SetCursorImage64
 
 		lea	$FFDC0000,A6	; I/O base
 
@@ -221,6 +258,103 @@ fpga_version:
 		bra		ramtest
 j1:
 		bra		j1
+
+;------------------------------------------------------------------------------
+; 1000 Hz interrupt
+;------------------------------------------------------------------------------
+;
+Pulse1000:
+		add.l	#1,milliseconds
+		add.w	#1,systick
+		and.w	#$1F,systick
+		beq.s	Pulse31
+		rte
+Pulse31:
+		rte
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+IllegalInstruction:
+		lea		MSG_ILLEGAL_INSN,a1
+		jsr		DisplayString
+		rte
+
+MSG_ILLEGAL_INSN:
+		dc.b	"Illegal instruction",0
+
+		align	2
+
+;------------------------------------------------------------------------------
+; TRAP #15 handler
+;------------------------------------------------------------------------------
+;
+TRAP15:
+		movem.l	d0/a0,-(a7)
+		lea		T15DispatchTable,a0
+		asl.l	#2,d0
+		move.l	(a0,d0.w),a0
+		jsr		(a0)
+		movem.l	(a7)+,d0/a0
+		rte
+
+		align	4
+T15DispatchTable:
+dc.l	StubRout
+dc.l	StubRout
+dc.l	StubRout
+dc.l	StubRout
+dc.l	StubRout
+dc.l	GetKey
+dc.l	DisplayChar
+dc.l	CheckForKey
+dc.l	StubRout
+dc.l	StubRout
+dc.l	StubRout
+dc.l	Cursor1
+dc.l	SetKeyboardEcho
+dc.l	DisplayStringCRLF
+dc.l	DisplayString
+dc.l	StubRout
+dc.l	StubRout
+dc.l	StubRout
+dc.l	StubRout
+dc.l	StubRout
+dc.l	StubRout
+dc.l	StubRout
+dc.l	StubRout
+dc.l	StubRout
+dc.l	StubRout
+dc.l	StubRout
+dc.l	StubRout
+dc.l	StubRout
+dc.l	StubRout
+dc.l	StubRout
+dc.l	StubRout
+dc.l	StubRout
+dc.l	StubRout
+dc.l	StubRout
+dc.l	StubRout
+dc.l	StubRout
+dc.l	StubRout
+dc.l	StubRout
+dc.l	StubRout
+dc.l	StubRout
+
+;------------------------------------------------------------------------------
+; Stub routine for unimplemented functionality.
+;------------------------------------------------------------------------------
+;
+StubRout:
+	rts
+
+;------------------------------------------------------------------------------
+; d1.b 0=echo off, non-zero = echo on
+;------------------------------------------------------------------------------
+SetKeyboardEcho:
+	move.b	d1,KeybdEcho
+	rts
+
 
 CRLF:
 		move.l	d1,-(a7)
@@ -387,6 +521,10 @@ dsret:
 		movem.l	(a7)+,d0/d1/a1
 		rts
 
+;------------------------------------------------------------------------------
+; Display a string on the screen followed by carriage return / linefeed.
+;------------------------------------------------------------------------------
+;
 DisplayStringCRLF:
 		bsr		DisplayString
 		bra		CRLF
@@ -497,11 +635,14 @@ BootCopyFont:
 		movea.l	#VDGREG,a6
 		; Setup font table
 		move.l	#$5C000,$590(a6)	; set font table address 1/2 B8000
-		move.w	#$8707,$FF8B8000	; set font fixed, width, height
+		move.l	#$5C004,d0			; set bitmap address (directly follows)
+		swap	d0
+		or.w	#%1001110011100000,d0	; set font fixed, width, height
+		swap	d0
+		move.l	d0,$FF8B8000
+		clr.l	$FF8B8004			; clear glyph width table address (not used)
 		movea.l	#$FF8B8008,a1		; font table address
-		move.l	#$5C004,$FF8B8004	; set bitmap address (directly follows)
 
-;		move.w	#$0707,fntsz		; set font size
 		lea		font8,a0
 		move.l	#8*512,d1			; 512 chars * 8 bytes per char
 
@@ -611,7 +752,10 @@ DispCursor:
 SetCursorColor:
 		move.l  a6,-(a7)
 		move.l	#VDGREG,a6
-		move.w	#%0111111111111111,VDG_CURCLR(a6)
+		move.w	#%0111111111111111,VDG_CURCLR0(a6)
+		move.w	#%0111111111111111,VDG_CURCLR1(a6)
+		move.w	#%0111111111111111,VDG_CURCLR2(a6)
+		move.w	#%0111111111111111,VDG_CURCLR3(a6)
 		move.w	#%00100,VDG_CURFLSH(a6)
 		move.l	(a7)+,a6
 		rts
@@ -650,6 +794,34 @@ CursorImage:
 	dc.w	%0000000000
 	dc.w	%0000000000
 	dc.w	%0000000000
+
+SetCursorImage64:
+		movem.l	d1/a0/a1,-(a7)
+		lea		CursorImage64,a0
+		moveq	#20,d1					; set count number of long words to move
+		move.l	#$FF8B7E00,a1
+.0001:
+		move.l	(a0)+,(a1)+
+		dbra	d1,.0001
+		move.l	#$5BF00,VDGREG+$680		; set cursor bitmap address
+		move.w	#$0A0A,VDGREG+$688		; set cursor size
+		movem.l	(a7)+,d1/a0/a1
+		rts
+		
+	align	4
+CursorImage64:
+	dc.l	%01010101010101010101000000000000,$00
+	dc.l	%01000000000000000001000000000000,$00
+	dc.l	%01000000000000000001000000000000,$00
+	dc.l	%01000000000000000001000000000000,$00
+	dc.l	%01000000000000000001000000000000,$00
+	dc.l	%01000000000000000001000000000000,$00
+	dc.l	%01000000000000000001000000000000,$00
+	dc.l	%01000000000000000001000000000000,$00
+	dc.l	%01000000010100000001000000000000,$00
+	dc.l	%01010101010101010101000000000000,$00
+	dc.l	$00,$00
+	dc.l	$00,$00
 
 ;------------------------------------------------------------------------------
 ; Parameters:
@@ -816,6 +988,9 @@ cfk1:
 		clr.b	d1
 		rts
 
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
 GetKey:
 		bsr		KeybdGetCharWait
 		cmpi.b	#0,KeybdEcho	; is keyboard echo on ?
@@ -826,6 +1001,9 @@ GetKey:
 gk1:
 		rts
 
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
 
 KeybdGetCharNoWait:
 		clr.b	KeybdWaitFlag
@@ -1156,6 +1334,10 @@ Prompt1:
 ; Dispatch based on command character
 ;
 Prompt2:
+		cmpi.b	#'o',d1
+		beq		gfx_demo
+		cmpi.b	#'a',d1
+		beq		AudioInputTest
 		cmpi.b	#'g',d1
 		beq		GraphicsDemo
 		cmpi.b	#':',d1			; $: - edit memory
@@ -1165,7 +1347,9 @@ Prompt2:
 		cmpi.b	#'F',d1
 		beq		FillMem
 		cmpi.b	#'B',d1			; $B - start tiny basic
-		beq		START
+		bne.s	.0001
+		jmp		$FFFCC000
+.0001:
 		cmpi.b	#'J',d1			; $J - execute code
 		beq		ExecuteCode
 		cmpi.b	#'L',d1			; $L - load S19 file
@@ -1226,18 +1410,21 @@ FillMem:
 		bne		fmem1
 fmemL:
 		move.l	d1,(a1)+
-		dbra	d3,fmemL
+		sub.l	#1,d3
+		bne.s	fmemL
 		bra		Monitor
 fmem1
 		cmpi.b	#'W',d4
 		bne		fmemB
 fmemW:
 		move.w	d1,(a1)+
-		dbra	d3,fmemW
+		sub.l	#1,d3
+		bne.s	fmemW
 		bra		Monitor
 fmemB:
 		move.b	d1,(a1)+
-		dbra	d3,fmemB
+		sub.l	#1,d3
+		bne.s	fmemB
 		bra		Monitor
 
 ;------------------------------------------------------------------------------
@@ -1386,10 +1573,18 @@ ClearScreen:
 		move.l	#320,$4A4(a5)		; set destination width
 		move.l	#0,$49C(a5)			; set dst modulo
 		move.w	#%1000000010000000,$4AC(a5)		; enable channel D, start transfer
+
+		; clear virtual screen too
+		moveq	#$20,d0				; d0 = space character
+		move.w	#80*32,d1
+		lea		VirtScreen,a5
+.0001:
+		move.b	d0,(a5)+
+		dbra	d1,.0001
 		rts
 
 ScrollUp:
-		movem.l	d0/a5,-(a7)
+		movem.l	d0/a0/a5,-(a7)
 		lea		VDGREG,a5
 .0003:								
 		move.w	$4AC(a5),d0			; get done status
@@ -1408,7 +1603,18 @@ ScrollUp:
 		move.l	#-1,$4A4(a5)		; set destination width
 		move.w	#$11,$4AE(a5)		; set op A ($11 = copy A)
 		move.w	#%1000000010000010,$4AC(a5)		; enable channel A,D, start transfer
-		movem.l	(a7)+,d0/a5
+
+		; Scroll virtual screen
+		lea		VirtScreen,a5
+		movea.l	a5,a0
+		move.b	TextCols,d0
+		ext.w	d0
+		add.l	d0,a0
+		mulu	#31,d0
+.0001:
+		move.b	(a0)+,(a5)+
+		dbra	d0,.0001
+		movem.l	(a7)+,d0/a0/a5
 
 BlankLastLine:
 		movem.l	d0/a5,-(a7)
@@ -1424,6 +1630,11 @@ BlankLastLine:
 		move.l	#-1,$4A4(a5)		; set destination width
 		move.w	bkcolor,$4A8(a5)	; set color dark blue
 		move.w	#%1000000010000000,$4AC(a5)		; enable channel D, start transfer
+		lea		VirtScreen+40*31,a5
+		moveq	#40,d0
+.0001:
+		move.b	#$20,(a5)+
+		dbra	d0,.0001
 		movem.l	(a7)+,d0/a5
 		rts
 
@@ -1953,6 +2164,34 @@ i2c_wait_rx_nack:
 ; Audio
 ;===============================================================================
 
+AudioInputTest:
+		lea		VDGREG,a5
+		move.l	#$58000,$640(a5)	; set buffer address ($FF8B0000)
+		move.w	#$4000,$644(a5)		; set buffer length
+		move.w	#1814,$646(a5)		; set period = 22.05kHz
+		move.w	#$1090,$584(a5)		; enable input channel, plot mode
+		move.w	#$0090,$584(a5)		; turn off reset
+		; should have input now
+
+		; puts a dark blue rectangle on screen
+.0003:								
+		move.w	$4AC(a5),d0			; get done status
+		btst	#13,d0				; bit 13 = done bit
+		beq.s	.0003				; branch if not done
+		move.l	#256*256,$4BC(a5)		; set transfer count pixels
+		move.w	#DARK_BLUE,$4A8(a5)		; set color 
+		move.l	#0,$498(a5)			; set destination address
+		move.l	#256,$4A4(a5)		; set destination width
+		move.l	#64,$49C(a5)		; set dst modulo
+		move.w	#%1000000010000000,$4AC(a5)		; enable channel D, start transfer
+
+		; delay a bit
+		move.l	#250000,d0
+.0004:
+		sub.l	#1,d0
+		bne.s	.0004
+		bra.s	.0003
+		
 
 audio_pll_config:
 		moveq	#0,d0
@@ -2153,6 +2392,129 @@ rtc_write:
 msgRtcReadFail:
 		dc.b	"RTC read/write failed.",$0D,$0A,$00
 
+
+;===============================================================================
+; ORGFX routines
+;===============================================================================
+
+		align	2
+gfx_wait:
+		movem.l	d0/a5,-(a7)
+		lea		VDGREG,a5
+		move.l	#GFX_STATUS,$700(a5)	; address status register
+.0001:
+		move.w	#$F3,$708(a5)		; set control (generate bus access to gfx)
+		move.l	$704(a5),d0			; get status value
+		btst	#0,d0				; test bit 0
+		bne.s	.0001
+		movem.l	(a7)+,d0/a5
+		rts
+
+gfx_set_320x256:
+		bsr		gfx_wait
+		lea		VDGREG,a5
+		move.l	#GFX_TARGET_SIZE_X,$700(a5)	; address register
+		move.l	#320,$704(a5)				; set data
+		move.w	#$F7,$708(a5)				; set control (generate write bus access to gfx)
+		move.l	#GFX_TARGET_SIZE_Y,$700(a5)	; address register
+		move.l	#256,$704(a5)				; set data
+		move.w	#$F7,$708(a5)				; set control (generate write bus access to gfx)
+		rts
+
+gfx_init:
+		bsr		gfx_wait
+		lea		VDGREG,a5
+		move.l	#GFX_CONTROL,$700(a5)		; address register
+		move.l	#0,gfx_control_reg_mem
+		move.l	#0,$704(a5)
+		move.w	#$F7,$708(a5)				; set control (generate write bus access to gfx)
+		move.l	#GFX_TARGET_BASE,$700(a5)	; address register
+		move.w	#$F7,$708(a5)				; set control (generate write bus access to gfx)
+		rts
+
+gfx_set_color_depth:
+		lea		VDGREG,a5
+		and.l	#-3,gfx_control_reg_mem		; mask off 2 LSB (color depth field)
+		or.l	#1,gfx_control_reg_mem		; select 16 bpp
+		bsr		gfx_wait
+		move.l	#GFX_CONTROL,$700(a5)		; address register
+		move.l	gfx_control_reg_mem,$704(a5)
+		move.w	#$F7,$708(a5)				; set control (generate write bus access to gfx)
+		rts
+
+gfx_set_color:
+		bsr		gfx_wait
+		lea		VDGREG,a5
+		move.l	#GFX_COLOR0,$700(a5)
+		move.l	d0,$704(a5)
+		move.w	#$F7,$708(a5)				; set control (generate write bus access to gfx)
+		rts
+
+gfx_line:
+		bsr		gfx_wait
+		lea		VDGREG,a5
+		move.l	#GFX_DEST_PIXEL_X,$700(a5)
+		move.l	d0,$704(a5)
+		move.w	#$F7,$708(a5)				; set control (generate write bus access to gfx)
+		move.l	#GFX_DEST_PIXEL_Y,$700(a5)
+		move.l	d1,$704(a5)
+		move.w	#$F7,$708(a5)				; set control (generate write bus access to gfx)
+		move.l	#GFX_DEST_PIXEL_Z,$700(a5)
+		move.l	#0,$704(a5)
+		move.w	#$F7,$708(a5)				; set control (generate write bus access to gfx)
+		move.l	gfx_control_reg_mem,d6
+		or.l	#GFX_ACTIVE_POINT0,d6
+		move.l	d6,GFX_CONTROL(a5)
+		move.l	d6,$704(a5)
+		move.w	#$F7,$708(a5)				; set control (generate write bus access to gfx)
+		move.l	#GFX_DEST_PIXEL_X,$700(a5)
+		move.l	d2,$704(a5)
+		move.w	#$F7,$708(a5)				; set control (generate write bus access to gfx)
+		move.l	#GFX_DEST_PIXEL_Y,$700(a5)
+		move.l	d3,$704(a5)
+		move.w	#$F7,$708(a5)				; set control (generate write bus access to gfx)
+		move.l	#GFX_DEST_PIXEL_Z,$700(a5)
+		move.l	#0,$704(a5)
+		move.w	#$F7,$708(a5)				; set control (generate write bus access to gfx)
+		move.l	gfx_control_reg_mem,d6
+		or.l	#GFX_ACTIVE_POINT1,d6
+		move.l	d6,GFX_CONTROL(a5)
+		move.l	d6,$704(a5)
+		move.w	#$F7,$708(a5)				; set control (generate write bus access to gfx)
+		move.l	gfx_control_reg_mem,d6
+		or.l	#GFX_LINE,d6
+		move.l	d6,GFX_CONTROL(a5)
+		move.l	d6,$704(a5)
+		move.w	#$F7,$708(a5)				; set control (generate write bus access to gfx)
+		rts
+
+gfx_demo:
+		bsr		gfx_init
+		bsr		gfx_set_320x256
+.0001:
+		lea		$FFDC0000,a6	; set I/O base
+		move.l	$0C00(a6),d0	; get 32 bit number
+		move.w	d0,d1			; use bits 0 to 8 for y0
+		swap	d0				; and bits 16 to 24 for x0
+		and.w	#$FF,d0		; 0 to 511
+		and.w	#$FF,d1		; 0 to 511
+		clr.w	$0C04(a6)		; gen next number
+		move.l	$0C00(a6),d2
+		move.w	d2,d3
+		swap	d2
+		and.w	#$FF,d2		; 0 to 511
+		and.w	#$FF,d3		; 0 to 511
+		clr.w	$0C04(a6)		; gen next number
+		move.l	$0C00(a6),d4
+		and.w	#RGBMASK,d4		; 9/15 bits color
+		clr.w	$0C04(a6)		; gen next number
+		move.l	d0,d6
+		move.l	d4,d0
+		bsr		gfx_set_color
+		move.l	d6,d0
+		bsr		gfx_line
+		bra		.0001
+
 		
 ; Randomize the screen	
 ;		move.l	#VDGBUF,A0
@@ -2168,7 +2530,62 @@ msgRtcReadFail:
 msg_start:
 	dc.b	"N4V 68k System Starting",0
 
-;------------------------------------------------------------------------------
+;===============================================================================
+; MMU
+;===============================================================================
+		align	2
+mmu_init:
+		move.w	#$1010,leds
+		move.l	#131072,d1					; count of addresses to set map
+		movea.l	#$1FF40000,a0				; base of page tables
+		moveq	#7,d0						; start at page zero, read,write,execute
+.0001:
+		move.l	d0,(a0)+					; update page table entry
+		add.l	#$1000,d0
+		sub.l	#1,d1
+		bne.s	.0001
+	
+		; Setup the page directory
+		; There are only 128 entries to be set, but all entries must be
+		; setup because there's no page faulting on not present. All the
+		; entries must point to present pages. So the part of the address
+		; space that isn't present is setup to point to a dummy page
+		; table.
+
+		move.w	#$1111,leds
+		move.w	#1024,d1			; 1024 entries to setup
+		move.l	#$1FFFE000,a0		; page table for not present entries
+		move.l	#$1FFFD006,d0		; point all entries for not present pages to $1FFFD000
+.0003:
+		move.l	d0,(a0)+
+		dbra	d1,.0003
+
+		move.w	#$1212,leds
+		move.l	#127,d2
+		movea.l	#$1FFFF000,a0		; a0 = page directory address
+		move.l	#$1FFFE000,d1		; point to not present page table
+		move.l	#$1FF40007,d0
+.0002:
+		move.l	d1,$0200(a0)		; 7/8 of memory isn't available
+		move.l	d1,$0400(a0)
+		move.l	d1,$0600(a0)
+		move.l	d1,$0800(a0)
+		move.l	d1,$0A00(a0)
+		move.l	d1,$0C00(a0)
+		move.l	d1,$0E00(a0)
+		move.l	d0,(a0)+
+		add.l	#$1000,d0
+		dbra	d2,.0002
+		move.w	#$1919,leds
+		move.w	#$00,$FFFFFFF6				; set asid
+		move.l	$1FFFF000,$FFFFFFF0			; set page directory address, enable
+		rts
+		
+;===============================================================================
+;===============================================================================
+;===============================================================================
+;===============================================================================
+
 font8:
 	dc.b	$00,$00,$00,$00,$00,$00,$00,$00	; $00
 	dc.b	$00,$00,$00,$00,$00,$00,$00,$00	; 
@@ -2298,3 +2715,9 @@ font8:
 	dc.b	$70,$18,$18,$0E,$18,$18,$70,$00	; }
 	dc.b	$72,$9C,$00,$00,$00,$00,$00,$00	; ~
 	dc.b	$FE,$FE,$FE,$FE,$FE,$FE,$FE,$00	; 
+
+.include C:\cores5\N4V68kSys\software\bootrom\MyTinyB.asm
+
+	;
+
+
