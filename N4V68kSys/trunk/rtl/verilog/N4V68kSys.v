@@ -146,7 +146,7 @@ wire cs_boot = cpu_addr[31:16]==16'hFFFC || cpu_addr[31:3]==29'h0;
 wire cs_dram = cpu_addr[31:29]==3'b000 && !cs_boot;
 wire cs_stack = cpu_addr[31:20]==12'hFF4;
 wire cs_vdg_reg = cpu_addr[31:12]==20'hFFE00;
-wire cs_vdg_ram = cpu_addr[31:21]==11'b1111_1111_100;
+wire cs_vdg_ram = cpu_addr[31:22]==10'b1111_1111_10;
 wire cs_led  = cpu_addr[31:4]==28'hFFDC060;
 wire cs_rand = cpu_addr[31:4]==28'hFFDC0C0;
 wire cs_kbd  = cpu_addr[31:4]==28'hFFDC000;

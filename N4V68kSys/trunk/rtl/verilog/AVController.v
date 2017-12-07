@@ -97,6 +97,7 @@ output reg [15:0] aud2_out;
 output reg [15:0] aud3_out;
 input [15:0] aud_in;
 
+parameter NSPR = 16;
 parameter ST_IDLE = 7'd0;
 parameter ST_RW = 7'd1;
 parameter ST_CHAR_INIT = 7'd2;
@@ -176,6 +177,7 @@ parameter ST_AUD_PLOT_WRITE = 7'd99;
 parameter ST_GFX_RW = 7'd100;
 parameter ST_GFXS_RW = 7'd101;
 parameter ST_GFXS_RW2 = 7'd102;
+parameter ST_READ_FONT_TBL6 = 7'd103;
 
 integer n;
 reg [6:0] state = ST_IDLE;
@@ -198,21 +200,23 @@ assign irq_o = |(irq_status & irq_en);
 //  |      +------------ raster op
 // +-------------------- busy indicator
 reg [15:0] ctrl;
-reg lowres = `TRUE;
+reg [1:0] lowres = 2'b01;
 reg [19:0] bmpBase = 20'h00000;		// base address of bitmap
 reg [19:0] charBmpBase = 20'h5C000;	// base address of character bitmaps
 reg [11:0] hstart = 12'hF03;		// -253
-reg [11:0] vstart = 12'hFDC;		// -36
+reg [11:0] vstart = 12'hFD4;		// -44
 reg [11:0] hpos;
 reg [11:0] vpos;
 reg [4:0] fpos;
-reg [11:0] bitmapWidth = 12'd400;
+reg [15:0] bitmapWidth = 16'd400;
 reg [15:0] borderColor;
 wire [15:0] rgb_i;					// internal rgb output from ram
 
 reg [`CMDQ_SZ:0] cmdq_in;
 wire [`CMDQ_SZ:0] cmdq_out;
 
+reg zbuf;							// z buffer flag
+reg [3:0] zlayer;
 // Line draw
 reg [13:0] x0,y0,x1,y1,x2,y2;
 reg [13:0] x0a,y0a,x1a,y1a,x2a,y2a;
@@ -229,38 +233,37 @@ reg signed [13:0] err;
 wire signed [13:0] e2 = err << 1;
 
 reg [5:0] flashcnt;
+
+// Cursor related registers
+reg [15:0] collision;
 reg cursor;
-reg [11:0] cursor_v;
-reg [11:0] cursor_h;
-reg [11:0] cursor_pv [0:15];
-reg [11:0] cursor_ph [0:15];
-reg [4:0] cx, cy;
-reg [9:0] cya [0:15];
+reg [15:0] cursorEnable;
+reg [11:0] cursor_pv [0:NSPR-1];
+reg [11:0] cursor_ph [0:NSPR-1];
+reg [3:0] cursor_pz [0:NSPR-1];
+reg [9:0] cya [0:NSPR-1];
 reg [22:0] cursor_color [0:63];
-reg [15:0] cursor_color0;
-reg [3:0] flashrate;
 reg [15:0] cursor_on;
 reg [15:0] cursor_on_d1;
 reg [15:0] cursor_on_d2;
 reg [15:0] cursor_on_d3;
-reg [19:0] cursorAddr [0:15];
-reg [63:0] cursorBmp [0:15];
-reg [15:0] cursorColor [0:15];
+reg [19:0] cursorAddr [0:NSPR-1];
+reg [63:0] cursorBmp [0:NSPR-1];
+reg [15:0] cursorColor [0:NSPR-1];
 reg [15:0] cursorLink1;
 reg [15:0] cursorLink2;
-reg [5:0] cursorColorNdx [0:15];
+reg [5:0] cursorColorNdx [0:NSPR-1];
+reg [9:0] cursor_szv [0:NSPR-1];
+reg [4:0] cursor_szh [0:NSPR-1];
+reg [15:0] cursor_bmp [0:NSPR-1];
 
-reg [4:0] cursor_sv;				// cursor size
-reg [4:0] cursor_sh;
-reg [9:0] cursor_szv [0:15];
-reg [4:0] cursor_szh [0:15];
-reg [15:0] cursor_bmp [0:15];
-reg [19:0] rdndx;					// video read index
-reg [19:0] ram_addr;
-reg [31:0] ram_data_i;
-wire [31:0] ram_data_o;
-reg [3:0] ram_we;
-reg ram_ul;
+reg [18:0] rdndx;					// video read index
+reg [18:0] ram_addr;
+reg [15:0] ram_data_i;
+wire [15:0] ram_data_o;
+wire [15:0] zbram_data_o;
+reg [1:0] ram_we;
+reg [1:0] zbram_we;
 
 reg [19:0] font_tbl_adr;			// address of the font table
 reg [15:0] font_id;
@@ -277,7 +280,7 @@ reg [19:0] bltSrcWid;
 reg [19:0] bltDstWid;
 reg [19:0] bltCount;
 //  ch  321033221100       
-//  TBD-ddddebebebeb
+//  TBDzddddebebebeb
 //  |||   |       |+- bitmap mode
 //  |||   |       +-- channel enabled
 //  |||   +---------- direction 0=normal,1=decrement
@@ -285,7 +288,9 @@ reg [19:0] bltCount;
 //  |+--------------- busy indicator
 //  +---------------- trigger bit
 reg [15:0] bltCtrl;
-reg [15:0] bltShift;
+reg [15:0] bltA_shift, bltB_shift, bltC_shift;
+reg [15:0] bltLWMask = 16'hFFFF;
+reg [15:0] bltFWMask = 16'hFFFF;
 
 reg [19:0] srcA_badr;               // base address
 reg [19:0] srcA_mod;                // modulo
@@ -404,9 +409,11 @@ reg [15:0] bltD_residue;
 wire [15:0] bltA_out, bltB_out, bltC_out;
 wire [15:0] bltA_out1, bltB_out1, bltC_out1;
 reg  [15:0] bltA_dat, bltB_dat, bltC_dat, bltD_dat;
+// Convert an input bit into a color (black or white) to allow use as a mask.
 wire [15:0] bltA_in = bltCtrl[0] ? (blt_bmpA[bitcnt] ? 16'h7FFF : 16'h0000) : blt_bmpA;
 wire [15:0] bltB_in = bltCtrl[2] ? (blt_bmpB[bitcnt] ? 16'h7FFF : 16'h0000) : blt_bmpB;
 wire [15:0] bltC_in = bltCtrl[4] ? (blt_bmpC[bitcnt] ? 16'h7FFF : 16'h0000) : blt_bmpC;
+// If the channel is disabled use the dat registers as the source of data.
 assign bltA_out = bltCtrl[1] ? bltA_out1 : bltA_dat;
 assign bltB_out = bltCtrl[3] ? bltB_out1 : bltB_dat;
 assign bltC_out = bltCtrl[5] ? bltC_out1 : bltC_dat;
@@ -459,6 +466,7 @@ vtdl #(.WID(16), .DEP(32)) bltC (.clk(clk_i), .ce(wrC), .a(bltCa), .d(bltC_in), 
 reg [15:0] bltab;
 reg [15:0] bltabc;
 
+// Perform alpha blending between the two colors.
 wire [12:0] blndR = (bltB_out[`R] * bltA_out[7:0]) + (bltC_out[`R])*(8'hFF-bltA_out[7:0]);
 wire [12:0] blndG = (bltB_out[`G] * bltA_out[7:0]) + (bltC_out[`G])*(8'hFF-bltA_out[7:0]);
 wire [12:0] blndB = (bltB_out[`B] * bltA_out[7:0]) + (bltC_out[`B])*(8'hFF-bltA_out[7:0]);
@@ -488,6 +496,7 @@ always @*
 			else
 				bltabc <= bltab;
 	4'h4:	bltabc <= {blndR[12:8],blndG[12:8],blndB[12:8]};
+	4'h7:   bltabc <= (bltC_out & ~bltB_out) | bltA_out; 
 	4'h8:	bltabc <= bltab & bltC_out;
 	4'h9:	bltabc <= bltab | bltC_out;
 	4'hA:	bltabc <= bltab ^ bltC_out;
@@ -543,6 +552,26 @@ chipram16 chipram1
 	.doutb(rgb_i)
 );
 
+wire [7:0] zbx2_i;
+reg [3:0] zb_i;
+zbram uzbram1
+(
+	.clka(clk200_i),
+	.ena(1'b1),
+	.wea(zbram_we),
+	.addra(ram_addr),
+	.dina(ram_data_i),
+	.douta(zbram_data_o),
+	.clkb(clk200_i),
+	.enb(1'b1),
+	.web(1'b0),
+	.addrb(rdndx[18:3]),
+	.dinb(2'h00),
+	.doutb(zbx2_i)
+);
+always @*
+	zb_i <= {zbx2_i >> rdndx[2:0],2'b00};
+
 reg [1:0] copper_op;
 reg copper_b;
 reg [3:0] copper_f, copper_mf;
@@ -576,25 +605,21 @@ always @(posedge clk)
 		flashcnt <= flashcnt + 6'd1;
 	end
 
-always @(posedge clk)
-	if ((hpos >> lowres) == cursor_h)
-		cx <= 0;
-	else
-		cx <= cx + 6'd1;
-always @(posedge clk)
-	if ((vpos >> lowres) == cursor_v)
-		cy <= 0;
-	else if (eol)
-		cy <= cy + 5'd1;
+// cya used to generate index into the core's memory
 always @(posedge clk)
 begin
-	for (n = 0; n < 16; n = n + 1)
-		if (((vpos >> lowres) == cursor_pv[n]) && (lowres ? vpos[0]==1'b0 : 1'b1))
-			cya[n] <= 0;
-		else if (eol)
+	for (n = 0; n < NSPR; n = n + 1)
+		if (((vpos >> lowres) == cursor_pv[n]) && (lowres[1] ? vpos[1:0]==2'b00 : lowres[0] ? vpos[0]==1'b0 : 1'b1)) begin
+			cya[n] <= 10'd0;
+		end
+		else if (eol) begin
 			cya[n] <= cya[n] + 10'd1;
+	   end
 end
 
+// Load the cursor bitmap from ram
+// Determine when cursor output should appear
+// Shift the cursor bitmap
 always @(posedge clk)
 begin
     casex(hpos)
@@ -603,45 +628,26 @@ begin
     12'b1111_10xx_xx10: cursorBmp[hpos[5:2]][31:16] <= rgb_i;
     12'b1111_10xx_xx11: cursorBmp[hpos[5:2]][15:0] <= rgb_i;
     endcase
-    // Determine when cursor output should appear
-	if (lowres) begin
-		if ((vpos[11:1] >= cursor_v && vpos <= {cursor_v + cursor_sv,1'b1}) &&
-			(hpos[11:1] >= cursor_h && hpos <= {cursor_h + cursor_sh,1'b1})) begin
-			cursor <= cursor_bmp[cy[4:1]][cx[4:1]];
-		end
-		else
-			cursor <= 1'b0;
-		for (n = 0; n < 16; n = n + 1)
-			if ((vpos[11:1] >= cursor_pv[n] && vpos <= {cursor_pv[n] + cursor_szv[n],1'b1}) &&
-				(hpos[11:1] >= cursor_ph[n] && hpos <= {cursor_ph[n] + cursor_szh[n],1'b1})) begin
-				if (hpos[0])
-					cursorBmp[n] <= {cursorBmp[n][61:0],2'b00};
-				cursor_on[n] <=
-				    cursorLink2[n] ? |{ cursorBmp[(n+2)&15][63:62],cursorBmp[(n+1)&15][63:62],cursorBmp[n][63:62]} :
-				    cursorLink1[n] ? |{ cursorBmp[(n+1)&15][63:62],cursorBmp[n][63:62]} : 
-				    |cursorBmp[n][63:62];
-			end
-			else
-				cursor_on[n] <= 1'b0;
-	end
-	else begin
-		if ((vpos >= cursor_v && vpos <= cursor_v + cursor_sv) &&
-			(hpos >= cursor_h && hpos <= cursor_h + cursor_sh))
-			cursor <= cursor_bmp[cy[3:0]][cx[3:0]];
-		else
-			cursor <= 1'b0;
-		for (n = 0; n < 16; n = n + 1)
-			if ((vpos >= cursor_pv[n] && vpos <= cursor_pv[n] + cursor_szv[n]) &&
-				(hpos >= cursor_ph[n] && hpos <= cursor_ph[n] + cursor_szh[n])) begin
-				cursorBmp[n] <= {cursorBmp[n][61:0],2'b00};
-				cursor_on[n] <=
-                    cursorLink2[n] ? |{ cursorBmp[(n+2)&15][63:62],cursorBmp[(n+1)&15][63:62],cursorBmp[n][63:62]} :
-                    cursorLink1[n] ? |{ cursorBmp[(n+1)&15][63:62],cursorBmp[n][63:62]} : 
-                    |cursorBmp[n][63:62];
-			end
-			else
-				cursor_on[n] <= 1'b0;
-	end
+    for (n = 0; n < NSPR; n = n + 1)
+        if (((vpos >> lowres) >= cursor_pv[n] && (vpos >> lowres) <= cursor_pv[n] + cursor_szv[n]) &&
+            ((hpos >> lowres) >= cursor_ph[n] && (hpos >> lowres) <= cursor_ph[n] + cursor_szh[n]) &&
+            cursorEnable[n]) begin
+            case(lowres)
+            2'd0:   cursorBmp[n] <= {cursorBmp[n][61:0],2'b00};
+            2'd1:   if (hpos[0])
+                        cursorBmp[n] <= {cursorBmp[n][61:0],2'b00};
+            2'd2:   if (hpos[1:0]==2'b11)
+                        cursorBmp[n] <= {cursorBmp[n][61:0],2'b00};
+            2'd3:   if (hpos[2:0]==3'b111)
+                        cursorBmp[n] <= {cursorBmp[n][61:0],2'b00};
+            endcase
+            cursor_on[n] <=
+                cursorLink2[n] ? |{ cursorBmp[(n+2)&15][63:62],cursorBmp[(n+1)&15][63:62],cursorBmp[n][63:62]} :
+                cursorLink1[n] ? |{ cursorBmp[(n+1)&15][63:62],cursorBmp[n][63:62]} : 
+                |cursorBmp[n][63:62];
+        end
+        else
+            cursor_on[n] <= 1'b0;
 end
 
 // Compute display ram index
@@ -649,23 +655,14 @@ always @(posedge clk)
 begin
     casex(hpos)
     12'hF7F:
-     	if (lowres)
-    		rdndx <= cursorAddr[hpos[5:2]+3'd1] + {cya[hpos[5:2]+3'd1][9:1],2'b00};
-    	else
-			rdndx <= cursorAddr[hpos[5:2]+3'd1] + {cya[hpos[5:2]+3'd1][9:0],2'b00};
+    		rdndx <= cursorAddr[hpos[5:2]+3'd1] + {cya[hpos[5:2]+3'd1][9:0] >> lowres,2'b00};
     12'b1111_10xx_xx00: rdndx <= rdndx + 20'd1;
     12'b1111_10xx_xx01: rdndx <= rdndx + 20'd1;
     12'b1111_10xx_xx10: rdndx <= rdndx + 20'd1;
     12'b1111_10xx_xx11:
-    	if (lowres)
-    		rdndx <= cursorAddr[hpos[5:2]+3'd1] + {cya[hpos[5:2]+3'd1][9:1],2'b00};
-    	else
-    		rdndx <= cursorAddr[hpos[5:2]+3'd1] + {cya[hpos[5:2]+3'd1][9:0],2'b00};
+    		rdndx <= cursorAddr[hpos[5:2]+3'd1] + {cya[hpos[5:2]+3'd1][9:0] >> lowres,2'b00};
     default:
-        if (lowres)
-            rdndx <= {9'h00,vpos[11:1]} * {8'h00,bitmapWidth} + {bmpBase[19:12],1'b0,hpos[11:1]};
-        else
-            rdndx <= {8'h00,vpos} * {8'h00,bitmapWidth} + {bmpBase[19:12],hpos};
+            rdndx <= {8'h00,vpos >> lowres} * {4'h00,bitmapWidth} + bmpBase + {8'h00,hpos >> lowres};
     endcase
 end
 
@@ -676,7 +673,7 @@ end
 // If the sprites are linked twice they all share the same set of colors.
 
 always @(posedge clk)
-for (n = 0; n < 16; n = n + 1)
+for (n = 0; n < NSPR; n = n + 1)
 if (cursorLink2[n])
     cursorColorNdx[n] <= {cursorBmp[(n+2)&15][63:62],cursorBmp[(n+1)&15][63:62],cursorBmp[n][63:62]};
 else if (cursorLink1[n])
@@ -707,6 +704,28 @@ always @(posedge clk)
 	       		cursor_on_d1[14] ? cursorColorNdx[14] :
 	       		cursorColorNdx[15]];
 
+reg [3:0] cursor_z1, cursor_z2;
+always @(posedge clk)
+    cursor_z1 <= 
+	       		cursor_on_d1[0] ? cursor_pz[0] :
+	       		cursor_on_d1[1] ? cursor_pz[1] :
+	       		cursor_on_d1[2] ? cursor_pz[2] :
+	       		cursor_on_d1[3] ? cursor_pz[3] :
+	       		cursor_on_d1[4] ? cursor_pz[4] :
+	       		cursor_on_d1[5] ? cursor_pz[5] :
+	       		cursor_on_d1[6] ? cursor_pz[6] :
+	       		cursor_on_d1[7] ? cursor_pz[7] :
+	       		cursor_on_d1[8] ? cursor_pz[8] :
+	       		cursor_on_d1[9] ? cursor_pz[9] :
+	       		cursor_on_d1[10] ? cursor_pz[10] :
+	       		cursor_on_d1[11] ? cursor_pz[11] :
+	       		cursor_on_d1[12] ? cursor_pz[12] :
+	       		cursor_on_d1[13] ? cursor_pz[13] :
+	       		cursor_on_d1[14] ? cursor_pz[14] :
+	       		cursor_pz[15];
+always @(posedge clk)
+	cursor_z2 <= cursor_z1;
+
 wire [12:0] alphaRed = rgb_i[14:10] * cursorColorOut[7:0];
 wire [12:0] alphaGreen = rgb_i[9:5] * cursorColorOut[7:0];
 wire [12:0] alphaBlue = rgb_i[4:0] * cursorColorOut[7:0];
@@ -725,23 +744,9 @@ wire [14:0] flashOut = cursorColorOut[20] ? (((flashcnt[5:2] & cursorColorOut[19
 always @(posedge clk)
 	rgb <= 	blank ? 15'h0000 :
 		   	border ? borderColor :
-       		cursor ? (cursor_color0[15] ? rgb_i[14:0] ^ 15'h7FFF : cursor_color0) :
-       		|cursor_on_d2 ? flashOut : rgb_i[14:0];
-/*
-always @(posedge clk)
-case(cursor_on)
-8'b00000000,
-8'b00000001,
-8'b00000010,
-8'b00000100,
-8'b00001000,
-8'b00010000,
-8'b00100000,
-8'b01000000,
-8'b10000000:	;
-default:	collision <= collision | cursor_on;
-endcase
-*/
+//       		cursor ? (cursor_color0[15] ? rgb_i[14:0] ^ 15'h7FFF : cursor_color0) :
+       		|cursor_on_d2 ? (zb_i < cursor_z2 ? rgb_i[14:0] : flashOut) : rgb_i[14:0];
+
 reg ack,rdy;
 reg rwsr;							// read / write shadow ram
 wire chrp = rwsr & ~rdy;			// chrq pulse
@@ -926,6 +931,8 @@ if (reg_cs|reg_copper) begin
 		10'b000xxxxxx1:   cursor_color[reg_adr[7:2]][15:0] <= reg_dat;
 		10'b0010000000:   cursorLink1 <= reg_dat;
 		10'b0010000001:   cursorLink2 <= reg_dat;
+		10'b0010000010:   collision <= reg_dat;
+		10'b0010000011:   cursorEnable <= reg_dat;
         10'b010_xxxx_000:   cursorAddr[reg_adr[7:4]][19:16] <= reg_dat[3:0];
         10'b010_xxxx_001:   cursorAddr[reg_adr[7:4]][15:0] <= reg_dat;
         10'b010_xxxx_010:   cursor_ph[reg_adr[7:4]] <= reg_dat[11:0];
@@ -934,6 +941,7 @@ if (reg_cs|reg_copper) begin
                                 cursor_szh[reg_adr[7:4]] <= reg_dat[4:0];
                                 cursor_szv[reg_adr[7:4]] <= reg_dat[15:6];
                             end
+        10'b010_xxxx_101:	cursor_pz[reg_adr[7:4]] <= reg_dat[3:0];
 /*                          
 		10'b0xxxxxx000:	begin
 						blt_addr[reg_adr[9:4]][19:4] <= reg_dat;
@@ -977,20 +985,9 @@ if (reg_cs|reg_copper) begin
 		10'b100_0011_001:	cmdq_in[`Y1POS] <= reg_dat[11:0];	// ypos2
 		10'b100_0011_010:	cmdq_in[`BASEADRH] <= reg_dat;
 		10'b100_0011_011:	cmdq_in[`BASEADRL] <= reg_dat;
+		10'b100_0011_110:	zlayer <= reg_dat[3:0];
+		10'b100_0011_111:	zbuf <= reg_dat[0];
 		
-		10'b100_0100_000:	cursor_h <= reg_dat[11:0];
-		10'b100_0100_001:	cursor_v <= reg_dat[11:0];
-		10'b100_0100_010:	begin
-								cursor_sh <= reg_dat[3:0];
-								cursor_sv <= reg_dat[11:8];
-							end
-		10'b100_0100_011:	flashrate <= reg_dat[4:0];
-		10'b100_0100_100:	cursor_color0 <= reg_dat[15:0];
-//		10'b100_0100_101:	cursor_color1 <= reg_dat[15:0];
-//		10'b100_0100_110:	cursor_color2 <= reg_dat[15:0];
-//		10'b100_0100_111:	cursor_color3 <= reg_dat[15:0];
-		10'b100_011x_xxx:	cursor_bmp[reg_adr[4:1]] <= reg_dat;
-	
 		10'b100_1000_000:	srcA_badr[19:16] <= reg_dat[3:0];
 		10'b100_1000_001:	srcA_badr[15: 0] <= reg_dat;
 		10'b100_1000_010:	srcA_mod[19:16] <= reg_dat[3:0];
@@ -1029,6 +1026,11 @@ if (reg_cs|reg_copper) begin
 		10'b101_0xxx_xxx:	rasti_en[reg_adr[6:1]] <= reg_dat;
 		10'b101_1000_000:	irq_en <= reg_dat;
 		10'b101_1000_001:	irq_status <= irq_status & ~reg_dat;
+        10'b101_1000_010:	aud_ctrl <= reg_dat;
+        10'b101_1000_011:   aud_ctrl2 <= reg_dat;
+        10'b101_1000_100:   bitmapWidth <= reg_dat;
+        10'b101_1000_110:   hstart <= reg_dat[11:0];   
+        10'b101_1000_111:   vstart <= reg_dat[11:0];
 
 		10'b101_1001_000:	font_tbl_adr[19:16] <= reg_dat[3:0];
 		10'b101_1001_001:	font_tbl_adr[15:0] <= reg_dat;
@@ -1036,10 +1038,12 @@ if (reg_cs|reg_copper) begin
 		10'b101_1001_100:	bltA_dat <= reg_dat;
 		10'b101_1001_101:	bltB_dat <= reg_dat;
 		10'b101_1001_110:	bltC_dat <= reg_dat;
-		10'b101_1001_111:	bltShift <= reg_dat;
+		10'b101_1010_000:	bltA_shift <= reg_dat;
+		10'b101_1010_001:	bltB_shift <= reg_dat;
+		10'b101_1010_010:	bltC_shift <= reg_dat;
+		10'b101_1010_100:   bltFWMask <= reg_dat;
+        10'b101_1010_101:   bltLWMask <= reg_dat;
 
-        10'b101_1000_010:	aud_ctrl <= reg_dat;
-        10'b101_1000_011:	aud_ctrl2 <= reg_dat;
 		10'b110_0000_000:   aud0_adr[19:16] <= reg_dat[3:0];
 		10'b110_0000_001:   aud0_adr[15:0] <= reg_dat;
 		10'b110_0000_010:   aud0_length <= reg_dat;
@@ -1069,7 +1073,9 @@ if (reg_cs|reg_copper) begin
         10'b110_0100_010:	audi_length <= reg_dat;
         10'b110_0100_011:	audi_period <= reg_dat;
         10'b110_0100_101:	audi_dat <= reg_dat;
-        
+
+        10'b110_0101_000:   lowres <= reg_dat[1:0];   
+/*        
         10'b110_1xxx_000:	cursorAddr[reg_adr[6:4]][19:16] <= reg_dat[3:0];
         10'b110_1xxx_001:	cursorAddr[reg_adr[6:4]][15:0] <= reg_dat;
 		10'b110_1xxx_010:	cursor_ph[reg_adr[6:4]] <= reg_dat[11:0];
@@ -1078,7 +1084,7 @@ if (reg_cs|reg_copper) begin
 								cursor_szh[reg_adr[6:4]] <= reg_dat[4:0];
 								cursor_szv[reg_adr[6:4]] <= reg_dat[12:8];
 							end
-
+*/
 		10'b111_0000_000:	gfxs_adr_i[31:16] <= reg_dat;
 		10'b111_0000_001:	gfxs_adr_i[15:0] <= reg_dat;
         10'b111_0000_010:	gfxs_dat_i[31:16] <= reg_dat;
@@ -1090,6 +1096,7 @@ if (reg_cs|reg_copper) begin
 	end
 	else begin
 		case(reg_adr[10:1])
+		10'b0010000010: dat_o <= collision;
 		10'b1000010110:	dat_o <= {11'h00,cmdq_ndx};
 		10'b1001010110:	dat_o <= bltCtrl;
 		10'b1011000001:	dat_o <= irq_status;
@@ -1174,17 +1181,38 @@ if (cs_cmdq)
 if (copper_state==2'b10 && (cmppos > {copper_f,copper_v,copper_h})&&(copper_b ? bltCtrl[13] : 1'b1))
 	copper_state <= 2'b01;
 
+case(cursor_on)
+16'b0000000000000000,
+16'b0000000000000001,
+16'b0000000000000010,
+16'b0000000000000100,
+16'b0000000000001000,
+16'b0000000000010000,
+16'b0000000000100000,
+16'b0000000001000000,
+16'b0000000010000000,
+16'b0000000100000000,
+16'b0000001000000000,
+16'b0000010000000000,
+16'b0000100000000000,
+16'b0001000000000000,
+16'b0010000000000000,
+16'b0100000000000000,
+16'b1000000000000000:	;
+default:	collision <= collision | cursor_on;
+endcase
+
 case(state)
 ST_IDLE:
 	begin
-		ram_we <= {4{`LOW}};
+		ram_we <= {2{`LOW}};
+		zbram_we <= {2{`LOW}};
 		ack <= `LOW;
 		
 		// Audio takes precedence to avoid audio distortion.
 		// Fortunately audio DMA is fast and infrequent.
 		if (|aud0_req) begin
-			ram_addr <= aud0_wadr[19:1];
-			ram_ul <= aud0_wadr[0];
+			ram_addr <= aud0_wadr;
 			aud0_wadr <= aud0_wadr + aud0_req;
 			aud0_req <= 6'd0;
 			if (aud0_wadr + aud0_req >= aud0_adr + aud0_length) begin
@@ -1197,8 +1225,7 @@ ST_IDLE:
 			state <= ST_AUD0;
 		end
 		else if (|aud1_req)	begin
-			ram_addr <= aud1_wadr[19:1];
-			ram_ul <= aud1_wadr[0];
+			ram_addr <= aud1_wadr;
 			aud1_wadr <= aud1_wadr + aud1_req;
 			aud1_req <= 6'd0;
 			if (aud1_wadr + aud1_req >= aud1_adr + aud1_length) begin
@@ -1211,8 +1238,7 @@ ST_IDLE:
 			state <= ST_AUD1;
 		end
 		else if (|aud2_req) begin
-			ram_addr <= aud2_wadr[19:1];
-			ram_ul <= aud2_wadr[0];
+			ram_addr <= aud2_wadr;
 			aud2_wadr <= aud2_wadr + aud2_req;
 			aud2_req <= 6'd0;
 			if (aud2_wadr + aud2_req >= aud2_adr + aud2_length) begin
@@ -1225,8 +1251,7 @@ ST_IDLE:
 			state <= ST_AUD2;
 		end
 		else if (|aud3_req)	begin
-			ram_addr <= aud3_wadr[19:1];
-			ram_ul <= aud3_wadr[0];
+			ram_addr <= aud3_wadr;
 			aud3_wadr <= aud3_wadr + aud3_req;
 			aud3_req <= 6'd0;
 			if (aud3_wadr + aud3_req >= aud3_adr + aud3_length) begin
@@ -1239,10 +1264,9 @@ ST_IDLE:
 			state <= ST_AUD3;
 		end
 		else if (|audi_req) begin
-			ram_we <= audi_wadr[0] ? 4'b1100 : 4'b0011;
-			ram_addr <= audi_wadr[19:1];
-			ram_ul <= audi_wadr[0];
-			ram_data_i <= {2{audi_dat}};
+			ram_we <= 2'b11;
+			ram_addr <= audi_wadr;
+			ram_data_i <= audi_dat;
 			audi_wadr <= audi_wadr + audi_req;
 			audi_req <= 6'd0;
 			if (audi_wadr + audi_req >= audi_adr + audi_length) begin
@@ -1258,10 +1282,12 @@ ST_IDLE:
 `endif
 		end
 		else if (cs_ram) begin
-			ram_data_i <= {2{dat_i}};
-			ram_addr <= adr_i[20:2];
-			ram_ul <= adr_i[1];
-			ram_we <= adr_i[1] ? {{2{we_i}} & sel_i,2'b00} : {2'b00,{2{we_i}} & sel_i};
+			ram_data_i <= dat_i;
+			ram_addr <= adr_i[19:1];
+			if (zbuf)
+				zbram_we <= {{2{we_i}} & sel_i};
+			else
+				ram_we <= {{2{we_i}} & sel_i};
 			state <= ST_RW;
 		end
 		
@@ -1311,6 +1337,8 @@ ST_IDLE:
 			srcC_hcnt <= 20'd1;
 			dstD_hcnt <= 20'd1;
 			bltA_residue <= 16'h0000;
+			bltB_residue <= 16'h0000;
+			bltC_residue <= 16'h0000;
 			if (bltCtrl[1])
 				state <= ST_BLTDMA1;
 			else if (bltCtrl[3])
@@ -1350,9 +1378,8 @@ ST_IDLE:
 		end
 
 		else if (gfx_cyc) begin
-			ram_we <= {4{gfx_we}} & gfx_sel;
-			ram_addr <= gfx_adr[19:2];
-			ram_ul <= 1'b0;
+			ram_we <= {2{gfx_we}} & gfx_sel;
+			ram_addr <= gfx_adr[19:1];
 			ram_data_i <= gfx_dat_o;
 			state <= ST_GFX_RW;
 		end
@@ -1390,9 +1417,13 @@ ST_CMD:
 ST_RW:
 	begin
         ack <= `HIGH;
-        dat_o <= adr_i[1] ? ram_data_o[31:16] : ram_data_o[15:0];
+        if (zbuf)
+        	dat_o <= zbram_data_o;
+        else
+        	dat_o <= ram_data_o;
         if (~cs_ram) begin
-            ram_we <= {4{`LOW}};
+            ram_we <= {2{`LOW}};
+            zbram_we <= {2{`LOW}};
             ack <= `LOW;
             state <= ST_IDLE;
         end
@@ -1403,7 +1434,7 @@ ST_GFX_RW:
         gfx_ack_i <= `HIGH;
         gfx_dat_i <= ram_data_o;
         if (!gfx_cyc) begin
-            ram_we <= {4{`LOW}};
+            ram_we <= {2{`LOW}};
             gfx_ack_i <= `LOW;
             state <= ST_IDLE;
         end
@@ -1429,37 +1460,36 @@ ST_GFXS_RW2:
 
 ST_AUD0:
 	begin
-		aud0_dat <= ram_ul ? ram_data_o[31:16] : ram_data_o[15:0];
+		aud0_dat <= ram_data_o;
 		state <= ST_IDLE;
 	end
 ST_AUD1:
 	begin
-		aud1_dat <= ram_ul ? ram_data_o[31:16] : ram_data_o[15:0];
+		aud1_dat <= ram_data_o;
 		state <= ST_IDLE;
 	end
 ST_AUD2:
 	begin
-		aud2_dat <= ram_ul ? ram_data_o[31:16] : ram_data_o[15:0];
+		aud2_dat <= ram_data_o;
 		state <= ST_IDLE;
 	end
 ST_AUD3:
 	begin
-		aud3_dat <= ram_ul ? ram_data_o[31:16] : ram_data_o[15:0];
+		aud3_dat <= ram_data_o;
 		state <= ST_IDLE;
 	end
 `ifdef AUD_PLOT
 ST_AUD_PLOT:
 	begin
 		bkcolor <= 16'h7FFF;
-		tgtaddr <= {12'h00,audi_dat[15:8]^8'h80} * {8'h00,bitmapWidth} + {bmpBase[19:12],4'h0,audi_wadr[7:0]};
+		tgtaddr <= {12'h00,audi_dat[15:8]^8'h80} * {4'h00,bitmapWidth} + bmpBase + audi_wadr[7:0];
 		state <= ST_AUD_PLOT_WRITE;
 	end
 ST_AUD_PLOT_WRITE:
 	begin
-		ram_we <= tgtaddr[0] ? 4'b1100 : 4'b0011;
-		ram_addr <= tgtaddr[19:1];
-		ram_ul <= tgtaddr[0];
-		ram_data_i <= {2{bkcolor}};
+		ram_we <= 2'b11;
+		ram_addr <= tgtaddr;
+		ram_data_i <= bkcolor;
 		state <= ST_IDLE;
 	end
 `endif
@@ -1471,28 +1501,31 @@ ST_AUD_PLOT_WRITE:
 ST_PLOT:
 	begin
 		bkcolor <= charbk_qo;
-		tgtaddr <= {8'h00,cmdy1_qo} * {8'h00,bitmapWidth} + {bmpBase[19:12],cmdx1_qo};
-		state <= charbk_qo[9] ? ST_PLOT_READ : ST_PLOT_WRITE;
+		tgtaddr <= {8'h00,cmdy1_qo} * {4'h00,bitmapWidth} + bmpBase + cmdx1_qo;
+		state <= charbk_qo[9]|zbuf ? ST_PLOT_READ : ST_PLOT_WRITE;
 	end
 ST_PLOT_READ:
 	begin
-		ram_addr <= tgtaddr[19:1];
-		ram_ul <= tgtaddr[0];
+		ram_addr <= zbuf ? tgtaddr[19:3] : tgtaddr;
 		state <= ST_PLOT_WRITE;
 	end
 ST_PLOT_WRITE:
 	begin
-		ram_we <= tgtaddr[0] ? 4'b1100 : 4'b0011;
-		if (bkcolor[`A]) begin
-			ram_data_i[`R] <= ram_data_o[`R] >> bkcolor[2:0];
-			ram_data_i[`G] <= ram_data_o[`G] >> bkcolor[5:3];
-			ram_data_i[`B] <= ram_data_o[`B] >> bkcolor[8:6];
-			ram_data_i[30:26] <= ram_data_o[30:26] >> bkcolor[2:0];
-			ram_data_i[25:21] <= ram_data_o[25:21] >> bkcolor[5:3];
-			ram_data_i[20:16] <= ram_data_o[20:16] >> bkcolor[8:6];
+		ram_addr <= zbuf ? tgtaddr[19:3] : tgtaddr;
+		if (zbuf) begin
+			zbram_we <= 2'b11;
+			ram_data_i <= (zbram_data_o & ~(2'b11 << {tgtaddr[2:0],1'b0})) | (zlayer << {tgtaddr[2:0],1'b0});
 		end
-		else
-			ram_data_i <= {2{bkcolor}};
+		else begin
+			ram_we <= 2'b11;
+			if (bkcolor[`A]) begin
+				ram_data_i[`R] <= ram_data_o[`R] >> bkcolor[2:0];
+				ram_data_i[`G] <= ram_data_o[`G] >> bkcolor[5:3];
+				ram_data_i[`B] <= ram_data_o[`B] >> bkcolor[8:6];
+			end
+			else
+				ram_data_i <= bkcolor;
+		end
 		state <= ST_IDLE;
 	end
 
@@ -1517,42 +1550,52 @@ ST_READ_FONT_TBL:
 		charcode <= charcode_qo;
 		fgcolor <= charfg_qo;
 		bkcolor <= charbk_qo;
-		ram_addr <= {font_tbl_adr[19:2],1'b0} + {font_id,1'b0};
-		ram_ul <= 1'b0;
+		ram_addr <= {font_tbl_adr[18:2],2'b0} + {font_id,2'b00};
 		state <= ST_READ_FONT_TBL2;
 	end
 ST_READ_FONT_TBL2:
 	begin
-		ram_addr <= ram_addr + 20'd1;
+		ram_addr <= ram_addr + 19'd1;
 		font_fixed <= ram_data_o[15];
 		font_width <= ram_data_o[14:10];
 		font_height <= ram_data_o[9:5];
-		charBmpBase <= {ram_data_o[3:0],ram_data_o[31:16]};//ram_data_o[19:0];
+		charBmpBase[19:16] <= ram_data_o[3:0];
 		state <= ST_READ_FONT_TBL3;
 	end
 ST_READ_FONT_TBL3:
 	begin
-		ram_addr <= ram_addr + 20'd1;
+		ram_addr <= ram_addr + 19'd1;
+		charBmpBase[15:0] <= ram_data_o;
+		state <= font_fixed ? ST_READ_FONT_TBL6 : ST_READ_FONT_TBL4;
+	end
+ST_READ_FONT_TBL4:
+	begin
+		ram_addr <= ram_addr + 19'd1;
 		glyph_tbl_adr[19:16] <= ram_data_o[3:0];
-		glyph_tbl_adr[15:0] <= ram_data_o[31:16];
 		state <= ST_READ_FONT_TBL5;
 	end
 ST_READ_FONT_TBL5:
 	begin
-		tgtaddr <= {8'h00,cmdy1_qo} * {8'h00,bitmapWidth} + {bmpBase[19:12],cmdx1_qo};
+		ram_addr <= ram_addr + 19'd1;
+		glyph_tbl_adr[15:0] <= ram_data_o;
+		state <= ST_READ_FONT_TBL6;
+	end
+ST_READ_FONT_TBL6:
+	begin
+		tgtaddr <= {8'h00,cmdy1_qo} * {4'h00,bitmapWidth} + bmpBase + cmdx1_qo;
 		charBmpBase <= charBmpBase + (charcode << font_width[4]) * (font_height + 7'd1);
 		if (font_fixed) begin
 			ctrl[14] <= 1'b1;
 			state <= ST_IDLE;
 		end
 		else begin
-			ram_addr <= glyph_tbl_adr[19:1] + charcode[8:2];
+			ram_addr <= glyph_tbl_adr + charcode[8:1];
 			state <= ST_READ_GLYPH_ENTRY;
 		end
 	end
 ST_READ_GLYPH_ENTRY:
 	begin
-		font_width <= ram_data_o >> {charcode[1:0],3'b0};
+		font_width <= ram_data_o >> {charcode[0],3'b0};
 		ctrl[14] <= 1'b1;
 		state <= ST_IDLE;
 	end
@@ -1574,38 +1617,43 @@ ST_CHAR_INIT:
 ST_READ_CHAR_BITMAP:
 	begin
 //		ram_addr <= charBmpBase + charcode * (pixym + 4'd1) + pixvc;
-		ram_addr <= (charBmpBase + (pixvc << font_width[4])) >> 1;
-		ram_ul <= (charBmpBase + (pixvc << font_width[4])) & 1'b1;
+		ram_addr <= charBmpBase + (pixvc << font_width[4]);
 		state <= ST_READ_CHAR_BITMAP_DAT;
 	end
 ST_READ_CHAR_BITMAP_DAT:
 	begin
-		ram_addr <= ram_addr + ram_ul;
-		ram_ul <= ram_ul ^ 1'b1;
-		charbmp[15:0] <= ram_ul ? ram_data_o[31:16] : ram_data_o[15:0];
-		tgtindex <= {14'h00,pixvc} * {8'h00,bitmapWidth};
+		ram_addr <= ram_addr + 19'd1;
+		charbmp[15:0] <= ram_data_o;
+		tgtindex <= {14'h00,pixvc} * {4'h00,bitmapWidth};
 		state <= font_width[4] ? ST_READ_CHAR_BITMAP_DAT2 : ST_WRITE_CHAR;
 	end
 ST_READ_CHAR_BITMAP_DAT2:
 	begin
-		charbmp[31:16] <= ram_ul ? ram_data_o[31:16] : ram_data_o[15:0];
+		charbmp[31:16] <= ram_data_o;
 		state <= ST_WRITE_CHAR;
 	end
 ST_WRITE_CHAR:
 	begin
-		ram_addr <= (tgtaddr + tgtindex + {14'h00,pixhc}) >> 1;
-		ram_ul <= (tgtaddr + tgtindex + {14'h00,pixhc}) & 1'b1;
+		ram_addr <= tgtaddr + tgtindex + {14'h00,pixhc};
 		if (~bkcolor[`A]) begin
-			ram_we <= ((tgtaddr + tgtindex + {14'h00,pixhc}) & 1'b1) ? 4'b1100 : 4'b0011;
-			ram_data_i <= {2{charbmp[font_width] ? fgcolor : bkcolor}};
+			ram_we <= 2'b11;
+			ram_data_i <= charbmp[font_width] ? fgcolor : bkcolor;
 		end
 		else begin
 			if (charbmp[font_width]) begin
-				ram_we <= ((tgtaddr + tgtindex + {14'h00,pixhc}) & 1'b1) ? 4'b1100 : 4'b0011;
-				ram_data_i <= {2{fgcolor}};
+				if (zbuf) begin
+					zbram_we <= 2'b11;
+					ram_data_i <= zlayer;
+				end
+				else begin
+					ram_we <= 2'b11;
+					ram_data_i <= fgcolor;
+				end
 			end
-			else
-				ram_we <= {4{`LOW}};
+			else begin
+				ram_we <= {2{`LOW}};
+				zbram_we <= {2{`LOW}};
+			end
 		end
 		charbmp <= {charbmp[30:0],1'b0};
 		pixhc <= pixhc + 5'd1;
@@ -1624,11 +1672,12 @@ ST_WRITE_CHAR:
 
 ST_BLTDMA1:
 	begin
-		ram_we <= {4{`LOW}};
+		ram_we <= {2{`LOW}};
+		zbram_we <= {2{`LOW}};
 		bitcnt <= bltCtrl[0] ? 4'd15 : 4'd0;
-		bitinc <= bltCtrl[0] ? 4'd1 : 4'd0;
+        bitinc <= bltCtrl[0] ? 4'd1 : 4'd0;
 		bltinc <= bltCtrl[8] ? 20'hFFFFF : 20'd1;
-		loopcnt <= bltPipedepth + 5'd1;
+	    loopcnt <= bltPipedepth + 5'd1;
 		bltAa <= 5'd0;
 		srstA <= `FALSE;
 		state <= ST_BLTDMA2;
@@ -1636,37 +1685,36 @@ ST_BLTDMA1:
 ST_BLTDMA2:
 	begin
 		if (loopcnt > 5'd0) begin
-			ram_addr <= srcA_wadr >> 1;
-			ram_ul <= srcA_wadr & 1'b1;
-			bitcnt <= bitcnt - bitinc;	// bitinc = 3'd0 unless bitmap
-			if (bitcnt==4'd0)
-				srcA_wadr <= srcA_wadr + bltinc;
-			srcA_hcnt <= srcA_hcnt + 20'd1;
-			if (srcA_hcnt==bltSrcWid) begin
-				srcA_hcnt <= 20'd1;
-				srcA_wadr <= srcA_wadr + srcA_mod + bltinc;
-				bitcnt <= bltCtrl[0] ? 4'd15 : 4'd0;
-			end
+			ram_addr <= srcA_wadr;
 			if (bitcnt==4'd0) begin
-				srcA_wcnt <= srcA_wcnt + 20'd1;
-				srcA_dcnt <= srcA_dcnt + 20'd1;
-				if (srcA_wcnt==srcA_cnt) begin
-		            srcA_wadr <= srcA_badr;
-		            srcA_wcnt <= 20'd1;
-		            srcA_hcnt <= 20'd1;
+        		srcA_wadr <= srcA_wadr + bltinc;
+			    srcA_hcnt <= srcA_hcnt + 20'd1;
+			    if (srcA_hcnt==bltSrcWid) begin
+				    srcA_hcnt <= 20'd1;
+				    srcA_wadr <= srcA_wadr + srcA_mod + bltinc;
 					bitcnt <= bltCtrl[0] ? 4'd15 : 4'd0;
-		        end
-			end
-		end
+				end
+                srcA_wcnt <= srcA_wcnt + 20'd1;
+                srcA_dcnt <= srcA_dcnt + 20'd1;
+                if (srcA_wcnt==srcA_cnt) begin
+                    srcA_wadr <= srcA_badr;
+                    srcA_wcnt <= 20'd1;
+                    srcA_hcnt <= 20'd1;
+					bitcnt <= bltCtrl[0] ? 4'd15 : 4'd0;
+                end
+            end
+        end
 		if (loopcnt < bltPipedepth + 5'd1) begin
 			wrA <= 1'b1;
 			bltAa <= bltAa + 5'd1;
-			blt_bmpA <= ram_ul ? ram_data_o[31:16] : ram_data_o[15:0];
-//			blt_bmpA <=   ((ram_data_o >> bltShift[3:0]) | bltA_residue)
-//						& ((srcA_hcnt==bltSrcWid) ? bltLWMask : 16'hFFFF)
-//						& ((srcA_hcnt==20'd1) ? bltFWMask : 16'hFFFF);
-//			bltA_residue <= ram_data_o << (5'd16-bltShift[3:0]);
-		end
+            //blt_bmpA <= ram_data_o;
+            blt_bmpA <=   ((bltCtrl[8] ? ((zbuf ? zbram_data_o : ram_data_o) << bltA_shift[3:0]) | bltA_residue :
+            				 ((zbuf ? zbram_data_o : ram_data_o) >> bltA_shift[3:0])| bltA_residue ))
+                        & ((srcA_hcnt==bltSrcWid) ? bltLWMask : 16'hFFFF)
+                        & ((srcA_hcnt==20'd1) ? bltFWMask : 16'hFFFF);
+            bltA_residue <= bltCtrl[8] ? (zbuf ? zbram_data_o : ram_data_o) >> (5'd16-bltA_shift[3:0]) :
+            			(zbuf ? zbram_data_o : ram_data_o) << (5'd16-bltA_shift[3:0]);
+        end
 		loopcnt <= loopcnt - 5'd1;
 		if (loopcnt==5'd0 || srcA_dcnt==dstD_cnt) begin
 			if (bltCtrl[3])
@@ -1680,9 +1728,10 @@ ST_BLTDMA2:
 	// Do channel B
 ST_BLTDMA3:
 	begin
-		ram_we <= {4{`LOW}};
+		ram_we <= {2{`LOW}};
+		zbram_we <= {2{`LOW}};
 		bitcnt <= bltCtrl[2] ? 4'd15 : 4'd0;
-		bitinc <= bltCtrl[2] ? 4'd1 : 4'd0;
+        bitinc <= bltCtrl[2] ? 4'd1 : 4'd0;
 		bltinc <= bltCtrl[9] ? 20'hFFFFF : 20'd1;
 		loopcnt <= bltPipedepth + 5'd1;
 		bltBa <= 5'd0;
@@ -1692,32 +1741,33 @@ ST_BLTDMA3:
 ST_BLTDMA4:
 	begin
 		if (loopcnt > 5'd0) begin
-			ram_addr <= srcB_wadr >> 1;
-			ram_ul <= srcB_wadr & 1'b1;
-			bitcnt <= bitcnt - bitinc;	// bitinc = 3'd0 unless bitmap
-			if (bitcnt==4'd0)
-				srcB_wadr <= srcB_wadr + bltinc;
-			srcB_hcnt <= srcB_hcnt + 20'd1;
-			if (srcB_hcnt==bltSrcWid) begin
-				srcB_hcnt <= 20'd1;
-				srcB_wadr <= srcB_wadr + srcB_mod + bltinc;
-				bitcnt <= bltCtrl[2] ? 4'd15 : 4'd0;
-			end
+			ram_addr <= srcB_wadr;
 			if (bitcnt==4'd0) begin
-				srcB_wcnt <= srcB_wcnt + 20'd1;
-				srcB_dcnt <= srcB_dcnt + 20'd1;
-				if (srcB_wcnt==srcB_cnt) begin
-		            srcB_wadr <= srcB_badr;
-		            srcB_wcnt <= 20'd1;
-		            srcB_hcnt <= 20'd1;
-		            bitcnt <= bltCtrl[2] ? 4'd15 : 4'd0;
-		        end
-			end
+                srcB_wadr <= srcB_wadr + bltinc;
+                srcB_hcnt <= srcB_hcnt + 20'd1;
+                if (srcB_hcnt==bltSrcWid) begin
+                    srcB_hcnt <= 20'd1;
+                    srcB_wadr <= srcB_wadr + srcB_mod + bltinc;
+					bitcnt <= bltCtrl[2] ? 4'd15 : 4'd0;
+                end
+                srcB_wcnt <= srcB_wcnt + 20'd1;
+                srcB_dcnt <= srcB_dcnt + 20'd1;
+                if (srcB_wcnt==srcB_cnt) begin
+                    srcB_wadr <= srcB_badr;
+                    srcB_wcnt <= 20'd1;
+                    srcB_hcnt <= 20'd1;
+					bitcnt <= bltCtrl[2] ? 4'd15 : 4'd0;
+                end
+            end
 		end
 		if (loopcnt < bltPipedepth + 5'd1) begin
 			wrB <= 1'b1;
 			bltBa <= bltBa + 5'd1;
-			blt_bmpB <= ram_ul ? ram_data_o[31:16] : ram_data_o[15:0];
+            blt_bmpB <=   ((bltCtrl[9] ? ((zbuf ? zbram_data_o : ram_data_o) << bltB_shift[3:0]) | bltB_residue :
+            				 ((zbuf ? zbram_data_o : ram_data_o) >> bltB_shift[3:0])| bltB_residue ));
+            bltB_residue <= bltCtrl[9] ? (zbuf ? zbram_data_o : ram_data_o) >> (5'd16-bltB_shift[3:0]) :
+            			(zbuf ? zbram_data_o : ram_data_o) << (5'd16-bltB_shift[3:0]);
+//            blt_bmpB <=   (((zbuf ? zbram_data_o : ram_data_o) >> bltB_shift[3:0]) | bltB_residue);
 		end
 		loopcnt <= loopcnt - 5'd1;
 		if (loopcnt==5'd0 || srcB_dcnt==dstD_cnt) begin
@@ -1731,8 +1781,9 @@ ST_BLTDMA4:
 ST_BLTDMA5:
 	begin
 		ram_we <= {2{`LOW}};
+		zbram_we <= {2{`LOW}};
 		bitcnt <= bltCtrl[4] ? 4'd15 : 4'd0;
-		bitinc <= bltCtrl[4] ? 4'd1 : 4'd0;
+        bitinc <= bltCtrl[4] ? 4'd1 : 4'd0;
 		bltinc <= bltCtrl[10] ? 20'hFFFFF : 20'd1;
 		loopcnt <= bltPipedepth + 5'd1;
 		bltCa <= 5'd0;
@@ -1742,32 +1793,32 @@ ST_BLTDMA5:
 ST_BLTDMA6:
 	begin
 		if (loopcnt > 5'd0) begin
-			ram_addr <= srcC_wadr >> 1;
-			ram_ul <= srcC_wadr & 1'b1;
-			bitcnt <= bitcnt - bitinc;	// bitinc = 3'd0 unless bitmap
-			if (bitcnt==4'd0)
-				srcC_wadr <= srcC_wadr + bltinc;
-			srcC_hcnt <= srcC_hcnt + 20'd1;
-			if (srcC_hcnt==bltSrcWid) begin
-				srcC_hcnt <= 20'd1;
-				srcC_wadr <= srcC_wadr + srcC_mod + bltinc;
-				bitcnt <= bltCtrl[4] ? 4'd15 : 4'd0;
-			end
+			ram_addr <= srcC_wadr;
 			if (bitcnt==4'd0) begin
-				srcC_wcnt <= srcC_wcnt + 20'd1;
-				srcC_dcnt <= srcC_dcnt + 20'd1;
-				if (srcC_wcnt==srcC_cnt) begin
-		            srcC_wadr <= srcC_badr;
-		            srcC_wcnt <= 20'd1;
-		            srcC_hcnt <= 20'd1;
-		            bitcnt <= bltCtrl[4] ? 4'd15 : 4'd0;
-		        end
-			end
+                srcC_wadr <= srcC_wadr + bltinc;
+                srcC_hcnt <= srcC_hcnt + 20'd1;
+                if (srcC_hcnt==bltSrcWid) begin
+                    srcC_hcnt <= 20'd1;
+                    srcC_wadr <= srcC_wadr + srcC_mod + bltinc;
+					bitcnt <= bltCtrl[4] ? 4'd15 : 4'd0;
+                end
+                srcC_wcnt <= srcC_wcnt + 20'd1;
+                srcC_dcnt <= srcC_dcnt + 20'd1;
+                if (srcC_wcnt==srcC_cnt) begin
+                    srcC_wadr <= srcC_badr;
+                    srcC_wcnt <= 20'd1;
+                    srcC_hcnt <= 20'd1;
+					bitcnt <= bltCtrl[4] ? 4'd15 : 4'd0;
+                end
+            end
 		end
 		if (loopcnt < bltPipedepth + 5'd1) begin
 			wrC <= 1'b1;
 			bltCa <= bltCa + 5'd1;
-			blt_bmpC <= ram_ul ? ram_data_o[31:16] : ram_data_o[15:0];
+            blt_bmpC <=   ((bltCtrl[10] ? ((zbuf ? zbram_data_o : ram_data_o) << bltC_shift[3:0]) | bltC_residue :
+            				 ((zbuf ? zbram_data_o : ram_data_o) >> bltC_shift[3:0])| bltC_residue ));
+            bltC_residue <= bltCtrl[10] ? (zbuf ? zbram_data_o : ram_data_o) >> (5'd16-bltC_shift[3:0]) :
+            			(zbuf ? zbram_data_o : ram_data_o) << (5'd16-bltC_shift[3:0]);
 		end
 		loopcnt <= loopcnt - 5'd1;
 		if (loopcnt==5'd0 || srcC_dcnt==dstD_cnt)
@@ -1776,8 +1827,6 @@ ST_BLTDMA6:
 	// Do channel D
 ST_BLTDMA7:
 	begin
-		bitcnt <= bltCtrl[6] ? 4'd15 : 4'd0;
-		bitinc <= bltCtrl[6] ? 4'd1 : 4'd0;
 		bltinc <= bltCtrl[11] ? 20'hFFFFF : 20'd1;
 		loopcnt <= bltPipedepth;
 		bltAa <= bltAa - 5'd1;	// move to next queue entry
@@ -1788,28 +1837,22 @@ ST_BLTDMA7:
 	end
 ST_BLTDMA8:
 	begin
-		ram_we <= (dstD_wadr & 1'b1) ? 4'b1100 : 4'b0011;
-		ram_addr <= dstD_wadr >> 1;
-		ram_ul <= dstD_wadr & 1'b1;
-		// If there's no source then a fill operation muct be taking place.
-		if (bltCtrl[1]|bltCtrl[3]|bltCtrl[5]) begin
-			if (bltCtrl[6])
-				ram_data_i <= {2{bltC_out & ~(16'd1<<bitcnt) | (bltab[14] << bitcnt)}};
-			else
-				ram_data_i <= {2{bltabc}};
-		end
+	    if (zbuf)
+		    zbram_we <= 2'b11;
 		else
-			ram_data_i <= {2{bltD_dat}};	// fill color
-		bitcnt <= bitcnt - bitinc;	// bitinc = 3'd0 unless bitmap
-		if (bitcnt==4'd0) begin
-			dstD_wadr <= dstD_wadr + bltinc;
-			dstD_wcnt <= dstD_wcnt + 20'd1;
-		end
+		    ram_we <= 2'b11;
+		ram_addr <= dstD_wadr;
+		// If there's no source then a fill operation muct be taking place.
+		if (bltCtrl[1]|bltCtrl[3]|bltCtrl[5])
+			ram_data_i <= bltabc;
+		else
+			ram_data_i <= bltD_dat;	// fill color
+		dstD_wadr <= dstD_wadr + bltinc;
+		dstD_wcnt <= dstD_wcnt + 20'd1;
 		dstD_hcnt <= dstD_hcnt + 24'd1;
 		if (dstD_hcnt==bltDstWid) begin
 			dstD_hcnt <= 24'd1;
 			dstD_wadr <= dstD_wadr + dstD_mod + bltinc;
-			bitcnt <= bltCtrl[6] ? 4'd15 : 4'd0;
 		end
 		bltAa <= bltAa - 5'd1;	// move to next queue entry
 		bltBa <= bltBa - 5'd1;
@@ -1940,33 +1983,37 @@ DL_PRECALC:
 			if (y0 < y1) sy <= 14'h0001; else sy <= 14'h3FFF;
 			err <= absx1mx0-absy1my0;
 		end
-		else if ((ctrl[11:8] != 4'h1) &&
+		else if (((ctrl[11:8] != 4'h1) &&
 			(ctrl[11:8] != 4'h0) &&
-			(ctrl[11:8] != 4'hF))
+			(ctrl[11:8] != 4'hF)) || zbuf)
 			state <= DL_GETPIXEL;
 		else
 			state <= DL_SETPIXEL;
 	end
 DL_GETPIXEL:
 	begin
-		ram_addr <= ma[19:1];
-		ram_ul <= ma[0];
+		ram_addr <= zbuf ? ma[19:3] : ma;
 		state <= DL_SETPIXEL;
 	end
 DL_SETPIXEL:
 	begin
-		ram_addr <= ma[19:1];
-		ram_ul <= ma[0];
-		ram_we <= ma[0] ? 4'b1100 : 4'b0011;
-		case(ctrl[11:8])
-		4'd0:	ram_data_i <= 32'h0000;
-		4'd1:	ram_data_i <= {2{bkcolor}};
-		4'd4:	ram_data_i <= {2{bkcolor}} & ram_data_o;
-		4'd5:	ram_data_i <= {2{bkcolor}} | ram_data_o;
-		4'd6:	ram_data_i <= {2{bkcolor}} ^ ram_data_o;
-		4'd7:	ram_data_i <= {2{bkcolor}} & ~ram_data_o;
-		4'hF:	ram_data_i <= 32'h7FFF7FFF;
-		endcase
+		ram_addr <= zbuf ? ma[19:3] : ma;
+		if (zbuf) begin
+			zbram_we <= 2'b11;
+			ram_data_i <= zbram_data_o & ~{2'b11 << {ma[2:0],1'b0}} | zlayer << {ma[2:0],1'b0};
+		end
+		else begin
+			ram_we <= 2'b11;
+			case(ctrl[11:8])
+			4'd0:	ram_data_i <= 16'h0000;
+			4'd1:	ram_data_i <= bkcolor;
+			4'd4:	ram_data_i <= bkcolor & ram_data_o;
+			4'd5:	ram_data_i <= bkcolor | ram_data_o;
+			4'd6:	ram_data_i <= bkcolor ^ ram_data_o;
+			4'd7:	ram_data_i <= bkcolor & ~ram_data_o;
+			4'hF:	ram_data_i <= 16'h7FFF;
+			endcase
+		end
 		loopcnt <= loopcnt - 5'd1;
 		if (gcx==x1 && gcy==y1) begin
 			state <= ST_IDLE;
@@ -1978,7 +2025,8 @@ DL_SETPIXEL:
 	end
 DL_TEST:
 	begin
-		ram_we <= {4{`LOW}};
+		ram_we <= {2{`LOW}};
+		zbram_we <= {2{`LOW}};
 		err <= err - ((e2 > -dy) ? dy : 14'd0) + ((e2 < dx) ? dx : 14'd0);
 		if (e2 > -dy)
 			gcx <= gcx + sx;
@@ -2018,7 +2066,7 @@ ST_FILLRECT1:
 	end
 ST_FILLRECT2:
 	begin
-		dstD_badr <= {8'h00,y0} * bitmapWidth + {bmpBase[19:12],x0[11:0]};
+		dstD_badr <= {8'h00,y0} * bitmapWidth + bmpBase + x0[11:0];
 		dstD_mod <= bitmapWidth - dx;
 		dstD_cnt <= dx * dy;
 		bltDstWid <= dx;
@@ -2052,7 +2100,7 @@ ST_TILERECT2:
 		srcA_mod <= TextureDesco[75:64];
 		srcA_cnt <= TextureDesco[47:32];
 		bltSrcWid <= TextureDesco[63:48];
-		dstD_badr <= {8'h00,y0} * bitmapWidth + {bmpBase[19:12],x0[11:0]};
+		dstD_badr <= {8'h00,y0} * bitmapWidth + bmpBase + x0[11:0];
 		dstD_mod <= bitmapWidth - dx;
 		dstD_cnt <= dx * dy;
 		bltDstWid <= dx;
@@ -2068,23 +2116,35 @@ ST_TILERECT2:
 
 ST_COPPER_IFETCH:
 	begin
-		ram_addr <= copper_pc[19:1];
+		ram_addr <= copper_pc;
 		state <= ST_COPPER_IFETCH2;
 	end
 ST_COPPER_IFETCH2:
 	begin
 		ram_addr <= ram_addr + 20'd1;
-		state <= ST_COPPER_IFETCH4;
+		state <= ST_COPPER_IFETCH3;
+	end
+ST_COPPER_IFETCH3:
+	begin
+		ram_addr <= ram_addr + 20'd1;
+		copper_ir[63:48] <= ram_data_o;
+		state <= ST_COPPER_IFETCH5;
 	end
 ST_COPPER_IFETCH4:
 	begin
 		ram_addr <= ram_addr + 20'd1;
-		copper_ir[31:0] <= ram_data_o;
+		copper_ir[47:32] <= ram_data_o;
 		state <= ST_COPPER_IFETCH5;
 	end
 ST_COPPER_IFETCH5:
 	begin
-		copper_ir[63:32] <= ram_data_o;
+		ram_addr <= ram_addr + 20'd1;
+		copper_ir[31:16] <= ram_data_o;
+		state <= ST_COPPER_IFETCH6;
+	end
+ST_COPPER_IFETCH6:
+	begin
+		copper_ir[15:0] <= ram_data_o;
 		state <= ST_COPPER_EXECUTE;
 	end
 ST_COPPER_EXECUTE:
@@ -2190,4 +2250,3 @@ gfx_top ugfx1
 `endif
 
 endmodule
-
