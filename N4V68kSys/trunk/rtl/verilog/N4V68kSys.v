@@ -203,22 +203,6 @@ clk_wiz_0 ucg1
     .clk_in1(xclk)
 );
 
-VGASyncGen800x600_60Hz uvgasg1
-(
-	.rst(rst),
-	.clk(clk40),
-	.eol(eol),
-	.eof(eof),
-	.hSync(hSync),
-	.vSync(vSync),
-	.hCtr(),
-	.vCtr(),
-    .blank(blank),
-    .vblank(),
-    .vbl_int(),
-    .border(border)
-);
-
 // The following core supplied by Digilent as part of the NexysVideo examples.
 rgb2dvi #(
     .kGenerateSerialClk(1'b0),
@@ -236,7 +220,7 @@ ur2d1
     .aRst_n(~rst),
     .vid_pData({red,blue,green}),
     .vid_pVDE(~blank),
-    .vid_pHSync(~hSync),
+    .vid_pHSync(hSync),
     .vid_pVSync(vSync),
     .PixelClk(clk40),
     .SerialClk(clk200)
@@ -345,7 +329,6 @@ DDRcontrol2 DDRCtrl1
 
 AVController uvdg1
 (
-    .clk200_i(clk200),
 	.rst_i(rst),
 	.clk_i(cpu_clk),
 	.cyc_i(cpu_cyc),
@@ -358,12 +341,13 @@ AVController uvdg1
 	.dat_o(vdg_data_o),
 	.cs_i(cs_vdg_reg),
 	.cs_ram_i(cs_vdg_ram),
+	// Video port
 	.clk(clk40),
-	.eol(eol),
-	.eof(eof),
-	.blank(blank),
-    .border(border),
+	.hSync(hSync),
+	.vSync(vSync),
+	.blank_o(blank),
 	.rgb(vdg_rgb),
+	// Audio port
 	.aud0_out(aud0),
 	.aud1_out(aud1),
 	.aud2_out(aud2),

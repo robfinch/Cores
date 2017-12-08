@@ -5,7 +5,7 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	VGASyncGen800x600_60Hz.v
+//	VGASyncGen.v
 //		VGA sync generator
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -25,36 +25,17 @@
 //
 //	VGA video sync generator.
 //
-//	Input clock:     40.00 MHz (100 MHz * 12/30)
-//	Horizontal freq: 37.9 kHz	(generated) (37.879 KHz)
-//	Vertical freq:   60.32  Hz (generated)  (60.316 Hz)
-//
 //	This module generates the basic sync timing signals required for a
 //	VGA display.
 //
 // ============================================================================
 
-module VGASyncGen800x600_60Hz(rst, clk, eol, eof, hSync, vSync, hCtr, vCtr,
-    blank, vblank, vbl_int, border);
-parameter phSyncOn  = 40;		//   40 front porch
-parameter phSyncOff = 168;		//  128 sync
-parameter phBlankOff = 256;		//   88 back porch
-//parameter phBorderOff = 336;	//   80 border
-parameter phBorderOff = 256;	//   80 border
-//parameter phBorderOn = 976;		//  640 display
-parameter phBorderOn = 1056;		//  640 display
-parameter phBlankOn = 1056;		//   80 border
-parameter phTotal = 1056;		// 1056 total clocks
-parameter pvSyncOn  = 1;		//    1 front porch
-parameter pvSyncOff = 5;		//    4 vertical sync
-parameter pvBlankOff = 28;		//   23 back porch
-parameter pvBorderOff = 28;		//   44 border	0
-//parameter pvBorderOff = 72;		//   44 border	0
-parameter pvBorderOn = 628;		//  512 display
-//parameter pvBorderOn = 584;		//  512 display
-parameter pvBlankOn = 628;  	//   44 border	0
-parameter pvTotal = 628;		//  628 total scan lines
-// 60 Hz
+module VGASyncGen(rst, clk, eol, eof, hSync, vSync, hCtr, vCtr,
+    blank, vblank, vbl_int, border,
+    hTotal_i, vTotal_i,
+    hSyncOn_i, hSyncOff_i, vSyncOn_i, vSyncOff_i,
+    hBlankOn_i, hBlankOff_i, vBlankOn_i, vBlankOff_i,
+    hBorderOn_i, vBorderOn_i, hBorderOff_i, vBorderOff_i);
 input rst;			// reset
 input clk;			// video clock
 output reg eol;
@@ -66,6 +47,20 @@ output reg blank;		// blanking output
 output reg vblank;
 output reg vbl_int;
 output border;
+input [11:0] hTotal_i;
+input [11:0] vTotal_i;
+input [11:0] hSyncOn_i;
+input [11:0] hSyncOff_i;
+input [11:0] vSyncOn_i;
+input [11:0] vSyncOff_i;
+input [11:0] hBlankOn_i;
+input [11:0] hBlankOff_i;
+input [11:0] vBlankOn_i;
+input [11:0] vBlankOff_i;
+input [11:0] hBorderOn_i;
+input [11:0] hBorderOff_i;
+input [11:0] vBorderOn_i;
+input [11:0] vBorderOff_i;
 
 //---------------------------------------------------------------------
 //---------------------------------------------------------------------
@@ -75,18 +70,18 @@ wire vBorder,hBorder;
 wire hSync1,vSync1;
 reg border;
 
-wire eol1 = hCtr==phTotal;
-wire eof1 = vCtr==pvTotal && eol;
+wire eol1 = hCtr==hTotal_i;
+wire eof1 = vCtr==vTotal_i;
 
-assign vSync1 = vCtr >= pvSyncOn && vCtr < pvSyncOff;
-assign hSync1 = hCtr >= phSyncOn && hCtr < phSyncOff;
-assign vBlank1 = vCtr >= pvBlankOn || vCtr < pvBlankOff;
-assign hBlank1 = hCtr >= phBlankOn || hCtr < phBlankOff;
-assign vBorder = vCtr >= pvBorderOn || vCtr < pvBorderOff;
-assign hBorder = hCtr >= phBorderOn || hCtr < phBorderOff;
+assign vSync1 = vCtr >= vSyncOn_i && vCtr < vSyncOff_i;
+assign hSync1 = hCtr >= hSyncOn_i && hCtr < hSyncOff_i;
+assign vBlank1 = ~(vCtr < vBlankOn_i && vCtr >= vBlankOff_i);
+assign hBlank1 = ~(hCtr < hBlankOn_i && hCtr >= hBlankOff_i);
+assign vBorder = ~(vCtr < vBorderOn_i && vCtr >= vBorderOff_i);
+assign hBorder = ~(hCtr < hBorderOn_i && hCtr >= hBorderOff_i);
 
 counter #(12) u1 (.rst(rst), .clk(clk), .ce(1'b1), .ld(eol1), .d(12'd1), .q(hCtr), .tc() );
-counter #(12) u2 (.rst(rst), .clk(clk), .ce(eol),  .ld(eof1), .d(12'd1), .q(vCtr), .tc() );
+counter #(12) u2 (.rst(rst), .clk(clk), .ce(eol1),  .ld(eof1), .d(12'd1), .q(vCtr), .tc() );
 
 always @(posedge clk)
     blank <= #1 hBlank1|vBlank1;
@@ -103,7 +98,7 @@ always @(posedge clk)
 always @(posedge clk)
     eol <= eol1;
 always @(posedge clk)
-    vbl_int <= hCtr==12'd8 && vCtr==12'd0;
+    vbl_int <= hCtr==12'd8 && vCtr==12'd1;
 
 endmodule
 

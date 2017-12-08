@@ -80,6 +80,8 @@ SC_TAB      EQU		$0D
 
 TEXTCOLS	EQU	50
 TEXTROWS	EQU	37
+BMP_WIDTH	EQU	400
+BMP_HEIGHT	EQU	300
 
 VDGBUF		EQU	$FF800000
 VDGREG		EQU	$FFE00000
@@ -215,8 +217,6 @@ fpga_version:
 ;		bsr		rtc_read
 		move.w	#$A2A2,leds		; diagnostics
 
-		move.b	#TEXTCOLS,TextCols
-		move.b	#TEXTROWS,TextRows
 		clr.b	CursorCol
 		clr.b	CursorRow
 		clr.w	TextCurpos
@@ -401,18 +401,23 @@ CalcScreenLoc:
 ;------------------------------------------------------------------------------
 ;
 DisplayChar:
+		movem.l	d2/d3,-(a7)
 		cmpi.b	#'\r',d1			; carriage return ?
 		bne.s	dccr
 		clr.b	CursorCol			; just set cursor column to zero on a CR
+		movem.l	(a7)+,d2/d3
 		rts
 dccr:
 		cmpi.b	#0x91,d1			; cursor right ?
 		bne.s   dcx6
-		cmpi.b	#79,CursorCol
+		move.b	TextCols,d2
+		sub.b	#1,d2
+		sub.b	CursorCol,d2
 		beq.s	dcx7
 		addi.b	#1,CursorCol
 		bra		SyncCursor
 dcx7:
+		movem.l	(a7)+,d2/d3
 		rts
 dcx6:
 		cmpi.b	#0x90,d1			; cursor up ?
@@ -431,7 +436,9 @@ dcx8:
 dcx9:
 		cmpi.b	#0x92,d1			; cursor down ?
 		bne		dcx10
-		cmpi.b	#63,CursorRow
+		move.b	TextRows,d2
+		sub.b	#1,d2
+		sub.b	CursorRow,d2
 		beq		dcx7
 		addi.w	#1,CursorRow
 		bra		SyncCursor
@@ -481,12 +488,14 @@ dcx3:
 		bsr		IncCursorPos
 		bsr		SyncCursor
 		movem.l	(a7)+,d0/d1/d2/a0
+		movem.l	(a7)+,d2/d3
 		rts
 dclf:
 		bsr		IncCursorRow
 		bsr		SyncCursor
 dcx4:
 		movem.l	(a7)+,d0/d1/d2/a0		; get back a0
+		movem.l	(a7)+,d2/d3
 		rts
 
 ;------------------------------------------------------------------------------
@@ -617,17 +626,61 @@ scp1:
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
 
+Set320x192:
+		lea		VDGREG,a6			; a6 = pointer to register set
+		lea		tbl1280x768,a0
+		lea		$710(a6),a1			; a1 points to timing registers
+		move.w	#$A123,$72E(a6)		; unlock timing regs
+		moveq	#14,d0
+.0001:
+		move.w	(a0)+,(a1)+
+		dbra	d0,.0001
+		move.w	#$0000,$72E(a6)		; lock timing regs
+		rts
+
+Set320x240:
+		movea.l	#VDGREG,a6			; a6 = pointer to register set
+		rts
+
 Set400x300:
 		movea.l	#VDGREG,a6			; a6 = pointer to register set
-		move.w	#1,$650(a6)
+		move.w	#1,$650(a6)			; 1 = divide by 2 mode
 		move.w	#400,$588(a6)		; bitmap width register
+		lea		tbl800x600,a0
+		lea		$710(a6),a1			; a1 points to timing registers
+		move.w	#$A123,$72E(a6)		; unlock timing regs
+		moveq	#14,d0
+.0001:
+		move.w	(a0)+,(a1)+
+		dbra	d0,.0001
+		move.w	#$0000,$72E(a6)		; lock timing regs
+		move.b	#50,TextCols
+		move.b	#37,TextRows
 		rts
 
 Set800x600:
 		movea.l	#VDGREG,a6			; a6 = pointer to register set
-		move.w	#0,$650(a6)
-		move.w	#800,$588(a6)
+		move.w	#0,$650(a6)			; 0 = no divide
+		move.w	#800,$588(a6)		; bitmap width register
+		lea		tbl800x600,a0
+		lea		$710(a6),a1			; a1 points to timing registers
+		move.w	#$A123,$72E(a6)		; unlock timing regs
+		moveq	#14,d0
+.0001:
+		move.w	(a0)+,(a1)+
+		dbra	d0,.0001
+		move.w	#$0000,$72E(a6)		; lock timing regs
+		move.b	#100,TextCols
+		move.b	#75,TextRows
 		rts
+
+	align	2
+;tbl640x480:
+;	dc.w	800,525
+tbl800x600:
+	dc.w	1056,628,40,168,1,5,1056,256,628,28,1056,256,628,28,0
+tbl1280x768:
+	dc.w	1680,795,67,201,2,5,1680,400,795,27,1680,400,795,27,0
 
 ;------------------------------------------------------------------------------
 ; The z buffer is setup so that display has the lowest priority. This allows
@@ -639,7 +692,7 @@ BootSetZBuffer:
 		movea.l	#VDGREG,a6			; a6 = pointer to register set
 		move.l	#VDGBUF,A0			; a0 = pointer to display buffer
 		move.w	#$1,$43E(a6)		; switch to z buffer
-		move.l	#400*300/8,D1		; number of words to update
+		move.l	#BMP_WIDTH*BMP_HEIGHT/8,D1		; number of words to update
 .0001:
 		move.l	#$FFFFFFFF,(a0)+	; set z layer to 3
 		sub.l	#1,d1
@@ -656,11 +709,11 @@ BootSetZBuffer:
 
 BootClearScreen:
 		move.l	#VDGBUF,A0
-		moveq	#DARK_BLUE,D0			; dark blue
-		move.l	#400*300,D1				; number of pixels
+		moveq	#DARK_BLUE,D0				; dark blue
+		move.l	#BMP_WIDTH*BMP_HEIGHT,D1	; number of pixels
 .loop1:
-		move.w	d0,(a0)+				; store it to the screen
-		sub.l	#1,d1					; can't use dbra here
+		move.w	d0,(a0)+					; store it to the screen
+		sub.l	#1,d1						; can't use dbra here
 		bne.s	.loop1
 		rts
 
@@ -763,18 +816,18 @@ DispChar:
 EnableCursor:
 		movem.l	d0/a6,-(a7)
 		lea		VDGREG,a6
-		move.w	$106(a6),d0
+		move.l	$108(a6),d0
 		bset	#0,d0
-		move.w	d0,$106(a6)
+		move.l	d0,$108(a6)
 		movem.l	(a7)+,d0/a6
 		rts
 		
 DisableCursor:
 		movem.l	d0/a6,-(a7)
 		lea		VDGREG,a6
-		move.w	$106(a6),d0
+		move.l	$108(a6),d0
 		bclr	#0,d0
-		move.w	d0,$106(a6)
+		move.l	d0,$108(a6)
 		movem.l	(a7)+,d0/a6
 		rts
 		
@@ -918,6 +971,8 @@ SetCursorImage64:
 		move.l	$0C00(a6),d3
 		and.w	#$FF,d3
 		move.w	d3,6(a0,d2.w)		; set v pos
+		move.w	#$0,d3
+		move.w	d3,10(a0,d2.w)		; set z pos
 		add.w	#$10,d2
 		cmp.w	#$300,d2
 		bne.s	.0002
@@ -946,15 +1001,15 @@ BouncingBalls:
 		move.l	#VDGREG,a1
 		move.l	#$FFDC0000,a6		; set I/O address
 		movea.l	#$FF800000,a0		; address of z buffer ram
-		move.l	#400*300/16,d2
-		move.w	#1,$43E(a1)			; select z buffer
+		move.l	#BMP_WIDTH*BMP_HEIGHT/16,d2
+;		move.w	#1,$43E(a1)			; select z buffer
 .0003:
-		clr.w	$0C04(a6)			; gen next number
-		move.l	$0C00(a6),d3		; get random value
-		move.l	d3,(a0)+			; move to z buffer
-		sub.l	#1,d2
-		bne.s	.0003
-		move.w	#0,$43E(a1)			; deselect z buffer
+;		clr.w	$0C04(a6)			; gen next number
+;		move.l	$0C00(a6),d3		; get random value
+;		move.l	d3,(a0)+			; move to z buffer
+;		sub.l	#1,d2
+;		bne.s	.0003
+;		move.w	#0,$43E(a1)			; deselect z buffer
 		
 		; Setup sprite image
 		lea		BallImage,a0
@@ -965,13 +1020,22 @@ BouncingBalls:
 .0001:
 		move.l	(a0)+,(a1)+
 		dbra	d1,.0001
+		lea		XImage,a0
+		moveq	#26,d1					; set count number of long words to move
+		move.l	#$FF8B7C00,a1
+.0012:
+		move.l	(a0)+,(a1)+
+		dbra	d1,.0012
 		move.w	#$210,d2
 		move.l	#VDGREG,a0
-		move.w	#$FFFF,$106(a0)		; enable sprites
+		move.l	#$FFFFFFFF,$108(a0)		; enable sprites
 		move.l	#$FFDC0000,a6
 .0002:
+		cmp.w	#$300,d2
+		bhs.s	.0014
 		move.l	#$5BE80,(a0,d2.w)
-		move.w	#$030F,8(a0,d2.w)	; set cursor size 16hx13v
+.0014:
+		move.w	#$0350,8(a0,d2.w)	; set cursor size 16hx13v
 		clr.w	$0C04(a6)			; gen next number
 		move.l	$0C00(a6),d3
 		and.w	#$FF,d3
@@ -982,7 +1046,7 @@ BouncingBalls:
 		move.w	d3,6(a0,d2.w)		; set v pos
 		clr.w	$0C04(a6)			; gen next number
 		move.l	$0C00(a6),d3
-		and.w	#$F,d3
+		and.w	#$0,d3
 		move.w	d3,10(a0,d2.w)		; set z pos
 		clr.w	$0C04(a6)			; gen next number
 		move.l	$0C00(a6),d3
@@ -996,6 +1060,10 @@ BouncingBalls:
 		move.w	d3,(a3,d2.w)		; set dy
 		add.w	#$10,d2
 		cmp.w	#$300,d2
+		blo.s	.0011
+		move.l	#$5BE00,(a0,d2.w)
+.0011:
+		cmp.w	#$400,d2
 		bne.s	.0002
 ; Move balls around	
 .0010:	
@@ -1005,7 +1073,7 @@ BouncingBalls:
 		add.w	d3,4(a0,d2.w)		; new hpos
 		move.w	(a3,d2.w),d3
 		add.w	d3,6(a0,d2.w)		; new vpos
-		cmp.w	#400,4(a0,d2.w)
+		cmp.w	#BMP_WIDTH,4(a0,d2.w)
 		blo.s	.0004
 		neg.w	(a2,d2.w)
 .0004:
@@ -1013,7 +1081,7 @@ BouncingBalls:
 		bhs.s	.0005
 		neg.w	(a2,d2.w)
 .0005:
-		cmp.w	#300,6(a0,d2.w)
+		cmp.w	#BMP_HEIGHT,6(a0,d2.w)
 		blo.s	.0006
 		neg.w	(a3,d2.w)
 .0006:
@@ -1022,10 +1090,10 @@ BouncingBalls:
 		neg.w	(a3,d2.w)
 .0007:
 		add.w	#$10,d2
-		cmp.w	#$300,d2
+		cmp.w	#$400,d2
 		bne.s	.0008	
 		; delay a bit
-		move.l	#20000,d3
+		move.l	#60000,d3
 .0009:
 		sub.l	#1,d3
 		bne.s	.0009
@@ -1040,7 +1108,7 @@ BallImage:
 	dc.l	%00000001010101010101010101000000,%00000000000000000000000000000000
 	dc.l	%00000101010101010101010101010000,%00000000000000000000000000000000
 	dc.l	%00010101010101010101010101010100,%00000000000000000000000000000000
-	dc.l	%01010100000000000000000000010101,%00000000000000000000000000000000
+	dc.l	%01010101000000000000000001010101,%00000000000000000000000000000000
 	dc.l	%01010100000000000000000000010101,%00000000000000000000000000000000
 	dc.l	%01010100000000000000000000010101,%00000000000000000000000000000000
 	dc.l	%01010100000000000000000000010101,%00000000000000000000000000000000
@@ -1050,6 +1118,22 @@ BallImage:
 	dc.l	%00000101010101010101010101010000,%00000000000000000000000000000000
 	dc.l	%00000001010101010101010101000000,%00000000000000000000000000000000
 	dc.l	%00000000010101010101010100000000,%00000000000000000000000000000000
+	dc.l	$00,$00
+	dc.l	$00,$00
+XImage:
+	dc.l	%01010000000000000000000001010000,%00000000000000000000000000000000
+	dc.l	%00010100000000000000000101000000,%00000000000000000000000000000000
+	dc.l	%00000101000000000000010100000000,%00000000000000000000000000000000
+	dc.l	%00000001010000000001010000000000,%00000000000000000000000000000000
+	dc.l	%00000000010100000101000000000000,%00000000000000000000000000000000
+	dc.l	%00000000000101010100000000000000,%00000000000000000000000000000000
+	dc.l	%00000000000001010000000000000000,%00000000000000000000000000000000
+	dc.l	%00000000000101010100000000000000,%00000000000000000000000000000000
+	dc.l	%00000000010100000101000000000000,%00000000000000000000000000000000
+	dc.l	%00000001010000000001010000000000,%00000000000000000000000000000000
+	dc.l	%00000101000000000000010100000000,%00000000000000000000000000000000
+	dc.l	%00010100000000000000000101000000,%00000000000000000000000000000000
+	dc.l	%01010000000000000000000001010000,%00000000000000000000000000000000
 	dc.l	$00,$00
 	dc.l	$00,$00
 	
@@ -1799,10 +1883,10 @@ ClearScreen:
 		move.w	$4AC(a5),d0			; get done status
 		btst	#13,d0				; bit 13 = done bit
 		beq.s	.0003				; branch if not done
-		move.l	#400*300,$4BC(a5)		; set transfer count  pixels
+		move.l	#BMP_WIDTH*BMP_HEIGHT,$4BC(a5)		; set transfer count  pixels
 		move.w	bkcolor,$4A8(a5)	; set color dark blue
 		move.l	#0,$498(a5)			; set destination address
-		move.l	#400,$4A4(a5)		; set destination width
+		move.l	#BMP_WIDTH,$4A4(a5)		; set destination width
 		move.l	#0,$49C(a5)			; set dst modulo
 		move.w	#%1000000010000000,$4AC(a5)		; enable channel D, start transfer
 
@@ -1823,11 +1907,11 @@ ScrollUp:
 		btst	#13,d0				; bit 13 = done bit
 		beq.s	.0003				; branch if not done
 		; Channel A
-		move.l	#400*292,$4B0(a5)	; set source transfer count pixels
-		move.l	#400*8,$480(a5)		; set source bitmap address (address in graphics mem)
+		move.l	#BMP_WIDTH*(BMP_HEIGHT-8),$4B0(a5)	; set source transfer count pixels
+		move.l	#BMP_WIDTH*8,$480(a5)		; set source bitmap address (address in graphics mem)
 		move.l	#0,$484(a5)			; set src modulo
 		; Channel D
-		move.l	#400*292,$4BC(a5)	; set destination transfer count pixels
+		move.l	#BMP_WIDTH*(BMP_HEIGHT-8),$4BC(a5)	; set destination transfer count pixels
 		move.l	#0,$498(a5)			; set destination address
 		move.l	#0,$49C(a5)			; set dst modulo
 
@@ -1856,8 +1940,8 @@ BlankLastLine:
 		move.w	$4AC(a5),d0			; get done status
 		btst	#13,d0				; bit 13 = done bit
 		beq.s	.0003				; branch if not done
-		move.l	#400*8,$4BC(a5)		; set destination transfer count pixels
-		move.l	#400*292,$498(a5)	; set destination address
+		move.l	#BMP_WIDTH*8,$4BC(a5)		; set destination transfer count pixels
+		move.l	#BMP_WIDTH*(BMP_HEIGHT-8),$498(a5)	; set destination address
 		move.l	#0,$49C(a5)			; set dst modulo
 		move.l	#-1,$4A4(a5)		; set destination width
 		move.w	bkcolor,$4A8(a5)	; set color dark blue
@@ -2414,7 +2498,7 @@ AudioInputTest:
 		move.w	#DARK_BLUE,$4A8(a5)		; set color 
 		move.l	#0,$498(a5)			; set destination address
 		move.l	#256,$4A4(a5)		; set destination width
-		move.l	#64,$49C(a5)		; set dst modulo
+		move.l	#BMP_WIDTH-256,$49C(a5)		; set dst modulo
 		move.w	#%1000000010000000,$4AC(a5)		; enable channel D, start transfer
 
 		; delay a bit
