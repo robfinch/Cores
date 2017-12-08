@@ -815,9 +815,9 @@ always @(posedge clk)
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 // Compute alpha blending
 
-wire [12:0] alphaRed = (rgb_i[14:10] * cursorColorOut2[31:24]) + (cursorColorOut[14:10] * (9'h100 - cursorColorOut2[31:24]));
-wire [12:0] alphaGreen = (rgb_i[9:5] * cursorColorOut2[31:24]) + (cursorColorOut[9:5]  * (9'h100 - cursorColorOut2[31:24]));
-wire [12:0] alphaBlue = (rgb_i[4:0] * cursorColorOut2[31:24]) + (cursorColorOut[4:0]  * (9'h100 - cursorColorOut2[31:24]));
+wire [12:0] alphaRed = (rgb_i[14:10] * cursorColorOut2[31:24]) + (cursorColorOut2[14:10] * (9'h100 - cursorColorOut2[31:24]));
+wire [12:0] alphaGreen = (rgb_i[9:5] * cursorColorOut2[31:24]) + (cursorColorOut2[9:5]  * (9'h100 - cursorColorOut2[31:24]));
+wire [12:0] alphaBlue = (rgb_i[4:0] * cursorColorOut2[31:24]) + (cursorColorOut2[4:0]  * (9'h100 - cursorColorOut2[31:24]));
 reg [14:0] alphaOut;
 
 always @(posedge clk)
@@ -1198,8 +1198,6 @@ if (reg_cs|reg_copper) begin
 		10'b1000010110:	dat_o <= {11'h00,cmdq_ndx};
 		10'b1001010110:	dat_o <= bltCtrl;
 		10'b1011000001:	dat_o <= irq_status;
-		10'b1110000010:	dat_o <= gfxs_ldat_o[31:16];
-		10'b1110000011:	dat_o <= gfxs_ldat_o[15:0];
 		default:	dat_o <= srdo;
 		endcase
 	end
@@ -1481,6 +1479,7 @@ ST_IDLE:
 			cmdq_ndx <= cmdq_ndx - 5'd1;
 			state <= ST_CMD;
 		end
+    end
 
 ST_CMD:
 	begin
