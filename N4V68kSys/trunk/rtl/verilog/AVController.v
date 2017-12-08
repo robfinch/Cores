@@ -248,8 +248,8 @@ reg [15:0] ctrl;
 reg [1:0] lowres = 2'b01;
 reg [19:0] bmpBase = 20'h00000;		// base address of bitmap
 reg [19:0] charBmpBase = 20'h5C000;	// base address of character bitmaps
-reg [11:0] hstart = 12'hEFB;		// -261
-reg [11:0] vstart = 12'hFD6;		// -44
+reg [11:0] hstart = 12'hEFD;		// -261
+reg [11:0] vstart = 12'hFD7;		// -44
 reg [11:0] hpos;
 reg [11:0] vpos;
 reg [4:0] fpos;
@@ -287,7 +287,7 @@ reg [11:0] cursor_pv [0:NSPR-1];
 reg [11:0] cursor_ph [0:NSPR-1];
 reg [3:0] cursor_pz [0:NSPR-1];
 reg [9:0] cya [0:NSPR-1];
-reg [22:0] cursor_color [0:63];
+reg [31:0] cursor_color [0:63];
 reg [NSPR-1:0] cursor_on;
 reg [NSPR-1:0] cursor_on_d1;
 reg [NSPR-1:0] cursor_on_d2;
@@ -684,10 +684,11 @@ begin
     endcase
 end
 
-// -  -  -  -  -  -  -  -  -  -  -  -  -  -
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 // clock edge #-1
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 // Compute InBox flag
-// -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
 reg [31:0] InBox;
 always @(posedge clk)
     for (n = 0; n < NSPR; n = n + 1)
@@ -758,14 +759,15 @@ reg [3:0] cursor_pzx;
 // The color index from each sprite can be mux'ed into a single value used to
 // access the color palette because output color is a priority chain. This
 // saves having mulriple read ports on the color palette.
-reg [22:0] cursorColorOut2; 
-reg [22:0] cursorColorOut3;
+reg [31:0] cursorColorOut2; 
+reg [31:0] cursorColorOut3;
 reg [5:0] cursorClrNdx;
 
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 // clock edge #1
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 // Mux color index
+// Fetch cursor Z order
 
 always @(posedge clk)
     cursor_on_d1 <= cursor_on;
@@ -790,11 +792,10 @@ begin
 			cursor_z1 <= cursor_pz[n]; 
 end
 
-// -  -  -  -  -  -  -  -  -
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 // clock edge #2
-// -  -  -  -  -  -  -  -  -
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 // Lookup color from palette
-// Fetch cursor Z order
 
 always @(posedge clk)
     cursor_on_d2 <= cursor_on_d1;
@@ -809,19 +810,18 @@ always @(posedge clk)
 always @(posedge clk)
     cursor_z2 <= cursor_z1;
 
-// -  -  -  -  -  -  -  -  -
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 // clock edge #3
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 // Compute alpha blending
-// -  -  -  -  -  -  -  -  -
-wire [12:0] alphaRed = rgb_i[14:10] * cursorColorOut2[7:0];
-wire [12:0] alphaGreen = rgb_i[9:5] * cursorColorOut2[7:0];
-wire [12:0] alphaBlue = rgb_i[4:0] * cursorColorOut2[7:0];
+
+wire [12:0] alphaRed = (rgb_i[14:10] * cursorColorOut2[31:24]) + (cursorColorOut[14:10] * (9'h100 - cursorColorOut2[31:24]));
+wire [12:0] alphaGreen = (rgb_i[9:5] * cursorColorOut2[31:24]) + (cursorColorOut[9:5]  * (9'h100 - cursorColorOut2[31:24]));
+wire [12:0] alphaBlue = (rgb_i[4:0] * cursorColorOut2[31:24]) + (cursorColorOut[4:0]  * (9'h100 - cursorColorOut2[31:24]));
 reg [14:0] alphaOut;
 
 always @(posedge clk)
-    alphaOut <= cursorColorOut2[22] ?
-				{alphaRed[12:8],alphaGreen[12:8],alphaBlue[12:8]} :
-				cursorColorOut2[14:0];
+    alphaOut <= {alphaRed[12:8],alphaGreen[12:8],alphaBlue[12:8]};
 always @(posedge clk)
     cursor_z3 <= cursor_z2;
 always @(posedge clk)
@@ -840,10 +840,11 @@ always @(posedge clk)
 reg [14:0] flashOut;
 wire [14:0] reverseVideoOut = cursorColorOut2[21] ? alphaOut ^ 15'h7FFF : alphaOut;
 
-// -  -  -  -  -  -  -  -  -
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 // clock edge #4
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 // Compute flash output
-// -  -  -  -  -  -  -  -  -
+
 always @(posedge clk)
     flashOut <= cursorColorOut3[20] ? (((flashcnt[5:2] & cursorColorOut3[19:16])!=4'b000) ? reverseVideoOut : rgb_i3) : reverseVideoOut;
 always @(posedge clk)
@@ -859,10 +860,11 @@ always @(posedge clk)
 always @(posedge clk)
     border4 <= border3;
 
-// -  -  -  -  -  -  -  -  -
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 // clock edge #5
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 // final output registration
-// -  -  -  -  -  -  -  -  -
+
 always @(posedge clk)
 	casex({blank4,border4,any_cursor_on4})
 	3'b1xx:		rgb <= 15'h0000;
@@ -1034,14 +1036,13 @@ end
 else begin
 reg_copper <= `FALSE;
 reg_cs <= cs_reg;
-reg_cs_gfx <= cs_gfx;
 reg_we <= we_i;
 reg_adr <= adr_i[10:0];
 reg_dat <= dat_i;
 if (reg_cs|reg_copper) begin
 	if (reg_we) begin
 		casex(reg_adr[10:1])
-		10'b000xxxxxx0:   cursor_color[reg_adr[7:2]][22:16] <= reg_dat[6:0];
+		10'b000xxxxxx0:   cursor_color[reg_adr[7:2]][31:16] <= reg_dat;
 		10'b000xxxxxx1:   cursor_color[reg_adr[7:2]][15:0] <= reg_dat;
 		10'b0010000000:   cursorLink1[31:16] <= reg_dat;
 		10'b0010000001:   cursorLink1[15:0] <= reg_dat;
@@ -1997,89 +1998,6 @@ ST_BLTDMA8:
         end
 	end
 
-// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
-// Blit draw states
-// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
-
-ST_BLT_INIT:
-	begin
-		blt_addrx <= blt_addr[bltno];
-		blt_pcx <= blt_pc[bltno];
-		blt_hctrx <= blt_hctr[bltno];
-		blt_vctrx <= blt_vctr[bltno];
-		state <= ST_READ_BLT_BITMAP;
-	end
-ST_READ_BLT_BITMAP:
-	begin
-		ram_addr <= blt_addrx + blt_pcx;
-		state <= ST_READ_BLT_BITMAP2;
-	end
-	// Two ram read wait states
-ST_READ_BLT_BITMAP2:
-	state <= ST_READ_BLT_BITMAP3;
-ST_READ_BLT_BITMAP3:
-	state <= ST_READ_BLT_BITMAP_DAT;
-ST_READ_BLT_BITMAP_DAT:
-	begin
-		bltcolor <= ram_data_o;
-		tgtindex <= blt_vctrx * bitmapWidth;
-		state <= ram_data_o[`A] ? ST_READ_BLT_PIX : ST_WRITE_BLT_PIX;
-	end
-ST_READ_BLT_PIX:
-	begin
-		ram_addr <= tgtaddr + tgtindex + blt_hctrx;
-		state <= ST_READ_BLT_PIX2;
-	end
-	// Two ram read wait states
-ST_READ_BLT_PIX2:
-	state <= ST_READ_BLT_PIX3;
-ST_READ_BLT_PIX3:
-	state <= ST_WRITE_BLT_PIX;
-ST_WRITE_BLT_PIX:
-	begin
-		ram_we <= `HIGH;
-		ram_addr <= tgtaddr + tgtindex + blt_hctrx;
-		if (bltcolor[`A]) begin
-			ram_data_i[`R] <= ram_data_o[`R] >> bltcolor[2:0];
-			ram_data_i[`G] <= ram_data_o[`G] >> bltcolor[5:3];
-			ram_data_i[`B] <= ram_data_o[`B] >> bltcolor[8:6];
-		end
-		else
-			ram_data_i <= bltcolor;
-		state <= ST_BLT_NEXT;
-	end
-ST_BLT_NEXT:
-	begin
-		// Default to reading next
-		state <= ST_READ_BLT_BITMAP;
-		ram_we <= `LOW;
-		blt_pcx <= blt_pcx + 10'd1;
-		blt_hctrx <= blt_hctrx + 10'd1;
-		if (blt_hctrx==blt_hmax[bltno]) begin
-			blt_hctrx <= 10'd0;
-			blt_vctrx <= blt_vctrx + 10'd1;
-		end
-		// If max count reached no longer dirty
-		// reset counters and return to IDLE state
-		if (blt_pcx==blt_pix[bltno]) begin
-			blt_dirty[bltno] <= `FALSE;
-			blt_hctr[bltno] <= 10'd0;
-			blt_vctr[bltno] <= 10'd0;
-			blt_pc[bltno] <= 10'd0;
-			state <= ST_IDLE;
-		end
-		// Limit the number of consecutive DMA cycles without
-		// going back to the IDLE state.
-		// Copy the intermediate state back to the registers
-		// so that the DMA may continue next time.
-		loopcnt <= loopcnt + 4'd1;
-		if (loopcnt==4'd7) begin
-			blt_pc[bltno] <= blt_pcx;
-			blt_hctr[bltno] <= blt_hctrx;
-			blt_vctr[bltno] <= blt_vctrx;
-			state <= ST_IDLE;
-		end
-	end
 
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 // Line draw states
