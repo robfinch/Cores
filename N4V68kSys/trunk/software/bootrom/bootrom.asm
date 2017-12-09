@@ -58,6 +58,7 @@ WHITE		EQU		%0111111111111111
 
 CTRLC	EQU		$03
 CTRLH	EQU		$08
+CTRLX	EQU		$18
 LF		EQU		$0A
 CR		EQU		$0D
 
@@ -162,6 +163,9 @@ reg_sr			EQU	$10548
 
 RTCBuf			EQU	$10600
 RTFBufEnd		EQU	$10660
+CmdBuf			EQU	$10800
+CmdBufEnd		EQU	$10850
+
 
 	org		$FFFC0000
 
@@ -370,9 +374,9 @@ SetKeyboardEcho:
 CRLF:
 		move.l	d1,-(a7)
 		move.b	#'\r',d1
-		jsr		DisplayChar
+		bsr		DisplayChar
 		move.b	#'\n',d1
-		jsr		DisplayChar
+		bsr		DisplayChar
 		move.l	(a7)+,d1
 		rts
 
@@ -415,7 +419,8 @@ dccr:
 		sub.b	CursorCol,d2
 		beq.s	dcx7
 		addi.b	#1,CursorCol
-		bra		SyncCursor
+dcx14:
+		bsr		SyncCursor
 dcx7:
 		movem.l	(a7)+,d2/d3
 		rts
@@ -425,14 +430,14 @@ dcx6:
 		cmpi.b	#0,CursorRow
 		beq.s	dcx7
 		subi.b	#1,CursorRow
-		bra		SyncCursor
+		bra.s	dcx14
 dcx8:
 		cmpi.b	#0x93,d1			; cursor left?
 		bne.s	dcx9
 		cmpi.b	#0,CursorCol
 		beq.s	dcx7
 		subi.b	#1,CursorCol
-		bra		SyncCursor
+		bra.s	dcx14
 dcx9:
 		cmpi.b	#0x92,d1			; cursor down ?
 		bne		dcx10
@@ -441,46 +446,30 @@ dcx9:
 		sub.b	CursorRow,d2
 		beq		dcx7
 		addi.w	#1,CursorRow
-		bra		SyncCursor
+		bra.s	dcx14
 dcx10:
 		cmpi.b	#0x94,d1			; cursor home ?
 		bne.s	dcx11
 		cmpi.b	#0,CursorCol
 		beq.s	dcx12
 		clr.b	CursorCol
-		bra		SyncCursor
+		bra.s	dcx14
 dcx12:
 		clr.b	CursorRow
-		bra		SyncCursor
+		bra.s	dcx14
 dcx11:
 		movem.l	d0/d1/d2/a0,-(a7)
 		cmpi.b	#0x99,d1			; delete ?
-		bne.s	dcx13
-		bsr		CalcScreenLoc
-		move.b	CursorCol,d0
-		bra.s	dcx5
-dcx13:
+		beq.s	doDelete
 		cmpi.b	#CTRLH,d1			; backspace ?
-		bne.s   dcx3
-		cmpi.b	#0,CursorCol
-		beq.s   dcx4
-		subi.b	#1,CursorCol
-		bsr		CalcScreenLoc		; a0 = screen location
-		move.b	CursorCol,d0
-dcx5:
-		move.b	1(a0),(a0)+
-		addi.b	#1,d0
-		cmp.b	TextCols,d0
-		blo.s	dcx5
-		move.b	#32,d0
-		move.b	d0,-1(a0)
-		bra.s	dcx4
-dcx3:
+		beq.s   doBackspace
+		cmpi.b	#CTRLX,d1			; delete line ?
+		beq.s	doCtrlX
 		cmpi.b	#'\n',d1		; linefeed ?
 		beq.s	dclf
 
+		; regular char
 		bsr		CalcScreenLoc	; a0 = screen location
-		;bsr		AsciiToScreen	; convert ascii char to screen char
 		move.b	d1,(a0)
 		move.b	d1,d0
 		ext.w	d0
@@ -492,11 +481,65 @@ dcx3:
 		rts
 dclf:
 		bsr		IncCursorRow
+dcx16:
 		bsr		SyncCursor
 dcx4:
 		movem.l	(a7)+,d0/d1/d2/a0		; get back a0
 		movem.l	(a7)+,d2/d3
 		rts
+
+		;---------------------------
+		; CTRL-H: backspace
+		;---------------------------
+doBackspace:
+		cmpi.b	#0,CursorCol		; if already at start of line
+		beq.s   dcx4				; nothing to do
+		subi.b	#1,CursorCol		; decrement column
+
+		;---------------------------
+		; Delete key
+		;---------------------------
+doDelete:
+		bsr		CalcScreenLoc		; a0 = screen location
+		move.l	a0,-(a7)			; save off screen location
+		move.b	CursorCol,d0
+.0001:
+		move.b	1(a0),(a0)+			; pull remaining characters on line over 1
+		addi.b	#1,d0
+		cmp.b	TextCols,d0
+		blo.s	.0001
+		move.b	#' ',d0				; terminate line with a space
+		move.b	d0,-1(a0)
+		; now re-render the chars to the display
+		move.l	(a7)+,a0			; get back screen location
+		move.b	CursorCol,d2		; save off cursor column
+.0002:
+		move.b	(a0)+,d0			; get a char
+		bsr		DispChar			; render to screen
+		add.b	#1,CursorCol		; increment column
+		move.b	CursorCol,d0		; check if end of line hit
+		sub.b	TextCols,d0
+		bne.s	.0002				; no, go back
+		move.b	d2,CursorCol		; restore cursor pos
+		bra.s	dcx16				; finished
+		;---------------------------
+		; CTRL-X: erase line
+		;---------------------------
+doCtrlX:
+		clr.b	CursorCol			; Reset cursor to start of line
+		move.b	TextCols,d0			; and display TextCols number of spaces
+		ext.w	d0
+		ext.l	d0
+		move.b	#' ',d1				; d1 = space char
+.0001:
+		; DisplayChar is called recursively here
+		; It's safe to do because we know it won't recurse again due to the
+		; fact we know the character being displayed is a space char
+		bsr		DisplayChar			
+		subq	#1,d0
+		bne.s	.0001
+		clr.b	CursorCol			; now really go back to start of line
+		bra.s	dcx16				; we're done
 
 ;------------------------------------------------------------------------------
 ; Increment the cursor position, scroll the screen if needed.
@@ -854,16 +897,16 @@ SyncCursor:
 
 ;------------------------------------------------------------------------------
 ; Cursor Color
-; - cursor color is a 23 bit vector
+; - cursor color is a 32 bit vector
 ;
-;	aifffff-rrrrrgggggbbbbb
-;	||  |     |    |    |
-;   ||  |     |    |    +-- blue
-;	||  |     |    +------- green
-;   ||  |     +------------ red
-;   ||  +------------------ flashrate 0xxxx = no flash
-;   |+--------------------- invert video (rgb ignored)
-;   +---------------------- alpha blend (least significant 8 bits used as alpha)
+;	aaaaaaaa--ifffff-rrrrrgggggbbbbb
+;	    |     |  |     |    |    |
+;       |     |  |     |    |    +-- blue
+;     	|     |  |     |    +------- green
+;       |     |  |     +------------ red
+;       |     |  +------------------ flashrate 0xxxx = no flash
+;       |     +--------------------- invert video (rgb ignored)
+;       +--------------------------- alpha 0 = cursor color, 255 = background
 ;
 ;   flash rate
 ;		 0xxxx = no flash
@@ -901,47 +944,11 @@ InitCursorColorPalette:
 .0001:
 		clr.w	$0C04(a5)			; gen next number
 		move.l	$0C00(a5),d3		; move random number
-		and.l	#$FFFF,d3			; mask off other attributes
+		and.l	#$FF007FFF,d3		; mask off other attributes
 		move.l	d3,(a6)+
 		dbra	d2,.0001
 		move.l	(a7)+,d2/d3/a5/a6
 		rts
-
-;------------------------------------------------------------------------------
-; Cursor Image (defunct)
-; The original 16x16 hardware cursor is no longer supported.
-; Cursor may be up to 16x16 pixels.
-;------------------------------------------------------------------------------
-
-SetCursorImage:
-		movem.l	d1/a0/a6,-(a7)
-		lea		CursorImage,a0
-		move.l	#VDGREG+VDG_CURIMG,a6
-		moveq	#15,d1
-.0001:
-		move.w	(a0)+,(a6)+
-		dbra	d1,.0001
-		movem.l	(a7)+,d1/a0/a6
-		rts
-
-	align	2
-CursorImage:
-	dc.w	%1111111111
-	dc.w	%1000000001
-	dc.w	%1000000001
-	dc.w	%1000000001
-	dc.w	%1000000001
-	dc.w	%1000000001
-	dc.w	%1000000001
-	dc.w	%1000000001
-	dc.w	%1000110001
-	dc.w	%1111111111
-	dc.w	%0000000000
-	dc.w	%0000000000
-	dc.w	%0000000000
-	dc.w	%0000000000
-	dc.w	%0000000000
-	dc.w	%0000000000
 
 ;------------------------------------------------------------------------------
 ; Setup an image for the cursor.
@@ -974,7 +981,7 @@ SetCursorImage64:
 		move.w	#$0,d3
 		move.w	d3,10(a0,d2.w)		; set z pos
 		add.w	#$10,d2
-		cmp.w	#$300,d2
+		cmp.w	#$400,d2
 		bne.s	.0002
 		movem.l	(a7)+,d1/d2/d3/a0/a1/a6
 		rts
@@ -1033,7 +1040,7 @@ BouncingBalls:
 .0002:
 		cmp.w	#$300,d2
 		bhs.s	.0014
-		move.l	#$5BE80,(a0,d2.w)
+		move.l	#$5BE80,(a0,d2.w)	; set image = 'O'
 .0014:
 		move.w	#$0350,8(a0,d2.w)	; set cursor size 16hx13v
 		clr.w	$0C04(a6)			; gen next number
@@ -1065,31 +1072,38 @@ BouncingBalls:
 .0011:
 		cmp.w	#$400,d2
 		bne.s	.0002
+;
 ; Move balls around	
+; Moves sprites 1-31 around on the screen (sprite 0 is the BIOS cursor)
+;
+; a0 = pointer to AV controller's register set
+; a2 = pointer to sprite movement dx
+; a3 = pointer to sprite movement dy
+;
 .0010:	
-		move.w	#$210,d2
+		move.w	#$210,d2			; offset of sprite #1 regsiter
 .0008:
 		move.w	(a2,d2.w),d3
 		add.w	d3,4(a0,d2.w)		; new hpos
 		move.w	(a3,d2.w),d3
 		add.w	d3,6(a0,d2.w)		; new vpos
-		cmp.w	#BMP_WIDTH,4(a0,d2.w)
+		cmp.w	#BMP_WIDTH,4(a0,d2.w)	; X hit limit ?
 		blo.s	.0004
-		neg.w	(a2,d2.w)
+		neg.w	(a2,d2.w)			; flip dx
 .0004:
-		cmp.w	#0,4(a0,d2.w)
+		cmp.w	#0,4(a0,d2.w)		; X hit limit ?
 		bhs.s	.0005
-		neg.w	(a2,d2.w)
+		neg.w	(a2,d2.w)			; flip dx
 .0005:
-		cmp.w	#BMP_HEIGHT,6(a0,d2.w)
+		cmp.w	#BMP_HEIGHT,6(a0,d2.w)	; Y hit limit ?
 		blo.s	.0006
-		neg.w	(a3,d2.w)
+		neg.w	(a3,d2.w)			; flip dy
 .0006:
-		cmp.w	#0,6(a0,d2.w)
+		cmp.w	#0,6(a0,d2.w)		; Y hit limit ?
 		bhs.s	.0007
-		neg.w	(a3,d2.w)
+		neg.w	(a3,d2.w)			; flip dy
 .0007:
-		add.w	#$10,d2
+		add.w	#$10,d2				; advance to next sprite register set
 		cmp.w	#$400,d2
 		bne.s	.0008	
 		; delay a bit
@@ -1097,8 +1111,9 @@ BouncingBalls:
 .0009:
 		sub.l	#1,d3
 		bne.s	.0009
-		bra.s	.0010
-
+		bsr		KeybdGetCharNoWait	; look for keypress to end
+		tst.b	d1
+		bmi.s	.0010
 		movem.l	(a7)+,d1/d2/d3/a0/a1/a6
 		rts
 		
@@ -1639,17 +1654,13 @@ Prompt1:
 		clr.b	CursorCol		; go back to the start of the line
 		bsr		CalcScreenLoc	; a0 = screen memory location
 		move.b	(a0)+,d1
-		;bsr		ScreenToAscii
 		cmpi.b	#'$',d1			; skip over '$' prompt character
 		bne.s	Prompt2
 		move.b	(a0)+,d1
-		;bsr		ScreenToAscii
 	
 ; Dispatch based on command character
 ;
 Prompt2:
-		cmpi.b	#'o',d1
-		beq		gfx_demo
 		cmpi.b	#'a',d1
 		beq		AudioInputTest
 		cmpi.b	#'b',d1
@@ -1678,9 +1689,11 @@ Prompt2:
 
 TestCLS:
 		move.b	(a0)+,d1
+		addq	#1,d2
 		cmpi.b	#'L',d1
 		bne		Monitor
 		move.b	(a0)+,d1
+		addq	#1,d2
 		cmpi.b	#'S',d1
 		bne		Monitor
 		bsr		ClearScreen
@@ -1702,6 +1715,68 @@ HelpMsg:
 		dc.b	"J = Jump to code",CR,LF,0
 		even
 
+;------------------------------------------------------------------------------
+; This routine borrowed from Gordo's Tiny Basic interpreter.
+; Used to fetch a command line. (Not currently used).
+;
+; d0.b	- command prompt
+;------------------------------------------------------------------------------
+
+GetCmdLine:
+		bsr		DisplayChar		; display prompt
+		move.b	#' ',d0
+		bsr		DisplayChar
+		lea		CmdBuf,a0
+.0001:
+		bsr		GetKey
+		cmp.b	#CTRLH,d0
+		beq.s	.0003
+		cmp.b	#CTRLX,d0
+		beq.s	.0004
+		cmp.b	#CR,d0
+		beq.s	.0002
+		cmp.b	#' ',d0
+		bcs.s	.0001
+.0002:
+		move.b	d0,(a0)+
+		bsr		DisplayChar
+		cmp.b	#CR,d0
+		beq		.0007
+		cmp.l	#CmdBufEnd-1,a0
+		bcs.s	.0001
+.0003:
+		move.b	#CTRLH,d0
+		bsr		DisplayChar
+		move.b	#' ',d0
+		bsr		DisplayChar
+		cmp.l	#CmdBuf,a0
+		bls.s	.0001
+		move.b	#CTRLH,d0
+		bsr		DisplayChar
+		subq.l	#1,a0
+		bra.s	.0001
+.0004:
+		move.l	a0,d1
+		sub.l	#CmdBuf,d1
+		beq.s	.0006
+		subq	#1,d1
+.0005:
+		move.b	#CTRLH,d0
+		bsr		DisplayChar
+		move.b	#' ',d0
+		bsr		DisplayChar
+		move.b	#CTRLH,d0
+		bsr		DisplayChar
+		dbra	d1,.0005
+.0006:
+		lea		CmdBuf,a0
+		bra		.0001
+.0007:
+		move.b	#LF,d0
+		bsr		DisplayChar
+		rts
+
+		
 ;------------------------------------------------------------------------------
 ; Fill memory
 ; FB = fill bytes		FB 00000010 100 FF	; fill starting at 10 for 256 bytes
@@ -1744,13 +1819,17 @@ fmemB:
 		bra		Monitor
 
 ;------------------------------------------------------------------------------
+; Modifies:
+;	a0	- text pointer
 ;------------------------------------------------------------------------------
 ;
 ignBlanks:
+		move.w	d1,-(a7)
 		move.b	(a0)+,d1
 		cmpi.b	#' ',d1
-		beq		ignBlanks
+		beq.s	ignBlanks
 		subq	#1,a0
+		move.w	(a7)+,d1
 		rts
 
 ;------------------------------------------------------------------------------
@@ -1806,39 +1885,52 @@ ExecuteCode:
 DumpMem:
 		bsr		ignBlanks
 		bsr		GetHexNumber
+		tst.b	d0				; was there a number ?
+		beq		Monitor			; no, other garbage, just ignore
+		move.l	d1,d3			; save off start of range
+		bsr		ignBlanks
+		bsr		GetHexNumber
+		tst.b	d0
+		bne.s	DumpMem1
+		move	d3,d1
+		addi.l	#64,d1			; no end specified, just dump 64 bytes
 DumpMem1:
-		move.l	d1,a0
+		move.l	d3,a0
+		move.l	d1,a1
 		jsr		CRLF
+.0001:
+		cmpa.l	a0,a1
+		bhi		Monitor
 		bsr		DisplayMem
-		bsr		DisplayMem
-		bsr		DisplayMem
-		bsr		DisplayMem
-		bsr		DisplayMem
-		bsr		DisplayMem
-		bsr		DisplayMem
-		bsr		DisplayMem
-		bra		Monitor
+		bra.s	.0001
+
 
 ;------------------------------------------------------------------------------
 ; Get a hexidecimal number. Maximum of eight digits.
+;
+; Returns:
+;	d0 = number of digits
+;	d1 = value of number
 ;------------------------------------------------------------------------------
 ;
 GetHexNumber:
-		movem.l	d0/d2,-(a7)
+		move.l	d2,-(a7)
 		clr.l	d2
-		moveq	#7,d0
-gthxn2:
+		moveq	#0,d0
+.0002:
 		move.b	(a0)+,d1
 		bsr		AsciiToHexNybble
 		cmp.b	#0xff,d1
-		beq		gthxn1
+		beq.s	.0001
 		lsl.l	#4,d2
 		andi.l	#0x0f,d1
 		or.l	d1,d2
-		dbra	d0,gthxn2
-gthxn1:
+		addq	#1,d0
+		cmpi.b	#8,d0
+		blo.s	.0002
+.0001:
 		move.l	d2,d1
-		movem.l	(a7)+,d0/d2
+		move.l	(a7)+,d2
 		rts	
 
 ;------------------------------------------------------------------------------

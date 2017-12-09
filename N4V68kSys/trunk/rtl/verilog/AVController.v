@@ -214,7 +214,7 @@ reg [6:0] state = ST_IDLE;
 wire eol;
 wire eof;
 wire border;
-wire blank;
+wire blank, vblank;
 wire vbl_int;
 reg sgLock = 1'b0;
 reg [11:0] hTotal = phTotal;
@@ -249,7 +249,7 @@ reg [1:0] lowres = 2'b01;
 reg [19:0] bmpBase = 20'h00000;		// base address of bitmap
 reg [19:0] charBmpBase = 20'h5C000;	// base address of character bitmaps
 reg [11:0] hstart = 12'hEFD;		// -261
-reg [11:0] vstart = 12'hFD7;		// -44
+reg [11:0] vstart = 12'hFD7;		// -41
 reg [11:0] hpos;
 reg [11:0] vpos;
 reg [4:0] fpos;
@@ -300,13 +300,14 @@ reg [NSPR-1:0] cursorLink2;
 reg [5:0] cursorColorNdx [0:NSPR-1];
 reg [9:0] cursor_szv [0:NSPR-1];
 reg [4:0] cursor_szh [0:NSPR-1];
-reg [15:0] cursor_bmp [0:NSPR-1];
 
 reg [18:0] rdndx;					// video read index
+wire rdce = ~vblank;
 reg [18:0] ram_addr;
 reg [15:0] ram_data_i;
 wire [15:0] ram_data_o;
 wire [15:0] zbram_data_o;
+reg ram_ce;
 reg [1:0] ram_we;
 reg [1:0] zbram_we;
 
@@ -492,7 +493,7 @@ VGASyncGen usg1
 	.hCtr(),
 	.vCtr(),
     .blank(blank),
-    .vblank(),
+    .vblank(vblank),
     .vbl_int(vbl_int),
     .border(border),
     .hTotal_i(hTotal),
@@ -517,13 +518,13 @@ reg [3:0] zb_i;
 chipram16 chipram1
 (
 	.clka(clk_i),
-	.ena(1'b1),
+	.ena(ram_ce),
 	.wea(ram_we),
 	.addra(ram_addr),
 	.dina(ram_data_i),
 	.douta(ram_data_o),
 	.clkb(clk),
-	.enb(1'b1),
+	.enb(rdce),
 	.web(1'b0),
 	.addrb(rdndx),
 	.dinb(16'h0000),
@@ -533,13 +534,13 @@ chipram16 chipram1
 zbram uzbram1
 (
 	.clka(clk_i),
-	.ena(1'b1),
+	.ena(ram_ce),
 	.wea(zbram_we),
 	.addra(ram_addr),
 	.dina(ram_data_i),
 	.douta(zbram_data_o),
 	.clkb(clk),
-	.enb(1'b1),
+	.enb(rdce),
 	.web(1'b0),
 	.addrb(rdndx[18:3]),
 	.dinb(2'h00),
@@ -600,6 +601,7 @@ reg [15:0] rasti_en [0:63];
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // RGB output display side
+// clk clock domain
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 always @(posedge clk)
@@ -689,7 +691,7 @@ end
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 // Compute InBox flag
 
-reg [31:0] InBox;
+reg [NSPR-1:0] InBox;
 always @(posedge clk)
     for (n = 0; n < NSPR; n = n + 1)
 	InBox[n] <= ((vpos >> lowres) >= cursor_pv[n]) && ((vpos >> lowres) <= cursor_pv[n] + cursor_szv[n]) &&
@@ -877,6 +879,7 @@ always @(posedge clk)
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Command queue
+// clk_i clock domain
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 reg [4:0] cmdq_ndx;
@@ -1064,8 +1067,6 @@ if (reg_cs|reg_copper) begin
 
 		10'b1000000000:	bmpBase[19:16] <= reg_dat[3:0];
 		10'b1000000001:	bmpBase[15:0] <= reg_dat;
-		10'b1000000010:	charBmpBase[19:16] <= reg_dat[3:0];
-		10'b1000000011:	charBmpBase[15:0] <= reg_dat;
 
 		10'b100_0010_000:	cmdq_in[`CHARCODE] <= reg_dat[8:0];	// char code
 		10'b100_0010_001:	cmdq_in[`FGCOLOR] <= reg_dat;	// fgcolor
@@ -1317,6 +1318,7 @@ endcase
 case(state)
 ST_IDLE:
 	begin
+	    ram_ce <= `LOW;
 		ram_we <= {2{`LOW}};
 		zbram_we <= {2{`LOW}};
 		ack <= `LOW;
@@ -1324,6 +1326,7 @@ ST_IDLE:
 		// Audio takes precedence to avoid audio distortion.
 		// Fortunately audio DMA is fast and infrequent.
 		if (|aud0_req) begin
+		    ram_ce <= `HIGH;
 			ram_addr <= aud0_wadr;
 			aud0_wadr <= aud0_wadr + aud0_req;
 			aud0_req <= 6'd0;
@@ -1337,6 +1340,7 @@ ST_IDLE:
 			state <= ST_AUD0;
 		end
 		else if (|aud1_req)	begin
+		    ram_ce <= `HIGH;
 			ram_addr <= aud1_wadr;
 			aud1_wadr <= aud1_wadr + aud1_req;
 			aud1_req <= 6'd0;
@@ -1350,6 +1354,7 @@ ST_IDLE:
 			state <= ST_AUD1;
 		end
 		else if (|aud2_req) begin
+		    ram_ce <= `HIGH;
 			ram_addr <= aud2_wadr;
 			aud2_wadr <= aud2_wadr + aud2_req;
 			aud2_req <= 6'd0;
@@ -1363,6 +1368,7 @@ ST_IDLE:
 			state <= ST_AUD2;
 		end
 		else if (|aud3_req)	begin
+		    ram_ce <= `HIGH;
 			ram_addr <= aud3_wadr;
 			aud3_wadr <= aud3_wadr + aud3_req;
 			aud3_req <= 6'd0;
@@ -1376,6 +1382,7 @@ ST_IDLE:
 			state <= ST_AUD3;
 		end
 		else if (|audi_req) begin
+		    ram_ce <= `HIGH;
 			ram_we <= 2'b11;
 			ram_addr <= audi_wadr;
 			ram_data_i <= audi_dat;
@@ -1394,6 +1401,7 @@ ST_IDLE:
 `endif
 		end
 		else if (cs_ram) begin
+		    ram_ce <= `HIGH;
 			ram_data_i <= dat_i;
 			ram_addr <= adr_i[19:1];
 			if (zbuf)
@@ -1513,6 +1521,7 @@ ST_CMD:
 ST_RW:
 	begin
         ack <= `HIGH;
+	    ram_ce <= `LOW;
         if (zbuf)
         	dat_o <= zbram_data_o;
         else
@@ -1535,6 +1544,7 @@ ST_AUD02:
     state <= ST_AUD03;
 ST_AUD03:
 	begin
+	    ram_ce <= `LOW;
         aud0_dat <= ram_data_o;
         state <= ST_IDLE;
     end
@@ -1545,6 +1555,7 @@ ST_AUD12:
     state <= ST_AUD13;
 ST_AUD13:
 	begin
+	    ram_ce <= `LOW;
         aud1_dat <= ram_data_o;
         state <= ST_IDLE;
     end
@@ -1555,6 +1566,7 @@ ST_AUD22:
     state <= ST_AUD23;
 ST_AUD23:
 	begin
+	    ram_ce <= `LOW;
         aud2_dat <= ram_data_o;
         state <= ST_IDLE;
     end
@@ -1565,6 +1577,7 @@ ST_AUD32:
     state <= ST_AUD33;
 ST_AUD33:
 	begin
+	    ram_ce <= `LOW;
         aud3_dat <= ram_data_o;
         state <= ST_IDLE;
     end
@@ -1578,6 +1591,7 @@ ST_AUD_PLOT:
 	end
 ST_AUD_PLOT_WRITE:
 	begin
+	    ram_ce <= `HIGH;
 		ram_we <= 2'b11;
 		ram_addr <= tgtaddr;
 		ram_data_i <= bkcolor;
@@ -1585,6 +1599,7 @@ ST_AUD_PLOT_WRITE:
 	end
 ST_AUD_PLOT_RET:
     begin
+	    ram_ce <= `LOW;
         ram_we <= 2'b00;
 		state <= ST_IDLE;
     end
@@ -1602,6 +1617,7 @@ ST_PLOT:
 	end
 ST_PLOT_READ:
     begin
+	    ram_ce <= `HIGH;
 		ram_addr <= zbuf ? tgtaddr[19:3] : tgtaddr;
         state <= ST_PLOT_READ2;
     end
@@ -1631,6 +1647,7 @@ ST_PLOT_WRITE:
 	// Disable write signal while address and data are still valid.
 ST_PLOT_RET:
     begin
+	    ram_ce <= `LOW;
         ram_we <= 2'b00;
 		state <= ST_IDLE;
     end
@@ -1655,6 +1672,7 @@ ST_READ_FONT_TBL:
 		charcode <= charcode_qo;
 		fgcolor <= charfg_qo;
 		bkcolor <= charbk_qo;
+	    ram_ce <= `HIGH;
 		ram_addr <= {font_tbl_adr[18:2],2'b0} + {font_id,2'b00};
 		state <= ST_READ_FONT_TBL1;
 	end
@@ -1700,6 +1718,7 @@ ST_READ_FONT_TBL6:
 		tgtaddr <= {8'h00,cmdy1_qo} * {4'h00,bitmapWidth} + bmpBase + cmdx1_qo;
 		charBmpBase <= charBmpBase + (charcode << font_width[4]) * (font_height + 7'd1);
 		if (font_fixed) begin
+    	    ram_ce <= `LOW;
 			ctrl[14] <= 1'b1;
 			state <= ST_IDLE;
 		end
@@ -1714,6 +1733,7 @@ ST_READ_GLYPH_ENTRY2:
     state <= ST_READ_GLYPH_ENTRY3;
 ST_READ_GLYPH_ENTRY3:
 	begin
+	    ram_ce <= `LOW;
 		font_width <= ram_data_o >> {charcode[0],3'b0};
 		ctrl[14] <= 1'b1;
 		state <= ST_IDLE;
@@ -1736,6 +1756,7 @@ ST_CHAR_INIT:
 ST_READ_CHAR_BITMAP:
 	begin
 //		ram_addr <= charBmpBase + charcode * (pixym + 4'd1) + pixvc;
+	    ram_ce <= `HIGH;
 		ram_addr <= charBmpBase + (pixvc << font_width[4]);
 		state <= ST_READ_CHAR_BITMAP2;
 	end
@@ -1812,6 +1833,7 @@ ST_BLTDMA1:
 ST_BLTDMA2:
 	begin
 		if (loopcnt > 5'd2) begin
+    	    ram_ce <= `HIGH;
 			ram_addr <= srcA_wadr;
 			if (bitcnt==4'd0) begin
         		srcA_wadr <= srcA_wadr + bltinc;
@@ -1868,6 +1890,7 @@ ST_BLTDMA3:
 ST_BLTDMA4:
 	begin
 		if (loopcnt > 5'd2) begin
+    	    ram_ce <= `HIGH;
 			ram_addr <= srcB_wadr;
 			if (bitcnt==4'd0) begin
                 srcB_wadr <= srcB_wadr + bltinc;
@@ -1920,6 +1943,7 @@ ST_BLTDMA5:
 ST_BLTDMA6:
 	begin
 		if (loopcnt > 5'd2) begin
+    	    ram_ce <= `HIGH;
 			ram_addr <= srcC_wadr;
 			if (bitcnt==4'd0) begin
                 srcC_wadr <= srcC_wadr + bltinc;
@@ -1968,6 +1992,7 @@ ST_BLTDMA8:
 		    zbram_we <= 2'b11;
 		else
 		    ram_we <= 2'b11;
+	    ram_ce <= `HIGH;
 		ram_addr <= dstD_wadr;
 		// If there's no source then a fill operation muct be taking place.
 		if (bltCtrl[1]|bltCtrl[3]|bltCtrl[5])
@@ -2036,6 +2061,7 @@ DL_PRECALC:
 	end
 DL_GETPIXEL:
 	begin
+	    ram_ce <= `HIGH;
 		ram_addr <= zbuf ? ma[19:3] : ma;
 		state <= DL_GETPIXEL2;
 	end
@@ -2045,6 +2071,7 @@ DL_GETPIXEL3:
     state <= DL_SETPIXEL;
 DL_SETPIXEL:
 	begin
+	    ram_ce <= `HIGH;
 		ram_addr <= zbuf ? ma[19:3] : ma;
 		if (zbuf) begin
 			zbram_we <= 2'b11;
@@ -2164,7 +2191,9 @@ ST_TILERECT2:
 
 ST_COPPER_IFETCH:
 	begin
+	    ram_ce <= `HIGH;
 		ram_addr <= copper_pc;
+		copper_pc <= copper_pc + 20'd4;
 		state <= ST_COPPER_IFETCH2;
 	end
 ST_COPPER_IFETCH2:
@@ -2197,6 +2226,7 @@ ST_COPPER_IFETCH6:
 	end
 ST_COPPER_EXECUTE:
 	begin
+	    ram_ce <= `LOW;
 		case(copper_ir[63:62])
 		2'b00:	// WAIT
 			begin
