@@ -216,6 +216,7 @@ wire eof;
 wire border;
 wire blank, vblank;
 wire vbl_int;
+reg [9:0] vbl_reg;
 reg sgLock = 1'b0;
 reg [11:0] hTotal = phTotal;
 reg [11:0] vTotal = pvTotal;
@@ -239,6 +240,8 @@ reg [15:0] irq_en = 16'h0;
 reg [15:0] irq_status;
 assign irq_o = |(irq_status & irq_en);
 
+wire [31:0] cap = {27'h000,NSPR[4:0]};
+
 // ctrl
 // -b--- rrrr ---- cccc
 //  |      |         +-- grpahics command
@@ -249,9 +252,11 @@ reg [1:0] lowres = 2'b01;
 reg [19:0] bmpBase = 20'h00000;		// base address of bitmap
 reg [19:0] charBmpBase = 20'h5C000;	// base address of character bitmaps
 reg [11:0] hstart = 12'hEFD;		// -261
-reg [11:0] vstart = 12'hFD7;		// -41
+reg [11:0] vstart = 12'hFE0;		// -41
 reg [11:0] hpos;
 reg [11:0] vpos;
+wire [11:0] vctr;
+wire [11:0] hctr;
 reg [4:0] fpos;
 reg [15:0] bitmapWidth = 16'd400;
 reg [15:0] borderColor;
@@ -280,28 +285,33 @@ wire signed [13:0] e2 = err << 1;
 reg [5:0] flashcnt;
 
 // Cursor related registers
-reg [NSPR-1:0] collision;
+reg [31:0] collision;
 reg cursor;
-reg [NSPR-1:0] cursorEnable;
-reg [11:0] cursor_pv [0:NSPR-1];
-reg [11:0] cursor_ph [0:NSPR-1];
-reg [3:0] cursor_pz [0:NSPR-1];
-reg [9:0] cya [0:NSPR-1];
+reg [31:0] cursorEnable;
+reg [31:0] cursorActive;
+reg [11:0] cursor_pv [0:31];
+reg [11:0] cursor_ph [0:31];
+reg [3:0] cursor_pz [0:31];
+reg [9:0] cya [0:31];
 reg [31:0] cursor_color [0:63];
-reg [NSPR-1:0] cursor_on;
-reg [NSPR-1:0] cursor_on_d1;
-reg [NSPR-1:0] cursor_on_d2;
-reg [NSPR-1:0] cursor_on_d3;
-reg [19:0] cursorAddr [0:NSPR-1];
-reg [63:0] cursorBmp [0:NSPR-1];
-reg [15:0] cursorColor [0:NSPR-1];
-reg [NSPR-1:0] cursorLink1;
-reg [NSPR-1:0] cursorLink2;
-reg [5:0] cursorColorNdx [0:NSPR-1];
-reg [9:0] cursor_szv [0:NSPR-1];
-reg [4:0] cursor_szh [0:NSPR-1];
+reg [31:0] cursor_on;
+reg [31:0] cursor_on_d1;
+reg [31:0] cursor_on_d2;
+reg [31:0] cursor_on_d3;
+reg [19:0] cursorAddr [0:31];
+reg [19:0] cursorWaddr [0:31];
+reg [15:0] cursorMcnt [0:31];
+reg [15:0] cursorWcnt [0:31];
+reg [63:0] cursorBmp [0:31];
+reg [15:0] cursorColor [0:31];
+reg [31:0] cursorLink1;
+reg [31:0] cursorLink2;
+reg [5:0] cursorColorNdx [0:31];
+reg [9:0] cursor_szv [0:31];
+reg [5:0] cursor_szh [0:31];
 
 reg [18:0] rdndx;					// video read index
+reg [18:0] lndx;					// line index
 wire rdce = ~vblank;
 reg [18:0] ram_addr;
 reg [15:0] ram_data_i;
@@ -490,8 +500,8 @@ VGASyncGen usg1
 	.eof(eof),
 	.hSync(hSync),
 	.vSync(vSync),
-	.hCtr(),
-	.vCtr(),
+	.hCtr(hctr),
+	.vCtr(vctr),
     .blank(blank),
     .vblank(vblank),
     .vbl_int(vbl_int),
@@ -514,6 +524,26 @@ VGASyncGen usg1
 
 wire [7:0] zbx2_i;
 reg [3:0] zb_i;
+wire [18:0] P0, P1, P2;
+
+multRndx umul0 (
+  .CLK(clk),
+  .A(vpos),
+  .B(bitmapWidth),
+  .P(P0)
+);
+multRndx umul1 (
+  .CLK(clk),
+  .A({1'b0,vpos[11:1]}),
+  .B(bitmapWidth),
+  .P(P1)
+);
+multRndx umul2 (
+  .CLK(clk),
+  .A({2'b00,vpos[11:2]}),
+  .B(bitmapWidth),
+  .P(P2)
+);
 
 chipram16 chipram1
 (
@@ -547,7 +577,7 @@ zbram uzbram1
 	.doutb(zbx2_i)
 );
 always @*
-	zb_i <= {zbx2_i >> rdndx[2:0],2'b00};
+	zb_i <= {zbx2_i >> rdndx[2:0],1'b0};
     
 vtdl #(.WID(16), .DEP(32)) bltA (.clk(clk_i), .ce(wrA), .a(bltAa), .d(bltA_in), .q(bltA_out1));
 vtdl #(.WID(16), .DEP(32)) bltB (.clk(clk_i), .ce(wrB), .a(bltBa), .d(bltB_in), .q(bltB_out1));
@@ -604,6 +634,13 @@ reg [15:0] rasti_en [0:63];
 // clk clock domain
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
+// widen vertical blank interrupt pulse
+always @(posedge clk)
+	if (vbl_int)
+		vbl_reg <= 10'h3FF;
+	else
+		vbl_reg <= {vbl_reg[8:0],1'b0};
+
 always @(posedge clk)
 	if (eol)
 		hpos <= hstart;
@@ -624,78 +661,122 @@ always @(posedge clk)
 		flashcnt <= flashcnt + 6'd1;
 	end
 
-// cya used to generate index into the core's memory
-always @(posedge clk)
-	for (n = 0; n < NSPR; n = n + 1)
-		if (hpos==12'hF00 &&
-			((vpos >> lowres) == cursor_pv[n]) && (lowres[1] ? vpos[1:0]==2'b00 : lowres[0] ? vpos[0]==1'b0 : 1'b1)) begin
-			cya[n] <= 10'd0;
-		end
-		else if (eol) begin
-			cya[n] <= cya[n] + 10'd1;
-	   end
-
 // Compute display ram index
 always @(posedge clk)
 begin
-    case(hpos)
-    12'b1111_0011_1101: rdndx <= cursorAddr[{1'b0,hpos[5:2]}+5'd1] + {cya[{1'b0,hpos[5:2]}+5'd1][9:0] >> lowres,2'b00};
-    12'b1111_0100_0001: rdndx <= cursorAddr[{1'b0,hpos[5:2]}+5'd1] + {cya[{1'b0,hpos[5:2]}+5'd1][9:0] >> lowres,2'b00};
-    12'b1111_0100_0101: rdndx <= cursorAddr[{1'b0,hpos[5:2]}+5'd1] + {cya[{1'b0,hpos[5:2]}+5'd1][9:0] >> lowres,2'b00};
-    12'b1111_0100_1001: rdndx <= cursorAddr[{1'b0,hpos[5:2]}+5'd1] + {cya[{1'b0,hpos[5:2]}+5'd1][9:0] >> lowres,2'b00};
-    12'b1111_0100_1101: rdndx <= cursorAddr[{1'b0,hpos[5:2]}+5'd1] + {cya[{1'b0,hpos[5:2]}+5'd1][9:0] >> lowres,2'b00};
-    12'b1111_0101_0001: rdndx <= cursorAddr[{1'b0,hpos[5:2]}+5'd1] + {cya[{1'b0,hpos[5:2]}+5'd1][9:0] >> lowres,2'b00};
-    12'b1111_0101_0101: rdndx <= cursorAddr[{1'b0,hpos[5:2]}+5'd1] + {cya[{1'b0,hpos[5:2]}+5'd1][9:0] >> lowres,2'b00};
-    12'b1111_0101_1001: rdndx <= cursorAddr[{1'b0,hpos[5:2]}+5'd1] + {cya[{1'b0,hpos[5:2]}+5'd1][9:0] >> lowres,2'b00};
-    12'b1111_0101_1101: rdndx <= cursorAddr[{1'b0,hpos[5:2]}+5'd1] + {cya[{1'b0,hpos[5:2]}+5'd1][9:0] >> lowres,2'b00};
-    12'b1111_0110_0001: rdndx <= cursorAddr[{1'b0,hpos[5:2]}+5'd1] + {cya[{1'b0,hpos[5:2]}+5'd1][9:0] >> lowres,2'b00};
-    12'b1111_0110_0101: rdndx <= cursorAddr[{1'b0,hpos[5:2]}+5'd1] + {cya[{1'b0,hpos[5:2]}+5'd1][9:0] >> lowres,2'b00};
-    12'b1111_0110_1001: rdndx <= cursorAddr[{1'b0,hpos[5:2]}+5'd1] + {cya[{1'b0,hpos[5:2]}+5'd1][9:0] >> lowres,2'b00};
-    12'b1111_0110_1101: rdndx <= cursorAddr[{1'b0,hpos[5:2]}+5'd1] + {cya[{1'b0,hpos[5:2]}+5'd1][9:0] >> lowres,2'b00};
-    12'b1111_0111_0001: rdndx <= cursorAddr[{1'b0,hpos[5:2]}+5'd1] + {cya[{1'b0,hpos[5:2]}+5'd1][9:0] >> lowres,2'b00};
-    12'b1111_0111_0101: rdndx <= cursorAddr[{1'b0,hpos[5:2]}+5'd1] + {cya[{1'b0,hpos[5:2]}+5'd1][9:0] >> lowres,2'b00};
-    12'b1111_0111_1001: rdndx <= cursorAddr[{1'b0,hpos[5:2]}+5'd1] + {cya[{1'b0,hpos[5:2]}+5'd1][9:0] >> lowres,2'b00};
-    12'b1111_0111_1101: rdndx <= cursorAddr[{1'b1,hpos[5:2]}+5'd1] + {cya[{1'b1,hpos[5:2]}+5'd1][9:0] >> lowres,2'b00};
-    12'b1111_1000_0001: rdndx <= cursorAddr[{1'b1,hpos[5:2]}+5'd1] + {cya[{1'b1,hpos[5:2]}+5'd1][9:0] >> lowres,2'b00};
-    12'b1111_1000_0101: rdndx <= cursorAddr[{1'b1,hpos[5:2]}+5'd1] + {cya[{1'b1,hpos[5:2]}+5'd1][9:0] >> lowres,2'b00};
-    12'b1111_1000_1001: rdndx <= cursorAddr[{1'b1,hpos[5:2]}+5'd1] + {cya[{1'b1,hpos[5:2]}+5'd1][9:0] >> lowres,2'b00};
-    12'b1111_1000_1101: rdndx <= cursorAddr[{1'b1,hpos[5:2]}+5'd1] + {cya[{1'b1,hpos[5:2]}+5'd1][9:0] >> lowres,2'b00};
-    12'b1111_1001_0001: rdndx <= cursorAddr[{1'b1,hpos[5:2]}+5'd1] + {cya[{1'b1,hpos[5:2]}+5'd1][9:0] >> lowres,2'b00};
-    12'b1111_1001_0101: rdndx <= cursorAddr[{1'b1,hpos[5:2]}+5'd1] + {cya[{1'b1,hpos[5:2]}+5'd1][9:0] >> lowres,2'b00};
-    12'b1111_1001_1001: rdndx <= cursorAddr[{1'b1,hpos[5:2]}+5'd1] + {cya[{1'b1,hpos[5:2]}+5'd1][9:0] >> lowres,2'b00};
-    12'b1111_1001_1101: rdndx <= cursorAddr[{1'b1,hpos[5:2]}+5'd1] + {cya[{1'b1,hpos[5:2]}+5'd1][9:0] >> lowres,2'b00};
-    12'b1111_1010_0001: rdndx <= cursorAddr[{1'b1,hpos[5:2]}+5'd1] + {cya[{1'b1,hpos[5:2]}+5'd1][9:0] >> lowres,2'b00};
-    12'b1111_1010_0101: rdndx <= cursorAddr[{1'b1,hpos[5:2]}+5'd1] + {cya[{1'b1,hpos[5:2]}+5'd1][9:0] >> lowres,2'b00};
-    12'b1111_1010_1001: rdndx <= cursorAddr[{1'b1,hpos[5:2]}+5'd1] + {cya[{1'b1,hpos[5:2]}+5'd1][9:0] >> lowres,2'b00};
-    12'b1111_1010_1101: rdndx <= cursorAddr[{1'b1,hpos[5:2]}+5'd1] + {cya[{1'b1,hpos[5:2]}+5'd1][9:0] >> lowres,2'b00};
-    12'b1111_1100_0001: rdndx <= cursorAddr[{1'b1,hpos[5:2]}+5'd1] + {cya[{1'b1,hpos[5:2]}+5'd1][9:0] >> lowres,2'b00};
-    12'b1111_1100_0101: rdndx <= cursorAddr[{1'b1,hpos[5:2]}+5'd1] + {cya[{1'b1,hpos[5:2]}+5'd1][9:0] >> lowres,2'b00};
-    12'b1111_1100_1001: rdndx <= cursorAddr[{1'b1,hpos[5:2]}+5'd1] + {cya[{1'b1,hpos[5:2]}+5'd1][9:0] >> lowres,2'b00};
-    12'b1111_1100_1101: rdndx <= cursorAddr[{1'b1,hpos[5:2]}+5'd1] + {cya[{1'b1,hpos[5:2]}+5'd1][9:0] >> lowres,2'b00};
-    12'b1111_1111_1101: rdndx <= {8'h00,vpos >> lowres} * {4'h00,bitmapWidth} + bmpBase;
-    12'b1111_1111_1110: if (lowres==2'b00) rdndx <= rdndx + 20'd1;
-    12'b1111_1111_1111: rdndx <= rdndx + 20'd1;
-    default:    if (hpos[11:8]==4'hF)	// sprite data load
-                    rdndx <= rdndx + 20'd1;
-                else if (lowres==2'b01 && hpos[0])
-                	rdndx <= rdndx + 20'd1;
-                else if (lowres==2'b10 && hpos[1:0]==2'b11)
-                	rdndx <= rdndx + 20'd1;
-                else if (lowres==2'b00)
-                	rdndx <= rdndx + 20'd1;
+    casez({lowres,hpos})
+    14'b??_1111_0011_1101: rdndx <= cursorWaddr[{1'b0,hpos[5:2]}+5'd1];
+    14'b??_1111_0100_0001: rdndx <= cursorWaddr[{1'b0,hpos[5:2]}+5'd1];
+    14'b??_1111_0100_0101: rdndx <= cursorWaddr[{1'b0,hpos[5:2]}+5'd1];
+    14'b??_1111_0100_1001: rdndx <= cursorWaddr[{1'b0,hpos[5:2]}+5'd1];
+    14'b??_1111_0100_1101: rdndx <= cursorWaddr[{1'b0,hpos[5:2]}+5'd1];
+    14'b??_1111_0101_0001: rdndx <= cursorWaddr[{1'b0,hpos[5:2]}+5'd1];
+    14'b??_1111_0101_0101: rdndx <= cursorWaddr[{1'b0,hpos[5:2]}+5'd1];
+    14'b??_1111_0101_1001: rdndx <= cursorWaddr[{1'b0,hpos[5:2]}+5'd1];
+    14'b??_1111_0101_1101: rdndx <= cursorWaddr[{1'b0,hpos[5:2]}+5'd1];
+    14'b??_1111_0110_0001: rdndx <= cursorWaddr[{1'b0,hpos[5:2]}+5'd1];
+    14'b??_1111_0110_0101: rdndx <= cursorWaddr[{1'b0,hpos[5:2]}+5'd1];
+    14'b??_1111_0110_1001: rdndx <= cursorWaddr[{1'b0,hpos[5:2]}+5'd1];
+    14'b??_1111_0110_1101: rdndx <= cursorWaddr[{1'b0,hpos[5:2]}+5'd1];
+    14'b??_1111_0111_0001: rdndx <= cursorWaddr[{1'b0,hpos[5:2]}+5'd1];
+    14'b??_1111_0111_0101: rdndx <= cursorWaddr[{1'b0,hpos[5:2]}+5'd1];
+    14'b??_1111_0111_1001: rdndx <= cursorWaddr[{1'b0,hpos[5:2]}+5'd1];
+    14'b??_1111_0111_1101: rdndx <= cursorWaddr[{1'b1,hpos[5:2]}+5'd1];
+    14'b??_1111_1000_0001: rdndx <= cursorWaddr[{1'b1,hpos[5:2]}+5'd1];
+    14'b??_1111_1000_0101: rdndx <= cursorWaddr[{1'b1,hpos[5:2]}+5'd1];
+    14'b??_1111_1000_1001: rdndx <= cursorWaddr[{1'b1,hpos[5:2]}+5'd1];
+    14'b??_1111_1000_1101: rdndx <= cursorWaddr[{1'b1,hpos[5:2]}+5'd1];
+    14'b??_1111_1001_0001: rdndx <= cursorWaddr[{1'b1,hpos[5:2]}+5'd1];
+    14'b??_1111_1001_0101: rdndx <= cursorWaddr[{1'b1,hpos[5:2]}+5'd1];
+    14'b??_1111_1001_1001: rdndx <= cursorWaddr[{1'b1,hpos[5:2]}+5'd1];
+    14'b??_1111_1001_1101: rdndx <= cursorWaddr[{1'b1,hpos[5:2]}+5'd1];
+    14'b??_1111_1010_0001: rdndx <= cursorWaddr[{1'b1,hpos[5:2]}+5'd1];
+    14'b??_1111_1010_0101: rdndx <= cursorWaddr[{1'b1,hpos[5:2]}+5'd1];
+    14'b??_1111_1010_1001: rdndx <= cursorWaddr[{1'b1,hpos[5:2]}+5'd1];
+    14'b??_1111_1010_1101: rdndx <= cursorWaddr[{1'b1,hpos[5:2]}+5'd1];
+    14'b??_1111_1011_0001: rdndx <= cursorWaddr[{1'b1,hpos[5:2]}+5'd1];
+    14'b??_1111_1011_0101: rdndx <= cursorWaddr[{1'b1,hpos[5:2]}+5'd1];
+    14'b??_1111_1011_1001: rdndx <= cursorWaddr[{1'b1,hpos[5:2]}+5'd1];
+    14'b00_1111_1111_1101: rdndx <= P0 + bmpBase;	// Px = vertical pos * bitmap width (above)
+    14'b01_1111_1111_1101: rdndx <= P1 + bmpBase;
+    14'b10_1111_1111_1101: rdndx <= P2 + bmpBase;
+    14'b00_1111_1111_1110: rdndx <= rdndx + 20'd1;
+    14'b00_1111_1111_1111: rdndx <= rdndx + 20'd1;
+    14'b??_1111_1111_1111: rdndx <= rdndx + 20'd1;
+    14'b??_1111_????_????: rdndx <= rdndx + 20'd1;	// <- indrement for sprite addressing
+    14'b00_????_????_????: rdndx <= rdndx + 20'd1;
+    14'b01_????_????_???1: rdndx <= rdndx + 20'd1;
+    14'b10_????_????_??11: rdndx <= rdndx + 20'd1;
+    //14'b10_????_????_??11: rdndx <= rdndx + 20'd1;
+    default:    ;	// don't change rdndx
     endcase
 end
 
+/*    
+    			if (hpos[11:8]==4'hF)	// sprite data load
+                    rdndx <= rdndx + 20'd1;
+                else casez({lowres,hpos[1:0]})
+	                4'b00??: rdndx <= rdndx + 20'd1;
+	                4'b01?1: rdndx <= rdndx + 20'd1;
+	                4'b1011: rdndx <= rdndx + 20'd1;
+	                default:	rdndx <= rdndx;
+	            	endcase
+*/
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 // clock edge #-1
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
-// Compute InBox flag
+// Compute when to shift cursor bitmaps.
+// Set cursor active flag
+// Increment working count and address
 
-reg [NSPR-1:0] InBox;
+reg [31:0] cursorShift;
 always @(posedge clk)
     for (n = 0; n < NSPR; n = n + 1)
-	InBox[n] <= ((vpos >> lowres) >= cursor_pv[n]) && ((vpos >> lowres) <= cursor_pv[n] + cursor_szv[n]) &&
-	            ((hpos >> lowres) >= cursor_ph[n]) && ((hpos >> lowres) <= cursor_ph[n] + cursor_szh[n]) ;
+    begin
+        cursorShift[n] <= `FALSE;
+	    case(lowres)
+	    2'd0,2'd3:	if (hctr >= cursor_ph[n]) cursorShift[n] <= `TRUE;
+		2'd1:		if (hctr[11:1] >= cursor_ph[n]) cursorShift[n] <= `TRUE;
+		2'd2:		if (hctr[11:2] >= cursor_ph[n]) cursorShift[n] <= `TRUE;
+		endcase
+	end
+
+always @(posedge clk)
+    for (n = 0; n < NSPR; n = n + 1)
+		cursorActive[n] = (cursorWcnt[n] < cursorMcnt[n]) && cursorEnable[n];
+
+always @(posedge clk)
+    for (n = 0; n < NSPR; n = n + 1)
+	begin
+	    case(lowres)
+	    2'd0,2'd3:	if ((vctr == cursor_pv[n]) && (hctr == 12'h005)) cursorWcnt[n] <= 16'd0;
+		2'd1:		if ((vctr[11:1] == cursor_pv[n]) && (hctr == 12'h005)) cursorWcnt[n] <= 16'd0;
+		2'd2:		if ((vctr[11:2] == cursor_pv[n]) && (hctr == 12'h005)) cursorWcnt[n] <= 16'd0;
+		endcase
+		if (hpos==12'hFF8)	// must be after image data fetch
+    		if (cursorActive[n])
+    		case(lowres)
+    		2'd0,2'd3:	cursorWcnt[n] <= cursorWcnt[n] + cursor_szh[n];
+    		2'd1:		if (vctr[0]) cursorWcnt[n] <= cursorWcnt[n] + cursor_szh[n];
+    		2'd2:		if (vctr[1:0]==2'b11) cursorWcnt[n] <= cursorWcnt[n] + cursor_szh[n];
+    		endcase
+	end
+
+always @(posedge clk)
+    for (n = 0; n < NSPR; n = n + 1)
+	begin
+	    case(lowres)
+	    2'd0,2'd3:	if ((vctr == cursor_pv[n]) && (hctr == 12'h005)) cursorWaddr[n] <= cursorAddr[n];
+		2'd1:		if ((vctr[11:1] == cursor_pv[n]) && (hctr == 12'h005)) cursorWaddr[n] <= cursorAddr[n];
+		2'd2:		if ((vctr[11:2] == cursor_pv[n]) && (hctr == 12'h005)) cursorWaddr[n] <= cursorAddr[n];
+		endcase
+		if (hpos==12'hFF8)	// must be after image data fetch
+		case(lowres)
+   		2'd0,2'd3:	cursorWaddr[n] <= cursorWaddr[n] + 20'd4;
+   		2'd1:		if (vctr[0]) cursorWaddr[n] <= cursorWaddr[n] + 20'd4;
+   		2'd2:		if (vctr[1:0]==2'b11) cursorWaddr[n] <= cursorWaddr[n] + 20'd4;
+   		endcase
+	end
 
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 // clock edge #0
@@ -709,10 +790,10 @@ always @(posedge clk)
 always @(posedge clk)
 begin
     for (n = 0; n < NSPR; n = n + 1)
-        if (InBox[n] && cursorEnable[n]) begin
+        if (cursorActive[n] & cursorShift[n]) begin
             cursor_on[n] <=
-                cursorLink2[n] ? |{ cursorBmp[(n+2)&15][63:62],cursorBmp[(n+1)&15][63:62],cursorBmp[n][63:62]} :
-                cursorLink1[n] ? |{ cursorBmp[(n+1)&15][63:62],cursorBmp[n][63:62]} : 
+                cursorLink2[n] ? |{ cursorBmp[(n+2)&31][63:62],cursorBmp[(n+1)&31][63:62],cursorBmp[n][63:62]} :
+                cursorLink1[n] ? |{ cursorBmp[(n+1)&31][63:62],cursorBmp[n][63:62]} : 
                 |cursorBmp[n][63:62];
         end
         else
@@ -722,27 +803,27 @@ end
 // Load / shift cursor bitmap
 always @(posedge clk)
 begin
-    casex(hpos)
-    12'b1111_01xx_xx00: cursorBmp[{1'b0,hpos[5:2]}][63:48] <= rgb_i;
-    12'b1111_01xx_xx01: cursorBmp[{1'b0,hpos[5:2]}][47:32] <= rgb_i;
-    12'b1111_01xx_xx10: cursorBmp[{1'b0,hpos[5:2]}][31:16] <= rgb_i;
-    12'b1111_01xx_xx11: cursorBmp[{1'b0,hpos[5:2]}][15:0] <= rgb_i;
-    12'b1111_10xx_xx00: cursorBmp[{1'b1,hpos[5:2]}][63:48] <= rgb_i;
-    12'b1111_10xx_xx01: cursorBmp[{1'b1,hpos[5:2]}][47:32] <= rgb_i;
-    12'b1111_10xx_xx10: cursorBmp[{1'b1,hpos[5:2]}][31:16] <= rgb_i;
-    12'b1111_10xx_xx11: cursorBmp[{1'b1,hpos[5:2]}][15:0] <= rgb_i;
+    casez(hpos)
+    12'b1111_01??_??00: cursorBmp[{1'b0,hpos[5:2]}][63:48] <= rgb_i;
+    12'b1111_01??_??01: cursorBmp[{1'b0,hpos[5:2]}][47:32] <= rgb_i;
+    12'b1111_01??_??10: cursorBmp[{1'b0,hpos[5:2]}][31:16] <= rgb_i;
+    12'b1111_01??_??11: cursorBmp[{1'b0,hpos[5:2]}][15:0] <= rgb_i;
+    12'b1111_10??_??00: cursorBmp[{1'b1,hpos[5:2]}][63:48] <= rgb_i;
+    12'b1111_10??_??01: cursorBmp[{1'b1,hpos[5:2]}][47:32] <= rgb_i;
+    12'b1111_10??_??10: cursorBmp[{1'b1,hpos[5:2]}][31:16] <= rgb_i;
+    12'b1111_10??_??11: cursorBmp[{1'b1,hpos[5:2]}][15:0] <= rgb_i;
     endcase
     for (n = 0; n < NSPR; n = n + 1)
-        if (InBox[n] && cursorEnable[n])
+        if (cursorShift[n])
             cursorBmp[n] <= {cursorBmp[n][61:0],2'b00};
 end
 
 always @(posedge clk)
 for (n = 0; n < NSPR; n = n + 1)
 if (cursorLink2[n])
-    cursorColorNdx[n] <= {cursorBmp[(n+2)&15][63:62],cursorBmp[(n+1)&15][63:62],cursorBmp[n][63:62]};
+    cursorColorNdx[n] <= {cursorBmp[(n+2)&31][63:62],cursorBmp[(n+1)&31][63:62],cursorBmp[n][63:62]};
 else if (cursorLink1[n])
-    cursorColorNdx[n] <= {n[3:2],cursorBmp[(n+1)&15][63:62],cursorBmp[n][63:62]};
+    cursorColorNdx[n] <= {n[3:2],cursorBmp[(n+1)&31][63:62],cursorBmp[n][63:62]};
 else
     cursorColorNdx[n] <= {n[3:0],cursorBmp[n][63:62]};
 
@@ -817,9 +898,9 @@ always @(posedge clk)
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 // Compute alpha blending
 
-wire [12:0] alphaRed = (rgb_i[14:10] * cursorColorOut2[31:24]) + (cursorColorOut2[14:10] * (9'h100 - cursorColorOut2[31:24]));
-wire [12:0] alphaGreen = (rgb_i[9:5] * cursorColorOut2[31:24]) + (cursorColorOut2[9:5]  * (9'h100 - cursorColorOut2[31:24]));
-wire [12:0] alphaBlue = (rgb_i[4:0] * cursorColorOut2[31:24]) + (cursorColorOut2[4:0]  * (9'h100 - cursorColorOut2[31:24]));
+wire [12:0] alphaRed = (rgb_i[`R] * cursorColorOut2[31:24]) + (cursorColorOut2[`R] * (9'h100 - cursorColorOut2[31:24]));
+wire [12:0] alphaGreen = (rgb_i[`G] * cursorColorOut2[31:24]) + (cursorColorOut2[`G]  * (9'h100 - cursorColorOut2[31:24]));
+wire [12:0] alphaBlue = (rgb_i[`B] * cursorColorOut2[31:24]) + (cursorColorOut2[`B]  * (9'h100 - cursorColorOut2[31:24]));
 reg [14:0] alphaOut;
 
 always @(posedge clk)
@@ -868,11 +949,11 @@ always @(posedge clk)
 // final output registration
 
 always @(posedge clk)
-	casex({blank4,border4,any_cursor_on4})
-	3'b1xx:		rgb <= 15'h0000;
-	3'b01x:		rgb <= borderColor;
+	casez({blank4,border4,any_cursor_on4})
+	3'b1??:		rgb <= 15'h0000;
+	3'b01?:		rgb <= borderColor;
 	3'b001:		rgb <= ((zb_i4 < cursor_z4) ? rgb_i4 : flashOut);
-	default:	rgb <= rgb_i4;
+	3'b000:		rgb <= rgb_i4;
 	endcase
 always @(posedge clk)
     blank_o <= blank4;
@@ -885,7 +966,6 @@ always @(posedge clk)
 reg [4:0] cmdq_ndx;
 
 wire cs_cmdq = cs_reg && adr_i[10:1]==10'b100_0010_111 && chrp && we_i;
-wire cs_gfx = cs_reg && adr_i[10:1]==10'b111_0000_100;
 
 
 vtdl #(.WID(105), .DEP(32)) char_q (.clk(clk_i), .ce(cs_cmdq), .a(cmdq_ndx), .d(cmdq_in), .q(cmdq_out));
@@ -995,26 +1075,28 @@ wire [75:0] TextureDesco = TextureDesc[hrTexture];
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+reg bltDone1;
+reg reg_cs;
+reg reg_we;
+reg [10:0] reg_adr;
+reg [15:0] reg_dat;
 
-reg [9:0] sra;						// shadow ram address
 reg [15:0] shadow_ram [0:1023];		// register shadow ram
 wire [15:0] srdo;					// shadow ram data out
 always @(posedge clk_i)
-	sra <= adr_i[10:1];
-always @(posedge clk_i)
-	if (cs_reg & we_i & rwsr)
-		shadow_ram[sra] <= dat_i;
-assign srdo = shadow_ram[sra];
+	if ((reg_cs|reg_copper) & reg_we)
+		shadow_ram[reg_adr[10:1]] <= reg_dat;
+assign srdo = shadow_ram[reg_adr[10:1]];
 
 reg rdy2;
 always @(posedge clk_i)
-	rwsr <= cs_reg;
+	rwsr <= cs_reg & ~reg_copper;
 always @(posedge clk_i)
-	rdy <= rwsr & cs_reg;
+	rdy <= rwsr & cs_reg & ~reg_copper;
 always @(posedge clk_i)
-	rdy2 <= rdy & cs_reg;
-always @(posedge clk_i)
-	ack_o <= (cs_gfx|cs_ram) ? ack & ~ack_o: cs_reg ? rdy2 & ~ack_o : 1'b0;
+	rdy2 <= rdy & cs_reg & ~reg_copper;
+always @*	//(posedge clk_i)
+	ack_o <= cs_ram ? ack : cs_reg ? rdy2 : 1'b0;
 
 // Widen the eof pulse so it can be seen by clk_i
 reg [11:0] vrst;
@@ -1024,12 +1106,9 @@ always @(posedge clk)
 	else
 		vrst <= {vrst[10:0],1'b0};
 
-reg bltDone1;
-reg reg_cs, reg_cs_gfx;
-reg reg_we;
-reg [10:0] reg_adr;
-reg [15:0] reg_dat;
-	
+wire pe_vbl;
+edge_det ued1 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(vbl_reg), .pe(pe_vbl), .ne(), .ee());
+
 always @(posedge clk_i)
 if (rst_i) begin
 	state <= ST_IDLE;
@@ -1044,9 +1123,9 @@ reg_adr <= adr_i[10:0];
 reg_dat <= dat_i;
 if (reg_cs|reg_copper) begin
 	if (reg_we) begin
-		casex(reg_adr[10:1])
-		10'b000xxxxxx0:   cursor_color[reg_adr[7:2]][31:16] <= reg_dat;
-		10'b000xxxxxx1:   cursor_color[reg_adr[7:2]][15:0] <= reg_dat;
+		casez(reg_adr[10:1])
+		10'b000??????0:   cursor_color[reg_adr[7:2]][31:16] <= reg_dat;
+		10'b000??????1:   cursor_color[reg_adr[7:2]][15:0] <= reg_dat;
 		10'b0010000000:   cursorLink1[31:16] <= reg_dat;
 		10'b0010000001:   cursorLink1[15:0] <= reg_dat;
 		10'b0010000010:   cursorLink2[31:16] <= reg_dat;
@@ -1055,18 +1134,24 @@ if (reg_cs|reg_copper) begin
 		10'b0010000101:   cursorEnable[15:0] <= reg_dat;
 		10'b0010000110:   collision[31:16] <= reg_dat;
 		10'b0010000111:   collision[15:0] <= reg_dat;
-        10'b01x_xxxx_000:   cursorAddr[reg_adr[8:4]][19:16] <= reg_dat[3:0];
-        10'b01x_xxxx_001:   cursorAddr[reg_adr[8:4]][15:0] <= reg_dat;
-        10'b01x_xxxx_010:   cursor_ph[reg_adr[8:4]] <= reg_dat[11:0];
-        10'b01x_xxxx_011:   cursor_pv[reg_adr[8:4]] <= reg_dat[11:0];
-        10'b01x_xxxx_100:   begin
-                                cursor_szh[reg_adr[8:4]] <= reg_dat[4:0];
+        10'b01?_????_000:   cursorAddr[reg_adr[8:4]][19:16] <= reg_dat[3:0];
+        10'b01?_????_001:   cursorAddr[reg_adr[8:4]][15:0] <= reg_dat;
+        10'b01?_????_010:   cursor_ph[reg_adr[8:4]] <= reg_dat[11:0];
+        10'b01?_????_011:   cursor_pv[reg_adr[8:4]] <= reg_dat[11:0];
+        10'b01?_????_100:   begin
+                                cursor_szh[reg_adr[8:4]] <= {1'b0,reg_dat[4:0]} + 6'd1;
                                 cursor_szv[reg_adr[8:4]] <= reg_dat[15:6];
                             end
-        10'b01x_xxxx_101:	cursor_pz[reg_adr[8:4]] <= reg_dat[3:0];
+        10'b01?_????_101:	cursor_pz[reg_adr[8:4]] <= reg_dat[3:0];
+        10'b01?_????_110:	cursorMcnt[reg_adr[8:4]] <= reg_dat;
 
-		10'b1000000000:	bmpBase[19:16] <= reg_dat[3:0];
-		10'b1000000001:	bmpBase[15:0] <= reg_dat;
+		10'b100_0000_000:	bmpBase[19:16] <= reg_dat[3:0];
+		10'b100_0000_001:	bmpBase[15:0] <= reg_dat;
+        10'b100_0000_011:   bitmapWidth <= reg_dat;
+
+		10'b100_0001_000:	font_tbl_adr[19:16] <= reg_dat[3:0];
+		10'b100_0001_001:	font_tbl_adr[15:0] <= reg_dat;
+		10'b100_0001_010:	font_id <= reg_dat;
 
 		10'b100_0010_000:	cmdq_in[`CHARCODE] <= reg_dat[8:0];	// char code
 		10'b100_0010_001:	cmdq_in[`FGCOLOR] <= reg_dat;	// fgcolor
@@ -1118,21 +1203,14 @@ if (reg_cs|reg_copper) begin
         10'b100_1011_101:   srcC_cnt[15:0] <= reg_dat;
 		10'b100_1011_110:   dstD_cnt[19:16] <= reg_dat[3:0];
         10'b100_1011_111:   dstD_cnt[15:0] <= reg_dat;
-		10'b100_110x_xx0:	copper_adr[reg_adr[4:2]][19:16] <= reg_dat[3:0];
-		10'b100_110x_xx1:	copper_adr[reg_adr[4:2]][15:0] <= reg_dat;
+
+		10'b100_110?_??0:	copper_adr[reg_adr[4:2]][19:16] <= reg_dat[3:0];
+		10'b100_110?_??1:	copper_adr[reg_adr[4:2]][15:0] <= reg_dat;
 		10'b100_1110_000:	copper_ctrl <= reg_dat;
-		10'b101_0xxx_xxx:	rasti_en[reg_adr[6:1]] <= reg_dat;
+		10'b101_0???_???:	rasti_en[reg_adr[6:1]] <= reg_dat;
 		10'b101_1000_000:	irq_en <= reg_dat;
 		10'b101_1000_001:	irq_status <= irq_status & ~reg_dat;
-        10'b101_1000_010:	aud_ctrl <= reg_dat;
-        10'b101_1000_011:   aud_ctrl2 <= reg_dat;
-        10'b101_1000_100:   bitmapWidth <= reg_dat;
-        10'b101_1000_110:   hstart <= reg_dat[11:0];   
-        10'b101_1000_111:   vstart <= reg_dat[11:0];
 
-		10'b101_1001_000:	font_tbl_adr[19:16] <= reg_dat[3:0];
-		10'b101_1001_001:	font_tbl_adr[15:0] <= reg_dat;
-		10'b101_1001_010:	font_id <= reg_dat;
 		10'b101_1001_100:	bltA_dat <= reg_dat;
 		10'b101_1001_101:	bltB_dat <= reg_dat;
 		10'b101_1001_110:	bltC_dat <= reg_dat;
@@ -1142,6 +1220,7 @@ if (reg_cs|reg_copper) begin
 		10'b101_1010_100:   bltFWMask <= reg_dat;
         10'b101_1010_101:   bltLWMask <= reg_dat;
 
+		// Audio $600 to $65E
 		10'b110_0000_000:   aud0_adr[19:16] <= reg_dat[3:0];
 		10'b110_0000_001:   aud0_adr[15:0] <= reg_dat;
 		10'b110_0000_010:   aud0_length <= reg_dat;
@@ -1171,34 +1250,42 @@ if (reg_cs|reg_copper) begin
         10'b110_0100_010:	audi_length <= reg_dat;
         10'b110_0100_011:	audi_period <= reg_dat;
         10'b110_0100_101:	audi_dat <= reg_dat;
+        10'b110_0101_000:	aud_ctrl <= reg_dat;
+        10'b110_0101_001:   aud_ctrl2 <= reg_dat;
 
-        10'b110_0101_000:   lowres <= reg_dat[1:0];   
-
-		// Sync generator control regs        
-        10'b111_0001_000:	if (sgLock) hTotal <= reg_dat[11:0];
-        10'b111_0001_001:	if (sgLock) vTotal <= reg_dat[11:0];
-        10'b111_0001_010:	if (sgLock) hSyncOn <= reg_dat[11:0];
-        10'b111_0001_011:	if (sgLock) hSyncOff <= reg_dat[11:0];
-        10'b111_0001_100:	if (sgLock) vSyncOn <= reg_dat[11:0];
-        10'b111_0001_101:	if (sgLock) vSyncOff <= reg_dat[11:0];
-        10'b111_0001_110:	if (sgLock) hBlankOn <= reg_dat[11:0];
-        10'b111_0001_111:	if (sgLock) hBlankOff <= reg_dat[11:0];
-        10'b111_0010_000:	if (sgLock) vBlankOn <= reg_dat[11:0];
-        10'b111_0010_001:	if (sgLock) vBlankOff <= reg_dat[11:0];
-        10'b111_0010_010:	hBorderOn <= reg_dat[11:0];
-        10'b111_0010_011:	hBorderOff <= reg_dat[11:0];
-        10'b111_0010_100:	vBorderOn <= reg_dat[11:0];
-        10'b111_0010_101:	vBorderOff <= reg_dat[11:0];
-        10'b111_0010_111:	sgLock <= reg_dat==16'hA123;
+		// Sync generator control regs  $7C0 to $7DE      
+        10'b111_1100_000:	if (sgLock) hTotal <= reg_dat[11:0];
+        10'b111_1100_001:	if (sgLock) vTotal <= reg_dat[11:0];
+        10'b111_1100_010:	if (sgLock) hSyncOn <= reg_dat[11:0];
+        10'b111_1100_011:	if (sgLock) hSyncOff <= reg_dat[11:0];
+        10'b111_1100_100:	if (sgLock) vSyncOn <= reg_dat[11:0];
+        10'b111_1100_101:	if (sgLock) vSyncOff <= reg_dat[11:0];
+        10'b111_1100_110:	if (sgLock) hBlankOn <= reg_dat[11:0];
+        10'b111_1100_111:	if (sgLock) hBlankOff <= reg_dat[11:0];
+        10'b111_1101_000:	if (sgLock) vBlankOn <= reg_dat[11:0];
+        10'b111_1101_001:	if (sgLock) vBlankOff <= reg_dat[11:0];
+        10'b111_1101_010:	hBorderOn <= reg_dat[11:0];
+        10'b111_1101_011:	hBorderOff <= reg_dat[11:0];
+        10'b111_1101_100:	vBorderOn <= reg_dat[11:0];
+        10'b111_1101_101:	vBorderOff <= reg_dat[11:0];
+        10'b111_1101_110:   hstart <= reg_dat[11:0];   
+        10'b111_1101_111:   vstart <= reg_dat[11:0];
+        10'b111_1111_000:   lowres <= reg_dat[1:0];   
+        10'b111_1111_001:	sgLock <= reg_dat==16'hA123;
 		default:	;	// do nothing
 		endcase
 	end
 	else begin
 		case(reg_adr[10:1])
-		10'b0010000010: dat_o <= collision;
+		10'b0010000110: dat_o <= collision[31:16];
+		10'b0010000111: dat_o <= collision[15:0];
 		10'b1000010110:	dat_o <= {11'h00,cmdq_ndx};
 		10'b1001010110:	dat_o <= bltCtrl;
 		10'b1011000001:	dat_o <= irq_status;
+		10'b1111110000:	dat_o <= {4'h0,hpos};
+		10'b1111110001:	dat_o <= {4'h0,vpos};
+        10'b1111111110: dat_o <= cap[31:16];
+        10'b1111111111: dat_o <= cap[15:0];   
 		default:	dat_o <= srdo;
 		endcase
 	end
@@ -1265,11 +1352,11 @@ if (audi_req2)
 //if (bltCtrl[5]) bltC_dat <= bltC_out1;
 
 bltDone1 <= bltCtrl[13];
-if (vbl_int)
+if (pe_vbl)
 	irq_status[0] <= `TRUE;
 if (bltCtrl[13] & ~bltDone1)
 	irq_status[1] <= `TRUE;
-if (hpos==12'd977 && rasti_en[vpos[9:4]][vpos[3:0]])
+if (hctr==12'd02 && rasti_en[vctr[9:4]][vctr[3:0]])
 	irq_status[2] <= `TRUE;
 	
 if (cs_cmdq)
@@ -1522,13 +1609,13 @@ ST_RW:
 	begin
         ack <= `HIGH;
 	    ram_ce <= `LOW;
+        ram_we <= {2{`LOW}};
+        zbram_we <= {2{`LOW}};
         if (zbuf)
         	dat_o <= zbram_data_o;
         else
         	dat_o <= ram_data_o;
         if (~cs_ram) begin
-            ram_we <= {2{`LOW}};
-            zbram_we <= {2{`LOW}};
             ack <= `LOW;
             state <= ST_IDLE;
         end

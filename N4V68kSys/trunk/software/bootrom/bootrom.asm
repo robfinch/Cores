@@ -236,6 +236,7 @@ fpga_version:
 
 		bsr		Set400x300
 ;		bsr		Set800x600
+		bsr		ColorBandMemory
 		bsr		BootSetZBuffer
 		bsr		InitCursorColorPalette
 ;		bsr		SetCursorColor
@@ -250,7 +251,7 @@ fpga_version:
 		lea		$FFDC0000,A6		; set I/O base
 		move.w	#$FFFF,$0700(a6)	; turn on audio clocks
 		movea.l	#VDGREG,a5
-		move.w	#%0100000000000000,$584(a5)
+		move.w	#%0100000000000000,$650(a5)
 
 ;		bsr		DrawLines
 ;		bsr		TestBlitter
@@ -440,12 +441,12 @@ dcx8:
 		bra.s	dcx14
 dcx9:
 		cmpi.b	#0x92,d1			; cursor down ?
-		bne		dcx10
+		bne.s	dcx10
 		move.b	TextRows,d2
 		sub.b	#1,d2
-		sub.b	CursorRow,d2
-		beq		dcx7
-		addi.w	#1,CursorRow
+		cmp.b	CursorRow,d2
+		beq.s	dcx7
+		addi.b	#1,CursorRow
 		bra.s	dcx14
 dcx10:
 		cmpi.b	#0x94,d1			; cursor home ?
@@ -672,13 +673,13 @@ scp1:
 Set320x192:
 		lea		VDGREG,a6			; a6 = pointer to register set
 		lea		tbl1280x768,a0
-		lea		$710(a6),a1			; a1 points to timing registers
-		move.w	#$A123,$72E(a6)		; unlock timing regs
+		lea		$7C0(a6),a1			; a1 points to timing registers
+		move.w	#$A123,$7F2(a6)		; unlock timing regs
 		moveq	#14,d0
 .0001:
 		move.w	(a0)+,(a1)+
 		dbra	d0,.0001
-		move.w	#$0000,$72E(a6)		; lock timing regs
+		move.w	#$0000,$7F2(a6)		; lock timing regs
 		rts
 
 Set320x240:
@@ -687,32 +688,32 @@ Set320x240:
 
 Set400x300:
 		movea.l	#VDGREG,a6			; a6 = pointer to register set
-		move.w	#1,$650(a6)			; 1 = divide by 2 mode
-		move.w	#400,$588(a6)		; bitmap width register
+		move.w	#1,$7F0(a6)			; 1 = divide by 2 mode
+		move.w	#400,$406(a6)		; bitmap width register
 		lea		tbl800x600,a0
-		lea		$710(a6),a1			; a1 points to timing registers
-		move.w	#$A123,$72E(a6)		; unlock timing regs
-		moveq	#14,d0
+		lea		$7C0(a6),a1			; a1 points to timing registers
+		move.w	#$A123,$7F2(a6)		; unlock timing regs
+		moveq	#16,d0
 .0001:
 		move.w	(a0)+,(a1)+
 		dbra	d0,.0001
-		move.w	#$0000,$72E(a6)		; lock timing regs
+		move.w	#$0000,$7F2(a6)		; lock timing regs
 		move.b	#50,TextCols
 		move.b	#37,TextRows
 		rts
 
 Set800x600:
 		movea.l	#VDGREG,a6			; a6 = pointer to register set
-		move.w	#0,$650(a6)			; 0 = no divide
-		move.w	#800,$588(a6)		; bitmap width register
+		move.w	#0,$7F0(a6)			; 0 = no divide
+		move.w	#800,$406(a6)		; bitmap width register
 		lea		tbl800x600,a0
-		lea		$710(a6),a1			; a1 points to timing registers
-		move.w	#$A123,$72E(a6)		; unlock timing regs
-		moveq	#14,d0
+		lea		$7C0(a6),a1			; a1 points to timing registers
+		move.w	#$A123,$7F2(a6)		; unlock timing regs
+		moveq	#16,d0
 .0001:
 		move.w	(a0)+,(a1)+
 		dbra	d0,.0001
-		move.w	#$0000,$72E(a6)		; lock timing regs
+		move.w	#$0000,$7F2(a6)		; lock timing regs
 		move.b	#100,TextCols
 		move.b	#75,TextRows
 		rts
@@ -721,9 +722,9 @@ Set800x600:
 ;tbl640x480:
 ;	dc.w	800,525
 tbl800x600:
-	dc.w	1056,628,40,168,1,5,1056,256,628,28,1056,256,628,28,0
+	dc.w	1056,628,40,168,1,5,1056,256,628,28,1056,256,628,28,$EFD,$FD7,0
 tbl1280x768:
-	dc.w	1680,795,67,201,2,5,1680,400,795,27,1680,400,795,27,0
+	dc.w	1680,795,67,201,2,5,1680,400,795,27,1680,400,795,27,$EFD,$FD7,0
 
 ;------------------------------------------------------------------------------
 ; The z buffer is setup so that display has the lowest priority. This allows
@@ -756,8 +757,43 @@ BootClearScreen:
 		move.l	#BMP_WIDTH*BMP_HEIGHT,D1	; number of pixels
 .loop1:
 		move.w	d0,(a0)+					; store it to the screen
-		sub.l	#1,d1						; can't use dbra here
+		subq	#1,d1						; can't use dbra here
 		bne.s	.loop1
+		lea		VDGREG,a6
+		move.w	#1,$43E(a6)					; access z buffer
+		lea		VDGBUF,a0
+		move.l	#$FFFFFFFF,d0				; lowest priority
+		move.l	#BMP_WIDTH*BMP_HEIGHT/16,D1	; number of pixels
+.0002:
+		move.l	d0,(a0)+
+		subq	#1,d1
+		bne.s	.0002
+		move.w	#0,$43E(a6)					; access normal buffer
+		bra		ClearVirtScreen				; clear the virtual screen too.
+
+;------------------------------------------------------------------------------
+; Copy bands of color to the display controller's memory. These bands should
+; show up if the bitmap address get toasted.
+;------------------------------------------------------------------------------
+
+ColorBandMemory:
+		move.l	#$FFDC0000,a6
+		move.l	#$FF800000,a0
+		move.l	#$FF900000,a1
+		move.l	#0,d1
+		clr.w	$0C04(a6)			; gen next number
+		move.l	$0C00(a6),d3		; get random value
+.0002:
+		move.w	d3,(a0)+			; move to z buffer
+		move.l	d1,d4
+		and.l	#$03FF,d4
+		bne.s	.0001
+		clr.w	$0C04(a6)			; gen next number
+		move.l	$0C00(a6),d3		; get random value
+.0001:
+		addq	#1,d1
+		cmpa	a1,a0
+		blo.s	.0002	
 		rts
 
 ;------------------------------------------------------------------------------
@@ -773,7 +809,7 @@ BootClearScreen:
 BootCopyFont:
 		movea.l	#VDGREG,a6
 		; Setup font table
-		move.l	#$5C000,$590(a6)	; set font table address 1/2 B8000
+		move.l	#$5C000,$410(a6)	; set font table address 1/2 B8000
 		move.l	#$5C004,d0			; set bitmap address (directly follows)
 		swap	d0
 		or.w	#%1001110011100000,d0	; set font fixed, width, height
@@ -785,7 +821,7 @@ BootCopyFont:
 		lea		font8,a0
 		move.l	#8*512,d1			; 512 chars * 8 bytes per char
 
-		move.w	#0,$594(a6)			; select font id (0)
+		move.w	#0,$414(a6)			; select font id (0)
 
 		moveq	#0,d0				; zero out high order bits
 cpyfnt:
@@ -945,6 +981,7 @@ InitCursorColorPalette:
 		clr.w	$0C04(a5)			; gen next number
 		move.l	$0C00(a5),d3		; move random number
 		and.l	#$FF007FFF,d3		; mask off other attributes
+		;or.l	#$FF000000,d3		; alpha blend to background color
 		move.l	d3,(a6)+
 		dbra	d2,.0001
 		move.l	(a7)+,d2/d3/a5/a6
@@ -982,7 +1019,7 @@ SetCursorImage64:
 		move.w	d3,10(a0,d2.w)		; set z pos
 		add.w	#$10,d2
 		cmp.w	#$400,d2
-		bne.s	.0002
+		blo.s	.0002
 		movem.l	(a7)+,d1/d2/d3/a0/a1/a6
 		rts
 		
@@ -1043,13 +1080,16 @@ BouncingBalls:
 		move.l	#$5BE80,(a0,d2.w)	; set image = 'O'
 .0014:
 		move.w	#$0350,8(a0,d2.w)	; set cursor size 16hx13v
+		move.w	#208,12(a0,d2.w)	; set total pixel count (16*13)
 		clr.w	$0C04(a6)			; gen next number
 		move.l	$0C00(a6),d3
 		and.w	#$FF,d3
+		add.w	#256,d3
 		move.w	d3,4(a0,d2.w)		; set h pos
 		clr.w	$0C04(a6)			; gen next number
 		move.l	$0C00(a6),d3
 		and.w	#$FF,d3
+		add.w	#28,d3
 		move.w	d3,6(a0,d2.w)		; set v pos
 		clr.w	$0C04(a6)			; gen next number
 		move.l	$0C00(a6),d3
@@ -1071,52 +1111,61 @@ BouncingBalls:
 		move.l	#$5BE00,(a0,d2.w)
 .0011:
 		cmp.w	#$400,d2
-		bne.s	.0002
+		blo.s	.0002
 ;
 ; Move balls around	
 ; Moves sprites 1-31 around on the screen (sprite 0 is the BIOS cursor)
 ;
 ; a0 = pointer to AV controller's register set
-; a2 = pointer to sprite movement dx
-; a3 = pointer to sprite movement dy
+; a2 = pointer to sprite movement dx table
+; a3 = pointer to sprite movement dy table
 ;
 .0010:	
+		move.w	$582(a0),d2			; get irq status
+		btst	#0,d2				; check vertical blank
+		beq.s	.0010				; not blank yet
+		move.w	#1,$582(a0)			; reset vert blank indicator
+
+		clr.l	$400(a0)			; reset bitmap base and
+		move.w	#BMP_WIDTH,$406(a0)	; bitmap width register
+
 		move.w	#$210,d2			; offset of sprite #1 regsiter
 .0008:
-		move.w	(a2,d2.w),d3
-		add.w	d3,4(a0,d2.w)		; new hpos
-		move.w	(a3,d2.w),d3
-		add.w	d3,6(a0,d2.w)		; new vpos
-		cmp.w	#BMP_WIDTH,4(a0,d2.w)	; X hit limit ?
+		move.w	(a2,d2.w),d3		; get dx
+		add.w	d3,4(a0,d2.w)		; add to hpos
+		move.w	(a3,d2.w),d3		l get dy
+		add.w	d3,6(a0,d2.w)		; add to vpos
+		cmp.w	#BMP_WIDTH+128,4(a0,d2.w)	; X hit limit ?
 		blo.s	.0004
 		neg.w	(a2,d2.w)			; flip dx
 .0004:
-		cmp.w	#0,4(a0,d2.w)		; X hit limit ?
+		cmp.w	#128,4(a0,d2.w)		; X hit limit ?
 		bhs.s	.0005
 		neg.w	(a2,d2.w)			; flip dx
 .0005:
-		cmp.w	#BMP_HEIGHT,6(a0,d2.w)	; Y hit limit ?
+		cmp.w	#BMP_HEIGHT+28,6(a0,d2.w)	; Y hit limit ?
 		blo.s	.0006
 		neg.w	(a3,d2.w)			; flip dy
 .0006:
-		cmp.w	#0,6(a0,d2.w)		; Y hit limit ?
+		cmp.w	#28,6(a0,d2.w)		; Y hit limit ?
 		bhs.s	.0007
 		neg.w	(a3,d2.w)			; flip dy
 .0007:
 		add.w	#$10,d2				; advance to next sprite register set
-		cmp.w	#$400,d2
-		bne.s	.0008	
-		; delay a bit
-		move.l	#60000,d3
+		cmp.w	#$400,d2			; is end of register set hit ?
+		blo.s	.0008	
+		; delay a bit to allow display to persist
+		move.l	#80000,d3
 .0009:
 		sub.l	#1,d3
 		bne.s	.0009
-		bsr		KeybdGetCharNoWait	; look for keypress to end
-		tst.b	d1
-		bmi.s	.0010
-		movem.l	(a7)+,d1/d2/d3/a0/a1/a6
+;		bsr		CheckForKey			; look for keypress to end. zf=0 if key
+;		tst.b	d1
+		beq.s	.0010
+		movem.l	(a7)+,d1/d2/d3/a0/a1/a6	; restore regs
+.0015:
 		rts
-		
+
 
 		align	4
 BallImage:
@@ -1969,20 +2018,39 @@ gthx3:
 ; The fast way to clear the screen. Uses the blitter.
 ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-ClearScreen:
+WaitBlit:
+		movem.l	d0/a5,-(a7)
 		lea		VDGREG,a5
-.0003:								
+.0003:
 		move.w	$4AC(a5),d0			; get done status
 		btst	#13,d0				; bit 13 = done bit
 		beq.s	.0003				; branch if not done
+		movem.l	(a7)+,d0/a5
+		rts
+
+ClearScreen:
+		lea		VDGREG,a5
+		bsr		WaitBlit
 		move.l	#BMP_WIDTH*BMP_HEIGHT,$4BC(a5)		; set transfer count  pixels
 		move.w	bkcolor,$4A8(a5)	; set color dark blue
 		move.l	#0,$498(a5)			; set destination address
 		move.l	#BMP_WIDTH,$4A4(a5)		; set destination width
 		move.l	#0,$49C(a5)			; set dst modulo
 		move.w	#%1000000010000000,$4AC(a5)		; enable channel D, start transfer
+		bsr		WaitBlit
+		move.w	#1,$43E(a5)			; access z buffer
+		move.l	#BMP_WIDTH*BMP_HEIGHT/16,$4BC(a5)		; set transfer count  pixels
+		move.w	#$FFFF,$4A8(a5)		; set lowest priority
+		move.w	#$FFFF,$43C(a5)		; z layer = 3
+		move.l	#0,$498(a5)			; set destination address
+		move.l	#BMP_WIDTH,$4A4(a5)		; set destination width
+		move.l	#0,$49C(a5)			; set dst modulo
+		move.w	#%1000000010000000,$4AC(a5)		; enable channel D, start transfer
+		bsr		WaitBlit
+		move.w	#0,$43E(a5)			; access normal buffer again
 
 		; clear virtual screen too
+ClearVirtScreen:
 		moveq	#$20,d0				; d0 = space character
 		move.w	#50*37,d1
 		lea		VirtScreen,a5
@@ -2577,8 +2645,8 @@ AudioInputTest:
 		move.l	#$58000,$640(a5)	; set buffer address ($FF8B0000)
 		move.w	#$4000,$644(a5)		; set buffer length
 		move.w	#1814,$646(a5)		; set period = 22.05kHz
-		move.w	#$1090,$584(a5)		; enable input channel, plot mode
-		move.w	#$0090,$584(a5)		; turn off reset
+		move.w	#$1090,$650(a5)		; enable input channel, plot mode
+		move.w	#$0090,$650(a5)		; turn off reset
 		; should have input now
 
 		; puts a dark blue rectangle on screen

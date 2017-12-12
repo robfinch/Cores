@@ -22,6 +22,8 @@
 //
 // ============================================================================
 //
+//`define MMU 1'b1
+
 module N4V68kSys(cpu_resetn, xclk, led, btnu, btnd, btnl, btnr, btnc, sw,
     kd, kclk,
     TMDS_OUT_clk_p, TMDS_OUT_clk_n, TMDS_OUT_data_p, TMDS_OUT_data_n,
@@ -92,10 +94,10 @@ wire cpu_cyc;
 wire cpu_stb;
 wire cpu_dtack;
 wire cpu_we;
-wire [15:0] cpu_data_o;
+wire [15:0] cpu_data_o, cpu_data_out;
 wire [15:0] cpu_data =  cpu_r_w ? 16'bz : cpu_data_o; //cpu_dd ? cpu_data_o : 16'bz;
-wire [15:0] cpu_data_i;
-wire [1:0] cpu_sel = ~{_cpu_uds,_cpu_lds};
+wire [15:0] cpu_data_i, cpu_data_in;
+wire [1:0] cpu_sel;
 
 //assign _cpu_reset = locked ? 1'b1 : 1'b0;
 
@@ -154,7 +156,7 @@ wire cs_i2c  = cpu_addr[31:4]==28'hFFDC0E0;
 wire cs_i2c2 = cpu_addr[31:4]==28'hFFDC0E1;
 wire cs_gpio = cpu_addr[31:4]==28'hFFDC070;
 
-assign cpu_data_i = cs_boot ? br_data_o :
+assign cpu_data_in = cs_boot ? br_data_o :
                     cs_stack ? stack_data_o :
                     cs_dram ? dram_data_o :
                     (cs_vdg_reg | cs_vdg_ram) ? vdg_data_o :
@@ -186,7 +188,7 @@ BtnDebounce ubdb5 (clk40, btnc, btncd);
 
 always @(posedge cpu_clk)
     if (cs_led & cpu_stb & cpu_we)
-        ledo <= cpu_data_o[7:0];
+        ledo <= cpu_data_out[7:0];
 
 clk_wiz_0 ucg1
 (
@@ -244,27 +246,45 @@ TG68 utg68k
     .drive_data(cpu_dd)
 );
 
+`ifdef MMU
 N4Vmmu ummu1
 (
 	.clk_i(cpu_clk),
-	.cyc_i(~_cpu_as),
-	.stb_i(~(_cpu_uds&_cpu_lds)),
-	.ack_i(~_cpu_dtack),
-	.we_i(~cpu_r_w),
-	.adr_i(cpu_addr1),
-	.dat_i(cpu_data_i),
+
+	.cpu_cyc_i(~_cpu_as),
+	.cpu_stb_i(~(_cpu_uds&_cpu_lds)),
+	.cpu_ack_o(cpu_dtack),
+	.cpu_we_i(~cpu_r_w),
+	.cpu_sel_i(~{_cpu_uds,_cpu_lds}),
+	.cpu_adr_i(cpu_addr1),
+	.cpu_dat_o(cpu_data_i),
+	.cpu_dat_i(cpu_data_o),
+
 	.cyc_o(cpu_cyc),
 	.stb_o(cpu_stb),
-	.ack_o(cpu_dtack),
+	.ack_i(~_cpu_dtack),
 	.we_o(cpu_we),
+	.sel_o(cpu_sel),
 	.adr_o(cpu_addr),
-	.ctrl_dat_i(cpu_data_o)
+	.dat_i(cpu_data_in),
+	.dat_o(cpu_data_out)
 );
+`else
+assign cpu_cyc = ~_cpu_as;
+assign cpu_stb = ~(_cpu_uds&_cpu_lds);
+assign cpu_dtack = ~_cpu_dtack;
+assign cpu_we = ~cpu_r_w;
+assign cpu_sel = ~{_cpu_uds,_cpu_lds};
+assign cpu_addr = cpu_addr1;
+assign cpu_data_i = cpu_data_in;
+assign cpu_data_out = cpu_data_o;
+`endif
 
 bootrom ubr1 (
     .clk_i(cpu_clk),
     .cs_i(cs_boot),
-    .cyc_i(cpu_stb),
+    .cyc_i(cpu_cyc),
+    .stb_i(cpu_stb),
     .ack_o(br_ack),
     .adr_i(cpu_addr[15:0]),
     .dat_o(br_data_o)
@@ -277,17 +297,17 @@ always @(posedge cpu_clk)
 always @(posedge cpu_clk)
     rdy2 <= rdy1 & cs_stack & cpu_stb;
 always @(posedge cpu_clk)
-    rdy3 <= rdy2 & cs_stack & cpu_stb & ~rdy3;
-assign _stack_dtack = ~rdy3;
+    rdy3 <= rdy2 & cs_stack;
+assign _stack_dtack = ~((cs_stack & cpu_stb) ? rdy3 : 1'b0);
 
 
 stackram ustk1
 (
     .clka(cpu_clk),
-    .ena(1'b1),
-    .wea({2{cs_stack & cpu_we}} & ~{_cpu_uds,_cpu_lds}),
+    .ena(cs_stack),
+    .wea({2{cs_stack & cpu_we}} & cpu_sel),
     .addra(cpu_addr[16:1]),
-    .dina(cpu_data_o),
+    .dina(cpu_data_out),
     .douta(stack_data_o)
 );
 
@@ -300,13 +320,13 @@ DDRcontrol2 DDRCtrl1
 
 	// RAM interface
 	.ram_a(cpu_addr[28:1]),
-	.ram_dq_i(cpu_data_o),
+	.ram_dq_i(cpu_data_out),
 	.ram_dq_o(dram_data_o),
 	.ram_cen(~(cs_dram & cpu_stb)),
 	.ram_oen(cpu_we),
 	.ram_wen(~cpu_we),
-	.ram_bhe(_cpu_uds),
-	.ram_ble(_cpu_lds),
+	.ram_bhe(~cpu_sel[1]),
+	.ram_ble(~cpu_sel[0]),
 	.dtack(_dram_dtack),
 	.data_valid(),
       
@@ -337,7 +357,7 @@ AVController uvdg1
 	.we_i(cpu_we),
 	.sel_i(cpu_sel),
 	.adr_i(cpu_addr[23:0]),
-	.dat_i(cpu_data_o),
+	.dat_i(cpu_data_out),
 	.dat_o(vdg_data_o),
 	.cs_i(cs_vdg_reg),
 	.cs_ram_i(cs_vdg_ram),
@@ -365,7 +385,7 @@ random	uprg1
 	.ack_o(rand_ack),
 	.we_i(cpu_we),
 	.adr_i(cpu_addr[3:0]),
-	.dat_i(cpu_data_o),
+	.dat_i(cpu_data_out),
 	.dat_o(rand_data_o)
 );
 
@@ -379,7 +399,7 @@ Ps2Keyboard ukbd1
 	.ack_o(kbd_ack),
 	.we_i(cpu_we),
 	.adr_i(cpu_addr[3:0]),
-	.dat_i(cpu_data_o[7:0]),
+	.dat_i(cpu_sel[1] ? cpu_data_out[15:8] : cpu_data_out[7:0]),
 	.dat_o(kbd_data_o),
 	.kclk(kclk),
 	.kd(kd),
@@ -397,7 +417,7 @@ i2c_master_top ui2c1
 	.wb_rst_i(rst),
 	.arst_i(~rst),
 	.wb_adr_i(cpu_addr[3:1]),
-	.wb_dat_i(cpu_data_o[7:0]),
+	.wb_dat_i(cpu_data_out[7:0]),
 	.wb_dat_o(i2c_data_o),
 	.wb_we_i(cpu_we),
 	.wb_stb_i(cs_i2c & cpu_stb),
@@ -422,7 +442,7 @@ i2c_master_top ui2c2
 	.wb_rst_i(rst),
 	.arst_i(~rst),
 	.wb_adr_i(cpu_addr[3:1]),
-	.wb_dat_i(cpu_data_o[7:0]),
+	.wb_dat_i(cpu_data_out[7:0]),
 	.wb_dat_o(i2c2_data_o),
 	.wb_we_i(cpu_we),
 	.wb_stb_i(cs_i2c2 & cpu_stb),
@@ -462,8 +482,8 @@ reg en_rx;
 
 always @(posedge cpu_clk)
 	if (cs_gpio & cpu_we) begin
-		en_tx <= cpu_data_o[1];
-		en_rx <= cpu_data_o[0];
+		en_tx <= cpu_data_out[1];
+		en_rx <= cpu_data_out[0];
 	end
 assign gpio_ack = cs_gpio & cpu_stb;
 

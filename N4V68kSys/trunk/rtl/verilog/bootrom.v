@@ -22,34 +22,40 @@
 //
 // ============================================================================
 //
-module bootrom(clk_i, cs_i, cyc_i, ack_o, adr_i, dat_o);
+module bootrom(clk_i, cs_i, cyc_i, stb_i, ack_o, adr_i, dat_o);
+parameter pAckStyle = 1'b0;
 input clk_i;
 input cs_i;
 input cyc_i;
+input stb_i;
 output reg ack_o;
 input [15:0] adr_i;
-output [15:0] dat_o;
+output reg [15:0] dat_o;
 
 reg ack1, ack2;
 reg [15:0] rommem [0:32767];
 reg [15:0] radr;
 
-wire cs = cs_i & cyc_i;
+wire cs = cs_i & cyc_i & stb_i;
  
 initial begin
 `include "..\..\software\bootrom\bootrom.vh"
 end
 
 always @(posedge clk_i)
+if (cs)
     radr <= adr_i;
 
-assign dat_o = rommem[radr[15:1]];
+always @(posedge clk_i)
+    dat_o <= rommem[radr[15:1]];
 
 always @(posedge clk_i)
     ack1 <= cs;
 always @(posedge clk_i)
     ack2 <= ack1 & cs;
-always @(posedge clk_i)
-    ack_o <= ack2 & cs & ~ack_o;
+//always @(posedge clk_i)
+//    ack_o <= ack2 & cs & ~ack_o;
+always @*
+    ack_o <= cs ? ack2 : pAckStyle;
 
 endmodule
