@@ -32,9 +32,10 @@ output reg ack_o;
 input [15:0] adr_i;
 output reg [15:0] dat_o;
 
-reg ack1, ack2;
+reg ack1, ack2, ack3;
 reg [15:0] rommem [0:32767];
 reg [15:0] radr;
+reg [15:0] dat;
 
 wire cs = cs_i & cyc_i & stb_i;
  
@@ -43,7 +44,6 @@ initial begin
 end
 
 always @(posedge clk_i)
-if (cs)
     radr <= adr_i;
 
 always @(posedge clk_i)
@@ -53,9 +53,11 @@ always @(posedge clk_i)
     ack1 <= cs;
 always @(posedge clk_i)
     ack2 <= ack1 & cs;
+always @(posedge clk_i)
+    ack3 <= ack2 & cs;
 //always @(posedge clk_i)
 //    ack_o <= ack2 & cs & ~ack_o;
 always @*
-    ack_o <= cs ? ack2 : pAckStyle;
+    ack_o <= cs_i ? ack3 : pAckStyle;
 
 endmodule

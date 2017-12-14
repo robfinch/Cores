@@ -1,25 +1,30 @@
--------------------------------------------------------------------------------
---                                                                 
---  COPYRIGHT (C) 2014, Digilent RO. All rights reserved
---                                                                  
--------------------------------------------------------------------------------
--- FILE NAME      : DDRcontrol.vhd
--- MODULE NAME    : DDR3 Interface Converter with internal XADC
---                  instantiation
--- AUTHOR         : Mihaita Nagy
--- AUTHOR'S EMAIL : mihaita.nagy@digilent.ro
--------------------------------------------------------------------------------
--- REVISION HISTORY
--- VERSION  DATE         AUTHOR             DESCRIPTION
--- 1.0      2014-02-04   Mihaita Nagy       Created
--- 1.1      2014-04-04   Mihaita Nagy       Fixed double registering write bug
--- 1.2      2015-10-07   Thomas Kappenman   Modified RAM to DDR controller to work with multiple bytes
+-- ============================================================================
+--        __
+--   \\__/ o\    (C) 2017  Robert Finch, Waterloo
+--    \  __ /    All rights reserved.
+--     \/_//     robfinch<remove>@finitron.ca
+--       ||
 --
---          2017-11-23	 RF					Modified for MinimigN4V
--------------------------------------------------------------------------------
--- DESCRIPTION    : This module implements a simple Static RAM to ddr3 interface
---                  converter designed to be used with Digilent Nexys4-DDR board
--------------------------------------------------------------------------------
+--	DDRcontrol2.v
+--  - this controller adapted from originally a controller supplied by
+--    Digilent. I've mostly re-written it to use a WISHBONE bus interface
+--    and to use cached data on reads.
+--
+-- This source file is free software: you can redistribute it and/or modify 
+-- it under the terms of the GNU Lesser General Public License as published 
+-- by the Free Software Foundation, either version 3 of the License, or     
+-- (at your option) any later version.                                      
+--                                                                          
+-- This source file is distributed in the hope that it will be useful,      
+-- but WITHOUT ANY WARRANTY; without even the implied warranty of           
+-- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+-- GNU General Public License for more details.                             
+--                                                                          
+-- You should have received a copy of the GNU General Public License        
+-- along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+--
+-- ============================================================================
+--
 library ieee;
 use ieee.std_logic_1164.all;
 
@@ -34,16 +39,15 @@ entity DDRcontrol2 is
       rst_i                : in    std_logic; -- active high system reset
       
       -- RAM interface
-      ram_a                : in    std_logic_vector(27 downto 0);
-      ram_dq_i             : in    std_logic_vector(15 downto 0);
-      ram_dq_o             : out   std_logic_vector(15 downto 0);
-      ram_cen              : in    std_logic;
-      ram_oen              : in    std_logic;
-      ram_wen              : in    std_logic;
-      ram_bhe			   : in    std_logic;
-      ram_ble			   : in    std_logic;
-      dtack				   : out   std_logic;
-      data_valid           : out   std_logic;
+      cs_i              : in    std_logic;
+      cyc_i				: in    std_logic;
+      stb_i				: in	std_logic;
+      sel_i				: in   std_logic_vector(1 downto 0);
+      we_i              : in    std_logic;
+      adr_i             : in    std_logic_vector(27 downto 0);
+      dat_i             : in    std_logic_vector(15 downto 0);
+      dat_o             : out   std_logic_vector(15 downto 0);
+      ack_o				   : out   std_logic;
       
       -- DDR3 interface
       ddr3_addr            : out   std_logic_vector(14 downto 0);
@@ -141,19 +145,20 @@ signal rst                 : std_logic;
 signal rstn                : std_logic;
 signal sreg                : std_logic_vector(1 downto 0);
 
--- ram internal signals
-signal ram_a_int           : std_logic_vector(27 downto 0);
-signal ram_dq_i_int        : std_logic_vector(15 downto 0);
-signal ram_cen_int         : std_logic;
-signal ram_oen_int         : std_logic;
-signal ram_wen_int         : std_logic;
-signal ram_bhe_int		 	: std_logic;
-signal ram_ble_int			: std_logic;
+-- WB internal signals
+signal cyc_i_int			: std_logic;
+signal stb_i_int			: std_logic;
+signal adr_i_int           : std_logic_vector(27 downto 0);
+signal dat_i_int        : std_logic_vector(15 downto 0);
+signal cs_i_int         : std_logic;
+signal we_i_int         : std_logic;
+signal sel_i_int            : std_logic_vector(1 downto 0);
 
 signal last_read_adr        : std_logic_vector(27 downto 0);
 signal last_read_adr_valid : std_logic;
 signal last_data           : std_logic_vector(127 downto 0);
 signal dtack_int           : std_logic;
+signal ack                 : std_logic;
 
 -- ddr user interface signals
 signal mem_addr            : std_logic_vector(28 downto 0); -- address for current request
@@ -183,7 +188,6 @@ attribute ASYNC_REG of sreg         : signal is "TRUE";
 -- Module Implementation
 ------------------------------------------------------------------------
 begin
-   data_valid<=mem_rd_data_valid;
 ------------------------------------------------------------------------
 -- Registering the active-low reset for the MIG component
 ------------------------------------------------------------------------
@@ -246,13 +250,13 @@ begin
    REG_IN: process(mem_ui_clk)
    begin
       if rising_edge(mem_ui_clk) then
-         ram_a_int <= ram_a;
-         ram_dq_i_int <= ram_dq_i;
-         ram_cen_int <= ram_cen;
-         ram_oen_int <= ram_oen;
-         ram_wen_int <= ram_wen;
-         ram_bhe_int <= ram_bhe;
-         ram_ble_int <= ram_ble;
+         cs_i_int <= cs_i;
+      	 cyc_i_int <= cyc_i;
+      	 stb_i_int <= stb_i;
+         sel_i_int <= sel_i;
+         adr_i_int <= adr_i;
+         dat_i_int <= dat_i;
+         we_i_int <= we_i;
       end if;
    end process REG_IN;
    
@@ -272,18 +276,18 @@ begin
    end process SYNC_PROCESS;
 
 -- Next state logic
-   NEXT_STATE_DECODE: process(cState, calib_complete, ram_cen_int, 
-   mem_rdy, mem_wdf_rdy, ram_wen_int, ram_oen_int)
+   NEXT_STATE_DECODE: process(cState, calib_complete, cs_i_int, cyc_i_int, stb_i_int,
+   mem_rdy, mem_wdf_rdy, we_i_int)
    begin
       nState <= cState;
       case(cState) is
          -- If calibration is done successfully and CEN is
          -- deasserted then start a new transaction
          when stIdle =>
-            if ram_cen_int = '0' and 
+            if cs_i_int = '1' and cyc_i_int = '1' and stb_i_int = '1' and
                calib_complete = '1' then
                -- if repeating a read of the same address just go to the wait cen state
-               if ram_wen_int = '1' and last_read_adr_valid = '1' and ram_a_int(27 downto 3) = last_read_adr(27 downto 3) then
+               if we_i_int = '0' and last_read_adr_valid = '1' and adr_i_int(27 downto 3) = last_read_adr(27 downto 3) then
                    nState <= stReRead;
                else
                    nState <= stPreset;
@@ -294,9 +298,9 @@ begin
          -- this additional state to make sure that all input
          -- transitions are fully settled and registered
          when stPreset =>
-            if ram_wen_int = '0' then
+            if we_i_int = '1' then
                nState <= stSendData;
-            elsif ram_oen_int = '0' then
+            else
                nState <= stSetCmdRd;
             end if;
          -- In a write transaction the data it written first
@@ -323,11 +327,11 @@ begin
          -- wait for the external CEN to signal transaction
          -- end
          when stWaitCen =>
-            if ram_cen_int = '1' then
+            if cs_i_int = '0' then
                nState <= stIdle;
             end if;
          when stReRead =>
-            if ram_cen_int = '1' then
+            if cs_i_int = '0' then
                nState <= stIdle;
             end if;
          when others => nState <= stIdle;            
@@ -373,12 +377,12 @@ begin
             if cState = stWaitCen then
                 -- read cycle: wait for rd_data_valid
                 -- write cyle: done already
-                if ram_wen_int='1' then
+                if we_i_int='0' then
                     if mem_rd_data_valid = '1' then
                          dtack_int <= '0';
                     end if;
                     last_read_adr_valid <= mem_rd_data_valid;
-                    last_read_adr <= ram_a_int;
+                    last_read_adr <= adr_i_int;
                 else
                     dtack_int <= '0';
                     last_read_adr_valid <= '0';
@@ -391,19 +395,27 @@ begin
    		end if;
    end process DTACK_CTL;
 
-    DTACKO: process(cpu_clk)
+    ACKO: process(cpu_clk)
     begin
         if rising_edge(cpu_clk) then
             if rst_i = '1' then
-                dtack <= '1';
-            elsif ram_cen_int = '1' then
-                dtack <= '1';
+                ack <= '0';
+            elsif stb_i = '0' then
+                ack <= '0';
             elsif dtack_int='0' then
-                dtack <= '0';
+                ack <= '1';
             end if;
         end if;
-            
-    end process DTACKO;
+    end process ACKO;
+    
+    ACKOO: process(stb_i,cs_i,ack)
+    begin
+    	if stb_i = '1' and cs_i = '1' then
+    		ack_o <= ack;
+    	else
+    		ack_o <= '0';
+    	end if;
+    end process ACKOO;
 
 ------------------------------------------------------------------------
 -- Decoding the least significant 3 bits of the address and creating
@@ -413,31 +425,31 @@ begin
    begin
       if rising_edge(mem_ui_clk) then
          if cState = stPreset then
-         	case(ram_a_int(2 downto 0)&ram_bhe_int&ram_ble_int) is
-         	when "00000" => mem_wdf_mask <= "1111111111111100";
-			when "00001" =>	mem_wdf_mask <= "1111111111111101";
-         	when "00010" =>	mem_wdf_mask <= "1111111111111110";
-         	when "00100" => mem_wdf_mask <= "1111111111110011";
-			when "00101" =>	mem_wdf_mask <= "1111111111110111";
-         	when "00110" =>	mem_wdf_mask <= "1111111111111011";
-         	when "01000" => mem_wdf_mask <= "1111111111001111";
-			when "01001" =>	mem_wdf_mask <= "1111111111011111";
-         	when "01010" =>	mem_wdf_mask <= "1111111111101111";
-         	when "01100" => mem_wdf_mask <= "1111111100111111";
-			when "01101" =>	mem_wdf_mask <= "1111111101111111";
-         	when "01110" =>	mem_wdf_mask <= "1111111110111111";
-         	when "10000" => mem_wdf_mask <= "1111110011111111";
-			when "10001" =>	mem_wdf_mask <= "1111110111111111";
-         	when "10010" =>	mem_wdf_mask <= "1111111011111111";
-         	when "10100" => mem_wdf_mask <= "1111001111111111";
-			when "10101" =>	mem_wdf_mask <= "1111011111111111";
-         	when "10110" =>	mem_wdf_mask <= "1111101111111111";
-         	when "11000" => mem_wdf_mask <= "1100111111111111";
-			when "11001" =>	mem_wdf_mask <= "1101111111111111";
-         	when "11010" =>	mem_wdf_mask <= "1110111111111111";
-         	when "11100" => mem_wdf_mask <= "0011111111111111";
-			when "11101" =>	mem_wdf_mask <= "0111111111111111";
-         	when "11110" =>	mem_wdf_mask <= "1011111111111111";
+         	case(adr_i_int(2 downto 0) & sel_i_int) is
+         	when "00011" => mem_wdf_mask <= "1111111111111100";
+			when "00010" =>	mem_wdf_mask <= "1111111111111101";
+         	when "00001" =>	mem_wdf_mask <= "1111111111111110";
+         	when "00111" => mem_wdf_mask <= "1111111111110011";
+			when "00110" =>	mem_wdf_mask <= "1111111111110111";
+         	when "00101" =>	mem_wdf_mask <= "1111111111111011";
+         	when "01011" => mem_wdf_mask <= "1111111111001111";
+			when "01010" =>	mem_wdf_mask <= "1111111111011111";
+         	when "01001" =>	mem_wdf_mask <= "1111111111101111";
+         	when "01111" => mem_wdf_mask <= "1111111100111111";
+			when "01110" =>	mem_wdf_mask <= "1111111101111111";
+         	when "01101" =>	mem_wdf_mask <= "1111111110111111";
+         	when "10011" => mem_wdf_mask <= "1111110011111111";
+			when "10010" =>	mem_wdf_mask <= "1111110111111111";
+         	when "10001" =>	mem_wdf_mask <= "1111111011111111";
+         	when "10111" => mem_wdf_mask <= "1111001111111111";
+			when "10110" =>	mem_wdf_mask <= "1111011111111111";
+         	when "10101" =>	mem_wdf_mask <= "1111101111111111";
+         	when "11011" => mem_wdf_mask <= "1100111111111111";
+			when "11010" =>	mem_wdf_mask <= "1101111111111111";
+         	when "11001" =>	mem_wdf_mask <= "1110111111111111";
+         	when "11111" => mem_wdf_mask <= "0011111111111111";
+			when "11110" =>	mem_wdf_mask <= "0111111111111111";
+         	when "11101" =>	mem_wdf_mask <= "1011111111111111";
          	when others =>  mem_wdf_mask <= "1111111111111111";
             end case;
          end if;
@@ -451,14 +463,14 @@ begin
    begin
       if rising_edge(mem_ui_clk) then
          if cState = stPreset then
-            mem_wdf_data <= ram_dq_i_int(15 downto 0) &
-            				ram_dq_i_int(15 downto 0) &
-            				ram_dq_i_int(15 downto 0) &
-            				ram_dq_i_int(15 downto 0) &
-            				ram_dq_i_int(15 downto 0) &
-            				ram_dq_i_int(15 downto 0) &
-            				ram_dq_i_int(15 downto 0) &
-            				ram_dq_i_int(15 downto 0);
+            mem_wdf_data <= dat_i_int(15 downto 0) &
+            				dat_i_int(15 downto 0) &
+            				dat_i_int(15 downto 0) &
+            				dat_i_int(15 downto 0) &
+            				dat_i_int(15 downto 0) &
+            				dat_i_int(15 downto 0) &
+            				dat_i_int(15 downto 0) &
+            				dat_i_int(15 downto 0);
          end if;
       end if;
    end process WR_DATA_ADDR;
@@ -467,13 +479,13 @@ begin
    begin
       if rising_edge(mem_ui_clk) then
          if cState = stPreset then
-            mem_addr <= ram_a_int(27 downto 3) & "0000";
+            mem_addr <= adr_i_int(27 downto 3) & "0000";
          end if;
       end if;
    end process WR_ADDR;
 
 ------------------------------------------------------------------------
--- Mask and output the read data from the FIFO
+-- select output data
 ------------------------------------------------------------------------
    RD_DATA: process(mem_ui_clk)
    begin
@@ -481,26 +493,26 @@ begin
          if cState = stWaitCen and mem_rd_data_valid = '1' and 
             mem_rd_data_end = '1' then
             last_data <= mem_rd_data;
-            case(ram_a_int(2 downto 0)) is
-            when "000" => ram_dq_o <= mem_rd_data(15 downto 0);
-            when "001" => ram_dq_o <= mem_rd_data(31 downto 16);
-            when "010" => ram_dq_o <= mem_rd_data(47 downto 32);
-            when "011" => ram_dq_o <= mem_rd_data(63 downto 48);
-            when "100" => ram_dq_o <= mem_rd_data(79 downto 64);
-            when "101" => ram_dq_o <= mem_rd_data(95 downto 80);
-            when "110" => ram_dq_o <= mem_rd_data(111 downto 96);
-            when others => ram_dq_o <= mem_rd_data(127 downto 112);
+            case(adr_i_int(2 downto 0)) is
+            when "000" => dat_o <= mem_rd_data(15 downto 0);
+            when "001" => dat_o <= mem_rd_data(31 downto 16);
+            when "010" => dat_o <= mem_rd_data(47 downto 32);
+            when "011" => dat_o <= mem_rd_data(63 downto 48);
+            when "100" => dat_o <= mem_rd_data(79 downto 64);
+            when "101" => dat_o <= mem_rd_data(95 downto 80);
+            when "110" => dat_o <= mem_rd_data(111 downto 96);
+            when others => dat_o <= mem_rd_data(127 downto 112);
             end case;
          elsif cState = stReRead then
-             case(ram_a_int(2 downto 0)) is
-             when "000" => ram_dq_o <= last_data(15 downto 0);
-             when "001" => ram_dq_o <= last_data(31 downto 16);
-             when "010" => ram_dq_o <= last_data(47 downto 32);
-             when "011" => ram_dq_o <= last_data(63 downto 48);
-             when "100" => ram_dq_o <= last_data(79 downto 64);
-             when "101" => ram_dq_o <= last_data(95 downto 80);
-             when "110" => ram_dq_o <= last_data(111 downto 96);
-             when others => ram_dq_o <= last_data(127 downto 112);
+             case(adr_i_int(2 downto 0)) is
+             when "000" => dat_o <= last_data(15 downto 0);
+             when "001" => dat_o <= last_data(31 downto 16);
+             when "010" => dat_o <= last_data(47 downto 32);
+             when "011" => dat_o <= last_data(63 downto 48);
+             when "100" => dat_o <= last_data(79 downto 64);
+             when "101" => dat_o <= last_data(95 downto 80);
+             when "110" => dat_o <= last_data(111 downto 96);
+             when others => dat_o <= last_data(127 downto 112);
              end case;
          end if;
       end if;

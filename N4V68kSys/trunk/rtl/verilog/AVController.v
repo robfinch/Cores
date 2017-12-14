@@ -62,6 +62,8 @@ module AVController(
 	clk, hSync, vSync, blank_o, rgb,
 	aud0_out, aud1_out, aud2_out, aud3_out, aud_in
 );
+parameter pAckStyle = 1'b0;
+
 // Wishbone slave port
 input rst_i;
 input clk_i;
@@ -251,8 +253,8 @@ reg [15:0] ctrl;
 reg [1:0] lowres = 2'b01;
 reg [19:0] bmpBase = 20'h00000;		// base address of bitmap
 reg [19:0] charBmpBase = 20'h5C000;	// base address of character bitmaps
-reg [11:0] hstart = 12'hEFD;		// -261
-reg [11:0] vstart = 12'hFE0;		// -41
+reg [11:0] hstart = 12'hEFF;		// -261
+reg [11:0] vstart = 12'hFE6;		// -41
 reg [11:0] hpos;
 reg [11:0] vpos;
 wire [11:0] vctr;
@@ -1096,7 +1098,7 @@ always @(posedge clk_i)
 always @(posedge clk_i)
 	rdy2 <= rdy & cs_reg & ~reg_copper;
 always @*	//(posedge clk_i)
-	ack_o <= cs_ram ? ack : cs_reg ? rdy2 : 1'b0;
+	ack_o <= cs_ram_i ? ack : cs_i ? rdy2 : pAckStyle;
 
 // Widen the eof pulse so it can be seen by clk_i
 reg [11:0] vrst;
@@ -1114,6 +1116,7 @@ if (rst_i) begin
 	state <= ST_IDLE;
 	aud_test <= 24'h0;
 	bltCtrl <= 16'b0010_0000_0000_0000;
+	ack <= pAckStyle;
 end
 else begin
 reg_copper <= `FALSE;
@@ -1275,21 +1278,26 @@ if (reg_cs|reg_copper) begin
 		default:	;	// do nothing
 		endcase
 	end
-	else begin
-		case(reg_adr[10:1])
-		10'b0010000110: dat_o <= collision[31:16];
-		10'b0010000111: dat_o <= collision[15:0];
-		10'b1000010110:	dat_o <= {11'h00,cmdq_ndx};
-		10'b1001010110:	dat_o <= bltCtrl;
-		10'b1011000001:	dat_o <= irq_status;
-		10'b1111110000:	dat_o <= {4'h0,hpos};
-		10'b1111110001:	dat_o <= {4'h0,vpos};
-        10'b1111111110: dat_o <= cap[31:16];
-        10'b1111111111: dat_o <= cap[15:0];   
-		default:	dat_o <= srdo;
-		endcase
-	end
 end
+if (cs_ram) begin
+    if (zbuf)
+    	dat_o <= zbram_data_o;
+    else
+    	dat_o <= ram_data_o;
+end
+else if(cs_reg)
+	case(adr_i[10:1])
+	10'b0010000110: dat_o <= collision[31:16];
+	10'b0010000111: dat_o <= collision[15:0];
+	10'b1000010110:	dat_o <= {11'h00,cmdq_ndx};
+	10'b1001010110:	dat_o <= bltCtrl;
+	10'b1011000001:	dat_o <= irq_status;
+	10'b1111110000:	dat_o <= {4'h0,hpos};
+	10'b1111110001:	dat_o <= {4'h0,vpos};
+	10'b1111111110: dat_o <= cap[31:16];
+	10'b1111111111: dat_o <= cap[15:0];   
+	default:	dat_o <= srdo;
+	endcase
 
 wrtx <= 1'b0;
 wrA <= 1'b0;
@@ -1603,23 +1611,27 @@ ST_CMD:
 
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 // Standard RAM read/write
+// - ram reads take two cycles hence the extra RW2 state
+// - on a write the ack signal can go high a cycle sooner.
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
 ST_RW:
 	begin
-        ack <= `HIGH;
+		if (|ram_we)
+			ack <= `HIGH;
 	    ram_ce <= `LOW;
         ram_we <= {2{`LOW}};
         zbram_we <= {2{`LOW}};
-        if (zbuf)
-        	dat_o <= zbram_data_o;
-        else
-        	dat_o <= ram_data_o;
+        state <= ST_RW2;
+    end
+ST_RW2:
+	begin
+		ack <= `HIGH;
         if (~cs_ram) begin
             ack <= `LOW;
             state <= ST_IDLE;
         end
-    end
+	end
 
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 // Audio DMA states
@@ -2162,7 +2174,7 @@ DL_SETPIXEL:
 		ram_addr <= zbuf ? ma[19:3] : ma;
 		if (zbuf) begin
 			zbram_we <= 2'b11;
-			ram_data_i <= zbram_data_o & ~{2'b11 << {ma[2:0],1'b0}} | zlayer << {ma[2:0],1'b0};
+			ram_data_i <= zbram_data_o & ~{2'b11 << {ma[2:0],1'b0}} | (zlayer << {ma[2:0],1'b0});
 		end
 		else begin
 			ram_we <= 2'b11;

@@ -1,66 +1,66 @@
 
 Pass 1
 File: bootrom.asm
-asm68 V5.6  (c) 1995-2017 Robert Finch - 680xx cross assembler
+asm68 V5.8  (c) 1995-2017 Robert Finch - 680xx cross assembler
 
 File: C:\cores5\N4V68kSys\software\bootrom\MyTinyB.asm
-asm68 V5.6  (c) 1995-2017 Robert Finch - 680xx cross assembler
+asm68 V5.8  (c) 1995-2017 Robert Finch - 680xx cross assembler
 
 File: bootrom.asm
 
 Pass 2
 File: bootrom.asm
-asm68 V5.6  (c) 1995-2017 Robert Finch - 680xx cross assembler
+asm68 V5.8  (c) 1995-2017 Robert Finch - 680xx cross assembler
 
 File: C:\cores5\N4V68kSys\software\bootrom\MyTinyB.asm
-asm68 V5.6  (c) 1995-2017 Robert Finch - 680xx cross assembler
+asm68 V5.8  (c) 1995-2017 Robert Finch - 680xx cross assembler
 
 File: bootrom.asm
 
 Pass 3
 File: bootrom.asm
-asm68 V5.6  (c) 1995-2017 Robert Finch - 680xx cross assembler
+asm68 V5.8  (c) 1995-2017 Robert Finch - 680xx cross assembler
 
 File: C:\cores5\N4V68kSys\software\bootrom\MyTinyB.asm
-asm68 V5.6  (c) 1995-2017 Robert Finch - 680xx cross assembler
+asm68 V5.8  (c) 1995-2017 Robert Finch - 680xx cross assembler
 
 File: bootrom.asm
 
 Pass 4
 File: bootrom.asm
-asm68 V5.6  (c) 1995-2017 Robert Finch - 680xx cross assembler
+asm68 V5.8  (c) 1995-2017 Robert Finch - 680xx cross assembler
 
 File: C:\cores5\N4V68kSys\software\bootrom\MyTinyB.asm
-asm68 V5.6  (c) 1995-2017 Robert Finch - 680xx cross assembler
+asm68 V5.8  (c) 1995-2017 Robert Finch - 680xx cross assembler
 
 File: bootrom.asm
 
 Pass 5
 File: bootrom.asm
-asm68 V5.6  (c) 1995-2017 Robert Finch - 680xx cross assembler
+asm68 V5.8  (c) 1995-2017 Robert Finch - 680xx cross assembler
 
 File: C:\cores5\N4V68kSys\software\bootrom\MyTinyB.asm
-asm68 V5.6  (c) 1995-2017 Robert Finch - 680xx cross assembler
+asm68 V5.8  (c) 1995-2017 Robert Finch - 680xx cross assembler
 
 File: bootrom.asm
 
 Pass 6
 File: bootrom.asm
-asm68 V5.6  (c) 1995-2017 Robert Finch - 680xx cross assembler
+asm68 V5.8  (c) 1995-2017 Robert Finch - 680xx cross assembler
 
 File: C:\cores5\N4V68kSys\software\bootrom\MyTinyB.asm
-asm68 V5.6  (c) 1995-2017 Robert Finch - 680xx cross assembler
+asm68 V5.8  (c) 1995-2017 Robert Finch - 680xx cross assembler
 
 File: bootrom.asm
 
 Pass 7
 File: bootrom.asm
-asm68 V5.6  (c) 1995-2017 Robert Finch - 680xx cross assembler
+asm68 V5.8  (c) 1995-2017 Robert Finch - 680xx cross assembler
 
- E2003 (line 2280): undefined symbol 'AUXIN'
- E2028 (line 2280): branch out of range - displacement 3E7CC
+ E2003 (line 2285): undefined symbol 'AUXIN'
+ E2028 (line 2285): branch out of range - displacement 3E7B4
 File: C:\cores5\N4V68kSys\software\bootrom\MyTinyB.asm
-asm68 V5.6  (c) 1995-2017 Robert Finch - 680xx cross assembler
+asm68 V5.8  (c) 1995-2017 Robert Finch - 680xx cross assembler
 
 File: bootrom.asm
 Errors: 2

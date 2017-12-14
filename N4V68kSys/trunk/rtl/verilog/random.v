@@ -94,12 +94,15 @@ output reg ack_o;
 input we_i;
 input [3:0] adr_i;
 input [15:0] dat_i;
-output [15:0] dat_o;
-reg [15:0] dat_o;
+output reg [15:0] dat_o;
+parameter pAckStyle = 1'b0;
 
+reg ack;
 wire cs = cs_i && cyc_i && stb_i;
 always @(posedge clk_i)
-	ack_o <= cs & ~ack_o;
+	ack <= cs;
+always @*
+	ack_o <= cs_i ? ack : pAckStyle;
 
 reg [9:0] stream;
 reg [31:0] m_z [0:1023];
@@ -128,22 +131,19 @@ end
 
 // Register read path
 //
-always @*
-	if (cs)
-		case(adr_i[3:1])
-		3'd0:	dat_o <= out[31:16];
-		3'd1:	dat_o <= out[15: 0];
-		3'd2:	dat_o <= 16'h4321;
-		3'd3:	dat_o <= {6'h0,stream};
+always @(posedge clk_i)
+	case(adr_i[3:1])
+	3'd0:	dat_o <= out[31:16];
+	3'd1:	dat_o <= out[15: 0];
+	3'd2:	dat_o <= 16'h4321;
+	3'd3:	dat_o <= {6'h0,stream};
 // Uncomment these for register read-back
 //		3'd4:	dat_o <= m_z[31:16];
 //		3'd5:	dat_o <= m_z[15: 0];
 //		3'd6:	dat_o <= m_w[31:16];
 //		3'd7:	dat_o <= m_w[15: 0];
-		default:	dat_o <= 16'h0000;
-		endcase
-	else
-		dat_o <= 16'h0000;
+	default:	dat_o <= 16'h0000;
+	endcase
 
 // Register write path
 //

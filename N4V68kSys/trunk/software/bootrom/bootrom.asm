@@ -167,11 +167,14 @@ CmdBuf			EQU	$10800
 CmdBufEnd		EQU	$10850
 
 
+	code
 	org		$FFFC0000
+	bra.s	Start
+	align	4
 
 ;------------------------------------------------------------------------------
 
-	dc.l	$FF401000	; initial SSP
+;	dc.l	$FF401000	; initial SSP
 	dc.l	Start		; initial PC
 	
 ;------------------------------------------------------------------------------
@@ -182,6 +185,8 @@ fpga_version:
 	Start:
 ;------------------------------------------------------------------------------
 		move.w	#$A1A1,leds		; diagnostics
+		move.l	#$FF401000,sp	; set stack pointer
+		ori.b	#$80,ccr		; select big endian mode for lword data access
 
 		; SIM croaked because the upper half of D1 was undefined. This caused
 		; problems with a dbra instruction. So the contents of all the registers
@@ -201,7 +206,7 @@ fpga_version:
 		clr.l	A4
 		clr.l	A5
 		clr.l	A6
-		move.l	A7,usp
+;		move.l	A7,usp
 
 		; setup vector table
 		;
@@ -578,9 +583,9 @@ dspj1:
 		clr.l	d1				; clear upper bits of d1
 		move.b	(a1)+,d1		; move string char into d1
 		cmpi.b	#0,d1			; is it end of string ?
-		beq		dsret			
+		beq.s	dsret			
 		bsr		DisplayChar		; display character
-		bra		dspj1			; go back for next character
+		bra.s	dspj1			; go back for next character
 dsret:
 		movem.l	(a7)+,d0/d1/a1
 		rts
@@ -881,7 +886,7 @@ DispChar:
 		ext.w	d1
 		asl.w	#3,d1
 		move.w	d1,$428(a6)			; set y pos
-;		move.w	#$0707,$42A(a6)		; set font x,y extent (defunct - in font table)
+		move.w	#$0707,$42A(a6)		; set font x,y extent (defunct - in font table)
 		move.w	#0,$42E(a6)			; pulse character queue write signal
 		movem.l	(a7)+,d1/a6
 		rts
@@ -1133,7 +1138,7 @@ BouncingBalls:
 .0008:
 		move.w	(a2,d2.w),d3		; get dx
 		add.w	d3,4(a0,d2.w)		; add to hpos
-		move.w	(a3,d2.w),d3		l get dy
+		move.w	(a3,d2.w),d3		; get dy
 		add.w	d3,6(a0,d2.w)		; add to vpos
 		cmp.w	#BMP_WIDTH+128,4(a0,d2.w)	; X hit limit ?
 		blo.s	.0004
