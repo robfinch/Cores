@@ -5,7 +5,7 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	FT68000.v
+//	FT68000x16.v
 //		
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -108,7 +108,7 @@
 // 2 MULTS
 // 8 BRAMs
 
-module FT68000(rst_i, rst_o, clk_i, nmi_i, ipl_i, lock_o, cyc_o, stb_o, ack_i, err_i, we_o, sel_o, fc_o, adr_o, dat_i, dat_o);
+module FT68000x16(rst_i, rst_o, clk_i, nmi_i, ipl_i, lock_o, bsz_i, cyc_o, stb_o, ack_i, err_i, we_o, sel_o, fc_o, adr_o, dat_i, dat_o);
 parameter IFETCH = 8'd1;
 parameter DECODE = 8'd2;
 parameter FETCH_BYTE = 8'd20;
@@ -259,7 +259,11 @@ parameter SDT2 = 8'd179;
 
 parameter SUB = 8'd180;
 parameter SUB1 = 8'd181;
- 
+parameter DIV = 8'd182;
+parameter DIV1 = 8'd183;
+parameter DIV2 = 8'd184;
+parameter BERR = 8'd185;
+
 parameter S = 1'b0;
 parameter D = 1'b1;
 
@@ -268,6 +272,7 @@ output reg rst_o;
 input clk_i;
 input nmi_i;
 input [2:0] ipl_i;
+input [1:0] bsz_i;
 output lock_o;
 reg lock_o;
 output cyc_o;
@@ -278,15 +283,15 @@ input ack_i;
 input err_i;
 output we_o;
 reg we_o;
-output [3:0] sel_o;
-reg [3:0] sel_o;
+output [1:0] sel_o;
+reg [1:0] sel_o;
 output [2:0] fc_o;
 reg [2:0] fc_o;
 output [31:0] adr_o;
 reg [31:0] adr_o;
-input [31:0] dat_i;
-output [31:0] dat_o;
-reg [31:0] dat_o;
+input [15:0] dat_i;
+output [15:0] dat_o;
+reg [15:0] dat_o;
 
 reg em;							// emulation mode
 reg [15:0] ir;
@@ -294,6 +299,7 @@ reg [7:0] state;
 reg [7:0] state2;
 reg [7:0] ret_state;
 reg [8:0] tr, otr;
+reg stack_tr;
 reg fork_task;
 reg [31:0] d0;
 reg [31:0] d1;
@@ -348,8 +354,9 @@ wire [31:0] spo;
 wire [31:0] flagso;
 wire [31:0] pco;
 reg cf,vf,nf,zf,xf,sf,tf;
+reg endian;
 reg [2:0] im;
-wire [15:0] sr = {tf,1'b0,sf,2'b00,im,3'b000,xf,nf,zf,vf,cf};
+wire [15:0] sr = {tf,1'b0,sf,2'b00,im,endian,2'b00,xf,nf,zf,vf,cf};
 reg [31:0] pc;
 reg [31:0] ssp,usp;
 reg [31:0] disp;
@@ -562,6 +569,31 @@ BCDSub u3
 	.c(bcdnegoc)
 );
 
+reg div_ld;
+reg divs;
+reg [31:0] div_a;
+reg [31:0] div_b;
+wire [31:0] div_qo;
+wire [31:0] div_ro;
+wire dvByZr;
+wire div_done;
+
+FT68000_divider udiv1
+(
+	.rst(rst_i),
+	.clk(clk_i),
+	.ld(div_ld),
+	.abort(1'b0),
+	.sgn(divs),
+	.sgnus(1'b0),
+	.a(div_a),
+	.b(div_b),
+	.qo(div_qo),
+	.ro(div_ro),
+	.dvByZr(dvByZr),
+	.done(div_done),
+	.idle()
+);
 
 always @(ir or cf or zf or nf or vf)
 case(ir[15:8])
@@ -600,16 +632,15 @@ case(ir[15:8])
 default:	takb = 1'b1;
 endcase
 
-wire [15:0] iri = pc[1] ? dat_i[31:16] : dat_i[15:0];
-
 always @(posedge clk_i)
 if (rst_i) begin
 	em <= 1'b0;
+	endian <= 1'b0;
 	lock_o <= 1'b0;
 	cyc_o <= 1'b0;
 	stb_o <= 1'b0;
 	we_o <= 1'b0;
-	sel_o <= 4'b0000;
+	sel_o <= 2'b00;
 	fc_o <= 3'b000;
 	adr_o <= 32'd0;
 	dat_o <= 32'd0;
@@ -721,7 +752,7 @@ IFETCH:
 			fc_o <= {sf,2'b10};
 			cyc_o <= 1'b1;
 			stb_o <= 1'b1;
-			sel_o <= pc[1] ? 4'b1100 : 4'b0011;
+			sel_o <= 2'b11;
 			adr_o <= pc;
 		end
 	end
@@ -729,11 +760,11 @@ IFETCH:
 		cyc_o <= 1'b0;
 		stb_o <= 1'b0;
 		sel_o <= 2'b00;
-		ir <= iri;
+		ir <= dat_i;
 		pc <= pc + 32'd2;
-		mmm <= iri[5:3];
-		rrr <= iri[2:0];
-		rrrr <= iri[3:0];
+		mmm <= dat_i[5:3];
+		rrr <= dat_i[2:0];
+		rrrr <= dat_i[3:0];
 		state <= DECODE;
 	end
 
@@ -781,13 +812,13 @@ DECODE:
 //-----------------------------------------------------------------------------
 //-----------------------------------------------------------------------------
 	4'h4:
-		casex(ir[11:8])
+		casez(ir[11:8])
 		4'h0:	case(sz)
 				2'b00:	fs_data(mmm,rrr,FETCH_BYTE,NEGX,D);
 				2'b01:	fs_data(mmm,rrr,FETCH_WORD,NEGX,D);
 				2'b10:	fs_data(mmm,rrr,FETCH_LWORD,NEGX,D);
 				endcase
-		4'bxxx1:
+		4'b???1:
 			if (sz==2'b11)	// LEA
 				fs_data(mmm,rrr,FETCH_NOP,LEA,S);
 				
@@ -807,11 +838,11 @@ DECODE:
 				end
 		4'h4:
 				begin
-					casex(ir[7:4])
-					4'b00xx:	fs_data(mmm,rrr,FETCH_BYTE,NEG,D);
-					4'b01xx:	fs_data(mmm,rrr,FETCH_WORD,NEG,D);
-					4'b10xx:	fs_data(mmm,rrr,FETCH_LWORD,NEG,D);
-					4'b11xx:	// MOVE <src>,ccr
+					casez(ir[7:4])
+					4'b00??:	fs_data(mmm,rrr,FETCH_BYTE,NEG,D);
+					4'b01??:	fs_data(mmm,rrr,FETCH_WORD,NEG,D);
+					4'b10??:	fs_data(mmm,rrr,FETCH_LWORD,NEG,D);
+					4'b11??:	// MOVE <src>,ccr
 						begin
 							fs_data(mmm,rrr,FETCH_WORD,MOVE2CCR,S);
 						end
@@ -819,8 +850,8 @@ DECODE:
 				end
 		4'h6:
 				begin
-					casex(ir[7:4])
-					4'b11xx:	// MOVE <src>,sr
+					casez(ir[7:4])
+					4'b11??:	// MOVE <src>,sr
 						begin
 							fs_data(mmm,rrr,FETCH_WORD,MOVE2SR,S);
 						end
@@ -835,8 +866,8 @@ DECODE:
 				end
 		4'h8:
 				begin
-					casex(ir[7:4])
-					4'b00xx:		// NBCD
+					casez(ir[7:4])
+					4'b00??:		// NBCD
 						fs_data(mmm,rrr,FETCH_BYTE,ABCD1,D);
 					4'h4:	begin	// 484x		SWAP
 								cf <= 1'b0;
@@ -847,7 +878,7 @@ DECODE:
 								Rt <= {1'b0,rrr};
 								rfwrL <= 1'b1;
 							end
-					4'b01xx:		// PEA
+					4'b01??:		// PEA
 						state <= PEA1;
 					4'h8:	if (!ir[3]) begin	// 488x		EXT.W
 								cf <= 1'b0;
@@ -896,7 +927,7 @@ DECODE:
 				ret_state <= MOVEM_s2Xn;
 				end
 		4'hE:
-				casex(ir[7:4])
+				casez(ir[7:4])
 				4'h4:	state <= TRAP;							// TRAP
 				4'h5:
 						begin
@@ -921,8 +952,8 @@ DECODE:
 							usp <= rfoAn;
 						end
 					end
-				4'b11xx:	fs_data(mmm,rrr,FETCH_LWORD,JMP1,D);	// JMP
-				4'b10xx:	fs_data(mmm,rrr,FETCH_LWORD,JSR1,D);	// JSR
+				4'b11??:	fs_data(mmm,rrr,FETCH_LWORD,JMP1,D);	// JMP
+				4'b10??:	fs_data(mmm,rrr,FETCH_LWORD,JSR1,D);	// JSR
 				4'h7:
 					case(ir[3:0])
 					4'h0:   begin state <= IFETCH; rst_o <= 1'b1; rst_cnt <= 5'd10; end  // 4E70 RESET
@@ -940,7 +971,7 @@ DECODE:
 //-----------------------------------------------------------------------------
 	4'h5:
 		begin
-			casex(ir[7:4])
+			casez(ir[7:4])
 			4'b1100:					// DBRA
 				if (takb) begin
 					state <= FETCH_IMM16;
@@ -950,7 +981,7 @@ DECODE:
 					pc <= pc + 32'd2;	// skip over displacement
 					state <= IFETCH;
 				end
-			4'b11xx:					// Scc
+			4'b11??:					// Scc
 				begin
 					resL <= {32{!takb}};
 					resW <= {16{!takb}};
@@ -1012,18 +1043,23 @@ DECODE:
 			state <= IFETCH;
 		end
 //-----------------------------------------------------------------------------
-// OR / SBCD
+// OR / SBCD / DIV
 //-----------------------------------------------------------------------------
 	4'h8:
 		begin
-			casex(ir)
-			16'b1000_xxx1_0000_xxxx:	// SBCD
+			casez(ir)
+			16'b1000_???1_0000_????:	// SBCD
 				if (ir[3])
 					fs_data(3'b100,rrr,FETCH_BYTE,SBCD,S);
 				else begin
 					s <= rfoDnn;
 					d <= rfoDn;
 					state <= SBCD;
+				end
+			16'b1000_???0_11??_????,
+			16'b1000_???1_11??_????:
+				begin
+					fs_data(mmm,rrr,FETCH_LWORD,DIV,S);
 				end
 			default:	state <= ADD;	// OR
 			endcase
@@ -1085,8 +1121,8 @@ DECODE:
 //-----------------------------------------------------------------------------
 	4'hC:
 		begin
-			casex(ir)
-			16'b1100_xxx1_0000_xxxx:	// ABCD
+			casez(ir)
+			16'b1100_???1_0000_????:	// ABCD
 				if (ir[3])
 					fs_data(3'b100,rrr,FETCH_BYTE,ABCD,S);
 				else begin
@@ -1094,9 +1130,9 @@ DECODE:
 					d <= rfoDn;
 					state <= ABCD;
 				end
-			16'b1100_xxxx_11xx_xxxx:	// MULS / MULU
+			16'b1100_????_11??_????:	// MULS / MULU
 				fs_data(mmm,rrr,FETCH_WORD,MUL,S);
-			16'b1100_xxx1_0100_0xxx:
+			16'b1100_???1_0100_0???:
 			begin
 				Rt <= {1'b0,DDD};
 				rfwrL <= 1'b1;
@@ -1104,7 +1140,7 @@ DECODE:
 				s <= rfoDn;
 				state <= EXG1;
 			end
-			16'b1100_xxx1_0100_1xxx:
+			16'b1100_???1_0100_1???:
 			begin
 				Rt <= {1'b1,AAA};
 				rfwrL <= 1'b1;
@@ -1112,7 +1148,7 @@ DECODE:
 				s <= rfoAna;
 				state <= EXG1;
 			end
-			16'b1100_xxx1_1000_1xxx:
+			16'b1100_???1_1000_1???:
 			begin
 				Rt <= {1'b0,DDD};
 				rfwrL <= 1'b1;
@@ -1235,6 +1271,7 @@ STOP1:
 		zf <= imm[2];
 		nf <= imm[3];
 		xf <= imm[4];
+		endian <= imm[7];
 		im[0] <= imm[8];
 		im[1] <= imm[9];
 		im[2] <= imm[10];
@@ -1269,6 +1306,37 @@ MUL1:
 		nf <= resL[31];
 		zf <= resL[31:0]==32'd0;
 	end
+
+//-----------------------------------------------------------------------------
+// DIV
+//-----------------------------------------------------------------------------
+DIV:
+	begin
+		divs <= ir[8];
+		div_ld <= `TRUE;
+		div_a <= s;
+		div_b <= rfoDn;
+		state <= DIV1;
+	end
+DIV1:
+	begin
+		div_ld <= `FALSE;
+		if (div_done) begin
+			rfwrL <= `TRUE;
+			Rt <= {1'b0,DDD};
+			resL <= div_qo;
+			state <= DIV2;
+		end
+	end
+DIV2:
+	begin
+		state <= IFETCH;
+		cf <= 1'b0;
+		vf <= 1'b0;
+		nf <= resL[31];
+		zf <= resL[31:0]==32'd0;
+	end
+
 
 //-----------------------------------------------------------------------------
 // NOT
@@ -1388,22 +1456,29 @@ LINK:
 		fc_o <= {sf,2'b01};
 		cyc_o <= 1'b1;
 		stb_o <= 1'b1;
-		sel_o <= 4'b1111;
+		sel_o <= 2'b11;
 		we_o <= 1'b1;
-		adr_o <= sp - 32'd4;
-`ifdef BIG_ENDIAN
-        dat_o <= rbo(rfoAn);
-`else
-		dat_o <= rfoAn;
-`endif
+		adr_o <= sp - 32'd2;
+		dat_o <= rfoAn[31:16];
+	end
+	else if (ack_i) begin
+		stb_o <= 1'b0;
+		sp <= sp - 32'd2;
+		state <= LINK1;
+	end
+LINK1:
+	if (!stb_o) begin
+		stb_o <= 1'b1;
+		adr_o <= sp - 32'd2;
+		dat_o <= rfoAn[15:0];
 	end
 	else if (ack_i) begin
 		cyc_o <= 1'b0;
 		stb_o <= 1'b0;
 		we_o <= 1'b0;
 		sel_o <= 2'b00;
-		sp <= sp - 32'd4;
-		resL <= sp - 32'd4;
+		sp <= sp - 32'd2;
+		resL <= sp - 32'd2;
 		rfwrL <= 1'b1;
 		Rt <= {1'b1,rrr};
 		state <= FETCH_IMM16;
@@ -1435,20 +1510,27 @@ PEA1:
 		cyc_o <= 1'b1;
 		stb_o <= 1'b1;
 		we_o <= 1'b1;
-		sel_o <= 4'b1111;
-		adr_o <= sp - 32'd4;
-`ifdef BIG_ENDIAN
-        dat_o <= rbo(ea);
-`else		
-		dat_o <= ea;
-`endif		
+		sel_o <= 2'b11;
+		adr_o <= sp - 32'd2;
+		dat_o <= ea[31:16];
+	end
+	else if (ack_i) begin
+		stb_o <= 1'b0;
+		sp <= sp - 32'd2;
+		state <= PEA2;
+	end
+PEA2:
+	if (!stb_o) begin
+		stb_o <= 1'b1;
+		adr_o <= sp - 32'd2;
+		dat_o <= ea[15:0];
 	end
 	else if (ack_i) begin
 		cyc_o <= 1'b0;
 		stb_o <= 1'b0;
 		we_o <= 1'b0;
-		sel_o <= 4'b00;
-		sp <= sp - 32'd4;
+		sel_o <= 2'b00;
+		sp <= sp - 32'd2;
 		state <= IFETCH;
 	end
 
@@ -1471,20 +1553,20 @@ DBRA:
 EXG1:
 	begin
 		state <= IFETCH;
-		casex(ir)
-		16'b1100_xxx1_0100_0xxx:
+		casez(ir)
+		16'b1100_???1_0100_0???:
 		begin
 			Rt <= {1'b0,rrr};
 			rfwrL <= 1'b1;
 			resL <= s;
 		end
-		16'b1100_xxx1_0100_1xxx:
+		16'b1100_???1_0100_1???:
 		begin
 			Rt <= {1'b1,rrr};
 			rfwrL <= 1'b1;
 			resL <= s;
 		end
-		16'b1100_xxx1_1000_1xxx:
+		16'b1100_???1_1000_1???:
 		begin
 			Rt <= {1'b1,rrr};
 			rfwrL <= 1'b1;
@@ -1503,15 +1585,52 @@ STORE_IN_DEST:
 		resB <= s[7:0];
 		case(ir[15:12])
 		4'd1:	begin zf <= s[ 7:0]== 8'h00; nf <= s[7]; end
-		4'd2:	begin zf <= s[15:0]==16'h00; nf <= s[15]; end
-		4'd3:	begin zf <= s[31:0]==32'd0;  nf <= s[31]; end
+		4'd3:	begin zf <= s[15:0]==16'h00; nf <= s[15]; end
+		4'd2:	begin zf <= s[31:0]==32'd0;  nf <= s[31]; end
 		endcase
 		cf <= 1'b0;
 		vf <= 1'b0;
 		case(ir[15:12])
 		4'd1:	fs_data(MMM,RRR,STORE_BYTE,IFETCH,D);
-		4'd2:	fs_data(MMM,RRR,STORE_WORD,IFETCH,D);
-		4'd3:	fs_data(MMM,RRR,STORE_LWORD,IFETCH,D);
+		4'd3:	fs_data(MMM,RRR,STORE_WORD,IFETCH,D);
+		4'd2:	fs_data(MMM,RRR,STORE_LWORD,IFETCH,D);
+		endcase
+		case(ir[15:12])
+		4'd1:
+		  case(MMM)
+		  3'd0:   begin
+		          Rt <= RRR;
+		          rfwrB <= `TRUE;
+		          state <= IFETCH;
+		          end
+		  3'd1:   state <= IFETCH;
+		  endcase
+	    4'd2:
+	       case(MMM)
+	       3'd0:   begin
+	               Rt <= RRR;
+	               rfwrL <= `TRUE;
+	               state <= IFETCH;
+	               end
+	       3'd1:   begin
+	               Rt <= {1'b1,RRR};
+	               rfwrL <= `TRUE;
+	               state <= IFETCH;
+	               end
+	       endcase
+	    4'd3:
+              case(MMM)
+              3'd0:   begin
+                      Rt <= RRR;
+                      rfwrW <= `TRUE;
+                      state <= IFETCH;
+                      end
+              3'd1:   begin
+                      Rt <= {1'b1,RRR};
+                      rfwrW <= `TRUE;
+                      state <= IFETCH;
+                      end
+              endcase
 		endcase
 	end
 
@@ -2119,6 +2238,7 @@ ANDI_CCR2:
 		zf <= zf & imm[2];
 		nf <= nf & imm[3];
 		xf <= xf & imm[4];
+		endian <= endian & imm[7];
 		state <= IFETCH;
 	end
 ANDI_SR:
@@ -2130,6 +2250,7 @@ ANDI_SR2:
 		zf <= zf & imm[2];
 		nf <= nf & imm[3];
 		xf <= xf & imm[4];
+		endian <= endian & imm[7];
 		im[0] <= im[0] & imm[8];
 		im[1] <= im[1] & imm[9];
 		im[2] <= im[2] & imm[10];
@@ -2146,6 +2267,7 @@ EORI_CCR2:
 		zf <= zf ^ imm[2];
 		nf <= nf ^ imm[3];
 		xf <= xf ^ imm[4];
+		endian <= endian ^ imm[7];
 		state <= IFETCH;
 	end
 EORI_SR:
@@ -2157,6 +2279,7 @@ EORI_SR2:
 		zf <= zf ^ imm[2];
 		nf <= nf ^ imm[3];
 		xf <= xf ^ imm[4];
+		endian <= endian ^ imm[7];
 		im[0] <= im[0] ^ imm[8];
 		im[1] <= im[1] ^ imm[9];
 		im[2] <= im[2] ^ imm[10];
@@ -2173,6 +2296,7 @@ ORI_CCR2:
 		zf <= zf | imm[2];
 		nf <= nf | imm[3];
 		xf <= xf | imm[4];
+		endian <= endian | imm[7];
 		state <= IFETCH;
 	end
 ORI_SR:
@@ -2184,6 +2308,7 @@ ORI_SR2:
 		zf <= zf | imm[2];
 		nf <= nf | imm[3];
 		xf <= xf | imm[4];
+		endian <= endian | imm[7];
 		im[0] <= im[0] | imm[8];
 		im[1] <= im[1] | imm[9];
 		im[2] <= im[2] | imm[10];
@@ -2256,14 +2381,14 @@ FETCH_BRDISP:
 		fc_o <= {sf,2'b10};
 		cyc_o <= 1'b1;
 		stb_o <= 1'b1;
-		sel_o <= pc[1] ? 4'b1100 : 4'b0011;
+		sel_o <= 2'b11;
 		adr_o <= pc;
 	end
 	else if (ack_i) begin
 		cyc_o <= 1'b0;
 		stb_o <= 1'b0;
-		sel_o <= 4'b00;
-		disp <= {{16{iri[15]}},iri};
+		sel_o <= 2'b00;
+		disp <= {{16{dat_i[15]}},dat_i};
 		state <= FETCH_BRDISPa;
 	end
 FETCH_BRDISPa:
@@ -2279,14 +2404,15 @@ FETCH_IMM8:
 		fc_o <= {sf,2'b10};
 		cyc_o <= 1'b1;
 		stb_o <= 1'b1;
-		sel_o <= pc[1] ? 4'b1100 : 4'b0011;
+		sel_o <= 2'b11;
 		adr_o <= pc;
 	end
 	else if (ack_i) begin
 		cyc_o <= 1'b0;
 		stb_o <= 1'b0;
 		sel_o <= 4'b00;
-		imm <= {{24{iri[7]}},iri[7:0]};
+		imm <= {{24{dat_i[7]}},dat_i[7:0]};
+		s <= {{24{dat_i[7]}},dat_i[7:0]};
 		pc <= pc + 32'd2;
 		state <= ret_state;
 	end
@@ -2298,14 +2424,15 @@ FETCH_IMM16:
 		fc_o <= {sf,2'b10};
 		cyc_o <= 1'b1;
 		stb_o <= 1'b1;
-		sel_o <= pc[1] ? 4'b1100 : 4'b0011;
+		sel_o <= 2'b11;
 		adr_o <= pc;
 	end
 	else if (ack_i) begin
 		cyc_o <= 1'b0;
 		stb_o <= 1'b0;
 		sel_o <= 4'b00;
-		imm <= {{16{iri[15]}},iri};
+		imm <= {{16{dat_i[15]}},dat_i};
+		s <= {{16{dat_i[15]}},dat_i};
 		pc <= pc + 32'd2;
 		state <= ret_state;
 	end
@@ -2317,35 +2444,27 @@ FETCH_IMM32:
 		fc_o <= {sf,2'b10};
 		cyc_o <= 1'b1;
 		stb_o <= 1'b1;
-		sel_o <= pc[1] ? 4'b1100 : 4'b1111;
+		sel_o <= 2'b11;
 		adr_o <= pc;
 	end
 	else if (ack_i) begin
 		stb_o <= 1'b0;
-		sel_o <= 4'b00;
-		if (pc[1]) begin
-          imm[15:0] <= dat_i[31:16];
-		  pc <= pc + 32'd2;
-		  state <= FETCH_IMM32a;
-		end
-		else begin
-          imm <= dat_i;
-		  cyc_o <= 1'b0;
-		  pc <= pc + 32'd4;
-		  state <= ret_state;
-		end
+        imm[15:0] <= dat_i;
+        s[15:0] <= dat_i;
+		pc <= pc + 32'd2;
+		state <= FETCH_IMM32a;
 	end
 FETCH_IMM32a:
 	if (!stb_o) begin
 		stb_o <= 1'b1;
-		sel_o <= pc[1] ? 4'b1100 : 4'b0011;
 		adr_o <= pc;
 	end
 	else if (ack_i) begin
 		cyc_o <= 1'b0;
 		stb_o <= 1'b0;
 		sel_o <= 2'b00;
-		imm[31:16] <= dat_i[15:0];
+		imm[31:16] <= dat_i;
+		s[31:16] <= dat_i;
 		pc <= pc + 32'd2;
 		state <= ret_state;
 	end
@@ -2357,37 +2476,25 @@ FETCH_D32:
 		fc_o <= {sf,2'b10};
 		cyc_o <= 1'b1;
 		stb_o <= 1'b1;
-		sel_o <= pc[1] ? 4'b1100 : 4'b1111;
+		sel_o <= 2'b11;
 		adr_o <= pc;
 	end
 	else if (ack_i) begin
-	    if (pc[1]) begin
-            stb_o <= 1'b0;
-            sel_o <= 4'b0000;
-            disp[15:0] <= dat_i[31:16];
-            pc <= pc + 32'd2;
-    		state <= FETCH_D32a;
-		end
-		else begin
-		    cyc_o <= `LOW;
-            stb_o <= 1'b0;
-            sel_o <= 4'b0000;
-            disp <= dat_i;
-            pc <= pc + 32'd4;
-            state <= FETCH_D32b;
-		end
+        stb_o <= 1'b0;
+        disp[15:0] <= dat_i;
+        pc <= pc + 32'd2;
+    	state <= FETCH_D32a;
 	end
 FETCH_D32a:
 	if (!stb_o) begin
 		stb_o <= 1'b1;
-		sel_o <= 4'b0011;
 		adr_o <= pc;
 	end
 	else if (ack_i) begin
 	    cyc_o <= `LOW;
 		stb_o <= 1'b0;
 		sel_o <= 2'b00;
-		disp[31:16] <= dat_i[15:0];
+		disp[31:16] <= dat_i;
 		pc <= pc + 32'd2;
 		state <= FETCH_D32b;
 	end
@@ -2404,21 +2511,16 @@ FETCH_D16:
 		fc_o <= {sf,2'b10};
 		cyc_o <= 1'b1;
 		stb_o <= 1'b1;
-		sel_o <= pc[1] ? 4'b1100 : 4'b0011;
+		sel_o <= 2'b11;
 		adr_o <= pc;
 	end
 	else if (ack_i) begin
 		cyc_o <= 1'b0;
 		stb_o <= 1'b0;
 		sel_o <= 2'b00;
-		disp <= {{16{iri[15]}},iri};
+		disp <= {{16{dat_i[15]}},dat_i};
 		pc <= pc + 32'd2;
-		state <= FETCH_D16a;
-	end
-FETCH_D16a:
-	begin
-		ea <= ea + disp;
-		state <= state2;
+		state <= FETCH_D32b;
 	end
 
 // Fetch index word
@@ -2428,17 +2530,17 @@ FETCH_NDX:
 		fc_o <= {sf,2'b10};
 		cyc_o <= 1'b1;
 		stb_o <= 1'b1;
-		sel_o <= pc[1] ? 4'b1100 : 4'b0011;
+		sel_o <= 2'b11;
 		adr_o <= pc;
 	end
 	else if (ack_i) begin
 		cyc_o <= 1'b0;
 		stb_o <= 1'b0;
 		sel_o <= 2'b00;
-		disp <= {{24{iri[7]}},iri[7:0]};
-		mmm <= {2'b00,iri[15]};	// to get reg
-		rrr <= iri[14:12];
-		wl <= iri[11];
+		disp <= {{24{dat_i[7]}},dat_i[7:0]};
+		mmm <= {2'b00,dat_i[15]};	// to get reg
+		rrr <= dat_i[14:12];
+		wl <= dat_i[11];
 		pc <= pc + 32'd2;
 		state <= FETCH_NDXa;
 	end
@@ -2457,27 +2559,23 @@ FETCH_BYTE:
 		cyc_o <= `HIGH;
 		stb_o <= `HIGH;
 		adr_o <= ea;
-		sel_o <= 4'b0001 << ea[1:0];
+		sel_o <= {ea[0],~ea[0]};
 	end
 	else if (ack_i) begin
 		cyc_o <= `LOW;
 		stb_o <= `LOW;
-		sel_o <= 4'b0000;
+		sel_o <= 2'b00;
 		if (ds==D) begin
 		    case(sel_o)
-		    4'b0001:  d <= {{24{dat_i[7]}},dat_i[7:0]};
-		    4'b0010:  d <= {{24{dat_i[15]}},dat_i[15:8]};
-		    4'b0100:  d <= {{24{dat_i[23]}},dat_i[23:16]};
-		    4'b1000:  d <= {{24{dat_i[31]}},dat_i[31:24]};
+		    2'b01:  d <= {{24{dat_i[7]}},dat_i[7:0]};
+		    2'b10:  d <= {{24{dat_i[15]}},dat_i[15:8]};
 		    default:  ;
 		    endcase
 		end
 		else begin
 		    case(sel_o)
-            4'b0001:  s <= {{24{dat_i[7]}},dat_i[7:0]};
-            4'b0010:  s <= {{24{dat_i[15]}},dat_i[15:8]};
-            4'b0100:  s <= {{24{dat_i[23]}},dat_i[23:16]};
-            4'b1000:  s <= {{24{dat_i[31]}},dat_i[31:24]};
+            2'b01:  s <= {{24{dat_i[7]}},dat_i[7:0]};
+            2'b10:  s <= {{24{dat_i[15]}},dat_i[15:8]};
             default:    ;
             endcase
 		end
@@ -2493,26 +2591,22 @@ LFETCH_BYTE:
 		cyc_o <= `HIGH;
 		stb_o <= `HIGH;
 		adr_o <= ea;
-		sel_o <= 4'b0001 << ea[1:0];
+		sel_o <= {ea[0],~ea[0]};
 	end
 	else if (ack_i) begin
 		stb_o <= 1'b0;
 		sel_o <= 2'b00;
 		if (ds==D) begin
             case(sel_o)
-            4'b0001:  d <= {{24{dat_i[7]}},dat_i[7:0]};
-            4'b0010:  d <= {{24{dat_i[15]}},dat_i[15:8]};
-            4'b0100:  d <= {{24{dat_i[23]}},dat_i[23:16]};
-            4'b1000:  d <= {{24{dat_i[31]}},dat_i[31:24]};
+            2'b01:  d <= {{24{dat_i[7]}},dat_i[7:0]};
+            2'b10:  d <= {{24{dat_i[15]}},dat_i[15:8]};
             default:    ;
             endcase
         end
         else begin
             case(sel_o)
-            4'b0001:  s <= {{24{dat_i[7]}},dat_i[7:0]};
-            4'b0010:  s <= {{24{dat_i[15]}},dat_i[15:8]};
-            4'b0100:  s <= {{24{dat_i[23]}},dat_i[23:16]};
-            4'b1000:  s <= {{24{dat_i[31]}},dat_i[31:24]};
+            2'b01:  s <= {{24{dat_i[7]}},dat_i[7:0]};
+            2'b10:  s <= {{24{dat_i[15]}},dat_i[15:8]};
             default:    ;
             endcase
         end
@@ -2525,16 +2619,16 @@ FETCH_WORD:
 		cyc_o <= `HIGH;
 		stb_o <= `HIGH;
 		adr_o <= ea;
-		sel_o <= ea[1] ? 4'b1100 : 4'b0011;
+		sel_o <= 2'b11;
 	end
 	else if (ack_i) begin
 		cyc_o <= 1'b0;
 		stb_o <= 1'b0;
-		sel_o <= 4'b00;
+		sel_o <= 2'b00;
 		if (ds==D)
-		  d <= ea[1] ? {{16{dat_i[31]}},dat_i[31:16]} : {{16{dat_i[15]}},dat_i[15:0]};
+		  d <= {{16{dat_i[15]}},dat_i[15:0]};
 		else
-		  s <= ea[1] ? {{16{dat_i[31]}},dat_i[31:16]} : {{16{dat_i[15]}},dat_i[15:0]};
+		  s <= {{16{dat_i[15]}},dat_i[15:0]};
 		state <= ret_state;
 	end
 
@@ -2562,43 +2656,46 @@ FETCH_LWORD:
 		cyc_o <= 1'b1;
 		stb_o <= 1'b1;
 		adr_o <= ea;
-		sel_o <= ea[1] ? 4'b1100 : 4'b1111;
+		sel_o <= 2'b11;
 	end
 	else if (ack_i) begin
 		stb_o <= 1'b0;
-		sel_o <= 4'b00;
-		if (ea[1]) begin
-            if (ds==D)
-                d[15:0] <= dat_i[31:16];
-            else
-                s[15:0] <= dat_i[31:16];
-    		state <= FETCH_LWORDa;
-	    end
-	    else begin
-	        cyc_o <= `LOW;
-            if (ds==D)
-                d <= dat_i;
-            else
-                s <= dat_i;
-            state <= ret_state;
-	    end
+		if (endian) begin
+	        if (ds==D)
+	            d[31:16] <= dat_i;
+	        else
+	            s[31:16] <= dat_i;
+        end
+        else begin
+	        if (ds==D)
+	            d[15:0] <= dat_i;
+	        else
+	            s[15:0] <= dat_i;
+        end
+		state <= FETCH_LWORDa;
 	end
 	endcase
 FETCH_LWORDa:
 	if (!stb_o) begin
-		cyc_o <= 1'b1;
 		stb_o <= 1'b1;
 		adr_o <= adr_o + 32'd2;
-		sel_o <= 4'b0011;
 	end
 	else if (ack_i) begin
 		cyc_o <= 1'b0;
 		stb_o <= 1'b0;
-		sel_o <= 4'b00;
-		if (ds==D)
-			d[31:16] <= dat_i[15:0];
-		else
-			s[31:16] <= dat_i[15:0];
+		sel_o <= 2'b00;
+		if (endian) begin
+			if (ds==D)
+				d[15:0] <= dat_i;
+			else
+				s[15:0] <= dat_i;
+		end
+		else begin
+			if (ds==D)
+				d[31:16] <= dat_i;
+			else
+				s[31:16] <= dat_i;
+		end
 		state <= ret_state;
 	end
 
@@ -2610,8 +2707,8 @@ STORE_BYTE:
 		stb_o <= 1'b1;
 		we_o <= 1'b1;
 		adr_o <= ea;
-		sel_o <= 4'b0001 << ea[1:0];
-		dat_o <= {4{resB[7:0]}};
+		sel_o <= {ea[0],~ea[0]};
+		dat_o <= {2{resB[7:0]}};
 	end
 	else if (ack_i) begin
 		cyc_o <= 1'b0;
@@ -2630,8 +2727,8 @@ USTORE_BYTE:
 		stb_o <= 1'b1;
 		we_o <= 1'b1;
 		adr_o <= ea;
-		sel_o <= 4'b0001 << ea[1:0];
-		dat_o <= {4{resB[7:0]}};
+		sel_o <= {ea[0],~ea[0]};
+		dat_o <= {2{resB[7:0]}};
 	end
 	else if (ack_i) begin
 		lock_o <= 1'b0;
@@ -2649,8 +2746,8 @@ STORE_WORD:
 		stb_o <= 1'b1;
 		we_o <= 1'b1;
 		adr_o <= ea;
-		sel_o <= ea[1] ? 4'b1100 : 4'b0011;
-		dat_o <= {2{resW[15:0]}};
+		sel_o <= 2'b11;
+		dat_o <= resW[15:0];
 	end
 	else if (ack_i) begin
 		cyc_o <= 1'b0;
@@ -2659,6 +2756,7 @@ STORE_WORD:
 		sel_o <= 2'b00;
 		state <= ret_state;
 	end
+
 STORE_LWORD:
     case(ea)
     `CSR_TASK:
@@ -2666,6 +2764,7 @@ STORE_LWORD:
             set_regs();
             fork_task <= resW[15];
             task_mem_wr <= 1'b1;
+            stack_tr <= `TRUE;
             state <= TASK1;
         end
     default:
@@ -2675,37 +2774,25 @@ STORE_LWORD:
 		stb_o <= 1'b1;
 		we_o <= 1'b1;
 		adr_o <= ea;
-		sel_o <= ea[1] ? 4'b1100 : 4'b1111;
-		dat_o <= ea[1] ? {resL[15:0],resL[31:16]} : resL;
+		sel_o <= 2'b11;
+		dat_o <= endian ? resL[31:16] : resL[15:0];
 	end
 	else if (ack_i) begin
-	    if (ea[1]) begin
-            stb_o <= 1'b0;
-            we_o <= 1'b0;
-            sel_o <= 4'b00;
-            state <= STORE_LWORDa;
-		end
-		else begin
-		    cyc_o <= `LOW;
-            stb_o <= 1'b0;
-            we_o <= 1'b0;
-            sel_o <= 4'b00;
-            state <= ret_state;
-		end
+        stb_o <= 1'b0;
+        state <= STORE_LWORDa;
 	end
 	endcase
 STORE_LWORDa:
 	if (!stb_o) begin
 		stb_o <= 1'b1;
-		we_o <= 1'b1;
 		adr_o <= adr_o + 32'd2;
-		sel_o <= 4'b0011;
+		dat_o <= endian ? resL[15:0] : resL[31:16];
 	end
 	else if (ack_i) begin
 		cyc_o <= 1'b0;
 		stb_o <= 1'b0;
 		we_o <= 1'b0;
-		sel_o <= 4'b0000;
+		sel_o <= 2'b00;
 		state <= ret_state;
 	end
 
@@ -2719,6 +2806,7 @@ MOVE2CCR:
 		zf <= s[2];
 		nf <= s[3];
 		xf <= s[4];
+		endian <= s[7];
 		state <= IFETCH;
 	end	
 
@@ -2729,6 +2817,7 @@ MOVE2SR:
 		zf <= s[2];
 		nf <= s[3];
 		xf <= s[4];
+		endian <= s[7];
 		im[0] <= s[8];
 		im[1] <= s[9];
 		im[2] <= s[10];
@@ -2759,6 +2848,16 @@ ILLEGAL:
 
 //----------------------------------------------------
 //----------------------------------------------------
+BERR:
+	begin
+        set_regs();
+        task_mem_wr <= `TRUE;
+        vecno <= `BUSERR_VEC;
+        state <= TRAP3;
+	end
+
+//----------------------------------------------------
+//----------------------------------------------------
 TRAP:
     begin
         set_regs();
@@ -2774,7 +2873,7 @@ TRAP:
             im <= ipl_i;
         end
         else begin
-            if (ir[3:0]==4'hF)
+            if (ir[3:0]==4'h0)
                 state <= TRAP2;
             else
                 vecno <= `TRAP_VEC + ir[3:0];
@@ -2784,27 +2883,27 @@ TRAP2:
     if (!cyc_o) begin
         cyc_o <= `HIGH;
         stb_o <= `HIGH;
-        sel_o <= pc[1] ? 4'b1100: 4'b0011;
+        sel_o <= 2'b11;
         adr_o <= pc;
     end
     else if (ack_i) begin
         cyc_o <= `LOW;
         stb_o <= `LOW;
-        sel_o <= 4'b0;
+        sel_o <= 2'b0;
         pc <= pc + 32'd2;
-        vecno <= iri[8:0];
+        vecno <= dat_i[8:0];
         state <= TRAP3;
     end
 TRAP3:
     if (!cyc_o) begin
         cyc_o <= `HIGH;
         stb_o <= `HIGH;
-        sel_o <= vecno[0] ? 4'b1100 : 4'b0011;
+        sel_o <= 2'b11;
         adr_o <= {vecno,1'b0};
     end
     else if (ack_i) begin
         otr <= tr;
-        tr <= vecno[0] ? dat_i[24:16] : dat_i[8:0];
+        tr <= dat_i[8:0];
         state <= TASK2;        
     end
 
@@ -2855,7 +2954,19 @@ UNLNK:
 		fc_o <= {sf,2'b01};
 		cyc_o <= 1'b1;
 		stb_o <= 1'b1;
-		sel_o <= 4'b1111;
+		sel_o <= 2'b11;
+		adr_o <= sp;
+	end
+	else if (ack_i) begin
+		stb_o <= 1'b0;
+		resL[15:0] <= dat_i;
+		sp <= sp + 32'd2;
+		state <= UNLNK2;
+	end
+UNLNK2:
+	if (!stb_o) begin
+		fc_o <= {sf,2'b01};
+		stb_o <= 1'b1;
 		adr_o <= sp;
 	end
 	else if (ack_i) begin
@@ -2863,34 +2974,61 @@ UNLNK:
 		sel_o <= 2'b00;
 		rfwrL <= 1'b1;
 		Rt <= {1'b1,rrr};
-		resL <= dat_i;
-		sp <= sp + 32'd4;
+		resL[31:16] <= dat_i;
+		sp <= sp + 32'd2;
 		state <= IFETCH;
 	end
 
 //----------------------------------------------------
 //----------------------------------------------------
 JMP1:
-	begin
+    if (d[0]) begin
+        set_regs();
+        fork_task <= d[15];
+        task_mem_wr <= 1'b1;
+        stack_tr <= `FALSE;
+        resW <= d[15:0];
+        state <= TASK1;
+    end
+    else begin
 		pc <= d;
-		state <= IFETCH;
+        state <= IFETCH;
 	end
 JSR1:
-	if (!cyc_o) begin
+    if (d[0]) begin
+        set_regs();
+        fork_task <= d[15];
+        task_mem_wr <= 1'b1;
+        resW <= d[15:0];
+        stack_tr <= `TRUE;
+        state <= TASK1;
+    end
+	else if (!cyc_o) begin
 		fc_o <= {sf,2'b01};
 		cyc_o <= 1'b1;
 		stb_o <= 1'b1;
 		we_o <= 1'b1;
-		sel_o <= 4'b1111;
-		adr_o <= sp - 32'd4;
-		dat_o <= pc;
+		sel_o <= 2'b11;
+		adr_o <= sp - 32'd2;
+		dat_o <= pc[31:16];
+	end
+	else if (ack_i) begin
+		stb_o <= 1'b0;
+		sp <= sp - 32'd2;
+		state <= JSR2;
+	end
+JSR2:
+	if (!stb_o) begin
+		stb_o <= 1'b1;
+		adr_o <= sp - 32'd2;
+		dat_o <= pc[15:0];
 	end
 	else if (ack_i) begin
 		cyc_o <= 1'b0;
 		stb_o <= 1'b0;
 		we_o <= 1'b0;
-		sel_o <= 4'b00;
-		sp <= sp - 32'd4;
+		sel_o <= 2'b00;
+		sp <= sp - 32'd2;
 		pc <= d;
 		state <= IFETCH;
 	end
@@ -2904,13 +3042,12 @@ RTE1:
 		fc_o <= {1'b1,2'b01};
 		cyc_o <= 1'b1;
 		stb_o <= 1'b1;
-		sel_o <= 4'b1111;
+		sel_o <= 2'b11;
 		adr_o <= sp;
 	end
 	else if (ack_i) begin
 		stb_o <= 1'b0;
-		sel_o <= 4'b0000;
-		sp <= sp + 32'd4;
+		sp <= sp + 32'd2;
 		cf <= dat_i[0];
 		vf <= dat_i[1];
 		zf <= dat_i[2];
@@ -2925,17 +3062,26 @@ RTE1:
 	end
 RTE2:
 	if (!stb_o) begin
-		cyc_o <= 1'b1;
 		stb_o <= 1'b1;
-		sel_o <= 4'b1111;
+		adr_o <= sp;
+	end
+	else if (ack_i) begin
+		stb_o <= 1'b0;
+		pc[15:0] <= dat_i;
+		sp <= sp + 32'd2;
+		state <= RTE3;
+	end
+RTE3:
+	if (!stb_o) begin
+		stb_o <= 1'b1;
 		adr_o <= sp;
 	end
 	else if (ack_i) begin
 		cyc_o <= 1'b0;
 		stb_o <= 1'b0;
 		sel_o <= 2'b00;
-		pc <= dat_i;
-		sp <= sp + 32'd4;
+		pc[31:16] <= dat_i;
+		sp <= sp + 32'd2;
 		state <= IFETCH;
 	end
 
@@ -2949,17 +3095,42 @@ RTS1:
 		fc_o <= {sf,2'b01};
 		cyc_o <= 1'b1;
 		stb_o <= 1'b1;
-		sel_o <= 4'b1111;
+		sel_o <= 2'b11;
+		adr_o <= sp;
+	end
+	else if (ack_i) begin
+		stb_o <= 1'b0;
+		sp <= sp + 32'd2;
+		if (dat_i[0]) begin
+            cyc_o <= `LOW;
+            stb_o <= 1'b0;
+            sel_o <= 2'b00;
+            set_regs();
+            fork_task <= 1'b0;
+            task_mem_wr <= 1'b1;
+            resW <= dat_i[15:0];
+            stack_tr <= `FALSE;
+            state <= TASK1;
+		end
+		else begin
+		  pc[15:0] <= dat_i;
+		  state <= RTS2;
+		end
+	end
+RTS2:
+	if (!stb_o) begin
+		stb_o <= 1'b1;
 		adr_o <= sp;
 	end
 	else if (ack_i) begin
 	    cyc_o <= `LOW;
 		stb_o <= 1'b0;
-		sel_o <= 4'b00;
-		pc <= dat_i;
-		sp <= sp + 32'd4;
+		sel_o <= 2'b00;
+		pc[31:16] <= dat_i;
+		sp <= sp + 32'd2;
 		state <= IFETCH;
 	end
+
 
 //----------------------------------------------------
 MOVEM_Xn2D:
@@ -3216,7 +3387,7 @@ MOVEM_s2Xn3:
 TASK1:
     begin
         otr <= tr;
-        tr <= resW[7:0];
+        tr <= resW[9:1];
         state <= fork_task ? TASK4: TASK2;
     end
 TASK2:
@@ -3244,11 +3415,12 @@ TASK3:
         zf <= flagso[2];
         nf <= flagso[3];
         xf <= flagso[4];
+    	endian <= flagso[7];
         im <= flagso[10:8];
         sf <= flagso[11];
         tf <= flagso[13];
         pc <= pco;
-        state <= TASK4;
+        state <= stack_tr ? TASK4 : IFETCH;
     end
 TASK4:
     if (!cyc_o) begin
@@ -3256,16 +3428,16 @@ TASK4:
         cyc_o <= `HIGH;
         stb_o <= `HIGH;
         we_o <= `HIGH;
-        sel_o <= 4'b1111;
-        adr_o <= sp - 32'd4;
-        dat_o <= otr;
+        sel_o <= 2'b11;
+        adr_o <= sp - 32'd2;
+        dat_o <= {otr,1'b1};
     end
     else if (ack_i) begin
         cyc_o <= `LOW;
         stb_o <= `LOW;
         we_o <= `LOW;
-        sel_o <= 4'b00;
-        sp <= sp - 32'd4;
+        sel_o <= 2'b00;
+        sp <= sp - 32'd2;
         state <= IFETCH;
     end
 //----------------------------------------------------
@@ -3281,39 +3453,57 @@ LDT2:
         cyc_o <= `HIGH;
         stb_o <= `HIGH;
         we_o <= `LOW;
-        sel_o <= 4'b1111;
+        sel_o <= 2'b11;
         adr_o <= ea;
     end
     else if (ack_i) begin
         stb_o <= `LOW;
         cnt <= cnt + 6'd1;
-        ea <= ea + 32'd4;
-        if (cnt >= 6'd17) begin
+        ea <= ea + 32'd2;
+        if (cnt >= 6'd35) begin
             cyc_o <= `LOW;
-            sel_o <= 4'b00;
+            sel_o <= 2'b00;
             task_mem_wr <= `TRUE;
-            tr <= d0[8:0];
+            tr <= d0[9:1];
             state <= LDT3;
         end
         case(cnt)
-        6'd0:   d0i <= dat_i;
-        6'd1:   d1i <= dat_i;
-        6'd2:   d2i <= dat_i;
-        6'd3:   d3i <= dat_i;
-        6'd4:   d4i <= dat_i;
-        6'd5:   d5i <= dat_i;
-        6'd6:   d6i <= dat_i;
-        6'd7:   d7i <= dat_i;
-        6'd8:   a0i <= dat_i;
-        6'd9:   a1i <= dat_i;
-        6'd10:  a2i <= dat_i;
-        6'd11:  a3i <= dat_i;
-        6'd12:  a4i <= dat_i;
-        6'd13:  a5i <= dat_i;
-        6'd14:  a6i <= dat_i;
-        6'd15:  spi <= dat_i;
-        6'd16:  flagsi <= dat_i;
-        6'd17:  pci <= dat_i;
+        6'd0:   d0i[15:0] <= dat_i;
+        6'd1:   d0i[31:16] <= dat_i;
+        6'd2:   d1i[15:0] <= dat_i;
+        6'd3:   d1i[31:16] <= dat_i;
+        6'd4:   d2i[15:0] <= dat_i;
+        6'd5:   d2i[31:16] <= dat_i;
+        6'd6:   d3i[15:0] <= dat_i;
+        6'd7:   d3i[31:16] <= dat_i;
+        6'd8:   d4i[15:0] <= dat_i;
+        6'd9:   d4i[31:16] <= dat_i;
+        6'd10:   d5i[15:0] <= dat_i;
+        6'd11:   d5i[31:16] <= dat_i;
+        6'd12:   d6i[15:0] <= dat_i;
+        6'd13:   d6i[31:16] <= dat_i;
+        6'd14:   d7i[15:0] <= dat_i;
+        6'd15:   d7i[31:16] <= dat_i;
+        6'd16:   a0i[15:0] <= dat_i;
+        6'd17:   a0i[31:16] <= dat_i;
+        6'd18:   a1i[15:0] <= dat_i;
+        6'd19:   a1i[31:16] <= dat_i;
+        6'd20:  a2i[15:0] <= dat_i;
+        6'd21:  a2i[31:16] <= dat_i;
+        6'd22:  a3i[15:0] <= dat_i;
+        6'd23:  a3i[31:16] <= dat_i;
+        6'd24:  a4i[15:0] <= dat_i;
+        6'd25:  a4i[31:16] <= dat_i;
+        6'd26:  a5i[15:0] <= dat_i;
+        6'd27:  a5i[31:16] <= dat_i;
+        6'd28:  a6i[15:0] <= dat_i;
+        6'd29:  a6i[31:16] <= dat_i;
+        6'd30:  spi[15:0] <= dat_i;
+        6'd31:  spi[31:16] <= dat_i;
+        6'd32:  flagsi[15:0] <= dat_i;
+        6'd33:  flagsi[31:16] <= dat_i;
+        6'd34:  pci[15:0] <= dat_i;
+        6'd35:  pci[31:16] <= dat_i;
         endcase
     end
 LDT3:
@@ -3326,7 +3516,7 @@ SDT1:
     begin
         cnt <= 6'd0;
         otr <= tr;
-        tr <= d0;
+        tr <= d0[9:1];
         fs_data(mmm,rrr,FETCH_NOP,SDT2,D);
     end
 SDT2:
@@ -3335,42 +3525,69 @@ SDT2:
         cyc_o <= `HIGH;
         stb_o <= `HIGH;
         we_o <= `HIGH;
-        sel_o <= 4'b1111;
+        sel_o <= 2'b11;
         adr_o <= ea;
         case(cnt)
-        6'd0:   dat_o <= d0o;
-        6'd1:   dat_o <= d1o;
-        6'd2:   dat_o <= d2o;
-        6'd3:   dat_o <= d3o;
-        6'd4:   dat_o <= d4o;
-        6'd5:   dat_o <= d5o;
-        6'd6:   dat_o <= d6o;
-        6'd7:   dat_o <= d7o;
-        6'd8:   dat_o <= a0o;
-        6'd9:   dat_o <= a1o;
-        6'd10:  dat_o <= a2o;
-        6'd11:  dat_o <= a3o;
-        6'd12:  dat_o <= a4o;
-        6'd13:  dat_o <= a5o;
-        6'd14:  dat_o <= a6o;
-        6'd15:  dat_o <= spo;
-        6'd16:  dat_o <= flagso;
-        6'd17:  dat_o <= pco;
+        6'd0:   dat_o <= d0o[15:0];
+        6'd2:   dat_o <= d1o[15:0];
+        6'd4:   dat_o <= d2o[15:0];
+        6'd6:   dat_o <= d3o[15:0];
+        6'd8:   dat_o <= d4o[15:0];
+        6'd10:   dat_o <= d5o[15:0];
+        6'd12:   dat_o <= d6o[15:0];
+        6'd14:   dat_o <= d7o[15:0];
+        6'd16:   dat_o <= a0o[15:0];
+        6'd18:   dat_o <= a1o[15:0];
+        6'd20:  dat_o <= a2o[15:0];
+        6'd22:  dat_o <= a3o[15:0];
+        6'd24:  dat_o <= a4o[15:0];
+        6'd26:  dat_o <= a5o[15:0];
+        6'd28:  dat_o <= a6o[15:0];
+        6'd30:  dat_o <= spo[15:0];
+        6'd32:  dat_o <= flagso[15:0];
+        6'd34:  dat_o <= pco[31:16];
+        6'd1:   dat_o <= d0o[31:16];
+        6'd3:   dat_o <= d1o[31:16];
+        6'd5:   dat_o <= d2o[31:16];
+        6'd7:   dat_o <= d3o[31:16];
+        6'd8:   dat_o <= d4o[31:16];
+        6'd11:   dat_o <= d5o[31:16];
+        6'd13:   dat_o <= d6o[31:16];
+        6'd15:   dat_o <= d7o[31:16];
+        6'd17:   dat_o <= a0o[31:16];
+        6'd19:   dat_o <= a1o[31:16];
+        6'd21:  dat_o <= a2o[31:16];
+        6'd23:  dat_o <= a3o[31:16];
+        6'd25:  dat_o <= a4o[31:16];
+        6'd27:  dat_o <= a5o[31:16];
+        6'd29:  dat_o <= a6o[31:16];
+        6'd31:  dat_o <= spo[31:16];
+        6'd33:  dat_o <= flagso[31:16];
+        6'd35:  dat_o <= pco[31:16];
         endcase
     end
     else if (ack_i) begin
         stb_o <= `LOW;
         we_o <= `LOW;
         cnt <= cnt + 6'd1;
-        ea <= ea + 32'd4;
-        if (cnt >= 6'd17) begin
+        ea <= ea + 32'd2;
+        if (cnt >= 6'd35) begin
             cyc_o <= `LOW;
-            sel_o <= 4'b00;
+            sel_o <= 2'b00;
             tr <= otr;
             state <= IFETCH;
         end
     end
 endcase
+
+if (cyc_o & err_i) begin
+	cyc_o <= `LOW;
+	stb_o <= `LOW;
+	we_o <= `LOW;
+	sel_o <= 2'b00;
+	state <= BERR;
+end
+
 end
 	
 //-----------------------------------------------------------------------------
