@@ -210,6 +210,7 @@ fpga_version:
 
 		; setup vector table
 		;
+		andi.b	#$7F,ccr
 ;		lea		BusError,a0
 ;		move.l	a0,0x008		; set bus error vector
 		lea		IllegalInstruction,a0
@@ -220,6 +221,7 @@ fpga_version:
 ;		move.l	a0,0x07C		; set autovector 7
 		lea		TRAP15,a0
 		move.l	a0,188			; set trap 15 vector
+		ori.b	#$80,ccr
 
 ;		bsr		mmu_init
 		bsr		i2c_setup
@@ -269,10 +271,8 @@ fpga_version:
 
 		; Write startup message to screen
 
-		lea		msg_start,a0
-		moveq	#0,d1					; xpos
-		moveq	#0,d2					; ypos
-		bsr		DispStringAt
+		lea		msg_start,a1
+		bsr		DisplayString
 		move.w	#$A4A4,leds			; diagnostics
 
 		lea		j1,a3
@@ -727,7 +727,7 @@ Set800x600:
 ;tbl640x480:
 ;	dc.w	800,525
 tbl800x600:
-	dc.w	1056,628,40,168,1,5,1056,256,628,28,1056,256,628,28,$EFD,$FD7,0
+	dc.w	1056,628,40,168,1,5,1056,256,628,28,1056,256,628,28,$EFE,$FE5,0
 tbl1280x768:
 	dc.w	1680,795,67,201,2,5,1680,400,795,27,1680,400,795,27,$EFD,$FD7,0
 
@@ -989,6 +989,8 @@ InitCursorColorPalette:
 		;or.l	#$FF000000,d3		; alpha blend to background color
 		move.l	d3,(a6)+
 		dbra	d2,.0001
+		move.l	#VDGREG,a6
+		move.l	#RED,4(a6)			; force cursor red
 		move.l	(a7)+,d2/d3/a5/a6
 		rts
 
@@ -1012,6 +1014,7 @@ SetCursorImage64:
 .0002:
 		move.l	#$5BF00,(a0,d2.w)
 		move.w	#$0249,8(a0,d2.w)	; set cursor size 10x10
+		move.w	#100,12(a0,d2.w)	; set total pixel count (10*10)
 		clr.w	$0C04(a6)			; gen next number
 		move.l	$0C00(a6),d3
 		and.w	#$FF,d3
@@ -1140,29 +1143,29 @@ BouncingBalls:
 		add.w	d3,4(a0,d2.w)		; add to hpos
 		move.w	(a3,d2.w),d3		; get dy
 		add.w	d3,6(a0,d2.w)		; add to vpos
-		cmp.w	#BMP_WIDTH+128,4(a0,d2.w)	; X hit limit ?
+		cmpi.w	#BMP_WIDTH+128,4(a0,d2.w)	; X hit limit ?
 		blo.s	.0004
 		neg.w	(a2,d2.w)			; flip dx
 .0004:
-		cmp.w	#128,4(a0,d2.w)		; X hit limit ?
+		cmpi.w	#128,4(a0,d2.w)		; X hit limit ?
 		bhs.s	.0005
 		neg.w	(a2,d2.w)			; flip dx
 .0005:
-		cmp.w	#BMP_HEIGHT+28,6(a0,d2.w)	; Y hit limit ?
+		cmpi.w	#BMP_HEIGHT+28,6(a0,d2.w)	; Y hit limit ?
 		blo.s	.0006
 		neg.w	(a3,d2.w)			; flip dy
 .0006:
-		cmp.w	#28,6(a0,d2.w)		; Y hit limit ?
+		cmpi.w	#28,6(a0,d2.w)		; Y hit limit ?
 		bhs.s	.0007
 		neg.w	(a3,d2.w)			; flip dy
 .0007:
-		add.w	#$10,d2				; advance to next sprite register set
-		cmp.w	#$400,d2			; is end of register set hit ?
+		addi.w	#$10,d2				; advance to next sprite register set
+		cmpi.w	#$400,d2			; is end of register set hit ?
 		blo.s	.0008	
 		; delay a bit to allow display to persist
 		move.l	#80000,d3
 .0009:
-		sub.l	#1,d3
+		subi.l	#1,d3
 		bne.s	.0009
 ;		bsr		CheckForKey			; look for keypress to end. zf=0 if key
 ;		tst.b	d1
@@ -2439,6 +2442,7 @@ ramtest7:
 GraphicsDemo:
 		bsr		DrawLines
 		bsr		DrawRects
+		bsr		DrawTriangles
 		bra		Monitor
 
 DrawRects:
@@ -2524,6 +2528,52 @@ DrawLines:
 		move.w	#2,$42E(a5)		; pulse command queue (2 = draw line)
 		sub.l	#1,d6
 		bne		.0001			; go back and do more lines
+		rts
+
+;===============================================================================
+; Draw triangles randomly on the screen.
+;===============================================================================
+
+DrawTriangles:
+		lea		$FFDC0000,A6	; I/O base
+		lea		VDGREG,a5
+		move.l	#10000,d6		; repeat a few times
+.0001:
+		; Wait for blitter to be done
+.0003:								
+		move.w	#10,leds
+		move.w	$4AC(a5),d0			; get done status
+		btst	#14,d0
+		beq.s	.0004
+		btst	#13,d0				; bit 13 = done bit
+		beq.s	.0003				; branch if not done
+.0004:
+		move.w	#11,leds
+		move.l	$0C00(a6),d0	; get 32 bit number
+		and.l	#$FF00FF,d0		; 0 to 255
+		clr.w	$0C04(a6)		; gen next number
+		move.l	$0C00(a6),d1
+		and.l	#$FF00FF,d1		; 0 to 255
+		clr.w	$0C04(a6)		; gen next number
+		move.l	$0C00(a6),d2
+		and.l	#$FF00FF,d2		; 0 to 255
+		clr.w	$0C04(a6)		; gen next number
+		move.l	$0C00(a6),d4
+		and.w	#RGBMASK,d4		; 9/15 bits color
+		clr.w	$0C04(a6)		; gen next number
+.0002:
+		move.w	$42C(a5),d7		; check # queued
+		cmp.w	#28,d7			; more than 28 queued ?
+		bhs.s	.0002			; too many, wait for queue to empty
+		move.w	#12,leds
+		move.w	#1,$422(a5)		; raster op = COPY
+		move.w	d4,$424(a5)		; set color
+		move.l	d0,$426(a5)		; set x0,y0
+		move.l	d1,$430(a5)		; set x1,y1
+		move.l	d2,$434(a5)		; set x2,y2
+		move.w	#6,$42E(a5)		; pulse command queue (6 = fill triangle)
+		sub.l	#1,d6
+		bne		.0001			; go back and do more triangles
 		rts
 
 ;===============================================================================
@@ -3009,7 +3059,7 @@ gfx_demo:
 ;		bne		clrscr_loop1
 
 msg_start:
-	dc.b	"N4V 68k System Starting",0
+	dc.b	"N4V 68k System Starting",CR,LF,0
 
 ;===============================================================================
 ; MMU

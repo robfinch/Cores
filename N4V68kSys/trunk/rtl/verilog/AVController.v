@@ -46,6 +46,8 @@
 `define CMD			80:73
 `define X1POS		92:81
 `define Y1POS		104:93
+`define X2POS		116:105
+`define Y2POS		128:117
 `define BASEADRH	120:105
 `define BASEADRL	136:121
 `define CMDQ_SZ		136
@@ -210,9 +212,26 @@ parameter ST_READ_CHAR_BITMAP_DAT4 = 7'd107;
 parameter ST_READ_FONT_TBL1 = 7'd108;
 parameter ST_READ_FONT_TBL1a = 7'd109;
 parameter ST_READ_GLYPH_ENTRY3 = 7'd110;
+parameter DT_SORT = 7'd111;
+parameter DT_SLOPE1 = 7'd112;
+parameter DT_SLOPE1a = 7'd113;
+parameter DT_SLOPE2 = 7'd114;
+parameter DT_LINE1 = 7'd115;
+parameter DT_LINE2 = 7'd116;
+parameter DT_SETPIXEL = 7'd117;
+parameter DT_INCY = 7'd118;
+parameter DT1 = 7'd119;
+parameter DT2 = 7'd120;
+parameter DT3 = 7'd121;
+parameter DT4 = 7'd122;
+parameter DT5 = 7'd123;
+parameter DT6 = 7'd124;
+parameter DT3a = 7'd125;
 
 integer n;
 reg [6:0] state = ST_IDLE;
+reg [6:0] retstate = ST_IDLE;	// subroutine return
+reg [6:0] ngs = ST_IDLE;		// next graphic state for continue
 wire eol;
 wire eof;
 wire border;
@@ -284,6 +303,14 @@ reg signed [13:0] sx,sy;
 reg signed [13:0] err;
 wire signed [13:0] e2 = err << 1;
 
+// Triangle draw
+reg fbt;	// flat bottom=1 or top=0 triangle
+reg [7:0] trimd;	// timer for mult
+reg [27:0] v0x, v0y, v1x, v1y, v2x, v2y, v3x, v3y;
+reg [27:0] w0x, w0y, w1x, w1y, w2x, w2y;
+reg signed [27:0] invslope0, invslope1;
+reg [27:0] curx0, curx1;
+
 reg [5:0] flashcnt;
 
 // Cursor related registers
@@ -350,36 +377,36 @@ reg [15:0] bltA_shift, bltB_shift, bltC_shift;
 reg [15:0] bltLWMask = 16'hFFFF;
 reg [15:0] bltFWMask = 16'hFFFF;
 
-reg [19:0] srcA_badr;               // base address
-reg [19:0] srcA_mod;                // modulo
-reg [19:0] srcA_cnt;
-reg [19:0] srcA_wadr;				// working address
-reg [19:0] srcA_wcnt;				// working count
-reg [19:0] srcA_dcnt;				// working count
-reg [19:0] srcA_hcnt;
+reg [19:0] bltA_badr;               // base address
+reg [19:0] bltA_mod;                // modulo
+reg [19:0] bltA_cnt;
+reg [19:0] bltA_wadr;				// working address
+reg [19:0] bltA_wcnt;				// working count
+reg [19:0] bltA_dcnt;				// working count
+reg [19:0] bltA_hcnt;
 
-reg [19:0] srcB_badr;
-reg [19:0] srcB_mod;
-reg [19:0] srcB_cnt;
-reg [19:0] srcB_wadr;				// working address
-reg [19:0] srcB_wcnt;				// working count
-reg [19:0] srcB_dcnt;				// working count
-reg [19:0] srcB_hcnt;
+reg [19:0] bltB_badr;
+reg [19:0] bltB_mod;
+reg [19:0] bltB_cnt;
+reg [19:0] bltB_wadr;				// working address
+reg [19:0] bltB_wcnt;				// working count
+reg [19:0] bltB_dcnt;				// working count
+reg [19:0] bltB_hcnt;
 
-reg [19:0] srcC_badr;
-reg [19:0] srcC_mod;
-reg [19:0] srcC_cnt;
-reg [19:0] srcC_wadr;				// working address
-reg [19:0] srcC_wcnt;				// working count
-reg [19:0] srcC_dcnt;				// working count
-reg [19:0] srcC_hcnt;
+reg [19:0] bltC_badr;
+reg [19:0] bltC_mod;
+reg [19:0] bltC_cnt;
+reg [19:0] bltC_wadr;				// working address
+reg [19:0] bltC_wcnt;				// working count
+reg [19:0] bltC_dcnt;				// working count
+reg [19:0] bltC_hcnt;
 
-reg [19:0] dstD_badr;
-reg [19:0] dstD_mod;
-reg [19:0] dstD_cnt;
-reg [19:0] dstD_wadr;				// working address
-reg [19:0] dstD_wcnt;				// working count
-reg [19:0] dstD_hcnt;
+reg [19:0] bltD_badr;
+reg [19:0] bltD_mod;
+reg [19:0] bltD_cnt;
+reg [19:0] bltD_wadr;				// working address
+reg [19:0] bltD_wcnt;				// working count
+reg [19:0] bltD_hcnt;
 
 reg [15:0] blt_op;
 
@@ -545,6 +572,37 @@ multRndx umul2 (
   .A({2'b00,vpos[11:2]}),
   .B(bitmapWidth),
   .P(P2)
+);
+
+reg div_ld;
+reg signed [27:0] div_a, div_b;
+wire signed [55:0] div_qo;
+wire div_idle;
+
+AVDivider #(.WID(56)) udiv1
+(
+	.rst(rst_i),
+	.clk(clk_i),
+	.ld(div_ld),
+	.abort(1'b0),
+	.sgn(1'b1),
+	.sgnus(1'b0),
+	.a({{12{div_a[27]}},div_a,16'h0}),
+	.b({{28{div_b[27]}},div_b}),
+	.qo(div_qo),
+	.ro(),
+	.dvByZr(),
+	.done(),
+	.idle(div_idle)
+);
+
+wire [55:0] trimult;
+AVTriMult umul3
+(
+  .CLK(clk_i),
+  .A(div_qo[27:0]),
+  .B(v2x-v0x),
+  .P(trimult)
 );
 
 chipram16 chipram1
@@ -970,7 +1028,7 @@ reg [4:0] cmdq_ndx;
 wire cs_cmdq = cs_reg && adr_i[10:1]==10'b100_0010_111 && chrp && we_i;
 
 
-vtdl #(.WID(105), .DEP(32)) char_q (.clk(clk_i), .ce(cs_cmdq), .a(cmdq_ndx), .d(cmdq_in), .q(cmdq_out));
+vtdl #(.WID(128), .DEP(32)) char_q (.clk(clk_i), .ce(cs_cmdq), .a(cmdq_ndx), .d(cmdq_in), .q(cmdq_out));
 
 wire [8:0] charcode_qo = cmdq_out[`CHARCODE];
 wire [15:0] charfg_qo = cmdq_out[`FGCOLOR];
@@ -982,6 +1040,8 @@ wire [3:0] charym_qo = cmdq_out[`CHARYM];
 wire [7:0] cmd_qo = cmdq_out[`CMD];
 wire [11:0] cmdx2_qo = cmdq_out[`X1POS];
 wire [11:0] cmdy2_qo = cmdq_out[`Y1POS];
+wire [11:0] cmdx3_qo = cmdq_out[`X2POS];
+wire [11:0] cmdy3_qo = cmdq_out[`Y2POS];
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Audio
@@ -1116,6 +1176,7 @@ if (rst_i) begin
 	state <= ST_IDLE;
 	aud_test <= 24'h0;
 	bltCtrl <= 16'b0010_0000_0000_0000;
+	ctrl <= 16'h0000;
 	ack <= pAckStyle;
 end
 else begin
@@ -1169,27 +1230,29 @@ if (reg_cs|reg_copper) begin
 		10'b100_0010_111:	cmdq_in[`CMD] <= reg_dat[7:0];	// cmd
 		10'b100_0011_000:	cmdq_in[`X1POS] <= reg_dat[11:0];	// xpos2
 		10'b100_0011_001:	cmdq_in[`Y1POS] <= reg_dat[11:0];	// ypos2
-		10'b100_0011_010:	cmdq_in[`BASEADRH] <= reg_dat;
-		10'b100_0011_011:	cmdq_in[`BASEADRL] <= reg_dat;
+		10'b100_0011_010:	cmdq_in[`X2POS] <= reg_dat[11:0];	// xpos2
+		10'b100_0011_011:	cmdq_in[`Y2POS] <= reg_dat[11:0];	// ypos2
+//		10'b100_0011_010:	cmdq_in[`BASEADRH] <= reg_dat;
+//		10'b100_0011_011:	cmdq_in[`BASEADRL] <= reg_dat;
 		10'b100_0011_110:	zlayer <= reg_dat[3:0];
 		10'b100_0011_111:	zbuf <= reg_dat[0];
 		
-		10'b100_1000_000:	srcA_badr[19:16] <= reg_dat[3:0];
-		10'b100_1000_001:	srcA_badr[15: 0] <= reg_dat;
-		10'b100_1000_010:	srcA_mod[19:16] <= reg_dat[3:0];
-		10'b100_1000_011:	srcA_mod[15: 0] <= reg_dat;
-		10'b100_1000_100:	srcB_badr[19:16] <= reg_dat[3:0];
-		10'b100_1000_101:	srcB_badr[15: 0] <= reg_dat;
-		10'b100_1000_110:	srcB_mod[19:16] <= reg_dat[3:0];
-		10'b100_1000_111:	srcB_mod[15: 0] <= reg_dat;
-		10'b100_1001_000:	srcC_badr[19:16] <= reg_dat[3:0];
-		10'b100_1001_001:	srcC_badr[15: 0] <= reg_dat;
-		10'b100_1001_010:	srcC_mod[19:16] <= reg_dat[3:0];
-		10'b100_1001_011:	srcC_mod[15: 0] <= reg_dat;
-		10'b100_1001_100:	dstD_badr[19:16] <= reg_dat[3:0];
-		10'b100_1001_101:	dstD_badr[15: 0] <= reg_dat;
-		10'b100_1001_110:	dstD_mod[19:16] <= reg_dat[3:0];
-		10'b100_1001_111:	dstD_mod[15: 0] <= reg_dat;
+		10'b100_1000_000:	bltA_badr[19:16] <= reg_dat[3:0];
+		10'b100_1000_001:	bltA_badr[15: 0] <= reg_dat;
+		10'b100_1000_010:	bltA_mod[19:16] <= reg_dat[3:0];
+		10'b100_1000_011:	bltA_mod[15: 0] <= reg_dat;
+		10'b100_1000_100:	bltB_badr[19:16] <= reg_dat[3:0];
+		10'b100_1000_101:	bltB_badr[15: 0] <= reg_dat;
+		10'b100_1000_110:	bltB_mod[19:16] <= reg_dat[3:0];
+		10'b100_1000_111:	bltB_mod[15: 0] <= reg_dat;
+		10'b100_1001_000:	bltC_badr[19:16] <= reg_dat[3:0];
+		10'b100_1001_001:	bltC_badr[15: 0] <= reg_dat;
+		10'b100_1001_010:	bltC_mod[19:16] <= reg_dat[3:0];
+		10'b100_1001_011:	bltC_mod[15: 0] <= reg_dat;
+		10'b100_1001_100:	bltD_badr[19:16] <= reg_dat[3:0];
+		10'b100_1001_101:	bltD_badr[15: 0] <= reg_dat;
+		10'b100_1001_110:	bltD_mod[19:16] <= reg_dat[3:0];
+		10'b100_1001_111:	bltD_mod[15: 0] <= reg_dat;
 		10'b100_1010_000:	bltSrcWid[19:16] <= reg_dat[3:0];
 		10'b100_1010_001:	bltSrcWid[15:0] <= reg_dat;
 		10'b100_1010_010:	bltDstWid[19:16] <= reg_dat[3:0];
@@ -1198,14 +1261,14 @@ if (reg_cs|reg_copper) begin
 		10'b100_1010_101:   bltPipedepth <= reg_dat[4:0];
 		10'b100_1010_110:	bltCtrl <= reg_dat;
 		10'b100_1010_111:	blt_op <= reg_dat;
-		10'b100_1011_000:   srcA_cnt[19:16] <= reg_dat[3:0];
-		10'b100_1011_001:   srcA_cnt[15:0] <= reg_dat;
-		10'b100_1011_010:   srcB_cnt[19:16] <= reg_dat[3:0];
-        10'b100_1011_011:   srcB_cnt[15:0] <= reg_dat;
-		10'b100_1011_100:   srcC_cnt[19:16] <= reg_dat[3:0];
-        10'b100_1011_101:   srcC_cnt[15:0] <= reg_dat;
-		10'b100_1011_110:   dstD_cnt[19:16] <= reg_dat[3:0];
-        10'b100_1011_111:   dstD_cnt[15:0] <= reg_dat;
+		10'b100_1011_000:   bltA_cnt[19:16] <= reg_dat[3:0];
+		10'b100_1011_001:   bltA_cnt[15:0] <= reg_dat;
+		10'b100_1011_010:   bltB_cnt[19:16] <= reg_dat[3:0];
+        10'b100_1011_011:   bltB_cnt[15:0] <= reg_dat;
+		10'b100_1011_100:   bltC_cnt[19:16] <= reg_dat[3:0];
+        10'b100_1011_101:   bltC_cnt[15:0] <= reg_dat;
+		10'b100_1011_110:   bltD_cnt[19:16] <= reg_dat[3:0];
+        10'b100_1011_111:   bltD_cnt[15:0] <= reg_dat;
 
 		10'b100_110?_??0:	copper_adr[reg_adr[4:2]][19:16] <= reg_dat[3:0];
 		10'b100_110?_??1:	copper_adr[reg_adr[4:2]][15:0] <= reg_dat;
@@ -1285,7 +1348,7 @@ if (cs_ram) begin
     else
     	dat_o <= ram_data_o;
 end
-else if(cs_reg)
+else // if(cs_reg)
 	case(adr_i[10:1])
 	10'b0010000110: dat_o <= collision[31:16];
 	10'b0010000111: dat_o <= collision[15:0];
@@ -1535,21 +1598,21 @@ ST_IDLE:
 			bltAa <= 5'd0;
 			bltBa <= 5'd0;
 			bltCa <= 5'd0;
-			srcA_wadr <= srcA_badr;
-			srcB_wadr <= srcB_badr;
-			srcC_wadr <= srcC_badr;
-			dstD_wadr <= dstD_badr;
-			srcA_wcnt <= 20'd1;
-			srcB_wcnt <= 20'd1;
-			srcC_wcnt <= 20'd1;
-			dstD_wcnt <= 20'd1;
-			srcA_dcnt <= 20'd1;
-			srcB_dcnt <= 20'd1;
-			srcC_dcnt <= 20'd1;
-			srcA_hcnt <= 20'd1;
-			srcB_hcnt <= 20'd1;
-			srcC_hcnt <= 20'd1;
-			dstD_hcnt <= 20'd1;
+			bltA_wadr <= bltA_badr;
+			bltB_wadr <= bltB_badr;
+			bltC_wadr <= bltC_badr;
+			bltD_wadr <= bltD_badr;
+			bltA_wcnt <= 20'd1;
+			bltB_wcnt <= 20'd1;
+			bltC_wcnt <= 20'd1;
+			bltD_wcnt <= 20'd1;
+			bltA_dcnt <= 20'd1;
+			bltB_dcnt <= 20'd1;
+			bltC_dcnt <= 20'd1;
+			bltA_hcnt <= 20'd1;
+			bltB_hcnt <= 20'd1;
+			bltC_hcnt <= 20'd1;
+			bltD_hcnt <= 20'd1;
 			bltA_residue <= 16'h0000;
 			bltB_residue <= 16'h0000;
 			bltC_residue <= 16'h0000;
@@ -1574,6 +1637,7 @@ ST_IDLE:
 			case(ctrl[3:0])
 			4'd0:	state <= ST_READ_CHAR_BITMAP;
 			4'd2:	state <= DL_PRECALC;
+			4'd6:	state <= ngs;
 			default:	ctrl[14] <= 1'b0;
 			endcase
 		end
@@ -1604,6 +1668,17 @@ ST_CMD:
 		4'd5:	begin
 				hrTexture <= cmdq_out[`TXHANDLE];
 				state <= ST_TILERECT;
+				end
+		4'd6:	begin
+				ctrl[11:8] <= cmdq_out[12:9];	// raster op
+        		bkcolor <= cmdq_out[`BKCOLOR];
+                x0 <= cmdq_out[`X0POS];
+                y0 <= cmdq_out[`Y0POS];
+                x1 <= cmdq_out[`X1POS];
+                y1 <= cmdq_out[`Y1POS];
+                x2 <= cmdq_out[`X2POS];
+                y2 <= cmdq_out[`Y2POS];
+				state <= DT_SORT;
 				end
 		default:	state <= ST_IDLE;
 		endcase
@@ -1933,21 +2008,21 @@ ST_BLTDMA2:
 	begin
 		if (loopcnt > 5'd2) begin
     	    ram_ce <= `HIGH;
-			ram_addr <= srcA_wadr;
+			ram_addr <= bltA_wadr;
 			if (bitcnt==4'd0) begin
-        		srcA_wadr <= srcA_wadr + bltinc;
-			    srcA_hcnt <= srcA_hcnt + 20'd1;
-			    if (srcA_hcnt==bltSrcWid) begin
-				    srcA_hcnt <= 20'd1;
-				    srcA_wadr <= srcA_wadr + srcA_mod + bltinc;
+        		bltA_wadr <= bltA_wadr + bltinc;
+			    bltA_hcnt <= bltA_hcnt + 20'd1;
+			    if (bltA_hcnt==bltSrcWid) begin
+				    bltA_hcnt <= 20'd1;
+				    bltA_wadr <= bltA_wadr + bltA_mod + bltinc;
 					bitcnt <= bltCtrl[0] ? 4'd15 : 4'd0;
 				end
-                srcA_wcnt <= srcA_wcnt + 20'd1;
-                srcA_dcnt <= srcA_dcnt + 20'd1;
-                if (srcA_wcnt==srcA_cnt) begin
-                    srcA_wadr <= srcA_badr;
-                    srcA_wcnt <= 20'd1;
-                    srcA_hcnt <= 20'd1;
+                bltA_wcnt <= bltA_wcnt + 20'd1;
+                bltA_dcnt <= bltA_dcnt + 20'd1;
+                if (bltA_wcnt==bltA_cnt) begin
+                    bltA_wadr <= bltA_badr;
+                    bltA_wcnt <= 20'd1;
+                    bltA_hcnt <= 20'd1;
 					bitcnt <= bltCtrl[0] ? 4'd15 : 4'd0;
                 end
             end
@@ -1958,13 +2033,13 @@ ST_BLTDMA2:
             //blt_bmpA <= ram_data_o;
             blt_bmpA <=   ((bltCtrl[8] ? ((zbuf ? zbram_data_o : ram_data_o) << bltA_shift[3:0]) | bltA_residue :
             				 ((zbuf ? zbram_data_o : ram_data_o) >> bltA_shift[3:0])| bltA_residue ))
-                        & ((srcA_hcnt==bltSrcWid) ? bltLWMask : 16'hFFFF)
-                        & ((srcA_hcnt==20'd1) ? bltFWMask : 16'hFFFF);
+                        & ((bltA_hcnt==bltSrcWid) ? bltLWMask : 16'hFFFF)
+                        & ((bltA_hcnt==20'd1) ? bltFWMask : 16'hFFFF);
             bltA_residue <= bltCtrl[8] ? (zbuf ? zbram_data_o : ram_data_o) >> (5'd16-bltA_shift[3:0]) :
             			(zbuf ? zbram_data_o : ram_data_o) << (5'd16-bltA_shift[3:0]);
         end
 		loopcnt <= loopcnt - 5'd1;
-		if (loopcnt==5'd0 || srcA_dcnt==dstD_cnt) begin
+		if (loopcnt==5'd0 || bltA_dcnt==bltD_cnt) begin
 			if (bltCtrl[3])
 				state <= ST_BLTDMA3;
 			else if (bltCtrl[5])
@@ -1990,21 +2065,21 @@ ST_BLTDMA4:
 	begin
 		if (loopcnt > 5'd2) begin
     	    ram_ce <= `HIGH;
-			ram_addr <= srcB_wadr;
+			ram_addr <= bltB_wadr;
 			if (bitcnt==4'd0) begin
-                srcB_wadr <= srcB_wadr + bltinc;
-                srcB_hcnt <= srcB_hcnt + 20'd1;
-                if (srcB_hcnt==bltSrcWid) begin
-                    srcB_hcnt <= 20'd1;
-                    srcB_wadr <= srcB_wadr + srcB_mod + bltinc;
+                bltB_wadr <= bltB_wadr + bltinc;
+                bltB_hcnt <= bltB_hcnt + 20'd1;
+                if (bltB_hcnt==bltSrcWid) begin
+                    bltB_hcnt <= 20'd1;
+                    bltB_wadr <= bltB_wadr + bltB_mod + bltinc;
 					bitcnt <= bltCtrl[2] ? 4'd15 : 4'd0;
                 end
-                srcB_wcnt <= srcB_wcnt + 20'd1;
-                srcB_dcnt <= srcB_dcnt + 20'd1;
-                if (srcB_wcnt==srcB_cnt) begin
-                    srcB_wadr <= srcB_badr;
-                    srcB_wcnt <= 20'd1;
-                    srcB_hcnt <= 20'd1;
+                bltB_wcnt <= bltB_wcnt + 20'd1;
+                bltB_dcnt <= bltB_dcnt + 20'd1;
+                if (bltB_wcnt==bltB_cnt) begin
+                    bltB_wadr <= bltB_badr;
+                    bltB_wcnt <= 20'd1;
+                    bltB_hcnt <= 20'd1;
 					bitcnt <= bltCtrl[2] ? 4'd15 : 4'd0;
                 end
             end
@@ -2019,7 +2094,7 @@ ST_BLTDMA4:
 //            blt_bmpB <=   (((zbuf ? zbram_data_o : ram_data_o) >> bltB_shift[3:0]) | bltB_residue);
 		end
 		loopcnt <= loopcnt - 5'd1;
-		if (loopcnt==5'd0 || srcB_dcnt==dstD_cnt) begin
+		if (loopcnt==5'd0 || bltB_dcnt==bltD_cnt) begin
 			if (bltCtrl[5])
 				state <= ST_BLTDMA5;
 			else
@@ -2043,21 +2118,21 @@ ST_BLTDMA6:
 	begin
 		if (loopcnt > 5'd2) begin
     	    ram_ce <= `HIGH;
-			ram_addr <= srcC_wadr;
+			ram_addr <= bltC_wadr;
 			if (bitcnt==4'd0) begin
-                srcC_wadr <= srcC_wadr + bltinc;
-                srcC_hcnt <= srcC_hcnt + 20'd1;
-                if (srcC_hcnt==bltSrcWid) begin
-                    srcC_hcnt <= 20'd1;
-                    srcC_wadr <= srcC_wadr + srcC_mod + bltinc;
+                bltC_wadr <= bltC_wadr + bltinc;
+                bltC_hcnt <= bltC_hcnt + 20'd1;
+                if (bltC_hcnt==bltSrcWid) begin
+                    bltC_hcnt <= 20'd1;
+                    bltC_wadr <= bltC_wadr + bltC_mod + bltinc;
 					bitcnt <= bltCtrl[4] ? 4'd15 : 4'd0;
                 end
-                srcC_wcnt <= srcC_wcnt + 20'd1;
-                srcC_dcnt <= srcC_dcnt + 20'd1;
-                if (srcC_wcnt==srcC_cnt) begin
-                    srcC_wadr <= srcC_badr;
-                    srcC_wcnt <= 20'd1;
-                    srcC_hcnt <= 20'd1;
+                bltC_wcnt <= bltC_wcnt + 20'd1;
+                bltC_dcnt <= bltC_dcnt + 20'd1;
+                if (bltC_wcnt==bltC_cnt) begin
+                    bltC_wadr <= bltC_badr;
+                    bltC_wcnt <= 20'd1;
+                    bltC_hcnt <= 20'd1;
 					bitcnt <= bltCtrl[4] ? 4'd15 : 4'd0;
                 end
             end
@@ -2071,7 +2146,7 @@ ST_BLTDMA6:
             			(zbuf ? zbram_data_o : ram_data_o) << (5'd16-bltC_shift[3:0]);
 		end
 		loopcnt <= loopcnt - 5'd1;
-		if (loopcnt==5'd0 || srcC_dcnt==dstD_cnt)
+		if (loopcnt==5'd0 || bltC_dcnt==bltD_cnt)
 			state <= ST_BLTDMA7;
 	end
 	// Do channel D
@@ -2092,24 +2167,24 @@ ST_BLTDMA8:
 		else
 		    ram_we <= 2'b11;
 	    ram_ce <= `HIGH;
-		ram_addr <= dstD_wadr;
+		ram_addr <= bltD_wadr;
 		// If there's no source then a fill operation muct be taking place.
 		if (bltCtrl[1]|bltCtrl[3]|bltCtrl[5])
 			ram_data_i <= bltabc;
 		else
 			ram_data_i <= bltD_dat;	// fill color
-		dstD_wadr <= dstD_wadr + bltinc;
-		dstD_wcnt <= dstD_wcnt + 20'd1;
-		dstD_hcnt <= dstD_hcnt + 24'd1;
-		if (dstD_hcnt==bltDstWid) begin
-			dstD_hcnt <= 24'd1;
-			dstD_wadr <= dstD_wadr + dstD_mod + bltinc;
+		bltD_wadr <= bltD_wadr + bltinc;
+		bltD_wcnt <= bltD_wcnt + 20'd1;
+		bltD_hcnt <= bltD_hcnt + 24'd1;
+		if (bltD_hcnt==bltDstWid) begin
+			bltD_hcnt <= 24'd1;
+			bltD_wadr <= bltD_wadr + bltD_mod + bltinc;
 		end
 		bltAa <= bltAa - 5'd1;	// move to next queue entry
 		bltBa <= bltBa - 5'd1;
 		bltCa <= bltCa - 5'd1;
 		loopcnt <= loopcnt - 5'd1;
-		if (dstD_wcnt==dstD_cnt) begin
+		if (bltD_wcnt==bltD_cnt) begin
 			bltRdf <= `FALSE;
 			state <= ST_IDLE;
 			bltCtrl[14] <= 1'b0;
@@ -2206,14 +2281,286 @@ DL_TEST:
 			gcx <= gcx + sx;
 		if (e2 <  dx)
 			gcy <= gcy + sy;
-		if (loopcnt==5'd0)
+		if (loopcnt==5'd0) begin
+			if ((ctrl[11:8] != 4'h1) &&
+				(ctrl[11:8] != 4'h0) &&
+				(ctrl[11:8] != 4'hF))
+				ngs <= DL_GETPIXEL;
+			else
+				ngs <= DL_SETPIXEL;
 			state <= ST_IDLE;
+		end
 		else if ((ctrl[11:8] != 4'h1) &&
 			(ctrl[11:8] != 4'h0) &&
 			(ctrl[11:8] != 4'hF))
 			state <= DL_GETPIXEL;
 		else
 			state <= DL_SETPIXEL;
+	end
+
+// ----------------------------------------------------------------------------
+// Filled Triangle drawing
+// Uses the standard method for drawing filled triangles.
+// Requires some fixed point math and division / multiplication.
+// ----------------------------------------------------------------------------
+
+// First step - sort vertices
+
+DT_SORT:
+	begin
+		ctrl[14] <= 1'b1;				// set busy indicator
+		if (y0 < y1 && y0 < y2) begin
+			v0x <= {x0,16'h0000};
+			v0y <= {y0,16'h0000};
+			if (y1 < y2) begin
+				v1x <= {x1,16'h0000};
+				v1y <= {y1,16'h0000};
+				v2x <= {x2,16'h0000};
+				v2y <= {y2,16'h0000};
+			end
+			else begin
+				v1x <= {x2,16'h0000};
+				v1y <= {y2,16'h0000};
+				v2x <= {x1,16'h0000};
+				v2y <= {y1,16'h0000};
+			end
+		end
+		else if (y1 < y2) begin
+			v0y <= {y1,16'h0000};
+			v0x <= {x1,16'h0000};
+			if (y0 < y2) begin
+				v1y <= {y0,16'h0000};
+				v1x <= {x0,16'h0000};
+				v2y <= {y2,16'h0000};
+				v2x <= {x2,16'h0000};
+			end
+			else begin
+				v1y <= {y2,16'h0000};
+				v1x <= {x2,16'h0000};
+				v2y <= {y0,16'h0000};
+				v2x <= {x0,16'h0000};
+			end
+		end
+		// y2 < y0 && y2 < y1
+		else begin
+			v0y <= {y2,16'h0000};
+			v0x <= {x2,16'h0000};
+			if (y0 < y1) begin
+				v1y <= {y0,16'h0000};
+				v1x <= {x0,16'h0000};
+				v2y <= {y1,16'h0000};
+				v2x <= {x1,16'h0000};
+			end
+			else begin
+				v1y <= {y1,16'h0000};
+				v1x <= {x1,16'h0000};
+				v2y <= {y0,16'h0000};
+				v2x <= {x0,16'h0000};
+			end
+		end
+		state <= DT1;
+	end
+
+// Flat bottom (FB) or flat top (FT) triangle drawing
+// Calc inv slopes
+DT_SLOPE1:
+	begin
+		div_ld <= `TRUE;
+		trimd <= 8'hE0;
+		if (fbt) begin
+			div_a <= w1x - w0x;
+			div_b <= w1y - w0y;
+		end
+		else begin
+			div_a <= w2x - w0x;
+			div_b <= w2y - w0y;
+		end
+		ngs <= DT_SLOPE1a;
+		state <= ST_IDLE;
+	end
+DT_SLOPE1a:
+	begin
+		trimd <= {trimd[6:0],1'b0};
+		div_ld <= `FALSE;
+		if (div_idle && trimd==8'h00) begin
+			invslope0 <= div_qo[27:0];
+			if (fbt) begin
+				div_a <= w2x - w0x;
+				div_b <= w2y - w0y;
+			end
+			else begin
+				div_a <= w2x - w1x;
+				div_b <= w2y - w1y;
+			end
+			div_ld <= `TRUE;
+			ngs <= DT_SLOPE2;
+    		trimd <= 8'hE0;
+			state <= ST_IDLE;
+		end
+	end
+DT_SLOPE2:
+	begin
+		div_ld <= `FALSE;
+		trimd <= {trimd[6:0],1'b0};
+		if (div_idle && trimd==8'h00) begin
+			invslope1 <= div_qo[27:0];
+			state <= DT_LINE1;
+		end
+	end
+DT_LINE1:
+	begin
+	    if (fbt) begin
+		    curx0 <= w0x;
+	   	    curx1 <= w0x;
+    		gcy <= w0y[27:16];
+		end
+		else begin
+		    curx0 <= w2x;
+            curx1 <= w2x;
+            gcy <= w2y[27:16];
+		end
+		state <= DT_LINE2;
+	end
+DT_LINE2:
+	begin
+		loopcnt <= 5'd31;
+		gcx <= curx0[27:16];
+		state <= DT_SETPIXEL;
+	end
+DT_SETPIXEL:
+	begin
+	    ram_ce <= `HIGH;
+		ram_addr <= zbuf ? ma[19:3] : ma;
+		if (zbuf) begin
+			zbram_we <= 2'b11;
+			ram_data_i <= zbram_data_o & ~{2'b11 << {ma[2:0],1'b0}} | (zlayer << {ma[2:0],1'b0});
+		end
+		else begin
+			ram_we <= 2'b11;
+			case(ctrl[11:8])
+			4'd0:	ram_data_i <= 16'h0000;
+			4'd1:	ram_data_i <= bkcolor;
+			4'd4:	ram_data_i <= bkcolor & ram_data_o;
+			4'd5:	ram_data_i <= bkcolor | ram_data_o;
+			4'd6:	ram_data_i <= bkcolor ^ ram_data_o;
+			4'd7:	ram_data_i <= bkcolor & ~ram_data_o;
+			4'hF:	ram_data_i <= 16'h7FFF;
+			endcase
+		end
+		loopcnt <= loopcnt - 5'd1;
+		gcx <= gcx + 12'd1;
+		if (gcx>=curx1[27:16])
+			state <= DT_INCY;
+		else if (loopcnt==5'd0) begin
+			ngs <= DT_SETPIXEL;
+			state <= ST_IDLE;
+//			bltCtrl[13] <= 1'b1;
+		end
+	end
+DT_INCY:
+	begin
+		if (fbt) begin
+			curx0 <= curx0 + invslope0;
+			curx1 <= curx1 + invslope1;
+			gcy <= gcy + 12'd1;
+		end
+		else begin
+			curx0 <= curx0 - invslope0;
+			curx1 <= curx1 - invslope1;
+			gcy <= gcy - 12'd1;
+		end
+		if (gcy>=w1y[27:16] && fbt==1'b1)
+			state <= retstate;
+	    else if (gcy<=w0y[27:16] && fbt==1'b0)
+	        state <= retstate;
+		else
+			state <= DT_LINE2;
+	end
+
+DT1:
+	begin
+		// Simple case of flat bottom
+		if (v1y==v2y) begin
+			fbt <= 1'b1;
+			w0x <= v0x;
+			w0y <= v0y;
+			w1x <= v1x;
+			w1y <= v1y;
+			w2x <= v2x;
+			w2y <= v2y;
+			state <= DT_SLOPE1;
+			retstate <= DT6;
+		end
+		// Simple case of flat top
+		else if (v0y==v1y) begin
+			fbt <= 1'b0;
+			w0x <= v0x;
+			w0y <= v0y;
+			w1x <= v1x;
+			w1y <= v1y;
+			w2x <= v2x;
+			w2y <= v2y;
+			state <= DT_SLOPE1;
+			retstate <= DT6;
+		end
+		// Need to calculte 4th vertice
+		else begin
+			div_ld <= `TRUE;
+			div_a <= v1y - v0y;
+			div_b <= v2y - v0y;
+			trimd <= 8'hE0;
+			state <= DT2;
+		end
+	end
+DT2:
+	begin
+		div_ld <= `FALSE;
+		trimd <= {trimd[6:0],1'b0};
+		if (div_idle && trimd==8'h00) begin
+			trimd <= 8'b11111111;
+			v3y <= v1y;
+			ngs <= DT3;
+			state <= ST_IDLE;
+		end
+	end
+DT3:
+	begin
+		trimd <= {trimd[6:0],1'b0};
+		if (trimd==8'h00) begin
+			v3x <= v0x + trimult[43:16];
+			v3x[15:0] <= 16'h0000;
+			state <= DT4;
+		end
+	end
+DT4:
+	begin
+		fbt <= 1'b1;
+		w0x <= v0x;
+		w0y <= v0y;
+		w1x <= v1x;
+		w1y <= v1y;
+		w2x <= v3x;
+		w2y <= v3y;
+		state <= DT_SLOPE1;
+		retstate <= DT5;
+	end
+DT5:
+	begin
+		fbt <= 1'b0;
+		w0x <= v1x;
+		w0y <= v1y;
+		w1x <= v3x;
+		w1y <= v3y;
+		w2x <= v2x;
+		w2y <= v2y;
+		state <= DT_SLOPE1;
+		retstate <= DT6;
+	end
+DT6:
+	begin
+		ngs <= ST_IDLE;
+		state <= ST_IDLE;
+		ctrl[14] <= 1'b0;
 	end
 
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
@@ -2240,9 +2587,9 @@ ST_FILLRECT1:
 	end
 ST_FILLRECT2:
 	begin
-		dstD_badr <= {8'h00,y0} * bitmapWidth + bmpBase + x0[11:0];
-		dstD_mod <= bitmapWidth - dx;
-		dstD_cnt <= dx * dy;
+		bltD_badr <= {8'h00,y0} * bitmapWidth + bmpBase + x0[11:0];
+		bltD_mod <= bitmapWidth - dx;
+		bltD_cnt <= dx * dy;
 		bltDstWid <= dx;
 		bltD_dat <= bkcolor;
 		bltCtrl <= 16'h8080;
@@ -2270,13 +2617,13 @@ ST_TILERECT1:
 	end
 ST_TILERECT2:
 	begin
-		srcA_badr <= TextureDesco[19:0];
-		srcA_mod <= TextureDesco[75:64];
-		srcA_cnt <= TextureDesco[47:32];
+		bltA_badr <= TextureDesco[19:0];
+		bltA_mod <= TextureDesco[75:64];
+		bltA_cnt <= TextureDesco[47:32];
 		bltSrcWid <= TextureDesco[63:48];
-		dstD_badr <= {8'h00,y0} * bitmapWidth + bmpBase + x0[11:0];
-		dstD_mod <= bitmapWidth - dx;
-		dstD_cnt <= dx * dy;
+		bltD_badr <= {8'h00,y0} * bitmapWidth + bmpBase + x0[11:0];
+		bltD_mod <= bitmapWidth - dx;
+		bltD_cnt <= dx * dy;
 		bltDstWid <= dx;
 		bltD_dat <= bkcolor;
 		bltCtrl <= 16'h8082;

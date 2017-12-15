@@ -57,8 +57,8 @@ Pass 7
 File: bootrom.asm
 asm68 V5.8  (c) 1995-2017 Robert Finch - 680xx cross assembler
 
- E2003 (line 2285): undefined symbol 'AUXIN'
- E2028 (line 2285): branch out of range - displacement 3E7B4
+ E2003 (line 2288): undefined symbol 'AUXIN'
+ E2028 (line 2288): branch out of range - displacement 3E79C
 File: C:\cores5\N4V68kSys\software\bootrom\MyTinyB.asm
 asm68 V5.8  (c) 1995-2017 Robert Finch - 680xx cross assembler
 
