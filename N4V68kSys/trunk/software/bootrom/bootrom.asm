@@ -223,6 +223,7 @@ fpga_version:
 		move.l	a0,188			; set trap 15 vector
 		ori.b	#$80,ccr
 
+		bsr		_KeybdInit
 ;		bsr		mmu_init
 		bsr		i2c_setup
 ;		bsr		rtc_read
@@ -695,6 +696,7 @@ Set400x300:
 		movea.l	#VDGREG,a6			; a6 = pointer to register set
 		move.w	#1,$7F0(a6)			; 1 = divide by 2 mode
 		move.w	#400,$406(a6)		; bitmap width register
+		move.w	#300,$40A(a6)		; bitmap height
 		lea		tbl800x600,a0
 		lea		$7C0(a6),a1			; a1 points to timing registers
 		move.w	#$A123,$7F2(a6)		; unlock timing regs
@@ -711,6 +713,7 @@ Set800x600:
 		movea.l	#VDGREG,a6			; a6 = pointer to register set
 		move.w	#0,$7F0(a6)			; 0 = no divide
 		move.w	#800,$406(a6)		; bitmap width register
+		move.w	#600,$40A(a6)		; bitmap height
 		lea		tbl800x600,a0
 		lea		$7C0(a6),a1			; a1 points to timing registers
 		move.w	#$A123,$7F2(a6)		; unlock timing regs
@@ -727,7 +730,7 @@ Set800x600:
 ;tbl640x480:
 ;	dc.w	800,525
 tbl800x600:
-	dc.w	1056,628,40,168,1,5,1056,256,628,28,1056,256,628,28,$EFE,$FE5,0
+	dc.w	1056,628,40,168,1,5,1056,256,628,28,1055,257,628,28,$EFE,$FE5,0
 tbl1280x768:
 	dc.w	1680,795,67,201,2,5,1680,400,795,27,1680,400,795,27,$EFD,$FD7,0
 
@@ -1306,6 +1309,11 @@ dspmem1:
 ; +-------- = extended
 ;
 ;==============================================================================
+
+_KeybdInit:
+		clr.b	_KeyState1
+		clr.b	_KeyState2
+		rts
 
 _KeybdGetStatus:
 		move.b	KEYBD+1,d1
@@ -2442,7 +2450,10 @@ ramtest7:
 GraphicsDemo:
 		bsr		DrawLines
 		bsr		DrawRects
-		bsr		DrawTriangles
+		moveq	#6,d3
+		bsr		DrawTrianglesOrCurves
+		moveq	#8,d3
+		bsr		DrawTrianglesOrCurves
 		bra		Monitor
 
 DrawRects:
@@ -2531,10 +2542,10 @@ DrawLines:
 		rts
 
 ;===============================================================================
-; Draw triangles randomly on the screen.
+; Draw triangles or curves randomly on the screen.
 ;===============================================================================
 
-DrawTriangles:
+DrawTrianglesOrCurves:
 		lea		$FFDC0000,A6	; I/O base
 		lea		VDGREG,a5
 		move.l	#10000,d6		; repeat a few times
@@ -2566,12 +2577,14 @@ DrawTriangles:
 		cmp.w	#28,d7			; more than 28 queued ?
 		bhs.s	.0002			; too many, wait for queue to empty
 		move.w	#12,leds
+		move.w	d4,$420(a5)		; fill curve
+		swap	d4
 		move.w	#1,$422(a5)		; raster op = COPY
 		move.w	d4,$424(a5)		; set color
 		move.l	d0,$426(a5)		; set x0,y0
 		move.l	d1,$430(a5)		; set x1,y1
 		move.l	d2,$434(a5)		; set x2,y2
-		move.w	#6,$42E(a5)		; pulse command queue (6 = fill triangle)
+		move.w	d3,$42E(a5)		; pulse command queue (6 = fill triangle, 8 = curve)
 		sub.l	#1,d6
 		bne		.0001			; go back and do more triangles
 		rts
