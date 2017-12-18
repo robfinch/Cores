@@ -37,6 +37,9 @@
 `define WHITE	16'h7FFF
 
 `define CLIPEN		0
+`define CMDDAT		31:0
+`define CMDCMD		47:32
+
 `define CHARCODE	8:0
 `define FGCOLOR		24:9
 `define BKCOLOR		40:25
@@ -51,7 +54,8 @@
 `define Y2POS		128:117
 `define BASEADRH	120:105
 `define BASEADRL	136:121
-`define CMDQ_SZ		136
+`define CMDQ_WID	64
+`define CMDQ_DEP    32
 `define TXHANDLE	8:0
 `define TXCOUNT		24:9
 `define TXMOD		40:25
@@ -241,11 +245,55 @@ parameter BC5 = 8'd133;
 parameter BC6 = 8'd134;
 parameter BC7 = 8'd135;
 parameter BC8 = 8'd136;
+parameter BC5a = 8'd137;
+parameter BC9 = 8'd138;
+parameter DT_START = 8'd139;
+parameter HL_LINE = 8'd140;
+parameter HL_GETPIXEL = 8'd141;
+parameter HL_GETPIXEL2 = 8'd142;
+parameter HL_GETPIXEL3 = 8'd143;
+parameter HL_SETPIXEL = 8'd144;
+parameter GETPIXEL = 8'd145;
+parameter GETPIXEL2 = 8'd146;
+parameter GETPIXEL3 = 8'd147;
+parameter SETPIXEL = 8'd148;
+parameter DELAY2 = 8'd149;
+parameter DELAY2a = 8'd150;
+parameter DELAY2b = 8'd151;
+parameter DAAL1 = 8'd155;
+parameter DAAL2 = 8'd156;
+parameter DAAL3 = 8'd157;
+parameter DAAL4 = 8'd158;
+parameter DAAL5 = 8'd159;
+parameter DAAL6 = 8'd160;
+parameter DAAL7 = 8'd161;
+parameter DAAL8 = 8'd162;
+parameter DAAL9 = 8'd163;
+parameter DAAL10 = 8'd164;
+parameter DAAL11 = 8'd165;
+parameter DAAL12 = 8'd166;
+parameter DAAL13 = 8'd167;
+parameter DAAL14 = 8'd168;
+parameter DAAL15 = 8'd169;
+parameter DAAL16 = 8'd170;
+parameter DAAL17 = 8'd171;
+parameter DT7 = 8'd172;
+parameter DT8 = 8'd173;
+parameter DT9 = 8'd174;
+parameter DT10 = 8'd175;
+parameter DAAL7a = 8'd176;
+parameter DAAL8a = 8'd177;
+parameter DAAL11a = 8'd178;
+parameter DAAL12a = 8'd179;
+parameter DAAL15a = 8'd180;
+parameter DAAL16a = 8'd181;
 
 integer n;
 reg [7:0] state = ST_IDLE;
 reg [7:0] retstate = ST_IDLE;	// subroutine return
 reg [7:0] retstate2 = ST_IDLE;	// subroutine return
+reg [7:0] retstate3 = ST_IDLE;
+reg [7:0] retstate4 = ST_IDLE;
 reg [7:0] ngs = ST_IDLE;		// next graphic state for continue
 wire eol;
 wire eof;
@@ -285,7 +333,7 @@ wire [31:0] cap = {27'h000,NSPR[4:0]};
 // +-------------------- busy indicator
 reg [15:0] ctrl;
 reg [1:0] lowres = 2'b01;
-reg [19:0] bmpBase = 20'h00000;		// base address of bitmap
+reg [19:0] TargetBase = 20'h00000;		// base address of bitmap
 reg [19:0] charBmpBase = 20'h5C000;	// base address of character bitmaps
 reg [11:0] hstart = 12'hEFF;		// -261
 reg [11:0] vstart = 12'hFE6;		// -41
@@ -294,13 +342,14 @@ reg [11:0] vpos;
 wire [11:0] vctr;
 wire [11:0] hctr;
 reg [4:0] fpos;
-reg [15:0] bitmapWidth = 16'd400;
-reg [15:0] bitmapHeight = 16'd300;
+reg [15:0] TargetWidth = 16'd400;
+reg [15:0] TargetHeight = 16'd300;
 reg [15:0] borderColor;
 wire [15:0] rgb_i;					// internal rgb output from ram
 
-reg [`CMDQ_SZ:0] cmdq_in;
-wire [`CMDQ_SZ:0] cmdq_out;
+reg [4:0] cmdq_ndx;
+reg [`CMDQ_WID-1:0] cmdq_in;
+wire [`CMDQ_WID-1:0] cmdq_out;
 
 reg [15:0] clipX0, clipY0, clipX1, clipY1;
 reg clipEnable;
@@ -308,14 +357,19 @@ reg clipEnable;
 reg zbuf;							// z buffer flag
 reg [3:0] zlayer;
 
-/*
-// Points
+
+// Untransformed points
 reg [31:0] up0x, up0y, up0z;
 reg [31:0] up1x, up1y, up1z;
 reg [31:0] up2x, up2y, up2z;
+reg [31:0] up0xs, up0ys, up0zs;
+reg [31:0] up1xs, up1ys, up1zs;
+reg [31:0] up2xs, up2ys, up2zs;
+// Points after transform
+reg [31:0] p0x, p0y, p0z, p1x, p1y, p1z, p2x, p2y, p2z;
 
 // Point Transform
-reg transform;
+reg transform, otransform;
 reg [31:0] aa, ab, ac, at;
 reg [31:0] ba, bb, bc, bt;
 reg [31:0] ca, cb, cc, ct;
@@ -356,15 +410,26 @@ wire signed [63:0] z1_prime = cax1 + cby1 + ccz1 + {ct,16'h0000};
 wire signed [63:0] x2_prime = aax2 + aby2 + acz2 + {at,16'h0000};
 wire signed [63:0] y2_prime = bax2 + bby2 + bcz2 + {bt,16'h0000};
 wire signed [63:0] z2_prime = cax2 + cby2 + ccz2 + {ct,16'h0000};
-wire signed [31:0] p0x = transform ? x0_prime[47:16] : up0x;
-wire signed [31:0] p0y = transform ? y0_prime[47:16] : up0y;
-wire signed [31:0] p0z = transform ? z0_prime[47:16] : up0z;
-wire signed [31:0] p1x = transform ? x1_prime[47:16] : up1x;
-wire signed [31:0] p1y = transform ? y1_prime[47:16] : up1y;
-wire signed [31:0] p1z = transform ? z1_prime[47:16] : up1z;
-wire signed [31:0] p2x = transform ? x2_prime[47:16] : up2x;
-wire signed [31:0] p2y = transform ? y2_prime[47:16] : up2y;
-wire signed [31:0] p2z = transform ? z2_prime[47:16] : up2z;
+
+always @(posedge clk_i)
+	p0x <= transform ? x0_prime[47:16] : up0x;
+always @(posedge clk_i)
+	p0y <= transform ? y0_prime[47:16] : up0y;
+always @(posedge clk_i)
+	p0z <= transform ? z0_prime[47:16] : up0z;
+always @(posedge clk_i)
+	p1x <= transform ? x1_prime[47:16] : up1x;
+always @(posedge clk_i)
+	p1y <= transform ? y1_prime[47:16] : up1y;
+always @(posedge clk_i)
+	p1z <= transform ? z1_prime[47:16] : up1z;
+always @(posedge clk_i)
+	p2x <= transform ? x2_prime[47:16] : up2x;
+always @(posedge clk_i)
+	p2y <= transform ? y2_prime[47:16] : up2y;
+always @(posedge clk_i)
+	p2z <= transform ? z2_prime[47:16] : up2z;
+/*
 wire [11:0] x0 = p0x[27:16];
 wire [11:0] y0 = p0y[27:16];
 wire [11:0] z0 = p0z[27:16];
@@ -376,40 +441,92 @@ wire [11:0] y2 = p2y[27:16];
 wire [11:0] z2 = p2z[27:16];
 */
 
+reg [31:0] maxX, maxY, minX, minY;
+
 // Line draw
 reg [13:0] x0,y0,x1,y1,x2,y2;
 reg [13:0] x0a,y0a,x1a,y1a,x2a,y2a;
-wire signed [13:0] absx1mx0 = (x1 < x0) ? x0-x1 : x1-x0;
-wire signed [13:0] absy1my0 = (y1 < y0) ? y0-y1 : y1-y0;
-reg [13:0] gcx,gcy;		// graphics cursor position
+wire signed [31:0] absx1mx0 = (p1x < p0x) ? p0x-p1x : p1x-p0x;
+wire signed [31:0] absy1my0 = (p1y < p0y) ? p0y-p1y : p1y-p0y;
+reg [15:0] gcx,gcy;		// graphics cursor position
 reg [11:0] ppl;
-wire [19:0] cyPPL = gcy * bitmapWidth;
+wire [19:0] cyPPL = gcy * TargetWidth;
 wire [19:0] offset = cyPPL + gcx;
-wire [19:0] ma = bmpBase + offset;
-reg signed [13:0] dx,dy;
-reg signed [13:0] sx,sy;
-reg signed [13:0] err;
-wire signed [13:0] e2 = err << 1;
+wire [19:0] ma = TargetBase + offset;
+reg signed [15:0] dx,dy;
+reg signed [15:0] sx,sy;
+reg signed [15:0] err;
+wire signed [15:0] e2 = err << 1;
+// Anti-aliased
+reg steep;
+reg [31:0] openColor;
+reg [31:0] xend, yend, gradient, xgap;
+reg [31:0] xpxl1, ypxl1, xpxl2, ypxl2;
+reg [68:0] pixColorR, pixColorG, pixColorB;
+reg [31:0] intery;
+reg signed [31:0] dxa,dya;
+
+function [31:0] ipart;
+input [31:0] nn;
+    ipart = {nn[31:16],16'h0000};
+endfunction
+
+function [31:0] fpart;
+input [31:0] nn;
+    fpart = {16'h0,nn[15:0]};
+endfunction
+
+function [31:0] rfpart;
+input [31:0] nn;
+    rfpart = (32'h10000 - fpart(nn));
+endfunction
+
+function [31:0] round;
+input [31:0] nn;
+    round = ipart(nn + 32'h8000); 
+endfunction
+
+function [20:0] blend1;
+input [4:0] comp;
+input [15:0] alpha;
+	blend1 = comp * alpha;
+endfunction
+
+function [15:0] blend;
+input [15:0] color1;
+input [15:0] color2;
+input [15:0] alpha;
+reg [63:0] blend2;
+begin
+	blend2 =
+		{blend1(color1[`R],alpha),blend1(color1[`G],alpha),blend1(color1[`B],alpha)} +
+		{blend1(color2[`R],(16'hFFFF-alpha)),
+		 blend1(color2[`G],(16'hFFFF-alpha)),
+		 blend1(color2[`B],(16'hFFFF-alpha))};
+	blend = {blend2[62:58],blend2[41:37],blend2[20:16]};
+end
+endfunction
+
 
 // Triangle draw
 reg fbt;	// flat bottom=1 or top=0 triangle
 reg [7:0] trimd;	// timer for mult
-reg [27:0] v0x, v0y, v1x, v1y, v2x, v2y, v3x, v3y;
-reg [27:0] w0x, w0y, w1x, w1y, w2x, w2y;
-reg signed [27:0] invslope0, invslope1;
-reg [27:0] curx0, curx1, cdx, endx;
+reg [31:0] v0x, v0y, v1x, v1y, v2x, v2y, v3x, v3y;
+reg [31:0] w0x, w0y, w1x, w1y, w2x, w2y;
+reg signed [31:0] invslope0, invslope1;
+reg [31:0] curx0, curx1, cdx, endx;
 
 // Bezier Curves
 reg [1:0] fillCurve;
-reg [27:0] bv0x, bv0y, bv1x, bv1y, bv2x, bv2y;
-reg [27:0] bezierT, bezier1mT, bezierInc = 28'h0100;
-reg [55:0] bezier1mTP0xw, bezier1mTP1xw;
-reg [55:0] bezier1mTP0yw, bezier1mTP1yw;
-reg [55:0] bezierTP1x, bezierTP2x;
-reg [55:0] bezierTP1y, bezierTP2y;
-reg [27:0] bezierP0plusP1x, bezierP1plusP2x;
-reg [27:0] bezierP0plusP1y, bezierP1plusP2y;
-reg [55:0] bezierBxw, bezierByw;
+reg [31:0] bv0x, bv0y, bv1x, bv1y, bv2x, bv2y;
+reg [31:0] bezierT, bezier1mT, bezierInc = 32'h0100;
+reg [63:0] bezier1mTP0xw, bezier1mTP1xw;
+reg [63:0] bezier1mTP0yw, bezier1mTP1yw;
+reg [63:0] bezierTP1x, bezierTP2x;
+reg [63:0] bezierTP1y, bezierTP2y;
+reg [31:0] bezierP0plusP1x, bezierP1plusP2x;
+reg [31:0] bezierP0plusP1y, bezierP1plusP2y;
+reg [63:0] bezierBxw, bezierByw;
 
 reg [5:0] flashcnt;
 
@@ -456,7 +573,7 @@ reg font_fixed;						// 1 = fixed width font
 reg [4:0] font_height;
 reg [4:0] font_width;
 reg [19:0] glyph_tbl_adr;			// address of the glyph table
-reg [15:0] charBoxX0, charBoxX1, charBoxY0, charBoxY1;
+reg [31:0] charBoxX0, charBoxX1, charBoxY0, charBoxY1;
 
 reg [9:0] pixcnt;
 reg [4:0] pixhc,pixvc;
@@ -609,15 +726,16 @@ reg bltRdf;
 reg [19:0] tgtaddr;					// upper left corner of target in bitmap
 reg [19:0] tgtindex;				// indexing of pixel from target address point
 reg [4:0] loopcnt;
-reg [ 8:0] charcode;                // character code being processed
+reg [15:0] charcode;                // character code being processed
 reg [31:0] charbmp;					// hold character bitmap scanline
 reg [15:0] fgcolor;					// character colors
-reg [15:0] bkcolor;					// top bit indicates overlay mode
+reg [31:0] penColor;					// top bit indicates overlay mode
+reg [31:0] fillColor;
 reg [3:0] pixxm, pixym;             // maximum # pixels for char
 
-reg ack,rdy;
+reg ack,rdy,rdy2;
 reg rwsr;							// read / write shadow ram
-wire chrp = rwsr & ~rdy;			// chrq pulse
+wire chrp = rdy & ~rdy2;			// chrq pulse
 wire cs_reg = cyc_i & stb_i & cs_i;
 wire cs_ram = cyc_i & stb_i & cs_ram_i;
 
@@ -659,28 +777,28 @@ wire [18:0] P0, P1, P2;
 multRndx umul0 (
   .CLK(clk),
   .A(vpos),
-  .B(bitmapWidth),
+  .B(TargetWidth),
   .P(P0)
 );
 multRndx umul1 (
   .CLK(clk),
   .A({1'b0,vpos[11:1]}),
-  .B(bitmapWidth),
+  .B(TargetWidth),
   .P(P1)
 );
 multRndx umul2 (
   .CLK(clk),
   .A({2'b00,vpos[11:2]}),
-  .B(bitmapWidth),
+  .B(TargetWidth),
   .P(P2)
 );
 
 reg div_ld;
-reg signed [27:0] div_a, div_b;
-wire signed [55:0] div_qo;
+reg signed [31:0] div_a, div_b;
+wire signed [63:0] div_qo;
 wire div_idle;
 
-AVDivider #(.WID(56)) udiv1
+AVDivider #(.WID(64)) udiv1
 (
 	.rst(rst_i),
 	.clk(clk_i),
@@ -688,8 +806,8 @@ AVDivider #(.WID(56)) udiv1
 	.abort(1'b0),
 	.sgn(1'b1),
 	.sgnus(1'b0),
-	.a({{12{div_a[27]}},div_a,16'h0}),
-	.b({{28{div_b[27]}},div_b}),
+	.a({{16{div_a[31]}},div_a,16'h0}),
+	.b({{32{div_b[31]}},div_b}),
 	.qo(div_qo),
 	.ro(),
 	.dvByZr(),
@@ -697,11 +815,11 @@ AVDivider #(.WID(56)) udiv1
 	.idle(div_idle)
 );
 
-wire [55:0] trimult;
+wire [63:0] trimult;
 AVTriMult umul3
 (
   .CLK(clk_i),
-  .A(div_qo[27:0]),
+  .A(div_qo[31:0]),
   .B(v2x-v0x),
   .P(trimult)
 );
@@ -858,9 +976,9 @@ begin
     14'b??_1111_1011_0001: rdndx <= cursorWaddr[{1'b1,hpos[5:2]}+5'd1];
     14'b??_1111_1011_0101: rdndx <= cursorWaddr[{1'b1,hpos[5:2]}+5'd1];
     14'b??_1111_1011_1001: rdndx <= cursorWaddr[{1'b1,hpos[5:2]}+5'd1];
-    14'b00_1111_1111_1101: rdndx <= P0 + bmpBase;	// Px = vertical pos * bitmap width (above)
-    14'b01_1111_1111_1101: rdndx <= P1 + bmpBase;
-    14'b10_1111_1111_1101: rdndx <= P2 + bmpBase;
+    14'b00_1111_1111_1101: rdndx <= P0 + TargetBase;	// Px = vertical pos * bitmap width (above)
+    14'b01_1111_1111_1101: rdndx <= P1 + TargetBase;
+    14'b10_1111_1111_1101: rdndx <= P2 + TargetBase;
     14'b00_1111_1111_1110: rdndx <= rdndx + 20'd1;
     14'b00_1111_1111_1111: rdndx <= rdndx + 20'd1;
     14'b??_1111_1111_1111: rdndx <= rdndx + 20'd1;
@@ -1123,14 +1241,18 @@ always @(posedge clk)
 // Command queue
 // clk_i clock domain
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+reg bltDone1;
+reg reg_cs;
+reg reg_we;
+reg [10:0] reg_adr;
+reg [15:0] reg_dat;
 
-reg [4:0] cmdq_ndx;
+//wire cs_cmdq = cs_reg && adr_i[10:1]==10'b100_0010_111 && chrp && we_i;
+wire cs_cmdq = reg_cs && reg_adr[10:1]==10'b100_0100_100 && chrp && reg_we;
 
-wire cs_cmdq = cs_reg && adr_i[10:1]==10'b100_0010_111 && chrp && we_i;
 
-
-vtdl #(.WID(128), .DEP(32)) char_q (.clk(clk_i), .ce(cs_cmdq), .a(cmdq_ndx), .d(cmdq_in), .q(cmdq_out));
-
+vtdl #(.WID(`CMDQ_WID), .DEP(`CMDQ_DEP)) char_q (.clk(clk_i), .ce(cs_cmdq), .a(cmdq_ndx), .d(cmdq_in), .q(cmdq_out));
+/*
 wire [8:0] charcode_qo = cmdq_out[`CHARCODE];
 wire [15:0] charfg_qo = cmdq_out[`FGCOLOR];
 wire [15:0] charbk_qo = cmdq_out[`BKCOLOR];
@@ -1143,7 +1265,7 @@ wire [11:0] cmdx2_qo = cmdq_out[`X1POS];
 wire [11:0] cmdy2_qo = cmdq_out[`Y1POS];
 wire [11:0] cmdx3_qo = cmdq_out[`X2POS];
 wire [11:0] cmdy3_qo = cmdq_out[`Y2POS];
-
+*/
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Audio
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -1227,22 +1349,19 @@ reg [8:0] hrTexture;
 reg [75:0] TextureDesc [0:511];
 always @(posedge clk_i)
 	if (wrtx)
-		TextureDesc[hwTexture] <= {
+		TextureDesc[hwTexture] <= { 16'hFFFF
+		/*
 			cmdq_out[`TXMOD],
 			cmdq_out[`TXWIDTH],
 			cmdq_out[`TXCOUNT],
 			cmdq_out[`BASEADRH],
 			cmdq_out[`BASEADRL]
+		*/
 		};
 wire [75:0] TextureDesco = TextureDesc[hrTexture];
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-reg bltDone1;
-reg reg_cs;
-reg reg_we;
-reg [10:0] reg_adr;
-reg [15:0] reg_dat;
 
 reg [15:0] shadow_ram [0:1023];		// register shadow ram
 wire [15:0] srdo;					// shadow ram data out
@@ -1251,7 +1370,6 @@ always @(posedge clk_i)
 		shadow_ram[reg_adr[10:1]] <= reg_dat;
 assign srdo = shadow_ram[reg_adr[10:1]];
 
-reg rdy2;
 always @(posedge clk_i)
 	rwsr <= cs_reg & ~reg_copper;
 always @(posedge clk_i)
@@ -1281,6 +1399,7 @@ if (rst_i) begin
 	ack <= pAckStyle;
 end
 else begin
+div_ld <= `FALSE;
 reg_copper <= `FALSE;
 reg_cs <= cs_reg;
 reg_we <= we_i;
@@ -1310,25 +1429,24 @@ if (reg_cs|reg_copper) begin
         10'b01?_????_101:	cursor_pz[reg_adr[8:4]] <= reg_dat[3:0];
         10'b01?_????_110:	cursorMcnt[reg_adr[8:4]] <= reg_dat;
 
-		10'b100_0000_000:	bmpBase[19:16] <= reg_dat[3:0];
-		10'b100_0000_001:	bmpBase[15:0] <= reg_dat;
-        10'b100_0000_011:   bitmapWidth <= reg_dat;
-        10'b100_0000_101:	bitmapHeight <= reg_dat;
+		10'b100_0000_000:	TargetBase[19:16] <= reg_dat[3:0];
+		10'b100_0000_001:	TargetBase[15:0] <= reg_dat;
+        10'b100_0000_011:   TargetWidth <= reg_dat;
+        10'b100_0000_101:	TargetHeight <= reg_dat;
 
 		10'b100_0001_000:	font_tbl_adr[19:16] <= reg_dat[3:0];
 		10'b100_0001_001:	font_tbl_adr[15:0] <= reg_dat;
 		10'b100_0001_010:	font_id <= reg_dat;
-
+/*
 	 	10'b100_0010_000:	cmdq_in[`CHARCODE] <= reg_dat[8:0];	// char code
 		10'b100_0010_001:	cmdq_in[`FGCOLOR] <= reg_dat;	// fgcolor
-		10'b100_0010_010:	cmdq_in[`BKCOLOR] <= reg_dat;	// bkcolor
+		10'b100_0010_010:	cmdq_in[`BKCOLOR] <= reg_dat;	// penColor
 		10'b100_0010_011:	cmdq_in[`X0POS] <= reg_dat[11:0];	// xpos1
 		10'b100_0010_100:	cmdq_in[`Y0POS] <= reg_dat[11:0];	// ypos1
 		10'b100_0010_101:   begin
 							cmdq_in[`CHARXM] <= reg_dat[3:0];	// fntsz
 							cmdq_in[`CHARYM] <= reg_dat[11:8];	// fntsz
 							end
-		10'b100_0010_110: 	cmdq_ndx <= reg_dat[4:0];
 		10'b100_0010_111:	cmdq_in[`CMD] <= reg_dat[7:0];	// cmd
 		10'b100_0011_000:	cmdq_in[`X1POS] <= reg_dat[11:0];	// xpos2
 		10'b100_0011_001:	cmdq_in[`Y1POS] <= reg_dat[11:0];	// ypos2
@@ -1336,11 +1454,16 @@ if (reg_cs|reg_copper) begin
 		10'b100_0011_011:	cmdq_in[`Y2POS] <= reg_dat[11:0];	// ypos2
 //		10'b100_0011_010:	cmdq_in[`BASEADRH] <= reg_dat;
 //		10'b100_0011_011:	cmdq_in[`BASEADRL] <= reg_dat;
+*/
+		10'b100_0010_110: 	cmdq_ndx <= reg_dat[4:0];
 		10'b100_0011_110:	zlayer <= reg_dat[3:0];
 		10'b100_0011_111:	begin
 							zbuf <= reg_dat[0];
 							clipEnable <= reg_dat[15];
 							end
+		10'b100_0100_000:	cmdq_in[31:16] <= reg_dat;
+		10'b100_0100_001:	cmdq_in[15:0] <= reg_dat;
+		10'b100_0100_011:	cmdq_in[47:32] <= reg_dat;
 /*							
 		10'b100_0100_000:   aa[31:16] <= reg_dat;
 		10'b100_0100_001:   aa[15:0] <= reg_dat;					
@@ -1403,6 +1526,7 @@ if (reg_cs|reg_copper) begin
 		10'b100_110?_??0:	copper_adr[reg_adr[4:2]][19:16] <= reg_dat[3:0];
 		10'b100_110?_??1:	copper_adr[reg_adr[4:2]][15:0] <= reg_dat;
 		10'b100_1110_000:	copper_ctrl <= reg_dat;
+
 		10'b101_0???_???:	rasti_en[reg_adr[6:1]] <= reg_dat;
 		10'b101_1000_000:	irq_en <= reg_dat;
 		10'b101_1000_001:	irq_status <= irq_status & ~reg_dat;
@@ -1448,7 +1572,7 @@ if (reg_cs|reg_copper) begin
         10'b110_0100_101:	audi_dat <= reg_dat;
         10'b110_0101_000:	aud_ctrl <= reg_dat;
         10'b110_0101_001:   aud_ctrl2 <= reg_dat;
-
+		
 		// Sync generator control regs  $7C0 to $7DE      
         10'b111_1100_000:	if (sgLock) hTotal <= reg_dat[11:0];
         10'b111_1100_001:	if (sgLock) vTotal <= reg_dat[11:0];
@@ -1764,11 +1888,11 @@ ST_IDLE:
 		// busy with a graphics command ?
 		else if (ctrl[14]) begin
 //			bltCtrl[13] <= 1'b0;
-			case(ctrl[3:0])
-			4'd0:	state <= ST_READ_CHAR_BITMAP;
-			4'd2:	state <= DL_PRECALC;
-			4'd6:	state <= ngs;
-			4'd8:   state <= ngs;
+			case(ctrl[7:0])
+			8'd0:	state <= ST_READ_CHAR_BITMAP;
+			8'd2:	state <= DL_PRECALC;
+			8'd6:	state <= ngs;
+			8'd8:   state <= ngs;
 			default:	ctrl[14] <= 1'b0;
 			endcase
 		end
@@ -1781,57 +1905,76 @@ ST_IDLE:
 
 ST_CMD:
 	begin
-		ctrl[3:0] <= cmd_qo[3:0];
+		state <= ST_IDLE;
+		ctrl[7:0] <= cmdq_out[39:32];
 		ctrl[14] <= 1'b0;
-		case(cmd_qo[3:0])
-		4'd0:	state <= ST_READ_FONT_TBL;	// draw character
-		4'd1:	state <= ST_PLOT;
-		4'd2:	begin
-				ctrl[11:8] <= cmdq_out[12:9];	// raster op
+		case(cmdq_out[39:32])
+		8'd0:	begin
+				charcode <= cmdq_out[15:0];
+				state <= ST_READ_FONT_TBL;	// draw character
+				end
+		8'd1:	state <= ST_PLOT;
+		8'd2:	begin
+				ctrl[11:8] <= cmdq_out[7:4];	// raster op
 				state <= DL_INIT;			// draw line
 				end
-		4'd3:	state <= ST_FILLRECT;
-		4'd4:	begin
+		8'd3:	begin
+				ctrl[11:8] <= cmdq_out[7:4];	// raster op
+				state <= ST_FILLRECT;
+				end
+		8'd4:	begin
 				wrtx <= 1'b1;
 				hwTexture <= cmdq_out[`TXHANDLE];
 				state <= ST_IDLE;
 				end
-		4'd5:	begin
+		8'd5:	begin
 				hrTexture <= cmdq_out[`TXHANDLE];
+				ctrl[11:8] <= cmdq_out[7:4];	// raster op
 				state <= ST_TILERECT;
 				end
-		4'd6:	begin	// Draw triangle
-				ctrl[11:8] <= cmdq_out[12:9];	// raster op
-        		bkcolor <= cmdq_out[`BKCOLOR];
-                x0 <= cmdq_out[`X0POS];
-                y0 <= cmdq_out[`Y0POS];
-                x1 <= cmdq_out[`X1POS];
-                y1 <= cmdq_out[`Y1POS];
-                x2 <= cmdq_out[`X2POS];
-                y2 <= cmdq_out[`Y2POS];
-				state <= DT_SORT;
+		8'd6:	begin	// Draw triangle
+				ctrl[11:8] <= cmdq_out[7:4];	// raster op
+				state <= DT_START;
 				retstate2 <= ST_IDLE;
 				end
-		4'd7:	begin	// Set clip region
+		8'd7:	begin	// Set clip region
+			/*
 				clipEnable <= cmdq_out[`CLIPEN];
 				clipX0 <= cmdq_out[`X0POS];
 				clipY0 <= cmdq_out[`Y0POS];
 				clipX1 <= cmdq_out[`X1POS];
 				clipY1 <= cmdq_out[`Y1POS];
-				state <= ST_IDLE;
+			*/
 				end
-		4'd8:	begin	// Bezier Curve
-				ctrl[11:8] <= cmdq_out[12:9];	// raster op
+		8'd8:	begin	// Bezier Curve
+				ctrl[11:8] <= cmdq_out[7:4];	// raster op
 				fillCurve <= cmdq_out[1:0];
-        		bkcolor <= cmdq_out[`BKCOLOR];
-                x0 <= cmdq_out[`X0POS];
-                y0 <= cmdq_out[`Y0POS];
-                x1 <= cmdq_out[`X1POS];
-                y1 <= cmdq_out[`Y1POS];
-                x2 <= cmdq_out[`X2POS];
-                y2 <= cmdq_out[`Y2POS];
 				state <= BC0;
 				end
+		8'd9:	transform <= cmdq_out[0];
+		8'd12:	penColor <= cmdq_out[`CMDDAT];
+		8'd13:	fillColor <= cmdq_out[`CMDDAT];
+		8'd16:	up0x <= cmdq_out[`CMDDAT];
+		8'd17:	up0y <= cmdq_out[`CMDDAT];
+		8'd18:	up0z <= cmdq_out[`CMDDAT];
+		8'd19:	up1x <= cmdq_out[`CMDDAT];
+		8'd20:	up1y <= cmdq_out[`CMDDAT];
+		8'd21:	up1z <= cmdq_out[`CMDDAT];
+		8'd22:	up2x <= cmdq_out[`CMDDAT];
+		8'd23:	up2y <= cmdq_out[`CMDDAT];
+		8'd24:	up2z <= cmdq_out[`CMDDAT];
+		8'd32:	aa <= cmdq_out[`CMDDAT];
+		8'd33:	ab <= cmdq_out[`CMDDAT];
+		8'd34:	ac <= cmdq_out[`CMDDAT];
+		8'd35:	at <= cmdq_out[`CMDDAT];
+		8'd36:	ba <= cmdq_out[`CMDDAT];
+		8'd37:	bb <= cmdq_out[`CMDDAT];
+		8'd38:	bc <= cmdq_out[`CMDDAT];
+		8'd39:	bt <= cmdq_out[`CMDDAT];
+		8'd40:	ca <= cmdq_out[`CMDDAT];
+		8'd41:	cb <= cmdq_out[`CMDDAT];
+		8'd42:	cc <= cmdq_out[`CMDDAT];
+		8'd43:	ct <= cmdq_out[`CMDDAT];
 		default:	state <= ST_IDLE;
 		endcase
 	end
@@ -1911,8 +2054,8 @@ ST_AUD33:
 `ifdef AUD_PLOT
 ST_AUD_PLOT:
 	begin
-		bkcolor <= 16'h7FFF;
-		tgtaddr <= {12'h00,audi_dat[15:8]^8'h80} * {4'h00,bitmapWidth} + bmpBase + audi_wadr[7:0];
+		penColor <= 16'h7FFF;
+		tgtaddr <= {12'h00,audi_dat[15:8]^8'h80} * {4'h00,TargetWidth} + TargetBase + audi_wadr[7:0];
 		state <= ST_AUD_PLOT_WRITE;
 	end
 ST_AUD_PLOT_WRITE:
@@ -1920,7 +2063,7 @@ ST_AUD_PLOT_WRITE:
 	    ram_ce <= `HIGH;
 		ram_we <= 2'b11;
 		ram_addr <= tgtaddr;
-		ram_data_i <= bkcolor;
+		ram_data_i <= penColor;
 		state <= ST_AUD_PLOT_RET;
 	end
 ST_AUD_PLOT_RET:
@@ -1937,22 +2080,19 @@ ST_AUD_PLOT_RET:
 
 ST_PLOT:
 	begin
-		bkcolor <= charbk_qo;
-		tgtaddr <= {8'h00,cmdy1_qo} * {4'h00,bitmapWidth} + bmpBase + cmdx1_qo;
-		state <= (charbk_qo[9]|zbuf) ? ST_PLOT_READ : ST_PLOT_WRITE;
+		//penColor <= charbk_qo;
+		tgtaddr <= {8'h00,p0y} * {4'h00,TargetWidth} + TargetBase + p0x;
+		state <= (penColor[`A]|zbuf) ? ST_PLOT_READ : ST_PLOT_WRITE;
 	end
 ST_PLOT_READ:
     begin
 	    ram_ce <= `HIGH;
 		ram_addr <= zbuf ? tgtaddr[19:3] : tgtaddr;
-        state <= ST_PLOT_READ2;
+		push_go(ST_PLOT_WRITE,DELAY2);
     end
-ST_PLOT_READ2:
-    state <= ST_PLOT_READ3;
-ST_PLOT_READ3:
-	state <= ST_PLOT_WRITE;
 ST_PLOT_WRITE:
 	begin
+		//set_pixel(penColor);
 		ram_addr <= zbuf ? tgtaddr[19:3] : tgtaddr;
 		if (zbuf) begin
 			zbram_we <= 2'b11;
@@ -1960,13 +2100,13 @@ ST_PLOT_WRITE:
 		end
 		else begin
 			ram_we <= 2'b11;
-			if (bkcolor[`A]) begin
-				ram_data_i[`R] <= ram_data_o[`R] >> bkcolor[2:0];
-				ram_data_i[`G] <= ram_data_o[`G] >> bkcolor[5:3];
-				ram_data_i[`B] <= ram_data_o[`B] >> bkcolor[8:6];
+			if (penColor[`A]) begin
+				ram_data_i[`R] <= ram_data_o[`R] >> penColor[2:0];
+				ram_data_i[`G] <= ram_data_o[`G] >> penColor[5:3];
+				ram_data_i[`B] <= ram_data_o[`B] >> penColor[8:6];
 			end
 			else
-				ram_data_i <= bkcolor;
+				ram_data_i <= penColor;
 		end
 		state <= ST_PLOT_RET;
 	end
@@ -1995,9 +2135,9 @@ ST_READ_FONT_TBL:
 	begin
 		pixhc <= 5'd0;
 		pixvc <= 5'd0;
-		charcode <= charcode_qo;
-		fgcolor <= charfg_qo;
-		bkcolor <= charbk_qo;
+		//charcode <= charcode_qo;
+		//fgcolor <= charfg_qo;
+		//penColor <= charbk_qo;
 	    ram_ce <= `HIGH;
 		ram_addr <= {font_tbl_adr[18:2],2'b0} + {font_id,2'b00};
 		state <= ST_READ_FONT_TBL1;
@@ -2041,8 +2181,8 @@ ST_READ_FONT_TBL5:
 	end
 ST_READ_FONT_TBL6:
 	begin
-		charBoxX0 <= cmdx1_qo;
-		charBoxY0 <= cmdy1_qo;
+		charBoxX0 <= p0x;
+		charBoxY0 <= p0y;
 		charBmpBase <= charBmpBase + (charcode << font_width[4]) * (font_height + 7'd1);
 		if (font_fixed) begin
     	    ram_ce <= `LOW;
@@ -2073,10 +2213,10 @@ ST_CHAR_INIT:
 		pixvc <= 4'd0;
 		charcode <= charcode_qo;
 		fgcolor <= charfg_qo;
-		bkcolor <= charbk_qo;
+		penColor <= charbk_qo;
 		pixxm <= charxm_qo;
 		pixym <= charym_qo;
-		tgtaddr <= {8'h00,cmdy1_qo} * {8'h00,bitmapWidth} + {bmpBase[19:12],cmdx1_qo};
+		tgtaddr <= {8'h00,cmdy1_qo} * {8'h00,TargetWidth} + {TargetBase[19:12],cmdx1_qo};
 		state <= ST_READ_CHAR_BITMAP;
 	end
 */
@@ -2097,8 +2237,8 @@ ST_READ_CHAR_BITMAP3:
 ST_READ_CHAR_BITMAP_DAT:
 	begin
 		charbmp[15:0] <= ram_data_o;
-		tgtaddr <= {8'h00,charBoxY0} * {4'h00,bitmapWidth} + bmpBase + charBoxX0;
-		tgtindex <= {14'h00,pixvc} * {4'h00,bitmapWidth};
+		tgtaddr <= {8'h00,charBoxY0[31:16]} * {4'h00,TargetWidth} + TargetBase + charBoxX0[31:16];
+		tgtindex <= {14'h00,pixvc} * {4'h00,TargetWidth};
 		state <= font_width[4] ? ST_READ_CHAR_BITMAP_DAT2 : ST_WRITE_CHAR;
 	end
 ST_READ_CHAR_BITMAP_DAT2:
@@ -2109,22 +2249,22 @@ ST_READ_CHAR_BITMAP_DAT2:
 ST_WRITE_CHAR:
 	begin
 		ram_addr <= tgtaddr + tgtindex + {14'h00,pixhc};
-		if (~bkcolor[`A]) begin
-			if (clipEnable && (charBoxX0 + pixhc < clipX0 || charBoxX0 + pixhc >= clipX1 || charBoxY0 + pixvc < clipY0))
+		if (~fillColor[`A]) begin
+			if (clipEnable && (charBoxX0[31:16] + pixhc < clipX0 || charBoxX0[31:16] + pixhc >= clipX1 || charBoxY0[31:16] + pixvc < clipY0))
 				;
-			else if (charBoxX0 + pixhc >= bitmapWidth)
+			else if (charBoxX0[31:16] + pixhc >= TargetWidth)
 				;
 			else begin
 				ram_we <= 2'b11;
-				ram_data_i <= charbmp[font_width] ? fgcolor : bkcolor;
+				ram_data_i <= charbmp[font_width] ? penColor[15:0] : fillColor[15:0];
 			end
 		end
 		else begin
 			if (charbmp[font_width]) begin
 				if (zbuf) begin
-					if (clipEnable && (charBoxX0 + pixhc < clipX0 || charBoxX0 + pixhc >= clipX1 || charBoxY0 + pixvc < clipY0))
+					if (clipEnable && (charBoxX0[31:16] + pixhc < clipX0 || charBoxX0[31:16] + pixhc >= clipX1 || charBoxY0[31:16] + pixvc < clipY0))
 						;
-					else if (charBoxX0 + pixhc >= bitmapWidth)
+					else if (charBoxX0[31:16] + pixhc >= TargetWidth)
 						;
 					else begin
 						zbram_we <= 2'b11;
@@ -2132,13 +2272,13 @@ ST_WRITE_CHAR:
 					end
 				end
 				else begin
-					if (clipEnable && (charBoxX0 + pixhc < clipX0 || charBoxX0 + pixhc >= clipX1 || charBoxY0 + pixvc < clipY0))
+					if (clipEnable && (charBoxX0[31:16] + pixhc < clipX0 || charBoxX0[31:16] + pixhc >= clipX1 || charBoxY0[31:16] + pixvc < clipY0))
 						;
-					else if (charBoxX0 + pixhc >= bitmapWidth)
+					else if (charBoxX0[31:16] + pixhc >= TargetWidth)
 						;
 					else begin
-						ram_we <= {2{charBoxX0 + pixhc < bitmapWidth}};
-						ram_data_i <= fgcolor;
+						ram_we <= {2{charBoxX0[31:16] + pixhc < TargetWidth}};
+						ram_data_i <= penColor[15:0];
 					end
 				end
 			end
@@ -2153,9 +2293,9 @@ ST_WRITE_CHAR:
 	        state <= ST_PLOT_RET;
 		    pixhc <= 5'd0;
 		    pixvc <= pixvc + 5'd1;
-		    if (clipEnable && (charBoxY0 + pixvc + 16'd1 >= clipY1))
+		    if (clipEnable && (charBoxY0[31:16] + pixvc + 16'd1 >= clipY1))
 		    	ctrl[14] <= 1'b0;
-		    else if (charBoxY0 + pixvc + 16'd1 >= bitmapHeight)
+		    else if (charBoxY0[31:16] + pixvc + 16'd1 >= TargetHeight)
 		    	ctrl[14] <= 1'b0;
 		    else if (pixvc==font_height)
 		    	ctrl[14] <= 1'b0;
@@ -2372,7 +2512,29 @@ ST_BLTDMA8:
         end
 	end
 
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+DELAY2:	go(DELAY2a);
+DELAY2a: go(DELAY2b);
+DELAY2b: ret();
+	
 
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+// Pixel fetch / plot
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+/*
+GETPIXEL:
+	begin
+	    ram_ce <= `HIGH;
+		ram_addr <= zbuf ? ma[19:3] : ma;
+		push_go(SETPIXEL,DELAY2);
+	end
+SETPIXEL:
+	begin
+		set_pixel(penColor);
+		ret();
+	end
+*/
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 // Line draw states
 // Line drawing may also be done by the blitter.
@@ -2380,13 +2542,7 @@ ST_BLTDMA8:
 
 DL_INIT:
 	begin
-		bkcolor <= cmdq_out[`BKCOLOR];
-		x0 <= cmdq_out[`X0POS];
-		y0 <= cmdq_out[`Y0POS];
-		x1 <= cmdq_out[`X1POS];
-		y1 <= cmdq_out[`Y1POS];
-		state <= DL_PRECALC;
-		retstate <= ST_IDLE;
+		push_go(ST_IDLE,DL_PRECALC);
 	end
 
 // State to setup invariants for DRAWLINE
@@ -2395,78 +2551,44 @@ DL_PRECALC:
 		loopcnt <= 5'd17;
 		if (!ctrl[14]) begin
 			ctrl[14] <= 1'b1;
-			gcx <= x0;
-			gcy <= y0;
-			dx <= absx1mx0;
-			dy <= absy1my0;
-			if (x0 < x1) sx <= 14'h0001; else sx <= 14'h3FFF;
-			if (y0 < y1) sy <= 14'h0001; else sy <= 14'h3FFF;
-			err <= absx1mx0-absy1my0;
+			gcx <= p0x[31:16];
+			gcy <= p0y[31:16];
+			dx <= absx1mx0[31:16];
+			dy <= absy1my0[31:16];
+			if (p0x < p1x) sx <= 16'h0001; else sx <= 16'hFFFF;
+			if (p0y < p1y) sy <= 16'h0001; else sy <= 16'hFFFF;
+			err <= absx1mx0[31:16]-absy1my0[31:16];
 		end
 		else if (((ctrl[11:8] != 4'h1) &&
 			(ctrl[11:8] != 4'h0) &&
 			(ctrl[11:8] != 4'hF)) || zbuf)
-			state <= DL_GETPIXEL;
+			go(DL_GETPIXEL);
 		else
-			state <= DL_SETPIXEL;
+			go(DL_SETPIXEL);
 	end
 DL_GETPIXEL:
 	begin
 	    ram_ce <= `HIGH;
 		ram_addr <= zbuf ? ma[19:3] : ma;
-		state <= DL_GETPIXEL2;
+		push_go(DL_SETPIXEL,DELAY2);
 	end
-DL_GETPIXEL2:
-    state <= DL_GETPIXEL3;
-DL_GETPIXEL3:
-    state <= DL_SETPIXEL;
 DL_SETPIXEL:
 	begin
-	    ram_ce <= `HIGH;
-		ram_addr <= zbuf ? ma[19:3] : ma;
-		if (zbuf) begin
-			if (clipEnable && (gcx < clipX0 || gcx >= clipX1 || gcy < clipY0 || gcy >= clipY1))
-				;
-			else if (gcx >= bitmapWidth || gcy >= bitmapHeight)
-				;
-			else begin
-				zbram_we <= 2'b11;
-				ram_data_i <= zbram_data_o & ~{2'b11 << {ma[2:0],1'b0}} | (zlayer << {ma[2:0],1'b0});
-			end
-		end
-		else begin
-			if (clipEnable && (gcx < clipX0 || gcx >= clipX1 || gcy < clipY0 || gcy >= clipY1))
-				;
-			else if (gcx >= bitmapWidth || gcy >= bitmapHeight)
-				;
-			else begin
-				ram_we <= 2'b11;
-				case(ctrl[11:8])
-				4'd0:	ram_data_i <= 16'h0000;
-				4'd1:	ram_data_i <= bkcolor;
-				4'd4:	ram_data_i <= bkcolor & ram_data_o;
-				4'd5:	ram_data_i <= bkcolor | ram_data_o;
-				4'd6:	ram_data_i <= bkcolor ^ ram_data_o;
-				4'd7:	ram_data_i <= bkcolor & ~ram_data_o;
-				4'hF:	ram_data_i <= 16'h7FFF;
-				endcase
-			end
-		end
+		set_pixel(penColor,0,ctrl[11:8]);
 		loopcnt <= loopcnt - 5'd1;
-		if (gcx==x1 && gcy==y1) begin
-			state <= retstate;
+		if (gcx==p1x[31:16] && gcy==p1y[31:16]) begin
 			if (retstate==ST_IDLE)
 				ctrl[14] <= 1'b0;
-//			bltCtrl[13] <= 1'b1;
+			ret();
 		end
 		else
-			state <= DL_TEST;
+			go(DL_TEST);
 	end
 DL_TEST:
 	begin
 		ram_we <= {2{`LOW}};
 		zbram_we <= {2{`LOW}};
-		err <= err - ((e2 > -dy) ? dy : 14'd0) + ((e2 < dx) ? dx : 14'd0);
+		err <= err - ((e2 > -dy) ? dy : 16'd0) + ((e2 < dx) ? dx : 16'd0);
 		if (e2 > -dy)
 			gcx <= gcx + sx;
 		if (e2 <  dx)
@@ -2475,17 +2597,272 @@ DL_TEST:
 			if ((ctrl[11:8] != 4'h1) &&
 				(ctrl[11:8] != 4'h0) &&
 				(ctrl[11:8] != 4'hF))
-				ngs <= DL_GETPIXEL;
+				pause(DL_GETPIXEL);
 			else
-				ngs <= DL_SETPIXEL;
-			state <= ST_IDLE;
+				pause(DL_SETPIXEL);
 		end
 		else if ((ctrl[11:8] != 4'h1) &&
 			(ctrl[11:8] != 4'h0) &&
 			(ctrl[11:8] != 4'hF))
-			state <= DL_GETPIXEL;
+			go(DL_GETPIXEL);
 		else
-			state <= DL_SETPIXEL;
+			go(DL_SETPIXEL);
+	end
+
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+// Draw line with anti-aliasing.
+// Needs to read the underlying color and mix the two.
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+DAAL1:
+    begin
+    	steep <= absy1my0 > absx1mx0;
+        if (absy1my0 > absx1mx0) begin
+            up0x <= up0y;
+            up0y <= up0x;
+            up1x <= up1y;
+            up1y <= up1x;
+        end
+        push_go(DAAL3,DELAY2);
+    end
+DAAL3:
+    begin
+        if (p0x > p1x) begin
+            up0x <= up1x;
+            up1x <= up0x;
+            up0y <= up1y;
+            up1y <= up0y;
+        end
+        push_go(DAAL4,DELAY2);
+    end
+DAAL4:
+    begin
+        div_a <= p1y - p0y; // dy
+        div_b <= p1x - p0x; // dx
+        div_ld <= `TRUE;	// gradient = dy/dx
+        pause(DAAL5);
+    end
+DAAL5:
+    if (div_idle) begin
+        if (div_b == 32'h0) // dx
+            gradient <= 32'h10000;
+        else
+            gradient <= div_qo;
+        go(DAAL6);
+    end
+DAAL6:
+    begin
+        //xend <= {p0x[31:16],16'h8000}; // + 0.5
+        yend <= p0y + gradient * (round(p0x) - p0x);
+        xgap <= rfpart(p0x + 32'h8000);
+        xpxl1 <= round(p0x);
+        ypxl1 <= ipart(p0y + gradient * (round(p0x) - p0x));
+        go(DAAL7);
+    end
+DAAL7:
+    begin
+        if (steep) begin
+            gcx <= ypxl1[31:16];
+            gcy <= xpxl1[31:16]; 
+        end
+        else begin
+            gcx <= xpxl1[31:16];
+            gcy <= ypxl1[31:16]; 
+        end
+        go(DAAL7a);
+    end
+DAAL7a:
+	begin
+	    ram_ce <= `HIGH;
+		ram_addr <= zbuf ? ma[19:3] : ma;
+		push_go(DAAL8,DELAY2);
+	end
+DAAL8:
+    begin
+        set_pixel(penColor,(rfpart(yend) * xgap) >> 16,4'd3);
+        if (steep) begin
+            gcx <= ypxl1[31:16] + 16'd1;
+            gcy <= xpxl1[31:16];
+        end
+        else begin
+            gcx <= xpxl1[31:16] + 16'd1;
+            gcy <= ypxl1[31:16];
+        end
+        go(DAAL8a);
+    end
+DAAL8a:
+	begin
+	    ram_ce <= `HIGH;
+		ram_addr <= zbuf ? ma[19:3] : ma;
+		push_go(DAAL9,DELAY2);
+	end
+DAAL9:
+    begin
+        set_pixel(penColor,(fpart(yend) * xgap) >> 16,4'd3);
+        intery <= yend + gradient;
+        go(DAAL10);
+    end
+DAAL10:
+    begin
+        //xend <= round(p1x); // + 0.5
+        yend <= p1y + gradient * (round(p1x) - p1x);
+        xgap <= rfpart(p1x + 32'h8000);
+        xpxl2 <= round(p1x);
+        ypxl2 <= ipart(p1y + gradient * (round(p1x) - p1x));
+        go(DAAL11);
+    end
+DAAL11:
+    begin
+        if (steep) begin
+            gcx <= ypxl2[31:16];
+            gcy <= xpxl2[31:16]; 
+        end
+        else begin
+            gcx <= xpxl2[31:16];
+            gcy <= ypxl2[31:16]; 
+        end
+        go(DAAL11a);
+    end
+DAAL11a:
+	begin
+	    ram_ce <= `HIGH;
+		ram_addr <= zbuf ? ma[19:3] : ma;
+		push_go(DAAL12,DELAY2);
+	end
+DAAL12:
+    begin
+        set_pixel(penColor,(rfpart(yend) * xgap) >> 16,4'd3);
+        if (steep) begin
+            gcx <= ypxl2[31:16] + 16'd1;
+            gcy <= xpxl2[31:16];
+        end
+        else begin
+            gcx <= xpxl2[31:16] + 16'd1;
+            gcy <= ypxl2[31:16];
+        end
+        go(DAAL12a);
+    end
+DAAL12a:
+	begin
+	    ram_ce <= `HIGH;
+		ram_addr <= zbuf ? ma[19:3] : ma;
+		push_go(DAAL13,DELAY2);
+	end
+DAAL13:
+    begin
+        set_pixel(penColor,(fpart(yend) * xgap) >> 16,4'd3);
+        curx0 <= xpxl1 + 32'h10000;
+        curx1 <= xpxl2 - 32'h10000;
+        loopcnt <= 5'd31;
+        go(DAAL15);
+    end
+DAAL15:
+    begin
+        if (steep) begin
+            gcx <= intery[31:16];
+            gcy <= curx0[31:16];
+        end
+        else begin
+            gcy <= intery[31:16];
+            gcx <= curx0[31:16];
+        end
+        go(DAAL15a);
+    end
+DAAL15a:
+	begin
+	    ram_ce <= `HIGH;
+		ram_addr <= zbuf ? ma[19:3] : ma;
+		push_go(DAAL16,DELAY2);
+	end
+DAAL16:
+    begin
+        set_pixel(penColor,rfpart(intery),4'd3);
+        if (steep) begin
+            gcx <= intery[31:16] + 16'd1;
+            gcy <= curx0[31:16];
+        end
+        else begin
+            gcy <= intery[31:16] + 16'd1;
+            gcx <= curx0[31:16];
+        end
+        curx0 <= curx0 + 32'h10000;
+        intery <= intery + gradient;
+        go(DAAL16a);
+    end
+DAAL16a:
+	begin
+	    ram_ce <= `HIGH;
+		ram_addr <= zbuf ? ma[19:3] : ma;
+		push_go(DAAL17,DELAY2);
+	end
+DAAL17:
+    begin
+        set_pixel(penColor,fpart(intery),4'd3);
+        loopcnt <= loopcnt - 5'd1;
+        if (curx0 >= curx1)
+            ret();
+        else if (loopcnt==5'd0)
+            pause(DAAL15a);
+        else
+            go(DAAL15a);
+        if (steep) begin
+            gcx <= intery[31:16];
+            gcy <= curx0[31:16];
+        end
+        else begin
+            gcy <= intery[31:16];
+            gcx <= curx0[31:16];
+        end
+    end
+
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+// Draw horizontal line
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+// Swap the x-coordinate so that the line is always drawn left to right.
+HL_LINE:
+	begin
+		loopcnt <= 5'd31;
+		if (curx0 <= curx1) begin
+    		gcx <= curx0[31:16];
+    		endx <= curx1;
+    	end
+    	else begin
+    	    gcx <= curx1[31:16];
+    	    endx <= curx0;
+    	end
+		if (((ctrl[11:8] != 4'h1) &&
+            (ctrl[11:8] != 4'h0) &&
+            (ctrl[11:8] != 4'hF)) || zbuf)
+            go(HL_GETPIXEL);
+        else
+            go(HL_SETPIXEL);
+	end
+HL_GETPIXEL:
+    begin
+        ram_ce <= `HIGH;
+        ram_addr <= zbuf ? ma[19:3] : ma;
+        push_go(HL_SETPIXEL,DELAY2);
+    end
+HL_SETPIXEL:
+	begin
+		set_pixel(fillColor,0,ctrl[11:8]);
+		loopcnt <= loopcnt - 5'd1;
+		gcx <= gcx + 16'd1;
+		if (gcx>=endx[31:16])
+			ret();
+		else if (loopcnt==5'd0) begin
+            if (((ctrl[11:8] != 4'h1) &&
+                (ctrl[11:8] != 4'h0) &&
+                (ctrl[11:8] != 4'hF)) || zbuf)
+                pause(HL_GETPIXEL);
+            else
+            	pause(HL_SETPIXEL);
+		end
+		else if (((ctrl[11:8] != 4'h1) &&
+            (ctrl[11:8] != 4'h0) &&
+            (ctrl[11:8] != 4'hF)) || zbuf)
+            go(HL_GETPIXEL);
 	end
 
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
@@ -2495,60 +2872,121 @@ DL_TEST:
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
 // First step - sort vertices
+DT_START:								// allows p?? to update
+    begin
+    up0xs <= up0x;
+    up0ys <= up0y;
+    up0zs <= up0z;
+    up1xs <= up1x;
+    up1ys <= up1y;
+    up1zs <= up1z;
+    up2xs <= up2x;
+    up2ys <= up2y;
+    up2zs <= up2z;
+	go(DT_SORT);
+	end
 
 DT_SORT:
 	begin
 		ctrl[14] <= 1'b1;				// set busy indicator
-		if (y0 < y1 && y0 < y2) begin
-			v0x <= {x0,16'h0000};
-			v0y <= {y0,16'h0000};
-			if (y1 < y2) begin
-				v1x <= {x1,16'h0000};
-				v1y <= {y1,16'h0000};
-				v2x <= {x2,16'h0000};
-				v2y <= {y2,16'h0000};
+		if (p0y == p1y && p0y == p2y) begin
+		   if (p0x < p1x && p0x < p2x)
+		       curx0 <= p0x;
+		   else if (p1x < p2x)
+		       curx0 <= p1x;
+		   else
+		       curx0 <= p2x;
+		   if (p0x > p1x && p0x > p2x)
+		       curx1 <= p0x;
+		   else if (p1x > p2x)
+		       curx1 <= p1x;
+		   else
+		       curx1 <= p2x;
+		   gcy <= p0y[31:16];
+           go(HL_LINE);
+		end
+		else if (p0y <= p1y && p0y <= p2y) begin
+		    minY <= p0y;
+			v0x <= p0x;
+			v0y <= p0y;
+			if (p1y <= p2y) begin
+				v1x <= p1x;
+				v1y <= p1y;
+				v2x <= p2x;
+				v2y <= p2y;
+				maxY <= p2y;
 			end
 			else begin
-				v1x <= {x2,16'h0000};
-				v1y <= {y2,16'h0000};
-				v2x <= {x1,16'h0000};
-				v2y <= {y1,16'h0000};
+				v1x <= p2x;
+				v1y <= p2y;
+				v2x <= p1x;
+				v2y <= p1y;
+				maxY <= p1y;
 			end
 		end
-		else if (y1 < y2) begin
-			v0y <= {y1,16'h0000};
-			v0x <= {x1,16'h0000};
-			if (y0 < y2) begin
-				v1y <= {y0,16'h0000};
-				v1x <= {x0,16'h0000};
-				v2y <= {y2,16'h0000};
-				v2x <= {x2,16'h0000};
+		else if (p1y <= p2y) begin
+		    minY <= p1y;
+			v0y <= p1y;
+			v0x <= p1x;
+			if (p0y <= p2y) begin
+				v1y <= p0y;
+				v1x <= p0x;
+				v2y <= p2y;
+				v2x <= p2x;
+				maxY <= p2y;
 			end
 			else begin
-				v1y <= {y2,16'h0000};
-				v1x <= {x2,16'h0000};
-				v2y <= {y0,16'h0000};
-				v2x <= {x0,16'h0000};
+				v1y <= p2y;
+				v1x <= p2x;
+				v2y <= p0y;
+				v2x <= p0x;
+				maxY <= p0y;
 			end
 		end
 		// y2 < y0 && y2 < y1
 		else begin
-			v0y <= {y2,16'h0000};
-			v0x <= {x2,16'h0000};
-			if (y0 < y1) begin
-				v1y <= {y0,16'h0000};
-				v1x <= {x0,16'h0000};
-				v2y <= {y1,16'h0000};
-				v2x <= {x1,16'h0000};
+			v0y <= p2y;
+			v0x <= p2x;
+			minY <= p2y;
+			if (p0y <= p1y) begin
+				v1y <= p0y;
+				v1x <= p0x;
+				v2y <= p1y;
+				v2x <= p1x;
+				maxY <= p1y;
 			end
 			else begin
-				v1y <= {y1,16'h0000};
-				v1x <= {x1,16'h0000};
-				v2y <= {y0,16'h0000};
-				v2x <= {x0,16'h0000};
+				v1y <= p1y;
+				v1x <= p1x;
+				v2y <= p0y;
+				v2x <= p0x;
+				maxY <= p0y;
 			end
 		end
-		state <= DT1;
+		// Determine minium and maximum X coord.
+		if (p0x <= p1x && p0x <= p2x) begin
+		    minX <= p0x;
+		    if (p1x <= p2x)
+		        maxX <= p2x;
+		    else
+		        maxX <= p1x;
+		end
+		else if (p1x <= p2x) begin
+		    minX <= p1x;
+		    if (p0x <= p2x)
+		        maxX <= p2x;
+		    else
+		        maxX <= p0x;
+		end
+		else begin
+		    minX <= p2x;
+		    if (p0x < p1x)
+		        maxX <= p1x;
+		    else
+		        maxX <= p0x;
+		end
+		    
+		go(DT1);
 	end
 
 // Flat bottom (FB) or flat top (FT) triangle drawing
@@ -2565,15 +3003,13 @@ DT_SLOPE1:
 			div_a <= w2x - w0x;
 			div_b <= w2y - w0y;
 		end
-		ngs <= DT_SLOPE1a;
-		state <= ST_IDLE;
+		pause(DT_SLOPE1a);
 	end
 DT_SLOPE1a:
 	begin
 		trimd <= {trimd[6:0],1'b0};
-		div_ld <= `FALSE;
 		if (div_idle && trimd==8'h00) begin
-			invslope0 <= div_qo[27:0];
+			invslope0 <= div_qo[31:0];
 			if (fbt) begin
 				div_a <= w2x - w0x;
 				div_b <= w2y - w0y;
@@ -2583,133 +3019,69 @@ DT_SLOPE1a:
 				div_b <= w2y - w1y;
 			end
 			div_ld <= `TRUE;
-			ngs <= DT_SLOPE2;
     		trimd <= 8'hE0;
-			state <= ST_IDLE;
+			pause(DT_SLOPE2);
 		end
 	end
 DT_SLOPE2:
 	begin
-		div_ld <= `FALSE;
 		trimd <= {trimd[6:0],1'b0};
 		if (div_idle && trimd==8'h00) begin
-			invslope1 <= div_qo[27:0];
-			state <= DT_LINE1;
-		end
-	end
-DT_LINE1:
-	begin
-	    if (fbt) begin
-		    curx0 <= w0x;
-	   	    curx1 <= w0x;
-    		gcy <= w0y[27:16];
-		end
-		else begin
-		    curx0 <= w2x;
-            curx1 <= w2x;
-            gcy <= w2y[27:16];
-		end
-		state <= DT_LINE2;
-	end
-DT_LINE2:
-	begin
-		loopcnt <= 5'd31;
-		if (curx0 < curx1) begin
-    		gcx <= curx0[27:16];
-    		endx <= curx1;
-    	end
-    	else begin
-    	    gcx <= curx1[27:16];
-    	    endx <= curx0;
-    	end
-		if (((ctrl[11:8] != 4'h1) &&
-            (ctrl[11:8] != 4'h0) &&
-            (ctrl[11:8] != 4'hF)) || zbuf)
-            state <= DT_GETPIXEL;
-        else
-            state <= DT_SETPIXEL;
-	end
-DT_GETPIXEL:
-    begin
-        ram_ce <= `HIGH;
-        ram_addr <= zbuf ? ma[19:3] : ma;
-        state <= DT_GETPIXEL2;
-    end
-DT_GETPIXEL2:
-    state <= DT_GETPIXEL3;
-DT_GETPIXEL3:
-    state <= DT_SETPIXEL;
-DT_SETPIXEL:
-	begin
-	    ram_ce <= `HIGH;
-		ram_addr <= zbuf ? ma[19:3] : ma;
-		if (zbuf) begin
-			if (clipEnable && (gcx < clipX0 || gcx >= clipX1 || gcy < clipY0 || gcy >= clipY1))
-				;
-			else if (gcx >= bitmapWidth || gcy >= bitmapHeight)
-				;
+			invslope1 <= div_qo[31:0];
+		    if (fbt) begin
+			    curx0 <= w0x;
+		   	    curx1 <= w0x;
+				gcy <= w0y[31:16];
+				push_go(DT_INCY,HL_LINE);
+			end
 			else begin
-				zbram_we <= 2'b11;
-				ram_data_i <= zbram_data_o & ~{2'b11 << {ma[2:0],1'b0}} | (zlayer << {ma[2:0],1'b0});
+			    curx0 <= w2x;
+		        curx1 <= w2x;
+		        gcy <= w2y[31:16];
+				push_go(DT_INCY,HL_LINE);
 			end
 		end
-		else begin
-			if (clipEnable && (gcx < clipX0 || gcx >= clipX1 || gcy < clipY0 || gcy >= clipY1))
-				;
-			else if (gcx >= bitmapWidth || gcy >= bitmapHeight)
-				;
-			else begin
-				ram_we <= 2'b11;
-				case(ctrl[11:8])
-				4'd0:	ram_data_i <= 16'h0000;
-				4'd1:	ram_data_i <= bkcolor;
-				4'd4:	ram_data_i <= bkcolor & ram_data_o;
-				4'd5:	ram_data_i <= bkcolor | ram_data_o;
-				4'd6:	ram_data_i <= bkcolor ^ ram_data_o;
-				4'd7:	ram_data_i <= bkcolor & ~ram_data_o;
-				4'hF:	ram_data_i <= 16'h7FFF;
-				endcase
-			end
-		end
-		loopcnt <= loopcnt - 5'd1;
-		gcx <= gcx + 12'd1;
-		if (gcx>=endx[27:16])
-			state <= DT_INCY;
-		else if (loopcnt==5'd0) begin
-            if (((ctrl[11:8] != 4'h1) &&
-                (ctrl[11:8] != 4'h0) &&
-                (ctrl[11:8] != 4'hF)) || zbuf)
-                ngs <= DT_GETPIXEL;
-            else
-                ngs <= DT_SETPIXEL;
-			state <= ST_IDLE;
-//			bltCtrl[13] <= 1'b1;
-		end
-		else if (((ctrl[11:8] != 4'h1) &&
-            (ctrl[11:8] != 4'h0) &&
-            (ctrl[11:8] != 4'hF)) || zbuf)
-            state <= DT_GETPIXEL;
-        else
-            state <= DT_SETPIXEL;
 	end
 DT_INCY:
 	begin
 		if (fbt) begin
-			curx0 <= curx0 + invslope0;
-			curx1 <= curx1 + invslope1;
+		    if (curx0 + invslope0 < minX)
+		        curx0 <= minX;
+		    else if (curx0 + invslope0 > maxX)
+		        curx0 <= maxX;
+		    else
+			    curx0 <= curx0 + invslope0;
+			if (curx1 + invslope1 < minX)
+			    curx1 <= minX;
+			else if (curx1 + invslope1 > maxX)
+			    curx1 <= maxX;
+			else
+			    curx1 <= curx1 + invslope1;
 			gcy <= gcy + 12'd1;
+			if (gcy>=w1y[31:16])
+				ret();
+			else
+				push_go(DT_INCY,HL_LINE);
 		end
 		else begin
-			curx0 <= curx0 - invslope0;
-			curx1 <= curx1 - invslope1;
+		    if (curx0 - invslope0 < minX)
+                curx0 <= minX;
+            else if (curx0 - invslope0 > maxX)
+                curx0 <= maxX;
+            else
+                curx0 <= curx0 - invslope0;
+            if (curx1 - invslope1 < minX)
+                curx1 <= minX;
+            else if (curx1 - invslope1 > maxX)
+                curx1 <= maxX;
+            else
+                curx1 <= curx1 - invslope1;
 			gcy <= gcy - 12'd1;
+			if (gcy<w0y[31:16])
+				ret();
+			else
+				push_go(DT_INCY,HL_LINE);
 		end
-		if (gcy>=w1y[27:16] && fbt==1'b1)
-			state <= retstate;
-	    else if (gcy<=w0y[27:16] && fbt==1'b0)
-	        state <= retstate;
-		else
-			state <= DT_LINE2;
 	end
 
 DT1:
@@ -2723,8 +3095,7 @@ DT1:
 			w1y <= v1y;
 			w2x <= v2x;
 			w2y <= v2y;
-			state <= DT_SLOPE1;
-			retstate <= DT6;
+			push_go(DT6,DT_SLOPE1);
 		end
 		// Simple case of flat top
 		else if (v0y==v1y) begin
@@ -2735,8 +3106,7 @@ DT1:
 			w1y <= v1y;
 			w2x <= v2x;
 			w2y <= v2y;
-			state <= DT_SLOPE1;
-			retstate <= DT6;
+			push_go(DT6,DT_SLOPE1);
 		end
 		// Need to calculte 4th vertice
 		else begin
@@ -2744,27 +3114,25 @@ DT1:
 			div_a <= v1y - v0y;
 			div_b <= v2y - v0y;
 			trimd <= 8'hE0;
-			state <= DT2;
+			pause(DT2);
 		end
 	end
 DT2:
 	begin
-		div_ld <= `FALSE;
 		trimd <= {trimd[6:0],1'b0};
 		if (div_idle && trimd==8'h00) begin
 			trimd <= 8'b11111111;
 			v3y <= v1y;
-			ngs <= DT3;
-			state <= ST_IDLE;
+			go(DT3);
 		end
 	end
 DT3:
 	begin
 		trimd <= {trimd[6:0],1'b0};
 		if (trimd==8'h00) begin
-			v3x <= v0x + trimult[43:16];
+			v3x <= v0x + trimult[47:16];
 			v3x[15:0] <= 16'h0000;
-			state <= DT4;
+			go(DT4);
 		end
 	end
 DT4:
@@ -2776,8 +3144,7 @@ DT4:
 		w1y <= v1y;
 		w2x <= v3x;
 		w2y <= v3y;
-		state <= DT_SLOPE1;
-		retstate <= DT5;
+		push_go(DT5,DT_SLOPE1);
 	end
 DT5:
 	begin
@@ -2788,16 +3155,55 @@ DT5:
 		w1y <= v3y;
 		w2x <= v2x;
 		w2y <= v2y;
-		state <= DT_SLOPE1;
-		retstate <= DT6;
+		push_go(DT6,DT_SLOPE1);
 	end
 DT6:
 	begin
 		ngs <= ST_IDLE;
-		state <= retstate2;
-		if (retstate2==ST_IDLE)
-		  ctrl[14] <= 1'b0;
+		if (retstate==ST_IDLE) begin
+	        ctrl[14] <= 1'b0;
+	        ret();
+		    //go(DT7);
+		end
+		else
+ 		    ret();
 	end
+
+// Outline the triangle with anti-aliased lines
+/*
+DT7:
+    begin
+        openColor <= penColor;
+        penColor <= fillColor;
+        up0x <= up0xs;
+        up0y <= up0ys;
+        up1x <= up1xs;
+        up1y <= up1ys;
+        push_go(DT8,DAAL1);
+    end
+DT8:
+    begin
+        up0x <= up1xs;
+        up0y <= up1ys;
+        up1x <= up2xs;
+        up1y <= up2ys;
+        push_go(DT9,DAAL1);
+    end
+DT9:
+    begin
+        up0x <= up2xs;
+        up0y <= up2ys;
+        up1x <= up0xs;
+        up1y <= up0ys;
+        push_go(DT10,DAAL1);
+    end
+DT10:
+    begin
+        penColor <= openColor;
+        ctrl[14] <= 1'b0;
+        ret();
+    end
+*/
 
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 // Bezier Curve
@@ -2807,19 +3213,23 @@ DT6:
 BC0:
 	begin
 	ctrl[14] <= 1'b1;
-	bv0x <= {x0,16'h0000};
-	bv0y <= {y0,16'h0000};
-	bv1x <= {x1,16'h0000};
-	bv1y <= {y1,16'h0000};
-	bv2x <= {x2,16'h0000};
-	bv2y <= {y2,16'h0000};
-	bezierT <= 28'h0;
-	state <= BC1;
+	bv0x <= p0x;
+	bv0y <= p0y;
+	bv1x <= p1x;
+	bv1y <= p1y;
+	bv2x <= p2x;
+	bv2y <= p2y;
+	bezierT <= 32'h0;
+	otransform <= transform;
+	transform <= `FALSE;
+	up0x <= p0x;
+	up0y <= p0y;
+	go(BC1);
 	end
 BC1:
 	begin
-	bezier1mT <= 28'h10000 - bezierT;
-	state <= BC2;
+	bezier1mT <= 32'h10000 - bezierT;
+	go(BC2);
 	end
 BC2:
 	begin
@@ -2831,59 +3241,67 @@ BC2:
 	bezier1mTP1yw <= bezier1mT * bv1y;
 	bezierTP1y <= bezierT * bv1y;
 	bezierTP2y <= bezierT * bv2y;
-	state <= BC3;
+	go(BC3);
 	end
 BC3:
 	begin
-	bezierP0plusP1x <= bezier1mTP0xw[43:16] + bezierTP1x[43:16];
-	bezierP1plusP2x <= bezier1mTP1xw[43:16] + bezierTP2x[43:16];
-	bezierP0plusP1y <= bezier1mTP0yw[43:16] + bezierTP1y[43:16];
-	bezierP1plusP2y <= bezier1mTP1yw[43:16] + bezierTP2y[43:16];
-	state <= BC4;
+	bezierP0plusP1x <= bezier1mTP0xw[47:16] + bezierTP1x[47:16];
+	bezierP1plusP2x <= bezier1mTP1xw[47:16] + bezierTP2x[47:16];
+	bezierP0plusP1y <= bezier1mTP0yw[47:16] + bezierTP1y[47:16];
+	bezierP1plusP2y <= bezier1mTP1yw[47:16] + bezierTP2y[47:16];
+	go(BC4);
 	end
 BC4:
 	begin
 	bezierBxw <= bezier1mT * bezierP0plusP1x + bezierT * bezierP1plusP2x;
 	bezierByw <= bezier1mT * bezierP0plusP1y + bezierT * bezierP1plusP2y;
-	state <= BC5;
+	go(BC5);
 	end
 BC5:
 	begin
-	x1 <= bezierBxw[43:32];
-	y1 <= bezierByw[43:32];
+	up1x <= bezierBxw[47:16];
+	up1y <= bezierByw[47:16];
+    if (fillCurve[1]) begin
+        up2x <= bv1x;
+        up2y <= bv1y;
+    end
+	go(BC5a);
+	end
+BC5a:
+	begin
 	ctrl[14] <= 1'b0;
-	state <= DL_PRECALC;
-	retstate <= |fillCurve ? BC6 : BC7;
+	push_go(|fillCurve ? BC6 : BC7,DL_PRECALC);
 	end
 BC6:
     begin
-    if (fillCurve[1]) begin
-        x2 <= bv1x[27:16];
-        y2 <= bv1y[27:16];
-    end
 	ctrl[14] <= 1'b0;
-    state <= DT_SORT;
-    retstate2 <= BC7;
+	push_go(BC7,DT_START);
     end
 BC7:
 	begin
-    state <= BC1;
-    x0 <= x1;
-    y0 <= y1;
+	go(BC1);
+    up0x <= up1x;
+    up0y <= up1y;
     bezierT <= bezierT + bezierInc;
-    if (bezierT >= 28'h10000) begin
-        x1 <= x2;
-        y1 <= y2;
-    	ctrl[14] <= 1'b0;
-        state <= DL_PRECALC;
-        retstate <= BC8;
+    if (bezierT >= 32'h10000) begin
+    	up1x <= up2x;
+    	up1y <= up2y;
+    	push_go(BC8,|fillCurve ? DT_START : DL_PRECALC);
+    	//go(BC8);
     end
 	end
 BC8:
 	begin
     ctrl[14] <= 1'b0;
-    state <= ST_IDLE;
+    //push_go(BC9,DL_PRECALC);
+    go(BC9);
     end
+BC9:
+	begin
+    ctrl[14] <= 1'b0;
+    transform <= otransform;
+    go(ST_IDLE);
+	end
 
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 // Draw a filled rectangle, uses the blitter.
@@ -2891,37 +3309,34 @@ BC8:
 
 ST_FILLRECT:
 	begin
-		bkcolor <= cmdq_out[`BKCOLOR];
-		x0 <= cmdq_out[`X0POS];
-		y0 <= cmdq_out[`Y0POS];
-		x1 <= cmdq_out[`X1POS];
-		y1 <= cmdq_out[`Y1POS];
 		state <= ST_FILLRECT1;
 	end
 ST_FILLRECT1:
 	begin
-		if (y1 < y0) y0 <= y1;
-		if (x1 < x0) x0 <= x1;
-		dx <= absx1mx0 + 12'd1;
-		dy <= absy1my0 + 12'd1;
+		// Switching the points around will have the side effect
+		// of switching the transformed points around as well.
+		if (p1y < p0y) up0y <= up1y;
+		if (p1x < p0x) up0x <= up1x;
+		dx <= absx1mx0[31:16] + 12'd1;
+		dy <= absy1my0[31:16] + 12'd1;
 		if (bltCtrl[13])
 			state <= ST_FILLRECT_CLIP;
 	end
 ST_FILLRECT_CLIP:
 	begin
-		if (x0 + dx > bitmapWidth)
-			dx <= bitmapWidth - x0;
-		if (y0 + dy > bitmapHeight)
-			dy <= bitmapHeight - y0;
+		if (p0x[31:16] + dx > TargetWidth)
+			dx <= TargetWidth - p0x[31:16];
+		if (p0y[31:16] + dy > TargetHeight)
+			dy <= TargetHeight - p0y[31:16];
 		state <= ST_FILLRECT2;
 	end
 ST_FILLRECT2:
 	begin
-		bltD_badr <= {8'h00,y0} * bitmapWidth + bmpBase + x0[11:0];
-		bltD_mod <= bitmapWidth - dx;
+		bltD_badr <= {8'h00,p0y[31:16]} * TargetWidth + TargetBase + p0x[31:16];
+		bltD_mod <= TargetWidth - dx;
 		bltD_cnt <= dx * dy;
 		bltDstWid <= dx;
-		bltD_dat <= bkcolor;
+		bltD_dat <= fillColor[15:0];
 		bltCtrl <= 16'h8080;
 		ctrl[14] <= 1'b0;
 		state <= ST_IDLE;
@@ -2929,28 +3344,25 @@ ST_FILLRECT2:
 
 ST_TILERECT:
 	begin
-		bkcolor <= cmdq_out[`BKCOLOR];
-		x0 <= cmdq_out[`X0POS];
-		y0 <= cmdq_out[`Y0POS];
-		x1 <= cmdq_out[`X1POS];
-		y1 <= cmdq_out[`Y1POS];
 		state <= ST_TILERECT1;
 	end
 ST_TILERECT1:
 	begin
-		if (y1 < y0) y0 <= y1;
-		if (x1 < x0) x0 <= x1;
-		dx <= absx1mx0 + 12'd1;
-		dy <= absy1my0 + 12'd1;
+		// Switching the points around will have the side effect
+		// of switching the transformed points around as well.
+		if (p1y < p0y) up0y <= up1y;
+		if (p1x < p0x) up0x <= up1x;
+		dx <= absx1mx0[31:16] + 12'd1;
+		dy <= absy1my0[31:16] + 12'd1;
 		if (bltCtrl[13])
 			state <= ST_TILERECT_CLIP;
 	end
 ST_TILERECT_CLIP:
 	begin
-		if (x0 + dx > bitmapWidth)
-			dx <= bitmapWidth - x0;
-		if (y0 + dy > bitmapHeight)
-			dy <= bitmapHeight - y0;
+		if (p0x[31:16] + dx > TargetWidth)
+			dx <= TargetWidth - p0x[31:16];
+		if (p0y[31:16] + dy > TargetHeight)
+			dy <= TargetHeight - p0y[31:16];
 		state <= ST_TILERECT2;
 	end
 ST_TILERECT2:
@@ -2959,11 +3371,11 @@ ST_TILERECT2:
 		bltA_mod <= TextureDesco[75:64];
 		bltA_cnt <= TextureDesco[47:32];
 		bltSrcWid <= TextureDesco[63:48];
-		bltD_badr <= {8'h00,y0} * bitmapWidth + bmpBase + x0[11:0];
-		bltD_mod <= bitmapWidth - dx;
+		bltD_badr <= {8'h00,p0y[31:16]} * TargetWidth + TargetBase + p0x[31:16];
+		bltD_mod <= TargetWidth - dx;
 		bltD_cnt <= dx * dy;
 		bltDstWid <= dx;
-		bltD_dat <= bkcolor;
+		bltD_dat <= penColor;
 		bltCtrl <= 16'h8082;
 		ctrl[14] <= 1'b0;
 		state <= ST_IDLE;
@@ -3077,5 +3489,83 @@ if (hpos==12'd1 && vpos==12'd1 && (fpos==4'd1 || copper_ctrl[1])) begin
 	copper_state <= {1'b0,copper_en};
 end
 end
+
+task set_pixel;
+input [15:0] color;
+input [15:0] alpha;
+input [3:0] rop;
+begin
+	ram_we <= 2'b00;
+	zbram_we <= 2'b00;
+    ram_ce <= `HIGH;
+	ram_addr <= zbuf ? ma[19:3] : ma;
+	if (zbuf) begin
+		if (clipEnable && (gcx < clipX0 || gcx >= clipX1 || gcy < clipY0 || gcy >= clipY1))
+			;
+		else if (gcx >= TargetWidth || gcy >= TargetHeight)
+			;
+		else begin
+			zbram_we <= 2'b11;
+			ram_data_i <= zbram_data_o & ~{2'b11 << {ma[2:0],1'b0}} | (zlayer << {ma[2:0],1'b0});
+		end
+	end
+	else begin
+		if (clipEnable && (gcx < clipX0 || gcx >= clipX1 || gcy < clipY0 || gcy >= clipY1))
+			;
+		else if (gcx >= TargetWidth || gcy >= TargetHeight)
+			;
+		else begin
+			ram_we <= 2'b11;
+			case(rop)
+			4'd0:	ram_data_i <= 16'h0000;
+			4'd1:	ram_data_i <= color;
+			4'd3:	ram_data_i <= blend(color,ram_data_o,alpha);
+			4'd4:	ram_data_i <= color & ram_data_o;
+			4'd5:	ram_data_i <= color | ram_data_o;
+			4'd6:	ram_data_i <= color ^ ram_data_o;
+			4'd7:	ram_data_i <= color & ~ram_data_o;
+			4'hF:	ram_data_i <= 16'h7FFF;
+			endcase
+		end
+	end
+end
+endtask
+
+task go;
+input [7:0] st;
+begin
+	state <= st;
+end
+endtask
+
+task push_go;
+input [7:0] rst;
+input [7:0] nst;
+begin
+	retstate4 <= retstate3;
+	retstate3 <= retstate2;
+	retstate2 <= retstate;
+	retstate <= rst;
+	state <= nst;
+end
+endtask
+
+task ret;
+begin
+	state <= retstate;
+	retstate <= retstate2;
+	retstate2 <= retstate3;
+	retstate3 <= retstate4;
+	retstate4 <= ST_IDLE;
+end
+endtask
+
+task pause;
+input [7:0] st;
+begin
+	ngs <= st;
+	state <= ST_IDLE;
+end
+endtask
 
 endmodule

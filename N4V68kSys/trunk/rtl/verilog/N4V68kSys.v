@@ -30,6 +30,7 @@ module N4V68kSys(cpu_resetn, xclk, led, btnu, btnd, btnl, btnr, btnc, sw,
     TMDS_OUT_clk_p, TMDS_OUT_clk_n, TMDS_OUT_data_p, TMDS_OUT_data_n,
     ac_mclk, ac_adc_sdata, ac_dac_sdata, ac_bclk, ac_lrclk, scl, sda,
     rtc_clk, rtc_data,
+    oled_sdin, oled_sclk, oled_dc, oled_res, oled_vbat, oled_vdd,
     ddr3_ck_p,ddr3_ck_n,ddr3_cke,ddr3_reset_n,ddr3_ras_n,ddr3_cas_n,ddr3_we_n,
     ddr3_ba,ddr3_addr,ddr3_dq,ddr3_dqs_p,ddr3_dqs_n,ddr3_dm,ddr3_odt
 );
@@ -59,6 +60,13 @@ inout sda;
 inout rtc_clk;
 inout rtc_data;
 
+output oled_sdin;
+output oled_sclk;
+output oled_dc;
+output oled_res;
+output oled_vbat;
+output oled_vdd;
+
 output [0:0] ddr3_ck_p;
 output [0:0] ddr3_ck_n;
 output [0:0] ddr3_cke;
@@ -76,6 +84,7 @@ output [0:0] ddr3_odt;
 
 parameter SIM = 1'b0;
 
+wire cpu_resetnd;
 wire clk200,clk40,clk12;
 wire locked;
 wire cpu_clk;// = clk40;
@@ -213,6 +222,8 @@ assign cpu_ack = dram_ack
 assign _cpu_ipl = 3'b111;
 
 wire btnud, btndd, btnld, btnrd, btncd;
+wire cpu_resetnd;
+BtnDebounce ubdb0 (clk40, cpu_resetn, cpu_resetnd);
 BtnDebounce ubdb1 (clk40, btnu, btnud);
 BtnDebounce ubdb2 (clk40, btnd, btndd);
 BtnDebounce ubdb3 (clk40, btnl, btnld);
@@ -222,6 +233,21 @@ BtnDebounce ubdb5 (clk40, btnc, btncd);
 always @(posedge cpu_clk)
     if (cs_led & cpu_stb & cpu_we)
         ledo <= cpu_data_out[7:0];
+
+OLED uoled1
+(
+	.rst(rst),
+	.clk(xclk),
+	.adr(cpu_addr),
+	.dat(cpu_data_out),
+	.SDIN(oled_sdin),
+	.SCLK(oled_sclk),
+	.DC(oled_dc),
+	.RES(oled_res),
+	.VBAT(oled_vbat),
+	.VDD(oled_vdd)
+);
+
 
 clk_wiz_0 ucg1
 (

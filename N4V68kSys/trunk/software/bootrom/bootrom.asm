@@ -166,6 +166,16 @@ RTFBufEnd		EQU	$10660
 CmdBuf			EQU	$10800
 CmdBufEnd		EQU	$10850
 
+MACRO mGetRand abc
+		clr.w	$0C04(a6)		; gen next number
+		move.l	$0C00(a6),abc
+ENDM
+
+MACRO mGrCmd val,cmdno
+		move.l	val,$440(a5)
+		move.w	#cmdno,$446(a5)
+		clr.b	$448(a5)
+ENDM
 
 	code
 	org		$FFFC0000
@@ -816,6 +826,7 @@ ColorBandMemory:
 
 BootCopyFont:
 		movea.l	#VDGREG,a6
+		move.w	#0,$43E(a6)			; access normal buffer
 		; Setup font table
 		move.l	#$5C000,$410(a6)	; set font table address 1/2 B8000
 		move.l	#$5C004,d0			; set bitmap address (directly follows)
@@ -843,30 +854,51 @@ cpyfnt:
 ;	d0.w		character to display
 ;	d1.w		x position
 ;	d2.w		y position
-; Trashes:
-;	a6
 ;------------------------------------------------------------------------------
 
 DispCharAt:
+		movem.l	d1/d2/a6,-(a7)
 		move.l	#VDGREG,a6
 		swap	d0						; save off d0 low
 .0001:									; wait for character que to empty
-		move.w	$42C(a6),d0			; read character queue index into d0
-		cmp.w	#28,d0					; allow up 28 entries to be in progress
+		move.w	$42C(a6),d0			; read command queue index into d0
+		cmp.w	#24,d0					; allow up 24 entries to be in progress
 		bhs.s	.0001					; branch if too many chars queued
 		swap	d0						; get back d0 low
-		move.w	d0,$420(a6)			; set char code
-		move.w	fgcolor,$422(a6)		; set fg color
-		move.w	bkcolor,$424(a6)		; set bk color
-		move.w	d1,$426(a6)			; set x pos
-		move.w	d2,$428(a6)			; set y pos
-		move.w	#$0707,$42A(a6)		; set font x,y extent
-		move.w	#0,$42E(a6)			; pulse character queue write signal
+		move.w	fgcolor,$442(a6)		; set fg color
+		move.w	#12,$446(a6)			; 12 = set pen color
+		clr.b	$448(a6)			; queue
+		move.w	bkcolor,$442(a6)		; set bk color
+		move.w	#13,$446(a6)			; 13 = set fill color
+		clr.b	$448(a6)			; queue
+		asl.l	#8,d1
+		asl.l	#8,d1
+		move.l	d1,$440(a6)
+		move.w	#16,$446(a6)			; 16 = set X0 pos
+		clr.b	$448(a6)			; queue
+		asl.l	#8,d2
+		asl.l	#8,d2
+		move.l	d2,$440(a6)
+		move.w	#17,$446(a6)			; 16 = set Y0 pos
+		clr.b	$448(a6)			; queue
+		move.w	d0,$442(a6)				; data = char code
+		move.w	#0,$446(a6)				; 0 = draw character
+		clr.b	$448(a6)			; queue
+		movem.l	(a7)+,d1/d2/a6
 		rts
 
 ;------------------------------------------------------------------------------
+; DispChar:
+;
+; Display character at cursor position. The current foreground color and
+; background color are used.
+;
 ; Parameters:
 ;	d0.w		character to display
+; Returns:
+;	<none>
+; Registers Affected:
+;	<none>
 ;------------------------------------------------------------------------------
 
 DispChar:
@@ -875,22 +907,36 @@ DispChar:
 		swap	d0					; save off d0 low
 .0001:								; wait for character que to empty
 		move.w	$42C(a6),d0			; read character queue index into d0
-		cmp.w	#28,d0				; allow up 28 entries to be in progress
+		cmp.w	#24,d0				; allow up 28 entries to be in progress
 		bhs.s	.0001				; branch if too many chars queued
 		swap	d0					; get back d0 low
-		move.w	d0,$420(a6)			; set char code
-		move.w	fgcolor,$422(a6)	; set fg color
-		move.w	bkcolor,$424(a6)	; set bk color
+		clr.w	$440(a6)			; clear out high order word
+		move.w	fgcolor,$442(a6)	; set fg color
+		move.w	#12,$446(a6)		; 12 = set pen color
+		clr.b	$448(a6)			; queue
+		move.w	bkcolor,$442(a6)	; set bk color
+		move.w	#13,$446(a6)		; 13 = set fill color
+		clr.b	$448(a6)			; queue
+
 		move.b	CursorCol,d1
 		ext.w	d1
-		asl.w	#3,d1
-		move.w	d1,$426(a6)			; set x pos
+		asl.l	#3,d1
+		swap	d1					; shift by 16
+		move.l	d1,$440(a6)
+		move.w	#16,$446(a6)		; 16 = set X0 pos
+		clr.b	$448(a6)			; queue
+
 		move.b	CursorRow,d1
 		ext.w	d1
-		asl.w	#3,d1
-		move.w	d1,$428(a6)			; set y pos
-		move.w	#$0707,$42A(a6)		; set font x,y extent (defunct - in font table)
-		move.w	#0,$42E(a6)			; pulse character queue write signal
+		asl.l	#3,d1
+		swap	d1					; shift by 16
+		move.l	d1,$440(a6)
+		move.w	#17,$446(a6)		; 17 = set Y0 pos
+		clr.b	$448(a6)			; queue
+
+		move.w	d0,$442(a6)			; data = character code
+		move.w	#0,$446(a6)			; pulse character queue write signal
+		clr.b	$448(a6)			; queue
 		movem.l	(a7)+,d1/a6
 		rts
 
@@ -919,7 +965,16 @@ DisableCursor:
 		rts
 		
 ;------------------------------------------------------------------------------
+; SyncCursor:
+;
 ; Sync the hardware cursor's position to the text cursor position.
+;
+; Parameters:
+;	<none>
+; Returns:
+;	<none>
+; Registers Affected:
+;	<none>
 ;------------------------------------------------------------------------------
 
 SyncCursor:
@@ -930,11 +985,13 @@ SyncCursor:
 		ext.w	d1
 		asl.w	#3,d1
 		sub.w	#1,d1
-		move.w	d1,VDG_CUR0X(a6)
+		add.w	#128,d1					; add fudge factor since cursor coordinate
+		move.w	d1,VDG_CUR0X(a6)		; system is different
 		move.b	CursorRow,d1
 		ext.w	d1
 		asl.w	#3,d1
 		sub.w	#1,d1
+		add.w	#26,d1
 		move.w	d1,VDG_CUR0Y(a6)
 		movem.l	(a7)+,d1/a6
 		rts
@@ -1048,6 +1105,13 @@ CursorImage64:
 	dc.l	%01010101010101010101000000000000,$00
 	dc.l	$00,$00
 	dc.l	$00,$00
+
+;------------------------------------------------------------------------------
+; Bouncing Balls
+; 
+; Displays the sprites as 'X's and 'O's and moves them around on the screen.
+; The sprites will bounce off the screen edges.
+;------------------------------------------------------------------------------
 
 BouncingBalls:
 		movem.l	d1/d2/d3/a0/a1/a6,-(a7)
@@ -2048,7 +2112,12 @@ ClearScreen:
 		lea		VDGREG,a5
 		bsr		WaitBlit
 		move.l	#BMP_WIDTH*BMP_HEIGHT,$4BC(a5)		; set transfer count  pixels
-		move.w	bkcolor,$4A8(a5)	; set color dark blue
+		move.w	bkcolor,$442(a5)	; set color dark blue
+		move.w	#13,$446(a5)
+		clr.b	$448(a5)			; queue
+.0001:
+		move.w	$42c(a5),d0			; get queue index
+		bne.s	.0001				; wait for queue to empty
 		move.l	#0,$498(a5)			; set destination address
 		move.l	#BMP_WIDTH,$4A4(a5)		; set destination width
 		move.l	#0,$49C(a5)			; set dst modulo
@@ -2120,7 +2189,12 @@ BlankLastLine:
 		move.l	#BMP_WIDTH*(BMP_HEIGHT-8),$498(a5)	; set destination address
 		move.l	#0,$49C(a5)			; set dst modulo
 		move.l	#-1,$4A4(a5)		; set destination width
-		move.w	bkcolor,$4A8(a5)	; set color dark blue
+		move.w	bkcolor,$442(a5)	; set color dark blue
+		move.w	#13,$446(a5)
+		clr.b	$448(a5)			; queue
+.0002:
+		move.w	$42c(a5),d0
+		bne.s	.0002
 		move.w	#%1000000010000000,$4AC(a5)		; enable channel D, start transfer
 		lea		VirtScreen+50*37,a5
 		moveq	#40,d0
@@ -2478,17 +2552,37 @@ DrawRects:
 		clr.w	$0C04(a6)		; gen next number
 .0002:
 		move.w	$42C(a5),d7		; check # queued
-		cmp.w	#28,d7			; more than 28 queued ?
+		cmp.w	#16,d7			; more than 28 queued ?
 		bhs.s	.0002			; too many, wait for queue to empty
-		move.w	#1,$422(a5)		; raster op = COPY
-		move.w	d4,$424(a5)		; set color
-		move.w	d0,$426(a5)		; set x0
-		move.w	d1,$428(a5)		; set y0
-		move.w	d2,$430(a5)		; set x1
-		move.w	d3,$432(a5)		; set y1
-		move.w	#3,$42E(a5)		; pulse command queue (3 = draw rect)
+		asl.l	#8,d0
+		asl.l	#8,d0
+		asl.l	#8,d1
+		asl.l	#8,d1
+		asl.l	#8,d2
+		asl.l	#8,d2
+		asl.l	#8,d3
+		asl.l	#8,d3
+		move.w	d4,$442(a5)		; set fill color
+		move.w	#13,$446(a5)
+		clr.b	$448(a5)			; queue
+		move.l	d0,$440(a5)
+		move.w	#16,$446(a5)	; set x0
+		clr.b	$448(a5)			; queue
+		move.l	d1,$440(a5)
+		move.w	#17,$446(a5)	; set y0
+		clr.b	$448(a5)			; queue
+		;move.w	#1,$422(a5)		; raster op = COPY
+		move.l	d2,$440(a5)
+		move.w	#19,$446(a5)	; set x1
+		clr.b	$448(a5)			; queue
+		move.l	d3,$440(a5)
+		move.w	#20,$446(a5)	; set y1
+		clr.b	$448(a5)			; queue
+		move.w	#$10,$442(a5)	; raster op = COPY
+		move.w	#3,$446(a5)		; pulse command queue (3 = draw rect)
+		clr.b	$448(a5)			; queue
 		sub.l	#1,d6
-		bne		.0001			; go back and do more lines
+		bne		.0001			; go back and do more rects
 		rts
 
 ;===============================================================================
@@ -2510,33 +2604,38 @@ DrawLines:
 		beq.s	.0003				; branch if not done
 .0004:
 		move.w	#11,leds
-		move.l	$0C00(a6),d0	; get 32 bit number
+		mGetRand d0
 		move.w	d0,d1			; use bits 0 to 8 for y0
 		swap	d0				; and bits 16 to 24 for x0
 		and.w	#$FF,d0		; 0 to 511
 		and.w	#$FF,d1		; 0 to 511
-		clr.w	$0C04(a6)		; gen next number
-		move.l	$0C00(a6),d2
+		mGetRand d2
 		move.w	d2,d3
 		swap	d2
 		and.w	#$FF,d2		; 0 to 511
 		and.w	#$FF,d3		; 0 to 511
-		clr.w	$0C04(a6)		; gen next number
-		move.l	$0C00(a6),d4
+		mGetRand d4
 		and.w	#RGBMASK,d4		; 9/15 bits color
 		clr.w	$0C04(a6)		; gen next number
 .0002:
 		move.w	$42C(a5),d7		; check # queued
-		cmp.w	#28,d7			; more than 28 queued ?
+		cmp.w	#16,d7			; more than 28 queued ?
 		bhs.s	.0002			; too many, wait for queue to empty
 		move.w	#12,leds
-		move.w	#1,$422(a5)		; raster op = COPY
-		move.w	d4,$424(a5)		; set color
-		move.w	d0,$426(a5)		; set x0
-		move.w	d1,$428(a5)		; set y0
-		move.w	d2,$430(a5)		; set x1
-		move.w	d3,$432(a5)		; set y1
-		move.w	#2,$42E(a5)		; pulse command queue (2 = draw line)
+		asl.l	#8,d0
+		asl.l	#8,d0
+		asl.l	#8,d1
+		asl.l	#8,d1
+		asl.l	#8,d2
+		asl.l	#8,d2
+		asl.l	#8,d3
+		asl.l	#8,d3
+		mGrCmd	d4,12			; set pen color
+		mGrCmd	d0,16			; set x0
+		mGrCmd	d1,17			; set y0
+		mGrCmd	d2,19			; set x1
+		mGrCmd	d3,20			; set y1
+		mGrCmd	#$10,2			; raster op = COPY
 		sub.l	#1,d6
 		bne		.0001			; go back and do more lines
 		rts
@@ -2560,31 +2659,64 @@ DrawTrianglesOrCurves:
 		beq.s	.0003				; branch if not done
 .0004:
 		move.w	#11,leds
-		move.l	$0C00(a6),d0	; get 32 bit number
+		mGetRand d0
 		and.l	#$FF00FF,d0		; 0 to 255
-		clr.w	$0C04(a6)		; gen next number
-		move.l	$0C00(a6),d1
+		mGetRand d1
 		and.l	#$FF00FF,d1		; 0 to 255
-		clr.w	$0C04(a6)		; gen next number
-		move.l	$0C00(a6),d2
+		mGetRand d2
 		and.l	#$FF00FF,d2		; 0 to 255
-		clr.w	$0C04(a6)		; gen next number
-		move.l	$0C00(a6),d4
+		mGetRand d4
 		and.w	#RGBMASK,d4		; 9/15 bits color
 		clr.w	$0C04(a6)		; gen next number
 .0002:
 		move.w	$42C(a5),d7		; check # queued
-		cmp.w	#28,d7			; more than 28 queued ?
+		cmp.w	#16,d7			; more than 16 queued ?
 		bhs.s	.0002			; too many, wait for queue to empty
 		move.w	#12,leds
 		move.w	d4,$420(a5)		; fill curve
 		swap	d4
 		move.w	#1,$422(a5)		; raster op = COPY
-		move.w	d4,$424(a5)		; set color
-		move.l	d0,$426(a5)		; set x0,y0
-		move.l	d1,$430(a5)		; set x1,y1
-		move.l	d2,$434(a5)		; set x2,y2
-		move.w	d3,$42E(a5)		; pulse command queue (6 = fill triangle, 8 = curve)
+		
+		move.w	d4,$442(a5)		; set color
+		move.w	#13,$446(a5)	; 13 = fill color
+		clr.b	$448(a5)		; queue
+
+		move.w	d0,d7
+		asl.l	#8,d7
+		asl.l	#8,d7
+		mGrCmd d7,16			; set x0
+		swap	d0
+		move.w	d0,d7
+		asl.l	#8,d7
+		asl.l	#8,d7
+		mGrCmd d7,17			; set y0
+
+		move.l	d1,d7
+		asl.l	#8,d7
+		asl.l	#8,d7
+		mGrCmd d7,19			; set x1
+		swap	d1
+		move.l	d1,d7
+		asl.l	#8,d7
+		asl.l	#8,d7
+		mGrCmd d7,20			; set y1
+		
+		move.l	d2,d7
+		asl.l	#8,d7
+		asl.l	#8,d7
+		mGrCmd	d7,22			; set x2
+		swap	d2
+		move.l	d2,d7
+		asl.l	#8,d7
+		asl.l	#8,d7
+		mGrCmd	d7,23			; set y2
+
+		swap	d4
+		and.w	#3,d4
+		or.w	#$10,d4
+		move.w	d4,$442(a5)		; raster op = copy, 
+		move.w	d3,$446(a5)		; set command (6 = fill triangle, 8 = curve)
+		clr.b	$448(a5)		; queue command
 		sub.l	#1,d6
 		bne		.0001			; go back and do more triangles
 		rts
