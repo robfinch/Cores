@@ -26,3 +26,6 @@ FT64 is a work-in-progress beginning in July 2017. FT64 originated from RiSC-16 
 
 # Software
 There is an asssembler and 'C64' compiler for FT64. The assembler does not yet fully support all the instructions for the core.
+
+# Versions
+There is now a non-superscalar clocked sequential version of the FT64 core. This allows the instruction set to be executed on a smaller core.
