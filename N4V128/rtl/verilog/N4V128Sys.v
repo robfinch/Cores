@@ -85,6 +85,7 @@ wire mem_ui_clk;
 wire locked;
 wire rst = ~locked;
 wire btnud,btndd,btnld,btnrd,btncd;
+wire [7:0] gst;
 
 wire hSync, vSync;
 wire vde;
@@ -93,15 +94,19 @@ wire [7:0] red = rgb[23:16];
 wire [7:0] green = rgb[15:8];
 wire [7:0] blue = rgb[7:0];
 
+wire [15:0] aud0, aud2;
+reg [15:0] audi;
+wire [3:0] dram_state;
+wire [2:0] dram_ch;
+wire [7:0] cpu_state;
 wire cpu_cyc;
 wire cpu_stb;
 wire cpu_ack;
 wire cpu_we;
 wire [15:0] cpu_sel;
 wire [31:0] cpu_addr;
-wire [31:0] cpu_dat_o;
+wire [127:0] cpu_dat_o;
 reg [127:0] cpu_dat_i;
-wire [127:0] cpu_data_out = cpu_dat_o;
 wire cpu_sr, cpu_cr, cpu_rb;
 wire [3:0] cpu_sel4 = cpu_sel[15:12]|cpu_sel[11:8]|cpu_sel[7:4]|cpu_sel[3:0];
 
@@ -124,13 +129,10 @@ wire cs_boot = cpu_addr[31:16]==16'hFFFC
 				|| cpu_addr[31:16]==16'hFFFD
 				|| cpu_addr[31:16]==16'hFFFE;
 wire cs_dram = cpu_addr[31:29]==3'b000;
-wire cs_stack = cpu_addr[31:20]==12'hFF4;
+wire cs_stack= cpu_addr[31:16]==16'hFF40;
 wire cs_vic  = cpu_addr[31:12]==20'hFFE00;
 wire cs_led  = cpu_addr[31:4]==28'hFFDC060;
-wire cs_rand = 	cpu_addr[31:4]==28'hFFDC0C0
-				|| cpu_addr[31:4]==28'hFFDC0C1
-				|| cpu_addr[31:4]==28'hFFDC0C2
-				|| cpu_addr[31:4]==28'hFFDC0C3;
+wire cs_rand = cpu_addr[31:4]==28'hFFDC0C0;
 wire cs_kbd  = cpu_addr[31:4]==28'hFFDC000;
 wire cs_i2c  = cpu_addr[31:4]==28'hFFDC0E0;
 wire cs_i2c2 = cpu_addr[31:4]==28'hFFDC0E1;
@@ -179,14 +181,18 @@ BtnDebounce ubdb5 (clk40, btnc, btncd);
 reg [7:0] ledo;
 always @(posedge cpu_clk)
     if (cs_led & cpu_stb & cpu_we)
-        ledo <= cpu_data_out[7:0];
+        ledo <= cpu_dat_o[7:0];
 
 OLED uoled1
 (
 	.rst(rst),
 	.clk(xclk_bufg),
 	.adr(cpu_addr),
-	.dat(cpu_data_out),
+	.dat(cpu_dat_o),
+	.st(cpu_state),
+	.dst({dram_ch,dram_state}),
+	.gst(gst),
+	.btn(btncd),
 	.SDIN(oled_sdin),
 	.SCLK(oled_sclk),
 	.DC(oled_dc),
@@ -256,7 +262,7 @@ AVIC128 uvic1
 	.dat_i(cpu_dat_o[31:0]),
 	.dat_o(vic_dat_o),
 	// Bus master
-	.m_clk_i(mem_ui_clk),	// 100MHz
+	.m_clk_i(clk40),
 	.m_cyc_o(vm_cyc),
 	.m_stb_o(vm_stb),
 	.m_ack_i(vm_ack),
@@ -276,9 +282,26 @@ AVIC128 uvic1
 	.aud1_out(aud1),
 	.aud2_out(aud2),
 	.aud3_out(aud3),
-	.aud_in(audi)
+	.aud_in(audi),
+	// Debug
+	.state(gst)
 );
 
+FT64seq ucpu1
+(
+	.rst_i(rst),
+	.clk_i(cpu_clk),
+	.cyc_o(cpu_cyc),
+	.stb_o(cpu_stb),
+	.ack_i(cpu_ack),
+	.sel_o(cpu_sel),
+	.we_o(cpu_we),
+	.adr_o(cpu_addr),
+	.dat_i(cpu_dat_i),
+	.dat_o(cpu_dat_o),
+	.state(cpu_state)
+);
+/*
 DSD9_mpu umpu1
 (
 	.hartid_i(80'h01),
@@ -334,7 +357,7 @@ DSD9_mpu umpu1
     .state_o(),
     .trigger_o()
 );
-
+*/
 
 bootrom ubr1
 (
@@ -355,7 +378,7 @@ always @(posedge cpu_clk)
     rdy2 <= rdy1 & cs_stack & cpu_cyc & cpu_stb;
 always @(posedge cpu_clk)
     rdy3 <= rdy2 & cs_stack & cpu_cyc & cpu_stb;
-assign stack_ack = (cs_stack ? rdy3 : 1'b0);
+assign stack_ack = ((cs_stack & cpu_cyc & cpu_stb) ? (cpu_we ? 1'b1 : rdy3) : 1'b0);
 
 stackram ustk1
 (
@@ -363,7 +386,7 @@ stackram ustk1
     .ena(1'b1),
     .wea({16{cs_stack & cpu_stb & cpu_we}} & cpu_sel),
     .addra(cpu_addr[12:4]),
-    .dina(cpu_data_out),
+    .dina(cpu_dat_o),
     .douta(stack_data_o)
 );
 
@@ -418,7 +441,10 @@ cs7, cyc7, stb7, ack7, we7, sel7, adr7, dati7, dato7, sr7, cr7, rb7,
 	.ddr3_cke(ddr3_cke),
 	.ddr3_reset_n(ddr3_reset_n),
 	.ddr3_dm(ddr3_dm),
-	.ddr3_odt(ddr3_odt)
+	.ddr3_odt(ddr3_odt),
+	// Debugging	
+	.state(dram_state),
+	.ch(dram_ch)
 );
 
 
@@ -432,7 +458,7 @@ random	uprg1
 	.ack_o(rand_ack),
 	.we_i(cpu_we),
 	.adr_i(cpu_addr[3:0]),
-	.dat_i(cpu_data_out),
+	.dat_i(cpu_dat_o[31:0]),
 	.dat_o(rand_data_o)
 );
 
@@ -446,7 +472,7 @@ Ps2Keyboard ukbd1
 	.ack_o(kbd_ack),
 	.we_i(cpu_we),
 	.adr_i(cpu_addr[5:2]),
-	.dat_i(cpu_data_out[7:0]),
+	.dat_i(cpu_dat_o[7:0]),
 	.dat_o(kbd_data_o),
 	.kclk(kclk),
 	.kd(kd),
@@ -465,7 +491,7 @@ i2c_master_top ui2c1
 	.arst_i(~rst),
 	.cs_i(cs_i2c),
 	.wb_adr_i(cpu_addr[3:1]),
-	.wb_dat_i(cpu_data_out[7:0]),
+	.wb_dat_i(cpu_dat_o[7:0]),
 	.wb_dat_o(i2c_data_o),
 	.wb_we_i(cpu_we),
 	.wb_cyc_i(cpu_cyc),
@@ -491,7 +517,7 @@ i2c_master_top ui2c2
 	.arst_i(~rst),
 	.cs_i(cs_i2c2),
 	.wb_adr_i(cpu_addr[3:1]),
-	.wb_dat_i(cpu_data_out[7:0]),
+	.wb_dat_i(cpu_dat_o[7:0]),
 	.wb_dat_o(i2c2_data_o),
 	.wb_we_i(cpu_we),
 	.wb_stb_i(cpu_stb),
@@ -524,12 +550,11 @@ assign led[2] = hSync;
 */
 reg en_tx;
 reg en_rx;
-reg [15:0] aud0, aud2, audi;
 
 always @(posedge cpu_clk)
-	if (cs_gpio & cpu_we) begin
-		en_tx <= cpu_data_out[1];
-		en_rx <= cpu_data_out[0];
+	if (cs_gpio & cpu_we & cpu_stb) begin
+		en_tx <= cpu_dat_o[1];
+		en_rx <= cpu_dat_o[0];
 	end
 assign gpio_ack = cs_gpio & cpu_stb;
 

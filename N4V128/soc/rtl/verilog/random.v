@@ -98,26 +98,19 @@ wire cs = cs_i && cyc_i && stb_i;
 always @(posedge clk_i)
 	ack <= cs;
 always @*
-	ack_o <= cs_i ? ack : pAckStyle;
+	ack_o <= cs ? ack : pAckStyle;
 
 reg [9:0] stream;
-reg [31:0] m_z [0:1023];
-reg [31:0] m_w [0:1023];
 reg [31:0] next_m_z;
 reg [31:0] next_m_w;
 reg [31:0] out;
-
 reg wrw, wrz;
 reg [31:0] w,z;
-wire [31:0] m_zs = m_z[stream];
-wire [31:0] m_ws = m_w[stream];
-always @(posedge clk_i)
-	if (wrw)
-		m_w[stream] <= w;
-always @(posedge clk_i)
-	if (wrz)
-		m_z[stream] <= z;
-		
+wire [31:0] m_zs;
+wire [31:0] m_ws;
+
+rand_ram u1 (clk_i, wrw, stream, w, m_ws);
+rand_ram u2 (clk_i, wrz, stream, z, m_zs);
 
 always @*
 begin
@@ -167,5 +160,35 @@ begin
 		end
 	end
 end
+
+endmodule
+
+
+// Tools were inferring a massive distributed ram so we help them out a bit by
+// creating an explicit ram definition.
+
+module rand_ram(clk, wr, ad, i, o);
+input clk;
+input wr;
+input [8:0] ad;
+input [31:0] i;
+output [31:0] o;
+
+reg [31:0] ri;
+reg [8:0] regadr;
+reg regwr;
+(* RAM_STYLE="BLOCK" *)
+reg [31:0] mem [0:1023];
+
+always @(posedge clk)
+	regadr <= ad;
+always @(posedge clk)
+	regwr <= wr;
+always @(posedge clk)
+	ri <= i;
+always @(posedge clk)
+	if (regwr)
+		mem[regadr] <= ri;
+assign o = mem[regadr];
 
 endmodule

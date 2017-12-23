@@ -177,6 +177,8 @@ wire [63:0] rfoa = regfile[Ra];
 wire [63:0] rfob = regfile[Rb];
 wire [63:0] rfoc = regfile[Rc];
 reg [63:0] a,b,c,res;
+reg [31:0] rasstack [0:511];
+reg [8:0] rassp;
 
 // CSR's
 reg [8:0] cause;
@@ -381,6 +383,12 @@ DECODE:
 			Ra <= ir[10:6];
 			Rt <= ir[15:11];
 			end
+		`LINK:
+		    begin
+			Ra <= ir[10:6];
+            Rb <= ir[15:11];
+            Rt <= ir[15:11];
+		    end
 		`CSR:
 			begin
 			Ra <= ir[10:6];
@@ -757,7 +765,7 @@ EXECUTE:
 				we_o <= `HIGH;
 				sel_o <= 16'hFF << {am8[3],3'b0};
 				adr_o <= am8;
-				dat_o <= pc;
+				dat_o <= {2{32'h0,pc}};
 				pc <= {pc[31:28],ir[31:6],2'b00};
 				goto(MEMORY);
 			end
@@ -768,7 +776,7 @@ EXECUTE:
 				we_o <= `HIGH;
 				sel_o <= 16'hFF << {am8[3],3'b0};
 				adr_o <= am8;
-				dat_o <= pc;
+				dat_o <= {2{32'h0,pc}};
 				pc <= b + {{48{ir[31]}},ir[31:16]};
 				goto(MEMORY);
 			end
@@ -812,7 +820,7 @@ EXECUTE:
 				we_o <= `HIGH;
 				sel_o <= 16'h0FF << {am8[3],3'b0};
 				adr_o <= am8;
-				dat_o <= b;
+				dat_o <= {2{b}};
 				goto(MEMORY);
 			end
 		`LB,`LBU:

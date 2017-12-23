@@ -2,11 +2,15 @@
 `define TRUE	1'b1
 `define FALSE	1'b0
 
-module OLED(rst, clk, adr, dat, SDIN, SCLK, DC, RES, VBAT, VDD);
+module OLED(rst, clk, adr, dat, st, dst, gst, btn, SDIN, SCLK, DC, RES, VBAT, VDD);
 input rst;
 input clk;
 input [31:0] adr;
 input [15:0] dat;
+input [7:0] st;
+input [7:0] dst;
+input [7:0] gst;
+input btn;
 output SDIN;
 output SCLK;
 output DC;
@@ -23,10 +27,10 @@ parameter UPDATEWAIT = 4'd5;
 parameter DONE = 4'd6;
 
 reg [3:0] state;
-reg [127:0] Text0 = "N4V68kSys       ";
+reg [127:0] Text0 = "N4V128Sys       ";
 reg [127:0] Text1 = "ADDR: ????????  ";
 reg [127:0] Text2 = "DATA:     ????  ";
-reg [127:0] Text3 = "                ";
+reg [127:0] Text3 = "STATE:  ??????  ";
 reg [127:0] Alphabet = "FEDCBA9876543210";
 
 integer n;
@@ -55,6 +59,7 @@ begin
     	Text1[n] <= Alphabet[{adr[27:24],3'b0}+(n-64)];
     for (n = 72; n < 80; n = n + 1)
     	Text1[n] <= Alphabet[{adr[31:28],3'b0}+(n-72)];
+
     for (n = 16; n < 24; n = n + 1)
     	Text2[n] <= Alphabet[{dat[3:0],3'b0}+(n-16)];
     for (n = 24; n < 32; n = n + 1)
@@ -63,12 +68,25 @@ begin
     	Text2[n] <= Alphabet[{dat[11:8],3'b0}+(n-32)];
     for (n = 40; n < 48; n = n + 1)
     	Text2[n] <= Alphabet[{dat[15:12],3'b0}+(n-40)];
+
+    for (n = 16; n < 24; n = n + 1)
+    	Text3[n] <= Alphabet[{gst[3:0],3'b0}+(n-16)];
+    for (n = 24; n < 32; n = n + 1)
+    	Text3[n] <= Alphabet[{gst[7:4],3'b0}+(n-24)];
+    for (n = 32; n < 40; n = n + 1)
+    	Text3[n] <= Alphabet[{dst[3:0],3'b0}+(n-32)];
+    for (n = 40; n < 48; n = n + 1)
+    	Text3[n] <= Alphabet[{dst[7:4],3'b0}+(n-40)];
+    for (n = 48; n < 56; n = n + 1)
+    	Text3[n] <= Alphabet[{st[3:0],3'b0}+(n-48)];
+    for (n = 56; n < 64; n = n + 1)
+    	Text3[n] <= Alphabet[{st[7:4],3'b0}+(n-56)];
 end
 
 always @(posedge clk)
 begin
-	cnt <= cnt + 1;
-	if (cnt==24'd5000000)
+	cnt <= cnt + 24'd1;
+	if (cnt==24'd10000000)
 		cnt <= 24'd1;
 end
 
@@ -164,6 +182,11 @@ ACTIVE:
             write_base_addr <= 'b0;
             state <= WRITEWAIT;
         end
+        else if (btn) begin
+            update_start <= 1'b1;
+            update_clear <= 1'b0;
+            state <= UPDATEWAIT;
+    	end
 	end
 WRITE:
 	begin

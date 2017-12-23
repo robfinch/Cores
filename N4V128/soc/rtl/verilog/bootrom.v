@@ -1,11 +1,10 @@
+`timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2017  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2016  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
-//
-//	bootrom.v
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -22,32 +21,28 @@
 //
 // ============================================================================
 //
-module bootrom(clk_i, cs_i, cyc_i, stb_i, ack_o, adr_i, dat_o);
-parameter pAckStyle = 1'b0;
+module bootrom(rst_i, clk_i, cs_i, cyc_i, stb_i, ack_o, adr_i, dat_o);
+input rst_i;
 input clk_i;
 input cs_i;
 input cyc_i;
 input stb_i;
-output reg ack_o;
-input [17:0] adr_i;
-output reg [31:0] dat_o;
+output ack_o;
+input [16:0] adr_i;
+output [127:0] dat_o;
+reg [127:0] dat_o;
 
-reg ack1, ack2, ack3;
-reg [31:0] rommem [0:65535];
-reg [17:0] radr;
-reg [31:0] dat;
+wire cs;
+reg ack1,ack2,ack3;
+assign cs = cs_i && cyc_i && stb_i;
+assign ack_o = cs ? ack2 : 1'b0;
 
-wire cs = cs_i & cyc_i & stb_i;
- 
+reg [127:0] rommem[0:5119];
+reg [12:0] radr;
 initial begin
-`include "..\..\..\software\bootrom\bootrom.vh"
+//`include "C:\Cores4\DSD\DSD9\trunk\software\bootrom\source\bootrom.ve0"
+`include "c:\cores5\FT64\trunk\software\boot\boot.ve0"
 end
-
-always @(posedge clk_i)
-    radr <= adr_i;
-
-always @(posedge clk_i)
-    dat_o <= rommem[radr[17:2]];
 
 always @(posedge clk_i)
     ack1 <= cs;
@@ -55,9 +50,11 @@ always @(posedge clk_i)
     ack2 <= ack1 & cs;
 always @(posedge clk_i)
     ack3 <= ack2 & cs;
-//always @(posedge clk_i)
-//    ack_o <= ack2 & cs & ~ack_o;
-always @*
-    ack_o <= cs_i ? ack3 : pAckStyle;
+
+always @(posedge clk_i)
+    radr <= adr_i[16:4];
+
+always @(posedge clk_i)
+    dat_o <= rommem[radr];
 
 endmodule

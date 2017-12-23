@@ -38,7 +38,8 @@ cyc6, stb6, ack6, we6, sel6, adr6, dati6, dato6,
 cs7, cyc7, stb7, ack7, we7, sel7, adr7, dati7, dato7, sr7, cr7, rb7,
 ddr3_dq, ddr3_dqs_n, ddr3_dqs_p,
 ddr3_addr, ddr3_ba, ddr3_ras_n, ddr3_cas_n, ddr3_we_n,
-ddr3_ck_p, ddr3_ck_n, ddr3_cke, ddr3_reset_n, ddr3_dm, ddr3_odt
+ddr3_ck_p, ddr3_ck_n, ddr3_cke, ddr3_reset_n, ddr3_dm, ddr3_odt,
+ch, state
 );
 parameter SIM= "FALSE";
 parameter SIM_BYPASS_INIT_CAL = "OFF";
@@ -165,6 +166,9 @@ output ddr3_reset_n;
 output [1:0] ddr3_dm;
 output ddr3_odt;
 
+output reg [2:0] ch;
+output reg [3:0] state;
+
 reg [7:0] sel;
 reg [31:0] adr;
 reg [63:0] dato;
@@ -173,6 +177,7 @@ reg [127:0] dat128;
 reg [15:0] wmask;
 
 reg [3:0] state;
+reg [3:0] nch;
 reg [2:0] ch;
 reg do_wr;
 reg [1:0] sreg;
@@ -246,6 +251,7 @@ wire calib_complete;
 reg [15:0] refcnt;
 reg refreq;
 wire refack;
+reg [15:0] tocnt;					// memory access timeout counter
 
 reg [3:0] resv_ch0,resv_ch1;
 reg [31:0] resv_adr0,resv_adr1;
@@ -379,7 +385,7 @@ wire ch7_read = ics7 && !we7xx && cs7xx && (adr7xx[31:5]==ch7_addr[31:5]);
 always @*
 begin
 	fast_read0 = FALSE;
-	if (cs0 && !we0 && adr0[31:7]==ch0_addr[31:7])
+	if (cs0 && !we0 && adr0[31:6]==ch0_addr[31:6])
 		fast_read0 = TRUE;
 end
 always @*
@@ -441,166 +447,128 @@ begin
 end
 
 // Select the channel
-always @(posedge mem_ui_clk)
+always @*
 begin
-	if (state==IDLE) begin
-		// Channel 0 read or write takes precedence
-		if (cs0)
-			ch <= 3'd0;
-		else if (cs1xx & we1xx)
-			ch <= 3'd1;
-		else if (cs2 & we2)
-			ch <= 3'd2;
-		else if (cs3 & we3)
-			ch <= 3'd3;
+	// Channel 0 read or write takes precedence
+	if (cs0 & we0)
+		nch <= 3'd0;
+	else if (cs0 & ~fast_read0)
+		nch <= 3'd0;
+	else if (cs1xx & we1xx)
+		nch <= 3'd1;
+	else if (cs2 & we2)
+		nch <= 3'd2;
+	else if (cs3 & we3)
+		nch <= 3'd3;
 `ifdef CH45
-		else if (cs4 & we4)
-			ch <= 3'd4;
+	else if (cs4 & we4)
+		nch <= 3'd4;
 `endif
-		else if (cs6 & we6)
-			ch <= 3'd6;
-		else if (cs7xx & we7xx)
-			ch <= 3'd7;
-		// Reads, writes detected above
-		else if (cs1xx & ~fast_read1)
-			ch <= 3'd1;
-		else if (cs2 & ~fast_read2)
-			ch <= 3'd2;
-		else if (cs3 & ~fast_read3)
-			ch <= 3'd3;
+	else if (cs6 & we6)
+		nch <= 3'd6;
+	else if (cs7xx & we7xx)
+		nch <= 3'd7;
+	// Reads, writes detected above
+	else if (cs1xx & ~fast_read1)
+		nch <= 3'd1;
+	else if (cs2 & ~fast_read2)
+		nch <= 3'd2;
+	else if (cs3 & ~fast_read3)
+		nch <= 3'd3;
 `ifdef CH45
-		else if (cs4 & ~fast_read4)
-			ch <= 3'd4;
-		else if (cs5 & ~fast_read5)
-			ch <= 3'd5;
+	else if (cs4 & ~fast_read4)
+		nch <= 3'd4;
+	else if (cs5 & ~fast_read5)
+		nch <= 3'd5;
 `endif
-		else if (cs6 & ~fast_read6)
-			ch <= 3'd6;
-		else if (~fast_read7)
-			ch <= 3'd7;
-	end
+	else if (cs6 & ~fast_read6)
+		nch <= 3'd6;
+	else if (cs7xx & ~fast_read7)
+		nch <= 3'd7;
+	// Nothing selected
+	else
+		nch <= 4'hF;
 end
+
+always @(posedge mem_ui_clk)
+	if (state==IDLE)
+		ch <= nch;
 
 // Select the address input
 always @(posedge mem_ui_clk)
-begin
 	if (state==IDLE) begin
-		// Channel 0 read or write takes precedence
-		if (cs0 & we0)
-			adr <= {adr0[AMSB:4],4'h0};
-		else if (cs0 & ~fast_read0)
-			adr <= {adr0[AMSB:6],6'h0};
-		else if (cs1xx & we1xx)
-			adr <= {adr1xx[AMSB:4],4'h0};
-		else if (cs2 & we2)
-			adr <= {adr2[AMSB:4],4'h0};
-		else if (cs3 & we3)
-			adr <= {adr3[AMSB:4],4'h0};
+		case(nch)
+		3'd0:	if (we0)
+					adr <= {adr0[AMSB:4],4'h0};
+				else
+					adr <= {adr0[AMSB:6],6'h0};
+		3'd1:	if (we1xx)
+					adr <= {adr1xx[AMSB:4],4'h0};
+				else
+					adr <= {adr1xx[AMSB:5],5'h0};
+		3'd2:	adr <= {adr2[AMSB:4],4'h0};
+		3'd3:	adr <= {adr3[AMSB:4],4'h0};
 `ifdef CH45
-		else if (cs4 & we4)
-			adr <= {adr4[AMSB:4],4'h0};
+		3'd4:	adr <= {adr4[AMSB:4],4'h0};
+		3'd5:	adr <= {adr5[AMSB:6],6'h0};
 `endif
-		else if (cs6 & we6)
-			adr <= {adr6[AMSB:4],4'h0};
-		else if (cs7xx & we7xx)
-			adr <= {adr7xx[AMSB:4],4'h0};
-		// Reads, writes detected above
-		else if (cs1xx & ~fast_read1)
-			adr <= {adr1xx[AMSB:5],5'h0};
-		else if (cs2 & ~fast_read2)
-			adr <= {adr2[AMSB:4],4'h0};
-		else if (cs3 & ~fast_read3)
-			adr <= {adr3[AMSB:4],4'h0};
-`ifdef CH45
-		else if (cs4 & ~fast_read4)
-			adr <= {adr4[AMSB:4],4'h0};
-		else if (cs5 & ~fast_read5)
-			adr <= {adr5[AMSB:6],6'h0};
-`endif
-		else if (cs6 & ~fast_read6)
-			adr <= {adr6[AMSB:4],4'h0};
-		else if (~fast_read7)
-			adr <= {adr7xx[AMSB:5],5'h0};
+		3'd6:	adr <= {adr6[AMSB:4],4'h0};
+		3'd7:	if (we7xx)
+					adr <= {adr7xx[AMSB:4],4'h0};
+				else
+					adr <= {adr7xx[AMSB:5],5'h0};
+		default:	adr <= 29'h1FFFFFFF;
+		endcase
 	end
-end
 
 // Setting the write mask
 always @(posedge mem_ui_clk)
-begin
 	if (state==IDLE) begin
-		// Channel 0 read or write takes precedence
-		if (cs0 & we0)
-			wmask <= ~sel0;
-		else if (cs0 & ~fast_read0)
-			wmask <= 16'h0000;
-		else if (cs1xx & we1xx)
-			wmask <= ~sel1xx;
-		else if (cs2 & we2)
-            case(adr2[3:2])
-            2'd0:  wmask <= {12'hFFF,~sel2[3:0]};
-            2'd1:  wmask <= {8'hFF,~sel2[3:0],4'hF};
-            2'd2:  wmask <= {4'hF,~sel2[3:0],8'hFF};
-            2'd3:  wmask <= {~sel2[3:0],12'hFFF};
-            endcase
-		else if (cs3 & we3)
-			wmask <= ~sel3;
+		wmask <= 16'h0000;
+		case(nch)
+		3'd0:	if (we0) wmask <= ~sel0;
+		3'd1:	if (we1xx)	wmask <= ~sel1xx;
+		3'd2:	if (we2)
+		            case(adr2[3:2])
+		            2'd0:  wmask <= {12'hFFF,~sel2[3:0]};
+		            2'd1:  wmask <= {8'hFF,~sel2[3:0],4'hF};
+		            2'd2:  wmask <= {4'hF,~sel2[3:0],8'hFF};
+		            2'd3:  wmask <= {~sel2[3:0],12'hFFF};
+		            endcase
+		3'd3:	if (we3) wmask <= ~sel3;
 `ifdef CH45
-		else if (cs4 & we4)
-			wmask <= ~sel4;
+		3'd4:	if (we4) wmask <= ~sel4;
+		3'd5:	;
 `endif
-		else if (cs6 & we6)
-            case(adr6[3:2])
-            2'd0:  wmask <= {12'hFFF,~sel6[3:0]};
-            2'd1:  wmask <= {8'hFF,~sel6[3:0],4'hF};
-            2'd2:  wmask <= {4'hF,~sel6[3:0],8'hFF};
-            2'd3:  wmask <= {~sel6[3:0],12'hFFF};
-            endcase
-		else if (cs7xx & we7xx)
-			wmask <= ~sel7xx;
-		// Reads, writes detected above
-		else if (cs1xx & ~fast_read1)
-			wmask <= 16'h0000;
-		else if (cs2 & ~fast_read2)
-			wmask <= 16'h0000;
-		else if (cs3 & ~fast_read3)
-			wmask <= 16'h0000;
-`ifdef CH45			
-		else if (cs4 & ~fast_read4)
-			wmask <= 16'h0000;
-		else if (cs5 & ~fast_read5)
-			wmask <= 16'h0000;
-`endif			
-		else if (cs6 & ~fast_read6)
-			wmask <= 16'h0000;
-		else if (~fast_read7)
-			wmask <= 16'h0000;
-		else
-			wmask <= 16'hFFFF;
+		3'd6:	if (we6)
+		            case(adr6[3:2])
+		            2'd0:  wmask <= {12'hFFF,~sel6[3:0]};
+		            2'd1:  wmask <= {8'hFF,~sel6[3:0],4'hF};
+		            2'd2:  wmask <= {4'hF,~sel6[3:0],8'hFF};
+		            2'd3:  wmask <= {~sel6[3:0],12'hFFF};
+		            endcase
+		3'd7:	if (we7xx) wmask <= ~sel7xx;
+		default:	wmask <= 16'hFFFF;
+		endcase
 	end
-end
 
 // Setting the write data
 always @(posedge mem_ui_clk)
-begin
 	if (state==IDLE) begin
-		if (cs0 & we0)
-			dat128 <= dati0;
-		else if (cs1xx & we1xx)
-			dat128 <= dati1xx;
-		else if (cs2 & we2)
-			dat128 <= {4{dati2}};
-		else if (cs3 & we3)
-			dat128 <= dati3;
+		case(nch)
+		3'd0:	dat128 <= dati0;
+		3'd1:	dat128 <= dati1xx;
+		3'd2:	dat128 <= {4{dati2}};
+		3'd3:	dat128 <= dati3;
 `ifdef CH45
-		else if (cs4 & we4)
-			dat128 <= dati4;
+		3'd4:	dat128 <= dati4;
+		3'd5:	;
 `endif
-		else if (cs6 & we6)
-			dat128 <= {4{dati6}};
-		else if (cs7xx & we7xx)
-			dat128 <= dati7xx;
+		3'd6:	dat128 <= {4{dati6}};
+		3'd7:	dat128 <= dati7xx;
+		default:	dat128 <= dati7xx;
+		endcase
 	end
-end
 
 
 // Managing read cache addresses
@@ -636,7 +604,7 @@ else begin
 		if (cs7xx & we7xx)
 			clear_cache(adr7xx);
 	end
-	if (state==WAIT_RD)
+	if (state==WAIT_RD||state==SET_CMD_RD)
     	if (mem_rd_data_valid & mem_rd_data_end) begin
 		    case(ch)
 		    3'd0:	if (strip_cnt2==num_strips)
@@ -659,48 +627,24 @@ end
 
 // Setting burst length
 always @(posedge mem_ui_clk)
-begin
 	if (state==IDLE) begin
-	  	if (cs0 & we0)
-	  		num_strips <= 2'd0;
-	  	else if (cs0 & ~fast_read0)
-	  		num_strips <= 2'd3;
-		else if (cs1xx & we1xx)
-	  		num_strips <= 2'd0;
-		else if (cs2 & we2)
-	  		num_strips <= 2'd0;
-		else if (cs3 & we3)
-	  		num_strips <= 2'd0;
+  		num_strips <= 2'd0;
+		case(nch)
+		3'd0:	if (!we0) 	num_strips <= 2'd3;
+		3'd1:	if (!we1xx)	num_strips <= 2'd1;
+		3'd2:	;
+		3'd3:	;
 `ifdef CH45
-		else if (cs4 & we4)
-	  		num_strips <= 2'd0;
+		3'd4:	;
+		3'd5:	num_strips <= 2'd3;
 `endif
-		else if (cs6 & we6)
-	  		num_strips <= 2'd0;
-		else if (cs7xx & we7xx)
-	  		num_strips <= 2'd0;
-		// Reads, writes detected above
-		else if (cs1xx & ~fast_read1)
-	  		num_strips <= 2'd1;
-		else if (cs2 & ~fast_read2)
-	  		num_strips <= 2'd0;
-		else if (cs3 & ~fast_read3)
-	  		num_strips <= 2'd0;
-`ifdef CH45
-		else if (cs4 & ~fast_read4)
-	  		num_strips <= 2'd0;
-		else if (cs5 & ~fast_read5)
-	  		num_strips <= 2'd3;
-`endif
-		else if (cs6 & ~fast_read6)
-	  		num_strips <= 2'd0;
-		else if (~fast_read7)
-	  		num_strips <= 2'd1;
-	  	else
-	  		num_strips <= 2'd0;
+		3'd6:	;
+		3'd7:	if (!we7xx)	num_strips <= 2'd1;
+		endcase
 	end
-end
 
+// Auto-increment the request address during a read burst until the desired
+// number of strips are requested.
 always @(posedge mem_ui_clk)
 if (state==PRESET)
 	mem_addr <= adr;
@@ -845,11 +789,9 @@ IDLE:
   // Calib complete goes high in sim about 111 us.
   // Simulation setting must be set to FAST.
 	if (calib_complete) begin
-		if (cs0 & we0)
-			state <= PRESET;
-		else if (cs0 & ~fast_read0)
-			state <= PRESET;
-		else if (cs1xx & we1xx & (cs7xx ? toggle : 1'b1)) begin
+		case(nch)
+		3'd0:	state <= PRESET;
+		3'd1:
 		    if (cr1xx) begin
 		        state <= IDLE;
 		        if ((resv_ch0==4'd1) && (resv_adr0[31:4]==adr1xx[31:4]))
@@ -859,18 +801,14 @@ IDLE:
 		    end
 		    else
 		        state <= PRESET;
-		end
-		else if (cs2 & we2)
-			state <= PRESET;
-		else if (cs3 & we3)
-			state <= PRESET;
+		3'd2:	state <= PRESET;
+		3'd3:	state <= PRESET;
 `ifdef CH45
-		else if (cs4 & we4)
-			state <= PRESET;
+		3'd4:	state <= PRESET;
+		3'd5:	state <= PRESET;
 `endif	
-		else if (cs6 & we6)
-			state <= PRESET;
-		else if (cs7xx & we7xx & ~acki7) begin
+		3'd6:	state <= PRESET;
+		3'd7:
 		    if (cr7xx) begin
 		        state <= IDLE;
 		        if ((resv_ch0==4'd7) && (resv_adr0[31:4]==adr7xx[31:4]))
@@ -880,31 +818,17 @@ IDLE:
 		    end
 		    else
 		        state <= PRESET;
-		end
-		// Read cycles
-		else if (!we1xx & cs1xx & ~fast_read1 & (cs7xx ? toggle : 1'b1))
-			state <= PRESET;
-		else if (!we2 & cs2 & ~fast_read2)
-			state <= PRESET;
-		else if (!we3 & cs3 & ~fast_read3)
-			state <= PRESET;
-`ifdef CH45			
-		else if (!we4 & cs4 & ~fast_read4)
-			state <= PRESET;
-		else if (cs5 & ~fast_read5)
-			state <= PRESET;
-`endif			
-		else if (!we6 & cs6 & ~fast_read6)
-			state <= PRESET;
-		else if (!we7xx & cs7xx & ~fast_read7)
-            state <= PRESET;
+		default:	;	// no channel selected -> stay in IDLE state
+		endcase
 	end
 
 PRESET:
 	if (do_wr)
 		state <= SEND_DATA;
-	else
+	else begin
+		tocnt <= 16'd0;
 		state <= SET_CMD_RD;
+	end
 SEND_DATA:
     if (mem_wdf_rdy == TRUE)
         state <= SET_CMD_WR;
@@ -912,15 +836,31 @@ SET_CMD_WR:
     if (mem_rdy == TRUE)
         state <= IDLE;
 SET_CMD_RD:
-    if (mem_rdy == TRUE) begin
-        if (strip_cnt==num_strips)
-            state <= WAIT_RD;
-    end
+	begin
+		tocnt <= tocnt + 16'd1;
+		if (tocnt==16'd120)
+			state <= IDLE;
+	    if (mem_rdy == TRUE) begin
+	        if (strip_cnt==num_strips) begin
+	        	tocnt <= 16'd0;
+	            state <= WAIT_RD;
+	        end
+	    end
+	    if (mem_rd_data_valid & mem_rd_data_end) begin
+	        if (strip_cnt2==num_strips)
+	            state <= IDLE;
+	    end
+	end
 WAIT_RD:
-    if (mem_rd_data_valid & mem_rd_data_end) begin
-        if (strip_cnt2==num_strips)
-            state <= IDLE;
-    end
+	begin
+		tocnt <= tocnt + 16'd1;
+		if (tocnt==16'd120)
+			state <= IDLE;
+	    if (mem_rd_data_valid & mem_rd_data_end) begin
+	        if (strip_cnt2==num_strips)
+	            state <= IDLE;
+	    end
+	end
 default:	state <= IDLE;
 endcase
 
@@ -941,7 +881,7 @@ always @(posedge mem_ui_clk)
 begin
 	if (state==IDLE)
 		strip_cnt2 <= 2'd0;
-	else if (state==WAIT_RD)
+	else if (state==WAIT_RD || state==SET_CMD_RD)
     	if (mem_rd_data_valid & mem_rd_data_end) begin
 		    case(ch)
 		    3'd0:	strip_cnt2 <= strip_cnt2 + 2'd1;
@@ -955,63 +895,65 @@ end
 // Update data caches with read data.
 always @(posedge mem_ui_clk)
 begin
-	if (state==WAIT_RD)
-	    case(ch)
-	    3'd0:	ch0_rd_data[strip_cnt2] <= mem_rd_data;
-	    3'd1:	ch1_rd_data[strip_cnt2[0]] <= mem_rd_data;
-	    3'd2:	ch2_rd_data <= mem_rd_data;
-	    3'd3:	ch3_rd_data <= mem_rd_data;
+	if (state==WAIT_RD || state==SET_CMD_RD)
+    	if (mem_rd_data_valid & mem_rd_data_end) begin
+		    case(ch)
+		    3'd0:	ch0_rd_data[strip_cnt2] <= mem_rd_data;
+		    3'd1:	ch1_rd_data[strip_cnt2[0]] <= mem_rd_data;
+		    3'd2:	ch2_rd_data <= mem_rd_data;
+		    3'd3:	ch3_rd_data <= mem_rd_data;
 `ifdef CH45	    
-	    3'd4:	ch4_rd_data <= mem_rd_data;
-	    3'd5:	ch5_rd_data[strip_cnt2] <= mem_rd_data;
+		    3'd4:	ch4_rd_data <= mem_rd_data;
+		    3'd5:	ch5_rd_data[strip_cnt2] <= mem_rd_data;
 `endif	    
-	    3'd6:	ch6_rd_data <= mem_rd_data;
-	    3'd7:	ch7_rd_data[strip_cnt2[0]] <= mem_rd_data;
-	    endcase
+		    3'd6:	ch6_rd_data <= mem_rd_data;
+		    3'd7:	ch7_rd_data[strip_cnt2[0]] <= mem_rd_data;
+		    endcase
+		end
 end
 
 // Write operation indicator
 always @(posedge mem_ui_clk)
 begin
 	if (state==IDLE) begin
-		if (cs0 & we0)
-			do_wr <= TRUE;
-		else if (cs0)
-			do_wr <= FALSE;
-		else if (cs1xx & we1xx & (cs7xx ? toggle : 1'b1)) begin
-		    if (cr1xx) begin
-		    	do_wr <= FALSE;
-		        if ((resv_ch0==4'd1) && (resv_adr0[31:4]==adr1xx[31:4]))
-		            do_wr <= TRUE;
-		        if ((resv_ch1==4'd1) && (resv_adr1[31:4]==adr1xx[31:4]))
-		            do_wr <= TRUE;
-		    end
-		    else
-		        do_wr <= TRUE;
-		end
-		else if (cs2 & we2)
-			do_wr <= TRUE;
-		else if (cs3 & we3)
-			do_wr <= TRUE;
+		case(nch)
+		3'd0:	do_wr <= we0;
+		3'd1:
+			if (we1xx) begin
+			    if (cr1xx) begin
+			    	do_wr <= FALSE;
+			        if ((resv_ch0==4'd1) && (resv_adr0[31:4]==adr1xx[31:4]))
+			            do_wr <= TRUE;
+			        if ((resv_ch1==4'd1) && (resv_adr1[31:4]==adr1xx[31:4]))
+			            do_wr <= TRUE;
+			    end
+			    else
+			        do_wr <= TRUE;
+			end
+			else
+				do_wr <= FALSE;
+		3'd2:	do_wr <= we2;
+		3'd3:	do_wr <= we3;
 `ifdef CH45			
-		else if (cs4 & we4)
-			do_wr <= TRUE;
+		3'd4:	do_wr <= we4;
 `endif			
-		else if (cs6 & we6)
-			do_wr <= TRUE;
-		else if (cs7xx & we7xx & ~acki7) begin
-		    if (cr7xx) begin
-		    	do_wr <= FALSE;
-		        if ((resv_ch0==4'd7) && (resv_adr0[31:4]==adr7xx[31:4]))
-		            do_wr <= TRUE;
-		        if ((resv_ch1==4'd7) && (resv_adr1[31:4]==adr7xx[31:4]))
-		            do_wr <= TRUE;
-		    end
-		    else
-		        do_wr <= TRUE;
-		end
-        else
-        	do_wr <= FALSE;
+		3'd6:	do_wr <= we6;
+		3'd7:
+			if (we7xx) begin
+			    if (cr7xx) begin
+			    	do_wr <= FALSE;
+			        if ((resv_ch0==4'd7) && (resv_adr0[31:4]==adr7xx[31:4]))
+			            do_wr <= TRUE;
+			        if ((resv_ch1==4'd7) && (resv_adr1[31:4]==adr7xx[31:4]))
+			            do_wr <= TRUE;
+			    end
+			    else
+			        do_wr <= TRUE;
+			end
+	        else
+	        	do_wr <= FALSE;
+	    default:	do_wr <= FALSE;
+	    endcase
 	end
 end
 
