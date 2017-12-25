@@ -176,7 +176,9 @@ reg [63:0] dati;
 reg [127:0] dat128;
 reg [15:0] wmask;
 
+reg [3:0] state;
 reg [3:0] nch;
+reg [2:0] ch;
 reg do_wr;
 reg [1:0] sreg;
 reg rstn;

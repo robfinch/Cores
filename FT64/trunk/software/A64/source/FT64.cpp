@@ -1002,14 +1002,16 @@ static void process_riop(int opcode6)
 			(val << 16) |
 			(23 << 11) |
 			(0 << 6) |
-			0x3A,!expand_flag,4);	// ORQ1
+			(1 << 6) |
+			0x1A,!expand_flag,4);	// ORQ1
 		val >>= 16;
 		if (val != 0) {
 			emit_insn(
 				(val << 16) |
 				(23 << 11) |
 				(0 << 6) |
-				0x5A,!expand_flag,4);	// ORQ2
+				(2 << 6) |
+				0x1A,!expand_flag,4);	// ORQ2
 		}
 		val >>= 16;
 		if (val != 0) {
@@ -1017,10 +1019,12 @@ static void process_riop(int opcode6)
 				(val << 16) |
 				(23 << 11) |
 				(0 << 6) |
-				0x7A,!expand_flag,4);	// ORQ3
+				(3 << 6) |
+				0x1A,!expand_flag,4);	// ORQ3
 		}
 		emit_insn(
 			(opcode6 << 26) |
+			(3 << 21) |		// set size to word size op
 			(Rt << 16) |
 			(23 << 11) |
 			(Ra << 6) |
@@ -1028,6 +1032,75 @@ static void process_riop(int opcode6)
 		return;
 	}
 	emit_insn(((val & 0xFFFF) << 16)|(Rt << 11)|(Ra << 6)|opcode6,!expand_flag,4);
+}
+
+// ---------------------------------------------------------------------------
+// slti r1,r2,#1234
+//
+// A value that is too large has to be loaded into a register then the
+// instruction converted to a registered form.
+// ---------------------------------------------------------------------------
+
+static void process_setiop(int opcode6, int cond4)
+{
+    int Ra;
+    int Rt;
+    char *p;
+    int64_t val;
+    
+    p = inptr;
+    Rt = getRegisterX();
+    need(',');
+    Ra = getRegisterX();
+    need(',');
+    NextToken();
+    val = expr();
+	if (val < -1024 || val > 1023) {
+		emit_insn(
+			(val << 16) |
+			(23 << 11) |
+			(0 << 6) |
+			0x09,!expand_flag,4);	// ORI
+		val >>= 16;
+		emit_insn(
+			(val << 16) |
+			(23 << 11) |
+			(0 << 6) |
+			(1 << 6) |
+			0x1A,!expand_flag,4);	// ORQ1
+		val >>= 16;
+		if (val != 0) {
+			emit_insn(
+				(val << 16) |
+				(23 << 11) |
+				(0 << 6) |
+				(2 << 6) |
+				0x1A,!expand_flag,4);	// ORQ2
+		}
+		val >>= 16;
+		if (val != 0) {
+			emit_insn(
+				(val << 16) |
+				(23 << 11) |
+				(0 << 6) |
+				(3 << 6) |
+				0x1A,!expand_flag,4);	// ORQ3
+		}
+		emit_insn(
+			(((cond4 >= 12 && cond4 <= 15) ? 7 : 6) << 26) |
+			((cond4 & 7) << 23) |
+			(3 << 21) |		// set size to word size op
+			(Rt << 16) |
+			(23 << 11) |
+			(Ra << 6) |
+			0x02,!expand_flag,4);
+		return;
+	}
+	emit_insn(
+		(cond4<<28)|
+		((val & 0xFFF) << 16)|
+		(Rt << 11)|(Ra << 6)|
+		opcode6,!expand_flag,4);
 }
 
 // ---------------------------------------------------------------------------
@@ -1055,6 +1128,16 @@ static void process_rrop(int funct6)
     prevToken();
     Rb = getRegisterX();
     //prevToken();
+	if (funct6==0x2E || funct6==0x2C || funct6==0x2D) {
+		funct6 += 0x10;	// change to divmod
+	    emit_insn((funct6<<26)||(Rt<<21)|(Rb<<11)|(Ra<<6)|0x02,!expand_flag,4);
+		return;
+	}
+	// No size is emitted for divides
+	else if (funct6==0x3C || funct6==0x3D || funct6==0x3E) {
+	    emit_insn((funct6<<26)||(Rt<<16)|(Rb<<11)|(Ra<<6)|0x02,!expand_flag,4);
+		return;
+	}
     emit_insn((funct6<<26)|(sz << 21)|(Rt<<16)|(Rb<<11)|(Ra<<6)|0x02,!expand_flag,4);
 }
        
@@ -1124,14 +1207,16 @@ j1:
 			(val << 16) |
 			(23 << 11) |
 			(0 << 6) |
-			0x3A,!expand_flag,4);	// ORQ1
+			(1 << 6) |
+			0x1A,!expand_flag,4);	// ORQ1
 		val >>= 16;
 		if (val != 0) {
 			emit_insn(
 				(val << 16) |
 				(23 << 11) |
 				(0 << 6) |
-				0x5A,!expand_flag,4);	// ORQ2
+				(2 << 6) |
+				0x1A,!expand_flag,4);	// ORQ2
 		}
 		val >>= 16;
 		if (val != 0) {
@@ -1139,7 +1224,8 @@ j1:
 				(val << 16) |
 				(23 << 11) |
 				(0 << 6) |
-				0x7A,!expand_flag,4);	// ORQ3
+				(3 << 6) |
+				0x1A,!expand_flag,4);	// ORQ3
 		}
 		if (Ra != 0) {
 			// add r23,r23,Ra
@@ -1160,7 +1246,7 @@ j1:
 		emit_insn(
 			(0 << 16) |
 			(Rt << 11) |
-			(Ra << 6) | 0x18,!expand_flag,4);
+			(23 << 6) | 0x18,!expand_flag,4);
 		return;
 	}
 	emit_insn((addr << 16) | (Rt << 11) | (Ra << 6) | 0x18,!expand_flag,4);
@@ -1614,7 +1700,7 @@ static void process_call(int opcode)
 			);
 		return;
 	}
-	if (val < 0xFFFFFFFFF8000000LL || val > 0x7FFFFFFLL) {
+	if (code_bits > 27 && (val < 0xFFFFFFFFF8000000LL || val > 0x7FFFFFFLL)) {
 		emit_insn(
 			(val << 16) |
 			(23 << 11) |
@@ -1625,14 +1711,16 @@ static void process_call(int opcode)
 			(val << 16) |
 			(23 << 11) |
 			(0 << 6) |
-			0x3A,!expand_flag,4);	// ORQ1
+			(1 << 6) |
+			0x1A,!expand_flag,4);	// ORQ1
 		val >>= 16;
 		if (val != 0) {
 			emit_insn(
 				(val << 16) |
 				(23 << 11) |
 				(0 << 6) |
-				0x5A,!expand_flag,4);	// ORQ2
+				(2 << 6) |
+				0x1A,!expand_flag,4);	// ORQ2
 		}
 		val >>= 16;
 		if (val != 0) {
@@ -1640,7 +1728,8 @@ static void process_call(int opcode)
 				(val << 16) |
 				(23 << 11) |
 				(0 << 6) |
-				0x7A,!expand_flag,4);	// ORQ3
+				(3 << 6) |
+				0x1A,!expand_flag,4);	// ORQ3
 		}
 		if (Ra!=0) {
 			// add r23,r23,Ra
@@ -1668,7 +1757,7 @@ static void process_call(int opcode)
 		return;
 	}
 	emit_insn(
-		((val & 0xFFFFFFF) >> 2) |
+		(((val & 0xFFFFFFFF) >> 2) << 6) |
 		opcode,0,4
 		);
 }
@@ -1925,7 +2014,7 @@ static void process_store(int opcode6)
 			(Rs << 16) |
 			(Rb << 11) |
 			(Ra << 6) |
-			0x0C,!expand_flag,2);
+			0x02,!expand_flag,4);
 		return;
 	}
     if (Ra < 0) Ra = 0;
@@ -1940,7 +2029,8 @@ static void process_store(int opcode6)
 			((val >> 16) << 16) |
 			(23 << 11) |
 			(0 << 6) |
-			0x3A,!expand_flag,4);	// ORQ1
+			(1 << 6) |
+			0x1A,!expand_flag,4);	// ORQ1
 		// Change to indexed addressing
 		emit_insn(
 			(opcode6 << 26) |
@@ -2005,7 +2095,12 @@ static void process_ldi()
     int Rt;
     int64_t val;
     int opcode6 = 0x09;  // ORI
+	int sz = 3;
+	char *p;
 
+    p = inptr;
+	if (*p=='.')
+		getSz(&sz);
     Rt = getRegisterX();
     expect(',');
     val = expr();
@@ -2020,14 +2115,16 @@ static void process_ldi()
 			(val << 16) |
 			(23 << 11) |
 			(0 << 6) |
-			0x3A,!expand_flag,4);	// ORQ1
+			(1 << 6) |
+			0x1A,!expand_flag,4);	// ORQ1
 		val >>= 16;
 		if (val != 0) {
 			emit_insn(
 				(val << 16) |
 				(23 << 11) |
 				(0 << 6) |
-				0x5A,!expand_flag,4);	// ORQ2
+				(2 << 6) |
+				0x1A,!expand_flag,4);	// ORQ2
 		}
 		val >>= 16;
 		if (val != 0) {
@@ -2035,10 +2132,12 @@ static void process_ldi()
 				(val << 16) |
 				(23 << 11) |
 				(0 << 6) |
-				0x7A,!expand_flag,4);	// ORQ3
+				(3 << 6) |
+				0x1A,!expand_flag,4);	// ORQ3
 		}
 		emit_insn(
 			(opcode6 << 26) |
+			(sz << 21) |
 			(Rt << 16) |
 			(23 << 11) |
 			(Ra << 6) |
@@ -2064,6 +2163,11 @@ static void process_link(int opcode6)
     int64_t val;
     
     p = inptr;
+    Rb = getRegisterX();
+	if (Rb==-1)
+		Rb = 30;
+	else
+		expect(',');
     NextToken();
     val = expr();
 	emit_prefix(val);
@@ -2106,7 +2210,7 @@ static void process_load(int opcode6)
 			(Rt << 16) |
 			(Rb << 11) |
 			(Ra << 6) |
-			0x0C,!expand_flag,2);
+			0x02,!expand_flag,4);
 		return;
 	}
     if (Ra < 0) Ra = 0;
@@ -2121,7 +2225,8 @@ static void process_load(int opcode6)
 			((val >> 16) << 16) |
 			(23 << 11) |
 			(0 << 6) |
-			0x3A,!expand_flag,4);	// ORQ1
+			(1 << 6) |
+			0x1A,!expand_flag,4);	// ORQ1
 		// Change to indexed addressing
 		emit_insn(
 			(opcode6 << 26) |
@@ -2276,7 +2381,7 @@ static void process_ltcb(int oc)
 }
 
 // ----------------------------------------------------------------------------
-// mov r1,r2
+// mov r1,r2 -> translated to or Rt,Ra,#0
 // ----------------------------------------------------------------------------
 
 static void process_mov(int oc)
@@ -2324,7 +2429,7 @@ static void process_mov(int oc)
 	 emit_insn(
 		 (Rt << 11) |
 		 (Ra << 6) |
-		 oc,0,1
+		 oc,0,4
 		 );
 	prevToken();
 }
@@ -2354,7 +2459,7 @@ static void process_shifti(int op4)
 	case 0:	func6 = 0x1F;
 	case 1:	func6 = 0x2F;
 	case 2:	func6 = 0x3F;
-	default:	func6 = 0x03;
+	default:	func6 = 0x0F;
 	}
 	emit_insn((func6 << 26) | (op4 << 22) | (((val >>5) & 1) << 21) | (Rt << 16) | ((val & 0x1F) << 11) | (Ra << 6) | 0x02,!expand_flag,4);
 }
@@ -2425,7 +2530,7 @@ static void process_shift(int op4)
 		case 0:	func6 = 0x1F;
 		case 1:	func6 = 0x2F;
 		case 2:	func6 = 0x3F;
-		default:	func6 = 0x03;
+		default:	func6 = 0x0F;
 		}
 		emit_insn((func6 << 26) | (op4 << 22) | (Rt << 16)| (Rb << 11) | (Ra << 6) | 0x02,!expand_flag,4);
 	 }
@@ -2666,7 +2771,7 @@ static void process_push(int func, int amt)
     }
     emit_insn(
 		(func << 26) |
-		(amt << 21) |
+		((amt & 31) << 21) |
 		(0x1F << 16) |
 		(Ra << 11) |
 		(0x1F << 6) |
@@ -2983,9 +3088,11 @@ void FT64_processMaster()
 		case tk_memdb: emit_insn(0xD0000002,0,4); break;
 		case tk_memsb: emit_insn(0xD4000002,0,4); break;
 		case tk_message: process_message(); break;
-        case tk_mov: process_mov(0x1D); break;
+		case tk_mod: process_riop(0x2E); break;
+		case tk_modu: process_riop(0x2C); break;
+        case tk_mov: process_mov(0x09); break;
         case tk_neg: process_neg(); break;
-        case tk_nop: emit_insn(0x1A,0,1); break;
+        case tk_nop: emit_insn(0x1C,0,4); break;
 		case tk_not: process_rop(0x05); break;
 //        case tk_not: process_rop(0x07); break;
         case tk_or:  process_rrop(0x09); break;
@@ -3015,6 +3122,11 @@ void FT64_processMaster()
         case tk_sb:  process_store(0x15); break;
         case tk_sc:  process_store(0x24); break;
         case tk_sei: process_sei(); break;
+		case tk_seq:	process_setiop(0x1B,2); break;
+		case tk_sge:	process_setiop(0x1B,5); break;
+		case tk_sgeu:	process_setiop(0x1B,13); break;
+		case tk_sgt:	process_setiop(0x1B,7); break;
+		case tk_sgtu:	process_setiop(0x1B,15); break;
         //case tk_slt:  process_rrop(0x33,0x02,0x00); break;
         //case tk_sltu:  process_rrop(0x33,0x03,0x00); break;
         //case tk_slti:  process_riop(0x13,0x02); break;
@@ -3026,6 +3138,11 @@ void FT64_processMaster()
         case tk_shri: process_shifti(0x9); break;
 		case tk_shru: process_shift(0x1); break;
 		case tk_shrui: process_shifti(0x9); break;
+		case tk_sle:	process_setiop(0x1B,6); break;
+		case tk_sleu:	process_setiop(0x1B,14); break;
+		case tk_slt:	process_setiop(0x1B,4); break;
+		case tk_sltu:	process_setiop(0x1B,12); break;
+		case tk_sne:	process_setiop(0x1B,3); break;
         case tk_slli: process_shifti(0x8); break;
         case tk_srai: process_shifti(0xB); break;
         case tk_srli: process_shifti(0x9); break;

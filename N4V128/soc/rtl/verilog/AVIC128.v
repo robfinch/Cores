@@ -54,7 +54,7 @@ input clk_i;
 input cs_i;
 input cyc_i;
 input stb_i;
-output ack_o;
+output reg ack_o;
 input we_i;
 input [3:0] sel_i;
 input [11:0] adr_i;
@@ -87,7 +87,7 @@ output reg [7:0] state;
 
 parameter NSPR = 32;			// number of supported sprites
 parameter pAckStyle = 1'b0;
-parameter BUSTO = 8'd20;		// bus timeout in m_clk_i clock cycles
+parameter BUSTO = 8'd40;		// bus timeout in m_clk_i clock cycles
 
 // Sync Generator defaults: 800x600 60Hz
 parameter phSyncOn  = 40;		//   40 front porch
@@ -152,6 +152,10 @@ parameter HT_SPRITE_FETCH = 3'd2;
 parameter HT_OTHERS = 3'd3;
 
 assign m_stb_o = m_cyc_o;
+
+reg [31:0] TargetBase = 32'h100000;
+reg [15:0] TargetWidth = 16'd600;
+reg [15:0] TargetHeight = 16'd800;
 
 integer n;
 
@@ -274,6 +278,7 @@ reg lrst;						// line reset
 // been made a core parameter.
 reg [7:0] busto = BUSTO;
 reg [7:0] tocnt;
+reg [7:0] num_strips = 8'd50;//8'd100;
 
 // Graphics cursor position
 reg [15:0] gcx;
@@ -318,9 +323,6 @@ reg [15:0] spriteColor [0:31];
 reg [31:0] spriteLink1;
 reg [7:0] spriteColorNdx [0:31];
 
-reg [31:0] TargetBase = 32'h100000;
-reg [15:0] TargetWidth = 16'd600;
-reg [15:0] TargetHeight = 16'd800;
 reg sgLock;
 
 reg [11:0] vpos;
@@ -332,7 +334,6 @@ reg [7:0] ngs;		// next graphic state
 reg [7:0] state1,state2,state3,state4,state5;
 reg [7:0] strip_cnt;
 reg [5:0] delay_cnt;
-reg [7:0] num_strips = 8'd100;
 wire [31:0] douta;
 
 //     i3210   31 i3210
@@ -514,7 +515,7 @@ VGASyncGen u1
 wire peack;
 edge_det u3 (.rst(rst_i), .clk(m_clk_i), .ce(1'b1), .i(m_ack_i), .pe(peack), .ne(), .ee());
 
-AVIC_VideoFifo
+AVIC_VideoFifo uavf1
 (
 	.wrst(rst_fifo),
 	.wclk(m_clk_i),
@@ -614,13 +615,16 @@ edge_det ued1 (.rst(rst_i), .clk(m_clk_i), .ce(1'b1), .i(cmdp), .pe(cmdpe), .ne(
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // WISHBONE slave port - register interface.
+// clk_i domain
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+reg rdy1, rdy2, rdy3, rdy4;
 
 VIC128_ShadowRam u4
 (
 	.clka(clk_i),
 	.ena(cs),
-	.wea({4{cs & we_i}} & sel_i),
+	.wea({4{cs & we_i & (rdy2|rdy3) & ~rdy4}} & sel_i),
 	.addra(adr_i[11:2]),
 	.dina(dat_i),
 	.douta(douta)
@@ -629,7 +633,7 @@ VIC128_ShadowRam u4
 
 always @(posedge clk_i)
 begin
-	if (cs & we_i)
+	if (cs & we_i & (rdy2|rdy3) & ~rdy4)
 		casez(adr_i[11:2])
 		10'b00????????:	sprite_color[adr_i[9:2]] <= dat_i;
 		10'b010?????00:	spriteAddr[adr_i[8:4]] <= dat_i;
@@ -725,23 +729,31 @@ begin
 		endcase
     if (aud_test==24'hFFFFFF)
         aud_ctrl[14] <= 1'b0;
+    spriteEnable <= 32'hFFFFFFFF;
+    spriteMcnt[0] <= 16'd640;
+    sprite_ph[0] <= 12'd500;
+    sprite_pv[0] <= 12'd300;
+    sprite_color[1] <= 16'h7FFF;
 end
 always @(posedge clk_i)
-	casez(adr_i[11:2])
+	case(adr_i[11:2])
 	10'b0110_1110_10:	dat_o <= {26'd0,cmdq_ndx};
 	10'b0111_1011_10:	dat_o <= collision;
 	default:	dat_o <= douta;
 	endcase
 
-reg rdy1, rdy2, rdy3;
 always @(posedge clk_i)
 	rdy1 <= cs;
 always @(posedge clk_i)
 	rdy2 <= rdy1 & cs;
 always @(posedge clk_i)
 	rdy3 <= rdy2 & cs;
-assign ack_o = cs ? rdy3 : pAckStyle;
-assign cmdp = rdy3 & ~rdy2;			// commmand pulse
+always @(posedge clk_i)
+	rdy4 <= rdy3 & cs;
+//assign ack_o = cs ? rdy4 : pAckStyle;
+always @*
+	ack_o <= rdy4;
+assign cmdp = rdy4 & ~rdy3;			// commmand pulse
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Audio
@@ -1165,12 +1177,25 @@ READ_ACK:
 SPRITE_ACC:
 	if (lrst)
 		goto(LINE_RESET);
-	else begin
+	// Bypass loading sprite data if it isn't enabled.
+	else if (spriteEnable[spriteno]) begin
 		m_cyc_o <= `HIGH;
 		m_sel_o <= 16'hFFFF;
 		m_adr_o <= spriteWaddr[spriteno];
 		tocnt <= busto;
 		goto(SPRITE_ACK);
+	end
+	else begin
+		spriteno <= spriteno + 5'd1;
+		rac <= rac + 4'd1;
+		if (spriteno==5'd31)
+			goto(WAIT_RESET);
+		else if (rac <= 4'd2)
+			goto (SPRITE_ACC);
+		else begin
+			rac <= 4'd0;
+			call(OTHERS,SPRITE_ACC);
+		end
 	end
 	// If the bus times out the scanline for the sprite is lost.
 SPRITE_ACK:
@@ -1643,7 +1668,7 @@ always @(posedge vclk)
 begin
 	if (hctr==12'h5)
 		for (n = 0; n < NSPR; n = n + 1)
-			spriteBmp[n] <= m_spriteBmp[n];
+			spriteBmp[n] <= {8{16'h5431}};//m_spriteBmp[n];
     for (n = 0; n < NSPR; n = n + 1)
         if (spriteShift[n])
             spriteBmp[n] <= {spriteBmp[n][123:0],4'h0};
@@ -1652,7 +1677,7 @@ end
 always @(posedge vclk)
 for (n = 0; n < NSPR; n = n + 1)
 if (spriteLink1[n])
-    spriteColorNdx[n] <= {n[3:2],spriteBmp[(n+1)&31][127:124],spriteBmp[n][127:124]};
+    spriteColorNdx[n] <= {spriteBmp[(n+1)&31][127:124],spriteBmp[n][127:124]};
 else
     spriteColorNdx[n] <= {n[3:0],spriteBmp[n][127:124]};
 

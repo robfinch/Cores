@@ -96,9 +96,9 @@ parameter pAckStyle = 1'b0;
 reg ack;
 wire cs = cs_i && cyc_i && stb_i;
 always @(posedge clk_i)
-	ack <= cs;
-always @*
-	ack_o <= cs ? ack : pAckStyle;
+	ack_o <= cs;
+//always @*
+//	ack_o <= cs ? ack : pAckStyle;
 
 reg [9:0] stream;
 reg [31:0] next_m_z;
@@ -122,7 +122,7 @@ end
 //
 always @(posedge clk_i)
 	case(adr_i[3:2])
-	2'd0:	dat_o <= out;
+	2'd0:	dat_o <= {m_zs[15:0],16'd0} + m_ws;
 	2'd1:	dat_o <= {6'h0,stream};
 // Uncomment these for register read-back
 //		3'd4:	dat_o <= m_z[31:16];
@@ -152,12 +152,6 @@ begin
 			2'd2:	begin z <= dat_i; wrz <= `TRUE; end
 			2'd3:	begin w <= dat_i; wrw <= `TRUE; end
 			endcase
-		else begin
-			case(adr_i[3:2])
-			2'd0:    out <= {m_zs[15:0],16'd0} + m_ws;
-			default:	;
-			endcase
-		end
 	end
 end
 

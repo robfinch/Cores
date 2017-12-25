@@ -28,13 +28,13 @@
 `define R1			6'h01
 `define ABS				5'h04
 `define NOT             5'h05
-`define Scc		6'h06
-`define Sccu	6'h07
 `define SUB			6'h05
+`define Scc		    6'h06
+`define Sccu	    6'h07
 `define SHIFTW		6'h0F
 `define SHIFTB		6'h1F
-`define SWINC		6'h19
-`define LWINC		6'h1A
+`define PUSH		6'h19
+`define POP			6'h1A
 `define UNLINK		6'h1B
 `define SYNC		6'h22
 `define XCHG		6'h2E
@@ -147,12 +147,18 @@ output reg [7:0] state;
 parameter RST_ADDR = 32'hFFFC0100;
 parameter RESET = 8'd0;
 parameter IFETCH = 8'd1;
-parameter REGFETCH = 8'd2;
-parameter DECODE = 8'd3;
-parameter EXECUTE = 8'd4;
-parameter MEMORY = 8'd5;
-parameter MEMORY2 = 8'd6;
-parameter MULDIV2 = 8'd7;
+parameter IFETCH2 = 8'd2;
+parameter REGFETCH = 8'd3;
+parameter DECODE = 8'd4;
+parameter EXECUTE = 8'd5;
+parameter MEMORY = 8'd6;
+parameter MEMORY2 = 8'd7;
+parameter MULDIV2 = 8'd8;
+
+parameter word = 2'd3;
+parameter half = 2'd2;
+parameter char = 2'd1;
+parameter byt_ = 2'd0;
 
 integer n, m;
 reg [63:0] sema;
@@ -167,6 +173,7 @@ wire [5:0] opcode = ir[5:0];
 wire [5:0] funct = ir[31:26];
 wire [4:0] func5 = ir[25:21];
 wire [3:0] func4 = ir[25:22];
+reg [1:0] opsize;
 reg [31:0] ibuf_adr [0:7];
 reg [31:0] ibuf [0:7];
 reg [2:0] ibuf_cnt;
@@ -189,9 +196,10 @@ wire [127:0] produ = a * b;
 wire [127:0] prods = $signed(a) * $signed(b);
 wire [127:0] prodsu = $signed(a) * b;
 wire [2:0] npl = ir[23:16] | a;
-wire [31:0] sum = a + b;
+wire [63:0] sum = a + b;
 wire [31:0] eandx = a + (b << ir[22:21]);
 wire [63:0] am8 = a - 32'd8;	// for link
+wire [31:0] xIncea = ir[25] ? a + {{59{ir[25]}},ir[25:21]} : a;	// for POP / PUSH
 
 always @*
 begin
@@ -201,10 +209,16 @@ for (n = 0; n < 8; n = n + 1)
 		m <= n;
 end
 
-wire [7:0] byte_in = dat_i >> {adr_o[3:0],3'b0};
-wire [15:0] char_in = dat_i >> {adr_o[3:1],4'h0};
-wire [31:0] half_in = dat_i >> {adr_o[3:2],5'h0};
-wire [63:0] word_in = dat_i >> {adr_o[3],6'h0};
+reg [127:0] din;	// input data latch
+reg [3:0] dshift;
+wire [7:0] byte_in = din >> {dshift[3:0],3'b0};
+wire [15:0] char_in = din >> {dshift[3:1],4'h0};
+wire [31:0] half_in = din >> {dshift[3:2],5'h0};
+wire [63:0] word_in = din >> {dshift[3],6'h0};
+
+wire [127:0] shlo = {64'd0,a} << b[5:0];
+wire [127:0] shro = {a,64'd0} >> b[5:0];
+wire [31:0]  asro32 = a[31] ? ~(32'hFFFFFFFFFFFFFFFF >> b[5:0]) | shro[95:64] : shro[95:64];
 
 reg div_ld;
 wire div_done;
@@ -264,11 +278,28 @@ default:	takb <= `TRUE;
 endcase
 
 always @(posedge clk_i)
+	if (ack_i)
+		din <= dat_i;
+always @(posedge clk_i)
+	if (ack_i)
+		dshift <= adr_o[3:0];
+
+always @(posedge clk_i)
 if (rst_i)
 	state <= RESET;
 else begin
+
+// Cause these signals to pulse for just one clock cycle. They are set
+// active below.
 div_ld <= `FALSE;
+rfwr <= `FALSE;
+
 case(state)
+
+// RESET:
+// Reset only the signals critical to the proper operation of the core.
+// This includes setting the PC address and deactivating the bus
+// controls.
 RESET:
 	begin
 	im <= 3'd7;
@@ -282,6 +313,15 @@ RESET:
 	adr_o <= 32'hFFFFFFFF;
 	goto(IFETCH);
 	end
+
+// IFETCH:
+// Fetch instructions from memory located by the program counter. A fully
+// associative buffer (cache) of the most recently used eight instructions
+// is maintained. A memory access won't be required if the instruction can
+// be found in the buffer.
+// Also update the register file for the previous instruction. Rather than
+// have another state in the state machine to perform the register update
+// it is done here to improve performance.
 IFETCH:
 	if (!cyc_o) begin
 		if (irq_i > im) begin
@@ -299,28 +339,40 @@ IFETCH:
 			pc <= pc + 32'd4;
 			goto(DECODE);
 		end
-		if (rfwr)
-			regfile[Rt] <= |Rt ? res : 64'd0;
-		rfwr <= `FALSE;
 	end
 	else if (ack_i) begin
+		cyc_o <= `LOW;
+		stb_o <= `LOW;
+		sel_o <= 16'h0000;
+		//adr_o <= 32'hFFFFFFFF;
+		goto(IFETCH2);
+	end
+IFETCH2:
+	if (~ack_i) begin
 		ir <= half_in;
 		ibuf[ibuf_cnt] <= half_in;
 		ibuf_adr[ibuf_cnt] <= pc;
 		ibuf_cnt <= ibuf_cnt + 3'd1;
-		cyc_o <= `LOW;
-		stb_o <= `LOW;
-		sel_o <= 16'h0000;
-		adr_o <= 32'hFFFFFFFF;
 		pc <= pc + 32'd4;
 		goto(DECODE);
 	end
+
+// DECODE:
+// Setup for register file access. Ra, Rb, Rc are almost always decoded from
+// the same spot in the instruction register to keep the decoding simple and
+// access to the register file fast. For the call instruction Ra is forced to
+// r31 since it doesn't come from the ir. Rt tends to float around depending on
+// the instruction.
+// Several instructions which do not have register operands (JMP,NOP,RTI, and
+// BRK) are executed directly in the decode stage to improve performance.
 DECODE:
 	begin
 		goto(REGFETCH);
 		Ra <= ir[10:6];
 		Rb <= ir[15:11];
 		Rc <= ir[20:16];
+		Rt <= 5'd0;
+		opsize = word;
 		case(opcode)
 		`BRK:
 			begin
@@ -354,14 +406,19 @@ DECODE:
 					case(func5)
 					`ABS,`NOT:	Rt <= ir[15:11];
 					endcase
+				`ADD,`AND,`OR,`XOR:
+				    opsize = ir[22:21];
+				// The SYNC instruction is treated as a NOP since this machine
+				// is strictly in order.
 				`SYNC:	goto(IFETCH);
 				`SB,`SC,`SH,`SW:	Rt <= 5'd0;
-				`SWINC:
+				`POP:
+				    Rt <= ir[15:11];
+				`PUSH:
 					Rt <= ir[20:16];
 				endcase
 			end
 		`TGT:	goto(IFETCH);
-		`REX:	Ra <= ir[10:6];
 		`NOP:	goto(IFETCH);
 		`JMP:
 			begin
@@ -374,36 +431,31 @@ DECODE:
 			Rt <= 5'd31;
 			end
 		`CALLR:
-			begin
-			Ra <= 5'd31;
-			Rt <= 5'd31;
-			end
+			Rt <= ir[10:6];
 		`JAL,`RET:
-			begin
-			Ra <= ir[10:6];
 			Rt <= ir[15:11];
-			end
 		`LINK:
-		    begin
-			Ra <= ir[10:6];
-            Rb <= ir[15:11];
             Rt <= ir[15:11];
-		    end
 		`CSR:
+			Rt <= ir[15:11];
+		`QOPI:
 			begin
-			Ra <= ir[10:6];
+			Ra <= ir[15:11];
 			Rt <= ir[15:11];
 			end
-		`QOPI:	Ra <= ir[15:11];
 		`ADD,`CMP,`CMPU,`AND,`OR,`XOR,
 		`MUL,`MULU,`MULSU,
 		`DIVI,`DIVUI,`DIVSUI,`MODI,`MODUI,`MODSUI,
-		`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW,`LWINC:
+		`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW:
 			Rt <= ir[15:11];
 		`SB,`SC,`SH,`SW:
 			Rt <= 5'd0;
 		endcase
 	end
+
+// REGFETCH:
+// Set operands from the register file, or the instruction register for
+// immediate operands.
 REGFETCH:
 	begin
 		goto(EXECUTE);
@@ -444,6 +496,16 @@ REGFETCH:
 				b <= rfob;
 				c <= rfoc;
 				end
+			`UNLINK:
+				begin
+				a <= rfoa;
+				b <= rfob;
+				end
+    		`PUSH,`POP:
+                begin
+                a <= rfoa;
+                c <= rfob;
+                end
 			endcase
 		`ADD,`CMP,`MUL:
 			begin
@@ -546,6 +608,11 @@ REGFETCH:
 			a <= rfoa;
 			b <= {{48{ir[31]}},ir[31:16]};	// +8
 			end
+		`LINK:
+			begin
+			a <= rfoa;
+			b <= rfob;
+			end
 		`REX:	a <= rfoa;
 		`CSR:	a <= rfoa;
 		`LB,`LBU,`LH,`LHU,`LC,`LCU,`LW,
@@ -555,13 +622,11 @@ REGFETCH:
 			b <= {{48{ir[31]}},ir[31:16]};
 			c <= rfob;
 			end
-		`SWINC:
-			begin
-			a <= rfoa;
-			c <= rfob;
-			end
 		endcase
 	end
+
+// EXECUTE:
+// Execute the instruction. Compute results and begin any memory access.
 EXECUTE:
 	begin
 		goto(IFETCH);
@@ -585,16 +650,45 @@ EXECUTE:
 					goto(MEMORY);
 				end
 			`SHIFTW:
-				case(func4)
-				`SHL,`SHLI:	res <= a << b[5:0];
-				`SHR,`SHRI:	res <= a >> b[5:0];
-				`ASL,`ASLI:	res <= a << b[5:0];
-				`ASR,`ASRI:	res <= a[63] ? ~(64'hFFFFFFFFFFFFFFFF >> b[5:0]) | (a >> b[5:0])
-								: a >> b[5:0];
-				`ROL,`ROLI: res <= (a << b[5:0]) | (a >> (7'd64 - b[5:0]));
-				`ROR,`RORI: res <= (a >> b[5:0]) | (a << (7'd64 - b[5:0]));
-				endcase
-			`ADD:	begin res <= a + b; rfwr <= `TRUE; end
+			    begin
+			    rfwr <= `TRUE;
+                case(func4)
+                `SHL,`SHLI:	res <= shlo[63:0];
+                `SHR,`SHRI:	res <= shro[127:64];
+                `ASL,`ASLI:	res <= shlo[63:0];
+                `ASR,`ASRI:	res <= a[63] ? ~(64'hFFFFFFFFFFFFFFFF >> b[5:0]) | shro[127:64]
+                        : shro[127:64];
+                `ROL,`ROLI: res <= shlo[63:0] | shlo[127:64];
+                `ROR,`RORI: res <= shro[127:64] | shro[63:0];
+                endcase
+                end
+			`SHIFTH:
+                begin
+                rfwr <= `TRUE;
+                case(func4)
+                `SHL,`SHLI:    res <= {32'd0,shlo[31:0]};
+                `SHR,`SHRI:    res <= {32'd0,shro[127:64]};
+                `ASL,`ASLI:    res <= {{32{shlo[31]}},shlo[31:0]};
+                `ASR,`ASRI:    res <= {{32{asro32[31]}},asro32};
+                `ROL,`ROLI: begin
+                            res[31:0] <= shlo[31:0] | shlo[63:32];
+                            res[63:32] <= {32{shlo[31]|shlo[63]}};
+                            end
+                `ROR,`RORI: begin
+                            res[31:0] <= shro[95:64] | shro[63:32];
+                            res[63:32] <= {32{shro[95]|shro[63]}};
+                            end
+                endcase
+                end
+            `ADD:	begin
+                    rfwr <= `TRUE;
+                    case(opsize)
+                    word:   res <= sum;
+                    half:   res <= {{32{sum[31]}},sum[31:0]};
+                    char:   res <= {{48{sum[15]}},sum[15:0]};
+                    byt_:   res <= {{56{sum[7]}},sum[7:0]};
+                    endcase
+                    end
 			`Scc:	begin
 					rfwr <= `TRUE;
 					case(ir[25:23])
@@ -619,25 +713,43 @@ EXECUTE:
 					3'd7:	res <= a > b;
 					endcase
 					end
-			`CMPU:	begin res <= a < b ? 64'hFFFFFFFFFFFFFFFF : a==b ? 64'h0 : 64'h1; rfwr <= `TRUE; end
 			`MULU:	begin res <= produ[63:0]; rfwr <= `TRUE; goto(MULDIV2); end
 			`MUL:	begin res <= prods[63:0]; rfwr <= `TRUE; goto(MULDIV2); end
 			`MULSU:	begin res <= prodsu[63:0]; rfwr <= `TRUE; goto(MULDIV2); end
+			// For divide stay in the EXECUTE state until the divide is done.
 			`DIVMOD,`DIVMODU,`DIVMODSU:
 					if (div_done) begin
 						res <= div_qo;
 						rfwr <= `TRUE;
 						goto(MULDIV2);
 					end
+					else
+						goto(EXECUTE);
 			`AND:	begin res <= a & b; rfwr <= `TRUE; end
-			`OR:	begin res <= a | b; rfwr <= `TRUE; end
-			`XOR:	begin res <= a ^ b; rfwr <= `TRUE; end
+			`OR:	begin
+			        rfwr <= `TRUE;
+			        case(opsize)
+			        word:    res <= a | b;
+			        half:    res <= a[31:0]|b[31:0];
+			        char:    res <= a[15:0]|b[15:0];
+			        byt_:    res <= a[7:0] | b[7:0];
+			        endcase
+			        end
+			`XOR:	begin
+			        rfwr <= `TRUE;
+			        case(opsize)
+			        word:    res <= a ^ b;
+			        half:    res <= a[31:0]^b[31:0];
+			        char:    res <= a[15:0]^b[15:0];
+			        byt_:    res <= a[7:0] ^ b[7:0];
+			        endcase
+			        end
 			`XCHG:	begin res <= b; Rt <= ir[20:16]; rfwr <= `TRUE; goto(MULDIV2); end
 			`LB,`LBU:
 				begin
 					cyc_o <= `HIGH;
 					stb_o <= `HIGH;
-					sel_o <= 16'h01 << sum[3:0];
+					sel_o <= 16'h01 << eandx[3:0];
 					adr_o <= eandx;
 					goto(MEMORY);
 				end
@@ -645,7 +757,7 @@ EXECUTE:
 				begin
 					cyc_o <= `HIGH;
 					stb_o <= `HIGH;
-					sel_o <= 16'h03 << {sum[3:1],1'b0};
+					sel_o <= 16'h03 << {eandx[3:1],1'b0};
 					adr_o <= eandx;
 					goto(MEMORY);
 				end
@@ -653,7 +765,7 @@ EXECUTE:
 				begin
 					cyc_o <= `HIGH;
 					stb_o <= `HIGH;
-					sel_o <= 16'h0F << {sum[3:2],2'b0};
+					sel_o <= 16'h0F << {eandx[3:2],2'b0};
 					adr_o <= eandx;
 					goto(MEMORY);
 				end
@@ -661,7 +773,7 @@ EXECUTE:
 				begin
 					cyc_o <= `HIGH;
 					stb_o <= `HIGH;
-					sel_o <= 16'hFF << {sum[3],3'b0};
+					sel_o <= 16'hFF << {eandx[3],3'b0};
 					adr_o <= eandx;
 					goto(MEMORY);
 				end
@@ -670,7 +782,7 @@ EXECUTE:
 					cyc_o <= `HIGH;
 					stb_o <= `HIGH;
 					we_o <= `HIGH;
-					sel_o <= 16'h01 << sum[3:0];
+					sel_o <= 16'h01 << eandx[3:0];
 					adr_o <= eandx;
 					dat_o <= {16{c[7:0]}};
 					goto(MEMORY);
@@ -680,7 +792,7 @@ EXECUTE:
 					cyc_o <= `HIGH;
 					stb_o <= `HIGH;
 					we_o <= `HIGH;
-					sel_o <= 16'h03 << {sum[3:1],1'b0};
+					sel_o <= 16'h03 << {eandx[3:1],1'b0};
 					adr_o <= eandx;
 					dat_o <= {8{c[15:0]}};
 					goto(MEMORY);
@@ -690,7 +802,7 @@ EXECUTE:
 					cyc_o <= `HIGH;
 					stb_o <= `HIGH;
 					we_o <= `HIGH;
-					sel_o <= 16'h0F << {sum[3:2],2'b0};
+					sel_o <= 16'h0F << {eandx[3:2],2'b0};
 					adr_o <= eandx;
 					dat_o <= {4{c[31:0]}};
 					goto(MEMORY);
@@ -700,13 +812,34 @@ EXECUTE:
 					cyc_o <= `HIGH;
 					stb_o <= `HIGH;
 					we_o <= `HIGH;
-					sel_o <= 16'hFF << {sum[3],3'b0};
+					sel_o <= 16'hFF << {eandx[3],3'b0};
 					adr_o <= eandx;
 					dat_o <= {2{c}};
 					goto(MEMORY);
 				end
+    		`PUSH:
+                begin
+                    cyc_o <= `HIGH;
+                    stb_o <= `HIGH;
+                    we_o <= `HIGH;
+                    sel_o <= 16'hFF << {xIncea[3],3'b0};
+                    adr_o <= xIncea;
+                    dat_o <= {2{c}};
+                    goto(MEMORY);
+                end
+    		`POP:
+                begin
+                    cyc_o <= `HIGH;
+                    stb_o <= `HIGH;
+                    sel_o <= 16'hFF << {xIncea[3],3'b0};
+                    adr_o <= xIncea;
+                    rfwr <= `TRUE;
+                    Rt <= ir[20:16];
+                    res <= a + {{59{ir[25]}},ir[25:21]};
+                    goto(MEMORY);
+                end
 			endcase
-		`ADD:	begin res <= a + b; rfwr <= `TRUE; end
+		`ADD:	begin res <= sum; rfwr <= `TRUE; end
 		`CMP:	begin res <= $signed(a) < $signed(b) ? 64'hFFFFFFFFFFFFFFFF : a==b ? 64'h0 : 64'h1; rfwr <= `TRUE; end
 		`CMPU:	begin res <= a < b ? 64'hFFFFFFFFFFFFFFFF : a==b ? 64'h0 : 64'h1; rfwr <= `TRUE; end
 		`SccI:
@@ -728,11 +861,21 @@ EXECUTE:
 		`MULU:	begin res <= produ[63:0]; rfwr <= `TRUE; end
 		`MUL:	begin res <= prods[63:0]; rfwr <= `TRUE; end
 		`MULSU:	begin res <= prodsu[63:0]; rfwr <= `TRUE; end
-		`DIVI,`DIVUI,`DIVSUI,`MODI,`MODUI,`MODSUI:
+		// Stay in execute state until divide is done.
+		`DIVI,`DIVUI,`DIVSUI:
 				if (div_done) begin
 					res <= div_qo;
 					rfwr <= `TRUE;
 				end
+				else
+					goto(EXECUTE);
+		`MODI,`MODUI,`MODSUI:
+				if (div_done) begin
+					res <= div_ro;
+					rfwr <= `TRUE;
+				end
+				else
+					goto(EXECUTE);
 		`AND:	begin res <= a & b; rfwr <= `TRUE; end
 		`OR:	begin res <= a | b; rfwr <= `TRUE; end
 		`XOR:	begin res <= a ^ b; rfwr <= `TRUE; end
@@ -758,15 +901,18 @@ EXECUTE:
 				rfwr <= `TRUE;
 				res <= pc;
 			end
+		// b is set to -8 for call
 		`CALL:	
 			begin
 				cyc_o <= `HIGH;
 				stb_o <= `HIGH;
 				we_o <= `HIGH;
-				sel_o <= 16'hFF << {am8[3],3'b0};
-				adr_o <= am8;
+				sel_o <= 16'hFF << {sum[3],3'b0};
+				adr_o <= sum;
 				dat_o <= {2{32'h0,pc}};
 				pc <= {pc[31:28],ir[31:6],2'b00};
+				res <= sum;
+				rfwr <= `TRUE;
 				goto(MEMORY);
 			end
 		`CALLR:
@@ -778,6 +924,7 @@ EXECUTE:
 				adr_o <= am8;
 				dat_o <= {2{32'h0,pc}};
 				pc <= b + {{48{ir[31]}},ir[31:16]};
+				pc[1:0] <= 2'b00;
 				goto(MEMORY);
 			end
 		`RET:
@@ -786,6 +933,8 @@ EXECUTE:
 				stb_o <= `HIGH;
 				sel_o <= 16'hFF << {a[3],3'b0};
 				adr_o <= a;
+				res <= sum;
+				rfwr <= `TRUE;
 				goto(MEMORY);
 			end
 		`REX:
@@ -895,37 +1044,51 @@ EXECUTE:
 				dat_o <= {2{c}};
 				goto(MEMORY);
 			end
-		`SWINC:
-			begin
-				cyc_o <= `HIGH;
-				stb_o <= `HIGH;
-				we_o <= `HIGH;
-				sel_o <= 16'hFF << {sum[3],3'b0};
-				adr_o <= ir[25] ? a + {{27{ir[25]}},ir[25:21]} : a;
-				dat_o <= {2{c}};
-				goto(MEMORY);
-			end
 		endcase
 	end
+
+// MEMORY:
+// Finish memory cycle started in EXECUTE by waiting for an ack. Latch input
+// data. The data is registered here before subsequent use because it's likely
+// coming from a large mux. We don't want to cascade the mux and the shift
+// operation required to align the data into a single clock cycle.
+
 MEMORY:
 	if (ack_i) begin
-		goto(IFETCH);
-		if (rfwr)
-			regfile[Rt] <= |Rt ? res : 64'd0;
+		goto(MEMORY2);
 		cyc_o <= `LOW;
 		stb_o <= `LOW;
 		we_o <= `LOW;
 		sel_o <= 16'h0000;
-		adr_o <= 32'hFFFFFFFF;
+		//adr_o <= 32'hFFFFFFFF;
+	end
+
+// Wait for ack to go back low again. Nomrally ack should go low immediately
+// when the bus cycle is terminated within the same clock cycle. However some
+// bus slaves don't put ack low until the clock edge when seeing the
+// terminated bus cycle. We want to ensure that a second bus cycle isn't
+// started until ack is low or the ack could be mistakenly accepted.
+MEMORY2:
+	if (~ack_i) begin
+		goto(IFETCH);
 		case(opcode)
 		`R2:
 			case(funct)
 			`UNLINK:	begin res <= word_in; Rt <= Rb; rfwr <= `TRUE; end
+    		`LB:	begin res <= {{56{byte_in[7]}},byte_in}; rfwr <= `TRUE; end
+            `LBU:   begin res <= {{56{1'b0}},byte_in}; rfwr <= `TRUE; end
+            `LC:    begin res <= {{48{char_in[15]}},char_in}; rfwr <= `TRUE; end
+            `LCU:   begin res <= {{48{1'b0}},char_in}; rfwr <= `TRUE; end
+            `LH:    begin res <= {{32{half_in[31]}},half_in}; rfwr <= `TRUE; end
+            `LHU:   begin res <= {{32{1'b0}},half_in}; rfwr <= `TRUE; end
+            `LW:    begin res <= word_in; rfwr <= `TRUE; end
+    		`POP:	begin res <= word_in; rfwr <= `TRUE; Rt <= ir[15:11]; end
+            `PUSH:  begin res <= a + {{59{ir[25]}},ir[25:21]}; rfwr <= `TRUE; end
 			endcase	
-		`LINK:	begin res <= a + {{48{ir[31]}},ir[31:16]}; Rt <= Ra; rfwr <= `TRUE; end
-		`CALL:	begin res <= am8; rfwr <= `TRUE; end
+		`LINK:	begin res <= a - {{48{ir[31]}},ir[31:16]}; Rt <= Ra; rfwr <= `TRUE; end
+		`CALL:	;
 		`CALLR:	begin res <= am8; rfwr <= `TRUE; end
-		`RET:	begin res <= sum; rfwr <= `TRUE; pc <= {word_in[31:2],2'b0}; end
+		`RET:	begin pc <= {word_in[31:2],2'b0}; end
 		`LB:	begin res <= {{56{byte_in[7]}},byte_in}; rfwr <= `TRUE; end
 		`LBU:	begin res <= {{56{1'b0}},byte_in}; rfwr <= `TRUE; end
 		`LC:	begin res <= {{48{char_in[15]}},char_in}; rfwr <= `TRUE; end
@@ -933,23 +1096,11 @@ MEMORY:
 		`LH:	begin res <= {{32{half_in[31]}},half_in}; rfwr <= `TRUE; end
 		`LHU:	begin res <= {{32{1'b0}},half_in}; rfwr <= `TRUE; end
 		`LW:	begin res <= word_in; rfwr <= `TRUE; end
-		`LWINC:	begin res <= word_in; rfwr <= `TRUE; goto(MEMORY2); end
-		`SWINC: begin res <= a + {{27{ir[25]}},ir[25:21]}; rfwr <= `TRUE; end
 		endcase
-	end
-	// Extra state needed for LWINC
-MEMORY2:
-	begin
-		if (rfwr)
-			regfile[Rt] <= |Rt ? res : 64'd0;
-		Rt <= ir[20:16];
-		res <= a + {{27{ir[25]}},ir[25:21]};	
-		goto(IFETCH);	
 	end
 MULDIV2:
 	begin
-		if (rfwr)
-			regfile[Rt] <= |Rt ? res : 64'd0;
+		rfwr <= `TRUE;
 		Rt <= ir[25:21];
 		case(funct)
 		`MUL:	res <= prods[127:64];
@@ -963,6 +1114,14 @@ MULDIV2:
 	end
 
 endcase
+
+// Handle the register file update. The update is caused in a couple of
+// different states. There may be two updates for a single instruction.
+// Note that r0 is always forced to zero. A write to r0 may be needed
+// before it's used anywhere.
+if (rfwr)
+	regfile[Rt] <= |Rt ? res : 64'd0;
+
 end
 
 task read_csr;

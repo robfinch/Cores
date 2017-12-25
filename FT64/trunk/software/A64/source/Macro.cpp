@@ -225,14 +225,14 @@ char *Macro::GetArg()
 
 int Macro::GetParmList(char *parmlist[])
 {
-   char *id;
+   int id;
    int Depth = 0, c, count;
 
    count = 0;
    while(1)
    {
       id = getIdentifier();
-      if (id) {
+      if (id!=0) {
          if (count >= 20) {
 			 printf("Too many macro parameters %d.\n", lineno);
              goto errxit;
@@ -243,14 +243,14 @@ int Macro::GetParmList(char *parmlist[])
          count++;
       }
 	  do {
-		  SkipSpaces();
-		c = *inptr;
-		inptr++;
-		if (c=='\\') {
-			ScanToEOL();
+			SkipSpaces();
+			c = *inptr;
 			inptr++;
+			if (c=='\\') {
+				ScanToEOL();
+				inptr++;
+			}
 		}
-	  }
 		while (c=='\\');
       if (c == ')') {   // we've gotten our last parameter
          inptr--;
