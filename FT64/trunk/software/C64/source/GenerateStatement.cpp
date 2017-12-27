@@ -381,7 +381,7 @@ void Statement::GenerateDoUntil()
 void Statement::GenerateLinearSwitch()
 {    
 	int curlab;
-	int *bf;
+	int64_t *bf;
 	int nn,jj;
 	Statement *defcase, *stmt;
 	AMODE *ap, *ap1;
@@ -407,8 +407,8 @@ void Statement::GenerateLinearSwitch()
         }
         else
         {
-			bf = (int *)stmt->casevals;
-			for (nn = bf[0]; nn >= 1; nn--) {
+			bf = (int64_t *)stmt->casevals;
+			for (nn = (int)bf[0]; nn >= 1; nn--) {
 				if ((jj = pwrof2(bf[nn])) != -1) {
 					GenerateTriadic(op_bbs,0,ap,make_immed(jj),make_clabel(curlab));
 				}
@@ -448,7 +448,7 @@ void Statement::GenerateCase()
 		if(stmt->s1 != (Statement *)NULL )
 		{
 			GenerateLabel((int)stmt->label);
-			s1->Generate();
+			stmt->s1->Generate();
 		}
 		else if(stmt->next == (Statement *)NULL)
 			GenerateLabel((int)stmt->label);
@@ -557,7 +557,8 @@ j1:	;
 			GenerateTriadic(op_bge,0,ap,ap2,make_clabel(defcase ? (int)defcase->label : breaklab));
 			//Generate4adic(op_chk,0,ap,ap1,ap2,make_clabel(defcase ? (int)defcase->label : breaklab));
 		}
-		GenerateTriadic(op_sub,0,ap,ap,make_immed(minv));
+		if (minv != 0)
+			GenerateTriadic(op_sub,0,ap,ap,make_immed(minv));
 		GenerateTriadic(op_shl,0,ap,ap,make_immed(3));
 		GenerateDiadic(op_lw,0,ap,make_indexed2(tablabel,ap->preg));
 		GenerateDiadic(op_jal,0,makereg(0),make_indexed(0,ap->preg));

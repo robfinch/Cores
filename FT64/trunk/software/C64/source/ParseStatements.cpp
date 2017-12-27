@@ -102,7 +102,7 @@ Statement *Statement::ParseWhile()
         needpunc( closepa,13 ); 
 		if (lastst==kw_do)
 			NextToken();
-        snp->s1 = Statement::Parse(0); 
+        snp->s1 = Statement::Parse(); 
 		// Empty statements return NULL
 		if (snp->s1)
 			snp->s1->outer = snp;
@@ -130,7 +130,7 @@ Statement *Statement::ParseUntil()
         if( expression(&(snp->exp)) == 0 ) 
             error(ERR_EXPREXPECT); 
         needpunc( closepa,14 ); 
-        snp->s1 = Statement::Parse(0); 
+        snp->s1 = Statement::Parse(); 
 		// Empty statements return NULL
 		if (snp->s1)
 			snp->s1->outer = snp;
@@ -151,7 +151,7 @@ Statement *Statement::ParseDo()
 	looplevel++;
 	if ((iflevel > maxPn-1) && isThor)
 	    error(ERR_OUTOFPREDS);
-    snp->s1 = Statement::Parse(0); 
+    snp->s1 = Statement::Parse(); 
 	// Empty statements return NULL
 	if (snp->s1)
 		snp->s1->outer = snp;
@@ -196,7 +196,7 @@ Statement *Statement::ParseFor()
     if( expression(&(snp->incrExpr)) == NULL ) 
         snp->incrExpr = (ENODE *)NULL; 
     needpunc(closepa,18); 
-    snp->s1 = Statement::Parse(0); 
+    snp->s1 = Statement::Parse(); 
 	// Empty statements return NULL
 	if (snp->s1)
 		snp->s1->outer = snp;
@@ -217,7 +217,7 @@ Statement *Statement::ParseForever()
     snp = NewStatement(st_forever, TRUE);
     snp->stype = st_forever; 
     foreverlevel = looplevel;
-    snp->s1 = Statement::Parse(0); 
+    snp->s1 = Statement::Parse(); 
     if (loopexit==0)
     	error(ERR_INFINITELOOP);
 	// Empty statements return NULL
@@ -249,7 +249,7 @@ Statement *Statement::ParseFirstcall()
 	lastst = st;
 	// doinit should set realname
 	snp->fcname = my_strdup(sp->realname);
-	snp->s1 = Statement::Parse(0); 
+	snp->s1 = Statement::Parse(); 
 	// Empty statements return NULL
 	if (snp->s1)
 		snp->s1->outer = snp;
@@ -284,12 +284,12 @@ Statement *Statement::ParseIf()
 		needpunc( closepa,19 ); 
 		if (lastst==kw_then)
 			NextToken();
-		snp->s1 = Statement::Parse(0); 
+		snp->s1 = Statement::Parse(); 
 		if (snp->s1)
 			snp->s1->outer = snp;
 		if( lastst == kw_else ) { 
 			NextToken(); 
-			snp->s2 = Statement::Parse(0); 
+			snp->s2 = Statement::Parse(); 
 			if (snp->s2)
 				snp->s2->outer = snp;
 		} 
@@ -319,7 +319,7 @@ Statement *Statement::ParseCatch()
 	if (lastst != openpa) {
 		snp->label = (int64_t *)NULL;
 		snp->s2 = (Statement *)99999;
-		snp->s1 = Statement::Parse(0);
+		snp->s1 = Statement::Parse();
 		// Empty statements return NULL
 		if (snp->s1)
 			snp->s1->outer = snp;
@@ -346,7 +346,7 @@ Statement *Statement::ParseCatch()
     strncpy_s(lastid, sizeof(lastid), declid->c_str(),sizeof(lastid)-1);
     nameref(&node,FALSE);
     strcpy_s(lastid,sizeof(lastid),buf);
-	snp->s1 = Statement::Parse(0);
+	snp->s1 = Statement::Parse();
 	// Empty statements return NULL
 	if (snp->s1)
 		snp->s1->outer = snp;
@@ -403,12 +403,12 @@ Statement *Statement::ParseCase()
     head = (Statement *)NULL; 
     while( lastst != end && lastst != kw_case && lastst != kw_default ) { 
 		if( head == NULL ) {
-			head = tail = Statement::Parse(0); 
+			head = tail = Statement::Parse(); 
 			if (head)
 				head->outer = snp;
 		}
 		else { 
-			tail->next = Statement::Parse(0); 
+			tail->next = Statement::Parse(); 
 			if( tail->next != NULL )  {
 				tail->next->outer = snp;
 				tail = tail->next;
@@ -458,17 +458,26 @@ int Statement::CheckForDuplicateCases()
 	return (FALSE);
 } 
   
-Statement *Statement::ParseSwitch(bool nkd) 
+Statement *Statement::ParseSwitch() 
 {       
 	Statement *snp; 
     Statement *head, *tail; 
 
     snp = NewStatement(st_switch, TRUE);
-	snp->nkd = nkd;
+	snp->nkd = false;
 	iflevel++;
 	looplevel++;
+	needpunc(openpa,0);
     if( expression(&(snp->exp)) == NULL ) 
         error(ERR_EXPREXPECT); 
+	if (lastst==semicolon) {
+		NextToken();
+		if (lastst==kw_naked) {
+			NextToken();
+			snp->nkd = true;
+		}
+	}
+	needpunc(closepa,0);
     needpunc(begin,36); 
     head = 0; 
     while( lastst != end ) { 
@@ -615,7 +624,7 @@ Statement *Statement::ParseTry()
 	hd = (Statement *)NULL;
 	tl = (Statement *)NULL;
 	snp = NewStatement(st_try, TRUE);
-    snp->s1 = Statement::Parse(0);
+    snp->s1 = Statement::Parse();
 	// Empty statements return NULL
 	if (snp->s1)
 		snp->s1->outer = snp;
@@ -681,18 +690,18 @@ Statement *Statement::ParseCompound()
 	p = currentStmt;
 	if (lastst==kw_prolog) {
 		NextToken();
-		currentFn->prolog = snp->prolog = Statement::Parse(0);
+		currentFn->prolog = snp->prolog = Statement::Parse();
 	}
 	if (lastst==kw_epilog) {
 		NextToken();
-		currentFn->epilog = snp->epilog = Statement::Parse(0);
+		currentFn->epilog = snp->epilog = Statement::Parse();
 	}
 	if (lastst==kw_prolog) {
 		NextToken();
-		currentFn->prolog = snp->prolog = Statement::Parse(0);
+		currentFn->prolog = snp->prolog = Statement::Parse();
 	}
 	if (lastst != end) {
-		head = tail = Statement::Parse(0); 
+		head = tail = Statement::Parse(); 
 		if (head)
 			head->outer = snp;
 	}
@@ -705,15 +714,15 @@ Statement *Statement::ParseCompound()
 	while( lastst != end) {
 		if (lastst==kw_prolog) {
 			NextToken();
-			currentFn->prolog = snp->prolog = Statement::Parse(0);
+			currentFn->prolog = snp->prolog = Statement::Parse();
 		}
 		else if (lastst==kw_epilog) {
 			NextToken();
-			currentFn->epilog = snp->epilog = Statement::Parse(0);
+			currentFn->epilog = snp->epilog = Statement::Parse();
 		}
 		else
 		{
-			tail->next = Statement::Parse(0); 
+			tail->next = Statement::Parse(); 
 			if( tail->next != NULL ) {
 				tail->next->outer = snp;
 				tail = tail->next;
@@ -790,7 +799,7 @@ Statement *Statement::ParseGoto()
     return ((Statement *)NULL);
 } 
   
-Statement *Statement::Parse(bool nkd) 
+Statement *Statement::Parse() 
 {
 	Statement *snp; 
 	dfs.puts("<Parse>");
@@ -805,10 +814,6 @@ Statement *Statement::Parse(bool nkd)
     case kw_check:
          snp = ParseCheckStatement();
          break;
-	case kw_naked:
-		 NextToken();
-		 snp = Parse(1);
-		 break;
 	/*
     case kw_prolog:
          snp = NewStatement(st_empty,1);
@@ -829,7 +834,7 @@ Statement *Statement::Parse(bool nkd)
     case kw_continue: snp = ParseContinue(); break; 
     case kw_do:
 	case kw_loop: snp = ParseDo(); break; 
-    case kw_switch: snp = ParseSwitch(nkd); break;
+    case kw_switch: snp = ParseSwitch(); break;
 	case kw_try: snp = ParseTry(); break;
 	case kw_throw: snp = ParseThrow(); break;
 	case kw_stop: snp = ParseStop(); break;

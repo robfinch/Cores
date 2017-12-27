@@ -38,10 +38,8 @@ typedef unsigned __int64 uint64_t;
 #include "Float128.h"
 #include "Rand.h"
 #include "txtStream.h"
-#include "cpu.h"
-#include "C.h"
-#include "Expr.h"
-#include "Statement.h"
+#include "const.h"
+#include "types.h"
 #include "Gen.h"
 #include "Cglbdec.h"
 

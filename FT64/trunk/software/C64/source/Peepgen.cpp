@@ -227,6 +227,8 @@ void GenerateLabel(int labno)
 static void SetLabelReference()
 {
 	struct ocode *p, *q;
+	struct clit *ct;
+	int nn;
 
 	for (p = peep_head; p; p = p->fwd) {
 		if (p->opcode==op_label) {
@@ -260,6 +262,12 @@ static void SetLabelReference()
 						}
 					}
 				}
+			}
+			// Now search case tables for label
+			for (ct = casetab; ct; ct = ct->next) {
+				for (nn = 0; nn < ct->num; nn++)
+					if (ct->cases[nn].label==(int)p->oper1)
+						p->isReferenced = true;
 			}
 		}
 	}

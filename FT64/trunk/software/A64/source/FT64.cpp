@@ -1185,7 +1185,7 @@ j1:
         Rt = 0;
 	addr = expr();
     // d(Rn)? 
-    NextToken();
+    //NextToken();
     if (token=='(' || token=='[') {
         Ra = getRegisterX();
         if (Ra==-1) {
@@ -1429,7 +1429,7 @@ static void process_beqi(int opcode6, int opcode3)
 	need(',');
 	NextToken();
 	val = expr();
-	disp = val - code_address;
+	disp = val - (code_address + 4);
 	if (imm < -256 || imm > 255) {
 		printf("Branch immediate too large: %d %d", lineno, imm);
 	}

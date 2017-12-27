@@ -1389,6 +1389,7 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 			if( tp1->type == bt_pointer ) {
 				tp2 = expression(&rnode);
 				tp3 = tp1;
+				tp4 = tp1;
 				if (rnode==nullptr) {
 					error(ERR_EXPREXPECT);
 					throw new C64PException(ERR_EXPREXPECT,9);
@@ -1399,11 +1400,12 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 				rnode = pnode;
 				tp3 = expression(&pnode);
 				tp1 = tp3;
+				tp4 = tp1;
 			}
 			if (cnt==0) {
 				numdimen = tp1->dimen;
 				cnt2 = 1;
-				for (tp4 = tp1; tp4; tp4 = tp4->GetBtp()) {
+				for (; tp4; tp4 = tp4->GetBtp()) {
 					sa[cnt2] = max(tp4->numele,1);
 					cnt2++;
 					if (cnt2 > 19) {
@@ -1411,7 +1413,10 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 						break;
 					}
 				}
-				sa[numdimen+1] = tp1->size;
+				if (tp1->type==bt_pointer)
+					sa[numdimen+1] = tp1->GetBtp()->size;
+				else
+					sa[numdimen+1] = tp1->size;
 			}
 			if (cnt==0)
 				totsz = tp1->size;

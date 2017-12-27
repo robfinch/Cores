@@ -59,6 +59,11 @@ static int OptimizationDesireability(CSE *csp)
         return 0;
 	if (csp->exp->isVolatile)
 		return 0;
+	// Prevent Inline code from being allocated a pointer in a register.
+	if (csp->exp->sym) {
+		if (csp->exp->sym->IsInline)
+			return (0);
+	}
     if( IsLValue(csp->exp) )
 	    return 2 * csp->uses;
     return csp->uses;
@@ -112,12 +117,14 @@ static int FinalAllocateRegisters(int reg)
 
 	for (csecnt = 0; csecnt < csendx; csecnt++)	{
 		csp = &CSETable[csecnt];
-		if (!csp->voidf && csp->reg==-1) {
-			if (csp->exp->etype!=bt_vector) {
-    			if(( csp->uses > 3) && reg < regLastRegvar )
-    				csp->reg = reg++;
-    			else
-    				csp->reg = -1;
+		if (OptimizationDesireability(csp) != 0) {
+			if (!csp->voidf && csp->reg==-1) {
+				if (csp->exp->etype!=bt_vector) {
+    				if(( csp->uses > 3) && reg < regLastRegvar )
+    					csp->reg = reg++;
+    				else
+    					csp->reg = -1;
+				}
 			}
 		}
 	}
@@ -532,19 +539,22 @@ void GenCompareI(AMODE *ap3, AMODE *ap1, AMODE *ap2, int su)
 {
 	AMODE *ap4;
 
+	/*
 	if (ap2->offset->i < -32768LL || ap2->offset->i > 32767LL) {
 		ap4 = GetTempRegister();
-		GenerateTriadic(op_or,0,ap4,makereg(regZero),make_immed(ap2->offset->i & 0xFFFFLL));
+		GenerateDiadic(op_ldi,0,ap4,make_immed(ap2->offset->i));
+		
 		if (ap2->offset->i & 0xFFFF0000LL)
 			GenerateDiadic(op_orq1,0,ap4,make_immed((ap2->offset->i >> 16) & 0xFFFFLL));
 		if (ap2->offset->i & 0xFFFF00000000LL)
 			GenerateDiadic(op_orq2,0,ap4,make_immed((ap2->offset->i >> 32) & 0xFFFFLL));
 		if (ap2->offset->i & 0xFFFF000000000000LL)
 			GenerateDiadic(op_orq3,0,ap4,make_immed((ap2->offset->i >> 48) & 0xFFFFLL));
-		GenerateTriadic(op_cmp,0,ap3,ap1,ap4);
+		
+		GenerateTriadic(su ? op_cmp : op_cmpu,0,ap3,ap1,ap4);
 		ReleaseTempReg(ap4);
 	}
-	else
+	else */
 		GenerateTriadic(su ? op_cmp : op_cmpu,0,ap3,ap1,ap2);
 }
 

@@ -197,6 +197,7 @@ wire [127:0] prods = $signed(a) * $signed(b);
 wire [127:0] prodsu = $signed(a) * b;
 wire [2:0] npl = ir[23:16] | a;
 wire [63:0] sum = a + b;
+wire [63:0] dif = a - b;
 wire [31:0] eandx = a + (b << ir[22:21]);
 wire [63:0] am8 = a - 32'd8;	// for link
 wire [31:0] xIncea = ir[25] ? a + {{59{ir[25]}},ir[25:21]} : a;	// for POP / PUSH
@@ -219,6 +220,27 @@ wire [63:0] word_in = din >> {dshift[3],6'h0};
 wire [127:0] shlo = {64'd0,a} << b[5:0];
 wire [127:0] shro = {a,64'd0} >> b[5:0];
 wire [31:0]  asro32 = a[31] ? ~(32'hFFFFFFFFFFFFFFFF >> b[5:0]) | shro[95:64] : shro[95:64];
+
+wire [63:0] shiftwo;
+wire [31:0] shiftho;
+
+FT64_shift uws1
+(
+	.instr(ir),
+	.a(a),
+	.b(b),
+	.res(shiftwo),
+	.ov()
+);
+
+FT64_shifth uhws1
+(
+	.instr(ir),
+	.a(a),
+	.b(b),
+	.res(shiftho),
+	.ov()
+);
 
 reg div_ld;
 wire div_done;
@@ -406,7 +428,7 @@ DECODE:
 					case(func5)
 					`ABS,`NOT:	Rt <= ir[15:11];
 					endcase
-				`ADD,`AND,`OR,`XOR:
+				`ADD,`SUB,`AND,`OR,`XOR:
 				    opsize = ir[22:21];
 				// The SYNC instruction is treated as a NOP since this machine
 				// is strictly in order.
@@ -459,68 +481,35 @@ DECODE:
 REGFETCH:
 	begin
 		goto(EXECUTE);
+		a <= rfoa;
+		b <= rfob;
 		case(opcode)
 		`R2:
 			case(funct)
-			`R1:
-				case(func5)
-				`ABS,`NOT:	a <= rfoa;
-				endcase
 			`SHIFTW,`SHIFTB,`SHIFTC,`SHIFTH:
 				begin
-				a <= rfoa;
 				case(func4)
-				`SHL,`SHR,`ASL,`ASR,`ROL,`ROR:
-					b <= rfob;
 				`SHLI,`SHRI,`ASLI,`ASRI,`ROLI,`RORI:
 					b <= {ir[21],ir[15:11]};
 				endcase
 				end
-			`ADD,`Scc,`Sccu,
-			`AND,`OR,`XOR,
-			`MUL,`MULU,`MULSU:
-				begin
-				a <= rfoa;
-				b <= rfob;
-				end
 			`DIVMOD,`DIVMODU,`DIVMODSU:
-				begin
-				a <= rfoa;
-				b <= rfob;
 				div_ld <= `TRUE;
-				end
 			`LB,`LBU,`LH,`LHU,`LC,`LCU,`LW,
 			`SB,`SC,`SH,`SW:
-				begin
-				a <= rfoa;
-				b <= rfob;
 				c <= rfoc;
-				end
-			`UNLINK:
-				begin
-				a <= rfoa;
-				b <= rfob;
-				end
     		`PUSH,`POP:
-                begin
-                a <= rfoa;
                 c <= rfob;
-                end
 			endcase
 		`ADD,`CMP,`MUL:
-			begin
-			a <= rfoa;
 			b <= {{48{ir[31]}},ir[31:16]};
-			end
 		`DIVI,`MODI:
 			begin
-			a <= rfoa;
 			b <= {{48{ir[31]}},ir[31:16]};
 			div_ld <= `TRUE;
 			end
 		`SccI:
 			begin
-			a <= rfoa;
 			case(ir[31:28])
 			4'h2,4'h3,4'h4,4'h5,4'h6,4'h7:
 				b <= {{52{ir[27]}},ir[27:16]};
@@ -530,28 +519,21 @@ REGFETCH:
 			end
 		`AND:
 			begin
-			a <= rfoa;
-			b <= {{48{1'b1}},ir[31:16]};
+			b <= {{48{1'b0}},ir[31:16]};
 			end
 		`CMPU,`OR,`XOR,`MULU,`MULSU:
 			begin
-			a <= rfoa;
 			b <= {{48{1'b0}},ir[31:16]};
 			end
 		`DIVUI,`DIVSUI,`MODUI,`MODSUI:
 			begin
-			a <= rfoa;
 			b <= {{48{1'b0}},ir[31:16]};
 			div_ld <= `TRUE;
 			end
 		`XCHG:
-			begin
-			b <= rfob;
 			c <= rfoc;
-			end
 		`QOPI:
 			begin
-				a <= rfoa;
 				case(ir[10:8])
 				3'd0,3'd3:	// OR, XOR
 					case(ir[7:6])
@@ -578,47 +560,18 @@ REGFETCH:
 				endcase
 			end
 		`Bcc0,`Bcc1,`BccR,`BBc0,`BBc1:
-			begin
-			a <= rfoa;
-			b <= rfob;
 			c <= rfoc;
-			end
 		`BEQ0,`BEQ1:
-			begin
-			a <= rfoa;
 			b <= {{55{ir[19]}},ir[19:11]};
-			end
 		`JAL:
-			begin
-			a <= rfoa;
 			b <= {{48{ir[31]}},ir[31:16]};
-			end
 		`CALL:
-			begin
-			a <= rfoa;
 			b <= 64'hFFFFFFFFFFFFFFF8;	// -8
-			end
-		`CALLR:
-			begin
-			a <= rfoa;
-			b <= rfob;
-			end
 		`RET:
-			begin
-			a <= rfoa;
 			b <= {{48{ir[31]}},ir[31:16]};	// +8
-			end
-		`LINK:
-			begin
-			a <= rfoa;
-			b <= rfob;
-			end
-		`REX:	a <= rfoa;
-		`CSR:	a <= rfoa;
 		`LB,`LBU,`LH,`LHU,`LC,`LCU,`LW,
 		`SB,`SC,`SH,`SW:
 			begin
-			a <= rfoa;
 			b <= {{48{ir[31]}},ir[31:16]};
 			c <= rfob;
 			end
@@ -652,31 +605,23 @@ EXECUTE:
 			`SHIFTW:
 			    begin
 			    rfwr <= `TRUE;
-                case(func4)
-                `SHL,`SHLI:	res <= shlo[63:0];
-                `SHR,`SHRI:	res <= shro[127:64];
-                `ASL,`ASLI:	res <= shlo[63:0];
-                `ASR,`ASRI:	res <= a[63] ? ~(64'hFFFFFFFFFFFFFFFF >> b[5:0]) | shro[127:64]
-                        : shro[127:64];
-                `ROL,`ROLI: res <= shlo[63:0] | shlo[127:64];
-                `ROR,`RORI: res <= shro[127:64] | shro[63:0];
-                endcase
+			    res <= shiftwo;
                 end
 			`SHIFTH:
                 begin
                 rfwr <= `TRUE;
                 case(func4)
-                `SHL,`SHLI:    res <= {32'd0,shlo[31:0]};
-                `SHR,`SHRI:    res <= {32'd0,shro[127:64]};
-                `ASL,`ASLI:    res <= {{32{shlo[31]}},shlo[31:0]};
-                `ASR,`ASRI:    res <= {{32{asro32[31]}},asro32};
+                `SHL,`SHLI:    res <= {32'd0,shiftho};
+                `SHR,`SHRI:    res <= {32'd0,shiftho};
+                `ASL,`ASLI:    res <= {{32{shiftho[31]}},shiftho};
+                `ASR,`ASRI:    res <= {{32{shiftho[31]}},shiftho};
                 `ROL,`ROLI: begin
-                            res[31:0] <= shlo[31:0] | shlo[63:32];
-                            res[63:32] <= {32{shlo[31]|shlo[63]}};
+                            res[31:0] <= shiftho;
+                            res[63:32] <= {32{shiftho[31]}};
                             end
                 `ROR,`RORI: begin
-                            res[31:0] <= shro[95:64] | shro[63:32];
-                            res[63:32] <= {32{shro[95]|shro[63]}};
+                            res[31:0] <= shiftho;
+                            res[63:32] <= {32{shiftho[31]}};
                             end
                 endcase
                 end
@@ -687,6 +632,15 @@ EXECUTE:
                     half:   res <= {{32{sum[31]}},sum[31:0]};
                     char:   res <= {{48{sum[15]}},sum[15:0]};
                     byt_:   res <= {{56{sum[7]}},sum[7:0]};
+                    endcase
+                    end
+            `SUB:	begin
+                    rfwr <= `TRUE;
+                    case(opsize)
+                    word:   res <= dif;
+                    half:   res <= {{32{dif[31]}},dif[31:0]};
+                    char:   res <= {{48{dif[15]}},dif[15:0]};
+                    byt_:   res <= {{56{dif[7]}},dif[7:0]};
                     endcase
                     end
 			`Scc:	begin
