@@ -47,7 +47,7 @@ output idle;
 output dvByZr;
 reg dvByZr;
 
-reg [WID-1:0] aa,bb;
+reg [WID-1:0] bb;
 reg so;
 reg [2:0] state;
 reg [7:0] cnt;
@@ -69,7 +69,6 @@ end
 
 always @(posedge clk)
 if (rst) begin
-	aa <= {WID{1'b0}};
 	bb <= {WID{1'b0}};
 	q <= {WID{1'b0}};
 	r <= {WID{1'b0}};

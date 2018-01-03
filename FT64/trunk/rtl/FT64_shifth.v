@@ -25,7 +25,7 @@
 //
 // ============================================================================
 //
-`ifndef SHL
+//`ifndef SHL
 `define RR      6'h02
 `define SHIFTH  6'h3F
 `define SHL     4'h0
@@ -40,7 +40,7 @@
 `define ASRI    4'hB
 `define ROLI    4'hC
 `define RORI    4'hD
-`endif
+//`endif
 `define HIGHWORDH    63:32
 
 module FT64_shifth(instr, a, b, res, ov);
@@ -58,7 +58,7 @@ wire [5:0] func = instr[31:26];
 wire [3:0] shiftop = instr[25:22];
 
 wire [63:0] shl = {32'd0,a} << b[4:0];
-wire [63:0] shr = {32,8'd0} >> b[4:0];
+wire [63:0] shr = {a,32'd0} >> b[4:0];
 
 assign ov = 1'b0;
 
@@ -68,8 +68,8 @@ case(opcode)
     case(func)
     `SHIFTH:
         case(shiftop)
-        `SHLI:	res <= shl[DMSB:0];
-        `SHL:	res <= shl[DMSB:0];
+        `SHLI,`ASLI:	res <= shl[DMSB:0];
+        `SHL,`ASL:	res <= shl[DMSB:0];
         `SHRI:	res <= shr[`HIGHWORDH];
         `SHR:	res <= shr[`HIGHWORDH];
         `ASRI:	if (a[DMSB])

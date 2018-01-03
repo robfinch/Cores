@@ -33,6 +33,7 @@
 `define Sccu	    6'h07
 `define SHIFTW		6'h0F
 `define SHIFTB		6'h1F
+`define LEAX		6'h18
 `define PUSH		6'h19
 `define POP			6'h1A
 `define UNLINK		6'h1B
@@ -73,6 +74,7 @@
 `define NOP		6'h1C
 `define LC		6'h20
 `define LCU		6'h21
+`define BITFLD	6'h22
 `define LBU		6'h23
 `define SC		6'h24
 `define BBc0	6'h26
@@ -88,7 +90,7 @@
 `define Bcc1	6'h31
 `define BEQ0	6'h32
 `define BEQ1	6'h33
-`define MULU	6'h3A
+`define MULU	6'h38
 `define MULSU	6'h39
 `define MUL		6'h3A
 `define DIVUI	6'h3C
@@ -125,13 +127,16 @@
 `define SCRATCH	11'h009
 `define SEMA	11'h00C
 `define TVEC	11'b000_0011_0???
+`define TIME	11'h7E0
+`define INSTRET	11'h7E1
 
-module FT64seq(hartid_i, rst_i, clk_i, irq_i, cause_i,
+module FT64seq(hartid_i, rst_i, clk_i, tm_clk_i, irq_i, cause_i,
 	cyc_o, stb_o, ack_i, sel_o, we_o, adr_o, dat_i, dat_o,
 	state);
 input [63:0] hartid_i;
 input rst_i;
 input clk_i;
+input tm_clk_i;				// 100 MHz
 input [2:0] irq_i;
 input [8:0] cause_i;
 output reg cyc_o;
@@ -144,16 +149,20 @@ input [127:0] dat_i;
 output reg [127:0] dat_o;
 output reg [7:0] state;
 
+// Wall clock timing parameter. Number of tm_clk_i cycles for 1s interval
+parameter WCTIME1S = 32'd100000000;
+
 parameter RST_ADDR = 32'hFFFC0100;
 parameter RESET = 8'd0;
 parameter IFETCH = 8'd1;
-parameter IFETCH2 = 8'd2;
-parameter REGFETCH = 8'd3;
-parameter DECODE = 8'd4;
-parameter EXECUTE = 8'd5;
-parameter MEMORY = 8'd6;
-parameter MEMORY2 = 8'd7;
-parameter MULDIV2 = 8'd8;
+parameter IFETCH_ACK = 8'd2;
+parameter IFETCH_NACK = 8'd3;
+parameter REGFETCH = 8'd4;
+parameter DECODE = 8'd5;
+parameter EXECUTE = 8'd6;
+parameter MEMORY = 8'd7;
+parameter MEMORY_NACK = 8'd8;
+parameter MULDIV2 = 8'd9;
 
 parameter word = 2'd3;
 parameter half = 2'd2;
@@ -167,7 +176,7 @@ reg [31:0] tvec [0:7];
 reg [2:0] ol;
 reg [2:0] im;
 reg [7:0] pl;
-reg [31:0] pc;
+reg [31:0] pc,opc;
 reg [31:0] ir;
 wire [5:0] opcode = ir[5:0];
 wire [5:0] funct = ir[31:26];
@@ -191,16 +200,56 @@ reg [8:0] rassp;
 reg [8:0] cause;
 reg [63:0] scratch;
 reg [63:0] tick;
+reg [63:0] wctime, times;
+reg [63:0] instret;
 
-wire [127:0] produ = a * b;
-wire [127:0] prods = $signed(a) * $signed(b);
-wire [127:0] prodsu = $signed(a) * b;
+wire [127:0] produ;// = a * b;
+wire [127:0] prods;// = $signed(a) * $signed(b);
+wire [127:0] prodsu;// = $signed(a) * b;
 wire [2:0] npl = ir[23:16] | a;
 wire [63:0] sum = a + b;
 wire [63:0] dif = a - b;
 wire [31:0] eandx = a + (b << ir[22:21]);
 wire [63:0] am8 = a - 32'd8;	// for link
 wire [31:0] xIncea = ir[25] ? a + {{59{ir[25]}},ir[25:21]} : a;	// for POP / PUSH
+
+function [23:0] regname;
+input [4:0] regno;
+case(regno)
+5'd0:	regname = "r0";
+5'd1:	regname = "r1";
+5'd2:	regname = "r2";
+5'd3:	regname = "r3";
+5'd4:	regname = "r4";
+5'd5:	regname = "r5";
+5'd6:	regname = "r6";
+5'd7:	regname = "r7";
+5'd8:	regname = "r8";
+5'd9:	regname = "r9";
+5'd10:	regname = "r10";
+5'd11:	regname = "r11";
+5'd12:	regname = "r12";
+5'd13:	regname = "r13";
+5'd14:	regname = "r14";
+5'd15:	regname = "r15";
+5'd16:	regname = "r16";
+5'd17:	regname = "r17";
+5'd18:	regname = "r18";
+5'd19:	regname = "r19";
+5'd20:	regname = "r20";
+5'd21:	regname = "r21";
+5'd22:	regname = "r22";
+5'd23:	regname = "r23";
+5'd24:	regname = "r24";
+5'd25:	regname = "r25";
+5'd26:	regname = "r26";
+5'd27:	regname = "r27";
+5'd28:	regname = "r28";
+5'd29:	regname = "r29";
+5'd30:	regname = "bp";
+5'd31:	regname = "sp";
+endcase
+endfunction
 
 always @*
 begin
@@ -221,6 +270,7 @@ wire [127:0] shlo = {64'd0,a} << b[5:0];
 wire [127:0] shro = {a,64'd0} >> b[5:0];
 wire [31:0]  asro32 = a[31] ? ~(32'hFFFFFFFFFFFFFFFF >> b[5:0]) | shro[95:64] : shro[95:64];
 
+wire [63:0] bfo;
 wire [63:0] shiftwo;
 wire [31:0] shiftho;
 
@@ -236,13 +286,23 @@ FT64_shift uws1
 FT64_shifth uhws1
 (
 	.instr(ir),
-	.a(a),
-	.b(b),
+	.a(a[31:0]),
+	.b(b[31:0]),
 	.res(shiftho),
 	.ov()
 );
 
-reg div_ld;
+FT64_bitfield ubf1
+(
+	.inst(ir),
+	.a(a),
+	.b(b),
+	.o(bfo),
+	.masko()
+);
+
+reg div_ld, mul_ld;
+reg [4:0] mul_cnt;
 wire div_done;
 wire [63:0] div_qo, div_ro;
 wire div_sgn = opcode==`DIVI || opcode==`MODI || (opcode==`R2 && (funct==`DIVMOD));
@@ -265,39 +325,50 @@ FT64_divider udiv1
 	.idle()
 );
 
-//Evaluate branch condition
-reg takb;
-always @*
-case(opcode)
-`BccR:
-	case(ir[24:21])
-	`BEQ:	takb <= a==b;
-	`BNE:	takb <= a!=b;
-	`BLT:	takb <= $signed(a) < $signed(b);
-	`BGE:	takb <= $signed(a) >= $signed(b);
-	`BLTU:	takb <= a < b;
-	`BGEU:	takb <= a >= b;
-	default:	takb <= `TRUE;
-	endcase
-`Bcc0,`Bcc1:
-	case(ir[19:16])
-	`BEQ:	takb <= a==b;
-	`BNE:	takb <= a!=b;
-	`BLT:	takb <= $signed(a) < $signed(b);
-	`BGE:	takb <= $signed(a) >= $signed(b);
-	`BLTU:	takb <= a < b;
-	`BGEU:	takb <= a >= b;
-	default:	takb <= `TRUE;
-	endcase
-`BEQ0,`BEQ1:	takb <= a==b;
-`BBc0,`BBc1:
-	case(ir[19:17])
-	3'd0:	takb <= a[ir[16:11]];	// BBS
-	3'd1:	takb <= ~a[ir[16:11]];	// BBC
-	default:	takb <= `TRUE;
-	endcase
-default:	takb <= `TRUE;
-endcase
+FT64_mul umul1
+(
+	.CLK(clk_i),
+	.A(a),
+	.B(b),
+	.P(prods)
+);
+
+FT64_mulu umul2
+(
+	.CLK(clk_i),
+	.A(a),
+	.B(b),
+	.P(produ)
+);
+
+FT64_mulsu umul3
+(
+	.CLK(clk_i),
+	.A(a),
+	.B(b),
+	.P(prodsu)
+);
+
+wire takb;
+
+FT64_EvalBranch ube1
+(
+	.instr(ir),
+	.a(a),
+	.b(b),
+	.takb(takb)
+);
+
+always @(posedge clk_i)
+if (rst_i)
+	mul_cnt <= 5'd19;
+else begin
+	if (mul_ld)
+		mul_cnt <= 5'd1;
+	else if (mul_cnt < 5'd19)
+		mul_cnt <= mul_cnt + 5'd1;
+end
+wire mul_done = mul_cnt==5'd19;
 
 always @(posedge clk_i)
 	if (ack_i)
@@ -307,6 +378,12 @@ always @(posedge clk_i)
 		dshift <= adr_o[3:0];
 
 always @(posedge clk_i)
+	if (rst_i)
+		tick <= 63'd0;
+	else
+		tick <= tick + 64'd1;
+
+always @(posedge clk_i)
 if (rst_i)
 	state <= RESET;
 else begin
@@ -314,6 +391,7 @@ else begin
 // Cause these signals to pulse for just one clock cycle. They are set
 // active below.
 div_ld <= `FALSE;
+mul_ld <= `FALSE;
 rfwr <= `FALSE;
 
 case(state)
@@ -333,6 +411,7 @@ RESET:
 	we_o <= `LOW;
 	sel_o <= 16'h0000;
 	adr_o <= 32'hFFFFFFFF;
+	instret <= 64'd0;
 	goto(IFETCH);
 	end
 
@@ -345,7 +424,10 @@ RESET:
 // have another state in the state machine to perform the register update
 // it is done here to improve performance.
 IFETCH:
-	if (!cyc_o) begin
+	begin
+		$display("%d", $time);
+		opc <= pc;
+		instret <= instret + 64'd1;
 		if (irq_i > im) begin
 			ir <= {13'd0,irq_i,1'b0,cause_i,`BRK};
 			goto(DECODE);
@@ -353,29 +435,33 @@ IFETCH:
 		else if (m[3]) begin
 			cyc_o <= `HIGH;
 			stb_o <= `HIGH;
-			sel_o <= 16'hFFFF;
+			sel_o <= 16'hF << {pc[3:2],2'b0};
 			adr_o <= pc;
+			goto(IFETCH_ACK);
 		end
 		else begin
 			ir <= ibuf[m];
 			pc <= pc + 32'd4;
+			$display("ir: %h (from ibuf)", ibuf[m]);
 			goto(DECODE);
 		end
 	end
-	else if (ack_i) begin
+IFETCH_ACK:
+	if (ack_i) begin
 		cyc_o <= `LOW;
 		stb_o <= `LOW;
 		sel_o <= 16'h0000;
 		//adr_o <= 32'hFFFFFFFF;
-		goto(IFETCH2);
+		goto(IFETCH_NACK);
 	end
-IFETCH2:
+IFETCH_NACK:
 	if (~ack_i) begin
 		ir <= half_in;
 		ibuf[ibuf_cnt] <= half_in;
 		ibuf_adr[ibuf_cnt] <= pc;
 		ibuf_cnt <= ibuf_cnt + 3'd1;
 		pc <= pc + 32'd4;
+		$display("ir: %h", half_in);
 		goto(DECODE);
 	end
 
@@ -394,7 +480,7 @@ DECODE:
 		Rb <= ir[15:11];
 		Rc <= ir[20:16];
 		Rt <= 5'd0;
-		opsize = word;
+		opsize <= word;
 		case(opcode)
 		`BRK:
 			begin
@@ -428,16 +514,16 @@ DECODE:
 					case(func5)
 					`ABS,`NOT:	Rt <= ir[15:11];
 					endcase
-				`ADD,`SUB,`AND,`OR,`XOR:
-				    opsize = ir[22:21];
+				`ADD,`SUB:
+				    opsize <= ir[22:21];
 				// The SYNC instruction is treated as a NOP since this machine
 				// is strictly in order.
 				`SYNC:	goto(IFETCH);
 				`SB,`SC,`SH,`SW:	Rt <= 5'd0;
-				`POP:
-				    Rt <= ir[15:11];
 				`PUSH:
 					Rt <= ir[20:16];
+				`POP:
+				    Rt <= ir[15:11];
 				endcase
 			end
 		`TGT:	goto(IFETCH);
@@ -465,13 +551,17 @@ DECODE:
 			Ra <= ir[15:11];
 			Rt <= ir[15:11];
 			end
+		`BITFLD:
+			Rt <= ir[20:16];
+		`MULU:	Rt <= ir[15:11];
 		`ADD,`CMP,`CMPU,`AND,`OR,`XOR,
-		`MUL,`MULU,`MULSU,
+		`MUL,`MULSU,
 		`DIVI,`DIVUI,`DIVSUI,`MODI,`MODUI,`MODSUI,
 		`LB,`LBU,`LC,`LCU,`LH,`LHU,`LW:
 			Rt <= ir[15:11];
 		`SB,`SC,`SH,`SW:
 			Rt <= 5'd0;
+		default: ;
 		endcase
 	end
 
@@ -493,6 +583,10 @@ REGFETCH:
 					b <= {ir[21],ir[15:11]};
 				endcase
 				end
+			`OR,`XOR,`XCHG:
+				c <= rfoc;
+			`MUL,`MULU,`MULSU:
+				mul_ld <= `TRUE;
 			`DIVMOD,`DIVMODU,`DIVMODSU:
 				div_ld <= `TRUE;
 			`LB,`LBU,`LH,`LHU,`LC,`LCU,`LW,
@@ -501,8 +595,13 @@ REGFETCH:
     		`PUSH,`POP:
                 c <= rfob;
 			endcase
-		`ADD,`CMP,`MUL:
+		`ADD,`CMP:
 			b <= {{48{ir[31]}},ir[31:16]};
+		`MUL:
+			begin
+			b <= {{48{ir[31]}},ir[31:16]};
+			mul_ld <= `TRUE;
+			end
 		`DIVI,`MODI:
 			begin
 			b <= {{48{ir[31]}},ir[31:16]};
@@ -521,17 +620,20 @@ REGFETCH:
 			begin
 			b <= {{48{1'b0}},ir[31:16]};
 			end
-		`CMPU,`OR,`XOR,`MULU,`MULSU:
+		`CMPU,`OR,`XOR:
 			begin
 			b <= {{48{1'b0}},ir[31:16]};
+			end
+		`MULU,`MULSU:
+			begin
+			b <= {{48{1'b0}},ir[31:16]};
+			mul_ld <= `TRUE;
 			end
 		`DIVUI,`DIVSUI,`MODUI,`MODSUI:
 			begin
 			b <= {{48{1'b0}},ir[31:16]};
 			div_ld <= `TRUE;
 			end
-		`XCHG:
-			c <= rfoc;
 		`QOPI:
 			begin
 				case(ir[10:8])
@@ -601,6 +703,7 @@ EXECUTE:
 					sel_o <= 16'h0FF << {b[3],3'b0};
 					adr_o <= b;
 					goto(MEMORY);
+					$display("%h: unlink", opc);
 				end
 			`SHIFTW:
 			    begin
@@ -667,9 +770,9 @@ EXECUTE:
 					3'd7:	res <= a > b;
 					endcase
 					end
-			`MULU:	begin res <= produ[63:0]; rfwr <= `TRUE; goto(MULDIV2); end
-			`MUL:	begin res <= prods[63:0]; rfwr <= `TRUE; goto(MULDIV2); end
-			`MULSU:	begin res <= prodsu[63:0]; rfwr <= `TRUE; goto(MULDIV2); end
+			`MULU:	if (mul_done) begin res <= produ[63:0]; rfwr <= `TRUE; goto(MULDIV2); end else goto(EXECUTE);
+			`MUL:	if (mul_done) begin res <= prods[63:0]; rfwr <= `TRUE; goto(MULDIV2); end else goto(EXECUTE);
+			`MULSU:	if (mul_done) begin res <= prodsu[63:0]; rfwr <= `TRUE; goto(MULDIV2); end else goto(EXECUTE);
 			// For divide stay in the EXECUTE state until the divide is done.
 			`DIVMOD,`DIVMODU,`DIVMODSU:
 					if (div_done) begin
@@ -680,25 +783,14 @@ EXECUTE:
 					else
 						goto(EXECUTE);
 			`AND:	begin res <= a & b; rfwr <= `TRUE; end
-			`OR:	begin
-			        rfwr <= `TRUE;
-			        case(opsize)
-			        word:    res <= a | b;
-			        half:    res <= a[31:0]|b[31:0];
-			        char:    res <= a[15:0]|b[15:0];
-			        byt_:    res <= a[7:0] | b[7:0];
-			        endcase
-			        end
-			`XOR:	begin
-			        rfwr <= `TRUE;
-			        case(opsize)
-			        word:    res <= a ^ b;
-			        half:    res <= a[31:0]^b[31:0];
-			        char:    res <= a[15:0]^b[15:0];
-			        byt_:    res <= a[7:0] ^ b[7:0];
-			        endcase
-			        end
+			`OR:	begin res <= a | b; rfwr <= `TRUE; end
+			`XOR:	begin res <= a ^ b; rfwr <= `TRUE; end
 			`XCHG:	begin res <= b; Rt <= ir[20:16]; rfwr <= `TRUE; goto(MULDIV2); end
+			`LEAX:
+				begin
+					rfwr <= `TRUE;
+					res <= eandx;
+				end
 			`LB,`LBU:
 				begin
 					cyc_o <= `HIGH;
@@ -769,6 +861,7 @@ EXECUTE:
 					sel_o <= 16'hFF << {eandx[3],3'b0};
 					adr_o <= eandx;
 					dat_o <= {2{c}};
+					$display("%h: swx %h=%h",opc,eandx,c);
 					goto(MEMORY);
 				end
     		`PUSH:
@@ -780,6 +873,7 @@ EXECUTE:
                     adr_o <= xIncea;
                     dat_o <= {2{c}};
                     goto(MEMORY);
+                    $display("%h: push %s", opc, regname(Rb));
                 end
     		`POP:
                 begin
@@ -791,6 +885,7 @@ EXECUTE:
                     Rt <= ir[20:16];
                     res <= a + {{59{ir[25]}},ir[25:21]};
                     goto(MEMORY);
+                    $display("%h: pop %s", opc, regname(Rb));
                 end
 			endcase
 		`ADD:	begin res <= sum; rfwr <= `TRUE; end
@@ -812,9 +907,9 @@ EXECUTE:
 				4'd15:	res <= a > b;
 				endcase
 				end
-		`MULU:	begin res <= produ[63:0]; rfwr <= `TRUE; end
-		`MUL:	begin res <= prods[63:0]; rfwr <= `TRUE; end
-		`MULSU:	begin res <= prodsu[63:0]; rfwr <= `TRUE; end
+		`MULU:	if (mul_done) begin res <= produ[63:0]; rfwr <= `TRUE; end else goto(EXECUTE);
+		`MUL:	if (mul_done) begin res <= prods[63:0]; rfwr <= `TRUE; end else goto(EXECUTE);
+		`MULSU:	if (mul_done) begin res <= prodsu[63:0]; rfwr <= `TRUE; end else goto(EXECUTE);
 		// Stay in execute state until divide is done.
 		`DIVI,`DIVUI,`DIVSUI:
 				if (div_done) begin
@@ -830,6 +925,7 @@ EXECUTE:
 				end
 				else
 					goto(EXECUTE);
+		`BITFLD:	begin res <= bfo; rfwr <= `TRUE; end
 		`AND:	begin res <= a & b; rfwr <= `TRUE; end
 		`OR:	begin res <= a | b; rfwr <= `TRUE; end
 		`XOR:	begin res <= a ^ b; rfwr <= `TRUE; end
@@ -844,11 +940,17 @@ EXECUTE:
 		      endcase
 		      end
 		`Bcc0,`Bcc1,`BEQ0,`BEQ1,`BBc0,`BBc1:
-			if (takb)
-				pc <= pc + {{21{ir[31]}},ir[31:22],ir[0],2'b00};
+			begin
+				if (takb)
+					pc <= pc + {{21{ir[31]}},ir[31:22],ir[0],2'b00};
+				$display("%h: br %h", pc + {{21{ir[31]}},ir[31:22],ir[0],2'b00});
+			end
 		`BccR:
-			if (takb)
-				pc <= c;
+			begin
+				if (takb)
+					pc <= c;
+				$display("%h: br %h", c);
+			end
 		`JAL:
 			begin
 				pc <= {sum[31:2],2'b00};
@@ -868,6 +970,7 @@ EXECUTE:
 				res <= sum;
 				rfwr <= `TRUE;
 				goto(MEMORY);
+				$display("%h: call %h", opc, {pc[31:28],ir[31:6],2'b00});
 			end
 		`CALLR:
 			begin
@@ -880,6 +983,7 @@ EXECUTE:
 				pc <= b + {{48{ir[31]}},ir[31:16]};
 				pc[1:0] <= 2'b00;
 				goto(MEMORY);
+				$display("%h: call %h", opc, b + {{48{ir[31]}},ir[31:16]});
 			end
 		`RET:
 			begin
@@ -889,6 +993,7 @@ EXECUTE:
 				adr_o <= a;
 				res <= sum;
 				rfwr <= `TRUE;
+				$display("%h: ret #", opc, b);
 				goto(MEMORY);
 			end
 		`REX:
@@ -925,6 +1030,7 @@ EXECUTE:
 				adr_o <= am8;
 				dat_o <= {2{b}};
 				goto(MEMORY);
+				$display("%h: link %s,#", opc, regname(Rb), b);
 			end
 		`LB,`LBU:
 			begin
@@ -933,6 +1039,7 @@ EXECUTE:
 				sel_o <= 16'h01 << sum[3:0];
 				adr_o <= sum;
 				goto(MEMORY);
+				$display("%h: lb[u] %h", opc, sum);
 			end
 		`LC,`LCU:
 			begin
@@ -941,6 +1048,7 @@ EXECUTE:
 				sel_o <= 16'h03 << {sum[3:1],1'b0};
 				adr_o <= sum;
 				goto(MEMORY);
+				$display("%h: lc[u] %h", opc, sum);
 			end
 		`LH,`LHU:
 			begin
@@ -949,6 +1057,7 @@ EXECUTE:
 				sel_o <= 16'h0F << {sum[3:2],2'b0};
 				adr_o <= sum;
 				goto(MEMORY);
+				$display("%h: lh[u] %h", opc, sum);
 			end
 		`LW:
 			begin
@@ -957,6 +1066,7 @@ EXECUTE:
 				sel_o <= 16'hFF << {sum[3],3'b0};
 				adr_o <= sum;
 				goto(MEMORY);
+				$display("%h: lw %h", opc, sum);
 			end
 		`SB:
 			begin
@@ -967,6 +1077,7 @@ EXECUTE:
 				adr_o <= sum;
 				dat_o <= {16{c[7:0]}};
 				goto(MEMORY);
+				$display("%h: sb %h <= %h", opc, sum, c[7:0]);
 			end
 		`SC:
 			begin
@@ -977,6 +1088,7 @@ EXECUTE:
 				adr_o <= sum;
 				dat_o <= {8{c[15:0]}};
 				goto(MEMORY);
+				$display("%h: sc %h <= %h", opc, sum, c[15:0]);
 			end
 		`SH:
 			begin
@@ -987,6 +1099,7 @@ EXECUTE:
 				adr_o <= sum;
 				dat_o <= {4{c[31:0]}};
 				goto(MEMORY);
+				$display("%h: sh %h <= %h", opc, sum, c[31:0]);
 			end
 		`SW:
 			begin
@@ -997,6 +1110,7 @@ EXECUTE:
 				adr_o <= sum;
 				dat_o <= {2{c}};
 				goto(MEMORY);
+				$display("%h: sw %h <= %h", opc, sum, c);
 			end
 		endcase
 	end
@@ -1009,7 +1123,7 @@ EXECUTE:
 
 MEMORY:
 	if (ack_i) begin
-		goto(MEMORY2);
+		goto(MEMORY_NACK);
 		cyc_o <= `LOW;
 		stb_o <= `LOW;
 		we_o <= `LOW;
@@ -1022,7 +1136,7 @@ MEMORY:
 // bus slaves don't put ack low until the clock edge when seeing the
 // terminated bus cycle. We want to ensure that a second bus cycle isn't
 // started until ack is low or the ack could be mistakenly accepted.
-MEMORY2:
+MEMORY_NACK:
 	if (~ack_i) begin
 		goto(IFETCH);
 		case(opcode)
@@ -1052,6 +1166,8 @@ MEMORY2:
 		`LW:	begin res <= word_in; rfwr <= `TRUE; end
 		endcase
 	end
+
+// Some operations produce two results and need a second register update cycle.
 MULDIV2:
 	begin
 		rfwr <= `TRUE;
@@ -1073,10 +1189,27 @@ endcase
 // different states. There may be two updates for a single instruction.
 // Note that r0 is always forced to zero. A write to r0 may be needed
 // before it's used anywhere.
-if (rfwr)
+if (rfwr) begin
 	regfile[Rt] <= |Rt ? res : 64'd0;
+	if (|Rt)
+		$display("%s=%h",regname(Rt),res);
+end
 
 end
+
+always @(posedge tm_clk_i)
+if (rst_i)
+	wctime <= 64'd1;
+else begin
+	if (wctime[31:0]==WCTIME1S) begin
+		wctime[31:0] <= 32'd1;
+		wctime[63:32] <= wctime[63:32] + 32'd1;
+	end
+	else
+		wctime[31:0] <= wctime[31:0] + 32'd1;
+end
+always @(posedge clk_i)
+	times <= wctime;
 
 task read_csr;
 input [11:0] regno;
@@ -1084,11 +1217,13 @@ output [63:0] val;
 begin
 	casez(regno)
 	`HARTID:	val <= hartid_i;
-	`TICK:	val <= tick;
-	`CAUSE:	val <= {55'd0,cause};
+	`TICK:		val <= tick;
+	`CAUSE:		val <= {55'd0,cause};
 	`SCRATCH:	val <= scratch;
-	`SEMA:	val <= sema;
-	`TVEC:	val <= tvec[regno[2:0]];
+	`SEMA:		val <= sema;
+	`TVEC:		val <= tvec[regno[2:0]];
+	`TIME:		val <= times;
+	`INSTRET:	val <= instret;
 	endcase
 end
 endtask

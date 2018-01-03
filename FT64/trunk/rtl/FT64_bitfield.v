@@ -35,12 +35,11 @@
 `define BFEXTU    4'd6
 `endif
 
-module FT64_bitfield(inst, a, b, imm, o, masko);
+module FT64_bitfield(inst, a, b, o, masko);
 parameter DWIDTH=64;
 input [31:0] inst;
 input [DWIDTH-1:0] a;
 input [DWIDTH-1:0] b;
-input [DWIDTH-1:0] imm;
 output [DWIDTH-1:0] o;
 reg [DWIDTH-1:0] o;
 output [DWIDTH-1:0] masko;
@@ -55,13 +54,14 @@ wire [3:0] op = inst[25:22];
 wire [5:0] mb = {inst[21],inst[15:11]};
 wire [5:0] me = inst[31:26];
 wire [5:0] ml = me-mb;		// mask length-1
+wire [63:0] imm = {59'd0,inst[15:11]};
 
 integer nn,n;
 always @(mb or me or nn)
 	for (nn = 0; nn < DWIDTH; nn = nn + 1)
 		mask[nn] <= (nn >= mb) ^ (nn <= me) ^ (me >= mb);
 
-always @(op,mask,b,a,imm,mb)
+always @(op,mask,b,a,imm,mb,ml)
 case (op)
 `BFINS: 	begin
 				o2 = a << mb;

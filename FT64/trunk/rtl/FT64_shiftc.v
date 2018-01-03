@@ -68,8 +68,8 @@ case(opcode)
     case(func)
     `SHIFTC:
         case(shiftop)
-        `SHLI:	res <= shl[DMSB:0];
-        `SHL:	res <= shl[DMSB:0];
+        `SHLI,`ASLI:	res <= shl[DMSB:0];
+        `SHL,`ASL:	res <= shl[DMSB:0];
         `SHRI:	res <= shr[`HIGHWORDC];
         `SHR:	res <= shr[`HIGHWORDC];
         `ASRI:	if (a[DMSB])

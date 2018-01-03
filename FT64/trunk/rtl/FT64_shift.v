@@ -25,7 +25,7 @@
 //
 // ============================================================================
 //
-`ifndef SHL
+//`ifndef SHL
 `define VECTOR  6'h01
 `define VSHL        6'h0C
 `define VSHR        6'h0D
@@ -44,7 +44,7 @@
 `define ASRI    4'hB
 `define ROLI    4'hC
 `define RORI    4'hD
-`endif
+//`endif
 `define HIGHWORD    127:64
 
 module FT64_shift(instr, a, b, res, ov);
@@ -86,8 +86,8 @@ case(opcode)
     case(func)
     `SHIFT:
         case(shiftop)
-        `SHLI:	res <= shl[DMSB:0];
-        `SHL:	res <= shl[DMSB:0];
+        `SHLI,`ASLI:res <= shl[DMSB:0];
+        `SHL,`ASL:	res <= shl[DMSB:0];
         `SHRI:	res <= shr[`HIGHWORD];
         `SHR:	res <= shr[`HIGHWORD];
         `ASRI:	if (a[DMSB])
