@@ -47,28 +47,6 @@ void GenLdi(AMODE *, AMODE *);
 extern AMODE *copy_addr(AMODE *ap);
 extern void GenLoad(AMODE *ap1, AMODE *ap3, int ssize, int size);
 
-//
-// Returns the desirability of optimization for a subexpression.
-//
-static int OptimizationDesireability(CSE *csp)
-{
-	if( csp->voidf || (csp->exp->nodetype == en_icon &&
-                       csp->exp->i < 32768 && csp->exp->i >= -32768))
-        return 0;
-    if (csp->exp->nodetype==en_cnacon)
-        return 0;
-	if (csp->exp->isVolatile)
-		return 0;
-	// Prevent Inline code from being allocated a pointer in a register.
-	if (csp->exp->sym) {
-		if (csp->exp->sym->IsInline)
-			return (0);
-	}
-    if( IsLValue(csp->exp) )
-	    return 2 * csp->uses;
-    return csp->uses;
-}
-
 static int CSECmp(const void *a, const void *b)
 {
 	CSE *csp1, *csp2;
@@ -76,8 +54,8 @@ static int CSECmp(const void *a, const void *b)
 
 	csp1 = (CSE *)a;
 	csp2 = (CSE *)b;
-	aa = OptimizationDesireability(csp1);
-	bb = OptimizationDesireability(csp2);
+	aa = csp1->OptimizationDesireability();
+	bb = csp2->OptimizationDesireability();
 	if (aa < bb)
 		return (1);
 	else if (aa == bb)
@@ -96,7 +74,7 @@ static int AllocateRegisters1()
 		for (csecnt = 0; csecnt < csendx; csecnt++)	{
 			csp = &CSETable[csecnt];
 			if (csp->reg==-1) {
-				if( OptimizationDesireability(csp) >= 4-nn ) {
+				if( csp->OptimizationDesireability() >= 4-nn ) {
 					if (csp->exp->etype!=bt_vector) {
     					if(( csp->duses > csp->uses / (8 << nn)) && reg < regLastRegvar )
     						csp->reg = reg++;
@@ -117,10 +95,10 @@ static int FinalAllocateRegisters(int reg)
 
 	for (csecnt = 0; csecnt < csendx; csecnt++)	{
 		csp = &CSETable[csecnt];
-		if (OptimizationDesireability(csp) != 0) {
+		if (csp->OptimizationDesireability() != 0) {
 			if (!csp->voidf && csp->reg==-1) {
 				if (csp->exp->etype!=bt_vector) {
-    				if(( csp->uses > 3) && reg < regLastRegvar )
+    				if(( csp->OptimizationDesireability() >= 4) && reg < regLastRegvar )
     					csp->reg = reg++;
     				else
     					csp->reg = -1;
@@ -141,7 +119,7 @@ static int AllocateVectorRegisters1()
 		for (csecnt = 0; csecnt < csendx; csecnt++)	{
 			csp = &CSETable[csecnt];
 			if (csp->reg==-1) {
-				if( OptimizationDesireability(csp) >= 4-nn ) {
+				if( csp->OptimizationDesireability() >= 4-nn ) {
 					if (csp->exp->etype==bt_vector) {
     					if(( csp->duses > csp->uses / (8 << nn)) && vreg < 18 )
     						csp->reg = vreg++;
@@ -205,7 +183,7 @@ int AllocateRegisterVars()
 
 	// Sort the CSE table according to desirability of allocating
 	// a register.
-	qsort(CSETable,csendx,sizeof(CSE),CSECmp);
+	qsort(CSETable,(size_t)csendx,sizeof(CSE),CSECmp);
 
 	// Initialize to no allocated registers
 	for (csecnt = 0; csecnt < csendx; csecnt++)
@@ -952,12 +930,12 @@ void GenerateFunction(SYM *sym)
 		// needed. So they are just always spit out here.
 //			snprintf(buf, sizeof(buf), "#-%sSTKSIZE_-8",sym->mangledName->c_str());
 		if (cpu.SupportsLink)
-			GenerateDiadic(op_link,0,makereg(regBP),make_immed(sym->stkspace));//make_string(my_strdup(buf)));
+			GenerateDiadic(op_link,0,makereg(regBP),make_immed(sym->stkspace+sizeOfWord));//make_string(my_strdup(buf)));
 		else {
 			// Alternate code for lacking a link instruction
 			GenerateMonadic(op_push,0,makereg(regBP));
 			GenerateDiadic(op_mov,0,makereg(regBP),makereg(regSP));
-			GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(sym->stkspace));
+			GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(sym->stkspace+sizeOfWord));
 		}
 	}
 	if (optimize)
@@ -1323,6 +1301,7 @@ static int GeneratePushParameter(ENODE *ep, int regno, int stkoffs)
 					}
 				}
 				else {
+					//ap->preg = regno & 0x7fff;
 					GenerateDiadic(op_mov,0,makereg(regno & 0x7fff), ap);
 					if (regno & 0x8000) {
 						GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(sizeOfWord));
@@ -1353,7 +1332,7 @@ static int GeneratePushParameter(ENODE *ep, int regno, int stkoffs)
 						nn = 1;
 					}
 					else {
-						if (ap->type=stddouble.GetIndex()) {
+						if (ap->type==stddouble.GetIndex()) {
 							GenerateDiadic(op_sw,0,ap,make_indexed(stkoffs,regSP));
 							nn = sz/sizeOfWord;
 						}
@@ -1428,7 +1407,8 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
             i = 1;
         }
 */
-		SaveRegisterParameters(sym);
+		if (currentFn->HasRegisterParameters())
+			SaveRegisterParameters(sym);
         i = i + GeneratePushParameterList(sym,node->p[1]);
 //		ReleaseTempRegister(ap);
 		if (sym && sym->IsInline) {
@@ -1458,7 +1438,8 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
 		if (ap->offset)
 			sym = ap->offset->sym;
 		SaveTemporaries(sym, &sp, &fsp);
-		SaveRegisterParameters(sym);
+		if (currentFn->HasRegisterParameters())
+			SaveRegisterParameters(sym);
         i = i + GeneratePushParameterList(sym,node->p[1]);
 		ap->mode = am_ind;
 		ap->offset = 0;
@@ -1485,7 +1466,8 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
 		else
 			GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),make_immed(i * sizeOfWord));
 	}
-	RestoreRegisterParameters(sym);
+	if (currentFn->HasRegisterParameters())
+		RestoreRegisterParameters(sym);
 	RestoreTemporaries(sym, sp, fsp);
 	/*
 	if (sym) {

@@ -87,7 +87,7 @@ output reg [7:0] state;
 
 parameter NSPR = 32;			// number of supported sprites
 parameter pAckStyle = 1'b0;
-parameter BUSTO = 8'd40;		// bus timeout in m_clk_i clock cycles
+parameter BUSTO = 8'd50;		// bus timeout in m_clk_i clock cycles
 
 // Sync Generator defaults: 800x600 60Hz
 parameter phSyncOn  = 40;		//   40 front porch
@@ -112,9 +112,9 @@ parameter pvTotal = 628;		//  628 total scan lines
 parameter LINE_RESET = 6'd0;
 parameter DELAY = 6'd1;
 parameter READ_ACC = 6'd2;
-parameter READ_ACK = 6'd3;
+parameter READ_NACK = 6'd3;
 parameter SPRITE_ACC = 6'd4;
-parameter SPRITE_ACK = 6'd5;
+parameter SPRITE_NACK = 6'd5;
 parameter WAIT_RESET = 6'd6;
 parameter ST_AUD0 = 6'd8;
 parameter ST_AUD1 = 6'd9;
@@ -123,14 +123,14 @@ parameter ST_AUD3 = 6'd11;
 parameter ST_AUDI = 6'd12;
 parameter OTHERS = 6'd13;
 parameter ST_READ_FONT_TBL = 6'd15;
-parameter ST_READ_FONT_TBL_ACK = 6'd16;
+parameter ST_READ_FONT_TBL_NACK = 6'd16;
 parameter ST_READ_GLYPH_ENTRY = 6'd17;
-parameter ST_READ_GLYPH_ENTRY_ACK = 6'd18;
+parameter ST_READ_GLYPH_ENTRY_NACK = 6'd18;
 parameter ST_READ_CHAR_BITMAP = 6'd19;
-parameter ST_READ_CHAR_BITMAP_ACK = 6'd20;
+parameter ST_READ_CHAR_BITMAP_NACK = 6'd20;
 parameter ST_WRITE_CHAR = 6'd21;
 parameter ST_WRITE_CHAR2 = 6'd22;
-parameter ST_WRITE_CHAR2_ACK = 6'd23;
+parameter ST_WRITE_CHAR2_NACK = 6'd23;
 parameter ST_CMD = 6'd24;
 parameter ST_PLOT = 6'd27;
 parameter ST_PLOT_READ = 6'd28;
@@ -145,6 +145,18 @@ parameter DL_GETPIXEL = 8'd36;
 parameter DL_SETPIXEL = 8'd37;
 parameter DL_TEST = 8'd38;
 parameter DL_RET = 8'd39;
+parameter ST_BLTDMA2 = 8'd42;
+parameter ST_BLTDMA2_NACK = 8'd43;
+parameter ST_BLTDMA4 = 8'd44;
+parameter ST_BLTDMA4_NACK = 8'd45;
+parameter ST_BLTDMA6 = 8'd46;
+parameter ST_BLTDMA6_NACK = 8'd47;
+parameter ST_BLTDMA8 = 8'd48;
+parameter ST_BLTDMA8_NACK = 8'd51;
+parameter ST_FILLRECT = 8'd60;
+parameter ST_FILLRECT_CLIP = 8'd61;
+parameter ST_FILLRECT2 = 8'd62;
+parameter ST_IDLE = 8'd63;
 
 parameter HT_NONE = 3'd0;
 parameter HT_LINE_FETCH = 3'd1;
@@ -156,6 +168,12 @@ assign m_stb_o = m_cyc_o;
 reg [31:0] TargetBase = 32'h100000;
 reg [15:0] TargetWidth = 16'd600;
 reg [15:0] TargetHeight = 16'd800;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+reg clipEnable;
+reg [15:0] clipX0, clipY0, clipX1, clipY1;
+
 
 integer n;
 
@@ -197,14 +215,14 @@ function [15:0] blend;
 input [15:0] color1;
 input [15:0] color2;
 input [15:0] alpha;
-reg [63:0] blend2;
+reg [20:0] blendR;
+reg [20:0] blendG;
+reg [20:0] blendB;
 begin
-	blend2 =
-		{blend1(color1[`R],alpha),blend1(color1[`G],alpha),blend1(color1[`B],alpha)} +
-		{blend1(color2[`R],(16'hFFFF-alpha)),
-		 blend1(color2[`G],(16'hFFFF-alpha)),
-		 blend1(color2[`B],(16'hFFFF-alpha))};
-	blend = {blend2[62:58],blend2[41:37],blend2[20:16]};
+	blendR = blend1(color1[`R],alpha) + blend1(color2[`R],(16'hFFFF-alpha));
+	blendG = blend1(color1[`G],alpha) + blend1(color2[`G],(16'hFFFF-alpha));
+	blendB = blend1(color1[`B],alpha) + blend1(color2[`B],(16'hFFFF-alpha));
+	blend = {blendR[20:16],blendG[20:16],blendB[20:16]};
 end
 endfunction
 
@@ -268,17 +286,25 @@ reg [31:0] irq_status;
 reg [3:0] htask;
 reg [31:0] ctrl;
 reg [1:0] lowres = 2'b00;
-reg [23:0] borderColor;
+reg [23:0] borderColor = 24'h000000;
 reg rst_fifo;
 reg rd_fifo;
 wire [15:0] rgb_i;
 reg lrst;						// line reset
+
+function IsBinaryROP;
+input [3:0] rop;
+IsBinaryROP =  (((rop != 4'h1) &&
+			(rop != 4'h0) &&
+			(rop != 4'hF)));
+endfunction
+
 // The bus timeout depends on the clock frequency (m_clk_i) of the core
 // relative to the memory controller's clock frequency (100MHz). So it's
 // been made a core parameter.
 reg [7:0] busto = BUSTO;
 reg [7:0] tocnt;
-reg [7:0] num_strips = 8'd50;//8'd100;
+reg [7:0] num_strips = 8'd100;
 
 // Graphics cursor position
 reg [15:0] gcx;
@@ -328,10 +354,10 @@ reg sgLock;
 reg [11:0] vpos;
 reg [27:0] vndx;
 // read access counter, controls number of consecutive reads
-reg [3:0] rac;
-reg [3:0] rac_limit = 4'd4;
+reg [7:0] rac;
+reg [7:0] rac_limit = 8'd100;
 reg [7:0] ngs;		// next graphic state
-reg [7:0] state1,state2,state3,state4,state5;
+reg [7:0] state1,state2,state3,state4,state5,state6;
 reg [7:0] strip_cnt;
 reg [5:0] delay_cnt;
 wire [31:0] douta;
@@ -425,11 +451,6 @@ wire cmdp;				// command pulse
 wire cmdpe;				// command pulse edge
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-reg clipEnable;
-reg [15:0] clipX0, clipY0, clipX1, clipY1;
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Text Blitting
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 reg [31:0] font_tbl_adr;
@@ -446,6 +467,7 @@ reg [15:0] tgtindex;
 reg [15:0] charcode;
 reg [31:0] charndx;
 reg [31:0] charbmp;
+reg [31:0] charbmpr;
 reg [31:0] charBmpBase;
 reg [5:0] pixhc, pixvc;
 reg [31:0] charBoxX0, charBoxY0;
@@ -477,6 +499,145 @@ reg [31:0] intery;
 reg signed [31:0] dxa,dya;
 
 reg [31:0] rdadr;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// blitter vars
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+reg [7:0] blit_state;
+reg [31:0] bltSrcWid, bltSrcWidx;
+reg [31:0] bltDstWid, bltDstWidx;
+//  ch  321033221100       
+//  TBDzddddebebebeb
+//  |||   |       |+- bitmap mode
+//  |||   |       +-- channel enabled
+//  |||   +---------- direction 0=normal,1=decrement
+//  ||+-------------- done indicator
+//  |+--------------- busy indicator
+//  +---------------- trigger bit
+reg [15:0] bltCtrl,bltCtrlx;
+reg [15:0] bltA_shift, bltB_shift, bltC_shift;
+reg [15:0] bltLWMask = 16'hFFFF;
+reg [15:0] bltFWMask = 16'hFFFF;
+
+reg [31:0] bltA_badr;               // base address
+reg [31:0] bltA_mod;                // modulo
+reg [31:0] bltA_cnt;
+reg [31:0] bltA_badrx;               // base address
+reg [31:0] bltA_modx;                // modulo
+reg [31:0] bltA_cntx;
+reg [31:0] bltA_wadr;				// working address
+reg [31:0] bltA_wcnt;				// working count
+reg [31:0] bltA_dcnt;				// working count
+reg [31:0] bltA_hcnt;
+
+reg [31:0] bltB_badr;
+reg [31:0] bltB_mod;
+reg [31:0] bltB_cnt;
+reg [31:0] bltB_badrx;
+reg [31:0] bltB_modx;
+reg [31:0] bltB_cntx;
+reg [31:0] bltB_wadr;				// working address
+reg [31:0] bltB_wcnt;				// working count
+reg [31:0] bltB_dcnt;				// working count
+reg [31:0] bltB_hcnt;
+
+reg [31:0] bltC_badr;
+reg [31:0] bltC_mod;
+reg [31:0] bltC_cnt;
+reg [31:0] bltC_badrx;
+reg [31:0] bltC_modx;
+reg [31:0] bltC_cntx;
+reg [31:0] bltC_wadr;				// working address
+reg [31:0] bltC_wcnt;				// working count
+reg [31:0] bltC_dcnt;				// working count
+reg [31:0] bltC_hcnt;
+
+reg [31:0] bltD_badr;
+reg [31:0] bltD_mod;
+reg [31:0] bltD_cnt;
+reg [31:0] bltD_badrx;
+reg [31:0] bltD_modx;
+reg [31:0] bltD_cntx;
+reg [31:0] bltD_wadr;				// working address
+reg [31:0] bltD_wcnt;				// working count
+reg [31:0] bltD_hcnt;
+
+reg [15:0] blt_op;
+reg [15:0] blt_opx;
+reg [6:0] bitcnt;
+reg [3:0] bitinc;
+reg [1:0] blt_nch;
+
+// May need to set the pipeline depth to zero if copying neighbouring pixels
+// during a blit. So the app is allowed to control the pipeline depth. Depth
+// should not be set >28.
+reg [4:0] bltPipedepth = 5'd15;
+reg [4:0] bltPipedepthx;
+reg [31:0] bltinc;
+reg [4:0] bltAa,bltBa,bltCa;
+reg wrA, wrB, wrC;
+reg [15:0] blt_bmpA;
+reg [15:0] blt_bmpB;
+reg [15:0] blt_bmpC;
+reg [15:0] bltA_residue;
+reg [15:0] bltB_residue;
+reg [15:0] bltC_residue;
+reg [15:0] bltD_residue;
+
+wire [15:0] bltA_out, bltB_out, bltC_out;
+wire [15:0] bltA_out1, bltB_out1, bltC_out1;
+reg  [15:0] bltA_dat, bltB_dat, bltC_dat, bltD_dat;
+reg  [15:0] bltA_datx, bltB_datx, bltC_datx, bltD_datx;
+// Convert an input bit into a color (black or white) to allow use as a mask.
+wire [15:0] bltA_in = bltCtrlx[0] ? (blt_bmpA[bitcnt] ? 16'h7FFF : 16'h0000) : blt_bmpA;
+wire [15:0] bltB_in = bltCtrlx[2] ? (blt_bmpB[bitcnt] ? 16'h7FFF : 16'h0000) : blt_bmpB;
+wire [15:0] bltC_in = bltCtrlx[4] ? (blt_bmpC[bitcnt] ? 16'h7FFF : 16'h0000) : blt_bmpC;
+assign bltA_out = bltA_datx;
+assign bltB_out = bltB_datx;
+assign bltC_out = bltC_datx;
+
+reg [15:0] bltab;
+reg [15:0] bltabc;
+
+// Perform alpha blending between the two colors.
+wire [12:0] blndR = (bltB_out[`R] * bltA_out[7:0]) + (bltC_out[`R])*(8'hFF-bltA_out[7:0]);
+wire [12:0] blndG = (bltB_out[`G] * bltA_out[7:0]) + (bltC_out[`G])*(8'hFF-bltA_out[7:0]);
+wire [12:0] blndB = (bltB_out[`B] * bltA_out[7:0]) + (bltC_out[`B])*(8'hFF-bltA_out[7:0]);
+
+always @*
+	case(blt_opx[3:0])
+	4'h1:	bltab <= bltA_out;
+	4'h2:	bltab <= bltB_out;
+	4'h3:	bltab <= ~bltA_out;
+	4'h4:	bltab <= ~bltB_out;
+	4'h8:	bltab <= bltA_out & bltB_out;
+	4'h9:	bltab <= bltA_out | bltB_out;
+	4'hA:	bltab <= bltA_out ^ bltB_out;
+	4'hB:	bltab <= bltA_out & ~bltB_out;
+	4'hF:	bltab <= `WHITE;
+	default:bltab <= `BLACK;
+	endcase
+always @*
+	case(blt_opx[7:4])
+	4'h1:	bltabc <= bltab;
+	4'h2:	bltabc <= bltC_out;
+	4'h3:	if (bltab[`A]) begin
+				bltabc[`R] <= bltC_out[`R] >> bltab[2:0];
+				bltabc[`G] <= bltC_out[`G] >> bltab[5:3];
+				bltabc[`B] <= bltC_out[`B] >> bltab[8:6];
+			end
+			else
+				bltabc <= bltab;
+	4'h4:	bltabc <= {blndR[12:8],blndG[12:8],blndB[12:8]};
+	4'h7:   bltabc <= (bltC_out & ~bltB_out) | bltA_out; 
+	4'h8:	bltabc <= bltab & bltC_out;
+	4'h9:	bltabc <= bltab | bltC_out;
+	4'hA:	bltabc <= bltab ^ bltC_out;
+	4'hB:	bltabc <= bltab & ~bltC_out;
+	4'hF:	bltabc <= `WHITE;
+	default:bltabc <= `BLACK;
+	endcase
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Component declarations
@@ -512,9 +673,9 @@ VGASyncGen u1
     .vBorderOff_i(vBorderOff)
 );
 
-wire peack;
-edge_det u3 (.rst(rst_i), .clk(m_clk_i), .ce(1'b1), .i(m_ack_i), .pe(peack), .ne(), .ee());
-
+wire peack, neack;
+edge_det u3 (.rst(rst_i), .clk(m_clk_i), .ce(1'b1), .i(m_ack_i), .pe(peack), .ne(neack), .ee());
+/*
 AVIC_VideoFifo uavf1
 (
 	.wrst(rst_fifo),
@@ -527,14 +688,14 @@ AVIC_VideoFifo uavf1
 	.dout(rgb_i),
 	.cnt()
 );
-/*
-N4V128_VideoFifo u2
+*/
+AVIC128_VideoFifo u2
 (
-	.rst(1'b0),
+	.rst(rst_fifo),
 	.wr_clk(m_clk_i),
 	.rd_clk(vclk),
-	.din(m_dat_i),
-	.wr_en(1'b1),//peack && state==READ_ACK),
+	.din((tocnt==8'd1) ? {8{missColor}} : latched_data),
+	.wr_en(neack && (state==READ_NACK)),
 	.rd_en(rd_fifo),
 	.dout(rgb_i),
 	.full(),
@@ -542,7 +703,7 @@ N4V128_VideoFifo u2
 	.wr_rst_busy(),
 	.rd_rst_busy()
 );
-*/
+
 VIC128_AudioFifo u5
 (
   .rst(rst_i),
@@ -611,7 +772,45 @@ wire cs = cs_i & cyc_i & stb_i;
 wire cs_cmdq = cs && adr_i[11:2]==10'b0110_1110_10 && cmdp && we_i;
 
 vtdl #(.WID(`CMDQ_WID), .DEP(`CMDQ_DEP)) cmdq (.clk(clk_i), .ce(cs_cmdq), .a(cmdq_ndx), .d(cmdq_in), .q(cmdq_out));
-edge_det ued1 (.rst(rst_i), .clk(m_clk_i), .ce(1'b1), .i(cmdp), .pe(cmdpe), .ne(), .ee());
+// Here m_clk_i needs to be faster than clk_i.
+edge_det ued1 (.rst(rst_i), .clk(m_clk_i), .ce(1'b1), .i(cs_cmdq), .pe(cmdpe), .ne(), .ee());
+
+// Command queue index signal
+always @(posedge m_clk_i)
+if (rst_i)
+	cmdq_ndx <= 6'd0;
+else begin
+	if (cmdpe) begin
+		if (cmdq_ndx < 6'd63)
+			cmdq_ndx <= cmdq_ndx + 6'd1;
+	end
+	// A lot of other events to process before handling the command queue.
+	// First check for audio DMA requests then check for outstanding
+	// active graphics requests. Finally process the next command from
+	// the queue.
+	if (state==OTHERS) begin
+		if (aud0_fifo_empty & aud_ctrl[0])
+			;
+		else if (aud1_fifo_empty & aud_ctrl[1])
+			;
+		else if (aud2_fifo_empty & aud_ctrl[2])
+			;
+		else if (aud3_fifo_empty & aud_ctrl[3])
+			;
+		else if (|audi_req)
+			;
+		else if (tblit_active)
+ 			;
+ 		else if (ctrl[14])
+			;
+		// Freeze command queue index if incrementing and descrmenting during
+		// the same cycle.
+		else if (|cmdq_ndx & cmdpe)
+			cmdq_ndx <= cmdq_ndx;
+		else if (|cmdq_ndx)
+			cmdq_ndx <= cmdq_ndx - 6'd1;
+	end
+end
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // WISHBONE slave port - register interface.
@@ -631,13 +830,46 @@ VIC128_ShadowRam u4
 );
 
 
+reg [31:0] dat_ix;
+wire peBltCtrl;
+wire peBltAdatx;
+wire peBltBdatx;
+wire peBltCdatx;
+wire peBltDdatx;
+wire peBltDbadrx,peBltDmodx,peBltDcntx;
+wire peBltDstWidx;
+wire cs_bltCtrl = (cs & we_i & (rdy2|rdy3) & ~rdy4) && adr_i[11:2]==10'b0110_1100_11 && |sel_i[1:0];
+wire cs_bltAdatx = (cs & we_i & (rdy2|rdy3) & ~rdy4) && adr_i[11:2]==10'b0110_1000_11 && |sel_i[1:0];
+wire cs_bltBdatx = (cs & we_i & (rdy2|rdy3) & ~rdy4) && adr_i[11:2]==10'b0110_1001_11 && |sel_i[1:0];
+wire cs_bltCdatx = (cs & we_i & (rdy2|rdy3) & ~rdy4) && adr_i[11:2]==10'b0110_1010_11 && |sel_i[1:0];
+wire cs_bltDdatx = (cs & we_i & (rdy2|rdy3) & ~rdy4) && adr_i[11:2]==10'b0110_1011_11 && |sel_i[1:0];
+wire cs_bltDbadrx = (cs & we_i & (rdy2|rdy3) & ~rdy4) && adr_i[11:2]==10'b0110_1011_00 && |sel_i[1:0];
+wire cs_bltDbmodx = (cs & we_i & (rdy2|rdy3) & ~rdy4) && adr_i[11:2]==10'b0110_1011_01 && |sel_i[1:0];
+wire cs_bltDbcntx = (cs & we_i & (rdy2|rdy3) & ~rdy4) && adr_i[11:2]==10'b0110_1011_10 && |sel_i[1:0];
+wire cs_bltDstWidx = (cs & we_i & (rdy2|rdy3) & ~rdy4) && adr_i[11:2]==10'b0110_1100_01 && |sel_i[1:0];
+edge_det ed2(.rst(rst_i), .clk(m_clk_i), .ce(1'b1), .i(cs_bltCtrl), .pe(peBltCtrl), .ne(), .ee());
+edge_det ed3(.rst(rst_i), .clk(m_clk_i), .ce(1'b1), .i(cs_bltAdatx), .pe(peBltAdatx), .ne(), .ee());
+edge_det ed4(.rst(rst_i), .clk(m_clk_i), .ce(1'b1), .i(cs_bltBdatx), .pe(peBltBdatx), .ne(), .ee());
+edge_det ed5(.rst(rst_i), .clk(m_clk_i), .ce(1'b1), .i(cs_bltCdatx), .pe(peBltCdatx), .ne(), .ee());
+edge_det ed6(.rst(rst_i), .clk(m_clk_i), .ce(1'b1), .i(cs_bltDdatx), .pe(peBltDdatx), .ne(), .ee());
+edge_det ed7(.rst(rst_i), .clk(m_clk_i), .ce(1'b1), .i(cs_bltDbadrx), .pe(peBltDbadrx), .ne(), .ee());
+edge_det ed8(.rst(rst_i), .clk(m_clk_i), .ce(1'b1), .i(cs_bltDmodx), .pe(peBltDmodx), .ne(), .ee());
+edge_det ed9(.rst(rst_i), .clk(m_clk_i), .ce(1'b1), .i(cs_bltDcntx), .pe(peBltDcntx), .ne(), .ee());
+edge_det ed10(.rst(rst_i), .clk(m_clk_i), .ce(1'b1), .i(cs_bltDstWidx), .pe(peBltDstWidx), .ne(), .ee());
+
+always @(posedge m_clk_i)
+	dat_ix <= dat_i;
+
 always @(posedge clk_i)
 begin
 	if (cs & we_i & (rdy2|rdy3) & ~rdy4)
 		casez(adr_i[11:2])
 		10'b00????????:	sprite_color[adr_i[9:2]] <= dat_i;
 		10'b010?????00:	spriteAddr[adr_i[8:4]] <= dat_i;
-		10'b010?????01:	spriteMcnt[adr_i[8:4]] <= dat_i[15:0];
+		10'b010?????01:	begin
+						if (|sel_i[1:0]) spriteMcnt[adr_i[8:4]] <= dat_i[15:0];
+						if (sel_i[3]) sprite_pz[adr_i[8:4]] <= dat_i[31:24];
+						end
 		10'b010?????10:	begin
 							if (|sel_i[1:0]) sprite_ph[adr_i[8:4]] <= dat_i[11:0];
 							if (|sel_i[3:2]) sprite_pv[adr_i[8:4]] <= dat_i[27:16];
@@ -682,6 +914,31 @@ begin
 
         10'b0110_0101_00:    aud_ctrl <= dat_i;
 
+		// Blitter: $680 to $6CC
+		10'b0110_1000_00:	bltA_badr <= dat_i;
+		10'b0110_1000_01:	bltA_mod <= dat_i;
+		10'b0110_1000_10:	bltA_cnt <= dat_i;
+		10'b0110_1001_00:	bltB_badr <= dat_i;
+		10'b0110_1001_01:	bltB_mod <= dat_i;
+		10'b0110_1001_10:	bltB_cnt <= dat_i;
+		10'b0110_1010_00:	bltC_badr <= dat_i;
+		10'b0110_1010_01:	bltC_mod <= dat_i;
+		10'b0110_1010_10:	bltC_cnt <= dat_i;
+		10'b0110_1011_00:	bltD_badr <= dat_i;
+		10'b0110_1011_01:	bltD_mod <= dat_i;
+		10'b0110_1011_10:	bltD_cnt <= dat_i;
+		10'b0110_1011_11:	bltD_dat <= dat_i[15:0];
+
+		10'b0110_1100_00:	bltSrcWid <= dat_i;
+		10'b0110_1100_01:	bltDstWid <= dat_i;
+
+		10'b0110_1100_10:	blt_op <= dat_i[15:0];
+		10'b0110_1100_11:	begin
+							if (sel_i[3]) bltPipedepth <= dat_i[29:24];
+							if (|sel_i[1:0]) bltCtrl <= dat_i[15:0];
+							end
+
+
 		10'b0110_1110_00:	cmdq_in <= dat_i;
 		10'b0110_1110_01:	cmdq_in[47:32] <= dat_i[15:0];
 		10'b0110_1111_00:	font_tbl_adr <= dat_i;
@@ -723,20 +980,24 @@ begin
         					if (|sel_i[1:0]) hstart <= dat_i[11:0];
         					if (|sel_i[3:2]) vstart <= dat_i[27:16];
         					end
-        10'b0111_1111_00:   	lowres <= dat_i[1:0];   
+        10'b0111_1110_00:		TargetBase <= dat_i;
+        10'b0111_1110_10:		begin
+        						if (|sel_i[3:2]) TargetWidth <= dat_i[31:16];
+        						if (|sel_i[1:0]) TargetHeight <= dat_i[15:0];
+        						end
+        10'b0111_1111_00:   	begin
+        						if (sel_i[2]) num_strips = dat_i[23:16];
+        						if (sel_i[0]) lowres <= dat_i[1:0];   
+        						end
         10'b0111_1111_01:		sgLock <= dat_i==32'hA1234567;
 		default:	;	// do nothing
 		endcase
     if (aud_test==24'hFFFFFF)
         aud_ctrl[14] <= 1'b0;
-    spriteEnable <= 32'hFFFFFFFF;
-    spriteMcnt[0] <= 16'd640;
-    sprite_ph[0] <= 12'd500;
-    sprite_pv[0] <= 12'd300;
-    sprite_color[1] <= 16'h7FFF;
 end
 always @(posedge clk_i)
 	case(adr_i[11:2])
+	10'b0110_1100_11:	dat_o <= {bltPipedepth,8'h00,bltCtrlx};
 	10'b0110_1110_10:	dat_o <= {26'd0,cmdq_ndx};
 	10'b0111_1011_10:	dat_o <= collision;
 	default:	dat_o <= douta;
@@ -753,7 +1014,47 @@ always @(posedge clk_i)
 //assign ack_o = cs ? rdy4 : pAckStyle;
 always @*
 	ack_o <= rdy4;
-assign cmdp = rdy4 & ~rdy3;			// commmand pulse
+edge_det ued20 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(rdy3), .pe(cmdp), .ne(), .ee());
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+always @*
+case(font_width[4:3])
+2'd0:	for (n = 0; n < 8; n = n + 1)
+			charbmpr[n] = charbmp[7-n];
+2'd1:	for (n = 0; n < 16; n = n + 1)
+			charbmpr[n] = charbmp[15-n];
+2'd2,2'd3:	for (n = 0; n < 32; n = n + 1)
+			charbmpr[n] = charbmp[31-n];
+endcase
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// Register blitter controls across clock domain.
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+always @(posedge m_clk_i)
+	bltA_badrx <= bltA_badr;
+always @(posedge m_clk_i)
+	bltA_modx <= bltA_mod;
+always @(posedge m_clk_i)
+	bltA_cntx <= bltA_cnt;
+always @(posedge m_clk_i)
+	bltB_badrx <= bltB_badr;
+always @(posedge m_clk_i)
+	bltB_modx <= bltB_mod;
+always @(posedge m_clk_i)
+	bltB_cntx <= bltB_cnt;
+always @(posedge m_clk_i)
+	bltC_badrx <= bltC_badr;
+always @(posedge m_clk_i)
+	bltC_modx <= bltC_mod;
+always @(posedge m_clk_i)
+	bltC_cntx <= bltC_cnt;
+always @(posedge m_clk_i)
+	bltSrcWidx <= bltSrcWid;
+always @(posedge m_clk_i)
+	blt_opx <= blt_op;
+always @(posedge m_clk_i)
+	bltPipedepthx <= bltPipedepth;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Audio
@@ -880,31 +1181,57 @@ always @(posedge m_clk_i)
 
 // Generate fifo read signal
 always @(posedge vclk)
-	if (hctr >= hBlankOff && hctr < hBlankOn && !vblank)
-		rd_fifo <= `TRUE;
+	if (hctr >= hBlankOff && hctr < hBlankOn && !vblank) begin
+		case(lowres)
+		2'd0: 	rd_fifo <= `TRUE;
+		2'd1:	rd_fifo <= hctr[0];
+		2'd2:	rd_fifo <= hctr[1:0]==2'b11;
+		2'd3:	rd_fifo <= `TRUE;
+		endcase
+	end
 	else
 		rd_fifo <= `FALSE;
 
 always @(posedge m_clk_i)
-	cyPPL <= gcy * {TargetWidth,1'b0};
+	cyPPL <= (gcy << lowres) * {TargetWidth,1'b0};
 always @(posedge m_clk_i)
-	offset <= cyPPL + {gcx,1'b0};
+	offset <= cyPPL + {(gcx << lowres),1'b0};
 always @(posedge m_clk_i)
 	ma <= TargetBase + offset;
+
 
 // Memory access state machine
 always @(posedge m_clk_i)
 if (rst_i) begin
 	goto(WAIT_RESET);
+	bltCtrlx[13] <= 1'b1;	// Blitter is "done" to begin with.
 	aud_test <= 24'h0;
 end
 else begin
 
+if (peBltCtrl)
+	bltCtrlx <= dat_ix;
+if (peBltAdatx)
+	bltA_datx <= dat_ix;
+if (peBltBdatx)
+	bltB_datx <= dat_ix;
+if (peBltCdatx)
+	bltC_datx <= dat_ix;
+if (peBltDdatx)
+	bltD_datx <= dat_ix;
+if (peBltDbadrx)
+	bltD_badrx <= dat_ix;
+if (peBltDmodx)
+	bltD_modx <= dat_ix;
+if (peBltDcntx)
+	bltD_cntx <= dat_ix;
+if (peBltDstWidx)
+	bltDstWidx <= dat_ix;
+
 p0x <= up0x;
 p0y <= up0y;
-
-if (cmdpe)
-	cmdq_ndx <= cmdq_ndx + 6'd1;
+p1x <= up1x;
+p1y <= up1y;
 
 // Channel reset
 if (aud_ctrl[8])
@@ -931,7 +1258,7 @@ if (audi_req2)
 
 	// Pipeline the vertical calc.
 	vpos <= m_vctr - vstart;
-	vndx <= vpos * TargetWidth;
+	vndx <= (vpos >> lowres) * {TargetWidth,1'b0};
 	charndx <= (charcode << font_width[4:3]) * (font_height + 6'd1);
 
 
@@ -1029,13 +1356,60 @@ OTHERS:
 	else if (tblit_active)
 		goto(tblit_state);
  
- 	else if (ctrl[14])
- 		goto(ngs);
-
-	else if (|cmdq_ndx) begin
-		cmdq_ndx <= cmdq_ndx - 6'd1;
-		goto(ST_CMD);
+	else if (bltCtrlx[14]) begin
+		if ((bltCtrlx[7:0] & 8'hAA)!=8'h00)
+			case(blt_nch)
+			2'd0:	goto(ST_BLTDMA2);
+			2'd1:	goto(ST_BLTDMA4);
+			2'd2:	goto(ST_BLTDMA6);
+			2'd3:	goto(ST_BLTDMA8);
+			endcase
+		else begin // no channels are enabled
+			bltCtrlx[14] <= 1'b0;
+			bltCtrlx[13] <= 1'b1;
+			return();
+		end
 	end
+	else if (bltCtrlx[15]) begin
+		bltCtrlx[15] <= 1'b0;
+		bltCtrlx[14] <= 1'b1;
+		bltCtrlx[13] <= 1'b0;
+		bltA_wadr <= bltA_badrx;
+		bltB_wadr <= bltB_badrx;
+		bltC_wadr <= bltC_badrx;
+		bltD_wadr <= bltD_badrx;
+		bltA_wcnt <= 32'd1;
+		bltB_wcnt <= 32'd1;
+		bltC_wcnt <= 32'd1;
+		bltD_wcnt <= 32'd1;
+		bltA_dcnt <= 32'd1;
+		bltB_dcnt <= 32'd1;
+		bltC_dcnt <= 32'd1;
+		bltA_hcnt <= 32'd1;
+		bltB_hcnt <= 32'd1;
+		bltC_hcnt <= 32'd1;
+		bltD_hcnt <= 32'd1;
+		if (bltCtrlx[1])
+			blt_nch <= 2'b00;
+		else if (bltCtrlx[3])
+			blt_nch <= 2'b01;
+		else if (bltCtrlx[5])
+			blt_nch <= 2'b10;
+		else if (bltCtrlx[7])
+			blt_nch <= 2'b11;
+		else begin
+			bltCtrlx[15] <= 1'b0;
+			bltCtrlx[14] <= 1'b0;
+			bltCtrlx[13] <= 1'b1;
+		end
+		return();
+	end
+
+// 	else if (ctrl[14])
+// 		goto(ngs);
+
+	else if (|cmdq_ndx)
+		goto(ST_CMD);
 	
 	else
 		return();
@@ -1049,17 +1423,21 @@ ST_CMD:
 				tblit_active <= `TRUE;
 				charcode <= cmdq_out[15:0];
 				tblit_state <= ST_READ_FONT_TBL;	// draw character
+				return();
 				end
-		8'd1:	state <= ST_PLOT;
+		8'd1:	begin
+				ctrl[11:8] <= cmdq_out[7:4];	// raster op
+				goto(ST_PLOT);
+				end
 		8'd2:	begin
 				ctrl[11:8] <= cmdq_out[7:4];	// raster op
-				state <= DL_PRECALC;			// draw line
+				goto(DL_PRECALC);				// draw line
 				end
-/*
 		8'd3:	begin
 				ctrl[11:8] <= cmdq_out[7:4];	// raster op
-				state <= ST_FILLRECT;
+				goto(ST_FILLRECT);
 				end
+/*
 		8'd4:	begin
 				wrtx <= 1'b1;
 				hwTexture <= cmdq_out[`TXHANDLE];
@@ -1074,13 +1452,6 @@ ST_CMD:
 				ctrl[11:8] <= cmdq_out[7:4];	// raster op
 				call(ST_IDLE,DT_START);
 				end
-		8'd7:	begin	// Set clip region
-				clipEnable <= cmdq_out[`CLIPEN];
-				clipX0 <= cmdq_out[`X0POS];
-				clipY0 <= cmdq_out[`Y0POS];
-				clipX1 <= cmdq_out[`X1POS];
-				clipY1 <= cmdq_out[`Y1POS];
-				end
 		8'd8:	begin	// Bezier Curve
 				ctrl[11:8] <= cmdq_out[7:4];	// raster op
 				fillCurve <= cmdq_out[1:0];
@@ -1091,9 +1462,7 @@ ST_CMD:
 */
 		8'd12:	begin penColor <= cmdq_out[`CMDDAT]; return(); end
 		8'd13:	begin fillColor <= cmdq_out[`CMDDAT]; return(); end
-/*
-		8'd14:	alpha <= cmdq_out[`CMDDAT];
-*/
+		8'd14:	begin alpha <= cmdq_out[`CMDDAT]; return(); end
 		8'd16:	begin up0x <= cmdq_out[`CMDDAT]; return(); end
 		8'd17:	begin up0y <= cmdq_out[`CMDDAT]; return(); end
 		8'd18:	begin up0z <= cmdq_out[`CMDDAT]; return(); end
@@ -1103,6 +1472,12 @@ ST_CMD:
 		8'd22:	begin up2x <= cmdq_out[`CMDDAT]; return(); end
 		8'd23:	begin up2y <= cmdq_out[`CMDDAT]; return(); end
 		8'd24:	begin up2z <= cmdq_out[`CMDDAT]; return(); end
+		
+		8'd25:	begin clipX0 <= cmdq_out[15:0]; return(); end
+		8'd26:	begin clipY0 <= cmdq_out[15:0]; return(); end
+		8'd27:	begin clipX1 <= cmdq_out[15:0]; return(); end
+		8'd28:	begin clipY1 <= cmdq_out[15:0]; return(); end
+		8'd29:	begin clipEnable <= cmdq_out[0]; return(); end
 /*
 		8'd32:	aa <= cmdq_out[`CMDDAT];
 		8'd33:	ab <= cmdq_out[`CMDDAT];
@@ -1125,8 +1500,10 @@ LINE_RESET:
 	begin
 		lrst <= `FALSE;
 		strip_cnt <= 8'd0;
-		rac <= 4'd0;
-		if (vblank)
+		rac <= 8'd0;
+		if (rst_fifo)
+			goto(LINE_RESET);
+		else if (vblank)
 			call(OTHERS,LINE_RESET);
 		else begin
 			m_cyc_o <= `LOW;
@@ -1145,80 +1522,69 @@ READ_ACC:
 		m_sel_o <= 16'hFFFF;
 		m_adr_o <= rdadr;
 		tocnt <= busto + 8'd2;
-		goto(READ_ACK);
+		call(ST_LATCH_DATA,READ_NACK);
 	end
-READ_ACK:
-	begin
-		tocnt <= tocnt - 8'd1;
-		if (m_ack_i||tocnt==8'd1) begin
-			strip_cnt <= strip_cnt + 8'd1;
-			rac <= rac + 6'd1;
-			m_cyc_o <= `LOW;
-			m_sel_o <= 16'h0000;
-			rdadr <= rdadr + 32'd16;
-			// If we read all the strips we needed to, then start reading sprite
-			// data.
-			if (strip_cnt==num_strips) begin
-				spriteno <= 5'd0;
-				for (n = 0; n < 32; n = n + 1)
-					m_spriteBmp[n] <= 128'd0;
-				goto(SPRITE_ACC);
-			end
-			// Check for too many consecutive memory accesses. Be nice to other
-			// bus masters.
-			else if (rac < rac_limit)
-				goto(READ_ACC);
-			else begin
-				rac <= 4'd0;
-				call(OTHERS,READ_ACC);
-			end
+READ_NACK:
+	if (~m_ack_i) begin
+		strip_cnt <= strip_cnt + 8'd1;
+		rac <= rac + 8'd1;
+		rdadr <= rdadr + 32'd16;
+		// If we read all the strips we needed to, then start reading sprite
+		// data.
+		goto(READ_ACC);
+		if (strip_cnt==num_strips) begin
+			spriteno <= 5'd0;
+			for (n = 0; n < 32; n = n + 1)
+				m_spriteBmp[n] <= 128'd0;
+			goto(SPRITE_ACC);
 		end
+		// Check for too many consecutive memory accesses. Be nice to other
+		// bus masters.
+//			else if (rac < rac_limit)
+//				goto(READ_ACC);
+//			else begin
+//				rac <= 8'd0;
+//				call(OTHERS,READ_ACC);
+//			end
 	end
 SPRITE_ACC:
 	if (lrst)
 		goto(LINE_RESET);
 	// Bypass loading sprite data if it isn't enabled.
-	else if (spriteEnable[spriteno]) begin
+	else if (spriteActive[spriteno]) begin
 		m_cyc_o <= `HIGH;
 		m_sel_o <= 16'hFFFF;
 		m_adr_o <= spriteWaddr[spriteno];
 		tocnt <= busto;
-		goto(SPRITE_ACK);
+		call(ST_LATCH_DATA,SPRITE_NACK);
 	end
 	else begin
 		spriteno <= spriteno + 5'd1;
-		rac <= rac + 4'd1;
-		if (spriteno==5'd31)
+		rac <= rac + 8'd1;
+		if (spriteno == 5'd31)
 			goto(WAIT_RESET);
-		else if (rac <= 4'd2)
+		else if (rac <= 8'd2)
 			goto (SPRITE_ACC);
 		else begin
-			rac <= 4'd0;
+			rac <= 8'd0;
 			call(OTHERS,SPRITE_ACC);
 		end
 	end
-	// If the bus times out the scanline for the sprite is lost.
-SPRITE_ACK:
-	begin
-		tocnt <= tocnt - 8'd1;
-		if (m_ack_i||tocnt==8'd1) begin
-			m_cyc_o <= `LOW;
-			m_sel_o <= 16'h0000;
-			m_adr_o <= 32'hFFFFFFFF;
-			if (tocnt==8'd1)
-				m_spriteBmp[spriteno] <= {8{missColor}};
-			else			
-				m_spriteBmp[spriteno] <= m_dat_i;
-			spriteno <= spriteno + 5'd1;
-			rac <= rac + 4'd1;
-			if (spriteno==5'd31)
-				goto(WAIT_RESET);
-			else if (rac <= 4'd2)
-				goto (SPRITE_ACC);
-			else begin
-				rac <= 4'd0;
-				call(OTHERS,SPRITE_ACC);
-			end
+SPRITE_NACK:
+	if (~m_ack_i) begin
+		if (tocnt==8'd1)
+			m_spriteBmp[spriteno] <= {8{missColor}};
+		else			
+			m_spriteBmp[spriteno] <= latched_data;
+		spriteno <= spriteno + 5'd1;
+		rac <= rac + 8'd1;
+		if (spriteno==5'd31)
+			goto(WAIT_RESET);
+		else if (rac <= 8'd2)
+			goto (SPRITE_ACC);
+		else begin
+			rac <= 8'd0;
+			call(OTHERS,SPRITE_ACC);
 		end
 	end
 WAIT_RESET:
@@ -1234,11 +1600,27 @@ ST_AUD3,
 ST_AUDI:
 	begin
 		tocnt <= tocnt - 8'd1;
-		if (m_ack_i||tocnt==8'd1) begin
+		if (m_ack_i||tocnt==8'd1||!m_cyc_o) begin
 			m_cyc_o <= `LOW;
 			m_we_o <= `LOW;
 			m_sel_o <= 16'h0000;
-			m_adr_o <= 32'hFFFFFFFF;
+			return();
+		end
+	end
+
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+// Generic data latching state.
+// Implemented as a subroutine.
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+ST_LATCH_DATA:
+	begin
+		tocnt <= tocnt - 8'd1;
+		if (m_ack_i||tocnt==8'd1||!m_cyc_o) begin
+			latched_data <= m_dat_i;
+			m_cyc_o <= `LOW;
+			m_we_o <= `LOW;
+			m_sel_o <= 16'h0000;
 			return();
 		end
 	end
@@ -1263,32 +1645,22 @@ ST_READ_FONT_TBL:
 	begin
 		pixhc <= 5'd0;
 		pixvc <= 5'd0;
-		//charcode <= charcode_qo;
-		//fgcolor <= charfg_qo;
-		//penColor <= charbk_qo;
 	    m_cyc_o <= `HIGH;
 	    m_sel_o <= 16'hFFFF;
 		m_adr_o <= {font_tbl_adr[31:4],4'b0} + {font_id,4'b00};
 		tocnt <= busto;
 		tblit_adr <= {font_tbl_adr[31:4],4'b0} + {font_id,4'b00};
-		goto(ST_READ_FONT_TBL_ACK);
+		call(ST_LATCH_DATA,ST_READ_FONT_TBL_NACK);
 	end
-ST_READ_FONT_TBL_ACK:
-	begin
-		tocnt <= tocnt - 8'd1;
-		if (m_ack_i||tocnt==8'd12) begin
-			m_cyc_o <= `LOW;
-			m_we_o <= `LOW;
-			m_sel_o <= 16'h0000;
-			m_adr_o <= 32'hFFFFFFFF;
-			font_fixed <= m_dat_i[127];
-			font_width <= m_dat_i[125:120];
-			font_height <= m_dat_i[117:112];
-			charBmpBase <= m_dat_i[63:32];
-			glyph_tbl_adr <= m_dat_i[31:0];
-			tblit_state <= ST_READ_GLYPH_ENTRY;
-			return();
-		end
+ST_READ_FONT_TBL_NACK:
+	if (~m_ack_i) begin
+		font_fixed <= latched_data[127];
+		font_width <= latched_data[125:120];
+		font_height <= latched_data[117:112];
+		charBmpBase <= latched_data[63:32];
+		glyph_tbl_adr <= latched_data[31:0];
+		tblit_state <= ST_READ_GLYPH_ENTRY;
+		return();
 	end
 ST_READ_GLYPH_ENTRY:
 	begin
@@ -1304,21 +1676,14 @@ ST_READ_GLYPH_ENTRY:
 		    m_sel_o <= 16'hFFFF;
 			m_adr_o <= {glyph_tbl_adr[31:4],4'h0} + {charcode[8:4],4'h0};
 			tocnt <= busto;
-			goto(ST_READ_GLYPH_ENTRY_ACK);
+			call(ST_LATCH_DATA,ST_READ_GLYPH_ENTRY_NACK);
 		end
 	end
-ST_READ_GLYPH_ENTRY_ACK:
-	begin
-		tocnt <= tocnt - 8'd1;
-		if (m_ack_i||tocnt==8'd1) begin
-			m_cyc_o <= `LOW;
-			m_we_o <= `LOW;
-			m_sel_o <= 16'h0000;
-			m_adr_o <= 32'hFFFFFFFF;
-			font_width <= m_dat_i >> {charcode[3:0],3'b0};
-			tblit_state <= ST_READ_CHAR_BITMAP;
-			return();
-		end
+ST_READ_GLYPH_ENTRY_NACK:
+	if (~m_ack_i) begin
+		font_width <= latched_data >> {charcode[3:0],3'b0};
+		tblit_state <= ST_READ_CHAR_BITMAP;
+		return();
 	end
 ST_READ_CHAR_BITMAP:
 	begin
@@ -1326,22 +1691,20 @@ ST_READ_CHAR_BITMAP:
 	    m_sel_o <= 16'hFFFF;
 		m_adr_o <= charBmpBase + (pixvc << font_width[4:3]);
 		tocnt <= busto;
-		goto(ST_READ_CHAR_BITMAP_ACK);
+		call(ST_LATCH_DATA,ST_READ_CHAR_BITMAP_NACK);
 	end
-ST_READ_CHAR_BITMAP_ACK:
-	begin
-		tocnt <= tocnt - 8'd1;
-		if (m_ack_i||tocnt==8'd1) begin
-			m_cyc_o <= `LOW;
-			m_we_o <= `LOW;
-			m_sel_o <= 16'h0000;
-			m_adr_o <= 32'hFFFFFFFF;
-			charbmp <= m_dat_i >> {m_adr_o[3:0],3'b0};
-			tgtaddr <= {8'h00,charBoxY0[31:16]} * {4'h00,TargetWidth,1'b0} + TargetBase + {charBoxX0[31:16],1'b0};
-			tgtindex <= {14'h00,pixvc} * {4'h00,TargetWidth,1'b0};
-			tblit_state <= ST_WRITE_CHAR;
-			return();
-		end
+ST_READ_CHAR_BITMAP_NACK:
+	if (~m_ack_i) begin
+		case(font_width[4:3])
+		2'd0:	charbmp <= (latched_data >> {m_adr_o[3:0],3'b0}) & 32'h0ff;
+		2'd1:	charbmp <= (latched_data >> {m_adr_o[3:1],4'b0}) & 32'h0ffff;
+		2'd2:	charbmp <= latched_data >> {m_adr_o[3:2],5'b0};
+		2'd3:	charbmp <= latched_data >> {m_adr_o[3],6'b0};
+		endcase
+		tgtaddr <= {8'h00,fixToInt(charBoxY0)} * {4'h00,TargetWidth,1'b0} + TargetBase + {fixToInt(charBoxX0),1'b0};
+		tgtindex <= {14'h00,pixvc} * {4'h00,TargetWidth,1'b0};
+		tblit_state <= ST_WRITE_CHAR;
+		return();
 	end
 ST_WRITE_CHAR:
 	begin
@@ -1351,21 +1714,21 @@ ST_WRITE_CHAR:
 ST_WRITE_CHAR2:
 	begin
 		if (~fillColor[`A]) begin
-			if (clipEnable && (fixToInt(charBoxX0) + pixhc < clipX0 || fixToInt(charBoxX0) + pixhc >= clipX1 || fixToInt(charBoxY0) + pixvc < clipY0))
+			if ((clipEnable && (fixToInt(charBoxX0) + pixhc < clipX0) || (fixToInt(charBoxX0) + pixhc >= clipX1) || (fixToInt(charBoxY0) + pixvc < clipY0)))
 				;
-			else if (charBoxX0[31:16] + pixhc >= TargetWidth)
+			else if (fixToInt(charBoxX0) + pixhc >= TargetWidth)
 				;
 			else begin
 				m_cyc_o <= `HIGH;
+				m_we_o <= `HIGH;
 				m_sel_o <= 16'd3 << {tgtadr[3:1],1'b0};
 				m_adr_o <= tgtadr;
-				m_we_o <= 1'b1;
-				m_dat_o <= {8{charbmp[font_width] ? penColor[15:0] : fillColor[15:0]}};
+				m_dat_o <= {8{charbmp[0] ? penColor[15:0] : fillColor[15:0]}};
 				tocnt <= busto;
 			end
 		end
 		else begin
-			if (charbmp[font_width]) begin
+			if (charbmp[0]) begin
 				if (zbuf) begin
 					if (clipEnable && (fixToInt(charBoxX0) + pixhc < clipX0 || fixToInt(charBoxX0) + pixhc >= clipX1 || fixToInt(charBoxY0) + pixvc < clipY0))
 						;
@@ -1374,9 +1737,11 @@ ST_WRITE_CHAR2:
 					else begin
 						m_cyc_o <= `HIGH;
 						m_sel_o <= 16'd3 << {tgtadr[3:1],1'b0};
+/*
 						m_we_o <= `HIGH;
 						m_adr_o <= tgtadr;
 						m_dat_o <= {32{zlayer}};
+*/				
 						tocnt <= busto;
 					end
 				end
@@ -1396,49 +1761,40 @@ ST_WRITE_CHAR2:
 				end
 			end
 		end
-		charbmp <= {charbmp[30:0],1'b0};
+		charbmp <= {1'b0,charbmp[31:1]};
 		pixhc <= pixhc + 5'd1;
 		if (pixhc==font_width) begin
+			tblit_state <= ST_READ_CHAR_BITMAP;
 		    pixhc <= 5'd0;
 		    pixvc <= pixvc + 5'd1;
-		    if (clipEnable && (charBoxY0[31:16] + pixvc + 16'd1 >= clipY1))
+		    if (clipEnable && (fixToInt(charBoxY0) + pixvc + 16'd1 >= clipY1))
 		    	tblit_active <= `FALSE;
-		    else if (charBoxY0[31:16] + pixvc + 16'd1 >= TargetHeight)
+		    else if (fixToInt(charBoxY0) + pixvc + 16'd1 >= TargetHeight)
 		    	tblit_active <= `FALSE;
 		    else if (pixvc==font_height)
 		    	tblit_active <= `FALSE;
 		end
-		goto(ST_WRITE_CHAR2_ACK);
+		else
+			tblit_state <= ST_WRITE_CHAR;
+		call(ST_LATCH_DATA,ST_WRITE_CHAR2_NACK);
 	end
-	// There might not be an active bus cycle if the point was outside the
-	// clipping area. So the check for no active bus cycle is present.
-ST_WRITE_CHAR2_ACK:
-	begin
-		tocnt <= tocnt - 8'd1;
-		if (m_ack_i||tocnt==8'd1||!m_cyc_o) begin
-			m_cyc_o <= `LOW;
-			m_we_o <= `LOW;
-			m_sel_o <= 16'h0000;
-			m_adr_o <= 32'hFFFFFFFF;
-			if (tblit_active)
-				tblit_state <= ST_WRITE_CHAR;
-			else
-				tblit_state <= OTHERS;
-			return();
-		end
+ST_WRITE_CHAR2_NACK:
+	if (~m_ack_i) begin
+		if (!tblit_active)
+			tblit_state <= OTHERS;
+		return();
 	end
 
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 // Pixel plot acceleration states
+// For binary raster operations a back-to-back read then write is performed.
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
-/*
+
 ST_PLOT:
 	begin
 		gcx <= fixToInt(p0x);
 		gcy <= fixToInt(p0y);
-		if (((ctrl[11:8] != 4'h1) &&
-			(ctrl[11:8] != 4'h0) &&
-			(ctrl[11:8] != 4'hF)) || zbuf)
+		if (IsBinaryROP(ctrl[11:8]))
 			call(DELAY3,ST_PLOT_READ);
 		else
 			call(DELAY3,ST_PLOT_WRITE);
@@ -1446,7 +1802,7 @@ ST_PLOT:
 ST_PLOT_READ:
     begin
 	    m_cyc_o <= `HIGH;
-		m_adr_o <= zbuf ? ma[31:1] : ma;
+		m_adr_o <= ma;
 		tocnt <= busto;
 		// The memory address doesn't change from read to write so
 		// there's no need to wait for it to update, it's already
@@ -1456,22 +1812,10 @@ ST_PLOT_READ:
 ST_PLOT_WRITE:
 	begin
 		tocnt <= busto;
-		set_pixel(penColor,alpha,ctrl[11:8]);
+		set_pixel(penColor[15:0],alpha,ctrl[11:8]);
 		goto(ST_LATCH_DATA);
 	end
-ST_LATCH_DATA:
-	begin
-		tocnt <= tocnt - 8'd1;
-		if (m_ack_i||tocnt==8'd1) begin
-			latched_data <= m_dat_i;
-			m_cyc_o <= `LOW;
-			m_we_o <= `LOW;
-			m_sel_o <= 16'h0000;
-			m_adr_o <= 32'hFFFFFFFF;
-			return();
-		end
-	end
-*/
+
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 // Line draw states
 // Line drawing may also be done by the blitter.
@@ -1521,7 +1865,6 @@ DL_TEST:
 		m_cyc_o <= `LOW;
 		m_we_o <= `LOW;
 		m_sel_o <= 16'h0000;
-		m_adr_o <= 32'hFFFFFFFF;
 		tocnt <= busto;
 		err <= err - ((e2 > -dy) ? dy : 16'd0) + ((e2 < dx) ? dx : 16'd0);
 		if (e2 > -dy)
@@ -1535,14 +1878,208 @@ DL_RET:
 		m_cyc_o <= `LOW;
 		m_we_o <= `LOW;
 		m_sel_o <= 16'h0000;
-		m_adr_o <= 32'hFFFFFFFF;
 		pause(OTHERS);
 	end
 */
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+// Blitter DMA
+// Blitter has four DMA channels, three source channels and one destination
+// channel.
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+	// Blit channel A
+ST_BLTDMA2:
+	begin
+	    m_cyc_o <= `HIGH;
+		m_adr_o <= bltA_wadr;
+		bltinc <= bltCtrl[8] ? 32'hFFFFFFFE : 32'd2;
+		call(ST_LATCH_DATA,ST_BLTDMA2_NACK);
+    end
+ST_BLTDMA2_NACK:
+	if (~m_ack_i) begin
+		bltA_datx <= latched_data >> {bltA_wadr[3:1],4'h0};
+		bltA_wadr <= bltA_wadr + bltinc;
+	    bltA_hcnt <= bltA_hcnt + 32'd1;
+	    if (bltA_hcnt==bltSrcWid) begin
+		    bltA_hcnt <= 32'd1;
+		    bltA_wadr <= bltA_wadr + bltA_modx + bltinc;
+		end
+        bltA_wcnt <= bltA_wcnt + 32'd1;
+        bltA_dcnt <= bltA_dcnt + 32'd1;
+        if (bltA_wcnt==bltA_cntx) begin
+            bltA_wadr <= bltA_badrx;
+            bltA_wcnt <= 32'd1;
+            bltA_hcnt <= 32'd1;
+        end
+		if (bltA_dcnt==bltD_cntx)
+			bltCtrlx[1] <= 1'b0;
+		if (bltCtrlx[3])
+			blt_nch <= 2'b01;
+		else if (bltCtrlx[5])
+			blt_nch <= 2'b10;
+		else if (bltCtrlx[7])
+			blt_nch <= 2'b11;
+		else
+			blt_nch <= 2'b00;
+		return();
+	end
+
+	// Blit channel B
+ST_BLTDMA4:
+	begin
+		m_cyc_o <= `HIGH;
+		m_sel_o <= 16'h0003 << {bltB_wadr[3:1],1'b0};
+		m_adr_o <= bltB_wadr;
+		bltinc <= bltCtrlx[9] ? 32'hFFFFFFFE : 32'd2;
+		call(ST_LATCH_DATA,ST_BLTDMA4_NACK);
+	end
+ST_BLTDMA4_NACK:
+	if (~m_ack_i) begin
+		bltB_datx <= latched_data >> {bltB_wadr[3:1],4'h0};
+        bltB_wadr <= bltB_wadr + bltinc;
+        bltB_hcnt <= bltB_hcnt + 32'd1;
+        if (bltB_hcnt==bltSrcWidx) begin
+            bltB_hcnt <= 32'd1;
+            bltB_wadr <= bltB_wadr + bltB_modx + bltinc;
+        end
+        bltB_wcnt <= bltB_wcnt + 32'd1;
+        bltB_dcnt <= bltB_dcnt + 32'd1;
+        if (bltB_wcnt==bltB_cntx) begin
+            bltB_wadr <= bltB_badrx;
+            bltB_wcnt <= 32'd1;
+            bltB_hcnt <= 32'd1;
+        end
+		if (bltB_dcnt==bltD_cntx)
+			bltCtrlx[3] <= 1'b0;
+		if (bltCtrlx[5])
+			blt_nch <= 2'b10;
+		else if (bltCtrlx[7])
+			blt_nch <= 2'b11;
+		else if (bltCtrlx[1])
+			blt_nch <= 2'b00;
+		else
+			blt_nch <= 2'b01;
+		return();
+	end
+
+	// Blit channel C
+ST_BLTDMA6:
+	begin
+		m_cyc_o <= `HIGH;
+		m_sel_o <= 16'h3 << {bltC_wadr[3:1],1'b0};
+		m_adr_o <= bltC_wadr;
+		bltinc <= bltCtrlx[10] ? 32'hFFFFFFFE : 32'd2;
+		call(ST_LATCH_DATA,ST_BLTDMA6_NACK);		
+	end
+ST_BLTDMA6_NACK:
+	if (~m_ack_i) begin
+		bltC_datx <= latched_data >> {bltC_wadr[3:1],4'h0};
+        bltC_wadr <= bltC_wadr + bltinc;
+        bltC_hcnt <= bltC_hcnt + 32'd1;
+        if (bltC_hcnt==bltSrcWidx) begin
+            bltC_hcnt <= 32'd1;
+            bltC_wadr <= bltC_wadr + bltC_modx + bltinc;
+        end
+        bltC_wcnt <= bltC_wcnt + 32'd1;
+        bltC_dcnt <= bltC_dcnt + 32'd1;
+        if (bltC_wcnt==bltC_cntx) begin
+            bltC_wadr <= bltC_badrx;
+            bltC_wcnt <= 32'd1;
+            bltC_hcnt <= 32'd1;
+        end
+		if (bltC_dcnt==bltD_cntx)
+			bltCtrlx[5] <= 1'b0;
+		if (bltCtrlx[7])
+			blt_nch <= 2'b11;
+		else if (bltCtrlx[1])
+			blt_nch <= 2'b00;
+		else if (bltCtrlx[3])
+			blt_nch <= 2'b01;
+		else
+			blt_nch <= 2'b10;
+		return();
+	end
+
+	// Blit channel D
+ST_BLTDMA8:
+	begin
+		m_cyc_o <= `HIGH;
+		m_we_o <= `HIGH;
+		m_sel_o <= 16'h0003 << {bltD_wadr[3:1],1'b0};
+		m_adr_o <= bltD_wadr;
+		// If there's no source then a fill operation muct be taking place.
+		if (bltCtrlx[1]|bltCtrlx[3]|bltCtrlx[5])
+			m_dat_o <= {8{bltabc}};
+		else
+			m_dat_o <= {8{16'h7c00}};// {8{bltD_datx}};	// fill color
+		bltinc <= bltCtrlx[11] ? 32'hFFFFFFFE : 32'd2;
+		call(ST_LATCH_DATA,ST_BLTDMA8_NACK);
+	end
+ST_BLTDMA8_NACK:
+	if (~m_ack_i) begin
+		bltD_wadr <= bltD_wadr + bltinc;
+		bltD_wcnt <= bltD_wcnt + 32'd1;
+		bltD_hcnt <= bltD_hcnt + 32'd1;
+		if (bltD_hcnt==bltDstWidx) begin
+			bltD_hcnt <= 32'd1;
+			bltD_wadr <= bltD_wadr + bltD_modx + bltinc;
+		end
+		if (bltD_wcnt==bltD_cntx) begin
+			bltCtrlx[14] <= 1'b0;
+			bltCtrlx[13] <= 1'b1;
+			bltCtrlx[7] <= 1'b0;
+		end
+		if (bltCtrlx[1])
+			blt_nch <= 2'b00;
+		else if (bltCtrlx[3])
+			blt_nch <= 2'b01;
+		else if (bltCtrlx[5])
+			blt_nch <= 2'b10;
+		else
+			blt_nch <= 2'b11;
+		return();
+	end
+
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+// Draw a filled rectangle, uses the blitter.
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+ST_FILLRECT:
+	begin
+		// Switching the points around will have the side effect
+		// of switching the transformed points around as well.
+		if (p1y < p0y) up0y <= up1y;
+		if (p1x < p0x) up0x <= up1x;
+		dx <= fixToInt(absx1mx0) + 16'd1;	// Order of points doesn't matter here.
+		dy <= fixToInt(absy1my0) + 16'd1;
+		// Wait for previous blit to finish
+		// then delay 1 cycle for point switching
+		if (bltCtrlx[13]||!(bltCtrlx[15]||bltCtrlx[14]))
+			call(DELAY1,ST_FILLRECT_CLIP);
+	end
+ST_FILLRECT_CLIP:
+	begin
+		if (fixToInt(p0x) + dx > TargetWidth)
+			dx <= TargetWidth - fixToInt(p0x);
+		if (fixToInt(p0y) + dy > TargetHeight)
+			dy <= TargetHeight - fixToInt(p0y);
+		goto(ST_FILLRECT2);
+	end
+ST_FILLRECT2:
+	begin
+		bltD_badrx <= {8'h00,fixToInt(p0y)} * {TargetWidth,1'b0} + TargetBase + {fixToInt(p0x),1'b0};
+		bltD_modx <= TargetWidth - dx;
+		bltD_cntx <= dx * dy;
+		bltDstWidx <= dx;
+		bltD_datx <= fillColor[15:0];
+		bltCtrlx[15:0] <= 16'h8080;
+		return();
+	end
+
 default:    goto(WAIT_RESET);
 endcase
     // Override any other state assignments
-    if (m_hctr==12'd5 || m_hctr==12'd6 || m_hctr==12'd7 || m_hctr==12'd8)
+    if (m_hctr<=12'd16)
     	lrst <= `TRUE;
 
 	case(sprite_on)
@@ -1606,7 +2143,7 @@ always @(posedge vclk)
 
 always @(posedge vclk)
     for (n = 0; n < NSPR; n = n + 1)
-		spriteActive[n] = (spriteWcnt[n] < spriteMcnt[n]) && spriteEnable[n];
+		spriteActive[n] = (spriteWcnt[n] <= spriteMcnt[n]) && spriteEnable[n];
 
 always @(posedge vclk)
     for (n = 0; n < NSPR; n = n + 1)
@@ -1668,10 +2205,14 @@ always @(posedge vclk)
 begin
 	if (hctr==12'h5)
 		for (n = 0; n < NSPR; n = n + 1)
-			spriteBmp[n] <= {8{16'h5431}};//m_spriteBmp[n];
+			spriteBmp[n] <= m_spriteBmp[n];
     for (n = 0; n < NSPR; n = n + 1)
         if (spriteShift[n])
-            spriteBmp[n] <= {spriteBmp[n][123:0],4'h0};
+        	case(lowres)
+        	2'd0,2'd3:	spriteBmp[n] <= {spriteBmp[n][123:0],4'h0};
+        	2'd1:	if (hctr[0]) spriteBmp[n] <= {spriteBmp[n][123:0],4'h0};
+        	2'd2:	if (&hctr[1:0]) spriteBmp[n] <= {spriteBmp[n][123:0],4'h0};
+    		endcase
 end
 
 always @(posedge vclk)
@@ -1828,13 +2369,15 @@ begin
 	m_sel_o <= 16'h0000;
 	if (fnClip(gcx,gcy))
 		;
+/*
 	else if (zbuf) begin
 		m_cyc_o <= `HIGH;
 		m_we_o <= `HIGH;
 		m_sel_o <= 16'hFFFF;
 		m_adr_o <= ma[31:1];
-		m_dat_o <= latched_data & ~{4'b1111 << {ma[4:0],2'b0}} | (zlayer << {ma[4:0],2'b0});
+		m_dat_o <= latched_data & ~{128'b1111 << {ma[4:0],2'b0}} | ({124'b0,zlayer} << {ma[4:0],2'b0});
 	end
+*/
 	else begin
 		// The same operation is performed on all pixels, however the
 		// data mask is set so that only the desired pixel is updated
@@ -1899,60 +2442,3 @@ endtask
 
 endmodule
 
-module AVIC_VideoFifo(wrst, wclk, wr, di, rrst, rclk, rd, dout, cnt);
-input wrst;
-input wclk;
-input wr;
-input [127:0] di;
-input rrst;
-input rclk;
-input rd;
-output reg [15:0] dout;
-output [7:0] cnt;
-reg [7:0] cnt;
-
-reg [7:0] wr_ptr;
-reg [10:0] rd_ptr,rrd_ptr;
-reg [127:0] mem [0:255];
-
-wire [7:0] wr_ptr_p1 = wr_ptr + 8'd1;
-wire [10:0] rd_ptr_p1 = rd_ptr + 11'd1;
-reg [10:0] rd_ptrs;
-
-always @(posedge wclk)
-	if (wrst)
-		wr_ptr <= 8'd0;
-	else if (wr) begin
-		mem[wr_ptr] <= di;
-		wr_ptr <= wr_ptr_p1;
-	end
-always @(posedge wclk)		// synchronize read pointer to wclk domain
-	rd_ptrs <= rd_ptr;
-
-always @(posedge rclk)
-	if (rrst)
-		rd_ptr <= 11'd0;
-	else if (rd)
-		rd_ptr <= rd_ptr_p1;
-always @(posedge rclk)
-	rrd_ptr <= rd_ptr;
-
-always @(posedge rclk)
-case(rrd_ptr[2:0])
-3'd0:	dout <= mem[rrd_ptr[10:3]][15:0];
-3'd1:	dout <= mem[rrd_ptr[10:3]][31:16];
-3'd2:	dout <= mem[rrd_ptr[10:3]][47:32];
-3'd3:	dout <= mem[rrd_ptr[10:3]][63:48];
-3'd4:	dout <= mem[rrd_ptr[10:3]][79:64];
-3'd5:	dout <= mem[rrd_ptr[10:3]][95:80];
-3'd6:	dout <= mem[rrd_ptr[10:3]][111:96];
-3'd7:	dout <= mem[rrd_ptr[10:3]][127:112];
-endcase
-
-always @(wr_ptr or rd_ptrs)
-	if (rd_ptrs > wr_ptr)
-		cnt <= wr_ptr + (9'd256 - rd_ptrs[10:3]);
-	else
-		cnt <= wr_ptr - rd_ptrs;
-
-endmodule

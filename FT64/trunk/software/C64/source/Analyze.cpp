@@ -159,40 +159,31 @@ CSE *InsertNodeIntoCSEList(ENODE *node, int duse)
 			throw new C64PException(ERR_CSETABLE,0x01);
 		csp = &CSETable[csendx];
 		csendx++;
-        csp->uses = loop_active;
-        csp->duses = (duse != 0) * loop_active;
+		if (loop_active > 1) {
+			csp->uses = (loop_active - 1) * 5;
+			csp->duses = (duse != 0) * ((loop_active-1) * 5);
+		}
+		else {
+			csp->uses = 1;
+			csp->duses = (duse != 0);
+		}
         csp->exp = DuplicateEnode(node);
         csp->voidf = 0;
 		csp->reg = 0;
-        return csp;
+        return (csp);
     }
-    (csp->uses) += loop_active;
-    if( duse )
-            (csp->duses) += loop_active;
-    return csp;
-}
-
-// Immediate constants have low priority.
-// Even though their use might be high, they are given a low priority.
-
-void DumpCSETable()
-{
-	int nn;
-	CSE *csp;
-
-	dfs.printf("<CSETable>\n");
-	dfs.printf("N Uses DUses Void Reg\n");
-	for (nn = 0; nn < csendx; nn++) {
-		csp = &CSETable[nn];
-		dfs.printf("%d: %d  ",nn,csp->uses);
-		dfs.printf("%d   ",csp->duses);
-		dfs.printf("%d   ",csp->voidf);
-		dfs.printf("%d   ",csp->reg);
-		dfs.printf("\n");
+	if (loop_active < 2) {
+	    (csp->uses)++;
+		if( duse )
+            (csp->duses)++;
 	}
-	dfs.printf("</CSETable>\n");
+	else {
+		(csp->uses) += ((loop_active-1) * 5);
+		 if( duse )
+            (csp->duses) += ((loop_active-1) * 5);
+	}
+    return (csp);
 }
-
 
 // voidauto2 searches the entire CSE list for auto dereferenced node which
 // point to the passed node. There might be more than one LValue that matches.
@@ -501,31 +492,6 @@ static void scan_compound(Statement *stmt)
 		sp = sp->GetNextPtr();
 	}
     scan(stmt->s1);
-}
-
-//
-// Returns the desirability of optimization for a subexpression.
-//
-// Immediate constants have low priority because small constants
-// can be directly encoded in the instruction. There's no value to
-// placing them in registers.
-
-int OptimizationDesireability(CSE *csp)
-{
-	if( csp->voidf || (csp->exp->nodetype == en_icon &&
-                       csp->exp->i < 32768 && csp->exp->i >= -32768))
-        return 0;
- /* added this line to disable register optimization of global variables.
-    The compiler would assign a register to a global variable ignoring
-    the fact that the value might change due to a subroutine call.
-  */
-	if (csp->exp->nodetype == en_nacon)
-		return 0;
-	if (csp->exp->isVolatile)
-		return 0;
-    if( IsLValue(csp->exp) )
-	    return 2 * csp->uses;
-    return csp->uses;
 }
 
 /*

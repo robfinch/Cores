@@ -235,3 +235,32 @@ void ListCompound(Statement *stmt)
 		}
 	}
 }
+
+// Immediate constants have low priority.
+// Even though their use might be high, they are given a low priority.
+
+void DumpCSETable()
+{
+	int nn;
+	CSE *csp;
+
+	dfs.printf("<CSETable>For %s\n",(char *)currentFn->name->c_str());
+	dfs.printf(
+"*The expression must be used three or more times before it will be allocated\n"
+"to a register.\n");
+	dfs.printf("N OD Uses DUses Void Reg Sym\n");
+	for (nn = 0; nn < csendx; nn++) {
+		csp = &CSETable[nn];
+		dfs.printf("%d: ", nn);
+		dfs.printf("%d   ",csp->OptimizationDesireability());
+		dfs.printf("%d   ",csp->uses);
+		dfs.printf("%d   ",csp->duses);
+		dfs.printf("%d   ",csp->voidf);
+		dfs.printf("%d   ",csp->reg);
+		if (csp->exp && csp->exp->sym)
+			dfs.printf("%s   ",(char *)csp->exp->sym->name->c_str());
+		dfs.printf("\n");
+	}
+	dfs.printf("</CSETable>\n");
+}
+

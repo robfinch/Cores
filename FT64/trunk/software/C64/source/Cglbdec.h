@@ -191,7 +191,6 @@ extern short int csendx;
 extern CSE CSETable[500];
 extern int equalnode(ENODE *node1, ENODE *node2);
 extern int bsort(CSE **list);
-extern int OptimizationDesireability(CSE *csp);
 extern int opt1(Statement *stmt);
 extern CSE *olist;         /* list of optimizable expressions */
 // CMain.c

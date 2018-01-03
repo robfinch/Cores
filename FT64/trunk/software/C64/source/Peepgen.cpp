@@ -978,14 +978,17 @@ static void PeepoptHint(struct ocode *ip)
 			optimized++;
 			return;
 		}
+		
 		if (ip->back && ip->back->opcode != op_mov) {
 			MarkRemove(ip);
 			optimized++;
 			return;
 		}
+		
 		if (equal_address(ip->fwd->oper2, ip->back->oper1)) {
 			ip->back->oper1 = ip->fwd->oper1;
 			MarkRemove(ip);
+			MarkRemove(ip->fwd);
 			optimized++;
 		}
 		else {

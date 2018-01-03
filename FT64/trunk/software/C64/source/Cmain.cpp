@@ -92,10 +92,10 @@ int main(int argc, char **argv)
 				closefiles();
 			}
     }
-    dfs.printf("Next on command line (%d).\n", argc);
+    dfs.printf("<CmdNext>Next on command line (%d).</CmdNext>\n", argc);
   }
 	//getchar();
-	dfs.printf("Exiting\n");
+	dfs.printf("<Exit></Exit>\n");
 	dfs.close();
  	exit(0);
 	return (0);
@@ -264,13 +264,13 @@ void makename(char *s, char *e)
 void summary()
 {
 //    if (verbose > 0)
-  dfs.printf("Enter summary\n");
+  dfs.printf("<summary>\n");
     	printf("\n -- %d errors found.",total_errors);
     lfs.write("\f\n *** global scope typedef symbol table ***\n\n");
     ListTable(&gsyms[0],0);
     lfs.write("\n *** structures and unions ***\n\n");
     ListTable(&tagtable,0);
-  dfs.printf("Leave summary\n");
+  dfs.printf("</summary>\n");
 //	fflush(list);
 }
 

@@ -236,6 +236,7 @@ public:
 	TypeArray *GetParameterTypes();
 	TypeArray *GetProtoTypes();
 	void PrintParameterTypes();
+	bool HasRegisterParameters();
 	static SYM *Copy(SYM *src);
 	bool ProtoTypesMatch(SYM *sym);
 	bool ProtoTypesMatch(TypeArray *typearray);
@@ -378,6 +379,8 @@ public:
     short int       voidf;          /* cannot optimize flag */
     short int       reg;            /* AllocateRegisterVarsd register */
     unsigned int    isfp : 1;
+public:
+	int OptimizationDesireability();
 };
 
 class Statement {

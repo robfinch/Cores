@@ -816,4 +816,17 @@ void SYM::AddDerived(SYM *sp)
   dfs.puts("</AddDerived>"); 
 }
 
+bool SYM::HasRegisterParameters()
+{
+	int nn;
 
+	TypeArray *ta = GetParameterTypes();
+	for (nn = 0; nn < ta->length; nn++) {
+		if (ta->preg[nn] & 0x8000) {
+			delete[] ta;
+			return (true);
+		}
+	}
+	delete[] ta;
+	return (false);
+}
