@@ -183,7 +183,7 @@ void Statement::GenMixedSource()
     if (mixedSource) {
         rtrim(lptr);
         if (strcmp(lptr,last_rem)!=0) {
-          	GenerateMonadic(op_rem,0,make_string(lptr));
+          	GenerateMonadicNT(op_rem,0,make_string(lptr));
           	strncpy_s(last_rem,131,lptr,130);
           	last_rem[131] = '\0';
         }
@@ -205,7 +205,7 @@ void Statement::GenerateWhile()
 		initstack();
 		GenerateFalseJump(exp,breaklab,2);
 		s1->Generate();
-		GenerateMonadic(op_bra,0,make_clabel(contlab));
+		GenerateMonadicNT(op_bra,0,make_clabel(contlab));
 		GenerateLabel(breaklab);
 		breaklab = lab2;
     }
@@ -232,7 +232,7 @@ void Statement::GenerateUntil()
 		initstack();
 		GenerateTrueJump(exp,breaklab,2);
 		s1->Generate();
-		GenerateMonadic(op_bra,0,make_clabel(contlab));
+		GenerateMonadicNT(op_bra,0,make_clabel(contlab));
 		GenerateLabel(breaklab);
 		breaklab = lab2;
 	}
@@ -271,7 +271,7 @@ void Statement::GenerateFor()
     initstack();
     if( incrExpr != NULL )
             ReleaseTempRegister(GenerateExpression(incrExpr,F_ALL | F_NOVALUE,GetNaturalSize(incrExpr)));
-    GenerateMonadic(op_bra,0,make_clabel(loop_label));
+    GenerateMonadicNT(op_bra,0,make_clabel(loop_label));
     breaklab = old_break;
     contlab = old_cont;
     GenerateLabel(exit_label);
@@ -292,7 +292,7 @@ void Statement::GenerateForever()
         breaklab = exit_label;
         s1->Generate();
 	}
-    GenerateMonadic(op_bra,0,make_clabel(loop_label));
+    GenerateMonadicNT(op_bra,0,make_clabel(loop_label));
     breaklab = old_break;
     contlab = old_cont;
     GenerateLabel(exit_label);
@@ -310,9 +310,9 @@ void Statement::GenerateIf()
     s1->Generate();
     if( s2 != 0 )             /* else part exists */
     {
-        GenerateDiadic(op_bra,0,make_clabel(lab2),0);
+        GenerateDiadicNT(op_bra,0,make_clabel(lab2),0);
         if (mixedSource)
-          	GenerateMonadic(op_rem,0,make_string("; else"));
+          	GenerateMonadicNT(op_rem,0,make_string("; else"));
         GenerateLabel(lab1);
         s2->Generate();
         GenerateLabel(lab2);
@@ -410,16 +410,16 @@ void Statement::GenerateLinearSwitch()
 			bf = (int64_t *)stmt->casevals;
 			for (nn = (int)bf[0]; nn >= 1; nn--) {
 				if ((jj = pwrof2(bf[nn])) != -1) {
-					GenerateTriadic(op_bbs,0,ap,make_immed(jj),make_clabel(curlab));
+					GenerateTriadicNT(op_bbs,0,ap,make_immed(jj),make_clabel(curlab));
 				}
 				else if (bf[nn] < -256 || bf[nn] > 255) {
 					ap1 = GetTempRegister();
 					GenerateTriadic(op_cmp,0,ap1,ap,make_immed(bf[nn]));
 					ReleaseTempRegister(ap1);
-					GenerateTriadic(op_beq,0,ap1,makereg(0),make_clabel(curlab));
+					GenerateTriadicNT(op_beq,0,ap1,makereg(0),make_clabel(curlab));
 				}
 				else {
-					GenerateTriadic(op_beqi,0,ap,make_immed(bf[nn]),make_clabel(curlab));
+					GenerateTriadicNT(op_beqi,0,ap,make_immed(bf[nn]),make_clabel(curlab));
 				}
 			}
 	        //GenerateDiadic(op_dw,0,make_label(curlab), make_direct(stmt->label));
@@ -429,9 +429,9 @@ void Statement::GenerateLinearSwitch()
             curlab = nextlabel++;
     }
     if( defcase == NULL )
-        GenerateMonadic(op_bra,0,make_clabel(breaklab));
+        GenerateMonadicNT(op_bra,0,make_clabel(breaklab));
     else
-		GenerateMonadic(op_bra,0,make_clabel((int)defcase->label));
+		GenerateMonadicNT(op_bra,0,make_clabel((int)defcase->label));
     ReleaseTempRegister(ap);
 }
 
@@ -552,9 +552,9 @@ j1:	;
 		ap2 = GetTempRegister();
 		if (!nkd) {
 			GenerateDiadic(op_ldi,0,ap1,make_immed(minv));
-			GenerateTriadic(op_blt,0,ap,ap1,make_clabel(defcase ? (int)defcase->label : breaklab));
+			GenerateTriadicNT(op_blt,0,ap,ap1,make_clabel(defcase ? (int)defcase->label : breaklab));
 			GenerateDiadic(op_ldi,0,ap2,make_immed(maxv+1));
-			GenerateTriadic(op_bge,0,ap,ap2,make_clabel(defcase ? (int)defcase->label : breaklab));
+			GenerateTriadicNT(op_bge,0,ap,ap2,make_clabel(defcase ? (int)defcase->label : breaklab));
 			//Generate4adic(op_chk,0,ap,ap1,ap2,make_clabel(defcase ? (int)defcase->label : breaklab));
 		}
 		if (minv != 0)
@@ -599,7 +599,7 @@ void Statement::GenerateTry()
 	a->mode = am_immed;
 	GenerateDiadic(op_ldi,0,makereg(regXLR),a);
 	s1->Generate();
-	GenerateMonadic(op_bra,0,make_clabel(lab1));
+	GenerateMonadicNT(op_bra,0,make_clabel(lab1));
 	GenerateLabel(throwlab);
 	// Generate catch statements
 	// r1 holds the value to be assigned to the catch variable
@@ -615,7 +615,7 @@ void Statement::GenerateTry()
 			ap2 = GetTempRegister();
 			GenerateDiadic(op_ldi,0,ap2,make_immed(stmt->num));
 			ReleaseTempReg(ap2);
-			GenerateTriadic(op_bne,0,makereg(2),ap2,make_clabel(nextlabel));
+			GenerateTriadicNT(op_bne,0,makereg(2),ap2,make_clabel(nextlabel));
 		}
 		// move the throw expression result in 'r1' into the catch variable.
 		node = stmt->exp;
@@ -653,7 +653,7 @@ void Statement::GenerateThrow()
 		ReleaseTempRegister(ap);
 		GenerateDiadic(op_ldi,0,makereg(2),make_immed(num));
 	}
-	GenerateMonadic(op_bra,0,make_clabel(throwlab));
+	GenerateMonadicNT(op_bra,0,make_clabel(throwlab));
 }
 
 void Statement::GenerateCheck()
@@ -777,7 +777,7 @@ void Statement::Generate()
                 GenerateLabel((int64_t)stmt->label);
                 break;
         case st_goto:
-                GenerateMonadic(isThor?op_br:op_bra,0,make_clabel((int64_t)stmt->label));
+                GenerateMonadicNT(op_bra,0,make_clabel((int64_t)stmt->label));
                 break;
 		//case st_critical:
 //                    GenerateCritical(stmt);
@@ -830,7 +830,7 @@ void Statement::Generate()
         case st_break:
 				if (breaklab==-1)
 					error(ERR_NOT_IN_LOOP);
-                GenerateDiadic(op_bra,0,make_clabel(breaklab),0);
+                GenerateDiadicNT(op_bra,0,make_clabel(breaklab),0);
                 break;
         case st_switch:
                 stmt->GenerateSwitch();
@@ -846,12 +846,12 @@ void Statement::Generate()
 
 void Statement::GenerateStop()
 {
-	GenerateMonadic(op_stop,0,make_immed(num));
+	GenerateMonadicNT(op_stop,0,make_immed(num));
 }
 
 void Statement::GenerateAsm()
 {
-	GenerateMonadic(op_asm,0,make_string((char *)label));
+	GenerateMonadicNT(op_asm,0,make_string((char *)label));
 }
 
 void Statement::GenerateFirstcall()
@@ -866,10 +866,10 @@ void Statement::GenerateFirstcall()
     {
         breaklab = nextlabel++;
 		ap1 = GetTempRegister();
-		GenerateDiadic(op_ldt,0,ap1,make_string(fcname));
-       	GenerateTriadic(op_beq,0,ap1,makereg(0),make_clabel(breaklab));
+		GenerateDiadic(op_lh,0,ap1,make_string(fcname));
+       	GenerateTriadicNT(op_beq,0,ap1,makereg(0),make_clabel(breaklab));
 		ReleaseTempRegister(ap1);
-		GenerateDiadic(op_stt,0,makereg(0),make_string(fcname));
+		GenerateDiadicNT(op_sh,0,makereg(0),make_string(fcname));
 		s1->Generate();
         GenerateLabel(breaklab);
         breaklab = lab2;

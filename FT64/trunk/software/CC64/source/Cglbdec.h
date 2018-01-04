@@ -159,7 +159,7 @@ extern int regmask;
 extern int bregmask;
 extern Statement *currentStmt;
 extern bool dogen;
-extern struct ocode *peep_tail;
+extern OCODE *peep_tail;
 
 extern TYP stdint;
 extern TYP stduint;
@@ -220,7 +220,7 @@ extern void SkipSpaces();
 // Stmt.c
 extern Statement *ParseCompoundStatement();
 
-extern void GenerateDiadic(int op, int len, struct amode *ap1,struct amode *ap2);
+extern void GenerateDiadic(int op, int len, AMODE *ap1,AMODE *ap2);
 // Symbol.c
 extern SYM *gsearch(std::string na);
 extern SYM *search(std::string na,TABLE *thead);
@@ -304,20 +304,24 @@ extern void cseg();
 extern void dseg();
 extern void tseg();
 //extern void put_code(int op, int len,AMODE *aps, AMODE *apd, AMODE *);
-extern void put_code(struct ocode *);
+extern void put_code(OCODE *);
 extern char *put_label(int lab, char*, char*, char);
 extern char *opstr(int op);
 // Peepgen.c
-extern void MarkRemove(struct ocode *ip);
-extern int PeepCount(struct ocode *);
+extern void MarkRemove(OCODE *ip);
+extern int PeepCount(OCODE *);
 extern void flush_peep();
 extern int equal_address(AMODE *ap1, AMODE *ap2);
 extern void GenerateLabel(int labno);
 extern void GenerateZeradic(int op);
 extern void GenerateMonadic(int op, int len, AMODE *ap1);
+extern void GenerateMonadicNT(int op, int len, AMODE *ap1);
 extern void GenerateDiadic(int op, int len, AMODE *ap1, AMODE *ap2);
+extern void GenerateDiadicNT(int op, int len, AMODE *ap1, AMODE *ap2);
 extern void GenerateTriadic(int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3);
+extern void GenerateTriadicNT(int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3);
 extern void Generate4adic(int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3, AMODE *ap4);
+extern void Generate4adicNT(int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3, AMODE *ap4);
 extern void GeneratePredicatedMonadic(int pr, int pop, int op, int len, AMODE *ap1);
 extern void GeneratePredicatedDiadic(int pop, int pr, int op, int len, AMODE *ap1, AMODE *ap2);
 // Gencode.c
@@ -350,6 +354,7 @@ extern void ListTable(TABLE *t, int i);
 // Register.c
 extern AMODE *GetTempReg(int);
 extern AMODE *GetTempRegister();
+extern AMODE *GetTempTgtRegister();
 extern AMODE *GetTempBrRegister();
 extern AMODE *GetTempFPRegister();
 extern AMODE *GetTempVectorRegister();

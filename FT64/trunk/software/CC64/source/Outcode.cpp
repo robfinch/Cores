@@ -59,94 +59,139 @@ int        outcol = 0;
 struct oplst {
         char    *s;
         int     ov;
-        }       opl[] =
-{       {"move",op_move}, {"add",op_add}, {"addu", op_addu}, {"mov", op_mov}, {"mtspr", op_mtspr}, {"mfspr", op_mfspr},
-		{"ldi",op_ldi}, {"ld", op_ld},
-		{"addi",op_addi}, {"sub",op_sub}, {"subu", op_subu},
-		{"subi",op_subi}, {"and",op_and}, {"eor",op_eor}, {"eori", op_eori}, {"redor", op_redor},
-		{"divi", op_divi}, {"modi", op_modi}, {"modui", op_modui},
-		{"div", op_div}, 
-		{"sext8",op_sext8}, {"sext16", op_sext16}, {"sext32", op_sext32},
-		{"sxb",op_sxb}, {"sxc", op_sxc}, {"sxh", op_sxh},
-		{"zxb",op_zxb}, {"zxc", op_zxc}, {"zxh", op_zxh},
-		{"subui",op_subui}, {"shru", op_shru}, {"divsi", op_divsi}, {"not", op_not},
-		{"addui",op_addui},
+        };
 
-		{"dw", op_dw},
+Instruction opl[] =
+{   
+	{"mov", op_mov,1,true},
+	{"move",op_move,1,true},
+	{"add",op_add,1,true},
+	{"addu", op_addu,1,true},
+	{"ldi",op_ldi,1,true},
+	{"addi",op_addi,1,true},
+	{"lw", op_lw,4,true,true},
+	{"sw", op_sw,4,false,true},
+	{"call", op_call,4,true,true},
+	{"ret", op_ret,4,true,true},
+	{"sub",op_sub,1,true},
+	{"subu", op_subu,1,true},
+	{"subi",op_subi,1,true},
+	{"and",op_and,1,true},
+	{"andi", op_andi,1,true},
+	{"or",op_or,1,true},
+	{"ori",op_ori,1,true},
+	{"eor",op_eor,1,true},
+	{"eori", op_eori,1,true},
+	{"xor",op_xor,1,true},
+	{"xori", op_xori,1,true},
+	{"divi", op_divi,68,true},
+	{"modi", op_modi,68,true},
+	{"modui", op_modui,68,true},
+	{"div", op_div,68,true}, 
+	{"subui",op_subui},
+	{"shru", op_shru,2,true},
+	{"divsi", op_divsi,68,true},
+	{"not", op_not,2,true},
+	{"addui",op_addui,1,true},
+	{"dw", op_dw},
+	{"bfext", op_bfext,2,true},
+	{"bfextu", op_bfextu,2,true},
+	{"bfins", op_bfins,2,true},
+	{"lh", op_lh,4,true,true},
+	{"lc", op_lc,4,true,true},
+	{"lb", op_lb,4,true,true},
+	{"lbu", op_lbu,4,true,true},
+	{"lcu", op_lcu,4,true,true},
+	{"lhu", op_lhu,4,true,true},
+	{"sti", op_sti},
+	{"lft", op_lft},
+	{"sft", op_sft},
 
-		{"bfext", op_bfext}, {"bfextu", op_bfextu}, {"bfins", op_bfins},
-		{"sw", op_sw}, {"lw", op_lw}, {"lh", op_lh}, {"lc", op_lc}, {"lb", op_lb},
-		{"lvb", op_lvb}, {"lvc", op_lvc}, {"lvh", op_lvh}, {"lvw", op_lvw},
-		{"lbu", op_lbu}, {"lcu", op_lcu}, {"lhu", op_lhu}, {"sti", op_sti},
-		{"lft", op_lft}, {"sft", op_sft},
+	{"lws", op_lws}, {"sws", op_sws},
+	{"lm", op_lm}, {"sm",op_sm},
+	{"sb",op_sb,4,false,true},
+	{"sc",op_sc,4,false,true},
+	{"sh",op_sh,4,false,true},
+	{"loop", op_loop},
+	{"jal", op_jal,1,true},
 
-		{"ldis", op_ldis}, {"lws", op_lws}, {"sws", op_sws},
-		{"lm", op_lm}, {"sm",op_sm}, {"sb",op_sb}, {"sc",op_sc}, {"sh",op_sh},
-		{"call", op_call}, {"ret", op_ret}, {"loop", op_loop}, {"beqi", op_beqi},
-		{"jal", op_jal}, {"jsr", op_jsr}, {"rts", op_rts},
-		{"brz", op_brz}, {"brnz", op_brnz},
-		{"beq", op_beq}, {"bne", op_bne},
-		{"blt", op_blt}, {"ble", op_ble}, {"bgt", op_bgt}, {"bge", op_bge},
-		{"bltu", op_bltu}, {"bleu", op_bleu}, {"bgtu", op_bgtu}, {"bgeu", op_bgeu},
-		{"bbs", op_bbs}, {"bbc", op_bbc}, {"bor", op_bor},
-		{"rti", op_rti}, {"rtd", op_rtd},
-		{"lwr", op_lwr}, {"swc", op_swc}, {"cache",op_cache},
-		{"or",op_or}, {"ori",op_ori}, {"iret", op_iret}, {"andi", op_andi},
-		{"xor",op_xor}, {"xori", op_xori}, {"mul",op_mul}, {"muli", op_muli}, {"mului", op_mului}, 
+	{"cmp",op_cmp,1,true},
+	{"cmpu",op_cmpu,1,true},
+	// Branches
+	// Branches weighted as 3 because they might cause a pipeline flush
+	{"beq", op_beq,3,false},
+	{"bne", op_bne,3,false},
+	{"blt", op_blt,3,false},
+	{"ble", op_ble,3,false},
+	{"bgt", op_bgt,3,false},
+	{"bge", op_bge,3,false},
+	{"bltu", op_bltu,3,false},
+	{"bleu", op_bleu,3,false},
+	{"bgtu", op_bgtu,3,false},
+	{"bgeu", op_bgeu,3,false},
+	{"bbs", op_bbs,3,false},
+	{"bbc", op_bbc,3,false},
+	{"bor", op_bor,3,false},
+	{"beqi", op_beqi,3,false},
+
+	{"rti", op_rti,2,false}, {"rtd", op_rtd},
+	{"lwr", op_lwr,4,true,true},
+	{"swc", op_swc,4,false,true},
+	{"cache",op_cache},
+	{"iret", op_iret,2},
+	{"mul",op_mul,18,true}, {"muli", op_muli,18,true}, {"mului", op_mului,18,true}, 
 		
 		{"fmul", op_fdmul}, {"fdiv", op_fddiv}, {"fadd", op_fdadd}, {"fsub", op_fdsub}, {"fcmp", op_fcmp},
 		{"fmul.s", op_fsmul}, {"fdiv.s", op_fsdiv}, {"fadd.s", op_fsadd}, {"fsub.s", op_fssub},
 		{"fs2d", op_fs2d}, {"fi2d", op_i2d}, {"fneg", op_fneg}, 
 
-		{"divs",op_divs}, {"swap",op_swap}, {"mod", op_mod}, {"modu", op_modu},
-		{"eq",op_eq}, {"bnei", op_bnei}, {"sei", op_sei},
+		{"divs",op_divs,68,true}, {"swap",op_swap,1,true}, {"mod", op_mod,68,true}, {"modu", op_modu,68,true},
+		{"eq",op_eq}, {"bnei", op_bnei}, {"sei", op_sei,1},
 		{"ltu", op_ltu}, {"leu",op_leu}, {"gtu",op_gtu}, {"geu", op_geu},
                 {"bhi",op_bhi}, {"bhs",op_bhs}, {"blo",op_blo}, {"bun", op_bun},
                 {"bls",op_bls}, {"mulu",op_mulu}, {"divu",op_divu},
                 {"ne",op_ne}, {"lt",op_lt}, {"le",op_le},
 		{"gt",op_gt}, {"ge",op_ge}, {"neg",op_neg}, {"nr", op_nr},
-		{"not",op_not}, {"com", op_com}, {"cmp",op_cmp}, {"ext",op_ext}, 
-		{"jmp",op_jmp},
-		{"lea",op_lea}, {"asr",op_asr}, {"asri", op_asri },
-                {"clr",op_clr}, {"link",op_link}, {"unlink",op_unlk},
-                {"br",op_br}, {"bra",op_bra}, {"pea",op_pea},
-				{"cmpi",op_cmpi}, {"tst",op_tst},
+	{"not",op_not,2,true},
+	{"com", op_com,2,true},
+	{"ext",op_ext}, 
+	{"jmp",op_jmp,1,false},
+	{"lea",op_lea,1,true},
+
+                {"link",op_link,4,true,true}, {"unlink",op_unlk,4,true,true},
+                {"br",op_br,3,false}, {"bra",op_bra,3,false}, {"pea",op_pea},
+				{"cmpi",op_cmpi,1,true}, {"tst",op_tst,1,true},
 		{"stop", op_stop}, {"movs", op_movs},
-		{"bmi", op_bmi}, {"outb", op_outb}, {"inb", op_inb}, {"inbu", op_inbu},
+		{"bmi", op_bmi},
 				{"dc",op_dc},
-		{"push",op_push}, {"pop", op_pop}, {"pea", op_pea},
-		{"seq", op_seq}, {"sne",op_sne},
-		{"slt", op_slt}, {"sle",op_sle},{"sgt",op_sgt}, {"sge",op_sge},
-		{"sltu", op_sltu}, {"sleu",op_sleu},{"sgtu",op_sgtu}, {"sgeu",op_sgeu},
-		{"",op_empty}, {"",op_asm}, {"", op_fnname},
+		{"push",op_push,4,true,true}, {"pop", op_pop,4,true,true}, {"pea", op_pea},
+		// Set
+		{"seq", op_seq,1,true}, {"sne",op_sne,1,true},
+		{"slt", op_slt,1,true}, {"sle",op_sle,1,true},{"sgt",op_sgt,1,true}, {"sge",op_sge,1,true},
+		{"sltu", op_sltu,1,true}, {"sleu",op_sleu,1,true},{"sgtu",op_sgtu,1,true}, {"sgeu",op_sgeu,1,true},
+
+		{"",op_empty}, {"",op_asm,100}, {"", op_fnname},
 		{"ftadd", op_ftadd}, {"ftsub", op_ftsub}, {"ftmul", op_ftmul}, {"ftdiv", op_ftdiv},
 		{"inc", op_inc}, {"dec", op_dec},
 
-		{"sec", op_sec}, {"clc", op_clc}, {"lda", op_lda}, {"sta", op_sta}, {"stz", op_stz},
-        {"sbc", op_sbc}, {"adc", op_adc}, {"ora", op_ora}, {"eor", op_eor},
-		{"ora", op_ora}, {"jsl", op_jsl}, {"rts", op_rts}, {"rtl", op_rtl}, {"rti", op_rti},
-		{"ldx", op_ldx}, {"stx", op_stx}, {"php", op_php}, {"plp", op_plp}, {"sei", op_sei},
-		{"cli", op_cli}, {"brl", op_brl},
-		{"pha", op_pha}, {"phx", op_phx}, {"pla", op_pla}, {"plx", op_plx},
-		{"rep", op_rep}, {"sep", op_sep},
-		{"bpl", op_bpl}, {"tsa", op_tsa}, {"tas", op_tas},
-		
 		{"bsr", op_bsr},
-		{"cmpu", op_cmpu},
-		{"lc0i", op_lc0i}, {"lc1i", op_lc1i}, {"lc2i", op_lc2i}, {"lc3i", op_lc3i},
 
-		// shifts
-		{"shl", op_shl}, {"shr", op_shr}, {"shru", op_shru},
-		{"shlu", op_shlu}, {"shlui", op_shlui},
-		{"shli", op_shli}, {"shri", op_shri}, {"shrui", op_shrui},
-		{"ror", op_ror}, {"rori", op_rori}, {"rol", op_rol}, {"roli", op_roli},
-		{"sll", op_sll}, {"slli", op_slli}, {"srl", op_srl}, {"srli", op_srli}, {"sra", op_sra}, {"srai", op_srai},
-		{"asl", op_asl}, {"asli", op_asli}, {"lsr", op_lsr}, {"lsri", op_lsri},
+	// Shifts
+	// Shifts are weighted as 2 because they can only execute on one ALU
+	{"asr",op_asr,2,true}, {"asri", op_asri,2,true },
+	{"shl", op_shl,2,true}, {"shr", op_shr,2,true}, {"shru", op_shru,2,true},
+	{"shlu", op_shlu,2,true}, {"shlui", op_shlui,2,true},
+	{"shli", op_shli,2,true}, {"shri", op_shri,2,true}, {"shrui", op_shrui,2,true},
+	{"ror", op_ror,2,true}, {"rori", op_rori,2,true}, {"rol", op_rol,2,true}, {"roli", op_roli,2,true},
+	{"sll", op_sll,2,true}, {"slli", op_slli,2,true}, {"srl", op_srl,2,true}, {"srli", op_srli,2,true},
+	{"sra", op_sra,2,true}, {"srai", op_srai,2,true},
+	{"asl", op_asl,2,true}, {"asli", op_asli,2,true}, {"lsr", op_lsr,2,true}, {"lsri", op_lsri,2,true},
 		
 		{"chk", op_chk }, {"chki",op_chki}, {";", op_rem},
 
-		{"fbeq", op_fbeq}, {"fbne", op_fbne}, {"fbor", op_fbor}, {"fbun", op_fbun},
-		{"fblt", op_fblt}, {"fble", op_fble}, {"fbgt", op_fbgt}, {"fbge", op_fbge},
+		{"fbeq", op_fbeq,3}, {"fbne", op_fbne,3}, {"fbor", op_fbor,3}, {"fbun", op_fbun,3},
+		{"fblt", op_fblt,3}, {"fble", op_fble,3}, {"fbgt", op_fbgt,3}, {"fbge", op_fbge,3},
+
 		{"fcvtsq", op_fcvtsq},
 		{"sf", op_sf}, {"lf", op_lf},
 		{"sfd", op_sfd}, {"lfd", op_lfd}, {"fmov.d", op_fdmov}, {"fmov", op_fmov},
@@ -155,23 +200,17 @@ struct oplst {
 		{"fix2flt", op_fix2flt}, {"mtfp", op_mtfp}, {"flt2fix",op_flt2fix}, {"mffp",op_mffp},
 		{"mv2fix",op_mv2fix}, {"mv2flt", op_mv2flt},
 		{"csrrw", op_csrrw}, {"nop", op_nop},
-		// DSD9
-		{"ldd", op_ldd}, {"ldp", op_ldp}, {"ldw", op_ldw}, {"ldb", op_ldb},
-		{"ldpu", op_ldpu}, {"ldwu", op_ldwu}, {"ldbu", op_ldbu}, {"ldt", op_ldt}, {"ldtu", op_ldtu},
-		{"std", op_std}, {"stp", op_stp}, {"stw", op_stw}, {"stb", op_stb}, {"stt", op_stt},
-		{"tgt", op_calltgt},
-		{"hint", op_hint}, {"hint2",op_hint2},
-		{"abs", op_abs},
-		// Vector operations
-		{"lv", op_lv}, {"sv", op_sv},
-		{"vadd", op_vadd}, {"vsub", op_vsub}, {"vmul", op_vmul}, {"vdiv", op_vdiv},
-		{"vseq", op_vseq}, {"vsne", op_vsne},
-		{"vslt", op_vslt}, {"vsge", op_vsge}, {"vsle", op_vsle}, {"vsgt", op_vsgt},
-		{"vadds", op_vadds}, {"vsubs", op_vsubs}, {"vmuls", op_vmuls}, {"vdivs", op_vdivs},
-		{"vex", op_vex}, {"veins",op_veins},
-		{"addq1", op_addq1 }, {"addq2", op_addq2 }, {"addq3", op_addq3 },
-		{"andq1", op_andq1 }, {"andq2", op_andq2 }, {"andq3", op_andq3 },
-		{"orq1", op_orq1 }, {"orq2", op_orq2 }, {"orq3", op_orq3 },
+		{"tgt", op_calltgt,1},
+		{"hint", op_hint,0}, {"hint2",op_hint2,0},
+		{"abs", op_abs,2},
+	// Vector operations
+	{"lv", op_lv,256,true}, {"sv", op_sv,256,true},
+	{"vadd", op_vadd,10}, {"vsub", op_vsub,10}, {"vmul", op_vmul,10}, {"vdiv", op_vdiv,100},
+	{"vseq", op_vseq,10}, {"vsne", op_vsne,10},
+	{"vslt", op_vslt,10}, {"vsge", op_vsge,10}, {"vsle", op_vsle,10}, {"vsgt", op_vsgt,10},
+	{"vadds", op_vadds,10}, {"vsubs", op_vsubs,10}, {"vmuls", op_vmuls,10}, {"vdivs", op_vdivs,100},
+	{"vex", op_vex,10}, {"veins",op_veins,10},
+	{"redor", op_redor,2,true},
                 {0,0} };
 
 static char *pad(char *op)
@@ -189,19 +228,14 @@ static char *pad(char *op)
 	return buf;
 }
 
-char *opstr(int op)
+Instruction *GetInsn(int op)
 {
-	int     i;
-    i = 0;
-    while( opl[i].s )
-    {
-		if( opl[i].ov == op )
-		{
-			return (opl[i].s);
-		}
-		++i;
-    }
-	return (char *)NULL;
+	int i;
+
+    for(i = 0; opl[i].mnem; i++)
+		if( opl[i].opcode == op )
+			return (&opl[i]);
+	return (nullptr);
 }
 
 /*
@@ -227,16 +261,16 @@ static char *segstr(int op)
 }
 */
 
-void putop(int op, int len)
+void putop(Instruction *insn,int op, int len)
 {    
 	int     i;
 	char buf[100];
 
     i = 0;
-    while( opl[i].s )
-    {
-		if( opl[i].ov == (op & 0x1FF))
-		{
+//    while( opl[i].mnem )
+//    {
+//		if( opl[i].opcode == (op & 0x1FF))
+//		{
 			//seg = op & 0xFF00;
 			//if (seg != 0) {
 			//	fprintf(output, "%s:", segstr(op));
@@ -244,26 +278,26 @@ void putop(int op, int len)
 			if (len) {
 				if (len <= 16) {
 					switch(len) {
-					case 1:	sprintf_s(buf, sizeof(buf), "%s.b", opl[i].s); break;
-					case 2:	sprintf_s(buf, sizeof(buf), "%s.c", opl[i].s); break;
-					case 4:	sprintf_s(buf, sizeof(buf), "%s.h", opl[i].s); break;
-					case 8:	sprintf_s(buf, sizeof(buf), "%s", opl[i].s); break;
+					case 1:	sprintf_s(buf, sizeof(buf), "%s.b", insn->mnem); break;
+					case 2:	sprintf_s(buf, sizeof(buf), "%s.c", insn->mnem); break;
+					case 4:	sprintf_s(buf, sizeof(buf), "%s.h", insn->mnem); break;
+					case 8:	sprintf_s(buf, sizeof(buf), "%s", insn->mnem); break;
 					}
 				}
 				else {
 					if (len != 'w' && len!='W')
-						sprintf_s(buf, sizeof(buf), "%s.%c", opl[i].s, len);
+						sprintf_s(buf, sizeof(buf), "%s.%c", insn->mnem, len);
 					else
-						sprintf_s(buf, sizeof(buf), "%s", opl[i].s);
+						sprintf_s(buf, sizeof(buf), "%s", insn->mnem);
 				}
 			}
 			else
-				sprintf_s(buf, sizeof(buf), "%s", opl[i].s);
+				sprintf_s(buf, sizeof(buf), "%s", insn->mnem);
 			ofs.write(pad(buf));
 			return;
-		}
-		++i;
-    }
+//		}
+//		++i;
+//    }
     printf("DIAG - illegal opcode (%d).\n", op);
 }
 
@@ -295,7 +329,7 @@ static void PutConstant(ENODE *offset, unsigned int lowhigh, unsigned int rshift
 				ofs.write(buf);
 			}
             else {
-            	sprintf_s(buf,sizeof(buf),"%ld",offset->i);
+            	sprintf_s(buf,sizeof(buf),"%lld",offset->i);
 				ofs.write(buf);
 			}
            	if (rshift > 0) {
@@ -467,7 +501,7 @@ void PutAddressMode(AMODE *ap)
  *      output a generic instruction.
  */
 //void put_code(int op, int len,AMODE *aps,AMODE *apd,AMODE *ap3,AMODE *ap4)
-void put_code(struct ocode *p)
+void put_code(OCODE *p)
 {
 	int op = p->opcode;
 	AMODE *aps,*apd,*ap3,*ap4;
@@ -482,6 +516,10 @@ void put_code(struct ocode *p)
 	if (p->comment) {
 		ofs.printf("; %s\n", (char *)p->comment->oper1->offset->sp->c_str());
 	}
+	if (p->remove)
+		ofs.printf(";-1");
+	if (p->remove2)
+		ofs.printf(";-2");
 	if( op == op_dc )
 		{
 		switch( len )
@@ -502,7 +540,7 @@ void put_code(struct ocode *p)
 			else {
 				ofs.printf("\t");
 				ofs.printf("%6.6s\t", "");
-				putop(op,len);
+				putop(p->insn,op,len);
 			}
 		}
 	if (op==op_fnname) {

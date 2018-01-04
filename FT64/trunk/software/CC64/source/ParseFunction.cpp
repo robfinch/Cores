@@ -442,7 +442,7 @@ static Statement *ParseFunctionBody(SYM *sp)
   p = my_strdup((char *)lbl.c_str());
   dfs.printf("b");
 	if (!sp->IsInline)
-		GenerateMonadic(op_fnname,0,make_string(p));
+		GenerateMonadicNT(op_fnname,0,make_string(p));
 	currentFn = sp;
 	currentFn->IsLeaf = TRUE;
 	currentFn->DoesThrow = FALSE;

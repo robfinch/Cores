@@ -149,7 +149,7 @@ void GenerateTempRegPush(int reg, int rmode, int number, int stkpos)
     ap1->preg = reg;
     ap1->mode = rmode;
 
-	GenerateMonadic(op_push,0,ap1);
+	GenerateMonadicNT(op_push,0,ap1);
 	TRACE(printf("pushing r%d\r\n", reg);)
     reg_stack[reg_stack_ptr].mode = (enum e_am)rmode;
     reg_stack[reg_stack_ptr].reg = reg;
@@ -168,7 +168,7 @@ void GenerateTempVectorRegPush(int reg, int rmode, int number, int stkpos)
     ap1->preg = reg;
     ap1->mode = rmode;
 
-	GenerateMonadic(op_push,0,ap1);
+	GenerateMonadicNT(op_push,0,ap1);
 	TRACE(printf("pushing r%d\r\n", reg);)
     vreg_stack[vreg_stack_ptr].mode = (enum e_am)rmode;
     vreg_stack[vreg_stack_ptr].reg = reg;

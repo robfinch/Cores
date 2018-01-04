@@ -24,8 +24,8 @@
 #define F_NOVALUE 32768		/* dont need result value */
 
 /*      addressing mode structure       */
-
-typedef struct amode {
+/*
+typedef AMODE {
 	unsigned int mode : 6;
 	unsigned int preg : 8;
 	unsigned int sreg : 8;
@@ -39,16 +39,17 @@ typedef struct amode {
 	unsigned int isVolatile : 1;
 	unsigned int isPascal : 1;
 	unsigned int rshift : 8;
-	short int deep;           /* stack depth on allocation */
+	short int deep;
 	short int deep2;
 	ENODE *offset;
 	int8_t scale;
 } AMODE;
+*/
 
 /*      output code structure   */
-
-struct ocode {
-	struct ocode *fwd, *back, *comment;
+/*
+OCODE {
+	OCODE *fwd, *back, *comment;
 	short opcode;
 	short length;
 	unsigned int isVolatile : 1;
@@ -58,7 +59,7 @@ struct ocode {
 	short predop;
 	AMODE *oper1, *oper2, *oper3, *oper4;
 };
-
+*/
 enum e_op {
         op_move, op_add, op_addu, op_addi, op_sub, op_subi, op_mov, op_mtspr, op_mfspr, op_ldi, op_ld,
         op_mul, op_muli, op_mulu, op_divi, op_modi, op_modui, 

@@ -56,7 +56,7 @@ AMODE *GenerateShift(ENODE *node,int flags, int size, int op)
 //
 AMODE *GenerateAssignShift(ENODE *node,int flags,int size,int op)
 {
-	struct amode    *ap1, *ap2, *ap3;
+	AMODE    *ap1, *ap2, *ap3;
 
 	ap1 = GetTempRegister();
 	//size = GetNaturalSize(node->p[0]);

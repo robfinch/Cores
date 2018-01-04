@@ -28,6 +28,8 @@
 //
 class ENODE;
 class Statement;
+class BasicBlock;
+class Instruction;
 
 enum e_sym {
   tk_nop,
@@ -82,6 +84,12 @@ enum e_bt {
 		bt_interrupt, bt_oscall, bt_pascal, bt_kernel, bt_bitfield, bt_ubitfield,
 		bt_exception, bt_ellipsis,
         bt_last};
+
+class CompilerType
+{
+public:
+	static CompilerType *alloc();
+};
 
 class MBlk
 {
@@ -368,6 +376,156 @@ public:
 	void *dtor;
   ENODE *p[3];
   void SetType(TYP *t) { tp = t; };
+};
+
+class AMODE : public CompilerType
+{
+public:
+	unsigned int mode : 6;
+	unsigned int preg : 8;
+	unsigned int sreg : 8;
+	unsigned int segment : 4;
+	unsigned int defseg : 1;
+	unsigned int tempflag : 1;
+	unsigned int type : 16;
+	char FloatSize;
+	unsigned int isUnsigned : 1;
+	unsigned int lowhigh : 2;
+	unsigned int isVolatile : 1;
+	unsigned int isPascal : 1;
+	unsigned int rshift : 8;
+	unsigned int isTarget : 1;
+	short int deep;           /* stack depth on allocation */
+	short int deep2;
+	ENODE *offset;
+	int8_t scale;
+	AMODE *next;			// For extended sizes (long)
+};
+
+// Output code structure
+
+class OCODE : public CompilerType
+{
+public:
+	OCODE *fwd, *back, *comment;
+	BasicBlock *bb;
+	Instruction *insn;
+	short opcode;
+	short length;
+	unsigned int isVolatile : 1;
+	unsigned int isReferenced : 1;	// label is referenced by code
+	unsigned int remove : 1;
+	unsigned int remove2 : 1;
+	unsigned int leader : 1;
+	short pregreg;
+	short predop;
+	int loop_depth;
+	AMODE *oper1, *oper2, *oper3, *oper4;
+public:
+	static OCODE *MakeNew();
+	bool HasTargetReg() const;
+	int GetTargetReg() const;
+	bool HasSourceReg(int) const;
+	//Edge *MakeEdge(OCODE *ip1, OCODE *ip2);
+};
+
+
+/*      output code structure   */
+/*
+OCODE {
+	OCODE *fwd, *back, *comment;
+	short opcode;
+	short length;
+	unsigned int isVolatile : 1;
+	unsigned int isReferenced : 1;	// label is referenced by code
+	unsigned int remove : 1;
+	short pregreg;
+	short predop;
+	AMODE *oper1, *oper2, *oper3, *oper4;
+};
+typedef OCODE OCODE;
+*/
+
+class Edge : public CompilerType
+{
+public:
+	bool backedge;
+	Edge *next;
+	Edge *prev;
+	BasicBlock *src;
+	BasicBlock *dst;
+};
+
+class BasicBlock : public CompilerType
+{
+public:
+	int num;
+	Edge *ohead;
+	Edge *otail;
+	Edge *ihead;
+	Edge *itail;
+public:
+	unsigned int changed : 1;
+	CSet *gen;		// use
+	CSet *kill;		// def
+	CSet *LiveIn;
+	CSet *LiveOut;
+	CSet *MustSpill;
+	CSet *NeedLoad;
+	static CSet *livo;
+	BasicBlock *next;
+	BasicBlock *prev;
+	OCODE *code;
+	OCODE *lcode;
+public:
+	static BasicBlock *MakeNew();
+	static BasicBlock *Blockize(OCODE *start);
+	Edge *MakeOutputEdge(BasicBlock *dst);
+	Edge *MakeInputEdge(BasicBlock *src);
+	void ComputeLiveVars();
+	void AddLiveOut(BasicBlock *ip);
+};
+
+class Tree : public CompilerType
+{
+public:
+	int num;
+	Tree *next;
+	CSet *tree;
+public:
+	static Tree *MakeNew() {
+		Tree *t;
+		t = (Tree*)allocx(sizeof(Tree));
+		t->tree = CSet::MakeNew();
+		return (t);
+	};
+};
+
+class Var : public CompilerType
+{
+public:
+	Var *next;
+	int num;
+	Tree *trees;
+	CSet *forest;
+public:
+	static Var *MakeNew();
+	// Create a forest for a specific Var
+	void CreateForest();
+	// Create a forest for each Var object
+	static void CreateForests();
+	static Var *Find(int);
+	static void DumpForests();
+};
+
+class Instruction
+{
+public:
+	char *mnem;		// mnemonic
+	short opcode;	// matches OCODE opcode
+	short extime;	// execution time, divide may take hundreds of cycles
+	bool HasTarget;	// has a target register
+	bool memacc;	// instruction accesses memory
 };
 
 class CSE {
