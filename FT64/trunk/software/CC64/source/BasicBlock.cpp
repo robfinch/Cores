@@ -191,7 +191,7 @@ void BasicBlock::ComputeLiveVars()
 					gen->add(ip->oper1->preg);
 				}
 			}
-			// Stack operations implicitly read SP.
+			// Stack operations implicitly read SP. It doesn't appear in the operx operands.
 			if (ip->opcode==op_push || ip->opcode==op_pop || ip->opcode==op_link || ip->opcode==op_unlk) {
 				gen->add(regSP);
 			}

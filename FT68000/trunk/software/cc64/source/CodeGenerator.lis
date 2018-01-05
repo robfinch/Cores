@@ -1,0 +1,105 @@
+     1	// ============================================================================
+     2	//        __
+     3	//   \\__/ o\    (C) 2012-2017  Robert Finch, Waterloo
+     4	//    \  __ /    All rights reserved.
+     5	//     \/_//     robfinch<remove>@finitron.ca
+     6	//       ||
+     7	//
+     8	// C64 - 'C' derived language compiler
+     9	//  - 64 bit CPU
+    10	//
+    11	// This source file is free software: you can redistribute it and/or modify 
+    12	// it under the terms of the GNU Lesser General Public License as published 
+    13	// by the Free Software Foundation, either version 3 of the License, or     
+    14	// (at your option) any later version.                                      
+    15	//                                                                          
+    16	// This source file is distributed in the hope that it will be useful,      
+    17	// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+    18	// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+    19	// GNU General Public License for more details.                             
+    20	//                                                                          
+    21	// You should have received a copy of the GNU General Public License        
+    22	// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+    23	//                                                                          
+    24	// ============================================================================
+    25	//
+    26	// stdafx.h : include file for standard system include files,
+    27	// or project specific include files that are used frequently, but
+    28	// are changed infrequently
+    29	//
+    30	
+    31	
+    32	
+    33	// Including SDKDDKVer.h defines the highest available Windows platform.
+    34	
+    35	// If you wish to build your application for a previous Windows platform, include WinSDKVer.h and
+    36	// set the _WIN32_WINNT macro to the platform you wish to support before including SDKDDKVer.h.
+    37	
+    38	
+    39	
+    40	
+    41	
+    42	
+    43	
+    44	// ============================================================================
+    45	//        __
+    46	//   \\__/ o\    (C) 2016-2017  Robert Finch, Waterloo
+    47	//    \  __ /    All rights reserved.
+    48	//     \/_//     robfinch<remove>@finitron.ca
+    49	//       ||
+    50	//
+    51	// 128 bit floating point class
+    52	//
+    53	// This source file is free software: you can redistribute it and/or modify 
+    54	// it under the terms of the GNU Lesser General Public License as published 
+    55	// by the Free Software Foundation, either version 3 of the License, or     
+    56	// (at your option) any later version.                                      
+    57	//                                                                          
+    58	// This source file is distributed in the hope that it will be useful,      
+    59	// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+    60	// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+    61	// GNU General Public License for more details.                             
+    62	//                                                                          
+    63	// You should have received a copy of the GNU General Public License        
+    64	// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+    65	//                                                                          
+    66	// Floats here are actually represented with a 128 bit mantissa for simpliity
+    67	// rather than 112 bits.
+    68	// ============================================================================
+    69	//
+    70	
+    71	class Float128
+    72	{
+    73	public:
+    74		static const __int16 bias = 0x3FFF;
+    75		static const __int16 infxp = 0x7FFF;
+    76	public:
+    77		unsigned __int32 pack[4];
+    78		unsigned __int32 man[4];
+    79		unsigned __int16 exp;
+    80		bool sign;
+ *** error 6: E Bad punctuation
+    81		// The following is for compiler use
+    82		//-----------------------------------
+    83		Float128 *next;	// next in a list
+    84		int label;
+    85		char *nmspace;
+    86		//-----------------------------------
+    87		void ShiftManLeft();
+    88	private:
+    89		void ShiftManRight();
+    90		static bool ManEQ(Float128 *a, Float128 *b);
+ *** error 6: E Bad punctuation
+ *** error 6: E Bad punctuation
+    91		static bool ManGT(Float128 *a, Float128 *b);
+ *** error 6: E Bad punctuation
+ *** error 6: E Bad punctuation
+    92		static bool ManGE(Float128 *a, Float128 *b) {
+ *** error 6: E Bad punctuation
+ *** error 6: E Bad punctuation
+    93			if (ManGT(a,b))
+ *** error 6: E Bad punctuation
+    94				return (true);
+    95			if (ManEQ(a,b))
+ *** error 0: E Syntax error
+ *** error 6: E Bad punctuation

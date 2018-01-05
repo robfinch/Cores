@@ -323,10 +323,6 @@ dfs.printf("G");
 			isNocall = FALSE;
 			sp->NumParms = nump;
 			sp->numa = numa;
-			// Parsing declarations sets the storage class to extern when it really
-			// should be global if there is a function body.
-			if (sp->storage_class==sc_external)
-				sp->storage_class =sc_global;
 			stmt = ParseFunctionBody(sp);
 			funcbottom(stmt);
     }
@@ -446,7 +442,7 @@ static Statement *ParseFunctionBody(SYM *sp)
   p = my_strdup((char *)lbl.c_str());
   dfs.printf("b");
 	if (!sp->IsInline)
-		GenerateMonadicNT(op_fnname,0,make_string(p));
+		GenerateMonadic(op_fnname,0,make_string(p));
 	currentFn = sp;
 	currentFn->IsLeaf = TRUE;
 	currentFn->DoesThrow = FALSE;

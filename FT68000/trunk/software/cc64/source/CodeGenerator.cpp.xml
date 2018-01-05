@@ -1,0 +1,654 @@
+<title>C64D Compiler debug file</title>
+<compile>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+<TYP__Make>
+</TYP__Make>
+</Find>
+_class</Find>
+<Parsing GlobalDecl>
+<ParseGlobalDecl>
+Enter declare()
+A<ParseSpecifier>
+A<ParseClassDeclaration>
+</Find>
+_Float128</Find>
+---------------------------------Class decl:_Float128
+---------------------------------</Find>
+_Float128</Find>
+AInsert into tagtable:_Float128|
+()
+</Find>
+_Float128</Find>
+At insert:
+Type array:
+   
+</Find>
+_public</Find>
+<TYP__Make>
+</TYP__Make>
+Insert _typeno into 0188B784()
+</Find>
+_typeno</Find>
+At insert:
+Type array:
+   
+</Find>
+_static</Find>
+</Find>
+_const</Find>
+Enter declare()
+A<ParseSpecifier>
+A</Find>
+___int16</Find>
+<TYP__Make>
+</TYP__Make>
+</Find>
+_bias</Find>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_bias|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_bias</Find>
+hh1kIIbIcinsert type: 15
+***Inserting:_bias into 0188B784
+<BuildSignature>:_bias</BuildSignature>Insert _bias into 0188B784()
+</Find>
+_bias</Find>
+At insert:
+Type array:
+   
+JK</Find>
+_static</Find>
+</Find>
+_const</Find>
+Enter declare()
+A<ParseSpecifier>
+A</Find>
+___int16</Find>
+<TYP__Make>
+</TYP__Make>
+</Find>
+_infxp</Find>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_infxp|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_infxp</Find>
+hh1kIIbIcinsert type: 15
+***Inserting:_infxp into 0188B784
+<BuildSignature>:_infxp</BuildSignature>Insert _infxp into 0188B784()
+</Find>
+_infxp</Find>
+At insert:
+Type array:
+   
+JK</Find>
+_public</Find>
+</Find>
+_unsigned</Find>
+Enter declare()
+A<ParseSpecifier>
+A</Find>
+___int32</Find>
+<TYP__Make>
+</TYP__Make>
+</Find>
+_pack</Find>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_pack|CDE<ParseDeclSuffix>
+<TYP__Make>
+</TYP__Make>
+Setting array size:16
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_pack</Find>
+hh1kIIbIcinsert type: 22
+***Inserting:_pack into 0188B784
+<BuildSignature>:_pack</BuildSignature>Insert _pack into 0188B784()
+</Find>
+_pack</Find>
+At insert:
+Type array:
+   
+JK</Find>
+_unsigned</Find>
+Enter declare()
+A<ParseSpecifier>
+A</Find>
+___int32</Find>
+<TYP__Make>
+</TYP__Make>
+</Find>
+_man</Find>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_man|CDE<ParseDeclSuffix>
+<TYP__Make>
+</TYP__Make>
+Setting array size:16
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_man</Find>
+hh1kIIbIcinsert type: 22
+***Inserting:_man into 0188B784
+<BuildSignature>:_man</BuildSignature>Insert _man into 0188B784()
+</Find>
+_man</Find>
+At insert:
+Type array:
+   
+JK</Find>
+_unsigned</Find>
+Enter declare()
+A<ParseSpecifier>
+A</Find>
+___int16</Find>
+<TYP__Make>
+</TYP__Make>
+</Find>
+_exp</Find>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_exp|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_exp</Find>
+hh1kIIbIcinsert type: 23
+***Inserting:_exp into 0188B784
+<BuildSignature>:_exp</BuildSignature>Insert _exp into 0188B784()
+</Find>
+_exp</Find>
+At insert:
+Type array:
+   
+JK</Find>
+_bool</Find>
+Enter declare()
+A<ParseSpecifier>
+A<ParseId>_bool</Find>
+_bool</Find>
+</Find>
+_bool</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseId></ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_bool|CD</Find>
+_sign</Find>
+E<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_sign</Find>
+hh1kIIbIcinsert type: 17
+***Inserting:_sign into 0188B784
+<BuildSignature>:_sign</BuildSignature>Insert _sign into 0188B784()
+</Find>
+_sign</Find>
+At insert:
+Type array:
+   
+JKb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_sign|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_signMatch
+</Find>
+0IsEqual:T3hh1klIIbJK</Find>
+_Float128</Find>
+Enter declare()
+A<ParseSpecifier>
+A<ParseId>_Float128</Find>
+_Float128Match
+</Find>
+Actually found type.
+</ParseId></ParseSpecifier>
+Bb<ParseDeclPrefix>(9)
+*<TYP__Make>
+</TYP__Make>
+</Find>
+_next</Find>
+<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_next|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+</ParseDeclPrefix>
+CDEGH</Find>
+_next</Find>
+hh1kIIbIcinsert type: 22
+***Inserting:_next into 0188B784
+<BuildSignature>:_next</BuildSignature>Insert _next into 0188B784()
+</Find>
+_next</Find>
+At insert:
+Type array:
+   
+JK</Find>
+_int</Find>
+Enter declare()
+A<ParseSpecifier>
+A</Find>
+_label</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_label|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_label</Find>
+hh1kIIbIcinsert type: 16
+***Inserting:_label into 0188B784
+<BuildSignature>:_label</BuildSignature>Insert _label into 0188B784()
+</Find>
+_label</Find>
+At insert:
+Type array:
+   
+JK</Find>
+_char</Find>
+Enter declare()
+A<ParseSpecifier>
+A<TYP__Make>
+</TYP__Make>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(9)
+*<TYP__Make>
+</TYP__Make>
+</Find>
+_nmspace</Find>
+<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_nmspace|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+</ParseDeclPrefix>
+CDEGH</Find>
+_nmspace</Find>
+hh1kIIbIcinsert type: 22
+***Inserting:_nmspace into 0188B784
+<BuildSignature>:_nmspace</BuildSignature>Insert _nmspace into 0188B784()
+</Find>
+_nmspace</Find>
+At insert:
+Type array:
+   
+JK</Find>
+_void</Find>
+Enter declare()
+A<ParseSpecifier>
+A<TYP__Make>
+</TYP__Make>
+</Find>
+_ShiftManLeft</Find>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_ShiftManLeft|CDE<ParseDeclSuffix>
+<openpa>
+****************************
+****************************
+Function: _ShiftManLeft
+****************************
+****************************
+<TYP__Make>
+</TYP__Make>
+o p q Set false
+</openpa>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_ShiftManLeft</Find>
+hh1h2ikIIbIcinsert type: 33
+***Inserting:_ShiftManLeft into 0188B784
+<BuildSignature>:_ShiftManLeft</BuildSignature><InsertMethod>_ShiftManLeft type 33 Insert _ShiftManLeft into 0188B784()
+</Find>
+_ShiftManLeft</Find>
+At insert:
+Type array:
+   
+<FindRising>_ShiftManLeft 
+</Find>
+_ShiftManLeftMatch
+</Find>
+</FindRising>Sym:_ShiftManLeft Types: (000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, )
+<FindRisingMatch>_ShiftManLeft type 33 <FindRising>_ShiftManLeft 
+</Find>
+_ShiftManLeftMatch
+</Find>
+</FindRising>Sym:_ShiftManLeft Types: (000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, )
+Found method:IsEqual:T3</FindRisingMatch>
+</InsertMethod>
+JK</Find>
+_private</Find>
+</Find>
+_void</Find>
+Enter declare()
+A<ParseSpecifier>
+A<TYP__Make>
+</TYP__Make>
+</Find>
+_ShiftManRight</Find>
+</ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_ShiftManRight|CDE<ParseDeclSuffix>
+<openpa>
+****************************
+****************************
+Function: _ShiftManRight
+****************************
+****************************
+<TYP__Make>
+</TYP__Make>
+o p q Set false
+</openpa>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_ShiftManRight</Find>
+hh1h2ikIIbIcinsert type: 33
+***Inserting:_ShiftManRight into 0188B784
+<BuildSignature>:_ShiftManRight</BuildSignature><InsertMethod>_ShiftManRight type 33 Insert _ShiftManRight into 0188B784()
+</Find>
+_ShiftManRight</Find>
+At insert:
+Type array:
+   
+<FindRising>_ShiftManRight 
+</Find>
+_ShiftManRightMatch
+</Find>
+</FindRising>Sym:_ShiftManRight Types: (000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, )
+<FindRisingMatch>_ShiftManRight type 33 <FindRising>_ShiftManRight 
+</Find>
+_ShiftManRightMatch
+</Find>
+</FindRising>Sym:_ShiftManRight Types: (000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, 000, )
+Found method:IsEqual:T3</FindRisingMatch>
+</InsertMethod>
+JK</Find>
+_static</Find>
+</Find>
+_bool</Find>
+Enter declare()
+A<ParseSpecifier>
+A<ParseId>_bool</Find>
+_bool</Find>
+</Find>
+_bool</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseId></ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_bool|CD</Find>
+_ManEQ</Find>
+E<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_ManEQ</Find>
+hh1kIIbIcinsert type: 17
+***Inserting:_ManEQ into 0188B784
+<BuildSignature>:_ManEQ</BuildSignature>Insert _ManEQ into 0188B784()
+</Find>
+_ManEQ</Find>
+At insert:
+Type array:
+   
+JK</Find>
+_Float128</Find>
+</Find>
+_a</Find>
+</Find>
+_Float128</Find>
+b<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_Float128|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_Float128</Find>
+hh1kIIbIcinsert type: 17
+***Inserting:_Float128 into 0188B784
+<BuildSignature>:_Float128</BuildSignature>Insert _Float128 into 0188B784()
+</Find>
+_Float128</Find>
+At insert:
+Type array:
+   
+JK</Find>
+_b</Find>
+</Find>
+_static</Find>
+</Find>
+_bool</Find>
+Enter declare()
+A<ParseSpecifier>
+A<ParseId>_bool</Find>
+_bool</Find>
+</Find>
+_bool</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseId></ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_bool|CD</Find>
+_ManGT</Find>
+E<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_ManGT</Find>
+hh1kIIbIcinsert type: 17
+***Inserting:_ManGT into 0188B784
+<BuildSignature>:_ManGT</BuildSignature>Insert _ManGT into 0188B784()
+</Find>
+_ManGT</Find>
+At insert:
+Type array:
+   
+JK</Find>
+_Float128</Find>
+</Find>
+_a</Find>
+</Find>
+_Float128</Find>
+b<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_Float128|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_Float128Match
+</Find>
+0IsEqual:T3hh1klIIbJK</Find>
+_b</Find>
+</Find>
+_static</Find>
+</Find>
+_bool</Find>
+Enter declare()
+A<ParseSpecifier>
+A<ParseId>_bool</Find>
+_bool</Find>
+</Find>
+_bool</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseId></ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_bool|CD</Find>
+_ManGE</Find>
+E<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_ManGE</Find>
+hh1kIIbIcinsert type: 17
+***Inserting:_ManGE into 0188B784
+<BuildSignature>:_ManGE</BuildSignature>Insert _ManGE into 0188B784()
+</Find>
+_ManGE</Find>
+At insert:
+Type array:
+   
+JK</Find>
+_Float128</Find>
+</Find>
+_a</Find>
+</Find>
+_Float128</Find>
+b<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_Float128|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_Float128Match
+</Find>
+0IsEqual:T3hh1klIIbJK</Find>
+_b</Find>
+</Find>
+_if</Find>
+</Find>
+_ManGT</Find>
+</Find>
+_a</Find>
+</Find>
+_b</Find>
+b<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_b|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_b</Find>
+hh1klIIbJK</Find>
+_return</Find>
+</Find>
+_true</Find>
+</Find>
+_if</Find>
+Enter declare()
+A<ParseSpecifier>
+A</ParseSpecifier>
+Bb<ParseDeclPrefix>(86)
+<ParseDeclSuffix>
+</ParseDeclSuffix>
+Z</ParseDeclPrefix>
+CEnter declare()
+A<ParseSpecifier>
+A</ParseSpecifier>
+Bb<ParseDeclPrefix>(44)
+<ParsePrefixOpenpa>
+</Find>
+_ManEQ</Find>
+<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_ManEQ|CDE<ParseDeclSuffix>
+<openpa>
+****************************
+****************************
+Function: _ManEQ
+****************************
+****************************
+</Find>
+_a</Find>
+<TYP__Make>
+</TYP__Make>
+o p q rss Set false
+<BuildParameterList
+><ParseParmDecls>
+A(1)CEnter declare()
+A<ParseSpecifier>
+A<ParseId>_a</Find>
+_a</Find>
+</Find>
+_a</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseId></ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_a|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_a</Find>
+hh1kIIbIcinsert type: 17
+***Inserting:_a into 013172AC
+<BuildSignature>:_a</BuildSignature>Insert _a into 013172AC(_ManEQ)
+</Find>
+_a</Find>
+At insert:
+Type array:
+   
+JK</Find>
+_b</Find>
+EA(1)CEnter declare()
+A<ParseSpecifier>
+A<ParseId>_b</Find>
+_b</Find>
+</Find>
+_b</Find>
+<TYP__Make>
+</TYP__Make>
+</ParseId></ParseSpecifier>
+Bb<ParseDeclPrefix>(1)
+<ParsePrefixId>B|_b|CDE<ParseDeclSuffix>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+CDEGH</Find>
+_b</Find>
+hh1kIIbIcinsert type: 17
+***Inserting:_b into 013172AC
+<BuildSignature>:_b</BuildSignature>Insert _b into 013172AC(_ManEQ)
+</Find>
+_b</Find>
+At insert:
+Type array:
+   
+JKEA(45)</ParseParmDecls>
+B</Find>
+_aMatch
+</Find>
+</Find>
+_bMatch
+</Find>
+</BuildParameterList>
+Set false
+Z
+YParameter types(_ManEQ)
+Type array:
+   017 017 
+Proto types(_ManEQ)
+Type array:
+   017 017 
+X</openpa>
+</ParseDeclSuffix>
+</ParsePrefixId></ParseDeclPrefix>
+</Find>
+_return</Find>
+<ParseDeclSuffix>
+</ParseDeclSuffix>

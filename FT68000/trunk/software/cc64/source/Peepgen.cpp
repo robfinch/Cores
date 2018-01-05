@@ -1,11 +1,11 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2017  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-// CC64 - 'C' derived language compiler
+// C64 - 'C' derived language compiler
 //  - 64 bit CPU
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -25,38 +25,18 @@
 //
 #include "stdafx.h"
 
-static void AddToPeepList(OCODE *newc);
+static void AddToPeepList(struct ocode *newc);
 static void Remove();
-void MarkRemove(OCODE *ip);
-void peep_add(OCODE *ip);
-static void PeepoptSub(OCODE *ip);
-void peep_move(OCODE	*ip);
-void peep_cmp(OCODE *ip);
+void MarkRemove(struct ocode *ip);
+void peep_add(struct ocode *ip);
+static void PeepoptSub(struct ocode *ip);
+void peep_move(struct ocode	*ip);
+void peep_cmp(struct ocode *ip);
 static void opt_peep();
-void put_ocode(OCODE *p);
-void CreateControlFlowGraph();
-extern void ComputeLiveVars();
-extern void DumpLiveVars();
-extern Instruction *GetInsn(int);
-void CreateVars();
-void ComputeLiveRanges();
-void DumpLiveRanges();
-void RemoveMoves();
-void DumpVarForests();
-void DumpLiveRegs();
-void CreateVarForests();
-void DeleteSets();
-void RemoveCode();
-Var *FindVar(int num);
-bool RemoveEnabled = true;
-extern BasicBlock *basicBlocks[10000];
+void put_ocode(struct ocode *p);
 
-OCODE    *peep_head = NULL,
+struct ocode    *peep_head = NULL,
                 *peep_tail = NULL;
-
-extern Var *varlist;
-extern BasicBlock *RootBlock;
-extern BasicBlock *LastBlock;
 
 int optimized;	// something got optimized
 
@@ -72,11 +52,10 @@ AMODE *copy_addr(AMODE *ap)
 
 void GeneratePredicatedMonadic(int pr, int pop, int op, int len, AMODE *ap1)
 {
-	OCODE *cd;
-	cd = (OCODE *)allocx(sizeof(OCODE));
+	struct ocode *cd;
+	cd = (struct ocode *)allocx(sizeof(struct ocode));
 	cd->predop = pop;
 	cd->pregreg = pr;
-	cd->insn = GetInsn(op);
 	cd->opcode = op;
 	cd->length = len;
 	cd->oper1 = copy_addr(ap1);
@@ -90,13 +69,12 @@ void GeneratePredicatedMonadic(int pr, int pop, int op, int len, AMODE *ap1)
 void GenerateZeradic(int op)
 {
 	dfs.printf("<GenerateZeradic>\r\n");
-	OCODE *cd;
+	struct ocode *cd;
 	dfs.printf("A");
-	cd = (OCODE *)allocx(sizeof(OCODE));
+	cd = (struct ocode *)allocx(sizeof(struct ocode));
 	dfs.printf("B");
 	cd->predop = 1;
 	cd->pregreg = 15;
-	cd->insn = GetInsn(op);
 	cd->opcode = op;
 	cd->length = 0;
 	cd->oper1 = NULL;
@@ -112,36 +90,12 @@ void GenerateZeradic(int op)
 void GenerateMonadic(int op, int len, AMODE *ap1)
 {
 	dfs.printf("Enter GenerateMonadic\r\n");
-	OCODE *cd;
+	struct ocode *cd;
 	dfs.printf("A");
-	cd = (OCODE *)allocx(sizeof(OCODE));
+	cd = (struct ocode *)allocx(sizeof(struct ocode));
 	dfs.printf("B");
 	cd->predop = 1;
 	cd->pregreg = 15;
-	cd->insn = GetInsn(op);
-	cd->opcode = op;
-	cd->length = len;
-	cd->oper1 = copy_addr(ap1);
-	cd->oper1->isTarget = 1;
-	dfs.printf("C");
-	cd->oper2 = NULL;
-	cd->oper3 = NULL;
-	cd->oper4 = NULL;
-	dfs.printf("D");
-	AddToPeepList(cd);
-	dfs.printf("Leave GenerateMonadic\r\n");
-}
-
-void GenerateMonadicNT(int op, int len, AMODE *ap1)
-{
-	dfs.printf("Enter GenerateMonadic\r\n");
-	OCODE *cd;
-	dfs.printf("A");
-	cd = (OCODE *)allocx(sizeof(OCODE));
-	dfs.printf("B");
-	cd->predop = 1;
-	cd->pregreg = 15;
-	cd->insn = GetInsn(op);
 	cd->opcode = op;
 	cd->length = len;
 	cd->oper1 = copy_addr(ap1);
@@ -156,11 +110,10 @@ void GenerateMonadicNT(int op, int len, AMODE *ap1)
 
 void GeneratePredicatedDiadic(int pop, int pr, int op, int len, AMODE *ap1, AMODE *ap2)
 {
-	OCODE *cd;
-	cd = (OCODE *)allocx(sizeof(OCODE));
+	struct ocode *cd;
+	cd = (struct ocode *)allocx(sizeof(struct ocode));
 	cd->predop = pop;
 	cd->pregreg = pr;
-	cd->insn = GetInsn(op);
 	cd->opcode = op;
 	cd->length = len;
 	cd->oper1 = copy_addr(ap1);
@@ -173,45 +126,14 @@ void GeneratePredicatedDiadic(int pop, int pr, int op, int len, AMODE *ap1, AMOD
 
 void GenerateDiadic(int op, int len, AMODE *ap1, AMODE *ap2)
 {
-	OCODE *cd;
-	cd = (OCODE *)xalloc(sizeof(OCODE));
+	struct ocode *cd;
+	cd = (struct ocode *)xalloc(sizeof(struct ocode));
 	cd->predop = 1;
 	cd->pregreg = 15;
-	cd->insn = GetInsn(op);
-	cd->opcode = op;
-	cd->length = len;
-	cd->oper1 = copy_addr(ap1);
-	cd->oper1->isTarget = 1;
-	cd->oper2 = copy_addr(ap2);
-	if (ap2) {
-		if (ap2->mode == am_ind || ap2->mode==am_indx) {
-			if (ap2->preg==regSP || ap2->preg==regBP)
-				cd->opcode |= op_ss;
-		}
-	}
-	cd->oper3 = NULL;
-	cd->oper4 = NULL;
-	AddToPeepList(cd);
-}
-
-// Generate diadic without a target register.
-void GenerateDiadicNT(int op, int len, AMODE *ap1, AMODE *ap2)
-{
-	OCODE *cd;
-	cd = (OCODE *)xalloc(sizeof(OCODE));
-	cd->predop = 1;
-	cd->pregreg = 15;
-	cd->insn = GetInsn(op);
 	cd->opcode = op;
 	cd->length = len;
 	cd->oper1 = copy_addr(ap1);
 	cd->oper2 = copy_addr(ap2);
-	if (ap2) {
-		if (ap2->mode == am_ind || ap2->mode==am_indx) {
-			if (ap2->preg==regSP || ap2->preg==regBP)
-				cd->opcode |= op_ss;
-		}
-	}
 	cd->oper3 = NULL;
 	cd->oper4 = NULL;
 	AddToPeepList(cd);
@@ -219,28 +141,10 @@ void GenerateDiadicNT(int op, int len, AMODE *ap1, AMODE *ap2)
 
 void GenerateTriadic(int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3)
 {
-	OCODE    *cd;
-	cd = (OCODE *)allocx(sizeof(OCODE));
+	struct ocode    *cd;
+	cd = (struct ocode *)allocx(sizeof(struct ocode));
 	cd->predop = 1;
 	cd->pregreg = 15;
-	cd->insn = GetInsn(op);
-	cd->opcode = op;
-	cd->length = len;
-	cd->oper1 = copy_addr(ap1);
-	cd->oper1->isTarget = 1;
-	cd->oper2 = copy_addr(ap2);
-	cd->oper3 = copy_addr(ap3);
-	cd->oper4 = NULL;
-	AddToPeepList(cd);
-}
-
-void GenerateTriadicNT(int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3)
-{
-	OCODE    *cd;
-	cd = (OCODE *)allocx(sizeof(OCODE));
-	cd->predop = 1;
-	cd->pregreg = 15;
-	cd->insn = GetInsn(op);
 	cd->opcode = op;
 	cd->length = len;
 	cd->oper1 = copy_addr(ap1);
@@ -252,28 +156,10 @@ void GenerateTriadicNT(int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3)
 
 void Generate4adic(int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3, AMODE *ap4)
 {
-	OCODE *cd;
-	cd = (OCODE *)allocx(sizeof(OCODE));
+	struct ocode *cd;
+	cd = (struct ocode *)allocx(sizeof(struct ocode));
 	cd->predop = 1;
 	cd->pregreg = 15;
-	cd->insn = GetInsn(op);
-	cd->opcode = op;
-	cd->length = len;
-	cd->oper1 = copy_addr(ap1);
-	cd->oper1->isTarget = true;
-	cd->oper2 = copy_addr(ap2);
-	cd->oper3 = copy_addr(ap3);
-	cd->oper4 = copy_addr(ap4);
-	AddToPeepList(cd);
-}
-
-void Generate4adicNT(int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3, AMODE *ap4)
-{
-	OCODE *cd;
-	cd = (OCODE *)allocx(sizeof(OCODE));
-	cd->predop = 1;
-	cd->pregreg = 15;
-	cd->insn = GetInsn(op);
 	cd->opcode = op;
 	cd->length = len;
 	cd->oper1 = copy_addr(ap1);
@@ -283,7 +169,7 @@ void Generate4adicNT(int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3, AMODE 
 	AddToPeepList(cd);
 }
 
-static void AddToPeepList(OCODE *cd)
+static void AddToPeepList(struct ocode *cd)
 {
 	if (!dogen)
 		return;
@@ -303,7 +189,7 @@ static void AddToPeepList(OCODE *cd)
 	}
 }
 
-int PeepCount(OCODE *ip)
+int PeepCount(struct ocode *ip)
 {
 	int cnt;
 
@@ -318,11 +204,11 @@ int PeepCount(OCODE *ip)
  */
 void GenerateLabel(int labno)
 {      
-	OCODE *newl;
-	newl = (OCODE *)allocx(sizeof(OCODE));
+	struct ocode *newl;
+	newl = (struct ocode *)allocx(sizeof(struct ocode));
 	newl->opcode = op_label;
-	newl->oper1 = (AMODE *)labno;
-	newl->oper2 = (AMODE *)my_strdup((char *)currentFn->name->c_str());
+	newl->oper1 = (struct amode *)labno;
+	newl->oper2 = (struct amode *)my_strdup((char *)currentFn->name->c_str());
 	AddToPeepList(newl);
 }
 
@@ -334,7 +220,7 @@ void GenerateLabel(int labno)
 
 static void SetLabelReference()
 {
-	OCODE *p, *q;
+	struct ocode *p, *q;
 	struct clit *ct;
 	int nn;
 
@@ -383,11 +269,10 @@ static void SetLabelReference()
 
 static void EliminateUnreferencedLabels()
 {
-	OCODE *p;
+	struct ocode *p;
 
 	for (p = peep_head; p; p = p->fwd) {
-		if (p->opcode==op_label)
-			p->remove = false;
+		p->remove = false;
 		if (p->opcode==op_label && !p->isReferenced) {
 			MarkRemove(p);
 			optimized++;
@@ -415,7 +300,7 @@ void flush_peep()
 /*
  *      output the instruction passed.
  */
-void put_ocode(OCODE *p)
+void put_ocode(struct ocode *p)
 {
 	put_code(p);
 //	put_code(p->opcode,p->length,p->oper1,p->oper2,p->oper3,p->oper4);
@@ -430,13 +315,37 @@ void put_ocode(OCODE *p)
 // Changed to:
 //		mov		r3,r5
 
-void peep_move(OCODE *ip)
+void peep_move(struct ocode	*ip)
 {
 	if (equal_address(ip->oper1, ip->oper2)) {
 		MarkRemove(ip);
 		optimized++;
-		return;
 	}
+	if (ip->fwd) {
+		if (ip->fwd->opcode==op_move) {
+			if (equal_address(ip->oper1,ip->fwd->oper1)
+				&& equal_address(ip->oper2,ip->fwd->oper2))
+			{
+				MarkRemove(ip);
+				optimized++;
+				return;
+			}
+		}
+	}
+	if (ip->back) {
+		if (ip->back->opcode==op_add || ip->back->opcode==op_and) {	// any ALU op
+			if (equal_address(ip->back->oper1, ip->oper1)) {
+				if (!(equal_address(ip->back->oper2,ip->oper1) || ip->back->oper2==nullptr)
+					&& (equal_address(ip->back->oper3,ip->oper1) || ip->back->oper3==nullptr)
+					&& (equal_address(ip->back->oper4,ip->oper1) || ip->back->oper4==nullptr)) { 
+					ip->back->back->fwd = ip;
+					ip->back = ip->back->back;
+					optimized++;
+				}
+			}
+		}
+	}
+	return;
 }
 
 /*
@@ -453,8 +362,14 @@ int equal_address(AMODE *ap1, AMODE *ap2)
   {
   case am_immed:
 	  return (ap1->offset->i == ap2->offset->i);
-  case am_reg:
-    return ap1->preg == ap2->preg;
+  case am_dreg:
+	  if (ap2->mode!=am_dreg)
+		  return(FALSE);
+	  return (ap1->preg==ap2->preg);
+  case am_areg:
+	  if (ap2->mode!=am_areg)
+		  return(FALSE);
+	  return (ap1->preg==ap2->preg);
   case am_ind:
   case am_indx:
 	  if (ap1->preg != ap2->preg)
@@ -474,7 +389,7 @@ int equal_address(AMODE *ap1, AMODE *ap2)
  *      peephole optimization for add instructions.
  *      makes quick immediates out of small constants.
  */
-void peep_add(OCODE *ip)
+void peep_add(struct ocode *ip)
 {
      AMODE *a;
      
@@ -485,10 +400,10 @@ void peep_add(OCODE *ip)
          return;
         if (ip->oper1) {
             a = ip->oper1;
-            if (a->mode==am_reg) {
+            if (a->mode==am_areg) {
                 if (a->preg==regSP) {
-                    if (ip->fwd->opcode==op_mov) {
-                        if (ip->fwd->oper1->mode==am_reg) {
+                    if (ip->fwd->opcode==op_move) {
+                        if (ip->fwd->oper1->mode==am_areg) {
                             if (ip->fwd->oper1->preg == regSP) {
                                 if (ip->back==NULL)
                                     return;
@@ -506,38 +421,16 @@ void peep_add(OCODE *ip)
 
 // 'subui' followed by a 'bne' gets turned into 'loop'
 //
-static void PeepoptSub(OCODE *ip)
+static void PeepoptSub(struct ocode *ip)
 {  
-	return;
-	if (ip->opcode==op_subui) {
-		if (ip->oper3) {
-			if (ip->oper3->mode==am_immed) {
-				if (ip->oper3->offset->nodetype==en_icon && ip->oper3->offset->i==1) {
-					if (ip->fwd) {
-						if (ip->fwd->opcode==op_ne && ip->fwd->oper2->mode==am_reg && ip->fwd->oper2->preg==0) {
-							if (ip->fwd->oper1->preg==ip->oper1->preg) {
-								ip->opcode = op_loop;
-								ip->oper2 = ip->fwd->oper3;
-								ip->oper3 = NULL;
-								if (ip->fwd->back) ip->fwd->back = ip;
-								ip->fwd = ip->fwd->fwd;
-								optimized++;
-								return;
-							}
-						}
-					}
-				}
-			}
-		}
-	}
 	return;
 }
 
-static bool IsSubiSP(OCODE *ip)
+static bool IsSubiSP(struct ocode *ip)
 {
 	if (ip->opcode==op_sub) {
-		if (ip->oper3->mode==am_immed) {
-			if (ip->oper1->preg==regSP && ip->oper2->preg==regSP) {
+		if (ip->oper1->mode==am_immed) {
+			if (ip->oper2->preg==regSP) {
 				return (true);
 			}
 		}
@@ -545,9 +438,9 @@ static bool IsSubiSP(OCODE *ip)
 	return (false);
 }
 
-static void MergeSubi(OCODE *first, OCODE *last, int64_t amt)
+static void MergeSubi(struct ocode *first, struct ocode *last, int64_t amt)
 {
-	OCODE *ip;
+	struct ocode *ip;
 
 	if (first==nullptr)
 		return;
@@ -565,7 +458,7 @@ static void MergeSubi(OCODE *first, OCODE *last, int64_t amt)
 	}
 }
 
-static bool IsFlowControl(OCODE *ip)
+static bool IsFlowControl(struct ocode *ip)
 {
 	if (ip->opcode==op_jal ||
 		ip->opcode==op_jmp ||
@@ -591,10 +484,7 @@ static bool IsFlowControl(OCODE *ip)
 		ip->opcode==op_bltui ||
 		ip->opcode==op_bleui ||
 		ip->opcode==op_bgtui ||
-		ip->opcode==op_bgeui ||
-		ip->opcode==op_beqi ||
-		ip->opcode==op_bbs ||
-		ip->opcode==op_bbc
+		ip->opcode==op_bgeui
 		)
 		return (true);
 	return (false);
@@ -604,9 +494,9 @@ static bool IsFlowControl(OCODE *ip)
 //
 static void PeepoptSubSP()
 {  
-	OCODE *ip;
-	OCODE *first_subi = nullptr;
-	OCODE *last_subi = nullptr;
+	struct ocode *ip;
+	struct ocode *first_subi = nullptr;
+	struct ocode *last_subi = nullptr;
 	int64_t amt = 0;
 
 	for (ip = peep_head; ip; ip = ip->fwd) {
@@ -628,7 +518,7 @@ static void PeepoptSubSP()
 /*
  *      peephole optimization for compare instructions.
  */
-void peep_cmp(OCODE *ip)
+void peep_cmp(struct ocode *ip)
 {
 	return;
 }
@@ -638,7 +528,7 @@ void peep_cmp(OCODE *ip)
  *      to shift operations. op should be either op_asl or
  *      op_asr (for divide).
  */
-void PeepoptMuldiv(OCODE *ip, int op)
+void PeepoptMuldiv(struct ocode *ip, int op)
 {  
 	int shcnt;
 	int64_t num;
@@ -679,7 +569,7 @@ void PeepoptMuldiv(OCODE *ip, int op)
 // Instructions that follow an unconditional transfer won't be executed
 // unless there is a label to branch to them.
 //
-void PeepoptUctran(OCODE *ip)
+void PeepoptUctran(struct ocode *ip)
 {
 	if (uctran_off) return;
 	while( ip->fwd != NULL && ip->fwd->opcode != op_label)
@@ -691,7 +581,7 @@ void PeepoptUctran(OCODE *ip)
 	}
 }
 
-void PeepoptJAL(OCODE *ip)
+void PeepoptJAL(struct ocode *ip)
 {
 	if (ip->oper1->preg!=0)
 		return;
@@ -700,9 +590,9 @@ void PeepoptJAL(OCODE *ip)
 
 // Remove instructions that branch to the next label.
 //
-void PeepoptBranch(OCODE *ip)
+void PeepoptBranch(struct ocode *ip)
 {
-	OCODE *p;
+	struct ocode *p;
 
 	for (p = ip->fwd; p && p->opcode==op_label; p = p->fwd)
 		if (ip->oper1->offset->i == (int)p->oper1) {
@@ -721,9 +611,9 @@ void PeepoptBranch(OCODE *ip)
 // ldi  rn,#0
 // lab2:
         
-void PeepoptBcc(OCODE * ip)
+void PeepoptBcc(struct ocode * ip)
 {
-     OCODE *fwd1, *fwd2, *fwd3, *fwd4, *fwd5;
+     struct ocode *fwd1, *fwd2, *fwd3, *fwd4, *fwd5;
      if (!ip->fwd)
          return;
      fwd1 = ip->fwd;
@@ -767,7 +657,7 @@ void PeepoptBcc(OCODE * ip)
 // or this code might not work.
 }
 
-void PeepoptLc(OCODE *ip)
+void PeepoptLc(struct ocode *ip)
 {
 	if (ip->fwd) {
 		if (ip->fwd->opcode==op_sext16 || ip->fwd->opcode==op_sxc ||
@@ -786,9 +676,9 @@ void PeepoptLc(OCODE *ip)
 // If LEA is followed by the push of more than one register, then leave it
 // alone. The register order of the push matters.
 
-void PeepoptLea(OCODE *ip)
+void PeepoptLea(struct ocode *ip)
 {
-	OCODE *ip2;
+	struct ocode *ip2;
 	int whop;
 
 	return;
@@ -805,7 +695,7 @@ void PeepoptLea(OCODE *ip)
   if (whop > 1)
     return;
   // Pushing a single register     
-  if (ip2->oper1->mode != am_reg)
+  if (ip2->oper1->mode != am_areg)
      return;
   // And it's the same register as the LEA
   if (ip2->oper1->preg != ip->oper1->preg)
@@ -818,9 +708,9 @@ void PeepoptLea(OCODE *ip)
 
 // LW followed by a push of the same register gets translated to PUSH.
 
-void PeepoptLw(OCODE *ip)
+void PeepoptLw(struct ocode *ip)
 {
-	OCODE *ip2;
+	struct ocode *ip2;
 
 	return;
 	ip2 = ip->fwd;
@@ -828,7 +718,7 @@ void PeepoptLw(OCODE *ip)
 	   return;
     if (ip2->opcode != op_push)
        return;
-    if (ip2->oper1->mode != am_reg)
+    if (ip2->oper1->mode != am_areg && ip2->oper1->mode != am_dreg)
        return;
     if (ip->oper2->mode != am_ind && ip->oper2->mode != am_indx)
        return;
@@ -840,33 +730,11 @@ void PeepoptLw(OCODE *ip)
     ip->fwd = ip2->fwd;
 }
 
-// LC0I followed by a push of the same register gets translated to PUSH.
-
-void PeepoptLc0i(OCODE *ip)
-{
-	OCODE *ip2;
-
-    if (!isFISA64)
-       return;
-	ip2 = ip->fwd;
-	if (!ip2)
-	   return;
-    if (ip2->opcode != op_push)
-       return;
-    if (ip->oper2->offset->i > 0x1fffLL || ip->oper2->offset->i <= -0x1fffLL)
-       return;
-    ip->opcode = op_push;
-    ip->oper1 = copy_addr(ip->oper2);
-    ip->oper2 = NULL;
-    ip->fwd = ip2->fwd;
-}
-
-
 // Combine a chain of push operations into a single push
 
-void PeepoptPushPop(OCODE *ip)
+void PeepoptPushPop(struct ocode *ip)
 {
-	OCODE *ip2,*ip3,*ip4;
+	struct ocode *ip2,*ip3,*ip4;
 
 	return;
 	if (ip->opcode==op_pop) {
@@ -918,17 +786,10 @@ void PeepoptPushPop(OCODE *ip)
 
 // Strip out useless masking operations generated by type conversions.
 
-void peep_ld(OCODE *ip)
+void peep_ld(struct ocode *ip)
 {
 	if (ip->oper2->mode != am_immed)
 		return;
-	if (ip->oper2->offset->i==0) {
-		ip->opcode = op_mov;
-		ip->oper2->mode = am_reg;
-		ip->oper2->preg = 0;
-		optimized++;
-		return;
-	}
 	if (!ip->fwd)
 		return;
 	if (ip->fwd->opcode!=op_and)
@@ -947,7 +808,7 @@ void peep_ld(OCODE *ip)
 }
 
 
-void PeepoptLd(OCODE *ip)
+void PeepoptLd(struct ocode *ip)
 {
     return;
 }
@@ -955,7 +816,7 @@ void PeepoptLd(OCODE *ip)
 
 // Remove extra labels at end of subroutines
 
-void PeepoptLabel(OCODE *ip)
+void PeepoptLabel(struct ocode *ip)
 {
     if (!ip)
         return;
@@ -969,7 +830,7 @@ void PeepoptLabel(OCODE *ip)
 // Optimize away duplicate sign extensions that the compiler sometimes
 // generates. This handles sxb, sxcm and sxh.
 
-void PeepoptSxb(OCODE *ip)
+void PeepoptSxb(struct ocode *ip)
 {
      if (!ip->fwd)
          return;
@@ -986,7 +847,7 @@ void PeepoptSxb(OCODE *ip)
           ip->fwd->fwd->back = ip;
 	optimized++;
 }
-void PeepoptSxbAnd(OCODE *ip)
+void PeepoptSxbAnd(struct ocode *ip)
 {
      if (!ip->fwd)
          return;
@@ -1007,7 +868,7 @@ void PeepoptSxbAnd(OCODE *ip)
 
 static void opt_nbr()
 {
-	OCODE *ip,*pip;
+	struct ocode *ip,*pip;
 	
 	ip = peep_head;
 	pip = peep_head;
@@ -1027,9 +888,34 @@ static void opt_nbr()
 }
 
 
+// Return true if the instruction has a target register.
+
+static bool HasTargetReg(struct ocode *ip)
+{
+	switch(ip->opcode) {
+	case op_lb:
+	case op_lc:
+	case op_lh:
+	case op_lbu:
+	case op_lcu:
+	case op_lhu:
+	case op_lw:
+	case op_add:
+	case op_sub:
+	case op_and:
+	case op_or:
+	case op_mul:
+	case op_div:
+	case op_mulu:
+	case op_divu:
+		return true;
+	}
+	return false;
+}
+
 // Process compiler hint opcodes
 
-static void PeepoptHint(OCODE *ip)
+static void PeepoptHint(struct ocode *ip)
 {
 	if ((ip->back && ip->back->opcode==op_label) || (ip->fwd && ip->fwd->opcode==op_label))
 		return;
@@ -1044,23 +930,13 @@ static void PeepoptHint(OCODE *ip)
 	// Translated to:
 	//    MOV r18,#constant
 	case 1:
-		if (ip->fwd && ip->fwd->opcode != op_mov) {
+		if (ip->fwd && ip->fwd->opcode != op_move) {
 			MarkRemove(ip);
 			optimized++;
 			return;
 		}
 		
-		if (ip->fwd && ip->fwd->oper1->preg >= 18 && ip->fwd->oper1->preg < 24) {
-			if (equal_address(ip->fwd->oper2, ip->back->oper1)) {
-				ip->back->oper1 = ip->fwd->oper1;
-				MarkRemove(ip);
-				MarkRemove(ip->fwd);
-				optimized++;
-				return;
-			}
-		}
-
-		if (ip->back && ip->back->opcode != op_mov) {
+		if (ip->back && ip->back->opcode != op_move) {
 			MarkRemove(ip);
 			optimized++;
 			return;
@@ -1089,7 +965,7 @@ static void PeepoptHint(OCODE *ip)
 		if (ip->fwd==nullptr || ip->back==nullptr)
 			break;
 		if (equal_address(ip->fwd->oper2, ip->back->oper1)) {
-			if (ip->back->HasTargetReg()) {
+			if (HasTargetReg(ip->back)) {
 				ip->back->oper1 = ip->fwd->oper1;
 				MarkRemove(ip->fwd);
 				optimized++;
@@ -1137,34 +1013,8 @@ static void PeepoptHint(OCODE *ip)
 // Note this optimization won't be performed for volatile
 // addresses.
 
-static void Swap(OCODE *ip1, OCODE *ip2)
+static void PeepoptStore(struct ocode *ip)
 {
-	OCODE *ip1b = ip1->back, *ip1f = ip1->fwd;
-	OCODE *ip2b = ip2->back, *ip2f = ip2->fwd;
-	ip1b->fwd = ip2;
-	ip2f->back = ip1;
-	ip1->fwd = ip2f;
-	ip1->back = ip2;
-	ip2->fwd = ip1;
-	ip2->back = ip1b;
-}
-
-static void PeepoptSh(OCODE *ip)
-{
-	OCODE *p, *q;
-	if (ip->back && (ip->back->opcode==op_bfextu || ip->back->opcode==op_bfext)) {
-		if (ip->back->oper1->preg==ip->oper1->preg) {
-			if (ip->back->oper3->offset->i == 0 && ip->back->oper4->offset->i==31) {
-				Swap(ip->back,ip);
-			}
-		}
-	}
-}
-
-static void PeepoptStore(OCODE *ip)
-{
-	if (ip->opcode==op_sh)
-		PeepoptSh(ip);
 	if (ip->opcode==op_label || ip->fwd->opcode==op_label)
 		return;
 	if (!equal_address(ip->oper1, ip->fwd->oper1))
@@ -1191,19 +1041,9 @@ static void PeepoptStore(OCODE *ip)
 //		and		r3,r3,#255
 // Eliminates the useless 'and' operation.
 
-static void PeepoptAnd(OCODE *ip)
+static void PeepoptAnd(struct ocode *ip)
 {
 	// This doesn't work properly yet in all cases.
-	if (ip->oper1 && ip->oper2 && ip->oper3) {
-		if (ip->oper1->mode==am_reg && ip->oper2->mode==am_reg && ip->oper3->mode == am_immed) {
-			if (ip->oper3->offset->i > 0xffff)
-				printf("hi");
-			if (ip->oper1->preg==ip->oper2->preg && ip->oper3->offset->i==-1) {
-				MarkRemove(ip);
-				optimized++;
-			}
-		}
-	}
 	return;
 	if (ip->oper2==nullptr || ip->oper3==nullptr)
 		throw new C64PException(ERR_NULLPOINTER,0x50);
@@ -1243,7 +1083,7 @@ static void PeepoptAnd(OCODE *ip)
 static int CountBPReferences()
 {
 	int refBP = 0;
-	OCODE *ip;
+	struct ocode *ip;
 
 	for (ip = peep_head; ip != NULL; ip = ip->fwd)
 	{
@@ -1270,31 +1110,25 @@ static int CountBPReferences()
 	return (refBP);
 }
 
-void MarkRemove(OCODE *ip)
+void MarkRemove(struct ocode *ip)
 {
 	ip->remove = true;
 }
 
-void MarkRemove2(OCODE *ip)
-{
-	ip->remove2 = true;
-}
-
 static void MarkAllKeep()
 {
-	OCODE *ip;
+	struct ocode *ip;
 
 	for (ip = peep_head; ip != NULL; ip = ip->fwd )
 	{
-		//ip->remove = false;
+		ip->remove = false;
 	}
 }
 
 static void Remove()
 {
-	OCODE *ip, *ip1, *ip2;
+	struct ocode *ip, *ip1, *ip2;
 
-	if (RemoveEnabled)
 	for (ip = peep_head; ip; ip = ip1) {
 		ip1 = ip->fwd;
 		ip2 = ip->back;
@@ -1309,53 +1143,12 @@ static void Remove()
 	}
 }
 
-static void Remove2()
-{
-	OCODE *ip, *ip1, *ip2;
-
-	if (RemoveEnabled)
-	for (ip = peep_head; ip; ip = ip1) {
-		ip1 = ip->fwd;
-		ip2 = ip->back;
-		if (ip->remove2) {
-			if (ip1 && ip1->comment==nullptr)
-				ip1->comment = ip->comment;
-			if (ip2)
-				ip2->fwd = ip1;
-			if (ip1)
-				ip1->back = ip2;
-		}
-	}
-}
-
-static void RemoveDoubleTargets(OCODE *ip)
-{
-	OCODE *ip2;
-
-	if (!ip->HasTargetReg())
-		return;
-	for (ip2 = ip->fwd; ip2 && (ip2->opcode==op_rem || ip2->opcode==op_hint); ip2 = ip2->fwd);
-	if (ip2==nullptr)
-		return;
-	if (!ip2->HasTargetReg())
-		return;
-	if (ip2->GetTargetReg() != ip->GetTargetReg())
-		return;
-	if (ip2->HasSourceReg(ip->GetTargetReg()))
-		return;
-	if (ip->GetTargetReg()==31)
-		return;
-	MarkRemove(ip);
-	optimized++;
-}
-
-
 // Remove stack linkage code for when there are no references to the base 
 // pointer.
 
 static void RemoveLinkUnlink()
 {
-	OCODE *ip;
+	struct ocode *ip;
 
 	for (ip = peep_head; ip != NULL; ip = ip->fwd)
 	{
@@ -1367,7 +1160,7 @@ static void RemoveLinkUnlink()
 
 static void RemoveCompilerHints()
 {
-	OCODE *ip;
+	struct ocode *ip;
 
     for(ip = peep_head; ip != NULL; ip = ip->fwd)
     {
@@ -1384,7 +1177,7 @@ static void RemoveCompilerHints()
 //
 static void opt_peep()
 {  
-	OCODE *ip;
+	struct ocode *ip;
 	int rep;
 	
 	// Remove any dead code identified by the code generator.
@@ -1404,10 +1197,10 @@ static void opt_peep()
 			SetLabelReference();
 			EliminateUnreferencedLabels();
 			Remove();
-			//MarkAllKeep();
+			MarkAllKeep();
 			for (ip = peep_head; ip != NULL; ip = ip->fwd )
 			{
-				if (!ip->remove) {
+				if (!ip->remove)
 				switch( ip->opcode )
 				{
 				case op_rem:
@@ -1420,11 +1213,11 @@ static void opt_peep()
 					peep_ld(ip);
 					PeepoptLd(ip);
 				break;
-				case op_mov:
+				case op_move:
 						peep_move(ip);
 						break;
 				case op_add:
-				case op_addu:
+				case op_adda:
 				case op_addui:
 						peep_add(ip);
 						break;
@@ -1467,7 +1260,7 @@ static void opt_peep()
 				case op_jmp:
 				case op_ret:
 				case op_rts:
-				case op_rti:
+				case op_rte:
 				case op_rtd:
 				case op_rtl:
 						PeepoptUctran(ip);
@@ -1486,11 +1279,7 @@ static void opt_peep()
 						PeepoptAnd(ip);
 						break;
 				}
-				}
 			}
-			Remove();
-			for (ip = peep_head; ip != NULL; ip = ip->fwd )
-				RemoveDoubleTargets(ip);
 			Remove();
 		}
 		PeepoptSubSP();
@@ -1510,166 +1299,4 @@ static void opt_peep()
 	// Remove all the compiler hints that didn't work out.
 	RemoveCompilerHints();
 	Remove();
-
-	RootBlock = BasicBlock::Blockize(peep_head);
-	CreateControlFlowGraph();
-	ComputeLiveVars();
-	DumpLiveVars();
-	CreateVars();
-	Var::CreateForests();
-	RemoveMoves();
-	Var::DumpForests();
-	RemoveCode();
-	//DumpLiveRegs();
 }
-
-// Return true if the instruction has a target register.
-
-bool OCODE::HasTargetReg() const
-{
-	if (insn)
-		return (insn->HasTarget);
-	else
-		return (false);
-}
-
-
-OCODE *FindLabel(int64_t i)
-{
-	OCODE *ip;
-
-	for (ip = peep_head; ip; ip = ip->fwd) {
-		if (ip->opcode==op_label) {
-			if ((int)ip->oper1==i)
-				return (ip);
-		}
-	}
-	return nullptr;
-}
-
-void CreateVars()
-{
-	BasicBlock *b;
-	int nn;
-	int num;
-
-	varlist = nullptr;
-	for (b = RootBlock; b; b = b->next) {
-		b->LiveOut->resetPtr();
-		for (nn = 0; nn < b->LiveOut->NumMember(); nn++) {
-			num = b->LiveOut->nextMember();
-			Var::Find(num);
-		}
-	}
-}
-
-// Remove the mov operation from consideration.
-// mov will create a false interference.
-
-void RemoveMoves()
-{
-	OCODE *ip;
-	BasicBlock *b;
-	Var *v;
-	Tree *t;
-
-	for (ip = peep_head; ip; ip = ip->fwd) {
-		if (ip->opcode==op_mov || ip->opcode==op_bfext) {
-			b = ip->bb;
-			for (v = varlist; v; v = v->next) {
-				for (t = v->trees; t; t = t->next) {
-					t->tree->remove(b->num);
-				}
-			}
-		}
-	}
-}
-
-void ComputeSpillCosts()
-{
-	Var *v;
-	Tree *t;
-	BasicBlock *b;
-	OCODE *ipb, *ip;
-	bool ipl;
-
-	for (b = RootBlock; b; b = b->next) {
-		b->MustSpill->copy(*b->LiveOut);
-		ipb = b->next->code;
-		ipb = ipb->back;
-		ipl = false;
-		for (ip = ipb; ip && !ipl; ip = ip->back) {
-			ipl = ip->leader;
-		}
-	}
-
-	for (v = varlist; v; v = v->next) {
-		for (t = v->trees; t; t = t->next) {
-			v->forest->add(t->tree);
-		}
-	}
-
-}
-
-int OCODE::GetTargetReg() const
-{
-	if (insn==nullptr)
-		return(0);
-	if (insn->HasTarget) {
-		// Handle implicit targets
-		switch(insn->opcode) {
-		case op_pop:
-		case op_unlk:
-		case op_link:	return((oper1->preg<<16) | 31);
-		case op_push:
-		case op_ret:
-		case op_call:	return (31);
-		default:
-			return (oper1->preg);
-		}
-	}
-	else
-		return (0);
-}
-
-
-void RemoveCode()
-{
-	int nn;
-	Var *v;
-	Tree *t;
-	OCODE *p;
-	int count;
-
-	count = 0;
-	//printf((char *)currentFn->name->c_str());
-	//printf("\r\n");
-	for (v = varlist; v; v = v->next) {
-		if (v->num==0 || v->num==31)
-			continue;
-		for (t = v->trees; t; t = t->next) {
-			nn = t->tree->lastMember();
-			do {
-				for (p = basicBlocks[nn]->lcode; p && !p->leader; p = p->back) {
-					if (p->opcode==op_label)
-						continue;
-					if (p->opcode==op_ret)
-						continue;
-					if (p->GetTargetReg() == v->num) {
-						if (p->bb->ohead==nullptr) {
-							MarkRemove2(p);
-							count++;
-						}
-					}
-					if (!p->remove && p->HasSourceReg(v->num))
-						goto j1;
-				}
-			} while((nn = t->tree->prevMember()) >= 0);
-j1:	;
-		}
-		Remove2();
-	}
-	dfs.printf("<CodeRemove>%d</CodeRemove>\n", count);
-}
-
-
