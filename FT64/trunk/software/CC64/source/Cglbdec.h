@@ -78,6 +78,8 @@ extern int regCLP;
 extern int regZero;
 extern int regFirstRegvar;
 extern int regLastRegvar;
+extern int regFirstParm;
+extern int regLastParm;
 extern int farcode;
 extern int wcharSupport;
 extern int verbose;

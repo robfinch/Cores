@@ -382,8 +382,10 @@ class AMODE : public CompilerType
 {
 public:
 	unsigned int mode : 6;
-	unsigned int preg : 8;
-	unsigned int sreg : 8;
+	unsigned int preg : 8;		// priimary virtual register number
+	unsigned int sreg : 8;		// secondary virtual register number (indexed addressing modes)
+	unsigned int lrpreg : 8;	// renumbered live range register
+	unsigned int lrsreg : 8;
 	unsigned int segment : 4;
 	unsigned int defseg : 1;
 	unsigned int tempflag : 1;
@@ -506,15 +508,19 @@ class Var : public CompilerType
 public:
 	Var *next;
 	int num;
+	int cnum;
 	Tree *trees;
 	CSet *forest;
+	CSet *visited;
 public:
 	static Var *MakeNew();
+	void GrowTree(Tree *, BasicBlock *, int);
 	// Create a forest for a specific Var
 	void CreateForest();
 	// Create a forest for each Var object
 	static void CreateForests();
 	static Var *Find(int);
+	static Var *Find2(int);
 	static void DumpForests();
 };
 
@@ -534,8 +540,8 @@ public:
     ENODE *exp;           /* optimizable expression */
     short int       uses;           /* number of uses */
     short int       duses;          /* number of dereferenced uses */
-    short int       voidf;          /* cannot optimize flag */
     short int       reg;            /* AllocateRegisterVarsd register */
+    unsigned int    voidf : 1;      /* cannot optimize flag */
     unsigned int    isfp : 1;
 public:
 	int OptimizationDesireability();

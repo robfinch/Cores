@@ -76,10 +76,11 @@ static int AllocateRegisters1()
 			if (csp->reg==-1) {
 				if( csp->OptimizationDesireability() >= 4-nn ) {
 					if (csp->exp->etype!=bt_vector) {
-    					if(( csp->duses > csp->uses / (8 << nn)) && reg < regLastRegvar )
+//    					if(( csp->duses > csp->uses / (8 << nn)) && reg < regLastRegvar )	// <- address register assignments
+						if (reg <= regLastRegvar)
     						csp->reg = reg++;
-    					else
-    						csp->reg = -1;
+//    					else
+//    						csp->reg = -1;
 					}
 				}
 			}
@@ -246,7 +247,7 @@ int AllocateRegisterVars()
         if( csp->reg != -1 )
         {               // see if preload needed
             exptr = csp->exp;
-            if( !IsLValue(exptr) || (exptr->p[0]->i > 0) || (exptr->nodetype==en_struct_ref))
+            if( 1 || !IsLValue(exptr) || (exptr->p[0]->i > 0) || (exptr->nodetype==en_struct_ref))
             {
                 initstack();
 				{

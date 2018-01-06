@@ -127,8 +127,9 @@ public:
 	int isDisjoint(CSet &s) { return (SetTest(s) == SET_DISJ); };
 	int isIntersecting(CSet &s) { return (SetTest(s) == SET_INTER); };
 	int isEmpty() { return NumMember() == 0; };
-	int isMember(int bit) { return ((bit >= nbits)||bit < 0 ? 0 : map[bit >> SET_NBIT] & (1 << (bit & SET_BMASK))); }; // is n a member of s ?
+	int isMember(int bit) { return ((bit >= nbits)||bit < 0 ? 0 : (map[bit >> SET_NBIT] & (1 << (bit & SET_BMASK)))) != 0; }; // is n a member of s ?
 	int test(int x) { return (isMember(x)) ? !compl : compl; };
+	int isSubset(CSet &);
 
 //	void Serialize(CArchive& ar);
 };

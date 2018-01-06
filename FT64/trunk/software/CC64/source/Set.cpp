@@ -210,7 +210,9 @@ void CSet::enlarge(int n)
 		exit(1);
 	}
 	memcpy(p, map, size * sizeof(int));
-	memset(p+size, 0, (n-size) * sizeof(int));
+	if (memcmp(p,map,size*sizeof(int)) != 0)
+		printf("hi");
+//	memset(p+size, 0, (n-size) * sizeof(int)); <- allocx zeros memory
 //	if (map != dmap)
 //		delete[] map;
 	map = p;
@@ -323,11 +325,11 @@ int CSet::NumMember() const
 	};
 
 	int tot = 0, ii;
-	unsigned char *pm = (unsigned char *)map;
+	unsigned __int8 *pm = (unsigned __int8 *)map;
 
 	for (ii = size * sizeof(int); --ii >= 0;)
 		tot += numbits[pm[ii]];
-	return tot;
+	return (tot);
 }
 
 
@@ -582,8 +584,10 @@ int CSet::SetTest(CSet &s)
 	i = max(size, s.size);
 
 	// Make the sets the same size.
-	enlarge(i);
-	s.enlarge(i);
+	if (s.size > size)
+		enlarge(i);
+	else
+		s.enlarge(i);
 
 	p1 = map;
 	p2 = s.map;
@@ -600,6 +604,23 @@ int CSet::SetTest(CSet &s)
 	}
 	return rval;
 }
+
+int CSet::isSubset(CSet &s)
+{
+	int i;
+	unsigned int *p1, *p2;
+
+	if (s.size > size)
+		return (false);
+	p1 = map;
+	p2 = s.map;
+	for (i = s.size; --i >= 0; p1++, p2++) {
+		if ((*p1 & *p2) != *p2)
+			return (false);
+	}
+	return (true);
+}
+
 /*
 void CSet::Serialize(CArchive& ar)
 {

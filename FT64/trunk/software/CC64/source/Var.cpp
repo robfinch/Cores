@@ -37,13 +37,14 @@ Var *Var::MakeNew()
 
 	p = (Var *)allocx(sizeof(Var));
 	p->forest = CSet::MakeNew();
+	p->visited = CSet::MakeNew();
 	return (p);
 }
 
 // Live ranges are represented as tree structures.
 // Since there could be multiple live ranges (trees) for any given variable
 // the group of ranges (or trees) is called a forest.
-
+/*
 void Var::CreateForest()
 {
 	Edge *ep;
@@ -108,6 +109,7 @@ void Var::CreateForest()
 				wl.push(b->prev);
 			}
 			*/
+/*
 		}
 		else {
 			tree = Tree::MakeNew();
@@ -129,12 +131,162 @@ void Var::CreateForest()
 		}
 	}
 }
+*/
+
+void Var::GrowTree(Tree *t, BasicBlock *b, int num)
+{
+	Edge *ep;
+	BasicBlock *p;
+
+	for (ep = b->ihead; ep; ep = ep->next) {
+//		if (!ep->backedge) {
+			p = ep->src;
+			if (!visited->isMember(p->num)) {
+				visited->add(p->num);
+				if (p->LiveOut->isMember(num)) {
+					if (t==nullptr) {
+						t = Tree::MakeNew();
+						t->next = trees;
+						t->num = treeno;
+						treeno++;
+						trees = t;
+					}
+					t->tree->add(p->num);
+					forest->add(p->num);
+					GrowTree(t, p, num);
+				}
+				else
+					GrowTree(nullptr, p, num);
+			}
+//		}
+	}
+	for (ep = b->ohead; ep; ep = ep->next) {
+//		if (ep->backedge) {
+			p = ep->src;
+			if (!visited->isMember(p->num)) {
+				visited->add(p->num);
+				if (p->LiveOut->isMember(num)) {
+					if (t==nullptr) {
+						t = Tree::MakeNew();
+						t->next = trees;
+						t->num = treeno;
+						treeno++;
+						trees = t;
+					}
+					t->tree->add(p->num);
+					forest->add(p->num);
+					GrowTree(t, p, num);
+				}
+				else {
+					GrowTree(nullptr, p, num);
+				}
+			}
+//		}
+	}
+}
+
+void Var::CreateForest()
+{
+	BasicBlock *b, *p;
+	Edge *ep;
+	Tree *t;
+	char buf[2000];
+
+	treeno = 1;
+	b = LastBlock;
+	visited->add(b->num);
+	// First see if a tree starts right at the last basic block.
+	if (b->LiveOut->isMember(num)) {
+		t = Tree::MakeNew();
+		t->next = trees;
+		t->num = treeno;
+		treeno++;
+		trees = t;
+		t->tree->add(b->num);
+		forest->add(b->num);
+		GrowTree(t, b, num);
+	}
+	//else
+	{
+	// Next check all the input edges to the last block that
+	// haven't yet been visited for additional trees.
+	for (ep = b->ihead; ep; ep = ep->next) {
+//		if (!ep->backedge) {
+			p = ep->src;
+			if (!visited->isMember(p->num)) {
+				visited->add(p->num);
+				if (p->LiveOut->isMember(num)) {
+					t = Tree::MakeNew();
+					t->next = trees;
+					t->num = treeno;
+					treeno++;
+					trees = t;
+					t->tree->add(p->num);
+					forest->add(p->num);
+					GrowTree(t, p, num);
+				}
+				else {
+					GrowTree(nullptr, p, num);
+				}
+			}
+//		}
+	}
+	for (ep = b->ohead; ep; ep = ep->next) {
+//		if (ep->backedge) {
+			p = ep->src;
+			if (!visited->isMember(p->num)) {
+				visited->add(p->num);
+				if (p->LiveOut->isMember(num)) {
+					t = Tree::MakeNew();
+					t->next = trees;
+					t->num = treeno;
+					treeno++;
+					trees = t;
+					t->tree->add(p->num);
+					forest->add(p->num);
+					GrowTree(t, p, num);
+				}
+				else {
+					GrowTree(nullptr, p, num);
+				}
+			}
+//		}
+	}
+	}
+	// Next try moving through the previous basic blocks, there may not be edges
+	// to them.
+	for (p = b->prev; p; p = p->prev)
+	{
+		if (!visited->isMember(p->num)) {
+			visited->add(p->num);
+			if (p->LiveOut->isMember(num)) {
+				t = Tree::MakeNew();
+				t->next = trees;
+				t->num = treeno;
+				treeno++;
+				trees = t;
+				t->tree->add(p->num);
+				forest->add(p->num);
+				GrowTree(t, p, num);
+			}
+			else {
+				GrowTree(nullptr, p, num);
+			}
+		}
+	}
+	dfs.printf("Visited r%d: ", num);
+	visited->sprint(buf, sizeof(buf));
+	dfs.printf(buf);
+	dfs.printf("\n");
+}
 
 void Var::CreateForests()
 {
 	Var *v;
 
 	for (v = varlist; v; v = v->next) {
+		v->visited->clear();
+		v->forest->clear();
 		v->CreateForest();
 	}
 }
@@ -158,6 +310,17 @@ Var *Var::Find(int num)
 	return (vp);
 }
 
+Var *Var::Find2(int num)
+{
+	Var *vp;
+
+	for (vp = varlist; vp; vp = vp->next) {
+		if (vp->num == num)
+			return(vp);
+	}
+	return (nullptr);
+}
+
 void Var::DumpForests()
 {
 	Var *vp;
@@ -166,7 +329,11 @@ void Var::DumpForests()
 
 	dfs.printf("<VarForests>\n");
 	for (vp = varlist; vp; vp = vp->next) {
-		dfs.printf("Var%d:\n", vp->num);
+		dfs.printf("Var%d:", vp->num);
+		if (vp->trees)
+			dfs.printf(" %d trees\n", vp->trees->num);
+		else
+			dfs.printf(" no trees\n");
 		for (rg = vp->trees; rg; rg = rg->next) {
 			if (!rg->tree->isEmpty()) {
 				rg->tree->sprint(buf, sizeof(buf));
@@ -174,6 +341,9 @@ void Var::DumpForests()
 				dfs.printf("\n");
 			}
 		}
+		vp->forest->sprint(buf, sizeof(buf));
+		dfs.printf(buf);
+		dfs.printf("\n");
 	}
 	dfs.printf("</VarForests>\n");
 }

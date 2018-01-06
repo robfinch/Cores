@@ -255,7 +255,7 @@ void DumpCSETable()
 		dfs.printf("%d   ",csp->OptimizationDesireability());
 		dfs.printf("%d   ",csp->uses);
 		dfs.printf("%d   ",csp->duses);
-		dfs.printf("%d   ",csp->voidf);
+		dfs.printf("%d   ",(int)csp->voidf);
 		dfs.printf("%d   ",csp->reg);
 		if (csp->exp && csp->exp->sym)
 			dfs.printf("%s   ",(char *)csp->exp->sym->name->c_str());

@@ -159,6 +159,8 @@ void BasicBlock::ComputeLiveVars()
 	gen->clear();
 	kill->clear();
 	for (ip = code; ip && (!ip->leader || ip == code); ip = ip->fwd) {
+		if (ip->remove || ip->remove2)
+			continue;
 		if (ip->opcode!=op_label) {
 			if (ip->HasTargetReg()) {
 				tr = ip->GetTargetReg() & 0xffff;
@@ -168,6 +170,8 @@ void BasicBlock::ComputeLiveVars()
 				else {
 					kill->add(tr);
 				}
+				if (tr >= 18 && tr <= 24)
+					gen->add(tr);
 				// There could be a second target
 				tr = (ip->GetTargetReg() >> 16) & 0xffff;
 				if (tr) {
@@ -177,6 +181,8 @@ void BasicBlock::ComputeLiveVars()
 					else {
 						kill->add(tr);
 					}
+					if (tr >= 18 && tr <= 24)
+						gen->add(tr);
 				}
 			}
 			// If there was an explicit target it would have been oper1
@@ -202,6 +208,9 @@ void BasicBlock::ComputeLiveVars()
 					}
 					else {
 						gen->add(ip->oper2->preg);
+					}
+					if (ip->oper2->mode == am_indx2) {
+						gen->add(ip->oper2->sreg);
 					}
 //				}
 			}

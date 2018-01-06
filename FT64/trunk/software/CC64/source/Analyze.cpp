@@ -351,7 +351,7 @@ static void scanexpr(ENODE *node, int duse)
                 scanexpr(node->p[1],duse);
                 break;
 		case en_mul:    case en_mulu:   case en_div:	case en_udiv:
-		case en_shl:    case en_shlu:	case en_shr:	case en_shru:	case en_asr:
+		case en_shl:    case en_asl:	case en_shlu:	case en_shr:	case en_shru:	case en_asr:
         case en_mod:    case en_umod:   case en_and:
         case en_or:     case en_xor:
         case en_lor:    case en_land:
@@ -599,7 +599,8 @@ void repexpr(ENODE *node)
                 case en_add:    case en_sub:
 				case en_mul:    case en_mulu:   case en_div:	case en_udiv:
 				case en_mod:    case en_umod:
-				case en_shl:	case en_shlu:	case en_shru:	case en_asr:
+				case en_shl:	case en_asl:
+				case en_shlu:	case en_shru:	case en_asr:
                 case en_shr:
 				case en_and:
                 case en_or:     case en_xor:

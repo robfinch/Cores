@@ -47,6 +47,7 @@ void DumpLiveRegs();
 void CreateVarForests();
 void DeleteSets();
 void RemoveCode();
+void Coalesce();
 Var *FindVar(int num);
 bool RemoveEnabled = true;
 extern BasicBlock *basicBlocks[10000];
@@ -132,6 +133,7 @@ void GenerateMonadic(int op, int len, AMODE *ap1)
 	dfs.printf("Leave GenerateMonadic\r\n");
 }
 
+// NT = no target register
 void GenerateMonadicNT(int op, int len, AMODE *ap1)
 {
 	dfs.printf("Enter GenerateMonadic\r\n");
@@ -1196,8 +1198,6 @@ static void PeepoptAnd(OCODE *ip)
 	// This doesn't work properly yet in all cases.
 	if (ip->oper1 && ip->oper2 && ip->oper3) {
 		if (ip->oper1->mode==am_reg && ip->oper2->mode==am_reg && ip->oper3->mode == am_immed) {
-			if (ip->oper3->offset->i > 0xffff)
-				printf("hi");
 			if (ip->oper1->preg==ip->oper2->preg && ip->oper3->offset->i==-1) {
 				MarkRemove(ip);
 				optimized++;
@@ -1489,9 +1489,11 @@ static void opt_peep()
 				}
 			}
 			Remove();
+			
 			for (ip = peep_head; ip != NULL; ip = ip->fwd )
 				RemoveDoubleTargets(ip);
 			Remove();
+			
 		}
 		PeepoptSubSP();
 
@@ -1513,26 +1515,18 @@ static void opt_peep()
 
 	RootBlock = BasicBlock::Blockize(peep_head);
 	CreateControlFlowGraph();
+	RemoveMoves();
 	ComputeLiveVars();
+	MarkAllKeep();
 	DumpLiveVars();
 	CreateVars();
 	Var::CreateForests();
-	RemoveMoves();
 	Var::DumpForests();
 	RemoveCode();
+	Coalesce();
+	Var::DumpForests();
 	//DumpLiveRegs();
 }
-
-// Return true if the instruction has a target register.
-
-bool OCODE::HasTargetReg() const
-{
-	if (insn)
-		return (insn->HasTarget);
-	else
-		return (false);
-}
-
 
 OCODE *FindLabel(int64_t i)
 {
@@ -1563,24 +1557,118 @@ void CreateVars()
 	}
 }
 
-// Remove the mov operation from consideration.
-// mov will create a false interference.
+
+// Remove move instructions which will create false interferences.
+// The move instructions are just marked for removal so they aren't
+// considered during live variable computation. They are unmarked
+// later, but may be subsequently removed if ranges are coalesced.
 
 void RemoveMoves()
 {
 	OCODE *ip;
-	BasicBlock *b;
-	Var *v;
-	Tree *t;
+	int reg1, reg2;
+	Var *p, *q;
+	bool foundMove;
+	foundMove = false;
 
 	for (ip = peep_head; ip; ip = ip->fwd) {
-		if (ip->opcode==op_mov || ip->opcode==op_bfext) {
-			b = ip->bb;
-			for (v = varlist; v; v = v->next) {
-				for (t = v->trees; t; t = t->next) {
-					t->tree->remove(b->num);
-				}
+		if (ip->opcode==op_mov) {
+			foundMove = true;
+			reg1 = ip->oper1->preg;
+			reg2 = ip->oper2->preg;
+			// Registers used as register parameters cannot be coalesced.
+			if ((reg1 >= regFirstParm && reg1 <= regLastParm)
+				|| (reg2 >= regFirstParm && reg2 <= regLastParm))
+				continue;
+			// Remove the move instruction
+			MarkRemove(ip);
+		}
+	}
+	if (!foundMove)
+		dfs.printf("No move instruction joins live ranges.\n");
+}
+
+void Coalesce()
+{
+	BasicBlock *b;
+	int reg1, reg2;
+	Var *v, *v1, *v2, *v3;
+	Var *p, *q;
+	Tree *t, *t1, *u;
+	bool foundSameTree;
+	char buf[2000];
+
+	for (p = varlist; p; p = p->next) {
+		for (q = varlist; q; q = q->next) {
+			if (p==q)
+				continue;
+			reg1 = p->num;
+			reg2 = q->num;
+			// Registers used as register parameters cannot be coalesced.
+			if ((reg1 >= 18 && reg1 <= 24)
+				|| (reg2 >= 18 && reg2 <= 24))
+				continue;
+			// Coalesce the live ranges of the two variables into a single
+			// range.
+			//dfs.printf("Testing coalescence of live range r%d with ", reg1);
+			//dfs.printf("r%d \n", reg2);
+			if (p->cnum)
+				v1 = Var::Find2(p->cnum);
+			else
+				v1 = p;
+			if (q->cnum)
+				v2 = Var::Find2(q->cnum);
+			else
+				v2 = q;
+			if (v1==nullptr || v2==nullptr)
+				continue;
+			// Live ranges cannot be coalesced unless they are disjoint.
+			if (!v1->forest->isDisjoint(*v2->forest)) {
+				//dfs.printf("Live ranges overlap - no coalescence possible\n");
+				continue;
 			}
+			
+			dfs.printf("Coalescing live range r%d with ", reg1);
+			dfs.printf("r%d \n", reg2);
+			if (v1->trees==nullptr) {
+				v3 = v1;
+				v1 = v2;
+				v2 = v3;
+			}
+			
+			for (t = v2->trees; t; t = t1) {
+				t1 = t->next;
+				foundSameTree = false;
+				for (u = v1->trees; u; u = u->next) {
+					if (t->tree->NumMember() >= u->tree->NumMember()) {
+						if (t->tree->isSubset(*u->tree)) {
+							u->tree->add(t->tree);
+							v1->forest->add(t->tree);
+							foundSameTree = true;
+							break;
+						}
+					}
+					else {
+						if (u->tree->isSubset(*t->tree)) {
+							foundSameTree = true;
+							t->tree->add(u->tree);
+							v2->forest->add(u->tree);
+							break;
+						}
+					}
+				}
+				
+				if (!foundSameTree) {
+					t->next = v1->trees;
+					v1->trees = t;
+					v1->forest->add(v2->forest);
+				}
+				
+			}
+			
+			v2->trees = nullptr;
+			v2->forest->clear();
+			v2->cnum = v1->num;
 		}
 	}
 }
@@ -1610,28 +1698,6 @@ void ComputeSpillCosts()
 	}
 
 }
-
-int OCODE::GetTargetReg() const
-{
-	if (insn==nullptr)
-		return(0);
-	if (insn->HasTarget) {
-		// Handle implicit targets
-		switch(insn->opcode) {
-		case op_pop:
-		case op_unlk:
-		case op_link:	return((oper1->preg<<16) | 31);
-		case op_push:
-		case op_ret:
-		case op_call:	return (31);
-		default:
-			return (oper1->preg);
-		}
-	}
-	else
-		return (0);
-}
-
 
 void RemoveCode()
 {
