@@ -72,10 +72,14 @@ void CreateControlFlowGraph()
 				}
 			}
 			else {
-				if (ip->oper2->mode != am_reg) {
-					if (ip1 = FindLabel(ip->oper2->offset->i)) {
-						ip->bb->MakeOutputEdge(ip1->bb);
-						ip1->bb->MakeInputEdge(ip->bb);
+				// Could be a jal [LR] for a ret statement in which case there's
+				// only one operand.
+				if (ip->oper2) {
+					if (ip->oper2->mode != am_reg) {
+						if (ip1 = FindLabel(ip->oper2->offset->i)) {
+							ip->bb->MakeOutputEdge(ip1->bb);
+							ip1->bb->MakeInputEdge(ip->bb);
+						}
 					}
 				}
 			}

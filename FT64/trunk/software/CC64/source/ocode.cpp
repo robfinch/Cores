@@ -55,9 +55,9 @@ bool OCODE::HasSourceReg(int regno) const
 		return (true);
 	if (oper4 && oper4->sreg==regno)
 		return (true);
-	// The call instruction implicitly has register parameters as source registers.
+	// The call instruction implicitly has register arguments as source registers.
 	if (opcode==op_call) {
-		if (regno >= regFirstParm && regno <= regLastParm)
+		if (IsArgumentReg(regno))
 			return(true);
 	}
 	return (false);

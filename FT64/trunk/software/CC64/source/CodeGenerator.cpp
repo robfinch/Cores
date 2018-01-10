@@ -654,7 +654,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
     {
         ap1 = allocAmode();
         ap1->mode = am_indx;
-        ap1->preg = regBP;
+        ap1->preg = regFP;
 		ap1->segment = stackseg;
         ap1->offset = makeinode(en_icon,node->p[0]->i);
 		ap1->offset->sym = node->p[0]->sym;
@@ -686,7 +686,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
     {
         ap1 = allocAmode();
         ap1->mode = am_indx;
-        ap1->preg = regBP;
+        ap1->preg = regFP;
         ap1->offset = makeinode(en_icon,node->p[0]->i);
 		ap1->offset->sym = node->p[0]->sym;
 		if (node->p[0]->tp)
@@ -707,7 +707,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
     {
         ap1 = allocAmode();
         ap1->mode = am_indx;
-        ap1->preg = regBP;
+        ap1->preg = regFP;
         ap1->offset = makeinode(en_icon,node->p[0]->i);
 		ap1->offset->sym = node->p[0]->sym;
 		if (node->p[0]->tp)
@@ -728,7 +728,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
     {
         ap1 = allocAmode();
         ap1->mode = am_indx;
-        ap1->preg = regBP;
+        ap1->preg = regFP;
         ap1->offset = makeinode(en_icon,node->p[0]->i);
 		ap1->offset->sym = node->p[0]->sym;
 		if (node->p[0]->tp)
@@ -1682,11 +1682,23 @@ AMODE *GenerateAssign(ENODE *node, int flags, int size)
 					}
 				}
 				else {
-					GenerateMonadicNT(op_push,0,make_immed(size));
-					GenerateMonadicNT(op_push,0,ap2);
-					GenerateMonadicNT(op_push,0,ap1);
+					if (!cpu.SupportsPush) {
+						GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(3 * sizeOfWord));
+						ap3 = GetTempRegister();
+						GenerateDiadic(op_ldi,0,ap3,make_immed(size));
+						GenerateDiadicNT(op_sw,0,ap3,make_indexed(2 * sizeOfWord,regSP));
+						GenerateDiadic(op_mov,0,ap3,ap2);
+						GenerateDiadicNT(op_sw,0,ap3,make_indexed(1 * sizeOfWord,regSP));
+						GenerateDiadic(op_mov,0,ap3,ap1);
+						GenerateDiadicNT(op_sw,0,ap3,make_indirect(regSP));
+					}
+					else {
+						GenerateMonadicNT(op_push,0,make_immed(size));
+						GenerateMonadicNT(op_push,0,ap2);
+						GenerateMonadicNT(op_push,0,ap1);
+					}
 					GenerateDiadic(op_jal,0,makereg(regLR),make_string("memcpy_"));
-					GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),make_immed(24));
+					GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),make_immed(3*sizeOfWord));
 				}
 			}
 			else {
@@ -1837,7 +1849,7 @@ AMODE *GenAutocon(ENODE *node, int flags, int size, int type)
 	ap1 = GetTempRegister();
 	ap2 = allocAmode();
 	ap2->mode = am_indx;
-	ap2->preg = regBP;          /* frame pointer */
+	ap2->preg = regFP;          /* frame pointer */
 	ap2->offset = node;     /* use as constant node */
 	ap2->type = type;
 	GenerateDiadic(op_lea,0,ap1,ap2);
@@ -2357,6 +2369,8 @@ int GetNaturalSize(ENODE *node)
 		return 8;
 	case en_q2i:
 	case en_t2i:
+		return (sizeOfWord);
+	case en_i2d:
 		return (sizeOfWord);
 	case en_i2t:
 		return (sizeOfFPT);

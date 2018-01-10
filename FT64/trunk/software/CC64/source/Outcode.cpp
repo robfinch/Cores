@@ -407,8 +407,8 @@ char *RegMoniker(int regno)
 	static int n;
 
 	n = (n + 1) & 3;
-    if (regno==regBP)
-		sprintf_s(&buf[n][0], 20, "$bp");
+    if (regno==regFP)
+		sprintf_s(&buf[n][0], 20, "$fp");
     else if (regno==regGP)
 		sprintf_s(&buf[n][0], 20, "$gp");
 	else if (regno==regXLR)
@@ -458,7 +458,7 @@ void PutAddressMode(AMODE *ap)
 			// parameter offset the size of the return block, then later
 			// subtracts it off again.
 			if (ap->offset) {
-				if (ap->preg==regBP) {
+				if (ap->preg==regFP) {
 					if (ap->offset->sym) {
 						if (ap->offset->sym->IsParameter) {	// must be an parameter
 							ap->offset->i += GetReturnBlockSize()-(currentFn->IsLeaf  ? sizeOfWord : 0);
@@ -466,7 +466,7 @@ void PutAddressMode(AMODE *ap)
 					}
 				}
            		PutConstant(ap->offset,0,0);
-				if (ap->preg==regBP) {
+				if (ap->preg==regFP) {
 					if (ap->offset->sym) {
 						if (ap->offset->sym->IsParameter) {
 							ap->offset->i -= GetReturnBlockSize()-(currentFn->IsLeaf  ? sizeOfWord : 0);

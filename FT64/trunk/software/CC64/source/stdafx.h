@@ -42,6 +42,6 @@ typedef unsigned __int64 uint64_t;
 #include "const.h"
 #include "types.h"
 #include "Gen.h"
-#include "Cglbdec.h"
+#include "glo.h"
 
 // TODO: reference additional headers your program requires here

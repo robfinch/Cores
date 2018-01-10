@@ -69,10 +69,10 @@ int main(int argc, char **argv)
 	uctran_off = 0;
 	optimize =1;
 	exceptions=1;
-	cpu.SupportsPop = true;
-	cpu.SupportsPush = true;
-	cpu.SupportsLink = true;
-	cpu.SupportsUnlink = true;
+	cpu.SupportsPop = false;
+	cpu.SupportsPush = false;
+	cpu.SupportsLink = false;
+	cpu.SupportsUnlink = false;
 
 //	printf("c64 starting...\r\n");
 	while(--argc) {
@@ -137,7 +137,7 @@ int	options(char *s)
              regLR = 31;
              regPC = 29;
              regSP = 30;
-             regBP = 27;
+             regFP = 27;
              regGP = 26;
              regXLR = 28;
              use_gp = TRUE;

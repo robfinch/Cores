@@ -51,6 +51,7 @@ extern char *stkname;
 extern int isVirtual;
 extern bool isFuncBody;
 extern bool isInline;
+extern unsigned int ArgRegCount;
 
 static Statement *ParseFunctionBody(SYM *sp);
 void funcbottom(Statement *stmt);
@@ -65,6 +66,7 @@ static int round2(int n)
 // Return the stack offset where parameter storage begins.
 int GetReturnBlockSize()
 {
+	return (3*sizeOfWord);
 	if (currentFn) {
 		if (currentFn->IsLeaf) {
 		    return (exceptions ? sizeOfWord*3 : sizeOfWord);
@@ -417,6 +419,7 @@ static Statement *ParseFunctionBody(SYM *sp)
 {    
 	std::string lbl;
 	char *p;
+	OCODE *ip;
 
   dfs.printf("<Parse function body>:%s|\n", (char *)sp->name->c_str());
 
@@ -458,21 +461,35 @@ static Statement *ParseFunctionBody(SYM *sp)
 	sp->stmt = Statement::ParseCompound();
   dfs.printf("D");
 //	stmt->stype = st_funcbody;
-  sp->stkspace = tmpVarSpace() + lc_auto;
-  if (!sp->IsInline) {
+	sp->stkspace = lc_auto;
+	if (!sp->IsInline) {
+		pass = 1;
+		ip = peep_tail;
+		GenerateFunction(sp);
+		sp->stkspace += (ArgRegCount-regFirstArg) * sizeOfWord;
+		sp->argbot = sp->stkspace;
+		sp->stkspace += GetTempMemSpace();
+		sp->tempbot = sp->stkspace;
+		pass = 2;
+		peep_tail = ip;
+		peep_tail->fwd = nullptr;
+		GenerateFunction(sp);
+		dfs.putch('E');
 
-	GenerateFunction(sp);
-	dfs.putch('E');
-
-	flush_peep();
-	if (sp->storage_class == sc_global) {
-		ofs.printf("endpublic\r\n\r\n");
+		flush_peep();
+		if (sp->storage_class == sc_global) {
+			ofs.printf("endpublic\r\n\r\n");
+		}
 	}
-  }
 	//if (sp->stkspace)
 	//ofs.printf("%sSTKSIZE_ EQU %d\r\n", (char *)sp->mangledName->c_str(), sp->stkspace);
 	isFuncBody = false;
 	dfs.printf("</ParseFunctionBody>\n");
 	return sp->stmt;
+}
+
+int TempBot()
+{
+	return (currentFn->tempbot);
 }
 

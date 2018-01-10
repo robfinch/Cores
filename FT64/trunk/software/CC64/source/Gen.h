@@ -157,11 +157,6 @@ enum e_seg {
 	op_cs = 15 << 8
 };
 
-enum e_am {
-        am_reg, am_sreg, am_breg, am_fpreg, am_vreg, am_vmreg, am_ind, am_brind, am_ainc, am_adec, am_indx, am_indx2,
-        am_direct, am_jdirect, am_immed, am_mask, am_none, am_indx3, am_predreg
-	};
-
 #define LR		1
 #define CLR		11
 

@@ -734,11 +734,17 @@ int opt1(Statement *block)
 
 	csendx = 0;
     nn = 0;
+	if (pass==1) {
+		csendx = 0;
+		ZeroMemory(CSETable,sizeof(CSETable));
+	}
 	olist = (CSE *)NULL;
     if (opt_noregs==FALSE) {
-	    scan(block);            /* collect expressions */
+		if (pass==1)
+			scan(block);            /* collect expressions */
         nn = AllocateRegisterVars();
-    	repcse(block);          /* replace allocated expressions */
+		if (pass==2)
+    		repcse(block);          /* replace allocated expressions */
     }
 	return nn;
 }

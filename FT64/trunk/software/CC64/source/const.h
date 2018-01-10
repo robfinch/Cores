@@ -62,4 +62,9 @@ enum e_stmt {
         st_case, st_goto, st_break, st_continue, st_label,
         st_return, st_vortex, st_intoff, st_inton, st_stop, st_check };
 
+enum e_am {
+        am_reg, am_sreg, am_breg, am_fpreg, am_vreg, am_vmreg, am_ind, am_brind, am_ainc, am_adec, am_indx, am_indx2,
+        am_direct, am_jdirect, am_immed, am_mask, am_none, am_indx3, am_predreg
+	};
+
 #endif

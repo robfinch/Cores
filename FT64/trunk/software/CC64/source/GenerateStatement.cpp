@@ -625,7 +625,7 @@ void Statement::GenerateTry()
 		else
 			GenStore(makereg(1),ap2,GetNaturalSize(node));
 		ReleaseTempRegister(ap2);
-		//            GenStore(makereg(1),make_indexed(sym->value.i,regBP),sym->tp->size);
+		//            GenStore(makereg(1),make_indexed(sym->value.i,regFP),sym->tp->size);
 		stmt->s1->Generate();
 	}
 	GenerateLabel(nextlabel);
@@ -864,6 +864,7 @@ void Statement::GenerateFirstcall()
     contlab = nextlabel++;
     if( s1 != NULL )
     {
+       	initstack();
         breaklab = nextlabel++;
 		ap1 = GetTempRegister();
 		GenerateDiadic(op_lh,0,ap1,make_string(fcname));

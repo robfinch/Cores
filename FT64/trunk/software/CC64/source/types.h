@@ -197,6 +197,8 @@ public:
 	unsigned __int8 NumParms;
 	unsigned __int8 numa;			// number of stack parameters (autos)
 	int stkspace;					// stack space used by function
+	int argbot;
+	int tempbot;
 	// Auto's are handled by compound statements
 	TABLE proto;
 	TABLE params;
@@ -468,10 +470,12 @@ public:
 	Edge *itail;
 public:
 	unsigned int changed : 1;
+	int depth;
 	CSet *gen;		// use
 	CSet *kill;		// def
 	CSet *LiveIn;
 	CSet *LiveOut;
+	CSet *live;
 	CSet *MustSpill;
 	CSet *NeedLoad;
 	static CSet *livo;
@@ -488,19 +492,23 @@ public:
 	void AddLiveOut(BasicBlock *ip);
 };
 
+// A "tree" is a "range" in Briggs terminology
 class Tree : public CompilerType
 {
 public:
+	static int treecount;
+	int var;
 	int num;
 	Tree *next;
 	CSet *tree;
+	// Cost accounting
+	float loads;
+	float stores;
+	float copies;
+	bool infinite;
+	float cost;
 public:
-	static Tree *MakeNew() {
-		Tree *t;
-		t = (Tree*)allocx(sizeof(Tree));
-		t->tree = CSet::MakeNew();
-		return (t);
-	};
+	static Tree *MakeNew();
 };
 
 class Var : public CompilerType

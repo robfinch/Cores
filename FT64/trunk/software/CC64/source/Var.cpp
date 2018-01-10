@@ -2,6 +2,7 @@
 
 extern BasicBlock *LastBlock;
 Var *varlist;
+Tree *alltrees[500];
 
 // This class is currently only used by the CreateForest() function.
 // It maintains a stack for tree traversal.
@@ -148,6 +149,7 @@ void Var::GrowTree(Tree *t, BasicBlock *b, int num)
 						t = Tree::MakeNew();
 						t->next = trees;
 						t->num = treeno;
+						t->var = num;
 						treeno++;
 						trees = t;
 					}
@@ -170,6 +172,7 @@ void Var::GrowTree(Tree *t, BasicBlock *b, int num)
 						t = Tree::MakeNew();
 						t->next = trees;
 						t->num = treeno;
+						t->var = num;
 						treeno++;
 						trees = t;
 					}
@@ -200,6 +203,7 @@ void Var::CreateForest()
 		t = Tree::MakeNew();
 		t->next = trees;
 		t->num = treeno;
+		t->var = num;
 		treeno++;
 		trees = t;
 		t->tree->add(b->num);
@@ -219,6 +223,7 @@ void Var::CreateForest()
 					t = Tree::MakeNew();
 					t->next = trees;
 					t->num = treeno;
+					t->var = num;
 					treeno++;
 					trees = t;
 					t->tree->add(p->num);
@@ -240,6 +245,7 @@ void Var::CreateForest()
 					t = Tree::MakeNew();
 					t->next = trees;
 					t->num = treeno;
+					t->var = num;
 					treeno++;
 					trees = t;
 					t->tree->add(p->num);
@@ -263,6 +269,7 @@ void Var::CreateForest()
 				t = Tree::MakeNew();
 				t->next = trees;
 				t->num = treeno;
+				t->var = num;
 				treeno++;
 				trees = t;
 				t->tree->add(p->num);
@@ -284,6 +291,8 @@ void Var::CreateForests()
 {
 	Var *v;
 
+	Tree::treecount = 0;
+	treeno = 0;
 	for (v = varlist; v; v = v->next) {
 		v->visited->clear();
 		v->forest->clear();

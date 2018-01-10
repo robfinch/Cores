@@ -49,8 +49,10 @@ void DeleteSets();
 void RemoveCode();
 void Coalesce();
 Var *FindVar(int num);
+void Renumber();
 bool RemoveEnabled = true;
 extern BasicBlock *basicBlocks[10000];
+unsigned int ArgRegCount;
 
 OCODE    *peep_head = NULL,
                 *peep_tail = NULL;
@@ -187,7 +189,7 @@ void GenerateDiadic(int op, int len, AMODE *ap1, AMODE *ap2)
 	cd->oper2 = copy_addr(ap2);
 	if (ap2) {
 		if (ap2->mode == am_ind || ap2->mode==am_indx) {
-			if (ap2->preg==regSP || ap2->preg==regBP)
+			if (ap2->preg==regSP || ap2->preg==regFP)
 				cd->opcode |= op_ss;
 		}
 	}
@@ -210,7 +212,7 @@ void GenerateDiadicNT(int op, int len, AMODE *ap1, AMODE *ap2)
 	cd->oper2 = copy_addr(ap2);
 	if (ap2) {
 		if (ap2->mode == am_ind || ap2->mode==am_indx) {
-			if (ap2->preg==regSP || ap2->preg==regBP)
+			if (ap2->preg==regSP || ap2->preg==regFP)
 				cd->opcode |= op_ss;
 		}
 	}
@@ -292,6 +294,7 @@ static void AddToPeepList(OCODE *cd)
 
 	if( peep_head == NULL )
 	{
+		ArgRegCount = regLastArg;
 		peep_head = peep_tail = cd;
 		cd->fwd = nullptr;
 		cd->back = nullptr;
@@ -302,6 +305,16 @@ static void AddToPeepList(OCODE *cd)
 		cd->back = peep_tail;
 		peep_tail->fwd = cd;
 		peep_tail = cd;
+	}
+	if (cd->opcode!=op_label) {
+		if (cd->oper1 && IsArgumentReg(cd->oper1->preg))
+			ArgRegCount = max(ArgRegCount,cd->oper1->preg);
+		if (cd->oper2 && IsArgumentReg(cd->oper2->preg))
+			ArgRegCount = max(ArgRegCount,cd->oper2->preg);
+		if (cd->oper3 && IsArgumentReg(cd->oper3->preg))
+			ArgRegCount = max(ArgRegCount,cd->oper3->preg);
+		if (cd->oper4 && IsArgumentReg(cd->oper4->preg))
+			ArgRegCount = max(ArgRegCount,cd->oper4->preg);
 	}
 }
 
@@ -1250,19 +1263,19 @@ static int CountBPReferences()
 		if (ip->opcode != op_label && ip->opcode!=op_nop
 			&& ip->opcode != op_link && ip->opcode != op_unlk) {
 			if (ip->oper1) {
-				if (ip->oper1->preg==regBP || ip->oper1->sreg==regBP)
+				if (ip->oper1->preg==regFP || ip->oper1->sreg==regFP)
 					refBP++;
 			}
 			if (ip->oper2) {
-				if (ip->oper2->preg==regBP || ip->oper2->sreg==regBP)
+				if (ip->oper2->preg==regFP || ip->oper2->sreg==regFP)
 					refBP++;
 			}
 			if (ip->oper3) {
-				if (ip->oper3->preg==regBP || ip->oper3->sreg==regBP)
+				if (ip->oper3->preg==regFP || ip->oper3->sreg==regFP)
 					refBP++;
 			}
 			if (ip->oper4) {
-				if (ip->oper4->preg==regBP || ip->oper4->sreg==regBP)
+				if (ip->oper4->preg==regFP || ip->oper4->sreg==regFP)
 					refBP++;
 			}
 		}
@@ -1286,7 +1299,7 @@ static void MarkAllKeep()
 
 	for (ip = peep_head; ip != NULL; ip = ip->fwd )
 	{
-		//ip->remove = false;
+		ip->remove = false;
 	}
 }
 
@@ -1495,7 +1508,7 @@ static void opt_peep()
 			Remove();
 			
 		}
-		PeepoptSubSP();
+		//PeepoptSubSP();
 
 		// Remove the link and unlink instructions if no references
 		// to BP.
@@ -1522,6 +1535,7 @@ static void opt_peep()
 	CreateVars();
 	Var::CreateForests();
 	Var::DumpForests();
+	Renumber();
 	RemoveCode();
 	Coalesce();
 	Var::DumpForests();
@@ -1577,8 +1591,7 @@ void RemoveMoves()
 			reg1 = ip->oper1->preg;
 			reg2 = ip->oper2->preg;
 			// Registers used as register parameters cannot be coalesced.
-			if ((reg1 >= regFirstParm && reg1 <= regLastParm)
-				|| (reg2 >= regFirstParm && reg2 <= regLastParm))
+			if (IsArgumentReg(reg1) || IsArgumentReg(reg2))
 				continue;
 			// Remove the move instruction
 			MarkRemove(ip);
@@ -1673,6 +1686,36 @@ void Coalesce()
 	}
 }
 
+static void UpdateLive(BasicBlock *b, OCODE *ip)
+{
+	int r;
+
+	r = ip->oper1->lrpreg;
+	if (b->NeedLoad->isMember(r)) {
+		b->NeedLoad->remove(r);
+		if (!b->MustSpill->isMember(r)) {
+			alltrees[r]->infinite = true;
+		}
+	}
+	alltrees[r]->stores += b->depth;
+	b->live->remove(r);
+}
+
+static void CheckForDeaths(BasicBlock *b, OCODE *ip, int r)
+{
+	int m;
+
+	r = ip->oper1->lrpreg;
+	if (!b->live->isMember(r)) {
+		b->NeedLoad->resetPtr();
+		for (m = b->NeedLoad->nextMember(); m >= 0; m = b->NeedLoad->nextMember()) {
+			alltrees[m]->loads += b->depth;
+			b->MustSpill->add(m);
+		}
+		b->NeedLoad->clear();
+	}
+}
+
 void ComputeSpillCosts()
 {
 	Var *v;
@@ -1680,23 +1723,150 @@ void ComputeSpillCosts()
 	BasicBlock *b;
 	OCODE *ipb, *ip;
 	bool ipl;
+	Instruction *i;
+	int r, m;
+	bool endLoop;
+
+	for (r = 0; r < Tree::treecount; r++) {
+		alltrees[r]->loads = 0.0;
+		alltrees[r]->stores = 0.0;
+		alltrees[r]->copies = 0.0;
+		alltrees[r]->infinite = false;
+	}
 
 	for (b = RootBlock; b; b = b->next) {
-		b->MustSpill->copy(*b->LiveOut);
-		ipb = b->next->code;
-		ipb = ipb->back;
-		ipl = false;
-		for (ip = ipb; ip && !ipl; ip = ip->back) {
-			ipl = ip->leader;
+		b->NeedLoad->clear();
+		// build the set live from b->liveout
+		b->live = b->LiveOut;
+		b->MustSpill = b->live;
+		endLoop = false;
+		for (ip = b->lcode; ip && !endLoop; ip = ip->back) {
+			i = ip->insn;
+			// examine instruction i updating sets and accumulating costs
+			if (i->HasTarget) {
+				UpdateLive(b, ip);
+			}
+			// This is a loop in the Briggs thesis, but we only allow 4 operands
+			// so the loop is unrolled.
+			if (!ip->oper1->isTarget) {
+				r = ip->oper1->lrpreg;
+				CheckForDeaths(b, ip, r);
+				if (r = ip->oper1->lrsreg)	// '=' is correct
+					CheckForDeaths(b,ip,r);
+			}
+			if (ip->oper2) {
+				r = ip->oper1->lrpreg;
+				CheckForDeaths(b, ip, r);
+				if (r = ip->oper1->lrsreg)
+					CheckForDeaths(b,ip,r);
+			}
+			if (ip->oper3) {
+				r = ip->oper1->lrpreg;
+				CheckForDeaths(b, ip, r);
+				if (r = ip->oper1->lrsreg)
+					CheckForDeaths(b,ip,r);
+			}
+			if (ip->oper4) {
+				r = ip->oper1->lrpreg;
+				CheckForDeaths(b, ip, r);
+				if (r = ip->oper1->lrsreg)
+					CheckForDeaths(b,ip,r);
+			}
+			// Re-examine uses to update live and needload
+			if (ip->oper1 && !ip->oper1->isTarget) {
+				b->live->add(ip->oper1->lrpreg);
+				b->NeedLoad->add(ip->oper1->lrpreg);
+				if (ip->oper1->lrsreg) {
+					b->live->add(ip->oper1->lrsreg);
+					b->NeedLoad->add(ip->oper1->lrsreg);
+				}
+			}
+			if (ip->oper2) {
+				b->live->add(ip->oper2->lrpreg);
+				b->NeedLoad->add(ip->oper2->lrpreg);
+				if (ip->oper2->lrsreg) {
+					b->live->add(ip->oper2->lrsreg);
+					b->NeedLoad->add(ip->oper2->lrsreg);
+				}
+			}
+			if (ip->oper3) {
+				b->live->add(ip->oper3->lrpreg);
+				b->NeedLoad->add(ip->oper3->lrpreg);
+				if (ip->oper3->sreg) {
+					b->live->add(ip->oper3->lrsreg);
+					b->NeedLoad->add(ip->oper3->lrsreg);
+				}
+			}
+			if (ip->oper4) {
+				b->live->add(ip->oper4->lrpreg);
+				b->NeedLoad->add(ip->oper4->lrpreg);
+				if (ip->oper4->sreg) {
+					b->live->add(ip->oper4->lrsreg);
+					b->NeedLoad->add(ip->oper4->lrsreg);
+				}
+			}
+			if (ip==b->code)
+				endLoop = true;
+		}
+		b->NeedLoad->resetPtr();
+		for (r = b->NeedLoad->nextMember(); r >= 0; r = b->NeedLoad->nextMember()) {
+			alltrees[r]->loads += b->depth;
 		}
 	}
 
-	for (v = varlist; v; v = v->next) {
-		for (t = v->trees; t; t = t->next) {
-			v->forest->add(t->tree);
+	// Summarize costs
+	dfs.printf("<TreeCosts>\n");
+	for (r = 0; r < Tree::treecount; r++) {
+		// If alltrees[r].lattice = BOT
+		alltrees[r]->cost = 2.0 * (alltrees[r]->loads + alltrees[r]->stores);
+		// else
+		// alltrees[r]->cost = alltrees[r]->loads - alltrees[r]->stores;
+		alltrees[r]->cost -= alltrees[r]->copies;
+		dfs.printf("Tree:%d ", r);
+		dfs.printf("cost = %d\n", (int)alltrees[r]->cost);
+	}
+	dfs.printf("</TreeCosts>\n");
+}
+
+// Renumber the registers according to the tree (live range) numbers.
+static void Renumber()
+{
+	Var *v;
+	OCODE *ip;
+	Tree *t;
+	int tt;
+	BasicBlock *b;
+	int bb;
+	bool eol;
+
+	for (tt = 0; tt < Tree::treecount; tt++) {
+		t = alltrees[tt];
+		t->tree->resetPtr();
+		for (bb = t->tree->nextMember(); bb >= 0; bb = t->tree->nextMember()) {
+			b = basicBlocks[bb];
+			eol = false;
+			for (ip = b->code; ip && !eol; ip = ip->fwd) {
+				if (ip->oper1 && ip->oper1->preg == t->var)
+					ip->oper1->lrpreg = t->num;
+				if (ip->oper1 && ip->oper1->sreg == t->var)
+					ip->oper1->lrsreg = t->num;
+				if (ip->oper2 && ip->oper2->preg==t->var)
+					ip->oper2->lrpreg = t->num;
+				if (ip->oper2 && ip->oper2->sreg==t->var)
+					ip->oper2->lrsreg = t->num;
+				if (ip->oper3 && ip->oper3->preg==t->var)
+					ip->oper3->lrpreg = t->num;
+				if (ip->oper3 && ip->oper3->sreg==t->var)
+					ip->oper3->lrsreg = t->num;
+				if (ip->oper4 && ip->oper4->preg==t->var)
+					ip->oper4->lrpreg = t->num;
+				if (ip->oper4 && ip->oper4->sreg==t->var)
+					ip->oper4->lrsreg = t->num;
+				if (ip==b->lcode)
+					eol = true;
+			}
 		}
 	}
-
 }
 
 void RemoveCode()
