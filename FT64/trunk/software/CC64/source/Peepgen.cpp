@@ -1420,6 +1420,30 @@ static void RemoveCompilerHints()
 	}
 }
 
+
+// Potentially any called routine could throw an exception. So call
+// instructions could act like branches to the default catch tacked
+// onto the end of a subroutine. This is important to prevent the
+// default catch from being optimized away. It's possible that there's
+// no other way to reach the catch.
+// A bex instruction, which isn't a real instruction, is added to the
+// instruction stream so that links are created in the CFG to the
+// catch handlers. At a later stage of the compile all the bex
+// instructions are removed, since they were there only to aid in
+// compiler optimizations.
+
+static void RemoveCompilerHints2()
+{
+	OCODE *ip;
+
+    for(ip = peep_head; ip != NULL; ip = ip->fwd)
+    {
+		if (ip->opcode==op_bex)
+			MarkRemove(ip);
+	}
+	Remove();
+}
+
 //
 //      peephole optimizer. This routine calls the instruction
 //      specific optimization routines above for each instruction
@@ -1510,9 +1534,8 @@ static void opt_peep()
 				case op_jmp:
 				case op_ret:
 				case op_rts:
-				case op_rti:
+				case op_rte:
 				case op_rtd:
-				case op_rtl:
 						PeepoptUctran(ip);
 						break;
 				case op_label:
@@ -1566,7 +1589,9 @@ static void opt_peep()
 	Var::CreateForests();
 	Var::DumpForests();
 	CFG::CalcDominanceFrontiers();
-	CFG::InsertPhiNodes();
+	CFG::InsertPhiInsns();
+	RemoveCompilerHints2();
+	CFG::Rename();
 	Renumber();
 	ComputeSpillCosts();
 	RemoveCode();
@@ -1923,7 +1948,7 @@ void RemoveCode()
 	//printf((char *)currentFn->name->c_str());
 	//printf("\r\n");
 	for (v = varlist; v; v = v->next) {
-		if (v->num==0 || v->num==31)
+		if (v->num==0 || v->num==regSP || v->num==regFP || v->num==regLR || v->num==regXLR)
 			continue;
 		for (t = v->trees; t; t = t->next) {
 			nn = t->tree->lastMember();

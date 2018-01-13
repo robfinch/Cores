@@ -843,13 +843,13 @@ static void GenerateDefaultCatch(SYM *sym)
 		if (sym->DoesThrow) {
 			GenerateDiadic(op_lw,0,makereg(regLR),make_indexed(sizeOfWord,regFP));		// load throw return address from stack into LR
 			GenerateDiadicNT(op_sw,0,makereg(regLR),make_indexed(sizeOfWord*2,regFP));		// and store it back (so it can be loaded with the lm)
-			GenerateDiadic(op_bra,0,make_label(retlab),NULL);				// goto regular return cleanup code
+//			GenerateDiadic(op_bra,0,make_label(retlab),NULL);				// goto regular return cleanup code
 		}
 	}
 	else {
 		GenerateDiadic(op_lw,0,makereg(regLR),make_indexed(sizeOfWord,regFP));		// load throw return address from stack into LR
 		GenerateDiadicNT(op_sw,0,makereg(regLR),make_indexed(sizeOfWord*2,regFP));		// and store it back (so it can be loaded with the lm)
-		GenerateDiadic(op_bra,0,make_label(retlab),NULL);				// goto regular return cleanup code
+//		GenerateDiadic(op_bra,0,make_label(retlab),NULL);				// goto regular return cleanup code
 	}
 }
 
@@ -953,7 +953,15 @@ void GenerateFunction(SYM *sym)
 	if (optimize)
 		opt1(stmt);
     stmt->Generate();
-    GenerateReturn(nullptr);
+
+	if (exceptions) {
+		GenerateMonadicNT(op_bra,0,make_label(lab0));
+		GenerateDefaultCatch(sym);
+		GenerateLabel(lab0);
+	}
+
+	GenerateReturn(nullptr);
+/*
 	// Inline code needs to branch around the default exception handler.
 	if (exceptions && sym->IsInline)
 		GenerateMonadicNT(op_bra,0,make_label(lab0));
@@ -962,7 +970,7 @@ void GenerateFunction(SYM *sym)
 		GenerateDefaultCatch(sym);
 	if (exceptions && sym->IsInline)
 		GenerateLabel(lab0);
-
+*/
 	throwlab = o_throwlab;
 	retlab = o_retlab;
 	contlab = o_contlab;
@@ -1134,7 +1142,7 @@ void GenerateReturn(Statement *stmt)
 	// from the stack.
 	if (sym->IsInterrupt) {
 		RestoreRegisterSet(sym);
-		GenerateZeradic(op_rti);
+		GenerateZeradic(op_rte);
 		return;
 	}
 
@@ -1177,7 +1185,8 @@ void GenerateReturn(Statement *stmt)
 	if (toAdd != 0)
 		GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),make_immed(toAdd));
 	if (!sym->IsInline) {
-		GenerateMonadic(op_jal,0,make_indirect(regLR));
+		GenerateZeradic(op_ret);
+		//GenerateMonadic(op_jal,0,make_indirect(regLR));
 	}
 }
 
@@ -1474,8 +1483,10 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
 			fpsave_mask = fmask;
 			save_mask = mask;
 		}
-		else
+		else {
 			GenerateMonadicNT(op_call,0,make_offset(node->p[0]));
+			GenerateMonadicNT(op_bex,0,make_label(throwlab));
+		}
 	}
     else
     {
@@ -1506,8 +1517,10 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
 			fpsave_mask = fmask;
 			save_mask = mask;
 		}
-		else
+		else {
 			GenerateMonadicNT(op_call,0,ap);
+			GenerateMonadicNT(op_bex,0,make_label(throwlab));
+		}
 		ReleaseTempRegister(ap);
     }
 	// Pop parameters off the stack

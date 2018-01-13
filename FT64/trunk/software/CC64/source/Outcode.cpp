@@ -29,6 +29,7 @@ extern char *TraceName(SYM *);
 void put_mask(int mask);
 void align(int n);
 void roseg();
+bool renamed = false; 
 
 /*      variable initialization         */
 
@@ -55,7 +56,7 @@ Instruction opl[] =
 	{"lw", op_lw,4,true,true},
 	{"sw", op_sw,4,false,true},
 	{"call", op_call,4,true,true},
-	{"ret", op_ret,4,true,true},
+	{"ret", op_ret,1,false},
 	{"sub",op_sub,1,true},
 	{"subu", op_subu,1,true},
 	{"subi",op_subi,1,true},
@@ -117,7 +118,7 @@ Instruction opl[] =
 	{"bor", op_bor,3,false},
 	{"beqi", op_beqi,3,false},
 
-	{"rti", op_rti,2,false}, {"rtd", op_rtd},
+	{"rtd", op_rtd},
 	{"lwr", op_lwr,4,true,true},
 	{"swc", op_swc,4,false,true},
 	{"cache",op_cache},
@@ -194,6 +195,8 @@ Instruction opl[] =
 	{"vadds", op_vadds,10}, {"vsubs", op_vsubs,10}, {"vmuls", op_vmuls,10}, {"vdivs", op_vdivs,100},
 	{"vex", op_vex,10}, {"veins",op_veins,10},
 	{"redor", op_redor,2,true},
+	{"rte", op_rte,2,false},
+	{"bex", op_bex,0,false},
 	{"phi", op_phi},
                 {0,0} };
 
@@ -431,8 +434,11 @@ void PutAddressMode(AMODE *ap)
 				ofs.printf("v%d", (int)ap->preg);
 			else if (ap->type==stdvectormask->GetIndex())
 				ofs.printf("vm%d", (int)ap->preg);
-			else
+			else {
 				ofs.write(RegMoniker(ap->preg));
+				if (renamed)
+					ofs.printf(".%d", (int)ap->pregs);
+			}
             break;
     case am_vmreg:
 			ofs.printf("vm%d", (int)ap->preg);

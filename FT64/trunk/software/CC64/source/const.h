@@ -96,7 +96,7 @@ enum e_op {
 		op_inc, op_dec,
 		op_lbu, op_lcu, op_lhu, op_sti,
 		op_lf, op_sf,
-        op_rts, op_rti, op_rtd,
+        op_rts, op_rtd,
 		op_push, op_pop, op_movs,
 		op_seq, op_sne, op_slt, op_sle, op_sgt, op_sge, op_sltu, op_sleu, op_sgtu, op_sgeu,
 		op_bra, op_bf, op_eq, op_ne, op_lt, op_le, op_gt, op_ge,
@@ -105,12 +105,6 @@ enum e_op {
         op_bhi, op_bhs, op_blo, op_bls, op_ext, op_lea, op_swap,
         op_neg, op_not, op_com, op_cmp, op_clr, op_link, op_unlk, op_label,
         op_pea, op_cmpi, op_dc, op_asm, op_stop, op_fnname, 
-        // W65C816 ops
-        op_sec, op_clc, op_lda, op_sta, op_stz, op_adc, op_sbc, op_ora,
-        op_jsl, 
-        op_rtl, op_php, op_plp, op_cli, op_ldx, op_stx, op_brl,
-        op_pha, op_phx, op_pla, op_plx, op_rep, op_sep,
-        op_bpl, op_tsa, op_tas,
         // FISA64
         op_lc0i, op_lc1i, op_lc2i, op_lc3i, op_chk, op_chki,
         op_cmpu, op_bsr, op_bun,
@@ -138,6 +132,7 @@ enum e_op {
 		op_csrrw, op_nop,
 		op_hint, op_hint2, op_rem2,
 		// FT64
+		op_rte, op_bex,
 		op_addq1, op_addq2, op_addq3,
 		op_andq1, op_andq2, op_andq3,
 		op_orq1, op_orq2, op_orq3,

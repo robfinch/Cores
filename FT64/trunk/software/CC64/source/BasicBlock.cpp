@@ -31,6 +31,7 @@ bool IsBasicBlockSeparater(OCODE *ip)
 	if (ip->opcode==op_label)
 		return (false);
 	switch(ip->opcode) {
+	case op_rte:	return (true);
 	case op_ret:	return true;
 	case op_jal:	return true;
 	case op_jmp:	return true;

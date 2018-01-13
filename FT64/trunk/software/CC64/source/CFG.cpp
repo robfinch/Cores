@@ -51,6 +51,7 @@ void CFG::Create()
 		}
 		//}
 		switch(ip->opcode) {
+		case op_bex:
 		case op_bra:
 		case op_jmp:
 			if (ip->oper1->offset) {
@@ -141,10 +142,10 @@ static void DownPath(BasicBlock *b)
 			paths[npaths]->add(paths[path]);
 			npaths++;
 		}
-		if (!e->backedge) {
+//		if (!e->backedge) {
 			first = false;
 			DownPath(e->dst);
-		}
+//		}
 	}
 }
 
@@ -177,13 +178,10 @@ void CFG::CalcDominatorTree()
 	int n, m, o, ps;
 	CSet *pathSet;
 	bool oInAllPaths;
-	int lastDominator;
 
 	DiscoverPaths();
 	pathSet = CSet::MakeNew();
 	for (n = LastBlock->num; n >= 1; n--) {
-		// Node 0 always dominates all other nodes.
-		lastDominator = 0;
 		pathSet->clear();
 		// Get all paths that contain n
 		for (m = 0; m < npaths; m++)
@@ -240,14 +238,15 @@ void CFG::CalcDominanceFrontiers()
 	}
 }
 
-void CFG::InsertPhiNodes()
+void CFG::InsertPhiInsns()
 {
 	BasicBlock *x;
-	OCODE *phiNode;
+	OCODE *phiNode, *ip;
 	CSet *w;
 	Var *v;
+	Edge *e;
 	int IterCount = 0;
-	int n, y;
+	int n, m, y;
 
 	w = CSet::MakeNew();
 	for (x = RootBlock; x; x = x->next) {
@@ -256,6 +255,9 @@ void CFG::InsertPhiNodes()
 	}
 	w->clear();
 	for (v = varlist; v; v = v->next) {
+		// Don't bother considering r0 which always contains the constant zero.
+		if (v->num==0)
+			continue;
 		IterCount++;
 		v->forest->resetPtr();
 		for (n = v->forest->nextMember(); n >= 0; n = v->forest->nextMember()) {
@@ -284,7 +286,15 @@ void CFG::InsertPhiNodes()
 						phiNode->opcode = op_phi;
 						phiNode->oper1 = makereg(v->num);
 						phiNode->bb = basicBlocks[y];
-						//Peep::InsertBefore(basicBlocks[y]->code,phiNode);
+						m = 0;
+						for (e = phiNode->bb->ihead; e && m < 100; e = e->next) {
+							phiNode->phiops[m] = e->src->num;
+							m++;
+						}
+						ip = basicBlocks[y]->code;
+						while (ip && ip->opcode==op_label) ip = ip->fwd;
+						// For now this is disabled.
+						// Peep::InsertBefore(ip,phiNode);
 						basicBlocks[y]->HasAlready = IterCount;
 						if (basicBlocks[y]->Work < IterCount) {
 							basicBlocks[y]->Work = IterCount;
@@ -297,3 +307,110 @@ void CFG::InsertPhiNodes()
 	}
 }
 
+int CFG::WhichPred(BasicBlock *x, int y)
+{
+	BasicBlock *b;
+	Edge *e;
+	int n;
+
+	b = basicBlocks[y];
+	n = 0;
+	for (e = b->ihead; e; e = e->next) {
+		if (e->src==x)
+			return (n);
+		n++;
+	}
+	return (-1);
+}
+
+void CFG::Subscript(AMODE *oper)
+{
+	Var *v;
+
+	if (oper) {
+		v = Var::Find2(oper->preg);
+		if (v)
+			oper->pregs = v->istk->tos();
+		v = Var::Find2(oper->sreg);
+		if (v)
+			oper->sregs = v->istk->tos();
+	}
+}
+
+void CFG::Search(BasicBlock *x)
+{
+	OCODE *s;
+	BasicBlock *b;
+	Var *v;
+	Edge *e;
+	int i, j, y;
+	bool eol;
+
+	eol = false;
+	for (s = x->code; !eol; s = s->fwd) {
+		if (s->opcode==op_label)
+			continue;
+		if (s->oper1 && !s->HasTargetReg())
+			Subscript(s->oper1);
+		if (s->oper2)
+			Subscript(s->oper2);
+		if (s->oper3)
+			Subscript(s->oper3);
+		if (s->oper4)
+			Subscript(s->oper4);
+		if (s->oper1 && s->HasTargetReg()) {
+			v = Var::Find2(s->GetTargetReg());
+			if (v) {
+				i = v->subscript;
+				s->oper1->pregs = i;
+				v->istk->push(i);
+				v->subscript++;
+			}
+		}
+		eol = s == x->lcode;
+	}
+	for (e = x->ohead; e; e = e->next) {
+		y = e->dst->num;
+		j = WhichPred(x,y);
+		if (j < 0)
+			continue;
+		b = basicBlocks[y];
+		eol = false;
+		for (s = b->code; !eol; s = s->fwd) {
+			if (s->opcode==op_label)
+				continue;
+			if (s->opcode==op_phi) {
+				v = Var::Find2(s->oper1->preg);
+				if (v)
+					s->phiops[j] = v->istk->tos();
+			}
+			eol = s == b->lcode;
+		}
+	}
+	for (e = x->dhead; e; e = e->next)
+		Search(e->dst);
+	eol = false;
+	for (s = x->code; !eol; s = s->fwd) {
+		if (s->opcode==op_label)
+			continue;
+		if (s->HasTargetReg()) {
+			v = Var::Find2(s->GetTargetReg());
+			if (v)
+				v->istk->pop();
+		}
+		eol = s == x->lcode;
+	}
+
+}
+
+void CFG::Rename()
+{
+	Var *v;
+
+	for (v = varlist; v; v = v->next) {
+		v->istk = IntStack::MakeNew();
+		v->istk->push(0);
+		v->subscript = 0;
+	}
+	Search(RootBlock);
+}

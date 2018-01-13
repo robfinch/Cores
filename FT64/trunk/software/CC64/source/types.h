@@ -30,6 +30,7 @@ class ENODE;
 class Statement;
 class BasicBlock;
 class Instruction;
+class Var;
 
 enum e_sym {
   tk_nop,
@@ -384,10 +385,12 @@ class AMODE : public CompilerType
 {
 public:
 	unsigned int mode : 6;
-	unsigned int preg : 8;		// priimary virtual register number
+	unsigned int preg : 8;		// primary virtual register number
 	unsigned int sreg : 8;		// secondary virtual register number (indexed addressing modes)
 	unsigned int lrpreg : 8;	// renumbered live range register
 	unsigned int lrsreg : 8;
+	unsigned int pregs;			// subscripted register number
+	unsigned int sregs;
 	unsigned int segment : 4;
 	unsigned int defseg : 1;
 	unsigned int tempflag : 1;
@@ -425,6 +428,7 @@ public:
 	short predop;
 	int loop_depth;
 	AMODE *oper1, *oper2, *oper3, *oper4;
+	short int phiops[100];
 public:
 	static OCODE *MakeNew();
 	bool HasTargetReg() const;
@@ -434,13 +438,19 @@ public:
 };
 
 // Control Flow Graph
+// For now everything in this class is static and there are no member variables
+// to it.
 class CFG
 {
 public:
 	static void Create();
 	static void CalcDominatorTree();
 	static void CalcDominanceFrontiers();
-	static void InsertPhiNodes();
+	static void InsertPhiInsns();
+	static void Rename();
+	static void Search(BasicBlock *);
+	static void Subscript(AMODE *oper);
+	static int WhichPred(BasicBlock *x, int y);
 };
 
 
@@ -459,6 +469,38 @@ OCODE {
 };
 typedef OCODE OCODE;
 */
+
+class IntStack
+{
+public:
+	int *stk;
+	int sp;
+public:
+	static IntStack *MakeNew() {
+		IntStack *s;
+		s = (IntStack *)allocx(sizeof(IntStack));
+		s->stk = (int *)allocx(1000 * sizeof(int));
+		s->sp = 1000;
+		return (s);
+	}
+	void push(int v) {
+		if (sp > 0) {
+			sp--;
+			stk[sp] = v;
+		}
+	};
+	int pop() {
+		int v = 0;
+		if (sp < 1000) {
+			v = stk[sp];
+			sp++;
+		}
+		return (v);
+	};
+	int tos() {
+		return (stk[sp]);
+	};
+};
 
 class Edge : public CompilerType
 {
@@ -537,6 +579,8 @@ public:
 	Tree *trees;
 	CSet *forest;
 	CSet *visited;
+	IntStack *istk;
+	int subscript;
 public:
 	static Var *MakeNew();
 	void GrowTree(Tree *, BasicBlock *);
