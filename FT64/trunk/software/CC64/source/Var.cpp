@@ -134,7 +134,7 @@ void Var::CreateForest()
 }
 */
 
-void Var::GrowTree(Tree *t, BasicBlock *b, int num)
+void Var::GrowTree(Tree *t, BasicBlock *b)
 {
 	Edge *ep;
 	BasicBlock *p;
@@ -155,10 +155,10 @@ void Var::GrowTree(Tree *t, BasicBlock *b, int num)
 					}
 					t->tree->add(p->num);
 					forest->add(p->num);
-					GrowTree(t, p, num);
+					GrowTree(t, p);
 				}
 				else
-					GrowTree(nullptr, p, num);
+					GrowTree(nullptr, p);
 			}
 //		}
 	}
@@ -178,10 +178,10 @@ void Var::GrowTree(Tree *t, BasicBlock *b, int num)
 					}
 					t->tree->add(p->num);
 					forest->add(p->num);
-					GrowTree(t, p, num);
+					GrowTree(t, p);
 				}
 				else {
-					GrowTree(nullptr, p, num);
+					GrowTree(nullptr, p);
 				}
 			}
 //		}
@@ -208,7 +208,7 @@ void Var::CreateForest()
 		trees = t;
 		t->tree->add(b->num);
 		forest->add(b->num);
-		GrowTree(t, b, num);
+		GrowTree(t, b);
 	}
 	//else
 	{
@@ -228,10 +228,10 @@ void Var::CreateForest()
 					trees = t;
 					t->tree->add(p->num);
 					forest->add(p->num);
-					GrowTree(t, p, num);
+					GrowTree(t, p);
 				}
 				else {
-					GrowTree(nullptr, p, num);
+					GrowTree(nullptr, p);
 				}
 			}
 //		}
@@ -250,10 +250,10 @@ void Var::CreateForest()
 					trees = t;
 					t->tree->add(p->num);
 					forest->add(p->num);
-					GrowTree(t, p, num);
+					GrowTree(t, p);
 				}
 				else {
-					GrowTree(nullptr, p, num);
+					GrowTree(nullptr, p);
 				}
 			}
 //		}
@@ -274,10 +274,10 @@ void Var::CreateForest()
 				trees = t;
 				t->tree->add(p->num);
 				forest->add(p->num);
-				GrowTree(t, p, num);
+				GrowTree(t, p);
 			}
 			else {
-				GrowTree(nullptr, p, num);
+				GrowTree(nullptr, p);
 			}
 		}
 	}

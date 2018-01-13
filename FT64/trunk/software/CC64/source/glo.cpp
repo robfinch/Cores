@@ -1,11 +1,11 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2017  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2018  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-// C64 - 'C' derived language compiler
+// CC64 - 'C' derived language compiler
 //  - 64 bit CPU
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -24,24 +24,6 @@
 // ============================================================================
 //
 #include "stdafx.h"
-/*
- *	68000 C compiler
- *
- *	Copyright 1984, 1985, 1986 Matthew Brandt.
- *  all commercial rights reserved.
- *
- *	This compiler is intended as an instructive tool for personal use. Any
- *	use for profit without the written consent of the author is prohibited.
- *
- *	This compiler may be distributed freely for non-commercial use as long
- *	as this notice stays intact. Please forward any enhancements or questions
- *	to:
- *
- *		Matthew Brandt
- *		Box 920337
- *		Norcross, Ga 30092
- */
-
 /*      global definitions      */
 
 CPU cpu;
@@ -49,19 +31,19 @@ int pass;
 int maxPn = 15;
 int gCpu = 7;
 int regPC = 254;
-int regSP = 31;
-int regFP = 30;
-int regLR = 29;
-int regXLR = 28;
-int regGP = 27;
-int regCLP = 25;                // class pointer
+int regSP = 63;
+int regFP = 62;
+int regLR = 61;
+int regXLR = 60;
+int regGP = 59;
+int regCLP = 57;                // class pointer
 int regZero = 0;
-int regFirstTemp = 3;
-int regLastTemp = 10;
-int regFirstRegvar = 11;
-int regLastRegvar = 17;
-int regFirstArg = 18;
-int regLastArg = 24;
+int regFirstTemp = 5;
+int regLastTemp = 20;
+int regFirstRegvar = 21;
+int regLastRegvar = 34;
+int regFirstArg = 35;
+int regLastArg = 47;
 int farcode = 0;
 int wcharSupport = 1;
 int verbose = 0;

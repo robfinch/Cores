@@ -70,6 +70,7 @@ BasicBlock *BasicBlock::Blockize(OCODE *start)
 	start->leader = true;
 	for (ip = start; ip; ip = ip2) {
 		ip->bb = pb;
+		pb->depth = ip->loop_depth;
 		ip2 = ip->fwd;
 		if (IsBasicBlockSeparater(ip)) {
 			pb->lcode = ip;
@@ -138,6 +139,29 @@ Edge *BasicBlock::MakeInputEdge(BasicBlock *src)
 	}
 	else {
 		ihead = itail = edge;
+	}
+	return (edge);
+}
+
+Edge *BasicBlock::MakeDomEdge(BasicBlock *dst)
+{
+	Edge *edge;
+	Edge *p;
+
+	// Prevent the same edge from being added multiple times.
+	for (p = dhead; p; p = p->next)
+		if (p->dst==dst)
+			return (nullptr);
+	edge = (Edge *)allocx(sizeof(Edge));
+	edge->src = this;
+	edge->dst = dst;
+	if (dtail) {
+		dtail->next = edge;
+		edge->prev = dtail;
+		dtail = edge;
+	}
+	else {
+		dhead = dtail = edge;
 	}
 	return (edge);
 }
@@ -290,6 +314,17 @@ void BasicBlock::AddLiveOut(BasicBlock *ip)
 			}
 		}
 	}
+}
+
+bool BasicBlock::IsIdom(BasicBlock *b)
+{
+	Edge *e;
+
+	for (e = dhead; e; e = e->next) {
+		if (e->dst==b)
+			return (true);
+	}
+	return (false);
 }
 
 void ComputeLiveVars()

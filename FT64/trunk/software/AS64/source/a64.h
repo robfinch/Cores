@@ -72,7 +72,7 @@ extern uint8_t binfile[10000000];
 extern int binndx;
 extern int64_t binstart;
 extern NameTable nmTable;
-extern int num_bytes;
+extern float num_bytes;
 extern int num_insns;
 
 extern void doif();

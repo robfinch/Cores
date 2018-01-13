@@ -1,7 +1,9 @@
 // ============================================================================
-// (C) 2017 Robert Finch
-// All Rights Reserved.
-// robfinch<remove>@finitron.ca
+//        __
+//   \\__/ o\    (C) 2012-2018  Robert Finch, Waterloo
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
 //
 // C64 - 'C' derived language compiler
 //  - 64 bit CPU
@@ -1215,7 +1217,7 @@ static void RestoreTemporaries(SYM *sym, int sp, int fsp)
 
 // Saves any registers used as parameters in the calling function.
 
-static void SaveRegisterParameters(SYM *sym)
+static void SaveRegisterArguments(SYM *sym)
 {
 	TypeArray *ta;
 
@@ -1238,7 +1240,7 @@ static void SaveRegisterParameters(SYM *sym)
 	}
 }
 
-static void RestoreRegisterParameters(SYM *sym)
+static void RestoreRegisterArguments(SYM *sym)
 {
 	TypeArray *ta;
 
@@ -1398,9 +1400,9 @@ static int GeneratePushParameter(ENODE *ep, int regno, int stkoffs)
 	return nn;
 }
 
-// push entire parameter list onto stack
+// Store entire argumnent list onto stack
 //
-static int GeneratePushParameterList(SYM *sym, ENODE *plist)
+static int GenerateStoreArgumentList(SYM *sym, ENODE *plist)
 {
 	TypeArray *ta = nullptr;
 	int i,sum;
@@ -1414,9 +1416,8 @@ static int GeneratePushParameterList(SYM *sym, ENODE *plist)
 		ta = sym->GetProtoTypes();
 
 	ip = peep_tail;
-	if (!cpu.SupportsPush) {
-		GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(0));
-	}
+	GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(0));
+	// Capture the parameter list. It is needed in the reverse order.
 	for (nn = 0, p = plist; p != NULL; p = p->p[1], nn++) {
 		pl[nn] = p->p[0];
 	}
@@ -1425,12 +1426,10 @@ static int GeneratePushParameterList(SYM *sym, ENODE *plist)
 		sum += GeneratePushParameter(pl[nn],ta ? ta->preg[ta->length - i - 1] : 0,sum*8);
 //		plist = plist->p[1];
     }
-	if (!cpu.SupportsPush) {
-		if (sum==0)
-			MarkRemove(ip->fwd);
-		else
-			ip->fwd->oper3 = make_immed(sum*8);
-	}
+	if (sum==0)
+		MarkRemove(ip->fwd);
+	else
+		ip->fwd->oper3 = make_immed(sum*sizeOfWord);
 	if (ta)
 		delete ta;
     return sum;
@@ -1462,8 +1461,8 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
         }
 */
 		if (currentFn->HasRegisterParameters())
-			SaveRegisterParameters(sym);
-        i = i + GeneratePushParameterList(sym,node->p[1]);
+			SaveRegisterArguments(sym);
+        i = i + GenerateStoreArgumentList(sym,node->p[1]);
 //		ReleaseTempRegister(ap);
 		if (sym && sym->IsInline) {
 			o_fn = currentFn;
@@ -1493,8 +1492,8 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
 			sym = ap->offset->sym;
 		SaveTemporaries(sym, &sp, &fsp);
 		if (currentFn->HasRegisterParameters())
-			SaveRegisterParameters(sym);
-        i = i + GeneratePushParameterList(sym,node->p[1]);
+			SaveRegisterArguments(sym);
+        i = i + GenerateStoreArgumentList(sym,node->p[1]);
 		ap->mode = am_ind;
 		ap->offset = 0;
 		if (sym && sym->IsInline) {
@@ -1521,7 +1520,7 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
 			GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),make_immed(i * sizeOfWord));
 	}
 	if (currentFn->HasRegisterParameters())
-		RestoreRegisterParameters(sym);
+		RestoreRegisterArguments(sym);
 	RestoreTemporaries(sym, sp, fsp);
 	/*
 	if (sym) {

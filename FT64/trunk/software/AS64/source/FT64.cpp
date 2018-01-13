@@ -58,6 +58,8 @@ static int getRegisterX()
     int reg;
 
     while(isspace(*inptr)) inptr++;
+	if (*inptr == '$')
+		inptr++;
     switch(*inptr) {
     case 'r': case 'R':
         if ((inptr[1]=='a' || inptr[1]=='A') && !isIdentChar(inptr[2])) {
@@ -1143,9 +1145,7 @@ static void process_rrop(int funct6)
        
 // ---------------------------------------------------------------------------
 // jmp main
-// jsr [r19]
-// jmp (tbl,r2)
-// jsr [gp+r20]
+// jal [r19]
 // ---------------------------------------------------------------------------
 
 static void process_jal(int oc)
@@ -1153,7 +1153,9 @@ static void process_jal(int oc)
     int64_t addr, val;
     int Ra;
     int Rt;
-    
+	bool noRt;
+
+	noRt = false;
 	Ra = 0;
     Rt = 0;
     NextToken();
@@ -1181,8 +1183,10 @@ j1:
         if (token=='(' || token=='[')
            goto j1;
     }
-    else
+    else {
         Rt = 0;
+		noRt = true;
+	}
 	addr = expr();
     // d(Rn)? 
     //NextToken();
@@ -1196,6 +1200,13 @@ j1:
 			addr -= code_address;
 	}
 	val = addr;
+	if (noRt && val > 0xfffffffff8000000LL && val < 0x7ffffffLL) {
+		emit_insn(
+			(((val & 0xfffffff) >> 2) << 6) |
+			0x19,0,4
+		);
+		return;
+	}
 	if (val < -32768 || val > 32767) {
 		emit_insn(
 			(val << 16) |
@@ -1447,6 +1458,9 @@ static void process_beqi(int opcode6, int opcode3)
 // ---------------------------------------------------------------------------
 // beq r1,r2,label
 // bne r2,r3,r4
+//
+// When opcode4 is negative it indicates to swap the a and b registers. This
+// allows source code to use alternate forms of branch conditions.
 // ---------------------------------------------------------------------------
 
 static void process_bcc(int opcode6, int opcode4)
@@ -1478,6 +1492,18 @@ static void process_bcc(int opcode6, int opcode4)
 			NextToken();
 			pred = (int)expr();
 		}
+		if (opcode4 < 0) {
+			opcode4 = -opcode4;
+			emit_insn(((disp >> 3) & 0x3FF) << 22 |
+				((pred & 3) << 20) |
+				(opcode4 << 16) |
+				(Ra << 11) |
+				(Rb << 6) |
+				((disp >> 2) & 1) |
+				opcode6,0,4
+			);
+			return;
+		}
 	    emit_insn(((disp >> 3) & 0x3FF) << 22 |
 			((pred & 3) << 20) |
 			(opcode4 << 16) |
@@ -1491,6 +1517,17 @@ static void process_bcc(int opcode6, int opcode4)
 	if (token==',') {
 		NextToken();
 		pred = (int)expr();
+	}
+	if (opcode4 < 0) {
+		opcode4 = -opcode4;
+		emit_insn(
+			((pred & 3) << 25) |
+			(opcode4 << 21) |
+			(Rc << 16) |
+			(Ra << 11) |
+			(Rb << 6) |
+			0x03,0,4
+		);
 	}
 	emit_insn(
 		((pred & 3) << 25) |
@@ -1686,17 +1723,18 @@ static void process_call(int opcode)
 		}
 	}
 	if (val==0) {
-		if (opcode==0x28)
+		if (opcode==0x28)	// JMP [Ra]
 			// jal r0,[Ra]
 			emit_insn(
 				(Ra << 6) |
 				0x18,0,4
 			);
 		else
-			// callr [Ra]
+			// jal lr,[Ra]	- call [Ra]
 			emit_insn(
+				(29 << 11) |
 				(Ra << 6) |
-				0x2B,0,4
+				0x18,0,4
 			);
 		return;
 	}
@@ -1741,24 +1779,24 @@ static void process_call(int opcode)
 				0x02,0,4
 				);
 		}
-		if (opcode==0x28)
+		if (opcode==0x28)	// JMP
 			// jal r0,[r23]
 			emit_insn(
 				(23 << 6) |
 				0x18,0,4
 				);
 		else
-			// call [r23]
+			// jal lr,[r23]	- call [r23]
 			emit_insn(
-				(23 << 11) |
-				(0x1F << 6) |
-				0x2B,0,4
+				(29 << 11) |
+				(23 << 6) |
+				0x18,0,4
 				);
 		return;
 	}
 	emit_insn(
 		(((val & 0xFFFFFFFF) >> 2) << 6) |
-		opcode,0,4
+		0x19,0,4
 		);
 }
 
@@ -2204,6 +2242,9 @@ static void process_load(int opcode6)
     expect(',');
     mem_operand(&disp, &Ra, &Rb, &Sc);
 	if (Ra > 0 && Rb > 0) {
+		// Trap LEA, convert to LEAX opcode
+		if (opcode6==0x04) // ADD is really LEA
+			opcode6 = 0x18;
 		emit_insn(
 			(opcode6 << 26) |
 			(Sc << 21) |
@@ -2461,7 +2502,7 @@ static void process_shifti(int op4)
 	case 2:	func6 = 0x3F;
 	default:	func6 = 0x0F;
 	}
-	emit_insn((func6 << 26) | (op4 << 22) | (((val >>5) & 1) << 21) | (Rt << 16) | ((val & 0x1F) << 11) | (Ra << 6) | 0x02,!expand_flag,4);
+	emit_insn((func6 << 26) | (op4 << 22) | ((val & 0x3f) << 16) | (Rt << 11) | (Ra << 6) | 0x02,!expand_flag,4);
 }
 
 // ----------------------------------------------------------------------------
@@ -2718,34 +2759,50 @@ static void process_push(int func, int amt)
     sz = GetFPSize();
     NextToken();
     if (token=='#') {  // Filter to PUSH
-		printf("Illegal push/pop instruction: %d.\r\n", lineno);
-		return;
+		//printf("Illegal push/pop instruction: %d.\r\n", lineno);
+		//return;
        val = expr();
-	    if (val >= -15LL && val < 16LL) {
+	    if (val > 32767 || val < -32768) {
 			emit_insn(
-				(4 << 11) |
-				((val & 0x1f) << 6) |
-				0x19,0,1
-				);
-			return;
-		}
-	    if (val > 32767 || val < LB16) {
+				(val << 16) |
+				(23 << 11) |
+				(0 << 6) |
+				0x09,!expand_flag,4);	// ORI
+			val >>= 16;
 			emit_insn(
-				(0x8000 << 16) |
-				(0x00 << 11) |
-				(0x00 << 6) |
-				0x2B,  // PEA
-				0,2
-			);
-		    emit_insn(val,0,2);
+				(val << 16) |
+				(23 << 11) |
+				(0 << 6) |
+				(1 << 6) |
+				0x1A,!expand_flag,4);	// ORQ1
+			val >>= 16;
+			if (val != 0) {
+				emit_insn(
+					(val << 16) |
+					(23 << 11) |
+					(0 << 6) |
+					(2 << 6) |
+					0x1A,!expand_flag,4);	// ORQ2
+			}
+			val >>= 16;
+			if (val != 0) {
+				emit_insn(
+					(val << 16) |
+					(23 << 11) |
+					(0 << 6) |
+					(3 << 6) |
+					0x1A,!expand_flag,4);	// ORQ3
+			}
+			Ra = 23;
+			goto j1;
 		}
 		else
 			emit_insn(
 				((val & 0xFFFFLL) << 16) |
-				(0x00 << 11) |
-				(0x00 << 6) |
-				0x2B,  // PEA
-				1,2
+				(0x1F << 11) |
+				(0x1F << 6) |
+				0x1F,  // PUSHC
+				0,4
 			);
         return;
     }
@@ -2767,8 +2824,9 @@ static void process_push(int func, int amt)
 	}
     if (Ra == -1) {
 		Ra = 0;
-        printf("%d: unknown register.\r\n");
+        printf("%d: unknown register.\r\n", lineno);
     }
+j1:
     emit_insn(
 		(func << 26) |
 		((amt & 31) << 21) |
@@ -3015,6 +3073,10 @@ void FT64_processMaster()
 		case tk_bfset: process_bitfield(0); break;
         case tk_bge: process_bcc(0x30,3); break;
         case tk_bgeu: process_bcc(0x30,5); break;
+        case tk_bgt: process_bcc(0x30,-2); break;
+        case tk_bgtu: process_bcc(0x30,-4); break;
+        case tk_ble: process_bcc(0x30,-3); break;
+        case tk_bleu: process_bcc(0x30,-5); break;
         case tk_blt: process_bcc(0x30,2); break;
         case tk_bltu: process_bcc(0x30,4); break;
         case tk_bne: process_bcc(0x30,1); break;

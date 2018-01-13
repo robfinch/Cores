@@ -874,7 +874,7 @@ int NextToken()
 
         // call cas chk cmp cmpu code cli com cmpi csrrc csrrs csrrw
         case 'c': case 'C':
-			 if (gCpu==7 || gCpu=='A' || gCpu=='F') {
+			 if (gCpu==7 || gCpu=='A' || gCpu=='F' || gCpu=='G') {
                  if ((inptr[1]=='a' || inptr[1]=='A') &&
                      (inptr[2]=='l' || inptr[2]=='L') &&
                      (inptr[3]=='l' || inptr[3]=='L') &&
@@ -974,7 +974,7 @@ int NextToken()
                  inptr += 4;
                  return token = tk_chki;
              }
-             if (gCpu==5 || gCpu==7 || gCpu=='A' || gCpu=='F') {
+             if (gCpu==5 || gCpu==7 || gCpu=='A' || gCpu=='F' || gCpu=='G') {
                if ((inptr[1]=='s' || inptr[1]=='S') &&
                    (inptr[2]=='r' || inptr[2]=='R') &&
                    (inptr[3]=='r' || inptr[3]=='R') &&

@@ -1,11 +1,11 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2017  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2018  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-// C64 - 'C' derived language compiler
+// CC64 - 'C' derived language compiler
 //  - 64 bit CPU
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -654,8 +654,8 @@ void SYM::BuildParameterList(int *num, int *numa)
 //	sp->parms = (SYM *)NULL;
 	onp = nparms;
 	nparms = 0;
-	preg = 18;
-	fpreg = 18;
+	preg = regFirstArg;
+	fpreg = regFirstArg;
 	// Parameters will be inserted into the symbol's parameter list when
 	// declarations are processed.
 	np = ParameterDeclaration::Parse(1);
@@ -674,7 +674,7 @@ void SYM::BuildParameterList(int *num, int *numa)
 		sp1->value.i = poffset;
 		noParmOffset = false;
 		if (sp1->tp->IsFloatType()) {
-			if (preg > 23)
+			if (preg > regLastArg)
 				sp1->IsRegister = false;
 			if (sp1->IsRegister && sp1->tp->size < 11) {
 				sp1->reg = sp1->IsAuto ? preg | 0x8000 : preg;
@@ -688,7 +688,7 @@ void SYM::BuildParameterList(int *num, int *numa)
 				sp1->IsRegister = false;
 		}
 		else {
-			if (preg > 23)
+			if (preg > regLastArg)
 				sp1->IsRegister = false;
 			if (sp1->IsRegister && sp1->tp->size < 11) {
 				sp1->reg = sp1->IsAuto ? preg | 0x8000 : preg;
@@ -727,7 +727,7 @@ void SYM::BuildParameterList(int *num, int *numa)
 				sp1->IsAuto = false;
 				sp1->next = 0;
 				sp1->IsRegister = true;
-				if (preg > 23)
+				if (preg > regLastArg)
 					sp1->IsRegister = false;
 				if (sp1->IsRegister && sp1->tp->size < 11) {
 					sp1->reg = sp1->IsAuto ? preg | 0x8000 : preg;

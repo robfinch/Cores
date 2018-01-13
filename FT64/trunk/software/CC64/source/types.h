@@ -433,6 +433,16 @@ public:
 	//Edge *MakeEdge(OCODE *ip1, OCODE *ip2);
 };
 
+// Control Flow Graph
+class CFG
+{
+public:
+	static void Create();
+	static void CalcDominatorTree();
+	static void CalcDominanceFrontiers();
+	static void InsertPhiNodes();
+};
+
 
 /*      output code structure   */
 /*
@@ -468,6 +478,8 @@ public:
 	Edge *otail;
 	Edge *ihead;
 	Edge *itail;
+	Edge *dhead;
+	Edge *dtail;
 public:
 	unsigned int changed : 1;
 	int depth;
@@ -478,6 +490,9 @@ public:
 	CSet *live;
 	CSet *MustSpill;
 	CSet *NeedLoad;
+	CSet *DF;		// dominance frontier
+	int HasAlready;
+	int Work;
 	static CSet *livo;
 	BasicBlock *next;
 	BasicBlock *prev;
@@ -488,8 +503,10 @@ public:
 	static BasicBlock *Blockize(OCODE *start);
 	Edge *MakeOutputEdge(BasicBlock *dst);
 	Edge *MakeInputEdge(BasicBlock *src);
+	Edge *MakeDomEdge(BasicBlock *dst);
 	void ComputeLiveVars();
 	void AddLiveOut(BasicBlock *ip);
+	bool IsIdom(BasicBlock *b);
 };
 
 // A "tree" is a "range" in Briggs terminology
@@ -522,7 +539,7 @@ public:
 	CSet *visited;
 public:
 	static Var *MakeNew();
-	void GrowTree(Tree *, BasicBlock *, int);
+	void GrowTree(Tree *, BasicBlock *);
 	// Create a forest for a specific Var
 	void CreateForest();
 	// Create a forest for each Var object
@@ -553,6 +570,13 @@ public:
     unsigned int    isfp : 1;
 public:
 	int OptimizationDesireability();
+};
+
+class Peep
+{
+public:
+	static void InsertBefore(OCODE *an, OCODE *cd);
+	static void InsertAfter(OCODE *an, OCODE *cd);
 };
 
 class Statement {

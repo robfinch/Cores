@@ -47,7 +47,9 @@ void DumpLiveRegs();
 void CreateVarForests();
 void DeleteSets();
 void RemoveCode();
-void Coalesce();
+bool Coalesce();
+void ComputeSpillCosts();
+extern void CalcDominatorTree();
 Var *FindVar(int num);
 void Renumber();
 bool RemoveEnabled = true;
@@ -108,6 +110,7 @@ void GenerateZeradic(int op)
 	cd->oper3 = NULL;
 	cd->oper4 = NULL;
 	dfs.printf("D");
+	cd->loop_depth = looplevel;
 	AddToPeepList(cd);
 	dfs.printf("</GenerateZeradic>\r\n");
 }
@@ -131,6 +134,7 @@ void GenerateMonadic(int op, int len, AMODE *ap1)
 	cd->oper3 = NULL;
 	cd->oper4 = NULL;
 	dfs.printf("D");
+	cd->loop_depth = looplevel;
 	AddToPeepList(cd);
 	dfs.printf("Leave GenerateMonadic\r\n");
 }
@@ -154,6 +158,7 @@ void GenerateMonadicNT(int op, int len, AMODE *ap1)
 	cd->oper3 = NULL;
 	cd->oper4 = NULL;
 	dfs.printf("D");
+	cd->loop_depth = looplevel;
 	AddToPeepList(cd);
 	dfs.printf("Leave GenerateMonadic\r\n");
 }
@@ -172,6 +177,7 @@ void GeneratePredicatedDiadic(int pop, int pr, int op, int len, AMODE *ap1, AMOD
 	cd->oper3 = NULL;
 	cd->oper4 = NULL;
 	currentFn->UsesPredicate = TRUE;
+	cd->loop_depth = looplevel;
 	AddToPeepList(cd);
 }
 
@@ -195,6 +201,7 @@ void GenerateDiadic(int op, int len, AMODE *ap1, AMODE *ap2)
 	}
 	cd->oper3 = NULL;
 	cd->oper4 = NULL;
+	cd->loop_depth = looplevel;
 	AddToPeepList(cd);
 }
 
@@ -218,6 +225,7 @@ void GenerateDiadicNT(int op, int len, AMODE *ap1, AMODE *ap2)
 	}
 	cd->oper3 = NULL;
 	cd->oper4 = NULL;
+	cd->loop_depth = looplevel;
 	AddToPeepList(cd);
 }
 
@@ -235,6 +243,7 @@ void GenerateTriadic(int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3)
 	cd->oper2 = copy_addr(ap2);
 	cd->oper3 = copy_addr(ap3);
 	cd->oper4 = NULL;
+	cd->loop_depth = looplevel;
 	AddToPeepList(cd);
 }
 
@@ -251,6 +260,7 @@ void GenerateTriadicNT(int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3)
 	cd->oper2 = copy_addr(ap2);
 	cd->oper3 = copy_addr(ap3);
 	cd->oper4 = NULL;
+	cd->loop_depth = looplevel;
 	AddToPeepList(cd);
 }
 
@@ -268,6 +278,7 @@ void Generate4adic(int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3, AMODE *a
 	cd->oper2 = copy_addr(ap2);
 	cd->oper3 = copy_addr(ap3);
 	cd->oper4 = copy_addr(ap4);
+	cd->loop_depth = looplevel;
 	AddToPeepList(cd);
 }
 
@@ -284,6 +295,7 @@ void Generate4adicNT(int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3, AMODE 
 	cd->oper2 = copy_addr(ap2);
 	cd->oper3 = copy_addr(ap3);
 	cd->oper4 = copy_addr(ap4);
+	cd->loop_depth = looplevel;
 	AddToPeepList(cd);
 }
 
@@ -1303,6 +1315,24 @@ static void MarkAllKeep()
 	}
 }
 
+void Peep::InsertBefore(OCODE *an, OCODE *cd)
+{
+	cd->fwd = an;
+	cd->back = an->back;
+	if (an->back)
+		an->back->fwd = cd;
+	an->back = cd;
+}
+
+void Peep::InsertAfter(OCODE *an, OCODE *cd)
+{
+	cd->fwd = an->fwd;
+	cd->back = an;
+	if (an->fwd)
+		an->fwd->back = cd;
+	an->fwd = cd;
+}
+
 static void Remove()
 {
 	OCODE *ip, *ip1, *ip2;
@@ -1527,7 +1557,7 @@ static void opt_peep()
 	Remove();
 
 	RootBlock = BasicBlock::Blockize(peep_head);
-	CreateControlFlowGraph();
+	CFG::Create();
 	RemoveMoves();
 	ComputeLiveVars();
 	MarkAllKeep();
@@ -1535,7 +1565,10 @@ static void opt_peep()
 	CreateVars();
 	Var::CreateForests();
 	Var::DumpForests();
+	CFG::CalcDominanceFrontiers();
+	CFG::InsertPhiNodes();
 	Renumber();
+	ComputeSpillCosts();
 	RemoveCode();
 	Coalesce();
 	Var::DumpForests();
@@ -1601,7 +1634,7 @@ void RemoveMoves()
 		dfs.printf("No move instruction joins live ranges.\n");
 }
 
-void Coalesce()
+bool Coalesce()
 {
 	BasicBlock *b;
 	int reg1, reg2;
@@ -1609,8 +1642,10 @@ void Coalesce()
 	Var *p, *q;
 	Tree *t, *t1, *u;
 	bool foundSameTree;
+	bool improved;
 	char buf[2000];
 
+	improved = false;
 	for (p = varlist; p; p = p->next) {
 		for (q = varlist; q; q = q->next) {
 			if (p==q)
@@ -1643,6 +1678,7 @@ void Coalesce()
 			
 			dfs.printf("Coalescing live range r%d with ", reg1);
 			dfs.printf("r%d \n", reg2);
+			improved = true;
 			if (v1->trees==nullptr) {
 				v3 = v1;
 				v1 = v2;
@@ -1684,6 +1720,7 @@ void Coalesce()
 			v2->cnum = v1->num;
 		}
 	}
+	return (improved);
 }
 
 static void UpdateLive(BasicBlock *b, OCODE *ip)
@@ -1701,11 +1738,10 @@ static void UpdateLive(BasicBlock *b, OCODE *ip)
 	b->live->remove(r);
 }
 
-static void CheckForDeaths(BasicBlock *b, OCODE *ip, int r)
+static void CheckForDeaths(BasicBlock *b, int r)
 {
 	int m;
 
-	r = ip->oper1->lrpreg;
 	if (!b->live->isMember(r)) {
 		b->NeedLoad->resetPtr();
 		for (m = b->NeedLoad->nextMember(); m >= 0; m = b->NeedLoad->nextMember()) {
@@ -1741,6 +1777,8 @@ void ComputeSpillCosts()
 		b->MustSpill = b->live;
 		endLoop = false;
 		for (ip = b->lcode; ip && !endLoop; ip = ip->back) {
+			if (ip->opcode==op_label)
+				continue;
 			i = ip->insn;
 			// examine instruction i updating sets and accumulating costs
 			if (i->HasTarget) {
@@ -1748,29 +1786,31 @@ void ComputeSpillCosts()
 			}
 			// This is a loop in the Briggs thesis, but we only allow 4 operands
 			// so the loop is unrolled.
-			if (!ip->oper1->isTarget) {
-				r = ip->oper1->lrpreg;
-				CheckForDeaths(b, ip, r);
-				if (r = ip->oper1->lrsreg)	// '=' is correct
-					CheckForDeaths(b,ip,r);
+			if (ip->oper1) {
+				if (!ip->oper1->isTarget) {
+					r = ip->oper1->lrpreg;
+					CheckForDeaths(b, r);
+					if (r = ip->oper1->lrsreg)	// '=' is correct
+						CheckForDeaths(b,r);
+				}
 			}
 			if (ip->oper2) {
 				r = ip->oper1->lrpreg;
-				CheckForDeaths(b, ip, r);
+				CheckForDeaths(b, r);
 				if (r = ip->oper1->lrsreg)
-					CheckForDeaths(b,ip,r);
+					CheckForDeaths(b,r);
 			}
 			if (ip->oper3) {
 				r = ip->oper1->lrpreg;
-				CheckForDeaths(b, ip, r);
+				CheckForDeaths(b, r);
 				if (r = ip->oper1->lrsreg)
-					CheckForDeaths(b,ip,r);
+					CheckForDeaths(b,r);
 			}
 			if (ip->oper4) {
 				r = ip->oper1->lrpreg;
-				CheckForDeaths(b, ip, r);
+				CheckForDeaths(b, r);
 				if (r = ip->oper1->lrsreg)
-					CheckForDeaths(b,ip,r);
+					CheckForDeaths(b,r);
 			}
 			// Re-examine uses to update live and needload
 			if (ip->oper1 && !ip->oper1->isTarget) {
@@ -1846,6 +1886,8 @@ static void Renumber()
 			b = basicBlocks[bb];
 			eol = false;
 			for (ip = b->code; ip && !eol; ip = ip->fwd) {
+				if (ip->opcode==op_label)
+					continue;
 				if (ip->oper1 && ip->oper1->preg == t->var)
 					ip->oper1->lrpreg = t->num;
 				if (ip->oper1 && ip->oper1->sreg == t->var)
@@ -1908,4 +1950,53 @@ j1:	;
 	dfs.printf("<CodeRemove>%d</CodeRemove>\n", count);
 }
 
+/*
+void BuildLivesetFromLiveout(BasicBlock *b)
+{
+	int m;
 
+	b->live->clear();
+	b->LiveOut->resetPtr();
+	for (m = b->LiveOut->nextMember(); m >= 0; m = b->LiveOut->nextMember()) {
+		// Find the live range assoicated with value m
+		b->live->add();
+	}
+}
+
+void Stage2()
+{
+	int bms;
+	int *bitmatrix;
+	int i, j;
+	int bitndx, intndx;
+	BasicBlock *b;
+	OCODE *ip;
+	bool eol;
+
+	bms = Tree::treecount * Tree::treecount / sizeof(int);
+	bitmatrix = new int[bms];
+	ZeroMemory(bitmatrix, bms);
+	bitndx = i + (j * j) / 2;
+	intndx = bitndx / sizeof(int);
+	bitndx %= (sizeof(int) * 8);
+
+	// For each block 
+	for (b = RootBlock; b; b = b->next) {
+		BuildLivesetFromLiveout(b);
+		eol = false;
+		for (ip = b->lcode; ip && !eol; ip = ip->back) {
+			// examine instruction ip and update graph and live
+			if (ip->opcode==op_mov) {
+				b->live->remove();
+			}
+			igraph->AddEdges(b->live,);
+			b->live->remove();
+			if (ip->oper1)
+			b->live->add();
+			eol = ip==b->lcode;
+		}
+	}
+
+	delete bitmatrix;
+}
+*/

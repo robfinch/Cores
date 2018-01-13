@@ -1,11 +1,11 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2017  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2018  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-// C64 - 'C' derived language compiler
+// CC64 - 'C' derived language compiler
 //  - 64 bit CPU
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -23,23 +23,6 @@
 //                                                                          
 // ============================================================================
 //
-/*
- *	68000 C compiler
- *
- *	Copyright 1984, 1985, 1986 Matthew Brandt.
- *  all commercial rights reserved.
- *
- *	This compiler is intended as an instructive tool for personal use. Any
- *	use for profit without the written consent of the author is prohibited.
- *
- *	This compiler may be distributed freely for non-commercial use as long
- *	as this notice stays intact. Please forward any enhancements or questions
- *	to:
- *
- *		Matthew Brandt
- *		Box 920337
- *		Norcross, Ga 30092
- */
 #include "stdafx.h"
 
 extern char *TraceName(SYM *);
@@ -211,6 +194,7 @@ Instruction opl[] =
 	{"vadds", op_vadds,10}, {"vsubs", op_vsubs,10}, {"vmuls", op_vmuls,10}, {"vdivs", op_vdivs,100},
 	{"vex", op_vex,10}, {"veins",op_veins,10},
 	{"redor", op_redor,2,true},
+	{"phi", op_phi},
                 {0,0} };
 
 static char *pad(char *op)
@@ -419,6 +403,14 @@ char *RegMoniker(int regno)
 		sprintf_s(&buf[n][0], 20, "$sp");
 	else if (regno==regLR)
 		sprintf_s(&buf[n][0], 20, "$lr");
+	else if (regno>=1 && regno<=4)
+		sprintf_s(&buf[n][0], 20, "$v%d", regno-1);
+	else if (regno >= regFirstArg && regno <= regLastArg)
+		sprintf_s(&buf[n][0], 20, "$a%d", regno-regFirstArg);
+	else if (regno >= regFirstTemp && regno <= regLastTemp)
+		sprintf_s(&buf[n][0], 20, "$t%d", regno-regFirstTemp);
+	else if (regno >= regFirstRegvar && regno <= regLastRegvar)
+		sprintf_s(&buf[n][0], 20, "$r%d", regno);
 	else
 		sprintf_s(&buf[n][0], 20, "$r%d", regno);
 	return &buf[n][0];
@@ -503,6 +495,7 @@ void PutAddressMode(AMODE *ap)
 //void put_code(int op, int len,AMODE *aps,AMODE *apd,AMODE *ap3,AMODE *ap4)
 void put_code(OCODE *p)
 {
+	static int lbbn = -1;	// last basic block number
 	int op = p->opcode;
 	AMODE *aps,*apd,*ap3,*ap4;
 	ENODE *ep;
@@ -513,6 +506,12 @@ void put_code(OCODE *p)
 	ap3 = p->oper3;
 	ap4 = p->oper4;
 
+	if (p->bb->num != lbbn) {
+		ofs.printf(";====================================================\n");
+		ofs.printf("; Basic Block %d\n", p->bb->num);
+		ofs.printf(";====================================================\n");
+		lbbn = p->bb->num;
+	}
 	if (p->comment) {
 		ofs.printf("; %s\n", (char *)p->comment->oper1->offset->sp->c_str());
 	}

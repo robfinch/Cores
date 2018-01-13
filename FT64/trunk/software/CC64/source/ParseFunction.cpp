@@ -465,6 +465,7 @@ static Statement *ParseFunctionBody(SYM *sp)
 	if (!sp->IsInline) {
 		pass = 1;
 		ip = peep_tail;
+		looplevel = 0;
 		GenerateFunction(sp);
 		sp->stkspace += (ArgRegCount-regFirstArg) * sizeOfWord;
 		sp->argbot = sp->stkspace;
@@ -473,6 +474,7 @@ static Statement *ParseFunctionBody(SYM *sp)
 		pass = 2;
 		peep_tail = ip;
 		peep_tail->fwd = nullptr;
+		looplevel = 0;
 		GenerateFunction(sp);
 		dfs.putch('E');
 

@@ -109,7 +109,7 @@ Statement *Statement::ParseWhile()
     } 
 	iflevel--;
 	looplevel--;
-    return snp; 
+    return (snp); 
 } 
   
 Statement *Statement::ParseUntil()

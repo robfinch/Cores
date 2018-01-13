@@ -1,11 +1,11 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2017  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2018  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-// C64 - 'C' derived language compiler
+// CC64 - 'C' derived language compiler
 //  - 64 bit CPU
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -204,7 +204,9 @@ void Statement::GenerateWhile()
 		breaklab = nextlabel++;
 		initstack();
 		GenerateFalseJump(exp,breaklab,2);
+		looplevel++;
 		s1->Generate();
+		looplevel--;
 		GenerateMonadicNT(op_bra,0,make_clabel(contlab));
 		GenerateLabel(breaklab);
 		breaklab = lab2;
@@ -231,7 +233,9 @@ void Statement::GenerateUntil()
 		breaklab = nextlabel++;
 		initstack();
 		GenerateTrueJump(exp,breaklab,2);
+		looplevel++;
 		s1->Generate();
+		looplevel--;
 		GenerateMonadicNT(op_bra,0,make_clabel(contlab));
 		GenerateLabel(breaklab);
 		breaklab = lab2;
@@ -265,7 +269,9 @@ void Statement::GenerateFor()
     if( s1 != NULL )
 	{
             breaklab = exit_label;
+			looplevel++;
             s1->Generate();
+			looplevel--;
 	}
 	GenerateLabel(contlab);
     initstack();
@@ -290,7 +296,9 @@ void Statement::GenerateForever()
     if( s1 != NULL )
 	{
         breaklab = exit_label;
+		looplevel++;
         s1->Generate();
+		looplevel--;
 	}
     GenerateMonadicNT(op_bra,0,make_clabel(loop_label));
     breaklab = old_break;
@@ -330,7 +338,9 @@ void Statement::GenerateDo()
     contlab = nextlabel++;
     GenerateLabel(contlab);
 	breaklab = nextlabel++;
+	looplevel++;
 	s1->Generate();
+	looplevel--;
 	initstack();
 	GenerateTrueJump(exp,contlab,3);
 	GenerateLabel(breaklab);
@@ -346,7 +356,9 @@ void Statement::GenerateDoUntil()
     contlab = nextlabel++;
     GenerateLabel(contlab);
     breaklab = nextlabel++;
+	looplevel++;
     s1->Generate();
+	looplevel--;
     initstack();
     GenerateFalseJump(exp,contlab,3);
     GenerateLabel(breaklab);

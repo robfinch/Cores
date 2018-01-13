@@ -1,11 +1,11 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2016-2017  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2016-2018  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-// A64 - Assembler
+// AS64 - Assembler
 //  - 64 bit CPU
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -73,6 +73,7 @@ char databuf[10000000];
 char bssbuf[10000000];
 char tlsbuf[10000000];
 uint8_t binfile[10000000];
+uint64_t binfilex36[10000000];
 int binndx;
 int64_t binstart;
 int mfndx;
@@ -83,7 +84,7 @@ int tlsndx;
 int bssndx;
 SYM *lastsym;
 int isInitializationData;
-int num_bytes;
+float num_bytes;
 int num_insns;
 HTBLE hTable[100000];
 int htblmax;
@@ -107,6 +108,7 @@ extern void dsd6_processMaster();
 extern void dsd7_processMaster();
 extern void dsd9_processMaster();
 extern void FT64_processMaster();
+extern void FT64x36_processMaster();
 extern void SymbolInit();
 extern void dsd9_VerilogOut(FILE *fp);
 
@@ -120,7 +122,7 @@ void displayHelp()
      printf("    +r      = relocatable output\r\n");
      printf("    -s      = non-segmented\r\n");
      printf("    +g[n]   = cpu version 8=Table888, 9=Table888mmu V=RISCV 6=FISA64 T=Thor\r\n");
-     printf("                          D=DSD6 7=DSD7 A=DSD9 F=FT64\r\n");
+     printf("                          D=DSD6 7=DSD7 A=DSD9 F=FT64 G=FT64x36\r\n");
      printf("    -o[bvlc] = suppress output file b=binary, v=verilog, l=listing, c=coe\r\n");
 }
 
@@ -230,6 +232,13 @@ int processOptions(int argc, char **argv)
 				 else
 					 gCanCompress = 0;
               }
+              if (argv[nn][2]=='G') {
+                 gCpu = 'G';
+				 if (argv[nn][3]=='c')
+					 gCanCompress = 1;
+				 else
+					 gCanCompress = 0;
+              }
            }
            nn++;
         }
@@ -269,6 +278,25 @@ void emitByte(int64_t cd)
          data_address++;
     else
         code_address++;
+}
+
+// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+
+void emitNybble(int64_t cd)
+{
+	static int64_t ln;
+	static bool evn = false;
+	static int byt = 0;
+
+	if (cd > 15)
+		evn = cd >> 4;
+	if (!evn) {
+		emitByte((cd << 4) | ln);
+	}
+	else
+		ln = cd;
+	evn = !evn;
 }
 
 // ---------------------------------------------------------------------------
@@ -405,7 +433,10 @@ void process_public()
             }
             if (sym) {
                 sym->defined = 1;
-                sym->value.low = ca;
+				if (gCpu=='G')
+					sym->value.low = ca & -4LL;
+				else
+					sym->value.low = ca;
 				sym->value.high = 0;
                 sym->segment = segment;
                 sym->scope = 'P';
@@ -422,7 +453,10 @@ void process_public()
 	            }
 	            else
 	                 sym->phaserr = ' ';
-	            sym->value.low = ca;
+				if (gCpu=='G')
+					sym->value.low = ca & -4LL;
+				else
+					sym->value.low = ca;
 				sym->value.high = 0;
         	}
         }
@@ -1068,7 +1102,10 @@ void process_label()
                 sym->bits = (int)ceil(log(fabs((double)val.low)+1) / log(2.0))+1;
             }
             else {
-                sym->value.low = ca;
+				if (gCpu=='G')
+					sym->value.low = ca & -4LL;
+				else
+					sym->value.low = ca;
 				sym->value.high = 0;
                 sym->segment = segment;
                 if (segment==codeseg)
@@ -1086,7 +1123,10 @@ void process_label()
                 sym->bits = (int)ceil(log(fabs((double)val.low)+1) / log(2.0))+1;
             }
             else {
-                sym->value.low = ca;
+				if (gCpu=='G')
+					sym->value.low = ca & -4LL;
+				else
+					sym->value.low = ca;
 				sym->value.high = 0;
                 sym->segment = segment;
                 if (segment==codeseg)
@@ -1106,14 +1146,17 @@ void process_label()
                  sym->value = val;
              }
              else {
-				 if (sym->value.low != ca) {
+				 if ((sym->value.low != ca && gCpu!='G') || (sym->value.low != (ca & -4LL) && gCpu=='G')) {
                      phasing_errors++;
                      sym->phaserr = '*';
                      //if (bGen) printf("%s=%06llx ca=%06llx\r\n", nmTable.GetName(sym->name),  sym->value, code_address);
                  }
                  else
                      sym->phaserr = ' ';
-                 sym->value.low = ca;
+					if (gCpu=='G')
+						sym->value.low = ca & -4LL;
+					else
+						sym->value.low = ca;
 				 sym->value.high = 0;
              }
          }
@@ -1455,6 +1498,7 @@ void processMaster()
 	case 7:		dsd7_processMaster();	break;
 	case 'A':	dsd9_processMaster();	break;
 	case 'F':	FT64_processMaster();	break;
+	case 'G':	FT64x36_processMaster();	break;
 	default:	FT64_processMaster();
 	}
 }
@@ -1996,7 +2040,7 @@ int main(int argc, char *argv[])
 			}
             else
 			*/
-			if (gCpu=='F') {
+			if (gCpu=='F' || gCpu=='G') {
                 for (kk = 0; kk < binndx; kk+=16) {
                     fprintf(vfp, "\trommem[%d] = 128'h%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X;\n", 
                         ((((unsigned int)start_address+kk)/16)%16384), //checksum64((int64_t *)&binfile[kk]),
@@ -2006,6 +2050,23 @@ int main(int argc, char *argv[])
                         binfile[kk+3], binfile[kk+2], binfile[kk+1], binfile[kk]);
                 }
             }
+			/*
+			else if (gCpu=='G') {
+                for (kk = 0; kk < binndx; kk+=32) {
+                    fprintf(vfp, "\trommem[%d] = 256'h%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X"
+						"%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X;\n", 
+                        ((((unsigned int)start_address+kk)/32)%16384), //checksum64((int64_t *)&binfile[kk]),
+                        binfile[kk+31], binfile[kk+30], binfile[kk+29], binfile[kk+28], 
+                        binfile[kk+27], binfile[kk+26], binfile[kk+25], binfile[kk+24], 
+                        binfile[kk+23], binfile[kk+22], binfile[kk+21], binfile[kk+20], 
+                        binfile[kk+19], binfile[kk+18], binfile[kk+17], binfile[kk+16], 
+                        binfile[kk+15], binfile[kk+14], binfile[kk+13], binfile[kk+12], 
+                        binfile[kk+11], binfile[kk+10], binfile[kk+9], binfile[kk+8], 
+                        binfile[kk+7], binfile[kk+6], binfile[kk+5], binfile[kk+4], 
+                        binfile[kk+3], binfile[kk+2], binfile[kk+1], binfile[kk]);
+                }
+            }
+			*/
 			else if (gCpu==64) {
                 for (kk = 0; kk < binndx; kk+=8) {
                     fprintf(vfp, "\trommem0[%d] = 65'h%01d%02X%02X%02X%02X%02X%02X%02X%02X;\n", 
