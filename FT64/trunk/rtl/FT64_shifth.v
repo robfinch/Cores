@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2016-2017  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2016-2018  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -27,6 +27,15 @@
 //
 //`ifndef SHL
 `define RR      6'h02
+`define AMO		6'h2F
+`define AMOSHL		6'h0C
+`define AMOSHR		6'h0D
+`define AMOASR		6'h0E
+`define AMOROL		6'h0F
+`define AMOSHLI		6'h2C
+`define AMOSHRI		6'h2D
+`define AMOASRI		6'h2E
+`define AMOROLI		6'h2F
 `define SHIFTH  6'h3F
 `define SHL     4'h0
 `define SHR     4'h1
@@ -86,8 +95,20 @@ case(opcode)
         `RORI:	res <= ROTATE_INSN ? shr[DMSB:0]|shr[`HIGHWORDH] : 32'hDEADDEAD;
         default: res <= 32'd0;
         endcase
-    default:    res = 32'd0;
+    default:    res <= 32'd0;
     endcase
+`AMO:
+	case(func)
+	`AMOSHL,`AMOSHLI:	res <= shl[DMSB:0];
+	`AMOSHR,`AMOSHRI:	res <= shr[`HIGHWORDH];
+	`AMOASR,`AMOASRI:	if (a[DMSB])
+                    		res <= (shr[`HIGHWORDH]) | ~({32{1'b1}} >> b[4:0]);
+                		else
+                    		res <= shr[`HIGHWORDH];
+    `AMOROL:	res <= ROTATE_INSN ? shl[DMSB:0]|shl[`HIGHWORDH] : 32'hDEADDEAD;
+    `AMOROLI:	res <= ROTATE_INSN ? shl[DMSB:0]|shl[`HIGHWORDH] : 32'hDEADDEAD;
+	default:	res <= 32'd0;
+	endcase
 default:	res <= 32'd0;
 endcase
 

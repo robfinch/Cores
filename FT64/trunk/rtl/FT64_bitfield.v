@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2016  Robert Finch, Stratford
+//   \\__/ o\    (C) 2016-2018  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -51,10 +51,10 @@ reg [DWIDTH-1:0] o2;
 reg [DWIDTH-1:0] mask;
 assign masko = mask;
 wire [3:0] op = inst[25:22];
-wire [5:0] mb = {inst[21],inst[15:11]};
+wire [5:0] mb = inst[21:16];
 wire [5:0] me = inst[31:26];
 wire [5:0] ml = me-mb;		// mask length-1
-wire [63:0] imm = {59'd0,inst[15:11]};
+wire [63:0] imm = {59'd0,inst[10:6]};
 
 integer nn,n;
 always @(mb or me or nn)

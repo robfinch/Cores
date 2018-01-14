@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2016-2017  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2016-2018  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -86,7 +86,7 @@ case(opcode)
         `RORI:	res <= ROTATE_INSN ? shr[DMSB:0]|shr[`HIGHWORDC] : 16'hDEAD;
         default: res <= 16'd0;
         endcase
-    default:    res = 16'd0;
+    default:    res <= 16'd0;
     endcase
 default:	res <= 16'd0;
 endcase

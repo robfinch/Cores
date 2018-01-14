@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2017  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2017-2018  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -302,15 +302,19 @@ case(instr[`INSTRUCTION_OP])
     case(instr[`INSTRUCTION_S2])
     `VABS:         o = a[63] ? -a : a;
     `VSIGN:        o = a[63] ? 64'hFFFFFFFFFFFFFFFF : a==64'd0 ? 64'd0 : 64'd1;
-    `VMAND:        o = and64;
-    `VMOR:         o = or64;
-    `VMXOR:        o = xor64;
-    `VMXNOR:       o = ~(xor64);
-    `VMPOP:        o = {57'd0,cpopo};
-    `VMFILL:       for (n = 0; n < 64; n = n + 1)
-                       o[n] = (n < a);
-    `VMFIRST:      o = fsto==5'd31 ? 64'd64 : fsto;
-    `VMLAST:       o = lsto==5'd31 ? 64'd64 : lsto;
+    `VMxx:
+    	case(instr[25:23])
+	    `VMAND:        o = and64;
+	    `VMOR:         o = or64;
+	    `VMXOR:        o = xor64;
+	    `VMXNOR:       o = ~(xor64);
+	    `VMPOP:        o = {57'd0,cpopo};
+	    `VMFILL:       for (n = 0; n < 64; n = n + 1)
+	                       o[n] = (n < a);
+	                       // Change the following when VL > 16
+	    `VMFIRST:      o = fsto==5'd31 ? 64'd64 : fsto;
+	    `VMLAST:       o = lsto==5'd31 ? 64'd64 : lsto;
+		endcase
     `VADD,`VADDS:  o = vm[ven] ? a + b : c;
     `VSUB,`VSUBS:  o = vm[ven] ? a - b : c;
     `VMUL,`VMULS:  o = vm[ven] ? prod[DBW-1:0] : c;
@@ -324,8 +328,9 @@ case(instr[`INSTRUCTION_OP])
     `VCMPRSS:      o = a;
     `VCIDX:        o = a * ven;
     `VSCAN:        o = a * (cpopom==0 ? 0 : cpopom-1);
-    `VSxx,`VSxxS:
-        case({instr[25],instr[20:19]})
+    `VSxx,`VSxxS,
+    `VSxxb,`VSxxSb:
+        case({instr[26],instr[20:19]})
         `VSEQ:     begin
                        o = c;    
                        o[ven] = vm[ven] ? a==b : c[ven];
@@ -351,8 +356,9 @@ case(instr[`INSTRUCTION_OP])
                          o[ven] = vm[ven] ? $signed(a) > $signed(b) : c[ven];
                     end
         endcase
-    `VSxxU,`VSxxSU:
-        case({instr[25],instr[20:19]})
+    `VSxxU,`VSxxSU,
+    `VSxxUb,`VSxxSUb:
+        case({instr[26],instr[20:19]})
         `VSEQ:     begin
                        o = c;    
                        o[ven] = vm[ven] ? a==b : c[ven];
@@ -593,6 +599,7 @@ case(instr[`INSTRUCTION_OP])
                            ($signed(b) < $signed(c)) ? b : c) : 64'hCCCCCCCCCCCCCCCC;
     `MAX:       o = BIG ? (($signed(a) > $signed(b) && $signed(a) > $signed(c)) ? a :
                            ($signed(b) > $signed(c)) ? b : c) : 64'hCCCCCCCCCCCCCCCC;
+    `MAJ:		o = (a & b) | (a & c) | (b & c);
     `CHK:       o = (a >= b && a < c);
     `XCHG:      o = c;
     default:    o = 64'hDEADDEADDEADDEAD;
@@ -735,8 +742,8 @@ else
 case(instr[`INSTRUCTION_OP])
 `RR:
     case(instr[`INSTRUCTION_S2])
-    `ADD:   exc <= (fnOverflow(0,a[63],b[63],o[63]) & excen[0]) ? `FLT_OFL : `FLT_NONE;
-    `SUB:   exc <= (fnOverflow(1,a[63],b[63],o[63]) & excen[1]) ? `FLT_OFL : `FLT_NONE;
+    `ADD:   exc <= (fnOverflow(0,a[63],b[63],o[63]) & excen[0] & instr[23]) ? `FLT_OFL : `FLT_NONE;
+    `SUB:   exc <= (fnOverflow(1,a[63],b[63],o[63]) & excen[1] & instr[23]) ? `FLT_OFL : `FLT_NONE;
     `ASL,`ASLI:     exc <= (BIG & aslo & excen[2]) ? `FLT_OFL : `FLT_NONE;
     `MUL,`MULSU:    exc <= prod[63] ? (prod[127:64] != 64'hFFFFFFFFFFFFFFFF && excen[3] ? `FLT_OFL : `FLT_NONE ):
                            (prod[127:64] != 64'd0 && excen[3] ? `FLT_OFL : `FLT_NONE);

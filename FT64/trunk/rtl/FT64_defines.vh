@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2017  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2017-2018  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -55,6 +55,7 @@
 `define VSHL        6'h0C
 `define VSHR        6'h0D
 `define VASR        6'h0E
+`define VSxxSb		6'h0F
 `define VSHLV       6'h10
 `define VSHRV       6'h11
 `define VROLV       6'h12
@@ -65,6 +66,7 @@
 `define VANDS       6'h18
 `define VORS        6'h19
 `define VXORS       6'h1A
+`define VSxxSUb		6'h1F
 `define VBITS2V     6'h20
 `define V2BITS      6'h21
 `define VEINS       6'h22
@@ -76,16 +78,19 @@
 `define VCNTPOP     6'h28
 `define VMULS       6'h2A
 `define VDIVS       6'h2E
-`define VMAND       6'h30
-`define VMOR        6'h31
-`define VMXOR       6'h32
-`define VMXNOR      6'h33
-`define VMPOP       6'h34
-`define VMFILL      6'h35
-`define VMFIRST     6'h36
-`define VMLAST      6'h37
+`define VSxxUb		6'h2F
+`define VMxx		6'h30
+`define VMAND       	3'h0
+`define VMOR        	3'h1
+`define VMXOR       	3'h2
+`define VMXNOR      	3'h3
+`define VMPOP       	3'h4
+`define VMFILL      	3'h5
+`define VMFIRST     	3'h6
+`define VMLAST      	3'h7
 `define VMUL        6'h3A
 `define VDIV        6'h3E
+`define VSxxb       6'h3F
 `define RR      6'h02
 `define BCD         6'h00
 `define BCDADD          5'h00
@@ -137,9 +142,7 @@
 `define SWX         6'h16
 `define SWCX        6'h17
 `define CALLR       6'h18
-`define PUSH        6'h19
-`define POP         6'h1A
-`define UNLINK      6'h1B
+`define MUX         6'h1B
 `define LWRX        6'h1D
 `define CACHEX      6'h1E
 `define SHIFTB      6'h1F
@@ -153,15 +156,15 @@
 `define SVWS        6'h27
 `define CMOVEQ      6'h28
 `define CMOVNE      6'h29
-`define MUX         6'h2A
 `define DEMUX       6'h2B
 `define MIN         6'h2C
 `define MAX         6'h2D
-`define XCHG        6'h2E
+`define MAJ         6'h2E
 `define SHIFTC      6'h2F
 `define SEI         6'h30
 `define WAIT        6'h31
 `define RTI         6'h32
+`define RTE         6'h32
 `define VMOV        6'h33
 `define MEMDB       6'h34
 `define MEMSB       6'h35

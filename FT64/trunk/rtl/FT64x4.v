@@ -695,7 +695,31 @@ FT64_L1_icache uic1
     .invall(invic),
     .invline()
 );
-FT64_L2_icache uic2
+FT64_L1_icache uic2
+(
+    .rst(rst),
+    .clk(clk),
+    .wr(L1_wr2),
+    .adr(icstate==IDLE ? pc2 : L1_adr),
+    .i(L2_rdat),
+    .o(insn2a),
+    .hit(ihit2),
+    .invall(invic),
+    .invline()
+);
+FT64_L1_icache uic3
+(
+    .rst(rst),
+    .clk(clk),
+    .wr(L1_wr3),
+    .adr(icstate==IDLE ? pc3 : L1_adr),
+    .i(L2_rdat),
+    .o(insn3a),
+    .hit(ihit3),
+    .invall(invic),
+    .invline()
+);
+FT64_L2_icache uic4
 (
     .rst(rst),
     .clk(clk),
@@ -3580,63 +3604,438 @@ always @*
 begin
     canq1 <= FALSE;
     canq2 <= FALSE;
+    canq3 <= FALSE;
+    canq4 <= FALSE;
     queued1 <= FALSE;
     queued2 <= FALSE;
+    queued3 <= FALSE;
+    queued4 <= FALSE;
     queuedNop <= FALSE;
     if (!branchmiss) begin
-        // Two available
-        if (fetchbuf1_v & fetchbuf0_v) begin
-            // Is there a pair of NOPs ? (cache miss)
-            if ((fetchbuf0_instr[`INSTRUCTION_OP]==`NOP) && (fetchbuf1_instr[`INSTRUCTION_OP]==`NOP))
-                queuedNop <= TRUE; 
-            else begin
-                // If it's a predicted branch queue only the first instruction, the second
-                // instruction will be stomped on.
-                if (IsBranch(fetchbuf0_instr) && predict_taken0) begin
-                    if (iqentry_v[tail0]==`INV) begin
-                        canq1 <= TRUE;
-                        queued1 <= TRUE;
-                    end
-                end
-                // This is where a single NOP is allowed through to simplify the code. A
-                // single NOP can't be a cache miss. Otherwise it would be necessary to queue
-                // fetchbuf1 on tail0 it would add a nightmare to the enqueue code.
-                // Not a branch and there are two instructions fetched, see whether or not
-                // both instructions can be queued.
-                else begin
-                    if (iqentry_v[tail0]==`INV) begin
-                        canq1 <= !IsVex(fetchbuf0_instr) || rf_vra0 || !SUP_VECTOR;
-                        queued1 <= ((!IsVex(fetchbuf0_instr) || rf_vra0) && (!IsVector(fetchbuf0_instr) || vqe>=vl-1)) || !SUP_VECTOR;
-                        if (iqentry_v[tail1]==`INV) begin
-                            canq2 <= (!IsVector(fetchbuf1_instr) && (!IsVex(fetchbuf0_instr) || rf_vra0) && (!IsVector(fetchbuf0_instr) || vqe>=vl-1)) || !SUP_VECTOR;
-                            queued2 <= (!IsVector(fetchbuf1_instr) && (!IsVex(fetchbuf0_instr) || rf_vra0) && (!IsVector(fetchbuf0_instr) || vqe>=vl-1)) || !SUP_VECTOR;
-                        end
-                    end
-                end
-            end
-        end
-        // One available
-        else if (fetchbuf0_v) begin
-            if (fetchbuf0_instr[`INSTRUCTION_OP]!=`NOP) begin
-                if (iqentry_v[tail0]==`INV) begin
+    	// four available
+    	case({fetchbuf0_v,fetchbuf1_v,fetchbuf2_v,fetchbuf3_v})
+    	// All four available
+    	4'b1111:
+        	begin
+	            if ((fetchbuf0_instr[`INSTRUCTION_OP]==`NOP) && (fetchbuf1_instr[`INSTRUCTION_OP]==`NOP)
+	            && (fetchbuf2_instr[`INSTRUCTION_OP]==`NOP) && (fetchbuf3_instr[`INSTRUCTION_OP]==`NOP))
+	                queuedNop <= TRUE; 
+	            else begin
+	                // If it's a predicted branch queue only the first instruction, the second
+	                // instruction will be stomped on.
+	                if (IsBranch(fetchbuf0_instr) && predict_taken0) begin
+	                    if (iqentry_v[tail0]==`INV) begin
+	                        canq1 <= TRUE;
+	                        queued1 <= TRUE;
+	                    end
+	                end
+	                // If the second instruction is a predicted branch, instructions two, three
+	                // will be stomped on.
+	                else if (IsBranch(fetchbuf1_instr) && predict_taken1) begin
+	                    if (iqentry_v[tail0]==`INV) begin
+	                        canq1 <= TRUE;
+	                        queued1 <= TRUE;
+		                    if (iqentry_v[tail1]==`INV) begin
+		                        canq2 <= TRUE;
+		                        queued2 <= TRUE;
+		                    end
+	                    end
+	            	end
+	            	else if (IsBranch(fetchbuf2_instr) && predict_taken2) begin
+	                    if (iqentry_v[tail0]==`INV) begin
+	                        canq1 <= TRUE;
+	                        queued1 <= TRUE;
+		                    if (iqentry_v[tail1]==`INV) begin
+		                        canq2 <= TRUE;
+		                        queued2 <= TRUE;
+			                    if (iqentry_v[tail2]==`INV) begin
+			                        canq3 <= TRUE;
+			                        queued3 <= TRUE;
+			                    end
+		                    end
+	                    end
+	            	end
+	            	else begin
+	                    if (iqentry_v[tail0]==`INV) begin
+	                        canq1 <= TRUE;
+	                        queued1 <= TRUE;
+		                    if (iqentry_v[tail1]==`INV) begin
+		                        canq2 <= TRUE;
+		                        queued2 <= TRUE;
+			                    if (iqentry_v[tail2]==`INV) begin
+			                        canq3 <= TRUE;
+			                        queued3 <= TRUE;
+				                    if (iqentry_v[tail3]==`INV) begin
+				                        canq4 <= TRUE;
+				                        queued4 <= TRUE;
+				                    end
+			                    end
+		                    end
+	                    end
+	            	end
+	            end
+	        end
+	    // Three available
+	    4'b1110:
+        	begin
+	            if ((fetchbuf0_instr[`INSTRUCTION_OP]==`NOP) && (fetchbuf1_instr[`INSTRUCTION_OP]==`NOP)
+	            && (fetchbuf2_instr[`INSTRUCTION_OP]==`NOP))
+	                queuedNop <= TRUE; 
+	            else begin
+	                // If it's a predicted branch queue only the first instruction, the second
+	                // instruction will be stomped on.
+	                if (IsBranch(fetchbuf0_instr) && predict_taken0) begin
+	                    if (iqentry_v[tail0]==`INV) begin
+	                        canq1 <= TRUE;
+	                        queued1 <= TRUE;
+	                    end
+	                end
+	                // If the second instruction is a predicted branch, instructions two, three
+	                // will be stomped on.
+	                else if (IsBranch(fetchbuf1_instr) && predict_taken1) begin
+	                    if (iqentry_v[tail0]==`INV) begin
+	                        canq1 <= TRUE;
+	                        queued1 <= TRUE;
+		                    if (iqentry_v[tail1]==`INV) begin
+		                        canq2 <= TRUE;
+		                        queued2 <= TRUE;
+		                    end
+	                    end
+	            	end
+	            	else begin
+	                    if (iqentry_v[tail0]==`INV) begin
+	                        canq1 <= TRUE;
+	                        queued1 <= TRUE;
+		                    if (iqentry_v[tail1]==`INV) begin
+		                        canq2 <= TRUE;
+		                        queued2 <= TRUE;
+			                    if (iqentry_v[tail2]==`INV) begin
+			                        canq3 <= TRUE;
+			                        queued3 <= TRUE;
+			                    end
+		                    end
+	                    end
+	            	end
+	            end
+	        end
+	    4'b1101:
+        	begin
+	            if ((fetchbuf0_instr[`INSTRUCTION_OP]==`NOP) && (fetchbuf1_instr[`INSTRUCTION_OP]==`NOP)
+	            && (fetchbuf3_instr[`INSTRUCTION_OP]==`NOP))
+	                queuedNop <= TRUE; 
+	            else begin
+	                // If it's a predicted branch queue only the first instruction, the second
+	                // instruction will be stomped on.
+	                if (IsBranch(fetchbuf0_instr) && predict_taken0) begin
+	                    if (iqentry_v[tail0]==`INV) begin
+	                        canq1 <= TRUE;
+	                        queued1 <= TRUE;
+	                    end
+	                end
+	                // If the second instruction is a predicted branch, instructions two, three
+	                // will be stomped on.
+	                else if (IsBranch(fetchbuf1_instr) && predict_taken1) begin
+	                    if (iqentry_v[tail0]==`INV) begin
+	                        canq1 <= TRUE;
+	                        queued1 <= TRUE;
+		                    if (iqentry_v[tail1]==`INV) begin
+		                        canq2 <= TRUE;
+		                        queued2 <= TRUE;
+		                    end
+	                    end
+	            	end
+	            	else begin
+	                    if (iqentry_v[tail0]==`INV) begin
+	                        canq1 <= TRUE;
+	                        queued1 <= TRUE;
+		                    if (iqentry_v[tail1]==`INV) begin
+		                        canq2 <= TRUE;
+		                        queued2 <= TRUE;
+			                    if (iqentry_v[tail2]==`INV) begin
+			                        canq3 <= TRUE;
+			                        queued3 <= TRUE;
+			                    end
+		                    end
+	                    end
+	            	end
+	            end
+	        end
+		4'b1011:
+        	begin
+	            if ((fetchbuf0_instr[`INSTRUCTION_OP]==`NOP) && (fetchbuf2_instr[`INSTRUCTION_OP]==`NOP)
+	            && (fetchbuf3_instr[`INSTRUCTION_OP]==`NOP))
+	                queuedNop <= TRUE; 
+	            else begin
+	                // If it's a predicted branch queue only the first instruction, the second
+	                // instruction will be stomped on.
+	                if (IsBranch(fetchbuf0_instr) && predict_taken0) begin
+	                    if (iqentry_v[tail0]==`INV) begin
+	                        canq1 <= TRUE;
+	                        queued1 <= TRUE;
+	                    end
+	                end
+	                // If the second instruction is a predicted branch, instructions two, three
+	                // will be stomped on.
+	                else if (IsBranch(fetchbuf2_instr) && predict_taken2) begin
+	                    if (iqentry_v[tail0]==`INV) begin
+	                        canq1 <= TRUE;
+	                        queued1 <= TRUE;
+		                    if (iqentry_v[tail1]==`INV) begin
+		                        canq2 <= TRUE;
+		                        queued2 <= TRUE;
+		                    end
+	                    end
+	            	end
+	            	else begin
+	                    if (iqentry_v[tail0]==`INV) begin
+	                        canq1 <= TRUE;
+	                        queued1 <= TRUE;
+		                    if (iqentry_v[tail1]==`INV) begin
+		                        canq2 <= TRUE;
+		                        queued2 <= TRUE;
+			                    if (iqentry_v[tail2]==`INV) begin
+			                        canq3 <= TRUE;
+			                        queued3 <= TRUE;
+			                    end
+		                    end
+	                    end
+	            	end
+	            end
+	        end
+		4'b0111:
+        	begin
+	            if ((fetchbuf1_instr[`INSTRUCTION_OP]==`NOP) && (fetchbuf2_instr[`INSTRUCTION_OP]==`NOP)
+	            && (fetchbuf3_instr[`INSTRUCTION_OP]==`NOP))
+	                queuedNop <= TRUE; 
+	            else begin
+	                // If it's a predicted branch queue only the first instruction, the second
+	                // instruction will be stomped on.
+	                if (IsBranch(fetchbuf1_instr) && predict_taken1) begin
+	                    if (iqentry_v[tail0]==`INV) begin
+	                        canq1 <= TRUE;
+	                        queued1 <= TRUE;
+	                    end
+	                end
+	                // If the second instruction is a predicted branch, instructions two, three
+	                // will be stomped on.
+	                else if (IsBranch(fetchbuf2_instr) && predict_taken2) begin
+	                    if (iqentry_v[tail0]==`INV) begin
+	                        canq1 <= TRUE;
+	                        queued1 <= TRUE;
+		                    if (iqentry_v[tail1]==`INV) begin
+		                        canq2 <= TRUE;
+		                        queued2 <= TRUE;
+		                    end
+	                    end
+	            	end
+	            	else begin
+	                    if (iqentry_v[tail0]==`INV) begin
+	                        canq1 <= TRUE;
+	                        queued1 <= TRUE;
+		                    if (iqentry_v[tail1]==`INV) begin
+		                        canq2 <= TRUE;
+		                        queued2 <= TRUE;
+			                    if (iqentry_v[tail2]==`INV) begin
+			                        canq3 <= TRUE;
+			                        queued3 <= TRUE;
+			                    end
+		                    end
+	                    end
+	            	end
+	            end
+	        end
+	    // Two available
+		4'b1100:
+        	begin
+	            if ((fetchbuf0_instr[`INSTRUCTION_OP]==`NOP) && (fetchbuf1_instr[`INSTRUCTION_OP]==`NOP))
+	                queuedNop <= TRUE; 
+	            else begin
+	                // If it's a predicted branch queue only the first instruction, the second
+	                // instruction will be stomped on.
+	                if (IsBranch(fetchbuf0_instr) && predict_taken0) begin
+	                    if (iqentry_v[tail0]==`INV) begin
+	                        canq1 <= TRUE;
+	                        queued1 <= TRUE;
+	                    end
+	                end
+	            	else begin
+	                    if (iqentry_v[tail0]==`INV) begin
+	                        canq1 <= !IsVex(fetchbuf0_instr) || rf_vra0 || !SUP_VECTOR;
+	                        queued1 <= ((!IsVex(fetchbuf0_instr) || rf_vra0) && (!IsVector(fetchbuf0_instr) || vqe>=vl-1)) || !SUP_VECTOR;
+	                        if (iqentry_v[tail1]==`INV) begin
+	                            canq2 <= (!IsVector(fetchbuf1_instr) && (!IsVex(fetchbuf1_instr) || rf_vra1) && (!IsVector(fetchbuf1_instr) || vqe>=vl-1)) || !SUP_VECTOR;
+	                            queued2 <= (!IsVector(fetchbuf1_instr) && (!IsVex(fetchbuf1_instr) || rf_vra1) && (!IsVector(fetchbuf1_instr) || vqe>=vl-1)) || !SUP_VECTOR;
+	                        end
+	                    end
+	            	end
+	            end
+	        end
+	    4'b1001:
+        	begin
+	            if ((fetchbuf0_instr[`INSTRUCTION_OP]==`NOP) && (fetchbuf3_instr[`INSTRUCTION_OP]==`NOP))
+	                queuedNop <= TRUE; 
+	            else begin
+	                // If it's a predicted branch queue only the first instruction, the second
+	                // instruction will be stomped on.
+	                if (IsBranch(fetchbuf0_instr) && predict_taken0) begin
+	                    if (iqentry_v[tail0]==`INV) begin
+	                        canq1 <= TRUE;
+	                        queued1 <= TRUE;
+	                    end
+	                end
+	            	else begin
+	                    if (iqentry_v[tail0]==`INV) begin
+	                        canq1 <= !IsVex(fetchbuf0_instr) || rf_vra0 || !SUP_VECTOR;
+	                        queued1 <= ((!IsVex(fetchbuf0_instr) || rf_vra0) && (!IsVector(fetchbuf0_instr) || vqe>=vl-1)) || !SUP_VECTOR;
+	                        if (iqentry_v[tail1]==`INV) begin
+	                            canq2 <= (!IsVector(fetchbuf3_instr) && (!IsVex(fetchbuf3_instr) || rf_vra3) && (!IsVector(fetchbuf3_instr) || vqe>=vl-1)) || !SUP_VECTOR;
+	                            queued2 <= (!IsVector(fetchbuf3_instr) && (!IsVex(fetchbuf3_instr) || rf_vra3) && (!IsVector(fetchbuf3_instr) || vqe>=vl-1)) || !SUP_VECTOR;
+	                        end
+	                    end
+	            	end
+	            end
+	        end
+	    4'b1010:
+        	begin
+	            if ((fetchbuf0_instr[`INSTRUCTION_OP]==`NOP) && (fetchbuf2_instr[`INSTRUCTION_OP]==`NOP))
+	                queuedNop <= TRUE; 
+	            else begin
+	                // If it's a predicted branch queue only the first instruction, the second
+	                // instruction will be stomped on.
+	                if (IsBranch(fetchbuf0_instr) && predict_taken0) begin
+	                    if (iqentry_v[tail0]==`INV) begin
+	                        canq1 <= TRUE;
+	                        queued1 <= TRUE;
+	                    end
+	                end
+	            	else begin
+	                    if (iqentry_v[tail0]==`INV) begin
+	                        canq1 <= !IsVex(fetchbuf0_instr) || rf_vra0 || !SUP_VECTOR;
+	                        queued1 <= ((!IsVex(fetchbuf0_instr) || rf_vra0) && (!IsVector(fetchbuf0_instr) || vqe>=vl-1)) || !SUP_VECTOR;
+	                        if (iqentry_v[tail1]==`INV) begin
+	                            canq2 <= (!IsVector(fetchbuf2_instr) && (!IsVex(fetchbuf2_instr) || rf_vra2) && (!IsVector(fetchbuf2_instr) || vqe>=vl-1)) || !SUP_VECTOR;
+	                            queued2 <= (!IsVector(fetchbuf2_instr) && (!IsVex(fetchbuf2_instr) || rf_vra2) && (!IsVector(fetchbuf2_instr) || vqe>=vl-1)) || !SUP_VECTOR;
+	                        end
+	                    end
+	            	end
+	            end
+	        end
+	    4'b0101:
+        	begin
+	            if ((fetchbuf1_instr[`INSTRUCTION_OP]==`NOP) && (fetchbuf3_instr[`INSTRUCTION_OP]==`NOP))
+	                queuedNop <= TRUE; 
+	            else begin
+	                // If it's a predicted branch queue only the first instruction, the second
+	                // instruction will be stomped on.
+	                if (IsBranch(fetchbuf1_instr) && predict_taken1) begin
+	                    if (iqentry_v[tail0]==`INV) begin
+	                        canq1 <= TRUE;
+	                        queued1 <= TRUE;
+	                    end
+	                end
+	            	else begin
+	                    if (iqentry_v[tail0]==`INV) begin
+	                        canq1 <= !IsVex(fetchbuf1_instr) || rf_vra1 || !SUP_VECTOR;
+	                        queued1 <= ((!IsVex(fetchbuf1_instr) || rf_vra1) && (!IsVector(fetchbuf1_instr) || vqe>=vl-1)) || !SUP_VECTOR;
+	                        if (iqentry_v[tail1]==`INV) begin
+	                            canq2 <= (!IsVector(fetchbuf3_instr) && (!IsVex(fetchbuf3_instr) || rf_vra3) && (!IsVector(fetchbuf3_instr) || vqe>=vl-1)) || !SUP_VECTOR;
+	                            queued2 <= (!IsVector(fetchbuf3_instr) && (!IsVex(fetchbuf3_instr) || rf_vra3) && (!IsVector(fetchbuf3_instr) || vqe>=vl-1)) || !SUP_VECTOR;
+	                        end
+	                    end
+	            	end
+	            end
+	        end
+	    4'b0110:
+        	begin
+	            if ((fetchbuf1_instr[`INSTRUCTION_OP]==`NOP) && (fetchbuf2_instr[`INSTRUCTION_OP]==`NOP))
+	                queuedNop <= TRUE; 
+	            else begin
+	                // If it's a predicted branch queue only the first instruction, the second
+	                // instruction will be stomped on.
+	                if (IsBranch(fetchbuf1_instr) && predict_taken1) begin
+	                    if (iqentry_v[tail0]==`INV) begin
+	                        canq1 <= TRUE;
+	                        queued1 <= TRUE;
+	                    end
+	                end
+	            	else begin
+	                    if (iqentry_v[tail0]==`INV) begin
+	                        canq1 <= !IsVex(fetchbuf1_instr) || rf_vra1 || !SUP_VECTOR;
+	                        queued1 <= ((!IsVex(fetchbuf1_instr) || rf_vra1) && (!IsVector(fetchbuf1_instr) || vqe>=vl-1)) || !SUP_VECTOR;
+	                        if (iqentry_v[tail1]==`INV) begin
+	                            canq2 <= (!IsVector(fetchbuf2_instr) && (!IsVex(fetchbuf2_instr) || rf_vra2) && (!IsVector(fetchbuf2_instr) || vqe>=vl-1)) || !SUP_VECTOR;
+	                            queued2 <= (!IsVector(fetchbuf2_instr) && (!IsVex(fetchbuf2_instr) || rf_vra2) && (!IsVector(fetchbuf2_instr) || vqe>=vl-1)) || !SUP_VECTOR;
+	                        end
+	                    end
+	            	end
+	            end
+	        end
+	    4'b0011:
+        	begin
+	            if ((fetchbuf2_instr[`INSTRUCTION_OP]==`NOP) && (fetchbuf3_instr[`INSTRUCTION_OP]==`NOP))
+	                queuedNop <= TRUE; 
+	            else begin
+	                // If it's a predicted branch queue only the first instruction, the second
+	                // instruction will be stomped on.
+	                if (IsBranch(fetchbuf2_instr) && predict_taken2) begin
+	                    if (iqentry_v[tail0]==`INV) begin
+	                        canq1 <= TRUE;
+	                        queued1 <= TRUE;
+	                    end
+	                end
+	            	else begin
+	                    if (iqentry_v[tail0]==`INV) begin
+	                        canq1 <= !IsVex(fetchbuf2_instr) || rf_vra2 || !SUP_VECTOR;
+	                        queued1 <= ((!IsVex(fetchbuf2_instr) || rf_vra2) && (!IsVector(fetchbuf2_instr) || vqe>=vl-1)) || !SUP_VECTOR;
+	                        if (iqentry_v[tail1]==`INV) begin
+	                            canq2 <= (!IsVector(fetchbuf3_instr) && (!IsVex(fetchbuf3_instr) || rf_vra3) && (!IsVector(fetchbuf3_instr) || vqe>=vl-1)) || !SUP_VECTOR;
+	                            queued2 <= (!IsVector(fetchbuf3_instr) && (!IsVex(fetchbuf3_instr) || rf_vra3) && (!IsVector(fetchbuf3_instr) || vqe>=vl-1)) || !SUP_VECTOR;
+	                        end
+	                    end
+	            	end
+	            end
+	        end
+	    // One available
+	    4'b1000:
+	    	begin
+	            if (fetchbuf0_instr[`INSTRUCTION_OP]==`NOP)
+	                queuedNop <= TRUE;
+	            else if (iqentry_v[tail0]==`INV) begin
                     canq1 <= !IsVex(fetchbuf0_instr) || rf_vra0 || !SUP_VECTOR;
                     queued1 <= ((!IsVex(fetchbuf0_instr) || rf_vra0) && (!IsVector(fetchbuf0_instr) || vqe>=vl-1)) || !SUP_VECTOR;
-                end
-            end
-            else
-                queuedNop <= TRUE;
-        end
-        else if (fetchbuf1_v) begin
-            if (fetchbuf1_instr[`INSTRUCTION_OP]!=`NOP) begin
-                if (iqentry_v[tail0]==`INV) begin
+	            end
+        	end
+		4'b0100:
+			begin
+	            if (fetchbuf1_instr[`INSTRUCTION_OP]==`NOP)
+	                queuedNop <= TRUE;
+	            else if (iqentry_v[tail0]==`INV) begin
                     canq1 <= !IsVex(fetchbuf1_instr) || rf_vra1 || !SUP_VECTOR;
                     queued1 <= ((!IsVex(fetchbuf1_instr) || rf_vra1) && (!IsVector(fetchbuf1_instr) || vqe>=vl-1)) || !SUP_VECTOR;
+	            end
+        	end
+        4'b0010:
+        	begin
+	            if (fetchbuf2_instr[`INSTRUCTION_OP]==`NOP)
+	                queuedNop <= TRUE;
+	            else if (iqentry_v[tail0]==`INV) begin
+	                canq1 <= !IsVex(fetchbuf2_instr) || rf_vra2 || !SUP_VECTOR;
+	                queued1 <= ((!IsVex(fetchbuf2_instr) || rf_vra2) && (!IsVector(fetchbuf2_instr) || vqe>=vl-1)) || !SUP_VECTOR;
+            	end
+            end
+        4'b0001:
+        	begin
+	            if (fetchbuf3_instr[`INSTRUCTION_OP]==`NOP)
+	                queuedNop <= TRUE;
+	            else if (iqentry_v[tail0]==`INV) begin
+	                    canq1 <= !IsVex(fetchbuf3_instr) || rf_vra3 || !SUP_VECTOR;
+	                    queued1 <= ((!IsVex(fetchbuf3_instr) || rf_vra3) && (!IsVector(fetchbuf3_instr) || vqe>=vl-1)) || !SUP_VECTOR;
                 end
             end
-            else
-                queuedNop <= TRUE;
-        end
-        //else no instructions available to queue
+        // No instructions available to queue
+		4'b0000:
+			;
+		endcase
     end
 end
 
@@ -3912,63 +4311,1310 @@ else begin
 	//
 	if (!branchmiss) 	// don't bother doing anything if there's been a branch miss
 
-	case ({fetchbuf0_v, fetchbuf1_v})
+	case ({fetchbuf0_v, fetchbuf1_v, fetchbuf2_v, fetchbuf3_v})
 
-	    2'b00: ; // do nothing
+	4'b0000: ; // do nothing
 
-	    2'b01: if (canq1) begin
-            if (IsVector(fetchbuf1_instr) && SUP_VECTOR) begin
-                vqe <= vqe + 4'd1;
-                if (IsVCmprss(fetchbuf1_instr)) begin
-                    if (vm[fetchbuf1_instr[24:23]])
-                        vqet <= vqet + 4'd1;
-                end
-                else
-                    vqet <= vqet + 4'd1; 
-            end
-            tgtq <= FALSE;
-            enque1(tail0, seq_num);
-            if (fetchbuf1_rfw) begin
-                rf_source[ Rt1 ] <= { 1'b0, fetchbuf1_mem &IsLoad(fetchbuf1_instr), tail0 };	// top bit indicates ALU/MEM bus
-                rf_v [Rt1] = `INV;
-                if (Rt1b != 6'd0) begin
-                  rf_source[Rt1b] <= { 1'b1, 1'b0, tail0 };
-                  rf_v[Rt1b] = `INV;
-                end
-            end
-	    end
+	4'b0001: if (canq1) begin
+	            if (IsVector(fetchbuf3_instr) && SUP_VECTOR) begin
+	                vqe <= vqe + 4'd1;
+	                if (IsVCmprss(fetchbuf3_instr)) begin
+	                    if (vm[fetchbuf3_instr[24:23]])
+	                        vqet <= vqet + 4'd1;
+	                end
+	                else
+	                    vqet <= vqet + 4'd1; 
+	            end
+	            tgtq <= FALSE;
+	            enque3(tail0, seq_num);
+	            if (fetchbuf3_rfw) begin
+	                rf_source[ Rt3 ] <= { 1'b0, fetchbuf3_mem &IsLoad(fetchbuf3_instr), tail0 };	// top bit indicates ALU/MEM bus
+	                rf_v [Rt3] = `INV;
+	            end
+		    end
+	4'b0010: if (canq1) begin
+	            if (IsVector(fetchbuf2_instr) && SUP_VECTOR) begin
+	                vqe <= vqe + 4'd1;
+	                if (IsVCmprss(fetchbuf2_instr)) begin
+	                    if (vm[fetchbuf2_instr[24:23]])
+	                        vqet <= vqet + 4'd1;
+	                end
+	                else
+	                    vqet <= vqet + 4'd1; 
+	            end
+	            tgtq <= FALSE;
+	            enque2(tail0, seq_num);
+	            if (fetchbuf2_rfw) begin
+	                rf_source[ Rt2 ] <= { 1'b0, fetchbuf2_mem &IsLoad(fetchbuf2_instr), tail0 };	// top bit indicates ALU/MEM bus
+	                rf_v [Rt2] = `INV;
+	            end
+		    end
+	4'b0011: if (canq1) begin
+				// If the first instruction is a backwards branch, enqueue it & stomp on all following instructions
+				if (IsBranch(fetchbuf2_instr) && predict_taken2) begin
+		            tgtq <= FALSE;
+		            enque2(tail0, seq_num);
+				end
 
-	    2'b10: if (canq1) begin
-//	    $display("queued1: %d", queued1);
-//		if (!IsBranch(fetchbuf0_instr))		panic <= `PANIC_FETCHBUFBEQ;
-//		if (!predict_taken0)	panic <= `PANIC_FETCHBUFBEQ;
-		//
-		// this should only happen when the first instruction is a BEQ-backwards and the IQ
-		// happened to be full on the previous cycle (thus we deleted fetchbuf1 but did not
-		// enqueue fetchbuf0) ... probably no need to check for LW -- sanity check, just in case
-		//
-            if (IsVector(fetchbuf0_instr) && SUP_VECTOR) begin
-                vqe <= vqe + 4'd1;
-                if (IsVCmprss(fetchbuf0_instr)) begin
-                    if (vm[fetchbuf0_instr[24:23]])
-                        vqet <= vqet + 4'd1;
-                end
-                else
-                    vqet <= vqet + 4'd1; 
-            end
-            tgtq <= FALSE;
-    		enque0(tail0);
-    		if (fetchbuf0_rfw) begin
-                rf_source[ Rt0 ] <= { 1'b0, fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };    // top bit indicates ALU/MEM bus
-                rf_v[Rt0] = `INV;
-                if (Rt0b != 6'd0) begin
-    	   	        rf_source[Rt0b] <= { 1'b1, 1'b0, tail0 };  // the source must be from ALU not mem
-                    rf_v[Rt0b] = `INV;
-                end
-            end
-	    end
+				else begin	// fetchbuf2 doesn't contain a predicted branch
+				    //
+				    // so -- we can enqueue 1 or 2 instructions, depending on space in the IQ
+				    // update tail0/tail1 separately (at top)
+				    // update the rf_v and rf_source bits separately (at end)
+				    //   the problem is that if we do have two instructions, 
+				    //   they may interact with each other, so we have to be
+				    //   careful about where things point.
+				    //
+				    //
+				    // enqueue the first instruction ...
+				    //
+		            if (IsVector(fetchbuf2_instr) && SUP_VECTOR) begin
+		                vqe <= vqe + 4'd1;
+		                if (IsVCmprss(fetchbuf2_instr)) begin
+		                    if (vm[fetchbuf2_instr[24:23]])
+		                        vqet <= vqet + 4'd1;
+		                end
+		                else
+		                    vqet <= vqet + 4'd1; 
+		            end
+		            tgtq <= FALSE;
+		            enque2(tail0, seq_num);
+				    //
+				    // if there is room for a second instruction, enqueue it
+				    //
+				    if (canq2) begin
+				    	enque3(tail1, seq_num + 5'd1);
 
-	    2'b11: if (canq1) begin
+						// a1/a2_v and a1/a2_s values require a bit of thinking ...
+
+						//
+						// SOURCE 1 ... this is relatively straightforward, because all instructions
+						// that have a source (i.e. every instruction but LUI) read from RB
+						//
+						// if the argument is an immediate or not needed, we're done
+						if (Source1Valid( fetchbuf3_instr ) == `VAL) begin
+						    iqentry_a1_v [tail1] <= `VAL;
+						    iqentry_a1_s [tail1] <= 4'd0;
+						end
+						// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+						else if (~fetchbuf2_rfw) begin
+						    iqentry_a1_v [tail1]    <=   rf_v[Ra3];
+						    iqentry_a1_s [tail1]    <=   rf_source [Ra3];
+						end
+						// otherwise, previous instruction does write to RF ... see if overlap
+						else if (Ra3 == Rt2) begin
+						    // if the previous instruction is a LW, then grab result from memq, not the iq
+						    iqentry_a1_v [tail1]    <=   `INV;
+						    iqentry_a1_s [tail1]    <=   { 1'b0, fetchbuf2_mem &IsLoad(fetchbuf2_instr), tail0 };
+						end
+						// if no overlap, get info from rf_v and rf_source
+						else begin
+						    iqentry_a1_v [tail1]    <=   rf_v[Ra3];
+						    iqentry_a1_s [tail1]    <=   rf_source [Ra3];
+						end
+
+						//
+						// SOURCE 2 ... this is more contorted than the logic for SOURCE 1 because
+						// some instructions (NAND and ADD) read from RC and others (SW, BEQ) read from RA
+						//
+						// if the argument is an immediate or not needed, we're done
+						// Source2 is valid for a JAL.
+						if (Source2Valid( fetchbuf3_instr ) == `VAL) begin
+						    iqentry_a2_v [tail1] <= `VAL;
+						    iqentry_a2_s [tail1] <= 4'd0;
+						end
+						// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+						else if (~fetchbuf2_rfw) begin
+						    iqentry_a2_v [tail1] <= rf_v[Rb3];
+						    iqentry_a2_s [tail1] <= rf_source[ Rb3 ];
+						end
+						// otherwise, previous instruction does write to RF ... see if overlap
+						else if (Rb3 == Rt2) begin
+						    // if the previous instruction is a LW, then grab result from memq, not the iq
+						    iqentry_a2_v [tail1]    <=   `INV;
+						    iqentry_a2_s [tail1]    <=   { 1'b0, fetchbuf2_mem &IsLoad(fetchbuf2_instr), tail0 };
+						end
+						// if no overlap, get info from rf_v and rf_source
+						else begin
+						    iqentry_a2_v [tail1] <= rf_v[Rb3];
+						    iqentry_a2_s [tail1] <= rf_source[ Rb3 ];
+						end
+
+						// SOURCE 3 ... this is more contorted than the logic for SOURCE 1 because
+						// some instructions (NAND and ADD) read from RC and others (SW, BEQ) read from RA
+						//
+						// if the argument is an immediate or not needed, we're done
+						// Source2 is valid for a JAL.
+						if (Source3Valid( fetchbuf3_instr ) == `VAL) begin
+						    iqentry_a3_v [tail1] <= `VAL;
+						    iqentry_a3_s [tail1] <= 4'd0;
+						end
+						// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+						else if (~fetchbuf2_rfw) begin
+						    iqentry_a3_v [tail1] <= rf_v[Rc3];
+						    iqentry_a3_s [tail1] <= rf_source[ Rc3 ];
+						end
+						// otherwise, previous instruction does write to RF ... see if overlap
+						else if (Rc3 == Rt2) begin
+						    // if the previous instruction is a LW, then grab result from memq, not the iq
+						    iqentry_a3_v [tail1]    <=   `INV;
+						    iqentry_a3_s [tail1]    <=   { 1'b0, fetchbuf2_mem &IsLoad(fetchbuf2_instr), tail0 };
+						end
+						// if no overlap, get info from rf_v and rf_source
+						else begin
+						    iqentry_a3_v [tail1] <= rf_v[Rc3];
+						    iqentry_a3_s [tail1] <= rf_source[ Rc3 ];
+						end
+
+						//
+						// if the two instructions enqueued target the same register, 
+						// make sure only the second writes to rf_v and rf_source.
+						// first is allowed to update rf_v and rf_source only if the
+						// second has no target (BEQ or SW)
+						//
+						begin
+						    if (fetchbuf2_rfw) begin
+							    rf_source[ Rt2 ] <= { 1'b0,fetchbuf2_mem &IsLoad(fetchbuf2_instr), tail0 };
+							    rf_v [ Rt2] = `INV;
+						    end
+						    if (fetchbuf3_rfw) begin
+							    rf_source[ Rt3 ] <= { 1'b0,fetchbuf3_mem &IsLoad(fetchbuf3_instr), tail1 };
+							    rf_v [ Rt3 ] = `INV;
+						    end
+						end
+
+				    end	// ends the "if IQ[tail1] is available" clause
+				    else begin	// only first instruction was enqueued
+						if (queued1 & fetchbuf2_rfw) begin
+						    rf_source[ Rt2 ] <= {1'b0,fetchbuf2_mem &IsLoad(fetchbuf2_instr), tail0};
+						    rf_v [ Rt2 ] = `INV;
+						end
+				    end
+				end	// ends the "else fetchbuf0 doesn't have a backwards branch" clause
+	    	end	
+	4'b0100: if (canq1) begin
+	            if (IsVector(fetchbuf1_instr) && SUP_VECTOR) begin
+	                vqe <= vqe + 4'd1;
+	                if (IsVCmprss(fetchbuf1_instr)) begin
+	                    if (vm[fetchbuf1_instr[24:23]])
+	                        vqet <= vqet + 4'd1;
+	                end
+	                else
+	                    vqet <= vqet + 4'd1; 
+	            end
+	            tgtq <= FALSE;
+	            enque1(tail0, seq_num);
+	            if (fetchbuf1_rfw) begin
+	                rf_source[ Rt1 ] <= { 1'b0, fetchbuf1_mem &IsLoad(fetchbuf1_instr), tail0 };	// top bit indicates ALU/MEM bus
+	                rf_v [Rt1] = `INV;
+	            end
+		    end
+	4'b0101: if (canq1) begin
+				// If the first instruction is a backwards branch, enqueue it & stomp on all following instructions
+				if (IsBranch(fetchbuf1_instr) && predict_taken1) begin
+		            tgtq <= FALSE;
+		            enque1(tail0, seq_num);
+				end
+
+				else begin	// fetchbuf2 doesn't contain a predicted branch
+				    //
+				    // so -- we can enqueue 1 or 2 instructions, depending on space in the IQ
+				    // update tail0/tail1 separately (at top)
+				    // update the rf_v and rf_source bits separately (at end)
+				    //   the problem is that if we do have two instructions, 
+				    //   they may interact with each other, so we have to be
+				    //   careful about where things point.
+				    //
+				    //
+				    // enqueue the first instruction ...
+				    //
+		            if (IsVector(fetchbuf1_instr) && SUP_VECTOR) begin
+		                vqe <= vqe + 4'd1;
+		                if (IsVCmprss(fetchbuf1_instr)) begin
+		                    if (vm[fetchbuf1_instr[24:23]])
+		                        vqet <= vqet + 4'd1;
+		                end
+		                else
+		                    vqet <= vqet + 4'd1; 
+		            end
+		            tgtq <= FALSE;
+		            enque1(tail0, seq_num);
+				    //
+				    // if there is room for a second instruction, enqueue it
+				    //
+				    if (canq2) begin
+				    	enque3(tail1, seq_num + 5'd1);
+
+						// a1/a2_v and a1/a2_s values require a bit of thinking ...
+
+						//
+						// SOURCE 1 ... this is relatively straightforward, because all instructions
+						// that have a source (i.e. every instruction but LUI) read from RB
+						//
+						// if the argument is an immediate or not needed, we're done
+						if (Source1Valid( fetchbuf3_instr ) == `VAL) begin
+						    iqentry_a1_v [tail1] <= `VAL;
+						    iqentry_a1_s [tail1] <= 4'd0;
+						end
+						// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+						else if (~fetchbuf1_rfw) begin
+						    iqentry_a1_v [tail1]    <=   rf_v[Ra3];
+						    iqentry_a1_s [tail1]    <=   rf_source [Ra3];
+						end
+						// otherwise, previous instruction does write to RF ... see if overlap
+						else if (Ra3 == Rt1) begin
+						    // if the previous instruction is a LW, then grab result from memq, not the iq
+						    iqentry_a1_v [tail1]    <=   `INV;
+						    iqentry_a1_s [tail1]    <=   { 1'b0, fetchbuf1_mem &IsLoad(fetchbuf1_instr), tail0 };
+						end
+						// if no overlap, get info from rf_v and rf_source
+						else begin
+						    iqentry_a1_v [tail1]    <=   rf_v[Ra3];
+						    iqentry_a1_s [tail1]    <=   rf_source [Ra3];
+						end
+
+						//
+						// SOURCE 2 ... this is more contorted than the logic for SOURCE 1 because
+						// some instructions (NAND and ADD) read from RC and others (SW, BEQ) read from RA
+						//
+						// if the argument is an immediate or not needed, we're done
+						// Source2 is valid for a JAL.
+						if (Source2Valid( fetchbuf3_instr ) == `VAL) begin
+						    iqentry_a2_v [tail1] <= `VAL;
+						    iqentry_a2_s [tail1] <= 4'd0;
+						end
+						// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+						else if (~fetchbuf1_rfw) begin
+						    iqentry_a2_v [tail1] <= rf_v[Rb3];
+						    iqentry_a2_s [tail1] <= rf_source[ Rb3 ];
+						end
+						// otherwise, previous instruction does write to RF ... see if overlap
+						else if (Rb3 == Rt1) begin
+						    // if the previous instruction is a LW, then grab result from memq, not the iq
+						    iqentry_a2_v [tail1]    <=   `INV;
+						    iqentry_a2_s [tail1]    <=   { 1'b0, fetchbuf1_mem &IsLoad(fetchbuf1_instr), tail0 };
+						end
+						// if no overlap, get info from rf_v and rf_source
+						else begin
+						    iqentry_a2_v [tail1] <= rf_v[Rb3];
+						    iqentry_a2_s [tail1] <= rf_source[ Rb3 ];
+						end
+
+						// SOURCE 3 ... this is more contorted than the logic for SOURCE 1 because
+						// some instructions (NAND and ADD) read from RC and others (SW, BEQ) read from RA
+						//
+						// if the argument is an immediate or not needed, we're done
+						// Source2 is valid for a JAL.
+						if (Source3Valid( fetchbuf3_instr ) == `VAL) begin
+						    iqentry_a3_v [tail1] <= `VAL;
+						    iqentry_a3_s [tail1] <= 4'd0;
+						end
+						// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+						else if (~fetchbuf1_rfw) begin
+						    iqentry_a3_v [tail1] <= rf_v[Rc3];
+						    iqentry_a3_s [tail1] <= rf_source[ Rc3 ];
+						end
+						// otherwise, previous instruction does write to RF ... see if overlap
+						else if (Rc3 == Rt1) begin
+						    // if the previous instruction is a LW, then grab result from memq, not the iq
+						    iqentry_a3_v [tail1]    <=   `INV;
+						    iqentry_a3_s [tail1]    <=   { 1'b0, fetchbuf1_mem &IsLoad(fetchbuf1_instr), tail0 };
+						end
+						// if no overlap, get info from rf_v and rf_source
+						else begin
+						    iqentry_a3_v [tail1] <= rf_v[Rc3];
+						    iqentry_a3_s [tail1] <= rf_source[ Rc3 ];
+						end
+
+						//
+						// if the two instructions enqueued target the same register, 
+						// make sure only the second writes to rf_v and rf_source.
+						// first is allowed to update rf_v and rf_source only if the
+						// second has no target (BEQ or SW)
+						//
+						begin
+						    if (fetchbuf1_rfw) begin
+							    rf_source[ Rt1 ] <= { 1'b0,fetchbuf1_mem &IsLoad(fetchbuf1_instr), tail0 };
+							    rf_v [ Rt1] = `INV;
+						    end
+						    if (fetchbuf3_rfw) begin
+							    rf_source[ Rt3 ] <= { 1'b0,fetchbuf3_mem &IsLoad(fetchbuf3_instr), tail1 };
+							    rf_v [ Rt3 ] = `INV;
+						    end
+						end
+
+				    end	// ends the "if IQ[tail1] is available" clause
+				    else begin	// only first instruction was enqueued
+						if (queued1 & fetchbuf1_rfw) begin
+						    rf_source[ Rt1 ] <= {1'b0,fetchbuf1_mem &IsLoad(fetchbuf1_instr), tail0};
+						    rf_v [ Rt1 ] = `INV;
+						end
+				    end
+				end	// ends the "else fetchbuf0 doesn't have a backwards branch" clause
+	    	end	
+	4'b0110: if (canq1) begin
+				// If the first instruction is a backwards branch, enqueue it & stomp on all following instructions
+				if (IsBranch(fetchbuf1_instr) && predict_taken1) begin
+		            tgtq <= FALSE;
+		            enque1(tail0, seq_num);
+				end
+
+				else begin	// fetchbuf2 doesn't contain a predicted branch
+				    //
+				    // so -- we can enqueue 1 or 2 instructions, depending on space in the IQ
+				    // update tail0/tail1 separately (at top)
+				    // update the rf_v and rf_source bits separately (at end)
+				    //   the problem is that if we do have two instructions, 
+				    //   they may interact with each other, so we have to be
+				    //   careful about where things point.
+				    //
+				    //
+				    // enqueue the first instruction ...
+				    //
+		            if (IsVector(fetchbuf1_instr) && SUP_VECTOR) begin
+		                vqe <= vqe + 4'd1;
+		                if (IsVCmprss(fetchbuf1_instr)) begin
+		                    if (vm[fetchbuf1_instr[24:23]])
+		                        vqet <= vqet + 4'd1;
+		                end
+		                else
+		                    vqet <= vqet + 4'd1; 
+		            end
+		            tgtq <= FALSE;
+		            enque1(tail0, seq_num);
+				    //
+				    // if there is room for a second instruction, enqueue it
+				    //
+				    if (canq2) begin
+				    	enque2(tail1, seq_num + 5'd1);
+
+						// a1/a2_v and a1/a2_s values require a bit of thinking ...
+
+						//
+						// SOURCE 1 ... this is relatively straightforward, because all instructions
+						// that have a source (i.e. every instruction but LUI) read from RB
+						//
+						// if the argument is an immediate or not needed, we're done
+						if (Source1Valid( fetchbuf2_instr ) == `VAL) begin
+						    iqentry_a1_v [tail1] <= `VAL;
+						    iqentry_a1_s [tail1] <= 4'd0;
+						end
+						// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+						else if (~fetchbuf1_rfw) begin
+						    iqentry_a1_v [tail1]    <=   rf_v[Ra2];
+						    iqentry_a1_s [tail1]    <=   rf_source [Ra2];
+						end
+						// otherwise, previous instruction does write to RF ... see if overlap
+						else if (Ra2 == Rt1) begin
+						    // if the previous instruction is a LW, then grab result from memq, not the iq
+						    iqentry_a1_v [tail1]    <=   `INV;
+						    iqentry_a1_s [tail1]    <=   { 1'b0, fetchbuf1_mem &IsLoad(fetchbuf1_instr), tail0 };
+						end
+						// if no overlap, get info from rf_v and rf_source
+						else begin
+						    iqentry_a1_v [tail1]    <=   rf_v[Ra2];
+						    iqentry_a1_s [tail1]    <=   rf_source [Ra2];
+						end
+
+						//
+						// SOURCE 2 ... this is more contorted than the logic for SOURCE 1 because
+						// some instructions (NAND and ADD) read from RC and others (SW, BEQ) read from RA
+						//
+						// if the argument is an immediate or not needed, we're done
+						// Source2 is valid for a JAL.
+						if (Source2Valid( fetchbuf2_instr ) == `VAL) begin
+						    iqentry_a2_v [tail1] <= `VAL;
+						    iqentry_a2_s [tail1] <= 4'd0;
+						end
+						// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+						else if (~fetchbuf1_rfw) begin
+						    iqentry_a2_v [tail1] <= rf_v[Rb2];
+						    iqentry_a2_s [tail1] <= rf_source[ Rb2 ];
+						end
+						// otherwise, previous instruction does write to RF ... see if overlap
+						else if (Rb2 == Rt1) begin
+						    // if the previous instruction is a LW, then grab result from memq, not the iq
+						    iqentry_a2_v [tail1]    <=   `INV;
+						    iqentry_a2_s [tail1]    <=   { 1'b0, fetchbuf1_mem &IsLoad(fetchbuf1_instr), tail0 };
+						end
+						// if no overlap, get info from rf_v and rf_source
+						else begin
+						    iqentry_a2_v [tail1] <= rf_v[Rb2];
+						    iqentry_a2_s [tail1] <= rf_source[ Rb2 ];
+						end
+
+						// SOURCE 3 ... this is more contorted than the logic for SOURCE 1 because
+						// some instructions (NAND and ADD) read from RC and others (SW, BEQ) read from RA
+						//
+						// if the argument is an immediate or not needed, we're done
+						// Source2 is valid for a JAL.
+						if (Source3Valid( fetchbuf2_instr ) == `VAL) begin
+						    iqentry_a3_v [tail1] <= `VAL;
+						    iqentry_a3_s [tail1] <= 4'd0;
+						end
+						// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+						else if (~fetchbuf1_rfw) begin
+						    iqentry_a3_v [tail1] <= rf_v[Rc2];
+						    iqentry_a3_s [tail1] <= rf_source[ Rc2 ];
+						end
+						// otherwise, previous instruction does write to RF ... see if overlap
+						else if (Rc2 == Rt1) begin
+						    // if the previous instruction is a LW, then grab result from memq, not the iq
+						    iqentry_a3_v [tail1]    <=   `INV;
+						    iqentry_a3_s [tail1]    <=   { 1'b0, fetchbuf1_mem &IsLoad(fetchbuf1_instr), tail0 };
+						end
+						// if no overlap, get info from rf_v and rf_source
+						else begin
+						    iqentry_a3_v [tail1] <= rf_v[Rc2];
+						    iqentry_a3_s [tail1] <= rf_source[ Rc2 ];
+						end
+
+						//
+						// if the two instructions enqueued target the same register, 
+						// make sure only the second writes to rf_v and rf_source.
+						// first is allowed to update rf_v and rf_source only if the
+						// second has no target (BEQ or SW)
+						//
+						begin
+						    if (fetchbuf1_rfw) begin
+							    rf_source[ Rt1 ] <= { 1'b0,fetchbuf1_mem &IsLoad(fetchbuf1_instr), tail0 };
+							    rf_v [ Rt1] = `INV;
+						    end
+						    if (fetchbuf2_rfw) begin
+							    rf_source[ Rt2 ] <= { 1'b0,fetchbuf2_mem &IsLoad(fetchbuf2_instr), tail1 };
+							    rf_v [ Rt2 ] = `INV;
+						    end
+						end
+
+				    end	// ends the "if IQ[tail1] is available" clause
+				    else begin	// only first instruction was enqueued
+						if (queued1 & fetchbuf1_rfw) begin
+						    rf_source[ Rt1 ] <= {1'b0,fetchbuf1_mem &IsLoad(fetchbuf1_instr), tail0};
+						    rf_v [ Rt1 ] = `INV;
+						end
+				    end
+				end	// ends the "else fetchbuf0 doesn't have a backwards branch" clause
+	    	end	
+	4'b0111: if (canq1) begin
+				// If the first instruction is a backwards branch, enqueue it & stomp on all following instructions
+				if (IsBranch(fetchbuf1_instr) && predict_taken1) begin
+		            tgtq <= FALSE;
+		            enque1(tail0, seq_num);
+				end
+
+				else begin	// fetchbuf1 doesn't contain a predicted branch
+				    //
+				    // so -- we can enqueue 1,2 or 3 instructions, depending on space in the IQ
+				    // update tail0/tail1 separately (at top)
+				    // update the rf_v and rf_source bits separately (at end)
+				    //   the problem is that if we do have two instructions, 
+				    //   they may interact with each other, so we have to be
+				    //   careful about where things point.
+				    //
+				    //
+				    // enqueue the first instruction ...
+				    //
+		            if (IsVector(fetchbuf1_instr) && SUP_VECTOR) begin
+		                vqe <= vqe + 4'd1;
+		                if (IsVCmprss(fetchbuf1_instr)) begin
+		                    if (vm[fetchbuf1_instr[24:23]])
+		                        vqet <= vqet + 4'd1;
+		                end
+		                else
+		                    vqet <= vqet + 4'd1; 
+		            end
+		            tgtq <= FALSE;
+		            enque1(tail0, seq_num);
+				    //
+				    // if there is room for a second instruction, enqueue it
+				    //
+				    if (canq2) begin
+				    	if (IsBranch(fetchbuf2_instr) && predict_taken2) begin
+				            enque2(tail1, seq_num + 5'd1);
+							if (fetchbuf1_rfw) begin
+							    rf_source[ Rt1 ] <= {1'b0,fetchbuf1_mem &IsLoad(fetchbuf1_instr), tail0};
+							    rf_v [ Rt1 ] = `INV;
+							end
+				    	end
+				    	else begin
+					    	enque2(tail1, seq_num + 5'd1);
+							// a1/a2_v and a1/a2_s values require a bit of thinking ...
+
+							//
+							// SOURCE 1 ... this is relatively straightforward, because all instructions
+							// that have a source (i.e. every instruction but LUI) read from RB
+							//
+							// if the argument is an immediate or not needed, we're done
+							if (Source1Valid( fetchbuf2_instr ) == `VAL) begin
+							    iqentry_a1_v [tail1] <= `VAL;
+							    iqentry_a1_s [tail1] <= 4'd0;
+							end
+							// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+							else if (~fetchbuf1_rfw) begin
+							    iqentry_a1_v [tail1]    <=   rf_v[Ra2];
+							    iqentry_a1_s [tail1]    <=   rf_source [Ra2];
+							end
+							// otherwise, previous instruction does write to RF ... see if overlap
+							else if (Ra2 == Rt1) begin
+							    // if the previous instruction is a LW, then grab result from memq, not the iq
+							    iqentry_a1_v [tail1]    <=   `INV;
+							    iqentry_a1_s [tail1]    <=   { 1'b0, fetchbuf1_mem &IsLoad(fetchbuf1_instr), tail0 };
+							end
+							// if no overlap, get info from rf_v and rf_source
+							else begin
+							    iqentry_a1_v [tail1]    <=   rf_v[Ra2];
+							    iqentry_a1_s [tail1]    <=   rf_source [Ra2];
+							end
+
+							//
+							// SOURCE 2 ... this is more contorted than the logic for SOURCE 1 because
+							// some instructions (NAND and ADD) read from RC and others (SW, BEQ) read from RA
+							//
+							// if the argument is an immediate or not needed, we're done
+							// Source2 is valid for a JAL.
+							if (Source2Valid( fetchbuf2_instr ) == `VAL) begin
+							    iqentry_a2_v [tail1] <= `VAL;
+							    iqentry_a2_s [tail1] <= 4'd0;
+							end
+							// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+							else if (~fetchbuf1_rfw) begin
+							    iqentry_a2_v [tail1] <= rf_v[Rb2];
+							    iqentry_a2_s [tail1] <= rf_source[ Rb2 ];
+							end
+							// otherwise, previous instruction does write to RF ... see if overlap
+							else if (Rb2 == Rt1) begin
+							    // if the previous instruction is a LW, then grab result from memq, not the iq
+							    iqentry_a2_v [tail1]    <=   `INV;
+							    iqentry_a2_s [tail1]    <=   { 1'b0, fetchbuf1_mem &IsLoad(fetchbuf1_instr), tail0 };
+							end
+							// if no overlap, get info from rf_v and rf_source
+							else begin
+							    iqentry_a2_v [tail1] <= rf_v[Rb2];
+							    iqentry_a2_s [tail1] <= rf_source[ Rb2 ];
+							end
+
+							// SOURCE 3 ... this is more contorted than the logic for SOURCE 1 because
+							// some instructions (NAND and ADD) read from RC and others (SW, BEQ) read from RA
+							//
+							// if the argument is an immediate or not needed, we're done
+							// Source2 is valid for a JAL.
+							if (Source3Valid( fetchbuf2_instr ) == `VAL) begin
+							    iqentry_a3_v [tail1] <= `VAL;
+							    iqentry_a3_s [tail1] <= 4'd0;
+							end
+							// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+							else if (~fetchbuf1_rfw) begin
+							    iqentry_a3_v [tail1] <= rf_v[Rc2];
+							    iqentry_a3_s [tail1] <= rf_source[ Rc2 ];
+							end
+							// otherwise, previous instruction does write to RF ... see if overlap
+							else if (Rc2 == Rt1) begin
+							    // if the previous instruction is a LW, then grab result from memq, not the iq
+							    iqentry_a3_v [tail1]    <=   `INV;
+							    iqentry_a3_s [tail1]    <=   { 1'b0, fetchbuf1_mem &IsLoad(fetchbuf1_instr), tail0 };
+							end
+							// if no overlap, get info from rf_v and rf_source
+							else begin
+							    iqentry_a3_v [tail1] <= rf_v[Rc2];
+							    iqentry_a3_s [tail1] <= rf_source[ Rc2 ];
+							end
+
+							//
+							// if the two instructions enqueued target the same register, 
+							// make sure only the second writes to rf_v and rf_source.
+							// first is allowed to update rf_v and rf_source only if the
+							// second has no target (BEQ or SW)
+							//
+						    if (fetchbuf1_rfw) begin
+							    rf_source[ Rt1 ] <= { 1'b0,fetchbuf1_mem &IsLoad(fetchbuf1_instr), tail0 };
+							    rf_v [ Rt1] = `INV;
+						    end
+						    if (fetchbuf2_rfw) begin
+							    rf_source[ Rt2 ] <= { 1'b0,fetchbuf2_mem &IsLoad(fetchbuf2_instr), tail1 };
+							    rf_v [ Rt2 ] = `INV;
+						    end
+
+					    	if (canq3) begin
+					    		enque3(tail2, seq_num + 5'd2);
+								// if the argument is an immediate or not needed, we're done
+								if (Source1Valid( fetchbuf3_instr ) == `VAL) begin
+								    iqentry_a1_v [tail2] <= `VAL;
+								    iqentry_a1_s [tail2] <= 4'd0;
+								end
+								// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+								else if (~fetchbuf1_rfw & ~fetchbuf2_rfw) begin
+								    iqentry_a1_v [tail2]    <=   rf_v[Ra3];
+								    iqentry_a1_s [tail2]    <=   rf_source [Ra3];
+								end
+								// otherwise, previous instruction does write to RF ... see if overlap
+								else if (Ra3 == Rt2) begin
+								    // if the previous instruction is a LW, then grab result from memq, not the iq
+								    iqentry_a1_v [tail2]    <=   `INV;
+								    iqentry_a1_s [tail2]    <=   { 1'b0, fetchbuf2_mem &IsLoad(fetchbuf2_instr), tail1 };
+								end
+								else if (Ra3 == Rt1) begin
+								    // if the previous instruction is a LW, then grab result from memq, not the iq
+								    iqentry_a1_v [tail2]    <=   `INV;
+								    iqentry_a1_s [tail2]    <=   { 1'b0, fetchbuf1_mem &IsLoad(fetchbuf1_instr), tail0 };
+								end
+								// if no overlap, get info from rf_v and rf_source
+								else begin
+								    iqentry_a1_v [tail2]    <=   rf_v[Ra3];
+								    iqentry_a1_s [tail2]    <=   rf_source [Ra3];
+								end
+
+								// if the argument is an immediate or not needed, we're done
+								// Source2 is valid for a JAL.
+								if (Source2Valid( fetchbuf2_instr ) == `VAL) begin
+								    iqentry_a2_v [tail2] <= `VAL;
+								    iqentry_a2_s [tail2] <= 4'd0;
+								end
+								// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+								else if (~fetchbuf1_rfw & ~fetchbuf2_rfw) begin
+								    iqentry_a2_v [tail2] <= rf_v[Rb3];
+								    iqentry_a2_s [tail2] <= rf_source[ Rb3 ];
+								end
+								// otherwise, previous instruction does write to RF ... see if overlap
+								else if (Rb3 == Rt2) begin
+								    // if the previous instruction is a LW, then grab result from memq, not the iq
+								    iqentry_a2_v [tail2]    <=   `INV;
+								    iqentry_a2_s [tail2]    <=   { 1'b0, fetchbuf2_mem &IsLoad(fetchbuf2_instr), tail1 };
+								end
+								// otherwise, previous instruction does write to RF ... see if overlap
+								else if (Rb3 == Rt1) begin
+								    // if the previous instruction is a LW, then grab result from memq, not the iq
+								    iqentry_a2_v [tail2]    <=   `INV;
+								    iqentry_a2_s [tail2]    <=   { 1'b0, fetchbuf1_mem &IsLoad(fetchbuf1_instr), tail0 };
+								end
+								// if no overlap, get info from rf_v and rf_source
+								else begin
+								    iqentry_a2_v [tail2] <= rf_v[Rb3];
+								    iqentry_a2_s [tail2] <= rf_source[ Rb3 ];
+								end
+
+								// SOURCE 3 ... this is more contorted than the logic for SOURCE 1 because
+								// some instructions (NAND and ADD) read from RC and others (SW, BEQ) read from RA
+								//
+								// if the argument is an immediate or not needed, we're done
+								// Source2 is valid for a JAL.
+								if (Source3Valid( fetchbuf3_instr ) == `VAL) begin
+								    iqentry_a3_v [tail2] <= `VAL;
+								    iqentry_a3_s [tail2] <= 4'd0;
+								end
+								// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+								else if (~fetchbuf1_rfw & ~fetchbuf2_rfw) begin
+								    iqentry_a3_v [tail2] <= rf_v[Rc3];
+								    iqentry_a3_s [tail2] <= rf_source[ Rc3 ];
+								end
+								// otherwise, previous instruction does write to RF ... see if overlap
+								else if (Rc3 == Rt2) begin
+								    // if the previous instruction is a LW, then grab result from memq, not the iq
+								    iqentry_a3_v [tail2]    <=   `INV;
+								    iqentry_a3_s [tail2]    <=   { 1'b0, fetchbuf2_mem &IsLoad(fetchbuf2_instr), tail1 };
+								end
+								// otherwise, previous instruction does write to RF ... see if overlap
+								else if (Rc3 == Rt1) begin
+								    // if the previous instruction is a LW, then grab result from memq, not the iq
+								    iqentry_a3_v [tail2]    <=   `INV;
+								    iqentry_a3_s [tail2]    <=   { 1'b0, fetchbuf1_mem &IsLoad(fetchbuf1_instr), tail0 };
+								end
+								// if no overlap, get info from rf_v and rf_source
+								else begin
+								    iqentry_a3_v [tail1] <= rf_v[Rc3];
+								    iqentry_a3_s [tail1] <= rf_source[ Rc3 ];
+								end
+								//
+								// if the three instructions enqueued target the same register, 
+								// make sure only the last writes to rf_v and rf_source.
+								// first is allowed to update rf_v and rf_source only if the
+								// second has no target (BEQ or SW)
+								//
+							    if (fetchbuf1_rfw) begin
+								    rf_source[ Rt1 ] <= { 1'b0,fetchbuf1_mem &IsLoad(fetchbuf1_instr), tail0 };
+								    rf_v [ Rt1] = `INV;
+							    end
+							    if (fetchbuf2_rfw) begin
+								    rf_source[ Rt2 ] <= { 1'b0,fetchbuf2_mem &IsLoad(fetchbuf2_instr), tail1 };
+								    rf_v [ Rt2 ] = `INV;
+							    end
+							    if (fetchbuf3_rfw) begin
+								    rf_source[ Rt3 ] <= { 1'b0,fetchbuf3_mem &IsLoad(fetchbuf3_instr), tail2 };
+								    rf_v [ Rt3 ] = `INV;
+							    end
+					    	end
+
+					    end	// ends the "if IQ[tail1] is available" clause
+					    else begin	// only first instruction was enqueued
+							if (queued1 & fetchbuf1_rfw) begin
+							    rf_source[ Rt1 ] <= {1'b0,fetchbuf1_mem &IsLoad(fetchbuf1_instr), tail0};
+							    rf_v [ Rt1 ] = `INV;
+							end
+					    end
+					end
+				end	// ends the "else fetchbuf0 doesn't have a backwards branch" clause
+	    	end	
+	4'b1000: if (canq1) begin
+	            if (IsVector(fetchbuf0_instr) && SUP_VECTOR) begin
+	                vqe <= vqe + 4'd1;
+	                if (IsVCmprss(fetchbuf0_instr)) begin
+	                    if (vm[fetchbuf0_instr[24:23]])
+	                        vqet <= vqet + 4'd1;
+	                end
+	                else
+	                    vqet <= vqet + 4'd1; 
+	            end
+	            tgtq <= FALSE;
+	            enque0(tail0, seq_num);
+	            if (fetchbuf0_rfw) begin
+	                rf_source[ Rt0 ] <= { 1'b0, fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };	// top bit indicates ALU/MEM bus
+	                rf_v [Rt0] = `INV;
+	            end
+		    end
+	4'b1001: if (canq1) begin
+				// If the first instruction is a backwards branch, enqueue it & stomp on all following instructions
+				if (IsBranch(fetchbuf0_instr) && predict_taken0) begin
+		            tgtq <= FALSE;
+		            enque0(tail0);
+				end
+
+				else begin	// fetchbuf2 doesn't contain a predicted branch
+				    //
+				    // so -- we can enqueue 1 or 2 instructions, depending on space in the IQ
+				    // update tail0/tail1 separately (at top)
+				    // update the rf_v and rf_source bits separately (at end)
+				    //   the problem is that if we do have two instructions, 
+				    //   they may interact with each other, so we have to be
+				    //   careful about where things point.
+				    //
+				    //
+				    // enqueue the first instruction ...
+				    //
+		            if (IsVector(fetchbuf0_instr) && SUP_VECTOR) begin
+		                vqe <= vqe + 4'd1;
+		                if (IsVCmprss(fetchbuf0_instr)) begin
+		                    if (vm[fetchbuf0_instr[24:23]])
+		                        vqet <= vqet + 4'd1;
+		                end
+		                else
+		                    vqet <= vqet + 4'd1; 
+		            end
+		            tgtq <= FALSE;
+		            enque0(tail0);
+				    //
+				    // if there is room for a second instruction, enqueue it
+				    //
+				    if (canq2) begin
+				    	enque3(tail1, seq_num + 5'd1);
+
+						// a1/a2_v and a1/a2_s values require a bit of thinking ...
+
+						//
+						// SOURCE 1 ... this is relatively straightforward, because all instructions
+						// that have a source (i.e. every instruction but LUI) read from RB
+						//
+						// if the argument is an immediate or not needed, we're done
+						if (Source1Valid( fetchbuf3_instr ) == `VAL) begin
+						    iqentry_a1_v [tail1] <= `VAL;
+						    iqentry_a1_s [tail1] <= 4'd0;
+						end
+						// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+						else if (~fetchbuf0_rfw) begin
+						    iqentry_a1_v [tail1]    <=   rf_v[Ra3];
+						    iqentry_a1_s [tail1]    <=   rf_source [Ra3];
+						end
+						// otherwise, previous instruction does write to RF ... see if overlap
+						else if (Ra3 == Rt0) begin
+						    // if the previous instruction is a LW, then grab result from memq, not the iq
+						    iqentry_a1_v [tail1]    <=   `INV;
+						    iqentry_a1_s [tail1]    <=   { 1'b0, fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
+						end
+						// if no overlap, get info from rf_v and rf_source
+						else begin
+						    iqentry_a1_v [tail1]    <=   rf_v[Ra3];
+						    iqentry_a1_s [tail1]    <=   rf_source [Ra3];
+						end
+
+						//
+						// SOURCE 2 ... this is more contorted than the logic for SOURCE 1 because
+						// some instructions (NAND and ADD) read from RC and others (SW, BEQ) read from RA
+						//
+						// if the argument is an immediate or not needed, we're done
+						// Source2 is valid for a JAL.
+						if (Source2Valid( fetchbuf3_instr ) == `VAL) begin
+						    iqentry_a2_v [tail1] <= `VAL;
+						    iqentry_a2_s [tail1] <= 4'd0;
+						end
+						// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+						else if (~fetchbuf0_rfw) begin
+						    iqentry_a2_v [tail1] <= rf_v[Rb3];
+						    iqentry_a2_s [tail1] <= rf_source[ Rb3 ];
+						end
+						// otherwise, previous instruction does write to RF ... see if overlap
+						else if (Rb3 == Rt0) begin
+						    // if the previous instruction is a LW, then grab result from memq, not the iq
+						    iqentry_a2_v [tail1]    <=   `INV;
+						    iqentry_a2_s [tail1]    <=   { 1'b0, fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
+						end
+						// if no overlap, get info from rf_v and rf_source
+						else begin
+						    iqentry_a2_v [tail1] <= rf_v[Rb3];
+						    iqentry_a2_s [tail1] <= rf_source[ Rb3 ];
+						end
+
+						// SOURCE 3 ... this is more contorted than the logic for SOURCE 1 because
+						// some instructions (NAND and ADD) read from RC and others (SW, BEQ) read from RA
+						//
+						// if the argument is an immediate or not needed, we're done
+						// Source2 is valid for a JAL.
+						if (Source3Valid( fetchbuf3_instr ) == `VAL) begin
+						    iqentry_a3_v [tail1] <= `VAL;
+						    iqentry_a3_s [tail1] <= 4'd0;
+						end
+						// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+						else if (~fetchbuf0_rfw) begin
+						    iqentry_a3_v [tail1] <= rf_v[Rc3];
+						    iqentry_a3_s [tail1] <= rf_source[ Rc3 ];
+						end
+						// otherwise, previous instruction does write to RF ... see if overlap
+						else if (Rc3 == Rt0) begin
+						    // if the previous instruction is a LW, then grab result from memq, not the iq
+						    iqentry_a3_v [tail1]    <=   `INV;
+						    iqentry_a3_s [tail1]    <=   { 1'b0, fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
+						end
+						// if no overlap, get info from rf_v and rf_source
+						else begin
+						    iqentry_a3_v [tail1] <= rf_v[Rc3];
+						    iqentry_a3_s [tail1] <= rf_source[ Rc3 ];
+						end
+
+						//
+						// if the two instructions enqueued target the same register, 
+						// make sure only the second writes to rf_v and rf_source.
+						// first is allowed to update rf_v and rf_source only if the
+						// second has no target (BEQ or SW)
+						//
+						begin
+						    if (fetchbuf0_rfw) begin
+							    rf_source[ Rt0 ] <= { 1'b0,fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
+							    rf_v [ Rt0] = `INV;
+						    end
+						    if (fetchbuf3_rfw) begin
+							    rf_source[ Rt3 ] <= { 1'b0,fetchbuf3_mem &IsLoad(fetchbuf3_instr), tail1 };
+							    rf_v [ Rt3 ] = `INV;
+						    end
+						end
+
+				    end	// ends the "if IQ[tail1] is available" clause
+				    else begin	// only first instruction was enqueued
+						if (queued1 & fetchbuf0_rfw) begin
+						    rf_source[ Rt0 ] <= {1'b0,fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0};
+						    rf_v [ Rt0 ] = `INV;
+						end
+				    end
+				end	// ends the "else fetchbuf0 doesn't have a backwards branch" clause
+	    	end	
+	4'b1010: if (canq1) begin
+				// If the first instruction is a backwards branch, enqueue it & stomp on all following instructions
+				if (IsBranch(fetchbuf0_instr) && predict_taken0) begin
+		            tgtq <= FALSE;
+		            enque0(tail0);
+				end
+
+				else begin	// fetchbuf2 doesn't contain a predicted branch
+				    //
+				    // so -- we can enqueue 1 or 2 instructions, depending on space in the IQ
+				    // update tail0/tail1 separately (at top)
+				    // update the rf_v and rf_source bits separately (at end)
+				    //   the problem is that if we do have two instructions, 
+				    //   they may interact with each other, so we have to be
+				    //   careful about where things point.
+				    //
+				    //
+				    // enqueue the first instruction ...
+				    //
+		            if (IsVector(fetchbuf0_instr) && SUP_VECTOR) begin
+		                vqe <= vqe + 4'd1;
+		                if (IsVCmprss(fetchbuf0_instr)) begin
+		                    if (vm[fetchbuf0_instr[24:23]])
+		                        vqet <= vqet + 4'd1;
+		                end
+		                else
+		                    vqet <= vqet + 4'd1; 
+		            end
+		            tgtq <= FALSE;
+		            enque0(tail0);
+				    //
+				    // if there is room for a second instruction, enqueue it
+				    //
+				    if (canq2) begin
+				    	enque2(tail1, seq_num + 5'd1);
+
+						// a1/a2_v and a1/a2_s values require a bit of thinking ...
+
+						//
+						// SOURCE 1 ... this is relatively straightforward, because all instructions
+						// that have a source (i.e. every instruction but LUI) read from RB
+						//
+						// if the argument is an immediate or not needed, we're done
+						if (Source1Valid( fetchbuf2_instr ) == `VAL) begin
+						    iqentry_a1_v [tail1] <= `VAL;
+						    iqentry_a1_s [tail1] <= 4'd0;
+						end
+						// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+						else if (~fetchbuf0_rfw) begin
+						    iqentry_a1_v [tail1]    <=   rf_v[Ra2];
+						    iqentry_a1_s [tail1]    <=   rf_source [Ra2];
+						end
+						// otherwise, previous instruction does write to RF ... see if overlap
+						else if (Ra2 == Rt0) begin
+						    // if the previous instruction is a LW, then grab result from memq, not the iq
+						    iqentry_a1_v [tail1]    <=   `INV;
+						    iqentry_a1_s [tail1]    <=   { 1'b0, fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
+						end
+						// if no overlap, get info from rf_v and rf_source
+						else begin
+						    iqentry_a1_v [tail1]    <=   rf_v[Ra2];
+						    iqentry_a1_s [tail1]    <=   rf_source [Ra2];
+						end
+
+						//
+						// SOURCE 2 ... this is more contorted than the logic for SOURCE 1 because
+						// some instructions (NAND and ADD) read from RC and others (SW, BEQ) read from RA
+						//
+						// if the argument is an immediate or not needed, we're done
+						// Source2 is valid for a JAL.
+						if (Source2Valid( fetchbuf2_instr ) == `VAL) begin
+						    iqentry_a2_v [tail1] <= `VAL;
+						    iqentry_a2_s [tail1] <= 4'd0;
+						end
+						// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+						else if (~fetchbuf0_rfw) begin
+						    iqentry_a2_v [tail1] <= rf_v[Rb2];
+						    iqentry_a2_s [tail1] <= rf_source[ Rb2 ];
+						end
+						// otherwise, previous instruction does write to RF ... see if overlap
+						else if (Rb2 == Rt0) begin
+						    // if the previous instruction is a LW, then grab result from memq, not the iq
+						    iqentry_a2_v [tail1]    <=   `INV;
+						    iqentry_a2_s [tail1]    <=   { 1'b0, fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
+						end
+						// if no overlap, get info from rf_v and rf_source
+						else begin
+						    iqentry_a2_v [tail1] <= rf_v[Rb2];
+						    iqentry_a2_s [tail1] <= rf_source[ Rb2 ];
+						end
+
+						// SOURCE 3 ... this is more contorted than the logic for SOURCE 1 because
+						// some instructions (NAND and ADD) read from RC and others (SW, BEQ) read from RA
+						//
+						// if the argument is an immediate or not needed, we're done
+						// Source2 is valid for a JAL.
+						if (Source3Valid( fetchbuf2_instr ) == `VAL) begin
+						    iqentry_a3_v [tail1] <= `VAL;
+						    iqentry_a3_s [tail1] <= 4'd0;
+						end
+						// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+						else if (~fetchbuf0_rfw) begin
+						    iqentry_a3_v [tail1] <= rf_v[Rc2];
+						    iqentry_a3_s [tail1] <= rf_source[ Rc2 ];
+						end
+						// otherwise, previous instruction does write to RF ... see if overlap
+						else if (Rc2 == Rt0) begin
+						    // if the previous instruction is a LW, then grab result from memq, not the iq
+						    iqentry_a3_v [tail1]    <=   `INV;
+						    iqentry_a3_s [tail1]    <=   { 1'b0, fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
+						end
+						// if no overlap, get info from rf_v and rf_source
+						else begin
+						    iqentry_a3_v [tail1] <= rf_v[Rc2];
+						    iqentry_a3_s [tail1] <= rf_source[ Rc2 ];
+						end
+
+						//
+						// if the two instructions enqueued target the same register, 
+						// make sure only the second writes to rf_v and rf_source.
+						// first is allowed to update rf_v and rf_source only if the
+						// second has no target (BEQ or SW)
+						//
+						begin
+						    if (fetchbuf0_rfw) begin
+							    rf_source[ Rt0 ] <= { 1'b0,fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
+							    rf_v [ Rt0] = `INV;
+						    end
+						    if (fetchbuf2_rfw) begin
+							    rf_source[ Rt2 ] <= { 1'b0,fetchbuf2_mem &IsLoad(fetchbuf2_instr), tail1 };
+							    rf_v [ Rt2 ] = `INV;
+						    end
+						end
+
+				    end	// ends the "if IQ[tail1] is available" clause
+				    else begin	// only first instruction was enqueued
+						if (queued1 & fetchbuf0_rfw) begin
+						    rf_source[ Rt0 ] <= {1'b0,fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0};
+						    rf_v [ Rt0 ] = `INV;
+						end
+				    end
+				end	// ends the "else fetchbuf0 doesn't have a backwards branch" clause
+	    	end	
+	4'b1011: if (canq1) begin
+				// If the first instruction is a backwards branch, enqueue it & stomp on all following instructions
+				if (IsBranch(fetchbuf0_instr) && predict_taken0) begin
+		            tgtq <= FALSE;
+		            enque0(tail0);
+				end
+
+				else begin	// fetchbuf1 doesn't contain a predicted branch
+				    //
+				    // so -- we can enqueue 1,2 or 3 instructions, depending on space in the IQ
+				    // update tail0/tail1 separately (at top)
+				    // update the rf_v and rf_source bits separately (at end)
+				    //   the problem is that if we do have two instructions, 
+				    //   they may interact with each other, so we have to be
+				    //   careful about where things point.
+				    //
+				    //
+				    // enqueue the first instruction ...
+				    //
+		            if (IsVector(fetchbuf0_instr) && SUP_VECTOR) begin
+		                vqe <= vqe + 4'd1;
+		                if (IsVCmprss(fetchbuf0_instr)) begin
+		                    if (vm[fetchbuf0_instr[24:23]])
+		                        vqet <= vqet + 4'd1;
+		                end
+		                else
+		                    vqet <= vqet + 4'd1; 
+		            end
+		            tgtq <= FALSE;
+		            enque0(tail0);
+				    //
+				    // if there is room for a second instruction, enqueue it
+				    //
+				    if (canq2) begin
+				    	if (IsBranch(fetchbuf2_instr) && predict_taken2) begin
+				            enque2(tail1, seq_num + 5'd1);
+							if (fetchbuf0_rfw) begin
+							    rf_source[ Rt0 ] <= {1'b0,fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0};
+							    rf_v [ Rt0 ] = `INV;
+							end
+				    	end
+				    	else begin
+					    	enque2(tail1, seq_num + 5'd1);
+							// a1/a2_v and a1/a2_s values require a bit of thinking ...
+
+							//
+							// SOURCE 1 ... this is relatively straightforward, because all instructions
+							// that have a source (i.e. every instruction but LUI) read from RB
+							//
+							// if the argument is an immediate or not needed, we're done
+							if (Source1Valid( fetchbuf2_instr ) == `VAL) begin
+							    iqentry_a1_v [tail1] <= `VAL;
+							    iqentry_a1_s [tail1] <= 4'd0;
+							end
+							// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+							else if (~fetchbuf0_rfw) begin
+							    iqentry_a1_v [tail1]    <=   rf_v[Ra2];
+							    iqentry_a1_s [tail1]    <=   rf_source [Ra2];
+							end
+							// otherwise, previous instruction does write to RF ... see if overlap
+							else if (Ra2 == Rt0) begin
+							    // if the previous instruction is a LW, then grab result from memq, not the iq
+							    iqentry_a1_v [tail1]    <=   `INV;
+							    iqentry_a1_s [tail1]    <=   { 1'b0, fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
+							end
+							// if no overlap, get info from rf_v and rf_source
+							else begin
+							    iqentry_a1_v [tail1]    <=   rf_v[Ra2];
+							    iqentry_a1_s [tail1]    <=   rf_source [Ra2];
+							end
+
+							//
+							// SOURCE 2 ... this is more contorted than the logic for SOURCE 1 because
+							// some instructions (NAND and ADD) read from RC and others (SW, BEQ) read from RA
+							//
+							// if the argument is an immediate or not needed, we're done
+							// Source2 is valid for a JAL.
+							if (Source2Valid( fetchbuf2_instr ) == `VAL) begin
+							    iqentry_a2_v [tail1] <= `VAL;
+							    iqentry_a2_s [tail1] <= 4'd0;
+							end
+							// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+							else if (~fetchbuf0_rfw) begin
+							    iqentry_a2_v [tail1] <= rf_v[Rb2];
+							    iqentry_a2_s [tail1] <= rf_source[ Rb2 ];
+							end
+							// otherwise, previous instruction does write to RF ... see if overlap
+							else if (Rb2 == Rt0) begin
+							    // if the previous instruction is a LW, then grab result from memq, not the iq
+							    iqentry_a2_v [tail1]    <=   `INV;
+							    iqentry_a2_s [tail1]    <=   { 1'b0, fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
+							end
+							// if no overlap, get info from rf_v and rf_source
+							else begin
+							    iqentry_a2_v [tail1] <= rf_v[Rb2];
+							    iqentry_a2_s [tail1] <= rf_source[ Rb2 ];
+							end
+
+							// SOURCE 3 ... this is more contorted than the logic for SOURCE 1 because
+							// some instructions (NAND and ADD) read from RC and others (SW, BEQ) read from RA
+							//
+							// if the argument is an immediate or not needed, we're done
+							// Source2 is valid for a JAL.
+							if (Source3Valid( fetchbuf2_instr ) == `VAL) begin
+							    iqentry_a3_v [tail1] <= `VAL;
+							    iqentry_a3_s [tail1] <= 4'd0;
+							end
+							// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+							else if (~fetchbuf0_rfw) begin
+							    iqentry_a3_v [tail1] <= rf_v[Rc2];
+							    iqentry_a3_s [tail1] <= rf_source[ Rc2 ];
+							end
+							// otherwise, previous instruction does write to RF ... see if overlap
+							else if (Rc2 == Rt0) begin
+							    // if the previous instruction is a LW, then grab result from memq, not the iq
+							    iqentry_a3_v [tail1]    <=   `INV;
+							    iqentry_a3_s [tail1]    <=   { 1'b0, fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
+							end
+							// if no overlap, get info from rf_v and rf_source
+							else begin
+							    iqentry_a3_v [tail1] <= rf_v[Rc2];
+							    iqentry_a3_s [tail1] <= rf_source[ Rc2 ];
+							end
+
+							//
+							// if the two instructions enqueued target the same register, 
+							// make sure only the second writes to rf_v and rf_source.
+							// first is allowed to update rf_v and rf_source only if the
+							// second has no target (BEQ or SW)
+							//
+						    if (fetchbuf0_rfw) begin
+							    rf_source[ Rt0 ] <= { 1'b0,fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
+							    rf_v [ Rt0] = `INV;
+						    end
+						    if (fetchbuf2_rfw) begin
+							    rf_source[ Rt2 ] <= { 1'b0,fetchbuf2_mem &IsLoad(fetchbuf2_instr), tail1 };
+							    rf_v [ Rt2 ] = `INV;
+						    end
+
+					    	if (canq3) begin
+					    		enque3(tail2, seq_num + 5'd2);
+								// if the argument is an immediate or not needed, we're done
+								if (Source1Valid( fetchbuf3_instr ) == `VAL) begin
+								    iqentry_a1_v [tail2] <= `VAL;
+								    iqentry_a1_s [tail2] <= 4'd0;
+								end
+								// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+								else if (~fetchbuf0_rfw & ~fetchbuf2_rfw) begin
+								    iqentry_a1_v [tail2]    <=   rf_v[Ra3];
+								    iqentry_a1_s [tail2]    <=   rf_source [Ra3];
+								end
+								// otherwise, previous instruction does write to RF ... see if overlap
+								else if (Ra3 == Rt2) begin
+								    // if the previous instruction is a LW, then grab result from memq, not the iq
+								    iqentry_a1_v [tail2]    <=   `INV;
+								    iqentry_a1_s [tail2]    <=   { 1'b0, fetchbuf2_mem &IsLoad(fetchbuf2_instr), tail1 };
+								end
+								else if (Ra3 == Rt0) begin
+								    // if the previous instruction is a LW, then grab result from memq, not the iq
+								    iqentry_a1_v [tail2]    <=   `INV;
+								    iqentry_a1_s [tail2]    <=   { 1'b0, fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
+								end
+								// if no overlap, get info from rf_v and rf_source
+								else begin
+								    iqentry_a1_v [tail2]    <=   rf_v[Ra3];
+								    iqentry_a1_s [tail2]    <=   rf_source [Ra3];
+								end
+
+								// if the argument is an immediate or not needed, we're done
+								// Source2 is valid for a JAL.
+								if (Source2Valid( fetchbuf3_instr ) == `VAL) begin
+								    iqentry_a2_v [tail2] <= `VAL;
+								    iqentry_a2_s [tail2] <= 4'd0;
+								end
+								// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+								else if (~fetchbuf0_rfw & ~fetchbuf2_rfw) begin
+								    iqentry_a2_v [tail2] <= rf_v[Rb3];
+								    iqentry_a2_s [tail2] <= rf_source[ Rb3 ];
+								end
+								// otherwise, previous instruction does write to RF ... see if overlap
+								else if (Rb3 == Rt2) begin
+								    // if the previous instruction is a LW, then grab result from memq, not the iq
+								    iqentry_a2_v [tail2]    <=   `INV;
+								    iqentry_a2_s [tail2]    <=   { 1'b0, fetchbuf2_mem &IsLoad(fetchbuf2_instr), tail1 };
+								end
+								// otherwise, previous instruction does write to RF ... see if overlap
+								else if (Rb3 == Rt0) begin
+								    // if the previous instruction is a LW, then grab result from memq, not the iq
+								    iqentry_a2_v [tail2]    <=   `INV;
+								    iqentry_a2_s [tail2]    <=   { 1'b0, fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
+								end
+								// if no overlap, get info from rf_v and rf_source
+								else begin
+								    iqentry_a2_v [tail2] <= rf_v[Rb3];
+								    iqentry_a2_s [tail2] <= rf_source[ Rb3 ];
+								end
+
+								// SOURCE 3 ... this is more contorted than the logic for SOURCE 1 because
+								// some instructions (NAND and ADD) read from RC and others (SW, BEQ) read from RA
+								//
+								// if the argument is an immediate or not needed, we're done
+								// Source2 is valid for a JAL.
+								if (Source3Valid( fetchbuf3_instr ) == `VAL) begin
+								    iqentry_a3_v [tail2] <= `VAL;
+								    iqentry_a3_s [tail2] <= 4'd0;
+								end
+								// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+								else if (~fetchbuf0_rfw & ~fetchbuf2_rfw) begin
+								    iqentry_a3_v [tail2] <= rf_v[Rc3];
+								    iqentry_a3_s [tail2] <= rf_source[ Rc3 ];
+								end
+								// otherwise, previous instruction does write to RF ... see if overlap
+								else if (Rc3 == Rt2) begin
+								    // if the previous instruction is a LW, then grab result from memq, not the iq
+								    iqentry_a3_v [tail2]    <=   `INV;
+								    iqentry_a3_s [tail2]    <=   { 1'b0, fetchbuf2_mem &IsLoad(fetchbuf2_instr), tail1 };
+								end
+								// otherwise, previous instruction does write to RF ... see if overlap
+								else if (Rc3 == Rt0) begin
+								    // if the previous instruction is a LW, then grab result from memq, not the iq
+								    iqentry_a3_v [tail2]    <=   `INV;
+								    iqentry_a3_s [tail2]    <=   { 1'b0, fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
+								end
+								// if no overlap, get info from rf_v and rf_source
+								else begin
+								    iqentry_a3_v [tail1] <= rf_v[Rc3];
+								    iqentry_a3_s [tail1] <= rf_source[ Rc3 ];
+								end
+								//
+								// if the three instructions enqueued target the same register, 
+								// make sure only the last writes to rf_v and rf_source.
+								// first is allowed to update rf_v and rf_source only if the
+								// second has no target (BEQ or SW)
+								//
+							    if (fetchbuf0_rfw) begin
+								    rf_source[ Rt0 ] <= { 1'b0,fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
+								    rf_v [ Rt0] = `INV;
+							    end
+							    if (fetchbuf2_rfw) begin
+								    rf_source[ Rt2 ] <= { 1'b0,fetchbuf2_mem &IsLoad(fetchbuf2_instr), tail1 };
+								    rf_v [ Rt2 ] = `INV;
+							    end
+							    if (fetchbuf3_rfw) begin
+								    rf_source[ Rt3 ] <= { 1'b0,fetchbuf3_mem &IsLoad(fetchbuf3_instr), tail2 };
+								    rf_v [ Rt3 ] = `INV;
+							    end
+					    	end
+
+					    end	// ends the "if IQ[tail1] is available" clause
+					    else begin	// only first instruction was enqueued
+							if (queued1 & fetchbuf0_rfw) begin
+							    rf_source[ Rt0 ] <= {1'b0,fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0};
+							    rf_v [ Rt0 ] = `INV;
+							end
+					    end
+					end
+				end	// ends the "else fetchbuf0 doesn't have a backwards branch" clause
+	    	end	
+    4'b1100: if (canq1) begin
 		//
 		// if the first instruction is a backwards branch, enqueue it & stomp on all following instructions
 		//
@@ -4112,18 +5758,10 @@ else begin
 			    if (fetchbuf0_rfw) begin
 				    rf_source[ Rt0 ] <= { 1'b0,fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
 				    rf_v [ Rt0] = `INV;
-				    if (Rt0b!=6'd0) begin
-    				    rf_source[ Rt0b ] <= { 1'b1, 1'b0, tail0 };
-                        rf_v [ Rt0b] = `INV;
-				    end
 			    end
 			    if (fetchbuf1_rfw) begin
 				    rf_source[ Rt1 ] <= { 1'b0,fetchbuf1_mem &IsLoad(fetchbuf1_instr), tail1 };
 				    rf_v [ Rt1 ] = `INV;
-				    if (Rt1b != 6'd0) begin
-    				    rf_source[ Rt1b ] <= { 1'b1, 1'b0, tail1 };
-                        rf_v [ Rt1b ] = `INV;
-				    end
 			    end
 			end
 
@@ -4132,15 +5770,941 @@ else begin
 			if (queued1 & fetchbuf0_rfw) begin
 			    rf_source[ Rt0 ] <= {1'b0,fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0};
 			    rf_v [ Rt0 ] = `INV;
-			    if (Rt0b != 6'd0) begin
-    			    rf_source[ Rt0b ] <= {1'b1,1'b0,tail0};
-                    rf_v [ Rt0b ] = `INV;
-			    end
 			end
 		    end
 
 		end	// ends the "else fetchbuf0 doesn't have a backwards branch" clause
-	    end
+	    	end
+	4'b1101: if (canq1) begin
+				// If the first instruction is a backwards branch, enqueue it & stomp on all following instructions
+				if (IsBranch(fetchbuf0_instr) && predict_taken0) begin
+		            tgtq <= FALSE;
+		            enque0(tail0);
+				end
+
+				else begin	// fetchbuf1 doesn't contain a predicted branch
+				    //
+				    // so -- we can enqueue 1,2 or 3 instructions, depending on space in the IQ
+				    // update tail0/tail1 separately (at top)
+				    // update the rf_v and rf_source bits separately (at end)
+				    //   the problem is that if we do have two instructions, 
+				    //   they may interact with each other, so we have to be
+				    //   careful about where things point.
+				    //
+				    //
+				    // enqueue the first instruction ...
+				    //
+		            if (IsVector(fetchbuf0_instr) && SUP_VECTOR) begin
+		                vqe <= vqe + 4'd1;
+		                if (IsVCmprss(fetchbuf0_instr)) begin
+		                    if (vm[fetchbuf0_instr[24:23]])
+		                        vqet <= vqet + 4'd1;
+		                end
+		                else
+		                    vqet <= vqet + 4'd1; 
+		            end
+		            tgtq <= FALSE;
+		            enque0(tail0);
+				    //
+				    // if there is room for a second instruction, enqueue it
+				    //
+				    if (canq2) begin
+				    	if (IsBranch(fetchbuf1_instr) && predict_taken1) begin
+				            enque1(tail1, seq_num + 5'd1);
+							if (fetchbuf0_rfw) begin
+							    rf_source[ Rt0 ] <= {1'b0,fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0};
+							    rf_v [ Rt0 ] = `INV;
+							end
+				    	end
+				    	else begin
+					    	enque1(tail1, seq_num + 5'd1);
+							// a1/a2_v and a1/a2_s values require a bit of thinking ...
+
+							//
+							// SOURCE 1 ... this is relatively straightforward, because all instructions
+							// that have a source (i.e. every instruction but LUI) read from RB
+							//
+							// if the argument is an immediate or not needed, we're done
+							if (Source1Valid( fetchbuf1_instr ) == `VAL) begin
+							    iqentry_a1_v [tail1] <= `VAL;
+							    iqentry_a1_s [tail1] <= 4'd0;
+							end
+							// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+							else if (~fetchbuf0_rfw) begin
+							    iqentry_a1_v [tail1]    <=   rf_v[Ra1];
+							    iqentry_a1_s [tail1]    <=   rf_source [Ra1];
+							end
+							// otherwise, previous instruction does write to RF ... see if overlap
+							else if (Ra1 == Rt0) begin
+							    // if the previous instruction is a LW, then grab result from memq, not the iq
+							    iqentry_a1_v [tail1]    <=   `INV;
+							    iqentry_a1_s [tail1]    <=   { 1'b0, fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
+							end
+							// if no overlap, get info from rf_v and rf_source
+							else begin
+							    iqentry_a1_v [tail1]    <=   rf_v[Ra1];
+							    iqentry_a1_s [tail1]    <=   rf_source [Ra1];
+							end
+
+							//
+							// SOURCE 2 ... this is more contorted than the logic for SOURCE 1 because
+							// some instructions (NAND and ADD) read from RC and others (SW, BEQ) read from RA
+							//
+							// if the argument is an immediate or not needed, we're done
+							// Source2 is valid for a JAL.
+							if (Source2Valid( fetchbuf1_instr ) == `VAL) begin
+							    iqentry_a2_v [tail1] <= `VAL;
+							    iqentry_a2_s [tail1] <= 4'd0;
+							end
+							// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+							else if (~fetchbuf0_rfw) begin
+							    iqentry_a2_v [tail1] <= rf_v[Rb1];
+							    iqentry_a2_s [tail1] <= rf_source[ Rb1 ];
+							end
+							// otherwise, previous instruction does write to RF ... see if overlap
+							else if (Rb1 == Rt0) begin
+							    // if the previous instruction is a LW, then grab result from memq, not the iq
+							    iqentry_a2_v [tail1]    <=   `INV;
+							    iqentry_a2_s [tail1]    <=   { 1'b0, fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
+							end
+							// if no overlap, get info from rf_v and rf_source
+							else begin
+							    iqentry_a2_v [tail1] <= rf_v[Rb1];
+							    iqentry_a2_s [tail1] <= rf_source[ Rb1 ];
+							end
+
+							// SOURCE 3 ... this is more contorted than the logic for SOURCE 1 because
+							// some instructions (NAND and ADD) read from RC and others (SW, BEQ) read from RA
+							//
+							// if the argument is an immediate or not needed, we're done
+							// Source2 is valid for a JAL.
+							if (Source3Valid( fetchbuf1_instr ) == `VAL) begin
+							    iqentry_a3_v [tail1] <= `VAL;
+							    iqentry_a3_s [tail1] <= 4'd0;
+							end
+							// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+							else if (~fetchbuf0_rfw) begin
+							    iqentry_a3_v [tail1] <= rf_v[Rc1];
+							    iqentry_a3_s [tail1] <= rf_source[ Rc1 ];
+							end
+							// otherwise, previous instruction does write to RF ... see if overlap
+							else if (Rc1 == Rt0) begin
+							    // if the previous instruction is a LW, then grab result from memq, not the iq
+							    iqentry_a3_v [tail1]    <=   `INV;
+							    iqentry_a3_s [tail1]    <=   { 1'b0, fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
+							end
+							// if no overlap, get info from rf_v and rf_source
+							else begin
+							    iqentry_a3_v [tail1] <= rf_v[Rc1];
+							    iqentry_a3_s [tail1] <= rf_source[ Rc1 ];
+							end
+
+							//
+							// if the two instructions enqueued target the same register, 
+							// make sure only the second writes to rf_v and rf_source.
+							// first is allowed to update rf_v and rf_source only if the
+							// second has no target (BEQ or SW)
+							//
+						    if (fetchbuf0_rfw) begin
+							    rf_source[ Rt0 ] <= { 1'b0,fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
+							    rf_v [ Rt0] = `INV;
+						    end
+						    if (fetchbuf1_rfw) begin
+							    rf_source[ Rt1 ] <= { 1'b0,fetchbuf1_mem &IsLoad(fetchbuf1_instr), tail1 };
+							    rf_v [ Rt1 ] = `INV;
+						    end
+
+					    	if (canq3) begin
+					    		enque3(tail2, seq_num + 5'd2);
+								// if the argument is an immediate or not needed, we're done
+								if (Source1Valid( fetchbuf3_instr ) == `VAL) begin
+								    iqentry_a1_v [tail2] <= `VAL;
+								    iqentry_a1_s [tail2] <= 4'd0;
+								end
+								// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+								else if (~fetchbuf0_rfw & ~fetchbuf1_rfw) begin
+								    iqentry_a1_v [tail2]    <=   rf_v[Ra3];
+								    iqentry_a1_s [tail2]    <=   rf_source [Ra3];
+								end
+								// otherwise, previous instruction does write to RF ... see if overlap
+								else if (Ra3 == Rt1) begin
+								    // if the previous instruction is a LW, then grab result from memq, not the iq
+								    iqentry_a1_v [tail2]    <=   `INV;
+								    iqentry_a1_s [tail2]    <=   { 1'b0, fetchbuf1_mem &IsLoad(fetchbuf1_instr), tail1 };
+								end
+								else if (Ra3 == Rt0) begin
+								    // if the previous instruction is a LW, then grab result from memq, not the iq
+								    iqentry_a1_v [tail2]    <=   `INV;
+								    iqentry_a1_s [tail2]    <=   { 1'b0, fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
+								end
+								// if no overlap, get info from rf_v and rf_source
+								else begin
+								    iqentry_a1_v [tail2]    <=   rf_v[Ra3];
+								    iqentry_a1_s [tail2]    <=   rf_source [Ra3];
+								end
+
+								// if the argument is an immediate or not needed, we're done
+								// Source2 is valid for a JAL.
+								if (Source2Valid( fetchbuf3_instr ) == `VAL) begin
+								    iqentry_a2_v [tail2] <= `VAL;
+								    iqentry_a2_s [tail2] <= 4'd0;
+								end
+								
+								// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+								else if (~fetchbuf0_rfw & ~fetchbuf1_rfw) begin
+								    iqentry_a2_v [tail2] <= rf_v[Rb3];
+								    iqentry_a2_s [tail2] <= rf_source[ Rb3 ];
+								end
+								// otherwise, previous instruction does write to RF ... see if overlap
+								else if (Rb3 == Rt1) begin
+								    // if the previous instruction is a LW, then grab result from memq, not the iq
+								    iqentry_a2_v [tail2]    <=   `INV;
+								    iqentry_a2_s [tail2]    <=   { 1'b0, fetchbuf1_mem &IsLoad(fetchbuf1_instr), tail1 };
+								end
+								// otherwise, previous instruction does write to RF ... see if overlap
+								else if (Rb3 == Rt0) begin
+								    // if the previous instruction is a LW, then grab result from memq, not the iq
+								    iqentry_a2_v [tail2]    <=   `INV;
+								    iqentry_a2_s [tail2]    <=   { 1'b0, fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
+								end
+								// if no overlap, get info from rf_v and rf_source
+								else begin
+								    iqentry_a2_v [tail2] <= rf_v[Rb3];
+								    iqentry_a2_s [tail2] <= rf_source[ Rb3 ];
+								end
+
+								// SOURCE 3 ... this is more contorted than the logic for SOURCE 1 because
+								// some instructions (NAND and ADD) read from RC and others (SW, BEQ) read from RA
+								//
+								// if the argument is an immediate or not needed, we're done
+								// Source2 is valid for a JAL.
+								if (Source3Valid( fetchbuf3_instr ) == `VAL) begin
+								    iqentry_a3_v [tail2] <= `VAL;
+								    iqentry_a3_s [tail2] <= 4'd0;
+								end
+								// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+								else if (~fetchbuf0_rfw & ~fetchbuf1_rfw) begin
+								    iqentry_a3_v [tail2] <= rf_v[Rc3];
+								    iqentry_a3_s [tail2] <= rf_source[ Rc3 ];
+								end
+								// otherwise, previous instruction does write to RF ... see if overlap
+								else if (Rc3 == Rt1) begin
+								    // if the previous instruction is a LW, then grab result from memq, not the iq
+								    iqentry_a3_v [tail2]    <=   `INV;
+								    iqentry_a3_s [tail2]    <=   { 1'b0, fetchbuf1_mem &IsLoad(fetchbuf1_instr), tail1 };
+								end
+								// otherwise, previous instruction does write to RF ... see if overlap
+								else if (Rc3 == Rt0) begin
+								    // if the previous instruction is a LW, then grab result from memq, not the iq
+								    iqentry_a3_v [tail2]    <=   `INV;
+								    iqentry_a3_s [tail2]    <=   { 1'b0, fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
+								end
+								// if no overlap, get info from rf_v and rf_source
+								else begin
+								    iqentry_a3_v [tail1] <= rf_v[Rc3];
+								    iqentry_a3_s [tail1] <= rf_source[ Rc3 ];
+								end
+								//
+								// if the three instructions enqueued target the same register, 
+								// make sure only the last writes to rf_v and rf_source.
+								// first is allowed to update rf_v and rf_source only if the
+								// second has no target (BEQ or SW)
+								//
+							    if (fetchbuf0_rfw) begin
+								    rf_source[ Rt0 ] <= { 1'b0,fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
+								    rf_v [ Rt0] = `INV;
+							    end
+							    if (fetchbuf1_rfw) begin
+								    rf_source[ Rt1 ] <= { 1'b0,fetchbuf1_mem &IsLoad(fetchbuf1_instr), tail1 };
+								    rf_v [ Rt1 ] = `INV;
+							    end
+							    if (fetchbuf3_rfw) begin
+								    rf_source[ Rt3 ] <= { 1'b0,fetchbuf3_mem &IsLoad(fetchbuf3_instr), tail2 };
+								    rf_v [ Rt3 ] = `INV;
+							    end
+					    	end
+
+					    end	// ends the "if IQ[tail1] is available" clause
+					    else begin	// only first instruction was enqueued
+							if (queued1 & fetchbuf0_rfw) begin
+							    rf_source[ Rt0 ] <= {1'b0,fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0};
+							    rf_v [ Rt0 ] = `INV;
+							end
+					    end
+					end
+				end	// ends the "else fetchbuf0 doesn't have a backwards branch" clause
+	    	end	
+	4'b1110: if (canq1) begin
+				// If the first instruction is a backwards branch, enqueue it & stomp on all following instructions
+				if (IsBranch(fetchbuf0_instr) && predict_taken0) begin
+		            tgtq <= FALSE;
+		            enque0(tail0);
+				end
+
+				else begin	// fetchbuf1 doesn't contain a predicted branch
+				    //
+				    // so -- we can enqueue 1,2 or 3 instructions, depending on space in the IQ
+				    // update tail0/tail1 separately (at top)
+				    // update the rf_v and rf_source bits separately (at end)
+				    //   the problem is that if we do have two instructions, 
+				    //   they may interact with each other, so we have to be
+				    //   careful about where things point.
+				    //
+				    //
+				    // enqueue the first instruction ...
+				    //
+		            if (IsVector(fetchbuf0_instr) && SUP_VECTOR) begin
+		                vqe <= vqe + 4'd1;
+		                if (IsVCmprss(fetchbuf0_instr)) begin
+		                    if (vm[fetchbuf0_instr[24:23]])
+		                        vqet <= vqet + 4'd1;
+		                end
+		                else
+		                    vqet <= vqet + 4'd1; 
+		            end
+		            tgtq <= FALSE;
+		            enque0(tail0);
+				    //
+				    // if there is room for a second instruction, enqueue it
+				    //
+				    if (canq2) begin
+				    	if (IsBranch(fetchbuf1_instr) && predict_taken1) begin
+				            enque1(tail1, seq_num + 5'd1);
+							if (fetchbuf0_rfw) begin
+							    rf_source[ Rt0 ] <= {1'b0,fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0};
+							    rf_v [ Rt0 ] = `INV;
+							end
+				    	end
+				    	else begin
+					    	enque1(tail1, seq_num + 5'd1);
+							// a1/a2_v and a1/a2_s values require a bit of thinking ...
+
+							//
+							// SOURCE 1 ... this is relatively straightforward, because all instructions
+							// that have a source (i.e. every instruction but LUI) read from RB
+							//
+							// if the argument is an immediate or not needed, we're done
+							if (Source1Valid( fetchbuf1_instr ) == `VAL) begin
+							    iqentry_a1_v [tail1] <= `VAL;
+							    iqentry_a1_s [tail1] <= 4'd0;
+							end
+							// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+							else if (~fetchbuf0_rfw) begin
+							    iqentry_a1_v [tail1]    <=   rf_v[Ra1];
+							    iqentry_a1_s [tail1]    <=   rf_source [Ra1];
+							end
+							// otherwise, previous instruction does write to RF ... see if overlap
+							else if (Ra1 == Rt0) begin
+							    // if the previous instruction is a LW, then grab result from memq, not the iq
+							    iqentry_a1_v [tail1]    <=   `INV;
+							    iqentry_a1_s [tail1]    <=   { 1'b0, fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
+							end
+							// if no overlap, get info from rf_v and rf_source
+							else begin
+							    iqentry_a1_v [tail1]    <=   rf_v[Ra1];
+							    iqentry_a1_s [tail1]    <=   rf_source [Ra1];
+							end
+
+							//
+							// SOURCE 2 ... this is more contorted than the logic for SOURCE 1 because
+							// some instructions (NAND and ADD) read from RC and others (SW, BEQ) read from RA
+							//
+							// if the argument is an immediate or not needed, we're done
+							// Source2 is valid for a JAL.
+							if (Source2Valid( fetchbuf1_instr ) == `VAL) begin
+							    iqentry_a2_v [tail1] <= `VAL;
+							    iqentry_a2_s [tail1] <= 4'd0;
+							end
+							// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+							else if (~fetchbuf0_rfw) begin
+							    iqentry_a2_v [tail1] <= rf_v[Rb1];
+							    iqentry_a2_s [tail1] <= rf_source[ Rb1 ];
+							end
+							// otherwise, previous instruction does write to RF ... see if overlap
+							else if (Rb1 == Rt0) begin
+							    // if the previous instruction is a LW, then grab result from memq, not the iq
+							    iqentry_a2_v [tail1]    <=   `INV;
+							    iqentry_a2_s [tail1]    <=   { 1'b0, fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
+							end
+							// if no overlap, get info from rf_v and rf_source
+							else begin
+							    iqentry_a2_v [tail1] <= rf_v[Rb1];
+							    iqentry_a2_s [tail1] <= rf_source[ Rb1 ];
+							end
+
+							// SOURCE 3 ... this is more contorted than the logic for SOURCE 1 because
+							// some instructions (NAND and ADD) read from RC and others (SW, BEQ) read from RA
+							//
+							// if the argument is an immediate or not needed, we're done
+							// Source2 is valid for a JAL.
+							if (Source3Valid( fetchbuf1_instr ) == `VAL) begin
+							    iqentry_a3_v [tail1] <= `VAL;
+							    iqentry_a3_s [tail1] <= 4'd0;
+							end
+							// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+							else if (~fetchbuf0_rfw) begin
+							    iqentry_a3_v [tail1] <= rf_v[Rc1];
+							    iqentry_a3_s [tail1] <= rf_source[ Rc1 ];
+							end
+							// otherwise, previous instruction does write to RF ... see if overlap
+							else if (Rc1 == Rt0) begin
+							    // if the previous instruction is a LW, then grab result from memq, not the iq
+							    iqentry_a3_v [tail1]    <=   `INV;
+							    iqentry_a3_s [tail1]    <=   { 1'b0, fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
+							end
+							// if no overlap, get info from rf_v and rf_source
+							else begin
+							    iqentry_a3_v [tail1] <= rf_v[Rc1];
+							    iqentry_a3_s [tail1] <= rf_source[ Rc1 ];
+							end
+
+							//
+							// if the two instructions enqueued target the same register, 
+							// make sure only the second writes to rf_v and rf_source.
+							// first is allowed to update rf_v and rf_source only if the
+							// second has no target (BEQ or SW)
+							//
+						    if (fetchbuf0_rfw) begin
+							    rf_source[ Rt0 ] <= { 1'b0,fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
+							    rf_v [ Rt0] = `INV;
+						    end
+						    if (fetchbuf1_rfw) begin
+							    rf_source[ Rt1 ] <= { 1'b0,fetchbuf1_mem &IsLoad(fetchbuf1_instr), tail1 };
+							    rf_v [ Rt1 ] = `INV;
+						    end
+
+					    	if (canq3) begin
+					    		enque2(tail2, seq_num + 5'd2);
+								// if the argument is an immediate or not needed, we're done
+								if (Source1Valid( fetchbuf2_instr ) == `VAL) begin
+								    iqentry_a1_v [tail2] <= `VAL;
+								    iqentry_a1_s [tail2] <= 4'd0;
+								end
+								// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+								else if (~fetchbuf0_rfw & ~fetchbuf1_rfw) begin
+								    iqentry_a1_v [tail2]    <=   rf_v[Ra2];
+								    iqentry_a1_s [tail2]    <=   rf_source [Ra2];
+								end
+								// otherwise, previous instruction does write to RF ... see if overlap
+								else if (Ra2 == Rt1) begin
+								    // if the previous instruction is a LW, then grab result from memq, not the iq
+								    iqentry_a1_v [tail2]    <=   `INV;
+								    iqentry_a1_s [tail2]    <=   { 1'b0, fetchbuf1_mem &IsLoad(fetchbuf1_instr), tail1 };
+								end
+								else if (Ra2 == Rt0) begin
+								    // if the previous instruction is a LW, then grab result from memq, not the iq
+								    iqentry_a1_v [tail2]    <=   `INV;
+								    iqentry_a1_s [tail2]    <=   { 1'b0, fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
+								end
+								// if no overlap, get info from rf_v and rf_source
+								else begin
+								    iqentry_a1_v [tail2]    <=   rf_v[Ra2];
+								    iqentry_a1_s [tail2]    <=   rf_source [Ra2];
+								end
+
+								// if the argument is an immediate or not needed, we're done
+								// Source2 is valid for a JAL.
+								if (Source2Valid( fetchbuf2_instr ) == `VAL) begin
+								    iqentry_a2_v [tail2] <= `VAL;
+								    iqentry_a2_s [tail2] <= 4'd0;
+								end
+								
+								// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+								else if (~fetchbuf0_rfw & ~fetchbuf1_rfw) begin
+								    iqentry_a2_v [tail2] <= rf_v[Rb2];
+								    iqentry_a2_s [tail2] <= rf_source[ Rb2 ];
+								end
+								// otherwise, previous instruction does write to RF ... see if overlap
+								else if (Rb2 == Rt1) begin
+								    // if the previous instruction is a LW, then grab result from memq, not the iq
+								    iqentry_a2_v [tail2]    <=   `INV;
+								    iqentry_a2_s [tail2]    <=   { 1'b0, fetchbuf1_mem &IsLoad(fetchbuf1_instr), tail1 };
+								end
+								// otherwise, previous instruction does write to RF ... see if overlap
+								else if (Rb2 == Rt0) begin
+								    // if the previous instruction is a LW, then grab result from memq, not the iq
+								    iqentry_a2_v [tail2]    <=   `INV;
+								    iqentry_a2_s [tail2]    <=   { 1'b0, fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
+								end
+								// if no overlap, get info from rf_v and rf_source
+								else begin
+								    iqentry_a2_v [tail2] <= rf_v[Rb2];
+								    iqentry_a2_s [tail2] <= rf_source[ Rb2 ];
+								end
+
+								// SOURCE 3 ... this is more contorted than the logic for SOURCE 1 because
+								// some instructions (NAND and ADD) read from RC and others (SW, BEQ) read from RA
+								//
+								// if the argument is an immediate or not needed, we're done
+								// Source2 is valid for a JAL.
+								if (Source3Valid( fetchbuf2_instr ) == `VAL) begin
+								    iqentry_a3_v [tail2] <= `VAL;
+								    iqentry_a3_s [tail2] <= 4'd0;
+								end
+								// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+								else if (~fetchbuf0_rfw & ~fetchbuf1_rfw) begin
+								    iqentry_a3_v [tail2] <= rf_v[Rc2];
+								    iqentry_a3_s [tail2] <= rf_source[ Rc2 ];
+								end
+								// otherwise, previous instruction does write to RF ... see if overlap
+								else if (Rc2 == Rt1) begin
+								    // if the previous instruction is a LW, then grab result from memq, not the iq
+								    iqentry_a3_v [tail2]    <=   `INV;
+								    iqentry_a3_s [tail2]    <=   { 1'b0, fetchbuf1_mem &IsLoad(fetchbuf1_instr), tail1 };
+								end
+								// otherwise, previous instruction does write to RF ... see if overlap
+								else if (Rc2 == Rt0) begin
+								    // if the previous instruction is a LW, then grab result from memq, not the iq
+								    iqentry_a3_v [tail2]    <=   `INV;
+								    iqentry_a3_s [tail2]    <=   { 1'b0, fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
+								end
+								// if no overlap, get info from rf_v and rf_source
+								else begin
+								    iqentry_a3_v [tail1] <= rf_v[Rc2];
+								    iqentry_a3_s [tail1] <= rf_source[ Rc2 ];
+								end
+								//
+								// if the three instructions enqueued target the same register, 
+								// make sure only the last writes to rf_v and rf_source.
+								// first is allowed to update rf_v and rf_source only if the
+								// second has no target (BEQ or SW)
+								//
+							    if (fetchbuf0_rfw) begin
+								    rf_source[ Rt0 ] <= { 1'b0,fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
+								    rf_v [ Rt0] = `INV;
+							    end
+							    if (fetchbuf1_rfw) begin
+								    rf_source[ Rt1 ] <= { 1'b0,fetchbuf1_mem &IsLoad(fetchbuf1_instr), tail1 };
+								    rf_v [ Rt1 ] = `INV;
+							    end
+							    if (fetchbuf2_rfw) begin
+								    rf_source[ Rt2 ] <= { 1'b0,fetchbuf2_mem &IsLoad(fetchbuf2_instr), tail2 };
+								    rf_v [ Rt2 ] = `INV;
+							    end
+					    	end
+
+					    end	// ends the "if IQ[tail1] is available" clause
+					    else begin	// only first instruction was enqueued
+							if (queued1 & fetchbuf0_rfw) begin
+							    rf_source[ Rt0 ] <= {1'b0,fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0};
+							    rf_v [ Rt0 ] = `INV;
+							end
+					    end
+					end
+				end	// ends the "else fetchbuf0 doesn't have a backwards branch" clause
+	    	end	
+	4'b1111: if (canq1) begin
+				// If the first instruction is a predicted branch, enqueue it & stomp on all following instructions
+				if (IsBranch(fetchbuf0_instr) && predict_taken0) begin
+		            tgtq <= FALSE;
+		            enque0(tail0);
+				end
+
+				else begin	// fetchbuf0 doesn't contain a predicted branch
+				    //
+				    // so -- we can enqueue 1,2 or 3 instructions, depending on space in the IQ
+				    // update tail0/tail1 separately (at top)
+				    // update the rf_v and rf_source bits separately (at end)
+				    //   the problem is that if we do have two instructions, 
+				    //   they may interact with each other, so we have to be
+				    //   careful about where things point.
+				    //
+				    //
+				    // enqueue the first instruction ...
+				    //
+		            if (IsVector(fetchbuf0_instr) && SUP_VECTOR) begin
+		                vqe <= vqe + 4'd1;
+		                if (IsVCmprss(fetchbuf0_instr)) begin
+		                    if (vm[fetchbuf0_instr[24:23]])
+		                        vqet <= vqet + 4'd1;
+		                end
+		                else
+		                    vqet <= vqet + 4'd1; 
+		            end
+		            tgtq <= FALSE;
+		            enque0(tail0);
+				    //
+				    // if there is room for a second instruction, enqueue it
+				    //
+				    if (canq2) begin
+				    	if (IsBranch(fetchbuf1_instr) && predict_taken1) begin
+				            enque1(tail1, seq_num + 5'd1);
+							if (fetchbuf0_rfw) begin
+							    rf_source[ Rt0 ] <= {1'b0,fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0};
+							    rf_v [ Rt0 ] = `INV;
+							end
+				    	end
+				    	else begin
+					    	enque1(tail1, seq_num + 5'd1);
+							// a1/a2_v and a1/a2_s values require a bit of thinking ...
+
+							//
+							// SOURCE 1 ... this is relatively straightforward, because all instructions
+							// that have a source (i.e. every instruction but LUI) read from RB
+							//
+							// if the argument is an immediate or not needed, we're done
+							if (Source1Valid( fetchbuf1_instr ) == `VAL) begin
+							    iqentry_a1_v [tail1] <= `VAL;
+							    iqentry_a1_s [tail1] <= 4'd0;
+							end
+							// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+							else if (~fetchbuf0_rfw) begin
+							    iqentry_a1_v [tail1]    <=   rf_v[Ra1];
+							    iqentry_a1_s [tail1]    <=   rf_source [Ra1];
+							end
+							// otherwise, previous instruction does write to RF ... see if overlap
+							else if (Ra1 == Rt0) begin
+							    // if the previous instruction is a LW, then grab result from memq, not the iq
+							    iqentry_a1_v [tail1]    <=   `INV;
+							    iqentry_a1_s [tail1]    <=   { 1'b0, fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
+							end
+							// if no overlap, get info from rf_v and rf_source
+							else begin
+							    iqentry_a1_v [tail1]    <=   rf_v[Ra1];
+							    iqentry_a1_s [tail1]    <=   rf_source [Ra1];
+							end
+
+							//
+							// SOURCE 2 ... this is more contorted than the logic for SOURCE 1 because
+							// some instructions (NAND and ADD) read from RC and others (SW, BEQ) read from RA
+							//
+							// if the argument is an immediate or not needed, we're done
+							// Source2 is valid for a JAL.
+							if (Source2Valid( fetchbuf1_instr ) == `VAL) begin
+							    iqentry_a2_v [tail1] <= `VAL;
+							    iqentry_a2_s [tail1] <= 4'd0;
+							end
+							// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+							else if (~fetchbuf0_rfw) begin
+							    iqentry_a2_v [tail1] <= rf_v[Rb1];
+							    iqentry_a2_s [tail1] <= rf_source[ Rb1 ];
+							end
+							// otherwise, previous instruction does write to RF ... see if overlap
+							else if (Rb1 == Rt0) begin
+							    // if the previous instruction is a LW, then grab result from memq, not the iq
+							    iqentry_a2_v [tail1]    <=   `INV;
+							    iqentry_a2_s [tail1]    <=   { 1'b0, fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
+							end
+							// if no overlap, get info from rf_v and rf_source
+							else begin
+							    iqentry_a2_v [tail1] <= rf_v[Rb1];
+							    iqentry_a2_s [tail1] <= rf_source[ Rb1 ];
+							end
+
+							// SOURCE 3 ... this is more contorted than the logic for SOURCE 1 because
+							// some instructions (NAND and ADD) read from RC and others (SW, BEQ) read from RA
+							//
+							// if the argument is an immediate or not needed, we're done
+							// Source2 is valid for a JAL.
+							if (Source3Valid( fetchbuf1_instr ) == `VAL) begin
+							    iqentry_a3_v [tail1] <= `VAL;
+							    iqentry_a3_s [tail1] <= 4'd0;
+							end
+							// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+							else if (~fetchbuf0_rfw) begin
+							    iqentry_a3_v [tail1] <= rf_v[Rc1];
+							    iqentry_a3_s [tail1] <= rf_source[ Rc1 ];
+							end
+							// otherwise, previous instruction does write to RF ... see if overlap
+							else if (Rc1 == Rt0) begin
+							    // if the previous instruction is a LW, then grab result from memq, not the iq
+							    iqentry_a3_v [tail1]    <=   `INV;
+							    iqentry_a3_s [tail1]    <=   { 1'b0, fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
+							end
+							// if no overlap, get info from rf_v and rf_source
+							else begin
+							    iqentry_a3_v [tail1] <= rf_v[Rc1];
+							    iqentry_a3_s [tail1] <= rf_source[ Rc1 ];
+							end
+
+							//
+							// if the two instructions enqueued target the same register, 
+							// make sure only the second writes to rf_v and rf_source.
+							// first is allowed to update rf_v and rf_source only if the
+							// second has no target (BEQ or SW)
+							//
+						    if (fetchbuf0_rfw) begin
+							    rf_source[ Rt0 ] <= { 1'b0,fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
+							    rf_v [ Rt0] = `INV;
+						    end
+						    if (fetchbuf1_rfw) begin
+							    rf_source[ Rt1 ] <= { 1'b0,fetchbuf1_mem &IsLoad(fetchbuf1_instr), tail1 };
+							    rf_v [ Rt1 ] = `INV;
+						    end
+
+					    	if (canq3) begin
+						    	if (IsBranch(fetchbuf2_instr) && predict_taken2) begin
+						            enque2(tail2, seq_num + 5'd2);
+									if (fetchbuf0_rfw) begin
+									    rf_source[ Rt0 ] <= {1'b0,fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0};
+									    rf_v [ Rt0 ] = `INV;
+									end
+									if (fetchbuf1_rfw) begin
+									    rf_source[ Rt1 ] <= {1'b0,fetchbuf1_mem &IsLoad(fetchbuf1_instr), tail1};
+									    rf_v [ Rt1 ] = `INV;
+									end
+						    	end
+						    	else begin
+						    		enque2(tail2, seq_num + 5'd2);
+						    		begin
+									// if the argument is an immediate or not needed, we're done
+									if (Source1Valid( fetchbuf2_instr ) == `VAL) begin
+									    iqentry_a1_v [tail2] <= `VAL;
+									    iqentry_a1_s [tail2] <= 4'd0;
+									end
+									// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+									else if (~fetchbuf0_rfw & ~fetchbuf1_rfw) begin
+									    iqentry_a1_v [tail2]    <=   rf_v[Ra2];
+									    iqentry_a1_s [tail2]    <=   rf_source [Ra2];
+									end
+									// otherwise, previous instruction does write to RF ... see if overlap
+									else if (Ra2 == Rt1) begin
+									    // if the previous instruction is a LW, then grab result from memq, not the iq
+									    iqentry_a1_v [tail2]    <=   `INV;
+									    iqentry_a1_s [tail2]    <=   { 1'b0, fetchbuf1_mem &IsLoad(fetchbuf1_instr), tail1 };
+									end
+									else if (Ra2 == Rt0) begin
+									    // if the previous instruction is a LW, then grab result from memq, not the iq
+									    iqentry_a1_v [tail2]    <=   `INV;
+									    iqentry_a1_s [tail2]    <=   { 1'b0, fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
+									end
+									// if no overlap, get info from rf_v and rf_source
+									else begin
+									    iqentry_a1_v [tail2]    <=   rf_v[Ra2];
+									    iqentry_a1_s [tail2]    <=   rf_source [Ra2];
+									end
+									end
+
+									// if the argument is an immediate or not needed, we're done
+									// Source2 is valid for a JAL.
+									begin
+									if (Source2Valid( fetchbuf2_instr ) == `VAL) begin
+									    iqentry_a2_v [tail2] <= `VAL;
+									    iqentry_a2_s [tail2] <= 4'd0;
+									end
+									
+									// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+									else if (~fetchbuf0_rfw & ~fetchbuf1_rfw) begin
+									    iqentry_a2_v [tail2] <= rf_v[Rb2];
+									    iqentry_a2_s [tail2] <= rf_source[ Rb2 ];
+									end
+									// otherwise, previous instruction does write to RF ... see if overlap
+									else if (Rb2 == Rt1) begin
+									    // if the previous instruction is a LW, then grab result from memq, not the iq
+									    iqentry_a2_v [tail2]    <=   `INV;
+									    iqentry_a2_s [tail2]    <=   { 1'b0, fetchbuf1_mem &IsLoad(fetchbuf1_instr), tail1 };
+									end
+									// otherwise, previous instruction does write to RF ... see if overlap
+									else if (Rb2 == Rt0) begin
+									    // if the previous instruction is a LW, then grab result from memq, not the iq
+									    iqentry_a2_v [tail2]    <=   `INV;
+									    iqentry_a2_s [tail2]    <=   { 1'b0, fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
+									end
+									// if no overlap, get info from rf_v and rf_source
+									else begin
+									    iqentry_a2_v [tail2] <= rf_v[Rb2];
+									    iqentry_a2_s [tail2] <= rf_source[ Rb2 ];
+									end
+									end
+
+									// SOURCE 3
+									begin
+									// some instructions (NAND and ADD) read from RC and others (SW, BEQ) read from RA
+									//
+									// if the argument is an immediate or not needed, we're done
+									// Source2 is valid for a JAL.
+									if (Source3Valid( fetchbuf2_instr ) == `VAL) begin
+									    iqentry_a3_v [tail2] <= `VAL;
+									    iqentry_a3_s [tail2] <= 4'd0;
+									end
+									// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+									else if (~fetchbuf0_rfw & ~fetchbuf1_rfw) begin
+									    iqentry_a3_v [tail2] <= rf_v[Rc2];
+									    iqentry_a3_s [tail2] <= rf_source[ Rc2 ];
+									end
+									// otherwise, previous instruction does write to RF ... see if overlap
+									else if (Rc2 == Rt1) begin
+									    // if the previous instruction is a LW, then grab result from memq, not the iq
+									    iqentry_a3_v [tail2]    <=   `INV;
+									    iqentry_a3_s [tail2]    <=   { 1'b0, fetchbuf1_mem &IsLoad(fetchbuf1_instr), tail1 };
+									end
+									// otherwise, previous instruction does write to RF ... see if overlap
+									else if (Rc2 == Rt0) begin
+									    // if the previous instruction is a LW, then grab result from memq, not the iq
+									    iqentry_a3_v [tail2]    <=   `INV;
+									    iqentry_a3_s [tail2]    <=   { 1'b0, fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
+									end
+									// if no overlap, get info from rf_v and rf_source
+									else begin
+									    iqentry_a3_v [tail2] <= rf_v[Rc2];
+									    iqentry_a3_s [tail2] <= rf_source[ Rc2 ];
+									end
+									end
+									//
+									// if the three instructions enqueued target the same register, 
+									// make sure only the last writes to rf_v and rf_source.
+									// first is allowed to update rf_v and rf_source only if the
+									// second has no target (BEQ or SW)
+									//
+								    if (fetchbuf0_rfw) begin
+									    rf_source[ Rt0 ] <= { 1'b0,fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
+									    rf_v [ Rt0] = `INV;
+								    end
+								    if (fetchbuf1_rfw) begin
+									    rf_source[ Rt1 ] <= { 1'b0,fetchbuf1_mem &IsLoad(fetchbuf1_instr), tail1 };
+									    rf_v [ Rt1 ] = `INV;
+								    end
+								    if (fetchbuf2_rfw) begin
+									    rf_source[ Rt2 ] <= { 1'b0,fetchbuf2_mem &IsLoad(fetchbuf2_instr), tail2 };
+									    rf_v [ Rt2 ] = `INV;
+								    end
+								end
+								if (canq4) begin
+						    		enque3(tail3, seq_num + 5'd3);
+						    		begin
+									// if the argument is an immediate or not needed, we're done
+									if (Source1Valid( fetchbuf3_instr ) == `VAL) begin
+									    iqentry_a1_v [tail3] <= `VAL;
+									    iqentry_a1_s [tail3] <= 4'd0;
+									end
+									// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+									else if (~fetchbuf0_rfw & ~fetchbuf1_rfw & ~fetchbuf2_rfw) begin
+									    iqentry_a1_v [tail3]    <=   rf_v[Ra3];
+									    iqentry_a1_s [tail3]    <=   rf_source [Ra3];
+									end
+									// otherwise, previous instruction does write to RF ... see if overlap
+									else if (Ra3 == Rt2) begin
+									    // if the previous instruction is a LW, then grab result from memq, not the iq
+									    iqentry_a1_v [tail3]    <=   `INV;
+									    iqentry_a1_s [tail3]    <=   { 1'b0, fetchbuf2_mem &IsLoad(fetchbuf2_instr), tail2 };
+									end
+									// otherwise, previous instruction does write to RF ... see if overlap
+									else if (Ra3 == Rt1) begin
+									    // if the previous instruction is a LW, then grab result from memq, not the iq
+									    iqentry_a1_v [tail3]    <=   `INV;
+									    iqentry_a1_s [tail3]    <=   { 1'b0, fetchbuf1_mem &IsLoad(fetchbuf1_instr), tail1 };
+									end
+									else if (Ra3 == Rt0) begin
+									    // if the previous instruction is a LW, then grab result from memq, not the iq
+									    iqentry_a1_v [tail3]    <=   `INV;
+									    iqentry_a1_s [tail3]    <=   { 1'b0, fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
+									end
+									// if no overlap, get info from rf_v and rf_source
+									else begin
+									    iqentry_a1_v [tail3]    <=   rf_v[Ra3];
+									    iqentry_a1_s [tail3]    <=   rf_source [Ra3];
+									end
+									end
+									begin
+									// if the argument is an immediate or not needed, we're done
+									// Source2 is valid for a JAL.
+									if (Source2Valid( fetchbuf3_instr ) == `VAL) begin
+									    iqentry_a2_v [tail3] <= `VAL;
+									    iqentry_a2_s [tail3] <= 4'd0;
+									end
+									
+									// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+									else if (~fetchbuf0_rfw & ~fetchbuf1_rfw & ~fetchbuf2_rfw) begin
+									    iqentry_a2_v [tail3] <= rf_v[Rb3];
+									    iqentry_a2_s [tail3] <= rf_source[ Rb3 ];
+									end
+									// otherwise, previous instruction does write to RF ... see if overlap
+									else if (Rb3 == Rt2) begin
+									    // if the previous instruction is a LW, then grab result from memq, not the iq
+									    iqentry_a2_v [tail3]    <=   `INV;
+									    iqentry_a2_s [tail3]    <=   { 1'b0, fetchbuf2_mem &IsLoad(fetchbuf2_instr), tail2 };
+									end
+									// otherwise, previous instruction does write to RF ... see if overlap
+									else if (Rb3 == Rt1) begin
+									    // if the previous instruction is a LW, then grab result from memq, not the iq
+									    iqentry_a2_v [tail3]    <=   `INV;
+									    iqentry_a2_s [tail3]    <=   { 1'b0, fetchbuf1_mem &IsLoad(fetchbuf1_instr), tail1 };
+									end
+									// otherwise, previous instruction does write to RF ... see if overlap
+									else if (Rb3 == Rt0) begin
+									    // if the previous instruction is a LW, then grab result from memq, not the iq
+									    iqentry_a2_v [tail3]    <=   `INV;
+									    iqentry_a2_s [tail3]    <=   { 1'b0, fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
+									end
+									// if no overlap, get info from rf_v and rf_source
+									else begin
+									    iqentry_a2_v [tail3] <= rf_v[Rb3];
+									    iqentry_a2_s [tail3] <= rf_source[ Rb3 ];
+									end
+									end
+
+									// Source3
+									begin
+									if (Source3Valid( fetchbuf3_instr ) == `VAL) begin
+									    iqentry_a3_v [tail3] <= `VAL;
+									    iqentry_a3_s [tail3] <= 4'd0;
+									end
+									// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
+									else if (~fetchbuf0_rfw & ~fetchbuf1_rfw & ~fetchbuf2_rfw) begin
+									    iqentry_a3_v [tail3] <= rf_v[Rc3];
+									    iqentry_a3_s [tail3] <= rf_source[ Rc3 ];
+									end
+									// otherwise, previous instruction does write to RF ... see if overlap
+									else if (Rc3 == Rt2) begin
+									    // if the previous instruction is a LW, then grab result from memq, not the iq
+									    iqentry_a3_v [tail3]    <=   `INV;
+									    iqentry_a3_s [tail3]    <=   { 1'b0, fetchbuf2_mem &IsLoad(fetchbuf2_instr), tail2 };
+									end
+									// otherwise, previous instruction does write to RF ... see if overlap
+									else if (Rc3 == Rt1) begin
+									    // if the previous instruction is a LW, then grab result from memq, not the iq
+									    iqentry_a3_v [tail3]    <=   `INV;
+									    iqentry_a3_s [tail3]    <=   { 1'b0, fetchbuf1_mem &IsLoad(fetchbuf1_instr), tail1 };
+									end
+									// otherwise, previous instruction does write to RF ... see if overlap
+									else if (Rc3 == Rt0) begin
+									    // if the previous instruction is a LW, then grab result from memq, not the iq
+									    iqentry_a3_v [tail3]    <=   `INV;
+									    iqentry_a3_s [tail3]    <=   { 1'b0, fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
+									end
+									// if no overlap, get info from rf_v and rf_source
+									else begin
+									    iqentry_a3_v [tail3] <= rf_v[Rc3];
+									    iqentry_a3_s [tail3] <= rf_source[ Rc3 ];
+									end
+									end
+									//
+									// if the three instructions enqueued target the same register, 
+									// make sure only the last writes to rf_v and rf_source.
+									// first is allowed to update rf_v and rf_source only if the
+									// second has no target (BEQ or SW)
+									//
+									begin
+								    if (fetchbuf0_rfw) begin
+									    rf_source[ Rt0 ] <= { 1'b0,fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
+									    rf_v [ Rt0] = `INV;
+								    end
+								    if (fetchbuf1_rfw) begin
+									    rf_source[ Rt1 ] <= { 1'b0,fetchbuf1_mem &IsLoad(fetchbuf1_instr), tail1 };
+									    rf_v [ Rt1 ] = `INV;
+								    end
+								    if (fetchbuf2_rfw) begin
+									    rf_source[ Rt2 ] <= { 1'b0,fetchbuf2_mem &IsLoad(fetchbuf2_instr), tail2 };
+									    rf_v [ Rt2 ] = `INV;
+								    end
+								    if (fetchbuf3_rfw) begin
+									    rf_source[ Rt3 ] <= { 1'b0,fetchbuf3_mem &IsLoad(fetchbuf3_instr), tail3 };
+									    rf_v [ Rt3 ] = `INV;
+								    end
+									end
+								end
+					    	end
+
+					    end	// ends the "if IQ[tail1] is available" clause
+					    else begin	// only first instruction was enqueued
+							if (queued1 & fetchbuf0_rfw) begin
+							    rf_source[ Rt0 ] <= {1'b0,fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0};
+							    rf_v [ Rt0 ] = `INV;
+							end
+					    end
+					end
+				end	// ends the "else fetchbuf0 doesn't have a backwards branch" clause
+	    	end	
 	endcase
 
     //
@@ -6046,6 +8610,254 @@ iqentry_a2_s [tail]    <=  rf_source[ Rb1 ];
 iqentry_a3   [tail]    <=   rfoc1;
 iqentry_a3_v [tail]    <=   Source3Valid(fetchbuf1_instr) | rf_v[Rc1];
 iqentry_a3_s [tail]    <=   rf_source [Rc1];
+end
+endtask
+
+// Enque fetchbuf2. Fetchbuf2 might be the third instruction to queue so some
+// of this code checks to see which tail it is being queued on.
+task enque2;
+input [2:0] tail;
+input [4:0] seqnum;
+begin
+iqentry_exc[tail] <= `FLT_NONE;
+`ifdef DEBUG_LOGIC
+    if (dbg_imatchB)
+        iqentry_exc[tail] <= `FLT_DBG;
+    else if (dbg_ctrl[63])
+        iqentry_exc[tail] <= `FLT_SSM;
+`endif
+iqentry_sn   [tail]    <=   seqnum;
+iqentry_v    [tail]    <=   `VAL;
+iqentry_done [tail]    <=   `INV;
+iqentry_pred [tail]    <=   `VAL;
+iqentry_out  [tail]    <=   `INV;
+iqentry_res  [tail]    <=   `ZERO;
+iqentry_res2 [tail]    <=   `ZERO;
+iqentry_instr[tail]    <=   IsVLS(fetchbuf2_instr) ? (vm[fnM2(fetchbuf2_instr)] ? fetchbuf2_instr : `NOP_INSN) : fetchbuf2_instr; 
+iqentry_bt   [tail]    <=   (IsBranch(fetchbuf2_instr) && predict_taken2); 
+iqentry_agen [tail]    <=   `INV;
+// If queing 2nd instruction must read from first
+if (tail==tail2) begin
+    // If the previous instruction was a hardware interrupt and this instruction is a hardware interrupt
+    // inherit the previous pc.
+    if (fetchbuf2_instr[`INSTRUCTION_OP]==`BRK && fetchbuf2_instr[15] &&
+    	fetchbuf1_instr[`INSTRUCTION_OP]==`BRK && fetchbuf1_instr[15] &&
+        fetchbuf0_instr[`INSTRUCTION_OP]==`BRK && fetchbuf0_instr[15])
+      iqentry_pc   [tail]   <= fetchbuf0_pc;
+    // If this instruction is a hardware interurpt and there's a previous immediate prefix
+    // -> inherit the address of the prefix
+    else if (fetchbuf2_instr[`INSTRUCTION_OP]==`BRK && fetchbuf2_instr[15])
+  		&& fetchbuf1_instr[`INSTRUCTION_OP]==`BRK && fetchbuf1_instr[15])
+      	iqentry_pc   [tail] <= fetchbuf1_pc;
+    else
+       	iqentry_pc   [tail] <= fetchbuf2_pc;
+else if (tail==tail1) begin
+    // If the previous instruction was a hardware interrupt and this instruction is a hardware interrupt
+    // inherit the previous pc.
+    // The previous instruction might be either fetchbuf0 or fetchbuf1 depending what queued
+    // Since the instructions queue in order we can tell whether fetchbuf0 or fetchbuf1 should be
+    // checked.
+    if (fetchbuf2_instr[`INSTRUCTION_OP]==`BRK && fetchbuf2_instr[15] &&
+        fetchbuf0_instr[`INSTRUCTION_OP]==`BRK && fetchbuf0_instr[15] && fetchbuf0_v)
+      	iqentry_pc   [tail] <= fetchbuf0_pc;
+    else if (fetchbuf2_instr[`INSTRUCTION_OP]==`BRK && fetchbuf2_instr[15] &&
+        fetchbuf1_instr[`INSTRUCTION_OP]==`BRK && fetchbuf1_instr[15] && fetchbuf1_v)
+      	iqentry_pc   [tail] <= fetchbuf1_pc;
+    else
+       	iqentry_pc   [tail] <= fetchbuf2_pc;
+end
+else
+	    iqentry_pc   [tail] <= fetchbuf2_pc;
+
+iqentry_alu  [tail]    <=   IsALU(fetchbuf2_instr);
+iqentry_fpu  [tail]    <=   IsFPU(fetchbuf2_instr);
+iqentry_fc   [tail]    <=   IsFlowCtrl(fetchbuf2_instr);
+iqentry_mem  [tail]    <=   fetchbuf2_mem;
+iqentry_memndx[tail]   <=   IsMemNdx(fetchbuf2_instr);
+iqentry_memdb[tail]    <=   IsMemdb(fetchbuf2_instr);
+iqentry_memsb[tail]    <=   IsMemsb(fetchbuf2_instr);
+iqentry_jmp  [tail]    <=   fetchbuf2_jmp;
+iqentry_br   [tail]    <=   IsBranch(fetchbuf2_instr);
+iqentry_fp   [tail]    <= FALSE;
+iqentry_sync [tail]    <=   IsSync(fetchbuf2_instr);
+iqentry_fsync[tail]    <=   IsFSync(fetchbuf2_instr);
+iqentry_rfw  [tail]    <=   fetchbuf2_rfw;
+//iqentry_ra   [tail0]    <=   fnRa(fetchbuf1_instr);
+if (fetchbuf2_rfw)
+    iqentry_tgt  [tail]    <= Rt2;
+else
+   	iqentry_tgt  [tail]    <= 6'd0;
+iqentry_Ra[tail] <= Ra2;
+iqentry_Rb[tail] <= Rb2;
+iqentry_Rc[tail] <= Rc2;
+iqentry_ven  [tail]    <=   vqe;
+iqentry_exc  [tail]    <=   `EXC_NONE;
+if (vqe==0) begin
+    iqentry_a0  [tail] <=   assign_a0(fetchbuf2_instr);
+end else
+    iqentry_a0  [tail] <=   iqentry_a0[(tail-1)&7];
+iqentry_a1   [tail]    <=   rfoa2;
+iqentry_a1_v [tail]    <=   Source1Valid(fetchbuf2_instr) | rf_v[Ra2];
+iqentry_a1_s [tail]    <=   rf_source [Ra2];
+iqentry_a2   [tail]    <=    
+                  ((fetchbuf2_instr[`INSTRUCTION_OP] == `CALL) || (fetchbuf2_instr[`INSTRUCTION_OP] == `LCALL) ||
+                   (fetchbuf2_instr[`INSTRUCTION_OP] == `JAL)
+                 ? fetchbuf2_pc + 32'd4: rfob2);
+iqentry_a2_v [tail]    <=   Source2Valid( fetchbuf2_instr ) | rf_v[Rb2];
+iqentry_a2_s [tail]    <=  rf_source[ Rb2 ];
+iqentry_a3   [tail]    <=   rfoc2;
+iqentry_a3_v [tail]    <=   Source3Valid(fetchbuf2_instr) | rf_v[Rc2];
+iqentry_a3_s [tail]    <=   rf_source [Rc2];
+end
+endtask
+
+// Enque fetchbuf2. Fetchbuf2 might be the third instruction to queue so some
+// of this code checks to see which tail it is being queued on.
+task enque3;
+input [2:0] tail;
+input [4:0] seqnum;
+begin
+iqentry_exc[tail] <= `FLT_NONE;
+`ifdef DEBUG_LOGIC
+    if (dbg_imatchB)
+        iqentry_exc[tail] <= `FLT_DBG;
+    else if (dbg_ctrl[63])
+        iqentry_exc[tail] <= `FLT_SSM;
+`endif
+iqentry_sn   [tail]    <=   seqnum;
+iqentry_v    [tail]    <=   `VAL;
+iqentry_done [tail]    <=   `INV;
+iqentry_pred [tail]    <=   `VAL;
+iqentry_out  [tail]    <=   `INV;
+iqentry_res  [tail]    <=   `ZERO;
+iqentry_res2 [tail]    <=   `ZERO;
+iqentry_instr[tail]    <=   IsVLS(fetchbuf3_instr) ? (vm[fnM2(fetchbuf3_instr)] ? fetchbuf3_instr : `NOP_INSN) : fetchbuf3_instr; 
+iqentry_bt   [tail]    <=   (IsBranch(fetchbuf3_instr) && predict_taken3); 
+iqentry_agen [tail]    <=   `INV;
+// If queing 2nd instruction must read from first
+if (tail==tail3) begin
+    // If the previous instruction was a hardware interrupt and this instruction is a hardware interrupt
+    // inherit the previous pc.
+    if (fetchbuf3_instr[`INSTRUCTION_OP]==`BRK && fetchbuf3_instr[15] &&
+    	fetchbuf2_instr[`INSTRUCTION_OP]==`BRK && fetchbuf2_instr[15] &&
+    	fetchbuf1_instr[`INSTRUCTION_OP]==`BRK && fetchbuf1_instr[15] &&
+        fetchbuf0_instr[`INSTRUCTION_OP]==`BRK && fetchbuf0_instr[15])
+      iqentry_pc   [tail]   <= fetchbuf0_pc;
+    // If the previous instruction was a hardware interrupt and this instruction is a hardware interrupt
+    // inherit the previous pc.
+    else if (fetchbuf3_instr[`INSTRUCTION_OP]==`BRK && fetchbuf3_instr[15] &&
+    	fetchbuf2_instr[`INSTRUCTION_OP]==`BRK && fetchbuf2_instr[15] &&
+        fetchbuf1_instr[`INSTRUCTION_OP]==`BRK && fetchbuf1_instr[15])
+      iqentry_pc   [tail]   <= fetchbuf1_pc;
+    // If this instruction is a hardware interurpt and there's a previous immediate prefix
+    // -> inherit the address of the prefix
+    else if (fetchbuf3_instr[`INSTRUCTION_OP]==`BRK && fetchbuf3_instr[15])
+  		&& fetchbuf2_instr[`INSTRUCTION_OP]==`BRK && fetchbuf2_instr[15])
+      	iqentry_pc   [tail] <= fetchbuf2_pc;
+    else
+       	iqentry_pc   [tail] <= fetchbuf3_pc;
+else if (tail==tail2) begin
+	if (fetchbuf0_v & fetcbuf1_v) begin	// fetchbuf2 must be invalid
+	    if (fetchbuf3_instr[`INSTRUCTION_OP]==`BRK && fetchbuf3_instr[15] &&
+	    	fetchbuf1_instr[`INSTRUCTION_OP]==`BRK && fetchbuf1_instr[15] &&
+	        fetchbuf0_instr[`INSTRUCTION_OP]==`BRK && fetchbuf0_instr[15])
+	    	iqentry_pc   [tail]   <= fetchbuf0_pc;
+	    else if (fetchbuf3_instr[`INSTRUCTION_OP]==`BRK && fetchbuf3_instr[15] &&
+	    	fetchbuf1_instr[`INSTRUCTION_OP]==`BRK && fetchbuf1_instr[15])
+		    iqentry_pc   [tail]   <= fetchbuf1_pc;
+	    else
+		    iqentry_pc   [tail]   <= fetchbuf3_pc;
+	end
+	else if (fetchbuf0_v & fetchbuf2_v) begin
+	    if (fetchbuf3_instr[`INSTRUCTION_OP]==`BRK && fetchbuf3_instr[15] &&
+	    	fetchbuf2_instr[`INSTRUCTION_OP]==`BRK && fetchbuf2_instr[15] &&
+	        fetchbuf0_instr[`INSTRUCTION_OP]==`BRK && fetchbuf0_instr[15])
+	    	iqentry_pc   [tail]   <= fetchbuf0_pc;
+	    else if (fetchbuf3_instr[`INSTRUCTION_OP]==`BRK && fetchbuf3_instr[15] &&
+	    	fetchbuf2_instr[`INSTRUCTION_OP]==`BRK && fetchbuf2_instr[15])
+		    iqentry_pc   [tail]   <= fetchbuf2_pc;
+	    else
+		    iqentry_pc   [tail]   <= fetchbuf3_pc;
+	end
+	else if (fetchbuf1_v & fetchbuf2_v) begin
+	    if (fetchbuf3_instr[`INSTRUCTION_OP]==`BRK && fetchbuf3_instr[15] &&
+	    	fetchbuf2_instr[`INSTRUCTION_OP]==`BRK && fetchbuf2_instr[15] &&
+	        fetchbuf1_instr[`INSTRUCTION_OP]==`BRK && fetchbuf1_instr[15])
+	    	iqentry_pc   [tail]   <= fetchbuf1_pc;
+	    else if (fetchbuf3_instr[`INSTRUCTION_OP]==`BRK && fetchbuf3_instr[15] &&
+	    	fetchbuf2_instr[`INSTRUCTION_OP]==`BRK && fetchbuf2_instr[15])
+		    iqentry_pc   [tail]   <= fetchbuf2_pc;
+	    else
+		    iqentry_pc   [tail]   <= fetchbuf3_pc;
+	end
+end
+else if (tail==tail1) begin
+	if (fetchbuf0_v) begin
+	    if (fetchbuf3_instr[`INSTRUCTION_OP]==`BRK && fetchbuf3_instr[15] &&
+	        fetchbuf0_instr[`INSTRUCTION_OP]==`BRK && fetchbuf0_instr[15])
+      		iqentry_pc   [tail] <= fetchbuf0_pc;
+      	else
+      		iqentry_pc   [tail] <= fetchbuf3_pc;
+	end
+	else if (fetchbuf1_v) begin
+	    if (fetchbuf3_instr[`INSTRUCTION_OP]==`BRK && fetchbuf3_instr[15] &&
+	        fetchbuf1_instr[`INSTRUCTION_OP]==`BRK && fetchbuf1_instr[15])
+      		iqentry_pc   [tail] <= fetchbuf1_pc;
+      	else
+      		iqentry_pc   [tail] <= fetchbuf3_pc;
+	end
+	else if (fetchbuf2_v) begin
+	    if (fetchbuf3_instr[`INSTRUCTION_OP]==`BRK && fetchbuf3_instr[15] &&
+	        fetchbuf2_instr[`INSTRUCTION_OP]==`BRK && fetchbuf2_instr[15])
+      		iqentry_pc   [tail] <= fetchbuf2_pc;
+      	else
+      		iqentry_pc   [tail] <= fetchbuf3_pc;
+	end
+	else
+      		iqentry_pc   [tail] <= fetchbuf3_pc;
+end
+else
+	    iqentry_pc   [tail] <= fetchbuf3_pc;
+
+iqentry_alu  [tail]    <=   IsALU(fetchbuf3_instr);
+iqentry_fpu  [tail]    <=   IsFPU(fetchbuf3_instr);
+iqentry_fc   [tail]    <=   IsFlowCtrl(fetchbuf3_instr);
+iqentry_mem  [tail]    <=   fetchbuf3_mem;
+iqentry_memndx[tail]   <=   IsMemNdx(fetchbuf3_instr);
+iqentry_memdb[tail]    <=   IsMemdb(fetchbuf3_instr);
+iqentry_memsb[tail]    <=   IsMemsb(fetchbuf3_instr);
+iqentry_jmp  [tail]    <=   fetchbuf3_jmp;
+iqentry_br   [tail]    <=   IsBranch(fetchbuf3_instr);
+iqentry_fp   [tail]    <= FALSE;
+iqentry_sync [tail]    <=   IsSync(fetchbuf3_instr);
+iqentry_fsync[tail]    <=   IsFSync(fetchbuf3_instr);
+iqentry_rfw  [tail]    <=   fetchbuf3_rfw;
+//iqentry_ra   [tail0]    <=   fnRa(fetchbuf1_instr);
+if (fetchbuf3_rfw)
+    iqentry_tgt  [tail]    <= Rt3;
+else
+   	iqentry_tgt  [tail]    <= 6'd0;
+iqentry_Ra[tail] <= Ra3;
+iqentry_Rb[tail] <= Rb3;
+iqentry_Rc[tail] <= Rc3;
+iqentry_ven  [tail]    <=   vqe;
+iqentry_exc  [tail]    <=   `EXC_NONE;
+if (vqe==0) begin
+    iqentry_a0  [tail] <=   assign_a0(fetchbuf3_instr);
+end else
+    iqentry_a0  [tail] <=   iqentry_a0[(tail-1)&7];
+iqentry_a1   [tail]    <=   rfoa3;
+iqentry_a1_v [tail]    <=   Source1Valid(fetchbuf3_instr) | rf_v[Ra3];
+iqentry_a1_s [tail]    <=   rf_source [Ra3];
+iqentry_a2   [tail]    <=    
+                  ((fetchbuf3_instr[`INSTRUCTION_OP] == `CALL) || (fetchbuf3_instr[`INSTRUCTION_OP] == `LCALL) ||
+                   (fetchbuf3_instr[`INSTRUCTION_OP] == `JAL)
+                 ? fetchbuf3_pc + 32'd4: rfob3);
+iqentry_a2_v [tail]    <=   Source2Valid( fetchbuf3_instr ) | rf_v[Rb3];
+iqentry_a2_s [tail]    <=  rf_source[ Rb3 ];
+iqentry_a3   [tail]    <=   rfoc3;
+iqentry_a3_v [tail]    <=   Source3Valid(fetchbuf3_instr) | rf_v[Rc3];
+iqentry_a3_s [tail]    <=   rf_source [Rc3];
 end
 endtask
 
