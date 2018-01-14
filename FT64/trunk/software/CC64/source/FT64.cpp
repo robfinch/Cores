@@ -5,7 +5,7 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-// C64 - 'C' derived language compiler
+// CC64 - 'C' derived language compiler
 //  - 64 bit CPU
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -82,8 +82,6 @@ static int AllocateRegisters1()
 //    					if(( csp->duses > csp->uses / (8 << nn)) && reg < regLastRegvar )	// <- address register assignments
 						if (reg <= regLastRegvar)
     						csp->reg = reg++;
-//    					else
-//    						csp->reg = -1;
 					}
 				}
 			}
@@ -171,8 +169,6 @@ int AllocateRegisterVars()
     uint64_t fpmask, fprmask;
 	uint64_t vmask, vrmask;
     AMODE *ap, *ap2;
-	int64_t nn;
-	int cnt;
 	int size;
 	int csecnt;
 
@@ -230,7 +226,6 @@ int AllocateRegisterVars()
 
     save_mask = mask;
     fpsave_mask = fpmask;
-    csp = olist;
 
 	// Initialize temporaries
 	for (csecnt = 0; csecnt < csendx; csecnt++) {
@@ -507,25 +502,7 @@ AMODE *GenExpr(ENODE *node)
 
 void GenCompareI(AMODE *ap3, AMODE *ap1, AMODE *ap2, int su)
 {
-	AMODE *ap4;
-
-	/*
-	if (ap2->offset->i < -32768LL || ap2->offset->i > 32767LL) {
-		ap4 = GetTempRegister();
-		GenerateDiadic(op_ldi,0,ap4,make_immed(ap2->offset->i));
-		
-		if (ap2->offset->i & 0xFFFF0000LL)
-			GenerateDiadic(op_orq1,0,ap4,make_immed((ap2->offset->i >> 16) & 0xFFFFLL));
-		if (ap2->offset->i & 0xFFFF00000000LL)
-			GenerateDiadic(op_orq2,0,ap4,make_immed((ap2->offset->i >> 32) & 0xFFFFLL));
-		if (ap2->offset->i & 0xFFFF000000000000LL)
-			GenerateDiadic(op_orq3,0,ap4,make_immed((ap2->offset->i >> 48) & 0xFFFFLL));
-		
-		GenerateTriadic(su ? op_cmp : op_cmpu,0,ap3,ap1,ap4);
-		ReleaseTempReg(ap4);
-	}
-	else */
-		GenerateTriadic(su ? op_cmp : op_cmpu,0,ap3,ap1,ap2);
+	GenerateTriadic(su ? op_cmp : op_cmpu,0,ap3,ap1,ap2);
 }
 
 void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int prediction)
@@ -914,9 +891,7 @@ static void SetupReturnBlock(SYM *sym)
 //
 void GenerateFunction(SYM *sym)
 {
-	AMODE *ap;
     int defcatch;
-	int nn, mm;
 	Statement *stmt = sym->stmt;
 	int lab0;
 	int o_throwlab, o_retlab, o_contlab, o_breaklab;
@@ -989,7 +964,7 @@ static void UnlinkStack(SYM * sym)
 			GenerateDiadic(op_lw,0,makereg(regXLR),make_indexed(sizeOfWord,regSP));
 	}
 	GenerateDiadic(op_lw,0,makereg(regLR),make_indexed(2*sizeOfWord,regSP));
-	GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),make_immed(3*sizeOfWord));
+//	GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),make_immed(3*sizeOfWord));
 }
 
 
@@ -1002,14 +977,10 @@ static void SaveRegisterVars(int64_t mask, int64_t rmask)
 
 	if( mask != 0 ) {
 		cnt = 0;
-		if (!cpu.SupportsPush)
-			GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(popcnt(mask)*8));
+		GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(popcnt(mask)*8));
 		for (nn = 0; nn < 64; nn++) {
 			if (rmask & (0x8000000000000000ULL >> nn)) {
-				if (!cpu.SupportsPush)
-					GenerateDiadicNT(op_sw,0,makereg(nn),make_indexed(cnt,regSP));
-				else
-					GenerateMonadicNT(op_push,0,makereg(nn&31));
+				GenerateDiadicNT(op_sw,0,makereg(nn),make_indexed(cnt,regSP));
 				cnt+=sizeOfWord;
 			}
 		}
@@ -1025,17 +996,14 @@ static void RestoreRegisterVars()
 
 	if( save_mask != 0 ) {
 		cnt2 = cnt = bitsset(save_mask)*sizeOfWord;
-		for (nn = 31; nn >=1 ; nn--) {
+		cnt = 0;
+		for (nn = 0; nn < 64; nn++) {
 			if (save_mask & (1LL << nn)) {
-				if (!cpu.SupportsPop)
-					GenerateDiadic(op_lw,0,makereg(nn),make_indexed(cnt,regSP));
-				else
-					GenerateMonadic(op_pop,0,makereg(nn));
-				cnt -= sizeOfWord;
+				GenerateDiadic(op_lw,0,makereg(nn),make_indexed(cnt,regSP));
+				cnt += sizeOfWord;
 			}
 		}
-		if (!cpu.SupportsPop)
-			GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),make_immed(cnt2 * sizeOfWord));
+		GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),make_immed(cnt2));
 	}
 }
 
@@ -1131,7 +1099,7 @@ void GenerateReturn(Statement *stmt)
 		return;
     }
 	UnlinkStack(sym);
-	toAdd = 0;
+	toAdd = 3*sizeOfWord;
 
 	if (sym->epilog) {
 		sym->epilog->Generate();
@@ -1182,12 +1150,14 @@ void GenerateReturn(Statement *stmt)
 			}
 		}
 	}
-	if (toAdd != 0)
-		GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),make_immed(toAdd));
+//	if (toAdd != 0)
+//		GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),make_immed(toAdd));
 	if (!sym->IsInline) {
-		GenerateZeradic(op_ret);
+		GenerateMonadic(op_ret,0,make_immed(toAdd));
 		//GenerateMonadic(op_jal,0,make_indirect(regLR));
 	}
+	else
+		GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),make_immed(toAdd));
 }
 
 static int round4(int n)

@@ -1,11 +1,11 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2017  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2018  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-// C64 - 'C' derived language compiler
+// CC64 - 'C' derived language compiler
 //  - 64 bit CPU
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -25,32 +25,13 @@
 //
 #include "stdafx.h"
 
-/*
- *	68000 C compiler
- *
- *	Copyright 1984, 1985, 1986 Matthew Brandt.
- *  all commercial rights reserved.
- *
- *	This compiler is intended as an instructive tool for personal use. Any
- *	use for profit without the written consent of the author is prohibited.
- *
- *	This compiler may be distributed freely for non-commercial use as long
- *	as this notice stays intact. Please forward any enhancements or questions
- *	to:
- *
- *		Matthew Brandt
- *		Box 920337
- *		Norcross, Ga 30092
- */
-
-
 int bsave_mask;
 extern int popcnt(int m);
 extern int AllocateRegisterVars();
 static void scan_compound(Statement *stmt);
 static void repcse_compound(Statement *stmt);
 
-CSE CSETable[500];
+CSE *CSETable;
 short int csendx;
 short int loop_active;
 
@@ -71,8 +52,6 @@ short int loop_active;
  *      scan will build a list of optimizable expressions which
  *      opt1 will replace during the second optimization pass.
  */
-
-CSE *olist;         /* list of optimizable expressions */
 
 //
 // equalnode will return 1 if the expressions pointed to by
@@ -732,13 +711,21 @@ int opt1(Statement *block)
 {
 	int nn;
 
-	csendx = 0;
+	//csendx = 0;
     nn = 0;
 	if (pass==1) {
+		if (currentFn->csetbl==nullptr) {
+			currentFn->csetbl = new CSE[500];
+			currentFn->csendx = 0;
+		}
 		csendx = 0;
+		CSETable = currentFn->csetbl;
 		ZeroMemory(CSETable,sizeof(CSETable));
 	}
-	olist = (CSE *)NULL;
+	else if (pass==2) {
+		CSETable = currentFn->csetbl;
+		csendx = currentFn->csendx;
+	}
     if (opt_noregs==FALSE) {
 		if (pass==1)
 			scan(block);            /* collect expressions */
@@ -746,5 +733,13 @@ int opt1(Statement *block)
 		if (pass==2)
     		repcse(block);          /* replace allocated expressions */
     }
-	return nn;
+	if (pass==1)
+		currentFn->csendx = csendx;
+	else if (pass==2) {
+		if (currentFn->csetbl) {
+			delete[] currentFn->csetbl;
+			currentFn->csetbl = nullptr;
+		}
+	}
+	return (nn);
 }

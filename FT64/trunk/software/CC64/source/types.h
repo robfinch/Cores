@@ -3,12 +3,12 @@
 
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2017  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2018  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-// C64 - 'C' derived language compiler
+// CC64 - 'C' derived language compiler
 //  - 64 bit CPU
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -31,6 +31,7 @@ class Statement;
 class BasicBlock;
 class Instruction;
 class Var;
+class CSE;
 
 enum e_sym {
   tk_nop,
@@ -243,6 +244,8 @@ public:
     Statement *prolog;
     Statement *epilog;
     unsigned int stksize;
+	CSE *csetbl;
+	int csendx;
 
 	TypeArray *GetParameterTypes();
 	TypeArray *GetProtoTypes();

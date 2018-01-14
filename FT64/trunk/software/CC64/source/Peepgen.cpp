@@ -497,10 +497,6 @@ int equal_address(AMODE *ap1, AMODE *ap2)
   return FALSE;
 }
 
-/*
- *      peephole optimization for add instructions.
- *      makes quick immediates out of small constants.
- */
 void peep_add(OCODE *ip)
 {
      AMODE *a;
@@ -1178,7 +1174,6 @@ static void Swap(OCODE *ip1, OCODE *ip2)
 
 static void PeepoptSh(OCODE *ip)
 {
-	OCODE *p, *q;
 	if (ip->back && (ip->back->opcode==op_bfextu || ip->back->opcode==op_bfext)) {
 		if (ip->back->oper1->preg==ip->oper1->preg) {
 			if (ip->back->oper3->offset->i == 0 && ip->back->oper4->offset->i==31) {
@@ -1386,7 +1381,7 @@ static void RemoveDoubleTargets(OCODE *ip)
 		return;
 	if (ip2->HasSourceReg(ip->GetTargetReg()))
 		return;
-	if (ip->GetTargetReg()==31)
+	if (ip->GetTargetReg()==regSP)
 		return;
 	MarkRemove(ip);
 	optimized++;
@@ -1594,7 +1589,7 @@ static void opt_peep()
 	CFG::Rename();
 	Renumber();
 	ComputeSpillCosts();
-	RemoveCode();
+	//RemoveCode();
 	Coalesce();
 	Var::DumpForests();
 	//DumpLiveRegs();
@@ -1639,7 +1634,6 @@ void RemoveMoves()
 {
 	OCODE *ip;
 	int reg1, reg2;
-	Var *p, *q;
 	bool foundMove;
 	foundMove = false;
 
@@ -1661,14 +1655,12 @@ void RemoveMoves()
 
 bool Coalesce()
 {
-	BasicBlock *b;
 	int reg1, reg2;
-	Var *v, *v1, *v2, *v3;
+	Var *v1, *v2, *v3;
 	Var *p, *q;
 	Tree *t, *t1, *u;
 	bool foundSameTree;
 	bool improved;
-	char buf[2000];
 
 	improved = false;
 	for (p = varlist; p; p = p->next) {
@@ -1779,13 +1771,10 @@ static void CheckForDeaths(BasicBlock *b, int r)
 
 void ComputeSpillCosts()
 {
-	Var *v;
-	Tree *t;
 	BasicBlock *b;
-	OCODE *ipb, *ip;
-	bool ipl;
+	OCODE *ip;
 	Instruction *i;
-	int r, m;
+	int r;
 	bool endLoop;
 
 	for (r = 0; r < Tree::treecount; r++) {
@@ -1883,7 +1872,7 @@ void ComputeSpillCosts()
 	dfs.printf("<TreeCosts>\n");
 	for (r = 0; r < Tree::treecount; r++) {
 		// If alltrees[r].lattice = BOT
-		alltrees[r]->cost = 2.0 * (alltrees[r]->loads + alltrees[r]->stores);
+		alltrees[r]->cost = 2.0f * (alltrees[r]->loads + alltrees[r]->stores);
 		// else
 		// alltrees[r]->cost = alltrees[r]->loads - alltrees[r]->stores;
 		alltrees[r]->cost -= alltrees[r]->copies;
@@ -1896,7 +1885,6 @@ void ComputeSpillCosts()
 // Renumber the registers according to the tree (live range) numbers.
 static void Renumber()
 {
-	Var *v;
 	OCODE *ip;
 	Tree *t;
 	int tt;
@@ -1948,7 +1936,9 @@ void RemoveCode()
 	//printf((char *)currentFn->name->c_str());
 	//printf("\r\n");
 	for (v = varlist; v; v = v->next) {
-		if (v->num==0 || v->num==regSP || v->num==regFP || v->num==regLR || v->num==regXLR)
+		if (IsCalleeSave(v->num))
+			continue;
+		if (v->num==0 || v->num==regLR || v->num==regXLR)
 			continue;
 		for (t = v->trees; t; t = t->next) {
 			nn = t->tree->lastMember();

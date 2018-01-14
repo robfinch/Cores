@@ -501,7 +501,7 @@ void PutAddressMode(AMODE *ap)
 //void put_code(int op, int len,AMODE *aps,AMODE *apd,AMODE *ap3,AMODE *ap4)
 void put_code(OCODE *p)
 {
-	static int lbbn = -1;	// last basic block number
+	static BasicBlock *b = nullptr;
 	int op = p->opcode;
 	AMODE *aps,*apd,*ap3,*ap4;
 	ENODE *ep;
@@ -512,11 +512,11 @@ void put_code(OCODE *p)
 	ap3 = p->oper3;
 	ap4 = p->oper4;
 
-	if (p->bb->num != lbbn) {
+	if (p->bb != b) {
 		ofs.printf(";====================================================\n");
 		ofs.printf("; Basic Block %d\n", p->bb->num);
 		ofs.printf(";====================================================\n");
-		lbbn = p->bb->num;
+		b = p->bb;
 	}
 	if (p->comment) {
 		ofs.printf("; %s\n", (char *)p->comment->oper1->offset->sp->c_str());

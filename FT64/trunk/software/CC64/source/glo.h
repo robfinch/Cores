@@ -52,6 +52,7 @@ extern int maxPn;
 extern int hook_predreg;
 extern int gCpu;
 extern int regGP;
+extern int regTP;
 extern int regSP;
 extern int regFP;
 extern int regLR;
@@ -175,11 +176,10 @@ extern Compiler compiler;
 
 // Analyze.c
 extern short int csendx;
-extern CSE CSETable[500];
+extern CSE *CSETable;
 extern int equalnode(ENODE *node1, ENODE *node2);
 extern int bsort(CSE **list);
 extern int opt1(Statement *stmt);
-extern CSE *olist;         /* list of optimizable expressions */
 // CMain.c
 extern void closefiles();
 

@@ -36,6 +36,7 @@ int regFP = 62;
 int regLR = 61;
 int regXLR = 60;
 int regGP = 59;
+int regTP = 58;
 int regCLP = 57;                // class pointer
 int regZero = 0;
 int regFirstTemp = 5;

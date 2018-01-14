@@ -1,11 +1,11 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2017  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2018  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-// C64 - 'C' derived language compiler
+// CC64 - 'C' derived language compiler
 //  - 64 bit CPU
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -105,8 +105,8 @@ void initRegStack()
 	int i;
 	SYM *sym = currentFn;
 
-	next_reg = sym->IsLeaf ? 1 : 3;
-	next_vreg = sym->IsLeaf ? 1 : 3;
+	next_reg = sym->IsLeaf ? 1 : regFirstTemp;
+	next_vreg = sym->IsLeaf ? 1 : regFirstTemp;
 	next_vmreg = 1;
     next_breg = 5;
 	//for (rsp=0; rsp < 3; rsp=rsp+1)
@@ -248,8 +248,8 @@ AMODE *GetTempRegister()
     reg_alloc[reg_alloc_ptr].reg = next_reg;
     reg_alloc[reg_alloc_ptr].amode = ap;
     reg_alloc[reg_alloc_ptr].f.isPushed = 'F';
-    if (next_reg++ >= 10)
-		next_reg = sym->IsLeaf ? 1 : 3;		/* wrap around */
+    if (next_reg++ >= regLastTemp)
+		next_reg = sym->IsLeaf ? 1 : regFirstTemp;		/* wrap around */
     if (reg_alloc_ptr++ == MAX_REG_STACK)
 		fatal("GetTempRegister(): register stack overflow");
 	return ap;
@@ -375,10 +375,10 @@ void checkstack()
     int i;
     SYM *sym = currentFn;
 
-    for (i=1; i<= 10; i++)
+    for (i=1; i<= regLastTemp; i++)
         if (reg_in_use[i] != -1)
             fatal("checkstack()/1");
-	if (next_reg != sym->IsLeaf ? 1 : 3) {
+	if (next_reg != sym->IsLeaf ? 1 : regFirstTemp) {
 		//printf("Nextreg: %d\r\n", next_reg);
         fatal("checkstack()/3");
 	}
@@ -411,31 +411,31 @@ void checkbrstack()
 void validate(AMODE *ap)
 {
     SYM *sym = currentFn;
-	unsigned int frg = sym->IsLeaf ? 1 : 3;
+	unsigned int frg = sym->IsLeaf ? 1 : regFirstTemp;
 
 	if (ap->type!=stdvector.GetIndex())
     switch (ap->mode) {
 	case am_reg:
-		if ((ap->preg >= frg && ap->preg <= 10) && reg_alloc[ap->deep].f.isPushed == 'T' ) {
+		if ((ap->preg >= frg && ap->preg <= regLastTemp) && reg_alloc[ap->deep].f.isPushed == 'T' ) {
 			LoadRegister(ap->preg, (int) ap->deep);
 //			if (isThor)
 //				GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(8));
 		}
 		break;
     case am_indx2:
-		if ((ap->preg >= frg && ap->preg <= 10) && reg_alloc[ap->deep].f.isPushed == 'T') {
+		if ((ap->preg >= frg && ap->preg <= regLastTemp) && reg_alloc[ap->deep].f.isPushed == 'T') {
 			LoadRegister(ap->preg, (int) ap->deep);
 //			if (isThor)
 //				GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(8));
 		}
-		if ((ap->sreg >= frg && ap->sreg <= 10) && reg_alloc[ap->deep2].f.isPushed  == 'T') {
+		if ((ap->sreg >= frg && ap->sreg <= regLastTemp) && reg_alloc[ap->deep2].f.isPushed  == 'T') {
 			LoadRegister(ap->sreg, (int) ap->deep2);
 //			if (isThor)
 //				GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(8));
 		}
 		break;
     case am_indx3:
-		if ((ap->sreg >= frg && ap->sreg <= 10) && reg_alloc[ap->deep2].f.isPushed == 'T') {
+		if ((ap->sreg >= frg && ap->sreg <= regLastTemp) && reg_alloc[ap->deep2].f.isPushed == 'T') {
 			LoadRegister(ap->sreg, (int) ap->deep2);
 //			if (isThor)
 //				GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(8));
@@ -446,7 +446,7 @@ void validate(AMODE *ap)
     case am_ainc:
     case am_adec:
 common:
-		if ((ap->preg >= frg && ap->preg <= 10) && reg_alloc[ap->deep].f.isPushed == 'T') {
+		if ((ap->preg >= frg && ap->preg <= regLastTemp) && reg_alloc[ap->deep].f.isPushed == 'T') {
 			LoadRegister(ap->preg, (int) ap->deep);
 //			if (isThor)
 //				GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(8));
@@ -463,7 +463,7 @@ void ReleaseTempRegister(AMODE *ap)
 {
     int number;
     SYM *sym = currentFn;
-	unsigned int frg = sym->IsLeaf ? 1 : 3;
+	unsigned int frg = sym->IsLeaf ? 1 : regFirstTemp;
 
 	TRACE(printf("ReleaseTempRegister:r%d r%d\r\n", ap->preg, ap->sreg);)
 
@@ -533,11 +533,11 @@ void ReleaseTempRegister(AMODE *ap)
 	case am_adec:
 	case am_reg:
 common:
-		if (ap->preg >= frg && ap->preg <= 10) {
+		if (ap->preg >= frg && ap->preg <= regLastTemp) {
 			if (reg_in_use[ap->preg]==-1)
 				return;
 			if (next_reg-- <= frg)
-				next_reg = 10;
+				next_reg = regLastTemp;
 			number = reg_in_use[ap->preg];
 			reg_in_use[ap->preg] = -1;
 			break;
@@ -545,11 +545,11 @@ common:
 		return;
     case am_indx2:
 	case am_indx3:
-		if (ap->sreg >= frg && ap->sreg <= 10) {
+		if (ap->sreg >= frg && ap->sreg <= regLastTemp) {
 			if (reg_in_use[ap->sreg]==-1)
 				return;
 			if (next_reg-- <= frg)
-				next_reg = 10;
+				next_reg = regLastTemp;
 			number = reg_in_use[ap->sreg];
 			reg_in_use[ap->sreg] = -1;
 			//break;
@@ -696,5 +696,16 @@ int GetTempMemSpace()
 bool IsArgumentReg(int regno)
 {
 	return (regno >= regFirstArg && regno <= regLastArg);
+}
+
+bool IsCalleeSave(int regno)
+{
+	if (regno >= regFirstTemp && regno <= regLastTemp)
+		return (true);
+	if (regno==regSP || regno==regFP)
+		return (true);
+	if (regno==regTP)
+		return (true);
+	return(false);
 }
 

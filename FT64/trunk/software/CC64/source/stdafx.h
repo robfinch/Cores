@@ -43,5 +43,6 @@ typedef unsigned __int64 uint64_t;
 #include "types.h"
 #include "Gen.h"
 #include "glo.h"
+#include "proto.h"
 
 // TODO: reference additional headers your program requires here
