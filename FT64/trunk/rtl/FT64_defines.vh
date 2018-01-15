@@ -224,7 +224,7 @@
 `define LBU     6'h23
 `define SC      6'h24
 `define CAS     6'h25
-`define BBc     6'b10011x
+`define BBc     6'b10011?
 `define JMP     6'h28
 `define RET     6'h29
 `define LINK    6'h2A
@@ -232,7 +232,7 @@
 `define MODUI   6'h2C
 `define MODSUI  6'h2D
 `define MODI    6'h2E
-`define Bcc     6'b11000x
+`define Bcc     6'b11000?
 `define BEQ         4'd0
 `define BNE         4'd1
 `define BLT         4'd2
@@ -244,8 +244,8 @@
 `define FBLT        4'd10
 `define FBGE        4'd11
 `define FBUN        4'd15
-`define BEQI    6'b11001x
-`define CHK     6'b11010x
+`define BEQI    6'b11001?
+`define CHK     6'b11010?
 `define LV      6'h36
 `define SV      6'h37
 `define MULUI   6'h38
@@ -302,12 +302,12 @@
 `define CSR_DBCTRL  11'h01C
 `define CSR_DBSTAT  11'h01D
 `define CSR_CAS     11'h02C
-`define CSR_TVEC    11'b00000110xxx
+`define CSR_TVEC    11'b00000110???
 `define CSR_EPC     11'h040
 `define CSR_STATUSL 11'h044
 `define CSR_STATUSH 11'h045
-`define CSR_CODEBUF 11'b00010xxxxxx
-`define CSR_INFO    11'b111_1111_xxxx
+`define CSR_CODEBUF 11'b00010??????
+`define CSR_INFO    11'b111_1111_????
 
 `define OL_USER         2'd3
 `define OL_SUPERVISOR   2'd2
