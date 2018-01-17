@@ -236,7 +236,7 @@ always @(posedge clk)
 	// writing three registers at once
 	if (wr0 && wr1 && wr2) begin
 		if (wa0==wa1 && wa0==wa2)
-			whichreg[wa0] <= 2'b00;	// All three registers sets have the same copy, doesn't matter
+			whichreg[wa0] <= 2'b10;	// port wa2 wins
 		else if (wa0==wa1) begin
 			whichreg[wa0] <= 2'b01;	// port wa1 wins
 			whichreg[wa2] <= 2'b10;

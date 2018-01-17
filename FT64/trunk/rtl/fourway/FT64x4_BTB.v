@@ -14,7 +14,7 @@ module FT64x4_BTB(rst, wclk, wr, wadr, wdat, valid, rclk,
 	pcE, btgtE, pcF, btgtF, pcG, btgtG, pcH, btgtH,
     npcA, npcB, npcC, npcD, npcE, npcF, npcG, npcH);
 parameter AMSB = 31;
-parameter RSTPC = 43'hFFFC0100;
+parameter RSTPC = 32'hFFFC0100;
 input rst;
 input wclk;
 input wr;
@@ -75,7 +75,7 @@ always @(posedge rclk)
 always @(posedge rclk)
     radrG <= pcG[11:2];
 always @(posedge rclk)
-    radrh <= pcH[11:2];
+    radrH <= pcH[11:2];
 wire hitA = mem[radrA][(AMSB+1)*2:AMSB+1]==pcA && mem[radrA][(AMSB+1)*2+1];
 wire hitB = mem[radrB][(AMSB+1)*2:AMSB+1]==pcB && mem[radrB][(AMSB+1)*2+1];
 wire hitC = mem[radrC][(AMSB+1)*2:AMSB+1]==pcC && mem[radrC][(AMSB+1)*2+1];
