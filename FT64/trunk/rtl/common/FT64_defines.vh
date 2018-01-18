@@ -96,7 +96,6 @@
 `define BCDADD          5'h00
 `define BCDSUB          5'h01
 `define BCDMUL          5'h02
-`define BITFIELD    6'h02
 `define BccR    6'h03
 `define SHL     4'h0
 `define SHR     4'h1
@@ -117,10 +116,8 @@
 `define ABS             5'h04
 `define NOT             5'h05
 `define REDOR           5'h06
-`define SLT             5'h08
-`define SGE             5'h09
-`define SLE             5'h0A
-`define SGT             5'h0B
+`define MEMDB			5'h10
+`define MEMSB			5'h11
 `define BMM			6'h03
 `define ADD	        6'h04
 `define SUB         6'h05
@@ -142,6 +139,8 @@
 `define SWX         6'h16
 `define SWCX        6'h17
 `define CALLR       6'h18
+`define CMPP		6'h19
+`define CMPUP		6'h1A
 `define MUX         6'h1B
 `define LWRX        6'h1D
 `define CACHEX      6'h1E
@@ -156,7 +155,8 @@
 `define SVWS        6'h27
 `define CMOVEQ      6'h28
 `define CMOVNE      6'h29
-`define DEMUX       6'h2B
+`define LBOX		6'h2A
+`define LCOX       	6'h2B
 `define MIN         6'h2C
 `define MAX         6'h2D
 `define MAJ         6'h2E
@@ -166,14 +166,12 @@
 `define RTI         6'h32
 `define RTE         6'h32
 `define VMOV        6'h33
-`define MEMDB       6'h34
-`define MEMSB       6'h35
+`define LHOX		6'h35
 `define LVX         6'h36
 `define SVX         6'h37
 `define MULU        6'h38
 `define MULSU       6'h39
 `define MUL         6'h3A
-`define CHK         6'h3B
 `define DIVMODU     6'h3C
 `define DIVMODSU    6'h3D
 `define DIVMOD      6'h3E
@@ -227,8 +225,8 @@
 `define BBc     6'b10011?
 `define JMP     6'h28
 `define RET     6'h29
-`define LINK    6'h2A
-`define LCALL   6'h2B
+`define LBO     6'h2A
+`define LCO     6'h2B
 `define MODUI   6'h2C
 `define MODSUI  6'h2D
 `define MODI    6'h2E
@@ -245,7 +243,8 @@
 `define FBGE        4'd11
 `define FBUN        4'd15
 `define BEQI    6'b11001?
-`define CHK     6'b11010?
+`define CHK     6'h34
+`define LHO		6'h35
 `define LV      6'h36
 `define SV      6'h37
 `define MULUI   6'h38

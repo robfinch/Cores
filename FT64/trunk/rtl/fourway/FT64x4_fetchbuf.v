@@ -47,14 +47,13 @@ module FT64_fetchbuf4(rst, clk,
     fetchbufH_instr, fetchbufH_pc,
     fetchbuf0_instr, fetchbuf1_instr,
     fetchbuf2_instr, fetchbuf3_instr,
-    fetchbuf0_pc, fetchbuf1_pc,
-    fetchbuf0_v, fetchbuf1_v,
+    fetchbuf0_pc, fetchbuf1_pc, fetchbuf2_pc, fetchbuf3_pc,
+    fetchbuf0_v, fetchbuf1_v, fetchbuf2_v, fetchbuf3_v,
     codebuf0, codebuf1,
-    fetchbuf2_pc, fetchbuf3_pc,
-    fetchbuf2_v, fetchbuf3_v,
     codebuf2, codebuf3,
     btgtA, btgtB, btgtC, btgtD,
-    btgtE, btgtF, btgtG, btgtH
+    btgtE, btgtF, btgtG, btgtH,
+    inv_fetchbuf
 );
 parameter RSTPC = 32'hFFFC0100;
 parameter TRUE = 1'b1;
@@ -138,6 +137,7 @@ input [31:0] btgtE;
 input [31:0] btgtF;
 input [31:0] btgtG;
 input [31:0] btgtH;
+input [7:0] inv_fetchbuf;
 
 integer n;
 
@@ -1231,6 +1231,14 @@ else begin
 	    else if ({fetchbufE_v,fetchbufF_v,fetchbufG_v,fetchbufH_v}==4'h0)
     	    FetchEFGH();
 	end
+	if (inv_fetchbuf[0]) fetchbufA_instr <= `NOP_INSN;
+	if (inv_fetchbuf[1]) fetchbufB_instr <= `NOP_INSN;
+	if (inv_fetchbuf[2]) fetchbufC_instr <= `NOP_INSN;
+	if (inv_fetchbuf[3]) fetchbufD_instr <= `NOP_INSN;
+	if (inv_fetchbuf[4]) fetchbufE_instr <= `NOP_INSN;
+	if (inv_fetchbuf[5]) fetchbufF_instr <= `NOP_INSN;
+	if (inv_fetchbuf[6]) fetchbufG_instr <= `NOP_INSN;
+	if (inv_fetchbuf[7]) fetchbufH_instr <= `NOP_INSN;
 end
 
 assign fetchbuf0_instr = (fetchbuf == 1'b0) ? fetchbufA_instr : fetchbufE_instr;

@@ -50,9 +50,9 @@ reg [DWIDTH-1:0] o2;
 // generate mask
 reg [DWIDTH-1:0] mask;
 assign masko = mask;
-wire [3:0] op = inst[25:22];
+wire [3:0] op = inst[31:28];
 wire [5:0] mb = inst[21:16];
-wire [5:0] me = inst[31:26];
+wire [5:0] me = inst[27:22];
 wire [5:0] ml = me-mb;		// mask length-1
 wire [63:0] imm = {59'd0,inst[10:6]};
 

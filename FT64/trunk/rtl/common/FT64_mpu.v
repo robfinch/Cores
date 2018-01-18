@@ -25,15 +25,17 @@
 //
 // ============================================================================
 //
-module FT64_mpu(hartid_i,rst_i,clk_i,irq_i,vec_i,cyc_o,stb_o,ack_i,we_o,sel_o,adr_o,dat_o,dat_i);
+module FT64_mpu(hartid_i,rst_i, clk4x_i, clk_i,irq_i,vec_i,cyc_o,stb_o,ack_i,err_i,we_o,sel_o,adr_o,dat_o,dat_i);
 input [63:0] hartid_i;
 input rst_i;
+input clk4x_i;
 input clk_i;
 input [2:0] irq_i;
 input [8:0] vec_i;
 output cyc_o;
 output stb_o;
 input ack_i;
+input err_i;
 output we_o;
 output [7:0] sel_o;
 output [31:0] adr_o;
@@ -89,11 +91,13 @@ FT64 ucpu1
     .hartid(hartid_i),
     .rst(rst_i),
     .clk(clk_i),
+    .clk4x(clk4x_i),
     .irq_i(irq_i),
     .vec_i(vec_i),
     .cyc_o(cyc),
     .stb_o(stb),
     .ack_i(ack),
+    .err_i(err_i),
     .we_o(we_o),
     .sel_o(sel_o),
     .adr_o(adr),

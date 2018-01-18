@@ -25,7 +25,7 @@
 //
 // ============================================================================
 //
-`ifndef SHL
+//`ifndef SHL
 `define RR      6'h02
 `define SHIFTB  6'h1F
 `define SHL     4'h0
@@ -40,7 +40,7 @@
 `define ASRI    4'hB
 `define ROLI    4'hC
 `define RORI    4'hD
-`endif
+//`endif
 `define HIGHWORDB    15:8
 
 module FT64_shiftb(instr, a, b, res, ov);

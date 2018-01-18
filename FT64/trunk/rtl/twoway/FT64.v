@@ -310,6 +310,8 @@ reg canq1, canq2;
 reg queued1;
 reg queued2;
 reg queuedNop;
+reg vqueued1;
+reg vqueued2;
 
 reg [31:0] codebuf[0:63];
 reg [7:0] setpred;
@@ -425,6 +427,7 @@ reg  [2:0] head7;	// used only to determine memory-access ordering
 
 wire  [2:0] missid;
 
+reg [3:0] nop_fetchbuf;
 wire        fetchbuf;	// determines which pair to read from & write to
 
 wire [31:0] fetchbuf0_instr;	
@@ -1281,6 +1284,7 @@ default:    fnRt = {1'b0,rgs,isn[`INSTRUCTION_RB]};
 endcase
 endfunction
 
+// Determines which lanes of the target register get updated.
 function [7:0] fnWe;
 input [31:0] isn;
 casez(isn[`INSTRUCTION_OP])
@@ -1289,28 +1293,30 @@ casez(isn[`INSTRUCTION_OP])
 	`R1:
 		case(isn[20:16])
 		`ABS,`CNTLZ,`CNTLO,`CNTPOP:
-			case(isn[22:21])
-			2'b00:  fnWe = 8'h01;
-			2'b01:	fnWe = 8'h03;
-			2'b10:	fnWe = 8'h0F;
-			2'b11:	fnWe = 8'hFF;
+			case(isn[23:21])
+			3'b000: fnWe = 8'h01;
+			3'b001:	fnWe = 8'h03;
+			3'b010:	fnWe = 8'h0F;
+			3'b011:	fnWe = 8'hFF;
+			default:	fnWe = 8'hFF;
 			endcase
 		default: fnWe = 8'hFF;
 		endcase
-	`SHIFT:		fnWe = 8'hFF;
-	`SHIFTH:	fnWe = 8'h0F;
-	`SHIFTC:	fnWe = 8'h03;
-	`SHIFTB:	fnWe = 8'h01;
-	`ADD,`SUB,`CMP,`CMPU,
+	`SHIFT:		fnWe = isn[21] ? 8'hFF : 8'hFF;
+	`SHIFTH:	fnWe = isn[21] ? 8'hFF : 8'h0F;
+	`SHIFTC:	fnWe = isn[21] ? 8'hFF : 8'h03;
+	`SHIFTB:	fnWe = isn[21] ? 8'hFF : 8'h01;
+	`ADD,`SUB,
 	`AND,`OR,`XOR,
 	`NAND,`NOR,`XNOR,
 	`DIVMOD,`DIVMODU,`DIVMODSU,
 	`MUL,`MULU,`MULSU:
-		case(isn[22:21])
-		2'b00:  fnWe = 8'h01;
-		2'b01:	fnWe = 8'h03;
-		2'b10:	fnWe = 8'h0F;
-		2'b11:	fnWe = 8'hFF;
+		case(isn[23:21])
+		3'b000: fnWe = 8'h01;
+		3'b001:	fnWe = 8'h03;
+		3'b010:	fnWe = 8'h0F;
+		3'b011:	fnWe = 8'hFF;
+		default:	fnWe = 8'hFF;
 		endcase
 	`LBOX:	fnWe = 8'h01;
 	`LCOX:	fnWe = 8'h03;
@@ -2444,7 +2450,8 @@ FT64_fetchbuf ufb1
     .btgtA(btgtA),
     .btgtB(btgtB),
     .btgtC(btgtC),
-    .btgtD(btgtD)
+    .btgtD(btgtD),
+    .nop_fetchbuf(nop_fetchbuf)
 );
 
 //initial begin: stop_at
@@ -2846,10 +2853,10 @@ assign Ra0 = fnRa(fetchbuf0_instr,vqe,vl);
 assign Rb0 = fnRb(fetchbuf0_instr,1'b0,vqe,rfoa0[3:0],rfoa1[3:0]);
 assign Rc0 = fnRc(fetchbuf0_instr,vqe);
 assign Rt0 = fnRt(fetchbuf0_instr,vqet,vl);
-assign Ra1 = fnRa(fetchbuf1_instr,vqe,vl);
-assign Rb1 = fnRb(fetchbuf1_instr,1'b1,vqe,rfoa0[3:0],rfoa1[3:0]);
-assign Rc1 = fnRc(fetchbuf1_instr,vqe);
-assign Rt1 = fnRt(fetchbuf1_instr,vqet,vl);
+assign Ra1 = fnRa(fetchbuf1_instr,vqe + vqueued2,vl);
+assign Rb1 = fnRb(fetchbuf1_instr,1'b1,vqe + vqueued2,rfoa0[3:0],rfoa1[3:0]);
+assign Rc1 = fnRc(fetchbuf1_instr,vqe+vqueued2);
+assign Rt1 = fnRt(fetchbuf1_instr,vqet+vqueued2,vl);
 
     //
     // additional logic for ISSUE
@@ -3620,6 +3627,8 @@ begin
     canq2 <= FALSE;
     queued1 <= FALSE;
     queued2 <= FALSE;
+    vqueued1 <= FALSE;
+    vqueued2 <= FALSE;
     queuedNop <= FALSE;
     if (!branchmiss) begin
         // Two available
@@ -3644,10 +3653,12 @@ begin
                 else begin
                     if (iqentry_v[tail0]==`INV) begin
                         canq1 <= !IsVex(fetchbuf0_instr) || rf_vra0 || !SUP_VECTOR;
-                        queued1 <= ((!IsVex(fetchbuf0_instr) || rf_vra0) && (!IsVector(fetchbuf0_instr) || vqe>=vl-1)) || !SUP_VECTOR;
+                        queued1 <= ((!IsVex(fetchbuf0_instr) || rf_vra0) && (!IsVector(fetchbuf0_instr))) || !SUP_VECTOR;
+                        vqueued1 <= IsVector(fetchbuf0_instr) && SUP_VECTOR;
                         if (iqentry_v[tail1]==`INV) begin
-                            canq2 <= (!IsVector(fetchbuf1_instr) && (!IsVex(fetchbuf0_instr) || rf_vra0) && (!IsVector(fetchbuf0_instr) || vqe>=vl-1)) || !SUP_VECTOR;
-                            queued2 <= (!IsVector(fetchbuf1_instr) && (!IsVex(fetchbuf0_instr) || rf_vra0) && (!IsVector(fetchbuf0_instr) || vqe>=vl-1)) || !SUP_VECTOR;
+                            canq2 <= ((!IsVex(fetchbuf0_instr) || rf_vra0)) || !SUP_VECTOR;
+                            queued2 <= (!IsVector(fetchbuf1_instr) && (!IsVex(fetchbuf0_instr) || rf_vra0) && (!IsVector(fetchbuf0_instr))) || !SUP_VECTOR;
+	                        vqueued2 <= (IsVector(fetchbuf0_instr) && SUP_VECTOR) || (IsVector(fetchbuf1_instr) && SUP_VECTOR);
                         end
                     end
                 end
@@ -3658,8 +3669,13 @@ begin
             if (fetchbuf0_instr[`INSTRUCTION_OP]!=`NOP) begin
                 if (iqentry_v[tail0]==`INV) begin
                     canq1 <= !IsVex(fetchbuf0_instr) || rf_vra0 || !SUP_VECTOR;
-                    queued1 <= ((!IsVex(fetchbuf0_instr) || rf_vra0) && (!IsVector(fetchbuf0_instr) || vqe>=vl-1)) || !SUP_VECTOR;
+                    queued1 <= ((!IsVex(fetchbuf0_instr) || rf_vra0) && (!IsVector(fetchbuf0_instr))) || !SUP_VECTOR;
+                    vqueued1 <= IsVector(fetchbuf0_instr) && SUP_VECTOR;
                 end
+                if (iqentry_v[tail1]==`INV) begin
+                	canq2 <= IsVector(fetchbuf0_instr) && SUP_VECTOR;
+                	vqueued2 <= IsVector(fetchbuf0_instr) && SUP_VECTOR;
+            	end
             end
             else
                 queuedNop <= TRUE;
@@ -3668,8 +3684,13 @@ begin
             if (fetchbuf1_instr[`INSTRUCTION_OP]!=`NOP) begin
                 if (iqentry_v[tail0]==`INV) begin
                     canq1 <= !IsVex(fetchbuf1_instr) || rf_vra1 || !SUP_VECTOR;
-                    queued1 <= ((!IsVex(fetchbuf1_instr) || rf_vra1) && (!IsVector(fetchbuf1_instr) || vqe>=vl-1)) || !SUP_VECTOR;
+                    queued1 <= ((!IsVex(fetchbuf1_instr) || rf_vra1) && (!IsVector(fetchbuf1_instr))) || !SUP_VECTOR;
+                    vqueued1 <= IsVector(fetchbuf1_instr) && SUP_VECTOR;
                 end
+                if (iqentry_v[tail1]==`INV) begin
+                	canq2 <= IsVector(fetchbuf1_instr) && SUP_VECTOR;
+                	vqueued2 <= IsVector(fetchbuf1_instr) && SUP_VECTOR;
+            	end
             end
             else
                 queuedNop <= TRUE;
@@ -3866,16 +3887,18 @@ if (rst) begin
     sbl <= 32'h0;
     sbu <= 32'hFFFFFFFF;
     // Vector
-    vqe <= 4'd0;
+    vqe <= 6'd0;
     vl <= 7'd16;
     for (n = 0; n < 8; n = n + 1)
         vm[n] <= 64'hFFFFFFFFFFFFFFFF;
+    nop_fetchbuf <= 4'h0;
 end
 else begin
     if (vqe >= vl) begin
         vqe <= 4'd0;
         vqet <= 4'h0;
     end
+    nop_fetchbuf <= 4'h0;
     excmiss <= FALSE;
     invic <= FALSE;
     tick <= tick + 64'd1;
@@ -3950,14 +3973,28 @@ else begin
             if (IsVector(fetchbuf1_instr) && SUP_VECTOR) begin
                 vqe <= vqe + 4'd1;
                 if (IsVCmprss(fetchbuf1_instr)) begin
-                    if (vm[fetchbuf1_instr[24:23]])
+                    if (vm[fetchbuf1_instr[24:23]][vqe])
                         vqet <= vqet + 4'd1;
                 end
                 else
                     vqet <= vqet + 4'd1; 
+                if (vqe >= vl-2)
+                	nop_fetchbuf <= fetchbuf ? 4'b1000 : 4'b0010;
+	            enque1(tail0, seq_num, vqe);
+                if (canq2 && vqe < vl-2) begin
+	                vqe <= vqe + 4'd2;
+	                if (IsVCmprss(fetchbuf1_instr)) begin
+	                    if (vm[fetchbuf1_instr[24:23]][vqe+6'd1])
+	                        vqet <= vqet + 4'd2;
+	                end
+	                else
+	                    vqet <= vqet + 4'd2;
+		            enque1(tail1, seq_num + 5'd1, vqe + 6'd1);
+            	end
             end
+            else
+	            enque1(tail0, seq_num, 6'd0);
             tgtq <= FALSE;
-            enque1(tail0, seq_num);
             if (fetchbuf1_rfw) begin
                 rf_source[ Rt1s ] <= { 1'b0, fetchbuf1_mem &IsLoad(fetchbuf1_instr), tail0 };	// top bit indicates ALU/MEM bus
                 rf_v [Rt1s] = `INV;
@@ -3976,14 +4013,30 @@ else begin
             if (IsVector(fetchbuf0_instr) && SUP_VECTOR) begin
                 vqe <= vqe + 4'd1;
                 if (IsVCmprss(fetchbuf0_instr)) begin
-                    if (vm[fetchbuf0_instr[24:23]])
+                    if (vm[fetchbuf0_instr[24:23]][vqe])
                         vqet <= vqet + 4'd1;
                 end
                 else
-                    vqet <= vqet + 4'd1; 
+                    vqet <= vqet + 4'd1;
+                if (vqe >= vl-2)
+                	nop_fetchbuf <= fetchbuf ? 4'b0100 : 4'b0001;
+	    		enque0(tail0, seq_num, vqe);
+                if (canq2) begin
+		            if (vqe < vl-2) begin
+		                vqe <= vqe + 4'd2;
+		                if (IsVCmprss(fetchbuf0_instr)) begin
+		                    if (vm[fetchbuf0_instr[24:23]][vqe+6'd1])
+		                        vqet <= vqet + 4'd2;
+		                end
+		                else
+		                    vqet <= vqet + 4'd2;
+		    			enque0(tail1, seq_num+5'd1, vqe + 6'd1);
+		            end
+            	end
             end
+            else
+	    		enque0(tail0, seq_num, 6'd0);
             tgtq <= FALSE;
-    		enque0(tail0);
     		if (fetchbuf0_rfw) begin
                 rf_source[ Rt0s ] <= { 1'b0, fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };    // top bit indicates ALU/MEM bus
                 rf_v[Rt0s] = `INV;
@@ -3996,7 +4049,7 @@ else begin
 		//
 		if (IsBranch(fetchbuf0_instr) && predict_taken0) begin
             tgtq <= FALSE;
-            enque0(tail0);
+            enque0(tail0,seq_num,6'd0);
 		end
 
 		else begin	// fetchbuf0 doesn't contain a backwards branch
@@ -4014,19 +4067,59 @@ else begin
             if (IsVector(fetchbuf0_instr) && SUP_VECTOR) begin
                 vqe <= vqe + 4'd1;
                 if (IsVCmprss(fetchbuf0_instr)) begin
-                    if (vm[fetchbuf0_instr[24:23]])
+                    if (vm[fetchbuf0_instr[24:23]][vqe])
                         vqet <= vqet + 4'd1;
                 end
                 else
                     vqet <= vqet + 4'd1; 
+                if (vqe >= vl-2)
+                	nop_fetchbuf <= fetchbuf ? 4'b0100 : 4'b0001;
             end
             tgtq <= FALSE;
-            enque0(tail0);
+            enque0(tail0, seq_num, vqe);
 		    //
 		    // if there is room for a second instruction, enqueue it
 		    //
 		    if (canq2) begin
-		      enque1(tail1, seq_num + 5'd1);
+		    	// If there was a vector instruction in fetchbuf0, we really
+		    	// want to queue the next vector element, not the next
+		    	// instruction waiting in fetchbuf1.
+	            if (IsVector(fetchbuf0_instr) && SUP_VECTOR && vqe < vl-2) begin
+	                vqe <= vqe + 4'd2;
+	                if (IsVCmprss(fetchbuf0_instr)) begin
+	                    if (vm[fetchbuf0_instr[24:23]][vqe+6'd1])
+	                        vqet <= vqet + 4'd2;
+	                end
+	                else
+	                    vqet <= vqet + 4'd2; 
+	                if (vqe >= vl-3)
+    	            	nop_fetchbuf <= fetchbuf ? 4'b0100 : 4'b0001;
+		      		enque0(tail1, seq_num + 5'd1, vqe + 6'd1);
+	        	end
+	            else if (IsVector(fetchbuf1_instr) && SUP_VECTOR) begin
+	            	if (IsVector(fetchbuf0_instr))
+	            		vqe <= 6'd1;
+	            	else
+	                	vqe <= vqe + 6'd2;
+	                if (IsVCmprss(fetchbuf1_instr)) begin
+	                    if (vm[fetchbuf1_instr[24:23]][IsVector(fetchbuf0_instr)? 6'd0:vqe+6'd1]) begin
+	                    	if (IsVector(fetchbuf0_instr))
+	                        	vqet <= 6'd1;
+	                    	else
+	                        	vqet <= vqet + 6'd2;
+	                    end
+	                end
+	                else begin
+	                   	if (IsVector(fetchbuf0_instr))
+	                   		vqet <= 6'd1; 
+	                   	else 
+	                   		vqet <= vqet + 6'd2; 
+	                end
+   	            	nop_fetchbuf <= fetchbuf ? 4'b0100 : 4'b0001;
+		      		enque1(tail1, seq_num + 5'd1, IsVector(fetchbuf0_instr) ? 6'd0 : vqe + 6'd1);
+	            end
+	            else
+		      		enque1(tail1, seq_num + 5'd1, 6'd0);
 
 			// a1/a2_v and a1/a2_s values require a bit of thinking ...
 
@@ -5837,6 +5930,8 @@ endtask
 // Enqueue fetchbuf0 onto the tail of the instruction queue
 task enque0;
 input [2:0] tail;
+input [4:0] seqnum;
+input [5:0] venno;
 begin
 iqentry_exc[tail] <= `FLT_NONE;
 `ifdef DEBUG_LOGIC
@@ -5845,7 +5940,7 @@ iqentry_exc[tail] <= `FLT_NONE;
     else if (dbg_ctrl[63])
         iqentry_exc[tail] <= `FLT_SSM;
 `endif
-iqentry_sn   [tail]    <=  seq_num;
+iqentry_sn   [tail]    <=  seqnum;
 iqentry_v    [tail]    <=    `VAL;
 iqentry_done [tail]    <=    `INV;
 iqentry_pred [tail]    <=   `VAL;
@@ -5889,7 +5984,7 @@ end
 iqentry_Ra[tail] <= Ra0;
 iqentry_Rb[tail] <= Rb0;
 iqentry_Rc[tail] <= Rc0;
-iqentry_ven  [tail]    <=   vqe;
+iqentry_ven  [tail]    <=   venno;
 iqentry_exc  [tail]    <=    `EXC_NONE;
 if (vqe==0)
     iqentry_a0   [tail]    <=  assign_a0(fetchbuf0_instr);
@@ -5914,6 +6009,7 @@ endtask
 task enque1;
 input [2:0] tail;
 input [4:0] seqnum;
+input [5:0] venno;
 begin
 iqentry_exc[tail] <= `FLT_NONE;
 `ifdef DEBUG_LOGIC
@@ -5980,7 +6076,7 @@ else
 iqentry_Ra[tail] <= Ra1;
 iqentry_Rb[tail] <= Rb1;
 iqentry_Rc[tail] <= Rc1;
-iqentry_ven  [tail]    <=   vqe;
+iqentry_ven  [tail]    <=   venno;
 iqentry_exc  [tail]    <=   `EXC_NONE;
 if (vqe==0) begin
     iqentry_a0  [tail] <=   assign_a0(fetchbuf1_instr);

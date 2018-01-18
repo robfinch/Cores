@@ -63,7 +63,7 @@ assign doutb = mem[raddrb];
 	
 endmodule
 
-module FT64_regfile2w6r_oc(clk4x, clk, wr0, wr1, wr2, we0, we1, we2, wa0, wa1, wa2, i0, i1, i2,
+module FT64x4_regfile3w12r_oc(clk4x, clk, wr0, wr1, wr2, we0, we1, we2, wa0, wa1, wa2, i0, i1, i2,
 	rclk, ra0, ra1, ra2, ra3, ra4, ra5, ra6, ra7, ra8, ra9, ra10, ra11,
 	o0, o1, o2, o3, o4, o5, o6, o7, o8, o9, o10, o11);
 parameter WID=64;

@@ -25,7 +25,7 @@
 //
 // ============================================================================
 //
-`ifndef SHL
+//`ifndef SHL
 `define RR      6'h02
 `define SHIFTC  6'h2F
 `define SHL     4'h0
@@ -40,7 +40,7 @@
 `define ASRI    4'hB
 `define ROLI    4'hC
 `define RORI    4'hD
-`endif
+//`endif
 `define HIGHWORDC    31:16
 
 module FT64_shiftc(instr, a, b, res, ov);
@@ -58,7 +58,7 @@ wire [5:0] func = instr[31:26];
 wire [3:0] shiftop = instr[25:22];
 
 wire [31:0] shl = {16'd0,a} << b[3:0];
-wire [31:0] shr = {16,8'd0} >> b[3:0];
+wire [31:0] shr = {a,16'd0} >> b[3:0];
 
 assign ov = 1'b0;
 

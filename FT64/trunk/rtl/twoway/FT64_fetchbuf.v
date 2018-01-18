@@ -45,7 +45,8 @@ module FT64_fetchbuf(rst, clk,
     fetchbuf0_pc, fetchbuf1_pc,
     fetchbuf0_v, fetchbuf1_v,
     codebuf0, codebuf1,
-    btgtA, btgtB, btgtC, btgtD
+    btgtA, btgtB, btgtC, btgtD,
+    nop_fetchbuf
 );
 parameter RSTPC = 32'hFFFC0100;
 parameter TRUE = 1'b1;
@@ -93,6 +94,7 @@ input [31:0] btgtA;
 input [31:0] btgtB;
 input [31:0] btgtC;
 input [31:0] btgtD;
+input [3:0] nop_fetchbuf;
 
 integer n;
 
@@ -581,6 +583,10 @@ else begin
 	    else if (fetchbufC_v == `INV && fetchbufD_v == `INV)
     	    FetchCD();
 	end
+	if (nop_fetchbuf[0]) fetchbufA_instr <= `NOP_INSN;
+	if (nop_fetchbuf[1]) fetchbufB_instr <= `NOP_INSN;
+	if (nop_fetchbuf[2]) fetchbufC_instr <= `NOP_INSN;
+	if (nop_fetchbuf[3]) fetchbufD_instr <= `NOP_INSN;
 end
 
 assign fetchbuf0_instr = (fetchbuf == 1'b0) ? fetchbufA_instr : fetchbufC_instr;

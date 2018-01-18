@@ -18,34 +18,34 @@ parameter RSTPC = 32'hFFFC0100;
 input rst;
 input wclk;
 input wr;
-input [ANSB:0] wadr;
-input [ANSB:0] wdat;
+input [AMSB:0] wadr;
+input [AMSB:0] wdat;
 input valid;
 input rclk;
-input [ANSB:0] pcA;
-output [ANSB:0] btgtA;
-input [ANSB:0] pcB;
-output [ANSB:0] btgtB;
-input [ANSB:0] pcC;
-output [ANSB:0] btgtC;
-input [ANSB:0] pcD;
-output [ANSB:0] btgtD;
-input [ANSB:0] pcE;
-output [ANSB:0] btgtE;
-input [ANSB:0] pcF;
-output [ANSB:0] btgtF;
-input [ANSB:0] pcG;
-output [ANSB:0] btgtG;
-input [ANSB:0] pcH;
-output [ANSB:0] btgtH;
-input [ANSB:0] npcA;
-input [ANSB:0] npcB;
-input [ANSB:0] npcC;
-input [ANSB:0] npcD;
-input [ANSB:0] npcE;
-input [ANSB:0] npcF;
-input [ANSB:0] npcG;
-input [ANSB:0] npcH;
+input [AMSB:0] pcA;
+output [AMSB:0] btgtA;
+input [AMSB:0] pcB;
+output [AMSB:0] btgtB;
+input [AMSB:0] pcC;
+output [AMSB:0] btgtC;
+input [AMSB:0] pcD;
+output [AMSB:0] btgtD;
+input [AMSB:0] pcE;
+output [AMSB:0] btgtE;
+input [AMSB:0] pcF;
+output [AMSB:0] btgtF;
+input [AMSB:0] pcG;
+output [AMSB:0] btgtG;
+input [AMSB:0] pcH;
+output [AMSB:0] btgtH;
+input [AMSB:0] npcA;
+input [AMSB:0] npcB;
+input [AMSB:0] npcC;
+input [AMSB:0] npcD;
+input [AMSB:0] npcE;
+input [AMSB:0] npcF;
+input [AMSB:0] npcG;
+input [AMSB:0] npcH;
 
 integer n;
 reg [(AMSB+1)*2+1:0] mem [0:1023];
@@ -56,7 +56,7 @@ initial begin
 end
 always @(posedge wclk)
 begin
-    if (wr) mem[wadr[9:0]][ANSB:0] <= wdat;
+    if (wr) mem[wadr[9:0]][AMSB:0] <= wdat;
     if (wr) mem[wadr[9:0]][(AMSB+1)*2:AMSB+1] <= wadr;
     if (wr) mem[wadr[9:0]][(AMSB+1)*2+1] <= valid;
 end
@@ -89,7 +89,7 @@ assign btgtB = hitB ? mem[radrB][AMSB:0] : npcB;
 assign btgtC = hitC ? mem[radrC][AMSB:0] : npcC;
 assign btgtD = hitD ? mem[radrD][AMSB:0] : npcD;
 assign btgtE = hitE ? mem[radrE][AMSB:0] : npcE;
-assign btgtF = hitF ? mem[radrF][AMSB:0] : npcf;
+assign btgtF = hitF ? mem[radrF][AMSB:0] : npcF;
 assign btgtG = hitG ? mem[radrG][AMSB:0] : npcG;
 assign btgtH = hitH ? mem[radrH][AMSB:0] : npcH;
 
