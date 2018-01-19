@@ -963,7 +963,8 @@ static void UnlinkStack(SYM * sym)
 		if (!sym->IsLeaf || sym->DoesThrow)
 			GenerateDiadic(op_lw,0,makereg(regXLR),make_indexed(sizeOfWord,regSP));
 	}
-	GenerateDiadic(op_lw,0,makereg(regLR),make_indexed(2*sizeOfWord,regSP));
+	if (!sym->IsLeaf)
+		GenerateDiadic(op_lw,0,makereg(regLR),make_indexed(2*sizeOfWord,regSP));
 //	GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),make_immed(3*sizeOfWord));
 }
 

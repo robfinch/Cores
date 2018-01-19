@@ -93,6 +93,7 @@ int gCanCompress = 1;
 int expandedBlock;
 int expand_flag;
 int compress_flag;
+int vebits = 128;
 void emitCode(int cd);
 void emitAlignedCode(int cd);
 void process_shifti(int oc,int fn);
@@ -227,14 +228,18 @@ int processOptions(int argc, char **argv)
               }
               if (argv[nn][2]=='F') {
                  gCpu = 'F';
-				 if (argv[nn][3]=='c')
+				 if (argv[nn][3]=='n')
+					 vebits = 64;
+				 else if (argv[nn][3]=='c')
 					 gCanCompress = 1;
 				 else
 					 gCanCompress = 0;
               }
               if (argv[nn][2]=='G') {
                  gCpu = 'G';
-				 if (argv[nn][3]=='c')
+				 if (argv[nn][3]=='n')
+					 vebits = 64;
+				 else if (argv[nn][3]=='c')
 					 gCanCompress = 1;
 				 else
 					 gCanCompress = 0;
@@ -2041,14 +2046,24 @@ int main(int argc, char *argv[])
             else
 			*/
 			if (gCpu=='F' || gCpu=='G') {
-                for (kk = 0; kk < binndx; kk+=16) {
-                    fprintf(vfp, "\trommem[%d] = 128'h%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X;\n", 
-                        ((((unsigned int)start_address+kk)/16)%16384), //checksum64((int64_t *)&binfile[kk]),
-                        binfile[kk+15], binfile[kk+14], binfile[kk+13], binfile[kk+12], 
-                        binfile[kk+11], binfile[kk+10], binfile[kk+9], binfile[kk+8], 
-                        binfile[kk+7], binfile[kk+6], binfile[kk+5], binfile[kk+4], 
-                        binfile[kk+3], binfile[kk+2], binfile[kk+1], binfile[kk]);
-                }
+				if (vebits==128) {
+					for (kk = 0; kk < binndx; kk+=16) {
+						fprintf(vfp, "\trommem[%d] = 128'h%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X;\n", 
+							((((unsigned int)start_address+kk)/16)%16384), //checksum64((int64_t *)&binfile[kk]),
+							binfile[kk+15], binfile[kk+14], binfile[kk+13], binfile[kk+12], 
+							binfile[kk+11], binfile[kk+10], binfile[kk+9], binfile[kk+8], 
+							binfile[kk+7], binfile[kk+6], binfile[kk+5], binfile[kk+4], 
+							binfile[kk+3], binfile[kk+2], binfile[kk+1], binfile[kk]);
+					}
+				}
+				else if (vebits==64) {
+					for (kk = 0; kk < binndx; kk+=8) {
+						fprintf(vfp, "\trommem[%d] = 64'h%02X%02X%02X%02X%02X%02X%02X%02X;\n", 
+							((((unsigned int)start_address+kk)/8)%16384), //checksum64((int64_t *)&binfile[kk]),
+							binfile[kk+7], binfile[kk+6], binfile[kk+5], binfile[kk+4], 
+							binfile[kk+3], binfile[kk+2], binfile[kk+1], binfile[kk]);
+					}
+				}
             }
 			/*
 			else if (gCpu=='G') {

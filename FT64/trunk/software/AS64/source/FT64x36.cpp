@@ -48,13 +48,13 @@ extern int use_gp;
 #define OPTLUI0   0
 #define LB16	-31653LL
 
-int regSP = 63;
-int regFP = 62;
-int regLR = 61;
-int regXL = 60;
-int regGP = 59;
-int regTP = 58;
-int regCnst;
+static int regSP = 63;
+static int regFP = 62;
+static int regLR = 61;
+static int regXL = 60;
+static int regGP = 59;
+static int regTP = 58;
+static int regCnst;
 
 // ----------------------------------------------------------------------------
 // Return the register number or -1 if not a register.
@@ -1619,17 +1619,13 @@ static void process_bitfield(int oc)
     NextToken();
     me = expr();
 	emit_insn(
-		(me << 14) |
-		(mb << 6) |
-		0x1A,0,4
+		(oc << 28) |
+		(me << 22) |
+		(mb << 16) |
+		(Rt << 11) |
+		(Ra << 6) |
+		0x22,0,4
 	);
-    emit_insn(
-		(0x02 << 26) |
-        (oc << 21) |
-        (Rt << 16) |
-        (Ra << 6) |
-        0x02,0,4	// bitfield
-    );
 }
 
 

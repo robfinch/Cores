@@ -23,7 +23,7 @@
 // Register file with two write ports and six read ports.
 // ============================================================================
 //
-//`define SIM
+`define SIM
 
 module FT64_regfileRam_sim(clka, ena, wea, addra, dina, clkb, enb, addrb, doutb);
 parameter WID=64;
@@ -48,17 +48,17 @@ initial begin
 		mem[n] = 0;
 end
 
-always @(posedge clka) if (ena & wea[0]) mem[addra][7:0] <= #1 dina[7:0];
-always @(posedge clka) if (ena & wea[1]) mem[addra][15:8] <= #1 dina[15:8];
-always @(posedge clka) if (ena & wea[2]) mem[addra][23:16] <= #1 dina[23:16];
-always @(posedge clka) if (ena & wea[3]) mem[addra][31:24] <= #1 dina[31:24];
-always @(posedge clka) if (ena & wea[4]) mem[addra][39:32] <= #1 dina[39:32];
-always @(posedge clka) if (ena & wea[5]) mem[addra][47:40] <= #1 dina[47:40];
-always @(posedge clka) if (ena & wea[6]) mem[addra][55:48] <= #1 dina[55:48];
-always @(posedge clka) if (ena & wea[7]) mem[addra][63:56] <= #1 dina[63:56];
+always @(posedge clka) if (ena & wea[0]) mem[addra][7:0] <= dina[7:0];
+always @(posedge clka) if (ena & wea[1]) mem[addra][15:8] <= dina[15:8];
+always @(posedge clka) if (ena & wea[2]) mem[addra][23:16] <= dina[23:16];
+always @(posedge clka) if (ena & wea[3]) mem[addra][31:24] <= dina[31:24];
+always @(posedge clka) if (ena & wea[4]) mem[addra][39:32] <= dina[39:32];
+always @(posedge clka) if (ena & wea[5]) mem[addra][47:40] <= dina[47:40];
+always @(posedge clka) if (ena & wea[6]) mem[addra][55:48] <= dina[55:48];
+always @(posedge clka) if (ena & wea[7]) mem[addra][63:56] <= dina[63:56];
 
 always @(posedge clkb)
-	raddrb <= #1 addrb;
+	raddrb <= addrb;
 assign doutb = mem[raddrb];
 	
 endmodule
@@ -262,8 +262,8 @@ end
 
 reg wclk2;
 always @(posedge clk4x)
-	wclk2 <= #1 clk;
-always @(posedge clk4x)
+begin
+	wclk2 <= clk;
 	if (clk & ~wclk2) begin
 		wr <= wr0;
 		we <= we0;
@@ -282,6 +282,7 @@ always @(posedge clk4x)
 		wa <= 'd0;
 		i <= 'd0;
 	end
+end
 
 assign o0 = ra0[4:0]==5'd0 ? {WID{1'b0}} :
 	(wr1 && (ra0==wa1)) ? i1 :

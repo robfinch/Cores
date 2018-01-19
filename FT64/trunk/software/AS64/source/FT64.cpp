@@ -1,11 +1,11 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2017  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2017-2018  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-// A64 - Assembler
+// AS64 - Assembler
 //  - 64 bit CPU
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -43,6 +43,14 @@ static int64_t ca;
 
 extern int use_gp;
 
+static int regSP = 31;
+static int regFP = 30;
+static int regLR = 29;
+static int regXL = 28;
+static int regGP = 27;
+static int regTP = 26;
+static int regCnst;
+
 #define OPT64     0
 #define OPTX32    1
 #define OPTLUI0   0
@@ -53,6 +61,142 @@ extern int use_gp;
 // Parses pretty register names like SP or BP in addition to r1,r2,etc.
 // ----------------------------------------------------------------------------
 
+//static int getRegisterX()
+//{
+//    int reg;
+//
+//    while(isspace(*inptr)) inptr++;
+//	if (*inptr == '$')
+//		inptr++;
+//    switch(*inptr) {
+//    case 'r': case 'R':
+//        if ((inptr[1]=='a' || inptr[1]=='A') && !isIdentChar(inptr[2])) {
+//            inptr += 2;
+//            NextToken();
+//            return 29;
+//        }
+//         if (isdigit(inptr[1])) {
+//             reg = inptr[1]-'0';
+//             if (isdigit(inptr[2])) {
+//                 reg = 10 * reg + (inptr[2]-'0');
+//                 if (isdigit(inptr[3])) {
+//                     reg = 10 * reg + (inptr[3]-'0');
+//                     if (isIdentChar(inptr[4]))
+//                         return -1;
+//                     inptr += 4;
+//                     NextToken();
+//                     return reg;
+//                 }
+//                 else if (isIdentChar(inptr[3]))
+//                     return -1;
+//                 else {
+//                     inptr += 3;
+//                     NextToken();
+//                     return reg;
+//                 }
+//             }
+//             else if (isIdentChar(inptr[2]))
+//                 return -1;
+//             else {
+//                 inptr += 2;
+//                 NextToken();
+//                 return reg;
+//             }
+//         }
+//         else return -1;
+//    case 'a': case 'A':
+//         if (isdigit(inptr[1])) {
+//             reg = inptr[1]-'0' + 18;
+//             if (isIdentChar(inptr[2]))
+//                 return -1;
+//             else {
+//                 inptr += 2;
+//                 NextToken();
+//                 return reg;
+//             }
+//         }
+//         else return -1;
+//    case 'b': case 'B':
+//        if ((inptr[1]=='P' || inptr[1]=='p') && !isIdentChar(inptr[2])) {
+//            inptr += 2;
+//            NextToken();
+//            return 30;
+//        }
+//        break;
+//    case 'f': case 'F':
+//        if ((inptr[1]=='P' || inptr[1]=='p') && !isIdentChar(inptr[2])) {
+//            inptr += 2;
+//            NextToken();
+//            return 2;
+//        }
+//        break;
+//    case 'g': case 'G':
+//        if ((inptr[1]=='P' || inptr[1]=='p') && !isIdentChar(inptr[2])) {
+//            inptr += 2;
+//            NextToken();
+//            return 26;
+//        }
+//        break;
+//    case 'p': case 'P':
+//        if ((inptr[1]=='C' || inptr[1]=='c') && !isIdentChar(inptr[2])) {
+//            inptr += 2;
+//            NextToken();
+//            return 31;
+//        }
+//        break;
+//    case 's': case 'S':
+//        if ((inptr[1]=='P' || inptr[1]=='p') && !isIdentChar(inptr[2])) {
+//            inptr += 2;
+//            NextToken();
+//            return 31;
+//        }
+//        break;
+//    case 't': case 'T':
+//         if (isdigit(inptr[1])) {
+//             reg = inptr[1]-'0' + 26;
+//             if (isIdentChar(inptr[2]))
+//                 return -1;
+//             else {
+//                 inptr += 2;
+//                 NextToken();
+//                 return reg;
+//             }
+//         }
+//        if ((inptr[1]=='P' || inptr[1]=='p') && !isIdentChar(inptr[2])) {
+//            inptr += 2;
+//            NextToken();
+//            return 15;
+//        }
+//        /*
+//        if ((inptr[1]=='R' || inptr[1]=='r') && !isIdentChar(inptr[2])) {
+//            inptr += 2;
+//            NextToken();
+//            return 24;
+//        }
+//        */
+//        break;
+//	// lr
+//    case 'l': case 'L':
+//        if ((inptr[1]=='R' || inptr[1]=='r') && !isIdentChar(inptr[2])) {
+//            inptr += 2;
+//            NextToken();
+//            return 29;
+//        }
+//        break;
+//	// xlr
+//    case 'x': case 'X':
+//        if ((inptr[1]=='L' || inptr[1]=='l') && (inptr[2]=='R' || inptr[2]=='r') && 
+//			!isIdentChar(inptr[3])) {
+//            inptr += 3;
+//            NextToken();
+//            return 28;
+//        }
+//        break;
+//    default:
+//        return -1;
+//    }
+//    return -1;
+//}
 static int getRegisterX()
 {
     int reg;
@@ -65,7 +209,7 @@ static int getRegisterX()
         if ((inptr[1]=='a' || inptr[1]=='A') && !isIdentChar(inptr[2])) {
             inptr += 2;
             NextToken();
-            return 29;
+            return regLR;
         }
          if (isdigit(inptr[1])) {
              reg = inptr[1]-'0';
@@ -108,25 +252,18 @@ static int getRegisterX()
              }
          }
          else return -1;
-    case 'b': case 'B':
-        if ((inptr[1]=='P' || inptr[1]=='p') && !isIdentChar(inptr[2])) {
-            inptr += 2;
-            NextToken();
-            return 30;
-        }
-        break;
     case 'f': case 'F':
         if ((inptr[1]=='P' || inptr[1]=='p') && !isIdentChar(inptr[2])) {
             inptr += 2;
             NextToken();
-            return 2;
+            return regFP;
         }
         break;
     case 'g': case 'G':
         if ((inptr[1]=='P' || inptr[1]=='p') && !isIdentChar(inptr[2])) {
             inptr += 2;
             NextToken();
-            return 26;
+            return regGP;
         }
         break;
     case 'p': case 'P':
@@ -140,24 +277,42 @@ static int getRegisterX()
         if ((inptr[1]=='P' || inptr[1]=='p') && !isIdentChar(inptr[2])) {
             inptr += 2;
             NextToken();
-            return 31;
+            return (regSP);
         }
         break;
     case 't': case 'T':
          if (isdigit(inptr[1])) {
-             reg = inptr[1]-'0' + 26;
+             reg = inptr[1]-'0' + 5;
+             if (isdigit(inptr[2])) {
+                 reg = 10 * reg + (inptr[2]-'0');
+                 if (isdigit(inptr[3])) {
+                     reg = 10 * reg + (inptr[3]-'0');
+                     if (isIdentChar(inptr[4]))
+                         return -1;
+                     inptr += 4;
+                     NextToken();
+                     return reg;
+                 }
+                 else if (isIdentChar(inptr[3]))
+                     return -1;
+                 else {
+                     inptr += 3;
+                     NextToken();
+                     return reg;
+                 }
+             }
              if (isIdentChar(inptr[2]))
                  return -1;
              else {
                  inptr += 2;
                  NextToken();
-                 return reg;
+                 return (reg);
              }
          }
         if ((inptr[1]=='P' || inptr[1]=='p') && !isIdentChar(inptr[2])) {
             inptr += 2;
             NextToken();
-            return 15;
+            return (regTP);
         }
         /*
         if ((inptr[1]=='R' || inptr[1]=='r') && !isIdentChar(inptr[2])) {
@@ -172,7 +327,7 @@ static int getRegisterX()
         if ((inptr[1]=='R' || inptr[1]=='r') && !isIdentChar(inptr[2])) {
             inptr += 2;
             NextToken();
-            return 29;
+            return (regLR);
         }
         break;
 	// xlr
@@ -181,15 +336,26 @@ static int getRegisterX()
 			!isIdentChar(inptr[3])) {
             inptr += 3;
             NextToken();
-            return 28;
+            return (regXL);
         }
         break;
+	case 'v': case 'V':
+         if (isdigit(inptr[1])) {
+             reg = inptr[1]-'0' + 1;
+             if (isIdentChar(inptr[2]))
+                 return -1;
+             else {
+                 inptr += 2;
+                 NextToken();
+                 return (reg);
+             }
+         }
+		 break;
     default:
         return -1;
     }
     return -1;
 }
-
 static int isdelim(char ch)
 {
     return ch==',' || ch=='[' || ch=='(' || ch==']' || ch==')' || ch=='.';
@@ -205,6 +371,8 @@ static int getVecRegister()
     int reg;
 
     while(isspace(*inptr)) inptr++;
+	if (*inptr=='$')
+		inptr++;
     switch(*inptr) {
     case 'v': case 'V':
          if (isdigit(inptr[1])) {
@@ -239,14 +407,17 @@ static int getVecRegister()
 			 if (!isIdentChar(inptr[2])) {
 				 inptr += 2;
 				 NextToken();
-				 return 0x28;
+				 return 0x2F;
 			 }
 		 }
          else if (inptr[1]=='m' || inptr[1]=='M') {
 			 if (isdigit(inptr[2])) {
 				 if (inptr[2] >= '0' && inptr[2] <= '7') {
 					 if (!isIdentChar(inptr[3])) {
-						 return 0x20 | (inptr[2]-'0');
+						 reg = 0x20 | (inptr[2]-'0');
+						 inptr += 3;
+						 NextToken();
+						 return (reg);
 					 }
 				 }
 			 }
@@ -846,6 +1017,7 @@ static int GetFPSize()
 	return (sz);
 }
 
+
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
 
@@ -941,6 +1113,55 @@ static void emit_insn(int64_t oc, int can_compress, int sz)
     }
 }
  
+void LoadConstant(int64_t val, int rg)
+{
+	if (val & 0x8000) {
+		emit_insn(
+			(0 << 16) |
+			(rg << 11) |
+			(0 << 6) |
+			0x09,!expand_flag,4);	// ORI
+		emit_insn(
+			(val << 16) |
+			(rg << 11) |
+			(0 << 6) |
+			(0 << 6) |
+			0x1A,!expand_flag,4);	// ORQ0
+	}
+	else {
+		emit_insn(
+			(val << 16) |
+			(rg << 11) |
+			(0 << 6) |
+			0x09,!expand_flag,4);	// ORI
+	}
+	val >>= 16;
+	emit_insn(
+		(val << 16) |
+		(rg << 11) |
+		(0 << 6) |
+		(1 << 6) |
+		0x1A,!expand_flag,4);	// ORQ1
+	val >>= 16;
+	if (val != 0) {
+		emit_insn(
+			(val << 16) |
+			(rg << 11) |
+			(0 << 6) |
+			(2 << 6) |
+			0x1A,!expand_flag,4);	// ORQ2
+	}
+	val >>= 16;
+	if (val != 0) {
+		emit_insn(
+			(val << 16) |
+			(rg << 11) |
+			(0 << 6) |
+			(3 << 6) |
+			0x1A,!expand_flag,4);	// ORQ3
+	}
+}
+		
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
 static void getSz(int *sz)
@@ -1549,10 +1770,19 @@ static void process_bitfield(int oc)
     int Rt;
     int64_t mb;
     int64_t me;
+	int64_t val;
 
     Rt = getRegisterX();
     need(',');
-    Ra = getRegisterX();
+	if (oc==4) {
+		NextToken();
+		val = expr();
+		Ra = 0;
+	}
+	else {
+		val = 0LL;
+		Ra = getRegisterX();
+	}
     need(',');
     NextToken();
     mb = expr();
@@ -1560,17 +1790,13 @@ static void process_bitfield(int oc)
     NextToken();
     me = expr();
 	emit_insn(
-		(me << 14) |
-		(mb << 6) |
-		0x1A,0,4
+		(oc << 28) |
+		(me << 22) |
+		(mb << 16) |
+		(Rt << 11) |
+		((Ra|(val & 0x1f)) << 6) |
+		0x22,0,4
 	);
-    emit_insn(
-		(0x02 << 26) |
-        (oc << 21) |
-        (Rt << 16) |
-        (Ra << 6) |
-        0x02,0,4	// bitfield
-    );
 }
 
 
@@ -1824,10 +2050,23 @@ static void process_ret()
 	if (token=='#') {
 		val = expr();
 	}
-	emit_prefix(val);
+	// If too large a constant, do the SP adjusment directly.
+	if (val < -32768 || val > 32767) {
+		LoadConstant(val,23);
+		// add.w r31,r31,r23
+		emit_insn(
+			(0x04 << 26) |
+			(3 << 21) |
+			(31 << 16) |
+			(23 << 11) |
+			(31 << 6) |
+			0x02,0,4
+			);
+		val = 0;
+	}
 	emit_insn(
-		(((val==0?8:val) & 0xFFFF) << 16) |
-		(31 << 11) |
+		((val & 0xFFFF) << 16) |
+		(29 << 11) |
 		(31 << 6) |
 		0x29,0,4
 	);
@@ -2058,17 +2297,7 @@ static void process_store(int opcode6)
     if (Ra < 0) Ra = 0;
     val = disp;
 	if (val < -32767 || val > 32767) {
-		emit_insn(
-			(val  << 16) |
-			(23 << 11) |
-			(0 << 6) |
-			0x09,!expand_flag,4);
-		emit_insn(
-			((val >> 16) << 16) |
-			(23 << 11) |
-			(0 << 6) |
-			(1 << 6) |
-			0x1A,!expand_flag,4);	// ORQ1
+		LoadConstant(val,23);
 		// Change to indexed addressing
 		emit_insn(
 			(opcode6 << 26) |
@@ -2143,43 +2372,14 @@ static void process_ldi()
     expect(',');
     val = expr();
 	if (val < -32768 || val > 32767) {
-		emit_insn(
-			(val << 16) |
-			(23 << 11) |
-			(0 << 6) |
-			0x09,!expand_flag,4);	// ORI
-		val >>= 16;
-		emit_insn(
-			(val << 16) |
-			(23 << 11) |
-			(0 << 6) |
-			(1 << 6) |
-			0x1A,!expand_flag,4);	// ORQ1
-		val >>= 16;
-		if (val != 0) {
-			emit_insn(
-				(val << 16) |
-				(23 << 11) |
-				(0 << 6) |
-				(2 << 6) |
-				0x1A,!expand_flag,4);	// ORQ2
-		}
-		val >>= 16;
-		if (val != 0) {
-			emit_insn(
-				(val << 16) |
-				(23 << 11) |
-				(0 << 6) |
-				(3 << 6) |
-				0x1A,!expand_flag,4);	// ORQ3
-		}
-		emit_insn(
-			(opcode6 << 26) |
-			(sz << 21) |
-			(Rt << 16) |
-			(23 << 11) |
-			(Ra << 6) |
-			0x02,!expand_flag,4);
+		LoadConstant(val,Rt);
+		//emit_insn(
+		//	(opcode6 << 26) |
+		//	(sz << 21) |
+		//	(Rt << 16) |
+		//	(23 << 11) |
+		//	(Ra << 6) |
+		//	0x02,!expand_flag,4);
 		return;
 	}
 	emit_insn(
@@ -2257,17 +2457,7 @@ static void process_load(int opcode6)
     if (Ra < 0) Ra = 0;
     val = disp;
 	if (val < -32767 || val > 32767) {
-		emit_insn(
-			(val  << 16) |
-			(23 << 11) |
-			(0 << 6) |
-			0x09,!expand_flag,4);
-		emit_insn(
-			((val >> 16) << 16) |
-			(23 << 11) |
-			(0 << 6) |
-			(1 << 6) |
-			0x1A,!expand_flag,4);	// ORQ1
+		LoadConstant(val,23);
 		// Change to indexed addressing
 		emit_insn(
 			(opcode6 << 26) |
@@ -2319,13 +2509,31 @@ static void process_lv(int opcode6)
     val = disp;
 	//if (val < -32768 || val > 32767)
 	//	printf("LV displacement too large: %d\r\n", lineno);
-	emit_prefix(val);
+	if (val >= -32768 && val < 32768) {
+		emit_insn(
+			(val << 16) |
+			(Vt << 11) |
+			(Ra << 6) |
+			opcode6,!expand_flag,4);
+		ScanToEOL();
+		return;
+	}
+	LoadConstant(val,23);
+	// add r23,r23,ra
+	if (Ra != 0)
+		emit_insn(
+			(0x04 << 26) |
+			(3 << 21) |
+			(23 << 16) |
+			(23 << 11) |
+			(Ra << 6) |
+			0x02,!expand_flag,4
+		);
 	emit_insn(
-		(val << 16) |
 		(Vt << 11) |
-		(Ra << 6) |
+		(23 << 6) |
 		opcode6,!expand_flag,4);
-    ScanToEOL();
+	ScanToEOL();
 }
 
 static void process_lsfloat(int opcode6)
@@ -2474,6 +2682,50 @@ static void process_mov(int oc)
 		 );
 	prevToken();
 }
+
+static void process_vmov(int opcode, int func)
+{
+	int Vt, Va;
+	int Rt, Ra;
+
+	Vt = getVecRegister();
+	if (Vt < 0x20) {
+		Rt = getRegisterX();
+		if (Rt < 0) {
+			printf("Illegal register in vmov (%d)\n", lineno);
+			ScanToEOL();
+			return;
+		}
+		Va = getVecRegister();
+		if (Va < 0x20) {
+			printf("Illegal register in vmov (%d)\n", lineno);
+			ScanToEOL();
+			return;
+		}
+		emit_insn(
+			(func << 26) |
+			(1 << 21) |
+			((Rt & 0x1f) << 11) |
+			((Va & 0x1F) << 6) |
+			opcode,!expand_flag,4
+			);
+		return;
+	}
+	need(',');
+	Ra = getRegisterX();
+	if (Ra < 0) {
+		printf("Illegal register in vmov (%d)\n", lineno);
+		ScanToEOL();
+		return;
+	}
+	emit_insn(
+		(func << 26) |
+		((Vt & 0x1f) << 11) |
+		(Ra << 6) |
+		opcode,!expand_flag,4
+		);
+}
+
 
 // ----------------------------------------------------------------------------
 // shr r1,r2,#5
@@ -2868,7 +3120,7 @@ static void process_vrrop(int funct6)
     Vm = getVecRegister();
 	if (Vm < 0x20 || Vm > 0x23)
 		printf("Illegal vector mask register: %d\r\n", lineno);
-	Vm &= 0x3;
+	Vm &= 0x7;
     //prevToken();
     emit_insn((funct6<<26)|(Vm<<23)|(sz << 21)|(Vt<<16)|(Vb<<11)|(Va<<6)|0x01,!expand_flag,4);
 }
@@ -3070,6 +3322,8 @@ void FT64_processMaster()
 		case tk_bfclr: process_bitfield(1); break;
         case tk_bfext: process_bitfield(5); break;
         case tk_bfextu: process_bitfield(6); break;
+		case tk_bfins: process_bitfield(3); break;
+		case tk_bfinsi: process_bitfield(4); break;
 		case tk_bfset: process_bitfield(0); break;
         case tk_bge: process_bcc(0x30,3); break;
         case tk_bgeu: process_bcc(0x30,5); break;
@@ -3221,6 +3475,7 @@ void FT64_processMaster()
 		case tk_vands: process_vsrrop(0x18); break;
 		case tk_vdiv: process_vrrop(0x3E); break;
 		case tk_vdivs: process_vsrrop(0x2E); break;
+		case tk_vmov: process_vmov(0x02,0x33); break;
 		case tk_vmul: process_vrrop(0x3A); break;
 		case tk_vmuls: process_vsrrop(0x2A); break;
 		case tk_vor: process_vrrop(0x09); break;

@@ -88,6 +88,8 @@ BasicBlock *BasicBlock::Blockize(OCODE *start)
 	}
 	nBasicBlocks = num;
 	LastBlock = pb->prev;
+	if (LastBlock==nullptr)
+		LastBlock = RootBlock;
 	// ASSERT(LastBlock!=nullptr);
 	pb->next = nullptr;
 	dfs.printf("%s: ", (char *)currentFn->name->c_str());

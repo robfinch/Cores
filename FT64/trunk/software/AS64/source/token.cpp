@@ -2697,6 +2697,13 @@ int NextToken()
                 return token = tk_vdivs;
             }
             if ((inptr[1]=='m' || inptr[1]=='M') &&
+				(inptr[2]=='o' || inptr[2]=='O') &&
+				(inptr[3]=='v' || inptr[3]=='V') &&
+				isspaceOrDot(inptr[4])) {
+                inptr += 4;
+                return token = tk_vmov;
+            }
+            if ((inptr[1]=='m' || inptr[1]=='M') &&
 				(inptr[2]=='u' || inptr[2]=='U') &&
 				(inptr[3]=='l' || inptr[3]=='L') &&
 				isspaceOrDot(inptr[4])) {

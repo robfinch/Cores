@@ -404,6 +404,7 @@ enum {
 	 tk_vands,
 	 tk_vdiv,
 	 tk_vdivs,
+	 tk_vmov,
 	 tk_vmul,
 	 tk_vmuls,
 	 tk_vor,

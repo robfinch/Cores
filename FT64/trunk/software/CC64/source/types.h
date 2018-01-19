@@ -431,7 +431,7 @@ public:
 	short predop;
 	int loop_depth;
 	AMODE *oper1, *oper2, *oper3, *oper4;
-	short int phiops[100];
+	__int16 phiops[100];
 public:
 	static OCODE *MakeNew();
 	bool HasTargetReg() const;

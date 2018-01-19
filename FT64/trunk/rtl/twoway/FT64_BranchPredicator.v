@@ -79,33 +79,33 @@ assign predict_takenD = (bht_ibitsD==2'd0 || bht_ibitsD==2'd1) && en;
 
 always @(posedge clk)
 if (rst)
-	pcstail <= 5'd0;
+	#1 pcstail <= 5'd0;
 else begin
 	if (xisBranch0 & xisBranch1) begin
-		pcs[pcstail] <= {xpc0[31:1],takb0};
-		pcs[pcstail+1] <= {xpc1[31:1],takb1};
-		pcstail <= pcstail + 5'd2;
+		#1 pcs[pcstail] <= {xpc0[31:1],takb0};
+		#1 pcs[pcstail+1] <= {xpc1[31:1],takb1};
+		#1 pcstail <= pcstail + 5'd2;
 	end
 	else if (xisBranch0) begin
-		pcs[pcstail] <= {xpc0[31:1],takb0};
-		pcstail <= pcstail + 5'd1;
+		#1 pcs[pcstail] <= {xpc0[31:1],takb0};
+		#1 pcstail <= pcstail + 5'd1;
 	end
 	else if (xisBranch1) begin
-		pcs[pcstail] <= {xpc1[31:1],takb1};
-		pcstail <= pcstail + 5'd1;
+		#1 pcs[pcstail] <= {xpc1[31:1],takb1};
+		#1 pcstail <= pcstail + 5'd1;
 	end
 end
 
 always @(posedge clk)
 if (rst)
-	pcshead <= 5'd0;
+	#1 pcshead <= 5'd0;
 else begin
-	wrhist <= 1'b0;
+	#1 wrhist <= 1'b0;
 	if (pcshead != pcstail) begin
-		pc <= pcs[pcshead];
-		takb <= pcs[pcshead][0];
-		wrhist <= 1'b1;
-		pcshead <= pcshead + 5'd1;
+		#1 pc <= pcs[pcshead];
+		#1 takb <= pcs[pcshead][0];
+		#1 wrhist <= 1'b1;
+		#1 pcshead <= pcshead + 5'd1;
 	end
 end
 
@@ -130,12 +130,12 @@ end
 
 always @(posedge clk)
 if (rst)
-	gbl_branch_hist <= 3'b000;
+	#1 gbl_branch_hist <= 3'b000;
 else begin
     if (en) begin
         if (wrhist) begin
-            gbl_branch_hist <= {gbl_branch_hist[1:0],takb};
-            branch_history_table[bht_wa] <= xbits_new;
+            #1 gbl_branch_hist <= {gbl_branch_hist[1:0],takb};
+            #1 branch_history_table[bht_wa] <= xbits_new;
         end
 	end
 end

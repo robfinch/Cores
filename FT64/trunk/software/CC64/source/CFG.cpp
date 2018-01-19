@@ -307,6 +307,9 @@ void CFG::InsertPhiInsns()
 	}
 }
 
+
+// Get the ordinal of which predecessor X is of Y.
+
 int CFG::WhichPred(BasicBlock *x, int y)
 {
 	BasicBlock *b;
@@ -322,6 +325,8 @@ int CFG::WhichPred(BasicBlock *x, int y)
 	}
 	return (-1);
 }
+
+// Set a subscript on a variable.
 
 void CFG::Subscript(AMODE *oper)
 {
@@ -347,24 +352,24 @@ void CFG::Search(BasicBlock *x)
 	bool eol;
 
 	eol = false;
-	for (s = x->code; !eol; s = s->fwd) {
-		if (s->opcode==op_label)
-			continue;
-		if (s->oper1 && !s->HasTargetReg())
-			Subscript(s->oper1);
-		if (s->oper2)
-			Subscript(s->oper2);
-		if (s->oper3)
-			Subscript(s->oper3);
-		if (s->oper4)
-			Subscript(s->oper4);
-		if (s->oper1 && s->HasTargetReg()) {
-			v = Var::Find2(s->GetTargetReg());
-			if (v) {
-				i = v->subscript;
-				s->oper1->pregs = i;
-				v->istk->push(i);
-				v->subscript++;
+	for (s = x->code; s && !eol; s = s->fwd) {
+		if (s->opcode!=op_label) {
+			if (s->oper1 && !s->HasTargetReg())
+				Subscript(s->oper1);
+			if (s->oper2)
+				Subscript(s->oper2);
+			if (s->oper3)
+				Subscript(s->oper3);
+			if (s->oper4)
+				Subscript(s->oper4);
+			if (s->oper1 && s->HasTargetReg()) {
+				v = Var::Find2(s->GetTargetReg());
+				if (v) {
+					i = v->subscript;
+					s->oper1->pregs = i;
+					v->istk->push(i);
+					v->subscript++;
+				}
 			}
 		}
 		eol = s == x->lcode;
@@ -372,13 +377,14 @@ void CFG::Search(BasicBlock *x)
 	for (e = x->ohead; e; e = e->next) {
 		y = e->dst->num;
 		j = WhichPred(x,y);
-		if (j < 0)
+		if (j < 0 || j > 99) {	// Internal compiler error
+			printf("DIAG: CFG Rename j=%d out of range.\n", j);
+			fatal("");
 			continue;
+		}
 		b = basicBlocks[y];
 		eol = false;
-		for (s = b->code; !eol; s = s->fwd) {
-			if (s->opcode==op_label)
-				continue;
+		for (s = b->code; s && !eol; s = s->fwd) {
 			if (s->opcode==op_phi) {
 				v = Var::Find2(s->oper1->preg);
 				if (v)
@@ -390,13 +396,13 @@ void CFG::Search(BasicBlock *x)
 	for (e = x->dhead; e; e = e->next)
 		Search(e->dst);
 	eol = false;
-	for (s = x->code; !eol; s = s->fwd) {
-		if (s->opcode==op_label)
-			continue;
-		if (s->HasTargetReg()) {
-			v = Var::Find2(s->GetTargetReg());
-			if (v)
-				v->istk->pop();
+	for (s = x->code; s && !eol; s = s->fwd) {
+		if (s->opcode!=op_label) {
+			if (s->HasTargetReg()) {
+				v = Var::Find2(s->GetTargetReg());
+				if (v)
+					v->istk->pop();
+			}
 		}
 		eol = s == x->lcode;
 	}
