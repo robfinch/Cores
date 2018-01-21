@@ -15,6 +15,7 @@
     <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
     <Keyword>ManagedCProj</Keyword>
     <RootNamespace>E64</RootNamespace>
+    <ProjectName>EM64</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -94,6 +95,7 @@
     <ClCompile Include="Disassem.cpp" />
     <ClCompile Include="E64.cpp" />
     <ClCompile Include="frmAbout.cpp" />
+    <ClCompile Include="frmAsmDisplay.cpp" />
     <ClCompile Include="frmBreakpoint.cpp" />
     <ClCompile Include="frmInterrupts.cpp" />
     <ClCompile Include="frmKeyboard.cpp" />
@@ -119,6 +121,9 @@
       <FileType>CppForm</FileType>
     </ClInclude>
     <ClInclude Include="frmAbout.h">
+      <FileType>CppForm</FileType>
+    </ClInclude>
+    <ClInclude Include="frmAsmDisplay.h">
       <FileType>CppForm</FileType>
     </ClInclude>
     <ClInclude Include="frmBreakpoint.h">
@@ -160,6 +165,9 @@
     </EmbeddedResource>
     <EmbeddedResource Include="frmAbout.resx">
       <DependentUpon>frmAbout.h</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="frmAsmDisplay.resx">
+      <DependentUpon>frmAsmDisplay.h</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="frmBreakpoint.resx">
       <DependentUpon>frmBreakpoint.h</DependentUpon>

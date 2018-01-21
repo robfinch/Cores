@@ -11,27 +11,16 @@ void clsCPU::Reset()
 		StatusHWI = false;
 		isRunning = false;
 		regs[0] = 0;
-		pc = 0x10000;
+		pc = 0xFFFC0100;
 		vbr = 0;
 		tick = 0;
 		rvecno = 0;
+		regLR = 29;
 	};
 	void clsCPU::BuildConstant() {
-		if (immcnt==2) {
-			imm1 = (((wir >> 6) << 16) | (ir >> 16));
-			imm2 = ((wir >> 6) >> 16);
-			imm2 = imm2 | ((xir >> 6) << 10);
-		}
-		else if (immcnt==1) {
-			imm1 = (((xir >> 6) << 16) | (ir >> 16));
-			imm2 = ((xir >> 6) >> 16);
-			imm2 = imm2 | ((xir&0x80000000) ? 0xFFFFFC00 : 0x00000000);
-		}
-		else {
-			sir = ir;
-			imm1 = (sir >> 16);
-			imm2 = (sir&0x80000000) ? 0xFFFFFFFF : 0x00000000;
-		}
+		sir = ir;
+		imm1 = (sir >> 16);
+		imm2 = (sir&0x80000000) ? 0xFFFFFFFF : 0x00000000;
 		imm = ((__int64)imm2 << 32) | imm1;
 	};
 	void clsCPU::Step()
@@ -83,20 +72,28 @@ dc:
 		//---------------------------------------------------------------------------
 		// Decode stage
 		//---------------------------------------------------------------------------
-		opcode = ir & 0x7F;
-		func = ir >> 25;
+		opcode = ir & 0x3F;
+		func = ir >> 26;
 		Ra = (ir >> 6) & 0x1f;
 		Rb = (ir >> 11) & 0x1F;
 		Rc = (ir >> 16) & 0x1f;
-		if ((ir>>26)==2) {
-			Rt = (ir >> 16) & 0x1F;
+		if (opcode==2) {
+			if (func==ISHIFT || func==ISHIFTB || func==ISHIFTC || func==ISHIFTH) {
+				Rt = ((ir >> 25) & 1) ? (ir >> 11) & 0x1f : (ir >> 16) & 0x1f;
+			}
+			else
+				Rt = (ir >> 16) & 0x1F;
 		}
+		else if (opcode==ICALL)
+			Rt = regLR;
+		else if (opcode==IRET)
+			Rt = Ra;
 		else
 			Rt = (ir >> 11) & 0x1F;
-		Bn = ((ir >> 11) & 0x1f) | (((ir >> 21) & 1) << 5);
+		Bn = (ir >> 16) & 0x3f;
 		sc = (ir >> 21) & 3;
-		mb = imm & 0x3f;
-		me = (imm >> 8) & 0x3f;
+		mb = (ir >> 16) & 0x3f;
+		me = (ir >> 22) & 0x3f;
 
 		a = opera.ai = regs[Ra];
 		b = operb.ai = regs[Rb];
@@ -130,21 +127,40 @@ dc:
 				res = a - b;
 				break;
 			case ICMP:
-				if (a < b)
-					res = -1LL;
-				else if (a == b)
-					res=0LL;
-				else
-					res=1LL;
+				switch((ir >> 23) & 7) {
+				case 0:
+					if (a < b)
+						res = -1LL;
+					else if (a == b)
+						res=0LL;
+					else
+						res=1LL;
+					break;
+				case 2: res = a==b ? 1 : 0; break;
+				case 3:	res = a!=b ? 1 : 0; break;
+				case 4: res = a < b ? 1 : 0; break;
+				case 5:	res = a >= b ? 1 : 0; break;
+				case 6:	res = a <= b ? 1 : 0; break;
+				case 7:	res = a > b ? 1 : 0; break;
+				}
 				break;
 			case ICMPU:
-				if (ua < ub)
-					res = -1LL;
-				else if (ua == ub)
-					res=0LL;
-				else
-					res=1LL;
+				switch((ir >> 23) & 7) {
+				case 0:
+					if (ua < ub)
+						res = -1LL;
+					else if (ua == ub)
+						res=0LL;
+					else
+						res=1LL;
+					break;
+				case 4: res = ua < ub ? 1 : 0; break;
+				case 5:	res = ua >= ub ? 1 : 0; break;
+				case 6:	res = ua <= ub ? 1 : 0; break;
+				case 7:	res = ua > ub ? 1 : 0; break;
+				}
 				break;
+			// ToDo: return high order 64 bits of product
 			case IMUL:
 				res = a * b;
 				break;
@@ -155,16 +171,22 @@ dc:
 				res = ua * ub;
 				break;
 			case IDIVMOD:
-				res = a / b;
-				res2 = a % b;
+				if (((ir >> 24) & 3)==1)
+					res = a % b;
+				else
+					res = a / b;
 				break;
 			case IDIVMODU:
-				res = ua / ub;
-				res2 = ua % ub;
+				if (((ir >> 24) & 3)==1)
+					res = ua % ub;
+				else
+					res = ua / ub;
 				break;
 			case IDIVMODSU:
-				res = a / ub;
-				res2 = a % ub;
+				if (((ir >> 24) & 3)==1)
+					res = a % ub;
+				else
+					res = a / ub;
 				break;
 			case IAND:
 				res = a & b;
@@ -288,22 +310,6 @@ dc:
 				system1->Write(ad,(int)regs[Rc],0xF);
 				system1->Write(ad+4,(int)(regs[Rc]>>32),0xF);
 				break;
-			case IPUSH:
-				ad = (unsigned int)regs[Ra]+ir21;
-				Rt2 = (ir >> 16) & 0x1F;
-				Rt = 0;
-				regs[Rt2] += ir21;
-				system1->Write(ad,(int)regs[Rb],0xF);
-				system1->Write(ad+4,(int)(regs[Rb]>>32),0xF);
-				break;
-			case IPOP:
-				ad = (unsigned int)regs[Ra];
-				Rt2 = (ir >> 16) & 0x1F;
-				Rt = (ir >> 11) & 0x1F;
-				regs[Rt2] += ir21;
-				res = system1->Read(ad,0);
-				res |= ((unsigned __int64)system1->Read(ad+4,0)) << 32;
-				break;
 			case ISHIFT:
 				switch((ir >> 22) & 0xF) {
 				case ISHL:
@@ -345,43 +351,6 @@ dc:
 				default: ;
 				}
 				break;
-			case IBTFLD:
-				bmask = 0;
-				for (nn = 0; nn < me-mb+1; nn ++) {
-					bmask = (bmask << 1) | 1;
-				}
-				switch((ir >> 29) & 7) {
-				case IBFSET:
-					bmask <<= mb;
-					res = a | bmask << mb;
-					break;
-				case IBFCLR:
-					bmask <<= mb;
-					res = a & ~(bmask << mb);
-					break;
-				case IBFCHG:
-					bmask <<= mb;
-					res = a ^ (bmask << mb);
-					break;
-				case IBFINS:
-					bmask <<= mb;
-					c &= ~(bmask << mb);
-					res = c | ((a & bmask) << mb);
-					break;
-				case IBFINSI:
-					bmask <<= mb;
-					c &= ~(bmask << mb);
-					res = c | ((Ra & bmask) << mb);
-					break;
-				case IBFEXT:
-					res = (a >> mb) & bmask;
-					if ((res & ((bmask + 1) >> 1)) != 0) res |= ~bmask;
-					break;
-				case IBFEXTU:
-					res = (a >> mb) & bmask;
-					break;
-				}
-				break;
 			}
 			break;
 		case ICHK:
@@ -392,6 +361,43 @@ dc:
 			if (!res) {
 				ir = 0x03cc0f38;
 				goto dc;
+			}
+			break;
+		case IBTFLD:
+			bmask = 0;
+			for (nn = 0; nn < me-mb+1; nn ++) {
+				bmask = (bmask << 1) | 1;
+			}
+			switch((ir >> 28) & 15) {
+			case IBFSET:
+				bmask <<= mb;
+				res = a | bmask << mb;
+				break;
+			case IBFCLR:
+				bmask <<= mb;
+				res = a & ~(bmask << mb);
+				break;
+			case IBFCHG:
+				bmask <<= mb;
+				res = a ^ (bmask << mb);
+				break;
+			case IBFINS:
+				bmask <<= mb;
+				c &= ~(bmask << mb);
+				res = c | ((a & bmask) << mb);
+				break;
+			case IBFINSI:
+				bmask <<= mb;
+				c &= ~(bmask << mb);
+				res = c | ((Ra & bmask) << mb);
+				break;
+			case IBFEXT:
+				res = (a >> mb) & bmask;
+				if ((res & ((bmask + 1) >> 1)) != 0) res |= ~bmask;
+				break;
+			case IBFEXTU:
+				res = (a >> mb) & bmask;
+				break;
 			}
 			break;
 		case IADD:
@@ -413,7 +419,7 @@ dc:
 			break;
 		case ICMPU:
 			BuildConstant();
-			if (ua < (unsigned __int64)imm)
+			if (ua < imm)
 				res = 0xFFFFFFFFFFFFFFFFLL;
 			else if (a==imm)
 				res = 0LL;
@@ -426,11 +432,11 @@ dc:
 			break;
 		case IMULU:
 			BuildConstant();
-			res = ua * (unsigned __int64)imm;
+			res = ua * imm;
 			break;
 		case IMULSU:
 			BuildConstant();
-			res = a * (unsigned __int64)imm;
+			res = a * imm;
 			break;
 		case IDIVI:
 			BuildConstant();
@@ -438,11 +444,11 @@ dc:
 			break;
 		case IDIVUI:
 			BuildConstant();
-			res = ua / (unsigned __int64)imm;
+			res = ua / imm;
 			break;
 		case IDIVSUI:
 			BuildConstant();
-			res = a / (unsigned __int64)imm;
+			res = a / imm;
 			break;
 		case IMODI:
 			BuildConstant();
@@ -450,11 +456,11 @@ dc:
 			break;
 		case IMODUI:
 			BuildConstant();
-			res = ua % (unsigned __int64)imm;
+			res = ua % imm;
 			break;
 		case IMODSUI:
 			BuildConstant();
-			res = a % (unsigned __int64)imm;
+			res = a % imm;
 			break;
 		case IAND:
 			BuildConstant();
@@ -467,6 +473,18 @@ dc:
 		case IXOR:
 			BuildConstant();
 			res = a ^ imm;
+			break;
+		case IQOPI:
+			switch((ir >> 8) & 7) {
+			case IQOR:
+				switch((ir >> 6) & 3) {
+				case 0:	res = b | (ir >> 16); break;
+				case 1: res = b | (ir & 0xffff0000); break;
+				case 2: res = b | (__int64)(ir & 0xffff0000) << 16; break;
+				case 3:	res = b | (__int64)(ir & 0xffff0000) << 32; break;
+				}
+				break;
+			}
 			break;
 		case IFLOAT:
 			switch(ir >> 26) {
@@ -554,28 +572,28 @@ dc:
 			ad = a + imm;
 			switch(ad & 7) {
 			case 0:
-				system1->Write(ad,(int)regs[Rc],0x1);
+				system1->Write(ad,(int)regs[Rb],0x1);
 				break;
 			case 1:
-				system1->Write(ad,(int)regs[Rc],0x2);
+				system1->Write(ad,(int)regs[Rb],0x2);
 				break;
 			case 2:
-				system1->Write(ad,(int)regs[Rc],0x4);
+				system1->Write(ad,(int)regs[Rb],0x4);
 				break;
 			case 3:
-				system1->Write(ad,(int)regs[Rc],0x8);
+				system1->Write(ad,(int)regs[Rb],0x8);
 				break;
 			case 4:
-				system1->Write(ad,(int)regs[Rc],0x1);
+				system1->Write(ad,(int)regs[Rb],0x1);
 				break;
 			case 5:
-				system1->Write(ad,(int)regs[Rc],0x2);
+				system1->Write(ad,(int)regs[Rb],0x2);
 				break;
 			case 6:
-				system1->Write(ad,(int)regs[Rc],0x4);
+				system1->Write(ad,(int)regs[Rb],0x4);
 				break;
 			case 7:
-				system1->Write(ad,(int)regs[Rc],0x8);
+				system1->Write(ad,(int)regs[Rb],0x8);
 				break;
 			}
 			break;
@@ -585,28 +603,28 @@ dc:
 			ad = a + imm;
 			switch(ad & 7) {
 			case 0:
-				system1->Write(ad,(int)regs[Rc],0x3);
+				system1->Write(ad,(int)regs[Rb],0x3);
 				break;
 			case 1:
-				system1->Write(ad,(int)regs[Rc],0x6);
+				system1->Write(ad,(int)regs[Rb],0x6);
 				break;
 			case 2:
-				system1->Write(ad,(int)regs[Rc],0xC);
+				system1->Write(ad,(int)regs[Rb],0xC);
 				break;
 			case 3:
-				system1->Write(ad,(int)regs[Rc],0x8);
+				system1->Write(ad,(int)regs[Rb],0x8);
 				break;
 			case 4:
-				system1->Write(ad,(int)regs[Rc],0x3);
+				system1->Write(ad,(int)regs[Rb],0x3);
 				break;
 			case 5:
-				system1->Write(ad,(int)regs[Rc],0x6);
+				system1->Write(ad,(int)regs[Rb],0x6);
 				break;
 			case 6:
-				system1->Write(ad,(int)regs[Rc],0xC);
+				system1->Write(ad,(int)regs[Rb],0xC);
 				break;
 			case 7:
-				system1->Write(ad,(int)regs[Rc],0x8);
+				system1->Write(ad,(int)regs[Rb],0x8);
 				break;
 			}
 			break;
@@ -614,36 +632,44 @@ dc:
 			Rt = 0;
 			BuildConstant();
 			ad = a + imm;
-			system1->Write(ad,(int)regs[Rc],0xF);
+			system1->Write(ad,(int)regs[Rb],0xF);
 			break;
 		case ISW:
 			Rt = 0;
 			BuildConstant();
 			ad = a + imm;
-			system1->Write(ad,(int)regs[Rc],0xF);
-			system1->Write(ad+4,(int)(regs[Rc]>>32),0xF);
+			system1->Write(ad,(int)regs[Rb],0xF);
+			system1->Write(ad+4,(int)(regs[Rb]>>32),0xF);
 			break;
 		case ISWC:
 			Rt = 0;
 			BuildConstant();
 			ad = a + imm;
-			nn = system1->Write(ad,(int)regs[Rc],0xF,1);
+			nn = system1->Write(ad,(int)regs[Rb],0xF,1);
 			cr0 &= 0xFFFFFFEFFFFFFFFFLL;
 			if (nn) cr0 |= 0x1000000000LL;
-			system1->Write(ad+4,(int)(regs[Rc]>>32),0xF,0);
+			system1->Write(ad+4,(int)(regs[Rb]>>32),0xF,0);
+			break;
+		case ICALL:
+			Rt = regLR;
+			res = pc;
+			regs[regLR] = pc;
+			pc = ((ir >> 6) << 2) | (pc & 0xf0000000);
 			break;
 		case IRET:
 			BuildConstant();
-			a = system1->Read((unsigned int)regs[30],0);
-			res = a;
-			pc = a;
-			regs[31] = regs[31] + imm;
+			pc = regs[Rb];
+			res = regs[Ra] + imm;
+			regs[Ra] = regs[Ra] + imm;
+			break;
+		case IJMP:
+			pc = ((ir >> 6) << 2) | (pc & 0xf0000000);
 			break;
 		case IJAL:
 			BuildConstant();
 			ad = a + imm;
 			res = pc + 4;
-			pc = system1->Read(ad);
+			pc = ad & -4LL;
 			break;
 		case IBRK:
 			switch((ir >> 30)&3) {
@@ -667,43 +693,54 @@ dc:
 			ad = vbr + (((ir >> 17) & 0x1ff) << 3);
 			pc = system1->Read(ad);
 			break;
-		case IBcc:
+		// Branch on bit set or clear
+		case IBBc0:
+		case IBBc1:
 			Rt = 0;
+			brdisp = (((sir >> 22) << 3) | ((ir & 1) << 2));
+			if (((ir >> 17) & 7)==1) {
+				if ((a & (1LL << ((ir >> 16) & 0x3f)))==0)
+					pc = pc + brdisp;
+			}
+			else {
+				if ((a & (1LL << ((ir >> 16) & 0x3f)))!=0)
+					pc = pc + brdisp;
+			}
+			break;
+		case IBcc0:
+		case IBcc1:
+			Rt = 0;
+			brdisp = (((sir >> 22) << 3) | ((ir & 1) << 2));
 			switch((ir >> 16) & 7) {
 			case IBEQ:
 				if (a==b)
-					pc = pc - 4 + ((sir >> 21) << 1);
+					pc = pc + brdisp;
 				break;
 			case IBNE:
 				if (a!=b)
-					pc = pc - 4 + ((sir >> 21) << 1);
+					pc = pc + brdisp;
 				break;
 			case IBLT:
 				if (a < b)
-					pc = pc - 4 + ((sir >> 21) << 1);
+					pc = pc + brdisp;
 				break;
 			case IBGE:
 				if (a >= b)
-					pc = pc - 4 + ((sir >> 21) << 1);
+					pc = pc + brdisp;
 				break;
 			case IBLTU:
 				if (ua < ub)
-					pc = pc - 4 + ((sir >> 21) << 1);
+					pc = pc + brdisp;
 				break;
 			case IBGEU:
 				if (ua <= ub)
-					pc = pc - 4 + ((sir >> 21) << 1);
+					pc = pc + brdisp;
 				break;
 			default:
 				break;
 			}
 			break;
 		case INOP:	Rt = 0; immcnt = 0; break;
-		case IIMML:
-		case IIMMH:
-			Rt = 0;
-			immcnt = immcnt + 1;
-			break;
 		default: break;
 		}
 		//---------------------------------------------------------------------------
@@ -716,9 +753,5 @@ dc:
 			}
 			regs[Rt] = res;
 		}
-		if (opcode != IIMML &&
-			(opcode != IIMMH)
-			)
-			immcnt = 0;
 		regs[0] = 0;
 	};

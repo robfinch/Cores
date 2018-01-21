@@ -15,6 +15,7 @@
 #include "frmInterrupts.h"
 #include "frmStack.h"
 #include "frmMemory.h"
+#include "frmAsmDisplay.h"
 #include "Disassem.h"
 #include "clsCPU.h"
 #include "clsPIC.h"
@@ -53,6 +54,7 @@ namespace E64 {
 		int stepout;
 		unsigned int stepoverBkpt;
 		Thread^ runthread;
+		frmAsmDisplay^ asmDisplay;
 
 	private: System::Windows::Forms::Label^  label42;
 	private: System::Windows::Forms::Label^  label43;
@@ -101,6 +103,7 @@ namespace E64 {
 	private: System::Windows::Forms::TextBox^  textBoxFP1;
 
 	private: System::Windows::Forms::TextBox^  textBoxFP0;
+	private: System::Windows::Forms::TrackBar^  trackBar1;
 
 
 
@@ -125,6 +128,8 @@ namespace E64 {
 				 Screenform->Show();
 			frmKeyboard^ keyboardFrm = gcnew frmKeyboard();
 			     keyboardFrm->Show();
+			asmDisplay = gcnew frmAsmDisplay();
+			asmDisplay->Show();
 			irq1024Hz = false;
 			irq30Hz = false;
 			irqKeyboard = false;
@@ -449,8 +454,10 @@ private: System::Windows::Forms::Label^  label41;
 			this->textBoxFP2 = (gcnew System::Windows::Forms::TextBox());
 			this->textBoxFP1 = (gcnew System::Windows::Forms::TextBox());
 			this->textBoxFP0 = (gcnew System::Windows::Forms::TextBox());
+			this->trackBar1 = (gcnew System::Windows::Forms::TrackBar());
 			this->menuStrip1->SuspendLayout();
 			this->toolStrip1->SuspendLayout();
+			(cli::safe_cast<System::ComponentModel::ISupportInitialize^  >(this->trackBar1))->BeginInit();
 			this->SuspendLayout();
 			// 
 			// menuStrip1
@@ -712,30 +719,29 @@ private: System::Windows::Forms::Label^  label41;
 			// listBoxAdr
 			// 
 			this->listBoxAdr->FormattingEnabled = true;
-			this->listBoxAdr->Location = System::Drawing::Point(12, 48);
+			this->listBoxAdr->Location = System::Drawing::Point(12, 152);
 			this->listBoxAdr->Name = L"listBoxAdr";
-			this->listBoxAdr->Size = System::Drawing::Size(64, 446);
+			this->listBoxAdr->Size = System::Drawing::Size(64, 342);
 			this->listBoxAdr->TabIndex = 5;
 			// 
 			// listBoxCode
 			// 
 			this->listBoxCode->FormattingEnabled = true;
-			this->listBoxCode->Location = System::Drawing::Point(138, 48);
+			this->listBoxCode->Location = System::Drawing::Point(138, 152);
 			this->listBoxCode->Name = L"listBoxCode";
-			this->listBoxCode->Size = System::Drawing::Size(238, 446);
+			this->listBoxCode->Size = System::Drawing::Size(238, 342);
 			this->listBoxCode->TabIndex = 6;
 			// 
 			// timer1
 			// 
-			this->timer1->Enabled = true;
 			this->timer1->Tick += gcnew System::EventHandler(this, &frmMain::timer1_Tick);
 			// 
 			// listBoxBytes
 			// 
 			this->listBoxBytes->FormattingEnabled = true;
-			this->listBoxBytes->Location = System::Drawing::Point(72, 48);
+			this->listBoxBytes->Location = System::Drawing::Point(72, 152);
 			this->listBoxBytes->Name = L"listBoxBytes";
-			this->listBoxBytes->Size = System::Drawing::Size(69, 446);
+			this->listBoxBytes->Size = System::Drawing::Size(69, 342);
 			this->listBoxBytes->TabIndex = 7;
 			// 
 			// label7
@@ -1210,9 +1216,9 @@ private: System::Windows::Forms::Label^  label41;
 			this->label30->AutoSize = true;
 			this->label30->Location = System::Drawing::Point(528, 417);
 			this->label30->Name = L"label30";
-			this->label30->Size = System::Drawing::Size(46, 13);
+			this->label30->Size = System::Drawing::Size(45, 13);
 			this->label30->TabIndex = 102;
-			this->label30->Text = L"R30/BP";
+			this->label30->Text = L"R30/FP";
 			// 
 			// label29
 			// 
@@ -1887,11 +1893,23 @@ private: System::Windows::Forms::Label^  label41;
 			this->textBoxFP0->TabStop = false;
 			this->textBoxFP0->TextAlign = System::Windows::Forms::HorizontalAlignment::Right;
 			// 
+			// trackBar1
+			// 
+			this->trackBar1->Location = System::Drawing::Point(12, 53);
+			this->trackBar1->Maximum = 500;
+			this->trackBar1->Minimum = 1;
+			this->trackBar1->Name = L"trackBar1";
+			this->trackBar1->Size = System::Drawing::Size(161, 45);
+			this->trackBar1->TabIndex = 161;
+			this->trackBar1->Value = 100;
+			this->trackBar1->Scroll += gcnew System::EventHandler(this, &frmMain::trackBar1_Scroll);
+			// 
 			// frmMain
 			// 
 			this->AutoScaleDimensions = System::Drawing::SizeF(6, 13);
 			this->AutoScaleMode = System::Windows::Forms::AutoScaleMode::Font;
 			this->ClientSize = System::Drawing::Size(984, 549);
+			this->Controls->Add(this->trackBar1);
 			this->Controls->Add(this->label48);
 			this->Controls->Add(this->label49);
 			this->Controls->Add(this->label50);
@@ -2025,6 +2043,7 @@ private: System::Windows::Forms::Label^  label41;
 			this->menuStrip1->PerformLayout();
 			this->toolStrip1->ResumeLayout(false);
 			this->toolStrip1->PerformLayout();
+			(cli::safe_cast<System::ComponentModel::ISupportInitialize^  >(this->trackBar1))->EndInit();
 			this->ResumeLayout(false);
 			this->PerformLayout();
 
@@ -2068,14 +2087,15 @@ private: System::Void loadToolStripMenuItem_Click(System::Object^  sender, Syste
 				if (!firstAdr)
 					firstAdr = ad;
 				system1.memory[ad>>2] = dat;
-				str_disassem = Disassem(str_ad,str_insn,&ad1);
+				str_disassem = Disassem(str_ad,str_insn,ad,&ad1);
 				str_ad_insn = str_ad + "   " + str_insn + "    " + str_disassem;
 				label1->Text = gcnew String(str_ad_insn.c_str());
 				//this->checkedListBox1->Items->Add(gcnew String(str_ad_insn.c_str()));
 			}
      		fp_in.close();
 			ad = firstAdr;
-			UpdateListBox(ad);
+			asmDisplay->ad = ad;
+			//UpdateListBox(ad);
 	};
 		 // the step once button
 private: System::Void toolStripButton1_Click(System::Object^  sender, System::EventArgs^  e) {
@@ -2090,7 +2110,8 @@ private: System::Void resetToolStripMenuItem_Click(System::Object^  sender, Syst
 			 this->lblWriteErr->Visible = false;
 			 irq30Hz = false;
 			 irq1024Hz = false;
-			 UpdateListBox(cpu1.pc-32);
+ 			 asmDisplay->ad = cpu1.pc-32;
+			 //UpdateListBox(cpu1.pc-32);
 		 }
 public: void UpdateListBox(unsigned int ad) {
 	int nn;
@@ -2100,14 +2121,14 @@ public: void UpdateListBox(unsigned int ad) {
 	unsigned int dat, datx, daty;
 	unsigned int ad1;
 
-	if (ad > 134217727)
-		ad = 0;
+	//if (ad > 134217727)
+	//	ad = 0;
 	this->listBoxCode->Items->Clear();
 	this->listBoxAdr->Items->Clear();
 	if (viewMacCode) this->listBoxBytes->Items->Clear();
 			chksum = 0;
-			for (nn = 0x10000; nn < 0x20000; nn+=4) {
-				chksum += system1.memory[nn>>2];
+			for (nn = 0xFFFC0000; nn < 0xFFFD0000; nn+=4) {
+				chksum += system1.Read(nn>>2);
 			}
 			chksum = 0;
 	for (nn = 0; nn < 32; nn++) {
@@ -2299,7 +2320,12 @@ private: System::Void toolStripButton4_Click(System::Object^  sender, System::Ev
 			 if (fullspeed) {
 				 isRunning = true;
 			 }
-			 else animate = true;
+			 else {
+				 asmDisplay->animate = true;
+				 if (asmDisplay->animateDelay==0)
+					 asmDisplay->animateDelay = 300;
+				 //animate = true;
+			 }
 		 }
 private: System::Void timer1_Tick(System::Object^  sender, System::EventArgs^  e) {
 			 static int tt = 0;
@@ -2308,10 +2334,10 @@ private: System::Void timer1_Tick(System::Object^  sender, System::EventArgs^  e
 				 tt += 1;
 				 if (tt == 100) {
 					 tt = 0;
-					 UpdateListBox(cpu1.pc-32);
+					 //UpdateListBox(cpu1.pc-32);
 				 }
-			 else
-				UpdateListBox(cpu1.pc-32);
+			 //else
+				//UpdateListBox(cpu1.pc-32);
 			 if (!cpu1.isRunning && animate)
 				RunCPU();
 			 if (trigger30) {
@@ -2340,7 +2366,9 @@ private: System::Void toolStripButton7_Click(System::Object^  sender, System::Ev
 private: System::Void freeRunFastToolStripMenuItem_Click(System::Object^  sender, System::EventArgs^  e) {
 			 cpu1.isRunning = false;
 			 animate = true;
-			 this->timer1->Interval = 1;
+			 asmDisplay->animate = true;
+			 asmDisplay->animateDelay = 100;
+			 //this->timer1->Interval = 1;
 			 this->fullSpeedToolStripMenuItem->Checked = false;
 			 this->freeRunFastToolStripMenuItem->Checked = true;
 		 }
@@ -2358,6 +2386,7 @@ private: System::Void fullSpeedToolStripMenuItem_Click(System::Object^  sender, 
 		 }
 			// stepout button.
 private: System::Void toolStripButton3_Click(System::Object^  sender, System::EventArgs^  e) {
+			 asmDisplay->animate = false;
 			 animate = false;
 			 stepout = true;
 			 fullspeed = true;
@@ -2367,7 +2396,7 @@ private: System::Void toolStripButton3_Click(System::Object^  sender, System::Ev
 private: void RunCPU() {
 			 int nn,kk;
 //			if (cpu1.pc > 134217727) {
-			 if (cpu1.pc < 0x10000 || cpu1.pc >= 0x30000) {
+			 if (cpu1.pc < 0xFFFC0000 || cpu1.pc >= 0xFFFE0000) {
 				isRunning = false;
 				return;
 			}
@@ -2393,6 +2422,7 @@ private: void RunCPU() {
 				runstop = false;
 				return;
 			}
+			asmDisplay->ad = cpu1.pc - 32;
 			cpu1.Step();
 			pic1.Step();
 			if (stepout) {
@@ -2500,7 +2530,9 @@ private: void LoadIntelHexFile() {
 				}
 				if (!firstAdr)
 					firstAdr = ad;
-				system1.memory[ad>>2] = dat;
+				system1.Write(ad,dat,0xffffffff);
+				//	case IBcc0:
+//system1.memory[ad>>2] = dat;
 				//sprintf(buf2,"%06X", ad);
 				//str_ad = std::string(buf2);
 				//sprintf(buf2,"%08X", dat);
@@ -2512,7 +2544,8 @@ private: void LoadIntelHexFile() {
 			}
      		fp_in.close();
 			ad = firstAdr;
-			UpdateListBox(ad);
+			//UpdateListBox(ad);
+			asmDisplay->ad = ad;
 			if (chksum != 0) {
 				sprintf(buf2, "Checksum Error: %d", chksum);
 				this->lblChecksumError->Text = gcnew String(buf2);
@@ -2560,6 +2593,7 @@ private: void DoStopButton() {
 			 isRunning = false;
 			 cpu1.brk = true;
 			 fullspeed = false;
+			 asmDisplay->animate = false;
 			 this->fullSpeedToolStripMenuItem->Checked = false;
 			 this->freeRunFastToolStripMenuItem->Checked = false;
 			 this->timer1->Interval = 100;
@@ -2569,7 +2603,9 @@ private: void DoStepInto() {
 			 isRunning = false;
 			 cpu1.Step();
 			 pic1.Step();
-			 UpdateListBox(cpu1.pc-32);
+			 asmDisplay->ad = cpu1.pc-32;
+			 asmDisplay->animate = false;
+			 //UpdateListBox(cpu1.pc-32);
 		 }
 private: void DoStepOver() {
 			 stepoverBkpt = cpu1.pc + 4;
@@ -2606,6 +2642,10 @@ private: System::Void textBox7_TextChanged(System::Object^  sender, System::Even
 private: System::Void textBox6_TextChanged(System::Object^  sender, System::EventArgs^  e) {
 		 }
 private: System::Void toolStrip1_ItemClicked(System::Object^  sender, System::Windows::Forms::ToolStripItemClickedEventArgs^  e) {
+		 }
+
+private: System::Void trackBar1_Scroll(System::Object^  sender, System::EventArgs^  e) {
+			 asmDisplay->animateDelay = (int)trackBar1->Value;
 		 }
 };
 };

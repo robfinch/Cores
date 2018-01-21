@@ -13,6 +13,8 @@ class clsSystem
 {
 public:
 	unsigned int memory[33554432];
+	unsigned int scratchpad[8192];
+	unsigned int rom[32768];
 	unsigned long VideoMem[4096];
 	bool VideoMemDirty[4096];
 	unsigned int leds;

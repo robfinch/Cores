@@ -42,6 +42,12 @@ void clsSystem::Reset()
 		if (ad < 134217728) {
 			return memory[ad >> 2];
 		}
+		else if (((ad & 0xFFF00000) >> 20) == 0xFF4) {
+			return (scratchpad[(ad & 32767) >> 2]);
+		}
+		else if ((ad & 0xfffc0000)==0xfffc0000) {
+			return (rom[(ad >> 2) & 0x7fff]);
+		}
 		else if ((ad & 0xFFFF0000)==0xFFD00000) {
 			return VideoMem[(ad>>2)& 0xFFF];
 		}
@@ -121,8 +127,47 @@ void clsSystem::Reset()
 				break;
 			}
 		}
+		else if (((ad & 0xFFF00000) >> 20) == 0xFF4) {
+			unsigned int ad1 = (ad & 32767) >> 2;
+			switch(mask) {
+			case 0xF:
+				scratchpad[ad1] = dat;
+				break;
+			case 0x1:
+				scratchpad[ad1] &= 0xFFFFFF00;
+				scratchpad[ad1] |= dat & 0xFF;
+				break;
+			case 0x2:
+				scratchpad[ad1] &= 0xFFFF00FF;
+				scratchpad[ad1] |= (dat & 0xFF) << 8;
+				break;
+			case 0x4:
+				scratchpad[ad1] &= 0xFF00FFFF;
+				scratchpad[ad1] |= (dat & 0xFF) << 16;
+				break;
+			case 0x8:
+				scratchpad[ad1] &= 0x00FFFFFF;
+				scratchpad[ad1] |= (dat & 0xFF) << 24;
+				break;
+			case 0x3:
+				scratchpad[ad1] &= 0xFFFF0000;
+				scratchpad[ad1] |= dat & 0xFFFF;
+				break;
+			case 0x6:
+				scratchpad[ad1] &= 0xFF0000FF;
+				scratchpad[ad1] |= (dat & 0xFFFF) << 8;
+				break;
+			case 0xC:
+				scratchpad[ad1] &= 0x0000FFFF;
+				scratchpad[ad1] |= (dat & 0xFFFF) << 16;
+				break;
+			}
+		}
 		else if ((ad & 0xFFFFFF00)==0xFFDC0600) {
 			leds = dat;
+		}
+		else if ((ad & 0xfffc0000)==0xfffc0000) {
+			rom[(ad>>2) & 0x7fff] = dat;
 		}
 		else if ((ad & 0xFFFF0000)==0xFFD00000) {
 			VideoMem[(ad>>2)& 0xFFF] = dat;

@@ -126,9 +126,9 @@ namespace E64 {
 			this->label2->AutoSize = true;
 			this->label2->Location = System::Drawing::Point(318, 9);
 			this->label2->Name = L"label2";
-			this->label2->Size = System::Drawing::Size(99, 13);
+			this->label2->Size = System::Drawing::Size(104, 13);
 			this->label2->TabIndex = 4;
-			this->label2->Text = L"Base Pointer Focus";
+			this->label2->Text = L"Frame Pointer Focus";
 			// 
 			// textBoxSP
 			// 
@@ -206,7 +206,7 @@ private: void UpdateForm() {
 					 this->listBoxBP->Items->Clear();
 					 for (nn = -128; nn < 128; nn+=8) {
 						 kk = max(0,cpu1.regs[30]+nn);
-						 sprintf(buf, "%s %06X: %016I64X", kk == cpu1.regs[30] ? "BP->" : "    ", (unsigned int)kk,
+						 sprintf(buf, "%s %06X: %016I64X", kk == cpu1.regs[30] ? "FP->" : "    ", (unsigned int)kk,
 							 ((unsigned __int64)system1.Read(kk+4) << 32)|(unsigned __int64)system1.Read(kk));
 						 this->listBoxBP->Items->Add(gcnew String(buf));
 						 if (kk == cpu1.regs[30])

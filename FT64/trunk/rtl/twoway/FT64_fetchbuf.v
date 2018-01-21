@@ -32,6 +32,7 @@
 // Like to turn this into an independent module at some point.
 //
 module FT64_fetchbuf(rst, clk,
+	regLR,
     insn0, insn1, phit, 
     branchmiss, misspc, predict_taken0, predict_taken1,
     predict_takenA, predict_takenB, predict_takenC, predict_takenD,
@@ -54,6 +55,7 @@ parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
 input rst;
 input clk;
+input [4:0] regLR;
 input [31:0] insn0;
 input [31:0] insn1;
 input phit;
@@ -201,12 +203,14 @@ else begin
 	if (fetchbuf0_v && fetchbuf1_v && (queued1 || queued2)) begin
         case(fetchbuf0_instr[`INSTRUCTION_OP])
         `JAL:
-        	if (fetchbuf0_instr[`INSTRUCTION_RB]==5'd29) begin
+        	// JAL LR,xxxx	assume call
+        	if (fetchbuf0_instr[`INSTRUCTION_RB]==regLR) begin
                  ras[((rasp-6'd1)&15)] <= fetchbuf0_pc + 32'd4;
                  rasp <= rasp - 4'd1;
         	end
+        	// JAL r0,[r29]	assume a ret
         	else if (fetchbuf0_instr[`INSTRUCTION_RB]==5'd00 &&
-        			 fetchbuf0_instr[`INSTRUCTION_RA]==5'd29) begin
+        			 fetchbuf0_instr[`INSTRUCTION_RA]==regLR) begin
         		rasp <= rasp + 4'd1;
         	end
         `CALL:
@@ -221,12 +225,12 @@ else begin
     else if (fetchbuf1_v && queued1)
         case(fetchbuf1_instr[`INSTRUCTION_OP])
         `JAL:
-        	if (fetchbuf1_instr[`INSTRUCTION_RB]==5'd29) begin
+        	if (fetchbuf1_instr[`INSTRUCTION_RB]==regLR) begin
                  ras[((rasp-6'd1)&15)] <= fetchbuf1_pc + 32'd4;
                  rasp <= rasp - 4'd1;
         	end
         	else if (fetchbuf1_instr[`INSTRUCTION_RB]==5'd00 &&
-        			 fetchbuf1_instr[`INSTRUCTION_RA]==5'd29) begin
+        			 fetchbuf1_instr[`INSTRUCTION_RA]==regLR) begin
         		rasp <= rasp + 4'd1;
         	end
         `CALL:
@@ -240,12 +244,12 @@ else begin
     else if (fetchbuf0_v && queued1)
         case(fetchbuf0_instr[`INSTRUCTION_OP])
         `JAL:
-        	if (fetchbuf0_instr[`INSTRUCTION_RB]==5'd29) begin
+        	if (fetchbuf0_instr[`INSTRUCTION_RB]==regLR) begin
                  ras[((rasp-6'd1)&15)] <= fetchbuf0_pc + 32'd4;
                  rasp <= rasp - 4'd1;
         	end
         	else if (fetchbuf0_instr[`INSTRUCTION_RB]==5'd00 &&
-        			 fetchbuf0_instr[`INSTRUCTION_RA]==5'd29) begin
+        			 fetchbuf0_instr[`INSTRUCTION_RA]==regLR) begin
         		rasp <= rasp + 4'd1;
         	end
         `CALL:
@@ -634,10 +638,12 @@ else begin
 	    else if (fetchbufC_v == `INV && fetchbufD_v == `INV)
     	    FetchCD();
 	end
-	if (nop_fetchbuf[0])  fetchbufA_instr <= `NOP_INSN;
-	if (nop_fetchbuf[1])  fetchbufB_instr <= `NOP_INSN;
-	if (nop_fetchbuf[2])  fetchbufC_instr <= `NOP_INSN;
-	if (nop_fetchbuf[3])  fetchbufD_instr <= `NOP_INSN;
+	// The fetchbuffer is invalidated at the end of a vector instruction
+	// queue.
+	if (nop_fetchbuf[0])  fetchbufA_v <= `INV;
+	if (nop_fetchbuf[1])  fetchbufB_v <= `INV;
+	if (nop_fetchbuf[2])  fetchbufC_v <= `INV;
+	if (nop_fetchbuf[3])  fetchbufD_v <= `INV;
 end
 
 assign fetchbuf0_instr = (fetchbuf == 1'b0) ? fetchbufA_instr : fetchbufC_instr;

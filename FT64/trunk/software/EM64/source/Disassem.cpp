@@ -5,7 +5,6 @@
 
 
 unsigned int insn;
-unsigned int ad;
 unsigned int imm1,imm2;
 int immcnt;
 int opcode;
@@ -131,6 +130,16 @@ std::string Spr()
 	return str;
 }
 
+static std::string CallConstant()
+{
+    static char buf[50];
+    int sir;
+
+    sir = insn;
+    sprintf(buf,"$%X", (sir >> 6) << 2);
+    return std::string(buf);
+}
+
 static std::string DisassemConstant()
 {
     static char buf[50];
@@ -200,39 +209,16 @@ static std::string DisassemConstant4u()
 }
 
 
-static std::string DisassemBraDisplacement()
+static std::string DisassemBccDisplacement(unsigned int bad)
 {
     static char buf[50];
     int sir;
+	int brdisp;
 
     sir = insn;
-    sprintf(buf,"$%X", ((sir >> 6) <<1) + ad);
-    return std::string(buf);
-}
-
-
-static std::string DisassemBraDisplacement9()
-{
-    static char buf[50];
-    int sir;
-
-	if (insn & 0x8000)
-		sir = insn | 0xFFFFFFFFFFFF0000LL;
-	else
-		sir = insn & 0xFFFF;
-    sprintf(buf,"$%X", ((sir >> 7) <<1) + ad);
-    return std::string(buf);
-}
-
-
-static std::string DisassemBccDisplacement()
-{
-    static char buf[50];
-    int sir;
-
-    sir = insn;
-    sprintf(buf,"$%X", (((sir >> 20)|(sir & 1)) <<2) + ad);
-    return std::string(buf);
+	brdisp = (((sir >> 22) << 3) | ((sir & 1) << 2));
+    sprintf(buf,"$%X", brdisp + bad + 4);
+    return (std::string(buf));
 }
 
 
@@ -255,7 +241,7 @@ static std::string DisassemMbMe()
 {
 	static char buf[50];
 
-	sprintf(buf, "#%d,#%d", (imm1) & 0x3f,(imm1>>8) &0x3f);
+	sprintf(buf, "#%d,#%d", (insn>>16) & 0x3f,(insn>>22) &0x3f);
 	return std::string(buf);
 }
 
@@ -340,7 +326,7 @@ static std::string DisassemBrk()
 }
 
 
-std::string Disassem(std::string sad, std::string sinsn, unsigned int *ad1)
+std::string Disassem(std::string sad, std::string sinsn, unsigned int dad, unsigned int *ad1)
 {
 	char buf[20];
 	std::string str;
@@ -352,27 +338,14 @@ std::string Disassem(std::string sad, std::string sinsn, unsigned int *ad1)
 		first = 0;
 	}
 
-	ad = strtoul(sad.c_str(),0,16);
 	insn = strtoul(sinsn.c_str(),0,16);
 	opcode = insn & 0x3f;
-	*ad1 = ad + 4;
+	*ad1 = dad + 4;
 	switch(opcode)
 	{
 	case IRR:
 		switch((insn >> 26) & 0x3f)
 		{
-		case IBTFLD:
-			switch((insn >> 29)&7) {
-			case IBFSET:	str = "BFSET  " + Rt() + "," + Ra() + "," + DisassemMbMe(); break;
-			case IBFCLR:	str = "BFCLR  " + Rt() + "," + Ra() + "," + DisassemMbMe(); break;
-			case IBFCHG:	str = "BFCHG  " + Rt() + "," + Ra() + "," + DisassemMbMe(); break;
-			case IBFINS:	str = "BFINS  " + Rt() + "," + Ra() + "," + DisassemMbMe(); break;
-	//		case BFINSI:	str = "BFINSI " + Rt() + "," + Ra() + "," + DisassemMbMe(); break;
-			case IBFEXT:	str = "BFEXT  " + Rt() + "," + Ra() + "," + DisassemMbMe(); break;
-			case IBFEXTU:	str = "BFEXTU " + Rt() + "," + Ra() + "," + DisassemMbMe(); break;
-			}
-			immcnt = 0;
-			return str;
 		case ISEI:	str = "SEI"; break;
 		case IWAIT:	str = "WAI"; break;
 		case IRTI:	str = "RTI"; break;
@@ -431,9 +404,6 @@ std::string Disassem(std::string sad, std::string sinsn, unsigned int *ad1)
 			str = "XOR   " + Rt() +"," + Ra() + "," + Rb();
 			immcnt = 0;
 			return str;
-		case IPOP:
-			immcnt = 0;
-			return "POP   " + Rt();
 		case ILBX:
 			str = "LBX   " + Rt() + "," + DisassemIndexedAddress();
 			immcnt = 0;
@@ -532,6 +502,23 @@ std::string Disassem(std::string sad, std::string sinsn, unsigned int *ad1)
 			break;
 		}
 		break;
+	case IBTFLD:
+		switch((insn >> 29)&7) {
+		case IBFSET:	str = "BFSET  " + Rt() + "," + Ra() + "," + DisassemMbMe(); break;
+		case IBFCLR:	str = "BFCLR  " + Rt() + "," + Ra() + "," + DisassemMbMe(); break;
+		case IBFCHG:	str = "BFCHG  " + Rt() + "," + Ra() + "," + DisassemMbMe(); break;
+		case IBFINS:	str = "BFINS  " + Rt() + "," + Ra() + "," + DisassemMbMe(); break;
+//		case BFINSI:	str = "BFINSI " + Rt() + "," + Ra() + "," + DisassemMbMe(); break;
+		case IBFEXT:	str = "BFEXT  " + Rt() + "," + Ra() + "," + DisassemMbMe(); break;
+		case IBFEXTU:	str = "BFEXTU " + Rt() + "," + Ra() + "," + DisassemMbMe(); break;
+		}
+		immcnt = 0;
+		return str;
+	case IQOPI:
+		switch((insn >> 8) & 7) {
+		case 0:	str = "QOR   " + Rt() + "," + DisassemConstant(); break;
+		}
+		return str;
 	case ICHK:
 		str = "CHK   " + Rt() +"," + Ra() + "," + Bn();
 		immcnt = 0;
@@ -632,41 +619,42 @@ std::string Disassem(std::string sad, std::string sinsn, unsigned int *ad1)
 			return str;
 		}
 		break;
-	case IIMML:
-	case IIMMH:
-		imm2 = imm1;
-		imm1 = (insn >> 6);
-		immcnt++;
-		return "IMM";
-	case IBcc:
+	case IBcc0:
+	case IBcc1:
 		switch((insn >> 16) & 0x7) {
 		case IBEQ:
-			str = "BEQ   " + Ra() + "," + DisassemBccDisplacement();
+			str = "BEQ   " + Ra() + "," + Rb() + "," + DisassemBccDisplacement(dad);
 			immcnt = 0;
 			return str;
 		case IBNE:
-			str = "BNE   " + Ra() + "," + DisassemBccDisplacement();
+			str = "BNE   " + Ra() + "," + Rb() + "," + DisassemBccDisplacement(dad);
 			immcnt = 0;
 			return str;
 		case IBLT:
-			str = "BLT   " + Ra() + "," + DisassemBccDisplacement();
+			str = "BLT   " + Ra() + "," + Rb() + "," + DisassemBccDisplacement(dad);
 			immcnt = 0;
 			return str;
 		case IBGE:
-			str = "BGE   " + Ra() + "," + DisassemBccDisplacement();
+			str = "BGE   " + Ra() + "," + Rb() + "," + DisassemBccDisplacement(dad);
 			immcnt = 0;
 			return str;
 		case IBLTU:
-			str = "BLTU  " + Ra() + "," + DisassemBccDisplacement();
+			str = "BLTU  " + Ra() + "," + Rb() + "," + DisassemBccDisplacement(dad);
 			immcnt = 0;
 			return str;
 		case IBGEU:
-			str = "BGEU  " + Ra() + "," + DisassemBccDisplacement();
+			str = "BGEU  " + Ra() + "," + Rb() + "," + DisassemBccDisplacement(dad);
 			immcnt = 0;
 			return str;
 		}
 		immcnt = 0;
 		return "B????";
+	case ICALL:
+		str = "CALL  " + CallConstant();
+		return (str);
+	case IJMP:
+		str = "JMP   " + CallConstant();
+		return (str);
 	case IJAL:
 		str = DisassemJal();
 		immcnt = 0;
@@ -747,5 +735,5 @@ std::string Disassem(unsigned int ad, unsigned int dat, unsigned int *ad1)
 
 	sprintf(buf1,"%06X", ad);
 	sprintf(buf2,"%08X", dat);
-	return Disassem(std::string(buf1),std::string(buf2),ad1);
+	return (Disassem(std::string(buf1),std::string(buf2),ad,ad1));
 }

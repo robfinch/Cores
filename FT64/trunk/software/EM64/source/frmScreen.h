@@ -75,7 +75,7 @@ namespace E64 {
 			this->AutoScaleMode = System::Windows::Forms::AutoScaleMode::Font;
 			this->ClientSize = System::Drawing::Size(1002, 334);
 			this->Name = L"frmScreen";
-			this->Text = L"E64 Screen";
+			this->Text = L"EM64 Screen";
 			this->Paint += gcnew System::Windows::Forms::PaintEventHandler(this, &frmScreen::frmScreen_Paint);
 			this->ResumeLayout(false);
 

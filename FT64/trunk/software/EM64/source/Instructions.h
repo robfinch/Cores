@@ -1,8 +1,28 @@
 #pragma once
 
-#define IBRK     0x00
+#define IBRK    0x00
 #define IRR		0x02
-#define IBTFLD		0x02
+#define IR1			0x01
+#define IMEMDB			0x10
+#define IMEMSB			0x11
+#define ISYNC			0x12
+#define ISHIFT		0x0F
+#define ISHIFTH		0x3F
+#define ISHIFTC		0x2F
+#define ISHIFTB		0x1F
+#define ISHL			0x0
+#define ISHR			0x1
+#define IASL			0x2
+#define IASR			0x3
+#define IROL			0x4
+#define IROR			0x5
+#define ISHLI			0x8
+#define ISHRI			0x9
+#define IASLI			0xA
+#define IASRI			0xB
+#define IROLI			0xC
+#define IRORI			0xD
+#define IBTFLD	0x22
 #define IBFSET			0x0
 #define IBFCLR			0x1
 #define IBFCHG			0x2
@@ -10,19 +30,6 @@
 #define IBFINSI			0x4
 #define IBFEXT			0x5
 #define IBFEXTU			0x6
-#define ISHIFT		0x03
-#define ISHL				0x0
-#define ISHR				0x1
-#define IASL				0x2
-#define IASR				0x3
-#define IROL				0x4
-#define IROR				0x5
-#define ISHLI			0x8
-#define ISHRI			0x9
-#define IASLI			0xA
-#define IASRI			0xB
-#define IROLI			0xC
-#define IRORI			0xD
 #define INAND		0x0C
 #define INOR			0x0D
 #define IXNOR		0x0E
@@ -34,9 +41,6 @@
 #define ISBX			0x15
 #define ISWX			0x16
 #define ISWCX		0x17
-#define IPUSH		0x19
-#define IPOP			0x1A
-#define IUNLINK		0x1B
 #define ILWRX		0x1D
 #define ILCX			0x20
 #define ILCUX		0x21
@@ -53,9 +57,6 @@
 #define ISEI         0x30
 #define IWAIT        0x31
 #define IRTI         0x32
-#define IMEMDB		0x34
-#define IMEMSB		0x35
-#define ISYNC		0x36
 #define IMULU		0x38
 #define IMULSU		0x39
 #define IMUL		0x3A
@@ -94,7 +95,10 @@
 #define IREX		0x0D
 #define ICSR		0x0E
 #define IEXEC	0x0F
-#define IBcc    0x30
+#define IBBc0	0x26
+#define IBBc1	0x27
+#define IBcc0   0x30
+#define IBcc1	0x31
 #define IBEQ         0x0
 #define IBNE         0x1
 #define IBLT         0x2
@@ -103,6 +107,8 @@
 #define IBGEU        0x5
 #define IRET    0x29
 #define IJAL	0x18
+#define IQOPI	0x1A
+#define	IQOR		0x0
 #define INOP     0x1C
 #define ILB      0x13
 #define ILBU     0x23
@@ -117,9 +123,7 @@
 #define ISW      0x16
 #define ISWC	0x17
 #define ICALL	0x19
-#define IIMML    0x1A
-#define IIMMH	0x1B
-
+#define IJMP	0x28
 #define IDIVUI	0x3C
 #define IDIVSUI	0x3D
 #define IDIVI	0x3E

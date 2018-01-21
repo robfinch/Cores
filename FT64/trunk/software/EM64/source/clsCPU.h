@@ -25,6 +25,7 @@ class clsCPU
 	int mb,me;
 	int spr;
 	int Bn;
+	unsigned int regLR;
 	unsigned int imm1;
 	unsigned int imm2;
 	char hasPrefix;
@@ -34,12 +35,14 @@ class clsCPU
 	int i1;
 	int nn;
 	unsigned int bmask;
+	int brdisp;
 	int r1,r2,r3;
 public:
 	char isRunning;
 	char brk;
 	unsigned int ir, xir, wir;
 	unsigned __int64 regs[32];
+	unsigned __int64 vregs[32][64];
 	double dregs[32];
 	unsigned int pc;
 	unsigned int pcs[40];
