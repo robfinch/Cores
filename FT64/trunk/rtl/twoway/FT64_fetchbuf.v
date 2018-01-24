@@ -630,14 +630,22 @@ else begin
 	    // get data iff the fetch buffers are empty
 	    //
 	    if (fetchbufA_v == `INV && fetchbufB_v == `INV) begin
-            FetchAB();
-            // fetchbuf steering logic correction
-            if (fetchbufC_v==`INV && fetchbufD_v==`INV && phit)
-                 fetchbuf <= 1'b0;
+	        FetchAB();
+	        // fetchbuf steering logic correction
+	        if (fetchbufC_v==`INV && fetchbufD_v==`INV && phit)
+	             fetchbuf <= 1'b0;
 	    end
 	    else if (fetchbufC_v == `INV && fetchbufD_v == `INV)
-    	    FetchCD();
+		    FetchCD();
 	end
+    //
+    // get data iff the fetch buffers are empty
+    //
+    if (fetchbufA_v == `INV && fetchbufB_v == `INV && fetchbufC_v==`INV && fetchbufD_v==`INV && phit) begin
+        FetchAB();
+        fetchbuf <= 1'b0;
+    end
+	
 	// The fetchbuffer is invalidated at the end of a vector instruction
 	// queue.
 	if (nop_fetchbuf[0])  fetchbufA_v <= `INV;

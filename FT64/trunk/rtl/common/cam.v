@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2017  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2017-2018  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -56,19 +56,16 @@ reg we2;
 wire [5:0] madr = (we2|we) ? dmem[wr_addr] : cmp_din;
 
 always @(posedge clk)
+begin
     din2 <= din;
-always @(posedge clk)
     we2 <= we;
-
-always @(posedge clk)
     if (we & ~we2)
         bmem[madr] <= bmem[madr] & ~(32'd1 << wr_addr);
     else if (we2 & ~we)
         bmem[madr] <= bmem[madr] | (32'd1 << wr_addr);
-
-always @(posedge clk)
     if (we)
         dmem[wr_addr] <= din2;
+end
 
 assign match_addr = bmem[madr];
 assign match = |match_addr;

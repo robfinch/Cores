@@ -516,7 +516,7 @@ std::string Disassem(std::string sad, std::string sinsn, unsigned int dad, unsig
 		return str;
 	case IQOPI:
 		switch((insn >> 8) & 7) {
-		case 0:	str = "QOR   " + Rt() + "," + DisassemConstant(); break;
+		case 0:	str = "QOR   " + Rt() + ",#" + DisassemConstant(); break;
 		}
 		return str;
 	case ICHK:
@@ -576,7 +576,10 @@ std::string Disassem(std::string sad, std::string sinsn, unsigned int dad, unsig
 		immcnt = 0;
 		return str;
 	case IOR:
-		str = "OR    " + Rt() +"," + Ra() + ",#" + DisassemConstant();
+		if ((insn >> 16) == 0)
+			str = "MOV   " + Rt() + "," + Ra();
+		else
+			str = "OR    " + Rt() + "," + Ra() + ",#" + DisassemConstant();
 		immcnt = 0;
 		return str;
 	case IXOR:

@@ -64,18 +64,18 @@ namespace E64 {
 			this->label1->AutoSize = true;
 			this->label1->Location = System::Drawing::Point(86, 32);
 			this->label1->Name = L"label1";
-			this->label1->Size = System::Drawing::Size(159, 13);
+			this->label1->Size = System::Drawing::Size(168, 13);
 			this->label1->TabIndex = 0;
-			this->label1->Text = L"E64 FT64 Test System Emulator";
+			this->label1->Text = L"EM64 FT64 Test System Emulator";
 			// 
 			// label2
 			// 
 			this->label2->AutoSize = true;
-			this->label2->Location = System::Drawing::Point(114, 56);
+			this->label2->Location = System::Drawing::Point(101, 56);
 			this->label2->Name = L"label2";
-			this->label2->Size = System::Drawing::Size(111, 13);
+			this->label2->Size = System::Drawing::Size(138, 13);
 			this->label2->TabIndex = 1;
-			this->label2->Text = L"(C) 2017 Robert Finch";
+			this->label2->Text = L"(C) 2017-2018 Robert Finch";
 			this->label2->Click += gcnew System::EventHandler(this, &frmAbout::label2_Click);
 			// 
 			// linkLabel1

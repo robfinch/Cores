@@ -501,6 +501,7 @@ case(instr[`INSTRUCTION_OP])
         `BCDMUL:    o = BIG ? bcdmulo :  64'hCCCCCCCCCCCCCCCC;
         default:    o = 64'hDEADDEADDEADDEAD;
         endcase
+    `VMOV:		o = a;
     `R1:
         case(instr[`INSTRUCTION_S1])
         `CNTLZ:     o = BIG ? {57'd0,clzo} : 64'hCCCCCCCCCCCCCCCC;
@@ -693,8 +694,8 @@ case(instr[`INSTRUCTION_OP])
     `NAND:  o = ~and64;
     `NOR:   o = ~or64;
     `XNOR:  o = ~xor64;
-    `SEI:       o = a | b;
-    `RTI:       o = a | b;
+    `SEI:       o = a | instr[21:16];
+    `RTI:       o = a | instr[21:16];
     `CMOVEQ:    o = (a==64'd0) ? b : c;
     `CMOVNE:    o = (a!=64'd0) ? b : c;
     `MUX:       for (n = 0; n < 64; n = n + 1)

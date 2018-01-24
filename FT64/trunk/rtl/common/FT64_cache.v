@@ -50,14 +50,14 @@ reg [255:0] mem [0:63];
 reg [63:0] valid;
 
 always  @(posedge clk)
-    if (wr) mem[lineno] <= i;
+    if (wr)  mem[lineno] <= i;
 always  @(posedge clk)
 if (rst)
-    valid <= 64'd0;
+     valid <= 64'd0;
 else begin
-    if (invall) valid <= 64'd0;
-    else if (invline) valid[lineno] <= 1'b0;
-    else if (wr) valid[lineno] <= 1'b1;
+    if (invall)  valid <= 64'd0;
+    else if (invline)  valid[lineno] <= 1'b0;
+    else if (wr)  valid[lineno] <= 1'b1;
 end
 
 assign o = mem[lineno];
@@ -84,9 +84,9 @@ wire [63:0] match_addr;
 reg [5:0] cntr;
 always @(posedge clk)
 if (rst)
-    cntr <= 6'd0;
+     cntr <= 6'd0;
 else begin
-    if (nxt) cntr <= cntr + 6'd1;
+    if (nxt)  cntr <= cntr + 6'd1;
 end
     
 //wire [21:0] lfsro;
@@ -132,7 +132,7 @@ wire [21:0] lfsro;
 lfsr #(22,22'h0ACE2) u1 (rst, clk, !(wr2|wr), 1'b0, lfsro);
 
 always @(posedge clk)
-    wr2 <= wr;
+     wr2 <= wr;
 
 genvar g;
 generate
@@ -178,9 +178,9 @@ reg wr1,wr2;
 // Must update the cache memory on the cycle after a write to the tag memmory.
 // Otherwise lineno won't be valid. Tag memory takes two clock cycles to update.
 always @(posedge clk)
-    wr1 <= wr;
+     wr1 <= wr;
 always @(posedge clk)
-    wr2 <= wr1;
+     wr2 <= wr1;
 
 FT64_L1_icache_mem u1
 (
@@ -253,26 +253,26 @@ initial begin
 end
 
 always @(posedge clk)
-    if (invall) valid <= 512'd0;
-    else if (invline) valid[lineno] <= 1'b0;
-    else if (wr) valid[lineno] <= 1'b1;
+    if (invall)  valid <= 512'd0;
+    else if (invline)  valid[lineno] <= 1'b0;
+    else if (wr)  valid[lineno] <= 1'b1;
 
 always @(posedge clk)
 begin
     if (wr)
         case(sel[1:0])
-        2'd0:   mem0[lineno] <= i;
-        2'd1:   mem1[lineno] <= i;
-        2'd2:   mem2[lineno] <= i;
-        2'd3:   mem3[lineno] <= i;
+        2'd0:    mem0[lineno] <= i;
+        2'd1:    mem1[lineno] <= i;
+        2'd2:    mem2[lineno] <= i;
+        2'd3:    mem3[lineno] <= i;
         endcase
 end
 
 always @(posedge clk)
-    rrcl <= lineno;        
+     rrcl <= lineno;        
     
 always @(posedge clk)
-    ov <= valid[lineno];
+     ov <= valid[lineno];
 
 assign o = {mem3[rrcl],mem2[rrcl],mem1[rrcl],mem0[rrcl]};
 
@@ -312,19 +312,19 @@ reg [63:0] i1,i2;
 // Must update the cache memory on the cycle after a write to the tag memmory.
 // Otherwise lineno won't be valid. camTag memory takes two clock cycles to update.
 always @(posedge clk)
-    wr1 <= wr;
+     wr1 <= wr;
 always @(posedge clk)
-    wr2 <= wr1;
+     wr2 <= wr1;
 always @(posedge clk)
-    sel1 <= adr[4:3];
+     sel1 <= adr[4:3];
 always @(posedge clk)
-    sel2 <= sel1;
+     sel2 <= sel1;
 // An exception is forced to be stored in the event of an error loading the
 // the instruction line.
 always @(posedge clk)
-    i1 <= err_i ? {2{16'd0,1'b0,`FLT_IBE,`BRK}} : exv_i ? {2{16'd0,1'b0,`FLT_EXF,`BRK}} : i;
+     i1 <= err_i ? {2{16'd0,1'b0,`FLT_IBE,`BRK}} : exv_i ? {2{16'd0,1'b0,`FLT_EXF,`BRK}} : i;
 always @(posedge clk)
-    i2 <= i1;
+     i2 <= i1;
 
 wire pe_wr;
 edge_det u3 (.rst(rst), .clk(clk), .ce(1'b1), .i(wr && adr[4:0]==5'd0), .pe(pe_wr), .ne(), .ee() );
@@ -409,30 +409,35 @@ initial begin
 end
 
 reg wr2;
-always @(posedge clk)
-    wr2 <= wr;
 wire [21:0] lfsro;
 lfsr #(22,22'h0ACE3) u1 (rst, clk, nxt, 1'b0, lfsro);
 reg [8:0] wlineno;
 always @(posedge clk)
-begin
-    if (wr && lfsro[1:0]==2'b00) begin mem0[adr[11:5]] <= adr[37:5]; wlineno <= {2'b00,adr[11:5]}; end
-    if (wr && lfsro[1:0]==2'b01) begin mem1[adr[11:5]] <= adr[37:5]; wlineno <= {2'b01,adr[11:5]}; end
-    if (wr && lfsro[1:0]==2'b10) begin mem2[adr[11:5]] <= adr[37:5]; wlineno <= {2'b10,adr[11:5]}; end
-    if (wr && lfsro[1:0]==2'b11) begin mem3[adr[11:5]] <= adr[37:5]; wlineno <= {2'b11,adr[11:5]}; end
+if (rst)
+	wlineno <= 9'h000;
+else begin
+     wr2 <= wr;
+	if (wr) begin
+		case(lfsro[1:0])
+		2'b00:	begin  mem0[adr[11:5]] <= adr[37:5];  wlineno <= {2'b00,adr[11:5]}; end
+		2'b01:	begin  mem1[adr[11:5]] <= adr[37:5];  wlineno <= {2'b01,adr[11:5]}; end
+		2'b10:	begin  mem2[adr[11:5]] <= adr[37:5];  wlineno <= {2'b10,adr[11:5]}; end
+		2'b11:	begin  mem3[adr[11:5]] <= adr[37:5];  wlineno <= {2'b11,adr[11:5]}; end
+		endcase
+	end
+     rradr <= adr;
 end
-always @(posedge clk)
-    rradr <= adr;
+
 wire hit0 = mem0[rradr[11:5]]==rradr[37:5];
 wire hit1 = mem1[rradr[11:5]]==rradr[37:5];
 wire hit2 = mem2[rradr[11:5]]==rradr[37:5];
 wire hit3 = mem3[rradr[11:5]]==rradr[37:5];
 always @*
     //if (wr2) lineno = wlineno;
-    if (hit0) lineno = {2'b00,rradr[11:5]};
-    else if (hit1) lineno = {2'b01,rradr[11:5]};
-    else if (hit2) lineno = {2'b10,rradr[11:5]};
-    else lineno = {2'b11,rradr[11:5]};
+    if (hit0)  lineno = {2'b00,rradr[11:5]};
+    else if (hit1)  lineno = {2'b01,rradr[11:5]};
+    else if (hit2)  lineno = {2'b10,rradr[11:5]};
+    else  lineno = {2'b11,rradr[11:5]};
 assign hit = hit0|hit1|hit2|hit3;
 endmodule
 
@@ -457,18 +462,18 @@ end
 
 reg wr2;
 always @(posedge clk)
-    wr2 <= wr;
+     wr2 <= wr;
 reg [8:0] wlineno;
 always @(posedge clk)
 begin
-    if (wr) begin mem[adr[13:5]] <= adr[37:14]; wlineno <= adr[13:5]; end
+    if (wr) begin  mem[adr[13:5]] <= adr[37:14];  wlineno <= adr[13:5]; end
 end
 always @(posedge clk)
-    rradr <= adr;
+     rradr <= adr;
 wire hit = mem[rradr[13:5]]==rradr[37:14];
 always @*
-    if (wr2) lineno = wlineno;
-    else lineno = rradr[13:5];
+    if (wr2)  lineno = wlineno;
+    else  lineno = rradr[13:5];
 endmodule
 
 // -----------------------------------------------------------------------------
@@ -487,9 +492,9 @@ output [255:0] o1;
 reg [11:0] rradr,rradrp8;
 
 always @(posedge rclk)
-    rradr <= radr;        
+     rradr <= radr;        
 always @(posedge rclk)
-    rradrp8 <= radr + 14'd8;
+     rradrp8 <= radr + 14'd8;
 
 genvar n;
 generate
@@ -499,7 +504,7 @@ begin : dmem
 reg [7:0] mem [7:0][0:511];
 always @(posedge wclk)
 begin
-    if (wr && (wadr[2:0]==n)) mem[n][wadr[11:3]] <= i;
+    if (wr && (wadr[2:0]==n))  mem[n][wadr[11:3]] <= i;
 end
 assign o0[n*32+31:n*32] = mem[n][rradr[11:3]];
 assign o1[n*32+31:n*32] = mem[n][rradrp8[11:3]];
@@ -553,9 +558,9 @@ FT64_dcache_tag2 u2 (
 );
 
 always @(posedge rclk)
-    hit0 <= tago0[31:8]==radr[37:14];
+     hit0 <= tago0[31:8]==radr[37:14];
 always @(posedge rclk)
-    hit1 <= tago1[31:8]==radrp8[37:14];
+     hit1 <= tago1[31:8]==radrp8[37:14];
 
 endmodule
 
@@ -665,7 +670,7 @@ endcase
 
 // hit0, hit1 are also delayed by a clock already
 always @(posedge rclk)
-    o <= {dc1,dc0} >> (radr[4:0] * 8);
+     o <= {dc1,dc0} >> (radr[4:0] * 8);
 
 always @*
     if (hit0 & hit1)
@@ -715,39 +720,39 @@ generate begin
 for (g = 0; g < 4; g = g + 1)
 always @(posedge clka)
 begin
-    if (ena & wea[0] & addra[4:3]==g) mem[addra[13:5]][g*64+7:g*64] <= dina[7:0];
-    if (ena & wea[1] & addra[4:3]==g) mem[addra[13:5]][g*64+15:g*64+8] <= dina[15:8];
-    if (ena & wea[2] & addra[4:3]==g) mem[addra[13:5]][g*64+23:g*64+16] <= dina[23:16];
-    if (ena & wea[3] & addra[4:3]==g) mem[addra[13:5]][g*64+31:g*64+24] <= dina[31:24];
-    if (ena & wea[4] & addra[4:3]==g) mem[addra[13:5]][g*64+39:g*64+32] <= dina[39:32];
-    if (ena & wea[5] & addra[4:3]==g) mem[addra[13:5]][g*64+47:g*64+40] <= dina[47:40];
-    if (ena & wea[6] & addra[4:3]==g) mem[addra[13:5]][g*64+55:g*64+48] <= dina[55:48];
-    if (ena & wea[7] & addra[4:3]==g) mem[addra[13:5]][g*64+63:g*64+56] <= dina[63:56];
-    if (ena & wea[0] & addra[4:3]==g) valid[addra[13:5]][g*8] <= 1'b1;
-    if (ena & wea[1] & addra[4:3]==g) valid[addra[13:5]][g*8+1] <= 1'b1;
-    if (ena & wea[2] & addra[4:3]==g) valid[addra[13:5]][g*8+2] <= 1'b1;
-    if (ena & wea[3] & addra[4:3]==g) valid[addra[13:5]][g*8+3] <= 1'b1;
-    if (ena & wea[4] & addra[4:3]==g) valid[addra[13:5]][g*8+4] <= 1'b1;
-    if (ena & wea[5] & addra[4:3]==g) valid[addra[13:5]][g*8+5] <= 1'b1;
-    if (ena & wea[6] & addra[4:3]==g) valid[addra[13:5]][g*8+6] <= 1'b1;
-    if (ena & wea[7] & addra[4:3]==g) valid[addra[13:5]][g*8+7] <= 1'b1;
+    if (ena & wea[0] & addra[4:3]==g)  mem[addra[13:5]][g*64+7:g*64] <= dina[7:0];
+    if (ena & wea[1] & addra[4:3]==g)  mem[addra[13:5]][g*64+15:g*64+8] <= dina[15:8];
+    if (ena & wea[2] & addra[4:3]==g)  mem[addra[13:5]][g*64+23:g*64+16] <= dina[23:16];
+    if (ena & wea[3] & addra[4:3]==g)  mem[addra[13:5]][g*64+31:g*64+24] <= dina[31:24];
+    if (ena & wea[4] & addra[4:3]==g)  mem[addra[13:5]][g*64+39:g*64+32] <= dina[39:32];
+    if (ena & wea[5] & addra[4:3]==g)  mem[addra[13:5]][g*64+47:g*64+40] <= dina[47:40];
+    if (ena & wea[6] & addra[4:3]==g)  mem[addra[13:5]][g*64+55:g*64+48] <= dina[55:48];
+    if (ena & wea[7] & addra[4:3]==g)  mem[addra[13:5]][g*64+63:g*64+56] <= dina[63:56];
+    if (ena & wea[0] & addra[4:3]==g)  valid[addra[13:5]][g*8] <= 1'b1;
+    if (ena & wea[1] & addra[4:3]==g)  valid[addra[13:5]][g*8+1] <= 1'b1;
+    if (ena & wea[2] & addra[4:3]==g)  valid[addra[13:5]][g*8+2] <= 1'b1;
+    if (ena & wea[3] & addra[4:3]==g)  valid[addra[13:5]][g*8+3] <= 1'b1;
+    if (ena & wea[4] & addra[4:3]==g)  valid[addra[13:5]][g*8+4] <= 1'b1;
+    if (ena & wea[5] & addra[4:3]==g)  valid[addra[13:5]][g*8+5] <= 1'b1;
+    if (ena & wea[6] & addra[4:3]==g)  valid[addra[13:5]][g*8+6] <= 1'b1;
+    if (ena & wea[7] & addra[4:3]==g)  valid[addra[13:5]][g*8+7] <= 1'b1;
 end
 end
 endgenerate
 always @(posedge clkb)
-    doutb1 <= mem[addrb[13:5]];
+     doutb1 <= mem[addrb[13:5]];
 always @(posedge clkb)
-    doutb <= doutb1;
+     doutb <= doutb1;
 always @(posedge clkb)
-    ov1 <= valid[addrb[13:5]];
+     ov1 <= valid[addrb[13:5]];
 always @(posedge clkb)
-    ov <= ov1;
+     ov <= ov1;
 endmodule
 
 // -----------------------------------------------------------------------------
 // Branch target buffer.
 // -----------------------------------------------------------------------------
-
+/*
 module FT64_BTB(rst, wclk, wr, wadr, wdat, valid, rclk, pcA, btgtA, pcB, btgtB, pcC, btgtC, pcD, btgtD);
 parameter RSTPC = 32'hFFFC0100;
 input rst;
@@ -803,3 +808,4 @@ assign btgtC = hitC ? {mem[radrC][29:0],2'b00} : {pcC + 32'd4};
 assign btgtD = hitD ? {mem[radrD][29:0],2'b00} : {pcD + 32'd4};
 
 endmodule
+*/

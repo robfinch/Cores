@@ -668,7 +668,7 @@ dc:
 		case IJAL:
 			BuildConstant();
 			ad = a + imm;
-			res = pc + 4;
+			res = pc;
 			pc = ad & -4LL;
 			break;
 		case IBRK:

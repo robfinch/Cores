@@ -118,6 +118,7 @@
 `define REDOR           5'h06
 `define MEMDB			5'h10
 `define MEMSB			5'h11
+`define SYNC        	5'h12
 `define BMM			6'h03
 `define ADD	        6'h04
 `define SUB         6'h05
@@ -147,7 +148,7 @@
 `define SHIFTB      6'h1F
 `define LCX         6'h20
 `define LCUX        6'h21
-`define SYNC        6'h22
+`define MOV			6'h22
 `define LBUX        6'h23
 `define SCX         6'h24
 `define CASX        6'h25
@@ -183,6 +184,7 @@
 `define ORI     6'h09
 `define XORI    6'h0A
 `define FLOAT   6'h0B
+`define FSYNC       6'h36
 `define TGT     6'h0C
 `define REX     6'h0D
 `define CSRRW   6'h0E
@@ -230,6 +232,18 @@
 `define MODUI   6'h2C
 `define MODSUI  6'h2D
 `define MODI    6'h2E
+`define AMO		6'h2F
+`define AMO_SWAP	6'h00
+`define AMO_ADD		6'h04
+`define AMO_AND		6'h08
+`define AMO_OR		6'h09
+`define AMO_XOR		6'h0A
+`define AMO_SHL		6'h0C
+`define AMO_SHR		6'h0D
+`define AMO_MIN		6'h1C
+`define AMO_MAX		6'h1D
+`define AMO_MINU	6'h1E
+`define AMO_MAXU	6'h1F
 `define Bcc     6'b11000?
 `define BEQ         4'd0
 `define BNE         4'd1
@@ -302,9 +316,19 @@
 `define CSR_DBSTAT  11'h01D
 `define CSR_CAS     11'h02C
 `define CSR_TVEC    11'b00000110???
-`define CSR_EPC     11'h040
-`define CSR_STATUSL 11'h044
-`define CSR_STATUSH 11'h045
+`define CSR_IM_STACK	11'h040
+`define CSR_OL_STACK	11'h041
+`define CSR_PL_STACK	11'h042
+`define CSR_RS_STACK	11'h043
+`define CSR_STATUS 	11'h044
+`define CSR_EPC0    11'h048
+`define CSR_EPC1    11'h049
+`define CSR_EPC2    11'h04A
+`define CSR_EPC3    11'h04B
+`define CSR_EPC4    11'h04C
+`define CSR_EPC5    11'h04D
+`define CSR_EPC6    11'h04E
+`define CSR_EPC7    11'h04F
 `define CSR_CODEBUF 11'b00010??????
 `define CSR_INFO    11'b111_1111_????
 
