@@ -106,15 +106,24 @@ reg [3:0] state;
 parameter RUN = 4'd0;
 parameter MEMLD = 4'd1;
 parameter MEMST = 4'd2;
-parameter MEMNACK = 4'd3;
+parameter MEMACK = 4'd3;
+parameter MEMNACK = 4'd4;
 
-reg [26:0] din;
-reg [17:0] rstack [0:63];
+function IsLS;
+input [4:0] op;
+IsLS = op==`FETCH || op==`STORE;
+endfunction
+
+reg domem;
+reg [4:0] slot_v, pslot_v;
+reg [4:0] slot_done;
+reg [31:0] din0, din1, din2, din3, din4;
+reg [31:0] rstack [0:63];
 reg [5:0] rsp, rsp0, rsp1, rsp2, rsp3, rsp4;
-reg [26:0] dstack [0:63];
+reg [31:0] dstack [0:63];
 reg [5:0] dsp, dsp0, dsp1, dsp2, dsp3, dsp4;
 
-reg [26:0] dmem [0:16383];
+reg [31:0] dmem [0:16383];
 reg [63:0] rommem [0:16383];
 
 initial begin
@@ -124,296 +133,467 @@ end
 reg [14:0] pc, npc;
 
 
-reg [26:0] res0, res1, res2, res3, res4;
-reg loadf;
-reg skip0, skip1, skip2, skip3, skip4, skip5, skip6;
-wire [26:0] tos = dstack[dsp];
-wire [26:0] nos = dstack[dsp-1];
-reg [26:0] dmem_o;
+reg [31:0] res0, res1, res2, res3, res4;
+reg [2:0] skip0, skip1, skip2, skip3, skip4;
+wire [31:0] tos = dstack[dsp];
+wire [31:0] nos = dstack[dsp-1];
+reg [31:0] dmem_o, dmem0_o, dmem1_o;
 reg [26:0] imem_o;
 
+reg [4:0] store_v;
+reg [31:0] store_addr;
+reg [31:0] store_data;
+
 always @(posedge clk_i)
-	if (ir[4:0]==`STORE && tos[26:25]==2'b00 && state==RUN)
-		dmem[tos] <= nos;
+	if (ir[4:0]==`STORE && tos[31:24]==8'h00 && state==MEMACK)
+		dmem[adr_o[15:2]] <= dat_o;
 
 always @(negedge clk_i)
 	dmem_o <= dmem[tos];
 always @(negedge clk_i)
+	dmem0_o <= dmem[dsp0];
+always @(negedge clk_i)
+	dmem1_o <= dmem[dsp1];
+always @(negedge clk_i)
 	imem_o <= rommem[pc][26:0];
 wire [26:0] ir = imem_o[26:0];
+
+reg [2:0] which;
 
 always @(posedge clk_i)
 if (rst_i) begin
 	dsp <= 6'd63;
 	rsp <= 6'd63;
 	pc <= 15'd0;
-	loadf <= `FALSE;
+	pslot_v <= 5'h1F;
+	slot_v <= 5'h1F;
+	domem <= `TRUE;
+	which <= 3'd7;
 	state <= RUN;
 end
 else begin
-loadf <= `FALSE;
 case(state)
 RUN:
 	begin
-		if (!loadf)
-		npc = pc + 15'd1;
-		else
-		npc = pc;
+		domem <= `TRUE;
 		//
-		skip0 = 1'b0;
-		skip1 = 1'b0;
-		skip2 = 1'b0;
-		skip3 = 1'b0;
-		skip4 = 1'b0;
-		skip5 = 1'b0;
-		skip6 = 1'b0;
+		skip0 = 3'd0;
+		skip1 = 3'd0;
+		skip2 = 3'd0;
+		skip3 = 3'd0;
+		skip4 = 3'd0;
 		rsp0 = rsp;
 		dsp0 = dsp;
 		res0 = tos;
+
+		slot_done = 5'h1F;
+		if (IsLS(ir[4:0]) && slot_v[0])
+			slot_done = 5'h01;
+		else if (IsLS(ir[9:5]) && slot_v[1])
+			slot_done = 5'h03;
+		else if (IsLS(ir[14:10]) && slot_v[2]) 
+			slot_done = 5'h07;
+		else if (IsLS(ir[19:15]) && slot_v[3]) 
+			slot_done = 5'h0F;
+		if (slot_done==5'h1F) begin
+			npc = pc + 15'd1;
+			slot_v <= 5'h1F;
+		end
+
 		if (ir[26]==1'b1) begin
 			res0 = {{1{ir[25]}},ir[25:0]};
 			skip2 = 1'b1;
 		end
-		else if (!loadf)
-		case (ir[4:0])
-		`NOP:	res0 = tos;
-		`PDPR:  
-				begin	// pop d, push r
-					rstack[rsp-6'd1] <= tos;
-					dsp0 = dsp + 6'd1;
-					rsp0 = rsp - 6'd1;
-				end
-		`PRPD:	begin	// pop r, push d
-					res0 = rstack[rsp];
-					rsp0 = rsp + 6'd1;
-					dsp0 = dsp - 6'd1;
-				end
-		`MVRD:	begin res0 = rstack[rsp]; dsp0 = dsp - 6'd1; end
-		`DUP:	begin res0 = tos; dsp0 = dsp - 6'd1; end
-		`DROP:	begin res0 = dstack[dsp + 6'd1]; dsp0 = dsp + 6'd1; end
-		`OVER:	begin res0 = nos; dsp0 = dsp - 6'd1; end
-		`INV:	begin res0 = ~tos; end
-		`ADD:	begin res0 = tos + dstack[dsp-1]; dsp0 = dsp + 6'd1; end
-		`SUB:	begin res0 = tos - dstack[dsp-1]; dsp0 = dsp + 6'd1; end
-		`AND:	begin res0 = tos & dstack[dsp-1]; dsp0 = dsp + 6'd1; end
-		`OR:	begin res0 = tos | dstack[dsp-1]; dsp0 = dsp + 6'd1; end
-		`XOR:	begin res0 = tos ^ dstack[dsp-1]; dsp0 = dsp + 6'd1; end
-		`MUL:	begin res0 = $signed(tos) * $signed(dstack[dsp-1]); dsp0 = dsp + 6'd1; end
-		`EQ:	begin res0 = (tos ^ dstack[dsp-1])==0; dsp0 = dsp + 6'd1; end
-		`LT:	begin res0 = ($signed(tos) < $signed(dstack[dsp-1])); dsp0 = dsp + 6'd1; end
-		`ASR:	begin res0 = $signed(nos) >> tos; end
-		`SHR:	begin res0 = nos >> tos; end
-		`SHL:	begin res0 = nos << tos; end
-		`JMP:	begin npc = ir[19:5]; skip0 = 1'b1; end
-		`JZ:	begin if (tos==27'd0) npc = ir[19:5]; skip0 = 1'b1; end
-		`CALL:	begin rstack[rsp-6'd1] = pc; npc = ir[19:5]; skip0 = 1'b1; end
-		`RET:	begin npc = rstack[rsp]; rsp0 = rsp + 6'd1; end
-		`FETCH:	begin
-					res0 = dmem_o;
-					if (tos[26:25]==2'b11) begin
-						cyc_o <= `HIGH;
-						stb_o <= `HIGH;
-						adr_o <= tos[24:0];
-						state <= MEMLD;
-					end
-				end
-		`STORE:	begin
-					if (tos[26:25]==2'b11) begin
-						cyc_o <= `HIGH;
-						stb_o <= `HIGH;
-						we_o <= `HIGH;
-						adr_o <= tos[24:0];
-						dat_o <= nos;
-						state <= MEMST;
-					end
-				end
-		`LIT15:	begin res0 = {{17{ir[19]}},ir[19:5]}; skip0 = 1'b1; end
-		`LIT5:	begin res0 = {{22{ir[9]}},ir[9:5]}; skip3 = `TRUE; end
-		endcase
+		else
+			datapath (
+				.which(3'd0),
+				.op(ir[4:0]),
+				.dsp_i(dsp),
+				.dsp_o(dsp0),
+				.rsp_i(rsp),
+				.rsp_o(rsp0),
+				.dmem_i(dmem_o),
+				.din(din0),
+				.res_i(tos),
+				.res_o(res0),
+				.skip(skip0),
+				.lit15(ir[19:5]),
+				.lit5(ir[9:5])
+			);
 		dstack[dsp0] = res0;
 		rsp1 = rsp0;
 		dsp1 = dsp0;
-		if (skip0|skip2|skip3|loadf)
+		if (skip0 > 3'd0)
 			res1 = res0;
 		else
-		case (ir[9:5])
-		`NOP:	res1 = res0;
-		`PDPR:  
-				begin
-					rstack[rsp0-6'd1] <= dstack[dsp0];
-					dsp1 = dsp0 + 6'd1;
-					rsp1 = rsp0 - 6'd1;
-				end
-		`PRPD:	begin
-					dstack[dsp0-6'd1] <= rstack[rsp0];
-					rsp1 = rsp0 + 6'd1;
-					dsp1 = dsp0 - 6'd1;
-				end
-		`MVRD:	begin res1 = rstack[rsp0]; dsp1 = dsp0 - 6'd1; end
-		`DUP:	begin res1 = res0; dsp1 = dsp0 - 6'd1; end
-		`DROP:	begin res1 = dstack[dsp0 + 6'd1]; dsp1 = dsp0 + 6'd1; end
-		`OVER:	begin res1 = dstack[dsp0 + 6'd1]; dsp1 = dsp0 - 6'd1; end
-		`INV:	begin res1 = ~res0; end
-		`ADD:	begin res1 = res0 + dstack[dsp0-1]; dsp1 = dsp0 + 6'd1; end
-		`SUB:	begin res1 = res0 - dstack[dsp0-1]; dsp1 = dsp0 + 6'd1; end
-		`AND:	begin res1 = res0 & dstack[dsp0-1]; dsp1 = dsp0 + 6'd1; end
-		`OR:	begin res1 = res0 | dstack[dsp0-1]; dsp1 = dsp0 + 6'd1; end
-		`XOR:	begin res1 = res0 ^ dstack[dsp0-1]; dsp1 = dsp0 + 6'd1; end
-		`MUL:	begin res1 = $signed(res0) * $signed(dstack[dsp0-1]); dsp1 = dsp0 + 6'd1; end
-		`EQ:	begin res1 = (res0 ^ dstack[dsp0-1])==0; dsp1 = dsp0 + 6'd1; end
-		`LT:	begin res1 = ($signed(res0) < $signed(dstack[dsp0-1])); dsp1 = dsp0 + 6'd1; end
-		`ASR:	begin res1 = $signed(dstack[dsp0-1]) >> res0; end
-		`SHR:	begin res1 = dstack[dsp0-1] >> res0; end
-		`SHL:	begin res1 = dstack[dsp0-1] << res0; end
-		`JMP:	begin npc = ir[24:10]; skip1 = 1'b1; end
-		`JZ:	begin if (res0==27'd0) npc = ir[24:10]; skip1 = 1'b1; end
-		`CALL:	begin rstack[rsp-6'd1] = pc; npc = ir[24:10]; skip1 = 1'b1; end
-		`RET:	begin npc = rstack[rsp0]; rsp1 = rsp0 + 6'd1; end
-		`LIT15:	begin res1 = {{17{ir[24]}},ir[24:10]}; skip1 = 1'b1; end
-		`LIT5:	begin res1 = {{22{ir[14]}},ir[14:10]}; skip4 = `TRUE; end
-		endcase
+			datapath (
+				.which(3'd1),
+				.op(ir[9:5]),
+				.dsp_i(dsp0),
+				.dsp_o(dsp1),
+				.rsp_i(rsp0),
+				.rsp_o(rsp1),
+				.dmem_i(dmem0_o),
+				.din(din1),
+				.res_i(res0),
+				.res_o(res1),
+				.skip(skip1),
+				.lit15(ir[24:10]),
+				.lit5(ir[14:10])
+			);
 		rsp2 = rsp1;
 		dsp2 = dsp1;
 		dstack[dsp1] = res1;
-		if (skip0|skip1|skip2|skip4|loadf)
+		if (skip0 > 3'd1 || skip1 > 3'd0)
 			res2 = res1;
 		else
-		case(ir[14:10])
-		`NOP:	res2 = res1;
-		`PDPR:  
-				begin
-					rstack[rsp1-6'd1] <= dstack[dsp1];
-					dsp2 = dsp1 + 6'd1;
-					rsp2 = rsp1 - 6'd1;
-				end
-		`PRPD:	begin
-					dstack[dsp1-6'd1] <= rstack[rsp1];
-					rsp2 = rsp1 + 6'd1;
-					dsp2 = dsp1 - 6'd1;
-				end
-		`DUP:	begin res2 = res1; dsp2 = dsp1 - 6'd1; end
-		`DROP:	begin res2 = dstack[dsp1 + 6'd1]; dsp2 = dsp1 + 6'd1; end
-		`OVER:	begin res2 = dstack[dsp1 + 6'd1]; dsp2 = dsp1 - 6'd1; end
-		`INV:	begin res2 = ~res1; end
-		`MVRD:	begin res2 = rstack[rsp1]; dsp2 = dsp1 - 6'd1; end
-		`ADD:	begin res2 = res1 + dstack[dsp1-1]; dsp2 = dsp1 + 6'd1; end
-		`SUB:	begin res2 = res1 - dstack[dsp1-1]; dsp2 = dsp1 + 6'd1; end
-		`AND:	begin res2 = res1 & dstack[dsp1-1]; dsp2 = dsp1 + 6'd1; end
-		`OR:	begin res2 = res1 | dstack[dsp1-1]; dsp2 = dsp1 + 6'd1; end
-		`XOR:	begin res2 = res1 ^ dstack[dsp1-1]; dsp2 = dsp1 + 6'd1; end
-		`MUL:	begin res2 = $signed(res1) * $signed(dstack[dsp1-1]); dsp2 = dsp1 + 6'd1; end
-		`EQ:	begin res2 = (res1 ^ dstack[dsp1-1])==0; dsp2 = dsp1 + 6'd1; end
-		`LT:	begin res2 = ($signed(res1) < $signed(dstack[dsp1-1])); dsp2 = dsp1 + 6'd1; end
-		`ASR:	begin res2 = $signed(dstack[dsp1-1]) >> res1; end
-		`SHR:	begin res2 = dstack[dsp1-1] >> res1; end
-		`SHL:	begin res2 = dstack[dsp1-1] << res1; end
-		`RET:	begin npc = rstack[rsp1]; rsp2 = rsp1 + 6'd1; end
-		`LIT5:	begin res2 = {{22{ir[19]}},ir[19:14]}; skip5 = `TRUE; end
-		endcase
+			datapath (
+				.which(3'd2),
+				.op(ir[14:10]),
+				.dsp_i(dsp1),
+				.dsp_o(dsp2),
+				.rsp_i(rsp1),
+				.rsp_o(rsp2),
+				.dmem_i(dmem1_o),
+				.din(din2),
+				.res_i(res1),
+				.res_o(res2),
+				.skip(skip2),
+				.lit15(ir[24:15]),
+				.lit5(ir[19:15])
+			);
 		rsp3 = rsp2;
 		dsp3 = dsp2;
 		dstack[dsp2] = res2;
-		if (skip0|skip1|skip2|skip5|loadf)
+		if (skip0 > 3'd2 || skip1 > 3'd1 || skip2 > 3'd0)
 			res3 = res2;
 		else
-		case(ir[19:15])
-		`NOP:	res3 = res2;
-		`PDPR:  
-				begin
-					rstack[rsp2-6'd1] <= dstack[dsp2];
-					dsp3 = dsp2 + 6'd1;
-					rsp3 = rsp2 - 6'd1;
-				end
-		`PRPD:	begin
-					dstack[dsp2-6'd1] <= rstack[rsp2];
-					rsp3 = rsp2 + 6'd1;
-					dsp3 = dsp2 - 6'd1;
-				end
-		`MVRD:	begin res3 = rstack[rsp2]; dsp3 = dsp2 - 6'd1; end
-		`MVRD:	begin res3 = rstack[rsp2]; dsp3 = dsp2 - 6'd1; end
-		`DUP:	begin res3 = res2; dsp3 = dsp2 - 6'd1; end
-		`DROP:	begin res3 = dstack[dsp2 + 6'd1]; dsp3 = dsp2 + 6'd1; end
-		`OVER:	begin res3 = dstack[dsp2 + 6'd1]; dsp3 = dsp2 - 6'd1; end
-		`INV:	begin res3 = ~res2; end
-		`ADD:	begin res3 = res2 + dstack[dsp2-1]; dsp3 = dsp2 + 6'd1; end
-		`SUB:	begin res3 = res2 - dstack[dsp2-1]; dsp3 = dsp2 + 6'd1; end
-		`AND:	begin res3 = res2 & dstack[dsp2-1]; dsp3 = dsp2 + 6'd1; end
-		`OR:	begin res3 = res2 | dstack[dsp2-1]; dsp3 = dsp2 + 6'd1; end
-		`XOR:	begin res3 = res2 ^ dstack[dsp2-1]; dsp3 = dsp2 + 6'd1; end
-		`MUL:	begin res3 = $signed(res2) * $signed(dstack[dsp2-1]); dsp3 = dsp2 + 6'd1; end
-		`EQ:	begin res3 = (res2 ^ dstack[dsp2-1])==0; dsp3 = dsp2 + 6'd1; end
-		`LT:	begin res3 = ($signed(res2) < $signed(dstack[dsp2-1])); dsp3 = dsp2 + 6'd1; end
-		`ASR:	begin res3 = $signed(res2) >> 1; end
-		`ASR:	begin res3 = $signed(dstack[dsp2-1]) >> res2; end
-		`SHR:	begin res3 = dstack[dsp2-1] >> res2; end
-		`SHL:	begin res3 = dstack[dsp2-1] << res2; end
-		`RET:	begin npc = rstack[rsp2]; rsp3 = rsp2 + 6'd1; end
-		`LIT5:	begin res3 = {{22{ir[19]}},ir[19:14]}; skip6 = `TRUE; end
-		endcase
+			datapath (
+				.which(3'd3),
+				.op(ir[19:15]),
+				.dsp_i(dsp2),
+				.dsp_o(dsp3),
+				.rsp_i(rsp2),
+				.rsp_o(rsp3),
+				.dmem_i(32'h0),
+				.din(din3),
+				.res_i(res2),
+				.res_o(res3),
+				.skip(skip3),
+				.lit15(ir[24:20]),
+				.lit5(ir[24:20])
+			);
 		dstack[dsp3] = res3;
 		rsp4 = rsp3;
 		dsp4 = dsp3;
-		if (skip1|skip2|skip6|loadf)
+		if (skip0 > 3'd3 || skip1 > 3'd2 || skip2 > 3'd1 || skip3 > 3'd0)
 			res4 = res3;
 		else
-		case(ir[24:20])
-		`NOP:	res4 = res3;
-		`PDPR:  
-				begin
-					rstack[rsp3-6'd1] <= dstack[dsp3];
-					dsp4 = dsp3 + 6'd1;
-					rsp4 = rsp3 - 6'd1;
-				end
-		`PRPD:	begin
-					dstack[dsp3-6'd1] <= rstack[rsp3];
-					rsp4 = rsp3 + 6'd1;
-					dsp4 = dsp3 - 6'd1;
-				end
-		`MVRD:	begin res4 = rstack[rsp3]; dsp4 = dsp3 - 6'd1; end
-		`DUP:	begin res4 = res3; dsp4 = dsp3 - 6'd1; end
-		`DROP:	begin res4 = dstack[dsp3 + 6'd1]; dsp4 = dsp3 + 6'd1; end
-		`OVER:	begin res4 = dstack[dsp3 + 6'd1]; dsp4 = dsp3 - 6'd1; end
-		`INV:	begin res4 = ~res3; end
-		`ADD:	begin res4 = res3 + dstack[dsp3-1]; dsp4 = dsp3 + 6'd1; end
-		`SUB:	begin res4 = res3 - dstack[dsp3-1]; dsp4 = dsp3 + 6'd1; end
-		`AND:	begin res4 = res3 & dstack[dsp3-1]; dsp4 = dsp3 + 6'd1; end
-		`OR:	begin res4 = res3 | dstack[dsp3-1]; dsp4 = dsp3 + 6'd1; end
-		`XOR:	begin res4 = res3 ^ dstack[dsp3-1]; dsp4 = dsp3 + 6'd1; end
-		`MUL:	begin res4 = $signed(res3) * $signed(dstack[dsp3-1]); dsp4 = dsp3 + 6'd1; end
-		`EQ:	begin res4 = (res3 ^ dstack[dsp3-1])==0; dsp4 = dsp3 + 6'd1; end
-		`LT:	begin res4 = ($signed(res3) < $signed(dstack[dsp3-1])); dsp4 = dsp3 + 6'd1; end
-		`ASR:	begin res4 = $signed(dstack[dsp3-1]) >> res3; end
-		`SHR:	begin res4 = dstack[dsp3-1] >> res3; end
-		`SHL:	begin res4 = dstack[dsp3-1] << res3; end
-		`RET:	begin npc = rstack[rsp3]; rsp4 = rsp3 + 6'd1; end
-		endcase
-		dstack[dsp4] = loadf ? din : res4;
+			datapath (
+				.which(3'd4),
+				.op(ir[24:20]),
+				.dsp_i(dsp3),
+				.dsp_o(dsp4),
+				.rsp_i(rsp3),
+				.rsp_o(rsp4),
+				.dmem_i(32'h0),
+				.din(din4),
+				.res_i(res3),
+				.res_o(res4),
+				.skip(skip4),
+				.lit15(15'd0),
+				.lit5(5'd0)
+			);
+		dstack[dsp4] = res4;
 		dsp <= dsp4;
 		rsp <= rsp4;
 		pc <= npc;
+		slot_v <= 5'h1F;
+		if (IsLS(ir[4:0]) && slot_v[0])
+			slot_v <= 5'h1E;
+		else if (IsLS(ir[9:5]) && slot_v[1])
+			slot_v <= 5'h1C;
+		else if (IsLS(ir[14:10]) && slot_v[2]) 
+			slot_v <= 5'h18;
+		else if (IsLS(ir[19:15]) && slot_v[3]) 
+			slot_v <= 5'h10;
 	end
 MEMLD:
-	if (ack_i) begin
-		cyc_o <= `LOW;
-		stb_o <= `LOW;
-		din <= dat_i;	
-		loadf <= `TRUE;
-		state <= MEMNACK;
+	begin
+		cyc_o <= `HIGH;
+		stb_o <= `HIGH;
+		case(which)
+		3'd0:	adr_o <= dstack[dsp];
+		3'd1:	adr_o <= dstack[dsp0];
+		3'd2:	adr_o <= dstack[dsp1];
+		3'd3:	adr_o <= dstack[dsp2];
+		3'd4:	adr_o <= dstack[dsp3];
+		endcase
+		state <= MEMACK;
 	end
 MEMST:
+	begin
+		cyc_o <= `HIGH;
+		stb_o <= `HIGH;
+		we_o <= `HIGH;
+		adr_o <= store_addr[which];
+		dat_o <= store_data[which];
+		state <= MEMACK;
+	end
+MEMACK:
 	if (ack_i) begin
 		cyc_o <= `LOW;
 		stb_o <= `LOW;
 		we_o <= `LOW;
+		case(which)
+		3'd0: din0 <= dat_i;
+		3'd1: din1 <= dat_i;
+		3'd2: din2 <= dat_i;
+		3'd3: din3 <= dat_i;
+		3'd4: din4 <= dat_i;
+		endcase
 		state <= MEMNACK;
 	end
 MEMNACK:
 	if (~ack_i) begin
-		loadf <= loadf;
+		case(which)
+		3'd7:
+			if (ir[4:0]==`STORE) begin
+				which <= 3'd0;
+				state <= MEMST;
+			end
+			else if (ir[4:0]==`FETCH) begin
+				which <= 3'd0;
+				state <= MEMLD;
+			end
+			else if (ir[9:5]==`STORE) begin
+				which <= 3'd1;
+				state <= MEMST;
+			end
+			else if (ir[9:5]==`FETCH) begin
+				which <= 3'd1;
+				state <= MEMLD;
+			end
+			else if (ir[14:10]==`STORE) begin
+				which <= 3'd2;
+				state <= MEMST;
+			end
+			else if (ir[14:10]==`FETCH) begin
+				which <= 3'd2;
+				state <= MEMLD;
+			end
+			else if (ir[19:15]==`STORE) begin
+				which <= 3'd3;
+				state <= MEMST;
+			end
+			else if (ir[19:15]==`FETCH) begin
+				which <= 3'd3;
+				state <= MEMLD;
+			end
+			else if (ir[24:20]==`STORE) begin
+				which <= 3'd4;
+				state <= MEMST;
+			end
+			else if (ir[24:20]==`FETCH) begin
+				which <= 3'd4;
+				state <= MEMLD;
+			end
+			else begin
+				which <= 3'd7;
+				state <= RUN;
+			end
+		3'd0:
+			if (ir[9:5]==`STORE) begin
+				which <= 3'd1;
+				state <= MEMST;
+			end
+			else if (ir[9:5]==`FETCH) begin
+				which <= 3'd1;
+				state <= MEMLD;
+			end
+			else if (ir[14:10]==`STORE) begin
+				which <= 3'd2;
+				state <= MEMST;
+			end
+			else if (ir[14:10]==`FETCH) begin
+				which <= 3'd2;
+				state <= MEMLD;
+			end
+			else if (ir[19:15]==`STORE) begin
+				which <= 3'd3;
+				state <= MEMST;
+			end
+			else if (ir[19:15]==`FETCH) begin
+				which <= 3'd3;
+				state <= MEMLD;
+			end
+			else if (ir[24:20]==`STORE) begin
+				which <= 3'd4;
+				state <= MEMST;
+			end
+			else if (ir[24:20]==`FETCH) begin
+				which <= 3'd4;
+				state <= MEMLD;
+			end
+			else begin
+				which <= 3'd7;
+				state <= RUN;
+			end
+		3'd1:
+			if (ir[14:10]==`STORE) begin
+				which <= 3'd2;
+				state <= MEMST;
+			end
+			else if (ir[14:10]==`FETCH) begin
+				which <= 3'd2;
+				state <= MEMLD;
+			end
+			else if (ir[19:15]==`STORE) begin
+				which <= 3'd3;
+				state <= MEMST;
+			end
+			else if (ir[19:15]==`FETCH) begin
+				which <= 3'd3;
+				state <= MEMLD;
+			end
+			else if (ir[24:20]==`STORE) begin
+				which <= 3'd4;
+				state <= MEMST;
+			end
+			else if (ir[24:20]==`FETCH) begin
+				which <= 3'd4;
+				state <= MEMLD;
+			end
+			else begin
+				which <= 3'd7;
+				state <= RUN;
+			end
+		3'd2:
+			if (ir[19:15]==`STORE) begin
+				which <= 3'd3;
+				state <= MEMST;
+			end
+			else if (ir[19:15]==`FETCH) begin
+				which <= 3'd3;
+				state <= MEMLD;
+			end
+			else if (ir[24:20]==`STORE) begin
+				which <= 3'd4;
+				state <= MEMST;
+			end
+			else if (ir[24:20]==`FETCH) begin
+				which <= 3'd4;
+				state <= MEMLD;
+			end
+			else begin
+				which <= 3'd7;
+				state <= RUN;
+			end
+		3'd3:
+			if (ir[24:20]==`STORE) begin
+				which <= 3'd4;
+				state <= MEMST;
+			end
+			else if (ir[24:20]==`FETCH) begin
+				which <= 3'd4;
+				state <= MEMLD;
+			end
+			else begin
+				which <= 3'd7;
+				state <= RUN;
+			end
+		3'd4:
+			begin
+				which <= 3'd7;
+				state <= RUN;
+			end
+		default:
+			begin
+				which <= 3'd7;
+				state <= RUN;
+			end
+		endcase
 		state <= RUN;
 	end
 endcase
 end
 
+task datapath;
+input [2:0] which;
+input [4:0] op;
+input [5:0] dsp_i;
+output [5:0] dsp_o;
+input [5:0] rsp_i;
+output [5:0] rsp_o;
+input [31:0] dmem_i;
+input [31:0] din;
+input [31:0] res_i;
+output [31:0] res_o;
+output [2:0] skip;
+input [14:0] lit15;
+input [4:0] lit5;
+begin
+	dsp_o = dsp_i;
+	rsp_o = rsp_i;
+	res_o = res_i;
+	skip = 3'd0;
+	if (slot_v[which])
+	case (op)
+	`NOP:	res_o = res_i;
+	`PDPR:  
+			begin
+				rstack[rsp_i-6'd1] <= dstack[dsp_i];
+				dsp_o = dsp_i + 6'd1;
+				rsp_o = rsp_i - 6'd1;
+			end
+	`PRPD:	begin
+				dstack[dsp_i-6'd1] <= rstack[rsp_i];
+				rsp_o = rsp_i + 6'd1;
+				dsp_o = dsp_i - 6'd1;
+			end
+	`MVRD:	begin res_o = rstack[rsp_i]; dsp_o = dsp_i - 6'd1; end
+	`DUP:	begin res_o = res_i; dsp_o = dsp_i - 6'd1; end
+	`DROP:	begin res_o = dstack[dsp_i + 6'd1]; dsp_o = dsp_i + 6'd1; end
+	`OVER:	begin res_o = dstack[dsp_i + 6'd1]; dsp_o = dsp_i - 6'd1; end
+	`INV:	begin res_o = ~res_i; end
+	`ADD:	begin res_o = res_i + dstack[dsp_i-1]; dsp_o = dsp_i + 6'd1; end
+	`SUB:	begin res_o = res_i - dstack[dsp_i-1]; dsp_o = dsp_i + 6'd1; end
+	`AND:	begin res_o = res_i & dstack[dsp_i-1]; dsp_o = dsp_i + 6'd1; end
+	`OR:	begin res_o = res_i | dstack[dsp_i-1]; dsp_o = dsp_i + 6'd1; end
+	`XOR:	begin res_o = res_i ^ dstack[dsp_i-1]; dsp_o = dsp_i + 6'd1; end
+	`MUL:	begin res_o = $signed(res_i) * $signed(dstack[dsp_i-1]); dsp_o = dsp_i + 6'd1; end
+	`EQ:	begin res_o = (res_i ^ dstack[dsp_i-1])==0; dsp_o = dsp_i + 6'd1; end
+	`LT:	begin res_o = ($signed(res_i) < $signed(dstack[dsp_i-1])); dsp_o = dsp_i + 6'd1; end
+	`ASR:	begin res_o = $signed(dstack[dsp_i-1]) >> res_i; end
+	`SHR:	begin res_o = dstack[dsp_i-1] >> res_i; end
+	`SHL:	begin res_o = dstack[dsp_i-1] << res_i; end
+	`JMP:	begin npc = res_i[14:0]; end
+	`JZ:	begin if (res_i==32'd0) npc = lit15; skip = 3'd3; end
+	`CALL:	begin rstack[rsp-6'd1] = pc; npc = res_i[14:0]; end
+	`RET:	begin npc = rstack[rsp_i]; rsp_o = rsp_i + 6'd1; end
+	`LIT15:	begin res_o = {{17{ir[24]}},ir[24:10]}; skip1 = 1'b1; end
+	`LIT5:	begin res_o = {{22{ir[14]}},ir[14:10]}; skip4 = `TRUE; end
+	`FETCH:	begin
+				res_o = dmem_i;
+				if (res_i[31:24]>8'h00) begin
+					res_o = din;
+					if (domem) begin
+						domem <= `FALSE;
+						state <= MEMNACK;
+					end
+				end
+			end
+	`STORE:	begin
+				store_v[which] <= 1'b1;
+				store_addr[which] <= dstack[dsp];
+				store_data[which] <= dstack[dsp_i-6'd1];
+				dsp_o = dsp_i + 6'd2;
+				state <= MEMNACK;
+			end
+	`LIT15:	begin res0 = {{17{lit15[14]}},lit15[14:0]}; skip = 3'd3; end
+	`LIT5:	begin res0 = {{27{lit5[4]}},lit5[4:0]}; skip = 3'd1; end
+	endcase
+end
+endtask
 
 endmodule
