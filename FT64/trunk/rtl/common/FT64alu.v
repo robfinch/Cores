@@ -501,6 +501,7 @@ case(instr[`INSTRUCTION_OP])
         `BCDMUL:    o = BIG ? bcdmulo :  64'hCCCCCCCCCCCCCCCC;
         default:    o = 64'hDEADDEADDEADDEAD;
         endcase
+    `MOV:		o = a;
     `VMOV:		o = a;
     `R1:
         case(instr[`INSTRUCTION_S1])
@@ -709,6 +710,7 @@ case(instr[`INSTRUCTION_OP])
     `LBX,`LBOX,`LBUX,`LCX,`LCOX,`LCUX,
     `LHX,`LHOX,`LHUX,`LWX,`LWRX,`SBX,`SCX,`SHX,`SWX,`SWCX:
     		   	o = BIG ? a + (b << instr[22:21]) : 64'hCCCCCCCCCCCCCCCC;
+    `LVx:		o = BIG ? a + (b << instr[22:21]) : 64'hCCCCCCCCCCCCCCCC;
     `LVX,`SVX:  o = BIG ? a + (b << 2'd3) : 64'hCCCCCCCCCCCCCCCC;
     `LVWS,`SVWS:    o = BIG ? a + ({b * ven,3'b000}) : 64'hCCCCCCCCCCCCCCCC;
     `MIN:       case(sz)
@@ -830,6 +832,7 @@ case(instr[`INSTRUCTION_OP])
  `MODI:      o = BIG ? rem : 64'hCCCCCCCCCCCCCCCC;
  `LB,`LBO,`LBU,`LC,`LCO,`LCU,`LH,`LHO,`LHU,`LW,`LWR,
  `SB,`SC,`SH,`SW,`SWC,`CAS:  o = a + b;
+ `LVx:		 o = a + sxb12;
  `LV,`SV:    o = a + b + {ven,3'b0};
  `CSRRW:     o = BIG ? csr : 64'hCCCCCCCCCCCCCCCC;
  `BITFIELD:   o = BIG ? bfout : 64'hCCCCCCCCCCCCCCCC;

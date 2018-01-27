@@ -264,7 +264,14 @@
 `define MULUI   6'h38
 `define MULSUI  6'h39
 `define MULI    6'h3A
-`define ANDQI   6'h3B
+`define LVx   	6'h3B
+`define LVB			3'h0
+`define LVBU		3'h1
+`define LVC			3'h2
+`define LVCU		3'h3
+`define LVH			3'h4
+`define LVHU		3'h5
+`define LVW			3'h6
 `define DIVUI   6'h3C
 `define DIVSUI  6'h3D
 `define DIVI    6'h3E
@@ -398,8 +405,11 @@
 `define FORW_BRANCH	1'b0
 `define BACK_BRANCH	1'b1
 
-`define DRAMSLOT_AVAIL	2'b00
-`define DRAMREQ_READY	2'b11
+`define DRAMSLOT_AVAIL	3'b000
+`define DRAMSLOT_BUSY	3'b001
+`define DRAMSLOT_REQBUS	3'b101
+`define DRAMSLOT_HASBUS	3'b110
+`define DRAMREQ_READY	3'b111
 
 `define INV	1'b0
 `define VAL	1'b1

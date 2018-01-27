@@ -35,49 +35,119 @@
 // within a single clock cycle.
 // -----------------------------------------------------------------------------
 
-module FT64_L1_icache_mem(rst, clk, wr, lineno, i, o, ov, invall, invline);
+module FT64_L1_icache_mem(rst, clk, wr, en, lineno, i, o, ov, invall, invline);
+parameter pLines = 64;
+parameter pLineWidth = 256;
 input rst;
 input clk;
 input wr;
+input [7:0] en;
 input [5:0] lineno;
-input [255:0] i;
-output [255:0] o;
-output ov;
+input [pLineWidth-1:0] i;
+output [pLineWidth-1:0] o;
+output [7:0] ov;
 input invall;
 input invline;
 
-reg [255:0] mem [0:63];
-reg [63:0] valid;
+reg [pLineWidth-1:0] mem [0:pLines-1];
+reg [pLines-1:0] valid0;
+reg [pLines-1:0] valid1;
+reg [pLines-1:0] valid2;
+reg [pLines-1:0] valid3;
+reg [pLines-1:0] valid4;
+reg [pLines-1:0] valid5;
+reg [pLines-1:0] valid6;
+reg [pLines-1:0] valid7;
 
 always  @(posedge clk)
-    if (wr)  mem[lineno] <= i;
+    if (wr & en[0])  mem[lineno][31:0] <= i[31:0];
 always  @(posedge clk)
-if (rst)
-     valid <= 64'd0;
+    if (wr & en[1])  mem[lineno][63:32] <= i[63:32];
+always  @(posedge clk)
+    if (wr & en[2])  mem[lineno][95:64] <= i[95:64];
+always  @(posedge clk)
+    if (wr & en[3])  mem[lineno][127:96] <= i[127:96];
+always  @(posedge clk)
+    if (wr & en[4])  mem[lineno][159:128] <= i[159:128];
+always  @(posedge clk)
+    if (wr & en[5])  mem[lineno][191:160] <= i[191:160];
+always  @(posedge clk)
+    if (wr & en[6])  mem[lineno][223:192] <= i[223:192];
+always  @(posedge clk)
+    if (wr & en[7])  mem[lineno][255:224] <= i[255:224];
+always  @(posedge clk)
+if (rst) begin
+     valid0 <= 64'd0;
+     valid1 <= 64'd0;
+     valid2 <= 64'd0;
+     valid3 <= 64'd0;
+     valid4 <= 64'd0;
+     valid5 <= 64'd0;
+     valid6 <= 64'd0;
+     valid7 <= 64'd0;
+end
 else begin
-    if (invall)  valid <= 64'd0;
-    else if (invline)  valid[lineno] <= 1'b0;
-    else if (wr)  valid[lineno] <= 1'b1;
+    if (invall) begin
+    	valid0 <= 64'd0;
+    	valid1 <= 64'd0;
+    	valid2 <= 64'd0;
+    	valid3 <= 64'd0;
+    	valid4 <= 64'd0;
+    	valid5 <= 64'd0;
+    	valid6 <= 64'd0;
+    	valid7 <= 64'd0;
+    end
+    else if (invline) begin
+    	valid0[lineno] <= 1'b0;
+    	valid1[lineno] <= 1'b0;
+    	valid2[lineno] <= 1'b0;
+    	valid3[lineno] <= 1'b0;
+    	valid4[lineno] <= 1'b0;
+    	valid5[lineno] <= 1'b0;
+    	valid6[lineno] <= 1'b0;
+    	valid7[lineno] <= 1'b0;
+	end
+    else if (wr) begin
+    	if (en[0]) valid0[lineno] <= 1'b1;
+    	if (en[1]) valid1[lineno] <= 1'b1;
+    	if (en[2]) valid2[lineno] <= 1'b1;
+    	if (en[3]) valid3[lineno] <= 1'b1;
+    	if (en[4]) valid4[lineno] <= 1'b1;
+    	if (en[5]) valid5[lineno] <= 1'b1;
+    	if (en[6]) valid6[lineno] <= 1'b1;
+    	if (en[7]) valid7[lineno] <= 1'b1;
+    end
 end
 
 assign o = mem[lineno];
-assign ov = valid[lineno];
+assign ov[0] = valid0[lineno];
+assign ov[1] = valid1[lineno];
+assign ov[2] = valid2[lineno];
+assign ov[3] = valid3[lineno];
+assign ov[4] = valid4[lineno];
+assign ov[5] = valid5[lineno];
+assign ov[6] = valid6[lineno];
+assign ov[7] = valid7[lineno];
 
 endmodule
 
 // -----------------------------------------------------------------------------
+// Fully associative (64 way) tag memory for L1 icache.
+//
 // -----------------------------------------------------------------------------
 
-// Fully associative (64 way) tag memory for L1 icache.
-module FT64_L1_icache_camtag(rst, clk, nxt, wr, adr, hit, lineno);
+module FT64_L1_icache_camtag(rst, clk, nxt, wlineno, wr, wadr, adr, hit, lineno);
 input rst;
 input clk;
 input nxt;
+output [5:0] wlineno;
 input wr;
 input [37:0] adr;
+input [37:0] wadr;
 output hit;
 output reg [5:0] lineno;
 
+wire [35:0] wtagi = {9'b0,wadr[37:5]};
 wire [35:0] tagi = {9'b0,adr[37:5]};
 wire [63:0] match_addr;
 
@@ -88,11 +158,12 @@ if (rst)
 else begin
     if (nxt)  cntr <= cntr + 6'd1;
 end
+assign wlineno = cntr;
     
 //wire [21:0] lfsro;
 //lfsr #(22,22'h0ACE1) u1 (rst, clk, !(wr3|wr2|wr), 1'b0, lfsro);
 
-cam36x64 u01 (rst, clk, wr, cntr[5:0], tagi, tagi, match_addr);
+cam36x64 u01 (rst, clk, wr, cntr[5:0], wtagi, tagi, match_addr);
 assign hit = |match_addr; 
 
 integer n;
@@ -105,7 +176,74 @@ end
 
 endmodule
 
+
+// -----------------------------------------------------------------------------
+// Four way set associative tag memory for L1 cache.
+// -----------------------------------------------------------------------------
+
+module FT64_L1_icache_cmptag4way(rst, clk, nxt, wr, adr, lineno, hit);
+input rst;
+input clk;
+input nxt;
+input wr;
+input [37:0] adr;
+output reg [5:0] lineno;
+output hit;
+
+reg [32:0] mem0 [0:15];
+reg [32:0] mem1 [0:15];
+reg [32:0] mem2 [0:15];
+reg [32:0] mem3 [0:15];
+reg [37:0] rradr;
+integer n;
+initial begin
+    for (n = 0; n < 16; n = n + 1)
+    begin
+        mem0[n] = 0;
+        mem1[n] = 0;
+        mem2[n] = 0;
+        mem3[n] = 0;
+    end
+end
+
+reg wr2;
+wire [21:0] lfsro;
+lfsr #(22,22'h0ACE3) u1 (rst, clk, nxt, 1'b0, lfsro);
+reg [5:0] wlineno;
+always @(posedge clk)
+if (rst)
+	lineno <= 6'h00;
+else begin
+     wr2 <= wr;
+	if (wr) begin
+		case(lfsro[1:0])
+		2'b00:	begin  mem0[adr[8:5]] <= adr[37:5];  wlineno <= {2'b00,adr[8:5]}; end
+		2'b01:	begin  mem1[adr[8:5]] <= adr[37:5];  wlineno <= {2'b01,adr[8:5]}; end
+		2'b10:	begin  mem2[adr[8:5]] <= adr[37:5];  wlineno <= {2'b10,adr[8:5]}; end
+		2'b11:	begin  mem3[adr[8:5]] <= adr[37:5];  wlineno <= {2'b11,adr[8:5]}; end
+		endcase
+	end
+     rradr <= adr;
+end
+
+wire hit0 = mem0[rradr[8:5]]==rradr[37:5];
+wire hit1 = mem1[rradr[8:5]]==rradr[37:5];
+wire hit2 = mem2[rradr[8:5]]==rradr[37:5];
+wire hit3 = mem3[rradr[8:5]]==rradr[37:5];
+always @*
+    //if (wr2) lineno = wlineno;
+    if (hit0)  lineno = {2'b00,rradr[8:5]};
+    else if (hit1)  lineno = {2'b01,rradr[8:5]};
+    else if (hit2)  lineno = {2'b10,rradr[8:5]};
+    else  lineno = {2'b11,rradr[8:5]};
+assign hit = hit0|hit1|hit2|hit3;
+endmodule
+
+
+// -----------------------------------------------------------------------------
 // 32 way, 16 set associative tag memory for L2 cache
+// -----------------------------------------------------------------------------
+
 module FT64_L2_icache_camtag(rst, clk, wr, adr, hit, lineno);
 input rst;
 input clk;
@@ -157,12 +295,16 @@ endmodule
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
 
-module FT64_L1_icache(rst, clk, nxt, wr, adr, i, o, hit, invall, invline);
+module FT64_L1_icache(rst, clk, nxt, wr, en, wadr, adr, i, o, hit, invall, invline);
+parameter CAMTAGS = 1'b0;   // 32 way
+parameter FOURWAY = 1'b1;
 input rst;
 input clk;
 input nxt;
 input wr;
+input [7:0] en;
 input [37:0] adr;
+input [37:0] wadr;
 input [255:0] i;
 output reg [31:0] o;
 output hit;
@@ -170,10 +312,14 @@ input invall;
 input invline;
 
 wire [255:0] ic;
-wire lv;            // line valid
+reg [255:0] i1, i2;
+wire [7:0] lv;				// line valid
 wire [5:0] lineno;
+wire [5:0] wlineno;
 wire taghit;
 reg wr1,wr2;
+reg [7:0] en1, en2;
+reg invline1, invline2;
 
 // Must update the cache memory on the cycle after a write to the tag memmory.
 // Otherwise lineno won't be valid. Tag memory takes two clock cycles to update.
@@ -181,18 +327,61 @@ always @(posedge clk)
      wr1 <= wr;
 always @(posedge clk)
      wr2 <= wr1;
+always @(posedge clk)
+	i1 <= i;
+always @(posedge clk)
+	i2 <= i1;
+always @(posedge clk)
+	en1 <= en;
+always @(posedge clk)
+	en2 <= en1;
+always @(posedge clk)
+	invline1 <= invline;
+always @(posedge clk)
+	invline2 <= invline1;
+
+generate begin : tags
+if (FOURWAY) begin
+
+FT64_L1_icache_mem u1
+(
+    .rst(rst),
+    .clk(clk),
+    .wr(wr1),
+    .en(en1),
+    .i(i1),
+    .lineno(lineno),
+    .o(ic),
+    .ov(lv),
+    .invall(invall),
+    .invline(invline1)
+);
+
+FT64_L1_icache_cmptag4way u3
+(
+	.rst(rst),
+	.clk(~clk),
+	.nxt(nxt),
+	.wr(wr),
+	.adr(adr),
+	.lineno(lineno),
+	.hit(taghit)
+);
+end
+else if (CAMTAGS) begin
 
 FT64_L1_icache_mem u1
 (
     .rst(rst),
     .clk(clk),
     .wr(wr2),
+    .en(en2),
+    .i(i2),
     .lineno(lineno),
-    .i(i),
     .o(ic),
     .ov(lv),
     .invall(invall),
-    .invline(invline)
+    .invline(invline2)
 );
 
 FT64_L1_icache_camtag u2
@@ -200,13 +389,18 @@ FT64_L1_icache_camtag u2
     .rst(rst),
     .clk(clk),
     .nxt(nxt),
+    .wlineno(wlineno),
+    .wadr(wadr),
     .wr(wr),
     .adr(adr),
     .lineno(lineno),
     .hit(taghit)
 );
+end
+end
+endgenerate
 
-assign hit = taghit & lv;
+assign hit = taghit & lv[adr[4:2]];
 
 //always @(radr or ic0 or ic1)
 always @(adr or ic)

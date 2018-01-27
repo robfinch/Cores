@@ -31,6 +31,8 @@
 // data. Next the bitmap of the data storage is set for the new data.
 // ============================================================================
 //
+//`define DUAL_READ	1'b1
+
 module cam6x32(clk, we, wr_addr, din, cmp_din, match_addr, match);
 input clk;
 input we;
@@ -40,6 +42,7 @@ input [5:0] cmp_din;
 output [31:0] match_addr;
 output match;
 
+(* RAM_STYLE="DISTRIBUTED" *)
 reg [31:0] bmem [0:63];
 reg [5:0] dmem [0:31];
 reg [5:0] din2;
@@ -53,7 +56,7 @@ initial begin
 end
 
 reg we2;
-wire [5:0] madr = (we2|we) ? dmem[wr_addr] : cmp_din;
+wire [5:0] madr = (we2 & ~we) ? din2 : we ? dmem[wr_addr] : cmp_din;
 
 always @(posedge clk)
 begin
@@ -63,7 +66,7 @@ begin
         bmem[madr] <= bmem[madr] & ~(32'd1 << wr_addr);
     else if (we2 & ~we)
         bmem[madr] <= bmem[madr] | (32'd1 << wr_addr);
-    if (we)
+    if (we2 & ~we)
         dmem[wr_addr] <= din2;
 end
 
@@ -84,6 +87,7 @@ input [5:0] cmp_din;
 output [63:0] match_addr;
 output match;
 
+(* RAM_STYLE="DISTRIBUTED" *)
 reg [63:0] bmem [0:63];
 reg [5:0] dmem [0:63];
 reg [5:0] din2;
@@ -122,6 +126,72 @@ end
 always @(posedge clk)
 if (rst) begin
     for (n = 0; n < 64; n = n + 1)
+        dmem[n] <= 0;
+end
+else begin
+    if (we2 & ~we)
+        dmem[wr_addr] <= din2;
+end
+
+`ifdef DUAL_READ
+assign match_addr = bmem[cmp_din];
+`else
+assign match_addr = bmem[madr];
+`endif
+assign match = |match_addr;
+
+endmodule
+
+// Write six bits of data to one of 64 addresses
+ 
+module cam6x256(rst, clk, we, wr_addr, din, cmp_din, match_addr, match);
+input rst;
+input clk;
+input we;
+input [7:0] wr_addr;
+input [5:0] din;
+input [5:0] cmp_din;
+output [255:0] match_addr;
+output match;
+
+reg [255:0] bmem [0:63];
+reg [5:0] dmem [0:255];
+reg [5:0] din2;
+
+integer n;
+initial begin
+    for (n = 0; n < 64; n = n + 1)
+        bmem[n] = 0;
+    for (n = 0; n < 256; n = n + 1)
+        dmem[n] = 0;
+end
+
+reg we2;
+wire [5:0] madr = (we2 & ~we) ? din2 : we ? dmem[wr_addr] : cmp_din;
+
+always @(posedge clk)
+    din2 <= din;
+always @(posedge clk)
+    we2 <= we;
+
+// This looks like it might be updating the same address during we and we2 ubt
+// bmem[adr] actually likely changes inbetween the write pulses due to an
+// update of dmem[wr_addr].
+always @(posedge clk)
+if (rst) begin
+    for (n = 0; n < 64; n = n + 1)
+        bmem[n] <= 0;
+end
+else begin
+    if (we & ~we2)
+        bmem[madr] <= bmem[madr] & ~(256'd1 << wr_addr);
+    else if (we2 & ~we)
+        bmem[madr] <= bmem[madr] | (256'd1 << wr_addr);
+end
+
+always @(posedge clk)
+if (rst) begin
+    for (n = 0; n < 256; n = n + 1)
         dmem[n] <= 0;
 end
 else begin

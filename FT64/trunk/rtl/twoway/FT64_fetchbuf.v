@@ -641,7 +641,7 @@ else begin
     //
     // get data iff the fetch buffers are empty
     //
-    if (fetchbufA_v == `INV && fetchbufB_v == `INV && fetchbufC_v==`INV && fetchbufD_v==`INV && phit) begin
+    if (fetchbufA_v == `INV && fetchbufB_v == `INV && fetchbufC_v==`INV && fetchbufD_v==`INV) begin
         FetchAB();
         fetchbuf <= 1'b0;
     end
