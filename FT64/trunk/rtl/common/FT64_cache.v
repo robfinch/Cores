@@ -190,6 +190,7 @@ input [37:0] adr;
 output reg [5:0] lineno;
 output hit;
 
+(* RAM_STYLE="DISTRIBUTED" *)
 reg [32:0] mem0 [0:15];
 reg [32:0] mem1 [0:15];
 reg [32:0] mem2 [0:15];
@@ -206,7 +207,6 @@ initial begin
     end
 end
 
-reg wr2;
 wire [21:0] lfsro;
 lfsr #(22,22'h0ACE3) u1 (rst, clk, nxt, 1'b0, lfsro);
 reg [5:0] wlineno;
@@ -214,7 +214,6 @@ always @(posedge clk)
 if (rst)
 	lineno <= 6'h00;
 else begin
-     wr2 <= wr;
 	if (wr) begin
 		case(lfsro[1:0])
 		2'b00:	begin  mem0[adr[8:5]] <= adr[37:5];  wlineno <= {2'b00,adr[8:5]}; end
@@ -223,19 +222,18 @@ else begin
 		2'b11:	begin  mem3[adr[8:5]] <= adr[37:5];  wlineno <= {2'b11,adr[8:5]}; end
 		endcase
 	end
-     rradr <= adr;
 end
 
-wire hit0 = mem0[rradr[8:5]]==rradr[37:5];
-wire hit1 = mem1[rradr[8:5]]==rradr[37:5];
-wire hit2 = mem2[rradr[8:5]]==rradr[37:5];
-wire hit3 = mem3[rradr[8:5]]==rradr[37:5];
+wire hit0 = mem0[adr[8:5]]==adr[37:5];
+wire hit1 = mem1[adr[8:5]]==adr[37:5];
+wire hit2 = mem2[adr[8:5]]==adr[37:5];
+wire hit3 = mem3[adr[8:5]]==adr[37:5];
 always @*
     //if (wr2) lineno = wlineno;
-    if (hit0)  lineno = {2'b00,rradr[8:5]};
-    else if (hit1)  lineno = {2'b01,rradr[8:5]};
-    else if (hit2)  lineno = {2'b10,rradr[8:5]};
-    else  lineno = {2'b11,rradr[8:5]};
+    if (hit0)  lineno = {2'b00,adr[8:5]};
+    else if (hit1)  lineno = {2'b01,adr[8:5]};
+    else if (hit2)  lineno = {2'b10,adr[8:5]};
+    else  lineno = {2'b11,adr[8:5]};
 assign hit = hit0|hit1|hit2|hit3;
 endmodule
 
@@ -360,7 +358,7 @@ FT64_L1_icache_mem u1
 FT64_L1_icache_cmptag4way u3
 (
 	.rst(rst),
-	.clk(~clk),
+	.clk(clk),
 	.nxt(nxt),
 	.wr(wr),
 	.adr(adr),

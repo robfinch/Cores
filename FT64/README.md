@@ -34,6 +34,13 @@ There is an assembler and 'CC64' compiler for FT64. The assembler does not yet f
 # Versions
 There is now a non-superscalar clocked sequential version of the FT64 core. This allows the instruction set to be executed on a smaller core. The author desired to use the same ISA to test other cores and a smaller version of the core was required. The sequential version does not support the full instruction set. Just the most commonly used instructions are supported.
 
+# Status
+Current focus is on getting the base integer instruction set working including the most common operations.
+Floting point is largely untested.
+There is an off by one error in the vector processing instructions. The core tries to process too many elements sometimes.
+The RSB doesn't work very well, causing most returns to be multi-cycle operations instead of single cycle.
+An attempt is being made to get the core to run a BIOS demo program. Currently it clears the screen then appears to hang.
+
 # Instruction Set
 The instruction set allows for up to three register read ports and a single register write port for a single instruction. The primary motivations for this being the desire for indexed addressing and branch-to-register. Three read ports are also handy for multiply-accumulate instructions. While the ISA probably does not offer leading edge performance, it's designed to be more programmer friendly in the author's opinion, while still offering good performance.
 Excepting vector operations the design is limited to one memory access per instruction in a load / store architecture.

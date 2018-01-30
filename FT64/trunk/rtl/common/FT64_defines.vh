@@ -221,6 +221,7 @@
 `define LC      6'h20
 `define LCU     6'h21
 `define BITFIELD    6'h22
+`define BFINSI			4'h4
 `define LBU     6'h23
 `define SC      6'h24
 `define CAS     6'h25

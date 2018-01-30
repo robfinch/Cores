@@ -2218,7 +2218,7 @@ int main(int argc, char *argv[])
         printf("fname:%s\r\n", fname);
         fopen_s(&vfp, fname, "w");
         if (vfp) {
-            if (gCpu==64) {
+            if (gCpu==64||gCpu=='F'||gCpu=='G') {
                 for (kk = 0; kk < binndx; kk+=4) {
                     if (lsa != (start_address + kk) >> 16) {
                         sprintf_s(hexbuf, sizeof(hexbuf), ":02000004%04X00\n", (int)((start_address+kk) >> 16));
@@ -2226,8 +2226,8 @@ int main(int argc, char *argv[])
                         fprintf(vfp, hexbuf);
                         lsa = (start_address+kk) >> 16;
                     }
-                    sprintf_s(hexbuf, sizeof(hexbuf), ":%02X%04X00%02X%02X%02X%02X%02X\n",
-                        4, (start_address + kk) & 0xFFFF,
+                    sprintf_s(hexbuf, sizeof(hexbuf), ":%02X%04X00%02X%02X%02X%02X\n",
+                        4, (int)(start_address + kk) & 0xFFFF,
                         binfile[kk], binfile[kk+1], binfile[kk+2], binfile[kk+3]
                     );
                     IHChecksum(hexbuf, 4);

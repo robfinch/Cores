@@ -25,7 +25,7 @@
 `include "FT64_defines.vh"
 
 module FT64alu(rst, clk, ld, abort, instr, a, b, c, imm, tgt, tgt2, ven, vm, sbl, sbu,
-    csr, o, ob, done, idle, excen, exc);
+    csr, o, ob, done, idle, excen, exc, thrd);
 parameter DBW = 64;
 parameter BIG = 1'b1;
 parameter SUP_VECTOR = 1;
@@ -53,6 +53,7 @@ output reg done;
 output reg idle;
 input [4:0] excen;
 output reg [8:0] exc;
+input thrd;
 integer n;
 
 wire [DBW-1:0] divq, rem;
@@ -834,7 +835,7 @@ case(instr[`INSTRUCTION_OP])
  `SB,`SC,`SH,`SW,`SWC,`CAS:  o = a + b;
  `LVx:		 o = a + sxb12;
  `LV,`SV:    o = a + b + {ven,3'b0};
- `CSRRW:     o = BIG ? csr : 64'hCCCCCCCCCCCCCCCC;
+ `CSRRW:     o = BIG ? csr | {thrd,24'h0} : 64'hDDDDDDDDDDDDDDDD;
  `BITFIELD:   o = BIG ? bfout : 64'hCCCCCCCCCCCCCCCC;
   default:    o = 64'hDEADDEADDEADDEAD;
 endcase  
