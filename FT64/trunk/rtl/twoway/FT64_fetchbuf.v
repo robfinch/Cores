@@ -317,42 +317,38 @@ if (rst) begin
 end
 else begin
 	
-	 did_branchback0 <= take_branch0;
-	 did_branchback1 <= take_branch1;
+	did_branchback0 <= take_branch0;
+	did_branchback1 <= take_branch1;
 
 	stompedRet = FALSE;
 	if (branchmiss) begin
 		if (thread_en) begin
-			if (branchmiss_thrd) begin
-				 pc0 <= misspc;
-	     		 //pc1 <= misspc + 32'd4;
-	    	end
-	    	else begin
-	    		 pc1 <= misspc;
-	    		 //pc1 <= misspc + 32'd4;
-	    	end
+			if (branchmiss_thrd)
+				 pc1 <= misspc;
+	    	else
+	    		 pc0 <= misspc;
 		end
 		else begin
 			 pc0 <= misspc;
 	     	 pc1 <= misspc + 32'd4;
 		end
-	    if (thread_en) begin
-	     	if (branchmiss_thrd) begin
+		if (thread_en) begin
+			if (branchmiss_thrd) begin
 				fetchbufB_v <= `INV;
 				fetchbufD_v <= `INV;
-	     	end
-	     	else begin
+			end
+			else begin
 				fetchbufA_v <= `INV;
 				fetchbufC_v <= `INV;
-	     	end
-	 	end
-	 	else begin
-	        fetchbuf <= 1'b0;
+			end
+		end
+		else begin
 			fetchbufA_v <= `INV;
 			fetchbufB_v <= `INV;
 			fetchbufC_v <= `INV;
 			fetchbufD_v <= `INV;
-	 	end
+			fetchbuf <= 1'b0;
+		end
 	     $display("********************");
 	     $display("********************");
 	     $display("********************");
@@ -392,6 +388,10 @@ else begin
 			      fetchbuf <= fetchbuf + (queued1|queuedNop);
 			end
 
+		// Can occur with threading enabled
+		4'b0101:
+			fetchbufB_v <= !(queued1|queuedNop);
+
 //		4'b0101	: panic <= `PANIC_INVALIDFBSTATE;
 //		4'b0110	: panic <= `PANIC_INVALIDFBSTATE;
 
@@ -405,8 +405,8 @@ else begin
 		// simple solution: leave it alone and wait until we are through with the first two slots.
 		4'b0111 :
 			begin
-			     fetchbufB_v <= !(queued1|queuedNop);	// if it can be queued, it will
-			      fetchbuf <= fetchbuf + (queued1|queuedNop);
+			    fetchbufB_v <= !(queued1|queuedNop);	// if it can be queued, it will
+				fetchbuf <= fetchbuf + (queued1|queuedNop);
 			end
 
 		// this looks like the following:
@@ -448,7 +448,7 @@ else begin
 		// if fbB has it: if pc0 == fbB_pc, then it is the former scenario, else it is the latter
 		4'b1100 : begin
 			if(thread_en) begin
-				if (take_branchA & take_branchB) begin
+				if (take_branchA && take_branchB) begin
 					pc0 <= branch_pcA;
 					pc1 <= branch_pcB;
 					fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
@@ -534,6 +534,9 @@ else begin
 			      fetchbuf <= fetchbuf + (queued1|queuedNop);
 			end
 
+		4'b0101:
+			fetchbufD_v <= !(queued1|queuedNop);
+			
 //		4'b0101	: panic <= `PANIC_INVALIDFBSTATE;
 //		4'b0110	: panic <= `PANIC_INVALIDFBSTATE;
 
@@ -598,13 +601,13 @@ else begin
 				end
 				else if (take_branchC) begin
 					pc0 <= branch_pcC;
-					fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
-					fetchbufB_v <= !(queued2|queuedNop);	// if it can be queued, it will
+					fetchbufC_v <= !(queued1|queuedNop);	// if it can be queued, it will
+					fetchbufD_v <= !(queued2|queuedNop);	// if it can be queued, it will
 				end
 				else if (take_branchD) begin
 					pc1 <= branch_pcD;
-					fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
-					fetchbufB_v <= !(queued2|queuedNop);	// if it can be queued, it will
+					fetchbufC_v <= !(queued1|queuedNop);	// if it can be queued, it will
+					fetchbufD_v <= !(queued2|queuedNop);	// if it can be queued, it will
 				end
 			end
 			else begin
@@ -770,8 +773,8 @@ assign fetchbuf0_pc    = (fetchbuf == 1'b0) ? fetchbufA_pc    : fetchbufC_pc   ;
 assign fetchbuf1_instr = (fetchbuf == 1'b0) ? fetchbufB_instr : fetchbufD_instr;
 assign fetchbuf1_v     = (fetchbuf == 1'b0) ? fetchbufB_v     : fetchbufD_v    ;
 assign fetchbuf1_pc    = (fetchbuf == 1'b0) ? fetchbufB_pc    : fetchbufD_pc   ;
-assign fetchbuf0_thrd  = (fetchbuf == 1'b0) ? 1'b0 : thread_en;
-assign fetchbuf1_thrd  = (fetchbuf == 1'b0) ? 1'b0 : thread_en;
+assign fetchbuf0_thrd  = 1'b0;
+assign fetchbuf1_thrd  = thread_en;
 
 task FetchAB;
 begin
@@ -788,8 +791,8 @@ begin
      fetchbufB_v <= `VAL;
      fetchbufB_pc <= pc1;
     if (phit) begin
-	    pc0 <= pc0 + 8;
-   		pc1 <= pc1 + 8;
+	    pc0 <= pc0 + (thread_en ? 4 : 8);
+   		pc1 <= pc1 + (thread_en ? 4 : 8);
     end
 end
 endtask
@@ -809,8 +812,8 @@ begin
      fetchbufD_v <= `VAL;
      fetchbufD_pc <= pc1;
 	if (phit) begin
-		 pc0 <= pc0 + 8;
-		 pc1 <= pc1 + 8;
+	    pc0 <= pc0 + (thread_en ? 4 : 8);
+   		pc1 <= pc1 + (thread_en ? 4 : 8);
 	end
 end
 endtask

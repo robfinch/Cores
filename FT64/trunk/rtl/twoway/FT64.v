@@ -65,7 +65,8 @@
 //	Modification to RiSC-16 include:
 //  - move to 32 bit instructions
 //  - additional instructions added
-//  - vector instruction set
+//  - vector instruction set,
+//  - SIMD instructions
 //  - extension of data width to 64 bits
 //	- 32 general purpose registers
 //	- 32 vector registers, length 63
@@ -77,7 +78,7 @@
 //  - asynchronous logic loops for issue and branch miss
 //    re-written for synchronous operation, not as elegant
 //    but required for operation in an FPGA
-//		
+//	- simultaneous multi-threading (SMT)
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -92,10 +93,11 @@
 // You should have received a copy of the GNU General Public License        
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.    
 //
-// Approx. 92,000 LUTs. 147,200 LC's).
+// Approx. 100,000 LUTs. 160,000 LC's.
 // ============================================================================
 //
 `include "FT64_defines.vh"
+//`define SUPPORT_SMT	1'b1
 `define QBITS		2:0
 `define QENTRIES	8
 
@@ -200,7 +202,13 @@ reg [63:0] cr0;
 wire dce = cr0[30];     // data cache enable
 wire bpe = cr0[32];     // branch predictor enable
 wire ctgtxe = cr0[33];
+// Simply setting this flag to zero should strip out almost all the logic
+// associated SMT.
+`ifdef SUPPORT_SMT
 wire thread_en = cr0[16];
+`else
+wire thread_en = 1'b0;
+`endif
 reg [63:0] tick;
 reg [31:0] pcr;
 reg [63:0] pcr2;
@@ -332,7 +340,7 @@ reg        iqentry_v  	[0:QENTRIES-1];	// entry valid?  -- this should be the fi
 reg        iqentry_out	[0:QENTRIES-1];	// instruction has been issued to an ALU ... 
 reg        iqentry_done	[0:QENTRIES-1];	// instruction result valid
 reg        iqentry_cmt  [0:QENTRIES-1];
-reg        iqentry_thrd [0:QENTRIES-1];
+reg        iqentry_thrd [0:QENTRIES-1];	// which thread the instruction is in
 reg        iqentry_pred [0:QENTRIES-1];  // predicate bit
 reg        iqentry_bt  	[0:QENTRIES-1];	// branch-taken (used only for branches)
 reg        iqentry_agen  	[0:QENTRIES-1];	// address-generate ... signifies that address is ready (only for LW/SW)
@@ -3635,24 +3643,54 @@ begin
   end
 end
 
+wire [4:0] nsn = thread_en ? (iqentry_thrd[idp1(fcu_id)]==iqentry_thrd[fcu_id] ? 5'd1 : 5'd2) : 5'd1;
+wire [4:0] nsn0 = thread_en ? (iqentry_thrd[3'd1]==iqentry_thrd[3'd0] ? 5'd1 : 5'd2) : 5'd1;
+wire [4:0] nsn1 = thread_en ? (iqentry_thrd[3'd2]==iqentry_thrd[3'd1] ? 5'd1 : 5'd2) : 5'd1;
+wire [4:0] nsn2 = thread_en ? (iqentry_thrd[3'd3]==iqentry_thrd[3'd2] ? 5'd1 : 5'd2) : 5'd1;
+wire [4:0] nsn3 = thread_en ? (iqentry_thrd[3'd4]==iqentry_thrd[3'd3] ? 5'd1 : 5'd2) : 5'd1;
+wire [4:0] nsn4 = thread_en ? (iqentry_thrd[3'd5]==iqentry_thrd[3'd4] ? 5'd1 : 5'd2) : 5'd1;
+wire [4:0] nsn5 = thread_en ? (iqentry_thrd[3'd6]==iqentry_thrd[3'd5] ? 5'd1 : 5'd2) : 5'd1;
+wire [4:0] nsn6 = thread_en ? (iqentry_thrd[3'd7]==iqentry_thrd[3'd6] ? 5'd1 : 5'd2) : 5'd1;
+wire [4:0] nsn7 = thread_en ? (iqentry_thrd[3'd0]==iqentry_thrd[3'd7] ? 5'd1 : 5'd2) : 5'd1;
+wire [QENTRIES-1:0] nextqd;
+// Next queue id
+wire [`QBITS] nid = thread_en ? (iqentry_thrd[idp1(fcu_id)]==iqentry_thrd[fcu_id] ? idp1(fcu_id) : idp2(fcu_id)) : idp1(fcu_id);
+wire [`QBITS] nid0 = thread_en ? (iqentry_thrd[3'd1]==iqentry_thrd[3'd0] ? 3'd1 : 3'd2) : 3'd1;
+wire [`QBITS] nid1 = thread_en ? (iqentry_thrd[3'd2]==iqentry_thrd[3'd1] ? 3'd1 : 3'd2) : 3'd1;
+wire [`QBITS] nid2 = thread_en ? (iqentry_thrd[3'd3]==iqentry_thrd[3'd2] ? 3'd1 : 3'd2) : 3'd1;
+wire [`QBITS] nid3 = thread_en ? (iqentry_thrd[3'd4]==iqentry_thrd[3'd3] ? 3'd1 : 3'd2) : 3'd1;
+wire [`QBITS] nid4 = thread_en ? (iqentry_thrd[3'd5]==iqentry_thrd[3'd4] ? 3'd1 : 3'd2) : 3'd1;
+wire [`QBITS] nid5 = thread_en ? (iqentry_thrd[3'd6]==iqentry_thrd[3'd5] ? 3'd1 : 3'd2) : 3'd1;
+wire [`QBITS] nid6 = thread_en ? (iqentry_thrd[3'd7]==iqentry_thrd[3'd6] ? 3'd1 : 3'd2) : 3'd1;
+wire [`QBITS] nid7 = thread_en ? (iqentry_thrd[3'd0]==iqentry_thrd[3'd7] ? 3'd1 : 3'd2) : 3'd1;
+
+assign nextqd[0] = thread_en ? iqentry_sn[nid0]==iqentry_sn[0] + nsn0 : iqentry_sn[1]==iqentry_sn[0] + 5'd1;
+assign  nextqd[1] = thread_en ? iqentry_sn[nid1]==iqentry_sn[1] + nsn1 : iqentry_sn[2]==iqentry_sn[1] + 5'd1;
+assign  nextqd[2] = thread_en ? iqentry_sn[nid2]==iqentry_sn[2] + nsn2 : iqentry_sn[3]==iqentry_sn[2] + 5'd1;
+assign  nextqd[3] = thread_en ? iqentry_sn[nid3]==iqentry_sn[3] + nsn3 : iqentry_sn[4]==iqentry_sn[3] + 5'd1;
+assign  nextqd[4] = thread_en ? iqentry_sn[nid4]==iqentry_sn[4] + nsn4 : iqentry_sn[5]==iqentry_sn[4] + 5'd1;
+assign  nextqd[5] = thread_en ? iqentry_sn[nid5]==iqentry_sn[5] + nsn5 : iqentry_sn[6]==iqentry_sn[5] + 5'd1;
+assign  nextqd[6] = thread_en ? iqentry_sn[nid6]==iqentry_sn[6] + nsn6 : iqentry_sn[7]==iqentry_sn[6] + 5'd1;
+assign  nextqd[7] = thread_en ? iqentry_sn[nid7]==iqentry_sn[7] + nsn7 : iqentry_sn[0]==iqentry_sn[7] + 5'd1;
+
 // Don't issue to the fcu until the following instruction is enqueued.
 always @*//(could_issue or head0 or head1 or head2 or head3 or head4 or head5 or head6 or head7)
 begin
 	iqentry_fcu_issue = 8'h00;
 	if (fcu_done) begin
-    if (could_issue[head0] && iqentry_fc[head0] && iqentry_sn[head1]==iqentry_sn[head0]+5'd1) begin
+    if (could_issue[head0] && iqentry_fc[head0] && nextqd[head0]) begin
       iqentry_fcu_issue[head0] = `TRUE;
     end
-    else if (could_issue[head1] && iqentry_fc[head1] && iqentry_sn[head2]==iqentry_sn[head1]+5'd1)
+    else if (could_issue[head1] && iqentry_fc[head1] && nextqd[head1])
     begin
       iqentry_fcu_issue[head1] = `TRUE;
     end
-    else if (could_issue[head2] && iqentry_fc[head2] && iqentry_sn[head3]==iqentry_sn[head2]+5'd1
+    else if (could_issue[head2] && iqentry_fc[head2] && nextqd[head2]
     && (!(iqentry_v[head1] && iqentry_sync[head1]) || !iqentry_v[head0])
     ) begin
    		iqentry_fcu_issue[head2] = `TRUE;
     end
-    else if (could_issue[head3] && iqentry_fc[head3] && iqentry_sn[head4]==iqentry_sn[head3]+5'd1
+    else if (could_issue[head3] && iqentry_fc[head3] && nextqd[head3]
     && (!(iqentry_v[head1] && iqentry_sync[head1]) || !iqentry_v[head0])
     && (!(iqentry_v[head2] && iqentry_sync[head2]) ||
      		((!iqentry_v[head0])
@@ -3661,7 +3699,7 @@ begin
     ) begin
    		iqentry_fcu_issue[head3] = `TRUE;
     end
-    else if (could_issue[head4] && iqentry_fc[head4] && iqentry_sn[head5]==iqentry_sn[head4]+5'd1
+    else if (could_issue[head4] && iqentry_fc[head4] && nextqd[head4]
     && (!(iqentry_v[head1] && iqentry_sync[head1]) || !iqentry_v[head0])
     && (!(iqentry_v[head2] && iqentry_sync[head2]) ||
      		((!iqentry_v[head0])
@@ -3675,7 +3713,7 @@ begin
     ) begin
    		iqentry_fcu_issue[head4] = `TRUE;
     end
-    else if (could_issue[head5] && iqentry_fc[head5] && iqentry_sn[head6]==iqentry_sn[head5]+5'd1
+    else if (could_issue[head5] && iqentry_fc[head5] && nextqd[head5]
     && (!(iqentry_v[head1] && iqentry_sync[head1]) || !iqentry_v[head0])
     && (!(iqentry_v[head2] && iqentry_sync[head2]) ||
      		((!iqentry_v[head0])
@@ -3695,7 +3733,7 @@ begin
     ) begin
    		iqentry_fcu_issue[head5] = `TRUE;
     end
-    else if (could_issue[head6] && iqentry_fc[head6] && iqentry_sn[head7]==iqentry_sn[head6]+5'd1
+    else if (could_issue[head6] && iqentry_fc[head6] && nextqd[head6]
     && (!(iqentry_v[head1] && iqentry_sync[head1]) || !iqentry_v[head0])
     && (!(iqentry_v[head2] && iqentry_sync[head2]) ||
      		((!iqentry_v[head0])
@@ -4323,6 +4361,7 @@ begin
 end
 
 // Stomp logic for branch miss.
+// For SMT stomp on only the entries of the same thread as the missed
 
 reg [QENTRIES-1:0] iqentry_stomp2;
 reg [`QBITS] contid;
@@ -4334,25 +4373,49 @@ if (branchmiss) begin
     // If missed at the head, all queue entries but the head are stomped on.
     if (head0==missid) begin
         for (n = 0; n < QENTRIES; n = n + 1)
-            if (n!=missid)
-                iqentry_stomp2[n] = iqentry_v[n];
+            if (n!=missid) begin
+            	if (thread_en) begin
+            		if (iqentry_thrd[n]==branchmiss_thrd)
+	                	iqentry_stomp2[n] = iqentry_v[n];
+            	end
+            	else
+                	iqentry_stomp2[n] = iqentry_v[n];
+            end
     end
     // If head0 is after the missid queue entries between the missid and
     // head0 are stomped on.
     else if (head0 > missid) begin
         for (n = 0; n < QENTRIES; n = n + 1)
-            if (n > missid && n < head0)
-                iqentry_stomp2[n] = iqentry_v[n];
+            if (n > missid && n < head0) begin
+            	if (thread_en) begin
+            		if (iqentry_thrd[n]==branchmiss_thrd)
+	                	iqentry_stomp2[n] = iqentry_v[n];
+            	end
+            	else
+                	iqentry_stomp2[n] = iqentry_v[n];
+            end
     end
     // Otherwise still queue entries between missid and head0 are stomped on
     // but the range 'wraps around'.
     else begin
         for (n = 0; n < QENTRIES; n = n + 1)
-            if (n < head0)
-                iqentry_stomp2[n] = iqentry_v[n];
+            if (n < head0) begin
+            	if (thread_en) begin
+            		if (iqentry_thrd[n]==branchmiss_thrd)
+	                	iqentry_stomp2[n] = iqentry_v[n];
+            	end
+            	else
+                	iqentry_stomp2[n] = iqentry_v[n];
+            end
         for (n = 0; n < QENTRIES; n = n + 1)
-            if (n >= missid + 1)
-                iqentry_stomp2[n] = iqentry_v[n];
+            if (n >= missid + 1) begin
+            	if (thread_en) begin
+            		if (iqentry_thrd[n]==branchmiss_thrd)
+	                	iqentry_stomp2[n] = iqentry_v[n];
+            	end
+            	else
+                	iqentry_stomp2[n] = iqentry_v[n];
+            end
     end
     // Not sure this logic is worth it for the few cases where the target
     // of the branch is in the queue already and there are no target
@@ -4636,10 +4699,11 @@ assign  fcu_misspc =
 // To avoid false branch mispredicts the branch isn't evaluated until the
 // following instruction queues. The address of the next instruction is
 // looked at to see if the BTB predicted correctly.
+
 wire fcu_brk_miss = IsBrk(fcu_instr) || IsRTI(fcu_instr);
-wire fcu_ret_miss = IsRet(fcu_instr) && (fcu_argB != iqentry_pc[idp1(fcu_id)]);
-wire fcu_jal_miss = IsJAL(fcu_instr) && fcu_argA + fcu_argI != iqentry_pc[idp1(fcu_id)];
-wire fcu_followed = iqentry_sn[idp1(fcu_id)]==iqentry_sn[fcu_id[`QBITS]]+5'd1;
+wire fcu_ret_miss = IsRet(fcu_instr) && (fcu_argB != iqentry_pc[thread_en ? idp2(fcu_id) : idp1(fcu_id)]);
+wire fcu_jal_miss = IsJAL(fcu_instr) && fcu_argA + fcu_argI != iqentry_pc[thread_en ? idp2(fcu_id) : idp1(fcu_id)];
+wire fcu_followed = thread_en ? iqentry_sn[nid] == iqentry_sn[fcu_id[`QBITS]]+nsn : iqentry_sn[idp1(fcu_id)]==iqentry_sn[fcu_id[`QBITS]]+5'd1;
 always @*
 if (fcu_dataready) begin
 	// Break and RTI switch register sets, and so are always treated as a branch miss in order to
@@ -4652,8 +4716,8 @@ if (fcu_dataready) begin
 			fcu_branchmiss = TRUE;
 		else if (fcu_ret_miss)
 			fcu_branchmiss = TRUE;
-		else if (IsBranch(fcu_instr) && ((fcu_bus[0] && (~fcu_bt || (fcu_misspc != iqentry_pc[idp1(fcu_id)]))) ||
-		                            (~fcu_bus[0] && ( fcu_bt || (fcu_pc + 32'd4 != iqentry_pc[idp1(fcu_id)])))))
+		else if (IsBranch(fcu_instr) && ((fcu_bus[0] && (~fcu_bt || (fcu_misspc != iqentry_pc[nid]))) ||
+		                            (~fcu_bus[0] && ( fcu_bt || (fcu_pc + 32'd4 != iqentry_pc[nid])))))
 		    fcu_branchmiss = TRUE;
 		else if (fcu_jal_miss)
 		    fcu_branchmiss = TRUE;
@@ -4686,8 +4750,8 @@ assign fcu_branchmiss = fcu_dataready &&
 		    (IsJAL(fcu_instr)) && fcu_argA + fcu_argI != iqentry_pc[idp1(fcu_id)]));
 */
 			    
-wire fcu_wr = fcu_v && iqentry_v[idp1(fcu_id)] && iqentry_sn[idp1(fcu_id)]==iqentry_sn[fcu_id[`QBITS]]+5'd1 &&
-              fcu_instr==iqentry_instr[fcu_id[`QBITS]];
+wire fcu_wr = fcu_v && iqentry_v[nid] && iqentry_sn[nid]==iqentry_sn[fcu_id[`QBITS]]+nsn
+					&& fcu_instr==iqentry_instr[fcu_id[`QBITS]];
 
 	FT64_AMO_alu uamoalu0 (amo_instr, amo_argA, amo_argB, amo_res);
 
@@ -4808,7 +4872,7 @@ begin
             else begin
                 // If it's a predicted branch queue only the first instruction, the second
                 // instruction will be stomped on.
-                if (take_branch0) begin
+                if (take_branch0 & ~thread_en) begin
                     if (iqentry_v[tail0]==`INV) begin
                         canq1 <= TRUE;
                         queued1 <= TRUE;
@@ -5167,9 +5231,10 @@ else begin
 	    2'b11:
 		    if (canq1) begin
 				//
-				// if the first instruction is a backwards branch, enqueue it & stomp on all following instructions
+				// if the first instruction is a predicted branch, enqueue it & stomp on all following instructions
+				// but only if the following instruction is in the same thread. Otherwise we want to queue two.
 				//
-				if (take_branch0) begin
+				if (take_branch0 && fetchbuf1_thrd==fetchbuf0_thrd) begin
 		             tgtq <= FALSE;
 		            enque0(tail0,seq_num,6'd0);
 				end
@@ -6711,7 +6776,7 @@ end
 	    45, fetchbuf?62:45, fetchbufD_v, fetchbufD_instr, fetchbufD_pc);
 
 	for (i=0; i<QENTRIES; i=i+1) 
-	    $display("%c%c %d: %d %d %d %d %d %d %d %d %d %c%h 0%d(%d) %o %h %h %h %d %o %h %d %o %h %h %d#",
+	    $display("%c%c %d: %d %d %d %d %d %d %d %d %d %c%h 0%d(%d) %o %h %h %h %d %o %h %d %o %h.%c %h %d#",
 		(i[`QBITS]==head0)?"C":".", (i[`QBITS]==tail0)?"Q":".", i[`QBITS],
 		iqentry_v[i], iqentry_done[i], iqentry_out[i], iqentry_bt[i], iqentry_memissue[i], iqentry_agen[i], iqentry_issue[i],
 		((i==0) ? iqentry_islot[0] : (i==1) ? iqentry_islot[1] : (i==2) ? iqentry_islot[2] : (i==3) ? iqentry_islot[3] :
@@ -6720,6 +6785,7 @@ end
 		iqentry_instr[i], iqentry_tgt[i][4:0], iqentry_utgt[i][4:0],
 		iqentry_exc[i], iqentry_res[i], iqentry_a0[i], iqentry_a1[i], iqentry_a1_v[i],
 		iqentry_a1_s[i], iqentry_a2[i], iqentry_a2_v[i], iqentry_a2_s[i], iqentry_pc[i],
+		iqentry_thrd[i] ? "^" : "v",
 		iqentry_sn[i], iqentry_ven[i]
 		);
     $display("DRAM");
