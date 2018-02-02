@@ -69,6 +69,7 @@
 //  - SIMD instructions
 //  - extension of data width to 64 bits
 //	- 32 general purpose registers
+//  - 32 floating point registers
 //	- 32 vector registers, length 63
 //  - addition of more powerful branch prediction
 //  - branch target buffer (BTB)
@@ -78,7 +79,7 @@
 //  - asynchronous logic loops for issue and branch miss
 //    re-written for synchronous operation, not as elegant
 //    but required for operation in an FPGA
-//	- simultaneous multi-threading (SMT)
+//	- fine-grained simultaneous multi-threading (SMT)
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -172,14 +173,14 @@ wire [RBIT:0] Rt0, Rt1;
 wire [63:0] rfoa0,rfob0,rfoc0,rfoc0a;
 wire [63:0] rfoa1,rfob1,rfoc1,rfoc1a;
 `ifdef SUPPORT_SMT
-wire [6:0] Ra0s = {Ra0[7],Ra0[5:0]};
-wire [6:0] Ra1s = {Ra1[7],Ra1[5:0]};
-wire [6:0] Rb0s = {Rb0[7],Rb0[5:0]};
-wire [6:0] Rb1s = {Rb1[7],Rb1[5:0]};
-wire [6:0] Rc0s = {Rc0[7],Rc0[5:0]};
-wire [6:0] Rc1s = {Rc1[7],Rc1[5:0]};
-wire [6:0] Rt0s = {Rt0[7],Rt0[5:0]};
-wire [6:0] Rt1s = {Rt1[7],Rt1[5:0]};
+wire [7:0] Ra0s = {Ra0[8:7],Ra0[5:0]};
+wire [7:0] Ra1s = {Ra1[8:7],Ra1[5:0]};
+wire [7:0] Rb0s = {Rb0[8:7],Rb0[5:0]};
+wire [7:0] Rb1s = {Rb1[8:7],Rb1[5:0]};
+wire [7:0] Rc0s = {Rc0[8:7],Rc0[5:0]};
+wire [7:0] Rc1s = {Rc1[8:7],Rc1[5:0]};
+wire [7:0] Rt0s = {Rt0[8:7],Rt0[5:0]};
+wire [7:0] Rt1s = {Rt1[8:7],Rt1[5:0]};
 `else
 wire [6:0] Ra0s = {Ra0[7],Ra0[5:0]};
 wire [6:0] Ra1s = {Ra1[7],Ra1[5:0]};
@@ -261,7 +262,7 @@ reg [63:0] cas;         // compare and swap
 reg isCAS, isAMO;
 reg [`QBITS] casid;
 reg [31:0] sbl, sbu;
-
+reg [4:0] regLR = 5'd29;
 reg [23:0] ol_stack;
 reg [23:0] im_stack;
 reg [63:0] pl_stack;
@@ -1506,7 +1507,7 @@ casez(isn[`INSTRUCTION_OP])
 `BEQI:  fnRt = 12'd0;
 `SB,`SC,`SH,`SW,`SWC,`CACHE:
 		fnRt = 12'd0;
-`CALL:  fnRt = {rgs,1'b0,5'd29};	// regLR
+`CALL:  fnRt = {rgs,1'b0,regLR};	// regLR
 `RET:   fnRt = {rgs,1'b0,isn[`INSTRUCTION_RA]};
 `LV:    fnRt = {vqei,1'b1,isn[`INSTRUCTION_RB]};
 `AMO:	fnRt = isn[31] ? {rgs,1'b0,isn[`INSTRUCTION_RB]} : {rgs,1'b0,isn[`INSTRUCTION_RC]};
@@ -2874,7 +2875,16 @@ input [31:0] isn;
 IsSingleCycle = TRUE;
 endfunction
 
-//`ifdef SUPPORT_SMT
+`ifdef SUPPORT_SMT
+decoder8 iq0(.num({iqentry_tgt[0][8:7],iqentry_tgt[0][5:0]}), .out(iq0_out));
+decoder8 iq1(.num({iqentry_tgt[1][8:7],iqentry_tgt[1][5:0]}), .out(iq1_out));
+decoder8 iq2(.num({iqentry_tgt[2][8:7],iqentry_tgt[2][5:0]}), .out(iq2_out));
+decoder8 iq3(.num({iqentry_tgt[3][8:7],iqentry_tgt[3][5:0]}), .out(iq3_out));
+decoder8 iq4(.num({iqentry_tgt[4][8:7],iqentry_tgt[4][5:0]}), .out(iq4_out));
+decoder8 iq5(.num({iqentry_tgt[5][8:7],iqentry_tgt[5][5:0]}), .out(iq5_out));
+decoder8 iq6(.num({iqentry_tgt[6][8:7],iqentry_tgt[6][5:0]}), .out(iq6_out));
+decoder8 iq7(.num({iqentry_tgt[7][8:7],iqentry_tgt[7][5:0]}), .out(iq7_out));
+`else
 decoder7 iq0(.num({iqentry_tgt[0][7],iqentry_tgt[0][5:0]}), .out(iq0_out));
 decoder7 iq1(.num({iqentry_tgt[1][7],iqentry_tgt[1][5:0]}), .out(iq1_out));
 decoder7 iq2(.num({iqentry_tgt[2][7],iqentry_tgt[2][5:0]}), .out(iq2_out));
@@ -2883,7 +2893,7 @@ decoder7 iq4(.num({iqentry_tgt[4][7],iqentry_tgt[4][5:0]}), .out(iq4_out));
 decoder7 iq5(.num({iqentry_tgt[5][7],iqentry_tgt[5][5:0]}), .out(iq5_out));
 decoder7 iq6(.num({iqentry_tgt[6][7],iqentry_tgt[6][5:0]}), .out(iq6_out));
 decoder7 iq7(.num({iqentry_tgt[7][7],iqentry_tgt[7][5:0]}), .out(iq7_out));
-/*`else
+/*
 decoder6 iq0(.num({iqentry_tgt[0][5:0]}), .out(iq0_out));
 decoder6 iq1(.num({iqentry_tgt[1][5:0]}), .out(iq1_out));
 decoder6 iq2(.num({iqentry_tgt[2][5:0]}), .out(iq2_out));
@@ -2891,8 +2901,8 @@ decoder6 iq3(.num({iqentry_tgt[3][5:0]}), .out(iq3_out));
 decoder6 iq4(.num({iqentry_tgt[4][5:0]}), .out(iq4_out));
 decoder6 iq5(.num({iqentry_tgt[5][5:0]}), .out(iq5_out));
 decoder6 iq6(.num({iqentry_tgt[6][5:0]}), .out(iq6_out));
-decoder6 iq7(.num({iqentry_tgt[7][5:0]}), .out(iq7_out));
-`endif*/
+decoder6 iq7(.num({iqentry_tgt[7][5:0]}), .out(iq7_out));*/
+`endif
 
 initial begin: Init
 	//
@@ -2926,11 +2936,12 @@ assign fetchbuf1_memld = IsMem(fetchbuf1_instr) & IsLoad(fetchbuf1_instr);
 assign fetchbuf1_jmp   = IsFlowCtrl(fetchbuf1_instr);
 assign fetchbuf1_rfw   = IsRFW(fetchbuf1_instr,vqe,vl);
 
-FT64_fetchbuf #(RSTPC) ufb1
+FT64_fetchbuf #(AMSB,RSTPC) ufb1
 (
     .rst(rst),
     .clk4x(clk4x),
     .clk(clk),
+    .regLR(regLR),
     .thread_en(thread_en),
     .insn0(insn0),
     .insn1(insn1),
@@ -3369,14 +3380,14 @@ endgenerate
 
 
 reg vqueued2;
-assign Ra0 = fnRa(fetchbuf0_instr,vqe,vl) | {fetchbuf0_thrd,7'b0};
-assign Rb0 = fnRb(fetchbuf0_instr,1'b0,vqe,rfoa0[5:0],rfoa1[5:0]) | {fetchbuf0_thrd,7'b0};
-assign Rc0 = fnRc(fetchbuf0_instr,vqe) | {fetchbuf0_thrd,7'b0};
-assign Rt0 = fnRt(fetchbuf0_instr,vqet,vl) | {fetchbuf0_thrd,7'b0};
-assign Ra1 = fnRa(fetchbuf1_instr,vqe + vqueued2,vl) | {fetchbuf1_thrd,7'b0};
-assign Rb1 = fnRb(fetchbuf1_instr,1'b1,vqe + vqueued2,rfoa0[5:0],rfoa1[5:0]) | {fetchbuf1_thrd,7'b0};
-assign Rc1 = fnRc(fetchbuf1_instr,vqe+vqueued2) | {fetchbuf1_thrd,7'b0};
-assign Rt1 = fnRt(fetchbuf1_instr,vqet+vqueued2,vl) | {fetchbuf1_thrd,7'b0};
+assign Ra0 = fnRa(fetchbuf0_instr,vqe,vl) | {fetchbuf0_thrd,8'b0};
+assign Rb0 = fnRb(fetchbuf0_instr,1'b0,vqe,rfoa0[5:0],rfoa1[5:0]) | {fetchbuf0_thrd,8'b0};
+assign Rc0 = fnRc(fetchbuf0_instr,vqe) | {fetchbuf0_thrd,8'b0};
+assign Rt0 = fnRt(fetchbuf0_instr,vqet,vl) | {fetchbuf0_thrd,8'b0};
+assign Ra1 = fnRa(fetchbuf1_instr,vqe + vqueued2,vl) | {fetchbuf1_thrd,8'b0};
+assign Rb1 = fnRb(fetchbuf1_instr,1'b1,vqe + vqueued2,rfoa0[5:0],rfoa1[5:0]) | {fetchbuf1_thrd,8'b0};
+assign Rc1 = fnRc(fetchbuf1_instr,vqe+vqueued2) | {fetchbuf1_thrd,8'b0};
+assign Rt1 = fnRt(fetchbuf1_instr,vqet+vqueued2,vl) | {fetchbuf1_thrd,8'b0};
 
     //
     // additional logic for ISSUE
@@ -7172,10 +7183,10 @@ end
 	$display("Call Stack:");
 	for (n = 0; n < 32; n = n + 4)
 		$display("%c%d: %h   %c%d: %h   %c%d: %h   %c%d: %h",
-			ufb1.rasp==n+0 ?">" : " ", n[4:0]+0, ufb1.ras[n+0],
-			ufb1.rasp==n+1 ?">" : " ", n[4:0]+1, ufb1.ras[n+1],
-			ufb1.rasp==n+2 ?">" : " ", n[4:0]+2, ufb1.ras[n+2],
-			ufb1.rasp==n+3 ?">" : " ", n[4:0]+3, ufb1.ras[n+3]
+			ufb1.ursb1.rasp==n+0 ?">" : " ", n[4:0]+0, ufb1.ursb1.ras[n+0],
+			ufb1.ursb1.rasp==n+1 ?">" : " ", n[4:0]+1, ufb1.ursb1.ras[n+1],
+			ufb1.ursb1.rasp==n+2 ?">" : " ", n[4:0]+2, ufb1.ursb1.ras[n+2],
+			ufb1.ursb1.rasp==n+3 ?">" : " ", n[4:0]+3, ufb1.ursb1.ras[n+3]
 		);
 	$display("\n");
 	

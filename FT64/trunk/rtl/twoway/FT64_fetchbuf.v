@@ -53,6 +53,7 @@ module FT64_fetchbuf(rst, clk4x, clk, thread_en,
     take_branch0, take_branch1,
     stompedRets
 );
+parameter AMSB = 31;
 parameter RSTPC = 32'hFFFC0100;
 parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
@@ -66,7 +67,7 @@ input [31:0] insn1;
 input phit;
 output threadx;
 input branchmiss;
-input [31:0] misspc;
+input [AMSB:0] misspc;
 input branchmiss_thrd;
 output predict_taken0;
 output predict_taken1;
@@ -77,8 +78,8 @@ input predict_takenD;
 input queued1;
 input queued2;
 input queuedNop;
-output reg [31:0] pc0;
-output reg [31:0] pc1;
+output reg [AMSB:0] pc0;
+output reg [AMSB:0] pc1;
 output reg fetchbuf;
 output reg fetchbufA_v;
 output reg fetchbufB_v;
@@ -90,22 +91,22 @@ output reg [31:0] fetchbufA_instr;
 output reg [31:0] fetchbufB_instr;
 output reg [31:0] fetchbufC_instr;
 output reg [31:0] fetchbufD_instr;
-output reg [31:0] fetchbufA_pc;
-output reg [31:0] fetchbufB_pc;
-output reg [31:0] fetchbufC_pc;
-output reg [31:0] fetchbufD_pc;
+output reg [AMSB:0] fetchbufA_pc;
+output reg [AMSB:0] fetchbufB_pc;
+output reg [AMSB:0] fetchbufC_pc;
+output reg [AMSB:0] fetchbufD_pc;
 output [31:0] fetchbuf0_instr;
 output [31:0] fetchbuf1_instr;
-output [31:0] fetchbuf0_pc;
-output [31:0] fetchbuf1_pc;
+output [AMSB:0] fetchbuf0_pc;
+output [AMSB:0] fetchbuf1_pc;
 output fetchbuf0_v;
 output fetchbuf1_v;
 input [31:0] codebuf0;
 input [31:0] codebuf1;
-input [31:0] btgtA;
-input [31:0] btgtB;
-input [31:0] btgtC;
-input [31:0] btgtD;
+input [AMSB:0] btgtA;
+input [AMSB:0] btgtB;
+input [AMSB:0] btgtC;
+input [AMSB:0] btgtD;
 input [3:0] nop_fetchbuf;
 output take_branch0;
 output take_branch1;
@@ -149,9 +150,7 @@ endfunction
 reg thread;
 reg stompedRet;
 reg ret0Counted, ret1Counted;
-reg [31:0] ras [0:31];
-reg [4:0] rasp;
-wire [31:0] retpc = ras[rasp];
+wire [AMSB:0] retpc0, retpc1;
 
 reg did_branchback0;
 reg did_branchback1;
@@ -159,22 +158,22 @@ reg did_branchback1;
 assign predict_taken0 = (fetchbuf==1'b0) ? predict_takenA : predict_takenC;
 assign predict_taken1 = (fetchbuf==1'b0) ? predict_takenB : predict_takenD;
 
-wire [31:0] branch_pcA = IsRet(fetchbufA_instr) ? retpc :
+wire [AMSB:0] branch_pcA = IsRet(fetchbufA_instr) ? retpc0 :
                          IsJmp(fetchbufA_instr) | IsCall(fetchbufA_instr) ? {fetchbufA_pc[31:28],fetchbufA_instr[31:6],2'b00} :
                          ((IsRTI(fetchbufA_instr) || fetchbufA_instr[`INSTRUCTION_OP]==`BccR || fetchbufA_instr[`INSTRUCTION_OP]==`BRK ||
                          fetchbufA_instr[`INSTRUCTION_OP]==`JAL) ? btgtA : 
                          fetchbufA_pc + {{19{fetchbufA_instr[`INSTRUCTION_SB]}},fetchbufA_instr[31:22],fetchbufA_instr[0],2'b00} + 64'd4);
-wire [31:0] branch_pcB = IsRet(fetchbufB_instr) ? retpc :
+wire [AMSB:0] branch_pcB = IsRet(fetchbufB_instr) ? (thread_en ? retpc1 : retpc0) :
                          IsJmp(fetchbufB_instr) | IsCall(fetchbufB_instr) ? {fetchbufB_pc[31:28],fetchbufB_instr[31:6],2'b00} :
                          ((IsRTI(fetchbufB_instr) || fetchbufB_instr[`INSTRUCTION_OP]==`BccR || fetchbufB_instr[`INSTRUCTION_OP]==`BRK ||
                          fetchbufB_instr[`INSTRUCTION_OP]==`JAL) ? btgtB : 
                          fetchbufB_pc + {{19{fetchbufB_instr[`INSTRUCTION_SB]}},fetchbufB_instr[31:22],fetchbufB_instr[0],2'b00} + 64'd4);
-wire [31:0] branch_pcC = IsRet(fetchbufC_instr) ? retpc :
+wire [AMSB:0] branch_pcC = IsRet(fetchbufC_instr) ? retpc0 :
                          IsJmp(fetchbufC_instr) | IsCall(fetchbufC_instr) ? {fetchbufC_pc[31:28],fetchbufC_instr[31:6],2'b00} :
                          ((IsRTI(fetchbufC_instr) || fetchbufC_instr[`INSTRUCTION_OP]==`BccR || fetchbufC_instr[`INSTRUCTION_OP]==`BRK ||
                          fetchbufC_instr[`INSTRUCTION_OP]==`JAL) ? btgtC : 
                          fetchbufC_pc + {{19{fetchbufC_instr[`INSTRUCTION_SB]}},fetchbufC_instr[31:22],fetchbufC_instr[0],2'b00} + 64'd4);
-wire [31:0] branch_pcD = IsRet(fetchbufD_instr) ? retpc :
+wire [AMSB:0] branch_pcD = IsRet(fetchbufD_instr) ? (thread_en ? retpc1 : retpc0) :
                          IsJmp(fetchbufD_instr) | IsCall(fetchbufD_instr) ? {fetchbufD_pc[31:28],fetchbufD_instr[31:6],2'b00} : 
                          ((IsRTI(fetchbufD_instr) || fetchbufD_instr[`INSTRUCTION_OP]==`BccR ||fetchbufD_instr[`INSTRUCTION_OP]==`BRK ||
                          fetchbufD_instr[`INSTRUCTION_OP]==`JAL) ? btgtD : 
@@ -209,98 +208,41 @@ end
 */
 assign threadx = thread_en ? fetchbuf : 1'b0;
 
-// Return address stack predictor is updated during the fetch stage on the 
-// assumption that previous flow controls (branches) predicted correctly.
-// Otherwise many small routines wouldn't predict the return address
-// correctly because they hit the RET before the CALL reaches the 
-// commit stage.
-always @(posedge clk)
-if (rst) begin
-    for (n = 0; n < 32; n = n + 1)
-         ras[n] <= RSTPC;
-     rasp <= 5'd0;
-end
-else begin
-	if (fetchbuf0_v && fetchbuf1_v && (queued1 || queued2)) begin
-        case(fetchbuf0_instr[`INSTRUCTION_OP])
-        `JAL:
-        	begin
-	        	// JAL LR,xxxx	assume call
-	        	if (fetchbuf0_instr[`INSTRUCTION_RB]==regLR) begin
-	                ras[((rasp-6'd1)&31)] <= fetchbuf0_pc + 32'd4;
-	                rasp <= rasp - 4'd1;
-	        	end
-	        	// JAL r0,[r29]	assume a ret
-	        	else if (fetchbuf0_instr[`INSTRUCTION_RB]==5'd00 &&
-	        			 fetchbuf0_instr[`INSTRUCTION_RA]==regLR) begin
-	        		rasp <= rasp + 4'd1;
-	        	end
-        	end
-        `CALL:
-            begin
-                 ras[((rasp-6'd1)&31)] <= fetchbuf0_pc + 32'd4;
-                 rasp <= rasp - 4'd1;
-            end
-        `RET:   begin 
-        		$display("RSP: Added 1");
-        		rasp <= rasp + 4'd1;
-        		end
-        default:	;
-        endcase
-	end
-    else if (fetchbuf1_v && queued1)
-        case(fetchbuf1_instr[`INSTRUCTION_OP])
-        `JAL:
-        	if (fetchbuf1_instr[`INSTRUCTION_RB]==regLR) begin
-                 ras[((rasp-6'd1)&31)] <= fetchbuf1_pc + 32'd4;
-                 rasp <= rasp - 4'd1;
-        	end
-        	else if (fetchbuf1_instr[`INSTRUCTION_RB]==5'd00 &&
-        			 fetchbuf1_instr[`INSTRUCTION_RA]==regLR) begin
-        		rasp <= rasp + 4'd1;
-        	end
-        `CALL:
-            begin
-                 ras[((rasp-6'd1)&31)] <= fetchbuf1_pc + 32'd4;
-                 rasp <= rasp - 4'd1;
-            end
-        `RET:   begin
-        		rasp <= rasp + 4'd1;
-        		$display("RSP: Added 1");
-        		end
-        default:	;
-        endcase
-    else if (fetchbuf0_v && queued1)
-        case(fetchbuf0_instr[`INSTRUCTION_OP])
-        `JAL:
-        	if (fetchbuf0_instr[`INSTRUCTION_RB]==regLR) begin
-                 ras[((rasp-6'd1)&31)] <= fetchbuf0_pc + 32'd4;
-                 rasp <= rasp - 4'd1;
-        	end
-        	else if (fetchbuf0_instr[`INSTRUCTION_RB]==5'd00 &&
-        			 fetchbuf0_instr[`INSTRUCTION_RA]==regLR) begin
-        		rasp <= rasp + 4'd1;
-        	end
-        `CALL:
-            begin
-                 ras[((rasp-6'd1)&31)] <= fetchbuf0_pc + 32'd4;
-                 rasp <= rasp - 4'd1;
-            end
-        `RET:   begin 
-        		$display("RSP: Added 1");
-        		rasp <= rasp + 4'd1;
-        		end
-        default:	;
-        endcase
-    if (stompedRets > 4'd0) begin
-    	$display("Stomped Rets: %d", stompedRets);
-    	rasp <= rasp - stompedRets;
-    end
-    else if (stompedRet) begin
-    	$display("Stomped Ret");
-    	rasp <= rasp - 5'd1;
-    end
-end
+FT64_RSB #(AMSB) ursb1
+(
+	.rst(rst),
+	.clk(clk),
+	.regLR(regLR),
+	.queued1(queued1),
+	.queued2(queued2),
+	.fetchbuf0_v(fetchbuf0_v),
+	.fetchbuf0_pc(fetchbuf0_pc),
+	.fetchbuf0_instr(fetchbuf0_instr),
+	.fetchbuf1_v(fetchbuf1_v),
+	.fetchbuf1_pc(fetchbuf1_pc),
+	.fetchbuf1_instr(fetchbuf1_instr),
+	.stompedRets(thread_en ? stompedRets : stompedRets[3:1]),
+	.stompedRet(stompedRet),
+	.pc(retpc0)
+);
+
+FT64_RSB #(AMSB) ursb2
+(
+	.rst(rst),
+	.clk(clk),
+	.regLR(regLR),
+	.queued1(queued1),
+	.queued2(1'b0),
+	.fetchbuf0_v(fetchbuf1_v),
+	.fetchbuf0_pc(fetchbuf1_pc),
+	.fetchbuf0_instr(fetchbuf1_instr),
+	.fetchbuf1_v(1'b0),
+	.fetchbuf1_pc(32'h00000000),
+	.fetchbuf1_instr(`NOP_INSN),
+	.stompedRets(stompedRets[3:1]),
+	.stompedRet(stompedRet),
+	.pc(retpc1)
+);
 
 wire peclk, neclk;
 edge_det ued1 (.rst(rst), .clk(clk4x), .ce(1'b1), .i(clk), .pe(peclk), .ne(neclk), .ee());
@@ -321,124 +263,16 @@ else begin
 	did_branchback1 <= take_branch1;
 
 	stompedRet = FALSE;
-	/*
-	if (thread_en) begin
-		if (branchmiss) begin
-			if (branchmiss_thrd==1'b0) begin
-				pc0 <= misspc;
-				fetchbufA_v <= `INV;
-				fetchbufC_v <= `INV;
-			end
-			else begin
-				pc1 <= misspc;
-				fetchbufB_v <= `INV;
-				fetchbufD_v <= `INV;
-			end
-		end
-		if (fetchbuf==1'b0) begin
-			if (!branchmiss || branchmiss_thrd != 1'b0) begin
-				if (take_branchA) begin
-					pc0 <= branch_pcA;
-					fetchbufA_v <= !(queued1|queuedNop);
-					fetchbufC_v <= `INV;
-					if (fetchbufD_v)
-						fetchbuf <= (!(queued1|queuedNop) && !fetchbufB_v) ? 1'b1 : 1'b0;
-				end
-				else begin
-					if (fetchbufA_v) begin
-						fetchbufA_v <= !(queued1|queuedNop);
-						fetchbuf <= (!(queued1|queuedNop) && (!fetchbufB_v || (branchmiss && branchmiss_thrd==1'b1))) ? 1'b1 : 1'b0;
-					end
-				end
-			end
-			if (!branchmiss || branchmiss_thrd != 1'b1) begin
-				if (take_branchB) begin
-					pc1 <= branch_pcB;
-					if (fetchbufA_v) begin
-						fetchbufB_v <= !(queued2|queuedNop);
-						fetchbufD_v <= `INV;
-						fetchbuf <= !(queued2|queuedNop) ? 1'b1 : 1'b0;
-					end
-					else begin
-						fetchbufB_v <= !(queued1|queuedNop);
-						fetchbufD_v <= `INV;
-						if (fetchbufC_v)
-							fetchbuf <= !(queued1|queuedNop) ? 1'b1 : 1'b0;
-					end
-				end
-				else begin
-					if (fetchbufB_v) begin
-						if (fetchbufA_v) begin
-							fetchbufB_v <= !(queued2|queuedNop);
-							fetchbuf <= !(queued2|queuedNop) ? 1'b1 : 1'b0;
-						end
-						else begin
-							fetchbufB_v <= !(queued1|queuedNop);
-							fetchbuf <= !(queued1|queuedNop) ? 1'b1 : 1'b0;
-						end
-					end
-					else
-						fetchbuf <= !fetchbufA_v ? 1'b1 : 1'b0;
-				end
-			end
-		end
-		else begin
-			if (!branchmiss || branchmiss_thrd != 1'b0) begin
-				if (take_branchC) begin
-					pc0 <= branch_pcC;
-					fetchbufC_v <= !(queued1|queuedNop);
-					fetchbufA_v <= `INV;
-					if (fetchbufB_v)
-						fetchbuf <= (!(queued1|queuedNop) && !fetchbufD_v) ? 1'b0 : 1'b1;
-				end
-				else begin
-					if (fetchbufC_v) begin
-						fetchbufC_v <= !(queued1|queuedNop);
-						fetchbuf <= !(queued1|queuedNop) && !fetchbufD_v ? 1'b0 : 1'b1;
-					end
-				end
-			end
-			if (!branchmiss || branchmiss_thrd != 1'b1) begin
-				if (take_branchD) begin
-					pc1 <= branch_pcD;
-					if (fetchbufC_v) begin
-						fetchbufD_v <= !(queued2|queuedNop);
-						fetchbufB_v <= `INV;
-						fetchbuf <= !(queued2|queuedNop) ? 1'b0 : 1'b1;
-					end
-					else begin
-						fetchbufD_v <= !(queued1|queuedNop);
-						fetchbufB_v <= `INV;
-						if (fetchbufA_v)
-							fetchbuf <= !(queued1|queuedNop) ? 1'b0 : 1'b1;
-					end
-				end
-				else begin
-					if (fetchbufD_v) begin
-						if (fetchbufC_v) begin
-							fetchbufD_v <= !(queued2|queuedNop);
-							fetchbuf <= !(queued2|queuedNop) ? 1'b0 : 1'b1;
-						end
-						else begin
-							fetchbufD_v <= !(queued1|queuedNop);
-							fetchbuf <= !(queued1|queuedNop) ? 1'b0 : 1'b1;
-						end
-					end
-					else
-						fetchbuf <= !fetchbufC_v ? 1'b0 : 1'b1;
-				end
-			end
-		end
-		if (fetchbufA_v==`INV && fetchbufB_v==`INV) begin
-			FetchAB();
-			if (fetchbufC_v==`INV && fetchbufD_v==`INV && phit)
-				fetchbuf <= 1'b0;
-		end
-		else if (fetchbufC_v==`INV && fetchbufD_v==`INV)
-			FetchCD();
-	end
-	else*/
+
 	begin
+
+	// On a branch miss with threading enabled all fectch buffers are
+	// invalidated even though the data in the fetch buffer would be valid
+	// for the thread that isn't in a branchmiss state. This is done to
+	// keep things simple. For the thread that doesn't miss the current
+	// data for the fetch buffer needs to be retrieved again, so the pc
+	// for that thread is assigned the current fetchbuf pc.
+	// For the thread that misses the pc is simply assigned the misspc.
 	if (branchmiss) begin
 		if (thread_en) begin
 			if (branchmiss_thrd) begin
