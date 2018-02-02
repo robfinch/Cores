@@ -276,6 +276,7 @@
 `define DIVUI   6'h3C
 `define DIVSUI  6'h3D
 `define DIVI    6'h3E
+`define IMM		6'h3F
 
 `define FMOV    6'h10
 `define FTOI    6'h12

@@ -710,7 +710,7 @@ case(instr[`INSTRUCTION_OP])
     `DIVMOD:    o = BIG ? (instr[25:24]==2'b00 ? divq : rem) : 64'hCCCCCCCCCCCCCCCC;
     `LBX,`LBOX,`LBUX,`LCX,`LCOX,`LCUX,
     `LHX,`LHOX,`LHUX,`LWX,`LWRX,`SBX,`SCX,`SHX,`SWX,`SWCX:
-    		   	o = BIG ? a + (b << instr[22:21]) : 64'hCCCCCCCCCCCCCCCC;
+    		   	o = BIG ? a + (b << instr[22:21]) : 64'hCCCCCCCCEEEEEEEE;
     `LVx:		o = BIG ? a + (b << instr[22:21]) : 64'hCCCCCCCCCCCCCCCC;
     `LVX,`SVX:  o = BIG ? a + (b << 2'd3) : 64'hCCCCCCCCCCCCCCCC;
     `LVWS,`SVWS:    o = BIG ? a + ({b * ven,3'b000}) : 64'hCCCCCCCCCCCCCCCC;
