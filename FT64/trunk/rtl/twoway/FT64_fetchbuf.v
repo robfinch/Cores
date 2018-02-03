@@ -31,7 +31,7 @@
 // do nothing (kinda like alpha approach)
 // Like to turn this into an independent module at some point.
 //
-module FT64_fetchbuf(rst, clk4x, clk, thread_en,
+module FT64_fetchbuf(rst, clk4x, clk, hirq, thread_en,
 	regLR,
     insn0, insn1, phit,
     threadx,
@@ -60,6 +60,7 @@ parameter FALSE = 1'b0;
 input rst;
 input clk4x;
 input clk;
+input hirq;
 input thread_en;
 input [4:0] regLR;
 input [31:0] insn0;
@@ -738,7 +739,7 @@ begin
          fetchbufA_instr <= insn0;
      fetchbufA_v <= `VAL;
      fetchbufA_pc <= pc0;
-    if (phit)
+    if (phit && ~hirq)
 	    pc0 <= pc0 + (thread_en ? 4 : 8);
 end
 endtask
@@ -751,7 +752,7 @@ begin
          fetchbufB_instr <= insn1;
      fetchbufB_v <= `VAL;
      fetchbufB_pc <= pc1;
-    if (phit)
+    if (phit && (~hirq || thread_en))
    		pc1 <= pc1 + (thread_en ? 4 : 8);
 end
 endtask
@@ -772,7 +773,7 @@ begin
          fetchbufC_instr <= insn0;
      fetchbufC_v <= `VAL;
      fetchbufC_pc <= pc0;
-    if (phit)
+    if (phit && ~hirq)
 	    pc0 <= pc0 + (thread_en ? 4 : 8);
 end
 endtask
@@ -785,7 +786,7 @@ begin
          fetchbufD_instr <= insn1;
      fetchbufD_v <= `VAL;
      fetchbufD_pc <= pc1;
-    if (phit)
+    if (phit && (~hirq || thread_en))
    		pc1 <= pc1 + (thread_en ? 4 : 8);
 end
 endtask
