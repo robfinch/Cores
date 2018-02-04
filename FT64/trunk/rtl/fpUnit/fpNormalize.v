@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2006-2016  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2006-2018  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -106,8 +106,10 @@ wire [7:0] leadingZeros2;
 
 generate
 begin
-if (WID==32)
+if (WID==32) begin
 cntlz32Reg clz0 (.clk(clk), .ce(ce), .i({mo1,5'b0}), .o(leadingZeros2) );
+assign leadingZeros2[7:6] = 2'b00;
+end
 else if (WID==128)
 cntlz128Reg clz0 (.clk(clk), .ce(ce), .i({mo1,12'b0}), .o(leadingZeros2) );
 else if (WID==96)
