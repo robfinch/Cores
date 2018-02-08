@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2006-2016  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2006-2018  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -96,14 +96,14 @@ assign so = i[MSB+3];
 assign xo = rounded[MSB:FMSB+2];
 
 always @(rnd or xo or carry or dn or rounded or mo1)
-	casex({rnd,&xo,carry,dn})
-	4'b0xx0:	mo = mo1[FMSB+2:2];		// not rounding, not denormalized, => hide MSB
-	4'b0xx1:	mo = mo1[FMSB+3:3];		// not rounding, denormalized
+	casez({rnd,&xo,carry,dn})
+	4'b0??0:	mo = mo1[FMSB+2:2];		// not rounding, not denormalized, => hide MSB
+	4'b0??1:	mo = mo1[FMSB+3:3];		// not rounding, denormalized
 	4'b1000:	mo = rounded[FMSB  :0];	// exponent didn't change, number was normalized, => hide MSB
 	4'b1001:	mo = rounded[FMSB+1:1];	// exponent didn't change, but number was denormalized, => retain MSB
 	4'b1010:	mo = rounded[FMSB+1:1];	// exponent incremented (new MSB generated), number was normalized, => hide 'extra (FMSB+2)' MSB
 	4'b1011:	mo = rounded[FMSB+1:1];	// exponent incremented (new MSB generated), number was denormalized, number became normalized, => hide 'extra (FMSB+2)' MSB
-	4'b11xx:	mo = 0;					// number became infinite, no need to check carry etc., rnd would be zero if input was NaN or infinite
+	4'b11??:	mo = 0;					// number became infinite, no need to check carry etc., rnd would be zero if input was NaN or infinite
 	endcase
 
 endmodule

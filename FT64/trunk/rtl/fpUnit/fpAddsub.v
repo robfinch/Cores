@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2006-2016  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2006-2018  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -210,10 +210,10 @@ wire [FMSB+3:0] obb = a_gt_b1 ? ob : oa;
 wire [FMSB+4:0] mab = realOp1 ? oaa - obb : oaa + obb;
 
 always @*
-	casex({aInf1&bInf1,aNan1,bNan1})
-	3'b1xx:		mo1 = {1'b0,op1,{FMSB-1{1'b0}},op1,{FMSB{1'b0}}};	// inf +/- inf - generate QNaN on subtract, inf on add
-	3'bx1x:		mo1 = {1'b0,fracta1[FMSB+1:0],{FMSB{1'b0}}};
-	3'bxx1: 	mo1 = {1'b0,fractb1[FMSB+1:0],{FMSB{1'b0}}};
+	casez({aInf1&bInf1,aNan1,bNan1})
+	3'b1??:		mo1 = {1'b0,op1,{FMSB-1{1'b0}},op1,{FMSB{1'b0}}};	// inf +/- inf - generate QNaN on subtract, inf on add
+	3'b01?:		mo1 = {1'b0,fracta1[FMSB+1:0],{FMSB{1'b0}}};
+	3'b001: 	mo1 = {1'b0,fractb1[FMSB+1:0],{FMSB{1'b0}}};
 	default:	mo1 = {mab,{FMSB-1{1'b0}}};	// mab has an extra lead bit and two trailing bits
 	endcase
 

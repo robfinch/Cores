@@ -24,7 +24,7 @@
 //                                                                          
 // ============================================================================
 
-module fpdivr8(clk, ld, a, b, q, r, done);
+module fpdivr8(clk, ld, a, b, q, r, done, lzcnt);
 parameter WID = 112;
 parameter RADIX = 8;
 localparam WID1 = WID;//((WID+2)/3)*3;    // make width a multiple of three
@@ -35,7 +35,8 @@ input [WID1-1:0] a;
 input [WID1-1:0] b;
 output reg [WID1*2-1:0] q;
 output [WID1-1:0] r;
-output done;
+output reg done;
+output reg [7:0] lzcnt;
 
 
 wire [DMSB:0] rx [2:0];		// remainder holds
@@ -45,9 +46,10 @@ wire [DMSB:0] sdq;
 wire [DMSB:0] sdr;
 wire sdval;
 wire sddbz;
-reg [DMSB+1:0] ri; 
+reg [DMSB+1:0] ri = 0; 
 wire b0,b1,b2;
-wire [DMSB:0] r1,r2,r3;
+wire [DMSB+1:0] r1,r2,r3;
+reg gotnz;
 
 specialCaseDivider #(WID1) u1 (.a(a), .b(b), .q(sdq), .val(sdval), .dbz(sdbz) );
 
@@ -73,7 +75,7 @@ end
 else if (RADIX==2) begin
     assign b0 = b <= ri;
     assign r1 = b0 ? ri - b : ri;
-    assign maxcnt = WID1*2+1;
+    assign maxcnt = WID1*2-1;
     assign n1 = 0;
 //	assign rx[0] = rxx  [DMSB] ? {rxx  ,q[WID*2-1  ]} + b : {rxx  ,q[WID*2-1  ]} - b;
 end
@@ -81,10 +83,18 @@ end
 endgenerate
 
 	always @(posedge clk)
-		if (ld)
-			cnt <= sdval ? 9'h1FF : maxcnt;
-		else if (!done)
+	begin
+		done <= 1'b0;
+		if (ld) begin
+			cnt <= sdval ? 9'h1FE : maxcnt;
+			done <= sdval;
+		end
+		else if (cnt != 9'h1FE) begin
 			cnt <= cnt - 1;
+			if (cnt==9'h1FF)
+				done <= 1'b1;
+		end
+	end
 
 
 generate
@@ -92,6 +102,8 @@ begin
 if (RADIX==8) begin
 	always @(posedge clk)
 		if (ld) begin
+			gotnz <= 1'b0;
+			lzcnt <= 8'h00;
 			if (sdval)
 				q <= {3'b0,sdq,{WID1{1'b0}}};
 			else
@@ -109,13 +121,19 @@ end
 if (RADIX==2) begin
 	always @(posedge clk)
     if (ld) begin
+		gotnz <= 1'b0;
+		lzcnt <= 8'h00;
         ri <= 0;
     	if (sdval)
             q <= {3'b0,sdq,{WID1{1'b0}}};
         else
             q <= {3'b0,a,{WID1{1'b0}}};
     end
-    else if (!done) begin
+    else if (cnt!=9'h1FE) begin
+    	if (b0)
+    		gotnz <= 1'b1;
+    	if (b0==0 && !gotnz)
+    		lzcnt <= lzcnt + 8'd1;
         q[WID1*2-1:1] <= q[WID1*2-1-1:0];
         q[0] <= b0;
         ri <= {r1[DMSB:0],q[WID1*2-1]};
@@ -126,49 +144,6 @@ end
 end
 endgenerate
 
-	assign done = cnt[8];
-
 endmodule
 
-/*
-module fpdiv_tb();
-
-	reg rst;
-	reg clk;
-	reg ld;
-	reg [6:0] cnt;
-
-	wire ce = 1'b1;
-	wire [49:0] a = 50'h0_0000_0400_0000;
-	wire [23:0] b = 24'd101;
-	wire [49:0] q;
-	wire [49:0] r;
-	wire done;
-
-	initial begin
-		clk = 1;
-		rst = 0;
-		#100 rst = 1;
-		#100 rst = 0;
-	end
-
-	always #20 clk = ~clk;	//  25 MHz
-	
-	always @(posedge clk)
-		if (rst)
-			cnt <= 0;
-		else begin
-			ld <= 0;
-			cnt <= cnt + 1;
-			if (cnt == 3)
-				ld <= 1;
-			$display("ld=%b q=%h r=%h done=%b", ld, q, r, done);
-		end
-	
-
-	fpdivr8 divu0(.clk(clk), .ce(ce), .ld(ld), .a(a), .b(b), .q(q), .r(r), .done(done) );
-
-endmodule
-
-*/
 

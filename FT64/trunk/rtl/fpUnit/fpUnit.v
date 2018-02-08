@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2006-2017  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2006-2018  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -19,7 +19,6 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.    
 //
 //
-// DSD
 //	fpUnit.v
 //  - floating point unit
 //  - parameterized width
@@ -30,6 +29,7 @@
 // 31'h7FC00002    - infinity / infinity
 // 31'h7FC00003    - zero / zero
 // 31'h7FC00004    - infinity X zero
+// 31'h7FC00005    - square root of infinity
 //
 // Whenever the fpu encounters a NaN input, the NaN is
 // passed through to the output.
@@ -94,6 +94,7 @@
 `define FCVTSD  6'h19
 `define FCVTSQ  6'h1B
 `define FSTAT   6'h1C
+`define FSQRT	6'h1D
 `define FTX     6'h20
 `define FCX     6'h21
 `define FEX     6'h22
@@ -107,31 +108,9 @@
 `define FMUL    6'h08
 `define FDIV    6'h09
 
-`define	QINFOS		23'h7FC000		// info
-`define	QSUBINFS	31'h7FC00001	// - infinity - infinity
-`define QINFDIVS	31'h7FC00002	// - infinity / infinity
-`define QZEROZEROS	31'h7FC00003	// - zero / zero
-`define QINFZEROS	31'h7FC00004	// - infinity X zero
+`include "fp_defines.v"
 
-`define	QINFOD		52'hFF80000000000		// info
-`define	QSUBINFD 	63'h7FF0000000000001	// - infinity - infinity
-`define QINFDIVD 	63'h7FF0000000000002	// - infinity / infinity
-`define QZEROZEROD  63'h7FF0000000000003	// - zero / zero
-`define QINFZEROD	63'h7FF0000000000004	// - infinity X zero
-
-`define	QINFODX		64'hFF800000_00000000		// info
-`define	QSUBINFDX 	79'h7FFF000000_0000000001	// - infinity - infinity
-`define QINFDIVDX 	79'h7FFF000000_0000000002	// - infinity / infinity
-`define QZEROZERODX 79'h7FFF000000_0000000003	// - zero / zero
-`define QINFZERODX	79'h7FFF000000_0000000004	// - infinity X zero
-
-`define	QINFOQ		112'hFF800000_0000000000_0000000000		// info
-`define	QSUBINFQ 	127'h7F_FF00000000_0000000000_0000000001	// - infinity - infinity
-`define QINFDIVQ 	127'h7F_FF00000000_0000000000_0000000002	// - infinity / infinity
-`define QZEROZEROQ  127'h7F_FF00000000_0000000000_0000000003	// - zero / zero
-`define QINFZEROQ	127'h7F_FF00000000_0000000000_0000000004	// - infinity X zero
-
-module fpUnit(rst, clk, ce, ir, ld, a, b, imm, o, csr_i, status, exception, done, rm
+module fpUnit(rst, clk, clk4x, ce, ir, ld, a, b, imm, o, csr_i, status, exception, done, rm
 );
 
 parameter WID = 64;
@@ -167,6 +146,7 @@ localparam EXS = FXS + 1 + EMSBS + 1 + 1 - 1;
 
 input rst;
 input clk;
+input clk4x;
 input ce;
 input [31:0] ir;
 input ld;
@@ -405,6 +385,7 @@ wire [MSB+3:0] fpn_o;
 wire [EX:0] fdiv_o;
 wire [EX:0] fmul_o;
 wire [EX:0] fas_o;
+wire [EX:0] fsqrt_o;
 reg  [EX:0] fres;
 wire [31:0] fpus_o;
 wire [31+3:0] fpns_o;
@@ -415,10 +396,12 @@ reg  [EXS:0] fress;
 wire divUnder,divUnders;
 wire mulUnder,mulUnders;
 reg under,unders;
+wire sqrneg;
 
 fpAddsub #(WID) u10(.clk(clk), .ce(pipe_ce), .rm(rmd), .op(func6b[0]), .a(a), .b(b), .o(fas_o) );
-fpDiv    #(WID) u11(.clk(clk), .ce(pipe_ce), .ld(ld), .a(a), .b(b), .o(fdiv_o), .sign_exe(), .underflow(divUnder), .done(divDone) );
+fpDiv    #(WID) u11(.clk(clk), .clk4x(clk4x), .ce(pipe_ce), .ld(ld), .a(a), .b(b), .o(fdiv_o), .sign_exe(), .underflow(divUnder), .done(divDone) );
 fpMul    #(WID) u12(.clk(clk), .ce(pipe_ce),          .a(a), .b(b), .o(fmul_o), .sign_exe(), .inf(), .underflow(mulUnder) );
+fpSqrt	 #(WID) u13(.rst(rst), .clk(clk4x), .ce(pipe_ce), .ld(ld), .a(a), .o(fsqrt_o), .done(), .sqrinf(), .sqrneg(sqrneg) );
 /*
 fpAddsub #(32) u10s(.clk(clk), .ce(pipe_ce), .rm(rm), .op(op[0]), .a(a[31:0]), .b(b[31:0]), .o(fass_o) );
 fpDiv    #(32) u11s(.clk(clk), .ce(pipe_ce), .ld(ld), .a(a[31:0]), .b(b[31:0]), .o(fdivs_o), .sign_exe(), .underflow(divUnders), .done() );
@@ -449,6 +432,7 @@ case(op2)
     `FSUB:	fres <= fas_o;
     `FMUL:	fres <= fmul_o;
     `FDIV:	fres <= fdiv_o;
+    `FSQRT:	fres <= fsqrt_o;
     default:	begin fres <= fas_o; fress <= fass_o; end
     endcase
 `VECTOR:
@@ -502,8 +486,8 @@ assign status = {
 	gx,
 	sx,
 	
-	1'b0,  // cvtx
-	1'b0,  // sqrtx
+	1'b0,  	// cvtx
+	sqrneg,	// sqrtx
 	fcmp & nanx,
 	infzero,
 	zerozero,
@@ -527,7 +511,7 @@ if (WID==128) begin
     assign infdiv 	= fpu_o[126:0]==`QINFDIVQ;
     assign zerozero = fpu_o[126:0]==`QZEROZEROQ;
     assign infzero 	= fpu_o[126:0]==`QINFZEROQ;
-    assign maxdivcnt = 8'd250;
+    assign maxdivcnt = 8'd64;
 end
 else if (WID==80) begin
     assign inf = &fpu_o[78:64] && fpu_o[63:0]==0;
@@ -535,7 +519,7 @@ else if (WID==80) begin
     assign infdiv 	= fpu_o[78:0]==`QINFDIVDX;
     assign zerozero = fpu_o[78:0]==`QZEROZERODX;
     assign infzero 	= fpu_o[78:0]==`QINFZERODX;
-    assign maxdivcnt = 8'd136;
+    assign maxdivcnt = 8'd40;
 end
 else if (WID==64) begin
     assign inf      = &fpu_o[62:52] && fpu_o[51:0]==0;
@@ -543,7 +527,7 @@ else if (WID==64) begin
     assign infdiv   = fpu_o[62:0]==`QINFDIVD;
     assign zerozero = fpu_o[62:0]==`QZEROZEROD;
     assign infzero  = fpu_o[62:0]==`QINFZEROD;
-    assign maxdivcnt = 8'd112;
+    assign maxdivcnt = 8'd32;
 end
 else if (WID==32) begin
     assign inf      = &fpu_o[30:23] && fpu_o[22:0]==0;
@@ -551,7 +535,7 @@ else if (WID==32) begin
     assign infdiv   = fpu_o[30:0]==`QINFDIVS;
     assign zerozero = fpu_o[30:0]==`QZEROZEROS;
     assign infzero  = fpu_o[30:0]==`QINFZEROS;
-    assign maxdivcnt = 8'd54;
+    assign maxdivcnt = 8'd16;
 end
 end
 endgenerate
@@ -567,27 +551,26 @@ begin
     if (ld)
         case(ir[5:0])
         `FLOAT: 
-            begin
-                case(func6b)
-                `FABS,`FNABS,`FNEG,`FMAN,`FMOV,`FSIGN,
-                `FCVTSD,`FCVTSQ,`FCVTDS:  begin fpcnt <= 8'd0; end
-                `FTOI:  begin fpcnt <= 8'd1; end
-                `ITOF:  begin fpcnt <= 8'd1; end
-                `FCMP:  begin fpcnt <= 8'd0; end
-                `FADD:  begin fpcnt <= 8'd8; end
-                `FSUB:  begin fpcnt <= 8'd8; end
-                `FMUL:  begin fpcnt <= 8'd10; end
-                `FDIV:  begin fpcnt <= maxdivcnt; end
-                default:    fpcnt <= 8'h00;
-                endcase
-            end
+            case(func6b)
+            `FABS,`FNABS,`FNEG,`FMAN,`FMOV,`FSIGN,
+            `FCVTSD,`FCVTSQ,`FCVTDS:  begin fpcnt <= 8'd0; end
+            `FTOI:  begin fpcnt <= 8'd1; end
+            `ITOF:  begin fpcnt <= 8'd1; end
+            `FCMP:  begin fpcnt <= 8'd0; end
+            `FADD:  begin fpcnt <= 8'd6; end
+            `FSUB:  begin fpcnt <= 8'd6; end
+            `FMUL:  begin fpcnt <= 8'd6; end
+            `FDIV:  begin fpcnt <= maxdivcnt; end
+            `FSQRT: begin fpcnt <= maxdivcnt; end
+            default:    fpcnt <= 8'h00;
+            endcase
         `VECTOR:
             case(func6b)
             `VFNEG:  begin fpcnt <= 8'd0; end
-            `VFADD:  begin fpcnt <= 8'd8; end
-            `VFSUB:  begin fpcnt <= 8'd8; end
+            `VFADD:  begin fpcnt <= 8'd6; end
+            `VFSUB:  begin fpcnt <= 8'd6; end
             `VFSxx:  begin fpcnt <= 8'd0; end
-            `VFMUL:  begin fpcnt <= 8'd10; end
+            `VFMUL:  begin fpcnt <= 8'd6; end
             `VFDIV:  begin fpcnt <= maxdivcnt; end
             `VFTOI:  begin fpcnt <= 8'd1; end
             `VITOF:  begin fpcnt <= 8'd1; end

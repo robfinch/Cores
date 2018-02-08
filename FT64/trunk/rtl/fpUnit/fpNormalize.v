@@ -98,7 +98,7 @@ wire sbit = |i[FMSB-2:0];
 // shift mantissa left by one to reduce to a single whole digit
 // if there is no exponent increment
 wire [FMSB+4:0] mo;
-wire [FMSB+4:0] mo1 = xInf1 & incExp1 ? 0 :
+wire [FMSB+4:0] mo1 = (xInf1 & incExp1) ? 0 :
 	incExp1 ? {i[FX:FMSB+2],gbit,rbit,sbit} :		// reduce mantissa size
 			 {i[FX-1:FMSB+1],gbit,rbit,sbit};	// reduce mantissa size
 wire [FMSB+3:0] mo2;
@@ -106,18 +106,24 @@ wire [7:0] leadingZeros2;
 
 generate
 begin
-if (WID==32) begin
+if (WID <= 32) begin
 cntlz32Reg clz0 (.clk(clk), .ce(ce), .i({mo1,5'b0}), .o(leadingZeros2) );
 assign leadingZeros2[7:6] = 2'b00;
 end
 else if (WID==128)
 cntlz128Reg clz0 (.clk(clk), .ce(ce), .i({mo1,12'b0}), .o(leadingZeros2) );
-else if (WID==96)
+else if (WID==96) begin
+assign leadingZeros2[7] = 1'b0;
 cntlz96Reg clz0 (.clk(clk), .ce(ce), .i({mo1,12'b0}), .o(leadingZeros2) );
-else if (WID==80)
+end
+else if (WID==80) begin
+assign leadingZeros2[7] = 1'b0;
 cntlz80Reg clz0 (.clk(clk), .ce(ce), .i({mo1,12'b0}), .o(leadingZeros2) );
-else if (WID==64)
+end
+else if (WID==64) begin
+assign leadingZeros2[7] = 1'b0;
 cntlz64Reg clz0 (.clk(clk), .ce(ce), .i({mo1,8'h0}), .o(leadingZeros2) );
+end
 end
 endgenerate
 
@@ -125,6 +131,7 @@ endgenerate
 wire xInf2;
 delay1 #(EMSB+1) d2(.clk(clk), .ce(ce), .i(xo1), .o(xo2) );
 delay1 #(1)      d3(.clk(clk), .ce(ce), .i(xInf1), .o(xInf2) );
+
 
 // If the exponent underflowed, then the shift direction must be to the
 // right regardless of mantissa bits; the number is denormalized.
@@ -139,7 +146,7 @@ wire [7:0] lshiftAmt2 = leadingZeros2 > xo2 ? xo2 : leadingZeros2;
 // at infinity the exponent can't be incremented, so we can't shift right
 // otherwise it was an underflow situation so the exponent was negative
 // shift amount needs to be negated for shift register
-wire [7:0] rshiftAmt2 = xInf2 ? 0 : -xo2 > FMSB+3 ? FMSB+4 : FMSB+4+xo2;	// xo2 is negative !
+wire [7:0] rshiftAmt2 = xInf2 ? 0 : $signed(xo2) > 0 ? 0 : ~xo2+1;//FMSB+4+xo2;	// xo2 is negative !
 
 
 // sign
@@ -162,8 +169,9 @@ wire [FMSB+3:0] mo2a;
 
 //	always @(posedge clk)
 //		if (ce)
-assign mo = rightOrLeft2 ? mo2 >> rshiftAmt2 : mo2 << lshiftAmt2;
-
+assign mo = rightOrLeft2 ? (mo2 >> rshiftAmt2) : (mo2 << lshiftAmt2);
+//always @(posedge clk)
+//	$display("%c xo2=%d -xo2=%d rshift=%d >%d %d", rightOrLeft2 ? "r" : "l",xo2, -xo2, rshiftAmt2,($unsigned(-xo2) > $unsigned(FMSB+3)),FMSB+3);
 assign o = {so,xo,mo[FMSB+4:1]};
 
 endmodule
