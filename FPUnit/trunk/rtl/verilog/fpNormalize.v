@@ -96,9 +96,9 @@ wire xInf1 = &xo1;
 // if there is no exponent increment
 wire [FMSB+4:0] mo;
 wire [FMSB+4:0] mo1 = (xInf1 & incExp1) ? 0 :
-	incExp1 ? {i[FX:FMSB],|i[FMSB-1:0]} :		// reduce mantissa size
-			 {i[FX-1:FMSB-1],|i[FMSB-2:0]};		// reduce mantissa size
-wire [FMSB+3:0] mo2;
+	incExp1 ? {i[FX:FMSB+1],|i[FMSB:0],1'b0} :	// reduce mantissa size
+			 {i[FX-1:FMSB],|i[FMSB-1:0],1'b0};		// reduce mantissa size
+wire [FMSB+4:0] mo2;
 wire [7:0] leadingZeros2;
 
 generate

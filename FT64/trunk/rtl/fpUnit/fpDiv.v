@@ -137,7 +137,7 @@ fpDecomp #(WID) u1b (.i(b), .sgn(sb), .exp(xb), .fract(fractb), .xz(b_dn), .vz(b
 // - correct the exponent for denormalized operands
 // - adjust the difference by the bias (add 127)
 // - also factor in the different decimal position for division
-assign ex1 = (xa|a_dn) - (xb|b_dn) + bias + FMSB + (FADD-2) - lzcnt;
+assign ex1 = (xa|a_dn) - (xb|b_dn) + bias + FMSB + (FADD-1) - lzcnt;
 
 // check for exponent underflow/overflow
 wire under = ex1[EMSB+2];	// MSB set = negative exponent
