@@ -76,12 +76,12 @@ reg rnd;
 // Compute the round bit
 // Infinities and NaNs are not rounded!
 always @(xInf,rm,g,r,s,so)
-	case ({xInf,rm})
-	3'd0:	rnd = (g & r) | (r & s);	// round to nearest even
-	3'd1:	rnd = 0;					// round to zero (truncate)
-	3'd2:	rnd = (r | s) & !so;		// round towards +infinity
-	3'd3:	rnd = (r | s) & so;			// round towards -infinity
-	3'd4:   rnd = (r | s); 
+	casez ({xInf,rm})
+	4'b0000:	rnd = (g & r) | (r & s);	// round to nearest even
+	4'b0001:	rnd = 0;					// round to zero (truncate)
+	4'b0010:	rnd = (r | s) & !so;		// round towards +infinity
+	4'b0011:	rnd = (r | s) & so;			// round towards -infinity
+	4'b1???:    rnd = (r | s); 
 	default:	rnd = 0;				// no rounding if exponent indicates infinite or NaN
 	endcase
 

@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2006-2016  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2006-2018  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -131,11 +131,11 @@ fpDecomp #(WID) u1b (.i(b), .sgn(sb), .exp(xb), .fract(fractb), .xz(b_dn), .vz(b
 // mul: ex1 = xa + xb,	result should always be < 1ffh
 assign ex1 = (az|bz) ? 0 : (xa|a_dn) + (xb|b_dn) - bias;
 
+generate
+if (WID==64) begin
 reg [35:0] p00,p01,p02;
 reg [35:0] p10,p11,p12;
 reg [35:0] p20,p21,p22;
-generate
-if (WID==64) begin
 	always @(posedge clk)
 	if (ce) begin
 		p00 <= fracta[17: 0] * fractb[17: 0];
@@ -154,19 +154,27 @@ if (WID==64) begin
 	end
 end
 else if (WID==32) begin
+reg [23:0] p00,p01,p02;
+reg [23:0] p10,p11,p12;
+reg [23:0] p20,p21,p22;
 	always @(posedge clk)
 	if (ce) begin
-		p00 <= fracta[17: 0] * fractb[17: 0];
-		p01 <= fracta[23:18] * fractb[17: 0];
-		p10 <= fracta[17: 0] * fractb[23:18];
-		p11 <= fracta[23:18] * fractb[23:18];
-		fract1 <= {p11,p00} + {p01,18'b0} + {p10,18'b0};
+		p00 <= fracta[11: 0] * fractb[11: 0];
+		p01 <= fracta[23:12] * fractb[11: 0];
+		p10 <= fracta[11: 0] * fractb[23:12];
+		p11 <= fracta[23:12] * fractb[23:12];
+		fract1 <= {p11,p00} + {p01,12'b0} + {p10,12'b0};
 	end
 end
 else begin
+reg [35:0] p00,p01,p02;
+reg [35:0] p10,p11,p12;
+reg [35:0] p20,p21,p22;
 	always @(posedge clk)
-    if (ce)
-        fract1 <= fracta * fractb;
+    if (ce) begin
+    	fract1a <= fracta * fractb;
+        fract1 <= fract1a;
+    end
 end
 endgenerate
 
@@ -176,7 +184,6 @@ wire under = ex1[EMSB+2];	// exponent underflow
 wire over = (&ex1[EMSB:0] | ex1[EMSB+1]) & !ex1[EMSB+2];
 
 delay2 #(EMSB+1) u3 (.clk(clk), .ce(ce), .i(ex1[EMSB:0]), .o(ex2) );
-delay2 #(FX+1) u4 (.clk(clk), .ce(ce), .i(fract1), .o(fracto) );
 delay2 u2a (.clk(clk), .ce(ce), .i(aInf), .o(aInf1) );
 delay2 u2b (.clk(clk), .ce(ce), .i(bInf), .o(bInf1) );
 delay2 u6  (.clk(clk), .ce(ce), .i(under), .o(under1) );
@@ -201,25 +208,25 @@ delay3 u8 (.clk(clk), .ce(ce), .i(sa ^ sb), .o(so1) );// two clock delay!
 
 always @(posedge clk)
 	if (ce)
-		casex({qNaNOut|aNan1|bNan1,aInf1,bInf1,over1,under1})
-		5'b1xxxx:	xo1 = infXp;	// qNaN - infinity * zero
-		5'b01xxx:	xo1 = infXp;	// 'a' infinite
-		5'b001xx:	xo1 = infXp;	// 'b' infinite
-		5'b0001x:	xo1 = infXp;	// result overflow
-		5'b00001:	xo1 = 0;		// underflow
+		casez({qNaNOut|aNan1|bNan1,aInf1,bInf1,over1,under1})
+		5'b1????:	xo1 = infXp;	// qNaN - infinity * zero
+		5'b01???:	xo1 = infXp;	// 'a' infinite
+		5'b001??:	xo1 = infXp;	// 'b' infinite
+		5'b0001?:	xo1 = infXp;	// result overflow
+		5'b00001:	xo1 = ex2[EMSB:0];//0;		// underflow
 		default:	xo1 = ex2[EMSB:0];	// situation normal
 		endcase
 
 always @(posedge clk)
 	if (ce)
-		casex({aNan1,bNan1,qNaNOut,aInf1,bInf1,over1})
-		6'b1xxxxx:  mo1 = {1'b0,a1[FMSB:0],{FMSB+1{1'b0}}};
-        6'bx1xxxx:  mo1 = {1'b0,b1[FMSB:0],{FMSB+1{1'b0}}};
-		6'bxx1xxx:	mo1 = {1'b0,qNaN|3'd4,{FMSB+1{1'b0}}};	// multiply inf * zero
-		6'b0001xx:	mo1 = 0;	// mul inf's
-		6'b00001x:	mo1 = 0;	// mul inf's
+		casez({aNan1,bNan1,qNaNOut,aInf1,bInf1,over1})
+		6'b1?????:  mo1 = {1'b1,a1[FMSB:0],{FMSB+1{1'b0}}};
+        6'b01????:  mo1 = {1'b1,b1[FMSB:0],{FMSB+1{1'b0}}};
+		6'b001???:	mo1 = {1'b1,qNaN|3'd4,{FMSB+1{1'b0}}};	// multiply inf * zero
+		6'b0001??:	mo1 = 0;	// mul inf's
+		6'b00001?:	mo1 = 0;	// mul inf's
 		6'b000001:	mo1 = 0;	// mul overflow
-		default:	mo1 = fracto;
+		default:	mo1 = fract1;
 		endcase
 
 delay3 u10 (.clk(clk), .ce(ce), .i(sa & sb), .o(sign_exe) );
@@ -231,7 +238,7 @@ assign o = {so1,xo1,mo1};
 
 endmodule
 
-module fpMulnr(clk, ce, a, b, o, sign_exe, inf, overflow, underflow);
+module fpMulnr(clk, ce, a, b, o, rm, sign_exe, inf, overflow, underflow);
 parameter WID=32;
 localparam MSB = WID-1;
 localparam EMSB = WID==128 ? 14 :
@@ -263,6 +270,7 @@ input clk;
 input ce;
 input  [MSB:0] a, b;
 output [MSB:0] o;
+input [2:0] rm;
 output sign_exe;
 output inf;
 output overflow;
@@ -274,7 +282,7 @@ wire [MSB+3:0] fpn0;
 
 fpMul       #(WID) u1 (clk, ce, a, b, o1, sign_exe1, inf1, overflow1, underflow1);
 fpNormalize #(WID) u2(.clk(clk), .ce(ce), .under(underflow1), .i(o1), .o(fpn0) );
-fpRoundReg  #(WID) u3(.clk(clk), .ce(ce), .rm(3'b000), .i(fpn0), .o(o) );
+fpRoundReg  #(WID) u3(.clk(clk), .ce(ce), .rm(rm), .i(fpn0), .o(o) );
 delay2      #(1)   u4(.clk(clk), .ce(ce), .i(sign_exe1), .o(sign_exe));
 delay2      #(1)   u5(.clk(clk), .ce(ce), .i(inf1), .o(inf));
 delay2      #(1)   u6(.clk(clk), .ce(ce), .i(overflow1), .o(overflow));

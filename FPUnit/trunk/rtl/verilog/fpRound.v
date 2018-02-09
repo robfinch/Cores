@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2006-2016  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2006-2018  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -76,12 +76,12 @@ reg rnd;
 // Compute the round bit
 // Infinities and NaNs are not rounded!
 always @(xInf,rm,g,r,s,so)
-	case ({xInf,rm})
-	3'd0:	rnd = (g & r) | (r & s);	// round to nearest even
-	3'd1:	rnd = 0;					// round to zero (truncate)
-	3'd2:	rnd = (r | s) & !so;		// round towards +infinity
-	3'd3:	rnd = (r | s) & so;			// round towards -infinity
-	3'd4:   rnd = (r | s); 
+	casez ({xInf,rm})
+	4'b0000:	rnd = (g & r) | (r & s);	// round to nearest even
+	4'b0001:	rnd = 0;					// round to zero (truncate)
+	4'b0010:	rnd = (r | s) & !so;		// round towards +infinity
+	4'b0011:	rnd = (r | s) & so;			// round towards -infinity
+	4'b1???:    rnd = (r | s); 
 	default:	rnd = 0;				// no rounding if exponent indicates infinite or NaN
 	endcase
 
@@ -96,14 +96,14 @@ assign so = i[MSB+3];
 assign xo = rounded[MSB:FMSB+2];
 
 always @(rnd or xo or carry or dn or rounded or mo1)
-	casex({rnd,&xo,carry,dn})
-	4'b0xx0:	mo = mo1[FMSB+2:2];		// not rounding, not denormalized, => hide MSB
-	4'b0xx1:	mo = mo1[FMSB+3:3];		// not rounding, denormalized
+	casez({rnd,&xo,carry,dn})
+	4'b0??0:	mo = mo1[FMSB+2:2];		// not rounding, not denormalized, => hide MSB
+	4'b0??1:	mo = mo1[FMSB+3:3];		// not rounding, denormalized
 	4'b1000:	mo = rounded[FMSB  :0];	// exponent didn't change, number was normalized, => hide MSB
 	4'b1001:	mo = rounded[FMSB+1:1];	// exponent didn't change, but number was denormalized, => retain MSB
 	4'b1010:	mo = rounded[FMSB+1:1];	// exponent incremented (new MSB generated), number was normalized, => hide 'extra (FMSB+2)' MSB
 	4'b1011:	mo = rounded[FMSB+1:1];	// exponent incremented (new MSB generated), number was denormalized, number became normalized, => hide 'extra (FMSB+2)' MSB
-	4'b11xx:	mo = 0;					// number became infinite, no need to check carry etc., rnd would be zero if input was NaN or infinite
+	4'b11??:	mo = 0;					// number became infinite, no need to check carry etc., rnd would be zero if input was NaN or infinite
 	endcase
 
 endmodule

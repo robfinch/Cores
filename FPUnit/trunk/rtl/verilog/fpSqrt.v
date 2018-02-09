@@ -1,13 +1,13 @@
 `timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2006-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2018  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	fpDiv.v
-//    - floating point divider
+//	fpSqrt.v
+//    - floating point square root
 //    - parameterized width
 //    - IEEE 754 representation
 //
@@ -27,16 +27,11 @@
 //                                                                          
 //	Floating Point Multiplier / Divider
 //
-//Properties:
-//+-inf * +-inf = -+inf    (this is handled by exOver)
-//+-inf * 0     = QNaN
-//+-0 / +-0      = QNaN
 // ============================================================================
 
 `include "fp_defines.v"
 
-module fpDiv(clk, clk4x, ce, ld, op, a, b, o, done, sign_exe, overflow, underflow);
-
+module fpSqrt(rst, clk, ce, ld, a, o, done, sqrinf, sqrneg);
 parameter WID = 128;
 localparam MSB = WID-1;
 localparam EMSB = WID==128 ? 14 :
@@ -61,33 +56,19 @@ localparam FMSB = WID==128 ? 111 :
 				  WID==40 ? 28 :
 				  WID==32 ? 22 :
 				  WID==24 ? 15 : 9;
-// FADD is a constant that makes the divider width a multiple of four and includes eight extra bits.			
-localparam FADD = WID==128 ? 9 :
-				  WID==96 ? 9 :
-				  WID==80 ? 9 :
-				  WID==64 ? 13 :
-				  WID==52 ? 9 :
-				  WID==48 ? 10 :
-				  WID==44 ? 9 :
-				  WID==42 ? 11 :
-				  WID==40 ? 8 :
-				  WID==32 ? 10 :
-				  WID==24 ? 9 : 11;
-				  
+
 localparam FX = (FMSB+2)*2-1;	// the MSB of the expanded fraction
 localparam EX = FX + 1 + EMSB + 1 + 1 - 1;
 
+input rst;
 input clk;
-input clk4x;
 input ce;
 input ld;
-input op;
-input [MSB:0] a, b;
-output [EX:0] o;
+input [MSB:0] a;
+output reg [EX:0] o;
 output done;
-output sign_exe;
-output overflow;
-output underflow;
+output sqrinf;
+output sqrneg;
 
 // registered outputs
 reg sign_exe;
@@ -95,10 +76,9 @@ reg inf;
 reg	overflow;
 reg	underflow;
 
-reg so;
-reg [EMSB:0] xo;
-reg [FX:0] mo;
-assign o = {so,xo,mo};
+wire so;
+wire [EMSB:0] xo;
+wire [FX:0] mo;
 
 // constants
 wire [EMSB:0] infXp = {EMSB+1{1'b1}};	// infinite / NaN - all ones
@@ -110,83 +90,70 @@ wire [FMSB:0] qNaN  = {1'b1,{FMSB{1'b0}}};
 
 // variables
 wire [EMSB+2:0] ex1;	// sum of exponents
-wire [(FMSB+FADD)*2-1:0] divo;
+wire [FX:0] sqrto;
 
 // Operands
-wire sa, sb;			// sign bit
-wire [EMSB:0] xa, xb;	// exponent bits
-wire [FMSB+1:0] fracta, fractb;
-wire a_dn, b_dn;			// a/b is denormalized
-wire az, bz;
-wire aInf, bInf;
-wire aNan,bNan;
+wire sa;			// sign bit
+wire [EMSB:0] xa;	// exponent bits
+wire [FMSB+1:0] fracta;
+wire a_dn;			// a/b is denormalized
+wire az;
+wire aInf;
+wire aNan;
 wire done1;
 wire [7:0] lzcnt;
 
 // -----------------------------------------------------------
-// - decode the input operands
+// - decode the input operand
 // - derive basic information
 // - calculate exponent
 // - calculate fraction
 // -----------------------------------------------------------
 
-fpDecomp #(WID) u1a (.i(a), .sgn(sa), .exp(xa), .fract(fracta), .xz(a_dn), .vz(az), .inf(aInf), .nan(aNan) );
-fpDecomp #(WID) u1b (.i(b), .sgn(sb), .exp(xb), .fract(fractb), .xz(b_dn), .vz(bz), .inf(bInf), .nan(bNan) );
+fpDecomp #(WID) u1
+(
+	.i(a),
+	.sgn(sa),
+	.exp(xa),
+	.fract(fracta),
+	.xz(a_dn),
+	.vz(az),
+	.inf(aInf),
+	.nan(aNan)
+);
 
-// Compute the exponent.
-// - correct the exponent for denormalized operands
-// - adjust the difference by the bias (add 127)
-// - also factor in the different decimal position for division
-assign ex1 = (xa|a_dn) - (xb|b_dn) + bias + FMSB + (FADD-2) - lzcnt;
+assign ex1 = xa + 8'd1;
+assign so = 1'b0;				// square root of positive numbers only
+assign xo = (ex1 >> 1) + (bias >> 1);	// divide by 2 cuts the bias in half, so 1/2 of it is added back in.
+assign mo = aNan ? {1'b1,a[FMSB:0],{FMSB+1{1'b0}}} : (sqrto << 36);
+assign sqrinf = aInf;
+assign sqrneg = !az & so;
 
-// check for exponent underflow/overflow
-wire under = ex1[EMSB+2];	// MSB set = negative exponent
-wire over = (&ex1[EMSB:0] | ex1[EMSB+1]) & !ex1[EMSB+2];
+wire [FMSB+2:0] fracta1 = ex1[0] ? {1'b0,fracta} << 1 : {2'b0,fracta};
 
-// Perform divide
-// Divider width must be a multiple of four
-fpdivr16 #(FMSB+FADD) u2 (.clk(clk), .ld(ld), .a({3'b0,fracta,8'b0}), .b({3'b0,fractb,8'b0}), .q(divo), .r(), .done(done1), .lzcnt(lzcnt));
-wire [(FMSB+FADD)*2-1:0] divo1 = divo[(FMSB+FADD)*2-1:0] << (lzcnt-2);
-delay1 #(1) u3 (.clk(clk), .ce(ce), .i(done1), .o(done));
+isqrt #(FX+1) u2
+(
+	.rst(rst),
+	.clk(clk),
+	.ce(ce),
+	.ld(ld),
+	.a({fracta1,{FMSB+1{1'b0}}}),
+	.o(sqrto),
+	.done(done)
+);
 
-
-// determine when a NaN is output
-wire qNaNOut = (az&bz)|(aInf&bInf);
-
-always @(posedge clk)
-	if (ce) begin
-		if (done1) begin
-			casez({qNaNOut|aNan|bNan,bInf,bz,over,under})
-			5'b1????:		xo = infXp;	// NaN exponent value
-			5'b01???:		xo = 0;		// divide by inf
-			5'b001??:		xo = infXp;	// divide by zero
-			5'b0001?:		xo = infXp;	// overflow
-			5'b00001:		xo = 0;		// underflow
-			default:		xo = ex1;	// normal or underflow: passthru neg. exp. for normalization
-			endcase
-
-			casez({aNan,bNan,qNaNOut,bInf,bz,over,aInf&bInf,az&bz})
-			8'b1???????:    mo = {1'b1,a[FMSB:0],{FMSB+1{1'b0}}};
-			8'b01??????:    mo = {1'b1,b[FMSB:0],{FMSB+1{1'b0}}};
-			8'b001?????:	mo = {1'b1,qNaN[FMSB:0]|{aInf,1'b0}|{az,bz},{FMSB+1{1'b0}}};
-			8'b0001????:	mo = 0;	// div by inf
-			8'b00001???:	mo = 0;	// div by zero
-			8'b000001??:	mo = 0;	// Inf exponent
-			8'b0000001?:	mo = {1'b1,qNaN|`QINFDIV,{FMSB+1{1'b0}}};	// infinity / infinity
-			8'b00000001:	mo = {1'b1,qNaN|`QZEROZERO,{FMSB+1{1'b0}}};	// zero / zero
-			default:		mo = divo1[(FMSB+FADD)*2-1:(FADD-2)*2-2];	// plain div
-			endcase
-
-			so  		= sa ^ sb;
-			sign_exe 	= sa & sb;
-			overflow	= over;
-			underflow 	= under;
-		end
-	end
+always @*
+casez({aNan,sqrinf,sqrneg})
+3'b1??:	o <= {sa,xa,mo};
+3'b01?:	o <= {sa,1'b1,qNaN|`QSQRTINF,{FMSB+1{1'b0}}};
+3'b001:	o <= {sa,1'b1,qNaN|`QSQRTNEG,{FMSB+1{1'b0}}};
+default:	o <= {so,xo,mo};
+endcase
+	
 
 endmodule
 
-module fpDivnr(clk, clk4x, ce, ld, op, a, b, o, rm, done, sign_exe, inf, overflow, underflow);
+module fpSqrtnr(rst, clk, ce, ld, a, o, rm, done, inf, sqrinf, sqrneg);
 parameter WID=32;
 localparam MSB = WID-1;
 localparam EMSB = WID==128 ? 14 :
@@ -214,32 +181,27 @@ localparam FMSB = WID==128 ? 111 :
 
 localparam FX = (FMSB+2)*2-1;	// the MSB of the expanded fraction
 localparam EX = FX + 1 + EMSB + 1 + 1 - 1;
+input rst;
 input clk;
-input clk4x;
 input ce;
 input ld;
-input op;
-input  [MSB:0] a, b;
+input  [MSB:0] a;
 output [MSB:0] o;
 input [2:0] rm;
-output sign_exe;
 output done;
 output inf;
-output overflow;
-output underflow;
+output sqrinf;
+output sqrneg;
 
 wire [EX:0] o1;
-wire sign_exe1, inf1, overflow1, underflow1;
+wire inf1;
 wire [MSB+3:0] fpn0;
 wire done1;
 
-fpDiv       #(WID) u1 (clk, clk4x, ce, ld, op, a, b, o1, done1, sign_exe1, overflow1, underflow1);
-fpNormalize #(WID) u2(.clk(clk), .ce(ce), .under(underflow1), .i(o1), .o(fpn0) );
+fpSqrt      #(WID) u1 (rst, clk, ce, ld, a, o1, done1, sqrinf, sqrneg);
+fpNormalize #(WID) u2(.clk(clk), .ce(ce), .under(1'b0), .i(o1), .o(fpn0) );
 fpRoundReg  #(WID) u3(.clk(clk), .ce(ce), .rm(rm), .i(fpn0), .o(o) );
-delay2      #(1)   u4(.clk(clk), .ce(ce), .i(sign_exe1), .o(sign_exe));
 delay2      #(1)   u5(.clk(clk), .ce(ce), .i(inf1), .o(inf));
-delay2      #(1)   u6(.clk(clk), .ce(ce), .i(overflow1), .o(overflow));
-delay2      #(1)   u7(.clk(clk), .ce(ce), .i(underflow1), .o(underflow));
 delay2		#(1)   u8(.clk(clk), .ce(ce), .i(done1), .o(done));
 endmodule
 

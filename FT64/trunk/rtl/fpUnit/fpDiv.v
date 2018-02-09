@@ -61,6 +61,7 @@ localparam FMSB = WID==128 ? 111 :
 				  WID==40 ? 28 :
 				  WID==32 ? 22 :
 				  WID==24 ? 15 : 9;
+// FADD is a constant that makes the divider width a multiple of four and includes eight extra bits.			
 localparam FADD = WID==128 ? 9 :
 				  WID==96 ? 9 :
 				  WID==80 ? 9 :
@@ -109,7 +110,7 @@ wire [FMSB:0] qNaN  = {1'b1,{FMSB{1'b0}}};
 
 // variables
 wire [EMSB+2:0] ex1;	// sum of exponents
-wire [(FMSB+9)*2-1:0] divo;
+wire [(FMSB+FADD)*2-1:0] divo;
 
 // Operands
 wire sa, sb;			// sign bit
@@ -136,13 +137,7 @@ fpDecomp #(WID) u1b (.i(b), .sgn(sb), .exp(xb), .fract(fractb), .xz(b_dn), .vz(b
 // - correct the exponent for denormalized operands
 // - adjust the difference by the bias (add 127)
 // - also factor in the different decimal position for division
-generate begin : gen_ex1
-if (WID==32)
-assign ex1 = (xa|a_dn) - (xb|b_dn) + bias + FMSB + 9 - lzcnt;
-else if (WID==64)
-assign ex1 = (xa|a_dn) - (xb|b_dn) + bias + FMSB + 11 - lzcnt;
-end
-endgenerate
+assign ex1 = (xa|a_dn) - (xb|b_dn) + bias + FMSB + (FADD-2) - lzcnt;
 
 // check for exponent underflow/overflow
 wire under = ex1[EMSB+2];	// MSB set = negative exponent
@@ -150,15 +145,7 @@ wire over = (&ex1[EMSB:0] | ex1[EMSB+1]) & !ex1[EMSB+2];
 
 // Perform divide
 // Divider width must be a multiple of four
-generate begin : gen_div16
-if (WID==32) begin
 fpdivr16 #(FMSB+FADD) u2 (.clk(clk), .ld(ld), .a({3'b0,fracta,8'b0}), .b({3'b0,fractb,8'b0}), .q(divo), .r(), .done(done1), .lzcnt(lzcnt));
-end
-else if (WID==64) begin
-fpdivr16 #(FMSB+FADD) u2 (.clk(clk), .ld(ld), .a({3'b0,fracta,8'b0}), .b({3'b0,fractb,8'b0}), .q(divo), .r(), .done(done1), .lzcnt(lzcnt));
-end
-end
-endgenerate
 wire [(FMSB+FADD)*2-1:0] divo1 = divo[(FMSB+FADD)*2-1:0] << (lzcnt-2);
 delay1 #(1) u3 (.clk(clk), .ce(ce), .i(done1), .o(done));
 
@@ -187,10 +174,7 @@ always @(posedge clk)
 			8'b000001??:	mo = 0;	// Inf exponent
 			8'b0000001?:	mo = {1'b1,qNaN|`QINFDIV,{FMSB+1{1'b0}}};	// infinity / infinity
 			8'b00000001:	mo = {1'b1,qNaN|`QZEROZERO,{FMSB+1{1'b0}}};	// zero / zero
-			default:		case(WID)
-							32:	mo = divo1[(FMSB+FADD)*2-1:15];	// plain div
-							64:	mo = divo1[(FMSB+FADD)*2-1:20];
-							endcase
+			default:		mo = divo1[(FMSB+FADD)*2-1:(FADD-2)*2-2];	// plain div
 			endcase
 
 			so  		= sa ^ sb;

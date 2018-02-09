@@ -6,10 +6,10 @@ reg ld;
 reg [15:0] cnt;
 
 wire ce = 1'b1;
-wire [33:0] a = 32'h817654;
-wire [33:0] b = 32'h17;
-wire [33:0] q;
-wire [33:0] r;
+wire [59:0] a = 32'h817654;
+wire [59:0] b = 32'h17;
+wire [119:0] q;
+wire [119:0] r;
 wire done;
 
 initial begin
@@ -35,7 +35,7 @@ always @(posedge clk)
 	end
 	
 
-fpdivr16 #(34) divu0(.clk(clk), .ld(ld), .a(a), .b(b), .q(q), .r(r), .done(done) );
+fpdivr16 #(60) divu0(.clk(clk), .ld(ld), .a(a), .b(b), .q(q), .r(r), .done(done) );
 
 endmodule
 

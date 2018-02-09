@@ -92,15 +92,12 @@ wire [EMSB:0] xo2;
 wire xInf1 = &xo1;
 
 // If infinity is reached then set the mantissa to zero
-wire gbit =  i[FMSB];
-wire rbit =  i[FMSB-1];
-wire sbit = |i[FMSB-2:0];
 // shift mantissa left by one to reduce to a single whole digit
 // if there is no exponent increment
 wire [FMSB+4:0] mo;
 wire [FMSB+4:0] mo1 = (xInf1 & incExp1) ? 0 :
-	incExp1 ? {i[FX:FMSB+2],gbit,rbit,sbit} :		// reduce mantissa size
-			 {i[FX-1:FMSB+1],gbit,rbit,sbit};	// reduce mantissa size
+	incExp1 ? {i[FX:FMSB],|i[FMSB-1:0]} :		// reduce mantissa size
+			 {i[FX-1:FMSB-1],|i[FMSB-2:0]};		// reduce mantissa size
 wire [FMSB+3:0] mo2;
 wire [7:0] leadingZeros2;
 
@@ -110,20 +107,20 @@ if (WID <= 32) begin
 cntlz32Reg clz0 (.clk(clk), .ce(ce), .i({mo1,5'b0}), .o(leadingZeros2) );
 assign leadingZeros2[7:6] = 2'b00;
 end
-else if (WID==128)
-cntlz128Reg clz0 (.clk(clk), .ce(ce), .i({mo1,12'b0}), .o(leadingZeros2) );
-else if (WID==96) begin
-assign leadingZeros2[7] = 1'b0;
-cntlz96Reg clz0 (.clk(clk), .ce(ce), .i({mo1,12'b0}), .o(leadingZeros2) );
-end
-else if (WID==80) begin
-assign leadingZeros2[7] = 1'b0;
-cntlz80Reg clz0 (.clk(clk), .ce(ce), .i({mo1,12'b0}), .o(leadingZeros2) );
-end
-else if (WID==64) begin
+else if (WID<=64) begin
 assign leadingZeros2[7] = 1'b0;
 cntlz64Reg clz0 (.clk(clk), .ce(ce), .i({mo1,8'h0}), .o(leadingZeros2) );
 end
+else if (WID<=80) begin
+assign leadingZeros2[7] = 1'b0;
+cntlz80Reg clz0 (.clk(clk), .ce(ce), .i({mo1,12'b0}), .o(leadingZeros2) );
+end
+else if (WID<=96) begin
+assign leadingZeros2[7] = 1'b0;
+cntlz96Reg clz0 (.clk(clk), .ce(ce), .i({mo1,12'b0}), .o(leadingZeros2) );
+end
+else if (WID<=128)
+cntlz128Reg clz0 (.clk(clk), .ce(ce), .i({mo1,12'b0}), .o(leadingZeros2) );
 end
 endgenerate
 

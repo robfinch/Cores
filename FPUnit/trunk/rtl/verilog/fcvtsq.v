@@ -1,14 +1,13 @@
-`timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2006-2017  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2006-2016  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	fpLOOUnit.v
-//		- single cycle latency floating point unit
-//		- parameterized width
+//	fcvtsq.v
+//		- convert single precision to quad precision
+//		- zero latency
 //		- IEEE 754 representation
 //
 //
@@ -25,28 +24,10 @@
 // You should have received a copy of the GNU General Public License        
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.    
 //                                                                          
-//	i2f - convert integer to floating point
-//  f2i - convert floating point to integer
-//
 // ============================================================================
 
-`define VECTOR  6'h01
-`define VFTOI   6'h24
-`define VITOF   6'h25
-`define FLOAT   6'h0B
-`define FTOI    6'h12
-`define ITOF    6'h13
-
-module fpLOOUnit
-#(parameter WID=32)
-(
-	input clk,
-	input ce,
-	input [39:0] ir,
-	input [WID-1:0] a,
-	output reg [WID-1:0] o,
-	output done
-);
+module fcvtsq(a, o);
+parameter WID = 128;
 localparam MSB = WID-1;
 localparam EMSB = WID==128 ? 14 :
                   WID==96 ? 14 :
@@ -70,37 +51,54 @@ localparam FMSB = WID==128 ? 111 :
 				  WID==40 ? 28 :
 				  WID==32 ? 22 :
 				  WID==24 ? 15 : 9;
+input [31:0] a;
+output reg [WID-1:0] o;
+wire sa;
+wire [7:0] xa;
+wire [22:0] ma;
+wire [23:0] fracta;
+wire adn;
+wire az;
+wire xaInf;
+wire xInf;
+wire aNan;
 
-wire [WID-1:0] i2f_o;
-wire [WID-1:0] f2i_o;
-wire [7:0] op = ir[7:0];
-wire [5:0] fn = ir[25:20];
-wire [2:0] rm = ir[34:32];
-wire [1:0] prec = ir[37:35];
+fpDecomp #(32) u1a (.i(a), .sgn(sa), .exp(xa), .man(ma), .fract(fracta), .xz(adn), .vz(az), .xinf(xaInf), .inf(aInf), .nan(aNan) );
 
-delay1 u1 (
-    .clk(clk),
-    .ce(ce),
-    .i((op==`FLOAT && (fn==`ITOF||fn==`FTOI)) || (op==`VECTOR && (fn==`VFTOI || fn==`VITOF))),
-    .o(done) );
-i2f #(WID)  ui2fs (.clk(clk), .ce(ce), .rm(rm), .i(a), .o(i2f_o) );
-f2i #(WID)  uf2is (.clk(clk), .ce(ce), .i(a), .o(f2i_o) );
+
 
 always @*
-	case (op)
-	`FLOAT:
-       case(fn)
-       `ITOF:   o <= i2f_o;
-       `FTOI:   o <= f2i_o;
-       default: o <= 0;
-       endcase
-    `VECTOR:
-        case(fn)
-        `VITOF:  o <= i2f_o;
-        `VFTOI:  o <= f2i_o;
-        default: o <= 0;
-        endcase
-    default:   o <= 0;
-    endcase
+begin
+    o[127] <= a[31];    // sign bit
+casex({aNan,aInf,az,adn})
+// NaN in, NaN out
+4'b1xxx:
+    begin
+        o[126:111] <= 16'hFFFF;
+        o[110:103] <= a[22:15];
+        o[14:0] <= a[14:0];  
+    end
+// Infinity in, infinity out
+4'bx1xx:
+    begin
+        o[126:111] <= 16'hFFFF;
+        o[110:0] <= 111'b0;
+    end
+// Zero in, zero out
+4'bxx1x:
+        o[126:0] <= 127'b0;
+// Denormal
+4'bxxx1:
+    begin
+        o[126:111] <= 16'h0000;
+        o[110:88] <= ma;
+    end
+default:
+    begin
+        o[126:111] <= xa + 16256;
+        o[110:88] <= ma;
+    end
+endcase
+end
 
 endmodule
