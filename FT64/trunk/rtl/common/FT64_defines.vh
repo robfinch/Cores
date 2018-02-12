@@ -119,6 +119,8 @@
 `define MEMDB			5'h10
 `define MEMSB			5'h11
 `define SYNC        	5'h12
+`define CHAIN_OFF		5'h14
+`define CHAIN_ON		5'h15
 `define BMM			6'h03
 `define ADD	        6'h04
 `define SUB         6'h05
@@ -183,12 +185,11 @@
 `define ANDI    6'h08
 `define ORI     6'h09
 `define XORI    6'h0A
-`define FLOAT   6'h0B
+`define EXEC    6'h0B
 `define FSYNC       6'h36
-`define TGT     6'h0C
 `define REX     6'h0D
 `define CSRRW   6'h0E
-`define EXEC    6'h0F
+`define FLOAT   6'h0F
 `define LH      6'h10
 `define LHU     6'h11
 `define LW      6'h12
@@ -226,6 +227,7 @@
 `define SC      6'h24
 `define CAS     6'h25
 `define BBc     6'b10011?
+`define DBNZ		3'd7
 `define JMP     6'h28
 `define RET     6'h29
 `define LBO     6'h2A

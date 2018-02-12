@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2017  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2017-2018  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -30,6 +30,7 @@
 `define Bcc1	6'h31
 `define BEQ0	6'h32
 `define BEQ1	6'h33
+`define CHK		6'h34
 
 `define BEQ		4'h0
 `define BNE		4'h1
@@ -43,16 +44,20 @@
 `define FBGE	4'hB
 `define FBUN    4'hC
 
-module FT64_EvalBranch(instr, a, b, takb);
+`define DBNZ	3'd7
+
+module FT64_EvalBranch(instr, a, b, c, takb);
+parameter WID=64;
 input [31:0] instr;
-input [63:0] a;
-input [63:0] b;
+input [WID-1:0] a;
+input [WID-1:0] b;
+input [WID-1:0] c;
 output reg takb;
 
 wire [5:0] opcode = instr[5:0];
 wire [4:0] fcmpo;
 wire fnanx;
-fp_cmp_unit #(64) ufcmp1 (a, b, fcmpo, fnanx);
+fp_cmp_unit #(WID) ufcmp1 (a, b, fcmpo, fnanx);
 
 //Evaluate branch condition
 always @*
@@ -87,13 +92,15 @@ case(opcode)
 	`FBUN:  takb <=  fcmpo[4];
 	default:	takb <= `TRUE;
 	endcase
-`BEQ0,`BEQ1:	takb <= a==b;
+`BEQ0,`BEQ1:	takb <= a=={{55{instr[19]}},instr[19:11]};
 `BBc0,`BBc1:
 	case(instr[19:17])
-	3'd0:	takb <= a[instr[16:11]];	// BBS
+	3'd0:	takb <=  a[instr[16:11]];	// BBS
 	3'd1:	takb <= ~a[instr[16:11]];	// BBC
+	`DBNZ:	takb <=  a=={58'h0,instr[16:11]};
 	default:	takb <= `TRUE;
 	endcase
+`CHK:	takb <= a >= b && a < c;
 default:	takb <= `TRUE;
 endcase
 

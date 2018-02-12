@@ -768,6 +768,7 @@ case(instr[`INSTRUCTION_OP])
 				3'd3,3'd7:    			
     				o = BIG ? ($signed(a) > $signed(b) ? a : b) : 64'hCCCCCCCCCCCCCCCC;
     			endcase
+    `MAJ:		o = (a & b) | (a & c) | (b & c);
     `CHK:       o = (a >= b && a < c);
     default:    o = 64'hDEADDEADDEADDEAD;
     endcase

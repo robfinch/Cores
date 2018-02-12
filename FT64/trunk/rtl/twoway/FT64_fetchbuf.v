@@ -181,7 +181,7 @@ wire [AMSB:0] branch_pcD = IsRet(fetchbufD_instr) ? (thread_en ? retpc1 : retpc0
                          fetchbufD_pc + {{19{fetchbufD_instr[`INSTRUCTION_SB]}},fetchbufD_instr[31:22],fetchbufD_instr[0],2'b00} + 64'd4);
                          
 wire take_branchA = ({fetchbufA_v, IsBranch(fetchbufA_instr), predict_takenA}  == {`VAL, `TRUE, `TRUE}) ||
-                        ((IsRet(fetchbufA_instr)|IsJmp(fetchbufA_instr)|IsCall(fetchbufA_instr)|
+                        ((IsRet(fetchbufA_instr)||IsJmp(fetchbufA_instr)||IsCall(fetchbufA_instr)||
                         IsRTI(fetchbufA_instr)|| fetchbufA_instr[`INSTRUCTION_OP]==`BRK || fetchbufA_instr[`INSTRUCTION_OP]==`JAL) &&
                         fetchbufA_v);
 wire take_branchB = ({fetchbufB_v, IsBranch(fetchbufB_instr), predict_takenB}  == {`VAL, `TRUE, `TRUE}) ||
