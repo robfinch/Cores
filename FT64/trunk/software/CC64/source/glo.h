@@ -143,6 +143,7 @@ extern int iflevel;
 extern int foreverlevel;
 extern int looplevel;
 extern int loopexit;
+extern int stmtdepth;
 extern int regmask;
 extern int bregmask;
 extern Statement *currentStmt;

@@ -818,14 +818,14 @@ static void GenerateDefaultCatch(SYM *sym)
 	GenerateLabel(throwlab);
 	if (sym->IsLeaf){
 		if (sym->DoesThrow) {
-			GenerateDiadic(op_lw,0,makereg(regLR),make_indexed(sizeOfWord,regFP));		// load throw return address from stack into LR
-			GenerateDiadicNT(op_sw,0,makereg(regLR),make_indexed(sizeOfWord*2,regFP));		// and store it back (so it can be loaded with the lm)
+			GenerateDiadic(op_lw,0,makereg(regLR),make_indexed(2*sizeOfWord,regFP));		// load throw return address from stack into LR
+			GenerateDiadicNT(op_sw,0,makereg(regLR),make_indexed(3*sizeOfWord,regFP));		// and store it back (so it can be loaded with the lm)
 //			GenerateDiadic(op_bra,0,make_label(retlab),NULL);				// goto regular return cleanup code
 		}
 	}
 	else {
-		GenerateDiadic(op_lw,0,makereg(regLR),make_indexed(sizeOfWord,regFP));		// load throw return address from stack into LR
-		GenerateDiadicNT(op_sw,0,makereg(regLR),make_indexed(sizeOfWord*2,regFP));		// and store it back (so it can be loaded with the lm)
+		GenerateDiadic(op_lw,0,makereg(regLR),make_indexed(2*sizeOfWord,regFP));		// load throw return address from stack into LR
+		GenerateDiadicNT(op_sw,0,makereg(regLR),make_indexed(3*sizeOfWord,regFP));		// and store it back (so it can be loaded with the lm)
 //		GenerateDiadic(op_bra,0,make_label(retlab),NULL);				// goto regular return cleanup code
 	}
 }
@@ -871,13 +871,14 @@ static void SetupReturnBlock(SYM *sym)
 {
 	AMODE *ap;
 
-	GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(3 * sizeOfWord));
+	GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(4 * sizeOfWord));
 	if (!sym->IsLeaf)
-		GenerateDiadic(op_sw,0,makereg(regLR),make_indexed(2*sizeOfWord,regSP));
+		GenerateDiadic(op_sw,0,makereg(regLR),make_indexed(3*sizeOfWord,regSP));
 	if (exceptions) {
 		if (!sym->IsLeaf || sym->DoesThrow)
-			GenerateDiadic(op_sw,0,makereg(regXLR),make_indexed(sizeOfWord,regSP));
+			GenerateDiadic(op_sw,0,makereg(regXLR),make_indexed(2*sizeOfWord,regSP));
 	}
+	GenerateDiadic(op_sw,0,makereg(regZero),make_indexed(sizeOfWord,regSP));
 	GenerateDiadic(op_sw,0,makereg(regFP),make_indirect(regSP));
 	ap = make_label(throwlab);
 	ap->mode = am_immed;
@@ -961,10 +962,10 @@ static void UnlinkStack(SYM * sym)
 	GenerateDiadic(op_lw,0,makereg(regFP),make_indirect(regSP));
 	if (exceptions) {
 		if (!sym->IsLeaf || sym->DoesThrow)
-			GenerateDiadic(op_lw,0,makereg(regXLR),make_indexed(sizeOfWord,regSP));
+			GenerateDiadic(op_lw,0,makereg(regXLR),make_indexed(2*sizeOfWord,regSP));
 	}
 	if (!sym->IsLeaf)
-		GenerateDiadic(op_lw,0,makereg(regLR),make_indexed(2*sizeOfWord,regSP));
+		GenerateDiadic(op_lw,0,makereg(regLR),make_indexed(3*sizeOfWord,regSP));
 //	GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),make_immed(3*sizeOfWord));
 }
 
@@ -1076,6 +1077,16 @@ void GenerateReturn(Statement *stmt)
 	}
 	retlab = nextlabel++;
 	GenerateLabel(retlab);
+
+	if (currentFn->UsesNew) {
+		GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(8));
+		GenerateDiadic(op_sw,0,makereg(regFirstArg),make_indirect(regSP));
+		GenerateDiadic(op_lea,0,makereg(regFirstArg),make_indexed(-sizeOfWord,regFP));
+		GenerateMonadic(op_call,0,make_string("__AddGarbage"));
+		GenerateDiadic(op_lw,0,makereg(regFirstArg),make_indirect(regSP));
+		GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),make_immed(8));
+	}
+
 	// Unlock any semaphores that may have been set
 	for (nn = lastsph - 1; nn >= 0; nn--)
 		GenerateDiadicNT(op_sb,0,makereg(0),make_string(semaphores[nn]));
@@ -1100,7 +1111,7 @@ void GenerateReturn(Statement *stmt)
 		return;
     }
 	UnlinkStack(sym);
-	toAdd = 3*sizeOfWord;
+	toAdd = 4*sizeOfWord;
 
 	if (sym->epilog) {
 		sym->epilog->Generate();
@@ -1403,7 +1414,8 @@ static int GenerateStoreArgumentList(SYM *sym, ENODE *plist)
 	}
 	for(--nn, i = 0; nn >= 0; --nn,i++ )
     {
-		sum += GeneratePushParameter(pl[nn],ta ? ta->preg[ta->length - i - 1] : 0,sum*8);
+//		sum += GeneratePushParameter(pl[nn],ta ? ta->preg[ta->length - i - 1] : 0,sum*8);
+		sum += GeneratePushParameter(pl[nn],ta ? ta->preg[i] : 0,sum*8);
 //		plist = plist->p[1];
     }
 	if (sum==0)

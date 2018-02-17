@@ -48,7 +48,9 @@ enum e_node {
 		// Vector
 		en_autovcon, en_autovmcon, en_vector_ref, en_vex, en_veins,
 		en_vadd, en_vsub, en_vmul, en_vdiv,
-		en_vadds, en_vsubs, en_vmuls, en_vdivs
+		en_vadds, en_vsubs, en_vmuls, en_vdivs,
+
+		en_object_list
 		};
 
 enum e_stmt {

@@ -31,20 +31,20 @@ int pass;
 int maxPn = 15;
 int gCpu = 7;
 int regPC = 254;
-int regSP = 63;
-int regFP = 62;
-int regLR = 61;
-int regXLR = 60;
-int regGP = 59;
-int regTP = 58;
-int regCLP = 57;                // class pointer
+int regSP = 31;//63;
+int regFP = 30;//62;
+int regLR = 29;//61;
+int regXLR = 28;//60;
+int regGP = 27;//59;
+int regTP = 26;//58;
+int regCLP = 25;//57;                // class pointer
 int regZero = 0;
-int regFirstTemp = 5;
-int regLastTemp = 20;
-int regFirstRegvar = 21;
-int regLastRegvar = 34;
-int regFirstArg = 35;
-int regLastArg = 47;
+int regFirstTemp = 3;//5;
+int regLastTemp = 10;//20;
+int regFirstRegvar = 11;//21;
+int regLastRegvar = 17;//34;
+int regFirstArg = 18;//35;
+int regLastArg = 22;//47;
 int farcode = 0;
 int wcharSupport = 1;
 int verbose = 0;
@@ -116,6 +116,7 @@ int exceptions = FALSE;
 int mixedSource = FALSE;
 SYM *currentFn = (SYM *)NULL;
 int callsFn = FALSE;
+int stmtdepth = 0;
 
 char nmspace[20][100];
 

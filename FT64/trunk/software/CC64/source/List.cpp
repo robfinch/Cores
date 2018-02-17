@@ -1,11 +1,11 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2017  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2018  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-// C64 - 'C' derived language compiler
+// CC64 - 'C' derived language compiler
 //  - 64 bit CPU
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -24,24 +24,6 @@
 // ============================================================================
 //
 #include "stdafx.h"
-
-/*
- *	68000 C compiler
- *
- *	Copyright 1984, 1985, 1986 Matthew Brandt.
- *  all commercial rights reserved.
- *
- *	This compiler is intended as an instructive tool for personal use. Any
- *	use for profit without the written consent of the author is prohibited.
- *
- *	This compiler may be distributed freely for non-commercial use as long
- *	as this notice stays intact. Please forward any enhancements or questions
- *	to:
- *
- *		Matthew Brandt
- *		Box 920337
- *		Norcross, Ga 30092
- */
 
 void ListTable(TABLE *t, int i);
 
@@ -181,6 +163,10 @@ void list_var(SYM *sp, int i)
   			ta->Print(&lfs);
   			if (ta)
   				delete ta;
+			lfs.printf("Stack Space:\n\t\t");
+			lfs.printf("Argbot: %d\n\t\t", sp->argbot);
+			lfs.printf("Tmpbot: %d\n\t\t", sp->tempbot);
+			lfs.printf("Stkspc: %d\n\t\t", sp->stkspace);
   		}
 	  }
 	  if (sp->tp) {

@@ -1,12 +1,12 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2016  Robert Finch, Stratford
+//   \\__/ o\    (C) 2012-2018  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-// C32 - 'C' derived language compiler
-//  - 32 bit CPU
+// CC64 - 'C' derived language compiler
+//  - 64 bit CPU
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -30,11 +30,14 @@ extern TYP *head;
 extern TYP stdconst;
 
 void enumbody(TABLE *table);
+void ParseEnumerationList(TABLE *table, int amt);
 
 void ParseEnumDeclaration(TABLE *table)
 {   
 	SYM *sp;
     TYP     *tp;
+	int amt = 1;
+
     if( lastst == id) {
         if((sp = search(lastid,&tagtable)) == NULL) {
             sp = allocSYM();
@@ -48,7 +51,7 @@ void ParseEnumDeclaration(TABLE *table)
             else {
 				tagtable.insert(sp);
 				NextToken();
-				ParseEnumerationList(table);
+				ParseEnumerationList(table,amt);
             }
         }
         else
@@ -58,18 +61,22 @@ void ParseEnumDeclaration(TABLE *table)
     else {
         tp = allocTYP();	// fix here
         tp->type = bt_enum;
-		tp->size = 1;
-        if( lastst != begin)
+		tp->size = 2;
+		if (lastst==openpa) {
+			amt = GetIntegerExpression((ENODE **)NULL);
+			needpunc(closepa,10);
+		}
+        else if( lastst != begin)
             error(ERR_INCOMPLETE);
         else {
             NextToken();
-            ParseEnumerationList(table);
+            ParseEnumerationList(table,amt);
         }
     head = tp;
     }
 }
 
-void ParseEnumerationList(TABLE *table)
+void ParseEnumerationList(TABLE *table, int amt)
 {
 	int     evalue;
     SYM     *sp;
@@ -84,7 +91,7 @@ void ParseEnumerationList(TABLE *table)
 		if (lastst==assign) {
 			NextToken();
 			sp->value.i = GetIntegerExpression((ENODE **)NULL);
-			evalue = (int)sp->value.i+1;
+			evalue = (int)sp->value.i+amt;
 		}
 		else
 			sp->value.i = evalue++;

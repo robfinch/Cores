@@ -1,11 +1,11 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2017  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2018  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-// C64 - 'C' derived language compiler
+// CC64 - 'C' derived language compiler
 //  - 64 bit CPU
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -136,6 +136,12 @@ void Leave(char *p, int n)
      printf("%s (%d)\r\n", p, n);
 */
 }
+
+int GetPtrSize()
+{
+	return sizeOfPtr;
+}
+
 
 /*
  *      build an expression node with a node type of nt and values
@@ -434,6 +440,12 @@ TYP *deref(ENODE **node, TYP *tp)
 
 		// Pointers (addresses) are always unsigned
 		case bt_pointer:
+			(*node)->esize = tp->size;
+			(*node)->etype = (enum e_bt)tp->type;
+			*node = makenode(sizeOfPtr==4 ? en_uh_ref : en_uw_ref,*node,(ENODE *)NULL);
+			(*node)->isUnsigned = TRUE;
+            break;
+
 		case bt_unsigned:
 			(*node)->esize = tp->size;
 			(*node)->etype = (enum e_bt)tp->type;
@@ -541,7 +553,7 @@ TYP *CondDeref(ENODE **node, TYP *tp)
 		tp1 = tp->GetBtp();
 		if (tp1==NULL)
 			printf("DIAG: CondDeref: tp1 is NULL\r\n");
-		tp =(TYP *) TYP::Make(bt_pointer, 8);
+		tp =(TYP *) TYP::Make(bt_pointer, sizeOfPtr);
 		tp->isArray = true;
 		tp->dimen = dimen;
 		tp->numele = numele;
@@ -902,8 +914,8 @@ SYM *makeStructPtr(std::string name)
 	SYM *sp;
 	TYP *tp,*tp2;
 	sp = allocSYM();
-	tp = TYP::Make(bt_pointer,8);
-	tp2 = TYP::Make(bt_struct,8);
+	tp = TYP::Make(bt_pointer,sizeOfPtr);
+	tp2 = TYP::Make(bt_struct,sizeOfPtr);
 	tp->btp = tp2->GetIndex();
 	tp->sname = new std::string("");
 	sp->SetName(name);
@@ -1175,7 +1187,7 @@ TYP *ParsePrimaryExpression(ENODE **node, int got_pa)
 			memcpy(tptr2,currentClass->tp,sizeof(TYP));
 		}
 		NextToken();
-		tptr = TYP::Make(bt_pointer,2);
+		tptr = TYP::Make(bt_pointer,sizeOfPtr);
 		tptr->btp = tptr2->GetIndex();
 		dfs.puts((char *)tptr->GetBtp()->sname->c_str());
 		pnode = makeinode(en_regvar,regCLP);
@@ -1542,14 +1554,14 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 				sp->storage_class = sc_external;
 				sp->SetName(name);
 				sp->tp = TYP::Make(bt_func,0);
-				sp->tp->btp = TYP::Make(bt_long,8)->GetIndex();
+				sp->tp->btp = TYP::Make(bt_long,sizeOfWord)->GetIndex();
 				sp->AddProto(&typearray);
 				sp->mangledName = sp->BuildSignature();
 				gsyms[0].insert(sp);
 			}
 			else if (sp->IsUndefined) {
 				sp->tp = TYP::Make(bt_func,0);
-				sp->tp->btp = TYP::Make(bt_long,8)->GetIndex();
+				sp->tp->btp = TYP::Make(bt_long,sizeOfWord)->GetIndex();
 				sp->AddProto(&typearray);
 				sp->mangledName = sp->BuildSignature();
 				gsyms[0].insert(sp);
@@ -1571,18 +1583,23 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 			break;
 
 		case pointsto:
-			cnt = 0;
-			if (tp1==NULL) {
-				error(ERR_UNDEFINED);
-				goto j1;
+			{
+				int reftype = sizeOfPtr==4 ? en_h_ref : en_w_ref;
+				cnt = 0;
+				if (tp1==NULL) {
+					error(ERR_UNDEFINED);
+					goto j1;
+				}
+				if( tp1->type != bt_pointer ) {
+					error(ERR_NOPOINTER);
+				}
+				else {
+					tp1 = tp1->GetBtp();
+				}
+				if( tp1->val_flag == FALSE ) {
+					ep1 = makenode(reftype,ep1,(ENODE *)NULL);
+				}
 			}
-			if( tp1->type != bt_pointer ) {
-				error(ERR_NOPOINTER);
-			}
-			else
-				tp1 = tp1->GetBtp();
-			if( tp1->val_flag == FALSE )
-				ep1 = makenode(en_w_ref,ep1,(ENODE *)NULL);
 
 		 // fall through to dot operation
 		case dot:
@@ -1965,29 +1982,37 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
         break;
 
     case kw_new:
-      NextToken();
-      if (IsBeginningOfTypecast(lastst)) {
-			std::string *name = new std::string("_malloc");
+		{
+			ENODE *ep4;
+			std::string *name = new std::string("__new");
 
-			tp = head;
-			tp1 = tail;
-  			Declaration::ParseSpecifier(0);
-  			Declaration::ParsePrefix(FALSE);
-  			if( head != NULL )
-  				ep1 = makeinode(en_icon,head->size);
-  			else {
-  				error(ERR_IDEXPECT);
-  				ep1 = makeinode(en_icon,1);
-  			}
-  			ep3 = makenode(en_void,ep1,nullptr);
-  			ep2 = makesnode(en_cnacon, name, name, 0);
-  			ep1 = makefcnode(en_fcall, ep2, ep3, nullptr);
-  			head = tp;
-  			tail = tp1;
-      }
+			currentFn->UsesNew = TRUE;
+			currentFn->IsLeaf = FALSE;
+			NextToken();
+			if (IsBeginningOfTypecast(lastst)) {
+
+				tp = head;
+				tp1 = tail;
+  				Declaration::ParseSpecifier(0);
+  				Declaration::ParsePrefix(FALSE);
+  				if( head != NULL )
+  					ep1 = makeinode(en_icon,head->size);
+  				else {
+  					error(ERR_IDEXPECT);
+  					ep1 = makeinode(en_icon,1);
+  				}
+				ep4 = nullptr;
+				ep2 = makeinode(en_icon,head->GetHash());
+				ep3 = makenode(en_object_list,nullptr,nullptr);
+				ep4 = makenode(en_void,ep1,ep4);
+				ep4 = makenode(en_void,ep2,ep4);
+				ep4 = makenode(en_void,ep3,ep4);
+  				ep2 = makesnode(en_cnacon, name, name, 0);
+  				ep1 = makefcnode(en_fcall, ep2, ep4, nullptr);
+  				head = tp;
+  				tail = tp1;
+			}
       else {
-			std::string *name = new std::string("_malloc");
-
   			sizeof_flag++;
   			tp = ParseUnaryExpression(&ep1, got_pa);
   			sizeof_flag--;
@@ -1999,13 +2024,15 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
   			ep3 = makenode(en_void,ep1,nullptr);
   			ep2 = makesnode(en_cnacon, name, name, 0);
   			ep1 = makefcnode(en_fcall, ep2, ep3, nullptr);
-      }
-      break;
+			}
+		}
+		break;
 
     case kw_delete:
+		currentFn->IsLeaf = FALSE;
 		NextToken();
 		{
-			std::string *name = new std::string("_free");
+			std::string *name = new std::string("__free");
         
   			if (lastst==openbr) {
 				NextToken();

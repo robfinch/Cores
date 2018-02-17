@@ -1,12 +1,12 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2016  Robert Finch, Stratford
+//   \\__/ o\    (C) 2012-2018  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-// C32 - 'C' derived language compiler
-//  - 32 bit CPU
+// CC64 - 'C' derived language compiler
+//  - 64 bit CPU
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -24,24 +24,6 @@
 // ============================================================================
 //
 #include "stdafx.h"
-
-/*
- *	68000 C compiler
- *
- *	Copyright 1984, 1985, 1986 Matthew Brandt.
- *  all commercial rights reserved.
- *
- *	This compiler is intended as an instructive tool for personal use. Any
- *	use for profit without the written consent of the author is prohibited.
- *
- *	This compiler may be distributed freely for non-commercial use as long
- *	as this notice stays intact. Please forward any enhancements or questions
- *	to:
- *
- *		Matthew Brandt
- *		Box 920337
- *		Norcross, Ga 30092
- */
 
 extern TABLE tagtable;
 extern TYP *head;
@@ -147,27 +129,27 @@ int StructDeclaration::Parse(int ztype)
 	return ret;
 }
 
-void StructDeclaration::ParseMembers(SYM * sym, TYP *tp, int ztype)
+void StructDeclaration::ParseMembers(SYM *sym, TYP *tp, int ztype)
 {
 	int slc;
-  bool priv;
+	bool priv;
 
-  slc = 0;
-  tp->val_flag = 1;
-//	tp->val_flag = FALSE;
-  while( lastst != end) {
-    priv = isPrivate;
-    isPrivate = false;    
-    if(ztype == bt_struct || ztype==bt_class)
-      slc += declare(sym,&(tp->lst),sc_member,slc,ztype);
-    else
-      slc = imax(slc,declare(sym,&tp->lst,sc_member,0,ztype));
-    isPrivate = priv;
-  }
+	slc = 0;
+	tp->val_flag = 1;
+	//	tp->val_flag = FALSE;
+	while( lastst != end) {
+		priv = isPrivate;
+		isPrivate = false;    
+		if(ztype == bt_struct || ztype==bt_class)
+			slc += declare(sym,&(tp->lst),sc_member,slc,ztype);
+		else
+			slc = imax(slc,declare(sym,&tp->lst,sc_member,0,ztype));
+		isPrivate = priv;
+	}
 	bit_offset = 0;
 	bit_next = 0;
 	bit_width = -1;
-  tp->size = tp->alignment ? tp->alignment : slc;
-  NextToken();
+	tp->size = tp->alignment ? tp->alignment : slc;
+	NextToken();
 }
 

@@ -218,6 +218,7 @@ public:
 	unsigned int IsPascal : 1;
 	unsigned int IsLeaf : 1;
 	unsigned int DoesThrow : 1;
+	unsigned int UsesNew : 1;
 	unsigned int UsesPredicate : 1;
 	unsigned int isConst : 1;
 	unsigned int IsKernel : 1;
@@ -646,6 +647,7 @@ public:
 	char *fcname;       // firstcall block var name
 	char *lptr;
 	unsigned int prediction : 2;	// static prediction for if statements
+	int depth;
 	
 	static Statement *ParseStop();
 	static Statement *ParseCompound();
@@ -710,6 +712,7 @@ public:
 	static void ParseConst();
 	static void ParseTypedef();
 	static void ParseNaked();
+	static void ParseShort();
 	static void ParseLong();
 	static void ParseInt();
 	static void ParseInt80();

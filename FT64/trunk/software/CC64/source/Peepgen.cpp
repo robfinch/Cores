@@ -306,7 +306,7 @@ static void AddToPeepList(OCODE *cd)
 
 	if( peep_head == NULL )
 	{
-		ArgRegCount = regLastArg;
+		ArgRegCount = regFirstArg;
 		peep_head = peep_tail = cd;
 		cd->fwd = nullptr;
 		cd->back = nullptr;

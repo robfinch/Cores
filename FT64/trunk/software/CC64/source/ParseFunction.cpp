@@ -60,7 +60,13 @@ void ListCompound(Statement *stmt);
 static int round2(int n)
 {
     while (n & 1) n++;
-    return n;
+    return (n);
+}
+
+static int round8(int n)
+{
+    while (n & 7) n++;
+    return (n);
 }
 
 // Return the stack offset where parameter storage begins.
@@ -454,13 +460,17 @@ static Statement *ParseFunctionBody(SYM *sp)
 	currentFn->IsLeaf = TRUE;
 	currentFn->DoesThrow = FALSE;
 	currentFn->UsesPredicate = FALSE;
+	currentFn->UsesNew = FALSE;
 	regmask = 0;
 	bregmask = 0;
 	currentStmt = (Statement *)NULL;
   dfs.printf("C");
+  stmtdepth = 0;
 	sp->stmt = Statement::ParseCompound();
   dfs.printf("D");
 //	stmt->stype = st_funcbody;
+	while( lc_auto % sizeOfWord )	// round frame size to word
+		++lc_auto;
 	sp->stkspace = lc_auto;
 	if (!sp->IsInline) {
 		pass = 1;
@@ -468,9 +478,9 @@ static Statement *ParseFunctionBody(SYM *sp)
 		looplevel = 0;
 		GenerateFunction(sp);
 		sp->stkspace += (ArgRegCount-regFirstArg) * sizeOfWord;
-		sp->argbot = sp->stkspace;
+		sp->argbot = -sp->stkspace;
 		sp->stkspace += GetTempMemSpace();
-		sp->tempbot = sp->stkspace;
+		sp->tempbot = -sp->stkspace;
 		pass = 2;
 		peep_tail = ip;
 		peep_tail->fwd = nullptr;

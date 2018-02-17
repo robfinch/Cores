@@ -1,11 +1,11 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2017  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2018  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-// C64 - 'C' derived language compiler
+// CC64 - 'C' derived language compiler
 //  - 64 bit CPU
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -170,6 +170,40 @@ void Declaration::ParseVoid()
 		NextToken();
 	}
 	bit_max = 0;
+}
+
+void Declaration::ParseShort()
+{
+	bit_max = 32;
+	NextToken();
+	switch(lastst) {
+	case kw_int:
+		NextToken();
+		if (isUnsigned) {
+			head = (TYP *)TYP::Make(bt_int32u,4);
+			tail = head;
+		}
+		else {
+			head = (TYP *)TYP::Make(bt_int32,4);
+			tail = head;
+		}
+		break;
+	default:
+		if (isUnsigned) {
+			head = (TYP *)TYP::Make(bt_int32u,4);
+			tail = head;
+		}
+		else {
+			head = (TYP *)TYP::Make(bt_int32,4);
+			tail = head;
+		}
+		break;
+	}
+	head->isUnsigned = isUnsigned;
+	head->isVolatile = isVolatile;
+	head->isIO = isIO;
+	head->isConst = isConst;
+	head->isShort = TRUE;
 }
 
 void Declaration::ParseLong()
@@ -557,7 +591,7 @@ int Declaration::ParseSpecifier(TABLE *table)
 			case kw_int16:	ParseInt16(); goto lxit;
 			case kw_int32:	ParseInt32(); goto lxit;
 			case kw_int64:	ParseInt64(); goto lxit;
-			case kw_short:	ParseInt32();	goto lxit;
+			case kw_short:	ParseShort();	goto lxit;
 			case kw_long:	ParseLong();	goto lxit;	// long, long int
 			case kw_int:	ParseInt();		goto lxit;
 
@@ -799,8 +833,9 @@ j1:
 		goto lxit;
 
 	case star:
+		bit_max = 64;
 		dfs.putch('*');
-		temp1 = TYP::Make(bt_pointer,sizeOfWord);
+		temp1 = TYP::Make(bt_pointer,sizeOfPtr);
 		temp1->btp = head->GetIndex();
 		head = temp1;
 		if(tail == NULL)
@@ -834,7 +869,7 @@ void Declaration::ParseSuffixOpenbr()
 	long sz2;
 
 	NextToken();
-	temp1 = (TYP *)TYP::Make(bt_pointer,8);
+	temp1 = (TYP *)TYP::Make(bt_pointer,sizeOfPtr);
 	temp1->val_flag = 1;
 	temp1->isArray = TRUE;
 	temp1->btp = head->GetIndex();
@@ -1106,9 +1141,9 @@ int alignment(TYP *tp)
 	case bt_enum:           return AL_CHAR;
 	case bt_pointer:
 	if(tp->val_flag)
-		return alignment(tp->GetBtp());
+		return (alignment(tp->GetBtp()));
 	else
-		return AL_POINTER;
+		return (sizeOfPtr);//isShort ? AL_SHORT : AL_POINTER);
 	case bt_float:          return AL_FLOAT;
 	case bt_double:         return AL_DOUBLE;
 	case bt_triple:         return AL_TRIPLE;
@@ -1143,8 +1178,10 @@ int walignment(TYP *tp)
     case bt_pointer:
             if(tp->val_flag)
                 return imax(alignment(tp->GetBtp()),worstAlignment);
-            else
-				return imax(AL_POINTER,worstAlignment);
+            else {
+				return (imax(sizeOfPtr,worstAlignment));
+//				return (imax(AL_POINTER,worstAlignment));
+			}
     case bt_float:          return imax(AL_FLOAT,worstAlignment);
     case bt_double:         return imax(AL_DOUBLE,worstAlignment);
     case bt_triple:         return imax(AL_TRIPLE,worstAlignment);
@@ -1193,6 +1230,7 @@ int roundSize(TYP *tp)
 			sz++;
 		return sz;
 	}
+//	return ((tp->precision+7)/8);
 	return tp->size;
 }
 
@@ -1604,6 +1642,7 @@ void GlobalDeclaration::Parse()
   isFuncPtr = false;
   isPascal = FALSE;
   isInline = false;
+  lc_auto = 0;
 	dfs.puts("<ParseGlobalDecl>\n");
   for(;;) {
     currentClass = nullptr;
@@ -1705,6 +1744,20 @@ void GlobalDeclaration::Parse()
           }
         }
       }
+	  else if (lastst==kw_short) {
+		  NextToken();
+		  if (lastst==id) {
+			  if (strcmp(lastid,"_pointers")==0)
+				  sizeOfPtr = 4;
+		  }
+	  }
+	  else if (lastst==kw_long) {
+		  NextToken();
+		  if (lastst==id) {
+			  if (strcmp(lastid,"_pointers")==0)
+				  sizeOfPtr = 8;
+		  }
+	  }
       break;
 
     default:

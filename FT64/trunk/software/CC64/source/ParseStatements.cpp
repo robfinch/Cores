@@ -49,6 +49,7 @@ Statement *NewStatement(int typ, int gt) {
 	s->ssyms.Clear();
 	s->lptr = my_strdup(inpline);
 	s->prediction = 0;
+	s->depth = stmtdepth;
 	//memset(s->ssyms,0,sizeof(s->ssyms));
 	if (gt) NextToken();
 	return s;
@@ -809,7 +810,9 @@ Statement *Statement::Parse()
         break; 
     case begin: 
 		NextToken(); 
+		stmtdepth++;
         snp = ParseCompound();
+		stmtdepth--;
         return snp; 
     case kw_check:
          snp = ParseCheckStatement();

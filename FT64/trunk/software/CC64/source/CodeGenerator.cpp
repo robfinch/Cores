@@ -774,7 +774,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
         return ap1;
 	}
 	else if (node->p[0]->nodetype == en_fpregvar) {
-		//error(ERR_DEREF);
+		/*error(ERR_DEREF)*/;
         ap1 = allocAmode();
 		ap1->mode = node->p[0]->i < 18 ? am_ind : am_fpreg;
 		ap1->preg = node->p[0]->i;
@@ -2241,6 +2241,11 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
 			Generate4adic(op_bfext,0,ap1,ap1,make_immed(0),make_immed(31));
 			//GenerateDiadic(op_sxh,0,ap1,ap1);
 			return ap1;
+	case en_object_list:
+			ap1 = GetTempRegister();
+			GenerateDiadic(op_lea,0,ap1,make_indexed(-8,regFP));
+			MakeLegalAmode(ap1,flags,sizeOfWord);
+			return (ap1);
     default:
             printf("DIAG - uncoded node (%d) in GenerateExpression.\n", node->nodetype);
             return 0;
