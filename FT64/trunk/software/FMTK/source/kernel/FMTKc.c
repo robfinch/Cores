@@ -47,11 +47,11 @@ extern MBX mailbox[NR_MBX];
 extern MSG message[NR_MSG];
 int nMsgBlk;
 int nMailbox;
-hACB freeACB;
-hMSG freeMSG;
-hMBX freeMBX;
-ACB *IOFocusNdx;
-int IOFocusTbl[4];
+extern hACB freeACB;
+extern hMSG freeMSG;
+extern hMBX freeMBX;
+extern ACB *IOFocusNdx;
+extern int IOFocusTbl[4];
 int iof_switch;
 int BIOS1_sema;
 extern int iof_sema;
@@ -62,6 +62,9 @@ int missed_ticks;
 
 short int video_bufs[NR_ACB][4096];
 extern hTCB TimeoutList;
+extern hMBX hKeybdMbx;
+extern hMBX hFocusSwitchMbx;
+extern int im_save;
 
 extern void gfx_demo();
 
@@ -71,7 +74,7 @@ extern void gfx_demo();
 naked void FMTK_FuncTbl()
 {
       asm {
-          dw  _FMTKInitialize
+          dw  _FMTK_Initialize
           dw  _FMTK_StartThread
           dw  _FMTK_ExitThread
           dw  _FMTK_KillThread
@@ -83,6 +86,7 @@ naked void FMTK_FuncTbl()
           dw  _FMTK_SendMsg
           dw  _FMTK_WaitMsg
           dw  _FMTK_CheckMsg
+          dw  _FMTK_StartApp
       }
 }
 
@@ -132,16 +136,35 @@ naked void DisplayIRQLive()
      }
 }
 
+inline TCB *GetRunningTCBPtr()
+{
+	__asm {
+		csrrd	r1,#$10,r0
+	}
+}
+
+inline TCB *SetRunningTCBPtr(register int ptr)
+{
+	__asm {
+		csrrw	r1,#$10,r18
+	}
+}
+
 ACB *SafeGetACBPtr(register int n)
 {
 	if (n < 0 || n >= NR_ACB)
-		return (NULL);
+		return (null);
     return (ACBPtrs[n]);
 }
 
 ACB *GetACBPtr(register int n)
 {
     return (ACBPtrs[n]);
+}
+
+hACB GetAppHandle()
+{
+	return (GetRunningTCBPtr()->hApp);
 }
 
 naked inline void SevenSeg(register int val) __attribute__(__no_temps)
@@ -158,6 +181,9 @@ naked inline void SevenSeg(register int val) __attribute__(__no_temps)
 naked int LockSysSemaphore(register int retries)
 {
 	__asm {
+		ldi		r1,#7		// set interrupt mask level seven
+		csrrs	r1,#$044,r1	// disable all interrupts
+		sw		r1,_im_save	// save off old setting
 		mov		r2,r18
 .loop:
 		ldi		r1,#4
@@ -172,49 +198,49 @@ naked int LockSysSemaphore(register int retries)
 	}
 }
 
-naked inline void UnlockSysSemaphore()
+naked void UnlockSysSemaphore()
 {
 	__asm {
 		ldi		r1,#4
 		csrrc	r0,#12,r1
+		// restore the previous interrupt mask setting
+		lw		r1,_im_save	
+		sei		r1
 	}
 }
 
-naked int LockIOFSemaphore()
+
+naked int LockIOFSemaphore(register int retries)
 {
 	__asm {
+		mov		r2,r18
+.loop:
 		ldi		r1,#8
 		csrrs	r1,#12,r1
-		bfextu	r1,r1,3,3
-		xor		r1,r1,#1
+		bfextu	r1,r1,3,3	// extract the previous lock status
+		xor		r1,r1,#1	// return true if semaphore wasn't locked
+		bne		r1,r0,.xit
+		dbnz	r2,.loop
+		// r1 = 0
+.xit:
 		ret
 	}
 }
 
-naked inline void UnlockIOFSemaphore()
+naked int LockKbdSemaphore(register int retries)
 {
 	__asm {
-		ldi		r1,#8
-		csrrc	r0,#12,r1
-	}
-}
-
-naked int LockKbdSemaphore()
-{
-	__asm {
+		mov		r2,r18
+.loop:
 		ldi		r1,#16
 		csrrs	r1,#12,r1
-		bfextu	r1,r1,4,4
-		xor		r1,r1,#1
+		bfextu	r1,r1,4,4	// extract the previous lock status
+		xor		r1,r1,#1	// return true if semaphore wasn't locked
+		bne		r1,r0,.xit
+		dbnz	r2,.loop
+		// r1 = 0
+.xit:
 		ret
-	}
-}
-
-naked inline void UnlockKbdSemaphore()
-{
-	__asm {
-		ldi		r1,#16
-		csrrc	r0,#12,r1
 	}
 }
 
@@ -320,6 +346,40 @@ naked inline int SetEpc(register int v)
 
 naked void SwapContext(register TCB *octx, register TCB *nctx)
 {
+	__asm {
+		sw		r1,520[r18]
+		sw		r2,528]r18]
+		sw		r3,536[r18]
+		sw		r4,544[r18]
+		sw		r5,552[r18]
+		sw		r6,560[r18]
+		sw		r7,568[r18]
+		sw		r8,576[r18]
+		sw		r9,584[r18]
+		sw		r10,592[r18]
+		sw		r11,600[r18]
+		sw		r12,608[r18]
+		sw		r13,616[r18]
+		sw		r14,624[r18]
+		sw		r15,632[r18]
+		sw		r16,640[r18]
+		sw		r17,648[r18]
+		sw		r18,656[r18]
+		sw		r19,664[r18]
+		sw		r20,672[r18]
+		sw		r21,680[r18]
+		sw		r22,688[r18]
+		sw		r23,696[r18]
+		sw		r24,704[r18]
+		sw		r24,712[r18]
+		sw		r25,720[r18]
+		sw		r26,728[r18]
+		sw		r27,736[r18]
+		sw		r28,744[r18]
+		sw		r29,752[r18]
+		sw		r30,760[r18]
+		sw		r31,768[r18]
+	}
 	octx->regs[1] = GetRegx1();
 	octx->regs[2] = GetRegx2();
 	octx->regs[3] = GetRegx3();
@@ -384,7 +444,38 @@ naked void SwapContext(register TCB *octx, register TCB *nctx)
 	SetRegx30(nctx->regs[30]);
 	SetRegx31(nctx->regs[31]);
 	__asm {
-		rti		#2
+		lw		r1,520[r19]
+		lw		r2,528]r19]
+		lw		r3,536[r19]
+		lw		r4,544[r19]
+		lw		r5,552[r19]
+		lw		r6,560[r19]
+		lw		r7,568[r19]
+		lw		r8,576[r19]
+		lw		r9,584[r19]
+		lw		r10,592[r19]
+		lw		r11,600[r19]
+		lw		r12,608[r19]
+		lw		r13,616[r19]
+		lw		r14,624[r19]
+		lw		r15,632[r19]
+		lw		r16,640[r19]
+		lw		r17,648[r19]
+		lw		r18,656[r19]
+		lw		r20,672[r19]
+		lw		r21,680[r19]
+		lw		r22,688[r19]
+		lw		r23,696[r19]
+		lw		r24,704[r19]
+		lw		r24,712[r19]
+		lw		r25,720[r19]
+		lw		r26,728[r19]
+		lw		r27,736[r19]
+		lw		r28,744[r19]
+		lw		r29,752[r19]
+		lw		r30,760[r19]
+		lw		r31,768[r19]
+		lw		r19,664[r19]
 	}
 }
 
@@ -450,17 +541,11 @@ private hTCB SelectTaskToRun()
 naked FMTK_SystemCall()
 {
     __asm {
-		 ldi    r1,#4
+    	// Spinlock waiting for system availability.
+.0001:
+		 ldi    r1,#32
 		 csrrs  r1,#$0C,r1			// read status bit and set it
-		 bbc    r1,#2,.0002			// if it wasn't already set, okay to process
-		 csrrd	r1,#$48,r0			// get exceptioned PC
-		 add	r1,r1,#4			// increment to skip over static parameter
-		 csrrw  r0,#$48,r1			// write it back
-		 sync
-		 ldi	r1,#E_Busy			// busy status to be returned in r1
-		 mov	r1:x,r1
-		 rti
-.0002:
+		 bbs    r1,#5,.0001			// if it wasn't already set, okay to process
 		 csrrd	r10,#$48,r0			// get return address into r10
     	 lhu    r11,4[r10]			// get static call number parameter into r11
     	 add    r10,r10,#4			// update return address
@@ -478,35 +563,54 @@ naked FMTK_SystemCall()
 		 lw		r11,_FMTK_FuncTbl[r11]
     	 call   [r11]				// do the system function
     	 mov	r1:x,r1				// return value in r1
-		 rti	#2
+		 rti	#5
 .bad_callno:
          ldi	r1,#E_BadCallno
          mov	r1:x,r1
-         rti	#2
+         rti	#5
     }
 }
 
 // ----------------------------------------------------------------------------
-// If timer interrupts are enabled during a priority #0 task, this routine
-// only updates the missed ticks and remains in the same task. No timeouts
-// are updated and no task switches will occur. The timer tick routine
+// FMTK primitives need to re-schedule threads in a couple of places.
+// ----------------------------------------------------------------------------
+
+void FMTK_Reschedule()
+{
+    TCB *t, *ot;
+   
+	ot = t = GetRunningTCBPtr();
+	t->endTick = GetTick();
+	t->ticks = t->ticks + (t->endTick - t->startTick);
+
+	SetRunningTCBPtr(SelectTaskToRun());
+	GetRunningTCBPtr()->status = TS_RUNNING;
+
+	// If an exception was flagged (eg CTRL-C) return to the catch handler
+	// not the interrupted code.
+	t = GetRunningTCBPtr();
+	if (t->exception) {
+		t->regs[29] = t->regs[28];   // set link register to catch handler
+		t->epc = t->regs[28];        // and the PC register
+		t->regs[1] = t->exception;    // r1 = exception value
+		t->exception = 0;
+		t->regs[2] = 45;              // r2 = exception type
+	}
+	t->startTick = GetTick();
+	if (ot != t)
+		SwapContext(ot,t);
+}
+
+// ----------------------------------------------------------------------------
+// If timer interrupts are enabled during a priority #0 thread, this routine
+// only updates the missed ticks and remains in the same thread. No timeouts
+// are updated and no thread switches will occur. The timer tick routine
 // basically has a fixed latency when priority #0 is present.
 // ----------------------------------------------------------------------------
 
-naked void FMTK_SchedulerIRQ()
+void interrupt FMTK_SchedulerIRQ()
 {
     TCB *t, *ot;
-
-	prolog {
-		// Refuse scheduling if already processing somewhere in the system.
-		__asm {
-			ldi    r1,#4
-			csrrs  r1,#$0C,r1			// read status bit and set it
-			bbc    r1,#2,.0002			// check bit #1
-			iret
-.0002:
-		}
-	}
 
 	ot = t = GetRunningTCBPtr();
 	t->endTick = GetTick();
@@ -529,7 +633,7 @@ naked void FMTK_SchedulerIRQ()
 					}
 				}
 				if (t->priority > 002)
-				SetRunningTCB(SelectTaskToRun());
+				SetRunningTCBPtr(SelectTaskToRun());
 				GetRunningTCBPtr()->status = TS_RUNNING;
 			}
 			else
@@ -541,11 +645,11 @@ naked void FMTK_SchedulerIRQ()
 		}
 		break;
 	// Explicit rescheduling request.
-	case 2:
+	case 66:
 		t->ticks = t->ticks + (t->endTick - t->startTick);
 		t->status = TS_PREEMPT;
 //		t->epc = t->epc + 1;  // advance the return address
-		SetRunningTCB(SelectTaskToRun());
+		SetRunningTCBPtr(SelectTaskToRun());
 		GetRunningTCBPtr()->status = TS_RUNNING;
 		break;
 	default:  ;
@@ -558,18 +662,11 @@ naked void FMTK_SchedulerIRQ()
 		t->epc = t->regs[28];        // and the PC register
 		t->regs[1] = t->exception;    // r1 = exception value
 		t->exception = 0;
-		t->regs[2] = 24;              // r2 = exception type
+		t->regs[2] = 45;              // r2 = exception type
 	}
 	t->startTick = GetTick();
-	// SwapContext() doesn't return to this routine. It returns to whatever
-	// address was setup in the TCB. Subsequent register variables restores
-	// are not done, but the compiler stills outputs the code. Stack frame
-	// cleanup code is omitted because this function was declared naked.
 	if (ot != t)
 		SwapContext(ot,t);
-	__asm {
-		rti		#2
-	}
 }
 
 void panic(char *msg)
@@ -667,8 +764,11 @@ int FMTK_ExitThread()
 {
     check_privilege();
     KillThread(GetRunningTCB());
-    // Reschdule
-j1: goto j1;
+	// The thread should not return from this reschedule because it's been
+	// killed.
+	forever {
+    	FMTK_Reschedule();
+	}
 }
 
 
@@ -711,7 +811,7 @@ int FMTK_StartThread(
 	        sb    r1,$FFDC0600
 	    }
         ht = freeTCB;
-        if (ht < 0 || ht >= NT_TCB) {
+        if (ht < 0 || ht >= NR_TCB) {
 	        UnlockSysSemaphore();
         	return (E_NoMoreTCBs);
         }
@@ -770,24 +870,29 @@ int FMTK_StartThread(
 }
 
 // ----------------------------------------------------------------------------
+// Sleep for a number of clock ticks.
 // ----------------------------------------------------------------------------
 
 int FMTK_Sleep(register int timeout)
 {
     hTCB ht;
-    
-    check_privilege();
-    if (LockSysSemaphore(100000)) {
-        ht = GetRunningTCB();
-        RemoveFromReadyList(ht);
-        InsertIntoTimeoutList(ht, timeout);
-        UnlockSysSemaphore();
-    }
-	else {
-		return (E_Busy);
+    int tick1, tick2;
+
+	while (timeout > 0) {
+		tick1 = GetTick();
+	    if (LockSysSemaphore(100000)) {
+	        ht = GetRunningTCB();
+	        RemoveFromReadyList(ht);
+	        InsertIntoTimeoutList(ht, timeout);
+	        UnlockSysSemaphore();
+			FMTK_Reschedule();
+	        break;
+	    }
+		else {
+			tick2 = GetTick();
+			timeout -= (tick2-tick1);
+		}
 	}
-	// Reschedule
-j1:	goto j1;
     return (E_Ok);
 }
 
@@ -816,14 +921,13 @@ int FMTK_SetThreadPriority(register hTCB ht, register int priority)
 }
 
 // ----------------------------------------------------------------------------
+// Initialize FMTK global variables.
 // ----------------------------------------------------------------------------
 
-void FMTKInitialize()
+void FMTK_Initialize()
 {
 	int nn,jj;
-	AppStartupRec asr;
 
-    check_privilege();
 //    firstcall
     {
         asm {
@@ -837,7 +941,8 @@ void FMTKInitialize()
         IOFocusNdx = null;
         iof_switch = 0;
 
-    	SetRunningTCB(0);
+    	SetRunningTCBPtr(0);
+        im_save = 7;
         UnlockSysSemaphore();
         UnlockIOFSemaphore();
         UnlockKbdSemaphore();
@@ -885,20 +990,6 @@ void FMTKInitialize()
 
     	TimeoutList = -1;
 
-		asr.pagesize = 0;
-		asr.priority = 4;
-		asr.affinity = 0;
-		asr.codesize = 16;
-		asr.pCode = _StartApp;
-		asr.pData = _begin_init_data;
-		asr.datasize = _end_init_data - _begin_init_data;
-		asr.heapsize = 1024;
-		asr.stacksize = 1024;
-		
-		FMTK_StartApp(&asr);
-
-        RequestIOFocus(ACBPtrs[0]);
-
         asm {
             ldi   r1,#40
             sb    r1,$FFDC0600
@@ -916,6 +1007,8 @@ void FMTKInitialize()
 //		SetVBA(FMTK_IRQDispatch);
 //    	set_vector(4,(unsigned int)FMTK_SystemCall);
 //    	set_vector(2,(unsigned int)FMTK_SchedulerIRQ);
+		hKeybdMbx = -1;
+		hFocusSwitchMbx = -1;
         asm {
             ldi   r1,#45
             sb    r1,$FFDC0600

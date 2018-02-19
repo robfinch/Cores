@@ -28,7 +28,7 @@
 
 extern int irq_stack[];
 extern int FMTK_Inited;
-extern ACB ACBs[];
+extern ACB *ACBPtrs[64];
 extern TCB tcbs[];
 extern hTCB readyQ[];
 extern hTCB freeTCB;

@@ -15,16 +15,6 @@ extern __int32 DBGCursorRow;
 extern __int32 DBGAttr;
 extern void DispChar(register char ch);
 
-void TestFunc()
-{
-	int *ptr : 32;	// delcare 32 bit pointer
-	int a;
-
-	a = *ptr;
-	ptr++;
-	a = *ptr;
-}
-
 void DBGClearScreen()
 {
      __int32 *p;
@@ -46,17 +36,17 @@ void DBGClearScreen()
 
 short int *GetScreenLocation()
 {
-      return GetJCBPtr()->pVidMem;
+      return GetACBPtr()->pVidMem;
 }
 
 short int GetCurrAttr()
 {
-      return GetJCBPtr()->NormAttr;
+      return GetACBPtr()->NormAttr;
 }
 
 void SetCurrAttr(int attr)
 {
-     GetJCBPtr()->NormAttr = attr & 0xFFFFFC00;
+     GetACBPtr()->NormAttr = attr & 0xFFFFFC00;
 }
 
 static void SetVideoReg(register int regno, register int val)
@@ -81,9 +71,9 @@ static void DBGSetVideoReg(register int regno, register int val)
 
 void SetCursorPos(int row, int col)
 {
-    JCB *j;
+    ACB *j;
 
-    j = GetJCBPtr();
+    j = GetACBPtr();
     j->CursorCol = col;
     j->CursorRow = row;
     UpdateCursorPos();
@@ -91,29 +81,29 @@ void SetCursorPos(int row, int col)
 
 void SetCursorCol(int col)
 {
-    JCB *j;
+    ACB *j;
 
-    j = GetJCBPtr();
+    j = GetACBPtr();
     j->CursorCol = col;
     UpdateCursorPos();
 }
 
 int GetCursorPos()
 {
-    JCB *j;
+    ACB *j;
 
-    j = GetJCBPtr();
+    j = GetACBPtr();
     return j->CursorCol | (j->CursorRow << 8);
 }
 
 int GetTextCols()
 {
-    return GetJCBPtr()->VideoCols;
+    return GetACBPtr()->VideoCols;
 }
 
 int GetTextRows()
 {
-    return GetJCBPtr()->VideoRows;
+    return GetACBPtr()->VideoRows;
 }
 
 char AsciiToScreen(char ch)
@@ -147,10 +137,10 @@ char ScreenToAscii(char ch)
 
 void UpdateCursorPos()
 {
-    JCB *j;
+    ACB *j;
     int pos;
 
-    j = GetJCBPtr();
+    j = GetACBPtr();
 //    if (j == IOFocusNdx) {
        pos = j->CursorRow * j->VideoCols + j->CursorCol;
        SetVideoReg(11,pos);
@@ -167,9 +157,9 @@ void DBGUpdateCursorPos()
 
 void HomeCursor()
 {
-    JCB *j;
+    ACB *j;
 
-    j = GetJCBPtr();
+    j = GetACBPtr();
     j->CursorCol = 0;
     j->CursorRow = 0;
     UpdateCursorPos();
@@ -184,10 +174,10 @@ void DBGHomeCursor()
 
 int *CalcScreenLocation()
 {
-    JCB *j;
+    ACB *j;
     int pos;
 
-    j = GetJCBPtr();
+    j = GetACBPtr();
     pos = j->CursorRow * j->VideoCols + j->CursorCol;
 //    if (j == IOFocusNdx) {
        SetVideoReg(11,pos);
@@ -200,10 +190,10 @@ void ClearScreen()
      __int32 *p;
      int nn;
      int mx;
-     JCB *j;
+     ACB *j;
      int vc;
      
-     j = GetJCBPtr();
+     j = GetACBPtr();
      p = GetScreenLocation();
      // Compiler did a byte multiply generating a single byte result first
      // before assigning it to mx. The (int) casts force the compiler to use
@@ -223,10 +213,10 @@ void BlankLine(int row)
      int *p;
      int nn;
      int mx;
-     JCB *j;
+     ACB *j;
      int vc;
      
-     j = GetJCBPtr();
+     j = GetACBPtr();
      p = GetScreenLocation();
      p = p + (int)j->VideoCols * row;
      vc = GetCurrAttr() | AsciiToScreen(' ');
@@ -251,9 +241,9 @@ void VBScrollUp()
 	int *scrn = GetScreenLocation();
 	int nn;
 	int count;
-    JCB *j;
+    ACB *j;
 
-    j = GetJCBPtr();
+    j = GetACBPtr();
 	count = (int)j->VideoCols*(int)(j->VideoRows-1);
 	for (nn = 0; nn < count; nn++)
 		scrn[nn] = scrn[nn+(int)j->VideoCols];
@@ -276,9 +266,9 @@ void DBGScrollUp()
 
 void IncrementCursorRow()
 {
-     JCB *j;
+     ACB *j;
      
-     j = GetJCBPtr();
+     j = GetACBPtr();
      j->CursorRow++;
      if (j->CursorRow < j->VideoRows) {
          UpdateCursorPos();
@@ -303,9 +293,9 @@ void DBGIncrementCursorRow()
 
 void IncrementCursorPos()
 {
-     JCB *j;
+     ACB *j;
      
-     j = GetJCBPtr();
+     j = GetACBPtr();
      j->CursorCol++;
      if (j->CursorCol < j->VideoCols) {
          UpdateCursorPos();
@@ -330,9 +320,9 @@ void DisplayChar(char ch)
 {
      int *p;
      int nn;
-     JCB *j;
+     ACB *j;
 
-     j = GetJCBPtr();
+     j = GetACBPtr();
      switch(ch) {
      case '\r':  j->CursorCol = 0; UpdateCursorPos(); break;
      case '\n':  IncrementCursorRow(); break;
@@ -423,7 +413,7 @@ void DBGDisplayChar(char ch)
 {
      __int32 *p;
      int nn;
-     JCB *j;
+     ACB *j;
 
      switch(ch) {
      case '\r':  DBGCursorCol = 0; DBGUpdateCursorPos(); break;

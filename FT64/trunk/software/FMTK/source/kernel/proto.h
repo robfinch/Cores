@@ -28,6 +28,11 @@
 //
 // ACB functions
 ACB *GetACBPtr();                   // get the ACB pointer of the running task
+hACB GetAppHandle();
+
+void FMTK_Reschedule();
+int FMTK_SendMsg(register hMBX hMbx, register int d1, register int d2, register int d3);
+int FMTK_WaitMsg(register hMBX hMbx, register int *d1, register int *d2, register int *d3, register int timelimit);
 
 pascal int chkTCB(register TCB *p);
 pascal int InsertIntoReadyList(register hTCB ht);
@@ -59,6 +64,25 @@ naked inline void SetVBA(register int value)  __attribute__(__no_temps)
 {
 	asm {
 		csrrw	r0,#4,r18
+	}
+}
+
+pascal int LockSysSemaphore(register int retries);
+pascal int LockIOFSemaphore(register int retries);
+pascal int LockKbdSemaphore(register int retries);
+naked inline void UnlockIOFSemaphore()
+{
+	__asm {
+		ldi		r1,#8
+		csrrc	r0,#12,r1
+	}
+}
+
+naked inline void UnlockKbdSemaphore()
+{
+	__asm {
+		ldi		r1,#16
+		csrrc	r0,#12,r1
 	}
 }
 

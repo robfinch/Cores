@@ -33,15 +33,7 @@ extern byte unshiftedScanCodes[];
 extern signed byte KeybdGetStatus();
 extern byte KeybdGetScancode();
 extern void KeybdClearRcv();
-int kbd_sema = 0;
-int int_level;
 
-void testnew()
-{
-	int *n;
-	
-	n = new int;
-}
 //
 // KeyState2_
 // 876543210
@@ -56,42 +48,42 @@ void testnew()
 // +-------- = extended
 //
 
-int keybd_irq_stack[256];
-static hMBX hKeybdMbx = -1;
+extern int keybd_irq_stack[256];
+extern hMBX hKeybdMbx = -1;
 
-void KeybdIRQ()
+void interrupt KeybdIRQ()
 {
     __int16 sc;
     __int16 kh, kt;
     hTCB ht;
     TCB *t;
-    JCB *jcb;
+    ACB *pACB;
     int nn;
 
     prolog asm {
-		ldi		sp,#keybd_irq_stack_+504
+		ldi		sp,#_keybd_irq_stack+1016
      }
      while (KeybdGetStatus() < 0) {    // Is there actually a scancode available ?
          sc = KeybdGetScancode();
-         jcb = IOFocusNdx;             // Are there any jobs with focus ?     
-         if (jcb) {
-          	 if (LockSemaphore(&kbd_sema,200)) {
+         pACB = IOFocusNdx;            // Are there any jobs with focus ?     
+         if (pACB) {
+          	 if (LockKbdSemaphore(200)) {
                  KeybdClearRcv();              // clear recieve register
-                 kh = jcb->KeybdHead;
-                 kt = jcb->KeybdTail;
+                 kh = pACB->KeybdHead;
+                 kt = pACB->KeybdTail;
                  kh++;
                  kh &= 31;
                  if (kh <> kt) {
-                     jcb->KeybdHead = kh;   
-                     jcb->KeybdBuffer[kh] = sc;
+                     pACB->KeybdHead = kh;   
+                     pACB->KeybdBuffer[kh] = sc;
                  }
-                 UnlockSemaphore(&kbd_sema);
+                 UnlockKbdSemaphore();
              }
              // Trigger debugger if F12 pressed. Set a breakpoint at the IRET
              // return address.
-             if (sc==SC_F12 && !jcb->KeyState1) {
-                 asm {
-					 csrrw	r1,#$40,r0		// r1 = epc
+             if (sc==SC_F12 && !pACB->KeyState1) {
+                 __asm {
+					 csrrd	r1,#$48,r0		// r1 = epc
                      //mtspr  dbad0,r1      ; Set breakpoint 0 address
                      //mfspr  r1,dbctrl
                      //or     r1,r1,#1      ; enable breakpoint #0
@@ -101,32 +93,26 @@ void KeybdIRQ()
              }
              // If CTRL-C is pressed, cause the tasks to return to the 
              // catch handler.
-             if (jcb->KeyState2 & 4) {
+             if (pACB->KeyState2 & 4) {
                  if(sc == SC_C) {      // control-c ?
-                     for (nn = 0; nn < 8; nn++) {
-                         if (jcb->tasks[nn]==-1)
-                             break;
-                         t = &tcbs[jcb->tasks[nn]];
-                         t->exception = 512+3;     // CTRL-C type exception
+                 	 for (ht = pACB->thrd; ht >= 0 && ht < NR_TCB; ht = tcbs[ht].acbnext)
+                         t = &tcbs[ht];
+                         t->exception = 3;	// CTRL-C type exception
                      }
                  }
                  else if (sc==SC_T || sc==SC_Z) {
                       t = &tcbs[2];
-                      t->exception = (512 + ((sc==SC_T) ? 20 : 26)) | (GetRunningTCB() << 32);
+                      t->exception = (((sc==SC_T) ? 20 : 26)) | (GetRunningTCB() << 32);
                  }
              }
-             if ((jcb->KeyState2 & 2) && sc == SC_TAB)    // ALT + TAB ?
+             if ((pACB->KeyState2 & 2) && sc == SC_TAB)    // ALT + TAB ?
                  if (hFocusSwitchMbx > 0)
-                     FMTK_PostMsg(hFocusSwitchMbx,-1,-1,-1);
+                     FMTK_SendMsg(hFocusSwitchMbx,-1,-1,-1);
 //                 iof_switch++;
          }
          if (hKeybdMbx >= 0)
-            FMTK_PostMsg(hKeybdMbx,-1,-1,-1);
+            FMTK_SendMsg(hKeybdMbx,-1,-1,-1);
      }
-     // Restore the processor registers and return using an RTI.
-	epilog asm {
-        rti
-    }
 }
 
 
@@ -134,15 +120,15 @@ void KeybdIRQ()
 
 int KeybdGetBufferStatus()
 {
-    JCB *j;
+    ACB *j;
     __int16 kh, kt;
 
     kh = kt = 0;
-    j = GetJCBPtr();
-    if (LockSemaphore(&kbd_sema,200)) {
+    j = GetACBPtr();
+    if (LockKbdSemaphore(200)) {
         kh = j->KeybdHead;
         kt = j->KeybdTail;
-        UnlockSemaphore(&kbd_sema);
+        UnlockKbdSemaphore();
     }
     if (kh<>kt)
         return -1;
@@ -154,13 +140,13 @@ int KeybdGetBufferStatus()
 
 __int8 KeybdGetBufferedScancode()
 {
-    JCB *j;
+    ACB *j;
     __int16 kh, kt;
     __int16 sc;
 
-    j = GetJCBPtr();
+    j = GetACBPtr();
     sc = 0;
-    if (LockSemaphore(&kbd_sema,200)) {
+    if (LockKbdSemaphore(200)) {
         kh = j->KeybdHead;
         kt = j->KeybdTail;
         if (kh <> kt) {
@@ -169,14 +155,14 @@ __int8 KeybdGetBufferedScancode()
             kt &= 31;
             j->KeybdTail = kt;
         }
-        UnlockSemaphore(&kbd_sema);
+        UnlockKbdSemaphore();
     }
     return sc;
 }
 
 private char KeybdGetBufferedChar()
 {
-    JCB *j;
+    ACB *j;
     unsigned __int16 sc;
     char ch;
     int d1, d2, d3;
@@ -184,11 +170,11 @@ private char KeybdGetBufferedChar()
     if firstcall {
         FMTK_AllocMbx(&hKeybdMbx);
     }
-    j = GetJCBPtr();
+    j = GetACBPtr();
     forever {
         while (KeybdGetBufferStatus() >= 0) {
             if (j->KeybdWaitFlag==0)
-                return -1;
+                return (-1);
             FMTK_WaitMsg(hKeybdMbx, &d1, &d2, &d3, 0x7FFFFFFF);
         }
         // The following typecast is needed to avoid a compiler bug in the
@@ -268,16 +254,16 @@ private char KeybdGetBufferedChar()
 }
 
 char KeybdGetBufferedCharWait() {
-    JCB *j;
-    j = GetJCBPtr();
+    ACB *j;
+    j = GetACBPtr();
     j->KeybdWaitFlag = 1;
-    return KeybdGetBufferedChar();     
+    return (KeybdGetBufferedChar());     
 }
 
 char KeybdGetBufferedCharNoWait() {
-    JCB *j;
-    j = GetJCBPtr();
+    ACB *j;
+    j = GetACBPtr();
     j->KeybdWaitFlag = 0;
-    return KeybdGetBufferedChar();     
+    return (KeybdGetBufferedChar());
 }
 

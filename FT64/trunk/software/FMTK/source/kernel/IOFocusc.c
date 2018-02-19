@@ -1,13 +1,13 @@
-#include "config.h"	// for NR_JCBS
+#include "config.h"	// for NR_ACBS
 #include "types.h"
 #include "proto.h"
 
-extern JCB *IOFocusNdx;
+extern ACB *IOFocusNdx;
 extern int IOFocusTbl[4];
 extern int iof_sema;
-extern JCB jcbs[NR_JCB];
+extern ACB *ACBPtrs[64];
 
-hMBX hFocusSwitchMbx = -1;
+extern hMBX hFocusSwitchMbx;
 
 void FocusSwitcher()
 {
@@ -23,10 +23,10 @@ void FocusSwitcher()
 }
 
 
-void ForceIOFocus(JCB *j)
+void ForceIOFocus(ACB *j)
 {
     RequestIOFocus(j);   // In case it isn't requested yet.
-     if (LockSemaphore(&iof_sema,-1)) {
+     if (LockIOFSemaphore(-1)) {
         if (j != IOFocusNdx) {
             CopyScreenToVirtualScreen();
             j->pVidMem = j->pVirtVidMem;
@@ -34,7 +34,7 @@ void ForceIOFocus(JCB *j)
             j->pVidMem = 0xFFD00000;
             CopyVirtualScreenToScreen();
         }
-        UnlockSemaphore(&iof_sema);
+        UnlockIOFSemaphore();
      }
 }
 
@@ -45,9 +45,9 @@ void ForceIOFocus(JCB *j)
 // switch.
 void SwitchIOFocus()
 {
-     JCB *j, *p;
+     ACB *j, *p;
 
-     if (LockSemaphore(&iof_sema,-1)) {
+     if (LockIOFSemaphore(-1)) {
          j = IOFocusNdx;
          if (j) {
              p = IOFocusNdx->iof_next;
@@ -61,7 +61,7 @@ void SwitchIOFocus()
                  }
              }
          }
-        UnlockSemaphore(&iof_sema);
+         UnlockIOFSemaphore();
      }
 }
 
@@ -71,31 +71,30 @@ void SwitchIOFocus()
 // keyboard.
 //-----------------------------------------------------------------------------
 
-void RequestIOFocus(JCB *j)
+void RequestIOFocus(ACB *j)
 {
      int nj, nn;
      int stat;
 
      nj = j->number;
-	 nj = j - &jcbs[0];
-	 if (nj < 0 || nj > NR_JCB-1)
+	 if (nj < 0 || nj >= NR_ACB)
 		 return;
-     if (LockSemaphore(&iof_sema,100000)) {
+     if (LockIOFSemaphore(100000)) {
 		 asm {
 			 ldi	r1,#256
-			 stt		r1,$FFDC0600
+			 sc		r1,$FFDC0600
 		 }
 		nn = nj >> 5;	// 32 bits per table entry
 		nj &= 0x1f;		// max bit number
         stat = (IOFocusTbl[nn] >> nj) & 1;
 		 asm {
 			 ldi	r1,#257
-			 stt		r1,$FFDC0600
+			 sc		r1,$FFDC0600
 		 }
         if (!stat) {
 		 asm {
 			 ldi	r1,#258
-			 stt		r1,$FFDC0600
+			 sc		r1,$FFDC0600
 		 }
            if (IOFocusNdx==null) {
                IOFocusNdx = j;
@@ -105,7 +104,7 @@ void RequestIOFocus(JCB *j)
            else {
 		 asm {
 			 ldi	r1,#259
-			 stt		r1,$FFDC0600
+			 sc		r1,$FFDC0600
 		 }
                j->iof_prev = IOFocusNdx->iof_prev;
                j->iof_next = IOFocusNdx;
@@ -114,19 +113,19 @@ void RequestIOFocus(JCB *j)
            }
 		 asm {
 			 ldi	r1,#260
-			 stt		r1,$FFDC0600
+			 sc		r1,$FFDC0600
 		 }
            IOFocusTbl[nn] |= (1 << nj);
 		 asm {
 			 ldi	r1,#261
-			 stt		r1,$FFDC0600
+			 sc		r1,$FFDC0600
 		 }
         }
 		 asm {
 			 ldi	r1,#262
-			 stt		r1,$FFDC0600
+			 sc		r1,$FFDC0600
 		 }
-        UnlockSemaphore(&iof_sema);
+        UnlockIOFSemaphore();
      }
 }
         
@@ -135,7 +134,7 @@ void RequestIOFocus(JCB *j)
 //-----------------------------------------------------------------------------
 void ReleaseIOFocus()
 {
-     ForceReleaseIOFocus(GetJCBPtr());
+     ForceReleaseIOFocus(GetACBPtr());
 }
 
 //-----------------------------------------------------------------------------
@@ -145,14 +144,14 @@ void ReleaseIOFocus()
 // different than the one currently running.
 //-----------------------------------------------------------------------------
 
-void ForceReleaseIOFocus(JCB * j)
+void ForceReleaseIOFocus(ACB * j)
 {
-     JCB *p;
+     ACB *p;
 	 int nj;
      int nn;
 
-     if (LockSemaphore(&iof_sema,-1)) {
-		 nj = j - &jcbs[0];
+     if (LockIOFSemaphore(-1)) {
+		 nj = j->number;
 		 nn = nj >> 5;
 		 nj &= 0x1f;
          if (IOFocusTbl[nn] & (1 << nj)) {
@@ -172,37 +171,37 @@ void ForceReleaseIOFocus(JCB * j)
                   j->iof_prev = null;
              }
          }
-        UnlockSemaphore(&iof_sema);
+         UnlockIOFSemaphore();
      }
 }
 
 void CopyVirtualScreenToScreen()
 {
-     int *p, *q;
-     JCB *j;
-     int nn, pos;
+	int *p, *q;
+	ACB *j;
+	int nn, pos;
 
-     j = IOFocusNdx;
-     p = j->pVidMem;
-     q = j->pVirtVidMem;
-     nn = j->VideoRows * j->VideoCols;
-     for (; nn >= 0; nn--)
-         p[nn] = q[nn];
+	j = IOFocusNdx;
+	p = j->pVidMem;
+	q = j->pVirtVidMem;
+	nn = j->VideoRows * j->VideoCols;
+	for (; nn >= 0; nn--)
+		p[nn] = q[nn];
     pos = j->CursorRow * j->VideoCols + j->CursorCol;
     SetVideoReg(11,pos);
 }
 
 void CopyScreenToVirtualScreen()
 {
-     int *p, *q;
-     JCB *j;
-     int nn;
+	int *p, *q;
+	ACB *j;
+	int nn;
 
-     j = IOFocusNdx;
-     p = j->pVidMem;
-     q = j->pVirtVidMem;
-     nn = j->VideoRows * j->VideoCols;
-     for (; nn >= 0; nn--)
-         q[nn] = p[nn];
+	j = IOFocusNdx;
+	p = j->pVidMem;
+	q = j->pVirtVidMem;
+	nn = j->VideoRows * j->VideoCols;
+	for (; nn >= 0; nn--)
+		q[nn] = p[nn];
 }
 

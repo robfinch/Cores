@@ -1,0 +1,1 @@
+int atexit(void (*)(void));

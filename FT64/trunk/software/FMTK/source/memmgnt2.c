@@ -1,3 +1,6 @@
+#include ".\kernel\const.h"
+#include ".\kernel\config.h"
+
 #define NULL    (void *)0
 
 extern int highest_data_word;
@@ -20,7 +23,7 @@ _sys_pages_available		dw	0
 _sys_512k_pages_available	dw	0
 _mmu_FreeMaps	dw	0
 _mmu_entries	dw	0
-_mm_freelist	dc	0
+_mmu_freelist	dc	0
 // 512kB page allocation map (bit for each 8k page)
 			org		$1FFDE000
 _pam512:	fill.w	1024,0
@@ -29,6 +32,15 @@ _pam512:	fill.w	1024,0
 _pam8:		fill.c	65518,0
 	}
 }
+
+extern int mmu_FreeMaps;
+extern __int16 mmu_freelist;
+extern __int32 *mmu_entries;
+extern int pam512[1024];
+extern __int16 pam8[NPAGES];
+extern int syspages;
+extern int sys_pages_available;
+
 //private __int16 pam[NPAGES];	
 // There are 128, 4MB pages in the system. Each 4MB page is composed of 64 64kb pages.
 //private int pam4mb[NPAGES/64];	// 4MB page allocation map (bit for each 64k page)
@@ -48,6 +60,41 @@ private pascal unsigned int round512k(unsigned int amt)
     amt += 0x3fffff;	// 4MB - 1
     amt &= 0xFFFFFFFFFFC00000L;
     return (amt);
+}
+
+naked inline int _GetMMUAccessKey()
+{
+	__asm {
+		csrrd	r1,#3,r0
+		bfextu	r1,r1,#8,#15
+	}
+}
+
+naked inline int _GetMMUOperateKey()
+{
+	__asm {
+		csrrd	r1,#3,r0
+		bfextu	r1,r1,#0,#7
+	}
+}
+
+naked inline void _SetMMUAccessKey(register int map)
+{
+	__asm {
+		csrrd	r1,#3,r0		// get PCR
+		bfins	r1,r18,#8,#15	// set access key
+		csrrw	r0,#3,r1		// set PCR
+	}
+}
+
+naked inline int _SetMMUOperateKey(register int map)
+{
+	__asm {
+		csrrd	r1,#3,r0		// get PCR
+		bfins	r1,r18,#0,#7	// set operating key
+		csrrw	r1,#3,r1		// set PCR
+		bfextu	r1,r1,#0,#7		// extract old operating key
+	}
 }
 
 // Detect whether the page table maps 8kB or 512kB pages.
@@ -72,7 +119,7 @@ void init_memory_management()
     int nn;
 
 	// Setup linked list of free pages (FAT style)
-	mm_freelist = 512;
+	mmu_freelist = 512;
 	for (nn = 0; nn < NPAGES; nn++) {
 		pam8[nn] = nn+1;
 	}
@@ -96,10 +143,10 @@ int mmu_Alloc8kPage()
 {
     int sb, pg4;
 
-	if (mm_freelist < syspages || mm_freelist >= NPAGES)
+	if (mmu_freelist < syspages || mmu_freelist >= NPAGES)
 		throw (E_NoMem);
 	sb = mm_freelist;
-	mm_freelist = pam8[mm_freelist];
+	mmu_freelist = pam8[mmu_freelist];
 	sys_pages_available--;
 	pg4 = (sb >> 6);
 	pam512[pg4] |= (1 << (sb & 63));
@@ -115,8 +162,8 @@ pascal void mmu_Free8kPage(register int pg)
 
     if (pg < syspages || pg >= NPAGES)
         return;
-	pam8[pg] = mm_freelist;
-	mm_freelist = pg;
+	pam8[pg] = mmu_freelist;
+	mmu_freelist = pg;
 	sys_pages_available++;
 	pg4 = (pg >> 6);
 	pam512[pg4] &= ~(1 << (pg & 63));
@@ -128,9 +175,9 @@ private pascal void remove_from_freelist(register int a)
 {
 	int c;
 
-	for (c = mm_freelist; c >=0 && c < NPAGES; ) {
+	for (c = mmu_freelist; c >=0 && c < NPAGES; ) {
 		if ((c>>6)==a) {
-			c = mm_freelist = pam8[mm_freelist];
+			c = mmu_freelist = pam8[mmu_freelist];
 			sys_pages_available--;
 		}
 		else
@@ -184,7 +231,7 @@ pascal void mmu_Free512kPage(register int pg)
 
 private pascal int findMMUPages(register int npages, register int maxpages)
 {
-	int nn, mm;
+	int nn, mm, np;
 
 	if (npages <= 0 || npages > maxpages)
 		return (0xffff);
@@ -364,5 +411,5 @@ void mmu_SetMapEntry(register void *physptr, register int acr, register int entr
 {
 	if (entryno < 0 || entryno > 1023)
 		throw (E_BadEntryno);
-	mmu_entries[entryno] = ((physptr >> 13) & 0xffff) | (acr << 16);
+	mmu_entries[entryno] = (__int32)((physptr >> 13) & 0xffff) | (acr << 16);
 }

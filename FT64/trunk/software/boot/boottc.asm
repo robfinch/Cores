@@ -168,8 +168,12 @@ start:
 		; set trap vector
 		ldi		r1,#$FFFC0000
 		csrrw	r0,#$30,r1
+		ldi		r1,#__BrkHandler6
+		csrrw	r0,#$36,r1			// tvec[6]
 		ldi		sp,#_brk_stack+4088
-		call	__SystemInit
+		sw		r0,_milliseconds
+		call	_init_memory_management
+		call	_FMTK_Initialize
 		
 		; Enable interrupts
 		sei		#0
@@ -299,6 +303,8 @@ calltest3:
 		lw		lr,[sp]
 		add		sp,sp,#8
 		ret
+
+.include ""
 
 ;------------------------------------------------------------------------------
 ; Set400x300 video mode.
@@ -827,6 +833,7 @@ vec2data:
 	dw	2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2
 
 .include "c:\Cores5\FT64\trunk\software\c64libc\source\cc64rt.s"
+.include "c:\Cores5\FT64\trunk\software\boot\brkrout.asm"
 .include "c:\Cores5\FT64\trunk\software\boot\BIOSMain.s"
 .include "c:\Cores5\FT64\trunk\software\boot\FloatTest.s"
 .include "c:\Cores5\FT64\trunk\software\boot\ramtest.s"
@@ -845,7 +852,10 @@ vec2data:
 .include "c:\Cores5\FT64\trunk\software\FMTK\source\kernel\FMTKmsg.s"
 .include "c:\Cores5\FT64\trunk\software\FMTK\source\kernel\TCB.s"
 .include "c:\Cores5\FT64\trunk\software\FMTK\source\kernel\IOFocusc.s"
+.include "c:\Cores5\FT64\trunk\software\FMTK\source\kernel\keybd.s"
+.include "c:\Cores5\FT64\trunk\software\FMTK\source\app.s"
 .include "c:\Cores5\FT64\trunk\software\bootrom\source\video.asm"
 .include "c:\Cores5\FT64\trunk\software\bootrom\source\TinyBasicDSD9.asm"
-.include "c:\Cores5\FT64\trunk\software\FMTK\source\kernel\fmtk_vars.asm"
 
+.include "c:\Cores5\FT64\trunk\software\FMTK\source\kernel\scancodes.asm"
+.include "c:\Cores5\FT64\trunk\software\FMTK\source\kernel\fmtk_vars.asm"

@@ -66,6 +66,7 @@ typedef struct _tagTCB align(1024) {
     // exception storage area
 	int regs[32];
 	int fpregs[32];
+	int xregs[32];
 	int epc;
 	int vl;
 	int cr0;

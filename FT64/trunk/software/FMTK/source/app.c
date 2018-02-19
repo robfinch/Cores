@@ -21,13 +21,12 @@
 //                                                                          
 // ============================================================================
 //
-#include "config.h"
-#include "const.h"
-#include "types.h"
-#include "proto.h"
-#include "glo.h"
+#include ".\kernel\config.h"
+#include ".\kernel\const.h"
+#include ".\kernel\types.h"
+#include ".\kernel\proto.h"
+#include ".\kernel\glo.h"
 
-#define NR_MAPS	64
 #define NR_APPS	64
 #define MMU_WR	4
 #define MMU_RD	2
@@ -39,6 +38,7 @@ __int8 hSearchApp;
 __int8 hFreeApp = -1;
 
 extern int mmu_SetAccessKey(register int mapno);
+extern int mmu_SetOperateKey(register int mapno);
 extern int mmu_AllocateMap();
 extern pascal char *mmu_alloc(register int amt, register int acr);
 
@@ -55,6 +55,7 @@ void FMTK_StartApp(AppStartupRec *asr)
 	__int32 *pCode;
 	int *pData;
 	int ndx;
+	int info;
 
 	try {	
 		mapno = mmu_AllocateMap();
@@ -138,14 +139,13 @@ void FMTK_StartApp(AppStartupRec *asr)
 		}
 		pStack = (int *)((1020-nspages) << 13);
 
+		info = (asr->priority << 48) | (mapno << 32) | asr->affinity;
 		FMTK_StartThread(
-			asr->priority,	// priority
-			asr->affinity,	// affinity
 			pCode,			// start address
 			nspages << 13,
 			pStack,			// pointer to stack memory
-			pACB->cmdline,	// parameter
-			mapno			// ACB handle
+			&pACB->commandLine,	// parameter
+			info
 		);
 	}
 	catch(int er) {
