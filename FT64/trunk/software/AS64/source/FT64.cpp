@@ -1810,6 +1810,112 @@ static void process_bcc(int opcode6, int opcode4)
 }
 
 // ---------------------------------------------------------------------------
+// dbnz r1,label
+//
+// ---------------------------------------------------------------------------
+
+static void process_dbnz(int opcode6, int opcode3)
+{
+    int Ra, Rc, pred;
+    int64_t val;
+    int64_t disp;
+	char *p, *p1;
+
+	pred = 3;		// default: statically predict as always taken
+	p1 = inptr;
+    Ra = getRegisterX();
+    need(',');
+	p = inptr;
+	Rc = getRegisterX();
+	if (Rc==-1) {
+		inptr = p;
+	    NextToken();
+		val = expr();
+		disp = val - (code_address + 4);
+		if (token==',') {
+			NextToken();
+			pred = (int)expr();
+		}
+	    emit_insn(((disp >> 3) & 0x3FF) << 22 |
+			((pred & 3) << 20) |
+			((opcode3 & 7) << 17) |
+			(0 << 11) |
+			(Ra << 6) |
+			((disp >> 2) & 1) |
+			opcode6,0,4
+		);
+		return;
+	}
+	printf("dbnz: target must be a label %d.\n", lineno);
+	if (token==',') {
+		NextToken();
+		pred = (int)expr();
+	}
+	emit_insn(
+		((pred & 3) << 25) |
+		(opcode3 << 21) |
+		(Rc << 16) |
+		(0 << 11) |
+		(Ra << 6) |
+		0x03,0,4
+	);
+}
+
+// ---------------------------------------------------------------------------
+// ibne r1,r2,label
+//
+// ---------------------------------------------------------------------------
+
+static void process_ibne(int opcode6, int opcode3)
+{
+    int Ra, Rb, Rc, pred;
+    int64_t val;
+    int64_t disp;
+	char *p, *p1;
+
+	pred = 3;		// default: statically predict as always taken
+	p1 = inptr;
+    Ra = getRegisterX();
+    need(',');
+    Rb = getRegisterX();
+    need(',');
+	p = inptr;
+	Rc = getRegisterX();
+	if (Rc==-1) {
+		inptr = p;
+	    NextToken();
+		val = expr();
+		disp = val - (code_address + 4);
+		if (token==',') {
+			NextToken();
+			pred = (int)expr();
+		}
+	    emit_insn(((disp >> 3) & 0x3FF) << 22 |
+			((pred & 3) << 20) |
+			((opcode3 & 7) << 17) |
+			(Rb << 11) |
+			(Ra << 6) |
+			((disp >> 2) & 1) |
+			opcode6,0,4
+		);
+		return;
+	}
+	printf("dbnz: target must be a label %d.\n", lineno);
+	if (token==',') {
+		NextToken();
+		pred = (int)expr();
+	}
+	emit_insn(
+		((pred & 3) << 25) |
+		(opcode3 << 21) |
+		(Rc << 16) |
+		(Rb << 11) |
+		(Ra << 6) |
+		0x03,0,4
+	);
+}
+
+// ---------------------------------------------------------------------------
 // bfextu r1,r2,#1,#63
 // ---------------------------------------------------------------------------
 
@@ -2172,7 +2278,7 @@ static void process_brk()
 	else
 		prevToken();
 	emit_insn(
-		(inc << 15) |
+		((inc & 0x1f) << 19) |
 		((val & 0x1FF) << 6) |
 		0x00,0,4
 	);
@@ -2497,6 +2603,53 @@ static void process_load(int opcode6)
     ScanToEOL();
 }
 
+static void process_cache(int opcode6)
+{
+    int Ra,Rb;
+	int Sc;
+    char *p;
+    int64_t disp;
+    int64_t val;
+    int fixup = 5;
+	int cmd;
+
+    p = inptr;
+	NextToken();
+	cmd = (int)expr() & 0x1f;
+    expect(',');
+    mem_operand(&disp, &Ra, &Rb, &Sc);
+	if (Ra > 0 && Rb > 0) {
+		emit_insn(
+			(opcode6 << 26) |
+			(Sc << 21) |
+			(cmd << 16) |
+			(Rb << 11) |
+			(Ra << 6) |
+			0x02,!expand_flag,4);
+		return;
+	}
+    if (Ra < 0) Ra = 0;
+    val = disp;
+	if (val < -32767 || val > 32767) {
+		LoadConstant(val,23);
+		// Change to indexed addressing
+		emit_insn(
+			(opcode6 << 26) |
+			(cmd << 16) |
+			(23 << 11) |
+			(Ra << 6) |
+			0x02,!expand_flag,4);
+		ScanToEOL();
+		return;
+	}
+	emit_insn(
+		(val << 16) |
+		(cmd << 11) |
+		(Ra << 6) |
+		opcode6,!expand_flag,4);
+    ScanToEOL();
+}
+
 // ----------------------------------------------------------------------------
 // lw r1,disp[r2]
 // lw r1,[r2+r3]
@@ -2732,17 +2885,17 @@ static void process_mov(int oc, int fn)
 		 Rt = getVecRegister() & 31;
 		 vec = 1;
 	 }
-	 if (*inptr==':') {
-		 inptr++;
-		 if (*inptr=='x' || *inptr=='X') {
-			 d3 = 2;
-			 inptr++;
-		 }
-		 else {
-			 rgs = (int)expr();
-			 d3 = 0;
-		 }
-	 }
+	if (inptr[-1]==':') {
+		if (*inptr=='x' || *inptr=='X') {
+			d3 = 2;
+			inptr++;
+			NextToken();
+		}
+		else {
+			rgs = (int)expr();
+			d3 = 0;
+		}
+	}
      need(',');
 	 p = inptr;
      Ra = getRegisterX();
@@ -2751,16 +2904,17 @@ static void process_mov(int oc, int fn)
 		 Ra = getVecRegister() & 31;
 		 vec = 2;
 	 }
-	 if (*inptr==':') {
-		 if (*inptr=='x' || *inptr=='X') {
-			 inptr++;
-			 d3 = 3;
-		 }
-		 else {
+	if (inptr[-1]==':') {
+		if (*inptr=='x' || *inptr=='X') {
+			inptr++;
+			d3 = 3;
+			NextToken();
+		}
+		else {
 			rgs = (int)expr();
 			d3 = 1;
-		 }
-	 }
+		}
+	}
 	 if (vec==1) {
 		 emit_insn(
 			 (0x33 << 26) |
@@ -2891,17 +3045,52 @@ static void process_sei()
 	if (Ra==-1) {
 		emit_insn(
 			0xC0000002 |
-			((val & 7) << 11) |
+			((val & 7) << 16) |
 			(0 << 6),
 			0,4);
 	}
 	else {
 		emit_insn(
 			0xC0000002 |
-			(0 << 11) |
+			(0 << 16) |
 			(Ra << 6),
 			0,4);
 	}
+}
+
+// ----------------------------------------------------------------------------
+// REX r0,6,6,1
+// ----------------------------------------------------------------------------
+
+static void process_rex()
+{
+	int64_t val = 7;
+	int Ra = -1;
+	int tgtol;
+	int pl;
+	int im;
+    char *p;
+
+	p = inptr;
+    Ra = getRegisterX();
+	need(',');
+	NextToken();
+	tgtol = (int)expr() & 7;
+	if (tgtol==0)
+		printf("REX: Illegal redirect to user level %d.\n", lineno);
+	need(',');
+	NextToken();
+	pl = (int)expr() & 7;
+	need(',');
+	NextToken();
+	im = (int)expr() & 7;
+	emit_insn(
+		(im << 24) |
+		(pl << 16) |
+		(tgtol << 11) |
+		(Ra << 6) |
+		0x0D,0,4
+	);
 }
 
 // ----------------------------------------------------------------------------
@@ -3460,6 +3649,7 @@ void FT64_processMaster()
             }
             segment = bssseg;
             break;
+		case tk_cache: process_cache(0x1E); break;
 		case tk_call:  process_call(0x19); break;
         case tk_cli: emit_insn(0xC0000002,0,4); break;
 		case tk_chk:  process_chk(0x34); break;
@@ -3485,6 +3675,7 @@ void FT64_processMaster()
             process_data(dataseg);
             break;
         case tk_db:  process_db(); break;
+		case tk_dbnz: process_dbnz(0x26,7); break;
         case tk_dc:  process_dc(); break;
         case tk_dh:  process_dh(); break;
         case tk_dh_htbl:  process_dh_htbl(); break;
@@ -3497,6 +3688,7 @@ void FT64_processMaster()
         case tk_extern: process_extern(); break;
         case tk_fill: process_fill(); break;
 		case tk_hint:	process_hint(); break;
+		case tk_ibne: process_ibne(0x26,6); break;
 		case tk_if:		pif1 = inptr-2; doif(); break;
 		case tk_iret:	process_iret(0xC8000002); break;
         case tk_jal: process_jal(0x18); break;
@@ -3546,6 +3738,7 @@ void FT64_processMaster()
             segment = rodataseg;
             break;
 		case tk_ret: process_ret(); break;
+		case tk_rex: process_rex(); break;
 		case tk_rol: process_shift(0x4); break;
 		case tk_roli: process_shift(0xC); break;
 		case tk_ror: process_shift(0x5); break;

@@ -73,20 +73,6 @@ enum e_sc {
         sc_static, sc_auto, sc_global, sc_thread, sc_external, sc_type, sc_const,
         sc_member, sc_label, sc_ulabel, sc_typedef, sc_register };
 
-enum e_bt {
-		bt_none,
-		bt_8, bt_8u, bt_16, bt_16u, bt_int32, bt_int32u, bt_40, bt_40u, bt_64, bt_64u, bt_80, bt_80u,
-		bt_128, bt_128u,
-		bt_byte, bt_ubyte,
-        bt_char, bt_short, bt_long, bt_float, bt_double, bt_triple, bt_quad, bt_pointer,
-		bt_uchar, bt_ushort, bt_ulong,
-        bt_unsigned, bt_vector, bt_vector_mask,
-        bt_struct, bt_union, bt_class, bt_enum, bt_void,
-        bt_func, bt_ifunc, bt_label,
-		bt_interrupt, bt_oscall, bt_pascal, bt_kernel, bt_bitfield, bt_ubitfield,
-		bt_exception, bt_ellipsis,
-        bt_last};
-
 class CompilerType
 {
 public:

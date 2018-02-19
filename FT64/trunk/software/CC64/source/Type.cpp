@@ -109,6 +109,8 @@ int TYP::GetHash()
 
 	n = 0;
 	p = this;
+	if (p==nullptr)
+		throw new C64PException(ERR_NULLPOINTER,2);
 	do {
 		if (p->type==bt_pointer)
 			n+=20000;

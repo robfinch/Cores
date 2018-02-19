@@ -98,6 +98,7 @@ enum {
      tk_bvc,
      tk_bvs,
      tk_byte,
+	 tk_cache,
 	 tk_call,
 	 tk_calltgt,
      tk_cas,
@@ -189,6 +190,7 @@ enum {
      tk_gt,
 	 tk_hint,
      tk_hs,
+	 tk_ibne,
      tk_icon,
      tk_id,
      tk_inc,
@@ -306,6 +308,7 @@ enum {
      tk_push,
      tk_rconst,//320
 	 tk_ret,
+	 tk_rex,
      tk_rodata,
      tk_rol,
      tk_roli,

@@ -1,6 +1,20 @@
 #ifndef _CONST_H
 #define _CONST_H
 
+enum e_bt {
+		bt_none,
+		bt_8, bt_8u, bt_16, bt_16u, bt_int32, bt_int32u, bt_40, bt_40u, bt_64, bt_64u, bt_80, bt_80u,
+		bt_128, bt_128u,
+		bt_byte, bt_ubyte,
+        bt_char, bt_short, bt_long, bt_float, bt_double, bt_triple, bt_quad, bt_pointer,
+		bt_uchar, bt_ushort, bt_ulong,
+        bt_unsigned, bt_vector, bt_vector_mask,
+        bt_struct, bt_union, bt_class, bt_enum, bt_void,
+        bt_func, bt_ifunc, bt_label,
+		bt_interrupt, bt_oscall, bt_pascal, bt_kernel, bt_bitfield, bt_ubitfield,
+		bt_exception, bt_ellipsis,
+        bt_last};
+
 enum e_node {
         en_void,        /* used for parameter lists */
 		en_list, en_aggregate,
@@ -134,7 +148,7 @@ enum e_op {
 		op_csrrw, op_nop,
 		op_hint, op_hint2, op_rem2,
 		// FT64
-		op_rte, op_bex,
+		op_rti, op_rte, op_bex,
 		op_addq1, op_addq2, op_addq3,
 		op_andq1, op_andq2, op_andq3,
 		op_orq1, op_orq2, op_orq3,

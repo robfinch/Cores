@@ -914,7 +914,7 @@ void GenerateFunction(SYM *sym)
 	if (sym->IsInterrupt) {
        if (sym->stkname)
            GenerateDiadic(op_lea,0,makereg(SP),make_string(sym->stkname));
-	   SaveRegisterSet(sym);
+	   //SaveRegisterSet(sym);
 	}
 	// The prolog code can't be optimized because it'll run *before* any variables
 	// assigned to registers are available. About all we can do here is constant
@@ -1118,14 +1118,6 @@ void GenerateReturn(Statement *stmt)
 		return;
 	}
         
-	// Generate the return instruction. For the Pascal calling convention pop the parameters
-	// from the stack.
-	if (sym->IsInterrupt) {
-		RestoreRegisterSet(sym);
-		GenerateZeradic(op_rte);
-		return;
-	}
-
 	// If Pascal calling convention remove parameters from stack by adding to stack pointer
 	// based on the number of parameters. However if a non-auto register parameter is
 	// present, then don't add to the stack pointer for it. (Remove the previous add effect).
@@ -1164,6 +1156,14 @@ void GenerateReturn(Statement *stmt)
 	}
 //	if (toAdd != 0)
 //		GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),make_immed(toAdd));
+	// Generate the return instruction. For the Pascal calling convention pop the parameters
+	// from the stack.
+	if (sym->IsInterrupt) {
+		//RestoreRegisterSet(sym);
+		GenerateZeradic(op_rti);
+		return;
+	}
+
 	if (!sym->IsInline) {
 		GenerateMonadic(op_ret,0,make_immed(toAdd));
 		//GenerateMonadic(op_jal,0,make_indirect(regLR));

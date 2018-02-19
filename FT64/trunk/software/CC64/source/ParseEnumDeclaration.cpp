@@ -63,10 +63,11 @@ void ParseEnumDeclaration(TABLE *table)
         tp->type = bt_enum;
 		tp->size = 2;
 		if (lastst==openpa) {
+			NextToken();
 			amt = GetIntegerExpression((ENODE **)NULL);
 			needpunc(closepa,10);
 		}
-        else if( lastst != begin)
+        if( lastst != begin)
             error(ERR_INCOMPLETE);
         else {
             NextToken();

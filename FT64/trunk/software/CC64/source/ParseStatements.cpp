@@ -817,14 +817,14 @@ Statement *Statement::Parse()
     case kw_check:
          snp = ParseCheckStatement();
          break;
-	/*
+/*
     case kw_prolog:
          snp = NewStatement(st_empty,1);
          currentFn->prolog = Statement::Parse(); break;
     case kw_epilog:
          snp = NewStatement(st_empty,1);
          currentFn->epilog = Statement::Parse(); break;
-	*/
+*/
     case kw_if: snp = ParseIf(); break; 
     case kw_while: snp = ParseWhile(); break; 
     case kw_until: snp = ParseUntil(); break; 

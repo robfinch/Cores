@@ -829,6 +829,14 @@ int NextToken()
                 return token = tk_bfext;
             }
             if ((inptr[1]=='f' || inptr[1]=='F') && 
+                (inptr[2]=='i' || inptr[2]=='I') &&
+                (inptr[3]=='n' || inptr[3]=='N') &&
+                (inptr[4]=='s' || inptr[4]=='S') &&
+                 isspace(inptr[5])) {
+                inptr += 5;
+                return token = tk_bfins;
+            }
+            if ((inptr[1]=='f' || inptr[1]=='F') && 
                 (inptr[2]=='e' || inptr[2]=='E') &&
                 (inptr[3]=='x' || inptr[3]=='X') &&
                 (inptr[4]=='t' || inptr[4]=='T') &&
@@ -874,6 +882,16 @@ int NextToken()
 
         // call cas chk cmp cmpu code cli com cmpi csrrc csrrs csrrw
         case 'c': case 'C':
+			if (gCpu=='F' || gCpu=='G') {
+				if ((inptr[1]=='a' || inptr[1]=='A')
+					&& (inptr[2]=='c' || inptr[2]=='C')
+					&& (inptr[3]=='h' || inptr[3]=='H')
+					&& (inptr[4]=='e' || inptr[4]=='E')
+					&& isspace(inptr[5])) {
+						inptr += 5;
+						return (token = tk_cache);
+				}
+			}
 			 if (gCpu==7 || gCpu=='A' || gCpu=='F' || gCpu=='G') {
                  if ((inptr[1]=='a' || inptr[1]=='A') &&
                      (inptr[2]=='l' || inptr[2]=='L') &&
@@ -1435,8 +1453,17 @@ int NextToken()
              }
              break;
              
-        // if ifdef ifndef ios inc int iret ipush ipop itof
+        // ibne if ifdef ifndef ios inc int iret ipush ipop itof
         case 'i': case 'I':
+			if (gCpu=='F') {
+				if ((inptr[1]=='b' || inptr[1]=='B') &&
+					(inptr[2]=='n' || inptr[2]=='N') &&
+					(inptr[3]=='e' || inptr[3]=='E') &&
+					isspace(inptr[4])) {
+					inptr += 4;
+					return token = tk_ibne;
+				}
+			}
              if ((inptr[1]=='o' || inptr[1]=='O') &&
                  (inptr[2]=='s' || inptr[2]=='S') &&
                  (inptr[3]==':')) {
@@ -2103,12 +2130,16 @@ int NextToken()
             }
             break;
 
-        // ret rol roli ror rori rtd rte rtf rts rti rtl rodata
+        // ret rex rol roli ror rori rtd rte rtf rts rti rtl rodata
         case 'r': case 'R':
 			if (gCpu==7 || gCpu=='A' || gCpu=='F') {
 				if ((inptr[1]=='e' || inptr[1]=='E') && (inptr[2]=='t' || inptr[2]=='T') && isspace(inptr[3])) {
 					inptr += 3;
 					return token = tk_ret;
+				}
+				if ((inptr[1]=='e' || inptr[1]=='E') && (inptr[2]=='x' || inptr[2]=='X') && isspace(inptr[3])) {
+					inptr += 3;
+					return token = tk_rex;
 				}
 			}
             if ((inptr[1]=='t' || inptr[1]=='T') && (inptr[2]=='s' || inptr[2]=='S') && isspace(inptr[3])) {

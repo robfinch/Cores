@@ -1411,6 +1411,11 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 				tp2 = tp1;
 				rnode = pnode;
 				tp3 = expression(&pnode);
+				if (tp3==NULL) {
+					error(ERR_UNDEFINED);
+					throw new C64PException(ERR_UNDEFINED,10);
+					goto j1;
+				}
 				tp1 = tp3;
 				tp4 = tp1;
 			}
@@ -1527,10 +1532,12 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 			dfs.printf("tp2->type=%d",tp2->type);
 			name = lastid;
 			NextToken();
-			if (tp1->GetBtp()->type==bt_struct || tp1->GetBtp()->type==bt_union || tp1->GetBtp()->type==bt_class)
-				ep4 = makenode(en_regvar,NULL,NULL);
-			else
-				ep4 = nullptr;
+			tp3 = tp1->GetBtp();
+			ep4 = nullptr;
+			if (tp3) {
+				if (tp3->type==bt_struct || tp3->type==bt_union || tp3->type==bt_class)
+					ep4 = makenode(en_regvar,NULL,NULL);
+			}
 			//ep2 = ArgumentList(ep1->p[2],&typearray);
 			ep2 = ArgumentList(ep4,&typearray);
 			typearray.Print();
@@ -2620,6 +2627,8 @@ static TYP *addops(ENODE **node)
             oper = (lastst == plus);
             NextToken();
             tp2 = multops(&ep2);
+			if (tp2==nullptr)
+				throw new C64PException(ERR_NULLPOINTER,1);
 			isScalar = !tp2->IsVectorType();
             if( tp2 == 0 ) {
                     error(ERR_IDEXPECT);

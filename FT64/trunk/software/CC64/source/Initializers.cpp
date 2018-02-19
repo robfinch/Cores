@@ -303,7 +303,7 @@ int inittriple()
 int InitializePointer()
 {   
 	SYM *sp;
-	ENODE *n;
+	ENODE *n = nullptr;
 	int64_t lng;
 
     if(lastst == bitandd) {     /* address of a variable */

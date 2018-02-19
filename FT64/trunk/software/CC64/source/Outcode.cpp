@@ -195,6 +195,7 @@ Instruction opl[] =
 	{"vadds", op_vadds,10}, {"vsubs", op_vsubs,10}, {"vmuls", op_vmuls,10}, {"vdivs", op_vdivs,100},
 	{"vex", op_vex,10}, {"veins",op_veins,10},
 	{"redor", op_redor,2,true},
+	{"rti", op_rti,2,false},
 	{"rte", op_rte,2,false},
 	{"bex", op_bex,0,false},
 	{"phi", op_phi},
