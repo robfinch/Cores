@@ -27,6 +27,7 @@
 #define PIC_IE          0xFFDC0F04
 #define PIC_ES          0xFFDC0F10
 #define PIC_RSTE        0xFFDC0F14
+#define PIC_I29			0xFFDC0FF4
 #define PIC_I30			0xFFDC0FF8
 #define PIC_I31			0xFFDC0FFC
 
@@ -35,7 +36,8 @@
 // 0    NMI (parity error)
 // 1    Keyboard reset button
 // ...
-// 30   keyboard interrupt 
+// 29   keyboard interrupt 
+// 30	garbage collector
 // 31   60Hz timer interrupt
 // 
 // 
@@ -54,6 +56,11 @@ void InitPIC()
 		out32(PIC+0x80+(n<<2),0x400);
 //     out32(PIC_ES, 0x4000000C);  	
 
+	// - cause 29
+	// - interrupt level 2 (low priority)
+	// - edge sensitive
+	// - disabled
+    out32(PIC_I29, 0x2021D);
 	// - cause 30
 	// - interrupt level 2 (low priority)
 	// - edge sensitive
@@ -68,6 +75,7 @@ void InitPIC()
         out32(PIC_IE, 0x00000000);  //enable keyboard reset, timer interrupts
     else
      	// - enable keyboard irq
+     	// - enable garbage collection irq
      	// - enable time slice irq
-        out32(PIC_IE, 0xC0000000);  //enable keyboard reset, timer interrupts
+        out32(PIC_IE, 0xE0000000);  //enable keyboard reset, timer interrupts
 }

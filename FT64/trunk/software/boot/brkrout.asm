@@ -1,8 +1,9 @@
+PIC_ES          equ		$FFDC0F10
 FMTK_SCHEDULE	equ		66
 FMTK_SYSCALL	equ		70
-TS_IRQ			equ		131
+KBD_IRQ			equ		157
 GC_IRQ			equ		158
-KBD_IRQ			equ		159
+TS_IRQ			equ		159
 
 __BrkHandler:
 		add		r0,r0,#0			// load r0 with 0
@@ -21,18 +22,19 @@ __BrkHandler:
 		rex		r0,6,6,2
 		rti
 .ts:
+		ldi		r1,#$20000		// sequence number reset bit
+		csrrs	r0,#0,r1		// pulse sn reset bit
+		// Need at least 8 linear instructions after sn reset
 		lh		r1,_milliseconds
 		add		r1,r1,#1
 		sh		r1,_milliseconds
-		ldi		r1,#$20000		// sequence number reset bit
-		csrrs	r0,#0,r1		// pulse sn reset bit
 		lh		r1,$FFD0013C	// Update screen indicator
 		add		r1,r1,#1
 		sh		r1,$FFD0013C
-		add		r0,r0,#0		// now a ramp of instructions
-		add		r0,r0,#0		// that don't depend on sequence
-		add		r0,r0,#0		// number to operate properly
-		add		r0,r0,#0
+        ld		r1,#31			// reset the edge sense circuit
+        sh		r1,PIC_ESR
+        add		r0,r0,#0
+        add		r0,r0,#0
 .ts2:
 		jmp		_FMTK_SchedulerIRQ
 
@@ -43,8 +45,13 @@ __BrkHandler6:
 		beq		r1,#GC_IRQ,.gc
 		rti
 .gc:
+        ld		r1,#30			// reset the edge sense circuit
+        sh		r1,PIC_ESR
 		call	__GarbageCollector
 		rti
 .sc:	jmp		_FMTK_SystemCall
-.kbd:	jmp		_KeybdIRQ
+.kbd:	
+        ld		r1,#29			// reset the edge sense circuit
+        sh		r1,PIC_ESR
+		jmp		_KeybdIRQ
 

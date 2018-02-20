@@ -170,10 +170,11 @@ start:
 		csrrw	r0,#$30,r1
 		ldi		r1,#__BrkHandler6
 		csrrw	r0,#$36,r1			// tvec[6]
-		ldi		sp,#_brk_stack+4088
+		ldi		sp,#__brk_stack+4088
 		sw		r0,_milliseconds
 		call	_init_memory_management
 		call	_FMTK_Initialize
+		call	_InitPIT
 		call	_InitPIC
 		
 		; Enable interrupts
@@ -838,27 +839,33 @@ vec2data:
 .include "c:\Cores5\FT64\trunk\software\boot\BIOSMain.s"
 .include "c:\Cores5\FT64\trunk\software\boot\FloatTest.s"
 .include "c:\Cores5\FT64\trunk\software\boot\ramtest.s"
+	.align	4096
 .include "c:\Cores5\FT64\trunk\software\c64libc\source\stdio.s"
 .include "c:\Cores5\FT64\trunk\software\c64libc\source\ctype.s"
 .include "c:\Cores5\FT64\trunk\software\c64libc\source\string.s"
 .include "c:\Cores5\FT64\trunk\software\c64libc\source\malloc.s"
 .include "c:\Cores5\FT64\trunk\software\c64libc\source\prtflt.s"
 .include "c:\Cores5\FT64\trunk\software\c64libc\source\FT64\io.s"
+	.align	4096
 .include "c:\Cores5\FT64\trunk\software\c64libc\source\libquadmath\log10q.s"
 .include "c:\Cores5\FT64\trunk\software\FMTK\source\kernel\LockSemaphore.s"
 .include "c:\Cores5\FT64\trunk\software\FMTK\source\kernel\UnlockSemaphore.s"
 .include "c:\Cores5\FT64\trunk\software\FMTK\source\kernel\console.s"
+.include "c:\Cores5\FT64\trunk\software\FMTK\source\kernel\PIT.asm"
 .include "c:\Cores5\FT64\trunk\software\FMTK\source\kernel\PIC.s"
+	.align	4096
 .include "c:\Cores5\FT64\trunk\software\FMTK\source\kernel\FMTKc.s"
 .include "c:\Cores5\FT64\trunk\software\FMTK\source\kernel\FMTKmsg.s"
 .include "c:\Cores5\FT64\trunk\software\FMTK\source\kernel\TCB.s"
 .include "c:\Cores5\FT64\trunk\software\FMTK\source\kernel\IOFocusc.s"
 .include "c:\Cores5\FT64\trunk\software\FMTK\source\kernel\keybd.s"
+	.align	4096
 .include "c:\Cores5\FT64\trunk\software\FMTK\source\memmgnt2.s"
 .include "c:\Cores5\FT64\trunk\software\FMTK\source\app.s"
 .include "c:\Cores5\FT64\trunk\software\FMTK\source\shell.s"
 .include "c:\Cores5\FT64\trunk\software\bootrom\source\video.asm"
 .include "c:\Cores5\FT64\trunk\software\bootrom\source\TinyBasicDSD9.asm"
 
+	.align	4096
 .include "c:\Cores5\FT64\trunk\software\FMTK\source\kernel\scancodes.asm"
 .include "c:\Cores5\FT64\trunk\software\FMTK\source\kernel\fmtk_vars.asm"
