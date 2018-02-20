@@ -94,11 +94,13 @@ int sh_parse_line()
     int taskno;
     int (*ad)();
     int pri,cpu,parm,job;
+    int info;
 
     ch = sh_getchar();
     switch (ch) {
     case 'd':
-         FMTK_StartTask(040,0,debugger_task,0,0);
+         info = (040 << 48) | (job << 32) | (cpu);
+         FMTK_StartThread(debugger_task,8192,malloc(8192),null,info);
          break;
     case 't':
          DumpTaskList();
@@ -112,7 +114,7 @@ int sh_parse_line()
          }
          nd = sh_getHexNumber(&taskno);
          if (nd > 0) {
-             FMTK_KillTask(taskno);
+             FMTK_KillThread(taskno);
          }
          return 0;
     case 'j':
@@ -133,7 +135,8 @@ int sh_parse_line()
              if (nd <= 0) break;
              nd = sh_getHexNumber(&job);
              if (nd <= 0) break;
-             FMTK_StartTask(pri,cpu,ad,parm,job);
+             info = (pri << 48) | (job << 32) | (cpu);
+             FMTK_StartThread(ad,8192,malloc(8192),null,info);
          }
          break;        
     }
@@ -158,7 +161,7 @@ int shell()
     char ch;
 
     screen = (unsigned short int *)0xFFD00000;
-    RequestIOFocus(&jcbs[1]);
+    RequestIOFocus(ACBPtrs[1]);
     FMTK_StartTask(055,0,sprite_main,0,1);
     //printf("%10.6E",3.141592653589793238);
     forever {
@@ -171,9 +174,9 @@ int shell()
         }
         row = dbg_GetCursorRow();
         col = dbg_GetCursorCol();
-        for (nn = 0; nn < 84; nn++)
-            sh_linebuf[nn] = CvtScreenToAscii(screen[row * 84 + nn] & 0x3ff);
-        printf("%.84s", sh_linebuf);
+        for (nn = 0; nn < 80; nn++)
+            sh_linebuf[nn] = CvtScreenToAscii(screen[row * 80 + nn] & 0x3ff);
+        printf("%.80s", sh_linebuf);
         sh_parse();
     }
 }

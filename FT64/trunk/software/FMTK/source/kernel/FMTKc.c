@@ -57,8 +57,8 @@ int BIOS1_sema;
 extern int iof_sema;
 extern int sys_sema;
 int BIOS_RespMbx;
-char hasUltraHighPriorityTasks;
-int missed_ticks;
+extern char hasUltraHighPriorityTasks;
+extern int missed_ticks;
 
 short int video_bufs[NR_ACB][4096];
 extern hTCB TimeoutList;
@@ -161,16 +161,56 @@ ACB *GetACBPtr(register int n)
 {
     return (ACBPtrs[n]);
 }
-
 hACB GetAppHandle()
 {
 	return (GetRunningTCBPtr()->hApp);
+}
+
+ACB *GetRunningACBPtr()
+{
+	return (GetACBPtr(GetAppHandle()));
 }
 
 naked inline void SevenSeg(register int val) __attribute__(__no_temps)
 {
 	asm {
 		sh		r18,$FFDC0080
+	}
+}
+
+
+// ----------------------------------------------------------------------------
+// SetImLevel will only set the interrupt mask level to level higher than the
+// current one.
+//
+// Returns:
+//		int	- the previous interrupt level setting
+// ----------------------------------------------------------------------------
+
+int SetImLevel(register int level)
+{
+	int x;
+
+	if ((x = GetImLevel()) >= level)
+		return (x);
+	__asm {
+		csrrd	r1,#$044,r0		// read machine status register #$044
+		bfins	r1,r18,0,2		// insert the desired level in the im bits
+		csrrw	r1,#$044,r1		// and update the status reg
+		and		r1,r1,#7		// return only the im bits
+		// The following safety ramp is present because the interrupt level
+		// won't be set for a few machine cycles after the instruction to 
+		// set the level is fetched. An interrupt still might occur and
+		// be recognized after the CSR is set. It takes a few cycles for
+		// the setting to take effect.
+		add		r0,r0,#0
+		add		r0,r0,#0
+		add		r0,r0,#0
+		add		r0,r0,#0
+		add		r0,r0,#0
+		add		r0,r0,#0
+		add		r0,r0,#0
+		add		r0,r0,#0
 	}
 }
 

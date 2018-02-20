@@ -65,6 +65,7 @@ void FMTK_StartApp(AppStartupRec *asr)
 			return (ret);
 		// Allocate a page for the ACB
 		pACB = mmu_Alloc8kPage();
+		// Keep track of the physical address of the ACB
 		ACBPtrs[mapno] = pACB;
 		mmu_SetMapEntry(pACB,MMU_RW|0x10,0);
 		pACB->magic = ACB_MAGIC;
@@ -110,21 +111,22 @@ void FMTK_StartApp(AppStartupRec *asr)
 			page = mmu_Alloc8kPage();
 			p = (int *)(page << 13);
 			memcpy(p, &asr->pData[ndx], 8192);
-			mmu_SetMapEntry(p,MMU_EX|0x8,nn+1);
+			mmu_SetMapEntry(p,MMU_EX|0x8,nn+1+ncpages);
 			ndx += 1024;
 		}
-		mmu_SetMapEntry(p,MMU_EX|0x10,nn+1);
-		pData = (__int32 *)(1 << 13);
+		mmu_SetMapEntry(p,MMU_EX|0x10,nn+1+ncpages);
+		pData = (__int32 *)((1+ncpages) << 13);
 
 		// Allocate storage space for heap
 		nhpages = (asr->heapsize+8191) >> 13;
 		for (nn = 0; nn < nhpages; nn++)	{
 			page = mmu_Alloc8kPage();
 			p = (int *)(page << 13);
-			mmu_SetMapEntry(p,MMU_EX|0x8,nn+1+ncpages);
+			mmu_SetMapEntry(p,MMU_EX|0x8,nn+1+ndpages+ncpages);
 		}
-		mmu_SetMapEntry(p,MMU_EX|0x10,nn+1+ncpages);
-		pACB->pHeap = (MBLK *)(1+ncpages << 13);
+		mmu_SetMapEntry(p,MMU_EX|0x10,nn+1+ndpages+ncpages);
+		pACB->pHeap = (MBLK *)((1+ndpages+ncpages) << 13);
+		pACB->HeapSize = (((asr->heapsize + 8191) >> 13) << 13);
 		
 		omapno = mmu_SetOperateKey(mapno);
 		InitHeap(pACB->pHeap, nhpages << 13);
@@ -139,6 +141,7 @@ void FMTK_StartApp(AppStartupRec *asr)
 		}
 		pStack = (int *)((1020-nspages) << 13);
 
+		// Start the startup thread
 		info = (asr->priority << 48) | (mapno << 32) | asr->affinity;
 		FMTK_StartThread(
 			pCode,			// start address

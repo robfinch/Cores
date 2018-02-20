@@ -42,6 +42,7 @@ enum(-1) {
      E_QueStrategy,
      E_DCBInUse,
 	 E_Busy,
+	 E_BadPageno,
      //; Device driver errors
      E_BadDevNum,// =	0x20,
      E_NoDev,

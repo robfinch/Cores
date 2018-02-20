@@ -1,47 +1,73 @@
-#include "C:\Cores4\DSD\DSD9\trunk\software\c64libc\source\DSD9\io.h"
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2012-2018  Robert Finch, Waterloo
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+//
+// This source file is free software: you can redistribute it and/or modify 
+// it under the terms of the GNU Lesser General Public License as published 
+// by the Free Software Foundation, either version 3 of the License, or     
+// (at your option) any later version.                                      
+//                                                                          
+// This source file is distributed in the hope that it will be useful,      
+// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+// GNU General Public License for more details.                             
+//                                                                          
+// You should have received a copy of the GNU General Public License        
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+//                                                                          
+// ============================================================================
+//
+#include "..\..\..\c64libc\source\FT64\io.h"
 
-#define PIC               0xFFDC0F00
-#define PIC_IE            0xFFDC0F04
-#define PIC_ES            0xFFDC0F10
-#define PIC_RSTE          0xFFDC0F14
-
-extern int interrupt_table[512];
-
-// ----------------------------------------------------------------------------
-// Set an IRQ vector
-// The vector is checked for the two LSB's begin zero which is necessary
-// for a code address.
-// ----------------------------------------------------------------------------
-
-pascal void set_vector(register unsigned int vecno, register unsigned int rout)
-{
-     if (vecno > 511) return;
-     if (rout == 0) return;
-     interrupt_table[vecno] = rout;
-}
+#define PIC             0xFFDC0F00
+#define PIC_IE          0xFFDC0F04
+#define PIC_ES          0xFFDC0F10
+#define PIC_RSTE        0xFFDC0F14
+#define PIC_I30			0xFFDC0FF8
+#define PIC_I31			0xFFDC0FFC
 
 // ----------------------------------------------------------------------------
 // 0 is highest priority, 31 is lowest
 // 0    NMI (parity error)
 // 1    Keyboard reset button
-// 2    1024 Hz timer interrupt
-// 3    30Hz timer interrupt
 // ...
-// 31   keyboard interrupt 
+// 30   keyboard interrupt 
+// 31   60Hz timer interrupt
 // 
-// CPU #1 isn't wired to most IRQ's. There is no 1024Hz interrupt support.
-// In fact the only interrupts supported on CPU #1 is the 30Hz time slice,
-// parity NMI, and keyboard reset button.
+// 
 // ----------------------------------------------------------------------------
+
 void InitPIC()
 {
-	 int n;
-	 for (n = 0; n < 32; n = n + 1)
-		 out32(PIC+0x80+(n<<2),4);	// set interrupt level 4
-     out32(PIC_ES, 0x4000000C);  //timer interrupt(s) are edge sensitive
-     if (getCPU()==1)
-          out32(PIC_IE, 0xC0000000);  //enable keyboard reset, timer interrupts
-     else
-          out32(PIC_IE, 0x4000000B);  //enable keyboard reset, timer interrupts
-}
+	int n;
 
+	// Default Everything:
+	// - level sensitive
+	// - irq disabled
+	// - interrupt level 4
+	//	- cause 0
+	for (n = 0; n < 32; n = n + 1)
+		out32(PIC+0x80+(n<<2),0x400);
+//     out32(PIC_ES, 0x4000000C);  	
+
+	// - cause 30
+	// - interrupt level 2 (low priority)
+	// - edge sensitive
+	// - disabled
+    out32(PIC_I30, 0x2021E);
+	// - cause 31
+	// - interrupt level 1 (lowest priority)
+	// - edge sensitive
+	// - disabled
+    out32(PIC_I31, 0x2011F);		// time slice interrupt(s) are edge sensitive
+    if (getCPU()==0x1)
+        out32(PIC_IE, 0x00000000);  //enable keyboard reset, timer interrupts
+    else
+     	// - enable keyboard irq
+     	// - enable time slice irq
+        out32(PIC_IE, 0xC0000000);  //enable keyboard reset, timer interrupts
+}

@@ -1,45 +1,48 @@
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2012-2018  Robert Finch, Waterloo
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+//
+// This source file is free software: you can redistribute it and/or modify 
+// it under the terms of the GNU Lesser General Public License as published 
+// by the Free Software Foundation, either version 3 of the License, or     
+// (at your option) any later version.                                      
+//                                                                          
+// This source file is distributed in the hope that it will be useful,      
+// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+// GNU General Public License for more details.                             
+//                                                                          
+// You should have received a copy of the GNU General Public License        
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+//                                                                          
+// ============================================================================
+//
 #include ".\kernel\const.h"
 #include ".\kernel\config.h"
-
-#define NULL    (void *)0
-
-extern int highest_data_word;
-extern __int16 mm_freelist;		// head of list of free pages
-
-//unsigned __int32 *mmu_entries;
 
 // There are 1024 pages in each map. In the normal 8k page size that means a max of
 // 8Mib of memory for an app. Since there is 512MB ram in the system that equates
 // to 65536 x 8k pages.
 // However the last 144kB (18 pages) are reserved for memory management software.
 #define NPAGES	65518
-private naked void mem_vars()
-{
-	__asm {
-			.bss
-			org		$1FFDC000
-_syspages					dw	0
-_sys_pages_available		dw	0
-_sys_512k_pages_available	dw	0
-_mmu_FreeMaps	dw	0
-_mmu_entries	dw	0
-_mmu_freelist	dc	0
-// 512kB page allocation map (bit for each 8k page)
-			org		$1FFDE000
-_pam512:	fill.w	1024,0
-// page allocation map (links like a DOS FAT)
-			org		$1FFE0000
-_pam8:		fill.c	65518,0
-	}
-}
 
-extern int mmu_FreeMaps;
-extern __int16 mmu_freelist;
-extern __int32 *mmu_entries;
-extern int pam512[1024];
-extern __int16 pam8[NPAGES];
+#define NULL    (void *)0
+
+extern int highest_data_word;
+extern __int16 mmu_freelist;		// head of list of free pages
 extern int syspages;
 extern int sys_pages_available;
+extern int mmu_FreeMaps;
+extern __int32 *mmu_entries;
+
+//unsigned __int32 *mmu_entries;
+
+extern int pam512[1024];
+extern __int16 pam8[NPAGES];
 
 //private __int16 pam[NPAGES];	
 // There are 128, 4MB pages in the system. Each 4MB page is composed of 64 64kb pages.
@@ -87,6 +90,16 @@ naked inline void _SetMMUAccessKey(register int map)
 	}
 }
 
+// The access key for the mmu needs to be setup before the
+// page tables can be referenced.
+
+void mmu_SetAccessKey(register int mapno)
+{
+	if (mapno < 0 || mapno >= NR_MAPS)
+		throw (E_BadMapno);
+	_SetMMUAccessKey(mapno);
+}
+
 naked inline int _SetMMUOperateKey(register int map)
 {
 	__asm {
@@ -110,8 +123,12 @@ private pascal int Is512kPages()
 	}
 }
 
+// ----------------------------------------------------------------------------
 // Must be called to initialize the memory system before any
 // other calls to the memory system are made.
+// Initialization includes setting up the linked list of free pages and
+// setting up the 512k page bitmap.
+// ----------------------------------------------------------------------------
 
 void init_memory_management()
 {
@@ -139,6 +156,10 @@ void init_memory_management()
     syspages = 8 * 64;
 }
 
+// ----------------------------------------------------------------------------
+// Allocate an 8k page. The page is removed from the free list.
+// ----------------------------------------------------------------------------
+
 int mmu_Alloc8kPage()
 {
     int sb, pg4;
@@ -146,6 +167,7 @@ int mmu_Alloc8kPage()
 	if (mmu_freelist < syspages || mmu_freelist >= NPAGES)
 		throw (E_NoMem);
 	sb = mm_freelist;
+	mmu_RemoveFromFreeList(sb);
 	mmu_freelist = pam8[mmu_freelist];
 	sys_pages_available--;
 	pg4 = (sb >> 6);
@@ -153,15 +175,17 @@ int mmu_Alloc8kPage()
 	return (sb);
 }
 
+// ----------------------------------------------------------------------------
 // Takes a page number allocated with sys_alloc and returns it to
 // available memory pool.
+// ----------------------------------------------------------------------------
 
 pascal void mmu_Free8kPage(register int pg)
 {
 	int pg4;
 
     if (pg < syspages || pg >= NPAGES)
-        return;
+        throw (E_BadPAgeno);
 	pam8[pg] = mmu_freelist;
 	mmu_freelist = pg;
 	sys_pages_available++;
@@ -169,27 +193,47 @@ pascal void mmu_Free8kPage(register int pg)
 	pam512[pg4] &= ~(1 << (pg & 63));
 }
 
+// ----------------------------------------------------------------------------
 // Removes a 512kB page from the freelist.
+// We know that 64 consecutive pages should be removed. There's
+// no reason to test the rest of the free list once the 64 pages
+// have been removed.
+// ----------------------------------------------------------------------------
 
-private pascal void remove_from_freelist(register int a)
+private pascal void Remove512kPageFromFreelist(register int a)
 {
-	int c;
+	int c, p, f;
 
-	for (c = mmu_freelist; c >=0 && c < NPAGES; ) {
-		if ((c>>6)==a) {
-			c = mmu_freelist = pam8[mmu_freelist];
-			sys_pages_available--;
-		}
-		else
-			c = pam8[c];
-	}
+	// p is set to NPAGES+1 (an invalid page number with an available memory
+	// cell at the end of the table), so that a test of p doesn't have to be
+	// made in the loop.
+	p = NPAGES+1;
+	// Search for the first page of the 512k area
+	for (c = mmu_freelist; c >=0 && c < NPAGES && ((c>>6) != a); c = pam8[c])
+		p = c;
+	// Couldn't find the page ?
+	if (c < 0 || c >= NPAGES)
+		throw (E_BadPageno);
+	f = p;
+	// Search for the last page of the 512k area.
+	for (; (c>>6)==a; c = pam8[c])
+		p = c;
+	// Reset link for entire chain.
+	pam8[f] = pam8[p];
+	// The only time f is NPAGES+1 occurs when the pages are at the head of
+	// the free list.
+	if (f==NPAGES+1)
+		mmu_freelist = pam8[p];
+	sys_pages_available -= 64;
 }
 
+// ----------------------------------------------------------------------------
 // To allocate a 512kB page first a 512kB free area must be found.
 // This is done with a linear search of the pam512 bitmap.
 // Next the free list of 8kB pages must be traversed for free
 // pages in the region of the 512kB free page. These page must
 // be removed from the free list.
+// ----------------------------------------------------------------------------
 
 int mmu_Alloc512kPage()
 {
@@ -198,7 +242,7 @@ int mmu_Alloc512kPage()
 
 	for (count = 0; count < 1024; count++) {
 		if (pam512[a]==0) {
-			remove_from_freelist(a);
+			Remove512kPageFromFreelist(a);
 			pam512[a] = 0xFFFFFFFFFFFFFFFFL;
 			return (a);
 		}
@@ -209,25 +253,29 @@ int mmu_Alloc512kPage()
 	return (0xffff);
 }
 
+// ----------------------------------------------------------------------------
 // Freeing a 512kB page is relatively easy. It's just a matter of freeing all
 // 8kB pages that make it up.
 // The first page is for the BIOS / video memory. It can't be deallocated.
+// ----------------------------------------------------------------------------
 
 pascal void mmu_Free512kPage(register int pg)
 {
 	int p, cnt;
 
 	if (pg < 8 || pg > 1023)
-		return;
+		throw (E_BadPageno);
 	p = pg << 6;
 	for (cnt = 0; cnt < 64; cnt++, p++)
-		free_8k_page(p);
+		mmu_Free8kPage(p);
 }
 
 
+// ----------------------------------------------------------------------------
 // In the page table there will be up to 1024 entries.
 // Need to find npages of consecutive free entries in the page table.
 // Works for either 8k or 512kB page size.
+// ----------------------------------------------------------------------------
 
 private pascal int findMMUPages(register int npages, register int maxpages)
 {
@@ -254,8 +302,11 @@ L1:	;
 	return (0xffff);
 }
 
+// ----------------------------------------------------------------------------
 // Allocate npages from the page table
 //
+// ----------------------------------------------------------------------------
+
 private pascal int allocMMUPages(register int npages, register int acr)
 {
 	int first_page;
@@ -277,6 +328,9 @@ private pascal int allocMMUPages(register int npages, register int acr)
 	mmu_entries[n] = (2 << 19) | (acr << 16) | (page & 0xffff);
 	return (first_page);
 }
+
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
 
 private pascal int alloc512kMMUPages(register int npages, register int acr)
 {
@@ -300,12 +354,15 @@ private pascal int alloc512kMMUPages(register int npages, register int acr)
 	return (first_page);
 }
 
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+
 private pascal void freeMMUPages(register int first_page)
 {
 	int n;
 
 	if (first_page < 0 || first_page > 1023)
-		return;
+		throw (E_BadPageno);
 
 	n = first_page;
 	while ((mmu_entries[n] & 0x180000)!=100000 && n < 1024) {	// last page ?
@@ -368,20 +425,6 @@ pascal void mmu_free(register char *pmem)
 	}
 }
 
-
-// The access key for the mmu needs to be setup before the
-// page tables can be referenced.
-
-void mmu_SetAccessKey(register int mapno)
-{
-	if (mapno < 0 || mapno >= NR_MAPS)
-		throw (E_BadMapno);
-	asm {
-		csrrd	r1,#3,r0		// get PCR
-		bfins	r1,r18,#8,#15
-		csrrw	r0,#3,r1		// set PCR
-	}
-}
 
 int mmu_AllocateMap()
 {

@@ -1,9 +1,19 @@
+#include ".\FMTK\source\kernel\types.h"
+#include ".\FMTK\source\kernel\proto.h"
+#include ".\FMTK\source\kernel\glo.h"
+
 #define BTNC	16
 #define BTNU	8
 #define BTND	4
 #define BTNL	2
 #define BTNR	1
 #define AVIC	((unsigned __int32 *)0xFFDCC000)
+
+extern int StartApp;
+extern __int32 *begin_init_data;
+extern __int32 *end_init_data;
+extern int shell();
+extern int IdleThread();
 
 // By declaring the function with the __no_temps attribute it tells the
 // compiler that the function doesn't use any temporaries. That means
@@ -57,6 +67,51 @@ static naked inline int GetButton()
 	}
 }
 
+void BIOS_StartApp(register AppStartupRec *asr)
+{
+	__asm {
+		brk		#70
+		dh		12		// Start App
+	}
+}
+
+void StartThread(register __int32 *StartAddr, register int stacksize, register int *pStack, register char *pCmdLine, register int info)
+{
+	__asm {
+		brk		#70
+		dh		1		// Start thread
+	}	
+}
+
+void StartBIOS()
+{
+	AppStartupRec asr;
+
+	asr.pagesize = 0;
+	asr.priority = 044;
+	asr.affinity = 0;
+	asr.codesize = 16;
+	asr.pCode = StartApp;
+	asr.pData = begin_init_data;
+	asr.datasize = end_init_data - begin_init_data;
+	asr.heapsize = 65535;
+	asr.stacksize = 8191;
+
+	BIOS_StartApp(&asr);
+
+	asr.pagesize = 0;
+	asr.priority = 043;
+	asr.affinity = 0;
+	asr.codesize = 16;
+	asr.pCode = shell;
+	asr.pData = begin_init_data;
+	asr.datasize = end_init_data - begin_init_data;
+	asr.heapsize = 65535;
+	asr.stacksize = 8191;
+
+	BIOS_StartApp(&asr);
+}
+
 void BIOSMain()
 {
 	float pi = 3.1415926535897932384626;
@@ -67,18 +122,20 @@ void BIOSMain()
 	int *pStack;
 	int info;
 
+    RequestIOFocus(ACBPtrs[0]);
+
 	pStack = new int[1024];
 	// priority | hApp | affinity
 	info = (077 << 48) | (0 << 32) | 0;
-	FMTK_StartThread(IdleThread,1024,pStack,0,info);
+	StartThread(IdleThread,1024,pStack,0,info);
 	info = (030 << 48) | (0 << 32) | 0;
-	FMTK_StartThread(FocusSwitcher, 1024, new int[1024], 0, info);
+	StartThread(FocusSwitcher, 1024, new int[1024], 0, info);
     asm {
         ldi   r1,#46
         sb    r1,$FFDC0600
     }
 	info = (033 << 48) | (0 << 32) | 0;
-	FMTK_StartThread(shell, 1024, new int[1024], 0, info);
+	StartThread(shell, 1024, new int[1024], 0, info);
     asm {
         ldi   r1,#129
         sb    r1,$FFDC0600

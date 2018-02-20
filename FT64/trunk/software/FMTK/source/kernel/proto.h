@@ -28,11 +28,15 @@
 //
 // ACB functions
 ACB *GetACBPtr();                   // get the ACB pointer of the running task
+ACB *GetRunningACBPtr();
 hACB GetAppHandle();
 
 void FMTK_Reschedule();
 int FMTK_SendMsg(register hMBX hMbx, register int d1, register int d2, register int d3);
 int FMTK_WaitMsg(register hMBX hMbx, register int *d1, register int *d2, register int *d3, register int timelimit);
+int FMTK_StartThread(register __int32 *pCode, register int stacksize, register int *pStack, register char *pCmd, register int info);
+int FMTK_StartApp(register AppStartupRec *rec);
+void RequestIOFocus(register ACB *);
 
 pascal int chkTCB(register TCB *p);
 pascal int InsertIntoReadyList(register hTCB ht);
@@ -83,6 +87,28 @@ naked inline void UnlockKbdSemaphore()
 	__asm {
 		ldi		r1,#16
 		csrrc	r0,#12,r1
+	}
+}
+
+
+naked inline int GetImLevel()
+{
+	__asm {
+		csrrd	r1,#$044,r0
+		and		r1,r1,#7
+	}
+}
+
+// Restoring the interrupt level does not have a ramp, because the level is
+// being set back to enable interrupts, from a disabled state. Following the
+// restore interupts are allowed to happen, we don't care if they do.
+
+naked inline void RestoreImLevel(register int level)
+{
+	__asm {
+		csrrd	r1,#$044,r0
+		bfins	r1,r18,0,2
+		csrrw	r1,#$044,r1
 	}
 }
 

@@ -36,6 +36,7 @@ typedef struct _tagACB align(2048)
 	unsigned int magic;			// ACB ACB 
 	struct _tagObject *garbage_list;
 	MBLK *pHeap;
+	int HeapSize;
     struct _tagACB *iof_next;
     struct _tagACB *iof_prev;
     char UserName[32];
@@ -76,9 +77,9 @@ typedef struct _tagTCB align(1024) {
 	hTCB mbq_next;
 	hTCB mbq_prev;
 	int stacksize;
+	int *stack;
 	int *sys_stack;
 	int *bios_stack;
-	int *stack;
 	int timeout;
 	MSG msg;
 	hMBX hMailboxes[4]; // handles of mailboxes owned by task

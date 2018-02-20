@@ -4,7 +4,7 @@
 ;
 ; how to build:
 ; 1. assemble using "AS64 +gFn .\boottc\boottc.asm"
-; 2. copy boot.ve0 to the correct directory if not already there
+; 2. copy boottc.ve0 to the correct directory if not already there
 ;
 ;------------------------------------------------------------------------------
 ;
@@ -174,6 +174,7 @@ start:
 		sw		r0,_milliseconds
 		call	_init_memory_management
 		call	_FMTK_Initialize
+		call	_InitPIC
 		
 		; Enable interrupts
 		sei		#0
@@ -841,8 +842,8 @@ vec2data:
 .include "c:\Cores5\FT64\trunk\software\c64libc\source\ctype.s"
 .include "c:\Cores5\FT64\trunk\software\c64libc\source\string.s"
 .include "c:\Cores5\FT64\trunk\software\c64libc\source\malloc.s"
-.include "c:\Cores5\FT64\trunk\software\c64libc\source\DSD9\io.s"
 .include "c:\Cores5\FT64\trunk\software\c64libc\source\prtflt.s"
+.include "c:\Cores5\FT64\trunk\software\c64libc\source\FT64\io.s"
 .include "c:\Cores5\FT64\trunk\software\c64libc\source\libquadmath\log10q.s"
 .include "c:\Cores5\FT64\trunk\software\FMTK\source\kernel\LockSemaphore.s"
 .include "c:\Cores5\FT64\trunk\software\FMTK\source\kernel\UnlockSemaphore.s"
@@ -853,7 +854,9 @@ vec2data:
 .include "c:\Cores5\FT64\trunk\software\FMTK\source\kernel\TCB.s"
 .include "c:\Cores5\FT64\trunk\software\FMTK\source\kernel\IOFocusc.s"
 .include "c:\Cores5\FT64\trunk\software\FMTK\source\kernel\keybd.s"
+.include "c:\Cores5\FT64\trunk\software\FMTK\source\memmgnt2.s"
 .include "c:\Cores5\FT64\trunk\software\FMTK\source\app.s"
+.include "c:\Cores5\FT64\trunk\software\FMTK\source\shell.s"
 .include "c:\Cores5\FT64\trunk\software\bootrom\source\video.asm"
 .include "c:\Cores5\FT64\trunk\software\bootrom\source\TinyBasicDSD9.asm"
 
