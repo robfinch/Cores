@@ -25,13 +25,47 @@
 //
 // ============================================================================
 //
-module FT64_mpu(hartid_i,rst_i, clk4x_i, clk_i,irq_i,vec_i,cyc_o,stb_o,ack_i,err_i,we_o,sel_o,adr_o,dat_o,dat_i);
+module FT64_mpu(hartid_i,rst_i, clk4x_i, clk_i, tm_clk_i, irq_o,
+    i1,i2,i3,i4,i5,i6,i7,i8,i9,i10,i11,i12,i13,i14,i15,i16,i17,i18,i19,
+    i20,i21,i22,i23,i24,i25,i26,i27,i28,i29,i30,
+	cti_o,bte_o,cyc_o,stb_o,ack_i,err_i,we_o,sel_o,adr_o,dat_o,dat_i);
 input [63:0] hartid_i;
 input rst_i;
 input clk4x_i;
 input clk_i;
-input [2:0] irq_i;
-input [8:0] vec_i;
+input tm_clk_i;
+input i1;
+input i2;
+input i3;
+input i4;
+input i5;
+input i6;
+input i7;
+input i8;
+input i9;
+input i10;
+input i11;
+input i12;
+input i13;
+input i14;
+input i15;
+input i16;
+input i17;
+input i18;
+input i19;
+input i20;
+input i21;
+input i22;
+input i23;
+input i24;
+input i25;
+input i26;
+input i27;
+input i28;
+input i29;
+input i30;
+output [2:0] cti_o;
+output [1:0] bte_o;
 output cyc_o;
 output stb_o;
 input ack_i;
@@ -45,14 +79,77 @@ input [63:0] dat_i;
 wire cyc,stb,we;
 wire [31:0] adr;
 reg [63:0] dati;
+wire [2:0] irq;
+wire [6:0] cause;
 wire mmu_ack;
 wire [31:0] mmu_dato;
+wire pic_ack;
+wire [31:0] pic_dato;
 wire ack;
 wire [2:0] ol;
 wire [31:0] pcr;
 wire [63:0] pcr2;
 wire icl;           // instruction cache load
 wire exv,rdv,wrv;
+wire pulse60;
+
+FT64_60Hz #(.CLK_FREQ(20000000)) u60Hz
+(
+    .rst_i(rst_i),
+    .clk_i(clk_i),
+    ._60Hz_o(pulse60)
+);
+
+FT64_pic upic1
+(
+	.rst_i(rst_i),		// reset
+	.clk_i(clk_i),		// system clock
+	.cyc_i(cyc),
+	.stb_i(stb),
+	.ack_o(pic_ack),    // controller is ready
+	.wr_i(we_o),		// write
+	.adr_i(adr),		// address
+	.dat_i(dat_o[31:0]),
+	.dat_o(pic_dato),
+	.vol_o(),			// volatile register selected
+	.i1(i1),
+	.i2(i2),
+	.i3(i3),
+	.i4(i4),
+	.i5(i5),
+	.i6(i6),
+	.i7(i7),
+	.i8(i8),
+	.i9(i9),
+	.i10(i10),
+	.i11(i11),
+	.i12(i12),
+	.i13(i13),
+	.i14(i14),
+	.i15(i15),
+	.i16(i16),
+	.i17(i17),
+	.i18(i18),
+	.i19(i19),
+	.i20(i20),
+	.i21(i21),
+	.i22(i22),
+	.i23(i23),
+	.i24(i24),
+	.i25(i25),
+	.i26(i26),
+	.i27(i27),
+	.i28(i28),
+	.i29(i29),
+	.i30(i30),
+	.i31(pulse60),
+	.irqo(irq),
+	.nmii(1'b0),
+	.nmio(),
+	.causeo(cause)
+);
+
+assign irq_o = irq;
 
 FT64_mmu ummu1
 (
@@ -79,12 +176,13 @@ FT64_mmu ummu1
 );
 
 always @*
-case(mmu_ack)
-1'b1:       dati <= {2{mmu_dato}};
+casez({mmu_ack,pic_ack})
+2'b1?:      dati <= {2{mmu_dato}};
+2'b01:		dati <= {2{pic_dato}};
 default:    dati <= dat_i;
 endcase
 
-assign ack = ack_i|mmu_ack;
+assign ack = ack_i|mmu_ack|pic_ack;
 
 FT64 ucpu1
 (
@@ -92,8 +190,11 @@ FT64 ucpu1
     .rst(rst_i),
     .clk(clk_i),
     .clk4x(clk4x_i),
-    .irq_i(irq_i),
-    .vec_i(vec_i),
+    .tm_clk_i(tm_clk_i),
+    .irq_i(irq),
+    .vec_i(cause),
+    .cti_o(cti_o),
+    .bte_o(bte_o),
     .cyc_o(cyc),
     .stb_o(stb),
     .ack_i(ack),

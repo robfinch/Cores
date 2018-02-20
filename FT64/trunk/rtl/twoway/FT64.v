@@ -98,20 +98,21 @@
 // ============================================================================
 //
 `include "FT64_defines.vh"
-`define SUPPORT_SMT		1'b1
+//`define SUPPORT_SMT		1'b1
 //`define SUPPORT_DBG		1'b1
 `define FULL_ISSUE_LOGIC	1'b1
 `define QBITS		2:0
 `define QENTRIES	8
 
-module FT64(hartid, rst, clk, clk4x, irq_i, vec_i, bte_o, cti_o, cyc_o, stb_o, ack_i, err_i, we_o, sel_o, adr_o, dat_o, dat_i,
+module FT64(hartid, rst, clk, clk4x, tm_clk_i, irq_i, vec_i, bte_o, cti_o, cyc_o, stb_o, ack_i, err_i, we_o, sel_o, adr_o, dat_o, dat_i,
     ol_o, pcr_o, pcr2_o, exv_i, rdv_i, wrv_i, icl_o, sr_o, cr_o, rbi_i, signal_i);
 input [63:0] hartid;
 input rst;
 input clk;
 input clk4x;
+input tm_clk_i;
 input [2:0] irq_i;
-input [8:0] vec_i;
+input [6:0] vec_i;
 output reg [1:0] bte_o;
 output reg [2:0] cti_o;
 output reg cyc_o;
@@ -135,6 +136,7 @@ output reg sr_o;
 input rbi_i;
 input [31:0] signal_i;
 
+parameter TM_CLKFREQ = 20000000;
 parameter QENTRIES = `QENTRIES;
 parameter RSTPC = 32'hFFFC0100;
 parameter BRKPC = 32'hFFFC0000;
@@ -243,12 +245,14 @@ wire thread_en = 1'b0;
 wire vechain = cr0[18];
 reg [7:0] fcu_timeout;
 reg [63:0] tick;
+reg [63:0] wc_time;
 reg [31:0] pcr;
 reg [63:0] pcr2;
 assign pcr_o = pcr;
 assign pcr2_o = pcr2;
 reg [63:0] aec;
 reg [15:0] cause[0:15];
+`ifdef SUPPORT_SMT
 reg [31:0] epc [0:NTHREAD];
 reg [31:0] epc0 [0:NTHREAD];
 reg [31:0] epc1 [0:NTHREAD];
@@ -267,11 +271,9 @@ wire [7:0] cpl [0:NTHREAD];
 assign cpl[0] = mstatus[0][13:6];	// current privilege level
 wire [5:0] rgs [0:NTHREAD];
 assign rgs[0] = mstatus[0][19:14];
-`ifdef SUPPORT_SMT
 assign ol[1] = mstatus[1][5:3];	// operating level
 assign cpl[1] = mstatus[1][13:6];	// current privilege level
 assign rgs[1] = mstatus[1][19:14];
-`endif
 reg [23:0] ol_stack [0:NTHREAD];
 reg [23:0] im_stack [0:NTHREAD];
 reg [63:0] pl_stack [0:NTHREAD];
@@ -281,6 +283,36 @@ wire mprv = mstatus[0][55];
 wire [5:0] fprgs = mstatus[0][25:20];
 assign ol_o = mprv ? ol_stack[0][2:0] : ol[0];
 wire vca = mstatus[0][32];		// vector chaining active
+`else
+reg [31:0] epc ;
+reg [31:0] epc0 ;
+reg [31:0] epc1 ;
+reg [31:0] epc2 ;
+reg [31:0] epc3 ;
+reg [31:0] epc4 ;
+reg [31:0] epc5 ;
+reg [31:0] epc6 ;
+reg [31:0] epc7 ;
+reg [31:0] epc8 ; 			// exception pc and stack
+reg [63:0] mstatus ;  		// machine status
+wire [2:0] im = mstatus[2:0];
+wire [2:0] ol ;
+assign ol = mstatus[5:3];	// operating level
+wire [7:0] cpl ;
+assign cpl = mstatus[13:6];	// current privilege level
+wire [5:0] rgs ;
+assign rgs = mstatus[19:14];
+reg [23:0] ol_stack ;
+reg [23:0] im_stack ;
+reg [63:0] pl_stack ;
+reg [63:0] rs_stack ;
+reg [63:0] fr_stack ;
+wire mprv = mstatus[55];
+wire [5:0] fprgs = mstatus[25:20];
+assign ol_o = mprv ? ol_stack[2:0] : ol;
+wire vca = mstatus[32];		// vector chaining active
+`endif
+reg [63:0] tcb;
 reg [31:0] badaddr[0:15];
 reg [31:0] tvec[0:7];
 reg [63:0] sema;
@@ -409,6 +441,7 @@ reg        iqentry_mem	[0:QENTRIES-1];	// touches memory: 1 if LW/SW
 reg        iqentry_memndx   [0:QENTRIES-1];  // indexed memory operation 
 reg        iqentry_memdb    [0:QENTRIES-1];
 reg        iqentry_memsb    [0:QENTRIES-1];
+reg [QENTRIES-1:0] iqentry_sei;
 reg        iqentry_aq   [0:QENTRIES-1];	// memory aquire
 reg        iqentry_rl   [0:QENTRIES-1];	// memory release
 reg        iqentry_jmp	[0:QENTRIES-1];	// changes control flow: 1 if BEQ/JALR
@@ -419,7 +452,7 @@ reg        iqentry_rfw	[0:QENTRIES-1];	// writes to register file
 reg  [7:0] iqentry_we   [0:QENTRIES-1];	// enable strobe
 reg [63:0] iqentry_res	[0:QENTRIES-1];	// instruction result
 reg [31:0] iqentry_instr[0:QENTRIES-1];	// instruction opcode
-reg  [3:0] iqentry_exc	[0:QENTRIES-1];	// only for branches ... indicates a HALT instruction
+reg  [7:0] iqentry_exc	[0:QENTRIES-1];	// only for branches ... indicates a HALT instruction
 reg [RBIT:0] iqentry_tgt	[0:QENTRIES-1];	// Rt field or ZERO -- this is the instruction's target (if any)
 reg  [5:0] iqentry_ven  [0:QENTRIES-1];  // vector element number
 reg [63:0] iqentry_a0	[0:QENTRIES-1];	// argument 0 (immediate)
@@ -508,7 +541,6 @@ reg  [`QBITS] head5;	// used only to determine memory-access ordering
 reg  [`QBITS] head6;	// used only to determine memory-access ordering
 reg  [`QBITS] head7;	// used only to determine memory-access ordering
 
-wire  [`QBITS] missid;
 wire take_branch0;
 wire take_branch1;
 
@@ -642,6 +674,7 @@ reg   [8:0] fcu_exc;
 wire        fcu_v;
 reg        fcu_thrd;
 reg        fcu_branchmiss;
+reg  fcu_clearbm;
 wire [31:0] fcu_misspc;
 
 reg [63:0] amo_argA;
@@ -649,9 +682,11 @@ reg [63:0] amo_argB;
 wire [63:0] amo_res;
 reg [31:0] amo_instr;
 
-wire        branchmiss;
-wire branchmiss_thrd;
-wire [31:0] misspc;
+reg branchmiss;
+reg branchmiss_thrd;
+reg [31:0] misspc;
+reg  [`QBITS] missid;
+
 wire take_branch;
 wire take_branchA;
 wire take_branchB;
@@ -839,6 +874,7 @@ FT64_L2_icache uic2
     .nxt(L2_nxt),
     .wr(bstate==B7 && ack_i),
     .adr(L2_adr),
+    .cnt(iccnt),
     .exv_i(exvq),
     .i(dat_i),
     .err_i(errq),
@@ -1176,10 +1212,10 @@ end
 wire hirq = (irq_i > im) && ~int_commit;
 always @*
 if (hirq)
-	insn0 <= {13'd0,irq_i,1'b0,vec_i,`BRK};
+	insn0 <= {13'd0,irq_i,3'b1,vec_i,`BRK};
 else if (phit) begin
 	if (insn0a[`INSTRUCTION_OP]==`BRK && insn0a[23:19]==5'd0)
-		insn0 <= {13'd1,3'd0,1'b0,`FLT_PRIV,`BRK};
+		insn0 <= {13'd1,3'd0,3'b0,`FLT_PRIV,`BRK};
 	else
     	insn0 <= insn0a;
 end
@@ -1187,10 +1223,10 @@ else
     insn0 <= `NOP_INSN;
 always @*
 if (hirq & ~thread_en)
-    insn1 <= {13'd0,irq_i,1'b0,vec_i,`BRK};
+    insn1 <= {13'd0,irq_i,3'b1,vec_i,`BRK};
 else if (phit) begin
 	if (insn1a[`INSTRUCTION_OP]==`BRK && insn1a[23:19]==5'd0)
-		insn1 <= {13'd1,3'd0,1'b0,`FLT_PRIV,`BRK};
+		insn1 <= {13'd1,3'd0,3'b0,`FLT_PRIV,`BRK};
 	else
 	    insn1 <= insn1a;
 end
@@ -1371,6 +1407,7 @@ case(id)
 endcase
 endfunction
 
+`ifdef SUPPORT_SMT
 function [RBIT:0] fnRa;
 input [31:0] isn;
 input [5:0] vqei;
@@ -1457,6 +1494,10 @@ input thrd;
 case(isn[`INSTRUCTION_OP])
 `RR:        case(isn[`INSTRUCTION_S2])
             `SVX:       fnRc = {vqei,1'b1,isn[`INSTRUCTION_RC]};
+	        `SBX,`SCX,`SHX,`SWX,`SWCX,`CACHEX:
+	        	fnRc = {rgs[thrd],1'b0,isn[`INSTRUCTION_RC]};
+	        `CMOVEQ,`CMOVNE,`MAJ:
+	        	fnRc = {rgs[thrd],1'b0,isn[`INSTRUCTION_RC]};
             default:    fnRc = {rgs[thrd],1'b0,isn[`INSTRUCTION_RC]};
             endcase
 `VECTOR:
@@ -1465,6 +1506,7 @@ case(isn[`INSTRUCTION_OP])
             default:    fnRc = {vqei,1'b1,isn[`INSTRUCTION_RC]};
             endcase
 `FLOAT:		fnRc = {rgs[thrd][5:1],1'b1,1'b0,isn[`INSTRUCTION_RC]};
+`BccR:		fnRc = {rgs[thrd],1'b0,isn[`INSTRUCTION_RC]};
 default:    fnRc = {rgs[thrd],1'b0,isn[`INSTRUCTION_RC]};
 endcase
 endfunction
@@ -1526,7 +1568,8 @@ casez(isn[`INSTRUCTION_OP])
         `LVX:       fnRt = {vqei,1'b1,isn[20:16]};
         `SHIFT,`SHIFTB,`SHIFTC,`SHIFTH:
         			fnRt = isn[25] ? {rgs[thrd],1'b0,isn[`INSTRUCTION_RB]} : {rgs[thrd],1'b0,isn[`INSTRUCTION_RC]};
-        `SEI,`WAIT,`RTI,`CHK,
+        `SEI:		fnRt = {rgs[thrd],1'b0,isn[`INSTRUCTION_RB]};
+        `WAIT,`RTI,`CHK,
         `SBX,`SCX,`SHX,`SWX,`SWCX,`CACHEX:
         			fnRt = 12'd0;
         default:    fnRt = {rgs[thrd],1'b0,isn[`INSTRUCTION_RC]};
@@ -1545,6 +1588,7 @@ casez(isn[`INSTRUCTION_OP])
 `Bcc:   fnRt = 12'd0;
 `BccR:  fnRt = 12'd0;
 `BBc:   case(isn[19:17])
+		`IBNE:	fnRt = {rgs[thrd],1'b0,isn[`INSTRUCTION_RA]};
 		`DBNZ:	fnRt = {rgs[thrd],1'b0,isn[`INSTRUCTION_RA]};
 		default:	fnRt = 12'd0;
 		endcase
@@ -1559,6 +1603,203 @@ casez(isn[`INSTRUCTION_OP])
 default:    fnRt = {rgs[thrd],1'b0,isn[`INSTRUCTION_RB]};
 endcase
 endfunction
+`else
+function [RBIT:0] fnRa;
+input [31:0] isn;
+input [5:0] vqei;
+input [5:0] vli;
+input thrd;
+case(isn[`INSTRUCTION_OP])
+`VECTOR:
+	case(isn[`INSTRUCTION_S2])
+        `VCIDX,`VSCAN:  fnRa = {6'd0,1'b1,isn[`INSTRUCTION_RA]};
+        `VMxx:
+        	case(isn[25:23])
+        	`VMAND,`VMOR,`VMXOR,`VMXNOR,`VMPOP,`VMFIRST,`VMLAST:
+                    fnRa = {6'h3F,1'b1,2'b0,isn[8:6]};
+            `VMFILL:fnRa = {6'd0,1'b1,isn[`INSTRUCTION_RA]};
+            default:fnRa = {6'h3F,1'b1,2'b0,isn[8:6]};
+            endcase
+        `VSHLV:     fnRa = (vqei+1+isn[15:11] >= vli) ? 11'h000 : {vli-vqei-isn[15:11]-1,1'b1,isn[`INSTRUCTION_RA]};
+        `VSHRV:     fnRa = (vqei+isn[15:11] >= vli) ? 11'h000 : {vqei+isn[15:11],1'b1,isn[`INSTRUCTION_RA]};
+        `VSxx,`VSxxU,`VSxxS,`VSxxSU:    fnRa = {vqei,1'b1,isn[`INSTRUCTION_RA]};
+        default:    fnRa = {vqei,1'b1,isn[`INSTRUCTION_RA]};
+        endcase
+`RR:    case(isn[`INSTRUCTION_S2])
+		`MOV:
+			case(isn[25:23])
+			3'd0:	fnRa = {rgs,1'b0,isn[`INSTRUCTION_RA]};
+			3'd1:	fnRa = {isn[21:16],1'b0,isn[`INSTRUCTION_RA]};
+			3'd2:	fnRa = {rgs,1'b0,isn[`INSTRUCTION_RA]};
+			3'd3:	fnRa = {rs_stack[5:0],1'b0,isn[`INSTRUCTION_RA]};
+			3'd4:	fnRa = {rgs,1'b0,isn[`INSTRUCTION_RA]};
+			3'd5:	fnRa = {rgs[5:1],1'b1,1'b0,isn[`INSTRUCTION_RA]};
+			default:fnRa = {rgs,1'b0,isn[`INSTRUCTION_RA]};
+			endcase
+        `VMOV:
+            case (isn[`INSTRUCTION_S1])
+            5'h0:   fnRa = {rgs,1'b0,isn[`INSTRUCTION_RA]};
+            5'h1:   fnRa = {6'h3F,1'b1,isn[`INSTRUCTION_RA]};
+            endcase
+        default:    fnRa = {rgs,1'b0,isn[`INSTRUCTION_RA]};
+        endcase
+`FLOAT:		fnRa = {rgs[5:1],1'b1,1'b0,isn[`INSTRUCTION_RA]};
+default:    fnRa = {rgs,1'b0,isn[`INSTRUCTION_RA]};
+endcase
+endfunction
+
+function [RBIT:0] fnRb;
+input [31:0] isn;
+input fb;
+input [5:0] vqei;
+input [5:0] rfoa0i;
+input [5:0] rfoa1i;
+input thrd;
+case(isn[`INSTRUCTION_OP])
+`RR:        case(isn[`INSTRUCTION_S2])
+            `VEX:       fnRb = fb ? {rfoa1i,1'b1,isn[`INSTRUCTION_RB]} : {rfoa0i,1'b1,isn[`INSTRUCTION_RB]};
+            `LVX,`SVX:  fnRb = {vqei,1'b1,isn[`INSTRUCTION_RB]};
+            default:    fnRb = {rgs,1'b0,isn[`INSTRUCTION_RB]};
+            endcase
+`VECTOR:
+			case(isn[`INSTRUCTION_S2])
+			`VMxx:
+				case(isn[25:23])
+            	`VMAND,`VMOR,`VMXOR,`VMXNOR,`VMPOP:
+                	fnRb = {6'h3F,1'b1,2'b0,isn[13:11]};
+                default:	fnRb = 12'h000;
+            	endcase
+            `VXCHG:     fnRb = {vqei,1'b1,isn[`INSTRUCTION_RB]};
+            `VSxx,`VSxxU:   fnRb = {vqei,1'b1,isn[`INSTRUCTION_RB]};
+        	`VSxxS,`VSxxSU:    fnRb = {vqei,1'b0,isn[`INSTRUCTION_RB]};
+            `VADDS,`VSUBS,`VMULS,`VANDS,`VORS,`VXORS,`VXORS:
+                fnRb = {rgs,1'b0,isn[`INSTRUCTION_RB]};
+            `VSHL,`VSHR,`VASR:
+                fnRb = {isn[25],isn[22]}==2'b00 ? {rgs,1'b0,isn[`INSTRUCTION_RB]} : {vqei,1'b1,isn[`INSTRUCTION_RB]};
+            default:    fnRb = {vqei,1'b1,isn[`INSTRUCTION_RB]};
+            endcase
+`FLOAT:		fnRb = {rgs[5:1],1'b1,1'b0,isn[`INSTRUCTION_RB]};
+default:    fnRb = {rgs,1'b0,isn[`INSTRUCTION_RB]};
+endcase
+endfunction
+
+function [RBIT:0] fnRc;
+input [31:0] isn;
+input [5:0] vqei;
+input thrd;
+case(isn[`INSTRUCTION_OP])
+`RR:        case(isn[`INSTRUCTION_S2])
+            `SVX:       fnRc = {vqei,1'b1,isn[`INSTRUCTION_RC]};
+	        `SBX,`SCX,`SHX,`SWX,`SWCX,`CACHEX:
+	        	fnRc = {rgs,1'b0,isn[`INSTRUCTION_RC]};
+	        `CMOVEQ,`CMOVNE,`MAJ:
+	        	fnRc = {rgs,1'b0,isn[`INSTRUCTION_RC]};
+            default:    fnRc = {rgs,1'b0,isn[`INSTRUCTION_RC]};
+            endcase
+`VECTOR:
+			case(isn[`INSTRUCTION_S2])
+            `VSxx,`VSxxS,`VSxxU,`VSxxSU:    fnRc = {6'h3F,1'b1,2'b0,isn[18:16]};
+            default:    fnRc = {vqei,1'b1,isn[`INSTRUCTION_RC]};
+            endcase
+`FLOAT:		fnRc = {rgs[5:1],1'b1,1'b0,isn[`INSTRUCTION_RC]};
+`BccR:		fnRc = {rgs,1'b0,isn[`INSTRUCTION_RC]};
+default:    fnRc = {rgs,1'b0,isn[`INSTRUCTION_RC]};
+endcase
+endfunction
+
+function [RBIT:0] fnRt;
+input [31:0] isn;
+input [5:0] vqei;
+input [5:0] vli;
+input thrd;
+casez(isn[`INSTRUCTION_OP])
+`VECTOR:
+		case(isn[`INSTRUCTION_S2])
+		`VMxx:
+			case(isn[25:23])
+        	`VMAND,`VMOR,`VMXOR,`VMXNOR,`VMFILL:
+                    fnRt = {6'h3F,1'b1,2'b0,isn[18:16]};
+            `VMPOP:	fnRt = {rgs,1'b0,isn[`INSTRUCTION_RB]};
+            default:
+                    fnRt = {6'h3F,1'b1,2'b0,isn[18:16]};
+            endcase
+        `VSxx,`VSxxU,`VSxxS,`VSxxSU:    fnRt = {6'h3F,1'b1,2'b0,isn[18:16]};
+        `VSHLV:     fnRt = (vqei+1 >= vli) ? 11'h000 : {vli-vqei-1,1'b1,isn[`INSTRUCTION_RC]};
+        `VSHRV:     fnRt = (vqei >= vli) ? 11'h000 : {vqei,1'b1,isn[`INSTRUCTION_RC]};
+        `VEINS:     fnRt = {vqei,1'b1,isn[`INSTRUCTION_RC]};	// ToDo: add element # from Ra
+        `V2BITS:    fnRt = {rgs,1'b0,isn[`INSTRUCTION_RB]};
+        default:    fnRt = {vqei,1'b1,isn[`INSTRUCTION_RC]};
+        endcase
+       
+`RR:    case(isn[`INSTRUCTION_S2])
+		`MOV:
+			case(isn[25:23])
+			3'd0:	fnRt = {isn[21:16],1'b0,isn[`INSTRUCTION_RB]};
+			3'd1:	fnRt = {rgs,1'b0,isn[`INSTRUCTION_RB]};
+			3'd2:	fnRt = {rs_stack[5:0],1'b0,isn[`INSTRUCTION_RB]};
+			3'd3:	fnRt = {rgs,1'b0,isn[`INSTRUCTION_RB]};
+			3'd4:	fnRt = {rgs[5:1],1'b1,1'b0,isn[`INSTRUCTION_RB]};
+			3'd5:	fnRt = {rgs,1'b0,isn[`INSTRUCTION_RB]};
+			default:fnRt = {rgs,1'b0,isn[`INSTRUCTION_RB]};
+			endcase
+        `VMOV:
+            case (isn[`INSTRUCTION_S1])
+            5'h0:   fnRt = {6'h3F,1'b1,isn[`INSTRUCTION_RB]};
+            5'h1:   fnRt = {rgs,1'b0,isn[`INSTRUCTION_RB]};
+            default:	fnRt = 12'h000;
+            endcase
+        `R1:    
+        	case(isn[20:16])
+        	`CNTLO,`CNTLZ,`CNTPOP,`ABS,`NOT:
+        		fnRt = {rgs,1'b0,isn[`INSTRUCTION_RB]};
+        	`MEMDB,`MEMSB,`SYNC:
+        		fnRt = 12'd0;
+        	default:	fnRt = 12'd0;
+        	endcase
+        `CMOVEQ:    fnRt = {rgs,1'b0,isn[`INSTRUCTION_S1]};
+        `CMOVNE:    fnRt = {rgs,1'b0,isn[`INSTRUCTION_S1]};
+        `MUX:       fnRt = {rgs,1'b0,isn[`INSTRUCTION_S1]};
+        `MIN:       fnRt = {rgs,1'b0,isn[`INSTRUCTION_S1]};
+        `MAX:       fnRt = {rgs,1'b0,isn[`INSTRUCTION_S1]};
+        `LVX:       fnRt = {vqei,1'b1,isn[20:16]};
+        `SHIFT,`SHIFTB,`SHIFTC,`SHIFTH:
+        			fnRt = isn[25] ? {rgs,1'b0,isn[`INSTRUCTION_RB]} : {rgs,1'b0,isn[`INSTRUCTION_RC]};
+        `SEI:		fnRt = {rgs,1'b0,isn[`INSTRUCTION_RB]};
+        `WAIT,`RTI,`CHK,
+        `SBX,`SCX,`SHX,`SWX,`SWCX,`CACHEX:
+        			fnRt = 12'd0;
+        default:    fnRt = {rgs,1'b0,isn[`INSTRUCTION_RC]};
+        endcase
+`FLOAT:
+		case(isn[31:26])
+		`FTX,`FCX,`FEX,`FDX,`FRM:
+					fnRt = 12'd0;
+		`FSYNC:		fnRt = 12'd0;
+		default:	fnRt = {rgs[5:1],1'b1,1'b0,isn[`INSTRUCTION_RC]};
+		endcase
+`BRK:	fnRt = 12'd0;
+`REX:	fnRt = 12'd0;
+`CHK:	fnRt = 12'd0;
+`EXEC:	fnRt = 12'd0;
+`Bcc:   fnRt = 12'd0;
+`BccR:  fnRt = 12'd0;
+`BBc:   case(isn[19:17])
+		`IBNE:	fnRt = {rgs,1'b0,isn[`INSTRUCTION_RA]};
+		`DBNZ:	fnRt = {rgs,1'b0,isn[`INSTRUCTION_RA]};
+		default:	fnRt = 12'd0;
+		endcase
+`BEQI:  fnRt = 12'd0;
+`SB,`SC,`SH,`SW,`SWC,`CACHE:
+		fnRt = 12'd0;
+`JMP:	fnRt = 12'd0;
+`CALL:  fnRt = {rgs,1'b0,regLR};	// regLR
+`RET:   fnRt = {rgs,1'b0,isn[`INSTRUCTION_RA]};
+`LV:    fnRt = {vqei,1'b1,isn[`INSTRUCTION_RB]};
+`AMO:	fnRt = isn[31] ? {rgs,1'b0,isn[`INSTRUCTION_RB]} : {rgs,1'b0,isn[`INSTRUCTION_RC]};
+default:    fnRt = {rgs,1'b0,isn[`INSTRUCTION_RB]};
+endcase
+endfunction
+`endif
 
 // Determines which lanes of the target register get updated.
 function [7:0] fnWe;
@@ -1754,8 +1995,7 @@ case(isn[`INSTRUCTION_OP])
     `SWX:       Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
     `SWCX:      Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
     `CASX:      Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
-    `SVX:       Source3Valid = FALSE;
-    `MIN,`MAX:  Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
+    `CMOVEQ,`CMOVNE,`MAJ:  Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
     default:    Source3Valid = TRUE;
     endcase
 default:    Source3Valid = TRUE;
@@ -2455,10 +2695,12 @@ casez(isn[`INSTRUCTION_OP])
     `SHIFT,`SHIFTH,`SHIFTC,`SHIFTB:
 	    	IsRFW = TRUE;
     `MIN,`MAX:    IsRFW = TRUE;
+    `SEI:	IsRFW = TRUE;
     default:    IsRFW = FALSE;
     endcase
 `BBc:
 	case(isn[19:17])
+	`IBNE:	IsRFW = TRUE;
 	`DBNZ:	IsRFW = TRUE;
 	default:	IsRFW = FALSE;
 	endcase
@@ -2802,6 +3044,7 @@ case(ins[`INSTRUCTION_OP])
 	        1'b1:   fnDati = {{32{1'b0}},dat[63:32]};
 	        endcase
 	    `LVW:  fnDati = dat;
+	    default:	fnDati = dat;
     	endcase
     default:    fnDati = dat;
     endcase
@@ -2901,6 +3144,7 @@ case(ins[`INSTRUCTION_OP])
         1'b1:   fnDati = {{32{1'b0}},dat[63:32]};
         endcase
     `LVW:  fnDati = dat;
+    default:	fnDati = dat;
 	endcase
 default:    fnDati = dat;
 endcase
@@ -4804,7 +5048,11 @@ end
                         fcu_exc <= fcu_argA >= fcu_argB && fcu_argA < fcu_argC ? `FLT_NONE : `FLT_CHK;
                 end
         `REX:
+`ifdef SUPPORT_SMT
             case(ol[fcu_thrd])
+`else
+            case(ol)
+`endif            
             `OL_USER:   fcu_exc <= `FLT_PRIV;
             default:    ;
             endcase
@@ -4819,7 +5067,7 @@ end
 		.c(fcu_argC),
 		.takb(fcu_takb)
 	);
-
+`ifdef SUPPORT_SMT
 	FT64_FCU_Calc ufcuc1
 	(
 		.ol(ol[fcu_thrd]),
@@ -4836,15 +5084,42 @@ end
 assign  fcu_misspc =
     IsRTI(fcu_instr) ? fcu_argB :
     (fcu_instr[`INSTRUCTION_OP] == `REX) ? fcu_bus :
-    (IsBrk(fcu_instr)) ? {tvec[0][31:8], ol[fcu_thrd], 5'h0}:
+    (IsBrk(fcu_instr)) ? {tvec[0][31:8], ol[fcu_thrd], 5'h0} :
     (IsRet(fcu_instr)) ? fcu_argB:
     (IsJAL(fcu_instr)) ? fcu_argA + fcu_argI:
     (fcu_instr[`INSTRUCTION_OP] == `CHK) ? (fcu_pc + 32'd4 + fcu_argI) :
     (fcu_instr[`INSTRUCTION_OP] == `BccR) ? (~fcu_takb ? fcu_pc + 4 : fcu_argC) :
                                             (~fcu_takb ? fcu_pc + 4 : fcu_pc + 4 + 
                                             {{51{fcu_instr[`INSTRUCTION_SB]}},fcu_instr[31:22],fcu_instr[0],2'b00});
+                                            
                                             //fcu_argI);
+`else                                            
+	FT64_FCU_Calc ufcuc1
+	(
+		.ol(ol),
+		.instr(fcu_instr),
+		.tvec(tvec[fcu_instr[13:11]]),
+		.a(fcu_argA),
+		.i(fcu_argI),
+		.pc(fcu_pc),
+		.im(im),
+		.waitctr(waitctr),
+		.bus(fcu_bus)
+	);
 
+assign  fcu_misspc =
+    IsRTI(fcu_instr) ? fcu_argB :
+    (fcu_instr[`INSTRUCTION_OP] == `REX) ? fcu_bus :
+    (IsBrk(fcu_instr)) ? {tvec[0][31:8], ol, 5'h0} :
+    (IsRet(fcu_instr)) ? fcu_argB:
+    (IsJAL(fcu_instr)) ? fcu_argA + fcu_argI:
+    (fcu_instr[`INSTRUCTION_OP] == `CHK) ? (fcu_pc + 32'd4 + fcu_argI) :
+    (fcu_instr[`INSTRUCTION_OP] == `BccR) ? (~fcu_takb ? fcu_pc + 4 : fcu_argC) :
+                                            (~fcu_takb ? fcu_pc + 4 : fcu_pc + 4 + 
+                                            {{51{fcu_instr[`INSTRUCTION_SB]}},fcu_instr[31:22],fcu_instr[0],2'b00});
+                                            
+                                            //fcu_argI);
+`endif
 // To avoid false branch mispredicts the branch isn't evaluated until the
 // following instruction queues. The address of the next instruction is
 // looked at to see if the BTB predicted correctly.
@@ -4863,21 +5138,25 @@ if (fcu_dataready) begin
 	// BRK and RTI are handled as excmiss types which are processed during the commit stage.
 //	else
 	if (fcu_brk_miss)
-		fcu_branchmiss = TRUE;
+		fcu_branchmiss = TRUE & ~fcu_clearbm;
     // the following instruction is queued
 	else
 	if (fcu_followed) begin
+`ifdef SUPPORT_SMT		
 		if (fcu_instr[`INSTRUCTION_OP] == `REX && (im < ~ol[fcu_thrd]) && fcu_v)
-			fcu_branchmiss = TRUE;
+`else
+		if (fcu_instr[`INSTRUCTION_OP] == `REX && (im < ~ol) && fcu_v)
+`endif		
+			fcu_branchmiss = TRUE & ~fcu_clearbm;
 		else if (fcu_ret_miss)
-			fcu_branchmiss = TRUE;
+			fcu_branchmiss = TRUE & ~fcu_clearbm;
 		else if (IsBranch(fcu_instr) && fcu_v && (((fcu_takb && (~fcu_bt || (fcu_misspc != iqentry_pc[nid]))) ||
 		                            (~fcu_takb && ( fcu_bt || (fcu_pc + 32'd4 != iqentry_pc[nid])))) || iqentry_v[nid]))
-		    fcu_branchmiss = TRUE;
+		    fcu_branchmiss = TRUE & ~fcu_clearbm;
 		else if (fcu_jal_miss)
-		    fcu_branchmiss = TRUE;
+		    fcu_branchmiss = TRUE & ~fcu_clearbm;
 		else if (fcu_instr[`INSTRUCTION_OP] == `CHK && ~fcu_takb && fcu_v)
-		    fcu_branchmiss = TRUE;
+		    fcu_branchmiss = TRUE & ~fcu_clearbm;
 		else
 		    fcu_branchmiss = FALSE;
 	end
@@ -4885,7 +5164,7 @@ if (fcu_dataready) begin
 		// Stuck at the head and can't finish because there's still an uncommitted instruction in the queue.
 		// -> cause a branch miss to clear the queue.
 		if (iqentry_v[nid] && !IsCall(fcu_instr) && !IsJmp(fcu_instr) && fcu_v)
-			fcu_branchmiss = TRUE;
+			fcu_branchmiss = TRUE & ~fcu_clearbm;
 		else
 		/*
 		if (fcu_id==head0 && iqentry_v[idp1(head0)]) begin
@@ -4932,7 +5211,7 @@ assign fcu_branchmiss = fcu_dataready &&
 // It should never be that way more than a couple of cycles. Sometimes the fcu_wr pulse got missed
 // because the following instruction got stomped on during a branchmiss, hence iqentry_v isn't true.
 wire fcu_wr = (fcu_v && iqentry_v[nid] && iqentry_sn[nid] > iqentry_sn[fcu_id[`QBITS]]	// && iqentry_v[nid]
-					&& fcu_instr==iqentry_instr[fcu_id[`QBITS]]) || fcu_timeout==8'h05;
+					&& fcu_instr==iqentry_instr[fcu_id[`QBITS]]);// || fcu_timeout==8'h05;
 
 	FT64_AMO_alu uamoalu0 (amo_instr, amo_argA, amo_argB, amo_res);
 
@@ -4940,10 +5219,13 @@ wire fcu_wr = (fcu_v && iqentry_v[nid] && iqentry_sn[nid] > iqentry_sn[fcu_id[`Q
 //					fcu_v && iqentry_v[idp1(fcu_id)] && iqentry_sn[idp1(fcu_id)]==iqentry_sn[fcu_id[`QBITS]]+5'd1;
 
 // An exception in a committing instruction takes precedence
+/*
+Too slow. Needs to be registered
 assign  branchmiss = excmiss|fcu_branchmiss,
     misspc = excmiss ? excmisspc : fcu_misspc,
     missid = excmiss ? (|iqentry_exc[head0] ? head0 : head1) : fcu_sourceid;
 assign branchmiss_thrd =  excmiss ? excthrd : fcu_thrd;
+*/
 
 //
 // additional DRAM-enqueue logic
@@ -5197,6 +5479,22 @@ end
 wire pebm;
 edge_det uedbm (.rst(rst), .clk(clk), .ce(1'b1), .i(branchmiss), .pe(pebm), .ne(), .ee() );
 
+reg [5:0] ld_time;
+reg [63:0] wc_time_dat;
+reg [63:0] wc_times;
+always @(posedge tm_clk_i)
+begin
+	if (|ld_time)
+		wc_time <= wc_time_dat;
+	else begin
+		wc_time[31:0] <= wc_time[31:0] + 32'd1;
+		if (wc_time[31:0] >= TM_CLKFREQ-1) begin
+			wc_time[31:0] <= 32'd0;
+			wc_time[63:32] <= wc_time[63:32] + 32'd1;
+		end
+	end
+end
+
 // Monster clock domain.
 // Like to move some of this to clocking under different always blocks in order
 // to help out the toolset's synthesis, but it ain't gonna be easy.
@@ -5204,10 +5502,20 @@ edge_det uedbm (.rst(rst), .clk(clk), .ce(1'b1), .i(branchmiss), .pe(pebm), .ne(
 // Synthesis doesn't like it if things are under the same always block.
 
 always @(posedge clk)
+begin
+	branchmiss <= excmiss|fcu_branchmiss;
+    misspc <= excmiss ? excmisspc : fcu_misspc;
+    missid <= excmiss ? (|iqentry_exc[head0] ? head0 : head1) : fcu_sourceid;
+	branchmiss_thrd <=  excmiss ? excthrd : fcu_thrd;
+end
+
+always @(posedge clk)
 if (rst) begin
-     mstatus[0] <= 64'h0007;	// select register set #0 for thread 0
 `ifdef SUPPORT_SMT
+     mstatus[0] <= 64'h0007;	// select register set #0 for thread 0
      mstatus[1] <= 64'h8007;	// select register set #2 for thread 1
+`else
+     mstatus <= 64'h0007;	// select register set #0 for thread 0
 `endif
     for (n = 0; n < QENTRIES; n = n + 1) begin
          iqentry_v[n] <= 1'b0;
@@ -5311,6 +5619,8 @@ if (rst) begin
      fcu_done <= `TRUE;
 end
 else begin
+	ld_time <= {ld_time[4:0],1'b0};
+	wc_times <= wc_time;
      rf_vra0 <= regIsValid[Ra0s];
      rf_vra1 <= regIsValid[Ra1s];
     if (vqe0 >= vl) begin
@@ -5323,7 +5633,11 @@ else begin
     end
     // Turn off vector chaining indicator when chained instructions are done.
     if ((vqe0 >= vl || vqe0==6'd0) && (vqe1 >= vl || vqe1==6'd0))
+`ifdef SUPPORT_SMT
     	mstatus[0][32] <= 1'b0;
+`else
+    	mstatus[32] <= 1'b0;
+`endif    	
 
      nop_fetchbuf <= 4'h0;
      excmiss <= FALSE;
@@ -5340,7 +5654,8 @@ else begin
      cr0[17] <= 1'b0;
     if (waitctr != 64'd0)
          waitctr <= waitctr - 64'd1;
-         
+
+
     if (IsFlowCtrl(iqentry_instr[fcu_id[`QBITS]]) && iqentry_v[fcu_id[`QBITS]] && !iqentry_done[fcu_id[`QBITS]] && iqentry_out[fcu_id[`QBITS]])
     	fcu_timeout <= fcu_timeout + 8'd1;
 
@@ -5556,6 +5871,10 @@ else begin
 		    			seq_num1 <= seq_num1 + 5'd1;
 		    		else
 		    			seq_num <= seq_num + 5'd1;
+					if (fetchbuf0_rfw) begin
+					     rf_source[ Rt0s ] <= {1'b0,fetchbuf0_memld, tail0};
+					     rf_v [ Rt0s ] <= `INV;
+					end
 				end
 
 				else begin	// fetchbuf0 doesn't contain a predicted branch
@@ -5595,7 +5914,11 @@ else begin
 					    	&& Rb1s != Rt0s
 					    	&& Rc1s != Rt0s
 					    	) begin
+`ifdef SUPPORT_SMT					    		
 					    		mstatus[0][32] <= 1'b1;
+`else
+					    		mstatus[32] <= 1'b1;
+`endif					    		
 				                vqe1 <= vqe1 + 4'd1;
 				                if (IsVCmprss(fetchbuf1_instr)) begin
 				                    if (vm[fetchbuf1_instr[25:23]][vqe1])
@@ -6091,14 +6414,15 @@ else begin
         end 
          iqentry_out [ fcu_id[`QBITS] ] <= `INV;
          //iqentry_agen[ fcu_id[`QBITS] ] <= `VAL;//!IsRet(fcu_instr);
-         fcu_dataready <= fcu_branchmiss || !iqentry_agen[ fcu_id[`QBITS] ] || !(iqentry_mem[ fcu_id[`QBITS] ] && IsLoad(iqentry_instr[fcu_id[`QBITS]]));
+       	fcu_dataready <= `VAL;
+         //fcu_dataready <= fcu_branchmiss || !iqentry_agen[ fcu_id[`QBITS] ] || !(iqentry_mem[ fcu_id[`QBITS] ] && IsLoad(iqentry_instr[fcu_id[`QBITS]]));
          //fcu_instr[`INSTRUCTION_OP] <= fcu_branchmiss|| (!IsMem(fcu_instr) && !IsWait(fcu_instr))? `NOP : fcu_instr[`INSTRUCTION_OP]; // to clear branchmiss
 	end
 	// Clear a branch miss when target instruction is fetched.
 	if (fcu_branchmiss) begin
 		if ((fetchbuf0_v && fetchbuf0_pc==misspc) ||
 			(fetchbuf1_v && fetchbuf1_pc==misspc))
-		fcu_dataready <= `INV;
+		fcu_clearbm <= `TRUE;
 		//fcu_instr[`INSTRUCTION_OP] <= `NOP;
 		//iqentry_instr[fcu_id][`INSTRUCTION_OP] <= `NOP;
 	end
@@ -6300,7 +6624,11 @@ else begin
                             : (iqentry_a1_s[n] == alu0_id) ? alu0_bus
                             : (iqentry_a1_s[n] == alu1_id) ? alu1_bus
                             : {4{16'hDEAD}};
+`ifdef SUPPORT_SMT                            
                  fcu_argB	<= IsRTI(iqentry_instr[n]) ? epc0[iqentry_thrd[n]]
+`else
+                 fcu_argB	<= IsRTI(iqentry_instr[n]) ? epc0
+`endif                 
                  			: (iqentry_a2_v[n] ? iqentry_a2[n]
                             : (iqentry_a2_s[n] == alu0_id) ? alu0_bus
                             : (iqentry_a2_s[n] == alu1_id) ? alu1_bus
@@ -6318,6 +6646,7 @@ else begin
                  fcu_argI	<= iqentry_a0[n];
                  fcu_thrd   <= iqentry_thrd[n];
                  fcu_dataready <= `VAL;
+                 fcu_clearbm <= `FALSE;
                  fcu_retadr_v <= `INV;
                  fcu_ld <= TRUE;
                  fcu_timeout <= 8'h00;
@@ -7085,7 +7414,10 @@ B7:
         L1_wr0 <= `TRUE;
         L1_wr1 <= `TRUE;
         L1_adr <= L2_adr;
-        L2_rdat <= {4{dat_i}};
+        if (err_i)
+        	L2_rdat <= {8{13'b0,3'd7,3'b0,`FLT_IBE,`BRK}};
+        else
+        	L2_rdat <= {4{dat_i}};
         iccnt <= iccnt + 2'd1;
         //stb_o <= `LOW;
         if (iccnt==2'd2)
@@ -7283,8 +7615,8 @@ end
 	$display("\n\n\n\n\n\n\n\n");
 	$display("TIME %0d", $time);
 	$display("%h #", pc0);
-
-    $display ("Regfile: %d", 0);
+`ifdef SUPPORT_SMT
+    $display ("Regfile: %d", rgs[0]);
 	for (n=0; n < 32; n=n+4) begin
 	    $display("%d: %h %d %o   %d: %h %d %o   %d: %h %d %o   %d: %h %d %o#",
 	       n[4:0]+0, urf1.urf10.mem[{rgs[0],1'b0,n[4:2],2'b00}], regIsValid[n+0], rf_source[n+0],
@@ -7294,7 +7626,7 @@ end
 	       );
 	end
 	if (thread_en) begin
-	    $display ("Regfile: %d", 1);
+	    $display ("Regfile: %d", rgs[1]);
 		for (n=128; n < 160; n=n+4) begin
 		    $display("%d: %h %d %o   %d: %h %d %o   %d: %h %d %o   %d: %h %d %o#",
 		       n[4:0]+0, urf1.urf10.mem[{rgs[1],1'b0,n[4:2],2'b00}], regIsValid[n+0], rf_source[n+0],
@@ -7304,6 +7636,17 @@ end
 		       );
 		end
 	end
+`else
+    $display ("Regfile: %d", rgs);
+	for (n=0; n < 32; n=n+4) begin
+	    $display("%d: %h %d %o   %d: %h %d %o   %d: %h %d %o   %d: %h %d %o#",
+	       n[4:0]+0, urf1.urf10.mem[{rgs,1'b0,n[4:2],2'b00}], regIsValid[n+0], rf_source[n+0],
+	       n[4:0]+1, urf1.urf10.mem[{rgs,1'b0,n[4:2],2'b01}], regIsValid[n+1], rf_source[n+1],
+	       n[4:0]+2, urf1.urf10.mem[{rgs,1'b0,n[4:2],2'b10}], regIsValid[n+2], rf_source[n+2],
+	       n[4:0]+3, urf1.urf10.mem[{rgs,1'b0,n[4:2],2'b11}], regIsValid[n+3], rf_source[n+3]
+	       );
+	end
+`endif
 	$display("Call Stack:");
 	for (n = 0; n < 32; n = n + 4)
 		$display("%c%d: %h   %c%d: %h   %c%d: %h   %c%d: %h",
@@ -7667,6 +8010,7 @@ begin
 	iqentry_memndx[tail]   <=   IsMemNdx(fetchbuf0_instr);
 	iqentry_memdb[tail]    <=   IsMemdb(fetchbuf0_instr);
 	iqentry_memsb[tail]    <=   IsMemsb(fetchbuf0_instr);
+	iqentry_sei	 [tail]	   <=   IsSEI(fetchbuf0_instr);
 	iqentry_aq   [tail]    <=   (IsAMO(fetchbuf0_instr)|IsLWRX(fetchbuf0_instr)|IsSWCX(fetchbuf0_instr)) & fetchbuf0_instr[25];
 	iqentry_rl   [tail]    <=   (IsAMO(fetchbuf0_instr)|IsLWRX(fetchbuf0_instr)|IsSWCX(fetchbuf0_instr)) & fetchbuf0_instr[24];
 	iqentry_jmp  [tail]    <=   fetchbuf0_jmp;
@@ -7749,6 +8093,7 @@ end
 	iqentry_memndx[tail]   <=   IsMemNdx(fetchbuf1_instr);
 	iqentry_memdb[tail]    <=   IsMemdb(fetchbuf1_instr);
 	iqentry_memsb[tail]    <=   IsMemsb(fetchbuf1_instr);
+	iqentry_sei	 [tail]	   <=   IsSEI(fetchbuf1_instr);
 	iqentry_aq   [tail]    <=   (IsAMO(fetchbuf1_instr)|IsLWRX(fetchbuf1_instr)|IsSWCX(fetchbuf1_instr)) & fetchbuf1_instr[25];
 	iqentry_rl   [tail]    <=   (IsAMO(fetchbuf1_instr)|IsLWRX(fetchbuf1_instr)|IsSWCX(fetchbuf1_instr)) & fetchbuf1_instr[24];
 	iqentry_jmp  [tail]    <=   fetchbuf1_jmp;
@@ -7810,7 +8155,8 @@ begin
     if (v) begin
         if (|iqentry_exc[head]) begin
             excmiss <= TRUE;
-            excmisspc <= {tvec[3'd0][31:8],ol[thread],5'h00};
+`ifdef SUPPORT_SMT            
+           	excmisspc <= {tvec[3'd0][31:8],ol[thread],5'h00};
             excthrd <= iqentry_thrd[head];
             badaddr[{thread,3'd0}] <= iqentry_a1[head];
             epc0[thread] <= iqentry_pc[head]+ 32'd4;
@@ -7826,9 +8172,32 @@ begin
             ol_stack[thread] <= {ol_stack[thread][20:0],ol[thread]};
             pl_stack[thread] <= {pl_stack[thread][55:0],cpl[thread]};
             rs_stack[thread] <= {rs_stack[thread][55:0],rgs[thread]};
-            cause[{thread,3'd0}] <= {7'd0,iqentry_exc[head]};
+            cause[{thread,3'd0}] <= {8'd0,iqentry_exc[head]};
             mstatus[thread][5:3] <= 3'd0;
             mstatus[thread][13:6] <= 8'h00;
+            mstatus[thread][19:14] <= 6'd0;
+`else
+           	excmisspc <= {tvec[3'd0][31:8],ol,5'h00};
+            excthrd <= iqentry_thrd[head];
+            badaddr[{thread,3'd0}] <= iqentry_a1[head];
+            epc0 <= iqentry_pc[head]+ 32'd4;
+            epc1 <= epc0;
+            epc2 <= epc1;
+            epc3 <= epc2;
+            epc4 <= epc3;
+            epc5 <= epc4;
+            epc6 <= epc5;
+            epc7 <= epc6;
+            epc8 <= epc7;
+            im_stack <= {im_stack[20:0],im};
+            ol_stack <= {ol_stack[20:0],ol};
+            pl_stack <= {pl_stack[55:0],cpl};
+            rs_stack <= {rs_stack[55:0],rgs};
+            cause[{thread,3'd0}] <= {8'd0,iqentry_exc[head]};
+            mstatus[5:3] <= 3'd0;
+            mstatus[13:6] <= 8'h00;
+            mstatus[19:14] <= 6'd0;
+`endif           	
             sema[0] <= 1'b0;
             ve_hold <= {vqet1,10'd0,vqe1,10'd0,vqet0,10'd0,vqe0};
 `ifdef SUPPORT_DBG            
@@ -7842,14 +8211,11 @@ begin
         		// BRK is treated as a nop unless it's a software interrupt or a
         		// hardware interrupt at a higher priority than the current priority.
                 if ((iqentry_instr[head][23:19] > 5'd0) || iqentry_instr[head][18:16] > im) begin
-		            //excmiss <= TRUE;
-            		//excmisspc <= {tvec[3'd0][31:8],ol[thread],5'h00};
-            		//excthrd <= iqentry_thrd[head];
+		            excmiss <= TRUE;
+`ifdef SUPPORT_SMT		            
+            		excmisspc <= {tvec[3'd0][31:8],ol[thread],5'h00};
+            		excthrd <= iqentry_thrd[head];
                     epc0[thread] <= iqentry_pc[head] + {iqentry_instr[head][23:19],2'b00};
-                    if (iqentry_pc[head] + {iqentry_instr[head][23:19],2'b00}==32'hFFFBFCC8) begin
-                    	$display("epc0=bfcc8");
-                    	$finish;
-                    end
                     epc1[thread] <= epc0[thread];
                     epc2[thread] <= epc1[thread];
                     epc3[thread] <= epc2[thread];
@@ -7862,8 +8228,8 @@ begin
                     ol_stack[thread] <= {ol_stack[thread][20:0],ol[thread]};
                     pl_stack[thread] <= {pl_stack[thread][55:0],cpl[thread]};
                     rs_stack[thread] <= {rs_stack[thread][55:0],rgs[thread]};
-                    //mstatus[19:14] <= 6'd16;
-                    cause[{thread,3'd0}] <= {7'd0,iqentry_instr[head][14:6]};
+                    mstatus[thread][19:14] <= 6'd0;
+                    cause[{thread,3'd0}] <= {iqentry_instr[head][31:24],iqentry_instr[head][13:6]};
                     mstatus[thread][5:3] <= 3'd0;
 	                mstatus[thread][13:6] <= 8'h00;
                     // For hardware interrupts only, set a new mask level
@@ -7871,8 +8237,36 @@ begin
                     if (iqentry_instr[head][23:19]==5'd0) begin
                         mstatus[thread][2:0] <= 3'd7;//iqentry_instr[head][18:16];
                         mstatus[thread][42:40] <= iqentry_instr[head][18:16];
-                        //mstatus[thread][19:14] <= {3'b00,iqentry_instr[head][18:16]};
+                        mstatus[thread][19:14] <= {1'b0,iqentry_instr[head][18:16],2'b00};
                     end
+`else
+            		excmisspc <= {tvec[3'd0][31:8],ol,5'h00};
+            		excthrd <= iqentry_thrd[head];
+                    epc0 <= iqentry_pc[head] + {iqentry_instr[head][23:19],2'b00};
+                    epc1 <= epc0;
+                    epc2 <= epc1;
+                    epc3 <= epc2;
+                    epc4 <= epc3;
+                    epc5 <= epc4;
+                    epc6 <= epc5;
+                    epc7 <= epc6;
+                    epc8 <= epc7;
+                    im_stack <= {im_stack[20:0],im};
+                    ol_stack <= {ol_stack[20:0],ol};
+                    pl_stack <= {pl_stack[55:0],cpl};
+                    rs_stack <= {rs_stack[55:0],rgs};
+                    mstatus[19:14] <= 6'd0;
+                    cause[{thread,3'd0}] <= {iqentry_instr[head][31:24],iqentry_instr[head][13:6]};
+                    mstatus[5:3] <= 3'd0;
+	                mstatus[13:6] <= 8'h00;
+                    // For hardware interrupts only, set a new mask level
+                    // Select register set according to interrupt level
+                    if (iqentry_instr[head][23:19]==5'd0) begin
+                        mstatus[2:0] <= 3'd7;//iqentry_instr[head][18:16];
+                        mstatus[42:40] <= iqentry_instr[head][18:16];
+                        mstatus[19:14] <= {1'b0,iqentry_instr[head][18:16],2'b00};
+                    end
+`endif                    
                     sema[0] <= 1'b0;
                     ve_hold <= {vqet1,10'd0,vqe1,10'd0,vqet0,10'd0,vqe0};
 `ifdef SUPPORT_DBG                    
@@ -7891,20 +8285,27 @@ begin
             `R1:	case(iqentry_instr[head][20:16])
             		`CHAIN_OFF:	cr0[18] <= 1'b0;
             		`CHAIN_ON:	cr0[18] <= 1'b1;
+            		default:	;
         			endcase
             `VMOV:  casez(iqentry_tgt[head])
                     12'b1111111_00???:  vm[iqentry_tgt[head][2:0]] <= iqentry_res[head];
                     12'b1111111_01111:  vl <= iqentry_res[head];
+                    default:	;
                     endcase
+`ifdef SUPPORT_SMT                    
             `SEI:   mstatus[thread][2:0] <= iqentry_res[head][2:0];   // S1
+`else
+            `SEI:   mstatus[2:0] <= iqentry_res[head][2:0];   // S1
+`endif          
             `RTI:   begin
-		            //excmiss <= TRUE;
-            		//excmisspc <= epc0[thread];
-            		//excthrd <= thread;
+		            excmiss <= TRUE;
+`ifdef SUPPORT_SMT		            
+            		excmisspc <= epc0[thread];
+            		excthrd <= thread;
             		mstatus[thread][2:0] <= im_stack[thread][2:0];
             		mstatus[thread][5:3] <= ol_stack[thread][2:0];
             		mstatus[thread][13:6] <= pl_stack[thread][7:0];
-            		//mstatus[thread][19:14] <= rs_stack[thread][5:0];
+            		mstatus[thread][19:14] <= rs_stack[thread][5:0];
             		im_stack[thread] <= {3'd7,im_stack[thread][23:3]};
             		ol_stack[thread] <= {3'd0,ol_stack[thread][23:3]};
             		pl_stack[thread] <= {8'h00,pl_stack[thread][63:8]};
@@ -7918,6 +8319,27 @@ begin
                     epc6[thread] <= epc7[thread];
                     epc7[thread] <= epc8[thread];
                     epc8[thread] <= {tvec[0][31:8], ol[thread], 5'h0};
+`else
+            		excmisspc <= epc0;
+            		excthrd <= thread;
+            		mstatus[2:0] <= im_stack[2:0];
+            		mstatus[5:3] <= ol_stack[2:0];
+            		mstatus[13:6] <= pl_stack[7:0];
+            		mstatus[19:14] <= rs_stack[5:0];
+            		im_stack <= {3'd7,im_stack[23:3]};
+            		ol_stack <= {3'd0,ol_stack[23:3]};
+            		pl_stack <= {8'h00,pl_stack[63:8]};
+            		rs_stack <= {8'h00,rs_stack[63:8]};
+                    epc0 <= epc1;
+                    epc1 <= epc2;
+                    epc2 <= epc3;
+                    epc3 <= epc4;
+                    epc4 <= epc5;
+                    epc5 <= epc6;
+                    epc6 <= epc7;
+                    epc7 <= epc8;
+                    epc8 <= {tvec[0][31:8], ol, 5'h0};
+`endif                    
                     sema[0] <= 1'b0;
                     sema[iqentry_res[head][5:0]] <= 1'b0;
                     vqe0  <= ve_hold[ 5: 0];
@@ -7943,6 +8365,7 @@ begin
         		write_csr(iqentry_instr[head][31:16],iqentry_a1[head],thread);
         		end
         `REX:
+`ifdef SUPPORT_SMT        
             // Can only redirect to a lower level
             if (ol[thread] < iqentry_instr[head][13:11]) begin
                 mstatus[thread][5:3] <= iqentry_instr[head][13:11];
@@ -7950,6 +8373,14 @@ begin
                 cause[{thread,iqentry_instr[head][13:11]}] <= cause[{thread,ol[thread]}];
                 mstatus[thread][13:6] <= iqentry_instr[head][23:16] | iqentry_a1[head][7:0];
             end
+`else
+            if (ol < iqentry_instr[head][13:11]) begin
+                mstatus[5:3] <= iqentry_instr[head][13:11];
+                badaddr[{thread,iqentry_instr[head][13:11]}] <= badaddr[{thread,ol}];
+                cause[{thread,iqentry_instr[head][13:11]}] <= cause[{thread,ol}];
+                mstatus[13:6] <= iqentry_instr[head][23:16] | iqentry_a1[head][7:0];
+            end
+`endif            
         `CACHE:
             case(iqentry_instr[head][15:11])
             5'h03:  invic <= TRUE;
@@ -8039,7 +8470,11 @@ input [13:0] csrno;
 output [63:0] dat;
 input thread;
 begin
+`ifdef SUPPORT_SMT
     if (csrno[13:11] >= ol[thread])
+`else
+    if (csrno[13:11] >= ol)
+`endif
     casez(csrno[10:0])
     `CSR_CR0:       dat <= cr0;
     `CSR_HARTID:    dat <= hartid;
@@ -8049,6 +8484,7 @@ begin
     `CSR_SEMA:      dat <= sema;
     `CSR_SBL:       dat <= sbl;
     `CSR_SBU:       dat <= sbu;
+    `CSR_TCB:		dat <= tcb;
     `CSR_FSTAT:     dat <= fp_status;
 `ifdef SUPPORT_DBG    
     `CSR_DBAD0:     dat <= dbg_adr0;
@@ -8062,6 +8498,7 @@ begin
     `CSR_TVEC:      dat <= tvec[csrno[2:0]];
     `CSR_BADADR:    dat <= badaddr[{thread,csrno[13:11]}];
     `CSR_CAUSE:     dat <= {48'd0,cause[{thread,csrno[13:11]}]};
+`ifdef SUPPORT_SMT    
     `CSR_IM_STACK:	dat <= im_stack[thread];
     `CSR_OL_STACK:	dat <= ol_stack[thread];
     `CSR_PL_STACK:	dat <= pl_stack[thread];
@@ -8075,7 +8512,23 @@ begin
     `CSR_EPC5:      dat <= epc5[thread];
     `CSR_EPC6:      dat <= epc6[thread];
     `CSR_EPC7:      dat <= epc7[thread];
+`else
+    `CSR_IM_STACK:	dat <= im_stack;
+    `CSR_OL_STACK:	dat <= ol_stack;
+    `CSR_PL_STACK:	dat <= pl_stack;
+    `CSR_RS_STACK:	dat <= rs_stack;
+    `CSR_STATUS:    dat <= mstatus[63:0];
+    `CSR_EPC0:      dat <= epc0;
+    `CSR_EPC1:      dat <= epc1;
+    `CSR_EPC2:      dat <= epc2;
+    `CSR_EPC3:      dat <= epc3;
+    `CSR_EPC4:      dat <= epc4;
+    `CSR_EPC5:      dat <= epc5;
+    `CSR_EPC6:      dat <= epc6;
+    `CSR_EPC7:      dat <= epc7;
+`endif    
     `CSR_CODEBUF:   dat <= codebuf[csrno[5:0]];
+    `CSR_TIME:		dat <= wc_times;
     `CSR_INFO:
                     case(csrno[3:0])
                     4'd0:   dat <= "Finitron";  // manufacturer
@@ -8105,7 +8558,11 @@ input [15:0] csrno;
 input [63:0] dat;
 input thread;
 begin
+`ifdef SUPPORT_SMT	
     if (csrno[13:11] >= ol[thread])
+`else
+    if (csrno[13:11] >= ol)
+`endif    
     case(csrno[15:14])
     2'd1:   // CSRRW
         casez(csrno[10:0])
@@ -8115,6 +8572,7 @@ begin
         `CSR_SEMA:      sema <= dat;
         `CSR_SBL:       sbl <= dat[31:0];
         `CSR_SBU:       sbu <= dat[31:0];
+        `CSR_TCB:		tcb <= dat;
         `CSR_BADADR:    badaddr[{thread,csrno[13:11]}] <= dat;
         `CSR_CAUSE:     cause[{thread,csrno[13:11]}] <= dat[15:0];
 `ifdef SUPPORT_DBG        
@@ -8126,6 +8584,7 @@ begin
 `endif        
         `CSR_CAS:       cas <= dat;
         `CSR_TVEC:      tvec[csrno[2:0]] <= dat[31:0];
+`ifdef SUPPORT_SMT        
         `CSR_IM_STACK:	im_stack[thread] <= dat[23:0];
         `CSR_OL_STACK:	ol_stack[thread] <= dat[23:0];
         `CSR_PL_STACK:	pl_stack[thread] <= dat;
@@ -8139,6 +8598,25 @@ begin
         `CSR_EPC5:      epc5[thread] <= dat;
         `CSR_EPC6:      epc6[thread] <= dat;
         `CSR_EPC7:      epc7[thread] <= dat;
+`else
+        `CSR_IM_STACK:	im_stack <= dat[23:0];
+        `CSR_OL_STACK:	ol_stack <= dat[23:0];
+        `CSR_PL_STACK:	pl_stack <= dat;
+        `CSR_RS_STACK:	rs_stack <= dat;
+        `CSR_STATUS:    mstatus[63:0] <= dat;
+        `CSR_EPC0:      epc0 <= dat;
+        `CSR_EPC1:      epc1 <= dat;
+        `CSR_EPC2:      epc2 <= dat;
+        `CSR_EPC3:      epc3 <= dat;
+        `CSR_EPC4:      epc4 <= dat;
+        `CSR_EPC5:      epc5 <= dat;
+        `CSR_EPC6:      epc6 <= dat;
+        `CSR_EPC7:      epc7 <= dat;
+`endif        
+		`CSR_TIME:		begin
+						ld_time <= 6'h3f;
+						wc_time_dat <= dat;
+						end
         `CSR_CODEBUF:   codebuf[csrno[5:0]] <= dat;
         default:    ;
         endcase
@@ -8151,7 +8629,11 @@ begin
         `CSR_DBCTRL:    dbg_ctrl <= dbg_ctrl | dat;
 `endif        
         `CSR_SEMA:      sema <= sema | dat;
+`ifdef SUPPORT_SMT        
         `CSR_STATUS:    mstatus[thread][63:0] <= mstatus[thread][63:0] | dat;
+`else
+        `CSR_STATUS:    mstatus[63:0] <= mstatus[63:0] | dat;
+`endif        
         default:    ;
         endcase
     2'd3:   // CSRRC
@@ -8163,7 +8645,11 @@ begin
         `CSR_DBCTRL:    dbg_ctrl <= dbg_ctrl & ~dat;
 `endif        
         `CSR_SEMA:      sema <= sema & ~dat;
+`ifdef SUPPORT_SMT        
         `CSR_STATUS:    mstatus[thread][63:0] <= mstatus[thread][63:0] & ~dat;
+`else
+        `CSR_STATUS:    mstatus[63:0] <= mstatus[63:0] & ~dat;
+`endif        
         default:    ;
         endcase
     default:    ;

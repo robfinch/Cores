@@ -227,6 +227,7 @@
 `define SC      6'h24
 `define CAS     6'h25
 `define BBc     6'b10011?
+`define IBNE		3'd6
 `define DBNZ		3'd7
 `define JMP     6'h28
 `define RET     6'h29
@@ -318,6 +319,7 @@
 `define CSR_SEMA    11'h00C
 `define CSR_SBL     11'h00E
 `define CSR_SBU     11'h00F
+`define CSR_TCB		11'h010
 `define CSR_FSTAT   11'h014
 `define CSR_DBAD0   11'h018
 `define CSR_DBAD1   11'h019
@@ -341,6 +343,7 @@
 `define CSR_EPC6    11'h04E
 `define CSR_EPC7    11'h04F
 `define CSR_CODEBUF 11'b00010??????
+`define CSR_TIME	11'h7E0
 `define CSR_INFO    11'b111_1111_????
 
 `define OL_USER         2'd3
@@ -368,22 +371,22 @@
 `define EXC_SIGSEGV	9'd3
 `define EXC_INVALID	9'd4
 
-`define FLT_NONE    9'd000
-`define FLT_SSM     9'd480
-`define FLT_DBG     9'd481
-`define FLT_TGT     9'd482
-`define FLT_IADR    9'd484
-`define FLT_FLT     9'd486
-`define FLT_CHK     9'd487
-`define FLT_DBZ     9'd488
-`define FLT_OFL     9'd489
-`define FLT_EXF     9'd497
-`define FLT_DWF     9'd498
-`define FLT_DRF     9'd499
-`define FLT_PRIV    9'd501
-`define FLT_STK     9'd504
-`define FLT_DBE     9'd508
-`define FLT_IBE     9'd509
+`define FLT_NONE    7'd00
+`define FLT_SSM     7'd32
+`define FLT_DBG     7'd33
+`define FLT_TGT     7'd34
+`define FLT_IADR    7'd36
+`define FLT_FLT     7'd38
+`define FLT_CHK     7'd39
+`define FLT_DBZ     7'd40
+`define FLT_OFL     7'd41
+`define FLT_EXF     7'd49
+`define FLT_DWF     7'd50
+`define FLT_DRF     7'd51
+`define FLT_PRIV    7'd53
+`define FLT_STK     7'd56
+`define FLT_DBE     7'd60
+`define FLT_IBE     7'd61
 
 //`define INSTRUCTION_OP	15:13	// opcode
 //`define INSTRUCTION_RA	12:10	// rA 
