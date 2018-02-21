@@ -39,6 +39,7 @@ int brsp=5;
 int bregmask = 0;
 */
 static unsigned short int next_reg;
+static unsigned short int next_fpreg;
 static unsigned short int next_vreg;
 static unsigned short int next_vmreg;
 static short int next_breg;
@@ -47,8 +48,10 @@ static short int next_breg;
 
 // Only registers 5,6,7 and 8 are used for temporaries
 static short int reg_in_use[256];	// 0 to 15
+static short int fpreg_in_use[256];	// 0 to 15
 static short int breg_in_use[16];	// 0 to 15
 static short int save_reg_in_use[256];
+static short int save_fpreg_in_use[256];
 static short int vreg_in_use[256];	// 0 to 15
 static short int save_vreg_in_use[256];
 static short int vmreg_in_use[256];	// 0 to 15
@@ -64,7 +67,11 @@ static struct {
 	reg_stack[MAX_REG_STACK + 1],
 	reg_alloc[MAX_REG_STACK + 1],
 	save_reg_alloc[MAX_REG_STACK + 1],
+	fpreg_stack[MAX_REG_STACK + 1],
+	fpreg_alloc[MAX_REG_STACK + 1],
+	save_fpreg_alloc[MAX_REG_STACK + 1],
 	stacked_regs[MAX_REG_STACK + 1],
+	stacked_fpregs[MAX_REG_STACK + 1],
 	breg_stack[MAX_REG_STACK + 1],
 	breg_alloc[MAX_REG_STACK + 1],
 	vreg_stack[MAX_REG_STACK + 1],
@@ -80,6 +87,9 @@ static struct {
 static short int reg_stack_ptr;
 static short int reg_alloc_ptr;
 static short int save_reg_alloc_ptr;
+static short int fpreg_stack_ptr;
+static short int fpreg_alloc_ptr;
+static short int save_fpreg_alloc_ptr;
 static short int vreg_stack_ptr;
 static short int vreg_alloc_ptr;
 static short int save_vreg_alloc_ptr;
@@ -90,10 +100,12 @@ static short int breg_stack_ptr;
 static short int breg_alloc_ptr;
 
 char tmpregs[] = {1,2,3,4,5,6,7,8,9,10};
+char tmpfpregs[] = {1,2,3,4,5,6,7,8,9,10};
 char tmpvregs[] = {1,2,3,4,5,6,7,8,9,10};
 char tmpvmregs[] = {1,2,3};
 char tmpbregs[] = {5,6,7};
 char regstack[18];
+char fpregstack[18];
 char bregstack[18];
 int rsp=17;
 int regmask=0;
@@ -106,6 +118,7 @@ void initRegStack()
 	SYM *sym = currentFn;
 
 	next_reg = sym->IsLeaf ? 1 : regFirstTemp;
+	next_fpreg = sym->IsLeaf ? 1 : regFirstTemp;
 	next_vreg = sym->IsLeaf ? 1 : regFirstTemp;
 	next_vmreg = 1;
     next_breg = 5;
@@ -114,12 +127,15 @@ void initRegStack()
 	//rsp = 0;
 	for (i = 0; i <= 255; i++) {
 		reg_in_use[i] = -1;
+		fpreg_in_use[i] = -1;
 		vreg_in_use[i] = -1;
 		vmreg_in_use[i] = -1;
 		breg_in_use[i&15] = -1;
 	}
     reg_stack_ptr = 0;
     reg_alloc_ptr = 0;
+    fpreg_stack_ptr = 0;
+    fpreg_alloc_ptr = 0;
     vreg_stack_ptr = 0;
     vreg_alloc_ptr = 0;
     vmreg_stack_ptr = 0;
@@ -129,6 +145,8 @@ void initRegStack()
 //    act_scratch = 0;
     memset(reg_stack,0,sizeof(reg_stack));
     memset(reg_alloc,0,sizeof(reg_alloc));
+    memset(fpreg_stack,0,sizeof(fpreg_stack));
+    memset(fpreg_alloc,0,sizeof(fpreg_alloc));
     memset(vreg_stack,0,sizeof(vreg_stack));
     memset(vreg_alloc,0,sizeof(vreg_alloc));
     memset(vmreg_stack,0,sizeof(vmreg_stack));
@@ -136,7 +154,9 @@ void initRegStack()
     memset(breg_stack,0,sizeof(breg_stack));
     memset(breg_alloc,0,sizeof(breg_alloc));
     memset(stacked_regs,0,sizeof(stacked_regs));
+    memset(stacked_fpregs,0,sizeof(stacked_fpregs));
     memset(save_reg_alloc,0,sizeof(save_reg_alloc));
+    memset(save_fpreg_alloc,0,sizeof(save_fpreg_alloc));
     memset(stacked_vregs,0,sizeof(stacked_vregs));
     memset(save_vreg_alloc,0,sizeof(save_vreg_alloc));
     memset(save_vmreg_alloc,0,sizeof(save_vmreg_alloc));
@@ -154,6 +174,16 @@ void SpillRegister(AMODE *ap, int number)
 //    reg_alloc[number].f.isPushed = 'T';
 }
 
+void SpillFPRegister(AMODE *ap, int number)
+{
+	GenerateDiadic(op_sf,'d',ap,make_indexed(TempBot()-ap->deep*sizeOfWord,regFP));
+    fpreg_stack[fpreg_stack_ptr].amode = ap;
+    fpreg_stack[fpreg_stack_ptr].f.allocnum = number;
+    if (fpreg_alloc[number].f.isPushed=='T')
+		fatal("SpillRegister(): register already spilled");
+//    reg_alloc[number].f.isPushed = 'T';
+}
+
 // Load register from memory.
 
 void LoadRegister(int regno, int number)
@@ -163,6 +193,15 @@ void LoadRegister(int regno, int number)
 	reg_in_use[regno] = number;
 	GenerateDiadic(op_lw,0,makereg(regno),make_indexed(TempBot()-number*sizeOfWord,regFP));
     reg_alloc[number].f.isPushed = 'F';
+}
+
+void LoadFPRegister(int regno, int number)
+{
+	if (fpreg_in_use[regno] >= 0)
+		fatal("LoadRegister():register still in use");
+	fpreg_in_use[regno] = number;
+	GenerateDiadic(op_lf,'d',makefpreg(regno),make_indexed(TempBot()-number*sizeOfWord,regFP));
+    fpreg_alloc[number].f.isPushed = 'F';
 }
 
 void GenerateTempRegPush(int reg, int rmode, int number, int stkpos)
@@ -313,28 +352,28 @@ AMODE *GetTempFPRegister()
     SYM *sym = currentFn;
 	int number;
     
-	number = reg_in_use[next_reg];
+	number = fpreg_in_use[next_fpreg];
 	if (number >= 0) {
-		SpillRegister(reg_alloc[number].amode,number);
+		SpillFPRegister(fpreg_alloc[number].amode,number);
 	}
 //	if (reg_in_use[next_reg] >= 0) {
 //		GenerateTempRegPush(next_reg, am_reg, reg_in_use[next_reg],0);
 //	}
-	TRACE(printf("GetTempRegister:r%d\r\n", next_reg);)
-    reg_in_use[next_reg] = reg_alloc_ptr;
+	TRACE(printf("GetTempFPRegister:r%d\r\n", next_fpreg);)
+    fpreg_in_use[next_fpreg] = fpreg_alloc_ptr;
     ap = allocAmode();
     ap->mode = am_fpreg;
-    ap->preg = next_reg;
-    ap->deep = reg_alloc_ptr;
+    ap->preg = next_fpreg;
+    ap->deep = fpreg_alloc_ptr;
 	ap->type = stddouble.GetIndex();
-    reg_alloc[reg_alloc_ptr].reg = next_reg;
-    reg_alloc[reg_alloc_ptr].amode = ap;
-    reg_alloc[reg_alloc_ptr].f.isPushed = 'F';
-    if (next_reg++ >= regLastTemp)
-    	next_reg = sym->IsLeaf ? 1 : regFirstTemp;		/* wrap around */
-    if (reg_alloc_ptr++ == MAX_REG_STACK)
-		fatal("GetTempRegister(): register stack overflow");
-	return ap;
+    fpreg_alloc[fpreg_alloc_ptr].reg = next_fpreg;
+    fpreg_alloc[fpreg_alloc_ptr].amode = ap;
+    fpreg_alloc[fpreg_alloc_ptr].f.isPushed = 'F';
+    if (next_fpreg++ >= regLastTemp)
+    	next_fpreg = sym->IsLeaf ? 1 : regFirstTemp;		/* wrap around */
+    if (fpreg_alloc_ptr++ == MAX_REG_STACK)
+		fatal("GetTempFPRegister(): register stack overflow");
+	return (ap);
 }
 //void RestoreTempRegs(int rgmask)
 //{
@@ -418,27 +457,24 @@ void validate(AMODE *ap)
 	case am_reg:
 		if ((ap->preg >= frg && ap->preg <= regLastTemp) && reg_alloc[ap->deep].f.isPushed == 'T' ) {
 			LoadRegister(ap->preg, (int) ap->deep);
-//			if (isThor)
-//				GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(8));
+		}
+		break;
+	case am_fpreg:
+		if ((ap->preg >= frg && ap->preg <= regLastTemp) && fpreg_alloc[ap->deep].f.isPushed == 'T' ) {
+			LoadFPRegister(ap->preg, (int) ap->deep);
 		}
 		break;
     case am_indx2:
 		if ((ap->preg >= frg && ap->preg <= regLastTemp) && reg_alloc[ap->deep].f.isPushed == 'T') {
 			LoadRegister(ap->preg, (int) ap->deep);
-//			if (isThor)
-//				GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(8));
 		}
 		if ((ap->sreg >= frg && ap->sreg <= regLastTemp) && reg_alloc[ap->deep2].f.isPushed  == 'T') {
 			LoadRegister(ap->sreg, (int) ap->deep2);
-//			if (isThor)
-//				GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(8));
 		}
 		break;
     case am_indx3:
 		if ((ap->sreg >= frg && ap->sreg <= regLastTemp) && reg_alloc[ap->deep2].f.isPushed == 'T') {
 			LoadRegister(ap->sreg, (int) ap->deep2);
-//			if (isThor)
-//				GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(8));
 		}
 		goto common;
     case am_ind:
@@ -448,8 +484,6 @@ void validate(AMODE *ap)
 common:
 		if ((ap->preg >= frg && ap->preg <= regLastTemp) && reg_alloc[ap->deep].f.isPushed == 'T') {
 			LoadRegister(ap->preg, (int) ap->deep);
-//			if (isThor)
-//				GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(8));
 		}
 		break;
     }
@@ -527,6 +561,23 @@ void ReleaseTempRegister(AMODE *ap)
 	}
 	else
     switch (ap->mode) {
+	case am_fpreg:
+		if (ap->preg >= frg && ap->preg <= regLastTemp) {
+			if (fpreg_in_use[ap->preg]==-1)
+				return;
+			if (next_fpreg-- <= frg)
+				next_fpreg = regLastTemp;
+			number = fpreg_in_use[ap->preg];
+			fpreg_in_use[ap->preg] = -1;
+			if (fpreg_alloc_ptr-- == 0)
+				fatal("ReleaseTempRegister(): no registers are allocated");
+		  //  if (reg_alloc_ptr != number)
+				//fatal("ReleaseTempRegister()/3");
+			if (fpreg_alloc[number].f.isPushed=='T')
+				fatal("ReleaseTempRegister(): register on stack");
+			return;
+		}
+		return;
 	case am_ind:
 	case am_indx:
 	case am_ainc:
@@ -584,7 +635,7 @@ void ReleaseTempVectorRegister()
 // Go through the allocated register list and generate a push instruction to
 // put the register on the stack if it isn't already on the stack.
 
-int TempInvalidate()
+int TempInvalidate(int *fsp)
 {
     int i;
 	int sp;
@@ -610,15 +661,44 @@ int TempInvalidate()
     		}
         }
 	}
-	return sp;
+
+	save_fpreg_alloc_ptr = fpreg_alloc_ptr;
+	memcpy(save_fpreg_alloc, fpreg_alloc, sizeof(save_fpreg_alloc));
+	memcpy(save_fpreg_in_use, fpreg_in_use, sizeof(save_fpreg_in_use));
+	for (*fsp = i = 0; i < fpreg_alloc_ptr; i++) {
+        if (fpreg_in_use[fpreg_alloc[i].reg] != -1) {
+    		if (fpreg_alloc[i].f.isPushed == 'F') {
+				// ToDo: fix this line
+				fpreg_alloc[i].amode->mode = am_fpreg;
+				SpillFPRegister(fpreg_alloc[i].amode, i);
+    			//GenerateTempRegPush(reg_alloc[i].reg, /*reg_alloc[i].amode->mode*/am_reg, i, sp);
+    			stacked_fpregs[sp].reg = fpreg_alloc[i].reg;
+    			stacked_fpregs[sp].amode = fpreg_alloc[i].amode;
+    			stacked_fpregs[sp].f.allocnum = i;
+    			(*fsp)++;
+    			// mark the register void
+    			fpreg_in_use[fpreg_alloc[i].reg] = -1;
+    		}
+        }
+	}
+	return (sp);
 }
 
 // Pop back any temporary registers that were pushed before the function call.
 // Restore the allocated and in use register lists.
 
-void TempRevalidate(int sp)
+void TempRevalidate(int sp, int fsp)
 {
 	int nn;
+
+	for (nn = fsp-1; nn >= 0; nn--) {
+		if (stacked_fpregs[nn].amode)
+			LoadFPRegister(stacked_fpregs[nn].amode->preg, stacked_fpregs[nn].f.allocnum);
+		//GenerateTempRegPop(stacked_regs[nn].reg, /*stacked_regs[nn].amode->mode*/am_reg, stacked_regs[nn].f.allocnum,sp-nn-1);
+	}
+	fpreg_alloc_ptr = save_fpreg_alloc_ptr;
+	memcpy(fpreg_alloc, save_fpreg_alloc, sizeof(fpreg_alloc));
+	memcpy(fpreg_in_use, save_fpreg_in_use, sizeof(fpreg_in_use));
 
 	for (nn = sp-1; nn >= 0; nn--) {
 		LoadRegister(stacked_regs[nn].amode->preg, stacked_regs[nn].f.allocnum);

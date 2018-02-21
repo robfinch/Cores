@@ -997,7 +997,7 @@ static int GetFPSize()
 {
 	int sz;
 
-    sz = 'q';
+    sz = 'd';
     if (*inptr=='.') {
         inptr++;
         if (strchr("sdtqSDTQ",*inptr)) {
@@ -1402,7 +1402,7 @@ static void process_rrop(int funct6)
     //prevToken();
 	if (funct6==0x2E || funct6==0x2C || funct6==0x2D) {
 		funct6 += 0x10;	// change to divmod
-	    emit_insn((funct6<<26)||(Rt<<21)|(Rb<<11)|(Ra<<6)|0x02,!expand_flag,4);
+	    emit_insn((funct6<<26)||(1 << 24)||(sz<<21)||(Rt<<21)|(Rb<<11)|(Ra<<6)|0x02,!expand_flag,4);
 		return;
 	}
 	// No size is emitted for divides
@@ -1594,14 +1594,47 @@ static void process_fprop(int oc)
     Ra = getFPRegister();
     if (token==',')
        rm = getFPRoundMode();
-    prevToken();
+//    prevToken();
     emit_insn(
-			(fmt << 27)|
-			(rm << 24)|
-			(Rt << 18)|
-			(oc << 12)|
+			(oc << 26) |
+			(fmt << 24)|
+			(rm << 21)|
+			(Rt << 16)|
+			(0 << 11)|
 			(Ra << 6) |
-			0x36,!expand_flag,2
+			0x0F,!expand_flag,2
+			);
+}
+
+// ---------------------------------------------------------------------------
+// fabs.d fp1,fp2[,rm]
+// ---------------------------------------------------------------------------
+
+static void process_itof(int oc)
+{
+    int Ra;
+    int Rt;
+    char *p;
+    int fmt;
+    int rm;
+
+    rm = 0;
+    fmt = GetFPSize();
+    p = inptr;
+    Rt = getFPRegister();
+    need(',');
+    Ra = getRegisterX();
+    if (token==',')
+       rm = getFPRoundMode();
+//    prevToken();
+    emit_insn(
+			(oc << 26) |
+			(fmt << 24)|
+			(rm << 21)|
+			(Rt << 16)|
+			(0 << 11)|
+			(Ra << 6) |
+			0x0F,!expand_flag,2
 			);
 }
 
@@ -1632,15 +1665,15 @@ static void process_fprrop(int oc)
     Rb = getFPRegister();
     if (token==',')
        rm = getFPRoundMode();
-    prevToken();
+//    prevToken();
     emit_insn(
-			(oc << 29)|
-			(fmt << 27)|
-			(rm << 24)|
-			(Rt << 18)|
-			(Rb << 12)|
+			(oc << 26)|
+			(fmt << 24)|
+			(rm << 21)|
+			(Rt << 16)|
+			(Rb << 11)|
 			(Ra << 6) |
-			0x36,!expand_flag,4
+			0x0F,!expand_flag,4
 			);
 }
 
@@ -1736,10 +1769,12 @@ static void process_beqi(int opcode6, int opcode3)
 static void process_bcc(int opcode6, int opcode4)
 {
     int Ra, Rb, Rc, pred;
+	int fmt;
     int64_t val;
     int64_t disp;
 	char *p, *p1;
 
+    fmt = GetFPSize();
 	pred = 0;
 	p1 = inptr;
     Ra = getRegisterX();
@@ -2771,7 +2806,7 @@ static void process_lv(int opcode6)
 	ScanToEOL();
 }
 
-static void process_lsfloat(int opcode6)
+static void process_lsfloat(int opcode6, int opcode3)
 {
     int Ra,Rb;
     int Rt;
@@ -2799,33 +2834,36 @@ static void process_lsfloat(int opcode6)
     mem_operand(&disp, &Ra, &Rb, &Sc);
 	if (Ra > 0 && Rb > 0) {
 		emit_insn(
-			(1L << 29) |
-			(sz << 27) |
-			(Rt << 18) |
-			(Rb << 12) |
+			(0x3B << 26) |
+			(opcode3 << 23) |
+			(Sc << 21) |
+			(Rt << 16) |
+			(Rb << 11) |
 			(Ra << 6) |
-			opcode6,!expand_flag,2);
+			0x0B,!expand_flag,4);
 		return;
 	}
     if (Ra < 0) Ra = 0;
     val = disp;
-	if (val < -15LL || val > 15LL) {
+	if (val < -2048 || val > 2047) {
+		LoadConstant12(val,23);
+		// Change to indexed addressing
 		emit_insn(
-			(sz << 27) |
-			(Rt << 18) |
-			(0x10 << 11) |
+			(0x3B << 26) |
+			(opcode3 << 23) |
+			(Rt << 16) |
+			(23 << 11) |
 			(Ra << 6) |
-			opcode6,0,2);
-		emit_insn(val,0,2);
+			0x02,!expand_flag,4);
+		ScanToEOL();
+		return;
 	}
-	else {
-		emit_insn(
-			(sz << 27) |
-			(Rt << 18) |
-			((val & 0x1f) << 11) |
-			(Ra << 6) |
-			opcode6,!expand_flag,2);
-    }
+	emit_insn(
+		(opcode3 << 28) |
+		((val & 0xFFF) << 16) |
+		(Rt << 11) |
+		(Ra << 6) |
+		0x0B,!expand_flag,4);
     ScanToEOL();
 }
 
@@ -2876,15 +2914,23 @@ static void process_mov(int oc, int fn)
 	 int vec = 0;
 	 int d3;
 	 int rgs = 8;
+	 int fp = 0;
 
 	 d3 = 7;	// current to current
 	 p = inptr;
      Rt = getRegisterX();
 	 if (Rt==-1) {
 		 inptr = p;
-		 Rt = getVecRegister() & 31;
 		 vec = 1;
+		 Rt = getVecRegister();
+		 if (Rt==-1) {
+			 inptr = p;
+			 Rt = getFPRegister();
+			 vec = 0;
+			 fp = 1;
+		 }
 	 }
+	 Rt &= 31;
 	if (inptr[-1]==':') {
 		if (*inptr=='x' || *inptr=='X') {
 			d3 = 2;
@@ -2901,9 +2947,16 @@ static void process_mov(int oc, int fn)
      Ra = getRegisterX();
 	 if (Ra==-1) {
 		 inptr = p;
-		 Ra = getVecRegister() & 31;
-		 vec = 2;
+		 Ra = getVecRegister();
+		 vec |= 2;
+		 if (Ra==-1) {
+			 inptr = p;
+			 Ra = getFPRegister();
+			 vec &= ~2;
+			 fp |= 2;
+		 }
 	 }
+	 Ra &= 31;
 	if (inptr[-1]==':') {
 		if (*inptr=='x' || *inptr=='X') {
 			inptr++;
@@ -2914,6 +2967,40 @@ static void process_mov(int oc, int fn)
 			rgs = (int)expr();
 			d3 = 1;
 		}
+	}
+	if (fp==3) {
+		 emit_insn(
+			 (0x22 << 26) |
+			 (0x06 << 23) |
+			 (Rt << 11) |
+			 (Ra << 6) |
+			 0x02,0,4
+		 );
+		 return;
+	}
+	if (fp==1) {
+		if (vec)
+			printf("unsupported move operation. %d\n", lineno);
+		 emit_insn(
+			 (0x22 << 26) |
+			 (0x04 << 23) |
+			 (Rt << 11) |
+			 (Ra << 6) |
+			 0x02,0,4
+		 );
+		 return;
+	}
+	if (fp==2) {
+		if (vec)
+			printf("unsupported move operation. %d\n", lineno);
+		 emit_insn(
+			 (0x22 << 26) |
+			 (0x05 << 23) |
+			 (Rt << 11) |
+			 (Ra << 6) |
+			 0x02,0,4
+		 );
+		 return;
 	}
 	 if (vec==1) {
 		 emit_insn(
@@ -2935,6 +3022,8 @@ static void process_mov(int oc, int fn)
 		 );
 		 return;
 	 }
+	 else if (vec==3)
+		 printf("Unsupported mov operation. %d\n", lineno);
 	 if (rgs < 0 || rgs > 63)
 		 printf("Illegal register set spec: %d\n", lineno);
 	 rgs &= 0x3f;
@@ -3607,6 +3696,7 @@ void FT64_processMaster()
         case tk_eol: ProcessEOL(1); break;
 //        case tk_add:  process_add(); break;
 //		case tk_abs:  process_rop(0x04); break;
+		case tk_abs: process_rop(0x01); break;
         case tk_add:  process_rrop(0x04); break;
         case tk_addi: process_riop(0x04); break;
         case tk_align: process_align(); continue; break;
@@ -3679,6 +3769,7 @@ void FT64_processMaster()
         case tk_dc:  process_dc(); break;
         case tk_dh:  process_dh(); break;
         case tk_dh_htbl:  process_dh_htbl(); break;
+		case tk_div: process_riop(0x3E); break;
         case tk_dw:  process_dw(); break;
         case tk_end: goto j1;
         case tk_end_expand: expandedBlock = 0; break;
@@ -3686,10 +3777,21 @@ void FT64_processMaster()
         case tk_eor: process_rrop(0x0A); break;
         case tk_eori: process_riop(0x0A); break;
         case tk_extern: process_extern(); break;
+		case tk_fadd:	process_fprrop(0x04); break;
+        case tk_fbeq:	process_bcc(0x30,8); break;
+        case tk_fbge:	process_bcc(0x30,11); break;
+        case tk_fblt:	process_bcc(0x30,10); break;
+        case tk_fbne:	process_bcc(0x30,9); break;
+		case tk_fdiv:	process_fprrop(0x09); break;
         case tk_fill: process_fill(); break;
+		case tk_fmov:	process_fprop(0x10); break;
+		case tk_fmul:	process_fprrop(0x08); break;
+		case tk_fneg:	process_fprop(0x14); break;
+		case tk_fsub:	process_fprrop(0x05); break;
 		case tk_hint:	process_hint(); break;
 		case tk_ibne: process_ibne(0x26,6); break;
 		case tk_if:		pif1 = inptr-2; doif(); break;
+		case tk_itof: process_itof(0x15); break;
 		case tk_iret:	process_iret(0xC8000002); break;
         case tk_jal: process_jal(0x18); break;
 		case tk_jmp: process_call(0x28); break;
@@ -3700,6 +3802,7 @@ void FT64_processMaster()
 		case tk_ld:	process_ld(); break;
         case tk_ldi: process_ldi(); break;
         case tk_lea: process_load(0x04); break;
+		case tk_lf:	 process_lsfloat(0x0b,0x00); break;
         case tk_lh:  process_load(0x10); break;
         case tk_lhu: process_load(0x11); break;
 		case tk_link:	process_link(0x2A); break;
@@ -3709,12 +3812,15 @@ void FT64_processMaster()
 		case tk_lvh: ProcessLoadVolatile(4); break;
 		case tk_lvw: ProcessLoadVolatile(6); break;
         case tk_lw:  process_load(0x12); break;
+        case tk_lwr:  process_load(0x1D); break;
 		case tk_memdb: emit_insn(0xD0000002,0,4); break;
 		case tk_memsb: emit_insn(0xD4000002,0,4); break;
 		case tk_message: process_message(); break;
 		case tk_mod: process_riop(0x2E); break;
 		case tk_modu: process_riop(0x2C); break;
         case tk_mov: process_mov(0x02, 0x22); break;
+		case tk_mul: process_riop(0x3A); break;
+		case tk_mulu: process_riop(0x38); break;
         case tk_neg: process_neg(); break;
         case tk_nop: emit_insn(0x1C,0,4); break;
 		case tk_not: process_rop(0x05); break;
@@ -3748,6 +3854,7 @@ void FT64_processMaster()
         case tk_sc:  process_store(0x24); break;
         case tk_sei: process_sei(); break;
 		case tk_seq:	process_setiop(0x1B,2); break;
+		case tk_sf:		process_lsfloat(0x0C,0x00); break;
 		case tk_sge:	process_setiop(0x1B,5); break;
 		case tk_sgeu:	process_setiop(0x1B,13); break;
 		case tk_sgt:	process_setiop(0x1B,7); break;
@@ -3775,6 +3882,7 @@ void FT64_processMaster()
         case tk_subi:  process_riop(0x05); break;
         case tk_sv:  process_sv(0x37); break;
         case tk_sw:  process_store(0x16); break;
+        case tk_swc:  process_store(0x17); break;
         case tk_swap: process_rop(0x03); break;
         case tk_sync: emit_insn(0x04120002,0,4); break;
 		case tk_unlink: emit_insn((0x1B << 26) | (0x1F << 16) | (30 << 11) | (0x1F << 6) | 0x02,0,4); break;

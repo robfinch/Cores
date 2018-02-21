@@ -40,9 +40,10 @@ extern int GetReturnBlockSize();
 void GenerateReturn(Statement *stmt);
 extern void GenerateComment(char *);
 static void SaveRegisterVars(int64_t mask, int64_t rmask);
+static void SaveFPRegisterVars(int64_t fpmask, int64_t fprmask);
 int TempFPInvalidate();
 int TempInvalidate();
-void TempRevalidate(int);
+void TempRevalidate(int,int);
 void TempFPRevalidate(int);
 void ReleaseTempRegister(AMODE *ap);
 AMODE *GetTempRegister();
@@ -67,18 +68,23 @@ static int CSECmp(const void *a, const void *b)
 		return (-1);
 }
 
-static int AllocateRegisters1()
+static int AllocateRegisters1(int *dregr)
 {
-	int nn,csecnt,reg;
+	int nn,csecnt,reg,dreg;
 	CSE *csp;
 
 	reg = regFirstRegvar;
+	dreg = regFirstRegvar;
 	for (nn = 0; nn < 3; nn++) {
 		for (csecnt = 0; csecnt < csendx; csecnt++)	{
 			csp = &CSETable[csecnt];
 			if (csp->reg==-1) {
 				if( csp->OptimizationDesireability() >= 4-nn ) {
-					if (csp->exp->etype!=bt_vector) {
+					if (csp->isfp) {
+						if (dreg <= regLastRegvar)
+    						csp->reg = dreg++;
+					}
+					else if (csp->exp->etype!=bt_vector) {
 //    					if(( csp->duses > csp->uses / (8 << nn)) && reg < regLastRegvar )	// <- address register assignments
 						if (reg <= regLastRegvar)
     						csp->reg = reg++;
@@ -87,10 +93,11 @@ static int AllocateRegisters1()
 			}
 		}
 	}
+	*dregr = dreg;
 	return reg;
 }
 
-static int FinalAllocateRegisters(int reg)
+static int FinalAllocateRegisters(int reg, int dreg)
 {
 	int csecnt;
 	CSE *csp;
@@ -99,7 +106,13 @@ static int FinalAllocateRegisters(int reg)
 		csp = &CSETable[csecnt];
 		if (csp->OptimizationDesireability() != 0) {
 			if (!csp->voidf && csp->reg==-1) {
-				if (csp->exp->etype!=bt_vector) {
+				if (csp->isfp) {
+    				if(( csp->OptimizationDesireability() >= 4) && dreg < regLastRegvar )
+    					csp->reg = dreg++;
+    				else
+    					csp->reg = -1;
+				}
+				else if (csp->exp->etype!=bt_vector) {
     				if(( csp->OptimizationDesireability() >= 4) && reg < regLastRegvar )
     					csp->reg = reg++;
     				else
@@ -164,15 +177,16 @@ int AllocateRegisterVars()
 {
 	CSE *csp;
     ENODE *exptr;
-    int reg, vreg;
+    int reg, dreg, vreg;
 	uint64_t mask, rmask;
     uint64_t fpmask, fprmask;
 	uint64_t vmask, vrmask;
-    AMODE *ap, *ap2;
+    AMODE *ap, *ap2, *ap3;
 	int size;
 	int csecnt;
 
 	reg = regFirstRegvar;
+	dreg = regFirstRegvar;
 	vreg = 11;
     mask = 0;
 	rmask = 0;
@@ -193,17 +207,24 @@ int AllocateRegisterVars()
 	// Make multiple passes over the CSE table in order to use
 	// up all temporary registers. Allocates on the progressively
 	// less desirable.
-	reg = AllocateRegisters1();
+	reg = AllocateRegisters1(&dreg);
 	vreg = AllocateVectorRegisters1();
 	if (reg < regLastRegvar)
-		reg = FinalAllocateRegisters(reg);
+		reg = FinalAllocateRegisters(reg,dreg);
 	if (vreg < 18)
 		vreg = FinalAllocateVectorRegisters(vreg);
 
 	// Generate bit masks of allocated registers
 	for (csecnt = 0; csecnt < csendx; csecnt++) {
 		csp = &CSETable[csecnt];
-		if (csp->exp->etype==bt_vector) {
+		if (csp->exp->isDouble) {
+			if( csp->reg != -1 )
+    		{
+    			fprmask = fprmask | (1LL << (63 - csp->reg));
+    			fpmask = fpmask | (1LL << csp->reg);
+    		}
+		}
+		else if (csp->exp->etype==bt_vector) {
 			if( csp->reg != -1 )
     		{
     			vrmask = vrmask | (1LL << (63 - csp->reg));
@@ -223,6 +244,7 @@ int AllocateRegisterVars()
 
 	// Push temporaries on the stack.
 	SaveRegisterVars(mask, rmask);
+	SaveFPRegisterVars(fpmask, fprmask);
 
     save_mask = mask;
     fpsave_mask = fpmask;
@@ -237,10 +259,18 @@ int AllocateRegisterVars()
             {
                 initstack();
 				{
-                    ap = GenerateExpression(exptr,F_REG|F_IMMED|F_MEM,sizeOfWord);
-    				ap2 = makereg(csp->reg);
-    				if (ap->mode==am_immed)
-                        GenLdi(ap2,ap);
+                    ap = GenerateExpression(exptr,F_REG|F_IMMED|F_MEM|F_FPREG,sizeOfWord);
+					ap2 = csp->isfp ? makefpreg(csp->reg) : makereg(csp->reg);
+    				if (ap->mode==am_immed) {
+						if (ap2->mode==am_fpreg) {
+							ap3 = GetTempRegister();
+							GenLdi(ap3,ap);
+							GenerateDiadic(op_mov,0,ap2,ap3);
+							ReleaseTempReg(ap3);
+						}
+						else
+							GenLdi(ap2,ap);
+					}
     				else if (ap->mode==am_reg)
     					GenerateDiadic(op_mov,0,ap2,ap);
     				else {
@@ -989,6 +1019,23 @@ static void SaveRegisterVars(int64_t mask, int64_t rmask)
 	}
 }
 
+static void SaveFPRegisterVars(int64_t mask, int64_t rmask)
+{
+	int cnt;
+	int nn;
+
+	if( mask != 0 ) {
+		cnt = 0;
+		GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(popcnt(mask)*8));
+		for (nn = 0; nn < 64; nn++) {
+			if (rmask & (0x8000000000000000ULL >> nn)) {
+				GenerateDiadicNT(op_sf,'d',makefpreg(nn),make_indexed(cnt,regSP));
+				cnt+=sizeOfWord;
+			}
+		}
+	}
+}
+
 // Restore registers used as register variables.
 
 static void RestoreRegisterVars()
@@ -1009,6 +1056,24 @@ static void RestoreRegisterVars()
 	}
 }
 
+static void RestoreFPRegisterVars()
+{
+	int cnt2, cnt;
+	int nn;
+
+	if( fpsave_mask != 0 ) {
+		cnt2 = cnt = bitsset(fpsave_mask)*sizeOfWord;
+		cnt = 0;
+		for (nn = 0; nn < 64; nn++) {
+			if (fpsave_mask & (1LL << nn)) {
+				GenerateDiadic(op_lf,'d',makefpreg(nn),make_indexed(cnt,regSP));
+				cnt += sizeOfWord;
+			}
+		}
+		GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),make_immed(cnt2));
+	}
+}
+
 // Generate a return statement.
 //
 void GenerateReturn(Statement *stmt)
@@ -1019,13 +1084,15 @@ void GenerateReturn(Statement *stmt)
 	int toAdd;
 	SYM *sym = currentFn;
 	SYM *p;
+	bool isFloat;
 
   // Generate the return expression and force the result into r1.
   if( stmt != NULL && stmt->exp != NULL )
   {
 		initstack();
-		if (sym->tp->GetBtp() && sym->tp->GetBtp()->IsFloatType())
-			ap = GenerateExpression(stmt->exp,F_REG,sizeOfFP);
+		isFloat = sym->tp->GetBtp() && sym->tp->GetBtp()->IsFloatType();
+		if (isFloat)
+			ap = GenerateExpression(stmt->exp,F_FPREG,sizeOfFP);
 		else
 			ap = GenerateExpression(stmt->exp,F_REG|F_IMMED,sizeOfWord);
 		GenerateMonadicNT(op_hint,0,make_immed(2));
@@ -1056,10 +1123,17 @@ void GenerateReturn(Statement *stmt)
 					GenerateDiadic(op_mov, 0, makereg(1),ap);
 			}
         }
-		else if (ap->mode == am_fpreg)
-			GenerateDiadic(op_mov, 0, makereg(1),ap);
+		else if (ap->mode == am_fpreg) {
+			if (isFloat)
+				GenerateDiadic(op_mov, 0, makefpreg(1),ap);
+			else
+				GenerateDiadic(op_mov, 0, makereg(1),ap);
+		}
 		else if (ap->type==stddouble.GetIndex()) {
-			GenerateDiadic(op_lw,0,makereg(1),ap);
+			if (isFloat)
+				GenerateDiadic(op_lf,'d',makefpreg(1),ap);
+			else
+				GenerateDiadic(op_lw,0,makereg(1),ap);
 		}
 		else {
 			if (sym->tp->GetBtp()->IsVectorType())
@@ -1182,12 +1256,12 @@ static void SaveTemporaries(SYM *sym, int *sp, int *fsp)
 {
 	if (sym) {
 		if (sym->UsesTemps) {
-			*sp = TempInvalidate();
+			*sp = TempInvalidate(fsp);
 			//*fsp = TempFPInvalidate();
 		}
 	}
 	else {
-		*sp = TempInvalidate();
+		*sp = TempInvalidate(fsp);
 		//*fsp = TempFPInvalidate();
 	}
 }
@@ -1197,12 +1271,12 @@ static void RestoreTemporaries(SYM *sym, int sp, int fsp)
 	if (sym) {
 		if (sym->UsesTemps) {
 			//TempFPRevalidate(fsp);
-			TempRevalidate(sp);
+			TempRevalidate(sp,fsp);
 		}
 	}
 	else {
 		//TempFPRevalidate(fsp);
-		TempRevalidate(sp);
+		TempRevalidate(sp,fsp);
 	}
 }
 
@@ -1275,18 +1349,18 @@ static int GeneratePushParameter(ENODE *ep, int regno, int stkoffs)
 	}
 	if (ep->tp) {
 		if (ep->tp->IsFloatType())
-			ap = GenerateExpression(ep,F_REG,sizeOfFP);
+			ap = GenerateExpression(ep,F_FPREG,sizeOfFP);
 		else
 			ap = GenerateExpression(ep,F_REG|F_IMMED,sizeOfWord);
 	}
 	else if (ep->etype==bt_quad)
-		ap = GenerateExpression(ep,F_REG,sz);
+		ap = GenerateExpression(ep,F_FPREG,sz);
 	else if (ep->etype==bt_double)
-		ap = GenerateExpression(ep,F_REG,sz);
+		ap = GenerateExpression(ep,F_FPREG,sz);
 	else if (ep->etype==bt_triple)
-		ap = GenerateExpression(ep,F_REG,sz);
+		ap = GenerateExpression(ep,F_FPREG,sz);
 	else if (ep->etype==bt_float)
-		ap = GenerateExpression(ep,F_REG,sz);
+		ap = GenerateExpression(ep,F_FPREG,sz);
 	else
 		ap = GenerateExpression(ep,F_REG|F_IMMED,sz);
 	switch(ap->mode) {
@@ -1320,7 +1394,7 @@ static int GeneratePushParameter(ENODE *ep, int regno, int stkoffs)
 					}
 				}
 				else if (ap->mode==am_fpreg) {
-					GenerateDiadic(op_mov,0,makereg(regno & 0x7fff), ap);
+					GenerateDiadic(op_mov,0,makefpreg(regno & 0x7fff), ap);
 					if (regno & 0x8000) {
 						GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(sz));
 						nn = sz/sizeOfWord;
@@ -1373,8 +1447,8 @@ static int GeneratePushParameter(ENODE *ep, int regno, int stkoffs)
 						nn = 1;
 					}
 					else {
-						if (ap->type==stddouble.GetIndex()) {
-							GenerateDiadicNT(op_sw,0,ap,make_indexed(stkoffs,regSP));
+						if (ap->type==stddouble.GetIndex() || ap->mode==am_fpreg) {
+							GenerateDiadicNT(op_sf,'d',ap,make_indexed(stkoffs,regSP));
 							nn = sz/sizeOfWord;
 						}
 						else {
@@ -1533,7 +1607,7 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
     }
 	*/
 	if (sym && sym->tp && sym->tp->GetBtp()->IsFloatType() && (flags & F_FPREG))
-		return (makereg(1));
+		return (makefpreg(1));
 	if (sym && sym->tp->IsVectorType())
 		return (makevreg(1));
 	return (makereg(1));

@@ -45,6 +45,7 @@ enum {
      tk_4addui,
      tk_8addui,
      tk_16addui,
+	 tk_abs,
      tk_addui,
      tk_align, //140
      tk_and,
@@ -256,6 +257,7 @@ enum {
      tk_lvw,
      tk_lvwar,
      tk_lw,
+	 tk_lwr,
      tk_lwar,
      tk_lws,
 	 tk_macro,
@@ -380,6 +382,7 @@ enum {
      tk_subui,
 	 tk_sv,
      tk_sw,
+     tk_swc,
      tk_swcr,
      tk_swap,
      tk_sws,

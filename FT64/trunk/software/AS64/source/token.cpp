@@ -515,7 +515,7 @@ int NextToken()
              }
              break;
 
-        // add addi addu addui and andi align asr asri
+        // abs add addi addu addui and andi align asr asri
         case 'a':
         case 'A':
             if ((inptr[1]=='n' || inptr[1]=='N') && (inptr[2]=='d' || inptr[2]=='D') && isspace(inptr[3])) {
@@ -565,6 +565,10 @@ int NextToken()
             if ((inptr[1]=='s' || inptr[1]=='S') && (inptr[2]=='l' || inptr[2]=='L') && isspaceOrDot(inptr[3])) {
                 inptr += 3;
                 return token = tk_asl;
+            }
+            if ((inptr[1]=='b' || inptr[1]=='B') && (inptr[2]=='s' || inptr[2]=='S') && isspace(inptr[3])) {
+                inptr += 3;
+                return token = tk_abs;
             }
             break;
 
@@ -1357,7 +1361,7 @@ int NextToken()
                  inptr += 4;
                  return token = tk_ftst;
              }
-			 if (gCpu==7 || gCpu=='A') {
+			 if (gCpu==7 || gCpu=='A' || gCpu=='F') {
 				 if ((inptr[1]=='b' || inptr[1]=='B') &&
 					 (inptr[2]=='e' || inptr[2]=='E') &&
 					 (inptr[3]=='q' || inptr[3]=='Q') &&
@@ -1506,7 +1510,7 @@ int NextToken()
 					 return token = tk_ipop;
 				 }
 			 }
-			 if (gCpu==7 || gCpu=='A') {
+			 if (gCpu==7 || gCpu=='A' || gCpu=='F') {
 				 if ((inptr[1]=='t' || inptr[1]=='T') &&
 					 (inptr[2]=='o' || inptr[2]=='O') &&
 					 (inptr[3]=='f' || inptr[3]=='F') &&
@@ -1756,6 +1760,10 @@ int NextToken()
                 if ((inptr[1]=='v' || inptr[1]=='V') && (inptr[2]=='w' || inptr[2]=='W') && isspace(inptr[3])) {
                     inptr += 3;
                     return (token = tk_lvw);
+                }
+                if ((inptr[1]=='w' || inptr[1]=='W') && (inptr[2]=='r' || inptr[2]=='R') && isspace(inptr[3])) {
+                    inptr += 3;
+                    return (token = tk_lwr);
                 }
 			}
             if (gCpu==4) {
@@ -2556,6 +2564,10 @@ int NextToken()
                 inptr += 4;
                 return token = tk_swcr;
             }
+            if ((inptr[1]=='w' || inptr[1]=='W') && (inptr[2]=='c' || inptr[2]=='C') && isspace(inptr[3])) {
+                inptr += 3;
+                return token = tk_swc;
+            }
             // RiSC-V opcodes
             // slli srli srai
             if (gCpu==5) {
@@ -2983,6 +2995,8 @@ int getFPRegister()
     int reg;
 
     while(isspace(*inptr)) inptr++;
+	if (*inptr=='$')
+		inptr++;
     switch(*inptr) {
     case 'f': case 'F':
          if (inptr[1]=='p' || inptr[1]=='P') {

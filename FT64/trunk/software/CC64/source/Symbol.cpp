@@ -674,12 +674,12 @@ void SYM::BuildParameterList(int *num, int *numa)
 		sp1->value.i = poffset;
 		noParmOffset = false;
 		if (sp1->tp->IsFloatType()) {
-			if (preg > regLastArg)
+			if (fpreg > regLastArg)
 				sp1->IsRegister = false;
 			if (sp1->IsRegister && sp1->tp->size < 11) {
-				sp1->reg = sp1->IsAuto ? preg | 0x8000 : preg;
-				preg++;
-				if ((preg & 0x8000)==0) {
+				sp1->reg = sp1->IsAuto ? fpreg | 0x8000 : fpreg;
+				fpreg++;
+				if ((fpreg & 0x8000)==0) {
 					noParmOffset = true;
 					sp1->value.i = -1;
 				}

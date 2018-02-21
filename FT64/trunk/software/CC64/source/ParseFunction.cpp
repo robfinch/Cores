@@ -1,11 +1,11 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2017  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2018  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-// C64 - 'C' derived language compiler
+// CC64 - 'C' derived language compiler
 //  - 64 bit CPU
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -72,7 +72,7 @@ static int round8(int n)
 // Return the stack offset where parameter storage begins.
 int GetReturnBlockSize()
 {
-	return (3*sizeOfWord);
+	return (4*sizeOfWord);
 	if (currentFn) {
 		if (currentFn->IsLeaf) {
 		    return (exceptions ? sizeOfWord*3 : sizeOfWord);

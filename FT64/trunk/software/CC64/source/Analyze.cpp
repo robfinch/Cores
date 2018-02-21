@@ -149,6 +149,7 @@ CSE *InsertNodeIntoCSEList(ENODE *node, int duse)
         csp->exp = DuplicateEnode(node);
         csp->voidf = 0;
 		csp->reg = 0;
+		csp->isfp = csp->exp->isDouble;
         return (csp);
     }
 	if (loop_active < 2) {
@@ -216,10 +217,17 @@ static void scanexpr(ENODE *node, int duse)
                 InsertNodeIntoCSEList(node,duse);
                 break;
 		case en_autofcon:
+        case en_tempfpref:
+                csp1 = InsertNodeIntoCSEList(node,duse);
+				csp1->isfp = TRUE;
+                if ((nn = voidauto2(node)) > 0) {
+					csp1->duses += loop_active;
+                    csp1->uses = csp1->duses + nn - loop_active;
+				}
+                break;
 		case en_autovcon:
         case en_autocon:
 		case en_classcon:
-        case en_tempfpref:
         case en_tempref:
                 csp1 = InsertNodeIntoCSEList(node,duse);
                 if ((nn = voidauto2(node)) > 0) {
@@ -486,6 +494,14 @@ void repexpr(ENODE *node)
 				case en_fcon:
 				case en_autofcon:
                 case en_tempfpref:
+					if( (csp = SearchCSEList(node)) != NULL ) {
+						csp->isfp = TRUE; //**** a kludge
+						if( csp->reg > 0 ) {
+							node->nodetype = en_fpregvar;
+							node->i = csp->reg;
+						}
+					}
+					break;
 					/*
 					if( (csp = SearchCSEList(node)) != NULL ) {
 						if( csp->reg > 0 ) {
@@ -546,7 +562,7 @@ void repexpr(ENODE *node)
 				case en_quad_ref:
 					if( (csp = SearchCSEList(node)) != NULL ) {
 						if( csp->reg > 0 ) {
-							node->nodetype = en_regvar;
+							node->nodetype = en_fpregvar;
 							node->i = csp->reg;
 						}
 						else

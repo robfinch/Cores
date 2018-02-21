@@ -435,6 +435,8 @@ void PutAddressMode(AMODE *ap)
 				ofs.printf("v%d", (int)ap->preg);
 			else if (ap->type==stdvectormask->GetIndex())
 				ofs.printf("vm%d", (int)ap->preg);
+			else if (ap->type==stddouble.GetIndex())
+				ofs.printf("$fp%d", (int)ap->preg);
 			else {
 				ofs.write(RegMoniker(ap->preg));
 				if (renamed)
@@ -445,7 +447,7 @@ void PutAddressMode(AMODE *ap)
 			ofs.printf("vm%d", (int)ap->preg);
             break;
     case am_fpreg:
-            ofs.printf("r%d", (int)ap->preg);
+            ofs.printf("$fp%d", (int)ap->preg);
             break;
     case am_ind:
 			ofs.printf("[%s]",RegMoniker(ap->preg));

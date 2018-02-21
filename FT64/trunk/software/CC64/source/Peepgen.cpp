@@ -473,28 +473,29 @@ void peep_move(OCODE *ip)
 int equal_address(AMODE *ap1, AMODE *ap2)
 {
 	if( ap1 == NULL || ap2 == NULL )
-		return FALSE;
-  if( ap1->mode != ap2->mode  && !((ap1->mode==am_ind && ap2->mode==am_indx) || (ap1->mode==am_indx && ap2->mode==am_ind)))
-    return FALSE;
-  switch( ap1->mode )
-  {
-  case am_immed:
-	  return (ap1->offset->i == ap2->offset->i);
-  case am_reg:
-    return ap1->preg == ap2->preg;
-  case am_ind:
-  case am_indx:
-	  if (ap1->preg != ap2->preg)
-		  return FALSE;
-	  if (ap1->offset == ap2->offset)
-		  return TRUE;
-	  if (ap1->offset == NULL || ap2->offset==NULL)
-		  return FALSE;
-	  if (ap1->offset->i != ap2->offset->i)
-		  return FALSE;
-	  return TRUE;
-  }
-  return FALSE;
+		return (FALSE);
+	if( ap1->mode != ap2->mode  && !((ap1->mode==am_ind && ap2->mode==am_indx) || (ap1->mode==am_indx && ap2->mode==am_ind)))
+		return (FALSE);
+	switch( ap1->mode )
+	{
+	case am_immed:
+		return (ap1->offset->i == ap2->offset->i);
+	case am_fpreg:
+	case am_reg:
+		return (ap1->preg == ap2->preg);
+	case am_ind:
+	case am_indx:
+		if (ap1->preg != ap2->preg)
+			return (FALSE);
+		if (ap1->offset == ap2->offset)
+			return (TRUE);
+		if (ap1->offset == NULL || ap2->offset==NULL)
+			return (FALSE);
+		if (ap1->offset->i != ap2->offset->i)
+			return (FALSE);
+		return (TRUE);
+	}
+	return (FALSE);
 }
 
 void peep_add(OCODE *ip)

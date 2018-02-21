@@ -350,8 +350,8 @@ extern AMODE *GetTempVectorRegister();
 extern AMODE *GetTempVectorMaskRegister();
 extern void ReleaseTempRegister(AMODE *ap);
 extern void ReleaseTempReg(AMODE *ap);
-extern int TempInvalidate();
-extern void TempRevalidate(int sp);
+extern int TempInvalidate(int *);
+extern void TempRevalidate(int sp, int fsp);
 extern int GetTempMemSpace();
 extern bool IsArgumentReg(int);
 // Table888.c

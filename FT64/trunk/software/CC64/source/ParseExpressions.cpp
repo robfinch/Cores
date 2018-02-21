@@ -750,15 +750,23 @@ TYP *nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeArray *typear
 						(*node)->isUnsigned = TRUE;
 				}
 				if (sp->IsRegister) {
-					(*node)->nodetype = en_regvar;
+					if (sp->tp->IsFloatType())
+						(*node)->nodetype = en_fpregvar;
+					else
+						(*node)->nodetype = en_regvar;
 					(*node)->i = sp->reg;
 					(*node)->tp = sp->tp;
 					//(*node)->tp->val_flag = TRUE;
 				}
 			}
 			(*node)->esize = sp->tp->size;
-			(*node)->etype = ((*node)->nodetype == en_regvar) ? bt_long : bt_pointer;//sp->tp->type;
 			(*node)->isDouble = sp->tp->type==bt_double;
+			switch((*node)->nodetype) {
+			case en_regvar:		(*node)->etype = bt_long;	break;//sp->tp->type;
+			case en_fpregvar:	(*node)->etype = bt_double;	(*node)->isDouble = TRUE; break;//sp->tp->type;
+			default:			(*node)->etype = bt_pointer;break;//sp->tp->type;
+			}
+			//(*node)->etype = ((*node)->nodetype == en_regvar) ? bt_long : bt_pointer;//sp->tp->type;
 			break;
 		}
 		(*node)->isPascal = sp->IsPascal;
@@ -1496,7 +1504,7 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 			uf = pnode->isUnsigned;
 			pnode = makenode(en_add, qnode, pnode);
 			pnode->etype = bt_pointer;
-			pnode->esize = sizeOfWord;
+			pnode->esize = sizeOfPtr;
 			pnode->constflag = cf & qnode->constflag;
 			pnode->isUnsigned = uf & qnode->isUnsigned;
 
@@ -1809,6 +1817,7 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
 			ep1->f128.sign = !ep1->f128.sign;
 			// A new literal label is required.
 			ep1->i = quadlit(&ep1->f128);
+			ep1->isDouble = TRUE;
 		}
 		else
 		
@@ -2529,14 +2538,17 @@ TYP *multops(ENODE **node)
 								case bt_double:
 									ep1 = makenode(en_fmul,ep1,ep2);
 									ep1->esize = 4;
+									ep1->isDouble = TRUE;
 									break;
 								case bt_quad:
 									ep1 = makenode(en_fmul,ep1,ep2);
 									ep1->esize = 8;
+									ep1->isDouble = TRUE;
 									break;
 								case bt_float:
 									ep1 = makenode(en_fmul,ep1,ep2);
 									ep1->esize = 2;
+									ep1->isDouble = TRUE;
 									break;
 								case bt_vector:
 									if (isScalar)
@@ -2562,14 +2574,17 @@ TYP *multops(ENODE **node)
 								else if (tp1->type==bt_double) {
 									ep1 = makenode(en_fdiv,ep1,ep2);
 									ep1->esize = 4;
+									ep1->isDouble = TRUE;
 								}
 								else if (tp1->type==bt_quad) {
 									ep1 = makenode(en_fdiv,ep1,ep2);
 									ep1->esize = 8;
+									ep1->isDouble = TRUE;
 								}
 								else if (tp1->type==bt_float) {
 									ep1 = makenode(en_fdiv,ep1,ep2);
-									ep1->esize = 2;
+									ep1->esize = 8;
+									ep1->isDouble = TRUE;
 								}
                                 else if( tp1->isUnsigned )
                                     ep1 = makenode(en_udiv,ep1,ep2);
@@ -2673,6 +2688,7 @@ static TYP *addops(ENODE **node)
 				case bt_double:
     				ep1 = makenode( oper ? en_fadd : en_fsub,ep1,ep2);
 					ep1->esize = 4;
+					ep1->isDouble = TRUE;
 					break;
 				case bt_quad:
                     tp1 = forcefit(&ep1,tp1,&ep2,tp2,true);
@@ -2682,6 +2698,7 @@ static TYP *addops(ENODE **node)
 				case bt_float:
     				ep1 = makenode( oper ? en_fadd : en_fsub,ep1,ep2);
 					ep1->esize = 8;
+					ep1->isDouble = TRUE;
 					break;
 				case bt_vector:
 					if (isScalar)

@@ -63,6 +63,11 @@ bool OCODE::HasSourceReg(int regno) const
 	return (false);
 }
 
+// Get target reg needs to distinguish floating-point registers from regular
+// general purpose registers. So the value 32 is added to the register number
+// for floating-point. This roughly corresponds to the fact that floating-
+// point registers are the odd numbered register sets.
+
 int OCODE::GetTargetReg() const
 {
 	if (insn==nullptr)
@@ -77,7 +82,10 @@ int OCODE::GetTargetReg() const
 		case op_ret:
 		case op_call:	return (31);
 		default:
-			return (oper1->preg);
+			if (oper1->mode==am_fpreg)
+				return (oper1->preg | 32);
+			else
+				return (oper1->preg);
 		}
 	}
 	else
