@@ -113,7 +113,7 @@ input casram_n;
 reg [1:0] chip;// = CHIP6567R8;
 integer n;
 wire cs = !cs_n;
-wire clk33;
+wire clk32, clk33, clk57, dotclk;
 reg [7:0] regShadow [127:0];
 
 reg [13:0] ado;
@@ -295,6 +295,10 @@ FAL6567_clkgen u1
   .rst(xrst),
   .xclk(cr_clk),
   .clk33(clk33),
+  .dcrate(1'b0),
+  .dotclk(dotclk),
+  .clk32(clk32),
+  .clk57(clk57),
   .locked(locked)
 );
 
@@ -320,6 +324,9 @@ wire ras_nne;
 wire phi02_pe;
 reg [7:0] cpu_dat;
 reg cpu_wrote;
+reg cpu_access;
+reg [7:0] col_adr, row_adr;
+reg [7:0] ram_dato;
 reg rst_cpu_access;
 edge_det ued1 (.rst(rst_o), .clk(clk33), .ce(1'b1), .i(casram_n), .pe(casram_npe), .ne(casram_nne));
 edge_det ued2 (.rst(rst_o), .clk(clk33), .ce(1'b1), .i(ras_n), .ne(ras_nne), .pe());
@@ -336,10 +343,10 @@ always @(posedge clk33)
 	if (phi02 & ras_nne)
 		row_adr <= ad[7:0];
 always @(posedge clk33)
-	if (casram_npe)
+	if (phi02 & casram_npe)
 		cpu_dat <= db;
 always @(posedge clk33)
-	if (casram_npe)
+	if (phi02 & casram_npe)
 		cpu_wrote <= rw;
 wire [15:0] cpu_adr = {row_adr,col_adr};
 always @(posedge clk33)
@@ -352,7 +359,7 @@ always @(posedge clk33)
 		ram_dato <= cpu_dat;
 always @(posedge clk33)
 	if (phi02_pe)
-		ram_we <= ~(cpu_wrote & cpu_acess);
+		ram_we <= ~(cpu_wrote & cpu_access);
 	else
 		ram_we <= 1'b1;
 always @(posedge clk33)
