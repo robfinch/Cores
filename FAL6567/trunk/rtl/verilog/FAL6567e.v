@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2016-2017  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2016-2018  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -33,7 +33,9 @@
 // display area with a border to be created. This is double the horizontal and
 // vertical resolution of the VIC-II. 
 //
-module FAL6567e(cr_clk, phi02, rst_o, irq, aec, ba, cs_n, rw, ad, db, den_n, dir, ras_n, cas_n, lp_n, hSync, vSync, red, green, blue);
+module FAL6567e(cr_clk, phi02, rst_o, irq, aec, ba, cs_n, rw, ad, db, den_n, dir, ras_n, cas_n, lp_n, hSync, vSync, red, green, blue,
+		ram_adr, ram_dat, ram_we, ram_ce, ram_oe, casram_n
+	);
 parameter CHIP6567R8 = 2'd0;
 parameter CHIP6567OLD = 2'd1;
 parameter CHIP6569 = 2'd2;
@@ -89,7 +91,7 @@ output aec;
 output reg ba;
 input cs_n;
 input rw;
-inout [7:0] ad;
+inout [13:0] ad;
 inout tri [11:0] db;
 output den_n;
 output dir;
@@ -100,6 +102,13 @@ output reg hSync, vSync;	// sync outputs
 output [2:0] red;
 output [2:0] green;
 output [2:0] blue;
+
+output reg [18:0] ram_adr;
+inout [7:0] ram_dat;
+output reg ram_we;
+output reg ram_oe;
+output reg ram_ce;
+input casram_n;
 
 reg [1:0] chip;// = CHIP6567R8;
 integer n;
@@ -134,12 +143,14 @@ wire wr = !rw;
 wire eol1 = hCtr==hTotal;
 wire eof1 = vCtr==vTotal && eol1;
 
+wire locked;
 wire clken8;
 reg [32:0] phi0r,phi1r,phi2r,phi02r,phisr;
 wire phi0,phi1,phi2;
 reg phi02,phis;
 reg [32:0] clk3r;
 reg [32:0] clk8r;
+wire mux;
 reg [32:0] rasr;
 reg [32:0] muxr;
 reg [32:0] casr;
@@ -149,6 +160,10 @@ wire vicRefresh;
 wire vicAddrValid;
 reg [7:0] dbo8;
 wire [7:0] dbo33 = 8'h00;
+
+reg turbo;
+reg [3:0] cram [0:1023];
+wire [3:0] cram_dat = cram[ram_adr[9:0]];
 
 wire badline;                   // flag bad line condition
 reg den;                        // display enable
@@ -210,8 +225,22 @@ reg leg;          // legacy compatibility
 
 reg [MIBCNT-1:0] balos = 16'h0000;
 
+reg [4:0] ram_page;
 reg [13:0] addr;
 reg [13:0] vicAddr;
+reg [32:0] stc;
+wire stCycle = stc[32];
+wire stCycle1 = stc[0];
+wire stCycle2 = stc[1];
+wire stCycle3 = stc[2];
+
+reg [7:0] sprite1;
+reg [3:0] sprite2,sprite3,sprite4,sprite5;
+reg [10:0] rasterX3;
+
+reg ismc;
+reg [11:0] shiftingChar,waitingChar,readChar;
+reg [7:0] shiftingPixels,waitingPixels,readPixels;
 
 // Interrupt bits
 reg irst;
@@ -241,6 +270,11 @@ reg hVicBorder;
 reg vVicBorder;
 wire vicBorder = hVicBorder | vVicBorder;
 
+wire csf = cs_n && (ad[5:0] >= 6'h33);
+wire [7:0] dbFlt;
+assign dbFlt = wr ? db : 8'bz;
+FAL6567Float(rst_o, clk33, phi02, csf, csf, wr, {2'b00,ad[5:0]}, dbFlt);
+
 reg [21:0] rstcntr;
 wire xrst = SIM ? !rstcntr[3] : !rstcntr[21];
 always @(posedge clk33)
@@ -269,16 +303,76 @@ assign rst_o = rst;
 
 assign den_n = aec ? cs_n : 1'b0;
 assign dir = aec ? rw : 1'b0;
-assign db = (aec && !cs_n && rw) ? (ad[5:0] < 6'h30 ? {4'h0,dbo8} : {4'h0,dbo33}) : 12'bz;   
+assign db = (aec && !cs_n && rw) ? (ad[5:0] < 6'h33 ? {4'h0,dbo8} : {4'h0,dbFlt}) : 12'bz;
+
 always @(posedge clk33)
 if (rst)
     chip <= db[9:8];
 always @(posedge clk33)
 if (rst)
-  ado1 <= 8'hFF;
+  	ado1 <= 8'hFF;
 else
-  ado1 <= mux ? {2'b11,vicAddr[13:8]} : vicAddr[7:0];
-assign ad = aec ? 8'bz : ado1;
+  	ado1 <= mux ? {2'b11,vicAddr[13:8]} : vicAddr[7:0];
+assign ad = aec ? 14'bz : {vicAddr[13:8],ado1};
+
+wire casram_npe, casram_nne;
+wire ras_nne;
+wire phi02_pe;
+reg [7:0] cpu_dat;
+reg cpu_wrote;
+reg rst_cpu_access;
+edge_det ued1 (.rst(rst_o), .clk(clk33), .ce(1'b1), .i(casram_n), .pe(casram_npe), .ne(casram_nne));
+edge_det ued2 (.rst(rst_o), .clk(clk33), .ce(1'b1), .i(ras_n), .ne(ras_nne), .pe());
+edge_det ued3 (.rst(rst_o), .clk(clk33), .ce(1'b1), .i(phi02), .pe(phi02_pe), .ne());
+always @(posedge clk33)
+	if (phi02 & casram_nne)
+		cpu_access <= 1'b1;
+	else if (rst_cpu_access)
+		cpu_access <= 1'b0;
+always @(posedge clk33)
+	if (phi02 & casram_npe)
+		col_adr <= ad[7:0];
+always @(posedge clk33)
+	if (phi02 & ras_nne)
+		row_adr <= ad[7:0];
+always @(posedge clk33)
+	if (casram_npe)
+		cpu_dat <= db;
+always @(posedge clk33)
+	if (casram_npe)
+		cpu_wrote <= rw;
+wire [15:0] cpu_adr = {row_adr,col_adr};
+always @(posedge clk33)
+	if (phi02_pe)
+		ram_adr <= {3'b0,cpu_adr};
+	else
+		ram_adr <= {ram_page,vicAddr};
+always @(posedge clk33)
+	if (phi02_pe & cpu_wrote & cpu_access)
+		ram_dato <= cpu_dat;
+always @(posedge clk33)
+	if (phi02_pe)
+		ram_we <= ~(cpu_wrote & cpu_acess);
+	else
+		ram_we <= 1'b1;
+always @(posedge clk33)
+	if (phi02_pe)
+		ram_oe <= cpu_access ? (cpu_wrote ? 1'b1 : 1'b0) : 1'b1;
+	else
+		ram_oe <= 1'b0;
+always @(posedge clk33)
+	if (phi02_pe)
+		ram_ce <= ~cpu_access;
+	else
+		ram_ce <= 1'b0;
+always @(posedge clk33)
+	if (phi02_pe)
+		rst_cpu_access <= cpu_access;
+
+assign ram_dat = ram_we ? ram_dato : 8'bz;
+always @(posedge clk33)
+	if (ram_we && ram_adr[15:10]==6'b110110)
+		cram[ram_adr[9:0]] <= ram_dato[3:0];
 
 FAL6567_ScanConverter u2
 (
@@ -305,16 +399,11 @@ else begin
 end
 assign clken8 = clk8r[32];
 
-reg [32:0] stc;
 always @(posedge clk33)
 if (rst)
   stc <= 33'b100000000000000000000000000000000;
 else
   stc <= {stc[31:0],stc[32]};
-wire stCycle = stc[32];
-wire stCycle1 = stc[0];
-wire stCycle2 = stc[1];
-wire stCycle3 = stc[2];
 
 always @(posedge clk33)
 if (rst)
@@ -545,98 +634,94 @@ end
 
 wire [10:0] rasterX2 = {preRasterX,1'b0};
 always @(chip,rasterX2)
-casex(rasterX2)
-11'h00x: vicCycle <= VIC_REF;
-11'h01x: vicCycle <= VIC_REF;
-11'h02x: vicCycle <= VIC_REF;
-11'h03x: vicCycle <= VIC_REF;
-11'h04x: vicCycle <= VIC_RC;
-11'h05x: vicCycle <= VIC_CHAR;
-11'h06x: vicCycle <= VIC_CHAR;
-11'h07x: vicCycle <= VIC_CHAR;
-11'h08x: vicCycle <= VIC_CHAR;
-11'h09x: vicCycle <= VIC_CHAR;
-11'h0Ax: vicCycle <= VIC_CHAR;
-11'h0Bx: vicCycle <= VIC_CHAR;
-11'h0Cx: vicCycle <= VIC_CHAR;
-11'h0Dx: vicCycle <= VIC_CHAR;
-11'h0Ex: vicCycle <= VIC_CHAR;
-11'h0Fx: vicCycle <= VIC_CHAR;
-11'h10x: vicCycle <= VIC_CHAR;
-11'h11x: vicCycle <= VIC_CHAR;
-11'h12x: vicCycle <= VIC_CHAR;
-11'h13x: vicCycle <= VIC_CHAR;
-11'h14x: vicCycle <= VIC_CHAR;
-11'h15x: vicCycle <= VIC_CHAR;
-11'h16x: vicCycle <= VIC_CHAR;
-11'h17x: vicCycle <= VIC_CHAR;
-11'h18x: vicCycle <= VIC_CHAR;
-11'h19x: vicCycle <= VIC_CHAR;
-11'h1Ax: vicCycle <= VIC_CHAR;
-11'h1Bx: vicCycle <= VIC_CHAR;
-11'h1Cx: vicCycle <= VIC_CHAR;
-11'h1Dx: vicCycle <= VIC_CHAR;
-11'h1Ex: vicCycle <= VIC_CHAR;
-11'h1Fx: vicCycle <= VIC_CHAR;
-11'h20x: vicCycle <= VIC_CHAR;
-11'h21x: vicCycle <= VIC_CHAR;
-11'h22x: vicCycle <= VIC_CHAR;
-11'h23x: vicCycle <= VIC_CHAR;
-11'h24x: vicCycle <= VIC_CHAR;
-11'h25x: vicCycle <= VIC_CHAR;
-11'h26x: vicCycle <= VIC_CHAR;
-11'h27x: vicCycle <= VIC_CHAR;
-11'h28x: vicCycle <= VIC_CHAR;
-11'h29x: vicCycle <= VIC_CHAR;
-11'h2Ax: vicCycle <= VIC_CHAR;
-11'h2Bx: vicCycle <= VIC_G;
-11'h2Cx: vicCycle <= VIC_IDLE;
-11'h2Dx: vicCycle <= VIC_IDLE;
-11'h2Ex:
+casez(rasterX2)
+11'h00?: vicCycle <= VIC_REF;
+11'h01?: vicCycle <= VIC_REF;
+11'h02?: vicCycle <= VIC_REF;
+11'h03?: vicCycle <= VIC_REF;
+11'h04?: vicCycle <= VIC_RC;
+11'h05?: vicCycle <= VIC_CHAR;
+11'h06?: vicCycle <= VIC_CHAR;
+11'h07?: vicCycle <= VIC_CHAR;
+11'h08?: vicCycle <= VIC_CHAR;
+11'h09?: vicCycle <= VIC_CHAR;
+11'h0A?: vicCycle <= VIC_CHAR;
+11'h0B?: vicCycle <= VIC_CHAR;
+11'h0C?: vicCycle <= VIC_CHAR;
+11'h0D?: vicCycle <= VIC_CHAR;
+11'h0E?: vicCycle <= VIC_CHAR;
+11'h0F?: vicCycle <= VIC_CHAR;
+11'h10?: vicCycle <= VIC_CHAR;
+11'h11?: vicCycle <= VIC_CHAR;
+11'h12?: vicCycle <= VIC_CHAR;
+11'h13?: vicCycle <= VIC_CHAR;
+11'h14?: vicCycle <= VIC_CHAR;
+11'h15?: vicCycle <= VIC_CHAR;
+11'h16?: vicCycle <= VIC_CHAR;
+11'h17?: vicCycle <= VIC_CHAR;
+11'h18?: vicCycle <= VIC_CHAR;
+11'h19?: vicCycle <= VIC_CHAR;
+11'h1A?: vicCycle <= VIC_CHAR;
+11'h1B?: vicCycle <= VIC_CHAR;
+11'h1C?: vicCycle <= VIC_CHAR;
+11'h1D?: vicCycle <= VIC_CHAR;
+11'h1E?: vicCycle <= VIC_CHAR;
+11'h1F?: vicCycle <= VIC_CHAR;
+11'h20?: vicCycle <= VIC_CHAR;
+11'h21?: vicCycle <= VIC_CHAR;
+11'h22?: vicCycle <= VIC_CHAR;
+11'h23?: vicCycle <= VIC_CHAR;
+11'h24?: vicCycle <= VIC_CHAR;
+11'h25?: vicCycle <= VIC_CHAR;
+11'h26?: vicCycle <= VIC_CHAR;
+11'h27?: vicCycle <= VIC_CHAR;
+11'h28?: vicCycle <= VIC_CHAR;
+11'h29?: vicCycle <= VIC_CHAR;
+11'h2A?: vicCycle <= VIC_CHAR;
+11'h2B?: vicCycle <= VIC_G;
+11'h2C?: vicCycle <= VIC_IDLE;
+11'h2D?: vicCycle <= VIC_IDLE;
+11'h2E?:
         case(chip)
         CHIP6567R8:   vicCycle <= VIC_IDLE;
         CHIP6567OLD:  vicCycle <= VIC_IDLE;
         default:      vicCycle <= VIC_SPRITE;
         endcase
-11'h2Fx:
+11'h2F?:
         case(chip)
         CHIP6567R8:   vicCycle <= VIC_IDLE;
         CHIP6567OLD:  vicCycle <= VIC_SPRITE;
         default:      vicCycle <= VIC_SPRITE;
         endcase
-11'h30x:  vicCycle <= VIC_SPRITE;
-11'h31x:  vicCycle <= VIC_SPRITE;
-11'h32x:  vicCycle <= VIC_SPRITE;
-11'h33x:  vicCycle <= VIC_SPRITE;
-11'h34x:  vicCycle <= VIC_SPRITE;
-11'h35x:  vicCycle <= VIC_SPRITE;
-11'h36x:  vicCycle <= VIC_SPRITE;
-11'h37x:  vicCycle <= VIC_SPRITE;
-11'h38x:  vicCycle <= VIC_SPRITE;
-11'h39x:  vicCycle <= VIC_SPRITE;
-11'h3Ax:  vicCycle <= VIC_SPRITE;
-11'h3Bx:  vicCycle <= VIC_SPRITE;
-11'h3Cx:  vicCycle <= VIC_SPRITE;
-11'h3Dx:  vicCycle <= VIC_SPRITE;
-11'h3Ex:
+11'h30?:  vicCycle <= VIC_SPRITE;
+11'h31?:  vicCycle <= VIC_SPRITE;
+11'h32?:  vicCycle <= VIC_SPRITE;
+11'h33?:  vicCycle <= VIC_SPRITE;
+11'h34?:  vicCycle <= VIC_SPRITE;
+11'h35?:  vicCycle <= VIC_SPRITE;
+11'h36?:  vicCycle <= VIC_SPRITE;
+11'h37?:  vicCycle <= VIC_SPRITE;
+11'h38?:  vicCycle <= VIC_SPRITE;
+11'h39?:  vicCycle <= VIC_SPRITE;
+11'h3A?:  vicCycle <= VIC_SPRITE;
+11'h3B?:  vicCycle <= VIC_SPRITE;
+11'h3C?:  vicCycle <= VIC_SPRITE;
+11'h3D?:  vicCycle <= VIC_SPRITE;
+11'h3E?:
         case(chip)
         CHIP6567R8:   vicCycle <= VIC_SPRITE;
         CHIP6567OLD:  vicCycle <= VIC_SPRITE;
         default:      vicCycle <= VIC_REF;
         endcase
-11'h3Fx:
+11'h3F?:
         case(chip)
         CHIP6567R8:   vicCycle <= VIC_SPRITE;
         CHIP6567OLD:  vicCycle <= VIC_REF;
         default:      vicCycle <= VIC_REF;
         endcase
-11'h40x:  vicCycle <= VIC_REF;
+11'h40?:  vicCycle <= VIC_REF;
 default:  vicCycle <= VIC_IDLE;
 endcase
-
-reg [7:0] sprite1;
-reg [3:0] sprite2,sprite3,sprite4,sprite5;
-reg [10:0] rasterX3;
 
 always @(posedge clk33)
 if (clken8) begin
@@ -694,11 +779,13 @@ wire balo = |balos | (badline && rasterX2 < 11'h2C0);
 
 always @(posedge clk33)
 if (rst) begin
-  ba <= 1'b1;
+	ba <= 1'b1;
 end
 else begin
-  if (stCycle2)
-    ba <= !balo;
+	if (turbo)
+		ba <= 1'b1;
+	else if (stCycle2)
+    	ba <= !balo;
 end
 
 //------------------------------------------------------------------------------
@@ -731,7 +818,7 @@ assign aec = ba ? phi02 : ba3 & phi02;
 always @(posedge clk33)
 if (phi02==`HIGH && enaData && (vicCycle==VIC_RC || vicCycle==VIC_CHAR)) begin
   if (badline)
-    nextChar <= db;
+    nextChar <= turbo ? {cram_dat,ram_dat} : db;
   else
     nextChar <= charbuf[38];
   for (n = 38; n > 0; n = n -1)
@@ -742,7 +829,7 @@ end
 always @(posedge clk33)
 if (phi02==`LOW && enaData) begin
   if (vicCycle==VIC_CHAR || vicCycle==VIC_G) begin
-    readPixels <= db[7:0];
+    readPixels <= turbo ? ram_dat : db[7:0];
     readChar <= nextChar;
   end
   waitingPixels <= readPixels;
@@ -752,7 +839,7 @@ end
 always @(posedge clk33)
 if (phis==`LOW && enaSData==1'b1 && busCycle==BUS_SPRITE) begin
   if (MActive[sprite])
-    MPtr[sprite] <= db[7:0];
+    MPtr[sprite] <= turbo ? ram_dat : db[7:0];
   else
     MPtr[sprite] <= 8'd255;
 end
@@ -1140,9 +1227,6 @@ end
 //------------------------------------------------------------------------------
 // Graphics mode pixel calc.
 //------------------------------------------------------------------------------
-reg ismc;
-reg [11:0] shiftingChar,waitingChar,readChar;
-reg [7:0] shiftingPixels,waitingPixels,readPixels;
 
 always @(posedge clk33)
 begin
@@ -1257,6 +1341,8 @@ end
 
 always @(posedge clk33)
 if (rst) begin
+	turbo <= 1'b0;
+	ram_page <= 5'd0;
   regpg <= 1'd0;
   leg <= LEGACY;
   hSyncOn <= phSyncOn;
@@ -1335,9 +1421,14 @@ else begin
             1'd1: dbo8 <= mye[15:8];
             endcase
     6'h18:  begin
-            dbo8[0] <= 1'b1;
-            dbo8[3:1] <= cb[13:11];
-            dbo8[7:4] <= vm[13:10];
+    		if (regpg) begin
+    			dbo8 <= {3'd0,ram_page};
+    		end
+    		else begin
+            	dbo8[0] <= 1'b1;
+            	dbo8[3:1] <= cb[13:11];
+            	dbo8[7:4] <= vm[13:10];
+        	end
             end
     6'h19:  dbo8 <= {irq,3'b111,ilp,immc,imbc,irst};
     6'h1A:  dbo8 <= {4'b1111,elp,emmc,embc,erst};
@@ -1373,7 +1464,7 @@ else begin
     6'h2C:  dbo8[3:0] <= mc[{regpg,3'd5}];
     6'h2D:  dbo8[3:0] <= mc[{regpg,3'd6}];
     6'h2E:  dbo8[3:0] <= mc[{regpg,3'd7}];
-    6'h32:  dbo8 <= {leg,7'h7F};
+    6'h32:  dbo8 <= {leg,turbo,5'h1F,regpg};
     default:  dbo8 <= 8'hFF;
     endcase
   end
@@ -1437,8 +1528,12 @@ else begin
                 1'd1: mye[15:8] <= db;
                 endcase
         6'h18:  begin
-                cb[13:11] <= db[3:1];
-                vm[13:10] <= db[7:4];
+        		if (regpg)
+        			ram_page <= db[4:0];
+        		else begin
+                	cb[13:11] <= db[3:1];
+                	vm[13:10] <= db[7:4];
+            	end
                 end
         6'h19:  begin
                 irst_clr <= db[0];
@@ -1483,6 +1578,7 @@ else begin
         6'h30:  regno <= db[5:0];
         6'h32:  begin
                 regpg <= db[0];
+                turbo <= db[6];
                 leg <= db[7];
                 end
         6'h31:
@@ -1554,9 +1650,9 @@ FAL6567_ColorROM u6
   .code(color33),
   .color(color24)
 );
-assign red = color24[23:22];
-assign green = color24[15:14];
-assign blue = color24[7:6];
+assign red = color24[23:21];
+assign green = color24[15:13];
+assign blue = color24[7:5];
 
 endmodule
 
