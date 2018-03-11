@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2016-2017  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2016-2018  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -22,26 +22,23 @@
 //                                                                          
 // ============================================================================
 //
-module FAL6567_clkgen(rst, xclk, clk33, dcrate, dotclk, clk32, clk57, locked);
+module FAL6567_clkgen(rst, xclk, clk33, turbo2, dcrate, dotclk, clk57, locked);
 input rst;
 input xclk;     // 14.31818MHz color reference
 output clk33;
+input turbo2;
 input dcrate;
 output dotclk;
-output clk32;
 output clk57;
 output locked;
 
-wire locked1, locked2;
-assign locked = locked1 & locked2;
-wire clk8u, clk33u, clk32u;
+wire clk8u, clk33u, clk65u;
 wire clk14u, clk57u;
-BUFG bg2 (.I(clk33u), 	.O(clk33) );
 wire clkfb,clkfbo;
 BUFG clkbufg (.I(clkfbo), .O(clkfb));
 BUFG cb3 (.I(clk57u), .O(clk57));
-BUFG cb4 (.I(clk32u), .O(clk32));
-BUFGMUX (.S(dcrate), .I0(clk8u), .I1(clk14u), .O(dotclk));
+BUFGMUX cb5 (.S(turbo2), .I0(clk33u), .I1(clk65u), .O(clk33));
+BUFGMUX cb6 (.S(dcrate), .I0(clk8u), .I1(clk14u), .O(dotclk));
 
 // MMCM must be used rather than a PLL because the PLL min frequency is
 // 19 MHz, just a bit too high for the 14.318MHz color reference clock.
@@ -52,32 +49,19 @@ MMCM_BASE u1
     .CLKIN1(xclk),
     .CLKFBIN(clkfb),
     .CLKFBOUT(clkfbo),
-    .LOCKED(locked1),
-    .CLKOUT0(clk33u)
-);
-defparam u1.CLKFBOUT_MULT_F = 66.000;     // must place VCO frequency 800-1600 MHz (945Mhz)
-defparam u1.CLKOUT0_DIVIDE_F = 28.000;
-defparam u1.CLKIN1_PERIOD = 69.8412;
-
-MMCM_BASE u2
-(
-    .RST(rst),
-    .CLKIN1(xclk),
-    .CLKFBIN(clkfb),
-    .CLKFBOUT(clkfbo),
-    .LOCKED(locked2),
+    .LOCKED(locked),
     .CLKOUT0(clk33u),
-    .CLKOUT1(clk8u),
-    .CLKOUT2(clk57u),
-    .CLKOUT3(clk14u),
-    .CLKOUT4(clk32u)
+    .CLKOUT1(clk65u),
+    .CLKOUT2(clk8u),
+    .CLKOUT3(clk57u),
+    .CLKOUT4(clk14u)
 );
-defparam u1.CLKFBOUT_MULT_F = 64.000;     // must place VCO frequency 800-1600 MHz (916Mhz)
+defparam u1.CLKFBOUT_MULT_F = 64.000;     // can't be any higher than 64!  must place VCO frequency 800-1600 MHz (916Mhz)
 defparam u1.CLKOUT0_DIVIDE_F = 28.000;
-defparam u1.CLKOUT1_DIVIDE = 112;
-defparam u1.CLKOUT2_DIVIDE = 16;
-defparam u1.CLKOUT3_DIVIDE = 64;
-defparam u1.CLKOUT4_DIVIDE = 28;
+defparam u1.CLKOUT1_DIVIDE = 14.000;
+defparam u1.CLKOUT2_DIVIDE = 112;
+defparam u1.CLKOUT3_DIVIDE = 16;
+defparam u1.CLKOUT4_DIVIDE = 64;
 defparam u1.CLKIN1_PERIOD = 69.8412;
 
 endmodule

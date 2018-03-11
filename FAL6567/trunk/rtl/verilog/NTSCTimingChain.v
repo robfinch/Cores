@@ -52,8 +52,7 @@
 //	Burst: 3.579545
 //	A burst of 3.555555 = 96/27
 //
-//	33.750 MHZ in / 15734.26573 = 2145
-//	2145-17.8% = 1763
+//	32.7272 MHz in / 15734.26573 = 2080
 //
 //                                            
 //	The number of lines in the NTSC standard is defined as 262.5 per frame

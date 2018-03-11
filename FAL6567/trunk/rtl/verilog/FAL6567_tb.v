@@ -36,16 +36,21 @@ wire hSync;
 wire vSync;
 wire [11:0] db;
 reg [11:0] dbi;
+wire [18:0] ram_adr;
+wire [7:0] ram_dat;
+wire ram_ce;
+wire ram_we;
+wire ram_oe;
 
 initial begin
   rst = 1'b1;
   clk = 1'b0;
-  #30 rst = 1'b0;
+  #200 rst = 1'b0;
 end
 
 always #34.92 clk = ~clk;
 
-FAL6567e #(
+FAL6567g #(
   .pSimRasterEnable(1)
 ) u1
 (
@@ -64,9 +69,17 @@ FAL6567e #(
   .lp_n(),
   .hSync(hSync),
   .vSync(vSync),
-  .red(),
-  .green(),
-  .blue()
+  .blank_n(),
+  .p(),
+  .pclk(),
+  .palwr_n(),
+  .synclk(),
+  .colclk(),
+  .ram_adr(ram_adr),
+  .ram_dat(ram_dat),
+  .ram_oe(ram_oe),
+  .ram_we(ram_we),
+  .ram_ce(ram_ce)
 );
 
 reg [11:0] state;
@@ -127,6 +140,6 @@ default: dbi <= ad[11:0];
 endcase
 endcase
 end
-assign db = dbi;
+assign db = aec ? dbi : 12'bz;
 
 endmodule
