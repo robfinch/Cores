@@ -32,12 +32,12 @@ output dotclk;
 output clk57;
 output locked;
 
-wire clk8u, clk33u, clk65u;
+wire clk8u, clk33u, clk40u;
 wire clk14u, clk57u;
 wire clkfb,clkfbo;
 BUFG clkbufg (.I(clkfbo), .O(clkfb));
 BUFG cb3 (.I(clk57u), .O(clk57));
-BUFGMUX cb5 (.S(turbo2), .I0(clk33u), .I1(clk65u), .O(clk33));
+BUFGMUX cb5 (.S(turbo2), .I0(clk33u), .I1(clk40u), .O(clk33));
 BUFGMUX cb6 (.S(dcrate), .I0(clk8u), .I1(clk14u), .O(dotclk));
 
 // MMCM must be used rather than a PLL because the PLL min frequency is
@@ -51,14 +51,14 @@ MMCM_BASE u1
     .CLKFBOUT(clkfbo),
     .LOCKED(locked),
     .CLKOUT0(clk33u),
-    .CLKOUT1(clk65u),
+    .CLKOUT1(clk40u),
     .CLKOUT2(clk8u),
     .CLKOUT3(clk57u),
     .CLKOUT4(clk14u)
 );
 defparam u1.CLKFBOUT_MULT_F = 64.000;     // can't be any higher than 64!  must place VCO frequency 800-1600 MHz (916Mhz)
 defparam u1.CLKOUT0_DIVIDE_F = 28.000;
-defparam u1.CLKOUT1_DIVIDE = 14.000;
+defparam u1.CLKOUT1_DIVIDE = 23;
 defparam u1.CLKOUT2_DIVIDE = 112;
 defparam u1.CLKOUT3_DIVIDE = 16;
 defparam u1.CLKOUT4_DIVIDE = 64;

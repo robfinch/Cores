@@ -27,7 +27,7 @@
 `define FALSE 1'b0
 `define LOW   1'b0
 `define HIGH  1'b1
-//`define TURBO2	1'b1
+`define TURBO2	1'b1
 
 // An 800x480 display format is created for VGA using the 640x480 standard VGA
 // timing. The dot clock is faster though at 32.727MHz. This allows a 640x400
@@ -121,7 +121,8 @@ input casram_n;
 reg [1:0] chip;// = CHIP6567R8;
 integer n;
 wire cs = !cs_n;
-wire clk32, clk33, clk57, dotclk;
+wire clk32, clk33;	// 32.73 or 39.84 MHz
+wire clk57, dotclk;
 reg [7:0] regShadow [127:0];
 
 reg [13:0] ado;
@@ -305,6 +306,14 @@ if (xrst)
 
 // Set Limits
 always @(chip)
+if (turbo2)
+case(chip)
+CHIP6567R8:   begin rasterYMax = 9'd262; rasterXMax = 10'd631; end
+CHIP6567OLD:  begin rasterYMax = 9'd261; rasterXMax = 10'd631; end
+CHIP6569:     begin rasterYMax = 9'd311; rasterXMax = 10'd631; end
+CHIP6572:     begin rasterYMax = 9'd311; rasterXMax = 10'd631; end
+endcase
+else
 case(chip)
 CHIP6567R8:   begin rasterYMax = 9'd262; rasterXMax = {7'd64,3'b111}; end
 CHIP6567OLD:  begin rasterYMax = 9'd261; rasterXMax = {7'd63,3'b111}; end
@@ -350,13 +359,13 @@ reg cpu_access;
 reg [7:0] col_adr, row_adr;
 reg [7:0] ram_dato;
 reg rst_cpu_access;
-edge_det ued1 (.rst(rst_o), .clk(clk33), .ce(1'b1), .i(casram_n), .pe(casram_npe), .ne(casram_nne));
-edge_det ued2 (.rst(rst_o), .clk(clk33), .ce(1'b1), .i(ras_n), .ne(ras_nne), .pe());
-edge_det ued3 (.rst(rst_o), .clk(clk33), .ce(1'b1), .i(phi02), .pe(phi02_pe), .ne());
+edge_det ued1 (.rst(rst), .clk(clk33), .ce(1'b1), .i(casram_n), .pe(casram_npe), .ne(casram_nne));
+edge_det ued2 (.rst(rst), .clk(clk33), .ce(1'b1), .i(ras_n), .ne(ras_nne), .pe());
+edge_det ued3 (.rst(rst), .clk(clk33), .ce(1'b1), .i(phi02), .pe(phi02_pe), .ne());
 wire phi02_1, phi02_2, phi02_3;
-delay1 #1 udly1 (.i(phi02_pe), .o(phi02_1));
-delay2 #1 udly2 (.i(phi02_pe), .o(phi02_2));
-delay3 #1 udly3 (.i(phi02_pe), .o(phi02_3));
+delay1 #1 udly1 (.clk(clk33), .ce(1'b1), .i(phi02_pe), .o(phi02_1));
+delay2 #1 udly2 (.clk(clk33), .ce(1'b1), .i(phi02_pe), .o(phi02_2));
+delay3 #1 udly3 (.clk(clk33), .ce(1'b1), .i(phi02_pe), .o(phi02_3));
 
 FAL6567_PaletteInit upali1
 (
@@ -729,6 +738,63 @@ casez(rasterX2)
 11'h28?: vicCycle <= VIC_CHAR;
 11'h29?: vicCycle <= VIC_CHAR;
 11'h2A?: vicCycle <= VIC_CHAR;
+default:
+if (turbo2)
+casez(rasterX2)
+11'h2B?: vicCycle <= VIC_CHAR;
+11'h2C?: vicCycle <= VIC_CHAR;
+11'h2D?: vicCycle <= VIC_CHAR;
+11'h2E?: vicCycle <= VIC_CHAR;
+11'h2F?: vicCycle <= VIC_CHAR;
+11'h30?: vicCycle <= VIC_CHAR;
+11'h31?: vicCycle <= VIC_CHAR;
+11'h32?: vicCycle <= VIC_CHAR;
+11'h33?: vicCycle <= VIC_G;
+11'h34?: vicCycle <= VIC_IDLE;
+11'h35?: vicCycle <= VIC_IDLE;
+11'h36?:
+        case(chip)
+        CHIP6567R8:   vicCycle <= VIC_IDLE;
+        CHIP6567OLD:  vicCycle <= VIC_IDLE;
+        default:      vicCycle <= VIC_SPRITE;
+        endcase
+11'h37?:
+        case(chip)
+        CHIP6567R8:   vicCycle <= VIC_IDLE;
+        CHIP6567OLD:  vicCycle <= VIC_SPRITE;
+        default:      vicCycle <= VIC_SPRITE;
+        endcase
+11'h38?:  vicCycle <= VIC_SPRITE;
+11'h39?:  vicCycle <= VIC_SPRITE;
+11'h3A?:  vicCycle <= VIC_SPRITE;
+11'h3B?:  vicCycle <= VIC_SPRITE;
+11'h3C?:  vicCycle <= VIC_SPRITE;
+11'h3D?:  vicCycle <= VIC_SPRITE;
+11'h3E?:  vicCycle <= VIC_SPRITE;
+11'h3F?:  vicCycle <= VIC_SPRITE;
+11'h40?:  vicCycle <= VIC_SPRITE;
+11'h41?:  vicCycle <= VIC_SPRITE;
+11'h42?:  vicCycle <= VIC_SPRITE;
+11'h43?:  vicCycle <= VIC_SPRITE;
+11'h44?:  vicCycle <= VIC_SPRITE;
+11'h45?:  vicCycle <= VIC_SPRITE;
+11'h46?:
+        case(chip)
+        CHIP6567R8:   vicCycle <= VIC_SPRITE;
+        CHIP6567OLD:  vicCycle <= VIC_SPRITE;
+        default:      vicCycle <= VIC_REF;
+        endcase
+11'h47?:
+        case(chip)
+        CHIP6567R8:   vicCycle <= VIC_SPRITE;
+        CHIP6567OLD:  vicCycle <= VIC_REF;
+        default:      vicCycle <= VIC_REF;
+        endcase
+11'h48?:  vicCycle <= VIC_REF;
+default:  vicCycle <= VIC_IDLE;
+endcase
+else
+casez(rasterX2)
 11'h2B?: vicCycle <= VIC_G;
 11'h2C?: vicCycle <= VIC_IDLE;
 11'h2D?: vicCycle <= VIC_IDLE;
@@ -773,6 +839,7 @@ casez(rasterX2)
 11'h40?:  vicCycle <= VIC_REF;
 default:  vicCycle <= VIC_IDLE;
 endcase
+endcase
 
 always @(posedge clk33)
 if (clken8) begin
@@ -809,28 +876,34 @@ assign badline = preRasterY[2:0]==yscroll && den && (preRasterY >= (SIM ? 9'd1 :
 
 //always @(chip,n,me,my,nextRasterY,rasterX2,MActive,leg)
 always @(posedge clk33)
-  for (n = 0; n < MIBCNT; n = n + 1) begin
-    if (me[n] && ((my[n]==nextRasterY)||MActive[n])) begin
-      if (leg)
-        case(chip)
-        CHIP6567R8:   balos[n] <= (rasterX2 >= 11'h2D0 + {n,5'b0}) && (rasterX2 < 11'h320 + {n,5'b0});
-        CHIP6567OLD:  balos[n] <= (rasterX2 >= 11'h2C0 + {n,5'b0}) && (rasterX2 < 11'h310 + {n,5'b0});
-        default:      balos[n] <= (rasterX2 >= 11'h2B0 + {n,5'b0}) && (rasterX2 < 11'h300 + {n,5'b0}); 
-        endcase
-      else
-        case(chip)
-        CHIP6567R8:   balos[n] <= (rasterX2 >= 11'h2D0 + {n,4'b0}) && (rasterX2 < 11'h310 + {n,4'b0});
-        CHIP6567OLD:  balos[n] <= (rasterX2 >= 11'h2C0 + {n,4'b0}) && (rasterX2 < 11'h300 + {n,4'b0});
-        default:      balos[n] <= (rasterX2 >= 11'h2B0 + {n,4'b0}) && (rasterX2 < 11'h2F0 + {n,4'b0}); 
-        endcase
-    end
-  end
+	for (n = 0; n < MIBCNT; n = n + 1) begin
+		if (me[n] && ((my[n]==nextRasterY)||MActive[n])) begin
+			if (leg)
+				case(chip)
+				CHIP6567R8:   balos[n] <= (rasterX2 >= 11'h2D0 + {n,5'b0}) && (rasterX2 < 11'h320 + {n,5'b0});
+				CHIP6567OLD:  balos[n] <= (rasterX2 >= 11'h2C0 + {n,5'b0}) && (rasterX2 < 11'h310 + {n,5'b0});
+				default:      balos[n] <= (rasterX2 >= 11'h2B0 + {n,5'b0}) && (rasterX2 < 11'h300 + {n,5'b0}); 
+				endcase
+			else
+				case(chip)
+				CHIP6567R8:   balos[n] <= (rasterX2 >= 11'h2D0 + {n,4'b0}) && (rasterX2 < 11'h310 + {n,4'b0});
+				CHIP6567OLD:  balos[n] <= (rasterX2 >= 11'h2C0 + {n,4'b0}) && (rasterX2 < 11'h300 + {n,4'b0});
+				default:      balos[n] <= (rasterX2 >= 11'h2B0 + {n,4'b0}) && (rasterX2 < 11'h2F0 + {n,4'b0}); 
+				endcase
+		end
+	end
 
 wire balo = |balos | (badline && rasterX2 < 11'h2C0);
 
+
+//------------------------------------------------------------------------------
+// Bus available drives the processor's ready line. So the ready line is held
+// inactive until the FPGA is loaded and the pll is locked.
+//------------------------------------------------------------------------------
+
 always @(posedge clk33)
 if (rst) begin
-	ba <= 1'b1;
+	ba <= `LOW;
 end
 else begin
 	if (turbo)
@@ -848,9 +921,9 @@ reg ba1,ba2,ba3;
 
 always @(posedge clk33)
 if (rst) begin
-	ba1 <= `TRUE;
-	ba2 <= `TRUE;
-	ba3 <= `TRUE;
+	ba1 <= `LOW;
+	ba2 <= `LOW;
+	ba3 <= `LOW;
 end
 else begin
 	if (stCycle2) begin
@@ -871,9 +944,13 @@ if (phi02==`HIGH && enaData && (vicCycle==VIC_RC || vicCycle==VIC_CHAR)) begin
 	if (badline)
 		nextChar <= turbo ? {cram_dat,ram_dat} : db;
 	else
-		nextChar <= charbuf[38];
-	for (n = 38; n > 0; n = n -1)
-		charbuf[n] = charbuf[n-1];
+		nextChar <= turbo2 ? charbuf[46] : charbuf[38];
+	if (turbo2)
+		for (n = 46; n > 0; n = n -1)
+			charbuf[n] = charbuf[n-1];
+	else
+		for (n = 38; n > 0; n = n -1)
+			charbuf[n] = charbuf[n-1];
 	charbuf[0] <= nextChar;
 end
 
@@ -911,7 +988,7 @@ else begin
 			vmndx <= 11'd0;
 		if ((vicCycle==VIC_CHAR||vicCycle==VIC_G) && badline)
 			vmndx <= vmndx + 1;
-		if (rasterX2[10:4]==7'h2C) begin
+		if (rasterX2[10:4]==(turbo2 ? 7'h34 : 7'h2C)) begin
 			if (scanline==3'd7)
 				vmndxStart <= vmndx;
 			else
@@ -937,7 +1014,7 @@ else begin
 			if (badline)
 				scanline <= 3'd0;
 		end
-		if (rasterX2[10:4]==7'h2C)
+		if (rasterX2[10:4]==(turbo2 ? 7'h34 : 7'h2C))
 			scanline <= scanline + 3'd1;
 	end
 end
@@ -1000,26 +1077,26 @@ end
 // Sprite-background collision logic
 always @(posedge clk33)
 if (rst)
-  m2dhit <= `FALSE;
+	m2dhit <= `FALSE;
 else begin
-  if (imbc_clr)
-    imbc <= `FALSE;
-  if (ad[7:0]==8'h1F && regpg && phi02 && aec && cs && enaData) begin
-    m2d[15:8] <= 8'h0;
-  end
-  if (ad[7:0]==8'h1F && !regpg && phi02 && aec && cs && enaData) begin
-    m2d[7:0] <= 8'h0;
-    m2dhit <= `FALSE;
-  end
-  for (n = 0; n < MIBCNT; n = n + 1) begin
-    if (collision[n] & pixelBgFlag & ~vicBorder) begin
-      m2d[n] <= `TRUE;
-      if (!m2dhit) begin
-        m2dhit <= `TRUE;
-        imbc <= `TRUE;
-      end
-    end
-  end
+	if (imbc_clr)
+		imbc <= `FALSE;
+	if (ad[7:0]==8'h1F && regpg && phi02 && aec && cs && enaData) begin
+		m2d[15:8] <= 8'h0;
+	end
+	if (ad[7:0]==8'h1F && !regpg && phi02 && aec && cs && enaData) begin
+		m2d[7:0] <= 8'h0;
+		m2dhit <= `FALSE;
+	end
+	for (n = 0; n < MIBCNT; n = n + 1) begin
+		if (collision[n] & pixelBgFlag & ~vicBorder) begin
+			m2d[n] <= `TRUE;
+			if (!m2dhit) begin
+				m2dhit <= `TRUE;
+				imbc <= `TRUE;
+			end
+		end
+	end
 end
 
 always @(posedge clk33)
@@ -1034,38 +1111,38 @@ end
 
 always @(posedge clk33)
 if (rst & SIM) begin
-  for (n = 0; n < MIBCNT; n = n + 1) begin
-    MCnt[n] <= 6'd63;
-  end
+	for (n = 0; n < MIBCNT; n = n + 1) begin
+		MCnt[n] <= 6'd63;
+	end
 end
 else begin
-  // Trigger sprite accesses on the last character cycle
-  // if the sprite Y coordinate will match.
-  if (rasterX2==11'h2B0) begin
-    for (n = 0; n < MIBCNT; n = n + 1) begin
-      if (!MActive[n] && me[n] && nextRasterY == my[n])
-        MCnt[n] <= 6'd0;
-    end    
-  end
+	// Trigger sprite accesses on the last character cycle
+	// if the sprite Y coordinate will match.
+	if (rasterX2==(turbo2 ? 11'h330 : 11'h2B0)) begin
+		for (n = 0; n < MIBCNT; n = n + 1) begin
+			if (!MActive[n] && me[n] && nextRasterY == my[n])
+				MCnt[n] <= 6'd0;
+		end    
+	end
 
-  // Reset expansion flipflop once sprite becomes deactivated or
-  // if no sprite Y expansion.
-  for (n = 0; n < MIBCNT; n = n + 1) begin
-    if (!mye[n] || !MActive[n])
-      mye_ff[n] <= 1'b0;
-  end
+	// Reset expansion flipflop once sprite becomes deactivated or
+	// if no sprite Y expansion.
+	for (n = 0; n < MIBCNT; n = n + 1) begin
+		if (!mye[n] || !MActive[n])
+			mye_ff[n] <= 1'b0;
+	end
   
-  // If Y expansion is on, backup the MIB data counter by three every
-  // other scanline.
-  if (enaData && ref5 && !phi02) begin
-    for (n = 0; n < MIBCNT; n = n + 1) begin
-      if (MActive[n] & mye[n]) begin
-        mye_ff[n] <= !mye_ff[n];
-        if (!mye_ff[n])
-          MCnt[n] <= MCnt[n] - 6'd3;
-      end
-    end  
-  end
+	// If Y expansion is on, backup the MIB data counter by three every
+	// other scanline.
+	if (enaData && ref5 && !phi02) begin
+		for (n = 0; n < MIBCNT; n = n + 1) begin
+			if (MActive[n] & mye[n]) begin
+				mye_ff[n] <= !mye_ff[n];
+				if (!mye_ff[n])
+					MCnt[n] <= MCnt[n] - 6'd3;
+			end
+		end  
+	end
 
   if (leg) begin
     if (sprite1[4]) begin
@@ -1153,7 +1230,7 @@ begin
 				addr <= vm + vmndx;
 			else begin
 				if (bmm)
-					addr <= {cb[13],vmndx[9:0],scanline};
+					addr <= {cb[13],12'd0} + {vmndx,scanline};
 				else
 					addr <= {cb[13:11],nextChar[7:0],scanline};
 				if (ecm)
@@ -1218,14 +1295,14 @@ reg lightPenHit;
 always @(posedge clk33)
 begin
     if (ilp_clr)
-      ilp <= `LOW;
+		ilp <= `LOW;
     if (rasterY == rasterYMax)
-      lightPenHit <= `FALSE;
+		lightPenHit <= `FALSE;
     else if (!lightPenHit && lp_n == `LOW) begin
-      lightPenHit <= `TRUE; 
-      ilp <= `HIGH; 
-      lpx <= rasterX[8:1];
-      lpy <= rasterY[7:0];
+		lightPenHit <= `TRUE; 
+		ilp <= `HIGH; 
+		lpx <= rasterX[8:1];
+		lpy <= rasterY[7:0];
     end
 end
 
@@ -1280,11 +1357,11 @@ begin
 	hVicBorder <= `TRUE;
 	if (den) begin
 		if (csel) begin
-			if (rasterX >= (25 << turbo2) && rasterX <= (345 << turbo2))
+			if (rasterX >= 25 && rasterX <=(turbo2 ? 409 : 345))
 				hVicBorder <= `FALSE;
 		end
 		else begin
-			if (rasterX >= (32 << turbo2) && rasterX <= (336 << turbo2))
+			if (rasterX >= 32 && rasterX <= (turbo2 ? 400 : 336))
 				hVicBorder <= `FALSE;
 		end
 	end
@@ -1653,6 +1730,26 @@ else begin
                 	rst_pal <= 1'b1;
 `ifdef TURBO2                
                 turbo2 <= db[5];
+                if (db[5]) begin
+                	hSyncOn <= 12'd26;
+                	hSyncOff <= 12'd178;
+                	hBlankOff <= 12'd255;
+                	hBorderOff <= 12'd381;
+                	hBorderOn <= 12'd1149;
+                	hBlankOn <= 12'd1275;
+                	hTotal <= 12'd1275;
+                	hSyncPol <= 1'b1;
+	            end
+	            else begin
+                	hSyncOn <= 12'd21;
+                	hSyncOff <= 12'd147;
+                	hBlankOff <= 12'd209;
+                	hBorderOff <= 12'd308;
+                	hBorderOn <= 12'd948;
+                	hBlankOn <= 12'd1047;
+                	hTotal <= 12'd1047;
+                	hSyncPol <= 1'b1;
+	            end
 `else
 				turbo2 <= 1'b0;                
 `endif             
@@ -1701,11 +1798,11 @@ else begin
 end
 
 assign vSync1 = (vCtr >= vSyncOn && vCtr < vSyncOff) ^ vSyncPol;
-assign hSync1 = (hCtr >= (hSyncOn << turbo2) && hCtr < (hSyncOff << turbo2)) ^ hSyncPol;
+assign hSync1 = (hCtr >= hSyncOn && hCtr < hSyncOff) ^ hSyncPol;
 assign vBlank = vCtr >= vBlankOn || vCtr < vBlankOff;
-assign hBlank = hCtr >= (hBlankOn << turbo2) || hCtr < (hBlankOff << turbo2);
+assign hBlank = hCtr >= hBlankOn || hCtr < hBlankOff;
 assign vBorder = vCtr >= vBorderOn || vCtr < vBorderOff;
-assign hBorder = hCtr >= (hBorderOn << turbo2) || hCtr < (hBorderOff << turbo2);
+assign hBorder = hCtr >= hBorderOn || hCtr < hBorderOff;
 
 counter #(12) u4 (.rst(rst), .clk(clk33), .ce(1'b1), .ld(eol1), .d(12'd1), .q(hCtr) );
 counter #(12) u5 (.rst(rst), .clk(clk33), .ce(eol1),  .ld(eof1), .d(12'd1), .q(vCtr) );
