@@ -51,7 +51,8 @@ end
 always #34.92 clk = ~clk;
 
 FAL6567g #(
-  .pSimRasterEnable(1)
+  .pSimRasterEnable(1),
+  .SIM(1'b1)
 ) u1
 (
   .cr_clk(clk),
@@ -140,6 +141,6 @@ default: dbi <= ad[11:0];
 endcase
 endcase
 end
-assign db = aec ? dbi : 12'bz;
+assign db = aec ? dbi : 12'h000;
 
 endmodule

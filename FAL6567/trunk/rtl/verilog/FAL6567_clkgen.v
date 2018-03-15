@@ -22,23 +22,25 @@
 //                                                                          
 // ============================================================================
 //
-module FAL6567_clkgen(rst, xclk, clk33, turbo2, dcrate, dotclk, clk57, locked);
+module FAL6567_clkgen(rst, xclk, clk33, clk33_270, turbo2, dcrate, dotclk, clk57, locked);
 input rst;
 input xclk;     // 14.31818MHz color reference
 output clk33;
+output clk33_270;
 input turbo2;
 input dcrate;
 output dotclk;
 output clk57;
 output locked;
 
-wire clk8u, clk33u, clk40u;
+wire clk8u, clk33u, clk40u, clk33_270u, clk40_270u;
 wire clk14u, clk57u;
 wire clkfb,clkfbo;
 BUFG clkbufg (.I(clkfbo), .O(clkfb));
 BUFG cb3 (.I(clk57u), .O(clk57));
 BUFGMUX cb5 (.S(turbo2), .I0(clk33u), .I1(clk40u), .O(clk33));
 BUFGMUX cb6 (.S(dcrate), .I0(clk8u), .I1(clk14u), .O(dotclk));
+BUFGMUX cb7 (.S(turbo2), .I0(clk33_270u), .I1(clk40_270u), .O(clk33_270));
 
 // MMCM must be used rather than a PLL because the PLL min frequency is
 // 19 MHz, just a bit too high for the 14.318MHz color reference clock.
@@ -54,14 +56,20 @@ MMCM_BASE u1
     .CLKOUT1(clk40u),
     .CLKOUT2(clk8u),
     .CLKOUT3(clk57u),
-    .CLKOUT4(clk14u)
+    .CLKOUT4(clk14u),
+    .CLKOUT5(clk33_270u),
+    .CLKOUT6(clk40_270u)
 );
 defparam u1.CLKFBOUT_MULT_F = 64.000;     // can't be any higher than 64!  must place VCO frequency 800-1600 MHz (916Mhz)
 defparam u1.CLKOUT0_DIVIDE_F = 28.000;
-defparam u1.CLKOUT1_DIVIDE = 23;
+defparam u1.CLKOUT1_DIVIDE = 24;
 defparam u1.CLKOUT2_DIVIDE = 112;
 defparam u1.CLKOUT3_DIVIDE = 16;
 defparam u1.CLKOUT4_DIVIDE = 64;
+defparam u1.CLKOUT5_DIVIDE = 28;
+defparam u1.CLKOUT5_PHASE = 270;
+defparam u1.CLKOUT6_DIVIDE = 24;
+defparam u1.CLKOUT6_PHASE = 270;
 defparam u1.CLKIN1_PERIOD = 69.8412;
 
 endmodule

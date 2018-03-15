@@ -28,7 +28,7 @@
 //
 `define SIMULATION	1'b1
 
-module FAL6567Float(rst, clk, phi02, cs, vda, rw, ad, db, rdy);
+module FAL6567Float(rst, clk, cs, vda, rw, ad, db, rdy);
 parameter pRdyStyle = 1'b1;
 parameter EMSB = 7;
 parameter FMSB = 39;
@@ -80,7 +80,6 @@ parameter RESET = 8'd63;
 
 input rst;
 input clk;
-input phi02;
 input cs;
 input vda;
 input rw;
@@ -143,7 +142,6 @@ assign db = csi & rw ? dbo : {8{1'bz}};
 // This is a clock cycle counter used in simulation to determine the number of
 // cycles a given operation takes to complete.
 reg [11:0] cyccnt;
-reg phi02r;
 
 always @(posedge clk)
 if (rst) begin
@@ -154,7 +152,6 @@ if (rst) begin
 `endif
 end
 else begin
-	phi02r <= phi02;
 `ifdef SIMULATION
 	cyccnt <= cyccnt + 1;
 `endif

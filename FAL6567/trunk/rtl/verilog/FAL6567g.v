@@ -36,7 +36,8 @@
 //
 module FAL6567g(cr_clk, phi02, rst_o, irq, aec, ba, cs_n, rw, ad, db, den_n, dir, ras_n, cas_n, lp_n, hSync, vSync,
 		pclk, palwr_n, p, blank_n, synclk, colclk,
-		ram_adr, ram_dat, ram_we, ram_ce, ram_oe, casram_n
+		ram_adr, ram_dat, ram_we, ram_ce, ram_oe, casram_n,
+		Sync, comp, colorBurst
 	);
 parameter CHIP6567R8 = 2'd0;
 parameter CHIP6567OLD = 2'd1;
@@ -68,7 +69,7 @@ parameter pSimRasterEnable = 48;
 
 parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
-parameter SIM = 1'b1;
+parameter SIM = 1'b0;
 
 parameter BUS_IDLE = 0;
 parameter BUS_SPRITE = 1;
@@ -85,7 +86,6 @@ parameter VIC_CHAR = 4;  // character acccess cycle
 parameter VIC_G = 5;
 parameter VIC_PAL = 6;	// palette initialization
 
-//input [1:0] chip;
 input cr_clk;           // color reference clcck (14.31818)
 output phi02;
 output rst_o;
@@ -118,19 +118,26 @@ output reg ram_oe;
 output reg ram_ce;
 input casram_n;
 
+output reg Sync;
+output reg [4:0] comp;
+output colorBurst;
+
+
 reg [1:0] chip;// = CHIP6567R8;
 integer n;
 wire cs = !cs_n;
-wire clk32, clk33;	// 32.73 or 39.84 MHz
+wire clk32, clk33;	// 32.73 or 38.18 MHz
+wire clk33_270;
 wire clk57, dotclk;
 reg [7:0] regShadow [127:0];
 
 reg [13:0] ado;
 reg [13:0] ado1;
-wire vSync8,hSync8;
+reg vSync8,hSync8;
 reg [3:0] pixelColor;
 reg [3:0] color8;
 wire [3:0] color33;
+wire [23:0] RGB;
 reg blank;			// blanking output
 reg border;
 wire vBlank, hBlank;
@@ -153,15 +160,16 @@ wire eof1 = vCtr==vTotal && eol1;
 
 wire locked;
 wire clken8;
-reg [32:0] phi02r,phisr;
+
+reg [31:0] phi02r,phisr;
 wire phi0,phi1;
 reg phi02,phis;
-reg [32:0] clk8r;
+reg [31:0] clk8r;
 wire mux;
-reg [32:0] rasr;
-reg [32:0] muxr;
-reg [32:0] casr;
-reg [32:0] enaDatar,enaSDatar;
+reg [31:0] rasr;
+reg [31:0] muxr;
+reg [31:0] casr;
+reg [31:0] enaDatar,enaSDatar;
 wire enaData,enaSData;
 wire vicRefresh;
 wire vicAddrValid;
@@ -239,7 +247,7 @@ reg [4:0] ram_page;
 reg [13:0] addr;
 reg [13:0] vicAddr;
 reg [32:0] stc;
-wire stCycle = stc[32];
+wire stCycle = stc[31];
 wire stCycle1 = stc[0];
 wire stCycle2 = stc[1];
 wire stCycle3 = stc[2];
@@ -293,10 +301,14 @@ reg pi_ack;
 wire [7:0] pi_adr;
 wire [7:0] pi_dat;
 
-wire csf = cs_n && phi02 && aec && ~cas_n && (ad[7:0] >= 8'h40 && ad[7:0] < 8'h4F);
-wire [7:0] dbFlt;
-assign dbFlt = wr ? db : 8'bz;
-FAL6567Float uflt1 (rst_o, clk33, phi02, csf, csf, wr, ad[7:0], dbFlt);
+reg vwr;
+reg [18:0] vadr;
+reg [7:0] vdat;
+reg [7:0] vdatr;
+
+wire ft816_rw;
+wire [7:0] ft816_db;
+wire [23:0] ft816_ad;
 
 reg [21:0] rstcntr = 0;
 wire xrst = SIM ? !rstcntr[3] : !rstcntr[21];
@@ -305,13 +317,13 @@ if (xrst)
   rstcntr <= rstcntr + 4'd1;
 
 // Set Limits
-always @(chip)
+always @*
 if (turbo2)
 case(chip)
-CHIP6567R8:   begin rasterYMax = 9'd262; rasterXMax = 10'd631; end
-CHIP6567OLD:  begin rasterYMax = 9'd261; rasterXMax = 10'd631; end
-CHIP6569:     begin rasterYMax = 9'd311; rasterXMax = 10'd631; end
-CHIP6572:     begin rasterYMax = 9'd311; rasterXMax = 10'd631; end
+CHIP6567R8:   begin rasterYMax = 9'd262; rasterXMax = 10'd605; end
+CHIP6567OLD:  begin rasterYMax = 9'd261; rasterXMax = 10'd605; end
+CHIP6569:     begin rasterYMax = 9'd311; rasterXMax = 10'd639; end
+CHIP6572:     begin rasterYMax = 9'd311; rasterXMax = 10'd639; end
 endcase
 else
 case(chip)
@@ -326,6 +338,7 @@ FAL6567_clkgen u1
 	.rst(xrst),
 	.xclk(cr_clk),
 	.clk33(clk33),
+	.clk33_270(clk33_270),
 	.turbo2(turbo2),
 	.dcrate(1'b0),
 	.dotclk(dotclk),
@@ -338,11 +351,18 @@ assign rst_o = rst;
 
 assign den_n = aec ? cs_n : ~palwr_nr;
 assign dir = aec ? rw : 1'b0;
-assign db = ~palwr_nr ? {4'h0,pi_dat} : (aec && !cs_n && rw) ? (ad[7:0] < 8'h33 ? {4'h0,dbo8} : {4'h0,dbFlt}) : 12'bz;
+assign db = rst ? 12'bz : ~palwr_nr ? {4'h0,pi_dat} : (aec && !cs_n && rw) ? (ad[7:0] < 8'h33 ? {4'h0,dbo8} : {4'h0,dbFlt}) : 12'bz;
 
+// Generate color burst clock
+reg [3:0] burstClk16x = 4'h0;
+wire burstClk;
+always @(posedge clk57)
+	burstClk16x <= burstClk16x + 4'd1;
+assign burstClk = burstClk16x[3];
+	
 always @(posedge clk33)
 if (rst)
-    chip <= db[9:8];
+   	chip <= db[9:8];
 always @(posedge clk33)
 if (rst)
   	ado1 <= 8'hFF;
@@ -398,51 +418,69 @@ always @(posedge clk33)
 wire [15:0] cpu_adr = {row_adr,col_adr};
 
 always @(posedge clk33)
-	if (phi02_pe)
-		ram_adr <= {3'b0,cpu_adr};
-	else if (phi02_1)
-		ram_adr <= sc_ram_wadr;
-	else if (phi02_2)
-		ram_adr <= sc_ram_radr;
-	else
-		ram_adr <= {ram_page,vicAddr};
+case(stc[31:29])
+3'b100:	ram_adr <= {3'b0,cpu_adr};
+3'b010:	ram_adr <= {ram_page,vicAddr};
+3'b001:	ram_adr <= vadr;
+default:	ram_adr <= ft816_ad[18:0];
+endcase
 
 always @(posedge clk33)
-	if (phi02_pe & cpu_wrote & cpu_access)
-		ram_dato <= cpu_dat;
-	else if (phi02_1)
-		ram_dato <= sc_ram_dato;
+case(stc[31:29])
+3'b100:	if (cpu_wrote & cpu_access)
+			ram_dato <= cpu_dat;
+3'b001:	ram_dato <= vdat;
+default:	ram_dato <= ft816_db;
+endcase
+
+reg vwr1;
+always @(posedge clk33)
+if (vwr)
+	vwr1 <= 1'b1;
+else if (stc[26])
+	vwr1 <= 1'b0;
+
+reg ram_we1;
+always @(posedge clk33)
+case(stc[31:29])
+3'b100:	ram_we1 <= ~(cpu_wrote & cpu_access);
+3'b010:	ram_we1 <= 1'b1;
+3'b001:	ram_we1 <= ~vwr1;
+default:	ram_we1 <= ft816_rw;
+endcase
+always @*
+	ram_we <= ram_we1 | clk33_270;
 
 always @(posedge clk33)
-	if (phi02_pe)
-		ram_we <= ~(cpu_wrote & cpu_access);
-	else if (phi02_1)
-		ram_we <= 1'b0;
-	else
-		ram_we <= 1'b1;
+case(stc[31:29])
+3'b100:	ram_oe <= cpu_access ? (cpu_wrote ? 1'b1 : 1'b0) : 1'b1;
+3'b010:	ram_oe <= 1'b0;
+3'b001:	ram_oe <= vwr1;
+default:	ram_oe <= ~ft816_rw;
+endcase
 
 always @(posedge clk33)
-	if (phi02_pe)
-		ram_oe <= cpu_access ? (cpu_wrote ? 1'b1 : 1'b0) : 1'b1;
-	else
-		ram_oe <= 1'b0;
+case(stc[31:29])
+3'b100:	ram_ce <= ~cpu_access;
+3'b010:	ram_ce <= 1'b0;
+3'b001:	ram_ce <= 1'b0;
+default:	ram_ce <= ~(ft816_ad[23:19]==5'h0);
+endcase
 
 always @(posedge clk33)
-	if (phi02_pe)
-		ram_ce <= ~cpu_access;
-	else
-		ram_ce <= 1'b0;
+if (stc[31:28]==4'b0001)
+	vdatr <= ram_dat;
 
 always @(posedge clk33)
 	if (phi02_pe)
 		rst_cpu_access <= cpu_access;
 
-assign ram_dat = ram_we ? ram_dato : 8'bz;
+assign ram_dat = ram_we1 ? ram_dato : 8'bz;
 always @(posedge clk33)
-	if (ram_we && ram_adr[15:10]==6'b110110)
+	if (ram_we1 && ram_adr[15:10]==6'b110110)
 		cram[ram_adr[9:0]] <= ram_dato[3:0];
 
-FAL6567_SRamScanConverter u2
+FAL6567_ScanConverter u2
 (
 	.chip(chip),
 	.clken8(clken8),
@@ -452,13 +490,66 @@ FAL6567_SRamScanConverter u2
 	.color_i(color8),
 	.hSync33_i(hSync),
 	.vSync33_i(vSync),
-	.color_o(color33),
-	.ram_wadr(sc_ram_wadr),
-	.ram_dato(sc_ram_dato),
-	.ram_radr(sc_ram_radr),
-	.ram_dati(ram_dat),
-	.ram_rlatch(phi02_3)
+	.color_o(color33)
 );
+
+
+//------------------------------------------------------------------------------
+// '816 system components
+//------------------------------------------------------------------------------
+
+wire ft816_cs_vic = ft816_ad[23:10]==14'b1011_0000_1101_00;
+wire ft816_cs_flt = ft816_ad[23:10]==14'b1011_0000_1110_00;
+
+wire [7:0] dbFlt;
+assign dbFlt = ft816_rw ? 8'bz : ft816_db;
+FAL6567Float uflt1 (rst_o, clk33, ft816_cs_flt, ft816_cs_flt, ~ft816_rw, ft816_ad[7:0], dbFlt);
+
+reg [7:0] ft816_dbi;
+always @*
+casez({ft816_cs_vic,ft816_cs_flt})
+2'b1?:	ft816_dbi <= dbo8;
+2'b01:	ft816_dbi <= dbFlt;
+default:	ft816_dbi <= ram_dat;
+endcase
+
+assign ft816_db = ft816_rw ? ft816_dbi : 8'bz;
+
+reg ft816_rst;
+wire ft816_clk;
+BUFGMUX ubg2 (.S(|stc[27:0]), .I0(1'b0), .I1(clk33), .O(ft816_clk));
+
+FT816 ucpu1
+(
+	.rst(ft816_rst),
+	.clk(ft816_clk),
+	.clko(),
+	.cyc(),
+	.phi11(),
+	.phi12(),
+	.phi81(),
+	.phi82(),
+	.nmi(),
+	.irq(irq),
+	.abort(),
+	.e(),
+	.mx(),
+	.rdy(1'b1),
+	.be(1'b1),
+	.vpa(),
+	.vda(),
+	.mlb(),
+	.vpb(),
+	.rw(ft816_rw),
+	.ad(ft816_ad),
+	.db(ft816_db),
+	.err_i(1'b0),
+	.rty_i(1'b0)
+);
+
+
+//------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 assign pclk = clk33;
 
@@ -479,7 +570,7 @@ else begin
 	if (stCycle)
 		clk8r <= 32'b00010001000100010001000100010001;
 	else
-		clk8r <= {clk8r[30:0],1'b0};
+		clk8r <= {clk8r[30:0],clk8r[31]};
 end
 assign clken8 = clk8r[31];
 
@@ -612,7 +703,7 @@ begin
 			busCycle <= BUS_IDLE;
 	VIC_REF,VIC_RC:
 		busCycle <= BUS_REF;
-	VIC_CHAR,VIC_G:
+	VIC_CHAR,VIC_G,VIC_PAL:
 		if (badline)
 			busCycle <= BUS_CG;
 		else
@@ -656,32 +747,50 @@ end
 //------------------------------------------------------------------------------
 always @(posedge clk33)
 if (rst) begin
-	preRasterY <= 9'd0;
 	preRasterX <= 11'd0;
+end
+else begin
+	if (clken8) begin
+		if (preRasterX==rasterXMax)
+			preRasterX <= 11'd0;
+		else
+			preRasterX <= preRasterX + 11'd1;
+	end  
+end
+
+always @(posedge clk33)
+if (rst) begin
 	rasterX <= 10'd0;
+end
+else begin
+	if (clken8) begin
+		if (preRasterX==10'h14)
+			rasterX <= 10'h0;
+		else
+			rasterX <= rasterX + 10'd1;
+	end  
+end
+
+always @(posedge clk33)
+if (rst) begin
+	preRasterY <= 9'd0;
 	rasterY <= 9'd0;
 	nextRasterY <= 9'd0;
 end
 else begin
 	if (clken8) begin
 		if (preRasterX==10'h14) begin
-			rasterX <= 10'h0;
 			rasterY <= preRasterY;
 		end
-		else
-			rasterX <= rasterX + 10'd1;
 		if (rasterX==10'd0) begin
 			nextRasterY <= rasterY + 9'd1;
 		end
 		if (preRasterX==rasterXMax) begin
-			preRasterX <= 11'd0;
 			if (preRasterY==rasterYMax)
 				preRasterY <= 9'd0;
 			else
 				preRasterY <= preRasterY + 9'd1;
 		end
-		else
-			preRasterX <= preRasterX + 11'd1;
 	end  
 end
 
@@ -878,18 +987,37 @@ assign badline = preRasterY[2:0]==yscroll && den && (preRasterY >= (SIM ? 9'd1 :
 always @(posedge clk33)
 	for (n = 0; n < MIBCNT; n = n + 1) begin
 		if (me[n] && ((my[n]==nextRasterY)||MActive[n])) begin
-			if (leg)
-				case(chip)
-				CHIP6567R8:   balos[n] <= (rasterX2 >= 11'h2D0 + {n,5'b0}) && (rasterX2 < 11'h320 + {n,5'b0});
-				CHIP6567OLD:  balos[n] <= (rasterX2 >= 11'h2C0 + {n,5'b0}) && (rasterX2 < 11'h310 + {n,5'b0});
-				default:      balos[n] <= (rasterX2 >= 11'h2B0 + {n,5'b0}) && (rasterX2 < 11'h300 + {n,5'b0}); 
-				endcase
-			else
-				case(chip)
-				CHIP6567R8:   balos[n] <= (rasterX2 >= 11'h2D0 + {n,4'b0}) && (rasterX2 < 11'h310 + {n,4'b0});
-				CHIP6567OLD:  balos[n] <= (rasterX2 >= 11'h2C0 + {n,4'b0}) && (rasterX2 < 11'h300 + {n,4'b0});
-				default:      balos[n] <= (rasterX2 >= 11'h2B0 + {n,4'b0}) && (rasterX2 < 11'h2F0 + {n,4'b0}); 
-				endcase
+			if (turbo2) begin
+				if (leg)
+					case(chip)
+					CHIP6567R8:   balos[n] <= (rasterX2 >= 11'h350 + {n,5'b0}) && (rasterX2 < 11'h3A0 + {n,5'b0});
+					CHIP6567OLD:  balos[n] <= (rasterX2 >= 11'h340 + {n,5'b0}) && (rasterX2 < 11'h390 + {n,5'b0});
+					default:      balos[n] <= (rasterX2 >= 11'h330 + {n,5'b0}) && (rasterX2 < 11'h380 + {n,5'b0}); 
+					endcase
+				else
+					case(chip)
+					CHIP6567R8:   balos[n] <= (rasterX2 >= 11'h350 + {n,4'b0}) && (rasterX2 < 11'h390 + {n,4'b0});
+					CHIP6567OLD:  balos[n] <= (rasterX2 >= 11'h340 + {n,4'b0}) && (rasterX2 < 11'h380 + {n,4'b0});
+					default:      balos[n] <= (rasterX2 >= 11'h330 + {n,4'b0}) && (rasterX2 < 11'h370 + {n,4'b0});
+					endcase
+			end
+			else begin
+				if (leg)
+					case(chip)
+					CHIP6567R8:   balos[n] <= (rasterX2 >= 11'h2D0 + {n,5'b0}) && (rasterX2 < 11'h320 + {n,5'b0});
+					CHIP6567OLD:  balos[n] <= (rasterX2 >= 11'h2C0 + {n,5'b0}) && (rasterX2 < 11'h310 + {n,5'b0});
+					default:      balos[n] <= (rasterX2 >= 11'h2B0 + {n,5'b0}) && (rasterX2 < 11'h300 + {n,5'b0}); 
+					endcase
+				else
+					case(chip)
+					CHIP6567R8:   balos[n] <= (rasterX2 >= 11'h2D0 + {n,4'b0}) && (rasterX2 < 11'h310 + {n,4'b0});
+					CHIP6567OLD:  balos[n] <= (rasterX2 >= 11'h2C0 + {n,4'b0}) && (rasterX2 < 11'h300 + {n,4'b0});
+					default:      balos[n] <= (rasterX2 >= 11'h2B0 + {n,4'b0}) && (rasterX2 < 11'h2F0 + {n,4'b0}); 
+					endcase
+			end
+		end
+		else begin
+			balos[n] <= `FALSE;
 		end
 	end
 
@@ -1314,7 +1442,7 @@ begin
 	vVicBlank <= `FALSE;
 	case(chip)
 	CHIP6567R8,CHIP6567OLD:
-		if (rasterY >= 13 && rasterY <= 40)
+		if (rasterY <= 40)
 			vVicBlank <= `TRUE;
 	CHIP6569,CHIP6572:
 		if (rasterY >= 300 || rasterY < 15)
@@ -1322,16 +1450,171 @@ begin
 	endcase
 end
 
+reg [9:0] hVicBlankOff;
+reg [9:0] hVicBlankOn;
+always @(posedge clk33)
+	hVicBlankOff <= turbo2 ? 10'd88 : 10'd103;
+always @(posedge clk33)
+	hVicBlankOn <= turbo2 ? 10'd508 : 10'd592;
+
 always @(posedge clk33)
 begin
-	case (vicCycle)
-	VIC_SPRITE:
-		if (leg ? sprite>=3 : sprite>=6)
-			hVicBlank <= `TRUE;
-	default:
-		hVicBlank <= `FALSE;
+	hVicBlank <= `FALSE;
+	if (rasterX < hVicBlankOff)		// 15%
+		hVicBlank <= `TRUE;
+	else if (rasterX >= hVicBlankOn)	// 97.2%
+		hVicBlank <= `TRUE;
+end
+
+//------------------------------------------------------------------------------
+// Video Sync Interval
+// - Video sync still needs to be generated as a reference point for the 
+//   scan converter. Although it's not otherwise used it may be in the future
+//   output, so it's generated accurately.
+//------------------------------------------------------------------------------
+always @(posedge clk33)
+if (rst)
+	vSync8 <= `FALSE;
+else begin
+	case(chip)
+	CHIP6567R8,CHIP6567OLD:
+		if (rasterY >= 3 && rasterY < 6)
+			vSync8 <= `TRUE;
+		else
+			vSync8 <= `FALSE;
+	CHIP6569,CHIP6572:
+		if (rasterY >= 313 || rasterY < 3)
+			vSync8 <= `TRUE;
+		else
+			vSync8 <= `FALSE;
 	endcase
 end
+
+reg [9:0] hSyncWidth;
+always @(posedge clk33)
+case(chip)
+CHIP6567R8,CHIP6567OLD:
+	hSyncWidth <= turbo2 ? 10'd49 : 10'd42;
+CHIP6569,CHIP6572:
+	hSyncWidth <= turbo2 ? 10'd43 : 10'd37;
+endcase
+always @(posedge clk33)
+begin
+	hSync8 <= `FALSE;
+	if (rasterX < hSyncWidth)	// 8%
+		hSync8 <= `TRUE;
+end
+
+reg EQ, SE;
+always @*
+case(chip)
+CHIP6567R8:
+	EQ <=		//  4% tH equalization width
+	(rasterX < 10'd21) ||
+	(
+		(rasterX >= 10'd260) &&
+		(rasterX < 10'd281)
+	)
+	;
+CHIP6567OLD:
+	EQ <=		//  4% tH equalization width
+	(rasterX < 10'd20) ||
+	(
+		(rasterX >= 10'd256) &&
+		(rasterX < 10'd276)
+	)
+	;
+CHIP6569,CHIP6572:
+	EQ <=		//  4% tH equalization width
+	(rasterX < 10'd20) ||
+	(
+		(rasterX >= 10'd252) &&
+		(rasterX < 10'd272)
+	)
+	;
+endcase
+
+always @*
+case(chip)
+CHIP6567R8:
+	SE <=		// 93% tH (7%tH) (3051-427)
+	(rasterX < 10'd224) ||	// 43%
+	(	
+		(rasterX >= 10'd260) &&	// 50%
+	 	(rasterX < 10'd484)		// 93%
+	)
+	;
+CHIP6567OLD:
+	SE <=		// 93% tH (7%tH) (3051-427)
+	(rasterX < 10'd220) ||	// 43%
+	(	
+		(rasterX >= 10'd256) &&
+	 	(rasterX < 10'd476)
+	)
+	;
+CHIP6569,CHIP6572:
+	SE <=		// 93% tH (7%tH) (3051-427)
+	(rasterX < 10'd217) ||
+	(	
+		(rasterX >= 10'd252) &&
+	 	(rasterX < 10'd469)
+	)
+	;
+endcase
+
+always @(posedge clk33)
+case(chip)
+CHIP6567R8,CHIP6567OLD,
+CHIP6569,CHIP6572:
+	case(rasterY)
+	9'd0:	Sync <= EQ;
+	9'd1:	Sync <= EQ;
+	9'd2:	Sync <= EQ;
+	9'd3:	Sync <= SE;
+	9'd4:	Sync <= SE;
+	9'd5:	Sync <= SE;
+	9'd6:	Sync <= EQ;
+	9'd7:	Sync <= EQ;
+	9'd8:	Sync <= EQ;
+	default:
+			Sync <= hSync8;
+	endcase
+endcase
+
+//------------------------------------------------------------------------------
+// Color burst window.
+// - determines when color burst should be output. Not needed for the current
+//   version of the core which only outputs VGA.
+//------------------------------------------------------------------------------
+
+reg [9:0] burstWindowBegin;
+reg [9:0] burstWindowEnd;
+// 504
+always @(posedge clk33)
+case(chip)
+CHIP6567R8,CHIP6567OLD:
+	burstWindowBegin <= turbo2 ? 10'd50 : 10'd43;
+CHIP6569,CHIP6572:
+	burstWindowBegin <= turbo2 ? 10'd51 : 10'd44;
+endcase
+always @(posedge clk33)
+case(chip)
+CHIP6567R8,CHIP6567OLD:
+	burstWindowEnd <= turbo2 ? 10'd74 : 10'd63;
+CHIP6569,CHIP6572:
+	burstWindowEnd <= turbo2 ? 10'd73 : 10'd62;
+endcase
+reg burstWindow;
+always @(posedge clk33)
+begin
+	if (rasterX >= burstWindowBegin && rasterX < burstWindowEnd && rasterY > 8)
+		burstWindow <= `TRUE;
+	else
+		burstWindow <= `FALSE;
+end
+
+BUFGMUX ubgbrst (.S(burstWindow|burstClk), .I0(1'b0), .I1(burstClk), .O(colorBurst));
+
 
 //------------------------------------------------------------------------------
 // Borders
@@ -1357,11 +1640,11 @@ begin
 	hVicBorder <= `TRUE;
 	if (den) begin
 		if (csel) begin
-			if (rasterX >= 25 && rasterX <=(turbo2 ? 409 : 345))
+			if (rasterX >= 25 && rasterX <= (turbo2 ? 409 : 345))
 				hVicBorder <= `FALSE;
 		end
 		else begin
-			if (rasterX >= 32 && rasterX <= (turbo2 ? 400 : 336))
+			if (rasterX >= 32 && rasterX <= (turbo2 ? 396 : 336))
 				hVicBorder <= `FALSE;
 		end
 	end
@@ -1477,6 +1760,27 @@ if (clken8) begin
       color8 <= color_code;
 end
 
+FAL6567_ColorROM ucrom1
+(
+	.clk(clk33),
+	.ce(1'b1),
+	.code(color8),
+	.color(RGB)
+);
+
+wire [4:0] comp1;
+RGB2Composite urgb2c1
+(
+	.clk(clk57),
+	.ph(burstClk16x),
+	.r(RGB[23:16]),
+	.g(RGB[15:8]),
+	.b(RGB[7:0]),
+	.co(comp1)
+);
+always @(posedge clk57)
+	comp <= (hVicBlank|vVicBlank) ? 5'd0 : comp1;
+
 //------------------------------------------------------------------------------
 // Register Interface
 //
@@ -1485,6 +1789,7 @@ end
 
 always @(posedge clk33)
 if (rst) begin
+	ft816_rst <= 1'b1;
 	turbo <= 1'b0;
 	ram_page <= 5'd0;
 	rst_pal <= 1'b0;
@@ -1508,6 +1813,7 @@ if (rst) begin
 	vSyncPol <= pvSyncPol;
 	vm[9:0] <= 10'd0;
 	cb[10:0] <= 11'b0;
+	ec <= 4'h6;
 	yscroll <= 3'd0;
 	den = `TRUE;
 	me <= 16'h0;
@@ -1515,8 +1821,12 @@ if (rst) begin
 		mx[n] = 9'd200;
 		my[n] = 8'd5;
 	end
+	vdat <= 8'h00;
+	vadr <= 19'h00000;
+	vwr <= 1'b0;
 end
 else begin
+	vwr <= 1'b0;
 	rst_pal <= 1'b0;
   if (phi02 && cs_n==`LOW) begin
     dbo8 <= 8'hFF;
@@ -1613,10 +1923,14 @@ else begin
     8'h32:  dbo8 <= {leg,turbo,5'h1F,regpg};
     8'h3A:	dbo8 <= 8'h46;
     8'h3B:	dbo8 <= 8'h49;
+    8'h34:	dbo8 <= vdatr;
+    8'h35:	dbo8 <= vadr[7:0];
+    8'h36:	dbo8 <= vadr[15:8];
+    8'h37:	dbo8 <= {5'h0,vadr[18:16]};
     default:  dbo8 <= 8'hFF;
     endcase
   end
-  if (phi02r[32] & ~phi02r[31]) begin // when phi02 transitions from high to low
+  if (phi02r[31] & ~phi02r[30]) begin // when phi02 transitions from high to low
     irst_clr <= `FALSE;
     imbc_clr <= `FALSE;
     immc_clr <= `FALSE;
@@ -1731,13 +2045,13 @@ else begin
 `ifdef TURBO2                
                 turbo2 <= db[5];
                 if (db[5]) begin
-                	hSyncOn <= 12'd26;
-                	hSyncOff <= 12'd178;
-                	hBlankOff <= 12'd255;
-                	hBorderOff <= 12'd381;
-                	hBorderOn <= 12'd1149;
-                	hBlankOn <= 12'd1275;
-                	hTotal <= 12'd1275;
+                	hSyncOn <= 12'd24;
+                	hSyncOff <= 12'd171;
+                	hBlankOff <= 12'd244;
+                	hBorderOff <= 12'd349;
+                	hBorderOn <= 12'd1117;
+                	hBlankOn <= 12'd1222;
+                	hTotal <= 12'd1222;
                 	hSyncPol <= 1'b1;
 	            end
 	            else begin
@@ -1791,6 +2105,16 @@ else begin
         6'h1C:  vTotal[7:0] <= db;
         6'h1D:  vTotal[11:8] <= db[3:0];
         endcase
+        8'h34:  vdat <= db[7:0];
+        8'h35:	vadr[7:0] <= db[7:0];
+        8'h36:	vadr[15:8] <= db[7:0];
+        8'h37:	begin
+        		vadr[18:16] <= db[2:0];
+        		vwr <= db[7];
+        		end
+        8'h38:	begin
+        		ft816_rst <= db[0];
+        		end
         endcase
       end
     end

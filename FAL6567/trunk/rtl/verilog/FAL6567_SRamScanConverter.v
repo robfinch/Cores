@@ -25,7 +25,7 @@
 //                                                                          
 // ============================================================================
 //
-module FAL6567_SRamScanConverter(chip, clken8, clk33, hSync8_i, vSync8_i, color_i, hSync33_i, vSync33_i, color_o,
+module FAL6567_SRamScanConverter(chip, clken8, clk33, turbo2, hSync8_i, vSync8_i, color_i, hSync33_i, vSync33_i, color_o,
 	ram_wadr, ram_dato, ram_radr, ram_dati, ram_rlatch
 	);
 parameter CHIP6567R8 = 2'd0;
@@ -36,6 +36,7 @@ parameter CHIP6572 = 2'd3;
 input [1:0] chip;
 input clken8;
 input clk33;
+input turbo2;
 input hSync8_i;
 input vSync8_i;
 input [3:0] color_i;
@@ -60,7 +61,15 @@ reg [9:0] raster33YMax;
 reg phSync33, pvSync33;
 
 // Set Limits
-always @(chip)
+always @*
+if (turbo2)
+case(chip)
+CHIP6567R8:   raster8XMax = 10'd606;
+CHIP6567OLD:  raster8XMax = 10'd606;
+CHIP6569:     raster8XMax = 10'd640;
+CHIP6572:     raster8XMax = 10'd640;
+endcase
+else
 case(chip)
 CHIP6567R8:   raster8XMax = 10'd520;
 CHIP6567OLD:  raster8XMax = 10'd512;

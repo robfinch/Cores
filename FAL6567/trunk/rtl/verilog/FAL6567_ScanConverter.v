@@ -60,25 +60,25 @@ endcase
 wire [17:0] adr8 = raster8Y * raster8XMax + raster8X;
 wire [17:0] adr33 = raster33Y[9:1] * raster8XMax + raster33X[10:1];
 initial begin
-  phSync8 = 1'b0;
-  pvSync8 = 1'b0;
-  phSync33 = 1'b1;
-  pvSync33 = 1'b1;
-  raster8X = 10'd0;
-  raster8Y = 9'd0;
+	phSync8 = 1'b0;
+	pvSync8 = 1'b0;
+	phSync33 = 1'b1;
+	pvSync33 = 1'b1;
+	raster8X = 10'd0;
+	raster8Y = 9'd0;
 end
 always @(posedge clk33)
 if (clken8) begin
 phSync8 <= hSync8_i;
 pvSync8 <= vSync8_i;
 if (hSync8_i && !phSync8)
-  raster8X <= 10'd0;
+	raster8X <= 10'd0;
 else
-  raster8X <= raster8X + 10'd1;
+	raster8X <= raster8X + 10'd1;
 if (vSync8_i && !pvSync8)
-  raster8Y <= 9'd0;
+	raster8Y <= 9'd0;
 else if (hSync8_i && !phSync8)
-  raster8Y <= raster8Y + 9'd1;
+	raster8Y <= raster8Y + 9'd1;
 end
 
 always @(posedge clk33)
@@ -86,13 +86,13 @@ begin
 phSync33 <= hSync33_i;
 pvSync33 <= vSync33_i;
 if (!hSync33_i && phSync33)
-  raster33X <= 10'd0;
+	raster33X <= 10'd0;
 else
-  raster33X <= raster33X + 10'd1;
+	raster33X <= raster33X + 10'd1;
 if (!vSync33_i && pvSync33)
-  raster33Y <= 10'd0;
+	raster33Y <= 10'd0;
 else if (!hSync33_i && phSync33)
-  raster33Y <= raster33Y + 10'd1;
+	raster33Y <= raster33Y + 10'd1;
 end
 
 always @(posedge clk33)
@@ -100,6 +100,6 @@ always @(posedge clk33)
         mem[adr8] <= color_i;
 
 always @(posedge clk33)
-  color_o <= mem[adr33];
+	color_o <= mem[adr33];
 
 endmodule
