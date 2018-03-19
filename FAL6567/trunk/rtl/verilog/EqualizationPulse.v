@@ -55,8 +55,8 @@ CHIP6569,CHIP6572:
 	EQ <=		//  4% tH equalization width
 	(rasterX < 10'd24) ||
 	(
-		(rasterX >= 10'd300) &&
-		(rasterX < 10'd324)
+		(rasterX >= 10'd304) &&
+		(rasterX < 10'd328)
 	)
 	;
 endcase
