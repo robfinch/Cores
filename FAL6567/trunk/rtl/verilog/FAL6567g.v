@@ -39,6 +39,7 @@ module FAL6567g(cr_clk, phi02, rst_o, irq, aec, ba, cs_n, rw, ad, db, den_n, dir
 		ram_adr, ram_dat, ram_we, ram_ce, ram_oe, casram_n,
 		Sync, comp, colorBurst
 	);
+parameter PAL = 1'b0;
 parameter CHIP6567R8 = 2'd0;
 parameter CHIP6567OLD = 2'd1;
 parameter CHIP6569 = 2'd2;
@@ -94,7 +95,7 @@ output aec;
 output reg ba;
 input cs_n;
 input rw;
-inout [13:0] ad;
+inout [11:0] ad;
 inout tri [11:0] db;
 output den_n;
 output dir;
@@ -118,7 +119,7 @@ output reg ram_oe;
 output reg ram_ce;
 input casram_n;
 
-output reg Sync;
+output Sync;
 output reg [4:0] comp;
 output colorBurst;
 
@@ -127,13 +128,12 @@ reg [1:0] chip;// = CHIP6567R8;
 integer n;
 wire cs = !cs_n;
 wire clk32, clk33;	// 32.73 or 38.18 MHz
-wire clk33_270;
+wire clk33_120, clk33_240;
 wire clk57, dotclk;
 reg [7:0] regShadow [127:0];
 
-reg [13:0] ado;
-reg [13:0] ado1;
-reg vSync8,hSync8;
+reg [7:0] ado;
+wire vSync8,hSync8;
 reg [3:0] pixelColor;
 reg [3:0] color8;
 wire [3:0] color33;
@@ -227,9 +227,8 @@ reg [3:0] mc [0:MIBCNT-1];
 reg [MIBCNT-1:0] mmc;
 reg [MIBCNT-1:0] me;
 reg [MIBCNT-1:0] mye, mye_ff;
-reg [MIBCNT-1:0] mxe, mxe_ff;
+reg [MIBCNT-1:0] mxe, mClkShift;
 reg [MIBCNT-1:0] mdp;
-reg [MIBCNT-1:0] mc_ff;
 reg [MIBCNT-1:0] MShift;
 reg [23:0] MPixels [MIBCNT-1:0];
 reg [1:0] MCurrentPixel [MIBCNT-1:0];
@@ -259,7 +258,6 @@ reg [7:0] sprite1;
 reg [3:0] sprite2,sprite3,sprite4,sprite5;
 reg [10:0] rasterX3;
 
-reg ismc;
 reg [11:0] shiftingChar,waitingChar,readChar;
 reg [7:0] shiftingPixels,waitingPixels,readPixels;
 
@@ -279,6 +277,8 @@ reg erst;
 reg embc;
 reg emmc;
 reg elp;
+
+wire [7:0] dbFlt;
 
 assign irq = (ilp & elp) | (immc & emmc) | (imbc & embc) | (irst & erst); 
  
@@ -320,10 +320,10 @@ if (xrst)
 always @*
 if (turbo2)
 case(chip)
-CHIP6567R8:   begin rasterYMax = 9'd262; rasterXMax = 10'd605; end
-CHIP6567OLD:  begin rasterYMax = 9'd261; rasterXMax = 10'd605; end
-CHIP6569:     begin rasterYMax = 9'd311; rasterXMax = 10'd639; end
-CHIP6572:     begin rasterYMax = 9'd311; rasterXMax = 10'd639; end
+CHIP6567R8:   begin rasterYMax = 9'd262; rasterXMax = 10'd607; end
+CHIP6567OLD:  begin rasterYMax = 9'd261; rasterXMax = 10'd607; end
+CHIP6569:     begin rasterYMax = 9'd311; rasterXMax = 10'd607; end
+CHIP6572:     begin rasterYMax = 9'd311; rasterXMax = 10'd607; end
 endcase
 else
 case(chip)
@@ -333,12 +333,13 @@ CHIP6569:     begin rasterYMax = 9'd311; rasterXMax = {7'd62,3'b111}; end
 CHIP6572:     begin rasterYMax = 9'd311; rasterXMax = {7'd62,3'b111}; end
 endcase
 
-FAL6567_clkgen u1
+FAL6567_clkgen #(PAL) u1
 (
 	.rst(xrst),
 	.xclk(cr_clk),
 	.clk33(clk33),
-	.clk33_270(clk33_270),
+	.clk33_120(clk33_120),
+	.clk33_240(clk33_240),
 	.turbo2(turbo2),
 	.dcrate(1'b0),
 	.dotclk(dotclk),
@@ -365,10 +366,10 @@ if (rst)
    	chip <= db[9:8];
 always @(posedge clk33)
 if (rst)
-  	ado1 <= 8'hFF;
+  	ado <= 8'hFF;
 else
-  	ado1 <= mux ? {2'b11,vicAddr[13:8]} : vicAddr[7:0];
-assign ad = aec ? 14'bz : {vicAddr[13:8],ado1};
+  	ado <= mux ? {2'b11,vicAddr[13:8]} : vicAddr[7:0];
+assign ad = aec ? 12'bz : {vicAddr[11:8],ado};
 
 wire casram_npe, casram_nne;
 wire ras_nne;
@@ -449,7 +450,7 @@ case(stc[31:29])
 default:	ram_we1 <= ft816_rw;
 endcase
 always @*
-	ram_we <= ram_we1 | clk33_270;
+	ram_we <= ram_we1 | clk33_240;
 
 always @(posedge clk33)
 case(stc[31:29])
@@ -501,7 +502,6 @@ FAL6567_ScanConverter u2
 wire ft816_cs_vic = ft816_ad[23:10]==14'b1011_0000_1101_00;
 wire ft816_cs_flt = ft816_ad[23:10]==14'b1011_0000_1110_00;
 
-wire [7:0] dbFlt;
 assign dbFlt = ft816_rw ? 8'bz : ft816_db;
 FAL6567Float uflt1 (rst_o, clk33, ft816_cs_flt, ft816_cs_flt, ~ft816_rw, ft816_ad[7:0], dbFlt);
 
@@ -521,7 +521,7 @@ BUFGMUX ubg2 (.S(|stc[27:0]), .I0(1'b0), .I1(clk33), .O(ft816_clk));
 
 FT816 ucpu1
 (
-	.rst(ft816_rst),
+	.rst(ft816_rst),	// active low
 	.clk(ft816_clk),
 	.clko(),
 	.cyc(),
@@ -774,22 +774,38 @@ end
 always @(posedge clk33)
 if (rst) begin
 	preRasterY <= 9'd0;
+end
+else begin
+	if (clken8) begin
+		if (preRasterX==rasterXMax) begin
+			if (preRasterY==rasterYMax)
+				preRasterY <= 9'd0;
+			else
+				preRasterY <= preRasterY + 9'd1;
+		end
+	end  
+end
+
+always @(posedge clk33)
+if (rst) begin
 	rasterY <= 9'd0;
-	nextRasterY <= 9'd0;
 end
 else begin
 	if (clken8) begin
 		if (preRasterX==10'h14) begin
 			rasterY <= preRasterY;
 		end
+	end  
+end
+
+always @(posedge clk33)
+if (rst) begin
+	nextRasterY <= 9'd0;
+end
+else begin
+	if (clken8) begin
 		if (rasterX==10'd0) begin
 			nextRasterY <= rasterY + 9'd1;
-		end
-		if (preRasterX==rasterXMax) begin
-			if (preRasterY==rasterYMax)
-				preRasterY <= 9'd0;
-			else
-				preRasterY <= preRasterY + 9'd1;
 		end
 	end  
 end
@@ -861,46 +877,29 @@ casez(rasterX2)
 11'h33?: vicCycle <= VIC_G;
 11'h34?: vicCycle <= VIC_IDLE;
 11'h35?: vicCycle <= VIC_IDLE;
-11'h36?:
-        case(chip)
-        CHIP6567R8:   vicCycle <= VIC_IDLE;
-        CHIP6567OLD:  vicCycle <= VIC_IDLE;
-        default:      vicCycle <= VIC_SPRITE;
-        endcase
-11'h37?:
-        case(chip)
-        CHIP6567R8:   vicCycle <= VIC_IDLE;
-        CHIP6567OLD:  vicCycle <= VIC_SPRITE;
-        default:      vicCycle <= VIC_SPRITE;
-        endcase
-11'h38?:  vicCycle <= VIC_SPRITE;
-11'h39?:  vicCycle <= VIC_SPRITE;
-11'h3A?:  vicCycle <= VIC_SPRITE;
-11'h3B?:  vicCycle <= VIC_SPRITE;
-11'h3C?:  vicCycle <= VIC_SPRITE;
-11'h3D?:  vicCycle <= VIC_SPRITE;
-11'h3E?:  vicCycle <= VIC_SPRITE;
-11'h3F?:  vicCycle <= VIC_SPRITE;
-11'h40?:  vicCycle <= VIC_SPRITE;
-11'h41?:  vicCycle <= VIC_SPRITE;
-11'h42?:  vicCycle <= VIC_SPRITE;
-11'h43?:  vicCycle <= VIC_SPRITE;
-11'h44?:  vicCycle <= VIC_SPRITE;
-11'h45?:  vicCycle <= VIC_SPRITE;
-11'h46?:
-        case(chip)
-        CHIP6567R8:   vicCycle <= VIC_SPRITE;
-        CHIP6567OLD:  vicCycle <= VIC_SPRITE;
-        default:      vicCycle <= VIC_REF;
-        endcase
-11'h47?:
-        case(chip)
-        CHIP6567R8:   vicCycle <= VIC_SPRITE;
-        CHIP6567OLD:  vicCycle <= VIC_REF;
-        default:      vicCycle <= VIC_REF;
-        endcase
-11'h48?:  vicCycle <= VIC_REF;
-default:  vicCycle <= VIC_IDLE;
+11'h36?: vicCycle <= VIC_IDLE;
+11'h37?: vicCycle <= VIC_IDLE;
+11'h38?: vicCycle <= VIC_SPRITE;
+11'h39?: vicCycle <= VIC_SPRITE;
+11'h3A?: vicCycle <= VIC_SPRITE;
+11'h3B?: vicCycle <= VIC_SPRITE;
+11'h3C?: vicCycle <= VIC_SPRITE;
+11'h3D?: vicCycle <= VIC_SPRITE;
+11'h3E?: vicCycle <= VIC_SPRITE;
+11'h3F?: vicCycle <= VIC_SPRITE;
+11'h40?: vicCycle <= VIC_SPRITE;
+11'h41?: vicCycle <= VIC_SPRITE;
+11'h42?: vicCycle <= VIC_SPRITE;
+11'h43?: vicCycle <= VIC_SPRITE;
+11'h44?: vicCycle <= VIC_SPRITE;
+11'h45?: vicCycle <= VIC_SPRITE;
+11'h46?: vicCycle <= VIC_SPRITE;
+11'h47?: vicCycle <= VIC_SPRITE;
+11'h48?: vicCycle <= VIC_IDLE;
+11'h49?: vicCycle <= VIC_IDLE;
+11'h4A?: vicCycle <= VIC_IDLE;
+11'h4B?: vicCycle <= VIC_REF;
+default: vicCycle <= VIC_IDLE;
 endcase
 else
 casez(rasterX2)
@@ -952,11 +951,18 @@ endcase
 
 always @(posedge clk33)
 if (clken8) begin
-    case(chip)
-    CHIP6567R8:   sprite1 <= rasterX2 - 11'h2FE;
-    CHIP6567OLD:  sprite1 <= rasterX2 - 11'h2EE;
-    default:      sprite1 <= rasterX2 - 11'h2DE;
-    endcase
+	if (turbo2)
+	    case(chip)
+	    CHIP6567R8:   sprite1 <= rasterX2 - 11'h37E;
+	    CHIP6567OLD:  sprite1 <= rasterX2 - 11'h37E;
+	    default:      sprite1 <= rasterX2 - 11'h37E;
+	    endcase
+	else
+	    case(chip)
+	    CHIP6567R8:   sprite1 <= rasterX2 - 11'h2FE;
+	    CHIP6567OLD:  sprite1 <= rasterX2 - 11'h2EE;
+	    default:      sprite1 <= rasterX2 - 11'h2DE;
+	    endcase
     if (leg)
 		sprite2 <= sprite1[7:5];
     else
@@ -991,14 +997,14 @@ always @(posedge clk33)
 				if (leg)
 					case(chip)
 					CHIP6567R8:   balos[n] <= (rasterX2 >= 11'h350 + {n,5'b0}) && (rasterX2 < 11'h3A0 + {n,5'b0});
-					CHIP6567OLD:  balos[n] <= (rasterX2 >= 11'h340 + {n,5'b0}) && (rasterX2 < 11'h390 + {n,5'b0});
-					default:      balos[n] <= (rasterX2 >= 11'h330 + {n,5'b0}) && (rasterX2 < 11'h380 + {n,5'b0}); 
+					CHIP6567OLD:  balos[n] <= (rasterX2 >= 11'h350 + {n,5'b0}) && (rasterX2 < 11'h3A0 + {n,5'b0});
+					default:      balos[n] <= (rasterX2 >= 11'h350 + {n,5'b0}) && (rasterX2 < 11'h3A0 + {n,5'b0}); 
 					endcase
 				else
 					case(chip)
 					CHIP6567R8:   balos[n] <= (rasterX2 >= 11'h350 + {n,4'b0}) && (rasterX2 < 11'h390 + {n,4'b0});
-					CHIP6567OLD:  balos[n] <= (rasterX2 >= 11'h340 + {n,4'b0}) && (rasterX2 < 11'h380 + {n,4'b0});
-					default:      balos[n] <= (rasterX2 >= 11'h330 + {n,4'b0}) && (rasterX2 < 11'h370 + {n,4'b0});
+					CHIP6567OLD:  balos[n] <= (rasterX2 >= 11'h350 + {n,4'b0}) && (rasterX2 < 11'h390 + {n,4'b0});
+					default:      balos[n] <= (rasterX2 >= 11'h350 + {n,4'b0}) && (rasterX2 < 11'h390 + {n,4'b0});
 					endcase
 			end
 			else begin
@@ -1021,7 +1027,16 @@ always @(posedge clk33)
 		end
 	end
 
-wire balo = |balos | (badline && rasterX2 < 11'h2C0);
+reg [10:0] baloff;
+always @(posedge clk33)
+case({turbo2,chip})
+3'b000:	baloff <= 11'h2C0;
+3'b001:	baloff <= 11'h2B0;
+3'b010:	baloff <= 11'h2A0;
+3'b011:	baloff <= 11'h2A0;
+default:	baloff <= 11'h340;
+endcase
+wire balo = |balos | (badline && rasterX2 < baloff);
 
 
 //------------------------------------------------------------------------------
@@ -1253,88 +1268,132 @@ else begin
 		end    
 	end
 
-	// Reset expansion flipflop once sprite becomes deactivated or
-	// if no sprite Y expansion.
-	for (n = 0; n < MIBCNT; n = n + 1) begin
-		if (!mye[n] || !MActive[n])
-			mye_ff[n] <= 1'b0;
-	end
-  
 	// If Y expansion is on, backup the MIB data counter by three every
 	// other scanline.
 	if (enaData && ref5 && !phi02) begin
 		for (n = 0; n < MIBCNT; n = n + 1) begin
 			if (MActive[n] & mye[n]) begin
-				mye_ff[n] <= !mye_ff[n];
 				if (!mye_ff[n])
 					MCnt[n] <= MCnt[n] - 6'd3;
 			end
 		end  
 	end
 
-  if (leg) begin
-    if (sprite1[4]) begin
-      if (vicCycle==VIC_SPRITE && phi02 && enaData) begin
-        if (MActive[sprite])
-          MCnt[sprite] <= MCnt[sprite] + 6'd1;
-      end 
-    end
-    else begin
-      if (vicCycle==VIC_SPRITE && enaData) begin
-        if (MActive[sprite])
-          MCnt[sprite] <= MCnt[sprite] + 6'd1;
-      end
-    end
-  end
-  else begin
-    if (!phis && enaMCnt && vicCycle==VIC_SPRITE) begin
-      if (MActive[sprite])
-        MCnt[sprite] <= MCnt[sprite] + 6'd1;
-    end
-  end
+	if (leg) begin
+		if (sprite1[4]) begin
+			if (vicCycle==VIC_SPRITE && phi02 && enaData) begin
+				if (MActive[sprite])
+					MCnt[sprite] <= MCnt[sprite] + 6'd1;
+			end 
+		end
+		else begin
+			if (vicCycle==VIC_SPRITE && enaData) begin
+				if (MActive[sprite])
+					MCnt[sprite] <= MCnt[sprite] + 6'd1;
+			end
+		end
+	end
+	else begin
+		if (!phis && enaMCnt && vicCycle==VIC_SPRITE) begin
+			if (MActive[sprite])
+				MCnt[sprite] <= MCnt[sprite] + 6'd1;
+		end
+	end
 end
 
+// X expansion - when to clock the shift register
+reg [1:0] mShiftCount[0:MIBCNT-1];
+
+always @(posedge clk33)
+if (clken8) begin
+	for (n = 0; n < MIBCNT; n = n + 1) begin
+		if (MShift[n]) begin
+			case({mxe,mc[n]})
+			2'b00:	mShiftCount[n] <= 2'd3;
+			2'b01:	mShiftCount[n][0] <= ~mShiftCount[n][0];
+			2'b10:	mShiftCount[n][0] <= ~mShiftCount[n][0];
+			2'b11:	mShiftCount[n] <= mShiftCount[n] + 2'd1;
+			endcase
+		end
+		else begin
+			case({mxe,mc[n]})
+			2'b00:	mShiftCount[n] <= 2'd3;
+			2'b01:	mShiftCount[n] <= 2'd2;
+			2'b10:	mShiftCount[n] <= 2'd2;
+			2'b11:	mShiftCount[n] <= 2'd0;
+			endcase
+		end
+	end
+end
+always @*
+	for (n = 0; n < MIBCNT; n = n + 1)
+		mClkShift[n] <= mShiftCount[n]==2'd3;
+
+// Y expansion
 always @(posedge clk33)
 begin
-  if (clken8) begin
-    for (n = 0; n < MIBCNT; n = n + 1) begin
-      if (MShift[n]) begin
-        mxe_ff[n] <= !mxe_ff[n] & mxe[n];
-        if (!mxe_ff[n]) begin
-          mc_ff[n] <= !mc_ff[n] & mc[n];
-          if (!mc_ff[n])
-            MCurrentPixel[n] <= MPixels[n][23:22];
-          MPixels[n] <= {MPixels[n][22:0],1'b0};
-        end
-      end
-      else begin
-        mxe_ff[n] <= 1'b0;
-        mc_ff[n] <= 1'b0;
-        MCurrentPixel[n] <= 2'b00;
-      end
-    end  
-  end
-  if (leg) begin
-    if (sprite1[4]) begin
-      if (vicCycle==VIC_SPRITE && phi02 && enaData) begin
-        if (MActive[sprite])
-          MPixels[sprite] <= {MPixels[sprite][15:0],db[7:0]};
-      end 
-    end
-    else begin
-      if (vicCycle==VIC_SPRITE && enaData) begin
-        if (MActive[sprite])
-          MPixels[sprite] <= {MPixels[sprite][15:0],db[7:0]};
-      end
-    end
-  end
-  else begin
-    if (phis==`LOW && enaSData && vicCycle==VIC_SPRITE) begin
-      if (MActive[sprite])
-        MPixels[sprite] <= {MPixels[sprite][15:0],db[7:0]};
-    end
-  end
+	// Reset expansion flipflop once sprite becomes deactivated or
+	// if no sprite Y expansion.
+	for (n = 0; n < MIBCNT; n = n + 1) begin
+		if (!mye[n] || !MActive[n])
+			mye_ff[n] <= 1'b0;
+	end
+	if (enaData && ref5 && !phi02) begin
+		for (n = 0; n < MIBCNT; n = n + 1) begin
+			if (MActive[n] & mye[n])
+				mye_ff[n] <= !mye_ff[n];
+		end  
+	end
 end
+
+// Handle sprite pixel loading / shifting
+always @(posedge clk33)
+begin
+	if (clken8) begin
+		for (n = 0; n < MIBCNT; n = n + 1) begin
+			if (MShift[n]) begin
+				if (mClkShift[n]) begin
+					if (mc[n])
+						MPixels[n] <= {MPixels[n][21:0],2'b0};
+					else
+						MPixels[n] <= {MPixels[n][22:0],1'b0};
+				end
+			end
+		end  
+	end
+	if (leg) begin
+		if (sprite1[4]) begin
+			if (vicCycle==VIC_SPRITE && phi02 && enaData) begin
+				if (MActive[sprite])
+					MPixels[sprite] <= {MPixels[sprite][15:0],db[7:0]};
+			end 
+		end
+		else begin
+			if (vicCycle==VIC_SPRITE && enaData) begin
+				if (MActive[sprite])
+					MPixels[sprite] <= {MPixels[sprite][15:0],db[7:0]};
+			end
+		end
+	end
+	else begin
+		if (phis==`LOW && enaSData && vicCycle==VIC_SPRITE) begin
+			if (MActive[sprite])
+				MPixels[sprite] <= {MPixels[sprite][15:0],db[7:0]};
+		end
+	end
+end
+
+// Adds a pipeline delay of one to the sprite pixel
+always @(posedge clk33)
+if (clken8) begin
+	for (n = 0; n < MIBCNT; n = n + 1) begin
+		if (MShift[n])
+			MCurrentPixel[n] <= MPixels[n][23:22];
+		else
+			MCurrentPixel[n] <= 2'b00;
+	end  
+end
+
 
 //------------------------------------------------------------------------------
 // Address Generation
@@ -1368,7 +1427,7 @@ begin
 	VIC_SPRITE:
 		if (leg) begin
 			if (phi02==`LOW && sprite1[4])
-				addr <= {vm,7'b1111111,sprite[2:0]};
+				addr <= vm + ((turbo2 ? 14'b11111111000 : 14'b1111111000) | sprite[2:0]);
 			else
 				addr <= {MPtr[sprite],MCnt[sprite]};
 		end
@@ -1376,7 +1435,7 @@ begin
 			if (!phis)
 				addr <= {MPtr[sprite],MCnt[sprite]};
 			else
-				addr <= {vm,6'b111111,~sprite[3],sprite[2:0]};
+				addr <= vm + ((turbo2 ? 14'b11111110000 : 14'b1111110000) | {~sprite[3],sprite[2:0]});
 		end
 	default: addr <= 14'h3FFF;
 	endcase
@@ -1472,114 +1531,19 @@ end
 //   scan converter. Although it's not otherwise used it may be in the future
 //   output, so it's generated accurately.
 //------------------------------------------------------------------------------
-always @(posedge clk33)
-if (rst)
-	vSync8 <= `FALSE;
-else begin
-	case(chip)
-	CHIP6567R8,CHIP6567OLD:
-		if (rasterY >= 3 && rasterY < 6)
-			vSync8 <= `TRUE;
-		else
-			vSync8 <= `FALSE;
-	CHIP6569,CHIP6572:
-		if (rasterY >= 313 || rasterY < 3)
-			vSync8 <= `TRUE;
-		else
-			vSync8 <= `FALSE;
-	endcase
-end
 
-reg [9:0] hSyncWidth;
-always @(posedge clk33)
-case(chip)
-CHIP6567R8,CHIP6567OLD:
-	hSyncWidth <= turbo2 ? 10'd49 : 10'd42;
-CHIP6569,CHIP6572:
-	hSyncWidth <= turbo2 ? 10'd43 : 10'd37;
-endcase
-always @(posedge clk33)
-begin
-	hSync8 <= `FALSE;
-	if (rasterX < hSyncWidth)	// 8%
-		hSync8 <= `TRUE;
-end
-
-reg EQ, SE;
-always @*
-case(chip)
-CHIP6567R8:
-	EQ <=		//  4% tH equalization width
-	(rasterX < 10'd21) ||
-	(
-		(rasterX >= 10'd260) &&
-		(rasterX < 10'd281)
-	)
-	;
-CHIP6567OLD:
-	EQ <=		//  4% tH equalization width
-	(rasterX < 10'd20) ||
-	(
-		(rasterX >= 10'd256) &&
-		(rasterX < 10'd276)
-	)
-	;
-CHIP6569,CHIP6572:
-	EQ <=		//  4% tH equalization width
-	(rasterX < 10'd20) ||
-	(
-		(rasterX >= 10'd252) &&
-		(rasterX < 10'd272)
-	)
-	;
-endcase
-
-always @*
-case(chip)
-CHIP6567R8:
-	SE <=		// 93% tH (7%tH) (3051-427)
-	(rasterX < 10'd224) ||	// 43%
-	(	
-		(rasterX >= 10'd260) &&	// 50%
-	 	(rasterX < 10'd484)		// 93%
-	)
-	;
-CHIP6567OLD:
-	SE <=		// 93% tH (7%tH) (3051-427)
-	(rasterX < 10'd220) ||	// 43%
-	(	
-		(rasterX >= 10'd256) &&
-	 	(rasterX < 10'd476)
-	)
-	;
-CHIP6569,CHIP6572:
-	SE <=		// 93% tH (7%tH) (3051-427)
-	(rasterX < 10'd217) ||
-	(	
-		(rasterX >= 10'd252) &&
-	 	(rasterX < 10'd469)
-	)
-	;
-endcase
-
-always @(posedge clk33)
-case(chip)
-CHIP6567R8,CHIP6567OLD,
-CHIP6569,CHIP6572:
-	case(rasterY)
-	9'd0:	Sync <= EQ;
-	9'd1:	Sync <= EQ;
-	9'd2:	Sync <= EQ;
-	9'd3:	Sync <= SE;
-	9'd4:	Sync <= SE;
-	9'd5:	Sync <= SE;
-	9'd6:	Sync <= EQ;
-	9'd7:	Sync <= EQ;
-	9'd8:	Sync <= EQ;
-	default:
-			Sync <= hSync8;
-	endcase
-endcase
+FAL6567_sync usg1
+(
+	.chip(chip),
+	.rst(rst),
+	.clk(clk33),
+	.turbo2(turbo2),
+	.rasterX(rasterX),
+	.rasterY(rasterY),
+	.hSync(hSync8),
+	.vSync(vSync8),
+	.cSync(Sync)
+);
 
 //------------------------------------------------------------------------------
 // Color burst window.
@@ -1595,14 +1559,14 @@ case(chip)
 CHIP6567R8,CHIP6567OLD:
 	burstWindowBegin <= turbo2 ? 10'd50 : 10'd43;
 CHIP6569,CHIP6572:
-	burstWindowBegin <= turbo2 ? 10'd51 : 10'd44;
+	burstWindowBegin <= turbo2 ? 10'd53 : 10'd44;
 endcase
 always @(posedge clk33)
 case(chip)
 CHIP6567R8,CHIP6567OLD:
 	burstWindowEnd <= turbo2 ? 10'd74 : 10'd63;
 CHIP6569,CHIP6572:
-	burstWindowEnd <= turbo2 ? 10'd73 : 10'd62;
+	burstWindowEnd <= turbo2 ? 10'd95 : 10'd62;
 endcase
 reg burstWindow;
 always @(posedge clk33)
@@ -1654,46 +1618,87 @@ end
 //------------------------------------------------------------------------------
 // Graphics mode pixel calc.
 //------------------------------------------------------------------------------
+reg loadPixels, shiftPixels;
+reg clkShift;
+wire ismc = mcm & (bmm | ecm | shiftingChar[11]);
+
+always @*
+	loadPixels <= xscroll==rasterX[2:0];
 
 always @(posedge clk33)
-begin
-	if (clken8) begin
-		mc_ff <= !mc_ff;
-		ismc = mcm & (bmm | ecm | shiftingChar[11]);
-		if (xscroll==rasterX[2:0]) begin
-			mc_ff <= 1'b0;
-			shiftingChar <= waitingChar;
-			shiftingPixels <= waitingPixels;
-		end
-		else if (!ismc)
-			shiftingPixels <= {shiftingPixels[6:0],1'b0};
-		else if (mc_ff)
+if (clken8) begin
+	if (loadPixels)
+		clkShift <= ~(mcm & (bmm | ecm | waitingChar[11]));
+	else
+		clkShift <= ismc ? ~clkShift : clkShift;
+end
+
+always @(posedge clk33)
+if (clken8) begin
+	if (loadPixels)
+		shiftingChar <= waitingChar;
+end
+
+// Pixel shifter
+always @(posedge clk33)
+if (clken8) begin
+	if (loadPixels)
+		shiftingPixels <= waitingPixels;
+	else if (clkShift) begin
+		if (ismc)
 			shiftingPixels <= {shiftingPixels[5:0],2'b0};
-		pixelBgFlag <= shiftingPixels[7];
-		pixelColor <= 4'h0; // black
-		case({ecm,bmm,mcm})
-		3'b000:
-			pixelColor <= shiftingPixels[7] ? shiftingChar[11:8] : b0c;
-		3'b001:
-			if (shiftingChar[11])
-				case(shiftingPixels[7:6])
-				2'b00:  pixelColor <= b0c;
-				2'b01:  pixelColor <= b1c;
-				2'b10:  pixelColor <= b2c;
-				2'b11:  pixelColor <= shiftingChar[10:8];
-				endcase
-			else
-				pixelColor <= shiftingPixels[7] ? shiftingChar[11:8] : b0c;
-		3'b010,3'b110: 
-			pixelColor <= shiftingPixels[7] ? shiftingChar[7:4] : shiftingChar[3:0];
-		3'b011,3'b111:
+		else
+			shiftingPixels <= {shiftingPixels[6:0],1'b0};
+	end
+end
+
+always @(posedge clk33)
+if (clken8)
+	pixelBgFlag <= shiftingPixels[7];
+
+// Compute pixel color
+always @(posedge clk33)
+if (clken8) begin
+	pixelColor <= 4'h0; // black
+	case({ecm,bmm,mcm})
+	3'b000:	// Text mode
+		pixelColor <= shiftingPixels[7] ? shiftingChar[11:8] : b0c;
+	3'b001:	// Multi-color text mode
+		if (shiftingChar[11])
 			case(shiftingPixels[7:6])
 			2'b00:  pixelColor <= b0c;
-			2'b01:  pixelColor <= shiftingChar[7:4];
-			2'b10:  pixelColor <= shiftingChar[3:0];
+			2'b01:  pixelColor <= b1c;
+			2'b10:  pixelColor <= b2c;
+			2'b11:  pixelColor <= shiftingChar[10:8];
+			endcase
+		else
+			pixelColor <= shiftingPixels[7] ? shiftingChar[11:8] : b0c;
+	3'b010,3'b110: 
+		pixelColor <= shiftingPixels[7] ? shiftingChar[7:4] : shiftingChar[3:0];
+	3'b011,3'b111:
+		case(shiftingPixels[7:6])
+		2'b00:  pixelColor <= b0c;
+		2'b01:  pixelColor <= shiftingChar[7:4];
+		2'b10:  pixelColor <= shiftingChar[3:0];
+		2'b11:  pixelColor <= shiftingChar[11:8];
+		endcase
+	3'b100:
+		case({shiftingPixels[7],shiftingChar[7:6]})
+		3'b000:  pixelColor <= b0c;
+		3'b001:  pixelColor <= b1c;
+		3'b010:  pixelColor <= b2c;
+		3'b011:  pixelColor <= b3c;
+		default:  pixelColor <= shiftingChar[11:8];
+		endcase
+	3'b101:
+		if (shiftingChar[11])
+			case(shiftingPixels[7:6])
+			2'b00:  pixelColor <= b0c;
+			2'b01:  pixelColor <= b1c;
+			2'b10:  pixelColor <= b2c;
 			2'b11:  pixelColor <= shiftingChar[11:8];
 			endcase
-		3'b100:
+		else
 			case({shiftingPixels[7],shiftingChar[7:6]})
 			3'b000:  pixelColor <= b0c;
 			3'b001:  pixelColor <= b1c;
@@ -1701,24 +1706,7 @@ begin
 			3'b011:  pixelColor <= b3c;
 			default:  pixelColor <= shiftingChar[11:8];
 			endcase
-		3'b101:
-			if (shiftingChar[11])
-				case(shiftingPixels[7:6])
-				2'b00:  pixelColor <= b0c;
-				2'b01:  pixelColor <= b1c;
-				2'b10:  pixelColor <= b2c;
-				2'b11:  pixelColor <= shiftingChar[11:8];
-				endcase
-			else
-				case({shiftingPixels[7],shiftingChar[7:6]})
-				3'b000:  pixelColor <= b0c;
-				3'b001:  pixelColor <= b1c;
-				3'b010:  pixelColor <= b2c;
-				3'b011:  pixelColor <= b3c;
-				default:  pixelColor <= shiftingChar[11:8];
-				endcase
-		endcase
-	end
+	endcase
 end
 
 //------------------------------------------------------------------------------
@@ -1755,9 +1743,9 @@ end
 always @(posedge clk33)
 if (clken8) begin
     if (vicBorder)
-      color8 <= ec;
+		color8 <= ec;
     else
-      color8 <= color_code;
+		color8 <= color_code;
 end
 
 FAL6567_ColorROM ucrom1
@@ -1789,7 +1777,7 @@ always @(posedge clk57)
 
 always @(posedge clk33)
 if (rst) begin
-	ft816_rst <= 1'b1;
+	ft816_rst <= 1'b0;	// active low
 	turbo <= 1'b0;
 	ram_page <= 5'd0;
 	rst_pal <= 1'b0;
@@ -1815,6 +1803,7 @@ if (rst) begin
 	cb[10:0] <= 11'b0;
 	ec <= 4'h6;
 	yscroll <= 3'd0;
+	xscroll <= 3'd0;
 	den = `TRUE;
 	me <= 16'h0;
 	for (n = 0; n < MIBCNT; n = n + 1) begin

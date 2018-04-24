@@ -71,13 +71,15 @@
 //
 // ============================================================================
 //
-module RGB2Composite(clk, ph, r, g, b, co);
+module RGB2Composite(clk, ph, r, g, b, co, yo, iq);
 input clk;		// synchronizing clock 57.27272MHz
 input [3:0] ph;	// clock phase 3.58MHz ref (22.5 deg. inc.)
 input [7:0] r;	// red input
 input [7:0] g;	// green input
 input [7:0] b;	// blue input
 output reg [4:0] co;	// composite output
+output reg [3:0] yo;
+output reg [3:0] iq;
 
 reg signed [5:0] sin;	// sin of angle
 reg signed [5:0] sin90;	// 90 deg. phase shift sin
@@ -115,6 +117,8 @@ wire [16:0] q = (rq + bq - gq);		// mac 0.52 * 512 = +/-266
 reg signed [22:0] im;
 reg signed [22:0] qm;
 reg signed [22:0] ym;
+reg [22:0] iq1;
+reg [22:0] yo1;
 
 always @(posedge clk)
 	im <= $signed(i) * $signed(sin);
@@ -167,10 +171,14 @@ always @(ph) begin
 end
 
 always @(posedge clk) begin
-	co1 <= im + qm + ym;
 	// Last step: create uni-polar output by adding in the
 	// maximum negative offset that could occur.
-	co <= $signed(co1[22:18]) + $signed(5'd16);
+	co1 <= im + qm + ym + 23'd17763;	// <- magic constant = (-307-266) * 31
+	co <= $signed(co1[22:18]);
+	iq1 <= im + qm + 23'd17763;
+	iq <= iq1[22:19];
+	yo1 <= ym;
+	yo <= yo1[22:19];
 end
 
 endmodule
