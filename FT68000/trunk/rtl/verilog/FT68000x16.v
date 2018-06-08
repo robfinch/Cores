@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2008-2017  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2008-2018  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -109,8 +109,12 @@
 // 8 BRAMs
 
 module FT68000x16(rst_i, rst_o, clk_i, nmi_i, ipl_i, lock_o, bsz_i, cyc_o, stb_o, ack_i, err_i, we_o, sel_o, fc_o, adr_o, dat_i, dat_o);
+parameter CHK_NACK = 1'b1;
 parameter IFETCH = 8'd1;
 parameter DECODE = 8'd2;
+parameter CSR = 8'd5;
+parameter CSRRD = 8'd6;
+parameter CSRWR = 8'd7;
 parameter FETCH_BYTE = 8'd20;
 parameter FETCH_WORD = 8'd21;
 parameter FETCH_LWORD = 8'd22;
@@ -293,6 +297,7 @@ input [15:0] dat_i;
 output [15:0] dat_o;
 reg [15:0] dat_o;
 
+wire nack_i = !ack_i | !CHK_NACK;
 reg em;							// emulation mode
 reg [15:0] ir;
 reg [7:0] state;
@@ -490,7 +495,7 @@ reg is_irq;
 reg [4:0] rst_cnt;
 // CSR's
 reg [31:0] tick;
-
+reg [31:0] csrwr_val;
 reg task_mem_wr;
 
 function [31:0] rbo;
@@ -737,23 +742,25 @@ case(state)
 
 IFETCH:
 	if (!cyc_o) begin
-		is_nmi <= 1'b0;
-		is_irq <= 1'b0;
-		if (pe_nmi) begin
-			pe_nmi <= 1'b0;
-			is_nmi <= 1'b1;
-			state <= TRAP;
-		end
-		else if (ipl_i > im) begin
-			is_irq <= 1'b1;
-			state <= TRAP;
-		end
-		else begin
-			fc_o <= {sf,2'b10};
-			cyc_o <= 1'b1;
-			stb_o <= 1'b1;
-			sel_o <= 2'b11;
-			adr_o <= pc;
+		if (nack_i) begin
+			is_nmi <= 1'b0;
+			is_irq <= 1'b0;
+			if (pe_nmi) begin
+				pe_nmi <= 1'b0;
+				is_nmi <= 1'b1;
+				state <= TRAP;
+			end
+			else if (ipl_i > im) begin
+				is_irq <= 1'b1;
+				state <= TRAP;
+			end
+			else begin
+				fc_o <= {sf,2'b10};
+				cyc_o <= 1'b1;
+				stb_o <= 1'b1;
+				sel_o <= 2'b11;
+				adr_o <= pc;
+			end
 		end
 	end
 	else if (ack_i) begin
@@ -962,6 +969,11 @@ DECODE:
 					4'h3:	state <= RTE1;						// 4E73 RTE
 					4'h6:	state <= vf ? TRAPV : IFETCH;		// 4E76 TRAPV
 					endcase
+				4'hB:	state <= CSR;
+				4'hC:	state <= CSR;
+				4'hD:	state <= CSR;
+				4'hE:	state <= CSR;
+				4'hF:	state <= CSR;
 				endcase
 		endcase
 //***		4'hF:	state <= RTD1;	// 4Fxx = rtd
@@ -1453,13 +1465,15 @@ TAS:
 //-----------------------------------------------------------------------------
 LINK:
 	if (!cyc_o) begin
-		fc_o <= {sf,2'b01};
-		cyc_o <= 1'b1;
-		stb_o <= 1'b1;
-		sel_o <= 2'b11;
-		we_o <= 1'b1;
-		adr_o <= sp - 32'd2;
-		dat_o <= rfoAn[31:16];
+		if (nack_i) begin
+			fc_o <= {sf,2'b01};
+			cyc_o <= 1'b1;
+			stb_o <= 1'b1;
+			sel_o <= 2'b11;
+			we_o <= 1'b1;
+			adr_o <= sp - 32'd2;
+			dat_o <= rfoAn[31:16];
+		end
 	end
 	else if (ack_i) begin
 		stb_o <= 1'b0;
@@ -1468,9 +1482,11 @@ LINK:
 	end
 LINK1:
 	if (!stb_o) begin
-		stb_o <= 1'b1;
-		adr_o <= sp - 32'd2;
-		dat_o <= rfoAn[15:0];
+		if (nack_i) begin
+			stb_o <= 1'b1;
+			adr_o <= sp - 32'd2;
+			dat_o <= rfoAn[15:0];
+		end
 	end
 	else if (ack_i) begin
 		cyc_o <= 1'b0;
@@ -1506,13 +1522,15 @@ LEA:
 //-----------------------------------------------------------------------------
 PEA1:
 	if (!cyc_o) begin
-		fc_o <= {sf,2'b01};
-		cyc_o <= 1'b1;
-		stb_o <= 1'b1;
-		we_o <= 1'b1;
-		sel_o <= 2'b11;
-		adr_o <= sp - 32'd2;
-		dat_o <= ea[31:16];
+		if (nack_i) begin
+			fc_o <= {sf,2'b01};
+			cyc_o <= 1'b1;
+			stb_o <= 1'b1;
+			we_o <= 1'b1;
+			sel_o <= 2'b11;
+			adr_o <= sp - 32'd2;
+			dat_o <= ea[31:16];
+		end
 	end
 	else if (ack_i) begin
 		stb_o <= 1'b0;
@@ -1521,9 +1539,11 @@ PEA1:
 	end
 PEA2:
 	if (!stb_o) begin
-		stb_o <= 1'b1;
-		adr_o <= sp - 32'd2;
-		dat_o <= ea[15:0];
+		if (nack_i) begin
+			stb_o <= 1'b1;
+			adr_o <= sp - 32'd2;
+			dat_o <= ea[15:0];
+		end
 	end
 	else if (ack_i) begin
 		cyc_o <= 1'b0;
@@ -2378,11 +2398,14 @@ FETCH_NOP:
 
 FETCH_BRDISP:
 	if (!cyc_o) begin
-		fc_o <= {sf,2'b10};
-		cyc_o <= 1'b1;
-		stb_o <= 1'b1;
-		sel_o <= 2'b11;
-		adr_o <= pc;
+		if (nack_i)
+		begin
+			fc_o <= {sf,2'b10};
+			cyc_o <= 1'b1;
+			stb_o <= 1'b1;
+			sel_o <= 2'b11;
+			adr_o <= pc;
+		end
 	end
 	else if (ack_i) begin
 		cyc_o <= 1'b0;
@@ -2401,16 +2424,19 @@ FETCH_BRDISPa:
 //
 FETCH_IMM8:
 	if (!cyc_o) begin
-		fc_o <= {sf,2'b10};
-		cyc_o <= 1'b1;
-		stb_o <= 1'b1;
-		sel_o <= 2'b11;
-		adr_o <= pc;
+		if (nack_i)
+		begin
+			fc_o <= {sf,2'b10};
+			cyc_o <= 1'b1;
+			stb_o <= 1'b1;
+			sel_o <= 2'b11;
+			adr_o <= pc;
+		end
 	end
 	else if (ack_i) begin
 		cyc_o <= 1'b0;
 		stb_o <= 1'b0;
-		sel_o <= 4'b00;
+		sel_o <= 2'b00;
 		imm <= {{24{dat_i[7]}},dat_i[7:0]};
 		s <= {{24{dat_i[7]}},dat_i[7:0]};
 		pc <= pc + 32'd2;
@@ -2421,16 +2447,18 @@ FETCH_IMM8:
 //
 FETCH_IMM16:
 	if (!cyc_o) begin
-		fc_o <= {sf,2'b10};
-		cyc_o <= 1'b1;
-		stb_o <= 1'b1;
-		sel_o <= 2'b11;
-		adr_o <= pc;
+		if (nack_i) begin
+			fc_o <= {sf,2'b10};
+			cyc_o <= 1'b1;
+			stb_o <= 1'b1;
+			sel_o <= 2'b11;
+			adr_o <= pc;
+		end
 	end
 	else if (ack_i) begin
 		cyc_o <= 1'b0;
 		stb_o <= 1'b0;
-		sel_o <= 4'b00;
+		sel_o <= 2'b00;
 		imm <= {{16{dat_i[15]}},dat_i};
 		s <= {{16{dat_i[15]}},dat_i};
 		pc <= pc + 32'd2;
@@ -2441,11 +2469,13 @@ FETCH_IMM16:
 //
 FETCH_IMM32:
 	if (!cyc_o) begin
-		fc_o <= {sf,2'b10};
-		cyc_o <= 1'b1;
-		stb_o <= 1'b1;
-		sel_o <= 2'b11;
-		adr_o <= pc;
+		if (nack_i) begin
+			fc_o <= {sf,2'b10};
+			cyc_o <= 1'b1;
+			stb_o <= 1'b1;
+			sel_o <= 2'b11;
+			adr_o <= pc;
+		end
 	end
 	else if (ack_i) begin
 		stb_o <= 1'b0;
@@ -2456,8 +2486,10 @@ FETCH_IMM32:
 	end
 FETCH_IMM32a:
 	if (!stb_o) begin
-		stb_o <= 1'b1;
-		adr_o <= pc;
+		if (nack_i) begin
+			stb_o <= 1'b1;
+			adr_o <= pc;
+		end
 	end
 	else if (ack_i) begin
 		cyc_o <= 1'b0;
@@ -2473,11 +2505,13 @@ FETCH_IMM32a:
 //
 FETCH_D32:
 	if (!cyc_o) begin
-		fc_o <= {sf,2'b10};
-		cyc_o <= 1'b1;
-		stb_o <= 1'b1;
-		sel_o <= 2'b11;
-		adr_o <= pc;
+		if (nack_i) begin
+			fc_o <= {sf,2'b10};
+			cyc_o <= 1'b1;
+			stb_o <= 1'b1;
+			sel_o <= 2'b11;
+			adr_o <= pc;
+		end
 	end
 	else if (ack_i) begin
         stb_o <= 1'b0;
@@ -2487,8 +2521,10 @@ FETCH_D32:
 	end
 FETCH_D32a:
 	if (!stb_o) begin
-		stb_o <= 1'b1;
-		adr_o <= pc;
+		if (nack_i) begin
+			stb_o <= 1'b1;
+			adr_o <= pc;
+		end
 	end
 	else if (ack_i) begin
 	    cyc_o <= `LOW;
@@ -2508,11 +2544,13 @@ FETCH_D32b:
 //
 FETCH_D16:
 	if (!cyc_o) begin
-		fc_o <= {sf,2'b10};
-		cyc_o <= 1'b1;
-		stb_o <= 1'b1;
-		sel_o <= 2'b11;
-		adr_o <= pc;
+		if (nack_i) begin
+			fc_o <= {sf,2'b10};
+			cyc_o <= 1'b1;
+			stb_o <= 1'b1;
+			sel_o <= 2'b11;
+			adr_o <= pc;
+		end
 	end
 	else if (ack_i) begin
 		cyc_o <= 1'b0;
@@ -2527,11 +2565,13 @@ FETCH_D16:
 //
 FETCH_NDX:
 	if (!cyc_o) begin
-		fc_o <= {sf,2'b10};
-		cyc_o <= 1'b1;
-		stb_o <= 1'b1;
-		sel_o <= 2'b11;
-		adr_o <= pc;
+		if (nack_i) begin
+			fc_o <= {sf,2'b10};
+			cyc_o <= 1'b1;
+			stb_o <= 1'b1;
+			sel_o <= 2'b11;
+			adr_o <= pc;
+		end
 	end
 	else if (ack_i) begin
 		cyc_o <= 1'b0;
@@ -2555,11 +2595,13 @@ FETCH_NDXa:
 
 FETCH_BYTE:
 	if (!cyc_o) begin
-		fc_o <= {sf,2'b01};
-		cyc_o <= `HIGH;
-		stb_o <= `HIGH;
-		adr_o <= ea;
-		sel_o <= {ea[0],~ea[0]};
+		if (nack_i) begin
+			fc_o <= {sf,2'b01};
+			cyc_o <= `HIGH;
+			stb_o <= `HIGH;
+			adr_o <= ea;
+			sel_o <= {ea[0],~ea[0]};
+		end
 	end
 	else if (ack_i) begin
 		cyc_o <= `LOW;
@@ -2586,12 +2628,14 @@ FETCH_BYTE:
 //
 LFETCH_BYTE:
 	if (!cyc_o) begin
-		fc_o <= {sf,2'b01};
-		lock_o <= `HIGH;
-		cyc_o <= `HIGH;
-		stb_o <= `HIGH;
-		adr_o <= ea;
-		sel_o <= {ea[0],~ea[0]};
+		if (nack_i) begin
+			fc_o <= {sf,2'b01};
+			lock_o <= `HIGH;
+			cyc_o <= `HIGH;
+			stb_o <= `HIGH;
+			adr_o <= ea;
+			sel_o <= {ea[0],~ea[0]};
+		end
 	end
 	else if (ack_i) begin
 		stb_o <= 1'b0;
@@ -2615,11 +2659,13 @@ LFETCH_BYTE:
 
 FETCH_WORD:
 	if (!cyc_o) begin
-		fc_o <= {sf,2'b01};
-		cyc_o <= `HIGH;
-		stb_o <= `HIGH;
-		adr_o <= ea;
-		sel_o <= 2'b11;
+		if (nack_i) begin
+			fc_o <= {sf,2'b01};
+			cyc_o <= `HIGH;
+			stb_o <= `HIGH;
+			adr_o <= ea;
+			sel_o <= 2'b11;
+		end
 	end
 	else if (ack_i) begin
 		cyc_o <= 1'b0;
@@ -2652,11 +2698,13 @@ FETCH_LWORD:
         end
     default:
     if (!cyc_o) begin
-		fc_o <= {sf,2'b01};
-		cyc_o <= 1'b1;
-		stb_o <= 1'b1;
-		adr_o <= ea;
-		sel_o <= 2'b11;
+    	if (nack_i) begin
+			fc_o <= {sf,2'b01};
+			cyc_o <= 1'b1;
+			stb_o <= 1'b1;
+			adr_o <= ea;
+			sel_o <= 2'b11;
+		end
 	end
 	else if (ack_i) begin
 		stb_o <= 1'b0;
@@ -2677,8 +2725,10 @@ FETCH_LWORD:
 	endcase
 FETCH_LWORDa:
 	if (!stb_o) begin
-		stb_o <= 1'b1;
-		adr_o <= adr_o + 32'd2;
+		if (nack_i) begin
+			stb_o <= 1'b1;
+			adr_o <= adr_o + 32'd2;
+		end
 	end
 	else if (ack_i) begin
 		cyc_o <= 1'b0;
@@ -2702,13 +2752,15 @@ FETCH_LWORDa:
 
 STORE_BYTE:
 	if (!cyc_o) begin
-		fc_o <= {sf,2'b01};
-		cyc_o <= 1'b1;
-		stb_o <= 1'b1;
-		we_o <= 1'b1;
-		adr_o <= ea;
-		sel_o <= {ea[0],~ea[0]};
-		dat_o <= {2{resB[7:0]}};
+		if (nack_i) begin
+			fc_o <= {sf,2'b01};
+			cyc_o <= 1'b1;
+			stb_o <= 1'b1;
+			we_o <= 1'b1;
+			adr_o <= ea;
+			sel_o <= {ea[0],~ea[0]};
+			dat_o <= {2{resB[7:0]}};
+		end
 	end
 	else if (ack_i) begin
 		cyc_o <= 1'b0;
@@ -2722,13 +2774,15 @@ STORE_BYTE:
 //
 USTORE_BYTE:
 	if (!cyc_o) begin
-		fc_o <= {sf,2'b01};
-		cyc_o <= 1'b1;
-		stb_o <= 1'b1;
-		we_o <= 1'b1;
-		adr_o <= ea;
-		sel_o <= {ea[0],~ea[0]};
-		dat_o <= {2{resB[7:0]}};
+		if (nack_i) begin
+			fc_o <= {sf,2'b01};
+			cyc_o <= 1'b1;
+			stb_o <= 1'b1;
+			we_o <= 1'b1;
+			adr_o <= ea;
+			sel_o <= {ea[0],~ea[0]};
+			dat_o <= {2{resB[7:0]}};
+		end
 	end
 	else if (ack_i) begin
 		lock_o <= 1'b0;
@@ -2741,13 +2795,15 @@ USTORE_BYTE:
 
 STORE_WORD:
 	if (!cyc_o) begin
-		fc_o <= {sf,2'b01};
-		cyc_o <= 1'b1;
-		stb_o <= 1'b1;
-		we_o <= 1'b1;
-		adr_o <= ea;
-		sel_o <= 2'b11;
-		dat_o <= resW[15:0];
+		if (nack_i) begin
+			fc_o <= {sf,2'b01};
+			cyc_o <= 1'b1;
+			stb_o <= 1'b1;
+			we_o <= 1'b1;
+			adr_o <= ea;
+			sel_o <= 2'b11;
+			dat_o <= resW[15:0];
+		end	
 	end
 	else if (ack_i) begin
 		cyc_o <= 1'b0;
@@ -2769,13 +2825,15 @@ STORE_LWORD:
         end
     default:
 	if (!cyc_o) begin
-		fc_o <= {sf,2'b01};
-		cyc_o <= 1'b1;
-		stb_o <= 1'b1;
-		we_o <= 1'b1;
-		adr_o <= ea;
-		sel_o <= 2'b11;
-		dat_o <= endian ? resL[31:16] : resL[15:0];
+		if (nack_i) begin
+			fc_o <= {sf,2'b01};
+			cyc_o <= 1'b1;
+			stb_o <= 1'b1;
+			we_o <= 1'b1;
+			adr_o <= ea;
+			sel_o <= 2'b11;
+			dat_o <= endian ? resL[31:16] : resL[15:0];
+		end
 	end
 	else if (ack_i) begin
         stb_o <= 1'b0;
@@ -2784,9 +2842,11 @@ STORE_LWORD:
 	endcase
 STORE_LWORDa:
 	if (!stb_o) begin
-		stb_o <= 1'b1;
-		adr_o <= adr_o + 32'd2;
-		dat_o <= endian ? resL[15:0] : resL[31:16];
+		if (nack_i) begin
+			stb_o <= 1'b1;
+			adr_o <= adr_o + 32'd2;
+			dat_o <= endian ? resL[15:0] : resL[31:16];
+		end		
 	end
 	else if (ack_i) begin
 		cyc_o <= 1'b0;
@@ -2881,10 +2941,12 @@ TRAP:
     end
 TRAP2:
     if (!cyc_o) begin
+    	if (nack_i) begin
         cyc_o <= `HIGH;
         stb_o <= `HIGH;
         sel_o <= 2'b11;
         adr_o <= pc;
+    	end
     end
     else if (ack_i) begin
         cyc_o <= `LOW;
@@ -2896,10 +2958,12 @@ TRAP2:
     end
 TRAP3:
     if (!cyc_o) begin
+    	if (nack_i) begin
         cyc_o <= `HIGH;
         stb_o <= `HIGH;
         sel_o <= 2'b11;
         adr_o <= {vecno,1'b0};
+    	end
     end
     else if (ack_i) begin
         otr <= tr;
@@ -2951,11 +3015,13 @@ JMP_VECTOR2:
 //----------------------------------------------------
 UNLNK:
 	if (!cyc_o) begin
+		if (nack_i) begin
 		fc_o <= {sf,2'b01};
 		cyc_o <= 1'b1;
 		stb_o <= 1'b1;
 		sel_o <= 2'b11;
 		adr_o <= sp;
+		end
 	end
 	else if (ack_i) begin
 		stb_o <= 1'b0;
@@ -2965,9 +3031,11 @@ UNLNK:
 	end
 UNLNK2:
 	if (!stb_o) begin
-		fc_o <= {sf,2'b01};
-		stb_o <= 1'b1;
-		adr_o <= sp;
+		if (nack_i) begin
+			fc_o <= {sf,2'b01};
+			stb_o <= 1'b1;
+			adr_o <= sp;
+		end
 	end
 	else if (ack_i) begin
 		stb_o <= 1'b0;
@@ -3004,6 +3072,7 @@ JSR1:
         state <= TASK1;
     end
 	else if (!cyc_o) begin
+		if (nack_i) begin
 		fc_o <= {sf,2'b01};
 		cyc_o <= 1'b1;
 		stb_o <= 1'b1;
@@ -3011,6 +3080,7 @@ JSR1:
 		sel_o <= 2'b11;
 		adr_o <= sp - 32'd2;
 		dat_o <= pc[31:16];
+		end
 	end
 	else if (ack_i) begin
 		stb_o <= 1'b0;
@@ -3019,9 +3089,11 @@ JSR1:
 	end
 JSR2:
 	if (!stb_o) begin
+		if (nack_i) begin
 		stb_o <= 1'b1;
 		adr_o <= sp - 32'd2;
 		dat_o <= pc[15:0];
+		end
 	end
 	else if (ack_i) begin
 		cyc_o <= 1'b0;
@@ -3039,11 +3111,13 @@ JSR2:
 //
 RTE1:
 	if (!cyc_o) begin
+		if (nack_i) begin
 		fc_o <= {1'b1,2'b01};
 		cyc_o <= 1'b1;
 		stb_o <= 1'b1;
 		sel_o <= 2'b11;
 		adr_o <= sp;
+		end
 	end
 	else if (ack_i) begin
 		stb_o <= 1'b0;
@@ -3062,8 +3136,10 @@ RTE1:
 	end
 RTE2:
 	if (!stb_o) begin
-		stb_o <= 1'b1;
-		adr_o <= sp;
+		if (nack_i) begin
+			stb_o <= 1'b1;
+			adr_o <= sp;
+		end
 	end
 	else if (ack_i) begin
 		stb_o <= 1'b0;
@@ -3073,8 +3149,10 @@ RTE2:
 	end
 RTE3:
 	if (!stb_o) begin
-		stb_o <= 1'b1;
-		adr_o <= sp;
+		if (nack_i) begin
+			stb_o <= 1'b1;
+			adr_o <= sp;
+		end
 	end
 	else if (ack_i) begin
 		cyc_o <= 1'b0;
@@ -3092,11 +3170,13 @@ RTE3:
 //
 RTS1:
 	if (!cyc_o) begin
+		if (nack_i) begin
 		fc_o <= {sf,2'b01};
 		cyc_o <= 1'b1;
 		stb_o <= 1'b1;
 		sel_o <= 2'b11;
 		adr_o <= sp;
+		end
 	end
 	else if (ack_i) begin
 		stb_o <= 1'b0;
@@ -3119,8 +3199,10 @@ RTS1:
 	end
 RTS2:
 	if (!stb_o) begin
+		if (nack_i) begin
 		stb_o <= 1'b1;
 		adr_o <= sp;
+		end
 	end
 	else if (ack_i) begin
 	    cyc_o <= `LOW;
@@ -3424,6 +3506,7 @@ TASK3:
     end
 TASK4:
     if (!cyc_o) begin
+    	if (nack_i) begin
 		fc_o <= {3'b101};
         cyc_o <= `HIGH;
         stb_o <= `HIGH;
@@ -3431,6 +3514,7 @@ TASK4:
         sel_o <= 2'b11;
         adr_o <= sp - 32'd2;
         dat_o <= {otr,1'b1};
+    	end
     end
     else if (ack_i) begin
         cyc_o <= `LOW;
@@ -3449,12 +3533,14 @@ LDT1:
     end
 LDT2:
     if (!stb_o) begin
+    	if (nack_i) begin
         fc_o <= 3'b101;
         cyc_o <= `HIGH;
         stb_o <= `HIGH;
         we_o <= `LOW;
         sel_o <= 2'b11;
         adr_o <= ea;
+    	end
     end
     else if (ack_i) begin
         stb_o <= `LOW;
@@ -3521,6 +3607,7 @@ SDT1:
     end
 SDT2:
     if (!stb_o) begin
+    	if (nack_i) begin
         fc_o <= 3'b101;
         cyc_o <= `HIGH;
         stb_o <= `HIGH;
@@ -3565,6 +3652,7 @@ SDT2:
         6'd33:  dat_o <= flagso[31:16];
         6'd35:  dat_o <= pco[31:16];
         endcase
+    	end
     end
     else if (ack_i) begin
         stb_o <= `LOW;
@@ -3578,6 +3666,38 @@ SDT2:
             state <= IFETCH;
         end
     end
+
+CSR:
+	begin
+		state <= FETCH_IMM16;
+		ret_state <= CSRRD;
+	end
+CSRRD:
+	begin
+		csrrd(imm[15:6],resL);
+		rrr <= imm[2:0];
+		Rt <= {1'b0,imm[5:3]};
+		state <= CSRWR;
+	end
+CSRWR:
+	begin
+		case(ir[3:0])
+		4'hB:	rfwrL <= `TRUE;	// CSRRW
+		4'hC:	rfwrL <= `TRUE:	// CSRRD
+		4'hD:	rfwrL <= `TRUE; // CSRRC
+		4'hE:	rfwrL <= `TRUE;	// CSRRS
+		4'hF:	rfwrL <= `FALSE;	// CSRWR
+		endcase
+		case(ir[3:0])
+		4'hB:	csrwr(imm[15:6],rfoDnn);
+		4'hC:	;
+		4'hD:	csrwr(imm[15:6],resL & ~rfoDnn);
+		4'hE:	csrwr(imm[15:6],resL | rfoDnn);
+		4'hF:	csrwr(imm[15:6],rfoDnn);
+		endcase
+		state <= IFETCH;
+	end
+
 endcase
 
 if (cyc_o & err_i) begin
