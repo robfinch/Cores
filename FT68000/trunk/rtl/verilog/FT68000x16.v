@@ -115,6 +115,15 @@ parameter DECODE = 8'd2;
 parameter CSR = 8'd5;
 parameter CSRRD = 8'd6;
 parameter CSRWR = 8'd7;
+parameter FETCH_WORD64a = 8'd10;
+parameter FETCH_WORD64b = 8'd11;
+parameter FETCH_WORD64c = 8'd12;
+parameter FETCH_WORD64d = 8'd13;
+parameter FETCH_IMM64 = 8'd15;
+parameter FETCH_IMM64b = 8'd16;
+parameter FETCH_IMM64c = 8'd17;
+parameter FETCH_IMM64d = 8'd18;
+
 parameter FETCH_BYTE = 8'd20;
 parameter FETCH_WORD = 8'd21;
 parameter FETCH_LWORD = 8'd22;
@@ -300,6 +309,7 @@ reg [15:0] dat_o;
 wire nack_i = !ack_i | !CHK_NACK;
 reg em;							// emulation mode
 reg [15:0] ir;
+reg [15:0] fltir;				// floating point ir extension
 reg [7:0] state;
 reg [7:0] state2;
 reg [7:0] ret_state;
@@ -322,6 +332,7 @@ reg [31:0] a4;
 reg [31:0] a5;
 reg [31:0] a6;
 reg [31:0] sp;
+reg [63:0] fp0, fp1, fp2, fp3, fp4, fp5, fp6, fp7;
 reg [31:0] d0i;
 reg [31:0] d1i;
 reg [31:0] d2i;
@@ -365,7 +376,7 @@ wire [15:0] sr = {tf,1'b0,sf,2'b00,im,endian,2'b00,xf,nf,zf,vf,cf};
 reg [31:0] pc;
 reg [31:0] ssp,usp;
 reg [31:0] disp;
-reg [31:0] s,d,imm;
+reg [63:0] s,d,imm;
 reg wl;
 reg ds;
 reg [5:0] cnt;				// shift count
@@ -472,6 +483,29 @@ case(rrrr)
 4'd13:  rfoRnn <= a5;
 4'd14:  rfoRnn <= a6;
 4'd15:  rfoRnn <= sp;
+endcase
+reg [63:0] sfltrfo,dfltrfo;
+always @*
+case(fltir[12:10])
+3'd0:	sfltrfo <= fp0;
+3'd1:	sfltrfo <= fp1;
+3'd2:	sfltrfo <= fp2;
+3'd3:	sfltrfo <= fp3;
+3'd4:	sfltrfo <= fp4;
+3'd5:	sfltrfo <= fp5;
+3'd6:	sfltrfo <= fp6;
+3'd7:	sfltrfo <= fp7;
+endcase
+always @*
+case(fltir[9:7])
+3'd0:	dfltrfo <= fp0;
+3'd1:	dfltrfo <= fp1;
+3'd2:	dfltrfo <= fp2;
+3'd3:	dfltrfo <= fp3;
+3'd4:	dfltrfo <= fp4;
+3'd5:	dfltrfo <= fp5;
+3'd6:	dfltrfo <= fp6;
+3'd7:	dfltrfo <= fp7;
 endcase
 //wire [31:0] rfoDn = regfile[{1'b0,DDD}];
 //wire [31:0] rfoAna = AAA==3'b111 ? sp : regfile[{1'b1,AAA}];
@@ -1215,6 +1249,12 @@ DECODE:
 				resW <= rfoDnn[15:0];
 			end
 		end
+//-----------------------------------------------------------------------------
+// Floating point
+//
+//-----------------------------------------------------------------------------
+	4'hF:
+		state <= FETCH_FLTIR;
 	endcase
 
 //-----------------------------------------------------------------------------
@@ -2393,6 +2433,37 @@ BIT2:
 
 //-----------------------------------------------------------------------------
 //-----------------------------------------------------------------------------
+// Fetch 16 bit floating point ir extension
+//
+FETCH_FLTIR:
+	if (!cyc_o) begin
+		if (nack_i) begin
+			fc_o <= {sf,2'b10};
+			cyc_o <= 1'b1;
+			stb_o <= 1'b1;
+			sel_o <= 2'b11;
+			adr_o <= pc;
+		end
+	end
+	else if (ack_i) begin
+		cyc_o <= 1'b0;
+		stb_o <= 1'b0;
+		sel_o <= 2'b00;
+		fltir <= dat_i;
+		pc <= pc + 32'd2;
+		state <= FLTIR1;
+	end
+FLTIR1:
+	begin
+		d <= dfltrfo;
+		if (fltir[14]==1'b0) begin// register
+			s <= sfltrfo;
+			state <= FLT_DECODE;
+		end
+		else
+			fs_data(mmm,rrr,FETCH_LWORD,FLT_DECODE,S);
+	end
+
 FETCH_NOP:
 	state <= ret_state;
 
@@ -2459,8 +2530,8 @@ FETCH_IMM16:
 		cyc_o <= 1'b0;
 		stb_o <= 1'b0;
 		sel_o <= 2'b00;
-		imm <= {{16{dat_i[15]}},dat_i};
-		s <= {{16{dat_i[15]}},dat_i};
+		imm <= {{48{dat_i[15]}},dat_i};
+		s <= {{48{dat_i[15]}},dat_i};
 		pc <= pc + 32'd2;
 		state <= ret_state;
 	end
@@ -2479,8 +2550,14 @@ FETCH_IMM32:
 	end
 	else if (ack_i) begin
 		stb_o <= 1'b0;
-        imm[15:0] <= dat_i;
-        s[15:0] <= dat_i;
+		if (endian) begin
+        	imm[31:16] <= dat_i;
+        	s[31:16] <= dat_i;
+		end
+		else begin
+        	imm[15:0] <= dat_i;
+        	s[15:0] <= dat_i;
+    	end
 		pc <= pc + 32'd2;
 		state <= FETCH_IMM32a;
 	end
@@ -2495,8 +2572,82 @@ FETCH_IMM32a:
 		cyc_o <= 1'b0;
 		stb_o <= 1'b0;
 		sel_o <= 2'b00;
+		if (endian) begin
+			imm[15:0] <= dat_i;
+			s[15:0] <= dat_i;
+		end
+		else begin
+			imm[31:16] <= dat_i;
+			s[31:16] <= dat_i;
+		end
+		pc <= pc + 32'd2;
+		state <= ret_state;
+	end
+
+// Fetch 64 bit immediate
+//
+FETCH_IMM64:
+	if (!cyc_o) begin
+		if (nack_i) begin
+			fc_o <= {sf,2'b10};
+			cyc_o <= 1'b1;
+			stb_o <= 1'b1;
+			sel_o <= 2'b11;
+			adr_o <= pc;
+		end
+	end
+	else if (ack_i) begin
+		stb_o <= 1'b0;
+        imm[15:0] <= dat_i;
+        s[15:0] <= dat_i;
+		pc <= pc + 32'd2;
+		state <= FETCH_IMM64b;
+	end
+FETCH_IMM64b:
+	if (!stb_o) begin
+		if (nack_i) begin
+			stb_o <= 1'b1;
+			adr_o <= pc;
+		end
+	end
+	else if (ack_i) begin
+		cyc_o <= 1'b0;
+		stb_o <= 1'b0;
+		sel_o <= 2'b00;
 		imm[31:16] <= dat_i;
 		s[31:16] <= dat_i;
+		pc <= pc + 32'd2;
+		state <= FETCH_IMM64c;
+	end
+FETCH_IMM64c:
+	if (!stb_o) begin
+		if (nack_i) begin
+			stb_o <= 1'b1;
+			adr_o <= pc;
+		end
+	end
+	else if (ack_i) begin
+		cyc_o <= 1'b0;
+		stb_o <= 1'b0;
+		sel_o <= 2'b00;
+		imm[47:32] <= dat_i;
+		s[47:32] <= dat_i;
+		pc <= pc + 32'd2;
+		state <= FETCH_IMM64d;
+	end
+FETCH_IMM64d:
+	if (!stb_o) begin
+		if (nack_i) begin
+			stb_o <= 1'b1;
+			adr_o <= pc;
+		end
+	end
+	else if (ack_i) begin
+		cyc_o <= 1'b0;
+		stb_o <= 1'b0;
+		sel_o <= 2'b00;
+		imm[63:48] <= dat_i;
+		s[63:48] <= dat_i;
 		pc <= pc + 32'd2;
 		state <= ret_state;
 	end
@@ -2748,6 +2899,114 @@ FETCH_LWORDa:
 		end
 		state <= ret_state;
 	end
+FETCH_WORD64a:
+    if (!cyc_o) begin
+    	if (nack_i) begin
+			fc_o <= {sf,2'b01};
+			cyc_o <= 1'b1;
+			stb_o <= 1'b1;
+			adr_o <= ea;
+			sel_o <= 2'b11;
+		end
+	end
+	else if (ack_i) begin
+		stb_o <= 1'b0;
+		if (endian) begin
+	        if (ds==D)
+	            d[63:48] <= dat_i;
+	        else
+	            s[63:48] <= dat_i;
+        end
+        else begin
+	        if (ds==D)
+	            d[15:0] <= dat_i;
+	        else
+	            s[15:0] <= dat_i;
+        end
+		state <= FETCH_WORD64b;
+	end
+	endcase
+FETCH_WORD64b:
+    if (!cyc_o) begin
+    	if (nack_i) begin
+			fc_o <= {sf,2'b01};
+			cyc_o <= 1'b1;
+			stb_o <= 1'b1;
+			adr_o <= adr_o + 32'd2;
+			sel_o <= 2'b11;
+		end
+	end
+	else if (ack_i) begin
+		stb_o <= 1'b0;
+		if (endian) begin
+	        if (ds==D)
+	            d[47:32] <= dat_i;
+	        else
+	            s[47:32] <= dat_i;
+        end
+        else begin
+	        if (ds==D)
+	            d[31:16] <= dat_i;
+	        else
+	            s[31:16] <= dat_i;
+        end
+		state <= FETCH_WORD64c;
+	end
+	endcase
+FETCH_WORD64c:
+    if (!cyc_o) begin
+    	if (nack_i) begin
+			fc_o <= {sf,2'b01};
+			cyc_o <= 1'b1;
+			stb_o <= 1'b1;
+			adr_o <= adr_o + 32'd2;
+			sel_o <= 2'b11;
+		end
+	end
+	else if (ack_i) begin
+		stb_o <= 1'b0;
+		if (endian) begin
+	        if (ds==D)
+	            d[31:16] <= dat_i;
+	        else
+	            s[31:16] <= dat_i;
+        end
+        else begin
+	        if (ds==D)
+	            d[47:32] <= dat_i;
+	        else
+	            s[47:32] <= dat_i;
+        end
+		state <= FETCH_WORD64d;
+	end
+	endcase
+FETCH_WORD64d:
+    if (!cyc_o) begin
+    	if (nack_i) begin
+			fc_o <= {sf,2'b01};
+			cyc_o <= 1'b1;
+			stb_o <= 1'b1;
+			adr_o <= adr_o + 32'd2;
+			sel_o <= 2'b11;
+		end
+	end
+	else if (ack_i) begin
+		stb_o <= 1'b0;
+		if (endian) begin
+	        if (ds==D)
+	            d[15:0] <= dat_i;
+	        else
+	            s[15:0] <= dat_i;
+        end
+        else begin
+	        if (ds==D)
+	            d[63:48] <= dat_i;
+	        else
+	            s[63:48] <= dat_i;
+        end
+		state <= ret_state;
+	end
+	endcase
 
 
 STORE_BYTE:
@@ -3811,6 +4070,10 @@ begin
 						end
 				3'd5:	begin	// #i32
 							state <= FETCH_IMM32;
+							ret_state <= return_state;
+						end
+				3'd6:	begin	// #i64
+							state <= FETCH_IMM64;
 							ret_state <= return_state;
 						end
 				endcase
