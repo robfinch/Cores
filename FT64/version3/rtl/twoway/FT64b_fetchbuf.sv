@@ -170,6 +170,21 @@ casez({cinstr[17:14],cinstr[6]})
 			expand[7] = 1'b1;
 			expand[6:0] = `ORI;
 			end
+5'b00100:	// RET / ANDI
+			if (cinstr[5:0]==6'd0) begin
+				expand[6:0] = `RET;
+				expand[7] = 1'b1;
+				expand[13:8] = 6'h3F;
+				expand[19:14] = 6'h3D;
+				expand[35:20] = {7'd0,cinstr[13:8],3'd0};
+			end
+			else begin
+				expand[6:0] = `ANDI;
+				expand[7] = 1'b1;
+				expand[13:8] = cinstr[5:0];
+				expand[19:14] = cinstr[5:0];
+				expand[35:20] = {{58{cinstr[13]}},cinstr[13:8]};
+			end
 5'b00110:	// SHLI
 			begin
 			expand[35:30] = 6'h10;	// SHL
@@ -211,7 +226,7 @@ casez({cinstr[17:14],cinstr[6]})
 				expand[19:14] = fnRp(cinstr[3:0]);
 				expand[13:8] = fnRp(cinstr[3:0]);
 				expand[7] = 1'b1;
-				expand[6:0] = `ANDI;
+				expand[6:0] = `ORI;
 				end
 			2'd3:
 				case(cinstr[13:12])
