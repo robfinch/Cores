@@ -133,9 +133,9 @@ void Int128::Div(Int128 *q, Int128 *r, Int128 *a, Int128 *b)
 	else
 		Assign(&oa,a);
 
-	qu.high = ob.high;
-	qu.low = ob.low;
-	qu.frac = ob.frac;
+	qu.high = oa.high;
+	qu.low = oa.low;
+	qu.frac = oa.frac;
 	rm.frac = 0;
 	rm.high = 0;
 	rm.low = 0;
@@ -143,13 +143,13 @@ void Int128::Div(Int128 *q, Int128 *r, Int128 *a, Int128 *b)
 		Shl(&rm,&rm);
 		if (Shl(&qu,&qu))
 			rm.frac |= 1;
-		if (IsLessThan(&oa,&rm)) {
-			Sub(&rm,&rm,&oa);
+		if (IsLessThan(&ob,&rm)) {
+			Sub(&rm,&rm,&ob);
 			qu.frac |= 1;
 		}
 	}
-	for (nn = 0; nn < 4; nn++)
-		Shr(&qu,&qu);
+//	for (nn = 0; nn < 4; nn++)
+//		Shr(&qu,&qu);
 	if (sign)
 		Sub(r,Zero(),&rm);
 	else

@@ -35,6 +35,7 @@ extern void process_message();
 static void mem_operand(int64_t *disp, int *regA, int *regB, int *Sc);
 
 extern char *pif1;
+int first_code;
 extern int first_rodata;
 extern int first_data;
 extern int first_bss;
@@ -1154,23 +1155,23 @@ static void emit_insn(int64_t oc, int can_compress, int sz, int64_t realoc = 0)
 	 }
 	 if (sz>2) {
 		 emitBitPair(oc & 3);
-		 emitBitPair((oc >> 2) & 3);
-		 emitBitPair((oc >> 4) & 3);
-		 emitBitPair((oc >> 6) & 3);
-		 emitBitPair((oc >> 8) & 3);
-		 emitBitPair((oc >> 10) & 3);
-		 emitBitPair((oc >> 12) & 3);
-		 emitBitPair((oc >> 14) & 3);
-		 emitBitPair((oc >> 16) & 3);
-		 emitBitPair((oc >> 18) & 3);
-		 emitBitPair((oc >> 20) & 3);
-		 emitBitPair((oc >> 22) & 3);
-		 emitBitPair((oc >> 24) & 3);
-		 emitBitPair((oc >> 26) & 3);
-		 emitBitPair((oc >> 28) & 3);
-		 emitBitPair((oc >> 30) & 3);
-		 emitBitPair((oc >> 32) & 3);
-		 emitBitPair((oc >> 34) & 3);
+		 emitBitPair((oc >> 2LL) & 3);
+		 emitBitPair((oc >> 4LL) & 3);
+		 emitBitPair((oc >> 6LL) & 3);
+		 emitBitPair((oc >> 8LL) & 3);
+		 emitBitPair((oc >> 10LL) & 3);
+		 emitBitPair((oc >> 12LL) & 3);
+		 emitBitPair((oc >> 14LL) & 3);
+		 emitBitPair((oc >> 16LL) & 3);
+		 emitBitPair((oc >> 18LL) & 3);
+		 emitBitPair((oc >> 20LL) & 3);
+		 emitBitPair((oc >> 22LL) & 3);
+		 emitBitPair((oc >> 24LL) & 3);
+		 emitBitPair((oc >> 26LL) & 3);
+		 emitBitPair((oc >> 28LL) & 3);
+		 emitBitPair((oc >> 30LL) & 3);
+		 emitBitPair((oc >> 32LL) & 3);
+		 emitBitPair((oc >> 34LL) & 3);
 	     num_bytes += 4.5;
 	 }
 
@@ -2062,11 +2063,11 @@ static void process_bcc(int opcode6, int opcode4)
 //
 // ---------------------------------------------------------------------------
 
-static void process_dbnz(int opcode6, int opcode3)
+static void process_dbnz(int opcode8, int opcode3)
 {
     int Ra, Rc, pred;
     Int128 val;
-    int64_t disp;
+    int64_t disp, ins;
 	char *p, *p1;
 
 	pred = 3;		// default: statically predict as always taken
@@ -2080,17 +2081,12 @@ static void process_dbnz(int opcode6, int opcode3)
 	    NextToken();
 		val = expr128();
 		disp = CalcDisp(val,4);
-		if (token==',') {
-			NextToken();
-			pred = (int)expr();
-		}
-	    emit_insn(((disp >> 3) & 0x1FFF) << 23 |
+		ins = ((disp & 0x1FFFLL) << 23LL) |
 			((opcode3 & 7) << 20) |
 			(0 << 14) |
 			(Ra << 8) |
-			((disp >> 2) & 1) |
-			opcode6,0,4
-		);
+			opcode8;
+	    emit_insn(ins,0,4);
 		return;
 	}
 	printf("dbnz: target must be a label %d.\n", lineno);
@@ -4403,6 +4399,7 @@ void FT64v3_processMaster()
     start_address = 0;
 	start_bitndx = 0;
     first_org = 1;
+	first_code = 1;
     first_rodata = 1;
     first_data = 1;
     first_bss = 1;
@@ -4434,66 +4431,77 @@ void FT64v3_processMaster()
 //        printf("token=%d\r", token);
           if (expandedBlock)
              expand_flag = 1;
-        switch(token) {
-		case tk_eol: ProcessEOL(1); data_flag = false; break;
-//        case tk_add:  process_add(); break;
-//		case tk_abs:  process_rop(0x04); break;
-		case tk_abs: process_rop(0x01); break;
-        case tk_add:  process_rrop(0x04); break;
-        case tk_addi: process_riop(0x04); break;
-        case tk_align: process_align(); continue; break;
-        case tk_and:  process_rrop(0x08); break;
-        case tk_andi:  process_riop(0x08); break;
-        case tk_asl: process_shift(0x11); break;
-        case tk_asli: process_shift(0x11); break;
-        case tk_asr: process_shift(0x13); break;
-        case tk_asri: process_shift(0x13); break;
-        case tk_bbc: process_beqi(0x26,1); break;
-        case tk_bbs: process_beqi(0x26,0); break;
-        case tk_begin_expand: expandedBlock = 1; break;
-        case tk_beq: process_bcc(0x30,0); break;
-        case tk_beqi: process_beqi(0x32,0); break;
-		case tk_bfchg: process_bitfield(2); break;
-		case tk_bfclr: process_bitfield(1); break;
-        case tk_bfext: process_bitfield(5); break;
-        case tk_bfextu: process_bitfield(6); break;
-		case tk_bfins: process_bitfield(3); break;
-		case tk_bfinsi: process_bitfield(4); break;
-		case tk_bfset: process_bitfield(0); break;
-        case tk_bge: process_bcc(0x30,3); break;
-        case tk_bgeu: process_bcc(0x30,5); break;
-        case tk_bgt: process_bcc(0x30,-2); break;
-        case tk_bgtu: process_bcc(0x30,-4); break;
-        case tk_ble: process_bcc(0x30,-3); break;
-        case tk_bleu: process_bcc(0x30,-5); break;
-        case tk_blt: process_bcc(0x30,2); break;
-        case tk_bltu: process_bcc(0x30,4); break;
-        case tk_bne: process_bcc(0x30,1); break;
-        case tk_bra: process_bra(0x01); break;
-		case tk_brk: process_brk(); break;
-        //case tk_bsr: process_bra(0x56); break;
-        case tk_bss:
-            if (first_bss) {
-                while(sections[segment].address & 4095)
-                    emitByte(0x00);
-                sections[3].address = sections[segment].address;
-                first_bss = 0;
-                binstart = sections[3].index;
-				bitstart = sections[3].bit_index;
-                ca = sections[3].address;
-				ca += sections[3].bit_index / 8.0;
-            }
-            segment = bssseg;
-            break;
-		case tk_cache: process_cache(0x2A); break;
-		case tk_call:  process_call(0x31); break;
-        case tk_cli: emit_insn(0xC0000002,!expand_flag,4); break;
-		case tk_chk:  process_chk(0x34); break;
-		case tk_cmp:  process_rrop(0x06); break;
-		case tk_cmpi:  process_riop(0x06); break;
-		case tk_cmpu:  process_rrop(0x07); break;
-		case tk_cmpui:  process_riop(0x07); break;
-        case tk_code: process_code(); break;
+		  switch (token) {
+		  case tk_eol: ProcessEOL(1); data_flag = false; break;
+			  //        case tk_add:  process_add(); break;
+			  //		case tk_abs:  process_rop(0x04); break;
+		  case tk_abs: process_rop(0x01); break;
+		  case tk_add:  process_rrop(0x04); break;
+		  case tk_addi: process_riop(0x04); break;
+		  case tk_align: process_align(); continue; break;
+		  case tk_and:  process_rrop(0x08); break;
+		  case tk_andi:  process_riop(0x08); break;
+		  case tk_asl: process_shift(0x11); break;
+		  case tk_asli: process_shift(0x11); break;
+		  case tk_asr: process_shift(0x13); break;
+		  case tk_asri: process_shift(0x13); break;
+		  case tk_bbc: process_beqi(0x26, 1); break;
+		  case tk_bbs: process_beqi(0x26, 0); break;
+		  case tk_begin_expand: expandedBlock = 1; break;
+		  case tk_beq: process_bcc(0x30, 0); break;
+		  case tk_beqi: process_beqi(0x32, 0); break;
+		  case tk_bfchg: process_bitfield(2); break;
+		  case tk_bfclr: process_bitfield(1); break;
+		  case tk_bfext: process_bitfield(5); break;
+		  case tk_bfextu: process_bitfield(6); break;
+		  case tk_bfins: process_bitfield(3); break;
+		  case tk_bfinsi: process_bitfield(4); break;
+		  case tk_bfset: process_bitfield(0); break;
+		  case tk_bge: process_bcc(0x30, 3); break;
+		  case tk_bgeu: process_bcc(0x30, 5); break;
+		  case tk_bgt: process_bcc(0x30, -2); break;
+		  case tk_bgtu: process_bcc(0x30, -4); break;
+		  case tk_ble: process_bcc(0x30, -3); break;
+		  case tk_bleu: process_bcc(0x30, -5); break;
+		  case tk_blt: process_bcc(0x30, 2); break;
+		  case tk_bltu: process_bcc(0x30, 4); break;
+		  case tk_bne: process_bcc(0x30, 1); break;
+		  case tk_bra: process_bra(0x01); break;
+		  case tk_brk: process_brk(); break;
+			  //case tk_bsr: process_bra(0x56); break;
+		  case tk_bss:
+			  if (first_bss) {
+				  while (sections[segment].address & 4095)
+					  emitByte(0x00);
+				  sections[3].address = sections[segment].address;
+				  first_bss = 0;
+				  binstart = sections[3].index;
+				  bitstart = sections[3].bit_index;
+				  ca = sections[3].address;
+				  ca += sections[3].bit_index / 8.0;
+			  }
+			  segment = bssseg;
+			  break;
+		  case tk_cache: process_cache(0x2A); break;
+		  case tk_call:  process_call(0x31); break;
+		  case tk_cli: emit_insn(0xC0000002, !expand_flag, 4); break;
+		  case tk_chk:  process_chk(0x34); break;
+		  case tk_cmp:  process_rrop(0x06); break;
+		  case tk_cmpi:  process_riop(0x06); break;
+		  case tk_cmpu:  process_rrop(0x07); break;
+		  case tk_cmpui:  process_riop(0x07); break;
+		  case tk_code:
+			  if (first_code) {
+				  first_code = 0;
+				  while (sections[segment].address & 4095)
+					  emitByte(0x00);
+				  binstart = sections[segment].index;
+				  bitstart = sections[segment].bit_index;
+				  ca = sections[segment].address;
+				  ca += sections[segment].bit_index / 8.0;
+			  }
+			  process_code();
+			  break;
         case tk_com: process_com(); break;
         case tk_csrrc: process_csrrw(0x3); break;
         case tk_csrrs: process_csrrw(0x2); break;
@@ -4513,7 +4521,7 @@ void FT64v3_processMaster()
             process_data(dataseg);
             break;
 		case tk_db:  process_db(); data_flag = true; break;
-		case tk_dbnz: process_dbnz(0x26,7); break;
+		case tk_dbnz: process_dbnz(0x3C,7); break;
 		case tk_dc:  process_dc(); data_flag = true; break;
 		case tk_dh:  process_dh(); data_flag = true; break;
 		case tk_dh_htbl:  process_dh_htbl(); data_flag = true; break;

@@ -1,13 +1,13 @@
 # Welcome to the FT64v3 core
 
 ## Overview
-FT64v3 is a superscalar core with the following features:
+FT64v3 is a superscalar barrel core with the following features:
+- two ways parallel
+- 32 threads of operation
 - 64 general purpose registers
-- 32 vector registers of 63 elements
+- 32 vector registers of 63 elements (one set shared between all threads)
 - 36 bit fixed size with 18 bit compressed instructions
 - 64 bit data width
-- branch prediction with branch target buffer (BTB)
-- return address prediction (RSB)
 - register renaming
 - out-of-order instruction execution
 - precise exception handling
