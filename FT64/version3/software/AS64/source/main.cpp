@@ -2382,7 +2382,7 @@ int main(int argc, char *argv[])
         printf("fname:%s\r\n", fname);
         fopen_s(&vfp, fname, "w");
         if (vfp) {
-            if (gCpu==64||gCpu=='F'||gCpu=='G') {
+            if (gCpu==64||gCpu=='F'||gCpu=='G'||gCpu=='H') {
                 for (kk = 0; kk < binndx; kk+=4) {
                     if (lsa != (start_address + kk) >> 16) {
                         sprintf_s(hexbuf, sizeof(hexbuf), ":02000004%04X00\n", (int)((start_address+kk) >> 16));
