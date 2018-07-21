@@ -140,7 +140,7 @@ static std::string CallConstant()
     __int64 sir;
 
     sir = insn;
-    sprintf(buf,"$%X.01X", (sir >> 8) >> 2, (sir & 3LL) << 2LL);
+    sprintf(buf,"$%X.%01X", (sir >> 8) >> 2, (sir & 3LL) << 2LL);
     return std::string(buf);
 }
 
@@ -338,13 +338,20 @@ std::string Disassem(std::string sad, std::string sinsn, unsigned __int64 dad, u
 	std::string str;
 	static int first = 1;
 	int Rbb = (insn >> 11) & 0x1f;
+	unsigned int insn1, insn2;
 
 	if (first) {
 		immcnt = 0;
 		first = 0;
 	}
 
-	insn = strtoul(sinsn.c_str(),0,16);
+	if (sinsn.length() > 8) {
+		insn1 = strtoul(sinsn.substr(0, sinsn.length() - 9).c_str(), 0, 16);
+		insn2 = strtoul(sinsn.substr(sinsn.length() - 8, 8).c_str(), 0, 16);
+		insn = ((unsigned __int64)insn1 << 32LL) | insn2;
+	}
+	else
+		insn = strtoul(sinsn.c_str(),0,16);
 	opcode = insn & 0xff;
 	if (opcode & 0x80)
 		*ad1 = dad + 9LL;
@@ -432,6 +439,52 @@ std::string Disassem(std::string sad, std::string sinsn, unsigned __int64 dad, u
 				immcnt = 0;
 			}
 			return (str);
+		case ISHL:
+			if ((insn >> 29) & 1)
+				str = "SHL   " + Rt() + "," + Ra() + ",#" + Sa();
+			else
+				str = "SHL   " + Rt() + "," + Ra() + "," + Rb();
+			immcnt = 0;
+			return str;
+		case ISHR:
+			if ((insn >> 29) & 1)
+				str = "SHR   " + Rt() + "," + Ra() + ",#" + Sa();
+			else
+				str = "SHR   " + Rt() + "," + Ra() + "," + Rb();
+			immcnt = 0;
+			return str;
+		case IASL:
+			if ((insn >> 29) & 1)
+				str = "ASL   " + Rt() + "," + Ra() + ",#" + Sa();
+			else
+				str = "ASL   " + Rt() + "," + Ra() + "," + Rb();
+			immcnt = 0;
+			return str;
+		case IASR:
+			if ((insn >> 29) & 1)
+				str = "ASR   " + Rt() + "," + Ra() + ",#" + Sa();
+			else
+				str = "ASR   " + Rt() + "," + Ra() + "," + Rb();
+			immcnt = 0;
+			return str;
+		case IROL:
+			if ((insn >> 29) & 1)
+				str = "ROL   " + Rt() + "," + Ra() + ",#" + Sa();
+			else
+				str = "ROL   " + Rt() + "," + Ra() + "," + Rb();
+			immcnt = 0;
+			return str;
+		case IROR:
+			if ((insn >> 29) & 1)
+				str = "ROR   " + Rt() + "," + Ra() + ",#" + Sa();
+			else
+				str = "ROR   " + Rt() + "," + Ra() + "," + Rb();
+			immcnt = 0;
+			return str;
+		}
+		break;
+	case INDXLD:
+		switch ((insn >> 31) & 0x1f) {
 		case ILBX:
 			str = "LBX   " + Rt() + "," + DisassemIndexedAddress();
 			immcnt = 0;
@@ -460,6 +513,10 @@ std::string Disassem(std::string sad, std::string sinsn, unsigned __int64 dad, u
 			str = "LWX   " + Rt() + "," + DisassemIndexedAddress();
 			immcnt = 0;
 			return str;
+		}
+		break;
+	case INDXST:
+		switch ((insn >> 31) & 0x1f) {
 		case ISBX:
 			str = "SB    " + Rt() + "," + DisassemIndexedAddress();
 			immcnt = 0;
@@ -476,58 +533,6 @@ std::string Disassem(std::string sad, std::string sinsn, unsigned __int64 dad, u
 			str = "SW    " + Rt() + "," + DisassemIndexedAddress();
 			immcnt = 0;
 			return str;
-		case ISHIFT:
-			switch((insn >> 22) & 0xF) {
-			case ISHL:
-				str = "SHL   " + Rt() +"," + Ra() + "," + Rb();
-				immcnt = 0;
-				return str;
-			case ISHR:
-				str = "SHR   " + Rt() +"," + Ra() + "," + Rb();
-				immcnt = 0;
-				return str;
-			case IASL:
-				str = "ASL   " + Rt() +"," + Ra() + "," + Rb();
-				immcnt = 0;
-				return str;
-			case IASR:
-				str = "ASR   " + Rt() +"," + Ra() + "," + Rb();
-				immcnt = 0;
-				return str;
-			case IROL:
-				str = "ROL   " + Rt() +"," + Ra() + "," + Rb();
-				immcnt = 0;
-				return str;
-			case IROR:
-				str = "ROR   " + Rt() +"," + Ra() + "," + Rb();
-				immcnt = 0;
-				return str;
-			case ISHLI:
-				str = "SHL   " + Rt() +"," + Ra() + ",#" + Sa();
-				immcnt = 0;
-				return str;
-			case ISHRI:
-				str = "SHR   " + Rt() +"," + Ra() + ",#" + Sa();
-				immcnt = 0;
-				return str;
-			case IASLI:
-				str = "ASL   " + Rt() +"," + Ra() + ",#" + Sa();
-				immcnt = 0;
-				return str;
-			case IASRI:
-				str = "ASL   " + Rt() +"," + Ra() + ",#" + Sa();
-				immcnt = 0;
-				return str;
-			case IROLI:
-				str = "ROL   " + Rt() +"," + Ra() + ",#" + Sa();
-				immcnt = 0;
-				return str;
-			case IRORI:
-				str = "ROR   " + Rt() +"," + Ra() + ",#" + Sa();
-				immcnt = 0;
-				return str;
-			}
-			break;
 		}
 		break;
 	case IBTFLD:
@@ -543,10 +548,11 @@ std::string Disassem(std::string sad, std::string sinsn, unsigned __int64 dad, u
 		immcnt = 0;
 		return str;
 	case IQOPI:
-		switch((insn >> 8) & 7) {
+		switch((insn >> 11) & 7) {
 		case 0:	str = "QOR   " + Rt() + ",#" + DisassemConstant(); break;
+		case 1:	str = "QADD  " + Rt() + ",#" + DisassemConstant(); break;
 		}
-		return str;
+		return (str);
 	case ICHK:
 		str = "CHK   " + Rt() +"," + Ra() + "," + Bn();
 		immcnt = 0;
@@ -604,7 +610,7 @@ std::string Disassem(std::string sad, std::string sinsn, unsigned __int64 dad, u
 		immcnt = 0;
 		return str;
 	case IOR:
-		if ((insn >> 16) == 0)
+		if ((insn >> 20) == 0)
 			str = "MOV   " + Rt() + "," + Ra();
 		else
 			str = "OR    " + Rt() + "," + Ra() + ",#" + DisassemConstant();
@@ -615,7 +621,7 @@ std::string Disassem(std::string sad, std::string sinsn, unsigned __int64 dad, u
 		immcnt = 0;
 		return str;
 	case IFLOAT:
-		switch ((insn>>26)&0x3f) {
+		switch ((insn>>30)&0x3f) {
 		case IFADD:
 			str = "FADD  " + FPt() +"," + FPa() + "," + FPb();
 			immcnt = 0;

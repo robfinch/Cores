@@ -135,8 +135,8 @@ dc:
 		//---------------------------------------------------------------------------
 		switch(opcode) {
 		case IRR:
-			switch(ir >> 26) {
-			case ISEI:  im = a|imm; break;
+			switch (ir >> 26) {
+			case ISEI:  im = a | imm; break;
 			case IRTI:
 				km = ipc & 1;
 				pc = ipc & -2;
@@ -152,17 +152,17 @@ dc:
 				res = a - b;
 				break;
 			case ICMP:
-				switch((ir >> 23) & 7) {
+				switch ((ir >> 23) & 7) {
 				case 0:
 					if (a < b)
 						res = -1LL;
 					else if (a == b)
-						res=0LL;
+						res = 0LL;
 					else
-						res=1LL;
+						res = 1LL;
 					break;
-				case 2: res = a==b ? 1 : 0; break;
-				case 3:	res = a!=b ? 1 : 0; break;
+				case 2: res = a == b ? 1 : 0; break;
+				case 3:	res = a != b ? 1 : 0; break;
 				case 4: res = a < b ? 1 : 0; break;
 				case 5:	res = a >= b ? 1 : 0; break;
 				case 6:	res = a <= b ? 1 : 0; break;
@@ -170,14 +170,14 @@ dc:
 				}
 				break;
 			case ICMPU:
-				switch((ir >> 23) & 7) {
+				switch ((ir >> 23) & 7) {
 				case 0:
 					if (ua < ub)
 						res = -1LL;
 					else if (ua == ub)
-						res=0LL;
+						res = 0LL;
 					else
-						res=1LL;
+						res = 1LL;
 					break;
 				case 4: res = ua < ub ? 1 : 0; break;
 				case 5:	res = ua >= ub ? 1 : 0; break;
@@ -185,7 +185,7 @@ dc:
 				case 7:	res = ua > ub ? 1 : 0; break;
 				}
 				break;
-			// ToDo: return high order 64 bits of product
+				// ToDo: return high order 64 bits of product
 			case IMUL:
 				res = a * b;
 				break;
@@ -196,19 +196,19 @@ dc:
 				res = ua * ub;
 				break;
 			case IDIVMOD:
-				if (((ir >> 24) & 3)==1)
+				if (((ir >> 24) & 3) == 1)
 					res = a % b;
 				else
 					res = a / b;
 				break;
 			case IDIVMODU:
-				if (((ir >> 24) & 3)==1)
+				if (((ir >> 24) & 3) == 1)
 					res = ua % ub;
 				else
 					res = ua / ub;
 				break;
 			case IDIVMODSU:
-				if (((ir >> 24) & 3)==1)
+				if (((ir >> 24) & 3) == 1)
 					res = a % ub;
 				else
 					res = a / ub;
@@ -231,169 +231,167 @@ dc:
 			case IXNOR:
 				res = ~(a ^ b);
 				break;
+			case IMOV:
+			{
+				int d3 = (ir >> 23) & 7;
+				int rgs1 = (ir >> 16) & 0x3f;
+				switch (d3) {
+				case 0:
+					regs[Rt][rgs1] = regs[Ra][rgs];
+					res = regs[Ra][rgs];
+					Rt = 0;
+					break;
+				case 1:
+					res = regs[Ra][rgs1];
+					break;
+				case 7:
+					res = regs[Ra][rgs];
+					break;
+				}
+			}
+			break;
+			case ISHL:
+			case IASL:
+				if ((ir >> 29) & 1)
+					res = ua << (Bn & 0x3f);
+				else
+					res = ua << (b & 0x3f);
+				break;
+			case ISHR:
+				if ((ir >> 29) & 1)
+					res = ua >> (Bn & 0x3f);
+				else
+					res = ua >> (b & 0x3f);
+				break;
+			case IASR:
+				if ((ir >> 29) & 1)
+					res = a >> (Bn & 0x3f);
+				else
+					res = a >> (b & 0x3f);
+				break;
+			case IROL:
+				if ((ir >> 29) & 1)
+					res = (ua << (Bn & 0x3f)) | (ua >> ((64 - Bn) & 0x3f));
+				else
+					res = (a << (b & 0x3f)) | (a >> ((64 - b) & 0x3f));
+				break;
+			case IROR:
+				if ((ir >> 29) & 1)
+					res = (ua >> (Bn & 0x3f)) | (ua << ((64 - Bn) & 0x3f));
+				else
+					res = (a >> (b & 0x3f)) | (a << ((64 - b) & 0x3f));
+				break;
+			}
+			break;
+		case INDXLD:
+			switch ((ir >> 30) & 0x1f) {
 			case ILBX:
 				ad = a + (b << sc);
-				res = (system1->Read(ad) >> ((ad & 3)<<3)) & 0xFF;
+				res = (system1->Read(ad) >> ((ad & 3) << 3)) & 0xFF;
 				if (res & 0x80) res |= 0xFFFFFFFFFFFFFF00LL;
 				break;
 			case ILBUX:
 				ad = a + (b << sc);
-				res = (system1->Read(ad) >> ((ad & 3)<<3)) & 0xFF;
+				res = (system1->Read(ad) >> ((ad & 3) << 3)) & 0xFF;
 				break;
 			case ILCX:
 				ad = a + (b << sc);
-				res = (system1->Read(ad) >> ((ad & 3)<<3)) & 0xFFFF;
+				res = (system1->Read(ad) >> ((ad & 3) << 3)) & 0xFFFF;
 				if (res & 0x8000) res |= 0xFFFFFFFFFFFF0000LL;
 				break;
 			case ILCUX:
 				ad = a + (b << sc);
-				res = (system1->Read(ad) >> ((ad & 3)<<3)) & 0xFFFF;
+				res = (system1->Read(ad) >> ((ad & 3) << 3)) & 0xFFFF;
 				break;
 			case ILHX:
 				ad = a + (b << sc);
-				res = (system1->Read(ad) >> ((ad & 3)<<3));
+				res = (system1->Read(ad) >> ((ad & 3) << 3));
 				if (res & 0x80000000LL) res |= 0xFFFFFFFF00000000LL;
 				break;
 			case ILHUX:
 				ad = a + (b << sc);
-				res = (system1->Read(ad) >> ((ad & 3)<<3));
+				res = (system1->Read(ad) >> ((ad & 3) << 3));
 				res &= 0x00000000FFFFFFFFLL;
 				break;
 			case ILWX:
 				ad = a + (b << sc);
 				res = system1->Read(ad);
-				res |= ((unsigned __int64)system1->Read(ad+4)) << 32;
+				res |= ((unsigned __int64)system1->Read(ad + 4)) << 32;
 				break;
+			}
+			break;
+		case INDXST:
+			switch ((ir >> 31) & 0x1f) {
 			case ISBX:
 				Rt = 0;
 				ad = a + (b << sc);
-				switch(ad & 7) {
+				switch (ad & 7) {
 				case 0:
-					system1->Write(ad,(int)c,0x1);
+					system1->Write(ad, (int)c, 0x1);
 					break;
 				case 1:
-					system1->Write(ad,(int)c,0x2);
+					system1->Write(ad, (int)c, 0x2);
 					break;
 				case 2:
-					system1->Write(ad,(int)c,0x4);
+					system1->Write(ad, (int)c, 0x4);
 					break;
 				case 3:
-					system1->Write(ad,(int)c,0x8);
+					system1->Write(ad, (int)c, 0x8);
 					break;
 				case 4:
-					system1->Write(ad,(int)c,0x1);
+					system1->Write(ad, (int)c, 0x1);
 					break;
 				case 5:
-					system1->Write(ad,(int)c,0x2);
+					system1->Write(ad, (int)c, 0x2);
 					break;
 				case 6:
-					system1->Write(ad,(int)c,0x4);
+					system1->Write(ad, (int)c, 0x4);
 					break;
 				case 7:
-					system1->Write(ad,(int)c,0x8);
+					system1->Write(ad, (int)c, 0x8);
 					break;
 				}
 				break;
 			case ISCX:
 				Rt = 0;
 				ad = a + (b << sc);
-				switch(ad & 7) {
+				switch (ad & 7) {
 				case 0:
-					system1->Write(ad,(int)c,0x3);
+					system1->Write(ad, (int)c, 0x3);
 					break;
 				case 1:
-					system1->Write(ad,(int)c,0x6);
+					system1->Write(ad, (int)c, 0x6);
 					break;
 				case 2:
-					system1->Write(ad,(int)c,0xC);
+					system1->Write(ad, (int)c, 0xC);
 					break;
 				case 3:
-					system1->Write(ad,(int)c,0x8);
+					system1->Write(ad, (int)c, 0x8);
 					break;
 				case 4:
-					system1->Write(ad,(int)c,0x3);
+					system1->Write(ad, (int)c, 0x3);
 					break;
 				case 5:
-					system1->Write(ad,(int)c,0x6);
+					system1->Write(ad, (int)c, 0x6);
 					break;
 				case 6:
-					system1->Write(ad,(int)c,0xC);
+					system1->Write(ad, (int)c, 0xC);
 					break;
 				case 7:
-					system1->Write(ad,(int)c,0x8);
+					system1->Write(ad, (int)c, 0x8);
 					break;
-				}
-				break;
-			case IMOV:
-				{
-					int d3 = (ir >> 23) & 7;
-					int rgs1 = (ir >> 16) & 0x3f;
-					switch(d3) {
-					case 0:
-						regs[Rt][rgs1] = regs[Ra][rgs];
-						res = regs[Ra][rgs];
-						Rt = 0;
-						break;
-					case 1:
-						res = regs[Ra][rgs1];
-						break;
-					case 7:
-						res = regs[Ra][rgs];
-						break;
-					}
 				}
 				break;
 			case ISHX:
 				Rt = 0;
 				ad = a + (b << sc);
-				system1->Write(ad,(int)c,0xF);
+				system1->Write(ad, (int)c, 0xF);
 				break;
 			case ISWX:
 				Rt = 0;
 				ad = a + (b << sc);
-				system1->Write(ad,(int)c,0xF);
-				system1->Write(ad+4,(int)(c>>32),0xF);
-				break;
-			case ISHIFT:
-				switch((ir >> 22) & 0xF) {
-				case ISHL:
-					res = ua << (b & 0x3f);
-					break;
-				case ISHR:
-					res = ua >> (b & 0x3f);
-					break;
-				case IASL:
-					res = a << (b & 0x3f);
-					break;
-				case IASR:
-					res = a >> (b & 0x3f);
-					break;
-				case IROL:
-					res = (a << (b & 0x3f)) | (a >> ((64-b)&0x3f));
-					break;
-				case IROR:
-					res = (a >> (b & 0x3f)) | (a << ((64-b)&0x3f));
-					break;
-				case ISHLI:
-					res = ua << (Bn & 0x3f);
-					break;
-				case ISHRI:
-					res = ua >> (Bn & 0x3f);
-					break;
-				case IASLI:
-					res = a << (Bn & 0x3f);
-					break;
-				case IASRI:
-					res = a >> (Bn & 0x3f);
-					break;
-				case IROLI:
-					res = (ua << (Bn & 0x3f)) | (ua >> ((64-Bn)&0x3f));
-					break;
-				case IRORI:
-					res = (ua >> (Bn & 0x3f)) | (ua << ((64-Bn)&0x3f));
-					break;
-				default: ;
-				}
+				system1->Write(ad, (int)c, 0xF);
+				system1->Write(ad + 4, (int)(c >> 32), 0xF);
 				break;
 			}
 			break;
@@ -519,9 +517,9 @@ dc:
 			res = a ^ imm;
 			break;
 		case IQOPI:
-			switch((ir >> 8) & 7) {
+			switch((ir >> 11) & 7) {
 			case IQOR:
-				switch((ir >> 6) & 3) {
+				switch((ir >> 8) & 3) {
 				case 0:	res = b | (ir >> 16); break;
 				case 1: res = b | (ir & 0xffff0000); break;
 				case 2: res = b | (__int64)(ir & 0xffff0000) << 16; break;
