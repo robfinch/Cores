@@ -1136,6 +1136,8 @@ static void PeepoptHint(OCODE *ip)
 			break;
 		if (ip->fwd->oper2==nullptr || ip->back->oper3==nullptr)
 			break;
+		if (ip->fwd->oper2->mode != am_indx2)
+			break;
 		if (ip->fwd->oper2->preg == ip->back->oper1->preg) {
 			if ((ip->back->opcode==op_shl) && ip->back->oper3->offset &&
 				(ip->back->oper3->offset->i == 1 
