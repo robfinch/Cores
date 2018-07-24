@@ -162,13 +162,23 @@ casez({cinstr[17:14],cinstr[6]})
 			expand[6:0] = `ADDI;
 			end
 	endcase
-5'b00010:	// LDI
-			begin
-			expand[35:20] = {{10{cinstr[13]}},cinstr[13:8]};
-			expand[19:14] = cinstr[5:0];
-			expand[13:8] = 6'd0;
-			expand[7] = 1'b1;
-			expand[6:0] = `ORI;
+5'b00010:	// SYS
+			if (cinstr[5:0]==6'd0) begin
+				expand[6:0] = `SYS;
+				expand[7] = 1'b1;
+				expand[16:8] = {3'd1,cinstr[13:8]};
+				expand[17] = 1'b0;
+				expand[21:18] = 4'd0;
+				expand[26:22] = 5'd1;
+				expand[35:27] = 9'd0;
+			end
+			// LDI
+			else begin
+				expand[35:20] = {{10{cinstr[13]}},cinstr[13:8]};
+				expand[19:14] = cinstr[5:0];
+				expand[13:8] = 6'd0;
+				expand[7] = 1'b1;
+				expand[6:0] = `ORI;
 			end
 5'b00100:	// RET / ANDI
 			if (cinstr[5:0]==6'd0) begin
@@ -183,7 +193,7 @@ casez({cinstr[17:14],cinstr[6]})
 				expand[7] = 1'b1;
 				expand[13:8] = cinstr[5:0];
 				expand[19:14] = cinstr[5:0];
-				expand[35:20] = {{58{cinstr[13]}},cinstr[13:8]};
+				expand[35:20] = {{10{cinstr[13]}},cinstr[13:8]};
 			end
 5'b00110:	// SHLI
 			begin
