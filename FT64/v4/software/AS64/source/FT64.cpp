@@ -1124,6 +1124,7 @@ void LoadConstant(int64_t val, int rg)
 			(4 << 9) |		// LDI
 			(1 << 6) |
 			0x1A, !expand_flag, 5);
+		if ((val & 0xfffffLL) != 0)
 		emit_insn(
 			(val << 20LL) |
 			(3 << 18) |
@@ -1140,14 +1141,16 @@ void LoadConstant(int64_t val, int rg)
 			(4 << 9) |		// LDI
 			(2 << 6) |
 			0x1A, !expand_flag, 5);
-		emit_insn(
+		if (((val >> 20) & 0xfffffLL) != 0)
+			emit_insn(
 			((val >> 20) << 20LL) |
 			(3 << 18LL) |
 			(rg << 12) |
 			(1 << 6) |
 			(0 << 9) |		// ORI
 			0x1A, !expand_flag, 5);
-		emit_insn(
+		if ((val & 0xfffffLL) != 0)
+			emit_insn(
 			(val << 20LL) |
 			(3 << 18LL) |
 			(rg << 12) |
@@ -1163,21 +1166,24 @@ void LoadConstant(int64_t val, int rg)
 		(4 << 9) |		// LDI
 		(3 << 6) |		// Q3
 		0x1A, !expand_flag, 5);
-	emit_insn(
+	if (((val >> 40) & 0xfffffLL) != 0)
+		emit_insn(
 		((val >> 40) << 20LL) |
 		(3 << 18) |
 		(rg << 12) |
 		(0 << 9) |		// ORI
 		(2 << 6) |		// Q2
 		0x1A, !expand_flag, 5);
-	emit_insn(
+	if (((val >> 20) & 0xfffffLL) != 0)
+		emit_insn(
 		((val >> 20) << 20LL) |
 		(3 << 18) |
 		(rg << 12) |
 		(0 << 9) |		// ORI
 		(1 << 6) |		// Q1
 		0x1A, !expand_flag, 5);
-	emit_insn(
+	if ((val & 0xfffffLL) != 0)
+		emit_insn(
 		(val << 20LL) |
 		(3 << 18) |
 		(rg << 12) |
@@ -2264,10 +2270,10 @@ static void process_iret(int op)
 		val = expr();
 	}
 	emit_insn(
-		((val & 0x3F) << 16) |
-		(0 << 11) |
+		((val & 0x3F) << 18) |
+		(0 << 12) |
 		(0 << 6) |
-		op,!expand_flag,4
+		op,!expand_flag,5
 	);
 }
 
@@ -2280,24 +2286,25 @@ static void process_ret()
 		val = expr();
 	}
 	// If too large a constant, do the SP adjusment directly.
-	if (val < -32768 || val > 32767) {
-		LoadConstant(val,23);
-		// add.w r31,r31,r23
+	if (!IsNBit(val,20)) {
+		LoadConstant(val,52);
+		// add.w r63,r63,r52
 		emit_insn(
-			(0x04 << 26) |
-			(3 << 21) |
-			(31 << 16) |
-			(23 << 11) |
-			(31 << 6) |
-			0x02,!expand_flag,4
+			(0x04LL << 34LL) |
+			(3 << 24) |
+			(63 << 18) |
+			(52 << 12) |
+			(63 << 6) |
+			0x02,!expand_flag,5
 			);
 		val = 0;
 	}
 	emit_insn(
-		((val & 0xFFFF) << 16) |
-		(29 << 11) |
-		(31 << 6) |
-		0x29,!expand_flag,4
+		((val & 0xFFFFFLL) << 20) |
+		(3 << 18) |
+		(61 << 12) |
+		(63 << 6) |
+		0x29,!expand_flag,5
 	);
 }
 
@@ -2635,6 +2642,7 @@ static void process_ldi()
 			(4 << 9) |		// LDI
 			(1 << 6) |
 			0x1A, !expand_flag, 5);
+		if ((val & 0xfffffLL) != 0)
 		emit_insn(
 			(val << 20LL) |
 			(sz << 18) |
@@ -2651,14 +2659,16 @@ static void process_ldi()
 			(4 << 9) |		// LDI
 			(2 << 6) |
 			0x1A, !expand_flag, 5);
-		emit_insn(
+		if (((val >> 20) & 0xfffffLL) != 0)
+			emit_insn(
 			((val >> 20) << 20LL) |
 			(sz << 18LL) |
 			(Rt << 12) |
 			(1 << 6) |
 			(0 << 9) |		// ORI
 			0x1A, !expand_flag, 5);
-		emit_insn(
+		if ((val & 0xfffffLL) != 0)
+			emit_insn(
 			(val << 20LL) |
 			(sz << 18LL) |
 			(Rt << 12) |
@@ -2674,21 +2684,24 @@ static void process_ldi()
 		(4 << 9) |		// LDI
 		(3 << 6) |		// Q3
 		0x1A, !expand_flag, 5);
-	emit_insn(
+	if (((val >> 40) & 0xfffffLL) != 0)
+		emit_insn(
 		((val >> 40) << 20LL) |
 		(sz << 18) |
 		(Rt << 12) |
 		(0 << 9) |		// ORI
 		(2 << 6) |		// Q2
 		0x1A, !expand_flag, 5);
-	emit_insn(
+	if (((val >> 20) & 0xfffffLL) != 0)
+		emit_insn(
 		((val >> 20) << 20LL) |
 		(sz << 18) |
 		(Rt << 12) |
 		(0 << 9) |		// ORI
 		(1 << 6) |		// Q1
 		0x1A, !expand_flag, 5);
-	emit_insn(
+	if ((val & 0xfffffLL) != 0)
+		emit_insn(
 		(val << 20LL) |
 		(sz << 18) |
 		(Rt << 12) |
@@ -2957,7 +2970,7 @@ static void process_lsfloat(int opcode6, int opcode3)
     rm = 0;
     sz = GetFPSize();
     p = inptr;
-    Rt = getFPRegister();
+    Rt = getRegisterX();
     if (Rt < 0) {
         printf("Expecting a target register (1:%d).\r\n", lineno);
         printf("Line:%.60s\r\n",p);
@@ -3041,7 +3054,7 @@ static void process_ltcb(int oc)
 // mov r1,r2 -> translated to or Rt,Ra,#0
 // ----------------------------------------------------------------------------
 
-static void process_mov(int oc, int fn)
+static void process_mov(int64_t oc, int64_t fn)
 {
      int Ra;
      int Rt;
@@ -3049,7 +3062,11 @@ static void process_mov(int oc, int fn)
 	 int vec = 0;
 	 int d3;
 	 int rgs = 8;
-	 int fp = 0;
+	 int sz = 3;
+
+	 p = inptr;
+	 if (*p == '.')
+		 getSz(&sz);
 
 	 d3 = 7;	// current to current
 	 p = inptr;
@@ -3058,14 +3075,8 @@ static void process_mov(int oc, int fn)
 		 inptr = p;
 		 vec = 1;
 		 Rt = getVecRegister();
-		 if (Rt==-1) {
-			 inptr = p;
-			 Rt = getFPRegister();
-			 vec = 0;
-			 fp = 1;
-		 }
 	 }
-	 Rt &= 31;
+	 Rt &= 63;
 	if (inptr[-1]==':') {
 		if (*inptr=='x' || *inptr=='X') {
 			d3 = 2;
@@ -3084,14 +3095,8 @@ static void process_mov(int oc, int fn)
 		 inptr = p;
 		 Ra = getVecRegister();
 		 vec |= 2;
-		 if (Ra==-1) {
-			 inptr = p;
-			 Ra = getFPRegister();
-			 vec &= ~2;
-			 fp |= 2;
-		 }
 	 }
-	 Ra &= 31;
+	 Ra &= 63;
 	if (inptr[-1]==':') {
 		if (*inptr=='x' || *inptr=='X') {
 			inptr++;
@@ -3103,57 +3108,23 @@ static void process_mov(int oc, int fn)
 			d3 = 1;
 		}
 	}
-	if (fp==3) {
-		 emit_insn(
-			 (0x22 << 26) |
-			 (0x06 << 23) |
-			 (Rt << 11) |
-			 (Ra << 6) |
-			 0x02,!expand_flag,4
-		 );
-		 return;
-	}
-	if (fp==1) {
-		if (vec)
-			printf("unsupported move operation. %d\n", lineno);
-		 emit_insn(
-			 (0x22 << 26) |
-			 (0x04 << 23) |
-			 (Rt << 11) |
-			 (Ra << 6) |
-			 0x02,!expand_flag,4
-		 );
-		 return;
-	}
-	if (fp==2) {
-		if (vec)
-			printf("unsupported move operation. %d\n", lineno);
-		 emit_insn(
-			 (0x22 << 26) |
-			 (0x05 << 23) |
-			 (Rt << 11) |
-			 (Ra << 6) |
-			 0x02,!expand_flag,4
-		 );
-		 return;
-	}
 	 if (vec==1) {
 		 emit_insn(
-			 (0x33 << 26) |
-			 (0x00 << 21) |
-			 (Rt << 11) |
+			 (0x33LL << 34LL) |
+			 (0x00LL << 28LL) |
+			 (Rt << 12) |
 			 (Ra << 6) |
-			 0x01,!expand_flag,4
+			 0x01,!expand_flag,5
 		 );
 		 return;
 	 }
 	 else if (vec==2) {
 		 emit_insn(
-			 (0x33 << 26) |
-			 (0x01 << 21) |
-			 (Rt << 11) |
+			 (0x33LL << 34LL) |
+			 (0x01LL << 28LL) |
+			 (Rt << 12) |
 			 (Ra << 6) |
-			 0x01,!expand_flag,4
+			 0x01,!expand_flag,5
 		 );
 		 return;
 	 }
@@ -3163,12 +3134,13 @@ static void process_mov(int oc, int fn)
 		 printf("Illegal register set spec: %d\n", lineno);
 	 rgs &= 0x3f;
 	 emit_insn(
-		 (fn << 26) |
-		 (d3 << 23) |
-		 (rgs << 16) |
-		 (Rt << 11) |
+		 (fn << 34LL) |
+		 (d3 << 27LL) |
+		 (sz << 24) |
+		 (rgs << 18) |
+		 (Rt << 12) |
 		 (Ra << 6) |
-		 oc,!expand_flag,4
+		 oc,!expand_flag,5
 		 );
 	prevToken();
 }
@@ -3262,17 +3234,17 @@ static void process_sei()
 	}
 	if (Ra==-1) {
 		emit_insn(
-			0xC0000002 |
-			((val & 7) << 16) |
+			0xC000000002LL |
+			((val & 7) << 18) |
 			(0 << 6),
-			!expand_flag,4);
+			!expand_flag,5);
 	}
 	else {
 		emit_insn(
-			0xC0000002 |
-			(0 << 16) |
+			0xC000000002LL |
+			(0 << 18) |
 			(Ra << 6),
-			!expand_flag,4);
+			!expand_flag,5);
 	}
 }
 
@@ -3411,14 +3383,18 @@ static void process_fprdstat(int oc)
 // csrrw	r6,r4,r5
 // ----------------------------------------------------------------------------
 
-static void process_csrrw(int op)
+static void process_csrrw(int64_t op)
 {
 	int Rd;
 	int Rs;
 	int Rc;
 	int64_t val,val2;
 	char *p;
-  
+	int sz = 3;
+
+	p = inptr;
+	if (p[0] == '.')
+		getSz(&sz);
 	Rd = getRegisterX();
 	need(',');
 	p = inptr;
@@ -3441,7 +3417,7 @@ static void process_csrrw(int op)
 		}
 		prevToken();
 		Rs = getRegisterX();
-		emit_insn(((val & 0x7ff) << 16) | (op << 30) | (Rs << 6) | (Rd << 11) | 0x0E,!expand_flag,4);
+		emit_insn(((val & 0xFFF) << 20) | (op << 38LL) | (sz << 18) | (Rs << 6) | (Rd << 12) | 0x0E,!expand_flag,5);
 		prevToken();
 		return;
 		}
@@ -3477,135 +3453,54 @@ static void process_com()
 {
     int Ra;
     int Rt;
+	char *p;
+	int sz = 3;
+
+	p = inptr;
+	if (p[0] == '.')
+		getSz(&sz);
 
     Rt = getRegisterX();
     need(',');
     Ra = getRegisterX();
 	emit_insn(
-		(0xFFFF << 16) |
-		(Rt << 11) |
+		(0xFFFFFLL << 20) |
+		(sz << 18) |
+		(Rt << 12) |
 		(Ra << 6) |
-		0x0A,!expand_flag,4
+		0x0A,!expand_flag,5
 		);
 	prevToken();
 }
 
 // ---------------------------------------------------------------------------
-// com r3,r3
-// - alternate mnemonic for xor Rn,Rn,#-1
+// neg r3,r3
+// - alternate mnemonic for sub Rn,R0,Rn
 // ---------------------------------------------------------------------------
 
 static void process_neg()
 {
     int Ra;
     int Rt;
+	char *p;
+	int sz = 3;
+
+	p = inptr;
+	if (p[0] == '.')
+		getSz(&sz);
 
     Rt = getRegisterX();
     need(',');
     Ra = getRegisterX();
 	emit_insn(
-		(0x05 << 26) |
-		(Rt << 16) |
-		(Ra << 11) |
+		(0x05 << 34LL) |
+		(sz << 24) |
+		(Rt << 18) |
+		(Ra << 12) |
 		(0 << 6) |
-		0x02,!expand_flag,4
+		0x02,!expand_flag,5
 		);
 	prevToken();
-}
-
-// ----------------------------------------------------------------------------
-// push r1
-// push #123
-// ----------------------------------------------------------------------------
-
-static void process_push(int func, int amt)
-{
-    int Ra,Rb;
-	int FRa;
-	int sz;
-    int64_t val;
-
-    Ra = -1;
-    Rb = -1;
-    sz = GetFPSize();
-    NextToken();
-    if (token=='#') {  // Filter to PUSH
-		//printf("Illegal push/pop instruction: %d.\r\n", lineno);
-		//return;
-       val = expr();
-	    if (val > 32767 || val < -32768) {
-			emit_insn(
-				(val << 16) |
-				(23 << 11) |
-				(0 << 6) |
-				0x09,!expand_flag,4);	// ORI
-			val >>= 16;
-			emit_insn(
-				(val << 16) |
-				(23 << 11) |
-				(0 << 6) |
-				(1 << 6) |
-				0x1A,!expand_flag,4);	// ORQ1
-			val >>= 16;
-			if (val != 0) {
-				emit_insn(
-					(val << 16) |
-					(23 << 11) |
-					(0 << 6) |
-					(2 << 6) |
-					0x1A,!expand_flag,4);	// ORQ2
-			}
-			val >>= 16;
-			if (val != 0) {
-				emit_insn(
-					(val << 16) |
-					(23 << 11) |
-					(0 << 6) |
-					(3 << 6) |
-					0x1A,!expand_flag,4);	// ORQ3
-			}
-			Ra = 23;
-			goto j1;
-		}
-		else
-			emit_insn(
-				((val & 0xFFFFLL) << 16) |
-				(0x1F << 11) |
-				(0x1F << 6) |
-				0x1F,  // PUSHC
-				0,4
-			);
-        return;
-    }
-    prevToken();
-	FRa = getFPRegister();
-	if (FRa==-1) {
-		prevToken();
-		Ra = getRegisterX();
-	}
-	else {
-		emit_insn(
-			(func << 14) |
-			(sz << 12) |
-			(FRa << 6) |
-			0x19,0,1
-			);
-		prevToken();
-		return;
-	}
-    if (Ra == -1) {
-		Ra = 0;
-        printf("%d: unknown register.\r\n", lineno);
-    }
-j1:
-    emit_insn(
-		(func << 26) |
-		((amt & 31) << 21) |
-		(0x1F << 16) |
-		(Ra << 11) |
-		(0x1F << 6) |
-		0x02,0,4);
-    prevToken();
 }
 
 static void process_sync(int oc)
@@ -3679,9 +3574,9 @@ static void process_vsrrop(int funct6)
 
 static void ProcessEOL(int opt)
 {
-    int64_t nn,mm;
+    int64_t nn,mm,cai,caia;
     int first;
-    int cc;
+    int cc,jj;
     
      //printf("Line: %d\r", lineno);
      expand_flag = 0;
@@ -3691,7 +3586,7 @@ static void ProcessEOL(int opt)
     nn = binstart;
     cc = 2;
     if (segment==codeseg) {
-       cc = 4;
+       cc = 5;
 /*
         if (sections[segment].bytes[binstart]==0x61) {
             fprintf(ofp, "%06LLX ", ca);
@@ -3747,17 +3642,19 @@ static void ProcessEOL(int opt)
     first = 1;
     while (nn < sections[segment].index) {
         fprintf(ofp, "%06I64X ", ca);
+		caia = 0;
         for (mm = nn; nn < mm + cc && nn < sections[segment].index; ) {
-			switch(sections[segment].index - nn) {
-			case 2:
-	            fprintf(ofp, "%02X%02X     ", sections[segment].bytes[nn+1], sections[segment].bytes[nn]);
-				nn += 2;
-				break;
-			default:
-	            fprintf(ofp, "%02X%02X%02X%02X%02X ", sections[segment].bytes[nn + 4], sections[segment].bytes[nn+3], sections[segment].bytes[nn+2], sections[segment].bytes[nn+1], sections[segment].bytes[nn]);
-				nn += 5;
-				break;
-			}
+			cai = sections[segment].index - nn;
+			// Output for instructions with multiple words
+			if ((cai % 5) == 0 && cai < 25 && segment==codeseg)
+				cai = 5;
+			// Otherwise a big stream of information was output, likely data
+			if (cai > 8) cai = 8;
+			for (jj = (int)cai-1; jj >= 0; jj--)
+				fprintf(ofp, "%02X", sections[segment].bytes[nn+jj]);
+			fprintf(ofp, " ");
+			nn += cai;
+			caia += cai;
         }
         for (; nn < mm + cc; nn++)
             fprintf(ofp, "   ");
@@ -3767,7 +3664,7 @@ static void ProcessEOL(int opt)
         }
         else
             fprintf(ofp, opt ? "\n" : "; NOP Ramp\n");
-        ca += cc;
+        ca += caia;
     }
     // empty (codeless) line
     if (binstart==sections[segment].index) {
@@ -3966,9 +3863,7 @@ void FT64_processMaster()
         case tk_ori: process_riop(0x09); break;
         case tk_org: process_org(); break;
         case tk_plus: expand_flag = 1; break;
-		case tk_pop:	process_push(0x1A,8); break;
         case tk_public: process_public(); break;
-		case tk_push:	process_push(0x19,-8); break;
         case tk_rodata:
             if (first_rodata) {
                 while(sections[segment].address & 4095)
