@@ -53,6 +53,7 @@ begin
     `REX:
         case(ol)
         `OL_USER:   bus <= 64'hCCCCCCCCCCCCCCCC;
+        // ToDo: fix im test
         default:    bus <= (im < ~ol) ? tvec : pc + 32'd4;
         endcase
     `WAIT:  bus = waitctr==64'd1;

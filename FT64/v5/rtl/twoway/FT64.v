@@ -573,19 +573,15 @@ wire        fetchbuf1_jmp;
 wire        fetchbuf1_rfw;
 
 wire [47:0] fetchbufA_instr;	
-wire  [2:0] fetchbufA_insln;
 wire [31:0] fetchbufA_pc;
 wire        fetchbufA_v;
 wire [47:0] fetchbufB_instr;
-wire  [2:0] fetchbufB_insln;
 wire [31:0] fetchbufB_pc;
 wire        fetchbufB_v;
 wire [47:0] fetchbufC_instr;
-wire  [2:0] fetchbufC_insln;
 wire [31:0] fetchbufC_pc;
 wire        fetchbufC_v;
 wire [47:0] fetchbufD_instr;
-wire  [2:0] fetchbufD_insln;
 wire [31:0] fetchbufD_pc;
 wire        fetchbufD_v;
 
@@ -681,6 +677,8 @@ reg [63:0] fcu_argT2;
 reg [31:0] fcu_retadr;
 reg        fcu_retadr_v;
 reg [31:0] fcu_pc;
+reg [31:0] fcu_nextpc;
+reg [31:0] fcu_brdisp;
 wire [63:0] fcu_bus;
 wire  [3:0] fcu_id;
 reg   [8:0] fcu_exc;
@@ -688,7 +686,7 @@ wire        fcu_v;
 reg        fcu_thrd;
 reg        fcu_branchmiss;
 reg  fcu_clearbm;
-wire [31:0] fcu_misspc;
+reg [31:0] fcu_misspc;
 
 reg [63:0] amo_argA;
 reg [63:0] amo_argB;
@@ -2562,6 +2560,11 @@ input [47:0] isn;
 IsBrk = isn[`INSTRUCTION_OP]==`BRK && isn[`INSTRUCTION_L2]==2'b00;
 endfunction
 
+function IsIrq;
+input [47:0] isn;
+IsBrk = isn[`INSTRUCTION_OP]==`BRK && isn[`INSTRUCTION_L2]==2'b00 && isn[23:20]==4'h0;
+endfunction
+
 function IsRTI;
 input [47:0] isn;
 IsRTI = isn[`INSTRUCTION_OP]==`RR && isn[`INSTRUCTION_L2]==2'b00 && isn[`INSTRUCTION_S2]==`RTI;
@@ -3394,6 +3397,8 @@ FT64_fetchbuf #(AMSB,RSTPC) ufb1
     .fetchbuf1_pc(fetchbuf1_pc),
     .fetchbuf0_v(fetchbuf0_v),
     .fetchbuf1_v(fetchbuf1_v),
+    .fetchbuf0_insln(fetchbuf0_insln),
+    .fetchbuf1_insln(fetchbuf1_insln),
     .codebuf0(codebuf[insn0[21:16]]),
     .codebuf1(codebuf[insn1[21:16]]),
     .btgtA(btgtA),
@@ -5136,6 +5141,12 @@ assign  alu0_id = alu0_sourceid,
 assign  fpu_v = fpu_dataready;
 assign  fpu_id = fpu_sourceid;
 
+`ifdef SUPPORT_SMT
+wire [1:0] olm = ol[fcu_thrd];
+`else
+wire [1:0] olm = ol;
+`endif
+
 assign  fcu_v = fcu_dataready;
 assign  fcu_id = fcu_sourceid;
 
@@ -5154,11 +5165,7 @@ begin
                     fcu_exc <= fcu_argA >= fcu_argB && fcu_argA < fcu_argC ? `FLT_NONE : `FLT_CHK;
             end
     `REX:
-`ifdef SUPPORT_SMT
-        case(ol[fcu_thrd])
-`else
-        case(ol)
-`endif            
+        case(olm)
         `OL_USER:   fcu_exc <= `FLT_PRIV;
         default:    ;
         endcase
@@ -5174,10 +5181,9 @@ FT64_EvalBranch ube1
 	.takb(fcu_takb)
 );
 
-`ifdef SUPPORT_SMT
 FT64_FCU_Calc ufcuc1
 (
-	.ol(ol[fcu_thrd]),
+	.ol(olm),
 	.instr(fcu_instr),
 	.tvec(tvec[fcu_instr[14:13]]),
 	.a(fcu_argA),
@@ -5188,51 +5194,18 @@ FT64_FCU_Calc ufcuc1
 	.bus(fcu_bus)
 );
 
-assign  fcu_misspc =
-    IsRTI(fcu_instr) ? fcu_argB :
-    (fcu_instr[`INSTRUCTION_OP] == `REX) ? fcu_bus :
-    (IsBrk(fcu_instr)) ? {tvec[0][31:8], ol[fcu_thrd], 5'h0} :
-    (IsRet(fcu_instr)) ? fcu_argB:
-    (IsJAL(fcu_instr)) ? fcu_argA + fcu_argI:
-    (fcu_instr[`INSTRUCTION_OP] == `CHK) ? (fcu_pc + fcu_insln + fcu_argI) :
-    (fcu_instr[`INSTRUCTION_OP] == `BCHK) ? (~fcu_takb ? fcu_pc + fcu_insln) : fcu_pc + fcu_insln + 
-         	((fcu_instr[7:6]==2'b01) ? {{38{fcu_instr[47]}},fcu_instr[47:23],1'b0} :
-         				   {{54{fcu_instr[31]}},fcu_instr[31:23],1'b0}):
-    // Else branch
-         (~fcu_takb ? fcu_pc + fcu_insln : fcu_pc + fcu_insln + (
-         	(fcu_instr[7:6]==2'b01) ? {{36{fcu_instr[47]}},fcu_instr[47:19],1'b0} :
-         				   {{52{fcu_instr[31]}},fcu_instr[31:19],1'b0}
-         );
-`else                                            
-	FT64_FCU_Calc ufcuc1
-	(
-		.ol(ol),
-		.instr(fcu_instr),
-		.tvec(tvec[fcu_instr[13:11]]),
-		.a(fcu_argA),
-		.i(fcu_argI),
-		.pc(fcu_pc),
-		.im(im),
-		.waitctr(waitctr),
-		.bus(fcu_bus)
-	);
+always @*
+case(fcu_instr[`INSTRUCTION_OP])
+`R2:	fcu_misspc = fcu_argB;	// RTI (we don't bother fully decoding this as it's the only R2)
+`RET:	fcu_misspc = fcu_argB;
+`REX:	fcu_misspc = fcu_bus;
+`BRK:	fcu_misspc = {tvec[0][31:8], 1'b0, olm, 5'h0};
+`JAL:	fcu_misspc = fcu_argA + fcu_argI;
+//`CHK:	fcu_misspc = fcu_nextpc + fcu_argI;	// Handled as an instruction exception
+// Default: branch
+default:	fcu_misspc = fcu_takb ? fcu_nextpc + fcu_brdisp : fcu_nextpc;
+endcase
 
-assign  fcu_misspc =
-    IsRTI(fcu_instr) ? fcu_argB :
-    (fcu_instr[`INSTRUCTION_OP] == `REX) ? fcu_bus :
-    (IsBrk(fcu_instr)) ? {tvec[0][31:8], ol, 5'h0} :
-    (IsRet(fcu_instr)) ? fcu_argB:
-    (IsJAL(fcu_instr)) ? fcu_argA + fcu_argI:
-    (fcu_instr[`INSTRUCTION_OP] == `CHK) ? (fcu_pc + fcu_insln + fcu_argI) :
-    (fcu_instr[`INSTRUCTION_OP] == `BCHK) ? (~fcu_takb ? fcu_pc + fcu_insln) : fcu_pc + fcu_insln + 
-         	((fcu_instr[7:6]==2'b01) ? {{38{fcu_instr[47]}},fcu_instr[47:23],1'b0} :
-         				   {{54{fcu_instr[31]}},fcu_instr[31:23],1'b0}):
-    // Else branch
-         (~fcu_takb ? fcu_pc + fcu_insln : fcu_pc + fcu_insln + (
-         	(fcu_instr[7:6]==2'b01) ? {{36{fcu_instr[47]}},fcu_instr[47:19],1'b0} :
-         				   {{52{fcu_instr[31]}},fcu_instr[31:19],1'b0}
-         );
-`endif
 
 // To avoid false branch mispredicts the branch isn't evaluated until the
 // following instruction queues. The address of the next instruction is
@@ -5387,8 +5360,8 @@ begin
     commit1_bus <= iqentry_res[head1];
 end
     
-assign int_commit = (commit0_v && IsBrk(iqentry_instr[head0])) ||
-                    (commit0_v && commit1_v && IsBrk(iqentry_instr[head1]));
+assign int_commit = (commit0_v && IsIrq(iqentry_instr[head0])) ||
+                    (commit0_v && commit1_v && IsIrq(iqentry_instr[head1]));
 
 // Detect if a given register will become valid during the current cycle.
 // We want a signal that is active during the current clock cycle for the read
@@ -6735,6 +6708,10 @@ else begin
                  fcu_instr	<= iqentry_instr[n];
                  fcu_insln  <= iqentry_insln[n];
                  fcu_pc		<= iqentry_pc[n];
+                 fcu_nextpc <= iqentry_pc[n] + iqentry_insln[n];
+                 fcu_brdisp <= (iqentry_instr[n][7:6]==2'b01) ?
+                          	{{36{iqentry_instr[n][47]}},iqentry_instr[n][47:19],1'b0} :
+         				    {{52{iqentry_instr[n][31]}},iqentry_instr[n][31:19],1'b0};
                  fcu_call    <= IsCall(iqentry_instr[n])|IsJAL(iqentry_instr[n]);
                  fcu_bt		<= iqentry_bt[n];
                  fcu_pc		<= iqentry_pc[n];
@@ -8113,11 +8090,7 @@ begin
 	iqentry_out  [tail]    <=    `INV;
 	iqentry_res  [tail]    <=    `ZERO;
 	iqentry_instr[tail]    <=    IsVLS(fetchbuf0_instr) ? (vm[fnM2(fetchbuf0_instr)] ? fetchbuf0_instr : `NOP_INSN) : fetchbuf0_instr;
-	case(fetchbuf0_instr[7:6])
-	2'd0:	iqentry_insln[tail] <= 4'd4;
-	2'd1:	iqentry_insln[tail] <= 4'd6;
-	default:	iqentry_insln[tail] <= 4'd2;
-	endcase
+	iqentry_insln[tail]    <=    fetchbuf0_insln;
 	iqentry_bt   [tail]    <=    (IsBranch(fetchbuf0_instr) && predict_taken0);
 	iqentry_agen [tail]    <=    `INV;
 // If the previous instruction was a hardware interrupt and this instruction is a hardware interrupt
@@ -8190,11 +8163,7 @@ begin
 	iqentry_out  [tail]    <=   `INV;
 	iqentry_res  [tail]    <=   `ZERO;
 	iqentry_instr[tail]    <=   IsVLS(fetchbuf1_instr) ? (vm[fnM2(fetchbuf1_instr)] ? fetchbuf1_instr : `NOP_INSN) : fetchbuf1_instr; 
-	case(fetchbuf1_instr[7:6])
-	2'd0:	iqentry_insln[tail] <= 4'd4;
-	2'd1:	iqentry_insln[tail] <= 4'd6;
-	default:	iqentry_insln[tail] <= 4'd2;
-	endcase
+	iqentry_insln[tail]    <=   fetchbuf1_insln;
 	iqentry_bt   [tail]    <=   (IsBranch(fetchbuf1_instr) && predict_taken1); 
 	iqentry_agen [tail]    <=   `INV;
 // If queing 2nd instruction must read from first
