@@ -157,7 +157,7 @@ endfunction
 
 function IsRTI;
 input [47:0] isn;
-IsRTI = isn[`INSTRUCTION_OP]==`RR && isn[`INSTRUCTION_S2]==`RTI;
+IsRTI = isn[`INSTRUCTION_OP]==`R2 && isn[`INSTRUCTION_S2]==`RTI;
 endfunction
 
 function [3:0] fnInsLength;
@@ -194,39 +194,51 @@ reg did_branchback1;
 assign predict_taken0 = (fetchbuf==1'b0) ? predict_takenA : predict_takenC;
 assign predict_taken1 = (fetchbuf==1'b0) ? predict_takenB : predict_takenD;
 
-wire [AMSB:0] branch_pcA = IsRet(fetchbufA_instr) ? retpc0 :
-                         IsJmp(fetchbufA_instr) | IsCall(fetchbufA_instr) ? {fetchbufA_pc[31:28],fetchbufA_instr[31:6],2'b00} :
-                         ((IsRTI(fetchbufA_instr) || fetchbufA_instr[`INSTRUCTION_OP]==`BRK ||
-                         fetchbufA_instr[`INSTRUCTION_OP]==`JAL) ? btgtA :
-                         fetchbufA_instr[7:6]==2'b00 ? 
-                         	fetchbufA_pc + {{19{fetchbufA_instr[`INSTRUCTION_SB]}},fetchbufA_instr[31:21],1'b0} + fnInsLength(fetchbufA_instr)) :
-                         	fetchbufA_pc + {{4{fetchbufA_instr[47]}},fetchbufA_instr[47:21],1'b0} + fnInsLength(fetchbufA_instr)) 
-                         	;
-wire [AMSB:0] branch_pcB = IsRet(fetchbufB_instr) ? (thread_en ? retpc1 : retpc0) :
-                         IsJmp(fetchbufB_instr) | IsCall(fetchbufB_instr) ? {fetchbufB_pc[31:28],fetchbufB_instr[31:6],2'b00} :
-                         ((IsRTI(fetchbufB_instr) || fetchbufB_instr[`INSTRUCTION_OP]==`BRK ||
-                         fetchbufB_instr[`INSTRUCTION_OP]==`JAL) ? btgtB : 
-                         fetchbufB_instr[7:6]==2'b00 ? 
-                         	fetchbufB_pc + {{19{fetchbufB_instr[`INSTRUCTION_SB]}},fetchbufB_instr[31:21],1'b0} + fnInsLength(fetchbufB_instr)) :
-                         	fetchbufB_pc + {{4{fetchbufB_instr[47]}},fetchbufB_instr[47:21],1'b0} + fnInsLength(fetchbufB_instr)) 
-                         	;
-wire [AMSB:0] branch_pcC = IsRet(fetchbufC_instr) ? retpc0 :
-                         IsJmp(fetchbufC_instr) | IsCall(fetchbufC_instr) ? {fetchbufC_pc[31:28],fetchbufC_instr[31:6],2'b00} :
-                         ((IsRTI(fetchbufC_instr) || fetchbufC_instr[`INSTRUCTION_OP]==`BRK ||
-                         fetchbufC_instr[`INSTRUCTION_OP]==`JAL) ? btgtC : 
-                         fetchbufC_instr[7:6]==2'b00 ? 
-                         	fetchbufC_pc + {{19{fetchbufC_instr[`INSTRUCTION_SB]}},fetchbufC_instr[31:21],1'b0} + fnInsLength(fetchbufC_instr)) :
-                         	fetchbufC_pc + {{4{fetchbufC_instr[47]}},fetchbufC_instr[47:21],1'b0} + fnInsLength(fetchbufC_instr)) 
-                         	;
-wire [AMSB:0] branch_pcD = IsRet(fetchbufD_instr) ? (thread_en ? retpc1 : retpc0) :
-                         IsJmp(fetchbufD_instr) | IsCall(fetchbufD_instr) ? {fetchbufD_pc[31:28],fetchbufD_instr[31:6],2'b00} : 
-                         ((IsRTI(fetchbufD_instr) || fetchbufD_instr[`INSTRUCTION_OP]==`BRK ||
-                         fetchbufD_instr[`INSTRUCTION_OP]==`JAL) ? btgtD : 
-                         fetchbufD_instr[7:6]==2'b00 ? 
-                         	fetchbufD_pc + {{19{fetchbufD_instr[`INSTRUCTION_SB]}},fetchbufD_instr[31:21],1'b0} + fnInsLength(fetchbufD_instr)) :
-                         	fetchbufD_pc + {{4{fetchbufD_instr[47]}},fetchbufD_instr[47:21],1'b0} + fnInsLength(fetchbufD_instr)) 
-                         	;
-                         
+reg [AMSB:0] branch_pcA;
+reg [AMSB:0] branch_pcB;
+reg [AMSB:0] branch_pcC;
+reg [AMSB:0] branch_pcD;
+
+always @*
+case(fetchbufA_instr[`INSTRUCTION_OP])
+`RET:		branch_pcA = retpc0;
+`JMP,`CALL: branch_pcA = fetchbufA_instr[6] ? {fetchbufA_instr[39:8],1'b0} : {fetchbufA_pc[31:25],fetchbufA_instr[31:8],1'b0};
+`R2:		branch_pcA = btgtA;	// RTI
+`BRK,`JAL:	branch_pcA = btgtA;
+default:	branch_pcA = fetchbufA_pc + (fetchbuf_instr[6] ? {{4{fetchbufA_instr[47]}},fetchbufA_instr[47:21],1'b0} + fnInsLength(fetchbufA_instr) :
+															{{20{fetchbufA_instr[31]}},fetchbufA_instr[31:21],1'b0} + fnInsLength(fetchbufA_instr));
+endcase
+
+always @*
+case(fetchbufB_instr[`INSTRUCTION_OP])
+`RET:		branch_pcB = retpc1;
+`JMP,`CALL: branch_pcB = fetchbufB_instr[6] ? {fetchbufB_instr[39:8],1'b0} : {fetchbufB_pc[31:25],fetchbufB_instr[31:8],1'b0};
+`R2:		branch_pcB = btgtB;	// RTI
+`BRK,`JAL:	branch_pcB = btgtB;
+default:	branch_pcB = fetchbufB_pc + (fetchbuf_instr[6] ? {{4{fetchbufB_instr[47]}},fetchbufB_instr[47:21],1'b0} + fnInsLength(fetchbufB_instr) :
+															{{20{fetchbufB_instr[31]}},fetchbufB_instr[31:21],1'b0} + fnInsLength(fetchbufB_instr));
+endcase
+
+always @*
+case(fetchbufC_instr[`INSTRUCTION_OP])
+`RET:		branch_pcC = retpc0;
+`JMP,`CALL: branch_pcC = fetchbufC_instr[6] ? {fetchbufC_instr[39:8],1'b0} : {fetchbufC_pc[31:25],fetchbufC_instr[31:8],1'b0};
+`R2:		branch_pcc = btgtC;	// RTI
+`BRK,`JAL:	branch_pcC = btgtC;
+default:	branch_pcC = fetchbufC_pc + (fetchbuf_instr[6] ? {{4{fetchbufC_instr[47]}},fetchbufC_instr[47:21],1'b0} + fnInsLength(fetchbufC_instr) :
+															{{20{fetchbufC_instr[31]}},fetchbufC_instr[31:21],1'b0} + fnInsLength(fetchbufC_instr));
+endcase
+
+always @*
+case(fetchbufD_instr[`INSTRUCTION_OP])
+`RET:		branch_pcD = retpc1;
+`JMP,`CALL: branch_pcD = fetchbufD_instr[6] ? {fetchbufD_instr[39:8],1'b0} : {fetchbufD_pc[31:25],fetchbufD_instr[31:8],1'b0};
+`R2:		branch_pcD = btgtD;	// RTI
+`BRK,`JAL:	branch_pcD = btgtD;
+default:	branch_pcD = fetchbufD_pc + (fetchbuf_instr[6] ? {{4{fetchbufD_instr[47]}},fetchbufD_instr[47:21],1'b0} + fnInsLength(fetchbufD_instr) :
+															{{20{fetchbufD_instr[31]}},fetchbufD_instr[31:21],1'b0} + fnInsLength(fetchbufD_instr));
+endcase
+
 wire take_branchA = ({fetchbufA_v, IsBranch(fetchbufA_instr), predict_takenA}  == {`VAL, `TRUE, `TRUE}) ||
                         ((IsRet(fetchbufA_instr)||IsJmp(fetchbufA_instr)||IsCall(fetchbufA_instr)||
                         IsRTI(fetchbufA_instr)|| fetchbufA_instr[`INSTRUCTION_OP]==`BRK || fetchbufA_instr[`INSTRUCTION_OP]==`JAL) &&
@@ -254,7 +266,7 @@ begin
 	pc1 <= thread_en ? (fetchbuf ? pc1b : pc1a) : pc1a;
 end
 */
-assign threadx = thread_en ? fetchbuf : 1'b0;
+assign threadx = fetchbuf;
 
 FT64_RSB #(AMSB) ursb1
 (
@@ -269,7 +281,7 @@ FT64_RSB #(AMSB) ursb1
 	.fetchbuf1_v(fetchbuf1_v),
 	.fetchbuf1_pc(fetchbuf1_pc),
 	.fetchbuf1_instr(fetchbuf1_instr),
-	.stompedRets(thread_en ? stompedRets : stompedRets[3:1]),
+	.stompedRets(stompedRets),
 	.stompedRet(stompedRet),
 	.pc(retpc0)
 );
@@ -298,7 +310,7 @@ edge_det ued1 (.rst(rst), .clk(clk4x), .ce(1'b1), .i(clk), .pe(peclk), .ne(neclk
 always @(posedge clk)
 if (rst) begin
 	  pc0 <= RSTPC;
-      pc1 <= RSTPC + 32'd4;
+      pc1 <= RSTPC;
      fetchbufA_v <= 0;
      fetchbufB_v <= 0;
      fetchbufC_v <= 0;
@@ -322,20 +334,14 @@ else begin
 	// for that thread is assigned the current fetchbuf pc.
 	// For the thread that misses the pc is simply assigned the misspc.
 	if (branchmiss) begin
-		if (thread_en) begin
-			if (branchmiss_thrd) begin
-     			pc0 <= fetchbuf0_pc;
-				pc1 <= misspc;
-			end
-			else begin
-				pc0 <= misspc;
-     			pc1 <= fetchbuf1_pc;
-     		end
+		if (branchmiss_thrd) begin
+ 			pc0 <= fetchbuf0_pc;
+			pc1 <= misspc;
 		end
 		else begin
 			pc0 <= misspc;
-     		pc1 <= misspc + 32'd4;
-    	end
+ 			pc1 <= fetchbuf1_pc;
+ 		end
 		fetchbufA_v <= `INV;
 		fetchbufB_v <= `INV;
 		fetchbufC_v <= `INV;
@@ -439,7 +445,6 @@ else begin
 		// if fbA has the branchback, then it is scenario 1.
 		// if fbB has it: if pc0 == fbB_pc, then it is the former scenario, else it is the latter
 		4'b1100 : begin
-			if(thread_en) begin
 				if (take_branchA && take_branchB) begin
 					pc0 <= branch_pcA;
 					pc1 <= branch_pcB;
@@ -459,36 +464,6 @@ else begin
 					fetchbufB_v <= !(queued2|queuedNop);	// if it can be queued, it will
 					if ((queued2|queuedNop))   fetchbuf <= 1'b1;
 				end
-			end
-			else 
-			begin
-				if (take_branchA) begin
-				    // has to be first scenario
-					pc0 <= branch_pcA;
-					pc1 <= branch_pcA + 4;
-				    fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
-		     		fetchbufB_v <= `INV;		// stomp on it
-				     if (IsRet(fetchbufB_instr))
-				     	stompedRet = `TRUE;
-				    	if ((queued1|queuedNop))   fetchbuf <= 1'b1;
-				end
-				else if (take_branchB) begin
-				    if (did_branchback0) begin
-				    FetchCD();
-					 fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
-					 fetchbufB_v <= !(queued2|queuedNop);	// if it can be queued, it will
-					  fetchbuf <= fetchbuf + (queued2|queuedNop);
-				    end
-				    else begin
-					 	pc0 <= branch_pcB;
-					 	pc1 <= branch_pcB + 4;
-					 fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
-					 fetchbufB_v <= !(queued2|queuedNop);	// if it can be queued, it will
-					if ((queued2|queuedNop))   fetchbuf <= 1'b1;
-				    end
-				end
-			end
-//			else panic <= `PANIC_BRANCHBACK;
 		    end
 
 //		4'b1101	: panic <= `PANIC_INVALIDFBSTATE;
@@ -589,8 +564,6 @@ else begin
 		// if fbC has the branchback, then it is scenario 1.
 		// if fbD has it: if pc0 == fbB_pc, then it is the former scenario, else it is the latter
 		4'b1100 : begin
-			
-			if(thread_en) begin
 				if (take_branchC & take_branchD) begin
 					pc0 <= branch_pcC;
 					pc1 <= branch_pcD;
@@ -611,35 +584,6 @@ else begin
 				    if ((queued2|queuedNop))   fetchbuf <= 1'b0;
 				end
 			end
-			else
-			begin
-				if (take_branchC) begin
-					 pc0 <= branch_pcC;
-					 pc1 <= branch_pcC + 4;
-				     fetchbufC_v <= !(queued1|queuedNop);	// if it can be queued, it will
-				     fetchbufD_v <= `INV;		// stomp on it
-				     if (IsRet(fetchbufD_instr))
-				     	stompedRet = `TRUE;
-				    if ((queued1|queuedNop))   fetchbuf <= 1'b0;
-				end
-				else if (take_branchD) begin
-				    if (did_branchback1) begin
-				    FetchAB();
-					 fetchbufC_v <= !(queued1|queuedNop);	// if it can be queued, it will
-					 fetchbufD_v <= !(queued2|queuedNop);	// if it can be queued, it will
-					 fetchbuf <= fetchbuf + (queued2|queuedNop);
-				    end
-				    else begin
-						 pc0 <= branch_pcD;
-						 pc1 <= branch_pcD + 4;
-					 fetchbufC_v <= !(queued1|queuedNop);	// if it can be queued, it will
-					 fetchbufD_v <= !(queued2|queuedNop);	// if it can be queued, it will
-					if ((queued2|queuedNop))   fetchbuf <= 1'b0;
-				    end
-				end
-			end
-//			else panic <= `PANIC_BRANCHBACK;
-		    end
 
 //		4'b1101	: panic <= `PANIC_INVALIDFBSTATE;
 //		4'b1110	: panic <= `PANIC_INVALIDFBSTATE;
@@ -777,7 +721,7 @@ assign fetchbuf1_instr = (fetchbuf == 1'b0) ? fetchbufB_instr : fetchbufD_instr;
 assign fetchbuf1_v     = (fetchbuf == 1'b0) ? fetchbufB_v     : fetchbufD_v    ;
 assign fetchbuf1_pc    = (fetchbuf == 1'b0) ? fetchbufB_pc    : fetchbufD_pc   ;
 assign fetchbuf0_thrd  = 1'b0;
-assign fetchbuf1_thrd  = thread_en ? 1'b1 : 1'b0;
+assign fetchbuf1_thrd  = 1'b1;
 assign fetchbuf0_insln = (fetchbuf == 1'b0) ? fnInsLength(fetchbufA_instr) : fnIndLength(fetchbufC_instr);
 assign fetchbuf1_insln = (fetchbuf == 1'b0) ? fnInsLength(fetchbufB_instr) : fnIndLength(fetchbufD_instr);
 

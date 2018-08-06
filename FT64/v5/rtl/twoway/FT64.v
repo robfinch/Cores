@@ -1212,7 +1212,7 @@ always @*
 if (hirq)
 	insn0 <= {8'd0,4'd0,irq_i,1'b0,vec_i,2'b00,`BRK};
 else if (phit) begin
-	if (insn0a[`INSTRUCTION_OP]==`BRK && insn0a[23:19]==5'd0)
+	if (insn0a[`INSTRUCTION_OP]==`BRK && insn0a[23:20]==4'd0)
 		insn0 <= {8'd1,4'd0,3'b0,1'b0,`FLT_PRIV,2'b00,`BRK};
 	else
     	insn0 <= insn0a;
@@ -1220,10 +1220,8 @@ end
 else
     insn0 <= `NOP_INSN;
 always @*
-if (hirq & ~thread_en)
-    insn1 <= {8'd0,4'd0,irq_i,1'b0,vec_i,2'b00,`BRK};
-else if (phit) begin
-	if (insn1a[`INSTRUCTION_OP]==`BRK && insn1a[23:19]==5'd0)
+if (phit) begin
+	if (insn1a[`INSTRUCTION_OP]==`BRK && insn1a[23:20]==4'd0)
 		insn1 <= {8'd1,4'd0,3'b0,1'b0,`FLT_PRIV,2'b00,`BRK};
 	else
 	    insn1 <= insn1a;
@@ -5033,7 +5031,6 @@ FT64_stomp #(QENTRIES) ustmp1
 	.branchmiss_thrd(branchmiss_thrd),
 	.missid(missid),
 	.head0(head0),
-	.thread_en(thread_en),
 	.thrd(iqentry_thrd),
 	.iqentry_v(iqentry_v),
 	.stomp(iqentry_stomp)
@@ -5212,8 +5209,8 @@ endcase
 // looked at to see if the BTB predicted correctly.
 
 wire fcu_brk_miss = (IsBrk(fcu_instr) || IsRTI(fcu_instr)) && fcu_v;
-wire fcu_ret_miss = IsRet(fcu_instr) && fcu_v && (fcu_argB != iqentry_pc[thread_en ? idp2(fcu_id) : idp1(fcu_id)]);
-wire fcu_jal_miss = IsJAL(fcu_instr) && fcu_v && fcu_argA + fcu_argI != iqentry_pc[thread_en ? idp2(fcu_id) : idp1(fcu_id)];
+wire fcu_ret_miss = IsRet(fcu_instr) && fcu_v && (fcu_argB != iqentry_pc[idp2(fcu_id)]);
+wire fcu_jal_miss = IsJAL(fcu_instr) && fcu_v && fcu_argA + fcu_argI != iqentry_pc[idp2(fcu_id)];
 wire fcu_followed = iqentry_sn[nid] > iqentry_sn[fcu_id[`QBITS]];
 always @*
 if (fcu_dataready) begin
@@ -5377,12 +5374,12 @@ begin
 		regIsValid[n] = rf_v[n];
 		if (branchmiss)
 	       if (~livetarget[n]) begin
-	       		if (branchmiss_thrd & thread_en) begin
+	       		if (branchmiss_thrd) begin
 	       			if (n >= 128)
 	           			regIsValid[n] = `VAL;
 	       		end
 	       		else begin
-	       			if (n < 128 | ~thread_en)
+	       			if (n < 128)
 	           			regIsValid[n] = `VAL;
 	       		end
 	       end
@@ -5751,12 +5748,12 @@ else begin
 	if (branchmiss) begin
         for (n = 1; n < PREGS; n = n + 1)
            if (~livetarget[n]) begin
-           		if (branchmiss_thrd & thread_en) begin
+           		if (branchmiss_thrd) begin
            			if (n >= 128)
                 		rf_v[n] <= `VAL;
            		end
            		else begin
-           			if (n < 128 || !thread_en)
+           			if (n < 128)
                 		rf_v[n] <= `VAL;
             	end
            end
@@ -7665,43 +7662,6 @@ if (!branchmiss) begin
         end
     endcase
 end
-else begin	// if branchmiss
-	if (!thread_en) begin
-	    if (iqentry_stomp[0] & ~iqentry_stomp[7]) begin
-	         tail0 <= 3'd0;
-	         tail1 <= 3'd1;
-	    end
-	    else if (iqentry_stomp[1] & ~iqentry_stomp[0]) begin
-	         tail0 <= 3'd1;
-	         tail1 <= 3'd2;
-	    end
-	    else if (iqentry_stomp[2] & ~iqentry_stomp[1]) begin
-	         tail0 <= 3'd2;
-	         tail1 <= 3'd3;
-	    end
-	    else if (iqentry_stomp[3] & ~iqentry_stomp[2]) begin
-	         tail0 <= 3'd3;
-	         tail1 <= 3'd4;
-	    end
-	    else if (iqentry_stomp[4] & ~iqentry_stomp[3]) begin
-	         tail0 <= 3'd4;
-	         tail1 <= 3'd5;
-	    end
-	    else if (iqentry_stomp[5] & ~iqentry_stomp[4]) begin
-	         tail0 <= 3'd5;
-	         tail1 <= 3'd6;
-	    end
-	    else if (iqentry_stomp[6] & ~iqentry_stomp[5]) begin
-	         tail0 <= 3'd6;
-	         tail1 <= 3'd7;
-	    end
-	    else if (iqentry_stomp[7] & ~iqentry_stomp[6]) begin
-	         tail0 <= 3'd7;
-	         tail1 <= 3'd0;
-	    end
-	end
-    // otherwise, it is the last instruction in the queue that has been mispredicted ... do nothing
-end
 /*
     if (pebm)
          seq_num <= seq_num + 5'd3;
@@ -7724,16 +7684,14 @@ end
 	       n[4:0]+3, urf1.urf10.mem[{rgs[0],1'b0,n[4:2],2'b11}], regIsValid[n+3], rf_source[n+3]
 	       );
 	end
-	if (thread_en) begin
-	    $display ("Regfile: %d", rgs[1]);
-		for (n=128; n < 160; n=n+4) begin
-		    $display("%d: %h %d %o   %d: %h %d %o   %d: %h %d %o   %d: %h %d %o#",
-		       n[4:0]+0, urf1.urf10.mem[{rgs[1],1'b0,n[4:2],2'b00}], regIsValid[n+0], rf_source[n+0],
-		       n[4:0]+1, urf1.urf10.mem[{rgs[1],1'b0,n[4:2],2'b01}], regIsValid[n+1], rf_source[n+1],
-		       n[4:0]+2, urf1.urf10.mem[{rgs[1],1'b0,n[4:2],2'b10}], regIsValid[n+2], rf_source[n+2],
-		       n[4:0]+3, urf1.urf10.mem[{rgs[1],1'b0,n[4:2],2'b11}], regIsValid[n+3], rf_source[n+3]
-		       );
-		end
+    $display ("Regfile: %d", rgs[1]);
+	for (n=128; n < 160; n=n+4) begin
+	    $display("%d: %h %d %o   %d: %h %d %o   %d: %h %d %o   %d: %h %d %o#",
+	       n[4:0]+0, urf1.urf10.mem[{rgs[1],1'b0,n[4:2],2'b00}], regIsValid[n+0], rf_source[n+0],
+	       n[4:0]+1, urf1.urf10.mem[{rgs[1],1'b0,n[4:2],2'b01}], regIsValid[n+1], rf_source[n+1],
+	       n[4:0]+2, urf1.urf10.mem[{rgs[1],1'b0,n[4:2],2'b10}], regIsValid[n+2], rf_source[n+2],
+	       n[4:0]+3, urf1.urf10.mem[{rgs[1],1'b0,n[4:2],2'b11}], regIsValid[n+3], rf_source[n+3]
+	       );
 	end
 `else
     $display ("Regfile: %d", rgs);
@@ -8156,7 +8114,7 @@ begin
 `endif
 	iqentry_sn   [tail]    <=   seqnum;
 	iqentry_v    [tail]    <=   `VAL;
-	iqentry_thrd [tail]    <=   thread_en ? 1'b1 : 1'b0;
+	iqentry_thrd [tail]    <=   1'b1;
 	iqentry_done [tail]    <=   `INV;
 	iqentry_cmt  [tail]    <=	`INV;
 	iqentry_pred [tail]    <=   `VAL;
