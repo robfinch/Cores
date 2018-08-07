@@ -109,8 +109,8 @@ output [31:0] fetchbuf0_instr;
 output [31:0] fetchbuf1_instr;
 output [AMSB:0] fetchbuf0_pc;
 output [AMSB:0] fetchbuf1_pc;
-output [3:0] fetchbuf0_insln;
-output [3:0] fetchbuf1_insln;
+output reg [3:0] fetchbuf0_insln;
+output reg [3:0] fetchbuf1_insln;
 output fetchbuf0_v;
 output fetchbuf1_v;
 input [31:0] codebuf0;
@@ -125,6 +125,10 @@ output take_branch1;
 input [3:0] stompedRets;
 
 integer n;
+reg [3:0] fetchbufA_insln;
+reg [3:0] fetchbufB_insln;
+reg [3:0] fetchbufC_insln;
+reg [3:0] fetchbufD_insln;
 
 //`include "FT64_decode.vh"
 
@@ -167,6 +171,296 @@ case(ins[7:6])
 2'd1:	fnInsLength = 4'd6;
 default:	fnInsLength = 4'd2;
 endcase
+endfunction
+
+function [47:0] expand;
+input [15:0] cinstr;
+casez({cinstr[15:12],cinstr[6]})
+5'b00000:	// NOP / ADDI
+	case(cinstr[4:0])
+	5'd31:	begin
+			expand[47:32] = 16'h0000;
+			expand[31:18] = {{6{cinstr[11]}},cinstr[11:8],cinstr[5],3'b0};
+			expand[17:13] = cinstr[4:0];
+			expand[12:8] = cinstr[4:0];
+			expand[7:6] = 2'b10;
+			expand[5:0] = `ADDI;
+			end
+	default:
+			begin
+			expand[47:32] = 16'h0000;
+			expand[31:18] = {{6{cinstr[11]}},cinstr[11:8],cinstr[5]};
+			expand[17:13] = cinstr[4:0];
+			expand[12:8] = cinstr[4:0];
+			expand[7:6] = 2'b10;
+			expand[5:0] = `ADDI;
+			end
+	endcase
+5'b00010:	// SYS
+			if (cinstr[4:0]==5'd0) begin
+				expand[47:32] = 16'h0000;
+				expand[5:0] = `BRK;
+				expand[7:6] = 2'b10;
+				expand[15:8] = {3'd1,cinstr[11:8],cinstr[5]};
+				expand[16] = 1'b0;
+				expand[19:17] = 3'd0;
+				expand[23:20] = 4'd1;
+				expand[31:24] = 8'd0;
+			end
+			// LDI
+			else begin
+				expand[47:32] = 16'h0000;
+				expand[31:18] = {{9{cinstr[11]}},cinstr[11:8],cinstr[5]};
+				expand[17:13] = cinstr[4:0];
+				expand[12:8] = 5'd0;
+				expand[7:6] = 2'b10;
+				expand[5:0] = `ORI;
+			end
+5'b00100:	// RET / ANDI
+			if (cinstr[4:0]==5'd0) begin
+				expand[47:32] = 16'h0000;
+				expand[5:0] = `RET;
+				expand[7:6] = 2'b10;
+				expand[12:8] = 5'd31;
+				expand[17:13] = 5'd29;
+				expand[31:18] = {8'd0,cinstr[11:8],cinstr[5],3'd0};
+			end
+			else begin
+				expand[47:32] = 16'h0000;
+				expand[5:0] = `ANDI;
+				expand[7:6] = 2'b10;
+				expand[12:8] = cinstr[4:0];
+				expand[17:13] = cinstr[4:0];
+				expand[31:18] = {{11{cinstr[11]}},cinstr[11:8],cinstr[5]};
+			end
+5'b00110:	// SHLI
+			begin
+			expand[47:32] = 16'h0000;
+			expand[31:26] = 6'h0F;	// immediate mode 0-31
+			expand[25:23] = 3'd0;	// SHL
+			expand[22:18] = {cinstr[11:8],cinstr[5]};	// amount
+			expand[17:13] = cinstr[4:0];
+			expand[12:8] = cinstr[4:0];
+			expand[7:6] = 2'b10;
+			expand[5:0] = 8'h02;		// R2 instruction
+			end
+5'b01000:
+			case(cinstr[5:4])
+			2'd0:		// SHRI
+				begin
+				expand[35:30] = 6'h12;	// SHR
+				expand[29] = 1'b1;		// immediate mode
+				expand[28:26] = 3'b011;	// word size
+				expand[25:20] = cinstr[13:8];	// amount
+				expand[19:14] = fnRp(cinstr[3:0]);
+				expand[13:8] = fnRp(cinstr[3:0]);
+				expand[7] = 1'b1;
+				expand[6:0] = 8'h02;		// R2 instruction
+				end
+			2'd1:		// ASRI
+				begin
+				expand[35:30] = 6'h13;	// ASR
+				expand[29] = 1'b1;		// immediate mode
+				expand[28:26] = 3'b011;	// word size
+				expand[25:20] = cinstr[13:8];	// amount
+				expand[19:14] = fnRp(cinstr[3:0]);
+				expand[13:8] = fnRp(cinstr[3:0]);
+				expand[7] = 1'b1;
+				expand[6:0] = 8'h02;		// R2 instruction
+				end
+			2'd2:		// ANDI
+				begin
+				expand[35:20] = {{10{cinstr[13]}},cinstr[13:8]};
+				expand[19:14] = fnRp(cinstr[3:0]);
+				expand[13:8] = fnRp(cinstr[3:0]);
+				expand[7] = 1'b1;
+				expand[6:0] = `ORI;
+				end
+			2'd3:
+				case(cinstr[13:12])
+				2'd0:	begin
+						expand[35:30] = `SUB;
+						expand[28:26] = 3'b011;	// word size
+						expand[25:20] = fnRp(cinstr[11:8]);
+						expand[19:14] = fnRp(cinstr[3:0]);
+						expand[13:8] = fnRp(cinstr[3:0]);
+						expand[7] = 1'b1;
+						expand[6:0] = 8'h02;		// R2 instruction
+						end
+				2'd1:	begin
+						expand[35:30] = `AND;
+						expand[28:26] = 3'b011;	// word size
+						expand[25:20] = fnRp(cinstr[11:8]);
+						expand[19:14] = fnRp(cinstr[3:0]);
+						expand[13:8] = fnRp(cinstr[3:0]);
+						expand[7] = 1'b1;
+						expand[6:0] = 8'h02;		// R2 instruction
+						end
+				2'd2:	begin
+						expand[35:30] = `OR;
+						expand[28:26] = 3'b011;	// word size
+						expand[25:20] = fnRp(cinstr[11:8]);
+						expand[19:14] = fnRp(cinstr[3:0]);
+						expand[13:8] = fnRp(cinstr[3:0]);
+						expand[7] = 1'b1;
+						expand[6:0] = 8'h02;		// R2 instruction
+						end
+				2'd3:	begin
+						expand[35:30] = `XOR;
+						expand[28:26] = 3'b011;	// word size
+						expand[25:20] = fnRp(cinstr[11:8]);
+						expand[19:14] = fnRp(cinstr[3:0]);
+						expand[13:8] = fnRp(cinstr[3:0]);
+						expand[7] = 1'b1;
+						expand[6:0] = 8'h02;		// R2 instruction
+						end
+				endcase
+			endcase
+5'b01110:
+		begin
+			expand[47:32] = 16'h0000;
+			expand[31:21] = {{1{cinstr[11]}},{cinstr[11:8],cinstr[5:0]}};
+			expand[20:18] = 3'd0;		// BEQ
+			expand[17:8] = 10'd0;		// r0==r0
+			expand[7:6] = 2'b10;
+			expand[5:0] = `Bcc;		// 0x38
+		end
+5'b10??0:
+		begin
+			expand[47:32] = 16'h0000;
+			expand[31:21] = {{6{cinstr[11]}},cinstr[11:8],cinstr[5]};
+			expand[20:18] = 3'd0;			// BEQ
+			expand[17:13] = 5'd0;			// r0
+			expand[12:8] = cinstr[4:0];	// Ra
+			expand[7:6] = 2'b10;
+			expand[5:0] = `Bcc;
+		end
+5'b11??0:
+		begin
+			expand[47:32] = 16'h0000;
+			expand[31:21] = {{6{cinstr[11]}},cinstr[11:8],cinstr[5]};
+			expand[20:18] = 3'd1;			// BNE
+			expand[17:13] = 5'd0;			// r0
+			expand[12:8] = cinstr[4:0];	// Ra
+			expand[7:6] = 2'b10;
+			expand[5:0] = `Bcc;
+		end
+5'b00001:
+		begin
+			expand[35:30] = `MOV;
+			expand[29:27] = 3'd7;			// move current to current
+			expand[26:20] = 7'd0;			// register set (ignored)
+			expand[19:14] = cinstr[13:8];
+			expand[13:8] = cinstr[5:0];
+			expand[7] = 1'b1;
+			expand[6:0] = 8'h02;
+		end
+5'b00011:	// ADD
+		begin
+			expand[35:30] = `ADD;
+			expand[28:26] = 3'b011;	// word size
+			expand[25:20] = cinstr[5:0];
+			expand[19:14] = cinstr[13:8];
+			expand[13:8] = cinstr[5:0];
+			expand[7] = 1'b1;
+			expand[6:0] = 8'h02;		// R2 instruction
+		end
+5'b00101:	// JALR
+		begin
+			expand[35:20] = 20'd0;
+			expand[19:14] = cinstr[13:8];
+			expand[13:8] = cinstr[5:0];
+			expand[7] = 1'b1;
+			expand[6:0] = `JAL;
+		end
+5'b01001:	// LH Rt,d[SP]
+		begin
+			expand[35:20] = {{5{cinstr[13]}},cinstr[13:8],3'd0};
+			expand[19:14] = cinstr[5:0];
+			expand[13:8] = 6'd63;
+			expand[7] = 1'b1;
+			expand[6:0] = `LH;
+		end
+5'b01011:	// LW Rt,d[SP]
+		begin
+			expand[35:20] = {{5{cinstr[13]}},cinstr[13:8],3'd0};
+			expand[19:14] = cinstr[5:0];
+			expand[13:8] = 6'd63;
+			expand[7] = 1'b1;
+			expand[6:0] = `LW;
+		end
+5'b01101:	// LH Rt,d[fP]
+		begin
+			expand[35:20] = {{5{cinstr[13]}},cinstr[13:8],3'd0};
+			expand[19:14] = cinstr[5:0];
+			expand[13:8] = 6'd62;
+			expand[7] = 1'b1;
+			expand[6:0] = `LH;
+		end
+5'b01111:	// LW Rt,d[FP]
+		begin
+			expand[35:20] = {{5{cinstr[13]}},cinstr[13:8],3'd0};
+			expand[19:14] = cinstr[5:0];
+			expand[13:8] = 6'd62;
+			expand[7] = 1'b1;
+			expand[6:0] = `LW;
+		end
+5'b10001:	// SH Rt,d[SP]
+		begin
+			expand[35:20] = {{5{cinstr[13]}},cinstr[13:8],3'd0};
+			expand[19:14] = cinstr[5:0];
+			expand[13:8] = 6'd63;
+			expand[7] = 1'b1;
+			expand[6:0] = `SH;
+		end
+5'b10011:	// SW Rt,d[SP]
+		begin
+			expand[35:20] = {{5{cinstr[13]}},cinstr[13:8],3'd0};
+			expand[19:14] = cinstr[5:0];
+			expand[13:8] = 6'd63;
+			expand[7] = 1'b1;
+			expand[6:0] = `SW;
+		end
+5'b10101:	// SH Rt,d[fP]
+		begin
+			expand[35:20] = {{5{cinstr[13]}},cinstr[13:8],3'd0};
+			expand[19:14] = cinstr[5:0];
+			expand[13:8] = 6'd62;
+			expand[7] = 1'b1;
+			expand[6:0] = `SH;
+		end
+5'b10111:	// SW Rt,d[FP]
+		begin
+			expand[35:20] = {{5{cinstr[13]}},cinstr[13:8],3'd0};
+			expand[19:14] = cinstr[5:0];
+			expand[13:8] = 6'd62;
+			expand[7] = 1'b1;
+			expand[6:0] = `SW;
+		end
+5'b11001:
+		begin
+			expand[35:20] = {{9{cinstr[13:12]}},cinstr[5:4],3'd0};
+			expand[19:14] = fnRp(cinstr[11:8]);
+			expand[13:8] = fnRp(cinstr[3:0]);
+			expand[7] = 1'b1;
+			expand[6:0] = `LW;
+		end
+5'b11111:
+		begin
+			expand[35:20] = {{9{cinstr[13:12]}},cinstr[5:4],3'd0};
+			expand[19:14] = fnRp(cinstr[11:8]);
+			expand[13:8] = fnRp(cinstr[3:0]);
+			expand[7] = 1'b1;
+			expand[6:0] = `SW;
+		end
+default:
+		begin
+			expand[35:8] = 28'd0;
+			expand[7] = 1'b1;
+			expand[6:0] = `NOP;
+		end
+endcase
+
 endfunction
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
@@ -722,36 +1016,66 @@ assign fetchbuf1_v     = (fetchbuf == 1'b0) ? fetchbufB_v     : fetchbufD_v    ;
 assign fetchbuf1_pc    = (fetchbuf == 1'b0) ? fetchbufB_pc    : fetchbufD_pc   ;
 assign fetchbuf0_thrd  = 1'b0;
 assign fetchbuf1_thrd  = 1'b1;
-assign fetchbuf0_insln = (fetchbuf == 1'b0) ? fnInsLength(fetchbufA_instr) : fnIndLength(fetchbufC_instr);
-assign fetchbuf1_insln = (fetchbuf == 1'b0) ? fnInsLength(fetchbufB_instr) : fnIndLength(fetchbufD_instr);
+
+always @*
+begin
+    if (insn0[`INSTRUCTION_OP]==`EXEC)
+         fetchbuf0_insln <= fnInsLength(codebuf0);
+    else if (insn0[7])
+    	 fetchbuf0_insln <= fnInsLength(insn0);
+	else
+    	 fetchbuf0_insln <= fnInsLength(insn0);
+end
+
+always @*
+begin
+    if (insn1[`INSTRUCTION_OP]==`EXEC)
+         fetchbuf1_insln <= fnInsLength(codebuf1);
+    else if (insn1[7])
+    	 fetchbuf1_insln <= fnInsLength(insn1);
+	else
+    	 fetchbuf1_insln <= fnInsLength(insn1);
+end
+
+reg [47:0] cinsn0, cinsn1;
+
+always @*
+begin
+    if (insn0[`INSTRUCTION_OP]==`EXEC)
+         cinsn0 <= codebuf0;
+    else if (insn0[7])
+    	 cinsn0 <= expand(insn0[15:0]);
+    else
+         cinsn0 <= insn0;
+end
+
+always @*
+begin
+    if (insn1[`INSTRUCTION_OP]==`EXEC)
+         cinsn1 <= codebuf1;
+    else if (insn1[7])
+    	 cinsn1 <= expand(insn1[15:0]);
+    else
+         cinsn1 <= insn1;
+end
 
 task FetchA;
 begin
-    if (insn0[`INSTRUCTION_OP]==`EXEC)
-         fetchbufA_instr <= codebuf0;
-    else if (dcmp0)
-    	 fetchbufA_instr <= expand0;
-    else
-         fetchbufA_instr <= insn0;
+     fetchbufA_instr <= cinsn0;
      fetchbufA_v <= `VAL;
      fetchbufA_pc <= pc0;
     if (phit && ~hirq)
-    	pc0 <= pc0 + fnInsLength(fetchbufA_instr);
+    	pc0 <= pc0 + fetchbuf0_insln;;
 end
 endtask
 
 task FetchB;
 begin
-    if (insn1[`INSTRUCTION_OP]==`EXEC)
-         fetchbufB_instr <= codebuf1;
-    else if (dcmp1)
-    	 fetchbufB_instr <= expand1;
-    else
-         fetchbufB_instr <= insn1;
+     fetchbufB_instr <= cinsn1;
      fetchbufB_v <= `VAL;
      fetchbufB_pc <= pc1;
-    if (phit && (~hirq || thread_en))
-    	pc1 <= pc1 + fnInsLength(fetchbufB_instr);
+    if (phit)
+    	pc1 <= pc1 + fetchbuf1_insln;
 end
 endtask
 
@@ -765,31 +1089,21 @@ endtask
 
 task FetchC;
 begin
-    if (insn0[`INSTRUCTION_OP]==`EXEC)
-         fetchbufC_instr <= codebuf0;
-    else if (dcmp0)
-    	 fetchbufC_instr <= expand0;
-    else
-         fetchbufC_instr <= insn0;
+     fetchbufC_instr <= cinsn0;
      fetchbufC_v <= `VAL;
      fetchbufC_pc <= pc0;
     if (phit && ~hirq)
-    	pc0 <= pc0 + fnInsLength(fetchbufC_instr);
+    	pc0 <= pc0 + fetchbuf0_insln;
 end
 endtask
 
 task FetchD;
 begin
-    if (insn1[`INSTRUCTION_OP]==`EXEC)
-         fetchbufD_instr <= codebuf1;
-    else if (dcmp1)
-    	 fetchbufD_instr <= expand1;
-    else
-         fetchbufD_instr <= insn1;
+     fetchbufD_instr <= cinsn1;
      fetchbufD_v <= `VAL;
      fetchbufD_pc <= pc1;
-    if (phit && (~hirq || thread_en))
-    	pc1 <= pc1 + fnInsLength(fetchbufD_instr);
+    if (phit)
+    	pc1 <= pc1 + fetchbuf1_insln;
 end
 endtask
 
