@@ -1118,88 +1118,45 @@ static void emit_insn(int64_t oc, int can_compress, int sz)
  
 void LoadConstant(int64_t val, int rg)
 {
-	if (IsNBit(val, 20)) {
+	if (IsNBit(val, 14)) {
 		emit_insn(
-			(val << 20LL) |
-			(3 << 18LL) |
-			(rg << 12) |
-			(4 << 9) |		// LDI
-			0x1A, !expand_flag, 5);
+			(val << 18LL) |
+			(rg << 13) |
+			0x09, !expand_flag, 4);	// ORI
 		return;
 	}
-	if (IsNBit(val, 40)) {
+	if (IsNBit(val, 30)) {
 		emit_insn(
-			((val >> 20) << 20LL) |
-			(3 << 18LL) |
-			(rg << 12) |
-			(4 << 9) |		// LDI
+			(val << 18LL) |
+			(rg << 13) |
 			(1 << 6) |
-			0x1A, !expand_flag, 5);
-		if ((val & 0xfffffLL) != 0)
-		emit_insn(
-			(val << 20LL) |
-			(3 << 18) |
-			(rg << 12) |
-			(0 << 9) |		// ORI
-			0x1A, !expand_flag, 5);
+			0x09, !expand_flag, 6);
 		return;
 	}
-	if (IsNBit(val, 60)) {
+	if (IsNBit(val, 49)) {
 		emit_insn(
-			((val >> 40) << 20LL) |
-			(3 << 18LL) |
-			(rg << 12) |
-			(4 << 9) |		// LDI
-			(2 << 6) |
-			0x1A, !expand_flag, 5);
+			((val >> 30) << 13LL) |
+			(rg << 8) |
+			0x27, !expand_flag, 4);	// LUI
 		if (((val >> 20) & 0xfffffLL) != 0)
 			emit_insn(
-			((val >> 20) << 20LL) |
-			(3 << 18LL) |
-			(rg << 12) |
+			(val << 18LL) |
+			(rg << 13) |
 			(1 << 6) |
-			(0 << 9) |		// ORI
-			0x1A, !expand_flag, 5);
-		if ((val & 0xfffffLL) != 0)
-			emit_insn(
-			(val << 20LL) |
-			(3 << 18LL) |
-			(rg << 12) |
-			(0 << 9) |		// ORI
-			0x1A, !expand_flag, 5);
+			0x09, !expand_flag, 6);
 		return;
 	}
-	// Won't fit into 60 bits, assume 64 bit constant
+	// Won't fit into 49 bits, assume 64 bit constant
 	emit_insn(
-		((val >> 60) << 20LL) |
-		(3 << 18) |
-		(rg << 12) |
-		(4 << 9) |		// LDI
-		(3 << 6) |		// Q3
-		0x1A, !expand_flag, 5);
-	if (((val >> 40) & 0xfffffLL) != 0)
-		emit_insn(
-		((val >> 40) << 20LL) |
-		(3 << 18) |
-		(rg << 12) |
-		(0 << 9) |		// ORI
-		(2 << 6) |		// Q2
-		0x1A, !expand_flag, 5);
+		((val >> 30) << 13LL) |
+		(rg << 8) |
+		0x27, !expand_flag, 6);	// LUI
 	if (((val >> 20) & 0xfffffLL) != 0)
 		emit_insn(
-		((val >> 20) << 20LL) |
-		(3 << 18) |
-		(rg << 12) |
-		(0 << 9) |		// ORI
-		(1 << 6) |		// Q1
-		0x1A, !expand_flag, 5);
-	if ((val & 0xfffffLL) != 0)
-		emit_insn(
-		(val << 20LL) |
-		(3 << 18) |
-		(rg << 12) |
-		(0 << 9) |		// ORI
-		0x1A, !expand_flag, 5);
+		(val << 18LL) |
+			(rg << 13) |
+			(1 << 6) |
+			0x09, !expand_flag, 6);	// ORI
 	return;
 }
 
@@ -1875,6 +1832,7 @@ static void process_beqi(int64_t opcode6, int64_t opcode3)
     int64_t disp;
 	int sz = 3;
 	char *p;
+	bool isn48 = false;
 
 	p = inptr;
 	if (*p == '.')
@@ -1888,16 +1846,34 @@ static void process_beqi(int64_t opcode6, int64_t opcode3)
 	NextToken();
 	val = expr();
 	disp = val - (code_address + 4LL);
-	disp >>= 1;
-	if (!IsNBit(imm,10)) {
-		printf("Branch immediate too large: %d %I64d", lineno, imm);
+	if (!IsNBit(disp, 11)) {
+		disp = val - (code_address + 6LL);
+		isn48 = true;
 	}
-	emit_insn(((disp & 0x1FFF) << 27) |
-		(sz << 24) |
-		(pred << 22) |
-		((imm & 0x3FF) << 12) |
-		(Ra << 6) |
-		opcode6,!expand_flag,5
+	disp >>= 1;
+	if (!IsNBit(imm,8)) {
+		//printf("Branch immediate too large: %d %I64d", lineno, imm);
+		isn48 = false;
+		LoadConstant(imm, 23);
+		disp = val - (code_address + 4LL);
+		if (!IsNBit(disp, 11)) {
+			disp = val - (code_address + 6LL);
+			isn48 = true;
+		}
+		disp >>= 1;
+		emit_insn(
+			(disp << 21LL) |
+			(0x00 << 18) |		// BEQ
+			(23 << 13) |
+			(Ra << 8) |
+			0x30, !expand_flag, isn48 ? 6 : 4
+		);
+		return;
+	}
+	emit_insn((disp << 21LL) |
+		((imm & 0xFF) << 13) |
+		(Ra << 8) |
+		opcode6,!expand_flag,isn48 ? 6 : 4
 	);
     return;
 }
@@ -2013,35 +1989,22 @@ static void process_dbnz(int opcode6, int opcode3)
 		inptr = p;
 	    NextToken();
 		val = expr();
-		disp = val - (code_address + 5LL);
-		disp /= 5LL;
-		if (token==',') {
-			NextToken();
-			pred = (int)expr();
-		}
+		disp = val - (code_address + 4LL);
 		emit_insn(
-			(disp << 27LL) |
-			(sz << 24) |
-			((pred & 3) << 22) |
-			((opcode3 & 7) << 19) |
-			(0 << 12) |
-			(Ra << 6) |
-			opcode6,!expand_flag,5
+			(disp << 21LL) |
+			((opcode3 & 7) << 18) |
+			(0 << 13) |
+			(Ra << 8) |
+			opcode6,!expand_flag,4
 		);
 		return;
 	}
 	printf("dbnz: target must be a label %d.\n", lineno);
-	if (token==',') {
-		NextToken();
-		pred = (int)expr();
-	}
 	emit_insn(
-		((pred & 3) << 25) |
-		(opcode3 << 21) |
-		(Rc << 16) |
-		(0 << 11) |
-		(Ra << 6) |
-		0x03,!expand_flag,5
+		(opcode3 << 18) |
+		(0 << 13) |
+		(Ra << 8) |
+		opcode6,!expand_flag,4
 	);
 }
 
@@ -2324,10 +2287,17 @@ static void process_call(int opcode)
 			);
 		else
 			// jal lr,[Ra]	- call [Ra]
+			//emit_insn(
+			//	(29 << 13) |
+			//	(Ra << 8) |
+			//	0x18,!expand_flag,4
+			//);
 			emit_insn(
-				(29 << 11) |
-				(Ra << 6) |
-				0x18,!expand_flag,4
+				(2 << 12) | 
+				(((29 >> 1) & 0xf) << 8) |
+				(3 << 6) |
+				((29 & 1) << 5) |
+				Ra,0,2
 			);
 		return;
 	}
@@ -2358,7 +2328,7 @@ static void process_call(int opcode)
 				);
 		return;
 	}
-	if (!IsNBit(val, 28)) {
+	if (!IsNBit(val, 24)) {
 		emit_insn(
 			((((val >> 1) & 0xFFFFFFFFFFLL)) << 8) |
 			(1 << 6) |
