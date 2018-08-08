@@ -2856,12 +2856,14 @@ int NextToken()
 
         // zs:
         case 'z': case 'Z':
-            if (gCpu==4) {
-                if ((inptr[1]=='s'||inptr[1]=='S') && inptr[2]==':') {
-                    inptr += 3;
-                    return token = tk_zs;
-                }
-                if ((inptr[1]=='x' || inptr[1]=='X') &&
+			if (gCpu == 4 || gCpu == 'F') {
+				if ((inptr[1] == 's' || inptr[1] == 'S') && inptr[2] == ':') {
+					inptr += 3;
+					return token = tk_zs;
+				}
+			}
+			if (gCpu == 4 || gCpu == 'F') {
+				if ((inptr[1]=='x' || inptr[1]=='X') &&
                     (inptr[2]=='b' || inptr[2]=='B') &&
                     isspace(inptr[3])
                     ) {

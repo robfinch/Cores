@@ -1351,9 +1351,9 @@ static void process_riop(int64_t opcode6)
 				if (val >= -16 && val < 16) {
 					emit_insn(
 						(0 << 12) |
-						(((val >> 4) & 0x0F) << 8) |
+						(((val >> 1) & 0x0F) << 8) |
 						(2 << 6) |
-						(((val >> 3) & 0x1) << 5) |
+						((val & 0x1) << 5) |
 						Ra, 0, 2);
 					return;
 				}
@@ -1484,14 +1484,14 @@ static void process_rrop(int64_t funct6)
     //prevToken();
 	if (funct6==0x2E || funct6==0x2C || funct6==0x2D) {
 		funct6 += 0x10;	// change to divmod
-	    emit_insn((funct6<<34LL)||(sz<<24)||(Rt<<18)|(Rb<<12)|(Ra<<6)|0x02,!expand_flag,5);
+	    emit_insn((funct6<<26LL)||(1<<23)||(Rt<<18)|(Rb<<13)|(Ra<<8)|0x02,!expand_flag,4);
 		return;
 	}
 	else if (funct6==0x3C || funct6==0x3D || funct6==0x3E) {
-	    emit_insn((funct6<<34LL)||(sz<<24)|(Rt<<18)|(Rb<<12)|(Ra<<6)|0x02,!expand_flag,5);
+	    emit_insn((funct6<<26LL)||(0<<23)|(Rt<<18)|(Rb<<13)|(Ra<<8)|0x02,!expand_flag,4);
 		return;
 	}
-    emit_insn((funct6<<34LL)|(sz << 24)|(Rt<<18)|(Rb<<12)|(Ra<<6)|0x02,!expand_flag,5);
+    emit_insn((funct6<<26LL)|(sz << 23)|(Rt<<18)|(Rb<<13)|(Ra<<8)|0x02,!expand_flag,4);
 }
        
 // ---------------------------------------------------------------------------
@@ -1811,12 +1811,12 @@ static void process_rop(int oc)
     need(',');
     Ra = getRegisterX();
 	emit_insn(
-		(1LL << 34LL) |
-		(sz << 24) |
+		(1LL << 26LL) |
+		(sz << 23) |
 		(oc << 18) |
-		(Rt << 12) |
-		(Ra << 6) |
-		0x02,!expand_flag,5
+		(Rt << 13) |
+		(Ra << 8) |
+		0x02,!expand_flag,4
 		);
 	prevToken();
 }
@@ -1889,11 +1889,11 @@ static void process_beqi(int64_t opcode6, int64_t opcode3)
 
 static void process_bcc(int opcode6, int opcode4)
 {
-    int Ra, Rb, Rc, pred;
+    int Ra, Rb, pred;
 	int fmt;
     int64_t val;
     int64_t disp;
-	char *p, *p1;
+	char *p1;
 	bool ins48 = false;
 
     fmt = GetFPSize();
@@ -1992,7 +1992,7 @@ static void process_dbnz(int opcode6, int opcode3)
 		disp = val - (code_address + 4LL);
 		emit_insn(
 			(disp << 21LL) |
-			((opcode3 & 7) << 18) |
+			((opcode3 & 3) << 19) |
 			(0 << 13) |
 			(Ra << 8) |
 			opcode6,!expand_flag,4
@@ -2001,7 +2001,7 @@ static void process_dbnz(int opcode6, int opcode3)
 	}
 	printf("dbnz: target must be a label %d.\n", lineno);
 	emit_insn(
-		(opcode3 << 18) |
+		(opcode3 << 19) |
 		(0 << 13) |
 		(Ra << 8) |
 		opcode6,!expand_flag,4
@@ -2021,6 +2021,7 @@ static void process_ibne(int opcode6, int opcode3)
 	char *p1;
 	int sz = 3;
 	char *p;
+	bool isn48 = false;
 
 	p = inptr;
 	if (*p == '.')
@@ -2038,34 +2039,27 @@ static void process_ibne(int opcode6, int opcode3)
 		inptr = p;
 	    NextToken();
 		val = expr();
-		disp = val - (code_address + 5);
-		disp /= 5LL;
-		if (token==',') {
-			NextToken();
-			pred = (int)expr();
+		disp = val - (code_address + 4LL);
+		disp >>= 1;
+		if (!IsNBit(disp, 11)) {
+			isn48 = true;
+			disp = val - (code_address + 6LL);
+			disp >>= 1;
 		}
-	    emit_insn((disp & 0x1FFF) << 27 |
-			(sz << 24) |
-			((pred & 3) << 22) |
-			((opcode3 & 7) << 19) |
-			(Rb << 12) |
-			(Ra << 6) |
-			opcode6,!expand_flag,5
+	    emit_insn((disp << 21LL) |
+			((opcode3 & 3) << 19) |
+			(Rb << 13) |
+			(Ra << 8) |
+			opcode6,!expand_flag,isn48 ? 6 : 4
 		);
 		return;
 	}
 	printf("ibne: target must be a label %d.\n", lineno);
-	if (token==',') {
-		NextToken();
-		pred = (int)expr();
-	}
 	emit_insn(
-		((pred & 3) << 25) |
-		(opcode3 << 21) |
-		(Rc << 18) |
-		(Rb << 12) |
-		(Ra << 6) |
-		0x03,!expand_flag,5
+		(opcode3 << 19) |
+		(Rb << 13) |
+		(Ra << 8) |
+		0x03,!expand_flag,4
 	);
 }
 
@@ -2406,7 +2400,7 @@ static void process_ret()
 // inc -8[bp],#1
 // ----------------------------------------------------------------------------
 
-static void process_inc(int oc)
+static void process_inc(int64_t oc)
 {
     int Ra;
     int Rb;
@@ -2443,25 +2437,39 @@ static void process_inc(int oc)
        return;
     }
     if (oc==0x25) neg = 1;
-    oc = 0x24;        // INC
+    oc = 0x1A;        // INC
     if (Ra < 0) Ra = 0;
     if (neg) incamt = -incamt;
-	if (disp < LB16 || disp > 32767LL) {
+	incamt &= 31;
+	if (!IsNBit(disp, 30)) {
+		LoadConstant(disp, 23);
+		// Change to indexed addressing
 		emit_insn(
-			(0x8000 << 16) |
-			((incamt & 0x1f) << 11) |
-			(Ra << 6) |
-			oc,!expand_flag,2);
-		emit_insn(disp,!expand_flag,2);
+			(oc << 26LL) |
+			(0 << 23) |		// Sc = 0
+			(incamt << 18) |
+			(23 << 13) |
+			(Ra << 8) |
+			0x02, !expand_flag, 4);
+		ScanToEOL();
+		return;
 	}
-	else {
+	if (!IsNBit(disp, 14)) {
 		emit_insn(
-			(disp << 16) |
-			((incamt & 0x1f) << 11) |
-			(Ra << 6) |
-			oc,!expand_flag,2);
-    }
-    ScanToEOL();
+			(disp << 18LL) |
+			(incamt << 13) |
+			(Ra << 8) |
+			(1 << 6) |
+			oc, !expand_flag, 6);
+		ScanToEOL();
+		return;
+	}
+	emit_insn(
+		(disp << 18LL) |
+		(incamt << 13) |
+		(Ra << 8) |
+		oc, !expand_flag, 4);
+	ScanToEOL();
 }
        
 // ---------------------------------------------------------------------------
@@ -3366,7 +3374,7 @@ static void process_mov(int64_t oc, int64_t fn)
 			 (0 << 12) |
 			 (3 << 6) |
 			 ((Rt >> 1) << 8) |
-			 ((Rt & 1) << 6) |
+			 ((Rt & 1) << 5) |
 			 (Ra),
 		 0,2);
 		 prevToken();
@@ -3909,7 +3917,7 @@ static void ProcessEOL(int opt)
 			nn += cai;
 			caia += cai;
         }
-		for (jj = 8 - caia; jj >= 0; jj--)
+		for (jj = 8 - (int)caia; jj >= 0; jj--)
 			fprintf(ofp, "   ");
 //        for (; nn < mm + caia; nn++)
 //            fprintf(ofp, "  ");
@@ -3990,7 +3998,7 @@ void FT64_processMaster()
         case tk_add:  process_rrop(0x04); break;
         case tk_addi: process_riop(0x04); break;
         case tk_align: process_align(); continue; break;
-        case tk_and:  process_rrrop(0x08); break;
+        case tk_and:  process_rrop(0x08); break;
         case tk_andi:  process_riop(0x08); break;
         case tk_asl: process_shift(0x2); break;
         case tk_asr: process_shift(0x3); break;
@@ -4055,9 +4063,10 @@ void FT64_processMaster()
             process_data(dataseg);
             break;
         case tk_db:  process_db(); break;
-		case tk_dbnz: process_dbnz(0x26,7); break;
+		case tk_dbnz: process_dbnz(0x26,3); break;
         case tk_dc:  process_dc(); break;
-        case tk_dh:  process_dh(); break;
+		case tk_dec:	process_inc(0x25); break;
+		case tk_dh:  process_dh(); break;
         case tk_dh_htbl:  process_dh_htbl(); break;
 		case tk_div: process_riop(0x3E); break;
         case tk_dw:  process_dw(); break;
@@ -4079,7 +4088,8 @@ void FT64_processMaster()
 		case tk_fneg:	process_fprop(0x14); break;
 		case tk_fsub:	process_fprrop(0x05); break;
 		case tk_hint:	process_hint(); break;
-		case tk_ibne: process_ibne(0x26,6); break;
+		case tk_ibne: process_ibne(0x26,2); break;
+		case tk_inc:	process_inc(0x1A); break;
 		case tk_if:		pif1 = inptr-2; doif(); break;
 		case tk_itof: process_itof(0x15); break;
 		case tk_iret:	process_iret(0xC8000002); break;
@@ -4114,7 +4124,7 @@ void FT64_processMaster()
         case tk_nop: emit_insn(0x1C,0,4); break;
 		case tk_not: process_rop(0x05); break;
 //        case tk_not: process_rop(0x07); break;
-        case tk_or:  process_rrrop(0x09); break;
+        case tk_or:  process_rrop(0x09); break;
         case tk_ori: process_riop(0x09); break;
         case tk_org: process_org(); break;
         case tk_plus: expand_flag = 1; break;
@@ -4189,9 +4199,12 @@ void FT64_processMaster()
 		case tk_vsubs: process_vsrrop(0x15); break;
 		case tk_vxor: process_vrrop(0x0A); break;
 		case tk_vxors: process_vsrrop(0x1A); break;
-        case tk_xor: process_rrrop(0x0A); break;
+        case tk_xor: process_rrop(0x0A); break;
         case tk_xori: process_riop(0x0A); break;
-        case tk_id:  process_label(); break;
+		case tk_zxb: process_rop(0x0A); break;
+		case tk_zxc: process_rop(0x09); break;
+		case tk_zxh: process_rop(0x08); break;
+		case tk_id:  process_label(); break;
         case '-': compress_flag = 1; expand_flag = 0; break;
         }
         NextToken();

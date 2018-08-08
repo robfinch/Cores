@@ -1,11 +1,11 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2014  Robert Finch, Stratford
+//   \\__/ o\    (C) 2018  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-// A64 - Assembler
+// AS64 - Assembler
 //  - 64 bit CPU
 //
 // This source file is free software: you can redistribute it and/or modify 
