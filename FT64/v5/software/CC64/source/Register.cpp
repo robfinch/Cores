@@ -176,8 +176,6 @@ void SpillRegister(AMODE *ap, int number)
 
 void SpillFPRegister(AMODE *ap, int number)
 {
-	SpillRegister(ap, number);
-	return;
 	GenerateDiadic(op_sf,'d',ap,make_indexed(TempBot()-ap->deep*sizeOfWord,regFP));
     fpreg_stack[fpreg_stack_ptr].amode = ap;
     fpreg_stack[fpreg_stack_ptr].f.allocnum = number;
@@ -199,8 +197,6 @@ void LoadRegister(int regno, int number)
 
 void LoadFPRegister(int regno, int number)
 {
-	LoadRegister(regno, number);
-	return;
 	if (fpreg_in_use[regno] >= 0)
 		fatal("LoadRegister():register still in use");
 	fpreg_in_use[regno] = number;
@@ -356,7 +352,6 @@ AMODE *GetTempFPRegister()
     SYM *sym = currentFn;
 	int number;
  
-	return (GetTempRegister());
 	number = fpreg_in_use[next_fpreg];
 	if (number >= 0) {
 		SpillFPRegister(fpreg_alloc[number].amode,number);

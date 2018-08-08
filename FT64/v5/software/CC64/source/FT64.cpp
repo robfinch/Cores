@@ -542,8 +542,8 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int predi
 
 	size = GetNaturalSize(node);
     if (op==op_flt || op==op_fle || op==op_fgt || op==op_fge || op==op_feq || op==op_fne) {
-    	ap1 = GenerateExpression(node->p[0],F_REG,size);
-	    ap2 = GenerateExpression(node->p[1],F_REG|F_IMM0,size);
+    	ap1 = GenerateExpression(node->p[0],F_FPREG,size);
+	    ap2 = GenerateExpression(node->p[1],F_FPREG,size);
     }
     else {
     	ap1 = GenerateExpression(node->p[0],F_REG, size);
@@ -627,7 +627,7 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int predi
 		switch(op) {
 		case op_fbne:
 			if (ap2->mode==am_immed) {
-				ap3 = GetTempRegister();
+				ap3 = GetTempFPRegister();
 				GenerateDiadic(op_ldi,0,ap3,ap2);
 				ReleaseTempRegister(ap3);
 				GenerateTriadicNT(op_fbne,sz,ap1,ap3,make_clabel(label));

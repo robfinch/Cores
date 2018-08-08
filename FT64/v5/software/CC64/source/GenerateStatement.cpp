@@ -98,7 +98,7 @@ AMODE *makefpreg(int r)
 {
 	AMODE *ap;
     ap = allocAmode();
-    ap->mode = am_reg;
+    ap->mode = am_fpreg;
     ap->preg = r;
     ap->type = stddouble.GetIndex();
     return ap;

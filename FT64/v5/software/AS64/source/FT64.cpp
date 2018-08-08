@@ -991,6 +991,22 @@ static int DSD7_getSprRegister()
     return -1;
 }
 
+// Detect if a register can be part of a compressed instruction
+int CmpReg(int reg)
+{
+	switch(reg) {
+	case 1:	return(0);
+	case 3: return(1);
+	case 4: return(2);
+	case 11: return(3);
+	case 12: return(4);
+	case 18: return(5);
+	case 19: return(6);
+	case 20: return(7);
+	default:
+		return(-1);
+	}
+}
 // ---------------------------------------------------------------------------
 // Process the size specifier for a FP instruction.
 // h: half (16 bit)
@@ -1315,7 +1331,7 @@ static void GetArBits(int64_t *aq, int64_t *rl)
 static void process_riop(int64_t opcode6)
 {
     int Ra;
-    int Rt;
+    int Rt, Rtp;
     char *p;
     int64_t val;
 	int sz = 3;
@@ -1373,20 +1389,20 @@ static void process_riop(int64_t opcode6)
 			return;
 		}
 	}
-/*
 	// Compress ORI ?
-	if (opcode6 == 0x09 && Ra == Rt && (Rtp = IsCmpReg(Ra)) >= 0) {
-		if (val > -32 && val < 32) {
+	if (opcode6 == 0x09 && Ra == Rt && (Rtp = CmpReg(Ra)) >= 0) {
+		if (val > -16 && val < 16) {
 			emit_insn(
-				(4 << 14) |
-				(10 << 4) |
-				((val & 0x3f) << 8) |
-				Rt, 0, 18
+				(4 << 12) |
+				(((val >> 1) & 0x0f) << 8) |
+				(2 << 6) |
+				(2 << 4) |
+				((val & 1) << 3) |
+				Rtp, 0, 2
 			);
 		}
 		return;
 	}
-*/
 	if (!IsNBit(val, 14)) {
 		if (!IsNBit(val, 30)) {
 			Lui34(val, 23);
@@ -1462,7 +1478,7 @@ static void process_setiop(int64_t opcode6, int64_t cond4)
 
 static void process_rrop(int64_t funct6)
 {
-    int Ra,Rb,Rt;
+    int Ra,Rb,Rt,Rbp,Rtp;
     char *p;
 	int sz = 3;
 
@@ -1481,7 +1497,75 @@ static void process_rrop(int64_t funct6)
     }
     prevToken();
     Rb = getRegisterX();
-    //prevToken();
+	// Compress ADD
+	if (funct6 == 0x04 && Ra == Rt) {
+		emit_insn(
+			(1 << 12) |
+			(((Ra >> 1) & 0xF) << 8) |
+			(3 << 6) |
+			((Ra & 1) << 5) |
+			(Rt),
+			0,2
+		);
+		return;
+	}
+	// Compress SUB
+	if (funct6 == 0x05 && Ra == Rt && (Rtp = CmpReg(Rt)) >= 0 && (Rbp = CmpReg(Rb)) >= 0) {
+		emit_insn(
+			(4 << 12) |
+			(0 << 10) |
+			(((Rbp >> 1) & 0x3) << 8) |
+			(2 << 6) |
+			(3 << 4) |
+			((Rbp & 1) << 3) |
+			(Rtp),
+			0, 2
+		);
+		return;
+	}
+	// Compress AND
+	if (funct6 == 0x08 && Ra == Rt && (Rtp = CmpReg(Rt)) >= 0 && (Rbp = CmpReg(Rb)) >= 0) {
+		emit_insn(
+			(4 << 12) |
+			(1 << 10) |
+			(((Rbp >> 1) & 0x3) << 8) |
+			(2 << 6) |
+			(3 << 4) |
+			((Rbp & 1) << 3) |
+			(Rtp),
+			0, 2
+		);
+		return;
+	}
+	// Compress OR
+	if (funct6 == 0x09 && Ra == Rt && (Rtp = CmpReg(Rt)) >= 0 && (Rbp = CmpReg(Rb)) >= 0) {
+		emit_insn(
+			(4 << 12) |
+			(2 << 10) |
+			(((Rbp >> 1) & 0x3) << 8) |
+			(2 << 6) |
+			(3 << 4) |
+			((Rbp & 1) << 3) |
+			(Rtp),
+			0, 2
+		);
+		return;
+	}
+	// Compress XOR
+	if (funct6 == 0x0A && Ra == Rt && (Rtp = CmpReg(Rt)) >= 0 && (Rbp = CmpReg(Rb)) >= 0) {
+		emit_insn(
+			(4 << 12) |
+			(3 << 10) |
+			(((Rbp >> 1) & 0x3) << 8) |
+			(2 << 6) |
+			(3 << 4) |
+			((Rbp & 1) << 3) |
+			(Rtp),
+			0, 2
+		);
+		return;
+	}
+	//prevToken();
 	if (funct6==0x2E || funct6==0x2C || funct6==0x2D) {
 		funct6 += 0x10;	// change to divmod
 	    emit_insn((funct6<<26LL)||(1<<23)||(Rt<<18)|(Rb<<13)|(Ra<<8)|0x02,!expand_flag,4);
@@ -1678,20 +1762,31 @@ static void process_fprop(int64_t oc)
     rm = 0;
     fmt = GetFPSize();
     p = inptr;
-    Rt = getRegisterX();
+    Rt = getFPRegister();
     need(',');
-    Ra = getRegisterX();
+    Ra = getFPRegister();
     if (token==',')
        rm = getFPRoundMode();
 //    prevToken();
-    emit_insn(
-			(oc << 34LL) |
+	if (fmt != 2) {
+		emit_insn(
+			(oc << 42LL) |
+			((int64_t)fmt << 31LL) |
 			(rm << 28) |
-			(fmt << 24)|
+			(Rt << 23) |
+			(0 << 13) |
+			(Ra << 8) |
+			0x0F, !expand_flag, 6
+		);
+		return;
+	}
+    emit_insn(
+			(oc << 26LL) |
+			(rm << 23) |
 			(Rt << 18)|
-			(0 << 12)|
-			(Ra << 6) |
-			0x0F,!expand_flag,5
+			(0 << 13)|
+			(Ra << 8) |
+			0x0F,!expand_flag,4
 			);
 }
 
@@ -1710,7 +1805,7 @@ static void process_itof(int64_t oc)
     rm = 0;
     fmt = GetFPSize();
     p = inptr;
-    Rt = getRegisterX();
+    Rt = getFPRegister();
     need(',');
     Ra = getRegisterX();
     if (token==',')
@@ -1747,22 +1842,35 @@ static void process_fprrop(int64_t oc)
     if (oc==0x01)        // fcmp
         Rt = getRegisterX();
     else
-        Rt = getRegisterX();
+        Rt = getFPRegister();
     need(',');
-    Ra = getRegisterX();
+    Ra = getFPRegister();
     need(',');
-    Rb = getRegisterX();
+    Rb = getFPRegister();
     if (token==',')
        rm = getFPRoundMode();
 //    prevToken();
+	if (fmt != 2) {
+		emit_insn(
+			(oc << 42LL) |
+			((int64_t)fmt << 31LL) |
+			(rm << 28LL) |
+			(Rt << 23) |
+			(Rb << 13) |
+			(Ra << 8) |
+			(1 << 6) |
+			0x0F, !expand_flag, 6
+		);
+		return;
+	}
+
     emit_insn(
-			(oc << 34LL)|
-			(fmt << 24)|
-			(rm << 28LL)|
+			(oc << 26LL)|
+			(rm << 23LL)|
 			(Rt << 18)|
-			(Rb << 12)|
-			(Ra << 6) |
-			0x0F,!expand_flag,5
+			(Rb << 13)|
+			(Ra << 8) |
+			0x0F,!expand_flag,4
 			);
 }
 
@@ -2203,12 +2311,13 @@ static void process_chki(int opcode6)
 // fbeq.q fp1,fp0,label
 // ---------------------------------------------------------------------------
 
-static void process_fbcc(int opcode3)
+static void process_fbcc(int64_t opcode3)
 {
     int Ra, Rb;
     int64_t val;
     int64_t disp;
 	int sz;
+	bool ins48 = false;
 
     sz = GetFPSize();
     Ra = getFPRegister();
@@ -2218,40 +2327,19 @@ static void process_fbcc(int opcode3)
     NextToken();
 
     val = expr();
-    disp = val - code_address;
-	if (disp < -255 || disp > 255) {
-		// Flip the test
-		switch(opcode3) {
-		case 0:	opcode3 = 1; break;
-		case 1:	opcode3 = 0; break;
-		case 2:	opcode3 = 3; break;
-		case 3:	opcode3 = 2; break;
-		case 4:	opcode3 = 5; break;
-		case 5: opcode3 = 4; break;
-		case 6:	opcode3 = 7; break;
-		case 7:	opcode3 = 6; break;
-		}
-		emit_insn(
-			(sz << 27) |
-			(4 << 21) |
-			(opcode3 << 18) |
-			(Rb << 12) |
-			(Ra << 6) |
-			0x01,0,2
-		);
-		emit_insn((disp & 0x1FFF) << 19 |
-			0x12,!expand_flag,2
-		);
-		return;
+	disp = val - (code_address + 4);
+	if (!IsNBit(disp, 12)) {
+		disp = val - (code_address + 6);
+		ins48 = true;
 	}
-    emit_insn(
-		(((disp & 0x1FF) >> 6) << 29) |
-		(sz << 27) |
-		((disp & 0x3F) << 21) |
+	disp >>= 1;
+	emit_insn(
+		(disp << 21LL) |
 		(opcode3 << 18) |
-        (Rb << 12) |
-        (Ra << 6) |
-        0x01,!expand_flag,2
+		(Rb << 13) |
+		(Ra << 8) |
+		((ins48 ? 1 : 0) << 6) |
+		0x05, !expand_flag, ins48 ? 6 : 4
     );
 }
 
@@ -3190,7 +3278,7 @@ static void process_lv(int opcode6)
 	ScanToEOL();
 }
 
-static void process_lsfloat(int opcode6, int opcode3)
+static void process_lsfloat(int64_t opcode6, int64_t opcode3)
 {
     int Ra,Rb;
     int Rt;
@@ -3206,7 +3294,7 @@ static void process_lsfloat(int opcode6, int opcode3)
     rm = 0;
     sz = GetFPSize();
     p = inptr;
-    Rt = getRegisterX();
+    Rt = getFPRegister();
     if (Rt < 0) {
         printf("Expecting a target register (1:%d).\r\n", lineno);
         printf("Line:%.60s\r\n",p);
@@ -3229,26 +3317,38 @@ static void process_lsfloat(int opcode6, int opcode3)
 	}
     if (Ra < 0) Ra = 0;
     val = disp;
-	if (val < -2048 || val > 2047) {
-		LoadConstant12(val,23);
+	if (!IsNBit(val, 27)) {
+		LoadConstant(val, 23);
 		// Change to indexed addressing
 		emit_insn(
-			(0x3B << 26) |
-			(opcode3 << 23) |
-			(Rt << 16) |
-			(23 << 11) |
-			(Ra << 6) |
-			0x02,!expand_flag,4);
+			(opcode6 << 26LL) |
+			(0 << 23) |		// Sc = 0
+			(Rt << 18) |
+			(23 << 13) |
+			(Ra << 8) |
+			0x02, !expand_flag, 4);
+		ScanToEOL();
+		return;
+	}
+	if (!IsNBit(val, 11)) {
+		emit_insn(
+			(val << 21LL) |
+			(sz << 18) |
+			(Rt << 13) |
+			(Ra << 8) |
+			(1 << 6) |
+			opcode6, !expand_flag, 6);
 		ScanToEOL();
 		return;
 	}
 	emit_insn(
-		(opcode3 << 28) |
-		((val & 0xFFF) << 16) |
-		(Rt << 11) |
-		(Ra << 6) |
-		0x0B,!expand_flag,4);
-    ScanToEOL();
+		(val << 21LL) |
+		(sz << 18) |
+		(Rt << 13) |
+		(Ra << 8) |
+		opcode6, !expand_flag, 4);
+	ScanToEOL();
+
 }
 
 static void process_ld()
@@ -3296,6 +3396,7 @@ static void process_mov(int64_t oc, int64_t fn)
      int Rt;
      char *p;
 	 int vec = 0;
+	 int fp = 0;
 	 int d3;
 	 int rgs = 8;
 	 int sz = 3;
@@ -3309,8 +3410,15 @@ static void process_mov(int64_t oc, int64_t fn)
      Rt = getRegisterX();
 	 if (Rt==-1) {
 		 inptr = p;
-		 vec = 1;
-		 Rt = getVecRegister();
+		 Rt = getFPRegister();
+		 if (Rt == -1) {
+			 d3 = 4;
+			 inptr = p;
+			 vec = 1;
+			 Rt = getVecRegister();
+		 }
+		 else
+			 fp = 1;
 	 }
 	 Rt &= 31;
 	if (inptr[-1]==':') {
@@ -3329,8 +3437,19 @@ static void process_mov(int64_t oc, int64_t fn)
      Ra = getRegisterX();
 	 if (Ra==-1) {
 		 inptr = p;
-		 Ra = getVecRegister();
-		 vec |= 2;
+		 Ra = getFPRegister();
+		 if (Ra == -1) {
+			 inptr = p;
+			 Ra = getVecRegister();
+			 vec |= 2;
+		 }
+		 else {
+			 if (fp == 1)
+				 d3 = 6;
+			 else
+				 d3 = 5;
+			 fp |= 2;
+		 }
 	 }
 	 Ra &= 31;
 	if (inptr[-1]==':') {
@@ -4077,10 +4196,10 @@ void FT64_processMaster()
         case tk_eori: process_riop(0x0A); break;
         case tk_extern: process_extern(); break;
 		case tk_fadd:	process_fprrop(0x04); break;
-        case tk_fbeq:	process_bcc(0x30,8); break;
-        case tk_fbge:	process_bcc(0x30,11); break;
-        case tk_fblt:	process_bcc(0x30,10); break;
-        case tk_fbne:	process_bcc(0x30,9); break;
+        case tk_fbeq:	process_fbcc(0); break;
+        case tk_fbge:	process_fbcc(3); break;
+        case tk_fblt:	process_fbcc(2); break;
+        case tk_fbne:	process_fbcc(1); break;
 		case tk_fdiv:	process_fprrop(0x09); break;
         case tk_fill: process_fill(); break;
 		case tk_fmov:	process_fprop(0x10); break;
@@ -4182,8 +4301,11 @@ void FT64_processMaster()
         case tk_swc:  process_store(0x17); break;
         case tk_swap: process_rop(0x03); break;
 		//case tk_swp:  process_storepair(0x27); break;
+		case tk_sxb: process_rop(0x1A); break;
+		case tk_sxc: process_rop(0x19); break;
+		case tk_sxh: process_rop(0x18); break;
 		case tk_sync: emit_insn(0x04120002,0,4); break;
-		case tk_unlink: emit_insn((0x1B << 26) | (0x1F << 16) | (30 << 11) | (0x1F << 6) | 0x02,0,4); break;
+		//case tk_unlink: emit_insn((0x1B << 26) | (0x1F << 16) | (30 << 11) | (0x1F << 6) | 0x02,0,4); break;
 		case tk_vadd: process_vrrop(0x04); break;
 		case tk_vadds: process_vsrrop(0x14); break;
 		case tk_vand: process_vrrop(0x08); break;

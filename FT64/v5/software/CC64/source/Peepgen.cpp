@@ -1016,6 +1016,30 @@ void PeepoptLabel(OCODE *ip)
 
 void PeepoptSxb(OCODE *ip)
 {
+	// Optimize away sign extension of a signed load
+	if (ip->back) {
+		if (ip->back->opcode == op_lb && ip->opcode == op_sxb) {
+			if (ip->back->oper1->preg == ip->oper1->preg && ip->oper1->preg==ip->oper2->preg) {
+				MarkRemove(ip);
+				optimized++;
+				return;
+			}
+		}
+		if (ip->back->opcode == op_lc && ip->opcode == op_sxc) {
+			if (ip->back->oper1->preg == ip->oper1->preg && ip->oper1->preg == ip->oper2->preg) {
+				MarkRemove(ip);
+				optimized++;
+				return;
+			}
+		}
+		if (ip->back->opcode == op_lh && ip->opcode == op_sxh) {
+			if (ip->back->oper1->preg == ip->oper1->preg && ip->oper1->preg == ip->oper2->preg) {
+				MarkRemove(ip);
+				optimized++;
+				return;
+			}
+		}
+	}
      if (!ip->fwd)
          return;
      if (ip->fwd->opcode != ip->opcode)

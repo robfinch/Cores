@@ -143,6 +143,9 @@ Instruction opl[] =
 {"zxh",op_zxh,1,true},
 {"zxc",op_zxc,1,true },
 {"zxb",op_zxb,1,true },
+{ "sxh",op_sxh,1,true },
+{ "sxc",op_sxc,1,true },
+{ "sxb",op_sxb,1,true },
 {"jmp",op_jmp,1,false},
 	{"lea",op_lea,1,true},
 
@@ -877,7 +880,7 @@ int quadlit(Float128 *f128)
 	lp->nmspace = my_strdup(GetNamespace());
 	lp->next = quadtab;
 	quadtab = lp;
-	return lp->label;
+	return (lp->label);
 }
 
 

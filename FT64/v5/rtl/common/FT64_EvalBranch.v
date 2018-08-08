@@ -36,8 +36,8 @@
 `define BLTU	3'h6
 `define BGEU	3'h7
 
-`define IBNE	3'd6
-`define DBNZ	3'd7
+`define IBNE	2'd2
+`define DBNZ	2'd3
 
 module FT64_EvalBranch(instr, a, b, c, takb);
 parameter WID=64;
@@ -64,10 +64,10 @@ case(opcode)
 	endcase
 `BEQI:	takb <= a=={{56{instr[20]}},instr[20:13]};
 `BBc:
-	case(instr[19:17])
-	3'd0:	takb <=  a[instr[16:11]];	// BBS
-	3'd1:	takb <= ~a[instr[16:11]];	// BBC
-	`IBNE:	takb <=  a!=b;
+	case(instr[20:19])
+	2'd0:	takb <=  a[instr[18:13]];	// BBS
+	2'd1:	takb <= ~a[instr[18:13]];	// BBC
+	`IBNE:	takb <=  a==b;
 	`DBNZ:	takb <=  a!=b;
 	default:	takb <= `TRUE;
 	endcase
