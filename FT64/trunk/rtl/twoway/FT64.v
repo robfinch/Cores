@@ -169,6 +169,8 @@ parameter wyde = 3'd1;
 parameter tetra = 3'd2;
 parameter octa = 3'd3;
 
+wire dc_ack;
+wire acki = ack_i|dc_ack;
 wire [RBIT:0] Ra0, Ra1;
 wire [RBIT:0] Rb0, Rb1;
 wire [RBIT:0] Rc0, Rc1;
@@ -800,13 +802,14 @@ reg phit;
 wire threadx;
 always @*
 	phit <= ihit&&icstate==IDLE;
-reg [1:0] iccnt;
+reg [2:0] iccnt;
 reg L1_wr0,L1_wr1;
 reg L1_invline;
-reg [7:0] L1_en;
+reg [9:0] L1_en;
 reg [37:0] L1_adr, L2_adr;
-reg [255:0] L2_rdat;
-wire [255:0] L2_dato;
+reg [319:0] L2_rdat;
+wire [319:0] L2_dato;
+reg L2_xsel;
 
 FT64_regfile2w6r_oc #(.RBIT(RBIT)) urf1
 (
@@ -873,6 +876,7 @@ FT64_L2_icache uic2
     .clk(clk),
     .nxt(L2_nxt),
     .wr(bstate==B7 && ack_i),
+    .xsel(L2_xsel),
     .adr(L2_adr),
     .cnt(iccnt),
     .exv_i(exvq),
@@ -1438,6 +1442,7 @@ case(isn[`INSTRUCTION_OP])
 			3'd3:	fnRa = {rs_stack[thrd][5:0],1'b0,isn[`INSTRUCTION_RA]};
 			3'd4:	fnRa = {rgs[thrd],1'b0,isn[`INSTRUCTION_RA]};
 			3'd5:	fnRa = {rgs[thrd][5:1],1'b1,1'b0,isn[`INSTRUCTION_RA]};
+			3'd6:	fnRa = {rgs[thrd][5:1],1'b1,1'b0,isn[`INSTRUCTION_RA]};
 			default:fnRa = {rgs[thrd],1'b0,isn[`INSTRUCTION_RA]};
 			endcase
         `VMOV:
@@ -1544,6 +1549,7 @@ casez(isn[`INSTRUCTION_OP])
 			3'd3:	fnRt = {rgs[thrd],1'b0,isn[`INSTRUCTION_RB]};
 			3'd4:	fnRt = {rgs[thrd][5:1],1'b1,1'b0,isn[`INSTRUCTION_RB]};
 			3'd5:	fnRt = {rgs[thrd],1'b0,isn[`INSTRUCTION_RB]};
+			3'd6:	fnRt = {rgs[thrd][5:1],1'b1,1'b0,isn[`INSTRUCTION_RB]};
 			default:fnRt = {rgs[thrd],1'b0,isn[`INSTRUCTION_RB]};
 			endcase
         `VMOV:
@@ -1634,6 +1640,7 @@ case(isn[`INSTRUCTION_OP])
 			3'd3:	fnRa = {rs_stack[5:0],1'b0,isn[`INSTRUCTION_RA]};
 			3'd4:	fnRa = {rgs,1'b0,isn[`INSTRUCTION_RA]};
 			3'd5:	fnRa = {rgs[5:1],1'b1,1'b0,isn[`INSTRUCTION_RA]};
+			3'd6:	fnRa = {rgs[5:1],1'b1,1'b0,isn[`INSTRUCTION_RA]};
 			default:fnRa = {rgs,1'b0,isn[`INSTRUCTION_RA]};
 			endcase
         `VMOV:
@@ -1740,6 +1747,7 @@ casez(isn[`INSTRUCTION_OP])
 			3'd3:	fnRt = {rgs,1'b0,isn[`INSTRUCTION_RB]};
 			3'd4:	fnRt = {rgs[5:1],1'b1,1'b0,isn[`INSTRUCTION_RB]};
 			3'd5:	fnRt = {rgs,1'b0,isn[`INSTRUCTION_RB]};
+			3'd6:	fnRt = {rgs[5:1],1'b1,1'b0,isn[`INSTRUCTION_RB]};
 			default:fnRt = {rgs,1'b0,isn[`INSTRUCTION_RB]};
 			endcase
         `VMOV:
@@ -2613,7 +2621,7 @@ endfunction
 
 function IsSync;
 input [31:0] isn;
-IsSync = (isn[`INSTRUCTION_OP]==`RR && isn[`INSTRUCTION_S2]==`R1 && isn[25:21]==`SYNC); 
+IsSync = (isn[`INSTRUCTION_OP]==`RR && isn[`INSTRUCTION_S2]==`R1 && isn[20:16]==`SYNC); 
 endfunction
 
 function IsFSync;
@@ -2623,12 +2631,12 @@ endfunction
 
 function IsMemdb;
 input [31:0] isn;
-IsMemdb = (isn[`INSTRUCTION_OP]==`RR && isn[`INSTRUCTION_S2]==`R1 && isn[25:21]==`MEMDB); 
+IsMemdb = (isn[`INSTRUCTION_OP]==`RR && isn[`INSTRUCTION_S2]==`R1 && isn[20:16]==`MEMDB); 
 endfunction
 
 function IsMemsb;
 input [31:0] isn;
-IsMemsb = (isn[`INSTRUCTION_OP]==`RR && isn[`INSTRUCTION_S2]==`R1 && isn[25:21]==`MEMSB); 
+IsMemsb = (isn[`INSTRUCTION_OP]==`RR && isn[`INSTRUCTION_S2]==`R1 && isn[20:16]==`MEMSB); 
 endfunction
 
 function IsSEI;
@@ -2834,7 +2842,7 @@ begin
         `LCX,`LCOX,`LCUX,`SCX:
             case(adr[2:1])
             2'd0:   fnSelect = 8'h03;
-            2'd1:   fnSelect = 8'hC0;
+            2'd1:   fnSelect = 8'h0C;
             2'd2:   fnSelect = 8'h30;
             2'd3:   fnSelect = 8'hC0;
             endcase
@@ -2861,7 +2869,7 @@ begin
 	        `LVC,`LVCU:
 	            case(adr[2:1])
 	            2'd0:   fnSelect = 8'h03;
-	            2'd1:   fnSelect = 8'hC0;
+	            2'd1:   fnSelect = 8'h0C;
 	            2'd2:   fnSelect = 8'h30;
 	            2'd3:   fnSelect = 8'hC0;
 	            endcase
@@ -2889,7 +2897,7 @@ begin
     `LC,`LCO,`LCU,`SC:
         case(adr[2:1])
         2'd0:   fnSelect = 8'h03;
-        2'd1:   fnSelect = 8'hC0;
+        2'd1:   fnSelect = 8'h0C;
         2'd2:   fnSelect = 8'h30;
         2'd3:   fnSelect = 8'hC0;
         endcase
@@ -2924,7 +2932,7 @@ begin
         `LVC,`LVCU:
             case(adr[2:1])
             2'd0:   fnSelect = 8'h03;
-            2'd1:   fnSelect = 8'hC0;
+            2'd1:   fnSelect = 8'h0C;
             2'd2:   fnSelect = 8'h30;
             2'd3:   fnSelect = 8'hC0;
             endcase
@@ -3248,6 +3256,13 @@ FT64_fetchbuf #(AMSB,RSTPC) ufb1
     .rst(rst),
     .clk4x(clk4x),
     .clk(clk),
+    .cs_i(adr_o[31:16]==16'hFFFF),
+    .cyc_i(cyc_o),
+    .stb_i(stb_o),
+    .ack_o(dc_ack),
+    .we_i(we_o),
+    .adr_i(adr_o[15:0]),
+    .dat_i(dat_o[31:0]),
     .hirq(hirq),
     .regLR(regLR),
     .thread_en(thread_en),
@@ -5210,8 +5225,8 @@ assign fcu_branchmiss = fcu_dataready &&
 // The fcu_timeout tracks how long the flow control op has been in the "out" state.
 // It should never be that way more than a couple of cycles. Sometimes the fcu_wr pulse got missed
 // because the following instruction got stomped on during a branchmiss, hence iqentry_v isn't true.
-wire fcu_wr = (fcu_v && iqentry_v[nid] && iqentry_sn[nid] > iqentry_sn[fcu_id[`QBITS]]	// && iqentry_v[nid]
-					&& fcu_instr==iqentry_instr[fcu_id[`QBITS]]);// || fcu_timeout==8'h05;
+wire fcu_wr = (fcu_v && iqentry_v[nid] && iqentry_sn[nid] > iqentry_sn[fcu_id[`QBITS]]);//	// && iqentry_v[nid]
+//					&& fcu_instr==iqentry_instr[fcu_id[`QBITS]]);// || fcu_timeout==8'h05;
 
 	FT64_AMO_alu uamoalu0 (amo_instr, amo_argA, amo_argB, amo_res);
 
@@ -5617,6 +5632,7 @@ if (rst) begin
      seq_num <= 5'd0;
      seq_num1 <= 5'd0;
      fcu_done <= `TRUE;
+     sema <= 64'h0;
 end
 else begin
 	ld_time <= {ld_time[4:0],1'b0};
@@ -6895,7 +6911,7 @@ IDLE:
              L2_adr <= {pcr[5:0],pc0[31:3],3'h0};
              L1_invline <= TRUE;
              icwhich <= 1'b0;
-             iccnt <= 2'b00;
+             iccnt <= 3'b00;
              icstate <= IC2;
         end
         else if (!ihit1) begin
@@ -6903,7 +6919,7 @@ IDLE:
              L2_adr <= {pcr[5:0],pc1[31:3],3'h0};
              L1_invline <= TRUE;
              icwhich <= 1'b1;
-             iccnt <= 2'b00;
+             iccnt <= 3'b00;
              icstate <= IC2;
         end
     end
@@ -7270,14 +7286,15 @@ BIDLE:
              icl_o <= `HIGH;
 //            adr_o <= icwhich ? {pc0[31:5],5'b0} : {pc1[31:5],5'b0};
 //            L2_adr <= icwhich ? {pc0[31:5],5'b0} : {pc1[31:5],5'b0};
-             adr_o <= {pcr[5:0],L1_adr[31:3],3'h0};
-             L2_adr <= {pcr[5:0],L1_adr[31:3],3'h0};
+             adr_o <= {pcr[5:0],L1_adr[31:5],5'h0};
+             L2_adr <= {pcr[5:0],L1_adr[31:5],5'h0};
+             L2_xsel <= 1'b0;
              bstate <= B7;
         end
     end
 // Terminal state for a store operation.
 B1:
-    if (ack_i|err_i) begin
+    if (acki|err_i) begin
     	 isStore <= `TRUE;
          cyc_o <= `LOW;
          stb_o <= `LOW;
@@ -7352,7 +7369,7 @@ B2:
              adr_o <= {dram2_addr[31:3],3'b0};
              bstate <= B2d;
             end
-    default:    if (~ack_i)  bstate <= BIDLE;
+    default:    if (~acki)  bstate <= BIDLE;
     endcase
     end
 // Data cache load terminal state
@@ -7418,11 +7435,11 @@ B7:
         	L2_rdat <= {8{13'b0,3'd7,3'b0,`FLT_IBE,`BRK}};
         else
         	L2_rdat <= {4{dat_i}};
-        iccnt <= iccnt + 2'd1;
+        iccnt <= iccnt + 3'd1;
         //stb_o <= `LOW;
-        if (iccnt==2'd2)
+        if (iccnt==3'd3)
             cti_o <= 3'b111;
-        if (iccnt==2'd3) begin
+        if (iccnt==3'd4) begin
             cti_o <= 3'b000;
             bte_o <= 2'b00;		// linear burst
             cyc_o <= `LOW;
@@ -7433,6 +7450,8 @@ B7:
         end
         else begin
             L2_adr[4:3] <= L2_adr[4:3] + 2'd1;
+            if (L2_adr[4:3]==2'b11)
+            	L2_xsel <= 1'b1;
         end
     end
 B9:
@@ -7440,6 +7459,7 @@ B9:
 		L1_wr0 <= `FALSE;
 		L1_wr1 <= `FALSE;
 		L1_en <= 8'hFF;
+		L2_xsel <= 1'b0;
 		if (~ack_i) begin
 			bstate <= BIDLE;
 			L2_nxt <= TRUE;
@@ -7521,7 +7541,7 @@ B16:    begin
             end
 B17:     bstate <= B18;
 B18:     bstate <= B19;
-B19:    if (~ack_i)  begin bstate <= BIDLE; isStore <= `FALSE; end
+B19:    if (~acki)  begin bstate <= BIDLE; isStore <= `FALSE; end
 B20:
 	if (~ack_i) begin
 		stb_o <= `HIGH;
