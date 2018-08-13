@@ -161,7 +161,8 @@
 `define CMOVEQ      6'h28
 `define CMOVNE      6'h29
 `define LBOX		6'h2A
-`define LCOX       	6'h2B
+//`define LCOX       	6'h2B
+`define ISPTR		6'h2B
 `define MIN         6'h2C
 `define MAX         6'h2D
 `define MAJ         6'h2E
@@ -171,7 +172,8 @@
 `define RTI         6'h32
 `define RTE         6'h32
 `define VMOV        6'h33
-`define LHOX		6'h35
+//`define LHOX		6'h35
+`define SPTR		6'h35
 `define LVX         6'h36
 `define SVX         6'h37
 `define MULU        6'h38
@@ -317,6 +319,7 @@
 `define CSR_BADADR  11'h007
 `define CSR_PCR2    11'h008
 `define CSR_SCRATCH 11'h009
+`define CSR_WBRCD	11'h00A
 `define CSR_SEMA    11'h00C
 `define CSR_SBL     11'h00E
 `define CSR_SBU     11'h00F

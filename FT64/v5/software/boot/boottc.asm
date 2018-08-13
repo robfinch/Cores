@@ -47,11 +47,14 @@
 ;
 E_BadCallno	equ		-4
 
-LEDS		equ		$FFDC0600
-BUTTONS		equ		$FFDC0600
-SCRATCHPAD	equ		$FF400000
-AVIC		equ		$FFDCC000
-TC1			equ		$FFD0DF00
+ROMBASE		equ		$FFFFFFFFFFFC0000
+IOBASE		equ		$FFFFFFFFFFD00000
+LEDS		equ		$FFFFFFFFFFDC0600
+BUTTONS		equ		$FFFFFFFFFFDC0600
+SCRATCHPAD	equ		$FFFFFFFFFF400000
+AVIC		equ		$FFFFFFFFFFDCC000
+TC1			equ		$FFFFFFFFFFD0DF00
+PIT			equ		$FFFFFFFFFFDC1100
 
 WHITE		equ		$7FFF
 MEDBLUE		equ		$000F
@@ -68,9 +71,9 @@ __brk_stack	equ	SCRATCHPAD + 2048
 ; Help the assembler out by telling it how many bits are required for code
 ; addresses
 		code	18 bits
-		org		$FFFC0000		; start of ROM memory space
+		org		ROMBASE			; start of ROM memory space
 		jmp		__BrkHandler	; jump to the exception handler
-		org		$FFFC0100		; The PC is set here on reset
+		org		ROMBASE + $100	; The PC is set here on reset
 		jmp		start			; Comment out this jump to test i-cache
 test_icache:
 	; This seems stupid but maybe necessary. Writes to r0 always cause it to
@@ -81,13 +84,13 @@ test_icache:
 -
 		and		r0,r0,#0		; cannot use LDI which does an or operation
 		; set trap vector
-		ldi		r1,#$FFFC0000
+		ldi		r1,#ROMBASE
 		csrrw	r0,#$30,r1
-		ldi		r31,#$FF400FF8	; set stack pointer
+		ldi		$sp,#SCRATCHPAD+$FF8	; set stack pointer
 		sei		#0
 
 	; Seed random number generator
-		ldi		r6,#$FFDC0000
+		ldi		r6,#IOBASE+$C0000
 		sh		r0,$0C04[r6]			; select stream #0
 		ldi		r1,#$88888888
 		sh		r1,$0C08[r6]			; set initial m_z
@@ -95,18 +98,18 @@ test_icache:
 		sh		r1,$0C0C[r6]			; set initial m_w
 .st4:
 	; Get a random number
-		sh		r0,$FFDC0C04	; set the stream
+		sh		r0,$0C04[r6]	; set the stream
 		nop						; delay a wee bit
-		lhu		r1,$FFDC0C00	; get a number
-		sh		r0,$FFDC0C00	; generate next number
+		lhu		r1,$0C00[r6]	; get a number
+		sh		r0,$0C00[r6]	; generate next number
 
 	; convert to random address
-		shl		r1,r1,#2
-		and		r1,r1,#$1FFC
-		add		r1,r1,#$FF401000	; scratchram address
+		mul		r1,r1,#5
+		and		r1,r1,#$1FFF
+		add		r1,r1,#SCRATCHPAD+$1000	; scratchram address
 		
 	; Fill an area with test code
-		ldi		r2,#15			; number of ops - 1
+		ldi		r2,#(.st6-.st2)/4		; number of ops - 1
 		ldi		r3,#.st2		; address of test routine copy
 .st3:
 		lhu		r4,[r3+r2*4]	; move from boot rom to
@@ -115,7 +118,7 @@ test_icache:
 	
 	; Now jump to the test code
 		cache	#3,[r1]			; invalidate the cache
-		jal		r29,[r1]
+		jal		r61,[r1]
 		ldi		r2,#14			; this is the value that should be returned
 		cmp		r1,r1,r2
 		bne		r1,r0,.st5
@@ -124,7 +127,7 @@ test_icache:
 	; Display fail code
 .st5:
 		ldi		r1,#$FA
-		sb		r1,$FFDC0600
+		sb		r1,$0600[r6]
 		bra		.st5
 
 ; Test code accumulates for 16 instructions, sum should be 14
@@ -146,6 +149,7 @@ test_icache:
 		add		r1,r1,#1		
 		add		r1,r1,#1		
 		ret
+.st6:
 
 start:
 	; This seems stupid but maybe necessary. Writes to r0 always cause it to
@@ -154,6 +158,15 @@ start:
 	; on. At power on the reg should be zero, but let's not assume that and
 	; write a zero to it.
 		and		r0,r0,#0		; cannot use LDI which does an or operation
+
+	; The following code must run shortly after the org statement determining
+	; where code is located.
+	; Get the high order bits of the program address into the program
+	; address pointer register r55.
+		jal		$r22,.st3
+.st3:
+		and		$r22,$r22,#$FFFC0000	; mask off the low order bits
+
 		bra		.st1
 .st2:
 		ldi		r2,#$AA
@@ -167,7 +180,7 @@ start:
 		sb		r2,LEDS			; write to LEDs
 
 		; set trap vector
-		ldi		r1,#$FFFC0000
+		ldi		r1,#$FFFFFFFFFFFC0000
 		csrrw	r0,#$30,r1
 		ldi		r1,#__BrkHandler6
 		csrrw	r0,#$36,r1			// tvec[6]
@@ -194,8 +207,7 @@ start:
 		add		r0,r0,#0
 		add		r0,r0,#0
 		csrrd	r1,#$044,r0		; which thread is running ?
-		bfextu	r1,r1,#24,#24	
-		bne		r1,r0,.st2
+		bbs		r1,#24,.st2
 
 		call	calltest3
 
@@ -226,7 +238,7 @@ start1:
 
 	; Initialize PRNG
 		sw		r0,_randStream
-		ldi		r6,#$FFDC0000
+		ldi		r6,#$FFFFFFFFFFDC0000
 		sh		r0,$0C04[r6]			; select stream #0
 		ldi		r1,#$88888888
 		sh		r1,$0C08[r6]			; set initial m_z
@@ -235,7 +247,7 @@ start1:
 
 		ldi		r2,#6
 		sb		r2,LEDS			; write to LEDs
-		jal		r29,clearTxtScreen
+		jal		lr,clearTxtScreen
 		ldi		r4,#$0025
 		sb		r4,LEDS
 _StartApp:
@@ -251,7 +263,8 @@ brkrout:
 	; Set the interrupt level back to the interrupting level
 	; to allow nesting higher priority interrupts
 		csrrd	r1,#$044,r0
-		bfextu	r1,r1,#40,#42
+		shr		r1,r1,#40
+		and		r1,r1,#7
 		;sei		r1
 		lh		r1,_milliseconds
 		add		r1,r1,#1
@@ -278,9 +291,9 @@ brkrout:
 		rti
 
 calltest:
-		sw		r1,$FF400000		; 1
+		sw		r1,SCRATCHPAD		; 1
 		add		r1,r1,#2			; 2
-		lw		r1,$FF400000		; 3
+		lw		r1,SCRATCHPAD		; 3
 		ret
 
 calltest1:
@@ -335,10 +348,10 @@ _Set400x300:
 ;------------------------------------------------------------------------------
 
 _GetRand:
-		sh		r18,$FFDC0C04	; set the stream
+		sh		r18,$FFFFFFFFFFDC0C04	; set the stream
 		nop						; delay a wee bit
-		lhu		r1,$FFDC0C00	; get a number
-		sh		r0,$FFDC0C00	; generate next number
+		lhu		r1,$FFFFFFFFFFDC0C00	; get a number
+		sh		r0,$FFFFFFFFFFDC0C00	; generate next number
 		ret
 
 ;------------------------------------------------------------------------------
@@ -504,17 +517,17 @@ _SyncCursorPos:
 ;----------------------------------------------------------------------------
 ;----------------------------------------------------------------------------
 _EnableCursor:
-		push	r2
-		push	r3
-		push	r6
-		
+		sub		sp,sp,#24
+		sw		r2,[$sp]
+		sw		r3,8[$sp]
+		sw		r6,16[$sp]
 		ldi		r6,#AVIC
 		ldi		r2,#$FFFFFFFF
 		sh		r2,$7B0[a6]		; enable sprite #0
-		pop		r6
-		pop		r3
-		pop		r2
-		ret
+		lw		r2,[$sp]
+		lw		r3,8[$sp]
+		lw		r6,16[$sp]
+		ret		#24
 
 ;----------------------------------------------------------------------------
 ; Setup the sprite color palette. The palette is loaded with random colors.
@@ -550,12 +563,13 @@ _SetCursorPalette:
 ;----------------------------------------------------------------------------
 
 _SetCursorImage:
-		push	r2
-		push	r3
-		push	r4
-		push	r5
-		push	r6
-		push	r7
+		sub		$sp,$sp,#48
+		sw		r2,[$sp]
+		sw		r3,8[$sp]
+		sw		r4,16[$sp]
+		sw		r5,24[$sp]
+		sw		r6,32[$sp]
+		sw		r7,40[$sp]
 
 		ldi		r6,#AVIC
 		ldi		r7,#$400
@@ -582,13 +596,13 @@ _SetCursorImage:
 		sub		r5,r5,#1
 		bne		r5,r0,.0001
 
-		pop		r7		
-		pop		r6
-		pop		r5
-		pop		r4
-		pop		r3
-		pop		r2
-		ret
+		lw		r2,[$sp]
+		lw		r3,8[$sp]
+		lw		r4,16[$sp]
+		lw		r5,24[$sp]
+		lw		r6,32[$sp]
+		lw		r7,40[$sp]
+		ret		#48
 
 	align	8
 _CursorBoxImage:
@@ -666,7 +680,7 @@ _RandomizeSpritePositions2:
 clearTxtScreen:
 		ldi		r4,#$0024
 		sb		r4,LEDS
-		ldi		r1,#$FFD00000	; text screen address
+		ldi		r1,#$FFFFFFFFFFD00000	; text screen address
 		ldi		r2,#24		; number of chars 2480 (80x31)
 		ldi		r3,#%000010000_111111111_0000100000
 .cts1:
@@ -676,6 +690,171 @@ clearTxtScreen:
 		bne		r2,r0,.cts1
 		ret
 
+;----------------------------------------------------------------------------
+; The GC needs an interrupt level all to itself.
+; - a higher priority interrupt may interrupt the GC, the GC stop interrupt
+;   will only be able to run when the GC exec interrupt routine is executing
+; - if there were other interrupt routines at the same level as the GC then
+;   it would be possible that some other interrupt might be running when
+;   the GC stop interrupt occurs. That would make it impossible to use a
+;   two up-level interrupt return and some other means of stopping execution
+;   of the GC would have to be found.
+;----------------------------------------------------------------------------
+brkrout2:
+		csrrw	r0,#9,r1		; store r1 in scratch
+
+		; Read the golex viewport register to determine if the exception
+		; should be handled globally or locally.
+		csrrd	r1,#GOLEXVP,r0
+		; 0=global, 1=local handling
+		beq		r1,r0,.0001		; branch to global handler
+		
+		; now setup to invoke the local hander
+		; load r1,r2 with cause and type
+		csrrd	r1,#CAUSE,r0	; get cause code into r1
+		mov		r1:x,r1			; put into exceptioned register set
+		ldi		r2,#45			; exception type = system exception
+		mov		r2:x,r2
+		
+		; Return to the exception handler code, not the exception return
+		; point. The exception handler address should be in r28.
+		mov		r1,r28:x
+		; Should probably do a quick check for a reasonable return
+		; address here.
+		csrrw	r0,#EPC,r1		; stuff r28 into the return pc
+		sync
+		rti						; go back to the local code
+		
+		; Here global handling of exceptions is done
+.0001:
+		csrrd	$r1,#$6,r0				; read cause code
+		beqi	$r1,#GC_EXEC,.execGC
+		beqi	$r1,#GC_STOP,.stopGC
+		rti
+
+.execGC:
+		; GC stop interrupt programmed for one-shot operation here
+		ldi		$r6,#PIT
+		; The number of cycles to allow the GC to run must be less than
+		; the number of cycles between GC interrupts
+		ldi		$r1,#2000000			; number of cycles to run GC for (0.1s)
+		sh		$r1,$24[r6]				; max count
+		sub		$r1,$r1,#2				; back off a couple of cycles
+		sh		$r1,$28[r6]				; store when 1 output
+		ldi		$r1,#3					; configure for one-shot
+		sb		$r1,$0D[r6]				; counter #2 only control
+		
+		; Re-enable the GC interrupt level so that a GC stop interrupt
+		; may interrupt the routine.
+		sei		#3
+		
+		lw		$r1,_gc_state
+		beq		$r1,$r0,.xgc			; if the state was IDLE just call the routine and return
+
+		// Restore operating key		
+		csrrd	r1,#3,r0		// get PCR
+		and		$r1,$r1,#$FFFFFFFFFFFFFF00
+		lbu		$r2,_gc_mapno
+		or		$r1,$r1,$r2
+		csrrw	r1,#3,r1		// set PCR
+
+		lw		$r1,_gc_regs+0			; Restore registers
+		lw		$r2,_gc_regs+8
+		lw		$r3,_gc_regs+16
+		lw		$r4,_gc_regs+24
+		lw		$r5,_gc_regs+32
+		lw		$r6,_gc_regs+40
+		lw		$r7,_gc_regs+48
+		lw		$r8,_gc_regs+56
+		lw		$r9,_gc_regs+64
+		lw		$r10,_gc_regs+72
+		lw		$r11,_gc_regs+80
+		lw		$r12,_gc_regs+88
+		lw		$r13,_gc_regs+96
+		lw		$r14,_gc_regs+104
+		lw		$r15,_gc_regs+112
+		lw		$r16,_gc_regs+120
+		lw		$r17,_gc_regs+128
+		lw		$r18,_gc_regs+136
+		lw		$r19,_gc_regs+144
+		lw		$r20,_gc_regs+152
+		lw		$r21,_gc_regs+160
+		lw		$r22,_gc_regs+168
+		lw		$r23,_gc_regs+176
+		lw		$r24,_gc_regs+184
+		lw		$r25,_gc_regs+192
+		lw		$r26,_gc_regs+200
+		lw		$r27,_gc_regs+208
+		lw		$r28,_gc_regs+216
+		lw		$r29,_gc_regs+224
+		lw		$r30,_gc_regs+232
+		lw		$r31,_gc_regs+240
+		; Here $r22 is used, meaning the GC code can't pass more than four
+		; values in registers. $r22 is normally arg#5.
+		; This is one spot where a memory indirect jump would be handy.
+		lw		$r22,_gc_pc
+		jmp		[$r22]
+.xgc:
+		lea		$sp,_gc_stack+255*8	; switch to GC stack
+		call	__GCExec
+		rti
+
+		; GCStop can only be entered when GC is running. It does a two up level
+		; return after saving the GC context.
+.stopGC:
+		lw		$r1,_gc_state
+		beq		$r1,$r0,.idle
+		csrrd	$r1,#9,$r0			; get back r1
+		sw		$r1,_gc_regs+0
+		sw		$r2,_gc_regs+8
+		sw		$r3,_gc_regs+16
+		sw		$r4,_gc_regs+24
+		sw		$r5,_gc_regs+32
+		sw		$r6,_gc_regs+40
+		sw		$r7,_gc_regs+48
+		sw		$r8,_gc_regs+56
+		sw		$r9,_gc_regs+64
+		sw		$r10,_gc_regs+72
+		sw		$r11,_gc_regs+80
+		sw		$r12,_gc_regs+88
+		sw		$r13,_gc_regs+96
+		sw		$r14,_gc_regs+104
+		sw		$r15,_gc_regs+112
+		sw		$r16,_gc_regs+120
+		sw		$r17,_gc_regs+128
+		sw		$r18,_gc_regs+136
+		sw		$r19,_gc_regs+144
+		sw		$r20,_gc_regs+152
+		sw		$r21,_gc_regs+160
+		sw		$r22,_gc_regs+168
+		sw		$r23,_gc_regs+176
+		sw		$r24,_gc_regs+184
+		sw		$r25,_gc_regs+192
+		sw		$r26,_gc_regs+200
+		sw		$r27,_gc_regs+208
+		sw		$r28,_gc_regs+216
+		sw		$r29,_gc_regs+224
+		sw		$r30,_gc_regs+232
+		sw		$r31,_gc_regs+240
+
+		// Restore operating key		
+		csrrd	r1,#3,r0		// get PCR
+		and		$r1,$r1,#$FFFFFFFFFFFFFF00
+		lbu		$r2,_gc_omapno
+		or		$r1,$r1,$r2
+		csrrw	r1,#3,r1		// set PCR
+		
+		; Replace the EPC pointer with a pointer to an RTI. The the RTI will
+		; execute another RTI.
+		lea		$r1,.stopRti
+		csrrw	$r1,#EPC0,$r1
+		sw		$r1,_gc_pc
+.stopRti:
+		rti
+.idle:
+		csrrd	$r1,#9,$r0			; get back r1
+		rti
+		
 ;===============================================================================
 ;===============================================================================
 ;===============================================================================
@@ -838,38 +1017,38 @@ vec1data:
 vec2data:
 	dw	2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2
 
-.include "c:\Cores5\FT64\trunk\software\c64libc\source\cc64rt.s"
-.include "c:\Cores5\FT64\trunk\software\boot\brkrout.asm"
-.include "c:\Cores5\FT64\trunk\software\boot\BIOSMain.s"
-.include "c:\Cores5\FT64\trunk\software\boot\FloatTest.s"
-.include "c:\Cores5\FT64\trunk\software\boot\ramtest.s"
+.include "d:\Cores5\FT64\v5\software\c64libc\source\cc64rt.s"
+.include "d:\Cores5\FT64\v5\software\boot\brkrout.asm"
+.include "d:\Cores5\FT64\v5\software\boot\BIOSMain.s"
+.include "d:\Cores5\FT64\v5\software\boot\FloatTest.s"
+.include "d:\Cores5\FT64\v5\software\boot\ramtest.s"
 	align	4096
-.include "c:\Cores5\FT64\trunk\software\c64libc\source\stdio.s"
-.include "c:\Cores5\FT64\trunk\software\c64libc\source\ctype.s"
-.include "c:\Cores5\FT64\trunk\software\c64libc\source\string.s"
-.include "c:\Cores5\FT64\trunk\software\c64libc\source\malloc.s"
-.include "c:\Cores5\FT64\trunk\software\c64libc\source\prtflt.s"
-.include "c:\Cores5\FT64\trunk\software\c64libc\source\FT64\io.s"
+.include "d:\Cores5\FT64\v5\software\c64libc\source\stdio.s"
+.include "d:\Cores5\FT64\v5\software\c64libc\source\ctype.s"
+.include "d:\Cores5\FT64\v5\software\c64libc\source\string.s"
+.include "d:\Cores5\FT64\v5\software\c64libc\source\malloc.s"
+.include "d:\Cores5\FT64\v5\software\c64libc\source\prtflt.s"
+.include "d:\Cores5\FT64\v5\software\c64libc\source\FT64\io.s"
 	align	4096
-.include "c:\Cores5\FT64\trunk\software\c64libc\source\libquadmath\log10q.s"
-.include "c:\Cores5\FT64\trunk\software\FMTK\source\kernel\LockSemaphore.s"
-.include "c:\Cores5\FT64\trunk\software\FMTK\source\kernel\UnlockSemaphore.s"
-.include "c:\Cores5\FT64\trunk\software\FMTK\source\kernel\console.s"
-.include "c:\Cores5\FT64\trunk\software\FMTK\source\kernel\PIT.asm"
-.include "c:\Cores5\FT64\trunk\software\FMTK\source\kernel\PIC.s"
+.include "d:\Cores5\FT64\v5\software\c64libc\source\libquadmath\log10q.s"
+.include "d:\Cores5\FT64\v5\software\FMTK\source\kernel\LockSemaphore.s"
+.include "d:\Cores5\FT64\v5\software\FMTK\source\kernel\UnlockSemaphore.s"
+.include "d:\Cores5\FT64\v5\software\FMTK\source\kernel\console.s"
+.include "d:\Cores5\FT64\v5\software\FMTK\source\kernel\PIT.asm"
+.include "d:\Cores5\FT64\v5\software\FMTK\source\kernel\PIC.s"
 	align	4096
-.include "c:\Cores5\FT64\trunk\software\FMTK\source\kernel\FMTKc.s"
-.include "c:\Cores5\FT64\trunk\software\FMTK\source\kernel\FMTKmsg.s"
-.include "c:\Cores5\FT64\trunk\software\FMTK\source\kernel\TCB.s"
-.include "c:\Cores5\FT64\trunk\software\FMTK\source\kernel\IOFocusc.s"
+.include "d:\Cores5\FT64\v5\software\FMTK\source\kernel\FMTKc.s"
+.include "d:\Cores5\FT64\v5\software\FMTK\source\kernel\FMTKmsg.s"
+.include "d:\Cores5\FT64\v5\software\FMTK\source\kernel\TCB.s"
+.include "d:\Cores5\FT64\v5\software\FMTK\source\kernel\IOFocusc.s"
 
-.include "c:\Cores5\FT64\trunk\software\FMTK\source\kernel\keybd.s"
-.include "c:\Cores5\FT64\trunk\software\FMTK\source\memmgnt2.s"
-.include "c:\Cores5\FT64\trunk\software\FMTK\source\app.s"
-.include "c:\Cores5\FT64\trunk\software\FMTK\source\shell.s"
-.include "c:\Cores5\FT64\trunk\software\bootrom\source\video.asm"
-.include "c:\Cores5\FT64\trunk\software\bootrom\source\TinyBasicDSD9.asm"
+.include "d:\Cores5\FT64\v5\software\FMTK\source\kernel\keybd.s"
+.include "d:\Cores5\FT64\v5\software\FMTK\source\memmgnt2.s"
+.include "d:\Cores5\FT64\v5\software\FMTK\source\app.s"
+.include "d:\Cores5\FT64\v5\software\FMTK\source\shell.s"
+.include "d:\Cores5\FT64\v5\software\bootrom\source\video.asm"
+.include "d:\Cores5\FT64\v5\software\bootrom\source\TinyBasicDSD9.asm"
 
 	align	4096
-.include "c:\Cores5\FT64\trunk\software\FMTK\source\kernel\scancodes.asm"
-.include "c:\Cores5\FT64\trunk\software\FMTK\source\kernel\fmtk_vars.asm"
+.include "d:\Cores5\FT64\v5\software\FMTK\source\kernel\scancodes.asm"
+.include "d:\Cores5\FT64\v5\software\FMTK\source\kernel\fmtk_vars.asm"

@@ -25,7 +25,7 @@
 `include "FT64_defines.vh"
 
 module FT64_alu(rst, clk, ld, abort, instr, a, b, c, pc, tgt, tgt2, ven, vm, sbl, sbu,
-    csr, o, ob, done, idle, excen, exc, thrd);
+    csr, o, ob, done, idle, excen, exc, thrd, ptrmask);
 parameter DBW = 64;
 parameter BIG = 1'b1;
 parameter SUP_VECTOR = 1;
@@ -54,6 +54,7 @@ output reg idle;
 input [4:0] excen;
 output reg [8:0] exc;
 input thrd;
+input [63:0] ptrmask;
 integer n;
 
 wire [7:0] a8 = a[7:0];
@@ -730,6 +731,10 @@ case(instr[`INSTRUCTION_OP])
     `LBX,`LBOX,`LBUX,`LCX,`LCOX,`LCUX,
     `LHX,`LHOX,`LHUX,`LWX,`LWRX,`SBX,`SCX,`SHX,`SWX,`SWCX:
     		   	o = BIG ? a + (b << instr[22:21]) : 64'hCCCCCCCCEEEEEEEE;
+	 `ISPTR:	 if ((a & ptrmask)==64'd0)
+ 					o = a + (b << instr[22:21]);
+ 				else
+ 					o = 64'd0;
     `LVx:		o = BIG ? a + (b << instr[22:21]) : 64'hCCCCCCCCCCCCCCCC;
     `LVX,`SVX:  o = BIG ? a + (b << 2'd3) : 64'hCCCCCCCCCCCCCCCC;
     `LVWS,`SVWS:    o = BIG ? a + ({b * ven,3'b000}) : 64'hCCCCCCCCCCCCCCCC;
@@ -846,13 +851,10 @@ case(instr[`INSTRUCTION_OP])
  `MODI:      o = BIG ? rem : 64'hCCCCCCCCCCCCCCCC;
  `LB,`LBO,`LBU,`LC,`LCO,`LCU,`LH,`LHO,`LHU,`LW,`LWR,
  `SB,`SC,`SH,`SW,`SWC,`CAS:  o = a + b;
- `PCREL:
- 			case(instr[11:6])
- 			`PCRELLEA,
-			 `LB,`LBO,`LBU,`LC,`LCO,`LCU,`LH,`LHO,`LHU,`LW,`LWR,
-			 `SB,`SC,`SH,`SW,`SWC,`CAS:  o = a + b;
-			default:	o = 64'hDEADDEADDEADDEAD;
- 			endcase
+ `ISPTR:	 if ((a & ptrmask)==64'd0)
+ 				o = a + b;
+ 			else
+ 				o = 64'd0;
  `LVx:		 o = a + sxb12;
  `LV,`SV:    o = a + b + {ven,3'b0};
  `CSRRW:     o = BIG ? csr | {thrd,24'h0} : 64'hDDDDDDDDDDDDDDDD;
@@ -892,7 +894,7 @@ endfunction
 
 always @*
 begin
-if ((tgt[5:0]==6'd63 || tgt[5:0]==6'd62) && (o[31:0] < sbl || o[31:0] > sbu))
+if ((tgt[4:0]==5'd31 || tgt[4:0]==5'd30) && (o[31:0] < sbl || o[31:0] > sbu))
     exc <= `FLT_STK;
 else
 case(instr[`INSTRUCTION_OP])

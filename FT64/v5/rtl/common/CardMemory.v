@@ -1,4 +1,31 @@
-module CardMemory(clk_i, cs_i, ack_o, wr_i, adr_i, dat_i, dat_o, stp,mapno,sadr);
+`timescale 1ns / 1ps
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2017-2018  Robert Finch, Waterloo
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+//	CardMemory.v
+//		
+//
+// This source file is free software: you can redistribute it and/or modify 
+// it under the terms of the GNU Lesser General Public License as published 
+// by the Free Software Foundation, either version 3 of the License, or     
+// (at your option) any later version.                                      
+//                                                                          
+// This source file is distributed in the hope that it will be useful,      
+// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+// GNU General Public License for more details.                             
+//                                                                          
+// You should have received a copy of the GNU General Public License        
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+//                                                                          
+//
+// ============================================================================
+//
+module CardMemory(clk_i, cs_i, ack_o, wr_i, adr_i, dat_i, dat_o, stp, mapno);
 input clk_i;
 input cs_i;
 output reg ack_o;		// acknowledge
@@ -8,7 +35,6 @@ input [63:0] dat_i;
 output reg [63:0] dat_o;
 input stp;				// store pointer
 input [5:0] mapno;
-input [31:0] sadr;
 
 parameter IDLE = 3'd0;
 parameter ACC  = 3'd1;
@@ -46,8 +72,8 @@ begin
 					ack_o <= 1'b1;
 			end
 			else if (stp) begin
-				ma <= {mapno,sadr[18:11]};
-				bn <= sadr[10:5];
+				ma <= {mapno,adr_i[18:11]};
+				bn <= adr_i[10:5];
 				state <= STP1a;
 			end
 		end
@@ -71,8 +97,8 @@ begin
 	STP1c:
 		begin
 			wcm <= 1'b0;
-			ma <= {mapno,6'd0,sadr[18:17]};
-			bn <= sadr[16:11];
+			ma <= {mapno,6'd0,adr_i[18:17]};
+			bn <= adr_i[16:11];
 			state <= STP2a;
 		end
 	STP2a:
