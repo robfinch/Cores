@@ -333,7 +333,7 @@ reg [63:0] sema;
 reg [63:0] vm_sema;
 reg [63:0] cas;         // compare and swap
 reg [63:0] ve_hold;
-reg isCAS, isAMO;
+reg isCAS, isAMO, isInc, isSpt, isRMW;
 reg [`QBITS] casid;
 reg [31:0] sbl, sbu;
 reg [4:0] regLR = 5'd29;
@@ -457,9 +457,11 @@ reg        iqentry_fc   [0:QENTRIES-1];   // flow control instruction
 reg        iqentry_canex[0:QENTRIES-1];	// true if it's an instruction that can exception
 reg        iqentry_load [0:QENTRIES-1];	// is a memory load instruction
 reg        iqentry_sptr [0:QENTRIES-1];	// is a memory store pointer instruction
+reg        iqentry_lptr [0:QENTRIES-1];	// is a memory load pointer instruction
 reg        iqentry_isptr[0:QENTRIES-1];	// pointer detect
 reg        iqentry_mem	[0:QENTRIES-1];	// touches memory: 1 if LW/SW
 reg        iqentry_memndx   [0:QENTRIES-1];  // indexed memory operation 
+reg        iqentry_rmw		[0:QENTRIES-1];	// memory RMW op
 reg        iqentry_memdb    [0:QENTRIES-1];
 reg        iqentry_memsb    [0:QENTRIES-1];
 reg [QENTRIES-1:0] iqentry_sei;
@@ -704,10 +706,11 @@ reg        fcu_branchmiss;
 reg  fcu_clearbm;
 reg [31:0] fcu_misspc;
 
-reg [63:0] amo_argA;
-reg [63:0] amo_argB;
-wire [63:0] amo_res;
-reg [31:0] amo_instr;
+reg [63:0] rmw_argA;
+reg [63:0] rmw_argB;
+reg [63:0] rmw_argC;
+wire [63:0] rmw_res;
+reg [31:0] rmw_instr;
 
 reg branchmiss;
 reg branchmiss_thrd;
@@ -728,6 +731,7 @@ reg [63:0] dram0_data;
 reg [31:0] dram0_addr;
 reg [31:0] dram0_seg;
 reg [47:0] dram0_instr;
+reg        dram0_rmw;
 reg [RBIT:0] dram0_tgt;
 reg  [3:0] dram0_id;
 reg  [8:0] dram0_exc;
@@ -740,6 +744,7 @@ reg [63:0] dram1_data;
 reg [31:0] dram1_addr;
 reg [31:0] dram1_seg;
 reg [47:0] dram1_instr;
+reg        dram1_rmw;
 reg [RBIT:0] dram1_tgt;
 reg  [3:0] dram1_id;
 reg  [8:0] dram1_exc;
@@ -752,6 +757,7 @@ reg [63:0] dram2_data;
 reg [31:0] dram2_addr;
 reg [31:0] dram2_seg;
 reg [47:0] dram2_instr;
+reg        dram2_rmw;
 reg [RBIT:0] dram2_tgt;
 reg  [3:0] dram2_id;
 reg  [8:0] dram2_exc;
@@ -1936,12 +1942,17 @@ casez(isn[`INSTRUCTION_OP])
 `LWR:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `LV:    Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `LVx:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`LPT:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`LPTR:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `SB:    Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `SC:    Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `SH:    Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `SW:    Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `SWC:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `SV:    Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`SPT:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`SPTR:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`INC:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `CAS:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `JAL:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `RET:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
@@ -1994,11 +2005,16 @@ casez(isn[`INSTRUCTION_OP])
 `LW:    Source2Valid = TRUE;
 `LWR:   Source2Valid = TRUE;
 `LVx:   Source2Valid = TRUE;
+`LPT:	Source2Valid = TRUE;
+`LPTR:	Source2Valid = TRUE;
+`INC:	Source2Valid = TRUE;
 `SB:    Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
 `SC:    Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
 `SH:    Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
 `SW:    Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
 `SWC:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
+`SPT:	Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
+`SPTR:	Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
 `CAS:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
 `JAL:   Source2Valid = TRUE;
 `RET:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
@@ -2234,13 +2250,16 @@ casez(isn[`INSTRUCTION_OP])
 `LW:  HasConst = TRUE;
 `LWR: HasConst = TRUE;
 `LV:    HasConst = TRUE;
+`LPT:	HasConst = TRUE;
+`LPTR:	HasConst = TRUE;
 `SB:  HasConst = TRUE;
 `SC:  HasConst = TRUE;
 `SH:  HasConst = TRUE;
 `SW:  HasConst = TRUE;
 `SWC:   HasConst = TRUE;
+`SPT:	HasConst = TRUE;
 `SPTR:	HasConst = TRUE;
-`ISPTR:	HasConst = TRUE;
+`INC:	HasConst = TRUE;
 `SV:    HasConst = TRUE;
 `CAS:   HasConst = TRUE;
 `JAL:   HasConst = TRUE;
@@ -2269,16 +2288,19 @@ case(isn[`INSTRUCTION_OP])
 	    `LHUX:  IsMem = TRUE;
 	    `LWX:   IsMem = TRUE;
 	    `LWRX:  IsMem = TRUE;
+		`LPT:	IsMem = TRUE;
+		`LPTR:	IsMem = TRUE;
 	    `SBX:   IsMem = TRUE;
 	    `SCX:   IsMem = TRUE;
 	    `SHX:   IsMem = TRUE;
 	    `SWX:   IsMem = TRUE;
 	    `SWCX:  IsMem = TRUE;
+		`INC:	IsMem = TRUE;
 	    `CASX:  IsMem = TRUE;
 	    `LVX,`SVX:  IsMem = TRUE;
 	    `LVx:	IsMem = TRUE;
+		`SPT:	IsMem = TRUE;
 		`SPTR:	IsMem = TRUE;
-		`ISPTR:	IsMem = TRUE;
 	    default: IsMem = FALSE;
 	    endcase
 	else
@@ -2296,13 +2318,16 @@ case(isn[`INSTRUCTION_OP])
 `LW:    IsMem = TRUE;
 `LWR:   IsMem = TRUE;
 `LV,`SV:    IsMem = TRUE;
+`LPT:	IsMem = TRUE;
+`LPTR:	IsMem = TRUE;
+`INC:	IsMem = TRUE;
 `SB:    IsMem = TRUE;
 `SC:    IsMem = TRUE;
 `SH:    IsMem = TRUE;
 `SW:    IsMem = TRUE;
 `SWC:   IsMem = TRUE;
+`SPT:	IsMem = TRUE;
 `SPTR:	IsMem = TRUE;
-`ISPTR:	IsMem = TRUE;
 `CAS:   IsMem = TRUE;
 `LVx:	IsMem = TRUE;
 default:    IsMem = FALSE;
@@ -2333,9 +2358,12 @@ case(isn[`INSTRUCTION_OP])
 	    `SWCX:  IsMemNdx = TRUE;
 	    `CASX:  IsMemNdx = TRUE;
 	    `LVX,`SVX:  IsMemNdx = TRUE;
+	    `LPT:	IsMemNdx = TRUE;
+	    `LPTR:	IsMemNdx = TRUE;
 	    `LVx:	IsMemNdx = TRUE;
+	    `SPT:	IsMemNdx = TRUE;
 	    `SPTR:	IsMemNdx = TRUE;
-	    `ISPTR:	IsMemNdx = TRUE;
+	    `INC:	IsMemNdx = TRUE;
 	    default: IsMemNdx = FALSE;
 	    endcase
 	else
@@ -2363,7 +2391,8 @@ case(isn[`INSTRUCTION_OP])
 	    `LWRX:  IsLoad = TRUE;
 	    `LVX:   IsLoad = TRUE;
 	    `LVx:	IsLoad = TRUE;
-	    `ISPTR:	IsLoad = TRUE;
+	    `LPT:	IsLoad = TRUE;
+	    `LPTR:	IsLoad = TRUE;
 	    default: IsLoad = FALSE;   
 	    endcase
 	else
@@ -2381,7 +2410,8 @@ case(isn[`INSTRUCTION_OP])
 `LWR:   IsLoad = TRUE;
 `LV:    IsLoad = TRUE;
 `LVx:   IsLoad = TRUE;
-`ISPTR:	IsLoad = TRUE;
+`LPT:	IsLoad = TRUE;
+`LPTR:	IsLoad = TRUE;
 default:    IsLoad = FALSE;
 endcase
 endfunction
@@ -2465,9 +2495,11 @@ case(isn[`INSTRUCTION_OP])
 	    `SHX:   IsStore = TRUE;
 	    `SWX:   IsStore = TRUE;
 	    `SWCX:  IsStore = TRUE;
+	    `SPT:	IsStore = TRUE;
 	    `SPTR:	IsStore = TRUE;
 	    `SVX:   IsStore = TRUE;
 	    `CASX:  IsStore = TRUE;
+	    `INC:	IsStore = TRUE;
 	    default:    IsStore = FALSE;
 	    endcase
 	else
@@ -2477,11 +2509,61 @@ case(isn[`INSTRUCTION_OP])
 `SH:    IsStore = TRUE;
 `SW:    IsStore = TRUE;
 `SWC:   IsStore = TRUE;
+`SPT:	IsStore = TRUE;
 `SPTR:	IsStore = TRUE;
+`INC:	IsStore = TRUE;
 `SV:    IsStore = TRUE;
 `CAS:   IsStore = TRUE;
 `AMO:	IsStore = TRUE;
 default:    IsStore = FALSE;
+endcase
+endfunction
+
+function IsLptr;
+input [47:0] isn;
+case(isn[`INSTRUCTION_OP])
+`R2:
+   	if (isn[`INSTRUCTION_L2]==2'b00)
+		case(isn[`INSTRUCTION_S2])
+	    `LPTR:   IsLptr = TRUE;
+	    default:    IsLptr = FALSE;
+	    endcase
+	else
+		IsLptr = FALSE;
+`LPTR:    IsLptr = TRUE;
+default:    IsLptr = FALSE;
+endcase
+endfunction
+
+function IsInc;
+input [47:0] isn;
+case(isn[`INSTRUCTION_OP])
+`R2:
+   	if (isn[`INSTRUCTION_L2]==2'b00)
+		case(isn[`INSTRUCTION_S2])
+	    `INC:   IsInc = TRUE;
+	    default:    IsInc = FALSE;
+	    endcase
+	else
+		IsInc = FALSE;
+`INC:    IsInc = TRUE;
+default:    IsInc = FALSE;
+endcase
+endfunction
+
+function IsSpt;
+input [47:0] isn;
+case(isn[`INSTRUCTION_OP])
+`R2:
+   	if (isn[`INSTRUCTION_L2]==2'b00)
+		case(isn[`INSTRUCTION_S2])
+	    `SPT:   IsSpt = TRUE;
+	    default:    IsSpt = FALSE;
+	    endcase
+	else
+		IsSpt = FALSE;
+`SPT:    IsSpt = TRUE;
+default:    IsSpt = FALSE;
 endcase
 endfunction
 
@@ -2833,6 +2915,7 @@ casez(isn[`INSTRUCTION_OP])
 	    `LWRX:  IsRFW = TRUE;
 	    `LVX:   IsRFW = TRUE;
 	    `LVx:	IsRFW = TRUE;
+	    `LPT:	IsRFW = TRUE;
 	    `CASX:  IsRFW = TRUE;
 	    `MOV:	IsRFW = TRUE;
 	    `VMOV:	IsRFW = TRUE;
@@ -2883,6 +2966,7 @@ casez(isn[`INSTRUCTION_OP])
 `LWR:       IsRFW = TRUE;
 `LV:        IsRFW = TRUE;
 `LVx:		IsRFW = TRUE;
+`LPT:		IsRFW = TRUE;
 `CAS:       IsRFW = TRUE;
 `AMO:		IsRFW = TRUE;
 `CSRRW:		IsRFW = TRUE;
@@ -3002,6 +3086,7 @@ begin
 	           1'b0:    fnSelect = 8'h0F;
 	           1'b1:    fnSelect = 8'hF0;
 	           endcase
+	       `LPT,`INC,
 	       `LWX,`SWX,`LWRX,`SWCX,`LVX,`SVX,`CASX:
 	           fnSelect = 8'hFF;
 	       `LVx:
@@ -3059,6 +3144,7 @@ begin
 		1'b0:	fnSelect = 8'h0F;
 		1'b1:	fnSelect = 8'hF0;
 		endcase
+	`LPT,`INC,
 	`LW,`SW,`LWR,`SWC,`CAS:   fnSelect = 8'hFF;
 	`LV,`SV:   fnSelect = 8'hFF;
 	`AMO:
@@ -5372,7 +5458,7 @@ assign fcu_branchmiss = fcu_dataready &&
 wire fcu_wr = (fcu_v && iqentry_v[nid] && iqentry_sn[nid] > iqentry_sn[fcu_id[`QBITS]]);//	// && iqentry_v[nid]
 //					&& fcu_instr==iqentry_instr[fcu_id[`QBITS]]);// || fcu_timeout==8'h05;
 
-	FT64_AMO_alu uamoalu0 (amo_instr, amo_argA, amo_argB, amo_res);
+FT64_RMW_alu urmwalu0 (rmw_instr, rmw_argA, rmw_argB, rmw_argC, rmw_res);
 
 //assign fcu_done = IsWait(fcu_instr) ? ((waitctr==64'd1) || signal_i[fcu_argA[4:0]|fcu_argI[4:0]]) :
 //					fcu_v && iqentry_v[idp1(fcu_id)] && iqentry_sn[idp1(fcu_id)]==iqentry_sn[fcu_id[`QBITS]]+5'd1;
@@ -6607,6 +6693,8 @@ else begin
         iqentry_out [ dramA_id[`QBITS] ] <= `INV;
         iqentry_cmt[ dramA_id[`QBITS] ] <= `VAL;
 	    iqentry_aq  [ dramA_id[`QBITS] ] <= `INV;
+//	    if (iqentry_lptr[dram0_id[`QBITS]])
+//	    	wbrcd[pcr[5:0]] <= 1'b1;
 	end
 	if (dramB_v && iqentry_v[ dramB_id[`QBITS] ] && iqentry_load[ dramB_id[`QBITS] ] ) begin	// if data for stomped instruction, ignore
        	iqentry_res	[ dramB_id[`QBITS] ] <= dramB_bus;
@@ -6615,6 +6703,8 @@ else begin
         iqentry_out [ dramB_id[`QBITS] ] <= `INV;
         iqentry_cmt[ dramB_id[`QBITS] ] <= `VAL;
 	    iqentry_aq  [ dramB_id[`QBITS] ] <= `INV;
+//	    if (iqentry_lptr[dram1_id[`QBITS]])
+//	    	wbrcd[pcr[5:0]] <= 1'b1;
 	end
 	if (dramC_v && iqentry_v[ dramC_id[`QBITS] ] && iqentry_load[ dramC_id[`QBITS] ] ) begin	// if data for stomped instruction, ignore
        	iqentry_res	[ dramC_id[`QBITS] ] <= dramC_bus;
@@ -6623,6 +6713,8 @@ else begin
         iqentry_out [ dramC_id[`QBITS] ] <= `INV;
         iqentry_cmt[ dramC_id[`QBITS] ] <= `VAL;
 	    iqentry_aq  [ dramC_id[`QBITS] ] <= `INV;
+//	    if (iqentry_lptr[dram2_id[`QBITS]])
+//	    	wbrcd[pcr[5:0]] <= 1'b1;
 	end
 
 	//
@@ -6632,22 +6724,16 @@ else begin
 	    if ((alu0_v && (dram0_id[`QBITS] == alu0_id[`QBITS])) || (alu1_v && (dram0_id[`QBITS] == alu1_id[`QBITS])))	 panic <= `PANIC_MEMORYRACE;
 	    iqentry_done[ dram0_id[`QBITS] ] <= `VAL;
 	    iqentry_out[ dram0_id[`QBITS] ] <= `INV;
-	    if (iqentry_sptr[dram0_id[`QBITS]])
-	    	wbrcd[pcr[5:0]] <= 1'b1;
 	end
 	if (dram1 == `DRAMSLOT_BUSY && IsStore(dram1_instr)) begin
 	    if ((alu0_v && (dram1_id[`QBITS] == alu0_id[`QBITS])) || (alu1_v && (dram1_id[`QBITS] == alu1_id[`QBITS])))	 panic <= `PANIC_MEMORYRACE;
 	    iqentry_done[ dram1_id[`QBITS] ] <= `VAL;
 	    iqentry_out[ dram1_id[`QBITS] ] <= `INV;
-	    if (iqentry_sptr[dram1_id[`QBITS]])
-	    	wbrcd[pcr[5:0]] <= 1'b1;
 	end
 	if (dram2 == `DRAMSLOT_BUSY && IsStore(dram2_instr)) begin
 	    if ((alu0_v && (dram2_id[`QBITS] == alu0_id[`QBITS])) || (alu1_v && (dram2_id[`QBITS] == alu1_id[`QBITS])))	 panic <= `PANIC_MEMORYRACE;
 	    iqentry_done[ dram2_id[`QBITS] ] <= `VAL;
 	    iqentry_out[ dram2_id[`QBITS] ] <= `INV;
-	    if (iqentry_sptr[dram2_id[`QBITS]])
-	    	wbrcd[pcr[5:0]] <= 1'b1;
 	end
 
 	//
@@ -6923,9 +7009,10 @@ else begin
              dram0 		<= `DRAMSLOT_BUSY;
              dram0_id 	<= { 1'b1, n[`QBITS] };
              dram0_instr <= iqentry_instr[n];
+             dram0_rmw  <= iqentry_rmw[n];
              dram0_tgt 	<= iqentry_tgt[n];
              dram0_data	<= iqentry_memndx[n] ? iqentry_a3[n] : iqentry_a2[n];
-             dram0_addr	<= iqentry_a1[n];
+             dram0_addr	<= iqentry_pt[n] ? iqentry_a1[n][57:0] + ptmbase : iqentry_a1[n];
 //             if (ol[iqentry_thrd[n]]==`OL_USER)
 //             	dram0_seg   <= (iqentry_Ra[n]==5'd30 || iqentry_Ra[n]==5'd31) ? {ss[iqentry_thrd[n]],13'd0} : {ds[iqentry_thrd[n]],13'd0};
 //             else
@@ -6948,9 +7035,10 @@ else begin
 	             dram1 		<= `DRAMSLOT_BUSY;
 	             dram1_id 	<= { 1'b1, n[`QBITS] };
 	             dram1_instr <= iqentry_instr[n];
+	             dram1_rmw  <= iqentry_rmw[n];
 	             dram1_tgt 	<= iqentry_tgt[n];
 	             dram1_data	<= iqentry_memndx[n] ? iqentry_a3[n] : iqentry_a2[n];
-	             dram1_addr	<= iqentry_a1[n];
+	             dram1_addr	<= iqentry_pt[n] ? iqentry_a1[n][57:0] + ptmbase : iqentry_a1[n];
 //	             if (ol[iqentry_thrd[n]]==`OL_USER)
 //	             	dram1_seg   <= (iqentry_Ra[n]==5'd30 || iqentry_Ra[n]==5'd31) ? {ss[iqentry_thrd[n]],13'd0} : {ds[iqentry_thrd[n]],13'd0};
 //	             else
@@ -6974,9 +7062,10 @@ else begin
 	             dram2 		<= `DRAMSLOT_BUSY;
 	             dram2_id 	<= { 1'b1, n[`QBITS] };
 	             dram2_instr	<= iqentry_instr[n];
+	             dram2_rmw  <= iqentry_rmw[n];
 	             dram2_tgt 	<= iqentry_tgt[n];
 	             dram2_data	<= iqentry_memndx[n] ? iqentry_a3[n] : iqentry_a2[n];
-	             dram2_addr	<= iqentry_a1[n];
+	             dram2_addr	<= iqentry_pt[n] ? iqentry_a1[n][57:0] + ptmbase : iqentry_a1[n];
 //	             if (ol[iqentry_thrd[n]]==`OL_USER)
 //	             	dram2_seg   <= (iqentry_Ra[n]==5'd30 || iqentry_Ra[n]==5'd31) ? {ss[iqentry_thrd[n]],13'd0} : {ds[iqentry_thrd[n]],13'd0};
 //	             else
@@ -7194,11 +7283,14 @@ BIDLE:
     begin
          isCAS <= FALSE;
          isAMO <= FALSE;
+         isInc <= FALSE;
+         isSpt <= FALSE;
+         isRMW <= FALSE;
          rdvq <= 1'b0;
          errq <= 1'b0;
          exvq <= 1'b0;
          bwhich <= 2'b11;
-        if (dram0==`DRAMSLOT_BUSY && (IsCAS(dram0_instr) || IsAMO(dram0_instr))) begin
+        if (dram0==`DRAMSLOT_BUSY && dram0_rmw) begin
 `ifdef SUPPORT_DBG      
             if (dbg_smatch0|dbg_lmatch0) begin
                  dramA_v <= `TRUE;
@@ -7211,8 +7303,11 @@ BIDLE:
 `endif            
             begin
                  dram0 <= `DRAMSLOT_HASBUS;
+                 isRMW <= dram0_rmw;
                  isCAS <= IsCAS(dram0_instr);
                  isAMO <= IsAMO(dram0_instr);
+                 isInc <= IsInc(dram0_instr);
+                 isSpt <= IsSpt(dram0_instr);
                  casid <= dram0_id;
                  bwhich <= 2'b00;
                  cyc_o <= `HIGH;
@@ -7224,7 +7319,7 @@ BIDLE:
                  bstate <= B12;
             end
         end
-        else if (dram1==`DRAMSLOT_BUSY && (IsCAS(dram1_instr) || IsAMO(dram1_instr))) begin
+        else if (dram1==`DRAMSLOT_BUSY && dram1_rmw) begin
 `ifdef SUPPORT_DBG        	
             if (dbg_smatch1|dbg_lmatch1) begin
                  dramB_v <= `TRUE;
@@ -7237,8 +7332,11 @@ BIDLE:
 `endif            
             begin
                  dram1 <= `DRAMSLOT_HASBUS;
+                 isRMW <= dram1_rmw;
                  isCAS <= IsCAS(dram1_instr);
                  isAMO <= IsAMO(dram1_instr);
+                 isInc <= IsInc(dram1_instr);
+                 isSpt <= IsSpt(dram1_instr);
                  casid <= dram1_id;
                  bwhich <= 2'b01;
                  cyc_o <= `HIGH;
@@ -7250,7 +7348,7 @@ BIDLE:
                  bstate <= B12;
             end
         end
-        else if (dram2==`DRAMSLOT_BUSY && (IsCAS(dram2_instr) || IsAMO(dram2_instr))) begin
+        else if (dram2==`DRAMSLOT_BUSY && dram2_rmw) begin
 `ifdef SUPPORT_DBG        	
             if (dbg_smatch2|dbg_lmatch2) begin
                  dramC_v <= `TRUE;
@@ -7263,8 +7361,11 @@ BIDLE:
 `endif            
             begin
                  dram2 <= `DRAMSLOT_HASBUS;
+                 isRMW <= dram2_rmw;
                  isCAS <= IsCAS(dram2_instr);
                  isAMO <= IsAMO(dram2_instr);
+                 isInc <= IsInc(dram2_instr);
+                 isSpt <= IsSpt(dram2_instr);
                  casid <= dram2_id;
                  bwhich <= 2'b10;
                  cyc_o <= `HIGH;
@@ -7697,11 +7798,23 @@ B12:
                  bstate <= B19;
             end
         end
-        else if (isAMO) begin
-    	     iqentry_res [ casid[`QBITS] ] <= dat_i;
-    	     amo_argA <= dat_i;
-    	     amo_argB <= iqentry_instr[casid[`QBITS]][31] ? {{59{iqentry_instr[casid[`QBITS]][20:16]}},iqentry_instr[casid[`QBITS]][20:16]} : iqentry_a2[casid[`QBITS]];
-    	     amo_instr <= iqentry_instr[casid[`QBITS]];
+        else if (isRMW) begin
+    	     rmw_instr <= iqentry_instr[casid[`QBITS]];
+    	     rmw_argA <= dat_i;
+        	 if (isSpt) begin
+        	 	rmw_argB <= 64'd1 << iqentry_a1[casid[`QBITS]][63:58];
+        	 	rmw_argC <= iqentry_instr[casid[`QBITS]][5:0]==`R2 ?
+        	 				iqentry_a3[casid[`QBITS]][0] << iqentry_a1[casid[`QBITS]][63:58] :
+        	 				iqentry_a2[casid[`QBITS]][0] << iqentry_a1[casid[`QBITS]][63:58];
+        	 end
+        	 else if (isInc) begin
+        	 	rmw_argB <= iqentry_instr[casid[`QBITS]][5:0]==`R2 ? {{59{iqentry_instr[casid[`QBITS]][22]}},iqentry_instr[casid[`QBITS]][22:18]} :
+        	 														 {{59{iqentry_instr[casid[`QBITS]][17]}},iqentry_instr[casid[`QBITS]][17:13]};
+         	 end
+        	 else begin // isAMO
+	    	     iqentry_res [ casid[`QBITS] ] <= dat_i;
+	    	     rmw_argB <= iqentry_instr[casid[`QBITS]][31] ? {{59{iqentry_instr[casid[`QBITS]][20:16]}},iqentry_instr[casid[`QBITS]][20:16]} : iqentry_a2[casid[`QBITS]];
+	         end
              iqentry_exc [ casid[`QBITS] ] <= err_i ? `FLT_DRF : rdv_i ? `FLT_DRF : `FLT_NONE;
              if (err_i | rdv_i) iqentry_a1[casid[`QBITS]] <= adr_o;
              stb_o <= `LOW;
@@ -7750,7 +7863,7 @@ B20:
 	if (~ack_i) begin
 		stb_o <= `HIGH;
 		we_o  <= `HIGH;
-		dat_o <= fnDato(amo_instr,amo_res);
+		dat_o <= fnDato(rmw_instr,rmw_res);
 		bstate <= B1;
 	end
 default:     bstate <= BIDLE;
@@ -8193,10 +8306,12 @@ begin
 	iqentry_fc   [tail]    <=   IsFlowCtrl(fetchbuf0_instr);
 	iqentry_canex[tail]    <=   fnCanException(fetchbuf0_instr);
 	iqentry_load [tail]    <=   IsLoad(fetchbuf0_instr);
+//	iqentry_lptr [tail]    <=   IsLptr(fetchbuf0_instr);
 	iqentry_sptr [tail]    <=   IsSptr(fetchbuf0_instr);
 	iqentry_isptr[tail]    <=   IsIsptr(fetchbuf0_instr);
 	iqentry_mem  [tail]    <=   fetchbuf0_mem;
 	iqentry_memndx[tail]   <=   IsMemNdx(fetchbuf0_instr);
+	iqentry_rmw  [tail]    <=   IsCAS(fetchbuf0_instr) || IsAMO(fetchbuf0_instr) || IsInc(fetchbuf0_instr) || IsSpt(fetchbuf0_instr);
 	iqentry_memdb[tail]    <=   IsMemdb(fetchbuf0_instr);
 	iqentry_memsb[tail]    <=   IsMemsb(fetchbuf0_instr);
 	iqentry_sei	 [tail]	   <=   IsSEI(fetchbuf0_instr);
@@ -8280,10 +8395,12 @@ end
 	iqentry_fc   [tail]    <=   IsFlowCtrl(fetchbuf1_instr);
 	iqentry_canex[tail]    <=   fnCanException(fetchbuf1_instr);
 	iqentry_load [tail]    <=   IsLoad(fetchbuf1_instr);
+//	iqentry_lptr [tail]    <=   IsLptr(fetchbuf1_instr);
 	iqentry_sptr [tail]    <=   IsSptr(fetchbuf1_instr);
 	iqentry_isptr[tail]    <=   IsIsptr(fetchbuf1_instr);
 	iqentry_mem  [tail]    <=   fetchbuf1_mem;
 	iqentry_memndx[tail]   <=   IsMemNdx(fetchbuf1_instr);
+	iqentry_rmw  [tail]    <=   IsCAS(fetchbuf1_instr) || IsAMO(fetchbuf1_instr) || IsInc(fetchbuf1_instr) || IsSpt(fetchbuf1_instr);
 	iqentry_memdb[tail]    <=   IsMemdb(fetchbuf1_instr);
 	iqentry_memsb[tail]    <=   IsMemsb(fetchbuf1_instr);
 	iqentry_sei	 [tail]	   <=   IsSEI(fetchbuf1_instr);
@@ -8431,8 +8548,10 @@ begin
                     if (iqentry_instr[head][23:19]==5'd0) begin
                         mstatus[thread][2:0] <= 3'd7;//iqentry_instr[head][18:16];
                         mstatus[thread][42:40] <= iqentry_instr[head][18:16];
-                        mstatus[thread][19:14] <= {1'b0,iqentry_instr[head][18:16],2'b00};
+                        mstatus[thread][19:14] <= {3'b0,iqentry_instr[head][18:16]};
                     end
+                    else
+                    	mstatus[thread][19:14] <= 6'd0;
 `else
             		excmisspc <= {tvec[3'd0][31:8],ol,5'h00};
             		excthrd <= iqentry_thrd[head];
@@ -8458,8 +8577,10 @@ begin
                     if (iqentry_instr[head][23:19]==5'd0) begin
                         mstatus[2:0] <= 3'd7;//iqentry_instr[head][18:16];
                         mstatus[42:40] <= iqentry_instr[head][18:16];
-                        mstatus[19:14] <= {1'b0,iqentry_instr[head][18:16],2'b00};
+                        mstatus[19:14] <= {3'b0,iqentry_instr[head][18:16]};
                     end
+                    else
+                    	mstatus[19:14] <= 6'd0;
 `endif                    
                     sema[0] <= 1'b0;
                     ve_hold <= {vqet1,10'd0,vqe1,10'd0,vqet0,10'd0,vqe0};
@@ -8474,11 +8595,12 @@ begin
             8'b00101111:  vl <= iqentry_res[head];
             default:    ;
             endcase
-        `RR:
+        `R2:
             case(iqentry_instr[head][`INSTRUCTION_S2])
             `R1:	case(iqentry_instr[head][20:16])
             		`CHAIN_OFF:	cr0[18] <= 1'b0;
             		`CHAIN_ON:	cr0[18] <= 1'b1;
+            		`SETWB:		wbrcd[pcr[5:0]] <= 1'b1;
             		default:	;
         			endcase
             `VMOV:  casez(iqentry_tgt[head])

@@ -731,6 +731,11 @@ case(instr[`INSTRUCTION_OP])
     `LBX,`LBOX,`LBUX,`LCX,`LCOX,`LCUX,
     `LHX,`LHOX,`LHUX,`LWX,`LWRX,`SBX,`SCX,`SHX,`SWX,`SWCX:
     		   	o = BIG ? a + (b << instr[22:21]) : 64'hCCCCCCCCEEEEEEEE;
+	 `LPT,`SPT:	begin
+ 				o[63:58] <= ((a + (b << instr[22:21])) >> 6'd3);
+ 				o[57:0] = ((a + (b << instr[22:21])) >> 6'd9);
+ 				o[2:0] = 3'd0;
+ 				end
 	 `ISPTR:	 if ((a & ptrmask)==64'd0)
  					o = a + (b << instr[22:21]);
  				else
@@ -851,6 +856,14 @@ case(instr[`INSTRUCTION_OP])
  `MODI:      o = BIG ? rem : 64'hCCCCCCCCCCCCCCCC;
  `LB,`LBO,`LBU,`LC,`LCO,`LCU,`LH,`LHO,`LHU,`LW,`LWR,
  `SB,`SC,`SH,`SW,`SWC,`CAS:  o = a + b;
+ // For the LPT/SPT instructions the bit index is stuffed into the high order
+ // six bits since these bits would otherwise be zero and we need to know the
+ // bit index.
+ `LPT,`SPT:	begin
+ 			o[63:58] <= ((a + b) >> 6'd3);
+ 			o[57:0] = ((a + b) >> 6'd9);
+ 			o[2:0] = 3'd0;
+ 			end
  `ISPTR:	 if ((a & ptrmask)==64'd0)
  				o = a + b;
  			else

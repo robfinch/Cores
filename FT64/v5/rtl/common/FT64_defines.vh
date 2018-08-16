@@ -160,7 +160,8 @@
 `define SVWS        6'h27
 `define CMOVEQ      6'h28
 `define CMOVNE      6'h29
-`define LBOX		6'h2A
+//`define LBOX		6'h2A
+`define LPTRX		6'h2A
 //`define LCOX       	6'h2B
 `define ISPTR		6'h2B
 `define MIN         6'h2C
@@ -204,12 +205,7 @@
 `define SWC     6'h17
 `define JAL	    6'h18
 `define CALL    6'h19
-`define QOPI    6'h1A
-`define QORI        3'd0
-`define QADDI       3'd1
-`define QANDI       3'd2
-`define QXORI       3'd3
-`define QLDI		3'd4
+`define INC		6'h1A
 `define SccI    6'h1B
 `define SEQ         4'h2
 `define SNE         4'h3
@@ -237,7 +233,8 @@
 `define LUI		6'h27
 `define JMP     6'h28
 `define RET     6'h29
-`define LBO     6'h2A
+//`define LBO     6'h2A
+`define LPTR	6'h2A
 `define LCO     6'h2B
 `define MODUI   6'h2C
 `define MODSUI  6'h2D
