@@ -370,7 +370,8 @@ public:
 	void *ctor;
 	void *dtor;
   ENODE *p[3];
-  void SetType(TYP *t) { tp = t; };
+  void SetType(TYP *t) { tp = t; if (t) etype = t->type; };
+  bool IsPtr() { return (etype == bt_pointer || etype == bt_struct || etype == bt_union || etype == bt_class); };
 };
 
 class AMODE : public CompilerType
@@ -394,6 +395,7 @@ public:
 	unsigned int isPascal : 1;
 	unsigned int rshift : 8;
 	unsigned int isTarget : 1;
+	unsigned int isPtr : 1;
 	short int deep;           /* stack depth on allocation */
 	short int deep2;
 	ENODE *offset;

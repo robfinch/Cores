@@ -22,6 +22,7 @@ enum e_node {
 		en_cubu, en_cucu, en_cuhu,
 		en_cbw, en_ccw, en_chw,
 		en_cubw, en_cucw, en_cuhw,
+		en_cucwp, en_ccwp,
 
         en_cbc, en_cbh,
 		en_cch,
@@ -33,6 +34,7 @@ enum e_node {
 		en_c_ref, en_uc_ref, en_h_ref, en_uh_ref,
         en_b_ref, en_w_ref, en_ub_ref, en_uw_ref,
 		en_ref32, en_ref32u,
+		en_hp_ref, en_wp_ref,
 		en_struct_ref,
         en_fcall, en_ifcall,
          en_tempref, en_regvar, en_fpregvar, en_tempfpref,
@@ -51,7 +53,7 @@ enum e_node {
         en_feq, en_fne, en_flt, en_fle, en_fgt, en_fge,
         en_veq, en_vne, en_vlt, en_vle, en_vgt, en_vge,
 		en_and, en_or, en_land, en_lor, //104
-        en_xor, en_ainc, en_adec, en_mulu, en_udiv, en_umod, en_ugt,
+        en_xor, en_mulu, en_udiv, en_umod, en_ugt,
         en_uge, en_ule, en_ult,
 		en_ref, en_ursh,
 		en_uwfieldref,en_wfieldref,en_bfieldref,en_ubfieldref,
@@ -148,6 +150,7 @@ enum e_op {
 		op_csrrw, op_nop,
 		op_hint, op_hint2, op_rem2,
 		// FT64
+		op_sptr, op_isptr, op_setwb, op_spt,
 		op_bchk, op_ibne, op_dbnz,
 		op_brk, op_rti, op_rte, op_bex,
 		op_addq1, op_addq2, op_addq3,

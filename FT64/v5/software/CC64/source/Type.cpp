@@ -77,6 +77,8 @@ TYP *TYP::Make(int bt, int siz)
 	tp->type = (e_bt)bt;
 	tp->typeno = bt;
 	tp->precision = siz * 8;
+	if (bt == bt_pointer)
+		tp->isUnsigned = TRUE;
 	dfs.puts("</TYP__Make>\n");
 	return tp;
 }

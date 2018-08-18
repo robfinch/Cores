@@ -261,6 +261,7 @@ int AllocateRegisterVars()
 				{
                     ap = GenerateExpression(exptr,F_REG|F_IMMED|F_MEM|F_FPREG,sizeOfWord);
 					ap2 = csp->isfp ? makefpreg(csp->reg) : makereg(csp->reg);
+					ap2->isPtr = ap->isPtr;
     				if (ap->mode==am_immed) {
 						if (ap2->mode==am_fpreg) {
 							ap3 = GetTempRegister();
@@ -851,13 +852,15 @@ static void GenerateDefaultCatch(SYM *sym)
 		if (sym->DoesThrow) {
 			GenerateDiadic(op_lw,0,makereg(regLR),make_indexed(2*sizeOfWord,regFP));		// load throw return address from stack into LR
 			GenerateDiadicNT(op_sw,0,makereg(regLR),make_indexed(3*sizeOfWord,regFP));		// and store it back (so it can be loaded with the lm)
+			//GenerateDiadicNT(op_spt,0,makereg(0),make_indexed(3 * sizeOfWord, regFP));
 //			GenerateDiadic(op_bra,0,make_label(retlab),NULL);				// goto regular return cleanup code
 		}
 	}
 	else {
 		GenerateDiadic(op_lw,0,makereg(regLR),make_indexed(2*sizeOfWord,regFP));		// load throw return address from stack into LR
 		GenerateDiadicNT(op_sw,0,makereg(regLR),make_indexed(3*sizeOfWord,regFP));		// and store it back (so it can be loaded with the lm)
-//		GenerateDiadic(op_bra,0,make_label(retlab),NULL);				// goto regular return cleanup code
+		//GenerateDiadicNT(op_spt, 0, makereg(0), make_indexed(3 * sizeOfWord, regFP));
+		//		GenerateDiadic(op_bra,0,make_label(retlab),NULL);				// goto regular return cleanup code
 	}
 }
 
@@ -958,8 +961,10 @@ void GenerateFunction(SYM *sym)
 	while( lc_auto % sizeOfWord )	// round frame size to word
 		++lc_auto;
 	if (sym->IsInterrupt) {
-       if (sym->stkname)
-           GenerateDiadic(op_lea,0,makereg(SP),make_string(sym->stkname));
+		if (sym->stkname) {
+			GenerateDiadic(op_lea, 0, makereg(SP), make_string(sym->stkname));
+			GenerateTriadic(op_ori, 0, makereg(SP), makereg(SP), make_immed(0xFFFFF00000000000LL));
+		}
 	   //SaveRegisterSet(sym);
 	}
 	// The prolog code can't be optimized because it'll run *before* any variables
@@ -1624,7 +1629,10 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
 	*/
 	if (sym && sym->tp->IsVectorType())
 		return (makevreg(1));
-	return (makereg(1));
+	ap = makereg(1);
+	if (sym && sym->tp)
+		ap->isPtr = sym->tp->GetBtp()->type == bt_pointer;
+	return (ap);
 	/*
 	else {
 		if( result->preg != 1 || (flags & F_REG) == 0 ) {

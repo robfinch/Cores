@@ -101,8 +101,6 @@ void GenerateZeradic(int op)
 	dfs.printf("A");
 	cd = (OCODE *)allocx(sizeof(OCODE));
 	dfs.printf("B");
-	cd->predop = 1;
-	cd->pregreg = 15;
 	cd->insn = GetInsn(op);
 	cd->opcode = op;
 	cd->length = 0;
@@ -124,8 +122,6 @@ void GenerateMonadic(int op, int len, AMODE *ap1)
 	dfs.printf("A");
 	cd = (OCODE *)allocx(sizeof(OCODE));
 	dfs.printf("B");
-	cd->predop = 1;
-	cd->pregreg = 15;
 	cd->insn = GetInsn(op);
 	cd->opcode = op;
 	cd->length = len;
@@ -149,8 +145,6 @@ void GenerateMonadicNT(int op, int len, AMODE *ap1)
 	dfs.printf("A");
 	cd = (OCODE *)allocx(sizeof(OCODE));
 	dfs.printf("B");
-	cd->predop = 1;
-	cd->pregreg = 15;
 	cd->insn = GetInsn(op);
 	cd->opcode = op;
 	cd->length = len;
@@ -187,8 +181,6 @@ void GenerateDiadic(int op, int len, AMODE *ap1, AMODE *ap2)
 {
 	OCODE *cd;
 	cd = (OCODE *)xalloc(sizeof(OCODE));
-	cd->predop = 1;
-	cd->pregreg = 15;
 	cd->insn = GetInsn(op);
 	cd->opcode = op;
 	cd->length = len;
@@ -212,8 +204,6 @@ void GenerateDiadicNT(int op, int len, AMODE *ap1, AMODE *ap2)
 {
 	OCODE *cd;
 	cd = (OCODE *)xalloc(sizeof(OCODE));
-	cd->predop = 1;
-	cd->pregreg = 15;
 	cd->insn = GetInsn(op);
 	cd->opcode = op;
 	cd->length = len;
@@ -235,8 +225,6 @@ void GenerateTriadic(int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3)
 {
 	OCODE    *cd;
 	cd = (OCODE *)allocx(sizeof(OCODE));
-	cd->predop = 1;
-	cd->pregreg = 15;
 	cd->insn = GetInsn(op);
 	cd->opcode = op;
 	cd->length = len;
@@ -253,8 +241,6 @@ void GenerateTriadicNT(int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3)
 {
 	OCODE    *cd;
 	cd = (OCODE *)allocx(sizeof(OCODE));
-	cd->predop = 1;
-	cd->pregreg = 15;
 	cd->insn = GetInsn(op);
 	cd->opcode = op;
 	cd->length = len;
@@ -270,8 +256,6 @@ void Generate4adic(int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3, AMODE *a
 {
 	OCODE *cd;
 	cd = (OCODE *)allocx(sizeof(OCODE));
-	cd->predop = 1;
-	cd->pregreg = 15;
 	cd->insn = GetInsn(op);
 	cd->opcode = op;
 	cd->length = len;
@@ -288,8 +272,6 @@ void Generate4adicNT(int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3, AMODE 
 {
 	OCODE *cd;
 	cd = (OCODE *)allocx(sizeof(OCODE));
-	cd->predop = 1;
-	cd->pregreg = 15;
 	cd->insn = GetInsn(op);
 	cd->opcode = op;
 	cd->length = len;
@@ -1207,16 +1189,18 @@ static void PeepoptHint(OCODE *ip)
 				//    shl for source
 				//    load source
 				//    store target
-				if ((back->opcode == op_shl) && back->oper3->offset &&
-					(am->preg != fwd->oper2->preg && am->preg != fwd->oper2->sreg) && 
-					(back->oper3->offset->i == 1
-						|| back->oper3->offset->i == 2
-						|| back->oper3->offset->i == 3)
-					) {
-					fwd->oper2->preg = back->oper2->preg;
-					fwd->oper2->scale = 1 << back->oper3->offset->i;
-					MarkRemove(back);
-					optimized++;
+				if (fwd->oper2) {
+					if ((back->opcode == op_shl) && back->oper3->offset &&
+						(am->preg != fwd->oper2->preg && am->preg != fwd->oper2->sreg) &&
+						(back->oper3->offset->i == 1
+							|| back->oper3->offset->i == 2
+							|| back->oper3->offset->i == 3)
+						) {
+						fwd->oper2->preg = back->oper2->preg;
+						fwd->oper2->scale = 1 << back->oper3->offset->i;
+						MarkRemove(back);
+						optimized++;
+					}
 				}
 			}
 		}
@@ -1944,6 +1928,7 @@ void ComputeSpillCosts()
 		}
 		b->NeedLoad->resetPtr();
 		for (r = b->NeedLoad->nextMember(); r >= 0; r = b->NeedLoad->nextMember()) {
+			if (alltrees[r])
 			alltrees[r]->loads += b->depth;
 		}
 	}

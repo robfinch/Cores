@@ -979,6 +979,7 @@ vec1data:
 vec2data:
 	dw	2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2
 
+.include "d:\Cores5\FT64\v5\software\c64libc\source\gc.s"
 .include "d:\Cores5\FT64\v5\software\c64libc\source\cc64rt.s"
 .include "d:\Cores5\FT64\v5\software\boot\brkrout.asm"
 .include "d:\Cores5\FT64\v5\software\boot\BIOSMain.s"

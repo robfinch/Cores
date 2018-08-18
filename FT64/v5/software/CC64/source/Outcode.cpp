@@ -96,6 +96,10 @@ Instruction opl[] =
 	{"sb",op_sb,4,false,true},
 	{"sc",op_sc,4,false,true},
 	{"sh",op_sh,4,false,true},
+	{"sptr", op_sptr,4,false,true},
+	{"spt", op_spt,4,false,true },
+	{"setwb", op_setwb, 1, false },
+
 	{"loop", op_loop},
 	{"jal", op_jal,1,true},
 

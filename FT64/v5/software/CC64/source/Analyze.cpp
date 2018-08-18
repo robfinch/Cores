@@ -255,6 +255,8 @@ static void scanexpr(ENODE *node, int duse)
 		case en_uhfieldref:
 		case en_wfieldref:
 		case en_uwfieldref:
+		case en_wp_ref:
+		case en_hp_ref:
         case en_struct_ref:
 		case en_vector_ref:
                 // There is something wrong with the following code that causes
@@ -317,13 +319,14 @@ static void scanexpr(ENODE *node, int duse)
 		case en_cbw: case en_cuhw:
 		case en_cbu: case en_ccu: case en_chu:
 		case en_cubu: case en_cucu: case en_cuhu:
+		case en_ccwp: case en_cucwp:
 		case en_cch:
 		case en_ccw:
 		case en_chw:
         case en_uminus:
 		case en_abs:
-        case en_compl:  case en_ainc:
-        case en_adec:   case en_not:
+        case en_compl:  
+        case en_not:
         case en_chk:
         case en_i2d:
 		case en_i2q:
@@ -543,6 +546,8 @@ void repexpr(ENODE *node)
 				case en_uc_ref:
 				case en_uh_ref:
                 case en_uw_ref:
+				case en_wp_ref:
+				case en_hp_ref:
 				case en_bfieldref:
 				case en_ubfieldref:
 				case en_cfieldref:
@@ -583,13 +588,13 @@ void repexpr(ENODE *node)
 				case en_cbw: case en_cuhw:
 				case en_cbu: case en_ccu: case en_chu:
 				case en_cubu: case en_cucu: case en_cuhu:
+				case en_ccwp: case en_cucwp:
 				case en_cch:
 				case en_ccw:
 				case en_chw:
                 case en_uminus:
 				case en_abs:
                 case en_not:    case en_compl:
-                case en_ainc:   case en_adec:
                 case en_chk:
                 case en_i2d:
 				case en_i2q:

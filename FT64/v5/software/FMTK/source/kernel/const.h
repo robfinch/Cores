@@ -43,6 +43,8 @@ enum(-1) {
      E_DCBInUse,
 	 E_Busy,
 	 E_BadPageno,
+	 E_PagesizeMismatch,
+
      //; Device driver errors
      E_BadDevNum,// =	0x20,
      E_NoDev,
@@ -62,6 +64,20 @@ enum(-1) {
      E_TooManyTasks
 };
 
+#define OBJ_MAGIC	(('O' << 40) | ('B' << 32) | ('J' << 24) | ('E' << 16) | ('C' << 8) | 'T')
 #define ACB_MAGIC	(('A' << 16) | ('C' << 8) | 'B')
+
+#define OL_USER			3
+#define OL_SUPERVISOR	2
+#define OL_HYPERVISOR	1
+#define OL_MACHINE		0
+
+#define OBJ_WHITE		2
+#define OBJ_GREY		1
+#define OBJ_BLACK		0
+
+#define MMU_WR	4
+#define MMU_RD	2
+#define MMU_EX	1
 
 #endif

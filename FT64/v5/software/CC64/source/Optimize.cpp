@@ -206,6 +206,8 @@ static void opt0(ENODE **node)
 			case en_flt_ref:
 			case en_dbl_ref:
 			case en_quad_ref:
+			case en_wp_ref:
+			case en_hp_ref:
 			case en_cubw:
 			case en_cucw:
 			case en_cuhw:
@@ -221,8 +223,8 @@ static void opt0(ENODE **node)
 			case en_cch:
 			case en_ccw:
 			case en_chw:
-			case en_ainc:
-			case en_adec:
+			case en_ccwp:
+			case en_cucwp:
                     opt0( &((*node)->p[0]));
                     return;
 			case en_abs:
@@ -543,6 +545,7 @@ static int64_t xfold(ENODE *node)
 				case en_uc_ref: case en_uh_ref:
                 case en_b_ref:  case en_w_ref:
 				case en_c_ref:  case en_h_ref:
+				case en_wp_ref:	case en_hp_ref:
 				case en_vector_ref:
                 case en_compl:
                 case en_not:

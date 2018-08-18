@@ -373,6 +373,8 @@ extern AMODE *GenerateShift(ENODE *node,int flags, int size, int op);
 extern AMODE *GenerateAssignShift(ENODE *node,int flags,int size,int op);
 extern AMODE *GenerateBitfieldDereference(ENODE *node, int flags, int size);
 extern AMODE *GenerateBitfieldAssign(ENODE *node, int flags, int size);
+extern void GenerateBitfieldInsert(AMODE *ap1, AMODE *ap2, int offset, int width);
+
 // err.c
 extern void fatal(char *str);
 
