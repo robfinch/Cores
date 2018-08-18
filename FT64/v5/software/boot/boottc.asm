@@ -66,6 +66,8 @@ _DBGCursorRow	equ	_DBGCursorCol + 4
 _DBGAttr	equ		_DBGCursorRow + 4
 _milliseconds	equ		_DBGAttr + 4
 ___garbage_list	equ	SCRATCHPAD + 48
+__GCExecPtr		equ	___garbage_list + 8
+__GCStopPtr		equ	__GCExecPtr + 8
 __brk_stack	equ	SCRATCHPAD + 2048
 
 ; Help the assembler out by telling it how many bits are required for code
@@ -178,6 +180,12 @@ start:
 .st1:
 		ldi		r2,#$FF
 		sb		r2,LEDS			; write to LEDs
+
+		; set garbage handler vectors
+		ldi		$r1,#__GCExec
+		sw		$r1,__GCExecPtr
+		ldi		$r1,#__GCStop
+		sw		$r1,__GCStopPtr
 
 		; set trap vector
 		ldi		r1,#$FFFFFFFFFFFC0000
@@ -732,127 +740,81 @@ brkrout2:
 		beqi	$r1,#GC_STOP,.stopGC
 		rti
 
+		; Here $r22 is used, meaning the GC code can't pass more than four
+		; values in registers. $r22 is normally arg#5.
 .execGC:
 		; GC stop interrupt programmed for one-shot operation here
-		ldi		$r6,#PIT
+		ldi		$r22,#PIT
 		; The number of cycles to allow the GC to run must be less than
 		; the number of cycles between GC interrupts
-		ldi		$r1,#2000000			; number of cycles to run GC for (0.1s)
-		sh		$r1,$24[r6]				; max count
+		ldi		$r1,#1900000			; number of cycles to run GC for (0.1s)
+		sh		$r1,$24[$r22]			; max count
 		sub		$r1,$r1,#2				; back off a couple of cycles
-		sh		$r1,$28[r6]				; store when 1 output
+		sh		$r1,$28[$r22]			; store when 1 output
 		ldi		$r1,#3					; configure for one-shot
-		sb		$r1,$0D[r6]				; counter #2 only control
+		sb		$r1,$0D[$r22]			; counter #2 only control
 		
 		; Re-enable the GC interrupt level so that a GC stop interrupt
 		; may interrupt the routine.
 		sei		#3
 		
-		lw		$r1,_gc_state
-		beq		$r1,$r0,.xgc			; if the state was IDLE just call the routine and return
+		csrrd	$r1,#$C,$r0
+		bbc		$r1,#1,.xgc		; if the state was IDLE just call the routine and return
 
-		// Restore operating key		
-		csrrd	r1,#3,r0		// get PCR
+		; Restore operating key		
+		lbu		$r22,_gc_mapno
+		csrrd	$r1,#3,$r0		; get PCR
 		and		$r1,$r1,#$FFFFFFFFFFFFFF00
-		lbu		$r2,_gc_mapno
-		or		$r1,$r1,$r2
-		csrrw	r1,#3,r1		// set PCR
+		or		$r1,$r1,$r22
+		csrrw	$r0,#3,$r1		; set PCR
 
-		lw		$r1,_gc_regs+0			; Restore registers
-		lw		$r2,_gc_regs+8
-		lw		$r3,_gc_regs+16
-		lw		$r4,_gc_regs+24
-		lw		$r5,_gc_regs+32
-		lw		$r6,_gc_regs+40
-		lw		$r7,_gc_regs+48
-		lw		$r8,_gc_regs+56
-		lw		$r9,_gc_regs+64
-		lw		$r10,_gc_regs+72
-		lw		$r11,_gc_regs+80
-		lw		$r12,_gc_regs+88
-		lw		$r13,_gc_regs+96
-		lw		$r14,_gc_regs+104
-		lw		$r15,_gc_regs+112
-		lw		$r16,_gc_regs+120
-		lw		$r17,_gc_regs+128
-		lw		$r18,_gc_regs+136
-		lw		$r19,_gc_regs+144
-		lw		$r20,_gc_regs+152
-		lw		$r21,_gc_regs+160
-		lw		$r22,_gc_regs+168
-		lw		$r23,_gc_regs+176
-		lw		$r24,_gc_regs+184
-		lw		$r25,_gc_regs+192
-		lw		$r26,_gc_regs+200
-		lw		$r27,_gc_regs+208
-		lw		$r28,_gc_regs+216
-		lw		$r29,_gc_regs+224
-		lw		$r30,_gc_regs+232
-		lw		$r31,_gc_regs+240
-		; Here $r22 is used, meaning the GC code can't pass more than four
-		; values in registers. $r22 is normally arg#5.
-		; This is one spot where a memory indirect jump would be handy.
+		; The following load must be before data level is set
 		lw		$r22,_gc_pc
+		; Restore data level (current level is 0)
+		lbu		$r1,_gc_dl
+		and		$r1,$21,#3
+		shl		$r1,$r1,#20
+		csrrs	$r0,#$44,$r1
+
+		csrrd	$r1,#$6,$r0		; get back r1
 		jmp		[$r22]
 .xgc:
 		lea		$sp,_gc_stack+255*8	; switch to GC stack
-		call	__GCExec
-		rti
+		ldi		$r1,#2			; flag GC busy
+		csrrs	$r0,#$C,r1
+		lw		$r1,__GCExecPtr
+		call	[$r1]
+		rti		#1				; flag GC not busy
 
 		; GCStop can only be entered when GC is running. It does a two up level
-		; return after saving the GC context.
+		; return after saving the GC context. There isn't that much to save because
+		; a register set is reserved for the interrupt level. That means there's no
+		; need to save and restore it.
 .stopGC:
-		lw		$r1,_gc_state
-		beq		$r1,$r0,.idle
-		csrrd	$r1,#9,$r0			; get back r1
-		sw		$r1,_gc_regs+0
-		sw		$r2,_gc_regs+8
-		sw		$r3,_gc_regs+16
-		sw		$r4,_gc_regs+24
-		sw		$r5,_gc_regs+32
-		sw		$r6,_gc_regs+40
-		sw		$r7,_gc_regs+48
-		sw		$r8,_gc_regs+56
-		sw		$r9,_gc_regs+64
-		sw		$r10,_gc_regs+72
-		sw		$r11,_gc_regs+80
-		sw		$r12,_gc_regs+88
-		sw		$r13,_gc_regs+96
-		sw		$r14,_gc_regs+104
-		sw		$r15,_gc_regs+112
-		sw		$r16,_gc_regs+120
-		sw		$r17,_gc_regs+128
-		sw		$r18,_gc_regs+136
-		sw		$r19,_gc_regs+144
-		sw		$r20,_gc_regs+152
-		sw		$r21,_gc_regs+160
-		sw		$r22,_gc_regs+168
-		sw		$r23,_gc_regs+176
-		sw		$r24,_gc_regs+184
-		sw		$r25,_gc_regs+192
-		sw		$r26,_gc_regs+200
-		sw		$r27,_gc_regs+208
-		sw		$r28,_gc_regs+216
-		sw		$r29,_gc_regs+224
-		sw		$r30,_gc_regs+232
-		sw		$r31,_gc_regs+240
+		lw		$r1,__GCStopPtr
+		jmp		[$r1]
+__GCStop:
+		; Save data level - the data level was stacked by the GCStop irq
+		csrrd	$r1,#$41,$r0		; read stacked data level
+		shr		$r1,$r1,#16			; extract data level bits
+		and		$r1,$r1,#3
+		sb		$r1,_gc_dl			; save off data level
 
-		// Restore operating key		
-		csrrd	r1,#3,r0		// get PCR
+		; Save operating key, restore old operating key
+		lbu		$r22,_gc_omapno
+		csrrd	$r1,#3,$r0
+		sb		$r1,_gc_mapno		; save off the map that was active
 		and		$r1,$r1,#$FFFFFFFFFFFFFF00
-		lbu		$r2,_gc_omapno
-		or		$r1,$r1,$r2
-		csrrw	r1,#3,r1		// set PCR
+		or		$r1,$r1,$r22
+		csrrw	$r0,#3,$r1
 		
 		; Replace the EPC pointer with a pointer to an RTI. The the RTI will
 		; execute another RTI.
 		lea		$r1,.stopRti
 		csrrw	$r1,#EPC0,$r1
 		sw		$r1,_gc_pc
-.stopRti:
-		rti
-.idle:
 		csrrd	$r1,#9,$r0			; get back r1
+.stopRti:
 		rti
 		
 ;===============================================================================
