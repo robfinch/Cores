@@ -105,7 +105,6 @@ void *malloc(int n)
 		}
 	}
 	p = pa->Heap.mem[k].allocptr;
-	memset(p,0,n);
 	pa->Heap.mem[k].allocptr += n;
 	p->magic = OBJ_MAGIC;
 	p->size = n;

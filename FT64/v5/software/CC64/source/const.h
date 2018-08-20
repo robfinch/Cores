@@ -150,6 +150,7 @@ enum e_op {
 		op_csrrw, op_nop,
 		op_hint, op_hint2, op_rem2,
 		// FT64
+		op_cmovenz,
 		op_sptr, op_isptr, op_setwb, op_spt,
 		op_bchk, op_ibne, op_dbnz,
 		op_brk, op_rti, op_rte, op_bex,

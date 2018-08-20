@@ -1029,6 +1029,19 @@ int NextToken()
                      inptr += 5;
                      return token = tk_csrrw;
                    }
+			   if (gCpu == 'F') {
+				   if ((inptr[1] == 'm' || inptr[1] == 'M') &&
+					   (inptr[2] == 'o' || inptr[2] == 'O') &&
+					   (inptr[3] == 'v' || inptr[3] == 'V') &&
+					   (inptr[4] == 'e' || inptr[4] == 'E') &&
+					   (inptr[5] == 'n' || inptr[5] == 'N') &&
+					   (inptr[6] == 'z' || inptr[6] == 'Z') &&
+					   isspace(inptr[7])) {
+					   inptr += 7;
+					   return (token = tk_cmovenz);
+				   }
+
+			   }
              }
              break;
 
@@ -1466,6 +1479,23 @@ int NextToken()
 					isspace(inptr[4])) {
 					inptr += 4;
 					return token = tk_ibne;
+				}
+				if ((inptr[1] == 's' || inptr[1] == 'S') &&
+					(inptr[2] == 'p' || inptr[2] == 'P') &&
+					(inptr[3] == 't' || inptr[3] == 'T') &&
+					(inptr[4] == 'r' || inptr[4] == 'R') &&
+					isspace(inptr[5])) {
+					inptr += 5;
+					return token = tk_isptr;
+				}
+				if ((inptr[1] == 's' || inptr[1] == 'S') &&
+					(inptr[2] == 'n' || inptr[2] == 'N') &&
+					(inptr[3] == 'u' || inptr[3] == 'U') &&
+					(inptr[4] == 'l' || inptr[4] == 'L') &&
+					(inptr[5] == 'l' || inptr[5] == 'L') &&
+					isspace(inptr[6])) {
+					inptr += 6;
+					return token = tk_isnull;
 				}
 			}
              if ((inptr[1]=='o' || inptr[1]=='O') &&
@@ -2606,6 +2636,15 @@ int NextToken()
 				if ((inptr[1]=='t' || inptr[1]=='T') && (inptr[2]=='c' || inptr[2]=='C') && (inptr[3]=='b' || inptr[3]=='B') && isspace(inptr[4])) {
 					inptr += 4;
 					return token = tk_stcb;
+				}
+			}
+			if (gCpu == 'F') {
+				if ((inptr[1] == 'p' || inptr[1] == 'P')
+					&& (inptr[2] == 't' || inptr[2] == 'T')
+					&& (inptr[3] == 'r' || inptr[3] == 'R')
+					&& isspace(inptr[4])) {
+					inptr += 4;
+					return (token = tk_sptr);
 				}
 			}
             break;

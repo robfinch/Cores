@@ -1614,7 +1614,24 @@ static void process_rrrop(int64_t funct6)
 		case 0x0A:	Rc = 0; break;	// xor
 		}
 	}
-	emit_insn((funct6 << 34LL) | (sz << 24) | (Rt << 27) | (Rc << 18) | (Rb << 12) | (Ra << 6) | 0x02, !expand_flag, 5);
+	emit_insn((funct6 << 34LL) | (sz << 24) | (Rt << 27) | (Rc << 18) | (Rb << 12) | (Ra << 6) | 0x42, !expand_flag, 5);
+}
+
+static void process_cmove(int64_t funct6)
+{
+	int Ra, Rb, Rc = 0, Rt;
+	char *p;
+	int sz = 3;
+
+	p = inptr;
+	Rt = getRegisterX();
+	need(',');
+	Ra = getRegisterX();
+	need(',');
+	Rb = getRegisterX();
+	need(',');
+	Rc = getRegisterX();
+	emit_insn((funct6 << 42LL) | (Rt << 23) | (Rc << 18) | (Rb << 13) | (Ra << 8) | 0x02, !expand_flag, 6);
 }
 
 // ---------------------------------------------------------------------------
@@ -1811,14 +1828,24 @@ static void process_itof(int64_t oc)
     if (token==',')
        rm = getFPRoundMode();
 //    prevToken();
+	if (fmt != 2) {
+		emit_insn(
+			(oc << 42LL) |
+			(fmt << 31LL) |
+			(rm << 28LL) |
+			(Rt << 23) |
+			(0 << 13) |
+			(Ra << 8) |
+			0x0F, !expand_flag, 6
+		);
+	}
     emit_insn(
-			(oc << 34LL) |
-			(fmt << 24)|
-			(rm << 28LL)|
+			(oc << 26LL) |
+			(rm << 23LL)|
 			(Rt << 18)|
-			(0 << 12)|
-			(Ra << 6) |
-			0x0F,!expand_flag,5
+			(0 << 13)|
+			(Ra << 8) |
+			0x0F,!expand_flag,4
 			);
 }
 
@@ -2352,7 +2379,10 @@ static void process_call(int opcode)
 	int Ra = 0;
 
     NextToken();
-	val = expr();
+	if (token == '[')
+		val = 0;
+	else
+		val = expr();
 	if (token=='[') {
 		Ra = getRegisterX();
 		need(']');
@@ -4160,6 +4190,7 @@ void FT64_processMaster()
 		case tk_call:  process_call(0x19); break;
         case tk_cli: emit_insn(0xC0000002,0,4); break;
 		case tk_chk:  process_chk(0x34); break;
+		case tk_cmovenz: process_cmove(0x29); break;
 		case tk_cmp:  process_rrop(0x06); break;
 		case tk_cmpi:  process_riop(0x06); break;
 		case tk_cmpu:  process_rrop(0x07); break;
@@ -4212,6 +4243,8 @@ void FT64_processMaster()
 		case tk_if:		pif1 = inptr-2; doif(); break;
 		case tk_itof: process_itof(0x15); break;
 		case tk_iret:	process_iret(0xC8000002); break;
+		case tk_isnull:  process_rop(0x0C); break;
+		case tk_isptr:  process_rop(0x0D); break;
         case tk_jal: process_jal(0x18); break;
 		case tk_jmp: process_call(0x28); break;
         case tk_lb:  process_load(0x13); break;
@@ -4292,7 +4325,8 @@ void FT64_processMaster()
 		case tk_sltu:	process_setiop(0x1B,12); break;
 		case tk_sne:	process_setiop(0x1B,3); break;
         case tk_slli: process_shifti(0x8); break;
-        case tk_srai: process_shifti(0xB); break;
+		case tk_sptr:  process_store(0x35); break;
+		case tk_srai: process_shifti(0xB); break;
         case tk_srli: process_shifti(0x9); break;
         case tk_sub:  process_rrop(0x05); break;
         case tk_subi:  process_riop(0x05); break;

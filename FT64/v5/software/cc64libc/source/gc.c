@@ -122,9 +122,18 @@ naked int _SetDataLevel(register int dl)
 	}
 }
 
-void *_new(int n, int typenum)
+int *GetTemplate(int typeno)
+{
+	ACB *pACB;
+	
+	pACB = (ACB *)0;
+	return (pACB->templates[typeno]);
+}
+
+void *_new(int n, int typenum, void *lol, int typeno)
 {
 	static int id;
+	int *ptr;
 	__object *p;
 	__object **ol = (__object **)8;
 	
@@ -132,9 +141,15 @@ void *_new(int n, int typenum)
 	p->id = id;
 	p->typenum = typenum;
 	id++;
+	// lookup a template for the object from template table
+	ptr = GetTemplate(typeno);
+	if (ptr)
+		memcpyW(&p[1],ptr,(n+7)>>3);
+	else
+		memsetW(&p[1],0,(n+7)>>3);
 	return (&p[1]);
 }
-
+/*
 void _delete(__object *p, __object **list)
 {
 	__object *m, *q;
@@ -209,7 +224,7 @@ void _gl_delete(__object *p)
 		(p->finalizer)();
 	free(&p[-1]);
 }
-
+*/
 // Used at the end of a function to add all the objects created in the function
 // that have gone out of scope to the garbage list.
 
@@ -226,9 +241,11 @@ void _AddGarbage(__object *list)
 		until (LockGCSemaphore());
 		while(list) {
 			count++;
+			/*
 			p = list->newlist;
 			list->newlist = *garbage_list;
 			*garbage_list = list;
+			*/
 			list = p;
 			if (count==25)
 				break;
@@ -242,18 +259,14 @@ void _AddGarbage(__object *list)
 naked inline int IsPointer(register int *p)
 {
 	__asm {
-		asr		$r1,$r18,#44
-		cmp		$r1,$r1,#$FFFFFFFFFFFFFF01
-		not		$r1,$r1
+		isptr	$r1,$r18
 	}
 }
 
 naked inline int IsNullPointer(register int *p)
 {
 	__asm {
-		ror		$r1,$r18,#44
-		cmp		$r1,$r1,#$FFF01
-		not		$r1,$r1
+		isnull	$r1,$r18
 	}
 }
 
@@ -304,10 +317,7 @@ naked int IsRegPointer(register int regset, register int regno)
 	int *rg;
 	
 	rg = GetRegister(regset,regno);
-	if (IsPointer(rg))
-		return (rg);
-	else
-		return (0);
+	return (IsPointer(rg) ? rg : 0);
 }
 
 
@@ -334,7 +344,7 @@ static naked inline void ClearWB(int regset)
 	}
 }
 
-
+/*
 void CheckObj(__object *p, int mapno)
 {
 	if (p->owningMap==mapno) {
@@ -349,21 +359,21 @@ void CheckObj(__object *p, int mapno)
 		}
 	}
 }
-
-static void GetStackedRootsOnThread(TCB *pThrd, int regset)
+*/
+static void GetStackedRootsOnThread(register TCB *pThrd, register int regset)
 {
 	int *ptr, *qtr, *sptr;
 	int *pStackBot;
 	int stksize;
 	ACB *pACB;
 
+	_SetDataLevel(OL_USER);
 	if (pThrd->status & (TS_PREEMPT|TS_RUNNING))
 		ptr = GetRegister(regset, 31);
 	else
 		ptr = pThrd->regs[31];
 	sptr = pThrd->stack;
 	stksize = pThrd->stacksize;
-	_SetDataLevel(OL_USER);
 	pACB = (ACB *)0;
 	pStackBot = &sptr[stksize>>3];
 	for (; ptr < pStackBot; ptr++) {
@@ -386,7 +396,6 @@ static void GetStackedRoots(ACB *pACB)
 {
 	TCB *pThrd;
 
-	gc_stkrootcnt = gc_gblrootcnt;
 	for (pThrd = &tcbs[pACB->thrd]; pThrd; pThrd = (pThrd->acbnext >= 0 ? &tcbs[pThrd->acbnext] : 0))
 		GetStackedRootsOnThread(pThrd, pACB->regset);
 }
@@ -600,7 +609,7 @@ static int IsInMemory(register MEMORY *mem, register void *ptr)
 		(__int8*)ptr < (__int8*)mem->addr + mem->size)
 }
 
-void Scavange(ACB *pACB)
+void Scavange()
 {
 	MEMORY *fromSpace, *toSpace;
 	MEMORY *mtmp;
@@ -613,7 +622,10 @@ void Scavange(ACB *pACB)
 	int *scanPtr;
 	__object *obj;
 	__object *fromNeighbour, *toNeighbour;
+	ACB *pACB;
 
+	_SetDataLevel(OL_USER);
+	pACB = (ACB *)0;
 	oldSpace = &pACB->Heap.mem[MS_OLD];
 
 	// swap (fromSpace, toSpace)
@@ -626,21 +638,17 @@ void Scavange(ACB *pACB)
 	allocationPtr = (int *)toSpace->addr;
 	scanPtr = (int *)toSpace->addr;
 	
-	for (ii = 0; ii < gc_rootcnt; ii++) {
-		root = gc_roots[ii];
+	for (ii = 0; ii < pACB->gc_rootcnt; ii++) {
+		root = pACB->gc_roots[ii];
 		root->forwardingAddress = 0;
-		_SetDataLevel(OL_USER);
 		if (IsInMemory(fromSpace,root)) {
 			rootCopy = CopyObject(&allocationPtr, root);
 			rootCopy->scavangeCount++;
-			_SetDataLevel(OL_MACHINE);
 			root->forwardingAddress = rootCopy;
-			gc_roots[ii] = rootCopy;
+			pACB->gc_roots[ii] = rootCopy;
 		}
-		_SetDataLevel(OL_MACHINE);
 	}
 
-	_SetDataLevel(OL_USER);
 	while (scanPtr < allocationPtr) {
 		obj = (__object *)scanPtr;
 		scanPtr += obj->size;
@@ -650,7 +658,7 @@ void Scavange(ACB *pACB)
 			op = &((int *)obj)[ii];
 			if (IsPointer(tmp) && !IsInMemory(oldSpace, tmp)) {
 				fromNeighbour = (__object *)tmp;
-				if (fromNeighbour->forwardingAddress != 0)
+				if (fromNeighbour->forwardingAddress != 0) 
 					toNeighbour = fromNeighbour->forwardingAddress;
 				else {
 					toNeighbour = CopyObject(&allocationPtr, fromNeighbour);
@@ -677,7 +685,7 @@ static void MarkObjectsWhite(ACB *pACB)
 	}
 }
 
-static void gc_push(__object *obj)
+static void gc_push(register __object *obj)
 {
 	ACB *pACB;
 	
@@ -695,7 +703,7 @@ static __object *gc_pop()
 	ACB *pACB;
 	__object *obj;
 
-	pABC = (ACB *)0;
+	pACB = (ACB *)0;
 	pACB->gc_ndx--;
 	pACB->gc_markingQueFull = false;
 	obj = pACB->gc_markingQue[pACB->gc_ndx];
@@ -703,7 +711,7 @@ static __object *gc_pop()
 	return (obj);
 }
 
-static void Mark(__object *obj)
+static void Mark(register __object *obj)
 {
 	ACB *pACB;
 	
@@ -731,7 +739,7 @@ static void RefillMarkingQue()
 		if (obj->state == OBJ_GREY)
 			gc_push(obj);
 		if (pACB->gc_markingQueFull) {
-			gc_overflow = true;
+			pACB->gc_overflow = true;
 			return;
 		}
 	}
@@ -742,10 +750,15 @@ static void MarkHeap()
 	ACB *pACB;
 	__object *obj, *pbj;
 	int *ptr;
+	int nn;
 
-	pACB = (ACB *)0;	
-	// for root in roots
-	//     Mark(root)
+	_SetDataLevel(OL_USER);
+	pACB = (ACB *)0;
+	for (nn = 0; nn < pACB->gc_rootcnt; nn++) {
+		obj = pACB->gc_roots[nn];
+		Mark(obj);
+	}
+
 	do {
 		if (pACB->gc_overflow) {
 			pACB->gc_overflow = false;
@@ -762,6 +775,7 @@ static void MarkHeap()
 			}
 		}
 	} while(pACB->gc_overflow);
+	_SetDataLevel(OL_MACHINE);
 }
 
 void gc_init()

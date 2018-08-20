@@ -403,80 +403,80 @@ AMODE *GenExpr(ENODE *node)
 		ap3 = GetTempRegister();         
 		ap1 = GenerateExpression(node->p[0],F_REG,size);
 		ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
-		GenerateTriadic(op_cmp,0,ap3,ap1,ap2);
+		GenerateTriadic(op_slt,0,ap3,ap1,ap2);
 		ReleaseTempRegister(ap2);
 		ReleaseTempRegister(ap1);
-		GenerateDiadic(op_slt,0,ap3,ap3);
+//		GenerateDiadic(op_slt,0,ap3,ap3);
 		return (ap3);
 	case en_le:
 		size = GetNaturalSize(node);
 		ap3 = GetTempRegister();         
 		ap1 = GenerateExpression(node->p[0],F_REG,size);
 		ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
-		GenerateTriadic(op_cmp,0,ap3,ap1,ap2);
+		GenerateTriadic(op_sle,0,ap3,ap1,ap2);
 		ReleaseTempRegister(ap2);
 		ReleaseTempRegister(ap1);
-		GenerateDiadic(op_sle,0,ap3,ap3);
+//		GenerateDiadic(op_sle,0,ap3,ap3);
 		return (ap3);
 	case en_gt:
 		size = GetNaturalSize(node);
 		ap3 = GetTempRegister();         
 		ap1 = GenerateExpression(node->p[0],F_REG,size);
 		ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
-		GenerateTriadic(op_cmp,0,ap3,ap1,ap2);
+		GenerateTriadic(op_sgt,0,ap3,ap1,ap2);
 		ReleaseTempRegister(ap2);
 		ReleaseTempRegister(ap1);
-		GenerateDiadic(op_sgt,0,ap3,ap3);
+//		GenerateDiadic(op_sgt,0,ap3,ap3);
 		return (ap3);
 	case en_ge:
 		size = GetNaturalSize(node);
 		ap3 = GetTempRegister();         
 		ap1 = GenerateExpression(node->p[0],F_REG,size);
 		ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
-		GenerateTriadic(op_cmp,0,ap3,ap1,ap2);
+		GenerateTriadic(op_sge,0,ap3,ap1,ap2);
 		ReleaseTempRegister(ap2);
 		ReleaseTempRegister(ap1);
-		GenerateDiadic(op_sge,0,ap3,ap3);
+//		GenerateDiadic(op_sge,0,ap3,ap3);
 		return (ap3);
 	case en_ult:
 		size = GetNaturalSize(node);
 		ap3 = GetTempRegister();         
 		ap1 = GenerateExpression(node->p[0],F_REG,size);
 		ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
-		GenerateTriadic(op_cmpu,0,ap3,ap1,ap2);
+		GenerateTriadic(op_sltu,0,ap3,ap1,ap2);
 		ReleaseTempRegister(ap2);
 		ReleaseTempRegister(ap1);
-		GenerateDiadic(op_slt,0,ap3,ap3);
+//		GenerateDiadic(op_slt,0,ap3,ap3);
 		return (ap3);
 	case en_ule:
 		size = GetNaturalSize(node);
 		ap3 = GetTempRegister();         
 		ap1 = GenerateExpression(node->p[0],F_REG,size);
 		ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
-		GenerateTriadic(op_cmpu,0,ap3,ap1,ap2);
+		GenerateTriadic(op_sleu,0,ap3,ap1,ap2);
 		ReleaseTempRegister(ap2);
 		ReleaseTempRegister(ap1);
-		GenerateDiadic(op_sle,0,ap3,ap3);
+//		GenerateDiadic(op_sle,0,ap3,ap3);
 		return (ap3);
 	case en_ugt:
 		size = GetNaturalSize(node);
 		ap3 = GetTempRegister();         
 		ap1 = GenerateExpression(node->p[0],F_REG,size);
 		ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
-		GenerateTriadic(op_cmpu,0,ap3,ap1,ap2);
+		GenerateTriadic(op_sgtu,0,ap3,ap1,ap2);
 		ReleaseTempRegister(ap2);
 		ReleaseTempRegister(ap1);
-		GenerateDiadic(op_sgt,0,ap3,ap3);
+//		GenerateDiadic(op_sgt,0,ap3,ap3);
 		return (ap3);
 	case en_uge:
 		size = GetNaturalSize(node);
 		ap3 = GetTempRegister();         
 		ap1 = GenerateExpression(node->p[0],F_REG,size);
 		ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
-		GenerateTriadic(op_cmpu,0,ap3,ap1,ap2);
+		GenerateTriadic(op_sgeu,0,ap3,ap1,ap2);
 		ReleaseTempRegister(ap2);
 		ReleaseTempRegister(ap1);
-		GenerateDiadic(op_sge,0,ap3,ap3);
+//		GenerateDiadic(op_sge,0,ap3,ap3);
 		return (ap3);
 /*
 	case en_ne:
@@ -1138,7 +1138,9 @@ void GenerateReturn(Statement *stmt)
 				}
             }
             else {
-				if (sym->tp->GetBtp()->IsVectorType())
+				if (sym->tp->GetBtp()->IsFloatType())
+					GenerateDiadic(op_mov, 0, makefpreg(1), ap);
+				else if (sym->tp->GetBtp()->IsVectorType())
 					GenerateDiadic(op_mov, 0, makevreg(1),ap);
 				else
 					GenerateDiadic(op_mov, 0, makereg(1),ap);
@@ -1627,7 +1629,10 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
             result = GetTempRegister();
     }
 	*/
-	if (sym && sym->tp->IsVectorType())
+	if (sym && sym->tp->GetBtp()->IsFloatType()) {
+		return (makefpreg(1));
+	}
+	if (sym && sym->tp->GetBtp()->IsVectorType())
 		return (makevreg(1));
 	ap = makereg(1);
 	if (sym && sym->tp)

@@ -137,6 +137,8 @@ void list_var(SYM *sp, int i)
 		int     j;
         for(j = i; j; --j)
                 lfs.printf("    ");
+		if (sp->tp)
+			lfs.printf("%d ", sp->tp->typeno);
 		if (sp->name->length()== 0)
 			lfs.printf("%-10s =%06x ","<unnamed>",(unsigned int)sp->value.u);
 		else {

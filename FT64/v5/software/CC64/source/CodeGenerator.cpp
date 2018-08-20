@@ -1185,23 +1185,43 @@ AMODE *GenerateMultiply(ENODE *node, int flags, int size, int op)
 //
 // Generate code to evaluate a condition operator node (?:)
 //
-AMODE *GenerateHook(ENODE *node,int flags, int size)
+AMODE *GenerateHook(ENODE *node, int flags, int size)
 {
-	AMODE *ap1, *ap2;
-    int false_label, end_label;
+	AMODE *ap1, *ap2, *ap3, *ap4;
+	int false_label, end_label;
 	OCODE *ip1;
 	int n1;
 
-    false_label = nextlabel++;
-    end_label = nextlabel++;
-    flags = (flags & F_REG) | F_VOL;
-/*
-    if (node->p[0]->constflag && node->p[1]->constflag) {
-    	GeneratePredicateMonadic(hook_predreg,op_op_ldi,make_immed(node->p[0]->i));
-    	GeneratePredicateMonadic(hook_predreg,op_ldi,make_immed(node->p[0]->i));
-	}
-*/
+	false_label = nextlabel++;
+	end_label = nextlabel++;
+	flags = (flags & F_REG) | F_VOL;
+	/*
+		if (node->p[0]->constflag && node->p[1]->constflag) {
+			GeneratePredicateMonadic(hook_predreg,op_op_ldi,make_immed(node->p[0]->i));
+			GeneratePredicateMonadic(hook_predreg,op_ldi,make_immed(node->p[0]->i));
+		}
+	*/
 	ip1 = peep_tail;
+	if (!opt_nocgo) {
+		ap4 = GetTempRegister();
+		ap1 = GenerateExpression(node->p[0], flags, size);
+		ap2 = GenerateExpression(node->p[1]->p[0], flags, size);
+		ap3 = GenerateExpression(node->p[1]->p[1], flags|F_IMM0, size);
+		n1 = PeepCount(ip1);
+		if (n1 < 20) {
+			Generate4adic(op_cmovenz, 0, ap4, ap1, ap2, ap3);
+			ReleaseTempReg(ap3);
+			ReleaseTempReg(ap2);
+			ReleaseTempReg(ap1);
+			return (ap4);
+		}
+		ReleaseTempReg(ap3);
+		ReleaseTempReg(ap2);
+		ReleaseTempReg(ap1);
+		ReleaseTempReg(ap4);
+		peep_tail = ip1;
+		peep_tail->fwd = nullptr;
+	}
 	ap2 = GenerateExpression(node->p[1]->p[1],flags,size);
 	n1 = PeepCount(ip1);
 	if (opt_nocgo)
@@ -2276,8 +2296,8 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
     case en_fdsub:    return GenerateBinary(node,flags,size,op_fdsub);
     case en_fsadd:    return GenerateBinary(node,flags,size,op_fsadd);
     case en_fssub:    return GenerateBinary(node,flags,size,op_fssub);
-    case en_fdmul:    return GenerateMultiply(node,flags,size,op_fdmul);
-    case en_fsmul:    return GenerateMultiply(node,flags,size,op_fsmul);
+    case en_fdmul:    return GenerateMultiply(node,flags,size,op_fmul);
+    case en_fsmul:    return GenerateMultiply(node,flags,size,op_fmul);
     case en_fddiv:    return GenerateMultiply(node,flags,size,op_fddiv);
     case en_fsdiv:    return GenerateMultiply(node,flags,size,op_fsdiv);
 	case en_ftadd:    return GenerateBinary(node,flags,size,op_ftadd);

@@ -2036,7 +2036,7 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
 
     case kw_new:
 		{
-			ENODE *ep4;
+			ENODE *ep4, *ep5;
 			std::string *name = new std::string("__new");
 
 			currentFn->UsesNew = TRUE;
@@ -2057,11 +2057,13 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
 				ep4 = nullptr;
 				ep2 = makeinode(en_icon,head->GetHash());
 				ep3 = makenode(en_object_list,nullptr,nullptr);
-				ep4 = makenode(en_void,ep1,ep4);
-				ep4 = makenode(en_void,ep2,ep4);
-				ep4 = makenode(en_void,ep3,ep4);
-  				ep2 = makesnode(en_cnacon, name, name, 0);
-  				ep1 = makefcnode(en_fcall, ep2, ep4, nullptr);
+				ep4 = makeinode(en_icon, head->typeno);
+				ep5 = makenode(en_void,ep1,nullptr);
+				ep5 = makenode(en_void,ep2,ep5);
+				ep5 = makenode(en_void,ep3,ep5);
+				ep5 = makenode(en_void, ep4, ep5);
+				ep2 = makesnode(en_cnacon, name, name, 0);
+  				ep1 = makefcnode(en_fcall, ep2, ep5, nullptr);
   				head = tp;
   				tail = tp1;
 			}
