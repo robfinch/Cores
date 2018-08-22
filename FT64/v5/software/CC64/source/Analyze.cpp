@@ -258,7 +258,6 @@ static void scanexpr(ENODE *node, int duse)
 		case en_uwfieldref:
 		case en_wp_ref:
 		case en_hp_ref:
-        case en_struct_ref:
 		case en_vector_ref:
                 // There is something wrong with the following code that causes
                 // it to remove zero extension conversion from a byte to a word.
@@ -557,7 +556,6 @@ void repexpr(ENODE *node)
 				case en_uhfieldref:
 				case en_wfieldref:
 				case en_uwfieldref:
-                case en_struct_ref:
 				case en_vector_ref:
 					if( (csp = SearchCSEList(node)) != NULL ) {
 						if( csp->reg > 0 ) {

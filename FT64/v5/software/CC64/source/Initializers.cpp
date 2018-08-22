@@ -28,21 +28,8 @@
 extern int catchdecl;
 extern void genstorageskip(int nbytes);
 
-int InitializeType(TYP *tp);
-int InitializeStructure(TYP *tp);
-int initbyte();
-int initchar();
-int initshort();
-int initlong();
-int inittriple();
-int initfloat();
-int initquad();
-int InitializePointer();
 void endinit();
-int InitializeArray(TYP *tp);
-static bool FindPointerInType(TYP *tp);
 extern int curseg;
-static int64_t prev_cumulative;
 static char glbl1[500];
 static char glbl2[500];
 bool hasPointer;
@@ -62,46 +49,6 @@ static void pad(char *p, int n)
 	p[nn + 1] = '\0';
 }
 
-static bool FindPointerInStruct(TYP *tp)
-{
-	SYM *sp;
-
-	sp = sp->GetPtr(tp->lst.GetHead());      /* start at top of symbol table */
-	while (sp != 0) {
-		if (FindPointerInType(sp->tp))
-			return (true);
-		sp = sp->GetNextPtr();
-	}
-	return (false);
-}
-
-static bool FindPointerInType(TYP *tp)
-{
-	switch (tp->type) {
-	case bt_pointer: return (tp->val_flag == FALSE);	// array ?
-	case bt_struct: return (FindPointerInStruct(tp));
-	case bt_union: return (FindPointerInStruct(tp));
-	case bt_class: return (FindPointerInStruct(tp));
-	}
-	return (false);
-}
-
-
-bool IsSkipType(TYP *tp)
-{
-	switch (tp->type) {
-	case bt_struct:	return(true);
-	case bt_union: return(true);
-	case bt_class: return(true);
-	case bt_pointer:
-		if (tp->val_flag == TRUE) {
-			return (!FindPointerInType(tp->GetBtp()));
-		}
-		return(false);
-	}
-	return (false);
-}
-
 void doinit(SYM *sp)
 {
 	static bool first = true;
@@ -115,7 +62,6 @@ void doinit(SYM *sp)
   hasPointer = false;
   if (first) {
 	  firstPrim = true;
-	  prev_cumulative = 0;
 	  first = false;
   }
 
@@ -159,7 +105,7 @@ void doinit(SYM *sp)
 	
 	if (sp->storage_class == sc_static || sp->storage_class == sc_thread) {
 		//strcpy_s(glbl, sizeof(glbl), gen_label((int)sp->value.i, (char *)sp->name->c_str(), GetNamespace(), 'D'));
-		if (IsSkipType(sp->tp)) {
+		if (sp->tp->IsSkippable()) {
 			patchpoint = ofs.tellp();
 			sprintf_s(buf, sizeof(buf), "\talign\t8\n\tdw\t$FFF0200000000001 ; GC_skip\n");
 			ofs.printf(buf);
@@ -178,7 +124,7 @@ void doinit(SYM *sp)
 				strcat_s(lbl, sizeof(lbl), "tls ");
 		}
 		strcat_s(lbl, sizeof(lbl), sp->name->c_str());
-		if (IsSkipType(sp->tp)) {
+		if (sp->tp->IsSkippable()) {
 			patchpoint = ofs.tellp();
 			sprintf_s(buf, sizeof(buf), "\talign\t8\n\tdw\t$FFF0200000000001 ; GC_skip\n");
 			ofs.printf(buf);
@@ -191,15 +137,15 @@ void doinit(SYM *sp)
         return;
     }
 	else if( lastst != assign) {
-		hasPointer = FindPointerInType(sp->tp);
+		hasPointer = sp->tp->FindPointer();
 		genstorage(sp->tp->size);
 	}
 	else {
 		NextToken();
-		hasPointer = FindPointerInType(sp->tp);
-		InitializeType(sp->tp);
+		hasPointer = sp->tp->FindPointer();
+		sp->tp->Initialize();
 	}
-	if (!hasPointer && IsSkipType(sp->tp)) {
+	if (!hasPointer && sp->tp->IsSkippable()) {
 		endpoint = ofs.tellp();
 		ofs.seekp(patchpoint);
 		sprintf_s(buf, sizeof(buf), "\talign\t8\n\tdw\t$%I64X ", ((genst_cumulative + 7LL) >> 3LL) | 0xFFF0200000000000LL);
@@ -207,7 +153,7 @@ void doinit(SYM *sp)
 		ofs.seekp(endpoint);
 		genst_cumulative = 0;
 	}
-	else if (IsSkipType(sp->tp)) {
+	else if (sp->tp->IsSkippable()) {
 		endpoint = ofs.tellp();
 		ofs.seekp(patchpoint);
 		sprintf_s(buf, sizeof(buf), "\talign\t8\n\t  \t                 ");
@@ -220,6 +166,9 @@ void doinit(SYM *sp)
 		ofs.printf("\nendpublic\n");
 }
 
+
+// Patch the last gc_skip
+
 void doInitCleanup()
 {
 	std::streampos endpoint;
@@ -227,7 +176,7 @@ void doInitCleanup()
 	char buf2[500];
 	int nn;
 
-	if (genst_cumulative) {
+	if (genst_cumulative && !hasPointer) {
 		endpoint = ofs.tellp();
 		ofs.seekp(patchpoint);
 		sprintf_s(buf, sizeof(buf), "\talign\t8\n\tdw\t$%I64X ; GC_skip\n", ((genst_cumulative + 7LL) >> 3LL) | 0xFFF0200000000000LL);
@@ -237,173 +186,49 @@ void doInitCleanup()
 	}
 }
 
-int InitializeType(TYP *tp)
-{   
-	int nbytes;
-
-  switch(tp->type) {
-	case bt_ubyte:
-	case bt_byte:
-			nbytes = initbyte();
-			break;
-	case bt_uchar:
-  case bt_char:
-  case bt_enum:
-            nbytes = initchar();
-            break;
-	case bt_ushort:
-  case bt_short:
-            nbytes = initshort();
-            break;
-  case bt_pointer:
-    if( tp->val_flag)
-			nbytes = InitializeArray(tp);
-		else
-			nbytes = InitializePointer();
-    break;
-  case bt_exception:
-	case bt_ulong:
-  case bt_long:
-            nbytes = initlong();
-            break;
-  case bt_struct:
-            nbytes = InitializeStructure(tp);
-            break;
-  case bt_quad:
-		nbytes = initquad();
-		break;
-  case bt_float:
-  case bt_double:
-		nbytes = initfloat();
-		break;
-  case bt_triple:
-		nbytes = inittriple();
-		break;
-  default:
-        error(ERR_NOINIT);
-        nbytes = 0;
-    }
-    return nbytes;
-}
-
-int InitializeArray(TYP *tp)
-{     
-	int nbytes;
-    char *p;
-
-    nbytes = 0;
-    if( lastst == begin) {
-        NextToken();               /* skip past the brace */
-        while(lastst != end) {
-			// Allow char array initialization like { "something", "somethingelse" }
-			if (lastst == sconst && (tp->GetBtp()->type==bt_char || tp->GetBtp()->type==bt_uchar)) {
-				nbytes = strlen(laststr) * 2 + 2;
-				p = laststr;
-				while( *p )
-					GenerateChar(*p++);
-				GenerateChar(0);
-				NextToken();
-			}
-			else
-				nbytes += InitializeType(tp->GetBtp());
-            if( lastst == comma)
-                NextToken();
-            else if( lastst != end)
-                error(ERR_PUNCT);
-        }
-        NextToken();               /* skip closing brace */
-    }
-    else if( lastst == sconst && (tp->GetBtp()->type == bt_char || tp->GetBtp()->type==bt_uchar)) {
-        nbytes = strlen(laststr) * 2 + 2;
-        p = laststr;
-        while( *p )
-            GenerateChar(*p++);
-        GenerateChar(0);
-        NextToken();
-    }
-    else if( lastst != semicolon)
-        error(ERR_ILLINIT);
-    if( nbytes < tp->size) {
-        genstorage( tp->size - nbytes);
-        nbytes = tp->size;
-    }
-    else if( tp->size != 0 && nbytes > tp->size)
-        error(ERR_INITSIZE);    /* too many initializers */
-    return nbytes;
-}
-
-int InitializeStructure(TYP *tp)
-{
-	SYM *sp;
-    int nbytes;
-
-    needpunc(begin,25);
-    nbytes = 0;
-    sp = sp->GetPtr(tp->lst.GetHead());      /* start at top of symbol table */
-    while(sp != 0) {
-		while(nbytes < sp->value.i) {     /* align properly */
-//                    nbytes += GenerateByte(0);
-            GenerateByte(0);
-//                    nbytes++;
-		}
-        nbytes += InitializeType(sp->tp);
-        if( lastst == comma)
-            NextToken();
-        else if(lastst == end)
-            break;
-        else
-            error(ERR_PUNCT);
-        sp = sp->GetNextPtr();
-    }
-    if( nbytes < tp->size)
-        genstorage( tp->size - nbytes);
-    needpunc(end,26);
-    return tp->size;
-}
-
-int initbyte()
+int64_t initbyte()
 {   
 	GenerateByte((int)GetIntegerExpression((ENODE **)NULL));
-    return 1;
+    return (1LL);
 }
 
-int initchar()
+int64_t initchar()
 {   
 	GenerateChar((int)GetIntegerExpression((ENODE **)NULL));
-    return 2;
+    return (2LL);
 }
 
-int initshort()
+int64_t initshort()
 {
 	GenerateWord((int)GetIntegerExpression((ENODE **)NULL));
-    return 4;
+    return (4LL);
 }
 
-int initlong()
+int64_t initlong()
 {
 	GenerateLong(GetIntegerExpression((ENODE **)NULL));
-    return 8;
+    return (8LL);
 }
 
-int initquad()
+int64_t initquad()
 {
 	GenerateQuad(GetFloatExpression((ENODE **)NULL));
-	return (16);
+	return (16LL);
 }
 
-int initfloat()
+int64_t initfloat()
 {
 	GenerateFloat(GetFloatExpression((ENODE **)NULL));
-	return (8);
+	return (8LL);
 }
 
-int inittriple()
+int64_t inittriple()
 {
 	GenerateQuad(GetFloatExpression((ENODE **)NULL));
-	return (12);
+	return (12LL);
 }
 
-int InitializePointer()
+int64_t InitializePointer()
 {   
 	SYM *sp;
 	ENODE *n = nullptr;

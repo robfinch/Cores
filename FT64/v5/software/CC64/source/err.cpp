@@ -89,7 +89,9 @@ static char *errtextstr[] = {
 	"W Unsigned branch if less than zero is always false.",
 	"W Unsigned branch greater or equal to zero is always true.",
 	"W Forever Infinite loop",
-	"E Too many initilization elements for aggregate"
+	"E Too many initilization elements for aggregate",
+	"E Constant required.",
+	"E A suitable type was not found initializing union."
 };
 
 char *errtext(int errnum)

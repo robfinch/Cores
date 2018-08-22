@@ -26,24 +26,6 @@
 #include "stdafx.h"
 
 /*
- *	68000 C compiler
- *
- *	Copyright 1984, 1985, 1986 Matthew Brandt.
- *  all commercial rights reserved.
- *
- *	This compiler is intended as an instructive tool for personal use. Any
- *	use for profit without the written consent of the author is prohibited.
- *
- *	This compiler may be distributed freely for non-commercial use as long
- *	as this notice stays intact. Please forward any enhancements or questions
- *	to:
- *
- *		Matthew Brandt
- *		Box 920337
- *		Norcross, Ga 30092
- */
-
-/*
  *      this module contains all of the code generation routines
  *      for evaluating expressions and conditions.
  */
@@ -106,7 +88,7 @@ static char fpsize(AMODE *ap1)
 	case 64:	return ('d');
 	case 96:	return ('t');
 	case 128:	return ('q');
-	default:	return ('t');
+	default:	return ('d');
 	}
 }
 
@@ -531,7 +513,7 @@ int ischar(ENODE *node)
 // ----------------------------------------------------------------------------
 AMODE *GenerateIndex(ENODE *node)
 {       
-	AMODE *ap1, *ap2;
+	AMODE *ap1, *ap2, *ap3;
 	
     if( (node->p[0]->nodetype == en_tempref || node->p[0]->nodetype==en_regvar)
     	 && (node->p[1]->nodetype == en_tempref || node->p[1]->nodetype==en_regvar))
@@ -552,12 +534,21 @@ AMODE *GenerateIndex(ENODE *node)
     ap1 = GenerateExpression(node->p[0],F_REG | F_IMMED,8);
     if( ap1->mode == am_immed )
     {
-		ap2 = GenerateExpression(node->p[1],F_REG,8);
+		ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,8);
+		if (ap2->mode == am_immed) {
+			if (ap2->offset->i == 0) {
+				ap1->mode = am_direct;
+				return (ap1);
+			}
+			ap1->mode = am_direct2;
+			ap1->next = ap2;
+			return (ap1);
+		}
 		GenerateHint(9);
 		ap2->mode = am_indx;
 		ap2->offset = ap1->offset;
 		ap2->isUnsigned = ap1->isUnsigned;
-		return ap2;
+		return (ap2);
     }
     ap2 = GenerateExpression(node->p[1],F_ALL,8);   /* get right op */
 	GenerateHint(9);
@@ -632,7 +623,6 @@ long GetReferenceSize(ENODE *node)
 	case en_hp_ref:
 		return sizeOfPtr >> 1;
 	case en_wp_ref:
-	case en_struct_ref:
             return sizeOfPtr;
 	case en_vector_ref:
 			return 512;
@@ -646,7 +636,7 @@ long GetReferenceSize(ENODE *node)
 //
 AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
 {    
-	AMODE *ap1;
+	AMODE *ap1, *ap2;
     int siz1;
 
     Enter("Genderef");
@@ -678,7 +668,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
     else if( node->p[0]->nodetype == en_autocon )
     {
         ap1 = allocAmode();
-		ap1->isPtr = node->nodetype == en_wp_ref || node->nodetype == en_hp_ref || node->nodetype == en_struct_ref;
+		ap1->isPtr = node->nodetype == en_wp_ref || node->nodetype == en_hp_ref;
 		ap1->mode = am_indx;
         ap1->preg = regFP;
 		ap1->segment = stackseg;
@@ -695,7 +685,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
     else if( node->p[0]->nodetype == en_classcon )
     {
         ap1 = allocAmode();
-		ap1->isPtr = node->nodetype == en_wp_ref || node->nodetype == en_hp_ref || node->nodetype == en_struct_ref;
+		ap1->isPtr = node->nodetype == en_wp_ref || node->nodetype == en_hp_ref;
 		ap1->mode = am_indx;
         ap1->preg = regCLP;
 		ap1->segment = dataseg;
@@ -712,7 +702,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
     else if( node->p[0]->nodetype == en_autofcon )
     {
         ap1 = allocAmode();
-		ap1->isPtr = node->nodetype == en_wp_ref || node->nodetype == en_hp_ref || node->nodetype == en_struct_ref;
+		ap1->isPtr = node->nodetype == en_wp_ref || node->nodetype == en_hp_ref;
 		ap1->mode = am_indx;
         ap1->preg = regFP;
         ap1->offset = makeinode(en_icon,node->p[0]->i);
@@ -734,7 +724,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
     else if( node->p[0]->nodetype == en_autovcon )
     {
         ap1 = allocAmode();
-		ap1->isPtr = node->nodetype == en_wp_ref || node->nodetype == en_hp_ref || node->nodetype == en_struct_ref;
+		ap1->isPtr = node->nodetype == en_wp_ref || node->nodetype == en_hp_ref;
 		ap1->mode = am_indx;
         ap1->preg = regFP;
         ap1->offset = makeinode(en_icon,node->p[0]->i);
@@ -756,7 +746,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
     else if( node->p[0]->nodetype == en_autovmcon )
     {
         ap1 = allocAmode();
-		ap1->isPtr = node->nodetype == en_wp_ref || node->nodetype == en_hp_ref || node->nodetype == en_struct_ref;
+		ap1->isPtr = node->nodetype == en_wp_ref || node->nodetype == en_hp_ref;
 		ap1->mode = am_indx;
         ap1->preg = regFP;
         ap1->offset = makeinode(en_icon,node->p[0]->i);
@@ -778,7 +768,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
 	else if ((node->p[0]->nodetype == en_labcon) && use_gp)
 	{
 		ap1 = allocAmode();
-		ap1->isPtr = node->nodetype == en_wp_ref || node->nodetype == en_hp_ref || node->nodetype == en_struct_ref;
+		ap1->isPtr = node->nodetype == en_wp_ref || node->nodetype == en_hp_ref;
 		ap1->mode = am_indx;
 		switch (node->p[0]->segment) {
 		case dataseg:	ap1->preg = regGP; break;
@@ -799,7 +789,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
 	else if(( node->p[0]->nodetype==en_nacon ) && use_gp)
     {
         ap1 = allocAmode();
-		ap1->isPtr = node->nodetype == en_wp_ref || node->nodetype == en_hp_ref || node->nodetype == en_struct_ref;
+		ap1->isPtr = node->nodetype == en_wp_ref || node->nodetype == en_hp_ref;
 		ap1->mode = am_indx;
         ap1->preg = regGP;
 		ap1->segment = dataseg;
@@ -816,7 +806,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
 	else if ((node->p[0]->nodetype == en_labcon) && !use_gp)
 	{
 		ap1 = allocAmode();
-		ap1->isPtr = node->nodetype == en_wp_ref || node->nodetype == en_hp_ref || node->nodetype == en_struct_ref;
+		ap1->isPtr = node->nodetype == en_wp_ref || node->nodetype == en_hp_ref;
 		ap1->mode = am_direct;
 		ap1->preg = 0;
 		ap1->segment = node->p[0]->segment;
@@ -833,7 +823,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
 	else if ((node->p[0]->nodetype == en_nacon) && !use_gp)
 	{
 		ap1 = allocAmode();
-		ap1->isPtr = node->nodetype == en_wp_ref || node->nodetype == en_hp_ref || node->nodetype == en_struct_ref;
+		ap1->isPtr = node->nodetype == en_wp_ref || node->nodetype == en_hp_ref;
 		ap1->mode = am_direct;
 		ap1->preg = 0;
 		ap1->segment = dataseg;
@@ -849,7 +839,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
 	}
 	else if (node->p[0]->nodetype == en_regvar) {
         ap1 = allocAmode();
-		ap1->isPtr = node->nodetype == en_wp_ref || node->nodetype == en_hp_ref || node->nodetype==en_struct_ref;
+		ap1->isPtr = node->nodetype == en_wp_ref || node->nodetype == en_hp_ref;
 		// For parameters we want Rn, for others [Rn]
 		// This seems like an error earlier in the compiler
 		// See setting val_flag in ParseExpressions
@@ -863,7 +853,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
 	else if (node->p[0]->nodetype == en_fpregvar) {
 		/*error(ERR_DEREF)*/;
 		ap1 = allocAmode();
-		ap1->isPtr = node->nodetype == en_wp_ref || node->nodetype == en_hp_ref || node->nodetype == en_struct_ref;
+		ap1->isPtr = node->nodetype == en_wp_ref || node->nodetype == en_hp_ref;
 		ap1->mode = node->p[0]->i < 18 ? am_ind : am_fpreg;
 		ap1->preg = node->p[0]->i;
 		ap1->type = stddouble.GetIndex();
@@ -888,7 +878,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
 		}
 	}
     ap1 = GenerateExpression(node->p[0],F_REG | F_IMMED,8); /* generate address */
-	ap1->isPtr = node->nodetype == en_wp_ref || node->nodetype == en_hp_ref || node->nodetype == en_struct_ref;
+	ap1->isPtr = node->nodetype == en_wp_ref || node->nodetype == en_hp_ref;
 	if( ap1->mode == am_reg)
     {
 //        ap1->mode = am_ind;
@@ -932,7 +922,7 @@ AMODE *GenerateDereference(ENODE *node,int flags,int size, int su)
 	//	ap1->segment = codeseg;
 	//else
 	//	ap1->segment = dataseg;
-	ap1->isPtr = node->nodetype == en_wp_ref || node->nodetype == en_hp_ref || node->nodetype == en_struct_ref;
+	ap1->isPtr = node->nodetype == en_wp_ref || node->nodetype == en_hp_ref;
 	if (use_gp) {
         ap1->mode = am_indx;
         ap1->preg = regGP;
@@ -1204,7 +1194,7 @@ AMODE *GenerateHook(ENODE *node, int flags, int size)
 		}
 	*/
 	ip1 = peep_tail;
-	if (!opt_nocgo|true) {
+	if (!opt_nocgo) {
 		ap4 = GetTempRegister();
 		ap1 = GenerateExpression(node->p[0], flags, size);
 		ap2 = GenerateExpression(node->p[1]->p[0], flags, size);
@@ -2164,11 +2154,6 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
 			ap1->isPtr = TRUE;
 			ap1->isUnsigned = TRUE;
             return ap1;
-	case en_struct_ref:
-			ap1 = GenerateDereference(node,flags,size,0);
-			ap1->isPtr = TRUE;
-			ap1->isUnsigned = TRUE;
-            return (ap1);
 	case en_vector_ref:	return GenerateDereference(node,flags,512,0);
 	case en_ref32:	return GenerateDereference(node,flags,4,1);
 	case en_ref32u:	return GenerateDereference(node,flags,4,0);
@@ -2517,8 +2502,6 @@ int GetNaturalSize(ENODE *node)
 		return sizeOfFPQ;
 	case en_triple_ref:
 		return sizeOfFPT;
-	case en_struct_ref:
-	return node->esize;
 	case en_tempfpref:
 	if (node->tp)
 		return node->tp->precision/16;

@@ -596,8 +596,12 @@ static void fold_const(ENODE **node)
         if( i != 0 )
                 {
                 ep = makeinode(en_icon,i);
+				ep->etype = (*node)->etype;
+				ep->tp = (*node)->tp;
                 ep = makenode(en_add,ep,*node);
-                *node = ep;
+				ep->etype = (*node)->etype;
+				ep->tp = (*node)->tp;
+				*node = ep;
                 }
 }
 

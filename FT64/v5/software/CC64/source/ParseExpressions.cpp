@@ -529,15 +529,15 @@ TYP *deref(ENODE **node, TYP *tp)
 		//	(*node)->isUnsigned = TRUE;
 		//	*node = makenode(en_uw_ref,*node,NULL);
   //          break;
-		case bt_class:
-		case bt_struct:
-		case bt_union:
-		  dfs.printf("F");
-			(*node)->esize = tp->size;
-			(*node)->etype = (e_bt)tp->type;
-      *node = makenode(en_struct_ref,*node,NULL);
-			(*node)->isUnsigned = TRUE;
-      break;
+		//case bt_class:
+		//case bt_struct:
+		//case bt_union:
+		//  dfs.printf("F");
+		//	(*node)->esize = tp->size;
+		//	(*node)->etype = (e_bt)tp->type;
+  //    *node = makenode(en_struct_ref,*node,NULL);
+		//	(*node)->isUnsigned = TRUE;
+  //    break;
 		default:
 		  dfs.printf("Deref :%d\n", tp->type);
 		  if ((*node)->msp)
@@ -565,7 +565,12 @@ TYP *CondDeref(ENODE **node, TYP *tp)
 	int numele;
   
 	if (tp->isArray == false)
-		return deref(node, tp);
+		if (tp->type != bt_struct
+			&& tp->type != bt_union
+			&& tp->type != bt_class
+			&& tp->type != bt_ifunc
+			&& tp->type != bt_func)
+			return deref(node, tp);
 	if (tp->type == bt_pointer && sizeof_flag == 0) {
 		sz = tp->size;
 		dimen = tp->dimen;
@@ -797,8 +802,8 @@ TYP *nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeArray *typear
 		(*node)->sym = sp;
 		dfs.printf("tp:%p ",(char *)tp);
 		// Not sure about this if - wasn't here in the past.
-		if (sp->tp->type!=bt_func && sp->tp->type!=bt_ifunc)
-			tp = CondDeref(node,tp);
+//		if (sp->tp->type!=bt_func && sp->tp->type!=bt_ifunc)
+		tp = CondDeref(node,tp);
 		dfs.printf("deref tp:%p ",(char *)tp);
 	}
 	if (nt)
@@ -1155,7 +1160,7 @@ TYP *ParsePrimaryExpression(ENODE **node, int got_pa)
 			//getch();
 			break;
 		default:
-			tptr = &stdtriple;
+			tptr = &stddouble;
 			break;
 		}
         pnode->SetType(tptr);
@@ -1298,7 +1303,6 @@ int IsLValue(ENODE *node)
 	case en_dbl_ref:
 	case en_quad_ref:
 	case en_flt_ref:
-	case en_struct_ref:
 	case en_ref32:
 	case en_ref32u:
 	case en_vector_ref:

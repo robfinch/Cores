@@ -5,4 +5,6 @@
 bool IsArgumentReg(int regno);
 bool IsCalleeSave(int regno);
 
+int64_t GetConstExpression(ENODE **pnode);
+
 #endif

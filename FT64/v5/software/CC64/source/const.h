@@ -35,7 +35,6 @@ enum e_node {
         en_b_ref, en_w_ref, en_ub_ref, en_uw_ref,
 		en_ref32, en_ref32u,
 		en_hp_ref, en_wp_ref,
-		en_struct_ref,
         en_fcall, en_ifcall,
          en_tempref, en_regvar, en_fpregvar, en_tempfpref,
 		en_add, en_sub, en_mul, en_mod,
@@ -82,8 +81,50 @@ enum e_stmt {
 
 enum e_am {
         am_reg, am_sreg, am_breg, am_fpreg, am_vreg, am_vmreg, am_ind, am_brind, am_ainc, am_adec, am_indx, am_indx2,
-        am_direct, am_jdirect, am_immed, am_mask, am_none, am_indx3, am_predreg
+        am_direct, am_direct2, am_jdirect, am_immed, am_mask, am_none, am_indx3, am_predreg
 	};
+
+enum e_sym {
+	tk_nop,
+	id, cconst, iconst, lconst, sconst, rconst, plus, minus,
+	star, divide, lshift, rshift, lrot, rrot,
+	modop, eq, neq, lt, leq, gt,
+	geq, assign, asplus, asminus, astimes, asdivide, asmodop,
+	aslshift, asrshift, aslrot, asrrot,
+	asand, asor, asxor, autoinc, autodec, hook, cmpl,
+	comma, colon, semicolon, double_colon, uparrow, openbr, closebr, begin, end,
+	openpa, closepa, pointsto, dot, lor, land, nott, bitorr, bitandd,
+	ellipsis,
+	// functions
+	kw_abs, kw_max, kw_min,
+
+	kw_vector, kw_vector_mask,
+	kw_int, kw_byte, kw_int8, kw_int16, kw_int32, kw_int40, kw_int64, kw_int80,
+	kw_icache, kw_dcache, kw_thread,
+	kw_void, kw_char, kw_float, kw_double, kw_triple,
+	kw_struct, kw_union, kw_class,
+	kw_long, kw_short, kw_unsigned, kw_auto, kw_extern,
+	kw_register, kw_typedef, kw_static, kw_goto, kw_return,
+	kw_sizeof, kw_break, kw_continue, kw_if, kw_else, kw_elsif,
+	kw_for, kw_forever, kw_signed,
+	kw_firstcall, kw_asm, kw_fallthru, kw_until, kw_loop,
+	kw_try, kw_catch, kw_throw, kw_typenum, kw_const, kw_volatile,
+	kw_do, kw_while, kw_switch, kw_case, kw_default, kw_enum,
+	kw_interrupt, kw_vortex, kw_pascal, kw_oscall, kw_nocall, kw_naked,
+	kw_intoff, kw_inton, kw_then,
+	kw_private, kw_public, kw_stop, kw_critical, kw_spinlock, kw_spinunlock, kw_lockfail,
+	kw_cdecl, kw_align, kw_prolog, kw_epilog, kw_check, kw_exception, kw_task,
+	kw_unordered, kw_inline, kw_kernel, kw_inout, kw_leafs,
+	kw_unique, kw_virtual, kw_this,
+	kw_new, kw_delete, kw_using, kw_namespace, kw_not, kw_attribute,
+	kw_no_temps, kw_no_parms, kw_floatmax,
+	my_eof
+};
+
+enum e_sc {
+	sc_static, sc_auto, sc_global, sc_thread, sc_external, sc_type, sc_const,
+	sc_member, sc_label, sc_ulabel, sc_typedef, sc_register
+};
 
 enum e_op {
         op_move, op_add, op_addu, op_addi, op_sub, op_subi, op_mov, op_mtspr, op_mfspr, op_ldi, op_ld,

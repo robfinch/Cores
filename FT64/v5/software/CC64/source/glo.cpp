@@ -81,7 +81,7 @@ char            laststr[MAX_STRLEN + 1] = "";
 int64_t			ival = 0;
 double          rval = 0.0;
 Float128		rval128;
-char float_precision = 't';
+char float_precision = 'd';
 //FloatTriple     FAC1,FAC2;
 //FLOAT           rval = {0,0,0,0,0,0};
 int parseEsc = TRUE;

@@ -255,7 +255,7 @@ int AllocateRegisterVars()
         if( csp->reg != -1 )
         {               // see if preload needed
             exptr = csp->exp;
-            if( 1 || !IsLValue(exptr) || (exptr->p[0]->i > 0) || (exptr->nodetype==en_struct_ref))
+            if( 1 || !IsLValue(exptr) || (exptr->p[0]->i > 0))
             {
                 initstack();
 				{

@@ -33,46 +33,6 @@ class Instruction;
 class Var;
 class CSE;
 
-enum e_sym {
-  tk_nop,
-        id, cconst, iconst, lconst, sconst, rconst, plus, minus,
-        star, divide, lshift, rshift, lrot, rrot,
-		modop, eq, neq, lt, leq, gt,
-        geq, assign, asplus, asminus, astimes, asdivide, asmodop,
-		aslshift, asrshift, aslrot, asrrot,
-		asand, asor, asxor, autoinc, autodec, hook, cmpl,
-        comma, colon, semicolon, double_colon, uparrow, openbr, closebr, begin, end,
-        openpa, closepa, pointsto, dot, lor, land, nott, bitorr, bitandd,
-		ellipsis,
-		// functions
-		kw_abs, kw_max, kw_min,
-
-		kw_vector, kw_vector_mask,
-		kw_int, kw_byte, kw_int8, kw_int16, kw_int32, kw_int40, kw_int64, kw_int80,
-		kw_icache, kw_dcache, kw_thread,
-        kw_void, kw_char, kw_float, kw_double, kw_triple,
-        kw_struct, kw_union, kw_class,
-        kw_long, kw_short, kw_unsigned, kw_auto, kw_extern,
-        kw_register, kw_typedef, kw_static, kw_goto, kw_return,
-        kw_sizeof, kw_break, kw_continue, kw_if, kw_else, kw_elsif,
-		kw_for, kw_forever, kw_signed,
-		kw_firstcall, kw_asm, kw_fallthru, kw_until, kw_loop,
-		kw_try, kw_catch, kw_throw, kw_typenum, kw_const, kw_volatile,
-        kw_do, kw_while, kw_switch, kw_case, kw_default, kw_enum,
-		kw_interrupt, kw_vortex, kw_pascal, kw_oscall, kw_nocall, kw_naked,
-		kw_intoff, kw_inton, kw_then,
-		kw_private,kw_public,kw_stop,kw_critical,kw_spinlock,kw_spinunlock,kw_lockfail,
-		kw_cdecl, kw_align, kw_prolog, kw_epilog, kw_check, kw_exception, kw_task,
-		kw_unordered, kw_inline, kw_kernel, kw_inout, kw_leafs,
-    kw_unique, kw_virtual, kw_this,
-		kw_new, kw_delete, kw_using, kw_namespace, kw_not, kw_attribute,
-		kw_no_temps, kw_no_parms, kw_floatmax,
-        my_eof };
-
-enum e_sc {
-        sc_static, sc_auto, sc_global, sc_thread, sc_external, sc_type, sc_const,
-        sc_member, sc_label, sc_ulabel, sc_typedef, sc_register };
-
 class CompilerType
 {
 public:
@@ -313,7 +273,20 @@ public:
 	bool IsUnion() const { return (type==bt_union); };
 	bool IsStructType() const { return (type==bt_struct || type==bt_class || type==bt_union); };
 	bool IsAggregateType() const { return (IsStructType() | isArray); };
+	static bool IsSameType(TYP *a, TYP *b, bool exact);
 	void put_ty();
+
+	// Initialization
+	int64_t InitializeArray();
+	int64_t InitializeStruct();
+	int64_t InitializeUnion();
+	int64_t Initialize(int64_t val);
+	int64_t Initialize();
+
+	// GC support
+	bool FindPointer();
+	bool FindPointerInStruct();
+	bool IsSkippable();
 };
 
 class TypeArray
@@ -866,6 +839,8 @@ public:
 #define ERR_UBGEQ			56
 #define ERR_INFINITELOOP	57
 #define ERR_TOOMANYELEMENTS	58
+#define ERR_CONST			59
+#define ERR_INIT_UNION      60
 #define ERR_NULLPOINTER		1000
 #define ERR_CIRCULAR_LIST 1001
 

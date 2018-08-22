@@ -445,7 +445,12 @@ void PutAddressMode(AMODE *ap)
     case am_direct:
             PutConstant(ap->offset,ap->lowhigh,ap->rshift);
             break;
-    case am_reg:
+	case am_direct2:
+		PutConstant(ap->offset, ap->lowhigh, ap->rshift);
+		ofs.printf("+");
+		PutConstant(ap->next->offset, ap->lowhigh, ap->rshift);
+		break;
+	case am_reg:
 			if (ap->type==stdvector.GetIndex())
 				ofs.printf("v%d", (int)ap->preg);
 			else if (ap->type==stdvectormask->GetIndex())

@@ -417,7 +417,7 @@ j1:
 						getch();
 				}
 				else
-					float_precision = 't';
+					float_precision = 'd';
 				
 				// Ignore 'U' unsigned suffix
 				if (lastch=='U' || lastch=='u') {

@@ -85,3 +85,56 @@ Float128 *GetFloatExpression(ENODE **pnode)       /* simple integer value */
 		*pnode = node;
 	return &node->f128;
 }
+
+int64_t GetConstExpression(ENODE **pnode)       /* simple integer value */
+{
+	TYP *tp;
+	ENODE *node;
+	Float128 *flt;
+
+	tp = NonCommaExpression(&node);
+	if (node == NULL) {
+		error(ERR_SYNTAX);
+		return (0);
+	}
+	opt_const(&node);	// This should reduce to a single integer expression
+	if (node == NULL) {
+		fatal("Compiler Error: GetConstExpression: node is NULL");
+		return (0);
+	}
+	switch (node->nodetype)
+	{
+	case en_uminus:
+		switch (node->p[0]->nodetype) {
+		case en_icon:
+			if (pnode)
+				*pnode = node;
+			return (-node->i);
+		case en_fcon:
+			flt = (Float128 *)allocx(sizeof(Float128));
+			Float128::Assign(flt, &node->p[0]->f128);
+			flt->sign = !flt->sign;
+			if (pnode)
+				*pnode = node;
+			return ((int64_t)flt);
+		default:
+			error(ERR_CONST);
+			return (0);
+		}
+		break;
+	case en_fcon:
+		if (pnode)
+			*pnode = node;
+		return ((int64_t)&node->f128);
+	case en_icon:
+	case en_cnacon:
+		if (pnode)
+			*pnode = node;
+		return (node->i);
+	default:
+		error(ERR_CONST);
+		return (0);
+	}
+	error(ERR_CONST);
+	return (0);
+}
