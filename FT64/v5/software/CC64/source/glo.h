@@ -150,6 +150,7 @@ extern int regmask;
 extern int bregmask;
 extern Statement *currentStmt;
 extern bool dogen;
+extern OCODE *peep_head;
 extern OCODE *peep_tail;
 
 extern TYP stdint;
@@ -176,6 +177,7 @@ extern TYP *stdvectormask;
 
 extern std::string *declid;
 extern Compiler compiler;
+extern int64_t genst_cumulative;
 
 // Analyze.c
 extern short int csendx;
@@ -296,6 +298,8 @@ extern void tseg();
 //extern void put_code(int op, int len,AMODE *aps, AMODE *apd, AMODE *);
 extern void put_code(OCODE *);
 extern char *put_label(int lab, char*, char*, char);
+extern char *gen_label(int lab, char*, char*, char);
+extern char *put_labels(char *);
 extern char *opstr(int op);
 // Peepgen.c
 extern void MarkRemove(OCODE *ip);

@@ -1,11 +1,11 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2017  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2018  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-// C64 - 'C' derived language compiler
+// CC64 - 'C' derived language compiler
 //  - 64 bit CPU
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -26,24 +26,7 @@
 #include "stdafx.h"
 
 extern int catchdecl;
-
-/*
- *	68000 C compiler
- *
- *	Copyright 1984, 1985, 1986 Matthew Brandt.
- *  all commercial rights reserved.
- *
- *	This compiler is intended as an instructive tool for personal use. Any
- *	use for profit without the written consent of the author is prohibited.
- *
- *	This compiler may be distributed freely for non-commercial use as long
- *	as this notice stays intact. Please forward any enhancements or questions
- *	to:
- *
- *		Matthew Brandt
- *		Box 920337
- *		Norcross, Ga 30092
- */
+extern void genstorageskip(int nbytes);
 
 int InitializeType(TYP *tp);
 int InitializeStructure(TYP *tp);
@@ -57,13 +40,84 @@ int initquad();
 int InitializePointer();
 void endinit();
 int InitializeArray(TYP *tp);
+static bool FindPointerInType(TYP *tp);
 extern int curseg;
+static int64_t prev_cumulative;
+static char glbl1[500];
+static char glbl2[500];
+bool hasPointer;
+bool firstPrim;
+std::streampos patchpoint;
+
+static void pad(char *p, int n)
+{
+	int nn;
+
+	nn = strlen(p);
+	while (nn < n) {
+		p[nn] = ' ';
+		nn++;
+	}
+	p[nn] = '\n';
+	p[nn + 1] = '\0';
+}
+
+static bool FindPointerInStruct(TYP *tp)
+{
+	SYM *sp;
+
+	sp = sp->GetPtr(tp->lst.GetHead());      /* start at top of symbol table */
+	while (sp != 0) {
+		if (FindPointerInType(sp->tp))
+			return (true);
+		sp = sp->GetNextPtr();
+	}
+	return (false);
+}
+
+static bool FindPointerInType(TYP *tp)
+{
+	switch (tp->type) {
+	case bt_pointer: return (tp->val_flag == FALSE);	// array ?
+	case bt_struct: return (FindPointerInStruct(tp));
+	case bt_union: return (FindPointerInStruct(tp));
+	case bt_class: return (FindPointerInStruct(tp));
+	}
+	return (false);
+}
+
+
+bool IsSkipType(TYP *tp)
+{
+	switch (tp->type) {
+	case bt_struct:	return(true);
+	case bt_union: return(true);
+	case bt_class: return(true);
+	case bt_pointer:
+		if (tp->val_flag == TRUE) {
+			return (!FindPointerInType(tp->GetBtp()));
+		}
+		return(false);
+	}
+	return (false);
+}
 
 void doinit(SYM *sp)
 {
+	static bool first = true;
 	char lbl[200];
   int algn;
   enum e_sg oseg;
+  char buf[500];
+  char buf2[500];
+  std::streampos endpoint;
+
+  hasPointer = false;
+  if (first) {
+	  firstPrim = true;
+	  prev_cumulative = 0;
+	  first = false;
+  }
 
   oseg = noseg;
 	lbl[0] = 0;
@@ -74,9 +128,9 @@ void doinit(SYM *sp)
   }
 	if (sp->storage_class == sc_thread) {
         if (sp->tp->type==bt_struct || sp->tp->type==bt_union)
-           algn = imax(sp->tp->alignment,2);
+           algn = imax(sp->tp->alignment,8);
         else if (sp->tp->type==bt_pointer && sp->tp->val_flag)
-           algn = imax(sp->tp->GetBtp()->alignment,2);
+           algn = imax(sp->tp->GetBtp()->alignment,8);
         else
             algn = 2;
 		seg(oseg==noseg ? tlsseg : oseg,algn);
@@ -84,9 +138,9 @@ void doinit(SYM *sp)
 	}
 	else if (sp->storage_class == sc_static || lastst==assign) {
         if (sp->tp->type==bt_struct || sp->tp->type==bt_union)
-           algn = imax(sp->tp->alignment,2);
+           algn = imax(sp->tp->alignment,8);
         else if (sp->tp->type==bt_pointer && sp->tp->val_flag)
-           algn = imax(sp->tp->GetBtp()->alignment,2);
+           algn = imax(sp->tp->GetBtp()->alignment,8);
         else
             algn = 2;
 		seg(oseg==noseg ? dataseg : oseg,algn);          /* initialize into data segment */
@@ -94,16 +148,24 @@ void doinit(SYM *sp)
 	}
 	else {
         if (sp->tp->type==bt_struct || sp->tp->type==bt_union)
-           algn = imax(sp->tp->alignment,2);
+           algn = imax(sp->tp->alignment,8);
         else if (sp->tp->type==bt_pointer && sp->tp->val_flag)
-           algn = imax(sp->tp->GetBtp()->alignment,2);
+           algn = imax(sp->tp->GetBtp()->alignment,8);
         else
             algn = 2;
 		seg(oseg==noseg ? bssseg : oseg,algn);            /* initialize into data segment */
 		nl();                   /* start a new line in object */
 	}
-	if(sp->storage_class == sc_static || sp->storage_class == sc_thread) {
+	
+	if (sp->storage_class == sc_static || sp->storage_class == sc_thread) {
+		//strcpy_s(glbl, sizeof(glbl), gen_label((int)sp->value.i, (char *)sp->name->c_str(), GetNamespace(), 'D'));
+		if (IsSkipType(sp->tp)) {
+			patchpoint = ofs.tellp();
+			sprintf_s(buf, sizeof(buf), "\talign\t8\n\tdw\t$FFF0200000000001 ; GC_skip\n");
+			ofs.printf(buf);
+		}
 		sp->realname = my_strdup(put_label((int)sp->value.i, (char *)sp->name->c_str(), GetNamespace(), 'D'));
+		strcpy_s(glbl2, sizeof(glbl2), gen_label((int)sp->value.i, (char *)sp->name->c_str(), GetNamespace(), 'D'));
 	}
 	else {
 		if (sp->storage_class == sc_global) {
@@ -116,6 +178,12 @@ void doinit(SYM *sp)
 				strcat_s(lbl, sizeof(lbl), "tls ");
 		}
 		strcat_s(lbl, sizeof(lbl), sp->name->c_str());
+		if (IsSkipType(sp->tp)) {
+			patchpoint = ofs.tellp();
+			sprintf_s(buf, sizeof(buf), "\talign\t8\n\tdw\t$FFF0200000000001 ; GC_skip\n");
+			ofs.printf(buf);
+		}
+		strcpy_s(glbl2, sizeof(glbl2), sp->name->c_str());
 		gen_strlab(lbl);
 	}
 	if (lastst == kw_firstcall) {
@@ -123,15 +191,50 @@ void doinit(SYM *sp)
         return;
     }
 	else if( lastst != assign) {
+		hasPointer = FindPointerInType(sp->tp);
 		genstorage(sp->tp->size);
 	}
 	else {
 		NextToken();
+		hasPointer = FindPointerInType(sp->tp);
 		InitializeType(sp->tp);
+	}
+	if (!hasPointer && IsSkipType(sp->tp)) {
+		endpoint = ofs.tellp();
+		ofs.seekp(patchpoint);
+		sprintf_s(buf, sizeof(buf), "\talign\t8\n\tdw\t$%I64X ", ((genst_cumulative + 7LL) >> 3LL) | 0xFFF0200000000000LL);
+		ofs.printf(buf);
+		ofs.seekp(endpoint);
+		genst_cumulative = 0;
+	}
+	else if (IsSkipType(sp->tp)) {
+		endpoint = ofs.tellp();
+		ofs.seekp(patchpoint);
+		sprintf_s(buf, sizeof(buf), "\talign\t8\n\t  \t                 ");
+		ofs.printf(buf);
+		ofs.seekp(endpoint);
+		genst_cumulative = 0;
 	}
     endinit();
 	if (sp->storage_class == sc_global)
 		ofs.printf("\nendpublic\n");
+}
+
+void doInitCleanup()
+{
+	std::streampos endpoint;
+	char buf[500];
+	char buf2[500];
+	int nn;
+
+	if (genst_cumulative) {
+		endpoint = ofs.tellp();
+		ofs.seekp(patchpoint);
+		sprintf_s(buf, sizeof(buf), "\talign\t8\n\tdw\t$%I64X ; GC_skip\n", ((genst_cumulative + 7LL) >> 3LL) | 0xFFF0200000000000LL);
+		ofs.printf(buf);
+		ofs.seekp(endpoint);
+		genst_cumulative = 0;
+	}
 }
 
 int InitializeType(TYP *tp)
@@ -350,7 +453,7 @@ int InitializePointer()
 				GenerateLong(lng);
 		}
 		else {
-			GenerateLong(lng);
+			GenerateLong((lng & 0xFFFFFFFFFFFLL)|0xFFF0100000000000LL);
         }
 	}
     endinit();

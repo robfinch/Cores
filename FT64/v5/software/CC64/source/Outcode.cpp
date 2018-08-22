@@ -30,6 +30,7 @@ void put_mask(int mask);
 void align(int n);
 void roseg();
 bool renamed = false; 
+int64_t genst_cumulative;
 
 /*      variable initialization         */
 
@@ -639,6 +640,24 @@ void gen_strlab(char *s)
 /*
  *      output a compiler generated label.
  */
+char *gen_label(int lab, char *nm, char *ns, char d)
+{
+	static char buf[500];
+
+	if (nm == NULL)
+		sprintf_s(buf, sizeof(buf), "%.400s_%d:\n", ns, lab);
+	else if (strlen(nm) == 0)
+		sprintf_s(buf, sizeof(buf), "%.400s_%d:\n", ns, lab);
+	else
+		sprintf_s(buf, sizeof(buf), "%.400s_%d: ; %s\n", ns, lab, nm);
+	return (buf);
+}
+char *put_labels(char *buf)
+{
+	ofs.printf("%s", buf);
+	return (buf);
+}
+
 char *put_label(int lab, char *nm, char *ns, char d)
 {
   static char buf[500];
@@ -666,6 +685,7 @@ void GenerateByte(int val)
         gentype = bytegen;
         outcol = 19;
     }
+	genst_cumulative += 1;
 }
 
 void GenerateChar(int val)
@@ -680,6 +700,7 @@ void GenerateChar(int val)
         gentype = chargen;
         outcol = 21;
     }
+	genst_cumulative += 2;
 }
 
 void genhalf(int val)
@@ -694,6 +715,7 @@ void genhalf(int val)
         gentype = halfgen;
         outcol = 25;
     }
+	genst_cumulative += 4;
 }
 
 void GenerateWord(int val)
@@ -708,6 +730,7 @@ void GenerateWord(int val)
         gentype = wordgen;
         outcol = 33;
     }
+	genst_cumulative += 8;
 }
 
 void GenerateLong(int64_t val)
@@ -722,6 +745,7 @@ void GenerateLong(int64_t val)
                 gentype = longgen;
                 outcol = 25;
                 }
+		genst_cumulative += 8;
 }
 
 void GenerateFloat(Float128 *val)
@@ -732,6 +756,7 @@ void GenerateFloat(Float128 *val)
 	ofs.printf("\tdh\t%s",val->ToString(64));
     gentype = longgen;
     outcol = 65;
+	genst_cumulative += 8;
 }
 
 void GenerateQuad(Float128 *val)
@@ -742,6 +767,7 @@ void GenerateQuad(Float128 *val)
 	ofs.printf("\tdh\t%s",val->ToString(128));
     gentype = longgen;
     outcol = 65;
+	genst_cumulative += 16;
 }
 
 void GenerateReference(SYM *sp,int offset)
@@ -814,10 +840,28 @@ void GenerateReference(SYM *sp,int offset)
     }
 }
 
+void genstorageskip(int nbytes)
+{
+	char buf[200];
+	int64_t nn;
+
+	nl();
+	nn = (nbytes + 7) >> 3;
+	if (nn) {
+		sprintf_s(buf, sizeof(buf), "\talign\t8\r\n\tdw\t0x%I64X\r\n", nn | 0xFFF0200000000000LL);
+		ofs.printf("%s", buf);
+	}
+}
+
 void genstorage(int nbytes)
 {       
+	int nn;
+
 	nl();
-	ofs.printf("\tfill.b\t%d,0x00\n",nbytes);
+	if (nbytes) {
+		ofs.printf("\tfill.b\t%d,0x00\n", nbytes);
+	}
+	genst_cumulative += nbytes;
 }
 
 void GenerateLabelReference(int n)
@@ -904,13 +948,45 @@ char *strip_crlf(char *p)
 	 return buf;
 }
 
+int64_t GetStrtabLen()
+{
+	struct slit *p;
+	int64_t len;
+	char *cp;
+
+	len = 0;
+	for (p = strtab; p; p = p->next) {
+		cp = p->str;
+		while (*cp) {
+			len++;
+			cp++;
+		}
+		len++;	// for null char
+	}
+	len += 7;
+	len >>= 3;
+	return (len);
+}
+
+int64_t GetQuadtabLen()
+{
+	Float128 *p;
+	int64_t len;
+
+	len = 0;
+	for (p = quadtab; p; p = p->next) {
+		len++;
+	}
+	return (len);
+}
 
 // Dump the literal pools.
 
 void dumplits()
 {
 	char *cp;
-	int nn;
+	int64_t nn;
+	char buf[200];
 
 	dfs.printf("<Dumplits>\n");
 	roseg();
@@ -931,6 +1007,15 @@ void dumplits()
 		align(8);
 		nl();
 	}
+
+	// Dumping to ro segment - no need for GC skip
+	/*
+	nn = GetQuadtabLen();
+	if (nn) {
+		sprintf_s(buf, sizeof(buf), "\tdw\t$%I64X ; GC_skip\n", nn | 0xFFF0200000000000LL);
+		ofs.printf("%s", buf);
+	}
+	*/
 	while(quadtab != nullptr) {
 		nl();
 		put_label(quadtab->label,"",quadtab->nmspace,'D');
@@ -942,9 +1027,15 @@ void dumplits()
 	}
 	if (strtab) {
 		nl();
-		align(2);
+		align(8);
 		nl();
 	}
+
+	//nn = GetStrtabLen();
+	//if (nn) {
+	//	sprintf_s(buf, sizeof(buf), "\tdw\t$%I64X ; GC_skip\n", nn | 0xFFF0200000000000LL);
+	//	ofs.printf("%s", buf);
+	//}
 	while( strtab != NULL) {
 		dfs.printf(".");
 		nl();

@@ -845,7 +845,7 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int predi
 }
 
 
-static void GenerateDefaultCatch(SYM *sym)
+static bool GenerateDefaultCatch(SYM *sym)
 {
 	GenerateLabel(throwlab);
 	if (sym->IsLeaf){
@@ -854,6 +854,7 @@ static void GenerateDefaultCatch(SYM *sym)
 			GenerateDiadicNT(op_sw,0,makereg(regLR),make_indexed(3*sizeOfWord,regFP));		// and store it back (so it can be loaded with the lm)
 			//GenerateDiadicNT(op_spt,0,makereg(0),make_indexed(3 * sizeOfWord, regFP));
 //			GenerateDiadic(op_bra,0,make_label(retlab),NULL);				// goto regular return cleanup code
+			return (true);
 		}
 	}
 	else {
@@ -861,7 +862,9 @@ static void GenerateDefaultCatch(SYM *sym)
 		GenerateDiadicNT(op_sw,0,makereg(regLR),make_indexed(3*sizeOfWord,regFP));		// and store it back (so it can be loaded with the lm)
 		//GenerateDiadicNT(op_spt, 0, makereg(0), make_indexed(3 * sizeOfWord, regFP));
 		//		GenerateDiadic(op_bra,0,make_label(retlab),NULL);				// goto regular return cleanup code
+		return (true);
 	}
+	return (false);
 }
 
 static void SaveRegisterSet(SYM *sym)
@@ -945,6 +948,8 @@ void GenerateFunction(SYM *sym)
 	Statement *stmt = sym->stmt;
 	int lab0;
 	int o_throwlab, o_retlab, o_contlab, o_breaklab;
+	OCODE *ip;
+	bool doCatch = true;
 
 	o_throwlab = throwlab;
 	o_retlab = retlab;
@@ -982,12 +987,18 @@ void GenerateFunction(SYM *sym)
     stmt->Generate();
 
 	if (exceptions) {
+		ip = peep_tail;
 		GenerateMonadicNT(op_bra,0,make_label(lab0));
-		GenerateDefaultCatch(sym);
+		doCatch = GenerateDefaultCatch(sym);
 		GenerateLabel(lab0);
+		if (!doCatch) {
+			peep_tail = ip;
+			peep_tail->fwd = nullptr;
+		}
 	}
 
-	GenerateReturn(nullptr);
+	if (!sym->IsInline)
+		GenerateReturn(nullptr);
 /*
 	// Inline code needs to branch around the default exception handler.
 	if (exceptions && sym->IsInline)
@@ -1534,6 +1545,7 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
 	int fsp = 0;
 	TypeArray *ta = nullptr;
 	int64_t mask,fmask;
+	CSE *csetbl;
 
 	sym = nullptr;
 
@@ -1558,7 +1570,9 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
 			mask = save_mask;
 			fmask = fpsave_mask;
 			currentFn = sym;
+			csetbl = CSETable;
 			GenerateFunction(sym);
+			CSETable = csetbl;
 			currentFn = o_fn;
 			fpsave_mask = fmask;
 			save_mask = mask;
@@ -1592,7 +1606,9 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
 			mask = save_mask;
 			fmask = fpsave_mask;
 			currentFn = sym;
+			csetbl = CSETable;
 			GenerateFunction(sym);
+			CSETable = csetbl;
 			currentFn = o_fn;
 			fpsave_mask = fmask;
 			save_mask = mask;

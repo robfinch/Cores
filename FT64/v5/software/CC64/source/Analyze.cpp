@@ -71,6 +71,7 @@ int equalnode(ENODE *node1, ENODE *node2)
 //			return (node1->f == node2->f);
 	case en_regvar:
 	case en_fpregvar:
+	case en_tempref:
       case en_icon:
       case en_labcon:
 	  case en_classcon:	// Check type ?

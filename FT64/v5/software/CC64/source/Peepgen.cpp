@@ -1087,6 +1087,8 @@ static void PeepoptHint(OCODE *ip)
 
 	if ((ip->back && ip->back->opcode==op_label) || (ip->fwd && ip->fwd->opcode==op_label))
 		return;
+	if (ip->remove)
+		return;
 
 	switch (ip->oper1->offset->i) {
 
@@ -1141,6 +1143,8 @@ static void PeepoptHint(OCODE *ip)
 	//     MOV r1,arg
 	case 2:
 		if (ip->fwd==nullptr || ip->back==nullptr)
+			break;
+		if (ip->fwd->remove || ip->back->remove)
 			break;
 		if (equal_address(ip->fwd->oper2, ip->back->oper1)) {
 			if (ip->back->HasTargetReg()) {

@@ -1625,7 +1625,8 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 				dfs.printf("Got direct function %s ", (char *)sp->name->c_str());
 				ep3 = makesnode(en_cnacon,sp->name,sp->mangledName,sp->value.i);
 				ep1 = makefcnode(en_fcall,ep3,ep2,sp);
-				currentFn->IsLeaf = FALSE;
+				if (!sp->IsInline)
+					currentFn->IsLeaf = FALSE;
 			}
 			tp1 = sp->tp->GetBtp();
 //			tp1 = ExprFunction(tp1, &ep1);

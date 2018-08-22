@@ -33,6 +33,7 @@ extern void ParseGlobalDeclarations();
 extern void makename(char *s, char *e);
 extern char *errtext(int errnum);
 extern std::string *classname;
+extern void doInitCleanup();
 
 Compiler::Compiler()
 {
@@ -75,6 +76,7 @@ void Compiler::compile()
 	GlobalDeclaration *gd;
 
 	dfs.printf("<compile>\n");
+	genst_cumulative = 0;
 	typenum = 1;
 	symnum = 257;
 	classname = nullptr;
@@ -108,6 +110,7 @@ void Compiler::compile()
 				gd = (GlobalDeclaration*)gd->next;
 			}
 		}
+		doInitCleanup();
 		dfs.printf("</compile>\n");
 	}
 	catch (C64PException * ex) {

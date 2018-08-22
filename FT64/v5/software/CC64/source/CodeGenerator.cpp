@@ -300,6 +300,8 @@ void MakeLegalAmode(AMODE *ap,int flags, int size)
 
         if( flags & F_REG )
         {
+			if (ap->mode == am_reg)
+				return;
             ReleaseTempRegister(ap);      /* maybe we can use it... */
 			if (ap)
 				ap2 = GetTempReg(ap->type);
@@ -1202,7 +1204,7 @@ AMODE *GenerateHook(ENODE *node, int flags, int size)
 		}
 	*/
 	ip1 = peep_tail;
-	if (!opt_nocgo) {
+	if (!opt_nocgo|true) {
 		ap4 = GetTempRegister();
 		ap1 = GenerateExpression(node->p[0], flags, size);
 		ap2 = GenerateExpression(node->p[1]->p[0], flags, size);
@@ -2202,7 +2204,7 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
             ap1->preg = node->i;
             ap1->tempflag = 0;      /* not a temporary */
             MakeLegalAmode(ap1,flags,size);
-            return ap1;
+            return (ap1);
     case en_tempfpref:
             ap1 = allocAmode();
             ap1->mode = am_fpreg;
@@ -2346,7 +2348,7 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
     case en_asmod: return GenerateAssignModiv(node,flags,size,op_mod);
     case en_asmodu: return GenerateAssignModiv(node,flags,size,op_modu);
     case en_assign:
-            return GenerateAssign(node,flags,size);
+            return (GenerateAssign(node,flags,size));
 
     case en_land:
         return (GenExpr(node));
