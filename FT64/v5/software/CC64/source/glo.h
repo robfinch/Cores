@@ -140,7 +140,7 @@ extern int opt_nocgo;
 extern int opt_size;
 extern int exceptions;
 extern int mixedSource;
-extern SYM *currentFn;
+extern Function *currentFn;
 extern int iflevel;
 extern int foreverlevel;
 extern int looplevel;
@@ -154,6 +154,7 @@ extern bool dogen;
 extern OCODE *peep_head;
 extern OCODE *peep_tail;
 
+extern TYP stdvoid;
 extern TYP stdint;
 extern TYP stduint;
 extern TYP stdlong;
@@ -179,6 +180,32 @@ extern TYP *stdvectormask;
 extern std::string *declid;
 extern Compiler compiler;
 extern int64_t genst_cumulative;
+
+extern int throwlab;
+extern int breaklab;
+extern int contlab;
+extern int retlab;
+extern int lastsph;
+extern char *semaphores[20];
+extern unsigned int ArgRegCount;
+extern bool isFuncBody;
+extern int isTypedef;
+extern bool isUnion;
+extern int isUnsigned;
+extern int isSigned;
+extern int isVolatile;
+extern int isVirtual;
+extern bool isInline;
+extern int isIO;
+extern int isConst;
+extern bool isRegister;
+extern bool isAuto;
+extern bool isFuncBody;
+extern bool isFuncPtr;
+extern char *stkname;
+extern int nparms;
+extern int funcdecl;
+extern Stringx names[20];
 
 // Analyze.c
 extern short int csendx;
@@ -360,15 +387,6 @@ extern int TempInvalidate(int *);
 extern void TempRevalidate(int sp, int fsp);
 extern int GetTempMemSpace();
 extern bool IsArgumentReg(int);
-// Table888.c
-extern void GenerateTable888Function(SYM *sym, Statement *stmt);
-extern void GenerateTable888Return(SYM *sym, Statement *stmt);
-extern AMODE *GenerateTable888FunctionCall(ENODE *node, int flags);
-extern AMODE *GenTable888Set(ENODE *node);
-// Raptor64.c
-extern void GenerateRaptor64Function(SYM *sym, Statement *stmt);
-extern void GenerateRaptor64Return(SYM *sym, Statement *stmt);
-extern AMODE *GenerateRaptor64FunctionCall(ENODE *node, int flags);
 extern AMODE *GenerateFunctionCall(ENODE *node, int flags);
 
 extern void GenerateFunction(SYM *sym);

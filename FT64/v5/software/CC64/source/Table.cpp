@@ -70,7 +70,7 @@ void TABLE::CopySymbolTable(TABLE *dst, TABLE *src)
 void TABLE::insert(SYM *sp)
 {
 	int nn;
-	TypeArray *ta = sp->GetProtoTypes();
+	TypeArray *ta = sp->fi->GetProtoTypes();
 	TABLE *tab = this;
 	int s1,s2,s3;
 	std::string nm;
@@ -113,7 +113,7 @@ void TABLE::insert(SYM *sp)
     }
     sp->SetNext(0);
     dfs.printf("At insert:\n");
-    sp->GetProtoTypes()->Print();
+    sp->fi->GetProtoTypes()->Print();
   }
   else
     error(ERR_DUPSYM);
@@ -177,7 +177,7 @@ int TABLE::Find(std::string na,__int16 rettype, TypeArray *typearray, bool exact
 				break;
 		
 			if (exact) {
-				ta = thead->GetProtoTypes();
+				ta = thead->fi->GetProtoTypes();
 				if (ta->IsEqual(typearray)) {
 				  dfs.printf("Exact match");
 				  ta->Print();
@@ -246,21 +246,23 @@ int TABLE::FindRising(std::string na)
   TABLE::matchno = ndx;
   for (nn = 0; nn < ndx; nn++) {
     sym = TABLE::match[nn];
-    if (sym) {
-      if (sym->name)
-         dfs.printf("Sym:%s Types: (", (char *)sym->name->c_str());
-      else
-         dfs.printf("Sym:%s Types: (", (char *)"<no name>");
-      ta = sym->GetProtoTypes();
-      if (ta) {
-        for (ii = 0; ii < 20; ii++) {
-          dfs.printf("%03d, ", ta->types[ii]);
-        }
-      }
-      dfs.puts(")\n");
+	if (sym) {
+		if (sym->tp->type == bt_func || sym->tp->type == bt_ifunc) {
+			if (sym->name)
+				dfs.printf("Sym:%s Types: (", (char *)sym->name->c_str());
+			else
+				dfs.printf("Sym:%s Types: (", (char *)"<no name>");
+			ta = sym->fi->GetProtoTypes();
+			if (ta) {
+				for (ii = 0; ii < 20; ii++) {
+					dfs.printf("%03d, ", ta->types[ii]);
+				}
+			}
+			dfs.puts(")\n");
+		}
     }
   }
-  return ndx;
+  return (ndx);
 }
 
 SYM *TABLE::Find(std::string na, bool opt)

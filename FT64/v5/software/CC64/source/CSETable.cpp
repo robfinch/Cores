@@ -30,6 +30,24 @@ void CSETable::Assign(CSETable *t)
 	memcpy(this, t, sizeof(CSETable));
 }
 
+static int CSECmp(const void *a, const void *b)
+{
+	CSE *csp1, *csp2;
+	int aa, bb;
+
+	csp1 = (CSE *)a;
+	csp2 = (CSE *)b;
+	aa = csp1->OptimizationDesireability();
+	bb = csp2->OptimizationDesireability();
+	if (aa < bb)
+		return (1);
+	else if (aa == bb)
+		return (0);
+	else
+		return (-1);
+}
+
+
 void CSETable::Sort(int(*cmp)(const void *a, const void *b))
 {
 	qsort(table, (size_t)csendx, sizeof(CSE), cmp);
@@ -111,5 +129,284 @@ int CSETable::voidauto2(ENODE *node)
 		}
 	}
 	return (voided ? uses : -1);
+}
+
+// Make multiple passes over the CSE table in order to use
+// up all temporary registers. Allocates on the progressively
+// less desirable.
+
+int CSETable::AllocateGPRegisters()
+{
+	CSE *csp;
+	bool alloc;
+	int pass;
+	int reg;
+
+	reg = regFirstRegvar;
+	for (pass = 0; pass < 4; pass++) {
+		for (csp = First(); csp; csp = Next()) {
+			if (csp->OptimizationDesireability() != 0) {
+				if (!csp->voidf && csp->reg == -1) {
+					if (csp->exp->etype != bt_vector && !csp->isfp) {
+						switch (pass)
+						{
+						case 0:
+						case 1:
+						case 2:	alloc = (csp->OptimizationDesireability() >= 4 - pass) && reg < regLastRegvar; break;
+						case 3: alloc = (csp->OptimizationDesireability() >= 4) && reg < regLastRegvar; break;
+						}
+						if (alloc)
+							csp->reg = reg++;
+						else
+							csp->reg = -1;
+					}
+				}
+			}
+		}
+	}
+	return (reg);
+}
+
+int CSETable::AllocateFPRegisters()
+{
+	CSE *csp;
+	bool alloc;
+	int pass;
+	int reg;
+
+	reg = regFirstRegvar;
+	for (pass = 0; pass < 4; pass++) {
+		for (csp = First(); csp; csp = Next()) {
+			if (csp->OptimizationDesireability() != 0) {
+				if (!csp->voidf && csp->reg == -1) {
+					if (csp->isfp) {
+						switch (pass)
+						{
+						case 0:
+						case 1:
+						case 2:	alloc = (csp->OptimizationDesireability() >= 4 - pass) && reg < regLastRegvar; break;
+						case 3: alloc = (csp->OptimizationDesireability() >= 4) && reg < regLastRegvar; break;
+							//    					if(( csp->duses > csp->uses / (8 << nn)) && reg < regLastRegvar )	// <- address register assignments
+						}
+						if (alloc)
+							csp->reg = reg++;
+						else
+							csp->reg = -1;
+					}
+				}
+			}
+		}
+	}
+	return (reg);
+}
+
+int CSETable::AllocateVectorRegisters()
+{
+	int nn, vreg;
+	CSE *csp;
+	bool alloc;
+
+	vreg = regFirstRegvar;
+	for (nn = 0; nn < 4; nn++) {
+		for (csp = First(); csp; csp = Next()) {
+			if (csp->exp) {
+				if (csp->exp->etype == bt_vector && csp->reg == -1 && vreg < regLastRegvar) {
+					switch (nn) {
+					case 0:
+					case 1:
+					case 2: alloc = (csp->OptimizationDesireability() >= 4 - nn)
+						&& (csp->duses > csp->uses / (8 << nn));
+						break;
+					case 3:	alloc = (!csp->voidf) && (csp->uses > 3);
+						break;
+					}
+					if (alloc)
+						csp->reg = vreg++;
+					else
+						csp->reg = -1;
+				}
+			}
+		}
+	}
+	return (vreg);
+}
+
+void CSETable::InitializeTempRegs()
+{
+	AMODE *ap, *ap2, *ap3;
+	CSE *csp;
+	ENODE *exptr;
+	int size;
+
+	for (csp = First(); csp; csp = Next()) {
+		if (csp->reg != -1)
+		{               // see if preload needed
+			exptr = csp->exp;
+			if (1 || !IsLValue(exptr) || (exptr->p[0]->i > 0))
+			{
+				initstack();
+				{
+					ap = GenerateExpression(exptr, F_REG | F_IMMED | F_MEM | F_FPREG, sizeOfWord);
+					ap2 = csp->isfp ? makefpreg(csp->reg) : makereg(csp->reg);
+					ap2->isPtr = ap->isPtr;
+					if (ap->mode == am_immed) {
+						if (ap2->mode == am_fpreg) {
+							ap3 = GetTempRegister();
+							GenLdi(ap3, ap);
+							GenerateDiadic(op_mov, 0, ap2, ap3);
+							ReleaseTempReg(ap3);
+						}
+						else
+							GenLdi(ap2, ap);
+					}
+					else if (ap->mode == am_reg)
+						GenerateDiadic(op_mov, 0, ap2, ap);
+					else {
+						size = GetNaturalSize(exptr);
+						ap->isUnsigned = exptr->isUnsigned;
+						GenLoad(ap2, ap, size, size);
+					}
+				}
+				ReleaseTempReg(ap);
+			}
+		}
+	}
+
+}
+
+void CSETable::GenerateRegMask(CSE *csp, uint64_t *mask, uint64_t *rmask)
+{
+	if (csp->reg != -1)
+	{
+		*rmask = *rmask | (1LL << (63 - csp->reg));
+		*mask = *mask | (1LL << csp->reg);
+	}
+}
+
+// ----------------------------------------------------------------------------
+// AllocateRegisterVars will allocate registers for the expressions that have
+// a high enough desirability.
+// ----------------------------------------------------------------------------
+
+int CSETable::AllocateRegisterVars()
+{
+	CSE *csp;
+	uint64_t mask, rmask;
+	uint64_t fpmask, fprmask;
+	uint64_t vmask, vrmask;
+
+	mask = 0;
+	rmask = 0;
+	fpmask = 0;
+	fprmask = 0;
+	vmask = 0;
+	vrmask = 0;
+
+	// Sort the CSE table according to desirability of allocating
+	// a register.
+	if (pass == 1)
+		Sort(CSECmp);
+
+	// Initialize to no allocated registers
+	for (csp = First(); csp; csp = Next())
+		csp->reg = -1;
+
+	AllocateGPRegisters();
+	AllocateFPRegisters();
+	AllocateVectorRegisters();
+
+	// Generate bit masks of allocated registers
+	for (csp = First(); csp; csp = Next()) {
+		if (csp->exp) {
+			if (csp->exp->IsFloatType())
+				GenerateRegMask(csp, &fpmask, &fprmask);
+			else if (csp->exp->etype == bt_vector)
+				GenerateRegMask(csp, &vrmask, &vmask);
+			else
+				GenerateRegMask(csp, &mask, &rmask);
+		}
+		else
+			GenerateRegMask(csp, &mask, &rmask);
+	}
+
+	Dump();
+
+	// Push temporaries on the stack.
+	SaveRegisterVars(mask, rmask);
+	SaveFPRegisterVars(fpmask, fprmask);
+
+	save_mask = mask;
+	fpsave_mask = fpmask;
+
+	InitializeTempRegs();
+	return (popcnt(mask));
+}
+
+/*
+*      opt1 is the externally callable optimization routine. it will
+*      collect and allocate common subexpressions and substitute the
+*      tempref for all occurrances of the expression within the block.
+*/
+int CSETable::Optimize(Statement *block)
+{
+	int nn;
+
+	//csendx = 0;
+	nn = 0;
+	if (pass == 1) {
+		if (currentFn->csetbl == nullptr) {
+			currentFn->csetbl = new CSETable;
+		}
+		Clear();
+	}
+	else if (pass == 2) {
+		Assign(currentFn->csetbl);
+	}
+	if (opt_noregs == FALSE) {
+		if (pass == 1)
+			block->scan();            /* collect expressions */
+		nn = AllocateRegisterVars();
+		if (pass == 2)
+			block->repcse();          /* replace allocated expressions */
+	}
+	if (pass == 1)
+		currentFn->csetbl->Assign(pCSETable);
+	else if (pass == 2) {
+		if (currentFn->csetbl && !currentFn->IsInline) {
+			delete currentFn->csetbl;
+			currentFn->csetbl = nullptr;
+		}
+	}
+	return (nn);
+}
+
+// Immediate constants have low priority.
+// Even though their use might be high, they are given a low priority.
+
+void CSETable::Dump()
+{
+	int nn;
+	CSE *csp;
+
+	dfs.printf("<CSETable>For %s\n", (char *)currentFn->sym->name->c_str());
+	dfs.printf(
+		"*The expression must be used three or more times before it will be allocated\n"
+		"to a register.\n");
+	dfs.printf("N OD Uses DUses Void Reg Sym\n");
+	for (nn = 0; nn < pCSETable->csendx; nn++) {
+		csp = &pCSETable->table[nn];
+		dfs.printf("%d: ", nn);
+		dfs.printf("%d   ", csp->OptimizationDesireability());
+		dfs.printf("%d   ", csp->uses);
+		dfs.printf("%d   ", csp->duses);
+		dfs.printf("%d   ", (int)csp->voidf);
+		dfs.printf("%d   ", csp->reg);
+		if (csp->exp && csp->exp->sym)
+			dfs.printf("%s   ", (char *)csp->exp->sym->name->c_str());
+		if (csp->exp && csp->exp->sp)
+			dfs.printf("%s   ", (char *)((std::string *)(csp->exp->sp))->c_str());
+		dfs.printf("\n");
+	}
+	dfs.printf("</CSETable>\n");
 }
 

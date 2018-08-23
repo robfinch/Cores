@@ -59,8 +59,10 @@ int CSE::OptimizationDesireability()
 		return (0);
 	// Prevent Inline code from being allocated a pointer in a register.
 	if (exp->sym) {
-		if (exp->sym->IsInline)
-			return (0);
+		if (exp->sym->fi) {
+			if (exp->sym->fi->IsInline)
+				return (0);
+		}
 	}
 	// Left values are worth more to optimization than right values.
     if( IsLValue(exp) )

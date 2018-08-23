@@ -25,13 +25,6 @@
 //
 #include "stdafx.h"
 
-extern int lastsph;
-extern char *semaphores[20];
-extern int throwlab;
-extern int breaklab;
-extern int contlab;
-extern int retlab;
-
 extern TYP              stdfunc;
 
 extern void DumpCSETable();
@@ -39,254 +32,14 @@ extern void scan(Statement *);
 extern int GetReturnBlockSize();
 void GenerateReturn(Statement *stmt);
 extern void GenerateComment(char *);
-static void SaveRegisterVars(int64_t mask, int64_t rmask);
-static void SaveFPRegisterVars(int64_t fpmask, int64_t fprmask);
 int TempFPInvalidate();
 int TempInvalidate();
 void TempRevalidate(int,int);
 void TempFPRevalidate(int);
 void ReleaseTempRegister(AMODE *ap);
 AMODE *GetTempRegister();
-void GenLdi(AMODE *, AMODE *);
 extern AMODE *copy_addr(AMODE *ap);
 extern void GenLoad(AMODE *ap1, AMODE *ap3, int ssize, int size);
-
-static int CSECmp(const void *a, const void *b)
-{
-	CSE *csp1, *csp2;
-	int aa,bb;
-
-	csp1 = (CSE *)a;
-	csp2 = (CSE *)b;
-	aa = csp1->OptimizationDesireability();
-	bb = csp2->OptimizationDesireability();
-	if (aa < bb)
-		return (1);
-	else if (aa == bb)
-		return (0);
-	else
-		return (-1);
-}
-
-static int AllocateRegisters1(int *dregr)
-{
-	int nn,csecnt,reg,dreg;
-	CSE *csp;
-
-	reg = regFirstRegvar;
-	dreg = regFirstRegvar;
-	for (nn = 0; nn < 3; nn++) {
-		for (csecnt = 0; csecnt < pCSETable->csendx; csecnt++)	{
-			csp = &pCSETable->table[csecnt];
-			if (csp->reg==-1) {
-				if( csp->OptimizationDesireability() >= 4-nn ) {
-					if (csp->isfp) {
-						if (dreg <= regLastRegvar)
-    						csp->reg = dreg++;
-					}
-					else if (csp->exp->etype!=bt_vector) {
-//    					if(( csp->duses > csp->uses / (8 << nn)) && reg < regLastRegvar )	// <- address register assignments
-						if (reg <= regLastRegvar)
-    						csp->reg = reg++;
-					}
-				}
-			}
-		}
-	}
-	*dregr = dreg;
-	return reg;
-}
-
-static int FinalAllocateRegisters(int reg, int dreg)
-{
-	int csecnt;
-	CSE *csp;
-
-	for (csecnt = 0; csecnt < pCSETable->csendx; csecnt++)	{
-		csp = &pCSETable->table[csecnt];
-		if (csp->OptimizationDesireability() != 0) {
-			if (!csp->voidf && csp->reg==-1) {
-				if (csp->isfp) {
-    				if(( csp->OptimizationDesireability() >= 4) && dreg < regLastRegvar )
-    					csp->reg = dreg++;
-    				else
-    					csp->reg = -1;
-				}
-				else if (csp->exp->etype!=bt_vector) {
-    				if(( csp->OptimizationDesireability() >= 4) && reg < regLastRegvar )
-    					csp->reg = reg++;
-    				else
-    					csp->reg = -1;
-				}
-			}
-		}
-	}
-	return reg;
-}
-
-static int AllocateVectorRegisters1()
-{
-	int nn,csecnt,vreg;
-	CSE *csp;
-
-	vreg = 11;
-	for (nn = 0; nn < 3; nn++) {
-		for (csecnt = 0; csecnt < pCSETable->csendx; csecnt++)	{
-			csp = &pCSETable->table[csecnt];
-			if (csp->reg==-1) {
-				if( csp->OptimizationDesireability() >= 4-nn ) {
-					if (csp->exp->etype==bt_vector) {
-    					if(( csp->duses > csp->uses / (8 << nn)) && vreg < 18 )
-    						csp->reg = vreg++;
-    					else
-    						csp->reg = -1;
-					}
-				}
-			}
-		}
-	}
-	return vreg;
-}
-
-static int FinalAllocateVectorRegisters(int vreg)
-{
-	int csecnt;
-	CSE *csp;
-
-	vreg = 11;
-	for (csecnt = 0; csecnt < pCSETable->csendx; csecnt++)	{
-		csp = &pCSETable->table[csecnt];
-		if (!csp->voidf && csp->reg==-1) {
-			if (csp->exp->etype==bt_vector) {
-    			if(( csp->uses > 3) && vreg < 18 )
-    				csp->reg = vreg++;
-    			else
-    				csp->reg = -1;
-			}
-		}
-	}
-	return vreg;
-}
-
-// ----------------------------------------------------------------------------
-// AllocateRegisterVars will allocate registers for the expressions that have
-// a high enough desirability.
-// ----------------------------------------------------------------------------
-
-int AllocateRegisterVars()
-{
-	CSE *csp;
-    ENODE *exptr;
-    int reg, dreg, vreg;
-	uint64_t mask, rmask;
-    uint64_t fpmask, fprmask;
-	uint64_t vmask, vrmask;
-    AMODE *ap, *ap2, *ap3;
-	int size;
-	int csecnt;
-
-	reg = regFirstRegvar;
-	dreg = regFirstRegvar;
-	vreg = 11;
-    mask = 0;
-	rmask = 0;
-	fpmask = 0;
-	fprmask = 0;
-	vmask = 0;
-	vrmask = 0;
-
-	// Sort the CSE table according to desirability of allocating
-	// a register.
-	if (pass == 1)
-		pCSETable->Sort(CSECmp);
-
-	// Initialize to no allocated registers
-	for (csecnt = 0; csecnt < pCSETable->csendx; csecnt++)
-		pCSETable->table[csecnt].reg = -1;
-
-	// Make multiple passes over the CSE table in order to use
-	// up all temporary registers. Allocates on the progressively
-	// less desirable.
-	reg = AllocateRegisters1(&dreg);
-	vreg = AllocateVectorRegisters1();
-	if (reg < regLastRegvar)
-		reg = FinalAllocateRegisters(reg,dreg);
-	if (vreg < 18)
-		vreg = FinalAllocateVectorRegisters(vreg);
-
-	// Generate bit masks of allocated registers
-	for (csecnt = 0; csecnt < pCSETable->csendx; csecnt++) {
-		csp = &pCSETable->table[csecnt];
-		if (csp->exp->IsFloatType()) {
-			if( csp->reg != -1 )
-    		{
-    			fprmask = fprmask | (1LL << (63 - csp->reg));
-    			fpmask = fpmask | (1LL << csp->reg);
-    		}
-		}
-		else if (csp->exp->etype==bt_vector) {
-			if( csp->reg != -1 )
-    		{
-    			vrmask = vrmask | (1LL << (63 - csp->reg));
-    			vmask = vmask | (1LL << csp->reg);
-    		}
-		}
-		else {
-			if( csp->reg != -1 )
-    		{
-    			rmask = rmask | (1LL << (63 - csp->reg));
-    			mask = mask | (1LL << csp->reg);
-    		}
-		}
-	}
-
-	DumpCSETable();
-
-	// Push temporaries on the stack.
-	SaveRegisterVars(mask, rmask);
-	SaveFPRegisterVars(fpmask, fprmask);
-
-    save_mask = mask;
-    fpsave_mask = fpmask;
-
-	// Initialize temporaries
-	for (csecnt = 0; csecnt < pCSETable->csendx; csecnt++) {
-		csp = &pCSETable->table[csecnt];
-        if( csp->reg != -1 )
-        {               // see if preload needed
-            exptr = csp->exp;
-            if( 1 || !IsLValue(exptr) || (exptr->p[0]->i > 0))
-            {
-                initstack();
-				{
-                    ap = GenerateExpression(exptr,F_REG|F_IMMED|F_MEM|F_FPREG,sizeOfWord);
-					ap2 = csp->isfp ? makefpreg(csp->reg) : makereg(csp->reg);
-					ap2->isPtr = ap->isPtr;
-    				if (ap->mode==am_immed) {
-						if (ap2->mode==am_fpreg) {
-							ap3 = GetTempRegister();
-							GenLdi(ap3,ap);
-							GenerateDiadic(op_mov,0,ap2,ap3);
-							ReleaseTempReg(ap3);
-						}
-						else
-							GenLdi(ap2,ap);
-					}
-    				else if (ap->mode==am_reg)
-    					GenerateDiadic(op_mov,0,ap2,ap);
-    				else {
-    					size = GetNaturalSize(exptr);
-    					ap->isUnsigned = exptr->isUnsigned;
-    					GenLoad(ap2,ap,size,size);
-    				}
-                }
-                ReleaseTempReg(ap);
-            }
-        }
-    }
-	return (popcnt(mask));
-}
-
 
 AMODE *GenExpr(ENODE *node)
 {
@@ -845,28 +598,6 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int predi
 }
 
 
-static bool GenerateDefaultCatch(SYM *sym)
-{
-	GenerateLabel(throwlab);
-	if (sym->IsLeaf){
-		if (sym->DoesThrow) {
-			GenerateDiadic(op_lw,0,makereg(regLR),make_indexed(2*sizeOfWord,regFP));		// load throw return address from stack into LR
-			GenerateDiadicNT(op_sw,0,makereg(regLR),make_indexed(3*sizeOfWord,regFP));		// and store it back (so it can be loaded with the lm)
-			//GenerateDiadicNT(op_spt,0,makereg(0),make_indexed(3 * sizeOfWord, regFP));
-//			GenerateDiadic(op_bra,0,make_label(retlab),NULL);				// goto regular return cleanup code
-			return (true);
-		}
-	}
-	else {
-		GenerateDiadic(op_lw,0,makereg(regLR),make_indexed(2*sizeOfWord,regFP));		// load throw return address from stack into LR
-		GenerateDiadicNT(op_sw,0,makereg(regLR),make_indexed(3*sizeOfWord,regFP));		// and store it back (so it can be loaded with the lm)
-		//GenerateDiadicNT(op_spt, 0, makereg(0), make_indexed(3 * sizeOfWord, regFP));
-		//		GenerateDiadic(op_bra,0,make_label(retlab),NULL);				// goto regular return cleanup code
-		return (true);
-	}
-	return (false);
-}
-
 static void SaveRegisterSet(SYM *sym)
 {
 	int nn, mm;
@@ -903,138 +634,10 @@ static void RestoreRegisterSet(SYM * sym)
 			GenerateMonadicNT(op_push,0,makereg(nn));
 }
 
-// For a leaf routine don't bother to store the link register.
-static void SetupReturnBlock(SYM *sym)
-{
-	AMODE *ap;
-	int n;
-
-	GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(4 * sizeOfWord));
-	GenerateDiadic(op_sw, 0, makereg(regFP), make_indirect(regSP));
-	GenerateDiadic(op_sw, 0, makereg(regZero), make_indexed(sizeOfWord, regSP));
-//	GenerateTriadic(op_swp, 0, makereg(regFP), makereg(regZero), make_indirect(regSP));
-	n = 0;
-	if (exceptions) {
-		if (!sym->IsLeaf || sym->DoesThrow) {
-			n = 1;
-			GenerateDiadic(op_sw,0,makereg(regXLR),make_indexed(2*sizeOfWord,regSP));
-		}
-	}
-	if (!sym->IsLeaf) {
-		n |= 2;
-		GenerateDiadic(op_sw, 0, makereg(regLR), make_indexed(3 * sizeOfWord, regSP));
-	}
-	/*
-	switch (n) {
-	case 0:	break;
-	case 1:	GenerateDiadic(op_sw, 0, makereg(regXLR), make_indexed(2 * sizeOfWord, regSP)); break;
-	case 2:	GenerateDiadic(op_sw, 0, makereg(regLR), make_indexed(3 * sizeOfWord, regSP)); break;
-	case 3:	GenerateTriadic(op_swp, 0, makereg(regXLR), makereg(regLR), make_indexed(2 * sizeOfWord, regSP)); break;
-	}
-	*/
-	ap = make_label(throwlab);
-	ap->mode = am_immed;
-	if (exceptions && (!sym->IsLeaf || sym->DoesThrow))
-		GenerateDiadic(op_ldi,0,makereg(regXLR),ap);
-	GenerateDiadic(op_mov,0,makereg(regFP),makereg(regSP));
-	GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(sym->stkspace));
-}
-
-// Generate a function body.
-//
-void GenerateFunction(SYM *sym)
-{
-    int defcatch;
-	Statement *stmt = sym->stmt;
-	int lab0;
-	int o_throwlab, o_retlab, o_contlab, o_breaklab;
-	OCODE *ip;
-	bool doCatch = true;
-
-	o_throwlab = throwlab;
-	o_retlab = retlab;
-	o_contlab = contlab;
-	o_breaklab = breaklab;
-
-	throwlab = retlab = contlab = breaklab = -1;
-	lastsph = 0;
-	memset(semaphores,0,sizeof(semaphores));
-	throwlab = nextlabel++;
-	defcatch = nextlabel++;
-	lab0 = nextlabel++;
-
-	while( lc_auto % sizeOfWord )	// round frame size to word
-		++lc_auto;
-	if (sym->IsInterrupt) {
-		if (sym->stkname) {
-			GenerateDiadic(op_lea, 0, makereg(SP), make_string(sym->stkname));
-			GenerateTriadic(op_ori, 0, makereg(SP), makereg(SP), make_immed(0xFFFFF00000000000LL));
-		}
-	   //SaveRegisterSet(sym);
-	}
-	// The prolog code can't be optimized because it'll run *before* any variables
-	// assigned to registers are available. About all we can do here is constant
-	// optimizations.
-	if (sym->prolog) {
-		sym->prolog->scan();
-	    sym->prolog->Generate();
-	}
-	// Setup the return block.
-	if (!sym->IsNocall)
-		SetupReturnBlock(sym);
-	if (optimize)
-		stmt->CSEOptimize();
-    stmt->Generate();
-
-	if (exceptions) {
-		ip = peep_tail;
-		GenerateMonadicNT(op_bra,0,make_label(lab0));
-		doCatch = GenerateDefaultCatch(sym);
-		GenerateLabel(lab0);
-		if (!doCatch) {
-			peep_tail = ip;
-			peep_tail->fwd = nullptr;
-		}
-	}
-
-	if (!sym->IsInline)
-		GenerateReturn(nullptr);
-/*
-	// Inline code needs to branch around the default exception handler.
-	if (exceptions && sym->IsInline)
-		GenerateMonadicNT(op_bra,0,make_label(lab0));
-	// Generate code for the hidden default catch
-	if (exceptions)
-		GenerateDefaultCatch(sym);
-	if (exceptions && sym->IsInline)
-		GenerateLabel(lab0);
-*/
-	throwlab = o_throwlab;
-	retlab = o_retlab;
-	contlab = o_contlab;
-	breaklab = o_breaklab;
-}
-
-
-// Unlink the stack
-
-static void UnlinkStack(SYM * sym)
-{
-	GenerateDiadic(op_mov,0,makereg(regSP),makereg(regFP));
-	GenerateDiadic(op_lw,0,makereg(regFP),make_indirect(regSP));
-	if (exceptions) {
-		if (!sym->IsLeaf || sym->DoesThrow)
-			GenerateDiadic(op_lw,0,makereg(regXLR),make_indexed(2*sizeOfWord,regSP));
-	}
-	if (!sym->IsLeaf)
-		GenerateDiadic(op_lw,0,makereg(regLR),make_indexed(3*sizeOfWord,regSP));
-//	GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),make_immed(3*sizeOfWord));
-}
-
 
 // Push temporaries on the stack.
 
-static void SaveRegisterVars(int64_t mask, int64_t rmask)
+void SaveRegisterVars(int64_t mask, int64_t rmask)
 {
 	int cnt;
 	int nn;
@@ -1051,7 +654,7 @@ static void SaveRegisterVars(int64_t mask, int64_t rmask)
 	}
 }
 
-static void SaveFPRegisterVars(int64_t mask, int64_t rmask)
+void SaveFPRegisterVars(int64_t mask, int64_t rmask)
 {
 	int cnt;
 	int nn;
@@ -1106,187 +709,13 @@ static void RestoreFPRegisterVars()
 	}
 }
 
-// Generate a return statement.
-//
-void GenerateReturn(Statement *stmt)
-{
-	AMODE *ap;
-	int nn;
-	int cnt,cnt2;
-	int toAdd;
-	SYM *sym = currentFn;
-	SYM *p;
-	bool isFloat;
-
-  // Generate the return expression and force the result into r1.
-  if( stmt != NULL && stmt->exp != NULL )
-  {
-		initstack();
-		isFloat = sym->tp->GetBtp() && sym->tp->GetBtp()->IsFloatType();
-		if (isFloat)
-			ap = GenerateExpression(stmt->exp,F_REG,sizeOfFP);
-		else
-			ap = GenerateExpression(stmt->exp,F_REG|F_IMMED,sizeOfWord);
-		GenerateMonadicNT(op_hint,0,make_immed(2));
-		if (ap->mode == am_immed)
-		    GenLdi(makereg(1),ap);
-		else if (ap->mode == am_reg) {
-            if (sym->tp->GetBtp() && (sym->tp->GetBtp()->type==bt_struct || sym->tp->GetBtp()->type==bt_union)) {
-				p = sym->params.Find("_pHiddenStructPtr",false);
-				if (p) {
-					if (p->IsRegister)
-						GenerateDiadic(op_mov,0,makereg(1),makereg(p->reg));
-					else
-						GenerateDiadic(op_lw,0,makereg(1),make_indexed(p->value.i,regFP));
-					GenerateMonadicNT(op_push,0,make_immed(sym->tp->GetBtp()->size));
-					GenerateMonadicNT(op_push,0,ap);
-					GenerateMonadicNT(op_push,0,makereg(1));
-					GenerateMonadicNT(op_call,0,make_string("_memcpy"));
-					GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),make_immed(sizeOfWord*3));
-				}
-				else {
-					// ToDo compiler error
-				}
-            }
-            else {
-				if (sym->tp->GetBtp()->IsFloatType())
-					GenerateDiadic(op_mov, 0, makefpreg(1), ap);
-				else if (sym->tp->GetBtp()->IsVectorType())
-					GenerateDiadic(op_mov, 0, makevreg(1),ap);
-				else
-					GenerateDiadic(op_mov, 0, makereg(1),ap);
-			}
-        }
-		else if (ap->mode == am_fpreg) {
-			if (isFloat)
-				GenerateDiadic(op_mov, 0, makefpreg(1),ap);
-			else
-				GenerateDiadic(op_mov, 0, makereg(1),ap);
-		}
-		else if (ap->type==stddouble.GetIndex()) {
-			if (isFloat)
-				GenerateDiadic(op_lf,'d',makereg(1),ap);
-			else
-				GenerateDiadic(op_lw,0,makereg(1),ap);
-		}
-		else {
-			if (sym->tp->GetBtp()->IsVectorType())
-				GenLoad(makevreg(1),ap,sizeOfWord,sizeOfWord);
-			else
-				GenLoad(makereg(1),ap,sizeOfWord,sizeOfWord);
-		}
-		ReleaseTempRegister(ap);
-	}
-
-	// Generate the return code only once. Branch to the return code for all returns.
-	if (retlab != -1) {
-		GenerateMonadicNT(op_bra,0,make_label(retlab));
-		return;
-	}
-	retlab = nextlabel++;
-	GenerateLabel(retlab);
-
-	if (currentFn->UsesNew) {
-		GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(8));
-		GenerateDiadic(op_sw,0,makereg(regFirstArg),make_indirect(regSP));
-		GenerateDiadic(op_lea,0,makereg(regFirstArg),make_indexed(-sizeOfWord,regFP));
-		GenerateMonadic(op_call,0,make_string("__AddGarbage"));
-		GenerateDiadic(op_lw,0,makereg(regFirstArg),make_indirect(regSP));
-		GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),make_immed(8));
-	}
-
-	// Unlock any semaphores that may have been set
-	for (nn = lastsph - 1; nn >= 0; nn--)
-		GenerateDiadicNT(op_sb,0,makereg(0),make_string(semaphores[nn]));
-		
-	// Restore fp registers used as register variables.
-	if( fpsave_mask != 0 ) {
-		cnt2 = cnt = (bitsset(fpsave_mask)-1)*sizeOfFP;
-		for (nn = 31; nn >=1 ; nn--) {
-			if (fpsave_mask & (1LL << nn)) {
-				GenerateDiadic(op_lw,0,makereg(nn),make_indexed(cnt2-cnt,regSP));
-				cnt -= sizeOfWord;
-			}
-		}
-		GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),make_immed(cnt2+sizeOfFP));
-	}
-	RestoreRegisterVars();
-    if (sym->IsNocall) {
-		if (sym->epilog) {
-			sym->epilog->Generate();
-			return;
-		}
-		return;
-    }
-	UnlinkStack(sym);
-	toAdd = 4*sizeOfWord;
-
-	if (sym->epilog) {
-		sym->epilog->Generate();
-		return;
-	}
-        
-	// If Pascal calling convention remove parameters from stack by adding to stack pointer
-	// based on the number of parameters. However if a non-auto register parameter is
-	// present, then don't add to the stack pointer for it. (Remove the previous add effect).
-	if (sym->IsPascal) {
-		TypeArray *ta;
-		int nn;
-		ta = sym->GetProtoTypes();
-		for (nn = 0; nn < ta->length; nn++) {
-			switch(ta->types[nn]) {
-			case bt_float:
-			case bt_quad:
-				if (ta->preg[nn] && (ta->preg[nn] & 0x8000)==0)
-					;
-				else
-					toAdd += sizeOfFPQ;
-				break;
-			case bt_double:
-				if (ta->preg[nn] && (ta->preg[nn] & 0x8000)==0)
-					;
-				else
-					toAdd += sizeOfFPD;
-				break;
-			case bt_triple:
-				if (ta->preg[nn] && (ta->preg[nn] & 0x8000)==0)
-					;
-				else
-					toAdd += sizeOfFPT;
-				break;
-			default:
-				if (ta->preg[nn] && (ta->preg[nn] & 0x8000)==0)
-					;
-				else
-					toAdd += sizeOfWord;
-			}
-		}
-	}
-//	if (toAdd != 0)
-//		GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),make_immed(toAdd));
-	// Generate the return instruction. For the Pascal calling convention pop the parameters
-	// from the stack.
-	if (sym->IsInterrupt) {
-		//RestoreRegisterSet(sym);
-		GenerateZeradic(op_rti);
-		return;
-	}
-
-	if (!sym->IsInline) {
-		GenerateMonadic(op_ret,0,make_immed(toAdd));
-		//GenerateMonadic(op_jal,0,make_indirect(regLR));
-	}
-	else
-		GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),make_immed(toAdd));
-}
-
 static int round4(int n)
 {
     while(n & 3) n++;
     return (n);
 };
 
-static void SaveTemporaries(SYM *sym, int *sp, int *fsp)
+static void SaveTemporaries(Function *sym, int *sp, int *fsp)
 {
 	if (sym) {
 		if (sym->UsesTemps) {
@@ -1300,7 +729,7 @@ static void SaveTemporaries(SYM *sym, int *sp, int *fsp)
 	}
 }
 
-static void RestoreTemporaries(SYM *sym, int sp, int fsp)
+static void RestoreTemporaries(Function *sym, int sp, int fsp)
 {
 	if (sym) {
 		if (sym->UsesTemps) {
@@ -1316,7 +745,7 @@ static void RestoreTemporaries(SYM *sym, int sp, int fsp)
 
 // Saves any registers used as parameters in the calling function.
 
-static void SaveRegisterArguments(SYM *sym)
+static void SaveRegisterArguments(Function *sym)
 {
 	TypeArray *ta;
 
@@ -1339,7 +768,7 @@ static void SaveRegisterArguments(SYM *sym)
 	}
 }
 
-static void RestoreRegisterArguments(SYM *sym)
+static void RestoreRegisterArguments(Function *sym)
 {
 	TypeArray *ta;
 
@@ -1501,7 +930,7 @@ static int GeneratePushParameter(ENODE *ep, int regno, int stkoffs)
 
 // Store entire argument list onto stack
 //
-static int GenerateStoreArgumentList(SYM *sym, ENODE *plist)
+static int GenerateStoreArgumentList(Function *sym, ENODE *plist)
 {
 	TypeArray *ta = nullptr;
 	int i,sum;
@@ -1538,9 +967,10 @@ static int GenerateStoreArgumentList(SYM *sym, ENODE *plist)
 AMODE *GenerateFunctionCall(ENODE *node, int flags)
 { 
 	AMODE *ap;
-	SYM *sym;
-	SYM *o_fn;
-    int             i;
+	Function *sym;
+	Function *o_fn;
+	SYM *s;
+    int i;
 	int sp = 0;
 	int fsp = 0;
 	TypeArray *ta = nullptr;
@@ -1551,9 +981,10 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
 
 	// Call the function
 	if( node->p[0]->nodetype == en_nacon || node->p[0]->nodetype == en_cnacon ) {
- 		sym = gsearch(*node->p[0]->sp);
+		s = gsearch(*node->p[0]->sp);
+ 		sym = s->fi;
         i = 0;
-		SaveTemporaries(sym, &sp, &fsp);
+		sym->SaveTemporaries(&sp, &fsp);
   /*
     	if ((sym->tp->GetBtp()->type==bt_struct || sym->tp->GetBtp()->type==bt_union) && sym->tp->GetBtp()->size > 8) {
             nn = tmpAlloc(sym->tp->GetBtp()->size) + lc_auto + round8(sym->tp->GetBtp()->size);
@@ -1571,7 +1002,7 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
 			fmask = fpsave_mask;
 			currentFn = sym;
 			csetbl = pCSETable;
-			GenerateFunction(sym);
+			sym->Gen();
 			pCSETable = csetbl;
 			currentFn = o_fn;
 			fpsave_mask = fmask;
@@ -1594,8 +1025,8 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
      */
 		ap = GenerateExpression(node->p[0],F_REG,sizeOfWord);
 		if (ap->offset)
-			sym = ap->offset->sym;
-		SaveTemporaries(sym, &sp, &fsp);
+			sym = ap->offset->sym->fi;
+		sym->SaveTemporaries(&sp, &fsp);
 		if (currentFn->HasRegisterParameters())
 			SaveRegisterArguments(sym);
         i = i + GenerateStoreArgumentList(sym,node->p[1]);
@@ -1607,7 +1038,7 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
 			fmask = fpsave_mask;
 			currentFn = sym;
 			csetbl = pCSETable;
-			GenerateFunction(sym);
+			sym->Gen();
 			pCSETable = csetbl;
 			currentFn = o_fn;
 			fpsave_mask = fmask;
@@ -1630,7 +1061,7 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
 	}
 	if (currentFn->HasRegisterParameters())
 		RestoreRegisterArguments(sym);
-	RestoreTemporaries(sym, sp, fsp);
+	sym->RestoreTemporaries(sp, fsp);
 	/*
 	if (sym) {
 	   if (sym->tp->type==bt_double)
@@ -1645,14 +1076,26 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
             result = GetTempRegister();
     }
 	*/
-	if (sym && sym->tp->GetBtp()->IsFloatType()) {
+	if (sym
+		&& sym->sym
+		&& sym->sym->tp 
+		&& sym->sym->tp->GetBtp()
+		&& sym->sym->tp->GetBtp()->IsFloatType()) {
 		return (makefpreg(1));
 	}
-	if (sym && sym->tp->GetBtp()->IsVectorType())
+	if (sym 
+		&& sym->sym
+		&& sym->sym->tp
+		&& sym->sym->tp->GetBtp()
+		&& sym->sym->tp->GetBtp()->IsVectorType())
 		return (makevreg(1));
 	ap = makereg(1);
-	if (sym && sym->tp)
-		ap->isPtr = sym->tp->GetBtp()->type == bt_pointer;
+	if (sym 
+		&& sym->sym
+		&& sym->sym->tp
+		&& sym->sym->tp->GetBtp()
+		)
+		ap->isPtr = sym->sym->tp->GetBtp()->type == bt_pointer;
 	return (ap);
 	/*
 	else {

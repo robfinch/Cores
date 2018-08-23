@@ -115,7 +115,7 @@ int bregmask=0;
 void initRegStack()
 {
 	int i;
-	SYM *sym = currentFn;
+	Function *sym = currentFn;
 
 	next_reg = sym->IsLeaf ? 1 : regFirstTemp;
 	next_fpreg = sym->IsLeaf ? 1 : regFirstTemp;
@@ -271,7 +271,7 @@ void initstack()
 AMODE *GetTempRegister()
 {
 	AMODE *ap;
-    SYM *sym = currentFn;
+    Function *sym = currentFn;
 	int number;
 
 	number = reg_in_use[next_reg];
@@ -297,7 +297,7 @@ AMODE *GetTempRegister()
 AMODE *GetTempVectorRegister()
 {
 	AMODE *ap;
-    SYM *sym = currentFn;
+    Function *sym = currentFn;
 
 	if (vreg_in_use[next_vreg] >= 0) {
 //		if (isThor)	
@@ -324,7 +324,7 @@ AMODE *GetTempVectorRegister()
 AMODE *GetTempVectorMaskRegister()
 {
 	AMODE *ap;
-    SYM *sym = currentFn;
+    SYM *sym = currentFn->sym;
 
 	if (vmreg_in_use[next_vmreg] >= 0) {
 //		GenerateTempVectorMaskRegPush(next_vreg, am_reg, vreg_in_use[next_vreg],0);
@@ -349,7 +349,7 @@ AMODE *GetTempVectorMaskRegister()
 AMODE *GetTempFPRegister()
 {
 	AMODE *ap;
-    SYM *sym = currentFn;
+    Function *sym = currentFn;
 	int number;
  
 	number = fpreg_in_use[next_fpreg];
@@ -412,7 +412,7 @@ AMODE *GetTempFPRegister()
 void checkstack()
 {
     int i;
-    SYM *sym = currentFn;
+    Function *sym = currentFn;
 
     for (i=1; i<= regLastTemp; i++)
         if (reg_in_use[i] != -1)
@@ -449,7 +449,7 @@ void checkbrstack()
  */
 void validate(AMODE *ap)
 {
-    SYM *sym = currentFn;
+    Function *sym = currentFn;
 	unsigned int frg = sym->IsLeaf ? 1 : regFirstTemp;
 
 	if (ap->type!=stdvector.GetIndex())
@@ -491,7 +491,7 @@ common:
 void ReleaseTempRegister(AMODE *ap)
 {
     int number;
-    SYM *sym = currentFn;
+    Function *sym = currentFn;
 	unsigned int frg = sym->IsLeaf ? 1 : regFirstTemp;
 
 	TRACE(printf("ReleaseTempRegister:r%d r%d\r\n", ap->preg, ap->sreg);)

@@ -74,6 +74,7 @@ int Compiler::main2(int argc, char **argv)
 void Compiler::compile()
 {
 	GlobalDeclaration *gd;
+	SYM *sp;
 
 	dfs.printf("<compile>\n");
 	genst_cumulative = 0;
@@ -93,6 +94,14 @@ void Compiler::compile()
 	decls = GlobalDeclaration::Make();
 	gd = decls;
 	lastst = tk_nop;
+
+	// Setup built-in functions.
+	sp = allocSYM();
+	sp->SetName("__new");
+	sp->fi = allocFunction(sp->id);
+	sp->fi->sym = sp;
+	sp->tp = &stdvoid;
+	gsyms->insert(sp);
 
 	getch();
 	lstackptr = 0;
@@ -276,6 +285,15 @@ void Compiler::AddStandardTypes()
 	p->bit_width = -1;
 	p->precision = 64;
 	stdvectormask = p;
+
+	p = allocTYP();
+	p->type = bt_void;
+	p->typeno = bt_void;
+	p->val_flag = 1;
+	p->size = 8;
+	p->bit_width = -1;
+	p->precision = 64;
+	stdvoid = *p;
 }
 
 

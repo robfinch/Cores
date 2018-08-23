@@ -333,7 +333,7 @@ void GenerateLabel(int labno)
 	newl = (OCODE *)allocx(sizeof(OCODE));
 	newl->opcode = op_label;
 	newl->oper1 = (AMODE *)labno;
-	newl->oper2 = (AMODE *)my_strdup((char *)currentFn->name->c_str());
+	newl->oper2 = (AMODE *)my_strdup((char *)currentFn->sym->name->c_str());
 	AddToPeepList(newl);
 }
 

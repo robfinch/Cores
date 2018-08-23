@@ -49,6 +49,7 @@ int pop;   // the just previous operator.
 // Tells subsequent levels that ParseCastExpression already fetched a token.
 //static unsigned char expr_flag = 0;
 
+TYP				stdvoid;
 TYP             stdint;
 TYP             stduint;
 TYP             stdlong;
@@ -579,7 +580,8 @@ TYP *CondDeref(ENODE **node, TYP *tp)
  */
 TYP *nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeArray *typearray, TABLE *tbl)
 {
-	SYM *sp;
+	SYM *sp = nullptr;
+	Function *fn;
 	TYP *tp;
 	std::string stnm;
 
@@ -588,7 +590,7 @@ TYP *nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeArray *typear
 		dfs.printf("searching table for:%d:%s|",TABLE::matchno,(char *)name.c_str());
 		tbl->Find(name,bt_long,typearray,true);
 		//		gsearch2(name,bt_long,typearray,true);
-		sp = SYM::FindExactMatch(TABLE::matchno, name, bt_long, typearray);
+		sp = Function::FindExactMatch(TABLE::matchno, name, bt_long, typearray)->sym;
 		//		if (sp==nullptr) {
 		//			printf("notfound\r\n");
 		//			sp = gsearch2(name,bt_long,typearray,false);
@@ -596,13 +598,15 @@ TYP *nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeArray *typear
 	}
 	else {
 	dfs.printf("A:%d:%s",TABLE::matchno,(char *)name.c_str());
-	sp = SYM::FindExactMatch(TABLE::matchno, name, bt_long, typearray);
+	fn = Function::FindExactMatch(TABLE::matchno, name, bt_long, typearray);
 	// If we didn't have an exact match and no (parameter) types are known
 	// return the match if there is only a single one.
-	if (sp==nullptr) {
+	if (fn==nullptr) {
 		if (TABLE::matchno==1 && typearray==nullptr)
 			sp = TABLE::match[0];
 	}
+	else
+		sp = fn->sym;
 	//		memset(typearray,0,sizeof(typearray));
 	//		sp = gsearch2(name,typearray);
 	}
@@ -617,6 +621,8 @@ TYP *nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeArray *typear
 			getch();
 		if( lastch == '(') {
 			sp = allocSYM();
+			sp->fi = allocFunction(sp->id);
+			sp->fi->sym = sp;
 			sp->tp = &stdfunc;
 			sp->SetName(*(new std::string(lastid)));
 			sp->storage_class = sc_external;
@@ -625,12 +631,13 @@ TYP *nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeArray *typear
 			typearray->Print();
 			//    gsyms[0].insert(sp);
 			tp = &stdfunc;
-			*node = makesnode(en_cnacon,sp->name,sp->BuildSignature(),sp->value.i);
+			*node = makesnode(en_cnacon,sp->name, sp->BuildSignature(1),sp->value.i);
 			(*node)->constflag = TRUE;
 			(*node)->sym = sp;
 			if (sp->tp->isUnsigned)
 				(*node)->isUnsigned = TRUE;
 			(*node)->esize = 8;
+			(*node)->isPascal = sp->fi->IsPascal;
 		}
 		else {
 			dfs.printf("Undefined symbol2 in nameref\r\n");
@@ -653,7 +660,8 @@ TYP *nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeArray *typear
 				//strcat(stnm,"_");
 				stnm = "";
 				stnm += *sp->name;
-				*node = makesnode(en_cnacon,&stnm,sp->BuildSignature(),sp->value.i);
+				*node = makesnode(en_cnacon,&stnm, sp->fi->BuildSignature(),sp->value.i);
+				(*node)->isPascal = sp->fi->IsPascal;
 				(*node)->constflag = TRUE;
 				(*node)->esize = 8;
 				//*node = makesnode(en_nacon,sp->name);
@@ -684,8 +692,10 @@ TYP *nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeArray *typear
 
 		case sc_global:
 		case sc_external:
-			if (sp->tp->type==bt_func || sp->tp->type==bt_ifunc)
-				*node = makesnode(en_cnacon,sp->name,sp->mangledName,sp->value.i);
+			if (sp->tp->type == bt_func || sp->tp->type == bt_ifunc) {
+				*node = makesnode(en_cnacon, sp->name, sp->mangledName, sp->value.i);
+				(*node)->isPascal = sp->fi->IsPascal;
+			}
 			else
 				*node = makesnode(en_nacon,sp->name,sp->mangledName,sp->value.i);
 			(*node)->constflag = TRUE;
@@ -716,7 +726,8 @@ TYP *nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeArray *typear
 				if ((sp->tp->type==bt_func || sp->tp->type==bt_ifunc) 
 				||(sp->tp->type==bt_pointer && (sp->tp->GetBtp()->type == bt_func ||sp->tp->GetBtp()->type == bt_ifunc)))
 				{
-					*node = makesnode(en_cnacon,sp->name,sp->BuildSignature(),25);
+					*node = makesnode(en_cnacon,sp->name, sp->fi->BuildSignature(),25);
+					(*node)->isPascal = sp->fi->IsPascal;
 				}
 				else {
 					*node = makeinode(en_classcon,sp->value.i);
@@ -759,7 +770,6 @@ TYP *nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeArray *typear
 			//(*node)->etype = ((*node)->nodetype == en_regvar) ? bt_long : bt_pointer;//sp->tp->type;
 			break;
 		}
-		(*node)->isPascal = sp->IsPascal;
 		(*node)->SetType(sp->tp);
 		(*node)->sym = sp;
 		dfs.printf("tp:%p ",(char *)tp);
@@ -902,7 +912,6 @@ SYM *makeint2(std::string name)
 	sp->SetName(name);
 	sp->storage_class = sc_auto;
 	sp->SetType(tp);
-	sp->IsPrototype = FALSE;
 	return sp;
 }
 
@@ -920,7 +929,6 @@ SYM *makeStructPtr(std::string name)
 	sp->SetName(name);
 	sp->storage_class = sc_auto;
 	sp->SetType(tp);
-	sp->IsPrototype = FALSE;
 	return sp;
 }
 
@@ -1558,25 +1566,31 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 			sp = nullptr;
 			ii = tp1->lst.FindRising(name);
 			if (ii) {
-				sp = SYM::FindExactMatch(TABLE::matchno, name, bt_long, &typearray);
+				sp = Function::FindExactMatch(TABLE::matchno, name, bt_long, &typearray)->sym;
 			}
 			if (!sp)
 				sp = gsearch2(name,bt_long,&typearray,true);
 			if (sp==nullptr) {
 				sp = allocSYM();
+				sp->fi = allocFunction(sp->id);
+				sp->fi->sym = sp;
 				sp->storage_class = sc_external;
 				sp->SetName(name);
 				sp->tp = TYP::Make(bt_func,0);
 				sp->tp->btp = TYP::Make(bt_long,sizeOfWord)->GetIndex();
-				sp->AddProto(&typearray);
-				sp->mangledName = sp->BuildSignature();
+				sp->fi->AddProto(&typearray);
+				sp->mangledName = sp->fi->BuildSignature();
 				gsyms[0].insert(sp);
 			}
 			else if (sp->IsUndefined) {
 				sp->tp = TYP::Make(bt_func,0);
 				sp->tp->btp = TYP::Make(bt_long,sizeOfWord)->GetIndex();
-				sp->AddProto(&typearray);
-				sp->mangledName = sp->BuildSignature();
+				if (!sp->fi) {
+					sp->fi = allocFunction(sp->id);
+					sp->fi->sym = sp;
+				}
+				sp->fi->AddProto(&typearray);
+				sp->mangledName = sp->fi->BuildSignature();
 				gsyms[0].insert(sp);
 				sp->IsUndefined = false;
 			}
@@ -1589,7 +1603,7 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 				dfs.printf("Got direct function %s ", (char *)sp->name->c_str());
 				ep3 = makesnode(en_cnacon,sp->name,sp->mangledName,sp->value.i);
 				ep1 = makefcnode(en_fcall,ep3,ep2,sp);
-				if (!sp->IsInline)
+				if (!sp->fi->IsInline)
 					currentFn->IsLeaf = FALSE;
 			}
 			tp1 = sp->tp->GetBtp();
@@ -1657,7 +1671,7 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 				error(ERR_NOMEMBER);
 				break;
 			}
-			if (sp->IsPrivate && sp->parent != currentFn->parent) {
+			if (sp->IsPrivate && sp->parent != currentFn->sym->parent) {
 				error(ERR_PRIVATE);
 				break;
 			}
@@ -1673,7 +1687,7 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 					NextToken();
 					ep2 = ArgumentList(pep1,&typearray);
 					typearray.Print();
-					sp = SYM::FindExactMatch(ii,name,bt_long,&typearray);
+					sp = Function::FindExactMatch(ii,name,bt_long,&typearray)->sym;
 					if (sp) {
 //						sp = TABLE::match[TABLE::matchno-1];
 						ep3 = makesnode(en_cnacon,sp->name,sp->mangledName,sp->value.i);

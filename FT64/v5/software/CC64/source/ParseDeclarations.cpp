@@ -748,6 +748,8 @@ SYM *Declaration::ParsePrefixId()
 	sp = allocSYM();
 	dfs.printf("C"); 
 	if (funcdecl==1) {
+		sp->fi = allocFunction(sp->id);
+		sp->fi->sym = sp;
 		if (nparms > 19)
 			error(ERR_TOOMANY_PARAMS);
 		else {
@@ -903,7 +905,7 @@ void Declaration::ParseSuffixOpenbr()
 		tail = head;
 }
 
-void Declaration::ParseFunctionAttribute(SYM *sym)
+void Declaration::ParseFunctionAttribute(Function *sym)
 {
 	NextToken();
 	needpunc(openpa,0);
@@ -929,7 +931,7 @@ void Declaration::ParseFunctionAttribute(SYM *sym)
 // call. There may or may not be following parameters. A following '{' is
 // looked for and if found a flag is set to parse the function body.
 
-void Declaration::ParseSuffixOpenpa(SYM *sp)
+void Declaration::ParseSuffixOpenpa(Function *sp)
 {
 	TYP *temp1;
 	TYP *tempHead, *tempTail;
@@ -938,12 +940,12 @@ void Declaration::ParseSuffixOpenpa(SYM *sp)
 	int isd;
 	int nump = 0;
 	int numa = 0;
-	SYM *cf;
+	Function *cf;
 	
 	dfs.printf("<openpa>\n");
 	dfs.printf("****************************\n");
 	dfs.printf("****************************\n");
-	dfs.printf("Function: %s\n", (char *)sp->name->c_str());
+	dfs.printf("Function: %s\n", (char *)sp->sym->name->c_str());
 	dfs.printf("****************************\n");
 	dfs.printf("****************************\n");
 	NextToken();
@@ -976,7 +978,7 @@ void Declaration::ParseSuffixOpenpa(SYM *sp)
 	dfs.printf("q ");
 	needParseFunction = 1;
 	sp->params.Clear();
-	sp->parent = currentClass->GetIndex();
+	sp->sym->parent = currentClass->GetIndex();
 	if(lastst == closepa) {
 		NextToken();
 		while (lastst == kw_attribute)
@@ -1112,9 +1114,16 @@ SYM *Declaration::ParseSuffix(SYM *sp)
     	// just be a type chain. so sp incoming might be null. We need a place
     	// to stuff the parameter / protoype list so we may as well create
     	// the symbol here if it isn't yet defined.
-    	if (sp==nullptr)
-    		sp = allocSYM();
-      ParseSuffixOpenpa(sp);
+		if (sp == nullptr) {
+			sp = allocSYM();
+			sp->fi = allocFunction(sp->id);
+			sp->fi->sym = sp;
+		}
+		else if (sp->fi == nullptr) {
+			sp->fi = allocFunction(sp->id);
+			sp->fi->sym = sp;
+		}
+      ParseSuffixOpenpa(sp->fi);
       goto lxit;
       
     default:
@@ -1234,22 +1243,22 @@ int roundSize(TYP *tp)
 // a virtual function override. If it's an override, then add the method to
 // the list of overrides for the virtual function.
 
-void InsertMethod(SYM *sp)
+void InsertMethod(Function *sp)
 {
   int nn;
   SYM *sym;
   std::string name;
   
-  name = *sp->name;
-  dfs.printf("<InsertMethod>%s type %d ", (char *)sp->name->c_str(), sp->tp->type);
-  sp->GetParentPtr()->tp->lst.insert(sp);
-  nn = sp->GetParentPtr()->tp->lst.FindRising(*sp->name);
-  sym = sp->FindRisingMatch(true);
+  name = *sp->sym->name;
+  dfs.printf("<InsertMethod>%s type %d ", (char *)sp->sym->name->c_str(), sp->sym->tp->type);
+  sp->sym->GetParentPtr()->tp->lst.insert(sp->sym);
+  nn = sp->sym->GetParentPtr()->tp->lst.FindRising(*sp->sym->name);
+  sym = sp->sym->FindRisingMatch(true);
   if (sym) {
     dfs.puts("Found in a base class:");
-    if (sym->IsVirtual) {
+    if (sym->fi->IsVirtual) {
       dfs.printf("Found virtual:");
-      sym->AddDerived(sp);
+      sym->fi->AddDerived(sp);
     }
   }
   dfs.printf("</InsertMethod>\n");
@@ -1269,7 +1278,9 @@ void InsertMethod(SYM *sp)
  */
 int Declaration::declare(SYM *parent,TABLE *table,int al,int ilc,int ztype)
 { 
-	SYM *sp, *sp1;
+	SYM *sp;
+	SYM *sp1;
+	Function *fn;
   TYP *dhead, *tp1, *tp2;
 	ENODE *ep1, *ep2;
 	int op;
@@ -1323,8 +1334,12 @@ int Declaration::declare(SYM *parent,TABLE *table,int al,int ilc,int ztype)
         sp = allocSYM();
 		  }
 		  SetType(sp);
-		  sp->IsPascal = isPascal;
-		  sp->IsInline = isInline;
+		  if (funcdecl > 0) {
+			  sp->fi = allocFunction(sp->id);
+			  sp->fi->sym = sp;
+			  sp->fi->IsPascal = isPascal;
+			  sp->fi->IsInline = isInline;
+		  }
 		  sp->IsRegister = isRegister;
 		  sp->IsAuto = isAuto;
 		  sp->IsParameter = parsingParameterList > 0;
@@ -1341,7 +1356,8 @@ int Declaration::declare(SYM *parent,TABLE *table,int al,int ilc,int ztype)
       dfs.printf("D");
       if (classname) delete classname;
 		  classname = new std::string("");
-		  sp->IsVirtual = isVirtual;
+		  if (sp->tp->type == bt_func || sp->tp->type == bt_ifunc)
+			sp->fi->IsVirtual = isVirtual;
       sp->storage_class = al;
       sp->isConst = isConst;
 		  if (bit_width > 0 && bit_offset > 0) {
@@ -1451,7 +1467,7 @@ dfs.printf("E");
           else {
             nn = sp->GetParentPtr()->tp->lst.Find(*sp->name);
             if (nn) {
-              sp1 = sp->FindExactMatch(TABLE::matchno);
+              sp1 = sp->fi->FindExactMatch(TABLE::matchno)->sym;
             }
           }
         }
@@ -1463,7 +1479,11 @@ dfs.printf("E");
           dfs.printf("h1");
   			  if (sp->tp->type == bt_ifunc || sp->tp->type==bt_func) {
             dfs.printf("h2");
-  				  sp1 = sp->FindExactMatch(TABLE::matchno);
+			fn = sp->fi->FindExactMatch(TABLE::matchno);
+			if (fn)
+				sp1 = fn->sym;
+			else
+				sp1 = nullptr;
             dfs.printf("i");
   			  }
   		  }
@@ -1489,13 +1509,17 @@ dfs.printf("E");
   				dfs.printf("bt_ifunc\r\n");
   				sp1->SetType(sp->tp);
   				sp1->storage_class = sp->storage_class;
-          sp1->value.i = sp->value.i;
-          sp1->IsPascal = sp->IsPascal;
-  				sp1->IsPrototype = sp->IsPrototype;
-  				sp1->IsVirtual = sp->IsVirtual;
+			  sp1->value.i = sp->value.i;
+			  if (!sp1->fi) {
+				  sp1->fi = allocFunction(sp1->id);
+				  sp1->fi->sym = sp1;
+			  }
+	          sp1->fi->IsPascal = sp->fi->IsPascal;
+  				sp1->fi->IsPrototype = sp->fi->IsPrototype;
+  				sp1->fi->IsVirtual = sp->fi->IsVirtual;
   				sp1->parent = sp->parent;
-  				sp1->params = sp->params;
-  				sp1->proto = sp->proto;
+  				sp1->fi->params = sp->fi->params;
+  				sp1->fi->proto = sp->fi->proto;
   				sp1->lsyms = sp->lsyms;
   				sp = sp1;
               }
@@ -1516,11 +1540,12 @@ dfs.printf("E");
               dfs.printf("insert type: %d\n", sp->tp->type);
   					  dfs.printf("***Inserting:%s into %p\n",(char *)sp->name->c_str(), (char *) table);
   					   // Need to know the type before a name can be generated.
-              sp->mangledName = sp->BuildSignature();
+					  if (sp->tp->type == bt_func || sp->tp->type == bt_ifunc)
+						sp->mangledName = sp->BuildSignature(!sp->fi->IsPrototype);
    					  if (sp->parent && ((sp->tp->type==bt_func || sp->tp->type==bt_ifunc)
    					  || (sp->tp->type==bt_pointer && (sp->tp->GetBtp()->type==bt_func || sp->tp->GetBtp()->type==bt_ifunc))))
               {
-  					    InsertMethod(sp);
+  					    InsertMethod(sp->fi);
   			      }
   			      else {
                 table->insert(sp);
@@ -1531,9 +1556,9 @@ dfs.printf("E");
   dfs.printf("J");
   			if (needParseFunction) {
   				needParseFunction = FALSE;
-  				fn_doneinit = ParseFunction(sp);
+  				fn_doneinit = sp->fi->Parse();
   				if (sp->tp->type != bt_pointer)
-  					return nbytes;
+  					return (nbytes);
   			}
      //         if(sp->tp->type == bt_ifunc) { /* function body follows */
      //             ParseFunction(sp);
@@ -1634,19 +1659,20 @@ int declbegin(int st)
 
 void GlobalDeclaration::Parse()
 {
-  bool notVal = false;
-  isFuncPtr = false;
-  isPascal = FALSE;
-  isInline = false;
-  lc_auto = 0;
 	dfs.puts("<ParseGlobalDecl>\n");
-  for(;;) {
-    currentClass = nullptr;
-    currentFn = nullptr;
-    currentStmt = nullptr;
-    isFuncBody = false;
+	for(;;) {
+		lc_auto = 0;
+		bool notVal = false;
+		isFuncPtr = false;
+		isPascal = FALSE;
+		isInline = false;
+		currentClass = nullptr;
+		currentFn = nullptr;
+		currentStmt = nullptr;
+		isFuncBody = false;
 		worstAlignment = 0;
 		funcdecl = 0;
+
 		switch(lastst) {
 		case kw_pascal:
 		  NextToken();
@@ -1769,10 +1795,10 @@ void AutoDeclaration::Parse(SYM *parent, TABLE *ssyms)
 {
 	SYM *sp;
 
-  isFuncPtr = false;
 //	printf("Enter ParseAutoDecls\r\n");
-	funcdecl = 0;
     for(;;) {
+		funcdecl = 0;
+		isFuncPtr = false;
 		worstAlignment = 0;
 		switch(lastst) {
 		case kw_cdecl:
@@ -1844,21 +1870,21 @@ int ParameterDeclaration::Parse(int fd)
 {
 	int ofd;
   int opascal;
-	isAuto = false;
 
-  isFuncPtr = false;
-	nparms = 0;
 	dfs.puts("<ParseParmDecls>\n");
-	worstAlignment = 0;
 	ofd = funcdecl;
 	opascal = isPascal;
 	isPascal = FALSE;
-	isRegister = false;
 	funcdecl = fd;
-	missingArgumentName = FALSE;
 	parsingParameterList++;
     for(;;) {
-dfs.printf("A(%d)",lastst);
+		isRegister = false;
+		worstAlignment = 0;
+		isFuncPtr = false;
+		nparms = 0;
+		isAuto = false;
+		missingArgumentName = FALSE;
+		dfs.printf("A(%d)",lastst);
 		switch(lastst) {
 		case kw_auto:
 			NextToken();

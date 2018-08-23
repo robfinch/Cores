@@ -100,7 +100,7 @@ BasicBlock *BasicBlock::Blockize(OCODE *start)
 		LastBlock = RootBlock;
 	// ASSERT(LastBlock!=nullptr);
 	pb->next = nullptr;
-	dfs.printf("%s: ", (char *)currentFn->name->c_str());
+	dfs.printf("%s: ", (char *)currentFn->sym->name->c_str());
 	dfs.printf("%d basic blocks\n", num);
 	return (bbs);
 }

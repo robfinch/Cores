@@ -116,7 +116,7 @@ int opt_nocgo = FALSE;
 int opt_size = FALSE;
 int exceptions = FALSE;
 int mixedSource = FALSE;
-SYM *currentFn = (SYM *)NULL;
+Function *currentFn = (Function *)NULL;
 int callsFn = FALSE;
 int stmtdepth = 0;
 

@@ -34,6 +34,8 @@ class Var;
 class CSE;
 class CSETable;
 class AMODE;
+class SYM;
+class Function;
 
 class CompilerType
 {
@@ -127,6 +129,82 @@ public:
 	void SetBase(int b) { base = b; };
 };
 
+class Function
+{
+public:
+	unsigned int IsPrototype : 1;
+	unsigned int IsTask : 1;
+	unsigned int IsInterrupt : 1;
+	unsigned int IsNocall : 1;
+	unsigned int IsPascal : 1;
+	unsigned int IsLeaf : 1;
+	unsigned int DoesThrow : 1;
+	unsigned int UsesNew : 1;
+	unsigned int UsesPredicate : 1;
+	unsigned int IsVirtual : 1;
+	unsigned int IsInline : 1;
+	unsigned int UsesTemps : 1;		// uses temporary registers
+	unsigned int UsesStackParms : 1;
+	uint8_t NumRegisterVars;
+	unsigned __int8 NumParms;
+	unsigned __int8 numa;			// number of stack parameters (autos)
+	int stkspace;					// stack space used by function
+	int argbot;
+	int tempbot;
+	TABLE proto;
+	TABLE params;
+	Statement *prolog;
+	Statement *epilog;
+	unsigned int stksize;
+	CSETable *csetbl;
+	SYM *sym;
+	SYM *parms;					      // List of parameters associated with symbol
+	SYM *nextparm;
+	DerivedMethod *derivitives;
+	uint64_t mask, rmask;
+	uint64_t fpmask, fprmask;
+	uint64_t vmask, vrmask;
+public:
+	void CheckParameterListMatch(Function *s1, Function *s2);
+	bool CheckSignatureMatch(Function *a, Function *b) const;
+	TypeArray *GetParameterTypes();
+	TypeArray *GetProtoTypes();
+	void PrintParameterTypes();
+	std::string *BuildSignature(int opt = 0);
+	Function *FindExactMatch(int mm);
+	static Function *FindExactMatch(int mm, std::string name, int rettype, TypeArray *typearray);
+	bool HasRegisterParameters();
+	bool ProtoTypesMatch(Function *sym);
+	bool ProtoTypesMatch(TypeArray *typearray);
+	bool ParameterTypesMatch(Function *sym);
+	bool ParameterTypesMatch(TypeArray *typearray);
+	void BuildParameterList(int *num, int*numa);
+	void AddParameters(SYM *list);
+	void AddProto(SYM *list);
+	void AddProto(TypeArray *);
+	void AddDerived(Function *sym);
+
+	Statement *ParseBody();
+	int Parse();
+
+	void SaveGPRegisterVars();
+	void SaveFPRegisterVars();
+	void SaveRegisterVars();
+	void RestoreGPRegisterVars();
+	void RestoreFPRegisterVars();
+	void RestoreRegisterVars();
+	void SaveTemporaries(int *sp, int *fsp);
+	void RestoreTemporaries(int sp, int fsp);
+
+	void UnlinkStack();
+
+	// Code generation
+	void SetupReturnBlock();
+	bool GenDefaultCatch();
+	void GenReturn(Statement *stmt);
+	void Gen();
+};
+
 class SYM {
 public:
 	int id;
@@ -143,38 +221,15 @@ public:
     __int8 storage_class;
 	unsigned int pos : 4;			// position of the symbol (param, auto or return type)
 	// Function attributes
-	uint8_t NumRegisterVars;
-	unsigned __int8 NumParms;
-	unsigned __int8 numa;			// number of stack parameters (autos)
-	int stkspace;					// stack space used by function
-	int argbot;
-	int tempbot;
+	Function *fi;
 	// Auto's are handled by compound statements
-	TABLE proto;
-	TABLE params;
 	TABLE lsyms;              // local symbols (goto labels)
-	SYM *parms;					      // List of parameters associated with symbol
-	SYM *nextparm;
-	DerivedMethod *derivitives;
 	unsigned int IsParameter : 1;
 	unsigned int IsRegister : 1;
 	unsigned int IsAuto : 1;
-	unsigned int IsPrototype : 1;
-	unsigned int IsTask : 1;
-	unsigned int IsInterrupt : 1;
-	unsigned int IsNocall : 1;
-	unsigned int IsPascal : 1;
-	unsigned int IsLeaf : 1;
-	unsigned int DoesThrow : 1;
-	unsigned int UsesNew : 1;
-	unsigned int UsesPredicate : 1;
 	unsigned int isConst : 1;
 	unsigned int IsKernel : 1;
 	unsigned int IsPrivate : 1;
-	unsigned int IsVirtual : 1;
-	unsigned int IsInline : 1;
-	unsigned int UsesTemps : 1;		// uses temporary registers
-	unsigned int UsesStackParms : 1;
 	unsigned int IsUndefined : 1;  // undefined function
 	unsigned int ctor : 1;
 	unsigned int dtor : 1;
@@ -190,43 +245,26 @@ public:
 	Float128 f128;
 	TYP *tp;
     Statement *stmt;
-    Statement *prolog;
-    Statement *epilog;
-    unsigned int stksize;
-	CSETable *csetbl;
 
-	TypeArray *GetParameterTypes();
-	TypeArray *GetProtoTypes();
-	void PrintParameterTypes();
-	bool HasRegisterParameters();
 	static SYM *Copy(SYM *src);
-	bool ProtoTypesMatch(SYM *sym);
-	bool ProtoTypesMatch(TypeArray *typearray);
-	bool ParameterTypesMatch(SYM *sym);
-	bool ParameterTypesMatch(TypeArray *typearray);
 	SYM *Find(std::string name);
-	SYM *FindRisingMatch(bool ignore=false);
 	int FindNextExactMatch(int startpos, TypeArray *);
+	SYM *FindRisingMatch(bool ignore = false);
 	std::string *GetNameHash();
-	bool CheckSignatureMatch(SYM *a, SYM *b) const;
-	SYM *FindExactMatch(int mm);
-	static SYM *FindExactMatch(int mm, std::string name, int rettype, TypeArray *typearray);
-	std::string *BuildSignature(int opt = 0);
-	void BuildParameterList(int *num, int*numa);
-	void AddParameters(SYM *list);
-	void AddProto(SYM *list);
-	void AddProto(TypeArray *);
+	std::string *BuildSignature(int opt);
 	static SYM *GetPtr(int n);
 	SYM *GetParentPtr();
 	void SetName(std::string nm) {
        name = new std::string(nm);
        name2 = new std::string(nm);
-       name3 = new std::string(nm); };
+       name3 = new std::string(nm);
+	   if (mangledName == nullptr)
+		   mangledName = new std::string(nm);
+	};
 	void SetNext(int nxt) { next = nxt; };
 	int GetNext() { return next; };
 	SYM *GetNextPtr();
 	int GetIndex();
-	void AddDerived(SYM *sym);
 	void SetType(TYP *t) { 
 		if (t == (TYP *)0x500000005) {
 			printf("Press key\n");
@@ -615,13 +653,28 @@ class CSETable
 public:
 	CSE table[500];
 	short int csendx;
+	short int cseiter;
 public:
+	CSE *First() { cseiter = 0; return &table[0]; };
+	CSE *Next() { cseiter++; return (cseiter < csendx ? &table[cseiter] : nullptr); };
 	void Clear() { ZeroMemory(table, sizeof(table)); csendx = 0; };
 	void Sort(int (*)(const void *a, const void *b));
 	void Assign(CSETable *);
 	int voidauto2(ENODE *node);
 	CSE *InsertNode(ENODE *node, int duse);
 	CSE *Search(ENODE *node);
+
+	void GenerateRegMask(CSE *csp, uint64_t *mask, uint64_t *rmask);
+	int AllocateGPRegisters();
+	int AllocateFPRegisters();
+	int AllocateVectorRegisters();
+	int AllocateRegisterVars();
+	void InitializeTempRegs();
+
+	int Optimize(Statement *);
+
+	// Debugging
+	void Dump();
 };
 
 class Peep
@@ -683,7 +736,6 @@ public:
 	void scan_compound();
 	void repcse();
 	void repcse_compound();
-	int CSEOptimize();
 
 	// Code generation
 	void GenMixedSource();
@@ -748,9 +800,9 @@ public:
 	static SYM *ParsePrefixOpenpa(bool isUnion);
 	static SYM *ParsePrefix(bool isUnion);
 	static void ParseSuffixOpenbr();
-	static void ParseSuffixOpenpa(SYM *);
+	static void ParseSuffixOpenpa(Function *);
 	static SYM *ParseSuffix(SYM *sp);
-	static void ParseFunctionAttribute(SYM *sym);
+	static void ParseFunctionAttribute(Function *sym);
 };
 
 class StructDeclaration : public Declaration
@@ -791,7 +843,9 @@ class Compiler
 public:
 	int typenum;
 	int symnum;
+	short int funcnum;
 	SYM symbolTable[32768];
+	Function functionTable[3000];
 	TYP typeTable[32768];
 public:
 	GlobalDeclaration *decls;

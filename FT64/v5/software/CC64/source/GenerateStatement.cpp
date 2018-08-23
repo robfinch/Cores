@@ -851,7 +851,7 @@ void Statement::Generate()
 				tmpFreeAll();
                 break;
         case st_return:
-				GenerateReturn(stmt);
+				currentFn->GenReturn(stmt);
                 break;
         case st_if:
                 stmt->GenerateIf();

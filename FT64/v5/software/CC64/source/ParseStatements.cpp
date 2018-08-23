@@ -740,13 +740,13 @@ Statement *Statement::ParseLabel()
 	SYM *sp;
 
 	snp = NewStatement(st_label, FALSE); 
-	if( (sp = currentFn->lsyms.Find(lastid,false)) == NULL ) { 
+	if( (sp = currentFn->sym->lsyms.Find(lastid,false)) == NULL ) { 
 		sp = allocSYM(); 
 		sp->SetName(*(new std::string(lastid)));
 		sp->storage_class = sc_label; 
 		sp->tp = TYP::Make(bt_label,0);
 		sp->value.i = nextlabel++; 
-		currentFn->lsyms.insert(sp); 
+		currentFn->sym->lsyms.insert(sp); 
 	} 
 	else { 
 		if( sp->storage_class != sc_ulabel ) 
@@ -776,13 +776,13 @@ Statement *Statement::ParseGoto()
         return ((Statement *)NULL);
     } 
     snp = NewStatement(st_goto, FALSE);
-    if( (sp = currentFn->lsyms.Find(lastid,false)) == NULL ) { 
+    if( (sp = currentFn->sym->lsyms.Find(lastid,false)) == NULL ) { 
         sp = allocSYM(); 
         sp->SetName(*(new std::string(lastid)));
         sp->value.i = nextlabel++; 
         sp->storage_class = sc_ulabel; 
         sp->tp = 0; 
-        currentFn->lsyms.insert(sp); 
+        currentFn->sym->lsyms.insert(sp); 
     }
     NextToken();       /* get past label name */
     if( lastst != end )

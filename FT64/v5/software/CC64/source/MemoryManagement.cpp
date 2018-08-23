@@ -191,24 +191,35 @@ void ReleaseGlobalMemory()
 }
 
 SYM *allocSYM() {
-	SYM *sym = &compiler.symbolTable[compiler.symnum];
+	SYM *sym = (SYM *)&compiler.symbolTable[compiler.symnum];
 	ZeroMemory(sym,sizeof(SYM));
 	sym->id = compiler.symnum;
 	sym->name = new std::string("");
 	sym->name2 = new std::string("");
 	sym->name3 = new std::string("");
 	sym->shortname = new std::string("");
-	sym->params.SetOwner(compiler.symnum);
 	sym->lsyms.SetOwner(compiler.symnum);
-	sym->proto.SetOwner(compiler.symnum);
-	sym->UsesTemps = true;
-	sym->UsesStackParms = true;
   	compiler.symnum++;
 	if (compiler.symnum > 32760) {
 	  dfs.printf("Too many symbols.\n");
     throw new C64PException(ERR_TOOMANY_SYMBOLS,1);
   }
 	return sym;
+};
+
+Function *allocFunction(int symnum) {
+	Function *sym = &compiler.functionTable[compiler.funcnum];
+	ZeroMemory(sym, sizeof(Function));
+	sym->params.SetOwner(symnum);
+	sym->proto.SetOwner(symnum);
+	sym->UsesTemps = true;
+	sym->UsesStackParms = true;
+	compiler.funcnum++;
+	if (compiler.funcnum > 2999) {
+		dfs.printf("Too many functions.\n");
+		throw new C64PException(ERR_TOOMANY_SYMBOLS, 1);
+	}
+	return (sym);
 };
 
 TYP *allocTYP()
