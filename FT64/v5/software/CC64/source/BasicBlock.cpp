@@ -182,7 +182,6 @@ CSet *BasicBlock::livo;
 void BasicBlock::ComputeLiveVars()
 {
 	OCODE *ip;
-	Edge *ep;
 	int tr;
 	static CSet OldLiveIn, OldLiveOut;
 //	char buf [4000];

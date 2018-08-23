@@ -32,6 +32,8 @@ class BasicBlock;
 class Instruction;
 class Var;
 class CSE;
+class CSETable;
+class AMODE;
 
 class CompilerType
 {
@@ -78,7 +80,7 @@ public:
 
 
 struct typ;
-Statement;
+class Statement;
 
 class TYP;
 class SYM;
@@ -191,8 +193,7 @@ public:
     Statement *prolog;
     Statement *epilog;
     unsigned int stksize;
-	CSE *csetbl;
-	int csendx;
+	CSETable *csetbl;
 
 	TypeArray *GetParameterTypes();
 	TypeArray *GetProtoTypes();
@@ -276,6 +277,8 @@ public:
 	static bool IsSameType(TYP *a, TYP *b, bool exact);
 	void put_ty();
 
+	ENODE *BuildEnodeTree();
+
 	// Initialization
 	int64_t InitializeArray();
 	int64_t InitializeStruct();
@@ -314,18 +317,17 @@ public:
 
 class ENODE {
 public:
-    enum e_node nodetype;
+	enum e_node nodetype;
 	enum e_bt etype;
 	long      esize;
-    TYP *tp;
-    SYM *sym;
-    __int8 constflag;
+	TYP *tp;
+	SYM *sym;
+	__int8 constflag;
 	unsigned int segment : 4;
 	unsigned int predreg : 4;
 	unsigned int isVolatile : 1;
 	unsigned int isIO : 1;
 	unsigned int isUnsigned : 1;
-	unsigned int isDouble : 1;
 	unsigned int isCheckExpr : 1;
 	unsigned int isPascal : 1;
 	ENODE *vmask;
@@ -333,18 +335,35 @@ public:
 	__int8 bit_offset;
 	__int8 scale;
 	// The following could be in a value union
-  int64_t i;
-  double f;
-  double f1, f2;
-  Float128 f128;
-  std::string *sp;
-  std::string *msp;
+	int64_t i;
+	double f;
+	double f1, f2;
+	Float128 f128;
+	std::string *sp;
+	std::string *msp;
 	std::string *udnm;			// undecorated name
 	void *ctor;
 	void *dtor;
-  ENODE *p[3];
-  void SetType(TYP *t) { tp = t; if (t) etype = t->type; };
-  bool IsPtr() { return (etype == bt_pointer || etype == bt_struct || etype == bt_union || etype == bt_class); };
+	ENODE *p[3];
+
+	ENODE *Clone();
+
+	void SetType(TYP *t) { tp = t; if (t) etype = t->type; };
+	bool IsPtr() { return (etype == bt_pointer || etype == bt_struct || etype == bt_union || etype == bt_class); };
+	bool IsFloatType() { return (etype == bt_double || etype == bt_quad || etype == bt_float || etype == bt_triple); };
+	bool IsUnsignedType() { return (etype == bt_ubyte || etype == bt_uchar || etype == bt_ushort || etype == bt_ulong || etype == bt_pointer); };
+	bool IsBitfield();
+	char fsize();
+	long GetReferenceSize();
+
+	static bool IsEqual(ENODE *a, ENODE *b);
+
+	// Code generation
+	AMODE *GenIndex();
+	AMODE *GenHook(int flags, int size);
+	AMODE *GenUnary(int flags, int size, int op);
+	AMODE *GenBinary(int flags, int size, int op);
+	AMODE *GenAssignAdd(int flags, int size, int op);
 };
 
 class AMODE : public CompilerType
@@ -374,6 +393,11 @@ public:
 	ENODE *offset;
 	int8_t scale;
 	AMODE *next;			// For extended sizes (long)
+
+	char fpsize();
+
+	void GenZeroExtend(int isize, int osize);
+	void GenSignExtend(int isize, int osize, int flags);
 };
 
 // Output code structure
@@ -586,6 +610,20 @@ public:
 	int OptimizationDesireability();
 };
 
+class CSETable
+{
+public:
+	CSE table[500];
+	short int csendx;
+public:
+	void Clear() { ZeroMemory(table, sizeof(table)); csendx = 0; };
+	void Sort(int (*)(const void *a, const void *b));
+	void Assign(CSETable *);
+	int voidauto2(ENODE *node);
+	CSE *InsertNode(ENODE *node, int duse);
+	CSE *Search(ENODE *node);
+};
+
 class Peep
 {
 public:
@@ -778,87 +816,5 @@ public:
 //#define TYP     struct typ
 //#define TABLE   struct stab
 
-#define MAX_STRLEN      120
-#define MAX_STLP1       121
-#define ERR_SYNTAX      0
-#define ERR_ILLCHAR     1
-#define ERR_FPCON       2
-#define ERR_ILLTYPE     3
-#define ERR_UNDEFINED   4
-#define ERR_DUPSYM      5
-#define ERR_PUNCT       6
-#define ERR_IDEXPECT    7
-#define ERR_NOINIT      8
-#define ERR_INCOMPLETE  9
-#define ERR_ILLINIT     10
-#define ERR_INITSIZE    11
-#define ERR_ILLCLASS    12
-#define ERR_BLOCK       13
-#define ERR_NOPOINTER   14
-#define ERR_NOFUNC      15
-#define ERR_NOMEMBER    16
-#define ERR_LVALUE      17
-#define ERR_DEREF       18
-#define ERR_MISMATCH    19
-#define ERR_EXPREXPECT  20
-#define ERR_WHILEXPECT  21
-#define ERR_NOCASE      22
-#define ERR_DUPCASE     23
-#define ERR_LABEL       24
-#define ERR_PREPROC     25
-#define ERR_INCLFILE    26
-#define ERR_CANTOPEN    27
-#define ERR_DEFINE      28
-#define ERR_CATCHEXPECT	29
-#define ERR_BITFIELD_WIDTH	30
-#define ERR_EXPRTOOCOMPLEX	31
-#define ERR_ASMTOOLONG	32
-#define ERR_TOOMANYCASECONSTANTS	33
-#define ERR_CATCHSTRUCT		34
-#define ERR_SEMA_INCR	35
-#define ERR_SEMA_ADDR	36
-#define ERR_UNDEF_OP	37
-#define ERR_INT_CONST	38
-#define ERR_BAD_SWITCH_EXPR	39
-#define ERR_NOT_IN_LOOP	40
-#define ERR_CHECK       41
-#define ERR_BADARRAYNDX	42
-#define ERR_TOOMANYDIMEN	43
-#define ERR_OUTOFPREDS  44 
-#define ERR_PARMLIST_MISMATCH	45
-#define ERR_PRIVATE		46
-#define ERR_CALLSIG2	47
-#define ERR_METHOD_NOTFOUND	48
-#define ERR_OUT_OF_MEMORY   49
-#define ERR_TOOMANY_SYMBOLS 50
-#define ERR_TOOMANY_PARAMS  51
-#define ERR_THIS            52
-#define ERR_BADARG			53
-#define ERR_CSETABLE		54
-#define ERR_UBLTZ			55
-#define ERR_UBGEQ			56
-#define ERR_INFINITELOOP	57
-#define ERR_TOOMANYELEMENTS	58
-#define ERR_CONST			59
-#define ERR_INIT_UNION      60
-#define ERR_NULLPOINTER		1000
-#define ERR_CIRCULAR_LIST 1001
-
-/*      alignment sizes         */
-
-#define AL_BYTE			1
-#define AL_CHAR         2
-#define AL_SHORT        4
-#define AL_LONG         8
-#define AL_POINTER      8
-#define AL_FLOAT        8
-#define AL_DOUBLE       8
-#define AL_QUAD			16
-#define AL_STRUCT       2
-#define AL_TRIPLE       12
-
-#define TRUE	1
-#define FALSE	0
-//#define NULL	((void *)0)
  
 #endif

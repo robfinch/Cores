@@ -49,24 +49,6 @@ int pop;   // the just previous operator.
 // Tells subsequent levels that ParseCastExpression already fetched a token.
 //static unsigned char expr_flag = 0;
 
-/*
- *	68000 C compiler
- *
- *	Copyright 1984, 1985, 1986 Matthew Brandt.
- *  all commercial rights reserved.
- *
- *	This compiler is intended as an instructive tool for personal use. Any
- *	use for profit without the written consent of the author is prohibited.
- *
- *	This compiler may be distributed freely for non-commercial use as long
- *	as this notice stays intact. Please forward any enhancements or questions
- *	to:
- *
- *		Matthew Brandt
- *		Box 920337
- *		Norcross, Ga 30092
- */
-
 TYP             stdint;
 TYP             stduint;
 TYP             stdlong;
@@ -170,7 +152,7 @@ ENODE *makenode(int nt, ENODE *v1, ENODE *v2)
 	ep->p[0] = v1;
 	ep->p[1] = v2;
 	ep->p[2] = 0;
-    return ep;
+    return (ep);
 }
 
 ENODE *makefcnode(int nt, ENODE *v1, ENODE *v2, SYM *sp)
@@ -411,19 +393,6 @@ TYP *deref(ENODE **node, TYP *tp)
 			}
 			break;
 
-		case bt_int32:
-		case bt_int32u:
-			(*node)->esize = tp->size;
-			(*node)->etype = (enum e_bt)tp->type;
-			if (tp->isUnsigned) {
-				(*node)->isUnsigned = TRUE;
-				*node = makenode(en_ref32u,*node,(ENODE *)NULL);
-			}
-			else {
-				*node = makenode(en_ref32,*node,(ENODE *)NULL);
-			}
-			break;
-
 		case bt_vector:
 			(*node)->esize = tp->size;
 			(*node)->etype = (enum e_bt)tp->type;
@@ -463,14 +432,12 @@ TYP *deref(ENODE **node, TYP *tp)
             *node = makenode(en_quad_ref,*node,(ENODE *)NULL);
 			(*node)->esize = tp->size;
 			(*node)->etype = (enum e_bt)tp->type;
-			(*node)->isDouble = TRUE;
             tp = &stdquad;
             break;
         case bt_double:
             *node = makenode(en_dbl_ref,*node,(ENODE *)NULL);
 			(*node)->esize = tp->size;
 			(*node)->etype = (enum e_bt)tp->type;
-			(*node)->isDouble = TRUE;
             tp = &stddbl;
             break;
         case bt_float:
@@ -703,7 +670,6 @@ TYP *nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeArray *typear
 				(*node)->esize = sp->tp->size;
 			}
 			(*node)->etype = bt_pointer;//sp->tp->type;
-			(*node)->isDouble = sp->tp->type==bt_double;
 			break;
 
 		case sc_thread:
@@ -714,7 +680,6 @@ TYP *nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeArray *typear
 			(*node)->etype = bt_pointer;//sp->tp->type;
 			if (sp->tp->isUnsigned)
 				(*node)->isUnsigned = TRUE;
-			(*node)->isDouble = sp->tp->type==bt_double;
 			break;
 
 		case sc_global:
@@ -727,7 +692,6 @@ TYP *nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeArray *typear
 			(*node)->esize = sp->tp->size;
 			(*node)->etype = bt_pointer;//sp->tp->type;
 			(*node)->isUnsigned = TRUE;// sp->tp->isUnsigned;
-			(*node)->isDouble = sp->tp->type==bt_double;
 			break;
 
 		case sc_const:
@@ -742,7 +706,6 @@ TYP *nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeArray *typear
 			}
 			(*node)->constflag = TRUE;
 			(*node)->esize = sp->tp->size;
-			(*node)->isDouble = sp->tp->type==bt_double;
 			break;
 
 		default:        /* auto and any errors */
@@ -788,10 +751,9 @@ TYP *nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeArray *typear
 				}
 			}
 			(*node)->esize = sp->tp->size;
-			(*node)->isDouble = sp->tp->type==bt_double;
 			switch((*node)->nodetype) {
 			case en_regvar:		(*node)->etype = bt_long;	break;//sp->tp->type;
-			case en_fpregvar:	(*node)->etype = bt_double;	(*node)->isDouble = TRUE; break;//sp->tp->type;
+			case en_fpregvar:	(*node)->etype = bt_double;	break;//sp->tp->type;
 			default:			(*node)->etype = bt_pointer;break;//sp->tp->type;
 			}
 			//(*node)->etype = ((*node)->nodetype == en_regvar) ? bt_long : bt_pointer;//sp->tp->type;
@@ -1130,7 +1092,6 @@ TYP *ParsePrimaryExpression(ENODE **node, int got_pa)
         tptr->isConst = TRUE;
         pnode = makefnode(en_fcon,rval);
         pnode->constflag = TRUE;
-        pnode->isDouble = TRUE;
         pnode->SetType(tptr);
 		pnode->i = quadlit(Float128::FloatMax());
         NextToken();
@@ -1139,7 +1100,6 @@ TYP *ParsePrimaryExpression(ENODE **node, int got_pa)
     case rconst:
         pnode = makefnode(en_fcon,rval);
         pnode->constflag = TRUE;
-        pnode->isDouble = TRUE;
 		pnode->i = quadlit(&rval128);
 		pnode->f128 = rval128;
 		switch(float_precision) {
@@ -1525,7 +1485,7 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 					sz1 = sz1 * sa[cnt2];
 			}
 			qnode = makeinode(en_icon,sz1);
-			qnode->etype = bt_short;
+			qnode->etype = bt_ushort;
 			qnode->esize = 8;
 			qnode->constflag = TRUE;
 			qnode->isUnsigned = TRUE;
@@ -1858,7 +1818,6 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
 			ep1->f128.sign = !ep1->f128.sign;
 			// A new literal label is required.
 			ep1->i = quadlit(&ep1->f128);
-			ep1->isDouble = TRUE;
 		}
 		else
 		
@@ -1882,6 +1841,7 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
 		ep1 = makenode(en_not,ep1,(ENODE *)NULL);
 		ep1->constflag = ep1->p[0]->constflag;
 		ep1->isUnsigned = ep1->p[0]->isUnsigned;
+		ep1->SetType(tp);
 		ep1->esize = tp->size;
 		break;
 
@@ -1895,6 +1855,7 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
         ep1 = makenode(en_compl,ep1,(ENODE *)NULL);
         ep1->constflag = ep1->p[0]->constflag;
 		ep1->isUnsigned = ep1->p[0]->isUnsigned;
+		ep1->SetType(tp);
 		ep1->esize = tp->size;
         break;
 
@@ -2380,8 +2341,6 @@ TYP *forcefit(ENODE **node1,TYP *tp1,ENODE **node2,TYP *tp2, bool promote)
 		return tp1;
 	case bt_bitfield:
 	case bt_exception:
-	case bt_int32:
-	case bt_int32u:
 		if (promote) {
 			if( tp2->type == bt_pointer	)
 				return tp2;
@@ -2584,17 +2543,14 @@ TYP *multops(ENODE **node)
 								case bt_double:
 									ep1 = makenode(en_fmul,ep1,ep2);
 									ep1->esize = 4;
-									ep1->isDouble = TRUE;
 									break;
 								case bt_quad:
 									ep1 = makenode(en_fmul,ep1,ep2);
 									ep1->esize = 8;
-									ep1->isDouble = TRUE;
 									break;
 								case bt_float:
 									ep1 = makenode(en_fmul,ep1,ep2);
 									ep1->esize = 2;
-									ep1->isDouble = TRUE;
 									break;
 								case bt_vector:
 									if (isScalar)
@@ -2620,17 +2576,14 @@ TYP *multops(ENODE **node)
 								else if (tp1->type==bt_double) {
 									ep1 = makenode(en_fdiv,ep1,ep2);
 									ep1->esize = 4;
-									ep1->isDouble = TRUE;
 								}
 								else if (tp1->type==bt_quad) {
 									ep1 = makenode(en_fdiv,ep1,ep2);
 									ep1->esize = 8;
-									ep1->isDouble = TRUE;
 								}
 								else if (tp1->type==bt_float) {
 									ep1 = makenode(en_fdiv,ep1,ep2);
 									ep1->esize = 8;
-									ep1->isDouble = TRUE;
 								}
                                 else if( tp1->isUnsigned )
                                     ep1 = makenode(en_udiv,ep1,ep2);
@@ -2734,7 +2687,6 @@ static TYP *addops(ENODE **node)
 				case bt_double:
     				ep1 = makenode( oper ? en_fadd : en_fsub,ep1,ep2);
 					ep1->esize = 4;
-					ep1->isDouble = TRUE;
 					break;
 				case bt_quad:
                     tp1 = forcefit(&ep1,tp1,&ep2,tp2,true);
@@ -2744,7 +2696,6 @@ static TYP *addops(ENODE **node)
 				case bt_float:
     				ep1 = makenode( oper ? en_fadd : en_fsub,ep1,ep2);
 					ep1->esize = 8;
-					ep1->isDouble = TRUE;
 					break;
 				case bt_vector:
 					if (isScalar)

@@ -88,6 +88,9 @@ Instruction opl[] =
 	{"lbu", op_lbu,4,true,true},
 	{"lcu", op_lcu,4,true,true},
 	{"lhu", op_lhu,4,true,true},
+	{ "lvbu", op_lvbu,4,true,true },
+	{ "lvcu", op_lvcu,4,true,true },
+	{ "lvhu", op_lvhu,4,true,true },
 	{"sti", op_sti},
 	{"lft", op_lft},
 	{"sft", op_sft},
@@ -324,11 +327,11 @@ static void PutConstant(ENODE *offset, unsigned int lowhigh, unsigned int rshift
 	case en_autocon:
 	case en_icon:
             if (lowhigh==2) {
-	            sprintf_s(buf,sizeof(buf),"%ld",offset->i & 0xffff);
+	            sprintf_s(buf,sizeof(buf),"%lld",offset->i & 0xffff);
 				ofs.write(buf);
 			}
             else if (lowhigh==3) {
-	            sprintf_s(buf,sizeof(buf),"%ld",(offset->i >> 16) & 0xffff);
+	            sprintf_s(buf,sizeof(buf),"%lld",(offset->i >> 16) & 0xffff);
 				ofs.write(buf);
 			}
             else {
@@ -445,11 +448,6 @@ void PutAddressMode(AMODE *ap)
     case am_direct:
             PutConstant(ap->offset,ap->lowhigh,ap->rshift);
             break;
-	case am_direct2:
-		PutConstant(ap->offset, ap->lowhigh, ap->rshift);
-		ofs.printf("+");
-		PutConstant(ap->next->offset, ap->lowhigh, ap->rshift);
-		break;
 	case am_reg:
 			if (ap->type==stdvector.GetIndex())
 				ofs.printf("v%d", (int)ap->preg);
@@ -503,10 +501,6 @@ void PutAddressMode(AMODE *ap)
 	            ofs.printf("[%s+%s]",RegMoniker(ap->sreg),RegMoniker(ap->preg));
 			else
 		        ofs.printf("[%s+%s*%d]",RegMoniker(ap->sreg),RegMoniker(ap->preg),ap->scale);
-            break;
-
-	case am_indx3:
-            ofs.printf("[%s+%s]",RegMoniker(ap->sreg),RegMoniker(ap->preg));
             break;
 
 	case am_mask:

@@ -56,7 +56,6 @@ void doinit(SYM *sp)
   int algn;
   enum e_sg oseg;
   char buf[500];
-  char buf2[500];
   std::streampos endpoint;
 
   hasPointer = false;
@@ -173,8 +172,6 @@ void doInitCleanup()
 {
 	std::streampos endpoint;
 	char buf[500];
-	char buf2[500];
-	int nn;
 
 	if (genst_cumulative && !hasPointer) {
 		endpoint = ofs.tellp();

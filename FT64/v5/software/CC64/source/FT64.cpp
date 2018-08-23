@@ -76,8 +76,8 @@ static int AllocateRegisters1(int *dregr)
 	reg = regFirstRegvar;
 	dreg = regFirstRegvar;
 	for (nn = 0; nn < 3; nn++) {
-		for (csecnt = 0; csecnt < csendx; csecnt++)	{
-			csp = &CSETable[csecnt];
+		for (csecnt = 0; csecnt < pCSETable->csendx; csecnt++)	{
+			csp = &pCSETable->table[csecnt];
 			if (csp->reg==-1) {
 				if( csp->OptimizationDesireability() >= 4-nn ) {
 					if (csp->isfp) {
@@ -102,8 +102,8 @@ static int FinalAllocateRegisters(int reg, int dreg)
 	int csecnt;
 	CSE *csp;
 
-	for (csecnt = 0; csecnt < csendx; csecnt++)	{
-		csp = &CSETable[csecnt];
+	for (csecnt = 0; csecnt < pCSETable->csendx; csecnt++)	{
+		csp = &pCSETable->table[csecnt];
 		if (csp->OptimizationDesireability() != 0) {
 			if (!csp->voidf && csp->reg==-1) {
 				if (csp->isfp) {
@@ -131,8 +131,8 @@ static int AllocateVectorRegisters1()
 
 	vreg = 11;
 	for (nn = 0; nn < 3; nn++) {
-		for (csecnt = 0; csecnt < csendx; csecnt++)	{
-			csp = &CSETable[csecnt];
+		for (csecnt = 0; csecnt < pCSETable->csendx; csecnt++)	{
+			csp = &pCSETable->table[csecnt];
 			if (csp->reg==-1) {
 				if( csp->OptimizationDesireability() >= 4-nn ) {
 					if (csp->exp->etype==bt_vector) {
@@ -154,8 +154,8 @@ static int FinalAllocateVectorRegisters(int vreg)
 	CSE *csp;
 
 	vreg = 11;
-	for (csecnt = 0; csecnt < csendx; csecnt++)	{
-		csp = &CSETable[csecnt];
+	for (csecnt = 0; csecnt < pCSETable->csendx; csecnt++)	{
+		csp = &pCSETable->table[csecnt];
 		if (!csp->voidf && csp->reg==-1) {
 			if (csp->exp->etype==bt_vector) {
     			if(( csp->uses > 3) && vreg < 18 )
@@ -197,12 +197,12 @@ int AllocateRegisterVars()
 
 	// Sort the CSE table according to desirability of allocating
 	// a register.
-	if (pass==1)
-		qsort(CSETable,(size_t)csendx,sizeof(CSE),CSECmp);
+	if (pass == 1)
+		pCSETable->Sort(CSECmp);
 
 	// Initialize to no allocated registers
-	for (csecnt = 0; csecnt < csendx; csecnt++)
-		CSETable[csecnt].reg = -1;
+	for (csecnt = 0; csecnt < pCSETable->csendx; csecnt++)
+		pCSETable->table[csecnt].reg = -1;
 
 	// Make multiple passes over the CSE table in order to use
 	// up all temporary registers. Allocates on the progressively
@@ -215,9 +215,9 @@ int AllocateRegisterVars()
 		vreg = FinalAllocateVectorRegisters(vreg);
 
 	// Generate bit masks of allocated registers
-	for (csecnt = 0; csecnt < csendx; csecnt++) {
-		csp = &CSETable[csecnt];
-		if (csp->exp->isDouble) {
+	for (csecnt = 0; csecnt < pCSETable->csendx; csecnt++) {
+		csp = &pCSETable->table[csecnt];
+		if (csp->exp->IsFloatType()) {
 			if( csp->reg != -1 )
     		{
     			fprmask = fprmask | (1LL << (63 - csp->reg));
@@ -250,8 +250,8 @@ int AllocateRegisterVars()
     fpsave_mask = fpmask;
 
 	// Initialize temporaries
-	for (csecnt = 0; csecnt < csendx; csecnt++) {
-		csp = &CSETable[csecnt];
+	for (csecnt = 0; csecnt < pCSETable->csendx; csecnt++) {
+		csp = &pCSETable->table[csecnt];
         if( csp->reg != -1 )
         {               // see if preload needed
             exptr = csp->exp;
@@ -1545,7 +1545,7 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
 	int fsp = 0;
 	TypeArray *ta = nullptr;
 	int64_t mask,fmask;
-	CSE *csetbl;
+	CSETable *csetbl;
 
 	sym = nullptr;
 
@@ -1570,9 +1570,9 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
 			mask = save_mask;
 			fmask = fpsave_mask;
 			currentFn = sym;
-			csetbl = CSETable;
+			csetbl = pCSETable;
 			GenerateFunction(sym);
-			CSETable = csetbl;
+			pCSETable = csetbl;
 			currentFn = o_fn;
 			fpsave_mask = fmask;
 			save_mask = mask;
@@ -1606,9 +1606,9 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
 			mask = save_mask;
 			fmask = fpsave_mask;
 			currentFn = sym;
-			csetbl = CSETable;
+			csetbl = pCSETable;
 			GenerateFunction(sym);
-			CSETable = csetbl;
+			pCSETable = csetbl;
 			currentFn = o_fn;
 			fpsave_mask = fmask;
 			save_mask = mask;

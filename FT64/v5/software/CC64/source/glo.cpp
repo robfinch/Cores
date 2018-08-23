@@ -121,6 +121,7 @@ int callsFn = FALSE;
 int stmtdepth = 0;
 
 char nmspace[20][100];
+CSETable *pCSETable;
 
 
 

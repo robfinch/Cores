@@ -441,7 +441,7 @@ void Float128::FloatToInt(__int64 *i, Float128 *a)
 	}
 	t = (a1->man[FLT128_WORDS-1] << 1) | (a1->man[FLT128_WORDS-2] << 1) | (a1->man[FLT128_WORDS-3] >> 31);
 	*i = a1->sign ? -t : t;
-	delete a1;
+	delete (a1);
 }
 
 void Float128::Float128ToDouble(double *d, Float128 *a)

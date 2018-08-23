@@ -145,6 +145,7 @@ extern int iflevel;
 extern int foreverlevel;
 extern int looplevel;
 extern int loopexit;
+extern short int loop_active;
 extern int stmtdepth;
 extern int regmask;
 extern int bregmask;
@@ -181,7 +182,7 @@ extern int64_t genst_cumulative;
 
 // Analyze.c
 extern short int csendx;
-extern CSE *CSETable;
+extern CSETable *pCSETable;
 extern int equalnode(ENODE *node1, ENODE *node2);
 extern int bsort(CSE **list);
 // CMain.c
@@ -325,7 +326,7 @@ extern AMODE *make_immed(int64_t i);
 extern AMODE *make_indirect(int i);
 extern AMODE *make_offset(ENODE *node);
 extern void swap_nodes(ENODE *node);
-extern int isshort(ENODE *node);
+
 // IdentifyKeyword.c
 extern int IdentifyKeyword();
 // Preproc.c
@@ -391,8 +392,6 @@ extern void tmpFree(int);
 extern int GetReturnBlockSize();
 
 extern Tree *alltrees[500];
-
-enum e_sg { noseg, codeseg, dataseg, stackseg, bssseg, idataseg, tlsseg, rodataseg };
 
 
 #endif

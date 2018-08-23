@@ -638,3 +638,33 @@ bool TYP::IsSkippable()
 	return (false);
 }
 
+// The problem is there are two trees of information. The LHS and the RHS.
+// The RHS is a tree of nodes containing expressions and data to load.
+// The nodes in the RHS have to be matched up against the structure elements
+// of the target LHS.
+
+// This little bit of code is dead code. But it might be useful to match
+// the expression trees at some point.
+
+ENODE *TYP::BuildEnodeTree()
+{
+	ENODE *ep1, *ep2, *ep3;
+	SYM *thead, *first;
+
+	first = thead = SYM::GetPtr(lst.GetHead());
+	ep1 = ep2 = nullptr;
+	while (thead) {
+		if (thead->tp->IsStructType()) {
+			ep3 = thead->tp->BuildEnodeTree();
+		}
+		else
+			ep3 = nullptr;
+		ep1 = makenode(en_void, ep2, ep1);
+		ep1->SetType(thead->tp);
+		ep1->p[2] = ep3;
+		thead = SYM::GetPtr(thead->next);
+	}
+	return (ep1);
+}
+
+

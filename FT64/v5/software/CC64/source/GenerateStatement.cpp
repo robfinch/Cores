@@ -122,15 +122,6 @@ AMODE *makebreg(int r)
     return ap;
 }
 
-AMODE *makepred(int r)
-{
-	AMODE *ap;
-    ap = allocAmode();
-    ap->mode = am_predreg;
-    ap->preg = r;
-    return ap;
-}
-
 /*
  *      generate the mask address structure.
  */
@@ -311,7 +302,7 @@ void Statement::GenerateIf()
 	int lab1, lab2, oldbreak;
 	ENODE *ep, *node;
 	int size;
-	AMODE *ap1, *ap2, *ap3;
+	AMODE *ap1;
 
     lab1 = nextlabel++;     // else label
     lab2 = nextlabel++;     // exit label
@@ -731,7 +722,7 @@ void Statement::GenerateCheck()
 
     initstack();
     ep = node = exp;
-	if (ep->p[0]->nodetype==en_lt && ep->p[1]->nodetype==en_ge && equalnode(ep->p[0]->p[0],ep->p[1]->p[0])) {
+	if (ep->p[0]->nodetype==en_lt && ep->p[1]->nodetype==en_ge && ENODE::IsEqual(ep->p[0]->p[0],ep->p[1]->p[0])) {
         ep->nodetype = en_chk;
         if (ep->p[0])
             ep->p[2] = ep->p[0]->p[1];
@@ -740,7 +731,7 @@ void Statement::GenerateCheck()
         ep->p[1] = ep->p[1]->p[1];
         ep->p[0] = ep->p[0]->p[0];
     }
-	else if (ep->p[0]->nodetype==en_ge && ep->p[1]->nodetype==en_lt && equalnode(ep->p[0]->p[0],ep->p[1]->p[0])) {
+	else if (ep->p[0]->nodetype==en_ge && ep->p[1]->nodetype==en_lt && ENODE::IsEqual(ep->p[0]->p[0],ep->p[1]->p[0])) {
        ep->nodetype = en_chk;
         if (ep->p[1])
             ep->p[2] = ep->p[1]->p[1];

@@ -472,11 +472,6 @@ void validate(AMODE *ap)
 			LoadRegister(ap->sreg, (int) ap->deep2);
 		}
 		break;
-    case am_indx3:
-		if ((ap->sreg >= frg && ap->sreg <= regLastTemp) && reg_alloc[ap->deep2].f.isPushed == 'T') {
-			LoadRegister(ap->sreg, (int) ap->deep2);
-		}
-		goto common;
     case am_ind:
     case am_indx:
     case am_ainc:
@@ -537,7 +532,6 @@ void ReleaseTempRegister(AMODE *ap)
 			}
 			return;
 		case am_indx2:
-		case am_indx3:
 			if (ap->sreg >= frg && ap->sreg <= 10) {
 				if (vreg_in_use[ap->sreg]==-1)
 					return;
@@ -595,7 +589,6 @@ common:
 		}
 		return;
     case am_indx2:
-	case am_indx3:
 		if (ap->sreg >= frg && ap->sreg <= regLastTemp) {
 			if (reg_in_use[ap->sreg]==-1)
 				return;

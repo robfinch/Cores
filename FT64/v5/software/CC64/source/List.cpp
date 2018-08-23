@@ -237,8 +237,8 @@ void DumpCSETable()
 "*The expression must be used three or more times before it will be allocated\n"
 "to a register.\n");
 	dfs.printf("N OD Uses DUses Void Reg Sym\n");
-	for (nn = 0; nn < csendx; nn++) {
-		csp = &CSETable[nn];
+	for (nn = 0; nn < pCSETable->csendx; nn++) {
+		csp = &pCSETable->table[nn];
 		dfs.printf("%d: ", nn);
 		dfs.printf("%d   ",csp->OptimizationDesireability());
 		dfs.printf("%d   ",csp->uses);

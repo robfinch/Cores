@@ -80,6 +80,8 @@ void Compiler::compile()
 	typenum = 1;
 	symnum = 257;
 	classname = nullptr;
+	pCSETable = new CSETable;
+	pCSETable->Clear();
 	ZeroMemory(&gsyms[0],sizeof(gsyms));
 	ZeroMemory(&defsyms,sizeof(defsyms));
 	ZeroMemory(&tagtable,sizeof(tagtable));

@@ -180,21 +180,21 @@ void Declaration::ParseShort()
 	case kw_int:
 		NextToken();
 		if (isUnsigned) {
-			head = (TYP *)TYP::Make(bt_int32u,4);
+			head = (TYP *)TYP::Make(bt_ushort,4);
 			tail = head;
 		}
 		else {
-			head = (TYP *)TYP::Make(bt_int32,4);
+			head = (TYP *)TYP::Make(bt_short,4);
 			tail = head;
 		}
 		break;
 	default:
 		if (isUnsigned) {
-			head = (TYP *)TYP::Make(bt_int32u,4);
+			head = (TYP *)TYP::Make(bt_ushort,4);
 			tail = head;
 		}
 		else {
-			head = (TYP *)TYP::Make(bt_int32,4);
+			head = (TYP *)TYP::Make(bt_short,4);
 			tail = head;
 		}
 		break;
@@ -374,11 +374,11 @@ void Declaration::ParseVectorMask()
 void Declaration::ParseInt32()
 {
 	if (isUnsigned) {
-		head = (TYP *)TYP::Make(bt_int32u,4);
+		head = (TYP *)TYP::Make(bt_ushort,4);
 		tail = head;
 	}
 	else {
-		head = (TYP *)TYP::Make(bt_int32,4);
+		head = (TYP *)TYP::Make(bt_short,4);
 		tail = head;
 	}
 	bit_max = 32;
@@ -1151,9 +1151,6 @@ int alignment(TYP *tp)
 	case bt_struct:
 	case bt_union:          
 		return (tp->alignment) ?  tp->alignment : AL_STRUCT;
-	case bt_int32:
-	case bt_int32u:
-		return (AL_BYTE * 4);
 	default:                return AL_CHAR;
 	}
 }
@@ -1173,7 +1170,6 @@ int walignment(TYP *tp)
 	case bt_char:   case bt_uchar:     return imax(AL_CHAR,worstAlignment);
 	case bt_short:  case bt_ushort:    return imax(AL_SHORT,worstAlignment);
 	case bt_long:   case bt_ulong:     return imax(AL_LONG,worstAlignment);
-	case bt_int32:  case bt_int32u:    return imax(AL_BYTE*4,worstAlignment);
     case bt_enum:           return imax(AL_CHAR,worstAlignment);
     case bt_pointer:
             if(tp->val_flag)

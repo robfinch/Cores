@@ -64,7 +64,7 @@ void ParseEnumDeclaration(TABLE *table)
 		tp->size = 2;
 		if (lastst==openpa) {
 			NextToken();
-			amt = GetIntegerExpression((ENODE **)NULL);
+			amt = (int)GetIntegerExpression((ENODE **)NULL);
 			needpunc(closepa,10);
 		}
         if( lastst != begin)

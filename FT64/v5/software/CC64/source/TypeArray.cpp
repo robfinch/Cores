@@ -74,20 +74,20 @@ bool TypeArray::IsEmpty()
 
 bool TypeArray::IsByte(int typ)
 {
-	return (typ==bt_byte || typ==bt_ubyte || typ==bt_8 || typ==bt_8u);
+	return (typ==bt_byte || typ==bt_ubyte);
 }
 
 bool TypeArray::IsChar(int typ)
 {
-	return (typ==bt_char || typ==bt_uchar || typ==bt_16 || typ==bt_16u);
+	return (typ==bt_char || typ==bt_uchar);
 }
 bool TypeArray::IsShort(int typ)
 {
-	return (typ==bt_short || typ==bt_ushort || typ==bt_int32 || typ==bt_int32u);
+	return (typ==bt_short || typ==bt_ushort);
 }
 bool TypeArray::IsLong(int typ)
 {
-	return (typ==bt_long || typ==bt_ulong || typ==bt_64 || typ==bt_64u);
+	return (typ==bt_long || typ==bt_ulong);
 }
 bool TypeArray::IsInt(int typ)
 {

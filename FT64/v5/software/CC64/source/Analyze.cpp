@@ -31,8 +31,6 @@ extern int AllocateRegisterVars();
 static void scan_compound(Statement *stmt);
 static void repcse_compound(Statement *stmt);
 
-CSE *CSETable;
-short int csendx;
 short int loop_active;
 
 /*
@@ -52,142 +50,6 @@ short int loop_active;
  *      scan will build a list of optimizable expressions which
  *      opt1 will replace during the second optimization pass.
  */
-
-//
-// equalnode will return 1 if the expressions pointed to by
-// node1 and node2 are equivalent.
-//
-int equalnode(ENODE *node1, ENODE *node2)
-{
-    if (node1 == NULL || node2 == NULL) {
-		return FALSE;
-    }
-    if (node1->nodetype != node2->nodetype) {
-		return FALSE;
-    }
-    switch (node1->nodetype) {
-	case en_fcon:
-		return (Float128::IsEqual(&node1->f128,&node2->f128));
-//			return (node1->f == node2->f);
-	case en_regvar:
-	case en_fpregvar:
-	case en_tempref:
-      case en_icon:
-      case en_labcon:
-	  case en_classcon:	// Check type ?
-      case en_autocon:
-	  case en_autovcon:
-	  case en_autofcon:
-		  {
-			return (node1->i == node2->i);
-	   }
-      case en_nacon:{
-			return (node1->sp->compare(*node2->sp)==0);
-	    }
-	  case en_cnacon:
-			return (node1->sp->compare(*node2->sp)==0);
-      default:
-	        if( IsLValue(node1) && equalnode(node1->p[0], node2->p[0])  ) {
-//	        if( equalnode(node1->p[0], node2->p[0])  )
-		        return TRUE;
-			}
-		return FALSE;
-    }
-}
-
-//
-// SearchCSEList will search the common expression table for an entry
-// that matches the node passed and return a pointer to it.
-//
-static CSE *SearchCSEList(ENODE *node)
-{
-	int cnt;
-
-	for (cnt = 0; cnt < csendx; cnt++) {
-        if( equalnode(node,CSETable[cnt].exp) )
-            return &CSETable[cnt];
-	}
-    return (CSE *)NULL;
-}
-
-/*
- *      copy the node passed into a new enode so it wont get
- *      corrupted during substitution.
- */
-static ENODE *DuplicateEnode(ENODE *node)
-{       
-	ENODE *temp;
-
-    if( node == NULL )
-        return (ENODE *)NULL;
-    temp = allocEnode();
-	memcpy(temp,node,sizeof(ENODE));	// copy all the fields
-    return temp;
-}
-
-
-// InsertNodeIntoCSEList will enter a reference to an expression node into the
-// common expression table. duse is a flag indicating whether or not
-// this reference will be dereferenced.
-
-CSE *InsertNodeIntoCSEList(ENODE *node, int duse)
-{
-	CSE *csp;
-
-    if( (csp = SearchCSEList(node)) == NULL ) {   /* add to tree */
-		if (csendx > 499)
-			throw new C64PException(ERR_CSETABLE,0x01);
-		csp = &CSETable[csendx];
-		csendx++;
-		if (loop_active > 1) {
-			csp->uses = (loop_active - 1) * 5;
-			csp->duses = (duse != 0) * ((loop_active-1) * 5);
-		}
-		else {
-			csp->uses = 1;
-			csp->duses = (duse != 0);
-		}
-        csp->exp = DuplicateEnode(node);
-        csp->voidf = 0;
-		csp->reg = 0;
-		csp->isfp = csp->exp->isDouble;
-        return (csp);
-    }
-	if (loop_active < 2) {
-	    (csp->uses)++;
-		if( duse )
-            (csp->duses)++;
-	}
-	else {
-		(csp->uses) += ((loop_active-1) * 5);
-		 if( duse )
-            (csp->duses) += ((loop_active-1) * 5);
-	}
-    return (csp);
-}
-
-// voidauto2 searches the entire CSE list for auto dereferenced node which
-// point to the passed node. There might be more than one LValue that matches.
-// voidauto will void an auto dereference node which points to
-// the same auto constant as node.
-//
-int voidauto2(ENODE *node)
-{
-    int uses;
-    bool voided;
-	int cnt;
-
-    uses = 0;
-    voided = false;
-	for (cnt = 0; cnt < csendx; cnt++) {
-        if( IsLValue(CSETable[cnt].exp) && equalnode(node,CSETable[cnt].exp->p[0]) ) {
-            CSETable[cnt].voidf = 1;
-            voided = true;
-            uses += CSETable[cnt].uses;
-        }
-	}
-    return voided ? uses : -1;
-}
 
 /*
  *      scanexpr will scan the expression pointed to by node for optimizable
@@ -215,13 +77,13 @@ static void scanexpr(ENODE *node, int duse)
         case en_icon:
         case en_labcon:
         case en_nacon:
-                InsertNodeIntoCSEList(node,duse);
+                pCSETable->InsertNode(node,duse);
                 break;
 		case en_autofcon:
         case en_tempfpref:
-                csp1 = InsertNodeIntoCSEList(node,duse);
+                csp1 = pCSETable->InsertNode(node,duse);
 				csp1->isfp = TRUE;
-                if ((nn = voidauto2(node)) > 0) {
+                if ((nn = pCSETable->voidauto2(node)) > 0) {
 					csp1->duses += loop_active;
                     csp1->uses = csp1->duses + nn - loop_active;
 				}
@@ -230,8 +92,8 @@ static void scanexpr(ENODE *node, int duse)
         case en_autocon:
 		case en_classcon:
         case en_tempref:
-                csp1 = InsertNodeIntoCSEList(node,duse);
-                if ((nn = voidauto2(node)) > 0) {
+                csp1 = pCSETable->InsertNode(node,duse);
+                if ((nn = pCSETable->voidauto2(node)) > 0) {
 					csp1->duses += loop_active;
                     csp1->uses = csp1->duses + nn - loop_active;
 				}
@@ -263,13 +125,13 @@ static void scanexpr(ENODE *node, int duse)
                 // it to remove zero extension conversion from a byte to a word.
                 if( node->p[0]->nodetype == en_autocon || node->p[0]->nodetype==en_autofcon
 					|| node->p[0]->nodetype == en_classcon || node->p[0]->nodetype==en_autovcon) {
-					first = (SearchCSEList(node)==NULL);	// Detect if this is the first insert
-                    csp = InsertNodeIntoCSEList(node,duse);
+					first = (pCSETable->Search(node)==nullptr);	// Detect if this is the first insert
+                    csp = pCSETable->InsertNode(node,duse);
 					if (csp->voidf)
 						scanexpr(node->p[0], 1);
 					// take care: the non-derereferenced use of the autocon node may
 					// already be in the list. In this case, set voidf to 1
-					if (SearchCSEList(node->p[0]) != NULL) {
+					if (pCSETable->Search(node->p[0]) != NULL) {
 						csp->voidf = 1;
 						scanexpr(node->p[0], 1);
 					}
@@ -504,7 +366,7 @@ void repexpr(ENODE *node)
 				case en_fcon:
 				case en_autofcon:
                 case en_tempfpref:
-					if( (csp = SearchCSEList(node)) != NULL ) {
+					if( (csp = pCSETable->Search(node)) != nullptr ) {
 						csp->isfp = TRUE; //**** a kludge
 						if( csp->reg > 0 ) {
 							node->nodetype = en_fpregvar;
@@ -530,7 +392,7 @@ void repexpr(ENODE *node)
 				case en_cnacon:
 				case en_clabcon:
                 case en_tempref:
-					if( (csp = SearchCSEList(node)) != NULL ) {
+					if( (csp = pCSETable->Search(node)) != NULL ) {
 						if( csp->reg > 0 ) {
 							node->nodetype = en_regvar;
 							node->i = csp->reg;
@@ -557,7 +419,7 @@ void repexpr(ENODE *node)
 				case en_wfieldref:
 				case en_uwfieldref:
 				case en_vector_ref:
-					if( (csp = SearchCSEList(node)) != NULL ) {
+					if( (csp = pCSETable->Search(node)) != NULL ) {
 						if( csp->reg > 0 ) {
 							node->nodetype = en_regvar;
 							node->i = csp->reg;
@@ -571,7 +433,7 @@ void repexpr(ENODE *node)
 				case en_dbl_ref:
 				case en_flt_ref:
 				case en_quad_ref:
-					if( (csp = SearchCSEList(node)) != NULL ) {
+					if( (csp = pCSETable->Search(node)) != NULL ) {
 						if( csp->reg > 0 ) {
 							node->nodetype = en_fpregvar;
 							node->i = csp->reg;
@@ -748,16 +610,12 @@ int Statement::CSEOptimize()
     nn = 0;
 	if (pass==1) {
 		if (currentFn->csetbl==nullptr) {
-			currentFn->csetbl = new CSE[500];
-			currentFn->csendx = 0;
+			currentFn->csetbl = new CSETable;
 		}
-		csendx = 0;
-		CSETable = currentFn->csetbl;
-		ZeroMemory(CSETable,sizeof(CSETable));
+		pCSETable->Clear();
 	}
 	else if (pass==2) {
-		CSETable = currentFn->csetbl;
-		csendx = currentFn->csendx;
+		pCSETable->Assign(currentFn->csetbl);
 	}
     if (opt_noregs==FALSE) {
 		if (pass==1)
@@ -766,11 +624,11 @@ int Statement::CSEOptimize()
 		if (pass==2)
     		repcse();          /* replace allocated expressions */
     }
-	if (pass==1)
-		currentFn->csendx = csendx;
+	if (pass == 1)
+		currentFn->csetbl->Assign(pCSETable);
 	else if (pass==2) {
-		if (currentFn->csetbl) {
-			delete[] currentFn->csetbl;
+		if (currentFn->csetbl && !currentFn->IsInline) {
+			delete currentFn->csetbl;
 			currentFn->csetbl = nullptr;
 		}
 	}
