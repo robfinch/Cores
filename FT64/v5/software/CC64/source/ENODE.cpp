@@ -63,8 +63,9 @@ long ENODE::GetReferenceSize()
 	case en_wfieldref:
 	case en_uwfieldref:
 		return (sizeOfWord);
-	case en_tempref:
 	case en_fpregvar:
+		return(tp->size);
+	case en_tempref:
 	case en_regvar:
 		return (sizeOfWord);
 	case en_dbl_ref:
@@ -333,6 +334,7 @@ AMODE *ENODE::GenUnary(int flags, int size, int op)
 	else {
 		ap2 = GetTempRegister();
 		ap = GenerateExpression(p[0], F_REG, size);
+		GenerateHint(3);
 		GenerateDiadic(op, 0, ap2, ap);
 	}
 	ReleaseTempReg(ap);
@@ -357,6 +359,7 @@ AMODE *ENODE::GenBinary(int flags, int size, int op)
 				GenerateDiadic(op_fcvtsq, 0, ap2, ap2);
 		}
 		GenerateTriadic(op, ap1->fpsize(), ap3, ap1, ap2);
+		ap3->type = ap1->type;
 	}
 	else if (op == op_vadd || op == op_vsub || op == op_vmul || op == op_vdiv
 		|| op == op_vadds || op == op_vsubs || op == op_vmuls || op == op_vdivs
@@ -517,3 +520,72 @@ AMODE *ENODE::GenAssignAdd(int flags, int size, int op)
 	return (ap1);
 }
 
+AMODE *ENODE::GenAssignLogic(int flags, int size, int op)
+{
+	AMODE *ap1, *ap2, *ap3;
+	int ssize;
+
+	ssize = GetNaturalSize(p[0]);
+	if (ssize > size)
+		size = ssize;
+	if (p[0]->IsBitfield()) {
+		ap3 = GetTempRegister();
+		ap1 = GenerateBitfieldDereference(p[0], F_REG | F_MEM, size);
+		GenerateDiadic(op_mov, 0, ap3, ap1);
+		ap2 = GenerateExpression(p[1], F_REG | F_IMMED, size);
+		GenerateTriadic(op, 0, ap1, ap1, ap2);
+		GenerateBitfieldInsert(ap3, ap1, ap1->offset->bit_offset, ap1->offset->bit_width);
+		GenStore(ap3, ap1->next, ssize);
+		ReleaseTempReg(ap2);
+		ReleaseTempReg(ap1->next);
+		ReleaseTempReg(ap1);
+		MakeLegalAmode(ap3, flags, size);
+		return (ap3);
+	}
+	ap1 = GenerateExpression(p[0], F_ALL & ~F_FPREG, ssize);
+	ap2 = GenerateExpression(p[1], F_REG | F_IMMED, size);
+	if (ap1->mode == am_reg) {
+		GenerateTriadic(op, 0, ap1, ap1, ap2);
+	}
+	else {
+		GenMemop(op, ap1, ap2, ssize);
+	}
+	ReleaseTempRegister(ap2);
+	if (!ap1->isUnsigned && !(flags & F_NOVALUE)) {
+		if (size > ssize) {
+			if (ap1->mode != am_reg) {
+				MakeLegalAmode(ap1, F_REG, ssize);
+			}
+			switch (ssize) {
+			case 1:	GenerateDiadic(op_sxb, 0, ap1, ap1); break;
+			case 2:	GenerateDiadic(op_sxc, 0, ap1, ap1); break;
+			case 4:	GenerateDiadic(op_sxh, 0, ap1, ap1); break;
+			}
+			MakeLegalAmode(ap1, flags, size);
+			return (ap1);
+		}
+		ap1->GenSignExtend(ssize, size, flags);
+	}
+	MakeLegalAmode(ap1, flags, size);
+	return (ap1);
+}
+
+AMODE *ENODE::GenLand(int flags, int op)
+{
+	AMODE *ap1, *ap2, *ap3, *ap4, *ap5;
+
+	ap3 = GetTempRegister();
+	ap1 = GenerateExpression(p[0], flags, 8);
+	ap4 = GetTempRegister();
+	GenerateDiadic(op_redor, 0, ap4, ap1);
+	ap2 = GenerateExpression(p[1], flags, 8);
+	ap5 = GetTempRegister();
+	GenerateDiadic(op_redor, 0, ap5, ap2);
+	GenerateTriadic(op, 0, ap3, ap4, ap5);
+	ReleaseTempReg(ap5);
+	ReleaseTempReg(ap2);
+	ReleaseTempReg(ap4);
+	ReleaseTempReg(ap1);
+	MakeLegalAmode(ap3, flags, 8);
+	return (ap3);
+}

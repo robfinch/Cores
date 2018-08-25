@@ -1,8 +1,32 @@
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2017-2018  Robert Finch, Waterloo
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+// CC64 - 'C' derived language compiler
+//  - 64 bit CPU
+//
+// This source file is free software: you can redistribute it and/or modify 
+// it under the terms of the GNU Lesser General Public License as published 
+// by the Free Software Foundation, either version 3 of the License, or     
+// (at your option) any later version.                                      
+//                                                                          
+// This source file is distributed in the hope that it will be useful,      
+// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+// GNU General Public License for more details.                             
+//                                                                          
+// You should have received a copy of the GNU General Public License        
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+//                                                                          
+// ============================================================================
+//
 #include "stdafx.h"
 
 extern BasicBlock *LastBlock;
 Var *varlist;
-Tree *alltrees[500];
 
 // This class is currently only used by the CreateForest() function.
 // It maintains a stack for tree traversal.
@@ -146,14 +170,12 @@ void Var::GrowTree(Tree *t, BasicBlock *b)
 				visited->add(p->num);
 				if (p->LiveOut->isMember(num)) {
 					if (t==nullptr) {
-						t = Tree::MakeNew();
-						t->next = trees;
+						t = trees.MakeNewTree();
 						t->num = treeno;
 						t->var = num;
 						treeno++;
-						trees = t;
 					}
-					t->tree->add(p->num);
+					t->blocks->add(p->num);
 					forest->add(p->num);
 					GrowTree(t, p);
 				}
@@ -169,14 +191,12 @@ void Var::GrowTree(Tree *t, BasicBlock *b)
 				visited->add(p->num);
 				if (p->LiveOut->isMember(num)) {
 					if (t==nullptr) {
-						t = Tree::MakeNew();
-						t->next = trees;
+						t = trees.MakeNewTree();
 						t->num = treeno;
 						t->var = num;
 						treeno++;
-						trees = t;
 					}
-					t->tree->add(p->num);
+					t->blocks->add(p->num);
 					forest->add(p->num);
 					GrowTree(t, p);
 				}
@@ -192,7 +212,7 @@ void Var::CreateForest()
 {
 	BasicBlock *b, *p;
 	Edge *ep;
-	Tree *t;
+	Tree *t, *u;
 	char buf[2000];
 
 	treeno = 1;
@@ -200,13 +220,12 @@ void Var::CreateForest()
 	visited->add(b->num);
 	// First see if a tree starts right at the last basic block.
 	if (b->LiveOut->isMember(num)) {
-		t = Tree::MakeNew();
-		t->next = trees;
+		t = trees.MakeNewTree();
+		::forest.MakeNewTree(t);
 		t->num = treeno;
 		t->var = num;
 		treeno++;
-		trees = t;
-		t->tree->add(b->num);
+		t->blocks->add(b->num);
 		forest->add(b->num);
 		GrowTree(t, b);
 	}
@@ -220,13 +239,12 @@ void Var::CreateForest()
 			if (!visited->isMember(p->num)) {
 				visited->add(p->num);
 				if (p->LiveOut->isMember(num)) {
-					t = Tree::MakeNew();
-					t->next = trees;
+					t = trees.MakeNewTree();
+					::forest.MakeNewTree(t);
 					t->num = treeno;
 					t->var = num;
 					treeno++;
-					trees = t;
-					t->tree->add(p->num);
+					t->blocks->add(p->num);
 					forest->add(p->num);
 					GrowTree(t, p);
 				}
@@ -242,13 +260,12 @@ void Var::CreateForest()
 			if (!visited->isMember(p->num)) {
 				visited->add(p->num);
 				if (p->LiveOut->isMember(num)) {
-					t = Tree::MakeNew();
-					t->next = trees;
+					t = trees.MakeNewTree();
+					::forest.MakeNewTree(t);
 					t->num = treeno;
 					t->var = num;
 					treeno++;
-					trees = t;
-					t->tree->add(p->num);
+					t->blocks->add(p->num);
 					forest->add(p->num);
 					GrowTree(t, p);
 				}
@@ -266,13 +283,12 @@ void Var::CreateForest()
 		if (!visited->isMember(p->num)) {
 			visited->add(p->num);
 			if (p->LiveOut->isMember(num)) {
-				t = Tree::MakeNew();
-				t->next = trees;
+				t = trees.MakeNewTree();
+				::forest.MakeNewTree(t);
 				t->num = treeno;
 				t->var = num;
 				treeno++;
-				trees = t;
-				t->tree->add(p->num);
+				t->blocks->add(p->num);
 				forest->add(p->num);
 				GrowTree(t, p);
 			}
@@ -291,7 +307,7 @@ void Var::CreateForests()
 {
 	Var *v;
 
-	Tree::treecount = 0;
+	::forest.treecount = 0;
 	treeno = 0;
 	for (v = varlist; v; v = v->next) {
 		v->visited->clear();
@@ -330,22 +346,38 @@ Var *Var::Find2(int num)
 	return (nullptr);
 }
 
+void Var::Transplant(Var *v)
+{
+	int nn;
+
+	for (nn = 0; nn < v->trees.treecount; nn++) {
+		if (trees.treecount < 500) {
+			trees.trees[trees.treecount] = v->trees.trees[nn];
+			trees.treecount++;
+		}
+		else
+			throw new C64PException(ERR_TOOMANY_TREES,1);
+	}
+}
+
 void Var::DumpForests()
 {
 	Var *vp;
 	Tree *rg;
+	int nn;
 	char buf[2000];
 
 	dfs.printf("<VarForests>\n");
 	for (vp = varlist; vp; vp = vp->next) {
 		dfs.printf("Var%d:", vp->num);
-		if (vp->trees)
-			dfs.printf(" %d trees\n", vp->trees->num);
+		if (vp->trees.treecount > 0)
+			dfs.printf(" %d trees\n", vp->trees.treecount);
 		else
 			dfs.printf(" no trees\n");
-		for (rg = vp->trees; rg; rg = rg->next) {
-			if (!rg->tree->isEmpty()) {
-				rg->tree->sprint(buf, sizeof(buf));
+		for (nn = 0; nn < vp->trees.treecount; nn++) {
+			rg = vp->trees.trees[nn];
+			if (!rg->blocks->isEmpty()) {
+				rg->blocks->sprint(buf, sizeof(buf));
 				dfs.printf(buf);
 				dfs.printf("\n");
 			}

@@ -152,7 +152,7 @@ int CSETable::AllocateGPRegisters()
 						{
 						case 0:
 						case 1:
-						case 2:	alloc = (csp->OptimizationDesireability() >= 4 - pass) && reg < regLastRegvar; break;
+						case 2:	alloc = (csp->OptimizationDesireability() >= 4) && reg < regLastRegvar; break;
 						case 3: alloc = (csp->OptimizationDesireability() >= 4) && reg < regLastRegvar; break;
 						}
 						if (alloc)
@@ -184,7 +184,7 @@ int CSETable::AllocateFPRegisters()
 						{
 						case 0:
 						case 1:
-						case 2:	alloc = (csp->OptimizationDesireability() >= 4 - pass) && reg < regLastRegvar; break;
+						case 2:	alloc = (csp->OptimizationDesireability() >= 4) && reg < regLastRegvar; break;
 						case 3: alloc = (csp->OptimizationDesireability() >= 4) && reg < regLastRegvar; break;
 							//    					if(( csp->duses > csp->uses / (8 << nn)) && reg < regLastRegvar )	// <- address register assignments
 						}
@@ -248,6 +248,8 @@ void CSETable::InitializeTempRegs()
 				{
 					ap = GenerateExpression(exptr, F_REG | F_IMMED | F_MEM | F_FPREG, sizeOfWord);
 					ap2 = csp->isfp ? makefpreg(csp->reg) : makereg(csp->reg);
+					if (csp->isfp)
+						ap2->type = ap->type;
 					ap2->isPtr = ap->isPtr;
 					if (ap->mode == am_immed) {
 						if (ap2->mode == am_fpreg) {

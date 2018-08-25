@@ -91,7 +91,11 @@ static char *errtextstr[] = {
 	"W Forever Infinite loop",
 	"E Too many initilization elements for aggregate",
 	"E Constant required.",
-	"E A suitable type was not found initializing union."
+	"E A suitable type was not found initializing union.",
+	"W Precision is being lost in the type conversion.",
+	"E Compiler limit reached: too many trees.",
+	"E Compiler limit reached: optimization stack full.",
+	"E Compiler: stack empty."
 };
 
 char *errtext(int errnum)

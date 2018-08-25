@@ -25,7 +25,6 @@
 //
 #include "stdafx.h"
 
-extern char *TraceName(SYM *);
 void put_mask(int mask);
 void align(int n);
 void roseg();
@@ -192,6 +191,8 @@ Instruction opl[] =
 	{ "fblt", op_fblt,3 }, { "fble", op_fble,3 }, { "fbgt", op_fbgt,3 }, { "fbge", op_fbge,3 },
 
 	{ "fcvtsq", op_fcvtsq },
+	{ "fcvtdq", op_fcvtdq },
+	{ "fcvttq", op_fcvttq },
 	{ "sf", op_sf }, { "lf", op_lf },
 	{ "sfd", op_sfd }, { "lfd", op_lfd }, { "fmov.d", op_fdmov }, { "fmov", op_fmov },
 	{ "fadd", op_fadd }, { "fsub", op_fsub }, { "fmul", op_fmul }, { "fdiv", op_fdiv },
@@ -214,6 +215,9 @@ Instruction opl[] =
 	{ "brk", op_brk,1,false },
 	{ "rti", op_rti,2,false },
 	{ "rte", op_rte,2,false },
+	{ "nand",op_nand,1,true },
+	{ "nor",op_nor,1,true },
+	{ "xnor",op_xnor,1,true },
 	{ "cmovenz", op_cmovenz,1,true },
 	{"bex", op_bex,0,false},
 	{"phi", op_phi},
@@ -480,7 +484,7 @@ void PutAddressMode(AMODE *ap)
 				if (ap->preg==regFP) {
 					if (ap->offset->sym) {
 						if (ap->offset->sym->IsParameter) {	// must be an parameter
-							ap->offset->i += GetReturnBlockSize()-(currentFn->IsLeaf  ? sizeOfWord : 0);
+							ap->offset->i += Compiler::GetReturnBlockSize();
 						}
 					}
 				}
@@ -488,7 +492,7 @@ void PutAddressMode(AMODE *ap)
 				if (ap->preg==regFP) {
 					if (ap->offset->sym) {
 						if (ap->offset->sym->IsParameter) {
-							ap->offset->i -= GetReturnBlockSize()-(currentFn->IsLeaf  ? sizeOfWord : 0);
+							ap->offset->i -= Compiler::GetReturnBlockSize();
 						}
 					}
 				}

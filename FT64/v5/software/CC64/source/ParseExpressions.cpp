@@ -28,7 +28,6 @@
 #define EXPR_DEBUG
 #define NUM_DIMEN	20
 extern SYM *currentClass;
-static int isscalar(TYP *tp);
 static unsigned char sizeof_flag = 0;
 static TYP *ParseCastExpression(ENODE **node);
 static TYP *NonAssignExpression(ENODE **node);
@@ -36,10 +35,8 @@ TYP *forcefit(ENODE **node1,TYP *tp1,ENODE **node2,TYP *tp2,bool);
 extern void backup();
 extern char *inpline;
 extern int parsingParameterList;
-extern char *TraceName(SYM *);
 extern SYM *gsearch2(std::string , __int16, TypeArray *,bool);
 extern SYM *search2(std::string na,TABLE *tbl,TypeArray *typearray);
-extern int GetReturnBlockSize();
 extern int round8(int n);
 
 ENODE *pep1;
@@ -764,7 +761,7 @@ TYP *nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeArray *typear
 			(*node)->esize = sp->tp->size;
 			switch((*node)->nodetype) {
 			case en_regvar:		(*node)->etype = bt_long;	break;//sp->tp->type;
-			case en_fpregvar:	(*node)->etype = bt_double;	break;//sp->tp->type;
+			case en_fpregvar:	(*node)->etype = sp->tp->type;	break;//sp->tp->type;
 			default:			(*node)->etype = bt_pointer;break;//sp->tp->type;
 			}
 			//(*node)->etype = ((*node)->nodetype == en_regvar) ? bt_long : bt_pointer;//sp->tp->type;
@@ -948,7 +945,7 @@ SYM *CreateDummyParameters(ENODE *ep, SYM *parent, TYP *tp)
 	static char buf[20];
 
 	list = nullptr;
-	poffset = GetReturnBlockSize();
+	poffset = Compiler::GetReturnBlockSize();
 
 	// Process hidden parameter
 	if (tp) {
@@ -2067,7 +2064,7 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
 		currentFn->IsLeaf = FALSE;
 		NextToken();
 		{
-			std::string *name = new std::string("__free");
+			std::string *name = new std::string("__delete");
         
   			if (lastst==openbr) {
 				NextToken();
@@ -2217,299 +2214,6 @@ static TYP *ParseCastExpression(ENODE **node)
 	return tp;
 }
 
-// ----------------------------------------------------------------------------
-//      forcefit will coerce the nodes passed into compatible
-//      types and return the type of the resulting expression.
-// ----------------------------------------------------------------------------
-TYP *forcefit(ENODE **node1,TYP *tp1,ENODE **node2,TYP *tp2, bool promote)
-{
-	ENODE *n2;
-
-	if (tp1==tp2)	// duh
-		return (tp1);
-	if (tp1 && tp2) {
-		if (tp1->type == tp2->type)
-			return (tp1);
-	}
-	if (node2)
-		n2 = *node2;
-	else
-		n2 = (ENODE *)NULL;
-	switch( tp1->type ) {
-	case bt_ubyte:
-		switch(tp2->type) {
-		case bt_long:	*node1 = makenode(en_cubw,*node1,*node2); (*node1)->esize = 2; return &stdlong;
-		case bt_ulong:	*node1 = makenode(en_cubu,*node1,*node2); (*node1)->esize = 2; return &stdulong;
-		case bt_short:	*node1 = makenode(en_cubw,*node1,*node2); (*node1)->esize = 2; return &stdlong;
-		case bt_ushort:	*node1 = makenode(en_cubu,*node1,*node2); (*node1)->esize = 2; return &stdulong;
-		case bt_char:	*node1 = makenode(en_cubw,*node1,*node2); (*node1)->esize = 2; return &stdlong;
-		case bt_uchar:	*node1 = makenode(en_cubu,*node1,*node2); (*node1)->esize = 2; return &stdulong;
-		case bt_byte:	*node1 = makenode(en_cubw,*node1,*node2); (*node1)->esize = 2; return &stdlong;
-		case bt_ubyte:	*node1 = makenode(en_cubu,*node1,*node2); (*node1)->esize = 2; return &stdulong;
-		case bt_enum:	*node1 = makenode(en_cubw,*node1,*node2); (*node1)->esize = 2; return &stdlong;
-		case bt_pointer:*node1 = makenode(en_cubu,*node1,*node2); (*node1)->esize = 2; return tp2;
-		case bt_exception:	*node1 = makenode(en_cubu,*node1,*node2); (*node1)->esize = 2; return &stdexception;
-		case bt_vector:	return (tp2);
-		}
-		return tp1;
-	case bt_byte:
-		switch(tp2->type) {
-		case bt_long:	*node1 = makenode(en_cbw,*node1,*node2); (*node1)->esize = 2; return &stdlong;
-		case bt_ulong:	*node1 = makenode(en_cbu,*node1,*node2); (*node1)->esize = 2; return &stdulong;
-		case bt_short:	*node1 = makenode(en_cbw,*node1,*node2); (*node1)->esize = 2; return &stdlong;
-		case bt_ushort:	*node1 = makenode(en_cbu,*node1,*node2); (*node1)->esize = 2; return &stdulong;
-		case bt_char:	*node1 = makenode(en_cbw,*node1,*node2); (*node1)->esize = 2; return &stdlong;
-		case bt_uchar:	*node1 = makenode(en_cbu,*node1,*node2); (*node1)->esize = 2; return &stdulong;
-		case bt_byte:	*node1 = makenode(en_cbw,*node1,*node2); (*node1)->esize = 2; return &stdlong;
-		case bt_ubyte:	*node1 = makenode(en_cbu,*node1,*node2); (*node1)->esize = 2; return &stdulong;
-		case bt_enum:	*node1 = makenode(en_cbw,*node1,*node2); (*node1)->esize = 2; return &stdlong;
-		case bt_pointer:*node1 = makenode(en_cbu,*node1,*node2); (*node1)->esize = 2; return tp2;
-		case bt_exception:	*node1 = makenode(en_cbu,*node1,*node2); (*node1)->esize = 2; return &stdexception;
-		case bt_vector:	return (tp2);
-		}
-		return tp1;
-	case bt_enum:
-		if (promote)
-		switch(tp2->type) {
-		case bt_long:	*node1 = makenode(en_ccw,*node1,*node2); (*node1)->esize = 2; return &stdlong;
-		case bt_ulong:	*node1 = makenode(en_ccu,*node1,*node2); (*node1)->esize = 2; return &stdulong;
-		case bt_short:	*node1 = makenode(en_ccw,*node1,*node2); (*node1)->esize = 2; return &stdlong;
-		case bt_ushort:	*node1 = makenode(en_ccu,*node1,*node2); (*node1)->esize = 2; return &stdulong;
-		case bt_char:	*node1 = makenode(en_ccw,*node1,*node2); (*node1)->esize = 2; return &stdlong;
-		case bt_uchar:	*node1 = makenode(en_ccu,*node1,*node2); (*node1)->esize = 2; return &stdulong;
-		case bt_byte:	*node1 = makenode(en_ccw,*node1,*node2); (*node1)->esize = 2; return &stdlong;
-		case bt_ubyte:	*node1 = makenode(en_ccu,*node1,*node2); (*node1)->esize = 2; return &stdulong;
-		case bt_enum:	*node1 = makenode(en_ccw,*node1,*node2); (*node1)->esize = 2; return &stdlong;
-		case bt_pointer:*node1 = makenode(en_ccu,*node1,*node2); (*node1)->esize = 2; return tp2;
-		case bt_exception:	*node1 = makenode(en_ccu,*node1,*node2); (*node1)->esize = 2; return &stdexception;
-		case bt_vector:	return (tp2);
-		}
-		return tp1;
-	case bt_uchar:
-		if (promote)
-		switch(tp2->type) {
-		case bt_long:	*node1 = makenode(en_cucw,*node1,n2); (*node1)->esize = 2; return &stdlong;
-		case bt_ulong:	*node1 = makenode(en_cucu,*node1,n2); (*node1)->esize = 2; return &stdulong;
-		case bt_short:	*node1 = makenode(en_cucw,*node1,n2); (*node1)->esize = 2; return &stdlong;
-		case bt_ushort:	*node1 = makenode(en_cucu,*node1,n2); (*node1)->esize = 2; return &stdulong;
-		case bt_char:	*node1 = makenode(en_cucw,*node1,n2); (*node1)->esize = 2; return &stdlong;
-		case bt_uchar:	*node1 = makenode(en_cucu,*node1,n2); (*node1)->esize = 2; return &stdulong;
-		case bt_byte:	*node1 = makenode(en_cucw,*node1,n2); (*node1)->esize = 2; return &stdlong;
-		case bt_ubyte:	*node1 = makenode(en_cucu,*node1,n2); (*node1)->esize = 2; return &stdulong;
-		case bt_enum:	*node1 = makenode(en_cucw,*node1,n2); (*node1)->esize = 2; return &stdlong;
-		case bt_pointer:*node1 = makenode(en_cucwp,*node1,n2); (*node1)->esize = 2; return tp2;
-		case bt_exception:	*node1 = makenode(en_cucu,*node1,*node2); (*node1)->esize = 2; return &stdexception;
-		case bt_vector:	return (tp2);
-		}
-		return tp1;
-	case bt_char:
-		if (promote)
-		switch(tp2->type) {
-		case bt_long:	*node1 = makenode(en_ccw,*node1,n2); (*node1)->esize = 2; return &stdlong;
-		case bt_ulong:	*node1 = makenode(en_ccu,*node1,n2); (*node1)->esize = 2; return &stdulong;
-		case bt_short:	*node1 = makenode(en_ccw,*node1,n2); (*node1)->esize = 2; return &stdlong;
-		case bt_ushort:	*node1 = makenode(en_ccu,*node1,n2); (*node1)->esize = 2; return &stdulong;
-		case bt_char:	*node1 = makenode(en_ccw,*node1,n2); (*node1)->esize = 2; return &stdlong;
-		case bt_uchar:	*node1 = makenode(en_ccu,*node1,n2); (*node1)->esize = 2; return &stdulong;
-		case bt_byte:	*node1 = makenode(en_ccw,*node1,n2); (*node1)->esize = 2; return &stdlong;
-		case bt_ubyte:	*node1 = makenode(en_ccu,*node1,n2); (*node1)->esize = 2; return &stdulong;
-		case bt_enum:	*node1 = makenode(en_ccw,*node1,n2); (*node1)->esize = 2; return &stdlong;
-		case bt_pointer:*node1 = makenode(en_ccwp,*node1,n2); (*node1)->esize = 2; return tp2;
-		case bt_exception:	*node1 = makenode(en_ccu,*node1,*node2); (*node1)->esize = 2; return &stdexception;
-		case bt_vector:	return (tp2);
-		}
-		return tp1;
-	case bt_ushort:
-		if (promote)
-		switch(tp2->type) {
-		case bt_long:	*node1 = makenode(en_cuhw,*node1,*node2); (*node1)->esize = 2; return &stdlong;
-		case bt_ulong:	*node1 = makenode(en_cuhu,*node1,*node2); (*node1)->esize = 2; return &stdulong;
-		case bt_short:	*node1 = makenode(en_cuhw,*node1,*node2); (*node1)->esize = 2; return &stdlong;
-		case bt_ushort:	*node1 = makenode(en_cuhu,*node1,*node2); (*node1)->esize = 2; return &stdulong;
-		case bt_char:	*node1 = makenode(en_cuhw,*node1,*node2); (*node1)->esize = 2; return &stdlong;
-		case bt_uchar:	*node1 = makenode(en_cuhu,*node1,*node2); (*node1)->esize = 2; return &stdulong;
-		case bt_byte:	*node1 = makenode(en_cuhw,*node1,*node2); (*node1)->esize = 2; return &stdlong;
-		case bt_ubyte:	*node1 = makenode(en_cuhu,*node1,*node2); (*node1)->esize = 2; return &stdulong;
-		case bt_enum:	*node1 = makenode(en_cuhw,*node1,*node2); (*node1)->esize = 2; return &stdlong;
-		case bt_pointer:*node1 = makenode(en_cuhu,*node1,*node2); (*node1)->esize = 2; return tp2;
-		case bt_exception:	*node1 = makenode(en_cuhu,*node1,*node2); (*node1)->esize = 2; return &stdexception;
-		case bt_vector:	return (tp2);
-		}
-		return tp1;
-	case bt_short:
-		if (promote)
-		switch(tp2->type) {
-		case bt_long:	*node1 = makenode(en_chw,*node1,*node2); (*node1)->esize = 2; return &stdlong;
-		case bt_ulong:	*node1 = makenode(en_chu,*node1,*node2); (*node1)->esize = 2; return &stdulong;
-		case bt_short:	*node1 = makenode(en_chw,*node1,*node2); (*node1)->esize = 2; return &stdlong;
-		case bt_ushort:	*node1 = makenode(en_chu,*node1,*node2); (*node1)->esize = 2; return &stdulong;
-		case bt_char:	*node1 = makenode(en_chw,*node1,*node2); (*node1)->esize = 2; return &stdlong;
-		case bt_uchar:	*node1 = makenode(en_chu,*node1,*node2); (*node1)->esize = 2; return &stdulong;
-		case bt_byte:	*node1 = makenode(en_chw,*node1,*node2); (*node1)->esize = 2; return &stdlong;
-		case bt_ubyte:	*node1 = makenode(en_chu,*node1,*node2); (*node1)->esize = 2; return &stdulong;
-		case bt_enum:	*node1 = makenode(en_chu,*node1,*node2); (*node1)->esize = 2; return &stdlong;
-		case bt_pointer:*node1 = makenode(en_chu,*node1,*node2); (*node1)->esize = 2; return tp2;
-		case bt_exception:	*node1 = makenode(en_chu,*node1,*node2); (*node1)->esize = 2; return &stdexception;
-		case bt_vector:	return (tp2);
-		}
-		return tp1;
-	case bt_bitfield:
-	case bt_exception:
-		if (promote) {
-			if( tp2->type == bt_pointer	)
-				return tp2;
-			if (tp2->type==bt_double) {
-				*node1 = makenode(en_i2d,*node1,*node2);
-				return tp2;
-			}
-			if (tp2->type==bt_triple) {
-				*node1 = makenode(en_i2t,*node1,*node2);
-				return tp2;
-			}
-			if (tp2->type==bt_quad) {
-				*node1 = makenode(en_i2q,*node1,*node2);
-				return tp2;
-			}
-			if (tp2->type==bt_vector)
-				return (tp2);
-		}
-		else {
-			switch(tp2->type) {
-			case bt_float:	*node1 = makenode(en_d2i,*node1,*node2); (*node1)->esize = 2; return &stdlong;
-			case bt_triple:	*node1 = makenode(en_t2i,*node1,*node2); (*node1)->esize = 2; return &stdlong;
-			case bt_quad:	*node1 = makenode(en_q2i,*node1,*node2); (*node1)->esize = 2; return &stdlong;
-			//case bt_double:	node1 = makenode(en_dtoi,*node1,*node2); (*node1)->esize = 2; return &stdlong;
-			}
-		}
-		return tp1;
-
-    case bt_long:
-    case bt_ulong:
-		if (promote) {
-			if( tp2->type == bt_pointer	)
-				return tp2;
-			if (tp2->type==bt_double) {
-				*node1 = makenode(en_i2d,*node1,*node2);
-				return tp2;
-			}
-			if (tp2->type==bt_triple) {
-				*node1 = makenode(en_i2t,*node1,*node2);
-				return tp2;
-			}
-			if (tp2->type==bt_quad) {
-				*node1 = makenode(en_i2q,*node1,*node2);
-				return tp2;
-			}
-			if (tp2->type==bt_vector)
-				return (tp2);
-		}
-		else {
-			switch(tp2->type) {
-			case bt_float:	*node1 = makenode(en_d2i,*node1,*node2); (*node1)->esize = 2; return &stdlong;
-			case bt_triple:	*node1 = makenode(en_t2i,*node1,*node2); (*node1)->esize = 2; return &stdlong;
-			case bt_quad:	*node1 = makenode(en_q2i,*node1,*node2); (*node1)->esize = 2; return &stdlong;
-			case bt_vector: return (tp2);
-			//case bt_double:	node1 = makenode(en_dtoi,*node1,*node2); (*node1)->esize = 2; return &stdlong;
-			}
-		}
-		//if (tp2->type == bt_double || tp2->type == bt_float) {
-		//	*node1 = makenode(en_i2d,*node1,*node2);
-		//	return tp2;
-		//}
-		return tp1;
-    case bt_pointer:
-            if( isscalar(tp2) || tp2->type == bt_pointer)
-                return tp1;
-			// pointer to function was really desired.
-			if (tp2->type == bt_func || tp2->type==bt_ifunc)
-				return tp1;
-			if (tp2->type==bt_struct && ((*node2)->nodetype==en_list || (*node2)->nodetype==en_aggregate))
-				return (tp1);
-            break;
-    case bt_unsigned:
-            if( tp2->type == bt_pointer )
-                return tp2;
-            else if( isscalar(tp2) )
-                return tp1;
-            break;
-	case bt_float:
-			if (tp2->type == bt_double)
-				return &stddbl;
-			switch(tp2->type) {
-			case bt_long:	*node2 = makenode(en_i2d,*node2,*node1); break;
-			case bt_vector:	return (tp2);
-			}
-			return tp1;
-	case bt_double:
-			switch(tp2->type) {
-			case bt_long:	*node2 = makenode(en_i2d,*node2,*node1); break;
-			case bt_vector:	return (tp2);
-			//case bt_float:	*node1 = makenode(en_s2q,*node1,*node2); break;
-			}
-			return tp1;
-			/*
-			if (tp2->type == bt_long)
-				*node1 = makenode(en_d2i,*node1,*node2);
-			return tp2;
-			*/
-	case bt_quad:
-			/*
-			switch(tp2->type) {
-			case bt_long:	*node1 = makenode(en_q2i,*node1,*node2); break;
-			case bt_float:	*node1 = makenode(en_s2q,*node1,*node2); break;
-			}
-			*/
-			switch(tp2->type) {
-			case bt_long:	*node1 = makenode(en_i2q,*node1,*node2); break;
-			case bt_float:	*node1 = makenode(en_s2q,*node1,*node2); break;
-			}
-			return tp1;
-	case bt_triple:
-			/*
-			switch(tp2->type) {
-			case bt_long:	*node1 = makenode(en_q2i,*node1,*node2); break;
-			case bt_float:	*node1 = makenode(en_s2q,*node1,*node2); break;
-			}
-			*/
-			switch(tp2->type) {
-			case bt_long:	*node2 = makenode(en_i2t,*node2,*node1); break;
-			//case bt_float:	*node1 = makenode(en_s2q,*node1,*node2); break;
-			}
-			return tp1;
-	case bt_class:
-	case bt_struct:
-	case bt_union:
-			if (tp2->size > tp1->size)
-				return tp2;
-			return tp1;
-	// Really working with pointers to functions.
-	case bt_func:
-	case bt_ifunc:
-			return tp1;
-    }
-    error( ERR_MISMATCH );
-    return tp1;
-}
-
-/*
- *      this function returns true when the type of the argument is
- *      one of char, short, unsigned, or long.
- */
-static int isscalar(TYP *tp)
-{
-	return
-		tp->type == bt_byte ||
-		tp->type == bt_char ||
-		tp->type == bt_short ||
-		tp->type == bt_long ||
-		tp->type == bt_ubyte ||
-		tp->type == bt_uchar ||
-		tp->type == bt_ushort ||
-		tp->type == bt_ulong ||
-		tp->type == bt_exception ||
-		tp->type == bt_unsigned;
-}
-
 /*
  *      multops parses the multiply priority operators. the syntax of
  *      this group is:
@@ -2552,19 +2256,19 @@ TYP *multops(ENODE **node)
 								switch(tp1->type) {
 								case bt_triple:
 									ep1 = makenode(en_fmul,ep1,ep2);
-									ep1->esize = 6;
+									ep1->esize = sizeOfFPT;
 									break;
 								case bt_double:
 									ep1 = makenode(en_fmul,ep1,ep2);
-									ep1->esize = 4;
+									ep1->esize = sizeOfFPD;
 									break;
 								case bt_quad:
 									ep1 = makenode(en_fmul,ep1,ep2);
-									ep1->esize = 8;
+									ep1->esize = sizeOfFPQ;
 									break;
 								case bt_float:
 									ep1 = makenode(en_fmul,ep1,ep2);
-									ep1->esize = 2;
+									ep1->esize = sizeOfFP;
 									break;
 								case bt_vector:
 									if (isScalar)
@@ -2585,19 +2289,19 @@ TYP *multops(ENODE **node)
                         case divide:
                                 if (tp1->type==bt_triple) {
 									ep1 = makenode(en_fdiv,ep1,ep2);
-									ep1->esize = 6;
+									ep1->esize = sizeOfFPT;
 								}
 								else if (tp1->type==bt_double) {
 									ep1 = makenode(en_fdiv,ep1,ep2);
-									ep1->esize = 4;
+									ep1->esize = sizeOfFPD;
 								}
 								else if (tp1->type==bt_quad) {
 									ep1 = makenode(en_fdiv,ep1,ep2);
-									ep1->esize = 8;
+									ep1->esize = sizeOfFPQ;
 								}
 								else if (tp1->type==bt_float) {
 									ep1 = makenode(en_fdiv,ep1,ep2);
-									ep1->esize = 8;
+									ep1->esize = sizeOfFP;
 								}
                                 else if( tp1->isUnsigned )
                                     ep1 = makenode(en_udiv,ep1,ep2);
@@ -2696,20 +2400,20 @@ static TYP *addops(ENODE **node)
 				switch (tp1->type) {
 				case bt_triple:
     				ep1 = makenode( oper ? en_fadd : en_fsub,ep1,ep2);
-					ep1->esize = 6;
+					ep1->esize = sizeOfFPT;
 					break;
 				case bt_double:
     				ep1 = makenode( oper ? en_fadd : en_fsub,ep1,ep2);
-					ep1->esize = 4;
+					ep1->esize = sizeOfFPD;
 					break;
 				case bt_quad:
-                    tp1 = forcefit(&ep1,tp1,&ep2,tp2,true);
+                    //tp1 = forcefit(&ep1,tp1,&ep2,tp2,true);
     				ep1 = makenode( oper ? en_fadd : en_fsub,ep1,ep2);
-					ep1->esize = 8;
+					ep1->esize = sizeOfFPQ;
 					break;
 				case bt_float:
     				ep1 = makenode( oper ? en_fadd : en_fsub,ep1,ep2);
-					ep1->esize = 8;
+					ep1->esize = sizeOfFPS;
 					break;
 				case bt_vector:
 					if (isScalar)

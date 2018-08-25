@@ -18,5 +18,7 @@ void funcbottom(Statement *stmt);
 Function *allocFunction(int id);
 SYM *makeint2(std::string na);
 int round8(int n);
+void ListCompound(Statement *stmt);
+std::string TraceName(SYM *sp);
 
 #endif

@@ -26,15 +26,8 @@
 #include "stdafx.h"
 
 char *prefix;
-extern int GetReturnBlockSize();
 extern int nparms;
 extern bool isRegister;
-
-int round8(int n)
-{
-    while (n & 7) n++;
-    return n;
-}
 
 SYM *SYM::GetPtr(int n)
 { 
@@ -471,4 +464,5 @@ std::string *SYM::BuildSignature(int opt)
 	dfs.printf(":%s</BuildSignature>", (char *)str->c_str());
 	return str;
 }
+
 

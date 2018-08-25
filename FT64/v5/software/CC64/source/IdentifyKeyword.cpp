@@ -327,6 +327,8 @@ int IdentifyKeyword()
 			return lastst = kw_no_parms;
 		if (p[2]=='f' && p[3]=='l' && p[4]=='o' && p[5]=='a' && p[6]=='t' && p[7]=='m' && p[8]=='a' && p[9]=='x' && p[10]=='\0')
 			return lastst = kw_floatmax;
+		if (p[2] == 'f' && p[3] == 'l' && p[4] == 'o' && p[5] == 'a' && p[6] == 't' && p[7] == '1' && p[8] == '2' && p[9] == '8' && p[10] == '\0')
+			return lastst = kw_float128;
 	}
 
 	return 0;

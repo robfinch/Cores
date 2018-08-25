@@ -165,6 +165,7 @@ public:
 	uint64_t fpmask, fprmask;
 	uint64_t vmask, vrmask;
 public:
+	int GetTempBot() { return (tempbot); };
 	void CheckParameterListMatch(Function *s1, Function *s2);
 	bool CheckSignatureMatch(Function *a, Function *b) const;
 	TypeArray *GetParameterTypes();
@@ -184,6 +185,8 @@ public:
 	void AddProto(TypeArray *);
 	void AddDerived(Function *sym);
 
+	void CheckForUndefinedLabels();
+	void Summary(Statement *);
 	Statement *ParseBody();
 	int Parse();
 
@@ -307,6 +310,7 @@ public:
 	unsigned int alignment;
 	static TYP *Make(int bt, int siz);
 	static TYP *Copy(TYP *src);
+	bool IsScalar();
 	bool IsFloatType() const { return (type==bt_quad || type==bt_float || type==bt_double || type==bt_triple); };
 	bool IsVectorType() const { return (type==bt_vector); };
 	bool IsUnion() const { return (type==bt_union); };
@@ -402,6 +406,8 @@ public:
 	AMODE *GenUnary(int flags, int size, int op);
 	AMODE *GenBinary(int flags, int size, int op);
 	AMODE *GenAssignAdd(int flags, int size, int op);
+	AMODE *GenAssignLogic(int flags, int size, int op);
+	AMODE *GenLand(int flags, int op);
 };
 
 class AMODE : public CompilerType
@@ -581,17 +587,23 @@ public:
 	void AddLiveOut(BasicBlock *ip);
 	bool IsIdom(BasicBlock *b);
 	void ExpandReturnBlocks();
+
+	void UpdateLive(int);
+	void CheckForDeaths(int r);
 };
 
 // A "tree" is a "range" in Briggs terminology
 class Tree : public CompilerType
 {
 public:
-	static int treecount;
 	int var;
 	int num;
-	Tree *next;
-	CSet *tree;
+	CSet *blocks;
+	int degree;
+	int lattice;
+	bool spill;
+	__int8 color;
+	CSet *adjacent;
 	// Cost accounting
 	float loads;
 	float stores;
@@ -599,7 +611,48 @@ public:
 	bool infinite;
 	float cost;
 public:
-	static Tree *MakeNew();
+	Tree() { adjacent = nullptr; };
+	void ClearCosts();
+	int GetFirstNeighbour() { adjacent->resetPtr(); return (adjacent->nextMember()); };
+	int GetNextNeighbour() { return (adjacent->nextMember()); };
+};
+
+class Forest
+{
+public:
+	short int treecount;
+	Tree *trees[500];
+	Function *func;
+	CSet low, high;
+public:
+	Tree *MakeNewTree();
+	Tree *MakeNewTree(Tree *);
+	void ClearCosts() {
+		int r;
+		for (r = 0; r < treecount; r++)
+			trees[r]->ClearCosts();
+	}
+	void SummarizeCost();
+	void Renumber();
+	void Simplify();
+	void Color();
+};
+
+class IGraph
+{
+public:
+	int *bitmatrix;
+	short int *degrees;
+	CSet *ns;	// neighbouring sets
+	int size;
+public:
+	void MakeNew(int n);
+	void Clear();
+	void Add(int x, int y);
+	void Remove(int n);
+	bool DoesInterfere(int x, int y);
+	int Degree(int n) { return ((int)degrees[n]); };
+	CSet *Neighbours(int n) { return (&ns[n]); };
 };
 
 class Var : public CompilerType
@@ -608,7 +661,7 @@ public:
 	Var *next;
 	int num;
 	int cnum;
-	Tree *trees;
+	Forest trees;
 	CSet *forest;
 	CSet *visited;
 	IntStack *istk;
@@ -623,6 +676,7 @@ public:
 	static Var *Find(int);
 	static Var *Find2(int);
 	static void DumpForests();
+	void Transplant(Var *);
 };
 
 class Instruction
@@ -633,6 +687,14 @@ public:
 	short extime;	// execution time, divide may take hundreds of cycles
 	bool HasTarget;	// has a target register
 	bool memacc;	// instruction accesses memory
+public:
+	bool IsFlowControl();
+	bool IsSetInsn() {
+		return (opcode == op_seq || opcode == op_sne
+			|| opcode == op_slt || opcode == op_sle || opcode == op_sgt || opcode == op_sge
+			|| opcode == op_sltu || opcode == op_sleu || opcode == op_sgtu || opcode == op_sgeu
+			);
+	};
 };
 
 class CSE {
@@ -790,6 +852,8 @@ public:
 	static void ParseByte();
 	static void ParseFloat();
 	static void ParseDouble();
+	static void ParseTriple();
+	static void ParseFloat128();
 	static void ParseVector();
 	static void ParseVectorMask();
 	static SYM *ParseId();
@@ -854,6 +918,8 @@ public:
 	int PreprocessFile(char *nm);
 	void CloseFiles();
 	void AddStandardTypes();
+	void AddBuiltinFunctions();
+	static int GetReturnBlockSize() { return (4 * 8); };
 	int main2(int c, char **argv);
 };
 

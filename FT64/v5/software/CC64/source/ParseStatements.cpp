@@ -38,6 +38,24 @@ char *llptr;
 extern char *lptr;
 extern char inpline[132];
 
+static SYM *makeint(char *name)
+{
+	SYM *sp;
+	TYP *tp;
+
+	sp = allocSYM();
+	tp = TYP::Make(bt_long, 2);
+	tp->sname = new std::string("");
+	tp->isUnsigned = FALSE;
+	tp->isVolatile = FALSE;
+	sp->SetName(name);
+	sp->storage_class = sc_auto;
+	sp->SetType(tp);
+	currentFn->sym->lsyms.insert(sp);
+	return sp;
+}
+
+
 Statement *NewStatement(int typ, int gt) {
 	Statement *s = (Statement *)xalloc(sizeof(Statement));
 	memset(s, '\0', sizeof(Statement));

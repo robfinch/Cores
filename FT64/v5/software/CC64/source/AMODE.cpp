@@ -27,6 +27,15 @@
 
 char AMODE::fpsize()
 {
+	if (type == stddouble.GetIndex())
+		return 'd';
+	if (type == stdquad.GetIndex())
+		return 'q';
+	if (type == stdflt.GetIndex())
+		return 's';
+	if (type == stdtriple.GetIndex())
+		return 't';
+
 	if (FloatSize)
 		return (FloatSize);
 	if (offset == nullptr)

@@ -53,9 +53,7 @@ void ComputeSpillCosts();
 extern void CalcDominatorTree();
 Var *FindVar(int num);
 void ExpandReturnBlocks();
-void Renumber();
 bool RemoveEnabled = true;
-extern BasicBlock *basicBlocks[10000];
 unsigned int ArgRegCount;
 
 OCODE    *peep_head = NULL,
@@ -65,6 +63,7 @@ extern Var *varlist;
 extern BasicBlock *RootBlock;
 extern BasicBlock *LastBlock;
 
+IGraph iGraph;
 int optimized;	// something got optimized
 
 AMODE *copy_addr(AMODE *ap)
@@ -535,6 +534,27 @@ static bool IsSubiSP(OCODE *ip)
 	return (false);
 }
 
+//	   sge		$v1,$r12,$v2
+//     redor	$v2,$v1
+// Translates to:
+//	   sge		$v1,$r12,$v2
+//     mov		$v2,$v1
+// Because redundant moves will be eliminated by further compiler
+// optimizations.
+
+static void PeepoptRedor(OCODE *ip)
+{
+	if (ip->back == nullptr)
+		return;
+	if (ip->back->insn->IsSetInsn()) {
+		if (ip->back->oper1->preg == ip->oper2->preg) {
+			ip->opcode = op_mov;
+			ip->insn = GetInsn(op_mov);
+			optimized++;
+		}
+	}
+}
+
 // 'subui' followed by a 'bne' gets turned into 'loop'
 //
 static void PeepoptSub(OCODE *ip)
@@ -591,42 +611,6 @@ static void MergeSubi(OCODE *first, OCODE *last, int64_t amt)
 	}
 }
 
-static bool IsFlowControl(OCODE *ip)
-{
-	if (ip->opcode==op_jal ||
-		ip->opcode==op_jmp ||
-		ip->opcode==op_ret ||
-		ip->opcode==op_call ||
-		ip->opcode==op_bra ||
-		ip->opcode==op_beq ||
-		ip->opcode==op_bne ||
-		ip->opcode==op_blt ||
-		ip->opcode==op_ble ||
-		ip->opcode==op_bgt ||
-		ip->opcode==op_bge ||
-		ip->opcode==op_bltu ||
-		ip->opcode==op_bleu ||
-		ip->opcode==op_bgtu ||
-		ip->opcode==op_bgeu ||
-		ip->opcode==op_beqi ||
-		ip->opcode==op_bnei ||
-		ip->opcode==op_blti ||
-		ip->opcode==op_blei ||
-		ip->opcode==op_bgti ||
-		ip->opcode==op_bgei ||
-		ip->opcode==op_bltui ||
-		ip->opcode==op_bleui ||
-		ip->opcode==op_bgtui ||
-		ip->opcode==op_bgeui ||
-		ip->opcode==op_beqi ||
-		ip->opcode==op_bbs ||
-		ip->opcode==op_bbc ||
-		ip->opcode==op_bchk 
-		)
-		return (true);
-	return (false);
-}
-
 // 'subui'
 //
 static void PeepoptSubSP()
@@ -644,7 +628,7 @@ static void PeepoptSubSP()
 				last_subi = ip;
 			amt += ip->oper3->offset->i;
 		}
-		else if (ip->opcode==op_push || IsFlowControl(ip)) {
+		else if (ip->opcode==op_push || ip->insn->IsFlowControl()) {
 			MergeSubi(first_subi, last_subi, amt);
 			first_subi = last_subi = nullptr;
 			amt = 0;
@@ -1134,6 +1118,10 @@ static void PeepoptHint(OCODE *ip)
 		}
 		break;
 
+	// Can't do this optimization:
+	// what if x = (~(y=(a & b)))
+	// The embedded assignment to y which might be used later would be lost.
+	//
 	// hint #2
 	// Takes care of redundant moves at the function return point
 	// Code like:
@@ -1142,20 +1130,76 @@ static void PeepoptHint(OCODE *ip)
 	// Translated to:
 	//     MOV r1,arg
 	case 2:
+		return;
 		if (ip->fwd==nullptr || ip->back==nullptr)
 			break;
 		if (ip->fwd->remove || ip->back->remove)
 			break;
 		if (equal_address(ip->fwd->oper2, ip->back->oper1)) {
 			if (ip->back->HasTargetReg()) {
-				ip->back->oper1 = ip->fwd->oper1;
-				MarkRemove(ip->fwd);
-				optimized++;
+				if (!(ip->fwd->oper1->mode == am_fpreg && ip->back->opcode==op_ldi)) {
+					ip->back->oper1 = ip->fwd->oper1;
+					MarkRemove(ip->fwd);
+					optimized++;
+				}
 			}
 		}
 		else {
 			MarkRemove(ip);
 			optimized++;
+		}
+		break;
+
+	// hint #3
+	//	   and r5,r2,r3
+	//     com r1,r5
+	// Translates to:
+	//     nand r5,r2,r3
+	case 3:
+		if (ip->back == nullptr || ip->fwd == nullptr)
+			break;
+		if (ip->fwd->remove || ip->back->remove)
+			break;
+		// If not all in registers
+		if (ip->back->oper1->mode != am_reg
+			|| ip->back->oper2->mode != am_reg
+			|| (ip->back->oper3 && ip->back->oper3->mode != am_reg))
+			break;
+		if (ip->back->opcode != op_and
+			&& ip->back->opcode != op_or
+			&& ip->back->opcode != op_xor
+			)
+			break;
+		if (ip->fwd->opcode != op_com)
+			break;
+		if (ip->fwd->oper2->mode != am_reg)
+			break;
+		if (ip->back->oper1->preg != ip->fwd->oper2->preg)
+			break;
+		if (ip->fwd->opcode != op_com)
+			break;
+		switch (ip->back->opcode) {
+		case op_and:
+			ip->back->opcode = op_nand;
+			ip->back->insn = GetInsn(op_nand);
+			ip->back->oper1->preg = ip->fwd->oper1->preg;
+			MarkRemove(ip->fwd);
+			optimized++;
+			break;
+		case op_or:
+			ip->back->opcode = op_nor;
+			ip->back->insn = GetInsn(op_nor);
+			ip->back->oper1->preg = ip->fwd->oper1->preg;
+			MarkRemove(ip->fwd);
+			optimized++;
+			break;
+		case op_xor:
+			ip->back->opcode = op_xnor;
+			ip->back->insn = GetInsn(op_xnor);
+			ip->back->oper1->preg = ip->fwd->oper1->preg;
+			MarkRemove(ip->fwd);
+			optimized++;
+			break;
 		}
 		break;
 
@@ -1610,6 +1654,9 @@ static void opt_peep()
 				case op_and:
 						PeepoptAnd(ip);
 						break;
+				case op_redor:
+					PeepoptRedor(ip);
+					break;
 				}
 				}
 			}
@@ -1652,7 +1699,7 @@ static void opt_peep()
 	CFG::InsertPhiInsns();
 	RemoveCompilerHints2();
 	CFG::Rename();
-	Renumber();
+	forest.Renumber();
 	ComputeSpillCosts();
 	//RemoveCode();
 	Coalesce();
@@ -1671,7 +1718,7 @@ OCODE *FindLabel(int64_t i)
 				return (ip);
 		}
 	}
-	return nullptr;
+	return (nullptr);
 }
 
 void CreateVars()
@@ -1724,9 +1771,10 @@ bool Coalesce()
 	int reg1, reg2;
 	Var *v1, *v2, *v3;
 	Var *p, *q;
-	Tree *t, *t1, *u;
+	Tree *t, *u;
 	bool foundSameTree;
 	bool improved;
+	int nn,mm;
 
 	improved = false;
 	for (p = varlist; p; p = p->next) {
@@ -1762,77 +1810,50 @@ bool Coalesce()
 			dfs.printf("Coalescing live range r%d with ", reg1);
 			dfs.printf("r%d \n", reg2);
 			improved = true;
-			if (v1->trees==nullptr) {
+			if (v1->trees.treecount==0) {
 				v3 = v1;
 				v1 = v2;
 				v2 = v3;
 			}
 			
-			for (t = v2->trees; t; t = t1) {
-				t1 = t->next;
+			for (nn = 0; nn < v2->trees.treecount; nn++) {
+				t = v2->trees.trees[nn];
 				foundSameTree = false;
-				for (u = v1->trees; u; u = u->next) {
-					if (t->tree->NumMember() >= u->tree->NumMember()) {
-						if (t->tree->isSubset(*u->tree)) {
-							u->tree->add(t->tree);
-							v1->forest->add(t->tree);
+				for (mm = 0; mm < v1->trees.treecount; mm++) {
+					u = v1->trees.trees[mm];
+					if (t->blocks->NumMember() >= u->blocks->NumMember()) {
+						if (t->blocks->isSubset(*u->blocks)) {
+							u->blocks->add(t->blocks);
+							v1->forest->add(t->blocks);
 							foundSameTree = true;
 							break;
 						}
 					}
 					else {
-						if (u->tree->isSubset(*t->tree)) {
+						if (u->blocks->isSubset(*t->blocks)) {
 							foundSameTree = true;
-							t->tree->add(u->tree);
-							v2->forest->add(u->tree);
+							t->blocks->add(u->blocks);
+							v2->forest->add(u->blocks);
 							break;
 						}
 					}
 				}
 				
 				if (!foundSameTree) {
-					t->next = v1->trees;
-					v1->trees = t;
+					//t->next = v1->trees;
+					//v1->trees = t;
+					v1->Transplant(v2);
 					v1->forest->add(v2->forest);
 				}
 				
 			}
 			
-			v2->trees = nullptr;
+			v2->trees.treecount = 0;
 			v2->forest->clear();
 			v2->cnum = v1->num;
 		}
 	}
 	return (improved);
-}
-
-static void UpdateLive(BasicBlock *b, OCODE *ip)
-{
-	int r;
-
-	r = ip->oper1->lrpreg;
-	if (b->NeedLoad->isMember(r)) {
-		b->NeedLoad->remove(r);
-		if (!b->MustSpill->isMember(r)) {
-			alltrees[r]->infinite = true;
-		}
-	}
-	alltrees[r]->stores += b->depth;
-	b->live->remove(r);
-}
-
-static void CheckForDeaths(BasicBlock *b, int r)
-{
-	int m;
-
-	if (!b->live->isMember(r)) {
-		b->NeedLoad->resetPtr();
-		for (m = b->NeedLoad->nextMember(); m >= 0; m = b->NeedLoad->nextMember()) {
-			alltrees[m]->loads += b->depth;
-			b->MustSpill->add(m);
-		}
-		b->NeedLoad->clear();
-	}
 }
 
 void ComputeSpillCosts()
@@ -1844,12 +1865,7 @@ void ComputeSpillCosts()
 	int r;
 	bool endLoop;
 
-	for (r = 0; r < Tree::treecount; r++) {
-		alltrees[r]->loads = 0.0;
-		alltrees[r]->stores = 0.0;
-		alltrees[r]->copies = 0.0;
-		alltrees[r]->infinite = false;
-	}
+	forest.ClearCosts();
 
 	for (b = RootBlock; b; b = b->next) {
 		b->NeedLoad->clear();
@@ -1863,35 +1879,35 @@ void ComputeSpillCosts()
 			i = ip->insn;
 			// examine instruction i updating sets and accumulating costs
 			if (i->HasTarget) {
-				UpdateLive(b, ip);
+				b->UpdateLive(ip->oper1->lrpreg);
 			}
 			// This is a loop in the Briggs thesis, but we only allow 4 operands
 			// so the loop is unrolled.
 			if (ip->oper1) {
 				if (!ip->oper1->isTarget) {
 					r = ip->oper1->lrpreg;
-					CheckForDeaths(b, r);
+					b->CheckForDeaths(r);
 					if (r = ip->oper1->lrsreg)	// '=' is correct
-						CheckForDeaths(b,r);
+						b->CheckForDeaths(r);
 				}
 			}
 			if (ip->oper2) {
 				r = ip->oper1->lrpreg;
-				CheckForDeaths(b, r);
+				b->CheckForDeaths(r);
 				if (r = ip->oper1->lrsreg)
-					CheckForDeaths(b,r);
+					b->CheckForDeaths(r);
 			}
 			if (ip->oper3) {
 				r = ip->oper1->lrpreg;
-				CheckForDeaths(b, r);
+				b->CheckForDeaths(r);
 				if (r = ip->oper1->lrsreg)
-					CheckForDeaths(b,r);
+					b->CheckForDeaths(r);
 			}
 			if (ip->oper4) {
 				r = ip->oper1->lrpreg;
-				CheckForDeaths(b, r);
+				b->CheckForDeaths(r);
 				if (r = ip->oper1->lrsreg)
-					CheckForDeaths(b,r);
+					b->CheckForDeaths(r);
 			}
 			// Re-examine uses to update live and needload
 			pam = ip->oper1;
@@ -1932,70 +1948,17 @@ void ComputeSpillCosts()
 		}
 		b->NeedLoad->resetPtr();
 		for (r = b->NeedLoad->nextMember(); r >= 0; r = b->NeedLoad->nextMember()) {
-			if (alltrees[r])
-			alltrees[r]->loads += b->depth;
+			if (forest.trees[r])
+			forest.trees[r]->loads += b->depth;
 		}
 	}
 
-	// Summarize costs
-	dfs.printf("<TreeCosts>\n");
-	for (r = 0; r < Tree::treecount; r++) {
-		// If alltrees[r].lattice = BOT
-		alltrees[r]->cost = 2.0f * (alltrees[r]->loads + alltrees[r]->stores);
-		// else
-		// alltrees[r]->cost = alltrees[r]->loads - alltrees[r]->stores;
-		alltrees[r]->cost -= alltrees[r]->copies;
-		dfs.printf("Tree:%d ", r);
-		dfs.printf("cost = %d\n", (int)alltrees[r]->cost);
-	}
-	dfs.printf("</TreeCosts>\n");
-}
-
-// Renumber the registers according to the tree (live range) numbers.
-static void Renumber()
-{
-	OCODE *ip;
-	Tree *t;
-	int tt;
-	BasicBlock *b;
-	int bb;
-	bool eol;
-
-	for (tt = 0; tt < Tree::treecount; tt++) {
-		t = alltrees[tt];
-		t->tree->resetPtr();
-		for (bb = t->tree->nextMember(); bb >= 0; bb = t->tree->nextMember()) {
-			b = basicBlocks[bb];
-			eol = false;
-			for (ip = b->code; ip && !eol; ip = ip->fwd) {
-				if (ip->opcode==op_label)
-					continue;
-				if (ip->oper1 && ip->oper1->preg == t->var)
-					ip->oper1->lrpreg = t->num;
-				if (ip->oper1 && ip->oper1->sreg == t->var)
-					ip->oper1->lrsreg = t->num;
-				if (ip->oper2 && ip->oper2->preg==t->var)
-					ip->oper2->lrpreg = t->num;
-				if (ip->oper2 && ip->oper2->sreg==t->var)
-					ip->oper2->lrsreg = t->num;
-				if (ip->oper3 && ip->oper3->preg==t->var)
-					ip->oper3->lrpreg = t->num;
-				if (ip->oper3 && ip->oper3->sreg==t->var)
-					ip->oper3->lrsreg = t->num;
-				if (ip->oper4 && ip->oper4->preg==t->var)
-					ip->oper4->lrpreg = t->num;
-				if (ip->oper4 && ip->oper4->sreg==t->var)
-					ip->oper4->lrsreg = t->num;
-				if (ip==b->lcode)
-					eol = true;
-			}
-		}
-	}
+	forest.SummarizeCost();
 }
 
 void RemoveCode()
 {
-	int nn;
+	int nn,mm;
 	Var *v;
 	Tree *t;
 	OCODE *p;
@@ -2009,8 +1972,9 @@ void RemoveCode()
 			continue;
 		if (v->num==0 || v->num==regLR || v->num==regXLR)
 			continue;
-		for (t = v->trees; t; t = t->next) {
-			nn = t->tree->lastMember();
+		for (mm = 0; mm < v->trees.treecount; mm++) {
+			t = v->trees.trees[mm];
+			nn = t->blocks->lastMember();
 			do {
 				for (p = basicBlocks[nn]->lcode; p && !p->leader; p = p->back) {
 					if (p->opcode==op_label)
@@ -2026,7 +1990,7 @@ void RemoveCode()
 					if (!p->remove && p->HasSourceReg(v->num))
 						goto j1;
 				}
-			} while((nn = t->tree->prevMember()) >= 0);
+			} while((nn = t->blocks->prevMember()) >= 0);
 j1:	;
 		}
 		Remove2();

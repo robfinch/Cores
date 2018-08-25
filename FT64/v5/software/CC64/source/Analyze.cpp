@@ -27,7 +27,6 @@
 
 int bsave_mask;
 extern int popcnt(int m);
-extern int AllocateRegisterVars();
 static void scan_compound(Statement *stmt);
 static void repcse_compound(Statement *stmt);
 
@@ -187,14 +186,21 @@ static void scanexpr(ENODE *node, int duse)
 		case en_chw:
         case en_uminus:
 		case en_abs:
+		case en_sxb: case en_sxc: case en_sxh:
         case en_compl:  
         case en_not:
         case en_chk:
-        case en_i2d:
+			scanexpr(node->p[0], duse);
+			break;
+		case en_i2d:
+			scanexpr(node->p[0], duse);
+			break;
 		case en_i2q:
         case en_d2i:
 		case en_q2i:
 		case en_s2q:
+		case en_d2q:
+		case en_t2q:
                 scanexpr(node->p[0],duse);
                 break;
         case en_asadd:  case en_assub:
@@ -455,13 +461,20 @@ void repexpr(ENODE *node)
 				case en_chw:
                 case en_uminus:
 				case en_abs:
+				case en_sxb: case en_sxh: case en_sxc:
                 case en_not:    case en_compl:
                 case en_chk:
-                case en_i2d:
+					repexpr(node->p[0]);
+					break;
+				case en_i2d:
+					repexpr(node->p[0]);
+					break;
 				case en_i2q:
                 case en_d2i:
 				case en_q2i:
 				case en_s2q:
+				case en_d2q:
+				case en_t2q:
                         repexpr(node->p[0]);
                         break;
                 case en_add:    case en_sub:

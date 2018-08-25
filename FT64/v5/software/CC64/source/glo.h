@@ -270,7 +270,6 @@ extern void doinit(SYM *sp);
 // Func.c
 extern SYM *makeint(char *);
 extern void funcbody(SYM *sp);
-extern int TempBot();
 // Intexpr.c
 extern int64_t GetIntegerExpression(ENODE **p);
 extern Float128 *GetFloatExpression(ENODE **pnode);
@@ -406,10 +405,8 @@ extern void tmpFreeAll();
 extern void tmpReset();
 extern int tmpAlloc(int);
 extern void tmpFree(int);
-
-extern int GetReturnBlockSize();
-
-extern Tree *alltrees[500];
-
+extern BasicBlock *basicBlocks[10000];
+extern Forest forest;
+extern IGraph iGraph;
 
 #endif

@@ -290,7 +290,7 @@ j2:
 			sp->NumParms = nump;
 			sp->numa = numa;
 			sp->sym->stmt = ParseBody();
-			funcbottom(sp->sym->stmt);
+			Summary(sp->sym->stmt);
 		}
 	}
 	//                error(ERR_BLOCK);
@@ -316,7 +316,7 @@ j2:
 		if (sym->storage_class == sc_external)
 			sym->storage_class = sc_global;
 		sp->sym->stmt = ParseBody();
-		funcbottom(sp->sym->stmt);
+		Summary(sp->sym->stmt);
 	}
 j1:
 	dfs.printf("F");
@@ -1177,6 +1177,45 @@ bool Function::HasRegisterParameters()
 	delete[] ta;
 	return (false);
 }
+
+
+void Function::CheckForUndefinedLabels()
+{
+	SYM *head = SYM::GetPtr(sym->lsyms.GetHead());
+
+	while (head != 0) {
+		if (head->storage_class == sc_ulabel)
+			lfs.printf("*** UNDEFINED LABEL - %s\n", (char *)head->name->c_str());
+		head = head->GetNextPtr();
+	}
+}
+
+
+void Function::Summary(Statement *stmt)
+{
+	dfs.printf("<FuncSummary>\n");
+	nl();
+	CheckForUndefinedLabels();
+	lc_auto = 0;
+	lfs.printf("\n\n*** local symbol table ***\n\n");
+	ListTable(&sym->lsyms, 0);
+	// Should recurse into all the compound statements
+	if (stmt == NULL)
+		dfs.printf("DIAG: null statement in funcbottom.\r\n");
+	else {
+		if (stmt->stype == st_compound)
+			ListCompound(stmt);
+	}
+	lfs.printf("\n\n\n");
+	//    ReleaseLocalMemory();        // release local symbols
+	isPascal = FALSE;
+	isKernel = FALSE;
+	isOscall = FALSE;
+	isInterrupt = FALSE;
+	isNocall = FALSE;
+	dfs.printf("</FuncSummary>\n");
+}
+
 
 
 

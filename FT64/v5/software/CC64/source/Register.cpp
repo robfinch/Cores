@@ -166,7 +166,7 @@ void initRegStack()
 
 void SpillRegister(AMODE *ap, int number)
 {
-	GenerateDiadic(op_sw,0,ap,make_indexed(TempBot()-ap->deep*sizeOfWord,regFP));
+	GenerateDiadic(op_sw,0,ap,make_indexed(currentFn->GetTempBot()-ap->deep*sizeOfWord,regFP));
     reg_stack[reg_stack_ptr].amode = ap;
     reg_stack[reg_stack_ptr].f.allocnum = number;
     if (reg_alloc[number].f.isPushed=='T')
@@ -176,7 +176,7 @@ void SpillRegister(AMODE *ap, int number)
 
 void SpillFPRegister(AMODE *ap, int number)
 {
-	GenerateDiadic(op_sf,'d',ap,make_indexed(TempBot()-ap->deep*sizeOfWord,regFP));
+	GenerateDiadic(op_sf,'d',ap,make_indexed(currentFn->GetTempBot()-ap->deep*sizeOfWord,regFP));
     fpreg_stack[fpreg_stack_ptr].amode = ap;
     fpreg_stack[fpreg_stack_ptr].f.allocnum = number;
     if (fpreg_alloc[number].f.isPushed=='T')
@@ -191,7 +191,7 @@ void LoadRegister(int regno, int number)
 	if (reg_in_use[regno] >= 0)
 		fatal("LoadRegister():register still in use");
 	reg_in_use[regno] = number;
-	GenerateDiadic(op_lw,0,makereg(regno),make_indexed(TempBot()-number*sizeOfWord,regFP));
+	GenerateDiadic(op_lw,0,makereg(regno),make_indexed(currentFn->GetTempBot()-number*sizeOfWord,regFP));
     reg_alloc[number].f.isPushed = 'F';
 }
 
@@ -200,7 +200,7 @@ void LoadFPRegister(int regno, int number)
 	if (fpreg_in_use[regno] >= 0)
 		fatal("LoadRegister():register still in use");
 	fpreg_in_use[regno] = number;
-	GenerateDiadic(op_lf,'d',makefpreg(regno),make_indexed(TempBot()-number*sizeOfWord,regFP));
+	GenerateDiadic(op_lf,'d',makefpreg(regno),make_indexed(currentFn->GetTempBot()-number*sizeOfWord,regFP));
     fpreg_alloc[number].f.isPushed = 'F';
 }
 

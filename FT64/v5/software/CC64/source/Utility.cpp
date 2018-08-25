@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2018  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -25,10 +25,40 @@
 //
 #include "stdafx.h"
 
-void Tree::ClearCosts()
+int round2(int n)
 {
-	loads = 0.0;
-	stores = 0.0;
-	copies = 0.0;
-	infinite = false;
+	while (n & 1) n++;
+	return (n);
 }
+
+int round8(int n)
+{
+	while (n & 7) n++;
+	return (n);
+}
+
+std::string TraceName(SYM *sp)
+{
+	std::string namebuf;
+	SYM *vector[64];
+	int deep = 0;
+
+	do {
+		vector[deep] = sp;
+		sp = sp->GetParentPtr();
+		deep++;
+		if (deep > 63) {
+			break; // should be an error
+		}
+	} while (sp);
+	deep--;
+	namebuf = "";
+	while (deep > 0) {
+		namebuf += *vector[deep]->name;
+		namebuf += "_";
+		deep--;
+	}
+	namebuf += *vector[deep]->name;
+	return namebuf;
+}
+

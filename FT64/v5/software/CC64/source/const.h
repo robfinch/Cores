@@ -25,6 +25,8 @@ enum e_node {
         en_cbc, en_cbh,
 		en_cch,
 		en_cwl, en_cld, en_cfd,
+		en_sxb, en_sxc, en_sxh,
+		en_zxb, en_zxc, en_zxh,
         en_icon, en_fcon, en_fqcon, en_dcon, en_tcon, en_labcon, en_nacon, en_autocon, en_autofcon, en_classcon,
 		en_clabcon, en_cnacon,
 		en_dlabcon, en_dnacon, // 30<-
@@ -40,6 +42,7 @@ enum e_node {
 		en_fdadd, en_fdsub, en_fdmul, en_fddiv,
 		en_fsadd, en_fssub, en_fsmul, en_fsdiv,
 		en_fadd, en_fsub, en_fmul, en_fdiv,
+		en_d2t, en_d2q, en_t2q,
 		en_i2d, en_i2t, en_i2q, en_d2i, en_q2i, en_s2q, en_t2i, // 63<-
         en_div, en_asl, en_shl, en_shlu, en_shr, en_shru, en_asr, en_rol, en_ror,
 		en_cond, en_assign, 
@@ -98,6 +101,7 @@ enum e_sym {
 
 	kw_vector, kw_vector_mask,
 	kw_int, kw_byte, kw_int8, kw_int16, kw_int32, kw_int40, kw_int64, kw_int80,
+	kw_float128,
 	kw_icache, kw_dcache, kw_thread,
 	kw_void, kw_char, kw_float, kw_double, kw_triple,
 	kw_struct, kw_union, kw_class,
@@ -131,6 +135,7 @@ enum e_op {
 	op_mul, op_muli, op_mulu, op_divi, op_modi, op_modui,
 	op_div, op_divs, op_divsi, op_divu, op_and, op_andi, op_eor, op_eori,
 	op_or, op_ori, op_xor, op_xori, op_redor,
+	op_nand, op_nor, op_xnor,
 	op_asr, op_asri, op_shl, op_shr, op_shru, op_ror, op_rol,
 	op_shli, op_shri, op_shrui, op_shlu, op_shlui, op_rori, op_roli,
 	op_bfext, op_bfextu, op_bfins,
@@ -170,7 +175,7 @@ enum e_op {
 	op_sll, op_slli, op_srl, op_srli, op_sra, op_srai, op_asl, op_lsr, op_asli, op_lsri, op_rem,
 	// floating point
 	op_fbeq, op_fbne, op_fbor, op_fbun, op_fblt, op_fble, op_fbgt, op_fbge,
-	op_fcvtsq,
+	op_fcvtsq, op_fcvtdq, op_fcvttq,
 	op_fadd, op_fsub, op_fmul, op_fdiv, op_fcmp, op_fneg,
 	op_ftmul, op_ftsub, op_ftdiv, op_ftadd, op_ftneg, op_ftcmp,
 	op_fdmul, op_fdsub, op_fddiv, op_fdadd, op_fdneg, op_fdcmp,
@@ -320,6 +325,10 @@ enum e_seg {
 #define ERR_TOOMANYELEMENTS	58
 #define ERR_CONST			59
 #define ERR_INIT_UNION      60
+#define ERR_LOST_PREC		61
+#define ERR_TOOMANY_TREES	62
+#define ERR_STACKFULL		63
+#define ERR_STACKEMPTY		64
 #define ERR_NULLPOINTER		1000
 #define ERR_CIRCULAR_LIST 1001
 

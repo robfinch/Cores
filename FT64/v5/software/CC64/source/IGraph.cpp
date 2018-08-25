@@ -25,10 +25,67 @@
 //
 #include "stdafx.h"
 
-void Tree::ClearCosts()
+void IGraph::MakeNew(int n)
 {
-	loads = 0.0;
-	stores = 0.0;
-	copies = 0.0;
-	infinite = false;
+	int bms;
+
+	size = n;
+	bms = n * n / sizeof(int);
+	bitmatrix = new int[bms];
+	degrees = new short int[n];
+	ns = new CSet[n];
+	Clear();
+}
+
+void IGraph::Clear()
+{
+	int j;
+
+	j = size * size / sizeof(int);
+	ZeroMemory(bitmatrix, j);
+	ZeroMemory(degrees, size);
+	for (j = 0; j < size; j++)
+		ns[j].clear();
+}
+
+void IGraph::Add(int x, int y)
+{
+	int bitndx;
+	int intndx;
+
+	bitndx = x + (y * y) / 2;
+	intndx = bitndx / sizeof(int);
+	bitndx %= (sizeof(int) * 8);
+	bitmatrix[intndx] |= (1 << bitndx);
+	ns[x].add(y);
+	degrees[x]++;
+}
+
+void IGraph::Remove(int n)
+{
+	int bitndx;
+	int intndx;
+	int j;
+
+	ns[n].resetPtr();
+	for (j = ns[n].nextMember(); j >= 0; j = ns[n].nextMember()) {
+		bitndx = n + (j * j) / 2;
+		intndx = bitndx / sizeof(int);
+		bitndx %= (sizeof(int) * 8);
+		bitmatrix[intndx] &= ~(1 << bitndx);
+	}
+	ns[n].clear();
+	if (degrees[n] > 0)
+		degrees[n]--;
+}
+
+bool IGraph::DoesInterfere(int x, int y)
+{
+	int bitndx;
+	int intndx;
+
+	bitndx = x + (y * y) / 2;
+	intndx = bitndx / sizeof(int);
+	bitndx %= (sizeof(int) * 8);
+	return (((bitmatrix[intndx] >> bitndx) & 1)==1);
 }

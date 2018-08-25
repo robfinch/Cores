@@ -74,7 +74,7 @@ BasicBlock *BasicBlock::Blockize(OCODE *start)
 	start->leader = true;
 	for (ip = start; ip; ip = ip2) {
 		ip->bb = pb;
-		pb->depth = ip->loop_depth;
+		pb->depth = ip->loop_depth + 1;
 		ip2 = ip->fwd;
 		if (ip->opcode != op_label && ip->opcode != op_rem && ip->opcode != op_rem2 && ip->opcode != op_hint && ip->opcode != op_hint2)
 			pb->length++;
@@ -367,6 +367,34 @@ void BasicBlock::ExpandReturnBlocks()
 
 	}
 
+}
+
+
+void BasicBlock::UpdateLive(int r)
+{
+	if (NeedLoad->isMember(r)) {
+		NeedLoad->remove(r);
+		if (!MustSpill->isMember(r)) {
+			forest.trees[r]->infinite = true;
+		}
+	}
+	forest.trees[r]->stores += depth;
+	live->remove(r);
+}
+
+
+void BasicBlock::CheckForDeaths(int r)
+{
+	int m;
+
+	if (!live->isMember(r)) {
+		NeedLoad->resetPtr();
+		for (m = NeedLoad->nextMember(); m >= 0; m = NeedLoad->nextMember()) {
+			forest.trees[m]->loads += depth;
+			MustSpill->add(m);
+		}
+		NeedLoad->clear();
+	}
 }
 
 void ComputeLiveVars()

@@ -139,7 +139,19 @@ void dooper(ENODE **node)
 		ep->i = ep->p[0]->i ? ep->p[1]->p[0]->i : ep->p[1]->p[1]->i;
 		ep->sp = ep->p[0]->i ? ep->p[1]->p[0]->sp : ep->p[1]->p[1]->sp;
 		break;
-    }
+	case en_sxb:
+		ep->nodetype = en_icon;
+		ep->i = (ep->p[0]->i & 0x100) ? ep->p[0]->i | 0xffffffffffffff00 : ep->p[0]->i;
+		break;
+	case en_sxc:
+		ep->nodetype = en_icon;
+		ep->i = (ep->p[0]->i & 0x10000) ? ep->p[0]->i | 0xffffffffffff0000 : ep->p[0]->i;
+		break;
+	case en_sxh:
+		ep->nodetype = en_icon;
+		ep->i = (ep->p[0]->i & 0x100000000) ? ep->p[0]->i | 0xffffffff00000000 : ep->p[0]->i;
+		break;
+	}
 }
 
 /*
@@ -227,6 +239,9 @@ static void opt0(ENODE **node)
 			case en_cucwp:
                     opt0( &((*node)->p[0]));
                     return;
+			case en_sxb:
+			case en_sxc:
+			case en_sxh:
 			case en_abs:
                     opt0( &(ep->p[0]));
                     if( ep->p[0]->nodetype == en_icon )
@@ -506,6 +521,7 @@ static int64_t xfold(ENODE *node)
                         i = node->i;
                         node->i = 0;
                         return i;
+				case en_sxb: case en_sxc: case en_sxh:
 				case en_abs:
 						return xfold(node->p[0]);
                 case en_add:

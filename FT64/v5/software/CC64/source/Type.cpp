@@ -34,6 +34,24 @@ extern int64_t initfloat();
 extern int64_t inittriple();
 int64_t InitializePointer();
 
+
+bool TYP::IsScalar()
+{
+	return
+		type == bt_byte ||
+		type == bt_char ||
+		type == bt_short ||
+		type == bt_long ||
+		type == bt_ubyte ||
+		type == bt_uchar ||
+		type == bt_ushort ||
+		type == bt_ulong ||
+		type == bt_enum ||
+		type == bt_exception ||
+		type == bt_unsigned;
+}
+
+
 TYP *TYP::GetBtp() {
     if (btp==0)
       return nullptr;
@@ -232,6 +250,9 @@ ucont:                  if(sname->length() == 0)
 
 bool TYP::IsSameType(TYP *a, TYP *b, bool exact)
 {
+	if (a == b)
+		return (true);
+
 	switch (a->type) {
 
 	case bt_float:
@@ -239,14 +260,14 @@ bool TYP::IsSameType(TYP *a, TYP *b, bool exact)
 			return (true);
 		if (b->type == bt_double)
 			return (true);
-		break;
+		return (false);
 
 	case bt_double:
 		if (b->type == bt_float)
 			return (true);
 		if (b->type == bt_double)
 			return (true);
-		break;
+		return (false);
 
 	case bt_long:
 		if (b->type == bt_long)
@@ -266,8 +287,10 @@ bool TYP::IsSameType(TYP *a, TYP *b, bool exact)
 				return (true);
 			if (b->type == bt_ubyte)
 				return (true);
+			if (b->type == bt_enum)
+				return (true);
 		}
-		break;
+		return (false);
 
 	case bt_ulong:
 		if (b->type == bt_ulong)
@@ -287,8 +310,10 @@ bool TYP::IsSameType(TYP *a, TYP *b, bool exact)
 				return (true);
 			if (b->type == bt_ubyte)
 				return (true);
+			if (b->type == bt_enum)
+				return (true);
 		}
-		break;
+		return (false);
 
 	case bt_short:
 		if (b->type == bt_short)
@@ -308,8 +333,10 @@ bool TYP::IsSameType(TYP *a, TYP *b, bool exact)
 				return (true);
 			if (b->type == bt_ubyte)
 				return (true);
+			if (b->type == bt_enum)
+				return (true);
 		}
-		break;
+		return (false);
 
 	case bt_ushort:
 		if (b->type == bt_ushort)
@@ -329,8 +356,10 @@ bool TYP::IsSameType(TYP *a, TYP *b, bool exact)
 				return (true);
 			if (b->type == bt_ubyte)
 				return (true);
+			if (b->type == bt_enum)
+				return (true);
 		}
-		break;
+		return (false);
 
 	case bt_uchar:
 		if (b->type == bt_uchar)
@@ -350,8 +379,10 @@ bool TYP::IsSameType(TYP *a, TYP *b, bool exact)
 				return (true);
 			if (b->type == bt_ubyte)
 				return (true);
+			if (b->type == bt_enum)
+				return (true);
 		}
-		break;
+		return (false);
 
 	case bt_char:
 		if (b->type == bt_char)
@@ -371,8 +402,10 @@ bool TYP::IsSameType(TYP *a, TYP *b, bool exact)
 				return (true);
 			if (b->type == bt_ubyte)
 				return (true);
+			if (b->type == bt_enum)
+				return (true);
 		}
-		break;
+		return (false);
 
 	case bt_byte:
 		if (b->type == bt_byte)
@@ -392,8 +425,10 @@ bool TYP::IsSameType(TYP *a, TYP *b, bool exact)
 				return (true);
 			if (b->type == bt_ubyte)
 				return (true);
+			if (b->type == bt_enum)
+				return (true);
 		}
-		break;
+		return (false);
 
 	case bt_ubyte:
 		if (b->type == bt_ubyte)
@@ -413,8 +448,46 @@ bool TYP::IsSameType(TYP *a, TYP *b, bool exact)
 				return (true);
 			if (b->type == bt_byte)
 				return (true);
+			if (b->type == bt_enum)
+				return (true);
 		}
-		break;
+		return (false);
+
+	case bt_pointer:
+		if (a->type != b->type)
+			return (false);
+		if (a->GetBtp() == b->GetBtp())
+			return (true);
+		if (a->GetBtp() && b->GetBtp())
+			return (TYP::IsSameType(a->GetBtp(), b->GetBtp(), exact));
+		return (false);
+
+	case bt_struct:
+	case bt_union:
+	case bt_class:
+		if (a->type != b->type)
+			return (false);
+		if (a->GetBtp() == b->GetBtp())
+			return (true);
+		if (a->GetBtp() && b->GetBtp())
+			return (TYP::IsSameType(a->GetBtp(), b->GetBtp(), exact));
+		return (false);
+
+	case bt_enum:
+		if (a->typeno == b->typeno)
+			return (true);
+		if (!exact) {
+			if (b->type == bt_long
+				|| b->type == bt_ulong
+				|| b->type == bt_short
+				|| b->type == bt_ushort
+				|| b->type == bt_char
+				|| b->type == bt_uchar
+				|| b->type == bt_enum
+				)
+				return (true);
+		}
+		return (false);
 	}
 	return (false);
 }

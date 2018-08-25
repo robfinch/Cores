@@ -29,8 +29,6 @@ extern TYP              stdfunc;
 
 extern void DumpCSETable();
 extern void scan(Statement *);
-extern int GetReturnBlockSize();
-void GenerateReturn(Statement *stmt);
 extern void GenerateComment(char *);
 int TempFPInvalidate();
 int TempInvalidate();

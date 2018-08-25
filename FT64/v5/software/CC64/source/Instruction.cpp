@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2018  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -25,10 +25,30 @@
 //
 #include "stdafx.h"
 
-void Tree::ClearCosts()
+// brk and rti ???
+bool Instruction::IsFlowControl()
 {
-	loads = 0.0;
-	stores = 0.0;
-	copies = 0.0;
-	infinite = false;
+	if (opcode == op_jal ||
+		opcode == op_jmp ||
+		opcode == op_ret ||
+		opcode == op_call ||
+		opcode == op_bra ||
+		opcode == op_beq ||
+		opcode == op_bne ||
+		opcode == op_blt ||
+		opcode == op_ble ||
+		opcode == op_bgt ||
+		opcode == op_bge ||
+		opcode == op_bltu ||
+		opcode == op_bleu ||
+		opcode == op_bgtu ||
+		opcode == op_bgeu ||
+		opcode == op_beqi ||
+		opcode == op_bbs ||
+		opcode == op_bbc ||
+		opcode == op_bchk
+		)
+		return (true);
+	return (false);
 }
+
