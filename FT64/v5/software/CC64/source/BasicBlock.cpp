@@ -6,6 +6,7 @@ BasicBlock *ReturnBlock;
 extern bool HasTargetReg(OCODE *);
 int nBasicBlocks;
 BasicBlock *basicBlocks[10000];
+BasicBlock *sortedBlocks[10000];
 
 BasicBlock *BasicBlock::MakeNew()
 {
@@ -175,6 +176,21 @@ Edge *BasicBlock::MakeDomEdge(BasicBlock *dst)
 		dhead = dtail = edge;
 	}
 	return (edge);
+}
+
+int bbdcmp(const void *a, const void *b)
+{
+	BasicBlock *aa, *bb;
+
+	aa = (BasicBlock *)a;
+	bb = (BasicBlock *)b;
+	return (aa->depth < bb->depth ? 1 : aa->depth == bb->depth ? 0 : -1);
+}
+
+void BasicBlock::DepthSort()
+{
+	memcpy(sortedBlocks, basicBlocks, (LastBlock->num+1)*sizeof(BasicBlock *));
+	qsort(sortedBlocks, (size_t)LastBlock->num+1, sizeof(BasicBlock *), bbdcmp);
 }
 
 CSet *BasicBlock::livo;
@@ -396,6 +412,135 @@ void BasicBlock::CheckForDeaths(int r)
 		NeedLoad->clear();
 	}
 }
+
+// We don't actually want entire ranges. Only the part of the
+// range that the basic block is sitting on. There could be
+// multiple peices to the range associated with a var.
+
+void BasicBlock::BuildLivesetFromLiveout()
+{
+	int m;
+	int v;
+
+	live->clear();
+	LiveOut->resetPtr();
+	for (m = LiveOut->nextMember(); m >= 0; m = LiveOut->nextMember()) {
+		// Find the live range associated with value m
+		v = Var::FindTreeno(m,num);
+		if (v >= 0) {
+			live->add(v);
+		}
+		// else compiler error
+	}
+}
+
+
+// Update the CFG by uniting the son's edges with the father's.
+
+void BasicBlock::Unite(int father, int son)
+{
+	Edge *ep;
+
+	for (ep = basicBlocks[son]->ohead; ep; ep = ep->next) {
+		basicBlocks[father]->MakeOutputEdge(ep->dst);
+	}
+	for (ep = basicBlocks[son]->ihead; ep; ep = ep->next) {
+		basicBlocks[father]->MakeInputEdge(ep->src);
+	}
+	for (ep = basicBlocks[son]->dhead; ep; ep = ep->next) {
+		basicBlocks[father]->MakeDomEdge(ep->dst);
+	}
+}
+
+// Insert a register move operation before block.
+
+void BasicBlock::InsertMove(int reg, int rreg, int blk)
+{
+	OCODE *cd, *ip;
+	AMODE *am;
+
+	cd = (OCODE *)allocx(sizeof(OCODE));
+	cd->opcode = op_mov;
+	cd->insn = GetInsn(op_mov);
+	cd->oper1 = allocAmode();
+	cd->oper1->mode = am_reg;
+	cd->oper1->preg = rreg;
+	cd->oper2 = allocAmode();
+	cd->oper2->mode = am_reg;
+	cd->oper2->preg = reg;
+	ip = basicBlocks[blk]->code;
+
+	basicBlocks[blk]->code = cd;
+	cd->back = ip->back;
+	cd->fwd = ip;
+	cd->bb = ip->bb;
+	if (ip->back)
+		ip->back->fwd = cd;
+	ip->back = cd;
+	cd->leader = true;
+	ip->leader = false;
+}
+
+// The interference graph works based on tree numbers
+// Basic blocks work based on basic block numbers.
+// There is some conversion required.
+
+bool BasicBlock::Coalesce()
+{
+	OCODE *ip;
+	int dst, src, dtree, stree;
+	int father, son, ft, st;
+	bool improved;
+	int nn,mm;
+	Var *v;
+	Tree *t;
+	int blk;
+
+	improved = false;
+
+	for (nn = 0; nn <= LastBlock->num; nn++) {
+		for (ip = sortedBlocks[nn]->code; ip && ip != sortedBlocks[nn]->lcode; ip = ip->fwd) {
+			if (ip->remove)
+				continue;
+			if (ip->insn == nullptr)
+				continue;
+			if (ip->insn->opcode == op_mov) {
+				dst = Var::PathCompress(ip->oper1->lrpreg, ip->bb->num, &dtree);
+				src = Var::PathCompress(ip->oper2->lrpreg, ip->bb->num, &stree);
+				if (dst < 0 || src < 0)
+					continue;
+				if (src != dst) {
+					// For iGraph we just want the tree number not the bb number.
+					if (!iGraph.DoesInterfere(stree, dtree)) {
+						if (src < dst) {
+							father = src;
+							ft = stree;
+						}
+						else {
+							father = dst;
+							ft = dtree;
+						}
+						if (src > dst) {
+							son = src;
+							st = stree;
+						}
+						else {
+							son = dst;
+							st = dtree;
+						}
+						iGraph.Unite(ft, st);
+						// update graph so father contains all edges from son
+						Unite(father, son);
+						improved = true;
+						MarkRemove(ip);
+					}
+				}
+			}
+		}
+	}
+	return (improved);
+}
+
 
 void ComputeLiveVars()
 {

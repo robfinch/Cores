@@ -20,5 +20,7 @@ SYM *makeint2(std::string na);
 int round8(int n);
 void ListCompound(Statement *stmt);
 std::string TraceName(SYM *sp);
+void MarkRemove(OCODE *ip);
+void IRemove();
 
 #endif

@@ -55,6 +55,7 @@ public:
 WorkList wl;
 Tree *tree;
 int treeno;
+int Var::nvar;
 
 Var *Var::MakeNew()
 {
@@ -63,6 +64,7 @@ Var *Var::MakeNew()
 	p = (Var *)allocx(sizeof(Var));
 	p->forest = CSet::MakeNew();
 	p->visited = CSet::MakeNew();
+	nvar++;
 	return (p);
 }
 
@@ -212,7 +214,7 @@ void Var::CreateForest()
 {
 	BasicBlock *b, *p;
 	Edge *ep;
-	Tree *t, *u;
+	Tree *t;
 	char buf[2000];
 
 	treeno = 1;
@@ -335,6 +337,8 @@ Var *Var::Find(int num)
 	return (vp);
 }
 
+// Find variable info, but don't create
+
 Var *Var::Find2(int num)
 {
 	Var *vp;
@@ -345,6 +349,53 @@ Var *Var::Find2(int num)
 	}
 	return (nullptr);
 }
+
+CSet *Var::Find3(int reg, int blocknum)
+{
+	Var *v;
+	Tree *t;
+	int n;
+
+	v = Find2(reg);
+	// Find the tree with the basic block
+	for (n = 0; n < v->trees.treecount; n++) {
+		t = v->trees.trees[n];
+		if (t->blocks->isMember(blocknum)) {
+			return (t->blocks);
+		}
+	}
+	// else error:
+	return (nullptr);
+}
+
+
+// Find a specific tree that reg is associated with given
+// the basic block number.
+
+int Var::FindTreeno(int reg, int blocknum)
+{
+	Var *v;
+	Tree *t;
+	int n;
+
+	// Find the associated variable
+	v = Find2(reg);
+	if (v == nullptr)
+		return (-1);
+
+	// Find the tree with the basic block
+	for (n = 0; n < v->trees.treecount; n++) {
+		t = v->trees.trees[n];
+		if (t->blocks->isMember(blocknum)) {
+			return (t->num);
+		}
+	}
+	// else error:
+	return (-1);
+}
+
+
+// Copy trees from one var to another.
 
 void Var::Transplant(Var *v)
 {
@@ -358,6 +409,129 @@ void Var::Transplant(Var *v)
 		else
 			throw new C64PException(ERR_TOOMANY_TREES,1);
 	}
+}
+
+
+// Coalescing currently doesn't make use of the interference graph.
+// This algorithm is slow (n^2).
+
+bool Var::Coalesce2()
+{
+	int reg1, reg2;
+	Var *v1, *v2, *v3;
+	Var *p, *q;
+	Tree *t, *u;
+	bool foundSameTree;
+	bool improved;
+	int nn, mm;
+
+	improved = false;
+	for (p = varlist; p; p = p->next) {
+		for (q = varlist; q; q = q->next) {
+			if (p == q)
+				continue;
+			reg1 = p->num;
+			reg2 = q->num;
+			// Registers used as register parameters cannot be coalesced.
+			if ((reg1 >= 18 && reg1 <= 24)
+				|| (reg2 >= 18 && reg2 <= 24))
+				continue;
+			// Coalesce the live ranges of the two variables into a single
+			// range.
+			//dfs.printf("Testing coalescence of live range r%d with ", reg1);
+			//dfs.printf("r%d \n", reg2);
+			if (p->cnum)
+				v1 = Var::Find2(p->cnum);
+			else
+				v1 = p;
+			if (q->cnum)
+				v2 = Var::Find2(q->cnum);
+			else
+				v2 = q;
+			if (v1 == nullptr || v2 == nullptr)
+				continue;
+			// Live ranges cannot be coalesced unless they are disjoint.
+			if (!v1->forest->isDisjoint(*v2->forest)) {
+				//dfs.printf("Live ranges overlap - no coalescence possible\n");
+				continue;
+			}
+
+			dfs.printf("Coalescing live range r%d with ", reg1);
+			dfs.printf("r%d \n", reg2);
+			improved = true;
+			if (v1->trees.treecount == 0) {
+				v3 = v1;
+				v1 = v2;
+				v2 = v3;
+			}
+
+			for (nn = 0; nn < v2->trees.treecount; nn++) {
+				t = v2->trees.trees[nn];
+				foundSameTree = false;
+				for (mm = 0; mm < v1->trees.treecount; mm++) {
+					u = v1->trees.trees[mm];
+					if (t->blocks->NumMember() >= u->blocks->NumMember()) {
+						if (t->blocks->isSubset(*u->blocks)) {
+							u->blocks->add(t->blocks);
+							v1->forest->add(t->blocks);
+							foundSameTree = true;
+							break;
+						}
+					}
+					else {
+						if (u->blocks->isSubset(*t->blocks)) {
+							foundSameTree = true;
+							t->blocks->add(u->blocks);
+							v2->forest->add(u->blocks);
+							break;
+						}
+					}
+				}
+
+				if (!foundSameTree) {
+					//t->next = v1->trees;
+					//v1->trees = t;
+					v1->Transplant(v2);
+					v1->forest->add(v2->forest);
+				}
+
+			}
+
+			v2->trees.treecount = 0;
+			v2->forest->clear();
+			v2->cnum = v1->num;
+		}
+	}
+	return (improved);
+}
+
+int Var::PathCompress(int reg, int blocknum, int *tr)
+{
+	Var *v;
+	Tree *t;
+	int n;
+
+	*tr = -1;
+	v = Find2(reg);
+	if (v == nullptr) {
+		*tr = -1;
+		return (-1);
+	}
+	// Find the tree with the basic block
+	for (n = 0; n < v->trees.treecount; n++) {
+		t = v->trees.trees[n];
+		if (t->blocks->isMember(blocknum)) {
+			break;
+		}
+	}
+	if (n < v->trees.treecount) {
+		*tr = t->num;
+		t->blocks->resetPtr();
+		// The root of the tree is the lowest block number
+		return (t->blocks->nextMember());
+	}
+	// else error: path not found
+	return (-1);
 }
 
 void Var::DumpForests()

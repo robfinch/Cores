@@ -52,3 +52,13 @@ bool Instruction::IsFlowControl()
 	return (false);
 }
 
+Instruction *Instruction::Get(int op)
+{
+	int i;
+
+	for (i = 0; opl[i].mnem; i++)
+		if (opl[i].opcode == op)
+			return (&opl[i]);
+	return (nullptr);
+}
+

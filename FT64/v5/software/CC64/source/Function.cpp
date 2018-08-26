@@ -256,7 +256,7 @@ j2:
 			sp->sym->IsKernel = isKernel;
 			sp->IsInterrupt = isInterrupt;
 			sp->IsTask = isTask;
-			sp->sym->IsRegister = isRegister;
+			//sp->sym->IsRegister = isRegister;
 			sp->IsVirtual = isVirtual;
 			sp->NumParms = nump;
 			sp->numa = numa;
@@ -279,7 +279,7 @@ j2:
 			sp->IsInterrupt = isInterrupt;
 			sp->IsTask = isTask;
 			sp->IsVirtual = isVirtual;
-			sp->sym->IsRegister = isRegister;
+			//sp->sym->IsRegister = isRegister;
 			sp->IsInline = isInline;
 			isPascal = FALSE;
 			isKernel = FALSE;

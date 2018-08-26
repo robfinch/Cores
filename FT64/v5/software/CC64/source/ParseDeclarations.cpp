@@ -1920,21 +1920,22 @@ int ParameterDeclaration::Parse(int fd)
 	parsingParameterList++;
 	nparms = 0;
 	for(;;) {
-		isRegister = false;
 		worstAlignment = 0;
 		isFuncPtr = false;
 		isAuto = false;
+		isRegister = false;
 		missingArgumentName = FALSE;
 		dfs.printf("A(%d)",lastst);
+j1:
 		switch(lastst) {
 		case kw_auto:
 			NextToken();
 			isAuto = true;
-			break;
+			goto j1;
 		case kw_pascal:
-      NextToken();
+			NextToken();
 		  isPascal = TRUE;
-		  break;
+		  goto j1;
 		case kw_cdecl:
     case kw_kernel:
 		case kw_interrupt:
@@ -1987,7 +1988,7 @@ dfs.printf("D");
 		case kw_register:
 				isRegister = true;
 				NextToken();
-				break;
+				goto j1;
         default:
 				goto xit;
 		}

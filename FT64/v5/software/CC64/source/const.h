@@ -349,4 +349,10 @@ enum e_seg {
 #define FALSE	0
 //#define NULL	((void *)0)
 
+// Register classes for instructions
+#define RC_GP	1
+#define RC_FP	2
+#define RC_VEC	4
+#define RC_ALL	7
+
 #endif

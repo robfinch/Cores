@@ -26,6 +26,7 @@
 #include "stdafx.h"
 
 Forest forest;
+int Forest::treeno = 0;
 int stkp;
 int stack[100000];
 
@@ -59,10 +60,37 @@ Tree *Forest::MakeNewTree() {
 	Tree *t;
 	t = (Tree*)allocx(sizeof(Tree));
 	t->blocks = CSet::MakeNew();
+	t->num = treeno;
+	treeno++;
 	trees[treecount] = t;
 	treecount++;
 	return (t);
 }
+
+void Forest::CalcRegclass()
+{
+	int n;
+	Tree *t;
+	int j;
+	BasicBlock *b;
+	OCODE *ip;
+
+	for (n = 0; n < treecount; n++) {
+		t = trees[n];
+		t->regclass = 0;
+		t->blocks->resetPtr();
+		for (j = t->blocks->nextMember(); j >= 0; j = t->blocks->nextMember()) {
+			b = basicBlocks[j];
+			for (ip = b->code; !ip->leader && ip; ip = ip->fwd) {
+				t->regclass |= ip->insn->regclass1;
+				t->regclass |= ip->insn->regclass2;
+				t->regclass |= ip->insn->regclass3;
+				t->regclass |= ip->insn->regclass4;
+			}
+		}
+	}
+}
+
 
 // Summarize costs
 void Forest::SummarizeCost()

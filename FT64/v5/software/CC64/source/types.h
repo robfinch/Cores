@@ -583,6 +583,7 @@ public:
 	Edge *MakeOutputEdge(BasicBlock *dst);
 	Edge *MakeInputEdge(BasicBlock *src);
 	Edge *MakeDomEdge(BasicBlock *dst);
+	static void Unite(int father, int son);
 	void ComputeLiveVars();
 	void AddLiveOut(BasicBlock *ip);
 	bool IsIdom(BasicBlock *b);
@@ -590,6 +591,10 @@ public:
 
 	void UpdateLive(int);
 	void CheckForDeaths(int r);
+	static void InsertMove(int reg, int rreg, int blk);
+	void BuildLivesetFromLiveout();
+	static void DepthSort();
+	static bool Coalesce();
 };
 
 // A "tree" is a "range" in Briggs terminology
@@ -603,6 +608,7 @@ public:
 	int lattice;
 	bool spill;
 	__int8 color;
+	__int8 regclass;		// 1 = integer, 2 = floating point, 4 = vector
 	// Cost accounting
 	float loads;
 	float stores;
@@ -622,6 +628,7 @@ public:
 	Tree *trees[500];
 	Function *func;
 	CSet low, high;
+	static int treeno;
 public:
 	Tree *MakeNewTree();
 	Tree *MakeNewTree(Tree *);
@@ -630,6 +637,7 @@ public:
 		for (r = 0; r < treecount; r++)
 			trees[r]->ClearCosts();
 	}
+	void CalcRegclass();
 	void SummarizeCost();
 	void Renumber();
 	void Simplify();
@@ -651,6 +659,35 @@ public:
 	int node;
 };
 
+class Var : public CompilerType
+{
+public:
+	Var *next;
+	int num;
+	int cnum;
+	Forest trees;
+	CSet *forest;
+	CSet *visited;
+	IntStack *istk;
+	int subscript;
+	static int nvar;
+public:
+	static Var *MakeNew();
+	void GrowTree(Tree *, BasicBlock *);
+	// Create a forest for a specific Var
+	void CreateForest();
+	// Create a forest for each Var object
+	static void CreateForests();
+	static Var *Find(int);
+	static Var *Find2(int);
+	static CSet *Find3(int reg, int blocknum);
+	static int FindTreeno(int reg, int blocknum);
+	static int PathCompress(int reg, int blocknum, int *);
+	static void DumpForests();
+	void Transplant(Var *);
+	static bool Coalesce2();
+};
+
 class IGraph
 {
 public:
@@ -665,37 +702,19 @@ public:
 	void Destroy();
 	void MakeNew(int n);
 	AdjVec *MakeNewAV() { return (new AdjVec); };
+	void ClearBitmatrix();
 	void Clear();
 	void Add(int x, int y);
 	bool Remove(int n);
+	static int FindTreeno(int reg, int blocknum) { return (Var::FindTreeno(reg, blocknum)); };
 	bool DoesInterfere(int x, int y);
 	int Degree(int n) { return ((int)degrees[n]); };
 	AdjVec *GetNeighbours(int n) { return (vecs[n]); };
+	void Unite(int father, int son);
+	void Fill();
+	void BuildAndCoalesce();
 };
 
-class Var : public CompilerType
-{
-public:
-	Var *next;
-	int num;
-	int cnum;
-	Forest trees;
-	CSet *forest;
-	CSet *visited;
-	IntStack *istk;
-	int subscript;
-public:
-	static Var *MakeNew();
-	void GrowTree(Tree *, BasicBlock *);
-	// Create a forest for a specific Var
-	void CreateForest();
-	// Create a forest for each Var object
-	static void CreateForests();
-	static Var *Find(int);
-	static Var *Find2(int);
-	static void DumpForests();
-	void Transplant(Var *);
-};
 
 class Instruction
 {
@@ -705,6 +724,10 @@ public:
 	short extime;	// execution time, divide may take hundreds of cycles
 	bool HasTarget;	// has a target register
 	bool memacc;	// instruction accesses memory
+	int regclass1 : 4;	// register class 1=integer,2=floating point,4=vector
+	int regclass2 : 4;	// register class 1=integer,2=floating point,4=vector
+	int regclass3 : 4;	// register class 1=integer,2=floating point,4=vector
+	int regclass4 : 4;	// register class 1=integer,2=floating point,4=vector
 public:
 	bool IsFlowControl();
 	bool IsSetInsn() {
@@ -713,6 +736,7 @@ public:
 			|| opcode == op_sltu || opcode == op_sleu || opcode == op_sgtu || opcode == op_sgeu
 			);
 	};
+	static Instruction *Get(int op);
 };
 
 class CSE {

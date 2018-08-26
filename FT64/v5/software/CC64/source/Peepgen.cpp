@@ -28,7 +28,6 @@
 static void AddToPeepList(OCODE *newc);
 void PrintPeepList();
 static void Remove();
-void MarkRemove(OCODE *ip);
 void peep_add(OCODE *ip);
 static void PeepoptSub(OCODE *ip);
 void peep_move(OCODE	*ip);
@@ -60,8 +59,7 @@ OCODE    *peep_head = NULL,
                 *peep_tail = NULL;
 
 extern Var *varlist;
-extern BasicBlock *RootBlock;
-extern BasicBlock *LastBlock;
+
 
 IGraph iGraph;
 int optimized;	// something got optimized
@@ -1434,7 +1432,7 @@ void Peep::InsertAfter(OCODE *an, OCODE *cd)
 	an->fwd = cd;
 }
 
-static void Remove()
+void Remove()
 {
 	OCODE *ip, *ip1, *ip2;
 
@@ -1451,6 +1449,11 @@ static void Remove()
 				ip1->back = ip2;
 		}
 	}
+}
+
+void IRemove()
+{
+	Remove();
 }
 
 static void Remove2()
@@ -1688,9 +1691,11 @@ static void opt_peep()
 	RootBlock = BasicBlock::Blockize(peep_head);
 //	RootBlock->ExpandReturnBlocks();
 	CFG::Create();
+
 	RemoveMoves();
 	ComputeLiveVars();
 	MarkAllKeep();
+	
 	DumpLiveVars();
 	CreateVars();
 	Var::CreateForests();
@@ -1702,9 +1707,11 @@ static void opt_peep()
 	forest.Renumber();
 	ComputeSpillCosts();
 	//RemoveCode();
-	Coalesce();
+	iGraph.frst = &forest;
+	iGraph.BuildAndCoalesce();
 	Var::DumpForests();
 	//DumpLiveRegs();
+
 	PrintPeepList();
 }
 
@@ -1728,6 +1735,7 @@ void CreateVars()
 	int num;
 
 	varlist = nullptr;
+	Var::nvar = 0;
 	for (b = RootBlock; b; b = b->next) {
 		b->LiveOut->resetPtr();
 		for (nn = 0; nn < b->LiveOut->NumMember(); nn++) {
@@ -1764,96 +1772,6 @@ void RemoveMoves()
 	}
 	if (!foundMove)
 		dfs.printf("No move instruction joins live ranges.\n");
-}
-
-bool Coalesce()
-{
-	int reg1, reg2;
-	Var *v1, *v2, *v3;
-	Var *p, *q;
-	Tree *t, *u;
-	bool foundSameTree;
-	bool improved;
-	int nn,mm;
-
-	improved = false;
-	for (p = varlist; p; p = p->next) {
-		for (q = varlist; q; q = q->next) {
-			if (p==q)
-				continue;
-			reg1 = p->num;
-			reg2 = q->num;
-			// Registers used as register parameters cannot be coalesced.
-			if ((reg1 >= 18 && reg1 <= 24)
-				|| (reg2 >= 18 && reg2 <= 24))
-				continue;
-			// Coalesce the live ranges of the two variables into a single
-			// range.
-			//dfs.printf("Testing coalescence of live range r%d with ", reg1);
-			//dfs.printf("r%d \n", reg2);
-			if (p->cnum)
-				v1 = Var::Find2(p->cnum);
-			else
-				v1 = p;
-			if (q->cnum)
-				v2 = Var::Find2(q->cnum);
-			else
-				v2 = q;
-			if (v1==nullptr || v2==nullptr)
-				continue;
-			// Live ranges cannot be coalesced unless they are disjoint.
-			if (!v1->forest->isDisjoint(*v2->forest)) {
-				//dfs.printf("Live ranges overlap - no coalescence possible\n");
-				continue;
-			}
-			
-			dfs.printf("Coalescing live range r%d with ", reg1);
-			dfs.printf("r%d \n", reg2);
-			improved = true;
-			if (v1->trees.treecount==0) {
-				v3 = v1;
-				v1 = v2;
-				v2 = v3;
-			}
-			
-			for (nn = 0; nn < v2->trees.treecount; nn++) {
-				t = v2->trees.trees[nn];
-				foundSameTree = false;
-				for (mm = 0; mm < v1->trees.treecount; mm++) {
-					u = v1->trees.trees[mm];
-					if (t->blocks->NumMember() >= u->blocks->NumMember()) {
-						if (t->blocks->isSubset(*u->blocks)) {
-							u->blocks->add(t->blocks);
-							v1->forest->add(t->blocks);
-							foundSameTree = true;
-							break;
-						}
-					}
-					else {
-						if (u->blocks->isSubset(*t->blocks)) {
-							foundSameTree = true;
-							t->blocks->add(u->blocks);
-							v2->forest->add(u->blocks);
-							break;
-						}
-					}
-				}
-				
-				if (!foundSameTree) {
-					//t->next = v1->trees;
-					//v1->trees = t;
-					v1->Transplant(v2);
-					v1->forest->add(v2->forest);
-				}
-				
-			}
-			
-			v2->trees.treecount = 0;
-			v2->forest->clear();
-			v2->cnum = v1->num;
-		}
-	}
-	return (improved);
 }
 
 void ComputeSpillCosts()
@@ -1998,56 +1916,6 @@ j1:	;
 	dfs.printf("<CodeRemove>%d</CodeRemove>\n", count);
 }
 
-/*
-void BuildLivesetFromLiveout(BasicBlock *b)
-{
-	int m;
-
-	b->live->clear();
-	b->LiveOut->resetPtr();
-	for (m = b->LiveOut->nextMember(); m >= 0; m = b->LiveOut->nextMember()) {
-		// Find the live range assoicated with value m
-		b->live->add();
-	}
-}
-
-void Stage2()
-{
-	int bms;
-	int *bitmatrix;
-	int i, j;
-	int bitndx, intndx;
-	BasicBlock *b;
-	OCODE *ip;
-	bool eol;
-
-	bms = Tree::treecount * Tree::treecount / sizeof(int);
-	bitmatrix = new int[bms];
-	ZeroMemory(bitmatrix, bms);
-	bitndx = i + (j * j) / 2;
-	intndx = bitndx / sizeof(int);
-	bitndx %= (sizeof(int) * 8);
-
-	// For each block 
-	for (b = RootBlock; b; b = b->next) {
-		BuildLivesetFromLiveout(b);
-		eol = false;
-		for (ip = b->lcode; ip && !eol; ip = ip->back) {
-			// examine instruction ip and update graph and live
-			if (ip->opcode==op_mov) {
-				b->live->remove();
-			}
-			igraph->AddEdges(b->live,);
-			b->live->remove();
-			if (ip->oper1)
-			b->live->add();
-			eol = ip==b->lcode;
-		}
-	}
-
-	delete bitmatrix;
-}
-*/
 
 void PrintPeepList()
 {

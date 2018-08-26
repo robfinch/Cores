@@ -102,6 +102,11 @@ public:
 		for (int ii = size; --ii >= 0;)
 			map[ii] &= ~s.map[ii];
 	}
+	inline void remove(CSet *s)
+	{
+		for (int ii = size; --ii >= 0;)
+			map[ii] &= ~s->map[ii];
+	}
 	int resetPtr() {
       int i = MemberPtr;
       MemberPtr = 0;

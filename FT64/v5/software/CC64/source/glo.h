@@ -406,7 +406,12 @@ extern void tmpReset();
 extern int tmpAlloc(int);
 extern void tmpFree(int);
 extern BasicBlock *basicBlocks[10000];
+extern BasicBlock *sortedBlocks[10000];
 extern Forest forest;
 extern IGraph iGraph;
+extern Instruction opl[];
+extern BasicBlock *RootBlock;
+extern BasicBlock *LastBlock;
+extern Instruction *GetInsn(int);
 
 #endif

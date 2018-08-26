@@ -130,6 +130,9 @@ void CSet::add(CSet *s)
 {
 	int ii;
 
+	if (s == nullptr)
+		return;
+
 	// Set the size of the bitmap to the greater of the two sizes.
 	if (size < s->size)
 		enlarge(s->size);
