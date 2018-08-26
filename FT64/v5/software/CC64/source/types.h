@@ -603,7 +603,6 @@ public:
 	int lattice;
 	bool spill;
 	__int8 color;
-	CSet *adjacent;
 	// Cost accounting
 	float loads;
 	float stores;
@@ -611,10 +610,9 @@ public:
 	bool infinite;
 	float cost;
 public:
-	Tree() { adjacent = nullptr; };
+	Tree() { };
 	void ClearCosts();
-	int GetFirstNeighbour() { adjacent->resetPtr(); return (adjacent->nextMember()); };
-	int GetNextNeighbour() { return (adjacent->nextMember()); };
+	float SelectRatio() { return (cost / (float)degree); };
 };
 
 class Forest
@@ -636,6 +634,21 @@ public:
 	void Renumber();
 	void Simplify();
 	void Color();
+	int SelectSpillCandidate();
+};
+
+
+// The number of neighbouring nodes varies depending on the function,
+// and optimization done. It could be small for small functions < 10,
+// medium for large functions <100, or possibly 1,000's if whole
+// program optimizations are done (not currently done by the compiler).
+// So, a linked list of node numbers is used.
+
+class AdjVec
+{
+public:
+	AdjVec *next;
+	int node;
 };
 
 class IGraph
@@ -643,16 +656,21 @@ class IGraph
 public:
 	int *bitmatrix;
 	short int *degrees;
-	CSet *ns;	// neighbouring sets
+	AdjVec **vecs;
 	int size;
+	int K;
+	Forest *frst;
 public:
+	~IGraph();
+	void Destroy();
 	void MakeNew(int n);
+	AdjVec *MakeNewAV() { return (new AdjVec); };
 	void Clear();
 	void Add(int x, int y);
-	void Remove(int n);
+	bool Remove(int n);
 	bool DoesInterfere(int x, int y);
 	int Degree(int n) { return ((int)degrees[n]); };
-	CSet *Neighbours(int n) { return (&ns[n]); };
+	AdjVec *GetNeighbours(int n) { return (vecs[n]); };
 };
 
 class Var : public CompilerType

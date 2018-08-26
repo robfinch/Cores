@@ -124,11 +124,40 @@ void Forest::Renumber()
 	}
 }
 
+
+// Consider all nodes in the high set as candidates for a spill.
+// Based on the lowest cost to degree ratio.
+
+int Forest::SelectSpillCandidate()
+{
+	int n;
+	float ratio;
+	bool ratioSet = false;
+	int s = -1;
+
+	high.resetPtr();
+	for (n = high.nextMember(); n >= 0; n = high.nextMember()) {
+		if (!ratioSet) {
+			s = n;
+			ratio = trees[n]->SelectRatio();
+			ratioSet = true;
+		}
+		else {
+			if (trees[n]->SelectRatio() < ratio) {
+				ratio = trees[n]->SelectRatio();
+				s = n;
+			}
+		}
+	}
+	return (s);
+}
+
 void Forest::Simplify()
 {
 	int m;
 	int K = 24;
 
+	iGraph.frst = this;
 	low.clear();
 	high.clear();
 	for (m = 0; m < treecount; m++) {
@@ -142,13 +171,14 @@ void Forest::Simplify()
 		low.resetPtr();
 		while ((m = low.nextMember()) >= 0) {
 			low.remove(m);
-			//iGraph.Remove(m);
 			// remove m from the graph updating low and high
+			iGraph.Remove(m);
 			push(m);
 		}
 		if (high.NumMember() == 0)
 			break;
 		// select a spill candidate m from high
+		m = SelectSpillCandidate();	// there should always be an m >= 0
 		high.remove(m);
 		low.add(m);
 	}
@@ -157,22 +187,25 @@ void Forest::Simplify()
 
 void Forest::Color()
 {
-	int n;
+	int n, m;
 	int c;
 	int k = 24;
 	CSet used;
 	Tree *t;
+	AdjVec *j;
 
-	for (c = 0; c < treecount; c++)
+	for (c = 0; c < treecount; c++) {
 		trees[c]->spill = false;
+		trees[c]->color = k;
+	}
 	while (stkp > 0) {
-		t = trees[pop()];
+		t = trees[m=pop()];
 		if (!t->infinite && t->cost <= 0.0f)
 			t->spill = true;
 		else {
 			used.clear();
-			for (n = t->GetFirstNeighbour(); n >= 0; n = t->GetNextNeighbour())
-				used.add(trees[n]->color);
+			for (j = iGraph.GetNeighbours(m); j; j = j->next)
+				used.add(trees[j->node]->color);
 			for (c = 0; used.isMember(c) && c < k; c++);
 			if (c < k)
 				t->color = c;
