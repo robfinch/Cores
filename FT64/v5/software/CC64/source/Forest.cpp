@@ -99,12 +99,12 @@ void Forest::SummarizeCost()
 
 	dfs.printf("<TreeCosts>\n");
 	for (r = 0; r < treecount; r++) {
-		// If alltrees[r].lattice = BOT
-		trees[r]->cost = 2.0f * (trees[r]->loads + trees[r]->stores);
-		// else
-		// alltrees[r]->cost = alltrees[r]->loads - alltrees[r]->stores;
+		if (trees[r]->lattice < 2)
+			trees[r]->cost = 2.0f * (trees[r]->loads + trees[r]->stores);
+		else
+			trees[r]->cost = trees[r]->loads - trees[r]->stores;
 		trees[r]->cost -= trees[r]->copies;
-		dfs.printf("Tree:%d ", r);
+		dfs.printf("Tree(%d):%d ", trees[r]->lattice,r);
 		dfs.printf("cost = %d\n", (int)trees[r]->cost);
 	}
 	dfs.printf("</TreeCosts>\n");
@@ -159,20 +159,21 @@ void Forest::Renumber()
 int Forest::SelectSpillCandidate()
 {
 	int n;
-	float ratio;
+	float ratio, rt;
 	bool ratioSet = false;
 	int s = -1;
 
 	high.resetPtr();
 	for (n = high.nextMember(); n >= 0; n = high.nextMember()) {
+		rt = trees[n]->SelectRatio();
 		if (!ratioSet) {
 			s = n;
-			ratio = trees[n]->SelectRatio();
+			ratio = rt;
 			ratioSet = true;
 		}
 		else {
-			if (trees[n]->SelectRatio() < ratio) {
-				ratio = trees[n]->SelectRatio();
+			if (rt < ratio) {
+				ratio = rt;
 				s = n;
 			}
 		}
@@ -207,20 +208,22 @@ void Forest::Simplify()
 			break;
 		// select a spill candidate m from high
 		m = SelectSpillCandidate();	// there should always be an m >= 0
-		high.remove(m);
-		low.add(m);
+		if (m >= 0) {
+			high.remove(m);
+			low.add(m);
+		}
 	}
 }
 
 
 void Forest::Color()
 {
-	int n, m;
+	int m;
 	int c;
-	int k = 24;
+	int j, k = 24;
+	int *p;
 	CSet used;
 	Tree *t;
-	AdjVec *j;
 
 	for (c = 0; c < treecount; c++) {
 		trees[c]->spill = false;
@@ -232,8 +235,9 @@ void Forest::Color()
 			t->spill = true;
 		else {
 			used.clear();
-			for (j = iGraph.GetNeighbours(m); j; j = j->next)
-				used.add(trees[j->node]->color);
+			p = iGraph.GetNeighbours(m);
+			for (j = 1; j < p[0]; j++)
+				used.add(trees[p[j]]->color);
 			for (c = 0; used.isMember(c) && c < k; c++);
 			if (c < k)
 				t->color = c;

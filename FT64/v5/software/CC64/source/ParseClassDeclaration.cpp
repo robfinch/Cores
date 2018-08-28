@@ -219,14 +219,14 @@ void ClassDeclaration::ParseMembers(SYM *sym, int ztype)
 	int slc;
 	TYP *tp = sym->tp;
 	int ist;
-  SYM *hsym;
-  std::string *name;
+	SYM *hsym;
+	std::string *name;
 
 	isPrivate = true;
 	if (sym->tp->size)
-     slc = roundSize(sym->tp);
-  else
-     slc = 0;
+		slc = sym->tp->roundSize();
+	else
+		slc = 0;
 
 //	slc = 0;
   tp->val_flag = 1;

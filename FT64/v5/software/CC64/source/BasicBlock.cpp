@@ -413,6 +413,112 @@ void BasicBlock::CheckForDeaths(int r)
 	}
 }
 
+
+void BasicBlock::ComputeSpillCosts()
+{
+	BasicBlock *b;
+	OCODE *ip;
+	Instruction *i;
+	AMODE *pam;
+	int r;
+	bool endLoop;
+
+	forest.ClearCosts();
+
+	for (b = RootBlock; b; b = b->next) {
+		b->NeedLoad->clear();
+		// build the set live from b->liveout
+		b->live = b->LiveOut;
+		b->MustSpill = b->live;
+		endLoop = false;
+		for (ip = b->lcode; ip && !endLoop; ip = ip->back) {
+			if (ip->opcode == op_label)
+				continue;
+			if (ip->opcode == op_mov) {
+				r = ip->oper1->lrpreg;
+				forest.trees[r]->copies++;
+			}
+			i = ip->insn;
+			// examine instruction i updating sets and accumulating costs
+			if (i->HasTarget) {
+				b->UpdateLive(ip->oper1->lrpreg);
+			}
+			// This is a loop in the Briggs thesis, but we only allow 4 operands
+			// so the loop is unrolled.
+			if (ip->oper1) {
+				if (!ip->oper1->isTarget) {
+					r = ip->oper1->lrpreg;
+					b->CheckForDeaths(r);
+					if (r = ip->oper1->lrsreg)	// '=' is correct
+						b->CheckForDeaths(r);
+				}
+			}
+			if (ip->oper2) {
+				r = ip->oper1->lrpreg;
+				b->CheckForDeaths(r);
+				if (r = ip->oper1->lrsreg)
+					b->CheckForDeaths(r);
+			}
+			if (ip->oper3) {
+				r = ip->oper1->lrpreg;
+				b->CheckForDeaths(r);
+				if (r = ip->oper1->lrsreg)
+					b->CheckForDeaths(r);
+			}
+			if (ip->oper4) {
+				r = ip->oper1->lrpreg;
+				b->CheckForDeaths(r);
+				if (r = ip->oper1->lrsreg)
+					b->CheckForDeaths(r);
+			}
+			// Re-examine uses to update live and needload
+			pam = ip->oper1;
+			if (pam && !pam->isTarget) {
+				b->live->add(pam->lrpreg);
+				b->NeedLoad->add(pam->lrpreg);
+				if (pam->lrsreg) {
+					b->live->add(pam->lrsreg);
+					b->NeedLoad->add(pam->lrsreg);
+				}
+			}
+			if (ip->oper2) {
+				b->live->add(ip->oper2->lrpreg);
+				b->NeedLoad->add(ip->oper2->lrpreg);
+				if (ip->oper2->lrsreg) {
+					b->live->add(ip->oper2->lrsreg);
+					b->NeedLoad->add(ip->oper2->lrsreg);
+				}
+			}
+			if (ip->oper3) {
+				b->live->add(ip->oper3->lrpreg);
+				b->NeedLoad->add(ip->oper3->lrpreg);
+				if (ip->oper3->sreg) {
+					b->live->add(ip->oper3->lrsreg);
+					b->NeedLoad->add(ip->oper3->lrsreg);
+				}
+			}
+			if (ip->oper4) {
+				b->live->add(ip->oper4->lrpreg);
+				b->NeedLoad->add(ip->oper4->lrpreg);
+				if (ip->oper4->sreg) {
+					b->live->add(ip->oper4->lrsreg);
+					b->NeedLoad->add(ip->oper4->lrsreg);
+				}
+			}
+			if (ip == b->code)
+				endLoop = true;
+		}
+		b->NeedLoad->resetPtr();
+		for (r = b->NeedLoad->nextMember(); r >= 0; r = b->NeedLoad->nextMember()) {
+			if (forest.trees[r])
+				forest.trees[r]->loads += b->depth;
+		}
+	}
+
+	forest.SummarizeCost();
+}
+
+
 // We don't actually want entire ranges. Only the part of the
 // range that the basic block is sitting on. There could be
 // multiple peices to the range associated with a var.

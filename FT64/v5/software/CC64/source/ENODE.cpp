@@ -155,6 +155,395 @@ ENODE *ENODE::Clone()
 }
 
 
+
+//	repexpr will replace all allocated references within an expression
+//	with tempref nodes.
+
+void ENODE::repexpr()
+{
+	CSE *csp;
+	if (this == nullptr)
+		return;
+	switch (nodetype) {
+	case en_fcon:
+	case en_autofcon:
+	case en_tempfpref:
+		if ((csp = pCSETable->Search(this)) != nullptr) {
+			csp->isfp = TRUE; //**** a kludge
+			if (csp->reg > 0) {
+				nodetype = en_fpregvar;
+				i = csp->reg;
+			}
+		}
+		break;
+		/*
+		if( (csp = SearchCSEList(node)) != NULL ) {
+		if( csp->reg > 0 ) {
+		node->nodetype = en_fpregvar;
+		node->i = csp->reg;
+		}
+		}
+		break;
+		*/
+	case en_icon:
+	case en_nacon:
+	case en_labcon:
+	case en_autovcon:
+	case en_autocon:
+	case en_classcon:
+	case en_cnacon:
+	case en_clabcon:
+	case en_tempref:
+		if ((csp = pCSETable->Search(this)) != NULL) {
+			if (csp->reg > 0) {
+				nodetype = en_regvar;
+				i = csp->reg;
+			}
+		}
+		break;
+	case en_ref32: case en_ref32u:
+	case en_b_ref:
+	case en_c_ref:
+	case en_h_ref:
+	case en_w_ref:
+	case en_ub_ref:
+	case en_uc_ref:
+	case en_uh_ref:
+	case en_uw_ref:
+	case en_wp_ref:
+	case en_hp_ref:
+	case en_bfieldref:
+	case en_ubfieldref:
+	case en_cfieldref:
+	case en_ucfieldref:
+	case en_hfieldref:
+	case en_uhfieldref:
+	case en_wfieldref:
+	case en_uwfieldref:
+	case en_vector_ref:
+		if ((csp = pCSETable->Search(this)) != NULL) {
+			if (csp->reg > 0) {
+				nodetype = en_regvar;
+				i = csp->reg;
+			}
+			else
+				p[0]->repexpr();
+		}
+		else
+			p[0]->repexpr();
+		break;
+	case en_dbl_ref:
+	case en_flt_ref:
+	case en_quad_ref:
+		if ((csp = pCSETable->Search(this)) != NULL) {
+			if (csp->reg > 0) {
+				nodetype = en_fpregvar;
+				i = csp->reg;
+			}
+			else
+				p[0]->repexpr();
+		}
+		else
+			p[0]->repexpr();
+		break;
+	case en_cbc: case en_cubw:
+	case en_cbh: case en_cucw:
+	case en_cbw: case en_cuhw:
+	case en_cbu: case en_ccu: case en_chu:
+	case en_cubu: case en_cucu: case en_cuhu:
+	case en_ccwp: case en_cucwp:
+	case en_cch:
+	case en_ccw:
+	case en_chw:
+	case en_uminus:
+	case en_abs:
+	case en_sxb: case en_sxh: case en_sxc:
+	case en_not:    case en_compl:
+	case en_chk:
+		p[0]->repexpr();
+		break;
+	case en_i2d:
+		p[0]->repexpr();
+		break;
+	case en_i2q:
+	case en_d2i:
+	case en_q2i:
+	case en_s2q:
+	case en_d2q:
+	case en_t2q:
+		p[0]->repexpr();
+		break;
+	case en_add:    case en_sub:
+	case en_mul:    case en_mulu:   case en_div:	case en_udiv:
+	case en_mod:    case en_umod:
+	case en_shl:	case en_asl:
+	case en_shlu:	case en_shru:	case en_asr:
+	case en_shr:
+	case en_and:
+	case en_or:     case en_xor:
+	case en_land:   case en_lor:
+	case en_eq:     case en_ne:
+	case en_lt:     case en_le:
+	case en_gt:     case en_ge:
+	case en_ult:	case en_ule:
+	case en_ugt:	case en_uge:
+
+	case en_feq:    case en_fne:
+	case en_flt:    case en_fle:
+	case en_fgt:    case en_fge:
+	case en_fdmul:  case en_fddiv:
+	case en_fdadd:  case en_fdsub:
+	case en_fadd: case en_fsub:
+	case en_fmul: case en_fdiv:
+
+	case en_veq:    case en_vne:
+	case en_vlt:    case en_vle:
+	case en_vgt:    case en_vge:
+	case en_vadd: case en_vsub:
+	case en_vmul: case en_vdiv:
+	case en_vadds: case en_vsubs:
+	case en_vmuls: case en_vdivs:
+
+	case en_cond:   case en_void:
+	case en_asadd:  case en_assub:
+	case en_asmul:  case en_asmulu:
+	case en_asdiv:  case en_asdivu:
+	case en_asor:   case en_asand:    case en_asxor:
+	case en_asmod:  case en_aslsh:
+	case en_asrsh:  case en_fcall:
+	case en_list: case en_aggregate:
+	case en_assign:
+		p[0]->repexpr();
+		p[1]->repexpr();
+		break;
+	case en_regvar:
+	case en_fpregvar:
+		break;
+	case en_bchk:
+		p[0]->repexpr();
+		p[1]->repexpr();
+		p[2]->repexpr();
+		break;
+	default:
+		dfs.printf("Uncoded node in repexr():%d\r\n", nodetype);
+	}
+}
+
+
+/*
+*      scanexpr will scan the expression pointed to by node for optimizable
+*      subexpressions. when an optimizable expression is found it is entered
+*      into the tree. if a reference to an autocon node is scanned the
+*      corresponding auto dereferenced node will be voided. duse should be
+*      set if the expression will be dereferenced.
+*/
+void ENODE::scanexpr(int duse)
+{
+	CSE *csp, *csp1;
+	int first;
+	int nn;
+
+	if (this == nullptr)
+		return;
+
+	switch (nodetype) {
+	case en_fpregvar:
+	case en_regvar:
+		break;
+	case en_cnacon:
+	case en_clabcon:
+	case en_fcon:
+	case en_icon:
+	case en_labcon:
+	case en_nacon:
+		pCSETable->InsertNode(this, duse);
+		break;
+	case en_autofcon:
+	case en_tempfpref:
+		csp1 = pCSETable->InsertNode(this, duse);
+		csp1->isfp = TRUE;
+		if ((nn = pCSETable->voidauto2(this)) > 0) {
+			csp1->duses += loop_active;
+			csp1->uses = csp1->duses + nn - loop_active;
+		}
+		break;
+	case en_autovcon:
+	case en_autocon:
+	case en_classcon:
+	case en_tempref:
+		csp1 = pCSETable->InsertNode(this, duse);
+		if ((nn = pCSETable->voidauto2(this)) > 0) {
+			csp1->duses += loop_active;
+			csp1->uses = csp1->duses + nn - loop_active;
+		}
+		break;
+	case en_ref32: case en_ref32u:
+	case en_b_ref:
+	case en_c_ref:
+	case en_h_ref:
+	case en_w_ref:
+	case en_ub_ref:
+	case en_uc_ref:
+	case en_uh_ref:
+	case en_uw_ref:
+	case en_flt_ref:
+	case en_dbl_ref:
+	case en_quad_ref:
+	case en_bfieldref:
+	case en_ubfieldref:
+	case en_cfieldref:
+	case en_ucfieldref:
+	case en_hfieldref:
+	case en_uhfieldref:
+	case en_wfieldref:
+	case en_uwfieldref:
+	case en_wp_ref:
+	case en_hp_ref:
+	case en_vector_ref:
+		// There is something wrong with the following code that causes
+		// it to remove zero extension conversion from a byte to a word.
+		if (p[0]->nodetype == en_autocon || p[0]->nodetype == en_autofcon
+			|| p[0]->nodetype == en_classcon || p[0]->nodetype == en_autovcon) {
+			first = (pCSETable->Search(this) == nullptr);	// Detect if this is the first insert
+			csp = pCSETable->InsertNode(this, duse);
+			if (csp->voidf)
+				p[0]->scanexpr(1);
+			// take care: the non-derereferenced use of the autocon node may
+			// already be in the list. In this case, set voidf to 1
+			if (pCSETable->Search(p[0]) != NULL) {
+				csp->voidf = 1;
+				p[0]->scanexpr(1);
+			}
+			else {
+				//                        if( csp->voidf )
+				//                             scanexpr(node->p[0],1);
+				if (first) {
+					///* look for register nodes */
+					//int i = 0;
+					//long j = node->p[0]->i;
+					//if ((node->p[0]->nodetype== en_regvar || node->p[0]->nodetype==en_bregvar) &&
+					//	(j >= 11 && j < 18))
+					//{
+					//	csp->voidf--;	/* this is not in auto_lst */
+					//	//csp->uses += 90 * (100 - i);
+					//	//csp->duses += 30 * (100 - i);
+					//	break;
+					//}
+					///* set voidf if the node is not in autolst */
+					//csp->voidf++;
+					//i = 0;
+					//while (i < autoptr) {
+					//	if (autolst[i] == j) {
+					//		csp->voidf--;
+					//		break;
+					//	}
+					//	++i;
+					//}
+					/*
+					* even if that item must not be put in a register,
+					* it is legal to put its address therein
+					*/
+					//if (csp->voidf)
+					//	scanexpr(node->p[0], 1);
+					//}
+
+					//if( csp->voidf )
+					//    scanexpr(node->p[0],1);
+				}
+			}
+		}
+		else
+			p[0]->scanexpr(1);
+		break;
+	case en_cbc: case en_cubw:
+	case en_cbh: case en_cucw:
+	case en_cbw: case en_cuhw:
+	case en_cbu: case en_ccu: case en_chu:
+	case en_cubu: case en_cucu: case en_cuhu:
+	case en_ccwp: case en_cucwp:
+	case en_cch:
+	case en_ccw:
+	case en_chw:
+	case en_uminus:
+	case en_abs:
+	case en_sxb: case en_sxc: case en_sxh:
+	case en_compl:
+	case en_not:
+	case en_chk:
+		p[0]->scanexpr(duse);
+		break;
+	case en_i2d:
+		p[0]->scanexpr(duse);
+		break;
+	case en_i2q:
+	case en_d2i:
+	case en_q2i:
+	case en_s2q:
+	case en_d2q:
+	case en_t2q:
+		p[0]->scanexpr(duse);
+		break;
+	case en_asadd:  case en_assub:
+	case en_add:    case en_sub:
+		p[0]->scanexpr(duse);
+		p[1]->scanexpr(duse);
+		break;
+	case en_mul:    case en_mulu:   case en_div:	case en_udiv:
+	case en_shl:    case en_asl:	case en_shlu:	case en_shr:	case en_shru:	case en_asr:
+	case en_mod:    case en_umod:   case en_and:
+	case en_or:     case en_xor:
+	case en_lor:    case en_land:
+	case en_eq:     case en_ne:
+	case en_gt:     case en_ge:
+	case en_lt:     case en_le:
+	case en_ugt:    case en_uge:
+	case en_ult:    case en_ule:
+	case en_feq:    case en_fne:
+	case en_flt:    case en_fle:
+	case en_fgt:    case en_fge:
+	case en_fdmul:  case en_fddiv:
+	case en_fdadd:  case en_fdsub:
+	case en_fadd: case en_fsub:
+	case en_fmul: case en_fdiv:
+
+	case en_veq:    case en_vne:
+	case en_vlt:    case en_vle:
+	case en_vgt:    case en_vge:
+	case en_vadd: case en_vsub:
+	case en_vmul: case en_vdiv:
+	case en_vadds: case en_vsubs:
+	case en_vmuls: case en_vdivs:
+
+	case en_asmul:  case en_asmulu:
+	case en_asdiv:	case en_asdivu:
+	case en_asmod:  case en_aslsh:
+	case en_asrsh:
+	case en_asand:	case en_asxor: case en_asor:
+	case en_cond:
+	case en_void:
+	case en_list:
+	case en_aggregate:
+		p[0]->scanexpr(0);
+		p[1]->scanexpr(0);
+		break;
+	case en_assign:
+		p[0]->scanexpr(0);
+		p[1]->scanexpr(0);
+		break;
+	case en_fcall:
+		p[0]->scanexpr(1);
+		p[1]->scanexpr(0);
+		break;
+	case en_bchk:
+		p[0]->scanexpr(0);
+		p[1]->scanexpr(0);
+		p[2]->scanexpr(0);
+		break;
+	default: dfs.printf("Uncoded node in ENODE::scanexpr():%d\r\n", nodetype);
+	}
+}
+
+
 // ----------------------------------------------------------------------------
 // Generate code to evaluate an index node (^+) and return the addressing mode
 // of the result. This routine takes no flags since it always returns either

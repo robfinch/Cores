@@ -741,3 +741,111 @@ ENODE *TYP::BuildEnodeTree()
 }
 
 
+// Get the natural alignment for a given type.
+
+int TYP::Alignment()
+{
+	//printf("DIAG: type NULL in alignment()\r\n");
+	if (this == NULL)
+		return AL_BYTE;
+	switch (type) {
+	case bt_byte:	case bt_ubyte:	return AL_BYTE;
+	case bt_char:   case bt_uchar:  return AL_CHAR;
+	case bt_short:  case bt_ushort: return AL_SHORT;
+	case bt_long:   case bt_ulong:  return AL_LONG;
+	case bt_enum:           return AL_CHAR;
+	case bt_pointer:
+		if (val_flag)
+			return (GetBtp()->Alignment());
+		else
+			return (sizeOfPtr);//isShort ? AL_SHORT : AL_POINTER);
+	case bt_float:          return AL_FLOAT;
+	case bt_double:         return AL_DOUBLE;
+	case bt_triple:         return AL_TRIPLE;
+	case bt_class:
+	case bt_struct:
+	case bt_union:
+		return (alignment) ? alignment : AL_STRUCT;
+	default:                return AL_CHAR;
+	}
+}
+
+
+// Figure out the worst alignment required.
+
+int TYP::walignment()
+{
+	SYM *sp;
+
+	//printf("DIAG: type NULL in alignment()\r\n");
+	if (this == NULL)
+		return imax(AL_BYTE, worstAlignment);
+	switch (type) {
+	case bt_byte:	case bt_ubyte:		return imax(AL_BYTE, worstAlignment);
+	case bt_char:   case bt_uchar:     return imax(AL_CHAR, worstAlignment);
+	case bt_short:  case bt_ushort:    return imax(AL_SHORT, worstAlignment);
+	case bt_long:   case bt_ulong:     return imax(AL_LONG, worstAlignment);
+	case bt_enum:           return imax(AL_CHAR, worstAlignment);
+	case bt_pointer:
+		if (val_flag)
+			return imax(GetBtp()->Alignment(), worstAlignment);
+		else {
+			return (imax(sizeOfPtr, worstAlignment));
+			//				return (imax(AL_POINTER,worstAlignment));
+		}
+	case bt_float:          return imax(AL_FLOAT, worstAlignment);
+	case bt_double:         return imax(AL_DOUBLE, worstAlignment);
+	case bt_triple:         return imax(AL_TRIPLE, worstAlignment);
+	case bt_class:
+	case bt_struct:
+	case bt_union:
+		sp = (SYM *)sp->GetPtr(lst.GetHead());
+		worstAlignment = alignment;
+		while (sp != NULL) {
+			if (sp->tp && sp->tp->alignment) {
+				worstAlignment = imax(worstAlignment, sp->tp->alignment);
+			}
+			else
+				worstAlignment = imax(worstAlignment, sp->tp->walignment());
+			sp = sp->GetNextPtr();
+		}
+		return (worstAlignment);
+	default:                return (imax(AL_CHAR, worstAlignment));
+	}
+}
+
+
+int TYP::roundAlignment()
+{
+	worstAlignment = 0;
+	if (type == bt_struct || type == bt_union || type == bt_class) {
+		return walignment();
+	}
+	return Alignment();
+}
+
+
+// Round the size of the type up according to the worst alignment.
+
+int TYP::roundSize()
+{
+	int sz;
+	int wa;
+
+	worstAlignment = 0;
+	if (type == bt_struct || type == bt_union || type == bt_class) {
+		wa = walignment();
+		sz = size;
+		if (sz == 0)
+			return (0);
+		if (sz % wa)
+			sz += (wa - (sz % wa));
+		//while (sz % wa)
+		//	sz++;
+		return (sz);
+	}
+	//	return ((tp->precision+7)/8);
+	return (size);
+}
+
+

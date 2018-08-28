@@ -22,5 +22,9 @@ void ListCompound(Statement *stmt);
 std::string TraceName(SYM *sp);
 void MarkRemove(OCODE *ip);
 void IRemove();
+int roundSize(TYP *tp);
+extern char *rtrim(char *);
+extern int caselit(scase *casetab, int64_t);
+AMODE *make_indexed2(int lab, int i);
 
 #endif

@@ -466,3 +466,52 @@ std::string *SYM::BuildSignature(int opt)
 }
 
 
+// Called during declaration parsing.
+
+// Auto variables are referenced negative to the base pointer
+// Structs need to be aligned on the boundary of the largest
+// struct element. If a struct is all chars this will be 2.
+// If a struct contains a pointer this will be 8. It has to
+// be the worst case alignment.
+
+void SYM::SetStorageOffset(TYP *head, int nbytes, int al, int ilc, int ztype)
+{
+	// Set the struct member storage offset.
+	if (al == sc_static || al == sc_thread) {
+		value.i = nextlabel++;
+	}
+	else if (ztype == bt_union) {
+		value.i = ilc;// + parentBytes;
+	}
+	else if (al != sc_auto) {
+		value.i = ilc + nbytes;// + parentBytes;
+	}
+	else {
+		value.i = -(ilc + nbytes + head->roundSize());// + parentBytes);
+	}
+}
+
+
+// Increase the storage allocation by the type size.
+
+int SYM::AdjustNbytes(int nbytes, int al, int ztype)
+{
+	if (ztype == bt_union)
+		nbytes = imax(nbytes, tp->roundSize());
+	else if (al != sc_external) {
+		// If a pointer to a function is defined in a struct.
+		if (isStructDecl) {
+			if (tp->type == bt_func) {
+				nbytes += 8;
+			}
+			else if (tp->type != bt_ifunc) {
+				nbytes += tp->roundSize();
+			}
+		}
+		else {
+			nbytes += tp->roundSize();
+		}
+	}
+	return (nbytes);
+}
+

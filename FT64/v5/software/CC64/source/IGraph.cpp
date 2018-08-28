@@ -40,7 +40,8 @@ void IGraph::MakeNew(int n)
 	bms = n * n / sizeof(int);
 	bitmatrix = new int[bms];
 	degrees = new short int[n];
-	vecs = new AdjVec *[n];
+	vecs = new int *[n];
+	memset(vecs, 0, n * sizeof(int *));
 	Clear();
 }
 
@@ -52,15 +53,12 @@ IGraph::~IGraph()
 void IGraph::Destroy()
 {
 	int n;
-	AdjVec *j, *k;
 
 	delete[] bitmatrix;
 	delete[] degrees;
 	for (n = 0; n < size; n++) {
-		for (j = vecs[n]; j; j = k) {
-			k = j->next;
-			delete j;
-		}
+		//if (vecs[n])
+		//	delete[] vecs[n];
 	}
 	delete[] vecs;
 }
@@ -75,16 +73,27 @@ void IGraph::ClearBitmatrix()
 
 void IGraph::Clear()
 {
+	int n;
+
 	ClearBitmatrix();
 	ZeroMemory(degrees, size * sizeof(short int));
-	ZeroMemory(vecs, size * sizeof(AdjVec *));
+	if (vecs) {
+		for (n = 0; n < size; n++)
+			if (vecs[n])
+				vecs[n][0] = 1;
+	}
 }
+
+// Two passes are made in order to determine the size of 
+// the adjacency vector array for the node. The first pass
+// just determines the degree.
+// The number of adjacency vectors stored is stored in the
+// first element of the array.
 
 void IGraph::Add(int x, int y)
 {
 	int bitndx;
 	int intndx;
-	AdjVec *v;
 	bool isSet;
 
 	bitndx = x + (y * y) / 2;
@@ -95,10 +104,14 @@ void IGraph::Add(int x, int y)
 		bitmatrix[intndx] |= (1 << bitndx);
 		degrees[x]++;
 		degrees[y]++;
-		v = vecs[x];
-		vecs[x] = new AdjVec;
-		vecs[x]->next = v;
-		vecs[x]->node = y;
+		if (pass > 1) {
+			if (vecs[x] == nullptr) {
+				vecs[x] = new int[degrees[x]+1];
+				vecs[x][0] = 1;
+			}
+			vecs[x][vecs[x][0]] = y;
+			vecs[x][0]++;
+		}
 	}
 }
 
@@ -106,26 +119,25 @@ bool IGraph::Remove(int n)
 {
 	int bitndx;
 	int intndx;
-	AdjVec *j, *k;
+	int j, m;
 	bool updated = false;
 
-	for (j = vecs[n]; j; j = k) {
-		if (degrees[j->node] > 0) {
-			degrees[j->node]--;
-			if (degrees[j->node] == K-1 && !frst->trees[j->node]->infinite) {
-				frst->high.remove(j->node);
-				frst->low.add(j->node);
+	for (j = 1; j < degrees[n] + 1; j++) {
+		m = vecs[n][j];
+		if (degrees[m] > 0) {
+			degrees[m]--;
+			if (degrees[m] == K-1 && !frst->trees[m]->infinite) {
+				frst->high.remove(m);
+				frst->low.add(m);
 				updated = true;
 			}
 		}
-		bitndx = n + (j->node * j->node) / 2;
+		bitndx = n + (m * m) / 2;
 		intndx = bitndx / sizeof(int);
 		bitndx %= (sizeof(int) * 8);
 		bitmatrix[intndx] &= ~(1 << bitndx);
-		k = j->next;
-		delete j;
-		vecs[n] = k;
 	}
+	vecs[n][0] = 1;
 	degrees[n] = 0;
 	return (updated);
 }
@@ -146,14 +158,26 @@ bool IGraph::DoesInterfere(int x, int y)
 
 void IGraph::Unite(int father, int son)
 {
-	AdjVec *j, *k;
+	int j;
+	int *tmp;
 
-	for (j = vecs[son]; j; j = k) {
-		Add(father, j->node);
-		k = j->next;
-		delete j;
+	// Increase the size of the adjacency vector allocation for the father as
+	// the son's vectors will be added to them.
+	tmp = new int [degrees[father] + degrees[son]];
+	if (vecs[father]) {
+		memcpy(tmp, vecs[father], (vecs[father][0] + 1) * sizeof(int));
+		//delete[] vecs[father];
 	}
-	vecs[son] = nullptr;
+	else
+		tmp[0] = 1;
+	vecs[father] = tmp;
+
+	if (vecs[son]) {
+		for (j = 1; j < vecs[son][0]; j++) {
+			Add(father, vecs[son][j]);
+		}
+		vecs[son][0] = 1;
+	}
 }
 
 
@@ -245,6 +269,11 @@ void IGraph::BuildAndCoalesce()
 	// blocks according to depth.
 	BasicBlock::DepthSort();
 
+	pass = 1;
+	Clear();
+	Fill();
+
+	pass = 2;
 	do {
 		Clear();
 		Fill();

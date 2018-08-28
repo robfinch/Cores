@@ -33,7 +33,6 @@
 int hook_predreg=15;
 
 AMODE *GenerateExpression();            /* forward ParseSpecifieraration */
-extern AMODE *GenExprRaptor64(ENODE *node);
 
 extern AMODE *copy_addr(AMODE *);
 extern AMODE *GenExpr(ENODE *node);

@@ -206,6 +206,8 @@ extern char *stkname;
 extern int nparms;
 extern int funcdecl;
 extern Stringx names[20];
+extern int isStructDecl;
+extern int worstAlignment;
 
 // Analyze.c
 extern short int csendx;

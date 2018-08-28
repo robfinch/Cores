@@ -183,12 +183,13 @@ public:
 	void AddParameters(SYM *list);
 	void AddProto(SYM *list);
 	void AddProto(TypeArray *);
-	void AddDerived(Function *sym);
+	void AddDerived();
 
 	void CheckForUndefinedLabels();
 	void Summary(Statement *);
 	Statement *ParseBody();
 	int Parse();
+	void InsertMethod();
 
 	void SaveGPRegisterVars();
 	void SaveFPRegisterVars();
@@ -276,6 +277,8 @@ public:
 	else
 		tp = t;
 } ;
+	void SetStorageOffset(TYP *head, int nbytes, int al, int ilc, int ztype);
+	int AdjustNbytes(int nbytes, int al, int ztype);
 };
 
 class TYP {
@@ -318,6 +321,11 @@ public:
 	bool IsAggregateType() const { return (IsStructType() | isArray); };
 	static bool IsSameType(TYP *a, TYP *b, bool exact);
 	void put_ty();
+
+	int Alignment();
+	int walignment();
+	int roundAlignment();
+	int roundSize();
 
 	ENODE *BuildEnodeTree();
 
@@ -399,6 +407,10 @@ public:
 	long GetReferenceSize();
 
 	static bool IsEqual(ENODE *a, ENODE *b);
+
+	// Optimization
+	void scanexpr(int duse);
+	void repexpr();
 
 	// Code generation
 	AMODE *GenIndex();
@@ -591,6 +603,7 @@ public:
 
 	void UpdateLive(int);
 	void CheckForDeaths(int r);
+	static void ComputeSpillCosts();
 	static void InsertMove(int reg, int rreg, int blk);
 	void BuildLivesetFromLiveout();
 	static void DepthSort();
@@ -693,10 +706,11 @@ class IGraph
 public:
 	int *bitmatrix;
 	short int *degrees;
-	AdjVec **vecs;
+	int **vecs;
 	int size;
 	int K;
 	Forest *frst;
+	int pass;
 public:
 	~IGraph();
 	void Destroy();
@@ -709,7 +723,7 @@ public:
 	static int FindTreeno(int reg, int blocknum) { return (Var::FindTreeno(reg, blocknum)); };
 	bool DoesInterfere(int x, int y);
 	int Degree(int n) { return ((int)degrees[n]); };
-	AdjVec *GetNeighbours(int n) { return (vecs[n]); };
+	int *GetNeighbours(int n) { return (vecs[n]); };
 	void Unite(int father, int son);
 	void Fill();
 	void BuildAndCoalesce();
@@ -877,6 +891,7 @@ class Declaration
 	static void SetType(SYM *sp);
 public:
 	Declaration *next;
+	static void AssignParameterName();
 	static int declare(SYM *parent,TABLE *table,int al,int ilc,int ztype);
 	static void ParseVoid();
 	static void ParseConst();
@@ -909,6 +924,8 @@ public:
 	static void ParseSuffixOpenpa(Function *);
 	static SYM *ParseSuffix(SYM *sp);
 	static void ParseFunctionAttribute(Function *sym);
+
+	static int GenStorage(int nbytes, int al, int ilc);
 };
 
 class StructDeclaration : public Declaration

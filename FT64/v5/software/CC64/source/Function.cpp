@@ -1139,20 +1139,20 @@ void Function::AddProto(TypeArray *ta)
 	}
 }
 
-void Function::AddDerived(Function *sp)
+void Function::AddDerived()
 {
 	DerivedMethod *mthd;
 
 	dfs.puts("<AddDerived>");
 	mthd = (DerivedMethod *)allocx(sizeof(DerivedMethod));
 	dfs.printf("A");
-	if (sp->sym->tp == nullptr)
+	if (sym->tp == nullptr)
 		dfs.printf("Nullptr");
-	if (sp->sym->GetParentPtr() == nullptr)
+	if (sym->GetParentPtr() == nullptr)
 		throw C64PException(ERR_NULLPOINTER, 10);
-	mthd->typeno = sp->sym->GetParentPtr()->tp->typeno;
+	mthd->typeno = sym->GetParentPtr()->tp->typeno;
 	dfs.printf("B");
-	mthd->name = sp->BuildSignature();
+	mthd->name = BuildSignature();
 
 	dfs.printf("C");
 	if (derivitives) {
@@ -1216,6 +1216,31 @@ void Function::Summary(Statement *stmt)
 	dfs.printf("</FuncSummary>\n");
 }
 
+
+// When going to insert a class method, check the base classes to see if it's
+// a virtual function override. If it's an override, then add the method to
+// the list of overrides for the virtual function.
+
+void Function::InsertMethod()
+{
+	int nn;
+	SYM *sy;
+	std::string name;
+
+	name = *sym->name;
+	dfs.printf("<InsertMethod>%s type %d ", (char *)sym->name->c_str(), sym->tp->type);
+	sym->GetParentPtr()->tp->lst.insert(sym);
+	nn = sym->GetParentPtr()->tp->lst.FindRising(*sym->name);
+	sy = sym->FindRisingMatch(true);
+	if (sy) {
+		dfs.puts("Found in a base class:");
+		if (sy->fi->IsVirtual) {
+			dfs.printf("Found virtual:");
+			sy->fi->AddDerived();
+		}
+	}
+	dfs.printf("</InsertMethod>\n");
+}
 
 
 

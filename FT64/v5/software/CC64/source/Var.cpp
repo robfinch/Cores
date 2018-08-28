@@ -175,9 +175,11 @@ void Var::GrowTree(Tree *t, BasicBlock *b)
 						t = trees.MakeNewTree();
 						t->num = treeno;
 						t->var = num;
+						t->lattice = b->depth;
 						treeno++;
 					}
 					t->blocks->add(p->num);
+					t->lattice = max(t->lattice, p->depth);
 					forest->add(p->num);
 					GrowTree(t, p);
 				}
@@ -194,11 +196,13 @@ void Var::GrowTree(Tree *t, BasicBlock *b)
 				if (p->LiveOut->isMember(num)) {
 					if (t==nullptr) {
 						t = trees.MakeNewTree();
+						t->lattice = b->depth;
 						t->num = treeno;
 						t->var = num;
 						treeno++;
 					}
 					t->blocks->add(p->num);
+					t->lattice = max(t->lattice, p->depth);
 					forest->add(p->num);
 					GrowTree(t, p);
 				}
@@ -226,6 +230,7 @@ void Var::CreateForest()
 		::forest.MakeNewTree(t);
 		t->num = treeno;
 		t->var = num;
+		t->lattice = b->depth;
 		treeno++;
 		t->blocks->add(b->num);
 		forest->add(b->num);
@@ -245,6 +250,7 @@ void Var::CreateForest()
 					::forest.MakeNewTree(t);
 					t->num = treeno;
 					t->var = num;
+					t->lattice = p->depth;
 					treeno++;
 					t->blocks->add(p->num);
 					forest->add(p->num);
@@ -266,6 +272,7 @@ void Var::CreateForest()
 					::forest.MakeNewTree(t);
 					t->num = treeno;
 					t->var = num;
+					t->lattice = p->depth;
 					treeno++;
 					t->blocks->add(p->num);
 					forest->add(p->num);
@@ -289,6 +296,7 @@ void Var::CreateForest()
 				::forest.MakeNewTree(t);
 				t->num = treeno;
 				t->var = num;
+				t->lattice = p->depth;
 				treeno++;
 				t->blocks->add(p->num);
 				forest->add(p->num);
