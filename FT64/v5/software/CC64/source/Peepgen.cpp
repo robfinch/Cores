@@ -311,6 +311,10 @@ static void AddToPeepList(OCODE *cd)
 	}
 }
 
+
+// Count the length of the peep list from the current position to the end of
+// the list.
+
 int PeepCount(OCODE *ip)
 {
 	int cnt;
@@ -1414,24 +1418,6 @@ static void MarkAllKeep()
 	}
 }
 
-void Peep::InsertBefore(OCODE *an, OCODE *cd)
-{
-	cd->fwd = an;
-	cd->back = an->back;
-	if (an->back)
-		an->back->fwd = cd;
-	an->back = cd;
-}
-
-void Peep::InsertAfter(OCODE *an, OCODE *cd)
-{
-	cd->fwd = an->fwd;
-	cd->back = an;
-	if (an->fwd)
-		an->fwd->back = cd;
-	an->fwd = cd;
-}
-
 void Remove()
 {
 	OCODE *ip, *ip1, *ip2;
@@ -1688,16 +1674,16 @@ static void opt_peep()
 	RemoveCompilerHints();
 	Remove();
 
-	RootBlock = BasicBlock::Blockize(peep_head);
+	currentFn->RootBlock = BasicBlock::Blockize(peep_head);
 //	RootBlock->ExpandReturnBlocks();
 	CFG::Create();
 
 	RemoveMoves();
-	ComputeLiveVars();
+	currentFn->ComputeLiveVars();
 	MarkAllKeep();
 	
-	DumpLiveVars();
-	CreateVars();
+	currentFn->DumpLiveVars();
+	currentFn->CreateVars();
 	Var::CreateForests();
 	Var::DumpForests();
 	CFG::CalcDominanceFrontiers();
@@ -1709,6 +1695,9 @@ static void opt_peep()
 	//RemoveCode();
 	iGraph.frst = &forest;
 	iGraph.BuildAndCoalesce();
+	forest.Simplify();
+	forest.Color();
+	forest.GenSpillCode();
 	Var::DumpForests();
 	//DumpLiveRegs();
 
@@ -1727,24 +1716,6 @@ OCODE *FindLabel(int64_t i)
 	}
 	return (nullptr);
 }
-
-void CreateVars()
-{
-	BasicBlock *b;
-	int nn;
-	int num;
-
-	varlist = nullptr;
-	Var::nvar = 0;
-	for (b = RootBlock; b; b = b->next) {
-		b->LiveOut->resetPtr();
-		for (nn = 0; nn < b->LiveOut->NumMember(); nn++) {
-			num = b->LiveOut->nextMember();
-			Var::Find(num);
-		}
-	}
-}
-
 
 // Remove move instructions which will create false interferences.
 // The move instructions are just marked for removal so they aren't
@@ -1785,7 +1756,7 @@ void RemoveCode()
 	count = 0;
 	//printf((char *)currentFn->name->c_str());
 	//printf("\r\n");
-	for (v = varlist; v; v = v->next) {
+	for (v = currentFn->varlist; v; v = v->next) {
 		if (IsCalleeSave(v->num))
 			continue;
 		if (v->num==0 || v->num==regLR || v->num==regXLR)

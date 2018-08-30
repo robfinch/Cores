@@ -61,10 +61,10 @@ Statement *Function::ParseBody()
 	if (!IsInline)
 		GenerateMonadicNT(op_fnname, 0, make_string(p));
 	currentFn = this;
-	currentFn->IsLeaf = TRUE;
-	currentFn->DoesThrow = FALSE;
-	currentFn->UsesPredicate = FALSE;
-	currentFn->UsesNew = FALSE;
+	IsLeaf = TRUE;
+	DoesThrow = FALSE;
+	UsesPredicate = FALSE;
+	UsesNew = FALSE;
 	regmask = 0;
 	bregmask = 0;
 	currentStmt = (Statement *)NULL;
@@ -104,6 +104,25 @@ Statement *Function::ParseBody()
 	return (sym->stmt);
 }
 
+void Function::Init(int nump, int numarg)
+{
+	IsNocall = isNocall;
+	IsPascal = isPascal;
+	sym->IsKernel = isKernel;
+	IsInterrupt = isInterrupt;
+	IsTask = isTask;
+	NumParms = nump;
+	numa = numarg;
+	IsVirtual = isVirtual;
+	IsInline = isInline;
+
+	isPascal = FALSE;
+	isKernel = FALSE;
+	isOscall = FALSE;
+	isInterrupt = FALSE;
+	isTask = FALSE;
+	isNocall = FALSE;
+}
 
 /*
 *      funcbody starts with the current symbol being either
@@ -114,26 +133,26 @@ Statement *Function::ParseBody()
 int Function::Parse()
 {
 	Function *osp, *sp;
-	int nump, numa;
+	int nump, numar;
 	std::string nme;
 
 	sp = this;
 	dfs.puts("<ParseFunction>\n");
 	isFuncBody = true;
-	if (sp == NULL) {
-		fatal("Compiler error: ParseFunction: SYM is NULL\r\n");
+	if (this == nullptr) {
+		fatal("Compiler error: Function::Parse: SYM is NULL\r\n");
 	}
 	dfs.printf("***********************************\n");
 	dfs.printf("***********************************\n");
 	dfs.printf("***********************************\n");
 	if (sym->parent)
 		dfs.printf("Parent: %s\n", (char *)sym->GetParentPtr()->name->c_str());
-	dfs.printf("Parsing function: %s\n", (char *)sp->sym->name->c_str());
+	dfs.printf("Parsing function: %s\n", (char *)sym->name->c_str());
 	dfs.printf("***********************************\n");
 	dfs.printf("***********************************\n");
 	dfs.printf("***********************************\n");
 	stkname = ::stkname;
-	if (verbose) printf("Parsing function: %s\r\n", (char *)sp->sym->name->c_str());
+	if (verbose) printf("Parsing function: %s\r\n", (char *)sym->name->c_str());
 	nump = nparms;
 	iflevel = 0;
 	looplevel = 0;
@@ -145,15 +164,15 @@ int Function::Parse()
 	// declarations. the original 'C' style is parsed here. Originally the
 	// parameter types appeared as list after the parenthesis and before the
 	// function body.
-	BuildParameterList(&nump, &numa);
+	BuildParameterList(&nump, &numar);
 	dfs.printf("B");
 	sym->mangledName = BuildSignature(1);  // build against parameters
 
 											  // If the symbol has a parent then it must be a class
 											  // method. Search the parent table(s) for matching
 											  // signatures.
-	osp = sp;
-	nme = *sp->sym->name;
+	osp = this;
+	nme = *sym->name;
 	if (sym->parent) {
 		Function *sp2;
 		dfs.printf("Parent Class:%s|", (char *)sym->GetParentPtr()->name->c_str());
@@ -176,12 +195,13 @@ int Function::Parse()
 	dfs.printf("C");
 
 	if (sp != osp) {
-		dfs.printf("ParseFunction: sp changed\n");
-		osp->params.CopyTo(&sp->params);
-		osp->proto.CopyTo(&sp->proto);
-		sp->derivitives = osp->derivitives;
-		sp->sym->mangledName = osp->sym->mangledName;
+		dfs.printf("Function::Parse: sp changed\n");
+		params.CopyTo(&sp->params);
+		proto.CopyTo(&sp->proto);
+		sp->derivitives = derivitives;
+		sp->sym->mangledName = sym->mangledName;
 		// Should free osp here. It's not needed anymore
+		FreeFunction(osp);
 	}
 	if (lastst == closepa) {
 		NextToken();
@@ -191,24 +211,9 @@ int Function::Parse()
 	dfs.printf("D");
 	if (sp->sym->tp->type == bt_pointer) {
 		if (lastst == assign) {
-			doinit(this->sym);
+			doinit(sp->sym);	// was doinit(sym);
 		}
-		sp->IsNocall = isNocall;
-		sp->IsPascal = isPascal;
-		sp->sym->IsKernel = isKernel;
-		sp->IsInterrupt = isInterrupt;
-		sp->IsTask = isTask;
-		sp->NumParms = nump;
-		sp->numa = numa;
-		sp->IsVirtual = isVirtual;
-		sp->IsInline = isInline;
-		isPascal = FALSE;
-		isKernel = FALSE;
-		isOscall = FALSE;
-		isInterrupt = FALSE;
-		isTask = FALSE;
-		isNocall = FALSE;
-		//	    ReleaseLocalMemory();        /* release local symbols (parameters)*/
+		sp->Init(nump, numar);
 		return (1);
 	}
 j2:
@@ -216,28 +221,13 @@ j2:
 	if (lastst == semicolon) {	// Function prototype
 		dfs.printf("e");
 		sp->IsPrototype = 1;
-		sp->IsNocall = isNocall;
-		sp->IsPascal = isPascal;
-		sp->sym->IsKernel = isKernel;
-		sp->IsInterrupt = isInterrupt;
-		sp->IsTask = isTask;
-		sp->IsVirtual = isVirtual;
-		sp->IsInline = isInline;
-		sp->NumParms = nump;
-		sp->numa = numa;
+		sp->Init(nump, numar);
 		sp->params.MoveTo(&sp->proto);
-		isPascal = FALSE;
-		isKernel = FALSE;
-		isOscall = FALSE;
-		isInterrupt = FALSE;
-		isTask = FALSE;
-		isNocall = FALSE;
-		//	    ReleaseLocalMemory();        /* release local symbols (parameters)*/
 		goto j1;
 	}
 	else if (lastst == kw_attribute) {
 		while (lastst == kw_attribute) {
-			Declaration::ParseFunctionAttribute(this);
+			Declaration::ParseFunctionAttribute(sp);
 		}
 		goto j2;
 	}
@@ -245,50 +235,19 @@ j2:
 		dfs.printf("F");
 		//			NextToken();
 		//			ParameterDeclaration::Parse(2);
-		sp->BuildParameterList(&nump, &numa);
+		sp->BuildParameterList(&nump, &numar);
 		// for old-style parameter list
 		//needpunc(closepa);
 		if (lastst == semicolon) {
 			sp->IsPrototype = 1;
-			sp->IsNocall = isNocall;
-			sp->IsPascal = isPascal;
-			sp->IsInline = isInline;
-			sp->sym->IsKernel = isKernel;
-			sp->IsInterrupt = isInterrupt;
-			sp->IsTask = isTask;
-			//sp->sym->IsRegister = isRegister;
-			sp->IsVirtual = isVirtual;
-			sp->NumParms = nump;
-			sp->numa = numa;
-			isPascal = FALSE;
-			isKernel = FALSE;
-			isOscall = FALSE;
-			isInterrupt = FALSE;
-			isTask = FALSE;
-			isNocall = FALSE;
-			//				ReleaseLocalMemory();        /* release local symbols (parameters)*/
+			sp->Init(nump, numar);
 		}
 		// Check for end of function parameter list.
 		else if (funcdecl == 2 && lastst == closepa) {
 			;
 		}
 		else {
-			sp->IsNocall = isNocall;
-			sp->IsPascal = isPascal;
-			sp->sym->IsKernel = isKernel;
-			sp->IsInterrupt = isInterrupt;
-			sp->IsTask = isTask;
-			sp->IsVirtual = isVirtual;
-			//sp->sym->IsRegister = isRegister;
-			sp->IsInline = isInline;
-			isPascal = FALSE;
-			isKernel = FALSE;
-			isOscall = FALSE;
-			isInterrupt = FALSE;
-			isTask = FALSE;
-			isNocall = FALSE;
-			sp->NumParms = nump;
-			sp->numa = numa;
+			sp->Init(nump, numar);
 			sp->sym->stmt = ParseBody();
 			Summary(sp->sym->stmt);
 		}
@@ -296,25 +255,11 @@ j2:
 	//                error(ERR_BLOCK);
 	else {
 		dfs.printf("G");
-		sp->IsNocall = isNocall;
-		sp->IsPascal = isPascal;
-		sp->IsInline = isInline;
-		sp->sym->IsKernel = isKernel;
-		sp->IsInterrupt = isInterrupt;
-		sp->IsTask = isTask;
-		sp->IsVirtual = isVirtual;
-		isPascal = FALSE;
-		isKernel = FALSE;
-		isOscall = FALSE;
-		isInterrupt = FALSE;
-		isTask = FALSE;
-		isNocall = FALSE;
-		sp->NumParms = nump;
-		sp->numa = numa;
+		sp->Init(nump, numar);
 		// Parsing declarations sets the storage class to extern when it really
 		// should be global if there is a function body.
-		if (sym->storage_class == sc_external)
-			sym->storage_class = sc_global;
+		if (sp->sym->storage_class == sc_external)
+			sp->sym->storage_class = sc_global;
 		sp->sym->stmt = ParseBody();
 		Summary(sp->sym->stmt);
 	}
@@ -365,6 +310,88 @@ void Function::SaveRegisterVars()
 	SaveGPRegisterVars();
 	SaveFPRegisterVars();
 }
+
+
+// Saves any registers used as parameters in the calling function.
+
+void Function::SaveRegisterArguments()
+{
+	TypeArray *ta;
+	int count;
+
+	if (this == nullptr)
+		return;
+	ta = GetProtoTypes();
+	if (ta) {
+		int nn;
+		if (!cpu.SupportsPush) {
+			for (count = nn = 0; nn < ta->length; nn++)
+				if (ta->preg[nn]) {
+					count++;
+					if (ta->types[nn] == bt_quad || ta->types[nn] == bt_triple)
+						count++;
+				}
+			GenerateTriadic(op_sub, 0, makereg(regSP), makereg(regSP), make_immed(count * sizeOfWord));
+			for (count = nn = 0; nn < ta->length; nn++) {
+				if (ta->preg[nn]) {
+					switch (ta->types[nn]) {
+					case bt_quad:	GenerateDiadicNT(op_sf, 'q', makereg(ta->preg[nn] & 0x7fff), make_indexed(count*sizeOfWord, regSP)); count += 2; break;
+					case bt_float:	GenerateDiadicNT(op_sf, 'd', makereg(ta->preg[nn] & 0x7fff), make_indexed(count*sizeOfWord, regSP)); count += 1; break;
+					case bt_double:	GenerateDiadicNT(op_sf, 'd', makereg(ta->preg[nn] & 0x7fff), make_indexed(count*sizeOfWord, regSP)); count += 1; break;
+					case bt_triple:	GenerateDiadicNT(op_sf, 't', makereg(ta->preg[nn] & 0x7fff), make_indexed(count*sizeOfWord, regSP)); count += 2; break;
+					default:	GenerateDiadicNT(op_sw, 0, makereg(ta->preg[nn] & 0x7fff), make_indexed(count*sizeOfWord, regSP)); count += 1; break;
+					}
+				}
+			}
+		}
+		else {
+			for (count = nn = 0; nn < ta->length; nn++) {
+				if (ta->preg[nn]) {
+					switch (ta->types[nn]) {
+					case bt_quad:	GenerateMonadicNT(op_pushf, 'q', makereg(ta->preg[nn] & 0x7fff)); break;
+					case bt_float:	GenerateMonadicNT(op_pushf, 'd', makereg(ta->preg[nn] & 0x7fff)); break;
+					case bt_double:	GenerateMonadicNT(op_pushf, 'd', makereg(ta->preg[nn] & 0x7fff)); break;
+					case bt_triple:	GenerateMonadicNT(op_pushf, 't', makereg(ta->preg[nn] & 0x7fff)); break;
+					default:	GenerateMonadicNT(op_push, 0, makereg(ta->preg[nn] & 0x7fff)); break;
+					}
+				}
+			}
+		}
+	}
+}
+
+
+void Function::RestoreRegisterArguments()
+{
+	TypeArray *ta;
+	int count;
+
+	if (this == nullptr)
+		return;
+	ta = GetProtoTypes();
+	if (ta) {
+		int nn;
+		for (count = nn = 0; nn < ta->length; nn++)
+			if (ta->preg[nn]) {
+				count++;
+				if (ta->types[nn] == bt_quad || ta->types[nn] == bt_triple)
+					count++;
+			}
+		GenerateTriadic(op_sub, 0, makereg(regSP), makereg(regSP), make_immed(count * sizeOfWord));
+		for (count = nn = 0; nn < ta->length; nn++) {
+			if (ta->preg[nn]) {
+				switch (ta->types[nn]) {
+				case bt_quad:	GenerateDiadicNT(op_lf, 'q', makereg(ta->preg[nn] & 0x7fff), make_indexed(count*sizeOfWord, regSP)); count += 2; break;
+				case bt_float:	GenerateDiadicNT(op_lf, 'd', makereg(ta->preg[nn] & 0x7fff), make_indexed(count*sizeOfWord, regSP)); count += 1; break;
+				case bt_double:	GenerateDiadicNT(op_lf, 'd', makereg(ta->preg[nn] & 0x7fff), make_indexed(count*sizeOfWord, regSP)); count += 1; break;
+				case bt_triple:	GenerateDiadicNT(op_lf, 't', makereg(ta->preg[nn] & 0x7fff), make_indexed(count*sizeOfWord, regSP)); count += 2; break;
+				default:	GenerateDiadicNT(op_lw, 0, makereg(ta->preg[nn] & 0x7fff), make_indexed(count*sizeOfWord, regSP)); count += 1; break;
+				}
+			}
+		}
+	}
+}
+
 
 void Function::RestoreGPRegisterVars()
 {
@@ -510,6 +537,7 @@ void Function::SetupReturnBlock()
 		GenerateDiadic(op_ldi, 0, makereg(regXLR), ap);
 	GenerateDiadic(op_mov, 0, makereg(regFP), makereg(regSP));
 	GenerateTriadic(op_sub, 0, makereg(regSP), makereg(regSP), make_immed(stkspace));
+	spAdjust = peep_tail;
 }
 
 // Generate a return statement.
@@ -1242,6 +1270,77 @@ void Function::InsertMethod()
 	dfs.printf("</InsertMethod>\n");
 }
 
+void Function::CreateVars()
+{
+	BasicBlock *b;
+	int nn;
+	int num;
+
+	varlist = nullptr;
+	Var::nvar = 0;
+	for (b = RootBlock; b; b = b->next) {
+		b->LiveOut->resetPtr();
+		for (nn = 0; nn < b->LiveOut->NumMember(); nn++) {
+			num = b->LiveOut->nextMember();
+			Var::Find(num);	// find will create the var if not found
+		}
+	}
+}
+
+
+void Function::ComputeLiveVars()
+{
+	BasicBlock *b;
+	bool changed;
+	int iter;
+	int changes;
+
+	changed = false;
+	for (iter = 0; (iter == 0 || changed) && iter < 10000; iter++) {
+		changes = 0;
+		changed = false;
+		for (b = LastBlock; b; b = b->prev) {
+			b->ComputeLiveVars();
+			if (b->changed) {
+				changes++;
+				changed = true;
+			}
+		}
+	}
+}
+
+void Function::DumpLiveVars()
+{
+	BasicBlock *b;
+	int nn;
+	int lomax, limax;
+
+	lomax = limax = 0;
+	for (b = RootBlock; b; b = b->next) {
+		lomax = max(lomax, b->LiveOut->NumMember());
+		limax = max(limax, b->LiveIn->NumMember());
+	}
+
+	dfs.printf("<table style=\"width:100%\">\n");
+	//dfs.printf("<LiveVarTable>\n");
+	for (b = RootBlock; b; b = b->next) {
+		b->LiveIn->resetPtr();
+		b->LiveOut->resetPtr();
+		dfs.printf("<tr><td>%d: </td>", b->num);
+		for (nn = 0; nn < b->LiveIn->NumMember(); nn++)
+			dfs.printf("<td>vi%d </td>", b->LiveIn->nextMember());
+		for (; nn < limax; nn++)
+			dfs.printf("<td></td>");
+		dfs.printf("<td> || </td>");
+		for (nn = 0; nn < b->LiveOut->NumMember(); nn++)
+			dfs.printf("<td>vo%d </td>", b->LiveOut->nextMember());
+		for (; nn < lomax; nn++)
+			dfs.printf("<td></td>");
+		dfs.printf("</tr>\n");
+	}
+	//dfs.printf("</LiveVarTable>\n");
+	dfs.printf("</table>\n");
+}
 
 
 

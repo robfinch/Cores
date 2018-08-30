@@ -30,5 +30,6 @@ void Tree::ClearCosts()
 	loads = 0.0;
 	stores = 0.0;
 	copies = 0.0;
+	others = 0.0;
 	infinite = false;
 }

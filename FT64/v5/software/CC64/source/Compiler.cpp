@@ -88,6 +88,7 @@ void Compiler::compile()
 	ZeroMemory(&tagtable,sizeof(tagtable));
 	ZeroMemory(&symbolTable,sizeof(symbolTable));
 	ZeroMemory(&typeTable,sizeof(typeTable));
+	ZeroMemory(&functionTable, sizeof(functionTable));
 	AddStandardTypes();
 
 	RTFClasses::Random::srand((RANDOM_TYPE)time(NULL));
@@ -95,6 +96,7 @@ void Compiler::compile()
 	gd = decls;
 	lastst = tk_nop;
 
+	funcnum = 0;
 	AddBuiltinFunctions();
 
 	getch();

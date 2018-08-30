@@ -27,4 +27,7 @@ extern char *rtrim(char *);
 extern int caselit(scase *casetab, int64_t);
 AMODE *make_indexed2(int lab, int i);
 
+// MemoryManagement.cpp
+void FreeFunction(Function *fn);
+
 #endif

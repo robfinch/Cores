@@ -84,6 +84,19 @@ void IGraph::Clear()
 	}
 }
 
+
+// Called after the first fill pass to allocate storage for vectors.
+
+void IGraph::AllocVecs()
+{
+	int x;
+
+	for (x = 0; x < size; x++) {
+		vecs[x] = new int[degrees[x] + 1];
+		vecs[x][0] = 1;
+	}
+}
+
 // Two passes are made in order to determine the size of 
 // the adjacency vector array for the node. The first pass
 // just determines the degree.
@@ -105,10 +118,6 @@ void IGraph::Add(int x, int y)
 		degrees[x]++;
 		degrees[y]++;
 		if (pass > 1) {
-			if (vecs[x] == nullptr) {
-				vecs[x] = new int[degrees[x]+1];
-				vecs[x][0] = 1;
-			}
 			vecs[x][vecs[x][0]] = y;
 			vecs[x][0]++;
 		}
@@ -190,7 +199,7 @@ void IGraph::Fill()
 	bool eol;
 
 	// For each block 
-	for (b = RootBlock; b; b = b->next) {
+	for (b = currentFn->RootBlock; b; b = b->next) {
 		b->BuildLivesetFromLiveout();
 		eol = false;
 		for (ip = b->lcode; ip && !eol; ip = ip->back) {
@@ -249,7 +258,8 @@ void IGraph::BuildAndCoalesce()
 	int nn, mm, blk;
 	bool improved = false;
 
-	MakeNew(Var::nvar);
+//	MakeNew(Var::nvar);
+	MakeNew(frst->treecount);
 	frst->CalcRegclass();
 
 	// Insert move operations to handle register parameters.
@@ -269,9 +279,12 @@ void IGraph::BuildAndCoalesce()
 	// blocks according to depth.
 	BasicBlock::DepthSort();
 
+	// On the first pass we just want to determine the degree of the nodes so
+	// that storage for vectors can be allocated.
 	pass = 1;
 	Clear();
 	Fill();
+	AllocVecs();
 
 	pass = 2;
 	do {
@@ -280,5 +293,5 @@ void IGraph::BuildAndCoalesce()
 		improved = BasicBlock::Coalesce();
 		IRemove();
 	} while (improved);
-	Destroy();
+	//Destroy();	// needed in Simplify()
 }

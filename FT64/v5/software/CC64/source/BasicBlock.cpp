@@ -1,8 +1,5 @@
 #include "stdafx.h"
 
-BasicBlock *RootBlock;
-BasicBlock *LastBlock;
-BasicBlock *ReturnBlock;
 extern bool HasTargetReg(OCODE *);
 int nBasicBlocks;
 BasicBlock *basicBlocks[10000];
@@ -52,6 +49,8 @@ bool IsBasicBlockSeparater(OCODE *ip)
 	case op_bbc:	return (true);
 	case op_beqi:	return (true);
 	case op_bchk:	return (true);
+	case op_ibne:	return (true);
+	case op_dbnz:	return (true);
 	default:	return (false);
 	}
 	return (false);
@@ -66,12 +65,12 @@ BasicBlock *BasicBlock::Blockize(OCODE *start)
 	int num;
 
 	num = 0;
-	RootBlock = bbs = BasicBlock::MakeNew();
+	currentFn->RootBlock = bbs = BasicBlock::MakeNew();
 	bbs->code = start;
 	bbs->num = num;
 	bbs->length = 0;
 	pb = bbs;
-	basicBlocks[0] = RootBlock;
+	basicBlocks[0] = currentFn->RootBlock;
 	start->leader = true;
 	for (ip = start; ip; ip = ip2) {
 		ip->bb = pb;
@@ -80,7 +79,7 @@ BasicBlock *BasicBlock::Blockize(OCODE *start)
 		if (ip->opcode != op_label && ip->opcode != op_rem && ip->opcode != op_rem2 && ip->opcode != op_hint && ip->opcode != op_hint2)
 			pb->length++;
 		if (ip->opcode == op_ret || ip->opcode==op_rti)
-			ReturnBlock = pb;
+			currentFn->ReturnBlock = pb;
 		if (IsBasicBlockSeparater(ip)) {
 			pb->lcode = ip;
 			if (ip->fwd)
@@ -96,9 +95,9 @@ BasicBlock *BasicBlock::Blockize(OCODE *start)
 		}
 	}
 	nBasicBlocks = num;
-	LastBlock = pb->prev;
-	if (LastBlock==nullptr)
-		LastBlock = RootBlock;
+	currentFn->LastBlock = pb->prev;
+	if (currentFn->LastBlock==nullptr)
+		currentFn->LastBlock = currentFn->RootBlock;
 	// ASSERT(LastBlock!=nullptr);
 	pb->next = nullptr;
 	dfs.printf("%s: ", (char *)currentFn->sym->name->c_str());
@@ -189,8 +188,8 @@ int bbdcmp(const void *a, const void *b)
 
 void BasicBlock::DepthSort()
 {
-	memcpy(sortedBlocks, basicBlocks, (LastBlock->num+1)*sizeof(BasicBlock *));
-	qsort(sortedBlocks, (size_t)LastBlock->num+1, sizeof(BasicBlock *), bbdcmp);
+	memcpy(sortedBlocks, basicBlocks, (currentFn->LastBlock->num+1)*sizeof(BasicBlock *));
+	qsort(sortedBlocks, (size_t)currentFn->LastBlock->num+1, sizeof(BasicBlock *), bbdcmp);
 }
 
 CSet *BasicBlock::livo;
@@ -211,9 +210,21 @@ void BasicBlock::ComputeLiveVars()
 	for (ip = code; ip && (!ip->leader || ip == code); ip = ip->fwd) {
 		if (ip->remove || ip->remove2)
 			continue;
-		if (ip->opcode!=op_label) {
-			if (ip->HasTargetReg()) {
-				tr = ip->GetTargetReg() & 0xffff;
+		if (ip->opcode == op_label)
+			continue;
+		if (ip->HasTargetReg()) {
+			tr = ip->GetTargetReg() & 0xffff;
+			if ((tr & 0xFFF) >= 0x800) {
+				kill->add((tr & 0xfff)-0x780);
+			}
+			else {
+				kill->add(tr);
+			}
+			if (tr >= 18 && tr <= 24)
+				gen->add(tr);
+			// There could be a second target
+			tr = (ip->GetTargetReg() >> 16) & 0xffff;
+			if (tr) {
 				if ((tr & 0xFFF) >= 0x800) {
 					kill->add((tr & 0xfff)-0x780);
 				}
@@ -222,68 +233,56 @@ void BasicBlock::ComputeLiveVars()
 				}
 				if (tr >= 18 && tr <= 24)
 					gen->add(tr);
-				// There could be a second target
-				tr = (ip->GetTargetReg() >> 16) & 0xffff;
-				if (tr) {
-					if ((tr & 0xFFF) >= 0x800) {
-						kill->add((tr & 0xfff)-0x780);
-					}
-					else {
-						kill->add(tr);
-					}
-					if (tr >= 18 && tr <= 24)
-						gen->add(tr);
-				}
 			}
-			// If there was an explicit target it would have been oper1
-			// there was an else here
-			else 
-			//if (ip->oper1 && ip->oper1->mode == am_reg) {
-			if (ip->oper1) {
-				if ((ip->oper1->preg & 0xfff) >= 0x800) {
-					gen->add((ip->oper1->preg & 0xfff)-0x780);
-				}
-				else {
-					gen->add(ip->oper1->preg);
-				}
+		}
+		// If there was an explicit target it would have been oper1
+		// there was an else here
+		else 
+		//if (ip->oper1 && ip->oper1->mode == am_reg) {
+		if (ip->oper1) {
+			if ((ip->oper1->preg & 0xfff) >= 0x800) {
+				gen->add((ip->oper1->preg & 0xfff)-0x780);
 			}
-			// Stack operations implicitly read SP. It doesn't appear in the operx operands.
-			if (ip->opcode==op_push || ip->opcode==op_pop || ip->opcode==op_link || ip->opcode==op_unlk) {
-				gen->add(regSP);
+			else {
+				gen->add(ip->oper1->preg);
 			}
-			if (ip->oper2) {
+		}
+		// Stack operations implicitly read SP. It doesn't appear in the operx operands.
+		if (ip->opcode==op_push || ip->opcode==op_pop || ip->opcode==op_link || ip->opcode==op_unlk) {
+			gen->add(regSP);
+		}
+		if (ip->oper2) {
 //				if (ip->oper2->mode == am_reg) {
-					if ((ip->oper2->preg & 0xfff) >= 0x800) {
-						gen->add((ip->oper2->preg & 0xfff)-0x780);
-					}
-					else {
-						gen->add(ip->oper2->preg);
-					}
-					if (ip->oper2->mode == am_indx2) {
-						gen->add(ip->oper2->sreg);
-					}
-//				}
+			if ((ip->oper2->preg & 0xfff) >= 0x800) {
+				gen->add((ip->oper2->preg & 0xfff)-0x780);
 			}
-			if (ip->oper3) {
+			else {
+				gen->add(ip->oper2->preg);
+			}
+			if (ip->oper2->mode == am_indx2) {
+				gen->add(ip->oper2->sreg);
+			}
+//				}
+		}
+		if (ip->oper3) {
 //				if (ip->oper3->mode == am_reg) {
-					if ((ip->oper3->preg & 0xfff) >= 0x800) {
-						gen->add((ip->oper3->preg & 0xfff)-0x780);
-					}
-					else {
-						gen->add(ip->oper3->preg);
-					}
-//				}
+			if ((ip->oper3->preg & 0xfff) >= 0x800) {
+				gen->add((ip->oper3->preg & 0xfff)-0x780);
 			}
-			if (ip->oper4) {
+			else {
+				gen->add(ip->oper3->preg);
+			}
+//				}
+		}
+		if (ip->oper4) {
 //				if (ip->oper4->mode == am_reg) {
-					if ((ip->oper4->preg & 0xfff) >= 0x800) {
-						gen->add((ip->oper4->preg & 0xfff)-0x780);
-					}
-					else {
-						gen->add(ip->oper4->preg);
-					}
-//				}
+			if ((ip->oper4->preg & 0xfff) >= 0x800) {
+				gen->add((ip->oper4->preg & 0xfff)-0x780);
 			}
+			else {
+				gen->add(ip->oper4->preg);
+			}
+//				}
 		}
 	}
 	OldLiveIn.clear();
@@ -359,17 +358,17 @@ void BasicBlock::ExpandReturnBlocks()
 	Edge *p;
 	OCODE *ip, *nc, *oc, *bk;
 
-	if (ReturnBlock == nullptr)
+	if (currentFn->ReturnBlock == nullptr)
 		return;
-	for (bb = RootBlock; bb; bb = bb->next) {
+	for (bb = currentFn->RootBlock; bb; bb = bb->next) {
 
 		// Prevent the same edge from being added multiple times.
 		for (p = bb->ohead; p; p = p->next) {
-			if (p->dst == ReturnBlock && ReturnBlock->length < 32) {
+			if (p->dst == currentFn->ReturnBlock && currentFn->ReturnBlock->length < 32) {
 				oc = bb->lcode;
 				bk = bb->lcode->back;
-				oc = bb->lcode = OCODE::Clone(ReturnBlock->code);
-				for (ip = ip->fwd; ip != ReturnBlock->lcode; ip = ip->fwd) {
+				oc = bb->lcode = OCODE::Clone(currentFn->ReturnBlock->code);
+				for (ip = ip->fwd; ip != currentFn->ReturnBlock->lcode; ip = ip->fwd) {
 					oc->back = bk;
 					oc->fwd = OCODE::Clone(ip);
 					bk = oc;
@@ -394,7 +393,7 @@ void BasicBlock::UpdateLive(int r)
 			forest.trees[r]->infinite = true;
 		}
 	}
-	forest.trees[r]->stores += depth;
+	forest.trees[r]->stores += depth * 4;
 	live->remove(r);
 }
 
@@ -406,7 +405,7 @@ void BasicBlock::CheckForDeaths(int r)
 	if (!live->isMember(r)) {
 		NeedLoad->resetPtr();
 		for (m = NeedLoad->nextMember(); m >= 0; m = NeedLoad->nextMember()) {
-			forest.trees[m]->loads += depth;
+			forest.trees[m]->loads += depth * 4;
 			MustSpill->add(m);
 		}
 		NeedLoad->clear();
@@ -425,7 +424,7 @@ void BasicBlock::ComputeSpillCosts()
 
 	forest.ClearCosts();
 
-	for (b = RootBlock; b; b = b->next) {
+	for (b = currentFn->RootBlock; b; b = b->next) {
 		b->NeedLoad->clear();
 		// build the set live from b->liveout
 		b->live = b->LiveOut;
@@ -437,6 +436,12 @@ void BasicBlock::ComputeSpillCosts()
 			if (ip->opcode == op_mov) {
 				r = ip->oper1->lrpreg;
 				forest.trees[r]->copies++;
+			}
+			else {
+				if (ip->oper1 && ip->insn->HasTarget) {
+					r = ip->oper1->lrpreg;
+					forest.trees[r]->others += ip->insn->extime;
+				}
 			}
 			i = ip->insn;
 			// examine instruction i updating sets and accumulating costs
@@ -511,7 +516,7 @@ void BasicBlock::ComputeSpillCosts()
 		b->NeedLoad->resetPtr();
 		for (r = b->NeedLoad->nextMember(); r >= 0; r = b->NeedLoad->nextMember()) {
 			if (forest.trees[r])
-				forest.trees[r]->loads += b->depth;
+				forest.trees[r]->loads += b->depth * 4;
 		}
 	}
 
@@ -563,7 +568,6 @@ void BasicBlock::Unite(int father, int son)
 void BasicBlock::InsertMove(int reg, int rreg, int blk)
 {
 	OCODE *cd, *ip;
-	AMODE *am;
 
 	cd = (OCODE *)allocx(sizeof(OCODE));
 	cd->opcode = op_mov;
@@ -597,14 +601,11 @@ bool BasicBlock::Coalesce()
 	int dst, src, dtree, stree;
 	int father, son, ft, st;
 	bool improved;
-	int nn,mm;
-	Var *v;
-	Tree *t;
-	int blk;
+	int nn;
 
 	improved = false;
 
-	for (nn = 0; nn <= LastBlock->num; nn++) {
+	for (nn = 0; nn <= currentFn->LastBlock->num; nn++) {
 		for (ip = sortedBlocks[nn]->code; ip && ip != sortedBlocks[nn]->lcode; ip = ip->fwd) {
 			if (ip->remove)
 				continue;
@@ -648,60 +649,6 @@ bool BasicBlock::Coalesce()
 }
 
 
-void ComputeLiveVars()
-{
-	BasicBlock *b;
-	bool changed;
-	int iter;
-	int changes;
-
-	changed = false;
-	for (iter = 0; (iter==0 || changed) && iter < 10000; iter++) {
-		changes = 0;
-		changed = false;
-		for (b = LastBlock; b; b = b->prev) {
-			b->ComputeLiveVars();
-			if (b->changed) {
-				changes++;
-				changed = true;
-			}
-		}
-	}
-}
-
-void DumpLiveVars()
-{
-	BasicBlock *b;
-	int nn;
-	int lomax, limax;
-
-	lomax = limax = 0;
-	for (b = RootBlock; b; b = b->next) {
-		lomax = max(lomax,b->LiveOut->NumMember());
-		limax = max(limax,b->LiveIn->NumMember());
-	}
-
-	dfs.printf("<table style=\"width:100%\">\n");
-	//dfs.printf("<LiveVarTable>\n");
-	for (b = RootBlock; b; b = b->next) {
-		b->LiveIn->resetPtr();
-		b->LiveOut->resetPtr();
-		dfs.printf("<tr><td>%d: </td>", b->num);
-		for (nn = 0; nn < b->LiveIn->NumMember(); nn++)
-			dfs.printf("<td>vi%d </td>", b->LiveIn->nextMember());
-		for (; nn < limax; nn++)
-			dfs.printf("<td></td>");
-		dfs.printf("<td> || </td>");
-		for (nn = 0; nn < b->LiveOut->NumMember(); nn++)
-			dfs.printf("<td>vo%d </td>", b->LiveOut->nextMember());
-		for (; nn < lomax; nn++)
-			dfs.printf("<td></td>");
-		dfs.printf("</tr>\n");
-	}
-	//dfs.printf("</LiveVarTable>\n");
-	dfs.printf("</table>\n");
-}
-
 void DumpLiveRegs()
 {
 	int regno;
@@ -710,7 +657,7 @@ void DumpLiveRegs()
 	dfs.printf("<LiveRegisters>\n");
 	for (regno = 1; regno < 32; regno++) {
 		dfs.printf("Reg:%d ", regno);
-		for (b = RootBlock; b; b = b->next) {
+		for (b = currentFn->RootBlock; b; b = b->next) {
 			if (/*b->LiveOut->isMember(regno) || */b->LiveIn->isMember(regno))
 				dfs.printf("%d ", b->num);
 		}
@@ -719,4 +666,44 @@ void DumpLiveRegs()
 	dfs.printf("</LiveRegisters>\n");
 }
 
+void BasicBlock::InsertSpillCode(int reg, int offs)
+{
+	OCODE *cd;
+	AMODE *ap1, *ap2;
 
+	cd = (OCODE *)xalloc(sizeof(OCODE));
+	cd->insn = GetInsn(op_sw);
+	cd->opcode = op_sw;
+	cd->oper1 = allocAmode();
+	cd->oper2 = allocAmode();
+	cd->oper1->mode = am_reg;
+	cd->oper1->preg = reg;
+	cd->oper2->mode = am_indx;
+	cd->oper2->preg = regFP;
+	cd->oper2->offset = allocEnode();
+	cd->oper2->offset->nodetype = en_icon;
+	cd->oper2->offset->i = offs;
+	cd->bb = this;
+	PeepList::InsertBefore(code, cd);
+}
+
+void BasicBlock::InsertFillCode(int reg, int offs)
+{
+	OCODE *cd;
+	AMODE *ap1, *ap2;
+
+	cd = (OCODE *)xalloc(sizeof(OCODE));
+	cd->insn = GetInsn(op_lw);
+	cd->opcode = op_lw;
+	cd->oper1 = allocAmode();
+	cd->oper2 = allocAmode();
+	cd->oper1->mode = am_reg;
+	cd->oper1->preg = reg;
+	cd->oper2->mode = am_indx;
+	cd->oper2->preg = regFP;
+	cd->oper2->offset = allocEnode();
+	cd->oper2->offset->nodetype = en_icon;
+	cd->oper2->offset->i = offs;
+	cd->bb = this;
+	PeepList::InsertBefore(lcode, cd);
+}

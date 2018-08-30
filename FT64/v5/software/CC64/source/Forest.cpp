@@ -27,28 +27,6 @@
 
 Forest forest;
 int Forest::treeno = 0;
-int stkp;
-int stack[100000];
-
-void push(int n)
-{
-	if (stkp < 99999) {
-		stack[stkp] = n;
-		stkp++;
-	}
-	else
-		throw new C64PException(ERR_STACKFULL, 0);
-}
-
-int pop()
-{
-	if (stkp > 0) {
-		--stkp;
-		return (stack[stkp]);
-	}
-	throw new C64PException(ERR_STACKEMPTY, 0);
-}
-
 
 Tree *Forest::MakeNewTree(Tree *t) {
 	trees[treecount] = t;
@@ -103,6 +81,7 @@ void Forest::SummarizeCost()
 			trees[r]->cost = 2.0f * (trees[r]->loads + trees[r]->stores);
 		else
 			trees[r]->cost = trees[r]->loads - trees[r]->stores;
+		trees[r]->cost += trees[r]->others;
 		trees[r]->cost -= trees[r]->copies;
 		dfs.printf("Tree(%d):%d ", trees[r]->lattice,r);
 		dfs.printf("cost = %d\n", (int)trees[r]->cost);
@@ -220,29 +199,117 @@ void Forest::Color()
 {
 	int m;
 	int c;
-	int j, k = 24;
+	int j, k = 17;
 	int *p;
 	CSet used;
 	Tree *t;
+	Var *v;
 
 	for (c = 0; c < treecount; c++) {
 		trees[c]->spill = false;
 		trees[c]->color = k;
+		if (trees[c]->var >= regFirstArg && trees[c]->var <= regLastArg) {
+			trees[c]->color = trees[c]->var;
+		}
+		if (trees[c]->var == 30 || trees[c]->var == 31) {
+			trees[c]->color = trees[c]->var;
+		}
 	}
-	while (stkp > 0) {
+	while (!stk->IsEmpty()) {
 		t = trees[m=pop()];
-		if (!t->infinite && t->cost <= 0.0f)
+		if (!t->infinite && t->cost < 0.0f)	// was <= 0.0f
 			t->spill = true;
 		else {
 			used.clear();
+			used.add(0);	// reg0 is a constant 0
+			used.add(1);	// these two are return value
+			used.add(2);
 			p = iGraph.GetNeighbours(m);
 			for (j = 1; j < p[0]; j++)
 				used.add(trees[p[j]]->color);
 			for (c = 0; used.isMember(c) && c < k; c++);
-			if (c < k)
+			if (c < k && t->color==k)	// The tree may have been colored already
 				t->color = c;
-			else
+			else if (t->color <= k)		// Don't need to spill args
 				t->spill = true;
 		}
 	}
+}
+
+
+// Count the number of trees requiring spills.
+
+int Forest::GetSpillCount()
+{
+	int c;
+	int spillCount;
+	CSet ts;
+	char buf[2000];
+
+	ts.clear();
+	for (spillCount = c = 0; c < treecount; c++) {
+		if (trees[c]->spill) {
+			spillCount++;
+			ts.add(c);
+		}
+	}
+	dfs.printf("<SpillCount>%d</SpillCount>\n", spillCount);
+	ts.sprint(buf, sizeof(buf));
+	dfs.printf("<TreesSpilled>%s</TreesSpilled>\n", buf);
+	return (spillCount);
+}
+
+void Forest::GenSpillCode()
+{
+	int c, m, n;
+	int spillCount;
+	Var *v;
+	Tree *t;
+	BasicBlock *bb;
+	int spillOffset;
+	OCODE *cd;
+	CSet spilled;
+
+	cd = currentFn->spAdjust;
+	if (cd == nullptr)
+		return;
+	spillOffset = cd->oper3->offset->i;	// start at -8
+	spilled.clear();
+	for (c = 0; c < treecount; c++) {
+		t = trees[c];	// convenience
+		// Tree couldn't be colored that means there are no available registers.
+		// So, spill one of the registers. The register to spill should be one
+		// that isn't live at the same time as this tree.
+		if (t->spill) {
+			v = Var::Find(t->var);
+			v = v->GetVarToSpill();
+			// The var is spilled at the head of the tree, and restored later
+			t->blocks->resetPtr();
+			m = t->blocks->nextMember();
+			if (m >= 0) {	// should always be true, otherwise no code
+				bb = basicBlocks[m];
+				if (!spilled.isMember(v->num)) {
+					v->spillOffset = spillOffset;
+					spillOffset += sizeOfWord;
+					spilled.add(v->num);
+				}
+				bb->InsertSpillCode(v->num, -v->spillOffset);
+				while(1) {
+					n = m;
+					m = t->blocks->nextMember();
+					if (m < 0)
+						break;
+					// Detect when a different branch is present. The node
+					// number will jump by more than 1 between branches.
+					if (m - n > 1) {
+						bb = basicBlocks[n];
+						bb->InsertFillCode(v->num, -v->spillOffset);
+					}
+				}
+				bb = basicBlocks[n];
+				bb->InsertFillCode(v->num, -v->spillOffset);
+			}
+		}
+	}
+	cd->oper3->offset->i = spillOffset;
 }

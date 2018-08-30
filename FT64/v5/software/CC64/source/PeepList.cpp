@@ -1,6 +1,7 @@
 // ============================================================================
+// Currently under construction (not used yet).
 //        __
-//   \\__/ o\    (C) 2012-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2017-2018  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -25,42 +26,63 @@
 //
 #include "stdafx.h"
 
-// brk and rti ???
-bool Instruction::IsFlowControl()
+// Count the length of the peep list from the current position to the end of
+// the list. Used during some code generation optimizations.
+
+int PeepList::Count(OCODE *ip)
 {
-	if (opcode == op_jal ||
-		opcode == op_jmp ||
-		opcode == op_ret ||
-		opcode == op_call ||
-		opcode == op_bra ||
-		opcode == op_beq ||
-		opcode == op_bne ||
-		opcode == op_blt ||
-		opcode == op_ble ||
-		opcode == op_bgt ||
-		opcode == op_bge ||
-		opcode == op_bltu ||
-		opcode == op_bleu ||
-		opcode == op_bgtu ||
-		opcode == op_bgeu ||
-		opcode == op_beqi ||
-		opcode == op_bbs ||
-		opcode == op_bbc ||
-		opcode == op_ibne ||
-		opcode == op_dbnz ||
-		opcode == op_bchk
-		)
-		return (true);
-	return (false);
+	int cnt;
+
+	for (cnt = 0; ip && ip != peep_tail; cnt++)
+		ip = ip->fwd;
+	return (cnt);
 }
 
-Instruction *Instruction::Get(int op)
+void PeepList::InsertBefore(OCODE *an, OCODE *cd)
 {
-	int i;
-
-	for (i = 0; opl[i].mnem; i++)
-		if (opl[i].opcode == op)
-			return (&opl[i]);
-	return (nullptr);
+	cd->fwd = an;
+	cd->back = an->back;
+	if (an->back)
+		an->back->fwd = cd;
+	an->back = cd;
 }
 
+void PeepList::InsertAfter(OCODE *an, OCODE *cd)
+{
+	cd->fwd = an->fwd;
+	cd->back = an;
+	if (an->fwd)
+		an->fwd->back = cd;
+	an->fwd = cd;
+}
+
+void PeepList::Add(OCODE *cd)
+{
+	if (!dogen)
+		return;
+
+	if (head == NULL)
+	{
+		ArgRegCount = regFirstArg;
+		head = tail = cd;
+		cd->fwd = nullptr;
+		cd->back = nullptr;
+	}
+	else
+	{
+		cd->fwd = nullptr;
+		cd->back = tail;
+		tail->fwd = cd;
+		tail = cd;
+	}
+	if (cd->opcode != op_label) {
+		if (cd->oper1 && IsArgumentReg(cd->oper1->preg))
+			ArgRegCount = max(ArgRegCount, cd->oper1->preg);
+		if (cd->oper2 && IsArgumentReg(cd->oper2->preg))
+			ArgRegCount = max(ArgRegCount, cd->oper2->preg);
+		if (cd->oper3 && IsArgumentReg(cd->oper3->preg))
+			ArgRegCount = max(ArgRegCount, cd->oper3->preg);
+		if (cd->oper4 && IsArgumentReg(cd->oper4->preg))
+			ArgRegCount = max(ArgRegCount, cd->oper4->preg);
+	}
+}

@@ -25,9 +25,6 @@
 //
 #include "stdafx.h"
 
-extern BasicBlock *LastBlock;
-Var *varlist;
-
 // This class is currently only used by the CreateForest() function.
 // It maintains a stack for tree traversal.
 
@@ -222,7 +219,7 @@ void Var::CreateForest()
 	char buf[2000];
 
 	treeno = 1;
-	b = LastBlock;
+	b = currentFn->LastBlock;
 	visited->add(b->num);
 	// First see if a tree starts right at the last basic block.
 	if (b->LiveOut->isMember(num)) {
@@ -319,7 +316,7 @@ void Var::CreateForests()
 
 	::forest.treecount = 0;
 	treeno = 0;
-	for (v = varlist; v; v = v->next) {
+	for (v = currentFn->varlist; v; v = v->next) {
 		v->visited->clear();
 		v->forest->clear();
 		v->CreateForest();
@@ -332,15 +329,15 @@ Var *Var::Find(int num)
 {
 	Var *vp;
 
-	for (vp = varlist; vp; vp = vp->next) {
+	for (vp = currentFn->varlist; vp; vp = vp->next) {
 		if (vp->num == num)
 			break;
 	}
 	if (vp==nullptr) {
 		vp = Var::MakeNew();
 		vp->num = num;
-		vp->next = varlist;
-		varlist = vp;
+		vp->next = currentFn->varlist;
+		currentFn->varlist = vp;
 	}
 	return (vp);
 }
@@ -351,7 +348,7 @@ Var *Var::Find2(int num)
 {
 	Var *vp;
 
-	for (vp = varlist; vp; vp = vp->next) {
+	for (vp = currentFn->varlist; vp; vp = vp->next) {
 		if (vp->num == num)
 			return(vp);
 	}
@@ -434,8 +431,8 @@ bool Var::Coalesce2()
 	int nn, mm;
 
 	improved = false;
-	for (p = varlist; p; p = p->next) {
-		for (q = varlist; q; q = q->next) {
+	for (p = currentFn->varlist; p; p = p->next) {
+		for (q = currentFn->varlist; q; q = q->next) {
 			if (p == q)
 				continue;
 			reg1 = p->num;
@@ -550,7 +547,7 @@ void Var::DumpForests()
 	char buf[2000];
 
 	dfs.printf("<VarForests>\n");
-	for (vp = varlist; vp; vp = vp->next) {
+	for (vp = currentFn->varlist; vp; vp = vp->next) {
 		dfs.printf("Var%d:", vp->num);
 		if (vp->trees.treecount > 0)
 			dfs.printf(" %d trees\n", vp->trees.treecount);
@@ -570,3 +567,19 @@ void Var::DumpForests()
 	}
 	dfs.printf("</VarForests>\n");
 }
+
+
+Var *Var::GetVarToSpill()
+{
+	Var *vp;
+
+	for (vp = currentFn->varlist; vp; vp = vp->next) {
+		if (vp != this && vp->num > 2 && vp->num <= 17) {
+			if (!iGraph.DoesInterfere(this->num, vp->num)) {
+				return (vp);
+			}
+		}
+	}
+	// error: no register could be spilled.
+}
+

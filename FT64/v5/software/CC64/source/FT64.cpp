@@ -741,54 +741,6 @@ static void RestoreTemporaries(Function *sym, int sp, int fsp)
 	}
 }
 
-// Saves any registers used as parameters in the calling function.
-
-static void SaveRegisterArguments(Function *sym)
-{
-	TypeArray *ta;
-
-	if (sym == nullptr)
-		return;
-	ta = sym->GetProtoTypes();
-	if (ta) {
-		int nn;
-		for (nn = 0; nn < ta->length; nn++) {
-			if (ta->preg[nn]) {
-				switch(ta->types[nn]) {
-				case bt_quad:	GenerateMonadicNT(op_push,0,makereg(ta->preg[nn]& 0x7fff)); break;
-				case bt_float:	GenerateMonadicNT(op_push,0,makereg(ta->preg[nn]& 0x7fff)); break;
-				case bt_double:	GenerateMonadicNT(op_push,0,makereg(ta->preg[nn]& 0x7fff)); break;
-				case bt_triple:	GenerateMonadicNT(op_push,0,makereg(ta->preg[nn]& 0x7fff)); break;
-				default:	GenerateMonadicNT(op_push,0,makereg(ta->preg[nn]& 0x7fff)); break;
-				}
-			}
-		}
-	}
-}
-
-static void RestoreRegisterArguments(Function *sym)
-{
-	TypeArray *ta;
-
-	if (sym == nullptr)
-		return;
-	ta = sym->GetProtoTypes();
-	if (ta) {
-		int nn;
-		for (nn = ta->length - 1; nn >= 0; nn--) {
-			if (ta->preg[nn]) {
-				switch(ta->types[nn]) {
-				case bt_quad:	GenerateMonadic(op_pop,0,makereg(ta->preg[nn]& 0x7fff)); break;
-				case bt_float:	GenerateMonadic(op_pop,0,makereg(ta->preg[nn]& 0x7fff)); break;
-				case bt_double:	GenerateMonadic(op_pop,0,makereg(ta->preg[nn]& 0x7fff)); break;
-				case bt_triple:	GenerateMonadic(op_pop,0,makereg(ta->preg[nn]& 0x7fff)); break;
-				default:	GenerateMonadic(op_pop,0,makereg(ta->preg[nn]& 0x7fff)); break;
-				}
-			}
-		}
-	}
-}
-
 // push the operand expression onto the stack.
 // Structure variables are represented as an address in a register and arrive
 // here as autocon nodes if on the stack. If the variable size is greater than
@@ -991,7 +943,7 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
         }
 */
 		if (currentFn->HasRegisterParameters())
-			SaveRegisterArguments(sym);
+			sym->SaveRegisterArguments();
         i = i + GenerateStoreArgumentList(sym,node->p[1]);
 //		ReleaseTempRegister(ap);
 		if (sym && sym->IsInline) {
@@ -1026,7 +978,7 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
 			sym = ap->offset->sym->fi;
 		sym->SaveTemporaries(&sp, &fsp);
 		if (currentFn->HasRegisterParameters())
-			SaveRegisterArguments(sym);
+			sym->SaveRegisterArguments();
         i = i + GenerateStoreArgumentList(sym,node->p[1]);
 		ap->mode = am_ind;
 		ap->offset = 0;
@@ -1058,7 +1010,7 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
 			GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),make_immed(i * sizeOfWord));
 	}
 	if (currentFn->HasRegisterParameters())
-		RestoreRegisterArguments(sym);
+		sym->RestoreRegisterArguments();
 	sym->RestoreTemporaries(sp, fsp);
 	/*
 	if (sym) {

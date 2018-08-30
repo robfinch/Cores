@@ -25,12 +25,9 @@
 //
 #include "stdafx.h"
 
-extern BasicBlock *RootBlock;
-extern BasicBlock *LastBlock;
 extern OCODE *peep_head;
 extern OCODE *FindLabel(int64_t);
 extern BasicBlock *basicBlocks[10000];
-extern Var *varlist;
 extern Instruction *GetInsn(int);
 
 void CFG::Create()
@@ -163,7 +160,7 @@ static void DiscoverPaths()
 	int n;
 	char buf[2000];
 
-	b = RootBlock;
+	b = currentFn->RootBlock;
 	visited = CSet::MakeNew();
 	paths[0] = CSet::MakeNew();
 	paths[0]->add(b->num);
@@ -187,7 +184,7 @@ void CFG::CalcDominatorTree()
 
 	DiscoverPaths();
 	pathSet = CSet::MakeNew();
-	for (n = LastBlock->num; n >= 1; n--) {
+	for (n = currentFn->LastBlock->num; n >= 1; n--) {
 		pathSet->clear();
 		// Get all paths that contain n
 		for (m = 0; m < npaths; m++)
@@ -220,7 +217,7 @@ void CFG::CalcDominanceFrontiers()
 	int y;
 
 	CalcDominatorTree();
-	for (x = LastBlock; x; x = x->prev) {
+	for (x = currentFn->LastBlock; x; x = x->prev) {
 		x->DF = nullptr;
 		if (x->dhead) {
 			x->DF = CSet::MakeNew();
@@ -255,12 +252,12 @@ void CFG::InsertPhiInsns()
 	int n, m, y;
 
 	w = CSet::MakeNew();
-	for (x = RootBlock; x; x = x->next) {
+	for (x = currentFn->RootBlock; x; x = x->next) {
 		x->HasAlready = 0;
 		x->Work = 0;
 	}
 	w->clear();
-	for (v = varlist; v; v = v->next) {
+	for (v = currentFn->varlist; v; v = v->next) {
 		// Don't bother considering r0 which always contains the constant zero.
 		if (v->num==0)
 			continue;
@@ -419,10 +416,10 @@ void CFG::Rename()
 {
 	Var *v;
 
-	for (v = varlist; v; v = v->next) {
+	for (v = currentFn->varlist; v; v = v->next) {
 		v->istk = IntStack::MakeNew();
 		v->istk->push(0);
 		v->subscript = 0;
 	}
-	Search(RootBlock);
+	Search(currentFn->RootBlock);
 }

@@ -180,7 +180,11 @@ Instruction opl[] =
 	{ "stop", op_stop }, { "movs", op_movs },
 	{ "bmi", op_bmi },
 	{ "dc",op_dc },
-	{ "push",op_push,4,true,true }, { "pop", op_pop,4,true,true }, { "pea", op_pea },
+	{ "push",op_push,4,true,true,RC_GP,0,0,0 },
+	{ "pop", op_pop,4,true,true,RC_GP,0,0,0 },
+	{ "pushf",op_pushf,4,true,true,RC_FP,0,0,0 },
+	{ "popf", op_popf,4,true,true,RC_FP,0,0,0 },
+	{ "pea", op_pea },
 		// Set
 	{ "seq", op_seq,1,true,false,RC_GP,RC_GP,RC_GP,0 },
 	{ "sne",op_sne,1,true,false,RC_GP,RC_GP,RC_GP,0 },

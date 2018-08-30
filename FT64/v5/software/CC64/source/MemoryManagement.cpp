@@ -1,11 +1,11 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2017  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2018  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-// C64 - 'C' derived language compiler
+// CC64 - 'C' derived language compiler
 //  - 64 bit CPU
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -26,24 +26,6 @@
 #include "stdafx.h"
 #include <stdlib.h>
 #include <malloc.h>
-
-/*
- *	68000 C compiler
- *
- *	Copyright 1984, 1985, 1986 Matthew Brandt.
- *  all commercial rights reserved.
- *
- *	This compiler is intended as an instructive tool for personal use. Any
- *	use for profit without the written consent of the author is prohibited.
- *
- *	This compiler may be distributed freely for non-commercial use as long
- *	as this notice stays intact. Please forward any enhancements or questions
- *	to:
- *
- *		Matthew Brandt
- *		Box 920337
- *		Norcross, Ga 30092
- */
 
 #define BLKSIZE		4000
 
@@ -207,20 +189,36 @@ SYM *allocSYM() {
 	return sym;
 };
 
-Function *allocFunction(int symnum) {
-	Function *sym = &compiler.functionTable[compiler.funcnum];
-	ZeroMemory(sym, sizeof(Function));
-	sym->params.SetOwner(symnum);
-	sym->proto.SetOwner(symnum);
-	sym->UsesTemps = true;
-	sym->UsesStackParms = true;
-	compiler.funcnum++;
-	if (compiler.funcnum > 2999) {
-		dfs.printf("Too many functions.\n");
-		throw new C64PException(ERR_TOOMANY_SYMBOLS, 1);
+Function *allocFunction(int symnum)
+{
+	int count;
+
+	for (count = 0; count < 3000; count++) {
+		Function *sym = &compiler.functionTable[compiler.funcnum];
+		if (!sym->valid) {
+			ZeroMemory(sym, sizeof(Function));
+			sym->valid = TRUE;
+			sym->params.SetOwner(symnum);
+			sym->proto.SetOwner(symnum);
+			sym->UsesTemps = true;
+			sym->UsesStackParms = true;
+			compiler.funcnum++;
+			if (compiler.funcnum > 2999)
+				compiler.funcnum = 0;
+			return (sym);
+		}
+		compiler.funcnum++;
+		if (compiler.funcnum > 2999)
+			compiler.funcnum = 0;
 	}
-	return (sym);
+	dfs.printf("Too many functions.\n");
+	throw new C64PException(ERR_TOOMANY_SYMBOLS, 1);
 };
+
+void FreeFunction(Function *fn)
+{
+	fn->valid = FALSE;
+}
 
 TYP *allocTYP()
 {

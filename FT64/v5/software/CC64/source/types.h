@@ -36,6 +36,8 @@ class CSETable;
 class AMODE;
 class SYM;
 class Function;
+class OCODE;
+class PeepList;
 
 class CompilerType
 {
@@ -129,9 +131,22 @@ public:
 	void SetBase(int b) { base = b; };
 };
 
+class PeepList
+{
+public:
+	OCODE *head;
+	OCODE *tail;
+public:
+	void Add(OCODE *cd);
+	int Count(OCODE *pos);
+	static void InsertBefore(OCODE *an, OCODE *cd);
+	static void InsertAfter(OCODE *an, OCODE *cd);
+};
+
 class Function
 {
 public:
+	unsigned int valid : 1;
 	unsigned int IsPrototype : 1;
 	unsigned int IsTask : 1;
 	unsigned int IsInterrupt : 1;
@@ -164,6 +179,12 @@ public:
 	uint64_t mask, rmask;
 	uint64_t fpmask, fprmask;
 	uint64_t vmask, vrmask;
+	BasicBlock *RootBlock;
+	BasicBlock *LastBlock;
+	BasicBlock *ReturnBlock;
+	Var *varlist;
+	PeepList pl;					// under construction
+	OCODE *spAdjust;				// place where sp adjustment takes place
 public:
 	int GetTempBot() { return (tempbot); };
 	void CheckParameterListMatch(Function *s1, Function *s2);
@@ -188,15 +209,18 @@ public:
 	void CheckForUndefinedLabels();
 	void Summary(Statement *);
 	Statement *ParseBody();
+	void Init(int nump, int numa);
 	int Parse();
 	void InsertMethod();
 
 	void SaveGPRegisterVars();
 	void SaveFPRegisterVars();
 	void SaveRegisterVars();
+	void SaveRegisterArguments();
 	void RestoreGPRegisterVars();
 	void RestoreFPRegisterVars();
 	void RestoreRegisterVars();
+	void RestoreRegisterArguments();
 	void SaveTemporaries(int *sp, int *fsp);
 	void RestoreTemporaries(int sp, int fsp);
 
@@ -207,6 +231,10 @@ public:
 	bool GenDefaultCatch();
 	void GenReturn(Statement *stmt);
 	void Gen();
+
+	void CreateVars();
+	void ComputeLiveVars();
+	void DumpLiveVars();
 };
 
 class SYM {
@@ -523,31 +551,40 @@ class IntStack
 public:
 	int *stk;
 	int sp;
+	int size;
 public:
-	static IntStack *MakeNew() {
+	static IntStack *MakeNew(int sz) {
 		IntStack *s;
 		s = (IntStack *)allocx(sizeof(IntStack));
-		s->stk = (int *)allocx(1000 * sizeof(int));
-		s->sp = 1000;
+		s->stk = (int *)allocx(sz * sizeof(int));
+		s->sp = sz;
+		s->size = sz;
 		return (s);
+	}
+	static IntStack *MakeNew() {
+		return (MakeNew(1000));
 	}
 	void push(int v) {
 		if (sp > 0) {
 			sp--;
 			stk[sp] = v;
 		}
+		else
+			throw new C64PException(ERR_STACKFULL, 0);
 	};
 	int pop() {
 		int v = 0;
-		if (sp < 1000) {
+		if (sp < size) {
 			v = stk[sp];
 			sp++;
+			return (v);
 		}
-		return (v);
+		throw new C64PException(ERR_STACKEMPTY, 0);
 	};
 	int tos() {
 		return (stk[sp]);
 	};
+	bool IsEmpty() { return (sp == size); };
 };
 
 class Edge : public CompilerType
@@ -608,6 +645,8 @@ public:
 	void BuildLivesetFromLiveout();
 	static void DepthSort();
 	static bool Coalesce();
+	void InsertSpillCode(int reg, int offs);
+	void InsertFillCode(int reg, int offs);
 };
 
 // A "tree" is a "range" in Briggs terminology
@@ -626,6 +665,7 @@ public:
 	float loads;
 	float stores;
 	float copies;
+	float others;
 	bool infinite;
 	float cost;
 public:
@@ -641,8 +681,10 @@ public:
 	Tree *trees[500];
 	Function *func;
 	CSet low, high;
+	IntStack *stk;
 	static int treeno;
 public:
+	Forest() { stk = IntStack::MakeNew(100000); };
 	Tree *MakeNewTree();
 	Tree *MakeNewTree(Tree *);
 	void ClearCosts() {
@@ -653,24 +695,16 @@ public:
 	void CalcRegclass();
 	void SummarizeCost();
 	void Renumber();
+	void push(int n) { stk->push(n); };
+	int pop() { return (stk->pop()); };
 	void Simplify();
 	void Color();
 	int SelectSpillCandidate();
+	int GetSpillCount();
+	int GetRegisterToSpill(int tree);
+	void GenSpillCode();
 };
 
-
-// The number of neighbouring nodes varies depending on the function,
-// and optimization done. It could be small for small functions < 10,
-// medium for large functions <100, or possibly 1,000's if whole
-// program optimizations are done (not currently done by the compiler).
-// So, a linked list of node numbers is used.
-
-class AdjVec
-{
-public:
-	AdjVec *next;
-	int node;
-};
 
 class Var : public CompilerType
 {
@@ -683,6 +717,7 @@ public:
 	CSet *visited;
 	IntStack *istk;
 	int subscript;
+	int spillOffset;	// offset in stack where spilled
 	static int nvar;
 public:
 	static Var *MakeNew();
@@ -699,6 +734,7 @@ public:
 	static void DumpForests();
 	void Transplant(Var *);
 	static bool Coalesce2();
+	Var *GetVarToSpill();
 };
 
 class IGraph
@@ -715,7 +751,6 @@ public:
 	~IGraph();
 	void Destroy();
 	void MakeNew(int n);
-	AdjVec *MakeNewAV() { return (new AdjVec); };
 	void ClearBitmatrix();
 	void Clear();
 	void Add(int x, int y);
@@ -726,6 +761,7 @@ public:
 	int *GetNeighbours(int n) { return (vecs[n]); };
 	void Unite(int father, int son);
 	void Fill();
+	void AllocVecs();
 	void BuildAndCoalesce();
 };
 
@@ -793,13 +829,6 @@ public:
 
 	// Debugging
 	void Dump();
-};
-
-class Peep
-{
-public:
-	static void InsertBefore(OCODE *an, OCODE *cd);
-	static void InsertAfter(OCODE *an, OCODE *cd);
 };
 
 class Statement {

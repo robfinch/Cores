@@ -196,6 +196,7 @@ enum e_op {
 	op_csrrw, op_nop,
 	op_hint, op_hint2, op_rem2,
 	// FT64
+	op_pushf, op_popf,
 	op_lvbu, op_lvcu, op_lvhu,
 	op_cmovenz,
 	op_sptr, op_isptr, op_setwb, op_spt,
