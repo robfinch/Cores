@@ -286,7 +286,7 @@ Instruction opl[] =
 	{ "cmovenz", op_cmovenz,1,true,false,RC_GP,RC_GP,RC_GP,RC_GP },
 	{"bex", op_bex,0,false,false,0,0,0,0},
 	{"phi", op_phi},
-                {0,0} };
+                {0,0,0,false,false,0,0,0,0} };
 
 static char *pad(char *op)
 {
@@ -384,6 +384,7 @@ static void PutConstant(ENODE *offset, unsigned int lowhigh, unsigned int rshift
 			break;
 	case en_fcon:
 			goto j1;
+			// The following spits out a warning, but is okay.
 			sprintf_s(buf,sizeof(buf),"0x%llx",offset->f);
 			ofs.write(buf);
 			break;
@@ -417,7 +418,7 @@ j1:
 			}
 			break;
 	case en_clabcon:
-			sprintf_s(buf,sizeof(buf),"%s_%ld",GetNamespace(),offset->i);
+			sprintf_s(buf,sizeof(buf),"%s_%lld",GetNamespace(),offset->i);
 			ofs.write(buf);
             if (rshift > 0) {
                 sprintf_s(buf,sizeof(buf), ">>%d", rshift);
@@ -477,24 +478,55 @@ char *RegMoniker(int regno)
 	static int n;
 
 	n = (n + 1) & 3;
-    if (regno==regFP)
+    if (regno==30)
 		sprintf_s(&buf[n][0], 20, "$fp");
-    else if (regno==regGP)
+    else if (regno==27)
 		sprintf_s(&buf[n][0], 20, "$gp");
-	else if (regno==regXLR)
+	else if (regno==28)
 		sprintf_s(&buf[n][0], 20, "$xlr");
 	else if (regno==regPC)
 		sprintf_s(&buf[n][0], 20, "$pc");
-	else if (regno==regSP)
+	else if (regno==31)
 		sprintf_s(&buf[n][0], 20, "$sp");
-	else if (regno==regLR)
+	else if (regno==29)
 		sprintf_s(&buf[n][0], 20, "$lr");
 	else if (regno>=1 && regno<=4)
 		sprintf_s(&buf[n][0], 20, "$v%d", regno-1);
-	else if (regno >= regFirstArg && regno <= regLastArg)
+	else if (regno >= 18 && regno <= 24)
 		sprintf_s(&buf[n][0], 20, "$a%d", regno-regFirstArg);
-	else if (regno >= regFirstTemp && regno <= regLastTemp)
+	else if (regno >= 3 && regno <= 10)
 		sprintf_s(&buf[n][0], 20, "$t%d", regno-regFirstTemp);
+	else if (regno >= 11 && regno <= 17)
+		sprintf_s(&buf[n][0], 20, "$r%d", regno);
+	else
+		sprintf_s(&buf[n][0], 20, "$r%d", regno);
+	return &buf[n][0];
+}
+
+char *RegMoniker2(int regno)
+{
+	static char buf[4][20];
+	static int n;
+
+	n = (n + 1) & 3;
+	if (regno == regFP)
+		sprintf_s(&buf[n][0], 20, "$fp");
+	else if (regno == regGP)
+		sprintf_s(&buf[n][0], 20, "$gp");
+	else if (regno == regXLR)
+		sprintf_s(&buf[n][0], 20, "$xlr");
+	else if (regno == regPC)
+		sprintf_s(&buf[n][0], 20, "$pc");
+	else if (regno == regSP)
+		sprintf_s(&buf[n][0], 20, "$sp");
+	else if (regno == regLR)
+		sprintf_s(&buf[n][0], 20, "$lr");
+	else if (regno >= 1 && regno <= 4)
+		sprintf_s(&buf[n][0], 20, "$v%d", regno - 1);
+	else if (regno >= regFirstArg && regno <= regLastArg)
+		sprintf_s(&buf[n][0], 20, "$a%d", regno - regFirstArg);
+	else if (regno >= regFirstTemp && regno <= regLastTemp)
+		sprintf_s(&buf[n][0], 20, "$t%d", regno - regFirstTemp);
 	else if (regno >= regFirstRegvar && regno <= regLastRegvar)
 		sprintf_s(&buf[n][0], 20, "$r%d", regno);
 	else
@@ -736,60 +768,60 @@ char *put_label(int lab, char *nm, char *ns, char d)
 }
 
 
-void GenerateByte(int val)
+void GenerateByte(int64_t val)
 {
 	if( gentype == bytegen && outcol < 60) {
-        ofs.printf(",%d",val & 0x00ff);
+        ofs.printf(",%d",(int)val & 0x00ff);
         outcol += 4;
     }
     else {
         nl();
-        ofs.printf("\tdb\t%d",val & 0x00ff);
+        ofs.printf("\tdb\t%d",(int)val & 0x00ff);
         gentype = bytegen;
         outcol = 19;
     }
 	genst_cumulative += 1;
 }
 
-void GenerateChar(int val)
+void GenerateChar(int64_t val)
 {
 	if( gentype == chargen && outcol < 60) {
-        ofs.printf(",%d",val & 0xffff);
+        ofs.printf(",%d",(int)val & 0xffff);
         outcol += 6;
     }
     else {
         nl();
-        ofs.printf("\tdc\t%d",val & 0xffff);
+        ofs.printf("\tdc\t%d",(int)val & 0xffff);
         gentype = chargen;
         outcol = 21;
     }
 	genst_cumulative += 2;
 }
 
-void genhalf(int val)
+void genhalf(int64_t val)
 {
 	if( gentype == halfgen && outcol < 60) {
-        ofs.printf(",%d",(int)(val & 0xffffffff));
+        ofs.printf(",%ld",(long)(val & 0xffffffff));
         outcol += 10;
     }
     else {
         nl();
-        ofs.printf("\tdh\t%d",(int)(val & 0xffffffff));
+        ofs.printf("\tdh\t%ld",(long)(val & 0xffffffff));
         gentype = halfgen;
         outcol = 25;
     }
 	genst_cumulative += 4;
 }
 
-void GenerateWord(int val)
+void GenerateWord(int64_t val)
 {
 	if( gentype == wordgen && outcol < 58) {
-        ofs.printf(",%ld",val);
+        ofs.printf(",%lld",val);
         outcol += 18;
     }
     else {
         nl();
-        ofs.printf("\tdw\t%ld",val);
+        ofs.printf("\tdw\t%lld",val);
         gentype = wordgen;
         outcol = 33;
     }
@@ -916,13 +948,11 @@ void genstorageskip(int nbytes)
 	}
 }
 
-void genstorage(int nbytes)
+void genstorage(int64_t nbytes)
 {       
-	int nn;
-
 	nl();
 	if (nbytes) {
-		ofs.printf("\tfill.b\t%d,0x00\n", nbytes);
+		ofs.printf("\tfill.b\t%lld,0x00\n", nbytes);
 	}
 	genst_cumulative += nbytes;
 }
@@ -1049,7 +1079,6 @@ void dumplits()
 {
 	char *cp;
 	int64_t nn;
-	char buf[200];
 
 	dfs.printf("<Dumplits>\n");
 	roseg();

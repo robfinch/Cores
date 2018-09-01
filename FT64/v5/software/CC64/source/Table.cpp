@@ -137,7 +137,7 @@ int TABLE::Find(std::string na,__int16 rettype, TypeArray *typearray, bool exact
 	int s1,s2,s3;
 	std::string name;
 
-  dfs.puts("</Find>\n");
+  dfs.puts("<Find>");
   dfs.puts((char *)na.c_str());
   if (this==nullptr) {
     matchno = 0;

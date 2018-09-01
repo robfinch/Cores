@@ -71,6 +71,7 @@ void CFG::Create()
 		case op_bbs:
 		case op_bbc:
 		case op_beqi:
+		case op_ibne:
 			if (0) {
 				if (ip->oper1->mode==am_reg && ip->back && ip->back->oper3) {
 					if (ip1 = FindLabel(ip->back->oper3->offset->i)) {

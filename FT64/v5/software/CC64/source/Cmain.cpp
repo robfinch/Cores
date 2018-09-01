@@ -151,6 +151,44 @@ int	options(char *s)
          else
              verbose = 1;
     }
+	else if (s[1] == 'r') {
+		if (s[2] == 'v') {
+			opt_vreg = TRUE;
+			regSP = 511;
+			regFP = 510;
+			regLR = 509;
+			regXLR = 508;
+			regGP = 507;
+			regTP = 506;
+			regCLP = 505;              // class pointer
+			regPP = 504;				// program pointer
+			regZero = 0;
+			regFirstTemp = 3;
+			regLastTemp = 255;
+			regFirstRegvar = 256;
+			regLastRegvar = 479;
+			regFirstArg = 480;
+			regLastArg = 501;
+		}
+		else
+		{
+			regSP = 31;
+			regFP = 30;
+			regLR = 29;
+			regXLR = 28;
+			regGP = 27;
+			regTP = 26;
+			regCLP = 25;                // class pointer
+			regPP = 24;					// program pointer
+			regZero = 0;
+			regFirstTemp = 3;
+			regLastTemp = 10;
+			regFirstRegvar = 11;
+			regLastRegvar = 17;
+			regFirstArg = 18;
+			regLastArg = 22;
+		}
+	}
     else if (s[1]=='S')
         mixedSource = TRUE;
 	return 0;

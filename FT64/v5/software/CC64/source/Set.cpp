@@ -86,7 +86,7 @@ CSet CSet::operator|(CSet s)
 
 	NumWords = min(size, s.size);
 	// Set bits in output according to union of two sets.
-	for (ii = NumWords - 1; --ii >= 0;)
+	for (ii = NumWords - 1; ii >= 0; ii--)
 		o.map[ii] = map[ii] | s.map[ii];
 	// Copy remaining words to output bitset
 	if (s.size > size)
@@ -108,7 +108,7 @@ CSet& CSet::operator|=(CSet s)
 	// Set the size of the bitmap to the greater of the two sizes.
 	if (size < s.size)
 		enlarge(s.size);
-	for (ii = min(size,s.size); --ii >= 0;)
+	for (ii = min(size,s.size) -1 ; ii >= 0; ii--)
 		map[ii] |= s.map[ii];
 	return *this;
 }
@@ -121,7 +121,7 @@ void CSet::add(CSet &s)
 	// Set the size of the bitmap to the greater of the two sizes.
 	if (size < s.size)
 		enlarge(s.size);
-	for (ii = min(size,s.size); --ii >= 0;)
+	for (ii = min(size,s.size) - 1; ii >= 0; ii--)
 		map[ii] |= s.map[ii];
 }
 
@@ -136,7 +136,7 @@ void CSet::add(CSet *s)
 	// Set the size of the bitmap to the greater of the two sizes.
 	if (size < s->size)
 		enlarge(s->size);
-	for (ii = min(size,s->size); --ii >= 0;)
+	for (ii = min(size,s->size) - 1; ii >= 0; ii--)
 		map[ii] |= s->map[ii];
 }
 
@@ -166,7 +166,7 @@ CSet CSet::operator&(CSet s)
 	o.allocBitStorage();
 
 	// Set bits in output according to union of two sets.
-	for (ii = o.size; --ii >= 0;)
+	for (ii = o.size - 1; ii >= 0; ii--)
 		o.map[ii] = map[ii] & s.map[ii];
 	return o;
 }
@@ -188,7 +188,7 @@ CSet& CSet::operator&=(CSet s)
 		nbits = s.nbits;
 	}
 	
-	for (ii = size; --ii >= 0;)
+	for (ii = size - 1; ii >= 0; ii--)
 		map[ii] &= s.map[ii];
 	return *this;
 }
@@ -214,7 +214,7 @@ void CSet::enlarge(int n)
 	}
 	memcpy(p, map, size * sizeof(int));
 	if (memcmp(p,map,size*sizeof(int)) != 0)
-		printf("hi");
+		printf("Set.cpp enlarge error");
 //	memset(p+size, 0, (n-size) * sizeof(int)); <- allocx zeros memory
 //	if (map != dmap)
 //		delete[] map;

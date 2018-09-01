@@ -450,25 +450,25 @@ void checkbrstack()
 void validate(AMODE *ap)
 {
     Function *sym = currentFn;
-	unsigned int frg = sym->IsLeaf ? 1 : regFirstTemp;
+	unsigned int frg = sym->IsLeaf ? 1 : (unsigned)regFirstTemp;
 
 	if (ap->type!=stdvector.GetIndex())
     switch (ap->mode) {
 	case am_reg:
-		if ((ap->preg >= frg && ap->preg <= regLastTemp) && reg_alloc[ap->deep].f.isPushed == 'T' ) {
+		if ((ap->preg >= frg && ap->preg <= (unsigned)regLastTemp) && reg_alloc[ap->deep].f.isPushed == 'T' ) {
 			LoadRegister(ap->preg, (int) ap->deep);
 		}
 		break;
 	case am_fpreg:
-		if ((ap->preg >= frg && ap->preg <= regLastTemp) && fpreg_alloc[ap->deep].f.isPushed == 'T' ) {
+		if ((ap->preg >= frg && ap->preg <= (unsigned)regLastTemp) && fpreg_alloc[ap->deep].f.isPushed == 'T' ) {
 			LoadFPRegister(ap->preg, (int) ap->deep);
 		}
 		break;
     case am_indx2:
-		if ((ap->preg >= frg && ap->preg <= regLastTemp) && reg_alloc[ap->deep].f.isPushed == 'T') {
+		if ((ap->preg >= frg && ap->preg <= (unsigned)regLastTemp) && reg_alloc[ap->deep].f.isPushed == 'T') {
 			LoadRegister(ap->preg, (int) ap->deep);
 		}
-		if ((ap->sreg >= frg && ap->sreg <= regLastTemp) && reg_alloc[ap->deep2].f.isPushed  == 'T') {
+		if ((ap->sreg >= frg && ap->sreg <= (unsigned)regLastTemp) && reg_alloc[ap->deep2].f.isPushed  == 'T') {
 			LoadRegister(ap->sreg, (int) ap->deep2);
 		}
 		break;
@@ -476,8 +476,7 @@ void validate(AMODE *ap)
     case am_indx:
     case am_ainc:
     case am_adec:
-common:
-		if ((ap->preg >= frg && ap->preg <= regLastTemp) && reg_alloc[ap->deep].f.isPushed == 'T') {
+		if ((ap->preg >= frg && ap->preg <= (unsigned)regLastTemp) && reg_alloc[ap->deep].f.isPushed == 'T') {
 			LoadRegister(ap->preg, (int) ap->deep);
 		}
 		break;
@@ -556,7 +555,7 @@ void ReleaseTempRegister(AMODE *ap)
 	else
     switch (ap->mode) {
 	case am_fpreg:
-		if (ap->preg >= frg && ap->preg <= regLastTemp) {
+		if (ap->preg >= frg && ap->preg <= (unsigned)regLastTemp) {
 			if (fpreg_in_use[ap->preg]==-1)
 				return;
 			if (next_fpreg-- <= frg)
@@ -578,7 +577,7 @@ void ReleaseTempRegister(AMODE *ap)
 	case am_adec:
 	case am_reg:
 common:
-		if (ap->preg >= frg && ap->preg <= regLastTemp) {
+		if (ap->preg >= frg && ap->preg <= (unsigned)regLastTemp) {
 			if (reg_in_use[ap->preg]==-1)
 				return;
 			if (next_reg-- <= frg)
@@ -589,7 +588,7 @@ common:
 		}
 		return;
     case am_indx2:
-		if (ap->sreg >= frg && ap->sreg <= regLastTemp) {
+		if (ap->sreg >= frg && ap->sreg <= (unsigned)regLastTemp) {
 			if (reg_in_use[ap->sreg]==-1)
 				return;
 			if (next_reg-- <= frg)

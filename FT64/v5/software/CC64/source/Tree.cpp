@@ -25,6 +25,19 @@
 //
 #include "stdafx.h"
 
+int Tree::treeno = 0;
+
+Tree *Tree::MakeNew()
+{
+	Tree *t;
+
+	t = new Tree;
+	t->num = treeno;
+	treeno++;
+	t->blocks = CSet::MakeNew();
+	return (t);
+}
+
 void Tree::ClearCosts()
 {
 	loads = 0.0;

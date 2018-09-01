@@ -1892,6 +1892,7 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
             printf("DIAG - uncoded node (%d) in GenerateExpression.\n", node->nodetype);
             return 0;
     }
+	return(0);
 }
 
 // return the natural evaluation size of a node.
@@ -2060,7 +2061,6 @@ void GenerateTrueJump(ENODE *node, int label, unsigned int prediction)
 { 
 	AMODE  *ap1;
 	int    siz1;
-	int    lab0;
 
 	if( node == 0 )
 		return;

@@ -73,7 +73,7 @@ enum e_stmt {
 		st_empty, st_funcbody,
         st_expr, st_compound, st_while, 
 		st_until, st_forever, st_firstcall, st_asm,
-		st_dountil, st_doloop,
+		st_dountil, st_doloop, st_dowhile, st_doonce,
 		st_try, st_catch, st_throw, st_critical, st_spinlock, st_spinunlock,
 		st_for,
 		st_do, st_if, st_switch, st_default,

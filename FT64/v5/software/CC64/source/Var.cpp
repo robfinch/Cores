@@ -51,7 +51,6 @@ public:
 
 WorkList wl;
 Tree *tree;
-int treeno;
 int Var::nvar;
 
 Var *Var::MakeNew()
@@ -169,11 +168,13 @@ void Var::GrowTree(Tree *t, BasicBlock *b)
 				visited->add(p->num);
 				if (p->LiveOut->isMember(num)) {
 					if (t==nullptr) {
-						t = trees.MakeNewTree();
-						t->num = treeno;
+						t = Tree::MakeNew();
+						::forest.PlantTree(t);
+						trees.PlantTree(t);
+						trees.map[num] = t->num;
+						::forest.map[num] = t->num;
 						t->var = num;
 						t->lattice = b->depth;
-						treeno++;
 					}
 					t->blocks->add(p->num);
 					t->lattice = max(t->lattice, p->depth);
@@ -192,11 +193,13 @@ void Var::GrowTree(Tree *t, BasicBlock *b)
 				visited->add(p->num);
 				if (p->LiveOut->isMember(num)) {
 					if (t==nullptr) {
-						t = trees.MakeNewTree();
+						t = Tree::MakeNew();
+						::forest.PlantTree(t);
+						trees.PlantTree(t);
+						trees.map[num] = t->num;
+						::forest.map[num] = t->num;
 						t->lattice = b->depth;
-						t->num = treeno;
 						t->var = num;
-						treeno++;
 					}
 					t->blocks->add(p->num);
 					t->lattice = max(t->lattice, p->depth);
@@ -218,17 +221,17 @@ void Var::CreateForest()
 	Tree *t;
 	char buf[2000];
 
-	treeno = 1;
 	b = currentFn->LastBlock;
 	visited->add(b->num);
 	// First see if a tree starts right at the last basic block.
 	if (b->LiveOut->isMember(num)) {
-		t = trees.MakeNewTree();
-		::forest.MakeNewTree(t);
-		t->num = treeno;
+		t = Tree::MakeNew();
+		::forest.PlantTree(t);
+		trees.PlantTree(t);
+		trees.map[num] = t->num;
+		::forest.map[num] = t->num;
 		t->var = num;
 		t->lattice = b->depth;
-		treeno++;
 		t->blocks->add(b->num);
 		forest->add(b->num);
 		GrowTree(t, b);
@@ -243,12 +246,13 @@ void Var::CreateForest()
 			if (!visited->isMember(p->num)) {
 				visited->add(p->num);
 				if (p->LiveOut->isMember(num)) {
-					t = trees.MakeNewTree();
-					::forest.MakeNewTree(t);
-					t->num = treeno;
+					t = Tree::MakeNew();
+					::forest.PlantTree(t);
+					trees.PlantTree(t);
+					trees.map[num] = t->num;
+					::forest.map[num] = t->num;
 					t->var = num;
 					t->lattice = p->depth;
-					treeno++;
 					t->blocks->add(p->num);
 					forest->add(p->num);
 					GrowTree(t, p);
@@ -265,12 +269,13 @@ void Var::CreateForest()
 			if (!visited->isMember(p->num)) {
 				visited->add(p->num);
 				if (p->LiveOut->isMember(num)) {
-					t = trees.MakeNewTree();
-					::forest.MakeNewTree(t);
-					t->num = treeno;
+					t = Tree::MakeNew();
+					::forest.PlantTree(t);
+					trees.PlantTree(t);
+					trees.map[num] = t->num;
+					::forest.map[num] = t->num;
 					t->var = num;
 					t->lattice = p->depth;
-					treeno++;
 					t->blocks->add(p->num);
 					forest->add(p->num);
 					GrowTree(t, p);
@@ -289,12 +294,13 @@ void Var::CreateForest()
 		if (!visited->isMember(p->num)) {
 			visited->add(p->num);
 			if (p->LiveOut->isMember(num)) {
-				t = trees.MakeNewTree();
-				::forest.MakeNewTree(t);
-				t->num = treeno;
+				t = Tree::MakeNew();
+				::forest.PlantTree(t);
+				trees.PlantTree(t);
+				trees.map[num] = t->num;
+				::forest.map[num] = t->num;
 				t->var = num;
 				t->lattice = p->depth;
-				treeno++;
 				t->blocks->add(p->num);
 				forest->add(p->num);
 				GrowTree(t, p);
@@ -314,8 +320,8 @@ void Var::CreateForests()
 {
 	Var *v;
 
+	Tree::treeno = 0;
 	::forest.treecount = 0;
-	treeno = 0;
 	for (v = currentFn->varlist; v; v = v->next) {
 		v->visited->clear();
 		v->forest->clear();
@@ -539,14 +545,14 @@ int Var::PathCompress(int reg, int blocknum, int *tr)
 	return (-1);
 }
 
-void Var::DumpForests()
+void Var::DumpForests(int n)
 {
 	Var *vp;
 	Tree *rg;
 	int nn;
 	char buf[2000];
 
-	dfs.printf("<VarForests>\n");
+	dfs.printf("<VarForests>%d\n", n);
 	for (vp = currentFn->varlist; vp; vp = vp->next) {
 		dfs.printf("Var%d:", vp->num);
 		if (vp->trees.treecount > 0)
@@ -554,32 +560,39 @@ void Var::DumpForests()
 		else
 			dfs.printf(" no trees\n");
 		for (nn = 0; nn < vp->trees.treecount; nn++) {
+			dfs.printf("<Tree>%d ", vp->trees.trees[nn]->num);
+			dfs.printf("Color:%d ", vp->trees.trees[nn]->color);
 			rg = vp->trees.trees[nn];
 			if (!rg->blocks->isEmpty()) {
 				rg->blocks->sprint(buf, sizeof(buf));
 				dfs.printf(buf);
-				dfs.printf("\n");
+				dfs.printf("</Tree>\n");
 			}
 		}
+		dfs.printf("<Forest>");
 		vp->forest->sprint(buf, sizeof(buf));
 		dfs.printf(buf);
-		dfs.printf("\n");
+		dfs.printf("</Forest>\n");
 	}
 	dfs.printf("</VarForests>\n");
 }
 
 
-Var *Var::GetVarToSpill()
+Var *Var::GetVarToSpill(CSet *exc)
 {
 	Var *vp;
+	int tn, vn;
 
 	for (vp = currentFn->varlist; vp; vp = vp->next) {
-		if (vp != this && vp->num > 2 && vp->num <= 17) {
-			if (!iGraph.DoesInterfere(this->num, vp->num)) {
+		if (vp != this && vp->num > 2 && vp->num <= 17 && !exc->isMember(vp->num)) {
+			tn = ::forest.map[this->num];
+			vn = ::forest.map[vp->num];
+			if (!iGraph.DoesInterfere(tn, vn)) {
 				return (vp);
 			}
 		}
 	}
 	// error: no register could be spilled.
+	return (nullptr);
 }
 

@@ -35,7 +35,7 @@ void IGraph::MakeNew(int n)
 {
 	int bms;
 
-	K = 24;
+	K = 17;
 	size = n;
 	bms = n * n / sizeof(int);
 	bitmatrix = new int[bms];
@@ -77,11 +77,6 @@ void IGraph::Clear()
 
 	ClearBitmatrix();
 	ZeroMemory(degrees, size * sizeof(short int));
-	if (vecs) {
-		for (n = 0; n < size; n++)
-			if (vecs[n])
-				vecs[n][0] = 1;
-	}
 }
 
 
@@ -92,8 +87,7 @@ void IGraph::AllocVecs()
 	int x;
 
 	for (x = 0; x < size; x++) {
-		vecs[x] = new int[degrees[x] + 1];
-		vecs[x][0] = 1;
+		vecs[x] = new int[degrees[x]];
 	}
 }
 
@@ -109,18 +103,20 @@ void IGraph::Add(int x, int y)
 	int intndx;
 	bool isSet;
 
+	if (x == y)
+		return;
 	bitndx = x + (y * y) / 2;
 	intndx = bitndx / sizeof(int);
 	bitndx %= (sizeof(int) * 8);
-	isSet = bitmatrix[intndx] &= ~(1 << bitndx);
+	isSet = bitmatrix[intndx] & ~(1 << bitndx);
 	if (!isSet) {
 		bitmatrix[intndx] |= (1 << bitndx);
+		if (pass > 1) {
+			vecs[x][degrees[x]] = y;
+			vecs[y][degrees[y]] = x;
+		}
 		degrees[x]++;
 		degrees[y]++;
-		if (pass > 1) {
-			vecs[x][vecs[x][0]] = y;
-			vecs[x][0]++;
-		}
 	}
 }
 
@@ -128,12 +124,18 @@ bool IGraph::Remove(int n)
 {
 	int bitndx;
 	int intndx;
-	int j, m;
+	int j, m, nn, mm;
 	bool updated = false;
 
-	for (j = 1; j < degrees[n] + 1; j++) {
+	for (j = 0; j < degrees[n]; j++) {
 		m = vecs[n][j];
 		if (degrees[m] > 0) {
+			for (mm = nn = 0; nn < degrees[m]; nn++) {
+				if (vecs[m][nn] != n) {
+					vecs[m][mm] = vecs[m][nn];
+					mm++;
+				}
+			}
 			degrees[m]--;
 			if (degrees[m] == K-1 && !frst->trees[m]->infinite) {
 				frst->high.remove(m);
@@ -146,8 +148,7 @@ bool IGraph::Remove(int n)
 		bitndx %= (sizeof(int) * 8);
 		bitmatrix[intndx] &= ~(1 << bitndx);
 	}
-	vecs[n][0] = 1;
-	degrees[n] = 0;
+	//degrees[n] = 0;
 	return (updated);
 }
 
@@ -172,20 +173,19 @@ void IGraph::Unite(int father, int son)
 
 	// Increase the size of the adjacency vector allocation for the father as
 	// the son's vectors will be added to them.
-	tmp = new int [degrees[father] + degrees[son]];
+	tmp = new int [degrees[father] + degrees[son] + 1];
+	ZeroMemory(tmp, (degrees[father] + degrees[son] + 1) * sizeof(int));
 	if (vecs[father]) {
-		memcpy(tmp, vecs[father], (vecs[father][0] + 1) * sizeof(int));
+		memcpy(tmp, vecs[father], degrees[father] * sizeof(int));
 		//delete[] vecs[father];
 	}
-	else
-		tmp[0] = 1;
 	vecs[father] = tmp;
 
 	if (vecs[son]) {
-		for (j = 1; j < vecs[son][0]; j++) {
+		for (j = 0; j < degrees[son]; j++) {
 			Add(father, vecs[son][j]);
 		}
-		vecs[son][0] = 1;
+		degrees[son] = 0;
 	}
 }
 
@@ -211,6 +211,7 @@ void IGraph::Fill()
 			if (ip->insn->HasTarget) {
 				v = FindTreeno(ip->oper1->preg,ip->bb->num);
 				if (v >= 0) {
+					b->live->resetPtr();
 					for (n = b->live->nextMember(); n >= 0; n = b->live->nextMember()) {
 						iGraph.Add(n, v);
 					}
@@ -290,8 +291,25 @@ void IGraph::BuildAndCoalesce()
 	do {
 		Clear();
 		Fill();
+		Print(2);
 		improved = BasicBlock::Coalesce();
 		IRemove();
 	} while (improved);
 	//Destroy();	// needed in Simplify()
+}
+
+void IGraph::Print(int n)
+{
+	int nn, mm;
+
+	dfs.printf("<IGraph>%d\n", n);
+	for (nn = 0; nn < size; nn++) {
+		dfs.printf("Degrees[%d]=%d ", nn, degrees[nn]);
+		dfs.printf("Neighbours are: ");
+		for (mm = 0; mm < degrees[nn]; mm++) {
+			dfs.printf("%d ", vecs[nn][mm]);
+		}
+		dfs.printf("\n");
+	}
+	dfs.printf("</IGraph>\n");
 }

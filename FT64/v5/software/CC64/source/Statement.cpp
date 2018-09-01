@@ -163,16 +163,16 @@ Statement *Statement::ParseDo()
 	snp->predreg = iflevel;
 	iflevel++;
 	looplevel++;
-	if ((iflevel > maxPn - 1) && isThor)
-		error(ERR_OUTOFPREDS);
 	snp->s1 = Statement::Parse();
 	// Empty statements return NULL
 	if (snp->s1)
 		snp->s1->outer = snp;
-	if (lastst == kw_until)
-		snp->stype = st_dountil;
-	else if (lastst == kw_loop)
-		snp->stype = st_doloop;
+	switch (lastst) {
+	case kw_until:	snp->stype = st_dountil; break;
+	case kw_loop:	snp->stype = st_doloop; break;
+	case kw_while:	snp->stype = st_dowhile; break;
+	default:	snp->stype = st_doonce; break;
+	}
 	if (lastst != kw_while && lastst != kw_until && lastst != kw_loop)
 		error(ERR_WHILEXPECT);
 	else {
@@ -186,7 +186,7 @@ Statement *Statement::ParseDo()
 	}
 	iflevel--;
 	looplevel--;
-	return snp;
+	return (snp);
 }
 
 Statement *Statement::ParseFor()
@@ -216,7 +216,7 @@ Statement *Statement::ParseFor()
 		snp->s1->outer = snp;
 	iflevel--;
 	looplevel--;
-	return snp;
+	return (snp);
 }
 
 // The forever statement tries to detect if there's an infinite loop and a
@@ -237,7 +237,7 @@ Statement *Statement::ParseForever()
 	// Empty statements return NULL
 	if (snp->s1)
 		snp->s1->outer = snp;
-	return snp;
+	return (snp);
 }
 
 
@@ -274,6 +274,7 @@ Statement *Statement::ParseFirstcall()
 Statement *Statement::ParseIf()
 {
 	Statement *snp;
+	bool needpa = true;
 
 	dfs.puts("<ParseIf>");
 	NextToken();
@@ -284,38 +285,39 @@ Statement *Statement::ParseIf()
 	snp->predreg = iflevel;
 	iflevel++;
 	if (lastst != openpa)
+		needpa = false;
+	NextToken();
+	if (expression(&(snp->exp)) == 0)
 		error(ERR_EXPREXPECT);
-	else {
+	if (lastst == semicolon) {
 		NextToken();
-		if (expression(&(snp->exp)) == 0)
-			error(ERR_EXPREXPECT);
-		if (lastst == semicolon) {
-			NextToken();
-			snp->prediction = (GetIntegerExpression(NULL) & 1) | 2;
-		}
-		needpunc(closepa, 19);
-		if (lastst == kw_then)
-			NextToken();
-		snp->s1 = Statement::Parse();
-		if (snp->s1)
-			snp->s1->outer = snp;
-		if (lastst == kw_else) {
-			NextToken();
-			snp->s2 = Statement::Parse();
-			if (snp->s2)
-				snp->s2->outer = snp;
-		}
-		else if (lastst == kw_elsif) {
-			snp->s2 = ParseIf();
-			if (snp->s2)
-				snp->s2->outer = snp;
-		}
-		else
-			snp->s2 = 0;
+		snp->prediction = (GetIntegerExpression(NULL) & 1) | 2;
 	}
+	if (needpa)
+		needpunc(closepa, 19);
+	else if (lastst != kw_then)
+		error(ERR_SYNTAX);
+	if (lastst == kw_then)
+		NextToken();
+	snp->s1 = Statement::Parse();
+	if (snp->s1)
+		snp->s1->outer = snp;
+	if (lastst == kw_else) {
+		NextToken();
+		snp->s2 = Statement::Parse();
+		if (snp->s2)
+			snp->s2->outer = snp;
+	}
+	else if (lastst == kw_elsif) {
+		snp->s2 = ParseIf();
+		if (snp->s2)
+			snp->s2->outer = snp;
+	}
+	else
+		snp->s2 = 0;
 	iflevel--;
 	dfs.puts("</ParseIf>");
-	return snp;
+	return (snp);
 }
 
 Statement *Statement::ParseCatch()
@@ -1250,7 +1252,23 @@ void Statement::GenerateIf()
 	breaklab = oldbreak;
 }
 
-void Statement::GenerateDo()
+void Statement::GenerateDoOnce()
+{
+	int oldcont, oldbreak;
+	oldcont = contlab;
+	oldbreak = breaklab;
+	contlab = nextlabel++;
+	GenerateLabel(contlab);
+	breaklab = nextlabel++;
+	looplevel++;
+	s1->Generate();
+	looplevel--;
+	GenerateLabel(breaklab);
+	breaklab = oldbreak;
+	contlab = oldcont;
+}
+
+void Statement::GenerateDoWhile()
 {
 	int oldcont, oldbreak;
 	oldcont = contlab;
@@ -1285,6 +1303,24 @@ void Statement::GenerateDoUntil()
 	breaklab = oldbreak;
 	contlab = oldcont;
 }
+
+void Statement::GenerateDoLoop()
+{
+	int oldcont, oldbreak;
+	oldcont = contlab;
+	oldbreak = breaklab;
+	contlab = nextlabel++;
+	GenerateLabel(contlab);
+	breaklab = nextlabel++;
+	looplevel++;
+	s1->Generate();
+	looplevel--;
+	GenerateMonadicNT(op_bra, 0, make_clabel(contlab));
+	GenerateLabel(breaklab);
+	breaklab = oldbreak;
+	contlab = oldcont;
+}
+
 
 /*
 *      generate a call to a library routine.
@@ -1736,13 +1772,17 @@ void Statement::Generate()
 			stmt->GenerateIf();
 			break;
 		case st_do:
-			stmt->GenerateDo();
+		case st_dowhile:
+			stmt->GenerateDoWhile();
 			break;
 		case st_dountil:
 			stmt->GenerateDoUntil();
 			break;
 		case st_doloop:
 			stmt->GenerateForever();
+			break;
+		case st_doonce:
+			stmt->GenerateDoOnce();
 			break;
 		case st_while:
 			stmt->GenerateWhile();

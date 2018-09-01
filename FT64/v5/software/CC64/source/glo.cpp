@@ -114,6 +114,7 @@ int opt_nopeep;
 int opt_noexpr = FALSE;
 int opt_nocgo = FALSE;
 int opt_size = FALSE;
+int opt_vreg = FALSE;
 int exceptions = FALSE;
 int mixedSource = FALSE;
 Function *currentFn = (Function *)NULL;

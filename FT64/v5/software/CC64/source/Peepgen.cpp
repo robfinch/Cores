@@ -54,6 +54,7 @@ Var *FindVar(int num);
 void ExpandReturnBlocks();
 bool RemoveEnabled = true;
 unsigned int ArgRegCount;
+int count;
 
 OCODE    *peep_head = NULL,
                 *peep_tail = NULL;
@@ -186,8 +187,8 @@ void GenerateDiadic(int op, int len, AMODE *ap1, AMODE *ap2)
 	cd->oper2 = copy_addr(ap2);
 	if (ap2) {
 		if (ap2->mode == am_ind || ap2->mode==am_indx) {
-			if (ap2->preg==regSP || ap2->preg==regFP)
-				cd->opcode |= op_ss;
+			//if (ap2->preg==regSP || ap2->preg==regFP)
+			//	cd->opcode |= op_ss;
 		}
 	}
 	cd->oper3 = NULL;
@@ -208,8 +209,8 @@ void GenerateDiadicNT(int op, int len, AMODE *ap1, AMODE *ap2)
 	cd->oper2 = copy_addr(ap2);
 	if (ap2) {
 		if (ap2->mode == am_ind || ap2->mode==am_indx) {
-			if (ap2->preg==regSP || ap2->preg==regFP)
-				cd->opcode |= op_ss;
+			//if (ap2->preg==regSP || ap2->preg==regFP)
+			//	cd->opcode |= op_ss;
 		}
 	}
 	cd->oper3 = NULL;
@@ -493,13 +494,15 @@ void peep_add(OCODE *ip)
      if (ip->fwd==NULL)
          return;
 	 if (ip->fwd->opcode == op_bra) {
-		 if (ip->oper1->preg == ip->oper2->preg && ip->oper3->offset->i == 1) {
-			 ip->opcode = op_ibne;
-			 ip->insn = GetInsn(op_ibne);
-			 ip->oper2->preg = 0;
-			 ip->oper3 = ip->fwd->oper1;
-			 MarkRemove(ip->fwd);
-			 optimized++;
+		 if (ip->oper3->offset) {
+			 if (ip->oper1->preg == ip->oper2->preg && ip->oper3->offset->i == 1) {
+				 ip->opcode = op_ibne;
+				 ip->insn = GetInsn(op_ibne);
+				 ip->oper2->preg = 0;
+				 ip->oper3 = ip->fwd->oper1;
+				 MarkRemove(ip->fwd);
+				 optimized++;
+			 }
 		 }
 		 return;
 	 }
@@ -1545,6 +1548,11 @@ static void opt_peep()
 	int rep;
 	
 	PrintPeepList();
+	// Move the return code pointer past the label which may be removed by
+	// optimization.
+	if (currentFn->rcode)
+		currentFn->rcode = currentFn->rcode->fwd;
+
 	// Remove any dead code identified by the code generator.
 	Remove();
 
@@ -1675,6 +1683,10 @@ static void opt_peep()
 	Remove();
 
 	currentFn->RootBlock = BasicBlock::Blockize(peep_head);
+	dfs.printf("<PeepList:1>\n");
+	PrintPeepList();
+	dfs.printf("</PeepList:1>\n");
+	forest.func = currentFn;
 //	RootBlock->ExpandReturnBlocks();
 	CFG::Create();
 
@@ -1685,23 +1697,36 @@ static void opt_peep()
 	currentFn->DumpLiveVars();
 	currentFn->CreateVars();
 	Var::CreateForests();
-	Var::DumpForests();
+	Var::DumpForests(0);
 	CFG::CalcDominanceFrontiers();
 	CFG::InsertPhiInsns();
 	RemoveCompilerHints2();
 	CFG::Rename();
-	forest.Renumber();
-	BasicBlock::ComputeSpillCosts();
-	//RemoveCode();
-	iGraph.frst = &forest;
-	iGraph.BuildAndCoalesce();
-	forest.Simplify();
-	forest.Color();
-	forest.GenSpillCode();
-	Var::DumpForests();
+	count = 0;
+	do {
+		count++;
+		forest.Renumber();
+		BasicBlock::ComputeSpillCosts();
+		RemoveCode();
+		if (!opt_vreg)
+			return;
+		iGraph.frst = &forest;
+		iGraph.BuildAndCoalesce();
+		iGraph.Print(3);
+		forest.Simplify();
+		iGraph.Print(4);
+		forest.Select();
+		Var::DumpForests(1);
+	} while (forest.SpillCode() && count < 1);
+	if (count == 2) {
+		dfs.printf("Register allocator max loops.\n");
+	}
+	Var::DumpForests(2);
 	//DumpLiveRegs();
 
+	dfs.printf("<PeepList:2>\n");
 	PrintPeepList();
+	dfs.printf("</PeepList:2>\n");
 }
 
 OCODE *FindLabel(int64_t i)
@@ -1745,6 +1770,8 @@ void RemoveMoves()
 		dfs.printf("No move instruction joins live ranges.\n");
 }
 
+// Remove useless code where there are no output links from the basic block.
+
 void RemoveCode()
 {
 	int nn,mm;
@@ -1759,7 +1786,7 @@ void RemoveCode()
 	for (v = currentFn->varlist; v; v = v->next) {
 		if (IsCalleeSave(v->num))
 			continue;
-		if (v->num==0 || v->num==regLR || v->num==regXLR)
+		if (v->num < 5 || v->num==regLR || v->num==regXLR)
 			continue;
 		for (mm = 0; mm < v->trees.treecount; mm++) {
 			t = v->trees.trees[mm];
@@ -1782,7 +1809,7 @@ void RemoveCode()
 			} while((nn = t->blocks->prevMember()) >= 0);
 j1:	;
 		}
-		Remove2();
+		//Remove2();
 	}
 	dfs.printf("<CodeRemove>%d</CodeRemove>\n", count);
 }
@@ -1794,9 +1821,19 @@ void PrintPeepList()
 	Instruction *insn;
 
 	for (ip = peep_head; ip; ip = ip->fwd) {
+		if (ip == currentFn->rcode)
+			dfs.printf("***rcode***");
 		insn = GetInsn(ip->opcode);
 		if (insn)
-		dfs.printf("%s\n", insn->mnem);
+			dfs.printf("%s ", insn->mnem);
+		else if (ip->opcode == op_label)
+			dfs.printf("%s%d:", (char *)ip->oper2, (int)ip->oper1);
+		else
+			dfs.printf("op(%d)", ip->opcode);
+		if (ip->bb)
+			dfs.printf("bb:%d\n", ip->bb->num);
+		else
+			dfs.printf("bb nul\n");
 	}
 }
 

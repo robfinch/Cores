@@ -26,9 +26,9 @@
 #include "stdafx.h"
 
 Forest forest;
-int Forest::treeno = 0;
 
-Tree *Forest::MakeNewTree(Tree *t) {
+Tree *Forest::PlantTree(Tree *t)
+{
 	trees[treecount] = t;
 	treecount++;
 	return (t);
@@ -38,8 +38,6 @@ Tree *Forest::MakeNewTree() {
 	Tree *t;
 	t = (Tree*)allocx(sizeof(Tree));
 	t->blocks = CSet::MakeNew();
-	t->num = treeno;
-	treeno++;
 	trees[treecount] = t;
 	treecount++;
 	return (t);
@@ -89,6 +87,15 @@ void Forest::SummarizeCost()
 	dfs.printf("</TreeCosts>\n");
 }
 
+bool IsRenumberable(int reg)
+{
+	if (reg > regLastRegvar)
+		return (false);
+	if (reg < 3)
+		return (false);
+	return (true);
+}
+
 // Renumber the registers according to the tree (live range) numbers.
 void Forest::Renumber()
 {
@@ -108,22 +115,38 @@ void Forest::Renumber()
 			for (ip = b->code; ip && !eol; ip = ip->fwd) {
 				if (ip->opcode == op_label)
 					continue;
-				if (ip->oper1 && ip->oper1->preg == t->var)
+				if (ip->oper1 && ip->oper1->preg == t->var && IsRenumberable(t->var))
 					ip->oper1->lrpreg = t->num;
-				if (ip->oper1 && ip->oper1->sreg == t->var)
+				else if (ip->oper1)
+					ip->oper1->lrpreg = ip->oper1->preg;
+				if (ip->oper1 && ip->oper1->sreg == t->var && IsRenumberable(t->var))
 					ip->oper1->lrsreg = t->num;
-				if (ip->oper2 && ip->oper2->preg == t->var)
+				else if (ip->oper1)
+					ip->oper1->lrsreg = ip->oper1->sreg;
+				if (ip->oper2 && ip->oper2->preg == t->var && IsRenumberable(t->var))
 					ip->oper2->lrpreg = t->num;
-				if (ip->oper2 && ip->oper2->sreg == t->var)
+				else if (ip->oper2)
+					ip->oper2->lrpreg = ip->oper2->preg;
+				if (ip->oper2 && ip->oper2->sreg == t->var && IsRenumberable(t->var))
 					ip->oper2->lrsreg = t->num;
-				if (ip->oper3 && ip->oper3->preg == t->var)
+				else if (ip->oper2)
+					ip->oper2->lrsreg = ip->oper2->sreg;
+				if (ip->oper3 && ip->oper3->preg == t->var && IsRenumberable(t->var))
 					ip->oper3->lrpreg = t->num;
-				if (ip->oper3 && ip->oper3->sreg == t->var)
+				else if (ip->oper3)
+					ip->oper3->lrpreg = ip->oper3->preg;
+				if (ip->oper3 && ip->oper3->sreg == t->var && IsRenumberable(t->var))
 					ip->oper3->lrsreg = t->num;
-				if (ip->oper4 && ip->oper4->preg == t->var)
+				else if (ip->oper3)
+					ip->oper3->lrsreg = ip->oper3->sreg;
+				if (ip->oper4 && ip->oper4->preg == t->var && IsRenumberable(t->var))
 					ip->oper4->lrpreg = t->num;
-				if (ip->oper4 && ip->oper4->sreg == t->var)
+				else if (ip->oper4)
+					ip->oper4->lrpreg = ip->oper4->preg;
+				if (ip->oper4 && ip->oper4->sreg == t->var && IsRenumberable(t->var))
 					ip->oper4->lrsreg = t->num;
+				else if (ip->oper4)
+					ip->oper4->lrsreg = ip->oper4->sreg;
 				if (ip == b->lcode)
 					eol = true;
 			}
@@ -163,7 +186,7 @@ int Forest::SelectSpillCandidate()
 void Forest::Simplify()
 {
 	int m;
-	int K = 24;
+	int K = 17;
 
 	iGraph.frst = this;
 	low.clear();
@@ -197,22 +220,26 @@ void Forest::Simplify()
 
 void Forest::Color()
 {
-	int m;
+	int nn, m;
 	int c;
 	int j, k = 17;
 	int *p;
 	CSet used;
 	Tree *t;
-	Var *v;
 
 	for (c = 0; c < treecount; c++) {
 		trees[c]->spill = false;
 		trees[c]->color = k;
+		if (trees[c]->var < 3)
+			trees[c]->color = trees[c]->var;
 		if (trees[c]->var >= regFirstArg && trees[c]->var <= regLastArg) {
-			trees[c]->color = trees[c]->var;
+			trees[c]->color = trees[c]->var - regFirstArg + 18;
 		}
-		if (trees[c]->var == 30 || trees[c]->var == 31) {
-			trees[c]->color = trees[c]->var;
+		if (trees[c]->var == regFP
+			|| trees[c]->var == regLR
+			|| trees[c]->var == regXLR
+			|| trees[c]->var == regSP) {
+			trees[c]->color = trees[c]->var - regXLR + 28;
 		}
 	}
 	while (!stk->IsEmpty()) {
@@ -224,8 +251,8 @@ void Forest::Color()
 			used.add(0);	// reg0 is a constant 0
 			used.add(1);	// these two are return value
 			used.add(2);
-			p = iGraph.GetNeighbours(m);
-			for (j = 1; j < p[0]; j++)
+			p = iGraph.GetNeighbours(m, &nn);
+			for (j = 0; j < nn; j++)
 				used.add(trees[p[j]]->color);
 			for (c = 0; used.isMember(c) && c < k; c++);
 			if (c < k && t->color==k)	// The tree may have been colored already
@@ -234,6 +261,7 @@ void Forest::Color()
 				t->spill = true;
 		}
 	}
+	BasicBlock::ColorAll();
 }
 
 
@@ -259,21 +287,22 @@ int Forest::GetSpillCount()
 	return (spillCount);
 }
 
-void Forest::GenSpillCode()
+bool Forest::SpillCode()
 {
 	int c, m, n;
-	int spillCount;
 	Var *v;
 	Tree *t;
 	BasicBlock *bb;
-	int spillOffset;
+	int64_t spillOffset;
 	OCODE *cd;
 	CSet spilled;
+	bool ret;
 
+	ret = false;
 	cd = currentFn->spAdjust;
 	if (cd == nullptr)
-		return;
-	spillOffset = cd->oper3->offset->i;	// start at -8
+		return (ret);
+	spillOffset = cd->oper3->offset->i;
 	spilled.clear();
 	for (c = 0; c < treecount; c++) {
 		t = trees[c];	// convenience
@@ -281,8 +310,11 @@ void Forest::GenSpillCode()
 		// So, spill one of the registers. The register to spill should be one
 		// that isn't live at the same time as this tree.
 		if (t->spill) {
+			ret = true;
 			v = Var::Find(t->var);
-			v = v->GetVarToSpill();
+			v = v->GetVarToSpill(&spilled);
+			if (v == nullptr)
+				continue;
 			// The var is spilled at the head of the tree, and restored later
 			t->blocks->resetPtr();
 			m = t->blocks->nextMember();
@@ -301,6 +333,7 @@ void Forest::GenSpillCode()
 						break;
 					// Detect when a different branch is present. The node
 					// number will jump by more than 1 between branches.
+					// *** suspect this won't work, should just pick last block in tree
 					if (m - n > 1) {
 						bb = basicBlocks[n];
 						bb->InsertFillCode(v->num, -v->spillOffset);
@@ -312,4 +345,5 @@ void Forest::GenSpillCode()
 		}
 	}
 	cd->oper3->offset->i = spillOffset;
+	return (ret);
 }

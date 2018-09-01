@@ -1247,7 +1247,6 @@ int Declaration::declare(SYM *parent,TABLE *table,int al,int ilc,int ztype)
 	int fn_doneinit = 0;
 	bool flag;
 	int parentBytes = 0;
-	char buf[20];
 	std::string name;
  
     int nbytes;

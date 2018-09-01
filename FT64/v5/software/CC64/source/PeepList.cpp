@@ -33,7 +33,7 @@ int PeepList::Count(OCODE *ip)
 {
 	int cnt;
 
-	for (cnt = 0; ip && ip != peep_tail; cnt++)
+	for (cnt = 0; ip && ip != tail; cnt++)
 		ip = ip->fwd;
 	return (cnt);
 }
@@ -86,3 +86,47 @@ void PeepList::Add(OCODE *cd)
 			ArgRegCount = max(ArgRegCount, cd->oper4->preg);
 	}
 }
+
+void PeepList::Remove()
+{
+	OCODE *ip, *ip1, *ip2;
+
+	if (1)//(RemoveEnabled)
+		for (ip = head; ip; ip = ip1) {
+			ip1 = ip->fwd;
+			ip2 = ip->back;
+			if (ip->remove) {
+				if (ip1 && ip1->comment == nullptr)
+					ip1->comment = ip->comment;
+				if (ip2)
+					ip2->fwd = ip1;
+				if (ip1)
+					ip1->back = ip2;
+			}
+		}
+}
+
+
+// Potentially any called routine could throw an exception. So call
+// instructions could act like branches to the default catch tacked
+// onto the end of a subroutine. This is important to prevent the
+// default catch from being optimized away. It's possible that there's
+// no other way to reach the catch.
+// A bex instruction, which isn't a real instruction, is added to the
+// instruction stream so that links are created in the CFG to the
+// catch handlers. At a later stage of the compile all the bex
+// instructions are removed, since they were there only to aid in
+// compiler optimizations.
+
+void PeepList::RemoveCompilerHints2()
+{
+	OCODE *ip;
+
+	for (ip = head; ip != NULL; ip = ip->fwd)
+	{
+		if (ip->opcode == op_bex)
+			MarkRemove(ip);
+	}
+	Remove();
+}
+

@@ -141,6 +141,8 @@ public:
 	int Count(OCODE *pos);
 	static void InsertBefore(OCODE *an, OCODE *cd);
 	static void InsertAfter(OCODE *an, OCODE *cd);
+	void RemoveCompilerHints2();
+	void Remove();
 };
 
 class Function
@@ -185,6 +187,7 @@ public:
 	Var *varlist;
 	PeepList pl;					// under construction
 	OCODE *spAdjust;				// place where sp adjustment takes place
+	OCODE *rcode;
 public:
 	int GetTempBot() { return (tempbot); };
 	void CheckParameterListMatch(Function *s1, Function *s2);
@@ -454,10 +457,10 @@ class AMODE : public CompilerType
 {
 public:
 	unsigned int mode : 6;
-	unsigned int preg : 8;		// primary virtual register number
-	unsigned int sreg : 8;		// secondary virtual register number (indexed addressing modes)
-	unsigned int lrpreg : 8;	// renumbered live range register
-	unsigned int lrsreg : 8;
+	unsigned int preg : 9;		// primary virtual register number
+	unsigned int sreg : 9;		// secondary virtual register number (indexed addressing modes)
+	unsigned int lrpreg : 9;	// renumbered live range register
+	unsigned int lrsreg : 9;
 	unsigned int pregs;			// subscripted register number
 	unsigned int sregs;
 	unsigned int segment : 4;
@@ -494,6 +497,7 @@ public:
 	Instruction *insn;
 	short opcode;
 	short length;
+	unsigned int segment : 4;
 	unsigned int isVolatile : 1;
 	unsigned int isReferenced : 1;	// label is referenced by code
 	unsigned int remove : 1;
@@ -645,8 +649,10 @@ public:
 	void BuildLivesetFromLiveout();
 	static void DepthSort();
 	static bool Coalesce();
-	void InsertSpillCode(int reg, int offs);
-	void InsertFillCode(int reg, int offs);
+	void InsertSpillCode(int reg, int64_t offs);
+	void InsertFillCode(int reg, int64_t offs);
+	void Color();
+	static void ColorAll();
 };
 
 // A "tree" is a "range" in Briggs terminology
@@ -668,8 +674,10 @@ public:
 	float others;
 	bool infinite;
 	float cost;
+	static int treeno;
 public:
 	Tree() { };
+	static Tree *MakeNew();
 	void ClearCosts();
 	float SelectRatio() { return (cost / (float)degree); };
 };
@@ -678,15 +686,15 @@ class Forest
 {
 public:
 	short int treecount;
-	Tree *trees[500];
+	Tree *trees[520];
 	Function *func;
 	CSet low, high;
 	IntStack *stk;
-	static int treeno;
+	short int map[512];
 public:
 	Forest() { stk = IntStack::MakeNew(100000); };
 	Tree *MakeNewTree();
-	Tree *MakeNewTree(Tree *);
+	Tree *PlantTree(Tree *t);
 	void ClearCosts() {
 		int r;
 		for (r = 0; r < treecount; r++)
@@ -699,10 +707,11 @@ public:
 	int pop() { return (stk->pop()); };
 	void Simplify();
 	void Color();
+	void Select() { Color(); };
 	int SelectSpillCandidate();
 	int GetSpillCount();
 	int GetRegisterToSpill(int tree);
-	void GenSpillCode();
+	bool SpillCode();
 };
 
 
@@ -717,7 +726,7 @@ public:
 	CSet *visited;
 	IntStack *istk;
 	int subscript;
-	int spillOffset;	// offset in stack where spilled
+	int64_t spillOffset;	// offset in stack where spilled
 	static int nvar;
 public:
 	static Var *MakeNew();
@@ -731,10 +740,10 @@ public:
 	static CSet *Find3(int reg, int blocknum);
 	static int FindTreeno(int reg, int blocknum);
 	static int PathCompress(int reg, int blocknum, int *);
-	static void DumpForests();
+	static void DumpForests(int);
 	void Transplant(Var *);
 	static bool Coalesce2();
-	Var *GetVarToSpill();
+	Var *GetVarToSpill(CSet *exc);
 };
 
 class IGraph
@@ -758,11 +767,12 @@ public:
 	static int FindTreeno(int reg, int blocknum) { return (Var::FindTreeno(reg, blocknum)); };
 	bool DoesInterfere(int x, int y);
 	int Degree(int n) { return ((int)degrees[n]); };
-	int *GetNeighbours(int n) { return (vecs[n]); };
+	int *GetNeighbours(int n, int *count) { if (count) *count = degrees[n]; return (vecs[n]); };
 	void Unite(int father, int son);
 	void Fill();
 	void AllocVecs();
 	void BuildAndCoalesce();
+	void Print(int);
 };
 
 
@@ -894,8 +904,10 @@ public:
 	void GenerateFor();
 	void GenerateForever();
 	void GenerateIf();
-	void GenerateDo();
+	void GenerateDoWhile();
 	void GenerateDoUntil();
+	void GenerateDoLoop();
+	void GenerateDoOnce();
 	void GenerateCompound();
 	void GenerateCase();
 	void GenerateTry();

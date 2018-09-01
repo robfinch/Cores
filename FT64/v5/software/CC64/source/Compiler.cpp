@@ -74,7 +74,6 @@ int Compiler::main2(int argc, char **argv)
 void Compiler::compile()
 {
 	GlobalDeclaration *gd;
-	SYM *sp;
 
 	dfs.printf("<compile>\n");
 	genst_cumulative = 0;

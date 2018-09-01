@@ -618,6 +618,7 @@ void Function::GenReturn(Statement *stmt)
 	}
 	retlab = nextlabel++;
 	GenerateLabel(retlab);
+	rcode = peep_tail;
 
 	if (currentFn->UsesNew) {
 		GenerateTriadic(op_sub, 0, makereg(regSP), makereg(regSP), make_immed(8));

@@ -10,6 +10,7 @@ BasicBlock *BasicBlock::MakeNew()
 	BasicBlock *bb;
 
 	bb = (BasicBlock *)allocx(sizeof(BasicBlock));
+	bb->live = CSet::MakeNew();
 	bb->gen = CSet::MakeNew();
 	bb->kill = CSet::MakeNew();
 	bb->LiveIn = CSet::MakeNew();
@@ -74,6 +75,8 @@ BasicBlock *BasicBlock::Blockize(OCODE *start)
 	start->leader = true;
 	for (ip = start; ip; ip = ip2) {
 		ip->bb = pb;
+		if (pb == nullptr)
+			printf("hi");
 		pb->depth = ip->loop_depth + 1;
 		ip2 = ip->fwd;
 		if (ip->opcode != op_label && ip->opcode != op_rem && ip->opcode != op_rem2 && ip->opcode != op_hint && ip->opcode != op_hint2)
@@ -427,7 +430,7 @@ void BasicBlock::ComputeSpillCosts()
 	for (b = currentFn->RootBlock; b; b = b->next) {
 		b->NeedLoad->clear();
 		// build the set live from b->liveout
-		b->live = b->LiveOut;
+		*b->live = *b->LiveOut;
 		b->MustSpill = b->live;
 		endLoop = false;
 		for (ip = b->lcode; ip && !endLoop; ip = ip->back) {
@@ -435,79 +438,111 @@ void BasicBlock::ComputeSpillCosts()
 				continue;
 			if (ip->opcode == op_mov) {
 				r = ip->oper1->lrpreg;
+				r = forest.map[r];
 				forest.trees[r]->copies++;
 			}
 			else {
 				if (ip->oper1 && ip->insn->HasTarget) {
 					r = ip->oper1->lrpreg;
+					r = forest.map[r];
 					forest.trees[r]->others += ip->insn->extime;
 				}
 			}
 			i = ip->insn;
 			// examine instruction i updating sets and accumulating costs
 			if (i->HasTarget) {
-				b->UpdateLive(ip->oper1->lrpreg);
+				r = ip->oper1->lrpreg;
+				r = forest.map[r];
+				b->UpdateLive(r);
 			}
 			// This is a loop in the Briggs thesis, but we only allow 4 operands
 			// so the loop is unrolled.
 			if (ip->oper1) {
 				if (!ip->oper1->isTarget) {
 					r = ip->oper1->lrpreg;
+					r = forest.map[r];
 					b->CheckForDeaths(r);
-					if (r = ip->oper1->lrsreg)	// '=' is correct
+					if (r = ip->oper1->lrsreg) {	// '=' is correct
+						r = forest.map[r];
 						b->CheckForDeaths(r);
+					}
 				}
 			}
 			if (ip->oper2) {
 				r = ip->oper1->lrpreg;
+				r = forest.map[r];
 				b->CheckForDeaths(r);
-				if (r = ip->oper1->lrsreg)
+				if (r = ip->oper1->lrsreg) {
+					r = forest.map[r];
 					b->CheckForDeaths(r);
+				}
 			}
 			if (ip->oper3) {
 				r = ip->oper1->lrpreg;
+				r = forest.map[r];
 				b->CheckForDeaths(r);
-				if (r = ip->oper1->lrsreg)
+				if (r = ip->oper1->lrsreg) {
+					r = forest.map[r];
 					b->CheckForDeaths(r);
+				}
 			}
 			if (ip->oper4) {
 				r = ip->oper1->lrpreg;
+				r = forest.map[r];
 				b->CheckForDeaths(r);
-				if (r = ip->oper1->lrsreg)
+				if (r = ip->oper1->lrsreg) {
+					r = forest.map[r];
 					b->CheckForDeaths(r);
+				}
 			}
 			// Re-examine uses to update live and needload
 			pam = ip->oper1;
 			if (pam && !pam->isTarget) {
-				b->live->add(pam->lrpreg);
-				b->NeedLoad->add(pam->lrpreg);
+				r = pam->lrpreg;
+				r = forest.map[r];
+				b->live->add(r);
+				b->NeedLoad->add(r);
 				if (pam->lrsreg) {
-					b->live->add(pam->lrsreg);
-					b->NeedLoad->add(pam->lrsreg);
+					r = pam->lrsreg;
+					r = forest.map[r];
+					b->live->add(r);
+					b->NeedLoad->add(r);
 				}
 			}
 			if (ip->oper2) {
-				b->live->add(ip->oper2->lrpreg);
-				b->NeedLoad->add(ip->oper2->lrpreg);
+				r = ip->oper2->lrpreg;
+				r = forest.map[r];
+				b->live->add(r);
+				b->NeedLoad->add(r);
 				if (ip->oper2->lrsreg) {
-					b->live->add(ip->oper2->lrsreg);
-					b->NeedLoad->add(ip->oper2->lrsreg);
+					r = ip->oper2->lrsreg;
+					r = forest.map[r];
+					b->live->add(r);
+					b->NeedLoad->add(r);
 				}
 			}
 			if (ip->oper3) {
-				b->live->add(ip->oper3->lrpreg);
-				b->NeedLoad->add(ip->oper3->lrpreg);
+				r = ip->oper3->lrpreg;
+				r = forest.map[r];
+				b->live->add(r);
+				b->NeedLoad->add(r);
 				if (ip->oper3->sreg) {
-					b->live->add(ip->oper3->lrsreg);
-					b->NeedLoad->add(ip->oper3->lrsreg);
+					r = ip->oper3->lrsreg;
+					r = forest.map[r];
+					b->live->add(r);
+					b->NeedLoad->add(r);
 				}
 			}
 			if (ip->oper4) {
-				b->live->add(ip->oper4->lrpreg);
-				b->NeedLoad->add(ip->oper4->lrpreg);
+				r = ip->oper4->lrpreg;
+				r = forest.map[r];
+				b->live->add(r);
+				b->NeedLoad->add(r);
 				if (ip->oper4->sreg) {
-					b->live->add(ip->oper4->lrsreg);
-					b->NeedLoad->add(ip->oper4->lrsreg);
+					r = ip->oper4->lrsreg;
+					r = forest.map[r];
+					b->live->add(r);
+					b->NeedLoad->add(r);
 				}
 			}
 			if (ip == b->code)
@@ -526,7 +561,7 @@ void BasicBlock::ComputeSpillCosts()
 
 // We don't actually want entire ranges. Only the part of the
 // range that the basic block is sitting on. There could be
-// multiple peices to the range associated with a var.
+// multiple pieces to the range associated with a var.
 
 void BasicBlock::BuildLivesetFromLiveout()
 {
@@ -584,6 +619,8 @@ void BasicBlock::InsertMove(int reg, int rreg, int blk)
 	cd->back = ip->back;
 	cd->fwd = ip;
 	cd->bb = ip->bb;
+	if (ip->bb == nullptr)
+		printf("hi");
 	if (ip->back)
 		ip->back->fwd = cd;
 	ip->back = cd;
@@ -666,11 +703,12 @@ void DumpLiveRegs()
 	dfs.printf("</LiveRegisters>\n");
 }
 
-void BasicBlock::InsertSpillCode(int reg, int offs)
+void BasicBlock::InsertSpillCode(int reg, int64_t offs)
 {
 	OCODE *cd;
-	AMODE *ap1, *ap2;
 
+	if (this == nullptr)
+		return;
 	cd = (OCODE *)xalloc(sizeof(OCODE));
 	cd->insn = GetInsn(op_sw);
 	cd->opcode = op_sw;
@@ -684,14 +722,18 @@ void BasicBlock::InsertSpillCode(int reg, int offs)
 	cd->oper2->offset->nodetype = en_icon;
 	cd->oper2->offset->i = offs;
 	cd->bb = this;
-	PeepList::InsertBefore(code, cd);
+	if (num==0)
+		PeepList::InsertBefore(lcode, cd);
+	else
+		PeepList::InsertBefore(code, cd);
 }
 
-void BasicBlock::InsertFillCode(int reg, int offs)
+void BasicBlock::InsertFillCode(int reg, int64_t offs)
 {
 	OCODE *cd;
-	AMODE *ap1, *ap2;
 
+	if (this == nullptr)
+		return;
 	cd = (OCODE *)xalloc(sizeof(OCODE));
 	cd->insn = GetInsn(op_lw);
 	cd->opcode = op_lw;
@@ -705,5 +747,62 @@ void BasicBlock::InsertFillCode(int reg, int offs)
 	cd->oper2->offset->nodetype = en_icon;
 	cd->oper2->offset->i = offs;
 	cd->bb = this;
-	PeepList::InsertBefore(lcode, cd);
+	if (currentFn->rcode->bb==this)
+		PeepList::InsertAfter(currentFn->rcode, cd);
+	else
+		PeepList::InsertBefore(lcode, cd);
+}
+
+void BasicBlock::Color()
+{
+	int r;
+	OCODE *ip;
+
+	for (ip = code; ip && ip != lcode; ip = ip->fwd) {
+		if (ip->remove)
+			continue;
+		if (ip->insn == nullptr)
+			continue;
+		if (ip->oper1) {
+			r = ip->oper1->preg;
+			r = forest.map[r];
+			ip->oper1->preg = forest.trees[r]->color;
+			r = ip->oper1->sreg;
+			r = forest.map[r];
+			ip->oper1->sreg = forest.trees[r]->color;
+		}
+		if (ip->oper2) {
+			r = ip->oper2->preg;
+			r = forest.map[r];
+			ip->oper2->preg = forest.trees[r]->color;
+			r = ip->oper2->sreg;
+			r = forest.map[r];
+			ip->oper2->sreg = forest.trees[r]->color;
+		}
+		if (ip->oper3) {
+			r = ip->oper3->preg;
+			r = forest.map[r];
+			ip->oper3->preg = forest.trees[r]->color;
+			r = ip->oper3->sreg;
+			r = forest.map[r];
+			ip->oper3->sreg = forest.trees[r]->color;
+		}
+		if (ip->oper4) {
+			r = ip->oper4->preg;
+			r = forest.map[r];
+			ip->oper4->preg = forest.trees[r]->color;
+			r = ip->oper4->sreg;
+			r = forest.map[r];
+			ip->oper4->sreg = forest.trees[r]->color;
+		}
+	}
+}
+
+void BasicBlock::ColorAll()
+{
+	int nn;
+
+	for (nn = 0; nn <= currentFn->LastBlock->num; nn++) {
+		basicBlocks[nn]->Color();
+	}
 }
