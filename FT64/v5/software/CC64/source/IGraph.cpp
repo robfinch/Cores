@@ -91,6 +91,24 @@ void IGraph::AllocVecs()
 	}
 }
 
+int IGraph::BitIndex(int x, int y, int *intndx, int *bitndx)
+{
+	if (x > y)
+		throw new C64PException(ERR_IGNODES, 1);
+	if (x < y) {
+		*bitndx = x + (y * y) / 2;
+		*intndx = *bitndx / sizeof(int);
+		*bitndx %= (sizeof(int) * 8);
+		return (x + (y * y) / 2);
+	}
+	else {
+		*bitndx = y + (x * x) / 2;
+		*intndx = *bitndx / sizeof(int);
+		*bitndx %= (sizeof(int) * 8);
+		return (y + (x * x) / 2);
+	}
+}
+
 // Two passes are made in order to determine the size of 
 // the adjacency vector array for the node. The first pass
 // just determines the degree.
@@ -105,10 +123,8 @@ void IGraph::Add(int x, int y)
 
 	if (x == y)
 		return;
-	bitndx = x + (y * y) / 2;
-	intndx = bitndx / sizeof(int);
-	bitndx %= (sizeof(int) * 8);
-	isSet = bitmatrix[intndx] & ~(1 << bitndx);
+	BitIndex(x,y,&intndx,&bitndx);
+	isSet = bitmatrix[intndx] & (1 << bitndx);
 	if (!isSet) {
 		bitmatrix[intndx] |= (1 << bitndx);
 		if (pass > 1) {
@@ -118,13 +134,63 @@ void IGraph::Add(int x, int y)
 		degrees[x]++;
 		degrees[y]++;
 	}
+	AddToVec(x, y);
+	AddToVec(y, x);
+}
+
+
+// Used to update the vector table.
+
+void IGraph::AddToVec(int x, int y)
+{
+	int nn;
+
+	if (pass > 1) {
+		for (nn = 0; nn < degrees[x]; nn++) {
+			if (vecs[x][nn] == y)
+				break;
+		}
+		if (nn >= degrees[x]) {
+			vecs[x][degrees[x]] = y;
+			degrees[x]++;
+		}
+	}
+	else
+		degrees[x]++;
+}
+
+// A slightly faster version of Add used when father and son nodes are united.
+// We don't want to add back to the son's.
+
+void IGraph::Add2(int x, int y)
+{
+	int bitndx;
+	int intndx;
+	bool isSet;
+	int nn, mm;
+	int x1, y1;
+
+	if (x == y)
+		return;
+	x1 = min(x, y);
+	y1 = max(x, y);
+	BitIndex(x1, y1, &intndx, &bitndx);
+	isSet = bitmatrix[intndx] & (1 << bitndx);
+	if (!isSet) {
+		bitmatrix[intndx] |= (1 << bitndx);
+		//if (pass > 1) {
+		//	vecs[x][degrees[x]] = y;
+		//}
+		//degrees[x]++;
+	}
+	AddToVec(x1, y1);
 }
 
 bool IGraph::Remove(int n)
 {
 	int bitndx;
 	int intndx;
-	int j, m, nn, mm;
+	int j, m, nn, mm, n1, m1;
 	bool updated = false;
 
 	for (j = 0; j < degrees[n]; j++) {
@@ -143,9 +209,9 @@ bool IGraph::Remove(int n)
 				updated = true;
 			}
 		}
-		bitndx = n + (m * m) / 2;
-		intndx = bitndx / sizeof(int);
-		bitndx %= (sizeof(int) * 8);
+		n1 = min(n, m);
+		m1 = max(n, m);
+		BitIndex(n1, m1, &intndx, &bitndx);
 		bitmatrix[intndx] &= ~(1 << bitndx);
 	}
 	//degrees[n] = 0;
@@ -157,19 +223,24 @@ bool IGraph::DoesInterfere(int x, int y)
 	int bitndx;
 	int intndx;
 
-	bitndx = x + (y * y) / 2;
-	intndx = bitndx / sizeof(int);
-	bitndx %= (sizeof(int) * 8);
+	bitndx = BitIndex(x, y, &intndx, &bitndx);
 	return (((bitmatrix[intndx] >> bitndx) & 1)==1);
 }
-
-
+/*
+bool IGraph::DoesInterfere(int x, int y)
+{
+	return (!::forest.trees[x]->blocks->isDisjoint(*::forest.trees[y]->blocks));
+}
+*/
 // Move adjacency vectors across graph from son to father.
 
 void IGraph::Unite(int father, int son)
 {
 	int j;
 	int *tmp;
+
+	if (father > son)
+		throw new C64PException(ERR_IGNODES, 2);
 
 	// Increase the size of the adjacency vector allocation for the father as
 	// the son's vectors will be added to them.
@@ -183,68 +254,74 @@ void IGraph::Unite(int father, int son)
 
 	if (vecs[son]) {
 		for (j = 0; j < degrees[son]; j++) {
-			Add(father, vecs[son][j]);
+			Add2(father, vecs[son][j]);
 		}
 		degrees[son] = 0;
 	}
 }
 
+void IGraph::AddToLive(BasicBlock *b, AMODE *ap, OCODE *ip)
+{
+	int v;
+
+	v = FindTreeno(ap->preg, ip->bb->num);
+	if (v >= 0) {
+		b->live->add(v);
+	}
+	if (ap->sreg) {
+		v = FindTreeno(ap->sreg, ip->bb->num);
+		if (v >= 0) {
+			b->live->add(v);
+		}
+	}
+}
 
 void IGraph::Fill()
 {
-	int n;
+	int n, n1;
 	BasicBlock *b;
-	int v;
+	int v, v1;
 	OCODE *ip;
 	bool eol;
+	Var *vr;
 
 	// For each block 
 	for (b = currentFn->RootBlock; b; b = b->next) {
 		b->BuildLivesetFromLiveout();
 		eol = false;
 		for (ip = b->lcode; ip && !eol; ip = ip->back) {
-			// examine instruction ip and update graph and live
-			if (ip->opcode == op_mov) {
-				v = FindTreeno(ip->oper1->preg,ip->bb->num);
-				if (v >= 0) b->live->remove(v);
-			}
-			if (ip->insn->HasTarget) {
-				v = FindTreeno(ip->oper1->preg,ip->bb->num);
-				if (v >= 0) {
-					b->live->resetPtr();
-					for (n = b->live->nextMember(); n >= 0; n = b->live->nextMember()) {
-						iGraph.Add(n, v);
+			if (ip->opcode != op_label) {
+				// examine instruction ip and update graph and live
+				if (ip->opcode == op_mov) {
+					v = FindTreeno(ip->oper1->preg, ip->bb->num);
+					if (v >= 0) {
+						b->live->remove(v);
 					}
-					b->live->remove(v);
 				}
+				if (ip->insn->HasTarget) {
+					v = FindTreeno(ip->oper1->preg, ip->bb->num);
+					if (v >= 0) {
+						b->live->resetPtr();
+						for (n = b->live->nextMember(); n >= 0; n = b->live->nextMember()) {
+							n1 = min(n, v);
+							v1 = max(n, v);
+							iGraph.Add(n1, v1);
+						}
+						b->live->remove(v);
+					}
+				}
+				// Unrolled loop
+				// while (p < ik->uses)
+				if (!ip->insn->HasTarget && ip->oper1)
+					AddToLive(b, ip->oper1, ip);
+				if (ip->oper2)
+					AddToLive(b, ip->oper2, ip);
+				if (ip->oper3)
+					AddToLive(b, ip->oper3, ip);
+				if (ip->oper4)
+					AddToLive(b, ip->oper4, ip);
 			}
-			// Unrolled loop
-			// while (p < ik->uses)
-			if (!ip->insn->HasTarget && ip->oper1) {
-				v = FindTreeno(ip->oper1->preg,ip->bb->num);
-				if (v>=0) b->live->add(v);
-				v = FindTreeno(ip->oper1->sreg,ip->bb->num);
-				if (v>=0) b->live->add(v);
-			}
-			if (ip->oper2) {
-				v = FindTreeno(ip->oper2->preg, ip->bb->num);
-				if (v >= 0) b->live->add(v);
-				v = FindTreeno(ip->oper2->sreg, ip->bb->num);
-				if (v >= 0) b->live->add(v);
-			}
-			if (ip->oper3) {
-				v = FindTreeno(ip->oper3->preg, ip->bb->num);
-				if (v >= 0) b->live->add(v);
-				v = FindTreeno(ip->oper3->sreg, ip->bb->num);
-				if (v >= 0) b->live->add(v);
-			}
-			if (ip->oper4) {
-				v = FindTreeno(ip->oper4->preg, ip->bb->num);
-				if (v >= 0) b->live->add(v);
-				v = FindTreeno(ip->oper4->sreg, ip->bb->num);
-				if (v >= 0) b->live->add(v);
-			}
-			eol = ip == b->lcode;
+			eol = ip == b->code;
 		}
 	}
 
@@ -259,19 +336,21 @@ void IGraph::BuildAndCoalesce()
 	int nn, mm, blk;
 	bool improved = false;
 
-//	MakeNew(Var::nvar);
 	MakeNew(frst->treecount);
 	frst->CalcRegclass();
 
 	// Insert move operations to handle register parameters.
 	for (nn = regFirstArg; nn <= regLastArg; nn++) {
-		if (v = Var::Find2(nn)) {				// find the forest
-			for (mm = 0; mm < v->trees.treecount; mm++) {	// search the trees
-				t = v->trees.trees[mm];
-				t->blocks->resetPtr();
-				blk = t->blocks->nextMember();	// The lowest block # will be the head of the tree
-				if (blk >= 0)
-					BasicBlock::InsertMove(nn, t->var, blk);
+		mm = map.newnums[nn];
+		if (mm >= 0) {
+			if (v = Var::Find2(mm)) {				// find the forest
+				for (mm = 0; mm < v->trees.treecount; mm++) {	// search the trees
+					t = v->trees.trees[mm];
+					t->blocks->resetPtr();
+					blk = t->blocks->nextMember();	// The lowest block # will be the head of the tree
+					if (blk >= 0)
+						BasicBlock::InsertMove(map.newnums[nn], t->var, blk);
+				}
 			}
 		}
 	}
@@ -293,7 +372,8 @@ void IGraph::BuildAndCoalesce()
 		Fill();
 		Print(2);
 		improved = BasicBlock::Coalesce();
-		IRemove();
+		//improved = Var::Coalesce2();
+		//IRemove();
 	} while (improved);
 	//Destroy();	// needed in Simplify()
 }

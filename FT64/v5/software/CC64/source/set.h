@@ -18,6 +18,7 @@
 #define SET_EQUIV   0
 #define SET_DISJ    1
 #define SET_INTER   2
+#define SET_UNKNOWN	3
 
 extern void *allocx(int);
 
@@ -99,12 +100,16 @@ public:
 	void remove(int);    // Remove member - clears bit in map
 	inline void remove(CSet &s)
 	{
-		for (int ii = size; --ii >= 0;)
+		int ii;
+		ii = min(size, s.size);
+		while (--ii >= 0)
 			map[ii] &= ~s.map[ii];
 	}
 	inline void remove(CSet *s)
 	{
-		for (int ii = size; --ii >= 0;)
+		int ii;
+		ii = min(size, s->size);
+		while (--ii >= 0)
 			map[ii] &= ~s->map[ii];
 	}
 	int resetPtr() {

@@ -1285,6 +1285,10 @@ void Function::CreateVars()
 			num = b->LiveOut->nextMember();
 			Var::Find(num);	// find will create the var if not found
 		}
+		//for (nn = 0; nn < b->LiveIn->NumMember(); nn++) {
+		//	num = b->LiveIn->nextMember();
+		//	Var::Find(num);	// find will create the var if not found
+		//}
 	}
 }
 

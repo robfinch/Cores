@@ -209,6 +209,7 @@ extern int funcdecl;
 extern Stringx names[20];
 extern int isStructDecl;
 extern int worstAlignment;
+extern Map map;
 
 // Analyze.c
 extern short int csendx;

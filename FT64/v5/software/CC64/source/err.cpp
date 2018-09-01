@@ -95,7 +95,8 @@ static char *errtextstr[] = {
 	"W Precision is being lost in the type conversion.",
 	"E Compiler limit reached: too many trees.",
 	"E Compiler limit reached: optimization stack full.",
-	"E Compiler: stack empty."
+	"E Compiler: stack empty.",
+	"E Compiler: i-graph nodes in wrong order."
 };
 
 char *errtext(int errnum)

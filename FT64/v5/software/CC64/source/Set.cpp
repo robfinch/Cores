@@ -589,7 +589,7 @@ int CSet::SetTest(CSet &s)
 	// Make the sets the same size.
 	if (s.size > size)
 		enlarge(i);
-	else
+	else if (s.size < size)
 		s.enlarge(i);
 
 	p1 = map;
@@ -601,11 +601,13 @@ int CSet::SetTest(CSet &s)
 		{
 			if (*p1 & *p2)
 				return (SET_INTER);
-			else
-				rval = SET_DISJ;
+			rval = SET_DISJ;
 		}
+		else if (*p1 != 0)
+			if (rval==SET_DISJ)
+				rval = SET_INTER;
 	}
-	return rval;
+	return (rval);
 }
 
 int CSet::isSubset(CSet &s)

@@ -55,6 +55,7 @@ void ExpandReturnBlocks();
 bool RemoveEnabled = true;
 unsigned int ArgRegCount;
 int count;
+Map map;
 
 OCODE    *peep_head = NULL,
                 *peep_tail = NULL;
@@ -1705,11 +1706,11 @@ static void opt_peep()
 	count = 0;
 	do {
 		count++;
+		if (!opt_vreg)
+			return;
 		forest.Renumber();
 		BasicBlock::ComputeSpillCosts();
 		RemoveCode();
-		if (!opt_vreg)
-			return;
 		iGraph.frst = &forest;
 		iGraph.BuildAndCoalesce();
 		iGraph.Print(3);
@@ -1717,7 +1718,7 @@ static void opt_peep()
 		iGraph.Print(4);
 		forest.Select();
 		Var::DumpForests(1);
-	} while (forest.SpillCode() && count < 1);
+	} while (forest.SpillCode() && count < 4);
 	if (count == 2) {
 		dfs.printf("Register allocator max loops.\n");
 	}

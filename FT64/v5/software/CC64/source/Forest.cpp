@@ -105,9 +105,16 @@ void Forest::Renumber()
 	BasicBlock *b;
 	int bb;
 	bool eol;
+	 
+	memset(::map.newnums, -1, sizeof(::map.newnums));
+	for (bb = 0; bb < 512; bb++)
+		::map.newnums[bb] = bb;
+
+	return;
 
 	for (tt = 0; tt < treecount; tt++) {
 		t = trees[tt];
+		::map.newnums[t->var] = t->num;
 		t->blocks->resetPtr();
 		for (bb = t->blocks->nextMember(); bb >= 0; bb = t->blocks->nextMember()) {
 			b = basicBlocks[bb];
@@ -115,43 +122,72 @@ void Forest::Renumber()
 			for (ip = b->code; ip && !eol; ip = ip->fwd) {
 				if (ip->opcode == op_label)
 					continue;
-				if (ip->oper1 && ip->oper1->preg == t->var && IsRenumberable(t->var))
-					ip->oper1->lrpreg = t->num;
-				else if (ip->oper1)
-					ip->oper1->lrpreg = ip->oper1->preg;
-				if (ip->oper1 && ip->oper1->sreg == t->var && IsRenumberable(t->var))
-					ip->oper1->lrsreg = t->num;
-				else if (ip->oper1)
-					ip->oper1->lrsreg = ip->oper1->sreg;
-				if (ip->oper2 && ip->oper2->preg == t->var && IsRenumberable(t->var))
-					ip->oper2->lrpreg = t->num;
-				else if (ip->oper2)
-					ip->oper2->lrpreg = ip->oper2->preg;
-				if (ip->oper2 && ip->oper2->sreg == t->var && IsRenumberable(t->var))
-					ip->oper2->lrsreg = t->num;
-				else if (ip->oper2)
-					ip->oper2->lrsreg = ip->oper2->sreg;
-				if (ip->oper3 && ip->oper3->preg == t->var && IsRenumberable(t->var))
-					ip->oper3->lrpreg = t->num;
-				else if (ip->oper3)
-					ip->oper3->lrpreg = ip->oper3->preg;
-				if (ip->oper3 && ip->oper3->sreg == t->var && IsRenumberable(t->var))
-					ip->oper3->lrsreg = t->num;
-				else if (ip->oper3)
-					ip->oper3->lrsreg = ip->oper3->sreg;
-				if (ip->oper4 && ip->oper4->preg == t->var && IsRenumberable(t->var))
-					ip->oper4->lrpreg = t->num;
-				else if (ip->oper4)
-					ip->oper4->lrpreg = ip->oper4->preg;
-				if (ip->oper4 && ip->oper4->sreg == t->var && IsRenumberable(t->var))
-					ip->oper4->lrsreg = t->num;
-				else if (ip->oper4)
-					ip->oper4->lrsreg = ip->oper4->sreg;
+				if (ip->oper1 && ip->oper1->preg == t->var) {// && IsRenumberable(t->var))
+					Var::Renumber(ip->oper1->preg, t->num);
+					ip->oper1->preg = t->num;
+				}
+				if (ip->oper1 && ip->oper1->sreg == t->var) {// && IsRenumberable(t->var))
+					Var::Renumber(ip->oper1->sreg, t->num);
+					ip->oper1->sreg = t->num;
+				}
+
+				if (ip->oper2 && ip->oper2->preg == t->var) {// && IsRenumberable(t->var))
+					Var::Renumber(ip->oper2->preg, t->num);
+					ip->oper2->preg = t->num;
+				}
+				if (ip->oper2 && ip->oper2->sreg == t->var) {// && IsRenumberable(t->var))
+					Var::Renumber(ip->oper2->sreg, t->num);
+					ip->oper2->sreg = t->num;
+				}
+
+				if (ip->oper3 && ip->oper3->preg == t->var) {// && IsRenumberable(t->var))
+					Var::Renumber(ip->oper3->preg, t->num);
+					ip->oper3->preg = t->num;
+				}
+				if (ip->oper3 && ip->oper3->sreg == t->var) {// && IsRenumberable(t->var))
+					ip->oper3->sreg = t->num;
+					Var::Renumber(ip->oper3->sreg, t->num);
+				}
+
+				if (ip->oper4 && ip->oper4->preg == t->var) {// && IsRenumberable(t->var))
+					Var::Renumber(ip->oper4->preg, t->num);
+					ip->oper4->preg = t->num;
+				}
+				if (ip->oper4 && ip->oper4->sreg == t->var) {// && IsRenumberable(t->var))
+					Var::Renumber(ip->oper4->sreg, t->num);
+					ip->oper4->sreg = t->num;
+				}
+
 				if (ip == b->lcode)
 					eol = true;
 			}
 		}
 	}
+	for (tt = 0; tt < treecount; tt++) {
+		t = trees[tt];
+		t->var = ::map.newnums[t->var];
+	}
+	for (ip = peep_head; ip; ip = ip->fwd) {
+		if (ip->opcode == op_label)
+			continue;
+		if (ip->oper1) {
+			ip->oper1->preg = ::map.newnums[ip->oper1->preg];
+			ip->oper1->sreg = ::map.newnums[ip->oper1->sreg];
+		}
+		if (ip->oper2) {
+			ip->oper2->preg = ::map.newnums[ip->oper2->preg];
+			ip->oper2->sreg = ::map.newnums[ip->oper2->sreg];
+		}
+		if (ip->oper3) {
+			ip->oper3->preg = ::map.newnums[ip->oper3->preg];
+			ip->oper3->sreg = ::map.newnums[ip->oper3->sreg];
+		}
+		if (ip->oper4) {
+			ip->oper4->preg = ::map.newnums[ip->oper4->preg];
+			ip->oper4->sreg = ::map.newnums[ip->oper4->sreg];
+		}
+	}
+	Var::RenumberNeg();
 }
 
 

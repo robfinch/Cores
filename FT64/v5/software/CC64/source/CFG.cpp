@@ -337,10 +337,10 @@ void CFG::Subscript(AMODE *oper)
 	Var *v;
 
 	if (oper) {
-		v = Var::Find2(oper->preg);
+		v = Var::FindByMac(oper->preg);
 		if (v)
 			oper->pregs = v->istk->tos();
-		v = Var::Find2(oper->sreg);
+		v = Var::FindByMac(oper->sreg);
 		if (v)
 			oper->sregs = v->istk->tos();
 	}
@@ -367,7 +367,7 @@ void CFG::Search(BasicBlock *x)
 			if (s->oper4)
 				Subscript(s->oper4);
 			if (s->oper1 && s->HasTargetReg()) {
-				v = Var::Find2(s->GetTargetReg());
+				v = Var::FindByMac(s->GetTargetReg());
 				if (v) {
 					i = v->subscript;
 					s->oper1->pregs = i;
@@ -390,7 +390,7 @@ void CFG::Search(BasicBlock *x)
 		eol = false;
 		for (s = b->code; s && !eol; s = s->fwd) {
 			if (s->opcode==op_phi) {
-				v = Var::Find2(s->oper1->preg);
+				v = Var::FindByMac(s->oper1->preg);
 				if (v)
 					s->phiops[j] = v->istk->tos();
 			}
@@ -403,7 +403,7 @@ void CFG::Search(BasicBlock *x)
 	for (s = x->code; s && !eol; s = s->fwd) {
 		if (s->opcode!=op_label) {
 			if (s->HasTargetReg()) {
-				v = Var::Find2(s->GetTargetReg());
+				v = Var::FindByMac(s->GetTargetReg());
 				if (v)
 					v->istk->pop();
 			}

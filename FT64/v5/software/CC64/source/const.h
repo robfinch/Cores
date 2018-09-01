@@ -330,6 +330,7 @@ enum e_seg {
 #define ERR_TOOMANY_TREES	62
 #define ERR_STACKFULL		63
 #define ERR_STACKEMPTY		64
+#define ERR_IGNODES			65
 #define ERR_NULLPOINTER		1000
 #define ERR_CIRCULAR_LIST 1001
 

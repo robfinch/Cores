@@ -430,20 +430,21 @@ void BasicBlock::ComputeSpillCosts()
 	for (b = currentFn->RootBlock; b; b = b->next) {
 		b->NeedLoad->clear();
 		// build the set live from b->liveout
-		*b->live = *b->LiveOut;
-		b->MustSpill = b->live;
+		b->BuildLivesetFromLiveout();
+		//*b->live = *b->LiveOut;
+		*b->MustSpill = *b->live;
 		endLoop = false;
 		for (ip = b->lcode; ip && !endLoop; ip = ip->back) {
 			if (ip->opcode == op_label)
 				continue;
 			if (ip->opcode == op_mov) {
-				r = ip->oper1->lrpreg;
+				r = ip->oper1->preg;
 				r = forest.map[r];
 				forest.trees[r]->copies++;
 			}
 			else {
 				if (ip->oper1 && ip->insn->HasTarget) {
-					r = ip->oper1->lrpreg;
+					r = ip->oper1->preg;
 					r = forest.map[r];
 					forest.trees[r]->others += ip->insn->extime;
 				}
@@ -451,7 +452,7 @@ void BasicBlock::ComputeSpillCosts()
 			i = ip->insn;
 			// examine instruction i updating sets and accumulating costs
 			if (i->HasTarget) {
-				r = ip->oper1->lrpreg;
+				r = ip->oper1->preg;
 				r = forest.map[r];
 				b->UpdateLive(r);
 			}
@@ -459,38 +460,38 @@ void BasicBlock::ComputeSpillCosts()
 			// so the loop is unrolled.
 			if (ip->oper1) {
 				if (!ip->oper1->isTarget) {
-					r = ip->oper1->lrpreg;
+					r = ip->oper1->preg;
 					r = forest.map[r];
 					b->CheckForDeaths(r);
-					if (r = ip->oper1->lrsreg) {	// '=' is correct
+					if (r = ip->oper1->sreg) {	// '=' is correct
 						r = forest.map[r];
 						b->CheckForDeaths(r);
 					}
 				}
 			}
 			if (ip->oper2) {
-				r = ip->oper1->lrpreg;
+				r = ip->oper1->preg;
 				r = forest.map[r];
 				b->CheckForDeaths(r);
-				if (r = ip->oper1->lrsreg) {
+				if (r = ip->oper1->sreg) {
 					r = forest.map[r];
 					b->CheckForDeaths(r);
 				}
 			}
 			if (ip->oper3) {
-				r = ip->oper1->lrpreg;
+				r = ip->oper1->preg;
 				r = forest.map[r];
 				b->CheckForDeaths(r);
-				if (r = ip->oper1->lrsreg) {
+				if (r = ip->oper1->sreg) {
 					r = forest.map[r];
 					b->CheckForDeaths(r);
 				}
 			}
 			if (ip->oper4) {
-				r = ip->oper1->lrpreg;
+				r = ip->oper1->preg;
 				r = forest.map[r];
 				b->CheckForDeaths(r);
-				if (r = ip->oper1->lrsreg) {
+				if (r = ip->oper1->sreg) {
 					r = forest.map[r];
 					b->CheckForDeaths(r);
 				}
@@ -498,49 +499,60 @@ void BasicBlock::ComputeSpillCosts()
 			// Re-examine uses to update live and needload
 			pam = ip->oper1;
 			if (pam && !pam->isTarget) {
-				r = pam->lrpreg;
+				r = pam->preg;
 				r = forest.map[r];
+				//r = Var::Find2(pam->lrpreg)->cnum;
 				b->live->add(r);
 				b->NeedLoad->add(r);
-				if (pam->lrsreg) {
-					r = pam->lrsreg;
+				if (pam->sreg) {
+					//r = Var::Find2(pam->lrsreg)->cnum;
+					r = pam->sreg;
 					r = forest.map[r];
 					b->live->add(r);
 					b->NeedLoad->add(r);
 				}
 			}
+			pam = ip->oper2;
 			if (ip->oper2) {
-				r = ip->oper2->lrpreg;
+				r = ip->oper2->preg;
 				r = forest.map[r];
+//				r = Var::Find2(pam->lrpreg)->cnum;
 				b->live->add(r);
 				b->NeedLoad->add(r);
-				if (ip->oper2->lrsreg) {
-					r = ip->oper2->lrsreg;
+				if (ip->oper2->sreg) {
+					r = ip->oper2->sreg;
 					r = forest.map[r];
+//					r = Var::Find2(pam->lrsreg)->cnum;
 					b->live->add(r);
 					b->NeedLoad->add(r);
 				}
 			}
+			pam = ip->oper3;
 			if (ip->oper3) {
-				r = ip->oper3->lrpreg;
+				r = ip->oper3->preg;
 				r = forest.map[r];
+//				r = Var::Find2(pam->lrpreg)->cnum;
 				b->live->add(r);
 				b->NeedLoad->add(r);
 				if (ip->oper3->sreg) {
-					r = ip->oper3->lrsreg;
+//					r = Var::Find2(pam->lrsreg)->cnum;
+					r = ip->oper3->sreg;
 					r = forest.map[r];
 					b->live->add(r);
 					b->NeedLoad->add(r);
 				}
 			}
+			pam = ip->oper4;
 			if (ip->oper4) {
-				r = ip->oper4->lrpreg;
+//				r = Var::Find2(pam->lrpreg)->cnum;
+				r = ip->oper4->preg;
 				r = forest.map[r];
 				b->live->add(r);
 				b->NeedLoad->add(r);
 				if (ip->oper4->sreg) {
-					r = ip->oper4->lrsreg;
+					r = ip->oper4->sreg;
 					r = forest.map[r];
+//					r = Var::Find2(pam->lrsreg)->cnum;
 					b->live->add(r);
 					b->NeedLoad->add(r);
 				}
@@ -550,6 +562,8 @@ void BasicBlock::ComputeSpillCosts()
 		}
 		b->NeedLoad->resetPtr();
 		for (r = b->NeedLoad->nextMember(); r >= 0; r = b->NeedLoad->nextMember()) {
+			//Var::FindByCnum(r)->trees.loads += b->depth * 4;
+			//forest.loads += b->depth * 4;
 			if (forest.trees[r])
 				forest.trees[r]->loads += b->depth * 4;
 		}
@@ -567,17 +581,25 @@ void BasicBlock::BuildLivesetFromLiveout()
 {
 	int m;
 	int v;
+	Var *vr;
 
 	live->clear();
 	LiveOut->resetPtr();
+	//for (m = LiveOut->nextMember(); m >= 0; m = LiveOut->nextMember()) {
+	//	vr = Var::Find2(m);
+	//	v = vr->cnum;
+	//	if (v >= 0) live->add(v);
+	//}
+	
 	for (m = LiveOut->nextMember(); m >= 0; m = LiveOut->nextMember()) {
 		// Find the live range associated with value m
-		v = Var::FindTreeno(m,num);
+		v = Var::FindTreeno(map.newnums[m],num);
 		if (v >= 0) {
 			live->add(v);
 		}
 		// else compiler error
 	}
+	
 }
 
 
@@ -649,29 +671,39 @@ bool BasicBlock::Coalesce()
 			if (ip->insn == nullptr)
 				continue;
 			if (ip->insn->opcode == op_mov) {
-				dst = Var::PathCompress(ip->oper1->lrpreg, ip->bb->num, &dtree);
-				src = Var::PathCompress(ip->oper2->lrpreg, ip->bb->num, &stree);
+				dst = Var::PathCompress(ip->oper1->preg, ip->bb->num, &dtree);
+				src = Var::PathCompress(ip->oper2->preg, ip->bb->num, &stree);
 				if (dst < 0 || src < 0)
 					continue;
 				if (src != dst) {
 					// For iGraph we just want the tree number not the bb number.
-					if (!iGraph.DoesInterfere(stree, dtree)) {
-						if (src < dst) {
-							father = src;
-							ft = stree;
-						}
-						else {
-							father = dst;
-							ft = dtree;
-						}
-						if (src > dst) {
-							son = src;
-							st = stree;
-						}
-						else {
-							son = dst;
-							st = dtree;
-						}
+					ft = min(stree, dtree);
+					st = max(stree, dtree);
+					if (stree < dtree) {
+						father = src;
+						son = dst;
+					}
+					else {
+						father = dst;
+						son = src;
+					}
+					if (!iGraph.DoesInterfere(ft, st)) {
+						//if (src < dst) {
+						//	father = src;
+						//	ft = stree;
+						//}
+						//else {
+						//	father = dst;
+						//	ft = dtree;
+						//}
+						//if (src > dst) {
+						//	son = src;
+						//	st = stree;
+						//}
+						//else {
+						//	son = dst;
+						//	st = dtree;
+						//}
 						iGraph.Unite(ft, st);
 						// update graph so father contains all edges from son
 						Unite(father, son);

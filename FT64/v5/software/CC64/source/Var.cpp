@@ -341,6 +341,7 @@ Var *Var::Find(int num)
 	}
 	if (vp==nullptr) {
 		vp = Var::MakeNew();
+		vp->cnum = nvar-1;
 		vp->num = num;
 		vp->next = currentFn->varlist;
 		currentFn->varlist = vp;
@@ -353,9 +354,58 @@ Var *Var::Find(int num)
 Var *Var::Find2(int num)
 {
 	Var *vp;
+	Tree *t;
+
+	for (vp = currentFn->varlist; vp; vp = vp->next) {
+		//t = ::forest.trees[num];
+		//if (t == nullptr)
+		//	return (nullptr);
+		if (vp->num == map.newnums[num])
+			return(vp);
+	}
+	return (nullptr);
+}
+
+
+// Find by machine register. Not used after renumbering.
+
+Var *Var::FindByMac(int num)
+{
+	Var *vp;
 
 	for (vp = currentFn->varlist; vp; vp = vp->next) {
 		if (vp->num == num)
+			return(vp);
+	}
+	return (nullptr);
+}
+
+void Var::Renumber(int num, int nnum)
+{
+	Var *vp;
+
+	for (vp = currentFn->varlist; vp; vp = vp->next) {
+		if (vp->num == num) {
+			vp->num = -nnum;
+		}
+	}
+}
+
+void Var::RenumberNeg()
+{
+	Var *vp;
+
+	for (vp = currentFn->varlist; vp; vp = vp->next) {
+		vp->num = -vp->num;
+	}
+}
+
+Var *Var::FindByCnum(int num)
+{
+	Var *vp;
+
+	for (vp = currentFn->varlist; vp; vp = vp->next) {
+		if (vp->cnum == num)
 			return(vp);
 	}
 	return (nullptr);
@@ -387,21 +437,20 @@ int Var::FindTreeno(int reg, int blocknum)
 {
 	Var *v;
 	Tree *t;
-	int n;
+	int n, m;
 
 	// Find the associated variable
 	v = Find2(reg);
 	if (v == nullptr)
 		return (-1);
 
-	// Find the tree with the basic block
-	for (n = 0; n < v->trees.treecount; n++) {
+	// Find the tree with the basic block. The individual trees in a given
+	// var should be disjoint. Only one tree will contain the block.
+	for (m = n = 0; n < v->trees.treecount; n++) {
 		t = v->trees.trees[n];
-		if (t->blocks->isMember(blocknum)) {
-			return (t->num);
-		}
+		if (t->blocks->isMember(blocknum))
+			return(t->num);
 	}
-	// else error:
 	return (-1);
 }
 
@@ -444,23 +493,26 @@ bool Var::Coalesce2()
 			reg1 = p->num;
 			reg2 = q->num;
 			// Registers used as register parameters cannot be coalesced.
-			if ((reg1 >= 18 && reg1 <= 24)
-				|| (reg2 >= 18 && reg2 <= 24))
+			if ((reg1 >= regFirstArg && reg1 <= regLastArg)
+				|| (reg2 >= regFirstArg && reg2 <= regLastArg))
 				continue;
 			// Coalesce the live ranges of the two variables into a single
 			// range.
 			//dfs.printf("Testing coalescence of live range r%d with ", reg1);
 			//dfs.printf("r%d \n", reg2);
-			if (p->cnum)
-				v1 = Var::Find2(p->cnum);
-			else
-				v1 = p;
-			if (q->cnum)
-				v2 = Var::Find2(q->cnum);
-			else
-				v2 = q;
+			//if (p->num)
+				v1 = Var::Find2(p->num);
+			//else
+			//	v1 = p;
+			//if (q->num)
+				v2 = Var::Find2(q->num);
+			//else
+			//	v2 = q;
 			if (v1 == nullptr || v2 == nullptr)
 				continue;
+			if (v1->trees.treecount == 0 || v2->trees.treecount == 0)
+				continue;
+
 			// Live ranges cannot be coalesced unless they are disjoint.
 			if (!v1->forest->isDisjoint(*v2->forest)) {
 				//dfs.printf("Live ranges overlap - no coalescence possible\n");
@@ -470,12 +522,15 @@ bool Var::Coalesce2()
 			dfs.printf("Coalescing live range r%d with ", reg1);
 			dfs.printf("r%d \n", reg2);
 			improved = true;
-			if (v1->trees.treecount == 0) {
-				v3 = v1;
-				v1 = v2;
-				v2 = v3;
-			}
+			//if (v1->trees.treecount == 0) {
+			//	v3 = v1;
+			//	v1 = v2;
+			//	v2 = v3;
+			//}
 
+			v1->Transplant(v2);
+			v1->forest->add(v2->forest);
+/*
 			for (nn = 0; nn < v2->trees.treecount; nn++) {
 				t = v2->trees.trees[nn];
 				foundSameTree = false;
@@ -507,10 +562,12 @@ bool Var::Coalesce2()
 				}
 
 			}
-
+*/
 			v2->trees.treecount = 0;
 			v2->forest->clear();
-			v2->cnum = v1->num;
+			//v2->num = v1->num;
+			//v2->Transplant(v1);
+			//v2->forest->add(v1->forest);
 		}
 	}
 	return (improved);
@@ -582,12 +639,15 @@ Var *Var::GetVarToSpill(CSet *exc)
 {
 	Var *vp;
 	int tn, vn;
+	int nn, mm;
 
 	for (vp = currentFn->varlist; vp; vp = vp->next) {
 		if (vp != this && vp->num > 2 && vp->num <= 17 && !exc->isMember(vp->num)) {
 			tn = ::forest.map[this->num];
 			vn = ::forest.map[vp->num];
-			if (!iGraph.DoesInterfere(tn, vn)) {
+			nn = min(tn, vn);
+			mm = max(tn, vn);
+			if (!iGraph.DoesInterfere(nn, mm)) {
 				return (vp);
 			}
 		}

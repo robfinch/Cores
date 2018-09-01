@@ -459,8 +459,6 @@ public:
 	unsigned int mode : 6;
 	unsigned int preg : 9;		// primary virtual register number
 	unsigned int sreg : 9;		// secondary virtual register number (indexed addressing modes)
-	unsigned int lrpreg : 9;	// renumbered live range register
-	unsigned int lrsreg : 9;
 	unsigned int pregs;			// subscripted register number
 	unsigned int sregs;
 	unsigned int segment : 4;
@@ -655,6 +653,12 @@ public:
 	static void ColorAll();
 };
 
+class Map
+{
+public:
+	int newnums[512];
+};
+
 // A "tree" is a "range" in Briggs terminology
 class Tree : public CompilerType
 {
@@ -691,6 +695,13 @@ public:
 	CSet low, high;
 	IntStack *stk;
 	short int map[512];
+	// Cost accounting
+	float loads;
+	float stores;
+	float copies;
+	float others;
+	bool infinite;
+	float cost;
 public:
 	Forest() { stk = IntStack::MakeNew(100000); };
 	Tree *MakeNewTree();
@@ -700,6 +711,13 @@ public:
 		for (r = 0; r < treecount; r++)
 			trees[r]->ClearCosts();
 	}
+	void ClearCut() {
+		int r;
+		for (r = 0; r < treecount; r++) {
+			delete trees[r];
+			trees[r] = nullptr;
+		}
+	};
 	void CalcRegclass();
 	void SummarizeCost();
 	void Renumber();
@@ -735,8 +753,12 @@ public:
 	void CreateForest();
 	// Create a forest for each Var object
 	static void CreateForests();
+	static void Renumber(int old, int nw);
+	static void RenumberNeg();
 	static Var *Find(int);
 	static Var *Find2(int);
+	static Var *FindByCnum(int);
+	static Var *FindByMac(int reg);
 	static CSet *Find3(int reg, int blocknum);
 	static int FindTreeno(int reg, int blocknum);
 	static int PathCompress(int reg, int blocknum, int *);
@@ -762,7 +784,11 @@ public:
 	void MakeNew(int n);
 	void ClearBitmatrix();
 	void Clear();
+	int BitIndex(int x, int y, int *intndx, int *bitndx);
 	void Add(int x, int y);
+	void Add2(int x, int y);
+	void AddToLive(BasicBlock *b, AMODE *ap, OCODE *ip);
+	void AddToVec(int x, int y);
 	bool Remove(int n);
 	static int FindTreeno(int reg, int blocknum) { return (Var::FindTreeno(reg, blocknum)); };
 	bool DoesInterfere(int x, int y);
