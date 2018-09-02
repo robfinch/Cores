@@ -582,6 +582,7 @@ void BasicBlock::BuildLivesetFromLiveout()
 	int m;
 	int v;
 	Var *vr;
+	int K = 17;
 
 	live->clear();
 	LiveOut->resetPtr();
@@ -594,7 +595,7 @@ void BasicBlock::BuildLivesetFromLiveout()
 	for (m = LiveOut->nextMember(); m >= 0; m = LiveOut->nextMember()) {
 		// Find the live range associated with value m
 		v = Var::FindTreeno(map.newnums[m],num);
-		if (v >= 0) {
+		if (v >= 0 && ::forest.trees[v]->color==K) {
 			live->add(v);
 		}
 		// else compiler error
@@ -675,7 +676,7 @@ bool BasicBlock::Coalesce()
 				src = Var::PathCompress(ip->oper2->preg, ip->bb->num, &stree);
 				if (dst < 0 || src < 0)
 					continue;
-				if (src != dst) {
+				if (stree != dtree) {
 					// For iGraph we just want the tree number not the bb number.
 					ft = min(stree, dtree);
 					st = max(stree, dtree);
@@ -688,25 +689,10 @@ bool BasicBlock::Coalesce()
 						son = src;
 					}
 					if (!iGraph.DoesInterfere(ft, st)) {
-						//if (src < dst) {
-						//	father = src;
-						//	ft = stree;
-						//}
-						//else {
-						//	father = dst;
-						//	ft = dtree;
-						//}
-						//if (src > dst) {
-						//	son = src;
-						//	st = stree;
-						//}
-						//else {
-						//	son = dst;
-						//	st = dtree;
-						//}
 						iGraph.Unite(ft, st);
 						// update graph so father contains all edges from son
-						Unite(father, son);
+						if (father != son)
+							Unite(father, son);
 						improved = true;
 						MarkRemove(ip);
 					}

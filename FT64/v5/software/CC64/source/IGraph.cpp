@@ -34,6 +34,7 @@
 void IGraph::MakeNew(int n)
 {
 	int bms;
+	int nn;
 
 	K = 17;
 	size = n;
@@ -41,7 +42,7 @@ void IGraph::MakeNew(int n)
 	bitmatrix = new int[bms];
 	degrees = new short int[n];
 	vecs = new int *[n];
-	memset(vecs, 0, n * sizeof(int *));
+	ZeroMemory(vecs, n * sizeof(int *));
 	Clear();
 }
 
@@ -95,18 +96,10 @@ int IGraph::BitIndex(int x, int y, int *intndx, int *bitndx)
 {
 	if (x > y)
 		throw new C64PException(ERR_IGNODES, 1);
-	if (x < y) {
-		*bitndx = x + (y * y) / 2;
-		*intndx = *bitndx / sizeof(int);
-		*bitndx %= (sizeof(int) * 8);
-		return (x + (y * y) / 2);
-	}
-	else {
-		*bitndx = y + (x * x) / 2;
-		*intndx = *bitndx / sizeof(int);
-		*bitndx %= (sizeof(int) * 8);
-		return (y + (x * x) / 2);
-	}
+	*bitndx = x + (y * y + 1) / 2;
+	*intndx = *bitndx / sizeof(int);
+	*bitndx %= (sizeof(int) * 8);
+	return (x + (y * y + 1) / 2);
 }
 
 // Two passes are made in order to determine the size of 
@@ -119,21 +112,11 @@ void IGraph::Add(int x, int y)
 {
 	int bitndx;
 	int intndx;
-	bool isSet;
 
 	if (x == y)
 		return;
 	BitIndex(x,y,&intndx,&bitndx);
-	isSet = bitmatrix[intndx] & (1 << bitndx);
-	if (!isSet) {
-		bitmatrix[intndx] |= (1 << bitndx);
-		if (pass > 1) {
-			vecs[x][degrees[x]] = y;
-			vecs[y][degrees[y]] = x;
-		}
-		degrees[x]++;
-		degrees[y]++;
-	}
+	bitmatrix[intndx] |= (1 << bitndx);
 	AddToVec(x, y);
 	AddToVec(y, x);
 }
@@ -146,6 +129,7 @@ void IGraph::AddToVec(int x, int y)
 	int nn;
 
 	if (pass > 1) {
+		// ensure the y isn't already in the table
 		for (nn = 0; nn < degrees[x]; nn++) {
 			if (vecs[x][nn] == y)
 				break;
@@ -166,8 +150,6 @@ void IGraph::Add2(int x, int y)
 {
 	int bitndx;
 	int intndx;
-	bool isSet;
-	int nn, mm;
 	int x1, y1;
 
 	if (x == y)
@@ -175,14 +157,7 @@ void IGraph::Add2(int x, int y)
 	x1 = min(x, y);
 	y1 = max(x, y);
 	BitIndex(x1, y1, &intndx, &bitndx);
-	isSet = bitmatrix[intndx] & (1 << bitndx);
-	if (!isSet) {
-		bitmatrix[intndx] |= (1 << bitndx);
-		//if (pass > 1) {
-		//	vecs[x][degrees[x]] = y;
-		//}
-		//degrees[x]++;
-	}
+	bitmatrix[intndx] |= (1 << bitndx);
 	AddToVec(x1, y1);
 }
 
@@ -209,12 +184,11 @@ bool IGraph::Remove(int n)
 				updated = true;
 			}
 		}
-		n1 = min(n, m);
-		m1 = max(n, m);
-		BitIndex(n1, m1, &intndx, &bitndx);
-		bitmatrix[intndx] &= ~(1 << bitndx);
+		//n1 = min(n, m);
+		//m1 = max(n, m);
+		//BitIndex(n1, m1, &intndx, &bitndx);
+		//bitmatrix[intndx] &= ~(1 << bitndx);
 	}
-	//degrees[n] = 0;
 	return (updated);
 }
 
@@ -223,15 +197,13 @@ bool IGraph::DoesInterfere(int x, int y)
 	int bitndx;
 	int intndx;
 
+	if (x == y) return (true);
+	//return !(frst->trees[x]->blocks->isDisjoint(*frst->trees[y]->blocks));
 	bitndx = BitIndex(x, y, &intndx, &bitndx);
 	return (((bitmatrix[intndx] >> bitndx) & 1)==1);
 }
-/*
-bool IGraph::DoesInterfere(int x, int y)
-{
-	return (!::forest.trees[x]->blocks->isDisjoint(*::forest.trees[y]->blocks));
-}
-*/
+
+
 // Move adjacency vectors across graph from son to father.
 
 void IGraph::Unite(int father, int son)
@@ -260,18 +232,22 @@ void IGraph::Unite(int father, int son)
 	}
 }
 
+// Only consider adding trees that have not yet been colored to the live set.
+
 void IGraph::AddToLive(BasicBlock *b, AMODE *ap, OCODE *ip)
 {
 	int v;
 
 	v = FindTreeno(ap->preg, ip->bb->num);
 	if (v >= 0) {
-		b->live->add(v);
+		if (frst->trees[v]->color == K)
+			b->live->add(v);
 	}
 	if (ap->sreg) {
 		v = FindTreeno(ap->sreg, ip->bb->num);
 		if (v >= 0) {
-			b->live->add(v);
+			if (frst->trees[v]->color == K)
+				b->live->add(v);
 		}
 	}
 }
@@ -284,6 +260,7 @@ void IGraph::Fill()
 	OCODE *ip;
 	bool eol;
 	Var *vr;
+	int K = 17;
 
 	// For each block 
 	for (b = currentFn->RootBlock; b; b = b->next) {
@@ -294,13 +271,13 @@ void IGraph::Fill()
 				// examine instruction ip and update graph and live
 				if (ip->opcode == op_mov) {
 					v = FindTreeno(ip->oper1->preg, ip->bb->num);
-					if (v >= 0) {
+					if (v >= 0 && frst->trees[v]->color == K) {
 						b->live->remove(v);
 					}
 				}
 				if (ip->insn->HasTarget) {
 					v = FindTreeno(ip->oper1->preg, ip->bb->num);
-					if (v >= 0) {
+					if (v >= 0 && frst->trees[v]->color==K) {
 						b->live->resetPtr();
 						for (n = b->live->nextMember(); n >= 0; n = b->live->nextMember()) {
 							n1 = min(n, v);
@@ -324,22 +301,15 @@ void IGraph::Fill()
 			eol = ip == b->code;
 		}
 	}
-
-	//Destroy();
 }
 
 
-void IGraph::BuildAndCoalesce()
+void IGraph::InsertArgumentMoves()
 {
+	int nn, mm, blk;
 	Var *v;
 	Tree *t;
-	int nn, mm, blk;
-	bool improved = false;
 
-	MakeNew(frst->treecount);
-	frst->CalcRegclass();
-
-	// Insert move operations to handle register parameters.
 	for (nn = regFirstArg; nn <= regLastArg; nn++) {
 		mm = map.newnums[nn];
 		if (mm >= 0) {
@@ -354,6 +324,22 @@ void IGraph::BuildAndCoalesce()
 			}
 		}
 	}
+}
+
+void IGraph::BuildAndCoalesce()
+{
+	Var *v;
+	Tree *t;
+	int nn, mm, blk;
+	bool improved = false;
+
+	MakeNew(frst->treecount);
+	frst->CalcRegclass();
+
+	// Insert move operations to handle register parameters. We want to do this
+	// only once.
+	if (forest.pass == 1)
+		InsertArgumentMoves();
 
 	// Vist high-priority blocks (blocks in nested loops) first, so sort the
 	// blocks according to depth.

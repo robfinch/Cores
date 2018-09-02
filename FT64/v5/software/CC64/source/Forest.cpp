@@ -228,16 +228,19 @@ void Forest::Simplify()
 	low.clear();
 	high.clear();
 	for (m = 0; m < treecount; m++) {
-		if (iGraph.degrees[m] < K)
-			low.add(m);
-		else if (!trees[m]->infinite)
-			high.add(m);
+		if (trees[m]->color == K) {
+			if (iGraph.degrees[m] < K)
+				low.add(m);
+			else if (!trees[m]->infinite)
+				high.add(m);
+		}
 	}
 
 	while (true) {
 		low.resetPtr();
 		while ((m = low.nextMember()) >= 0) {
 			low.remove(m);
+			high.remove(m);
 			// remove m from the graph updating low and high
 			iGraph.Remove(m);
 			push(m);
@@ -263,41 +266,45 @@ void Forest::Color()
 	CSet used;
 	Tree *t;
 
-	for (c = 0; c < treecount; c++) {
-		trees[c]->spill = false;
-		trees[c]->color = k;
-		if (trees[c]->var < 3)
-			trees[c]->color = trees[c]->var;
-		if (trees[c]->var >= regFirstArg && trees[c]->var <= regLastArg) {
-			trees[c]->color = trees[c]->var - regFirstArg + 18;
-		}
-		if (trees[c]->var == regFP
-			|| trees[c]->var == regLR
-			|| trees[c]->var == regXLR
-			|| trees[c]->var == regSP) {
-			trees[c]->color = trees[c]->var - regXLR + 28;
+	if (pass == 1) {
+		for (c = 0; c < treecount; c++) {
+			trees[c]->spill = false;
+			trees[c]->color = k;
+			if (trees[c]->var < 3)
+				trees[c]->color = trees[c]->var;
+			if (trees[c]->var >= regFirstArg && trees[c]->var <= regLastArg) {
+				trees[c]->color = trees[c]->var - regFirstArg + 18;
+			}
+			if (trees[c]->var == regFP
+				|| trees[c]->var == regLR
+				|| trees[c]->var == regXLR
+				|| trees[c]->var == regSP) {
+				trees[c]->color = trees[c]->var - regXLR + 28;
+			}
 		}
 	}
+	used.clear();
+	used.add(0);	// reg0 is a constant 0
+	used.add(1);	// these two are return value
+	used.add(2);
 	while (!stk->IsEmpty()) {
 		t = trees[m=pop()];
-		if (!t->infinite && t->cost < 0.0f)	// was <= 0.0f
+		if (pass == 1 && !t->infinite && t->cost < 0.0f) {	// was <= 0.0f
 			t->spill = true;
+		}
 		else {
-			used.clear();
-			used.add(0);	// reg0 is a constant 0
-			used.add(1);	// these two are return value
-			used.add(2);
 			p = iGraph.GetNeighbours(m, &nn);
 			for (j = 0; j < nn; j++)
 				used.add(trees[p[j]]->color);
 			for (c = 0; used.isMember(c) && c < k; c++);
-			if (c < k && t->color==k)	// The tree may have been colored already
+			if (c < k && t->color == k) {	// The tree may have been colored already
 				t->color = c;
+				used.add(c);
+			}
 			else if (t->color <= k)		// Don't need to spill args
 				t->spill = true;
 		}
 	}
-	BasicBlock::ColorAll();
 }
 
 
@@ -378,8 +385,24 @@ bool Forest::SpillCode()
 				bb = basicBlocks[n];
 				bb->InsertFillCode(v->num, -v->spillOffset);
 			}
+			t->spill = false;
 		}
 	}
 	cd->oper3->offset->i = spillOffset;
 	return (ret);
+}
+
+
+bool Forest::IsAllTreesColored()
+{
+	int c;
+	Tree *t;
+	int K = 17;
+
+	for (c = 0; c < treecount; c++) {
+		t = trees[c];	// convenience
+		if (t->color == K)
+			return (false);
+	}
+	return (true);
 }

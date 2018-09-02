@@ -695,6 +695,7 @@ public:
 	CSet low, high;
 	IntStack *stk;
 	short int map[512];
+	short int pass;
 	// Cost accounting
 	float loads;
 	float stores;
@@ -730,6 +731,7 @@ public:
 	int GetSpillCount();
 	int GetRegisterToSpill(int tree);
 	bool SpillCode();
+	bool IsAllTreesColored();
 };
 
 
@@ -759,6 +761,7 @@ public:
 	static Var *Find2(int);
 	static Var *FindByCnum(int);
 	static Var *FindByMac(int reg);
+	static Var *FindByTreeno(int tn);
 	static CSet *Find3(int reg, int blocknum);
 	static int FindTreeno(int reg, int blocknum);
 	static int PathCompress(int reg, int blocknum, int *);
@@ -789,6 +792,7 @@ public:
 	void Add2(int x, int y);
 	void AddToLive(BasicBlock *b, AMODE *ap, OCODE *ip);
 	void AddToVec(int x, int y);
+	void InsertArgumentMoves();
 	bool Remove(int n);
 	static int FindTreeno(int reg, int blocknum) { return (Var::FindTreeno(reg, blocknum)); };
 	bool DoesInterfere(int x, int y);

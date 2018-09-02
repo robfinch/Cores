@@ -116,7 +116,7 @@ void GenerateZeradic(int op)
 
 void GenerateMonadic(int op, int len, AMODE *ap1)
 {
-	dfs.printf("Enter GenerateMonadic\r\n");
+	dfs.printf("<GenerateMonadic>");
 	OCODE *cd;
 	dfs.printf("A");
 	cd = (OCODE *)allocx(sizeof(OCODE));
@@ -133,13 +133,13 @@ void GenerateMonadic(int op, int len, AMODE *ap1)
 	dfs.printf("D");
 	cd->loop_depth = looplevel;
 	AddToPeepList(cd);
-	dfs.printf("Leave GenerateMonadic\r\n");
+	dfs.printf("</GenerateMonadic>\n");
 }
 
 // NT = no target register
 void GenerateMonadicNT(int op, int len, AMODE *ap1)
 {
-	dfs.printf("Enter GenerateMonadic\r\n");
+	dfs.printf("<GenerateMonadicNT>");
 	OCODE *cd;
 	dfs.printf("A");
 	cd = (OCODE *)allocx(sizeof(OCODE));
@@ -155,7 +155,7 @@ void GenerateMonadicNT(int op, int len, AMODE *ap1)
 	dfs.printf("D");
 	cd->loop_depth = looplevel;
 	AddToPeepList(cd);
-	dfs.printf("Leave GenerateMonadic\r\n");
+	dfs.printf("</GenerateMonadicNT>\n");
 }
 
 void GeneratePredicatedDiadic(int pop, int pr, int op, int len, AMODE *ap1, AMODE *ap2)
@@ -1704,8 +1704,9 @@ static void opt_peep()
 	RemoveCompilerHints2();
 	CFG::Rename();
 	count = 0;
+	forest.pass = 0;
 	do {
-		count++;
+		forest.pass++;
 		if (!opt_vreg)
 			return;
 		forest.Renumber();
@@ -1718,7 +1719,12 @@ static void opt_peep()
 		iGraph.Print(4);
 		forest.Select();
 		Var::DumpForests(1);
-	} while (forest.SpillCode() && count < 4);
+		forest.SpillCode();
+	} while (!forest.IsAllTreesColored() && forest.pass < 32);
+	dfs.printf("Loops for color graphing allocator: %d\n", forest.pass);
+
+	// Substitute real registers for virtual ones.
+	BasicBlock::ColorAll();
 	if (count == 2) {
 		dfs.printf("Register allocator max loops.\n");
 	}
@@ -1821,6 +1827,7 @@ void PrintPeepList()
 	OCODE *ip;
 	Instruction *insn;
 
+	return;
 	for (ip = peep_head; ip; ip = ip->fwd) {
 		if (ip == currentFn->rcode)
 			dfs.printf("***rcode***");

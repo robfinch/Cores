@@ -360,7 +360,7 @@ Var *Var::Find2(int num)
 		//t = ::forest.trees[num];
 		//if (t == nullptr)
 		//	return (nullptr);
-		if (vp->num == map.newnums[num])
+		if (vp->num == num)//map.newnums[num])
 			return(vp);
 	}
 	return (nullptr);
@@ -376,6 +376,22 @@ Var *Var::FindByMac(int num)
 	for (vp = currentFn->varlist; vp; vp = vp->next) {
 		if (vp->num == num)
 			return(vp);
+	}
+	return (nullptr);
+}
+
+Var *Var::FindByTreeno(int tn)
+{
+	Var *vp;
+	Tree *t;
+	int nn;
+
+	for (vp = currentFn->varlist; vp; vp = vp->next) {
+		for (nn = 0; nn < vp->trees.treecount; nn++) {
+			t = vp->trees.trees[nn];
+			if (t->treeno == tn)
+				return (vp);
+		}
 	}
 	return (nullptr);
 }
