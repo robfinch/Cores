@@ -36,7 +36,6 @@ void TempRevalidate(int,int);
 void TempFPRevalidate(int);
 void ReleaseTempRegister(AMODE *ap);
 AMODE *GetTempRegister();
-extern AMODE *copy_addr(AMODE *ap);
 extern void GenLoad(AMODE *ap1, AMODE *ap3, int ssize, int size);
 
 AMODE *GenExpr(ENODE *node)
@@ -122,7 +121,7 @@ AMODE *GenExpr(ENODE *node)
 		GenerateFalseJump(node,lab0,0);
 		ap1 = GetTempRegister();
 		GenerateDiadic(op_ldi,0,ap1,make_immed(1));
-		GenerateMonadicNT(op_bra,0,make_label(lab1));
+		GenerateMonadic(op_bra,0,make_label(lab1));
 		GenerateLabel(lab0);
 		GenerateDiadic(op_ldi,0,ap1,make_immed(0));
 		GenerateLabel(lab1);
@@ -382,60 +381,60 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int predi
 				ap3 = GetTempFPRegister();
 				GenerateDiadic(op_ldi,0,ap3,ap2);
 				ReleaseTempRegister(ap3);
-				GenerateTriadicNT(op_fbne,sz,ap1,ap3,make_clabel(label));
+				GenerateTriadic(op_fbne,sz,ap1,ap3,make_clabel(label));
 			}
 			else
-				GenerateTriadicNT(op_fbne,sz,ap1,ap2,make_clabel(label));
+				GenerateTriadic(op_fbne,sz,ap1,ap2,make_clabel(label));
 			break;
 		case op_fbeq:
 			if (ap2->mode==am_immed) {
 				ap3 = GetTempRegister();
 				GenerateDiadic(op_ldi,0,ap3,ap2);
 				ReleaseTempRegister(ap3);
-				GenerateTriadicNT(op_fbeq,sz,ap1,ap3,make_clabel(label));
+				GenerateTriadic(op_fbeq,sz,ap1,ap3,make_clabel(label));
 			}
 			else
-				GenerateTriadicNT(op_fbeq,sz,ap1,ap2,make_clabel(label));
+				GenerateTriadic(op_fbeq,sz,ap1,ap2,make_clabel(label));
 			break;
 		case op_fblt:
 			if (ap2->mode==am_immed) {
 				ap3 = GetTempRegister();
 				GenerateDiadic(op_ldi,0,ap3,ap2);
 				ReleaseTempRegister(ap3);
-				GenerateTriadicNT(op_fblt,sz,ap1,ap3,make_clabel(label));
+				GenerateTriadic(op_fblt,sz,ap1,ap3,make_clabel(label));
 			}
 			else
-				GenerateTriadicNT(op_fblt,sz,ap1,ap2,make_clabel(label));
+				GenerateTriadic(op_fblt,sz,ap1,ap2,make_clabel(label));
 			break;
 		case op_fble:
 			if (ap2->mode==am_immed) {
 				ap3 = GetTempRegister();
 				GenerateDiadic(op_ldi,0,ap3,ap2);
 				ReleaseTempRegister(ap3);
-				GenerateTriadicNT(op_fbge,sz,ap3,ap1,make_clabel(label));
+				GenerateTriadic(op_fbge,sz,ap3,ap1,make_clabel(label));
 			}
 			else
-				GenerateTriadicNT(op_fbge,sz,ap2,ap1,make_clabel(label));
+				GenerateTriadic(op_fbge,sz,ap2,ap1,make_clabel(label));
 			break;
 		case op_fbgt:
 			if (ap2->mode==am_immed) {
 				ap3 = GetTempRegister();
 				GenerateDiadic(op_ldi,0,ap3,ap2);
 				ReleaseTempRegister(ap3);
-				GenerateTriadicNT(op_fblt,sz,ap3,ap1,make_clabel(label));
+				GenerateTriadic(op_fblt,sz,ap3,ap1,make_clabel(label));
 			}
 			else
-				GenerateTriadicNT(op_fblt,sz,ap2,ap1,make_clabel(label));
+				GenerateTriadic(op_fblt,sz,ap2,ap1,make_clabel(label));
 			break;
 		case op_fbge:
 			if (ap2->mode==am_immed) {
 				ap3 = GetTempRegister();
 				GenerateDiadic(op_ldi,0,ap3,ap2);
 				ReleaseTempRegister(ap3);
-				GenerateTriadicNT(op_fbge,sz,ap1,ap3,make_clabel(label));
+				GenerateTriadic(op_fbge,sz,ap1,ap3,make_clabel(label));
 			}
 			else
-				GenerateTriadicNT(op_fbge,sz,ap1,ap2,make_clabel(label));
+				GenerateTriadic(op_fbge,sz,ap1,ap2,make_clabel(label));
 			break;
 		}
 	}
@@ -443,88 +442,88 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int predi
 		switch(op) {
 		case op_beq:
 			if (ap2->mode==am_immed && ap2->offset->nodetype==en_icon && ap2->offset->i >= -128 && ap2->offset->i <=128) {
-				GenerateTriadicNT(op_beqi,0,ap1,ap2,make_clabel(label));
+				GenerateTriadic(op_beqi,0,ap1,ap2,make_clabel(label));
 			}
 			else if (ap2->mode==am_immed) {
 				ap3 = GetTempRegister();
 				GenCompareI(ap3,ap1,ap2,1);
 				ReleaseTempRegister(ap3);
-				GenerateTriadicNT(op_beq,0,ap3,makereg(0),make_clabel(label));
+				GenerateTriadic(op_beq,0,ap3,makereg(0),make_clabel(label));
 			}
 			else
-				GenerateTriadicNT(op_beq,0,ap1,ap2,make_clabel(label));
+				GenerateTriadic(op_beq,0,ap1,ap2,make_clabel(label));
 			break;
 		case op_bne:
 			if (ap2->mode==am_immed) {
 				if (ap2->offset->i == 0)
-					GenerateTriadicNT(op_bne,0,ap1,makereg(0),make_clabel(label));
+					GenerateTriadic(op_bne,0,ap1,makereg(0),make_clabel(label));
 				else {
 					ap3 = GetTempRegister();
 					GenCompareI(ap3,ap1,ap2,1);
 					ReleaseTempRegister(ap3);
-					GenerateTriadicNT(op_bne,0,ap3,makereg(0),make_clabel(label));
+					GenerateTriadic(op_bne,0,ap3,makereg(0),make_clabel(label));
 				}
 			}
 			else {
-				GenerateTriadicNT(op_bne,0,ap1,ap2,make_clabel(label));
+				GenerateTriadic(op_bne,0,ap1,ap2,make_clabel(label));
 			}
 			break;
 		case op_blt:
 			if (ap2->mode==am_immed) {
 				if (ap2->offset->i == 0)
-					GenerateTriadicNT(op_blt,0,ap1,makereg(0),make_clabel(label));
+					GenerateTriadic(op_blt,0,ap1,makereg(0),make_clabel(label));
 				else {
 					ap3 = GetTempRegister();
 					GenCompareI(ap3,ap1,ap2,1);
 					ReleaseTempRegister(ap3);
-					GenerateTriadicNT(op_blt,0,ap3,makereg(0),make_clabel(label));
+					GenerateTriadic(op_blt,0,ap3,makereg(0),make_clabel(label));
 				}
 			}
 			else
-				GenerateTriadicNT(op_blt,0,ap1,ap2,make_clabel(label));
+				GenerateTriadic(op_blt,0,ap1,ap2,make_clabel(label));
 			break;
 		case op_ble:
 			if (ap2->mode==am_immed) {
 				if (ap2->offset->i == 0)
-					GenerateTriadicNT(op_bge,0,makereg(0),ap1,make_clabel(label));
+					GenerateTriadic(op_bge,0,makereg(0),ap1,make_clabel(label));
 				else {
 					ap3 = GetTempRegister();
 					GenCompareI(ap3,ap1,ap2,1);
 					ReleaseTempRegister(ap3);
-					GenerateTriadicNT(op_bge,0,makereg(0),ap3,make_clabel(label));
+					GenerateTriadic(op_bge,0,makereg(0),ap3,make_clabel(label));
 				}
 			}
 			else
-				GenerateTriadicNT(op_bge,0,ap2,ap1,make_clabel(label));
+				GenerateTriadic(op_bge,0,ap2,ap1,make_clabel(label));
 			break;
 		case op_bgt:
 			if (ap2->mode==am_immed) {
 				if (ap2->offset->i == 0)
-					GenerateTriadicNT(op_blt,0,makereg(0),ap1,make_clabel(label));
+					GenerateTriadic(op_blt,0,makereg(0),ap1,make_clabel(label));
 				else {
 					ap3 = GetTempRegister();
 					GenCompareI(ap3,ap1,ap2,1);
 					ReleaseTempRegister(ap3);
-					GenerateTriadicNT(op_blt,0,makereg(0),ap3,make_clabel(label));
+					GenerateTriadic(op_blt,0,makereg(0),ap3,make_clabel(label));
 				}
 			}
 			else
-				GenerateTriadicNT(op_blt,0,ap2,ap1,make_clabel(label));
+				GenerateTriadic(op_blt,0,ap2,ap1,make_clabel(label));
 			break;
 		case op_bge:
 			if (ap2->mode==am_immed) {
 				if (ap2->offset->i==0) {
-					GenerateTriadicNT(op_bge,0,ap1,makereg(0),make_clabel(label));
+					GenerateTriadic(op_bge,0,ap1,makereg(0),make_clabel(label));
 				}
 				else {
 					ap3 = GetTempRegister();
 					GenCompareI(ap3,ap1,ap2,1);
 					ReleaseTempRegister(ap3);
-					GenerateTriadicNT(op_bge,0,ap3,makereg(0),make_clabel(label));
+					GenerateTriadic(op_bge,0,ap3,makereg(0),make_clabel(label));
 				}
 			}
 			else
-				GenerateTriadicNT(op_bge,0,ap1,ap2,make_clabel(label));
+				GenerateTriadic(op_bge,0,ap1,ap2,make_clabel(label));
 			break;
 		case op_bltu:
 			if (ap2->mode==am_immed) {
@@ -537,56 +536,56 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int predi
 					ap3 = GetTempRegister();
 					GenCompareI(ap3,ap1,ap2,0);
 					ReleaseTempRegister(ap3);
-					GenerateTriadicNT(op_blt,0,ap3,makereg(0),make_clabel(label));
+					GenerateTriadic(op_blt,0,ap3,makereg(0),make_clabel(label));
 				}
 			}
 			else
-				GenerateTriadicNT(op_bltu,0,ap1,ap2,make_clabel(label));
+				GenerateTriadic(op_bltu,0,ap1,ap2,make_clabel(label));
 			break;
 		case op_bleu:
 			if (ap2->mode==am_immed) {
 				if (ap2->offset->i == 0)
-					GenerateTriadicNT(op_bgeu,0,makereg(0),ap1,make_clabel(label));
+					GenerateTriadic(op_bgeu,0,makereg(0),ap1,make_clabel(label));
 				else {
 					ap3 = GetTempRegister();
 					GenCompareI(ap3,ap1,ap2,0);
 					ReleaseTempRegister(ap3);
-					GenerateTriadicNT(op_bge,0,makereg(0),ap3,make_clabel(label));
+					GenerateTriadic(op_bge,0,makereg(0),ap3,make_clabel(label));
 				}
 			}
 			else
-				GenerateTriadicNT(op_bgeu,0,ap2,ap1,make_clabel(label));
+				GenerateTriadic(op_bgeu,0,ap2,ap1,make_clabel(label));
 			break;
 		case op_bgtu:
 			if (ap2->mode==am_immed) {
 				if (ap2->offset->i == 0)
-					GenerateTriadicNT(op_bltu,0,makereg(0),ap1,make_clabel(label));
+					GenerateTriadic(op_bltu,0,makereg(0),ap1,make_clabel(label));
 				else {
 					ap3 = GetTempRegister();
 					GenCompareI(ap3,ap1,ap2,0);
 					ReleaseTempRegister(ap3);
-					GenerateTriadicNT(op_blt,0,makereg(0),ap3,make_clabel(label));
+					GenerateTriadic(op_blt,0,makereg(0),ap3,make_clabel(label));
 				}
 			}
 			else
-				GenerateTriadicNT(op_bltu,0,ap2,ap1,make_clabel(label));
+				GenerateTriadic(op_bltu,0,ap2,ap1,make_clabel(label));
 			break;
 		case op_bgeu:
 			if (ap2->mode==am_immed) {
 				if (ap2->offset->i == 0) {
 					// This branch is always true
 					error(ERR_UBGEQ);
-					GenerateTriadicNT(op_bgeu,0,ap1,makereg(0),make_clabel(label));
+					GenerateTriadic(op_bgeu,0,ap1,makereg(0),make_clabel(label));
 				}
 				else {
 					ap3 = GetTempRegister();
 					GenCompareI(ap3,ap1,ap2,0);
 					ReleaseTempRegister(ap3);
-					GenerateTriadicNT(op_bge,0,ap3,makereg(0),make_clabel(label));
+					GenerateTriadic(op_bge,0,ap3,makereg(0),make_clabel(label));
 				}
 			}
 			else
-				GenerateTriadicNT(op_bgeu,0,ap1,ap2,make_clabel(label));
+				GenerateTriadic(op_bgeu,0,ap1,ap2,make_clabel(label));
 			break;
 		}
 		//GenerateTriadic(op,sz,ap1,ap2,make_clabel(label));
@@ -605,13 +604,13 @@ static void SaveRegisterSet(SYM *sym)
 		GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(mm*sizeOfWord));
 		mm = 0;
 		for (nn = 1 + (sym->tp->GetBtp()->type!=bt_void ? 1 : 0); nn < 31; nn++) {
-			GenerateDiadicNT(op_sw,0,makereg(nn),make_indexed(mm,regSP));
+			GenerateDiadic(op_sw,0,makereg(nn),make_indexed(mm,regSP));
 			mm += sizeOfWord;
 		}
 	}
 	else
 		for (nn = 1 + (sym->tp->GetBtp()->type!=bt_void ? 1 : 0); nn < 31; nn++)
-			GenerateMonadicNT(op_push,0,makereg(nn));
+			GenerateMonadic(op_push,0,makereg(nn));
 }
 
 static void RestoreRegisterSet(SYM * sym)
@@ -621,7 +620,7 @@ static void RestoreRegisterSet(SYM * sym)
 	if (!cpu.SupportsPop) {
 		mm = 0;
 		for (nn = 1 + (sym->tp->GetBtp()->type!=bt_void ? 1 : 0); nn < 31; nn++) {
-			GenerateDiadicNT(op_lw,0,makereg(nn),make_indexed(mm,regSP));
+			GenerateDiadic(op_lw,0,makereg(nn),make_indexed(mm,regSP));
 			mm += sizeOfWord;
 		}
 		mm = sym->tp->GetBtp()->type!=bt_void ? 29 : 30;
@@ -629,7 +628,7 @@ static void RestoreRegisterSet(SYM * sym)
 	}
 	else
 		for (nn = 1 + (sym->tp->GetBtp()->type!=bt_void ? 1 : 0); nn < 31; nn++)
-			GenerateMonadicNT(op_push,0,makereg(nn));
+			GenerateMonadic(op_push,0,makereg(nn));
 }
 
 
@@ -645,7 +644,7 @@ void SaveRegisterVars(int64_t mask, int64_t rmask)
 		GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(popcnt(mask)*8));
 		for (nn = 0; nn < 64; nn++) {
 			if (rmask & (0x8000000000000000ULL >> nn)) {
-				GenerateDiadicNT(op_sw,0,makereg(nn),make_indexed(cnt,regSP));
+				GenerateDiadic(op_sw,0,makereg(nn),make_indexed(cnt,regSP));
 				cnt+=sizeOfWord;
 			}
 		}
@@ -662,7 +661,7 @@ void SaveFPRegisterVars(int64_t mask, int64_t rmask)
 		GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(popcnt(mask)*8));
 		for (nn = 0; nn < 64; nn++) {
 			if (rmask & (0x8000000000000000ULL >> nn)) {
-				GenerateDiadicNT(op_sf,'d',makefpreg(nn),make_indexed(cnt,regSP));
+				GenerateDiadic(op_sf,'d',makefpreg(nn),make_indexed(cnt,regSP));
 				cnt+=sizeOfWord;
 			}
 		}
@@ -798,7 +797,7 @@ static int GeneratePushParameter(ENODE *ep, int regno, int stkoffs)
         else {
 */
 			if (regno) {
-				GenerateMonadicNT(op_hint,0,make_immed(1));
+				GenerateMonadic(op_hint,0,make_immed(1));
 				if (ap->mode==am_immed) {
 					GenerateDiadic(op_ldi,0,makereg(regno & 0x7fff), ap);
 					if (regno & 0x8000) {
@@ -826,7 +825,7 @@ static int GeneratePushParameter(ENODE *ep, int regno, int stkoffs)
 				if (cpu.SupportsPush) {
 					if (ap->mode==am_immed) {	// must have been a zero
 						if (ap->offset->i==0)
-         					GenerateMonadicNT(op_push,0,makereg(0));
+         					GenerateMonadic(op_push,0,makereg(0));
 						else {
 							ap3 = GetTempRegister();
 							GenerateDiadic(op_ldi,0,ap3,ap);
@@ -837,11 +836,11 @@ static int GeneratePushParameter(ENODE *ep, int regno, int stkoffs)
 					}
 					else {
 						if (ap->type=stddouble.GetIndex()) {
-							GenerateMonadicNT(op_push,ap->FloatSize,ap);
+							GenerateMonadic(op_push,ap->FloatSize,ap);
 							nn = sz/sizeOfWord;
 						}
 						else {
-          					GenerateMonadicNT(op_push,0,ap);
+          					GenerateMonadic(op_push,0,ap);
 							nn = 1;
 						}
 					}
@@ -852,20 +851,20 @@ static int GeneratePushParameter(ENODE *ep, int regno, int stkoffs)
 						if (ap->offset->i!=0) {
 							ap3 = GetTempRegister();
 							GenerateDiadic(op_ldi,0,ap3,ap);
-	         				GenerateDiadicNT(op_sw,0,ap3,make_indexed(stkoffs,regSP));
+	         				GenerateDiadic(op_sw,0,ap3,make_indexed(stkoffs,regSP));
 							ReleaseTempReg(ap3);
 						}
 						else
-         					GenerateDiadicNT(op_sw,0,makereg(0),make_indexed(stkoffs,regSP));
+         					GenerateDiadic(op_sw,0,makereg(0),make_indexed(stkoffs,regSP));
 						nn = 1;
 					}
 					else {
 						if (ap->type==stddouble.GetIndex() || ap->mode==am_fpreg) {
-							GenerateDiadicNT(op_sf,'d',ap,make_indexed(stkoffs,regSP));
+							GenerateDiadic(op_sf,'d',ap,make_indexed(stkoffs,regSP));
 							nn = sz/sizeOfWord;
 						}
 						else {
-          					GenerateDiadicNT(op_sw,0,ap,make_indexed(stkoffs,regSP));
+          					GenerateDiadic(op_sw,0,ap,make_indexed(stkoffs,regSP));
 							nn = 1;
 						}
 					}
@@ -959,8 +958,8 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
 			save_mask = mask;
 		}
 		else {
-			GenerateMonadicNT(op_call,0,make_offset(node->p[0]));
-			GenerateMonadicNT(op_bex,0,make_label(throwlab));
+			GenerateMonadic(op_call,0,make_offset(node->p[0]));
+			GenerateMonadic(op_bex,0,make_label(throwlab));
 		}
 	}
     else
@@ -995,8 +994,8 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
 			save_mask = mask;
 		}
 		else {
-			GenerateMonadicNT(op_call,0,ap);
-			GenerateMonadicNT(op_bex,0,make_label(throwlab));
+			GenerateMonadic(op_call,0,ap);
+			GenerateMonadic(op_bex,0,make_label(throwlab));
 		}
 		ReleaseTempRegister(ap);
     }

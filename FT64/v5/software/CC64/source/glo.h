@@ -334,11 +334,7 @@ extern void GenerateMonadicNT(int op, int len, AMODE *ap1);
 extern void GenerateDiadic(int op, int len, AMODE *ap1, AMODE *ap2);
 extern void GenerateDiadicNT(int op, int len, AMODE *ap1, AMODE *ap2);
 extern void GenerateTriadic(int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3);
-extern void GenerateTriadicNT(int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3);
 extern void Generate4adic(int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3, AMODE *ap4);
-extern void Generate4adicNT(int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3, AMODE *ap4);
-extern void GeneratePredicatedMonadic(int pr, int pop, int op, int len, AMODE *ap1);
-extern void GeneratePredicatedDiadic(int pop, int pr, int op, int len, AMODE *ap1, AMODE *ap2);
 // Gencode.c
 extern AMODE *make_label(int lab);
 extern AMODE *make_clabel(int lab);

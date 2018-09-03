@@ -57,6 +57,8 @@ unsigned int ArgRegCount;
 int count;
 Map map;
 
+OCODE *LabelTable[50000];
+
 OCODE    *peep_head = NULL,
                 *peep_tail = NULL;
 
@@ -65,33 +67,6 @@ extern Var *varlist;
 
 IGraph iGraph;
 int optimized;	// something got optimized
-
-AMODE *copy_addr(AMODE *ap)
-{
-	AMODE *newap;
-	if( ap == NULL )
-		return NULL;
-	newap = allocAmode();
-	memcpy(newap,ap,sizeof(AMODE));
-	return newap;
-}
-
-void GeneratePredicatedMonadic(int pr, int pop, int op, int len, AMODE *ap1)
-{
-	OCODE *cd;
-	cd = (OCODE *)allocx(sizeof(OCODE));
-	cd->predop = pop;
-	cd->pregreg = pr;
-	cd->insn = GetInsn(op);
-	cd->opcode = op;
-	cd->length = len;
-	cd->oper1 = copy_addr(ap1);
-	cd->oper2 = NULL;
-	cd->oper3 = NULL;
-	cd->oper4 = NULL;
-	currentFn->UsesPredicate = TRUE;
-	AddToPeepList(cd);
-}
 
 void GenerateZeradic(int op)
 {
@@ -124,8 +99,7 @@ void GenerateMonadic(int op, int len, AMODE *ap1)
 	cd->insn = GetInsn(op);
 	cd->opcode = op;
 	cd->length = len;
-	cd->oper1 = copy_addr(ap1);
-	cd->oper1->isTarget = 1;
+	cd->oper1 = ap1->Clone();
 	dfs.printf("C");
 	cd->oper2 = NULL;
 	cd->oper3 = NULL;
@@ -136,46 +110,6 @@ void GenerateMonadic(int op, int len, AMODE *ap1)
 	dfs.printf("</GenerateMonadic>\n");
 }
 
-// NT = no target register
-void GenerateMonadicNT(int op, int len, AMODE *ap1)
-{
-	dfs.printf("<GenerateMonadicNT>");
-	OCODE *cd;
-	dfs.printf("A");
-	cd = (OCODE *)allocx(sizeof(OCODE));
-	dfs.printf("B");
-	cd->insn = GetInsn(op);
-	cd->opcode = op;
-	cd->length = len;
-	cd->oper1 = copy_addr(ap1);
-	dfs.printf("C");
-	cd->oper2 = NULL;
-	cd->oper3 = NULL;
-	cd->oper4 = NULL;
-	dfs.printf("D");
-	cd->loop_depth = looplevel;
-	AddToPeepList(cd);
-	dfs.printf("</GenerateMonadicNT>\n");
-}
-
-void GeneratePredicatedDiadic(int pop, int pr, int op, int len, AMODE *ap1, AMODE *ap2)
-{
-	OCODE *cd;
-	cd = (OCODE *)allocx(sizeof(OCODE));
-	cd->predop = pop;
-	cd->pregreg = pr;
-	cd->insn = GetInsn(op);
-	cd->opcode = op;
-	cd->length = len;
-	cd->oper1 = copy_addr(ap1);
-	cd->oper2 = copy_addr(ap2);
-	cd->oper3 = NULL;
-	cd->oper4 = NULL;
-	currentFn->UsesPredicate = TRUE;
-	cd->loop_depth = looplevel;
-	AddToPeepList(cd);
-}
-
 void GenerateDiadic(int op, int len, AMODE *ap1, AMODE *ap2)
 {
 	OCODE *cd;
@@ -183,31 +117,8 @@ void GenerateDiadic(int op, int len, AMODE *ap1, AMODE *ap2)
 	cd->insn = GetInsn(op);
 	cd->opcode = op;
 	cd->length = len;
-	cd->oper1 = copy_addr(ap1);
-	cd->oper1->isTarget = 1;
-	cd->oper2 = copy_addr(ap2);
-	if (ap2) {
-		if (ap2->mode == am_ind || ap2->mode==am_indx) {
-			//if (ap2->preg==regSP || ap2->preg==regFP)
-			//	cd->opcode |= op_ss;
-		}
-	}
-	cd->oper3 = NULL;
-	cd->oper4 = NULL;
-	cd->loop_depth = looplevel;
-	AddToPeepList(cd);
-}
-
-// Generate diadic without a target register.
-void GenerateDiadicNT(int op, int len, AMODE *ap1, AMODE *ap2)
-{
-	OCODE *cd;
-	cd = (OCODE *)xalloc(sizeof(OCODE));
-	cd->insn = GetInsn(op);
-	cd->opcode = op;
-	cd->length = len;
-	cd->oper1 = copy_addr(ap1);
-	cd->oper2 = copy_addr(ap2);
+	cd->oper1 = ap1->Clone();
+	cd->oper2 = ap2->Clone();
 	if (ap2) {
 		if (ap2->mode == am_ind || ap2->mode==am_indx) {
 			//if (ap2->preg==regSP || ap2->preg==regFP)
@@ -227,25 +138,9 @@ void GenerateTriadic(int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3)
 	cd->insn = GetInsn(op);
 	cd->opcode = op;
 	cd->length = len;
-	cd->oper1 = copy_addr(ap1);
-	cd->oper1->isTarget = 1;
-	cd->oper2 = copy_addr(ap2);
-	cd->oper3 = copy_addr(ap3);
-	cd->oper4 = NULL;
-	cd->loop_depth = looplevel;
-	AddToPeepList(cd);
-}
-
-void GenerateTriadicNT(int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3)
-{
-	OCODE    *cd;
-	cd = (OCODE *)allocx(sizeof(OCODE));
-	cd->insn = GetInsn(op);
-	cd->opcode = op;
-	cd->length = len;
-	cd->oper1 = copy_addr(ap1);
-	cd->oper2 = copy_addr(ap2);
-	cd->oper3 = copy_addr(ap3);
+	cd->oper1 = ap1->Clone();
+	cd->oper2 = ap2->Clone();
+	cd->oper3 = ap3->Clone();
 	cd->oper4 = NULL;
 	cd->loop_depth = looplevel;
 	AddToPeepList(cd);
@@ -258,26 +153,10 @@ void Generate4adic(int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3, AMODE *a
 	cd->insn = GetInsn(op);
 	cd->opcode = op;
 	cd->length = len;
-	cd->oper1 = copy_addr(ap1);
-	cd->oper1->isTarget = true;
-	cd->oper2 = copy_addr(ap2);
-	cd->oper3 = copy_addr(ap3);
-	cd->oper4 = copy_addr(ap4);
-	cd->loop_depth = looplevel;
-	AddToPeepList(cd);
-}
-
-void Generate4adicNT(int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3, AMODE *ap4)
-{
-	OCODE *cd;
-	cd = (OCODE *)allocx(sizeof(OCODE));
-	cd->insn = GetInsn(op);
-	cd->opcode = op;
-	cd->length = len;
-	cd->oper1 = copy_addr(ap1);
-	cd->oper2 = copy_addr(ap2);
-	cd->oper3 = copy_addr(ap3);
-	cd->oper4 = copy_addr(ap4);
+	cd->oper1 = ap1->Clone();
+	cd->oper2 = ap2->Clone();
+	cd->oper3 = ap3->Clone();
+	cd->oper4 = ap4->Clone();
 	cd->loop_depth = looplevel;
 	AddToPeepList(cd);
 }
@@ -342,67 +221,60 @@ void GenerateLabel(int labno)
 
 
 // Detect references to labels
-// Potential looping is N^2 although the inner loop is aborted as soon as a
-// reference is found. It's a good thing functions are small and without
-// too many lables.
 
-static void SetLabelReference()
+void PeepOpt::SetLabelReference()
 {
 	OCODE *p, *q;
 	struct clit *ct;
 	int nn;
 
+	ZeroMemory(LabelTable, sizeof(LabelTable));
 	for (p = peep_head; p; p = p->fwd) {
-		if (p->opcode==op_label) {
+		if (p->opcode == op_label) {
+			LabelTable[(int)p->oper1] = p;
 			p->isReferenced = false;
-			for (q = peep_head; q; q = q->fwd) {
-				if (q != p) {
-					if (q->opcode!=op_label && q->opcode!=op_nop) {
-						if (q->oper1 && (q->oper1->mode==am_direct || q->oper1->mode==am_immed)) {
-							if (q->oper1->offset->i == (int)p->oper1) {
-								p->isReferenced = true;
-								break;
-							}
-						}
-						if (q->oper2 && (q->oper2->mode==am_direct || q->oper2->mode==am_immed)) {
-							if (q->oper2->offset->i == (int)p->oper1) {
-								p->isReferenced = true;
-								break;
-							}
-						}
-						if (q->oper3 && (q->oper3->mode==am_direct || q->oper3->mode==am_immed)) {
-							if (q->oper3->offset->i == (int)p->oper1) {
-								p->isReferenced = true;
-								break;
-							}
-						}
-						if (q->oper4 && (q->oper4->mode==am_direct || q->oper4->mode==am_immed)) {
-							if (q->oper4->offset->i == (int)p->oper1) {
-								p->isReferenced = true;
-								break;
-							}
-						}
-					}
+		}
+	}
+	for (q = peep_head; q; q = q->fwd) {
+		if (q->opcode!=op_label && q->opcode!=op_nop) {
+			if (q->oper1 && (q->oper1->mode==am_direct || q->oper1->mode==am_immed)) {
+				if (p = PeepList::FindLabel(q->oper1->offset->i)) {
+					p->isReferenced = true;
+				}
+			}
+			if (q->oper2 && (q->oper2->mode==am_direct || q->oper2->mode==am_immed)) {
+				if (p = PeepList::FindLabel(q->oper2->offset->i)) {
+					p->isReferenced = true;
+				}
+			}
+			if (q->oper3 && (q->oper3->mode==am_direct || q->oper3->mode==am_immed)) {
+				if (p = PeepList::FindLabel(q->oper3->offset->i)) {
+					p->isReferenced = true;
+				}
+			}
+			if (q->oper4 && (q->oper4->mode==am_direct || q->oper4->mode==am_immed)) {
+				if (p = PeepList::FindLabel(q->oper4->offset->i)) {
+					p->isReferenced = true;
 				}
 			}
 			// Now search case tables for label
 			for (ct = casetab; ct; ct = ct->next) {
 				for (nn = 0; nn < ct->num; nn++)
-					if (ct->cases[nn].label==(int)p->oper1)
+					if (p = PeepList::FindLabel(ct->cases[nn].label))
 						p->isReferenced = true;
 			}
 		}
 	}
 }
 
-static void EliminateUnreferencedLabels()
+void PeepOpt::EliminateUnreferencedLabels()
 {
 	OCODE *p;
 
 	for (p = peep_head; p; p = p->fwd) {
-		if (p->opcode==op_label)
+		if (p->opcode == op_label)
 			p->remove = false;
-		if (p->opcode==op_label && !p->isReferenced) {
+		if (p->opcode == op_label && !p->isReferenced) {
 			MarkRemove(p);
 			optimized++;
 		}
@@ -828,7 +700,7 @@ void PeepoptLea(OCODE *ip)
   if (ip2->oper1->preg != ip->oper1->preg)
      return;
   ip->opcode = op_pea;
-  ip->oper1 = copy_addr(ip->oper2);
+  ip->oper1 = ip->oper2->Clone();
   ip->oper2 = NULL;
   ip->fwd = ip2->fwd;
 }
@@ -852,7 +724,7 @@ void PeepoptLw(OCODE *ip)
     if (ip->oper1->preg != ip2->oper1->preg)
        return;     
     ip->opcode = op_push;
-    ip->oper1 = copy_addr(ip->oper2);
+    ip->oper1 = ip->oper2->Clone();
     ip->oper2 = NULL;
     ip->fwd = ip2->fwd;
 }
@@ -873,7 +745,7 @@ void PeepoptLc0i(OCODE *ip)
     if (ip->oper2->offset->i > 0x1fffLL || ip->oper2->offset->i <= -0x1fffLL)
        return;
     ip->opcode = op_push;
-    ip->oper1 = copy_addr(ip->oper2);
+    ip->oper1 = ip->oper2->Clone();
     ip->oper2 = NULL;
     ip->fwd = ip2->fwd;
 }
@@ -910,7 +782,7 @@ void PeepoptPushPop(OCODE *ip)
 		return;
 	if (ip2->oper1->mode==am_immed)
 		return;
-	ip->oper2 = copy_addr(ip2->oper1);
+	ip->oper2 = ip2->oper1->Clone();
 	ip->fwd = ip2->fwd;
 	ip3 = ip2->fwd;
 	if (!ip3)
@@ -919,7 +791,7 @@ void PeepoptPushPop(OCODE *ip)
 		return;
 	if (ip3->oper1->mode==am_immed)
 		return;
-	ip->oper3 = copy_addr(ip3->oper1);
+	ip->oper3 = ip3->oper1->Clone();
 	ip->fwd = ip3->fwd;
 	ip4 = ip3->fwd;
 	if (!ip4)
@@ -928,7 +800,7 @@ void PeepoptPushPop(OCODE *ip)
 		return;
 	if (ip4->oper1->mode==am_immed)
 		return;
-	ip->oper4 = copy_addr(ip4->oper1);
+	ip->oper4 = ip4->oper1->Clone();
 	ip->fwd = ip4->fwd;
 }
 
@@ -1468,6 +1340,7 @@ static void Remove2()
 static void RemoveDoubleTargets(OCODE *ip)
 {
 	OCODE *ip2;
+	int rg1, rg2, rg3, rg4;
 
 	if (!ip->HasTargetReg())
 		return;
@@ -1476,11 +1349,13 @@ static void RemoveDoubleTargets(OCODE *ip)
 		return;
 	if (!ip2->HasTargetReg())
 		return;
-	if (ip2->GetTargetReg() != ip->GetTargetReg())
+	ip2->GetTargetReg(&rg1, &rg2);
+	ip->GetTargetReg(&rg3, &rg4);
+	if (rg1 != rg3)
 		return;
-	if (ip2->HasSourceReg(ip->GetTargetReg()))
+	if (ip2->HasSourceReg(rg3))
 		return;
-	if (ip->GetTargetReg()==regSP)
+	if (rg3==regSP)
 		return;
 	MarkRemove(ip);
 	optimized++;
@@ -1568,8 +1443,8 @@ static void opt_peep()
 		{
 			// Peephole optimizations might lead to unreferenced labels, which may make
 			// further peephole optimizations possible.
-			SetLabelReference();
-			EliminateUnreferencedLabels();
+			PeepOpt::SetLabelReference();
+			PeepOpt::EliminateUnreferencedLabels();
 			Remove();
 			//MarkAllKeep();
 			for (ip = peep_head; ip != NULL; ip = ip->fwd )
@@ -1675,9 +1550,8 @@ static void opt_peep()
 	}
 
 	// Get rid of extra labels that clutter up the output
-	SetLabelReference();
-	EliminateUnreferencedLabels();
-	Remove();
+	PeepOpt::SetLabelReference();
+	PeepOpt::EliminateUnreferencedLabels();
 
 	// Remove all the compiler hints that didn't work out.
 	RemoveCompilerHints();
@@ -1736,19 +1610,6 @@ static void opt_peep()
 	dfs.printf("</PeepList:2>\n");
 }
 
-OCODE *FindLabel(int64_t i)
-{
-	OCODE *ip;
-
-	for (ip = peep_head; ip; ip = ip->fwd) {
-		if (ip->opcode==op_label) {
-			if ((int)ip->oper1==i)
-				return (ip);
-		}
-	}
-	return (nullptr);
-}
-
 // Remove move instructions which will create false interferences.
 // The move instructions are just marked for removal so they aren't
 // considered during live variable computation. They are unmarked
@@ -1786,6 +1647,7 @@ void RemoveCode()
 	Tree *t;
 	OCODE *p;
 	int count;
+	int rg1, rg2;
 
 	count = 0;
 	//printf((char *)currentFn->name->c_str());
@@ -1804,7 +1666,8 @@ void RemoveCode()
 						continue;
 					if (p->opcode==op_ret)
 						continue;
-					if (p->GetTargetReg() == v->num) {
+					p->GetTargetReg(&rg1, &rg2);
+					if (rg1 == v->num && rg2==0) {
 						if (p->bb->ohead==nullptr) {
 							MarkRemove2(p);
 							count++;

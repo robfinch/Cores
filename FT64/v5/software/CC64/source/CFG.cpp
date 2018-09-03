@@ -26,7 +26,6 @@
 #include "stdafx.h"
 
 extern OCODE *peep_head;
-extern OCODE *FindLabel(int64_t);
 extern BasicBlock *basicBlocks[10000];
 extern Instruction *GetInsn(int);
 
@@ -354,6 +353,7 @@ void CFG::Search(BasicBlock *x)
 	Edge *e;
 	int i, j, y;
 	bool eol;
+	int rg1, rg2;
 
 	eol = false;
 	for (s = x->code; s && !eol; s = s->fwd) {
@@ -367,12 +367,22 @@ void CFG::Search(BasicBlock *x)
 			if (s->oper4)
 				Subscript(s->oper4);
 			if (s->oper1 && s->HasTargetReg()) {
-				v = Var::FindByMac(s->GetTargetReg());
+				s->GetTargetReg(&rg1, &rg2);
+				v = Var::FindByMac(rg1);
 				if (v) {
 					i = v->subscript;
 					s->oper1->pregs = i;
 					v->istk->push(i);
 					v->subscript++;
+				}
+				if (rg2) {
+					v = Var::FindByMac(rg2);
+					if (v) {
+						i = v->subscript;
+						s->oper1->sregs = i;
+						v->istk->push(i);
+						v->subscript++;
+					}
 				}
 			}
 		}
@@ -403,9 +413,15 @@ void CFG::Search(BasicBlock *x)
 	for (s = x->code; s && !eol; s = s->fwd) {
 		if (s->opcode!=op_label) {
 			if (s->HasTargetReg()) {
-				v = Var::FindByMac(s->GetTargetReg());
+				s->GetTargetReg(&rg1, &rg2);
+				v = Var::FindByMac(rg1);
 				if (v)
 					v->istk->pop();
+				if (rg2) {
+					v = Var::FindByMac(rg2);
+					if (v)
+						v->istk->pop();
+				}
 			}
 		}
 		eol = s == x->lcode;

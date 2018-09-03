@@ -30,14 +30,14 @@
 bool OCODE::HasTargetReg() const
 {
 	if (insn)
-		return (insn->HasTarget);
+		return (insn->HasTarget());
 	else
 		return (false);
 }
 
 bool OCODE::HasSourceReg(int regno) const
 {
-	if (oper1 && !oper1->isTarget) {
+	if (oper1 && !insn->HasTarget()) {
 		if (oper1->preg==regno)
 			return (true);
 		if (oper1->sreg==regno)
@@ -64,32 +64,56 @@ bool OCODE::HasSourceReg(int regno) const
 }
 
 // Get target reg needs to distinguish floating-point registers from regular
-// general purpose registers. So the value 32 is added to the register number
-// for floating-point. This roughly corresponds to the fact that floating-
-// point registers are the odd numbered register sets.
+// general purpose registers. It returns a one for floating-point registers or
+// a zero for general-purpose registers.
 
-int OCODE::GetTargetReg() const
+int OCODE::GetTargetReg(int *rg1, int *rg2) const
 {
 	if (insn==nullptr)
 		return(0);
-	if (insn->HasTarget) {
+	if (insn->HasTarget()) {
 		// Handle implicit targets
 		switch(insn->opcode) {
 		case op_pop:
 		case op_unlk:
-		case op_link:	return((oper1->preg<<16) | 31);
+		case op_link:
+			*rg1 = regSP;
+			*rg2 = oper1->preg;
+			return(0);
+		case op_divmod:
+		case op_mul:
+		case op_mulu:
+		case op_sort:
+		case op_demux:
+		case op_mov2:
+			*rg1 = oper1->preg;
+			*rg2 = oper1->sreg;
+			return (0);
+		case op_pea:
 		case op_push:
 		case op_ret:
-		case op_call:	return (31);
+		case op_call:
+			*rg1 = regSP;
+			*rg2 = 0;
+			return (0);
 		default:
-			if (oper1->mode==am_fpreg)
-				return (oper1->preg | 32);
-			else
-				return (oper1->preg);
+			if (oper1->mode == am_fpreg) {
+				*rg1 = oper1->preg;
+				*rg2 = 0;
+				return (1);
+			}
+			else {
+				*rg1 = oper1->preg;
+				*rg2 = 0;
+				return (0);
+			}
 		}
 	}
-	else
+	else {
+		*rg1 = 0;
+		*rg2 = 0;
 		return (0);
+	}
 }
 
 OCODE *OCODE::Clone(OCODE *c)

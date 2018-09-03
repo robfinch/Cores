@@ -64,7 +64,10 @@ long ENODE::GetReferenceSize()
 	case en_uwfieldref:
 		return (sizeOfWord);
 	case en_fpregvar:
-		return(tp->size);
+		if (tp)
+			return(tp->size);
+		else
+			return (sizeOfFPD);
 	case en_tempref:
 	case en_regvar:
 		return (sizeOfWord);
@@ -671,11 +674,11 @@ AMODE *ENODE::GenHook(int flags, int size)
 	node = p[1];
 	ap1 = GenerateExpression(node->p[0], flags, size);
 	if (n1 > 4)
-		GenerateDiadicNT(op_bra, 0, make_clabel(end_label), 0);
+		GenerateDiadic(op_bra, 0, make_clabel(end_label), 0);
 	else {
 		if (!equal_address(ap1, ap2))
 		{
-			GenerateMonadicNT(op_hint, 0, make_immed(2));
+			GenerateMonadic(op_hint, 0, make_immed(2));
 			GenerateDiadic(op_mov, 0, ap2, ap1);
 		}
 	}
@@ -684,7 +687,7 @@ AMODE *ENODE::GenHook(int flags, int size)
 		ap2 = GenerateExpression(node->p[1], flags, size);
 		if (!equal_address(ap1, ap2))
 		{
-			GenerateMonadicNT(op_hint, 0, make_immed(2));
+			GenerateMonadic(op_hint, 0, make_immed(2));
 			GenerateDiadic(op_mov, 0, ap1, ap2);
 		}
 	}

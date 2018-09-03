@@ -202,6 +202,7 @@ void BasicBlock::ComputeLiveVars()
 	OCODE *ip;
 	int tr;
 	static CSet OldLiveIn, OldLiveOut;
+	int rg1, rg2;
 //	char buf [4000];
 
 	if (livo==nullptr)
@@ -216,17 +217,18 @@ void BasicBlock::ComputeLiveVars()
 		if (ip->opcode == op_label)
 			continue;
 		if (ip->HasTargetReg()) {
-			tr = ip->GetTargetReg() & 0xffff;
+			ip->GetTargetReg(&rg1, &rg2);
+			tr = rg1;
 			if ((tr & 0xFFF) >= 0x800) {
 				kill->add((tr & 0xfff)-0x780);
 			}
 			else {
 				kill->add(tr);
 			}
-			if (tr >= 18 && tr <= 24)
+			if (tr >= regFirstArg && tr <= regLastArg)
 				gen->add(tr);
 			// There could be a second target
-			tr = (ip->GetTargetReg() >> 16) & 0xffff;
+			tr = rg2;
 			if (tr) {
 				if ((tr & 0xFFF) >= 0x800) {
 					kill->add((tr & 0xfff)-0x780);
@@ -234,7 +236,7 @@ void BasicBlock::ComputeLiveVars()
 				else {
 					kill->add(tr);
 				}
-				if (tr >= 18 && tr <= 24)
+				if (tr >= regFirstArg && tr <= regLastArg)
 					gen->add(tr);
 			}
 		}
@@ -443,7 +445,7 @@ void BasicBlock::ComputeSpillCosts()
 				forest.trees[r]->copies++;
 			}
 			else {
-				if (ip->oper1 && ip->insn->HasTarget) {
+				if (ip->oper1 && ip->insn->HasTarget()) {
 					r = ip->oper1->preg;
 					r = forest.map[r];
 					forest.trees[r]->others += ip->insn->extime;
@@ -451,7 +453,7 @@ void BasicBlock::ComputeSpillCosts()
 			}
 			i = ip->insn;
 			// examine instruction i updating sets and accumulating costs
-			if (i->HasTarget) {
+			if (i->HasTarget()) {
 				r = ip->oper1->preg;
 				r = forest.map[r];
 				b->UpdateLive(r);
@@ -459,7 +461,7 @@ void BasicBlock::ComputeSpillCosts()
 			// This is a loop in the Briggs thesis, but we only allow 4 operands
 			// so the loop is unrolled.
 			if (ip->oper1) {
-				if (!ip->oper1->isTarget) {
+				if (!i->HasTarget()) {
 					r = ip->oper1->preg;
 					r = forest.map[r];
 					b->CheckForDeaths(r);
@@ -498,7 +500,7 @@ void BasicBlock::ComputeSpillCosts()
 			}
 			// Re-examine uses to update live and needload
 			pam = ip->oper1;
-			if (pam && !pam->isTarget) {
+			if (pam && !i->HasTarget()) {
 				r = pam->preg;
 				r = forest.map[r];
 				//r = Var::Find2(pam->lrpreg)->cnum;

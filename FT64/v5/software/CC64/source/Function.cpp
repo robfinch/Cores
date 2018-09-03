@@ -59,7 +59,7 @@ Statement *Function::ParseBody()
 	p = my_strdup((char *)lbl.c_str());
 	dfs.printf("b");
 	if (!IsInline)
-		GenerateMonadicNT(op_fnname, 0, make_string(p));
+		GenerateMonadic(op_fnname, 0, make_string(p));
 	currentFn = this;
 	IsLeaf = TRUE;
 	DoesThrow = FALSE;
@@ -281,7 +281,7 @@ void Function::SaveGPRegisterVars()
 		GenerateTriadic(op_sub, 0, makereg(regSP), makereg(regSP), make_immed(popcnt(mask) * 8));
 		for (nn = 0; nn < 64; nn++) {
 			if (rmask & (0x8000000000000000ULL >> nn)) {
-				GenerateDiadicNT(op_sw, 0, makereg(nn), make_indexed(cnt, regSP));
+				GenerateDiadic(op_sw, 0, makereg(nn), make_indexed(cnt, regSP));
 				cnt += sizeOfWord;
 			}
 		}
@@ -298,7 +298,7 @@ void Function::SaveFPRegisterVars()
 		GenerateTriadic(op_sub, 0, makereg(regSP), makereg(regSP), make_immed(popcnt(fpmask) * 8));
 		for (nn = 0; nn < 64; nn++) {
 			if (fprmask & (0x8000000000000000ULL >> nn)) {
-				GenerateDiadicNT(op_sf, 'd', makefpreg(nn), make_indexed(cnt, regSP));
+				GenerateDiadic(op_sf, 'd', makefpreg(nn), make_indexed(cnt, regSP));
 				cnt += sizeOfWord;
 			}
 		}
@@ -335,11 +335,11 @@ void Function::SaveRegisterArguments()
 			for (count = nn = 0; nn < ta->length; nn++) {
 				if (ta->preg[nn]) {
 					switch (ta->types[nn]) {
-					case bt_quad:	GenerateDiadicNT(op_sf, 'q', makereg(ta->preg[nn] & 0x7fff), make_indexed(count*sizeOfWord, regSP)); count += 2; break;
-					case bt_float:	GenerateDiadicNT(op_sf, 'd', makereg(ta->preg[nn] & 0x7fff), make_indexed(count*sizeOfWord, regSP)); count += 1; break;
-					case bt_double:	GenerateDiadicNT(op_sf, 'd', makereg(ta->preg[nn] & 0x7fff), make_indexed(count*sizeOfWord, regSP)); count += 1; break;
-					case bt_triple:	GenerateDiadicNT(op_sf, 't', makereg(ta->preg[nn] & 0x7fff), make_indexed(count*sizeOfWord, regSP)); count += 2; break;
-					default:	GenerateDiadicNT(op_sw, 0, makereg(ta->preg[nn] & 0x7fff), make_indexed(count*sizeOfWord, regSP)); count += 1; break;
+					case bt_quad:	GenerateDiadic(op_sf, 'q', makereg(ta->preg[nn] & 0x7fff), make_indexed(count*sizeOfWord, regSP)); count += 2; break;
+					case bt_float:	GenerateDiadic(op_sf, 'd', makereg(ta->preg[nn] & 0x7fff), make_indexed(count*sizeOfWord, regSP)); count += 1; break;
+					case bt_double:	GenerateDiadic(op_sf, 'd', makereg(ta->preg[nn] & 0x7fff), make_indexed(count*sizeOfWord, regSP)); count += 1; break;
+					case bt_triple:	GenerateDiadic(op_sf, 't', makereg(ta->preg[nn] & 0x7fff), make_indexed(count*sizeOfWord, regSP)); count += 2; break;
+					default:	GenerateDiadic(op_sw, 0, makereg(ta->preg[nn] & 0x7fff), make_indexed(count*sizeOfWord, regSP)); count += 1; break;
 					}
 				}
 			}
@@ -348,11 +348,11 @@ void Function::SaveRegisterArguments()
 			for (count = nn = 0; nn < ta->length; nn++) {
 				if (ta->preg[nn]) {
 					switch (ta->types[nn]) {
-					case bt_quad:	GenerateMonadicNT(op_pushf, 'q', makereg(ta->preg[nn] & 0x7fff)); break;
-					case bt_float:	GenerateMonadicNT(op_pushf, 'd', makereg(ta->preg[nn] & 0x7fff)); break;
-					case bt_double:	GenerateMonadicNT(op_pushf, 'd', makereg(ta->preg[nn] & 0x7fff)); break;
-					case bt_triple:	GenerateMonadicNT(op_pushf, 't', makereg(ta->preg[nn] & 0x7fff)); break;
-					default:	GenerateMonadicNT(op_push, 0, makereg(ta->preg[nn] & 0x7fff)); break;
+					case bt_quad:	GenerateMonadic(op_pushf, 'q', makereg(ta->preg[nn] & 0x7fff)); break;
+					case bt_float:	GenerateMonadic(op_pushf, 'd', makereg(ta->preg[nn] & 0x7fff)); break;
+					case bt_double:	GenerateMonadic(op_pushf, 'd', makereg(ta->preg[nn] & 0x7fff)); break;
+					case bt_triple:	GenerateMonadic(op_pushf, 't', makereg(ta->preg[nn] & 0x7fff)); break;
+					default:	GenerateMonadic(op_push, 0, makereg(ta->preg[nn] & 0x7fff)); break;
 					}
 				}
 			}
@@ -381,11 +381,11 @@ void Function::RestoreRegisterArguments()
 		for (count = nn = 0; nn < ta->length; nn++) {
 			if (ta->preg[nn]) {
 				switch (ta->types[nn]) {
-				case bt_quad:	GenerateDiadicNT(op_lf, 'q', makereg(ta->preg[nn] & 0x7fff), make_indexed(count*sizeOfWord, regSP)); count += 2; break;
-				case bt_float:	GenerateDiadicNT(op_lf, 'd', makereg(ta->preg[nn] & 0x7fff), make_indexed(count*sizeOfWord, regSP)); count += 1; break;
-				case bt_double:	GenerateDiadicNT(op_lf, 'd', makereg(ta->preg[nn] & 0x7fff), make_indexed(count*sizeOfWord, regSP)); count += 1; break;
-				case bt_triple:	GenerateDiadicNT(op_lf, 't', makereg(ta->preg[nn] & 0x7fff), make_indexed(count*sizeOfWord, regSP)); count += 2; break;
-				default:	GenerateDiadicNT(op_lw, 0, makereg(ta->preg[nn] & 0x7fff), make_indexed(count*sizeOfWord, regSP)); count += 1; break;
+				case bt_quad:	GenerateDiadic(op_lf, 'q', makereg(ta->preg[nn] & 0x7fff), make_indexed(count*sizeOfWord, regSP)); count += 2; break;
+				case bt_float:	GenerateDiadic(op_lf, 'd', makereg(ta->preg[nn] & 0x7fff), make_indexed(count*sizeOfWord, regSP)); count += 1; break;
+				case bt_double:	GenerateDiadic(op_lf, 'd', makereg(ta->preg[nn] & 0x7fff), make_indexed(count*sizeOfWord, regSP)); count += 1; break;
+				case bt_triple:	GenerateDiadic(op_lf, 't', makereg(ta->preg[nn] & 0x7fff), make_indexed(count*sizeOfWord, regSP)); count += 2; break;
+				default:	GenerateDiadic(op_lw, 0, makereg(ta->preg[nn] & 0x7fff), make_indexed(count*sizeOfWord, regSP)); count += 1; break;
 				}
 			}
 		}
@@ -485,16 +485,16 @@ bool Function::GenDefaultCatch()
 	if (IsLeaf) {
 		if (DoesThrow) {
 			GenerateDiadic(op_lw, 0, makereg(regLR), make_indexed(2 * sizeOfWord, regFP));		// load throw return address from stack into LR
-			GenerateDiadicNT(op_sw, 0, makereg(regLR), make_indexed(3 * sizeOfWord, regFP));		// and store it back (so it can be loaded with the lm)
-																									//GenerateDiadicNT(op_spt,0,makereg(0),make_indexed(3 * sizeOfWord, regFP));
+			GenerateDiadic(op_sw, 0, makereg(regLR), make_indexed(3 * sizeOfWord, regFP));		// and store it back (so it can be loaded with the lm)
+																									//GenerateDiadic(op_spt,0,makereg(0),make_indexed(3 * sizeOfWord, regFP));
 																									//			GenerateDiadic(op_bra,0,make_label(retlab),NULL);				// goto regular return cleanup code
 			return (true);
 		}
 	}
 	else {
 		GenerateDiadic(op_lw, 0, makereg(regLR), make_indexed(2 * sizeOfWord, regFP));		// load throw return address from stack into LR
-		GenerateDiadicNT(op_sw, 0, makereg(regLR), make_indexed(3 * sizeOfWord, regFP));		// and store it back (so it can be loaded with the lm)
-																								//GenerateDiadicNT(op_spt, 0, makereg(0), make_indexed(3 * sizeOfWord, regFP));
+		GenerateDiadic(op_sw, 0, makereg(regLR), make_indexed(3 * sizeOfWord, regFP));		// and store it back (so it can be loaded with the lm)
+																								//GenerateDiadic(op_spt, 0, makereg(0), make_indexed(3 * sizeOfWord, regFP));
 																								//		GenerateDiadic(op_bra,0,make_label(retlab),NULL);				// goto regular return cleanup code
 		return (true);
 	}
@@ -560,7 +560,7 @@ void Function::GenReturn(Statement *stmt)
 			ap = GenerateExpression(stmt->exp, F_REG, sizeOfFP);
 		else
 			ap = GenerateExpression(stmt->exp, F_REG | F_IMMED, sizeOfWord);
-		GenerateMonadicNT(op_hint, 0, make_immed(2));
+		GenerateMonadic(op_hint, 0, make_immed(2));
 		if (ap->mode == am_immed)
 			GenLdi(makereg(1), ap);
 		else if (ap->mode == am_reg) {
@@ -571,10 +571,10 @@ void Function::GenReturn(Statement *stmt)
 						GenerateDiadic(op_mov, 0, makereg(1), makereg(p->reg));
 					else
 						GenerateDiadic(op_lw, 0, makereg(1), make_indexed(p->value.i, regFP));
-					GenerateMonadicNT(op_push, 0, make_immed(sym->tp->GetBtp()->size));
-					GenerateMonadicNT(op_push, 0, ap);
-					GenerateMonadicNT(op_push, 0, makereg(1));
-					GenerateMonadicNT(op_call, 0, make_string("_memcpy"));
+					GenerateMonadic(op_push, 0, make_immed(sym->tp->GetBtp()->size));
+					GenerateMonadic(op_push, 0, ap);
+					GenerateMonadic(op_push, 0, makereg(1));
+					GenerateMonadic(op_call, 0, make_string("_memcpy"));
 					GenerateTriadic(op_add, 0, makereg(regSP), makereg(regSP), make_immed(sizeOfWord * 3));
 				}
 				else {
@@ -613,7 +613,7 @@ void Function::GenReturn(Statement *stmt)
 
 	// Generate the return code only once. Branch to the return code for all returns.
 	if (retlab != -1) {
-		GenerateMonadicNT(op_bra, 0, make_label(retlab));
+		GenerateMonadic(op_bra, 0, make_label(retlab));
 		return;
 	}
 	retlab = nextlabel++;
@@ -631,7 +631,7 @@ void Function::GenReturn(Statement *stmt)
 
 	// Unlock any semaphores that may have been set
 	for (nn = lastsph - 1; nn >= 0; nn--)
-		GenerateDiadicNT(op_sb, 0, makereg(0), make_string(semaphores[nn]));
+		GenerateDiadic(op_sb, 0, makereg(0), make_string(semaphores[nn]));
 
 	// Restore fp registers used as register variables.
 	if (fpsave_mask != 0) {
@@ -763,7 +763,7 @@ void Function::Gen()
 
 	if (exceptions) {
 		ip = peep_tail;
-		GenerateMonadicNT(op_bra, 0, make_label(lab0));
+		GenerateMonadic(op_bra, 0, make_label(lab0));
 		doCatch = GenDefaultCatch();
 		GenerateLabel(lab0);
 		if (!doCatch) {
@@ -777,7 +777,7 @@ void Function::Gen()
 	/*
 	// Inline code needs to branch around the default exception handler.
 	if (exceptions && sym->IsInline)
-	GenerateMonadicNT(op_bra,0,make_label(lab0));
+	GenerateMonadic(op_bra,0,make_label(lab0));
 	// Generate code for the hidden default catch
 	if (exceptions)
 	GenerateDefaultCatch(sym);

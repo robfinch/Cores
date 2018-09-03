@@ -275,7 +275,7 @@ void IGraph::Fill()
 						b->live->remove(v);
 					}
 				}
-				if (ip->insn->HasTarget) {
+				if (ip->insn->HasTarget()) {
 					v = FindTreeno(ip->oper1->preg, ip->bb->num);
 					if (v >= 0 && frst->trees[v]->color==K) {
 						b->live->resetPtr();
@@ -289,7 +289,7 @@ void IGraph::Fill()
 				}
 				// Unrolled loop
 				// while (p < ik->uses)
-				if (!ip->insn->HasTarget && ip->oper1)
+				if (!ip->insn->HasTarget() && ip->oper1)
 					AddToLive(b, ip->oper1, ip);
 				if (ip->oper2)
 					AddToLive(b, ip->oper2, ip);

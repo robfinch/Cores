@@ -25,6 +25,17 @@
 //
 #include "stdafx.h"
 
+AMODE *AMODE::Clone()
+{
+	AMODE *newap;
+
+	if (this == NULL)
+		return NULL;
+	newap = allocAmode();
+	memcpy(newap, this, sizeof(AMODE));
+	return (newap);
+}
+
 char AMODE::fpsize()
 {
 	if (type == stddouble.GetIndex())

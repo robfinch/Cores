@@ -139,10 +139,18 @@ public:
 public:
 	void Add(OCODE *cd);
 	int Count(OCODE *pos);
+	static OCODE *FindLabel(int64_t i);
 	static void InsertBefore(OCODE *an, OCODE *cd);
 	static void InsertAfter(OCODE *an, OCODE *cd);
 	void RemoveCompilerHints2();
 	void Remove();
+};
+
+class PeepOpt
+{
+public:
+	static void SetLabelReference();
+	static void EliminateUnreferencedLabels();
 };
 
 class Function
@@ -453,14 +461,16 @@ public:
 	AMODE *GenLand(int flags, int op);
 };
 
+
+// AMODE is really Operand
 class AMODE : public CompilerType
 {
 public:
 	unsigned int mode : 6;
 	unsigned int preg : 9;		// primary virtual register number
 	unsigned int sreg : 9;		// secondary virtual register number (indexed addressing modes)
-	unsigned int pregs;			// subscripted register number
-	unsigned int sregs;
+	unsigned short int pregs;	// subscripted register number
+	unsigned short int sregs;
 	unsigned int segment : 4;
 	unsigned int defseg : 1;
 	unsigned int tempflag : 1;
@@ -471,14 +481,14 @@ public:
 	unsigned int isVolatile : 1;
 	unsigned int isPascal : 1;
 	unsigned int rshift : 8;
-	unsigned int isTarget : 1;
 	unsigned int isPtr : 1;
 	short int deep;           /* stack depth on allocation */
 	short int deep2;
 	ENODE *offset;
 	int8_t scale;
 	AMODE *next;			// For extended sizes (long)
-
+public:
+	AMODE *Clone();
 	char fpsize();
 
 	void GenZeroExtend(int isize, int osize);
@@ -510,7 +520,7 @@ public:
 	static OCODE *MakeNew();
 	static OCODE *Clone(OCODE *p);
 	bool HasTargetReg() const;
-	int GetTargetReg() const;
+	int GetTargetReg(int *rg1, int *rg2) const;
 	bool HasSourceReg(int) const;
 	//Edge *MakeEdge(OCODE *ip1, OCODE *ip2);
 };
@@ -525,6 +535,7 @@ public:
 	static void CalcDominatorTree();
 	static void CalcDominanceFrontiers();
 	static void InsertPhiInsns();
+	static OCODE *FindLabel(int64_t i) { return (PeepList::FindLabel(i)); };
 	static void Rename();
 	static void Search(BasicBlock *);
 	static void Subscript(AMODE *oper);
@@ -812,12 +823,12 @@ public:
 	char *mnem;		// mnemonic
 	short opcode;	// matches OCODE opcode
 	short extime;	// execution time, divide may take hundreds of cycles
-	bool HasTarget;	// has a target register
+	unsigned int targetCount : 2;
 	bool memacc;	// instruction accesses memory
-	int regclass1 : 4;	// register class 1=integer,2=floating point,4=vector
-	int regclass2 : 4;	// register class 1=integer,2=floating point,4=vector
-	int regclass3 : 4;	// register class 1=integer,2=floating point,4=vector
-	int regclass4 : 4;	// register class 1=integer,2=floating point,4=vector
+	unsigned int regclass1 : 4;	// register class 1=integer,2=floating point,4=vector
+	unsigned int regclass2 : 4;	// register class 1=integer,2=floating point,4=vector
+	unsigned int regclass3 : 4;	// register class 1=integer,2=floating point,4=vector
+	unsigned int regclass4 : 4;	// register class 1=integer,2=floating point,4=vector
 public:
 	bool IsFlowControl();
 	bool IsSetInsn() {
@@ -827,6 +838,7 @@ public:
 			);
 	};
 	static Instruction *Get(int op);
+	inline bool HasTarget() { return (targetCount != 0); };
 };
 
 class CSE {

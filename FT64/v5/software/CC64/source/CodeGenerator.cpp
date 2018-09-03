@@ -191,12 +191,12 @@ AMODE *make_indx(ENODE *node, int rg)
 
 void GenerateHint(int num)
 {
-	GenerateMonadicNT(op_hint,0,make_immed(num));
+	GenerateMonadic(op_hint,0,make_immed(num));
 }
 
 void GenerateComment(char *cm)
 {
-	GenerateMonadicNT(op_rem2,0,make_string(cm));
+	GenerateMonadic(op_rem2,0,make_string(cm));
 }
 
 
@@ -395,30 +395,30 @@ void GenLoad(AMODE *ap3, AMODE *ap1, int ssize, int size)
 void GenStore(AMODE *ap1, AMODE *ap3, int size)
 {
 	if (ap1->isPtr) {
-		GenerateDiadicNT(op_sptr, 0, ap1, ap3);
+		GenerateDiadic(op_sptr, 0, ap1, ap3);
 	}
 	else if (ap1->type==stdvector.GetIndex())
-	    GenerateDiadicNT(op_sv,0,ap1,ap3);
+	    GenerateDiadic(op_sv,0,ap1,ap3);
 	else if (ap1->type == stdflt.GetIndex()) {
-		GenerateDiadicNT(op_sf, 'd', ap1, ap3);
+		GenerateDiadic(op_sf, 'd', ap1, ap3);
 	}
 	else if (ap1->type == stddouble.GetIndex()) {
-		GenerateDiadicNT(op_sf, 'd', ap1, ap3);
+		GenerateDiadic(op_sf, 'd', ap1, ap3);
 	}
 	else if (ap1->type == stdquad.GetIndex()) {
-		GenerateDiadicNT(op_sf, 'q', ap1, ap3);
+		GenerateDiadic(op_sf, 'q', ap1, ap3);
 	}
 	else if (ap1->type == stdtriple.GetIndex()) {
-		GenerateDiadicNT(op_sf, 't', ap1, ap3);
+		GenerateDiadic(op_sf, 't', ap1, ap3);
 	}
 	else if (ap1->mode==am_fpreg)
-		GenerateDiadicNT(op_sf,'d',ap1,ap3);
+		GenerateDiadic(op_sf,'d',ap1,ap3);
 	else {
 		switch (size) {
-		case 1: GenerateDiadicNT(op_sb, 0, ap1, ap3); break;
-		case 2: GenerateDiadicNT(op_sc, 0, ap1, ap3); break;
-		case 4: GenerateDiadicNT(op_sh, 0, ap1, ap3); break;
-		case 8: GenerateDiadicNT(op_sw, 0, ap1, ap3); break;
+		case 1: GenerateDiadic(op_sb, 0, ap1, ap3); break;
+		case 2: GenerateDiadic(op_sc, 0, ap1, ap3); break;
+		case 4: GenerateDiadic(op_sh, 0, ap1, ap3); break;
+		case 8: GenerateDiadic(op_sw, 0, ap1, ap3); break;
 		default:;
 		}
 	}
@@ -1073,11 +1073,11 @@ void GenerateStructAssign(TYP *tp, int64_t offset, ENODE *ep, AMODE *base)
 				offset2 = offset;
 			switch(thead->tp->size)
 			{
-			case 1:	GenerateDiadicNT(op_sb,0,ap2,make_indexed(offset,base->preg)); break;
-			case 2:	GenerateDiadicNT(op_sc,0,ap2,make_indexed(offset,base->preg)); break;
-			case 4:	GenerateDiadicNT(op_sh,0,ap2,make_indexed(offset,base->preg)); break;
-			case 512:	GenerateDiadicNT(op_sv,0,ap2,make_indexed(offset,base->preg)); break;
-			default:	GenerateDiadicNT(op_sw,0,ap2,make_indexed(offset,base->preg)); break;
+			case 1:	GenerateDiadic(op_sb,0,ap2,make_indexed(offset,base->preg)); break;
+			case 2:	GenerateDiadic(op_sc,0,ap2,make_indexed(offset,base->preg)); break;
+			case 4:	GenerateDiadic(op_sh,0,ap2,make_indexed(offset,base->preg)); break;
+			case 512:	GenerateDiadic(op_sv,0,ap2,make_indexed(offset,base->preg)); break;
+			default:	GenerateDiadic(op_sw,0,ap2,make_indexed(offset,base->preg)); break;
 			}
 			if (ap2)
 				ReleaseTempReg(ap2);
@@ -1145,11 +1145,11 @@ void GenerateArrayAssign(TYP *tp, ENODE *node1, ENODE *node2, AMODE *base)
 			}
 			switch(tp->GetElementSize())
 			{
-			case 1:	GenerateDiadicNT(op_sb,0,ap2,make_indexed(offset,base->preg)); break;
-			case 2:	GenerateDiadicNT(op_sc,0,ap2,make_indexed(offset,base->preg)); break;
-			case 4:	GenerateDiadicNT(op_sh,0,ap2,make_indexed(offset,base->preg)); break;
-			case 512:	GenerateDiadicNT(op_sv,0,ap2,make_indexed(offset,base->preg)); break;
-			default:	GenerateDiadicNT(op_sw,0,ap2,make_indexed(offset,base->preg)); break;
+			case 1:	GenerateDiadic(op_sb,0,ap2,make_indexed(offset,base->preg)); break;
+			case 2:	GenerateDiadic(op_sc,0,ap2,make_indexed(offset,base->preg)); break;
+			case 4:	GenerateDiadic(op_sh,0,ap2,make_indexed(offset,base->preg)); break;
+			case 512:	GenerateDiadic(op_sv,0,ap2,make_indexed(offset,base->preg)); break;
+			default:	GenerateDiadic(op_sw,0,ap2,make_indexed(offset,base->preg)); break;
 			}
 			offset += tp->GetElementSize();
 			ReleaseTempReg(ap2);
@@ -1313,16 +1313,16 @@ AMODE *GenerateAssign(ENODE *node, int flags, int size)
 						GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(3 * sizeOfWord));
 						ap3 = GetTempRegister();
 						GenerateDiadic(op_ldi,0,ap3,make_immed(size));
-						GenerateDiadicNT(op_sw,0,ap3,make_indexed(2 * sizeOfWord,regSP));
+						GenerateDiadic(op_sw,0,ap3,make_indexed(2 * sizeOfWord,regSP));
 						GenerateDiadic(op_mov,0,ap3,ap2);
-						GenerateDiadicNT(op_sw,0,ap3,make_indexed(1 * sizeOfWord,regSP));
+						GenerateDiadic(op_sw,0,ap3,make_indexed(1 * sizeOfWord,regSP));
 						GenerateDiadic(op_mov,0,ap3,ap1);
-						GenerateDiadicNT(op_sw,0,ap3,make_indirect(regSP));
+						GenerateDiadic(op_sw,0,ap3,make_indirect(regSP));
 					}
 					else {
-						GenerateMonadicNT(op_push,0,make_immed(size));
-						GenerateMonadicNT(op_push,0,ap2);
-						GenerateMonadicNT(op_push,0,ap1);
+						GenerateMonadic(op_push,0,make_immed(size));
+						GenerateMonadic(op_push,0,ap2);
+						GenerateMonadic(op_push,0,ap1);
 					}
 					GenerateDiadic(op_jal,0,makereg(regLR),make_string("memcpy_"));
 					GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),make_immed(3*sizeOfWord));
@@ -1623,12 +1623,15 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
             ap1->mode = am_fpreg;
             ap1->preg = node->i;
             ap1->tempflag = 0;      /* not a temporary */
-			switch (node->tp->type) {
-			case bt_float:	ap1->type = stdflt.GetIndex(); break;
-			case bt_double:	ap1->type = stddouble.GetIndex(); break;
-			case bt_triple:	ap1->type = stdtriple.GetIndex(); break;
-			case bt_quad:	ap1->type = stdquad.GetIndex(); break;
-			}
+			if (node->tp)
+				switch (node->tp->type) {
+				case bt_float:	ap1->type = stdflt.GetIndex(); break;
+				case bt_double:	ap1->type = stddouble.GetIndex(); break;
+				case bt_triple:	ap1->type = stdtriple.GetIndex(); break;
+				case bt_quad:	ap1->type = stdquad.GetIndex(); break;
+				}
+			else
+				ap1->type = stddouble.GetIndex();
 			MakeLegalAmode(ap1,flags,size);
             return ap1;
 	case en_fpregvar:
@@ -1637,12 +1640,15 @@ AMODE *GenerateExpression(ENODE *node, int flags, int size)
             ap1->mode = am_fpreg;
             ap1->preg = node->i;
             ap1->tempflag = 0;      /* not a temporary */
-			switch (node->tp->type) {
-			case bt_float:	ap1->type = stdflt.GetIndex(); break;
-			case bt_double:	ap1->type = stddouble.GetIndex(); break;
-			case bt_triple:	ap1->type = stdtriple.GetIndex(); break;
-			case bt_quad:	ap1->type = stdquad.GetIndex(); break;
-			}
+			if (node->tp)
+				switch (node->tp->type) {
+				case bt_float:	ap1->type = stdflt.GetIndex(); break;
+				case bt_double:	ap1->type = stddouble.GetIndex(); break;
+				case bt_triple:	ap1->type = stdtriple.GetIndex(); break;
+				case bt_quad:	ap1->type = stdquad.GetIndex(); break;
+				}
+			else
+				ap1->type = stddouble.GetIndex();
 			MakeLegalAmode(ap1,flags,size);
             return ap1;
 	case en_abs:	return node->GenUnary(flags,size,op_abs);
@@ -2098,7 +2104,7 @@ void GenerateTrueJump(ENODE *node, int label, unsigned int prediction)
 		ap1 = GenerateExpression(node,F_REG,siz1);
 		//                        GenerateDiadic(op_tst,siz1,ap1,0);
 		ReleaseTempRegister(ap1);
-		GenerateTriadicNT(op_bne,0,ap1,makereg(0),make_label(label));
+		GenerateTriadic(op_bne,0,ap1,makereg(0),make_label(label));
 		break;
 	}
 }
@@ -2158,7 +2164,7 @@ void GenerateFalseJump(ENODE *node,int label, unsigned int prediction)
 		ap = GenerateExpression(node,F_REG,siz1);
 		//                        GenerateDiadic(op_tst,siz1,ap,0);
 		ReleaseTempRegister(ap);
-		GenerateTriadicNT(op_beq,0,ap,makereg(0),make_label(label));
+		GenerateTriadic(op_beq,0,ap,makereg(0),make_label(label));
 		break;
 	}
 }

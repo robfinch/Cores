@@ -25,6 +25,16 @@
 // ============================================================================
 //
 #include "stdafx.h"
+extern int optimized;
+extern OCODE *LabelTable[50000];
+
+OCODE *PeepList::FindLabel(int64_t i)
+{
+	if (i >= 50000 || i < 0)
+		return (nullptr);
+	return (LabelTable[i]);
+}
+
 
 // Count the length of the peep list from the current position to the end of
 // the list. Used during some code generation optimizations.
