@@ -56,12 +56,14 @@ static short int vreg_in_use[256];	// 0 to 15
 static short int save_vreg_in_use[256];
 static short int vmreg_in_use[256];	// 0 to 15
 
+static int wrapno, save_wrapno;
+
 static struct {
 	AMODE *amode;
     short int reg;
-	union {
-		char isPushed;	/* flags if pushed or corresponding reg_alloc * number */
-		char allocnum;
+	struct {
+	char isPushed;	/* flags if pushed or corresponding reg_alloc * number */
+	char allocnum;
 	} f;
 } 
 	reg_stack[MAX_REG_STACK + 1],
@@ -111,6 +113,16 @@ int rsp=17;
 int regmask=0;
 int brsp=17;
 int bregmask=0;
+int rap[20];
+int save_rap[20];
+
+int NumTempRegs()
+{
+	if (currentFn->IsLeaf)
+		return (regLastTemp - 1 + 1);
+	else
+		return (regLastTemp - regFirstTemp + 1);
+}
 
 void initRegStack()
 {
@@ -160,6 +172,8 @@ void initRegStack()
     memset(stacked_vregs,0,sizeof(stacked_vregs));
     memset(save_vreg_alloc,0,sizeof(save_vreg_alloc));
     memset(save_vmreg_alloc,0,sizeof(save_vmreg_alloc));
+	wrapno = 0;
+	ZeroMemory(rap, sizeof(rap));
 }
 
 // Spill a register to memory.
@@ -167,11 +181,11 @@ void initRegStack()
 void SpillRegister(AMODE *ap, int number)
 {
 	GenerateDiadic(op_sw,0,ap,make_indexed(currentFn->GetTempBot()-ap->deep*sizeOfWord,regFP));
-    reg_stack[reg_stack_ptr].amode = ap;
-    reg_stack[reg_stack_ptr].f.allocnum = number;
+    //reg_stack[reg_stack_ptr].amode = ap;
+    //reg_stack[reg_stack_ptr].f.allocnum = number;
     if (reg_alloc[number].f.isPushed=='T')
 		fatal("SpillRegister(): register already spilled");
-//    reg_alloc[number].f.isPushed = 'T';
+    reg_alloc[number].f.isPushed = 'T';
 }
 
 void SpillFPRegister(AMODE *ap, int number)
@@ -181,7 +195,7 @@ void SpillFPRegister(AMODE *ap, int number)
     fpreg_stack[fpreg_stack_ptr].f.allocnum = number;
     if (fpreg_alloc[number].f.isPushed=='T')
 		fatal("SpillRegister(): register already spilled");
-//    reg_alloc[number].f.isPushed = 'T';
+    reg_alloc[number].f.isPushed = 'T';
 }
 
 // Load register from memory.
@@ -275,23 +289,27 @@ AMODE *GetTempRegister()
 	int number;
 
 	number = reg_in_use[next_reg];
-	if (number >= 0) {
-		SpillRegister(reg_alloc[number].amode,number);
+	if (number >= 0) {// && number < rap[wrapno]) {
+		SpillRegister(makereg(next_reg),number);
 	}
 	TRACE(printf("GetTempRegister:r%d\r\n", next_reg);)
     reg_in_use[next_reg] = reg_alloc_ptr;
     ap = allocAmode();
     ap->mode = am_reg;
     ap->preg = next_reg;
+	ap->pdeep = ap->deep;
     ap->deep = reg_alloc_ptr;
     reg_alloc[reg_alloc_ptr].reg = next_reg;
     reg_alloc[reg_alloc_ptr].amode = ap;
     reg_alloc[reg_alloc_ptr].f.isPushed = 'F';
-    if (next_reg++ >= regLastTemp)
+	if (next_reg++ >= regLastTemp) {
+		wrapno++;
+		rap[wrapno] = reg_alloc_ptr;
 		next_reg = sym->IsLeaf ? 1 : regFirstTemp;		/* wrap around */
+	}
     if (reg_alloc_ptr++ == MAX_REG_STACK)
 		fatal("GetTempRegister(): register stack overflow");
-	return ap;
+	return (ap);
 }
 
 AMODE *GetTempVectorRegister()
@@ -455,8 +473,8 @@ void validate(AMODE *ap)
 	if (ap->type!=stdvector.GetIndex())
     switch (ap->mode) {
 	case am_reg:
-		if ((ap->preg >= frg && ap->preg <= (unsigned)regLastTemp) && reg_alloc[ap->deep].f.isPushed == 'T' ) {
-			LoadRegister(ap->preg, (int) ap->deep);
+		if ((ap->preg >= frg && ap->preg <= (unsigned)regLastTemp) && reg_alloc[ap->pdeep].f.isPushed == 'T' ) {
+			LoadRegister(ap->preg, (int) ap->pdeep);
 		}
 		break;
 	case am_fpreg:
@@ -489,6 +507,7 @@ void validate(AMODE *ap)
  */
 void ReleaseTempRegister(AMODE *ap)
 {
+	int nn;
     int number;
     Function *sym = currentFn;
 	unsigned int frg = sym->IsLeaf ? 1 : regFirstTemp;
@@ -500,7 +519,15 @@ void ReleaseTempRegister(AMODE *ap)
 		return;
 	}
 
+	// Kludgy here. The register is being release so at the moment it
+	// is in use until it's released. The in_use flag will cause
+	// validate not to work. Need to keep the value of in_use for later.
+	nn = reg_in_use[ap->preg];
+	if (ap->type != stdvector.GetIndex() && ap->mode != am_fpreg)
+		reg_in_use[ap->preg] = -1;
 	validate(ap);
+	reg_in_use[ap->preg] = nn;
+
 	if (ap->type==stdvector.GetIndex()) {
 		switch (ap->mode) {
 		case am_vmreg:
@@ -580,8 +607,10 @@ common:
 		if (ap->preg >= frg && ap->preg <= (unsigned)regLastTemp) {
 			if (reg_in_use[ap->preg]==-1)
 				return;
-			if (next_reg-- <= frg)
+			if (next_reg-- <= frg) {
 				next_reg = regLastTemp;
+				wrapno--;
+			}
 			number = reg_in_use[ap->preg];
 			reg_in_use[ap->preg] = -1;
 			break;
@@ -591,8 +620,10 @@ common:
 		if (ap->sreg >= frg && ap->sreg <= (unsigned)regLastTemp) {
 			if (reg_in_use[ap->sreg]==-1)
 				return;
-			if (next_reg-- <= frg)
+			if (next_reg-- <= frg) {
 				next_reg = regLastTemp;
+				wrapno--;
+			}
 			number = reg_in_use[ap->sreg];
 			reg_in_use[ap->sreg] = -1;
 			//break;
@@ -634,24 +665,24 @@ int TempInvalidate(int *fsp)
 
 	sp = 0;
 	TRACE(printf("TempInvalidate()\r\n");)
+	save_wrapno = wrapno;
 	save_reg_alloc_ptr = reg_alloc_ptr;
 	memcpy(save_reg_alloc, reg_alloc, sizeof(save_reg_alloc));
 	memcpy(save_reg_in_use, reg_in_use, sizeof(save_reg_in_use));
+	memcpy(save_rap, rap, sizeof(rap));
 	for (sp = i = 0; i < reg_alloc_ptr; i++) {
-        if (reg_in_use[reg_alloc[i].reg] != -1) {
-    		if (reg_alloc[i].f.isPushed == 'F') {
-				// ToDo: fix this line
-				reg_alloc[i].amode->mode = am_reg;
-				SpillRegister(reg_alloc[i].amode, i);
-    			//GenerateTempRegPush(reg_alloc[i].reg, /*reg_alloc[i].amode->mode*/am_reg, i, sp);
-    			stacked_regs[sp].reg = reg_alloc[i].reg;
-    			stacked_regs[sp].amode = reg_alloc[i].amode;
-    			stacked_regs[sp].f.allocnum = i;
-    			sp++;
-    			// mark the register void
-    			reg_in_use[reg_alloc[i].reg] = -1;
-    		}
-        }
+    	if (reg_alloc[i].f.isPushed == 'F') {
+			// ToDo: fix this line
+			reg_alloc[i].amode->mode = am_reg;
+			SpillRegister(reg_alloc[i].amode, i);
+    		//GenerateTempRegPush(reg_alloc[i].reg, /*reg_alloc[i].amode->mode*/am_reg, i, sp);
+    		stacked_regs[sp].reg = reg_alloc[i].reg;
+    		stacked_regs[sp].amode = reg_alloc[i].amode;
+    		stacked_regs[sp].f.allocnum = i;
+    		sp++;
+    		// mark the register void
+    		reg_in_use[reg_alloc[i].reg] = -1;
+    	}
 	}
 
 	save_fpreg_alloc_ptr = fpreg_alloc_ptr;
@@ -673,6 +704,11 @@ int TempInvalidate(int *fsp)
     		}
         }
 	}
+	wrapno = 0;
+	reg_alloc_ptr = 0;
+	memset(reg_in_use, -1, sizeof(reg_in_use));
+	ZeroMemory(reg_alloc, sizeof(reg_alloc));
+	ZeroMemory(rap, sizeof(rap));
 	return (sp);
 }
 
@@ -696,9 +732,11 @@ void TempRevalidate(int sp, int fsp)
 		LoadRegister(stacked_regs[nn].amode->preg, stacked_regs[nn].f.allocnum);
 		//GenerateTempRegPop(stacked_regs[nn].reg, /*stacked_regs[nn].amode->mode*/am_reg, stacked_regs[nn].f.allocnum,sp-nn-1);
 	}
+	wrapno = save_wrapno;
 	reg_alloc_ptr = save_reg_alloc_ptr;
 	memcpy(reg_alloc, save_reg_alloc, sizeof(reg_alloc));
 	memcpy(reg_in_use, save_reg_in_use, sizeof(reg_in_use));
+	memcpy(rap, save_rap, sizeof(rap));
 }
 
 /*

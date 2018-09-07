@@ -123,3 +123,44 @@ OCODE *OCODE::Clone(OCODE *c)
 	memcpy(cd, c, sizeof(OCODE));
 	return (cd);
 }
+
+//
+//      mov r3,r3 removed
+//
+// Code Like:
+//		add		r3,r2,#10
+//		mov		r3,r5
+// Changed to:
+//		mov		r3,r5
+
+void OCODE::OptMove()
+{
+	if (OCODE::IsEqualOperand(oper1, oper2)) {
+		MarkRemove();
+		optimized++;
+		return;
+	}
+}
+
+//	   sge		$v1,$r12,$v2
+//     redor	$v2,$v1
+// Translates to:
+//	   sge		$v1,$r12,$v2
+//     mov		$v2,$v1
+// Because redundant moves will be eliminated by further compiler
+// optimizations.
+
+void OCODE::OptRedor()
+{
+	if (back == nullptr)
+		return;
+	if (back->insn->IsSetInsn()) {
+		if (back->oper1->preg == oper2->preg) {
+			opcode = op_mov;
+			insn = GetInsn(op_mov);
+			optimized++;
+		}
+	}
+}
+
+

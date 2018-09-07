@@ -34,7 +34,6 @@
 void IGraph::MakeNew(int n)
 {
 	int bms;
-	int nn;
 
 	K = 17;
 	size = n;
@@ -74,8 +73,6 @@ void IGraph::ClearBitmatrix()
 
 void IGraph::Clear()
 {
-	int n;
-
 	ClearBitmatrix();
 	ZeroMemory(degrees, size * sizeof(short int));
 }
@@ -259,7 +256,6 @@ void IGraph::Fill()
 	int v, v1;
 	OCODE *ip;
 	bool eol;
-	Var *vr;
 	int K = 17;
 
 	// For each block 
@@ -328,9 +324,6 @@ void IGraph::InsertArgumentMoves()
 
 void IGraph::BuildAndCoalesce()
 {
-	Var *v;
-	Tree *t;
-	int nn, mm, blk;
 	bool improved = false;
 
 	MakeNew(frst->treecount);

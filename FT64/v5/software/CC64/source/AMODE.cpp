@@ -36,6 +36,38 @@ AMODE *AMODE::Clone()
 	return (newap);
 }
 
+
+//      compare two address nodes and return true if they are
+//      equivalent.
+
+bool AMODE::IsEqual(AMODE *ap1, AMODE *ap2)
+{
+	if (ap1 == nullptr || ap2 == nullptr)
+		return (false);
+	if (ap1->mode != ap2->mode && !((ap1->mode == am_ind && ap2->mode == am_indx) || (ap1->mode == am_indx && ap2->mode == am_ind)))
+		return (false);
+	switch (ap1->mode)
+	{
+	case am_immed:
+		return (ap1->offset->i == ap2->offset->i);
+	case am_fpreg:
+	case am_reg:
+		return (ap1->preg == ap2->preg);
+	case am_ind:
+	case am_indx:
+		if (ap1->preg != ap2->preg)
+			return (false);
+		if (ap1->offset == ap2->offset)
+			return (true);
+		if (ap1->offset == nullptr || ap2->offset == nullptr)
+			return (false);
+		if (ap1->offset->i != ap2->offset->i)
+			return (false);
+		return (true);
+	}
+	return (false);
+}
+
 char AMODE::fpsize()
 {
 	if (type == stddouble.GetIndex())

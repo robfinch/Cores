@@ -31,11 +31,11 @@ static void fold_const(ENODE **node);
  *      dooper will execute a constant operation in a node and
  *      modify the node to be the result of the operation.
  */
-void dooper(ENODE **node)
+void dooper(ENODE *node)
 {
 	ENODE *ep;
 
-    ep = *node;
+    ep = node;
     switch( ep->nodetype ) {
 	case en_abs:
             ep->nodetype = en_icon;
@@ -141,15 +141,27 @@ void dooper(ENODE **node)
 		break;
 	case en_sxb:
 		ep->nodetype = en_icon;
-		ep->i = (ep->p[0]->i & 0x100) ? ep->p[0]->i | 0xffffffffffffff00 : ep->p[0]->i;
+		ep->i = (ep->p[0]->i & 0x100LL) ? ep->p[0]->i | 0xffffffffffffff00LL : ep->p[0]->i;
 		break;
 	case en_sxc:
 		ep->nodetype = en_icon;
-		ep->i = (ep->p[0]->i & 0x10000) ? ep->p[0]->i | 0xffffffffffff0000 : ep->p[0]->i;
+		ep->i = (ep->p[0]->i & 0x10000LL) ? ep->p[0]->i | 0xffffffffffff0000LL : ep->p[0]->i;
 		break;
 	case en_sxh:
 		ep->nodetype = en_icon;
-		ep->i = (ep->p[0]->i & 0x100000000) ? ep->p[0]->i | 0xffffffff00000000 : ep->p[0]->i;
+		ep->i = (ep->p[0]->i & 0x100000000LL) ? ep->p[0]->i | 0xffffffff00000000LL : ep->p[0]->i;
+		break;
+	case en_zxb:
+		ep->nodetype = en_icon;
+		ep->i = ep->p[0]->i & 0xffLL;
+		break;
+	case en_zxc:
+		ep->nodetype = en_icon;
+		ep->i = ep->p[0]->i & 0xffffLL;
+		break;
+	case en_zxh:
+		ep->nodetype = en_icon;
+		ep->i = ep->p[0]->i & 0xffffffffLL;
 		break;
 	}
 }
@@ -167,11 +179,11 @@ int pwrof2(int64_t i)
     while( q > 0 )
     {
 		if( q == i )
-			return p;
+			return (p);
 		q <<= 1LL;
 		++p;
     }
-    return -1;
+    return (-1);
 }
 
 /*
@@ -183,7 +195,7 @@ int mod_mask(int i)
     m = 0;
     while( i-- )
         m = (m << 1) | 1;
-    return m;
+    return (m);
 }
 
 /*
@@ -242,10 +254,11 @@ static void opt0(ENODE **node)
 			case en_sxb:
 			case en_sxc:
 			case en_sxh:
+			case en_zxb: case en_zxc: case en_zxh:
 			case en_abs:
                     opt0( &(ep->p[0]));
                     if( ep->p[0]->nodetype == en_icon )
-						dooper(node);
+						dooper(*node);
                     return;
 			case en_compl:
                     opt0( &(ep->p[0]));
@@ -296,7 +309,7 @@ static void opt0(ENODE **node)
                     opt0(&(ep->p[1]));
                     if( ep->p[0]->nodetype == en_icon ) {
                         if( ep->p[1]->nodetype == en_icon ) {
-                            dooper(node);
+                            dooper(*node);
                             return;
                         }
                         if( ep->p[0]->i == 0 ) {
@@ -326,7 +339,7 @@ static void opt0(ENODE **node)
                     opt0(&(ep->p[1]));
                     if( ep->p[0]->nodetype == en_icon ) {
                         if( ep->p[1]->nodetype == en_icon ) {
-                            dooper(node);
+                            dooper(*node);
                             return;
                         }
                         val = ep->p[0]->i;
@@ -344,6 +357,7 @@ static void opt0(ENODE **node)
                             swap_nodes(ep);
                             ep->p[1]->i = sc;
                             ep->nodetype = en_shl;
+							return;
                         }
                     }
                     else if( ep->p[1]->nodetype == en_icon ) {
@@ -361,6 +375,7 @@ static void opt0(ENODE **node)
                         {
 							ep->p[1]->i = sc;
 							ep->nodetype = en_shl;
+							return;
                         }
                     }
                     break;
@@ -370,7 +385,7 @@ static void opt0(ENODE **node)
                     opt0(&(ep->p[1]));
                     if( ep->p[0]->nodetype == en_icon ) {
                             if( ep->p[1]->nodetype == en_icon ) {
-                                    dooper(node);
+                                    dooper(*node);
                                     return;
                                     }
                             if( ep->p[0]->i == 0 ) {    /* 0/x */
@@ -402,7 +417,7 @@ static void opt0(ENODE **node)
                             {
                             if( ep->p[0]->nodetype == en_icon )
                                     {
-                                    dooper(node);
+                                    dooper(*node);
                                     return;
                                     }
                             sc = pwrof2(ep->p[1]->i);
@@ -421,7 +436,7 @@ static void opt0(ENODE **node)
                     opt0(&(ep->p[1]));
                     if( ep->p[0]->nodetype == en_icon &&
                             ep->p[1]->nodetype == en_icon )
-                            dooper(node);
+                            dooper(*node);
                     break;
 
 			case en_shr:	case en_shru:	case en_asr:
@@ -430,7 +445,7 @@ static void opt0(ENODE **node)
                     opt0(&(ep->p[1]));
                     if( ep->p[0]->nodetype == en_icon &&
                             ep->p[1]->nodetype == en_icon )
-                            dooper(node);
+                            dooper(*node);
 					// Shift by zero....
                     else if( ep->p[1]->nodetype == en_icon ) {
                         if( ep->p[1]->i == 0 ) {
@@ -444,7 +459,7 @@ static void opt0(ENODE **node)
                     opt0(&(ep->p[0]));
                     opt0(&(ep->p[1]));
 					if (ep->p[0]->nodetype==en_icon && ep->p[1]->nodetype==en_icon) {
-						dooper(node);
+						dooper(*node);
 						break;
                     }
                     break;
@@ -452,7 +467,7 @@ static void opt0(ENODE **node)
                     opt0(&(ep->p[0]));
                     opt0(&(ep->p[1]));
 					if (ep->p[0]->nodetype==en_icon && ep->p[1]->nodetype==en_icon) {
-						dooper(node);
+						dooper(*node);
 						break;
                     }
                     break;
@@ -464,7 +479,7 @@ static void opt0(ENODE **node)
                     opt0(&(ep->p[0]));
                     opt0(&(ep->p[1]));
 					if (ep->p[0]->nodetype==en_icon && ep->p[1]->nodetype==en_icon)
-						dooper(node);
+						dooper(*node);
                     break;
                 case en_feq:    case en_fne:
                 case en_flt:    case en_fle:
@@ -482,7 +497,7 @@ static void opt0(ENODE **node)
 					if ((ep->p[0]->nodetype==en_icon||ep->p[0]->nodetype==en_cnacon) &&
 						 (ep->p[1]->p[0]->nodetype==en_icon || ep->p[1]->p[0]->nodetype==en_cnacon) &&
 						 (ep->p[1]->p[1]->nodetype==en_icon || ep->p[1]->p[1]->nodetype==en_cnacon))
-						dooper(node);
+						dooper(*node);
 					break;
             case en_chk:
                     opt0(&(ep->p[0]));
@@ -522,7 +537,9 @@ static int64_t xfold(ENODE *node)
                         node->i = 0;
                         return i;
 				case en_sxb: case en_sxc: case en_sxh:
+				case en_zxb: case en_zxc: case en_zxh:
 				case en_abs:
+					return (0);
 						return xfold(node->p[0]);
                 case en_add:
                         return xfold(node->p[0]) + xfold(node->p[1]);
@@ -549,7 +566,7 @@ static int64_t xfold(ENODE *node)
                 case en_assub:  case en_asmul:
                 case en_asdiv:  case en_asmod:
                 case en_and:    case en_land:
-                case en_or:     case en_lor:
+				case en_or:		case en_lor:
                 case en_xor:    case en_asand:
                 case en_asor:   case en_void:
                 case en_fcall:  case en_assign:
@@ -626,9 +643,11 @@ static void fold_const(ENODE **node)
 //
 void opt_const(ENODE **node)
 {
+	dfs.printf("<OptConst>");
     if (opt_noexpr==FALSE) {
     	opt0(node);
     	fold_const(node);
     	opt0(node);
     }
+	dfs.printf("</OptConst>");
 }

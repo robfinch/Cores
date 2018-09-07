@@ -354,6 +354,7 @@ int CSETable::Optimize(Statement *block)
 	int nn;
 
 	//csendx = 0;
+	dfs.printf("<CSETable__Optimize>");
 	nn = 0;
 	if (pass == 1) {
 		if (currentFn->csetbl == nullptr) {
@@ -362,8 +363,9 @@ int CSETable::Optimize(Statement *block)
 		Clear();
 	}
 	else if (pass == 2) {
-		Assign(currentFn->csetbl);
+		//Assign(currentFn->csetbl);
 	}
+	dfs.printf("Pass:%d ", pass);
 	if (opt_noregs == FALSE) {
 		if (pass == 1)
 			block->scan();            /* collect expressions */
@@ -372,13 +374,14 @@ int CSETable::Optimize(Statement *block)
 			block->repcse();          /* replace allocated expressions */
 	}
 	if (pass == 1)
-		currentFn->csetbl->Assign(pCSETable);
+		;// currentFn->csetbl->Assign(pCSETable);
 	else if (pass == 2) {
 		if (currentFn->csetbl && !currentFn->IsInline) {
 			delete currentFn->csetbl;
 			currentFn->csetbl = nullptr;
 		}
 	}
+	dfs.printf("</CSETable__Optimize>\n");
 	return (nn);
 }
 
@@ -395,8 +398,8 @@ void CSETable::Dump()
 		"*The expression must be used three or more times before it will be allocated\n"
 		"to a register.\n");
 	dfs.printf("N OD Uses DUses Void Reg Sym\n");
-	for (nn = 0; nn < pCSETable->csendx; nn++) {
-		csp = &pCSETable->table[nn];
+	for (nn = 0; nn < csendx; nn++) {
+		csp = &table[nn];
 		dfs.printf("%d: ", nn);
 		dfs.printf("%d   ", csp->OptimizationDesireability());
 		dfs.printf("%d   ", csp->uses);

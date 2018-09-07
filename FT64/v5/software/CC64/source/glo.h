@@ -210,10 +210,10 @@ extern Stringx names[20];
 extern int isStructDecl;
 extern int worstAlignment;
 extern Map map;
+extern int optimized;
 
 // Analyze.c
 extern short int csendx;
-extern CSETable *pCSETable;
 extern int equalnode(ENODE *node1, ENODE *node2);
 extern int bsort(CSE **list);
 // CMain.c
@@ -326,7 +326,6 @@ extern char *opstr(int op);
 extern void MarkRemove(OCODE *ip);
 extern int PeepCount(OCODE *);
 extern void flush_peep();
-extern int equal_address(AMODE *ap1, AMODE *ap2);
 extern void GenerateLabel(int labno);
 extern void GenerateZeradic(int op);
 extern void GenerateMonadic(int op, int len, AMODE *ap1);

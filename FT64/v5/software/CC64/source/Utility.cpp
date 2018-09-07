@@ -37,6 +37,17 @@ int round8(int n)
 	return (n);
 }
 
+int popcnt(int64_t m)
+{
+	int n;
+	int cnt;
+
+	cnt = 0;
+	for (n = 0; n < 64; n = n + 1)
+		if (m & (1LL << n)) cnt = cnt + 1;
+	return cnt;
+}
+
 std::string TraceName(SYM *sp)
 {
 	std::string namebuf;

@@ -26,6 +26,7 @@
 //                                                                          
 // ============================================================================
 //
+class AMODE;
 class ENODE;
 class Statement;
 class BasicBlock;
@@ -442,6 +443,7 @@ public:
 	bool IsFloatType() { return (etype == bt_double || etype == bt_quad || etype == bt_float || etype == bt_triple); };
 	bool IsUnsignedType() { return (etype == bt_ubyte || etype == bt_uchar || etype == bt_ushort || etype == bt_ulong || etype == bt_pointer); };
 	bool IsBitfield();
+	static bool IsEqualOperand(AMODE *a, AMODE *b);
 	char fsize();
 	long GetReferenceSize();
 
@@ -482,6 +484,7 @@ public:
 	unsigned int isPascal : 1;
 	unsigned int rshift : 8;
 	unsigned int isPtr : 1;
+	short int pdeep;		// previous stack depth on allocation
 	short int deep;           /* stack depth on allocation */
 	short int deep2;
 	ENODE *offset;
@@ -489,6 +492,7 @@ public:
 	AMODE *next;			// For extended sizes (long)
 public:
 	AMODE *Clone();
+	static bool IsEqual(AMODE *ap1, AMODE *ap2);
 	char fpsize();
 
 	void GenZeroExtend(int isize, int osize);
@@ -519,10 +523,16 @@ public:
 public:
 	static OCODE *MakeNew();
 	static OCODE *Clone(OCODE *p);
+	static bool IsEqualOperand(AMODE *a, AMODE *b) { return (AMODE::IsEqual(a, b)); };
+	void MarkRemove() { remove = true; };
+	void MarkRemove2() { remove2 = true; };
 	bool HasTargetReg() const;
 	int GetTargetReg(int *rg1, int *rg2) const;
 	bool HasSourceReg(int) const;
 	//Edge *MakeEdge(OCODE *ip1, OCODE *ip2);
+	// Optimizations
+	void OptMove();
+	void OptRedor();
 };
 
 // Control Flow Graph

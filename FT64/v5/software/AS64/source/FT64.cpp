@@ -1452,24 +1452,32 @@ static void process_setiop(int64_t opcode6, int64_t cond4)
     need(',');
     NextToken();
     val = expr();
-	if (!IsNBit(val, 14)) {
-		LoadConstant(val, 52);
+	if (!IsNBit(val, 26)) {
+		LoadConstant(val, 23);
 		emit_insn(
-			(((cond4 >= 12 && cond4 <= 15) ? 7LL : 6LL) << 34LL) |
-			((cond4 & 7LL) << 30LL) |
-			(sz << 24) |		// set size
+			(((cond4 >= 12 && cond4 <= 15) ? 7LL : 6LL) << 26LL) |
+			((cond4 & 7LL) << 23LL) |
 			(Rt << 18) |
-			(52 << 12) |
-			(Ra << 6) |
-			0x02, !expand_flag, 5);
+			(52 << 13) |
+			(Ra << 8) |
+			0x02, !expand_flag, 4);
+		return;
+	}
+	if (!IsNBit(val, 10)) {
+		emit_insn(
+			((val >> 10) << 32) |
+			(cond4 << 28LL) |
+			((val & 0x3FF) << 18) |
+			(Rt << 13) | (Ra << 8) |
+			(1 << 6) |
+			opcode6, !expand_flag,6);
 		return;
 	}
 	emit_insn(
-		(cond4<<34LL)|
-		((val & 0x3FFF) << 20)|
-		(sz << 18) |
-		(Rt << 12)|(Ra << 6)|
-		opcode6,!expand_flag,5);
+		(cond4<<28LL)|
+		((val & 0x3FF) << 18)|
+		(Rt << 13)|(Ra << 8)|
+		opcode6,!expand_flag,4);
 }
 
 // ---------------------------------------------------------------------------
@@ -1838,6 +1846,7 @@ static void process_itof(int64_t oc)
 			(Ra << 8) |
 			0x0F, !expand_flag, 6
 		);
+		return;
 	}
     emit_insn(
 			(oc << 26LL) |
@@ -1847,6 +1856,45 @@ static void process_itof(int64_t oc)
 			(Ra << 8) |
 			0x0F,!expand_flag,4
 			);
+}
+
+static void process_ftoi(int64_t oc)
+{
+	int Ra;
+	int Rt;
+	char *p;
+	int fmt;
+	int64_t rm;
+
+	rm = 0;
+	fmt = GetFPSize();
+	p = inptr;
+	Rt = getRegisterX();
+	need(',');
+	Ra = getFPRegister();
+	if (token == ',')
+		rm = getFPRoundMode();
+	//    prevToken();
+	if (fmt != 2) {
+		emit_insn(
+			(oc << 42LL) |
+			(fmt << 31LL) |
+			(rm << 28LL) |
+			(Rt << 23) |
+			(0 << 13) |
+			(Ra << 8) |
+			0x0F, !expand_flag, 6
+		);
+		return;
+	}
+	emit_insn(
+		(oc << 26LL) |
+		(rm << 23LL) |
+		(Rt << 18) |
+		(0 << 13) |
+		(Ra << 8) |
+		0x0F, !expand_flag, 4
+	);
 }
 
 // ---------------------------------------------------------------------------
@@ -3447,8 +3495,10 @@ static void process_mov(int64_t oc, int64_t fn)
 			 vec = 1;
 			 Rt = getVecRegister();
 		 }
-		 else
+		 else {
+			 d3 = 4;
 			 fp = 1;
+		 }
 	 }
 	 Rt &= 31;
 	if (inptr[-1]==':') {
@@ -4226,6 +4276,7 @@ void FT64_processMaster()
         case tk_eor: process_rrrop(0x0A); break;
         case tk_eori: process_riop(0x0A); break;
         case tk_extern: process_extern(); break;
+		case tk_ftoi:	process_ftoi(0x12); break;
 		case tk_fadd:	process_fprrop(0x04); break;
         case tk_fbeq:	process_fbcc(0); break;
         case tk_fbge:	process_fbcc(3); break;
@@ -4292,6 +4343,7 @@ void FT64_processMaster()
             }
             segment = rodataseg;
             break;
+		case tk_redor: process_rop(0x06); break;
 		case tk_ret: process_ret(); break;
 		case tk_rex: process_rex(); break;
 		case tk_rol: process_shift(0x4); break;

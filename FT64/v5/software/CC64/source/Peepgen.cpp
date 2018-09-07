@@ -30,7 +30,6 @@ void PrintPeepList();
 static void Remove();
 void peep_add(OCODE *ip);
 static void PeepoptSub(OCODE *ip);
-void peep_move(OCODE	*ip);
 void peep_cmp(OCODE *ip);
 static void opt_peep();
 void put_ocode(OCODE *p);
@@ -307,56 +306,6 @@ void put_ocode(OCODE *p)
 //	put_code(p->opcode,p->length,p->oper1,p->oper2,p->oper3,p->oper4);
 }
 
-//
-//      mov r3,r3 removed
-//
-// Code Like:
-//		add		r3,r2,#10
-//		mov		r3,r5
-// Changed to:
-//		mov		r3,r5
-
-void peep_move(OCODE *ip)
-{
-	if (equal_address(ip->oper1, ip->oper2)) {
-		MarkRemove(ip);
-		optimized++;
-		return;
-	}
-}
-
-/*
- *      compare two address nodes and return true if they are
- *      equivalent.
- */
-int equal_address(AMODE *ap1, AMODE *ap2)
-{
-	if( ap1 == NULL || ap2 == NULL )
-		return (FALSE);
-	if( ap1->mode != ap2->mode  && !((ap1->mode==am_ind && ap2->mode==am_indx) || (ap1->mode==am_indx && ap2->mode==am_ind)))
-		return (FALSE);
-	switch( ap1->mode )
-	{
-	case am_immed:
-		return (ap1->offset->i == ap2->offset->i);
-	case am_fpreg:
-	case am_reg:
-		return (ap1->preg == ap2->preg);
-	case am_ind:
-	case am_indx:
-		if (ap1->preg != ap2->preg)
-			return (FALSE);
-		if (ap1->offset == ap2->offset)
-			return (TRUE);
-		if (ap1->offset == NULL || ap2->offset==NULL)
-			return (FALSE);
-		if (ap1->offset->i != ap2->offset->i)
-			return (FALSE);
-		return (TRUE);
-	}
-	return (FALSE);
-}
-
 void peep_add(OCODE *ip)
 {
      AMODE *a;
@@ -410,27 +359,6 @@ static bool IsSubiSP(OCODE *ip)
 		}
 	}
 	return (false);
-}
-
-//	   sge		$v1,$r12,$v2
-//     redor	$v2,$v1
-// Translates to:
-//	   sge		$v1,$r12,$v2
-//     mov		$v2,$v1
-// Because redundant moves will be eliminated by further compiler
-// optimizations.
-
-static void PeepoptRedor(OCODE *ip)
-{
-	if (ip->back == nullptr)
-		return;
-	if (ip->back->insn->IsSetInsn()) {
-		if (ip->back->oper1->preg == ip->oper2->preg) {
-			ip->opcode = op_mov;
-			ip->insn = GetInsn(op_mov);
-			optimized++;
-		}
-	}
 }
 
 // 'subui' followed by a 'bne' gets turned into 'loop'
@@ -644,7 +572,7 @@ void PeepoptBcc(OCODE * ip)
      if (fwd2->oper1!=fwd5->oper1)
          return;
      // check for same target register
-     if (!equal_address(fwd1->oper1,fwd4->oper1))
+     if (!OCODE::IsEqualOperand(fwd1->oper1,fwd4->oper1))
          return;
      // check ldi values
      if (fwd1->oper2->offset->i != 1)
@@ -969,7 +897,7 @@ static void PeepoptHint(OCODE *ip)
 		}
 		
 		if (ip->fwd && ip->fwd->oper1->preg >= 18 && ip->fwd->oper1->preg < 24) {
-			if (equal_address(ip->fwd->oper2, ip->back->oper1)) {
+			if (OCODE::IsEqualOperand(ip->fwd->oper2, ip->back->oper1)) {
 				ip->back->oper1 = ip->fwd->oper1;
 				MarkRemove(ip);
 				MarkRemove(ip->fwd);
@@ -984,7 +912,7 @@ static void PeepoptHint(OCODE *ip)
 			return;
 		}
 		
-		if (equal_address(ip->fwd->oper2, ip->back->oper1)) {
+		if (OCODE::IsEqualOperand(ip->fwd->oper2, ip->back->oper1)) {
 			ip->back->oper1 = ip->fwd->oper1;
 			MarkRemove(ip);
 			MarkRemove(ip->fwd);
@@ -1013,7 +941,7 @@ static void PeepoptHint(OCODE *ip)
 			break;
 		if (ip->fwd->remove || ip->back->remove)
 			break;
-		if (equal_address(ip->fwd->oper2, ip->back->oper1)) {
+		if (OCODE::IsEqualOperand(ip->fwd->oper2, ip->back->oper1)) {
 			if (ip->back->HasTargetReg()) {
 				if (!(ip->fwd->oper1->mode == am_fpreg && ip->back->opcode==op_ldi)) {
 					ip->back->oper1 = ip->fwd->oper1;
@@ -1173,9 +1101,9 @@ static void PeepoptStore(OCODE *ip)
 		PeepoptSh(ip);
 	if (ip->opcode==op_label || ip->fwd->opcode==op_label)
 		return;
-	if (!equal_address(ip->oper1, ip->fwd->oper1))
+	if (!OCODE::IsEqualOperand(ip->oper1, ip->fwd->oper1))
 		return;
-	if (!equal_address(ip->oper2, ip->fwd->oper2))
+	if (!OCODE::IsEqualOperand(ip->oper2, ip->fwd->oper2))
 		return;
 	if (ip->opcode==op_sh && ip->fwd->opcode!=op_lh)
 		return;
@@ -1463,8 +1391,8 @@ static void opt_peep()
 					PeepoptLd(ip);
 				break;
 				case op_mov:
-						peep_move(ip);
-						break;
+					ip->OptMove();
+					break;
 				case op_add:
 				case op_addu:
 				case op_addui:
@@ -1528,7 +1456,7 @@ static void opt_peep()
 						PeepoptAnd(ip);
 						break;
 				case op_redor:
-					PeepoptRedor(ip);
+					ip->OptRedor();
 					break;
 				}
 				}

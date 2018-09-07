@@ -18,6 +18,7 @@ void funcbottom(Statement *stmt);
 Function *allocFunction(int id);
 SYM *makeint2(std::string na);
 int round8(int n);
+int pwrof2(int64_t);
 void ListCompound(Statement *stmt);
 std::string TraceName(SYM *sp);
 void MarkRemove(OCODE *ip);

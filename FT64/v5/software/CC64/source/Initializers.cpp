@@ -106,7 +106,7 @@ void doinit(SYM *sp)
 		//strcpy_s(glbl, sizeof(glbl), gen_label((int)sp->value.i, (char *)sp->name->c_str(), GetNamespace(), 'D'));
 		if (sp->tp->IsSkippable()) {
 			patchpoint = ofs.tellp();
-			sprintf_s(buf, sizeof(buf), "\talign\t8\n\tdw\t$FFF0200000000001 ; GC_skip\n");
+			sprintf_s(buf, sizeof(buf), "\talign\t8\n\tdw\t$FFF0200000000001\n");
 			ofs.printf(buf);
 		}
 		sp->realname = my_strdup(put_label((int)sp->value.i, (char *)sp->name->c_str(), GetNamespace(), 'D'));
@@ -125,7 +125,7 @@ void doinit(SYM *sp)
 		strcat_s(lbl, sizeof(lbl), sp->name->c_str());
 		if (sp->tp->IsSkippable()) {
 			patchpoint = ofs.tellp();
-			sprintf_s(buf, sizeof(buf), "\talign\t8\n\tdw\t$FFF0200000000001 ; GC_skip\n");
+			sprintf_s(buf, sizeof(buf), "\talign\t8\n\tdw\t$FFF0200000000001\n");
 			ofs.printf(buf);
 		}
 		strcpy_s(glbl2, sizeof(glbl2), sp->name->c_str());
@@ -147,7 +147,7 @@ void doinit(SYM *sp)
 	if (!hasPointer && sp->tp->IsSkippable()) {
 		endpoint = ofs.tellp();
 		ofs.seekp(patchpoint);
-		sprintf_s(buf, sizeof(buf), "\talign\t8\n\tdw\t$%I64X ", ((genst_cumulative + 7LL) >> 3LL) | 0xFFF0200000000000LL);
+		sprintf_s(buf, sizeof(buf), "\talign\t8\n\tdw\t$%I64X\n", ((genst_cumulative + 7LL) >> 3LL) | 0xFFF0200000000000LL);
 		ofs.printf(buf);
 		ofs.seekp(endpoint);
 		genst_cumulative = 0;
@@ -155,7 +155,7 @@ void doinit(SYM *sp)
 	else if (sp->tp->IsSkippable()) {
 		endpoint = ofs.tellp();
 		ofs.seekp(patchpoint);
-		sprintf_s(buf, sizeof(buf), "\talign\t8\n\t  \t                 ");
+		sprintf_s(buf, sizeof(buf), "\talign\t8\n\t  \t                 \n");
 		ofs.printf(buf);
 		ofs.seekp(endpoint);
 		genst_cumulative = 0;
@@ -175,10 +175,12 @@ void doInitCleanup()
 
 	if (genst_cumulative && !hasPointer) {
 		endpoint = ofs.tellp();
-		ofs.seekp(patchpoint);
-		sprintf_s(buf, sizeof(buf), "\talign\t8\n\tdw\t$%I64X ; GC_skip\n", ((genst_cumulative + 7LL) >> 3LL) | 0xFFF0200000000000LL);
-		ofs.printf(buf);
-		ofs.seekp(endpoint);
+		if (patchpoint > 0) {
+			ofs.seekp(patchpoint);
+			sprintf_s(buf, sizeof(buf), "\talign\t8\n\tdw\t$%I64X\n", ((genst_cumulative + 7LL) >> 3LL) | 0xFFF0200000000000LL);
+			ofs.printf(buf);
+			ofs.seekp(endpoint);
+		}
 		genst_cumulative = 0;
 	}
 }

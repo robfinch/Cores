@@ -757,8 +757,11 @@ void Function::Gen()
 	// Setup the return block.
 	if (!IsNocall)
 		SetupReturnBlock();
-	if (optimize)
-		pCSETable->Optimize(stmt);
+	if (optimize) {
+		if (currentFn->csetbl == nullptr)
+			currentFn->csetbl = new CSETable;
+		currentFn->csetbl->Optimize(stmt);
+	}
 	stmt->Generate();
 
 	if (exceptions) {

@@ -256,7 +256,7 @@ void MakeLegalAmode(AMODE *ap,int flags, int size)
 				return;
             ReleaseTempRegister(ap);      // maybe we can use it...
 			if (ap)
-				ap2 = GetTempReg(ap->type);
+				ap2 = GetTempRegister();// GetTempReg(ap->type);
 			else
 				ap2 = GetTempReg(stdint.GetIndex());
 			if (ap->mode == am_ind || ap->mode==am_indx)

@@ -59,6 +59,12 @@ AMODE *GenExpr(ENODE *node)
 	case en_ugt:	op = op_sgtu;	break;
 	case en_ge:		op = op_sge;	break;
 	case en_uge:	op = op_sgeu;	break;
+	case en_flt:	op = op_fslt;	break;
+	case en_fle:	op = op_fsle;	break;
+	case en_fgt:	op = op_fsgt;	break;
+	case en_fge:	op = op_fsge;	break;
+	case en_feq:	op = op_fseq;	break;
+	case en_fne:	op = op_fsne;	break;
 	case en_veq:
 		size = GetNaturalSize(node);
 		ap3 = GetTempVectorRegister();         
@@ -228,7 +234,21 @@ AMODE *GenExpr(ENODE *node)
 		ReleaseTempRegister(ap1);
 //		GenerateDiadic(op_sge,0,ap3,ap3);
 		return (ap3);
-/*
+	case en_flt:
+	case en_fle:
+	case en_fgt:
+	case en_fge:
+	case en_feq:
+	case en_fne:
+		size = GetNaturalSize(node);
+		ap3 = GetTempRegister();
+		ap1 = GenerateExpression(node->p[0], F_FPREG, size);
+		ap2 = GenerateExpression(node->p[1], F_FPREG, size);
+		GenerateTriadic(op, ap1->fpsize(), ap3, ap1, ap2);
+		ReleaseTempRegister(ap2);
+		ReleaseTempRegister(ap1);
+		return (ap3);
+		/*
 	case en_ne:
 	case en_lt:
 	case en_ult:
@@ -450,8 +470,12 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int predi
 				ReleaseTempRegister(ap3);
 				GenerateTriadic(op_beq,0,ap3,makereg(0),make_clabel(label));
 			}
-			else
-				GenerateTriadic(op_beq,0,ap1,ap2,make_clabel(label));
+			else {
+				ReleaseTempReg(ap2);
+				ReleaseTempReg(ap1);
+				GenerateTriadic(op_beq, 0, ap1, ap2, make_clabel(label));
+				return;
+			}
 			break;
 		case op_bne:
 			if (ap2->mode==am_immed) {
@@ -628,7 +652,7 @@ static void RestoreRegisterSet(SYM * sym)
 	}
 	else
 		for (nn = 1 + (sym->tp->GetBtp()->type!=bt_void ? 1 : 0); nn < 31; nn++)
-			GenerateMonadic(op_push,0,makereg(nn));
+			GenerateMonadic(op_pop,0,makereg(nn));
 }
 
 
@@ -922,6 +946,7 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
     int i;
 	int sp = 0;
 	int fsp = 0;
+	int ps;
 	TypeArray *ta = nullptr;
 	int64_t mask,fmask;
 	CSETable *csetbl;
@@ -950,9 +975,9 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
 			mask = save_mask;
 			fmask = fpsave_mask;
 			currentFn = sym;
-			csetbl = pCSETable;
+			ps = pass;
 			sym->Gen();
-			pCSETable = csetbl;
+			pass = ps;
 			currentFn = o_fn;
 			fpsave_mask = fmask;
 			save_mask = mask;
@@ -986,9 +1011,9 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
 			mask = save_mask;
 			fmask = fpsave_mask;
 			currentFn = sym;
-			csetbl = pCSETable;
+			ps = pass;
 			sym->Gen();
-			pCSETable = csetbl;
+			pass = ps;
 			currentFn = o_fn;
 			fpsave_mask = fmask;
 			save_mask = mask;

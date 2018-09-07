@@ -25,6 +25,11 @@
 //
 #include "stdafx.h"
 
+bool ENODE::IsEqualOperand(AMODE *a, AMODE *b)
+{
+	return (AMODE::IsEqual(a, b));
+};
+
 char ENODE::fsize()
 {
 	switch (etype) {
@@ -171,7 +176,7 @@ void ENODE::repexpr()
 	case en_fcon:
 	case en_autofcon:
 	case en_tempfpref:
-		if ((csp = pCSETable->Search(this)) != nullptr) {
+		if ((csp = currentFn->csetbl->Search(this)) != nullptr) {
 			csp->isfp = TRUE; //**** a kludge
 			if (csp->reg > 0) {
 				nodetype = en_fpregvar;
@@ -197,7 +202,7 @@ void ENODE::repexpr()
 	case en_cnacon:
 	case en_clabcon:
 	case en_tempref:
-		if ((csp = pCSETable->Search(this)) != NULL) {
+		if ((csp = currentFn->csetbl->Search(this)) != NULL) {
 			if (csp->reg > 0) {
 				nodetype = en_regvar;
 				i = csp->reg;
@@ -224,7 +229,7 @@ void ENODE::repexpr()
 	case en_wfieldref:
 	case en_uwfieldref:
 	case en_vector_ref:
-		if ((csp = pCSETable->Search(this)) != NULL) {
+		if ((csp = currentFn->csetbl->Search(this)) != NULL) {
 			if (csp->reg > 0) {
 				nodetype = en_regvar;
 				i = csp->reg;
@@ -238,7 +243,7 @@ void ENODE::repexpr()
 	case en_dbl_ref:
 	case en_flt_ref:
 	case en_quad_ref:
-		if ((csp = pCSETable->Search(this)) != NULL) {
+		if ((csp = currentFn->csetbl->Search(this)) != NULL) {
 			if (csp->reg > 0) {
 				nodetype = en_fpregvar;
 				i = csp->reg;
@@ -359,13 +364,13 @@ void ENODE::scanexpr(int duse)
 	case en_icon:
 	case en_labcon:
 	case en_nacon:
-		pCSETable->InsertNode(this, duse);
+		currentFn->csetbl->InsertNode(this, duse);
 		break;
 	case en_autofcon:
 	case en_tempfpref:
-		csp1 = pCSETable->InsertNode(this, duse);
+		csp1 = currentFn->csetbl->InsertNode(this, duse);
 		csp1->isfp = TRUE;
-		if ((nn = pCSETable->voidauto2(this)) > 0) {
+		if ((nn = currentFn->csetbl->voidauto2(this)) > 0) {
 			csp1->duses += loop_active;
 			csp1->uses = csp1->duses + nn - loop_active;
 		}
@@ -374,8 +379,8 @@ void ENODE::scanexpr(int duse)
 	case en_autocon:
 	case en_classcon:
 	case en_tempref:
-		csp1 = pCSETable->InsertNode(this, duse);
-		if ((nn = pCSETable->voidauto2(this)) > 0) {
+		csp1 = currentFn->csetbl->InsertNode(this, duse);
+		if ((nn = currentFn->csetbl->voidauto2(this)) > 0) {
 			csp1->duses += loop_active;
 			csp1->uses = csp1->duses + nn - loop_active;
 		}
@@ -407,13 +412,13 @@ void ENODE::scanexpr(int duse)
 		// it to remove zero extension conversion from a byte to a word.
 		if (p[0]->nodetype == en_autocon || p[0]->nodetype == en_autofcon
 			|| p[0]->nodetype == en_classcon || p[0]->nodetype == en_autovcon) {
-			first = (pCSETable->Search(this) == nullptr);	// Detect if this is the first insert
-			csp = pCSETable->InsertNode(this, duse);
+			first = (currentFn->csetbl->Search(this) == nullptr);	// Detect if this is the first insert
+			csp = currentFn->csetbl->InsertNode(this, duse);
 			if (csp->voidf)
 				p[0]->scanexpr(1);
 			// take care: the non-derereferenced use of the autocon node may
 			// already be in the list. In this case, set voidf to 1
-			if (pCSETable->Search(p[0]) != NULL) {
+			if (currentFn->csetbl->Search(p[0]) != NULL) {
 				csp->voidf = 1;
 				p[0]->scanexpr(1);
 			}
@@ -470,6 +475,7 @@ void ENODE::scanexpr(int duse)
 	case en_uminus:
 	case en_abs:
 	case en_sxb: case en_sxc: case en_sxh:
+	case en_zxb: case en_zxc: case en_zxh:
 	case en_compl:
 	case en_not:
 	case en_chk:
@@ -646,7 +652,7 @@ AMODE *ENODE::GenHook(int flags, int size)
 		ap4 = GetTempRegister();
 		ap1 = GenerateExpression(p[0], flags, size);
 		ap2 = GenerateExpression(p[1]->p[0], flags, size);
-		ap3 = GenerateExpression(p[1]->p[1], flags | F_IMM0, size);
+		ap3 = GenerateExpression(p[1]->p[1], (flags & ~F_VOL) | F_IMMED, size);
 		n1 = PeepCount(ip1);
 		if (n1 < 20) {
 			Generate4adic(op_cmovenz, 0, ap4, ap1, ap2, ap3);
@@ -676,7 +682,7 @@ AMODE *ENODE::GenHook(int flags, int size)
 	if (n1 > 4)
 		GenerateDiadic(op_bra, 0, make_clabel(end_label), 0);
 	else {
-		if (!equal_address(ap1, ap2))
+		if (!IsEqualOperand(ap1, ap2))
 		{
 			GenerateMonadic(op_hint, 0, make_immed(2));
 			GenerateDiadic(op_mov, 0, ap2, ap1);
@@ -685,7 +691,7 @@ AMODE *ENODE::GenHook(int flags, int size)
 	GenerateLabel(false_label);
 	if (n1 > 4) {
 		ap2 = GenerateExpression(node->p[1], flags, size);
-		if (!equal_address(ap1, ap2))
+		if (!IsEqualOperand(ap1, ap2))
 		{
 			GenerateMonadic(op_hint, 0, make_immed(2));
 			GenerateDiadic(op_mov, 0, ap1, ap2);

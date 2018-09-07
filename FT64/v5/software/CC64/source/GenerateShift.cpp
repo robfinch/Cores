@@ -47,7 +47,7 @@ AMODE *GenerateShift(ENODE *node,int flags, int size, int op)
 	ReleaseTempRegister(ap2);
 	ReleaseTempRegister(ap1);
     MakeLegalAmode(ap3,flags,size);
-    return ap3;
+    return (ap3);
 }
 
 

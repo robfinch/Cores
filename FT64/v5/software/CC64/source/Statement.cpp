@@ -48,7 +48,6 @@ char *semaphores[20];
 char last_rem[132];
 
 extern TYP              stdfunc;
-extern int pwrof2(int64_t);
 
 static SYM *makeint(char *name)
 {
@@ -56,7 +55,7 @@ static SYM *makeint(char *name)
 	TYP *tp;
 
 	sp = allocSYM();
-	tp = TYP::Make(bt_long, 2);
+	tp = TYP::Make(bt_long, 8);
 	tp->sname = new std::string("");
 	tp->isUnsigned = FALSE;
 	tp->isVolatile = FALSE;
@@ -64,13 +63,13 @@ static SYM *makeint(char *name)
 	sp->storage_class = sc_auto;
 	sp->SetType(tp);
 	currentFn->sym->lsyms.insert(sp);
-	return sp;
+	return (sp);
 }
 
 
 Statement *NewStatement(int typ, int gt) {
 	Statement *s = (Statement *)xalloc(sizeof(Statement));
-	memset(s, '\0', sizeof(Statement));
+	ZeroMemory(s, sizeof(Statement));
 	s->stype = typ;
 	s->predreg = -1;
 	s->outer = currentStmt;
@@ -898,9 +897,10 @@ void Statement::repcse()
 			break;
 		case st_while:
 		case st_until:
-		case st_do:
+		case st_dowhile:
 		case st_dountil:
 			block->exp->repexpr();
+		case st_do:
 		case st_doloop:
 		case st_forever:
 			block->s1->repcse();
@@ -970,24 +970,38 @@ void Statement::scan()
 {
 	Statement *block = this;
 
+	dfs.printf("<Statement__Scan>");
 	loop_active = 1;
 	while (block != NULL) {
+		dfs.printf("B");
 		switch (block->stype) {
 		case st_compound:
+			dfs.printf("C\n");
 			block->prolog->scan();
 			block->scan_compound();
 			block->epilog->scan();
+			dfs.printf("c");
 			break;
 		case st_check:
 		case st_return:
 		case st_throw:
 		case st_expr:
+			dfs.printf("E");
 			opt_const(&block->exp);
 			block->exp->scanexpr(0);
+			dfs.printf("e");
+			break;
+		case st_dowhile:
+			dfs.printf("{do}");
+			loop_active++;
+			opt_const(&block->exp);
+			block->exp->scanexpr(0);
+			block->s1->scan();
+			loop_active--;
+			dfs.printf("{/do}");
 			break;
 		case st_while:
 		case st_until:
-		case st_do:
 		case st_dountil:
 			loop_active++;
 			opt_const(&block->exp);
@@ -995,6 +1009,7 @@ void Statement::scan()
 			block->s1->scan();
 			loop_active--;
 			break;
+		case st_do:
 		case st_doloop:
 		case st_forever:
 			loop_active++;
@@ -1013,10 +1028,12 @@ void Statement::scan()
 			loop_active--;
 			break;
 		case st_if:
+			dfs.printf("{if}");
 			opt_const(&block->exp);
 			block->exp->scanexpr(0);
 			block->s1->scan();
 			block->s2->scan();
+			dfs.printf("{/if}");
 			break;
 		case st_switch:
 			opt_const(&block->exp);
@@ -1041,6 +1058,7 @@ void Statement::scan()
 		}
 		block = block->next;
 	}
+	dfs.printf("</Statement__Scan>");
 }
 
 
@@ -1538,17 +1556,6 @@ void Statement::GenerateSwitch()
 	s1->GenerateCase();
 	GenerateLabel(breaklab);
 	breaklab = oldbreak;
-}
-
-int popcnt(int64_t m)
-{
-	int n;
-	int cnt;
-
-	cnt = 0;
-	for (n = 0; n < 64; n = n + 1)
-		if (m & (1LL << n)) cnt = cnt + 1;
-	return cnt;
 }
 
 void Statement::GenerateTry()

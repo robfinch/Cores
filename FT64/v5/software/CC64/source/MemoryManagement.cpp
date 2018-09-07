@@ -85,7 +85,7 @@ char    *xalloc(int siz)
             rv = &(glbblk->m[glbindx]);
             glbsize -= siz;
             glbindx += siz;
-            return rv;
+            return (rv);
         }
         else {
             bp = (struct blk *)calloc(1,sizeof(struct blk) + BLKSIZE);
@@ -99,7 +99,7 @@ char    *xalloc(int siz)
             glbblk = bp;
             glbsize = BLKSIZE - siz;
             glbindx = siz;
-            return glbblk->m;
+            return (glbblk->m);
         }
     }
     else    {
@@ -107,7 +107,7 @@ char    *xalloc(int siz)
             rv = &(locblk->m[locindx]);
             locsize -= siz;
             locindx += siz;
-            return rv;
+            return (rv);
         }
         else {
             bp = (struct blk *)calloc(1,sizeof(struct blk) + BLKSIZE);
@@ -121,7 +121,7 @@ char    *xalloc(int siz)
             locblk = bp;
             locsize = BLKSIZE - siz;
             locindx = siz;
-            return locblk->m;
+            return (locblk->m);
         }
     }
 }
@@ -240,8 +240,9 @@ Statement *allocSnode() { return (Statement *)xalloc(sizeof(Statement)); };
 ENODE *allocEnode() {
   ENODE *p;
   p = (ENODE *)allocx(sizeof(ENODE));
+  ZeroMemory(p, sizeof(ENODE));
   p->sp = new std::string();
-  return p;
+  return (p);
 };
 AMODE *allocAmode() { return (AMODE *)xalloc(sizeof(AMODE)); };
 CSE *allocCSE() { return (CSE *)xalloc(sizeof(CSE)); };

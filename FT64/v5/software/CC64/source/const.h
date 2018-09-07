@@ -196,6 +196,7 @@ enum e_op {
 	op_csrrw, op_nop,
 	op_hint, op_hint2, op_rem2,
 	// FT64
+	op_fslt, op_fsle, op_fsgt, op_fsge, op_fseq, op_fsne, op_fsun,
 	op_divmod,
 	op_pushf, op_popf, op_mov2, op_sort, op_demux,
 	op_lvbu, op_lvcu, op_lvhu,

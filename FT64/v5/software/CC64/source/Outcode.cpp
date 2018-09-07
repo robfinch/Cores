@@ -270,6 +270,7 @@ Instruction opl[] =
 	{ "fdiv", op_fdiv, 160, 1, false, RC_FP, RC_FP, RC_FP, 0 },
 	{ "ftoi", op_ftoi, 2, 1, false, RC_GP, RC_FP, 0, 0 },
 	{ "itof", op_itof, 2, 1, false, RC_FP, RC_GP, 0, 0 },
+	{ "fslt", op_fslt, 1, 1, false, RC_GP, RC_FP, RC_FP, 0},
 	{ "fix2flt", op_fix2flt }, { "mtfp", op_mtfp }, { "flt2fix",op_flt2fix }, { "mffp",op_mffp },
 	{ "mv2fix",op_mv2fix }, { "mv2flt", op_mv2flt },
 	{ "csrrw", op_csrrw,1,1,false },
@@ -512,7 +513,7 @@ char *RegMoniker(int regno)
 		sprintf_s(&buf[n][0], 20, "$sp");
 	else if (regno==29)
 		sprintf_s(&buf[n][0], 20, "$lr");
-	else if (regno>=1 && regno<=4)
+	else if (regno>=1 && regno<=2)
 		sprintf_s(&buf[n][0], 20, "$v%d", regno-1);
 	else if (regno >= 18 && regno <= 24)
 		sprintf_s(&buf[n][0], 20, "$a%d", regno-regFirstArg);
@@ -543,7 +544,7 @@ char *RegMoniker2(int regno)
 		sprintf_s(&buf[n][0], 20, "$sp");
 	else if (regno == regLR)
 		sprintf_s(&buf[n][0], 20, "$lr");
-	else if (regno >= 1 && regno <= 4)
+	else if (regno >= 1 && regno <= 2)
 		sprintf_s(&buf[n][0], 20, "$v%d", regno - 1);
 	else if (regno >= regFirstArg && regno <= regLastArg)
 		sprintf_s(&buf[n][0], 20, "$a%d", regno - regFirstArg);
