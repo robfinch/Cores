@@ -423,7 +423,7 @@ void BasicBlock::ComputeSpillCosts()
 	BasicBlock *b;
 	OCODE *ip;
 	Instruction *i;
-	AMODE *pam;
+	Operand *pam;
 	int r;
 	bool endLoop;
 
@@ -632,10 +632,10 @@ void BasicBlock::InsertMove(int reg, int rreg, int blk)
 	cd = (OCODE *)allocx(sizeof(OCODE));
 	cd->opcode = op_mov;
 	cd->insn = GetInsn(op_mov);
-	cd->oper1 = allocAmode();
+	cd->oper1 = allocOperand();
 	cd->oper1->mode = am_reg;
 	cd->oper1->preg = rreg;
-	cd->oper2 = allocAmode();
+	cd->oper2 = allocOperand();
 	cd->oper2->mode = am_reg;
 	cd->oper2->preg = reg;
 	ip = basicBlocks[blk]->code;
@@ -732,8 +732,8 @@ void BasicBlock::InsertSpillCode(int reg, int64_t offs)
 	cd = (OCODE *)xalloc(sizeof(OCODE));
 	cd->insn = GetInsn(op_sw);
 	cd->opcode = op_sw;
-	cd->oper1 = allocAmode();
-	cd->oper2 = allocAmode();
+	cd->oper1 = allocOperand();
+	cd->oper2 = allocOperand();
 	cd->oper1->mode = am_reg;
 	cd->oper1->preg = reg;
 	cd->oper2->mode = am_indx;
@@ -757,8 +757,8 @@ void BasicBlock::InsertFillCode(int reg, int64_t offs)
 	cd = (OCODE *)xalloc(sizeof(OCODE));
 	cd->insn = GetInsn(op_lw);
 	cd->opcode = op_lw;
-	cd->oper1 = allocAmode();
-	cd->oper2 = allocAmode();
+	cd->oper1 = allocOperand();
+	cd->oper2 = allocOperand();
 	cd->oper1->mode = am_reg;
 	cd->oper1->preg = reg;
 	cd->oper2->mode = am_indx;

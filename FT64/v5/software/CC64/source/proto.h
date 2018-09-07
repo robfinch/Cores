@@ -6,12 +6,12 @@ bool IsArgumentReg(int regno);
 bool IsCalleeSave(int regno);
 
 int64_t GetConstExpression(ENODE **pnode);
-void GenMemop(int op, AMODE *ap1, AMODE *ap2, int ssize);
+void GenMemop(int op, Operand *ap1, Operand *ap2, int ssize);
 void GenerateHint(int num);
 
 void SaveRegisterVars(int64_t mask, int64_t rmask);
 void SaveFPRegisterVars(int64_t fpmask, int64_t fprmask);
-void GenLdi(AMODE *, AMODE *);
+void GenLdi(Operand *, Operand *);
 void SaveRegisterVars(int64_t mask, int64_t rmask);
 void SaveFPRegisterVars(int64_t mask, int64_t rmask);
 void funcbottom(Statement *stmt);
@@ -26,7 +26,7 @@ void IRemove();
 int roundSize(TYP *tp);
 extern char *rtrim(char *);
 extern int caselit(scase *casetab, int64_t);
-AMODE *make_indexed2(int lab, int i);
+Operand *make_indexed2(int lab, int i);
 
 // MemoryManagement.cpp
 void FreeFunction(Function *fn);

@@ -36,57 +36,57 @@ int bitsset(int64_t mask)
 	return (bs);
 }
 
-AMODE *makereg(int r)
+Operand *makereg(int r)
 {
-	AMODE *ap;
-    ap = allocAmode();
+	Operand *ap;
+    ap = allocOperand();
     ap->mode = am_reg;
     ap->preg = r;
     return (ap);
 }
 
-AMODE *makevreg(int r)
+Operand *makevreg(int r)
 {
-	AMODE *ap;
-    ap = allocAmode();
+	Operand *ap;
+    ap = allocOperand();
     ap->mode = am_reg;
     ap->preg = r;
 	ap->type = stdvector.GetIndex();
     return (ap);
 }
 
-AMODE *makevmreg(int r)
+Operand *makevmreg(int r)
 {
-	AMODE *ap;
-    ap = allocAmode();
+	Operand *ap;
+    ap = allocOperand();
     ap->mode = am_vmreg;
     ap->preg = r;
     return (ap);
 }
 
-AMODE *makefpreg(int r)
+Operand *makefpreg(int r)
 {
-	AMODE *ap;
-    ap = allocAmode();
+	Operand *ap;
+    ap = allocOperand();
     ap->mode = am_fpreg;
     ap->preg = r;
     ap->type = stddouble.GetIndex();
     return (ap);
 }
 
-AMODE *makesreg(int r)
+Operand *makesreg(int r)
 {
-	AMODE *ap;
-    ap = allocAmode();
+	Operand *ap;
+    ap = allocOperand();
     ap->mode = am_sreg;
     ap->preg = r;
     return (ap);
 }
 
-AMODE *makebreg(int r)
+Operand *makebreg(int r)
 {
-	AMODE *ap;
-    ap = allocAmode();
+	Operand *ap;
+    ap = allocOperand();
     ap->mode = am_breg;
     ap->preg = r;
     return (ap);
@@ -95,10 +95,10 @@ AMODE *makebreg(int r)
 /*
  *      generate the mask address structure.
  */
-AMODE *make_mask(int mask)
+Operand *make_mask(int mask)
 {
-	AMODE *ap;
-    ap = allocAmode();
+	Operand *ap;
+    ap = allocOperand();
     ap->mode = am_mask;
     ap->offset = (ENODE *)mask;
     return (ap);
@@ -107,19 +107,19 @@ AMODE *make_mask(int mask)
 /*
  *      make a direct reference to an immediate value.
  */
-AMODE *make_direct(int i)
+Operand *make_direct(int i)
 {
 	return make_offset(makeinode(en_icon,i));
 }
 
-AMODE *make_indexed2(int lab, int i)
+Operand *make_indexed2(int lab, int i)
 {
-	AMODE *ap;
+	Operand *ap;
     ENODE *ep;
     ep = allocEnode();
     ep->nodetype = en_clabcon;
     ep->i = lab;
-    ap = allocAmode();
+    ap = allocOperand();
 	ap->mode = am_indx;
 	ap->preg = i;
     ap->offset = ep;
@@ -130,10 +130,10 @@ AMODE *make_indexed2(int lab, int i)
 //
 // Generate a direct reference to a string label.
 //
-AMODE *make_strlab(std::string s)
+Operand *make_strlab(std::string s)
 {
-	AMODE *ap;
-    ap = allocAmode();
+	Operand *ap;
+    ap = allocOperand();
     ap->mode = am_direct;
     ap->offset = makesnode(en_nacon,new std::string(s),new std::string(s),-1);
     return (ap);

@@ -26,9 +26,9 @@
 #include "stdafx.h"
 #define SUPPORT_BITFIELD	false
 
-static void SignExtendBitfield(ENODE *node, AMODE *ap3, uint64_t mask)
+static void SignExtendBitfield(ENODE *node, Operand *ap3, uint64_t mask)
 {
-	AMODE *ap2;
+	Operand *ap2;
 	uint64_t umask;
 
 	umask = 0x8000000000000000LL | ~(mask >> 1);
@@ -39,9 +39,9 @@ static void SignExtendBitfield(ENODE *node, AMODE *ap3, uint64_t mask)
 	ReleaseTempRegister(ap2);
 }
 
-AMODE *GenerateBitfieldDereference(ENODE *node, int flags, int size)
+Operand *GenerateBitfieldDereference(ENODE *node, int flags, int size)
 {
-    AMODE *ap, *ap3;
+    Operand *ap, *ap3;
     int width = node->bit_width + 1;
 	int isSigned;
 	uint64_t mask;
@@ -52,7 +52,7 @@ AMODE *GenerateBitfieldDereference(ENODE *node, int flags, int size)
 	ap3 = GetTempRegister();
 	ap3->tempflag = TRUE;
     ap = GenerateDereference(node, flags, node->esize, isSigned);
-    MakeLegalAmode(ap, flags, node->esize);
+    ap->MakeLegal(flags, node->esize);
 	if (ap->mode == am_reg)
 		GenerateDiadic(op_mov, 0, ap3, ap);
 	else if (ap->mode == am_immed)
@@ -73,13 +73,13 @@ AMODE *GenerateBitfieldDereference(ENODE *node, int flags, int size)
 		if (isSigned)
 			SignExtendBitfield(node, ap3, mask);
 	}
-	MakeLegalAmode(ap3, flags, node->esize);
+	ap3->MakeLegal(flags, node->esize);
 	ap3->next = ap;
 	ap3->offset = node;
     return (ap3);
 }
 
-void GenerateBitfieldInsert(AMODE *ap1, AMODE *ap2, int offset, int width)
+void GenerateBitfieldInsert(Operand *ap1, Operand *ap2, int offset, int width)
 {
 	int nn;
 	uint64_t mask;
@@ -103,9 +103,9 @@ void GenerateBitfieldInsert(AMODE *ap1, AMODE *ap2, int offset, int width)
 	}
 }
 
-AMODE *GenerateBitfieldAssign(ENODE *node, int flags, int size)
+Operand *GenerateBitfieldAssign(ENODE *node, int flags, int size)
 {
-	AMODE *ap1, *ap2 ,*ap3;
+	Operand *ap1, *ap2 ,*ap3;
 
 	// we don't want a bitfield dereference operation here.
 	// We want all the bits.
@@ -122,7 +122,7 @@ AMODE *GenerateBitfieldAssign(ENODE *node, int flags, int size)
 		ReleaseTempRegister(ap3);
 	}
 	ReleaseTempRegister(ap2);
-	MakeLegalAmode(ap1, flags, size);
+	ap1->MakeLegal( flags, size);
 	return ap1;
 }
 

@@ -34,13 +34,13 @@ int TempFPInvalidate();
 int TempInvalidate();
 void TempRevalidate(int,int);
 void TempFPRevalidate(int);
-void ReleaseTempRegister(AMODE *ap);
-AMODE *GetTempRegister();
-extern void GenLoad(AMODE *ap1, AMODE *ap3, int ssize, int size);
+void ReleaseTempRegister(Operand *ap);
+Operand *GetTempRegister();
+extern void GenLoad(Operand *ap1, Operand *ap3, int ssize, int size);
 
-AMODE *GenExpr(ENODE *node)
+Operand *GenExpr(ENODE *node)
 {
-	AMODE *ap1,*ap2,*ap3,*ap4;
+	Operand *ap1,*ap2,*ap3,*ap4;
 	int lab0, lab1;
 	int size;
 	int op;
@@ -301,7 +301,7 @@ AMODE *GenExpr(ENODE *node)
 	*/
 }
 
-void GenCompareI(AMODE *ap3, AMODE *ap1, AMODE *ap2, int su)
+void GenCompareI(Operand *ap3, Operand *ap1, Operand *ap2, int su)
 {
 	GenerateTriadic(su ? op_cmp : op_cmpu,0,ap3,ap1,ap2);
 }
@@ -309,7 +309,7 @@ void GenCompareI(AMODE *ap3, AMODE *ap1, AMODE *ap2, int su)
 void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int prediction)
 {
 	int size, sz;
-	AMODE *ap1, *ap2, *ap3;
+	Operand *ap1, *ap2, *ap3;
 
 	size = GetNaturalSize(node);
     if (op==op_flt || op==op_fle || op==op_fgt || op==op_fge || op==op_feq || op==op_fne) {
@@ -772,7 +772,7 @@ static void RestoreTemporaries(Function *sym, int sp, int fsp)
 //
 static int GeneratePushParameter(ENODE *ep, int regno, int stkoffs)
 {    
-	AMODE *ap, *ap3;
+	Operand *ap, *ap3;
 	int nn = 0;
 	int sz;
 	
@@ -937,9 +937,9 @@ static int GenerateStoreArgumentList(Function *sym, ENODE *plist)
     return sum;
 }
 
-AMODE *GenerateFunctionCall(ENODE *node, int flags)
+Operand *GenerateFunctionCall(ENODE *node, int flags)
 { 
-	AMODE *ap;
+	Operand *ap;
 	Function *sym;
 	Function *o_fn;
 	SYM *s;
@@ -1096,7 +1096,7 @@ AMODE *GenerateFunctionCall(ENODE *node, int flags)
 	*/
 }
 
-void GenLdi(AMODE *ap1, AMODE *ap2)
+void GenLdi(Operand *ap1, Operand *ap2)
 {
 	GenerateDiadic(op_ldi,0,ap1,ap2);
   return;

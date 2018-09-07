@@ -26,7 +26,7 @@
 //                                                                          
 // ============================================================================
 //
-class AMODE;
+class Operand;
 class ENODE;
 class Statement;
 class BasicBlock;
@@ -34,7 +34,7 @@ class Instruction;
 class Var;
 class CSE;
 class CSETable;
-class AMODE;
+class Operand;
 class SYM;
 class Function;
 class OCODE;
@@ -443,7 +443,7 @@ public:
 	bool IsFloatType() { return (etype == bt_double || etype == bt_quad || etype == bt_float || etype == bt_triple); };
 	bool IsUnsignedType() { return (etype == bt_ubyte || etype == bt_uchar || etype == bt_ushort || etype == bt_ulong || etype == bt_pointer); };
 	bool IsBitfield();
-	static bool IsEqualOperand(AMODE *a, AMODE *b);
+	static bool IsEqualOperand(Operand *a, Operand *b);
 	char fsize();
 	long GetReferenceSize();
 
@@ -454,18 +454,20 @@ public:
 	void repexpr();
 
 	// Code generation
-	AMODE *GenIndex();
-	AMODE *GenHook(int flags, int size);
-	AMODE *GenUnary(int flags, int size, int op);
-	AMODE *GenBinary(int flags, int size, int op);
-	AMODE *GenAssignAdd(int flags, int size, int op);
-	AMODE *GenAssignLogic(int flags, int size, int op);
-	AMODE *GenLand(int flags, int op);
+	Operand *GenIndex();
+	Operand *GenHook(int flags, int size);
+	Operand *GenShift(int flags, int size, int op);
+	Operand *GenDivMod(int flags, int size, int op);
+	Operand *GenUnary(int flags, int size, int op);
+	Operand *GenBinary(int flags, int size, int op);
+	Operand *GenAssignShift(int flags, int size, int op);
+	Operand *GenAssignAdd(int flags, int size, int op);
+	Operand *GenAssignLogic(int flags, int size, int op);
+	Operand *GenLand(int flags, int op);
 };
 
 
-// AMODE is really Operand
-class AMODE : public CompilerType
+class Operand : public CompilerType
 {
 public:
 	unsigned int mode : 6;
@@ -489,14 +491,15 @@ public:
 	short int deep2;
 	ENODE *offset;
 	int8_t scale;
-	AMODE *next;			// For extended sizes (long)
+	Operand *next;			// For extended sizes (long)
 public:
-	AMODE *Clone();
-	static bool IsEqual(AMODE *ap1, AMODE *ap2);
+	Operand *Clone();
+	static bool IsEqual(Operand *ap1, Operand *ap2);
 	char fpsize();
 
 	void GenZeroExtend(int isize, int osize);
 	void GenSignExtend(int isize, int osize, int flags);
+	void MakeLegal(int flags, int size);
 };
 
 // Output code structure
@@ -518,12 +521,12 @@ public:
 	short pregreg;
 	short predop;
 	int loop_depth;
-	AMODE *oper1, *oper2, *oper3, *oper4;
+	Operand *oper1, *oper2, *oper3, *oper4;
 	__int16 phiops[100];
 public:
 	static OCODE *MakeNew();
 	static OCODE *Clone(OCODE *p);
-	static bool IsEqualOperand(AMODE *a, AMODE *b) { return (AMODE::IsEqual(a, b)); };
+	static bool IsEqualOperand(Operand *a, Operand *b) { return (Operand::IsEqual(a, b)); };
 	void MarkRemove() { remove = true; };
 	void MarkRemove2() { remove2 = true; };
 	bool HasTargetReg() const;
@@ -548,7 +551,7 @@ public:
 	static OCODE *FindLabel(int64_t i) { return (PeepList::FindLabel(i)); };
 	static void Rename();
 	static void Search(BasicBlock *);
-	static void Subscript(AMODE *oper);
+	static void Subscript(Operand *oper);
 	static int WhichPred(BasicBlock *x, int y);
 };
 
@@ -564,7 +567,7 @@ OCODE {
 	unsigned int remove : 1;
 	short pregreg;
 	short predop;
-	AMODE *oper1, *oper2, *oper3, *oper4;
+	Operand *oper1, *oper2, *oper3, *oper4;
 };
 typedef OCODE OCODE;
 */
@@ -811,7 +814,7 @@ public:
 	int BitIndex(int x, int y, int *intndx, int *bitndx);
 	void Add(int x, int y);
 	void Add2(int x, int y);
-	void AddToLive(BasicBlock *b, AMODE *ap, OCODE *ip);
+	void AddToLive(BasicBlock *b, Operand *ap, OCODE *ip);
 	void AddToVec(int x, int y);
 	void InsertArgumentMoves();
 	bool Remove(int n);

@@ -25,14 +25,14 @@
 //
 #include "stdafx.h"
 
-AMODE *AMODE::Clone()
+Operand *Operand::Clone()
 {
-	AMODE *newap;
+	Operand *newap;
 
 	if (this == NULL)
 		return NULL;
-	newap = allocAmode();
-	memcpy(newap, this, sizeof(AMODE));
+	newap = allocOperand();
+	memcpy(newap, this, sizeof(Operand));
 	return (newap);
 }
 
@@ -40,7 +40,7 @@ AMODE *AMODE::Clone()
 //      compare two address nodes and return true if they are
 //      equivalent.
 
-bool AMODE::IsEqual(AMODE *ap1, AMODE *ap2)
+bool Operand::IsEqual(Operand *ap1, Operand *ap2)
 {
 	if (ap1 == nullptr || ap2 == nullptr)
 		return (false);
@@ -68,7 +68,7 @@ bool AMODE::IsEqual(AMODE *ap1, AMODE *ap2)
 	return (false);
 }
 
-char AMODE::fpsize()
+char Operand::fpsize()
 {
 	if (type == stddouble.GetIndex())
 		return 'd';
@@ -94,11 +94,11 @@ char AMODE::fpsize()
 	}
 }
 
-void AMODE::GenZeroExtend(int isize, int osize)
+void Operand::GenZeroExtend(int isize, int osize)
 {
 	if (isize == osize)
 		return;
-	MakeLegalAmode(this, F_REG, isize);
+	MakeLegal(F_REG, isize);
 	switch (osize)
 	{
 	case 1:	GenerateDiadic(op_zxb, 0, this, this); break;
@@ -107,10 +107,10 @@ void AMODE::GenZeroExtend(int isize, int osize)
 	}
 }
 
-void AMODE::GenSignExtend(int isize, int osize, int flags)
+void Operand::GenSignExtend(int isize, int osize, int flags)
 {
-	AMODE *ap1;
-	AMODE *ap = this;
+	Operand *ap1;
+	Operand *ap = this;
 
 	if (isize == osize)
 		return;
@@ -128,7 +128,7 @@ void AMODE::GenSignExtend(int isize, int osize, int flags)
 		GenStore(ap1, ap, osize);
 		ReleaseTempRegister(ap1);
 		return;
-		//MakeLegalAmode(ap,flags & (F_REG|F_FPREG),isize);
+		//MakeLegalOperand(ap,flags & (F_REG|F_FPREG),isize);
 	}
 	if (ap->type == stddouble.GetIndex()) {
 		switch (isize) {
@@ -144,3 +144,149 @@ void AMODE::GenSignExtend(int isize, int osize, int flags)
 		}
 	}
 }
+
+// ----------------------------------------------------------------------------
+// MakeLegal will coerce the addressing mode in ap1 into a mode that is
+// satisfactory for the flag word.
+// ----------------------------------------------------------------------------
+void Operand::MakeLegal(int flags, int size)
+{
+	Operand *ap2, *ap1;
+	int64_t i;
+
+	if (this == nullptr)
+		return;
+
+	//	if (flags & F_NOVALUE) return;
+	if (((flags & F_VOL) == 0) || tempflag)
+	{
+		switch (mode) {
+		case am_immed:
+			i = ((ENODE *)(offset))->i;
+			if (flags & F_IMM8) {
+				if (i < 256 && i >= 0)
+					return;
+			}
+			else if (flags & F_IMM6) {
+				if (i < 64 && i >= 0)
+					return;
+			}
+			else if (flags & F_IMM0) {
+				if (i == 0)
+					return;
+			}
+			else if (flags & F_IMMED)
+				return;         /* mode ok */
+			break;
+		case am_reg:
+			if (flags & F_REG)
+				return;
+			break;
+		case am_fpreg:
+			if (flags & F_FPREG)
+				return;
+			break;
+		case am_ind:
+		case am_indx:
+		case am_indx2:
+		case am_direct:
+			if (flags & F_MEM)
+				return;
+			break;
+		}
+	}
+
+	if (flags & F_REG)
+	{
+		if (mode == am_reg)	// Might get this if F_VOL specified
+			return;
+		ReleaseTempRegister(this);      // maybe we can use it...
+		if (this)
+			ap2 = GetTempRegister();// GetTempReg(ap->type);
+		else
+			ap2 = GetTempReg(stdint.GetIndex());
+		if (mode == am_ind || mode == am_indx)
+			GenLoad(ap2, this, size, size);
+		else if (mode == am_immed) {
+			GenerateDiadic(op_ldi, 0, ap2, this);
+		}
+		else {
+			if (mode == am_reg || mode == am_fpreg)
+				GenerateDiadic(op_mov, 0, ap2, this);
+			else
+				GenLoad(ap2, this, size, size);
+		}
+		mode = am_reg;
+		preg = ap2->preg;
+		deep = ap2->deep;
+		pdeep = ap2->pdeep;
+		tempflag = 1;
+		return;
+	}
+	if (flags & F_FPREG)
+	{
+		ReleaseTempReg(this);      /* maybe we can use it... */
+		ap2 = GetTempFPRegister();
+		if (mode == am_ind || mode == am_indx)
+			GenLoad(ap2, this, size, size);
+		else if (mode == am_immed) {
+			ap1 = GetTempRegister();
+			GenerateDiadic(op_ldi, 0, ap1, this);
+			GenerateDiadic(op_mov, 0, ap2, ap1);
+			ReleaseTempReg(ap1);
+		}
+		else {
+			if (mode == am_reg)
+				GenerateDiadic(op_mov, 0, ap2, this);
+			else
+				GenLoad(ap2, this, size, size);
+		}
+		mode = am_fpreg;
+		preg = ap2->preg;
+		deep = ap2->deep;
+		pdeep = ap2->pdeep;
+		tempflag = 1;
+		return;
+	}
+	// Here we wanted the mode to be non-register (memory/immed)
+	// Should fix the following to place the result in memory and
+	// not a register.
+	if (size == 1)
+	{
+		ReleaseTempRegister(this);
+		ap2 = GetTempRegister();
+		GenerateDiadic(op_mov, 0, ap2, this);
+		if (isUnsigned)
+			GenerateTriadic(op_and, 0, ap2, ap2, make_immed(255));
+		else {
+			GenerateDiadic(op_sext8, 0, ap2, ap2);
+		}
+		mode = ap2->mode;
+		preg = ap2->preg;
+		deep = ap2->deep;
+		pdeep = ap2->pdeep;
+		size = 2;
+	}
+	ap2 = GetTempRegister();
+	switch (mode) {
+	case am_ind:
+	case am_indx:
+		GenLoad(ap2, this, size, size);
+		break;
+	case am_immed:
+		GenerateDiadic(op_ldi, 0, ap2, this);
+		break;
+	case am_reg:
+		GenerateDiadic(op_mov, 0, ap2, this);
+		break;
+	default:
+		GenLoad(ap2, this, size, size);
+	}
+	mode = am_reg;
+	preg = ap2->preg;
+	deep = ap2->deep;
+	pdeep = ap2->pdeep;
+	tempflag = 1;
+	//     Leave("MkLegalOperand",0);
+}
+

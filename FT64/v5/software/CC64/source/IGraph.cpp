@@ -231,7 +231,7 @@ void IGraph::Unite(int father, int son)
 
 // Only consider adding trees that have not yet been colored to the live set.
 
-void IGraph::AddToLive(BasicBlock *b, AMODE *ap, OCODE *ip)
+void IGraph::AddToLive(BasicBlock *b, Operand *ap, OCODE *ip)
 {
 	int v;
 

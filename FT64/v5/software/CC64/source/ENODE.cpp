@@ -25,9 +25,17 @@
 //
 #include "stdafx.h"
 
-bool ENODE::IsEqualOperand(AMODE *a, AMODE *b)
+void swap_nodes(ENODE *node)
 {
-	return (AMODE::IsEqual(a, b));
+	ENODE *temp;
+	temp = node->p[0];
+	node->p[0] = node->p[1];
+	node->p[1] = temp;
+}
+
+bool ENODE::IsEqualOperand(Operand *a, Operand *b)
+{
+	return (Operand::IsEqual(a, b));
 };
 
 char ENODE::fsize()
@@ -561,9 +569,9 @@ void ENODE::scanexpr(int duse)
 // No reason to ReleaseTempReg() because the registers used are transported
 // forward.
 // ----------------------------------------------------------------------------
-AMODE *ENODE::GenIndex()
+Operand *ENODE::GenIndex()
 {
-	AMODE *ap1, *ap2;
+	Operand *ap1, *ap2;
 
 	if ((p[0]->nodetype == en_tempref || p[0]->nodetype == en_regvar)
 		&& (p[1]->nodetype == en_tempref || p[1]->nodetype == en_regvar))
@@ -617,7 +625,7 @@ AMODE *ENODE::GenIndex()
 		return ap2;
 	}
 	// ap1->mode must be F_REG
-	MakeLegalAmode(ap2, F_REG, 8);
+	ap2->MakeLegal( F_REG, 8);
 	ap1->mode = am_indx2;            /* make indexed */
 	ap1->sreg = ap2->preg;
 	ap1->deep2 = ap2->deep;
@@ -630,9 +638,9 @@ AMODE *ENODE::GenIndex()
 //
 // Generate code to evaluate a condition operator node (?:)
 //
-AMODE *ENODE::GenHook(int flags, int size)
+Operand *ENODE::GenHook(int flags, int size)
 {
-	AMODE *ap1, *ap2, *ap3, *ap4;
+	Operand *ap1, *ap2, *ap3, *ap4;
 	int false_label, end_label;
 	OCODE *ip1;
 	int n1;
@@ -709,13 +717,97 @@ AMODE *ENODE::GenHook(int flags, int size)
 	}
 }
 
+Operand *ENODE::GenShift(int flags, int size, int op)
+{
+	Operand *ap1, *ap2, *ap3;
+
+	ap3 = GetTempRegister();
+	ap1 = GenerateExpression(p[0], F_REG, size);
+	ap2 = GenerateExpression(p[1], F_REG | F_IMM6, 8);
+	GenerateTriadic(op, size, ap3, ap1, ap2);
+	// Rotates automatically sign extend
+	if ((op == op_rol || op == op_ror) && ap2->isUnsigned)
+		switch (size) {
+		case 1:	GenerateDiadic(op_zxb, 0, ap3, ap3); break;
+		case 2:	GenerateDiadic(op_zxc, 0, ap3, ap3); break;
+		case 4:	GenerateDiadic(op_zxh, 0, ap3, ap3); break;
+		default:;
+		}
+	ReleaseTempRegister(ap2);
+	ReleaseTempRegister(ap1);
+	ap3->MakeLegal(flags, size);
+	return (ap3);
+}
+
+
+Operand *ENODE::GenAssignShift(int flags, int size, int op)
+{
+	Operand    *ap1, *ap2, *ap3;
+
+	//size = GetNaturalSize(node->p[0]);
+	ap3 = GenerateExpression(p[0], F_ALL & ~F_IMMED, size);
+	ap2 = GenerateExpression(p[1], F_REG | F_IMM6, size);
+	if (ap3->mode == am_reg) {
+		GenerateTriadic(op, size, ap3, ap3, ap2);
+		ReleaseTempRegister(ap2);
+		ap3->MakeLegal(flags, size);
+		return (ap3);
+	}
+	ap1 = GetTempRegister();
+	GenLoad(ap1, ap3, size, size);
+	GenerateTriadic(op, size, ap1, ap1, ap2);
+	GenStore(ap1, ap3, size);
+	ReleaseTempRegister(ap1);
+	ReleaseTempRegister(ap2);
+	ap3->MakeLegal(flags, size);
+	return (ap3);
+}
+
+
+//
+//      generate code to evaluate a mod operator or a divide
+//      operator.
+//
+Operand *ENODE::GenDivMod(int flags, int size, int op)
+{
+	Operand *ap1, *ap2, *ap3;
+
+	//if( node->p[0]->nodetype == en_icon ) //???
+	//	swap_nodes(node);
+	if (op == op_fdiv) {
+		ap3 = GetTempFPRegister();
+		ap1 = GenerateExpression(p[0], F_FPREG, 8);
+		ap2 = GenerateExpression(p[1], F_FPREG, 8);
+	}
+	else {
+		ap3 = GetTempRegister();
+		ap1 = GenerateExpression(p[0], F_REG, 8);
+		ap2 = GenerateExpression(p[1], F_REG | F_IMMED, 8);
+	}
+	if (op == op_fdiv) {
+		// Generate a convert operation ?
+		if (ap1->fpsize() != ap2->fpsize()) {
+			if (ap2->fpsize() == 's')
+				GenerateDiadic(op_fcvtsq, 0, ap2, ap2);
+		}
+		GenerateTriadic(op, ap1->fpsize(), ap3, ap1, ap2);
+	}
+	else
+		GenerateTriadic(op, 0, ap3, ap1, ap2);
+	//    GenerateDiadic(op_ext,0,ap3,0);
+	ap3->MakeLegal( flags, 2);
+	ReleaseTempReg(ap2);
+	ReleaseTempReg(ap1);
+	return (ap3);
+}
+
 
 //
 // Generate code to evaluate a unary minus or complement.
 //
-AMODE *ENODE::GenUnary(int flags, int size, int op)
+Operand *ENODE::GenUnary(int flags, int size, int op)
 {
-	AMODE *ap, *ap2;
+	Operand *ap, *ap2;
 
 	if (IsFloatType()) {
 		ap2 = GetTempFPRegister();
@@ -736,15 +828,15 @@ AMODE *ENODE::GenUnary(int flags, int size, int op)
 		GenerateDiadic(op, 0, ap2, ap);
 	}
 	ReleaseTempReg(ap);
-	MakeLegalAmode(ap2, flags, size);
+	ap2->MakeLegal( flags, size);
 	return (ap2);
 }
 
 // Generate code for a binary expression
 
-AMODE *ENODE::GenBinary(int flags, int size, int op)
+Operand *ENODE::GenBinary(int flags, int size, int op)
 {
-	AMODE *ap1, *ap2, *ap3, *ap4;
+	Operand *ap1, *ap2, *ap3, *ap4;
 
 	if (IsFloatType())
 	{
@@ -851,14 +943,14 @@ AMODE *ENODE::GenBinary(int flags, int size, int op)
 	if (ap2)
 		ReleaseTempReg(ap2);
 	ReleaseTempReg(ap1);
-	MakeLegalAmode(ap3, flags, size);
+	ap3->MakeLegal( flags, size);
 	return (ap3);
 }
 
 
-AMODE *ENODE::GenAssignAdd(int flags, int size, int op)
+Operand *ENODE::GenAssignAdd(int flags, int size, int op)
 {
-	AMODE *ap1, *ap2, *ap3;
+	Operand *ap1, *ap2, *ap3;
 	int ssize;
 	bool negf = false;
 
@@ -876,7 +968,7 @@ AMODE *ENODE::GenAssignAdd(int flags, int size, int op)
 		ReleaseTempReg(ap2);
 		ReleaseTempReg(ap1->next);
 		ReleaseTempReg(ap1);
-		MakeLegalAmode(ap3, flags, size);
+		ap3->MakeLegal( flags, size);
 		return (ap3);
 	}
 	if (IsFloatType()) {
@@ -905,7 +997,7 @@ AMODE *ENODE::GenAssignAdd(int flags, int size, int op)
 	else if (ap1->mode == am_fpreg) {
 		GenerateTriadic(op, ap1->fpsize(), ap1, ap1, ap2);
 		ReleaseTempReg(ap2);
-		MakeLegalAmode(ap1, flags, size);
+		ap1->MakeLegal( flags, size);
 		return (ap1);
 	}
 	else {
@@ -914,13 +1006,13 @@ AMODE *ENODE::GenAssignAdd(int flags, int size, int op)
 	ReleaseTempReg(ap2);
 	if (ap1->type != stddouble.GetIndex() && !ap1->isUnsigned)
 		ap1->GenSignExtend(ssize, size, flags);
-	MakeLegalAmode(ap1, flags, size);
+	ap1->MakeLegal( flags, size);
 	return (ap1);
 }
 
-AMODE *ENODE::GenAssignLogic(int flags, int size, int op)
+Operand *ENODE::GenAssignLogic(int flags, int size, int op)
 {
-	AMODE *ap1, *ap2, *ap3;
+	Operand *ap1, *ap2, *ap3;
 	int ssize;
 
 	ssize = GetNaturalSize(p[0]);
@@ -937,7 +1029,7 @@ AMODE *ENODE::GenAssignLogic(int flags, int size, int op)
 		ReleaseTempReg(ap2);
 		ReleaseTempReg(ap1->next);
 		ReleaseTempReg(ap1);
-		MakeLegalAmode(ap3, flags, size);
+		ap3->MakeLegal( flags, size);
 		return (ap3);
 	}
 	ap1 = GenerateExpression(p[0], F_ALL & ~F_FPREG, ssize);
@@ -952,25 +1044,25 @@ AMODE *ENODE::GenAssignLogic(int flags, int size, int op)
 	if (!ap1->isUnsigned && !(flags & F_NOVALUE)) {
 		if (size > ssize) {
 			if (ap1->mode != am_reg) {
-				MakeLegalAmode(ap1, F_REG, ssize);
+				ap1->MakeLegal( F_REG, ssize);
 			}
 			switch (ssize) {
 			case 1:	GenerateDiadic(op_sxb, 0, ap1, ap1); break;
 			case 2:	GenerateDiadic(op_sxc, 0, ap1, ap1); break;
 			case 4:	GenerateDiadic(op_sxh, 0, ap1, ap1); break;
 			}
-			MakeLegalAmode(ap1, flags, size);
+			ap1->MakeLegal( flags, size);
 			return (ap1);
 		}
 		ap1->GenSignExtend(ssize, size, flags);
 	}
-	MakeLegalAmode(ap1, flags, size);
+	ap1->MakeLegal( flags, size);
 	return (ap1);
 }
 
-AMODE *ENODE::GenLand(int flags, int op)
+Operand *ENODE::GenLand(int flags, int op)
 {
-	AMODE *ap1, *ap2, *ap3, *ap4, *ap5;
+	Operand *ap1, *ap2, *ap3, *ap4, *ap5;
 
 	ap3 = GetTempRegister();
 	ap1 = GenerateExpression(p[0], flags, 8);
@@ -984,6 +1076,6 @@ AMODE *ENODE::GenLand(int flags, int op)
 	ReleaseTempReg(ap2);
 	ReleaseTempReg(ap4);
 	ReleaseTempReg(ap1);
-	MakeLegalAmode(ap3, flags, 8);
+	ap3->MakeLegal( flags, 8);
 	return (ap3);
 }

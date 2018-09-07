@@ -331,7 +331,7 @@ int CFG::WhichPred(BasicBlock *x, int y)
 
 // Set a subscript on a variable.
 
-void CFG::Subscript(AMODE *oper)
+void CFG::Subscript(Operand *oper)
 {
 	Var *v;
 

@@ -322,6 +322,10 @@ static void opt0(ENODE **node)
 								*node = ep->p[1];
 								return;
                         }
+						// Place the constant node second in the add to allow
+						// use of immediate mode instructions.
+						if (ep->nodetype==en_add)
+							swap_nodes(ep);
                     }
 					// Add or subtract of zero gets eliminated.
                     else if( ep->p[1]->nodetype == en_icon ) {
@@ -359,6 +363,8 @@ static void opt0(ENODE **node)
                             ep->nodetype = en_shl;
 							return;
                         }
+						// Place constant as oper2
+						swap_nodes(ep);
                     }
                     else if( ep->p[1]->nodetype == en_icon ) {
                         val = ep->p[1]->i;
@@ -434,10 +440,12 @@ static void opt0(ENODE **node)
 			case en_xor:    
                     opt0(&(ep->p[0]));
                     opt0(&(ep->p[1]));
-                    if( ep->p[0]->nodetype == en_icon &&
-                            ep->p[1]->nodetype == en_icon )
-                            dooper(*node);
-                    break;
+					if (ep->p[0]->nodetype == en_icon &&
+						ep->p[1]->nodetype == en_icon)
+						dooper(*node);
+					else if (ep->p[0]->nodetype == en_icon)
+						swap_nodes(ep);
+					break;
 
 			case en_shr:	case en_shru:	case en_asr:
 			case en_asl:	case en_shl:	case en_shlu:

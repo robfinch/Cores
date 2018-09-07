@@ -226,7 +226,7 @@ extern void *allocx(int);
 extern char *xalloc(int);
 extern SYM *allocSYM();
 extern TYP *allocTYP();
-extern AMODE *allocAmode();
+extern Operand *allocOperand();
 extern ENODE *allocEnode();
 extern CSE *allocCSE();
 extern void ReleaseGlobalMemory();
@@ -243,7 +243,7 @@ extern void SkipSpaces();
 // Stmt.c
 extern Statement *ParseCompoundStatement();
 
-extern void GenerateDiadic(int op, int len, AMODE *ap1,AMODE *ap2);
+extern void GenerateDiadic(int op, int len, Operand *ap1,Operand *ap2);
 // Symbol.c
 extern SYM *gsearch(std::string na);
 extern SYM *search(std::string na,TABLE *thead);
@@ -286,7 +286,7 @@ extern TYP *nameref(ENODE **node,int);
 extern TYP *forcefit(ENODE **node1,TYP *tp1,ENODE **node2,TYP *tp2,bool);
 extern TYP *expression(ENODE **node);
 extern int IsLValue(ENODE *node);
-extern AMODE *GenerateExpression(ENODE *node, int flags, int size);
+extern Operand *GenerateExpression(ENODE *node, int flags, int size);
 extern int GetNaturalSize(ENODE *node);
 extern TYP *asnop(ENODE **node);
 extern TYP *NonCommaExpression(ENODE **);
@@ -298,12 +298,12 @@ extern void GenerateIntoff(Statement *stmt);
 extern void GenerateInton(Statement *stmt);
 extern void GenerateStop(Statement *stmt);
 extern void gen_regrestore();
-extern AMODE *make_direct(int i);
-extern AMODE *makereg(int r);
-extern AMODE *makevreg(int r);
-extern AMODE *makefpreg(int t);
-extern AMODE *makebreg(int r);
-extern AMODE *makepred(int r);
+extern Operand *make_direct(int i);
+extern Operand *makereg(int r);
+extern Operand *makevreg(int r);
+extern Operand *makefpreg(int t);
+extern Operand *makebreg(int r);
+extern Operand *makepred(int r);
 extern int bitsset(int64_t mask);
 extern int popcnt(int64_t m);
 // Outcode.c
@@ -316,7 +316,7 @@ extern void seg(int sg, int algn);
 extern void cseg();
 extern void dseg();
 extern void tseg();
-//extern void put_code(int op, int len,AMODE *aps, AMODE *apd, AMODE *);
+//extern void put_code(int op, int len,Operand *aps, Operand *apd, Operand *);
 extern void put_code(OCODE *);
 extern char *put_label(int lab, char*, char*, char);
 extern char *gen_label(int lab, char*, char*, char);
@@ -328,18 +328,18 @@ extern int PeepCount(OCODE *);
 extern void flush_peep();
 extern void GenerateLabel(int labno);
 extern void GenerateZeradic(int op);
-extern void GenerateMonadic(int op, int len, AMODE *ap1);
-extern void GenerateMonadicNT(int op, int len, AMODE *ap1);
-extern void GenerateDiadic(int op, int len, AMODE *ap1, AMODE *ap2);
-extern void GenerateDiadicNT(int op, int len, AMODE *ap1, AMODE *ap2);
-extern void GenerateTriadic(int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3);
-extern void Generate4adic(int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3, AMODE *ap4);
+extern void GenerateMonadic(int op, int len, Operand *ap1);
+extern void GenerateMonadicNT(int op, int len, Operand *ap1);
+extern void GenerateDiadic(int op, int len, Operand *ap1, Operand *ap2);
+extern void GenerateDiadicNT(int op, int len, Operand *ap1, Operand *ap2);
+extern void GenerateTriadic(int op, int len, Operand *ap1, Operand *ap2, Operand *ap3);
+extern void Generate4adic(int op, int len, Operand *ap1, Operand *ap2, Operand *ap3, Operand *ap4);
 // Gencode.c
-extern AMODE *make_label(int lab);
-extern AMODE *make_clabel(int lab);
-extern AMODE *make_immed(int64_t i);
-extern AMODE *make_indirect(int i);
-extern AMODE *make_offset(ENODE *node);
+extern Operand *make_label(int lab);
+extern Operand *make_clabel(int lab);
+extern Operand *make_immed(int64_t i);
+extern Operand *make_indirect(int i);
+extern Operand *make_offset(ENODE *node);
 extern void swap_nodes(ENODE *node);
 
 // IdentifyKeyword.c
@@ -347,44 +347,42 @@ extern int IdentifyKeyword();
 // Preproc.c
 extern int preprocess();
 // CodeGenerator.c
-extern AMODE *make_indirect(int i);
-extern AMODE *make_indexed(int64_t o, int i);
-extern AMODE *make_indx(ENODE *node, int reg);
-extern AMODE *make_string(char *s);
+extern Operand *make_indirect(int i);
+extern Operand *make_indexed(int64_t o, int i);
+extern Operand *make_indx(ENODE *node, int reg);
+extern Operand *make_string(char *s);
 extern void GenerateFalseJump(ENODE *node,int label, unsigned int);
 extern void GenerateTrueJump(ENODE *node,int label, unsigned int);
 extern char *GetNamespace();
 extern char nmspace[20][100];
-extern AMODE *GenerateDereference(ENODE *, int, int, int);
-extern void MakeLegalAmode(AMODE *ap,int flags, int size);
-extern void GenLoad(AMODE *, AMODE *, int size, int);
-extern void GenStore(AMODE *, AMODE *, int size);
+extern Operand *GenerateDereference(ENODE *, int, int, int);
+extern void MakeLegalOperand(Operand *ap,int flags, int size);
+extern void GenLoad(Operand *, Operand *, int size, int);
+extern void GenStore(Operand *, Operand *, int size);
 // List.c
 extern void ListTable(TABLE *t, int i);
 // Register.c
-extern AMODE *GetTempReg(int);
-extern AMODE *GetTempRegister();
-extern AMODE *GetTempTgtRegister();
-extern AMODE *GetTempBrRegister();
-extern AMODE *GetTempFPRegister();
-extern AMODE *GetTempVectorRegister();
-extern AMODE *GetTempVectorMaskRegister();
-extern void ReleaseTempRegister(AMODE *ap);
-extern void ReleaseTempReg(AMODE *ap);
+extern Operand *GetTempReg(int);
+extern Operand *GetTempRegister();
+extern Operand *GetTempTgtRegister();
+extern Operand *GetTempBrRegister();
+extern Operand *GetTempFPRegister();
+extern Operand *GetTempVectorRegister();
+extern Operand *GetTempVectorMaskRegister();
+extern void ReleaseTempRegister(Operand *ap);
+extern void ReleaseTempReg(Operand *ap);
 extern int TempInvalidate(int *);
 extern void TempRevalidate(int sp, int fsp);
 extern int GetTempMemSpace();
 extern bool IsArgumentReg(int);
-extern AMODE *GenerateFunctionCall(ENODE *node, int flags);
+extern Operand *GenerateFunctionCall(ENODE *node, int flags);
 
 extern void GenerateFunction(SYM *sym);
 extern void GenerateReturn(Statement *stmt);
 
-extern AMODE *GenerateShift(ENODE *node,int flags, int size, int op);
-extern AMODE *GenerateAssignShift(ENODE *node,int flags,int size,int op);
-extern AMODE *GenerateBitfieldDereference(ENODE *node, int flags, int size);
-extern AMODE *GenerateBitfieldAssign(ENODE *node, int flags, int size);
-extern void GenerateBitfieldInsert(AMODE *ap1, AMODE *ap2, int offset, int width);
+extern Operand *GenerateBitfieldDereference(ENODE *node, int flags, int size);
+extern Operand *GenerateBitfieldAssign(ENODE *node, int flags, int size);
+extern void GenerateBitfieldInsert(Operand *ap1, Operand *ap2, int offset, int width);
 
 // err.c
 extern void fatal(char *str);

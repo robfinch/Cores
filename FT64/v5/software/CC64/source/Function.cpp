@@ -505,7 +505,7 @@ bool Function::GenDefaultCatch()
 // For a leaf routine don't bother to store the link register.
 void Function::SetupReturnBlock()
 {
-	AMODE *ap;
+	Operand *ap;
 	int n;
 
 	GenerateTriadic(op_sub, 0, makereg(regSP), makereg(regSP), make_immed(4 * sizeOfWord));
@@ -544,7 +544,7 @@ void Function::SetupReturnBlock()
 //
 void Function::GenReturn(Statement *stmt)
 {
-	AMODE *ap;
+	Operand *ap;
 	int nn;
 	int cnt, cnt2;
 	int toAdd;

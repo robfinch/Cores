@@ -1201,7 +1201,7 @@ void Statement::GenerateIf()
 	int lab1, lab2, oldbreak;
 	ENODE *ep, *node;
 	int size;
-	AMODE *ap1;
+	Operand *ap1;
 
 	lab1 = nextlabel++;     // else label
 	lab2 = nextlabel++;     // exit label
@@ -1370,7 +1370,7 @@ void Statement::GenerateLinearSwitch()
 	int64_t *bf;
 	int nn, jj;
 	Statement *defcase, *stmt;
-	AMODE *ap, *ap1;
+	Operand *ap, *ap1;
 
 	curlab = nextlabel++;
 	defcase = 0;
@@ -1465,7 +1465,7 @@ void Statement::GenerateTabularSwitch()
 //
 void Statement::GenerateSwitch()
 {
-	AMODE *ap, *ap1, *ap2;
+	Operand *ap, *ap1, *ap2;
 	Statement *st, *defcase;
 	int oldbreak;
 	int tablabel;
@@ -1562,7 +1562,7 @@ void Statement::GenerateTry()
 {
 	int lab1, curlab;
 	int oldthrow;
-	AMODE *a, *ap2;
+	Operand *a, *ap2;
 	ENODE *node;
 	Statement *stmt;
 
@@ -1613,7 +1613,7 @@ void Statement::GenerateTry()
 
 void Statement::GenerateThrow()
 {
-	AMODE *ap;
+	Operand *ap;
 
 	if (exp != NULL)
 	{
@@ -1638,7 +1638,7 @@ void Statement::GenerateThrow()
 
 void Statement::GenerateCheck()
 {
-	AMODE *ap1, *ap2, *ap3;
+	Operand *ap1, *ap2, *ap3;
 	ENODE *node, *ep;
 	int size;
 
@@ -1727,7 +1727,7 @@ void Statement::GenerateFuncBody()
 
 void Statement::Generate()
 {
-	AMODE *ap;
+	Operand *ap;
 	Statement *stmt;
 
 	for (stmt = this; stmt != NULL; stmt = stmt->next)
@@ -1841,7 +1841,7 @@ void Statement::GenerateAsm()
 void Statement::GenerateFirstcall()
 {
 	int     lab1, lab2;
-	AMODE *ap1;
+	Operand *ap1;
 
 	lab1 = contlab;
 	lab2 = breaklab;

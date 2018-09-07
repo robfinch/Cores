@@ -557,7 +557,7 @@ char *RegMoniker2(int regno)
 	return &buf[n][0];
 }
 
-void PutAddressMode(AMODE *ap)
+void PutAddressMode(Operand *ap)
 {
 	switch( ap->mode )
     {
@@ -634,12 +634,12 @@ void PutAddressMode(AMODE *ap)
 /*
  *      output a generic instruction.
  */
-//void put_code(int op, int len,AMODE *aps,AMODE *apd,AMODE *ap3,AMODE *ap4)
+//void put_code(int op, int len,Operand *aps,Operand *apd,Operand *ap3,Operand *ap4)
 void put_code(OCODE *p)
 {
 	static BasicBlock *b = nullptr;
 	int op = p->opcode;
-	AMODE *aps,*apd,*ap3,*ap4;
+	Operand *aps,*apd,*ap3,*ap4;
 	ENODE *ep;
 	int predreg = p->pregreg;
 	int len = p->length;

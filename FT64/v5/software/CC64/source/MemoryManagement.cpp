@@ -244,6 +244,6 @@ ENODE *allocEnode() {
   p->sp = new std::string();
   return (p);
 };
-AMODE *allocAmode() { return (AMODE *)xalloc(sizeof(AMODE)); };
+Operand *allocOperand() { return (Operand *)xalloc(sizeof(Operand)); };
 CSE *allocCSE() { return (CSE *)xalloc(sizeof(CSE)); };
 

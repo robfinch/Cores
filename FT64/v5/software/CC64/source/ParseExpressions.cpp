@@ -2278,10 +2278,19 @@ TYP *multops(ENODE **node)
 									ep1->esize = 512;
 									break;
                                 default:
-									if( tp1->isUnsigned )
-                                        ep1 = makenode(en_mulu,ep1,ep2);
-									else
-                                        ep1 = makenode(en_mul,ep1,ep2);
+									// place constant as second operand.
+									if (ep1->nodetype == en_icon) {
+										if (tp1->isUnsigned)
+											ep1 = makenode(en_mulu, ep2, ep1);
+										else
+											ep1 = makenode(en_mul, ep2, ep1);
+									}
+									else {
+										if (tp1->isUnsigned)
+											ep1 = makenode(en_mulu, ep1, ep2);
+										else
+											ep1 = makenode(en_mul, ep1, ep2);
+									}
 								}
 								ep1->esize = tp1->size;
 								ep1->etype = (e_bt)tp1->type;
@@ -2421,6 +2430,15 @@ static TYP *addops(ENODE **node)
 					else
     					ep1 = makenode( oper ? en_vadd : en_vsub,ep1,ep2);
 					ep1->esize = 8;
+					break;
+				// In the case of a pointer place any constant to be added
+				// as the second operand. This will allow the use of immediate
+				// mode addressing rather than having to load into a register.
+				case bt_pointer:
+					if (ep1->nodetype==en_icon && oper)
+						ep1 = makenode(en_add, ep2, ep1);
+					else
+						ep1 = makenode(oper ? en_add : en_sub, ep1, ep2);
 					break;
 				default:
     				ep1 = makenode( oper ? en_add : en_sub,ep1,ep2);
@@ -2770,9 +2788,9 @@ ascomm3:        NextToken();
 				tp2 = asnop(&ep2);
 				if( tp1->type == bt_pointer ) {
 					ep3 = makeinode(en_icon,tp1->GetBtp()->size);
-					ep3->esize = 2;
+					ep3->esize = sizeOfPtr;
 					ep2 = makenode(en_mul,ep2,ep3);
-					ep2->esize = 2;
+					ep2->esize = sizeOfPtr;
 				}
 				goto ascomm2;
 			case asminus:

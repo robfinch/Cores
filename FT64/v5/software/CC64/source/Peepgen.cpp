@@ -88,7 +88,7 @@ void GenerateZeradic(int op)
 	dfs.printf("</GenerateZeradic>\r\n");
 }
 
-void GenerateMonadic(int op, int len, AMODE *ap1)
+void GenerateMonadic(int op, int len, Operand *ap1)
 {
 	dfs.printf("<GenerateMonadic>");
 	OCODE *cd;
@@ -109,7 +109,7 @@ void GenerateMonadic(int op, int len, AMODE *ap1)
 	dfs.printf("</GenerateMonadic>\n");
 }
 
-void GenerateDiadic(int op, int len, AMODE *ap1, AMODE *ap2)
+void GenerateDiadic(int op, int len, Operand *ap1, Operand *ap2)
 {
 	OCODE *cd;
 	cd = (OCODE *)xalloc(sizeof(OCODE));
@@ -130,7 +130,7 @@ void GenerateDiadic(int op, int len, AMODE *ap1, AMODE *ap2)
 	AddToPeepList(cd);
 }
 
-void GenerateTriadic(int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3)
+void GenerateTriadic(int op, int len, Operand *ap1, Operand *ap2, Operand *ap3)
 {
 	OCODE    *cd;
 	cd = (OCODE *)allocx(sizeof(OCODE));
@@ -145,7 +145,7 @@ void GenerateTriadic(int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3)
 	AddToPeepList(cd);
 }
 
-void Generate4adic(int op, int len, AMODE *ap1, AMODE *ap2, AMODE *ap3, AMODE *ap4)
+void Generate4adic(int op, int len, Operand *ap1, Operand *ap2, Operand *ap3, Operand *ap4)
 {
 	OCODE *cd;
 	cd = (OCODE *)allocx(sizeof(OCODE));
@@ -213,8 +213,8 @@ void GenerateLabel(int labno)
 	OCODE *newl;
 	newl = (OCODE *)allocx(sizeof(OCODE));
 	newl->opcode = op_label;
-	newl->oper1 = (AMODE *)labno;
-	newl->oper2 = (AMODE *)my_strdup((char *)currentFn->sym->name->c_str());
+	newl->oper1 = (Operand *)labno;
+	newl->oper2 = (Operand *)my_strdup((char *)currentFn->sym->name->c_str());
 	AddToPeepList(newl);
 }
 
@@ -308,7 +308,7 @@ void put_ocode(OCODE *p)
 
 void peep_add(OCODE *ip)
 {
-     AMODE *a;
+     Operand *a;
      
      // IF add to SP is followed by a move to SP, eliminate the add
      if (ip==NULL)
@@ -873,7 +873,7 @@ static void opt_nbr()
 static void PeepoptHint(OCODE *ip)
 {
 	OCODE *fwd, *back;
-	AMODE *am;
+	Operand *am;
 
 	if ((ip->back && ip->back->opcode==op_label) || (ip->fwd && ip->fwd->opcode==op_label))
 		return;

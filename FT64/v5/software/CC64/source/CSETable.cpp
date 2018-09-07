@@ -233,7 +233,7 @@ int CSETable::AllocateVectorRegisters()
 
 void CSETable::InitializeTempRegs()
 {
-	AMODE *ap, *ap2, *ap3;
+	Operand *ap, *ap2, *ap3;
 	CSE *csp;
 	ENODE *exptr;
 	int size;
