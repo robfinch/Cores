@@ -45,7 +45,7 @@ int popcnt(int64_t m)
 	cnt = 0;
 	for (n = 0; n < 64; n = n + 1)
 		if (m & (1LL << n)) cnt = cnt + 1;
-	return cnt;
+	return (cnt);
 }
 
 std::string TraceName(SYM *sp)

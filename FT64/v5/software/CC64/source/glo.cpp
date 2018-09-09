@@ -46,6 +46,21 @@ int regFirstRegvar = 11;
 int regLastRegvar = 17;
 int regFirstArg = 18;
 int regLastArg = 22;
+int pregSP = 31;
+int pregFP = 30;
+int pregLR = 29;
+int pregXLR = 28;
+int pregGP = 27;
+int pregTP = 26;
+int pregCLP = 25;                // class pointer
+int pregPP = 24;					// program pointer
+int pregZero = 0;
+int pregFirstTemp = 3;
+int pregLastTemp = 10;
+int pregFirstRegvar = 11;
+int pregLastRegvar = 17;
+int pregFirstArg = 18;
+int pregLastArg = 22;
 int farcode = 0;
 int wcharSupport = 1;
 int verbose = 0;
@@ -122,6 +137,8 @@ int callsFn = FALSE;
 int stmtdepth = 0;
 
 char nmspace[20][100];
+int bsave_mask;
+short int loop_active;
 
 
 

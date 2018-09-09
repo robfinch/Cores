@@ -625,7 +625,7 @@ j1:
 		error(ERR_ASMTOOLONG);
 	buf[nn] = '\0';
 	snp->label = (int64_t *)my_strdup(buf);
-	return snp;
+	return (snp);
 }
 
 Statement *Statement::ParseTry()
@@ -659,7 +659,7 @@ Statement *Statement::ParseTry()
 		tl->next = (Statement *)NULL;
 	}
 	snp->s2 = hd;
-	return snp;
+	return (snp);
 }
 
 Statement *Statement::ParseExpression()
@@ -675,7 +675,7 @@ Statement *Statement::ParseExpression()
 	if (lastst != end)
 		needpunc(semicolon, 44);
 	dfs.printf("</ParseExpression>\n");
-	return snp;
+	return (snp);
 }
 
 // Parse a compound statement.
@@ -772,9 +772,9 @@ Statement *Statement::ParseLabel()
 	if (sp->storage_class == sc_label) {
 		snp->label = (int64_t *)sp->value.i;
 		snp->next = (Statement *)NULL;
-		return snp;
+		return (snp);
 	}
-	return 0;
+	return (0);
 }
 
 Statement *Statement::ParseGoto()
@@ -866,7 +866,7 @@ Statement *Statement::Parse()
 		snp->next = (Statement *)NULL;
 	}
 	dfs.puts("</Parse>");
-	return snp;
+	return (snp);
 }
 
 

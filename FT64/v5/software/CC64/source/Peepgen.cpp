@@ -69,7 +69,7 @@ int optimized;	// something got optimized
 
 void GenerateZeradic(int op)
 {
-	dfs.printf("<GenerateZeradic>\r\n");
+	dfs.printf("<GenerateZeradic>");
 	OCODE *cd;
 	dfs.printf("A");
 	cd = (OCODE *)allocx(sizeof(OCODE));
@@ -292,18 +292,9 @@ void flush_peep()
 		if( peep_head->opcode == op_label )
 			put_label((int)peep_head->oper1,"",GetNamespace(),'C');
 		else
-			put_ocode(peep_head);
+			peep_head->store(ofs);
 		peep_head = peep_head->fwd;
 	}
-}
-
-/*
- *      output the instruction passed.
- */
-void put_ocode(OCODE *p)
-{
-	put_code(p);
-//	put_code(p->opcode,p->length,p->oper1,p->oper2,p->oper3,p->oper4);
 }
 
 void peep_add(OCODE *ip)

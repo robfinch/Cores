@@ -163,4 +163,174 @@ void OCODE::OptRedor()
 	}
 }
 
+void OCODE::storeHex(txtoStream& ofs)
+{
+	ENODE *ep;
+
+	switch (opcode) {
+	case op_label:
+		ofs.printf("L");
+		ofs.printf("%05X", (int)oper1);
+		ofs.printf(GetNamespace());
+		ofs.printf("\n");
+		break;
+	case op_fnname:
+		ep = (ENODE *)oper1->offset;
+		ofs.printf("F%s:\n", (char *)ep->sp->c_str());
+		break;
+	default:
+		ofs.printf("C");
+		insn->storeHex(ofs);
+		ofs.printf("L%01d", length);
+		if (oper1) oper1->storeHex(ofs);
+		if (oper2) oper2->storeHex(ofs);
+		if (oper3) oper3->storeHex(ofs);
+		if (oper4) oper4->storeHex(ofs);
+		ofs.printf("\n");
+	}
+}
+
+OCODE *OCODE::loadHex(std::ifstream& ifs)
+{
+	OCODE *cd;
+	char buf[20];
+	int op;
+
+	cd = (OCODE *)allocx(sizeof(OCODE));
+	ifs.read(buf, 1);
+	if (buf[0] != 'I') {
+		while (!ifs.eof() && buf[0] != '\n')
+			ifs.read(buf, 1);
+		return (nullptr);
+	}
+	cd->insn = Instruction::loadHex(ifs);
+	cd->opcode = cd->insn->opcode;
+	ifs.read(buf, 1);
+	if (buf[0] == 'L') {
+		ifs.read(buf, 1);
+		buf[1] = '\0';
+		cd->length = atoi(buf);
+		ifs.read(buf, 1);
+	}
+	cd->oper1 = nullptr;
+	cd->oper2 = nullptr;
+	cd->oper3 = nullptr;
+	cd->oper4 = nullptr;
+	switch (buf[0]) {
+	case '1': cd->oper1 = Operand::loadHex(ifs); break;
+	case '2': cd->oper2 = Operand::loadHex(ifs); break;
+	case '3': cd->oper3 = Operand::loadHex(ifs); break;
+	case '4': cd->oper4 = Operand::loadHex(ifs); break;
+	default:
+		while (!ifs.eof() && buf[0] != '\n')
+			ifs.read(buf, 1);
+	}
+	return (cd);
+}
+
+//
+// Output a generic instruction.
+//
+void OCODE::store(txtoStream& ofs)
+{
+	static BasicBlock *b = nullptr;
+	int op = opcode;
+	Operand *ap1, *ap2, *ap3, *ap4;
+	ENODE *ep;
+	int predreg = pregreg;
+	char buf[8];
+	int nn;
+
+	ap1 = oper1;
+	ap2 = oper2;
+	ap3 = oper3;
+	ap4 = oper4;
+
+	if (bb != b) {
+		ofs.printf(";====================================================\n");
+		ofs.printf("; Basic Block %d\n", bb->num);
+		ofs.printf(";====================================================\n");
+		b = bb;
+	}
+	if (comment) {
+		ofs.printf("; %s\n", (char *)comment->oper1->offset->sp->c_str());
+	}
+	if (remove)
+		ofs.printf(";-1");
+	if (remove2)
+		ofs.printf(";-2");
+	if (op != op_fnname)
+	{
+		if (op == op_rem2) {
+			ofs.printf(";\t");
+			ofs.printf("%6.6s\t", "");
+			ofs.printf(ap1->offset->sp->c_str());
+			ofs.printf("\n");
+			return;
+		}
+		else {
+			ofs.printf("\t");
+			ofs.printf("%6.6s\t", "");
+			nn = insn->store(ofs);
+			buf[0] = '\0';
+			if (length) {
+				if (length <= 16) {
+					switch (length) {
+					case 1:	sprintf_s(buf, sizeof(buf), ".b"); nn += 2; break;
+					case 2:	sprintf_s(buf, sizeof(buf), ".c"); nn += 2; break;
+					case 4:	sprintf_s(buf, sizeof(buf), ".h"); nn += 2; break;
+					}
+				}
+				else {
+					if (length != 'w' && length != 'W') {
+						sprintf_s(buf, sizeof(buf), ".%c", length);
+						nn += 2;
+					}
+				}
+			}
+			ofs.write(buf);
+			// The longest mnemonic is 7 chars
+			while (nn < 9) {
+				ofs.write(" ");
+				nn++;
+			}
+		}
+	}
+	if (op == op_fnname) {
+		ep = (ENODE *)oper1->offset;
+		ofs.printf("%s:", (char *)ep->sp->c_str());
+	}
+	else if (ap1 != 0)
+	{
+		ofs.printf("\t");
+		ap1->store(ofs);
+		if (ap2 != 0)
+		{
+			if (op == op_push || op == op_pop)
+				ofs.printf("/");
+			else
+				ofs.printf(",");
+			if (op == op_cmp && ap2->mode != am_reg)
+				printf("aha\r\n");
+			ap2->store(ofs);
+			if (ap3 != NULL) {
+				if (op == op_push || op == op_pop)
+					ofs.printf("/");
+				else
+					ofs.printf(",");
+				ap3->store(ofs);
+				if (ap4 != NULL) {
+					if (op == op_push || op == op_pop)
+						ofs.printf("/");
+					else
+						ofs.printf(",");
+					ap4->store(ofs);
+				}
+			}
+		}
+	}
+	ofs.printf("\n");
+}
+
+
 

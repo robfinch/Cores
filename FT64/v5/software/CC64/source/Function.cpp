@@ -399,7 +399,7 @@ void Function::RestoreGPRegisterVars()
 	int nn;
 
 	if (save_mask != 0) {
-		cnt2 = cnt = bitsset(save_mask)*sizeOfWord;
+		cnt2 = cnt = popcnt(save_mask)*sizeOfWord;
 		cnt = 0;
 		for (nn = 0; nn < 64; nn++) {
 			if (save_mask & (1LL << nn)) {
@@ -417,7 +417,7 @@ void Function::RestoreFPRegisterVars()
 	int nn;
 
 	if (fpsave_mask != 0) {
-		cnt2 = cnt = bitsset(fpsave_mask)*sizeOfWord;
+		cnt2 = cnt = popcnt(fpsave_mask)*sizeOfWord;
 		cnt = 0;
 		for (nn = 0; nn < 64; nn++) {
 			if (fpsave_mask & (1LL << nn)) {
@@ -635,7 +635,7 @@ void Function::GenReturn(Statement *stmt)
 
 	// Restore fp registers used as register variables.
 	if (fpsave_mask != 0) {
-		cnt2 = cnt = (bitsset(fpsave_mask) - 1)*sizeOfFP;
+		cnt2 = cnt = (popcnt(fpsave_mask) - 1)*sizeOfFP;
 		for (nn = 31; nn >= 1; nn--) {
 			if (fpsave_mask & (1LL << nn)) {
 				GenerateDiadic(op_lw, 0, makereg(nn), make_indexed(cnt2 - cnt, regSP));

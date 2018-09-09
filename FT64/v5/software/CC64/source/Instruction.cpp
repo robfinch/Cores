@@ -54,6 +54,19 @@ bool Instruction::IsFlowControl()
 	return (false);
 }
 
+static int fbmcmp(const void *a, const void *b)
+{
+	Instruction *ib;
+
+	ib = (Instruction *)b;
+	return (strcmp((char *)a, ib->mnem));
+}
+
+Instruction *Instruction::FindByMnem(std::string& mn)
+{
+	return ((Instruction *)bsearch(mn.c_str(), &opl[1], 222, sizeof(Instruction), fbmcmp));
+}
+
 Instruction *Instruction::Get(int op)
 {
 	int i;
@@ -62,5 +75,62 @@ Instruction *Instruction::Get(int op)
 		if (opl[i].opcode == op)
 			return (&opl[i]);
 	return (nullptr);
+}
+
+int Instruction::store(txtoStream& ofs)
+{
+	ofs.write(mnem);
+	return (strlen(mnem));
+}
+
+int Instruction::storeHRR(txtoStream& ofs)
+{
+	ofs.write(mnem);
+	return (strlen(mnem));
+}
+
+int Instruction::storeHex(txtoStream& ofs)
+{
+	char buf[20];
+
+	sprintf_s(buf, sizeof(buf), "I%03X", opcode);
+	ofs.write(buf);
+	return (0);
+}
+
+Instruction *Instruction::loadHex(std::ifstream& ifs)
+{
+	char buf[10];
+	int op;
+
+	ifs.read(buf, 3);
+	buf[4] = '\0';
+	op = atoi(buf);
+	return (GetInsn(op));
+}
+
+int Instruction::load(std::ifstream& ifs, Instruction **p)
+{
+	int nn;
+	char buf[20];
+	std::streampos pos;
+
+	do {
+		ifs.read(buf, 1);
+	} while (isspace(buf[0]));
+	pos = ifs.tellg();
+	for (nn = 0; nn < sizeof(buf); nn++) {
+		ifs.read(&buf[nn], 1);
+		if (isspace(buf[nn]))
+			break;
+	}
+	// If too long, can't be an instruction
+	if (nn >= sizeof(buf)) {
+		ifs.seekg(pos);
+		return (0);
+	}
+	// Given the mnemonic figure out the opcode
+	*p = FindByMnem(std::string(buf));
+	return (nn);
 }
 

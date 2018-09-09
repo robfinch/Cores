@@ -154,21 +154,21 @@ int	options(char *s)
 	else if (s[1] == 'r') {
 		if (s[2] == 'v') {
 			opt_vreg = TRUE;
-			regSP = 511;
-			regFP = 510;
-			regLR = 509;
-			regXLR = 508;
-			regGP = 507;
-			regTP = 506;
-			regCLP = 505;              // class pointer
-			regPP = 504;				// program pointer
+			regSP = 1023;
+			regFP = 1022;
+			regLR = 1021;
+			regXLR = 1020;
+			regGP = 1019;
+			regTP = 1018;
+			regCLP = 1017;              // class pointer
+			regPP = 1016;				// program pointer
 			regZero = 0;
 			regFirstTemp = 3;
-			regLastTemp = 255;
-			regFirstRegvar = 256;
-			regLastRegvar = 479;
-			regFirstArg = 480;
-			regLastArg = 501;
+			regLastTemp = 511;
+			regFirstRegvar = 512;
+			regLastRegvar = 979;
+			regFirstArg = 980;
+			regLastArg = 1011;
 		}
 		else
 		{

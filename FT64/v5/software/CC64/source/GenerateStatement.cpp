@@ -28,14 +28,6 @@
 extern char *rtrim(char *);
 extern int caselit(scase *casetab,int64_t);
 
-int bitsset(int64_t mask)
-{
-	int nn,bs=0;
-	for (nn =0; nn < 64; nn++)
-		if (mask & (1LL << nn)) bs++;
-	return (bs);
-}
-
 Operand *makereg(int r)
 {
 	Operand *ap;

@@ -290,3 +290,95 @@ void Operand::MakeLegal(int flags, int size)
 	//     Leave("MkLegalOperand",0);
 }
 
+void Operand::storeHex(txtoStream& ofs)
+{
+	ofs.printf("O");
+	switch (mode) {
+	case am_immed:
+		ofs.printf("#");
+	}
+}
+
+Operand *Operand::loadHex(std::ifstream& ifs)
+{
+	Operand *oper;
+
+	oper = allocOperand();
+	return (oper);
+}
+
+
+void Operand::store(txtoStream& ofs)
+{
+	switch (mode)
+	{
+	case am_immed:
+		ofs.write("#");
+		// Fall through
+	case am_direct:
+		offset->PutConstant(ofs, lowhigh, rshift);
+		break;
+	case am_reg:
+		if (type == stdvector.GetIndex())
+			ofs.printf("v%d", (int)preg);
+		else if (type == stdvectormask->GetIndex())
+			ofs.printf("vm%d", (int)preg);
+		else if (type == stddouble.GetIndex())
+			ofs.printf("$fp%d", (int)preg);
+		else {
+			ofs.write(RegMoniker(preg));
+			//if (renamed)
+			//	ofs.printf(".%d", (int)pregs);
+		}
+		break;
+	case am_vmreg:
+		ofs.printf("vm%d", (int)preg);
+		break;
+	case am_fpreg:
+		ofs.printf("$fp%d", (int)preg);
+		break;
+	case am_ind:
+		ofs.printf("[%s]", RegMoniker(preg));
+		break;
+	case am_indx:
+		// It's not known the function is a leaf routine until code
+		// generation time. So the parameter offsets can't be determined
+		// until code is being output. This bit of code first adds onto
+		// parameter offset the size of the return block, then later
+		// subtracts it off again.
+		if (offset) {
+			if (preg == regFP) {
+				if (offset->sym) {
+					if (offset->sym->IsParameter) {	// must be an parameter
+						offset->i += Compiler::GetReturnBlockSize();
+					}
+				}
+			}
+			offset->PutConstant(ofs, 0, 0);
+			if (preg == regFP) {
+				if (offset->sym) {
+					if (offset->sym->IsParameter) {
+						offset->i -= Compiler::GetReturnBlockSize();
+					}
+				}
+			}
+		}
+		ofs.printf("[%s]", RegMoniker(preg));
+		break;
+
+	case am_indx2:
+		if (scale == 1 || scale == 0)
+			ofs.printf("[%s+%s]", RegMoniker(sreg), RegMoniker(preg));
+		else
+			ofs.printf("[%s+%s*%d]", RegMoniker(sreg), RegMoniker(preg), scale);
+		break;
+
+//	case am_mask:
+//		put_mask((int)offset);
+//		break;
+	default:
+		printf("DIAG - illegal address mode.\n");
+		break;
+	}
+}
+

@@ -145,6 +145,9 @@ public:
 	static void InsertAfter(OCODE *an, OCODE *cd);
 	void RemoveCompilerHints2();
 	void Remove();
+
+	void loadHex(std::ifstream& ifs);
+	void storeHex(txtoStream& ofs);
 };
 
 class PeepOpt
@@ -464,15 +467,20 @@ public:
 	Operand *GenAssignAdd(int flags, int size, int op);
 	Operand *GenAssignLogic(int flags, int size, int op);
 	Operand *GenLand(int flags, int op);
+
+	void PutConstant(txtoStream& ofs, unsigned int lowhigh, unsigned int rshift);
+	void PutConstantHex(txtoStream& ofs, unsigned int lowhigh, unsigned int rshift);
+	static ENODE *GetConstantHex(std::ifstream& ifs);
 };
 
 
 class Operand : public CompilerType
 {
 public:
+	int num;					// number of the operand
 	unsigned int mode : 6;
-	unsigned int preg : 9;		// primary virtual register number
-	unsigned int sreg : 9;		// secondary virtual register number (indexed addressing modes)
+	unsigned int preg : 12;		// primary virtual register number
+	unsigned int sreg : 12;		// secondary virtual register number (indexed addressing modes)
 	unsigned short int pregs;	// subscripted register number
 	unsigned short int sregs;
 	unsigned int segment : 4;
@@ -500,6 +508,13 @@ public:
 	void GenZeroExtend(int isize, int osize);
 	void GenSignExtend(int isize, int osize, int flags);
 	void MakeLegal(int flags, int size);
+
+	// Storage
+	void PutAddressMode(txtoStream& ofs);
+	void store(txtoStream& fp);
+	void storeHex(txtoStream& fp);
+	static Operand *loadHex(std::ifstream& fp);
+	void load(std::ifstream fp);
 };
 
 // Output code structure
@@ -536,6 +551,10 @@ public:
 	// Optimizations
 	void OptMove();
 	void OptRedor();
+
+	static OCODE *loadHex(std::ifstream& ifs);
+	void store(txtoStream& ofs);
+	void storeHex(txtoStream& ofs);
 };
 
 // Control Flow Graph
@@ -838,10 +857,10 @@ public:
 	short extime;	// execution time, divide may take hundreds of cycles
 	unsigned int targetCount : 2;
 	bool memacc;	// instruction accesses memory
-	unsigned int regclass1 : 4;	// register class 1=integer,2=floating point,4=vector
-	unsigned int regclass2 : 4;	// register class 1=integer,2=floating point,4=vector
-	unsigned int regclass3 : 4;	// register class 1=integer,2=floating point,4=vector
-	unsigned int regclass4 : 4;	// register class 1=integer,2=floating point,4=vector
+	unsigned int regclass1;	// register class 1=integer,2=floating point,4=vector
+	unsigned int regclass2;	// register class 1=integer,2=floating point,4=vector
+	unsigned int regclass3;	// register class 1=integer,2=floating point,4=vector
+	unsigned int regclass4;	// register class 1=integer,2=floating point,4=vector
 public:
 	bool IsFlowControl();
 	bool IsSetInsn() {
@@ -850,8 +869,14 @@ public:
 			|| opcode == op_sltu || opcode == op_sleu || opcode == op_sgtu || opcode == op_sgeu
 			);
 	};
+	static Instruction *FindByMnem(std::string& mn);
 	static Instruction *Get(int op);
 	inline bool HasTarget() { return (targetCount != 0); };
+	int store(txtoStream& ofs);
+	int storeHex(txtoStream& ofs);	// hex intermediate representation
+	int storeHRR(txtoStream& ofs);	// human readable representation
+	static Instruction *loadHex(std::ifstream& fp);
+	int load(std::ifstream& ifs, Instruction **p);
 };
 
 class CSE {
@@ -1066,6 +1091,7 @@ public:
 	SYM symbolTable[32768];
 	Function functionTable[3000];
 	TYP typeTable[32768];
+	short int pass;
 public:
 	GlobalDeclaration *decls;
 	Compiler();
@@ -1076,6 +1102,7 @@ public:
 	void AddBuiltinFunctions();
 	static int GetReturnBlockSize() { return (4 * 8); };
 	int main2(int c, char **argv);
+	void storeSymbols(std::ostream& ofs);
 };
 
 class CPU

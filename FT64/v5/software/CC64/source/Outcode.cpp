@@ -40,291 +40,239 @@ int	       gentype = nogen;
 int	       curseg = noseg;
 int        outcol = 0;
 
-struct oplst {
-        char    *s;
-        int     ov;
-        };
-
+// Please keep table in alphabetical order.
+// Instruction.cpp has the number of table elements hard-coded in it.
+//
 Instruction opl[] =
 {   
-	{"mov", op_mov,1,1,false,RC_ALL,RC_ALL,0,0},
-	{"move",op_move,1,1},
-	{"add",op_add,1,1,false,RC_GP,RC_GP,RC_GP,0},
-	{"addu", op_addu,1,1},
-	{"ldi",op_ldi,1,1,false,RC_GP,0,0,0},
-	{"addi",op_addi,1,1},
-	{"lw", op_lw,4,1,true,RC_GP,RC_GP,0,0},
-	{"sw", op_sw,4,0,true,RC_GP,RC_GP,0,0},
-	{"call", op_call,4,1,true,0,0,0,0},
-	{"ret", op_ret,1,0,0,0,0,0},
-	{"sub",op_sub,1,1,false,RC_GP,RC_GP,RC_GP,0},
-	{"subu", op_subu,1,1},
-	{"subi",op_subi,1,1},
-	{"and",op_and,1,1,false,RC_GP,RC_GP,RC_GP,0},
-	{"andi", op_andi,1,1},
-	{"or",op_or,1,1,false,RC_GP,RC_GP,RC_GP,0 },
-	{"ori",op_ori,1,1},
-	{"eor",op_eor,1,1,false,RC_GP,RC_GP,RC_GP,0 },
-	{"eori", op_eori,1,1},
-	{"xor",op_xor,1,1,false,RC_GP,RC_GP,RC_GP,0 },
-	{"xori", op_xori,1,1},
-	{"divi", op_divi,68,1},
-	{"modi", op_modi,68,1},
-	{"modui", op_modui,68,1},
-	{"div", op_div,68,1,false,RC_GP,RC_GP,RC_GP,0 },
-	{"subui",op_subui,1,1},
-	{"shru", op_shru,2,1,false,RC_GP,RC_GP,RC_GP,0 },
-	{"divsi", op_divsi,68,1},
-	{"not", op_not,2,1,false,RC_GP,RC_GP,0,0 },
-	{"addui",op_addui,1,1},
-	{"dw", op_dw},
-	{"bfext", op_bfext,2,1},
-	{"bfextu", op_bfextu,2,1},
-	{"bfins", op_bfins,2,1},
-	{"lh", op_lh,4,1,true,RC_GP,RC_GP,0,0},
-	{"lc", op_lc,4,1,true,RC_GP,RC_GP,0,0 },
-	{"lb", op_lb,4,1,true,RC_GP,RC_GP,0,0 },
-	{"lbu", op_lbu,4,1,true,RC_GP,RC_GP,0,0 },
-	{"lcu", op_lcu,4,1,true,RC_GP,RC_GP,0,0 },
-	{"lhu", op_lhu,4,1,true,RC_GP,RC_GP,0,0 },
-	{ "lvbu", op_lvbu,4,1,true ,RC_GP,RC_GP,0,0 },
-	{ "lvcu", op_lvcu,4,1,true ,RC_GP,RC_GP,0,0 },
-	{ "lvhu", op_lvhu,4,1,true ,RC_GP,RC_GP,0,0 },
-	{"sti", op_sti,1,0},
-	{"lft", op_lft,4,1},
-	{"sft", op_sft,4,0},
-
-	{"lws", op_lws,4,1},
-	{"sws", op_sws,4,0},
-	{"lm", op_lm},
-	{"sm",op_sm},
-	{"sb",op_sb,4,0,true,RC_GP,RC_GP,0,0 },
-	{"sc",op_sc,4,0,true,RC_GP,RC_GP,0,0 },
-	{"sh",op_sh,4,0,true,RC_GP,RC_GP,0,0 },
-	{"sptr", op_sptr,4,0,true,RC_GP,RC_GP,0,0 },
-	{"spt", op_spt,4,0,true ,RC_GP,RC_GP,0,0 },
-	{"setwb", op_setwb, 1, 0 },
-
-	{"loop", op_loop,1,0},
-	{"jal", op_jal,1,1},
-
-	{"cmp",op_cmp,1,1,false,RC_GP,RC_GP,RC_GP,0},
-	{"cmpu",op_cmpu,1,1,false,RC_GP,RC_GP,RC_GP,0 },
-	// Branches
-	// Branches weighted as 3 because they might cause a pipeline flush
-	{"beq", op_beq,3,0,false,RC_GP,RC_GP,0,0},
-	{"bne", op_bne,3,0,false,RC_GP,RC_GP,0,0 },
-	{"blt", op_blt,3,0,false,RC_GP,RC_GP,0,0 },
-	{"ble", op_ble, 3,0,false,RC_GP,RC_GP,0,0 },
-	{ "bgt", op_bgt,3,0,false,RC_GP,RC_GP,0,0 },
-	{ "bge", op_bge,3,0,false,RC_GP,RC_GP,0,0 },
-	{ "bltu", op_bltu,3,0,false,RC_GP,RC_GP,0,0 },
-	{ "bleu", op_bleu,3,0,false,RC_GP,RC_GP,0,0 },
-	{ "bgtu", op_bgtu,3,0,false,RC_GP,RC_GP,0,0 },
-	{ "bgeu", op_bgeu,3,0,false,RC_GP,RC_GP,0,0 },
-	{ "bbs", op_bbs,3,0,false,RC_GP,0,0,0 },
-	{ "bbc", op_bbc,3,0,false,RC_GP,0,0,0 },
-	{ "bor", op_bor,3,0 },
-	{ "beqi", op_beqi,3,0,false,RC_GP,0,0,0 },
-	{ "bchk", op_bchk,3,0 },
-	{ "ibne", op_ibne,3,1 ,false,RC_GP,RC_GP,0,0 },
-	{ "rtd", op_rtd },
-	{ "lwr", op_lwr,4,1,true,RC_GP,RC_GP,0,0 },
-	{ "swc", op_swc,4,0,true, RC_GP, RC_GP,0,0 },
-	{ "cache",op_cache,1,0 },
-	{ "iret", op_iret,2,0,false,0,0,0,0 },
-	{ "mul",op_mul,18,1,false,RC_GP,RC_GP,RC_GP,0},
-	{ "muli", op_muli,18,1 },
-	{ "mului", op_mului,18,1 },
-
-	{ "fmul", op_fdmul,10,1,false,RC_FP,RC_FP,RC_FP,0 },
-	{ "fdiv", op_fddiv,160,1,false,RC_FP,RC_FP,RC_FP,0 },
-	{ "fadd", op_fdadd,6,1,false,RC_FP,RC_FP,RC_FP,0 },
-	{ "fsub", op_fdsub,6,1,false,RC_FP,RC_FP,RC_FP,0 },
-	{ "fcmp", op_fcmp, 1,1,false,RC_FP,RC_FP,RC_FP,0 },
-	{ "fmul.s", op_fsmul,10,1,false },
-	{ "fdiv.s", op_fsdiv,80,1,false },
-	{ "fadd.s", op_fsadd,6,1,false },
-	{ "fsub.s", op_fssub,6,1,false },
-	{ "fs2d", op_fs2d,2,1,false },
-	{ "fi2d", op_i2d,2,1,false },
-	{ "fneg", op_fneg,2,1,false,RC_FP,RC_FP,0,0 },
-
-	{ "divs",op_divs,68,1,false },
-	{ "swap",op_swap,1,1,false },
-	{ "mod", op_mod,68,1, false },
-	{ "modu", op_modu,68,1 },
-	{ "eq",op_eq },
-	{ "bnei", op_bnei },
-	{ "sei", op_sei,1,0 },
-	{ "ltu", op_ltu },
-	{ "leu",op_leu },
-	{ "gtu",op_gtu },
-	{ "geu", op_geu },
-	{ "bhi",op_bhi,2,0 },
-	{ "bhs",op_bhs,2,0 },
-	{ "blo",op_blo,2,0 },
-	{ "bun", op_bun,2,0 },
-	{ "bls",op_bls,2,0 },
-	{ "mulu",op_mulu,10,1 },
-	{ "divu",op_divu,68,1 },
-	{ "ne",op_ne },
-	{ "lt",op_lt },
-	{ "le",op_le },
-	{ "gt",op_gt },
-	{ "ge",op_ge },
-	{ "neg",op_neg, 1, 1, false,RC_GP,RC_GP,0,0 },
-	{ "nr", op_nr },
-	{ "not",op_not,2,1, false,RC_GP, RC_GP,0,0 },
-	{ "com", op_com,2,1,false,RC_GP,RC_GP,0,0 },
-	{ "ext",op_ext },
-	{ "zxh",op_zxh,1,1,false,RC_GP,RC_GP,0,0 },
-	{ "zxc",op_zxc,1,1,false,RC_GP,RC_GP,0,0 },
-	{ "zxb",op_zxb,1,1,false,RC_GP,RC_GP,0,0 },
-	{ "sxh",op_sxh,1,1,false,RC_GP,RC_GP,0,0 },
-	{ "sxc",op_sxc,1,1,false,RC_GP,RC_GP,0,0 },
-	{ "sxb",op_sxb,1,1,false,RC_GP,RC_GP,0,0 },
-	{ "jmp",op_jmp,1,0,false },
-	{ "lea",op_lea,1,1,false,RC_GP,RC_GP,RC_GP,0 },
-
-	{ "link",op_link,4,1,true },
-	{ "unlink",op_unlk,4,1,true },
-	{ "br",op_br,3,0,false,0,0,0,0 },
-	{ "bra",op_bra,3,0,false,0,0,0,0 },
-	{ "pea",op_pea },
-	{ "cmpi",op_cmpi,1,1 },
-	{ "tst",op_tst,1,1 },
-	{ "stop", op_stop },
-	{ "movs", op_movs },
-	{ "bmi", op_bmi,2,0 },
-	{ "dc",op_dc },
-	{ "push",op_push,4,1,true,RC_GP,0,0,0 },
-	{ "pop", op_pop,4,2,true,RC_GP,RC_GP,0,0 },
-	{ "pushf",op_pushf,4,0,true,RC_FP,0,0,0 },
-	{ "popf", op_popf,4,2,true,RC_FP,RC_GP,0,0 },
-	{ "pea", op_pea },
-		// Set
-	{ "seq", op_seq,1,1,false,RC_GP,RC_GP,RC_GP,0 },
-	{ "sne",op_sne,1,1,false,RC_GP,RC_GP,RC_GP,0 },
-	{ "slt", op_slt,1,1,false,RC_GP,RC_GP,RC_GP,0 },
-	{ "sle",op_sle,1,1,false,RC_GP,RC_GP,RC_GP,0 },
-	{ "sgt",op_sgt,1,1,false,RC_GP,RC_GP,RC_GP,0 },
-	{ "sge",op_sge,1,1,false,RC_GP,RC_GP,RC_GP,0 },
-	{ "sltu", op_sltu,1,1,false,RC_GP,RC_GP,RC_GP,0 },
-	{ "sleu",op_sleu,1,1,false,RC_GP,RC_GP,RC_GP,0 },
-	{ "sgtu",op_sgtu,1,1,false,RC_GP,RC_GP,RC_GP,0 },
-	{ "sgeu",op_sgeu,1,1,false,RC_GP,RC_GP,RC_GP,0 },
-
-	{ "",op_empty }, { "",op_asm,100 }, { "", op_fnname },
-	{ "ftadd", op_ftadd }, { "ftsub", op_ftsub }, { "ftmul", op_ftmul }, { "ftdiv", op_ftdiv },
-	{ "inc", op_inc,4,0,true }, { "dec", op_dec,4,0,true },
-
-	{ "bsr", op_bsr },
-
-		// Shifts
-		// Shifts are weighted as 2 because they can only execute on one ALU
-	{ "asr",op_asr,2,1,false,RC_GP,RC_GP,RC_GP,0 },
-	{ "asri", op_asri,2,1,false,RC_GP,RC_GP,0,0 },
-	{ "shl", op_shl,2,1,false,RC_GP,RC_GP,RC_GP,0 },
-	{ "shr", op_shr,2,1,false,RC_GP,RC_GP,RC_GP,0 },
-	{ "shru", op_shru,2,1,false,RC_GP,RC_GP,RC_GP,0 },
-	{ "shlu", op_shlu,2,1,false,RC_GP,RC_GP,RC_GP,0 },
-	{ "shlui", op_shlui,2,1 },
-	{ "shli", op_shli,2,1 },
-	{ "shri", op_shri,2,1 },
-	{ "shrui", op_shrui,2,1 },
-	{ "ror", op_ror,2,1,false,RC_GP,RC_GP,RC_GP,0 },
-	{ "rori", op_rori,2,1 },
-	{ "rol", op_rol,2,1,false,RC_GP,RC_GP,RC_GP,0 },
-	{ "roli", op_roli,2,1 },
-	{ "sll", op_sll,2,1,false,RC_GP,RC_GP,RC_GP,0 },
-	{ "slli", op_slli,2,1 },
-	{ "srl", op_srl,2,1,false,RC_GP,RC_GP,RC_GP,0 },
-	{ "srli", op_srli,2,1 },
-	{ "sra", op_sra,2,1,false,RC_GP,RC_GP,RC_GP,0 },
-	{ "srai", op_srai,2,1 },
-	{ "asl", op_asl,2,1,false,RC_GP,RC_GP,RC_GP,0 },
-	{ "asli", op_asli,2,1 },
-	{ "lsr", op_lsr,2,1,false,RC_GP,RC_GP,RC_GP,0 },
-	{ "lsri", op_lsri,2,1 },
-
-	{ "chk", op_chk,1,0 },
-	{ "chki",op_chki,1,0 },
-	{ ";", op_rem },
-
-	{ "fbeq", op_fbeq,3 }, { "fbne", op_fbne,3 }, { "fbor", op_fbor,3 }, { "fbun", op_fbun,3 },
-	{ "fblt", op_fblt,3 }, { "fble", op_fble,3 }, { "fbgt", op_fbgt,3 }, { "fbge", op_fbge,3 },
-
-	{ "fcvtsq", op_fcvtsq },
-	{ "fcvtdq", op_fcvtdq },
-	{ "fcvttq", op_fcvttq },
-	{ "sf", op_sf, 4, 0, true, RC_FP, RC_GP, 0, 0 },
-	{ "lf", op_lf, 4, 1, true, RC_FP, RC_GP, 0, 0 },
-	{ "sfd", op_sfd,4,0,true },
-	{ "lfd", op_lfd,4,1,true },
-	{ "fmov.d", op_fdmov,1,1 },
-	{ "fmov", op_fmov,1,1 },
-	{ "fadd", op_fadd, 6, 1, false, RC_FP, RC_FP, RC_FP, 0 },
-	{ "fsub", op_fsub, 6, 1, false, RC_FP, RC_FP, RC_FP, 0 },
-	{ "fmul", op_fmul, 10, 1, false, RC_FP, RC_FP, RC_FP, 0 },
-	{ "fdiv", op_fdiv, 160, 1, false, RC_FP, RC_FP, RC_FP, 0 },
-	{ "ftoi", op_ftoi, 2, 1, false, RC_GP, RC_FP, 0, 0 },
-	{ "itof", op_itof, 2, 1, false, RC_FP, RC_GP, 0, 0 },
-	{ "fslt", op_fslt, 1, 1, false, RC_GP, RC_FP, RC_FP, 0},
-	{ "fix2flt", op_fix2flt }, { "mtfp", op_mtfp }, { "flt2fix",op_flt2fix }, { "mffp",op_mffp },
-	{ "mv2fix",op_mv2fix }, { "mv2flt", op_mv2flt },
-	{ "csrrw", op_csrrw,1,1,false },
-	{ "nop", op_nop,0,0,false },
-	{ "tgt", op_calltgt,1 },
-	{ "hint", op_hint,0 },
-	{ "hint2",op_hint2,0 },
-	{ "abs", op_abs,2,1 },
-	{ "swp", op_swp, 8, false },
-		// Vector operations
-	{ "lv", op_lv,256,1 }, { "sv", op_sv,256,0 },
-	{ "vadd", op_vadd,10,1,false, RC_VEC,RC_VEC,RC_VEC,0 },
-	{ "vsub", op_vsub,10,1,false, RC_VEC,RC_VEC,RC_VEC,0 },
-	{ "vmul", op_vmul,10,1,false, RC_VEC,RC_VEC,RC_VEC,0 },
-	{ "vdiv", op_vdiv,100,1,false, RC_VEC,RC_VEC,RC_VEC,0 },
-	{ "vseq", op_vseq,10 },
-	{ "vsne", op_vsne,10 },
-	{ "vslt", op_vslt,10 },
-	{ "vsge", op_vsge,10 },
-	{ "vsle", op_vsle,10 },
-	{ "vsgt", op_vsgt,10 },
-	{ "vadds", op_vadds,10 },
-	{ "vsubs", op_vsubs,10 },
-	{ "vmuls", op_vmuls,10 },
-	{ "vdivs", op_vdivs,100 },
-	{ "vex", op_vex,10 },
-	{ "veins",op_veins,10 },
-
-	{ "redor", op_redor,2,1,false,RC_GP,RC_GP,RC_GP,0 },
-	{ "brk", op_brk,1,0 },
-	{ "rti", op_rti,2,0 },
-	{ "rte", op_rte,2,0 },
-	{ "nand",op_nand,1,1,false,RC_GP,RC_GP,RC_GP,0 },
-	{ "nor",op_nor,1,1,false,RC_GP,RC_GP,RC_GP,0 },
-	{ "xnor",op_xnor,1,1,false,RC_GP,RC_GP,RC_GP,0 },
-	{ "cmovenz", op_cmovenz,1,1,false,RC_GP,RC_GP,RC_GP,RC_GP },
-	{"bex", op_bex,0,0,false,0,0,0,0},
-	{"phi", op_phi},
-                {0,0,0,0,false,0,0,0,0} };
-
-static char *pad(char *op)
-{
-	static char buf[20];
-	int n;
-
-	n = strlen(op);
-	strncpy_s(buf,20,op,19);
-	buf[19] = '\0';
-	if (n < 5) {
-		strcat_s(buf, 20, "     ");
-		buf[5] = '\0';
-	}
-	return buf;
-}
+{ ";", op_rem },
+{ "abs", op_abs,2,1,false,am_reg,am_reg,0,0 },
+{ "add",op_add,1,1,false,am_reg,am_reg,am_reg|am_imm,0 },
+{ "addu", op_addu,1,1 },
+{ "and",op_and,1,1,false,am_reg,am_reg,am_reg|am_imm,0 },
+{ "asl", op_asl,2,1,false,am_reg,am_reg,am_reg|am_ui6,0 },
+{ "asr",op_asr,2,1,false,am_reg,am_reg,am_reg|am_ui6,0 },
+{ "bbc", op_bbc,3,0,false,am_reg,am_ui6,0,0 },
+{ "bbs", op_bbs,3,0,false,am_reg,am_ui6,0,0 },
+{ "bchk", op_bchk,3,0 },
+{ "beq", op_beq,3,0,false,am_reg,am_reg|am_imm,0,0 },
+{ "beqi", op_beqi,3,0,false,am_reg,am_imm,0,0 },
+{ "bex", op_bex,0,0,false,0,0,0,0 },
+{ "bfext", op_bfext,2,1,false,am_reg },
+{ "bfextu", op_bfextu,2,1,false,am_reg, },
+{ "bfins", op_bfins,2,1,false,am_reg },
+{ "bge", op_bge,3,0,false,am_reg,am_reg,0,0 },
+{ "bgeu", op_bgeu,3,0,false,am_reg,am_reg,0,0 },
+{ "bgt", op_bgt,3,0,false,am_reg,am_reg,0,0 },
+{ "bgtu", op_bgtu,3,0,false,am_reg,am_reg,0,0 },
+{ "bhi",op_bhi,2,0, false, am_reg, am_reg,0,0 },
+{ "bhs",op_bhs,2,0, false, am_reg, am_reg,0,0 },
+{ "ble", op_ble, 3,0,false,am_reg,am_reg,0,0 },
+{ "bleu", op_bleu,3,0,false,am_reg,am_reg,0,0 },
+{ "blo",op_blo,2,0,false,am_reg,am_reg,0,0 },
+{ "bls",op_bls,2,0,false,am_reg,am_reg,0,0 },
+{ "blt", op_blt,3,0,false,am_reg,am_reg,0,0 },
+{ "bltu", op_bltu,3,0,false,am_reg,am_reg,0,0 },
+{ "bmi", op_bmi,2,0,false,am_reg,am_reg,0,0 },
+{ "bne", op_bne,3,0,false,am_reg,am_reg,0,0 },
+{ "bor", op_bor,3,0 },
+{ "br",op_br,3,0,false,0,0,0,0 },
+{ "bra",op_bra,3,0,false,0,0,0,0 },
+{ "brk", op_brk,1,0 },
+{ "bsr", op_bsr },
+{ "bun", op_bun,2,0 },
+{ "cache",op_cache,1,0 },
+{ "call", op_call,4,1,false,0,0,0,0 },
+{ "chk", op_chk,1,0 },
+{ "cmovenz", op_cmovenz,1,1,false,am_reg,am_reg,am_reg,am_reg },
+{ "cmp",op_cmp,1,1,false,am_reg,am_reg,am_reg|am_imm,0 },
+{ "cmpu",op_cmpu,1,1,false,am_reg,am_reg,am_reg|am_imm,0 },
+{ "com", op_com,2,1,false,am_reg,am_reg,0,0 },
+{ "csrrw", op_csrrw,1,1,false,am_reg },
+{ "dc",op_dc },
+{ "dec", op_dec,4,0,true,am_i5 },
+{ "div", op_div,68,1,false,am_reg,am_reg,am_reg|am_imm,0 },
+{ "divu",op_divu,68,1,false,am_reg,am_reg,am_reg|am_imm,0 },
+{ "dw", op_dw },
+{ "eor",op_eor,1,1,false,am_reg,am_reg,am_reg|am_imm,0 },
+{ "eq",op_eq },
+{ "ext",op_ext },
+{ "fadd", op_fadd, 6, 1, false, am_fpreg, am_fpreg, am_fpreg, 0 },
+{ "fadd", op_fdadd,6,1,false,am_fpreg,am_fpreg,am_fpreg,0 },
+{ "fadd.s", op_fsadd,6,1,false,am_fpreg,am_fpreg,am_fpreg,0 },
+{ "fbeq", op_fbeq,3,0,false,am_fpreg,am_fpreg,0,0 },
+{ "fbge", op_fbge,3,0,false,am_fpreg,am_fpreg,0,0 },
+{ "fbgt", op_fbgt,3,0,false,am_fpreg,am_fpreg,0,0 },
+{ "fble", op_fble,3,0,false,am_fpreg,am_fpreg,0,0 },
+{ "fblt", op_fblt,3,0,false,am_fpreg,am_fpreg,0,0 },
+{ "fbne", op_fbne,3,0,false,am_fpreg,am_fpreg,0,0 },
+{ "fbor", op_fbor,3,0,false,am_fpreg,am_fpreg,0,0 },
+{ "fbun", op_fbun,3,0,false,am_fpreg,am_fpreg,0,0 },
+{ "fcmp", op_fcmp, 1,1,false,am_reg,am_fpreg,am_fpreg,0 },
+{ "fcvtdq", op_fcvtdq,2,1,false,am_fpreg,am_fpreg,0,0 },
+{ "fcvtsq", op_fcvtsq,2,1,false,am_fpreg,am_fpreg,0,0 },
+{ "fcvttq", op_fcvttq,2,1,false,am_fpreg,am_fpreg,0,0 },
+{ "fdiv", op_fdiv, 160, 1, false, am_fpreg, am_fpreg, am_fpreg, 0 },
+{ "fdiv.s", op_fsdiv,80,1,false },
+{ "fi2d", op_i2d,2,1,false },
+{ "fix2flt", op_fix2flt },
+{ "flt2fix",op_flt2fix },
+{ "fmov", op_fmov,1,1 },
+{ "fmov.d", op_fdmov,1,1 },
+{ "fmul", op_fdmul,10,1,false,am_fpreg,am_fpreg,am_fpreg,0 },
+{ "fmul", op_fmul, 10, 1, false, am_fpreg, am_fpreg, am_fpreg, 0 },
+{ "fmul.s", op_fsmul,10,1,false },
+{ "fneg", op_fneg,2,1,false,am_fpreg,am_fpreg,0,0 },
+{ "fs2d", op_fs2d,2,1,false,am_fpreg,am_fpreg,0,0 },
+{ "fslt", op_fslt, 1, 1, false, am_reg, am_fpreg, am_fpreg, 0 },
+{ "fsub", op_fdsub,6,1,false,am_fpreg,am_fpreg,am_fpreg,0 },
+{ "fsub", op_fsub, 6, 1, false, am_fpreg, am_fpreg, am_fpreg, 0 },
+{ "fsub.s", op_fssub,6,1,false },
+{ "ftadd", op_ftadd },
+{ "ftdiv", op_ftdiv },
+{ "ftmul", op_ftmul },
+{ "ftoi", op_ftoi, 2, 1, false, am_reg, am_fpreg, 0, 0 },
+{ "ftsub", op_ftsub },
+{ "ge",op_ge },
+{ "geu", op_geu },
+{ "gt",op_gt },
+{ "gtu",op_gtu },
+{ "hint", op_hint,0 },
+{ "hint2",op_hint2,0 },
+{ "ibne", op_ibne,3,1 ,false,am_reg,am_reg,0,0 },
+{ "inc", op_inc,4,0,true,am_i5,am_mem,0,0 },
+{ "iret", op_iret,2,0,false,0,0,0,0 },
+{ "itof", op_itof, 2, 1, false, am_fpreg, am_reg, 0, 0 },
+{ "jal", op_jal,1,1,false },
+{ "jmp",op_jmp,1,0,false,am_mem,0,0,0 },
+{ "lb", op_lb,4,1,true,am_reg,am_mem,0,0 },
+{ "lbu", op_lbu,4,1,true,am_reg,am_mem,0,0 },
+{ "lc", op_lc,4,1,true,am_reg,am_mem,0,0 },
+{ "lcu", op_lcu,4,1,true,am_reg,am_mem,0,0 },
+{ "ldi",op_ldi,1,1,false,am_reg,am_imm,0,0 },
+{ "le",op_le },
+{ "lea",op_lea,1,1,false,am_reg,am_mem,0,0 },
+{ "leu",op_leu },
+{ "lf", op_lf, 4, 1, true, am_fpreg, am_mem, 0, 0 },
+{ "lfd", op_lfd,4,1,true, am_fpreg, am_mem,0,0 },
+{ "lft", op_lft,4,1,true, am_fpreg, am_mem,0,0 },
+{ "lh", op_lh,4,1,true,am_reg,am_mem,0,0 },
+{ "lhu", op_lhu,4,1,true,am_reg,am_mem,0,0 },
+{ "link",op_link,4,1,true },
+{ "lm", op_lm },
+{ "loop", op_loop,1,0 },
+{ "lsr", op_lsr,2,1,false,am_reg,am_reg,am_reg|am_ui6,0 },
+{ "lt",op_lt },
+{ "ltu", op_ltu },
+{ "lv", op_lv,256,1 },
+{ "lvbu", op_lvbu,4,1,true ,am_reg,am_mem,0,0 },
+{ "lvcu", op_lvcu,4,1,true ,am_reg,am_mem,0,0 },
+{ "lvhu", op_lvhu,4,1,true ,am_reg,am_mem,0,0 },
+{ "lw", op_lw,4,1,true,am_reg,am_mem,0,0 },
+{ "lwr", op_lwr,4,1,true,am_reg,am_mem,0,0 },
+{ "lws", op_lws,4,1,true },
+{ "mffp",op_mffp },
+{ "mod", op_mod,68,1, false,am_reg,am_reg,am_reg|am_imm,0 },
+{ "modu", op_modu,68,1,false,am_reg,am_reg,am_reg,0 },
+{ "mov", op_mov,1,1,false,am_reg|am_fpreg,am_reg|am_fpreg,0,0 },
+{ "move",op_move,1,1,false,am_reg | am_fpreg,am_reg | am_fpreg,0,0 },
+{ "movs", op_movs },
+{ "mtfp", op_mtfp },
+{ "mul",op_mul,18,1,false,am_reg,am_reg,am_reg|am_imm,0 },
+{ "mulu",op_mulu,10,1,false,am_reg,am_reg,am_reg|am_imm,0 },
+{ "nand",op_nand,1,1,false,am_reg,am_reg,am_reg,0 },
+{ "ne",op_ne },
+{ "neg",op_neg, 1, 1, false,am_reg,am_reg,0,0 },
+{ "nop", op_nop,0,0,false },
+{ "nor",op_nor,1,1,false,am_reg,am_reg,am_reg,0 },
+{ "not", op_not,2,1,false,am_reg,am_reg,0,0 },
+{ "not",op_not,2,1, false,am_reg, am_reg,0,0 },
+{ "nr", op_nr },
+{ "or",op_or,1,1,false,am_reg,am_reg,am_reg|am_imm,0 },
+{ "pea", op_pea },
+{ "pea",op_pea },
+{ "phi", op_phi },
+{ "pop", op_pop,4,2,true,am_reg,am_reg,0,0 },
+{ "popf", op_popf,4,2,true,am_fpreg,am_reg,0,0 },
+{ "push",op_push,4,1,true,am_reg,0,0,0 },
+{ "pushf",op_pushf,4,0,true,am_fpreg,0,0,0 },
+{ "redor", op_redor,2,1,false,am_reg,am_reg,am_reg,0 },
+{ "ret", op_ret,1,0,am_imm,0,0,0 },
+{ "rol", op_rol,2,1,false,am_reg,am_reg,am_reg|am_ui6,0 },
+{ "ror", op_ror,2,1,false,am_reg,am_reg,am_reg|am_ui6,0 },
+{ "rtd", op_rtd },
+{ "rte", op_rte,2,0 },
+{ "rti", op_rti,2,0 },
+{ "sb",op_sb,4,0,true,am_reg,am_mem,0,0 },
+{ "sc",op_sc,4,0,true,am_reg,am_mem,0,0 },
+{ "sei", op_sei,1,0,false,am_reg,0,0,0 },
+{ "seq", op_seq,1,1,false,am_reg,am_reg,am_reg|am_i26,0 },
+{ "setwb", op_setwb, 1, 0 },
+{ "sf", op_sf, 4, 0, true, am_fpreg, am_mem, 0, 0 },
+{ "sfd", op_sfd,4,0,true, am_fpreg, am_mem,0,0 },
+{ "sft", op_sft,4,0,true, am_fpreg, am_mem,0,0 },
+{ "sge",op_sge,1,1,false,am_reg,am_reg,am_reg | am_i26,0 },
+{ "sgeu",op_sgeu,1,1,false,am_reg,am_reg,am_reg | am_i26,0 },
+{ "sgt",op_sgt,1,1,false,am_reg,am_reg,am_reg | am_i26,0 },
+{ "sgtu",op_sgtu,1,1,false,am_reg,am_reg,am_reg | am_i26,0 },
+{ "sh",op_sh,4,0,true,am_reg,am_mem,0,0 },
+{ "shl", op_shl,2,1,false,am_reg,am_reg,am_reg|am_ui6,0 },
+{ "shlu", op_shlu,2,1,false,am_reg,am_reg,am_reg|am_ui6,0 },
+{ "shr", op_shr,2,1,false,am_reg,am_reg,am_reg|am_ui6,0 },
+{ "shru", op_shru,2,1,false,am_reg,am_reg,am_reg|am_ui6,0 },
+{ "sle",op_sle,1,1,false,am_reg,am_reg,am_reg | am_i26,0 },
+{ "sleu",op_sleu,1,1,false,am_reg,am_reg,am_reg | am_i26,0 },
+{ "sll", op_sll,2,1,false,am_reg,am_reg,am_reg,0 },
+{ "slt", op_slt,1,1,false,am_reg,am_reg,am_reg,0 },
+{ "sltu", op_sltu,1,1,false,am_reg,am_reg,am_reg,0 },
+{ "sm",op_sm },
+{ "sne",op_sne,1,1,false,am_reg,am_reg,am_reg|am_i26,0 },
+{ "spt", op_spt,4,0,true ,am_reg,am_mem,0,0 },
+{ "sptr", op_sptr,4,0,true,am_reg,am_mem,0,0 },
+{ "sra", op_sra,2,1,false,am_reg,am_reg,am_reg|am_ui6,0 },
+{ "srl", op_srl,2,1,false,am_reg,am_reg,am_reg|am_ui6,0 },
+{ "sti", op_sti,1,0 },
+{ "stop", op_stop },
+{ "sub",op_sub,1,1,false,am_reg,am_reg,am_reg|am_imm,0 },
+{ "subu", op_subu,1,1 },
+{ "sv", op_sv,256,0 },
+{ "sw", op_sw,4,0,true,am_reg,am_mem,0,0 },
+{ "swap",op_swap,1,1,false },
+{ "swc", op_swc,4,0,true, am_reg, am_mem,0,0 },
+{ "swp", op_swp, 8, false },
+{ "sws", op_sws,4,0 },
+{ "sxb",op_sxb,1,1,false,am_reg,am_reg,0,0 },
+{ "sxc",op_sxc,1,1,false,am_reg,am_reg,0,0 },
+{ "sxh",op_sxh,1,1,false,am_reg,am_reg,0,0 },
+{ "tgt", op_calltgt,1 },
+{ "tst",op_tst,1,1 },
+{ "unlink",op_unlk,4,1,true },
+{ "vadd", op_vadd,10,1,false, am_vreg,am_vreg,am_vreg,0 },
+{ "vadds", op_vadds,10 },
+{ "vdiv", op_vdiv,100,1,false, am_vreg,am_vreg,am_vreg,0 },
+{ "vdivs", op_vdivs,100 },
+{ "veins",op_veins,10 },
+{ "vex", op_vex,10 },
+{ "vmul", op_vmul,10,1,false, am_vreg,am_vreg,am_vreg,0 },
+{ "vmuls", op_vmuls,10 },
+{ "vseq", op_vseq,10,1,false, am_vreg,am_vreg,am_vreg,0 },
+{ "vsge", op_vsge,10,1,false, am_vreg,am_vreg,am_vreg,0 },
+{ "vsgt", op_vsgt,10,1,false, am_vreg,am_vreg,am_vreg,0 },
+{ "vsle", op_vsle,10,1,false, am_vreg,am_vreg,am_vreg,0 },
+{ "vslt", op_vslt,10,1,false, am_vreg,am_vreg,am_vreg,0 },
+{ "vsne", op_vsne,10,1,false, am_vreg,am_vreg,am_vreg,0 },
+{ "vsub", op_vsub,10,1,false, am_vreg,am_vreg,am_vreg,0 },
+{ "vsubs", op_vsubs,10 },
+{ "xnor",op_xnor,1,1,false,am_reg,am_reg,am_reg,0 },
+{ "xor",op_xor,1,1,false,am_reg,am_reg,am_reg|am_imm,0 },
+{ "zxb",op_zxb,1,1,false,am_reg,am_reg,0,0 },
+{ "zxc",op_zxc,1,1,false,am_reg,am_reg,0,0 },
+{ "zxh",op_zxh,1,1,false,am_reg,am_reg,0,0 },
+{ "",op_empty },
+{ "",op_asm,300 },
+{ "", op_fnname },
+{0,0,0,0,false,0,0,0,0}
+};
 
 Instruction *GetInsn(int op)
 {
@@ -353,145 +301,6 @@ static char *segstr(int op)
 	}
 }
 */
-
-void putop(Instruction *insn,int op, int len)
-{    
-	int     i;
-	char buf[100];
-
-    i = 0;
-//    while( opl[i].mnem )
-//    {
-//		if( opl[i].opcode == (op & 0x1FF))
-//		{
-			//seg = op & 0xFF00;
-			//if (seg != 0) {
-			//	fprintf(output, "%s:", segstr(op));
-			//}
-			if (len) {
-				if (len <= 16) {
-					switch(len) {
-					case 1:	sprintf_s(buf, sizeof(buf), "%s.b", insn->mnem); break;
-					case 2:	sprintf_s(buf, sizeof(buf), "%s.c", insn->mnem); break;
-					case 4:	sprintf_s(buf, sizeof(buf), "%s.h", insn->mnem); break;
-					case 8:	sprintf_s(buf, sizeof(buf), "%s", insn->mnem); break;
-					}
-				}
-				else {
-					if (len != 'w' && len!='W')
-						sprintf_s(buf, sizeof(buf), "%s.%c", insn->mnem, len);
-					else
-						sprintf_s(buf, sizeof(buf), "%s", insn->mnem);
-				}
-			}
-			else
-				sprintf_s(buf, sizeof(buf), "%s", insn->mnem);
-			ofs.write(pad(buf));
-			return;
-//		}
-//		++i;
-//    }
-    printf("DIAG - illegal opcode (%d).\n", op);
-}
-
-static void PutConstant(ENODE *offset, unsigned int lowhigh, unsigned int rshift)
-{
-	// ASM statment text (up to 3500 chars) may be placed in the following buffer.
-	static char buf[4000];
-
-	switch( offset->nodetype )
-	{
-	case en_autofcon:
-			sprintf_s(buf,sizeof(buf),"%lld",offset->i);
-			ofs.write(buf);
-			break;
-	case en_fcon:
-			goto j1;
-			// The following spits out a warning, but is okay.
-			sprintf_s(buf,sizeof(buf),"0x%llx",offset->f);
-			ofs.write(buf);
-			break;
-	case en_autovcon:
-	case en_autocon:
-	case en_icon:
-            if (lowhigh==2) {
-	            sprintf_s(buf,sizeof(buf),"%lld",offset->i & 0xffff);
-				ofs.write(buf);
-			}
-            else if (lowhigh==3) {
-	            sprintf_s(buf,sizeof(buf),"%lld",(offset->i >> 16) & 0xffff);
-				ofs.write(buf);
-			}
-            else {
-            	sprintf_s(buf,sizeof(buf),"%lld",offset->i);
-				ofs.write(buf);
-			}
-           	if (rshift > 0) {
-           	    sprintf_s(buf,sizeof(buf), ">>%d", rshift);
-				ofs.write(buf);
-			}
-			break;
-	case en_labcon:
-j1:
-			sprintf_s(buf, sizeof(buf), "%s_%ld",GetNamespace(),offset->i);
-			ofs.write(buf);
-            if (rshift > 0) {
-                sprintf_s(buf, sizeof(buf), ">>%d", rshift);
-				ofs.write(buf);
-			}
-			break;
-	case en_clabcon:
-			sprintf_s(buf,sizeof(buf),"%s_%lld",GetNamespace(),offset->i);
-			ofs.write(buf);
-            if (rshift > 0) {
-                sprintf_s(buf,sizeof(buf), ">>%d", rshift);
-				ofs.write(buf);
-			}
-			break;
-	case en_nacon:
-			sprintf_s(buf,sizeof(buf),"%s",(char *)offset->sp->c_str());
-			ofs.write(buf);
-			if (lowhigh==3) {
-			    sprintf_s(buf, sizeof(buf), ">>16");
-				ofs.write(buf);
-			}
-            if (rshift > 0) {
-                sprintf_s(buf, sizeof(buf), ">>%d", rshift);
-				ofs.write(buf);
-			}
-			break;
-	case en_cnacon:
-			sprintf_s(buf,sizeof(buf),"%s",(char *)offset->msp->c_str());
-			if (strncmp(buf, "public code",11)==0) {
-				printf("pub code\r\n");
-			}
-			sprintf_s(buf,sizeof(buf), "%s",(char *)offset->msp->c_str());
-			ofs.write(buf);
-            if (rshift > 0) {
-                sprintf_s(buf, sizeof(buf), ">>%d", rshift);
-				ofs.write(buf);
-			}
-			break;
-	case en_add:
-			PutConstant(offset->p[0],0,0);
-			ofs.write("+");
-			PutConstant(offset->p[1],0,0);
-			break;
-	case en_sub:
-			PutConstant(offset->p[0],0,0);
-			ofs.write("-");
-			PutConstant(offset->p[1],0,0);
-			break;
-	case en_uminus:
-			ofs.write("-");
-			PutConstant(offset->p[0],0,0);
-			break;
-	default:
-			printf("DIAG - illegal constant node.\n");
-			break;
-	}
-}
-
 
 // Output a friendly register moniker
 
@@ -557,168 +366,6 @@ char *RegMoniker2(int regno)
 	return &buf[n][0];
 }
 
-void PutAddressMode(Operand *ap)
-{
-	switch( ap->mode )
-    {
-    case am_immed:
-			ofs.write("#");
-			// Fall through
-    case am_direct:
-            PutConstant(ap->offset,ap->lowhigh,ap->rshift);
-            break;
-	case am_reg:
-			if (ap->type==stdvector.GetIndex())
-				ofs.printf("v%d", (int)ap->preg);
-			else if (ap->type==stdvectormask->GetIndex())
-				ofs.printf("vm%d", (int)ap->preg);
-			else if (ap->type==stddouble.GetIndex())
-				ofs.printf("$fp%d", (int)ap->preg);
-			else {
-				ofs.write(RegMoniker(ap->preg));
-				if (renamed)
-					ofs.printf(".%d", (int)ap->pregs);
-			}
-            break;
-    case am_vmreg:
-			ofs.printf("vm%d", (int)ap->preg);
-            break;
-    case am_fpreg:
-            ofs.printf("$fp%d", (int)ap->preg);
-            break;
-    case am_ind:
-			ofs.printf("[%s]",RegMoniker(ap->preg));
-			break;
-    case am_indx:
-			// It's not known the function is a leaf routine until code
-			// generation time. So the parameter offsets can't be determined
-			// until code is being output. This bit of code first adds onto
-			// parameter offset the size of the return block, then later
-			// subtracts it off again.
-			if (ap->offset) {
-				if (ap->preg==regFP) {
-					if (ap->offset->sym) {
-						if (ap->offset->sym->IsParameter) {	// must be an parameter
-							ap->offset->i += Compiler::GetReturnBlockSize();
-						}
-					}
-				}
-           		PutConstant(ap->offset,0,0);
-				if (ap->preg==regFP) {
-					if (ap->offset->sym) {
-						if (ap->offset->sym->IsParameter) {
-							ap->offset->i -= Compiler::GetReturnBlockSize();
-						}
-					}
-				}
-			}
-			ofs.printf("[%s]",RegMoniker(ap->preg));
-			break;
-
-	case am_indx2:
-			if (ap->scale==1 || ap->scale==0)
-	            ofs.printf("[%s+%s]",RegMoniker(ap->sreg),RegMoniker(ap->preg));
-			else
-		        ofs.printf("[%s+%s*%d]",RegMoniker(ap->sreg),RegMoniker(ap->preg),ap->scale);
-            break;
-
-	case am_mask:
-            put_mask((int)ap->offset);
-            break;
-    default:
-            printf("DIAG - illegal address mode.\n");
-            break;
-    }
-}
-
-/*
- *      output a generic instruction.
- */
-//void put_code(int op, int len,Operand *aps,Operand *apd,Operand *ap3,Operand *ap4)
-void put_code(OCODE *p)
-{
-	static BasicBlock *b = nullptr;
-	int op = p->opcode;
-	Operand *aps,*apd,*ap3,*ap4;
-	ENODE *ep;
-	int predreg = p->pregreg;
-	int len = p->length;
-	aps = p->oper1;
-	apd = p->oper2;
-	ap3 = p->oper3;
-	ap4 = p->oper4;
-
-	if (p->bb != b) {
-		ofs.printf(";====================================================\n");
-		ofs.printf("; Basic Block %d\n", p->bb->num);
-		ofs.printf(";====================================================\n");
-		b = p->bb;
-	}
-	if (p->comment) {
-		ofs.printf("; %s\n", (char *)p->comment->oper1->offset->sp->c_str());
-	}
-	if (p->remove)
-		ofs.printf(";-1");
-	if (p->remove2)
-		ofs.printf(";-2");
-	if( op == op_dc )
-		{
-		switch( len )
-			{
-			case 1: ofs.printf("\tdh"); break;
-			case 2: ofs.printf("\tdw"); break;
-			}
-		}
-	else if (op != op_fnname)
-		{
-			if (op==op_rem2) {
-				ofs.printf(";\t");
-				ofs.printf("%6.6s\t", "");
-				ofs.printf(aps->offset->sp->c_str());
-		        ofs.printf("\n");
-				return;
-			}
-			else {
-				ofs.printf("\t");
-				ofs.printf("%6.6s\t", "");
-				putop(p->insn,op,len);
-			}
-		}
-	if (op==op_fnname) {
-		ep = (ENODE *)p->oper1->offset;
-		ofs.printf("%s:", (char *)ep->sp->c_str());
-	}
-	else if( aps != 0 )
-        {
-                ofs.printf("\t");
-					PutAddressMode(aps);
-					if( apd != 0 )
-					{
-						if (op==op_push || op==op_pop)
-							ofs.printf("/");
-						else
-							ofs.printf(",");
-							if (op==op_cmp && apd->mode != am_reg)
-								printf("aha\r\n");
-                       		PutAddressMode(apd);
-							if (ap3 != NULL) {
-								if (op==op_push || op==op_pop)
-									ofs.printf("/");
-								else
-									ofs.printf(",");
-								PutAddressMode(ap3);
-								if (ap4 != NULL) {
-									if (op==op_push || op==op_pop)
-										ofs.printf("/");
-									else
-										ofs.printf(",");
-									PutAddressMode(ap4);
-								}
-					}
-                }
-        }
-        ofs.printf("\n");
-}
 
 /*
  *      generate a register mask for restore and save.
@@ -888,7 +535,7 @@ void GenerateQuad(Float128 *val)
 	genst_cumulative += 16;
 }
 
-void GenerateReference(SYM *sp,int offset)
+void GenerateReference(SYM *sp,int64_t offset)
 {
 	char    sign;
     if( offset < 0) {
@@ -901,17 +548,17 @@ void GenerateReference(SYM *sp,int offset)
         if( sp->storage_class == sc_static) {
 			ofs.printf(",");
 			ofs.printf(GetNamespace());
-			ofs.printf("_%ld", sp->value.i);
+			ofs.printf("_%lld", sp->value.i);
 			ofs.putch(sign);
-			ofs.printf("%d", offset);
+			ofs.printf("%lld", offset);
 //                fprintf(output,",%s_%ld%c%d",GetNamespace(),sp->value.i,sign,offset);
 		}
         else if( sp->storage_class == sc_thread) {
 			ofs.printf(",");
 			ofs.printf(GetNamespace());
-			ofs.printf("_%ld", sp->value.i);
+			ofs.printf("_%lld", sp->value.i);
 			ofs.putch(sign);
-			ofs.printf("%d", offset);
+			ofs.printf("%lld", offset);
 //                fprintf(output,",%s_%ld%c%d",GetNamespace(),sp->value.i,sign,offset);
 		}
 		else {
@@ -921,7 +568,7 @@ void GenerateReference(SYM *sp,int offset)
 			else {
                 ofs.printf(",%s",(char *)sp->name->c_str());
 				ofs.putch(sign);
-				ofs.printf("%d",offset);
+				ofs.printf("%lld",offset);
 			}
 		}
         outcol += (11 + sp->name->length());
@@ -930,17 +577,17 @@ void GenerateReference(SYM *sp,int offset)
         nl();
         if(sp->storage_class == sc_static) {
 			ofs.printf("\tdw\t%s",GetNamespace());
-			ofs.printf("_%ld",sp->value.i);
+			ofs.printf("_%lld",sp->value.i);
 			ofs.putch(sign);
-			ofs.printf("%d",offset);
+			ofs.printf("%lld",offset);
 //            fprintf(output,"\tdw\t%s_%ld%c%d",GetNamespace(),sp->value.i,sign,offset);
 		}
         else if(sp->storage_class == sc_thread) {
 //            fprintf(output,"\tdw\t%s_%ld%c%d",GetNamespace(),sp->value.i,sign,offset);
 			ofs.printf("\tdw\t%s",GetNamespace());
-			ofs.printf("_%ld",sp->value.i);
+			ofs.printf("_%lld",sp->value.i);
 			ofs.putch(sign);
-			ofs.printf("%d",offset);
+			ofs.printf("%lld",offset);
 		}
 		else {
 			if (offset==0) {
@@ -949,7 +596,7 @@ void GenerateReference(SYM *sp,int offset)
 			else {
 				ofs.printf("\tdw\t%s",(char *)sp->name->c_str());
 				ofs.putch(sign);
-				ofs.printf("%d", offset);
+				ofs.printf("%lld", offset);
 //				fprintf(output,"\tdw\t%s%c%d",sp->name,sign,offset);
 			}
 		}

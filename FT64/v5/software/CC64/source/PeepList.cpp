@@ -140,3 +140,41 @@ void PeepList::RemoveCompilerHints2()
 	Remove();
 }
 
+void PeepList::storeHex(txtoStream& ofs)
+{
+	OCODE *ip;
+
+	ofs.printf("; CC64 Hex Intermediate Representation File\n");
+	ofs.printf("; This is an automatically generated file.\n");
+	for (ip = head; ip != NULL; ip = ip->fwd)
+	{
+		ip->storeHex(ofs);
+	}
+	ofs.printf("%c", 26);
+}
+
+void PeepList::loadHex(std::ifstream& ifs)
+{
+	char buf[50];
+	OCODE *cd;
+	int op;
+
+	while (!ifs.eof()) {
+		ifs.read(buf, 1);
+		switch (buf[0]) {
+		case ';':
+			while (buf[0] != '\n' && !ifs.eof())
+				ifs.read(buf, 1);
+			break;
+		case 'O':
+			cd = OCODE::loadHex(ifs);
+			Add(cd);
+			break;
+		case 'L':
+			ifs.read(buf, 1);
+			buf[1] = '\0';
+			cd->length = atoi(buf);
+			break;
+		}
+	}
+}

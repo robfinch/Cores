@@ -1079,3 +1079,183 @@ Operand *ENODE::GenLand(int flags, int op)
 	ap3->MakeLegal( flags, 8);
 	return (ap3);
 }
+
+void ENODE::PutConstant(txtoStream& ofs, unsigned int lowhigh, unsigned int rshift)
+{
+	// ASM statment text (up to 3500 chars) may be placed in the following buffer.
+	static char buf[4000];
+
+	switch (nodetype)
+	{
+	case en_autofcon:
+		sprintf_s(buf, sizeof(buf), "%lld", i);
+		ofs.write(buf);
+		break;
+	case en_fcon:
+		goto j1;
+		// The following spits out a warning, but is okay.
+		sprintf_s(buf, sizeof(buf), "0x%llx", f);
+		ofs.write(buf);
+		break;
+	case en_autovcon:
+	case en_autocon:
+	case en_icon:
+		if (lowhigh == 2) {
+			sprintf_s(buf, sizeof(buf), "%lld", i & 0xffff);
+			ofs.write(buf);
+		}
+		else if (lowhigh == 3) {
+			sprintf_s(buf, sizeof(buf), "%lld", (i >> 16) & 0xffff);
+			ofs.write(buf);
+		}
+		else {
+			sprintf_s(buf, sizeof(buf), "%lld", i);
+			ofs.write(buf);
+		}
+		if (rshift > 0) {
+			sprintf_s(buf, sizeof(buf), ">>%d", rshift);
+			ofs.write(buf);
+		}
+		break;
+	case en_labcon:
+	j1:
+		sprintf_s(buf, sizeof(buf), "%s_%lld", GetNamespace(), i);
+		ofs.write(buf);
+		if (rshift > 0) {
+			sprintf_s(buf, sizeof(buf), ">>%d", rshift);
+			ofs.write(buf);
+		}
+		break;
+	case en_clabcon:
+		sprintf_s(buf, sizeof(buf), "%s_%lld", GetNamespace(), i);
+		ofs.write(buf);
+		if (rshift > 0) {
+			sprintf_s(buf, sizeof(buf), ">>%d", rshift);
+			ofs.write(buf);
+		}
+		break;
+	case en_nacon:
+		sprintf_s(buf, sizeof(buf), "%s", (char *)sp->c_str());
+		ofs.write(buf);
+		if (lowhigh == 3) {
+			sprintf_s(buf, sizeof(buf), ">>16");
+			ofs.write(buf);
+		}
+		if (rshift > 0) {
+			sprintf_s(buf, sizeof(buf), ">>%d", rshift);
+			ofs.write(buf);
+		}
+		break;
+	case en_cnacon:
+		sprintf_s(buf, sizeof(buf), "%s", (char *)msp->c_str());
+		ofs.write(buf);
+		if (rshift > 0) {
+			sprintf_s(buf, sizeof(buf), ">>%d", rshift);
+			ofs.write(buf);
+		}
+		break;
+	case en_add:
+		p[0]->PutConstant(ofs, 0, 0);
+		ofs.write("+");
+		p[1]->PutConstant(ofs, 0, 0);
+		break;
+	case en_sub:
+		p[0]->PutConstant(ofs, 0, 0);
+		ofs.write("-");
+		p[1]->PutConstant(ofs, 0, 0);
+		break;
+	case en_uminus:
+		ofs.write("-");
+		p[0]->PutConstant(ofs, 0, 0);
+		break;
+	default:
+		printf("DIAG - illegal constant node.\n");
+		break;
+	}
+}
+
+ENODE *ENODE::GetConstantHex(std::ifstream& ifs)
+{
+	static char buf[4000];
+	ENODE *ep;
+
+	ep = allocEnode();
+	ifs.read(buf, 2);
+	buf[2] = '\0';
+	ep->nodetype = (e_node)strtol(buf, nullptr, 16);
+	switch (ep->nodetype) {
+	case en_autofcon:
+		ifs.read(buf, 8);
+		buf[8] = '\0';
+		ep->i = strtol(buf, nullptr, 16);
+		break;
+	case en_fcon:
+		goto j1;
+	case en_autovcon:
+	case en_autocon:
+	case en_icon:
+		ifs.read(buf, 8);
+		buf[8] = '\0';
+		ep->i = strtol(buf, nullptr, 16);
+		break;
+	case en_labcon:
+j1:		;
+	}
+}
+
+void ENODE::PutConstantHex(txtoStream& ofs, unsigned int lowhigh, unsigned int rshift)
+{
+	// ASM statment text (up to 3500 chars) may be placed in the following buffer.
+	static char buf[4000];
+
+	ofs.printf("N%02X", nodetype);
+	switch (nodetype)
+	{
+	case en_autofcon:
+		sprintf_s(buf, sizeof(buf), "%08LLX", i);
+		ofs.write(buf);
+		break;
+	case en_fcon:
+		goto j1;
+	case en_autovcon:
+	case en_autocon:
+	case en_icon:
+		sprintf_s(buf, sizeof(buf), "%08llX", i);
+		ofs.write(buf);
+		break;
+	case en_labcon:
+	j1:
+		sprintf_s(buf, sizeof(buf), "%s_%lld:", GetNamespace(), i);
+		ofs.write(buf);
+		break;
+	case en_clabcon:
+		sprintf_s(buf, sizeof(buf), "%s_%lld:", GetNamespace(), i);
+		ofs.write(buf);
+		break;
+	case en_nacon:
+		sprintf_s(buf, sizeof(buf), "%s:", (char *)sp->c_str());
+		ofs.write(buf);
+		break;
+	case en_cnacon:
+		sprintf_s(buf, sizeof(buf), "%s:", (char *)msp->c_str());
+		ofs.write(buf);
+		break;
+	case en_add:
+		p[0]->PutConstantHex(ofs, 0, 0);
+		ofs.write("+");
+		p[1]->PutConstantHex(ofs, 0, 0);
+		break;
+	case en_sub:
+		p[0]->PutConstantHex(ofs, 0, 0);
+		ofs.write("-");
+		p[1]->PutConstantHex(ofs, 0, 0);
+		break;
+	case en_uminus:
+		ofs.write("-");
+		p[0]->PutConstantHex(ofs, 0, 0);
+		break;
+	default:
+		printf("DIAG - illegal constant node.\n");
+		break;
+	}
+}

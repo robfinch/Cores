@@ -79,6 +79,7 @@ void Compiler::compile()
 	genst_cumulative = 0;
 	typenum = 1;
 	symnum = 257;
+	pass = 1;
 	classname = nullptr;
 	//pCSETable = new CSETable;
 	//pCSETable->Clear();
@@ -315,4 +316,15 @@ void Compiler::AddBuiltinFunctions()
 	sp->fi->AddProto(&tadelete);
 	sp->tp = &stdvoid;
 	gsyms->insert(sp);
+}
+
+void Compiler::storeSymbols(std::ostream& ofs)
+{
+	int nn;
+	char buf[20];
+
+	nn = compiler.symnum;
+	sprintf_s(buf, sizeof(buf), "SYM%05d", nn);
+	ofs.write(buf,8);
+	ofs.write((char *)symbolTable, nn * sizeof(SYM));
 }

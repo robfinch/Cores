@@ -81,8 +81,27 @@ enum e_stmt {
         st_return, st_vortex, st_intoff, st_inton, st_stop, st_check };
 
 enum e_am {
-        am_reg, am_sreg, am_breg, am_fpreg, am_vreg, am_vmreg, am_ind, am_brind, am_ainc, am_adec, am_indx, am_indx2,
-        am_direct, am_immed, am_mask, am_none
+		am_none = 0,
+        am_reg = 1,
+		am_fpreg = 2,
+		am_vreg = 4,
+		am_vmreg = 8,
+		am_ind = 16,
+		am_indx = 32,
+		am_indx2 = 64,
+        am_direct = 128,
+		am_mem = 240,
+		am_imm = 256,
+		am_i5 = 512,
+		am_ui6 = 1024,
+		am_i8 = 2048,	// BEQI
+		am_i26 = 4096,
+		am_mask = 8192,
+		am_ainc = 16384,
+		am_adec = 32768,
+		am_brind = 65536,
+		am_breg = 131072,
+		am_sreg = 262144
 	};
 
 enum e_sym {

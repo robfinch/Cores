@@ -700,7 +700,7 @@ static void RestoreRegisterVars()
 	int nn;
 
 	if( save_mask != 0 ) {
-		cnt2 = cnt = bitsset(save_mask)*sizeOfWord;
+		cnt2 = cnt = popcnt(save_mask)*sizeOfWord;
 		cnt = 0;
 		for (nn = 0; nn < 64; nn++) {
 			if (save_mask & (1LL << nn)) {
@@ -718,7 +718,7 @@ static void RestoreFPRegisterVars()
 	int nn;
 
 	if( fpsave_mask != 0 ) {
-		cnt2 = cnt = bitsset(fpsave_mask)*sizeOfWord;
+		cnt2 = cnt = popcnt(fpsave_mask)*sizeOfWord;
 		cnt = 0;
 		for (nn = 0; nn < 64; nn++) {
 			if (fpsave_mask & (1LL << nn)) {

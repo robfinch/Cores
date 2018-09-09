@@ -1,12 +1,11 @@
+//===-- FT64CallingConv.td - FT64 Calling Conventions ---*- tablegen -*-===//
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2018  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-// CC64 - 'C' derived language compiler
-//  - 64 bit CPU
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -23,28 +22,23 @@
 //                                                                          
 // ============================================================================
 //
-#include "stdafx.h"
+// This describes the calling conventions for the FT64 architecture.
+//
+// The FT64 calling convention is handled with custom code in
+// FT64ISelLowering.cpp (CC_FT64).
 
-int bsave_mask;
-extern int popcnt(int m);
+def CSR : CalleeSavedRegs<(add (sequence "R%u", 11, 17), (sequence "R%u", 26, 31))>;
 
-short int loop_active;
+// Needed for implementation of FT64RegisterInfo::getNoPreservedMask()
+def CSR_NoRegs : CalleeSavedRegs<(add)>;
 
-/*
- *      this module will step through the parse tree and find all
- *      optimizable expressions. at present these expressions are
- *      limited to expressions that are valid throughout the scope
- *      of the function. the list of optimizable expressions is:
- *
- *              constants
- *              global and static addresses
- *              auto addresses
- *              contents of auto addresses.
- *
- *      contents of auto addresses are valid only if the address is
- *      never referred to without dereferencing.
- *
- *      scan will build a list of optimizable expressions which
- *      opt1 will replace during the second optimization pass.
- */
+// Interrupt handler needs to save/restore all registers that are used,
+// both Caller and Callee saved registers.
+def CSR_Interrupt : CalleeSavedRegs<(add (sequence "R%u", 1, 30))>;
+
+// Same as CSR_Interrupt, but including all 32-bit FP registers.
+def CSR_XLEN_F64_Interrupt: CalleeSavedRegs<(add
+    (sequence "R%u", 1, 30),
+    (sequence "FP%u_64", 0, 31)
+)>;
 
