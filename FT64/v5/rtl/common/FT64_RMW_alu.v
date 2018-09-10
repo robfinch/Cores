@@ -30,24 +30,26 @@
 
 module FT64_RMW_alu(instr, a, b, c, res);
 input [31:0] instr;
-input [63:0] a;
-input [63:0] b;
-input [63:0] c;
+input [64:0] a;
+input [64:0] b;
+input [64:0] c;
 output reg [63:0] res;
 
 wire [4:0] op = instr[30:26];
 
 always @*
+begin
 case(instr[5:0])
 `R2:
 	case(instr[31:26])
-	`INC:		res <= a + b;
-	`SPT:		res <= (a & ~b) | c;
-	default:	res <= 64'hDEADDEADDEADDEAD;
+	`INC:		begin
+				res[63:0] <= a + b;
+				end
+	default:	res[63:0] <= 64'hDEADDEADDEADDEAD;
 	endcase
 `AMO:
 	case(op)
-	`AMO_SWAP:	res <= b;
+	`AMO_SWAP:	res[63:0] <= b;
 	`AMO_ADD:	case(instr[23:21])
 				3'd0,3'd4:
 					begin
@@ -72,12 +74,24 @@ case(instr[5:0])
 						res[31:0] <= a[31:0] + b[31:0];
 						res[63:32] <= a[63:32] + b[63:32];
 					end
-				3'd3,3'd7:	res <= a + b;
+				3'd3,3'd7:	
+						begin
+						res[63:0] <= a + b;
+						res[64] <= a[64]^b[64];
+						end
 				endcase
-	`AMO_AND:	res <= a & b;
-	`AMO_OR:	res <= a | b;
-	`AMO_XOR:	res <= a ^ b;
-
+	`AMO_AND:	begin
+				res[63:0] <= a & b;
+				res[64] <= a[64] | b[64];
+				end
+	`AMO_OR:	begin
+				res[63:0] <= a | b;
+				res[64] <= a[64] | b[64];
+				end
+	`AMO_XOR:	begin
+				res[63:0] <= a ^ b;
+				res[64] <= a[64] | b[64];
+				end
 	`AMO_SHL:	
 				case(instr[23:21])
 				3'd0,3'd4:
@@ -103,7 +117,11 @@ case(instr[5:0])
 						res[31:0] <= a[31:0] << b[4:0];
 						res[63:32] <= a[63:32] << b[4:0];
 					end
-				3'd3,3'd7:	res <= a << b[5:0];
+				3'd3,3'd7:	
+					begin
+						res[63:0] <= a << b[5:0];
+						res[64] <= a[64];
+					end
 				endcase			
 				
 	`AMO_SHR:
@@ -131,7 +149,11 @@ case(instr[5:0])
 						res[31:0] <= a[31:0] >> b[4:0];
 						res[63:32] <= a[63:32] >> b[4:0];
 					end
-				3'd3,3'd7:	res <= a >> b[5:0];
+				3'd3,3'd7:	
+					begin
+						res[63:0] <= a >> b[5:0];
+						res[64] <= a[64];
+					end
 				endcase			
 
 	`AMO_MIN:
@@ -159,7 +181,11 @@ case(instr[5:0])
 						res[31:0] <= $signed(a[31:0]) < $signed(b[31:0]) ? a[31:0] : b[31:0];
 						res[63:32] <= $signed(a[63:32]) < $signed(b[63:32]) ? a[63:32] : b[63:32];
 					end
-				3'd3,3'd7:	res <= $signed(a) < $signed(b) ? a : b;
+				3'd3,3'd7:	
+					begin
+					res[63:0] <= $signed(a) < $signed(b) ? a : b;
+					res[64] <= $signed(a) < $signed(b) ? a[64] : b[64];
+					end
 				endcase
 	`AMO_MAX:	
 				case(instr[23:21])
@@ -186,7 +212,11 @@ case(instr[5:0])
 						res[31:0] <= $signed(a[31:0]) > $signed(b[31:0]) ? a[31:0] : b[31:0];
 						res[63:32] <= $signed(a[63:32]) > $signed(b[63:32]) ? a[63:32] : b[63:32];
 					end
-				3'd3,3'd7:	res <= $signed(a) > $signed(b) ? a : b;
+				3'd3,3'd7:
+					begin
+						res[63:0] <= $signed(a) > $signed(b) ? a : b;
+						res[64] <= $signed(a) > $signed(b) ? a[64] : b[64];
+					end
 				endcase
 	`AMO_MINU:	
 				case(instr[23:21])
@@ -213,7 +243,11 @@ case(instr[5:0])
 						res[31:0] <= $unsigned(a[31:0]) < $unsigned(b[31:0]) ? a[31:0] : b[31:0];
 						res[63:32] <= $unsigned(a[63:32]) < $unsigned(b[63:32]) ? a[63:32] : b[63:32];
 					end
-				3'd3,3'd7:	res <= $unsigned(a) < $unsigned(b) ? a : b;
+				3'd3,3'd7:
+					begin
+						res[63:0] <= $unsigned(a) < $unsigned(b) ? a : b;
+						res[64] <= $unsigned(a) < $unsigned(b) ? a[64] : b[64];
+					end
 				endcase
 	`AMO_MAXU:	
 				case(instr[23:21])
@@ -240,13 +274,18 @@ case(instr[5:0])
 						res[31:0] <= $unsigned(a[31:0]) > $unsigned(b[31:0]) ? a[31:0] : b[31:0];
 						res[63:32] <= $unsigned(a[63:32]) > $unsigned(b[63:32]) ? a[63:32] : b[63:32];
 					end
-				3'd3,3'd7:	res <= $unsigned(a) > $unsigned(b) ? a : b;
+				3'd3,3'd7:
+					begin
+						res[63:0] <= $unsigned(a) > $unsigned(b) ? a : b;
+						res[64] <= $unsigned(a) > $unsigned(b) ? a[64] : b[64];
+					end
 				endcase
-	default:	res <= 64'hDEADDEADDEADDEAD;
+	default:	res[63:0] <= 64'hDEADDEADDEADDEAD;
 	endcase
-`INC:		res <= a + b;
-`SPT:		res <= (a & ~b) | c;
-default:	res <= 64'hDEADDEADDEADDEAD;
+`INC:		begin
+			res[63:0] <= a + b;
+			end
+default:	res[63:0] <= 64'hDEADDEADDEADDEAD;
 endcase
-
+end
 endmodule

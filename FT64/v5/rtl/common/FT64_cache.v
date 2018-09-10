@@ -775,17 +775,19 @@ endmodule
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
 
-module FT64_dcache(rst, wclk, wr, sel, wadr, i, rclk, rdsize, radr, o, hit, hit0, hit1);
+module FT64_dcache(rst, wclk, wr, sel, wadr, i, li, rclk, rdsize, radr, o, lo, hit, hit0, hit1);
 input rst;
 input wclk;
 input wr;
 input [7:0] sel;
 input [37:0] wadr;
 input [63:0] i;
+input [255:0] li;		// line input
 input rclk;
 input [2:0] rdsize;
 input [37:0] radr;
 output reg [63:0] o;
+output reg [255:0] lo;	// line out
 output reg hit;
 output reg hit0;
 output reg hit1;
@@ -877,6 +879,8 @@ default:    begin
 endcase
 
 // hit0, hit1 are also delayed by a clock already
+always @(posedge rclk)
+	lo <= dc0;
 always @(posedge rclk)
      o <= dc0 >> {radr[4:3],6'b0};
 //     o <= {dc1,dc0} >> (radr[4:0] * 8);

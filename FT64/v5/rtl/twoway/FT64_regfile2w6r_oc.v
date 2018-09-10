@@ -26,11 +26,11 @@
 //`define SIM
 
 module FT64_regfileRam_sim(clka, ena, wea, addra, dina, clkb, enb, addrb, doutb);
-parameter WID=64;
+parameter WID=65;
 parameter RBIT = 11;
 input clka;
 input ena;
-input [7:0] wea;
+input [8:0] wea;
 input [RBIT:0] addra;
 input [WID-1:0] dina;
 input clkb;
@@ -40,7 +40,7 @@ output [WID-1:0] doutb;
 
 integer n;
 (* RAM_STYLE="BLOCK" *)
-reg [63:0] mem [0:4095];
+reg [64:0] mem [0:4095];
 reg [RBIT:0] raddrb;
 
 initial begin
@@ -56,6 +56,7 @@ always @(posedge clka) if (ena & wea[4]) mem[addra][39:32] <= dina[39:32];
 always @(posedge clka) if (ena & wea[5]) mem[addra][47:40] <= dina[47:40];
 always @(posedge clka) if (ena & wea[6]) mem[addra][55:48] <= dina[55:48];
 always @(posedge clka) if (ena & wea[7]) mem[addra][63:56] <= dina[63:56];
+always @(posedge clka) if (ena & wea[8]) mem[addra][64] <= dina[64];
 
 always @(posedge clkb)
 	raddrb <= addrb;
@@ -72,8 +73,8 @@ input clk4x;
 input clk;
 input wr0;
 input wr1;
-input [7:0] we0;
-input [7:0] we1;
+input [8:0] we0;
+input [8:0] we1;
 input [RBIT:0] wa0;
 input [RBIT:0] wa1;
 input [WID-1:0] i0;

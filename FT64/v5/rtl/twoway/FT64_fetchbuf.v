@@ -97,10 +97,10 @@ output reg fetchbufC_v;
 output reg fetchbufD_v;
 output fetchbuf0_thrd;
 output fetchbuf1_thrd;
-output reg [31:0] fetchbufA_instr;
-output reg [31:0] fetchbufB_instr;
-output reg [31:0] fetchbufC_instr;
-output reg [31:0] fetchbufD_instr;
+output reg [47:0] fetchbufA_instr;
+output reg [47:0] fetchbufB_instr;
+output reg [47:0] fetchbufC_instr;
+output reg [47:0] fetchbufD_instr;
 output reg [AMSB:0] fetchbufA_pc;
 output reg [AMSB:0] fetchbufB_pc;
 output reg [AMSB:0] fetchbufC_pc;
@@ -136,7 +136,6 @@ function IsBranch;
 input [47:0] isn;
 casex(isn[`INSTRUCTION_OP])
 `Bcc:   IsBranch = TRUE;
-`BccR:  IsBranch = TRUE;
 `BBc:   IsBranch = TRUE;
 `BEQI:  IsBranch = TRUE;
 `BCHK:	IsBranch = TRUE;
@@ -299,7 +298,7 @@ casez({cinstr[15:12],cinstr[6]})
 						expand[31:26] = `SUB;
 						expand[25:23] = 3'b011;	// word size
 						expand[22:18] = fnRp({cinstr[9:8],cinstr[3]});
-						expand[17:34] = fnRp(cinstr[2:0]);
+						expand[17:13] = fnRp(cinstr[2:0]);
 						expand[12:8] = fnRp(cinstr[2:0]);
 						expand[7:6] = 2'b10;
 						expand[5:0] = 8'h02;		// R2 instruction
@@ -309,7 +308,7 @@ casez({cinstr[15:12],cinstr[6]})
 						expand[31:26] = `AND;
 						expand[25:23] = 3'b011;	// word size
 						expand[22:18] = fnRp({cinstr[9:8],cinstr[3]});
-						expand[17:34] = fnRp(cinstr[2:0]);
+						expand[17:13] = fnRp(cinstr[2:0]);
 						expand[12:8] = fnRp(cinstr[2:0]);
 						expand[7:6] = 2'b10;
 						expand[5:0] = 8'h02;		// R2 instruction
@@ -319,7 +318,7 @@ casez({cinstr[15:12],cinstr[6]})
 						expand[31:26] = `OR;
 						expand[25:23] = 3'b011;	// word size
 						expand[22:18] = fnRp({cinstr[9:8],cinstr[3]});
-						expand[17:34] = fnRp(cinstr[2:0]);
+						expand[17:13] = fnRp(cinstr[2:0]);
 						expand[12:8] = fnRp(cinstr[2:0]);
 						expand[7:6] = 2'b10;
 						expand[5:0] = 8'h02;		// R2 instruction
@@ -329,7 +328,7 @@ casez({cinstr[15:12],cinstr[6]})
 						expand[31:26] = `XOR;
 						expand[25:23] = 3'b011;	// word size
 						expand[22:18] = fnRp({cinstr[9:8],cinstr[3]});
-						expand[17:34] = fnRp(cinstr[2:0]);
+						expand[17:13] = fnRp(cinstr[2:0]);
 						expand[12:8] = fnRp(cinstr[2:0]);
 						expand[7:6] = 2'b10;
 						expand[5:0] = 8'h02;		// R2 instruction
@@ -398,87 +397,87 @@ casez({cinstr[15:12],cinstr[6]})
 		end
 5'b01001:	// LH Rt,d[SP]
 		begin
-			expand[35:20] = {{5{cinstr[13]}},cinstr[13:8],3'd0};
-			expand[19:14] = cinstr[5:0];
-			expand[13:8] = 6'd63;
-			expand[7] = 1'b1;
-			expand[6:0] = `LH;
+			expand[31:18] = {{8{cinstr[11]}},cinstr[11:8],cinstr[5],1'd1};
+			expand[17:13] = {cinstr[4:0]};
+			expand[12:8] = 65'd31;
+			expand[7:6] = 2'b10;
+			expand[5:0] = `Lx;
 		end
 5'b01011:	// LW Rt,d[SP]
 		begin
 			expand[47:32] = 16'h0000;
-			expand[31:18] = {{6{cinstr[11]}},cinstr[11:8],cinstr[5],3'd0};
+			expand[31:18] = {{6{cinstr[11]}},cinstr[11:8],cinstr[5],3'd4};
 			expand[17:13] = cinstr[4:0];
 			expand[12:8] = 5'd31;
 			expand[7:6] = 2'b10;
-			expand[5:0] = `LW;
+			expand[5:0] = `Lx;
 		end
 5'b01101:	// LH Rt,d[fP]
 		begin
-			expand[35:20] = {{5{cinstr[13]}},cinstr[13:8],3'd0};
-			expand[19:14] = cinstr[5:0];
-			expand[13:8] = 6'd62;
-			expand[7] = 1'b1;
-			expand[6:0] = `LH;
+			expand[31:18] = {{8{cinstr[11]}},cinstr[11:8],cinstr[5],1'd1};
+			expand[17:13] = cinstr[4:0];
+			expand[12:8] = 6'd30;
+			expand[7:6] = 2'b10;
+			expand[5:0] = `Lx;
 		end
 5'b01111:	// LW Rt,d[FP]
 		begin
 			expand[47:32] = 16'h0000;
-			expand[31:18] = {{6{cinstr[11]}},cinstr[11:8],cinstr[5],3'd0};
+			expand[31:18] = {{6{cinstr[11]}},cinstr[11:8],cinstr[5],3'd4};
 			expand[17:13] = cinstr[4:0];
 			expand[12:8] = 5'd30;
 			expand[7:6] = 2'b10;
-			expand[5:0] = `LW;
+			expand[5:0] = `Lx;
 		end
 5'b10001:	// SH Rt,d[SP]
 		begin
-			expand[35:20] = {{5{cinstr[13]}},cinstr[13:8],3'd0};
-			expand[19:14] = cinstr[5:0];
-			expand[13:8] = 6'd63;
-			expand[7] = 1'b1;
-			expand[6:0] = `SH;
+			expand[31:18] = {{8{cinstr[11]}},cinstr[11:8],cinstr[5],1'd1};
+			expand[17:13] = cinstr[4:0];
+			expand[12:8] = 5'd31;
+			expand[7:6] = 2'b10;
+			expand[5:0] = `Sx;
 		end
 5'b10011:	// SW Rt,d[SP]
 		begin
 			expand[47:32] = 16'h0000;
-			expand[31:18] = {{6{cinstr[11]}},cinstr[11:8],cinstr[5],3'd0};
+			expand[31:18] = {{6{cinstr[11]}},cinstr[11:8],cinstr[5],3'd4};
 			expand[17:13] = cinstr[4:0];
 			expand[12:8] = 5'd31;
 			expand[7:6] = 2'b10;
-			expand[5:0] = `SW;
+			expand[5:0] = `Sx;
 		end
 5'b10101:	// SH Rt,d[fP]
 		begin
-			expand[35:20] = {{5{cinstr[13]}},cinstr[13:8],3'd0};
-			expand[19:14] = cinstr[5:0];
-			expand[13:8] = 6'd62;
-			expand[7] = 1'b1;
-			expand[6:0] = `SH;
+			expand[31:18] = {{8{cinstr[11]}},cinstr[11:8],cinstr[5],1'd1};
+			expand[17:13] = cinstr[4:0];
+			expand[12:8] = 6'd62;
+			expand[7:6] = 2'b10;
+			expand[5:0] = `Sx;
 		end
 5'b10111:	// SW Rt,d[FP]
 		begin
 			expand[47:32] = 16'h0000;
-			expand[31:18] = {{6{cinstr[11]}},cinstr[11:8],cinstr[5],3'd0};
+			expand[31:18] = {{6{cinstr[11]}},cinstr[11:8],cinstr[5],3'd4};
 			expand[17:13] = cinstr[4:0];
 			expand[12:8] = 5'd30;
 			expand[7:6] = 2'b10;
-			expand[5:0] = `SW;
+			expand[5:0] = `Sx;
 		end
 5'b11001:
 		begin
-			expand[35:20] = {{9{cinstr[13:12]}},cinstr[5:4],3'd0};
-			expand[19:14] = fnRp(cinstr[11:8]);
-			expand[13:8] = fnRp(cinstr[3:0]);
-			expand[7] = 1'b1;
-			expand[6:0] = `LW;
+			expand[31:18] = {{9{cinstr[11:10]}},cinstr[4:3],1'd1};
+			expand[17:13] = fnRp({cinstr[9:8],cinstr[5]});
+			expand[12:8] = fnRp(cinstr[2:0]);
+			expand[7:6] = 2'b10;
+			expand[5:0] = `Lx;
 		end
 5'b11111:
 		begin
-			expand[35:20] = {{9{cinstr[13:12]}},cinstr[5:4],3'd0};
-			expand[19:14] = fnRp(cinstr[11:8]);
-			expand[13:8] = fnRp(cinstr[3:0]);
-			expand[7] = 1'b1;
-			expand[6:0] = `SW;
+			expand[31:18] = {{9{cinstr[11:10]}},cinstr[4:3],3'd0};
+			expand[17:13] = fnRp({cinstr[9:8],cinstr[5]});
+			expand[12:8] = fnRp(cinstr[2:0]);
+			expand[7:6] = 2'b10;
+			expand[5:0] = `Sx;
 		end
 default:
 		begin
@@ -526,7 +525,7 @@ case(fetchbufA_instr[`INSTRUCTION_OP])
 `JMP,`CALL: branch_pcA = fetchbufA_instr[6] ? {fetchbufA_instr[39:8],1'b0} : {fetchbufA_pc[31:25],fetchbufA_instr[31:8],1'b0};
 `R2:		branch_pcA = btgtA;	// RTI
 `BRK,`JAL:	branch_pcA = btgtA;
-default:	branch_pcA = fetchbufA_pc + {{20{fetchbufA_instr[31]}},fetchbufA_instr[31:21],1'b0} + fnInsLength(fetchbufA_instr));
+default:	branch_pcA = fetchbufA_pc + {{20{fetchbufA_instr[31]}},fetchbufA_instr[31:21],1'b0} + fnInsLength(fetchbufA_instr);
 endcase
 
 always @*
@@ -535,16 +534,16 @@ case(fetchbufB_instr[`INSTRUCTION_OP])
 `JMP,`CALL: branch_pcB = fetchbufB_instr[6] ? {fetchbufB_instr[39:8],1'b0} : {fetchbufB_pc[31:25],fetchbufB_instr[31:8],1'b0};
 `R2:		branch_pcB = btgtB;	// RTI
 `BRK,`JAL:	branch_pcB = btgtB;
-default:	branch_pcB = fetchbufB_pc + {{20{fetchbufB_instr[31]}},fetchbufB_instr[31:21],1'b0} + fnInsLength(fetchbufB_instr));
+default:	branch_pcB = fetchbufB_pc + {{20{fetchbufB_instr[31]}},fetchbufB_instr[31:21],1'b0} + fnInsLength(fetchbufB_instr);
 endcase
 
 always @*
 case(fetchbufC_instr[`INSTRUCTION_OP])
 `RET:		branch_pcC = retpc0;
 `JMP,`CALL: branch_pcC = fetchbufC_instr[6] ? {fetchbufC_instr[39:8],1'b0} : {fetchbufC_pc[31:25],fetchbufC_instr[31:8],1'b0};
-`R2:		branch_pcc = btgtC;	// RTI
+`R2:		branch_pcC = btgtC;	// RTI
 `BRK,`JAL:	branch_pcC = btgtC;
-default:	branch_pcC = fetchbufC_pc + {{20{fetchbufC_instr[31]}},fetchbufC_instr[31:21],1'b0} + fnInsLength(fetchbufC_instr));
+default:	branch_pcC = fetchbufC_pc + {{20{fetchbufC_instr[31]}},fetchbufC_instr[31:21],1'b0} + fnInsLength(fetchbufC_instr);
 endcase
 
 always @*
@@ -553,7 +552,7 @@ case(fetchbufD_instr[`INSTRUCTION_OP])
 `JMP,`CALL: branch_pcD = fetchbufD_instr[6] ? {fetchbufD_instr[39:8],1'b0} : {fetchbufD_pc[31:25],fetchbufD_instr[31:8],1'b0};
 `R2:		branch_pcD = btgtD;	// RTI
 `BRK,`JAL:	branch_pcD = btgtD;
-default:	branch_pcD = fetchbufD_pc + {{20{fetchbufD_instr[31]}},fetchbufD_instr[31:21],1'b0} + fnInsLength(fetchbufD_instr));
+default:	branch_pcD = fetchbufD_pc + {{20{fetchbufD_instr[31]}},fetchbufD_instr[31:21],1'b0} + fnInsLength(fetchbufD_instr);
 endcase
 
 wire take_branchA = ({fetchbufA_v, IsBranch(fetchbufA_instr), predict_takenA}  == {`VAL, `TRUE, `TRUE}) ||

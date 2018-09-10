@@ -25,12 +25,13 @@
 `include "FT64_defines.vh"
 
 module FT64_alu(rst, clk, ld, abort, instr, a, b, c, pc, tgt, tgt2, ven, vm, sbl, sbu,
-    csr, o, ob, done, idle, excen, exc, thrd, ptrmask);
+    csr, o, ob, done, idle, excen, exc, thrd, ptrmask, state, mem, shift48);
 parameter DBW = 64;
 parameter BIG = 1'b1;
 parameter SUP_VECTOR = 1;
 parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
+parameter PTR = 20'hFFF01;
 input rst;
 input clk;
 input ld;
@@ -55,7 +56,15 @@ input [4:0] excen;
 output reg [8:0] exc;
 input thrd;
 input [63:0] ptrmask;
+input [1:0] state;
+input mem;
+input shift48;
+
 integer n;
+
+reg adrDone, adrIdle;
+reg [63:0] addro;
+reg [63:0] addr8;
 
 wire [7:0] a8 = a[7:0];
 wire [15:0] a16 = a[15:0];
@@ -63,6 +72,8 @@ wire [31:0] a32 = a[31:0];
 wire [7:0] b8 = b[7:0];
 wire [15:0] b16 = b[15:0];
 wire [31:0] b32 = b[31:0];
+wire [63:0] orb = instr[6] ? {34'd0,b[29:0]} : {50'd0,b[13:0]};
+wire [63:0] andb = instr[6] ? {34'h3FFFFFFFF,b[29:0]} : {50'h3FFFFFFFFFFFF,b[13:0]};
 
 wire [21:0] qimm = instr[39:18];
 wire [63:0] imm = {{45{instr[39]}},instr[39:21]};
@@ -79,11 +90,12 @@ wire mult_done, mult_idle, div_done, div_idle;
 wire aslo;
 wire [6:0] clzo,cloo,cpopo;
 wire [63:0] shftho;
+reg [34:0] addr9;
 
 function IsMul;
-input [31:0] isn;
+input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`VECTOR:
+`IVECTOR:
     case(isn[`INSTRUCTION_S2])
     `VMUL,`VMULS:   IsMul = TRUE;
     default:    IsMul = FALSE;
@@ -99,9 +111,9 @@ endcase
 endfunction
 
 function IsDivmod;
-input [31:0] isn;
+input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`VECTOR:
+`IVECTOR:
     case(isn[`INSTRUCTION_S2])
     `VDIV,`VDIVS:   IsDivmod = TRUE;
     default:    IsDivmod = FALSE;
@@ -111,15 +123,15 @@ case(isn[`INSTRUCTION_OP])
     `DIVMODU,`DIVMODSU,`DIVMOD: IsDivmod = TRUE;
     default:    IsDivmod = FALSE;
     endcase
-`DIVUI,`DIVSUI,`DIVI,`MODUI,`MODSUI,`MODI:  IsDivmod = TRUE;
+`DIVUI,`DIVI,`MODI:  IsDivmod = TRUE;
 default:    IsDivmod = FALSE;
 endcase
 endfunction
 
 function IsSgn;
-input [31:0] isn;
+input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`VECTOR:
+`IVECTOR:
     case(isn[`INSTRUCTION_S2])
     `VMUL,`VMULS,`VDIV,`VDIVS:    IsSgn = TRUE;
     default:    IsSgn = FALSE;
@@ -135,20 +147,24 @@ endcase
 endfunction
 
 function IsSgnus;
-input [31:0] isn;
+input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
 `RR:
     case(isn[`INSTRUCTION_S2])
     `MULSU,`DIVMODSU:   IsSgnus = TRUE;
     default:    IsSgnus = FALSE;
     endcase
-`MULSUI,`DIVSUI,`MODSUI:    IsSgnus = TRUE;
 default:    IsSgnus = FALSE;
 endcase
 endfunction
 
+function IsShiftAndOp;
+input [47:0] isn;
+IsShiftAndOp = FALSE;
+endfunction
+
 wire [2:0] sz =
-    instr[`INSTRUCTION_OP]==`VECTOR ? 2'd3 : 
+    instr[`INSTRUCTION_OP]==`IVECTOR ? 2'd3 : 
     instr[`INSTRUCTION_S2]==`R1 ? instr[18:16] : instr[23:21];
 
 wire [63:0] bfout,shfto;
@@ -371,10 +387,15 @@ wire [63:0] redor64 = {63'd0,|a};
 wire [63:0] redor32 = {63'd0,|a[31:0]};
 wire [63:0] redor16 = {63'd0,|a[15:0]};
 wire [63:0] redor8 = {63'd0,|a[7:0]};
-wire [63:0] zxb12 = {52'd0,b[11:0]};
-wire [63:0] sxb12 = {{52{b[11]}},b[11:0]};
+wire [63:0] zxb10 = {54'd0,b[9:0]};
+wire [63:0] sxb10 = {{54{b[9]}},b[9:0]};
+wire [63:0] zxb26 = {38'd0,instr[47:32],instr[27:18]};
+wire [63:0] sxb26 = {{38{instr[47]}},instr[47:32],instr[27:18]};
 reg [15:0] mask;
 wire [4:0] cpopom;
+wire signed [63:0] as = a;
+wire signed [63:0] bs = b;
+wire signed [63:0] cs = c;
 
 always @*
 for (n = 0; n < 16; n = n + 1)
@@ -412,468 +433,487 @@ FT64_BMM ubmm1
 );
 
 always @*
+begin
 case(instr[`INSTRUCTION_OP])
-`VECTOR:
+`IVECTOR:
     if (SUP_VECTOR)
     case(instr[`INSTRUCTION_S2])
-    `VABS:         o = a[63] ? -a : a;
-    `VSIGN:        o = a[63] ? 64'hFFFFFFFFFFFFFFFF : a==64'd0 ? 64'd0 : 64'd1;
+    `VABS:         o[63:0] = a[63] ? -a : a;
+    `VSIGN:        o[63:0] = a[63] ? 64'hFFFFFFFFFFFFFFFF : a==64'd0 ? 64'd0 : 64'd1;
     `VMxx:
     	case(instr[25:23])
-	    `VMAND:        o = and64;
-	    `VMOR:         o = or64;
-	    `VMXOR:        o = xor64;
-	    `VMXNOR:       o = ~(xor64);
-	    `VMPOP:        o = {57'd0,cpopo};
+	    `VMAND:        o[63:0] = and64;
+	    `VMOR:         o[63:0] = or64;
+	    `VMXOR:        o[63:0] = xor64;
+	    `VMXNOR:       o[63:0] = ~(xor64);
+	    `VMPOP:        o[63:0] = {57'd0,cpopo};
 	    `VMFILL:       for (n = 0; n < 64; n = n + 1)
 	                       o[n] = (n < a);
 	                       // Change the following when VL > 16
-	    `VMFIRST:      o = fsto==5'd31 ? 64'd64 : fsto;
-	    `VMLAST:       o = lsto==5'd31 ? 64'd64 : lsto;
+	    `VMFIRST:      o[63:0] = fsto==5'd31 ? 64'd64 : fsto;
+	    `VMLAST:       o[63:0] = lsto==5'd31 ? 64'd64 : lsto;
 		endcase
-    `VADD,`VADDS:  o = vm[ven] ? a + b : c;
-    `VSUB,`VSUBS:  o = vm[ven] ? a - b : c;
-    `VMUL,`VMULS:  o = vm[ven] ? prod[DBW-1:0] : c;
-    `VDIV,`VDIVS:  o = BIG ? (vm[ven] ? divq : c) : 64'hCCCCCCCCCCCCCCCC;
-    `VAND,`VANDS:  o = vm[ven] ? a & b : c;
-    `VOR,`VORS:    o = vm[ven] ? a | b : c;
-    `VXOR,`VXORS:  o = vm[ven] ? a ^ b : c;
-    `VCNTPOP:      o = {57'd0,cpopo};
-    `VSHLV:        o = a;   // no masking here
-    `VSHRV:        o = a;
-    `VCMPRSS:      o = a;
-    `VCIDX:        o = a * ven;
-    `VSCAN:        o = a * (cpopom==0 ? 0 : cpopom-1);
+    `VADD,`VADDS:  o[63:0] = vm[ven] ? a + b : c;
+    `VSUB,`VSUBS:  o[63:0] = vm[ven] ? a - b : c;
+    `VMUL,`VMULS:  o[63:0] = vm[ven] ? prod[DBW-1:0] : c;
+    `VDIV,`VDIVS:  o[63:0] = BIG ? (vm[ven] ? divq : c) : 64'hCCCCCCCCCCCCCCCC;
+    `VAND,`VANDS:  o[63:0] = vm[ven] ? a & b : c;
+    `VOR,`VORS:    o[63:0] = vm[ven] ? a | b : c;
+    `VXOR,`VXORS:  o[63:0] = vm[ven] ? a ^ b : c;
+    `VCNTPOP:      o[63:0] = {57'd0,cpopo};
+    `VSHLV:        o[63:0] = a;   // no masking here
+    `VSHRV:        o[63:0] = a;
+    `VCMPRSS:      o[63:0] = a;
+    `VCIDX:        o[63:0] = a * ven;
+    `VSCAN:        o[63:0] = a * (cpopom==0 ? 0 : cpopom-1);
     `VSxx,`VSxxS,
     `VSxxb,`VSxxSb:
         case({instr[26],instr[20:19]})
         `VSEQ:     begin
-                       o = c;    
+                       o[63:0] = c;    
                        o[ven] = vm[ven] ? a==b : c[ven];
                    end
         `VSNE:     begin
-                       o = c;    
+                       o[63:0] = c;    
                        o[ven] = vm[ven] ? a!=b : c[ven];
                    end
         `VSLT:      begin
-                         o = c;    
+                         o[63:0] = c;    
                          o[ven] = vm[ven] ? $signed(a) < $signed(b) : c[ven];
                     end
         `VSGE:      begin
-                         o = c;    
+                         o[63:0] = c;    
                          o[ven] = vm[ven] ? $signed(a) >= $signed(b) : c[ven];
                     end
         `VSLE:      begin
-                          o = c;    
+                          o[63:0] = c;    
                           o[ven] = vm[ven] ? $signed(a) <= $signed(b) : c[ven];
                     end
         `VSGT:      begin
-                         o = c;    
+                         o[63:0] = c;    
                          o[ven] = vm[ven] ? $signed(a) > $signed(b) : c[ven];
                     end
-        default:	o = 64'hCCCCCCCCCCCCCCCC;
+        default:	o[63:0] = 64'hCCCCCCCCCCCCCCCC;
         endcase
     `VSxxU,`VSxxSU,
     `VSxxUb,`VSxxSUb:
         case({instr[26],instr[20:19]})
         `VSEQ:     begin
-                       o = c;    
+                       o[63:0] = c;    
                        o[ven] = vm[ven] ? a==b : c[ven];
                    end
         `VSNE:     begin
-                       o = c;    
+                       o[63:0] = c;    
                        o[ven] = vm[ven] ? a!=b : c[ven];
                    end
         `VSLT:      begin
-                         o = c;    
+                         o[63:0] = c;    
                          o[ven] = vm[ven] ? a < b : c[ven];
                     end
         `VSGE:      begin
-                         o = c;    
+                         o[63:0] = c;    
                          o[ven] = vm[ven] ? a >= b : c[ven];
                     end
         `VSLE:      begin
-                          o = c;    
+                          o[63:0] = c;    
                           o[ven] = vm[ven] ? a <= b : c[ven];
                     end
         `VSGT:      begin
-                         o = c;    
+                         o[63:0] = c;    
                          o[ven] = vm[ven] ? a > b : c[ven];
                     end
-        default:	o = 64'hCCCCCCCCCCCCCCCC;
+        default:	o[63:0] = 64'hCCCCCCCCCCCCCCCC;
         endcase
-    `VBITS2V:   o = vm[ven] ? a[ven] : c;
+    `VBITS2V:   o[63:0] = vm[ven] ? a[ven] : c;
     `V2BITS:    begin
-                o = b;
+                o[63:0] = b;
                 o[ven] = vm[ven] ? a[0] : b[ven];
                 end
-    `VSHL,`VSHR,`VASR:  o = BIG ? shfto : 64'hCCCCCCCCCCCCCCCC;
-    `VXCHG:     o = vm[ven] ? b : a;
-    default:	o = 64'hCCCCCCCCCCCCCCCC;
+    `VSHL,`VSHR,`VASR:  o[63:0] = BIG ? shfto : 64'hCCCCCCCCCCCCCCCC;
+    `VXCHG:     o[63:0] = vm[ven] ? b : a;
+    default:	o[63:0] = 64'hCCCCCCCCCCCCCCCC;
     endcase
     else
-        o <= 64'hCCCCCCCCCCCCCCCC;    
+        o[63:0] <= 64'hCCCCCCCCCCCCCCCC;    
 `R2:
-    case(instr[`INSTRUCTION_S2])
-    `BCD:
-        case(instr[`INSTRUCTION_S1])
-        `BCDADD:    o = BIG ? bcdaddo :  64'hCCCCCCCCCCCCCCCC;
-        `BCDSUB:    o = BIG ? bcdsubo :  64'hCCCCCCCCCCCCCCCC;
-        `BCDMUL:    o = BIG ? bcdmulo :  64'hCCCCCCCCCCCCCCCC;
-        default:    o = 64'hDEADDEADDEADDEAD;
-        endcase
-    `MOV:		o = a;
-    `VMOV:		o = a;
-    `R1:
-        case(instr[`INSTRUCTION_S1])
-        `CNTLZ:     o = BIG ? {57'd0,clzo} : 64'hCCCCCCCCCCCCCCCC;
-        `CNTLO:     o = BIG ? {57'd0,cloo} : 64'hCCCCCCCCCCCCCCCC;
-        `CNTPOP:    o = BIG ? {57'd0,cpopo} : 64'hCCCCCCCCCCCCCCCC;
-        `ABS:       case(sz)
-                    2'd0:   o = BIG ? (a[7] ? -a[7:0] : a[7:0]) : 64'hCCCCCCCCCCCCCCCC;
-                    2'd1:   o = BIG ? (a[15] ? -a[15:0] : a[15:0]) : 64'hCCCCCCCCCCCCCCCC;
-                    2'd2:   o = BIG ? (a[31] ? -a[31:0] : a[31:0]) : 64'hCCCCCCCCCCCCCCCC;
-                    2'd3:   o = BIG ? (a[63] ? -a : a) : 64'hCCCCCCCCCCCCCCCC;
-                    endcase
-        `NOT:   case(sz)
-                2'd0:   o = ~|a[7:0];
-                2'd1:   o = ~|a[15:0];
-                2'd2:   o = ~|a[31:0];
-                2'd3:   o = ~|a[63:0];
-                endcase
-        `REDOR: case(sz)
-                2'd0:   o = redor8;
-                2'd1:   o = redor16;
-                2'd2:   o = redor32;
-                2'd3:   o = redor64;
-                endcase
-        default:    o = 64'hDEADDEADDEADDEAD;
-        endcase
-    `BMM:		o = BIG ? bmmo : 64'hCCCCCCCCCCCCCCCC;
-    `SHIFT:     o = BIG ? shfto : 64'hCCCCCCCCCCCCCCCC;
-    `SHIFTB:    o = BIG ? shftob : 64'hCCCCCCCCCCCCCCCC;
-    `SHIFTC:    o = BIG ? shftco : 64'hCCCCCCCCCCCCCCCC;
-    `SHIFTH:    o = BIG ? shftho : 64'hCCCCCCCCCCCCCCCC;
-    `ADD:   case(sz)
-    		3'd0,3'd4:
-    			begin
-    				o[7:0] <= a[7:0] + b[7:0];
-    				o[15:8] <= a[15:8] + b[15:8];
-    				o[23:16] <= a[23:16] + b[23:16];
-    				o[31:24] <= a[31:24] + b[31:24];
-    				o[39:32] <= a[39:32] + b[39:32];
-    				o[47:40] <= a[47:40] + b[47:40];
-    				o[55:48] <= a[55:48] + b[55:48];
-    				o[63:56] <= a[63:56] + b[63:56];
-    			end
-    		3'd1,3'd5:
-    			begin
-    				o[15:0] <= a[15:0] + b[15:0];
-    				o[31:16] <= a[31:16] + b[31:16];
-    				o[47:32] <= a[47:32] + b[47:32];
-    				o[63:48] <= a[63:48] + b[63:48];
-    			end
-    		3'd2,3'd6:
-    			begin
-    				o[31:0] <= a[31:0] + b[31:0];
-    				o[63:32] <= a[63:32] + b[63:32];
-    			end
-            3'd3,3'd7:
-            		o = a + b;
-            endcase
-    `SUB:   case(sz)
-    		3'd0,3'd4:
-    			begin
-    				o[7:0] <= a[7:0] - b[7:0];
-    				o[15:8] <= a[15:8] - b[15:8];
-    				o[23:16] <= a[23:16] - b[23:16];
-    				o[31:24] <= a[31:24] - b[31:24];
-    				o[39:32] <= a[39:32] - b[39:32];
-    				o[47:40] <= a[47:40] - b[47:40];
-    				o[55:48] <= a[55:48] - b[55:48];
-    				o[63:56] <= a[63:56] - b[63:56];
-    			end
-    		3'd1,3'd5:
-    			begin
-    				o[15:0] <= a[15:0] - b[15:0];
-    				o[31:16] <= a[31:16] - b[31:16];
-    				o[47:32] <= a[47:32] - b[47:32];
-    				o[63:48] <= a[63:48] - b[63:48];
-    			end
-    		3'd2,3'd6:
-    			begin
-    				o[31:0] <= a[31:0] - b[31:0];
-    				o[63:32] <= a[63:32] - b[63:32];
-    			end
-            3'd3,3'd7:
-            		o = a - b;
-            endcase
-    `CMP:   case(instr[25:23])
-    		3'd0,3'd1:	// CMP
-	    		case(sz[1:0])
-	            2'd0:   o = $signed(a[7:0]) < $signed(b[7:0]) ? 64'hFFFFFFFFFFFFFFFF : a[7:0]==b[7:0] ? 64'd0 : 64'd1;
-	            2'd1:   o = $signed(a[15:0]) < $signed(b[15:0]) ? 64'hFFFFFFFFFFFFFFFF : a[15:0]==b[15:0] ? 64'd0 : 64'd1;
-	            2'd2:   o = $signed(a[31:0]) < $signed(b[31:0]) ? 64'hFFFFFFFFFFFFFFFF : a[31:0]==b[31:0] ? 64'd0 : 64'd1;
-	            2'd3:   o = $signed(a) < $signed(b) ? 64'hFFFFFFFFFFFFFFFF : a==b ? 64'd0 : 64'd1;
-	            endcase
-	        3'd2:	// SEQ
-	        	case(sz[1:0])
-	        	2'd0:	o = a[7:0]==b[7:0];
-	        	2'd1:	o = a[15:0]==b[15:0];
-	        	2'd2:	o = a[31:0]==b[31:0];
-	        	2'd3:	o = a==b;
-	        	endcase
-	        3'd3:	// SNE
-	        	case(sz[1:0])
-	        	2'd0:	o = a[7:0]!=b[7:0];
-	        	2'd1:	o = a[15:0]!=b[15:0];
-	        	2'd2:	o = a[31:0]!=b[31:0];
-	        	2'd3:	o = a!=b;
-	        	endcase
-    		3'd4:	// SLT
-	    		case(sz[1:0])
-	            2'd0:   o = $signed(a[7:0]) < $signed(b[7:0]);
-	            2'd1:   o = $signed(a[15:0]) < $signed(b[15:0]);
-	            2'd2:   o = $signed(a[31:0]) < $signed(b[31:0]);
-	            2'd3:   o = $signed(a) < $signed(b);
-	            endcase
-    		3'd5:	// SGE
-	    		case(sz[1:0])
-	            2'd0:   o = $signed(a[7:0]) >= $signed(b[7:0]);
-	            2'd1:   o = $signed(a[15:0]) >= $signed(b[15:0]);
-	            2'd2:   o = $signed(a[31:0]) >= $signed(b[31:0]);
-	            2'd3:   o = $signed(a) >= $signed(b);
-	            endcase
-    		3'd6:	// SLE
-	    		case(sz[1:0])
-	            2'd0:   o = $signed(a[7:0]) <= $signed(b[7:0]);
-	            2'd1:   o = $signed(a[15:0]) <= $signed(b[15:0]);
-	            2'd2:   o = $signed(a[31:0]) <= $signed(b[31:0]);
-	            2'd3:   o = $signed(a) <= $signed(b);
-	            endcase
-    		3'd7:	// SGT
-	    		case(sz[1:0])
-	            2'd0:   o = $signed(a[7:0]) > $signed(b[7:0]);
-	            2'd1:   o = $signed(a[15:0]) > $signed(b[15:0]);
-	            2'd2:   o = $signed(a[31:0]) > $signed(b[31:0]);
-	            2'd3:   o = $signed(a) > $signed(b);
-	            endcase
+	if (instr[6])
+		case(instr[47:42])
+		`SHIFTR:
+			begin
+			case(instr[35:33])
+			`ASL,`ASR,`ROL,`ROR:
+				case(instr[32:30])	// size
+				3'd0:	addr8 = {{56{shftob[7]}},shftob[7:0]};
+				3'd1:	addr8 = {{48{shftob[15]}},shftco[15:0]};
+				3'd2:	addr8 = {{32{shftho[31]}},shftho[31:0]};
+				3'd3,3'd7:	addr8 = shfto;
+				3'd4:	addr8 = shftob;
+				3'd5:	addr8 = shftco;
+				3'd6:	addr8 = shftho;
+				endcase
+			`SHL,`SHR:
+				case(instr[32:30])	// size
+				3'd0:	addr8 = {56'd0,shftob[7:0]};
+				3'd1:	addr8 = {48'd0,shftco[15:0]};
+				3'd2:	addr8 = {32'd0,shftho[31:0]};
+				3'd3,3'd7:	addr8 = shfto;
+				3'd4:	addr8 = shftob;
+				3'd5:	addr8 = shftco;
+				3'd6:	addr8 = shftho;
+				endcase
+			default:	o[63:0] = 64'hDCDCDCDCDCDCDCDC;
+			endcase
+			case(instr[35:33])
+			`ASL,`ASR,`SHL,`SHR,`ROL,`ROR:
+				o[63:0] = addr9;
+			default:	o[63:0] = 64'hDCDCDCDCDCDCDCDC;
+			endcase
+			end
+		`MIN:
+			case(instr[30:28])
+			3'd3:
+				if (as < bs && as < cs)
+					o[63:0] = as;
+				else if (bs < cs)
+					o[63:0] = bs;
+				else
+					o[63:0] = cs;
+			endcase
+		endcase
+	else
+	    case(instr[`INSTRUCTION_S2])
+	    `BCD:
+	        case(instr[`INSTRUCTION_S1])
+	        `BCDADD:    o[63:0] = BIG ? bcdaddo :  64'hCCCCCCCCCCCCCCCC;
+	        `BCDSUB:    o[63:0] = BIG ? bcdsubo :  64'hCCCCCCCCCCCCCCCC;
+	        `BCDMUL:    o[63:0] = BIG ? bcdmulo :  64'hCCCCCCCCCCCCCCCC;
+	        default:    o[63:0] = 64'hDEADDEADDEADDEAD;
 	        endcase
-    `CMPU:  case(instr[25:23])
-    		3'd0,3'd1:	// CMPU
-	    		case(sz[1:0])
-	            2'd0:   o = a[7:0] < b[7:0] ? 64'hFFFFFFFFFFFFFFFF : a[7:0]==b[7:0] ? 64'd0 : 64'd1;
-	            2'd1:   o = a[15:0] < b[15:0] ? 64'hFFFFFFFFFFFFFFFF : a[15:0]==b[15:0] ? 64'd0 : 64'd1;
-	            2'd2:   o = a[31:0] < b[31:0] ? 64'hFFFFFFFFFFFFFFFF : a[31:0]==b[31:0] ? 64'd0 : 64'd1;
-	            2'd3:   o = a < b ? 64'hFFFFFFFFFFFFFFFF : a==b ? 64'd0 : 64'd1;
-	            endcase
-	        3'd2:	// SEQ
-	        	case(sz[1:0])
-	        	2'd0:	o = a[7:0]==b[7:0];
-	        	2'd1:	o = a[15:0]==b[15:0];
-	        	2'd2:	o = a[31:0]==b[31:0];
-	        	2'd3:	o = a==b;
-	        	endcase
-	        3'd3:	// SNE
-	        	case(sz[1:0])
-	        	2'd0:	o = a[7:0]!=b[7:0];
-	        	2'd1:	o = a[15:0]!=b[15:0];
-	        	2'd2:	o = a[31:0]!=b[31:0];
-	        	2'd3:	o = a!=b;
-	        	endcase
-    		3'd4:	// SLTU
-	    		case(sz[1:0])
-	            2'd0:   o = a[7:0] < b[7:0];
-	            2'd1:   o = a[15:0] < b[15:0];
-	            2'd2:   o = a[31:0] < b[31:0];
-	            2'd3:   o = a < b;
-	            endcase
-    		3'd5:	// SGEU
-	    		case(sz[1:0])
-	            2'd0:   o = a[7:0] >= b[7:0];
-	            2'd1:   o = a[15:0] >= b[15:0];
-	            2'd2:   o = a[31:0] >= b[31:0];
-	            2'd3:   o = a >= b;
-	            endcase
-    		3'd6:	// SLEU
-	    		case(sz[1:0])
-	            2'd0:   o = a[7:0] <= b[7:0];
-	            2'd1:   o = a[15:0] <= b[15:0];
-	            2'd2:   o = a[31:0] <= b[31:0];
-	            2'd3:   o = a <= b;
-	            endcase
-    		3'd7:	// SGTU
-	    		case(sz[1:0])
-	            2'd0:   o = a[7:0] > b[7:0];
-	            2'd1:   o = a[15:0] > b[15:0];
-	            2'd2:   o = a[31:0] > b[31:0];
-	            2'd3:   o = a > b;
-	            endcase
+	    `MOV:	begin	
+	    		o[63:0] = a;
+	    		end
+	    `VMOV:		o[63:0] = a;
+	    `R1:
+	        case(instr[`INSTRUCTION_S1])
+	        `CNTLZ:     o[63:0] = BIG ? {57'd0,clzo} : 64'hCCCCCCCCCCCCCCCC;
+	        `CNTLO:     o[63:0] = BIG ? {57'd0,cloo} : 64'hCCCCCCCCCCCCCCCC;
+	        `CNTPOP:    o[63:0] = BIG ? {57'd0,cpopo} : 64'hCCCCCCCCCCCCCCCC;
+	        `ABS:       case(sz)
+	                    2'd0:   o[63:0] = BIG ? (a[7] ? -a[7:0] : a[7:0]) : 64'hCCCCCCCCCCCCCCCC;
+	                    2'd1:   o[63:0] = BIG ? (a[15] ? -a[15:0] : a[15:0]) : 64'hCCCCCCCCCCCCCCCC;
+	                    2'd2:   o[63:0] = BIG ? (a[31] ? -a[31:0] : a[31:0]) : 64'hCCCCCCCCCCCCCCCC;
+	                    2'd3:   o[63:0] = BIG ? (a[63] ? -a : a) : 64'hCCCCCCCCCCCCCCCC;
+	                    endcase
+	        `NOT:   case(sz)
+	                2'd0:   o[63:0] = ~|a[7:0];
+	                2'd1:   o[63:0] = ~|a[15:0];
+	                2'd2:   o[63:0] = ~|a[31:0];
+	                2'd3:   o[63:0] = ~|a[63:0];
+	                endcase
+	        `REDOR: case(sz)
+	                2'd0:   o[63:0] = redor8;
+	                2'd1:   o[63:0] = redor16;
+	                2'd2:   o[63:0] = redor32;
+	                2'd3:   o[63:0] = redor64;
+	                endcase
+	        `ZXH:		o[63:0] = {32'd0,a[31:0]};
+	        `ZXC:		o[63:0] = {48'd0,a[15:0]};
+	        `ZXB:		o[63:0] = {56'd0,a[7:0]};
+	        `SXH:		o[63:0] = {{32{a[31]}},a[31:0]};
+	        `SXC:		o[63:0] = {{48{a[15]}},a[15:0]};
+	        `SXB:		o[63:0] = {{56{a[7]}},a[7:0]};
+//	        5'h1C:		o[63:0] = tmem[a[9:0]];
+	        default:    o = 64'hDEADDEADDEADDEAD;
 	        endcase
-    `AND:   o = and64;
-    `OR:    o = or64;
-    `XOR:   o = xor64;
-    `NAND:  o = ~and64;
-    `NOR:   o = ~or64;
-    `XNOR:  o = ~xor64;
-    `SEI:       o = a | instr[21:16];
-    `RTI:       o = a | instr[21:16];
-    `CMOVEQ:    o = (a==64'd0) ? b : c;
-    `CMOVNE:    o = (a!=64'd0) ? b : c;
-    `MUX:       for (n = 0; n < 64; n = n + 1)
-                    o[n] <= a[n] ? b[n] : c[n];
-    `MULU:      o = instr[25:24]==2'b00 ? prod[DBW-1:0] : prod[DBW*2-1:DBW];
-    `MULSU:     o = instr[25:24]==2'b00 ? prod[DBW-1:0] : prod[DBW*2-1:DBW];
-    `MUL:       o = instr[25:24]==2'b00 ? prod[DBW-1:0] : prod[DBW*2-1:DBW];
-    `DIVMODU:   o = BIG ? (instr[25:24]==2'b00 ? divq : rem) : 64'hCCCCCCCCCCCCCCCC;
-    `DIVMODSU:  o = BIG ? (instr[25:24]==2'b00 ? divq : rem) : 64'hCCCCCCCCCCCCCCCC;
-    `DIVMOD:    o = BIG ? (instr[25:24]==2'b00 ? divq : rem) : 64'hCCCCCCCCCCCCCCCC;
-    `LBX,`LBOX,`LBUX,`LCX,`LCOX,`LCUX,
-    `LHX,`LHOX,`LHUX,`LWX,`LWRX,`SBX,`SCX,`SHX,`SWX,`SWCX:
-    		   	o = BIG ? a + (b << instr[22:21]) : 64'hCCCCCCCCEEEEEEEE;
-	 `LPT,`SPT:	begin
- 				o[63:58] <= ((a + (b << instr[22:21])) >> 6'd3);
- 				o[57:0] = ((a + (b << instr[22:21])) >> 6'd9);
- 				o[2:0] = 3'd0;
- 				end
-	 `ISPTR:	 if ((a & ptrmask)==64'd0)
- 					o = a + (b << instr[22:21]);
- 				else
- 					o = 64'd0;
-    `LVx:		o = BIG ? a + (b << instr[22:21]) : 64'hCCCCCCCCCCCCCCCC;
-    `LVX,`SVX:  o = BIG ? a + (b << 2'd3) : 64'hCCCCCCCCCCCCCCCC;
-    `LVWS,`SVWS:    o = BIG ? a + ({b * ven,3'b000}) : 64'hCCCCCCCCCCCCCCCC;
-    `MIN:       case(sz)
-    			3'd0,3'd4:
+	    `BMM:		o[63:0] = BIG ? bmmo : 64'hCCCCCCCCCCCCCCCC;
+	    `SHIFT31:   o[63:0] = BIG ? shfto : 64'hCCCCCCCCCCCCCCCC;
+	    `SHIFT63:   o[63:0] = BIG ? shfto : 64'hCCCCCCCCCCCCCCCC;
+	    `SHIFTR:    o[63:0] = BIG ? shfto : 64'hCCCCCCCCCCCCCCCC;
+	    `ADD:   case(sz)
+	    		3'd0,3'd4:
 	    			begin
-	    			o[7:0] = BIG ? ($signed(a[7:0]) < $signed(b[7:0]) ? a[7:0] : b[7:0]) : 8'hCC;
-	    			o[15:8] = BIG ? ($signed(a[15:8]) < $signed(b[15:8]) ? a[15:8] : b[15:8]) : 64'hCCCCCCCCCCCCCCCC;
-	    			o[23:16] = BIG ? ($signed(a[23:16]) < $signed(b[23:16]) ? a[23:16] : b[23:16]) : 64'hCCCCCCCCCCCCCCCC;
-	    			o[31:24] = BIG ? ($signed(a[31:24]) < $signed(b[31:24]) ? a[31:24] : b[31:24]) : 64'hCCCCCCCCCCCCCCCC;
-	    			o[39:32] = BIG ? ($signed(a[39:32]) < $signed(b[39:32]) ? a[39:32] : b[39:32]) : 64'hCCCCCCCCCCCCCCCC;
-	    			o[47:40] = BIG ? ($signed(a[47:40]) < $signed(b[47:40]) ? a[47:40] : b[47:40]) : 64'hCCCCCCCCCCCCCCCC;
-	    			o[55:48] = BIG ? ($signed(a[55:48]) < $signed(b[55:48]) ? a[55:48] : b[55:48]) : 64'hCCCCCCCCCCCCCCCC;
-	    			o[63:56] = BIG ? ($signed(a[63:56]) < $signed(b[63:56]) ? a[63:56] : b[63:56]) : 64'hCCCCCCCCCCCCCCCC;
+	    				o[7:0] = a[7:0] + b[7:0];
+	    				o[15:8] = a[15:8] + b[15:8];
+	    				o[23:16] = a[23:16] + b[23:16];
+	    				o[31:24] = a[31:24] + b[31:24];
+	    				o[39:32] = a[39:32] + b[39:32];
+	    				o[47:40] = a[47:40] + b[47:40];
+	    				o[55:48] = a[55:48] + b[55:48];
+	    				o[63:56] = a[63:56] + b[63:56];
 	    			end
 	    		3'd1,3'd5:
 	    			begin
-	    			o[15:0] = BIG ? ($signed(a[15:0]) < $signed(b[15:0]) ? a[15:0] : b[15:0]) : 64'hCCCCCCCCCCCCCCCC;
-	    			o[32:16] = BIG ? ($signed(a[32:16]) < $signed(b[32:16]) ? a[32:16] : b[32:16]) : 64'hCCCCCCCCCCCCCCCC;
-	    			o[47:32] = BIG ? ($signed(a[47:32]) < $signed(b[47:32]) ? a[47:32] : b[47:32]) : 64'hCCCCCCCCCCCCCCCC;
-	    			o[63:48] = BIG ? ($signed(a[63:48]) < $signed(b[63:48]) ? a[63:48] : b[63:48]) : 64'hCCCCCCCCCCCCCCCC;
+	    				o[15:0] = a[15:0] + b[15:0];
+	    				o[31:16] = a[31:16] + b[31:16];
+	    				o[47:32] = a[47:32] + b[47:32];
+	    				o[63:48] = a[63:48] + b[63:48];
 	    			end
 	    		3'd2,3'd6:
 	    			begin
-	    			o[31:0] = BIG ? ($signed(a[31:0]) < $signed(b[31:0]) ? a[31:0] : b[31:0]) : 64'hCCCCCCCCCCCCCCCC;
-	    			o[63:32] = BIG ? ($signed(a[63:32]) < $signed(b[63:32]) ? a[63:32] : b[63:32]) : 64'hCCCCCCCCCCCCCCCC;
+	    				o[31:0] = a[31:0] + b[31:0];
+	    				o[63:32] = a[63:32] + b[63:32];
 	    			end
-				3'd3,3'd7:    			
-    				o = BIG ? ($signed(a) < $signed(b) ? a : b) : 64'hCCCCCCCCCCCCCCCC;
-    			endcase
-    `MAX:       case(sz)
-    			3'd0,3'd4:
+	            3'd3,3'd7:
+	            	begin
+	            		o[63:0] = a + b;
+	            	end
+	            endcase
+	    `SUB:   case(sz)
+	    		3'd0,3'd4:
 	    			begin
-	    			o[7:0] = BIG ? ($signed(a[7:0]) > $signed(b[7:0]) ? a[7:0] : b[7:0]) : 64'hCCCCCCCCCCCCCCCC;
-	    			o[15:8] = BIG ? ($signed(a[15:8]) > $signed(b[15:8]) ? a[15:8] : b[15:8]) : 64'hCCCCCCCCCCCCCCCC;
-	    			o[23:16] = BIG ? ($signed(a[23:16]) > $signed(b[23:16]) ? a[23:16] : b[23:16]) : 64'hCCCCCCCCCCCCCCCC;
-	    			o[31:24] = BIG ? ($signed(a[31:24]) > $signed(b[31:24]) ? a[31:24] : b[31:24]) : 64'hCCCCCCCCCCCCCCCC;
-	    			o[39:32] = BIG ? ($signed(a[39:32]) > $signed(b[39:32]) ? a[39:32] : b[39:32]) : 64'hCCCCCCCCCCCCCCCC;
-	    			o[47:40] = BIG ? ($signed(a[47:40]) > $signed(b[47:40]) ? a[47:40] : b[47:40]) : 64'hCCCCCCCCCCCCCCCC;
-	    			o[55:48] = BIG ? ($signed(a[55:48]) > $signed(b[55:48]) ? a[55:48] : b[55:48]) : 64'hCCCCCCCCCCCCCCCC;
-	    			o[63:56] = BIG ? ($signed(a[63:56]) > $signed(b[63:56]) ? a[63:56] : b[63:56]) : 64'hCCCCCCCCCCCCCCCC;
+	    				o[7:0] = a[7:0] - b[7:0];
+	    				o[15:8] = a[15:8] - b[15:8];
+	    				o[23:16] = a[23:16] - b[23:16];
+	    				o[31:24] = a[31:24] - b[31:24];
+	    				o[39:32] = a[39:32] - b[39:32];
+	    				o[47:40] = a[47:40] - b[47:40];
+	    				o[55:48] = a[55:48] - b[55:48];
+	    				o[63:56] = a[63:56] - b[63:56];
 	    			end
 	    		3'd1,3'd5:
 	    			begin
-	    			o[15:0] = BIG ? ($signed(a[15:0]) > $signed(b[15:0]) ? a[15:0] : b[15:0]) : 64'hCCCCCCCCCCCCCCCC;
-	    			o[32:16] = BIG ? ($signed(a[32:16]) > $signed(b[32:16]) ? a[32:16] : b[32:16]) : 64'hCCCCCCCCCCCCCCCC;
-	    			o[47:32] = BIG ? ($signed(a[47:32]) > $signed(b[47:32]) ? a[47:32] : b[47:32]) : 64'hCCCCCCCCCCCCCCCC;
-	    			o[63:48] = BIG ? ($signed(a[63:48]) > $signed(b[63:48]) ? a[63:48] : b[63:48]) : 64'hCCCCCCCCCCCCCCCC;
+	    				o[15:0] = a[15:0] - b[15:0];
+	    				o[31:16] = a[31:16] - b[31:16];
+	    				o[47:32] = a[47:32] - b[47:32];
+	    				o[63:48] = a[63:48] - b[63:48];
 	    			end
 	    		3'd2,3'd6:
 	    			begin
-	    			o[31:0] = BIG ? ($signed(a[31:0]) > $signed(b[31:0]) ? a[31:0] : b[31:0]) : 64'hCCCCCCCCCCCCCCCC;
-	    			o[63:32] = BIG ? ($signed(a[63:32]) > $signed(b[63:32]) ? a[63:32] : b[63:32]) : 64'hCCCCCCCCCCCCCCCC;
+	    				o[31:0] = a[31:0] - b[31:0];
+	    				o[63:32] = a[63:32] - b[63:32];
 	    			end
-				3'd3,3'd7:    			
-    				o = BIG ? ($signed(a) > $signed(b) ? a : b) : 64'hCCCCCCCCCCCCCCCC;
-    			endcase
-    `MAJ:		o = (a & b) | (a & c) | (b & c);
-    `CHK:       o = (a >= b && a < c);
-    default:    o = 64'hDEADDEADDEADDEAD;
-    endcase
- `AUIPC:
- 	begin
- 		o = pc + b;
- 		o[29:0] = 30'd0;
- 	end
- `LUI:
+	            3'd3,3'd7:
+	            	begin
+	            		o[63:0] = a - b;
+	            	end
+	            endcase
+	    `SLT:   tskSlt(instr,instr[25:23],a,b,o);
+	    `SLTU:  tskSltu(instr,instr[25:23],a,b,o);
+	    `SLE:   tskSle(instr,instr[25:23],a,b,o);
+	    `SLEU:  tskSleu(instr,instr[25:23],a,b,o);
+	    `AND:   o[63:0] = and64;
+	    `OR:    o[63:0] = or64;
+	    `XOR:   o[63:0] = xor64;
+	    `NAND:  o[63:0] = ~and64;
+	    `NOR:   o[63:0] = ~or64;
+	    `XNOR:  o[63:0] = ~xor64;
+	    `SEI:       o[63:0] = a | instr[21:16];
+	    `RTI:       o[63:0] = a | instr[21:16];
+	    `CMOVEZ:    begin
+	    			o[63:0] = (a==64'd0) ? b : c;
+	    			end
+	    `CMOVNZ:	if (instr[41])
+	    				o[63:0] = (a!=64'd0) ? b : {{48{instr[38]}},instr[38:28],instr[22:18]};
+	    			else
+	    				o[63:0] = (a!=64'd0) ? b : c;
+	    `MUX:       for (n = 0; n < 64; n = n + 1)
+	                    o[n] <= a[n] ? b[n] : c[n];
+	    `MULU:      o[63:0] = instr[25:24]==2'b00 ? prod[DBW-1:0] : prod[DBW*2-1:DBW];
+	    `MULSU:     o[63:0] = instr[25:24]==2'b00 ? prod[DBW-1:0] : prod[DBW*2-1:DBW];
+	    `MUL:       o[63:0] = instr[25:24]==2'b00 ? prod[DBW-1:0] : prod[DBW*2-1:DBW];
+	    `DIVMODU:   o[63:0] = BIG ? (instr[25:24]==2'b00 ? divq : rem) : 64'hCCCCCCCCCCCCCCCC;
+	    `DIVMODSU:  o[63:0] = BIG ? (instr[25:24]==2'b00 ? divq : rem) : 64'hCCCCCCCCCCCCCCCC;
+	    `DIVMOD:    o[63:0] = BIG ? (instr[25:24]==2'b00 ? divq : rem) : 64'hCCCCCCCCCCCCCCCC;
+			`LEAX:
+					begin
+					o[63:0] = BIG ? a + (b << instr[22:21]) : 64'hCCCCCCCCEEEEEEEE;
+					o[63:44] = PTR;
+					end
+			`LVX,
+	    `LBX,`LBUX,`LCX,`LCUX,
+	    `LHX,`LHUX,`LWX,`LWRX,`SBX,`SCX,`SHX,`SWX,`SWCX:
+					if (BIG) begin
+						o[63:0] = a + (b << instr[22:21]);
+					end
+					else
+						o[63:0] = 64'hCCCCCCCCEEEEEEEE;
+	    `LVX,`SVX:  if (BIG) begin
+	    				o[63:0] = a + (b << 2'd3);
+	    			end
+	    			else
+	    				o[63:0] = 64'hCCCCCCCCCCCCCCCC;
+	    `LVWS,`SVWS:
+	    			if (BIG) begin    
+	    				o[63:0] = a + ({b * ven,3'b000});
+	    			end
+	    			else
+	    				o[63:0] = 64'hCCCCCCCCCCCCCCCC;
+	    `MIN:       case(sz)
+	    			3'd0,3'd4:
+		    			begin
+		    			o[7:0] = BIG ? ($signed(a[7:0]) < $signed(b[7:0]) ? a[7:0] : b[7:0]) : 8'hCC;
+		    			o[15:8] = BIG ? ($signed(a[15:8]) < $signed(b[15:8]) ? a[15:8] : b[15:8]) : 64'hCCCCCCCCCCCCCCCC;
+		    			o[23:16] = BIG ? ($signed(a[23:16]) < $signed(b[23:16]) ? a[23:16] : b[23:16]) : 64'hCCCCCCCCCCCCCCCC;
+		    			o[31:24] = BIG ? ($signed(a[31:24]) < $signed(b[31:24]) ? a[31:24] : b[31:24]) : 64'hCCCCCCCCCCCCCCCC;
+		    			o[39:32] = BIG ? ($signed(a[39:32]) < $signed(b[39:32]) ? a[39:32] : b[39:32]) : 64'hCCCCCCCCCCCCCCCC;
+		    			o[47:40] = BIG ? ($signed(a[47:40]) < $signed(b[47:40]) ? a[47:40] : b[47:40]) : 64'hCCCCCCCCCCCCCCCC;
+		    			o[55:48] = BIG ? ($signed(a[55:48]) < $signed(b[55:48]) ? a[55:48] : b[55:48]) : 64'hCCCCCCCCCCCCCCCC;
+		    			o[63:56] = BIG ? ($signed(a[63:56]) < $signed(b[63:56]) ? a[63:56] : b[63:56]) : 64'hCCCCCCCCCCCCCCCC;
+		    			end
+		    		3'd1,3'd5:
+		    			begin
+		    			o[15:0] = BIG ? ($signed(a[15:0]) < $signed(b[15:0]) ? a[15:0] : b[15:0]) : 64'hCCCCCCCCCCCCCCCC;
+		    			o[32:16] = BIG ? ($signed(a[32:16]) < $signed(b[32:16]) ? a[32:16] : b[32:16]) : 64'hCCCCCCCCCCCCCCCC;
+		    			o[47:32] = BIG ? ($signed(a[47:32]) < $signed(b[47:32]) ? a[47:32] : b[47:32]) : 64'hCCCCCCCCCCCCCCCC;
+		    			o[63:48] = BIG ? ($signed(a[63:48]) < $signed(b[63:48]) ? a[63:48] : b[63:48]) : 64'hCCCCCCCCCCCCCCCC;
+		    			end
+		    		3'd2,3'd6:
+		    			begin
+		    			o[31:0] = BIG ? ($signed(a[31:0]) < $signed(b[31:0]) ? a[31:0] : b[31:0]) : 64'hCCCCCCCCCCCCCCCC;
+		    			o[63:32] = BIG ? ($signed(a[63:32]) < $signed(b[63:32]) ? a[63:32] : b[63:32]) : 64'hCCCCCCCCCCCCCCCC;
+		    			end
+					3'd3,3'd7:
+						begin    			
+	    				o[63:0] = BIG ? ($signed(a) < $signed(b) ? a : b) : 64'hCCCCCCCCCCCCCCCC;
+	    				end
+	    			endcase
+	    `MAX:       case(sz)
+	    			3'd0,3'd4:
+		    			begin
+		    			o[7:0] = BIG ? ($signed(a[7:0]) > $signed(b[7:0]) ? a[7:0] : b[7:0]) : 64'hCCCCCCCCCCCCCCCC;
+		    			o[15:8] = BIG ? ($signed(a[15:8]) > $signed(b[15:8]) ? a[15:8] : b[15:8]) : 64'hCCCCCCCCCCCCCCCC;
+		    			o[23:16] = BIG ? ($signed(a[23:16]) > $signed(b[23:16]) ? a[23:16] : b[23:16]) : 64'hCCCCCCCCCCCCCCCC;
+		    			o[31:24] = BIG ? ($signed(a[31:24]) > $signed(b[31:24]) ? a[31:24] : b[31:24]) : 64'hCCCCCCCCCCCCCCCC;
+		    			o[39:32] = BIG ? ($signed(a[39:32]) > $signed(b[39:32]) ? a[39:32] : b[39:32]) : 64'hCCCCCCCCCCCCCCCC;
+		    			o[47:40] = BIG ? ($signed(a[47:40]) > $signed(b[47:40]) ? a[47:40] : b[47:40]) : 64'hCCCCCCCCCCCCCCCC;
+		    			o[55:48] = BIG ? ($signed(a[55:48]) > $signed(b[55:48]) ? a[55:48] : b[55:48]) : 64'hCCCCCCCCCCCCCCCC;
+		    			o[63:56] = BIG ? ($signed(a[63:56]) > $signed(b[63:56]) ? a[63:56] : b[63:56]) : 64'hCCCCCCCCCCCCCCCC;
+		    			end
+		    		3'd1,3'd5:
+		    			begin
+		    			o[15:0] = BIG ? ($signed(a[15:0]) > $signed(b[15:0]) ? a[15:0] : b[15:0]) : 64'hCCCCCCCCCCCCCCCC;
+		    			o[32:16] = BIG ? ($signed(a[32:16]) > $signed(b[32:16]) ? a[32:16] : b[32:16]) : 64'hCCCCCCCCCCCCCCCC;
+		    			o[47:32] = BIG ? ($signed(a[47:32]) > $signed(b[47:32]) ? a[47:32] : b[47:32]) : 64'hCCCCCCCCCCCCCCCC;
+		    			o[63:48] = BIG ? ($signed(a[63:48]) > $signed(b[63:48]) ? a[63:48] : b[63:48]) : 64'hCCCCCCCCCCCCCCCC;
+		    			end
+		    		3'd2,3'd6:
+		    			begin
+		    			o[31:0] = BIG ? ($signed(a[31:0]) > $signed(b[31:0]) ? a[31:0] : b[31:0]) : 64'hCCCCCCCCCCCCCCCC;
+		    			o[63:32] = BIG ? ($signed(a[63:32]) > $signed(b[63:32]) ? a[63:32] : b[63:32]) : 64'hCCCCCCCCCCCCCCCC;
+		    			end
+					3'd3,3'd7: 
+						begin   			
+	    				o[63:0] = BIG ? ($signed(a) > $signed(b) ? a : b) : 64'hCCCCCCCCCCCCCCCC;
+	    				end
+	    			endcase
+	    `MAJ:		o = (a & b) | (a & c) | (b & c);
+	    `CHK:       o[63:0] = (a >= b && a < c);
+	    /*
+	    `RTOP:		case(c[5:0])
+	    			`RTADD:	o = a + b;
+	    			`RTSUB:	o = a - b;
+	    			`RTAND:	o = and64;
+	    			`RTOR:	o = or64;
+	    			`RTXOR:	o = xor64;
+	    			`RTNAND:	o = ~and64;
+	    			`RTNOR:	o = ~or64;
+	    			`RTXNOR:	o = ~xor64;
+	    			`RTSLT:	o = as < bs;
+	    			`RTSGE:	o = as >= bs;
+	    			`RTSLE: o = as <= bs;
+	    			`RTSGT:	o = as > bs;
+	    			`RTSEQ: o = as==bs;
+	    			`RTSNE:	o = as!=bs;
+	    			endcase
+	    */
+	    default:    o[63:0] = 64'hDEADDEADDEADDEAD;
+	    endcase
+`AUIPC:
  	begin
  		if (instr[7:6]==2'b01)
- 			o = {instr[47:13],30'd0};
+ 			o[63:0] = pc + {instr[47:13],30'd0};
  		else
- 			o = {{15{instr[31]}},instr[31:13],30'd0};
+ 			o[63:0] = pc + {{15{instr[31]}},instr[31:13],30'd0};
+ 		o[29:0] = 30'd0;
+// 		o[63:44] = PTR;
+ 	end
+`LUI:
+ 	begin
+ 		if (instr[7:6]==2'b01)
+ 			o[63:0] = {instr[47:13],30'd0};
+ 		else
+ 			o[63:0] = {{15{instr[31]}},instr[31:13],30'd0};
 	end
- `ADDI: o = a + b;
- `CMPI: o = $signed(a) < $signed(b) ? 64'hFFFFFFFFFFFFFFFF : a==b ? 64'd0 : 64'd1;
- `CMPUI: o = a < b ? 64'hFFFFFFFFFFFFFFFF : a==b ? 64'd0 : 64'd1;
- `ANDI:  o = a & b;
- `ORI:  case(instr[18:16])
- 		3'd0,3'd1,3'd2,3'd3:	o = a | b;
- 		3'd4:	o = a | {8{b[7:0]}};
- 		3'd5:	o = a | {4{b[15:0]}};
- 		3'd6:	o = a | {2{13'd0,b[18:0]}};
- 		3'd7:	o = a | b;
- 		endcase
- `XORI: case(instr[18:16])
- 		3'd0,3'd1,3'd2,3'd3:	o = a ^ b;
- 		3'd4:	o = a ^ {8{b[7:0]}};
- 		3'd5:	o = a ^ {4{b[15:0]}};
- 		3'd6:	o = a ^ {2{13'd0,b[18:0]}};
- 		3'd7:	o = a ^ b;
- 		endcase
- `SccI:
-            case(instr[`INSTRUCTION_S2])
-            `SEQ:   o = a == sxb12;
-            `SNE:   o = a != sxb12;
-            `SLT:   o = $signed(a) < $signed(sxb12);
-            `SGE:   o = $signed(a) >= $signed(sxb12);
-            `SLE:   o = $signed(a) <= $signed(sxb12);
-            `SGT:   o = $signed(a) > $signed(sxb12);
-            `SLTU:  o = a < zxb12;
-            `SGEU:  o = a >= zxb12;
-            `SLEU:  o = a <= zxb12;
-            `SGTU:  o = a > zxb12;
-            default:    o = 64'hDEADDEADDEADDEAD;
-            endcase
- `MULUI:     o = prod[DBW-1:0];
- `MULSUI:    o = prod[DBW-1:0];
- `MULI:      o = prod[DBW-1:0];
- `DIVUI:     o = BIG ? divq : 64'hCCCCCCCCCCCCCCCC;
- `DIVSUI:    o = BIG ? divq : 64'hCCCCCCCCCCCCCCCC;
- `DIVI:      o = BIG ? divq : 64'hCCCCCCCCCCCCCCCC;
- `MODUI:     o = BIG ? rem : 64'hCCCCCCCCCCCCCCCC;
- `MODSUI:    o = BIG ? rem : 64'hCCCCCCCCCCCCCCCC;
- `MODI:      o = BIG ? rem : 64'hCCCCCCCCCCCCCCCC;
- `LB,`LBO,`LBU,`LC,`LCO,`LCU,`LH,`LHO,`LHU,`LW,`LWR,
- `SB,`SC,`SH,`SW,`SWC,`CAS:  o = a + b;
- // For the LPT/SPT instructions the bit index is stuffed into the high order
- // six bits since these bits would otherwise be zero and we need to know the
- // bit index.
- `LPT,`SPT:	begin
- 			o[63:58] <= ((a + b) >> 6'd3);
- 			o[57:0] = ((a + b) >> 6'd9);
- 			o[2:0] = 3'd0;
- 			end
- `ISPTR:	 if ((a & ptrmask)==64'd0)
- 				o = a + b;
- 			else
- 				o = 64'd0;
- `LVx:		 o = a + sxb12;
- `LV,`SV:    o = a + b + {ven,3'b0};
- `CSRRW:     o = BIG ? csr | {thrd,24'h0} : 64'hDDDDDDDDDDDDDDDD;
- `BITFIELD:   o = BIG ? bfout : 64'hCCCCCCCCCCCCCCCC;
-  default:    o = 64'hDEADDEADDEADDEAD;
+`ADDI:	o[63:0] = a + b;
+`SLTI:	o[63:0] = $signed(a) < $signed(b);
+`SLTUI: o[63:0] = a < b;
+`SGTI:	o[63:0] = $signed(a) > $signed(b);
+`SGTUI: o[63:0] = a > b;
+`ANDI:	o[63:0] = a & andb;
+`ORI:		o[63:0] = a | orb;
+`XORI:	o[63:0] = a ^ orb;
+`XNORI:	o[63:0] = ~(a ^ orb);
+`MULUI:		o[63:0] = prod[DBW-1:0];
+`MULI:		o[63:0] = prod[DBW-1:0];
+`DIVUI:		o[63:0] = BIG ? divq : 64'hCCCCCCCCCCCCCCCC;
+`DIVI:		o[63:0] = BIG ? divq : 64'hCCCCCCCCCCCCCCCC;
+`MODI:		o[63:0] = BIG ? rem : 64'hCCCCCCCCCCCCCCCC;
+`LB,`LBU,`SB:	o[63:0] = a + b;
+`Lx,`LxU,`Sx:
+			begin
+				o[63:0] = a + b;
+				casez(b[2:0])
+				3'b100:	o[2:0] = 3'd0;	// LW / SW
+				3'b?10:	o[1:0] = 2'd0;	// LH / LHU / SH
+				3'b??1:	o[0] = 1'd0;		// LC / LCU / SC
+				endcase
+			end
+`LWR,`SWC,`CAS:
+			begin
+				o[63:0] = a + b;
+			end
+`LVx:		begin
+				o[63:0] = a + (instr[6] ? sxb26 : sxb10);
+			end
+`LV,`SV:    begin
+				o[63:0] = a + b + {ven,3'b0};
+			end
+`CSRRW:     case(instr[27:18])
+			10'h044:	o[63:0] = BIG ? csr | {thrd,24'h0} : 64'hDDDDDDDDDDDDDDDD;
+			default:	o[63:0] = BIG ? csr : 64'hDDDDDDDDDDDDDDDD;
+			endcase
+`BITFIELD:  o[63:0] = BIG ? bfout : 64'hCCCCCCCCCCCCCCCC;
+default:    o[63:0] = 64'hDEADDEADDEADDEAD;
 endcase  
+end
+
+always @(posedge clk)
+	if (ld)
+		adrDone <= FALSE;
+	else if (mem|shift48)
+		adrDone <= TRUE;
+
+always @(posedge clk)
+case(instr[`INSTRUCTION_OP])
+`R2:
+	if (instr[`INSTRUCTION_L2]==2'b01)
+		case(instr[47:42])
+		`ADD,`SUB,
+		`AND,`OR,`XOR,`NAND,`NOR,`XNOR,
+		`SHIFTR:
+			case(instr[41:36])
+			`R1:
+				case(instr[22:18])
+				`COM:	addro[63:0] = ~addr8;
+				`NOT:	addro[63:0] = ~|addr8;
+				`NEG:	addro[63:0] = -addr8;
+				default:	addro[63:0] = 64'hDCDCDCDCDCDCDCDC;
+				endcase
+			`ADD:	addro[63:0] = addr8 + c;
+			`SUB:	addro[63:0] = addr8 - c;
+			`AND:	addro[63:0] = addr8 & c;
+			`OR:	addro[63:0] = addr8 | c;
+			`XOR:	addro[63:0] = addr8 ^ c;
+			default:	addro[63:0] = 64'hDCDCDCDCDCDCDCDC;
+			endcase
+		default:	addro[63:0] = 64'hDCDCDCDCDCDCDCDC;
+		endcase
+	else
+	   addro = 64'hCCCCCCCCCCCCCCCE;
+default:	addro = 64'hCCCCCCCCCCCCCCCE;
+endcase
+
+reg sao_done, sao_idle;
 
 // Generate done signal
 always @*
@@ -882,6 +922,10 @@ begin
         done <= mult_done;
     else if (IsDivmod(instr) & BIG)
         done <= div_done;
+    else if (IsShiftAndOp(instr) & BIG)
+    	done <= sao_done;
+    else if (mem|shift48)
+    	done <= adrDone;
     else
         done <= TRUE;
 end
@@ -893,6 +937,10 @@ begin
         idle <= mult_idle;
     else if (IsDivmod(instr) & BIG)
         idle <= div_idle;
+    else if (IsShiftAndOp(instr) & BIG)
+    	idle <= sao_idle;
+    else if (mem|shift48)
+    	idle <= adrIdle;
     else
         idle <= TRUE;
 end
@@ -922,12 +970,168 @@ case(instr[`INSTRUCTION_OP])
     `DIVMOD,`DIVMODSU,`DIVMODU: exc <= BIG && excen[4] & divByZero ? `FLT_DBZ : `FLT_NONE;
     default:    exc <= `FLT_NONE;
     endcase
-`MULI,`MULSUI:    exc <= prod[63] ? (prod[127:64] != 64'hFFFFFFFFFFFFFFFF & excen[3] ? `FLT_OFL : `FLT_NONE):
+`MULI:    exc <= prod[63] ? (prod[127:64] != 64'hFFFFFFFFFFFFFFFF & excen[3] ? `FLT_OFL : `FLT_NONE):
                                     (prod[127:64] != 64'd0 & excen[3] ? `FLT_OFL : `FLT_NONE);
-`DIVI,`DIVSUI: exc <= BIG & excen[4] & divByZero & instr[27] ? `FLT_DBZ : `FLT_NONE;
-`MODI,`MODSUI: exc <= BIG & excen[4] & divByZero & instr[27] ? `FLT_DBZ : `FLT_NONE;
+`DIVI: exc <= BIG & excen[4] & divByZero & instr[27] ? `FLT_DBZ : `FLT_NONE;
+`MODI: exc <= BIG & excen[4] & divByZero & instr[27] ? `FLT_DBZ : `FLT_NONE;
 default:    exc <= `FLT_NONE;
 endcase
 end
+
+reg [63:0] aa, bb;
+
+always @(posedge clk)
+begin
+	aa <= shfto;
+	bb <= c;
+end
+
+task tskSlt;
+input [47:0] instr;
+input [2:0] sz;
+input [63:0] a;
+input [63:0] b;
+output [63:0] o;
+begin
+	case(sz[2:0])
+  3'd0:   o[63:0] = $signed(a[7:0]) < $signed(b[7:0]);
+  3'd1:   o[63:0] = $signed(a[15:0]) < $signed(b[15:0]);
+  3'd2:   o[63:0] = $signed(a[31:0]) < $signed(b[31:0]);
+  3'd3:   o[63:0] = $signed(a) < $signed(b);
+  3'd4:		o[63:0] = {
+					        	7'h0,$signed(a[7:0]) < $signed(b[7:0]),
+					        	7'h0,$signed(a[15:8]) < $signed(b[15:8]),
+					        	7'h0,$signed(a[23:16]) < $signed(b[23:16]),
+					        	7'h0,$signed(a[31:24]) < $signed(b[31:24]),
+					        	7'h0,$signed(a[39:32]) < $signed(b[39:32]),
+					        	7'h0,$signed(a[47:40]) < $signed(b[47:40]),
+					        	7'h0,$signed(a[55:48]) < $signed(b[55:48]),
+					        	7'h0,$signed(a[63:56]) < $signed(b[63:56])
+						        };
+  3'd5:		o[63:0] = {
+					        	15'h0,$signed(a[15:0]) < $signed(b[15:0]),
+					        	15'h0,$signed(a[31:16]) < $signed(b[31:16]),
+					        	15'h0,$signed(a[47:32]) < $signed(b[47:32]),
+					        	15'h0,$signed(a[63:48]) < $signed(b[63:48])
+						        };
+  3'd6:		o[63:0] = {
+					        	31'h0,$signed(a[31:0]) < $signed(b[31:0]),
+					        	31'h0,$signed(a[63:32]) < $signed(b[63:32])
+						        };
+	3'd7:		o[63:0] = $signed(a[63:0]) < $signed(b[63:0]);
+  endcase
+end
+endtask
+
+task tskSle;
+input [47:0] instr;
+input [2:0] sz;
+input [63:0] a;
+input [63:0] b;
+output [63:0] o;
+begin
+	case(sz[2:0])
+  3'd0:   o[63:0] = $signed(a[7:0]) <= $signed(b[7:0]);
+  3'd1:   o[63:0] = $signed(a[15:0]) <= $signed(b[15:0]);
+  3'd2:   o[63:0] = $signed(a[31:0]) <= $signed(b[31:0]);
+  3'd3:   o[63:0] = $signed(a) <= $signed(b);
+  3'd4:		o[63:0] = {
+					        	7'h0,$signed(a[7:0]) <= $signed(b[7:0]),
+					        	7'h0,$signed(a[15:8]) <= $signed(b[15:8]),
+					        	7'h0,$signed(a[23:16]) <= $signed(b[23:16]),
+					        	7'h0,$signed(a[31:24]) <= $signed(b[31:24]),
+					        	7'h0,$signed(a[39:32]) <= $signed(b[39:32]),
+					        	7'h0,$signed(a[47:40]) <= $signed(b[47:40]),
+					        	7'h0,$signed(a[55:48]) <= $signed(b[55:48]),
+					        	7'h0,$signed(a[63:56]) <= $signed(b[63:56])
+						        };
+  3'd5:		o[63:0] = {
+					        	15'h0,$signed(a[15:0]) <= $signed(b[15:0]),
+					        	15'h0,$signed(a[31:16]) <= $signed(b[31:16]),
+					        	15'h0,$signed(a[47:32]) <= $signed(b[47:32]),
+					        	15'h0,$signed(a[63:48]) <= $signed(b[63:48])
+						        };
+  3'd6:		o[63:0] = {
+					        	31'h0,$signed(a[31:0]) <= $signed(b[31:0]),
+					        	31'h0,$signed(a[63:32]) <= $signed(b[63:32])
+						        };
+	3'd7:		o[63:0] = $signed(a[63:0]) <= $signed(b[63:0]);
+  endcase
+end
+endtask
+
+task tskSltu;
+input [47:0] instr;
+input [2:0] sz;
+input [63:0] a;
+input [63:0] b;
+output [63:0] o;
+begin
+	case(sz[2:0])
+  3'd0:   o[63:0] = (a[7:0]) < (b[7:0]);
+  3'd1:   o[63:0] = (a[15:0]) < (b[15:0]);
+  3'd2:   o[63:0] = (a[31:0]) < (b[31:0]);
+  3'd3:   o[63:0] = (a) < (b);
+  3'd4:		o[63:0] = {
+					        	7'h0,(a[7:0]) < (b[7:0]),
+					        	7'h0,(a[15:8]) < (b[15:8]),
+					        	7'h0,(a[23:16]) < (b[23:16]),
+					        	7'h0,(a[31:24]) < (b[31:24]),
+					        	7'h0,(a[39:32]) < (b[39:32]),
+					        	7'h0,(a[47:40]) < (b[47:40]),
+					        	7'h0,(a[55:48]) < (b[55:48]),
+					        	7'h0,(a[63:56]) < (b[63:56])
+						        };
+  3'd5:		o[63:0] = {
+					        	15'h0,(a[15:0]) < (b[15:0]),
+					        	15'h0,(a[31:16]) < (b[31:16]),
+					        	15'h0,(a[47:32]) < (b[47:32]),
+					        	15'h0,(a[63:48]) < (b[63:48])
+						        };
+  3'd6:		o[63:0] = {
+					        	31'h0,(a[31:0]) < (b[31:0]),
+					        	31'h0,(a[63:32]) < (b[63:32])
+						        };
+	3'd7:		o[63:0] = (a[63:0]) < (b[63:0]);
+  endcase
+end
+endtask
+
+task tskSleu;
+input [47:0] instr;
+input [2:0] sz;
+input [63:0] a;
+input [63:0] b;
+output [63:0] o;
+begin
+	case(sz[2:0])
+  3'd0:   o[63:0] = (a[7:0]) <= (b[7:0]);
+  3'd1:   o[63:0] = (a[15:0]) <= (b[15:0]);
+  3'd2:   o[63:0] = (a[31:0]) <= (b[31:0]);
+  3'd3:   o[63:0] = (a) <= (b);
+  3'd4:		o[63:0] = {
+					        	7'h0,(a[7:0]) <= (b[7:0]),
+					        	7'h0,(a[15:8]) <= (b[15:8]),
+					        	7'h0,(a[23:16]) <= (b[23:16]),
+					        	7'h0,(a[31:24]) <= (b[31:24]),
+					        	7'h0,(a[39:32]) <= (b[39:32]),
+					        	7'h0,(a[47:40]) <= (b[47:40]),
+					        	7'h0,(a[55:48]) <= (b[55:48]),
+					        	7'h0,(a[63:56]) <= (b[63:56])
+						        };
+  3'd5:		o[63:0] = {
+					        	15'h0,(a[15:0]) <= (b[15:0]),
+					        	15'h0,(a[31:16]) <= (b[31:16]),
+					        	15'h0,(a[47:32]) <= (b[47:32]),
+					        	15'h0,(a[63:48]) <= (b[63:48])
+						        };
+  3'd6:		o[63:0] = {
+					        	31'h0,(a[31:0]) <= (b[31:0]),
+					        	31'h0,(a[63:32]) <= (b[63:32])
+						        };
+	3'd7:		o[63:0] = (a[63:0]) <= (b[63:0]);
+  endcase
+end
+endtask
 
 endmodule

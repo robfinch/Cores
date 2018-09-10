@@ -219,8 +219,8 @@ CardMemory ucrd1
 	.adr_i(adr),
 	.dat_i(dat_o),
 	.dat_o(crd_dato),
-	.sptr(sptr_o),
-	.mapno(pcr_o[5:0])
+	.stp(1'b0),
+	.mapno(pcr[5:0])
 );
 
 
@@ -264,8 +264,7 @@ FT64 ucpu1
     .wrv_i(wrv),
     .sr_o(sr_o),
     .cr_o(cr_o),
-    .rbi_i(rb_i),
-    .sptr_o(sptr_o)
+    .rbi_i(rb_i)
 );
 
 endmodule

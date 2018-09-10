@@ -26,16 +26,15 @@
 // FT64MCCodeEmitter to determine which form of fixup to use. These
 // definitions must be kept in-sync with FT64BaseInfo.h.
 
-class InstFormat<bits<5> val> {
-  bits<5> Value = val;
+class InstFormat<bits<6> val> {
+  bits<6> Value = val;
 }
-def InstFormatRI14		: InstFormat<0>;
+def InstFormatRI		: InstFormat<0>;
 def InstFormatRI10		: InstFormat<1>;
 def InstFormatR2		: InstFormat<2>;
 def InstFormatR1		: InstFormat<3>;
 def InstFormatSR		: InstFormat<4>;
 def InstFormatSI		: InstFormat<5>;
-def InstFormatBF		: InstFormat<6>;
 def InstFormatBD		: InstFormat<7>;
 def InstFormatBB		: InstFormat<8>;
 def InstFormatBR		: InstFormat<9>;
@@ -43,14 +42,41 @@ def InstFormatBE		: InstFormat<10>;
 def InstFormatMX		: InstFormat<11>;
 def InstFormatCSR		: InstFormat<12>;
 def InstFormatFLT		: InstFormat<13>;
-def InstFormatJC24		: InstFormat<14>;
+def InstFormatJC		: InstFormat<14>;
 def InstFormatOther		: InstFormat<15>;
 def InstFormatPseudo	: InstFormat<16>;
-def InstFormatR3		: InstFormat<17>;
-def InstFormatRI30		: InstFormat<18>;
-def InstFormatLUI19		: InstFormat<19>;
-def InstFormatLUI35		: InstFormat<20>;
-def InstFormatJC40		: InstFormat<21>;
+def InstFormatLUI		: InstFormat<17>;
+
+// Compressed instruction formats
+def InstFormatCmpNop		: InstFormat<22>;
+def InstFormatCmpAddiSp		: InstFormat<23>;
+def InstFormatCmpAddi		: InstFormat<24>;
+def InstFormatCmpLdiSys		: InstFormat<25>;
+def InstFormatCmpAndi		: InstFormat<26>;
+def InstFormatCmpShli		: InstFormat<27>;
+def InstFormatCmpI			: InstFormat<28>;
+def InstFormatCmpR2			: InstFormat<29>;
+def InstFormatCmpCall		: InstFormat<30>;
+def InstFormatCmpBra		: InstFormat<31>;
+def InstFormatCmpBccZ		: InstFormat<32>;
+def InstFormatCmpMov		: InstFormat<33>;
+def InstFormatCmpAdd		: InstFormat<34>;
+def InstFormatCmpJalr		: InstFormat<35>;
+def InstFormatCmpStkLd		: InstFormat<36>;
+def InstFormatCmpStkSt		: InstFormat<37>;
+def InstFormatCmpLh			: InstFormat<38>;
+def InstFormatCmpSh			: InstFormat<39>;
+def InstFormatCmpLw			: InstFormat<40>;
+def InstFormatCmpSw			: InstFormat<41>;
+def InstFormatCmpRet		: InstFormat<42>;
+
+// Extended instruction formats
+def InstFormatExtR3		: InstFormat<50>;
+def InstFormatExtRI		: InstFormat<51>;
+def InstFormatExtLUI	: InstFormat<52>;
+def InstFormatExtJC		: InstFormat<53>;
+def InstFormatExtBF		: InstFormat<54>;
+
 
 class FT64Opcode<bits<6> val> {
   bits<6> Value = val;
@@ -193,9 +219,221 @@ class Pseudo<dag outs, dag ins, list<dag> pattern, string opcodestr = "", string
   let isCodeGenOnly = 1;
 }
 
-class FTInstLUI19<FT64Opcode opcode, dag outs,
+
+// ----------------------------------------------------------------------------
+// 16-bit compressed instruction formats
+// ----------------------------------------------------------------------------
+
+class FTCmpInstNop<dag outs, dag ins, string opcodestr, string argstr>
+    : FTInst16<outs, ins, opcodestr, argstr, [], InstFormatCmpNop> {
+  let Inst{15-0} = 0x0080;
+}
+
+class FTCmpInstAddiSp<dag outs, dag ins, string opcodestr, string argstr>
+    : FTInst16<outs, ins, opcodestr, argstr, [], InstFormatCmpAddiSp> {
+  bits<8> amt;
+  let Inst{15-12} = 0;
+  let Inst{11-8} = amt{7-4};
+  let Inst{7-6} = 2;
+  let Inst{5} = amt{3};
+  let Inst{4-0} = 31;
+}
+
+class FTCmpInstAddi<dag outs, dag ins, string opcodestr, string argstr>
+    : FTInst16<outs, ins, opcodestr, argstr, [], InstFormatCmpAddi> {
+  bits<5> amt;
+  bits<5> Rt;
+  let Inst{15-12} = 0;
+  let Inst{11-8} = amt{4-1};
+  let Inst{7-6} = 2;
+  let Inst{5} = amt{0};
+  let Inst{4-0} = Rt;
+}
+
+class FTCmpInstLdiSys<dag outs, dag ins, string opcodestr, string argstr>
+    : FTInst16<outs, ins, opcodestr, argstr, [], InstFormatCmpLdiSys> {
+  bits<5> amt;
+  bits<5> Rt;
+  let Inst{15-12} = 1;
+  let Inst{11-8} = amt{4-1};
+  let Inst{7-6} = 2;
+  let Inst{5} = amt{0};
+  let Inst{4-0} = Rt;
+}
+
+class FTCmpInstRet<dag outs, dag ins, string opcodestr, string argstr>
+    : FTInst16<outs, ins, opcodestr, argstr, [], InstFormatCmpRet> {
+  bits<8> amt;
+  let Inst{15-12} = 2;
+  let Inst{11-8} = amt{7-4};
+  let Inst{7-6} = 2;
+  let Inst{5} = amt{3};
+  let Inst{4-0} = 0;
+}
+
+class FTCmpInstAndi<dag outs, dag ins, string opcodestr, string argstr>
+    : FTInst16<outs, ins, opcodestr, argstr, [], InstFormatCmpAndi> {
+  bits<5> amt;
+  bits<5> Rt;
+  let Inst{15-12} = 2;
+  let Inst{11-8} = amt{4-1};
+  let Inst{7-6} = 2;
+  let Inst{5} = amt{0};
+  let Inst{4-0} = Rt;
+}
+
+class FTCmpInstShli<dag outs, dag ins, string opcodestr, string argstr>
+    : FTInst16<outs, ins, opcodestr, argstr, [], InstFormatCmpShli> {
+  bits<5> amt;
+  bits<5> Rt;
+  let Inst{15-12} = 3;
+  let Inst{11-8} = amt{4-1};
+  let Inst{7-6} = 2;
+  let Inst{5} = amt{0};
+  let Inst{4-0} = Rt;
+}
+
+class FTCmpInstI<bits<2> Op2, dag outs, dag ins, string opcodestr, string argstr>
+    : FTInst16<outs, ins, opcodestr, argstr, [], InstFormatCmpI> {
+  bits<5> amt;
+  bits<3> Rt;
+  let Inst{15-12} = 4;
+  let Inst{11-8} = amt{4-1};
+  let Inst{7-6} = 2;
+  let Inst{5} = amt{0};
+  let Inst{4-3} = Op2;
+  let Inst{2-0} = Rt;
+}
+
+class FTCmpInstR2<bits<2> Op2, dag outs, dag ins, string opcodestr, string argstr>
+    : FTInst16<outs, ins, opcodestr, argstr, [], InstFormatCmpR2> {
+  bits<5> amt;
+  bits<3> Rb;
+  bits<3> Rt;
+  let Inst{15-12} = 4;
+  let Inst{11-10} = Op2;
+  let Inst{9-8} = Rb{2-1};
+  let Inst{7-6} = 2;
+  let Inst{5} = Rb{0};
+  let Inst{4-3} = 3;
+  let Inst{2-0} = Rt;
+}
+
+class FTCmpInstCall<dag outs, dag ins, string opcodestr, string argstr>
+    : FTInst16<outs, ins, opcodestr, argstr, [], InstFormatCmpCall> {
+  bits<11> addr;
+  let Inst{15-12} = 5;
+  let Inst{11-8} = addr{10-7};
+  let Inst{7-6} = 2;
+  let Inst{5-0} = addr{6-1};
+}
+
+class FTCmpInstBra<dag outs, dag ins, string opcodestr, string argstr>
+    : FTInst16<outs, ins, opcodestr, argstr, [], InstFormatCmpBra> {
+  bits<11> disp;
+  let Inst{15-12} = 7;
+  let Inst{11-8} = disp{10-7};
+  let Inst{7-6} = 2;
+  let Inst{5-0} = disp{6-1};
+}
+
+class FTCmpInstBccZ<bits<1> Op1, dag outs, dag ins, string opcodestr, string argstr>
+    : FTInst16<outs, ins, opcodestr, argstr, [], InstFormatCmpBra> {
+  bits<8> disp;
+  bits<5> Ra;
+  let Inst{15} = 1;
+  let Inst{14} = Op1;
+  let Inst{13-8} = disp{7-2};
+  let Inst{7-6} = 2;
+  let Inst{5} = disp{1};
+  let Inst{4-0} = Ra;
+}
+
+class FTCmpInstMov<dag outs, dag ins, string opcodestr, string argstr>
+    : FTInst16<outs, ins, opcodestr, argstr, [], InstFormatCmpMov> {
+  bits<5> Rt;
+  bits<5> Ra;
+  let Inst{15-12} = 0;
+  let Inst{11-8} = Rt{4-1};
+  let Inst{7-6} = 3;
+  let Inst{5} = Rt{1};
+  let Inst{4-0} = Ra;
+}
+
+class FTCmpInstAdd<dag outs, dag ins, string opcodestr, string argstr>
+    : FTInst16<outs, ins, opcodestr, argstr, [], InstFormatCmpAdd> {
+  bits<5> Rt;
+  bits<5> Rb;
+  let Inst{15-12} = 1;
+  let Inst{11-8} = Rb{4-1};
+  let Inst{7-6} = 3;
+  let Inst{5} = Rb{1};
+  let Inst{4-0} = Rt;
+}
+
+class FTCmpInstJalr<dag outs, dag ins, string opcodestr, string argstr>
+    : FTInst16<outs, ins, opcodestr, argstr, [], InstFormatCmpJalr> {
+  bits<5> Rt;
+  bits<5> Ra;
+  let Inst{15-12} = 2;
+  let Inst{11-8} = Rt{4-1};
+  let Inst{7-6} = 3;
+  let Inst{5} = Rt{1};
+  let Inst{4-0} = Ra;
+}
+
+class FTCmpInstStkLh<bits<4> Op4, dag outs, dag ins, string opcodestr, string argstr>
+    : FTInst16<outs, ins, opcodestr, argstr, [], InstFormatCmpLh> {
+  bits<7> disp;
+  bits<5> Rt;
+  let Inst{15-12} = Op4;
+  let Inst{11-8} = disp{6-3};
+  let Inst{7-6} = 3;
+  let Inst{5} = disp{2};
+  let Inst{4-0} = Rt;
+}
+
+class FTCmpInstStkLw<bits<4> Op4, dag outs, dag ins, string opcodestr, string argstr>
+    : FTInst16<outs, ins, opcodestr, argstr, [], InstFormatCmpLw> {
+  bits<8> disp;
+  bits<5> Rt;
+  let Inst{15-12} = Op4;
+  let Inst{11-8} = disp{7-4};
+  let Inst{7-6} = 3;
+  let Inst{5} = disp{3};
+  let Inst{4-0} = Rt;
+}
+
+class FTCmpInstStkSh<bits<4> Op4, dag outs, dag ins, string opcodestr, string argstr>
+    : FTInst16<outs, ins, opcodestr, argstr, [], InstFormatCmpSh> {
+  bits<7> disp;
+  bits<5> Rb;
+  let Inst{15-12} = Op4;
+  let Inst{11-8} = disp{6-3};
+  let Inst{7-6} = 3;
+  let Inst{5} = disp{2};
+  let Inst{4-0} = Rb;
+}
+
+class FTCmpInstStkSw<bits<4> Op4, dag outs, dag ins, string opcodestr, string argstr>
+    : FTInst16<outs, ins, opcodestr, argstr, [], InstFormatCmpSw> {
+  bits<8> disp;
+  bits<5> Rb;
+  let Inst{15-12} = Op4;
+  let Inst{11-8} = disp{7-4};
+  let Inst{7-6} = 3;
+  let Inst{5} = disp{3};
+  let Inst{4-0} = Rb;
+}
+
+
+// ----------------------------------------------------------------------------
+// 32-bit instruction formats
+// ----------------------------------------------------------------------------
+
+class FTInstLUI<FT64Opcode opcode, dag outs,
               dag ins, string opcodestr, string argstr>
-    : FTInst32<outs, ins, opcodestr, argstr, [], InstFormatLUI19> {
+    : FTInst32<outs, ins, opcodestr, argstr, [], InstFormatLUI> {
   bits<19> imm19;
   bits<5> Rt;
 
@@ -204,38 +442,14 @@ class FTInstLUI19<FT64Opcode opcode, dag outs,
   let Opcode = opcode.Value;
 }
 
-class FTInstLUI35<FT64Opcode opcode, dag outs,
+class FTInstRI<FT64Opcode opcode, dag outs,
               dag ins, string opcodestr, string argstr>
-    : FTInst48<outs, ins, opcodestr, argstr, [], InstFormatLUI35> {
-  bits<35> imm35;
-  bits<5> Rt;
-
-  let Inst{47-13} = imm35;
-  let Inst{12-8} = Rt;
-  let Opcode = opcode.Value;
-}
-
-class FTInstRI14<FT64Opcode opcode, dag outs,
-              dag ins, string opcodestr, string argstr>
-    : FTInst32<outs, ins, opcodestr, argstr, [], InstFormatRI14> {
+    : FTInst32<outs, ins, opcodestr, argstr, [], InstFormatRI> {
   bits<14> imm;
   bits<5> Ra;
   bits<5> Rt;
 
   let Inst{31-18} = imm;
-  let Inst{17-13} = Rt;
-  let Inst{12-8} = Ra;
-  let Opcode = opcode.Value;
-}
-
-class FTInstRI30<FT64Opcode opcode, dag outs,
-              dag ins, string opcodestr, string argstr>
-    : FTInst48<outs, ins, opcodestr, argstr, [], InstFormatRI30> {
-  bits<30> imm;
-  bits<5> Ra;
-  bits<5> Rt;
-
-  let Inst{47-18} = imm;
   let Inst{17-13} = Rt;
   let Inst{12-8} = Ra;
   let Opcode = opcode.Value;
@@ -309,26 +523,6 @@ class FTInstSI<bits<3> funct3, FT64Opcode opcode, dag outs,
   let Inst{22-18} = imm & 0x1f;
   let Inst{17-13} = Rt;
   let Inst{12-8} = Ra;
-  let Opcode = opcode.Value;
-}
-
-class FTInstBF<bits<4> funct4, bits<3> Rg3, FT64Opcode opcode, dag outs,
-              dag ins, string opcodestr, string argstr>
-    : FTInst48<outs, ins, opcodestr, argstr, [], InstFormatBF> {
-  bits<16> Da;
-  bits<6> Bo;
-  bits<6> Bw;
-  bits<5> Rt;
-
-  let Inst{47-44} = funct4;
-  let Inst{43-33} = Da{15-5};
-  let Inst{32-30} = Rg3;
-  let Inst{29} = Bw{5};
-  let Inst{28} = Bo{5};
-  let Inst{27-23} = Rt;
-  let Inst{22-18} = Da{4-0};
-  let Inst{17-13} = Bw{4-0};
-  let Inst{12-8} = Bo{4-0};
   let Opcode = opcode.Value;
 }
 
@@ -434,27 +628,56 @@ class FTInstFLT<bits<6> funct6, bits<3> Rm, FT64Opcode opcode, dag outs,
   let Opcode = opcode.Value;
 }
 
-class FTInstJC24<FT64Opcode opcode, dag outs,
+class FTInstJC<FT64Opcode opcode, dag outs,
               dag ins, string opcodestr, string argstr>
-    : FTInst32<outs, ins, opcodestr, argstr, [], InstFormatJC24> {
+    : FTInst32<outs, ins, opcodestr, argstr, [], InstFormatJC> {
   bits<24> addr;
 
   let Inst{31-8} = addr;
   let Opcode = opcode.Value;
 }
 
-class FTInstJC40<FT64Opcode opcode, dag outs,
+
+// ----------------------------------------------------------------------------
+// 48-bit extended instruction formats
+// ----------------------------------------------------------------------------
+
+class FTExtInstRI<FT64Opcode opcode, dag outs,
               dag ins, string opcodestr, string argstr>
-    : FTInst32<outs, ins, opcodestr, argstr, [], InstFormatJC40> {
+    : FTInst48<outs, ins, opcodestr, argstr, [], InstFormatExtRI> {
+  bits<30> imm;
+  bits<5> Ra;
+  bits<5> Rt;
+
+  let Inst{47-18} = imm;
+  let Inst{17-13} = Rt;
+  let Inst{12-8} = Ra;
+  let Opcode = opcode.Value;
+}
+
+class FTExtInstLUI<FT64Opcode opcode, dag outs,
+              dag ins, string opcodestr, string argstr>
+    : FTInst48<outs, ins, opcodestr, argstr, [], InstFormatExtLUI> {
+  bits<35> imm35;
+  bits<5> Rt;
+
+  let Inst{47-13} = imm35;
+  let Inst{12-8} = Rt;
+  let Opcode = opcode.Value;
+}
+
+class FTExtInstJC<FT64Opcode opcode, dag outs,
+              dag ins, string opcodestr, string argstr>
+    : FTInst32<outs, ins, opcodestr, argstr, [], InstFormatExtJC> {
   bits<40> addr;
 
   let Inst{47-8} = addr;
   let Opcode = opcode.Value;
 }
 
-class FTInstR3<bits<6> funct6, bits<6> Op2, bits<3> Sz3, FT64Opcode opcode, dag outs,
+class FTExtInstR3<bits<6> funct6, bits<6> Op2, bits<3> Sz3, FT64Opcode opcode, dag outs,
               dag ins, string opcodestr, string argstr>
-    : FTInst48<outs, ins, opcodestr, argstr, [], InstFormatR3> {
+    : FTInst48<outs, ins, opcodestr, argstr, [], InstFormatExtR3> {
   bits<5> Rc;
   bits<5> Rb;
   bits<5> Ra;
@@ -469,3 +692,24 @@ class FTInstR3<bits<6> funct6, bits<6> Op2, bits<3> Sz3, FT64Opcode opcode, dag 
   let Inst{12-8} = Ra;
   let Opcode = opcode.Value;
 }
+
+class FTExtInstBF<bits<4> funct4, bits<3> Rg3, FT64Opcode opcode, dag outs,
+              dag ins, string opcodestr, string argstr>
+    : FTInst48<outs, ins, opcodestr, argstr, [], InstFormatExtBF> {
+  bits<16> Da;
+  bits<6> Bo;
+  bits<6> Bw;
+  bits<5> Rt;
+
+  let Inst{47-44} = funct4;
+  let Inst{43-33} = Da{15-5};
+  let Inst{32-30} = Rg3;
+  let Inst{29} = Bw{5};
+  let Inst{28} = Bo{5};
+  let Inst{27-23} = Rt;
+  let Inst{22-18} = Da{4-0};
+  let Inst{17-13} = Bw{4-0};
+  let Inst{12-8} = Bo{4-0};
+  let Opcode = opcode.Value;
+}
+

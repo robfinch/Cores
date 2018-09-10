@@ -105,7 +105,7 @@
 `define QENTRIES	8
 
 module FT64(hartid, rst, clk, clk4x, tm_clk_i, irq_i, vec_i, bte_o, cti_o, cyc_o, stb_o, ack_i, err_i, we_o, sel_o, adr_o, dat_o, dat_i,
-    ol_o, pcr_o, pcr2_o, exv_i, rdv_i, wrv_i, icl_o, sr_o, cr_o, rbi_i, signal_i, sptr_o);
+    ol_o, pcr_o, pcr2_o, exv_i, rdv_i, wrv_i, icl_o, sr_o, cr_o, rbi_i, signal_i);
 input [63:0] hartid;
 input rst;
 input clk;
@@ -135,7 +135,6 @@ output reg cr_o;
 output reg sr_o;
 input rbi_i;
 input [31:0] signal_i;
-output reg sptr_o;
 
 parameter TM_CLKFREQ = 20000000;
 parameter QENTRIES = `QENTRIES;
@@ -169,6 +168,11 @@ parameter byt = 3'd0;
 parameter wyde = 3'd1;
 parameter tetra = 3'd2;
 parameter octa = 3'd3;
+// IQ states
+parameter IQS_IDLE = 2'd0;
+parameter IQS_AGEN = 2'd1;
+parameter IQS_LDDONE = 2'd2;
+parameter IQS_S3 = 2'd3;
 
 wire dc_ack;
 wire acki = ack_i|dc_ack;
@@ -334,11 +338,11 @@ reg [63:0] vm_sema;
 reg [63:0] cas;         // compare and swap
 reg [63:0] ve_hold;
 reg isCAS, isAMO, isInc, isSpt, isRMW;
+reg [`QBITS] findptrid;
 reg [`QBITS] casid;
 reg [31:0] sbl, sbu;
 reg [4:0] regLR = 5'd29;
 
-reg [5:0] fp_rgs;	// register set - float instructions
 reg [2:0] fp_rm;
 reg fp_inexe;
 reg fp_dbzxe;
@@ -442,13 +446,17 @@ reg [7:0] setpred;
 // instruction queue (ROB)
 reg [31:0]  iqentry_sn   [0:QENTRIES-1];  // instruction sequence number
 reg [QENTRIES-1:0] iqentry_v;			// entry valid?  -- this should be the first bit
+reg [QENTRIES-1:0] iqentry_iv;		// instruction is valid
+reg [3:0]  iqentry_is   [0:QENTRIES-1];	// source of instruction
 reg        iqentry_out	[0:QENTRIES-1];	// instruction has been issued to an ALU ... 
 reg        iqentry_done	[0:QENTRIES-1];	// instruction result valid
 reg        iqentry_cmt  [0:QENTRIES-1];
 reg [QENTRIES-1:0] iqentry_thrd;		// which thread the instruction is in
 reg        iqentry_pred [0:QENTRIES-1];  // predicate bit
+reg 				iqentry_pt [0:QENTRIES-1];
 reg        iqentry_bt  	[0:QENTRIES-1];	// branch-taken (used only for branches)
 reg        iqentry_agen  	[0:QENTRIES-1];	// address-generate ... signifies that address is ready (only for LW/SW)
+reg  [1:0] iqentry_state [0:QENTRIES-1];
 reg  [3:0] iqentry_id   [0:QENTRIES-1];
 reg        iqentry_alu  [0:QENTRIES-1];  // alu type instruction
 reg [QENTRIES-1:0] iqentry_alu0;	 // only valid on alu #0
@@ -456,17 +464,18 @@ reg        iqentry_fpu  [0:QENTRIES-1];  // floating point instruction
 reg        iqentry_fc   [0:QENTRIES-1];   // flow control instruction
 reg        iqentry_canex[0:QENTRIES-1];	// true if it's an instruction that can exception
 reg        iqentry_load [0:QENTRIES-1];	// is a memory load instruction
-reg        iqentry_sptr [0:QENTRIES-1];	// is a memory store pointer instruction
-reg        iqentry_lptr [0:QENTRIES-1];	// is a memory load pointer instruction
-reg        iqentry_isptr[0:QENTRIES-1];	// pointer detect
+reg        iqentry_preload [0:QENTRIES-1];	// is a memory preload instruction
+reg        iqentry_ldcmp [0:QENTRIES-1];
 reg        iqentry_mem	[0:QENTRIES-1];	// touches memory: 1 if LW/SW
 reg        iqentry_memndx   [0:QENTRIES-1];  // indexed memory operation 
 reg        iqentry_rmw		[0:QENTRIES-1];	// memory RMW op
 reg        iqentry_memdb    [0:QENTRIES-1];
 reg        iqentry_memsb    [0:QENTRIES-1];
+reg        iqentry_rtop [0:QENTRIES-1];
 reg [QENTRIES-1:0] iqentry_sei;
 reg        iqentry_aq   [0:QENTRIES-1];	// memory aquire
 reg        iqentry_rl   [0:QENTRIES-1];	// memory release
+reg        iqentry_shft48[0:QENTRIES-1];
 reg        iqentry_jmp	[0:QENTRIES-1];	// changes control flow: 1 if BEQ/JALR
 reg        iqentry_br   [0:QENTRIES-1];  // Bcc (for predictor)
 reg        iqentry_sync [0:QENTRIES-1];  // sync instruction
@@ -514,6 +523,8 @@ reg  [QENTRIES-1:0] iqentry_memissue;
 wire [QENTRIES-1:0] iqentry_stomp;
 reg [3:0] stompedOnRets;
 reg  [QENTRIES-1:0] iqentry_issue;
+reg  [QENTRIES-1:0] iqentry_idissue;
+reg [1:0] iqentry_idslot [0:QENTRIES-1];
 reg [1:0] iqentry_islot [0:QENTRIES-1];
 reg [1:0] iqentry_mem_islot [0:QENTRIES-1];
 reg [1:0] iqentry_fpu_islot [0:QENTRIES-1];
@@ -606,6 +617,18 @@ wire        fetchbufD_v;
 //reg        did_branchback0;
 //reg        did_branchback1;
 
+reg   [3:0] id1_id;
+reg  [47:0] id1_instr;
+reg         id1_pt;
+reg   [4:0] id1_Rt;
+wire [127:0] id1_bus;
+
+reg   [3:0] id2_id;
+reg  [47:0] id2_instr;
+reg         id2_pt;
+reg   [4:0] id2_Rt;
+wire [127:0] id2_bus;
+
 reg        alu0_ld;
 reg        alu0_available;
 reg        alu0_dataready;
@@ -615,6 +638,8 @@ wire       alu0_idle;
 reg  [3:0] alu0_sourceid;
 reg [47:0] alu0_instr;
 reg        alu0_bt;
+reg        alu0_mem;
+reg        alu0_shft48;
 reg [63:0] alu0_argA;
 reg [63:0] alu0_argB;
 reg [63:0] alu0_argC;
@@ -640,6 +665,8 @@ wire       alu1_idle;
 reg  [3:0] alu1_sourceid;
 reg [47:0] alu1_instr;
 reg        alu1_bt;
+reg        alu1_mem;
+reg        alu1_shft48;
 reg [63:0] alu1_argA;
 reg [63:0] alu1_argB;
 reg [63:0] alu1_argC;
@@ -732,39 +759,39 @@ reg [31:0] dram0_addr;
 reg [31:0] dram0_seg;
 reg [47:0] dram0_instr;
 reg        dram0_rmw;
+reg		   dram0_preload;
 reg [RBIT:0] dram0_tgt;
 reg  [3:0] dram0_id;
 reg  [8:0] dram0_exc;
 reg        dram0_unc;
 reg [2:0]  dram0_memsize;
 reg        dram0_load;	// is a load operation
-reg        dram0_sptr;
 reg  [1:0] dram0_ol;
 reg [63:0] dram1_data;
 reg [31:0] dram1_addr;
 reg [31:0] dram1_seg;
 reg [47:0] dram1_instr;
 reg        dram1_rmw;
+reg		   dram1_preload;
 reg [RBIT:0] dram1_tgt;
 reg  [3:0] dram1_id;
 reg  [8:0] dram1_exc;
 reg        dram1_unc;
 reg [2:0]  dram1_memsize;
 reg        dram1_load;
-reg        dram1_sptr;
 reg  [1:0] dram1_ol;
 reg [63:0] dram2_data;
 reg [31:0] dram2_addr;
 reg [31:0] dram2_seg;
 reg [47:0] dram2_instr;
 reg        dram2_rmw;
+reg		   dram2_preload;
 reg [RBIT:0] dram2_tgt;
 reg  [3:0] dram2_id;
 reg  [8:0] dram2_exc;
 reg        dram2_unc;
 reg [2:0]  dram2_memsize;
 reg        dram2_load;
-reg        dram2_sptr;
 reg  [1:0] dram2_ol;
 
 reg        dramA_v;
@@ -820,6 +847,7 @@ parameter B2b = 5'd21;
 parameter B2c = 5'd22;
 parameter B2d = 5'd23;
 parameter B20 = 5'd24;
+parameter B21 = 5'd25;
 reg [1:0] bwhich;
 reg [3:0] icstate,picstate;
 parameter IDLE = 4'd0;
@@ -853,16 +881,16 @@ reg L2_xsel;
 
 FT64_regfile2w6r_oc #(.RBIT(RBIT)) urf1
 (
-    .clk(clk),
-    .clk4x(clk4x),
-    .wr0(commit0_v),
-    .wr1(commit1_v),
-    .we0(commit0_we),
-    .we1(commit1_we),
-    .wa0(commit0_tgt),
-    .wa1(commit1_tgt),
-    .i0(commit0_bus),
-    .i1(commit1_bus),
+  .clk(clk),
+  .clk4x(clk4x),
+  .wr0(commit0_v),
+  .wr1(commit1_v),
+  .we0(commit0_we),
+  .we1(commit1_we),
+  .wa0(commit0_tgt),
+  .wa1(commit1_tgt),
+  .i0(commit0_bus),
+  .i1(commit1_bus),
 	.rclk(~clk),
 	.ra0(Ra0),
 	.ra1(Rb0),
@@ -945,14 +973,12 @@ wire btbwr0 = iqentry_v[head0] && iqentry_done[head0] &&
         (
         iqentry_instr[head0][`INSTRUCTION_OP]==`JAL ||
         iqentry_instr[head0][`INSTRUCTION_OP]==`BRK ||
-        IsRTI(iqentry_instr[head0]) ||
-        iqentry_instr[head0][`INSTRUCTION_OP]==`BccR);
+        IsRTI(iqentry_instr[head0]));
 wire btbwr1 = iqentry_v[head1] && iqentry_done[head1] &&
         (
         iqentry_instr[head1][`INSTRUCTION_OP]==`JAL ||
         iqentry_instr[head1][`INSTRUCTION_OP]==`BRK ||
-        IsRTI(iqentry_instr[head1]) ||
-        iqentry_instr[head1][`INSTRUCTION_OP]==`BccR);
+        IsRTI(iqentry_instr[head1]));
 
 FT64_BTB ubtb1
 (
@@ -1265,6 +1291,7 @@ assign rdat0 = dram0_unc ? xdati : dc0_out;
 assign rdat1 = dram1_unc ? xdati : dc1_out;
 assign rdat2 = dram2_unc ? xdati : dc2_out;
 
+reg preload;
 reg [1:0] dccnt;
 wire dhit0, dhit1, dhit2;
 wire dhit00, dhit10, dhit20;
@@ -1639,7 +1666,7 @@ input [5:0] vqei;
 input [5:0] vli;
 input thrd;
 case(isn[`INSTRUCTION_OP])
-`VECTOR:
+`IVECTOR:
 	case(isn[`INSTRUCTION_S2])
         `VCIDX,`VSCAN:  fnRa = {6'd0,1'b1,isn[`INSTRUCTION_RA]};
         `VMxx:
@@ -1691,7 +1718,7 @@ case(isn[`INSTRUCTION_OP])
             `LVX,`SVX:  fnRb = {vqei,1'b1,isn[`INSTRUCTION_RB]};
             default:    fnRb = {rgs,1'b0,isn[`INSTRUCTION_RB]};
             endcase
-`VECTOR:
+`IVECTOR:
 			case(isn[`INSTRUCTION_S2])
 			`VMxx:
 				case(isn[25:23])
@@ -1722,17 +1749,16 @@ case(isn[`INSTRUCTION_OP])
             `SVX:       fnRc = {vqei,1'b1,isn[`INSTRUCTION_RC]};
 	        `SBX,`SCX,`SHX,`SWX,`SWCX,`CACHEX:
 	        	fnRc = {rgs,1'b0,isn[`INSTRUCTION_RC]};
-	        `CMOVEQ,`CMOVNE,`MAJ:
+	        `CMOVEZ,`CMOVNZ,`MAJ:
 	        	fnRc = {rgs,1'b0,isn[`INSTRUCTION_RC]};
             default:    fnRc = {rgs,1'b0,isn[`INSTRUCTION_RC]};
             endcase
-`VECTOR:
+`IVECTOR:
 			case(isn[`INSTRUCTION_S2])
             `VSxx,`VSxxS,`VSxxU,`VSxxSU:    fnRc = {6'h3F,1'b1,2'b0,isn[18:16]};
             default:    fnRc = {vqei,1'b1,isn[`INSTRUCTION_RC]};
             endcase
 `FLOAT:		fnRc = {fp_rgs,1'b0,isn[`INSTRUCTION_RC]};
-`BccR:		fnRc = {rgs,1'b0,isn[`INSTRUCTION_RC]};
 default:    fnRc = {rgs,1'b0,isn[`INSTRUCTION_RC]};
 endcase
 endfunction
@@ -1805,8 +1831,8 @@ casez(isn[`INSTRUCTION_OP])
         		fnRt = 12'd0;
         	default:	fnRt = 12'd0;
         	endcase
-        `CMOVEQ:    fnRt = {rgs,1'b0,isn[`INSTRUCTION_S1]};
-        `CMOVNE:    fnRt = {rgs,1'b0,isn[`INSTRUCTION_S1]};
+        `CMOVEZ:    fnRt = {rgs,1'b0,isn[`INSTRUCTION_S1]};
+        `CMOVNZ:    fnRt = {rgs,1'b0,isn[`INSTRUCTION_S1]};
         `MUX:       fnRt = {rgs,1'b0,isn[`INSTRUCTION_S1]};
         `MIN:       fnRt = {rgs,1'b0,isn[`INSTRUCTION_S1]};
         `MAX:       fnRt = {rgs,1'b0,isn[`INSTRUCTION_S1]};
@@ -1832,14 +1858,13 @@ casez(isn[`INSTRUCTION_OP])
 `CHK:	fnRt = 12'd0;
 `EXEC:	fnRt = 12'd0;
 `Bcc:   fnRt = 12'd0;
-`BccR:  fnRt = 12'd0;
 `BBc:   case(isn[19:18])
 		`IBNE:	fnRt = {rgs,1'b0,isn[`INSTRUCTION_RA]};
 		`DBNZ:	fnRt = {rgs,1'b0,isn[`INSTRUCTION_RA]};
 		default:	fnRt = 12'd0;
 		endcase
 `BEQI:  fnRt = 12'd0;
-`SB,`SC,`SH,`SW,`SWC,`CACHE:
+`SB,`Sx,`SWC,`CACHE:
 		fnRt = 12'd0;
 `JMP:	fnRt = 12'd0;
 `CALL:  fnRt = {rgs,1'b0,regLR};	// regLR
@@ -1869,37 +1894,23 @@ casez(isn[`INSTRUCTION_OP])
 			endcase
 		default: fnWe = 8'hFF;
 		endcase
-	`SHIFT:		fnWe = (~isn[25] & isn[21]) ? 8'hFF : 8'hFF;
-	`SHIFTH:	fnWe = (~isn[25] & isn[21]) ? 8'hFF : 8'h0F;
-	`SHIFTC:	fnWe = (~isn[25] & isn[21]) ? 8'hFF : 8'h03;
-	`SHIFTB:	fnWe = (~isn[25] & isn[21]) ? 8'hFF : 8'h01;
+	`SHIFT31:	fnWe = (~isn[25] & isn[21]) ? 8'hFF : 8'hFF;
+	`SHIFT63:	fnWe = (~isn[25] & isn[21]) ? 8'hFF : 8'hFF;
+	`SLT,`SLTU,`SLE,`SLEU,
 	`ADD,`SUB,
 	`AND,`OR,`XOR,
 	`NAND,`NOR,`XNOR,
 	`DIVMOD,`DIVMODU,`DIVMODSU,
 	`MUL,`MULU,`MULSU:
-		case(isn[23:21])
+		case(isn[25:23])
 		3'b000: fnWe = 8'h01;
 		3'b001:	fnWe = 8'h03;
 		3'b010:	fnWe = 8'h0F;
 		3'b011:	fnWe = 8'hFF;
 		default:	fnWe = 8'hFF;
 		endcase
-	`CMP,`CMPU:
-		case(isn[22:21])
-		2'b00:	fnWe = 8'h01;
-		2'b01:	fnWe = 8'h03;
-		2'b10:	fnWe = 8'h0F;
-		2'b11:	fnWe = 8'hFF;
-		endcase
-	`LBOX:	fnWe = 8'h01;
-	`LCOX:	fnWe = 8'h03;
-	`LHOX:	fnWe = 8'h0F;
 	default: fnWe = 8'hFF;
 	endcase
-`LBO:	fnWe = 8'h01;
-`LCO:	fnWe = 8'h03;
-`LHO:	fnWe = 8'h0F;
 default:	fnWe = 8'hFF;
 endcase
 endfunction
@@ -1910,48 +1921,37 @@ input [47:0] isn;
 casez(isn[`INSTRUCTION_OP])
 `BRK:   Source1Valid = TRUE;
 `Bcc:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`BccR:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `BBc:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `BEQI:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `CHK:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `RR:    case(isn[`INSTRUCTION_S2])
-        `SHIFT:    Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-        `SHIFTH:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-        `SHIFTC:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-        `SHIFTB:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+        `SHIFT31:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+        `SHIFT63:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+        `SHIFTR:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
         default:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
         endcase
 `ADDI:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`CMPI:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`CMPUI: Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`SLTI:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`SLTUI: Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`SGTI:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`SGTUI: Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `ANDI:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `ORI:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `XORI:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`XNORI: Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `MULUI: Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `AMO: 	Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `LB:    Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`LBO:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `LBU:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`LC:    Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`LCO:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`LCU:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`LH:    Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`LHO:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`LHU:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`LW:    Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`Lx:    Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`LxU:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `LWR:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `LV:    Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `LVx:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`LPT:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`LPTR:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `SB:    Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`SC:    Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`SH:    Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`SW:    Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`Sx:    Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `SWC:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `SV:    Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`SPT:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`SPTR:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `INC:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `CAS:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `JAL:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
@@ -1961,7 +1961,7 @@ casez(isn[`INSTRUCTION_OP])
 			`BFINSI:	Source1Valid = TRUE;
 			default:	Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 			endcase
-`VECTOR:
+`IVECTOR:
 			Source1Valid = FALSE;
 default:    Source1Valid = TRUE;
 endcase
@@ -1972,53 +1972,41 @@ input [47:0] isn;
 casez(isn[`INSTRUCTION_OP])
 `BRK:   Source2Valid = TRUE;
 `Bcc:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
-`BccR:  Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
 `BBc:   Source2Valid = TRUE;
 `BEQI:  Source2Valid = TRUE;
 `CHK:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
 `RR:    case(isn[`INSTRUCTION_S2])
         `R1:       Source2Valid = TRUE;
-        `SHIFT:	   Source2Valid = isn[25] ? 1'b1 : isn[`INSTRUCTION_RB]==5'd0;
-        `SHIFTH:   Source2Valid = isn[25] ? 1'b1 : isn[`INSTRUCTION_RB]==5'd0;
-        `SHIFTC:   Source2Valid = isn[25] ? 1'b1 : isn[`INSTRUCTION_RB]==5'd0;
-        `SHIFTB:   Source2Valid = isn[25] ? 1'b1 : isn[`INSTRUCTION_RB]==5'd0;
+        `SHIFTR:   Source2Valid = isn[25] ? 1'b1 : isn[`INSTRUCTION_RB]==5'd0;
+        `SHIFT31:  Source2Valid = isn[25] ? 1'b1 : isn[`INSTRUCTION_RB]==5'd0;
+        `SHIFT63:  Source2Valid = isn[25] ? 1'b1 : isn[`INSTRUCTION_RB]==5'd0;
         `LVX,`SVX: Source2Valid = FALSE;
         default:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
         endcase
 `ADDI:  Source2Valid = TRUE;
-`CMPI:  Source2Valid = TRUE;
-`CMPUI: Source2Valid = TRUE;
+`SLTI:  Source2Valid = TRUE;
+`SLTUI: Source2Valid = TRUE;
+`SGTI:  Source2Valid = TRUE;
+`SGTUI: Source2Valid = TRUE;
 `ANDI:  Source2Valid = TRUE;
 `ORI:   Source2Valid = TRUE;
 `XORI:  Source2Valid = TRUE;
+`XNORI: Source2Valid = TRUE;
 `MULUI: Source2Valid = TRUE;
-`QOPI:	Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
 `LB:    Source2Valid = TRUE;
-`LBO:   Source2Valid = TRUE;
 `LBU:   Source2Valid = TRUE;
-`LC:    Source2Valid = TRUE;
-`LCO:   Source2Valid = TRUE;
-`LCU:   Source2Valid = TRUE;
-`LH:    Source2Valid = TRUE;
-`LHO:   Source2Valid = TRUE;
-`LHU:   Source2Valid = TRUE;
-`LW:    Source2Valid = TRUE;
+`Lx:    Source2Valid = TRUE;
+`LxU:   Source2Valid = TRUE;
 `LWR:   Source2Valid = TRUE;
 `LVx:   Source2Valid = TRUE;
-`LPT:	Source2Valid = TRUE;
-`LPTR:	Source2Valid = TRUE;
-`INC:	Source2Valid = TRUE;
+`INC:		Source2Valid = TRUE;
 `SB:    Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
-`SC:    Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
-`SH:    Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
-`SW:    Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
+`Sx:    Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
 `SWC:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
-`SPT:	Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
-`SPTR:	Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
 `CAS:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
 `JAL:   Source2Valid = TRUE;
 `RET:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
-`VECTOR:
+`IVECTOR:
 		    case(isn[`INSTRUCTION_S2])
             `VABS:  Source2Valid = TRUE;
             `VMAND,`VMOR,`VMXOR,`VMXNOR,`VMPOP:
@@ -2040,22 +2028,27 @@ endfunction
 function Source3Valid;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`VECTOR:
+`IVECTOR:
     case(isn[`INSTRUCTION_S2])
     `VEX:       Source3Valid = TRUE;
     default:    Source3Valid = TRUE;
     endcase
-`BccR:  Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
 `CHK:   Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
 `R2:
+	if (isn[`INSTRUCTION_L2]==2'b01)
+		case(isn[47:42])
+    `CMOVEZ,`CMOVNZ:  Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
+		default:	Source3Valid = TRUE;
+		endcase
+	else
     case(isn[`INSTRUCTION_S2])
-    `SBX:       Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
-    `SCX:       Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
-    `SHX:       Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
-    `SWX:       Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
-    `SWCX:      Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
-    `CASX:      Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
-    `CMOVEQ,`CMOVNE,`MAJ:  Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
+    `SBX:   Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
+    `SCX:   Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
+    `SHX:   Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
+    `SWX:   Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
+    `SWCX:  Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
+    `CASX:  Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
+    `MAJ:		Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
     default:    Source3Valid = TRUE;
     endcase
 default:    Source3Valid = TRUE;
@@ -2084,7 +2077,7 @@ case(isn[`INSTRUCTION_OP])
             `LVX,`SVX:  IsVector = TRUE;
             default:    IsVector = FALSE;
             endcase
-`VECTOR:
+`IVECTOR:
 			case(isn[`INSTRUCTION_S2])
 			`VMxx:
 				case(isn[25:23])
@@ -2104,7 +2097,7 @@ endfunction
 function IsVeins;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`VECTOR:    IsVeins = isn[`INSTRUCTION_S2]==`VEINS;
+`IVECTOR:   IsVeins = isn[`INSTRUCTION_S2]==`VEINS;
 default:    IsVeins = FALSE;
 endcase
 endfunction
@@ -2112,7 +2105,7 @@ endfunction
 function IsVex;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`VECTOR:    IsVex = isn[`INSTRUCTION_S2]==`VEX;
+`IVECTOR:   IsVex = isn[`INSTRUCTION_S2]==`VEX;
 default:    IsVex = FALSE;
 endcase
 endfunction
@@ -2120,7 +2113,7 @@ endfunction
 function IsVCmprss;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`VECTOR:    IsVCmprss = isn[`INSTRUCTION_S2]==`VCMPRSS || isn[`INSTRUCTION_S2]==`VCIDX;
+`IVECTOR:   IsVCmprss = isn[`INSTRUCTION_S2]==`VCMPRSS || isn[`INSTRUCTION_S2]==`VCIDX;
 default:    IsVCmprss = FALSE;
 endcase
 endfunction
@@ -2128,7 +2121,7 @@ endfunction
 function IsVShifti;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`VECTOR:
+`IVECTOR:
 		    case(isn[`INSTRUCTION_S2])
             `VSHL,`VSHR,`VASR:
                 IsVShifti = {isn[25],isn[22]}==2'd2;
@@ -2159,114 +2152,39 @@ default:    fnM2 = 2'b00;
 endcase
 endfunction
 
-function IsALU;
-input [47:0] isn;
-casez(isn[`INSTRUCTION_OP])
-`R2:    if (isn[`INSTRUCTION_L2]==2'b00)
-			case(isn[`INSTRUCTION_S2])
-			`VMOV:		IsALU = TRUE;
-	        `RTI:       IsALU = FALSE;
-	        default:    IsALU = TRUE;
-	        endcase
-	    else
-	    	IsALU = TRUE;
-`BRK:   IsALU = FALSE;
-`Bcc:   IsALU = FALSE;
-`BccR:  IsALU = FALSE;
-`BBc:   IsALU = FALSE;
-`BEQI:  IsALU = FALSE;
-`CHK:   IsALU = FALSE;
-`JAL:   IsALU = FALSE;
-`JMP:	IsALU = FALSE;
-`CALL:  IsALU = FALSE;
-`RET:   IsALU = FALSE;
-`FVECTOR:
-			case(isn[`INSTRUCTION_S2])
-            `VSHL,`VSHR,`VASR:  IsALU = TRUE;
-            default:    IsALU = FALSE;  // Integer
-            endcase
-`IVECTOR:
-			case(isn[`INSTRUCTION_S2])
-            `VSHL,`VSHR,`VASR:  IsALU = TRUE;
-            default:    IsALU = TRUE;  // Integer
-            endcase
-`FLOAT:		IsALU = FALSE;            
-default:    IsALU = TRUE;
-endcase
-endfunction
-
-function IsFPU;
-input [47:0] isn;
-case(isn[`INSTRUCTION_OP])
-`FLOAT: IsFPU = TRUE;
-`FVECTOR:
-		    case(isn[`INSTRUCTION_S2])
-            `VSHL,`VSHR,`VASR:  IsFPU = FALSE;
-            default:    IsFPU = TRUE;
-            endcase
-default:    IsFPU = FALSE;
-endcase
-
-endfunction
-
+// Has an extendable 14-bit constant
 function HasConst;
 input [47:0] isn;
 casez(isn[`INSTRUCTION_OP])
-`BRK:   HasConst = FALSE;
-`Bcc:   HasConst = FALSE;
-`BBc:   HasConst = FALSE;
-`BEQI:  HasConst = FALSE;
-`R2:    HasConst = FALSE;
-/*
-		case(isn[`INSTRUCTION_S2])
-        `SHLI:  HasConst = TRUE;
-        `SHRI:  HasConst = TRUE;
-        default: HasConst = FALSE;
-        endcase*/
 `ADDI:  HasConst = TRUE;
-`CMPI:  HasConst = TRUE;
-`CMPUI:  HasConst = TRUE;
+`SLTI:  HasConst = TRUE;
+`SLTUI: HasConst = TRUE;
+`SGTI:  HasConst = TRUE;
+`SGTUI: HasConst = TRUE;
 `ANDI:  HasConst = TRUE;
-`ORI:  HasConst = TRUE;
+`ORI:   HasConst = TRUE;
 `XORI:  HasConst = TRUE;
+`XNORI: HasConst = TRUE;
 `MULUI: HasConst = TRUE;
-`MULSUI:    HasConst = TRUE;
 `MULI:  HasConst = TRUE;
 `DIVUI: HasConst = TRUE;
-`DIVSUI:    HasConst = TRUE;
 `DIVI:  HasConst = TRUE;
-`MODUI: HasConst = TRUE;
-`MODSUI:    HasConst = TRUE;
 `MODI:  HasConst = TRUE;
 `LB:    HasConst = TRUE;
-`LBO:   HasConst = TRUE;
 `LBU:   HasConst = TRUE;
-`LC:    HasConst = TRUE;
-`LCO:   HasConst = TRUE;
-`LCU:   HasConst = TRUE;
-`LH:  HasConst = TRUE;
-`LHO:  HasConst = TRUE;
-`LHU:  HasConst = TRUE;
-`LW:  HasConst = TRUE;
-`LWR: HasConst = TRUE;
+`Lx:    HasConst = TRUE;
+`LWR:		HasConst = TRUE;
 `LV:    HasConst = TRUE;
-`LPT:	HasConst = TRUE;
-`LPTR:	HasConst = TRUE;
-`SB:  HasConst = TRUE;
-`SC:  HasConst = TRUE;
-`SH:  HasConst = TRUE;
-`SW:  HasConst = TRUE;
+`SB:  	HasConst = TRUE;
+`Sx:  	HasConst = TRUE;
 `SWC:   HasConst = TRUE;
-`SPT:	HasConst = TRUE;
-`SPTR:	HasConst = TRUE;
-`INC:	HasConst = TRUE;
+`INC:		HasConst = TRUE;
 `SV:    HasConst = TRUE;
 `CAS:   HasConst = TRUE;
 `JAL:   HasConst = TRUE;
 `CALL:  HasConst = TRUE;
 `RET:   HasConst = TRUE;
-`SccI:	HasConst = TRUE;
-`LVx:	HasConst = TRUE;
+`LVx:		HasConst = TRUE;
 default:    HasConst = FALSE;
 endcase
 endfunction
@@ -2276,60 +2194,41 @@ input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
 `R2:
 	if (isn[`INSTRUCTION_L2]==2'b00)
-	    case(isn[`INSTRUCTION_S2])
-	    `LBX:   IsMem = TRUE;
-	    `LBOX:  IsMem = TRUE;
-	    `LBUX:  IsMem = TRUE;
-	    `LCX:   IsMem = TRUE;
-	    `LCOX:  IsMem = TRUE;
-	    `LCUX:  IsMem = TRUE;
-	    `LHX:   IsMem = TRUE;
-	    `LHOX:  IsMem = TRUE;
-	    `LHUX:  IsMem = TRUE;
-	    `LWX:   IsMem = TRUE;
-	    `LWRX:  IsMem = TRUE;
-		`LPT:	IsMem = TRUE;
-		`LPTR:	IsMem = TRUE;
-	    `SBX:   IsMem = TRUE;
-	    `SCX:   IsMem = TRUE;
-	    `SHX:   IsMem = TRUE;
-	    `SWX:   IsMem = TRUE;
-	    `SWCX:  IsMem = TRUE;
+		case(isn[`INSTRUCTION_S2])
+		`LBX:   IsMem = TRUE;
+		`LBUX:  IsMem = TRUE;
+		`LCX:   IsMem = TRUE;
+		`LCUX:  IsMem = TRUE;
+		`LHX:   IsMem = TRUE;
+		`LHUX:  IsMem = TRUE;
+		`LWX:   IsMem = TRUE;
+		`LWRX:  IsMem = TRUE;
+		`SBX:   IsMem = TRUE;
+		`SCX:   IsMem = TRUE;
+		`SHX:   IsMem = TRUE;
+		`SWX:   IsMem = TRUE;
+		`SWCX:  IsMem = TRUE;
 		`INC:	IsMem = TRUE;
-	    `CASX:  IsMem = TRUE;
-	    `LVX,`SVX:  IsMem = TRUE;
-	    `LVx:	IsMem = TRUE;
-		`SPT:	IsMem = TRUE;
-		`SPTR:	IsMem = TRUE;
-	    default: IsMem = FALSE;
-	    endcase
+		`CASX:  IsMem = TRUE;
+		`LVX,`SVX:  IsMem = TRUE;
+		`LVx:	IsMem = TRUE;
+		default: IsMem = FALSE;
+		endcase
 	else
 		IsMem = FALSE;
 `AMO:	IsMem = TRUE;
 `LB:    IsMem = TRUE;
-`LBO:   IsMem = TRUE;
 `LBU:   IsMem = TRUE;
-`LC:    IsMem = TRUE;
-`LCO:   IsMem = TRUE;
-`LCU:   IsMem = TRUE;
-`LH:    IsMem = TRUE;
-`LHO:   IsMem = TRUE;
-`LHU:   IsMem = TRUE;
-`LW:    IsMem = TRUE;
+`Lx:    IsMem = TRUE;
+`LxU:   IsMem = TRUE;
 `LWR:   IsMem = TRUE;
 `LV,`SV:    IsMem = TRUE;
-`LPT:	IsMem = TRUE;
-`LPTR:	IsMem = TRUE;
-`INC:	IsMem = TRUE;
+`INC:		IsMem = TRUE;
 `SB:    IsMem = TRUE;
-`SC:    IsMem = TRUE;
-`SH:    IsMem = TRUE;
-`SW:    IsMem = TRUE;
+`Sx:    IsMem = TRUE;
 `SWC:   IsMem = TRUE;
-`SPT:	IsMem = TRUE;
-`SPTR:	IsMem = TRUE;
 `CAS:   IsMem = TRUE;
-`LVx:	IsMem = TRUE;
+`LVx:		IsMem = TRUE;
 default:    IsMem = FALSE;
 endcase
 endfunction
@@ -2341,13 +2240,10 @@ case(isn[`INSTRUCTION_OP])
 	if (isn[`INSTRUCTION_L2]==2'b00)
 	    case(isn[`INSTRUCTION_S2])
 	    `LBX:   IsMemNdx = TRUE;
-	    `LBOX:  IsMemNdx = TRUE;
 	    `LBUX:  IsMemNdx = TRUE;
 	    `LCX:   IsMemNdx = TRUE;
-	    `LCOX:  IsMemNdx = TRUE;
 	    `LCUX:  IsMemNdx = TRUE;
 	    `LHX:   IsMemNdx = TRUE;
-	    `LHOX:  IsMemNdx = TRUE;
 	    `LHUX:  IsMemNdx = TRUE;
 	    `LWX:   IsMemNdx = TRUE;
 	    `LWRX:  IsMemNdx = TRUE;
@@ -2358,11 +2254,7 @@ case(isn[`INSTRUCTION_OP])
 	    `SWCX:  IsMemNdx = TRUE;
 	    `CASX:  IsMemNdx = TRUE;
 	    `LVX,`SVX:  IsMemNdx = TRUE;
-	    `LPT:	IsMemNdx = TRUE;
-	    `LPTR:	IsMemNdx = TRUE;
 	    `LVx:	IsMemNdx = TRUE;
-	    `SPT:	IsMemNdx = TRUE;
-	    `SPTR:	IsMemNdx = TRUE;
 	    `INC:	IsMemNdx = TRUE;
 	    default: IsMemNdx = FALSE;
 	    endcase
@@ -2379,39 +2271,26 @@ case(isn[`INSTRUCTION_OP])
 	if (isn[`INSTRUCTION_L2]==2'b00)
 	    case(isn[`INSTRUCTION_S2])
 	    `LBX:   IsLoad = TRUE;
-	    `LBOX:  IsLoad = TRUE;
 	    `LBUX:  IsLoad = TRUE;
 	    `LCX:   IsLoad = TRUE;
-	    `LCOX:  IsLoad = TRUE;
 	    `LCUX:  IsLoad = TRUE;
 	    `LHX:   IsLoad = TRUE;
-	    `LHOX:  IsLoad = TRUE;
 	    `LHUX:  IsLoad = TRUE;
 	    `LWX:   IsLoad = TRUE;
 	    `LWRX:  IsLoad = TRUE;
 	    `LVX:   IsLoad = TRUE;
 	    `LVx:	IsLoad = TRUE;
-	    `LPT:	IsLoad = TRUE;
-	    `LPTR:	IsLoad = TRUE;
 	    default: IsLoad = FALSE;   
 	    endcase
 	else
 		IsLoad = FALSE;
 `LB:    IsLoad = TRUE;
-`LBO:   IsLoad = TRUE;
 `LBU:   IsLoad = TRUE;
-`LC:    IsLoad = TRUE;
-`LCO:   IsLoad = TRUE;
-`LCU:   IsLoad = TRUE;
-`LH:    IsLoad = TRUE;
-`LHO:   IsLoad = TRUE;
-`LHU:   IsLoad = TRUE;
-`LW:    IsLoad = TRUE;
+`Lx:    IsLoad = TRUE;
+`LxU:   IsLoad = TRUE;
 `LWR:   IsLoad = TRUE;
 `LV:    IsLoad = TRUE;
 `LVx:   IsLoad = TRUE;
-`LPT:	IsLoad = TRUE;
-`LPTR:	IsLoad = TRUE;
 default:    IsLoad = FALSE;
 endcase
 endfunction
@@ -2440,10 +2319,10 @@ case(isn[`INSTRUCTION_OP])
 `R2:
 	if (isn[`INSTRUCTION_L2]==2'b00)
 	    case(isn[`INSTRUCTION_S2])
-	    `LBX,`LBOX,`LBUX,`SBX:   MemSize = byt;
-	    `LCX,`LCOX,`LCUX,`SCX:   MemSize = wyde;
+	    `LBX,`LBUX,`SBX:   MemSize = byt;
+	    `LCX,`LCUX,`SCX:   MemSize = wyde;
 	    `LHX,`SHX:   MemSize = tetra;
-	    `LHOX,`LHUX: MemSize = tetra;
+	    `LHUX: MemSize = tetra;
 	    `LWX,`SWX:   MemSize = octa;
 	    `LWRX,`SWCX: MemSize = octa;
 	    `LVX,`SVX:   MemSize = octa;
@@ -2458,11 +2337,14 @@ case(isn[`INSTRUCTION_OP])
 	    endcase
 	else
 		MemSize = octa;
-`LB,`LBO,`LBU,`SB:    MemSize = byt;
-`LC,`LCO,`LCU,`SC:    MemSize = wyde;
-`LH,`SH:    MemSize = tetra;
-`LHO,`LHU:  MemSize = tetra;
-`LW,`SW:    MemSize = octa;
+`LB,`LBU,`SB:    MemSize = byt;
+`Lx,`LxU,`Sx:
+	casez(isn[20:18])
+	3'b100:	MemSize = octa;
+	3'b?10:	MemSize = tetra;
+	3'b??1:	MemSize = wyde;
+	default:	MemSize = octa;
+	endcase
 `LWR,`SWC:  MemSize = octa;
 `LV,`SV:    MemSize = octa;
 `AMO:
@@ -2495,8 +2377,6 @@ case(isn[`INSTRUCTION_OP])
 	    `SHX:   IsStore = TRUE;
 	    `SWX:   IsStore = TRUE;
 	    `SWCX:  IsStore = TRUE;
-	    `SPT:	IsStore = TRUE;
-	    `SPTR:	IsStore = TRUE;
 	    `SVX:   IsStore = TRUE;
 	    `CASX:  IsStore = TRUE;
 	    `INC:	IsStore = TRUE;
@@ -2505,33 +2385,13 @@ case(isn[`INSTRUCTION_OP])
 	else
 		IsStore = FALSE;
 `SB:    IsStore = TRUE;
-`SC:    IsStore = TRUE;
-`SH:    IsStore = TRUE;
-`SW:    IsStore = TRUE;
+`Sx:    IsStore = TRUE;
 `SWC:   IsStore = TRUE;
-`SPT:	IsStore = TRUE;
-`SPTR:	IsStore = TRUE;
 `INC:	IsStore = TRUE;
 `SV:    IsStore = TRUE;
 `CAS:   IsStore = TRUE;
 `AMO:	IsStore = TRUE;
 default:    IsStore = FALSE;
-endcase
-endfunction
-
-function IsLptr;
-input [47:0] isn;
-case(isn[`INSTRUCTION_OP])
-`R2:
-   	if (isn[`INSTRUCTION_L2]==2'b00)
-		case(isn[`INSTRUCTION_S2])
-	    `LPTR:   IsLptr = TRUE;
-	    default:    IsLptr = FALSE;
-	    endcase
-	else
-		IsLptr = FALSE;
-`LPTR:    IsLptr = TRUE;
-default:    IsLptr = FALSE;
 endcase
 endfunction
 
@@ -2548,54 +2408,6 @@ case(isn[`INSTRUCTION_OP])
 		IsInc = FALSE;
 `INC:    IsInc = TRUE;
 default:    IsInc = FALSE;
-endcase
-endfunction
-
-function IsSpt;
-input [47:0] isn;
-case(isn[`INSTRUCTION_OP])
-`R2:
-   	if (isn[`INSTRUCTION_L2]==2'b00)
-		case(isn[`INSTRUCTION_S2])
-	    `SPT:   IsSpt = TRUE;
-	    default:    IsSpt = FALSE;
-	    endcase
-	else
-		IsSpt = FALSE;
-`SPT:    IsSpt = TRUE;
-default:    IsSpt = FALSE;
-endcase
-endfunction
-
-function IsSptr;
-input [47:0] isn;
-case(isn[`INSTRUCTION_OP])
-`R2:
-   	if (isn[`INSTRUCTION_L2]==2'b00)
-		case(isn[`INSTRUCTION_S2])
-	    `SPTR:   IsSptr = TRUE;
-	    default:    IsSptr = FALSE;
-	    endcase
-	else
-		IsSptr = FALSE;
-`SPTR:    IsSptr = TRUE;
-default:    IsSptr = FALSE;
-endcase
-endfunction
-
-function IsIsptr;
-input [47:0] isn;
-case(isn[`INSTRUCTION_OP])
-`R2:
-   	if (isn[`INSTRUCTION_L2]==2'b00)
-		case(isn[`INSTRUCTION_S2])
-	    `ISPTR:   IsIsptr = TRUE;
-	    default:    IsIsptr = FALSE;
-	    endcase
-	else
-		IsIsptr = FALSE;
-`ISPTR:    IsIsptr = TRUE;
-default:    IsIsptr = FALSE;
 endcase
 endfunction
 
@@ -2711,7 +2523,7 @@ endfunction
 
 function IsIrq;
 input [47:0] isn;
-IsBrk = isn[`INSTRUCTION_OP]==`BRK && isn[`INSTRUCTION_L2]==2'b00 && isn[23:20]==4'h0;
+IsIrq = isn[`INSTRUCTION_OP]==`BRK && isn[`INSTRUCTION_L2]==2'b00 && isn[23:20]==4'h0;
 endfunction
 
 function IsRTI;
@@ -2748,58 +2560,16 @@ casez(isn[`INSTRUCTION_OP])
         default:    IsFlowCtrl = FALSE;
         endcase
 `Bcc:   IsFlowCtrl = TRUE;
-`BBc:  IsFlowCtrl = TRUE;
+`BBc:		IsFlowCtrl = TRUE;
 `BEQI:  IsFlowCtrl = TRUE;
 `CHK:   IsFlowCtrl = TRUE;
-`JAL:    IsFlowCtrl = TRUE;
-`JMP:	IsFlowCtrl = TRUE;
+`JAL:   IsFlowCtrl = TRUE;
+`JMP:		IsFlowCtrl = TRUE;
 `CALL:  IsFlowCtrl = TRUE;
 `RET:   IsFlowCtrl = TRUE;
 default:    IsFlowCtrl = FALSE;
 endcase
 endfunction
-
-// fnCanException
-//
-// Used by memory issue logic.
-// Returns TRUE if the instruction can cause an exception.
-// In debug mode any instruction could potentially cause a breakpoint exception.
-// Rather than check all the addresses for potential debug exceptions it's
-// simpler to just have it so that all instructions could exception. This will
-// slow processing down somewhat as stores will only be done at the head of the
-// instruction queue, but it's debug mode so we probably don't care.
-//
-function fnCanException;
-input [47:0] isn;
-// ToDo add debug_on as input
-`ifdef SUPPORT_DBG
-if (debug_on)
-    fnCanException = `TRUE;
-else
-`endif
-case(isn[`INSTRUCTION_OP])
-`FLOAT:
-    case(isn[`INSTRUCTION_S2])
-    `FDIV,`FMUL,`FADD,`FSUB,`FTX:
-        fnCanException = `TRUE;
-    default:    fnCanException = `FALSE;
-    endcase
-`ADDI,`DIVI,`MODI,`MULI:
-    fnCanException = `TRUE;
-`R2:
-    case(isn[`INSTRUCTION_S2])
-    `ADD,`SUB,`MUL,`DIVMOD,`MULSU,`DIVMODSU:   fnCanException = TRUE;
-    `RTI:   fnCanException = TRUE;
-    default:    fnCanException = FALSE;
-    endcase
-`Bcc:	fnCanException = TRUE;
-`BEQI:	fnCanException = TRUE;
-`CHK:	fnCanException = TRUE;
-default:
-    fnCanException = IsMem(isn);
-endcase
-endfunction
-
 
 function IsCache;
 input [47:0] isn;
@@ -2891,8 +2661,10 @@ casez(isn[`INSTRUCTION_OP])
 	    `R1:    IsRFW = TRUE;
 	    `ADD:   IsRFW = TRUE;
 	    `SUB:   IsRFW = TRUE;
-	    `CMP:   IsRFW = TRUE;
-	    `CMPU:  IsRFW = TRUE;
+	    `SLT:   IsRFW = TRUE;
+	    `SLTU:  IsRFW = TRUE;
+	    `SLE:   IsRFW = TRUE;
+        `SLEU:  IsRFW = TRUE;
 	    `AND:   IsRFW = TRUE;
 	    `OR:    IsRFW = TRUE;
 	    `XOR:   IsRFW = TRUE;
@@ -2903,23 +2675,19 @@ casez(isn[`INSTRUCTION_OP])
 	    `DIVMODSU: IsRFW = TRUE;
 	    `DIVMOD:IsRFW = TRUE;
 	    `LBX:   IsRFW = TRUE;
-	    `LBOX:  IsRFW = TRUE;
 	    `LBUX:  IsRFW = TRUE;
 	    `LCX:   IsRFW = TRUE;
-	    `LCOX:  IsRFW = TRUE;
 	    `LCUX:  IsRFW = TRUE;
 	    `LHX:   IsRFW = TRUE;
-	    `LHOX:  IsRFW = TRUE;
 	    `LHUX:  IsRFW = TRUE;
 	    `LWX:   IsRFW = TRUE;
 	    `LWRX:  IsRFW = TRUE;
 	    `LVX:   IsRFW = TRUE;
 	    `LVx:	IsRFW = TRUE;
-	    `LPT:	IsRFW = TRUE;
 	    `CASX:  IsRFW = TRUE;
 	    `MOV:	IsRFW = TRUE;
 	    `VMOV:	IsRFW = TRUE;
-	    `SHIFT,`SHIFTH,`SHIFTC,`SHIFTB:
+	    `SHIFTR,`SHIFT31,`SHIFT63:
 		    	IsRFW = TRUE;
 	    `MIN,`MAX:    IsRFW = TRUE;
 	    `SEI:	IsRFW = TRUE;
@@ -2935,41 +2703,30 @@ casez(isn[`INSTRUCTION_OP])
 	endcase
 `BITFIELD:  IsRFW = TRUE;
 `ADDI:      IsRFW = TRUE;
-`CMPI:      IsRFW = TRUE;
-`CMPUI:     IsRFW = TRUE;
+`SLTI:      IsRFW = TRUE;
+`SLTUI:     IsRFW = TRUE;
+`SGTI:      IsRFW = TRUE;
+`SGTUI:     IsRFW = TRUE;
 `ANDI:      IsRFW = TRUE;
 `ORI:       IsRFW = TRUE;
 `XORI:      IsRFW = TRUE;
 `MULUI:     IsRFW = TRUE;
-`MULSUI:    IsRFW = TRUE;
 `MULI:      IsRFW = TRUE;
 `DIVUI:     IsRFW = TRUE;
-`DIVSUI:    IsRFW = TRUE;
 `DIVI:      IsRFW = TRUE;
-`MODUI:     IsRFW = TRUE;
-`MODSUI:    IsRFW = TRUE;
 `MODI:      IsRFW = TRUE;
-`QOPI:		IsRFW = TRUE;
 `JAL:       IsRFW = TRUE;
 `CALL:      IsRFW = TRUE;  
 `RET:       IsRFW = TRUE; 
 `LB:        IsRFW = TRUE;
-`LBO:       IsRFW = TRUE;
 `LBU:       IsRFW = TRUE;
-`LC:        IsRFW = TRUE;
-`LCO:       IsRFW = TRUE;
-`LCU:       IsRFW = TRUE;
-`LH:        IsRFW = TRUE;
-`LHO:       IsRFW = TRUE;
-`LHU:       IsRFW = TRUE;
-`LW:        IsRFW = TRUE;
+`Lx:        IsRFW = TRUE;
 `LWR:       IsRFW = TRUE;
 `LV:        IsRFW = TRUE;
-`LVx:		IsRFW = TRUE;
-`LPT:		IsRFW = TRUE;
+`LVx:				IsRFW = TRUE;
 `CAS:       IsRFW = TRUE;
-`AMO:		IsRFW = TRUE;
-`CSRRW:		IsRFW = TRUE;
+`AMO:				IsRFW = TRUE;
+`CSRRW:			IsRFW = TRUE;
 default:    IsRFW = FALSE;
 endcase
 endfunction
@@ -2990,6 +2747,21 @@ default: IsShifti = FALSE;
 endcase
 endfunction
 
+function IsRtop;
+input [47:0] isn;
+case(isn[`INSTRUCTION_OP])
+`R2:
+	if (isn[`INSTRUCTION_L2]==2'b01)
+	    case(isn[47:42])
+	    `RTOP: IsRtop = TRUE;
+	    default: IsRtop = FALSE;
+	    endcase
+    else
+    	IsRtop = FALSE;
+default: IsRtop = FALSE;
+endcase
+endfunction
+
 function IsMul;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
@@ -3001,7 +2773,7 @@ case(isn[`INSTRUCTION_OP])
 	    endcase
 	else
 		IsMul = FALSE;
-`MULUI,`MULSUI,`MULI:  IsMul = TRUE;
+`MULUI,`MULI:  IsMul = TRUE;
 default:    IsMul = FALSE;
 endcase
 endfunction
@@ -3017,41 +2789,16 @@ case(isn[`INSTRUCTION_OP])
 	    endcase
 	else
 		IsDivmod = FALSE;
-`DIVUI,`DIVSUI,`DIVI,`MODUI,`MODSUI,`MODI:  IsDivmod = TRUE;
+`DIVUI,`DIVI,`MODI:  IsDivmod = TRUE;
 default:    IsDivmod = FALSE;
 endcase
 endfunction
 
-function IsAlu0Only;
+function IsExec;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`R2:
-	if (isn[`INSTRUCTION_L2]==2'b00)
-	    case(isn[`INSTRUCTION_S2])
-	    `R1:        IsAlu0Only = TRUE;
-	    `SHIFT:     IsAlu0Only = TRUE;
-	    `LBX,`LBOX,`LBUX,`LCX,`LCOX,`LCUX,`LHX,`LHOX,`LHUX,`LWX,`LWRX:
-	    	IsAlu0Only = TRUE;
-	    `SBX,`SCX,`SHX,`SWX,`SWCX: IsAlu0Only = TRUE;
-	    `LVX,`SVX,`LVx:  IsAlu0Only = TRUE;
-	    `MULU,`MULSU,`MUL,
-	    `DIVMODU,`DIVMODSU,`DIVMOD: IsAlu0Only = TRUE;
-	    `MIN,`MAX:  IsAlu0Only = TRUE;
-	    default:    IsAlu0Only = FALSE;
-	    endcase
-	else
-		IsAlu0Only = FALSE;
-`IVECTOR,`FVECTOR:
-    case(isn[`INSTRUCTION_S2])
-    `VSHL,`VSHR,`VASR:  IsAlu0Only = TRUE;
-    default: IsAlu0Only = FALSE;
-    endcase
-`BITFIELD:  IsAlu0Only = TRUE;
-`MULUI,`MULSUI,`MULI,
-`DIVUI,`DIVSUI,`DIVI,
-`MODUI,`MODSUI,`MODI:   IsAlu0Only = TRUE;
-`CSRRW: IsAlu0Only = TRUE;
-default:    IsAlu0Only = FALSE;
+`EXEC:	IsExec = TRUE;
+default:	IsExec = FALSE;
 endcase
 endfunction
 
@@ -3061,9 +2808,9 @@ input [31:0] adr;
 begin
 	case(ins[`INSTRUCTION_OP])
 	`R2:
-		if (isn[`INSTRUCTION_L2]==2'b00)
+		if (ins[`INSTRUCTION_L2]==2'b00)
 		   case(ins[`INSTRUCTION_S2])
-	       `LBX,`LBOX,`LBUX,`SBX:
+	       `LBX,`LBUX,`SBX:
 	           case(adr[2:0])
 	           3'd0:    fnSelect = 8'h01;
 	           3'd1:    fnSelect = 8'h02;
@@ -3074,54 +2821,54 @@ begin
 	           3'd6:    fnSelect = 8'h40;
 	           3'd7:    fnSelect = 8'h80;
 	           endcase
-	        `LCX,`LCOX,`LCUX,`SCX:
+	        `LCX,`LCUX,`SCX:
 	            case(adr[2:1])
 	            2'd0:   fnSelect = 8'h03;
 	            2'd1:   fnSelect = 8'h0C;
 	            2'd2:   fnSelect = 8'h30;
 	            2'd3:   fnSelect = 8'hC0;
 	            endcase
-	    	`LHX,`LHOX,`LHUX,`SHX:
+	    	`LHX,`LHUX,`SHX:
 	           case(adr[2])
 	           1'b0:    fnSelect = 8'h0F;
 	           1'b1:    fnSelect = 8'hF0;
 	           endcase
-	       `LPT,`INC,
+	       `INC,
 	       `LWX,`SWX,`LWRX,`SWCX,`LVX,`SVX,`CASX:
 	           fnSelect = 8'hFF;
-	       `LVx:
-	       		case(ins[25:23])
-		       `LVB,`LVBU:
-		           case(adr[2:0])
-		           3'd0:    fnSelect = 8'h01;
-		           3'd1:    fnSelect = 8'h02;
-		           3'd2:    fnSelect = 8'h04;
-		           3'd3:    fnSelect = 8'h08;
-		           3'd4:    fnSelect = 8'h10;
-		           3'd5:    fnSelect = 8'h20;
-		           3'd6:    fnSelect = 8'h40;
-		           3'd7:    fnSelect = 8'h80;
-		           endcase
-		        `LVC,`LVCU:
-		            case(adr[2:1])
-		            2'd0:   fnSelect = 8'h03;
-		            2'd1:   fnSelect = 8'h0C;
-		            2'd2:   fnSelect = 8'h30;
-		            2'd3:   fnSelect = 8'hC0;
-		            endcase
-		    	`LVH,`LVHU:
-		           case(adr[2])
-		           1'b0:    fnSelect = 8'h0F;
-		           1'b1:    fnSelect = 8'hF0;
-		           endcase
-		       `LVW:
-		           fnSelect = 8'hFF;
-	       		endcase
+	       `LVx:   ;
+//	       		case(ins[25:23])
+//		       `LVB,`LVBU:
+//		           case(adr[2:0])
+//		           3'd0:    fnSelect = 8'h01;
+//		           3'd1:    fnSelect = 8'h02;
+//		           3'd2:    fnSelect = 8'h04;
+//		           3'd3:    fnSelect = 8'h08;
+//		           3'd4:    fnSelect = 8'h10;
+//		           3'd5:    fnSelect = 8'h20;
+//		           3'd6:    fnSelect = 8'h40;
+//		           3'd7:    fnSelect = 8'h80;
+//		           endcase
+//		        `LVC,`LVCU:
+//		            case(adr[2:1])
+//		            2'd0:   fnSelect = 8'h03;
+//		            2'd1:   fnSelect = 8'h0C;
+//		            2'd2:   fnSelect = 8'h30;
+//		            2'd3:   fnSelect = 8'hC0;
+//		            endcase
+//		    	`LVH,`LVHU:
+//		           case(adr[2])
+//		           1'b0:    fnSelect = 8'h0F;
+//		           1'b1:    fnSelect = 8'hF0;
+//		           endcase
+//		       `LVW:
+//		           fnSelect = 8'hFF;
+//	       		endcase
 	       default: fnSelect = 8'h00;
 		   endcase
 	   else
 	   	fnSelect = 8'h00;
-    `LB,`LBO,`LBU,`SB:
+    `LB,`LBU,`SB:
 		case(adr[2:0])
 		3'd0:	fnSelect = 8'h01;
 		3'd1:	fnSelect = 8'h02;
@@ -3132,20 +2879,21 @@ begin
 		3'd6:	fnSelect = 8'h40;
 		3'd7:	fnSelect = 8'h80;
 		endcase
-    `LC,`LCO,`LCU,`SC:
+    `Lx,`LxU,`Sx:
+    	casez(ins[20:18])
+    	3'b100:	fnSelect = 8'hFF;
+    	3'b?10: fnSelect = adr[2] ? 8'hF0 : 8'h0F;
+    	3'b??1:
         case(adr[2:1])
         2'd0:   fnSelect = 8'h03;
         2'd1:   fnSelect = 8'h0C;
         2'd2:   fnSelect = 8'h30;
         2'd3:   fnSelect = 8'hC0;
         endcase
-	`LH,`LHO,`LHU,`SH:
-		case(adr[2])
-		1'b0:	fnSelect = 8'h0F;
-		1'b1:	fnSelect = 8'hF0;
-		endcase
-	`LPT,`INC,
-	`LW,`SW,`LWR,`SWC,`CAS:   fnSelect = 8'hFF;
+      default: fnSelect = 8'h00;
+      endcase
+	`INC,
+	`LWR,`SWC,`CAS:   fnSelect = 8'hFF;
 	`LV,`SV:   fnSelect = 8'hFF;
 	`AMO:
 		case(ins[23:21])
@@ -3157,44 +2905,82 @@ begin
 		endcase
 	`LVx:
 		case(ins[30:28])
-       `LVB,`LVBU:
-           case(adr[2:0])
-           3'd0:    fnSelect = 8'h01;
-           3'd1:    fnSelect = 8'h02;
-           3'd2:    fnSelect = 8'h04;
-           3'd3:    fnSelect = 8'h08;
-           3'd4:    fnSelect = 8'h10;
-           3'd5:    fnSelect = 8'h20;
-           3'd6:    fnSelect = 8'h40;
-           3'd7:    fnSelect = 8'h80;
-           endcase
-        `LVC,`LVCU:
-            case(adr[2:1])
-            2'd0:   fnSelect = 8'h03;
-            2'd1:   fnSelect = 8'h0C;
-            2'd2:   fnSelect = 8'h30;
-            2'd3:   fnSelect = 8'hC0;
-            endcase
-    	`LVH,`LVHU:
-           case(adr[2])
-           1'b0:    fnSelect = 8'h0F;
-           1'b1:    fnSelect = 8'hF0;
-           endcase
-       `LVW:
-           fnSelect = 8'hFF;
+//       `LVB,`LVBU:
+//           case(adr[2:0])
+//           3'd0:    fnSelect = 8'h01;
+//           3'd1:    fnSelect = 8'h02;
+//           3'd2:    fnSelect = 8'h04;
+//           3'd3:    fnSelect = 8'h08;
+//           3'd4:    fnSelect = 8'h10;
+//           3'd5:    fnSelect = 8'h20;
+//           3'd6:    fnSelect = 8'h40;
+//           3'd7:    fnSelect = 8'h80;
+//           endcase
+//        `LVC,`LVCU:
+//            case(adr[2:1])
+//            2'd0:   fnSelect = 8'h03;
+//            2'd1:   fnSelect = 8'h0C;
+//            2'd2:   fnSelect = 8'h30;
+//            2'd3:   fnSelect = 8'hC0;
+//            endcase
+//    	`LVH,`LVHU:
+//           case(adr[2])
+//           1'b0:    fnSelect = 8'h0F;
+//           1'b1:    fnSelect = 8'hF0;
+//           endcase
+//       `LVW:
+//           fnSelect = 8'hFF;
 		endcase
 	default:	fnSelect = 8'h00;
 	endcase
 end
 endfunction
-
+/*
+function [63:0] fnDatc;
+input [47:0] ins;
+input [63:0] dat;
+case(ins[`INSTRUCTION_OP])
+`R2:
+	if (isn[`INSTRUCTION_L2]==2'b01)
+		case(ins[47:42])
+		`FINDB:		fnDatc = dat[7:0];
+		`FINDC:		fnDatc = dat[15:0];
+		`FINDH:		fnDatc = dat[31:0];
+		`FINDW:		fnDatc = dat[63:0];
+		default:	fnDatc = dat[63:0];
+		endcase
+	else
+		fnDatc = dat[63:0];
+default:	fnDatc = dat[63:0];
+endcase
+endfunction
+*/
+/*
+function [63:0] fnMemInc;
+input [47:0] ins;
+case(ins[`INSTRUCTION_OP])
+`R2:
+	if (isn[`INSTRUCTION_L2]==2'b01)
+		case(ins[47:42])
+		`FINDB:		fnMemInc = 32'd1;
+		`FINDC:		fnMemInc = 32'd2;
+		`FINDH:		fnMemInc = 32'd4;
+		`FINDW:		fnMemInc = 32'd8;
+		default:	fnMemInc = 32'd8;
+		endcase
+	else
+		fnMemInc = 32'd8;
+default:	fnMemInc = 32'd8;
+endcase
+endfunction
+*/
 function [63:0] fnDati;
 input [47:0] ins;
 input [31:0] adr;
 input [63:0] dat;
 case(ins[`INSTRUCTION_OP])
 `R2:
-	if (isn[`INSTRUCTION_L2]==2'b00)
+	if (ins[`INSTRUCTION_L2]==2'b00)
 	    case(ins[`INSTRUCTION_S2])
 	    `LBX:
 	        case(adr[2:0])
@@ -3207,7 +2993,7 @@ case(ins[`INSTRUCTION_OP])
 	        3'd6:   fnDati = {{56{dat[55]}},dat[55:48]};
 	        3'd7:   fnDati = {{56{dat[63]}},dat[63:56]};
 	        endcase
-	    `LBOX,`LBUX:
+	    `LBUX:
 	        case(adr[2:0])
 	        3'd0:   fnDati = {{56{1'b0}},dat[7:0]};
 	        3'd1:   fnDati = {{56{1'b0}},dat[15:8]};
@@ -3225,7 +3011,7 @@ case(ins[`INSTRUCTION_OP])
 	        2'd2:   fnDati = {{48{dat[47]}},dat[47:32]};
 	        2'd3:   fnDati = {{48{dat[63]}},dat[63:48]};
 	        endcase
-	    `LCOX,`LCUX:
+	    `LCUX:
 	        case(adr[2:1])
 	        2'd0:   fnDati = {{48{1'b0}},dat[15:0]};
 	        2'd1:   fnDati = {{48{1'b0}},dat[31:16]};
@@ -3237,167 +3023,173 @@ case(ins[`INSTRUCTION_OP])
 	        1'b0:   fnDati = {{32{dat[31]}},dat[31:0]};
 	        1'b1:   fnDati = {{32{dat[63]}},dat[63:32]};
 	        endcase
-	    `LHOX,`LHUX:
+	    `LHUX:
 	        case(adr[2])
 	        1'b0:   fnDati = {{32{1'b0}},dat[31:0]};
 	        1'b1:   fnDati = {{32{1'b0}},dat[63:32]};
 	        endcase
 	    `LWX,`LWRX,`LVX,`CAS:  fnDati = dat;
-		`ISPTR:	fnDati = dat==ptrkey;
-	    `LVx:
-	    	case(ins[25:23])
-		    `LVB:
-		        case(adr[2:0])
-		        3'd0:   fnDati = {{56{dat[7]}},dat[7:0]};
-		        3'd1:   fnDati = {{56{dat[15]}},dat[15:8]};
-		        3'd2:   fnDati = {{56{dat[23]}},dat[23:16]};
-		        3'd3:   fnDati = {{56{dat[31]}},dat[31:24]};
-		        3'd4:   fnDati = {{56{dat[39]}},dat[39:32]};
-		        3'd5:   fnDati = {{56{dat[47]}},dat[47:40]};
-		        3'd6:   fnDati = {{56{dat[55]}},dat[55:48]};
-		        3'd7:   fnDati = {{56{dat[63]}},dat[63:56]};
-		        endcase
-		    `LVBU:
-		        case(adr[2:0])
-		        3'd0:   fnDati = {{56{1'b0}},dat[7:0]};
-		        3'd1:   fnDati = {{56{1'b0}},dat[15:8]};
-		        3'd2:   fnDati = {{56{1'b0}},dat[23:16]};
-		        3'd3:   fnDati = {{56{1'b0}},dat[31:24]};
-		        3'd4:   fnDati = {{56{1'b0}},dat[39:32]};
-		        3'd5:   fnDati = {{56{1'b0}},dat[47:40]};
-		        3'd6:   fnDati = {{56{1'b0}},dat[55:48]};
-		        3'd7:   fnDati = {{56{2'b0}},dat[63:56]};
-		        endcase
-		    `LVC:
-		        case(adr[2:1])
-		        2'd0:   fnDati = {{48{dat[15]}},dat[15:0]};
-		        2'd1:   fnDati = {{48{dat[31]}},dat[31:16]};
-		        2'd2:   fnDati = {{48{dat[47]}},dat[47:32]};
-		        2'd3:   fnDati = {{48{dat[63]}},dat[63:48]};
-		        endcase
-		    `LVCU:
-		        case(adr[2:1])
-		        2'd0:   fnDati = {{48{1'b0}},dat[15:0]};
-		        2'd1:   fnDati = {{48{1'b0}},dat[31:16]};
-		        2'd2:   fnDati = {{48{1'b0}},dat[47:32]};
-		        2'd3:   fnDati = {{48{1'b0}},dat[63:48]};
-		        endcase
-		    `LVH:
-		        case(adr[2])
-		        1'b0:   fnDati = {{32{dat[31]}},dat[31:0]};
-		        1'b1:   fnDati = {{32{dat[63]}},dat[63:32]};
-		        endcase
-		    `LVHU:
-		        case(adr[2])
-		        1'b0:   fnDati = {{32{1'b0}},dat[31:0]};
-		        1'b1:   fnDati = {{32{1'b0}},dat[63:32]};
-		        endcase
-		    `LVW:  fnDati = dat;
-		    default:	fnDati = dat;
-	    	endcase
+//	    `LVx:
+//	    	case(ins[25:23])
+//		    `LVB:
+//		        case(adr[2:0])
+//		        3'd0:   fnDati = {{56{dat[7]}},dat[7:0]};
+//		        3'd1:   fnDati = {{56{dat[15]}},dat[15:8]};
+//		        3'd2:   fnDati = {{56{dat[23]}},dat[23:16]};
+//		        3'd3:   fnDati = {{56{dat[31]}},dat[31:24]};
+//		        3'd4:   fnDati = {{56{dat[39]}},dat[39:32]};
+//		        3'd5:   fnDati = {{56{dat[47]}},dat[47:40]};
+//		        3'd6:   fnDati = {{56{dat[55]}},dat[55:48]};
+//		        3'd7:   fnDati = {{56{dat[63]}},dat[63:56]};
+//		        endcase
+//		    `LVBU:
+//		        case(adr[2:0])
+//		        3'd0:   fnDati = {{56{1'b0}},dat[7:0]};
+//		        3'd1:   fnDati = {{56{1'b0}},dat[15:8]};
+//		        3'd2:   fnDati = {{56{1'b0}},dat[23:16]};
+//		        3'd3:   fnDati = {{56{1'b0}},dat[31:24]};
+//		        3'd4:   fnDati = {{56{1'b0}},dat[39:32]};
+//		        3'd5:   fnDati = {{56{1'b0}},dat[47:40]};
+//		        3'd6:   fnDati = {{56{1'b0}},dat[55:48]};
+//		        3'd7:   fnDati = {{56{2'b0}},dat[63:56]};
+//		        endcase
+//		    `LVC:
+//		        case(adr[2:1])
+//		        2'd0:   fnDati = {{48{dat[15]}},dat[15:0]};
+//		        2'd1:   fnDati = {{48{dat[31]}},dat[31:16]};
+//		        2'd2:   fnDati = {{48{dat[47]}},dat[47:32]};
+//		        2'd3:   fnDati = {{48{dat[63]}},dat[63:48]};
+//		        endcase
+//		    `LVCU:
+//		        case(adr[2:1])
+//		        2'd0:   fnDati = {{48{1'b0}},dat[15:0]};
+//		        2'd1:   fnDati = {{48{1'b0}},dat[31:16]};
+//		        2'd2:   fnDati = {{48{1'b0}},dat[47:32]};
+//		        2'd3:   fnDati = {{48{1'b0}},dat[63:48]};
+//		        endcase
+//		    `LVH:
+//		        case(adr[2])
+//		        1'b0:   fnDati = {{32{dat[31]}},dat[31:0]};
+//		        1'b1:   fnDati = {{32{dat[63]}},dat[63:32]};
+//		        endcase
+//		    `LVHU:
+//		        case(adr[2])
+//		        1'b0:   fnDati = {{32{1'b0}},dat[31:0]};
+//		        1'b1:   fnDati = {{32{1'b0}},dat[63:32]};
+//		        endcase
+//		    `LVW:  fnDati = dat;
+//		    default:	fnDati = dat;
+//	    	endcase
 	    default:    fnDati = dat;
 	    endcase
 	else
 		fnDati = dat;
 `LB:
-    case(adr[2:0])
-    3'd0:   fnDati = {{56{dat[7]}},dat[7:0]};
-    3'd1:   fnDati = {{56{dat[15]}},dat[15:8]};
-    3'd2:   fnDati = {{56{dat[23]}},dat[23:16]};
-    3'd3:   fnDati = {{56{dat[31]}},dat[31:24]};
-    3'd4:   fnDati = {{56{dat[39]}},dat[39:32]};
-    3'd5:   fnDati = {{56{dat[47]}},dat[47:40]};
-    3'd6:   fnDati = {{56{dat[55]}},dat[55:48]};
-    3'd7:   fnDati = {{56{dat[63]}},dat[63:56]};
-    endcase
-`LBO,`LBU:
-    case(adr[2:0])
-    3'd0:   fnDati = {{56{1'b0}},dat[7:0]};
-    3'd1:   fnDati = {{56{1'b0}},dat[15:8]};
-    3'd2:   fnDati = {{56{1'b0}},dat[23:16]};
-    3'd3:   fnDati = {{56{1'b0}},dat[31:24]};
-    3'd4:   fnDati = {{56{1'b0}},dat[39:32]};
-    3'd5:   fnDati = {{56{1'b0}},dat[47:40]};
-    3'd6:   fnDati = {{56{1'b0}},dat[55:48]};
-    3'd7:   fnDati = {{56{2'b0}},dat[63:56]};
-    endcase
-`LC:
-    case(adr[2:1])
-    2'd0:   fnDati = {{48{dat[15]}},dat[15:0]};
-    2'd1:   fnDati = {{48{dat[31]}},dat[31:16]};
-    2'd2:   fnDati = {{48{dat[47]}},dat[47:32]};
-    2'd3:   fnDati = {{48{dat[63]}},dat[63:48]};
-    endcase
-`LCO,`LCU:
-    case(adr[2:1])
-    2'd0:   fnDati = {{48{1'b0}},dat[15:0]};
-    2'd1:   fnDati = {{48{1'b0}},dat[31:16]};
-    2'd2:   fnDati = {{48{1'b0}},dat[47:32]};
-    2'd3:   fnDati = {{48{1'b0}},dat[63:48]};
-    endcase
-`LH:
-    case(adr[2])
-    1'b0:   fnDati = {{32{dat[31]}},dat[31:0]};
-    1'b1:   fnDati = {{32{dat[63]}},dat[63:32]};
-    endcase
-`LHO,`LHU:
-    case(adr[2])
-    1'b0:   fnDati = {{32{1'b0}},dat[31:0]};
-    1'b1:   fnDati = {{32{1'b0}},dat[63:32]};
-    endcase
-`LW,`LWR,`LV,`CAS,`AMO:   fnDati = dat;
-`ISPTR:	fnDati = dat==ptrkey;
-`LVx:
-	case(ins[30:28])
-    `LVB:
-        case(adr[2:0])
-        3'd0:   fnDati = {{56{dat[7]}},dat[7:0]};
-        3'd1:   fnDati = {{56{dat[15]}},dat[15:8]};
-        3'd2:   fnDati = {{56{dat[23]}},dat[23:16]};
-        3'd3:   fnDati = {{56{dat[31]}},dat[31:24]};
-        3'd4:   fnDati = {{56{dat[39]}},dat[39:32]};
-        3'd5:   fnDati = {{56{dat[47]}},dat[47:40]};
-        3'd6:   fnDati = {{56{dat[55]}},dat[55:48]};
-        3'd7:   fnDati = {{56{dat[63]}},dat[63:56]};
-        endcase
-    `LVBU:
-        case(adr[2:0])
-        3'd0:   fnDati = {{56{1'b0}},dat[7:0]};
-        3'd1:   fnDati = {{56{1'b0}},dat[15:8]};
-        3'd2:   fnDati = {{56{1'b0}},dat[23:16]};
-        3'd3:   fnDati = {{56{1'b0}},dat[31:24]};
-        3'd4:   fnDati = {{56{1'b0}},dat[39:32]};
-        3'd5:   fnDati = {{56{1'b0}},dat[47:40]};
-        3'd6:   fnDati = {{56{1'b0}},dat[55:48]};
-        3'd7:   fnDati = {{56{2'b0}},dat[63:56]};
-        endcase
-    `LVC:
-        case(adr[2:1])
-        2'd0:   fnDati = {{48{dat[15]}},dat[15:0]};
-        2'd1:   fnDati = {{48{dat[31]}},dat[31:16]};
-        2'd2:   fnDati = {{48{dat[47]}},dat[47:32]};
-        2'd3:   fnDati = {{48{dat[63]}},dat[63:48]};
-        endcase
-    `LVCU:
-        case(adr[2:1])
-        2'd0:   fnDati = {{48{1'b0}},dat[15:0]};
-        2'd1:   fnDati = {{48{1'b0}},dat[31:16]};
-        2'd2:   fnDati = {{48{1'b0}},dat[47:32]};
-        2'd3:   fnDati = {{48{1'b0}},dat[63:48]};
-        endcase
-    `LVH:
-        case(adr[2])
-        1'b0:   fnDati = {{32{dat[31]}},dat[31:0]};
-        1'b1:   fnDati = {{32{dat[63]}},dat[63:32]};
-        endcase
-    `LVHU:
-        case(adr[2])
-        1'b0:   fnDati = {{32{1'b0}},dat[31:0]};
-        1'b1:   fnDati = {{32{1'b0}},dat[63:32]};
-        endcase
-    `LVW:  fnDati = dat;
-    default:	fnDati = dat;
+  case(adr[2:0])
+  3'd0:   fnDati = {{56{dat[7]}},dat[7:0]};
+  3'd1:   fnDati = {{56{dat[15]}},dat[15:8]};
+  3'd2:   fnDati = {{56{dat[23]}},dat[23:16]};
+  3'd3:   fnDati = {{56{dat[31]}},dat[31:24]};
+  3'd4:   fnDati = {{56{dat[39]}},dat[39:32]};
+  3'd5:   fnDati = {{56{dat[47]}},dat[47:40]};
+  3'd6:   fnDati = {{56{dat[55]}},dat[55:48]};
+  3'd7:   fnDati = {{56{dat[63]}},dat[63:56]};
+  endcase
+`LBU:
+  case(adr[2:0])
+  3'd0:   fnDati = {{56{1'b0}},dat[7:0]};
+  3'd1:   fnDati = {{56{1'b0}},dat[15:8]};
+  3'd2:   fnDati = {{56{1'b0}},dat[23:16]};
+  3'd3:   fnDati = {{56{1'b0}},dat[31:24]};
+  3'd4:   fnDati = {{56{1'b0}},dat[39:32]};
+  3'd5:   fnDati = {{56{1'b0}},dat[47:40]};
+  3'd6:   fnDati = {{56{1'b0}},dat[55:48]};
+  3'd7:   fnDati = {{56{2'b0}},dat[63:56]};
+  endcase
+`Lx:
+	casez(ins[20:18])
+	3'b100:	fnDati = dat;
+	3'b?10:
+	  case(adr[2])
+	  1'b0:   fnDati = {{32{dat[31]}},dat[31:0]};
+	  1'b1:   fnDati = {{32{dat[63]}},dat[63:32]};
+	  endcase
+	3'b??1:
+	  case(adr[2:1])
+	  2'd0:   fnDati = {{48{dat[15]}},dat[15:0]};
+	  2'd1:   fnDati = {{48{dat[31]}},dat[31:16]};
+	  2'd2:   fnDati = {{48{dat[47]}},dat[47:32]};
+	  2'd3:   fnDati = {{48{dat[63]}},dat[63:48]};
+	  endcase
 	endcase
+`LxU:
+	casez(ins[20:18])
+	3'b100:	fnDati = dat;
+	3'b?10:
+	  case(adr[2])
+	  1'b0:   fnDati = {{32{1'b0}},dat[31:0]};
+	  1'b1:   fnDati = {{32{1'b0}},dat[63:32]};
+	  endcase
+	3'b??1:
+	  case(adr[2:1])
+	  2'd0:   fnDati = {{48{1'b0}},dat[15:0]};
+	  2'd1:   fnDati = {{48{1'b0}},dat[31:16]};
+	  2'd2:   fnDati = {{48{1'b0}},dat[47:32]};
+	  2'd3:   fnDati = {{48{1'b0}},dat[63:48]};
+	  endcase
+	endcase
+`LWR,`LV,`CAS,`AMO:   fnDati = dat;
+//`LVx:
+//	case(ins[30:28])
+//    `LVB:
+//        case(adr[2:0])
+//        3'd0:   fnDati = {{56{dat[7]}},dat[7:0]};
+//        3'd1:   fnDati = {{56{dat[15]}},dat[15:8]};
+//        3'd2:   fnDati = {{56{dat[23]}},dat[23:16]};
+//        3'd3:   fnDati = {{56{dat[31]}},dat[31:24]};
+//        3'd4:   fnDati = {{56{dat[39]}},dat[39:32]};
+//        3'd5:   fnDati = {{56{dat[47]}},dat[47:40]};
+//        3'd6:   fnDati = {{56{dat[55]}},dat[55:48]};
+//        3'd7:   fnDati = {{56{dat[63]}},dat[63:56]};
+//        endcase
+//    `LVBU:
+//        case(adr[2:0])
+//        3'd0:   fnDati = {{56{1'b0}},dat[7:0]};
+//        3'd1:   fnDati = {{56{1'b0}},dat[15:8]};
+//        3'd2:   fnDati = {{56{1'b0}},dat[23:16]};
+//        3'd3:   fnDati = {{56{1'b0}},dat[31:24]};
+//        3'd4:   fnDati = {{56{1'b0}},dat[39:32]};
+//        3'd5:   fnDati = {{56{1'b0}},dat[47:40]};
+//        3'd6:   fnDati = {{56{1'b0}},dat[55:48]};
+//        3'd7:   fnDati = {{56{2'b0}},dat[63:56]};
+//        endcase
+//    `LVC:
+//        case(adr[2:1])
+//        2'd0:   fnDati = {{48{dat[15]}},dat[15:0]};
+//        2'd1:   fnDati = {{48{dat[31]}},dat[31:16]};
+//        2'd2:   fnDati = {{48{dat[47]}},dat[47:32]};
+//        2'd3:   fnDati = {{48{dat[63]}},dat[63:48]};
+//        endcase
+//    `LVCU:
+//        case(adr[2:1])
+//        2'd0:   fnDati = {{48{1'b0}},dat[15:0]};
+//        2'd1:   fnDati = {{48{1'b0}},dat[31:16]};
+//        2'd2:   fnDati = {{48{1'b0}},dat[47:32]};
+//        2'd3:   fnDati = {{48{1'b0}},dat[63:48]};
+//        endcase
+//    `LVH:
+//        case(adr[2])
+//        1'b0:   fnDati = {{32{dat[31]}},dat[31:0]};
+//        1'b1:   fnDati = {{32{dat[63]}},dat[63:32]};
+//        endcase
+//    `LVHU:
+//        case(adr[2])
+//        1'b0:   fnDati = {{32{1'b0}},dat[31:0]};
+//        1'b1:   fnDati = {{32{1'b0}},dat[63:32]};
+//        endcase
+////    `LVW:  fnDati = dat;
+//    default:	fnDati = dat;
+//	endcase
 default:    fnDati = dat;
 endcase
 endfunction
@@ -3408,18 +3200,22 @@ input [63:0] dat;
 case(isn[`INSTRUCTION_OP])
 `R2:
 	if (isn[`INSTRUCTION_L2]==2'b00)
-	    case(isn[`INSTRUCTION_S2])
-	    `SBX:   fnDato = {8{dat[7:0]}};
-	    `SCX:   fnDato = {4{dat[15:0]}};
-	    `SHX:   fnDato = {2{dat[31:0]}};
-	    `SPTR:		fnDato = dat;
-	    default:    fnDato = dat;
-	    endcase
+		case(isn[`INSTRUCTION_S2])
+		`SBX:   fnDato = {8{dat[7:0]}};
+		`SCX:   fnDato = {4{dat[15:0]}};
+		`SHX:   fnDato = {2{dat[31:0]}};
+		default:    fnDato = dat;
+		endcase
 	else
-		fnDato = fnDato = dat;
+		fnDato = dat;
 `SB:   fnDato = {8{dat[7:0]}};
-`SC:   fnDato = {4{dat[15:0]}};
-`SH:   fnDato = {2{dat[31:0]}};
+`Sx:
+	case(isn[20:18])
+	3'b100:	fnDato = dat;
+	3'b?10:	fnDato = {2{dat[31:0]}};
+	3'b??1:	fnDato = {4{dat[15:0]}};
+	default:	fnDato = dat;
+	endcase
 `AMO:
 	case(isn[23:21])
 	3'd0:	fnDato = {8{dat[7:0]}};
@@ -3428,7 +3224,6 @@ case(isn[`INSTRUCTION_OP])
 	3'd3:	fnDato = dat;
 	default:	fnDato = dat;
 	endcase
-`SPTR:   	fnDato = dat;
 default:    fnDato = dat;
 endcase
 endfunction
@@ -3436,7 +3231,7 @@ endfunction
 // Indicate if the ALU instruction is valid immediately (single cycle operation)
 function IsSingleCycle;
 input [47:0] isn;
-IsSingleCycle = TRUE;
+IsSingleCycle = !(IsMem(isn)|IsMul(isn)|IsDivmod(isn));
 endfunction
 
 `ifdef SUPPORT_SMT
@@ -3567,6 +3362,8 @@ FT64_fetchbuf #(AMSB,RSTPC) ufb1
     .take_branch1(take_branch1),
     .stompedRets(stompedOnRets)
 );
+
+
 
 //initial begin: stop_at
 //#1000000; panic <= `PANIC_OVERRUN;
@@ -3976,6 +3773,7 @@ assign Rt1 = fnRt(fetchbuf1_instr,vqueued2 ? vqet0 + 1 : vqet1,vl,fetchbuf1_thrd
 
 wire [QENTRIES-1:0] args_valid;
 wire [QENTRIES-1:0] could_issue;
+wire [QENTRIES-1:0] could_issueid;
 
 generate begin : issue_logic
 for (g = 0; g < QENTRIES; g = g + 1)
@@ -3994,8 +3792,17 @@ assign args_valid[g] =
         || (iqentry_a3_s[g] == alu1_sourceid && alu1_dataready))
     ;
 
-assign could_issue[g] = iqentry_v[g] && !iqentry_done[g] && !iqentry_out[g] && args_valid[g] &&
-                                 (iqentry_mem[g] ? !iqentry_agen[g] : 1'b1);
+assign could_issue[g] = iqentry_v[g] && !iqentry_done[g] && !iqentry_out[g]
+												&& args_valid[g]
+												&& iqentry_iv[g]
+                        && (iqentry_mem[g] ? !iqentry_agen[g] : 1'b1);
+
+assign could_issueid[g] = iqentry_v[g] && !iqentry_done[g] && !iqentry_out[g]
+			&& !iqentry_iv[g]
+		  && (iqentry_a1_v[g] 
+        || (iqentry_a1_s[g] == alu0_sourceid && alu0_dataready)
+        || (iqentry_a1_s[g] == alu1_sourceid && alu1_dataready));
+
 end                                 
 end
 endgenerate
@@ -4006,6 +3813,102 @@ endgenerate
 // Can't issue to the ALU if it's busy doing a long running operation like a 
 // divide.
 // ToDo: fix the memory synchronization, see fp_issue below
+
+always @*
+begin
+	iqentry_idissue = 8'h00;
+	for (n = 0; n < QENTRIES; n = n + 1)
+		iqentry_idslot[n] = 2'b00;
+	
+	// aluissue is a task
+	begin
+		if (could_issueid[head0] && !iqentry_idissue[head0]) begin
+		  iqentry_idissue[head0] = `TRUE;
+		  iqentry_idslot[head0] = 2'b00;
+		end
+		else if (could_issueid[head1] && !iqentry_idissue[head1]
+		)
+		begin
+		  iqentry_idissue[head1] = `TRUE;
+		  iqentry_idslot[head1] = 2'b00;
+		end
+		else if (could_issueid[head2] && !iqentry_idissue[head2]
+		)
+		begin
+			iqentry_idissue[head2] = `TRUE;
+			iqentry_idslot[head2] = 2'b00;
+		end
+		else if (could_issueid[head3] && !iqentry_idissue[head3])
+	  begin
+			iqentry_idissue[head3] = `TRUE;
+			iqentry_idslot[head3] = 2'b00;
+		end
+		else if (could_issueid[head4] && !iqentry_idissue[head4])
+	  begin
+			iqentry_idissue[head4] = `TRUE;
+			iqentry_idslot[head4] = 2'b00;
+		end
+		else if (could_issueid[head5] && !iqentry_idissue[head5])
+	  begin
+			iqentry_idissue[head5] = `TRUE;
+			iqentry_idslot[head5] = 2'b00;
+		end
+		else if (could_issueid[head6] && !iqentry_idissue[head6])
+	  begin
+			iqentry_idissue[head6] = `TRUE;
+			iqentry_idslot[head6] = 2'b00;
+		end
+		else if (could_issueid[head7] && !iqentry_idissue[head7])
+	  begin
+			iqentry_idissue[head7] = `TRUE;
+			iqentry_idslot[head7] = 2'b00;
+		end
+	end
+
+	begin
+		if (could_issueid[head0] && !iqentry_idissue[head0]) begin
+		  iqentry_idissue[head0] = `TRUE;
+		  iqentry_idslot[head0] = 2'b01;
+		end
+		else if (could_issueid[head1] && !iqentry_idissue[head1]
+		)
+		begin
+		  iqentry_idissue[head1] = `TRUE;
+		  iqentry_idslot[head1] = 2'b01;
+		end
+		else if (could_issueid[head2] && !iqentry_idissue[head2]
+		)
+		begin
+			iqentry_idissue[head2] = `TRUE;
+			iqentry_idslot[head2] = 2'b01;
+		end
+		else if (could_issueid[head3] && !iqentry_idissue[head3])
+	  begin
+			iqentry_idissue[head3] = `TRUE;
+			iqentry_idslot[head3] = 2'b01;
+		end
+		else if (could_issueid[head4] && !iqentry_idissue[head4])
+	  begin
+			iqentry_idissue[head4] = `TRUE;
+			iqentry_idslot[head4] = 2'b01;
+		end
+		else if (could_issueid[head5] && !iqentry_idissue[head5])
+	  begin
+			iqentry_idissue[head5] = `TRUE;
+			iqentry_idslot[head5] = 2'b01;
+		end
+		else if (could_issueid[head6] && !iqentry_idissue[head6])
+	  begin
+			iqentry_idissue[head6] = `TRUE;
+			iqentry_idslot[head6] = 2'b01;
+		end
+		else if (could_issueid[head7] && !iqentry_idissue[head7])
+	  begin
+			iqentry_idissue[head7] = `TRUE;
+			iqentry_idslot[head7] = 2'b01;
+		end
+	end
+end
 
 always @*
 begin
@@ -5215,6 +5118,22 @@ begin
 		stompedOnRets = stompedOnRets + 4'd1;
 end
 
+FT64_idecoder uid1
+(
+	.instr(id1_instr),
+	.predict_taken(id1_pt),
+	.Rt(id1_Rt0),
+	.bus(id1_bus)
+);
+
+FT64_idecoder uid2
+(
+	.instr(id2_instr),
+	.predict_taken(id2_pt),
+	.Rt(id2_Rt0),
+	.bus(id2_bus)
+);
+
 //
 // EXECUTE
 //
@@ -5222,73 +5141,77 @@ reg [63:0] csr_r;
 always @*
     read_csr(alu0_instr[29:18],csr_r,alu0_thrd);
 FT64_alu #(.BIG(1'b1),.SUP_VECTOR(SUP_VECTOR)) ualu0 (
-    .rst(rst),
-    .clk(clk),
-    .ld(alu0_ld),
-    .abort(1'b0),
-    .instr(alu0_instr),
-    .a(alu0_argA),
-    .b(alu0_argB),
-    .c(alu0_argC),
-    .pc(alu0_pc),
-    .imm(alu0_argI),
-    .tgt(alu0_tgt),
-    .ven(alu0_ven),
-    .vm(vm[alu0_instr[25:23]]),
-    .sbl(sbl),
-    .sbu(sbu),
-    .csr(csr_r),
-    .o(alu0_bus),
-    .ob(alu0b_bus),
-    .done(alu0_done),
-    .idle(alu0_idle),
-    .excen(aec[4:0]),
-    .exc(alu0_exc),
-    .thrd(alu0_thrd),
-    .ptrmask(ptrmask[alu0_thrd])
+  .rst(rst),
+  .clk(clk),
+  .ld(alu0_ld),
+  .abort(1'b0),
+  .instr(alu0_instr),
+  .a(alu0_argA),
+  .b(alu0_argB),
+  .c(alu0_argC),
+  .pc(alu0_pc),
+//    .imm(alu0_argI),
+  .tgt(alu0_tgt),
+  .ven(alu0_ven),
+  .vm(vm[alu0_instr[25:23]]),
+  .sbl(sbl),
+  .sbu(sbu),
+  .csr(csr_r),
+  .o(alu0_bus),
+  .ob(alu0b_bus),
+  .done(alu0_done),
+  .idle(alu0_idle),
+  .excen(aec[4:0]),
+  .exc(alu0_exc),
+  .thrd(alu0_thrd),
+  .ptrmask(ptrmask[alu0_thrd]),
+  .mem(alu0_mem),
+  .shift48(alu0_shft48)
 );
 FT64_alu #(.BIG(1'b0),.SUP_VECTOR(SUP_VECTOR)) ualu1 (
-    .rst(rst),
-    .clk(clk),
-    .ld(alu1_ld),
-    .abort(1'b0),
-    .instr(alu1_instr),
-    .a(alu1_argA),
-    .b(alu1_argB),
-    .c(alu1_argC),
-    .pc(alu1_pc),
-    .imm(alu1_argI),
-    .tgt(alu1_tgt),
-    .ven(alu1_ven),
-    .vm(vm[alu1_instr[25:23]]),
-    .sbl(sbl),
-    .sbu(sbu),
-    .csr(64'd0),
-    .o(alu1_bus),
-    .ob(alu1b_bus),
-    .done(alu1_done),
-    .idle(alu1_idle),
-    .excen(aec[4:0]),
-    .exc(alu1_exc),
-    .thrd(1'b0),
-    .ptrmask(ptrmask[alu1_thrd])
+  .rst(rst),
+  .clk(clk),
+  .ld(alu1_ld),
+  .abort(1'b0),
+  .instr(alu1_instr),
+  .a(alu1_argA),
+  .b(alu1_argB),
+  .c(alu1_argC),
+  .pc(alu1_pc),
+  //.imm(alu1_argI),
+  .tgt(alu1_tgt),
+  .ven(alu1_ven),
+  .vm(vm[alu1_instr[25:23]]),
+  .sbl(sbl),
+  .sbu(sbu),
+  .csr(64'd0),
+  .o(alu1_bus),
+  .ob(alu1b_bus),
+  .done(alu1_done),
+  .idle(alu1_idle),
+  .excen(aec[4:0]),
+  .exc(alu1_exc),
+  .thrd(1'b0),
+  .ptrmask(ptrmask[alu1_thrd]),
+  .mem(alu1_mem),
+  .shift48(alu1_shft48)
 );
 fpUnit ufp1
 (
-    .rst(rst),
-    .clk(clk),
-    .clk4x(clk4x),
-    .ce(1'b1),
-    .ir(fpu_instr),
-    .ld(fpu_ld),
-    .a(fpu_argA),
-    .b(fpu_argB),
-    .imm(fpu_argI),
-    .o(fpu_bus),
-    .csr_i(),
-    .status(fpu_status),
-    .exception(),
-    .done(fpu_done)
+  .rst(rst),
+  .clk(clk),
+  .clk4x(clk4x),
+  .ce(1'b1),
+  .ir(fpu_instr),
+  .ld(fpu_ld),
+  .a(fpu_argA),
+  .b(fpu_argB),
+  .imm(fpu_argI),
+  .o(fpu_bus),
+  .csr_i(),
+  .status(fpu_status),
+  .exception(),
+  .done(fpu_done)
 );
 assign fpu_exc = |fpu_status[15:0] ? `FLT_FLT : `FLT_NONE;
 
@@ -5739,6 +5662,7 @@ begin
 		end
 	end
 end
+
 
 // Monster clock domain.
 // Like to move some of this to clocking under different always blocks in order
@@ -6594,44 +6518,36 @@ else begin
     // can be reset to zero by enqueue.
     // put results into the appropriate instruction entries
     //
-    if (IsMul(alu0_instr)|IsDivmod(alu0_instr)) begin
+    if (IsMul(alu0_instr)|IsDivmod(alu0_instr)|alu0_shft48) begin
         if (alu0_done) begin
              alu0_dataready <= `TRUE;
         end
     end
 
 	if (alu0_v) begin
-	     iqentry_tgt [ alu0_id[`QBITS] ] <= alu0_tgt;
-         iqentry_res	[ alu0_id[`QBITS] ] <= alu0_bus;
-         iqentry_exc	[ alu0_id[`QBITS] ] <= alu0_exc;
-         iqentry_done[ alu0_id[`QBITS] ] <= !iqentry_mem[ alu0_id[`QBITS] ] && alu0_done;
-         iqentry_cmt[ alu0_id[`QBITS] ] <= !iqentry_mem[ alu0_id[`QBITS] ] && alu0_done;
-         iqentry_out	[ alu0_id[`QBITS] ] <= `INV;
-         iqentry_agen[ alu0_id[`QBITS] ] <= `VAL;//!iqentry_fc[alu0_id[`QBITS]];  // RET
-         iqentry_id [alu0_id[`QBITS]] <= alu0_id;
-         if (iqentry_isptr[alu0_id[`QBITS]] && alu0_bus==64'd0) begin
-         	iqentry_res[alu0_id[`QBITS]] <= 64'd0;
-         	iqentry_mem[alu0_id[`QBITS]] <= 1'b0;
-         	iqentry_done[alu0_id[`QBITS]] <= `VAL;
-         end
-         alu0_dataready <= FALSE;
+		iqentry_tgt [ alu0_id[`QBITS] ] <= alu0_tgt;
+		iqentry_res	[ alu0_id[`QBITS] ] <= alu0_bus;
+		iqentry_exc	[ alu0_id[`QBITS] ] <= alu0_exc;
+		iqentry_done[ alu0_id[`QBITS] ] <= !iqentry_mem[ alu0_id[`QBITS] ] && alu0_done;
+		iqentry_cmt[ alu0_id[`QBITS] ] <= !iqentry_mem[ alu0_id[`QBITS] ] && alu0_done;
+		iqentry_out	[ alu0_id[`QBITS] ] <= `INV;
+		iqentry_agen[ alu0_id[`QBITS] ] <= `VAL;//!iqentry_fc[alu0_id[`QBITS]];  // RET
+		iqentry_id [alu0_id[`QBITS]] <= alu0_id;
+		alu0_dataready <= FALSE;
 	end
+
 	if (alu1_v) begin
-	     iqentry_tgt [ alu1_id[`QBITS] ] <= alu1_tgt;
-         iqentry_res	[ alu1_id[`QBITS] ] <= alu1_bus;
-         iqentry_exc	[ alu1_id[`QBITS] ] <= alu1_exc;
-         iqentry_done[ alu1_id[`QBITS] ] <= !iqentry_mem[ alu1_id[`QBITS] ] && alu1_done;
-         iqentry_cmt[ alu1_id[`QBITS] ] <= !iqentry_mem[ alu1_id[`QBITS] ] && alu1_done;
-         iqentry_out	[ alu1_id[`QBITS] ] <= `INV;
-         iqentry_agen[ alu1_id[`QBITS] ] <= `VAL;//!iqentry_fc[alu1_id[`QBITS]];  // RET
-         iqentry_id [alu1_id[`QBITS]] <= alu1_id;
-         if (iqentry_isptr[alu1_id[`QBITS]] && alu1_bus==64'd0) begin
-         	iqentry_res[alu1_id[`QBITS]] <= 64'd0;
-         	iqentry_mem[alu1_id[`QBITS]] <= 1'b0;
-         	iqentry_done[alu1_id[`QBITS]] <= `VAL;
-         end
-         alu1_dataready <= FALSE;
+		iqentry_tgt [ alu1_id[`QBITS] ] <= alu1_tgt;
+		iqentry_res	[ alu1_id[`QBITS] ] <= alu1_bus;
+		iqentry_exc	[ alu1_id[`QBITS] ] <= alu1_exc;
+		iqentry_done[ alu1_id[`QBITS] ] <= !iqentry_mem[ alu1_id[`QBITS] ] && alu1_done;
+		iqentry_cmt[ alu1_id[`QBITS] ] <= !iqentry_mem[ alu1_id[`QBITS] ] && alu1_done;
+		iqentry_out	[ alu1_id[`QBITS] ] <= `INV;
+		iqentry_agen[ alu1_id[`QBITS] ] <= `VAL;//!iqentry_fc[alu0_id[`QBITS]];  // RET
+		iqentry_id [alu1_id[`QBITS]] <= alu1_id;
+		alu1_dataready <= FALSE;
 	end
+
 	if (fpu_v) begin
          iqentry_res    [ fpu_id[`QBITS] ] <= fpu_bus;
          iqentry_a0     [ fpu_id[`QBITS] ] <= fpu_status; 
@@ -6686,8 +6602,8 @@ else begin
 		//iqentry_instr[fcu_id][`INSTRUCTION_OP] <= `NOP;
 	end
 //	if (dram_v && iqentry_v[ dram_id[`QBITS] ] && iqentry_mem[ dram_id[`QBITS] ] ) begin	// if data for stomped instruction, ignore
-	if (dramA_v && iqentry_v[ dramA_id[`QBITS] ] && iqentry_load[ dramA_id[`QBITS] ] ) begin	// if data for stomped instruction, ignore
-       	iqentry_res	[ dramA_id[`QBITS] ] <= dramA_bus;
+	if (dramA_v && iqentry_v[ dramA_id[`QBITS] ] && iqentry_load[ dramA_id[`QBITS] ]) begin	// if data for stomped instruction, ignore
+   		iqentry_res	[ dramA_id[`QBITS] ] <= dramA_bus;
         iqentry_exc	[ dramA_id[`QBITS] ] <= dramA_exc;
         iqentry_done[ dramA_id[`QBITS] ] <= `VAL;
         iqentry_out [ dramA_id[`QBITS] ] <= `INV;
@@ -6696,7 +6612,7 @@ else begin
 //	    if (iqentry_lptr[dram0_id[`QBITS]])
 //	    	wbrcd[pcr[5:0]] <= 1'b1;
 	end
-	if (dramB_v && iqentry_v[ dramB_id[`QBITS] ] && iqentry_load[ dramB_id[`QBITS] ] ) begin	// if data for stomped instruction, ignore
+	if (dramB_v && iqentry_v[ dramB_id[`QBITS] ] && iqentry_load[ dramB_id[`QBITS] ]) begin	// if data for stomped instruction, ignore
        	iqentry_res	[ dramB_id[`QBITS] ] <= dramB_bus;
         iqentry_exc	[ dramB_id[`QBITS] ] <= dramB_exc;
         iqentry_done[ dramB_id[`QBITS] ] <= `VAL;
@@ -6706,7 +6622,7 @@ else begin
 //	    if (iqentry_lptr[dram1_id[`QBITS]])
 //	    	wbrcd[pcr[5:0]] <= 1'b1;
 	end
-	if (dramC_v && iqentry_v[ dramC_id[`QBITS] ] && iqentry_load[ dramC_id[`QBITS] ] ) begin	// if data for stomped instruction, ignore
+	if (dramC_v && iqentry_v[ dramC_id[`QBITS] ] && iqentry_load[ dramC_id[`QBITS] ]) begin	// if data for stomped instruction, ignore
        	iqentry_res	[ dramC_id[`QBITS] ] <= dramC_bus;
         iqentry_exc	[ dramC_id[`QBITS] ] <= dramC_exc;
         iqentry_done[ dramC_id[`QBITS] ] <= `VAL;
@@ -6758,6 +6674,9 @@ else begin
         setargs(n,{1'b0,dramC_id},dramC_v,dramC_bus);
         setargs(n,commit0_id,commit0_v,commit0_bus);
         setargs(n,commit1_id,commit1_v,commit1_bus);
+        
+        setinsn(n,id1_id,1'b1,id1_bus);
+        setinsn(n,id2_id,1'b1,id2_bus);
 	end
 
     //
@@ -6769,13 +6688,51 @@ else begin
     //
 
     for (n = 0; n < QENTRIES; n = n + 1)
+        if (iqentry_idissue[n] && !iqentry_iv[n] && !(iqentry_v[n] && iqentry_stomp[n])) begin
+            case (iqentry_idslot[n]) 
+            2'd0: 
+            	begin
+                 id1_id			<= n[3:0];
+                 id1_instr	<= iqentry_rtop[n] ? (
+                 									iqentry_a3_v[n] ? iqentry_a3[n]
+			                            : (iqentry_a3_s[n] == alu0_id) ? alu0_bus
+			                            : (iqentry_a3_s[n] == alu1_id) ? alu1_bus
+			                            : `NOP_INSN)
+                 							 : iqentry_instr[n];
+                 id1_Rt     <= iqentry_tgt[n][4:0];
+                 id1_pt			<= iqentry_pt[n];
+                end
+            2'd1: 
+            	begin
+                 id2_id			<= n[3:0];
+                 id2_instr	<= iqentry_rtop[n] ? (
+                 									iqentry_a3_v[n] ? iqentry_a3[n]
+			                            : (iqentry_a3_s[n] == alu0_id) ? alu0_bus
+			                            : (iqentry_a3_s[n] == alu1_id) ? alu1_bus
+			                            : `NOP_INSN)
+                 							 : iqentry_instr[n];
+                 id2_Rt     <= iqentry_tgt[n][4:0];
+                 id2_pt			<= iqentry_pt[n];
+                end
+            default:  panic <= `PANIC_INVALIDISLOT;
+            endcase
+        end
+
+    for (n = 0; n < QENTRIES; n = n + 1)
         if (iqentry_issue[n] && !(iqentry_v[n] && iqentry_stomp[n])) begin
             case (iqentry_islot[n]) 
             2'd0: if (alu0_available & alu0_done) begin
                  alu0_sourceid	<= n[3:0];
                  alu0_pred   <= iqentry_pred[n];
-                 alu0_instr	<= iqentry_instr[n];
+                 alu0_instr	<= iqentry_rtop[n] ? (
+                 									iqentry_a3_v[n] ? iqentry_a3[n]
+			                            : (iqentry_a3_s[n] == alu0_id) ? alu0_bus
+			                            : (iqentry_a3_s[n] == alu1_id) ? alu1_bus
+			                            : {4{16'hDEAD}})
+                 							 : iqentry_instr[n];
                  alu0_bt		<= iqentry_bt[n];
+                 alu0_mem   <= iqentry_mem[n];
+                 alu0_shft48 <= iqentry_shft48[n];
                  alu0_pc		<= iqentry_pc[n];
                  alu0_argA	<= iqentry_a1_v[n] ? iqentry_a1[n]
                             : (iqentry_a1_s[n] == alu0_id) ? alu0_bus
@@ -6814,6 +6771,8 @@ else begin
                  alu1_pred   <= iqentry_pred[n];
                  alu1_instr	<= iqentry_instr[n];
                  alu1_bt		<= iqentry_bt[n];
+                 alu1_mem   <= iqentry_mem[n];
+                 alu1_shft48 <= iqentry_shft48[n];
                  alu1_pc		<= iqentry_pc[n];
                  alu1_argA	<= iqentry_a1_v[n] ? iqentry_a1[n]
                             : (iqentry_a1_s[n] == alu0_id) ? alu0_bus
@@ -7010,9 +6969,10 @@ else begin
              dram0_id 	<= { 1'b1, n[`QBITS] };
              dram0_instr <= iqentry_instr[n];
              dram0_rmw  <= iqentry_rmw[n];
+             dram0_preload <= iqentry_preload[n];
              dram0_tgt 	<= iqentry_tgt[n];
              dram0_data	<= iqentry_memndx[n] ? iqentry_a3[n] : iqentry_a2[n];
-             dram0_addr	<= iqentry_pt[n] ? iqentry_a1[n][57:0] + ptmbase : iqentry_a1[n];
+             dram0_addr	<= iqentry_a1[n];
 //             if (ol[iqentry_thrd[n]]==`OL_USER)
 //             	dram0_seg   <= (iqentry_Ra[n]==5'd30 || iqentry_Ra[n]==5'd31) ? {ss[iqentry_thrd[n]],13'd0} : {ds[iqentry_thrd[n]],13'd0};
 //             else
@@ -7020,8 +6980,11 @@ else begin
              dram0_unc   <= iqentry_a1[n][31:20]==12'hFFD || !dce || IsVolatileLoad(iqentry_instr[n]);
              dram0_memsize <= MemSize(iqentry_instr[n]);
              dram0_load <= iqentry_load[n];
-             dram0_sptr <= iqentry_sptr[n];
              dram0_ol   <= (iqentry_Ra[n][4:0]==5'd31 || iqentry_Ra[n][4:0]==5'd30) ? ol[iqentry_thrd[n]] : dl[iqentry_thrd[n]];
+             // Once the memory op is issued reset the a1_v flag.
+             // This will cause the a1 bus to look for new data from memory (a1_s is pointed to a memory bus)
+             // This is used for the load and compare instructions.
+             iqentry_a1_v[n] <= `INV;
              last_issue = n;
             end
         end
@@ -7036,9 +6999,10 @@ else begin
 	             dram1_id 	<= { 1'b1, n[`QBITS] };
 	             dram1_instr <= iqentry_instr[n];
 	             dram1_rmw  <= iqentry_rmw[n];
+	             dram1_preload <= iqentry_preload[n];
 	             dram1_tgt 	<= iqentry_tgt[n];
 	             dram1_data	<= iqentry_memndx[n] ? iqentry_a3[n] : iqentry_a2[n];
-	             dram1_addr	<= iqentry_pt[n] ? iqentry_a1[n][57:0] + ptmbase : iqentry_a1[n];
+	             dram1_addr	<= iqentry_a1[n];
 //	             if (ol[iqentry_thrd[n]]==`OL_USER)
 //	             	dram1_seg   <= (iqentry_Ra[n]==5'd30 || iqentry_Ra[n]==5'd31) ? {ss[iqentry_thrd[n]],13'd0} : {ds[iqentry_thrd[n]],13'd0};
 //	             else
@@ -7046,8 +7010,8 @@ else begin
 	             dram1_unc   <= iqentry_a1[n][31:20]==12'hFFD || !dce || IsVolatileLoad(iqentry_instr[n]);
 	             dram1_memsize <= MemSize(iqentry_instr[n]);
 	             dram1_load <= iqentry_load[n];
-	             dram1_sptr <= iqentry_sptr[n];
 	             dram1_ol   <= (iqentry_Ra[n][4:0]==5'd31 || iqentry_Ra[n][4:0]==5'd30) ? ol[iqentry_thrd[n]] : dl[iqentry_thrd[n]];
+	             iqentry_a1_v[n] <= `INV;
 	             last_issue = n;
 	            end
         	end
@@ -7063,9 +7027,10 @@ else begin
 	             dram2_id 	<= { 1'b1, n[`QBITS] };
 	             dram2_instr	<= iqentry_instr[n];
 	             dram2_rmw  <= iqentry_rmw[n];
+	             dram2_preload <= iqentry_preload[n];
 	             dram2_tgt 	<= iqentry_tgt[n];
 	             dram2_data	<= iqentry_memndx[n] ? iqentry_a3[n] : iqentry_a2[n];
-	             dram2_addr	<= iqentry_pt[n] ? iqentry_a1[n][57:0] + ptmbase : iqentry_a1[n];
+	             dram2_addr	<= iqentry_a1[n];
 //	             if (ol[iqentry_thrd[n]]==`OL_USER)
 //	             	dram2_seg   <= (iqentry_Ra[n]==5'd30 || iqentry_Ra[n]==5'd31) ? {ss[iqentry_thrd[n]],13'd0} : {ds[iqentry_thrd[n]],13'd0};
 //	             else
@@ -7073,8 +7038,8 @@ else begin
 	             dram2_unc   <= iqentry_a1[n][31:20]==12'hFFD || !dce || IsVolatileLoad(iqentry_instr[n]);
 	             dram2_memsize <= MemSize(iqentry_instr[n]);
 	             dram2_load <= iqentry_load[n];
-	             dram2_sptr <= iqentry_sptr[n];
 	             dram2_ol   <= (iqentry_Ra[n][4:0]==5'd31 || iqentry_Ra[n][4:0]==5'd30) ? ol[iqentry_thrd[n]] : dl[iqentry_thrd[n]];
+	             iqentry_a1_v[n] <= `INV;
 	            end
         	end
         end
@@ -7290,6 +7255,7 @@ BIDLE:
          errq <= 1'b0;
          exvq <= 1'b0;
          bwhich <= 2'b11;
+         preload <= FALSE;
         if (dram0==`DRAMSLOT_BUSY && dram0_rmw) begin
 `ifdef SUPPORT_DBG      
             if (dbg_smatch0|dbg_lmatch0) begin
@@ -7307,13 +7273,13 @@ BIDLE:
                  isCAS <= IsCAS(dram0_instr);
                  isAMO <= IsAMO(dram0_instr);
                  isInc <= IsInc(dram0_instr);
-                 isSpt <= IsSpt(dram0_instr);
                  casid <= dram0_id;
+                 findptrid = dram0_id;
                  bwhich <= 2'b00;
                  cyc_o <= `HIGH;
                  stb_o <= `HIGH;
                  sel_o <= fnSelect(dram0_instr,dram0_addr);
-                 adr_o <= dram0_addr + dram0_seg;
+                 adr_o <= dram0_addr;
                  dat_o <= fnDato(dram0_instr,dram0_data);
                  ol_o  <= dram0_ol;
                  bstate <= B12;
@@ -7336,13 +7302,13 @@ BIDLE:
                  isCAS <= IsCAS(dram1_instr);
                  isAMO <= IsAMO(dram1_instr);
                  isInc <= IsInc(dram1_instr);
-                 isSpt <= IsSpt(dram1_instr);
                  casid <= dram1_id;
+                 findptrid = dram1_id;
                  bwhich <= 2'b01;
                  cyc_o <= `HIGH;
                  stb_o <= `HIGH;
                  sel_o <= fnSelect(dram1_instr,dram1_addr);
-                 adr_o <= dram1_addr + dram1_seg;
+                 adr_o <= dram1_addr;
                  dat_o <= fnDato(dram1_instr,dram1_data);
                  ol_o  <= dram1_ol;
                  bstate <= B12;
@@ -7365,13 +7331,13 @@ BIDLE:
                  isCAS <= IsCAS(dram2_instr);
                  isAMO <= IsAMO(dram2_instr);
                  isInc <= IsInc(dram2_instr);
-                 isSpt <= IsSpt(dram2_instr);
                  casid <= dram2_id;
+                 findptrid = dram2_id;
                  bwhich <= 2'b10;
                  cyc_o <= `HIGH;
                  stb_o <= `HIGH;
                  sel_o <= fnSelect(dram2_instr,dram2_addr);
-                 adr_o <= dram2_addr + dram2_seg;
+                 adr_o <= dram2_addr;
                  dat_o <= fnDato(dram2_instr,dram2_data);
                  ol_o  <= dram2_ol;
                  bstate <= B12;
@@ -7396,11 +7362,10 @@ BIDLE:
 				 stb_o <= `HIGH;
                  we_o <= `HIGH;
                  sel_o <= fnSelect(dram0_instr,dram0_addr);
-                 adr_o <= dram0_addr + dram0_seg;
+                 adr_o <= dram0_addr;
                  dat_o <= fnDato(dram0_instr,dram0_data);
                  cr_o <= IsSWC(dram0_instr);
                  ol_o  <= dram0_ol;
-                 sptr_o <= dram0_sptr;
                  bstate <= B1;
             end
         end
@@ -7423,11 +7388,10 @@ BIDLE:
 				 stb_o <= `HIGH;
                  we_o <= `HIGH;
                  sel_o <= fnSelect(dram1_instr,dram1_addr);
-                 adr_o <= dram1_addr + dram1_seg;
+                 adr_o <= dram1_addr;
                  dat_o <= fnDato(dram1_instr,dram1_data);
                  cr_o <= IsSWC(dram1_instr);
                  ol_o  <= dram1_ol;
-                 sptr_o <= dram1_sptr;
                  bstate <= B1;
             end
         end
@@ -7450,11 +7414,10 @@ BIDLE:
 				 stb_o <= `HIGH;
                  we_o <= `HIGH;
                  sel_o <= fnSelect(dram2_instr,dram2_addr);
-                 adr_o <= dram2_addr + dram2_seg;
+                 adr_o <= dram2_addr;
                  dat_o <= fnDato(dram2_instr,dram2_data);
                  cr_o <= IsSWC(dram2_instr);
                  ol_o  <= dram2_ol;
-                 sptr_o <= dram2_sptr;
                  bstate <= B1;
             end
         end
@@ -7473,6 +7436,7 @@ BIDLE:
             begin
                  dram0 <= `DRAMSLOT_HASBUS;
                  bwhich <= 2'b00;
+                 preload <= dram0_preload;
                  bstate <= B2; 
             end
         end
@@ -7490,6 +7454,7 @@ BIDLE:
             begin
                  dram1 <= `DRAMSLOT_HASBUS;
                  bwhich <= 2'b01;
+                 preload <= dram1_preload;
                  bstate <= B2;
             end 
         end
@@ -7506,6 +7471,7 @@ BIDLE:
 `endif            
             begin
                  dram2 <= `DRAMSLOT_HASBUS;
+                 preload <= dram2_preload;
                  bwhich <= 2'b10;
                  bstate <= B2;
             end 
@@ -7526,7 +7492,7 @@ BIDLE:
                  cyc_o <= `HIGH;
                  stb_o <= `HIGH;
                  sel_o <= fnSelect(dram0_instr,dram0_addr);
-                 adr_o <= {dram0_addr[31:3],3'b0} + dram0_seg;
+                 adr_o <= {dram0_addr[31:3],3'b0};
                  sr_o <=  IsLWR(dram0_instr);
                  ol_o  <= dram0_ol;
                  bstate <= B12;
@@ -7548,7 +7514,7 @@ BIDLE:
                  cyc_o <= `HIGH;
                  stb_o <= `HIGH;
                  sel_o <= fnSelect(dram1_instr,dram1_addr);
-                 adr_o <= {dram1_addr[31:3],3'b0} + dram1_seg;
+                 adr_o <= {dram1_addr[31:3],3'b0};
                  sr_o <=  IsLWR(dram1_instr);
                  ol_o  <= dram1_ol;
                  bstate <= B12;
@@ -7570,7 +7536,7 @@ BIDLE:
                  cyc_o <= `HIGH;
                  stb_o <= `HIGH;
                  sel_o <= fnSelect(dram2_instr,dram2_addr);
-                 adr_o <= {dram2_addr[31:3],3'b0} + dram2_seg;
+                 adr_o <= {dram2_addr[31:3],3'b0};
                  sr_o <=  IsLWR(dram2_instr);
                  ol_o  <= dram2_ol;
                  bstate <= B12;
@@ -7602,7 +7568,6 @@ B1:
          we_o <= `LOW;
          sel_o <= 8'h00;
          cr_o <= 1'b0;
-         sptr_o <= 1'b0;
         // This isn't a good way of doing things; the state should be propagated
         // to the commit stage, however since this is a store we know there will
         // be no change of program flow. So the reservation status bit is set
@@ -7682,6 +7647,7 @@ B2d:
     if (ack_i|err_i) begin
         errq <= errq | err_i;
         rdvq <= rdvq | rdv_i;
+        if (!preload)	// A preload instruction ignores any error
         case(bwhich)
         2'd0:   if (err_i|rdv_i) begin
                      iqentry_a1[dram0_id[`QBITS]] <= adr_o;
@@ -7804,8 +7770,8 @@ B12:
         	 if (isSpt) begin
         	 	rmw_argB <= 64'd1 << iqentry_a1[casid[`QBITS]][63:58];
         	 	rmw_argC <= iqentry_instr[casid[`QBITS]][5:0]==`R2 ?
-        	 				iqentry_a3[casid[`QBITS]][0] << iqentry_a1[casid[`QBITS]][63:58] :
-        	 				iqentry_a2[casid[`QBITS]][0] << iqentry_a1[casid[`QBITS]][63:58];
+        	 				iqentry_a3[casid[`QBITS]][64] << iqentry_a1[casid[`QBITS]][63:58] :
+        	 				iqentry_a2[casid[`QBITS]][64] << iqentry_a1[casid[`QBITS]][63:58];
         	 end
         	 else if (isInc) begin
         	 	rmw_argB <= iqentry_instr[casid[`QBITS]][5:0]==`R2 ? {{59{iqentry_instr[casid[`QBITS]][22]}},iqentry_instr[casid[`QBITS]][22:18]} :
@@ -7819,7 +7785,7 @@ B12:
              if (err_i | rdv_i) iqentry_a1[casid[`QBITS]] <= adr_o;
              stb_o <= `LOW;
              bstate <= B20;
-    	end
+    		end
         else begin
              cyc_o <= `LOW;
              stb_o <= `LOW;
@@ -7865,6 +7831,11 @@ B20:
 		we_o  <= `HIGH;
 		dat_o <= fnDato(rmw_instr,rmw_res);
 		bstate <= B1;
+	end
+B21:
+	if (~ack_i) begin
+		stb_o <= `HIGH;
+		bstate <= B12;
 	end
 default:     bstate <= BIDLE;
 endcase
@@ -8253,18 +8224,54 @@ input [4:0] id;
 input v;
 input [63:0] bus;
 begin
-    if (iqentry_a1_v[nn] == `INV && iqentry_a1_s[nn] == id && iqentry_v[nn] == `VAL && v == `VAL) begin
-         iqentry_a1[nn] <= bus;
-         iqentry_a1_v[nn] <= `VAL;
-    end
-    if (iqentry_a2_v[nn] == `INV && iqentry_a2_s[nn] == id && iqentry_v[nn] == `VAL && v == `VAL) begin
-         iqentry_a2[nn] <= bus;
-         iqentry_a2_v[nn] <= `VAL;
-    end
-    if (iqentry_a3_v[nn] == `INV && iqentry_a3_s[nn] == id && iqentry_v[nn] == `VAL && v == `VAL) begin
-         iqentry_a3[nn] <= bus;
-         iqentry_a3_v[nn] <= `VAL;
-    end
+  if (iqentry_a1_v[nn] == `INV && iqentry_a1_s[nn] == id && iqentry_v[nn] == `VAL && v == `VAL) begin
+		iqentry_a1[nn] <= bus;
+		iqentry_a1_v[nn] <= `VAL;
+  end
+  if (iqentry_a2_v[nn] == `INV && iqentry_a2_s[nn] == id && iqentry_v[nn] == `VAL && v == `VAL) begin
+		iqentry_a2[nn] <= bus;
+		iqentry_a2_v[nn] <= `VAL;
+  end
+  if (iqentry_a3_v[nn] == `INV && iqentry_a3_s[nn] == id && iqentry_v[nn] == `VAL && v == `VAL) begin
+		iqentry_a3[nn] <= bus;
+		iqentry_a3_v[nn] <= `VAL;
+  end
+end
+endtask
+
+task setinsn;
+input [`QBITS] nn;
+input [4:0] id;
+input v;
+input [127:0] bus;
+begin
+  if (iqentry_iv[nn] == `INV && iqentry_is[nn] == id && iqentry_v[nn] == `VAL && v == `VAL) begin
+  	iqentry_a0	 [nn]  <= bus[`IB_CONST];
+		iqentry_insln[nn]  <= bus[`IB_LN];
+		iqentry_bt   [nn]  <= bus[`IB_BT];
+		iqentry_alu  [nn]  <= bus[`IB_ALU];
+		iqentry_alu0 [nn]  <= bus[`IB_ALU0];
+		iqentry_fpu  [nn]  <= bus[`IB_FPU];
+		iqentry_fc   [nn]  <= bus[`IB_FC];
+		iqentry_canex[nn]  <= bus[`IB_CANEX];
+		iqentry_load [nn]  <= bus[`IB_LOAD];
+		iqentry_preload[nn]<= bus[`IB_PRELOAD];
+		iqentry_mem  [nn]  <= bus[`IB_MEM];
+		iqentry_memndx[nn] <= bus[`IB_MEMNDX];
+		iqentry_rmw  [nn]  <= bus[`IB_RMW];
+		iqentry_memdb[nn]  <= bus[`IB_MEMDB];
+		iqentry_memsb[nn]  <= bus[`IB_MEMSB];
+		iqentry_shft48[nn] <= bus[`IB_SHFT48];
+		iqentry_sei	 [nn]	 <= bus[`IB_SEI];
+		iqentry_aq   [nn]  <= bus[`IB_AQ];
+		iqentry_rl   [nn]  <= bus[`IB_RL];
+		iqentry_jmp  [nn]  <= bus[`IB_JMP];
+		iqentry_br   [nn]  <= bus[`IB_BR];
+		iqentry_sync [nn]  <= bus[`IB_SYNC];
+		iqentry_fsync[nn]  <= bus[`IB_FSYNC];
+  	iqentry_rfw  [nn]  <= bus[`IB_RFW];
+  	iqentry_we   [nn]  <= bus[`IB_WE];
+  end
 end
 endtask
 
@@ -8282,7 +8289,8 @@ begin
         iqentry_exc[tail] <= `FLT_SSM;
 `endif
 	iqentry_sn   [tail]    <=  seqnum;
-	iqentry_v    [tail]    <=    `VAL;
+	iqentry_v    [tail]    <=   `VAL;
+	iqentry_iv	 [tail]    <=   `INV;
 	iqentry_thrd [tail]    <=   1'b0;
 	iqentry_done [tail]    <=    `INV;
 	iqentry_cmt  [tail]    <=	`INV;
@@ -8290,9 +8298,9 @@ begin
 	iqentry_out  [tail]    <=    `INV;
 	iqentry_res  [tail]    <=    `ZERO;
 	iqentry_instr[tail]    <=    IsVLS(fetchbuf0_instr) ? (vm[fnM2(fetchbuf0_instr)] ? fetchbuf0_instr : `NOP_INSN) : fetchbuf0_instr;
-	iqentry_insln[tail]    <=    fetchbuf0_insln;
-	iqentry_bt   [tail]    <=    (IsBranch(fetchbuf0_instr) && predict_taken0);
+	iqentry_pt   [tail]    <=  predict_taken0;
 	iqentry_agen [tail]    <=    `INV;
+	iqentry_state[tail]    <=   IQS_IDLE;
 // If the previous instruction was a hardware interrupt and this instruction is a hardware interrupt
 // inherit the previous pc.
 //if (IsBrk(fetchbuf0_instr) && !fetchbuf0_instr[15] &&
@@ -8300,29 +8308,7 @@ begin
 //   iqentry_pc   [tail]    <= iqentry_pc[idm1(tail)];
 //else
 	 iqentry_pc   [tail] <= fetchbuf0_pc;
-	iqentry_alu  [tail]    <=   IsALU(fetchbuf0_instr);
-	iqentry_alu0 [tail]    <=   IsAlu0Only(fetchbuf0_instr);
-	iqentry_fpu  [tail]    <=   IsFPU(fetchbuf0_instr);
-	iqentry_fc   [tail]    <=   IsFlowCtrl(fetchbuf0_instr);
-	iqentry_canex[tail]    <=   fnCanException(fetchbuf0_instr);
-	iqentry_load [tail]    <=   IsLoad(fetchbuf0_instr);
-//	iqentry_lptr [tail]    <=   IsLptr(fetchbuf0_instr);
-	iqentry_sptr [tail]    <=   IsSptr(fetchbuf0_instr);
-	iqentry_isptr[tail]    <=   IsIsptr(fetchbuf0_instr);
-	iqentry_mem  [tail]    <=   fetchbuf0_mem;
-	iqentry_memndx[tail]   <=   IsMemNdx(fetchbuf0_instr);
-	iqentry_rmw  [tail]    <=   IsCAS(fetchbuf0_instr) || IsAMO(fetchbuf0_instr) || IsInc(fetchbuf0_instr) || IsSpt(fetchbuf0_instr);
-	iqentry_memdb[tail]    <=   IsMemdb(fetchbuf0_instr);
-	iqentry_memsb[tail]    <=   IsMemsb(fetchbuf0_instr);
-	iqentry_sei	 [tail]	   <=   IsSEI(fetchbuf0_instr);
-	iqentry_aq   [tail]    <=   (IsAMO(fetchbuf0_instr)|IsLWRX(fetchbuf0_instr)|IsSWCX(fetchbuf0_instr)) & fetchbuf0_instr[25];
-	iqentry_rl   [tail]    <=   (IsAMO(fetchbuf0_instr)|IsLWRX(fetchbuf0_instr)|IsSWCX(fetchbuf0_instr)) & fetchbuf0_instr[24];
-	iqentry_jmp  [tail]    <=   fetchbuf0_jmp;
-	iqentry_br   [tail]    <=  	IsBranch(fetchbuf0_instr);
-	iqentry_sync [tail]    <=  	IsSync(fetchbuf0_instr)||IsBrk(fetchbuf0_instr)||IsRTI(fetchbuf0_instr);
-	iqentry_fsync[tail]    <=  	IsFSync(fetchbuf0_instr);
-	iqentry_rfw  [tail]    <=   fetchbuf0_rfw;
-	iqentry_we   [tail]    <= 	fnWe(fetchbuf0_instr);
+	iqentry_rtop [tail]    <=   IsRtop(fetchbuf0_instr);
 	iqentry_tgt  [tail]    <=	Rt0;
 	iqentry_Ra[tail] <= Ra0;
 	iqentry_Rb[tail] <= Rb0;
@@ -8331,7 +8317,7 @@ begin
 	iqentry_exc  [tail]    <=    `EXC_NONE;
 	iqentry_imm  [tail]    <= HasConst(fetchbuf0_instr);
 	iqentry_a0   [tail]    <= fetchbuf0_instr[7:6]==2'b01 ? {{34{fetchbuf0_instr[47]}},fetchbuf0_instr[47:18]} :
-								{{50{fetchbuf0_instr[31]}},fetchbuf0_instr[31:18]};}
+								{{50{fetchbuf0_instr[31]}},fetchbuf0_instr[31:18]};
 	iqentry_a1   [tail]    <=    rfoa0;
 	iqentry_a1_v [tail]    <=    Source1Valid(fetchbuf0_instr) | regIsValid[Ra0s];
 	iqentry_a1_s [tail]    <=    rf_source[Ra0s];
@@ -8360,16 +8346,17 @@ begin
 `endif
 	iqentry_sn   [tail]    <=   seqnum;
 	iqentry_v    [tail]    <=   `VAL;
+	iqentry_iv	 [tail]    <=   `INV;
 	iqentry_thrd [tail]    <=   1'b1;
 	iqentry_done [tail]    <=   `INV;
 	iqentry_cmt  [tail]    <=	`INV;
 	iqentry_pred [tail]    <=   `VAL;
 	iqentry_out  [tail]    <=   `INV;
 	iqentry_res  [tail]    <=   `ZERO;
-	iqentry_instr[tail]    <=   IsVLS(fetchbuf1_instr) ? (vm[fnM2(fetchbuf1_instr)] ? fetchbuf1_instr : `NOP_INSN) : fetchbuf1_instr; 
-	iqentry_insln[tail]    <=   fetchbuf1_insln;
-	iqentry_bt   [tail]    <=   (IsBranch(fetchbuf1_instr) && predict_taken1); 
+	iqentry_instr[tail]    <=   IsExec(fetchbuf1_instr) ? rfoa1[47:0] : IsVLS(fetchbuf1_instr) ? (vm[fnM2(fetchbuf1_instr)] ? fetchbuf1_instr : `NOP_INSN) : fetchbuf1_instr; 
+	iqentry_pt   [tail]    <=  predict_taken1;
 	iqentry_agen [tail]    <=   `INV;
+	iqentry_state[tail]    <=   IQS_IDLE;
 // If queing 2nd instruction must read from first
 if (tail==tail1) begin
     // If the previous instruction was a hardware interrupt and this instruction is a hardware interrupt
@@ -8389,29 +8376,7 @@ else begin
 //    else
 		iqentry_pc   [tail] <= fetchbuf1_pc;
 end
-	iqentry_alu  [tail]    <=   IsALU(fetchbuf1_instr);
-	iqentry_alu0 [tail]    <=   IsAlu0Only(fetchbuf1_instr);
-	iqentry_fpu  [tail]    <=   IsFPU(fetchbuf1_instr);
-	iqentry_fc   [tail]    <=   IsFlowCtrl(fetchbuf1_instr);
-	iqentry_canex[tail]    <=   fnCanException(fetchbuf1_instr);
-	iqentry_load [tail]    <=   IsLoad(fetchbuf1_instr);
-//	iqentry_lptr [tail]    <=   IsLptr(fetchbuf1_instr);
-	iqentry_sptr [tail]    <=   IsSptr(fetchbuf1_instr);
-	iqentry_isptr[tail]    <=   IsIsptr(fetchbuf1_instr);
-	iqentry_mem  [tail]    <=   fetchbuf1_mem;
-	iqentry_memndx[tail]   <=   IsMemNdx(fetchbuf1_instr);
-	iqentry_rmw  [tail]    <=   IsCAS(fetchbuf1_instr) || IsAMO(fetchbuf1_instr) || IsInc(fetchbuf1_instr) || IsSpt(fetchbuf1_instr);
-	iqentry_memdb[tail]    <=   IsMemdb(fetchbuf1_instr);
-	iqentry_memsb[tail]    <=   IsMemsb(fetchbuf1_instr);
-	iqentry_sei	 [tail]	   <=   IsSEI(fetchbuf1_instr);
-	iqentry_aq   [tail]    <=   (IsAMO(fetchbuf1_instr)|IsLWRX(fetchbuf1_instr)|IsSWCX(fetchbuf1_instr)) & fetchbuf1_instr[25];
-	iqentry_rl   [tail]    <=   (IsAMO(fetchbuf1_instr)|IsLWRX(fetchbuf1_instr)|IsSWCX(fetchbuf1_instr)) & fetchbuf1_instr[24];
-	iqentry_jmp  [tail]    <=   fetchbuf1_jmp;
-	iqentry_br   [tail]    <=   IsBranch(fetchbuf1_instr);
-	iqentry_sync [tail]    <=   IsSync(fetchbuf1_instr)||IsBrk(fetchbuf1_instr)||IsRTI(fetchbuf1_instr);
-	iqentry_fsync[tail]    <=   IsFSync(fetchbuf1_instr);
-	iqentry_rfw  [tail]    <=   fetchbuf1_rfw;
-	iqentry_we   [tail]    <= 	fnWe(fetchbuf1_instr);
+	iqentry_rtop [tail]    <=   IsRtop(fetchbuf1_instr);
 	iqentry_tgt  [tail]    <= Rt1;
 	iqentry_Ra[tail] <= Ra1;
 	iqentry_Rb[tail] <= Rb1;
@@ -8420,7 +8385,7 @@ end
 	iqentry_exc  [tail]    <=   `EXC_NONE;
 	iqentry_imm  [tail]    <= HasConst(fetchbuf1_instr);
 	iqentry_a0   [tail]    <= fetchbuf1_instr[7:6]==2'b01 ? {{34{fetchbuf1_instr[47]}},fetchbuf1_instr[47:18]} :
-								{{50{fetchbuf1_instr[31]}},fetchbuf1_instr[31:18]};}
+								{{50{fetchbuf1_instr[31]}},fetchbuf1_instr[31:18]};
 	iqentry_a1   [tail]    <=	rfoa1;
 	iqentry_a1_v [tail]    <=	Source1Valid(fetchbuf1_instr) | regIsValid[Ra1s];
 	iqentry_a1_s [tail]    <=	rf_source[Ra1s];
@@ -8440,7 +8405,7 @@ if (|iqentry_exc[head])
 else
 case(iqentry_instr[head][`INSTRUCTION_OP])
 `BRK:   IsOddball = TRUE;
-`VECTOR:
+`IVECTOR:
     case(iqentry_instr[head][`INSTRUCTION_S2])
     `VSxx:  IsOddball = TRUE;
     default:    IsOddball = FALSE;
@@ -8589,7 +8554,7 @@ begin
                     dbg_ctrl[63] <= FALSE;
 `endif                    
                 end
-        `VECTOR:
+        `IVECTOR:
             casez(iqentry_tgt[head])
             8'b00100xxx:  vm[iqentry_tgt[head][2:0]] <= iqentry_res[head];
             8'b00101111:  vl <= iqentry_res[head];
@@ -8600,7 +8565,7 @@ begin
             `R1:	case(iqentry_instr[head][20:16])
             		`CHAIN_OFF:	cr0[18] <= 1'b0;
             		`CHAIN_ON:	cr0[18] <= 1'b1;
-            		`SETWB:		wbrcd[pcr[5:0]] <= 1'b1;
+            		//`SETWB:		wbrcd[pcr[5:0]] <= 1'b1;
             		default:	;
         			endcase
             `VMOV:  casez(iqentry_tgt[head])

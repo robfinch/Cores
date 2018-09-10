@@ -38,7 +38,6 @@ wire [4:0] op = instr[30:26];
 
 always @*
 case(instr[5:0])
-`R2:
 `AMO:
 	case(op)
 	`AMO_SWAP:	res <= b;
