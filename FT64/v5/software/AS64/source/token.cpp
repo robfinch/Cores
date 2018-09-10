@@ -2229,6 +2229,16 @@ int NextToken()
                  inptr += 6;
                  return token = tk_rodata;
              }
+			 if (gCpu == 'F') {
+				 if ((inptr[1] == 'e' || inptr[1] == 'E') &&
+					 (inptr[2] == 'd' || inptr[2] == 'D') &&
+					 (inptr[3] == 'o' || inptr[3] == 'O') &&
+					 (inptr[4] == 'r' || inptr[4] == 'R') &&
+					 isspace(inptr[5])) {
+					 inptr += 5;
+					 return token = tk_redor;
+				 }
+			 }
             break;
         
         // sb sc sf sh sw sxb sxc sxh sub subi subu subui shl shli shr shru shrui sei smr ss:

@@ -134,7 +134,7 @@ Operand *make_immed(int64_t i)
     ep->nodetype = en_icon;
     ep->i = i;
     ap = allocOperand();
-    ap->mode = am_immed;
+    ap->mode = am_imm;
     ap->offset = ep;
     return ap;
 }
@@ -258,7 +258,7 @@ void GenLoad(Operand *ap3, Operand *ap1, int ssize, int size)
 void GenStore(Operand *ap1, Operand *ap3, int size)
 {
 	if (ap1->isPtr) {
-		GenerateDiadic(op_sptr, 0, ap1, ap3);
+		GenerateDiadic(op_sw, 0, ap1, ap3);
 	}
 	else if (ap1->type==stdvector.GetIndex())
 	    GenerateDiadic(op_sv,0,ap1,ap3);
@@ -583,14 +583,14 @@ Operand *GenerateDereference(ENODE *node,int flags,int size, int su)
 	// dereferenced as direct addresses because it would fall through
 	// to the following dead code.
 	
-	if (ap1->mode == am_immed) {
+	if (ap1->mode == am_imm) {
 		ap1->MakeLegal( flags, size);
 		goto xit;
 	}
 	
 	// *********************************************************************
 	// I think what follows is dead code.
-	// am_reg and am_immed the only codes that should be generated are
+	// am_reg and am_imm the only codes that should be generated are
 	// checked for above.
 	// *********************************************************************
 
@@ -681,11 +681,11 @@ void GenMemop(int op, Operand *ap1, Operand *ap2, int ssize)
 	}
 	//if (ap1->mode != am_indx2)
 	{
-		if (op==op_add && ap2->mode==am_immed && ap2->offset->i >= -16 && ap2->offset->i < 16 && ssize==8) {
+		if (op==op_add && ap2->mode==am_imm && ap2->offset->i >= -16 && ap2->offset->i < 16 && ssize==8) {
 			GenerateDiadic(op_inc,0,ap1,ap2);
 			return;
 		}
-		if (op==op_sub && ap2->mode==am_immed && ap2->offset->i >= -15 && ap2->offset->i < 15 && ssize==8) {
+		if (op==op_sub && ap2->mode==am_imm && ap2->offset->i >= -15 && ap2->offset->i < 15 && ssize==8) {
 			GenerateDiadic(op_dec,0,ap1,ap2);
 			return;
 		}
@@ -874,7 +874,7 @@ void GenerateStructAssign(TYP *tp, int64_t offset, ENODE *ep, Operand *base)
 			if (ep->p[2]==nullptr)
 				break;
 			ap1 = GenerateExpression(ep->p[2],F_REG,thead->tp->size);
-			if (ap1->mode==am_immed) {
+			if (ap1->mode==am_imm) {
 				ap2 = GetTempRegister();
 				GenLdi(ap2,ap1);
 			}
@@ -949,7 +949,7 @@ void GenerateArrayAssign(TYP *tp, ENODE *node1, ENODE *node2, Operand *base)
 		while (ep1) {
 			ap1 = GenerateExpression(ep1,F_REG|F_IMMED,sizeOfWord);
 			ap2 = GetTempRegister();
-			if (ap1->mode==am_immed)
+			if (ap1->mode==am_imm)
 				GenLdi(ap2,ap1);
 			else {
 				if (ap1->offset)
@@ -1070,7 +1070,7 @@ Operand *GenerateAssign(ENODE *node, int flags, int size)
 			else
 				GenerateDiadic(op_mov,0,ap1,ap2);
 			break;
-		case am_immed:
+		case am_imm:
 			if (ap2->isPtr)
 				GenerateZeradic(op_setwb);
 			GenerateDiadic(op_ldi,0,ap1,ap2);
@@ -1094,7 +1094,7 @@ Operand *GenerateAssign(ENODE *node, int flags, int size)
 		if (ap2->mode == am_reg || ap2->mode == am_fpreg) {
 		    GenStore(ap2,ap1,ssize);
         }
-		else if (ap2->mode == am_immed) {
+		else if (ap2->mode == am_imm) {
             if (ap2->offset->i == 0 && ap2->offset->nodetype != en_labcon) {
                 GenStore(makereg(0),ap1,ssize);
             }
@@ -1178,13 +1178,13 @@ Operand *GenerateAssign(ENODE *node, int flags, int size)
 	}
 /*
 	if (ap1->mode == am_reg) {
-		if (ap2->mode==am_immed)	// must be zero
+		if (ap2->mode==am_imm)	// must be zero
 			GenerateDiadic(op_mov,0,ap1,makereg(0));
 		else
 			GenerateDiadic(op_mov,0,ap1,ap2);
 	}
 	else {
-		if (ap2->mode==am_immed)
+		if (ap2->mode==am_imm)
 		switch(size) {
 		case 1:	GenerateDiadic(op_sb,0,makereg(0),ap1); break;
 		case 2:	GenerateDiadic(op_sc,0,makereg(0),ap1); break;
@@ -1274,7 +1274,7 @@ Operand *GenerateExpression(ENODE *node, int flags, int size)
         return (ap1);
 		/*
             ap1 = allocOperand();
-            ap1->mode = am_immed;
+            ap1->mode = am_imm;
             ap1->offset = node;
 			ap1->isFloat = TRUE;
             ap1->MakeLegal(flags,size);
@@ -1283,7 +1283,7 @@ Operand *GenerateExpression(ENODE *node, int flags, int size)
 		*/
     case en_icon:
         ap1 = allocOperand();
-        ap1->mode = am_immed;
+        ap1->mode = am_imm;
         ap1->offset = node;
         ap1->MakeLegal(flags,size);
         Leave("GenExpression",3); 
@@ -1315,7 +1315,7 @@ Operand *GenerateExpression(ENODE *node, int flags, int size)
 				ap1->segment = dataseg;
 			}
 			*/
-            ap1->mode = am_immed;
+            ap1->mode = am_imm;
             ap1->offset = node;
 			ap1->isUnsigned = node->isUnsigned;
             ap1->MakeLegal(flags,size);
@@ -1338,7 +1338,7 @@ Operand *GenerateExpression(ENODE *node, int flags, int size)
 	case en_cnacon:
             ap1 = allocOperand();
 			ap1->isPtr = node->IsPtr();
-			ap1->mode = am_immed;
+			ap1->mode = am_imm;
             ap1->offset = node;
 			if (node->i==0)
 				node->i = -1;
@@ -1348,7 +1348,7 @@ Operand *GenerateExpression(ENODE *node, int flags, int size)
             return ap1;
 	case en_clabcon:
             ap1 = allocOperand();
-            ap1->mode = am_immed;
+            ap1->mode = am_imm;
             ap1->offset = node;
 			ap1->isUnsigned = node->isUnsigned;
             ap1->MakeLegal(flags,size);

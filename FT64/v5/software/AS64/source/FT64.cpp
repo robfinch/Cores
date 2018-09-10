@@ -1433,18 +1433,13 @@ static void process_riop(int64_t opcode6)
 // instruction converted to a registered form.
 // ---------------------------------------------------------------------------
 
-static void process_setiop(int64_t opcode6, int64_t cond4)
+static void process_setiop(int64_t opcode6)
 {
     int Ra;
     int Rt;
     char *p;
     int64_t val;
-	int sz = 3;
 
-	p = inptr;
-	if (*p == '.')
-		getSz(&sz);
-	sz &= 3;
     p = inptr;
     Rt = getRegisterX();
     need(',');
@@ -1452,32 +1447,174 @@ static void process_setiop(int64_t opcode6, int64_t cond4)
     need(',');
     NextToken();
     val = expr();
-	if (!IsNBit(val, 26)) {
+	if (!IsNBit(val, 30)) {
 		LoadConstant(val, 23);
-		emit_insn(
-			(((cond4 >= 12 && cond4 <= 15) ? 7LL : 6LL) << 26LL) |
-			((cond4 & 7LL) << 23LL) |
-			(Rt << 18) |
-			(52 << 13) |
-			(Ra << 8) |
-			0x02, !expand_flag, 4);
+		switch (opcode6)
+		{
+		case 0x06:
+		case 0x07:
+			emit_insn(
+				(opcode6 << 26) |	// SLT / SLTU
+				(3 << 23) |
+				(Rt << 18) |
+				(23 << 13) |
+				(Ra << 8) |
+				(0 << 6) |
+				0x02, !expand_flag, 4);
+			return;
+		case 0x2C:	// SGTI
+			emit_insn(
+				(0x28 << 26) |	// SLE
+				(3 << 23) |
+				(Rt << 18) |
+				(23 << 13) |
+				(Ra << 8) |
+				(0 << 6) |
+				0x02,!expand_flag,4)
+				;
+			emit_insn(
+				(0x01 << 26) |
+				(3 << 23) |
+				(3 << 18) |		// COM
+				(Rt << 13) |
+				(Ra << 8) |
+				(0 << 6) |
+				0x02,!expand_flag,4
+			);
+			return;
+		case 0x1C:	// SGTUI
+			emit_insn(
+				(0x29 << 26) |	// SLEU
+				(3 << 23) |
+				(Rt << 18) |
+				(23 << 13) |
+				(Ra << 8) |
+				(0 << 6) |
+				0x02, !expand_flag, 4)
+				;
+			emit_insn(
+				(0x01 << 26) |
+				(3 << 23) |
+				(3 << 18) |		// COM
+				(Rt << 13) |
+				(Ra << 8) |
+				(0 << 6) |
+				0x02, !expand_flag, 4
+			);
+			return;
+		}
+		printf("Illegal set immediate instruction %d.", lineno);
 		return;
 	}
-	if (!IsNBit(val, 10)) {
+	if (!IsNBit(val, 14)) {
 		emit_insn(
-			((val >> 10) << 32) |
-			(cond4 << 28LL) |
-			((val & 0x3FF) << 18) |
+			(val << 18) |
 			(Rt << 13) | (Ra << 8) |
 			(1 << 6) |
 			opcode6, !expand_flag,6);
 		return;
 	}
 	emit_insn(
-		(cond4<<28LL)|
-		((val & 0x3FF) << 18)|
-		(Rt << 13)|(Ra << 8)|
+		(val << 18)|
+		(Rt << 13)|
+		(Ra << 8)|
 		opcode6,!expand_flag,4);
+}
+
+static void process_setop(int64_t opcode6)
+{
+	int Ra, Rb, Rt;
+	char *p;
+	int sz = 3;
+
+	p = inptr;
+	if (*p == '.')
+		getSz(&sz);
+	sz &= 7;
+	Rt = getRegisterX();
+	need(',');
+	Ra = getRegisterX();
+	need(',');
+	NextToken();
+	Rb = getRegisterX();
+	if (Rb == -1) {
+		inptr = p;
+		process_setiop(opcode6);
+		return;
+	}
+	switch (opcode6)
+	{
+	case -6:	// SGE = !SLT
+	case -7:	// SGEU	= !SLTU
+		emit_insn(
+			(-opcode6 << 26) |
+			(sz << 23) |
+			(Rt << 18) |
+			(Rb << 13) |
+			(Ra << 8) |
+			(0 << 6) |
+			0x02, !expand_flag, 4
+		);
+		emit_insn(
+			(1 << 26) |
+			(sz << 23) |
+			(3 << 18) |	// COM
+			(Rt << 13) |
+			(Ra << 8) |
+			(0 << 6) |
+			0x02, !expand_flag, 4
+		);
+		return;
+	case -0x2C:	// SGT = !SLE
+		emit_insn(
+			(0x28 << 26) |
+			(sz << 23) |
+			(Rt << 18) |
+			(Rb << 13) |
+			(Ra << 8) |
+			(0 << 6) |
+			0x02, !expand_flag, 4
+		);
+		emit_insn(
+			(1 << 26) |
+			(sz << 23) |
+			(3 << 18) |	// COM
+			(Rt << 13) |
+			(Ra << 8) |
+			(0 << 6) |
+			0x02, !expand_flag, 4
+		);
+		return;
+	case -0x1C:	// SGTU	= !SLEU
+		emit_insn(
+			(0x29 << 26) |
+			(sz << 23) |
+			(Rt << 18) |
+			(Rb << 13) |
+			(Ra << 8) |
+			(0 << 6) |
+			0x02, !expand_flag, 4
+		);
+		emit_insn(
+			(1 << 26) |
+			(sz << 23) |
+			(3 << 18) |	// COM
+			(Rt << 13) |
+			(Ra << 8) |
+			(0 << 6) |
+			0x02, !expand_flag, 4
+		);
+		return;
+	}
+	emit_insn(
+		(opcode6 << 26) |
+		(sz << 23) |
+		(Rt << 18) |
+		(Rb << 13) |
+		(Ra << 8) |
+		(0 << 6) |
+		0x02, !expand_flag, 4
+	);
 }
 
 // ---------------------------------------------------------------------------
@@ -1630,6 +1767,7 @@ static void process_cmove(int64_t funct6)
 	int Ra, Rb, Rc = 0, Rt;
 	char *p;
 	int sz = 3;
+	int64_t val;
 
 	p = inptr;
 	Rt = getRegisterX();
@@ -1638,6 +1776,21 @@ static void process_cmove(int64_t funct6)
 	need(',');
 	Rb = getRegisterX();
 	need(',');
+	NextToken();
+	if (token == '#') {
+		val = expr();
+		emit_insn(
+			(funct6 << 42LL) |
+			(1LL << 41LL) |
+			(((val >> 5) & 0x7ff) << 28) |
+			(Rt << 23) |
+			((val & 0x1f) << 18) |
+			(Rb << 13) |
+			(Ra << 8) |
+			0x02, !expand_flag, 6);
+		return;
+	}
+	prevToken();
 	Rc = getRegisterX();
 	emit_insn((funct6 << 42LL) | (Rt << 23) | (Rc << 18) | (Rb << 13) | (Ra << 8) | 0x02, !expand_flag, 6);
 }
@@ -2793,7 +2946,7 @@ static void mem_voperand(int64_t *disp, int *regA, int *regB)
 // sw [r1+r2],r3
 // ----------------------------------------------------------------------------
 
-static void process_store(int64_t opcode6)
+static void process_store(int64_t opcode6, int sz)
 {
     int Ra,Rb;
     int Rs;
@@ -2814,6 +2967,12 @@ static void process_store(int64_t opcode6)
     expect(',');
     mem_operand(&disp, &Ra, &Rb, &Sc);
 	if (Ra > 0 && Rb > 0) {
+		switch (sz) {
+		case 1: opcode6 = 0x24; break;	// SCX
+		case 2: opcode6 = 0x14; break;	// SHX
+		case 4: opcode6 = 0x16; break;	// SWX
+		default:;
+		}
 		emit_insn(
 			(opcode6 << 26LL) |
 			(Sc << 23) |
@@ -2827,7 +2986,7 @@ static void process_store(int64_t opcode6)
     val = disp;
 	if (Ra == 55)
 		val -= program_address;
-	if (opcode6 == 0x16 && Ra == regSP) {
+	if (sz == 4 && Ra == regSP) {
 		if ((val & 7) == 0) {
 			if (val >= -128 && val < 128) {
 				emit_insn(
@@ -2842,7 +3001,7 @@ static void process_store(int64_t opcode6)
 			}
 		}
 	}
-	if (opcode6 == 0x16 && Ra == regFP) {
+	if (sz == 4 && Ra == regFP) {
 		if ((val & 7) == 0) {
 			if (val >= -128 && val < 128) {
 				emit_insn(
@@ -2860,6 +3019,12 @@ static void process_store(int64_t opcode6)
 	if (!IsNBit(val,30)) {
 		LoadConstant(val,23);
 		// Change to indexed addressing
+		switch (sz) {
+		case 1: opcode6 = 0x24; break;
+		case 2: opcode6 = 0x14; break;
+		case 4: opcode6 = 0x16; break;
+		default: opcode6 = 0x15;
+		}
 		emit_insn(
 			(opcode6 << 26LL) |
 			(0 << 23) |		// Sc
@@ -2872,7 +3037,7 @@ static void process_store(int64_t opcode6)
 	}
 	if (!IsNBit(val, 14)) {
 		emit_insn(
-			(val << 18) |
+			((val|sz) << 18) |
 			(Rs << 13) |
 			(Ra << 8) |
 			(1 << 6) |
@@ -2881,7 +3046,7 @@ static void process_store(int64_t opcode6)
 		return;
 	}
 	emit_insn(
-		(val << 18) |
+		((val|sz) << 18) |
 		(Rs << 13) |
 		(Ra << 8) |
 		opcode6,!expand_flag,4);
@@ -3082,7 +3247,7 @@ static void process_ldi()
 // lw r1,[r2+r3]
 // ----------------------------------------------------------------------------
 
-static void process_load(int64_t opcode6)
+static void process_load(int64_t opcode6, int sz)
 {
     int Ra,Rb;
     int Rt;
@@ -3114,6 +3279,15 @@ static void process_load(int64_t opcode6)
 		// Trap LEA, convert to LEAX opcode
 		if (opcode6==0x04) // ADD is really LEA
 			opcode6 = 0x18;
+		else {
+			switch (sz) {
+			case -1: opcode6 = 0x21;	// LCUX
+			case 1: opcode6 = 0x20;		// LCX
+			case -2: opcode6 = 0x11;	// LHUX
+			case 2: opcode6 = 0x10;		// LHX
+			case 4: opcode6 = 0x12;		// LWX
+			}
+		}
 		emit_insn(
 			(opcode6 << 26LL) |
 			(Sc << 23) |
@@ -3127,7 +3301,7 @@ static void process_load(int64_t opcode6)
     val = disp;
 	if (Ra == 55)
 		val -= program_address;
-	if (opcode6 == 0x12 && Ra == regSP) {
+	if (sz == 4 && Ra == regSP) {
 		if ((val & 7) == 0) {
 			if (val >= -128 && val < 128) {
 				emit_insn(
@@ -3142,7 +3316,7 @@ static void process_load(int64_t opcode6)
 			}
 		}
 	}
-	if (opcode6 == 0x12 && Ra == regFP) {
+	if (sz == 4 && Ra == regFP) {
 		if ((val & 7) == 0) {
 			if (val >= -128 && val < 128) {
 				emit_insn(
@@ -3160,6 +3334,13 @@ static void process_load(int64_t opcode6)
 	if (!IsNBit(val, 30)) {
 		LoadConstant(val, 23);
 		// Change to indexed addressing
+		switch (sz) {
+		case -1: opcode6 = 0x21;	// LCUX
+		case 1: opcode6 = 0x20;		// LCX
+		case -2: opcode6 = 0x11;	// LHUX
+		case 2: opcode6 = 0x10;		// LHX
+		case 4: opcode6 = 0x12;		// LWX
+		}
 		emit_insn(
 			(opcode6 << 26LL) |
 			(0 << 23) |		// Sc = 0
@@ -3172,7 +3353,7 @@ static void process_load(int64_t opcode6)
 	}
 	if (!IsNBit(val, 14)) {
 		emit_insn(
-			(val << 18LL) |
+			((val|abs(sz)) << 18LL) |
 			(Rt << 13) |
 			(Ra << 8) |
 			(1 << 6) |
@@ -3181,7 +3362,7 @@ static void process_load(int64_t opcode6)
 		return;
 	}
 	emit_insn(
-		(val << 18LL) |
+		((val|abs(sz)) << 18LL) |
 		(Rt << 13) |
 		(Ra << 8) |
 		opcode6,!expand_flag,4);
@@ -3445,7 +3626,7 @@ static void process_ld()
 	}
 	// Else: do a word load
 	inptr = p;
-	process_load(0x22);
+	process_load(0x20,4);
 }
 
 // ----------------------------------------------------------------------------
@@ -3866,16 +4047,16 @@ static void process_csrrw(int64_t op)
 			return;
 			val2 = expr();
 			if (val2 < -15LL || val2 > 15LL) {
-				emit_insn((val << 18) | (op << 16) | (0x10 << 6) | (Rd << 11) | 0x0F,0,2);
+				emit_insn((val << 18) | (op << 16) | (0x10 << 6) | (Rd << 11) | 0x05,0,2);
 				emit_insn(val2,0,2);
 				return;
 			}
-			emit_insn((val << 18) | (op << 16) | ((val2 & 0x1f) << 6) | (Rd << 11) | 0x0F,!expand_flag,2);
+			emit_insn((val << 18) | (op << 16) | ((val2 & 0x1f) << 6) | (Rd << 11) | 0x05,!expand_flag,2);
 			return;
 		}
 		prevToken();
 		Rs = getRegisterX();
-		emit_insn(((val & 0x3FF) << 18) | (op << 30LL) | (Rs << 8) | (Rd << 13) | 0x0E,!expand_flag,4);
+		emit_insn(((val & 0x3FF) << 18) | (op << 30LL) | (Rs << 8) | (Rd << 13) | 0x05,!expand_flag,4);
 		prevToken();
 		return;
 		}
@@ -4298,23 +4479,23 @@ void FT64_processMaster()
 		case tk_isptr:  process_rop(0x0D); break;
         case tk_jal: process_jal(0x18); break;
 		case tk_jmp: process_call(0x28); break;
-        case tk_lb:  process_load(0x13); break;
-        case tk_lbu:  process_load(0x23); break;
-        case tk_lc:  process_load(0x20); break;
-        case tk_lcu:  process_load(0x21); break;
+        case tk_lb:  process_load(0x13,0); break;
+        case tk_lbu:  process_load(0x23,0); break;
+        case tk_lc:  process_load(0x20,1); break;
+        case tk_lcu:  process_load(0x20,-1); break;
 		case tk_ld:	process_ld(); break;
         case tk_ldi: process_ldi(); break;
-        case tk_lea: process_load(0x04); break;
+        case tk_lea: process_load(0x04,0); break;
 		case tk_lf:	 process_lsfloat(0x0b,0x00); break;
-        case tk_lh:  process_load(0x10); break;
-        case tk_lhu: process_load(0x11); break;
+        case tk_lh:  process_load(0x20,2); break;
+        case tk_lhu: process_load(0x20,-2); break;
         case tk_lv:  process_lv(0x36); break;
 		case tk_lvb: ProcessLoadVolatile(0); break;
 		case tk_lvc: ProcessLoadVolatile(2); break;
 		case tk_lvh: ProcessLoadVolatile(4); break;
 		case tk_lvw: ProcessLoadVolatile(6); break;
-        case tk_lw:  process_load(0x12); break;
-        case tk_lwr:  process_load(0x1D); break;
+        case tk_lw:  process_load(0x20,4); break;
+        case tk_lwr:  process_load(0x1D,0); break;
 		case tk_memdb: emit_insn(0x40100002,0,4); break;
 		case tk_memsb: emit_insn(0x40110002,0,4); break;
 		case tk_message: process_message(); break;
@@ -4351,40 +4532,39 @@ void FT64_processMaster()
 		case tk_ror: process_shift(0x5); break;
 		case tk_rori: process_shift(0xD); break;
 		case tk_rti: process_iret(0xC8000002); break;
-        case tk_sb:  process_store(0x15); break;
-        case tk_sc:  process_store(0x24); break;
+        case tk_sb:  process_store(0x15,0); break;
+        case tk_sc:  process_store(0x24,1); break;
         case tk_sei: process_sei(); break;
-		case tk_seq:	process_setiop(0x1B,2); break;
+		//case tk_seq:	process_riop(0x1B,2); break;
 		case tk_sf:		process_lsfloat(0x0C,0x00); break;
-		case tk_sge:	process_setiop(0x1B,5); break;
-		case tk_sgeu:	process_setiop(0x1B,13); break;
-		case tk_sgt:	process_setiop(0x1B,7); break;
-		case tk_sgtu:	process_setiop(0x1B,15); break;
+		case tk_sge:	process_setop(-6); break;
+		case tk_sgeu:	process_setiop(-7); break;
+		case tk_sgt:	process_setiop(-0x2C); break;
+		case tk_sgtu:	process_setiop(-0x1C); break;
         //case tk_slt:  process_rrop(0x33,0x02,0x00); break;
         //case tk_sltu:  process_rrop(0x33,0x03,0x00); break;
         //case tk_slti:  process_riop(0x13,0x02); break;
         //case tk_sltui:  process_riop(0x13,0x03); break;
-        case tk_sh:  process_store(0x14); break;
+        case tk_sh:  process_store(0x24,2); break;
         case tk_shl: process_shift(0x0); break;
         case tk_shli: process_shifti(0x8); break;
 		case tk_shr: process_shift(0x1); break;
         case tk_shri: process_shifti(0x9); break;
 		case tk_shru: process_shift(0x1); break;
 		case tk_shrui: process_shifti(0x9); break;
-		case tk_sle:	process_setiop(0x1B,6); break;
-		case tk_sleu:	process_setiop(0x1B,14); break;
-		case tk_slt:	process_setiop(0x1B,4); break;
-		case tk_sltu:	process_setiop(0x1B,12); break;
-		case tk_sne:	process_setiop(0x1B,3); break;
+		case tk_sle:	process_setop(0x28); break;
+		case tk_sleu:	process_setop(0x29); break;
+		case tk_slt:	process_setop(0x06); break;
+		case tk_sltu:	process_setop(0x07); break;
+		//case tk_sne:	process_setiop(0x1B,3); break;
         case tk_slli: process_shifti(0x8); break;
-		case tk_sptr:  process_store(0x35); break;
 		case tk_srai: process_shifti(0xB); break;
         case tk_srli: process_shifti(0x9); break;
         case tk_sub:  process_rrop(0x05); break;
         case tk_subi:  process_riop(0x05); break;
         case tk_sv:  process_sv(0x37); break;
-        case tk_sw:  process_store(0x16); break;
-        case tk_swc:  process_store(0x17); break;
+        case tk_sw:  process_store(0x24,4); break;
+        case tk_swc:  process_store(0x17,0); break;
         case tk_swap: process_rop(0x03); break;
 		//case tk_swp:  process_storepair(0x27); break;
 		case tk_sxb: process_rop(0x1A); break;

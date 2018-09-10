@@ -55,7 +55,7 @@ Operand *GenerateBitfieldDereference(ENODE *node, int flags, int size)
     ap->MakeLegal(flags, node->esize);
 	if (ap->mode == am_reg)
 		GenerateDiadic(op_mov, 0, ap3, ap);
-	else if (ap->mode == am_immed)
+	else if (ap->mode == am_imm)
 		GenerateDiadic(op_ldi, 0, ap3, ap);
 	else	// memory
 		GenLoad(ap3, ap, node->esize, node->esize);

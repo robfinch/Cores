@@ -478,7 +478,7 @@ class Operand : public CompilerType
 {
 public:
 	int num;					// number of the operand
-	unsigned int mode : 6;
+	unsigned int mode;
 	unsigned int preg : 12;		// primary virtual register number
 	unsigned int sreg : 12;		// secondary virtual register number (indexed addressing modes)
 	unsigned short int pregs;	// subscripted register number

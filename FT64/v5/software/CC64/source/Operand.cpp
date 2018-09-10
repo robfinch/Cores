@@ -48,7 +48,7 @@ bool Operand::IsEqual(Operand *ap1, Operand *ap2)
 		return (false);
 	switch (ap1->mode)
 	{
-	case am_immed:
+	case am_imm:
 		return (ap1->offset->i == ap2->offset->i);
 	case am_fpreg:
 	case am_reg:
@@ -161,7 +161,7 @@ void Operand::MakeLegal(int flags, int size)
 	if (((flags & F_VOL) == 0) || tempflag)
 	{
 		switch (mode) {
-		case am_immed:
+		case am_imm:
 			i = ((ENODE *)(offset))->i;
 			if (flags & F_IMM8) {
 				if (i < 256 && i >= 0)
@@ -207,7 +207,7 @@ void Operand::MakeLegal(int flags, int size)
 			ap2 = GetTempReg(stdint.GetIndex());
 		if (mode == am_ind || mode == am_indx)
 			GenLoad(ap2, this, size, size);
-		else if (mode == am_immed) {
+		else if (mode == am_imm) {
 			GenerateDiadic(op_ldi, 0, ap2, this);
 		}
 		else {
@@ -229,7 +229,7 @@ void Operand::MakeLegal(int flags, int size)
 		ap2 = GetTempFPRegister();
 		if (mode == am_ind || mode == am_indx)
 			GenLoad(ap2, this, size, size);
-		else if (mode == am_immed) {
+		else if (mode == am_imm) {
 			ap1 = GetTempRegister();
 			GenerateDiadic(op_ldi, 0, ap1, this);
 			GenerateDiadic(op_mov, 0, ap2, ap1);
@@ -273,7 +273,7 @@ void Operand::MakeLegal(int flags, int size)
 	case am_indx:
 		GenLoad(ap2, this, size, size);
 		break;
-	case am_immed:
+	case am_imm:
 		GenerateDiadic(op_ldi, 0, ap2, this);
 		break;
 	case am_reg:
@@ -294,7 +294,7 @@ void Operand::storeHex(txtoStream& ofs)
 {
 	ofs.printf("O");
 	switch (mode) {
-	case am_immed:
+	case am_imm:
 		ofs.printf("#");
 	}
 }
@@ -310,9 +310,11 @@ Operand *Operand::loadHex(std::ifstream& ifs)
 
 void Operand::store(txtoStream& ofs)
 {
+	if (mode == 0)
+		mode = am_reg;
 	switch (mode)
 	{
-	case am_immed:
+	case am_imm:
 		ofs.write("#");
 		// Fall through
 	case am_direct:

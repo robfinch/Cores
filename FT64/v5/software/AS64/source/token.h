@@ -313,6 +313,7 @@ enum {
      tk_public,
      tk_push,
      tk_rconst,//320
+	 tk_redor,
 	 tk_ret,
 	 tk_rex,
      tk_rodata,

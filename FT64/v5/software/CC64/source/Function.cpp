@@ -532,7 +532,7 @@ void Function::SetupReturnBlock()
 	}
 	*/
 	ap = make_label(throwlab);
-	ap->mode = am_immed;
+	ap->mode = am_imm;
 	if (exceptions && (!IsLeaf || DoesThrow))
 		GenerateDiadic(op_ldi, 0, makereg(regXLR), ap);
 	GenerateDiadic(op_mov, 0, makereg(regFP), makereg(regSP));
@@ -561,7 +561,7 @@ void Function::GenReturn(Statement *stmt)
 		else
 			ap = GenerateExpression(stmt->exp, F_REG | F_IMMED, sizeOfWord);
 		GenerateMonadic(op_hint, 0, make_immed(2));
-		if (ap->mode == am_immed)
+		if (ap->mode == am_imm)
 			GenLdi(makereg(1), ap);
 		else if (ap->mode == am_reg) {
 			if (sym->tp->GetBtp() && (sym->tp->GetBtp()->type == bt_struct || sym->tp->GetBtp()->type == bt_union)) {

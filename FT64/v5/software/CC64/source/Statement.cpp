@@ -1218,7 +1218,7 @@ void Statement::GenerateIf()
 	ap1 = GenerateExpression(node->p[0], F_REG, size);
 	ap2 = GenerateExpression(node->p[1], F_REG, size);
 	ap3 = GenerateExpression(node->p[2], F_REG|F_IMM0, size);
-	if (ap3->mode == am_immed) {
+	if (ap3->mode == am_imm) {
 	ReleaseTempReg(ap3);
 	ap3 = makereg(0);
 	}
@@ -1400,7 +1400,7 @@ void Statement::GenerateLinearSwitch()
 				}
 				else if (bf[nn] < -256 || bf[nn] > 255) {
 					ap1 = GetTempRegister();
-					GenerateTriadic(op_cmp, 0, ap1, ap, make_immed(bf[nn]));
+					GenerateTriadic(op_xor, 0, ap1, ap, make_immed(bf[nn]));
 					ReleaseTempRegister(ap1);
 					GenerateTriadic(op_beq, 0, ap1, makereg(0), make_clabel(curlab));
 				}
@@ -1571,7 +1571,7 @@ void Statement::GenerateTry()
 	throwlab = nextlabel++;
 
 	a = make_clabel(throwlab);
-	a->mode = am_immed;
+	a->mode = am_imm;
 	GenerateDiadic(op_ldi, 0, makereg(regXLR), a);
 	s1->Generate();
 	GenerateMonadic(op_bra, 0, make_clabel(lab1));
@@ -1607,7 +1607,7 @@ void Statement::GenerateTry()
 	nextlabel++;
 	GenerateLabel(lab1);
 	a = make_clabel(oldthrow);
-	a->mode = am_immed;
+	a->mode = am_imm;
 	GenerateDiadic(op_ldi, 0, makereg(regXLR), a);
 }
 
@@ -1619,7 +1619,7 @@ void Statement::GenerateThrow()
 	{
 		initstack();
 		ap = GenerateExpression(exp, F_ALL, 8);
-		if (ap->mode == am_immed)
+		if (ap->mode == am_imm)
 			GenerateDiadic(op_ldi, 0, makereg(1), ap);
 		else if (ap->mode != am_reg)
 			GenerateDiadic(op_lw, 0, makereg(1), ap);
@@ -1679,11 +1679,11 @@ void Statement::GenerateCheck()
 	ap1 = GenerateExpression(node->p[0], F_REG, size);
 	ap2 = GenerateExpression(node->p[1], F_REG | F_IMM0, size);
 	ap3 = GenerateExpression(node->p[2], F_REG | F_IMMED, size);
-	if (ap2->mode == am_immed) {
+	if (ap2->mode == am_imm) {
 		ap2->mode = am_reg;
 		ap2->preg = 0;
 	}
-	GenerateTriadic(ap3->mode == am_immed ? op_chki : op_chk, 0, ap1, ap2, ap3);
+	GenerateTriadic(ap3->mode == am_imm ? op_chki : op_chk, 0, ap1, ap2, ap3);
 	ReleaseTempRegister(ap3);
 	ReleaseTempRegister(ap2);
 	ReleaseTempRegister(ap1);

@@ -122,7 +122,7 @@ test_icache:
 		cache	#3,[r1]			; invalidate the cache
 		jal		r61,[r1]
 		ldi		r2,#14			; this is the value that should be returned
-		cmp		r1,r1,r2
+		xor		r1,r1,r2
 		bne		r1,r0,.st5
 		bra		.st4
 
@@ -241,7 +241,7 @@ start1:
 	sb		r2,LEDS			; write to LEDs
 	add		r1,r1,#1
 	add		r3,r3,#1
-	cmp		r2,r3,#10	; stop after a few cycles
+	xor		r2,r3,#10	; stop after a few cycles
 ;	bne		r2,r0,r4
 
 	; Initialize PRNG
@@ -385,8 +385,8 @@ _ColorBandMemory2:
 		mov		r18,r0
 		call	_GetRand
 .0001:
-		cmpu	r2,r6,#$200000
-		blt		r2,r0,.0002
+		sltu	r2,r6,#$200000
+		bne		r2,r0,.0002
 		ldi		r2,#8
 		sb		r2,LEDS			; write to LEDs
 		lw		r1,[sp]
@@ -558,8 +558,8 @@ _SetCursorPalette:
 		and		r1,r1,#$7FFF
 		sh		r1,[r6+r7]
 		add		r7,r7,#4
-		cmp		r2,r7,#$400
-		blt		r2,r0,.0001
+		slt		r2,r7,#$400
+		bne		r2,r0,.0001
 		lw		r2,[sp]
 		lw		r6,8[sp]
 		lw		r7,16[sp]
@@ -588,7 +588,7 @@ _SetCursorImage:
 		ldi		r2,#30*32			; number of pixels
 		sh		r2,[r6+r7]		; 
 		add		r7,r7,#12		; next sprite
-		cmp		r2,r7,#$600
+		xor		r2,r7,#$600
 		bne		r2,r0,.0002
 
 		ldi		r2,#$1FFEE000
@@ -664,9 +664,10 @@ _XImage:
 ;----------------------------------------------------------------------------
 ;----------------------------------------------------------------------------
 _RandomizeSpritePositions2:
-		push	r1
-		push	r6
-		push	r7
+		sub		$sp,$sp,#24
+		sw		$r1,[$sp]
+		sw		$r6,8[$sp]
+		sw		$r7,16[$sp]
 		ldi		r6,#AVIC
 		ldi		r7,#$408
 .0001:
@@ -676,12 +677,12 @@ _RandomizeSpritePositions2:
 		add		r1,r1,#$000E0080	; add +28 to y and +256 to x
 		sh		r1,[r6+r7]
 		add		r7,r7,#$10			; advance to next sprite
-		cmp		r1,r7,#$5F8
-		blt		r1,r0,.0001
-		pop		r7
-		pop		r6
-		pop		r1
-		ret
+		slt		r1,r7,#$5F8
+		bne		r1,r0,.0001
+		lw		$r1,[$sp]
+		lw		$r6,8[$sp]
+		lw		$r7,16[$sp]
+		ret		#24
 
 ;----------------------------------------------------------------------------
 ;----------------------------------------------------------------------------

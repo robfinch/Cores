@@ -756,7 +756,7 @@ void ReleaseTempRegister(Operand *ap)
 		printf("DIAG - NULL pointer in ReleaseTempRegister\r\n");
 		return;
 	}
-	if( ap->mode == am_immed || ap->mode == am_direct )
+	if( ap->mode == am_imm || ap->mode == am_direct )
         return;         // no registers used
 	if (ap->mode == am_breg || ap->mode==am_brind) {
 		if (ap->preg < 9 && ap->preg >= 3)

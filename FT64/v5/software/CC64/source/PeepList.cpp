@@ -159,21 +159,17 @@ void PeepList::loadHex(std::ifstream& ifs)
 	OCODE *cd;
 	int op;
 
+	head = tail = nullptr;
 	while (!ifs.eof()) {
 		ifs.read(buf, 1);
 		switch (buf[0]) {
-		case ';':
-			while (buf[0] != '\n' && !ifs.eof())
-				ifs.read(buf, 1);
-			break;
 		case 'O':
 			cd = OCODE::loadHex(ifs);
 			Add(cd);
 			break;
-		case 'L':
-			ifs.read(buf, 1);
-			buf[1] = '\0';
-			cd->length = atoi(buf);
+		default:	// ;
+			while (buf[0] != '\n' && !ifs.eof())
+				ifs.read(buf, 1);
 			break;
 		}
 	}

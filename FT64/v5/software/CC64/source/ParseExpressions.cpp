@@ -2035,7 +2035,8 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
 				ep2 = makeinode(en_icon,head->GetHash());
 				ep3 = makenode(en_object_list,nullptr,nullptr);
 				ep4 = makeinode(en_icon, head->typeno);
-				ep5 = makenode(en_void,ep1,nullptr);
+				//ep5 = makenode(en_void,ep1,nullptr);
+				ep5 = nullptr;
 				ep5 = makenode(en_void,ep2,ep5);
 				ep5 = makenode(en_void,ep3,ep5);
 				ep5 = makenode(en_void, ep4, ep5);

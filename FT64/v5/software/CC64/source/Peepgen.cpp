@@ -236,22 +236,22 @@ void PeepOpt::SetLabelReference()
 	}
 	for (q = peep_head; q; q = q->fwd) {
 		if (q->opcode!=op_label && q->opcode!=op_nop) {
-			if (q->oper1 && (q->oper1->mode==am_direct || q->oper1->mode==am_immed)) {
+			if (q->oper1 && (q->oper1->mode==am_direct || q->oper1->mode==am_imm)) {
 				if (p = PeepList::FindLabel(q->oper1->offset->i)) {
 					p->isReferenced = true;
 				}
 			}
-			if (q->oper2 && (q->oper2->mode==am_direct || q->oper2->mode==am_immed)) {
+			if (q->oper2 && (q->oper2->mode==am_direct || q->oper2->mode==am_imm)) {
 				if (p = PeepList::FindLabel(q->oper2->offset->i)) {
 					p->isReferenced = true;
 				}
 			}
-			if (q->oper3 && (q->oper3->mode==am_direct || q->oper3->mode==am_immed)) {
+			if (q->oper3 && (q->oper3->mode==am_direct || q->oper3->mode==am_imm)) {
 				if (p = PeepList::FindLabel(q->oper3->offset->i)) {
 					p->isReferenced = true;
 				}
 			}
-			if (q->oper4 && (q->oper4->mode==am_direct || q->oper4->mode==am_immed)) {
+			if (q->oper4 && (q->oper4->mode==am_direct || q->oper4->mode==am_imm)) {
 				if (p = PeepList::FindLabel(q->oper4->offset->i)) {
 					p->isReferenced = true;
 				}
@@ -343,7 +343,7 @@ void peep_add(OCODE *ip)
 static bool IsSubiSP(OCODE *ip)
 {
 	if (ip->opcode == op_sub) {
-		if (ip->oper3->mode == am_immed) {
+		if (ip->oper3->mode == am_imm) {
 			if (ip->oper1->preg == regSP && ip->oper2->preg == regSP) {
 				return (true);
 			}
@@ -366,7 +366,7 @@ static void PeepoptSub(OCODE *ip)
 	return;
 	if (ip->opcode==op_subui) {
 		if (ip->oper3) {
-			if (ip->oper3->mode==am_immed) {
+			if (ip->oper3->mode==am_imm) {
 				if (ip->oper3->offset->nodetype==en_icon && ip->oper3->offset->i==1) {
 					if (ip->fwd) {
 						if (ip->fwd->opcode==op_ne && ip->fwd->oper2->mode==am_reg && ip->fwd->oper2->preg==0) {
@@ -451,7 +451,7 @@ void PeepoptMuldiv(OCODE *ip, int op)
 	int shcnt;
 	int64_t num;
 
-	if( ip->oper1->mode != am_immed )
+	if( ip->oper1->mode != am_imm )
 		return;
 	if( ip->oper1->offset->nodetype != en_icon )
 		return;
@@ -535,7 +535,7 @@ void PeepoptBcc(OCODE * ip)
      if (!ip->fwd)
          return;
      fwd1 = ip->fwd;
-     if (fwd1->opcode != op_ldi || fwd1->oper2->mode != am_immed)
+     if (fwd1->opcode != op_ldi || fwd1->oper2->mode != am_imm)
          return;
      fwd2 = fwd1->fwd;
      if (!fwd2)
@@ -550,7 +550,7 @@ void PeepoptBcc(OCODE * ip)
      fwd4 = fwd3->fwd;
      if (!fwd4)
          return;
-     if (fwd4->opcode != op_ldi || fwd4->oper2->mode != am_immed)
+     if (fwd4->opcode != op_ldi || fwd4->oper2->mode != am_imm)
          return;
      fwd5 = fwd4->fwd;
      if (!fwd5)
@@ -692,14 +692,14 @@ void PeepoptPushPop(OCODE *ip)
 	return;
     if (!isTable888)
         return;
-	if (ip->oper1->mode == am_immed)
+	if (ip->oper1->mode == am_imm)
 		return;
 	ip2 = ip->fwd;
 	if (!ip2)
 		return;
 	if (ip2->opcode!=ip->opcode)
 		return;
-	if (ip2->oper1->mode==am_immed)
+	if (ip2->oper1->mode==am_imm)
 		return;
 	ip->oper2 = ip2->oper1->Clone();
 	ip->fwd = ip2->fwd;
@@ -708,7 +708,7 @@ void PeepoptPushPop(OCODE *ip)
 		return;
 	if (ip3->opcode!=ip->opcode)
 		return;
-	if (ip3->oper1->mode==am_immed)
+	if (ip3->oper1->mode==am_imm)
 		return;
 	ip->oper3 = ip3->oper1->Clone();
 	ip->fwd = ip3->fwd;
@@ -717,7 +717,7 @@ void PeepoptPushPop(OCODE *ip)
 		return;
 	if (ip4->opcode!=ip->opcode)
 		return;
-	if (ip4->oper1->mode==am_immed)
+	if (ip4->oper1->mode==am_imm)
 		return;
 	ip->oper4 = ip4->oper1->Clone();
 	ip->fwd = ip4->fwd;
@@ -728,7 +728,7 @@ void PeepoptPushPop(OCODE *ip)
 
 void peep_ld(OCODE *ip)
 {
-	if (ip->oper2->mode != am_immed)
+	if (ip->oper2->mode != am_imm)
 		return;
 	if (ip->oper2->offset->i==0) {
 		ip->opcode = op_mov;
@@ -745,7 +745,7 @@ void peep_ld(OCODE *ip)
 		return;
 	if (ip->fwd->oper2->preg != ip->oper1->preg)
 		return;
-	if (ip->fwd->oper3->mode != am_immed)
+	if (ip->fwd->oper3->mode != am_imm)
 		return;
 	ip->oper2->offset->i = ip->oper2->offset->i & ip->fwd->oper3->offset->i;
 	if (ip->fwd->fwd)
@@ -826,7 +826,7 @@ void PeepoptSxbAnd(OCODE *ip)
          return;
      if (ip->fwd->opcode != op_and)
          return;
-	 if (ip->fwd->oper3->mode != am_immed)
+	 if (ip->fwd->oper3->mode != am_imm)
 		 return;
      if (ip->fwd->oper3->offset->i != 255)
          return;
@@ -1120,7 +1120,7 @@ static void PeepoptAnd(OCODE *ip)
 {
 	// This doesn't work properly yet in all cases.
 	if (ip->oper1 && ip->oper2 && ip->oper3) {
-		if (ip->oper1->mode==am_reg && ip->oper2->mode==am_reg && ip->oper3->mode == am_immed) {
+		if (ip->oper1->mode==am_reg && ip->oper2->mode==am_reg && ip->oper3->mode == am_imm) {
 			if (ip->oper1->preg==ip->oper2->preg && ip->oper3->offset->i==-1) {
 				MarkRemove(ip);
 				optimized++;

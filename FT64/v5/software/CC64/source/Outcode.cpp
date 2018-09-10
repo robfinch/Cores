@@ -330,8 +330,11 @@ char *RegMoniker(int regno)
 		sprintf_s(&buf[n][0], 20, "$t%d", regno-regFirstTemp);
 	else if (regno >= 11 && regno <= 17)
 		sprintf_s(&buf[n][0], 20, "$r%d", regno);
-	else
+	else {
+		if (regno == 3533)
+			printf("hi");
 		sprintf_s(&buf[n][0], 20, "$r%d", regno);
+	}
 	return &buf[n][0];
 }
 

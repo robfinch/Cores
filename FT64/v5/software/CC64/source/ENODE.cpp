@@ -590,10 +590,10 @@ Operand *ENODE::GenIndex()
 	}
 	GenerateHint(8);
 	ap1 = GenerateExpression(p[0], F_REG | F_IMMED, 8);
-	if (ap1->mode == am_immed)
+	if (ap1->mode == am_imm)
 	{
 		ap2 = GenerateExpression(p[1], F_REG | F_IMM0, 8);
-		if (ap2->mode == am_immed) {	// value is zero
+		if (ap2->mode == am_imm) {	// value is zero
 			ap1->mode = am_direct;
 			return (ap1);
 		}
@@ -605,7 +605,7 @@ Operand *ENODE::GenIndex()
 	}
 	ap2 = GenerateExpression(p[1], F_ALL, 8);   /* get right op */
 	GenerateHint(9);
-	if (ap2->mode == am_immed && ap1->mode == am_reg) /* make am_indx */
+	if (ap2->mode == am_imm && ap1->mode == am_reg) /* make am_indx */
 	{
 		ap2->mode = am_indx;
 		ap2->preg = ap1->preg;
@@ -891,7 +891,7 @@ Operand *ENODE::GenBinary(int flags, int size, int op)
 		else {
 			ap1 = GenerateExpression(p[0], F_REG, size);
 			ap2 = GenerateExpression(p[1], F_REG | F_IMMED, size);
-			if (ap2->mode == am_immed) {
+			if (ap2->mode == am_imm) {
 				switch (op) {
 				case op_and:
 					GenerateTriadic(op, 0, ap3, ap1, make_immed(ap2->offset->i));

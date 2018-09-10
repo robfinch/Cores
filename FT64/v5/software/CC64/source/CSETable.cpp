@@ -251,7 +251,7 @@ void CSETable::InitializeTempRegs()
 					if (csp->isfp)
 						ap2->type = ap->type;
 					ap2->isPtr = ap->isPtr;
-					if (ap->mode == am_immed) {
+					if (ap->mode == am_imm) {
 						if (ap2->mode == am_fpreg) {
 							ap3 = GetTempRegister();
 							GenLdi(ap3, ap);
