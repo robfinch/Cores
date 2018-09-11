@@ -557,7 +557,11 @@ always @*
 begin
 	bus[`IB_CONST] <= instr[7:6]==2'b01 ? {{34{instr[47]}},instr[47:18]} :
 																				{{50{instr[31]}},instr[31:18]};
-	bus[`IB_LN]    <= instr[7:6];
+	case(instr[7:6])
+	2'b00:	bus[`IB_LN] <= 3'd4;
+	2'b01:	bus[`IB_LN] <= 3'd6;
+	default: bus[`IB_LN] <= 3'd2;
+	endcase
 	bus[`IB_BT]    <= (IsBranch(instr) && predict_taken);
 	bus[`IB_ALU]   <= IsALU(instr);
 	bus[`IB_ALU0]  <= IsAlu0Only(instr);

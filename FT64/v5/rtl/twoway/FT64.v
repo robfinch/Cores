@@ -424,8 +424,8 @@ reg [128:0] message [0:15];	// indexed by panic
 
 wire int_commit;
 reg StatusHWI;
-reg [31:0] insn0, insn1;
-wire [31:0] insn0a, insn1a;
+reg [47:0] insn0, insn1;
+wire [47:0] insn0a, insn1a;
 reg tgtq;
 // Only need enough bits in the seqnence number to cover the instructions in
 // the queue plus an extra count for skipping on branch misses. In this case
@@ -440,7 +440,7 @@ reg queued1;
 reg queued2;
 reg queuedNop;
 
-reg [31:0] codebuf[0:63];
+reg [47:0] codebuf[0:63];
 reg [7:0] setpred;
 
 // instruction queue (ROB)
@@ -5164,7 +5164,6 @@ FT64_alu #(.BIG(1'b1),.SUP_VECTOR(SUP_VECTOR)) ualu0 (
   .excen(aec[4:0]),
   .exc(alu0_exc),
   .thrd(alu0_thrd),
-  .ptrmask(ptrmask[alu0_thrd]),
   .mem(alu0_mem),
   .shift48(alu0_shft48)
 );
@@ -5192,7 +5191,6 @@ FT64_alu #(.BIG(1'b0),.SUP_VECTOR(SUP_VECTOR)) ualu1 (
   .excen(aec[4:0]),
   .exc(alu1_exc),
   .thrd(1'b0),
-  .ptrmask(ptrmask[alu1_thrd]),
   .mem(alu1_mem),
   .shift48(alu1_shft48)
 );
@@ -5688,6 +5686,7 @@ if (rst) begin
 `endif
     for (n = 0; n < QENTRIES; n = n + 1) begin
          iqentry_v[n] <= 1'b0;
+         iqentry_iv[n] <= `INV;
          iqentry_done[n] <= 1'b0;
          iqentry_cmt[n] <= 1'b0;
          iqentry_out[n] <= 1'b0;
@@ -6845,8 +6844,8 @@ else begin
                  fcu_pc		<= iqentry_pc[n];
                  fcu_nextpc <= iqentry_pc[n] + iqentry_insln[n];
                  fcu_brdisp <= (iqentry_instr[n][7:6]==2'b01) ?
-                          	{{36{iqentry_instr[n][47]}},iqentry_instr[n][47:19],1'b0} :
-         				    {{52{iqentry_instr[n][31]}},iqentry_instr[n][31:19],1'b0};
+                          	{{36{iqentry_instr[n][47]}},iqentry_instr[n][47:21],1'b0} :
+         				    {{52{iqentry_instr[n][31]}},iqentry_instr[n][31:21],1'b0};
                  fcu_call    <= IsCall(iqentry_instr[n])|IsJAL(iqentry_instr[n]);
                  fcu_bt		<= iqentry_bt[n];
                  fcu_pc		<= iqentry_pc[n];
@@ -7173,24 +7172,32 @@ IC3a:     icstate <= IC4;
         // will do no good.
         // The IC machine will stall in this state until the BIU has loaded the
         // L2 cache. 
-IC4:    if (ihit2 && picstate==IC3a) begin
-			L1_en <= 8'hFF;
-            L1_wr1 <= TRUE;
-            L1_wr0 <= TRUE;
-            L1_adr <= L2_adr;
-            L2_rdat <= L2_dato;
-            icstate <= IC5;
-		end
-		else if (bstate!=B9)
-			;
-		else begin
-             //L1_wr1 <= TRUE;
-             //L1_wr0 <= TRUE;
-             //L1_adr <= L2_adr;
-             //L2_rdat <= L2_dato;
-             icstate <= IC5;
-        end
-IC5:     icstate <= IC6;
+IC4: 
+	if (ihit2 && picstate==IC3a) begin
+		L1_en <= 10'h3FF;
+		L1_wr1 <= TRUE;
+		L1_wr0 <= TRUE;
+		L1_adr <= L2_adr;
+		L2_rdat <= L2_dato;
+		icstate <= IC5;
+	end
+	else if (bstate!=B9)
+		;
+	else begin
+		L1_en <= 10'h3FF;
+		L1_wr1 <= TRUE;
+		L1_wr0 <= TRUE;
+		L1_adr <= L2_adr;
+		L2_rdat <= L2_dato;
+		icstate <= IC5;
+	end
+IC5: 
+	begin
+		L1_en <= 10'h000;
+		L1_wr0 <= FALSE;
+		L1_wr1 <= FALSE;
+		icstate <= IC6;
+	end
 IC6:     icstate <= IC8;
 IC7:	icstate <= IC8;
 IC8:    begin
@@ -7698,10 +7705,10 @@ B7:
     if (ack_i|err_i) begin
         errq <= errq | err_i;
         exvq <= exvq | exv_i;
-        L1_en <= 8'h3 << {L2_adr[4:3],1'b0};
-        L1_wr0 <= `TRUE;
-        L1_wr1 <= `TRUE;
-        L1_adr <= L2_adr;
+//        L1_en <= 8'h3 << {L2_adr[4:3],1'b0};
+//        L1_wr0 <= `TRUE;
+//        L1_wr1 <= `TRUE;
+//        L1_adr <= L2_adr;
         if (err_i)
         	L2_rdat <= {8{13'b0,3'd7,3'b0,`FLT_IBE,`BRK}};
         else
@@ -7883,6 +7890,7 @@ end
          seq_num <= seq_num + 5'd1;
 */
 //	#5 rf[0] = 0; rf_v[0] = 1; rf_source[0] = 0;
+if (icstate==IDLE || icstate==IC5 || icstate==IC6 || icstate==IC7 || icstate==IC8) begin
 	$display("\n\n\n\n\n\n\n\n");
 	$display("TIME %0d", $time);
 	$display("%h #", pc0);
@@ -7987,6 +7995,7 @@ end
 	$display("0: %c %h %o 0%d #", commit0_v?"v":" ", commit0_bus, commit0_id, commit0_tgt[4:0]);
 	$display("1: %c %h %o 0%d #", commit1_v?"v":" ", commit1_bus, commit1_id, commit1_tgt[4:0]);
     $display("instructions committed: %d ticks: %d ", I, tick);
+end
 //
 //	$display("\n\n\n\n\n\n\n\n");
 //	$display("TIME %0d", $time);
@@ -8246,6 +8255,7 @@ input v;
 input [127:0] bus;
 begin
   if (iqentry_iv[nn] == `INV && iqentry_is[nn] == id && iqentry_v[nn] == `VAL && v == `VAL) begin
+  	iqentry_iv   [nn]  <= `VAL;
   	iqentry_a0	 [nn]  <= bus[`IB_CONST];
 		iqentry_insln[nn]  <= bus[`IB_LN];
 		iqentry_bt   [nn]  <= bus[`IB_BT];
@@ -8291,6 +8301,7 @@ begin
 	iqentry_sn   [tail]    <=  seqnum;
 	iqentry_v    [tail]    <=   `VAL;
 	iqentry_iv	 [tail]    <=   `INV;
+	iqentry_is   [tail]    <= tail;
 	iqentry_thrd [tail]    <=   1'b0;
 	iqentry_done [tail]    <=    `INV;
 	iqentry_cmt  [tail]    <=	`INV;
@@ -8347,6 +8358,7 @@ begin
 	iqentry_sn   [tail]    <=   seqnum;
 	iqentry_v    [tail]    <=   `VAL;
 	iqentry_iv	 [tail]    <=   `INV;
+	iqentry_is   [tail]    <= tail;
 	iqentry_thrd [tail]    <=   1'b1;
 	iqentry_done [tail]    <=   `INV;
 	iqentry_cmt  [tail]    <=	`INV;

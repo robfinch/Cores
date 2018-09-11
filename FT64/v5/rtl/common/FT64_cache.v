@@ -91,6 +91,8 @@ if (rst) begin
      valid5 <= 64'd0;
      valid6 <= 64'd0;
      valid7 <= 64'd0;
+     valid8 <= 64'd0;
+     valid9 <= 64'd0;
 end
 else begin
     if (invall) begin
@@ -102,6 +104,8 @@ else begin
     	valid5 <= 64'd0;
     	valid6 <= 64'd0;
     	valid7 <= 64'd0;
+			valid8 <= 64'd0;
+			valid9 <= 64'd0;
     end
     else if (invline) begin
     	valid0[lineno] <= 1'b0;
@@ -112,6 +116,8 @@ else begin
     	valid5[lineno] <= 1'b0;
     	valid6[lineno] <= 1'b0;
     	valid7[lineno] <= 1'b0;
+    	valid8[lineno] <= 1'b0;
+    	valid9[lineno] <= 1'b0;
 	end
     else if (wr) begin
     	if (en[0]) valid0[lineno] <= 1'b1;
@@ -313,7 +319,7 @@ input [9:0] en;
 input [37:0] adr;
 input [37:0] wadr;
 input [319:0] i;
-output reg [31:0] o;
+output reg [47:0] o;
 output hit;
 input invall;
 input invline;

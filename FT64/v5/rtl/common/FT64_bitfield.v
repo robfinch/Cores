@@ -66,7 +66,7 @@ always @(mb or me or nn)
 	for (nn = 0; nn < DWIDTH; nn = nn + 1)
 		mask[nn] <= (nn >= mb) ^ (nn <= me) ^ (me >= mb);
 
-ffo96 ({32'h0,o1},ffoo);
+ffo96 u1 ({32'h0,o1},ffoo);
 
 always @(op,mask,b,a,da,imm,mb,ml)
 case (op)

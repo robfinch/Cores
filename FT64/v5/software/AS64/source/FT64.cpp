@@ -1407,6 +1407,13 @@ static void process_riop(int64_t opcode6)
 		if (!IsNBit(val, 30)) {
 			Lui34(val, 23);
 			emit_insn(
+				(val << 18) |
+				(23 << 13) |
+				(23 << 8) |
+				(1 << 6) |
+				0x09, !expand_flag, 6	// ORI
+			);
+			emit_insn(
 				(opcode6 << 26LL) |
 				(sz << 23) |		// set size to word size op
 				(Rt << 18) |
@@ -1806,27 +1813,30 @@ static void process_jal(int64_t oc)
     int Ra;
     int Rt;
 	bool noRt;
+	char *p;
 
 	noRt = false;
 	Ra = 0;
     Rt = 0;
+	p = inptr;
     NextToken();
-    if (token=='(' || token=='[') {
-j1:
-       Ra = getRegisterX();
-       if (Ra==-1) {
-           printf("Expecting a register\r\n");
-           return;
-       }
-       // Simple jmp [Rn]
-       else {
-            if (token != ')' && token!=']')
-                printf("Missing close bracket\r\n");
-            emit_insn((Ra << 6)|(Rt<<11)|0x18,0,4);
-            return;
-       }
-    }
-    prevToken();
+	if (token == '(' || token == '[') {
+	j1:
+		Ra = getRegisterX();
+		if (Ra == -1) {
+			printf("Expecting a register\r\n");
+			return;
+		}
+		// Simple jmp [Rn]
+		else {
+			if (token != ')' && token != ']')
+				printf("Missing close bracket\r\n");
+			emit_insn((Ra << 8) | (Rt << 13) | 0x18, 0, 4);
+			return;
+		}
+	}
+	else
+		inptr = p;
     Rt = getRegisterX();
     if (Rt >= 0) {
         need(',');
@@ -1852,39 +1862,48 @@ j1:
 			addr -= code_address;
 	}
 	val = addr;
-	if (noRt && IsNBit(val,33)) {
+	if (IsNBit(val, 14)) {
 		emit_insn(
-			((val & 0x3ffffffff) << 6) |
-			oc,0,5
-		);
+			(val << 18) |
+			(Rt << 13) |
+			(Ra << 8) |
+			0x18, !expand_flag, 4);
 		return;
 	}
-	if (!IsNBit(val,20)) {
-		LoadConstant(val, 52);
+	if (IsNBit(val, 30)) {
+		emit_insn(
+			(val << 18) |
+			(Rt << 13) |
+			(Ra << 8) |
+			(1 << 6) |
+			0x18, !expand_flag, 6);
+		return;
+	}
+
+	{
+		LoadConstant(val, 23);
 		if (Ra != 0) {
-			// add r52,r52,Ra
+			// add r23,r23,Ra
 			emit_insn(
-				(0x04LL << 34LL) |
-				(3 << 24) |
-				(52 << 18) |
-				(52 << 12) |
-				(Ra << 6) |
-				0x02,0,5
-				);
+				(0x04LL << 26LL) |
+				(3 << 23) |
+				(23 << 18) |
+				(23 << 13) |
+				(Ra << 8) |
+				0x02, 0, 4
+			);
 			// jal Rt,r23
 			emit_insn(
-				(3 << 18) |
+				(0 << 18) |
 				(Rt << 12) |
-				(52 << 6) | 0x18,!expand_flag,5);
+				(23 << 8) | 0x18, !expand_flag, 4);
 			return;
 		}
 		emit_insn(
-			(3 << 18) |
 			(Rt << 12) |
-			(52 << 6) | 0x18,!expand_flag,5);
+			(23 << 8) | 0x18, !expand_flag, 4);
 		return;
 	}
-	emit_insn((addr << 20) | (3 << 18) | (Rt << 12) | (Ra << 6) | 0x18,!expand_flag,5);
 }
 
 // ---------------------------------------------------------------------------
@@ -2468,7 +2487,7 @@ static void process_bra(int oc)
 	if (disp+1 > -512 && disp+1 < 512) {	// disp+1 accounts for instruction size of 2 not 4
 		disp++;
 		emit_insn(
-			(7 << 14) |
+			(7 << 12) |
 			(((disp >> 6) & 0xf) << 8) |
 			(2 << 6) |
 			(disp & 0x3f), 0, 2
@@ -4489,6 +4508,7 @@ void FT64_processMaster()
 		case tk_lf:	 process_lsfloat(0x0b,0x00); break;
         case tk_lh:  process_load(0x20,2); break;
         case tk_lhu: process_load(0x20,-2); break;
+		//case tk_lui: process_lui(0x27); break;
         case tk_lv:  process_lv(0x36); break;
 		case tk_lvb: ProcessLoadVolatile(0); break;
 		case tk_lvc: ProcessLoadVolatile(2); break;

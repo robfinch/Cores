@@ -417,7 +417,7 @@
 `define PANIC_BADTARGETID	4'd12
 
 `define IB_CONST	127:64
-`define IB_LN			63:62
+`define IB_LN			63:61
 `define IB_MEM      29
 `define IB_BT       28
 `define IB_ALU		27
