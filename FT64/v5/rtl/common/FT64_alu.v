@@ -73,7 +73,7 @@ wire [7:0] b8 = b[7:0];
 wire [15:0] b16 = b[15:0];
 wire [31:0] b32 = b[31:0];
 wire [63:0] orb = instr[6] ? {34'd0,b[29:0]} : {50'd0,b[13:0]};
-wire [63:0] andb = instr[6] ? {34'h3FFFFFFFF,b[29:0]} : {50'h3FFFFFFFFFFFF,b[13:0]};
+wire [63:0] andb = ((instr[6]==1'b1) ? {34'h3FFFFFFFF,b[29:0]} : {50'h3FFFFFFFFFFFF,b[13:0]});
 
 wire [21:0] qimm = instr[39:18];
 wire [63:0] imm = {{45{instr[39]}},instr[39:21]};

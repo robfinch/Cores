@@ -413,7 +413,7 @@ end
 end
 endgenerate
 
-assign hit = taghit & lv[adr[4:2]];
+assign hit = taghit & &lv; //[adr[4:2]];
 
 //always @(radr or ic0 or ic1)
 always @(adr or ic)

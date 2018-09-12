@@ -52,11 +52,19 @@ parameter FALSE = 1'b0;
 //endcase
 //endfunction
 
+wire iAlu;
+mIsALU uialu1
+(
+	.instr(instr),
+	.IsALU(iAlu)
+);
+
 function IsALU;
-input [47:0] isn;
-casez(isn[`INSTRUCTION_OP])
-`R2:    if (isn[`INSTRUCTION_L2]==2'b00)
-			case(isn[`INSTRUCTION_S2])
+input [47:0] instr;
+begin
+casez(instr[`INSTRUCTION_OP])
+`R2:    if (instr[`INSTRUCTION_L2]==2'b00)
+			case(instr[`INSTRUCTION_S2])
 			`VMOV:		IsALU = TRUE;
 	        `RTI:       IsALU = FALSE;
 	        default:    IsALU = TRUE;
@@ -73,18 +81,19 @@ casez(isn[`INSTRUCTION_OP])
 `CALL:  IsALU = FALSE;
 `RET:   IsALU = FALSE;
 `FVECTOR:
-			case(isn[`INSTRUCTION_S2])
+			case(instr[`INSTRUCTION_S2])
             `VSHL,`VSHR,`VASR:  IsALU = TRUE;
             default:    IsALU = FALSE;  // Integer
             endcase
 `IVECTOR:
-			case(isn[`INSTRUCTION_S2])
+			case(instr[`INSTRUCTION_S2])
             `VSHL,`VSHR,`VASR:  IsALU = TRUE;
             default:    IsALU = TRUE;  // Integer
             endcase
 `FLOAT:		IsALU = FALSE;            
 default:    IsALU = TRUE;
 endcase
+end
 endfunction
 
 function IsAlu0Only;
@@ -598,5 +607,46 @@ begin
 	bus[`IB_WE]			<= fnWe(instr);
 	id_o <= id_i;
 end
+
+endmodule
+
+module mIsALU(instr, IsALU);
+input [47:0] instr;
+output reg IsALU;
+parameter TRUE = 1'b1;
+parameter FALSE = 1'b0;
+
+always @*
+casez(instr[`INSTRUCTION_OP])
+`R2:    if (instr[`INSTRUCTION_L2]==2'b00)
+			case(instr[`INSTRUCTION_S2])
+			`VMOV:		IsALU = TRUE;
+	        `RTI:       IsALU = FALSE;
+	        default:    IsALU = TRUE;
+	        endcase
+	    else
+	    	IsALU = TRUE;
+`BRK:   IsALU = FALSE;
+`Bcc:   IsALU = FALSE;
+`BBc:   IsALU = FALSE;
+`BEQI:  IsALU = FALSE;
+`CHK:   IsALU = FALSE;
+`JAL:   IsALU = FALSE;
+`JMP:	IsALU = FALSE;
+`CALL:  IsALU = FALSE;
+`RET:   IsALU = FALSE;
+`FVECTOR:
+			case(instr[`INSTRUCTION_S2])
+            `VSHL,`VSHR,`VASR:  IsALU = TRUE;
+            default:    IsALU = FALSE;  // Integer
+            endcase
+`IVECTOR:
+			case(instr[`INSTRUCTION_S2])
+            `VSHL,`VSHR,`VASR:  IsALU = TRUE;
+            default:    IsALU = TRUE;  // Integer
+            endcase
+`FLOAT:		IsALU = FALSE;            
+default:    IsALU = TRUE;
+endcase
 
 endmodule

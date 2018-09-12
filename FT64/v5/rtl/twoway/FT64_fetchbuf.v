@@ -125,10 +125,6 @@ output take_branch1;
 input [3:0] stompedRets;
 
 integer n;
-reg [3:0] fetchbufA_insln;
-reg [3:0] fetchbufB_insln;
-reg [3:0] fetchbufC_insln;
-reg [3:0] fetchbufD_insln;
 
 //`include "FT64_decode.vh"
 
@@ -187,318 +183,32 @@ case(rg)
 endcase
 endfunction
 
-function [47:0] expand;
-input [15:0] cinstr;
-casez({cinstr[15:12],cinstr[6]})
-5'b00000:	// NOP / ADDI
-	case(cinstr[4:0])
-	5'd31:	begin
-			expand[47:32] = 16'h0000;
-			expand[31:18] = {{6{cinstr[11]}},cinstr[11:8],cinstr[5],3'b0};
-			expand[17:13] = cinstr[4:0];
-			expand[12:8] = cinstr[4:0];
-			expand[7:6] = 2'b10;
-			expand[5:0] = `ADDI;
-			end
-	default:
-			begin
-			expand[47:32] = 16'h0000;
-			expand[31:18] = {{6{cinstr[11]}},cinstr[11:8],cinstr[5]};
-			expand[17:13] = cinstr[4:0];
-			expand[12:8] = cinstr[4:0];
-			expand[7:6] = 2'b10;
-			expand[5:0] = `ADDI;
-			end
-	endcase
-5'b00010:	// SYS
-			if (cinstr[4:0]==5'd0) begin
-				expand[47:32] = 16'h0000;
-				expand[5:0] = `BRK;
-				expand[7:6] = 2'b10;
-				expand[15:8] = {3'd1,cinstr[11:8],cinstr[5]};
-				expand[16] = 1'b0;
-				expand[19:17] = 3'd0;
-				expand[23:20] = 4'd1;
-				expand[31:24] = 8'd0;
-			end
-			// LDI
-			else begin
-				expand[47:32] = 16'h0000;
-				expand[31:18] = {{9{cinstr[11]}},cinstr[11:8],cinstr[5]};
-				expand[17:13] = cinstr[4:0];
-				expand[12:8] = 5'd0;
-				expand[7:6] = 2'b10;
-				expand[5:0] = `ORI;
-			end
-5'b00100:	// RET / ANDI
-			if (cinstr[4:0]==5'd0) begin
-				expand[47:32] = 16'h0000;
-				expand[5:0] = `RET;
-				expand[7:6] = 2'b10;
-				expand[12:8] = 5'd31;
-				expand[17:13] = 5'd29;
-				expand[31:18] = {8'd0,cinstr[11:8],cinstr[5],3'd0};
-			end
-			else begin
-				expand[47:32] = 16'h0000;
-				expand[5:0] = `ANDI;
-				expand[7:6] = 2'b10;
-				expand[12:8] = cinstr[4:0];
-				expand[17:13] = cinstr[4:0];
-				expand[31:18] = {{11{cinstr[11]}},cinstr[11:8],cinstr[5]};
-			end
-5'b00110:	// SHLI
-			begin
-			expand[47:32] = 16'h0000;
-			expand[31:26] = 6'h0F;	// immediate mode 0-31
-			expand[25:23] = 3'd0;	// SHL
-			expand[22:18] = {cinstr[11:8],cinstr[5]};	// amount
-			expand[17:13] = cinstr[4:0];
-			expand[12:8] = cinstr[4:0];
-			expand[7:6] = 2'b10;
-			expand[5:0] = 8'h02;		// R2 instruction
-			end
-5'b01000:
-			case(cinstr[5:4])
-			2'd0:		// SHRI
-				begin
-				expand[47:32] = 16'h0000;
-				expand[31:26] = 6'h0F;		// shift immediate 0-31
-				expand[25:23] = 3'd1;		// SHR
-				expand[22:18] = {cinstr[11:8],cinstr[3]};	// amount
-				expand[17:13] = fnRp(cinstr[2:0]);
-				expand[12:8] = fnRp(cinstr[2:0]);
-				expand[7:6] = 2'b10;
-				expand[5:0] = 8'h02;		// R2 instruction
-				end
-			2'd1:		// ASRI
-				begin
-				expand[47:32] = 16'h0000;
-				expand[31:26] = 6'h0F;		// shift immediate 0-31
-				expand[25:23] = 3'd3;		// ASR
-				expand[22:18] = {cinstr[11:8],cinstr[3]};	// amount
-				expand[17:13] = fnRp(cinstr[2:0]);
-				expand[12:8] = fnRp(cinstr[2:0]);
-				expand[7:6] = 2'b10;
-				expand[5:0] = 8'h02;		// R2 instruction
-				end
-			2'd2:		// ORI
-				begin
-				expand[47:32] = 16'h0000;
-				expand[31:18] = {{9{cinstr[11]}},cinstr[11:8],cinstr[3]};
-				expand[17:13] = fnRp(cinstr[2:0]);
-				expand[12:8] = fnRp(cinstr[2:0]);
-				expand[7:6] = 2'b10;
-				expand[5:0] = `ORI;
-				end
-			2'd3:
-				case(cinstr[11:10])
-				2'd0:	begin
-						expand[47:32] = 16'h0000;
-						expand[31:26] = `SUB;
-						expand[25:23] = 3'b011;	// word size
-						expand[22:18] = fnRp({cinstr[9:8],cinstr[3]});
-						expand[17:13] = fnRp(cinstr[2:0]);
-						expand[12:8] = fnRp(cinstr[2:0]);
-						expand[7:6] = 2'b10;
-						expand[5:0] = 8'h02;		// R2 instruction
-						end
-				2'd1:	begin
-						expand[47:32] = 16'h0000;
-						expand[31:26] = `AND;
-						expand[25:23] = 3'b011;	// word size
-						expand[22:18] = fnRp({cinstr[9:8],cinstr[3]});
-						expand[17:13] = fnRp(cinstr[2:0]);
-						expand[12:8] = fnRp(cinstr[2:0]);
-						expand[7:6] = 2'b10;
-						expand[5:0] = 8'h02;		// R2 instruction
-						end
-				2'd2:	begin
-						expand[47:32] = 16'h0000;
-						expand[31:26] = `OR;
-						expand[25:23] = 3'b011;	// word size
-						expand[22:18] = fnRp({cinstr[9:8],cinstr[3]});
-						expand[17:13] = fnRp(cinstr[2:0]);
-						expand[12:8] = fnRp(cinstr[2:0]);
-						expand[7:6] = 2'b10;
-						expand[5:0] = 8'h02;		// R2 instruction
-						end
-				2'd3:	begin
-						expand[47:32] = 16'h0000;
-						expand[31:26] = `XOR;
-						expand[25:23] = 3'b011;	// word size
-						expand[22:18] = fnRp({cinstr[9:8],cinstr[3]});
-						expand[17:13] = fnRp(cinstr[2:0]);
-						expand[12:8] = fnRp(cinstr[2:0]);
-						expand[7:6] = 2'b10;
-						expand[5:0] = 8'h02;		// R2 instruction
-						end
-				endcase
-			endcase
-5'b01110:
-		begin
-			expand[47:32] = 16'h0000;
-			expand[31:21] = {{1{cinstr[11]}},{cinstr[11:8],cinstr[5:0]}};
-			expand[20:18] = 3'd0;		// BEQ
-			expand[17:8] = 10'd0;		// r0==r0
-			expand[7:6] = 2'b10;
-			expand[5:0] = `Bcc;		// 0x38
-		end
-5'b10??0:
-		begin
-			expand[47:32] = 16'h0000;
-			expand[31:21] = {{6{cinstr[11]}},cinstr[11:8],cinstr[5]};
-			expand[20:18] = 3'd0;			// BEQ
-			expand[17:13] = 5'd0;			// r0
-			expand[12:8] = cinstr[4:0];	// Ra
-			expand[7:6] = 2'b10;
-			expand[5:0] = `Bcc;
-		end
-5'b11??0:
-		begin
-			expand[47:32] = 16'h0000;
-			expand[31:21] = {{6{cinstr[11]}},cinstr[11:8],cinstr[5]};
-			expand[20:18] = 3'd1;			// BNE
-			expand[17:13] = 5'd0;			// r0
-			expand[12:8] = cinstr[4:0];	// Ra
-			expand[7:6] = 2'b10;
-			expand[5:0] = `Bcc;
-		end
-5'b00001:
-		begin
-			expand[47:32] = 16'h0000;
-			expand[31:26] = `MOV;
-			expand[25:23] = 3'd7;			// move current to current
-			expand[22:18] = 5'd0;			// register set (ignored)
-			expand[17:13] = {cinstr[11:8],cinstr[5]};
-			expand[12:8] = cinstr[4:0];
-			expand[7:6] = 2'b10;
-			expand[5:0] = 8'h02;
-		end
-5'b00011:	// ADD
-		begin
-			expand[47:32] = 16'h0000;
-			expand[31:26] = `ADD;
-			expand[27:23] = 3'b011;	// word size
-			expand[22:18] = cinstr[4:0];
-			expand[17:13] = {cinstr[11:8],cinstr[5]};
-			expand[12:8] = cinstr[4:0];
-			expand[7:6] = 2'b10;
-			expand[5:0] = 6'h02;		// R2 instruction
-		end
-5'b00101:	// JALR
-		begin
-			expand[47:32] = 16'h0000;
-			expand[31:18] = 14'd0;
-			expand[17:13] = {cinstr[11:8],cinstr[5]};
-			expand[12:8] = cinstr[4:0];
-			expand[7:6] = 2'b10;
-			expand[5:0] = `JAL;
-		end
-5'b01001:	// LH Rt,d[SP]
-		begin
-			expand[31:18] = {{8{cinstr[11]}},cinstr[11:8],cinstr[5],1'd1};
-			expand[17:13] = {cinstr[4:0]};
-			expand[12:8] = 65'd31;
-			expand[7:6] = 2'b10;
-			expand[5:0] = `Lx;
-		end
-5'b01011:	// LW Rt,d[SP]
-		begin
-			expand[47:32] = 16'h0000;
-			expand[31:18] = {{6{cinstr[11]}},cinstr[11:8],cinstr[5],3'd4};
-			expand[17:13] = cinstr[4:0];
-			expand[12:8] = 5'd31;
-			expand[7:6] = 2'b10;
-			expand[5:0] = `Lx;
-		end
-5'b01101:	// LH Rt,d[fP]
-		begin
-			expand[31:18] = {{8{cinstr[11]}},cinstr[11:8],cinstr[5],1'd1};
-			expand[17:13] = cinstr[4:0];
-			expand[12:8] = 6'd30;
-			expand[7:6] = 2'b10;
-			expand[5:0] = `Lx;
-		end
-5'b01111:	// LW Rt,d[FP]
-		begin
-			expand[47:32] = 16'h0000;
-			expand[31:18] = {{6{cinstr[11]}},cinstr[11:8],cinstr[5],3'd4};
-			expand[17:13] = cinstr[4:0];
-			expand[12:8] = 5'd30;
-			expand[7:6] = 2'b10;
-			expand[5:0] = `Lx;
-		end
-5'b10001:	// SH Rt,d[SP]
-		begin
-			expand[31:18] = {{8{cinstr[11]}},cinstr[11:8],cinstr[5],1'd1};
-			expand[17:13] = cinstr[4:0];
-			expand[12:8] = 5'd31;
-			expand[7:6] = 2'b10;
-			expand[5:0] = `Sx;
-		end
-5'b10011:	// SW Rt,d[SP]
-		begin
-			expand[47:32] = 16'h0000;
-			expand[31:18] = {{6{cinstr[11]}},cinstr[11:8],cinstr[5],3'd4};
-			expand[17:13] = cinstr[4:0];
-			expand[12:8] = 5'd31;
-			expand[7:6] = 2'b10;
-			expand[5:0] = `Sx;
-		end
-5'b10101:	// SH Rt,d[fP]
-		begin
-			expand[31:18] = {{8{cinstr[11]}},cinstr[11:8],cinstr[5],1'd1};
-			expand[17:13] = cinstr[4:0];
-			expand[12:8] = 6'd62;
-			expand[7:6] = 2'b10;
-			expand[5:0] = `Sx;
-		end
-5'b10111:	// SW Rt,d[FP]
-		begin
-			expand[47:32] = 16'h0000;
-			expand[31:18] = {{6{cinstr[11]}},cinstr[11:8],cinstr[5],3'd4};
-			expand[17:13] = cinstr[4:0];
-			expand[12:8] = 5'd30;
-			expand[7:6] = 2'b10;
-			expand[5:0] = `Sx;
-		end
-5'b11001:
-		begin
-			expand[31:18] = {{9{cinstr[11:10]}},cinstr[4:3],1'd1};
-			expand[17:13] = fnRp({cinstr[9:8],cinstr[5]});
-			expand[12:8] = fnRp(cinstr[2:0]);
-			expand[7:6] = 2'b10;
-			expand[5:0] = `Lx;
-		end
-5'b11111:
-		begin
-			expand[31:18] = {{9{cinstr[11:10]}},cinstr[4:3],3'd0};
-			expand[17:13] = fnRp({cinstr[9:8],cinstr[5]});
-			expand[12:8] = fnRp(cinstr[2:0]);
-			expand[7:6] = 2'b10;
-			expand[5:0] = `Sx;
-		end
-default:
-		begin
-			expand[47:8] = 40'd0;
-			expand[7:6] = 2'b10;
-			expand[5:0] = `NOP;
-		end
-endcase
 
-endfunction
+wire [47:0] xinsn0;
+wire [47:0] xinsn1;
+
+FT64_iexpander ux1
+(
+	.cinstr(insn0[15:0]),
+	.expand(xinsn0)
+);
+FT64_iexpander ux2
+(
+	.cinstr(insn1[15:0]),
+	.expand(xinsn1)
+);
+
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 // Table of decompressed instructions.
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 assign ack_o = cs_i & cyc_i & stb_i;
-reg [31:0] DecompressTable [0:1023];
+reg [47:0] DecompressTable [0:1023];
 always @(posedge clk)
 	if (cs_i & cyc_i & stb_i & we_i)
 		DecompressTable[adr_i[11:2]] <= dat_i;
-wire [31:0] expand0 = DecompressTable[insn0[15:6]];
-wire [31:0] expand1 = DecompressTable[insn1[15:6]];
+wire [47:0] expand0 = DecompressTable[insn0[15:6]];
+wire [47:0] expand1 = DecompressTable[insn1[15:6]];
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
@@ -625,15 +335,15 @@ edge_det ued1 (.rst(rst), .clk(clk4x), .ce(1'b1), .i(clk), .pe(peclk), .ne(neclk
 
 always @(posedge clk)
 if (rst) begin
-	  pc0 <= RSTPC;
+	pc0 <= RSTPC;
 `ifdef SUPPORT_SMT
-      pc1 <= RSTPC;
+  pc1 <= RSTPC;
 `endif
-     fetchbufA_v <= 0;
-     fetchbufB_v <= 0;
-     fetchbufC_v <= 0;
-     fetchbufD_v <= 0;
-      fetchbuf <= 0;
+	fetchbufA_v <= 0;
+	fetchbufB_v <= 0;
+	fetchbufC_v <= 0;
+	fetchbufD_v <= 0;
+	fetchbuf <= 0;
 end
 else begin
 	
@@ -1114,52 +824,52 @@ always @*
 
 always @*
 begin
-    if (insn0[`INSTRUCTION_OP]==`EXEC)
-         fetchbuf0_insln <= fnInsLength(codebuf0);
+	if (insn0[7:6]==2'b00 && insn0[`INSTRUCTION_OP]==`EXEC)
+		fetchbuf0_insln <= fnInsLength(codebuf0);
 	else
-    	 fetchbuf0_insln <= fnInsLength(insn0);
+		fetchbuf0_insln <= fnInsLength(insn0);
 end
 
 always @*
 begin
-    if (insn1[`INSTRUCTION_OP]==`EXEC)
-         fetchbuf1_insln <= fnInsLength(codebuf1);
+	if (insn1[7:6]==2'b00 && insn1[`INSTRUCTION_OP]==`EXEC)
+		fetchbuf1_insln <= fnInsLength(codebuf1);
 	else
-    	 fetchbuf1_insln <= fnInsLength(insn1);
+		fetchbuf1_insln <= fnInsLength(insn1);
 end
 
 reg [47:0] cinsn0, cinsn1;
 
 always @*
 begin
-    if (insn0[`INSTRUCTION_OP]==`EXEC)
-         cinsn0 <= codebuf0;
-    else if (insn0[7])
-    	 cinsn0 <= expand(insn0[15:0]);
-    else
-         cinsn0 <= insn0;
+	if (insn0[7:6]==2'b00 && insn0[`INSTRUCTION_OP]==`EXEC)
+		cinsn0 <= codebuf0;
+	else if (insn0[7])
+		cinsn0 <= xinsn0;
+	else
+		cinsn0 <= insn0;
 end
 
 always @*
 begin
-    if (insn1[`INSTRUCTION_OP]==`EXEC)
-         cinsn1 <= codebuf1;
-    else if (insn1[7])
-    	 cinsn1 <= expand(insn1[15:0]);
-    else
-         cinsn1 <= insn1;
+	if (insn1[7:6]==2'b00 && insn1[`INSTRUCTION_OP]==`EXEC)
+		cinsn1 <= codebuf1;
+	else if (insn1[7])
+		cinsn1 <= xinsn1;
+	else
+		cinsn1 <= insn1;
 end
 
 task FetchA;
 begin
-     fetchbufA_instr <= cinsn0;
-     fetchbufA_v <= `VAL;
-     fetchbufA_pc <= pc0;
-    if (phit && ~hirq)
+	fetchbufA_instr <= cinsn0;
+	fetchbufA_v <= `VAL;
+	fetchbufA_pc <= pc0;
+	if (phit && ~hirq)
 `ifdef SUPPORT_SMT
-    	pc0 <= pc0 + fetchbuf0_insln;
+		pc0 <= pc0 + fetchbuf0_insln;
 `else
-    	pc0 <= pc0 + fetchbuf0_insln + fetchbuf1_insln;
+		pc0 <= pc0 + fetchbuf0_insln + fetchbuf1_insln;
 `endif
 end
 endtask
@@ -1188,14 +898,14 @@ endtask
 
 task FetchC;
 begin
-     fetchbufC_instr <= cinsn0;
-     fetchbufC_v <= `VAL;
-     fetchbufC_pc <= pc0;
-    if (phit && ~hirq)
+	fetchbufC_instr <= cinsn0;
+	fetchbufC_v <= `VAL;
+	fetchbufC_pc <= pc0;
+	if (phit && ~hirq)
 `ifdef SUPPORT_SMT
-    	pc0 <= pc0 + fetchbuf0_insln;
+		pc0 <= pc0 + fetchbuf0_insln;
 `else
-    	pc0 <= pc0 + fetchbuf0_insln + fetchbuf1_insln;
+		pc0 <= pc0 + fetchbuf0_insln + fetchbuf1_insln;
 `endif
 end
 endtask
@@ -1222,3 +932,4 @@ end
 endtask
 
 endmodule
+

@@ -99,9 +99,15 @@
 //
 `include "FT64_defines.vh"
 //`define SUPPORT_DBG		1'b1
-`define FULL_ISSUE_LOGIC	1'b1
+//`define FULL_ISSUE_LOGIC	1'b1
 `define QBITS		2:0
 `define QENTRIES	8
+`define ID1_AVAIL	1'b1
+`define ID2_AVAIL	1'b0
+`define ALU0_AVAIL	1'b1
+`define ALU1_AVAIL	1'b1
+`define FPU1_AVAIL	1'b1
+`define FPU2_AVAIL	1'b0
 
 module FT64(hartid, rst, clk, clk4x, tm_clk_i, irq_i, vec_i, bte_o, cti_o, cyc_o, stb_o, ack_i, err_i, we_o, sel_o, adr_o, dat_o, dat_i,
     ol_o, pcr_o, pcr2_o, exv_i, rdv_i, wrv_i, icl_o, sr_o, cr_o, rbi_i, signal_i);
@@ -458,7 +464,7 @@ reg        iqentry_agen  	[0:QENTRIES-1];	// address-generate ... signifies that
 reg  [1:0] iqentry_state [0:QENTRIES-1];
 reg  [3:0] iqentry_id   [0:QENTRIES-1];
 reg        iqentry_alu  [0:QENTRIES-1];  // alu type instruction
-reg        iqentry_alu0 [0:QENTRIES-1];	 // only valid on alu #0
+reg [QENTRIES-1:0] iqentry_alu0;	 // only valid on alu #0
 reg        iqentry_fpu  [0:QENTRIES-1];  // floating point instruction
 reg        iqentry_fc   [0:QENTRIES-1];   // flow control instruction
 reg        iqentry_canex[0:QENTRIES-1];	// true if it's an instruction that can exception
@@ -617,6 +623,7 @@ wire        fetchbufD_v;
 //reg        did_branchback0;
 //reg        did_branchback1;
 
+reg				  id1_available;
 reg   [3:0] id1_id;
 reg  [47:0] id1_instr;
 reg   [5:0] id1_ven;
@@ -626,6 +633,7 @@ reg         id1_pt;
 reg   [4:0] id1_Rt;
 wire [127:0] id1_bus;
 
+reg					id2_available;
 reg   [3:0] id2_id;
 reg  [47:0] id2_instr;
 reg   [5:0] id2_ven;
@@ -3308,6 +3316,9 @@ initial begin: Init
 	message[ `PANIC_MEMORYRACE ]		= "MEMORYRACE      ";
 	message[ `PANIC_ALU0ONLY ] = "ALU0 Only       ";
 
+	for (n = 0; n < 64; n = n + 1)
+		codebuf[n] <= 48'h0;
+
 end
 
 // ---------------------------------------------------------------------------
@@ -3849,7 +3860,7 @@ begin
 		iqentry_idslot[n] = 2'b00;
 	
 	// aluissue is a task
-	begin
+	if (id1_available) begin
 		if (could_issueid[head0] && !iqentry_idissue[head0]) begin
 		  iqentry_idissue[head0] = `TRUE;
 		  iqentry_idslot[head0] = 2'b00;
@@ -3893,7 +3904,7 @@ begin
 		end
 	end
 
-	begin
+	if (id2_available) begin
 		if (could_issueid[head0] && !iqentry_idissue[head0]) begin
 		  iqentry_idissue[head0] = `TRUE;
 		  iqentry_idslot[head0] = 2'b01;
@@ -3946,25 +3957,23 @@ begin
 	
 	// aluissue is a task
 	if (alu0_idle) begin
-		if (could_issue[head0] && iqentry_alu[head0]
-		&& !iqentry_issue[head0]) begin
+		if (could_issue[head0] && iqentry_alu[head0]) begin
 		  iqentry_issue[head0] = `TRUE;
 		  iqentry_islot[head0] = 2'b00;
 		end
-		else if (could_issue[head1] && !iqentry_issue[head1] && iqentry_alu[head1]
-		)
+		else if (could_issue[head1] && iqentry_alu[head1])
 		begin
 		  iqentry_issue[head1] = `TRUE;
 		  iqentry_islot[head1] = 2'b00;
 		end
-		else if (could_issue[head2] && !iqentry_issue[head2] && iqentry_alu[head2]
+		else if (could_issue[head2] && iqentry_alu[head2]
 		&& (!(iqentry_v[head1] && iqentry_sync[head1]) || !iqentry_v[head0])
 		)
 		begin
 			iqentry_issue[head2] = `TRUE;
 			iqentry_islot[head2] = 2'b00;
 		end
-		else if (could_issue[head3] && !iqentry_issue[head3] && iqentry_alu[head3]
+		else if (could_issue[head3] && iqentry_alu[head3]
 		&& (!(iqentry_v[head1] && iqentry_sync[head1]) || !iqentry_v[head0])
 		&& (!(iqentry_v[head2] && iqentry_sync[head2]) ||
 		 		((!iqentry_v[head0])
@@ -3974,7 +3983,7 @@ begin
 			iqentry_issue[head3] = `TRUE;
 			iqentry_islot[head3] = 2'b00;
 		end
-		else if (could_issue[head4] && !iqentry_issue[head4] && iqentry_alu[head4]
+		else if (could_issue[head4] && iqentry_alu[head4]
 		&& (!(iqentry_v[head1] && iqentry_sync[head1]) || !iqentry_v[head0])
 		&& (!(iqentry_v[head2] && iqentry_sync[head2]) ||
 		 		((!iqentry_v[head0])
@@ -3989,7 +3998,7 @@ begin
 			iqentry_issue[head4] = `TRUE;
 			iqentry_islot[head4] = 2'b00;
 		end
-		else if (could_issue[head5] && !iqentry_issue[head5] && iqentry_alu[head5]
+		else if (could_issue[head5] && iqentry_alu[head5]
 		&& (!(iqentry_v[head1] && iqentry_sync[head1]) || !iqentry_v[head0])
 		&& (!(iqentry_v[head2] && iqentry_sync[head2]) ||
 		 		((!iqentry_v[head0])
@@ -4011,7 +4020,7 @@ begin
 			iqentry_islot[head5] = 2'b00;
 		end
 `ifdef FULL_ISSUE_LOGIC
-		else if (could_issue[head6] && !iqentry_issue[head6] && iqentry_alu[head6]
+		else if (could_issue[head6] && iqentry_alu[head6]
 		&& (!(iqentry_v[head1] && iqentry_sync[head1]) || !iqentry_v[head0])
 		&& (!(iqentry_v[head2] && iqentry_sync[head2]) ||
 		 		((!iqentry_v[head0])
@@ -4039,7 +4048,7 @@ begin
 			iqentry_issue[head6] = `TRUE;
 			iqentry_islot[head6] = 2'b00;
 		end
-		else if (could_issue[head7] && !iqentry_issue[head7] && iqentry_alu[head7]
+		else if (could_issue[head7] && iqentry_alu[head7]
 		&& (!(iqentry_v[head1] && iqentry_sync[head1]) || !iqentry_v[head0])
 		&& (!(iqentry_v[head2] && iqentry_sync[head2]) ||
 		 		((!iqentry_v[head0])
@@ -4079,6 +4088,7 @@ begin
 	end
 
 	if (alu1_idle) begin
+		if ((could_issue & ~iqentry_issue & ~iqentry_alu0) != 8'h00) begin
 		if (could_issue[head0] && iqentry_alu[head0]
 		&& !iqentry_alu0[head0]	// alu0only
 		&& !iqentry_issue[head0]) begin
@@ -4219,7 +4229,7 @@ begin
 	end
 //	aluissue(alu0_idle,8'h00,2'b00);
 //	aluissue(alu1_idle,iqentry_alu0,2'b01);
-
+	end
 end
 
 always @*
@@ -5775,9 +5785,11 @@ if (rst) begin
      head6 <= 6;
      head7 <= 7;
      panic = `PANIC_NONE;
-     alu0_available <= 1;
+     id1_available <= `ID1_AVAIL;
+     id2_available <= `ID2_AVAIL;
+     alu0_available <= `ALU0_AVAIL;
      alu0_dataready <= 0;
-     alu1_available <= 1;
+     alu1_available <= `ALU1_AVAIL;
      alu1_dataready <= 0;
      alu0_sourceid <= 5'd0;
      alu1_sourceid <= 5'd0;
@@ -6562,11 +6574,11 @@ else begin
     // can be reset to zero by enqueue.
     // put results into the appropriate instruction entries
     //
-    if (IsMul(alu0_instr)|IsDivmod(alu0_instr)|alu0_shft48) begin
-        if (alu0_done) begin
-             alu0_dataready <= `TRUE;
-        end
-    end
+	if (IsMul(alu0_instr)|IsDivmod(alu0_instr)|alu0_shft48) begin
+		if (alu0_done) begin
+			alu0_dataready <= `TRUE;
+		end
+	end
 
 	if (alu0_v) begin
 		iqentry_tgt [ alu0_id[`QBITS] ] <= alu0_tgt;
@@ -6593,15 +6605,15 @@ else begin
 	end
 
 	if (fpu_v) begin
-         iqentry_res    [ fpu_id[`QBITS] ] <= fpu_bus;
-         iqentry_a0     [ fpu_id[`QBITS] ] <= fpu_status; 
-         iqentry_exc    [ fpu_id[`QBITS] ] <= fpu_exc;
-         iqentry_done[ fpu_id[`QBITS] ] <= fpu_done;
-         iqentry_cmt[ fpu_id[`QBITS] ] <= fpu_done;
-         iqentry_out    [ fpu_id[`QBITS] ] <= `INV;
-         //iqentry_agen[ fpu_id[`QBITS] ] <= `VAL;  // RET
-         fpu_dataready <= FALSE;
-    end
+		iqentry_res    [ fpu_id[`QBITS] ] <= fpu_bus;
+		iqentry_a0     [ fpu_id[`QBITS] ] <= fpu_status; 
+		iqentry_exc    [ fpu_id[`QBITS] ] <= fpu_exc;
+		iqentry_done[ fpu_id[`QBITS] ] <= fpu_done;
+		iqentry_cmt[ fpu_id[`QBITS] ] <= fpu_done;
+		iqentry_out    [ fpu_id[`QBITS] ] <= `INV;
+		//iqentry_agen[ fpu_id[`QBITS] ] <= `VAL;  // RET
+		fpu_dataready <= FALSE;
+	end
 	if (fcu_wr) begin
 	    if (fcu_ld)
 	        waitctr <= fcu_argA;
@@ -6707,66 +6719,66 @@ else begin
 	//  - commit1_bus
 	//
 
-    for (n = 0; n < QENTRIES; n = n + 1)
-    begin
-        setargs(n,{1'b0,fpu_id},fpu_v,fpu_bus);
-        setargs(n,{1'b0,alu0_id},alu0_v,alu0_bus);
-        setargs(n,{1'b0,alu1_id},alu1_v,alu1_bus);
-        setargs(n,{1'b0,fcu_id},fcu_wr,fcu_bus);
-        setargs(n,{1'b0,dramA_id},dramA_v,dramA_bus);
-        setargs(n,{1'b0,dramB_id},dramB_v,dramB_bus);
-        setargs(n,{1'b0,dramC_id},dramC_v,dramC_bus);
-        setargs(n,commit0_id,commit0_v,commit0_bus);
-        setargs(n,commit1_id,commit1_v,commit1_bus);
-        
-        setinsn(n,id1_ido,1'b1,id1_bus);
-        setinsn(n,id2_ido,1'b1,id2_bus);
+	for (n = 0; n < QENTRIES; n = n + 1)
+	begin
+		setargs(n,{1'b0,fpu_id},fpu_v,fpu_bus);
+		setargs(n,{1'b0,alu0_id},alu0_v,alu0_bus);
+		setargs(n,{1'b0,alu1_id},alu1_v,alu1_bus);
+		setargs(n,{1'b0,fcu_id},fcu_wr,fcu_bus);
+		setargs(n,{1'b0,dramA_id},dramA_v,dramA_bus);
+		setargs(n,{1'b0,dramB_id},dramB_v,dramB_bus);
+		setargs(n,{1'b0,dramC_id},dramC_v,dramC_bus);
+		setargs(n,commit0_id,commit0_v,commit0_bus);
+		setargs(n,commit1_id,commit1_v,commit1_bus);
+
+		setinsn(n,id1_ido,1'b1,id1_bus);
+		setinsn(n,id2_ido,1'b1,id2_bus);
 	end
 
-    //
-    // ISSUE 
-    //
-    // determines what instructions are ready to go, then places them
-    // in the various ALU queues.  
-    // also invalidates instructions following a branch-miss BEQ or any JALR (STOMP logic)
-    //
+//
+// ISSUE 
+//
+// determines what instructions are ready to go, then places them
+// in the various ALU queues.  
+// also invalidates instructions following a branch-miss BEQ or any JALR (STOMP logic)
+//
 
-    for (n = 0; n < QENTRIES; n = n + 1)
-        if (iqentry_idissue[n] && !iqentry_iv[n] && !(iqentry_v[n] && iqentry_stomp[n])) begin
-            case (iqentry_idslot[n]) 
-            2'd0: 
-            	begin
-                 id1_id			<= n[3:0];
-                 id1_instr	<= iqentry_rtop[n] ? (
-                 									iqentry_a3_v[n] ? iqentry_a3[n]
-			                            : (iqentry_a3_s[n] == alu0_id) ? alu0_bus
-			                            : (iqentry_a3_s[n] == alu1_id) ? alu1_bus
-			                            : `NOP_INSN)
-                 							 : iqentry_instr[n];
-                 id1_ven    <= iqentry_ven[n];
-                 id1_vl     <= iqentry_vl[n];
-                 id1_thrd   <= iqentry_thrd[n];
-                 id1_Rt     <= iqentry_tgt[n][4:0];
-                 id1_pt			<= iqentry_pt[n];
-                end
-            2'd1: 
-            	begin
-                 id2_id			<= n[3:0];
-                 id2_instr	<= iqentry_rtop[n] ? (
-                 									iqentry_a3_v[n] ? iqentry_a3[n]
-			                            : (iqentry_a3_s[n] == alu0_id) ? alu0_bus
-			                            : (iqentry_a3_s[n] == alu1_id) ? alu1_bus
-			                            : `NOP_INSN)
-                 							 : iqentry_instr[n];
-                 id2_ven    <= iqentry_ven[n];
-                 id2_vl     <= iqentry_vl[n];
-                 id2_thrd   <= iqentry_thrd[n];
-                 id2_Rt     <= iqentry_tgt[n][4:0];
-                 id2_pt			<= iqentry_pt[n];
-                end
-            default:  panic <= `PANIC_INVALIDISLOT;
-            endcase
-        end
+for (n = 0; n < QENTRIES; n = n + 1)
+if (iqentry_idissue[n] && !iqentry_iv[n] && !(iqentry_v[n] && iqentry_stomp[n])) begin
+case (iqentry_idslot[n]) 
+2'd0: 
+	begin
+		id1_id			<= n[3:0];
+		id1_instr	<= iqentry_rtop[n] ? (
+										iqentry_a3_v[n] ? iqentry_a3[n]
+		                : (iqentry_a3_s[n] == alu0_id) ? alu0_bus
+		                : (iqentry_a3_s[n] == alu1_id) ? alu1_bus
+		                : `NOP_INSN)
+								 : iqentry_instr[n];
+		id1_ven    <= iqentry_ven[n];
+		id1_vl     <= iqentry_vl[n];
+		id1_thrd   <= iqentry_thrd[n];
+		id1_Rt     <= iqentry_tgt[n][4:0];
+		id1_pt			<= iqentry_pt[n];
+  end
+2'd1: 
+	begin
+		id2_id			<= n[3:0];
+		id2_instr	<= iqentry_rtop[n] ? (
+										iqentry_a3_v[n] ? iqentry_a3[n]
+		                : (iqentry_a3_s[n] == alu0_id) ? alu0_bus
+		                : (iqentry_a3_s[n] == alu1_id) ? alu1_bus
+		                : `NOP_INSN)
+								 : iqentry_instr[n];
+		id2_ven    <= iqentry_ven[n];
+		id2_vl     <= iqentry_vl[n];
+		id2_thrd   <= iqentry_thrd[n];
+		id2_Rt     <= iqentry_tgt[n][4:0];
+		id2_pt			<= iqentry_pt[n];
+	end
+default:  panic <= `PANIC_INVALIDISLOT;
+endcase
+end
 
     for (n = 0; n < QENTRIES; n = n + 1)
         if (iqentry_issue[n] && !(iqentry_v[n] && iqentry_stomp[n])) begin
@@ -8043,9 +8055,9 @@ if (icstate==IDLE || icstate==IC5 || icstate==IC6 || icstate==IC7 || icstate==IC
 	    45, fetchbuf?62:45, fetchbufD_v, fetchbufD_instr, fetchbufD_pc);
 
 	for (i=0; i<QENTRIES; i=i+1) 
-	    $display("%c%c %d: %c%c%c %d %d %c%c %d %c %c%h %d %o %h %h %h %d %o %h %d %o %h %d %o %d:%h %h %d#",
+	    $display("%c%c %d: %c%c%c%c %d %d %c%c %d %c %c%h %d %o %h %h %h %d %o %h %d %o %h %d %o %d:%h %h %d#",
 		(i[`QBITS]==head0)?"C":".", (i[`QBITS]==tail0)?"Q":".", i[`QBITS],
-		iqentry_v[i]?"v":"-", iqentry_done[i]?"d":"-", iqentry_out[i]?"o":"-", iqentry_bt[i], iqentry_memissue[i], iqentry_agen[i] ? "a": "-", iqentry_issue[i]?"i":"-",
+		iqentry_v[i]?"v":"-", iqentry_iv[i] ? "I" : "-", iqentry_done[i]?"d":"-", iqentry_out[i]?"o":"-", iqentry_bt[i], iqentry_memissue[i], iqentry_agen[i] ? "a": "-", iqentry_issue[i]?"i":"-",
 		((i==0) ? iqentry_islot[0] : (i==1) ? iqentry_islot[1] : (i==2) ? iqentry_islot[2] : (i==3) ? iqentry_islot[3] :
 		 (i==4) ? iqentry_islot[4] : (i==5) ? iqentry_islot[5] : (i==6) ? iqentry_islot[6] : iqentry_islot[7]), iqentry_stomp[i]?"s":"-",
 		(IsFlowCtrl(iqentry_instr[i]) ? 98 : (IsMem(iqentry_instr[i])) ? 109 : 97), 
