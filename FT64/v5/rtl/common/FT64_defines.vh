@@ -22,6 +22,7 @@
 //
 // ============================================================================
 //
+//`define SUPPORT_SMT		1'b1
 //`define DEBUG_LOGIC 1'b1
 `define HIGH        1'b1
 `define LOW         1'b0
@@ -415,9 +416,14 @@
 `define PANIC_INVALIDIQSTATE	4'd10
 `define PANIC_BRANCHBACK	4'd11
 `define PANIC_BADTARGETID	4'd12
+`define PANIC_ALU0ONLY	4'd13
 
 `define IB_CONST	127:64
 `define IB_LN			63:61
+`define IB_RT			49:45
+`define IB_RC		  44:40
+`define IB_RB			39:35
+`define IB_RA			34:30
 `define IB_MEM      29
 `define IB_BT       28
 `define IB_ALU		27

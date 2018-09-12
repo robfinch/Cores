@@ -22,12 +22,19 @@
 //
 // ============================================================================
 //
+`include ".\FT64_defines.vh"
 
-module FT64_idecoder(instr,predict_taken,Rt,bus);
+module FT64_idecoder(clk,id_i,instr,vl,ven,thrd,predict_taken,Rt,bus,id_o);
+input clk;
+input [3:0] id_i;
 input [47:0] instr;
+input [7:0] vl;
+input [5:0] ven;
+input thrd;
 input predict_taken;
 input [4:0] Rt;
 output reg [127:0] bus;
+output reg [3:0] id_o;
 
 parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
@@ -85,25 +92,26 @@ input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
 `R2:
 	if (isn[`INSTRUCTION_L2]==2'b00)
-	    case(isn[`INSTRUCTION_S2])
-	    `R1:        IsAlu0Only = TRUE;
-	    `SHIFTR,`SHIFT31,`SHIFT63:     IsAlu0Only = TRUE;
-	    `LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,`LWRX:
-	    	IsAlu0Only = TRUE;
-	    `SBX,`SCX,`SHX,`SWX,`SWCX: IsAlu0Only = TRUE;
-	    `LVX,`SVX,`LVx:  IsAlu0Only = TRUE;
-	    `MULU,`MULSU,`MUL,
-	    `DIVMODU,`DIVMODSU,`DIVMOD: IsAlu0Only = TRUE;
-	    `MIN,`MAX:  IsAlu0Only = TRUE;
-	    default:    IsAlu0Only = FALSE;
-	    endcase
+		case(isn[`INSTRUCTION_S2])
+		`R1:        IsAlu0Only = TRUE;
+		`SHIFTR,`SHIFT31,`SHIFT63:
+			IsAlu0Only = TRUE;
+		`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,`LWRX:
+			IsAlu0Only = TRUE;
+		`SBX,`SCX,`SHX,`SWX,`SWCX: IsAlu0Only = TRUE;
+		`LVX,`SVX,`LVx:  IsAlu0Only = TRUE;
+		`MULU,`MULSU,`MUL,
+		`DIVMODU,`DIVMODSU,`DIVMOD: IsAlu0Only = TRUE;
+		`MIN,`MAX:  IsAlu0Only = TRUE;
+		default:    IsAlu0Only = FALSE;
+		endcase
 	else
 		IsAlu0Only = FALSE;
 `IVECTOR,`FVECTOR:
-    case(isn[`INSTRUCTION_S2])
-    `VSHL,`VSHR,`VASR:  IsAlu0Only = TRUE;
-    default: IsAlu0Only = FALSE;
-    endcase
+	case(isn[`INSTRUCTION_S2])
+	`VSHL,`VSHR,`VASR:  IsAlu0Only = TRUE;
+	default: IsAlu0Only = FALSE;
+	endcase
 `BITFIELD:  IsAlu0Only = TRUE;
 `MULUI,`MULI,
 `DIVUI,`DIVI,
@@ -479,7 +487,7 @@ casez(isn[`INSTRUCTION_OP])
 	else
 		IsRFW = FALSE;
 `BBc:
-	case(isn[19:18])
+	case(isn[20:19])
 	`IBNE:	IsRFW = TRUE;
 	`DBNZ:	IsRFW = TRUE;
 	default:	IsRFW = FALSE;
@@ -553,7 +561,7 @@ default:	fnWe = 8'hFF;
 endcase
 endfunction
 
-always @*
+always @(posedge clk)
 begin
 	bus[`IB_CONST] <= instr[7:6]==2'b01 ? {{34{instr[47]}},instr[47:18]} :
 																				{{50{instr[31]}},instr[31:18]};
@@ -562,6 +570,9 @@ begin
 	2'b01:	bus[`IB_LN] <= 3'd6;
 	default: bus[`IB_LN] <= 3'd2;
 	endcase
+//	bus[`IB_RT]		 <= fnRt(instr,ven,vl,thrd) | {thrd,7'b0};
+//	bus[`IB_RC]		 <= fnRc(instr,ven,thrd) | {thrd,7'b0};
+//	bus[`IB_RA]		 <= fnRa(instr,ven,vl,thrd) | {thrd,7'b0};
 	bus[`IB_BT]    <= (IsBranch(instr) && predict_taken);
 	bus[`IB_ALU]   <= IsALU(instr);
 	bus[`IB_ALU0]  <= IsAlu0Only(instr);
@@ -585,6 +596,7 @@ begin
 	bus[`IB_FSYNC]	<= IsFSync(instr);
 	bus[`IB_RFW]		<= Rt==5'd0 ? 1'b0 : IsRFW(instr);
 	bus[`IB_WE]			<= fnWe(instr);
+	id_o <= id_i;
 end
 
 endmodule

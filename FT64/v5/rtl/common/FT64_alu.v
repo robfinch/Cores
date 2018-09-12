@@ -213,11 +213,13 @@ FT64_divider #(DBW) udiv1
 	.idle(div_idle)
 );
 
+wire [5:0] bshift = instr[31:26]==`SHIFTR ? b : {instr[30],instr[17:13]};
+
 FT64_shift ushft1
 (
     .instr(instr),
     .a(a),
-    .b(b),
+    .b(bshift),
     .res(shfto),
     .ov(aslo)
 );
@@ -226,7 +228,7 @@ FT64_shifth ushfthL
 (
     .instr(instr),
     .a(a[31:0]),
-    .b(b[31:0]),
+    .b(bshift),
     .res(shftho[31:0]),
     .ov()
 );
@@ -244,7 +246,7 @@ FT64_shiftc ushftc0
 (
     .instr(instr),
     .a(a[15:0]),
-    .b(b[15:0]),
+    .b(bshift),
     .res(shftco[15:0]),
     .ov()
 );
@@ -280,7 +282,7 @@ FT64_shiftb ushftb0
 (
     .instr(instr),
     .a(a[7:0]),
-    .b(b[7:0]),
+    .b(bshift),
     .res(shftob[7:0]),
     .ov()
 );
@@ -626,7 +628,13 @@ case(instr[`INSTRUCTION_OP])
 	        default:    o = 64'hDEADDEADDEADDEAD;
 	        endcase
 	    `BMM:		o[63:0] = BIG ? bmmo : 64'hCCCCCCCCCCCCCCCC;
-	    `SHIFT31:   o[63:0] = BIG ? shfto : 64'hCCCCCCCCCCCCCCCC;
+	    `SHIFT31:   
+	    	begin
+	    		o[63:0] = BIG ? shfto : 64'hCCCCCCCCCCCCCCCC;
+	    		$display("BIG=%d",BIG);
+	    		if(!BIG)
+	    			$stop;
+	    	end
 	    `SHIFT63:   o[63:0] = BIG ? shfto : 64'hCCCCCCCCCCCCCCCC;
 	    `SHIFTR:    o[63:0] = BIG ? shfto : 64'hCCCCCCCCCCCCCCCC;
 	    `ADD:   case(sz)
@@ -917,32 +925,36 @@ reg sao_done, sao_idle;
 
 // Generate done signal
 always @*
-begin
-    if (IsMul(instr))
-        done <= mult_done;
-    else if (IsDivmod(instr) & BIG)
-        done <= div_done;
-    else if (IsShiftAndOp(instr) & BIG)
-    	done <= sao_done;
-    else if (mem|shift48)
-    	done <= adrDone;
-    else
-        done <= TRUE;
+if (rst)
+	done <= TRUE;
+else begin
+	if (IsMul(instr))
+		done <= mult_done;
+	else if (IsDivmod(instr) & BIG)
+		done <= div_done;
+	else if (IsShiftAndOp(instr) & BIG)
+		done <= sao_done;
+	else if (shift48)
+		done <= adrDone;
+	else
+		done <= TRUE;
 end
 
 // Generate idle signal
 always @*
-begin
-    if (IsMul(instr))
-        idle <= mult_idle;
-    else if (IsDivmod(instr) & BIG)
-        idle <= div_idle;
-    else if (IsShiftAndOp(instr) & BIG)
-    	idle <= sao_idle;
-    else if (mem|shift48)
-    	idle <= adrIdle;
-    else
-        idle <= TRUE;
+if (rst)
+	idle <= TRUE;
+else begin
+	if (IsMul(instr))
+		idle <= mult_idle;
+	else if (IsDivmod(instr) & BIG)
+		idle <= div_idle;
+	else if (IsShiftAndOp(instr) & BIG)
+		idle <= sao_idle;
+	else if (shift48)
+		idle <= adrIdle;
+	else
+		idle <= TRUE;
 end
 
 function fnOverflow;

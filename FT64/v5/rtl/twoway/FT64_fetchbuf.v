@@ -626,7 +626,9 @@ edge_det ued1 (.rst(rst), .clk(clk4x), .ce(1'b1), .i(clk), .pe(peclk), .ne(neclk
 always @(posedge clk)
 if (rst) begin
 	  pc0 <= RSTPC;
+`ifdef SUPPORT_SMT
       pc1 <= RSTPC;
+`endif
      fetchbufA_v <= 0;
      fetchbufB_v <= 0;
      fetchbufC_v <= 0;
@@ -652,11 +654,15 @@ else begin
 	if (branchmiss) begin
 		if (branchmiss_thrd) begin
  			pc0 <= fetchbuf0_pc;
+`ifdef SUPPORT_SMT
 			pc1 <= misspc;
+`endif
 		end
 		else begin
 			pc0 <= misspc;
+`ifdef SUPPORT_SMT
  			pc1 <= fetchbuf1_pc;
+`endif
  		end
 		fetchbufA_v <= `INV;
 		fetchbufB_v <= `INV;
@@ -761,6 +767,7 @@ else begin
 		// if fbA has the branchback, then it is scenario 1.
 		// if fbB has it: if pc0 == fbB_pc, then it is the former scenario, else it is the latter
 		4'b1100 : begin
+`ifdef SUPPORT_SMT
 				if (take_branchA && take_branchB) begin
 					pc0 <= branch_pcA;
 					pc1 <= branch_pcB;
@@ -768,18 +775,46 @@ else begin
 					fetchbufB_v <= !(queued2|queuedNop);	// if it can be queued, it will
 					if ((queued2|queuedNop))   fetchbuf <= 1'b1;
 				end
-				else if (take_branchA) begin
+				else
+`endif
+				if (take_branchA) begin
 					pc0 <= branch_pcA;
 					fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
+`ifdef SUPPORT_SMT
 					fetchbufB_v <= !(queued2|queuedNop);	// if it can be queued, it will
 					if ((queued2|queuedNop))   fetchbuf <= 1'b1;
+`else
+					fetchbufB_v <= `INV;
+					if ((queued1|queuedNop))   fetchbuf <= 1'b1;
+`endif
 				end
+`ifdef SUPPORT_SMT
 				else if (take_branchB) begin
 					pc1 <= branch_pcB;
 					fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
 					fetchbufB_v <= !(queued2|queuedNop);	// if it can be queued, it will
 					if ((queued2|queuedNop))   fetchbuf <= 1'b1;
 				end
+`else
+				else begin
+					if (did_branchback0) begin
+						FetchCD();
+						fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
+						fetchbufB_v <= !(queued2|queuedNop);	// if it can be queued, it will
+`ifdef SUPPORT_SMT
+						if ((queued2|queuedNop))   fetchbuf <= 1'b1;
+`else
+						fetchbuf <= fetchbuf + ((queued2|queuedNop));
+`endif
+					end
+					else begin
+						pc0 <= branch_pcB;
+						fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
+						fetchbufB_v <= !(queued2|queuedNop);	// if it can be queued, it will
+						if ((queued2|queuedNop))   fetchbuf <= 1'b1;
+					end
+				end
+`endif
 		    end
 
 //		4'b1101	: panic <= `PANIC_INVALIDFBSTATE;
@@ -880,25 +915,54 @@ else begin
 		// if fbC has the branchback, then it is scenario 1.
 		// if fbD has it: if pc0 == fbB_pc, then it is the former scenario, else it is the latter
 		4'b1100 : begin
-				if (take_branchC & take_branchD) begin
+`ifdef SUPPORT_SMT
+				if (take_branchC && take_branchD) begin
 					pc0 <= branch_pcC;
 					pc1 <= branch_pcD;
 					fetchbufC_v <= !(queued1|queuedNop);	// if it can be queued, it will
 					fetchbufD_v <= !(queued2|queuedNop);	// if it can be queued, it will
-				    if ((queued2|queuedNop))   fetchbuf <= 1'b0;
+					if ((queued2|queuedNop))   fetchbuf <= 1'b1;
 				end
-				else if (take_branchC) begin
+				else
+`endif
+				if (take_branchC) begin
 					pc0 <= branch_pcC;
 					fetchbufC_v <= !(queued1|queuedNop);	// if it can be queued, it will
+`ifdef SUPPORT_SMT
 					fetchbufD_v <= !(queued2|queuedNop);	// if it can be queued, it will
-				    if ((queued2|queuedNop))   fetchbuf <= 1'b0;
+					if ((queued2|queuedNop))   fetchbuf <= 1'b1;
+`else
+					fetchbufD_v <= `INV;
+					if ((queued1|queuedNop))   fetchbuf <= 1'b1;
+`endif
 				end
+`ifdef SUPPORT_SMT
 				else if (take_branchD) begin
 					pc1 <= branch_pcD;
 					fetchbufC_v <= !(queued1|queuedNop);	// if it can be queued, it will
 					fetchbufD_v <= !(queued2|queuedNop);	// if it can be queued, it will
-				    if ((queued2|queuedNop))   fetchbuf <= 1'b0;
+					if ((queued2|queuedNop))   fetchbuf <= 1'b1;
 				end
+`else
+				else begin
+					if (did_branchback1) begin
+						FetchAB();
+						fetchbufC_v <= !(queued1|queuedNop);	// if it can be queued, it will
+						fetchbufD_v <= !(queued2|queuedNop);	// if it can be queued, it will
+`ifdef SUPPORT_SMT
+						if ((queued2|queuedNop))   fetchbuf <= 1'b1;
+`else
+						fetchbuf <= fetchbuf + ((queued2|queuedNop));
+`endif
+					end
+					else begin
+						pc0 <= branch_pcD;
+						fetchbufC_v <= !(queued1|queuedNop);	// if it can be queued, it will
+						fetchbufD_v <= !(queued2|queuedNop);	// if it can be queued, it will
+						if ((queued2|queuedNop))   fetchbuf <= 1'b1;
+					end
+				end
+`endif
 			end
 
 //		4'b1101	: panic <= `PANIC_INVALIDFBSTATE;
@@ -1037,7 +1101,16 @@ assign fetchbuf1_instr = (fetchbuf == 1'b0) ? fetchbufB_instr : fetchbufD_instr;
 assign fetchbuf1_v     = (fetchbuf == 1'b0) ? fetchbufB_v     : fetchbufD_v    ;
 assign fetchbuf1_pc    = (fetchbuf == 1'b0) ? fetchbufB_pc    : fetchbufD_pc   ;
 assign fetchbuf0_thrd  = 1'b0;
+`ifdef SUPPORT_SMT
 assign fetchbuf1_thrd  = 1'b1;
+`else
+assign fetchbuf1_thrd  = 1'b0;
+`endif
+
+`ifndef SUPPORT_SMT
+always @*
+	pc1 <= pc0 + fetchbuf0_insln;
+`endif
 
 always @*
 begin
@@ -1083,17 +1156,25 @@ begin
      fetchbufA_v <= `VAL;
      fetchbufA_pc <= pc0;
     if (phit && ~hirq)
-    	pc0 <= pc0 + fetchbuf0_insln;;
+`ifdef SUPPORT_SMT
+    	pc0 <= pc0 + fetchbuf0_insln;
+`else
+    	pc0 <= pc0 + fetchbuf0_insln + fetchbuf1_insln;
+`endif
 end
 endtask
 
 task FetchB;
 begin
-     fetchbufB_instr <= cinsn1;
-     fetchbufB_v <= `VAL;
-     fetchbufB_pc <= pc1;
-    if (phit)
-    	pc1 <= pc1 + fetchbuf1_insln;
+	fetchbufB_instr <= cinsn1;
+	fetchbufB_v <= `VAL;
+`ifdef SUPPORT_SMT
+	fetchbufB_pc <= pc1;
+	if (phit)
+		pc1 <= pc1 + fetchbuf1_insln;
+`else
+	fetchbufB_pc <= pc0 + fetchbuf0_insln;
+`endif
 end
 endtask
 
@@ -1111,17 +1192,25 @@ begin
      fetchbufC_v <= `VAL;
      fetchbufC_pc <= pc0;
     if (phit && ~hirq)
+`ifdef SUPPORT_SMT
     	pc0 <= pc0 + fetchbuf0_insln;
+`else
+    	pc0 <= pc0 + fetchbuf0_insln + fetchbuf1_insln;
+`endif
 end
 endtask
 
 task FetchD;
 begin
-     fetchbufD_instr <= cinsn1;
-     fetchbufD_v <= `VAL;
-     fetchbufD_pc <= pc1;
-    if (phit)
-    	pc1 <= pc1 + fetchbuf1_insln;
+	fetchbufD_instr <= cinsn1;
+	fetchbufD_v <= `VAL;
+`ifdef SUPPORT_SMT
+	fetchbufD_pc <= pc1;
+	if (phit)
+		pc1 <= pc1 + fetchbuf1_insln;
+`else
+	fetchbufD_pc <= pc0 + fetchbuf0_insln;
+`endif
 end
 endtask
 

@@ -40,25 +40,26 @@ output reg [WID-1:0] bus;
 
 always @*
 begin
-    casez(instr[`INSTRUCTION_OP])
-    `BRK:   bus <= {{56{1'b0}},instr[15:8]};
-    `BBc:   case(instr[19:17])
-    		`IBNE:	bus <=  a + 64'd1;
-    		`DBNZ:	bus <=  a - 64'd1;
-    		default:	bus <= 64'hCCCCCCCCCCCCCCCC;
-    		endcase
-    `JAL:   bus <= pc + (instr[6] ? 32'd6 : 32'd4);
-    `CALL:	bus <= pc + (instr[6] ? 32'd6 : 32'd4);
-    `RET:	bus <= a + i;
-    `REX:
-        case(ol)
-        `OL_USER:   bus <= 64'hCCCCCCCCCCCCCCCC;
-        // ToDo: fix im test
-        default:    bus <= (im < ~ol) ? tvec : pc + 32'd4;
-        endcase
-    `WAIT:  bus = waitctr==64'd1;
-    default:    bus <= 64'hCCCCCCCCCCCCCCCC;
+  casez(instr[`INSTRUCTION_OP])
+  `BRK:   bus <= {{56{1'b0}},instr[15:8]};
+  `BBc:
+    case(instr[20:19])
+		`IBNE:	bus <=  a + 64'd1;
+		`DBNZ:	bus <=  a - 64'd1;
+		default:	bus <= 64'hCCCCCCCCCCCCCCCC;
+		endcase
+  `JAL:   bus <= pc + (instr[6] ? 32'd6 : 32'd4);
+  `CALL:	bus <= pc + (instr[6] ? 32'd6 : 32'd4);
+  `RET:	bus <= a + i;
+  `REX:
+    case(ol)
+    `OL_USER:   bus <= 64'hCCCCCCCCCCCCCCCC;
+    // ToDo: fix im test
+    default:    bus <= (im < ~ol) ? tvec : pc + 32'd4;
     endcase
+  `WAIT:  bus = waitctr==64'd1;
+  default:    bus <= 64'hCCCCCCCCCCCCCCCC;
+  endcase
 end
 
 endmodule

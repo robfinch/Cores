@@ -4607,7 +4607,8 @@ void FT64_processMaster()
 		case tk_vsubs: process_vsrrop(0x15); break;
 		case tk_vxor: process_vrrop(0x0A); break;
 		case tk_vxors: process_vsrrop(0x1A); break;
-        case tk_xor: process_rrop(0x0A); break;
+		case tk_xnor: process_rrop(0x0E); break;
+		case tk_xor: process_rrop(0x0A); break;
         case tk_xori: process_riop(0x0A); break;
 		case tk_zxb: process_rop(0x0A); break;
 		case tk_zxc: process_rop(0x09); break;

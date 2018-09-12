@@ -98,7 +98,6 @@
 // ============================================================================
 //
 `include "FT64_defines.vh"
-//`define SUPPORT_SMT		1'b1
 //`define SUPPORT_DBG		1'b1
 `define FULL_ISSUE_LOGIC	1'b1
 `define QBITS		2:0
@@ -425,7 +424,7 @@ reg [128:0] message [0:15];	// indexed by panic
 wire int_commit;
 reg StatusHWI;
 reg [47:0] insn0, insn1;
-wire [47:0] insn0a, insn1a;
+wire [47:0] insn0a, insn1a, insn1b;
 reg tgtq;
 // Only need enough bits in the seqnence number to cover the instructions in
 // the queue plus an extra count for skipping on branch misses. In this case
@@ -459,7 +458,7 @@ reg        iqentry_agen  	[0:QENTRIES-1];	// address-generate ... signifies that
 reg  [1:0] iqentry_state [0:QENTRIES-1];
 reg  [3:0] iqentry_id   [0:QENTRIES-1];
 reg        iqentry_alu  [0:QENTRIES-1];  // alu type instruction
-reg [QENTRIES-1:0] iqentry_alu0;	 // only valid on alu #0
+reg        iqentry_alu0 [0:QENTRIES-1];	 // only valid on alu #0
 reg        iqentry_fpu  [0:QENTRIES-1];  // floating point instruction
 reg        iqentry_fc   [0:QENTRIES-1];   // flow control instruction
 reg        iqentry_canex[0:QENTRIES-1];	// true if it's an instruction that can exception
@@ -487,6 +486,7 @@ reg [47:0] iqentry_instr[0:QENTRIES-1];	// instruction opcode
 reg  [2:0] iqentry_insln[0:QENTRIES-1]; // instruction length
 reg  [7:0] iqentry_exc	[0:QENTRIES-1];	// only for branches ... indicates a HALT instruction
 reg [RBIT:0] iqentry_tgt	[0:QENTRIES-1];	// Rt field or ZERO -- this is the instruction's target (if any)
+reg  [7:0] iqentry_vl   [0:QENTRIES-1];
 reg  [5:0] iqentry_ven  [0:QENTRIES-1];  // vector element number
 reg [63:0] iqentry_a0	[0:QENTRIES-1];	// argument 0 (immediate)
 reg [63:0] iqentry_a1	[0:QENTRIES-1];	// argument 1
@@ -619,12 +619,18 @@ wire        fetchbufD_v;
 
 reg   [3:0] id1_id;
 reg  [47:0] id1_instr;
+reg   [5:0] id1_ven;
+reg   [7:0] id1_vl;
+reg         id1_thrd;
 reg         id1_pt;
 reg   [4:0] id1_Rt;
 wire [127:0] id1_bus;
 
 reg   [3:0] id2_id;
 reg  [47:0] id2_instr;
+reg   [5:0] id2_ven;
+reg   [7:0] id2_vl;
+reg         id2_thrd;
 reg         id2_pt;
 reg   [4:0] id2_Rt;
 wire [127:0] id2_bus;
@@ -908,6 +914,24 @@ FT64_regfile2w6r_oc #(.RBIT(RBIT)) urf1
 assign rfoc0 = Rc0[11:6]==6'h3F ? vm[Rc0[2:0]] : rfoc0a;
 assign rfoc1 = Rc1[11:6]==6'h3F ? vm[Rc1[2:0]] : rfoc1a;
 
+function [2:0] fnInsLength;
+input [47:0] ins;
+case(ins[7:6])
+2'b00:	fnInsLength = 3'd4;
+2'b01:	fnInsLength = 3'd6;
+2'b10:	fnInsLength = 3'd2;
+2'b11:	fnInsLength = 3'd2;
+endcase
+endfunction
+
+wire [31:0] pc0plus6 = pc0 + 32'd6;
+
+`ifdef SUPPORT_SMT
+assign insn1a = insn1b;
+`else
+assign insn1a = {insn1b,insn0a} >> {fnInsLength(insn0a),3'b0};
+`endif
+
 FT64_L1_icache uic0
 (
     .rst(rst),
@@ -930,10 +954,14 @@ FT64_L1_icache uic1
     .nxt(icnxt),
     .wr(L1_wr1),
     .en(L1_en),
+`ifdef SUPPORT_SMT
     .adr(icstate==IDLE||icstate==IC8 ? {pcr[5:0],pc1} : L1_adr),
+`else
+    .adr(icstate==IDLE||icstate==IC8 ? {pcr[5:0],pc0plus6} : L1_adr),
+`endif
     .wadr(L1_adr),
     .i(L2_rdat),
-    .o(insn1a),
+    .o(insn1b),
     .hit(ihit1),
     .invall(invic),
     .invline(L1_invline)
@@ -1468,7 +1496,7 @@ input [5:0] vqei;
 input [5:0] vli;
 input thrd;
 case(isn[`INSTRUCTION_OP])
-`VECTOR:
+`IVECTOR:
 	case(isn[`INSTRUCTION_S2])
         `VCIDX,`VSCAN:  fnRa = {6'd0,1'b1,isn[`INSTRUCTION_RA]};
         `VMxx:
@@ -1520,7 +1548,7 @@ case(isn[`INSTRUCTION_OP])
             `LVX,`SVX:  fnRb = {vqei,1'b1,isn[`INSTRUCTION_RB]};
             default:    fnRb = {rgs[thrd],1'b0,isn[`INSTRUCTION_RB]};
             endcase
-`VECTOR:
+`IVECTOR:
 			case(isn[`INSTRUCTION_S2])
 			`VMxx:
 				case(isn[25:23])
@@ -1551,17 +1579,16 @@ case(isn[`INSTRUCTION_OP])
             `SVX:       fnRc = {vqei,1'b1,isn[`INSTRUCTION_RC]};
 	        `SBX,`SCX,`SHX,`SWX,`SWCX,`CACHEX:
 	        	fnRc = {rgs[thrd],1'b0,isn[`INSTRUCTION_RC]};
-	        `CMOVEQ,`CMOVNE,`MAJ:
+	        `CMOVEZ,`CMOVNZ,`MAJ:
 	        	fnRc = {rgs[thrd],1'b0,isn[`INSTRUCTION_RC]};
             default:    fnRc = {rgs[thrd],1'b0,isn[`INSTRUCTION_RC]};
             endcase
-`VECTOR:
+`IVECTOR:
 			case(isn[`INSTRUCTION_S2])
             `VSxx,`VSxxS,`VSxxU,`VSxxSU:    fnRc = {6'h3F,1'b1,2'b0,isn[18:16]};
             default:    fnRc = {vqei,1'b1,isn[`INSTRUCTION_RC]};
             endcase
 `FLOAT:		fnRc = {fp_rgs[thrd],1'b0,isn[`INSTRUCTION_RC]};
-`BccR:		fnRc = {rgs[thrd],1'b0,isn[`INSTRUCTION_RC]};
 default:    fnRc = {rgs[thrd],1'b0,isn[`INSTRUCTION_RC]};
 endcase
 endfunction
@@ -1572,7 +1599,7 @@ input [5:0] vqei;
 input [5:0] vli;
 input thrd;
 casez(isn[`INSTRUCTION_OP])
-`VECTOR:
+`IVECTOR:
 		case(isn[`INSTRUCTION_S2])
 		`VMxx:
 			case(isn[25:23])
@@ -1616,14 +1643,15 @@ casez(isn[`INSTRUCTION_OP])
         		fnRt = 12'd0;
         	default:	fnRt = 12'd0;
         	endcase
-        `CMOVEQ:    fnRt = {rgs[thrd],1'b0,isn[`INSTRUCTION_S1]};
-        `CMOVNE:    fnRt = {rgs[thrd],1'b0,isn[`INSTRUCTION_S1]};
+        `CMOVEZ:    fnRt = {rgs[thrd],1'b0,isn[`INSTRUCTION_S1]};
+        `CMOVNZ:    fnRt = {rgs[thrd],1'b0,isn[`INSTRUCTION_S1]};
         `MUX:       fnRt = {rgs[thrd],1'b0,isn[`INSTRUCTION_S1]};
         `MIN:       fnRt = {rgs[thrd],1'b0,isn[`INSTRUCTION_S1]};
         `MAX:       fnRt = {rgs[thrd],1'b0,isn[`INSTRUCTION_S1]};
         `LVX:       fnRt = {vqei,1'b1,isn[20:16]};
-        `SHIFT,`SHIFTB,`SHIFTC,`SHIFTH:
-        			fnRt = isn[25] ? {rgs[thrd],1'b0,isn[`INSTRUCTION_RB]} : {rgs[thrd],1'b0,isn[`INSTRUCTION_RC]};
+        `SHIFTR:	fnRt = {rgs[thrd],1'b0,isn[`INSTRUCTION_RC]};
+        `SHIFT31,`SHIFT63:
+        			fnRt = {rgs[thrd],1'b0,isn[`INSTRUCTION_RB]};
         `SEI:		fnRt = {rgs[thrd],1'b0,isn[`INSTRUCTION_RB]};
         `WAIT,`RTI,`CHK,
         `SBX,`SCX,`SHX,`SWX,`SWCX,`CACHEX:
@@ -1642,14 +1670,13 @@ casez(isn[`INSTRUCTION_OP])
 `CHK:	fnRt = 12'd0;
 `EXEC:	fnRt = 12'd0;
 `Bcc:   fnRt = 12'd0;
-`BccR:  fnRt = 12'd0;
-`BBc:   case(isn[19:18])
+`BBc:   case(isn[20:19])
 		`IBNE:	fnRt = {rgs[thrd],1'b0,isn[`INSTRUCTION_RA]};
 		`DBNZ:	fnRt = {rgs[thrd],1'b0,isn[`INSTRUCTION_RA]};
 		default:	fnRt = 12'd0;
 		endcase
 `BEQI:  fnRt = 12'd0;
-`SB,`SC,`SH,`SW,`SWC,`CACHE:
+`SB,`Sx,`SWC,`CACHE:
 		fnRt = 12'd0;
 `JMP:	fnRt = 12'd0;
 `CALL:  fnRt = {rgs[thrd],1'b0,regLR};	// regLR
@@ -1858,11 +1885,12 @@ casez(isn[`INSTRUCTION_OP])
 `CHK:	fnRt = 12'd0;
 `EXEC:	fnRt = 12'd0;
 `Bcc:   fnRt = 12'd0;
-`BBc:   case(isn[19:18])
-		`IBNE:	fnRt = {rgs,1'b0,isn[`INSTRUCTION_RA]};
-		`DBNZ:	fnRt = {rgs,1'b0,isn[`INSTRUCTION_RA]};
-		default:	fnRt = 12'd0;
-		endcase
+`BBc:
+	case(isn[20:19])
+	`IBNE:	fnRt = {rgs,1'b0,isn[`INSTRUCTION_RA]};
+	`DBNZ:	fnRt = {rgs,1'b0,isn[`INSTRUCTION_RA]};
+	default:	fnRt = 12'd0;
+	endcase
 `BEQI:  fnRt = 12'd0;
 `SB,`Sx,`SWC,`CACHE:
 		fnRt = 12'd0;
@@ -2696,7 +2724,7 @@ casez(isn[`INSTRUCTION_OP])
 	else
 		IsRFW = FALSE;
 `BBc:
-	case(isn[19:18])
+	case(isn[20:19])
 	`IBNE:	IsRFW = TRUE;
 	`DBNZ:	IsRFW = TRUE;
 	default:	IsRFW = FALSE;
@@ -3231,7 +3259,7 @@ endfunction
 // Indicate if the ALU instruction is valid immediately (single cycle operation)
 function IsSingleCycle;
 input [47:0] isn;
-IsSingleCycle = !(IsMem(isn)|IsMul(isn)|IsDivmod(isn));
+IsSingleCycle = !(IsMul(isn)|IsDivmod(isn));
 endfunction
 
 `ifdef SUPPORT_SMT
@@ -3278,6 +3306,7 @@ initial begin: Init
 	message[ `PANIC_INVALIDIQSTATE ]	= "INVALIDIQSTATE  ";
 	message[ `PANIC_BRANCHBACK ]		= "BRANCHBACK      ";
 	message[ `PANIC_MEMORYRACE ]		= "MEMORYRACE      ";
+	message[ `PANIC_ALU0ONLY ] = "ALU0 Only       ";
 
 end
 
@@ -3797,11 +3826,10 @@ assign could_issue[g] = iqentry_v[g] && !iqentry_done[g] && !iqentry_out[g]
 												&& iqentry_iv[g]
                         && (iqentry_mem[g] ? !iqentry_agen[g] : 1'b1);
 
-assign could_issueid[g] = iqentry_v[g] && !iqentry_done[g] && !iqentry_out[g]
-			&& !iqentry_iv[g]
-		  && (iqentry_a1_v[g] 
-        || (iqentry_a1_s[g] == alu0_sourceid && alu0_dataready)
-        || (iqentry_a1_s[g] == alu1_sourceid && alu1_dataready));
+assign could_issueid[g] = iqentry_v[g] && !iqentry_iv[g];
+//		  && (iqentry_a1_v[g] 
+//        || (iqentry_a1_s[g] == alu0_sourceid && alu0_dataready)
+//        || (iqentry_a1_s[g] == alu1_sourceid && alu1_dataready));
 
 end                                 
 end
@@ -5118,20 +5146,34 @@ begin
 		stompedOnRets = stompedOnRets + 4'd1;
 end
 
+wire [3:0] id1_ido, id2_ido;
+
 FT64_idecoder uid1
 (
+	.clk(clk),
+	.id_i(id1_id),
 	.instr(id1_instr),
+	.ven(id1_ven),
+	.vl(id1_vl),
+	.thrd(id1_thrd),
 	.predict_taken(id1_pt),
 	.Rt(id1_Rt0),
-	.bus(id1_bus)
+	.bus(id1_bus),
+	.id_o(id1_ido)
 );
 
 FT64_idecoder uid2
 (
+	.clk(clk),
+	.id_i(id2_id),
 	.instr(id2_instr),
+	.ven(id2_ven),
+	.vl(id2_vl),
+	.thrd(id2_thrd),
 	.predict_taken(id2_pt),
 	.Rt(id2_Rt0),
-	.bus(id2_bus)
+	.bus(id2_bus),
+	.id_o(id2_ido)
 );
 
 //
@@ -5498,143 +5540,145 @@ wire q2open = iqentry_v[tail0]==`INV && iqentry_v[tail1]==`INV;
 wire q3open = iqentry_v[tail0]==`INV && iqentry_v[tail1]==`INV && iqentry_v[idp1(tail1)]==`INV;
 always @*
 begin
-    canq1 <= FALSE;
-    canq2 <= FALSE;
-    queued1 <= FALSE;
-    queued2 <= FALSE;
-    queuedNop <= FALSE;
-    vqueued2 <= FALSE;
-    if (!branchmiss) begin
-        // Two available
-        if (fetchbuf1_v & fetchbuf0_v) begin
-            // Is there a pair of NOPs ? (cache miss)
-            if ((fetchbuf0_instr[`INSTRUCTION_OP]==`NOP) && (fetchbuf1_instr[`INSTRUCTION_OP]==`NOP))
-                queuedNop <= TRUE; 
-            else begin
-                // If it's a predicted branch queue only the first instruction, the second
-                // instruction will be stomped on.
-                if (take_branch0 && fetchbuf1_thrd==fetchbuf0_thrd) begin
-                    if (iqentry_v[tail0]==`INV) begin
-                        canq1 <= TRUE;
-                        queued1 <= TRUE;
-                    end
-                end
-                // This is where a single NOP is allowed through to simplify the code. A
-                // single NOP can't be a cache miss. Otherwise it would be necessary to queue
-                // fetchbuf1 on tail0 it would add a nightmare to the enqueue code.
-                // Not a branch and there are two instructions fetched, see whether or not
-                // both instructions can be queued.
-                else begin
-                    if (iqentry_v[tail0]==`INV) begin
-                        canq1 <= !IsVex(fetchbuf0_instr) || rf_vra0 || !SUP_VECTOR;
-                        queued1 <= (
-                        	((!IsVex(fetchbuf0_instr) || rf_vra0) && (!IsVector(fetchbuf0_instr))) || !SUP_VECTOR);
-                        if (iqentry_v[tail1]==`INV) begin
-                            canq2 <= ((!IsVex(fetchbuf1_instr) || rf_vra1)) || !SUP_VECTOR;
-                            queued2 <= (
-                            	(!IsVector(fetchbuf1_instr) && (!IsVex(fetchbuf1_instr) || rf_vra1) && (!IsVector(fetchbuf0_instr))) || !SUP_VECTOR);
-                            vqueued2 <= IsVector(fetchbuf0_instr) && vqe0 < vl-2 && !vechain;
-                        end
-                    end
-                    // If an irq is active during a vector instruction fetch, claim the vector instruction
-                    // is finished queueing even though it may not be. It'll pick up where it left off after
-                    // the exception is processed.
-                    if (hirq) begin
-                    	if (IsVector(fetchbuf0_instr) && IsVector(fetchbuf1_instr) && vechain) begin
-                    		queued1 <= TRUE;
-                    		queued2 <= TRUE;
-                    	end
-                    	else if (IsVector(fetchbuf0_instr)) begin
-                    		queued1 <= TRUE;
-                    		if (vqe0 < vl-2)
-                    			queued2 <= TRUE;
-                    		else
-                    			queued2 <= iqentry_v[tail1]==`INV;
-                    	end
-                    end
-                end
-            end
-        end
-        // One available
-        else if (fetchbuf0_v) begin
-            if (fetchbuf0_instr[`INSTRUCTION_OP]!=`NOP) begin
-                if (iqentry_v[tail0]==`INV) begin
-                    canq1 <= !IsVex(fetchbuf0_instr) || rf_vra0 || !SUP_VECTOR;
-                    queued1 <=  
-                    	(((!IsVex(fetchbuf0_instr) || rf_vra0) && (!IsVector(fetchbuf0_instr))) || !SUP_VECTOR);
-                end
-                if (iqentry_v[tail1]==`INV) begin
-                	canq2 <= IsVector(fetchbuf0_instr) && vqe0 < vl-2 && SUP_VECTOR;
-                    vqueued2 <= IsVector(fetchbuf0_instr) && vqe0 < vl-2 && !vechain;
-            	end
-            	if (hirq) begin
-                	if (IsVector(fetchbuf0_instr)) begin
-                		queued1 <= TRUE;
-                		if (vqe0 < vl-2)
-                			queued2 <= iqentry_v[tail1]==`INV;
-                	end
-            	end
-            end
-            else
-                queuedNop <= TRUE;
-        end
-        else if (fetchbuf1_v) begin
-            if (fetchbuf1_instr[`INSTRUCTION_OP]!=`NOP) begin
-                if (iqentry_v[tail0]==`INV) begin
-                    canq1 <= !IsVex(fetchbuf1_instr) || rf_vra1 || !SUP_VECTOR;
-                    queued1 <= (
-                    	((!IsVex(fetchbuf1_instr) || rf_vra1) && (!IsVector(fetchbuf1_instr))) || !SUP_VECTOR);
-                end
-                if (iqentry_v[tail1]==`INV) begin
-                	canq2 <= IsVector(fetchbuf1_instr) && vqe1 < vl-2 && SUP_VECTOR;
-                    vqueued2 <= IsVector(fetchbuf1_instr) && vqe1 < vl-2;
-            	end
-            	if (hirq) begin
-                	if (IsVector(fetchbuf1_instr)) begin
-                		queued1 <= TRUE;
-                		if (vqe1 < vl-2)
-                			queued2 <= iqentry_v[tail1]==`INV;
-                	end
-            	end
-            end
-            else
-                queuedNop <= TRUE;
-        end
-        //else no instructions available to queue
+	canq1 <= FALSE;
+	canq2 <= FALSE;
+	queued1 <= FALSE;
+	queued2 <= FALSE;
+	queuedNop <= FALSE;
+	vqueued2 <= FALSE;
+	if (!branchmiss) begin
+      // Two available
+      if (fetchbuf1_v & fetchbuf0_v) begin
+          // Is there a pair of NOPs ? (cache miss)
+          if ((fetchbuf0_instr[`INSTRUCTION_OP]==`NOP) && (fetchbuf1_instr[`INSTRUCTION_OP]==`NOP))
+              queuedNop <= TRUE; 
+          else begin
+              // If it's a predicted branch queue only the first instruction, the second
+              // instruction will be stomped on.
+              if (take_branch0 && fetchbuf1_thrd==fetchbuf0_thrd) begin
+                  if (iqentry_v[tail0]==`INV) begin
+                      canq1 <= TRUE;
+                      queued1 <= TRUE;
+                  end
+              end
+              // This is where a single NOP is allowed through to simplify the code. A
+              // single NOP can't be a cache miss. Otherwise it would be necessary to queue
+              // fetchbuf1 on tail0 it would add a nightmare to the enqueue code.
+              // Not a branch and there are two instructions fetched, see whether or not
+              // both instructions can be queued.
+              else begin
+                  if (iqentry_v[tail0]==`INV) begin
+                      canq1 <= !IsVex(fetchbuf0_instr) || rf_vra0 || !SUP_VECTOR;
+                      queued1 <= (
+                      	((!IsVex(fetchbuf0_instr) || rf_vra0) && (!IsVector(fetchbuf0_instr))) || !SUP_VECTOR);
+                      if (iqentry_v[tail1]==`INV) begin
+                          canq2 <= ((!IsVex(fetchbuf1_instr) || rf_vra1)) || !SUP_VECTOR;
+                          queued2 <= (
+                          	(!IsVector(fetchbuf1_instr) && (!IsVex(fetchbuf1_instr) || rf_vra1) && (!IsVector(fetchbuf0_instr))) || !SUP_VECTOR);
+                          vqueued2 <= IsVector(fetchbuf0_instr) && vqe0 < vl-2 && !vechain;
+                      end
+                  end
+                  // If an irq is active during a vector instruction fetch, claim the vector instruction
+                  // is finished queueing even though it may not be. It'll pick up where it left off after
+                  // the exception is processed.
+                  if (hirq) begin
+                  	if (IsVector(fetchbuf0_instr) && IsVector(fetchbuf1_instr) && vechain) begin
+                  		queued1 <= TRUE;
+                  		queued2 <= TRUE;
+                  	end
+                  	else if (IsVector(fetchbuf0_instr)) begin
+                  		queued1 <= TRUE;
+                  		if (vqe0 < vl-2)
+                  			queued2 <= TRUE;
+                  		else
+                  			queued2 <= iqentry_v[tail1]==`INV;
+                  	end
+                  end
+              end
+          end
+      end
+      // One available
+      else if (fetchbuf0_v) begin
+          if (fetchbuf0_instr[`INSTRUCTION_OP]!=`NOP) begin
+              if (iqentry_v[tail0]==`INV) begin
+                  canq1 <= !IsVex(fetchbuf0_instr) || rf_vra0 || !SUP_VECTOR;
+                  queued1 <=  
+                  	(((!IsVex(fetchbuf0_instr) || rf_vra0) && (!IsVector(fetchbuf0_instr))) || !SUP_VECTOR);
+              end
+              if (iqentry_v[tail1]==`INV) begin
+              	canq2 <= IsVector(fetchbuf0_instr) && vqe0 < vl-2 && SUP_VECTOR;
+                  vqueued2 <= IsVector(fetchbuf0_instr) && vqe0 < vl-2 && !vechain;
+          	end
+          	if (hirq) begin
+              	if (IsVector(fetchbuf0_instr)) begin
+              		queued1 <= TRUE;
+              		if (vqe0 < vl-2)
+              			queued2 <= iqentry_v[tail1]==`INV;
+              	end
+          	end
+          end
+          else
+              queuedNop <= TRUE;
+      end
+      else if (fetchbuf1_v) begin
+          if (fetchbuf1_instr[`INSTRUCTION_OP]!=`NOP) begin
+              if (iqentry_v[tail0]==`INV) begin
+                  canq1 <= !IsVex(fetchbuf1_instr) || rf_vra1 || !SUP_VECTOR;
+                  queued1 <= (
+                  	((!IsVex(fetchbuf1_instr) || rf_vra1) && (!IsVector(fetchbuf1_instr))) || !SUP_VECTOR);
+              end
+              if (iqentry_v[tail1]==`INV) begin
+              	canq2 <= IsVector(fetchbuf1_instr) && vqe1 < vl-2 && SUP_VECTOR;
+                  vqueued2 <= IsVector(fetchbuf1_instr) && vqe1 < vl-2;
+          	end
+          	if (hirq) begin
+              	if (IsVector(fetchbuf1_instr)) begin
+              		queued1 <= TRUE;
+              		if (vqe1 < vl-2)
+              			queued2 <= iqentry_v[tail1]==`INV;
+              	end
+          	end
+          end
+          else
+              queuedNop <= TRUE;
+      end
+      //else no instructions available to queue
     end
     else begin
-        // One available
-        if (fetchbuf0_v && fetchbuf0_thrd != branchmiss_thrd) begin
-            if (fetchbuf0_instr[`INSTRUCTION_OP]!=`NOP) begin
-                if (iqentry_v[tail0]==`INV) begin
-                    canq1 <= !IsVex(fetchbuf0_instr) || rf_vra0 || !SUP_VECTOR;
-                    queued1 <= (
-                    	((!IsVex(fetchbuf0_instr) || rf_vra0) && (!IsVector(fetchbuf0_instr))) || !SUP_VECTOR);
-                end
-                if (iqentry_v[tail1]==`INV) begin
-                	canq2 <= IsVector(fetchbuf0_instr) && vqe0 < vl-2 && SUP_VECTOR;
-                    vqueued2 <= IsVector(fetchbuf0_instr) && vqe0 < vl-2 && !vechain;
-            	end
-            end
-            else
-                queuedNop <= TRUE;
-        end
-        else if (fetchbuf1_v && fetchbuf1_thrd != branchmiss_thrd) begin
-            if (fetchbuf1_instr[`INSTRUCTION_OP]!=`NOP) begin
-                if (iqentry_v[tail0]==`INV) begin
-                    canq1 <= !IsVex(fetchbuf1_instr) || rf_vra1 || !SUP_VECTOR;
-                    queued1 <= (
-                    	((!IsVex(fetchbuf1_instr) || rf_vra1) && (!IsVector(fetchbuf1_instr))) || !SUP_VECTOR);
-                end
-                if (iqentry_v[tail1]==`INV) begin
-                	canq2 <= IsVector(fetchbuf1_instr) && vqe1 < vl-2 && SUP_VECTOR;
-                    vqueued2 <= IsVector(fetchbuf0_instr) && vqe0 < vl-2 && !vechain;
-            	end
-            end
-            else
-                queuedNop <= TRUE;
-        end
-	end
+      // One available
+      if (fetchbuf0_v && fetchbuf0_thrd != branchmiss_thrd) begin
+          if (fetchbuf0_instr[`INSTRUCTION_OP]!=`NOP) begin
+              if (iqentry_v[tail0]==`INV) begin
+                  canq1 <= !IsVex(fetchbuf0_instr) || rf_vra0 || !SUP_VECTOR;
+                  queued1 <= (
+                  	((!IsVex(fetchbuf0_instr) || rf_vra0) && (!IsVector(fetchbuf0_instr))) || !SUP_VECTOR);
+              end
+              if (iqentry_v[tail1]==`INV) begin
+              	canq2 <= IsVector(fetchbuf0_instr) && vqe0 < vl-2 && SUP_VECTOR;
+                  vqueued2 <= IsVector(fetchbuf0_instr) && vqe0 < vl-2 && !vechain;
+          	end
+          end
+          else
+              queuedNop <= TRUE;
+      end
+      else if (fetchbuf1_v && fetchbuf1_thrd != branchmiss_thrd) begin
+          if (fetchbuf1_instr[`INSTRUCTION_OP]!=`NOP) begin
+              if (iqentry_v[tail0]==`INV) begin
+                  canq1 <= !IsVex(fetchbuf1_instr) || rf_vra1 || !SUP_VECTOR;
+                  queued1 <= (
+                  	((!IsVex(fetchbuf1_instr) || rf_vra1) && (!IsVector(fetchbuf1_instr))) || !SUP_VECTOR);
+              end
+              if (iqentry_v[tail1]==`INV) begin
+              	canq2 <= IsVector(fetchbuf1_instr) && vqe1 < vl-2 && SUP_VECTOR;
+                  vqueued2 <= IsVector(fetchbuf0_instr) && vqe0 < vl-2 && !vechain;
+          	end
+          end
+          else
+              queuedNop <= TRUE;
+      end
+    	else
+    		queuedNop <= TRUE;
+    end
 end
 
 //
@@ -5787,6 +5831,7 @@ if (rst) begin
      seq_num1 <= 5'd0;
      fcu_done <= `TRUE;
      sema <= 64'h0;
+     tvec[0] <= RSTPC;
 end
 else begin
 	ld_time <= {ld_time[4:0],1'b0};
@@ -6674,8 +6719,8 @@ else begin
         setargs(n,commit0_id,commit0_v,commit0_bus);
         setargs(n,commit1_id,commit1_v,commit1_bus);
         
-        setinsn(n,id1_id,1'b1,id1_bus);
-        setinsn(n,id2_id,1'b1,id2_bus);
+        setinsn(n,id1_ido,1'b1,id1_bus);
+        setinsn(n,id2_ido,1'b1,id2_bus);
 	end
 
     //
@@ -6698,6 +6743,9 @@ else begin
 			                            : (iqentry_a3_s[n] == alu1_id) ? alu1_bus
 			                            : `NOP_INSN)
                  							 : iqentry_instr[n];
+                 id1_ven    <= iqentry_ven[n];
+                 id1_vl     <= iqentry_vl[n];
+                 id1_thrd   <= iqentry_thrd[n];
                  id1_Rt     <= iqentry_tgt[n][4:0];
                  id1_pt			<= iqentry_pt[n];
                 end
@@ -6710,6 +6758,9 @@ else begin
 			                            : (iqentry_a3_s[n] == alu1_id) ? alu1_bus
 			                            : `NOP_INSN)
                  							 : iqentry_instr[n];
+                 id2_ven    <= iqentry_ven[n];
+                 id2_vl     <= iqentry_vl[n];
+                 id2_thrd   <= iqentry_thrd[n];
                  id2_Rt     <= iqentry_tgt[n][4:0];
                  id2_pt			<= iqentry_pt[n];
                 end
@@ -6766,6 +6817,8 @@ else begin
                 end
                 end
             2'd1: if (alu1_available && alu1_done) begin
+            		if (iqentry_alu0[n])
+            			panic <= `PANIC_ALU0ONLY;
                  alu1_sourceid	<= n[3:0];
                  alu1_pred   <= iqentry_pred[n];
                  alu1_instr	<= iqentry_instr[n];
@@ -7127,42 +7180,47 @@ if (~|panic)
     endcase
 
 
-	 rf_source[0] <= 0;
-	 L1_wr0 <= FALSE;
-	 L1_wr1 <= FALSE;
-	 L1_invline <= FALSE;
-     icnxt <= FALSE;
-     L2_nxt <= FALSE;
+	rf_source[0] <= 0;
+	L1_wr0 <= FALSE;
+	L1_wr1 <= FALSE;
+	L1_invline <= FALSE;
+	icnxt <= FALSE;
+	L2_nxt <= FALSE;
 // Instruction cache state machine.
 // On a miss first see if the instruction is in the L2 cache. No need to go to
 // the BIU on an L1 miss.
 // If not the machine will wait until the BIU loads the L2 cache.
 
-    // Capture the previous ic state, used to determine how long to wait in
-    // icstate #4.
-     picstate <= icstate;
+// Capture the previous ic state, used to determine how long to wait in
+// icstate #4.
+	picstate <= icstate;
 case(icstate)
 IDLE:
 	// If the bus unit is busy doing an update involving L1_adr or L2_adr
 	// we have to wait.
-    if (bstate != B7 && bstate != B9) begin
-        if (!ihit0) begin
-             L1_adr <= {pcr[5:0],pc0[31:3],3'h0};
-             L2_adr <= {pcr[5:0],pc0[31:3],3'h0};
-             L1_invline <= TRUE;
-             icwhich <= 1'b0;
-             iccnt <= 3'b00;
-             icstate <= IC2;
-        end
-        else if (!ihit1) begin
-             L1_adr <= {pcr[5:0],pc1[31:3],3'h0};
-             L2_adr <= {pcr[5:0],pc1[31:3],3'h0};
-             L1_invline <= TRUE;
-             icwhich <= 1'b1;
-             iccnt <= 3'b00;
-             icstate <= IC2;
-        end
-    end
+	if (bstate != B7 && bstate != B9) begin
+		if (!ihit0) begin
+			L1_adr <= {pcr[5:0],pc0[31:3],3'h0};
+			L2_adr <= {pcr[5:0],pc0[31:3],3'h0};
+			L1_invline <= TRUE;
+			icwhich <= 1'b0;
+			iccnt <= 3'b00;
+			icstate <= IC2;
+		end
+		else if (!ihit1) begin
+`ifdef SUPPORT_SMT
+			L1_adr <= {pcr[5:0],pc1[31:3],3'h0};
+			L2_adr <= {pcr[5:0],pc1[31:3],3'h0};
+`else
+			L1_adr <= {pcr[5:0],pc0plus6[31:3],3'h0};
+			L2_adr <= {pcr[5:0],pc0plus6[31:3],3'h0};
+`endif
+			L1_invline <= TRUE;
+			icwhich <= 1'b1;
+			iccnt <= 3'b00;
+			icstate <= IC2;
+		end
+	end
 IC2:     icstate <= IC3;
 IC3:     icstate <= IC3a;
 IC3a:     icstate <= IC4;
@@ -7198,7 +7256,7 @@ IC5:
 		L1_wr1 <= FALSE;
 		icstate <= IC6;
 	end
-IC6:     icstate <= IC8;
+IC6:  icstate <= IC7;
 IC7:	icstate <= IC8;
 IC8:    begin
              icstate <= IDLE;
@@ -7881,6 +7939,43 @@ if (!branchmiss) begin
         end
     endcase
 end
+`ifndef SUPPORT_SMT
+else begin	// if branchmiss
+    if (iqentry_stomp[0] & ~iqentry_stomp[7]) begin
+         tail0 <= 3'd0;
+         tail1 <= 3'd1;
+    end
+    else if (iqentry_stomp[1] & ~iqentry_stomp[0]) begin
+         tail0 <= 3'd1;
+         tail1 <= 3'd2;
+    end
+    else if (iqentry_stomp[2] & ~iqentry_stomp[1]) begin
+         tail0 <= 3'd2;
+         tail1 <= 3'd3;
+    end
+    else if (iqentry_stomp[3] & ~iqentry_stomp[2]) begin
+         tail0 <= 3'd3;
+         tail1 <= 3'd4;
+    end
+    else if (iqentry_stomp[4] & ~iqentry_stomp[3]) begin
+         tail0 <= 3'd4;
+         tail1 <= 3'd5;
+    end
+    else if (iqentry_stomp[5] & ~iqentry_stomp[4]) begin
+         tail0 <= 3'd5;
+         tail1 <= 3'd6;
+    end
+    else if (iqentry_stomp[6] & ~iqentry_stomp[5]) begin
+         tail0 <= 3'd6;
+         tail1 <= 3'd7;
+    end
+    else if (iqentry_stomp[7] & ~iqentry_stomp[6]) begin
+         tail0 <= 3'd7;
+         tail1 <= 3'd0;
+    end
+    // otherwise, it is the last instruction in the queue that has been mispredicted ... do nothing
+end
+`endif
 /*
     if (pebm)
          seq_num <= seq_num + 5'd3;
@@ -7948,7 +8043,7 @@ if (icstate==IDLE || icstate==IC5 || icstate==IC6 || icstate==IC7 || icstate==IC
 	    45, fetchbuf?62:45, fetchbufD_v, fetchbufD_instr, fetchbufD_pc);
 
 	for (i=0; i<QENTRIES; i=i+1) 
-	    $display("%c%c %d: %c%c%c %d %d %c%c %d %c %c%h 0%d %o %h %h %h %d %o %h %d %o %h %d %o %d:%h %h %d#",
+	    $display("%c%c %d: %c%c%c %d %d %c%c %d %c %c%h %d %o %h %h %h %d %o %h %d %o %h %d %o %d:%h %h %d#",
 		(i[`QBITS]==head0)?"C":".", (i[`QBITS]==tail0)?"Q":".", i[`QBITS],
 		iqentry_v[i]?"v":"-", iqentry_done[i]?"d":"-", iqentry_out[i]?"o":"-", iqentry_bt[i], iqentry_memissue[i], iqentry_agen[i] ? "a": "-", iqentry_issue[i]?"i":"-",
 		((i==0) ? iqentry_islot[0] : (i==1) ? iqentry_islot[1] : (i==2) ? iqentry_islot[2] : (i==3) ? iqentry_islot[3] :
@@ -7992,8 +8087,8 @@ if (icstate==IDLE || icstate==IC5 || icstate==IC6 || icstate==IC7 || icstate==IC
 	$display("%d %h %h %h %h #", fcu_v, fcu_bus, fcu_argI, fcu_argA, fcu_argB);
 	$display("%c %h %h #", fcu_branchmiss?"m":" ", fcu_sourceid, fcu_misspc); 
     $display("Commit");
-	$display("0: %c %h %o 0%d #", commit0_v?"v":" ", commit0_bus, commit0_id, commit0_tgt[4:0]);
-	$display("1: %c %h %o 0%d #", commit1_v?"v":" ", commit1_bus, commit1_id, commit1_tgt[4:0]);
+	$display("0: %c %h %o %d #", commit0_v?"v":" ", commit0_bus, commit0_id, commit0_tgt[4:0]);
+	$display("1: %c %h %o %d #", commit1_v?"v":" ", commit1_bus, commit1_id, commit1_tgt[4:0]);
     $display("instructions committed: %d ticks: %d ", I, tick);
 end
 //
@@ -8256,6 +8351,9 @@ input [127:0] bus;
 begin
   if (iqentry_iv[nn] == `INV && iqentry_is[nn] == id && iqentry_v[nn] == `VAL && v == `VAL) begin
   	iqentry_iv   [nn]  <= `VAL;
+//  	iqentry_Rt   [nn]  <= bus[`IB_RT];
+//  	iqentry_Rc   [nn]  <= bus[`IB_RC];
+//  	iqentry_Ra   [nn]  <= bus[`IB_RA];
   	iqentry_a0	 [nn]  <= bus[`IB_CONST];
 		iqentry_insln[nn]  <= bus[`IB_LN];
 		iqentry_bt   [nn]  <= bus[`IB_BT];
@@ -8302,7 +8400,7 @@ begin
 	iqentry_v    [tail]    <=   `VAL;
 	iqentry_iv	 [tail]    <=   `INV;
 	iqentry_is   [tail]    <= tail;
-	iqentry_thrd [tail]    <=   1'b0;
+	iqentry_thrd [tail]    <=   fetchbuf0_thrd;
 	iqentry_done [tail]    <=    `INV;
 	iqentry_cmt  [tail]    <=	`INV;
 	iqentry_pred [tail]    <=   `VAL;
@@ -8324,6 +8422,7 @@ begin
 	iqentry_Ra[tail] <= Ra0;
 	iqentry_Rb[tail] <= Rb0;
 	iqentry_Rc[tail] <= Rc0;
+	iqentry_vl   [tail]    <=  vl;
 	iqentry_ven  [tail]    <=   venno;
 	iqentry_exc  [tail]    <=    `EXC_NONE;
 	iqentry_imm  [tail]    <= HasConst(fetchbuf0_instr);
@@ -8359,7 +8458,7 @@ begin
 	iqentry_v    [tail]    <=   `VAL;
 	iqentry_iv	 [tail]    <=   `INV;
 	iqentry_is   [tail]    <= tail;
-	iqentry_thrd [tail]    <=   1'b1;
+	iqentry_thrd [tail]    <=   fetchbuf1_thrd;
 	iqentry_done [tail]    <=   `INV;
 	iqentry_cmt  [tail]    <=	`INV;
 	iqentry_pred [tail]    <=   `VAL;
@@ -8393,6 +8492,7 @@ end
 	iqentry_Ra[tail] <= Ra1;
 	iqentry_Rb[tail] <= Rb1;
 	iqentry_Rc[tail] <= Rc1;
+	iqentry_vl   [tail]    <=  vl;
 	iqentry_ven  [tail]    <=   venno;
 	iqentry_exc  [tail]    <=   `EXC_NONE;
 	iqentry_imm  [tail]    <= HasConst(fetchbuf1_instr);

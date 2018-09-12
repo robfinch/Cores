@@ -68,8 +68,8 @@ case(opcode)
 	case(instr[20:19])
 	2'd0:	takb <=  a[instr[18:13]];	// BBS
 	2'd1:	takb <= ~a[instr[18:13]];	// BBC
-	`IBNE:	takb <=  a==b;
-	`DBNZ:	takb <=  a!=b;
+	`IBNE:	takb <=  (a + 64'd1) !=b;
+	`DBNZ:	takb <=  (a - 64'd1) !=b;
 	default:	takb <= `TRUE;
 	endcase
 `CHK,`BCHK:	takb <= a >= b && a < c;

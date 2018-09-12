@@ -2891,17 +2891,25 @@ int NextToken()
              }
              break;
 
-        // xor xori
+        // xnor xor xori
         case 'x': case 'X':
             if ((inptr[1]=='o' || inptr[1]=='O') && (inptr[2]=='r' || inptr[2]=='R') && (inptr[3]=='i' || inptr[3]=='I') && isspace(inptr[4])) {
                 inptr += 4;
-                return token = tk_xori;
+                return token = (tk_xori);
             }
-            if ((inptr[1]=='o' || inptr[1]=='O') && (inptr[2]=='r' || inptr[2]=='R') && isspace(inptr[3])) {
+            if ((inptr[1]=='o' || inptr[1]=='O') && (inptr[2]=='r' || inptr[2]=='R') && isspaceOrDot(inptr[3])) {
                 inptr += 3;
-                return token = tk_xor;
+                return (token = tk_xor);
             }
-            break;
+			if (
+				(inptr[1] == 'n' || inptr[1] == 'N')
+				&& (inptr[2] == 'o' || inptr[2] == 'O')
+				&& (inptr[3] == 'r' || inptr[3] == 'R')
+				&& isspaceOrDot(inptr[4])) {
+				inptr += 4;
+				return (token = tk_xnor);
+			}
+			break;
 
         // zs:
         case 'z': case 'Z':
