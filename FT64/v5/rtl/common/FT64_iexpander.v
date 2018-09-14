@@ -28,6 +28,21 @@ module FT64_iexpander(cinstr,expand);
 input [15:0] cinstr;
 output reg [47:0] expand;
 
+// Maps a subset of registers for compressed instructions.
+function [4:0] fnRp;
+input [2:0] rg;
+case(rg)
+3'd0:	fnRp = 5'd1;		// return value 0
+3'd1:	fnRp = 5'd3;		// temp
+3'd2:	fnRp = 5'd4;		// temp
+3'd3:	fnRp = 5'd11;		// regvar
+3'd4:	fnRp = 5'd12;		// regvar
+3'd5:	fnRp = 5'd18;		// arg1
+3'd6:	fnRp = 5'd19;		// arg2
+3'd7:	fnRp = 5'd20;		// arg3
+endcase
+endfunction
+
 always @*
 casez({cinstr[15:12],cinstr[6]})
 5'b00000:	// NOP / ADDI

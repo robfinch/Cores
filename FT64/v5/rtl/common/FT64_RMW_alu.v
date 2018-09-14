@@ -29,10 +29,10 @@
 `include "FT64_defines.vh"
 
 module FT64_RMW_alu(instr, a, b, c, res);
-input [31:0] instr;
-input [64:0] a;
-input [64:0] b;
-input [64:0] c;
+input [47:0] instr;
+input [63:0] a;
+input [63:0] b;
+input [63:0] c;
 output reg [63:0] res;
 
 wire [4:0] op = instr[30:26];
@@ -77,209 +77,200 @@ case(instr[5:0])
 				3'd3,3'd7:	
 						begin
 						res[63:0] <= a + b;
-						res[64] <= a[64]^b[64];
 						end
 				endcase
-	`AMO_AND:	begin
-				res[63:0] <= a & b;
-				res[64] <= a[64] | b[64];
-				end
+	`AMO_AND:
+		begin
+		res[63:0] <= a & b;
+		end
 	`AMO_OR:	begin
 				res[63:0] <= a | b;
-				res[64] <= a[64] | b[64];
 				end
 	`AMO_XOR:	begin
 				res[63:0] <= a ^ b;
-				res[64] <= a[64] | b[64];
 				end
 	`AMO_SHL:	
-				case(instr[23:21])
-				3'd0,3'd4:
-					begin
-						res[7:0] <= a[7:0] << b[2:0];
-						res[15:8] <= a[15:8] << b[2:0];
-						res[23:16] <= a[23:16] << b[2:0];
-						res[31:24] <= a[31:24] << b[2:0];
-						res[39:32] <= a[39:32] << b[2:0];
-						res[47:40] <= a[47:40] << b[2:0];
-						res[55:48] <= a[55:48] << b[2:0];
-						res[63:56] <= a[63:56] << b[2:0];
-					end
-				3'd1,3'd5:
-					begin
-						res[15:0] <= a[15:0] << b[3:0];
-						res[31:16] <= a[31:16] << b[3:0];
-						res[47:32] <= a[47:32] << b[3:0];
-						res[63:48] <= a[63:48] << b[3:0];
-					end
-				3'd2,3'd6:
-					begin
-						res[31:0] <= a[31:0] << b[4:0];
-						res[63:32] <= a[63:32] << b[4:0];
-					end
-				3'd3,3'd7:	
-					begin
-						res[63:0] <= a << b[5:0];
-						res[64] <= a[64];
-					end
-				endcase			
-				
+		case(instr[23:21])
+		3'd0,3'd4:
+			begin
+				res[7:0] <= a[7:0] << b[2:0];
+				res[15:8] <= a[15:8] << b[2:0];
+				res[23:16] <= a[23:16] << b[2:0];
+				res[31:24] <= a[31:24] << b[2:0];
+				res[39:32] <= a[39:32] << b[2:0];
+				res[47:40] <= a[47:40] << b[2:0];
+				res[55:48] <= a[55:48] << b[2:0];
+				res[63:56] <= a[63:56] << b[2:0];
+			end
+		3'd1,3'd5:
+			begin
+				res[15:0] <= a[15:0] << b[3:0];
+				res[31:16] <= a[31:16] << b[3:0];
+				res[47:32] <= a[47:32] << b[3:0];
+				res[63:48] <= a[63:48] << b[3:0];
+			end
+		3'd2,3'd6:
+			begin
+				res[31:0] <= a[31:0] << b[4:0];
+				res[63:32] <= a[63:32] << b[4:0];
+			end
+		3'd3,3'd7:	
+			begin
+				res[63:0] <= a << b[5:0];
+				res[64] <= a[64];
+			end
+		endcase			
 	`AMO_SHR:
-				case(instr[23:21])
-				3'd0,3'd4:
-					begin
-						res[7:0] <= a[7:0] >> b[2:0];
-						res[15:8] <= a[15:8] >> b[2:0];
-						res[23:16] <= a[23:16] >> b[2:0];
-						res[31:24] <= a[31:24] >> b[2:0];
-						res[39:32] <= a[39:32] >> b[2:0];
-						res[47:40] <= a[47:40] >> b[2:0];
-						res[55:48] <= a[55:48] >> b[2:0];
-						res[63:56] <= a[63:56] >> b[2:0];
-					end
-				3'd1,3'd5:
-					begin
-						res[15:0] <= a[15:0] >> b[3:0];
-						res[31:16] <= a[31:16] >> b[3:0];
-						res[47:32] <= a[47:32] >> b[3:0];
-						res[63:48] <= a[63:48] >> b[3:0];
-					end
-				3'd2,3'd6:
-					begin
-						res[31:0] <= a[31:0] >> b[4:0];
-						res[63:32] <= a[63:32] >> b[4:0];
-					end
-				3'd3,3'd7:	
-					begin
-						res[63:0] <= a >> b[5:0];
-						res[64] <= a[64];
-					end
-				endcase			
-
+		case(instr[23:21])
+		3'd0,3'd4:
+			begin
+				res[7:0] <= a[7:0] >> b[2:0];
+				res[15:8] <= a[15:8] >> b[2:0];
+				res[23:16] <= a[23:16] >> b[2:0];
+				res[31:24] <= a[31:24] >> b[2:0];
+				res[39:32] <= a[39:32] >> b[2:0];
+				res[47:40] <= a[47:40] >> b[2:0];
+				res[55:48] <= a[55:48] >> b[2:0];
+				res[63:56] <= a[63:56] >> b[2:0];
+			end
+		3'd1,3'd5:
+			begin
+				res[15:0] <= a[15:0] >> b[3:0];
+				res[31:16] <= a[31:16] >> b[3:0];
+				res[47:32] <= a[47:32] >> b[3:0];
+				res[63:48] <= a[63:48] >> b[3:0];
+			end
+		3'd2,3'd6:
+			begin
+				res[31:0] <= a[31:0] >> b[4:0];
+				res[63:32] <= a[63:32] >> b[4:0];
+			end
+		3'd3,3'd7:	
+			begin
+				res[63:0] <= a >> b[5:0];
+				res[64] <= a[64];
+			end
+		endcase			
 	`AMO_MIN:
-				case(instr[23:21])
-				3'd0,3'd4:
-					begin
-						res[7:0] <= $signed(a[7:0]) < $signed(b[7:0]) ? a[7:0] : b[7:0];
-						res[15:8] <= $signed(a[15:8]) < $signed(b[15:8]) ? a[15:8] : b[15:8];
-						res[23:16] <= $signed(a[23:16]) < $signed(b[23:16]) ? a[23:16] : b[23:16];
-						res[31:24] <= $signed(a[31:24]) < $signed(b[31:24]) ? a[31:24] : b[31:24];
-						res[39:32] <= $signed(a[39:32]) < $signed(b[39:32]) ? a[39:32] : b[39:32];
-						res[47:40] <= $signed(a[47:40]) < $signed(b[47:40]) ? a[47:40] : b[47:40];
-						res[55:48] <= $signed(a[55:48]) < $signed(b[55:48]) ? a[55:48] : b[55:48];
-						res[63:56] <= $signed(a[63:56]) < $signed(b[63:56]) ? a[63:56] : b[63:56];
-					end
-				3'd1,3'd5:
-					begin
-						res[15:0] <= $signed(a[15:0]) < $signed(b[15:0]) ? a[15:0] : b[15:0];
-						res[31:16] <= $signed(a[31:16]) < $signed(b[31:16]) ? a[31:16] : b[31:16];
-						res[47:32] <= $signed(a[47:32]) < $signed(b[47:32]) ? a[47:32] : b[47:32];
-						res[63:48] <= $signed(a[63:48]) < $signed(b[63:48]) ? a[63:48] : b[63:48];
-					end
-				3'd2,3'd6:
-					begin
-						res[31:0] <= $signed(a[31:0]) < $signed(b[31:0]) ? a[31:0] : b[31:0];
-						res[63:32] <= $signed(a[63:32]) < $signed(b[63:32]) ? a[63:32] : b[63:32];
-					end
-				3'd3,3'd7:	
-					begin
-					res[63:0] <= $signed(a) < $signed(b) ? a : b;
-					res[64] <= $signed(a) < $signed(b) ? a[64] : b[64];
-					end
-				endcase
+		case(instr[23:21])
+		3'd0,3'd4:
+			begin
+				res[7:0] <= $signed(a[7:0]) < $signed(b[7:0]) ? a[7:0] : b[7:0];
+				res[15:8] <= $signed(a[15:8]) < $signed(b[15:8]) ? a[15:8] : b[15:8];
+				res[23:16] <= $signed(a[23:16]) < $signed(b[23:16]) ? a[23:16] : b[23:16];
+				res[31:24] <= $signed(a[31:24]) < $signed(b[31:24]) ? a[31:24] : b[31:24];
+				res[39:32] <= $signed(a[39:32]) < $signed(b[39:32]) ? a[39:32] : b[39:32];
+				res[47:40] <= $signed(a[47:40]) < $signed(b[47:40]) ? a[47:40] : b[47:40];
+				res[55:48] <= $signed(a[55:48]) < $signed(b[55:48]) ? a[55:48] : b[55:48];
+				res[63:56] <= $signed(a[63:56]) < $signed(b[63:56]) ? a[63:56] : b[63:56];
+			end
+		3'd1,3'd5:
+			begin
+				res[15:0] <= $signed(a[15:0]) < $signed(b[15:0]) ? a[15:0] : b[15:0];
+				res[31:16] <= $signed(a[31:16]) < $signed(b[31:16]) ? a[31:16] : b[31:16];
+				res[47:32] <= $signed(a[47:32]) < $signed(b[47:32]) ? a[47:32] : b[47:32];
+				res[63:48] <= $signed(a[63:48]) < $signed(b[63:48]) ? a[63:48] : b[63:48];
+			end
+		3'd2,3'd6:
+			begin
+				res[31:0] <= $signed(a[31:0]) < $signed(b[31:0]) ? a[31:0] : b[31:0];
+				res[63:32] <= $signed(a[63:32]) < $signed(b[63:32]) ? a[63:32] : b[63:32];
+			end
+		3'd3,3'd7:	
+			begin
+			res[63:0] <= $signed(a) < $signed(b) ? a : b;
+			end
+		endcase
 	`AMO_MAX:	
-				case(instr[23:21])
-				3'd0,3'd4:
-					begin
-						res[7:0] <= $signed(a[7:0]) > $signed(b[7:0]) ? a[7:0] : b[7:0];
-						res[15:8] <= $signed(a[15:8]) > $signed(b[15:8]) ? a[15:8] : b[15:8];
-						res[23:16] <= $signed(a[23:16]) > $signed(b[23:16]) ? a[23:16] : b[23:16];
-						res[31:24] <= $signed(a[31:24]) > $signed(b[31:24]) ? a[31:24] : b[31:24];
-						res[39:32] <= $signed(a[39:32]) > $signed(b[39:32]) ? a[39:32] : b[39:32];
-						res[47:40] <= $signed(a[47:40]) > $signed(b[47:40]) ? a[47:40] : b[47:40];
-						res[55:48] <= $signed(a[55:48]) > $signed(b[55:48]) ? a[55:48] : b[55:48];
-						res[63:56] <= $signed(a[63:56]) > $signed(b[63:56]) ? a[63:56] : b[63:56];
-					end
-				3'd1,3'd5:
-					begin
-						res[15:0] <= $signed(a[15:0]) > $signed(b[15:0]) ? a[15:0] : b[15:0];
-						res[31:16] <= $signed(a[31:16]) > $signed(b[31:16]) ? a[31:16] : b[31:16];
-						res[47:32] <= $signed(a[47:32]) > $signed(b[47:32]) ? a[47:32] : b[47:32];
-						res[63:48] <= $signed(a[63:48]) > $signed(b[63:48]) ? a[63:48] : b[63:48];
-					end
-				3'd2,3'd6:
-					begin
-						res[31:0] <= $signed(a[31:0]) > $signed(b[31:0]) ? a[31:0] : b[31:0];
-						res[63:32] <= $signed(a[63:32]) > $signed(b[63:32]) ? a[63:32] : b[63:32];
-					end
-				3'd3,3'd7:
-					begin
-						res[63:0] <= $signed(a) > $signed(b) ? a : b;
-						res[64] <= $signed(a) > $signed(b) ? a[64] : b[64];
-					end
-				endcase
+		case(instr[23:21])
+		3'd0,3'd4:
+			begin
+				res[7:0] <= $signed(a[7:0]) > $signed(b[7:0]) ? a[7:0] : b[7:0];
+				res[15:8] <= $signed(a[15:8]) > $signed(b[15:8]) ? a[15:8] : b[15:8];
+				res[23:16] <= $signed(a[23:16]) > $signed(b[23:16]) ? a[23:16] : b[23:16];
+				res[31:24] <= $signed(a[31:24]) > $signed(b[31:24]) ? a[31:24] : b[31:24];
+				res[39:32] <= $signed(a[39:32]) > $signed(b[39:32]) ? a[39:32] : b[39:32];
+				res[47:40] <= $signed(a[47:40]) > $signed(b[47:40]) ? a[47:40] : b[47:40];
+				res[55:48] <= $signed(a[55:48]) > $signed(b[55:48]) ? a[55:48] : b[55:48];
+				res[63:56] <= $signed(a[63:56]) > $signed(b[63:56]) ? a[63:56] : b[63:56];
+			end
+		3'd1,3'd5:
+			begin
+				res[15:0] <= $signed(a[15:0]) > $signed(b[15:0]) ? a[15:0] : b[15:0];
+				res[31:16] <= $signed(a[31:16]) > $signed(b[31:16]) ? a[31:16] : b[31:16];
+				res[47:32] <= $signed(a[47:32]) > $signed(b[47:32]) ? a[47:32] : b[47:32];
+				res[63:48] <= $signed(a[63:48]) > $signed(b[63:48]) ? a[63:48] : b[63:48];
+			end
+		3'd2,3'd6:
+			begin
+				res[31:0] <= $signed(a[31:0]) > $signed(b[31:0]) ? a[31:0] : b[31:0];
+				res[63:32] <= $signed(a[63:32]) > $signed(b[63:32]) ? a[63:32] : b[63:32];
+			end
+		3'd3,3'd7:
+			begin
+				res[63:0] <= $signed(a) > $signed(b) ? a : b;
+			end
+		endcase
 	`AMO_MINU:	
-				case(instr[23:21])
-				3'd0,3'd4:
-					begin
-						res[7:0] <= $unsigned(a[7:0]) < $unsigned(b[7:0]) ? a[7:0] : b[7:0];
-						res[15:8] <= $unsigned(a[15:8]) < $unsigned(b[15:8]) ? a[15:8] : b[15:8];
-						res[23:16] <= $unsigned(a[23:16]) < $unsigned(b[23:16]) ? a[23:16] : b[23:16];
-						res[31:24] <= $unsigned(a[31:24]) < $unsigned(b[31:24]) ? a[31:24] : b[31:24];
-						res[39:32] <= $unsigned(a[39:32]) < $unsigned(b[39:32]) ? a[39:32] : b[39:32];
-						res[47:40] <= $unsigned(a[47:40]) < $unsigned(b[47:40]) ? a[47:40] : b[47:40];
-						res[55:48] <= $unsigned(a[55:48]) < $unsigned(b[55:48]) ? a[55:48] : b[55:48];
-						res[63:56] <= $unsigned(a[63:56]) < $unsigned(b[63:56]) ? a[63:56] : b[63:56];
-					end
-				3'd1,3'd5:
-					begin
-						res[15:0] <= $unsigned(a[15:0]) < $unsigned(b[15:0]) ? a[15:0] : b[15:0];
-						res[31:16] <= $unsigned(a[31:16]) < $unsigned(b[31:16]) ? a[31:16] : b[31:16];
-						res[47:32] <= $unsigned(a[47:32]) < $unsigned(b[47:32]) ? a[47:32] : b[47:32];
-						res[63:48] <= $unsigned(a[63:48]) < $unsigned(b[63:48]) ? a[63:48] : b[63:48];
-					end
-				3'd2,3'd6:
-					begin
-						res[31:0] <= $unsigned(a[31:0]) < $unsigned(b[31:0]) ? a[31:0] : b[31:0];
-						res[63:32] <= $unsigned(a[63:32]) < $unsigned(b[63:32]) ? a[63:32] : b[63:32];
-					end
-				3'd3,3'd7:
-					begin
-						res[63:0] <= $unsigned(a) < $unsigned(b) ? a : b;
-						res[64] <= $unsigned(a) < $unsigned(b) ? a[64] : b[64];
-					end
-				endcase
+		case(instr[23:21])
+		3'd0,3'd4:
+			begin
+				res[7:0] <= $unsigned(a[7:0]) < $unsigned(b[7:0]) ? a[7:0] : b[7:0];
+				res[15:8] <= $unsigned(a[15:8]) < $unsigned(b[15:8]) ? a[15:8] : b[15:8];
+				res[23:16] <= $unsigned(a[23:16]) < $unsigned(b[23:16]) ? a[23:16] : b[23:16];
+				res[31:24] <= $unsigned(a[31:24]) < $unsigned(b[31:24]) ? a[31:24] : b[31:24];
+				res[39:32] <= $unsigned(a[39:32]) < $unsigned(b[39:32]) ? a[39:32] : b[39:32];
+				res[47:40] <= $unsigned(a[47:40]) < $unsigned(b[47:40]) ? a[47:40] : b[47:40];
+				res[55:48] <= $unsigned(a[55:48]) < $unsigned(b[55:48]) ? a[55:48] : b[55:48];
+				res[63:56] <= $unsigned(a[63:56]) < $unsigned(b[63:56]) ? a[63:56] : b[63:56];
+			end
+		3'd1,3'd5:
+			begin
+				res[15:0] <= $unsigned(a[15:0]) < $unsigned(b[15:0]) ? a[15:0] : b[15:0];
+				res[31:16] <= $unsigned(a[31:16]) < $unsigned(b[31:16]) ? a[31:16] : b[31:16];
+				res[47:32] <= $unsigned(a[47:32]) < $unsigned(b[47:32]) ? a[47:32] : b[47:32];
+				res[63:48] <= $unsigned(a[63:48]) < $unsigned(b[63:48]) ? a[63:48] : b[63:48];
+			end
+		3'd2,3'd6:
+			begin
+				res[31:0] <= $unsigned(a[31:0]) < $unsigned(b[31:0]) ? a[31:0] : b[31:0];
+				res[63:32] <= $unsigned(a[63:32]) < $unsigned(b[63:32]) ? a[63:32] : b[63:32];
+			end
+		3'd3,3'd7:
+			begin
+				res[63:0] <= $unsigned(a) < $unsigned(b) ? a : b;
+			end
+		endcase
 	`AMO_MAXU:	
-				case(instr[23:21])
-				3'd0,3'd4:
-					begin
-						res[7:0] <= $unsigned(a[7:0]) > $unsigned(b[7:0]) ? a[7:0] : b[7:0];
-						res[15:8] <= $unsigned(a[15:8]) > $unsigned(b[15:8]) ? a[15:8] : b[15:8];
-						res[23:16] <= $unsigned(a[23:16]) > $unsigned(b[23:16]) ? a[23:16] : b[23:16];
-						res[31:24] <= $unsigned(a[31:24]) > $unsigned(b[31:24]) ? a[31:24] : b[31:24];
-						res[39:32] <= $unsigned(a[39:32]) > $unsigned(b[39:32]) ? a[39:32] : b[39:32];
-						res[47:40] <= $unsigned(a[47:40]) > $unsigned(b[47:40]) ? a[47:40] : b[47:40];
-						res[55:48] <= $unsigned(a[55:48]) > $unsigned(b[55:48]) ? a[55:48] : b[55:48];
-						res[63:56] <= $unsigned(a[63:56]) > $unsigned(b[63:56]) ? a[63:56] : b[63:56];
-					end
-				3'd1,3'd5:
-					begin
-						res[15:0] <= $unsigned(a[15:0]) > $unsigned(b[15:0]) ? a[15:0] : b[15:0];
-						res[31:16] <= $unsigned(a[31:16]) > $unsigned(b[31:16]) ? a[31:16] : b[31:16];
-						res[47:32] <= $unsigned(a[47:32]) > $unsigned(b[47:32]) ? a[47:32] : b[47:32];
-						res[63:48] <= $unsigned(a[63:48]) > $unsigned(b[63:48]) ? a[63:48] : b[63:48];
-					end
-				3'd2,3'd6:
-					begin
-						res[31:0] <= $unsigned(a[31:0]) > $unsigned(b[31:0]) ? a[31:0] : b[31:0];
-						res[63:32] <= $unsigned(a[63:32]) > $unsigned(b[63:32]) ? a[63:32] : b[63:32];
-					end
-				3'd3,3'd7:
-					begin
-						res[63:0] <= $unsigned(a) > $unsigned(b) ? a : b;
-						res[64] <= $unsigned(a) > $unsigned(b) ? a[64] : b[64];
-					end
-				endcase
+		case(instr[23:21])
+		3'd0,3'd4:
+			begin
+				res[7:0] <= $unsigned(a[7:0]) > $unsigned(b[7:0]) ? a[7:0] : b[7:0];
+				res[15:8] <= $unsigned(a[15:8]) > $unsigned(b[15:8]) ? a[15:8] : b[15:8];
+				res[23:16] <= $unsigned(a[23:16]) > $unsigned(b[23:16]) ? a[23:16] : b[23:16];
+				res[31:24] <= $unsigned(a[31:24]) > $unsigned(b[31:24]) ? a[31:24] : b[31:24];
+				res[39:32] <= $unsigned(a[39:32]) > $unsigned(b[39:32]) ? a[39:32] : b[39:32];
+				res[47:40] <= $unsigned(a[47:40]) > $unsigned(b[47:40]) ? a[47:40] : b[47:40];
+				res[55:48] <= $unsigned(a[55:48]) > $unsigned(b[55:48]) ? a[55:48] : b[55:48];
+				res[63:56] <= $unsigned(a[63:56]) > $unsigned(b[63:56]) ? a[63:56] : b[63:56];
+			end
+		3'd1,3'd5:
+			begin
+				res[15:0] <= $unsigned(a[15:0]) > $unsigned(b[15:0]) ? a[15:0] : b[15:0];
+				res[31:16] <= $unsigned(a[31:16]) > $unsigned(b[31:16]) ? a[31:16] : b[31:16];
+				res[47:32] <= $unsigned(a[47:32]) > $unsigned(b[47:32]) ? a[47:32] : b[47:32];
+				res[63:48] <= $unsigned(a[63:48]) > $unsigned(b[63:48]) ? a[63:48] : b[63:48];
+			end
+		3'd2,3'd6:
+			begin
+				res[31:0] <= $unsigned(a[31:0]) > $unsigned(b[31:0]) ? a[31:0] : b[31:0];
+				res[63:32] <= $unsigned(a[63:32]) > $unsigned(b[63:32]) ? a[63:32] : b[63:32];
+			end
+		3'd3,3'd7:
+			begin
+				res[63:0] <= $unsigned(a) > $unsigned(b) ? a : b;
+			end
+		endcase
 	default:	res[63:0] <= 64'hDEADDEADDEADDEAD;
 	endcase
 `INC:		begin

@@ -24,9 +24,10 @@
 //
 `include ".\FT64_defines.vh"
 
-module FT64_idecoder(clk,id_i,instr,vl,ven,thrd,predict_taken,Rt,bus,id_o);
+module FT64_idecoder(clk,idv_i,id_i,instr,vl,ven,thrd,predict_taken,Rt,bus,id_o,idv_o);
 input clk;
-input [3:0] id_i;
+input idv_i;
+input [4:0] id_i;
 input [47:0] instr;
 input [7:0] vl;
 input [5:0] ven;
@@ -34,7 +35,8 @@ input thrd;
 input predict_taken;
 input [4:0] Rt;
 output reg [127:0] bus;
-output reg [3:0] id_o;
+output reg [4:0] id_o;
+output reg idv_o;
 
 parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
@@ -59,10 +61,10 @@ mIsALU uialu1
 	.IsALU(iAlu)
 );
 
-function IsALU;
-input [47:0] instr;
-begin
-casez(instr[`INSTRUCTION_OP])
+
+reg IsALU;
+always @*
+case(instr[`INSTRUCTION_OP])
 `R2:    if (instr[`INSTRUCTION_L2]==2'b00)
 			case(instr[`INSTRUCTION_S2])
 			`VMOV:		IsALU = TRUE;
@@ -93,11 +95,10 @@ casez(instr[`INSTRUCTION_OP])
 `FLOAT:		IsALU = FALSE;            
 default:    IsALU = TRUE;
 endcase
-end
-endfunction
 
 function IsAlu0Only;
 input [47:0] isn;
+begin
 case(isn[`INSTRUCTION_OP])
 `R2:
 	if (isn[`INSTRUCTION_L2]==2'b00)
@@ -128,10 +129,12 @@ case(isn[`INSTRUCTION_OP])
 `CSRRW: IsAlu0Only = TRUE;
 default:    IsAlu0Only = FALSE;
 endcase
+end
 endfunction
 
 function IsFPU;
 input [47:0] isn;
+begin
 case(isn[`INSTRUCTION_OP])
 `FLOAT: IsFPU = TRUE;
 `FVECTOR:
@@ -141,28 +144,50 @@ case(isn[`INSTRUCTION_OP])
             endcase
 default:    IsFPU = FALSE;
 endcase
-
+end
 endfunction
 
-function IsFlowCtrl;
-input [47:0] isn;
-casez(isn[`INSTRUCTION_OP])
-`BRK:    IsFlowCtrl = TRUE;
-`RR:    case(isn[`INSTRUCTION_S2])
-        `RTI:   IsFlowCtrl = TRUE;
-        default:    IsFlowCtrl = FALSE;
+reg IsFlowCtrl;
+
+always @*
+case(instr[`INSTRUCTION_OP])
+`BRK:    IsFlowCtrl <= TRUE;
+`RR:    case(instr[`INSTRUCTION_S2])
+        `RTI:   IsFlowCtrl <= TRUE;
+        default:    IsFlowCtrl <= FALSE;
         endcase
-`Bcc:   IsFlowCtrl = TRUE;
-`BBc:		IsFlowCtrl = TRUE;
-`BEQI:  IsFlowCtrl = TRUE;
-`CHK:   IsFlowCtrl = TRUE;
-`JAL:   IsFlowCtrl = TRUE;
-`JMP:		IsFlowCtrl = TRUE;
-`CALL:  IsFlowCtrl = TRUE;
-`RET:   IsFlowCtrl = TRUE;
-default:    IsFlowCtrl = FALSE;
+`Bcc:   IsFlowCtrl <= TRUE;
+`BBc:		IsFlowCtrl <= TRUE;
+`BEQI:  IsFlowCtrl <= TRUE;
+`CHK:   IsFlowCtrl <= TRUE;
+`JAL:   IsFlowCtrl <= TRUE;
+`JMP:		IsFlowCtrl <= TRUE;
+`CALL:  IsFlowCtrl <= TRUE;
+`RET:   IsFlowCtrl <= TRUE;
+default:    IsFlowCtrl <= FALSE;
 endcase
-endfunction
+
+//function IsFlowCtrl;
+//input [47:0] isn;
+//begin
+//case(isn[`INSTRUCTION_OP])
+//`BRK:    IsFlowCtrl = TRUE;
+//`RR:    case(isn[`INSTRUCTION_S2])
+//        `RTI:   IsFlowCtrl = TRUE;
+//        default:    IsFlowCtrl = FALSE;
+//        endcase
+//`Bcc:   IsFlowCtrl = TRUE;
+//`BBc:		IsFlowCtrl = TRUE;
+//`BEQI:  IsFlowCtrl = TRUE;
+//`CHK:   IsFlowCtrl = TRUE;
+//`JAL:   IsFlowCtrl = TRUE;
+//`JMP:		IsFlowCtrl = TRUE;
+//`CALL:  IsFlowCtrl = TRUE;
+//`RET:   IsFlowCtrl = TRUE;
+//default:    IsFlowCtrl = FALSE;
+//endcase
+//end
+//endfunction
 
 // fnCanException
 //
@@ -176,6 +201,7 @@ endfunction
 //
 function fnCanException;
 input [47:0] isn;
+begin
 // ToDo add debug_on as input
 `ifdef SUPPORT_DBG
 if (debug_on)
@@ -203,6 +229,7 @@ case(isn[`INSTRUCTION_OP])
 default:
     fnCanException = IsMem(isn);
 endcase
+end
 endfunction
 
 function IsLoad;
@@ -450,6 +477,43 @@ input [47:0] isn;
 IsRti = isn[`INSTRUCTION_OP]==`RR && isn[`INSTRUCTION_L2]==2'b00 && isn[`INSTRUCTION_S2]==`RTI;
 endfunction
 
+// Has an extendable 14-bit constant
+function HasConst;
+input [47:0] isn;
+casez(isn[`INSTRUCTION_OP])
+`ADDI:  HasConst = TRUE;
+`SLTI:  HasConst = TRUE;
+`SLTUI: HasConst = TRUE;
+`SGTI:  HasConst = TRUE;
+`SGTUI: HasConst = TRUE;
+`ANDI:  HasConst = TRUE;
+`ORI:   HasConst = TRUE;
+`XORI:  HasConst = TRUE;
+`XNORI: HasConst = TRUE;
+`MULUI: HasConst = TRUE;
+`MULI:  HasConst = TRUE;
+`DIVUI: HasConst = TRUE;
+`DIVI:  HasConst = TRUE;
+`MODI:  HasConst = TRUE;
+`LB:    HasConst = TRUE;
+`LBU:   HasConst = TRUE;
+`Lx:    HasConst = TRUE;
+`LWR:		HasConst = TRUE;
+`LV:    HasConst = TRUE;
+`SB:  	HasConst = TRUE;
+`Sx:  	HasConst = TRUE;
+`SWC:   HasConst = TRUE;
+`INC:		HasConst = TRUE;
+`SV:    HasConst = TRUE;
+`CAS:   HasConst = TRUE;
+`JAL:   HasConst = TRUE;
+`CALL:  HasConst = TRUE;
+`RET:   HasConst = TRUE;
+`LVx:		HasConst = TRUE;
+default:    HasConst = FALSE;
+endcase
+endfunction
+
 function IsRFW;
 input [47:0] isn;
 casez(isn[`INSTRUCTION_OP])
@@ -570,8 +634,149 @@ default:	fnWe = 8'hFF;
 endcase
 endfunction
 
+// Detect if a source is automatically valid
+function Source1Valid;
+input [47:0] isn;
+casez(isn[`INSTRUCTION_OP])
+`BRK:   Source1Valid = TRUE;
+`Bcc:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`BBc:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`BEQI:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`CHK:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`RR:    case(isn[`INSTRUCTION_S2])
+        `SHIFT31:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+        `SHIFT63:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+        `SHIFTR:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+        default:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+        endcase
+`ADDI:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`SLTI:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`SLTUI: Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`SGTI:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`SGTUI: Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`ANDI:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`ORI:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`XORI:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`XNORI: Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`MULUI: Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`AMO: 	Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`LB:    Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`LBU:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`Lx:    Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`LxU:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`LWR:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`LV:    Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`LVx:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`SB:    Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`Sx:    Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`SWC:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`SV:    Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`INC:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`CAS:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`JAL:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`RET:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`CSRRW: Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`BITFIELD: 	case(isn[31:28])
+			`BFINSI:	Source1Valid = TRUE;
+			default:	Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+			endcase
+`IVECTOR:
+			Source1Valid = FALSE;
+default:    Source1Valid = TRUE;
+endcase
+endfunction
+  
+function Source2Valid;
+input [47:0] isn;
+casez(isn[`INSTRUCTION_OP])
+`BRK:   Source2Valid = TRUE;
+`Bcc:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
+`BBc:   Source2Valid = TRUE;
+`BEQI:  Source2Valid = TRUE;
+`CHK:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
+`RR:    case(isn[`INSTRUCTION_S2])
+        `R1:       Source2Valid = TRUE;
+        `SHIFTR:   Source2Valid = isn[25] ? 1'b1 : isn[`INSTRUCTION_RB]==5'd0;
+        `SHIFT31:  Source2Valid = isn[25] ? 1'b1 : isn[`INSTRUCTION_RB]==5'd0;
+        `SHIFT63:  Source2Valid = isn[25] ? 1'b1 : isn[`INSTRUCTION_RB]==5'd0;
+        `LVX,`SVX: Source2Valid = FALSE;
+        default:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
+        endcase
+`ADDI:  Source2Valid = TRUE;
+`SLTI:  Source2Valid = TRUE;
+`SLTUI: Source2Valid = TRUE;
+`SGTI:  Source2Valid = TRUE;
+`SGTUI: Source2Valid = TRUE;
+`ANDI:  Source2Valid = TRUE;
+`ORI:   Source2Valid = TRUE;
+`XORI:  Source2Valid = TRUE;
+`XNORI: Source2Valid = TRUE;
+`MULUI: Source2Valid = TRUE;
+`LB:    Source2Valid = TRUE;
+`LBU:   Source2Valid = TRUE;
+`Lx:    Source2Valid = TRUE;
+`LxU:   Source2Valid = TRUE;
+`LWR:   Source2Valid = TRUE;
+`LVx:   Source2Valid = TRUE;
+`INC:		Source2Valid = TRUE;
+`SB:    Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
+`Sx:    Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
+`SWC:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
+`CAS:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
+`JAL:   Source2Valid = TRUE;
+`RET:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
+`IVECTOR:
+		    case(isn[`INSTRUCTION_S2])
+            `VABS:  Source2Valid = TRUE;
+            `VMAND,`VMOR,`VMXOR,`VMXNOR,`VMPOP:
+                Source2Valid = FALSE;
+            `VADDS,`VSUBS,`VANDS,`VORS,`VXORS:
+                Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
+            `VBITS2V:   Source2Valid = TRUE;
+            `V2BITS:    Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
+            `VSHL,`VSHR,`VASR:  Source2Valid = isn[22:21]==2'd2;
+            default:    Source2Valid = FALSE;
+            endcase
+`LV:        Source2Valid = TRUE;
+`SV:        Source2Valid = FALSE;
+`AMO:		Source2Valid = isn[31] || isn[`INSTRUCTION_RB]==5'd0;
+default:    Source2Valid = TRUE;
+endcase
+endfunction
+
+function Source3Valid;
+input [47:0] isn;
+case(isn[`INSTRUCTION_OP])
+`IVECTOR:
+    case(isn[`INSTRUCTION_S2])
+    `VEX:       Source3Valid = TRUE;
+    default:    Source3Valid = TRUE;
+    endcase
+`CHK:   Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
+`R2:
+	if (isn[`INSTRUCTION_L2]==2'b01)
+		case(isn[47:42])
+    `CMOVEZ,`CMOVNZ:  Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
+		default:	Source3Valid = TRUE;
+		endcase
+	else
+    case(isn[`INSTRUCTION_S2])
+    `SBX:   Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
+    `SCX:   Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
+    `SHX:   Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
+    `SWX:   Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
+    `SWCX:  Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
+    `CASX:  Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
+    `MAJ:		Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
+    default:    Source3Valid = TRUE;
+    endcase
+default:    Source3Valid = TRUE;
+endcase
+endfunction
+
 always @(posedge clk)
 begin
+	bus <= 128'h0;
 	bus[`IB_CONST] <= instr[7:6]==2'b01 ? {{34{instr[47]}},instr[47:18]} :
 																				{{50{instr[31]}},instr[31:18]};
 	case(instr[7:6])
@@ -582,11 +787,15 @@ begin
 //	bus[`IB_RT]		 <= fnRt(instr,ven,vl,thrd) | {thrd,7'b0};
 //	bus[`IB_RC]		 <= fnRc(instr,ven,thrd) | {thrd,7'b0};
 //	bus[`IB_RA]		 <= fnRa(instr,ven,vl,thrd) | {thrd,7'b0};
+	bus[`IB_IMM]	 <= HasConst(instr);
+	bus[`IB_A3V]   <= Source3Valid(instr);
+	bus[`IB_A2V]   <= Source2Valid(instr);
+	bus[`IB_A1V]   <= Source1Valid(instr);
 	bus[`IB_BT]    <= (IsBranch(instr) && predict_taken);
-	bus[`IB_ALU]   <= IsALU(instr);
+	bus[`IB_ALU]   <= IsALU;
 	bus[`IB_ALU0]  <= IsAlu0Only(instr);
 	bus[`IB_FPU]   <= IsFPU(instr);
-	bus[`IB_FC]		 <= IsFlowCtrl(instr);
+	bus[`IB_FC]		 <= IsFlowCtrl;
 	bus[`IB_CANEX] <= fnCanException(instr);
 	bus[`IB_LOAD]	 <= IsLoad(instr);
 	bus[`IB_PRELOAD] <=   IsLoad(instr) && Rt==5'd0;
@@ -606,6 +815,7 @@ begin
 	bus[`IB_RFW]		<= Rt==5'd0 ? 1'b0 : IsRFW(instr);
 	bus[`IB_WE]			<= fnWe(instr);
 	id_o <= id_i;
+	idv_o <= idv_i;
 end
 
 endmodule

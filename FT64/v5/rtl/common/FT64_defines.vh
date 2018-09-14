@@ -22,6 +22,7 @@
 //
 // ============================================================================
 //
+`define SIM		1'b1
 //`define SUPPORT_SMT		1'b1
 //`define DEBUG_LOGIC 1'b1
 `define HIGH        1'b1
@@ -285,8 +286,9 @@
 `define FMUL    6'h08
 `define FDIV    6'h09
 
+`define EXR			8'h7F
 
-`define NOP_INSN    {26'd0,`NOP}
+`define NOP_INSN    {42'd0,`NOP}
 
 `define CSR_CR0     11'h000
 `define CSR_HARTID  11'h001
@@ -420,12 +422,16 @@
 
 `define IB_CONST	127:64
 `define IB_LN			63:61
-`define IB_RT			49:45
-`define IB_RC		  44:40
-`define IB_RB			39:35
-`define IB_RA			34:30
-`define IB_MEM      29
-`define IB_BT       28
+`define IB_RT			54:50
+`define IB_RC		  49:45
+`define IB_RB			44:40
+`define IB_RA			39:35
+`define IB_A3V		34
+`define IB_A2V		33
+`define IB_A1V		32
+`define IB_IMM		31
+`define IB_MEM    30
+`define IB_BT     28
 `define IB_ALU		27
 `define IB_ALU0		26
 `define IB_FPU		25

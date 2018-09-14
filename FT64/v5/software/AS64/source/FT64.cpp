@@ -1423,14 +1423,15 @@ static void process_riop(int64_t opcode6)
 			return;
 		}
 		emit_insn(
-			((val & 0x3FFFFFFF) << 18) |
-			(Rt << 12) |
-			(Ra << 6) |
+			(val << 18LL) |
+			(Rt << 13) |
+			(Ra << 8) |
+			(1 << 6) |
 			opcode6, !expand_flag, 6);
 		return;
 	}
 	emit_insn(
-		((val & 0x3FFF) << 18)|(Rt << 13)|(Ra << 8)|opcode6,!expand_flag,4);
+		(val << 18)|(Rt << 13)|(Ra << 8)|opcode6,!expand_flag,4);
 }
 
 // ---------------------------------------------------------------------------
@@ -2345,6 +2346,7 @@ static void process_dbnz(int opcode6, int opcode3)
 	    NextToken();
 		val = expr();
 		disp = val - (code_address + 4LL);
+		disp >>= 1;
 		emit_insn(
 			(disp << 21LL) |
 			((opcode3 & 3) << 19) |
@@ -3415,22 +3417,31 @@ static void process_cache(int opcode6)
 	}
     if (Ra < 0) Ra = 0;
     val = disp;
-	if (val < -32767 || val > 32767) {
+	if (!IsNBit(val,30)) {
 		LoadConstant(val,23);
 		// Change to indexed addressing
 		emit_insn(
 			(opcode6 << 26) |
-			(cmd << 16) |
-			(23 << 11) |
-			(Ra << 6) |
+			(cmd << 18) |
+			(23 << 13) |
+			(Ra << 8) |
 			0x02,!expand_flag,4);
 		ScanToEOL();
 		return;
 	}
+	if (!IsNBit(val, 14)) {
+		emit_insn(
+			(val << 18LL) |
+			(cmd << 13) |
+			(Ra << 8) |
+			(1 << 6) |
+			opcode6, !expand_flag, 6);
+		return;
+	}
 	emit_insn(
-		(val << 16) |
-		(cmd << 11) |
-		(Ra << 6) |
+		(val << 18) |
+		(cmd << 13) |
+		(Ra << 8) |
 		opcode6,!expand_flag,4);
     ScanToEOL();
 }
@@ -4505,7 +4516,7 @@ void FT64_processMaster()
 		case tk_ld:	process_ld(); break;
         case tk_ldi: process_ldi(); break;
         case tk_lea: process_load(0x04,0); break;
-		case tk_lf:	 process_lsfloat(0x0b,0x00); break;
+		case tk_lf:	 process_lsfloat(0x1b,0x00); break;
         case tk_lh:  process_load(0x20,2); break;
         case tk_lhu: process_load(0x20,-2); break;
 		//case tk_lui: process_lui(0x27); break;
@@ -4556,7 +4567,7 @@ void FT64_processMaster()
         case tk_sc:  process_store(0x24,1); break;
         case tk_sei: process_sei(); break;
 		//case tk_seq:	process_riop(0x1B,2); break;
-		case tk_sf:		process_lsfloat(0x0C,0x00); break;
+		case tk_sf:		process_lsfloat(0x2B,0x00); break;
 		case tk_sge:	process_setop(-6); break;
 		case tk_sgeu:	process_setiop(-7); break;
 		case tk_sgt:	process_setiop(-0x2C); break;

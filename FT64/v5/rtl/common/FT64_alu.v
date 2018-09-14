@@ -73,7 +73,7 @@ wire [7:0] b8 = b[7:0];
 wire [15:0] b16 = b[15:0];
 wire [31:0] b32 = b[31:0];
 wire [63:0] orb = instr[6] ? {34'd0,b[29:0]} : {50'd0,b[13:0]};
-wire [63:0] andb = ((instr[6]==1'b1) ? {34'h3FFFFFFFF,b[29:0]} : {50'h3FFFFFFFFFFFF,b[13:0]});
+wire [63:0] andb = b;//((instr[6]==1'b1) ? {34'h3FFFFFFFF,b[29:0]} : {50'h3FFFFFFFFFFFF,b[13:0]});
 
 wire [21:0] qimm = instr[39:18];
 wire [63:0] imm = {{45{instr[39]}},instr[39:21]};
@@ -628,15 +628,18 @@ case(instr[`INSTRUCTION_OP])
 	        default:    o = 64'hDEADDEADDEADDEAD;
 	        endcase
 	    `BMM:		o[63:0] = BIG ? bmmo : 64'hCCCCCCCCCCCCCCCC;
-	    `SHIFT31:   
+	    `SHIFT31,
+	    `SHIFT63,
+	    `SHIFTR:
 	    	begin
-	    		o[63:0] = BIG ? shfto : 64'hCCCCCCCCCCCCCCCC;
+	    		if (instr[25:23]==`SHL)
+	    			o[63:0] = shfto;
+	    		else
+	    			o[63:0] = BIG ? shfto : 64'hCCCCCCCCCCCCCCCC;
 	    		$display("BIG=%d",BIG);
 	    		if(!BIG)
 	    			$stop;
 	    	end
-	    `SHIFT63:   o[63:0] = BIG ? shfto : 64'hCCCCCCCCCCCCCCCC;
-	    `SHIFTR:    o[63:0] = BIG ? shfto : 64'hCCCCCCCCCCCCCCCC;
 	    `ADD:   case(sz)
 	    		3'd0,3'd4:
 	    			begin
