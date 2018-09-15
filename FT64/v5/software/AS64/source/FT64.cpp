@@ -2751,35 +2751,36 @@ static void process_inc(int64_t oc)
     int fixup = 5;
     int neg = 0;
 
-    NextToken();
+	if (oc == 0x25) neg = 1;
+	NextToken();
     p = inptr;
     mem_operand(&disp, &Ra, &Rb, &Sc);
     incamt = 1;
-    if (token==']')
+	if (token==']')
        NextToken();
     if (token==',') {
         NextToken();
         incamt = expr();
         prevToken();
     }
-    if (Rb >= 0) {
+	if (neg) incamt = -incamt;
+	if (Rb >= 0) {
        if (disp != 0)
            printf("displacement not allowed with indexed addressing.\r\n");
-       oc = 0x6F;  // INCX
+       oc = 0x1A;  // INCX
 	   // ToDo: fix this
        emit_insn(
-           ((disp & 0xFF) << 24) |
-           (Rb << 17) |
-           ((incamt & 0x1F) << 12) |
-           (Ra << 7) |
-           oc,!expand_flag,2
-       );
+		   (oc << 26LL) |
+		   (0 << 23) |		// Sc = 0
+		   (incamt << 18) |
+		   (23 << 13) |
+		   (Ra << 8) |
+		   0x16, !expand_flag, 4
+	   );
        return;
     }
-    if (oc==0x25) neg = 1;
     oc = 0x1A;        // INC
     if (Ra < 0) Ra = 0;
-    if (neg) incamt = -incamt;
 	incamt &= 31;
 	if (!IsNBit(disp, 30)) {
 		LoadConstant(disp, 23);
@@ -2790,7 +2791,7 @@ static void process_inc(int64_t oc)
 			(incamt << 18) |
 			(23 << 13) |
 			(Ra << 8) |
-			0x02, !expand_flag, 4);
+			0x16, !expand_flag, 4);
 		ScanToEOL();
 		return;
 	}
@@ -3000,7 +3001,7 @@ static void process_store(int64_t opcode6, int sz)
 			(Rs << 18) |
 			(Rb << 13) |
 			(Ra << 8) |
-			0x02,!expand_flag,4);
+			0x16,!expand_flag,4);
 		return;
 	}
     if (Ra < 0) Ra = 0;
@@ -3302,11 +3303,11 @@ static void process_load(int64_t opcode6, int sz)
 			opcode6 = 0x18;
 		else {
 			switch (sz) {
-			case -1: opcode6 = 0x21;	// LCUX
-			case 1: opcode6 = 0x20;		// LCX
-			case -2: opcode6 = 0x11;	// LHUX
-			case 2: opcode6 = 0x10;		// LHX
-			case 4: opcode6 = 0x12;		// LWX
+			case -1: opcode6 = 0x21; break;	// LCUX
+			case 1: opcode6 = 0x20; break;		// LCX
+			case -2: opcode6 = 0x11; break;	// LHUX
+			case 2: opcode6 = 0x10;	break;	// LHX
+			case 4: opcode6 = 0x12; break;		// LWX
 			}
 		}
 		emit_insn(
@@ -3315,7 +3316,7 @@ static void process_load(int64_t opcode6, int sz)
 			(Rt << 18) |
 			(Rb << 13) |
 			(Ra << 8) |
-			0x02,!expand_flag,4);
+			0x16,!expand_flag,4);
 		return;
 	}
     if (Ra < 0) Ra = 0;
@@ -3412,7 +3413,7 @@ static void process_cache(int opcode6)
 			(cmd << 16) |
 			(Rb << 11) |
 			(Ra << 6) |
-			0x02,!expand_flag,4);
+			0x16,!expand_flag,4);
 		return;
 	}
     if (Ra < 0) Ra = 0;
@@ -3425,7 +3426,7 @@ static void process_cache(int opcode6)
 			(cmd << 18) |
 			(23 << 13) |
 			(Ra << 8) |
-			0x02,!expand_flag,4);
+			0x16,!expand_flag,4);
 		ScanToEOL();
 		return;
 	}
@@ -3595,22 +3596,21 @@ static void process_lsfloat(int64_t opcode6, int64_t opcode3)
     mem_operand(&disp, &Ra, &Rb, &Sc);
 	if (Ra > 0 && Rb > 0) {
 		emit_insn(
-			(0x3B << 26) |
-			(opcode3 << 23) |
-			(Sc << 21) |
-			(Rt << 16) |
-			(Rb << 11) |
-			(Ra << 6) |
-			0x0B,!expand_flag,4);
+			((opcode6+sz) << 26) |
+			(Sc << 23) |
+			(Rt << 18) |
+			(Rb << 13) |
+			(Ra << 8) |
+			0x16,!expand_flag,4);
 		return;
 	}
     if (Ra < 0) Ra = 0;
     val = disp;
-	if (!IsNBit(val, 27)) {
+	if (!IsNBit(val, 30)) {
 		LoadConstant(val, 23);
 		// Change to indexed addressing
 		emit_insn(
-			(opcode6 << 26LL) |
+			((opcode6+sz) << 26LL) |
 			(0 << 23) |		// Sc = 0
 			(Rt << 18) |
 			(23 << 13) |
@@ -3619,10 +3619,15 @@ static void process_lsfloat(int64_t opcode6, int64_t opcode3)
 		ScanToEOL();
 		return;
 	}
-	if (!IsNBit(val, 11)) {
+	switch (sz) {
+	case 0:	val &= 0xfffffffffffffffeLL; val |= 1; break;
+	case 1: val &= 0xfffffffffffffffcLL; val |= 2; break;
+	case 2: val &= 0xfffffffffffffff8LL; val |= 4; break;
+	case 4: val &= 0xfffffffffffffff0LL; val |= 8; break;
+	}
+	if (!IsNBit(val, 14)) {
 		emit_insn(
-			(val << 21LL) |
-			(sz << 18) |
+			(val << 18LL) |
 			(Rt << 13) |
 			(Ra << 8) |
 			(1 << 6) |
@@ -3631,8 +3636,7 @@ static void process_lsfloat(int64_t opcode6, int64_t opcode3)
 		return;
 	}
 	emit_insn(
-		(val << 21LL) |
-		(sz << 18) |
+		(val << 18LL) |
 		(Rt << 13) |
 		(Ra << 8) |
 		opcode6, !expand_flag, 4);

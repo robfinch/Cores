@@ -106,10 +106,6 @@ case(isn[`INSTRUCTION_OP])
 		`R1:        IsAlu0Only = TRUE;
 		`SHIFTR,`SHIFT31,`SHIFT63:
 			IsAlu0Only = TRUE;
-		`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,`LWRX:
-			IsAlu0Only = TRUE;
-		`SBX,`SCX,`SHX,`SWX,`SWCX: IsAlu0Only = TRUE;
-		`LVX,`SVX,`LVx:  IsAlu0Only = TRUE;
 		`MULU,`MULSU,`MUL,
 		`DIVMODU,`DIVMODSU,`DIVMOD: IsAlu0Only = TRUE;
 		`MIN,`MAX:  IsAlu0Only = TRUE;
@@ -117,6 +113,7 @@ case(isn[`INSTRUCTION_OP])
 		endcase
 	else
 		IsAlu0Only = FALSE;
+`MEMNDX:	IsAlu0Only = TRUE;
 `IVECTOR,`FVECTOR:
 	case(isn[`INSTRUCTION_S2])
 	`VSHL,`VSHR,`VASR:  IsAlu0Only = TRUE;
@@ -235,7 +232,7 @@ endfunction
 function IsLoad;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`R2:
+`MEMNDX:
 	if (isn[`INSTRUCTION_L2]==2'b00)
 	    case(isn[`INSTRUCTION_S2])
 	    `LBX:   IsLoad = TRUE;
@@ -266,31 +263,8 @@ endfunction
 function [0:0] IsMem;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`R2:
-	if (isn[`INSTRUCTION_L2]==2'b00)
-		case(isn[`INSTRUCTION_S2])
-		`LBX:   IsMem = TRUE;
-		`LBUX:  IsMem = TRUE;
-		`LCX:   IsMem = TRUE;
-		`LCUX:  IsMem = TRUE;
-		`LHX:   IsMem = TRUE;
-		`LHUX:  IsMem = TRUE;
-		`LWX:   IsMem = TRUE;
-		`LWRX:  IsMem = TRUE;
-		`SBX:   IsMem = TRUE;
-		`SCX:   IsMem = TRUE;
-		`SHX:   IsMem = TRUE;
-		`SWX:   IsMem = TRUE;
-		`SWCX:  IsMem = TRUE;
-		`INC:	IsMem = TRUE;
-		`CASX:  IsMem = TRUE;
-		`LVX,`SVX:  IsMem = TRUE;
-		`LVx:	IsMem = TRUE;
-		default: IsMem = FALSE;
-		endcase
-	else
-		IsMem = FALSE;
-`AMO:	IsMem = TRUE;
+`MEMNDX:	IsMem = TRUE;
+`AMO:		IsMem = TRUE;
 `LB:    IsMem = TRUE;
 `LBU:   IsMem = TRUE;
 `Lx:    IsMem = TRUE;
@@ -310,30 +284,7 @@ endfunction
 function IsMemNdx;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`R2:
-	if (isn[`INSTRUCTION_L2]==2'b00)
-	    case(isn[`INSTRUCTION_S2])
-	    `LBX:   IsMemNdx = TRUE;
-	    `LBUX:  IsMemNdx = TRUE;
-	    `LCX:   IsMemNdx = TRUE;
-	    `LCUX:  IsMemNdx = TRUE;
-	    `LHX:   IsMemNdx = TRUE;
-	    `LHUX:  IsMemNdx = TRUE;
-	    `LWX:   IsMemNdx = TRUE;
-	    `LWRX:  IsMemNdx = TRUE;
-	    `SBX:   IsMemNdx = TRUE;
-	    `SCX:   IsMemNdx = TRUE;
-	    `SHX:   IsMemNdx = TRUE;
-	    `SWX:   IsMemNdx = TRUE;
-	    `SWCX:  IsMemNdx = TRUE;
-	    `CASX:  IsMemNdx = TRUE;
-	    `LVX,`SVX:  IsMemNdx = TRUE;
-	    `LVx:	IsMemNdx = TRUE;
-	    `INC:	IsMemNdx = TRUE;
-	    default: IsMemNdx = FALSE;
-	    endcase
-	else
-		IsMemNdx = FALSE;
+`MEMNDX:	IsMemNdx = TRUE;
 default:    IsMemNdx = FALSE;
 endcase
 endfunction
@@ -341,7 +292,7 @@ endfunction
 function IsCAS;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`R2:
+`MEMNDX:
 	if (isn[`INSTRUCTION_L2]==2'b00)
 	    case(isn[`INSTRUCTION_S2])
 	    `CASX:   IsCAS = TRUE;
@@ -365,7 +316,7 @@ endfunction
 function IsInc;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`R2:
+`MEMNDX:
    	if (isn[`INSTRUCTION_L2]==2'b00)
 		case(isn[`INSTRUCTION_S2])
 	    `INC:   IsInc = TRUE;
@@ -421,7 +372,7 @@ endfunction
 function IsLWRX;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`R2:
+`MEMNDX:
 	if (isn[`INSTRUCTION_L2]==2'b00)
 	    case(isn[`INSTRUCTION_S2])
 	    `LWRX:   IsLWRX = TRUE;
@@ -437,7 +388,7 @@ endfunction
 function IsSWCX;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`R2:
+`MEMNDX:
 	if (isn[`INSTRUCTION_L2]==2'b00)
 	    case(isn[`INSTRUCTION_S2])
 	    `SWCX:   IsSWCX = TRUE;
@@ -538,6 +489,19 @@ casez(isn[`INSTRUCTION_OP])
 	    `DIVMODU:  IsRFW = TRUE;
 	    `DIVMODSU: IsRFW = TRUE;
 	    `DIVMOD:IsRFW = TRUE;
+	    `MOV:	IsRFW = TRUE;
+	    `VMOV:	IsRFW = TRUE;
+	    `SHIFTR,`SHIFT31,`SHIFT63:
+		    	IsRFW = TRUE;
+	    `MIN,`MAX:    IsRFW = TRUE;
+	    `SEI:	IsRFW = TRUE;
+	    default:    IsRFW = FALSE;
+	    endcase
+	else
+		IsRFW = FALSE;
+`MEMNDX:
+	if (isn[`INSTRUCTION_L2]==2'b00)
+	    case(isn[`INSTRUCTION_S2])
 	    `LBX:   IsRFW = TRUE;
 	    `LBUX:  IsRFW = TRUE;
 	    `LCX:   IsRFW = TRUE;
@@ -549,12 +513,6 @@ casez(isn[`INSTRUCTION_OP])
 	    `LVX:   IsRFW = TRUE;
 	    `LVx:	IsRFW = TRUE;
 	    `CASX:  IsRFW = TRUE;
-	    `MOV:	IsRFW = TRUE;
-	    `VMOV:	IsRFW = TRUE;
-	    `SHIFTR,`SHIFT31,`SHIFT63:
-		    	IsRFW = TRUE;
-	    `MIN,`MAX:    IsRFW = TRUE;
-	    `SEI:	IsRFW = TRUE;
 	    default:    IsRFW = FALSE;
 	    endcase
 	else
@@ -643,12 +601,13 @@ casez(isn[`INSTRUCTION_OP])
 `BBc:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `BEQI:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `CHK:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`RR:    case(isn[`INSTRUCTION_S2])
+`R2:    case(isn[`INSTRUCTION_S2])
         `SHIFT31:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
         `SHIFT63:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
         `SHIFTR:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
         default:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
         endcase
+`MEMNDX:	Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `ADDI:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `SLTI:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `SLTUI: Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
@@ -694,11 +653,14 @@ casez(isn[`INSTRUCTION_OP])
 `BBc:   Source2Valid = TRUE;
 `BEQI:  Source2Valid = TRUE;
 `CHK:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
-`RR:    case(isn[`INSTRUCTION_S2])
+`R2:    case(isn[`INSTRUCTION_S2])
         `R1:       Source2Valid = TRUE;
         `SHIFTR:   Source2Valid = isn[25] ? 1'b1 : isn[`INSTRUCTION_RB]==5'd0;
         `SHIFT31:  Source2Valid = isn[25] ? 1'b1 : isn[`INSTRUCTION_RB]==5'd0;
         `SHIFT63:  Source2Valid = isn[25] ? 1'b1 : isn[`INSTRUCTION_RB]==5'd0;
+        default:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
+        endcase
+`MEMNDX: case(isn[`INSTRUCTION_S2])
         `LVX,`SVX: Source2Valid = FALSE;
         default:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
         endcase
@@ -761,13 +723,18 @@ case(isn[`INSTRUCTION_OP])
 		endcase
 	else
     case(isn[`INSTRUCTION_S2])
+    `MAJ:		Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
+    default:    Source3Valid = TRUE;
+    endcase
+`MEMNDX:
+	if (isn[`INSTRUCTION_L2]==2'b00)
+    case(isn[`INSTRUCTION_S2])
     `SBX:   Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
     `SCX:   Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
     `SHX:   Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
     `SWX:   Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
     `SWCX:  Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
     `CASX:  Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
-    `MAJ:		Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
     default:    Source3Valid = TRUE;
     endcase
 default:    Source3Valid = TRUE;

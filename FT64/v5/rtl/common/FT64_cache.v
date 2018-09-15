@@ -748,7 +748,7 @@ FT64_dcache_tag2 u1 (
   .ena(1'b1),      // input wire ena
   .wea(wr),      // input wire [0 : 0] wea
   .addra(wadr[13:5]),  // input wire [8 : 0] addra
-  .dina(wadr[37:6]),    // input wire [31 : 0] dina
+  .dina(wadr[37:14]),    // input wire [31 : 0] dina
   .clkb(rclk),    // input wire clkb
   .web(1'b0),
   .dinb(32'd0),
@@ -762,7 +762,7 @@ FT64_dcache_tag2 u2 (
   .ena(1'b1),      // input wire ena
   .wea(wr),      // input wire [0 : 0] wea
   .addra(wadr[13:5]),  // input wire [8 : 0] addra
-  .dina(wadr[37:6]),    // input wire [31 : 0] dina
+  .dina(wadr[37:14]),    // input wire [31 : 0] dina
   .clkb(rclk),    // input wire clkb
   .web(1'b0),
   .dinb(32'd0),
@@ -772,9 +772,9 @@ FT64_dcache_tag2 u2 (
 );
 
 always @(posedge rclk)
-     hit0 <= tago0[31:8]==radr[37:14];
+     hit0 <= tago0[23:0]==radr[37:14];
 always @(posedge rclk)
-     hit1 <= tago1[31:8]==radrp8[37:14];
+     hit1 <= tago1[23:0]==radrp8[37:14];
 
 endmodule
 

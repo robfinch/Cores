@@ -399,14 +399,14 @@ reg [QENTRIES-1:0] iqentry_out;	// instruction has been issued to an ALU ...
 reg [QENTRIES-1:0] iqentry_done;	// instruction result valid
 reg [QENTRIES-1:0] iqentry_cmt;
 reg [QENTRIES-1:0] iqentry_thrd;		// which thread the instruction is in
-reg 				iqentry_pt [0:QENTRIES-1];
-reg        iqentry_bt  	[0:QENTRIES-1];	// branch-taken (used only for branches)
+reg [QENTRIES-1:0] iqentry_pt;		// predict taken
+reg [QENTRIES-1:0] iqentry_bt;	// branch-taken (used only for branches)
 reg [QENTRIES-1:0] iqentry_agen;	// address-generate ... signifies that address is ready (only for LW/SW)
 reg  [1:0] iqentry_state [0:QENTRIES-1];
 reg [QENTRIES-1:0] iqentry_alu = 8'h00;  // alu type instruction
 reg [QENTRIES-1:0] iqentry_alu0;	 // only valid on alu #0
-reg        iqentry_fpu  [0:QENTRIES-1];  // floating point instruction
-reg        iqentry_fc   [0:QENTRIES-1];   // flow control instruction
+reg [QENTRIES-1:0] iqentry_fpu;  // floating point instruction
+reg [QENTRIES-1:0] iqentry_fc;   // flow control instruction
 reg [QENTRIES-1:0] iqentry_canex = 8'h00;	// true if it's an instruction that can exception
 reg        iqentry_load [0:QENTRIES-1];	// is a memory load instruction
 reg        iqentry_preload [0:QENTRIES-1];	// is a memory preload instruction
@@ -1600,11 +1600,16 @@ casez(isn[`INSTRUCTION_OP])
         `SHIFT31,`SHIFT63:
         			fnRt = {rgs[thrd],1'b0,isn[`INSTRUCTION_RB]};
         `SEI:		fnRt = {rgs[thrd],1'b0,isn[`INSTRUCTION_RB]};
-        `WAIT,`RTI,`CHK,
-        `SBX,`SCX,`SHX,`SWX,`SWCX,`CACHEX:
-        			fnRt = 12'd0;
-        default:    fnRt = {rgs[thrd],1'b0,isn[`INSTRUCTION_RC]};
+        `WAIT,`RTI,`CHK:
+    			fnRt = 12'd0;
+    		default:    fnRt = {rgs[thrd],1'b0,isn[`INSTRUCTION_RC]};
         endcase
+`MEMNDX:
+    case(isn[`INSTRUCTION_S2])
+    `SBX,`SCX,`SHX,`SWX,`SWCX,`CACHEX:
+    			fnRt = 12'd0;
+    default:    fnRt = {rgs[thrd],1'b0,isn[`INSTRUCTION_RC]};
+  	endcase
 `FLOAT:
 		case(isn[31:26])
 		`FTX,`FCX,`FEX,`FDX,`FRM:
@@ -1815,11 +1820,16 @@ casez(isn[`INSTRUCTION_OP])
         `SHIFT31,`SHIFT63:
         			fnRt = {rgs,1'b0,isn[`INSTRUCTION_RB]};
         `SEI:		fnRt = {rgs,1'b0,isn[`INSTRUCTION_RB]};
-        `WAIT,`RTI,`CHK,
-        `SBX,`SCX,`SHX,`SWX,`SWCX,`CACHEX:
+        `WAIT,`RTI,`CHK:
         			fnRt = 12'd0;
         default:    fnRt = {rgs,1'b0,isn[`INSTRUCTION_RC]};
         endcase
+`MEMNDX:
+	case(isn[`INSTRUCTION_S2])
+  `SBX,`SCX,`SHX,`SWX,`SWCX,`CACHEX:
+  			fnRt = 12'd0;
+  default:    fnRt = {rgs,1'b0,isn[`INSTRUCTION_RC]};
+  endcase
 `FLOAT:
 		case(isn[31:26])
 		`FTX,`FCX,`FEX,`FDX,`FRM:
@@ -1905,6 +1915,7 @@ casez(isn[`INSTRUCTION_OP])
         `SHIFTR:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
         default:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
         endcase
+`MEMNDX:Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `ADDI:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `SLTI:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `SLTUI: Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
@@ -1958,6 +1969,11 @@ casez(isn[`INSTRUCTION_OP])
         `LVX,`SVX: Source2Valid = FALSE;
         default:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
         endcase
+`MEMNDX:
+	case(isn[`INSTRUCTION_S2])
+	`LVX,`SVX: Source2Valid = FALSE;
+	default:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
+	endcase
 `ADDI:  Source2Valid = TRUE;
 `SLTI:  Source2Valid = TRUE;
 `SLTUI: Source2Valid = TRUE;
@@ -2026,6 +2042,17 @@ case(isn[`INSTRUCTION_OP])
     `MAJ:		Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
     default:    Source3Valid = TRUE;
     endcase
+`MEMNDX:
+	if (isn[`INSTRUCTION_L2]==2'b00)
+    case(isn[`INSTRUCTION_S2])
+    `SBX:   Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
+    `SCX:   Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
+    `SHX:   Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
+    `SWX:   Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
+    `SWCX:  Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
+    `CASX:  Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
+    default:    Source3Valid = TRUE;
+    endcase
 default:    Source3Valid = TRUE;
 endcase
 endfunction
@@ -2048,7 +2075,7 @@ endfunction
 function IsVector;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`R2:        case(isn[`INSTRUCTION_S2])
+`MEMNDX:    case(isn[`INSTRUCTION_S2])
             `LVX,`SVX:  IsVector = TRUE;
             default:    IsVector = FALSE;
             endcase
@@ -2109,7 +2136,7 @@ endfunction
 function IsVLS;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`RR:
+`MEMNDX:
     case(isn[`INSTRUCTION_S2])
     `LVX,`SVX,`LVWS,`SVWS:  IsVLS = TRUE;
     default:    IsVLS = FALSE;
@@ -2130,30 +2157,7 @@ endfunction
 function [0:0] IsMem;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`R2:
-	if (isn[`INSTRUCTION_L2]==2'b00)
-		case(isn[`INSTRUCTION_S2])
-		`LBX:   IsMem = TRUE;
-		`LBUX:  IsMem = TRUE;
-		`LCX:   IsMem = TRUE;
-		`LCUX:  IsMem = TRUE;
-		`LHX:   IsMem = TRUE;
-		`LHUX:  IsMem = TRUE;
-		`LWX:   IsMem = TRUE;
-		`LWRX:  IsMem = TRUE;
-		`SBX:   IsMem = TRUE;
-		`SCX:   IsMem = TRUE;
-		`SHX:   IsMem = TRUE;
-		`SWX:   IsMem = TRUE;
-		`SWCX:  IsMem = TRUE;
-		`INC:	IsMem = TRUE;
-		`CASX:  IsMem = TRUE;
-		`LVX,`SVX:  IsMem = TRUE;
-		`LVx:	IsMem = TRUE;
-		default: IsMem = FALSE;
-		endcase
-	else
-		IsMem = FALSE;
+`MEMNDX:	IsMem = TRUE;
 `AMO:	IsMem = TRUE;
 `LB:    IsMem = TRUE;
 `LBU:   IsMem = TRUE;
@@ -2174,30 +2178,7 @@ endfunction
 function IsMemNdx;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`R2:
-	if (isn[`INSTRUCTION_L2]==2'b00)
-	    case(isn[`INSTRUCTION_S2])
-	    `LBX:   IsMemNdx = TRUE;
-	    `LBUX:  IsMemNdx = TRUE;
-	    `LCX:   IsMemNdx = TRUE;
-	    `LCUX:  IsMemNdx = TRUE;
-	    `LHX:   IsMemNdx = TRUE;
-	    `LHUX:  IsMemNdx = TRUE;
-	    `LWX:   IsMemNdx = TRUE;
-	    `LWRX:  IsMemNdx = TRUE;
-	    `SBX:   IsMemNdx = TRUE;
-	    `SCX:   IsMemNdx = TRUE;
-	    `SHX:   IsMemNdx = TRUE;
-	    `SWX:   IsMemNdx = TRUE;
-	    `SWCX:  IsMemNdx = TRUE;
-	    `CASX:  IsMemNdx = TRUE;
-	    `LVX,`SVX:  IsMemNdx = TRUE;
-	    `LVx:	IsMemNdx = TRUE;
-	    `INC:	IsMemNdx = TRUE;
-	    default: IsMemNdx = FALSE;
-	    endcase
-	else
-		IsMemNdx = FALSE;
+`MEMNDX:	IsMemNdx = TRUE;
 default:    IsMemNdx = FALSE;
 endcase
 endfunction
@@ -2205,7 +2186,7 @@ endfunction
 function IsLoad;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`R2:
+`MEMNDX:
 	if (isn[`INSTRUCTION_L2]==2'b00)
 	    case(isn[`INSTRUCTION_S2])
 	    `LBX:   IsLoad = TRUE;
@@ -2236,7 +2217,7 @@ endfunction
 function IsVolatileLoad;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`R2:
+`MEMNDX:
 	if (isn[`INSTRUCTION_L2]==2'b00)
 	    case(isn[`INSTRUCTION_S2])
 	    `LWRX:	IsVolatileLoad = TRUE;
@@ -2254,7 +2235,7 @@ endfunction
 function [2:0] MemSize;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`R2:
+`MEMNDX:
 	if (isn[`INSTRUCTION_L2]==2'b00)
 	    case(isn[`INSTRUCTION_S2])
 	    `LBX,`LBUX,`SBX:   MemSize = byt;
@@ -2307,7 +2288,7 @@ endfunction
 function IsStore;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`RR:
+`MEMNDX:
 	if (isn[`INSTRUCTION_L2]==2'b00)
 	    case(isn[`INSTRUCTION_S2])
 	    `SBX:   IsStore = TRUE;
@@ -2336,7 +2317,7 @@ endfunction
 function IsInc;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`R2:
+`MEMNDX:
    	if (isn[`INSTRUCTION_L2]==2'b00)
 		case(isn[`INSTRUCTION_S2])
 	    `INC:   IsInc = TRUE;
@@ -2352,7 +2333,7 @@ endfunction
 function IsSWC;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`R2:
+`MEMNDX:
    	if (isn[`INSTRUCTION_L2]==2'b00)
 		case(isn[`INSTRUCTION_S2])
 	    `SWCX:   IsSWC = TRUE;
@@ -2369,7 +2350,7 @@ endfunction
 function IsSWCX;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`R2:
+`MEMNDX:
 	if (isn[`INSTRUCTION_L2]==2'b00)
 	    case(isn[`INSTRUCTION_S2])
 	    `SWCX:   IsSWCX = TRUE;
@@ -2384,7 +2365,7 @@ endfunction
 function IsLWR;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`R2:
+`MEMNDX:
 	if (isn[`INSTRUCTION_L2]==2'b00)
 	    case(isn[`INSTRUCTION_S2])
 	    `LWRX:   IsLWR = TRUE;
@@ -2400,7 +2381,7 @@ endfunction
 function IsLWRX;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`R2:
+`MEMNDX:
 	if (isn[`INSTRUCTION_L2]==2'b00)
 	    case(isn[`INSTRUCTION_S2])
 	    `LWRX:   IsLWRX = TRUE;
@@ -2415,7 +2396,7 @@ endfunction
 function IsCAS;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`R2:
+`MEMNDX:
 	if (isn[`INSTRUCTION_L2]==2'b00)
 	    case(isn[`INSTRUCTION_S2])
 	    `CASX:   IsCAS = TRUE;
@@ -2512,7 +2493,7 @@ endfunction
 function IsCache;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`R2:
+`MEMNDX:
 	if (isn[`INSTRUCTION_L2]==2'b00)
 	    case(isn[`INSTRUCTION_S2])
 	    `CACHEX:    IsCache = TRUE;
@@ -2528,7 +2509,7 @@ endfunction
 function [4:0] CacheCmd;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`RR:
+`MEMNDX:
 	if (isn[`INSTRUCTION_L2]==2'b00)
 	    case(isn[`INSTRUCTION_S2])
 	    `CACHEX:    CacheCmd = isn[22:18];
@@ -2569,7 +2550,7 @@ endfunction
 function IsLV;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`R2:
+`MEMNDX:
 	if (isn[`INSTRUCTION_L2]==2'b00)
 	    case(isn[`INSTRUCTION_S2])
 	    `LVX:   IsLV = TRUE;
@@ -2612,6 +2593,19 @@ casez(isn[`INSTRUCTION_OP])
 	    `DIVMODU:  IsRFW = TRUE;
 	    `DIVMODSU: IsRFW = TRUE;
 	    `DIVMOD:IsRFW = TRUE;
+	    `MOV:	IsRFW = TRUE;
+	    `VMOV:	IsRFW = TRUE;
+	    `SHIFTR,`SHIFT31,`SHIFT63:
+		    	IsRFW = TRUE;
+	    `MIN,`MAX:    IsRFW = TRUE;
+	    `SEI:	IsRFW = TRUE;
+	    default:    IsRFW = FALSE;
+	    endcase
+	else
+		IsRFW = FALSE;
+`MEMNDX:
+	if (isn[`INSTRUCTION_L2]==2'b00)
+	    case(isn[`INSTRUCTION_S2])
 	    `LBX:   IsRFW = TRUE;
 	    `LBUX:  IsRFW = TRUE;
 	    `LCX:   IsRFW = TRUE;
@@ -2623,12 +2617,6 @@ casez(isn[`INSTRUCTION_OP])
 	    `LVX:   IsRFW = TRUE;
 	    `LVx:	IsRFW = TRUE;
 	    `CASX:  IsRFW = TRUE;
-	    `MOV:	IsRFW = TRUE;
-	    `VMOV:	IsRFW = TRUE;
-	    `SHIFTR,`SHIFT31,`SHIFT63:
-		    	IsRFW = TRUE;
-	    `MIN,`MAX:    IsRFW = TRUE;
-	    `SEI:	IsRFW = TRUE;
 	    default:    IsRFW = FALSE;
 	    endcase
 	else
@@ -2745,7 +2733,7 @@ input [47:0] ins;
 input [31:0] adr;
 begin
 	case(ins[`INSTRUCTION_OP])
-	`R2:
+	`MEMNDX:
 		if (ins[`INSTRUCTION_L2]==2'b00)
 		   case(ins[`INSTRUCTION_S2])
 	       `LBX,`LBUX,`SBX:
@@ -2841,8 +2829,7 @@ begin
 		3'd3:	fnSelect = 8'hFF;
 		default:	fnSelect = 8'hFF;
 		endcase
-	`LVx:
-		case(ins[30:28])
+//	`LVx:
 //       `LVB,`LVBU:
 //           case(adr[2:0])
 //           3'd0:    fnSelect = 8'h01;
@@ -2868,7 +2855,6 @@ begin
 //           endcase
 //       `LVW:
 //           fnSelect = 8'hFF;
-		endcase
 	default:	fnSelect = 8'h00;
 	endcase
 end
@@ -2917,7 +2903,7 @@ input [47:0] ins;
 input [31:0] adr;
 input [63:0] dat;
 case(ins[`INSTRUCTION_OP])
-`R2:
+`MEMNDX:
 	if (ins[`INSTRUCTION_L2]==2'b00)
 	    case(ins[`INSTRUCTION_S2])
 	    `LBX:
@@ -3136,7 +3122,7 @@ function [63:0] fnDato;
 input [47:0] isn;
 input [63:0] dat;
 case(isn[`INSTRUCTION_OP])
-`R2:
+`MEMNDX:
 	if (isn[`INSTRUCTION_L2]==2'b00)
 		case(isn[`INSTRUCTION_S2])
 		`SBX:   fnDato = {8{dat[7:0]}};
@@ -4978,7 +4964,7 @@ end
 
 reg id1_vi, id2_vi;
 wire [4:0] id1_ido, id2_ido;
-wire id1_v0, id2_vo;
+wire id1_vo, id2_vo;
 
 FT64_idecoder uid1
 (
@@ -5152,6 +5138,7 @@ FT64_FCU_Calc ufcuc1
 );
 
 always @*
+begin
 case(fcu_instr[`INSTRUCTION_OP])
 `R2:	fcu_misspc = fcu_argB;	// RTI (we don't bother fully decoding this as it's the only R2)
 `RET:	fcu_misspc = fcu_argB;
@@ -5162,7 +5149,8 @@ case(fcu_instr[`INSTRUCTION_OP])
 // Default: branch
 default:	fcu_misspc = fcu_takb ? fcu_nextpc + fcu_brdisp : fcu_nextpc;
 endcase
-
+fcu_misspc[0] = 1'b0;
+end
 
 // To avoid false branch mispredicts the branch isn't evaluated until the
 // following instruction queues. The address of the next instruction is
@@ -5732,6 +5720,9 @@ if (rst) begin
      tvec[0] <= RSTPC;
 end
 else begin
+	// The following signals only pulse
+	id1_vi <= `INV;
+	id2_vi <= `INV;
 	ld_time <= {ld_time[4:0],1'b0};
 	wc_times <= wc_time;
      rf_vra0 <= regIsValid[Ra0s];
@@ -6564,8 +6555,9 @@ end
 //
 
 for (n = 0; n < QENTRIES; n = n + 1)
+if (id1_available) begin
 if (iqentry_id1issue[n] && !iqentry_iv[n] && !(iqentry_v[n] && iqentry_stomp[n])) begin
-		id1_vi <= id1_available;
+		id1_vi <= `VAL;
 		id1_id			<= n[4:0];
 		id1_instr	<= iqentry_rtop[n] ? (
 										iqentry_a3_v[n] ? iqentry_a3[n]
@@ -6579,9 +6571,14 @@ if (iqentry_id1issue[n] && !iqentry_iv[n] && !(iqentry_v[n] && iqentry_stomp[n])
 		id1_Rt     <= iqentry_tgt[n][4:0];
 		id1_pt			<= iqentry_pt[n];
   end
+  if (iqentry_iv[n] && id1_id==n[4:0]) begin
+  	uid1.idv_o <= `INV;
+  end
+end
 for (n = 0; n < QENTRIES; n = n + 1)
+if (id2_available) begin
 if (iqentry_id2issue[n] && !iqentry_iv[n] && !(iqentry_v[n] && iqentry_stomp[n])) begin
-		id2_vi <= id2_available;
+		id2_vi <= `VAL;
 		id2_id			<= n[4:0];
 		id2_instr	<= iqentry_rtop[n] ? (
 										iqentry_a3_v[n] ? iqentry_a3[n]
@@ -6595,6 +6592,10 @@ if (iqentry_id2issue[n] && !iqentry_iv[n] && !(iqentry_v[n] && iqentry_stomp[n])
 		id2_Rt     <= iqentry_tgt[n][4:0];
 		id2_pt			<= iqentry_pt[n];
 	end
+  if (iqentry_iv[n] && id2_id==n[4:0]) begin
+  	uid2.idv_o <= `INV;
+  end
+end
 
     for (n = 0; n < QENTRIES; n = n + 1)
         if (iqentry_alu0_issue[n] && !(iqentry_v[n] && iqentry_stomp[n])) begin
@@ -7485,7 +7486,7 @@ B2:
              cyc_o <= `HIGH;
              stb_o <= `HIGH;
              sel_o <= fnSelect(dram0_instr,dram0_addr);
-             adr_o <= {dram0_addr[31:3],3'b0};
+             adr_o <= {dram0_addr[31:5],5'b0};
              ol_o  <= dram0_ol;
              bstate <= B2d;
             end
@@ -7495,7 +7496,7 @@ B2:
              cyc_o <= `HIGH;
              stb_o <= `HIGH;
              sel_o <= fnSelect(dram1_instr,dram1_addr);
-             adr_o <= {dram1_addr[31:3],3'b0};
+             adr_o <= {dram1_addr[31:5],5'b0};
              ol_o  <= dram1_ol;
              bstate <= B2d;
             end
@@ -7505,7 +7506,7 @@ B2:
              cyc_o <= `HIGH;
              stb_o <= `HIGH;
              sel_o <= fnSelect(dram2_instr,dram2_addr);
-             adr_o <= {dram2_addr[31:3],3'b0};
+             adr_o <= {dram2_addr[31:5],5'b0};
              ol_o  <= dram2_ol;
              bstate <= B2d;
             end

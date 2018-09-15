@@ -5,7 +5,7 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	FT64alu.v
+//	FT64_alu.v
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -730,25 +730,6 @@ case(instr[`INSTRUCTION_OP])
 					o[63:0] = BIG ? a + (b << instr[22:21]) : 64'hCCCCCCCCEEEEEEEE;
 					o[63:44] = PTR;
 					end
-			`LVX,
-	    `LBX,`LBUX,`LCX,`LCUX,
-	    `LHX,`LHUX,`LWX,`LWRX,`SBX,`SCX,`SHX,`SWX,`SWCX:
-					if (BIG) begin
-						o[63:0] = a + (b << instr[22:21]);
-					end
-					else
-						o[63:0] = 64'hCCCCCCCCEEEEEEEE;
-	    `LVX,`SVX:  if (BIG) begin
-	    				o[63:0] = a + (b << 2'd3);
-	    			end
-	    			else
-	    				o[63:0] = 64'hCCCCCCCCCCCCCCCC;
-	    `LVWS,`SVWS:
-	    			if (BIG) begin    
-	    				o[63:0] = a + ({b * ven,3'b000});
-	    			end
-	    			else
-	    				o[63:0] = 64'hCCCCCCCCCCCCCCCC;
 	    `MIN:       case(sz)
 	    			3'd0,3'd4:
 		    			begin
@@ -829,6 +810,31 @@ case(instr[`INSTRUCTION_OP])
 	    */
 	    default:    o[63:0] = 64'hDEADDEADDEADDEAD;
 	    endcase
+`MEMNDX:
+	if (instr[7:6]==2'b00)
+		case(instr[`INSTRUCTION_S2])
+		`LVX,
+    `LBX,`LBUX,`LCX,`LCUX,
+    `LHX,`LHUX,`LWX,`LWRX,`SBX,`SCX,`SHX,`SWX,`SWCX:
+				if (BIG) begin
+					o[63:0] = a + (b << instr[24:23]);
+				end
+				else
+					o[63:0] = 64'hCCCCCCCCEEEEEEEE;
+    `LVX,`SVX:  if (BIG) begin
+    				o[63:0] = a + (b << 2'd3);
+    			end
+    			else
+    				o[63:0] = 64'hCCCCCCCCCCCCCCCC;
+    `LVWS,`SVWS:
+    			if (BIG) begin    
+    				o[63:0] = a + ({b * ven,3'b000});
+    			end
+    			else
+    				o[63:0] = 64'hCCCCCCCCCCCCCCCC;
+		endcase
+	else
+		o[63:0] = 64'hDEADDEADDEADDEAD;
 `AUIPC:
  	begin
  		if (instr[7:6]==2'b01)

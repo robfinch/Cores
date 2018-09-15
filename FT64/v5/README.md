@@ -16,6 +16,7 @@ FT64v5 is a superscalar core with the following features:
 - bus interface unit
 - instruction (L1, L2) and data caches
 - Functional Units:
+	- dual instruction decoders
 	- dual ALU's,
 	- one flow control unit
 	- one floating point unit

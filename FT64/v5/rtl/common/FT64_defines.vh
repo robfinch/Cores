@@ -206,6 +206,7 @@
 `define FLOAT   6'h0F
 `define LB      6'h13
 `define SB      6'h15
+`define MEMNDX	6'h16
 `define SWC     6'h17
 `define JAL	    6'h18
 `define CALL    6'h19
