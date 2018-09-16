@@ -22,9 +22,6 @@
 //
 // ============================================================================
 //
-`define SIM		1'b1
-//`define SUPPORT_SMT		1'b1
-//`define DEBUG_LOGIC 1'b1
 `define HIGH        1'b1
 `define LOW         1'b0
 `define TRUE        1'b1
@@ -295,6 +292,7 @@
 `define CSR_HARTID  11'h001
 `define CSR_TICK    11'h002
 `define CSR_PCR     11'h003
+`define CSR_PMR			11'h005
 `define CSR_CAUSE   11'h006
 `define CSR_BADADR  11'h007
 `define CSR_PCR2    11'h008
@@ -365,6 +363,7 @@
 `define FLT_DBG     8'd33
 `define FLT_TGT     8'd34
 `define FLT_IADR    8'd36
+`define FLT_UNIMP		8'd37
 `define FLT_FLT     8'd38
 `define FLT_CHK     8'd39
 `define FLT_DBZ     8'd40

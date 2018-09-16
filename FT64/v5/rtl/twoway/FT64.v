@@ -40,26 +40,17 @@
 // Approx. 100,000 LUTs. 160,000 LC's.
 // ============================================================================
 //
+`include "FT64_config.vh"
 `include "FT64_defines.vh"
-//`define SUPPORT_DBG		1'b1
-//`define FULL_ISSUE_LOGIC	1'b1
-`define QBITS		2:0
-`define QENTRIES	8
-`define ID1_AVAIL	1'b1
-`define ID2_AVAIL	1'b1
-`define ALU0_AVAIL	1'b1
-`define ALU1_AVAIL	1'b1
-`define FPU1_AVAIL	1'b1
-`define FPU2_AVAIL	1'b0
 
-module FT64(hartid, rst, clk, clk4x, tm_clk_i, irq_i, vec_i, bte_o, cti_o, cyc_o, stb_o, ack_i, err_i, we_o, sel_o, adr_o, dat_o, dat_i,
+module FT64(hartid, rst, clk_i, clk4x, tm_clk_i, irq_i, vec_i, bte_o, cti_o, cyc_o, stb_o, ack_i, err_i, we_o, sel_o, adr_o, dat_o, dat_i,
     ol_o, pcr_o, pcr2_o, exv_i, rdv_i, wrv_i, icl_o, sr_o, cr_o, rbi_i, signal_i);
 input [63:0] hartid;
 input rst;
-input clk;
+input clk_i;
 input clk4x;
 input tm_clk_i;
-input [2:0] irq_i;
+input [3:0] irq_i;
 input [7:0] vec_i;
 output reg [1:0] bte_o;
 output reg [2:0] cti_o;
@@ -69,7 +60,7 @@ input ack_i;
 input err_i;
 output reg we_o;
 output reg [7:0] sel_o;
-output reg [31:0] adr_o;
+output reg [`ABITS] adr_o;
 output reg [63:0] dat_o;
 input [63:0] dat_i;
 output reg [1:0] ol_o;
@@ -121,6 +112,13 @@ parameter IQS_IDLE = 2'd0;
 parameter IQS_AGEN = 2'd1;
 parameter IQS_LDDONE = 2'd2;
 parameter IQS_S3 = 2'd3;
+
+wire clk;
+BUFG uclkb1
+(
+	.I(clk_i),
+	.O(clk)
+);
 
 wire dc_ack;
 wire acki = ack_i|dc_ack;
@@ -196,6 +194,13 @@ wire snr = cr0[17];		// sequence number reset
 wire dce = cr0[30];     // data cache enable
 wire bpe = cr0[32];     // branch predictor enable
 wire ctgtxe = cr0[33];
+reg [63:0] pmr;
+wire id1_available = pmr[0];
+wire id2_available = pmr[1];
+wire alu0_available = pmr[8];
+wire alu1_available = pmr[9];
+wire fpu1_available = pmr[16];
+wire fcu_available = pmr[32];
 // Simply setting this flag to zero should strip out almost all the logic
 // associated SMT.
 `ifdef SUPPORT_SMT
@@ -225,7 +230,7 @@ reg [31:0] epc6 [0:NTHREAD];
 reg [31:0] epc7 [0:NTHREAD];
 reg [31:0] epc8 [0:NTHREAD]; 			// exception pc and stack
 reg [63:0] mstatus [0:NTHREAD];  		// machine status
-wire [2:0] im = mstatus[0][2:0];
+wire [3:0] im = mstatus[0][3:0];
 wire [1:0] ol [0:NTHREAD];
 wire [1:0] dl [0:NTHREAD];
 assign ol[0] = mstatus[0][5:3];	// operating level
@@ -259,7 +264,7 @@ reg [31:0] epc6 ;
 reg [31:0] epc7 ;
 reg [31:0] epc8 ; 			// exception pc and stack
 reg [63:0] mstatus ;  		// machine status
-wire [2:0] im = mstatus[2:0];
+wire [3:0] im = mstatus[3:0];
 wire [1:0] ol ;
 wire [1:0] dl;
 assign ol = mstatus[5:3];	// operating level
@@ -408,23 +413,23 @@ reg [QENTRIES-1:0] iqentry_alu0;	 // only valid on alu #0
 reg [QENTRIES-1:0] iqentry_fpu;  // floating point instruction
 reg [QENTRIES-1:0] iqentry_fc;   // flow control instruction
 reg [QENTRIES-1:0] iqentry_canex = 8'h00;	// true if it's an instruction that can exception
-reg        iqentry_load [0:QENTRIES-1];	// is a memory load instruction
-reg        iqentry_preload [0:QENTRIES-1];	// is a memory preload instruction
-reg        iqentry_ldcmp [0:QENTRIES-1];
-reg        iqentry_mem	[0:QENTRIES-1];	// touches memory: 1 if LW/SW
-reg        iqentry_memndx   [0:QENTRIES-1];  // indexed memory operation 
-reg        iqentry_rmw		[0:QENTRIES-1];	// memory RMW op
-reg        iqentry_memdb    [0:QENTRIES-1];
-reg        iqentry_memsb    [0:QENTRIES-1];
-reg        iqentry_rtop [0:QENTRIES-1];
+reg [QENTRIES-1:0] iqentry_load;	// is a memory load instruction
+reg [QENTRIES-1:0] iqentry_preload;	// is a memory preload instruction
+reg [QENTRIES-1:0] iqentry_ldcmp;
+reg [QENTRIES-1:0] iqentry_mem;	// touches memory: 1 if LW/SW
+reg [QENTRIES-1:0] iqentry_memndx;  // indexed memory operation 
+reg [QENTRIES-1:0] iqentry_rmw;	// memory RMW op
+reg [QENTRIES-1:0] iqentry_memdb;
+reg [QENTRIES-1:0] iqentry_memsb;
+reg [QENTRIES-1:0] iqentry_rtop;
 reg [QENTRIES-1:0] iqentry_sei;
 reg [QENTRIES-1:0] iqentry_aq;	// memory aquire
 reg [QENTRIES-1:0] iqentry_rl;	// memory release
-reg        iqentry_shft48[0:QENTRIES-1];
-reg        iqentry_jmp	[0:QENTRIES-1];	// changes control flow: 1 if BEQ/JALR
+reg [QENTRIES-1:0] iqentry_shft48;
+reg [QENTRIES-1:0] iqentry_jmp;	// changes control flow: 1 if BEQ/JALR
 reg [QENTRIES-1:0] iqentry_br;  // Bcc (for predictor)
-reg        iqentry_sync [0:QENTRIES-1];  // sync instruction
-reg        iqentry_fsync[0:QENTRIES-1];
+reg [QENTRIES-1:0] iqentry_sync;  // sync instruction
+reg [QENTRIES-1:0] iqentry_fsync;
 reg [QENTRIES-1:0] iqentry_rfw = 8'h00;	// writes to register file
 reg  [7:0] iqentry_we   [0:QENTRIES-1];	// enable strobe
 reg [63:0] iqentry_res	[0:QENTRIES-1];	// instruction result
@@ -444,7 +449,7 @@ reg  [4:0] iqentry_a2_s	[0:QENTRIES-1];	// arg2 source (iq entry # with top bit 
 reg [63:0] iqentry_a3	[0:QENTRIES-1];	// argument 3
 reg        iqentry_a3_v	[0:QENTRIES-1];	// arg3 valid
 reg  [4:0] iqentry_a3_s	[0:QENTRIES-1];	// arg3 source (iq entry # with top bit representing ALU/DRAM bus)
-reg [31:0] iqentry_pc	[0:QENTRIES-1];	// program counter for this instruction
+reg [`ABITS] iqentry_pc	[0:QENTRIES-1];	// program counter for this instruction
 reg [RBIT:0] iqentry_Ra [0:QENTRIES-1];
 reg [RBIT:0] iqentry_Rb [0:QENTRIES-1];
 reg [RBIT:0] iqentry_Rc [0:QENTRIES-1];
@@ -530,7 +535,7 @@ wire        fetchbuf;	// determines which pair to read from & write to
 
 wire [47:0] fetchbuf0_instr;	
 wire  [2:0] fetchbuf0_insln;
-wire [31:0] fetchbuf0_pc;
+wire [`ABITS] fetchbuf0_pc;
 wire        fetchbuf0_v;
 wire		fetchbuf0_thrd;
 wire        fetchbuf0_mem;
@@ -539,7 +544,7 @@ wire        fetchbuf0_jmp;
 wire        fetchbuf0_rfw;
 wire [47:0] fetchbuf1_instr;
 wire  [2:0] fetchbuf1_insln;
-wire [31:0] fetchbuf1_pc;
+wire [`ABITS] fetchbuf1_pc;
 wire        fetchbuf1_v;
 wire		fetchbuf1_thrd;
 wire        fetchbuf1_mem;
@@ -548,22 +553,21 @@ wire        fetchbuf1_jmp;
 wire        fetchbuf1_rfw;
 
 wire [47:0] fetchbufA_instr;	
-wire [31:0] fetchbufA_pc;
+wire [`ABITS] fetchbufA_pc;
 wire        fetchbufA_v;
 wire [47:0] fetchbufB_instr;
-wire [31:0] fetchbufB_pc;
+wire [`ABITS] fetchbufB_pc;
 wire        fetchbufB_v;
 wire [47:0] fetchbufC_instr;
-wire [31:0] fetchbufC_pc;
+wire [`ABITS] fetchbufC_pc;
 wire        fetchbufC_v;
 wire [47:0] fetchbufD_instr;
-wire [31:0] fetchbufD_pc;
+wire [`ABITS] fetchbufD_pc;
 wire        fetchbufD_v;
 
 //reg        did_branchback0;
 //reg        did_branchback1;
 
-reg				  id1_available;
 reg         id1_v;
 reg   [4:0] id1_id;
 reg  [47:0] id1_instr;
@@ -574,7 +578,6 @@ reg         id1_pt;
 reg   [4:0] id1_Rt;
 wire [127:0] id1_bus;
 
-reg					id2_available;
 reg         id2_v;
 reg   [4:0] id2_id;
 reg  [47:0] id2_instr;
@@ -586,7 +589,6 @@ reg   [4:0] id2_Rt;
 wire [127:0] id2_bus;
 
 reg        alu0_ld;
-reg        alu0_available;
 reg        alu0_dataready;
 wire       alu0_done;
 wire       alu0_idle;
@@ -602,17 +604,16 @@ reg [63:0] alu0_argI;	// only used by BEQ
 reg [RBIT:0] alu0_tgt;
 reg [5:0]  alu0_ven;
 reg        alu0_thrd;
-reg [31:0] alu0_pc;
+reg [`ABITS] alu0_pc;
 wire [63:0] alu0_bus;
 wire [63:0] alu0b_bus;
 wire  [3:0] alu0_id;
-wire  [8:0] alu0_exc;
+wire  [`XBITS] alu0_exc;
 wire        alu0_v;
 wire        alu0_branchmiss;
-wire [31:0] alu0_misspc;
+wire [`ABITS] alu0_misspc;
 
 reg        alu1_ld;
-reg        alu1_available;
 reg        alu1_dataready;
 wire       alu1_done;
 wire       alu1_idle;
@@ -627,18 +628,17 @@ reg [63:0] alu1_argC;
 reg [63:0] alu1_argI;	// only used by BEQ
 reg [RBIT:0] alu1_tgt;
 reg [5:0]  alu1_ven;
-reg [31:0] alu1_pc;
+reg [`ABITS] alu1_pc;
 reg        alu1_thrd;
 wire [63:0] alu1_bus;
 wire [63:0] alu1b_bus;
 wire  [3:0] alu1_id;
-wire  [8:0] alu1_exc;
+wire  [`XBITS] alu1_exc;
 wire        alu1_v;
 wire        alu1_branchmiss;
-wire [31:0] alu1_misspc;
+wire [`ABITS] alu1_misspc;
 
 reg        fpu_ld;
-reg        fpu1_available = 1'b1;
 reg        fpu_dataready = 1'b1;
 wire       fpu_done = 1'b1;
 wire       fpu_idle;
@@ -649,10 +649,10 @@ reg [63:0] fpu_argB;
 reg [63:0] fpu_argC;
 reg [63:0] fpu_argI;	// only used by BEQ
 reg [RBIT:0] fpu_tgt;
-reg [31:0] fpu_pc;
+reg [`ABITS] fpu_pc;
 wire [63:0] fpu_bus;
 wire  [3:0] fpu_id;
-wire  [8:0] fpu_exc = 9'h000;
+wire  [`XBITS] fpu_exc = 9'h000;
 wire        fpu_v;
 wire [31:0] fpu_status;
 
@@ -672,19 +672,19 @@ reg [63:0] fcu_argC;
 reg [63:0] fcu_argI;	// only used by BEQ
 reg [63:0] fcu_argT;
 reg [63:0] fcu_argT2;
-reg [31:0] fcu_retadr;
+reg [`ABITS] fcu_retadr;
 reg        fcu_retadr_v;
-reg [31:0] fcu_pc;
-reg [31:0] fcu_nextpc;
-reg [31:0] fcu_brdisp;
+reg [`ABITS] fcu_pc;
+reg [`ABITS] fcu_nextpc;
+reg [`ABITS] fcu_brdisp;
 wire [63:0] fcu_bus;
 wire  [3:0] fcu_id;
-reg   [8:0] fcu_exc;
+reg   [`XBITS] fcu_exc;
 wire        fcu_v;
 reg        fcu_thrd;
 reg        fcu_branchmiss;
 reg  fcu_clearbm;
-reg [31:0] fcu_misspc;
+reg [`ABITS] fcu_misspc;
 
 reg [63:0] rmw_argA;
 reg [63:0] rmw_argB;
@@ -694,7 +694,7 @@ reg [31:0] rmw_instr;
 
 reg branchmiss = 1'b0;
 reg branchmiss_thrd = 1'b0;
-reg [31:0] misspc;
+reg [`ABITS] misspc;
 reg  [`QBITS] missid;
 
 wire take_branch;
@@ -708,40 +708,40 @@ reg	 [2:0] dram0;	// state of the DRAM request (latency = 4; can have three in p
 reg	 [2:0] dram1;	// state of the DRAM request (latency = 4; can have three in pipeline)
 reg	 [2:0] dram2;	// state of the DRAM request (latency = 4; can have three in pipeline)
 reg [63:0] dram0_data;
-reg [31:0] dram0_addr;
+reg [`ABITS] dram0_addr;
 reg [31:0] dram0_seg;
 reg [47:0] dram0_instr;
 reg        dram0_rmw;
 reg		   dram0_preload;
 reg [RBIT:0] dram0_tgt;
 reg  [3:0] dram0_id;
-reg  [8:0] dram0_exc;
+reg  [`XBITS] dram0_exc;
 reg        dram0_unc;
 reg [2:0]  dram0_memsize;
 reg        dram0_load;	// is a load operation
 reg  [1:0] dram0_ol;
 reg [63:0] dram1_data;
-reg [31:0] dram1_addr;
+reg [`ABITS] dram1_addr;
 reg [31:0] dram1_seg;
 reg [47:0] dram1_instr;
 reg        dram1_rmw;
 reg		   dram1_preload;
 reg [RBIT:0] dram1_tgt;
 reg  [3:0] dram1_id;
-reg  [8:0] dram1_exc;
+reg  [`XBITS] dram1_exc;
 reg        dram1_unc;
 reg [2:0]  dram1_memsize;
 reg        dram1_load;
 reg  [1:0] dram1_ol;
 reg [63:0] dram2_data;
-reg [31:0] dram2_addr;
+reg [`ABITS] dram2_addr;
 reg [31:0] dram2_seg;
 reg [47:0] dram2_instr;
 reg        dram2_rmw;
 reg		   dram2_preload;
 reg [RBIT:0] dram2_tgt;
 reg  [3:0] dram2_id;
-reg  [8:0] dram2_exc;
+reg  [`XBITS] dram2_exc;
 reg        dram2_unc;
 reg [2:0]  dram2_memsize;
 reg        dram2_load;
@@ -750,15 +750,15 @@ reg  [1:0] dram2_ol;
 reg        dramA_v;
 reg  [3:0] dramA_id;
 reg [63:0] dramA_bus;
-reg  [8:0] dramA_exc;
+reg  [`XBITS] dramA_exc;
 reg        dramB_v;
 reg  [3:0] dramB_id;
 reg [63:0] dramB_bus;
-reg  [8:0] dramB_exc;
+reg  [`XBITS] dramB_exc;
 reg        dramC_v;
 reg  [3:0] dramC_id;
 reg [63:0] dramC_bus;
-reg  [8:0] dramC_exc;
+reg  [`XBITS] dramC_exc;
 
 wire        outstanding_stores;
 reg [63:0] I;	// instruction count
@@ -817,7 +817,7 @@ parameter IC10 = 4'd10;
 parameter IC3a = 4'd11;
 reg invic, invdc;
 reg icwhich,icnxt,L2_nxt;
-wire ihit0,ihit1,ihit2;
+wire ihit0,ihit1,ihitL2;
 wire ihit = ihit0&ihit1;
 reg phit;
 wire threadx;
@@ -871,7 +871,7 @@ case(ins[7:6])
 endcase
 endfunction
 
-wire [31:0] pc0plus6 = pc0 + 32'd6;
+wire [`ABITS] pc0plus6 = pc0 + 32'd6;
 
 `ifdef SUPPORT_SMT
 assign insn1a = insn1b;
@@ -926,7 +926,7 @@ FT64_L2_icache uic2
     .i(dat_i),
     .err_i(errq),
     .o(L2_dato),
-    .hit(ihit2),
+    .hit(ihitL2),
     .invall(invic),
     .invline()
 );
@@ -943,7 +943,7 @@ wire predict_takenB1;
 wire predict_takenC1;
 wire predict_takenD1;
 
-wire [31:0] btgtA, btgtB, btgtC, btgtD;
+wire [`ABITS] btgtA, btgtB, btgtC, btgtD;
 wire btbwr0 = iqentry_v[head0] && iqentry_done[head0] &&
         (
         iqentry_instr[head0][`INSTRUCTION_OP]==`JAL ||
@@ -955,10 +955,18 @@ wire btbwr1 = iqentry_v[head1] && iqentry_done[head1] &&
         iqentry_instr[head1][`INSTRUCTION_OP]==`BRK ||
         IsRTI(iqentry_instr[head1]));
 
+wire fcu_clk;
+BUFGCE ufcuclk
+(
+	.I(clk_i),
+	.CE(fcu_available),
+	.O(fcu_clk)
+);
+
 FT64_BTB ubtb1
 (
     .rst(rst),
-    .wclk(clk),
+    .wclk(fcu_clk),
     .wr(btbwr0 | btbwr1),  
     .wadr(btbwr0 ? iqentry_pc[head0] : iqentry_pc[head1]),
     .wdat(btbwr0 ? iqentry_a0[head0] : iqentry_a0[head1]),
@@ -981,7 +989,7 @@ FT64_BTB ubtb1
 FT64_BranchPredictor ubp1
 (
     .rst(rst),
-    .clk(clk),
+    .clk(fcu_clk),
     .en(bpe),
     .xisBranch0(iqentry_br[head0] & commit0_v),
     .xisBranch1(iqentry_br[head1] & commit1_v),
@@ -1271,7 +1279,7 @@ reg [1:0] dccnt;
 wire dhit0, dhit1, dhit2;
 wire dhit00, dhit10, dhit20;
 wire dhit01, dhit11, dhit21;
-reg [31:0] dc_wadr;
+reg [`ABITS] dc_wadr;
 reg [63:0] dc_wdat;
 reg isStore;
 
@@ -2730,7 +2738,7 @@ endfunction
 
 function [7:0] fnSelect;
 input [47:0] ins;
-input [31:0] adr;
+input [`ABITS] adr;
 begin
 	case(ins[`INSTRUCTION_OP])
 	`MEMNDX:
@@ -2900,7 +2908,7 @@ endfunction
 */
 function [63:0] fnDati;
 input [47:0] ins;
-input [31:0] adr;
+input [`ABITS] adr;
 input [63:0] dat;
 case(ins[`INSTRUCTION_OP])
 `MEMNDX:
@@ -3229,6 +3237,7 @@ FT64_fetchbuf #(AMSB,RSTPC) ufb1
     .rst(rst),
     .clk4x(clk4x),
     .clk(clk),
+    .fcu_clk(fcu_clk),
     .cs_i(adr_o[31:16]==16'hFFFF),
     .cyc_i(cyc_o),
     .stb_i(stb_o),
@@ -3669,14 +3678,14 @@ endgenerate
 				    ? iqentry_7_livetarget
 				    : {PREGS{1'b0}};
 
-    assign  iqentry_source[0] = | iqentry_0_latestID,
-	    iqentry_source[1] = | iqentry_1_latestID,
-	    iqentry_source[2] = | iqentry_2_latestID,
-	    iqentry_source[3] = | iqentry_3_latestID,
-	    iqentry_source[4] = | iqentry_4_latestID,
-	    iqentry_source[5] = | iqentry_5_latestID,
-	    iqentry_source[6] = | iqentry_6_latestID,
-	    iqentry_source[7] = | iqentry_7_latestID;
+assign  iqentry_source[0] = | iqentry_0_latestID,
+  iqentry_source[1] = | iqentry_1_latestID,
+  iqentry_source[2] = | iqentry_2_latestID,
+  iqentry_source[3] = | iqentry_3_latestID,
+  iqentry_source[4] = | iqentry_4_latestID,
+  iqentry_source[5] = | iqentry_5_latestID,
+  iqentry_source[6] = | iqentry_6_latestID,
+  iqentry_source[7] = | iqentry_7_latestID;
 
 
 reg vqueued2;
@@ -3776,8 +3785,6 @@ begin
 	iqentry_alu0_issue = 8'h00;
 	iqentry_alu1_issue = 8'h00;
 	
-	// aluissue is a task
-	// aluissue is a task
 	if (alu0_available & alu0_idle) begin
 		if (could_issue[head0] && iqentry_alu[head0]) begin
 		  iqentry_alu0_issue[head0] = `TRUE;
@@ -4965,10 +4972,18 @@ end
 reg id1_vi, id2_vi;
 wire [4:0] id1_ido, id2_ido;
 wire id1_vo, id2_vo;
+wire id1_clk, id2_clk;
+
+BUFGCE uclkb2
+(
+	.I(clk_i),
+	.CE(id1_available),
+	.O(id1_clk)
+);
 
 FT64_idecoder uid1
 (
-	.clk(clk),
+	.clk(id1_clk),
 	.idv_i(id1_vi),
 	.id_i(id1_id),
 	.instr(id1_instr),
@@ -4982,9 +4997,16 @@ FT64_idecoder uid1
 	.idv_o(id1_vo)
 );
 
+BUFGCE uclkb3
+(
+	.I(clk_i),
+	.CE(id2_available),
+	.O(id2_clk)
+);
+
 FT64_idecoder uid2
 (
-	.clk(clk),
+	.clk(id2_clk),
 	.idv_i(id2_vi),
 	.id_i(id2_id),
 	.instr(id2_instr),
@@ -5058,10 +5080,18 @@ FT64_alu #(.BIG(1'b0),.SUP_VECTOR(SUP_VECTOR)) ualu1 (
   .mem(alu1_mem),
   .shift48(alu1_shft48)
 );
+
+wire fpu1_clk;
+BUFGCE ufpc1
+(
+	.I(clk_i),
+	.CE(fpu1_available),
+	.O(fpu1_clk)
+);
 fpUnit ufp1
 (
   .rst(rst),
-  .clk(clk),
+  .clk(fpu1_clk),
   .clk4x(clk4x),
   .ce(1'b1),
   .ir(fpu_instr),
@@ -5075,7 +5105,7 @@ fpUnit ufp1
   .exception(),
   .done(fpu_done)
 );
-assign fpu_exc = |fpu_status[15:0] ? `FLT_FLT : `FLT_NONE;
+assign fpu_exc = fpu1_available ? (|fpu_status[15:0] ? `FLT_FLT : `FLT_NONE) : `FLT_UNIMP;
 
 assign  alu0_v = alu0_dataready,
         alu1_v = alu1_dataready;
@@ -5632,11 +5662,7 @@ if (rst) begin
      head6 <= 6;
      head7 <= 7;
      panic = `PANIC_NONE;
-     id1_available <= `ID1_AVAIL;
-     id2_available <= `ID2_AVAIL;
-     alu0_available <= `ALU0_AVAIL;
      alu0_dataready <= 0;
-     alu1_available <= `ALU1_AVAIL;
      alu1_dataready <= 0;
      alu0_sourceid <= 5'd0;
      alu1_sourceid <= 5'd0;
@@ -5666,7 +5692,6 @@ if (rst) begin
 		alu1_tgt <= 6'h00;
 		alu1_ven <= 6'd0;
 `endif
-     fpu1_available <= `FPU1_AVAIL;
      fcu_dataready <= 0;
      fcu_instr <= `NOP_INSN;
      fcu_retadr_v <= 0;
@@ -5718,9 +5743,21 @@ if (rst) begin
      fcu_done <= `TRUE;
      sema <= 64'h0;
      tvec[0] <= RSTPC;
+     pmr <= 64'hFFFFFFFFFFFFFFFF;
+     pmr[0] <= `ID1_AVAIL;
+     pmr[1] <= `ID2_AVAIL;
+     pmr[8] <= `ALU0_AVAIL;
+     pmr[9] <= `ALU1_AVAIL;
+     pmr[16] <= `FPU1_AVAIL;
+     pmr[17] <= `FPU2_AVAIL;
+     pmr[32] <= `FCU_AVAIL;
 end
 else begin
 	// The following signals only pulse
+
+	// Instruction decode output should only pulse once for a queue entry. We
+	// want the decode to be invalidated after a clock cycle so that it isn't
+	// inadvertently used to update the queue at a later point.
 	id1_vi <= `INV;
 	id2_vi <= `INV;
 	ld_time <= {ld_time[4:0],1'b0};
@@ -6571,9 +6608,6 @@ if (iqentry_id1issue[n] && !iqentry_iv[n] && !(iqentry_v[n] && iqentry_stomp[n])
 		id1_Rt     <= iqentry_tgt[n][4:0];
 		id1_pt			<= iqentry_pt[n];
   end
-  if (iqentry_iv[n] && id1_id==n[4:0]) begin
-  	uid1.idv_o <= `INV;
-  end
 end
 for (n = 0; n < QENTRIES; n = n + 1)
 if (id2_available) begin
@@ -6592,9 +6626,6 @@ if (iqentry_id2issue[n] && !iqentry_iv[n] && !(iqentry_v[n] && iqentry_stomp[n])
 		id2_Rt     <= iqentry_tgt[n][4:0];
 		id2_pt			<= iqentry_pt[n];
 	end
-  if (iqentry_iv[n] && id2_id==n[4:0]) begin
-  	uid2.idv_o <= `INV;
-  end
 end
 
     for (n = 0; n < QENTRIES; n = n + 1)
@@ -7040,7 +7071,7 @@ IC3a:     icstate <= IC4;
         // The IC machine will stall in this state until the BIU has loaded the
         // L2 cache. 
 IC4: 
-	if (ihit2 && picstate==IC3a) begin
+	if (ihitL2 && picstate==IC3a) begin
 		L1_en <= 10'h3FF;
 		L1_wr1 <= TRUE;
 		L1_wr0 <= TRUE;
@@ -7414,7 +7445,7 @@ BIDLE:
             end
         end
         // Check for L2 cache miss
-        else if (!ihit2) begin
+        else if (!ihitL2) begin
              cti_o <= 3'b001;
              bte_o <= 2'b01;	// 4 beat burst wrap
              cyc_o <= `HIGH;
@@ -8680,6 +8711,7 @@ begin
     `CSR_TICK:      dat <= tick;
     `CSR_PCR:       dat <= pcr;
     `CSR_PCR2:      dat <= pcr2;
+    `CSR_PMR:				dat <= pmr;
     `CSR_WBRCD:		dat <= wbrcd;
     `CSR_SEMA:      dat <= sema;
     `CSR_SBL:       dat <= sbl;
@@ -8769,6 +8801,13 @@ begin
         `CSR_CR0:       cr0 <= dat;
         `CSR_PCR:       pcr <= dat[31:0];
         `CSR_PCR2:      pcr2 <= dat;
+        `CSR_PMR:		begin	
+        							if (dat[1:0]==2'b00)	
+        								pmr[1:0] <= 2'b01;
+        							else
+        								pmr[1:0] <= dat[1:0];
+        							pmr[63:2] <= dat[63:2];
+        						end
         `CSR_WBRCD:		wbrcd <= dat;
         `CSR_SEMA:      sema <= dat;
         `CSR_SBL:       sbl <= dat[31:0];
@@ -8827,6 +8866,7 @@ begin
         `CSR_CR0:       cr0 <= cr0 | dat;
         `CSR_PCR:       pcr[31:0] <= pcr[31:0] | dat[31:0];
         `CSR_PCR2:      pcr2 <= pcr2 | dat;
+        `CSR_PMR:				pmr <= pmr | dat;
         `CSR_WBRCD:		wbrcd <= wbrcd | dat;
 `ifdef SUPPORT_DBG        
         `CSR_DBCTRL:    dbg_ctrl <= dbg_ctrl | dat;
@@ -8844,6 +8884,13 @@ begin
         `CSR_CR0:       cr0 <= cr0 & ~dat;
         `CSR_PCR:       pcr <= pcr & ~dat;
         `CSR_PCR2:      pcr2 <= pcr2 & ~dat;
+        `CSR_PMR:			begin	
+        							if (dat[1:0]==2'b11)
+        								pmr[1:0] <= 2'b01;
+        							else
+        								pmr[1:0] <= pmr[1:0] & ~dat[1:0];
+        							pmr[63:2] <= pmr[63:2] & ~dat[63:2];
+        							end
         `CSR_WBRCD:		wbrcd <= wbrcd & ~dat;
 `ifdef SUPPORT_DBG        
         `CSR_DBCTRL:    dbg_ctrl <= dbg_ctrl & ~dat;

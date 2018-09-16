@@ -22,6 +22,7 @@
 //
 // ============================================================================
 //
+`include "FT64_config.vh"
 `include "FT64_defines.vh"
 
 // FETCH
@@ -31,7 +32,7 @@
 // do nothing (kinda like alpha approach)
 // Like to turn this into an independent module at some point.
 //
-module FT64_fetchbuf(rst, clk4x, clk, 
+module FT64_fetchbuf(rst, clk4x, clk, fcu_clk,
 	cs_i, cyc_i, stb_i, ack_o, we_i, adr_i, dat_i,
 	hirq, thread_en,
 	regLR,
@@ -55,13 +56,14 @@ module FT64_fetchbuf(rst, clk4x, clk,
     take_branch0, take_branch1,
     stompedRets
 );
-parameter AMSB = 31;
+parameter AMSB = `AMSB;
 parameter RSTPC = 32'hFFFC0100;
 parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
 input rst;
 input clk4x;
 input clk;
+input fcu_clk;
 input cs_i;
 input cyc_i;
 input stb_i;
@@ -282,7 +284,7 @@ assign threadx = fetchbuf;
 FT64_RSB #(AMSB) ursb1
 (
 	.rst(rst),
-	.clk(clk),
+	.clk(fcu_clk),
 	.regLR(regLR),
 	.queued1(queued1),
 	.queued2(queued2),
@@ -300,7 +302,7 @@ FT64_RSB #(AMSB) ursb1
 FT64_RSB #(AMSB) ursb2
 (
 	.rst(rst),
-	.clk(clk),
+	.clk(fcu_clk),
 	.regLR(regLR),
 	.queued1(queued1),
 	.queued2(1'b0),
@@ -854,7 +856,7 @@ begin
 `ifdef SUPPORT_SMT
 		pc0 <= pc0 + fetchbuf0_insln;
 `else
-		pc0 <= pc0 + fetchbuf0_insln + fetchbuf1_insln;
+		pc0 <= pc0 + {1'b0,fetchbuf0_insln} + {1'b0,fetchbuf1_insln};
 `endif
 end
 endtask
@@ -890,7 +892,7 @@ begin
 `ifdef SUPPORT_SMT
 		pc0 <= pc0 + fetchbuf0_insln;
 `else
-		pc0 <= pc0 + fetchbuf0_insln + fetchbuf1_insln;
+		pc0 <= pc0 + {1'b0,fetchbuf0_insln} + {1'b0,fetchbuf1_insln};
 `endif
 end
 endtask

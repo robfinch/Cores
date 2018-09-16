@@ -23,10 +23,10 @@
 // Register file with two write ports and six read ports.
 // ============================================================================
 //
-`define SIM
+`include "FT64_config.vh"
 
 module FT64_regfileRam_sim(clka, ena, wea, addra, dina, clkb, enb, addrb, doutb);
-parameter WID=65;
+parameter WID=64;
 parameter RBIT = 11;
 input clka;
 input ena;

@@ -239,7 +239,7 @@ FT64 ucpu1
 (
     .hartid(hartid_i),
     .rst(rst_i),
-    .clk(clk_i),
+    .clk_i(clk_i),
     .clk4x(clk4x_i),
     .tm_clk_i(tm_clk_i),
     .irq_i(irq),
