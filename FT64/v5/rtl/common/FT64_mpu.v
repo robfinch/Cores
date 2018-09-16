@@ -88,7 +88,7 @@ input rb_i;
 wire cyc,stb,we;
 wire [31:0] adr;
 reg [63:0] dati;
-wire [2:0] irq;
+wire [3:0] irq;
 wire [6:0] cause;
 wire mmu_ack;
 wire [31:0] mmu_dato;

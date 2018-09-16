@@ -54,7 +54,8 @@ module FT64_fetchbuf(rst, clk4x, clk, fcu_clk,
     btgtA, btgtB, btgtC, btgtD,
     nop_fetchbuf,
     take_branch0, take_branch1,
-    stompedRets
+    stompedRets,
+    panic
 );
 parameter AMSB = `AMSB;
 parameter RSTPC = 32'hFFFC0100;
@@ -125,7 +126,7 @@ input [3:0] nop_fetchbuf;
 output take_branch0;
 output take_branch1;
 input [3:0] stompedRets;
-
+output reg [3:0] panic;
 integer n;
 
 //`include "FT64_decode.vh"
@@ -336,6 +337,7 @@ if (rst) begin
 	fetchbufC_v <= 0;
 	fetchbufD_v <= 0;
 	fetchbuf <= 0;
+	panic <= `PANIC_NONE;
 end
 else begin
 	
@@ -354,6 +356,9 @@ else begin
 	// for that thread is assigned the current fetchbuf pc.
 	// For the thread that misses the pc is simply assigned the misspc.
 	if (branchmiss) begin
+		$display("***********");
+		$display("Branch miss");
+		$display("***********");
 		if (branchmiss_thrd) begin
  			pc0 <= fetchbuf0_pc;
 `ifdef SUPPORT_SMT
@@ -728,7 +733,7 @@ else begin
 			 fetchbufB_v <= `INV;
 			  fetchbuf <= ~fetchbuf;
 		    end
-		default:  ;
+		default:  panic <= `PANIC_INVALIDIQSTATE;
 	    endcase
 	    else case ({fetchbufC_v, fetchbufD_v, (queued1|queuedNop), (queued2|queuedNop)})
 		4'b00_00 : ;	// do nothing
@@ -765,7 +770,7 @@ else begin
 			 fetchbufD_v <= `INV;
 			  fetchbuf <= ~fetchbuf;
 		    end
-		default:  ;
+		default:  panic <= `PANIC_INVALIDIQSTATE;
 	    endcase
 	    //
 	    // get data iff the fetch buffers are empty
@@ -861,7 +866,10 @@ begin
 `ifdef SUPPORT_SMT
 		pc0 <= pc0 + fetchbuf0_insln;
 `else
-		pc0 <= pc0 + {1'b0,fetchbuf0_insln} + {1'b0,fetchbuf1_insln};
+	if (`WAYS > 1)
+		pc0 <= pc0 + fetchbuf0_insln + fetchbuf1_insln;
+	else
+		pc0 <= pc0 + fetchbuf0_insln;
 `endif
 end
 endtask
@@ -869,13 +877,11 @@ endtask
 task FetchB;
 begin
 	fetchbufB_instr <= cinsn1;
-	fetchbufB_v <= `VAL;
-`ifdef SUPPORT_SMT
+	fetchbufB_v <= `WAYS > 1;
 	fetchbufB_pc <= pc1;
+`ifdef SUPPORT_SMT
 	if (phit)
 		pc1 <= pc1 + fetchbuf1_insln;
-`else
-	fetchbufB_pc <= pc0 + fetchbuf0_insln;
 `endif
 end
 endtask
@@ -897,7 +903,10 @@ begin
 `ifdef SUPPORT_SMT
 		pc0 <= pc0 + fetchbuf0_insln;
 `else
-		pc0 <= pc0 + {1'b0,fetchbuf0_insln} + {1'b0,fetchbuf1_insln};
+	if (`WAYS > 1)
+		pc0 <= pc0 + fetchbuf0_insln + fetchbuf1_insln;
+	else
+		pc0 <= pc0 + fetchbuf0_insln;
 `endif
 end
 endtask
@@ -905,13 +914,11 @@ endtask
 task FetchD;
 begin
 	fetchbufD_instr <= cinsn1;
-	fetchbufD_v <= `VAL;
-`ifdef SUPPORT_SMT
+	fetchbufD_v <= `WAYS > 1;
 	fetchbufD_pc <= pc1;
+`ifdef SUPPORT_SMT
 	if (phit)
 		pc1 <= pc1 + fetchbuf1_insln;
-`else
-	fetchbufD_pc <= pc0 + fetchbuf0_insln;
 `endif
 end
 endtask

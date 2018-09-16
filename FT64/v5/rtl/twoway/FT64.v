@@ -203,6 +203,9 @@ wire alu0_available = pmr[8];
 wire alu1_available = pmr[9];
 wire fpu1_available = pmr[16];
 wire fpu2_available = pmr[17];
+wire mem1_available = pmr[24];
+wire mem2_available = pmr[25];
+wire mem3_available = pmr[26];
 wire fcu_available = pmr[32];
 // Simply setting this flag to zero should strip out almost all the logic
 // associated SMT.
@@ -609,6 +612,7 @@ wire take_branch1;
 
 reg [3:0] nop_fetchbuf;
 wire        fetchbuf;	// determines which pair to read from & write to
+wire [3:0] fb_panic;
 
 wire [47:0] fetchbuf0_instr;	
 wire  [2:0] fetchbuf0_insln;
@@ -797,6 +801,16 @@ reg [63:0] rmw_argC;
 wire [63:0] rmw_res;
 reg [31:0] rmw_instr;
 
+// write buffer
+reg [47:0] wb_instr [0:7];
+reg [63:0] wb_data [0:7];
+reg [`ABITS] wb_addr [0:7];
+reg [1:0] wb_ol [0:7];
+reg [7:0] wb_v;
+reg [7:0] wb_rmw;
+reg [`QBITS] wb_id [0:7];
+reg [`QBITS] wbo_id;
+
 reg branchmiss = 1'b0;
 reg branchmiss_thrd = 1'b0;
 reg [`ABITS] misspc;
@@ -921,7 +935,8 @@ parameter IC9 = 4'd9;
 parameter IC10 = 4'd10;
 parameter IC3a = 4'd11;
 reg invic, invdc;
-reg icwhich,icnxt,L2_nxt;
+reg [1:0] icwhich;
+reg icnxt,L2_nxt;
 wire ihit0,ihit1,ihit2,ihitL2;
 wire ihit = ihit0&ihit1&ihit2;
 reg phit;
@@ -1481,6 +1496,8 @@ FT64_dcache udc0
     .hit0(dhit0),
     .hit1()
 );
+generate begin : gDCacheInst
+if (`NUM_MEM > 1) begin
 FT64_dcache udc1
 (
     .rst(rst),
@@ -1497,6 +1514,8 @@ FT64_dcache udc1
     .hit0(dhit1),
     .hit1()
 );
+end
+if (`NUM_MEM > 2) begin
 FT64_dcache udc2
 (
     .rst(rst),
@@ -1513,6 +1532,9 @@ FT64_dcache udc2
     .hit0(dhit2),
     .hit1()
 );
+end
+end
+endgenerate
 
 function [`QBITS] idp1;
 input [`QBITS] id;
@@ -2664,7 +2686,7 @@ function IsFlowCtrl;
 input [47:0] isn;
 casez(isn[`INSTRUCTION_OP])
 `BRK:    IsFlowCtrl = TRUE;
-`RR:    case(isn[`INSTRUCTION_S2])
+`R2:    case(isn[`INSTRUCTION_S2])
         `RTI:   IsFlowCtrl = TRUE;
         default:    IsFlowCtrl = FALSE;
         endcase
@@ -3480,7 +3502,8 @@ FT64_fetchbuf #(AMSB,RSTPC) ufb1
   .nop_fetchbuf(nop_fetchbuf),
   .take_branch0(take_branch0),
   .take_branch1(take_branch1),
-  .stompedRets(stompedOnRets)
+  .stompedRets(stompedOnRets),
+  .panic(fb_panic)
 );
 
 
@@ -5268,6 +5291,28 @@ begin
 `endif
 end
 
+reg [2:0] wbptr;
+always @*
+begin
+	wbptr <= 3'd7;
+	if (wb_v[6])
+		wbptr <= 3'd7;
+	else if (wb_v[5])
+		wbptr <= 3'd6;
+	else if (wb_v[4])
+		wbptr <= 3'd5;
+	else if (wb_v[3])
+		wbptr <= 3'd4;
+	else if (wb_v[2])
+		wbptr <= 3'd3;
+	else if (wb_v[1])
+		wbptr <= 3'd2;
+	else if (wb_v[0])
+		wbptr <= 3'd1;
+	else
+		wbptr <= 3'd0;
+end
+
 // Stomp logic for branch miss.
 
 FT64_stomp #(QENTRIES) ustmp1
@@ -5973,13 +6018,13 @@ end
 // Simulation doesn't like it if things are under separate always blocks.
 // Synthesis doesn't like it if things are under the same always block.
 
-always @(posedge clk)
-begin
-	branchmiss <= excmiss|fcu_branchmiss;
-    misspc <= excmiss ? excmisspc : fcu_misspc;
-    missid <= excmiss ? (|iqentry_exc[head0] ? head0 : head1) : fcu_sourceid;
-	branchmiss_thrd <=  excmiss ? excthrd : fcu_thrd;
-end
+//always @(posedge clk)
+//begin
+//	branchmiss <= excmiss|fcu_branchmiss;
+//    misspc <= excmiss ? excmisspc : fcu_misspc;
+//    missid <= excmiss ? (|iqentry_exc[head0] ? head0 : head1) : fcu_sourceid;
+//	branchmiss_thrd <=  excmiss ? excthrd : fcu_thrd;
+//end
 
 always @(posedge clk)
 if (rst) begin
@@ -6047,6 +6092,7 @@ if (rst) begin
          iqentry_a3_s[n] <= 5'd0;
          iqentry_canex[n] <= FALSE;
     end
+     bwhich <= 2'b00;
      dram0 <= `DRAMSLOT_AVAIL;
      dram1 <= `DRAMSLOT_AVAIL;
      dram2 <= `DRAMSLOT_AVAIL;
@@ -6159,9 +6205,21 @@ if (rst) begin
      pmr[9] <= `ALU1_AVAIL;
      pmr[16] <= `FPU1_AVAIL;
      pmr[17] <= `FPU2_AVAIL;
+     pmr[24] <= `MEM1_AVAIL;
+     pmr[25] <= `MEM2_AVAIL;
+		 pmr[26] <= `MEM3_AVAIL;     
      pmr[32] <= `FCU_AVAIL;
+     wb_v <= 8'h00;
 end
 else begin
+	if (|fb_panic)
+		panic <= fb_panic;
+	begin
+		branchmiss <= excmiss|fcu_branchmiss;
+	    misspc <= excmiss ? excmisspc : fcu_misspc;
+	    missid <= excmiss ? (|iqentry_exc[head0] ? head0 : head1) : fcu_sourceid;
+		branchmiss_thrd <=  excmiss ? excthrd : fcu_thrd;
+	end
 	// The following signals only pulse
 
 	// Instruction decode output should only pulse once for a queue entry. We
@@ -6267,16 +6325,16 @@ else begin
     end
      rf_v[0] <= 1;
 
-    //
-    // ENQUEUE
-    //
-    // place up to two instructions from the fetch buffer into slots in the IQ.
-    //   note: they are placed in-order, and they are expected to be executed
-    // 0, 1, or 2 of the fetch buffers may have valid data
-    // 0, 1, or 2 slots in the instruction queue may be available.
-    // if we notice that one of the instructions in the fetch buffer is a predicted branch,
-    // (set branchback/backpc and delete any instructions after it in fetchbuf)
-    //
+  //
+  // ENQUEUE
+  //
+  // place up to two instructions from the fetch buffer into slots in the IQ.
+  //   note: they are placed in-order, and they are expected to be executed
+  // 0, 1, or 2 of the fetch buffers may have valid data
+  // 0, 1, or 2 slots in the instruction queue may be available.
+  // if we notice that one of the instructions in the fetch buffer is a predicted branch,
+  // (set branchback/backpc and delete any instructions after it in fetchbuf)
+  //
 
 	// enqueue fetchbuf0 and fetchbuf1, but only if there is room, 
 	// and ignore fetchbuf1 if fetchbuf0 has a backwards branch in it.
@@ -6930,7 +6988,7 @@ end
 		//iqentry_instr[fcu_id][`INSTRUCTION_OP] <= `NOP;
 	end
 //	if (dram_v && iqentry_v[ dram_id[`QBITS] ] && iqentry_mem[ dram_id[`QBITS] ] ) begin	// if data for stomped instruction, ignore
-	if (dramA_v && iqentry_v[ dramA_id[`QBITS] ] && iqentry_load[ dramA_id[`QBITS] ]) begin	// if data for stomped instruction, ignore
+	if (mem1_available && dramA_v && iqentry_v[ dramA_id[`QBITS] ] && iqentry_load[ dramA_id[`QBITS] ]) begin	// if data for stomped instruction, ignore
    		iqentry_res	[ dramA_id[`QBITS] ] <= dramA_bus;
         iqentry_exc	[ dramA_id[`QBITS] ] <= dramA_exc;
         iqentry_done[ dramA_id[`QBITS] ] <= `VAL;
@@ -6940,7 +6998,7 @@ end
 //	    if (iqentry_lptr[dram0_id[`QBITS]])
 //	    	wbrcd[pcr[5:0]] <= 1'b1;
 	end
-	if (dramB_v && iqentry_v[ dramB_id[`QBITS] ] && iqentry_load[ dramB_id[`QBITS] ]) begin	// if data for stomped instruction, ignore
+	if (mem2_available && `NUM_MEM > 1 && dramB_v && iqentry_v[ dramB_id[`QBITS] ] && iqentry_load[ dramB_id[`QBITS] ]) begin	// if data for stomped instruction, ignore
        	iqentry_res	[ dramB_id[`QBITS] ] <= dramB_bus;
         iqentry_exc	[ dramB_id[`QBITS] ] <= dramB_exc;
         iqentry_done[ dramB_id[`QBITS] ] <= `VAL;
@@ -6950,7 +7008,7 @@ end
 //	    if (iqentry_lptr[dram1_id[`QBITS]])
 //	    	wbrcd[pcr[5:0]] <= 1'b1;
 	end
-	if (dramC_v && iqentry_v[ dramC_id[`QBITS] ] && iqentry_load[ dramC_id[`QBITS] ]) begin	// if data for stomped instruction, ignore
+	if (mem3_available && `NUM_MEM > 2 && dramC_v && iqentry_v[ dramC_id[`QBITS] ] && iqentry_load[ dramC_id[`QBITS] ]) begin	// if data for stomped instruction, ignore
        	iqentry_res	[ dramC_id[`QBITS] ] <= dramC_bus;
         iqentry_exc	[ dramC_id[`QBITS] ] <= dramC_exc;
         iqentry_done[ dramC_id[`QBITS] ] <= `VAL;
@@ -6964,17 +7022,17 @@ end
 //
 // set the IQ entry == DONE as soon as the SW is let loose to the memory system
 //
-if (dram0 == `DRAMSLOT_BUSY && IsStore(dram0_instr)) begin
+if (mem1_available && dram0 == `DRAMSLOT_BUSY && IsStore(dram0_instr)) begin
 	if ((alu0_v && (dram0_id[`QBITS] == alu0_id[`QBITS])) || (alu1_v && (dram0_id[`QBITS] == alu1_id[`QBITS])))	 panic <= `PANIC_MEMORYRACE;
 	iqentry_done[ dram0_id[`QBITS] ] <= `VAL;
 	iqentry_out[ dram0_id[`QBITS] ] <= `INV;
 end
-if (dram1 == `DRAMSLOT_BUSY && IsStore(dram1_instr)) begin
+if (mem2_available && `NUM_MEM > 1 && dram1 == `DRAMSLOT_BUSY && IsStore(dram1_instr)) begin
 	if ((alu0_v && (dram1_id[`QBITS] == alu0_id[`QBITS])) || (alu1_v && (dram1_id[`QBITS] == alu1_id[`QBITS])))	 panic <= `PANIC_MEMORYRACE;
 	iqentry_done[ dram1_id[`QBITS] ] <= `VAL;
 	iqentry_out[ dram1_id[`QBITS] ] <= `INV;
 end
-if (dram2 == `DRAMSLOT_BUSY && IsStore(dram2_instr)) begin
+if (mem3_available && `NUM_MEM > 2 && dram2 == `DRAMSLOT_BUSY && IsStore(dram2_instr)) begin
 	if ((alu0_v && (dram2_id[`QBITS] == alu0_id[`QBITS])) || (alu1_v && (dram2_id[`QBITS] == alu1_id[`QBITS])))	 panic <= `PANIC_MEMORYRACE;
 	iqentry_done[ dram2_id[`QBITS] ] <= `VAL;
 	iqentry_out[ dram2_id[`QBITS] ] <= `INV;
@@ -7357,7 +7415,7 @@ end
 
 //
 // grab requests that have finished and put them on the dram_bus
-if (dram0 == `DRAMREQ_READY) begin
+if (mem1_available && dram0 == `DRAMREQ_READY) begin
 	dram0 <= `DRAMSLOT_AVAIL;
 	dramA_v <= dram0_load;
 	dramA_id <= dram0_id;
@@ -7367,7 +7425,7 @@ if (dram0 == `DRAMREQ_READY) begin
 end
 //    else
 //    	dramA_v <= `INV;
-if (dram1 == `DRAMREQ_READY) begin
+if (mem2_available && dram1 == `DRAMREQ_READY && `NUM_MEM > 1) begin
 	dram1 <= `DRAMSLOT_AVAIL;
 	dramB_v <= dram1_load;
 	dramB_id <= dram1_id;
@@ -7377,7 +7435,7 @@ if (dram1 == `DRAMREQ_READY) begin
 end
 //    else
 //    	dramB_v <= `INV;
-if (dram2 == `DRAMREQ_READY) begin
+if (mem3_available && dram2 == `DRAMREQ_READY && `NUM_MEM > 2) begin
 	dram2 <= `DRAMSLOT_AVAIL;
 	dramC_v <= dram2_load;
 	dramC_id <= dram2_id;
@@ -7414,7 +7472,7 @@ end
 	last_issue = 8;
     for (n = 0; n < QENTRIES; n = n + 1)
         if (~iqentry_stomp[n] && iqentry_memissue[n] && iqentry_agen[n] && ~iqentry_out[n]) begin
-            if (dram0 == `DRAMSLOT_AVAIL) begin
+            if (mem1_available && dram0 == `DRAMSLOT_AVAIL) begin
             	dramA_v <= `INV;
              dram0 		<= `DRAMSLOT_BUSY;
              dram0_id 	<= { 1'b1, n[`QBITS] };
@@ -7442,7 +7500,7 @@ end
        	iqentry_out[last_issue] <= `VAL;
     for (n = 0; n < QENTRIES; n = n + 1)
         if (~iqentry_stomp[n] && iqentry_memissue[n] && iqentry_agen[n] && ~iqentry_out[n]) begin
-        	if (n < last_issue) begin
+        	if (mem2_available && n < last_issue && `NUM_MEM > 1) begin
 	            if (dram1 == `DRAMSLOT_AVAIL) begin
             		dramB_v <= `INV;
 	             dram1 		<= `DRAMSLOT_BUSY;
@@ -7469,7 +7527,7 @@ end
        	iqentry_out[last_issue] <= `VAL;
     for (n = 0; n < QENTRIES; n = n + 1)
         if (~iqentry_stomp[n] && iqentry_memissue[n] && iqentry_agen[n] && ~iqentry_out[n]) begin
-        	if (n < last_issue) begin
+        	if (mem3_available && n < last_issue && `NUM_MEM > 2) begin
 	            if (dram2 == `DRAMSLOT_AVAIL) begin
             		dramC_v <= `INV;
 	             dram2 		<= `DRAMSLOT_BUSY;
@@ -7521,12 +7579,12 @@ if (`NUM_CMT > 1)
 // well limit retiring to two instructions max to conserve logic.
 //
 if (~|panic)
-    casez ({ iqentry_v[head0],
-	iqentry_cmt[head0],
-	iqentry_v[head1],
-	iqentry_cmt[head1],
-	iqentry_v[head2],
-	iqentry_cmt[head2]})
+  casez ({ iqentry_v[head0],
+		iqentry_cmt[head0],
+		iqentry_v[head1],
+		iqentry_cmt[head1],
+		iqentry_v[head2],
+		iqentry_cmt[head2]})
 
 	// retire 3
 	6'b0?_0?_0?:
@@ -7753,11 +7811,11 @@ IDLE:
 			L1_adr <= {pcr[5:0],pc0[31:3],3'h0};
 			L2_adr <= {pcr[5:0],pc0[31:3],3'h0};
 			L1_invline <= TRUE;
-			icwhich <= 1'b0;
+			icwhich <= 2'b00;
 			iccnt <= 3'b00;
 			icstate <= IC2;
 		end
-		else if (!ihit1) begin
+		else if (!ihit1 && `WAYS > 1) begin
 `ifdef SUPPORT_SMT
 			L1_adr <= {pcr[5:0],pc1[31:3],3'h0};
 			L2_adr <= {pcr[5:0],pc1[31:3],3'h0};
@@ -7766,7 +7824,20 @@ IDLE:
 			L2_adr <= {pcr[5:0],pc0plus6[31:3],3'h0};
 `endif
 			L1_invline <= TRUE;
-			icwhich <= 1'b1;
+			icwhich <= 2'b01;
+			iccnt <= 3'b00;
+			icstate <= IC2;
+		end
+		else if (!ihit2 && `WAYS > 2) begin
+`ifdef SUPPORT_SMT
+			L1_adr <= {pcr[5:0],pc2[31:3],3'h0};
+			L2_adr <= {pcr[5:0],pc2[31:3],3'h0};
+`else
+			L1_adr <= {pcr[5:0],pc0plus12[31:3],3'h0};
+			L2_adr <= {pcr[5:0],pc0plus12[31:3],3'h0};
+`endif
+			L1_invline <= TRUE;
+			icwhich <= 2'b10;
 			iccnt <= 3'b00;
 			icstate <= IC2;
 		end
@@ -7783,8 +7854,9 @@ IC3a:     icstate <= IC4;
 IC4: 
 	if (ihitL2 && picstate==IC3a) begin
 		L1_en <= 10'h3FF;
-		L1_wr1 <= TRUE;
 		L1_wr0 <= TRUE;
+		L1_wr1 <= TRUE && `WAYS > 1;
+		L1_wr2 <= TRUE && `WAYS > 2;
 		L1_adr <= L2_adr;
 		L2_rdat <= L2_dato;
 		icstate <= IC5;
@@ -7793,8 +7865,9 @@ IC4:
 		;
 	else begin
 		L1_en <= 10'h3FF;
-		L1_wr1 <= TRUE;
 		L1_wr0 <= TRUE;
+		L1_wr1 <= TRUE && `WAYS > 1;
+		L1_wr2 <= TRUE && `WAYS > 2;
 		L1_adr <= L2_adr;
 		L2_rdat <= L2_dato;
 		icstate <= IC5;
@@ -7804,6 +7877,7 @@ IC5:
 		L1_en <= 10'h000;
 		L1_wr0 <= FALSE;
 		L1_wr1 <= FALSE;
+		L1_wr2 <= FALSE;
 		icstate <= IC6;
 	end
 IC6:  icstate <= IC7;
@@ -7815,7 +7889,7 @@ IC8:    begin
 default:     icstate <= IDLE;
 endcase
 
-if (dram0_load)
+if (mem1_available && dram0_load)
 case(dram0)
 `DRAMSLOT_AVAIL:	;
 `DRAMSLOT_BUSY:		dram0 <= dram0 + !dram0_unc;
@@ -7827,7 +7901,7 @@ case(dram0)
 `DRAMREQ_READY:		;
 endcase
 
-if (dram1_load)
+if (mem2_available && dram1_load && `NUM_MEM > 1)
 case(dram1)
 `DRAMSLOT_AVAIL:	;
 `DRAMSLOT_BUSY:		dram1 <= dram1 + !dram1_unc;
@@ -7839,7 +7913,7 @@ case(dram1)
 `DRAMREQ_READY:		;
 endcase
 
-if (dram2_load)
+if (mem3_available && dram2_load && `NUM_MEM > 2)
 case(dram2)
 `DRAMSLOT_AVAIL:	;
 `DRAMSLOT_BUSY:		dram2 <= dram2 + !dram2_unc;
@@ -7860,18 +7934,46 @@ endcase
 
 case(bstate)
 BIDLE:
-    begin
-         isCAS <= FALSE;
-         isAMO <= FALSE;
-         isInc <= FALSE;
-         isSpt <= FALSE;
-         isRMW <= FALSE;
-         rdvq <= 1'b0;
-         errq <= 1'b0;
-         exvq <= 1'b0;
-         bwhich <= 2'b11;
-         preload <= FALSE;
-        if (dram0==`DRAMSLOT_BUSY && dram0_rmw) begin
+	begin
+		isCAS <= FALSE;
+		isAMO <= FALSE;
+		isInc <= FALSE;
+		isSpt <= FALSE;
+		isRMW <= FALSE;
+		rdvq <= 1'b0;
+		errq <= 1'b0;
+		exvq <= 1'b0;
+		bwhich <= 2'b00;
+		preload <= FALSE;
+`ifdef HAS_WB
+		if (wb_v[0]) begin
+			cyc_o <= `HIGH;
+			stb_o <= `HIGH;
+			we_o <= `HIGH;
+			sel_o <= fnSelect(wb_instr[0],wb_addr[0]);
+			adr_o <= wb_addr[0];
+			dat_o <= fnDato(wb_instr[0],wb_data[0]);
+			ol_o  <= wb_ol[0];
+			wbo_id <= wb_id[0];
+			bstate <= wb_rmw[0] ? B12 : B1;
+			for (j = n+1; j < 8; j = j + 1) begin
+	     	wb_v[j-1] <= wb_v[j];
+	     	wb_id[j-1] <= wb_id[j];
+	     	wb_rmw[j-1] <= wb_rmw[j];
+	     	wb_instr[j-1] <= wb_instr[j];
+	     	wb_addr[j-1] <= wb_addr[j];
+	     	wb_data[j-1] <= wb_data[j];
+	     	wb_ol[j-1] <= wb_ol[j];
+    	end
+    	wb_v[7] <= `INV;
+    	wb_rmw[7] <= `FALSE;
+		end
+
+			if (|wb_v)
+				;
+        else
+`endif
+      if (mem1_available && dram0==`DRAMSLOT_BUSY && dram0_rmw) begin
 `ifdef SUPPORT_DBG      
             if (dbg_smatch0|dbg_lmatch0) begin
                  dramA_v <= `TRUE;
@@ -7883,13 +7985,14 @@ BIDLE:
             else
 `endif            
             begin
-                 dram0 <= `DRAMSLOT_HASBUS;
                  isRMW <= dram0_rmw;
                  isCAS <= IsCAS(dram0_instr);
                  isAMO <= IsAMO(dram0_instr);
                  isInc <= IsInc(dram0_instr);
                  casid <= dram0_id;
                  bwhich <= 2'b00;
+`ifndef HAS_WB                 
+                 dram0 <= `DRAMSLOT_HASBUS;
                  cyc_o <= `HIGH;
                  stb_o <= `HIGH;
                  sel_o <= fnSelect(dram0_instr,dram0_addr);
@@ -7897,9 +8000,21 @@ BIDLE:
                  dat_o <= fnDato(dram0_instr,dram0_data);
                  ol_o  <= dram0_ol;
                  bstate <= B12;
+`else
+								if (wbptr<3'd7) begin
+									dram0 <= `DRAMREQ_READY;
+									wb_v[wbptr] <= `VAL;
+									wb_id[wbptr] <= dram0_id;
+									wb_rmw[wbptr] <= `TRUE;
+									wb_instr[wbptr] <= dram0_instr;
+									wb_ol[wbptr] <= dram0_ol;
+									wb_addr[wbptr] <= dram0_addr;
+									wb_data[wbptr] <= fnDato(dram0_instr,dram0_data);
+								end
+`endif                 
             end
         end
-        else if (dram1==`DRAMSLOT_BUSY && dram1_rmw) begin
+        else if (mem2_available && dram1==`DRAMSLOT_BUSY && dram1_rmw && `NUM_MEM > 1) begin
 `ifdef SUPPORT_DBG        	
             if (dbg_smatch1|dbg_lmatch1) begin
                  dramB_v <= `TRUE;
@@ -7911,13 +8026,14 @@ BIDLE:
             else
 `endif            
             begin
-                 dram1 <= `DRAMSLOT_HASBUS;
                  isRMW <= dram1_rmw;
                  isCAS <= IsCAS(dram1_instr);
                  isAMO <= IsAMO(dram1_instr);
                  isInc <= IsInc(dram1_instr);
                  casid <= dram1_id;
                  bwhich <= 2'b01;
+`ifndef HAS_WB                 
+                 dram1 <= `DRAMSLOT_HASBUS;
                  cyc_o <= `HIGH;
                  stb_o <= `HIGH;
                  sel_o <= fnSelect(dram1_instr,dram1_addr);
@@ -7925,9 +8041,21 @@ BIDLE:
                  dat_o <= fnDato(dram1_instr,dram1_data);
                  ol_o  <= dram1_ol;
                  bstate <= B12;
+`else
+								if (wbptr<3'd7) begin
+									dram1 <= `DRAMREQ_READY;
+									wb_v[wbptr] <= `VAL;
+									wb_id[wbptr] <= dram1_id;
+									wb_rmw[wbptr] <= `TRUE;
+									wb_instr[wbptr] <= dram1_instr;
+									wb_ol[wbptr] <= dram1_ol;
+									wb_addr[wbptr] <= dram1_addr;
+									wb_data[wbptr] <= fnDato(dram1_instr,dram1_data);
+								end
+`endif                 
             end
         end
-        else if (dram2==`DRAMSLOT_BUSY && dram2_rmw) begin
+        else if (mem3_available && dram2==`DRAMSLOT_BUSY && dram2_rmw && `NUM_MEM > 2) begin
 `ifdef SUPPORT_DBG        	
             if (dbg_smatch2|dbg_lmatch2) begin
                  dramC_v <= `TRUE;
@@ -7939,13 +8067,14 @@ BIDLE:
             else
 `endif            
             begin
-                 dram2 <= `DRAMSLOT_HASBUS;
                  isRMW <= dram2_rmw;
                  isCAS <= IsCAS(dram2_instr);
                  isAMO <= IsAMO(dram2_instr);
                  isInc <= IsInc(dram2_instr);
                  casid <= dram2_id;
                  bwhich <= 2'b10;
+`ifndef HAS_WB                 
+                 dram2 <= `DRAMSLOT_HASBUS;
                  cyc_o <= `HIGH;
                  stb_o <= `HIGH;
                  sel_o <= fnSelect(dram2_instr,dram2_addr);
@@ -7953,9 +8082,21 @@ BIDLE:
                  dat_o <= fnDato(dram2_instr,dram2_data);
                  ol_o  <= dram2_ol;
                  bstate <= B12;
+`else
+								if (wbptr<3'd7) begin
+									dram2 <= `DRAMREQ_READY;
+									wb_v[wbptr] <= `VAL;
+									wb_id[wbptr] <= dram2_id;
+									wb_rmw[wbptr] <= `TRUE;
+									wb_instr[wbptr] <= dram2_instr;
+									wb_ol[wbptr] <= dram2_ol;
+									wb_addr[wbptr] <= dram2_addr;
+									wb_data[wbptr] <= fnDato(dram2_instr,dram2_data);
+								end
+`endif                 
             end
         end
-        else if (dram0==`DRAMSLOT_BUSY && IsStore(dram0_instr)) begin
+        else if (mem1_available && dram0==`DRAMSLOT_BUSY && IsStore(dram0_instr)) begin
 `ifdef SUPPORT_DBG        	
             if (dbg_smatch0) begin
                  dramA_v <= `TRUE;
@@ -7967,21 +8108,34 @@ BIDLE:
             else
 `endif            
             begin
-                 dram0 <= `DRAMSLOT_HASBUS;
-                 dram0_instr[`INSTRUCTION_OP] <= `NOP;
-                 bwhich <= 2'b00;
-				 cyc_o <= `HIGH;
-				 stb_o <= `HIGH;
-                 we_o <= `HIGH;
+							bwhich <= 2'b00;
+`ifndef HAS_WB                 
+							dram0 <= `DRAMSLOT_HASBUS;
+							dram0_instr[`INSTRUCTION_OP] <= `NOP;
+                 cyc_o <= `HIGH;
+                 stb_o <= `HIGH;
                  sel_o <= fnSelect(dram0_instr,dram0_addr);
                  adr_o <= dram0_addr;
                  dat_o <= fnDato(dram0_instr,dram0_data);
-                 cr_o <= IsSWC(dram0_instr);
                  ol_o  <= dram0_ol;
                  bstate <= B1;
+`else
+								if (wbptr<3'd7) begin
+									dram0 <= `DRAMREQ_READY;
+									dram0_instr[`INSTRUCTION_OP] <= `NOP;
+									wb_v[wbptr] <= `VAL;
+									wb_id[wbptr] <= dram0_id;
+									wb_rmw[wbptr] <= `FALSE;
+									wb_instr[wbptr] <= dram0_instr;
+									wb_ol[wbptr] <= dram0_ol;
+									wb_addr[wbptr] <= dram0_addr;
+									wb_data[wbptr] <= fnDato(dram0_instr,dram0_data);
+								end
+`endif                 
+//                 cr_o <= IsSWC(dram0_instr);
             end
         end
-        else if (dram1==`DRAMSLOT_BUSY && IsStore(dram1_instr)) begin
+        else if (mem2_available && dram1==`DRAMSLOT_BUSY && IsStore(dram1_instr) && `NUM_MEM > 1) begin
 `ifdef SUPPORT_DBG        	
             if (dbg_smatch1) begin
                  dramB_v <= `TRUE;
@@ -7993,21 +8147,34 @@ BIDLE:
             else
 `endif            
             begin
+                 bwhich <= 2'b01;
+`ifndef HAS_WB                 
                  dram1 <= `DRAMSLOT_HASBUS;
                  dram1_instr[`INSTRUCTION_OP] <= `NOP;
-                 bwhich <= 2'b01;
-				 cyc_o <= `HIGH;
-				 stb_o <= `HIGH;
-                 we_o <= `HIGH;
+                 cyc_o <= `HIGH;
+                 stb_o <= `HIGH;
                  sel_o <= fnSelect(dram1_instr,dram1_addr);
                  adr_o <= dram1_addr;
                  dat_o <= fnDato(dram1_instr,dram1_data);
-                 cr_o <= IsSWC(dram1_instr);
                  ol_o  <= dram1_ol;
                  bstate <= B1;
+`else
+								if (wbptr<3'd7) begin
+									dram1 <= `DRAMREQ_READY;
+	                dram1_instr[`INSTRUCTION_OP] <= `NOP;
+									wb_v[wbptr] <= `VAL;
+									wb_id[wbptr] <= dram1_id;
+									wb_rmw[wbptr] <= `FALSE;
+									wb_instr[wbptr] <= dram1_instr;
+									wb_ol[wbptr] <= dram1_ol;
+									wb_addr[wbptr] <= dram1_addr;
+									wb_data[wbptr] <= fnDato(dram1_instr,dram1_data);
+								end
+`endif                 
+//                 cr_o <= IsSWC(dram0_instr);
             end
         end
-        else if (dram2==`DRAMSLOT_BUSY && IsStore(dram2_instr)) begin
+        else if (mem3_available && dram2==`DRAMSLOT_BUSY && IsStore(dram2_instr) && `NUM_MEM > 2) begin
 `ifdef SUPPORT_DBG        	
             if (dbg_smatch2) begin
                  dramC_v <= `TRUE;
@@ -8019,22 +8186,35 @@ BIDLE:
             else
 `endif            
             begin
+                 bwhich <= 2'b10;
+`ifndef HAS_WB                 
                  dram2 <= `DRAMSLOT_HASBUS;
                  dram2_instr[`INSTRUCTION_OP] <= `NOP;
-                 bwhich <= 2'b10;
-				 cyc_o <= `HIGH;
-				 stb_o <= `HIGH;
-                 we_o <= `HIGH;
+                 cyc_o <= `HIGH;
+                 stb_o <= `HIGH;
                  sel_o <= fnSelect(dram2_instr,dram2_addr);
                  adr_o <= dram2_addr;
                  dat_o <= fnDato(dram2_instr,dram2_data);
-                 cr_o <= IsSWC(dram2_instr);
                  ol_o  <= dram2_ol;
                  bstate <= B1;
+`else
+								if (wbptr<3'd7) begin
+									dram2 <= `DRAMREQ_READY;
+	                dram2_instr[`INSTRUCTION_OP] <= `NOP;
+									wb_v[wbptr] <= `VAL;
+									wb_id[wbptr] <= dram2_id;
+									wb_rmw[wbptr] <= `FALSE;
+									wb_instr[wbptr] <= dram2_instr;
+									wb_ol[wbptr] <= dram2_ol;
+									wb_addr[wbptr] <= dram2_addr;
+									wb_data[wbptr] <= fnDato(dram2_instr,dram2_data);
+								end
+`endif                 
+//                 cr_o <= IsSWC(dram0_instr);
             end
         end
         // Check for read misses on the data cache
-        else if (!dram0_unc && dram0==`DRAMSLOT_REQBUS && dram0_load) begin
+        else if (mem1_available && !dram0_unc && dram0==`DRAMSLOT_REQBUS && dram0_load) begin
 `ifdef SUPPORT_DBG        	
             if (dbg_lmatch0) begin
                  dramA_v <= `TRUE;
@@ -8052,7 +8232,7 @@ BIDLE:
                  bstate <= B2; 
             end
         end
-        else if (!dram1_unc && dram1==`DRAMSLOT_REQBUS && dram1_load) begin
+        else if (mem2_available && !dram1_unc && dram1==`DRAMSLOT_REQBUS && dram1_load && `NUM_MEM > 1) begin
 `ifdef SUPPORT_DBG        	
             if (dbg_lmatch1) begin
                  dramB_v <= `TRUE;
@@ -8070,7 +8250,7 @@ BIDLE:
                  bstate <= B2;
             end 
         end
-        else if (!dram2_unc && dram2==`DRAMSLOT_REQBUS && dram2_load) begin
+        else if (mem3_available && !dram2_unc && dram2==`DRAMSLOT_REQBUS && dram2_load && `NUM_MEM > 2) begin
 `ifdef SUPPORT_DBG        	
             if (dbg_lmatch2) begin
                  dramC_v <= `TRUE;
@@ -8088,7 +8268,7 @@ BIDLE:
                  bstate <= B2;
             end 
         end
-        else if (dram0_unc && dram0==`DRAMSLOT_BUSY && dram0_load) begin
+        else if (mem1_available && dram0_unc && dram0==`DRAMSLOT_BUSY && dram0_load) begin
 `ifdef SUPPORT_DBG        	
             if (dbg_lmatch0) begin
                  dramA_v <= `TRUE;
@@ -8110,7 +8290,7 @@ BIDLE:
                  bstate <= B12;
             end
         end
-        else if (dram1_unc && dram1==`DRAMSLOT_BUSY && dram1_load) begin
+        else if (mem2_available && dram1_unc && dram1==`DRAMSLOT_BUSY && dram1_load && `NUM_MEM > 1) begin
 `ifdef SUPPORT_DBG        	
             if (dbg_lmatch1) begin
                  dramB_v <= `TRUE;
@@ -8132,7 +8312,7 @@ BIDLE:
                  bstate <= B12;
             end
         end
-        else if (dram2_unc && dram2==`DRAMSLOT_BUSY && dram2_load) begin
+        else if (mem3_available && dram2_unc && dram2==`DRAMSLOT_BUSY && dram2_load && `NUM_MEM > 2) begin
 `ifdef SUPPORT_DBG        	
             if (dbg_lmatch2) begin
                  dramC_v <= `TRUE;
@@ -8172,6 +8352,8 @@ BIDLE:
         end
     end
 // Terminal state for a store operation.
+// Note that if only a single memory channel is selected, bwhich will be a
+// constant 0. This should cause the extra code to be removed.
 B1:
     if (acki|err_i) begin
     	 isStore <= `TRUE;
@@ -8188,33 +8370,40 @@ B1:
         // instruction should be surrounded by SYNC's.
         if (cr_o)
              sema[0] <= rbi_i;
+`ifdef HAS_WB
+         iqentry_exc[wbo_id] <= wrv_i|err_i ? `FLT_DWF : `FLT_NONE;
+        if (err_i|wrv_i)  iqentry_a1[wbo_id] <= adr_o; 
+					iqentry_cmt[ wbo_id ] <= `VAL;
+					iqentry_aq[ wbo_id ] <= `INV;
+`else
         case(bwhich)
-        2'd0:   begin
+        2'd0:   if (mem1_available) begin
                  dram0 <= `DRAMREQ_READY;
                  iqentry_exc[dram0_id[`QBITS]] <= wrv_i|err_i ? `FLT_DWF : `FLT_NONE;
                 if (err_i|wrv_i)  iqentry_a1[dram0_id[`QBITS]] <= adr_o; 
-			    iqentry_cmt[ dram0_id[`QBITS] ] <= `VAL;
-			    iqentry_aq[ dram0_id[`QBITS] ] <= `INV;
+									iqentry_cmt[ dram0_id[`QBITS] ] <= `VAL;
+									iqentry_aq[ dram0_id[`QBITS] ] <= `INV;
          		//iqentry_out[ dram0_id[`QBITS] ] <= `INV;
                 end
-        2'd1:   begin
+        2'd1:   if (`NUM_MEM > 1) begin
                  dram1 <= `DRAMREQ_READY;
                  iqentry_exc[dram1_id[`QBITS]] <= wrv_i|err_i ? `FLT_DWF : `FLT_NONE;
                 if (err_i|wrv_i)  iqentry_a1[dram1_id[`QBITS]] <= adr_o; 
-			    iqentry_cmt[ dram1_id[`QBITS] ] <= `VAL;
-			    iqentry_aq[ dram1_id[`QBITS] ] <= `INV;
+									iqentry_cmt[ dram1_id[`QBITS] ] <= `VAL;
+									iqentry_aq[ dram1_id[`QBITS] ] <= `INV;
          		//iqentry_out[ dram1_id[`QBITS] ] <= `INV;
                 end
-        2'd2:   begin
+        2'd2:   if (`NUM_MEM > 2) begin
                  dram2 <= `DRAMREQ_READY;
                  iqentry_exc[dram2_id[`QBITS]] <= wrv_i|err_i ? `FLT_DWF : `FLT_NONE;
                 if (err_i|wrv_i)  iqentry_a1[dram2_id[`QBITS]] <= adr_o; 
-			    iqentry_cmt[ dram2_id[`QBITS] ] <= `VAL;
-			    iqentry_aq[ dram2_id[`QBITS] ] <= `INV;
+									iqentry_cmt[ dram2_id[`QBITS] ] <= `VAL;
+									iqentry_aq[ dram2_id[`QBITS] ] <= `INV;
          		//iqentry_out[ dram2_id[`QBITS] ] <= `INV;
                 end
         default:    ;
         endcase
+`endif
          bstate <= B19;
     end
 B2:
@@ -8231,7 +8420,7 @@ B2:
              ol_o  <= dram0_ol;
              bstate <= B2d;
             end
-    2'd1:   begin
+    2'd1:   if (`NUM_MEM > 1) begin
              cti_o <= 3'b001;
              bte_o <= 2'b01;
              cyc_o <= `HIGH;
@@ -8241,7 +8430,7 @@ B2:
              ol_o  <= dram1_ol;
              bstate <= B2d;
             end
-    2'd2:   begin
+    2'd2:   if (`NUM_MEM > 2) begin
              cti_o <= 3'b001;
              bte_o <= 2'b01;
              cyc_o <= `HIGH;
@@ -8265,11 +8454,11 @@ B2d:
                      iqentry_a1[dram0_id[`QBITS]] <= adr_o;
                      iqentry_exc[dram0_id[`QBITS]] <= err_i ? `FLT_DBE : `FLT_DRF;
                 end
-        2'd1:   if (err_i|rdv_i) begin
+        2'd1:   if ((err_i|rdv_i) && `NUM_MEM > 1) begin
                      iqentry_a1[dram1_id[`QBITS]] <= adr_o;
                      iqentry_exc[dram1_id[`QBITS]] <= err_i ? `FLT_DBE : `FLT_DRF;
                 end
-        2'd2:   if (err_i|rdv_i) begin
+        2'd2:   if ((err_i|rdv_i) && `NUM_MEM > 2) begin
                      iqentry_a1[dram2_id[`QBITS]] <= adr_o;
                      iqentry_exc[dram2_id[`QBITS]] <= err_i ? `FLT_DBE : `FLT_DRF;
                 end
@@ -8341,7 +8530,8 @@ B9:
  	begin
 		L1_wr0 <= `FALSE;
 		L1_wr1 <= `FALSE;
-		L1_en <= 8'hFF;
+		L1_wr2 <= `FALSE;
+		L1_en <= 10'h3FF;
 		L2_xsel <= 1'b0;
 		if (~ack_i) begin
 			bstate <= BIDLE;
@@ -8350,6 +8540,66 @@ B9:
 	end
 B12:
     if (ack_i|err_i) begin
+`ifdef HAS_WB
+        if (isCAS) begin
+    	     iqentry_res	[ wbo_id[`QBITS] ] <= (dat_i == cas);
+             iqentry_exc [ wbo_id[`QBITS] ] <= err_i ? `FLT_DRF : rdv_i ? `FLT_DRF : `FLT_NONE;
+             iqentry_done[ wbo_id[`QBITS] ] <= `VAL;
+    	     iqentry_instr[ wbo_id[`QBITS]] <= `NOP_INSN;
+    	     iqentry_out [ wbo_id[`QBITS] ] <= `INV;
+    	    if (err_i | rdv_i) iqentry_a1[wbo_id[`QBITS]] <= adr_o;
+            if (dat_i == cas) begin
+                 stb_o <= `LOW;
+                 we_o <= `TRUE;
+                 bstate <= B15;
+            end
+            else begin
+                 cas <= dat_i;
+                 cyc_o <= `LOW;
+                 stb_o <= `LOW;
+                 sel_o <= 8'h00;
+                case(bwhich)
+                2'b00:   dram0 <= `DRAMREQ_READY;
+                2'b01:   dram1 <= `DRAMREQ_READY;
+                2'b10:   dram2 <= `DRAMREQ_READY;
+                default:    ;
+                endcase
+                 bstate <= B19;
+            end
+        end
+        else if (isRMW) begin
+    	     rmw_instr <= iqentry_instr[wbo_id[`QBITS]];
+    	     rmw_argA <= dat_i;
+        	 if (isSpt) begin
+        	 	rmw_argB <= 64'd1 << iqentry_a1[wbo_id[`QBITS]][63:58];
+        	 	rmw_argC <= iqentry_instr[wbo_id[`QBITS]][5:0]==`R2 ?
+        	 				iqentry_a3[wbo_id[`QBITS]][64] << iqentry_a1[wbo_id[`QBITS]][63:58] :
+        	 				iqentry_a2[wbo_id[`QBITS]][64] << iqentry_a1[wbo_id[`QBITS]][63:58];
+        	 end
+        	 else if (isInc) begin
+        	 	rmw_argB <= iqentry_instr[wbo_id[`QBITS]][5:0]==`R2 ? {{59{iqentry_instr[wbo_id[`QBITS]][22]}},iqentry_instr[wbo_id[`QBITS]][22:18]} :
+        	 														 {{59{iqentry_instr[wbo_id[`QBITS]][17]}},iqentry_instr[wbo_id[`QBITS]][17:13]};
+         	 end
+        	 else begin // isAMO
+	    	     iqentry_res [ wbo_id[`QBITS] ] <= dat_i;
+	    	     rmw_argB <= iqentry_instr[wbo_id[`QBITS]][31] ? {{59{iqentry_instr[wbo_id[`QBITS]][20:16]}},iqentry_instr[wbo_id[`QBITS]][20:16]} : iqentry_a2[wbo_id[`QBITS]];
+	         end
+             iqentry_exc [ wbo_id[`QBITS] ] <= err_i ? `FLT_DRF : rdv_i ? `FLT_DRF : `FLT_NONE;
+             if (err_i | rdv_i) iqentry_a1[wbo_id[`QBITS]] <= adr_o;
+             stb_o <= `LOW;
+             bstate <= B20;
+    		end
+        else begin
+             cyc_o <= `LOW;
+             stb_o <= `LOW;
+             sel_o <= 8'h00;
+             sr_o <= `LOW;
+             xdati <= dat_i;
+               iqentry_exc [ wbo_id[`QBITS] ] <= err_i ? `FLT_DRF : rdv_i ? `FLT_DRF : `FLT_NONE;
+              if (err_i|rdv_i)  iqentry_a1[wbo_id[`QBITS]] <= adr_o;
+             bstate <= B19;
+        end
+`else
         if (isCAS) begin
     	     iqentry_res	[ casid[`QBITS] ] <= (dat_i == cas);
              iqentry_exc [ casid[`QBITS] ] <= err_i ? `FLT_DRF : rdv_i ? `FLT_DRF : `FLT_NONE;
@@ -8410,12 +8660,12 @@ B12:
                      iqentry_exc [ dram0_id[`QBITS] ] <= err_i ? `FLT_DRF : rdv_i ? `FLT_DRF : `FLT_NONE;
                     if (err_i|rdv_i)  iqentry_a1[dram0_id[`QBITS]] <= adr_o;
                     end
-            2'b01:  begin
+            2'b01:  if (`NUM_MEM > 1) begin
                      dram1 <= `DRAMREQ_READY;
                      iqentry_exc [ dram1_id[`QBITS] ] <= err_i ? `FLT_DRF : rdv_i ? `FLT_DRF : `FLT_NONE;
                     if (err_i|rdv_i)  iqentry_a1[dram1_id[`QBITS]] <= adr_o;
                     end
-            2'b10:  begin
+            2'b10:  if (`NUM_MEM > 2) begin
                      dram2 <= `DRAMREQ_READY;
                      iqentry_exc [ dram2_id[`QBITS] ] <= err_i ? `FLT_DRF : rdv_i ? `FLT_DRF : `FLT_NONE;
                     if (err_i|rdv_i)  iqentry_a1[dram2_id[`QBITS]] <= adr_o;
@@ -8424,6 +8674,7 @@ B12:
             endcase
              bstate <= B19;
         end
+`endif
     end
 // Three cycles to detemrine if there's a cache hit during a store.
 B16:    begin
@@ -8616,14 +8867,18 @@ end
 	$display("%d %h %h %c%h %o #",
 	    dram0, dram0_addr, dram0_data, (IsFlowCtrl(dram0_instr) ? 98 : (IsMem(dram0_instr)) ? 109 : 97), 
 	    dram0_instr, dram0_id);
+	  if (`NUM_MEM > 1)
 	$display("%d %h %h %c%h %o #",
 	    dram1, dram1_addr, dram1_data, (IsFlowCtrl(dram1_instr) ? 98 : (IsMem(dram1_instr)) ? 109 : 97), 
 	    dram1_instr, dram1_id);
+	  if (`NUM_MEM > 2)
 	$display("%d %h %h %c%h %o #",
 	    dram2, dram2_addr, dram2_data, (IsFlowCtrl(dram2_instr) ? 98 : (IsMem(dram2_instr)) ? 109 : 97), 
 	    dram2_instr, dram2_id);
 	$display("%d %h %o %h #", dramA_v, dramA_bus, dramA_id, dramA_exc);
+	if (`NUM_MEM > 1)
 	$display("%d %h %o %h #", dramB_v, dramB_bus, dramB_id, dramB_exc);
+	if (`NUM_MEM > 2)
 	$display("%d %h %o %h #", dramC_v, dramC_bus, dramC_id, dramC_exc);
     $display("ALU");
 	$display("%d %h %h %h %c%h %d %o %h #",

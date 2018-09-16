@@ -79,7 +79,7 @@ module FT64_pic
 		i8, i9, i10, i11, i12, i13, i14, i15,
 		i16, i17, i18, i19, i20, i21, i22, i23,
 		i24, i25, i26, i27, i28, i29, i30, i31,
-	output [2:0] irqo,	// normally connected to the processor irq
+	output [3:0] irqo,	// normally connected to the processor irq
 	input nmii,		// nmi input connected to nmi requester
 	output nmio,	// normally connected to the nmi of cpu
 	output [6:0] causeo
@@ -96,7 +96,7 @@ reg [31:0] iedge;
 reg [31:0] rste;
 reg [31:0] es;
 reg [5:0] cause_base;
-reg [2:0] irq [0:31];
+reg [3:0] irq [0:31];
 reg [6:0] cause [0:31];
 
 wire cs = cyc_i && stb_i && adr_i[31:8]==pIOAddress[31:8];
@@ -128,7 +128,7 @@ always @(posedge clk_i)
 			6'b1xxxxx:
 			     begin
 			     	 cause[adr_i[6:2]] <= dat_i[6:0];
-			         irq[adr_i[6:2]] <= dat_i[10:8];
+			         irq[adr_i[6:2]] <= dat_i[11:8];
 			         ie[adr_i[6:2]] <= dat_i[16];
 			         es[adr_i[6:2]] <= dat_i[17];
 			     end
@@ -144,14 +144,14 @@ begin
 	if (cs)
 		casex (adr_i[7:2])
 		6'd0:	dat_o <= {cause_base,3'd0} + irqenc;
-		6'b1xxxxx: dat_o <= {es[adr_i[6:2]],ie[adr_i[6:2]],5'b0,irq[adr_i[6:2]],1'b0,cause[adr_i[6:2]]};
+		6'b1xxxxx: dat_o <= {es[adr_i[6:2]],ie[adr_i[6:2]],4'b0,irq[adr_i[6:2]],1'b0,cause[adr_i[6:2]]};
 		default:	dat_o <= ie;
 		endcase
 	else
 		dat_o <= 32'h0000;
 end
 
-assign irqo = (irqenc == 5'h0) ? 3'd0 : irq[irqenc];
+assign irqo = (irqenc == 5'h0) ? 4'd0 : irq[irqenc];
 assign causeo = (irqenc == 5'h0) ? 7'd0 : cause[irqenc];
 assign nmio = nmii & ie[0];
 

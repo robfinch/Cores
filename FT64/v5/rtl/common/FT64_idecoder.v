@@ -149,7 +149,7 @@ reg IsFlowCtrl;
 always @*
 case(instr[`INSTRUCTION_OP])
 `BRK:    IsFlowCtrl <= TRUE;
-`RR:    case(instr[`INSTRUCTION_S2])
+`R2:    case(instr[`INSTRUCTION_S2])
         `RTI:   IsFlowCtrl <= TRUE;
         default:    IsFlowCtrl <= FALSE;
         endcase
