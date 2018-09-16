@@ -281,6 +281,7 @@ end
 */
 assign threadx = fetchbuf;
 
+`ifdef FCU_ENH
 FT64_RSB #(AMSB) ursb1
 (
 	.rst(rst),
@@ -316,6 +317,10 @@ FT64_RSB #(AMSB) ursb2
 	.stompedRet(stompedRet),
 	.pc(retpc1)
 );
+`else
+assign retpc0 = RSTPC;
+assign retpc1 = RSTPC;
+`endif
 
 wire peclk, neclk;
 edge_det ued1 (.rst(rst), .clk(clk4x), .ce(1'b1), .i(clk), .pe(peclk), .ne(neclk), .ee());

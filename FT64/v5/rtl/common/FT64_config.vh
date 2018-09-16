@@ -35,9 +35,20 @@
 //`define SUPPORT_DBG		1'b1
 `define FULL_ISSUE_LOGIC	1'b1
 
-`define NUM_ALU		2
+`define WAYS			2				// number of ways parallel (not working yet)
+`define NUM_IDU		2				// number of instruction decode units (1-3)
+`define NUM_ALU		2				// number of ALU's (1-2)
+`define NUM_MEM		3				// number of memory queues (not working yet)
+`define NUM_FPU		0				// number of floating-point units (0-2)
+`define NUM_CMT		2				// number of commit busses (1-2)
+// Comment out the following to remove FCU enhancements (branch predictor, BTB, RSB)
+`define FCU_ENH		1
+// Comment out the following to remove bypassing logic on the functional units
+`define FU_BYPASS	1
+
 `define ID1_AVAIL	1'b1
 `define ID2_AVAIL	1'b1
+`define ID3_AVAIL 1'b0
 `define ALU0_AVAIL	1'b1
 `define ALU1_AVAIL	1'b1
 `define FPU1_AVAIL	1'b1
