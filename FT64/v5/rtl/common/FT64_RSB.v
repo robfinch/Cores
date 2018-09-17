@@ -56,23 +56,30 @@ output [AMSB:0] pc;
 parameter RSTPC = 32'hFFFC0100;
 integer n;
 reg [AMSB:0] ras [0:DEPTH-1];
-reg [4:0] rasp;
+reg [3:0] rasp;
 assign pc = ras[rasp];
+reg [47:0] lasti0, lasti1;
 
 always @(posedge clk)
 if (rst) begin
-    for (n = 0; n < 32; n = n + 1)
-         ras[n] <= RSTPC;
-     rasp <= 5'd0;
+	lasti0 <= `NOP_INSN;
+	lasti1 <= `NOP_INSN;
+  for (n = 0; n < DEPTH; n = n + 1)
+     ras[n] <= RSTPC;
+  rasp <= 4'd0;
 end
 else begin
 	if (fetchbuf0_v && fetchbuf1_v && (queued1 || queued2)) begin
+		// Make sure the instruction changed between clock cycles.
+		lasti0 <= fetchbuf0_instr;
+		lasti1 <= fetchbuf1_instr;
+		if (fetchbuf0_instr != lasti0 || fetchbuf1_instr != lasti1) begin
         case(fetchbuf0_instr[`INSTRUCTION_OP])
         `JAL:
         	begin
 	        	// JAL LR,xxxx	assume call
 	        	if (fetchbuf0_instr[`INSTRUCTION_RB]==regLR) begin
-	                ras[((rasp-6'd1)&(DEPTH-1))] <= fetchbuf0_pc + 32'd4;
+	                ras[((rasp-6'd1)&(DEPTH-1))] <= fetchbuf0_pc + (fetchbuf0_instr[6] ? 32'd6 : 32'd4);
 	                rasp <= rasp - 4'd1;
 	        	end
 	        	// JAL r0,[r29]	assume a ret
@@ -83,7 +90,7 @@ else begin
         	end
         `CALL:
             begin
-                 ras[((rasp-6'd1)&(DEPTH-1))] <= fetchbuf0_pc + 32'd4;
+                 ras[((rasp-6'd1)&(DEPTH-1))] <= fetchbuf0_pc + (fetchbuf0_instr[6] ? 32'd6 : 32'd4);
                  rasp <= rasp - 4'd1;
             end
         `RET:   begin 
@@ -92,12 +99,15 @@ else begin
         		end
         default:	;
         endcase
+    end
 	end
     else if (fetchbuf1_v && queued1)
+    	lasti1 <= fetchbuf1_instr;
+    	if (fetchbuf1_instr != lasti1) begin
         case(fetchbuf1_instr[`INSTRUCTION_OP])
         `JAL:
         	if (fetchbuf1_instr[`INSTRUCTION_RB]==regLR) begin
-                 ras[((rasp-6'd1)&(DEPTH-1))] <= fetchbuf1_pc + 32'd4;
+                 ras[((rasp-6'd1)&(DEPTH-1))] <= fetchbuf1_pc + (fetchbuf1_instr[6] ? 32'd6 : 32'd4);
                  rasp <= rasp - 4'd1;
         	end
         	else if (fetchbuf1_instr[`INSTRUCTION_RB]==5'd00 &&
@@ -106,7 +116,7 @@ else begin
         	end
         `CALL:
             begin
-                 ras[((rasp-6'd1)&(DEPTH-1))] <= fetchbuf1_pc + 32'd4;
+                 ras[((rasp-6'd1)&(DEPTH-1))] <= fetchbuf1_pc + (fetchbuf1_instr[6] ? 32'd6 : 32'd4);
                  rasp <= rasp - 4'd1;
             end
         `RET:   begin
@@ -115,11 +125,14 @@ else begin
         		end
         default:	;
         endcase
+      end
     else if (fetchbuf0_v && queued1)
+    	lasti0 <= fetchbuf0_instr;
+    	if (lasti0 != fetchbuf0_instr) begin
         case(fetchbuf0_instr[`INSTRUCTION_OP])
         `JAL:
         	if (fetchbuf0_instr[`INSTRUCTION_RB]==regLR) begin
-                 ras[((rasp-6'd1)&(DEPTH-1))] <= fetchbuf0_pc + 32'd4;
+                 ras[((rasp-6'd1)&(DEPTH-1))] <= fetchbuf0_pc + (fetchbuf0_instr[6] ? 32'd6 : 32'd4);
                  rasp <= rasp - 4'd1;
         	end
         	else if (fetchbuf0_instr[`INSTRUCTION_RB]==5'd00 &&
@@ -128,7 +141,7 @@ else begin
         	end
         `CALL:
             begin
-                 ras[((rasp-6'd1)&(DEPTH-1))] <= fetchbuf0_pc + 32'd4;
+                 ras[((rasp-6'd1)&(DEPTH-1))] <= fetchbuf0_pc + (fetchbuf0_instr[6] ? 32'd6 : 32'd4);
                  rasp <= rasp - 4'd1;
             end
         `RET:   begin 
@@ -137,6 +150,7 @@ else begin
         		end
         default:	;
         endcase
+      end
 /*        
     if (stompedRets > 4'd0) begin
     	$display("Stomped Rets: %d", stompedRets);

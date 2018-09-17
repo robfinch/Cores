@@ -37,18 +37,19 @@
 
 module FT64_L1_icache_mem(rst, clk, wr, en, lineno, i, o, ov, invall, invline);
 parameter pLines = 64;
-parameter pLineWidth = 320;
+parameter pLineWidth = 288;
 input rst;
 input clk;
 input wr;
-input [9:0] en;
+input [8:0] en;
 input [5:0] lineno;
 input [pLineWidth-1:0] i;
 output [pLineWidth-1:0] o;
-output [9:0] ov;
+output [8:0] ov;
 input invall;
 input invline;
 
+(* ram_style="distributed" *)
 reg [pLineWidth-1:0] mem [0:pLines-1];
 reg [pLines-1:0] valid0;
 reg [pLines-1:0] valid1;
@@ -59,7 +60,6 @@ reg [pLines-1:0] valid5;
 reg [pLines-1:0] valid6;
 reg [pLines-1:0] valid7;
 reg [pLines-1:0] valid8;
-reg [pLines-1:0] valid9;
 
 always  @(posedge clk)
     if (wr & en[0])  mem[lineno][31:0] <= i[31:0];
@@ -80,8 +80,6 @@ always  @(posedge clk)
 always  @(posedge clk)
     if (wr & en[8])  mem[lineno][287:256] <= i[287:256];
 always  @(posedge clk)
-    if (wr & en[9])  mem[lineno][319:288] <= i[319:288];
-always  @(posedge clk)
 if (rst) begin
      valid0 <= 64'd0;
      valid1 <= 64'd0;
@@ -92,7 +90,6 @@ if (rst) begin
      valid6 <= 64'd0;
      valid7 <= 64'd0;
      valid8 <= 64'd0;
-     valid9 <= 64'd0;
 end
 else begin
     if (invall) begin
@@ -105,7 +102,6 @@ else begin
     	valid6 <= 64'd0;
     	valid7 <= 64'd0;
 			valid8 <= 64'd0;
-			valid9 <= 64'd0;
     end
     else if (invline) begin
     	valid0[lineno] <= 1'b0;
@@ -117,7 +113,6 @@ else begin
     	valid6[lineno] <= 1'b0;
     	valid7[lineno] <= 1'b0;
     	valid8[lineno] <= 1'b0;
-    	valid9[lineno] <= 1'b0;
 	end
     else if (wr) begin
     	if (en[0]) valid0[lineno] <= 1'b1;
@@ -129,7 +124,6 @@ else begin
     	if (en[6]) valid6[lineno] <= 1'b1;
     	if (en[7]) valid7[lineno] <= 1'b1;
     	if (en[8]) valid8[lineno] <= 1'b1;
-    	if (en[9]) valid9[lineno] <= 1'b1;
     end
 end
 
@@ -143,7 +137,6 @@ assign ov[5] = valid5[lineno];
 assign ov[6] = valid6[lineno];
 assign ov[7] = valid7[lineno];
 assign ov[8] = valid8[lineno];
-assign ov[9] = valid9[lineno];
 
 endmodule
 
@@ -206,6 +199,7 @@ input [37:0] adr;
 output reg [5:0] lineno;
 output hit;
 
+(* ram_style="distributed" *)
 reg [32:0] mem0 [0:15];
 reg [32:0] mem1 [0:15];
 reg [32:0] mem2 [0:15];
@@ -315,23 +309,23 @@ input rst;
 input clk;
 input nxt;
 input wr;
-input [9:0] en;
+input [8:0] en;
 input [37:0] adr;
 input [37:0] wadr;
-input [319:0] i;
+input [287:0] i;
 output reg [47:0] o;
 output hit;
 input invall;
 input invline;
 
-wire [319:0] ic;
-reg [319:0] i1, i2;
-wire [9:0] lv;				// line valid
+wire [287:0] ic;
+reg [287:0] i1, i2;
+wire [8:0] lv;				// line valid
 wire [5:0] lineno;
 wire [5:0] wlineno;
 wire taghit;
 reg wr1,wr2;
-reg [9:0] en1, en2;
+reg [8:0] en1, en2;
 reg invline1, invline2;
 
 // Must update the cache memory on the cycle after a write to the tag memmory.
@@ -341,7 +335,7 @@ always @(posedge clk)
 always @(posedge clk)
      wr2 <= wr1;
 always @(posedge clk)
-	i1 <= i;
+	i1 <= i[287:0];
 always @(posedge clk)
 	i2 <= i1;
 always @(posedge clk)
@@ -441,16 +435,17 @@ input wr;
 input [8:0] lineno;
 input [2:0] sel;
 input [63:0] i;
-output [319:0] o;
+output [287:0] o;
 output reg ov;
 input invall;
 input invline;
 
+(* ram_style="block" *)
 reg [63:0] mem0 [0:511];
 reg [63:0] mem1 [0:511];
 reg [63:0] mem2 [0:511];
 reg [63:0] mem3 [0:511];
-reg [63:0] mem4 [0:511];
+reg [31:0] mem4 [0:511];
 reg [511:0] valid;
 reg [8:0] rrcl;
 
@@ -475,7 +470,7 @@ begin
         3'd1:    mem1[lineno] <= i;
         3'd2:    mem2[lineno] <= i;
         3'd3:    mem3[lineno] <= i;
-        3'd4:    mem4[lineno] <= i;
+        3'd4:    mem4[lineno] <= i[31:0];
         endcase
     end
 end
@@ -511,7 +506,7 @@ input [2:0] cnt;
 input exv_i;
 input [63:0] i;
 input err_i;
-output [319:0] o;
+output [287:0] o;
 output hit;
 input invall;
 input invline;
@@ -536,7 +531,7 @@ always @(posedge clk)
 // An exception is forced to be stored in the event of an error loading the
 // the instruction line.
 always @(posedge clk)
-     i1 <= err_i ? {2{16'd0,1'b0,`FLT_IBE,`BRK}} : exv_i ? {2{16'd0,1'b0,`FLT_EXF,`BRK}} : i;
+     i1 <= err_i ? {2{15'd0,1'b0,`FLT_IBE,2'b00,`BRK}} : exv_i ? {2{15'd0,1'b0,`FLT_EXF,2'b00,`BRK}} : i;
 always @(posedge clk)
      i2 <= i1;
 
@@ -606,6 +601,7 @@ input [37:0] adr;
 output reg [8:0] lineno;
 output hit;
 
+(* ram_style="block" *)
 reg [32:0] mem0 [0:127];
 reg [32:0] mem1 [0:127];
 reg [32:0] mem2 [0:127];

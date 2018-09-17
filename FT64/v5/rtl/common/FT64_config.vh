@@ -59,4 +59,6 @@
 `define MEM3_AVAIL	1'b0
 `define FCU_AVAIL 1'b1
 
+// Comment out to remove the write buffer from the core.
 `define HAS_WB	1'b1
+`define	WB_DEPTH	8			// must be one more than desired depth

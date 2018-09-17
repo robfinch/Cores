@@ -802,14 +802,15 @@ wire [63:0] rmw_res;
 reg [31:0] rmw_instr;
 
 // write buffer
-reg [47:0] wb_instr [0:7];
-reg [63:0] wb_data [0:7];
-reg [`ABITS] wb_addr [0:7];
-reg [1:0] wb_ol [0:7];
-reg [7:0] wb_v;
-reg [7:0] wb_rmw;
-reg [`QBITS] wb_id [0:7];
+reg [47:0] wb_instr [0:`WB_DEPTH-1];
+reg [63:0] wb_data [0:`WB_DEPTH-1];
+reg [`ABITS] wb_addr [0:`WB_DEPTH-1];
+reg [1:0] wb_ol [0:`WB_DEPTH-1];
+reg [`WB_DEPTH-1:0] wb_v;
+reg [`WB_DEPTH-1:0] wb_rmw;
+reg [`QBITS] wb_id [0:`WB_DEPTH-1];
 reg [`QBITS] wbo_id;
+reg wb_en;
 
 reg branchmiss = 1'b0;
 reg branchmiss_thrd = 1'b0;
@@ -946,10 +947,10 @@ always @*
 reg [2:0] iccnt;
 reg L1_wr0,L1_wr1,L1_wr2;
 reg L1_invline;
-reg [9:0] L1_en;
+reg [8:0] L1_en;
 reg [37:0] L1_adr, L2_adr;
-reg [319:0] L2_rdat;
-wire [319:0] L2_dato;
+reg [287:0] L2_rdat;
+wire [287:0] L2_dato;
 reg L2_xsel;
 
 FT64_regfile2w6r_oc #(.RBIT(RBIT)) urf1
@@ -1431,10 +1432,10 @@ end
 wire hirq = (irq_i > im) && ~int_commit;
 always @*
 if (hirq)
-	insn0 <= {8'd0,4'd0,irq_i,1'b0,vec_i,2'b00,`BRK};
+	insn0 <= {8'd0,3'd0,irq_i,1'b0,vec_i,2'b00,`BRK};
 else if (phit) begin
-	if (insn0a[`INSTRUCTION_OP]==`BRK && insn0a[23:20]==4'd0)
-		insn0 <= {8'd1,4'd0,3'b0,1'b0,`FLT_PRIV,2'b00,`BRK};
+	if (insn0a[`INSTRUCTION_OP]==`BRK && insn0a[23:21]==3'd0 && insn0a[7:6]==2'b00)
+		insn0 <= {8'd1,3'd0,4'b0,1'b0,`FLT_PRIV,2'b00,`BRK};
 	else
 		insn0 <= insn0a;
 end
@@ -1444,8 +1445,8 @@ generate begin : gInsnMux
 if (`WAYS > 1) begin
 always @*
 if (phit) begin
-	if (insn1a[`INSTRUCTION_OP]==`BRK && insn1a[23:20]==4'd0)
-		insn1 <= {8'd1,4'd0,3'b0,1'b0,`FLT_PRIV,2'b00,`BRK};
+	if (insn1a[`INSTRUCTION_OP]==`BRK && insn1a[23:21]==3'd0 && insn1a[7:6]==2'b00)
+		insn1 <= {8'd1,3'd0,4'b0,1'b0,`FLT_PRIV,2'b00,`BRK};
 	else
 		insn1 <= insn1a;
 end
@@ -1455,8 +1456,8 @@ end
 if (`WAYS > 2) begin
 always @*
 if (phit) begin
-	if (insn2a[`INSTRUCTION_OP]==`BRK && insn1a[23:20]==4'd0)
-		insn2 <= {8'd1,4'd0,3'b0,1'b0,`FLT_PRIV,2'b00,`BRK};
+	if (insn2a[`INSTRUCTION_OP]==`BRK && insn1a[23:21]==3'd0 && insn2a[7:6]==2'b00)
+		insn2 <= {8'd1,3'd0,4'b0,1'b0,`FLT_PRIV,2'b00,`BRK};
 	else
 		insn2 <= insn2a;
 end
@@ -5294,7 +5295,16 @@ end
 reg [2:0] wbptr;
 always @*
 begin
-	wbptr <= 3'd7;
+	// Crashes sim
+//	wbptr <= `WB_DEPTH-1;
+//	if (wb_v==8'h0)
+//		wbptr <= 3'd0;
+//	else
+//	begin
+//		for (n = `WB_DEPTH-2; n >= 0; n = n - 1)
+//			if (wb_v[n] && wbptr==`WB_DEPTH-1)
+//				wbptr <= n + 1;
+//	end
 	if (wb_v[6])
 		wbptr <= 3'd7;
 	else if (wb_v[5])
@@ -6210,6 +6220,8 @@ if (rst) begin
 		 pmr[26] <= `MEM3_AVAIL;     
      pmr[32] <= `FCU_AVAIL;
      wb_v <= 8'h00;
+     wb_rmw <= 8'h00;
+     wb_en <= `TRUE;
 end
 else begin
 	if (|fb_panic)
@@ -6230,6 +6242,8 @@ else begin
 		id2_vi <= `INV;
 	if (`NUM_IDU > 2)
 		id3_vi <= `INV;
+	if (iqentry_v[nid] && iqentry_sn[nid] > iqentry_sn[fcu_id[`QBITS]])
+		fcu_dataready <= `INV;
 	ld_time <= {ld_time[4:0],1'b0};
 	wc_times <= wc_time;
      rf_vra0 <= regIsValid[Ra0s];
@@ -6944,7 +6958,7 @@ if (fpu2_v && `NUM_FPU > 1) begin
 	fpu2_dataready <= FALSE;
 end
 
-	if (fcu_wr) begin
+	if (fcu_wr & ~fcu_done) begin
 	    if (fcu_ld)
 	        waitctr <= fcu_argA;
         iqentry_res [ fcu_id[`QBITS] ] <= fcu_bus;
@@ -7163,7 +7177,7 @@ end
 			                            : (iqentry_a3_s[n] == fpu1_id && `NUM_FPU > 0) ? fpu1_bus
 			                            : alu1_bus)
 `else			                           
-																	iqentry_a3[n] 
+																	iqentry_a3[n]) 
 `endif			                            
                  							 : iqentry_instr[n];
                  alu0_bt		<= iqentry_bt[n];
@@ -7187,7 +7201,7 @@ end
                             : (iqentry_a2_s[n] == fpu1_id && `NUM_FPU > 0) ? fpu1_bus
                             : alu1_bus);
 `else
-														iqentry_a2[n];                         
+														: iqentry_a2[n];                         
 `endif                            
                  alu0_argC	<=
 `ifdef FU_BYPASS                  
@@ -7245,7 +7259,7 @@ end
                             : (iqentry_a2_s[n] == fpu1_id && `NUM_FPU > 0) ? fpu1_bus
                             : alu1_bus);
 `else
-															iqentry_a2[n];
+														: iqentry_a2[n];
 `endif                            
                  alu1_argC	<=
 `ifdef FU_BYPASS                 	
@@ -7853,7 +7867,7 @@ IC3a:     icstate <= IC4;
         // L2 cache. 
 IC4: 
 	if (ihitL2 && picstate==IC3a) begin
-		L1_en <= 10'h3FF;
+		L1_en <= 9'h1FF;
 		L1_wr0 <= TRUE;
 		L1_wr1 <= TRUE && `WAYS > 1;
 		L1_wr2 <= TRUE && `WAYS > 2;
@@ -7864,7 +7878,7 @@ IC4:
 	else if (bstate!=B9)
 		;
 	else begin
-		L1_en <= 10'h3FF;
+		L1_en <= 9'h1FF;
 		L1_wr0 <= TRUE;
 		L1_wr1 <= TRUE && `WAYS > 1;
 		L1_wr2 <= TRUE && `WAYS > 2;
@@ -7874,7 +7888,7 @@ IC4:
 	end
 IC5: 
 	begin
-		L1_en <= 10'h000;
+		L1_en <= 9'h000;
 		L1_wr0 <= FALSE;
 		L1_wr1 <= FALSE;
 		L1_wr2 <= FALSE;
@@ -7946,7 +7960,7 @@ BIDLE:
 		bwhich <= 2'b00;
 		preload <= FALSE;
 `ifdef HAS_WB
-		if (wb_v[0]) begin
+		if (wb_v[0] & wb_en) begin
 			cyc_o <= `HIGH;
 			stb_o <= `HIGH;
 			we_o <= `HIGH;
@@ -7956,7 +7970,7 @@ BIDLE:
 			ol_o  <= wb_ol[0];
 			wbo_id <= wb_id[0];
 			bstate <= wb_rmw[0] ? B12 : B1;
-			for (j = n+1; j < 8; j = j + 1) begin
+			for (j = 1; j < `WB_DEPTH; j = j + 1) begin
 	     	wb_v[j-1] <= wb_v[j];
 	     	wb_id[j-1] <= wb_id[j];
 	     	wb_rmw[j-1] <= wb_rmw[j];
@@ -7965,8 +7979,8 @@ BIDLE:
 	     	wb_data[j-1] <= wb_data[j];
 	     	wb_ol[j-1] <= wb_ol[j];
     	end
-    	wb_v[7] <= `INV;
-    	wb_rmw[7] <= `FALSE;
+    	wb_v[`WB_DEPTH-1] <= `INV;
+    	wb_rmw[`WB_DEPTH-1] <= `FALSE;
 		end
 
 			if (|wb_v)
@@ -8001,15 +8015,17 @@ BIDLE:
                  ol_o  <= dram0_ol;
                  bstate <= B12;
 `else
-								if (wbptr<3'd7) begin
+								if (wbptr<`WB_DEPTH-1) begin
 									dram0 <= `DRAMREQ_READY;
-									wb_v[wbptr] <= `VAL;
+									wb_v[wbptr] <= wb_en;
 									wb_id[wbptr] <= dram0_id;
 									wb_rmw[wbptr] <= `TRUE;
 									wb_instr[wbptr] <= dram0_instr;
 									wb_ol[wbptr] <= dram0_ol;
 									wb_addr[wbptr] <= dram0_addr;
 									wb_data[wbptr] <= fnDato(dram0_instr,dram0_data);
+									iqentry_done[ dram0_id[`QBITS] ] <= `VAL;
+									iqentry_out[ dram0_id[`QBITS] ] <= `INV;
 								end
 `endif                 
             end
@@ -8042,15 +8058,17 @@ BIDLE:
                  ol_o  <= dram1_ol;
                  bstate <= B12;
 `else
-								if (wbptr<3'd7) begin
+								if (wbptr<`WB_DEPTH-1) begin
 									dram1 <= `DRAMREQ_READY;
-									wb_v[wbptr] <= `VAL;
+									wb_v[wbptr] <= wb_en;
 									wb_id[wbptr] <= dram1_id;
 									wb_rmw[wbptr] <= `TRUE;
 									wb_instr[wbptr] <= dram1_instr;
 									wb_ol[wbptr] <= dram1_ol;
 									wb_addr[wbptr] <= dram1_addr;
 									wb_data[wbptr] <= fnDato(dram1_instr,dram1_data);
+									iqentry_done[ dram1_id[`QBITS] ] <= `VAL;
+									iqentry_out[ dram1_id[`QBITS] ] <= `INV;
 								end
 `endif                 
             end
@@ -8083,15 +8101,17 @@ BIDLE:
                  ol_o  <= dram2_ol;
                  bstate <= B12;
 `else
-								if (wbptr<3'd7) begin
+								if (wbptr<`WB_DEPTH-1) begin
 									dram2 <= `DRAMREQ_READY;
-									wb_v[wbptr] <= `VAL;
+									wb_v[wbptr] <= wb_en;
 									wb_id[wbptr] <= dram2_id;
 									wb_rmw[wbptr] <= `TRUE;
 									wb_instr[wbptr] <= dram2_instr;
 									wb_ol[wbptr] <= dram2_ol;
 									wb_addr[wbptr] <= dram2_addr;
 									wb_data[wbptr] <= fnDato(dram2_instr,dram2_data);
+									iqentry_done[ dram2_id[`QBITS] ] <= `VAL;
+									iqentry_out[ dram2_id[`QBITS] ] <= `INV;
 								end
 `endif                 
             end
@@ -8120,16 +8140,18 @@ BIDLE:
                  ol_o  <= dram0_ol;
                  bstate <= B1;
 `else
-								if (wbptr<3'd7) begin
+								if (wbptr<`WB_DEPTH-1) begin
 									dram0 <= `DRAMREQ_READY;
 									dram0_instr[`INSTRUCTION_OP] <= `NOP;
-									wb_v[wbptr] <= `VAL;
+									wb_v[wbptr] <= wb_en;
 									wb_id[wbptr] <= dram0_id;
 									wb_rmw[wbptr] <= `FALSE;
 									wb_instr[wbptr] <= dram0_instr;
 									wb_ol[wbptr] <= dram0_ol;
 									wb_addr[wbptr] <= dram0_addr;
 									wb_data[wbptr] <= fnDato(dram0_instr,dram0_data);
+									iqentry_done[ dram0_id[`QBITS] ] <= `VAL;
+									iqentry_out[ dram0_id[`QBITS] ] <= `INV;
 								end
 `endif                 
 //                 cr_o <= IsSWC(dram0_instr);
@@ -8159,16 +8181,18 @@ BIDLE:
                  ol_o  <= dram1_ol;
                  bstate <= B1;
 `else
-								if (wbptr<3'd7) begin
+								if (wbptr<`WB_DEPTH-1) begin
 									dram1 <= `DRAMREQ_READY;
 	                dram1_instr[`INSTRUCTION_OP] <= `NOP;
-									wb_v[wbptr] <= `VAL;
+									wb_v[wbptr] <= wb_en;
 									wb_id[wbptr] <= dram1_id;
 									wb_rmw[wbptr] <= `FALSE;
 									wb_instr[wbptr] <= dram1_instr;
 									wb_ol[wbptr] <= dram1_ol;
 									wb_addr[wbptr] <= dram1_addr;
 									wb_data[wbptr] <= fnDato(dram1_instr,dram1_data);
+									iqentry_done[ dram1_id[`QBITS] ] <= `VAL;
+									iqentry_out[ dram1_id[`QBITS] ] <= `INV;
 								end
 `endif                 
 //                 cr_o <= IsSWC(dram0_instr);
@@ -8198,16 +8222,18 @@ BIDLE:
                  ol_o  <= dram2_ol;
                  bstate <= B1;
 `else
-								if (wbptr<3'd7) begin
+								if (wbptr<`WB_DEPTH-1) begin
 									dram2 <= `DRAMREQ_READY;
 	                dram2_instr[`INSTRUCTION_OP] <= `NOP;
-									wb_v[wbptr] <= `VAL;
+									wb_v[wbptr] <= wb_en;
 									wb_id[wbptr] <= dram2_id;
 									wb_rmw[wbptr] <= `FALSE;
 									wb_instr[wbptr] <= dram2_instr;
 									wb_ol[wbptr] <= dram2_ol;
 									wb_addr[wbptr] <= dram2_addr;
 									wb_data[wbptr] <= fnDato(dram2_instr,dram2_data);
+									iqentry_done[ dram2_id[`QBITS] ] <= `VAL;
+									iqentry_out[ dram2_id[`QBITS] ] <= `INV;
 								end
 `endif                 
 //                 cr_o <= IsSWC(dram0_instr);
@@ -8337,11 +8363,12 @@ BIDLE:
         // Check for L2 cache miss
         else if (!ihitL2) begin
              cti_o <= 3'b001;
-             bte_o <= 2'b01;	// 4 beat burst wrap
+             bte_o <= 2'b00;//2'b01;	// 4 beat burst wrap
              cyc_o <= `HIGH;
              stb_o <= `HIGH;
              sel_o <= 8'hFF;
              icl_o <= `HIGH;
+             iccnt <= 3'd0;
 //            adr_o <= icwhich ? {pc0[31:5],5'b0} : {pc1[31:5],5'b0};
 //            L2_adr <= icwhich ? {pc0[31:5],5'b0} : {pc1[31:5],5'b0};
              adr_o <= {pcr[5:0],L1_adr[31:5],5'h0};
@@ -8372,9 +8399,13 @@ B1:
              sema[0] <= rbi_i;
 `ifdef HAS_WB
          iqentry_exc[wbo_id] <= wrv_i|err_i ? `FLT_DWF : `FLT_NONE;
-        if (err_i|wrv_i)  iqentry_a1[wbo_id] <= adr_o; 
-					iqentry_cmt[ wbo_id ] <= `VAL;
-					iqentry_aq[ wbo_id ] <= `INV;
+        if (err_i|wrv_i) begin
+        	iqentry_a1[wbo_id] <= adr_o;
+        	wb_v <= 8'h00;		// Invalidate write buffer if there is a problem with the store
+        	wb_en <= `FALSE;	// and disable write buffer
+        end
+				iqentry_cmt[ wbo_id ] <= `VAL;
+				iqentry_aq[ wbo_id ] <= `INV;
 `else
         case(bwhich)
         2'd0:   if (mem1_available) begin
@@ -8499,14 +8530,14 @@ B7:
     if (ack_i|err_i) begin
         errq <= errq | err_i;
         exvq <= exvq | exv_i;
-//        L1_en <= 8'h3 << {L2_adr[4:3],1'b0};
+//        L1_en <= 9'h3 << {L2_xsel,L2_adr[4:3],1'b0};
 //        L1_wr0 <= `TRUE;
 //        L1_wr1 <= `TRUE;
 //        L1_adr <= L2_adr;
         if (err_i)
-        	L2_rdat <= {8{13'b0,3'd7,3'b0,`FLT_IBE,`BRK}};
+        	L2_rdat <= {9{11'b0,4'd7,1'b0,`FLT_IBE,2'b00,`BRK}};
         else
-        	L2_rdat <= {4{dat_i}};
+        	L2_rdat <= {dat_i[31:0],{4{dat_i}}};
         iccnt <= iccnt + 3'd1;
         //stb_o <= `LOW;
         if (iccnt==3'd3)
@@ -8531,7 +8562,7 @@ B9:
 		L1_wr0 <= `FALSE;
 		L1_wr1 <= `FALSE;
 		L1_wr2 <= `FALSE;
-		L1_en <= 10'h3FF;
+		L1_en <= 9'h1FF;
 		L2_xsel <= 1'b0;
 		if (~ack_i) begin
 			bstate <= BIDLE;
@@ -8547,7 +8578,11 @@ B12:
              iqentry_done[ wbo_id[`QBITS] ] <= `VAL;
     	     iqentry_instr[ wbo_id[`QBITS]] <= `NOP_INSN;
     	     iqentry_out [ wbo_id[`QBITS] ] <= `INV;
-    	    if (err_i | rdv_i) iqentry_a1[wbo_id[`QBITS]] <= adr_o;
+    	    if (err_i | rdv_i) begin
+    	   	 iqentry_a1[wbo_id[`QBITS]] <= adr_o;
+    	   	 wb_v <= 0;
+    	   	 wb_en <= `FALSE;
+    	   	end
             if (dat_i == cas) begin
                  stb_o <= `LOW;
                  we_o <= `TRUE;
@@ -8585,18 +8620,39 @@ B12:
 	    	     rmw_argB <= iqentry_instr[wbo_id[`QBITS]][31] ? {{59{iqentry_instr[wbo_id[`QBITS]][20:16]}},iqentry_instr[wbo_id[`QBITS]][20:16]} : iqentry_a2[wbo_id[`QBITS]];
 	         end
              iqentry_exc [ wbo_id[`QBITS] ] <= err_i ? `FLT_DRF : rdv_i ? `FLT_DRF : `FLT_NONE;
-             if (err_i | rdv_i) iqentry_a1[wbo_id[`QBITS]] <= adr_o;
+             if (err_i | rdv_i) begin
+             	iqentry_a1[wbo_id[`QBITS]] <= adr_o;
+             	wb_v <= 0;
+             	wb_en <= `FALSE;
+             end
              stb_o <= `LOW;
              bstate <= B20;
     		end
+    		// For some reason the last state of a uncached load is here.
         else begin
              cyc_o <= `LOW;
              stb_o <= `LOW;
              sel_o <= 8'h00;
              sr_o <= `LOW;
              xdati <= dat_i;
-               iqentry_exc [ wbo_id[`QBITS] ] <= err_i ? `FLT_DRF : rdv_i ? `FLT_DRF : `FLT_NONE;
-              if (err_i|rdv_i)  iqentry_a1[wbo_id[`QBITS]] <= adr_o;
+            case(bwhich)
+            2'b00:  begin
+                     dram0 <= `DRAMREQ_READY;
+                     iqentry_exc [ dram0_id[`QBITS] ] <= err_i ? `FLT_DRF : rdv_i ? `FLT_DRF : `FLT_NONE;
+                    if (err_i|rdv_i)  iqentry_a1[dram0_id[`QBITS]] <= adr_o;
+                    end
+            2'b01:  if (`NUM_MEM > 1) begin
+                     dram1 <= `DRAMREQ_READY;
+                     iqentry_exc [ dram1_id[`QBITS] ] <= err_i ? `FLT_DRF : rdv_i ? `FLT_DRF : `FLT_NONE;
+                    if (err_i|rdv_i)  iqentry_a1[dram1_id[`QBITS]] <= adr_o;
+                    end
+            2'b10:  if (`NUM_MEM > 2) begin
+                     dram2 <= `DRAMREQ_READY;
+                     iqentry_exc [ dram2_id[`QBITS] ] <= err_i ? `FLT_DRF : rdv_i ? `FLT_DRF : `FLT_NONE;
+                    if (err_i|rdv_i)  iqentry_a1[dram2_id[`QBITS]] <= adr_o;
+                    end
+            default:    ;
+            endcase
              bstate <= B19;
         end
 `else
@@ -8817,7 +8873,7 @@ end
 	end
 `endif
 	$display("Call Stack:");
-	for (n = 0; n < 32; n = n + 4)
+	for (n = 0; n < 16; n = n + 4)
 		$display("%c%d: %h   %c%d: %h   %c%d: %h   %c%d: %h",
 			ufb1.ursb1.rasp==n+0 ?">" : " ", n[4:0]+0, ufb1.ursb1.ras[n+0],
 			ufb1.ursb1.rasp==n+1 ?">" : " ", n[4:0]+1, ufb1.ursb1.ras[n+1],
@@ -9389,6 +9445,7 @@ begin
             mstatus[13:6] <= 8'h00;
             mstatus[19:14] <= 6'd0;
 `endif           	
+						wb_en <= `TRUE;
             sema[0] <= 1'b0;
             ve_hold <= {vqet1,10'd0,vqe1,10'd0,vqet0,10'd0,vqe0};
 `ifdef SUPPORT_DBG            
@@ -9547,8 +9604,12 @@ begin
                     dbg_ctrl[63] <= dbg_ctrl[55];
 `endif                    
                     end
+            default: ;
+            endcase
+        `MEMNDX:
+            case(iqentry_instr[head][`INSTRUCTION_S2])
             `CACHEX:
-                    case(iqentry_instr[head][20:16])
+                    case(iqentry_instr[head][22:18])
                     5'h03:  invic <= TRUE;
                     5'h10:  cr0[30] <= FALSE;
                     5'h11:  cr0[30] <= TRUE;
@@ -9578,7 +9639,7 @@ begin
             end
 `endif            
         `CACHE:
-            case(iqentry_instr[head][15:11])
+            case(iqentry_instr[head][17:13])
             5'h03:  invic <= TRUE;
             5'h10:  cr0[30] <= FALSE;
             5'h11:  cr0[30] <= TRUE;
