@@ -2706,7 +2706,7 @@ static void process_ret()
 		emit_insn(
 			(2 << 12) |
 			(((val >> 4) & 0x0F) << 8) |
-			(2 << 7) |
+			(2 << 6) |
 			(((val >> 3) & 1) << 5),
 			0, 2
 		);
@@ -4531,8 +4531,8 @@ void FT64_processMaster()
 		case tk_lvw: ProcessLoadVolatile(6); break;
         case tk_lw:  process_load(0x20,4); break;
         case tk_lwr:  process_load(0x1D,0); break;
-		case tk_memdb: emit_insn(0x40100002,0,4); break;
-		case tk_memsb: emit_insn(0x40110002,0,4); break;
+		case tk_memdb: emit_insn(0x04400002,0,4); break;
+		case tk_memsb: emit_insn(0x04440002,0,4); break;
 		case tk_message: process_message(); break;
 		case tk_mod: process_riop(0x2E); break;
 		case tk_modu: process_riop(0x2C); break;
@@ -4605,7 +4605,7 @@ void FT64_processMaster()
 		case tk_sxb: process_rop(0x1A); break;
 		case tk_sxc: process_rop(0x19); break;
 		case tk_sxh: process_rop(0x18); break;
-		case tk_sync: emit_insn(0x04120002,0,4); break;
+		case tk_sync: emit_insn(0x04480002,0,4); break;
 		//case tk_unlink: emit_insn((0x1B << 26) | (0x1F << 16) | (30 << 11) | (0x1F << 6) | 0x02,0,4); break;
 		case tk_vadd: process_vrrop(0x04); break;
 		case tk_vadds: process_vsrrop(0x14); break;

@@ -213,7 +213,7 @@ FT64_mmu ummu1
 CardMemory ucrd1
 (
 	.clk_i(clk_i),
-	.cs_i(cs_crd),
+	.cs_i(cs_crd & cyc_o & stb_o),
 	.ack_o(crd_ack),
 	.wr_i(we_o),
 	.adr_i(adr),

@@ -1978,7 +1978,7 @@ int NextToken()
                 inptr += 6;
                 return token = tk_mv2fix;
             }
-            if (gCpu==4) {
+            if (gCpu==4 || gCpu=='F') {
                 if ((inptr[1]=='e' || inptr[1]=='E') &&
                     (inptr[2]=='m' || inptr[2]=='M') &&
                     (inptr[3]=='d' || inptr[3]=='D') &&

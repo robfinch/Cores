@@ -224,7 +224,14 @@ case(isn[`INSTRUCTION_OP])
 `BEQI:	fnCanException = TRUE;
 `CHK:	fnCanException = TRUE;
 default:
+// Stores can stil exception if there is a write buffer, but we allow following
+// stores to be issued by ignoring the fact they can exception because the stores
+// can be undone by invalidating the write buffer.
+`ifdef HAS_WB
+    fnCanException = IsLoad(isn);
+`else
     fnCanException = IsMem(isn);
+`endif
 endcase
 end
 endfunction
