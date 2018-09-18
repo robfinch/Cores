@@ -3452,7 +3452,7 @@ static void process_cache(int opcode6)
 // lw r1,[r2+r3]
 // ----------------------------------------------------------------------------
 
-static void ProcessLoadVolatile(int opcode3)
+static void ProcessLoadVolatile(int64_t opcode, int sz)
 {
     int Ra,Rb;
     int Rt;
@@ -3474,37 +3474,63 @@ static void ProcessLoadVolatile(int opcode3)
     expect(',');
     mem_operand(&disp, &Ra, &Rb, &Sc);
 	if (Ra > 0 && Rb > 0) {
+		switch (sz) {
+		case -1: opcode = 0x01;	// LVBUX
+		case 1: opcode = 0x00;		// LVBX
+		case -2: opcode = 0x03;	// LVCUX
+		case 2: opcode = 0x02;		// LVCX
+		case -4: opcode = 0x05;		// LVHUX
+		case 4: opcode = 0x04;		// LVHX
+		case 8:	opcode = 0x06;	// LVWX
+		}
 		emit_insn(
-			(0x3B << 26) |
-			(opcode3 << 23) |
-			(Sc << 21) |
-			(Rt << 16) |
-			(Rb << 11) |
-			(Ra << 6) |
-			0x02,!expand_flag,4);
+			(opcode << 26) |
+			(Sc << 23) |
+			(Rt << 18) |
+			(Rb << 13) |
+			(Ra << 8) |
+			0x16,!expand_flag,4);
 		return;
 	}
     if (Ra < 0) Ra = 0;
     val = disp;
-	if (val < -2048 || val > 2047) {
-		LoadConstant12(val,23);
+	if (!IsNBit(val, 30)) {
+		LoadConstant(val, 23);
 		// Change to indexed addressing
+		switch (sz) {
+		case -1: opcode = 0x01;	// LVBUX
+		case 1: opcode = 0x00;		// LVBX
+		case -2: opcode = 0x03;	// LVCUX
+		case 2: opcode = 0x02;		// LVCX
+		case -4: opcode = 0x05;		// LVHUX
+		case 4: opcode = 0x04;		// LVHX
+		case 8:	opcode = 0x06;	// LVWX
+		}
 		emit_insn(
-			(0x3B << 26) |
-			(opcode3 << 23) |
-			(Rt << 16) |
-			(23 << 11) |
-			(Ra << 6) |
-			0x02,!expand_flag,4);
+			(opcode << 26LL) |
+			(0 << 23) |		// Sc = 0
+			(Rt << 18) |
+			(23 << 13) |
+			(Ra << 8) |
+			0x02, !expand_flag, 4);
+		ScanToEOL();
+		return;
+	}
+	if (!IsNBit(val, 14)) {
+		emit_insn(
+			((val | abs(sz)) << 18LL) |
+			(Rt << 13) |
+			(Ra << 8) |
+			(1 << 6) |
+			opcode, !expand_flag, 6);
 		ScanToEOL();
 		return;
 	}
 	emit_insn(
-		(opcode3 << 28) |
-		((val & 0xFFF) << 16) |
-		(Rt << 11) |
-		(Ra << 6) |
-		0x3B,!expand_flag,4);
+		((val | abs(sz)) << 18LL) |
+		(Rt << 13) |
+		(Ra << 8) |
+		opcode, !expand_flag, 4);
     ScanToEOL();
 }
 
@@ -4525,10 +4551,13 @@ void FT64_processMaster()
         case tk_lhu: process_load(0x20,-2); break;
 		//case tk_lui: process_lui(0x27); break;
         case tk_lv:  process_lv(0x36); break;
-		case tk_lvb: ProcessLoadVolatile(0); break;
-		case tk_lvc: ProcessLoadVolatile(2); break;
-		case tk_lvh: ProcessLoadVolatile(4); break;
-		case tk_lvw: ProcessLoadVolatile(6); break;
+		case tk_lvb: ProcessLoadVolatile(0x3B,1); break;
+		case tk_lvbu: ProcessLoadVolatile(0x3B,-1); break;
+		case tk_lvc: ProcessLoadVolatile(0x3B,2); break;
+		case tk_lvcu: ProcessLoadVolatile(0x3B,-2); break;
+		case tk_lvh: ProcessLoadVolatile(0x3B,4); break;
+		case tk_lvhu: ProcessLoadVolatile(0x3B,-4); break;
+		case tk_lvw: ProcessLoadVolatile(0x3B,8); break;
         case tk_lw:  process_load(0x20,4); break;
         case tk_lwr:  process_load(0x1D,0); break;
 		case tk_memdb: emit_insn(0x04400002,0,4); break;

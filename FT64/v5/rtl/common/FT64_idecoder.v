@@ -40,6 +40,11 @@ output reg idv_o;
 
 parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
+// Memory access sizes
+parameter byt = 3'd0;
+parameter wyde = 3'd1;
+parameter tetra = 3'd2;
+parameter octa = 3'd3;
 
 // Really IsPredictableBranch
 // Does not include BccR's
@@ -241,19 +246,25 @@ input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
 `MEMNDX:
 	if (isn[`INSTRUCTION_L2]==2'b00)
-	    case(isn[`INSTRUCTION_S2])
-	    `LBX:   IsLoad = TRUE;
-	    `LBUX:  IsLoad = TRUE;
-	    `LCX:   IsLoad = TRUE;
-	    `LCUX:  IsLoad = TRUE;
-	    `LHX:   IsLoad = TRUE;
-	    `LHUX:  IsLoad = TRUE;
-	    `LWX:   IsLoad = TRUE;
-	    `LWRX:  IsLoad = TRUE;
-	    `LVX:   IsLoad = TRUE;
-	    `LVx:	IsLoad = TRUE;
-	    default: IsLoad = FALSE;   
-	    endcase
+    case(isn[`INSTRUCTION_S2])
+    `LBX:   IsLoad = TRUE;
+    `LBUX:  IsLoad = TRUE;
+    `LCX:   IsLoad = TRUE;
+    `LCUX:  IsLoad = TRUE;
+    `LHX:   IsLoad = TRUE;
+    `LHUX:  IsLoad = TRUE;
+    `LWX:   IsLoad = TRUE;
+    `LVBX:  IsLoad = TRUE;
+    `LVBUX: IsLoad = TRUE;
+    `LVCX:  IsLoad = TRUE;
+    `LVCUX: IsLoad = TRUE;
+    `LVHX:  IsLoad = TRUE;
+    `LVHUX: IsLoad = TRUE;
+    `LVWX:  IsLoad = TRUE;
+    `LWRX:  IsLoad = TRUE;
+    `LVX:   IsLoad = TRUE;
+    default: IsLoad = FALSE;   
+    endcase
 	else
 		IsLoad = FALSE;
 `LB:    IsLoad = TRUE;
@@ -264,6 +275,59 @@ case(isn[`INSTRUCTION_OP])
 `LV:    IsLoad = TRUE;
 `LVx:   IsLoad = TRUE;
 default:    IsLoad = FALSE;
+endcase
+endfunction
+
+function IsVolatileLoad;
+input [47:0] isn;
+case(isn[`INSTRUCTION_OP])
+`MEMNDX:
+	if (isn[`INSTRUCTION_L2]==2'b00)
+    case(isn[`INSTRUCTION_S2])
+    `LWRX:	IsVolatileLoad = TRUE;
+    `LVBX:	IsVolatileLoad = TRUE;
+    `LVBUX:	IsVolatileLoad = TRUE;
+    `LVCX:	IsVolatileLoad = TRUE;
+    `LVCUX:	IsVolatileLoad = TRUE;
+    `LVHX:	IsVolatileLoad = TRUE;
+    `LVHUX:	IsVolatileLoad = TRUE;
+    `LVWX:	IsVolatileLoad = TRUE;
+    default: IsVolatileLoad = FALSE;   
+    endcase
+	else
+		IsVolatileLoad = FALSE;
+`LWR:	IsVolatileLoad = TRUE;
+`LVx:   IsVolatileLoad = TRUE;
+default:    IsVolatileLoad = FALSE;
+endcase
+endfunction
+
+function IsStore;
+input [47:0] isn;
+case(isn[`INSTRUCTION_OP])
+`MEMNDX:
+	if (isn[`INSTRUCTION_L2]==2'b00)
+    case(isn[`INSTRUCTION_S2])
+    `SBX:   IsStore = TRUE;
+    `SCX:   IsStore = TRUE;
+    `SHX:   IsStore = TRUE;
+    `SWX:   IsStore = TRUE;
+    `SWCX:  IsStore = TRUE;
+    `SVX:   IsStore = TRUE;
+    `CASX:  IsStore = TRUE;
+    `INC:	IsStore = TRUE;
+    default:    IsStore = FALSE;
+    endcase
+	else
+		IsStore = FALSE;
+`SB:    IsStore = TRUE;
+`Sx:    IsStore = TRUE;
+`SWC:   IsStore = TRUE;
+`INC:	IsStore = TRUE;
+`SV:    IsStore = TRUE;
+`CAS:   IsStore = TRUE;
+`AMO:	IsStore = TRUE;
+default:    IsStore = FALSE;
 endcase
 endfunction
 
@@ -293,6 +357,56 @@ input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
 `MEMNDX:	IsMemNdx = TRUE;
 default:    IsMemNdx = FALSE;
+endcase
+endfunction
+
+function [2:0] MemSize;
+input [47:0] isn;
+case(isn[`INSTRUCTION_OP])
+`MEMNDX:
+	if (isn[`INSTRUCTION_L2]==2'b00)
+    case(isn[`INSTRUCTION_S2])
+    `LVBX,`LVBUX:	MemSize = byt;
+    `LBX,`LBUX,`SBX:   MemSize = byt;
+    `LVCX,`LVCUX:			 MemSize = wyde;
+    `LCX,`LCUX,`SCX:   MemSize = wyde;
+    `LVHX,`LVHUX:		MemSize = tetra;
+    `LHX,`SHX:   MemSize = tetra;
+    `LHUX: MemSize = tetra;
+    `LVWX:			 MemSize = octa;
+    `LWX,`SWX:   MemSize = octa;
+    `LWRX,`SWCX: MemSize = octa;
+    `LVX,`SVX:   MemSize = octa;
+    `LVx:
+    	case(isn[25:23])
+    	3'd0,3'd1:	MemSize = byt;
+    	3'd2,3'd3:	MemSize = wyde;
+    	3'd4,3'd5:	MemSize = tetra;
+    	default:	MemSize = octa;
+    	endcase
+    default: MemSize = octa;   
+    endcase
+	else
+		MemSize = octa;
+`LB,`LBU,`SB:    MemSize = byt;
+`Lx,`LxU,`Sx,`LVx:
+	casez(isn[20:18])
+	3'b100:	MemSize = octa;
+	3'b?10:	MemSize = tetra;
+	3'b??1:	MemSize = wyde;
+	default:	MemSize = octa;
+	endcase
+`LWR,`SWC:  MemSize = octa;
+`LV,`SV:    MemSize = octa;
+`AMO:
+	case(isn[23:21])
+	3'd0:	MemSize = byt;
+	3'd1:	MemSize = wyde;
+	3'd2:	MemSize = tetra;
+	3'd3:	MemSize = octa;
+	default:	MemSize = octa;
+	endcase
+default:    MemSize = octa;
 endcase
 endfunction
 
@@ -472,6 +586,34 @@ default:    HasConst = FALSE;
 endcase
 endfunction
 
+function IsOddball;
+input [47:0] instr;
+//if (|iqentry_exc[head])
+//    IsOddball = TRUE;
+//else
+case(instr[`INSTRUCTION_OP])
+`BRK:   IsOddball = TRUE;
+`IVECTOR:
+    case(instr[`INSTRUCTION_S2])
+    `VSxx:  IsOddball = TRUE;
+    default:    IsOddball = FALSE;
+    endcase
+`RR:
+    case(instr[`INSTRUCTION_S2])
+    `VMOV:  IsOddball = TRUE;
+    `SEI,`RTI: IsOddball = TRUE;
+    default:    IsOddball = FALSE;
+    endcase
+`MEMNDX:
+    case(instr[`INSTRUCTION_S2])
+    `CACHEX: IsOddball = TRUE;
+    default:    IsOddball = FALSE;
+    endcase
+`CSRRW,`REX,`CACHE,`FLOAT:  IsOddball = TRUE;
+default:    IsOddball = FALSE;
+endcase
+endfunction
+    
 function IsRFW;
 input [47:0] isn;
 casez(isn[`INSTRUCTION_OP])
@@ -479,49 +621,56 @@ casez(isn[`INSTRUCTION_OP])
 `FVECTOR:   IsRFW = TRUE;
 `R2:
 	if (isn[`INSTRUCTION_L2]==2'b00)
-	    case(isn[`INSTRUCTION_S2])
-	    `R1:    IsRFW = TRUE;
-	    `ADD:   IsRFW = TRUE;
-	    `SUB:   IsRFW = TRUE;
-	    `SLT:   IsRFW = TRUE;
-	    `SLTU:  IsRFW = TRUE;
-	    `SLE:   IsRFW = TRUE;
-	    `SLEU:  IsRFW = TRUE;
-	    `AND:   IsRFW = TRUE;
-	    `OR:    IsRFW = TRUE;
-	    `XOR:   IsRFW = TRUE;
-	    `MULU:  IsRFW = TRUE;
-	    `MULSU: IsRFW = TRUE;
-	    `MUL:   IsRFW = TRUE;
-	    `DIVMODU:  IsRFW = TRUE;
-	    `DIVMODSU: IsRFW = TRUE;
-	    `DIVMOD:IsRFW = TRUE;
-	    `MOV:	IsRFW = TRUE;
-	    `VMOV:	IsRFW = TRUE;
-	    `SHIFTR,`SHIFT31,`SHIFT63:
-		    	IsRFW = TRUE;
-	    `MIN,`MAX:    IsRFW = TRUE;
-	    `SEI:	IsRFW = TRUE;
-	    default:    IsRFW = FALSE;
-	    endcase
+    case(isn[`INSTRUCTION_S2])
+    `R1:    IsRFW = TRUE;
+    `ADD:   IsRFW = TRUE;
+    `SUB:   IsRFW = TRUE;
+    `SLT:   IsRFW = TRUE;
+    `SLTU:  IsRFW = TRUE;
+    `SLE:   IsRFW = TRUE;
+    `SLEU:  IsRFW = TRUE;
+    `AND:   IsRFW = TRUE;
+    `OR:    IsRFW = TRUE;
+    `XOR:   IsRFW = TRUE;
+    `MULU:  IsRFW = TRUE;
+    `MULSU: IsRFW = TRUE;
+    `MUL:   IsRFW = TRUE;
+    `DIVMODU:  IsRFW = TRUE;
+    `DIVMODSU: IsRFW = TRUE;
+    `DIVMOD:IsRFW = TRUE;
+    `MOV:	IsRFW = TRUE;
+    `VMOV:	IsRFW = TRUE;
+    `SHIFTR,`SHIFT31,`SHIFT63:
+	    	IsRFW = TRUE;
+    `MIN,`MAX:    IsRFW = TRUE;
+    `SEI:	IsRFW = TRUE;
+    default:    IsRFW = FALSE;
+    endcase
 	else
 		IsRFW = FALSE;
 `MEMNDX:
 	if (isn[`INSTRUCTION_L2]==2'b00)
-	    case(isn[`INSTRUCTION_S2])
-	    `LBX:   IsRFW = TRUE;
-	    `LBUX:  IsRFW = TRUE;
-	    `LCX:   IsRFW = TRUE;
-	    `LCUX:  IsRFW = TRUE;
-	    `LHX:   IsRFW = TRUE;
-	    `LHUX:  IsRFW = TRUE;
-	    `LWX:   IsRFW = TRUE;
-	    `LWRX:  IsRFW = TRUE;
-	    `LVX:   IsRFW = TRUE;
-	    `LVx:	IsRFW = TRUE;
-	    `CASX:  IsRFW = TRUE;
-	    default:    IsRFW = FALSE;
-	    endcase
+    case(isn[`INSTRUCTION_S2])
+    `LBX:   IsRFW = TRUE;
+    `LBUX:  IsRFW = TRUE;
+    `LCX:   IsRFW = TRUE;
+    `LCUX:  IsRFW = TRUE;
+    `LHX:   IsRFW = TRUE;
+    `LHUX:  IsRFW = TRUE;
+    `LWX:   IsRFW = TRUE;
+    `LVBX:  IsRFW = TRUE;
+    `LVBUX: IsRFW = TRUE;
+    `LVCX:  IsRFW = TRUE;
+    `LVCUX: IsRFW = TRUE;
+    `LVHX:  IsRFW = TRUE;
+    `LVHUX: IsRFW = TRUE;
+    `LVWX:  IsRFW = TRUE;
+    `LWX:   IsRFW = TRUE;
+    `LWRX:  IsRFW = TRUE;
+    `LVX:   IsRFW = TRUE;
+    `CASX:  IsRFW = TRUE;
+    default:    IsRFW = FALSE;
+    endcase
 	else
 		IsRFW = FALSE;
 `BBc:
@@ -762,17 +911,21 @@ begin
 //	bus[`IB_RC]		 <= fnRc(instr,ven,thrd) | {thrd,7'b0};
 //	bus[`IB_RA]		 <= fnRa(instr,ven,vl,thrd) | {thrd,7'b0};
 	bus[`IB_IMM]	 <= HasConst(instr);
-	bus[`IB_A3V]   <= Source3Valid(instr);
-	bus[`IB_A2V]   <= Source2Valid(instr);
-	bus[`IB_A1V]   <= Source1Valid(instr);
+//	bus[`IB_A3V]   <= Source3Valid(instr);
+//	bus[`IB_A2V]   <= Source2Valid(instr);
+//	bus[`IB_A1V]   <= Source1Valid(instr);
 	bus[`IB_BT]    <= (IsBranch(instr) && predict_taken);
 	bus[`IB_ALU]   <= IsALU;
 	bus[`IB_ALU0]  <= IsAlu0Only(instr);
 	bus[`IB_FPU]   <= IsFPU(instr);
 	bus[`IB_FC]		 <= IsFlowCtrl;
 	bus[`IB_CANEX] <= fnCanException(instr);
+	bus[`IB_LOADV] <= IsVolatileLoad(instr);
 	bus[`IB_LOAD]	 <= IsLoad(instr);
 	bus[`IB_PRELOAD] <=   IsLoad(instr) && Rt==5'd0;
+	bus[`IB_STORE]	<= IsStore(instr);
+	bus[`IB_ODDBALL] <= IsOddball(instr);
+	bus[`IB_MEMSZ]  <= MemSize(instr);
 	bus[`IB_MEM]		<= IsMem(instr);
 	bus[`IB_MEMNDX]	<= IsMemNdx(instr);
 	bus[`IB_RMW]		<= IsCAS(instr) || IsAMO(instr) || IsInc(instr);

@@ -188,26 +188,26 @@ assign irq_o = irq;
 
 FT64_mmu ummu1
 (
-    .rst_i(rst_i),
-    .clk_i(clk_i),
-    .ol_i(ol),
-    .pcr_i(pcr),
-    .pcr2_i(pcr2),
-    .mapen_i(pcr[31]),
-    .s_ex_i(icl),
-    .s_cyc_i(cyc),
-    .s_stb_i(stb),
-    .s_ack_o(mmu_ack),
-    .s_wr_i(we_o),
-    .s_adr_i(adr),
-    .s_dat_i(dat_o[31:0]),
-    .s_dat_o(mmu_dato),
-    .cyc_o(cyc_o),
-    .stb_o(stb_o),
-    .pea_o(adr_o),
-    .exv_o(exv),
-    .rdv_o(rdv),
-    .wrv_o(wrv)
+	.rst_i(rst_i),
+	.clk_i(clk_i),
+	.ol_i(ol),
+	.pcr_i(pcr),
+	.pcr2_i(pcr2),
+	.mapen_i(pcr[31]),
+	.s_ex_i(icl),
+	.s_cyc_i(cyc),
+	.s_stb_i(stb),
+	.s_ack_o(mmu_ack),
+	.s_wr_i(we_o),
+	.s_adr_i(adr),
+	.s_dat_i(dat_o[31:0]),
+	.s_dat_o(mmu_dato),
+	.cyc_o(cyc_o),
+	.stb_o(stb_o),
+	.pea_o(adr_o),
+	.exv_o(exv),
+	.rdv_o(rdv),
+	.wrv_o(wrv)
 );
 
 CardMemory ucrd1

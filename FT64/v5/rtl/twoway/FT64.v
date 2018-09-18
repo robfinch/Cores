@@ -492,11 +492,15 @@ reg [QENTRIES-1:0] iqentry_alu0;	 // only valid on alu #0
 reg [QENTRIES-1:0] iqentry_fpu;  // floating point instruction
 reg [QENTRIES-1:0] iqentry_fc;   // flow control instruction
 reg [QENTRIES-1:0] iqentry_canex = 8'h00;	// true if it's an instruction that can exception
+reg [QENTRIES-1:0] iqentry_oddball = 8'h00;	// writes to register file
 reg [QENTRIES-1:0] iqentry_load;	// is a memory load instruction
+reg [QENTRIES-1:0] iqentry_loadv;	// is a volatile memory load instruction
+reg [QENTRIES-1:0] iqentry_store;	// is a memory store instruction
 reg [QENTRIES-1:0] iqentry_preload;	// is a memory preload instruction
 reg [QENTRIES-1:0] iqentry_ldcmp;
 reg [QENTRIES-1:0] iqentry_mem;	// touches memory: 1 if LW/SW
 reg [QENTRIES-1:0] iqentry_memndx;  // indexed memory operation 
+reg [2:0] iqentry_memsz [0:QENTRIES-1];	// size of memory op
 reg [QENTRIES-1:0] iqentry_rmw;	// memory RMW op
 reg [QENTRIES-1:0] iqentry_memdb;
 reg [QENTRIES-1:0] iqentry_memsb;
@@ -840,6 +844,7 @@ reg  [`XBITS] dram0_exc;
 reg        dram0_unc;
 reg [2:0]  dram0_memsize;
 reg        dram0_load;	// is a load operation
+reg        dram0_store;
 reg  [1:0] dram0_ol;
 reg [63:0] dram1_data;
 reg [`ABITS] dram1_addr;
@@ -853,6 +858,7 @@ reg  [`XBITS] dram1_exc;
 reg        dram1_unc;
 reg [2:0]  dram1_memsize;
 reg        dram1_load;
+reg        dram1_store;
 reg  [1:0] dram1_ol;
 reg [63:0] dram2_data;
 reg [`ABITS] dram2_addr;
@@ -866,6 +872,7 @@ reg  [`XBITS] dram2_exc;
 reg        dram2_unc;
 reg [2:0]  dram2_memsize;
 reg        dram2_load;
+reg        dram2_store;
 reg  [1:0] dram2_ol;
 
 reg        dramA_v;
@@ -2410,19 +2417,26 @@ input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
 `MEMNDX:
 	if (isn[`INSTRUCTION_L2]==2'b00)
-	    case(isn[`INSTRUCTION_S2])
-	    `LBX:   IsLoad = TRUE;
-	    `LBUX:  IsLoad = TRUE;
-	    `LCX:   IsLoad = TRUE;
-	    `LCUX:  IsLoad = TRUE;
-	    `LHX:   IsLoad = TRUE;
-	    `LHUX:  IsLoad = TRUE;
-	    `LWX:   IsLoad = TRUE;
-	    `LWRX:  IsLoad = TRUE;
-	    `LVX:   IsLoad = TRUE;
-	    `LVx:	IsLoad = TRUE;
-	    default: IsLoad = FALSE;   
-	    endcase
+    case(isn[`INSTRUCTION_S2])
+    `LBX:   IsLoad = TRUE;
+    `LBUX:  IsLoad = TRUE;
+    `LCX:   IsLoad = TRUE;
+    `LCUX:  IsLoad = TRUE;
+    `LHX:   IsLoad = TRUE;
+    `LHUX:  IsLoad = TRUE;
+    `LWX:   IsLoad = TRUE;
+    `LVBX:	IsLoad = TRUE;
+    `LVBUX: IsLoad = TRUE;
+    `LVCX:  IsLoad = TRUE;
+    `LVCUX: IsLoad = TRUE;
+    `LVHX:  IsLoad = TRUE;
+    `LVHUX: IsLoad = TRUE;
+    `LVWX:  IsLoad = TRUE;
+    `LWRX:  IsLoad = TRUE;
+    `LVX:   IsLoad = TRUE;
+    `LVx:	IsLoad = TRUE;
+    default: IsLoad = FALSE;   
+    endcase
 	else
 		IsLoad = FALSE;
 `LB:    IsLoad = TRUE;
@@ -2433,106 +2447,6 @@ case(isn[`INSTRUCTION_OP])
 `LV:    IsLoad = TRUE;
 `LVx:   IsLoad = TRUE;
 default:    IsLoad = FALSE;
-endcase
-endfunction
-
-function IsVolatileLoad;
-input [47:0] isn;
-case(isn[`INSTRUCTION_OP])
-`MEMNDX:
-	if (isn[`INSTRUCTION_L2]==2'b00)
-	    case(isn[`INSTRUCTION_S2])
-	    `LWRX:	IsVolatileLoad = TRUE;
-	    `LVx:	IsVolatileLoad = TRUE;
-	    default: IsVolatileLoad = FALSE;   
-	    endcase
-	else
-		IsVolatileLoad = FALSE;
-`LWR:	IsVolatileLoad = TRUE;
-`LVx:   IsVolatileLoad = TRUE;
-default:    IsVolatileLoad = FALSE;
-endcase
-endfunction
-
-function [2:0] MemSize;
-input [47:0] isn;
-case(isn[`INSTRUCTION_OP])
-`MEMNDX:
-	if (isn[`INSTRUCTION_L2]==2'b00)
-	    case(isn[`INSTRUCTION_S2])
-	    `LBX,`LBUX,`SBX:   MemSize = byt;
-	    `LCX,`LCUX,`SCX:   MemSize = wyde;
-	    `LHX,`SHX:   MemSize = tetra;
-	    `LHUX: MemSize = tetra;
-	    `LWX,`SWX:   MemSize = octa;
-	    `LWRX,`SWCX: MemSize = octa;
-	    `LVX,`SVX:   MemSize = octa;
-	    `LVx:
-	    	case(isn[25:23])
-	    	3'd0,3'd1:	MemSize = byt;
-	    	3'd2,3'd3:	MemSize = wyde;
-	    	3'd4,3'd5:	MemSize = tetra;
-	    	default:	MemSize = octa;
-	    	endcase
-	    default: MemSize = octa;   
-	    endcase
-	else
-		MemSize = octa;
-`LB,`LBU,`SB:    MemSize = byt;
-`Lx,`LxU,`Sx:
-	casez(isn[20:18])
-	3'b100:	MemSize = octa;
-	3'b?10:	MemSize = tetra;
-	3'b??1:	MemSize = wyde;
-	default:	MemSize = octa;
-	endcase
-`LWR,`SWC:  MemSize = octa;
-`LV,`SV:    MemSize = octa;
-`AMO:
-	case(isn[23:21])
-	3'd0:	MemSize = byt;
-	3'd1:	MemSize = wyde;
-	3'd2:	MemSize = tetra;
-	3'd3:	MemSize = octa;
-	default:	MemSize = octa;
-	endcase
-`LVx:
-	case(isn[30:28])
-	3'd0,3'd1:	MemSize = byt;
-	3'd2,3'd3:	MemSize = wyde;
-	3'd4,3'd5:	MemSize = tetra;
-	default:	MemSize = octa;
-	endcase
-default:    MemSize = octa;
-endcase
-endfunction
-
-function IsStore;
-input [47:0] isn;
-case(isn[`INSTRUCTION_OP])
-`MEMNDX:
-	if (isn[`INSTRUCTION_L2]==2'b00)
-	    case(isn[`INSTRUCTION_S2])
-	    `SBX:   IsStore = TRUE;
-	    `SCX:   IsStore = TRUE;
-	    `SHX:   IsStore = TRUE;
-	    `SWX:   IsStore = TRUE;
-	    `SWCX:  IsStore = TRUE;
-	    `SVX:   IsStore = TRUE;
-	    `CASX:  IsStore = TRUE;
-	    `INC:	IsStore = TRUE;
-	    default:    IsStore = FALSE;
-	    endcase
-	else
-		IsStore = FALSE;
-`SB:    IsStore = TRUE;
-`Sx:    IsStore = TRUE;
-`SWC:   IsStore = TRUE;
-`INC:	IsStore = TRUE;
-`SV:    IsStore = TRUE;
-`CAS:   IsStore = TRUE;
-`AMO:	IsStore = TRUE;
-default:    IsStore = FALSE;
 endcase
 endfunction
 
@@ -2744,16 +2658,6 @@ default: CacheCmd = 5'd0;
 endcase
 endfunction
 
-function IsSync;
-input [47:0] isn;
-IsSync = (isn[`INSTRUCTION_OP]==`R2 && isn[`INSTRUCTION_L2]==2'b00 && isn[`INSTRUCTION_S2]==`R1 && isn[22:18]==`SYNC); 
-endfunction
-
-function IsFSync;
-input [47:0] isn;
-IsFSync = (isn[`INSTRUCTION_OP]==`FLOAT && isn[`INSTRUCTION_L2]==2'b00 && isn[`INSTRUCTION_S2]==`FSYNC); 
-endfunction
-
 function IsMemsb;
 input [47:0] isn;
 IsMemsb = (isn[`INSTRUCTION_OP]==`RR && isn[`INSTRUCTION_L2]==2'b00 && isn[`INSTRUCTION_S2]==`R1 && isn[22:18]==`MEMSB); 
@@ -2822,20 +2726,26 @@ casez(isn[`INSTRUCTION_OP])
 		IsRFW = FALSE;
 `MEMNDX:
 	if (isn[`INSTRUCTION_L2]==2'b00)
-	    case(isn[`INSTRUCTION_S2])
-	    `LBX:   IsRFW = TRUE;
-	    `LBUX:  IsRFW = TRUE;
-	    `LCX:   IsRFW = TRUE;
-	    `LCUX:  IsRFW = TRUE;
-	    `LHX:   IsRFW = TRUE;
-	    `LHUX:  IsRFW = TRUE;
-	    `LWX:   IsRFW = TRUE;
-	    `LWRX:  IsRFW = TRUE;
-	    `LVX:   IsRFW = TRUE;
-	    `LVx:	IsRFW = TRUE;
-	    `CASX:  IsRFW = TRUE;
-	    default:    IsRFW = FALSE;
-	    endcase
+    case(isn[`INSTRUCTION_S2])
+    `LBX:   IsRFW = TRUE;
+    `LBUX:  IsRFW = TRUE;
+    `LCX:   IsRFW = TRUE;
+    `LCUX:  IsRFW = TRUE;
+    `LHX:   IsRFW = TRUE;
+    `LHUX:  IsRFW = TRUE;
+    `LWX:   IsRFW = TRUE;
+    `LVBX:  IsRFW = TRUE;
+    `LVBUX: IsRFW = TRUE;
+    `LVCX:  IsRFW = TRUE;
+    `LVCUX: IsRFW = TRUE;
+    `LVHX:  IsRFW = TRUE;
+    `LVHUX: IsRFW = TRUE;
+    `LVWX:  IsRFW = TRUE;
+    `LWRX:  IsRFW = TRUE;
+    `LVX:   IsRFW = TRUE;
+    `CASX:  IsRFW = TRUE;
+    default:    IsRFW = FALSE;
+    endcase
 	else
 		IsRFW = FALSE;
 `BBc:
@@ -5773,9 +5683,9 @@ assign  iqentry_memready[0] = (iqentry_v[0] & iqentry_memopsvalid[0] & ~iqentry_
     iqentry_memready[6] = (iqentry_v[6] & iqentry_memopsvalid[6] & ~iqentry_memissue[6] & ~iqentry_done[6] & ~iqentry_out[6] & ~iqentry_stomp[6]),
     iqentry_memready[7] = (iqentry_v[7] & iqentry_memopsvalid[7] & ~iqentry_memissue[7] & ~iqentry_done[7] & ~iqentry_out[7] & ~iqentry_stomp[7]);
 
-assign outstanding_stores = (dram0 && IsStore(dram0_instr)) ||
-                            (dram1 && IsStore(dram1_instr)) ||
-                            (dram2 && IsStore(dram2_instr));
+assign outstanding_stores = (dram0 && dram0_store) ||
+                            (dram1 && dram1_store) ||
+                            (dram2 && dram2_store);
 
 //
 // additional COMMIT logic
@@ -6296,7 +6206,7 @@ else begin
          waitctr <= waitctr - 64'd1;
 
 
-    if (IsFlowCtrl(iqentry_instr[fcu_id[`QBITS]]) && iqentry_v[fcu_id[`QBITS]] && !iqentry_done[fcu_id[`QBITS]] && iqentry_out[fcu_id[`QBITS]])
+    if (iqentry_fc[fcu_id[`QBITS]] && iqentry_v[fcu_id[`QBITS]] && !iqentry_done[fcu_id[`QBITS]] && iqentry_out[fcu_id[`QBITS]])
     	fcu_timeout <= fcu_timeout + 8'd1;
 
 	if (branchmiss) begin
@@ -7050,17 +6960,17 @@ end
 //
 // set the IQ entry == DONE as soon as the SW is let loose to the memory system
 //
-if (mem1_available && dram0 == `DRAMSLOT_BUSY && IsStore(dram0_instr)) begin
+if (mem1_available && dram0 == `DRAMSLOT_BUSY && dram0_store) begin
 	if ((alu0_v && (dram0_id[`QBITS] == alu0_id[`QBITS])) || (alu1_v && (dram0_id[`QBITS] == alu1_id[`QBITS])))	 panic <= `PANIC_MEMORYRACE;
 	iqentry_done[ dram0_id[`QBITS] ] <= `VAL;
 	iqentry_out[ dram0_id[`QBITS] ] <= `INV;
 end
-if (mem2_available && `NUM_MEM > 1 && dram1 == `DRAMSLOT_BUSY && IsStore(dram1_instr)) begin
+if (mem2_available && `NUM_MEM > 1 && dram1 == `DRAMSLOT_BUSY && dram1_store) begin
 	if ((alu0_v && (dram1_id[`QBITS] == alu0_id[`QBITS])) || (alu1_v && (dram1_id[`QBITS] == alu1_id[`QBITS])))	 panic <= `PANIC_MEMORYRACE;
 	iqentry_done[ dram1_id[`QBITS] ] <= `VAL;
 	iqentry_out[ dram1_id[`QBITS] ] <= `INV;
 end
-if (mem3_available && `NUM_MEM > 2 && dram2 == `DRAMSLOT_BUSY && IsStore(dram2_instr)) begin
+if (mem3_available && `NUM_MEM > 2 && dram2 == `DRAMSLOT_BUSY && dram2_store) begin
 	if ((alu0_v && (dram2_id[`QBITS] == alu0_id[`QBITS])) || (alu1_v && (dram2_id[`QBITS] == alu1_id[`QBITS])))	 panic <= `PANIC_MEMORYRACE;
 	iqentry_done[ dram2_id[`QBITS] ] <= `VAL;
 	iqentry_out[ dram2_id[`QBITS] ] <= `INV;
@@ -7449,7 +7359,7 @@ if (mem1_available && dram0 == `DRAMREQ_READY) begin
 	dramA_id <= dram0_id;
 	dramA_exc <= dram0_exc;
 	dramA_bus <= fnDati(dram0_instr,dram0_addr,rdat0);
-	if (IsStore(dram0_instr)) 	$display("m[%h] <- %h", dram0_addr, dram0_data);
+	if (dram0_store) 	$display("m[%h] <- %h", dram0_addr, dram0_data);
 end
 //    else
 //    	dramA_v <= `INV;
@@ -7459,7 +7369,7 @@ if (mem2_available && dram1 == `DRAMREQ_READY && `NUM_MEM > 1) begin
 	dramB_id <= dram1_id;
 	dramB_exc <= dram1_exc;
 	dramB_bus <= fnDati(dram1_instr,dram1_addr,rdat1);
-	if (IsStore(dram1_instr))     $display("m[%h] <- %h", dram1_addr, dram1_data);
+	if (dram1_store)     $display("m[%h] <- %h", dram1_addr, dram1_data);
 end
 //    else
 //    	dramB_v <= `INV;
@@ -7469,7 +7379,7 @@ if (mem3_available && dram2 == `DRAMREQ_READY && `NUM_MEM > 2) begin
 	dramC_id <= dram2_id;
 	dramC_exc <= dram2_exc;
 	dramC_bus <= fnDati(dram2_instr,dram2_addr,rdat2);
-	if (IsStore(dram2_instr))     $display("m[%h] <- %h", dram2_addr, dram2_data);
+	if (dram2_store)     $display("m[%h] <- %h", dram2_addr, dram2_data);
 end
 //    else
 //    	dramC_v <= `INV;
@@ -7513,9 +7423,10 @@ end
 //             if (ol[iqentry_thrd[n]]==`OL_USER)
 //             	dram0_seg   <= (iqentry_Ra[n]==5'd30 || iqentry_Ra[n]==5'd31) ? {ss[iqentry_thrd[n]],13'd0} : {ds[iqentry_thrd[n]],13'd0};
 //             else
-             dram0_unc   <= iqentry_a1[n][31:20]==12'hFFD || !dce || IsVolatileLoad(iqentry_instr[n]);
-             dram0_memsize <= MemSize(iqentry_instr[n]);
+             dram0_unc   <= iqentry_a1[n][39:20]==20'hFFFFD || !dce || iqentry_loadv[n];
+             dram0_memsize <= iqentry_memsz[n];
              dram0_load <= iqentry_load[n];
+             dram0_store <= iqentry_store[n];
              dram0_ol   <= (iqentry_Ra[n][4:0]==5'd31 || iqentry_Ra[n][4:0]==5'd30) ? ol[iqentry_thrd[n]] : dl[iqentry_thrd[n]];
              // Once the memory op is issued reset the a1_v flag.
              // This will cause the a1 bus to look for new data from memory (a1_s is pointed to a memory bus)
@@ -7542,9 +7453,10 @@ end
 //	             if (ol[iqentry_thrd[n]]==`OL_USER)
 //	             	dram1_seg   <= (iqentry_Ra[n]==5'd30 || iqentry_Ra[n]==5'd31) ? {ss[iqentry_thrd[n]],13'd0} : {ds[iqentry_thrd[n]],13'd0};
 //	             else
-	             dram1_unc   <= iqentry_a1[n][31:20]==12'hFFD || !dce || IsVolatileLoad(iqentry_instr[n]);
-	             dram1_memsize <= MemSize(iqentry_instr[n]);
+	             dram1_unc   <= iqentry_a1[n][39:20]==20'hFFFFD || !dce || iqentry_loadv[n];
+	             dram1_memsize <= iqentry_memsz[n];
 	             dram1_load <= iqentry_load[n];
+	             dram1_store <= iqentry_store[n];
 	             dram1_ol   <= (iqentry_Ra[n][4:0]==5'd31 || iqentry_Ra[n][4:0]==5'd30) ? ol[iqentry_thrd[n]] : dl[iqentry_thrd[n]];
 	             iqentry_a1_v[n] <= `INV;
 	             last_issue = n;
@@ -7569,9 +7481,10 @@ end
 //	             if (ol[iqentry_thrd[n]]==`OL_USER)
 //	             	dram2_seg   <= (iqentry_Ra[n]==5'd30 || iqentry_Ra[n]==5'd31) ? {ss[iqentry_thrd[n]],13'd0} : {ds[iqentry_thrd[n]],13'd0};
 //	             else
-	             dram2_unc   <= iqentry_a1[n][31:20]==12'hFFD || !dce || IsVolatileLoad(iqentry_instr[n]);
-	             dram2_memsize <= MemSize(iqentry_instr[n]);
+	             dram2_unc   <= iqentry_a1[n][39:20]==20'hFFFFD || !dce || iqentry_loadv[n];
+	             dram2_memsize <= iqentry_memsz[n];
 	             dram2_load <= iqentry_load[n];
+	             dram2_store <= iqentry_store[n];
 	             dram2_ol   <= (iqentry_Ra[n][4:0]==5'd31 || iqentry_Ra[n][4:0]==5'd30) ? ol[iqentry_thrd[n]] : dl[iqentry_thrd[n]];
 	             iqentry_a1_v[n] <= `INV;
 	            end
@@ -7602,6 +7515,8 @@ end
 oddball_commit(commit0_v, head0);
 if (`NUM_CMT > 1)
 	oddball_commit(commit1_v, head1);
+//if (`NUM_CMT > 2)
+//	oddball_commit(commit2_v, head2);
 
 // Fetch and queue are limited to two instructions per cycle, so we might as
 // well limit retiring to two instructions max to conserve logic.
@@ -7650,7 +7565,7 @@ if (~|panic)
         	head_inc(1);
       	end
   6'b0?_11_11:
-        if (`NUM_CMT > 2 || (`NUM_CMT > 1 && iqentry_tgt[head2] == 12'd0)) begin
+        if (`NUM_CMT > 2 || (`NUM_CMT > 1 && iqentry_tgt[head2] == 12'd0 && !iqentry_oddball[head2] && ~|iqentry_exc[head2])) begin
         	iqentry_v[head1] <= `INV;
           iqentry_v[head2] <= `INV;
         	head_inc(3);
@@ -7686,7 +7601,7 @@ if (~|panic)
   	end
   6'b11_0?_11:
   	if (head1 != tail0) begin
-  		if (`NUM_CMT > 2 || iqentry_tgt[head2]==12'd0) begin
+  		if (`NUM_CMT > 2 || (iqentry_tgt[head2]==12'd0 && !iqentry_oddball[head2] && ~|iqentry_exc[head2])) begin
 				iqentry_v[head0] <= `INV;
 				iqentry_v[head2] <= `INV;
 				head_inc(3);
@@ -7736,7 +7651,7 @@ if (~|panic)
 			head_inc(1);
   	end
 	6'b11_11_11:
-		if (`NUM_CMT > 2 || (`NUM_CMT > 1 && iqentry_tgt[head2]==12'd0)) begin
+		if (`NUM_CMT > 2 || (`NUM_CMT > 1 && iqentry_tgt[head2]==12'd0 && !iqentry_oddball[head2] && ~|iqentry_exc[head2])) begin
 			iqentry_v[head0] <= `INV;
 			iqentry_v[head1] <= `INV;
 			iqentry_v[head2] <= `INV;
@@ -8025,7 +7940,7 @@ BIDLE:
                  bstate <= B12;
             end
         end
-        else if (mem1_available && dram0==`DRAMSLOT_BUSY && IsStore(dram0_instr)) begin
+        else if (mem1_available && dram0==`DRAMSLOT_BUSY && dram0_store) begin
 `ifdef SUPPORT_DBG        	
             if (dbg_smatch0) begin
                  dramA_v <= `TRUE;
@@ -8067,7 +7982,7 @@ BIDLE:
 //                 cr_o <= IsSWC(dram0_instr);
             end
         end
-        else if (mem2_available && dram1==`DRAMSLOT_BUSY && IsStore(dram1_instr) && `NUM_MEM > 1) begin
+        else if (mem2_available && dram1==`DRAMSLOT_BUSY && dram1_store && `NUM_MEM > 1) begin
 `ifdef SUPPORT_DBG        	
             if (dbg_smatch1) begin
                  dramB_v <= `TRUE;
@@ -8109,7 +8024,7 @@ BIDLE:
 //                 cr_o <= IsSWC(dram0_instr);
             end
         end
-        else if (mem3_available && dram2==`DRAMSLOT_BUSY && IsStore(dram2_instr) && `NUM_MEM > 2) begin
+        else if (mem3_available && dram2==`DRAMSLOT_BUSY && dram2_store && `NUM_MEM > 2) begin
 `ifdef SUPPORT_DBG        	
             if (dbg_smatch2) begin
                  dramC_v <= `TRUE;
@@ -9117,8 +9032,12 @@ begin
 		iqentry_fpu  [nn]  <= bus[`IB_FPU];
 		iqentry_fc   [nn]  <= bus[`IB_FC];
 		iqentry_canex[nn]  <= bus[`IB_CANEX];
+		iqentry_loadv[nn]  <= bus[`IB_LOADV];
 		iqentry_load [nn]  <= bus[`IB_LOAD];
 		iqentry_preload[nn]<= bus[`IB_PRELOAD];
+		iqentry_store[nn]  <= bus[`IB_STORE];
+		iqentry_oddball[nn] <= bus[`IB_ODDBALL];
+		iqentry_memsz[nn]  <= bus[`IB_MEMSZ];
 		iqentry_mem  [nn]  <= bus[`IB_MEM];
 		iqentry_memndx[nn] <= bus[`IB_MEMNDX];
 		iqentry_rmw  [nn]  <= bus[`IB_RMW];
@@ -9257,29 +9176,6 @@ end
 end
 endtask
 
-function IsOddball;
-input [`QBITS] head;
-if (|iqentry_exc[head])
-    IsOddball = TRUE;
-else
-case(iqentry_instr[head][`INSTRUCTION_OP])
-`BRK:   IsOddball = TRUE;
-`IVECTOR:
-    case(iqentry_instr[head][`INSTRUCTION_S2])
-    `VSxx:  IsOddball = TRUE;
-    default:    IsOddball = FALSE;
-    endcase
-`RR:
-    case(iqentry_instr[head][`INSTRUCTION_S2])
-    `VMOV:  IsOddball = TRUE;
-    `SEI,`RTI,`CACHEX: IsOddball = TRUE;
-    default:    IsOddball = FALSE;
-    endcase
-`CSRRW,`REX,`CACHE,`FLOAT:  IsOddball = TRUE;
-default:    IsOddball = FALSE;
-endcase
-endfunction
-    
 // This task takes care of commits for things other than the register file.
 task oddball_commit;
 input v;
