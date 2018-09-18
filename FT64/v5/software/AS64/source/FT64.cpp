@@ -1345,7 +1345,7 @@ static void process_riop(int64_t opcode6)
     need(',');
     NextToken();
     val = expr();
-	if (opcode6==0x05LL)	{ // subi
+	if (opcode6==-4LL)	{ // subi
 		val = -val;
 		opcode6 = 0x04LL;	// change to addi
 	}
@@ -1629,7 +1629,7 @@ static void process_setop(int64_t opcode6)
 // add r1,r2,r3
 // ---------------------------------------------------------------------------
 
-static void process_rrop(int64_t funct6)
+static void process_rrop(int64_t funct6, int64_t iop)
 {
     int Ra,Rb,Rt,Rbp,Rtp;
     char *p;
@@ -1644,8 +1644,10 @@ static void process_rrop(int64_t funct6)
     need(',');
     NextToken();
     if (token=='#') {
+		if (iop < 0 && iop!=-4)
+			printf("Immediate mode not supported (%d).", lineno);
         inptr = p;
-        process_riop(funct6);
+        process_riop(iop);
         return;
     }
     prevToken();
@@ -3821,7 +3823,8 @@ static void process_mov(int64_t oc, int64_t fn)
 		 return;
 	 }
 	 emit_insn(
-		 (fn << 26LL) |
+		 (fn << 26LL) |	// fn should be even
+		 (((rgs >> 5) & 1) << 26) |
 		 (d3 << 23LL) |
 		 (rgs << 18) |
 		 (Rt << 13) |
@@ -4435,10 +4438,10 @@ void FT64_processMaster()
 //        case tk_add:  process_add(); break;
 //		case tk_abs:  process_rop(0x04); break;
 		case tk_abs: process_rop(0x01); break;
-        case tk_add:  process_rrop(0x04); break;
+        case tk_add:  process_rrop(0x04,0x04); break;
         case tk_addi: process_riop(0x04); break;
         case tk_align: process_align(); continue; break;
-        case tk_and:  process_rrop(0x08); break;
+        case tk_and:  process_rrop(0x08,0x08); break;
         case tk_andi:  process_riop(0x08); break;
         case tk_asl: process_shift(0x2); break;
         case tk_asr: process_shift(0x3); break;
@@ -4482,10 +4485,10 @@ void FT64_processMaster()
         case tk_cli: emit_insn(0xC0000002,0,4); break;
 		case tk_chk:  process_chk(0x34); break;
 		case tk_cmovenz: process_cmove(0x29); break;
-		case tk_cmp:  process_rrop(0x06); break;
-		case tk_cmpi:  process_riop(0x06); break;
-		case tk_cmpu:  process_rrop(0x07); break;
-		case tk_cmpui:  process_riop(0x07); break;
+		//case tk_cmp:  process_rrop(0x06); break;
+		//case tk_cmpi:  process_riop(0x06); break;
+		//case tk_cmpu:  process_rrop(0x07); break;
+		//case tk_cmpui:  process_riop(0x07); break;
         case tk_code: process_code(); break;
         case tk_com: process_com(); break;
         case tk_csrrc: process_csrrw(0x3); break;
@@ -4509,12 +4512,14 @@ void FT64_processMaster()
 		case tk_dec:	process_inc(0x25); break;
 		case tk_dh:  process_dh(); break;
         case tk_dh_htbl:  process_dh_htbl(); break;
-		case tk_div: process_riop(0x3E); break;
-        case tk_dw:  process_dw(); break;
+		case tk_div: process_rrop(0x3E,0x3E); break;
+		//case tk_divsu:	process_rrop(0x3D, -1); break;
+		case tk_divu: process_rrop(0x3C,0x3C); break;
+		case tk_dw:  process_dw(); break;
         case tk_end: goto j1;
         case tk_end_expand: expandedBlock = 0; break;
         case tk_endpublic: break;
-        case tk_eor: process_rrrop(0x0A); break;
+        case tk_eor: process_rrop(0x0A,0x0A); break;
         case tk_eori: process_riop(0x0A); break;
         case tk_extern: process_extern(); break;
 		case tk_ftoi:	process_ftoi(0x12); break;
@@ -4563,16 +4568,18 @@ void FT64_processMaster()
 		case tk_memdb: emit_insn(0x04400002,0,4); break;
 		case tk_memsb: emit_insn(0x04440002,0,4); break;
 		case tk_message: process_message(); break;
-		case tk_mod: process_riop(0x2E); break;
-		case tk_modu: process_riop(0x2C); break;
+		case tk_mod: process_rrop(0x16,0x2E); break;
+		case tk_modu: process_rrop(0x14,-1); break;
         case tk_mov: process_mov(0x02, 0x22); break;
-		case tk_mul: process_riop(0x3A); break;
-		case tk_mulu: process_riop(0x38); break;
-        case tk_neg: process_neg(); break;
+		case tk_mul: process_rrop(0x3A,0x3A); break;
+		//case tk_mulh: process_rrop(0x26, 0x3A); break;
+		case tk_mulu: process_rrop(0x38,0x38); break;
+		//case tk_muluh: process_rrop(0x24, 0x38); break;
+		case tk_neg: process_neg(); break;
         case tk_nop: emit_insn(0x1C,0,4); break;
 		case tk_not: process_rop(0x05); break;
 //        case tk_not: process_rop(0x07); break;
-        case tk_or:  process_rrop(0x09); break;
+        case tk_or:  process_rrop(0x09,0x09); break;
         case tk_ori: process_riop(0x09); break;
         case tk_org: process_org(); break;
         case tk_plus: expand_flag = 1; break;
@@ -4624,7 +4631,7 @@ void FT64_processMaster()
         case tk_slli: process_shifti(0x8); break;
 		case tk_srai: process_shifti(0xB); break;
         case tk_srli: process_shifti(0x9); break;
-        case tk_sub:  process_rrop(0x05); break;
+        case tk_sub:  process_rrop(0x05,-0x04); break;
         case tk_subi:  process_riop(0x05); break;
         case tk_sv:  process_sv(0x37); break;
         case tk_sw:  process_store(0x24,4); break;
@@ -4651,8 +4658,8 @@ void FT64_processMaster()
 		case tk_vsubs: process_vsrrop(0x15); break;
 		case tk_vxor: process_vrrop(0x0A); break;
 		case tk_vxors: process_vsrrop(0x1A); break;
-		case tk_xnor: process_rrop(0x0E); break;
-		case tk_xor: process_rrop(0x0A); break;
+		case tk_xnor: process_rrop(0x0E,0x0E); break;
+		case tk_xor: process_rrop(0x0A,0x0A); break;
         case tk_xori: process_riop(0x0A); break;
 		case tk_zxb: process_rop(0x0A); break;
 		case tk_zxc: process_rop(0x09); break;

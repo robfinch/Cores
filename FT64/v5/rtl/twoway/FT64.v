@@ -1687,11 +1687,11 @@ case(isn[`INSTRUCTION_OP])
         `VSxx,`VSxxU,`VSxxS,`VSxxSU:    fnRa = {vqei,1'b1,isn[`INSTRUCTION_RA]};
         default:    fnRa = {vqei,1'b1,isn[`INSTRUCTION_RA]};
         endcase
-`R2:    case(isn[`INSTRUCTION_S2])
+`R2:    casez(isn[`INSTRUCTION_S2])
 		`MOV:
 			case(isn[25:23])
 			3'd0:	fnRa = {rgs[thrd],1'b0,isn[`INSTRUCTION_RA]};
-			3'd1:	fnRa = {isn[22:18],1'b0,isn[`INSTRUCTION_RA]};
+			3'd1:	fnRa = {isn[26],isn[22:18],1'b0,isn[`INSTRUCTION_RA]};
 			3'd2:	fnRa = {rgs[thrd],1'b0,isn[`INSTRUCTION_RA]};
 			3'd3:	fnRa = {rs_stack[thrd][5:0],1'b0,isn[`INSTRUCTION_RA]};
 			3'd4:	fnRa = {rgs[thrd],1'b0,isn[`INSTRUCTION_RA]};
@@ -1793,10 +1793,10 @@ casez(isn[`INSTRUCTION_OP])
         default:    fnRt = {vqei,1'b1,isn[`INSTRUCTION_RC]};
         endcase
        
-`R2:    case(isn[`INSTRUCTION_S2])
+`R2:    casez(isn[`INSTRUCTION_S2])
 		`MOV:
 			case(isn[25:23])
-			3'd0:	fnRt = {isn[22:18],1'b0,isn[`INSTRUCTION_RB]};
+			3'd0:	fnRt = {isn[26],isn[22:18],1'b0,isn[`INSTRUCTION_RB]};
 			3'd1:	fnRt = {rgs[thrd],1'b0,isn[`INSTRUCTION_RB]};
 			3'd2:	fnRt = {rs_stack[thrd][5:0],1'b0,isn[`INSTRUCTION_RB]};
 			3'd3:	fnRt = {rgs[thrd],1'b0,isn[`INSTRUCTION_RB]};
@@ -1889,25 +1889,26 @@ case(isn[`INSTRUCTION_OP])
         `VSxx,`VSxxU,`VSxxS,`VSxxSU:    fnRa = {vqei,1'b1,isn[`INSTRUCTION_RA]};
         default:    fnRa = {vqei,1'b1,isn[`INSTRUCTION_RA]};
         endcase
-`RR:    case(isn[`INSTRUCTION_S2])
-		`MOV:
-			case(isn[25:23])
-			3'd0:	fnRa = {rgs,1'b0,isn[`INSTRUCTION_RA]};
-			3'd1:	fnRa = {isn[22:18],1'b0,isn[`INSTRUCTION_RA]};
-			3'd2:	fnRa = {rgs,1'b0,isn[`INSTRUCTION_RA]};
-			3'd3:	fnRa = {rs_stack[5:0],1'b0,isn[`INSTRUCTION_RA]};
-			3'd4:	fnRa = {rgs,1'b0,isn[`INSTRUCTION_RA]};
-			3'd5:	fnRa = {fp1_rgs,1'b0,isn[`INSTRUCTION_RA]};
-			3'd6:	fnRa = {fp1_rgs,1'b0,isn[`INSTRUCTION_RA]};
-			default:fnRa = {rgs,1'b0,isn[`INSTRUCTION_RA]};
-			endcase
-        `VMOV:
-            case (isn[`INSTRUCTION_S1])
-            5'h0:   fnRa = {rgs,1'b0,isn[`INSTRUCTION_RA]};
-            5'h1:   fnRa = {6'h3F,1'b1,isn[`INSTRUCTION_RA]};
-            endcase
-        default:    fnRa = {rgs,1'b0,isn[`INSTRUCTION_RA]};
-        endcase
+`R2:
+	casez(isn[`INSTRUCTION_S2])
+	`MOV:
+		case(isn[25:23])
+		3'd0:	fnRa = {rgs,1'b0,isn[`INSTRUCTION_RA]};
+		3'd1:	fnRa = {isn[26],isn[22:18],1'b0,isn[`INSTRUCTION_RA]};
+		3'd2:	fnRa = {rgs,1'b0,isn[`INSTRUCTION_RA]};
+		3'd3:	fnRa = {rs_stack[5:0],1'b0,isn[`INSTRUCTION_RA]};
+		3'd4:	fnRa = {rgs,1'b0,isn[`INSTRUCTION_RA]};
+		3'd5:	fnRa = {fp1_rgs,1'b0,isn[`INSTRUCTION_RA]};
+		3'd6:	fnRa = {fp1_rgs,1'b0,isn[`INSTRUCTION_RA]};
+		default:fnRa = {rgs,1'b0,isn[`INSTRUCTION_RA]};
+		endcase
+  `VMOV:
+    case (isn[`INSTRUCTION_S1])
+    5'h0:   fnRa = {rgs,1'b0,isn[`INSTRUCTION_RA]};
+    5'h1:   fnRa = {6'h3F,1'b1,isn[`INSTRUCTION_RA]};
+    endcase
+  default:    fnRa = {rgs,1'b0,isn[`INSTRUCTION_RA]};
+  endcase
 `FLOAT:		fnRa = {fp1_rgs,1'b0,isn[`INSTRUCTION_RA]};
 default:    fnRa = {rgs,1'b0,isn[`INSTRUCTION_RA]};
 endcase
@@ -2013,46 +2014,47 @@ casez(isn[`INSTRUCTION_OP])
         default:    fnRt = {vqei,1'b1,isn[`INSTRUCTION_RC]};
         endcase
        
-`R2:    case(isn[`INSTRUCTION_S2])
-		`MOV:
-			case(isn[25:23])
-			3'd0:	fnRt = {isn[22:18],1'b0,isn[`INSTRUCTION_RB]};
-			3'd1:	fnRt = {rgs,1'b0,isn[`INSTRUCTION_RB]};
-			3'd2:	fnRt = {rs_stack[5:0],1'b0,isn[`INSTRUCTION_RB]};
-			3'd3:	fnRt = {rgs,1'b0,isn[`INSTRUCTION_RB]};
-			3'd4:	fnRt = {fp1_rgs,1'b0,isn[`INSTRUCTION_RB]};
-			3'd5:	fnRt = {rgs,1'b0,isn[`INSTRUCTION_RB]};
-			3'd6:	fnRt = {fp1_rgs,1'b0,isn[`INSTRUCTION_RB]};
-			default:fnRt = {rgs,1'b0,isn[`INSTRUCTION_RB]};
-			endcase
-        `VMOV:
-            case (isn[`INSTRUCTION_S1])
-            5'h0:   fnRt = {6'h3F,1'b1,isn[`INSTRUCTION_RB]};
-            5'h1:   fnRt = {rgs,1'b0,isn[`INSTRUCTION_RB]};
-            default:	fnRt = 12'h000;
-            endcase
-        `R1:    
-        	case(isn[22:18])
-        	`CNTLO,`CNTLZ,`CNTPOP,`ABS,`NOT:
-        		fnRt = {rgs,1'b0,isn[`INSTRUCTION_RB]};
-        	`MEMDB,`MEMSB,`SYNC:
-        		fnRt = 12'd0;
-        	default:	fnRt = 12'd0;
-        	endcase
-        `CMOVEZ:    fnRt = {rgs,1'b0,isn[`INSTRUCTION_S1]};
-        `CMOVNZ:    fnRt = {rgs,1'b0,isn[`INSTRUCTION_S1]};
-        `MUX:       fnRt = {rgs,1'b0,isn[`INSTRUCTION_S1]};
-        `MIN:       fnRt = {rgs,1'b0,isn[`INSTRUCTION_S1]};
-        `MAX:       fnRt = {rgs,1'b0,isn[`INSTRUCTION_S1]};
-        `LVX:       fnRt = {vqei,1'b1,isn[20:16]};
-        `SHIFTR:	fnRt = {rgs,1'b0,isn[`INSTRUCTION_RC]};
-        `SHIFT31,`SHIFT63:
-        			fnRt = {rgs,1'b0,isn[`INSTRUCTION_RB]};
-        `SEI:		fnRt = {rgs,1'b0,isn[`INSTRUCTION_RB]};
-        `WAIT,`RTI,`CHK:
-        			fnRt = 12'd0;
-        default:    fnRt = {rgs,1'b0,isn[`INSTRUCTION_RC]};
-        endcase
+`R2:    
+	casez(isn[`INSTRUCTION_S2])
+	`MOV:
+		case(isn[25:23])
+		3'd0:	fnRt = {isn[26],isn[22:18],1'b0,isn[`INSTRUCTION_RB]};
+		3'd1:	fnRt = {rgs,1'b0,isn[`INSTRUCTION_RB]};
+		3'd2:	fnRt = {rs_stack[5:0],1'b0,isn[`INSTRUCTION_RB]};
+		3'd3:	fnRt = {rgs,1'b0,isn[`INSTRUCTION_RB]};
+		3'd4:	fnRt = {fp1_rgs,1'b0,isn[`INSTRUCTION_RB]};
+		3'd5:	fnRt = {rgs,1'b0,isn[`INSTRUCTION_RB]};
+		3'd6:	fnRt = {fp1_rgs,1'b0,isn[`INSTRUCTION_RB]};
+		default:fnRt = {rgs,1'b0,isn[`INSTRUCTION_RB]};
+		endcase
+  `VMOV:
+    case (isn[`INSTRUCTION_S1])
+    5'h0:   fnRt = {6'h3F,1'b1,isn[`INSTRUCTION_RB]};
+    5'h1:   fnRt = {rgs,1'b0,isn[`INSTRUCTION_RB]};
+    default:	fnRt = 12'h000;
+    endcase
+  `R1:    
+  	case(isn[22:18])
+  	`CNTLO,`CNTLZ,`CNTPOP,`ABS,`NOT:
+  		fnRt = {rgs,1'b0,isn[`INSTRUCTION_RB]};
+  	`MEMDB,`MEMSB,`SYNC:
+  		fnRt = 12'd0;
+  	default:	fnRt = 12'd0;
+  	endcase
+  `CMOVEZ:    fnRt = {rgs,1'b0,isn[`INSTRUCTION_S1]};
+  `CMOVNZ:    fnRt = {rgs,1'b0,isn[`INSTRUCTION_S1]};
+  `MUX:       fnRt = {rgs,1'b0,isn[`INSTRUCTION_S1]};
+  `MIN:       fnRt = {rgs,1'b0,isn[`INSTRUCTION_S1]};
+  `MAX:       fnRt = {rgs,1'b0,isn[`INSTRUCTION_S1]};
+  `LVX:       fnRt = {vqei,1'b1,isn[20:16]};
+  `SHIFTR:	fnRt = {rgs,1'b0,isn[`INSTRUCTION_RC]};
+  `SHIFT31,`SHIFT63:
+  			fnRt = {rgs,1'b0,isn[`INSTRUCTION_RB]};
+  `SEI:		fnRt = {rgs,1'b0,isn[`INSTRUCTION_RB]};
+  `WAIT,`RTI,`CHK:
+  			fnRt = 12'd0;
+  default:    fnRt = {rgs,1'b0,isn[`INSTRUCTION_RC]};
+  endcase
 `MEMNDX:
 	case(isn[`INSTRUCTION_S2])
   `SBX,`SCX,`SHX,`SWX,`SWCX,`CACHEX:
@@ -2114,8 +2116,10 @@ casez(isn[`INSTRUCTION_OP])
 	`ADD,`SUB,
 	`AND,`OR,`XOR,
 	`NAND,`NOR,`XNOR,
-	`DIVMOD,`DIVMODU,`DIVMODSU,
-	`MUL,`MULU,`MULSU:
+	`DIV,`DIVU,`DIVSU,
+	`MOD,`MODU,`MODSU,
+	`MUL,`MULU,`MULSU,
+	`MULH,`MULUH,`MULSUH:
 		case(isn[25:23])
 		3'b000: fnWe = 8'h01;
 		3'b001:	fnWe = 8'h03;
@@ -2711,9 +2715,15 @@ casez(isn[`INSTRUCTION_OP])
 	    `MULU:  IsRFW = TRUE;
 	    `MULSU: IsRFW = TRUE;
 	    `MUL:   IsRFW = TRUE;
-	    `DIVMODU:  IsRFW = TRUE;
-	    `DIVMODSU: IsRFW = TRUE;
-	    `DIVMOD:IsRFW = TRUE;
+	    `MULUH:  IsRFW = TRUE;
+	    `MULSUH: IsRFW = TRUE;
+	    `MULH:   IsRFW = TRUE;
+	    `DIVU:  IsRFW = TRUE;
+	    `DIVSU: IsRFW = TRUE;
+	    `DIV:IsRFW = TRUE;
+	    `MODU:  IsRFW = TRUE;
+	    `MODSU: IsRFW = TRUE;
+	    `MOD:IsRFW = TRUE;
 	    `MOV:	IsRFW = TRUE;
 	    `VMOV:	IsRFW = TRUE;
 	    `SHIFTR,`SHIFT31,`SHIFT63:
@@ -2818,12 +2828,13 @@ endfunction
 function IsMul;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`RR:
+`R2:
 	if (isn[`INSTRUCTION_L2]==2'b00)
-	    case(isn[`INSTRUCTION_S2])
-	    `MULU,`MULSU,`MUL: IsMul = TRUE;
-	    default:    IsMul = FALSE;
-	    endcase
+    case(isn[`INSTRUCTION_S2])
+    `MULU,`MULSU,`MUL: IsMul = TRUE;
+    `MULUH,`MULSUH,`MULH: IsMul = TRUE;
+    default:    IsMul = FALSE;
+    endcase
 	else
 		IsMul = FALSE;
 `MULUI,`MULI:  IsMul = TRUE;
@@ -2834,12 +2845,13 @@ endfunction
 function IsDivmod;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`RR:
+`R2:
 	if (isn[`INSTRUCTION_L2]==2'b00)
-	    case(isn[`INSTRUCTION_S2])
-	    `DIVMODU,`DIVMODSU,`DIVMOD: IsDivmod = TRUE;
-	    default: IsDivmod = FALSE;
-	    endcase
+    case(isn[`INSTRUCTION_S2])
+    `DIVU,`DIVSU,`DIV: IsDivmod = TRUE;
+    `MODU,`MODSU,`MOD: IsDivmod = TRUE;
+    default: IsDivmod = FALSE;
+    endcase
 	else
 		IsDivmod = FALSE;
 `DIVUI,`DIVI,`MODI:  IsDivmod = TRUE;

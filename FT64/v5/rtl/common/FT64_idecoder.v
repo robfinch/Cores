@@ -70,14 +70,15 @@ mIsALU uialu1
 reg IsALU;
 always @*
 case(instr[`INSTRUCTION_OP])
-`R2:    if (instr[`INSTRUCTION_L2]==2'b00)
-			case(instr[`INSTRUCTION_S2])
-			`VMOV:		IsALU = TRUE;
-	        `RTI:       IsALU = FALSE;
-	        default:    IsALU = TRUE;
-	        endcase
-	    else
-	    	IsALU = TRUE;
+`R2:
+	if (instr[`INSTRUCTION_L2]==2'b00)
+		case(instr[`INSTRUCTION_S2])
+		`VMOV:		IsALU = TRUE;
+    `RTI:       IsALU = FALSE;
+    default:    IsALU = TRUE;
+    endcase
+  else
+  	IsALU = TRUE;
 `BRK:   IsALU = FALSE;
 `Bcc:   IsALU = FALSE;
 `BBc:   IsALU = FALSE;
@@ -88,15 +89,15 @@ case(instr[`INSTRUCTION_OP])
 `CALL:  IsALU = FALSE;
 `RET:   IsALU = FALSE;
 `FVECTOR:
-			case(instr[`INSTRUCTION_S2])
-            `VSHL,`VSHR,`VASR:  IsALU = TRUE;
-            default:    IsALU = FALSE;  // Integer
-            endcase
+	case(instr[`INSTRUCTION_S2])
+  `VSHL,`VSHR,`VASR:  IsALU = TRUE;
+  default:    IsALU = FALSE;  // Integer
+  endcase
 `IVECTOR:
-			case(instr[`INSTRUCTION_S2])
-            `VSHL,`VSHR,`VASR:  IsALU = TRUE;
-            default:    IsALU = TRUE;  // Integer
-            endcase
+	case(instr[`INSTRUCTION_S2])
+  `VSHL,`VSHR,`VASR:  IsALU = TRUE;
+  default:    IsALU = TRUE;  // Integer
+  endcase
 `FLOAT:		IsALU = FALSE;            
 default:    IsALU = TRUE;
 endcase
@@ -112,7 +113,9 @@ case(isn[`INSTRUCTION_OP])
 		`SHIFTR,`SHIFT31,`SHIFT63:
 			IsAlu0Only = TRUE;
 		`MULU,`MULSU,`MUL,
-		`DIVMODU,`DIVMODSU,`DIVMOD: IsAlu0Only = TRUE;
+		`MULUH,`MULSUH,`MULH,
+		`MODU,`MODSU,`MOD: IsAlu0Only = TRUE;
+		`DIVU,`DIVSU,`DIV: IsAlu0Only = TRUE;
 		`MIN,`MAX:  IsAlu0Only = TRUE;
 		default:    IsAlu0Only = FALSE;
 		endcase
@@ -221,7 +224,10 @@ case(isn[`INSTRUCTION_OP])
     fnCanException = `TRUE;
 `R2:
     case(isn[`INSTRUCTION_S2])
-    `ADD,`SUB,`MUL,`DIVMOD,`MULSU,`DIVMODSU:   fnCanException = TRUE;
+    `ADD,`SUB,`MUL,
+    `DIV,`MULSU,`DIVSU,
+    `MOD,`MODSU:
+       fnCanException = TRUE;
     `RTI:   fnCanException = TRUE;
     default:    fnCanException = FALSE;
     endcase
@@ -635,9 +641,15 @@ casez(isn[`INSTRUCTION_OP])
     `MULU:  IsRFW = TRUE;
     `MULSU: IsRFW = TRUE;
     `MUL:   IsRFW = TRUE;
-    `DIVMODU:  IsRFW = TRUE;
-    `DIVMODSU: IsRFW = TRUE;
-    `DIVMOD:IsRFW = TRUE;
+    `MULUH:  IsRFW = TRUE;
+    `MULSUH: IsRFW = TRUE;
+    `MULH:   IsRFW = TRUE;
+    `DIVU:  IsRFW = TRUE;
+    `DIVSU: IsRFW = TRUE;
+    `DIV:IsRFW = TRUE;
+    `MODU:  IsRFW = TRUE;
+    `MODSU: IsRFW = TRUE;
+    `MOD:IsRFW = TRUE;
     `MOV:	IsRFW = TRUE;
     `VMOV:	IsRFW = TRUE;
     `SHIFTR,`SHIFT31,`SHIFT63:
@@ -733,8 +745,10 @@ casez(isn[`INSTRUCTION_OP])
 	`ADD,`SUB,
 	`AND,`OR,`XOR,
 	`NAND,`NOR,`XNOR,
-	`DIVMOD,`DIVMODU,`DIVMODSU,
-	`MUL,`MULU,`MULSU:
+	`DIV,`DIVU,`DIVSU,
+	`MOD,`MODU,`MODSU,
+	`MUL,`MULU,`MULSU,
+	`MULH,`MULUH,`MULSUH:
 		case(isn[25:23])
 		3'b000: fnWe = 8'h01;
 		3'b001:	fnWe = 8'h03;
@@ -955,14 +969,15 @@ parameter FALSE = 1'b0;
 
 always @*
 casez(instr[`INSTRUCTION_OP])
-`R2:    if (instr[`INSTRUCTION_L2]==2'b00)
-			case(instr[`INSTRUCTION_S2])
-			`VMOV:		IsALU = TRUE;
-	        `RTI:       IsALU = FALSE;
-	        default:    IsALU = TRUE;
-	        endcase
-	    else
-	    	IsALU = TRUE;
+`R2:
+  if (instr[`INSTRUCTION_L2]==2'b00)
+		case(instr[`INSTRUCTION_S2])
+		`VMOV:		IsALU = TRUE;
+    `RTI:       IsALU = FALSE;
+    default:    IsALU = TRUE;
+    endcase
+    else
+    	IsALU = TRUE;
 `BRK:   IsALU = FALSE;
 `Bcc:   IsALU = FALSE;
 `BBc:   IsALU = FALSE;
@@ -973,15 +988,15 @@ casez(instr[`INSTRUCTION_OP])
 `CALL:  IsALU = FALSE;
 `RET:   IsALU = FALSE;
 `FVECTOR:
-			case(instr[`INSTRUCTION_S2])
-            `VSHL,`VSHR,`VASR:  IsALU = TRUE;
-            default:    IsALU = FALSE;  // Integer
-            endcase
+	case(instr[`INSTRUCTION_S2])
+  `VSHL,`VSHR,`VASR:  IsALU = TRUE;
+  default:    IsALU = FALSE;  // Integer
+  endcase
 `IVECTOR:
-			case(instr[`INSTRUCTION_S2])
-            `VSHL,`VSHR,`VASR:  IsALU = TRUE;
-            default:    IsALU = TRUE;  // Integer
-            endcase
+	case(instr[`INSTRUCTION_S2])
+  `VSHL,`VSHR,`VASR:  IsALU = TRUE;
+  default:    IsALU = TRUE;  // Integer
+  endcase
 `FLOAT:		IsALU = FALSE;            
 default:    IsALU = TRUE;
 endcase

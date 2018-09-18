@@ -96,16 +96,17 @@ function IsMul;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
 `IVECTOR:
-    case(isn[`INSTRUCTION_S2])
-    `VMUL,`VMULS:   IsMul = TRUE;
-    default:    IsMul = FALSE;
-    endcase
-`RR:
-    case(isn[`INSTRUCTION_S2])
-    `MULU,`MULSU,`MUL: IsMul = TRUE;
-    default:    IsMul = FALSE;
-    endcase
-`MULUI,`MULSUI,`MULI:  IsMul = TRUE;
+  case(isn[`INSTRUCTION_S2])
+  `VMUL,`VMULS:   IsMul = TRUE;
+  default:    IsMul = FALSE;
+  endcase
+`R2:
+  case(isn[`INSTRUCTION_S2])
+  `MULU,`MULSU,`MUL: IsMul = TRUE;
+  `MULUH,`MULSUH,`MULH: IsMul = TRUE;
+  default:    IsMul = FALSE;
+  endcase
+`MULUI,`MULI:  IsMul = TRUE;
 default:    IsMul = FALSE;
 endcase
 endfunction
@@ -114,15 +115,16 @@ function IsDivmod;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
 `IVECTOR:
-    case(isn[`INSTRUCTION_S2])
-    `VDIV,`VDIVS:   IsDivmod = TRUE;
-    default:    IsDivmod = FALSE;
-    endcase
-`RR:
-    case(isn[`INSTRUCTION_S2])
-    `DIVMODU,`DIVMODSU,`DIVMOD: IsDivmod = TRUE;
-    default:    IsDivmod = FALSE;
-    endcase
+  case(isn[`INSTRUCTION_S2])
+  `VDIV,`VDIVS:   IsDivmod = TRUE;
+  default:    IsDivmod = FALSE;
+  endcase
+`R2:
+  case(isn[`INSTRUCTION_S2])
+  `DIVU,`DIVSU,`DIV: IsDivmod = TRUE;
+  `MODU,`MODSU,`MOD: IsDivmod = TRUE;
+  default:    IsDivmod = FALSE;
+  endcase
 `DIVUI,`DIVI,`MODI:  IsDivmod = TRUE;
 default:    IsDivmod = FALSE;
 endcase
@@ -136,11 +138,11 @@ case(isn[`INSTRUCTION_OP])
     `VMUL,`VMULS,`VDIV,`VDIVS:    IsSgn = TRUE;
     default:    IsSgn = FALSE;
     endcase
-`RR:
-    case(isn[`INSTRUCTION_S2])
-    `MUL,`DIVMOD:   IsSgn = TRUE;
-    default:    IsSgn = FALSE;
-    endcase
+`R2:
+  case(isn[`INSTRUCTION_S2])
+  `MUL,`DIV,`MOD,`MULH:   IsSgn = TRUE;
+  default:    IsSgn = FALSE;
+  endcase
 `MULI,`DIVI,`MODI:    IsSgn = TRUE;
 default:    IsSgn = FALSE;
 endcase
@@ -149,11 +151,11 @@ endfunction
 function IsSgnus;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`RR:
-    case(isn[`INSTRUCTION_S2])
-    `MULSU,`DIVMODSU:   IsSgnus = TRUE;
-    default:    IsSgnus = FALSE;
-    endcase
+`R2:
+  case(isn[`INSTRUCTION_S2])
+  `MULSU,`MULSUH,`DIVSU,`MODSU:   IsSgnus = TRUE;
+  default:    IsSgnus = FALSE;
+  endcase
 default:    IsSgnus = FALSE;
 endcase
 endfunction
@@ -719,12 +721,15 @@ case(instr[`INSTRUCTION_OP])
 	    				o[63:0] = (a!=64'd0) ? b : c;
 	    `MUX:       for (n = 0; n < 64; n = n + 1)
 	                    o[n] <= a[n] ? b[n] : c[n];
-	    `MULU:      o[63:0] = instr[25:24]==2'b00 ? prod[DBW-1:0] : prod[DBW*2-1:DBW];
-	    `MULSU:     o[63:0] = instr[25:24]==2'b00 ? prod[DBW-1:0] : prod[DBW*2-1:DBW];
-	    `MUL:       o[63:0] = instr[25:24]==2'b00 ? prod[DBW-1:0] : prod[DBW*2-1:DBW];
-	    `DIVMODU:   o[63:0] = BIG ? (instr[25:24]==2'b00 ? divq : rem) : 64'hCCCCCCCCCCCCCCCC;
-	    `DIVMODSU:  o[63:0] = BIG ? (instr[25:24]==2'b00 ? divq : rem) : 64'hCCCCCCCCCCCCCCCC;
-	    `DIVMOD:    o[63:0] = BIG ? (instr[25:24]==2'b00 ? divq : rem) : 64'hCCCCCCCCCCCCCCCC;
+	    `MULU:      o[63:0] = prod[DBW-1:0];
+	    `MULSU:     o[63:0] = prod[DBW-1:0];
+	    `MUL:       o[63:0] = prod[DBW-1:0];
+	    `DIVU:   o[63:0] = BIG ? divq : 64'hCCCCCCCCCCCCCCCC;
+	    `DIVSU:  o[63:0] = BIG ? divq : 64'hCCCCCCCCCCCCCCCC;
+	    `DIV:    o[63:0] = BIG ? divq : 64'hCCCCCCCCCCCCCCCC;
+	    `MODU:   o[63:0] = BIG ? rem : 64'hCCCCCCCCCCCCCCCC;
+	    `MODSU:  o[63:0] = BIG ? rem : 64'hCCCCCCCCCCCCCCCC;
+	    `MOD:    o[63:0] = BIG ? rem : 64'hCCCCCCCCCCCCCCCC;
 			`LEAX:
 					begin
 					o[63:0] = BIG ? a + (b << instr[22:21]) : 64'hCCCCCCCCEEEEEEEE;
@@ -988,7 +993,8 @@ case(instr[`INSTRUCTION_OP])
     `MUL,`MULSU:    exc <= prod[63] ? (prod[127:64] != 64'hFFFFFFFFFFFFFFFF && excen[3] ? `FLT_OFL : `FLT_NONE ):
                            (prod[127:64] != 64'd0 && excen[3] ? `FLT_OFL : `FLT_NONE);
     `MULU:      exc <= prod[127:64] != 64'd0 && excen[3] ? `FLT_OFL : `FLT_NONE;
-    `DIVMOD,`DIVMODSU,`DIVMODU: exc <= BIG && excen[4] & divByZero ? `FLT_DBZ : `FLT_NONE;
+    `DIV,`DIVSU,`DIVU: exc <= BIG && excen[4] & divByZero ? `FLT_DBZ : `FLT_NONE;
+    `MOD,`MODSU,`MODU: exc <= BIG && excen[4] & divByZero ? `FLT_DBZ : `FLT_NONE;
     default:    exc <= `FLT_NONE;
     endcase
 `MULI:    exc <= prod[63] ? (prod[127:64] != 64'hFFFFFFFFFFFFFFFF & excen[3] ? `FLT_OFL : `FLT_NONE):

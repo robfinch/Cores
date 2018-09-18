@@ -145,10 +145,16 @@
 `define NOR         6'h0D
 `define XNOR        6'h0E
 `define SHIFT31     6'h0F
+`define MODU				6'h14
+`define MODSU				6'h15
+`define MOD					6'h16
 `define LEAX        6'h18
 `define MUX         6'h1B
 `define SHIFT63     6'h1F
-`define MOV					6'h22
+`define MOV					6'b01001?
+`define MULUH				6'h24
+`define MULSUH			6'h25
+`define MULH				6'h26
 `define SLE     		6'h28
 `define SLEU    		6'h29
 `define CMOVEZ      6'h28	// 48 bit op
@@ -165,9 +171,9 @@
 `define MULU        6'h38
 `define MULSU       6'h39
 `define MUL         6'h3A
-`define DIVMODU     6'h3C
-`define DIVMODSU    6'h3D
-`define DIVMOD      6'h3E
+`define DIVU     		6'h3C
+`define DIVSU    		6'h3D
+`define DIV      		6'h3E
 `define SHIFTH      6'h3F
 // Root Level Ops
 `define ADDI		6'h04
