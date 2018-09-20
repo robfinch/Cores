@@ -34,7 +34,7 @@
 //
 module FT64_fetchbuf(rst, clk4x, clk, fcu_clk,
 	cs_i, cyc_i, stb_i, ack_o, we_i, adr_i, dat_i,
-	hirq, thread_en,
+	freezePC, thread_en,
 	regLR,
     insn0, insn1, phit,
     threadx,
@@ -72,7 +72,7 @@ output ack_o;
 input we_i;
 input [15:0] adr_i;
 input [31:0] dat_i;
-input hirq;
+input freezePC;
 input thread_en;
 input [4:0] regLR;
 input [47:0] insn0;
@@ -329,9 +329,7 @@ edge_det ued1 (.rst(rst), .clk(clk4x), .ce(1'b1), .i(clk), .pe(peclk), .ne(neclk
 always @(posedge clk)
 if (rst) begin
 	pc0 <= RSTPC;
-`ifdef SUPPORT_SMT
   pc1 <= RSTPC;
-`endif
 	fetchbufA_v <= 0;
 	fetchbufB_v <= 0;
 	fetchbufC_v <= 0;
@@ -808,16 +806,7 @@ assign fetchbuf1_instr = (fetchbuf == 1'b0) ? fetchbufB_instr : fetchbufD_instr;
 assign fetchbuf1_v     = (fetchbuf == 1'b0) ? fetchbufB_v     : fetchbufD_v    ;
 assign fetchbuf1_pc    = (fetchbuf == 1'b0) ? fetchbufB_pc    : fetchbufD_pc   ;
 assign fetchbuf0_thrd  = 1'b0;
-`ifdef SUPPORT_SMT
-assign fetchbuf1_thrd  = 1'b1;
-`else
-assign fetchbuf1_thrd  = 1'b0;
-`endif
-
-`ifndef SUPPORT_SMT
-always @*
-	pc1 <= pc0 + fetchbuf0_insln;
-`endif
+assign fetchbuf1_thrd  = thread_en;
 
 always @*
 begin
@@ -862,15 +851,14 @@ begin
 	fetchbufA_instr <= cinsn0;
 	fetchbufA_v <= `VAL;
 	fetchbufA_pc <= pc0;
-	if (phit && ~hirq)
-`ifdef SUPPORT_SMT
-		pc0 <= pc0 + fetchbuf0_insln;
-`else
-	if (`WAYS > 1)
-		pc0 <= pc0 + fetchbuf0_insln + fetchbuf1_insln;
-	else
-		pc0 <= pc0 + fetchbuf0_insln;
-`endif
+	if (phit && ~freezePC) begin
+		if (thread_en)
+			pc0 <= pc0 + fetchbuf0_insln;
+		else if (`WAYS > 1)
+			pc0 <= pc0 + fetchbuf0_insln + fetchbuf1_insln;
+		else
+			pc0 <= pc0 + fetchbuf0_insln;
+	end
 end
 endtask
 
@@ -878,11 +866,12 @@ task FetchB;
 begin
 	fetchbufB_instr <= cinsn1;
 	fetchbufB_v <= `WAYS > 1;
-	fetchbufB_pc <= pc1;
-`ifdef SUPPORT_SMT
-	if (phit)
+	if (thread_en)
+		fetchbufB_pc <= pc1;
+	else
+		fetchbufB_pc <= pc0 + fetchbuf0_insln;
+	if (phit & thread_en)
 		pc1 <= pc1 + fetchbuf1_insln;
-`endif
 end
 endtask
 
@@ -899,15 +888,14 @@ begin
 	fetchbufC_instr <= cinsn0;
 	fetchbufC_v <= `VAL;
 	fetchbufC_pc <= pc0;
-	if (phit && ~hirq)
-`ifdef SUPPORT_SMT
-		pc0 <= pc0 + fetchbuf0_insln;
-`else
-	if (`WAYS > 1)
-		pc0 <= pc0 + fetchbuf0_insln + fetchbuf1_insln;
-	else
-		pc0 <= pc0 + fetchbuf0_insln;
-`endif
+	if (phit && ~freezePC) begin
+		if (thread_en)
+			pc0 <= pc0 + fetchbuf0_insln;
+		else if (`WAYS > 1)
+			pc0 <= pc0 + fetchbuf0_insln + fetchbuf1_insln;
+		else
+			pc0 <= pc0 + fetchbuf0_insln;
+	end
 end
 endtask
 
@@ -915,11 +903,12 @@ task FetchD;
 begin
 	fetchbufD_instr <= cinsn1;
 	fetchbufD_v <= `WAYS > 1;
-	fetchbufD_pc <= pc1;
-`ifdef SUPPORT_SMT
-	if (phit)
+	if (thread_en)
+		fetchbufD_pc <= pc1;
+	else
+		fetchbufD_pc <= pc0 + fetchbuf0_insln;
+	if (phit & thread_en)
 		pc1 <= pc1 + fetchbuf1_insln;
-`endif
 end
 endtask
 

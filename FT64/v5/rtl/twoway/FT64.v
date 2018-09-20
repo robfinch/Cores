@@ -99,7 +99,7 @@ parameter AMSB = ABW-1;
 parameter NTHREAD = 1;
 reg [3:0] i;
 integer n;
-integer j;
+integer j, k;
 genvar g;
 parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
@@ -167,10 +167,10 @@ reg [63:0] ptrkey = "  OBJECT";
 reg [63:0] wbrcd;
 
 reg  [PREGS-1:0] rf_v;
-reg  [4:0] rf_source[0:AREGS-1];
+reg  [5:0] rf_source[0:AREGS-1];
 initial begin
 for (n = 0; n < AREGS; n = n + 1)
-	rf_source[n] = 5'd0;
+	rf_source[n] = 6'd0;
 end
 wire [`ABITS] pc0;
 wire [`ABITS] pc1;
@@ -386,7 +386,8 @@ reg [128:0] message [0:15];	// indexed by panic
 wire int_commit;
 reg StatusHWI;
 reg [47:0] insn0, insn1, insn2;
-wire [47:0] insn0a, insn1a, insn1b, insn2a, insn2b;
+wire [47:0] insn0a, insn1b, insn2b;
+reg [47:0] insn1a, insn2a;
 reg tgtq;
 // Only need enough bits in the seqnence number to cover the instructions in
 // the queue plus an extra count for skipping on branch misses. In this case
@@ -402,7 +403,7 @@ reg queued2;
 reg queuedNop;
 
 reg [47:0] codebuf[0:63];
-reg [7:0] setpred;
+reg [QENTRIES-1:0] setpred;
 
 // instruction queue (ROB)
 reg [31:0]  iqentry_sn   [0:QENTRIES-1];  // instruction sequence number
@@ -511,6 +512,19 @@ wire  [PREGS-1:1] iqentry_4_livetarget;
 wire  [PREGS-1:1] iqentry_5_livetarget;
 wire  [PREGS-1:1] iqentry_6_livetarget;
 wire  [PREGS-1:1] iqentry_7_livetarget;
+wire  [PREGS-1:1] iqentry_8_livetarget;
+wire  [PREGS-1:1] iqentry_9_livetarget;
+wire [PREGS-1:1] iqentry_livetarget [0:QENTRIES-1];
+assign iqentry_livetarget[0] = iqentry_0_livetarget;
+assign iqentry_livetarget[1] = iqentry_1_livetarget;
+assign iqentry_livetarget[2] = iqentry_2_livetarget;
+assign iqentry_livetarget[3] = iqentry_3_livetarget;
+assign iqentry_livetarget[4] = iqentry_4_livetarget;
+assign iqentry_livetarget[5] = iqentry_5_livetarget;
+assign iqentry_livetarget[6] = iqentry_6_livetarget;
+assign iqentry_livetarget[7] = iqentry_7_livetarget;
+assign iqentry_livetarget[8] = iqentry_8_livetarget;
+assign iqentry_livetarget[9] = iqentry_9_livetarget;
 wire  [PREGS-1:1] iqentry_0_latestID;
 wire  [PREGS-1:1] iqentry_1_latestID;
 wire  [PREGS-1:1] iqentry_2_latestID;
@@ -519,6 +533,8 @@ wire  [PREGS-1:1] iqentry_4_latestID;
 wire  [PREGS-1:1] iqentry_5_latestID;
 wire  [PREGS-1:1] iqentry_6_latestID;
 wire  [PREGS-1:1] iqentry_7_latestID;
+wire  [PREGS-1:1] iqentry_8_latestID;
+wire  [PREGS-1:1] iqentry_9_latestID;
 wire  [PREGS-1:1] iqentry_0_cumulative;
 wire  [PREGS-1:1] iqentry_1_cumulative;
 wire  [PREGS-1:1] iqentry_2_cumulative;
@@ -527,6 +543,9 @@ wire  [PREGS-1:1] iqentry_4_cumulative;
 wire  [PREGS-1:1] iqentry_5_cumulative;
 wire  [PREGS-1:1] iqentry_6_cumulative;
 wire  [PREGS-1:1] iqentry_7_cumulative;
+wire  [PREGS-1:1] iqentry_8_cumulative;
+wire  [PREGS-1:1] iqentry_9_cumulative;
+reg [PREGS-1:1] iqentry_cumulative [0:QENTRIES-1];
 wire  [PREGS-1:1] iq0_out;
 wire  [PREGS-1:1] iq1_out;
 wire  [PREGS-1:1] iq2_out;
@@ -535,6 +554,8 @@ wire  [PREGS-1:1] iq4_out;
 wire  [PREGS-1:1] iq5_out;
 wire  [PREGS-1:1] iq6_out;
 wire  [PREGS-1:1] iq7_out;
+wire  [PREGS-1:1] iq8_out;
+wire  [PREGS-1:1] iq9_out;
 
 reg  [`QBITS] tail0;
 reg  [`QBITS] tail1;
@@ -546,6 +567,8 @@ reg  [`QBITS] head4;	// used only to determine memory-access ordering
 reg  [`QBITS] head5;	// used only to determine memory-access ordering
 reg  [`QBITS] head6;	// used only to determine memory-access ordering
 reg  [`QBITS] head7;	// used only to determine memory-access ordering
+reg  [`QBITS] head8;
+reg  [`QBITS] head9;
 
 wire take_branch0;
 wire take_branch1;
@@ -667,6 +690,7 @@ wire        alu1_v;
 wire        alu1_branchmiss;
 wire [`ABITS] alu1_misspc;
 
+wire [`XBITS] fpu_exc;
 reg        fpu1_ld;
 reg        fpu1_dataready = 1'b1;
 wire       fpu1_done = 1'b1;
@@ -939,27 +963,23 @@ endfunction
 wire [`ABITS] pc0plus6 = pc0 + 32'd6;
 wire [`ABITS] pc0plus12 = pc0 + 32'd12;
 
-`ifdef SUPPORT_SMT
 generate begin : gInsnVar
 	if (`WAYS > 1) begin
-		assign insn1a = insn1b;
+		always @*
+			if (thread_en)
+				insn1a <= insn1b;
+			else
+				insn1a = {insn1b,insn0a} >> {fnInsLength(insn0a),3'b0};
 	end
 	if (`WAYS > 2) begin
-		assign insn2a = insn2b;
+		always @*
+			if (thread_en)
+				insn2a <= insn2b;
+			else
+				insn2a = {insn2b,insn1b,insn0a} >> {fnInsLength(insn0a) + fnInsLength(insn1a),3'b0};
 	end
 end
 endgenerate
-`else
-generate begin : gInsnVar
-	if (`WAYS > 1) begin
-		assign insn1a = {insn1b,insn0a} >> {fnInsLength(insn0a),3'b0};
-	end
-	if (`WAYS > 2) begin
-		assign insn2a = {insn2b,insn1b,insn0a} >> {fnInsLength(insn0a) + fnInsLength(insn1a),3'b0};
-	end
-end
-endgenerate
-`endif
 
 FT64_L1_icache uic0
 (
@@ -985,11 +1005,7 @@ FT64_L1_icache uic1
     .nxt(icnxt),
     .wr(L1_wr1),
     .en(L1_en),
-`ifdef SUPPORT_SMT
-    .adr(icstate==IDLE||icstate==IC8 ? {pcr[5:0],pc1} : L1_adr),
-`else
-    .adr(icstate==IDLE||icstate==IC8 ? {pcr[5:0],pc0plus6} : L1_adr),
-`endif
+    .adr(icstate==IDLE||icstate==IC8 ? (thread_en ? {pcr[5:0],pc1}: {pcr[5:0],pc0plus6} ): L1_adr),
     .wadr(L1_adr),
     .i(L2_rdat),
     .o(insn1b),
@@ -1009,11 +1025,7 @@ FT64_L1_icache uic2
     .nxt(icnxt),
     .wr(L1_wr2),
     .en(L1_en),
-`ifdef SUPPORT_SMT
-    .adr(icstate==IDLE||icstate==IC8 ? {pcr[5:0],pc2} : L1_adr),
-`else
-    .adr(icstate==IDLE||icstate==IC8 ? {pcr[5:0],pc0plus12} : L1_adr),
-`endif
+    .adr(icstate==IDLE||icstate==IC8 ? (thread_en ? {pcr[5:0],pc2} : {pcr[5:0],pc0plus12}) : L1_adr),
     .wadr(L1_adr),
     .i(L2_rdat),
     .o(insn2b),
@@ -1381,10 +1393,10 @@ end
 //-----------------------------------------------------------------------------
 //-----------------------------------------------------------------------------
 
-// hirq squashes the pc increment if there's an irq.
-wire hirq = (irq_i > im) && ~int_commit;
+// freezePC squashes the pc increment if there's an irq.
+wire freezePC = (irq_i > im) && ~int_commit;
 always @*
-if (hirq)
+if (freezePC)
 	insn0 <= {8'd0,3'd0,irq_i,1'b0,vec_i,2'b00,`BRK};
 else if (phit) begin
 	if (insn0a[`INSTRUCTION_OP]==`BRK && insn0a[23:21]==3'd0 && insn0a[7:6]==2'b00)
@@ -1397,7 +1409,9 @@ else
 generate begin : gInsnMux
 if (`WAYS > 1) begin
 always @*
-if (phit) begin
+if (freezePC && !thread_en)
+	insn1 <= {8'd0,3'd0,irq_i,1'b0,vec_i,2'b00,`BRK};
+else if (phit) begin
 	if (insn1a[`INSTRUCTION_OP]==`BRK && insn1a[23:21]==3'd0 && insn1a[7:6]==2'b00)
 		insn1 <= {8'd1,3'd0,4'b0,1'b0,`FLT_PRIV,2'b00,`BRK};
 	else
@@ -1408,7 +1422,9 @@ else
 end
 if (`WAYS > 2) begin
 always @*
-if (phit) begin
+if (freezePC && !thread_en)
+	insn2 <= {8'd0,3'd0,irq_i,1'b0,vec_i,2'b00,`BRK};
+else if (phit) begin
 	if (insn2a[`INSTRUCTION_OP]==`BRK && insn1a[23:21]==3'd0 && insn2a[7:6]==2'b00)
 		insn2 <= {8'd1,3'd0,4'b0,1'b0,`FLT_PRIV,2'b00,`BRK};
 	else
@@ -1493,112 +1509,160 @@ endgenerate
 function [`QBITS] idp1;
 input [`QBITS] id;
 case(id)
-3'd0:	idp1 = 3'd1;
-3'd1:	idp1 = 3'd2;
-3'd2:	idp1 = 3'd3;
-3'd3:	idp1 = 3'd4;
-3'd4:	idp1 = 3'd5;
-3'd5:	idp1 = 3'd6;
-3'd6:	idp1 = 3'd7;
-3'd7:	idp1 = 3'd0;
+4'd0:	idp1 = 4'd1;
+4'd1:	idp1 = 4'd2;
+4'd2:	idp1 = 4'd3;
+4'd3:	idp1 = 4'd4;
+4'd4:	idp1 = 4'd5;
+4'd5:	idp1 = 4'd6;
+4'd6:	idp1 = 4'd7;
+4'd7:	idp1 = 4'd8;
+4'd8:	idp1 = 4'd9;
+4'd9:	idp1 = 4'd0;
 endcase
 endfunction
 
 function [`QBITS] idp2;
 input [`QBITS] id;
 case(id)
-3'd0:	idp2 = 3'd2;
-3'd1:	idp2 = 3'd3;
-3'd2:	idp2 = 3'd4;
-3'd3:	idp2 = 3'd5;
-3'd4:	idp2 = 3'd6;
-3'd5:	idp2 = 3'd7;
-3'd6:	idp2 = 3'd0;
-3'd7:	idp2 = 3'd1;
+4'd0:	idp2 = 4'd2;
+4'd1:	idp2 = 4'd3;
+4'd2:	idp2 = 4'd4;
+4'd3:	idp2 = 4'd5;
+4'd4:	idp2 = 4'd6;
+4'd5:	idp2 = 4'd7;
+4'd6:	idp2 = 4'd8;
+4'd7:	idp2 = 4'd9;
+4'd8:	idp2 = 4'd0;
+4'd9:	idp2 = 4'd1;
 endcase
 endfunction
 
 function [`QBITS] idp3;
 input [`QBITS] id;
 case(id)
-3'd0:	idp3 = 3'd3;
-3'd1:	idp3 = 3'd4;
-3'd2:	idp3 = 3'd5;
-3'd3:	idp3 = 3'd6;
-3'd4:	idp3 = 3'd7;
-3'd5:	idp3 = 3'd0;
-3'd6:	idp3 = 3'd1;
-3'd7:	idp3 = 3'd2;
+4'd0:	idp3 = 4'd3;
+4'd1:	idp3 = 4'd4;
+4'd2:	idp3 = 4'd5;
+4'd3:	idp3 = 4'd6;
+4'd4:	idp3 = 4'd7;
+4'd5:	idp3 = 4'd8;
+4'd6:	idp3 = 4'd9;
+4'd7:	idp3 = 4'd0;
+4'd8: idp3 = 4'd1;
+4'd9:	idp3 = 4'd2;
 endcase
 endfunction
 
 function [`QBITS] idp4;
 input [`QBITS] id;
 case(id)
-3'd0:	idp4 = 3'd4;
-3'd1:	idp4 = 3'd5;
-3'd2:	idp4 = 3'd6;
-3'd3:	idp4 = 3'd7;
-3'd4:	idp4 = 3'd0;
-3'd5:	idp4 = 3'd1;
-3'd6:	idp4 = 3'd2;
-3'd7:	idp4 = 3'd3;
+4'd0:	idp4 = 4'd4;
+4'd1:	idp4 = 4'd5;
+4'd2:	idp4 = 4'd6;
+4'd3:	idp4 = 4'd7;
+4'd4:	idp4 = 4'd8;
+4'd5:	idp4 = 4'd9;
+4'd6:	idp4 = 4'd0;
+4'd7:	idp4 = 4'd1;
+4'd8:	idp4 = 4'd2;
+4'd9:	idp4 = 4'd3;
 endcase
 endfunction
 
 function [`QBITS] idp5;
 input [`QBITS] id;
 case(id)
-3'd0:	idp5 = 3'd5;
-3'd1:	idp5 = 3'd6;
-3'd2:	idp5 = 3'd7;
-3'd3:	idp5 = 3'd0;
-3'd4:	idp5 = 3'd1;
-3'd5:	idp5 = 3'd2;
-3'd6:	idp5 = 3'd3;
-3'd7:	idp5 = 3'd4;
+4'd0:	idp5 = 4'd5;
+4'd1:	idp5 = 4'd6;
+4'd2:	idp5 = 4'd7;
+4'd3:	idp5 = 4'd8;
+4'd4:	idp5 = 4'd9;
+4'd5:	idp5 = 4'd0;
+4'd6:	idp5 = 4'd1;
+4'd7:	idp5 = 4'd2;
+4'd8: idp5 = 4'd3;
+4'd9: idp5 = 4'd4;
 endcase
 endfunction
 
 function [`QBITS] idp6;
 input [`QBITS] id;
 case(id)
-3'd0:	idp6 = 3'd6;
-3'd1:	idp6 = 3'd7;
-3'd2:	idp6 = 3'd0;
-3'd3:	idp6 = 3'd1;
-3'd4:	idp6 = 3'd2;
-3'd5:	idp6 = 3'd3;
-3'd6:	idp6 = 3'd4;
-3'd7:	idp6 = 3'd5;
+4'd0:	idp6 = 4'd6;
+4'd1:	idp6 = 4'd7;
+4'd2:	idp6 = 4'd8;
+4'd3:	idp6 = 4'd9;
+4'd4:	idp6 = 4'd0;
+4'd5:	idp6 = 4'd1;
+4'd6:	idp6 = 4'd2;
+4'd7:	idp6 = 4'd3;
+4'd8:	idp6 = 4'd4;
+4'd9:	idp6 = 4'd5;
 endcase
 endfunction
 
 function [`QBITS] idp7;
 input [`QBITS] id;
 case(id)
-3'd0:	idp7 = 3'd7;
-3'd1:	idp7 = 3'd0;
-3'd2:	idp7 = 3'd1;
-3'd3:	idp7 = 3'd2;
-3'd4:	idp7 = 3'd3;
-3'd5:	idp7 = 3'd4;
-3'd6:	idp7 = 3'd5;
-3'd7:	idp7 = 3'd6;
+4'd0:	idp7 = 4'd7;
+4'd1:	idp7 = 4'd8;
+4'd2:	idp7 = 4'd9;
+4'd3:	idp7 = 4'd0;
+4'd4:	idp7 = 4'd1;
+4'd5:	idp7 = 4'd2;
+4'd6:	idp7 = 4'd3;
+4'd7:	idp7 = 4'd4;
+4'd8:	idp7 = 4'd5;
+4'd9:	idp7 = 4'd6;
+endcase
+endfunction
+
+function [`QBITS] idp8;
+input [`QBITS] id;
+case(id)
+4'd0:	idp8 = 4'd8;
+4'd1:	idp8 = 4'd9;
+4'd2:	idp8 = 4'd0;
+4'd3:	idp8 = 4'd1;
+4'd4:	idp8 = 4'd2;
+4'd5:	idp8 = 4'd3;
+4'd6:	idp8 = 4'd4;
+4'd7:	idp8 = 4'd5;
+4'd8:	idp8 = 4'd6;
+4'd9:	idp8 = 4'd7;
+endcase
+endfunction
+
+function [`QBITS] idp9;
+input [`QBITS] id;
+case(id)
+4'd0:	idp9 = 4'd9;
+4'd1:	idp9 = 4'd0;
+4'd2:	idp9 = 4'd1;
+4'd3:	idp9 = 4'd2;
+4'd4:	idp9 = 4'd3;
+4'd5:	idp9 = 4'd4;
+4'd6:	idp9 = 4'd5;
+4'd7:	idp9 = 4'd6;
+4'd8:	idp9 = 4'd7;
+4'd9:	idp9 = 4'd8;
 endcase
 endfunction
 
 function [`QBITS] idm1;
 input [`QBITS] id;
 case(id)
-3'd0:	idm1 = 3'd7;
-3'd1:	idm1 = 3'd0;
-3'd2:	idm1 = 3'd1;
-3'd3:	idm1 = 3'd2;
-3'd4:	idm1 = 3'd3;
-3'd5:	idm1 = 3'd4;
-3'd6:	idm1 = 3'd5;
-3'd7:	idm1 = 3'd6;
+4'd0:	idm1 = 4'd9;
+4'd1:	idm1 = 4'd0;
+4'd2:	idm1 = 4'd1;
+4'd3:	idm1 = 4'd2;
+4'd4:	idm1 = 4'd3;
+4'd5:	idm1 = 4'd4;
+4'd6:	idm1 = 4'd5;
+4'd7:	idm1 = 4'd6;
+4'd8:	idm1 = 4'd7;
+4'd9:	idm1 = 4'd8;
 endcase
 endfunction
 
@@ -3208,6 +3272,8 @@ decoder8 iq4(.num({iqentry_tgt[4][8:7],iqentry_tgt[4][5:0]}), .out(iq4_out));
 decoder8 iq5(.num({iqentry_tgt[5][8:7],iqentry_tgt[5][5:0]}), .out(iq5_out));
 decoder8 iq6(.num({iqentry_tgt[6][8:7],iqentry_tgt[6][5:0]}), .out(iq6_out));
 decoder8 iq7(.num({iqentry_tgt[7][8:7],iqentry_tgt[7][5:0]}), .out(iq7_out));
+decoder8 iq8(.num({iqentry_tgt[8][8:7],iqentry_tgt[8][5:0]}), .out(iq8_out));
+decoder8 iq9(.num({iqentry_tgt[9][8:7],iqentry_tgt[9][5:0]}), .out(iq9_out));
 `else
 decoder7 iq0(.num({iqentry_tgt[0][7],iqentry_tgt[0][5:0]}), .out(iq0_out));
 decoder7 iq1(.num({iqentry_tgt[1][7],iqentry_tgt[1][5:0]}), .out(iq1_out));
@@ -3217,6 +3283,8 @@ decoder7 iq4(.num({iqentry_tgt[4][7],iqentry_tgt[4][5:0]}), .out(iq4_out));
 decoder7 iq5(.num({iqentry_tgt[5][7],iqentry_tgt[5][5:0]}), .out(iq5_out));
 decoder7 iq6(.num({iqentry_tgt[6][7],iqentry_tgt[6][5:0]}), .out(iq6_out));
 decoder7 iq7(.num({iqentry_tgt[7][7],iqentry_tgt[7][5:0]}), .out(iq7_out));
+decoder7 iq8(.num({iqentry_tgt[8][7],iqentry_tgt[8][5:0]}), .out(iq8_out));
+decoder7 iq9(.num({iqentry_tgt[9][7],iqentry_tgt[9][5:0]}), .out(iq9_out));
 /*
 decoder6 iq0(.num({iqentry_tgt[0][5:0]}), .out(iq0_out));
 decoder6 iq1(.num({iqentry_tgt[1][5:0]}), .out(iq1_out));
@@ -3275,7 +3343,7 @@ FT64_fetchbuf #(AMSB,RSTPC) ufb1
   .we_i(we_o),
   .adr_i(adr_o[15:0]),
   .dat_i(dat_o[31:0]),
-  .hirq(hirq),
+  .freezePC(freezePC),
   .regLR(regLR),
   .thread_en(thread_en),
   .insn0(insn0),
@@ -3354,7 +3422,10 @@ generate begin : live_target
                         iqentry_4_livetarget[g] |
                         iqentry_5_livetarget[g] |
                         iqentry_6_livetarget[g] |
-                        iqentry_7_livetarget[g];
+                        iqentry_7_livetarget[g] |
+                        iqentry_8_livetarget[g] |
+                        iqentry_9_livetarget[g]
+                        ;
     end
 end
 endgenerate
@@ -3366,14 +3437,27 @@ endgenerate
 	    iqentry_4_livetarget = {PREGS {iqentry_v[4]}} & {PREGS {~iqentry_stomp[4] && iqentry_thrd[4]==branchmiss_thrd}} & iq4_out,
 	    iqentry_5_livetarget = {PREGS {iqentry_v[5]}} & {PREGS {~iqentry_stomp[5] && iqentry_thrd[5]==branchmiss_thrd}} & iq5_out,
 	    iqentry_6_livetarget = {PREGS {iqentry_v[6]}} & {PREGS {~iqentry_stomp[6] && iqentry_thrd[6]==branchmiss_thrd}} & iq6_out,
-	    iqentry_7_livetarget = {PREGS {iqentry_v[7]}} & {PREGS {~iqentry_stomp[7] && iqentry_thrd[7]==branchmiss_thrd}} & iq7_out;
+	    iqentry_7_livetarget = {PREGS {iqentry_v[7]}} & {PREGS {~iqentry_stomp[7] && iqentry_thrd[7]==branchmiss_thrd}} & iq7_out,
+	    iqentry_8_livetarget = {PREGS {iqentry_v[8]}} & {PREGS {~iqentry_stomp[8] && iqentry_thrd[8]==branchmiss_thrd}} & iq8_out,
+	    iqentry_9_livetarget = {PREGS {iqentry_v[9]}} & {PREGS {~iqentry_stomp[9] && iqentry_thrd[9]==branchmiss_thrd}} & iq9_out
+	    ;
 
-    //
-    // BRANCH-MISS LOGIC: latestID
-    //
-    // latestID is the instruction queue ID of the newest instruction (latest) that targets
-    // a particular register.  looks a lot like scheduling logic, but in reverse.
-    // 
+//
+// BRANCH-MISS LOGIC: latestID
+//
+// latestID is the instruction queue ID of the newest instruction (latest) that targets
+// a particular register.  looks a lot like scheduling logic, but in reverse.
+// 
+always @*
+	for (n = 0; n < QENTRIES; n = n + 1) begin
+		iqentry_cumulative[n] = 0;
+		for (j = n; j < n + QENTRIES; j = j + 1) begin
+			if (missid==(j % QENTRIES))
+				for (k = n; k <= j; k = k + 1)
+					iqentry_cumulative[n] = iqentry_cumulative[n] | iqentry_livetarget[k % QENTRIES];
+		end
+	end
+/*
     assign iqentry_0_cumulative = (missid==3'd0) ? iqentry_0_livetarget :
                                   (missid==3'd1) ? iqentry_0_livetarget |
                                                    iqentry_1_livetarget :
@@ -3412,35 +3496,35 @@ endgenerate
                                                    iqentry_7_livetarget :
                                                    {PREGS{1'b0}};
 
-    assign iqentry_1_cumulative = (missid==3'd1) ? iqentry_1_livetarget :
-                                  (missid==3'd2) ? iqentry_1_livetarget |
+    assign iqentry_1_cumulative = (missid==4'd1) ? iqentry_1_livetarget :
+                                  (missid==4'd2) ? iqentry_1_livetarget |
                                                    iqentry_2_livetarget :
-                                  (missid==3'd3) ? iqentry_1_livetarget |
+                                  (missid==4'd3) ? iqentry_1_livetarget |
                                                    iqentry_2_livetarget |
                                                    iqentry_3_livetarget :
-                                  (missid==3'd4) ? iqentry_1_livetarget |
+                                  (missid==4'd4) ? iqentry_1_livetarget |
                                                    iqentry_2_livetarget |
                                                    iqentry_3_livetarget |
                                                    iqentry_4_livetarget :
-                                  (missid==3'd5) ? iqentry_1_livetarget |
+                                  (missid==4'd5) ? iqentry_1_livetarget |
                                                    iqentry_2_livetarget |
                                                    iqentry_3_livetarget |
                                                    iqentry_4_livetarget | 
                                                    iqentry_5_livetarget :
-                                  (missid==3'd6) ? iqentry_1_livetarget |
+                                  (missid==4'd6) ? iqentry_1_livetarget |
                                                    iqentry_2_livetarget |
                                                    iqentry_3_livetarget |
                                                    iqentry_4_livetarget | 
                                                    iqentry_5_livetarget |
                                                    iqentry_6_livetarget :
-                                  (missid==3'd7) ? iqentry_1_livetarget |
+                                  (missid==4'd7) ? iqentry_1_livetarget |
                                                    iqentry_2_livetarget |
                                                    iqentry_3_livetarget |
                                                    iqentry_4_livetarget | 
                                                    iqentry_5_livetarget |
                                                    iqentry_6_livetarget |
                                                    iqentry_7_livetarget :
-                                  (missid==3'd0) ? iqentry_1_livetarget |
+                                  (missid==4'd0) ? iqentry_1_livetarget |
                                                    iqentry_2_livetarget |
                                                    iqentry_3_livetarget |
                                                    iqentry_4_livetarget | 
@@ -3450,35 +3534,35 @@ endgenerate
                                                    iqentry_0_livetarget :
                                                    {PREGS{1'b0}};
 
-    assign iqentry_2_cumulative = (missid==3'd2) ? iqentry_2_livetarget :
-                                     (missid==3'd3) ? iqentry_2_livetarget |
+    assign iqentry_2_cumulative = (missid==4'd2) ? iqentry_2_livetarget :
+                                     (missid==4'd3) ? iqentry_2_livetarget |
                                                       iqentry_3_livetarget :
-                                     (missid==3'd4) ? iqentry_2_livetarget |
+                                     (missid==4'd4) ? iqentry_2_livetarget |
                                                       iqentry_3_livetarget |
                                                       iqentry_4_livetarget :
-                                     (missid==3'd5) ? iqentry_2_livetarget |
+                                     (missid==4'd5) ? iqentry_2_livetarget |
                                                       iqentry_3_livetarget |
                                                       iqentry_4_livetarget |
                                                       iqentry_5_livetarget :
-                                     (missid==3'd6) ? iqentry_2_livetarget |
+                                     (missid==4'd6) ? iqentry_2_livetarget |
                                                       iqentry_3_livetarget |
                                                       iqentry_4_livetarget |
                                                       iqentry_5_livetarget | 
                                                       iqentry_6_livetarget :
-                                     (missid==3'd7) ? iqentry_2_livetarget |
+                                     (missid==4'd7) ? iqentry_2_livetarget |
                                                       iqentry_3_livetarget |
                                                       iqentry_4_livetarget |
                                                       iqentry_5_livetarget | 
                                                       iqentry_6_livetarget |
                                                       iqentry_7_livetarget :
-                                     (missid==3'd0) ? iqentry_2_livetarget |
+                                     (missid==4'd0) ? iqentry_2_livetarget |
                                                       iqentry_3_livetarget |
                                                       iqentry_4_livetarget |
                                                       iqentry_5_livetarget | 
                                                       iqentry_6_livetarget |
                                                       iqentry_7_livetarget |
                                                       iqentry_0_livetarget :
-                                     (missid==3'd1) ? iqentry_2_livetarget |
+                                     (missid==4'd1) ? iqentry_2_livetarget |
                                                       iqentry_3_livetarget |
                                                       iqentry_4_livetarget |
                                                       iqentry_5_livetarget | 
@@ -3488,35 +3572,35 @@ endgenerate
                                                       iqentry_1_livetarget :
                                                       {PREGS{1'b0}};
 
-    assign iqentry_3_cumulative = (missid==3'd3) ? iqentry_3_livetarget :
-                                     (missid==3'd4) ? iqentry_3_livetarget |
+    assign iqentry_3_cumulative = (missid==4'd3) ? iqentry_3_livetarget :
+                                     (missid==4'd4) ? iqentry_3_livetarget |
                                                       iqentry_4_livetarget :
-                                     (missid==3'd5) ? iqentry_3_livetarget |
+                                     (missid==4'd5) ? iqentry_3_livetarget |
                                                       iqentry_4_livetarget |
                                                       iqentry_5_livetarget :
-                                     (missid==3'd6) ? iqentry_3_livetarget |
+                                     (missid==4'd6) ? iqentry_3_livetarget |
                                                       iqentry_4_livetarget |
                                                       iqentry_5_livetarget |
                                                       iqentry_6_livetarget :
-                                     (missid==3'd7) ? iqentry_3_livetarget |
+                                     (missid==4'd7) ? iqentry_3_livetarget |
                                                       iqentry_4_livetarget |
                                                       iqentry_5_livetarget |
                                                       iqentry_6_livetarget | 
                                                       iqentry_7_livetarget :
-                                     (missid==3'd0) ? iqentry_3_livetarget |
+                                     (missid==4'd0) ? iqentry_3_livetarget |
                                                       iqentry_4_livetarget |
                                                       iqentry_5_livetarget |
                                                       iqentry_6_livetarget | 
                                                       iqentry_7_livetarget |
                                                       iqentry_0_livetarget :
-                                     (missid==3'd1) ? iqentry_3_livetarget |
+                                     (missid==4'd1) ? iqentry_3_livetarget |
                                                       iqentry_4_livetarget |
                                                       iqentry_5_livetarget |
                                                       iqentry_6_livetarget | 
                                                       iqentry_7_livetarget |
                                                       iqentry_0_livetarget |
                                                       iqentry_1_livetarget :
-                                     (missid==3'd2) ? iqentry_3_livetarget |
+                                     (missid==4'd2) ? iqentry_3_livetarget |
                                                       iqentry_4_livetarget |
                                                       iqentry_5_livetarget |
                                                       iqentry_6_livetarget | 
@@ -3526,35 +3610,35 @@ endgenerate
                                                       iqentry_2_livetarget :
                                                       {PREGS{1'b0}};
 
-    assign iqentry_4_cumulative = (missid==3'd4) ? iqentry_4_livetarget :
-                                     (missid==3'd5) ? iqentry_4_livetarget |
+    assign iqentry_4_cumulative = (missid==4'd4) ? iqentry_4_livetarget :
+                                     (missid==4'd5) ? iqentry_4_livetarget |
                                                       iqentry_5_livetarget :
-                                     (missid==3'd6) ? iqentry_4_livetarget |
+                                     (missid==4'd6) ? iqentry_4_livetarget |
                                                       iqentry_5_livetarget |
                                                       iqentry_6_livetarget :
-                                     (missid==3'd7) ? iqentry_4_livetarget |
+                                     (missid==4'd7) ? iqentry_4_livetarget |
                                                       iqentry_5_livetarget |
                                                       iqentry_6_livetarget |
                                                       iqentry_7_livetarget :
-                                     (missid==3'd0) ? iqentry_4_livetarget |
+                                     (missid==4'd0) ? iqentry_4_livetarget |
                                                       iqentry_5_livetarget |
                                                       iqentry_6_livetarget |
                                                       iqentry_7_livetarget | 
                                                       iqentry_0_livetarget :
-                                     (missid==3'd1) ? iqentry_4_livetarget |
+                                     (missid==4'd1) ? iqentry_4_livetarget |
                                                       iqentry_5_livetarget |
                                                       iqentry_6_livetarget |
                                                       iqentry_7_livetarget | 
                                                       iqentry_0_livetarget |
                                                       iqentry_1_livetarget :
-                                     (missid==3'd2) ? iqentry_4_livetarget |
+                                     (missid==4'd2) ? iqentry_4_livetarget |
                                                       iqentry_5_livetarget |
                                                       iqentry_6_livetarget |
                                                       iqentry_7_livetarget | 
                                                       iqentry_0_livetarget |
                                                       iqentry_1_livetarget |
                                                       iqentry_2_livetarget :
-                                     (missid==3'd3) ? iqentry_4_livetarget |
+                                     (missid==4'd3) ? iqentry_4_livetarget |
                                                       iqentry_5_livetarget |
                                                       iqentry_6_livetarget |
                                                       iqentry_7_livetarget | 
@@ -3564,35 +3648,35 @@ endgenerate
                                                       iqentry_3_livetarget :
                                                       {PREGS{1'b0}};
 
-    assign iqentry_5_cumulative = (missid==3'd5) ? iqentry_5_livetarget :
-                                     (missid==3'd6) ? iqentry_5_livetarget |
+    assign iqentry_5_cumulative = (missid==4'd5) ? iqentry_5_livetarget :
+                                     (missid==4'd6) ? iqentry_5_livetarget |
                                                       iqentry_6_livetarget :
-                                     (missid==3'd7) ? iqentry_5_livetarget |
+                                     (missid==4'd7) ? iqentry_5_livetarget |
                                                       iqentry_6_livetarget |
                                                       iqentry_7_livetarget :
-                                     (missid==3'd0) ? iqentry_5_livetarget |
+                                     (missid==4'd0) ? iqentry_5_livetarget |
                                                       iqentry_6_livetarget |
                                                       iqentry_7_livetarget |
                                                       iqentry_0_livetarget :
-                                     (missid==3'd1) ? iqentry_5_livetarget |
+                                     (missid==4'd1) ? iqentry_5_livetarget |
                                                       iqentry_6_livetarget |
                                                       iqentry_7_livetarget |
                                                       iqentry_0_livetarget | 
                                                       iqentry_1_livetarget :
-                                     (missid==3'd2) ? iqentry_5_livetarget |
+                                     (missid==4'd2) ? iqentry_5_livetarget |
                                                       iqentry_6_livetarget |
                                                       iqentry_7_livetarget |
                                                       iqentry_0_livetarget | 
                                                       iqentry_1_livetarget |
                                                       iqentry_2_livetarget :
-                                     (missid==3'd3) ? iqentry_5_livetarget |
+                                     (missid==4'd3) ? iqentry_5_livetarget |
                                                       iqentry_6_livetarget |
                                                       iqentry_7_livetarget |
                                                       iqentry_0_livetarget | 
                                                       iqentry_1_livetarget |
                                                       iqentry_2_livetarget |
                                                       iqentry_3_livetarget :
-                                     (missid==3'd4) ? iqentry_5_livetarget |
+                                     (missid==4'd4) ? iqentry_5_livetarget |
                                                       iqentry_6_livetarget |
                                                       iqentry_7_livetarget |
                                                       iqentry_0_livetarget | 
@@ -3601,35 +3685,35 @@ endgenerate
                                                       iqentry_3_livetarget |
                                                       iqentry_4_livetarget :
                                                       {PREGS{1'b0}};
-    assign iqentry_6_cumulative = (missid==3'd6) ? iqentry_6_livetarget :
-                                       (missid==3'd7) ? iqentry_6_livetarget |
+    assign iqentry_6_cumulative = (missid==4'd6) ? iqentry_6_livetarget :
+                                       (missid==4'd7) ? iqentry_6_livetarget |
                                                         iqentry_7_livetarget :
-                                       (missid==3'd0) ? iqentry_6_livetarget |
+                                       (missid==4'd0) ? iqentry_6_livetarget |
                                                         iqentry_7_livetarget |
                                                         iqentry_0_livetarget :
-                                       (missid==3'd1) ? iqentry_6_livetarget |
+                                       (missid==4'd1) ? iqentry_6_livetarget |
                                                         iqentry_7_livetarget |
                                                         iqentry_0_livetarget |
                                                         iqentry_1_livetarget :
-                                       (missid==3'd2) ? iqentry_6_livetarget |
+                                       (missid==4'd2) ? iqentry_6_livetarget |
                                                         iqentry_7_livetarget |
                                                         iqentry_0_livetarget |
                                                         iqentry_1_livetarget | 
                                                         iqentry_2_livetarget :
-                                       (missid==3'd3) ? iqentry_6_livetarget |
+                                       (missid==4'd3) ? iqentry_6_livetarget |
                                                         iqentry_7_livetarget |
                                                         iqentry_0_livetarget |
                                                         iqentry_1_livetarget | 
                                                         iqentry_2_livetarget |
                                                         iqentry_3_livetarget :
-                                       (missid==3'd4) ? iqentry_6_livetarget |
+                                       (missid==4'd4) ? iqentry_6_livetarget |
                                                         iqentry_7_livetarget |
                                                         iqentry_0_livetarget |
                                                         iqentry_1_livetarget | 
                                                         iqentry_2_livetarget |
                                                         iqentry_3_livetarget |
                                                         iqentry_4_livetarget :
-                                       (missid==3'd5) ? iqentry_6_livetarget |
+                                       (missid==4'd5) ? iqentry_6_livetarget |
                                                         iqentry_7_livetarget |
                                                         iqentry_0_livetarget |
                                                         iqentry_1_livetarget | 
@@ -3639,35 +3723,35 @@ endgenerate
                                                         iqentry_5_livetarget :
                                                         {PREGS{1'b0}};
 
-    assign iqentry_7_cumulative = (missid==3'd7) ? iqentry_7_livetarget :
-                                       (missid==3'd0) ? iqentry_7_livetarget |
+    assign iqentry_7_cumulative = (missid==4'd7) ? iqentry_7_livetarget :
+                                       (missid==4'd0) ? iqentry_7_livetarget |
                                                         iqentry_0_livetarget :
-                                       (missid==3'd1) ? iqentry_7_livetarget |
+                                       (missid==4'd1) ? iqentry_7_livetarget |
                                                         iqentry_0_livetarget |
                                                         iqentry_1_livetarget :
-                                       (missid==3'd2) ? iqentry_7_livetarget |
+                                       (missid==4'd2) ? iqentry_7_livetarget |
                                                         iqentry_0_livetarget |
                                                         iqentry_1_livetarget |
                                                         iqentry_2_livetarget :
-                                       (missid==3'd3) ? iqentry_7_livetarget |
+                                       (missid==4'd3) ? iqentry_7_livetarget |
                                                         iqentry_0_livetarget |
                                                         iqentry_1_livetarget |
                                                         iqentry_2_livetarget | 
                                                         iqentry_3_livetarget :
-                                       (missid==3'd4) ? iqentry_7_livetarget |
+                                       (missid==4'd4) ? iqentry_7_livetarget |
                                                         iqentry_0_livetarget |
                                                         iqentry_1_livetarget |
                                                         iqentry_2_livetarget | 
                                                         iqentry_3_livetarget |
                                                         iqentry_4_livetarget :
-                                       (missid==3'd5) ? iqentry_7_livetarget |
+                                       (missid==4'd5) ? iqentry_7_livetarget |
                                                         iqentry_0_livetarget |
                                                         iqentry_1_livetarget |
                                                         iqentry_2_livetarget | 
                                                         iqentry_3_livetarget |
                                                         iqentry_4_livetarget |
                                                         iqentry_5_livetarget :
-                                       (missid==3'd6) ? iqentry_7_livetarget |
+                                       (missid==4'd6) ? iqentry_7_livetarget |
                                                         iqentry_0_livetarget |
                                                         iqentry_1_livetarget |
                                                         iqentry_2_livetarget | 
@@ -3676,47 +3760,59 @@ endgenerate
                                                         iqentry_5_livetarget |
                                                         iqentry_6_livetarget :
                                                         {PREGS{1'b0}};
-
-    assign iqentry_0_latestID = (missid == 3'd0 || ((iqentry_0_livetarget & iqentry_1_cumulative) == {PREGS{1'b0}}))
-				    ? iqentry_0_livetarget
+*/
+    assign iqentry_0_latestID = (missid == 4'd0 || ((iqentry_livetarget[0] & iqentry_cumulative[1]) == {PREGS{1'b0}}))
+				    ? iqentry_livetarget[0]
 				    : {PREGS{1'b0}};
 
-    assign iqentry_1_latestID = (missid == 3'd1 || ((iqentry_1_livetarget & iqentry_2_cumulative) == {PREGS{1'b0}}))
-				    ? iqentry_1_livetarget
+    assign iqentry_1_latestID = (missid == 4'd1 || ((iqentry_livetarget[1] & iqentry_cumulative[2]) == {PREGS{1'b0}}))
+				    ? iqentry_livetarget[1]
 				    : {PREGS{1'b0}};
 
-    assign iqentry_2_latestID = (missid == 3'd2 || ((iqentry_2_livetarget & iqentry_3_cumulative) == {PREGS{1'b0}}))
-				    ? iqentry_2_livetarget
+    assign iqentry_2_latestID = (missid == 4'd2 || ((iqentry_livetarget[2] & iqentry_cumulative[3]) == {PREGS{1'b0}}))
+				    ? iqentry_livetarget[2]
 				    : {PREGS{1'b0}};
 
-    assign iqentry_3_latestID = (missid == 3'd3 || ((iqentry_3_livetarget & iqentry_4_cumulative) == {PREGS{1'b0}}))
-				    ? iqentry_3_livetarget
+    assign iqentry_3_latestID = (missid == 4'd3 || ((iqentry_livetarget[3] & iqentry_cumulative[4]) == {PREGS{1'b0}}))
+				    ? iqentry_livetarget[3]
 				    : {PREGS{1'b0}};
 
-    assign iqentry_4_latestID = (missid == 3'd4 || ((iqentry_4_livetarget & iqentry_5_cumulative) == {PREGS{1'b0}}))
-				    ? iqentry_4_livetarget
+    assign iqentry_4_latestID = (missid == 4'd4 || ((iqentry_livetarget[4] & iqentry_cumulative[5]) == {PREGS{1'b0}}))
+				    ? iqentry_livetarget[4]
 				    : {PREGS{1'b0}};
 
-    assign iqentry_5_latestID = (missid == 3'd5 || ((iqentry_5_livetarget & iqentry_6_cumulative) == {PREGS{1'b0}}))
-				    ? iqentry_5_livetarget
+    assign iqentry_5_latestID = (missid == 4'd5 || ((iqentry_livetarget[5] & iqentry_cumulative[6]) == {PREGS{1'b0}}))
+				    ? iqentry_livetarget[5]
 				    : {PREGS{1'b0}};
 
-    assign iqentry_6_latestID = (missid == 3'd6 || ((iqentry_6_livetarget & iqentry_7_cumulative) == {PREGS{1'b0}}))
-				    ? iqentry_6_livetarget
+    assign iqentry_6_latestID = (missid == 4'd6 || ((iqentry_livetarget[6] & iqentry_cumulative[7]) == {PREGS{1'b0}}))
+				    ? iqentry_livetarget[6]
 				    : {PREGS{1'b0}};
 
-    assign iqentry_7_latestID = (missid == 3'd7 || ((iqentry_7_livetarget & iqentry_0_cumulative) == {PREGS{1'b0}}))
-				    ? iqentry_7_livetarget
+    assign iqentry_7_latestID = (missid == 4'd7 || ((iqentry_livetarget[7] & iqentry_cumulative[8]) == {PREGS{1'b0}}))
+				    ? iqentry_livetarget[7]
 				    : {PREGS{1'b0}};
 
-assign  iqentry_source[0] = | iqentry_0_latestID,
+    assign iqentry_8_latestID = (missid == 4'd8 || ((iqentry_livetarget[8] & iqentry_cumulative[9]) == {PREGS{1'b0}}))
+				    ? iqentry_livetarget[8]
+				    : {PREGS{1'b0}};
+
+    assign iqentry_9_latestID = (missid == 4'd9 || ((iqentry_livetarget[9] & iqentry_cumulative[0]) == {PREGS{1'b0}}))
+				    ? iqentry_livetarget[9]
+				    : {PREGS{1'b0}};
+
+assign
+  iqentry_source[0] = | iqentry_0_latestID,
   iqentry_source[1] = | iqentry_1_latestID,
   iqentry_source[2] = | iqentry_2_latestID,
   iqentry_source[3] = | iqentry_3_latestID,
   iqentry_source[4] = | iqentry_4_latestID,
   iqentry_source[5] = | iqentry_5_latestID,
   iqentry_source[6] = | iqentry_6_latestID,
-  iqentry_source[7] = | iqentry_7_latestID;
+  iqentry_source[7] = | iqentry_7_latestID,
+  iqentry_source[8] = | iqentry_8_latestID,
+  iqentry_source[9] = | iqentry_9_latestID
+  ;
 
 
 reg vqueued2;
@@ -3802,6 +3898,8 @@ assign heads[4] = head4;
 assign heads[5] = head5;
 assign heads[6] = head6;
 assign heads[7] = head7;
+assign heads[8] = head8;
+assign heads[9] = head9;
 
 always @*
 begin
@@ -4368,154 +4466,232 @@ wire [QENTRIES-1:0] nextqd;
 reg [`QBITS] nid0;
 always @*
 if (iqentry_thrd[1]==iqentry_thrd[0])
-	nid0 = 3'd1;
+	nid0 = 4'd1;
 else if (iqentry_thrd[2]==iqentry_thrd[0])
-	nid0 = 3'd2;
+	nid0 = 4'd2;
 else if (iqentry_thrd[3]==iqentry_thrd[0])
-	nid0 = 3'd3;
+	nid0 = 4'd3;
 else if (iqentry_thrd[4]==iqentry_thrd[0])
-	nid0 = 3'd4;
+	nid0 = 4'd4;
 else if (iqentry_thrd[5]==iqentry_thrd[0])
-	nid0 = 3'd5;
+	nid0 = 4'd5;
 else if (iqentry_thrd[6]==iqentry_thrd[0])
-	nid0 = 3'd6;
+	nid0 = 4'd6;
 else if (iqentry_thrd[7]==iqentry_thrd[0])
-	nid0 = 3'd7;
+	nid0 = 4'd7;
+else if (iqentry_thrd[8]==iqentry_thrd[0])
+	nid0 = 4'd8;
+else if (iqentry_thrd[9]==iqentry_thrd[0])
+	nid0 = 4'd9;
 else
 	nid0 = 3'd0;
 
 reg [`QBITS] nid1;
 always @*
 if (iqentry_thrd[2]==iqentry_thrd[1])
-	nid1 = 3'd2;
+	nid1 = 4'd2;
 else if (iqentry_thrd[3]==iqentry_thrd[1])
-	nid1 = 3'd3;
+	nid1 = 4'd3;
 else if (iqentry_thrd[4]==iqentry_thrd[1])
-	nid1 = 3'd4;
+	nid1 = 4'd4;
 else if (iqentry_thrd[5]==iqentry_thrd[1])
-	nid1 = 3'd5;
+	nid1 = 4'd5;
 else if (iqentry_thrd[6]==iqentry_thrd[1])
-	nid1 = 3'd6;
+	nid1 = 4'd6;
 else if (iqentry_thrd[7]==iqentry_thrd[1])
-	nid1 = 3'd7;
+	nid1 = 4'd7;
+else if (iqentry_thrd[8]==iqentry_thrd[1])
+	nid1 = 4'd8;
+else if (iqentry_thrd[9]==iqentry_thrd[1])
+	nid1 = 4'd9;
 else if (iqentry_thrd[0]==iqentry_thrd[1])
-	nid1 = 3'd0;
+	nid1 = 4'd0;
 else
-	nid1 = 3'd1;
+	nid1 = 4'd1;
 
 reg [`QBITS] nid2;
 always @*
 if (iqentry_thrd[3]==iqentry_thrd[2])
-	nid2 = 3'd3;
+	nid2 = 4'd3;
 else if (iqentry_thrd[4]==iqentry_thrd[2])
-	nid2 = 3'd4;
+	nid2 = 4'd4;
 else if (iqentry_thrd[5]==iqentry_thrd[2])
-	nid2 = 3'd5;
+	nid2 = 4'd5;
 else if (iqentry_thrd[6]==iqentry_thrd[2])
-	nid2 = 3'd6;
+	nid2 = 4'd6;
 else if (iqentry_thrd[7]==iqentry_thrd[2])
-	nid2 = 3'd7;
+	nid2 = 4'd7;
+else if (iqentry_thrd[8]==iqentry_thrd[2])
+	nid2 = 4'd8;
+else if (iqentry_thrd[9]==iqentry_thrd[2])
+	nid2 = 4'd9;
 else if (iqentry_thrd[0]==iqentry_thrd[2])
-	nid2 = 3'd0;
+	nid2 = 4'd0;
 else if (iqentry_thrd[1]==iqentry_thrd[2])
-	nid2 = 3'd1;
+	nid2 = 4'd1;
 else
-	nid2 = 3'd2;
+	nid2 = 4'd2;
 
 reg [`QBITS] nid3;
 always @*
 if (iqentry_thrd[4]==iqentry_thrd[3])
-	nid3 = 3'd4;
+	nid3 = 4'd4;
 else if (iqentry_thrd[5]==iqentry_thrd[3])
-	nid3 = 3'd5;
+	nid3 = 4'd5;
 else if (iqentry_thrd[6]==iqentry_thrd[3])
-	nid3 = 3'd6;
+	nid3 = 4'd6;
 else if (iqentry_thrd[7]==iqentry_thrd[3])
-	nid3 = 3'd7;
+	nid3 = 4'd7;
+else if (iqentry_thrd[8]==iqentry_thrd[3])
+	nid3 = 4'd8;
+else if (iqentry_thrd[9]==iqentry_thrd[3])
+	nid3 = 4'd9;
 else if (iqentry_thrd[0]==iqentry_thrd[3])
-	nid3 = 3'd0;
+	nid3 = 4'd0;
 else if (iqentry_thrd[1]==iqentry_thrd[3])
-	nid3 = 3'd1;
+	nid3 = 4'd1;
 else if (iqentry_thrd[2]==iqentry_thrd[3])
-	nid3 = 3'd2;
+	nid3 = 4'd2;
 else
-	nid3 = 3'd3;
+	nid3 = 4'd3;
 
 reg [`QBITS] nid4;
 always @*
 if (iqentry_thrd[5]==iqentry_thrd[4])
-	nid4 = 3'd5;
+	nid4 = 4'd5;
 else if (iqentry_thrd[6]==iqentry_thrd[4])
-	nid4 = 3'd6;
+	nid4 = 4'd6;
 else if (iqentry_thrd[7]==iqentry_thrd[4])
-	nid4 = 3'd7;
+	nid4 = 4'd7;
+else if (iqentry_thrd[8]==iqentry_thrd[4])
+	nid4 = 4'd8;
+else if (iqentry_thrd[9]==iqentry_thrd[4])
+	nid4 = 4'd9;
 else if (iqentry_thrd[0]==iqentry_thrd[4])
-	nid4 = 3'd0;
+	nid4 = 4'd0;
 else if (iqentry_thrd[1]==iqentry_thrd[4])
-	nid4 = 3'd1;
+	nid4 = 4'd1;
 else if (iqentry_thrd[2]==iqentry_thrd[4])
-	nid4 = 3'd2;
+	nid4 = 4'd2;
 else if (iqentry_thrd[3]==iqentry_thrd[4])
-	nid4 = 3'd3;
+	nid4 = 4'd3;
 else
-	nid4 = 3'd4;
+	nid4 = 4'd4;
 
 reg [`QBITS] nid5;
 always @*
 if (iqentry_thrd[6]==iqentry_thrd[5])
-	nid5 = 3'd6;
+	nid5 = 4'd6;
 else if (iqentry_thrd[7]==iqentry_thrd[5])
-	nid5 = 3'd7;
+	nid5 = 4'd7;
+else if (iqentry_thrd[8]==iqentry_thrd[5])
+	nid5 = 4'd8;
+else if (iqentry_thrd[9]==iqentry_thrd[5])
+	nid5 = 4'd9;
 else if (iqentry_thrd[0]==iqentry_thrd[5])
-	nid5 = 3'd0;
+	nid5 = 4'd0;
 else if (iqentry_thrd[1]==iqentry_thrd[5])
-	nid5 = 3'd1;
+	nid5 = 4'd1;
 else if (iqentry_thrd[2]==iqentry_thrd[5])
-	nid5 = 3'd2;
+	nid5 = 4'd2;
 else if (iqentry_thrd[3]==iqentry_thrd[5])
-	nid5 = 3'd3;
+	nid5 = 4'd3;
 else if (iqentry_thrd[4]==iqentry_thrd[5])
-	nid5 = 3'd4;
+	nid5 = 4'd4;
 else
-	nid5 = 3'd5;
+	nid5 = 4'd5;
 
 reg [`QBITS] nid6;
 always @*
 if (iqentry_thrd[7]==iqentry_thrd[6])
-	nid6 = 3'd7;
+	nid6 = 4'd7;
+else if (iqentry_thrd[8]==iqentry_thrd[6])
+	nid6 = 4'd8;
+else if (iqentry_thrd[9]==iqentry_thrd[6])
+	nid6 = 4'd9;
 else if (iqentry_thrd[0]==iqentry_thrd[6])
-	nid6 = 3'd0;
+	nid6 = 4'd0;
 else if (iqentry_thrd[1]==iqentry_thrd[6])
-	nid6 = 3'd1;
+	nid6 = 4'd1;
 else if (iqentry_thrd[2]==iqentry_thrd[6])
-	nid6 = 3'd2;
+	nid6 = 4'd2;
 else if (iqentry_thrd[3]==iqentry_thrd[6])
-	nid6 = 3'd3;
+	nid6 = 4'd3;
 else if (iqentry_thrd[4]==iqentry_thrd[6])
-	nid6 = 3'd4;
+	nid6 = 4'd4;
 else if (iqentry_thrd[5]==iqentry_thrd[6])
-	nid6 = 3'd5;
+	nid6 = 4'd5;
 else
-	nid6 = 3'd6;
+	nid6 = 4'd6;
 
 reg [`QBITS] nid7;
 always @*
-if (iqentry_thrd[0]==iqentry_thrd[7])
-	nid7 = 3'd0;
+if (iqentry_thrd[8]==iqentry_thrd[7])
+	nid7 = 4'd8;
+else if (iqentry_thrd[9]==iqentry_thrd[7])
+	nid7 = 4'd9;
+else if (iqentry_thrd[0]==iqentry_thrd[7])
+	nid7 = 4'd0;
 else if (iqentry_thrd[1]==iqentry_thrd[7])
-	nid7 = 3'd1;
+	nid7 = 4'd1;
 else if (iqentry_thrd[2]==iqentry_thrd[7])
-	nid7 = 3'd2;
+	nid7 = 4'd2;
 else if (iqentry_thrd[3]==iqentry_thrd[7])
-	nid7 = 3'd3;
+	nid7 = 4'd3;
 else if (iqentry_thrd[4]==iqentry_thrd[7])
-	nid7 = 3'd4;
+	nid7 = 4'd4;
 else if (iqentry_thrd[5]==iqentry_thrd[7])
-	nid7 = 3'd5;
+	nid7 = 4'd5;
 else if (iqentry_thrd[6]==iqentry_thrd[7])
-	nid7 = 3'd6;
+	nid7 = 4'd6;
 else
-	nid7 = 3'd7;
+	nid7 = 4'd7;
+
+reg [`QBITS] nid8;
+always @*
+if (iqentry_thrd[9]==iqentry_thrd[8])
+	nid8 = 4'd9;
+else if (iqentry_thrd[0]==iqentry_thrd[8])
+	nid8 = 4'd0;
+else if (iqentry_thrd[1]==iqentry_thrd[8])
+	nid8 = 4'd1;
+else if (iqentry_thrd[2]==iqentry_thrd[8])
+	nid8 = 4'd2;
+else if (iqentry_thrd[3]==iqentry_thrd[8])
+	nid8 = 4'd3;
+else if (iqentry_thrd[4]==iqentry_thrd[8])
+	nid8 = 4'd4;
+else if (iqentry_thrd[5]==iqentry_thrd[8])
+	nid8 = 4'd5;
+else if (iqentry_thrd[6]==iqentry_thrd[8])
+	nid8 = 4'd6;
+else if (iqentry_thrd[7]==iqentry_thrd[8])
+	nid8 = 4'd7;
+else
+	nid8 = 4'd8;
+
+reg [`QBITS] nid9;
+always @*
+if (iqentry_thrd[0]==iqentry_thrd[9])
+	nid9 = 4'd0;
+else if (iqentry_thrd[1]==iqentry_thrd[9])
+	nid9 = 4'd1;
+else if (iqentry_thrd[2]==iqentry_thrd[9])
+	nid9 = 4'd2;
+else if (iqentry_thrd[3]==iqentry_thrd[9])
+	nid9 = 4'd3;
+else if (iqentry_thrd[4]==iqentry_thrd[9])
+	nid9 = 4'd4;
+else if (iqentry_thrd[5]==iqentry_thrd[9])
+	nid9 = 4'd5;
+else if (iqentry_thrd[6]==iqentry_thrd[9])
+	nid9 = 4'd6;
+else if (iqentry_thrd[7]==iqentry_thrd[9])
+	nid9 = 4'd7;
+else if (iqentry_thrd[8]==iqentry_thrd[9])
+	nid9 = 4'd8;
+else
+	nid9 = 4'd9;
 
 // Search the queue for the next entry on the same thread.
 reg [`QBITS] nid;
@@ -4534,6 +4710,10 @@ else if (iqentry_thrd[idp6(fcu_id)]==iqentry_thrd[fcu_id[`QBITS]])
 	nid = idp6(fcu_id);
 else if (iqentry_thrd[idp7(fcu_id)]==iqentry_thrd[fcu_id[`QBITS]])
 	nid = idp7(fcu_id);
+else if (iqentry_thrd[idp8(fcu_id)]==iqentry_thrd[fcu_id[`QBITS]])
+	nid = idp8(fcu_id);
+else if (iqentry_thrd[idp9(fcu_id)]==iqentry_thrd[fcu_id[`QBITS]])
+	nid = idp9(fcu_id);
 else
 	nid = fcu_id;
 
@@ -4546,6 +4726,8 @@ assign  nextqd[4] = iqentry_sn[nid4] > iqentry_sn[4] || iqentry_v[4];
 assign  nextqd[5] = iqentry_sn[nid5] > iqentry_sn[5] || iqentry_v[5];
 assign  nextqd[6] = iqentry_sn[nid6] > iqentry_sn[6] || iqentry_v[6];
 assign  nextqd[7] = iqentry_sn[nid7] > iqentry_sn[7] || iqentry_v[7];
+assign  nextqd[8] = iqentry_sn[nid8] > iqentry_sn[8] || iqentry_v[8];
+assign  nextqd[9] = iqentry_sn[nid9] > iqentry_sn[9] || iqentry_v[9];
 
 //assign nextqd = 8'hFF;
 
@@ -5180,6 +5362,10 @@ begin
 		stompedOnRets = stompedOnRets + 4'd1;
 	if (iqentry_stomp[7] && iqentry_ret[7])
 		stompedOnRets = stompedOnRets + 4'd1;
+	if (iqentry_stomp[8] && iqentry_ret[8])
+		stompedOnRets = stompedOnRets + 4'd1;
+	if (iqentry_stomp[9] && iqentry_ret[9])
+		stompedOnRets = stompedOnRets + 4'd1;
 end
 
 reg id1_vi, id2_vi, id3_vi;
@@ -5356,7 +5542,7 @@ fpUnit ufp1
   .imm(fpu1_argI),
   .o(fpu1_bus),
   .csr_i(),
-  .status(fpu_status),
+  .status(fpu1_status),
   .exception(),
   .done(fpu1_done)
 );
@@ -5383,7 +5569,7 @@ fpUnit ufp1
   .imm(fpu2_argI),
   .o(fpu2_bus),
   .csr_i(),
-  .status(fpu_status),
+  .status(fpu2_status),
   .exception(),
   .done(fpu2_done)
 );
@@ -5391,8 +5577,10 @@ end
 end
 endgenerate
 
-assign fpu_exc = (fpu1_available|fpu2_available) ? 
-									((|fpu1_status[15:0] || |fpu2_status[15:0]) ? `FLT_FLT : `FLT_NONE) : `FLT_UNIMP;
+assign fpu1_exc = (fpu1_available) ? 
+									((|fpu1_status[15:0]) ? `FLT_FLT : `FLT_NONE) : `FLT_UNIMP;
+assign fpu2_exc = (fpu2_available) ? 
+									((|fpu2_status[15:0]) ? `FLT_FLT : `FLT_NONE) : `FLT_UNIMP;
 
 assign  alu0_v = alu0_dataready,
         alu1_v = alu1_dataready;
@@ -5572,7 +5760,10 @@ assign  iqentry_memopsvalid[0] = (iqentry_mem[0] & iqentry_a2_v[0] & iqentry_age
     iqentry_memopsvalid[4] = (iqentry_mem[4] & iqentry_a2_v[4] & iqentry_agen[4]),
     iqentry_memopsvalid[5] = (iqentry_mem[5] & iqentry_a2_v[5] & iqentry_agen[5]),
     iqentry_memopsvalid[6] = (iqentry_mem[6] & iqentry_a2_v[6] & iqentry_agen[6]),
-    iqentry_memopsvalid[7] = (iqentry_mem[7] & iqentry_a2_v[7] & iqentry_agen[7]);
+    iqentry_memopsvalid[7] = (iqentry_mem[7] & iqentry_a2_v[7] & iqentry_agen[7]),
+    iqentry_memopsvalid[8] = (iqentry_mem[8] & iqentry_a2_v[8] & iqentry_agen[8]),
+    iqentry_memopsvalid[9] = (iqentry_mem[9] & iqentry_a2_v[9] & iqentry_agen[9])
+    ;
 
 assign  iqentry_memready[0] = (iqentry_v[0] & iqentry_memopsvalid[0] & ~iqentry_memissue[0] & ~iqentry_done[0] & ~iqentry_out[0] & ~iqentry_stomp[0]),
     iqentry_memready[1] = (iqentry_v[1] & iqentry_memopsvalid[1] & ~iqentry_memissue[1] & ~iqentry_done[1] & ~iqentry_out[1] & ~iqentry_stomp[1]),
@@ -5581,7 +5772,10 @@ assign  iqentry_memready[0] = (iqentry_v[0] & iqentry_memopsvalid[0] & ~iqentry_
     iqentry_memready[4] = (iqentry_v[4] & iqentry_memopsvalid[4] & ~iqentry_memissue[4] & ~iqentry_done[4] & ~iqentry_out[4] & ~iqentry_stomp[4]),
     iqentry_memready[5] = (iqentry_v[5] & iqentry_memopsvalid[5] & ~iqentry_memissue[5] & ~iqentry_done[5] & ~iqentry_out[5] & ~iqentry_stomp[5]),
     iqentry_memready[6] = (iqentry_v[6] & iqentry_memopsvalid[6] & ~iqentry_memissue[6] & ~iqentry_done[6] & ~iqentry_out[6] & ~iqentry_stomp[6]),
-    iqentry_memready[7] = (iqentry_v[7] & iqentry_memopsvalid[7] & ~iqentry_memissue[7] & ~iqentry_done[7] & ~iqentry_out[7] & ~iqentry_stomp[7]);
+    iqentry_memready[7] = (iqentry_v[7] & iqentry_memopsvalid[7] & ~iqentry_memissue[7] & ~iqentry_done[7] & ~iqentry_out[7] & ~iqentry_stomp[7]),
+    iqentry_memready[8] = (iqentry_v[8] & iqentry_memopsvalid[8] & ~iqentry_memissue[8] & ~iqentry_done[8] & ~iqentry_out[8] & ~iqentry_stomp[8]),
+    iqentry_memready[9] = (iqentry_v[9] & iqentry_memopsvalid[9] & ~iqentry_memissue[9] & ~iqentry_done[9] & ~iqentry_out[9] & ~iqentry_stomp[9])
+    ;
 
 assign outstanding_stores = (dram0 && dram0_store) ||
                             (dram1 && dram1_store) ||
@@ -5712,7 +5906,7 @@ begin
                   // If an irq is active during a vector instruction fetch, claim the vector instruction
                   // is finished queueing even though it may not be. It'll pick up where it left off after
                   // the exception is processed.
-                  if (hirq) begin
+                  if (freezePC) begin
                   	if (IsVector(fetchbuf0_instr) && IsVector(fetchbuf1_instr) && vechain) begin
                   		queued1 <= TRUE;
                   		queued2 <= TRUE;
@@ -5740,7 +5934,7 @@ begin
               	canq2 <= IsVector(fetchbuf0_instr) && vqe0 < vl-2 && SUP_VECTOR;
                   vqueued2 <= IsVector(fetchbuf0_instr) && vqe0 < vl-2 && !vechain;
           	end
-          	if (hirq) begin
+          	if (freezePC) begin
               	if (IsVector(fetchbuf0_instr)) begin
               		queued1 <= TRUE;
               		if (vqe0 < vl-2)
@@ -5762,7 +5956,7 @@ begin
               	canq2 <= IsVector(fetchbuf1_instr) && vqe1 < vl-2 && SUP_VECTOR;
                   vqueued2 <= IsVector(fetchbuf1_instr) && vqe1 < vl-2;
           	end
-          	if (hirq) begin
+          	if (freezePC) begin
               	if (IsVector(fetchbuf1_instr)) begin
               		queued1 <= TRUE;
               		if (vqe1 < vl-2)
@@ -5946,6 +6140,8 @@ if (rst) begin
      head5 <= 5;
      head6 <= 6;
      head7 <= 7;
+     head8 <= 8;
+     head9 <= 9;
      panic = `PANIC_NONE;
      alu0_dataready <= 0;
      alu1_dataready <= 0;
@@ -6125,14 +6321,16 @@ else begin
             	end
            end
 
-	    if (|iqentry_0_latestID)	 if (iqentry_thrd[0]==branchmiss_thrd) rf_source[ {iqentry_tgt[0][7:0]} ] <= { 1'b0, iqentry_mem[0], 3'd0 };
-        if (|iqentry_1_latestID)     if (iqentry_thrd[1]==branchmiss_thrd) rf_source[ {iqentry_tgt[1][7:0]} ] <= { 1'b0, iqentry_mem[1], 3'd1 };
-        if (|iqentry_2_latestID)     if (iqentry_thrd[2]==branchmiss_thrd) rf_source[ {iqentry_tgt[2][7:0]} ] <= { 1'b0, iqentry_mem[2], 3'd2 };
-        if (|iqentry_3_latestID)     if (iqentry_thrd[3]==branchmiss_thrd) rf_source[ {iqentry_tgt[3][7:0]} ] <= { 1'b0, iqentry_mem[3], 3'd3 };
-        if (|iqentry_4_latestID)     if (iqentry_thrd[4]==branchmiss_thrd) rf_source[ {iqentry_tgt[4][7:0]} ] <= { 1'b0, iqentry_mem[4], 3'd4 };
-        if (|iqentry_5_latestID)     if (iqentry_thrd[5]==branchmiss_thrd) rf_source[ {iqentry_tgt[5][7:0]} ] <= { 1'b0, iqentry_mem[5], 3'd5 };
-        if (|iqentry_6_latestID)     if (iqentry_thrd[6]==branchmiss_thrd) rf_source[ {iqentry_tgt[6][7:0]} ] <= { 1'b0, iqentry_mem[6], 3'd6 };
-        if (|iqentry_7_latestID)     if (iqentry_thrd[7]==branchmiss_thrd) rf_source[ {iqentry_tgt[7][7:0]} ] <= { 1'b0, iqentry_mem[7], 3'd7 };
+	    if (|iqentry_0_latestID)	 if (iqentry_thrd[0]==branchmiss_thrd) rf_source[ {iqentry_tgt[0][7:0]} ] <= { 1'b0, iqentry_mem[0], 4'd0 };
+        if (|iqentry_1_latestID)     if (iqentry_thrd[1]==branchmiss_thrd) rf_source[ {iqentry_tgt[1][7:0]} ] <= { 1'b0, iqentry_mem[1], 4'd1 };
+        if (|iqentry_2_latestID)     if (iqentry_thrd[2]==branchmiss_thrd) rf_source[ {iqentry_tgt[2][7:0]} ] <= { 1'b0, iqentry_mem[2], 4'd2 };
+        if (|iqentry_3_latestID)     if (iqentry_thrd[3]==branchmiss_thrd) rf_source[ {iqentry_tgt[3][7:0]} ] <= { 1'b0, iqentry_mem[3], 4'd3 };
+        if (|iqentry_4_latestID)     if (iqentry_thrd[4]==branchmiss_thrd) rf_source[ {iqentry_tgt[4][7:0]} ] <= { 1'b0, iqentry_mem[4], 4'd4 };
+        if (|iqentry_5_latestID)     if (iqentry_thrd[5]==branchmiss_thrd) rf_source[ {iqentry_tgt[5][7:0]} ] <= { 1'b0, iqentry_mem[5], 4'd5 };
+        if (|iqentry_6_latestID)     if (iqentry_thrd[6]==branchmiss_thrd) rf_source[ {iqentry_tgt[6][7:0]} ] <= { 1'b0, iqentry_mem[6], 4'd6 };
+        if (|iqentry_7_latestID)     if (iqentry_thrd[7]==branchmiss_thrd) rf_source[ {iqentry_tgt[7][7:0]} ] <= { 1'b0, iqentry_mem[7], 4'd7 };
+        if (|iqentry_8_latestID)     if (iqentry_thrd[8]==branchmiss_thrd) rf_source[ {iqentry_tgt[8][7:0]} ] <= { 1'b0, iqentry_mem[8], 4'd8 };
+        if (|iqentry_9_latestID)     if (iqentry_thrd[9]==branchmiss_thrd) rf_source[ {iqentry_tgt[9][7:0]} ] <= { 1'b0, iqentry_mem[9], 4'd9 };
         
     end
 
@@ -8429,43 +8627,49 @@ if (!branchmiss) begin
         end
     endcase
 end
-`ifndef SUPPORT_SMT
-else begin	// if branchmiss
+else if (!thread_en) begin	// if branchmiss
     if (iqentry_stomp[0] & ~iqentry_stomp[7]) begin
-         tail0 <= 3'd0;
-         tail1 <= 3'd1;
+         tail0 <= 4'd0;
+         tail1 <= 4'd1;
     end
     else if (iqentry_stomp[1] & ~iqentry_stomp[0]) begin
-         tail0 <= 3'd1;
-         tail1 <= 3'd2;
+         tail0 <= 4'd1;
+         tail1 <= 4'd2;
     end
     else if (iqentry_stomp[2] & ~iqentry_stomp[1]) begin
-         tail0 <= 3'd2;
-         tail1 <= 3'd3;
+         tail0 <= 4'd2;
+         tail1 <= 4'd3;
     end
     else if (iqentry_stomp[3] & ~iqentry_stomp[2]) begin
-         tail0 <= 3'd3;
-         tail1 <= 3'd4;
+         tail0 <= 4'd3;
+         tail1 <= 4'd4;
     end
     else if (iqentry_stomp[4] & ~iqentry_stomp[3]) begin
-         tail0 <= 3'd4;
-         tail1 <= 3'd5;
+         tail0 <= 4'd4;
+         tail1 <= 4'd5;
     end
     else if (iqentry_stomp[5] & ~iqentry_stomp[4]) begin
-         tail0 <= 3'd5;
-         tail1 <= 3'd6;
+         tail0 <= 4'd5;
+         tail1 <= 4'd6;
     end
     else if (iqentry_stomp[6] & ~iqentry_stomp[5]) begin
-         tail0 <= 3'd6;
-         tail1 <= 3'd7;
+         tail0 <= 4'd6;
+         tail1 <= 4'd7;
     end
     else if (iqentry_stomp[7] & ~iqentry_stomp[6]) begin
-         tail0 <= 3'd7;
-         tail1 <= 3'd0;
+         tail0 <= 4'd7;
+         tail1 <= 4'd8;
+    end
+    else if (iqentry_stomp[8] & ~iqentry_stomp[7]) begin
+         tail0 <= 4'd8;
+         tail1 <= 4'd9;
+    end
+    else if (iqentry_stomp[9] & ~iqentry_stomp[8]) begin
+         tail0 <= 4'd9;
+         tail1 <= 4'd0;
     end
     // otherwise, it is the last instruction in the queue that has been mispredicted ... do nothing
 end
-`endif
 
 /*
     if (pebm)
@@ -8840,6 +9044,23 @@ begin
 	end
 end
 endtask
+
+function [`QBITS] fnAddAmt;
+input [`QBITS] hd;
+input [`QBITS] amt;
+begin
+	case(hd + amt)
+	4'd10:	fnAddAmt = 4'd0;
+	4'd11:	fnAddAmt = 4'd1;
+	4'd12:	fnAddAmt = 4'd2;
+	4'd13:	fnAddAmt = 4'd3;
+	4'd14:	fnAddAmt = 4'd4;
+	4'd15:	fnAddAmt = 4'd5;
+	default:	fnAddAmt = hd + amt;
+	endcase
+end
+endfunction
+
 // Increment the head pointers
 // Also increments the instruction counter
 // Used when instructions are committed.
@@ -8848,14 +9069,16 @@ endtask
 task head_inc;
 input [`QBITS] amt;
 begin
-     head0 <= head0 + amt;
-     head1 <= head1 + amt;
-     head2 <= head2 + amt;
-     head3 <= head3 + amt;
-     head4 <= head4 + amt;
-     head5 <= head5 + amt;
-     head6 <= head6 + amt;
-     head7 <= head7 + amt;
+     head0 <= fnAddAmt(head0,amt);
+     head1 <= fnAddAmt(head1,amt);
+     head2 <= fnAddAmt(head2,amt);
+     head3 <= fnAddAmt(head3,amt);
+     head4 <= fnAddAmt(head4,amt);
+     head5 <= fnAddAmt(head5,amt);
+     head6 <= fnAddAmt(head6,amt);
+     head7 <= fnAddAmt(head7,amt);
+     head8 <= fnAddAmt(head8,amt);
+     head9 <= fnAddAmt(head9,amt);
      I <= I + amt;
     if (amt==3'd3) begin
      	iqentry_agen[head0] <= `INV;
@@ -9444,8 +9667,8 @@ begin
 `endif   
     `CSR_CAS:       dat <= cas;
     `CSR_TVEC:      dat <= tvec[csrno[2:0]];
-    `CSR_BADADR:    dat <= badaddr[{thread,csrno[13:11]}];
-    `CSR_CAUSE:     dat <= {48'd0,cause[{thread,csrno[13:11]}]};
+    `CSR_BADADR:    dat <= badaddr[{thread,csrno[11:10]}];
+    `CSR_CAUSE:     dat <= {48'd0,cause[{thread,csrno[11:10]}]};
 `ifdef SUPPORT_SMT    
     `CSR_IM_STACK:	dat <= im_stack[thread];
     `CSR_OL_STACK:	dat <= ol_stack[thread];
@@ -9543,8 +9766,8 @@ begin
         `CSR_SBU:       sbu <= dat[31:0];
         `CSR_TCB:		tcb <= dat;
         `CSR_FSTAT:		fpu_csr[37:32] <= dat[37:32];
-        `CSR_BADADR:    badaddr[{thread,csrno[13:11]}] <= dat;
-        `CSR_CAUSE:     cause[{thread,csrno[13:11]}] <= dat[15:0];
+        `CSR_BADADR:    badaddr[{thread,csrno[11:10]}] <= dat;
+        `CSR_CAUSE:     cause[{thread,csrno[11:10]}] <= dat[15:0];
 `ifdef SUPPORT_DBG        
         `CSR_DBAD0:     dbg_adr0 <= dat[AMSB:0];
         `CSR_DBAD1:     dbg_adr1 <= dat[AMSB:0];

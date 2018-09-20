@@ -22,10 +22,10 @@
 //
 // ============================================================================
 //
-`define QBITS	2:0
+`include "FT64_config.vh"
 
 module FT64_stomp(branchmiss,branchmiss_thrd,missid,head0,thrd,iqentry_v,stomp);
-parameter QENTRIES = 8;
+parameter QENTRIES = `QENTRIES;
 input branchmiss;
 input branchmiss_thrd;
 input [`QBITS] missid;
@@ -41,7 +41,7 @@ reg [QENTRIES-1:0] stomp2;
 reg [`QBITS] contid;
 always @*
 if (branchmiss) begin
-    stomp2 = 8'h00;
+    stomp2 = {QENTRIES{1'b0}};
 
     // If missed at the head, all queue entries but the head are stomped on.
     if (head0==missid) begin

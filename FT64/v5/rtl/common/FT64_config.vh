@@ -28,8 +28,8 @@
 
 `define AMSB			31
 `define ABITS			`AMSB:0
-`define QBITS			2:0
-`define QENTRIES	8
+`define QBITS			3:0
+`define QENTRIES	10
 `define XBITS			7:0
 
 //`define SUPPORT_DBG		1'b1

@@ -57,8 +57,8 @@
 //
 //  0x80    - irq control for irq #0
 //  0x84    - irq control for irq #1
-//            bits 0 to 6  = cause code to issue
-//            bits 8 to 10 = irq level to issue
+//            bits 0 to 7  = cause code to issue
+//            bits 8 to 11 = irq level to issue
 //            bit 16 = irq enable
 //            bit 17 = edge sensitivity
 //=============================================================================
@@ -97,7 +97,7 @@ reg [31:0] rste;
 reg [31:0] es;
 reg [5:0] cause_base;
 reg [3:0] irq [0:31];
-reg [6:0] cause [0:31];
+reg [7:0] cause [0:31];
 integer n;
 
 initial begin
@@ -105,7 +105,7 @@ initial begin
 	es <= 32'hFFFFFFFF;
 	rste <= 32'h0;
 	for (n = 0; n < 32; n = n + 1) begin
-		cause[n] <= 7'h00;
+		cause[n] <= 8'h00;
 		irq[n] <= 4'h8;
 	end
 end
@@ -138,7 +138,7 @@ always @(posedge clk_i)
 			6'd5:	rste[dat_i[4:0]] <= 1'b1;
 			6'b1?????:
 			     begin
-			     	 cause[adr_i[6:2]] <= dat_i[6:0];
+			     	 cause[adr_i[6:2]] <= dat_i[7:0];
 			         irq[adr_i[6:2]] <= dat_i[11:8];
 			         ie[adr_i[6:2]] <= dat_i[16];
 			         es[adr_i[6:2]] <= dat_i[17];
@@ -155,7 +155,7 @@ begin
 	if (cs)
 		casez (adr_i[7:2])
 		6'd0:	dat_o <= {cause_base,3'd0} + irqenc;
-		6'b1?????: dat_o <= {es[adr_i[6:2]],ie[adr_i[6:2]],4'b0,irq[adr_i[6:2]],1'b0,cause[adr_i[6:2]]};
+		6'b1?????: dat_o <= {es[adr_i[6:2]],ie[adr_i[6:2]],4'b0,irq[adr_i[6:2]],cause[adr_i[6:2]]};
 		default:	dat_o <= ie;
 		endcase
 	else
@@ -163,7 +163,7 @@ begin
 end
 
 assign irqo = (irqenc == 5'h0) ? 4'd0 : irq[irqenc];
-assign causeo = (irqenc == 5'h0) ? 7'd0 : cause[irqenc];
+assign causeo = (irqenc == 5'h0) ? 8'd0 : cause[irqenc];
 assign nmio = nmii & ie[0];
 
 // Edge detect circuit

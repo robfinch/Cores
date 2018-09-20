@@ -918,9 +918,9 @@ Operand *ENODE::GenBinary(int flags, int size, int op)
 					// Most ops handle a max 16 bit immediate operand. If the operand is over 16 bits
 					// it has to be loaded into a register.
 				default:
-					if (ap2->offset->i < -32768LL || ap2->offset->i > 32767LL) {
-						ap4 = GetTempRegister();
-						GenerateTriadic(op_or, 0, ap4, makereg(regZero), make_immed(ap2->offset->i));
+					//if (ap2->offset->i < -32768LL || ap2->offset->i > 32767LL) {
+						//ap4 = GetTempRegister();
+						//GenerateTriadic(op_or, 0, ap4, makereg(regZero), make_immed(ap2->offset->i));
 						/*
 						if (ap2->offset->i & 0xFFFF0000LL)
 						GenerateDiadic(op_orq1,0,ap4,make_immed((ap2->offset->i >> 16) & 0xFFFFLL));
@@ -929,10 +929,10 @@ Operand *ENODE::GenBinary(int flags, int size, int op)
 						if (ap2->offset->i & 0xFFFF000000000000LL)
 						GenerateDiadic(op_orq3,0,ap4,make_immed((ap2->offset->i >> 48) & 0xFFFFLL));
 						*/
-						GenerateTriadic(op, 0, ap3, ap1, ap4);
-						ReleaseTempReg(ap4);
-					}
-					else
+						//GenerateTriadic(op, 0, ap3, ap1, ap4);
+						//ReleaseTempReg(ap4);
+					//}
+					//else
 						GenerateTriadic(op, 0, ap3, ap1, ap2);
 				}
 			}
