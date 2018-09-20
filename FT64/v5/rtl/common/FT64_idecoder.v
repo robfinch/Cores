@@ -22,6 +22,7 @@
 //
 // ============================================================================
 //
+`include ".\FT64_config.vh"
 `include ".\FT64_defines.vh"
 
 module FT64_idecoder(clk,idv_i,id_i,instr,vl,ven,thrd,predict_taken,Rt,bus,id_o,idv_o);
@@ -926,7 +927,11 @@ default:    Source3Valid = TRUE;
 endcase
 endfunction
 
+`ifdef REGISTER_DECODE
 always @(posedge clk)
+`else
+always @*
+`endif
 begin
 	bus <= 144'h0;
 	bus[`IB_CONST] <= instr[6]==1'b1 ? {{34{instr[47]}},instr[47:18]} :

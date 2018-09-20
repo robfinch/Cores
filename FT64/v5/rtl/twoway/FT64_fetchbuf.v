@@ -471,8 +471,8 @@ else begin
 		//   cycle 2 - where we are now ... fetch the two instructions & update fetchbufX_v appropriately
 		// if fbA has the branchback, then it is scenario 1.
 		// if fbB has it: if pc0 == fbB_pc, then it is the former scenario, else it is the latter
-		4'b1100 : begin
-`ifdef SUPPORT_SMT
+		4'b1100:
+			if (thread_en) begin
 				if (take_branchA && take_branchB) begin
 					pc0 <= branch_pcA;
 					pc1 <= branch_pcB;
@@ -480,37 +480,32 @@ else begin
 					fetchbufB_v <= !(queued2|queuedNop);	// if it can be queued, it will
 					if ((queued2|queuedNop))   fetchbuf <= 1'b1;
 				end
-				else
-`endif
-				if (take_branchA) begin
+				else if (take_branchA) begin
 					pc0 <= branch_pcA;
 					fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
-`ifdef SUPPORT_SMT
 					fetchbufB_v <= !(queued2|queuedNop);	// if it can be queued, it will
 					if ((queued2|queuedNop))   fetchbuf <= 1'b1;
-`else
-					fetchbufB_v <= `INV;
-					if ((queued1|queuedNop))   fetchbuf <= 1'b1;
-`endif
 				end
-`ifdef SUPPORT_SMT
 				else if (take_branchB) begin
 					pc1 <= branch_pcB;
 					fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
 					fetchbufB_v <= !(queued2|queuedNop);	// if it can be queued, it will
 					if ((queued2|queuedNop))   fetchbuf <= 1'b1;
 				end
-`else
+			end
+			else begin
+				if (take_branchA) begin
+					pc0 <= branch_pcA;
+					fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
+					fetchbufB_v <= `INV;
+					if ((queued1|queuedNop))   fetchbuf <= 1'b1;
+				end
 				else begin
 					if (did_branchback0) begin
 						FetchCD();
 						fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
 						fetchbufB_v <= !(queued2|queuedNop);	// if it can be queued, it will
-`ifdef SUPPORT_SMT
-						if ((queued2|queuedNop))   fetchbuf <= 1'b1;
-`else
 						fetchbuf <= fetchbuf + ((queued2|queuedNop));
-`endif
 					end
 					else begin
 						pc0 <= branch_pcB;
@@ -518,9 +513,8 @@ else begin
 						fetchbufB_v <= !(queued2|queuedNop);	// if it can be queued, it will
 						if ((queued2|queuedNop))   fetchbuf <= 1'b1;
 					end
-				end
-`endif
 		    end
+		  end
 
 //		4'b1101	: panic <= `PANIC_INVALIDFBSTATE;
 //		4'b1110	: panic <= `PANIC_INVALIDFBSTATE;
@@ -619,8 +613,8 @@ else begin
 		//   cycle 2 - where we are now ... fetch the two instructions & update fetchbufX_v appropriately
 		// if fbC has the branchback, then it is scenario 1.
 		// if fbD has it: if pc0 == fbB_pc, then it is the former scenario, else it is the latter
-		4'b1100 : begin
-`ifdef SUPPORT_SMT
+		4'b1100:
+			if (thread_en) begin
 				if (take_branchC && take_branchD) begin
 					pc0 <= branch_pcC;
 					pc1 <= branch_pcD;
@@ -628,37 +622,32 @@ else begin
 					fetchbufD_v <= !(queued2|queuedNop);	// if it can be queued, it will
 					if ((queued2|queuedNop))   fetchbuf <= 1'b1;
 				end
-				else
-`endif
-				if (take_branchC) begin
+				else if (take_branchC) begin
 					pc0 <= branch_pcC;
 					fetchbufC_v <= !(queued1|queuedNop);	// if it can be queued, it will
-`ifdef SUPPORT_SMT
 					fetchbufD_v <= !(queued2|queuedNop);	// if it can be queued, it will
 					if ((queued2|queuedNop))   fetchbuf <= 1'b1;
-`else
-					fetchbufD_v <= `INV;
-					if ((queued1|queuedNop))   fetchbuf <= 1'b1;
-`endif
 				end
-`ifdef SUPPORT_SMT
 				else if (take_branchD) begin
 					pc1 <= branch_pcD;
 					fetchbufC_v <= !(queued1|queuedNop);	// if it can be queued, it will
 					fetchbufD_v <= !(queued2|queuedNop);	// if it can be queued, it will
 					if ((queued2|queuedNop))   fetchbuf <= 1'b1;
 				end
-`else
+			end
+			else begin
+				if (take_branchC) begin
+					pc0 <= branch_pcC;
+					fetchbufC_v <= !(queued1|queuedNop);	// if it can be queued, it will
+					fetchbufD_v <= `INV;
+					if ((queued1|queuedNop))   fetchbuf <= 1'b1;
+				end
 				else begin
 					if (did_branchback1) begin
 						FetchAB();
 						fetchbufC_v <= !(queued1|queuedNop);	// if it can be queued, it will
 						fetchbufD_v <= !(queued2|queuedNop);	// if it can be queued, it will
-`ifdef SUPPORT_SMT
-						if ((queued2|queuedNop))   fetchbuf <= 1'b1;
-`else
 						fetchbuf <= fetchbuf + ((queued2|queuedNop));
-`endif
 					end
 					else begin
 						pc0 <= branch_pcD;
@@ -667,7 +656,6 @@ else begin
 						if ((queued2|queuedNop))   fetchbuf <= 1'b1;
 					end
 				end
-`endif
 			end
 
 //		4'b1101	: panic <= `PANIC_INVALIDFBSTATE;

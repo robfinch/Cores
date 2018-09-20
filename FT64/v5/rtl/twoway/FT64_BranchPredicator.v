@@ -115,18 +115,22 @@ end
 // commit1 if commit0 is not taken.
 reg [1:0] xbits_new;
 always @*
-if (takb & wrhist) begin
-	if (bht_xbits != 2'd1)
-		xbits_new <= bht_xbits + 2'd1;
-	else
-		xbits_new <= bht_xbits;
+if (wrhist) begin
+	if (takb) begin
+		if (bht_xbits != 2'd1)
+			xbits_new <= bht_xbits + 2'd1;
+		else
+			xbits_new <= bht_xbits;
+	end
+	else begin
+		if (bht_xbits != 2'd2)
+			xbits_new <= bht_xbits - 2'd1;
+		else
+			xbits_new <= bht_xbits;
+	end
 end
-else begin
-	if (bht_xbits != 2'd2)
-		xbits_new <= bht_xbits - {1'b0,wrhist};
-	else
-		xbits_new <= bht_xbits;
-end
+else
+	xbits_new <= bht_xbits;
 
 always @(posedge clk)
 if (rst)

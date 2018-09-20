@@ -202,7 +202,7 @@ casez({cinstr[15:12],cinstr[6]})
 5'b10??0:
 		begin
 			expand[47:32] = 16'h0000;
-			expand[31:21] = {{6{cinstr[11]}},cinstr[11:8],cinstr[5]};
+			expand[31:21] = {{4{cinstr[13]}},cinstr[13:8],cinstr[5]};
 			expand[20:18] = 3'd0;			// BEQ
 			expand[17:13] = 5'd0;			// r0
 			expand[12:8] = cinstr[4:0];	// Ra
@@ -212,7 +212,7 @@ casez({cinstr[15:12],cinstr[6]})
 5'b11??0:
 		begin
 			expand[47:32] = 16'h0000;
-			expand[31:21] = {{6{cinstr[11]}},cinstr[11:8],cinstr[5]};
+			expand[31:21] = {{4{cinstr[13]}},cinstr[13:8],cinstr[5]};
 			expand[20:18] = 3'd1;			// BNE
 			expand[17:13] = 5'd0;			// r0
 			expand[12:8] = cinstr[4:0];	// Ra

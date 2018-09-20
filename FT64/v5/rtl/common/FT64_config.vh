@@ -65,3 +65,6 @@
 
 // Uncomment to allow SIMD operations
 `define SIMD	1'b1
+
+// Comment the following to disable registering the output of instruction decoders.
+`define REGISTER_DECODE

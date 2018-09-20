@@ -197,6 +197,7 @@ reg [63:0] cr0;
 wire snr = cr0[17];		// sequence number reset
 wire dce = cr0[30];     // data cache enable
 wire bpe = cr0[32];     // branch predictor enable
+wire wbm = cr0[34];
 wire ctgtxe = cr0[33];
 reg [63:0] pmr;
 wire id1_available = pmr[0];
@@ -416,6 +417,7 @@ reg [QENTRIES-1:0] iqentry_cmt;
 reg [QENTRIES-1:0] iqentry_thrd;		// which thread the instruction is in
 reg [QENTRIES-1:0] iqentry_pt;		// predict taken
 reg [QENTRIES-1:0] iqentry_bt;		// update branch target buffer
+reg [QENTRIES-1:0] iqentry_takb;	// take branch record
 reg [QENTRIES-1:0] iqentry_jal;
 reg [QENTRIES-1:0] iqentry_agen;	// address-generate ... signifies that address is ready (only for LW/SW)
 reg  [1:0] iqentry_state [0:QENTRIES-1];
@@ -776,6 +778,7 @@ reg [QENTRIES-1:0] wb_id [0:`WB_DEPTH-1];
 reg [QENTRIES-1:0] wbo_id;
 reg [7:0] wb_sel [0:`WB_DEPTH-1];
 reg wb_en;
+reg wb_shift;
 
 reg branchmiss = 1'b0;
 reg branchmiss_thrd = 1'b0;
@@ -1139,8 +1142,8 @@ FT64_BranchPredictor ubp1
   .pcD(fetchbufD_pc),
   .xpc0(iqentry_pc[head0]),
   .xpc1(iqentry_pc[head1]),
-  .takb0(commit0_v & iqentry_res[head0][0]),
-  .takb1(commit1_v & iqentry_res[head1][0]),
+  .takb0(commit0_v & iqentry_takb[head0]),
+  .takb1(commit1_v & iqentry_takb[head1]),
   .predict_takenA(predict_takenA),
   .predict_takenB(predict_takenB),
   .predict_takenC(predict_takenC),
@@ -1508,162 +1511,52 @@ endgenerate
 
 function [`QBITS] idp1;
 input [`QBITS] id;
-case(id)
-4'd0:	idp1 = 4'd1;
-4'd1:	idp1 = 4'd2;
-4'd2:	idp1 = 4'd3;
-4'd3:	idp1 = 4'd4;
-4'd4:	idp1 = 4'd5;
-4'd5:	idp1 = 4'd6;
-4'd6:	idp1 = 4'd7;
-4'd7:	idp1 = 4'd8;
-4'd8:	idp1 = 4'd9;
-4'd9:	idp1 = 4'd0;
-endcase
+idp1 = (id + 1) % QENTRIES;
 endfunction
 
 function [`QBITS] idp2;
 input [`QBITS] id;
-case(id)
-4'd0:	idp2 = 4'd2;
-4'd1:	idp2 = 4'd3;
-4'd2:	idp2 = 4'd4;
-4'd3:	idp2 = 4'd5;
-4'd4:	idp2 = 4'd6;
-4'd5:	idp2 = 4'd7;
-4'd6:	idp2 = 4'd8;
-4'd7:	idp2 = 4'd9;
-4'd8:	idp2 = 4'd0;
-4'd9:	idp2 = 4'd1;
-endcase
+idp2 = (id + 2) % QENTRIES;
 endfunction
 
 function [`QBITS] idp3;
 input [`QBITS] id;
-case(id)
-4'd0:	idp3 = 4'd3;
-4'd1:	idp3 = 4'd4;
-4'd2:	idp3 = 4'd5;
-4'd3:	idp3 = 4'd6;
-4'd4:	idp3 = 4'd7;
-4'd5:	idp3 = 4'd8;
-4'd6:	idp3 = 4'd9;
-4'd7:	idp3 = 4'd0;
-4'd8: idp3 = 4'd1;
-4'd9:	idp3 = 4'd2;
-endcase
+idp3 = (id + 3) % QENTRIES;
 endfunction
 
 function [`QBITS] idp4;
 input [`QBITS] id;
-case(id)
-4'd0:	idp4 = 4'd4;
-4'd1:	idp4 = 4'd5;
-4'd2:	idp4 = 4'd6;
-4'd3:	idp4 = 4'd7;
-4'd4:	idp4 = 4'd8;
-4'd5:	idp4 = 4'd9;
-4'd6:	idp4 = 4'd0;
-4'd7:	idp4 = 4'd1;
-4'd8:	idp4 = 4'd2;
-4'd9:	idp4 = 4'd3;
-endcase
+idp4 = (id + 4) % QENTRIES;
 endfunction
 
 function [`QBITS] idp5;
 input [`QBITS] id;
-case(id)
-4'd0:	idp5 = 4'd5;
-4'd1:	idp5 = 4'd6;
-4'd2:	idp5 = 4'd7;
-4'd3:	idp5 = 4'd8;
-4'd4:	idp5 = 4'd9;
-4'd5:	idp5 = 4'd0;
-4'd6:	idp5 = 4'd1;
-4'd7:	idp5 = 4'd2;
-4'd8: idp5 = 4'd3;
-4'd9: idp5 = 4'd4;
-endcase
+idp5 = (id + 5) % QENTRIES;
 endfunction
 
 function [`QBITS] idp6;
 input [`QBITS] id;
-case(id)
-4'd0:	idp6 = 4'd6;
-4'd1:	idp6 = 4'd7;
-4'd2:	idp6 = 4'd8;
-4'd3:	idp6 = 4'd9;
-4'd4:	idp6 = 4'd0;
-4'd5:	idp6 = 4'd1;
-4'd6:	idp6 = 4'd2;
-4'd7:	idp6 = 4'd3;
-4'd8:	idp6 = 4'd4;
-4'd9:	idp6 = 4'd5;
-endcase
+idp6 = (id + 6) % QENTRIES;
 endfunction
 
 function [`QBITS] idp7;
 input [`QBITS] id;
-case(id)
-4'd0:	idp7 = 4'd7;
-4'd1:	idp7 = 4'd8;
-4'd2:	idp7 = 4'd9;
-4'd3:	idp7 = 4'd0;
-4'd4:	idp7 = 4'd1;
-4'd5:	idp7 = 4'd2;
-4'd6:	idp7 = 4'd3;
-4'd7:	idp7 = 4'd4;
-4'd8:	idp7 = 4'd5;
-4'd9:	idp7 = 4'd6;
-endcase
+idp7 = (id + 7) % QENTRIES;
 endfunction
 
 function [`QBITS] idp8;
 input [`QBITS] id;
-case(id)
-4'd0:	idp8 = 4'd8;
-4'd1:	idp8 = 4'd9;
-4'd2:	idp8 = 4'd0;
-4'd3:	idp8 = 4'd1;
-4'd4:	idp8 = 4'd2;
-4'd5:	idp8 = 4'd3;
-4'd6:	idp8 = 4'd4;
-4'd7:	idp8 = 4'd5;
-4'd8:	idp8 = 4'd6;
-4'd9:	idp8 = 4'd7;
-endcase
+idp8 = (id + 8) % QENTRIES;
 endfunction
 
 function [`QBITS] idp9;
 input [`QBITS] id;
-case(id)
-4'd0:	idp9 = 4'd9;
-4'd1:	idp9 = 4'd0;
-4'd2:	idp9 = 4'd1;
-4'd3:	idp9 = 4'd2;
-4'd4:	idp9 = 4'd3;
-4'd5:	idp9 = 4'd4;
-4'd6:	idp9 = 4'd5;
-4'd7:	idp9 = 4'd6;
-4'd8:	idp9 = 4'd7;
-4'd9:	idp9 = 4'd8;
-endcase
+idp9 = (id + 9) % QENTRIES;
 endfunction
 
 function [`QBITS] idm1;
 input [`QBITS] id;
-case(id)
-4'd0:	idm1 = 4'd9;
-4'd1:	idm1 = 4'd0;
-4'd2:	idm1 = 4'd1;
-4'd3:	idm1 = 4'd2;
-4'd4:	idm1 = 4'd3;
-4'd5:	idm1 = 4'd4;
-4'd6:	idm1 = 4'd5;
-4'd7:	idm1 = 4'd6;
-4'd8:	idm1 = 4'd7;
-4'd9:	idm1 = 4'd8;
-endcase
+idm1 = (id - 1) % QENTRIES;
 endfunction
 
 `ifdef SUPPORT_SMT
@@ -2898,7 +2791,7 @@ begin
 		   endcase
 	   else
 	   	fnSelect = 8'h00;
-    `LB,`LBU,`SB:
+  `LB,`LBU,`SB:
 		case(adr[2:0])
 		3'd0:	fnSelect = 8'h01;
 		3'd1:	fnSelect = 8'h02;
@@ -3873,7 +3766,8 @@ assign could_issue[g] = iqentry_v[g] && !iqentry_done[g] && !iqentry_out[g]
 												&& iqentry_iv[g]
                         && (iqentry_mem[g] ? !iqentry_agen[g] : 1'b1);
 
-assign could_issueid[g] = iqentry_v[g] && !iqentry_iv[g];
+assign could_issueid[g] = (iqentry_v[g])// || (g==tail0 && canq1))// || (g==tail1 && canq2))
+														&& !iqentry_iv[g];
 //		  && (iqentry_a1_v[g] 
 //        || (iqentry_a1_s[g] == alu0_sourceid && alu0_dataready)
 //        || (iqentry_a1_s[g] == alu1_sourceid && alu1_dataready));
@@ -4877,8 +4771,8 @@ begin
 					// ... and no preceding instruction is ready to go
 					//&& ~iqentry_memready[head0]
 					// ... and there is no address-overlap with any preceding instruction
-					&& (!iqentry_mem[head0] || (iqentry_agen[head0] & iqentry_out[head0]) 
-						|| (iqentry_a1_v[head0] && iqentry_a1[head1][AMSB:3] != iqentry_a1[head0][AMSB:3]))
+					&& (!iqentry_mem[head0] || (iqentry_agen[head0] & iqentry_out[head0]) || iqentry_done[head0]
+						|| (iqentry_a1_v[head0] && (iqentry_a1[head1][AMSB:3] != iqentry_a1[head0][AMSB:3] || iqentry_out[head0] || iqentry_done[head0])))
 					// ... if a release, any prior memory ops must be done before this one
 					&& (iqentry_rl[head1] ? iqentry_done[head0] || !iqentry_v[head0] || !iqentry_mem[head0] : 1'b1)
 					// ... if a preivous op has the aquire bit set
@@ -4895,10 +4789,10 @@ begin
 					//&& ~iqentry_memready[head0]
 					//&& ~iqentry_memready[head1] 
 					// ... and there is no address-overlap with any preceding instruction
-					&& (!iqentry_mem[head0] || (iqentry_agen[head0] & iqentry_out[head0]) 
-						|| (iqentry_a1_v[head0] && iqentry_a1[head2][AMSB:3] != iqentry_a1[head0][AMSB:3]))
-					&& (!iqentry_mem[head1] || (iqentry_agen[head1] & iqentry_out[head1]) 
-						|| (iqentry_a1_v[head1] && iqentry_a1[head2][AMSB:3] != iqentry_a1[head1][AMSB:3]))
+					&& (!iqentry_mem[head0] || (iqentry_agen[head0] & iqentry_out[head0])  || iqentry_done[head0]
+						|| (iqentry_a1_v[head0] && (iqentry_a1[head2][AMSB:3] != iqentry_a1[head0][AMSB:3] || iqentry_out[head0] || iqentry_done[head0])))
+					&& (!iqentry_mem[head1] || (iqentry_agen[head1] & iqentry_out[head1])  || iqentry_done[head1]
+						|| (iqentry_a1_v[head1] && (iqentry_a1[head2][AMSB:3] != iqentry_a1[head1][AMSB:3] || iqentry_out[head1] || iqentry_done[head1])))
 					// ... if a release, any prior memory ops must be done before this one
 					&& (iqentry_rl[head2] ? (iqentry_done[head0] || !iqentry_v[head0] || !iqentry_mem[head0])
 										 && (iqentry_done[head1] || !iqentry_v[head1] || !iqentry_mem[head1])
@@ -4923,12 +4817,12 @@ begin
 					//&& ~iqentry_memready[head1] 
 					//&& ~iqentry_memready[head2] 
 					// ... and there is no address-overlap with any preceding instruction
-					&& (!iqentry_mem[head0] || (iqentry_agen[head0] & iqentry_out[head0]) 
-						|| (iqentry_a1_v[head0] && iqentry_a1[head3][AMSB:3] != iqentry_a1[head0][AMSB:3]))
-					&& (!iqentry_mem[head1] || (iqentry_agen[head1] & iqentry_out[head1]) 
-						|| (iqentry_a1_v[head1] && iqentry_a1[head3][AMSB:3] != iqentry_a1[head1][AMSB:3]))
-					&& (!iqentry_mem[head2] || (iqentry_agen[head2] & iqentry_out[head2]) 
-						|| (iqentry_a1_v[head2] && iqentry_a1[head3][AMSB:3] != iqentry_a1[head2][AMSB:3]))
+					&& (!iqentry_mem[head0] || (iqentry_agen[head0] & iqentry_out[head0])  || iqentry_done[head0]
+						|| (iqentry_a1_v[head0] && (iqentry_a1[head3][AMSB:3] != iqentry_a1[head0][AMSB:3] || iqentry_out[head0] || iqentry_done[head0])))
+					&& (!iqentry_mem[head1] || (iqentry_agen[head1] & iqentry_out[head1])  || iqentry_done[head1]
+						|| (iqentry_a1_v[head1] && (iqentry_a1[head3][AMSB:3] != iqentry_a1[head1][AMSB:3] || iqentry_out[head1] || iqentry_done[head1])))
+					&& (!iqentry_mem[head2] || (iqentry_agen[head2] & iqentry_out[head2])  || iqentry_done[head2]
+						|| (iqentry_a1_v[head2] && (iqentry_a1[head3][AMSB:3] != iqentry_a1[head2][AMSB:3] || iqentry_out[head2] || iqentry_done[head2])))
 					// ... if a release, any prior memory ops must be done before this one
 					&& (iqentry_rl[head3] ? (iqentry_done[head0] || !iqentry_v[head0] || !iqentry_mem[head0])
 										 && (iqentry_done[head1] || !iqentry_v[head1] || !iqentry_mem[head1])
@@ -4965,14 +4859,14 @@ begin
 					//&& ~iqentry_memready[head2] 
 					//&& ~iqentry_memready[head3] 
 					// ... and there is no address-overlap with any preceding instruction
-					&& (!iqentry_mem[head0] || (iqentry_agen[head0] & iqentry_out[head0]) 
-						|| (iqentry_a1_v[head0] && iqentry_a1[head4][AMSB:3] != iqentry_a1[head0][AMSB:3]))
-					&& (!iqentry_mem[head1] || (iqentry_agen[head1] & iqentry_out[head1]) 
-						|| (iqentry_a1_v[head1] && iqentry_a1[head4][AMSB:3] != iqentry_a1[head1][AMSB:3]))
-					&& (!iqentry_mem[head2] || (iqentry_agen[head2] & iqentry_out[head2]) 
-						|| (iqentry_a1_v[head2] && iqentry_a1[head4][AMSB:3] != iqentry_a1[head2][AMSB:3]))
-					&& (!iqentry_mem[head3] || (iqentry_agen[head3] & iqentry_out[head3]) 
-						|| (iqentry_a1_v[head3] && iqentry_a1[head4][AMSB:3] != iqentry_a1[head3][AMSB:3]))
+					&& (!iqentry_mem[head0] || (iqentry_agen[head0] & iqentry_out[head0])  || iqentry_done[head0]
+						|| (iqentry_a1_v[head0] && (iqentry_a1[head4][AMSB:3] != iqentry_a1[head0][AMSB:3] || iqentry_out[head0] || iqentry_done[head0])))
+					&& (!iqentry_mem[head1] || (iqentry_agen[head1] & iqentry_out[head1])  || iqentry_done[head1]
+						|| (iqentry_a1_v[head1] && (iqentry_a1[head4][AMSB:3] != iqentry_a1[head1][AMSB:3] || iqentry_out[head1] || iqentry_done[head1])))
+					&& (!iqentry_mem[head2] || (iqentry_agen[head2] & iqentry_out[head2])  || iqentry_done[head2]
+						|| (iqentry_a1_v[head2] && (iqentry_a1[head4][AMSB:3] != iqentry_a1[head2][AMSB:3] || iqentry_out[head2] || iqentry_done[head2])))
+					&& (!iqentry_mem[head3] || (iqentry_agen[head3] & iqentry_out[head3])  || iqentry_done[head3]
+						|| (iqentry_a1_v[head3] && (iqentry_a1[head4][AMSB:3] != iqentry_a1[head3][AMSB:3] || iqentry_out[head3] || iqentry_done[head3])))
 					// ... if a release, any prior memory ops must be done before this one
 					&& (iqentry_rl[head4] ? (iqentry_done[head0] || !iqentry_v[head0] || !iqentry_mem[head0])
 										 && (iqentry_done[head1] || !iqentry_v[head1] || !iqentry_mem[head1])
@@ -5023,16 +4917,16 @@ begin
 					//&& ~iqentry_memready[head3] 
 					//&& ~iqentry_memready[head4] 
 					// ... and there is no address-overlap with any preceding instruction
-					&& (!iqentry_mem[head0] || (iqentry_agen[head0] & iqentry_out[head0]) 
-						|| (iqentry_a1_v[head0] && iqentry_a1[head5][AMSB:3] != iqentry_a1[head0][AMSB:3]))
-					&& (!iqentry_mem[head1] || (iqentry_agen[head1] & iqentry_out[head1]) 
-						|| (iqentry_a1_v[head1] && iqentry_a1[head5][AMSB:3] != iqentry_a1[head1][AMSB:3]))
-					&& (!iqentry_mem[head2] || (iqentry_agen[head2] & iqentry_out[head2]) 
-						|| (iqentry_a1_v[head2] && iqentry_a1[head5][AMSB:3] != iqentry_a1[head2][AMSB:3]))
-					&& (!iqentry_mem[head3] || (iqentry_agen[head3] & iqentry_out[head3]) 
-						|| (iqentry_a1_v[head3] && iqentry_a1[head5][AMSB:3] != iqentry_a1[head3][AMSB:3]))
-					&& (!iqentry_mem[head4] || (iqentry_agen[head4] & iqentry_out[head4]) 
-						|| (iqentry_a1_v[head4] && iqentry_a1[head5][AMSB:3] != iqentry_a1[head4][AMSB:3]))
+					&& (!iqentry_mem[head0] || (iqentry_agen[head0] & iqentry_out[head0]) || iqentry_done[head0] 
+						|| (iqentry_a1_v[head0] && (iqentry_a1[head5][AMSB:3] != iqentry_a1[head0][AMSB:3] || iqentry_out[head0] || iqentry_done[head0])))
+					&& (!iqentry_mem[head1] || (iqentry_agen[head1] & iqentry_out[head1]) || iqentry_done[head1] 
+						|| (iqentry_a1_v[head1] && (iqentry_a1[head5][AMSB:3] != iqentry_a1[head1][AMSB:3] || iqentry_out[head1] || iqentry_done[head1])))
+					&& (!iqentry_mem[head2] || (iqentry_agen[head2] & iqentry_out[head2]) || iqentry_done[head2] 
+						|| (iqentry_a1_v[head2] && (iqentry_a1[head5][AMSB:3] != iqentry_a1[head2][AMSB:3] || iqentry_out[head2] || iqentry_done[head2])))
+					&& (!iqentry_mem[head3] || (iqentry_agen[head3] & iqentry_out[head3]) || iqentry_done[head3] 
+						|| (iqentry_a1_v[head3] && (iqentry_a1[head5][AMSB:3] != iqentry_a1[head3][AMSB:3] || iqentry_out[head3] || iqentry_done[head3])))
+					&& (!iqentry_mem[head4] || (iqentry_agen[head4] & iqentry_out[head4]) || iqentry_done[head4] 
+						|| (iqentry_a1_v[head4] && (iqentry_a1[head5][AMSB:3] != iqentry_a1[head4][AMSB:3] || iqentry_out[head4] || iqentry_done[head4])))
 					// ... if a release, any prior memory ops must be done before this one
 					&& (iqentry_rl[head5] ? (iqentry_done[head0] || !iqentry_v[head0] || !iqentry_mem[head0])
 										 && (iqentry_done[head1] || !iqentry_v[head1] || !iqentry_mem[head1])
@@ -5100,18 +4994,18 @@ begin
 					//&& ~iqentry_memready[head4] 
 					//&& ~iqentry_memready[head5] 
 					// ... and there is no address-overlap with any preceding instruction
-					&& (!iqentry_mem[head0] || (iqentry_agen[head0] & iqentry_out[head0]) 
-						|| (iqentry_a1_v[head0] && iqentry_a1[head6][AMSB:3] != iqentry_a1[head0][AMSB:3]))
-					&& (!iqentry_mem[head1] || (iqentry_agen[head1] & iqentry_out[head1]) 
-						|| (iqentry_a1_v[head1] && iqentry_a1[head6][AMSB:3] != iqentry_a1[head1][AMSB:3]))
-					&& (!iqentry_mem[head2] || (iqentry_agen[head2] & iqentry_out[head2]) 
-						|| (iqentry_a1_v[head2] && iqentry_a1[head6][AMSB:3] != iqentry_a1[head2][AMSB:3]))
-					&& (!iqentry_mem[head3] || (iqentry_agen[head3] & iqentry_out[head3]) 
-						|| (iqentry_a1_v[head3] && iqentry_a1[head6][AMSB:3] != iqentry_a1[head3][AMSB:3]))
-					&& (!iqentry_mem[head4] || (iqentry_agen[head4] & iqentry_out[head4]) 
-						|| (iqentry_a1_v[head4] && iqentry_a1[head6][AMSB:3] != iqentry_a1[head4][AMSB:3]))
-					&& (!iqentry_mem[head5] || (iqentry_agen[head5] & iqentry_out[head5]) 
-						|| (iqentry_a1_v[head5] && iqentry_a1[head6][AMSB:3] != iqentry_a1[head5][AMSB:3]))
+					&& (!iqentry_mem[head0] || (iqentry_agen[head0] & iqentry_out[head0]) || iqentry_done[head0] 
+						|| (iqentry_a1_v[head0] && (iqentry_a1[head6][AMSB:3] != iqentry_a1[head0][AMSB:3] || iqentry_out[head0] || iqentry_done[head0])))
+					&& (!iqentry_mem[head1] || (iqentry_agen[head1] & iqentry_out[head1]) || iqentry_done[head1] 
+						|| (iqentry_a1_v[head1] && (iqentry_a1[head6][AMSB:3] != iqentry_a1[head1][AMSB:3] || iqentry_out[head1] || iqentry_done[head1])))
+					&& (!iqentry_mem[head2] || (iqentry_agen[head2] & iqentry_out[head2]) || iqentry_done[head2] 
+						|| (iqentry_a1_v[head2] && (iqentry_a1[head6][AMSB:3] != iqentry_a1[head2][AMSB:3] || iqentry_out[head2] || iqentry_done[head2])))
+					&& (!iqentry_mem[head3] || (iqentry_agen[head3] & iqentry_out[head3]) || iqentry_done[head3] 
+						|| (iqentry_a1_v[head3] && (iqentry_a1[head6][AMSB:3] != iqentry_a1[head3][AMSB:3] || iqentry_out[head3] || iqentry_done[head3])))
+					&& (!iqentry_mem[head4] || (iqentry_agen[head4] & iqentry_out[head4]) || iqentry_done[head4] 
+						|| (iqentry_a1_v[head4] && (iqentry_a1[head6][AMSB:3] != iqentry_a1[head4][AMSB:3] || iqentry_out[head4] || iqentry_done[head4])))
+					&& (!iqentry_mem[head5] || (iqentry_agen[head5] & iqentry_out[head5]) || iqentry_done[head5] 
+						|| (iqentry_a1_v[head5] && (iqentry_a1[head6][AMSB:3] != iqentry_a1[head5][AMSB:3] || iqentry_out[head5] || iqentry_done[head5])))
 					&& (iqentry_rl[head6] ? (iqentry_done[head0] || !iqentry_v[head0] || !iqentry_mem[head0])
 										 && (iqentry_done[head1] || !iqentry_v[head1] || !iqentry_mem[head1])
 										 && (iqentry_done[head2] || !iqentry_v[head2] || !iqentry_mem[head2])
@@ -5195,20 +5089,20 @@ begin
 					//&& ~iqentry_memready[head5] 
 					//&& ~iqentry_memready[head6] 
 					// ... and there is no address-overlap with any preceding instruction
-					&& (!iqentry_mem[head0] || (iqentry_agen[head0] & iqentry_out[head0]) 
-						|| (iqentry_a1_v[head0] && iqentry_a1[head7][AMSB:3] != iqentry_a1[head0][AMSB:3]))
-					&& (!iqentry_mem[head1] || (iqentry_agen[head1] & iqentry_out[head1]) 
-						|| (iqentry_a1_v[head1] && iqentry_a1[head7][AMSB:3] != iqentry_a1[head1][AMSB:3]))
-					&& (!iqentry_mem[head2] || (iqentry_agen[head2] & iqentry_out[head2]) 
-						|| (iqentry_a1_v[head2] && iqentry_a1[head7][AMSB:3] != iqentry_a1[head2][AMSB:3]))
-					&& (!iqentry_mem[head3] || (iqentry_agen[head3] & iqentry_out[head3]) 
-						|| (iqentry_a1_v[head3] && iqentry_a1[head7][AMSB:3] != iqentry_a1[head3][AMSB:3]))
-					&& (!iqentry_mem[head4] || (iqentry_agen[head4] & iqentry_out[head4]) 
-						|| (iqentry_a1_v[head4] && iqentry_a1[head7][AMSB:3] != iqentry_a1[head4][AMSB:3]))
-					&& (!iqentry_mem[head5] || (iqentry_agen[head5] & iqentry_out[head5]) 
-						|| (iqentry_a1_v[head5] && iqentry_a1[head7][AMSB:3] != iqentry_a1[head5][AMSB:3]))
-					&& (!iqentry_mem[head6] || (iqentry_agen[head6] & iqentry_out[head6]) 
-						|| (iqentry_a1_v[head6] && iqentry_a1[head7][AMSB:3] != iqentry_a1[head6][AMSB:3]))
+					&& (!iqentry_mem[head0] || (iqentry_agen[head0] & iqentry_out[head0]) || iqentry_done[head0]
+						|| (iqentry_a1_v[head0] && (iqentry_a1[head7][AMSB:3] != iqentry_a1[head0][AMSB:3] || iqentry_out[head0] || iqentry_done[head0])))
+					&& (!iqentry_mem[head1] || (iqentry_agen[head1] & iqentry_out[head1]) || iqentry_done[head1]
+						|| (iqentry_a1_v[head1] && (iqentry_a1[head7][AMSB:3] != iqentry_a1[head1][AMSB:3] || iqentry_out[head1] || iqentry_done[head1])))
+					&& (!iqentry_mem[head2] || (iqentry_agen[head2] & iqentry_out[head2]) || iqentry_done[head2] 
+						|| (iqentry_a1_v[head2] && (iqentry_a1[head7][AMSB:3] != iqentry_a1[head2][AMSB:3] || iqentry_out[head2] || iqentry_done[head2])))
+					&& (!iqentry_mem[head3] || (iqentry_agen[head3] & iqentry_out[head3]) || iqentry_done[head3] 
+						|| (iqentry_a1_v[head3] && (iqentry_a1[head7][AMSB:3] != iqentry_a1[head3][AMSB:3] || iqentry_out[head3] || iqentry_done[head3])))
+					&& (!iqentry_mem[head4] || (iqentry_agen[head4] & iqentry_out[head4]) || iqentry_done[head4] 
+						|| (iqentry_a1_v[head4] && (iqentry_a1[head7][AMSB:3] != iqentry_a1[head4][AMSB:3] || iqentry_out[head4] || iqentry_done[head4])))
+					&& (!iqentry_mem[head5] || (iqentry_agen[head5] & iqentry_out[head5]) || iqentry_done[head5] 
+						|| (iqentry_a1_v[head5] && (iqentry_a1[head7][AMSB:3] != iqentry_a1[head5][AMSB:3] || iqentry_out[head5] || iqentry_done[head5])))
+					&& (!iqentry_mem[head6] || (iqentry_agen[head6] & iqentry_out[head6]) || iqentry_done[head6] 
+						|| (iqentry_a1_v[head6] && (iqentry_a1[head7][AMSB:3] != iqentry_a1[head6][AMSB:3] || iqentry_out[head6] || iqentry_done[head6])))
 					&& (iqentry_rl[head7] ? (iqentry_done[head0] || !iqentry_v[head0] || !iqentry_mem[head0])
 										 && (iqentry_done[head1] || !iqentry_v[head1] || !iqentry_mem[head1])
 										 && (iqentry_done[head2] || !iqentry_v[head2] || !iqentry_mem[head2])
@@ -5689,8 +5583,8 @@ if (fcu_dataready) begin
 			fcu_branchmiss = TRUE & ~fcu_clearbm;
 		else if (fcu_ret_miss)
 			fcu_branchmiss = TRUE & ~fcu_clearbm;
-		else if (fcu_branch && fcu_v && (((fcu_takb && (~fcu_bt || (fcu_misspc != iqentry_pc[nid]))) ||
-		                            (~fcu_takb && ( fcu_bt || (fcu_pc + 32'd4 != iqentry_pc[nid])))) || iqentry_v[nid]))
+		else if (fcu_branch && fcu_v && (((fcu_takb && (fcu_misspc != iqentry_pc[nid])) ||
+		                            (~fcu_takb && (fcu_pc + fcu_insln != iqentry_pc[nid])))))// || iqentry_v[nid]))
 		    fcu_branchmiss = TRUE & ~fcu_clearbm;
 		else if (fcu_jal_miss)
 		    fcu_branchmiss = TRUE & ~fcu_clearbm;
@@ -6077,6 +5971,7 @@ if (rst) begin
        iqentry_fsync[n] <= FALSE;
        iqentry_fc[n] <= FALSE;
        iqentry_fcu_issue[n] <= FALSE;
+       iqentry_takb[n] <= FALSE;
        iqentry_jmp[n] <= FALSE;
        iqentry_jal[n] <= FALSE;
        iqentry_ret[n] <= FALSE;
@@ -6198,6 +6093,7 @@ if (rst) begin
      cr0[32] <= TRUE;    	// enable branch predictor
      cr0[16] <= 1'b0;		// disable SMT
      cr0[17] <= 1'b0;		// sequence number reset = 1
+     cr0[34] <= FALSE;	// write buffer merging enable
      pcr <= 32'd0;
      pcr2 <= 64'd0;
     for (n = 0; n < PREGS; n = n + 1)
@@ -6268,6 +6164,7 @@ else begin
 		id3_vi <= `INV;
 	if (iqentry_v[nid] && iqentry_sn[nid] > iqentry_sn[fcu_id[`QBITS]])
 		fcu_dataready <= `INV;
+	wb_shift <= FALSE;
 	ld_time <= {ld_time[4:0],1'b0};
 	wc_times <= wc_time;
      rf_vra0 <= regIsValid[Ra0s];
@@ -7003,9 +6900,9 @@ if (fcu_wr & ~fcu_done) begin
 		iqentry_bt[ fcu_id[`QBITS] ] <= `VAL;
 	end
 // Branch target is only updated for branch-to-register
-//	else if (fcu_branch) begin
-//		iqentry_bt[ fcu_id[`QBITS] ] <= fcu_takb;
-//	end 
+	else if (fcu_branch) begin
+		iqentry_takb[ fcu_id[`QBITS] ] <= fcu_takb;
+	end 
 	iqentry_out [ fcu_id[`QBITS] ] <= `INV;
 	//iqentry_agen[ fcu_id[`QBITS] ] <= `VAL;//!IsRet(fcu_instr);
 	fcu_dataready <= `VAL;
@@ -7941,9 +7838,6 @@ BIDLE:
     	wb_rmw[`WB_DEPTH-1] <= `FALSE;
     end
 
-//			if (|wb_v)
-//				;
- //       else
 `endif
       if (~|wb_v && mem1_available && dram0==`DRAMSLOT_BUSY && dram0_rmw) begin
 `ifdef SUPPORT_DBG      
@@ -9020,8 +8914,19 @@ input [1:0] ol;
 input [`ABITS] addr;
 input [63:0] data;
 begin
-	if (wbptr > 0 && wb_addr[wbptr-1][AMSB:3]==addr[AMSB:3] && wb_ol[wbptr-1]==ol && wb_rmw[wbptr-1]==rmw) begin
+	if (wbm && wbptr > 1 && wb_addr[wbptr-1][AMSB:3]==addr[AMSB:3]
+	 && wb_ol[wbptr-1]==ol && wb_rmw[wbptr-1]==rmw && wb_v[wbptr-1]) begin
+		// The write buffer is always shifted during the bus IDLE state. That means
+		// the data is out of place by a slot. The slot the data is moved from is
+		// invalidated.
+		wb_v[wbptr-2] <= `INV;
+		wb_v[wbptr-1] <= wb_en;
+		wb_id[wbptr-1] <= wb_id[wbptr-1] | (16'd1 << id);
+		wb_rmw[wbptr-1] <= rmw;
+		wb_ol[wbptr-1] <= ol;
 		wb_sel[wbptr-1] <= wb_sel[wbptr-1] | sel;
+		wb_addr[wbptr-1] <= wb_addr[wbptr-1];
+		wb_data[wbptr-1] <= wb_data[wbptr-1];
 		if (sel[0]) wb_data[wbptr-1][ 7: 0] <= data[ 7: 0];
 		if (sel[1]) wb_data[wbptr-1][15: 8] <= data[15: 8];
 		if (sel[2]) wb_data[wbptr-1][23:16] <= data[23:16];
@@ -9030,7 +8935,6 @@ begin
 		if (sel[5]) wb_data[wbptr-1][47:40] <= data[47:40];
 		if (sel[6]) wb_data[wbptr-1][55:48] <= data[55:48];
 		if (sel[7]) wb_data[wbptr-1][63:56] <= data[63:56];
-		wb_id[wbptr-1] <= wb_id[wbptr-1] | (16'd1 << id);
 		wb_merges <= wb_merges + 32'd1;
 	end
 	else begin
@@ -9045,22 +8949,6 @@ begin
 end
 endtask
 
-function [`QBITS] fnAddAmt;
-input [`QBITS] hd;
-input [`QBITS] amt;
-begin
-	case(hd + amt)
-	4'd10:	fnAddAmt = 4'd0;
-	4'd11:	fnAddAmt = 4'd1;
-	4'd12:	fnAddAmt = 4'd2;
-	4'd13:	fnAddAmt = 4'd3;
-	4'd14:	fnAddAmt = 4'd4;
-	4'd15:	fnAddAmt = 4'd5;
-	default:	fnAddAmt = hd + amt;
-	endcase
-end
-endfunction
-
 // Increment the head pointers
 // Also increments the instruction counter
 // Used when instructions are committed.
@@ -9069,16 +8957,16 @@ endfunction
 task head_inc;
 input [`QBITS] amt;
 begin
-     head0 <= fnAddAmt(head0,amt);
-     head1 <= fnAddAmt(head1,amt);
-     head2 <= fnAddAmt(head2,amt);
-     head3 <= fnAddAmt(head3,amt);
-     head4 <= fnAddAmt(head4,amt);
-     head5 <= fnAddAmt(head5,amt);
-     head6 <= fnAddAmt(head6,amt);
-     head7 <= fnAddAmt(head7,amt);
-     head8 <= fnAddAmt(head8,amt);
-     head9 <= fnAddAmt(head9,amt);
+     head0 <= (head0 + amt) % QENTRIES;
+     head1 <= (head1 + amt) % QENTRIES;
+     head2 <= (head2 + amt) % QENTRIES;
+     head3 <= (head3 + amt) % QENTRIES;
+     head4 <= (head4 + amt) % QENTRIES;
+     head5 <= (head5 + amt) % QENTRIES;
+     head6 <= (head6 + amt) % QENTRIES;
+     head7 <= (head7 + amt) % QENTRIES;
+     head8 <= (head8 + amt) % QENTRIES;
+     head9 <= (head9 + amt) % QENTRIES;
      I <= I + amt;
     if (amt==3'd3) begin
      	iqentry_agen[head0] <= `INV;
