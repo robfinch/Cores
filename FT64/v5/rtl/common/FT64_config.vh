@@ -39,7 +39,7 @@
 `define NUM_IDU		2				// number of instruction decode units (1-3)
 `define NUM_ALU		2				// number of ALU's (1-2)
 `define NUM_MEM		2				// number of memory queues (1-3)
-`define NUM_FPU		0				// number of floating-point units (0-2)
+`define NUM_FPU		2				// number of floating-point units (0-2)
 `define NUM_CMT		2				// number of commit busses (1-2)
 // Comment out the following to remove FCU enhancements (branch predictor, BTB, RSB)
 `define FCU_ENH		1
@@ -62,3 +62,6 @@
 // Comment out to remove the write buffer from the core.
 `define HAS_WB	1'b1
 `define	WB_DEPTH	8			// must be one more than desired depth
+
+// Uncomment to allow SIMD operations
+`define SIMD	1'b1

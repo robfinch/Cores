@@ -111,6 +111,10 @@ wire sptr_o;
 wire cs_pit = adr[31:8]==24'hFFDC11;
 wire cs_crd = adr[31:11]==21'd0;	// $00000000 in virtual address space
 
+// Need to recreate the a2 address bit for 32 bit peripherals.
+wire [31:0] adr32 = {adr[31:3],|sel_o[7:4],2'b00};
+wire [31:0] dat32 = |sel_o[7:4] ? dat_o[63:32] : dat_o[31:0];
+
 FT64_pit upit1
 (
 	.rst_i(rst_i),
@@ -121,8 +125,8 @@ FT64_pit upit1
 	.ack_o(pit_ack),
 	.sel_i(sel_o[7:4]|sel_o[3:0]),
 	.we_i(we_o),
-	.adr_i(adr[5:0]),
-	.dat_i(dat_o[31:0]),
+	.adr_i(adr32[5:0]),
+	.dat_i(dat32),
 	.dat_o(pit_dato),
 	.clk0(1'b0),
 	.gate0(1'b0),
@@ -143,8 +147,8 @@ FT64_pic upic1
 	.stb_i(stb),
 	.ack_o(pic_ack),    // controller is ready
 	.wr_i(we_o),		// write
-	.adr_i(adr),		// address
-	.dat_i(dat_o[31:0]),
+	.adr_i(adr32),		// address
+	.dat_i(dat32),
 	.dat_o(pic_dato),
 	.vol_o(),			// volatile register selected
 	.i1(i1),
@@ -199,8 +203,8 @@ FT64_mmu ummu1
 	.s_stb_i(stb),
 	.s_ack_o(mmu_ack),
 	.s_wr_i(we_o),
-	.s_adr_i(adr),
-	.s_dat_i(dat_o[31:0]),
+	.s_adr_i(adr32),
+	.s_dat_i(dat32),
 	.s_dat_o(mmu_dato),
 	.cyc_o(cyc_o),
 	.stb_o(stb_o),
@@ -233,7 +237,7 @@ casez({mmu_ack,pic_ack,pit_ack,crd_ack})
 default:    dati <= dat_i;
 endcase
 
-assign ack = ack_i|mmu_ack|pic_ack|crd_ack;
+assign ack = ack_i|mmu_ack|pic_ack|pit_ack|crd_ack;
 
 FT64 ucpu1
 (

@@ -98,6 +98,17 @@ reg [31:0] es;
 reg [5:0] cause_base;
 reg [3:0] irq [0:31];
 reg [6:0] cause [0:31];
+integer n;
+
+initial begin
+	ie <= 32'h0;	
+	es <= 32'hFFFFFFFF;
+	rste <= 32'h0;
+	for (n = 0; n < 32; n = n + 1) begin
+		cause[n] <= 7'h00;
+		irq[n] <= 4'h8;
+	end
+end
 
 wire cs = cyc_i && stb_i && adr_i[31:8]==pIOAddress[31:8];
 assign vol_o = cs;
@@ -115,7 +126,7 @@ always @(posedge clk_i)
 	else begin
 		rste <= 32'h0;
 		if (cs & wr_i) begin
-			casex (adr_i[7:2])
+			casez (adr_i[7:2])
 			6'd0:    ;
 			6'd1:
 				begin
@@ -125,7 +136,7 @@ always @(posedge clk_i)
 				ie[dat_i[4:0]] <= adr_i[2];
 			6'd4:	es <= dat_i[31:0];
 			6'd5:	rste[dat_i[4:0]] <= 1'b1;
-			6'b1xxxxx:
+			6'b1?????:
 			     begin
 			     	 cause[adr_i[6:2]] <= dat_i[6:0];
 			         irq[adr_i[6:2]] <= dat_i[11:8];
@@ -142,9 +153,9 @@ begin
 	if (irqenc!=5'd0)
 		$display("PIC: %d",irqenc);
 	if (cs)
-		casex (adr_i[7:2])
+		casez (adr_i[7:2])
 		6'd0:	dat_o <= {cause_base,3'd0} + irqenc;
-		6'b1xxxxx: dat_o <= {es[adr_i[6:2]],ie[adr_i[6:2]],4'b0,irq[adr_i[6:2]],1'b0,cause[adr_i[6:2]]};
+		6'b1?????: dat_o <= {es[adr_i[6:2]],ie[adr_i[6:2]],4'b0,irq[adr_i[6:2]],1'b0,cause[adr_i[6:2]]};
 		default:	dat_o <= ie;
 		endcase
 	else
@@ -156,7 +167,6 @@ assign causeo = (irqenc == 5'h0) ? 7'd0 : cause[irqenc];
 assign nmio = nmii & ie[0];
 
 // Edge detect circuit
-integer n;
 always @(posedge clk_i)
 begin
 	for (n = 1; n < 32; n = n + 1)

@@ -1,0 +1,10 @@
+add_llvm_library(LLVMFT64Desc
+  FT64AsmBackend.cpp
+  FT64ELFObjectWriter.cpp
+  FT64MCAsmInfo.cpp
+  FT64MCCodeEmitter.cpp
+  FT64MCExpr.cpp
+  FT64MCTargetDesc.cpp
+  FT64TargetStreamer.cpp
+  FT64ELFStreamer.cpp
+)

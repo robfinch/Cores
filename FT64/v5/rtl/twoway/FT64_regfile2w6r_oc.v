@@ -30,7 +30,7 @@ parameter WID=64;
 parameter RBIT = 11;
 input clka;
 input ena;
-input [8:0] wea;
+input [7:0] wea;
 input [RBIT:0] addra;
 input [WID-1:0] dina;
 input clkb;
@@ -56,7 +56,6 @@ always @(posedge clka) if (ena & wea[4]) mem[addra][39:32] <= dina[39:32];
 always @(posedge clka) if (ena & wea[5]) mem[addra][47:40] <= dina[47:40];
 always @(posedge clka) if (ena & wea[6]) mem[addra][55:48] <= dina[55:48];
 always @(posedge clka) if (ena & wea[7]) mem[addra][63:56] <= dina[63:56];
-always @(posedge clka) if (ena & wea[8]) mem[addra][64] <= dina[64];
 
 always @(posedge clkb)
 	raddrb <= addrb;
@@ -73,8 +72,8 @@ input clk4x;
 input clk;
 input wr0;
 input wr1;
-input [8:0] we0;
-input [8:0] we1;
+input [7:0] we0;
+input [7:0] we1;
 input [RBIT:0] wa0;
 input [RBIT:0] wa1;
 input [WID-1:0] i0;
@@ -186,7 +185,9 @@ FT64_regfileRam urf10 (
   .dina(i),
   .clkb(rclk),
   .enb(1'b1),
+  .web(1'b0),
   .addrb(ra0),
+  .dinb(8'h00),
   .doutb(o00)
 );
 
@@ -198,7 +199,9 @@ FT64_regfileRam urf11 (
   .dina(i),
   .clkb(rclk),
   .enb(1'b1),
+  .web(1'b0),
   .addrb(ra1),
+  .dinb(8'h00),
   .doutb(o01)
 );
 
@@ -210,7 +213,9 @@ FT64_regfileRam urf12 (
   .dina(i),
   .clkb(rclk),
   .enb(1'b1),
+  .web(1'b0),
   .addrb(ra2),
+  .dinb(8'h00),
   .doutb(o02)
 );
 
@@ -222,7 +227,9 @@ FT64_regfileRam urf13 (
   .dina(i),
   .clkb(rclk),
   .enb(1'b1),
+  .web(1'b0),
   .addrb(ra3),
+  .dinb(8'h00),
   .doutb(o03)
 );
 
@@ -234,7 +241,9 @@ FT64_regfileRam urf14 (
   .dina(i),
   .clkb(rclk),
   .enb(1'b1),
+  .web(1'b0),
   .addrb(ra4),
+  .dinb(8'h00),
   .doutb(o04)
 );
 
@@ -246,7 +255,9 @@ FT64_regfileRam urf15 (
   .dina(i),
   .clkb(rclk),
   .enb(1'b1),
+  .web(1'b0),
   .addrb(ra5),
+  .dinb(8'h00),
   .doutb(o05)
 );
 `endif

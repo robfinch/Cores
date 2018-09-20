@@ -101,6 +101,20 @@ edge_det ued0 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(clk0), .pe(pulse[0]), .ne
 edge_det ued1 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(clk1), .pe(pulse[1]), .ne());
 edge_det ued2 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(clk2), .pe(pulse[2]), .ne());
 
+initial begin
+	for (n = 0; n < 3; n = n + 1) begin
+		maxcount[n] <= 32'd0;
+		count[n] <= 32'd0;
+		ont[n] <= 32'd0;
+		ld[n] <= 1'b0;
+		ce[n] <= 1'b0;
+		ar[n] <= 1'b0;
+		ge[n] <= 1'b0;
+		xc[n] <= 1'b0;
+		out[n] <= 1'b0;
+	end
+end
+
 always @(posedge clk_i)
 if (rst_i) begin
 	for (n = 0; n < 3; n = n + 1) begin

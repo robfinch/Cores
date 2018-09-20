@@ -60,6 +60,15 @@ input [1:0] state;
 input mem;
 input shift48;
 
+parameter byt = 3'd0;
+parameter char = 3'd1;
+parameter half = 3'd2;
+parameter word = 3'd3;
+parameter byt_para = 3'd4;
+parameter char_para = 3'd5;
+parameter half_para = 3'd6;
+parameter word_para = 3'd7;
+
 integer n;
 
 reg adrDone, adrIdle;
@@ -79,13 +88,26 @@ wire [21:0] qimm = instr[39:18];
 wire [63:0] imm = {{45{instr[39]}},instr[39:21]};
 wire [DBW-1:0] divq, rem;
 wire divByZero;
-wire [15:0] prod8;
-wire [31:0] prod16;
-wire [63:0] prod32;
+wire [15:0] prod80, prod81, prod82, prod83, prod84, prod85, prod86, prod87;
+wire [31:0] prod160, prod161, prod162, prod163;
+wire [63:0] prod320, prod321;
 wire [DBW*2-1:0] prod;
 wire mult_done8, mult_idle8, div_done8, div_idle8;
+wire mult_done80, mult_idle80, div_done80, div_idle80;
+wire mult_done81, mult_idle81, div_done81, div_idle81;
+wire mult_done82, mult_idle82, div_done82, div_idle82;
+wire mult_done83, mult_idle83, div_done83, div_idle83;
+wire mult_done84, mult_idle84, div_done84, div_idle84;
+wire mult_done85, mult_idle85, div_done85, div_idle85;
+wire mult_done86, mult_idle86, div_done86, div_idle86;
+wire mult_done87, mult_idle87, div_done87, div_idle87;
 wire mult_done16, mult_idle16, div_done16, div_idle16;
-wire mult_done32, mult_idle32, div_done32, div_idle32;
+wire mult_done160, mult_idle160, div_done160, div_idle160;
+wire mult_done161, mult_idle161, div_done161, div_idle161;
+wire mult_done162, mult_idle162, div_done162, div_idle162;
+wire mult_done163, mult_idle163, div_done163, div_idle163;
+wire mult_done320, mult_idle320, div_done320, div_idle320;
+wire mult_done321, mult_idle321, div_done321, div_idle321;
 wire mult_done, mult_idle, div_done, div_idle;
 wire aslo;
 wire [6:0] clzo,cloo,cpopo;
@@ -167,7 +189,7 @@ endfunction
 
 wire [2:0] sz =
     instr[`INSTRUCTION_OP]==`IVECTOR ? 2'd3 : 
-    instr[`INSTRUCTION_S2]==`R1 ? instr[18:16] : instr[23:21];
+    instr[`INSTRUCTION_S2]==`R1 ? instr[25:23] : instr[25:23];
 
 wire [63:0] bfout,shfto;
 wire [63:0] shftob;
@@ -187,7 +209,7 @@ FT64_multiplier #(DBW) umult1
 (
 	.rst(rst),
 	.clk(clk),
-	.ld(ld && IsMul(instr)),
+	.ld(ld && IsMul(instr)&& (sz==word || sz==word_para)),
 	.abort(abort),
 	.sgn(IsSgn(instr)),
 	.sgnus(IsSgnus(instr)),
@@ -198,11 +220,223 @@ FT64_multiplier #(DBW) umult1
 	.idle(mult_idle)
 );
 
+`ifdef SIMD
+FT64_multiplier #(32) umulth0
+(
+	.rst(rst),
+	.clk(clk),
+	.ld(ld && IsMul(instr) && (sz==half_para)),
+	.abort(abort),
+	.sgn(IsSgn(instr)),
+	.sgnus(IsSgnus(instr)),
+	.a(a[31:0]),
+	.b(b[31:0]),
+	.o(prod320),
+	.done(mult_done320),
+	.idle(mult_idle320)
+);
+
+FT64_multiplier #(32) umulth1
+(
+	.rst(rst),
+	.clk(clk),
+	.ld(ld && IsMul(instr) && (sz==half || sz==half_para)),
+	.abort(abort),
+	.sgn(IsSgn(instr)),
+	.sgnus(IsSgnus(instr)),
+	.a(a[63:32]),
+	.b(b[63:32]),
+	.o(prod321),
+	.done(mult_done321),
+	.idle(mult_idle321)
+);
+
+FT64_multiplier #(16) umultc0
+(
+	.rst(rst),
+	.clk(clk),
+	.ld(ld && IsMul(instr) && (sz==char || sz==char_para)),
+	.abort(abort),
+	.sgn(IsSgn(instr)),
+	.sgnus(IsSgnus(instr)),
+	.a(a[15:0]),
+	.b(b[15:0]),
+	.o(prod160),
+	.done(mult_done160),
+	.idle(mult_idle160)
+);
+
+FT64_multiplier #(16) umultc1
+(
+	.rst(rst),
+	.clk(clk),
+	.ld(ld && IsMul(instr) && (sz==char_para)),
+	.abort(abort),
+	.sgn(IsSgn(instr)),
+	.sgnus(IsSgnus(instr)),
+	.a(a[31:16]),
+	.b(b[31:16]),
+	.o(prod161),
+	.done(mult_done161),
+	.idle(mult_idle161)
+);
+
+FT64_multiplier #(16) umultc2
+(
+	.rst(rst),
+	.clk(clk),
+	.ld(ld && IsMul(instr) && (sz==char_para)),
+	.abort(abort),
+	.sgn(IsSgn(instr)),
+	.sgnus(IsSgnus(instr)),
+	.a(a[47:32]),
+	.b(b[47:32]),
+	.o(prod162),
+	.done(mult_done162),
+	.idle(mult_idle162)
+);
+
+FT64_multiplier #(16) umultc3
+(
+	.rst(rst),
+	.clk(clk),
+	.ld(ld && IsMul(instr) && (sz==char_para)),
+	.abort(abort),
+	.sgn(IsSgn(instr)),
+	.sgnus(IsSgnus(instr)),
+	.a(a[63:48]),
+	.b(b[63:48]),
+	.o(prod163),
+	.done(mult_done163),
+	.idle(mult_idle163)
+);
+
+FT64_multiplier #(8) umultb0
+(
+	.rst(rst),
+	.clk(clk),
+	.ld(ld && IsMul(instr) && (sz==byt || sz==byt_para)),
+	.abort(abort),
+	.sgn(IsSgn(instr)),
+	.sgnus(IsSgnus(instr)),
+	.a(a[7:0]),
+	.b(b[7:0]),
+	.o(prod80),
+	.done(mult_done80),
+	.idle(mult_idle80)
+);
+
+FT64_multiplier #(8) umultb1
+(
+	.rst(rst),
+	.clk(clk),
+	.ld(ld && IsMul(instr) && (sz==byt_para)),
+	.abort(abort),
+	.sgn(IsSgn(instr)),
+	.sgnus(IsSgnus(instr)),
+	.a(a[15:8]),
+	.b(b[15:8]),
+	.o(prod81),
+	.done(mult_done81),
+	.idle(mult_idle81)
+);
+
+FT64_multiplier #(8) umultb2
+(
+	.rst(rst),
+	.clk(clk),
+	.ld(ld && IsMul(instr) && (sz==byt_para)),
+	.abort(abort),
+	.sgn(IsSgn(instr)),
+	.sgnus(IsSgnus(instr)),
+	.a(a[23:16]),
+	.b(b[23:16]),
+	.o(prod82),
+	.done(mult_done82),
+	.idle(mult_idle82)
+);
+
+FT64_multiplier #(8) umultb3
+(
+	.rst(rst),
+	.clk(clk),
+	.ld(ld && IsMul(instr) && (sz==byt_para)),
+	.abort(abort),
+	.sgn(IsSgn(instr)),
+	.sgnus(IsSgnus(instr)),
+	.a(a[31:24]),
+	.b(b[31:24]),
+	.o(prod83),
+	.done(mult_done83),
+	.idle(mult_idle83)
+);
+
+FT64_multiplier #(8) umultb4
+(
+	.rst(rst),
+	.clk(clk),
+	.ld(ld && IsMul(instr) && (sz==byt_para)),
+	.abort(abort),
+	.sgn(IsSgn(instr)),
+	.sgnus(IsSgnus(instr)),
+	.a(a[39:32]),
+	.b(b[39:32]),
+	.o(prod84),
+	.done(mult_done84),
+	.idle(mult_idle84)
+);
+
+FT64_multiplier #(8) umultb5
+(
+	.rst(rst),
+	.clk(clk),
+	.ld(ld && IsMul(instr) && (sz==byt_para)),
+	.abort(abort),
+	.sgn(IsSgn(instr)),
+	.sgnus(IsSgnus(instr)),
+	.a(a[47:40]),
+	.b(b[47:40]),
+	.o(prod85),
+	.done(mult_done85),
+	.idle(mult_idle85)
+);
+
+FT64_multiplier #(8) umultb6
+(
+	.rst(rst),
+	.clk(clk),
+	.ld(ld && IsMul(instr) && (sz==byt_para)),
+	.abort(abort),
+	.sgn(IsSgn(instr)),
+	.sgnus(IsSgnus(instr)),
+	.a(a[55:48]),
+	.b(b[55:48]),
+	.o(prod86),
+	.done(mult_done86),
+	.idle(mult_idle86)
+);
+
+FT64_multiplier #(8) umultb7
+(
+	.rst(rst),
+	.clk(clk),
+	.ld(ld && IsMul(instr) && (sz==byt_para)),
+	.abort(abort),
+	.sgn(IsSgn(instr)),
+	.sgnus(IsSgnus(instr)),
+	.a(a[63:56]),
+	.b(b[63:56]),
+	.o(prod87),
+	.done(mult_done87),
+	.idle(mult_idle87)
+);
+`endif
+
 FT64_divider #(DBW) udiv1
 (
 	.rst(rst),
 	.clk(clk),
-	.ld(ld && IsDivmod(instr)),
+	.ld(ld && IsDivmod(instr) && (sz==word || sz==word_para)),
 	.abort(abort),
 	.sgn(IsSgn(instr)),
 	.sgnus(IsSgnus(instr)),
@@ -634,7 +868,7 @@ case(instr[`INSTRUCTION_OP])
 	    `SHIFT63,
 	    `SHIFTR:
 	    	begin
-	    		if (instr[25:23]==`SHL)
+	    		if (instr[25:23]==`SHL || instr[25:23]==`ASL)
 	    			o[63:0] = shfto;
 	    		else
 	    			o[63:0] = BIG ? shfto : 64'hCCCCCCCCCCCCCCCC;
@@ -642,7 +876,9 @@ case(instr[`INSTRUCTION_OP])
 	    		if(!BIG)
 	    			$stop;
 	    	end
-	    `ADD:   case(sz)
+	    `ADD:
+`ifdef SIMD	    		
+	    	case(sz)
 	    		3'd0,3'd4:
 	    			begin
 	    				o[7:0] = a[7:0] + b[7:0];
@@ -666,12 +902,17 @@ case(instr[`INSTRUCTION_OP])
 	    				o[31:0] = a[31:0] + b[31:0];
 	    				o[63:32] = a[63:32] + b[63:32];
 	    			end
-	            3'd3,3'd7:
+	            default:
 	            	begin
 	            		o[63:0] = a + b;
 	            	end
 	            endcase
-	    `SUB:   case(sz)
+`else
+			o = a + b;	            
+`endif
+	    `SUB:   
+`ifdef SIMD	    
+	    	case(sz)
 	    		3'd0,3'd4:
 	    			begin
 	    				o[7:0] = a[7:0] - b[7:0];
@@ -695,11 +936,14 @@ case(instr[`INSTRUCTION_OP])
 	    				o[31:0] = a[31:0] - b[31:0];
 	    				o[63:32] = a[63:32] - b[63:32];
 	    			end
-	            3'd3,3'd7:
+	            default:
 	            	begin
 	            		o[63:0] = a - b;
 	            	end
 	            endcase
+`else
+			o = a - b;	            
+`endif
 	    `SLT:   tskSlt(instr,instr[25:23],a,b,o);
 	    `SLTU:  tskSltu(instr,instr[25:23],a,b,o);
 	    `SLE:   tskSle(instr,instr[25:23],a,b,o);
@@ -721,9 +965,16 @@ case(instr[`INSTRUCTION_OP])
 	    				o[63:0] = (a!=64'd0) ? b : c;
 	    `MUX:       for (n = 0; n < 64; n = n + 1)
 	                    o[n] <= a[n] ? b[n] : c[n];
-	    `MULU:      o[63:0] = prod[DBW-1:0];
-	    `MULSU:     o[63:0] = prod[DBW-1:0];
-	    `MUL:       o[63:0] = prod[DBW-1:0];
+	    `MULU,`MULSU,`MUL:
+	        case(sz)
+	        byt:				o[63:0] = prod80;
+	        byt_para:		o[63:0] = {prod87[7:0],prod86[7:0],prod85[7:0],prod84[7:0],prod83[7:0],prod82[7:0],prod81[7:0],prod80[7:0]};
+	        char:				o[63:0] = prod160;
+	        char_para:	o[63:0] = {prod163[15:0],prod162[15:0],prod161[15:0],prod160[15:0]};
+					half: 			o[63:0] = prod320;
+					half_para:	o[63:0] = {prod321[31:0],prod320[31:0]};
+					default:		o[63:0] = prod[DBW-1:0];
+					endcase
 	    `DIVU:   o[63:0] = BIG ? divq : 64'hCCCCCCCCCCCCCCCC;
 	    `DIVSU:  o[63:0] = BIG ? divq : 64'hCCCCCCCCCCCCCCCC;
 	    `DIV:    o[63:0] = BIG ? divq : 64'hCCCCCCCCCCCCCCCC;
@@ -735,7 +986,9 @@ case(instr[`INSTRUCTION_OP])
 					o[63:0] = BIG ? a + (b << instr[22:21]) : 64'hCCCCCCCCEEEEEEEE;
 					o[63:44] = PTR;
 					end
-	    `MIN:       case(sz)
+	    `MIN: 
+`ifdef SIMD
+	          case(sz)
 	    			3'd0,3'd4:
 		    			begin
 		    			o[7:0] = BIG ? ($signed(a[7:0]) < $signed(b[7:0]) ? a[7:0] : b[7:0]) : 8'hCC;
@@ -764,7 +1017,12 @@ case(instr[`INSTRUCTION_OP])
 	    				o[63:0] = BIG ? ($signed(a) < $signed(b) ? a : b) : 64'hCCCCCCCCCCCCCCCC;
 	    				end
 	    			endcase
-	    `MAX:       case(sz)
+`else
+			o[63:0] = BIG ? ($signed(a) < $signed(b) ? a : b) : 64'hCCCCCCCCCCCCCCCC;
+`endif	    			
+	    `MAX: 
+`ifdef SIMD     
+	    			case(sz)
 	    			3'd0,3'd4:
 		    			begin
 		    			o[7:0] = BIG ? ($signed(a[7:0]) > $signed(b[7:0]) ? a[7:0] : b[7:0]) : 64'hCCCCCCCCCCCCCCCC;
@@ -793,6 +1051,9 @@ case(instr[`INSTRUCTION_OP])
 	    				o[63:0] = BIG ? ($signed(a) > $signed(b) ? a : b) : 64'hCCCCCCCCCCCCCCCC;
 	    				end
 	    			endcase
+`else
+			o[63:0] = BIG ? ($signed(a) > $signed(b) ? a : b) : 64'hCCCCCCCCCCCCCCCC;
+`endif	    			
 	    `MAJ:		o = (a & b) | (a & c) | (b & c);
 	    `CHK:       o[63:0] = (a >= b && a < c);
 	    /*
@@ -942,8 +1203,14 @@ always @*
 if (rst)
 	done <= TRUE;
 else begin
-	if (IsMul(instr))
-		done <= mult_done;
+	if (IsMul(instr)) begin
+		case(sz)
+		byt,byt_para:	done <= mult_done80;
+		char,char_para:	done <= mult_done160;
+		half,half_para:	done <= mult_done320;
+		default:	done <= mult_done;
+		endcase
+	end
 	else if (IsDivmod(instr) & BIG)
 		done <= div_done;
 	else if (IsShiftAndOp(instr) & BIG)
@@ -959,8 +1226,14 @@ always @*
 if (rst)
 	idle <= TRUE;
 else begin
-	if (IsMul(instr))
-		idle <= mult_idle;
+	if (IsMul(instr)) begin
+		case(sz)
+		byt,byt_para:	idle <= mult_idle80;
+		char,char_para:	idle <= mult_idle160;
+		half,half_para:	idle <= mult_idle320;
+		default:	idle <= mult_idle;
+		endcase
+	end
 	else if (IsDivmod(instr) & BIG)
 		idle <= div_idle;
 	else if (IsShiftAndOp(instr) & BIG)
@@ -1020,6 +1293,7 @@ input [63:0] a;
 input [63:0] b;
 output [63:0] o;
 begin
+`ifdef SIMD
 	case(sz[2:0])
   3'd0:   o[63:0] = $signed(a[7:0]) < $signed(b[7:0]);
   3'd1:   o[63:0] = $signed(a[15:0]) < $signed(b[15:0]);
@@ -1047,6 +1321,9 @@ begin
 						        };
 	3'd7:		o[63:0] = $signed(a[63:0]) < $signed(b[63:0]);
   endcase
+`else
+	o[63:0] = $signed(a[63:0]) < $signed(b[63:0]);
+`endif
 end
 endtask
 
@@ -1057,6 +1334,7 @@ input [63:0] a;
 input [63:0] b;
 output [63:0] o;
 begin
+`ifdef SIMD
 	case(sz[2:0])
   3'd0:   o[63:0] = $signed(a[7:0]) <= $signed(b[7:0]);
   3'd1:   o[63:0] = $signed(a[15:0]) <= $signed(b[15:0]);
@@ -1084,6 +1362,9 @@ begin
 						        };
 	3'd7:		o[63:0] = $signed(a[63:0]) <= $signed(b[63:0]);
   endcase
+`else
+	o[63:0] = $signed(a[63:0]) <= $signed(b[63:0]);
+`endif
 end
 endtask
 
@@ -1094,6 +1375,7 @@ input [63:0] a;
 input [63:0] b;
 output [63:0] o;
 begin
+`ifdef SIMD
 	case(sz[2:0])
   3'd0:   o[63:0] = (a[7:0]) < (b[7:0]);
   3'd1:   o[63:0] = (a[15:0]) < (b[15:0]);
@@ -1121,6 +1403,9 @@ begin
 						        };
 	3'd7:		o[63:0] = (a[63:0]) < (b[63:0]);
   endcase
+`else
+	o[63:0] = (a[63:0]) < (b[63:0]);
+`endif
 end
 endtask
 
@@ -1131,6 +1416,7 @@ input [63:0] a;
 input [63:0] b;
 output [63:0] o;
 begin
+`ifdef SIMD
 	case(sz[2:0])
   3'd0:   o[63:0] = (a[7:0]) <= (b[7:0]);
   3'd1:   o[63:0] = (a[15:0]) <= (b[15:0]);
@@ -1158,6 +1444,9 @@ begin
 						        };
 	3'd7:		o[63:0] = (a[63:0]) <= (b[63:0]);
   endcase
+`else
+	o[63:0] = (a[63:0]) <= (b[63:0]);
+`endif
 end
 endtask
 

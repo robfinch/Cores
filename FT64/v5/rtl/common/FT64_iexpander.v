@@ -228,7 +228,7 @@ casez({cinstr[15:12],cinstr[6]})
 			expand[17:13] = {cinstr[11:8],cinstr[5]};
 			expand[12:8] = cinstr[4:0];
 			expand[7:6] = 2'b10;
-			expand[5:0] = 8'h02;
+			expand[5:0] = 6'h02;
 		end
 5'b00011:	// ADD
 		begin

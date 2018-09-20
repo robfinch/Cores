@@ -433,12 +433,17 @@
 `define PANIC_BADTARGETID	4'd12
 `define PANIC_ALU0ONLY	4'd13
 
-`define IB_CONST	127:64
-`define IB_LN			63:61
-`define IB_RT			59:55
-`define IB_RC		  54:50
-`define IB_RB			49:45
-`define IB_RA			44:40
+`define IB_CONST	143:80
+`define IB_LN			78:76
+`define IB_RT			75:71
+`define IB_RC		  70:66
+`define IB_RB			65:61
+`define IB_RA			60:56
+`define IB_IRQ		42
+`define IB_RTI		41
+`define IB_BRK		40
+`define IB_RET		39
+`define IB_JAL		38
 `define IB_ODDBALL	37
 `define IB_STORE	36
 `define IB_MEMSZ	35:33

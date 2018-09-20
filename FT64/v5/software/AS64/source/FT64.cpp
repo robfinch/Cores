@@ -2423,49 +2423,80 @@ static void process_ibne(int opcode6, int opcode3)
 }
 
 // ---------------------------------------------------------------------------
-// bfextu r1,r2,#1,#63
+// bfextu r1,#1,#63,r2
 // ---------------------------------------------------------------------------
 
 static void process_bitfield(int64_t oc)
 {
-    int Ra;
+    int Ra, Rb, Rc;
     int Rt;
     int64_t mb;
     int64_t me;
 	int64_t val;
+	int64_t op;
 	int sz = 3;
 	char *p;
+	bool gmb, gme, gval;
 
+	gmb = gme = gval = false;
 	p = inptr;
 	if (*p == '.')
 		getSz(&sz);
 
     Rt = getRegisterX();
     need(',');
-	if (oc==4) {
-		NextToken();
-		val = expr();
-		Ra = 0;
+	NextToken();
+	if (token == '#') {
+		mb = expr();
+		gmb = true;
 	}
 	else {
-		val = 0LL;
+		prevToken();
 		Ra = getRegisterX();
 	}
-    need(',');
-    NextToken();
-    mb = expr();
-    need(',');
-    NextToken();
-    me = expr();
-	emit_insn(
-		(oc << 34LL) |
-		(me << 27LL) |
-		(sz << 24) |
-		(mb << 18) |
-		(Rt << 12) |
-		((Ra|(val & 0x3f)) << 6) |
-		0x22,!expand_flag,5
-	);
+	need(',');
+	NextToken();
+	if (token == '#') {
+		me = expr();
+		gme = true;
+	}
+	else {
+		prevToken();
+		Rb = getRegisterX();
+	}
+	need(',');
+	NextToken();
+	if (token == '#') {
+		val = expr();
+		gval = true;
+	}
+	else {
+		prevToken();
+		Rc = getRegisterX();
+	}
+
+	op =
+		(oc << 44LL) |
+		(gval << 32) |
+		(gme << 31) |
+		(gmb << 30) |
+		(Rt << 23) |
+		(1 << 6) |
+		0x22;
+	if (gmb)
+		op |= ((mb & 31) << 8) | (((mb >> 5) & 1) << 28);
+	else
+		op |= (Ra << 8);
+	if (gme)
+		op |= ((me & 31) << 13) | (((me >> 5) & 1) << 29);
+	else
+		op |= (Rb << 13);
+	if (gval)
+		op |= ((val & 31) << 18) | (((val >> 5) & 0x7ff) << 33LL);
+	else
+		op |= (Rc << 18);
+
+	emit_insn(op, 0, 6);
 }
 
 

@@ -34,7 +34,7 @@ input [5:0] ven;
 input thrd;
 input predict_taken;
 input [4:0] Rt;
-output reg [127:0] bus;
+output reg [143:0] bus;
 output reg [4:0] id_o;
 output reg idv_o;
 
@@ -111,7 +111,7 @@ case(isn[`INSTRUCTION_OP])
 		case(isn[`INSTRUCTION_S2])
 		`R1:        IsAlu0Only = TRUE;
 		`SHIFTR,`SHIFT31,`SHIFT63:
-			IsAlu0Only = TRUE;
+			IsAlu0Only = !(instr[25:23]==`SHL || instr[25:23]==`ASL);
 		`MULU,`MULSU,`MUL,
 		`MULUH,`MULSUH,`MULH,
 		`MODU,`MODSU,`MOD: IsAlu0Only = TRUE;
@@ -529,7 +529,7 @@ endfunction
 
 function IsJmp;
 input [47:0] isn;
-IsJmp = isn[`INSTRUCTION_OP]==`JMP && isn[7]==1'b0;
+IsJmp = isn[`INSTRUCTION_OP]==`JMP;// && isn[7]==1'b0;
 endfunction
 
 // Really IsPredictableBranch
@@ -545,14 +545,29 @@ default:    IsBranch = FALSE;
 endcase
 endfunction
 
+function IsJAL;
+input [47:0] isn;
+IsJAL = isn[`INSTRUCTION_OP]==`JAL;// && isn[7]==1'b0;
+endfunction
+
+function IsRet;
+input [47:0] isn;
+IsRet = isn[`INSTRUCTION_OP]==`RET;// && isn[7]==1'b0;
+endfunction
+
+function IsIrq;
+input [47:0] isn;
+IsIrq = isn[`INSTRUCTION_OP]==`BRK /*&& isn[`INSTRUCTION_L2]==2'b00*/ && isn[23:20]==4'h0;
+endfunction
+
 function IsBrk;
 input [47:0] isn;
-IsBrk = isn[`INSTRUCTION_OP]==`BRK && isn[`INSTRUCTION_L2]==2'b00;
+IsBrk = isn[`INSTRUCTION_OP]==`BRK;// && isn[`INSTRUCTION_L2]==2'b00;
 endfunction
 
 function IsRti;
 input [47:0] isn;
-IsRti = isn[`INSTRUCTION_OP]==`RR && isn[`INSTRUCTION_L2]==2'b00 && isn[`INSTRUCTION_S2]==`RTI;
+IsRti = isn[`INSTRUCTION_OP]==`RR /*&& isn[`INSTRUCTION_L2]==2'b00*/ && isn[`INSTRUCTION_S2]==`RTI;
 endfunction
 
 // Has an extendable 14-bit constant
@@ -913,9 +928,9 @@ endfunction
 
 always @(posedge clk)
 begin
-	bus <= 128'h0;
-	bus[`IB_CONST] <= instr[7:6]==2'b01 ? {{34{instr[47]}},instr[47:18]} :
-																				{{50{instr[31]}},instr[31:18]};
+	bus <= 144'h0;
+	bus[`IB_CONST] <= instr[6]==1'b1 ? {{34{instr[47]}},instr[47:18]} :
+																			{{50{instr[31]}},instr[31:18]};
 	case(instr[7:6])
 	2'b00:	bus[`IB_LN] <= 3'd4;
 	2'b01:	bus[`IB_LN] <= 3'd6;
@@ -928,6 +943,11 @@ begin
 //	bus[`IB_A3V]   <= Source3Valid(instr);
 //	bus[`IB_A2V]   <= Source2Valid(instr);
 //	bus[`IB_A1V]   <= Source1Valid(instr);
+	bus[`IB_IRQ]	 <= IsIrq(instr);
+	bus[`IB_BRK]	 <= IsBrk(instr);
+	bus[`IB_RTI]	 <= IsRti(instr);
+	bus[`IB_RET]	 <= IsRet(instr);
+	bus[`IB_JAL]	 <= IsJAL(instr);
 	bus[`IB_BT]    <= (IsBranch(instr) && predict_taken);
 	bus[`IB_ALU]   <= IsALU;
 	bus[`IB_ALU0]  <= IsAlu0Only(instr);
