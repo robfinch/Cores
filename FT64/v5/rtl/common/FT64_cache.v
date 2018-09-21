@@ -302,13 +302,14 @@ endmodule
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
 
-module FT64_L1_icache(rst, clk, nxt, wr, en, wadr, adr, i, o, hit, invall, invline);
+module FT64_L1_icache(rst, clk, nxt, wr, wr_ack, en, wadr, adr, i, o, hit, invall, invline);
 parameter CAMTAGS = 1'b0;   // 32 way
 parameter FOURWAY = 1'b1;
 input rst;
 input clk;
 input nxt;
 input wr;
+output wr_ack;
 input [8:0] en;
 input [37:0] adr;
 input [37:0] wadr;
@@ -331,9 +332,9 @@ reg invline1, invline2;
 // Must update the cache memory on the cycle after a write to the tag memmory.
 // Otherwise lineno won't be valid. Tag memory takes two clock cycles to update.
 always @(posedge clk)
-     wr1 <= wr;
+	wr1 <= wr;
 always @(posedge clk)
-     wr2 <= wr1;
+	wr2 <= wr1;
 always @(posedge clk)
 	i1 <= i[287:0];
 always @(posedge clk)
@@ -407,23 +408,15 @@ end
 end
 endgenerate
 
-assign hit = taghit & &lv; //[adr[4:2]];
+// Valid if a 64-bit area encompassing a potential 48-bit instruction is valid.
+assign hit = taghit & lv[adr[4:2]] & lv[adr[4:2]+4'd1];
 
 //always @(radr or ic0 or ic1)
 always @(adr or ic)
 	o <= ic >> {adr[4:1],4'h0};
-/*
-case(adr[4:2])
-3'd0:  o <= ic[31:0];
-3'd1:  o <= ic[63:32];
-3'd2:  o <= ic[95:64];
-3'd3:  o <= ic[127:96];
-3'd4:  o <= ic[159:128];
-3'd5:  o <= ic[191:160];
-3'd6:  o <= ic[223:192];
-3'd7:  o <= ic[255:224];
-endcase
-*/
+
+assign wr_ack = wr2;
+
 endmodule
 
 // -----------------------------------------------------------------------------
@@ -493,13 +486,15 @@ endmodule
 // address bit 4).
 // -----------------------------------------------------------------------------
 
-module FT64_L2_icache(rst, clk, nxt, wr, xsel, adr, cnt, exv_i, i, err_i, o, hit, invall, invline);
+module FT64_L2_icache(rst, clk, nxt, wr, wr_ack, rd_ack, xsel, adr, cnt, exv_i, i, err_i, o, hit, invall, invline);
 parameter CAMTAGS = 1'b0;   // 32 way
 parameter FOURWAY = 1'b1;
 input rst;
 input clk;
 input nxt;
 input wr;
+output wr_ack;
+output rd_ack;
 input xsel;
 input [37:0] adr;
 input [2:0] cnt;
@@ -517,17 +512,34 @@ wire taghit;
 reg wr1,wr2;
 reg [2:0] sel1,sel2;
 reg [63:0] i1,i2;
+reg [37:0] last_adr;
 
 // Must update the cache memory on the cycle after a write to the tag memmory.
 // Otherwise lineno won't be valid. camTag memory takes two clock cycles to update.
 always @(posedge clk)
-     wr1 <= wr;
+	wr1 <= wr;
 always @(posedge clk)
-     wr2 <= wr1;
+	wr2 <= wr1;
 always @(posedge clk)
-     sel1 <= {xsel,adr[4:3]};
+	sel1 <= {xsel,adr[4:3]};
 always @(posedge clk)
-     sel2 <= sel1;
+	sel2 <= sel1;
+always @(posedge clk)
+	last_adr <= adr;
+
+reg [3:0] rdackx;
+always @(posedge clk)
+if (rst)
+	rdackx <= 4'b0;
+else begin
+	if (last_adr != adr || wr || wr1 || wr2)
+		rdackx <= 4'b0;
+	else
+		rdackx <= {rdackx,~(wr|wr1|wr2)};
+end
+
+assign rd_ack = rdackx[3] & ~(last_adr!=adr || wr || wr1 || wr2);
+
 // An exception is forced to be stored in the event of an error loading the
 // the instruction line.
 always @(posedge clk)
@@ -540,15 +552,15 @@ edge_det u3 (.rst(rst), .clk(clk), .ce(1'b1), .i(wr && cnt==3'd0), .pe(pe_wr), .
 
 FT64_L2_icache_mem u1
 (
-    .clk(clk),
-    .wr(wr2),
-    .lineno(lineno),
-    .sel(sel2),
-    .i(i2),
-    .o(o),
-    .ov(lv),
-    .invall(invall),
-    .invline(invline)
+	.clk(clk),
+	.wr(wr2),
+	.lineno(lineno),
+	.sel(sel2),
+	.i(i2),
+	.o(o),
+	.ov(lv),
+	.invall(invall),
+	.invline(invline)
 );
 
 generate
@@ -556,38 +568,39 @@ begin : tags
 if (FOURWAY)
 FT64_L2_icache_cmptag4way u2
 (
-    .rst(rst),
-    .clk(clk),
-    .nxt(nxt),
-    .wr(pe_wr),
-    .adr(adr),
-    .lineno(lineno),
-    .hit(taghit)
+	.rst(rst),
+	.clk(clk),
+	.nxt(nxt),
+	.wr(pe_wr),
+	.adr(adr),
+	.lineno(lineno),
+	.hit(taghit)
 );
 else if (CAMTAGS)
 FT64_L2_icache_camtag u2
 (
-    .rst(rst),
-    .clk(clk),
-    .wr(pe_wr),
-    .adr(adr),
-    .lineno(lineno),
-    .hit(taghit)
+	.rst(rst),
+	.clk(clk),
+	.wr(pe_wr),
+	.adr(adr),
+	.lineno(lineno),
+	.hit(taghit)
 );
 else
 FT64_L2_icache_cmptag u2
 (
-    .rst(rst),
-    .clk(clk),
-    .wr(pe_wr),
-    .adr(adr),
-    .lineno(lineno),
-    .hit(taghit)
+	.rst(rst),
+	.clk(clk),
+	.wr(pe_wr),
+	.adr(adr),
+	.lineno(lineno),
+	.hit(taghit)
 );
 end
 endgenerate
 
 assign hit = taghit & lv;
+assign wr_ack = wr2;
 
 endmodule
 

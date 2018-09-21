@@ -1081,6 +1081,7 @@ case(instr[`INSTRUCTION_OP])
 		case(instr[`INSTRUCTION_S2])
 		`LVX,
     `LBX,`LBUX,`LCX,`LCUX,
+    `LVBX,`LVBUX,`LVCX,`LVCUX,`LVHX,`LVHUX,`LVWX,
     `LHX,`LHUX,`LWX,`LWRX,`SBX,`SCX,`SHX,`SWX,`SWCX:
 				if (BIG) begin
 					o[63:0] = a + (b << instr[24:23]);
@@ -1132,21 +1133,17 @@ case(instr[`INSTRUCTION_OP])
 `DIVI:		o[63:0] = BIG ? divq : 64'hCCCCCCCCCCCCCCCC;
 `MODI:		o[63:0] = BIG ? rem : 64'hCCCCCCCCCCCCCCCC;
 `LB,`LBU,`SB:	o[63:0] = a + b;
-`Lx,`LxU,`Sx:
+`Lx,`LxU,`Sx,`LVx:
 			begin
-				o[63:0] = a + b;
 				casez(b[2:0])
-				3'b100:	o[2:0] = 3'd0;	// LW / SW
-				3'b?10:	o[1:0] = 2'd0;	// LH / LHU / SH
-				3'b??1:	o[0] = 1'd0;		// LC / LCU / SC
+				3'b100:		o = a + {b[63:3],3'b0};	// LW / SW
+				3'b?10: 	o = a + {b[63:2],2'b0};	// LH / LHU / SH
+				default:	o = a + {b[63:1],1'b0};	// LC / LCU / SC
 				endcase
 			end
 `LWR,`SWC,`CAS:
 			begin
 				o[63:0] = a + b;
-			end
-`LVx:		begin
-				o[63:0] = a + (instr[6] ? sxb26 : sxb10);
 			end
 `LV,`SV:    begin
 				o[63:0] = a + b + {ven,3'b0};
@@ -1262,7 +1259,7 @@ case(instr[`INSTRUCTION_OP])
     case(instr[`INSTRUCTION_S2])
     `ADD:   exc <= (fnOverflow(0,a[63],b[63],o[63]) & excen[0] & instr[24]) ? `FLT_OFL : `FLT_NONE;
     `SUB:   exc <= (fnOverflow(1,a[63],b[63],o[63]) & excen[1] & instr[24]) ? `FLT_OFL : `FLT_NONE;
-    `ASL,`ASLI:     exc <= (BIG & aslo & excen[2]) ? `FLT_OFL : `FLT_NONE;
+//    `ASL,`ASLI:     exc <= (BIG & aslo & excen[2]) ? `FLT_OFL : `FLT_NONE;
     `MUL,`MULSU:    exc <= prod[63] ? (prod[127:64] != 64'hFFFFFFFFFFFFFFFF && excen[3] ? `FLT_OFL : `FLT_NONE ):
                            (prod[127:64] != 64'd0 && excen[3] ? `FLT_OFL : `FLT_NONE);
     `MULU:      exc <= prod[127:64] != 64'd0 && excen[3] ? `FLT_OFL : `FLT_NONE;

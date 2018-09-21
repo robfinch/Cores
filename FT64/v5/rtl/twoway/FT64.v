@@ -483,12 +483,12 @@ for (n = 0; n < QENTRIES; n = n + 1)
 	iqentry_a3_s[n] = 5'd0;
 end
 
-wire  [QENTRIES-1:0] iqentry_source = 8'h00;
+reg [QENTRIES-1:0] iqentry_source = {QENTRIES{1'b0}};
 reg   [QENTRIES-1:0] iqentry_imm;
-wire  [QENTRIES-1:0] iqentry_memready;
-wire  [QENTRIES-1:0] iqentry_memopsvalid;
+reg  [QENTRIES-1:0] iqentry_memready;
+reg  [QENTRIES-1:0] iqentry_memopsvalid;
 
-reg  [QENTRIES-1:0] memissue = 8'h00;
+reg  [QENTRIES-1:0] memissue = {QENTRIES{1'b0}};
 reg [1:0] missued;
 integer last_issue;
 reg  [QENTRIES-1:0] iqentry_memissue;
@@ -527,37 +527,9 @@ assign iqentry_livetarget[6] = iqentry_6_livetarget;
 assign iqentry_livetarget[7] = iqentry_7_livetarget;
 assign iqentry_livetarget[8] = iqentry_8_livetarget;
 assign iqentry_livetarget[9] = iqentry_9_livetarget;
-wire  [PREGS-1:1] iqentry_0_latestID;
-wire  [PREGS-1:1] iqentry_1_latestID;
-wire  [PREGS-1:1] iqentry_2_latestID;
-wire  [PREGS-1:1] iqentry_3_latestID;
-wire  [PREGS-1:1] iqentry_4_latestID;
-wire  [PREGS-1:1] iqentry_5_latestID;
-wire  [PREGS-1:1] iqentry_6_latestID;
-wire  [PREGS-1:1] iqentry_7_latestID;
-wire  [PREGS-1:1] iqentry_8_latestID;
-wire  [PREGS-1:1] iqentry_9_latestID;
-wire  [PREGS-1:1] iqentry_0_cumulative;
-wire  [PREGS-1:1] iqentry_1_cumulative;
-wire  [PREGS-1:1] iqentry_2_cumulative;
-wire  [PREGS-1:1] iqentry_3_cumulative;
-wire  [PREGS-1:1] iqentry_4_cumulative;
-wire  [PREGS-1:1] iqentry_5_cumulative;
-wire  [PREGS-1:1] iqentry_6_cumulative;
-wire  [PREGS-1:1] iqentry_7_cumulative;
-wire  [PREGS-1:1] iqentry_8_cumulative;
-wire  [PREGS-1:1] iqentry_9_cumulative;
+reg [PREGS-1:1] iqentry_latestID [0:QENTRIES-1];
 reg [PREGS-1:1] iqentry_cumulative [0:QENTRIES-1];
-wire  [PREGS-1:1] iq0_out;
-wire  [PREGS-1:1] iq1_out;
-wire  [PREGS-1:1] iq2_out;
-wire  [PREGS-1:1] iq3_out;
-wire  [PREGS-1:1] iq4_out;
-wire  [PREGS-1:1] iq5_out;
-wire  [PREGS-1:1] iq6_out;
-wire  [PREGS-1:1] iq7_out;
-wire  [PREGS-1:1] iq8_out;
-wire  [PREGS-1:1] iq9_out;
+wire  [PREGS-1:1] iq_out [0:QENTRIES-1];
 
 reg  [`QBITS] tail0;
 reg  [`QBITS] tail1;
@@ -705,7 +677,7 @@ reg [63:0] fpu1_argC;
 reg [63:0] fpu1_argI;	// only used by BEQ
 reg [RBIT:0] fpu1_tgt;
 reg [`ABITS] fpu1_pc;
-wire [63:0] fpu1_bus;
+wire [63:0] fpu1_bus = 64'h0;
 wire  [3:0] fpu1_id;
 wire  [`XBITS] fpu1_exc = 9'h000;
 wire        fpu1_v;
@@ -723,7 +695,7 @@ reg [63:0] fpu2_argC;
 reg [63:0] fpu2_argI;	// only used by BEQ
 reg [RBIT:0] fpu2_tgt;
 reg [`ABITS] fpu2_pc;
-wire [63:0] fpu2_bus;
+wire [63:0] fpu2_bus = 64'h0;
 wire  [3:0] fpu2_id;
 wire  [`XBITS] fpu2_exc = 9'h000;
 wire        fpu2_v;
@@ -797,7 +769,6 @@ reg	 [2:0] dram1;	// state of the DRAM request (latency = 4; can have three in p
 reg	 [2:0] dram2;	// state of the DRAM request (latency = 4; can have three in pipeline)
 reg [63:0] dram0_data;
 reg [`ABITS] dram0_addr;
-reg [31:0] dram0_seg;
 reg [47:0] dram0_instr;
 reg        dram0_rmw;
 reg		   dram0_preload;
@@ -811,7 +782,6 @@ reg        dram0_store;
 reg  [1:0] dram0_ol;
 reg [63:0] dram1_data;
 reg [`ABITS] dram1_addr;
-reg [31:0] dram1_seg;
 reg [47:0] dram1_instr;
 reg        dram1_rmw;
 reg		   dram1_preload;
@@ -825,7 +795,6 @@ reg        dram1_store;
 reg  [1:0] dram1_ol;
 reg [63:0] dram2_data;
 reg [`ABITS] dram2_addr;
-reg [31:0] dram2_seg;
 reg [47:0] dram2_instr;
 reg        dram2_rmw;
 reg		   dram2_preload;
@@ -2733,7 +2702,7 @@ begin
 	`MEMNDX:
 		if (ins[`INSTRUCTION_L2]==2'b00)
 		   case(ins[`INSTRUCTION_S2])
-	       `LBX,`LBUX,`SBX:
+	       `LBX,`LBUX,`SBX,`LVBX,`LVBUX:
 	           case(adr[2:0])
 	           3'd0:    fnSelect = 8'h01;
 	           3'd1:    fnSelect = 8'h02;
@@ -2744,49 +2713,21 @@ begin
 	           3'd6:    fnSelect = 8'h40;
 	           3'd7:    fnSelect = 8'h80;
 	           endcase
-	        `LCX,`LCUX,`SCX:
+	        `LCX,`LCUX,`SCX,`LVCX,`LVCUX:
 	            case(adr[2:1])
 	            2'd0:   fnSelect = 8'h03;
 	            2'd1:   fnSelect = 8'h0C;
 	            2'd2:   fnSelect = 8'h30;
 	            2'd3:   fnSelect = 8'hC0;
 	            endcase
-	    	`LHX,`LHUX,`SHX:
+	    	`LHX,`LHUX,`SHX,`LVHX,`LVHUX:
 	           case(adr[2])
 	           1'b0:    fnSelect = 8'h0F;
 	           1'b1:    fnSelect = 8'hF0;
 	           endcase
-	       `INC,
+	       `INC,`LVWX,
 	       `LWX,`SWX,`LWRX,`SWCX,`LVX,`SVX,`CASX:
 	           fnSelect = 8'hFF;
-	       `LVx:   ;
-//	       		case(ins[25:23])
-//		       `LVB,`LVBU:
-//		           case(adr[2:0])
-//		           3'd0:    fnSelect = 8'h01;
-//		           3'd1:    fnSelect = 8'h02;
-//		           3'd2:    fnSelect = 8'h04;
-//		           3'd3:    fnSelect = 8'h08;
-//		           3'd4:    fnSelect = 8'h10;
-//		           3'd5:    fnSelect = 8'h20;
-//		           3'd6:    fnSelect = 8'h40;
-//		           3'd7:    fnSelect = 8'h80;
-//		           endcase
-//		        `LVC,`LVCU:
-//		            case(adr[2:1])
-//		            2'd0:   fnSelect = 8'h03;
-//		            2'd1:   fnSelect = 8'h0C;
-//		            2'd2:   fnSelect = 8'h30;
-//		            2'd3:   fnSelect = 8'hC0;
-//		            endcase
-//		    	`LVH,`LVHU:
-//		           case(adr[2])
-//		           1'b0:    fnSelect = 8'h0F;
-//		           1'b1:    fnSelect = 8'hF0;
-//		           endcase
-//		       `LVW:
-//		           fnSelect = 8'hFF;
-//	       		endcase
 	       default: fnSelect = 8'h00;
 		   endcase
 	   else
@@ -2802,7 +2743,7 @@ begin
 		3'd6:	fnSelect = 8'h40;
 		3'd7:	fnSelect = 8'h80;
 		endcase
-    `Lx,`LxU,`Sx:
+    `Lx,`LxU,`Sx,`LVx:
     	casez(ins[20:18])
     	3'b100:	fnSelect = 8'hFF;
     	3'b?10: fnSelect = adr[2] ? 8'hF0 : 8'h0F;
@@ -2826,32 +2767,6 @@ begin
 		3'd3:	fnSelect = 8'hFF;
 		default:	fnSelect = 8'hFF;
 		endcase
-//	`LVx:
-//       `LVB,`LVBU:
-//           case(adr[2:0])
-//           3'd0:    fnSelect = 8'h01;
-//           3'd1:    fnSelect = 8'h02;
-//           3'd2:    fnSelect = 8'h04;
-//           3'd3:    fnSelect = 8'h08;
-//           3'd4:    fnSelect = 8'h10;
-//           3'd5:    fnSelect = 8'h20;
-//           3'd6:    fnSelect = 8'h40;
-//           3'd7:    fnSelect = 8'h80;
-//           endcase
-//        `LVC,`LVCU:
-//            case(adr[2:1])
-//            2'd0:   fnSelect = 8'h03;
-//            2'd1:   fnSelect = 8'h0C;
-//            2'd2:   fnSelect = 8'h30;
-//            2'd3:   fnSelect = 8'hC0;
-//            endcase
-//    	`LVH,`LVHU:
-//           case(adr[2])
-//           1'b0:    fnSelect = 8'h0F;
-//           1'b1:    fnSelect = 8'hF0;
-//           endcase
-//       `LVW:
-//           fnSelect = 8'hFF;
 	default:	fnSelect = 8'h00;
 	endcase
 end
@@ -2903,7 +2818,7 @@ case(ins[`INSTRUCTION_OP])
 `MEMNDX:
 	if (ins[`INSTRUCTION_L2]==2'b00)
 	    case(ins[`INSTRUCTION_S2])
-	    `LBX:
+	    `LBX,`LVBX:
 	        case(adr[2:0])
 	        3'd0:   fnDati = {{56{dat[7]}},dat[7:0]};
 	        3'd1:   fnDati = {{56{dat[15]}},dat[15:8]};
@@ -2914,7 +2829,7 @@ case(ins[`INSTRUCTION_OP])
 	        3'd6:   fnDati = {{56{dat[55]}},dat[55:48]};
 	        3'd7:   fnDati = {{56{dat[63]}},dat[63:56]};
 	        endcase
-	    `LBUX:
+	    `LBUX,`LVBUX:
 	        case(adr[2:0])
 	        3'd0:   fnDati = {{56{1'b0}},dat[7:0]};
 	        3'd1:   fnDati = {{56{1'b0}},dat[15:8]};
@@ -2925,82 +2840,31 @@ case(ins[`INSTRUCTION_OP])
 	        3'd6:   fnDati = {{56{1'b0}},dat[55:48]};
 	        3'd7:   fnDati = {{56{2'b0}},dat[63:56]};
 	        endcase
-	    `LCX:
+	    `LCX,`LVCX:
 	        case(adr[2:1])
 	        2'd0:   fnDati = {{48{dat[15]}},dat[15:0]};
 	        2'd1:   fnDati = {{48{dat[31]}},dat[31:16]};
 	        2'd2:   fnDati = {{48{dat[47]}},dat[47:32]};
 	        2'd3:   fnDati = {{48{dat[63]}},dat[63:48]};
 	        endcase
-	    `LCUX:
+	    `LCUX,`LVCUX:
 	        case(adr[2:1])
 	        2'd0:   fnDati = {{48{1'b0}},dat[15:0]};
 	        2'd1:   fnDati = {{48{1'b0}},dat[31:16]};
 	        2'd2:   fnDati = {{48{1'b0}},dat[47:32]};
 	        2'd3:   fnDati = {{48{1'b0}},dat[63:48]};
 	        endcase
-	    `LHX:
+	    `LHX,`LVHX:
 	        case(adr[2])
 	        1'b0:   fnDati = {{32{dat[31]}},dat[31:0]};
 	        1'b1:   fnDati = {{32{dat[63]}},dat[63:32]};
 	        endcase
-	    `LHUX:
+	    `LHUX,`LVHUX:
 	        case(adr[2])
 	        1'b0:   fnDati = {{32{1'b0}},dat[31:0]};
 	        1'b1:   fnDati = {{32{1'b0}},dat[63:32]};
 	        endcase
-	    `LWX,`LWRX,`LVX,`CAS:  fnDati = dat;
-//	    `LVx:
-//	    	case(ins[25:23])
-//		    `LVB:
-//		        case(adr[2:0])
-//		        3'd0:   fnDati = {{56{dat[7]}},dat[7:0]};
-//		        3'd1:   fnDati = {{56{dat[15]}},dat[15:8]};
-//		        3'd2:   fnDati = {{56{dat[23]}},dat[23:16]};
-//		        3'd3:   fnDati = {{56{dat[31]}},dat[31:24]};
-//		        3'd4:   fnDati = {{56{dat[39]}},dat[39:32]};
-//		        3'd5:   fnDati = {{56{dat[47]}},dat[47:40]};
-//		        3'd6:   fnDati = {{56{dat[55]}},dat[55:48]};
-//		        3'd7:   fnDati = {{56{dat[63]}},dat[63:56]};
-//		        endcase
-//		    `LVBU:
-//		        case(adr[2:0])
-//		        3'd0:   fnDati = {{56{1'b0}},dat[7:0]};
-//		        3'd1:   fnDati = {{56{1'b0}},dat[15:8]};
-//		        3'd2:   fnDati = {{56{1'b0}},dat[23:16]};
-//		        3'd3:   fnDati = {{56{1'b0}},dat[31:24]};
-//		        3'd4:   fnDati = {{56{1'b0}},dat[39:32]};
-//		        3'd5:   fnDati = {{56{1'b0}},dat[47:40]};
-//		        3'd6:   fnDati = {{56{1'b0}},dat[55:48]};
-//		        3'd7:   fnDati = {{56{2'b0}},dat[63:56]};
-//		        endcase
-//		    `LVC:
-//		        case(adr[2:1])
-//		        2'd0:   fnDati = {{48{dat[15]}},dat[15:0]};
-//		        2'd1:   fnDati = {{48{dat[31]}},dat[31:16]};
-//		        2'd2:   fnDati = {{48{dat[47]}},dat[47:32]};
-//		        2'd3:   fnDati = {{48{dat[63]}},dat[63:48]};
-//		        endcase
-//		    `LVCU:
-//		        case(adr[2:1])
-//		        2'd0:   fnDati = {{48{1'b0}},dat[15:0]};
-//		        2'd1:   fnDati = {{48{1'b0}},dat[31:16]};
-//		        2'd2:   fnDati = {{48{1'b0}},dat[47:32]};
-//		        2'd3:   fnDati = {{48{1'b0}},dat[63:48]};
-//		        endcase
-//		    `LVH:
-//		        case(adr[2])
-//		        1'b0:   fnDati = {{32{dat[31]}},dat[31:0]};
-//		        1'b1:   fnDati = {{32{dat[63]}},dat[63:32]};
-//		        endcase
-//		    `LVHU:
-//		        case(adr[2])
-//		        1'b0:   fnDati = {{32{1'b0}},dat[31:0]};
-//		        1'b1:   fnDati = {{32{1'b0}},dat[63:32]};
-//		        endcase
-//		    `LVW:  fnDati = dat;
-//		    default:	fnDati = dat;
-//	    	endcase
+	    `LWX,`LWRX,`LVX,`CAS,`LVWX:  fnDati = dat;
 	    default:    fnDati = dat;
 	    endcase
 	else
@@ -3027,7 +2891,7 @@ case(ins[`INSTRUCTION_OP])
   3'd6:   fnDati = {{56{1'b0}},dat[55:48]};
   3'd7:   fnDati = {{56{2'b0}},dat[63:56]};
   endcase
-`Lx:
+`Lx,`LVx:
 	casez(ins[20:18])
 	3'b100:	fnDati = dat;
 	3'b?10:
@@ -3060,57 +2924,6 @@ case(ins[`INSTRUCTION_OP])
 	  endcase
 	endcase
 `LWR,`LV,`CAS,`AMO:   fnDati = dat;
-//`LVx:
-//	case(ins[30:28])
-//    `LVB:
-//        case(adr[2:0])
-//        3'd0:   fnDati = {{56{dat[7]}},dat[7:0]};
-//        3'd1:   fnDati = {{56{dat[15]}},dat[15:8]};
-//        3'd2:   fnDati = {{56{dat[23]}},dat[23:16]};
-//        3'd3:   fnDati = {{56{dat[31]}},dat[31:24]};
-//        3'd4:   fnDati = {{56{dat[39]}},dat[39:32]};
-//        3'd5:   fnDati = {{56{dat[47]}},dat[47:40]};
-//        3'd6:   fnDati = {{56{dat[55]}},dat[55:48]};
-//        3'd7:   fnDati = {{56{dat[63]}},dat[63:56]};
-//        endcase
-//    `LVBU:
-//        case(adr[2:0])
-//        3'd0:   fnDati = {{56{1'b0}},dat[7:0]};
-//        3'd1:   fnDati = {{56{1'b0}},dat[15:8]};
-//        3'd2:   fnDati = {{56{1'b0}},dat[23:16]};
-//        3'd3:   fnDati = {{56{1'b0}},dat[31:24]};
-//        3'd4:   fnDati = {{56{1'b0}},dat[39:32]};
-//        3'd5:   fnDati = {{56{1'b0}},dat[47:40]};
-//        3'd6:   fnDati = {{56{1'b0}},dat[55:48]};
-//        3'd7:   fnDati = {{56{2'b0}},dat[63:56]};
-//        endcase
-//    `LVC:
-//        case(adr[2:1])
-//        2'd0:   fnDati = {{48{dat[15]}},dat[15:0]};
-//        2'd1:   fnDati = {{48{dat[31]}},dat[31:16]};
-//        2'd2:   fnDati = {{48{dat[47]}},dat[47:32]};
-//        2'd3:   fnDati = {{48{dat[63]}},dat[63:48]};
-//        endcase
-//    `LVCU:
-//        case(adr[2:1])
-//        2'd0:   fnDati = {{48{1'b0}},dat[15:0]};
-//        2'd1:   fnDati = {{48{1'b0}},dat[31:16]};
-//        2'd2:   fnDati = {{48{1'b0}},dat[47:32]};
-//        2'd3:   fnDati = {{48{1'b0}},dat[63:48]};
-//        endcase
-//    `LVH:
-//        case(adr[2])
-//        1'b0:   fnDati = {{32{dat[31]}},dat[31:0]};
-//        1'b1:   fnDati = {{32{dat[63]}},dat[63:32]};
-//        endcase
-//    `LVHU:
-//        case(adr[2])
-//        1'b0:   fnDati = {{32{1'b0}},dat[31:0]};
-//        1'b1:   fnDati = {{32{1'b0}},dat[63:32]};
-//        endcase
-////    `LVW:  fnDati = dat;
-//    default:	fnDati = dat;
-//	endcase
 default:    fnDati = dat;
 endcase
 endfunction
@@ -3156,38 +2969,16 @@ IsSingleCycle = !(IsMul(isn)|IsDivmod(isn));
 endfunction
 
 
+generate begin : gDecocderInst
+for (g = 0; g < QENTRIES; g = g + 1) begin
 `ifdef SUPPORT_SMT
-decoder8 iq0(.num({iqentry_tgt[0][8:7],iqentry_tgt[0][5:0]}), .out(iq0_out));
-decoder8 iq1(.num({iqentry_tgt[1][8:7],iqentry_tgt[1][5:0]}), .out(iq1_out));
-decoder8 iq2(.num({iqentry_tgt[2][8:7],iqentry_tgt[2][5:0]}), .out(iq2_out));
-decoder8 iq3(.num({iqentry_tgt[3][8:7],iqentry_tgt[3][5:0]}), .out(iq3_out));
-decoder8 iq4(.num({iqentry_tgt[4][8:7],iqentry_tgt[4][5:0]}), .out(iq4_out));
-decoder8 iq5(.num({iqentry_tgt[5][8:7],iqentry_tgt[5][5:0]}), .out(iq5_out));
-decoder8 iq6(.num({iqentry_tgt[6][8:7],iqentry_tgt[6][5:0]}), .out(iq6_out));
-decoder8 iq7(.num({iqentry_tgt[7][8:7],iqentry_tgt[7][5:0]}), .out(iq7_out));
-decoder8 iq8(.num({iqentry_tgt[8][8:7],iqentry_tgt[8][5:0]}), .out(iq8_out));
-decoder8 iq9(.num({iqentry_tgt[9][8:7],iqentry_tgt[9][5:0]}), .out(iq9_out));
+decoder8 iq0(.num({iqentry_tgt[g][8:7],iqentry_tgt[g][5:0]}), .out(iq_out[g]));
 `else
-decoder7 iq0(.num({iqentry_tgt[0][7],iqentry_tgt[0][5:0]}), .out(iq0_out));
-decoder7 iq1(.num({iqentry_tgt[1][7],iqentry_tgt[1][5:0]}), .out(iq1_out));
-decoder7 iq2(.num({iqentry_tgt[2][7],iqentry_tgt[2][5:0]}), .out(iq2_out));
-decoder7 iq3(.num({iqentry_tgt[3][7],iqentry_tgt[3][5:0]}), .out(iq3_out));
-decoder7 iq4(.num({iqentry_tgt[4][7],iqentry_tgt[4][5:0]}), .out(iq4_out));
-decoder7 iq5(.num({iqentry_tgt[5][7],iqentry_tgt[5][5:0]}), .out(iq5_out));
-decoder7 iq6(.num({iqentry_tgt[6][7],iqentry_tgt[6][5:0]}), .out(iq6_out));
-decoder7 iq7(.num({iqentry_tgt[7][7],iqentry_tgt[7][5:0]}), .out(iq7_out));
-decoder7 iq8(.num({iqentry_tgt[8][7],iqentry_tgt[8][5:0]}), .out(iq8_out));
-decoder7 iq9(.num({iqentry_tgt[9][7],iqentry_tgt[9][5:0]}), .out(iq9_out));
-/*
-decoder6 iq0(.num({iqentry_tgt[0][5:0]}), .out(iq0_out));
-decoder6 iq1(.num({iqentry_tgt[1][5:0]}), .out(iq1_out));
-decoder6 iq2(.num({iqentry_tgt[2][5:0]}), .out(iq2_out));
-decoder6 iq3(.num({iqentry_tgt[3][5:0]}), .out(iq3_out));
-decoder6 iq4(.num({iqentry_tgt[4][5:0]}), .out(iq4_out));
-decoder6 iq5(.num({iqentry_tgt[5][5:0]}), .out(iq5_out));
-decoder6 iq6(.num({iqentry_tgt[6][5:0]}), .out(iq6_out));
-decoder6 iq7(.num({iqentry_tgt[7][5:0]}), .out(iq7_out));*/
+decoder7 iq0(.num({iqentry_tgt[g][7],iqentry_tgt[g][5:0]}), .out(iq_out[g]));
 `endif
+end
+end
+endgenerate
 
 initial begin: Init
 	//
@@ -3323,16 +3114,16 @@ generate begin : live_target
 end
 endgenerate
 
-    assign  iqentry_0_livetarget = {PREGS {iqentry_v[0]}} & {PREGS {~iqentry_stomp[0] && iqentry_thrd[0]==branchmiss_thrd}} & iq0_out,
-	    iqentry_1_livetarget = {PREGS {iqentry_v[1]}} & {PREGS {~iqentry_stomp[1] && iqentry_thrd[1]==branchmiss_thrd}} & iq1_out,
-	    iqentry_2_livetarget = {PREGS {iqentry_v[2]}} & {PREGS {~iqentry_stomp[2] && iqentry_thrd[2]==branchmiss_thrd}} & iq2_out,
-	    iqentry_3_livetarget = {PREGS {iqentry_v[3]}} & {PREGS {~iqentry_stomp[3] && iqentry_thrd[3]==branchmiss_thrd}} & iq3_out,
-	    iqentry_4_livetarget = {PREGS {iqentry_v[4]}} & {PREGS {~iqentry_stomp[4] && iqentry_thrd[4]==branchmiss_thrd}} & iq4_out,
-	    iqentry_5_livetarget = {PREGS {iqentry_v[5]}} & {PREGS {~iqentry_stomp[5] && iqentry_thrd[5]==branchmiss_thrd}} & iq5_out,
-	    iqentry_6_livetarget = {PREGS {iqentry_v[6]}} & {PREGS {~iqentry_stomp[6] && iqentry_thrd[6]==branchmiss_thrd}} & iq6_out,
-	    iqentry_7_livetarget = {PREGS {iqentry_v[7]}} & {PREGS {~iqentry_stomp[7] && iqentry_thrd[7]==branchmiss_thrd}} & iq7_out,
-	    iqentry_8_livetarget = {PREGS {iqentry_v[8]}} & {PREGS {~iqentry_stomp[8] && iqentry_thrd[8]==branchmiss_thrd}} & iq8_out,
-	    iqentry_9_livetarget = {PREGS {iqentry_v[9]}} & {PREGS {~iqentry_stomp[9] && iqentry_thrd[9]==branchmiss_thrd}} & iq9_out
+    assign  iqentry_0_livetarget = {PREGS {iqentry_v[0]}} & {PREGS {~iqentry_stomp[0] && iqentry_thrd[0]==branchmiss_thrd}} & iq_out[0],
+	    iqentry_1_livetarget = {PREGS {iqentry_v[1]}} & {PREGS {~iqentry_stomp[1] && iqentry_thrd[1]==branchmiss_thrd}} & iq_out[1],
+	    iqentry_2_livetarget = {PREGS {iqentry_v[2]}} & {PREGS {~iqentry_stomp[2] && iqentry_thrd[2]==branchmiss_thrd}} & iq_out[2],
+	    iqentry_3_livetarget = {PREGS {iqentry_v[3]}} & {PREGS {~iqentry_stomp[3] && iqentry_thrd[3]==branchmiss_thrd}} & iq_out[3],
+	    iqentry_4_livetarget = {PREGS {iqentry_v[4]}} & {PREGS {~iqentry_stomp[4] && iqentry_thrd[4]==branchmiss_thrd}} & iq_out[4],
+	    iqentry_5_livetarget = {PREGS {iqentry_v[5]}} & {PREGS {~iqentry_stomp[5] && iqentry_thrd[5]==branchmiss_thrd}} & iq_out[5],
+	    iqentry_6_livetarget = {PREGS {iqentry_v[6]}} & {PREGS {~iqentry_stomp[6] && iqentry_thrd[6]==branchmiss_thrd}} & iq_out[6],
+	    iqentry_7_livetarget = {PREGS {iqentry_v[7]}} & {PREGS {~iqentry_stomp[7] && iqentry_thrd[7]==branchmiss_thrd}} & iq_out[7],
+	    iqentry_8_livetarget = {PREGS {iqentry_v[8]}} & {PREGS {~iqentry_stomp[8] && iqentry_thrd[8]==branchmiss_thrd}} & iq_out[8],
+	    iqentry_9_livetarget = {PREGS {iqentry_v[9]}} & {PREGS {~iqentry_stomp[9] && iqentry_thrd[9]==branchmiss_thrd}} & iq_out[9]
 	    ;
 
 //
@@ -3350,363 +3141,16 @@ always @*
 					iqentry_cumulative[n] = iqentry_cumulative[n] | iqentry_livetarget[k % QENTRIES];
 		end
 	end
-/*
-    assign iqentry_0_cumulative = (missid==3'd0) ? iqentry_0_livetarget :
-                                  (missid==3'd1) ? iqentry_0_livetarget |
-                                                   iqentry_1_livetarget :
-                                  (missid==3'd2) ? iqentry_0_livetarget |
-                                                   iqentry_1_livetarget |
-                                                   iqentry_2_livetarget :
-                                  (missid==3'd3) ? iqentry_0_livetarget |
-                                                   iqentry_1_livetarget |
-                                                   iqentry_2_livetarget |
-                                                   iqentry_3_livetarget :
-                                  (missid==3'd4) ? iqentry_0_livetarget |
-                                                   iqentry_1_livetarget |
-                                                   iqentry_2_livetarget |
-                                                   iqentry_3_livetarget | 
-                                                   iqentry_4_livetarget :
-                                  (missid==3'd5) ? iqentry_0_livetarget |
-                                                   iqentry_1_livetarget |
-                                                   iqentry_2_livetarget |
-                                                   iqentry_3_livetarget | 
-                                                   iqentry_4_livetarget |
-                                                   iqentry_5_livetarget :
-                                  (missid==3'd6) ? iqentry_0_livetarget |
-                                                   iqentry_1_livetarget |
-                                                   iqentry_2_livetarget |
-                                                   iqentry_3_livetarget | 
-                                                   iqentry_4_livetarget |
-                                                   iqentry_5_livetarget |
-                                                   iqentry_6_livetarget :
-                                  (missid==3'd7) ? iqentry_0_livetarget |
-                                                   iqentry_1_livetarget |
-                                                   iqentry_2_livetarget |
-                                                   iqentry_3_livetarget | 
-                                                   iqentry_4_livetarget |
-                                                   iqentry_5_livetarget |
-                                                   iqentry_6_livetarget |
-                                                   iqentry_7_livetarget :
-                                                   {PREGS{1'b0}};
 
-    assign iqentry_1_cumulative = (missid==4'd1) ? iqentry_1_livetarget :
-                                  (missid==4'd2) ? iqentry_1_livetarget |
-                                                   iqentry_2_livetarget :
-                                  (missid==4'd3) ? iqentry_1_livetarget |
-                                                   iqentry_2_livetarget |
-                                                   iqentry_3_livetarget :
-                                  (missid==4'd4) ? iqentry_1_livetarget |
-                                                   iqentry_2_livetarget |
-                                                   iqentry_3_livetarget |
-                                                   iqentry_4_livetarget :
-                                  (missid==4'd5) ? iqentry_1_livetarget |
-                                                   iqentry_2_livetarget |
-                                                   iqentry_3_livetarget |
-                                                   iqentry_4_livetarget | 
-                                                   iqentry_5_livetarget :
-                                  (missid==4'd6) ? iqentry_1_livetarget |
-                                                   iqentry_2_livetarget |
-                                                   iqentry_3_livetarget |
-                                                   iqentry_4_livetarget | 
-                                                   iqentry_5_livetarget |
-                                                   iqentry_6_livetarget :
-                                  (missid==4'd7) ? iqentry_1_livetarget |
-                                                   iqentry_2_livetarget |
-                                                   iqentry_3_livetarget |
-                                                   iqentry_4_livetarget | 
-                                                   iqentry_5_livetarget |
-                                                   iqentry_6_livetarget |
-                                                   iqentry_7_livetarget :
-                                  (missid==4'd0) ? iqentry_1_livetarget |
-                                                   iqentry_2_livetarget |
-                                                   iqentry_3_livetarget |
-                                                   iqentry_4_livetarget | 
-                                                   iqentry_5_livetarget |
-                                                   iqentry_6_livetarget |
-                                                   iqentry_7_livetarget |
-                                                   iqentry_0_livetarget :
-                                                   {PREGS{1'b0}};
-
-    assign iqentry_2_cumulative = (missid==4'd2) ? iqentry_2_livetarget :
-                                     (missid==4'd3) ? iqentry_2_livetarget |
-                                                      iqentry_3_livetarget :
-                                     (missid==4'd4) ? iqentry_2_livetarget |
-                                                      iqentry_3_livetarget |
-                                                      iqentry_4_livetarget :
-                                     (missid==4'd5) ? iqentry_2_livetarget |
-                                                      iqentry_3_livetarget |
-                                                      iqentry_4_livetarget |
-                                                      iqentry_5_livetarget :
-                                     (missid==4'd6) ? iqentry_2_livetarget |
-                                                      iqentry_3_livetarget |
-                                                      iqentry_4_livetarget |
-                                                      iqentry_5_livetarget | 
-                                                      iqentry_6_livetarget :
-                                     (missid==4'd7) ? iqentry_2_livetarget |
-                                                      iqentry_3_livetarget |
-                                                      iqentry_4_livetarget |
-                                                      iqentry_5_livetarget | 
-                                                      iqentry_6_livetarget |
-                                                      iqentry_7_livetarget :
-                                     (missid==4'd0) ? iqentry_2_livetarget |
-                                                      iqentry_3_livetarget |
-                                                      iqentry_4_livetarget |
-                                                      iqentry_5_livetarget | 
-                                                      iqentry_6_livetarget |
-                                                      iqentry_7_livetarget |
-                                                      iqentry_0_livetarget :
-                                     (missid==4'd1) ? iqentry_2_livetarget |
-                                                      iqentry_3_livetarget |
-                                                      iqentry_4_livetarget |
-                                                      iqentry_5_livetarget | 
-                                                      iqentry_6_livetarget |
-                                                      iqentry_7_livetarget |
-                                                      iqentry_0_livetarget |
-                                                      iqentry_1_livetarget :
-                                                      {PREGS{1'b0}};
-
-    assign iqentry_3_cumulative = (missid==4'd3) ? iqentry_3_livetarget :
-                                     (missid==4'd4) ? iqentry_3_livetarget |
-                                                      iqentry_4_livetarget :
-                                     (missid==4'd5) ? iqentry_3_livetarget |
-                                                      iqentry_4_livetarget |
-                                                      iqentry_5_livetarget :
-                                     (missid==4'd6) ? iqentry_3_livetarget |
-                                                      iqentry_4_livetarget |
-                                                      iqentry_5_livetarget |
-                                                      iqentry_6_livetarget :
-                                     (missid==4'd7) ? iqentry_3_livetarget |
-                                                      iqentry_4_livetarget |
-                                                      iqentry_5_livetarget |
-                                                      iqentry_6_livetarget | 
-                                                      iqentry_7_livetarget :
-                                     (missid==4'd0) ? iqentry_3_livetarget |
-                                                      iqentry_4_livetarget |
-                                                      iqentry_5_livetarget |
-                                                      iqentry_6_livetarget | 
-                                                      iqentry_7_livetarget |
-                                                      iqentry_0_livetarget :
-                                     (missid==4'd1) ? iqentry_3_livetarget |
-                                                      iqentry_4_livetarget |
-                                                      iqentry_5_livetarget |
-                                                      iqentry_6_livetarget | 
-                                                      iqentry_7_livetarget |
-                                                      iqentry_0_livetarget |
-                                                      iqentry_1_livetarget :
-                                     (missid==4'd2) ? iqentry_3_livetarget |
-                                                      iqentry_4_livetarget |
-                                                      iqentry_5_livetarget |
-                                                      iqentry_6_livetarget | 
-                                                      iqentry_7_livetarget |
-                                                      iqentry_0_livetarget |
-                                                      iqentry_1_livetarget |
-                                                      iqentry_2_livetarget :
-                                                      {PREGS{1'b0}};
-
-    assign iqentry_4_cumulative = (missid==4'd4) ? iqentry_4_livetarget :
-                                     (missid==4'd5) ? iqentry_4_livetarget |
-                                                      iqentry_5_livetarget :
-                                     (missid==4'd6) ? iqentry_4_livetarget |
-                                                      iqentry_5_livetarget |
-                                                      iqentry_6_livetarget :
-                                     (missid==4'd7) ? iqentry_4_livetarget |
-                                                      iqentry_5_livetarget |
-                                                      iqentry_6_livetarget |
-                                                      iqentry_7_livetarget :
-                                     (missid==4'd0) ? iqentry_4_livetarget |
-                                                      iqentry_5_livetarget |
-                                                      iqentry_6_livetarget |
-                                                      iqentry_7_livetarget | 
-                                                      iqentry_0_livetarget :
-                                     (missid==4'd1) ? iqentry_4_livetarget |
-                                                      iqentry_5_livetarget |
-                                                      iqentry_6_livetarget |
-                                                      iqentry_7_livetarget | 
-                                                      iqentry_0_livetarget |
-                                                      iqentry_1_livetarget :
-                                     (missid==4'd2) ? iqentry_4_livetarget |
-                                                      iqentry_5_livetarget |
-                                                      iqentry_6_livetarget |
-                                                      iqentry_7_livetarget | 
-                                                      iqentry_0_livetarget |
-                                                      iqentry_1_livetarget |
-                                                      iqentry_2_livetarget :
-                                     (missid==4'd3) ? iqentry_4_livetarget |
-                                                      iqentry_5_livetarget |
-                                                      iqentry_6_livetarget |
-                                                      iqentry_7_livetarget | 
-                                                      iqentry_0_livetarget |
-                                                      iqentry_1_livetarget |
-                                                      iqentry_2_livetarget |
-                                                      iqentry_3_livetarget :
-                                                      {PREGS{1'b0}};
-
-    assign iqentry_5_cumulative = (missid==4'd5) ? iqentry_5_livetarget :
-                                     (missid==4'd6) ? iqentry_5_livetarget |
-                                                      iqentry_6_livetarget :
-                                     (missid==4'd7) ? iqentry_5_livetarget |
-                                                      iqentry_6_livetarget |
-                                                      iqentry_7_livetarget :
-                                     (missid==4'd0) ? iqentry_5_livetarget |
-                                                      iqentry_6_livetarget |
-                                                      iqentry_7_livetarget |
-                                                      iqentry_0_livetarget :
-                                     (missid==4'd1) ? iqentry_5_livetarget |
-                                                      iqentry_6_livetarget |
-                                                      iqentry_7_livetarget |
-                                                      iqentry_0_livetarget | 
-                                                      iqentry_1_livetarget :
-                                     (missid==4'd2) ? iqentry_5_livetarget |
-                                                      iqentry_6_livetarget |
-                                                      iqentry_7_livetarget |
-                                                      iqentry_0_livetarget | 
-                                                      iqentry_1_livetarget |
-                                                      iqentry_2_livetarget :
-                                     (missid==4'd3) ? iqentry_5_livetarget |
-                                                      iqentry_6_livetarget |
-                                                      iqentry_7_livetarget |
-                                                      iqentry_0_livetarget | 
-                                                      iqentry_1_livetarget |
-                                                      iqentry_2_livetarget |
-                                                      iqentry_3_livetarget :
-                                     (missid==4'd4) ? iqentry_5_livetarget |
-                                                      iqentry_6_livetarget |
-                                                      iqentry_7_livetarget |
-                                                      iqentry_0_livetarget | 
-                                                      iqentry_1_livetarget |
-                                                      iqentry_2_livetarget |
-                                                      iqentry_3_livetarget |
-                                                      iqentry_4_livetarget :
-                                                      {PREGS{1'b0}};
-    assign iqentry_6_cumulative = (missid==4'd6) ? iqentry_6_livetarget :
-                                       (missid==4'd7) ? iqentry_6_livetarget |
-                                                        iqentry_7_livetarget :
-                                       (missid==4'd0) ? iqentry_6_livetarget |
-                                                        iqentry_7_livetarget |
-                                                        iqentry_0_livetarget :
-                                       (missid==4'd1) ? iqentry_6_livetarget |
-                                                        iqentry_7_livetarget |
-                                                        iqentry_0_livetarget |
-                                                        iqentry_1_livetarget :
-                                       (missid==4'd2) ? iqentry_6_livetarget |
-                                                        iqentry_7_livetarget |
-                                                        iqentry_0_livetarget |
-                                                        iqentry_1_livetarget | 
-                                                        iqentry_2_livetarget :
-                                       (missid==4'd3) ? iqentry_6_livetarget |
-                                                        iqentry_7_livetarget |
-                                                        iqentry_0_livetarget |
-                                                        iqentry_1_livetarget | 
-                                                        iqentry_2_livetarget |
-                                                        iqentry_3_livetarget :
-                                       (missid==4'd4) ? iqentry_6_livetarget |
-                                                        iqentry_7_livetarget |
-                                                        iqentry_0_livetarget |
-                                                        iqentry_1_livetarget | 
-                                                        iqentry_2_livetarget |
-                                                        iqentry_3_livetarget |
-                                                        iqentry_4_livetarget :
-                                       (missid==4'd5) ? iqentry_6_livetarget |
-                                                        iqentry_7_livetarget |
-                                                        iqentry_0_livetarget |
-                                                        iqentry_1_livetarget | 
-                                                        iqentry_2_livetarget |
-                                                        iqentry_3_livetarget |
-                                                        iqentry_4_livetarget |
-                                                        iqentry_5_livetarget :
-                                                        {PREGS{1'b0}};
-
-    assign iqentry_7_cumulative = (missid==4'd7) ? iqentry_7_livetarget :
-                                       (missid==4'd0) ? iqentry_7_livetarget |
-                                                        iqentry_0_livetarget :
-                                       (missid==4'd1) ? iqentry_7_livetarget |
-                                                        iqentry_0_livetarget |
-                                                        iqentry_1_livetarget :
-                                       (missid==4'd2) ? iqentry_7_livetarget |
-                                                        iqentry_0_livetarget |
-                                                        iqentry_1_livetarget |
-                                                        iqentry_2_livetarget :
-                                       (missid==4'd3) ? iqentry_7_livetarget |
-                                                        iqentry_0_livetarget |
-                                                        iqentry_1_livetarget |
-                                                        iqentry_2_livetarget | 
-                                                        iqentry_3_livetarget :
-                                       (missid==4'd4) ? iqentry_7_livetarget |
-                                                        iqentry_0_livetarget |
-                                                        iqentry_1_livetarget |
-                                                        iqentry_2_livetarget | 
-                                                        iqentry_3_livetarget |
-                                                        iqentry_4_livetarget :
-                                       (missid==4'd5) ? iqentry_7_livetarget |
-                                                        iqentry_0_livetarget |
-                                                        iqentry_1_livetarget |
-                                                        iqentry_2_livetarget | 
-                                                        iqentry_3_livetarget |
-                                                        iqentry_4_livetarget |
-                                                        iqentry_5_livetarget :
-                                       (missid==4'd6) ? iqentry_7_livetarget |
-                                                        iqentry_0_livetarget |
-                                                        iqentry_1_livetarget |
-                                                        iqentry_2_livetarget | 
-                                                        iqentry_3_livetarget |
-                                                        iqentry_4_livetarget |
-                                                        iqentry_5_livetarget |
-                                                        iqentry_6_livetarget :
-                                                        {PREGS{1'b0}};
-*/
-    assign iqentry_0_latestID = (missid == 4'd0 || ((iqentry_livetarget[0] & iqentry_cumulative[1]) == {PREGS{1'b0}}))
-				    ? iqentry_livetarget[0]
+always @*
+	for (n = 0; n < QENTRIES; n = n + 1)
+    iqentry_latestID[n] = (missid == n || ((iqentry_livetarget[n] & iqentry_cumulative[(n+1)%QENTRIES]) == {PREGS{1'b0}}))
+				    ? iqentry_livetarget[n]
 				    : {PREGS{1'b0}};
 
-    assign iqentry_1_latestID = (missid == 4'd1 || ((iqentry_livetarget[1] & iqentry_cumulative[2]) == {PREGS{1'b0}}))
-				    ? iqentry_livetarget[1]
-				    : {PREGS{1'b0}};
-
-    assign iqentry_2_latestID = (missid == 4'd2 || ((iqentry_livetarget[2] & iqentry_cumulative[3]) == {PREGS{1'b0}}))
-				    ? iqentry_livetarget[2]
-				    : {PREGS{1'b0}};
-
-    assign iqentry_3_latestID = (missid == 4'd3 || ((iqentry_livetarget[3] & iqentry_cumulative[4]) == {PREGS{1'b0}}))
-				    ? iqentry_livetarget[3]
-				    : {PREGS{1'b0}};
-
-    assign iqentry_4_latestID = (missid == 4'd4 || ((iqentry_livetarget[4] & iqentry_cumulative[5]) == {PREGS{1'b0}}))
-				    ? iqentry_livetarget[4]
-				    : {PREGS{1'b0}};
-
-    assign iqentry_5_latestID = (missid == 4'd5 || ((iqentry_livetarget[5] & iqentry_cumulative[6]) == {PREGS{1'b0}}))
-				    ? iqentry_livetarget[5]
-				    : {PREGS{1'b0}};
-
-    assign iqentry_6_latestID = (missid == 4'd6 || ((iqentry_livetarget[6] & iqentry_cumulative[7]) == {PREGS{1'b0}}))
-				    ? iqentry_livetarget[6]
-				    : {PREGS{1'b0}};
-
-    assign iqentry_7_latestID = (missid == 4'd7 || ((iqentry_livetarget[7] & iqentry_cumulative[8]) == {PREGS{1'b0}}))
-				    ? iqentry_livetarget[7]
-				    : {PREGS{1'b0}};
-
-    assign iqentry_8_latestID = (missid == 4'd8 || ((iqentry_livetarget[8] & iqentry_cumulative[9]) == {PREGS{1'b0}}))
-				    ? iqentry_livetarget[8]
-				    : {PREGS{1'b0}};
-
-    assign iqentry_9_latestID = (missid == 4'd9 || ((iqentry_livetarget[9] & iqentry_cumulative[0]) == {PREGS{1'b0}}))
-				    ? iqentry_livetarget[9]
-				    : {PREGS{1'b0}};
-
-assign
-  iqentry_source[0] = | iqentry_0_latestID,
-  iqentry_source[1] = | iqentry_1_latestID,
-  iqentry_source[2] = | iqentry_2_latestID,
-  iqentry_source[3] = | iqentry_3_latestID,
-  iqentry_source[4] = | iqentry_4_latestID,
-  iqentry_source[5] = | iqentry_5_latestID,
-  iqentry_source[6] = | iqentry_6_latestID,
-  iqentry_source[7] = | iqentry_7_latestID,
-  iqentry_source[8] = | iqentry_8_latestID,
-  iqentry_source[9] = | iqentry_9_latestID
-  ;
-
+always @*
+	for (n = 0; n < QENTRIES; n = n + 1)
+	  iqentry_source[n] = | iqentry_latestID[n];
 
 reg vqueued2;
 assign Ra0 = fnRa(fetchbuf0_instr,vqe0,vl,fetchbuf0_thrd) | {fetchbuf0_thrd,7'b0};
@@ -4611,7 +4055,6 @@ else if (iqentry_thrd[idp9(fcu_id)]==iqentry_thrd[fcu_id[`QBITS]])
 else
 	nid = fcu_id;
 
-
 assign  nextqd[0] = iqentry_sn[nid0] > iqentry_sn[0] || iqentry_v[0];
 assign  nextqd[1] = iqentry_sn[nid1] > iqentry_sn[1] || iqentry_v[1];
 assign  nextqd[2] = iqentry_sn[nid2] > iqentry_sn[2] || iqentry_v[2];
@@ -4995,17 +4438,17 @@ begin
 					//&& ~iqentry_memready[head5] 
 					// ... and there is no address-overlap with any preceding instruction
 					&& (!iqentry_mem[head0] || (iqentry_agen[head0] & iqentry_out[head0]) || iqentry_done[head0] 
-						|| (iqentry_a1_v[head0] && (iqentry_a1[head6][AMSB:3] != iqentry_a1[head0][AMSB:3] || iqentry_out[head0] || iqentry_done[head0])))
+						|| (iqentry_a1_v[head0] && (iqentry_a1[head6][AMSB:3] != iqentry_a1[head0][AMSB:3])))
 					&& (!iqentry_mem[head1] || (iqentry_agen[head1] & iqentry_out[head1]) || iqentry_done[head1] 
-						|| (iqentry_a1_v[head1] && (iqentry_a1[head6][AMSB:3] != iqentry_a1[head1][AMSB:3] || iqentry_out[head1] || iqentry_done[head1])))
+						|| (iqentry_a1_v[head1] && (iqentry_a1[head6][AMSB:3] != iqentry_a1[head1][AMSB:3])))
 					&& (!iqentry_mem[head2] || (iqentry_agen[head2] & iqentry_out[head2]) || iqentry_done[head2] 
-						|| (iqentry_a1_v[head2] && (iqentry_a1[head6][AMSB:3] != iqentry_a1[head2][AMSB:3] || iqentry_out[head2] || iqentry_done[head2])))
+						|| (iqentry_a1_v[head2] && (iqentry_a1[head6][AMSB:3] != iqentry_a1[head2][AMSB:3])))
 					&& (!iqentry_mem[head3] || (iqentry_agen[head3] & iqentry_out[head3]) || iqentry_done[head3] 
-						|| (iqentry_a1_v[head3] && (iqentry_a1[head6][AMSB:3] != iqentry_a1[head3][AMSB:3] || iqentry_out[head3] || iqentry_done[head3])))
+						|| (iqentry_a1_v[head3] && (iqentry_a1[head6][AMSB:3] != iqentry_a1[head3][AMSB:3])))
 					&& (!iqentry_mem[head4] || (iqentry_agen[head4] & iqentry_out[head4]) || iqentry_done[head4] 
-						|| (iqentry_a1_v[head4] && (iqentry_a1[head6][AMSB:3] != iqentry_a1[head4][AMSB:3] || iqentry_out[head4] || iqentry_done[head4])))
+						|| (iqentry_a1_v[head4] && (iqentry_a1[head6][AMSB:3] != iqentry_a1[head4][AMSB:3])))
 					&& (!iqentry_mem[head5] || (iqentry_agen[head5] & iqentry_out[head5]) || iqentry_done[head5] 
-						|| (iqentry_a1_v[head5] && (iqentry_a1[head6][AMSB:3] != iqentry_a1[head5][AMSB:3] || iqentry_out[head5] || iqentry_done[head5])))
+						|| (iqentry_a1_v[head5] && (iqentry_a1[head6][AMSB:3] != iqentry_a1[head5][AMSB:3])))
 					&& (iqentry_rl[head6] ? (iqentry_done[head0] || !iqentry_v[head0] || !iqentry_mem[head0])
 										 && (iqentry_done[head1] || !iqentry_v[head1] || !iqentry_mem[head1])
 										 && (iqentry_done[head2] || !iqentry_v[head2] || !iqentry_mem[head2])
@@ -5647,29 +5090,13 @@ assign branchmiss_thrd =  excmiss ? excthrd : fcu_thrd;
 
 assign dram_avail = (dram0 == `DRAMSLOT_AVAIL || dram1 == `DRAMSLOT_AVAIL || dram2 == `DRAMSLOT_AVAIL);
 
-assign  iqentry_memopsvalid[0] = (iqentry_mem[0] & iqentry_a2_v[0] & iqentry_agen[0]),
-    iqentry_memopsvalid[1] = (iqentry_mem[1] & iqentry_a2_v[1] & iqentry_agen[1]),
-    iqentry_memopsvalid[2] = (iqentry_mem[2] & iqentry_a2_v[2] & iqentry_agen[2]),
-    iqentry_memopsvalid[3] = (iqentry_mem[3] & iqentry_a2_v[3] & iqentry_agen[3]),
-    iqentry_memopsvalid[4] = (iqentry_mem[4] & iqentry_a2_v[4] & iqentry_agen[4]),
-    iqentry_memopsvalid[5] = (iqentry_mem[5] & iqentry_a2_v[5] & iqentry_agen[5]),
-    iqentry_memopsvalid[6] = (iqentry_mem[6] & iqentry_a2_v[6] & iqentry_agen[6]),
-    iqentry_memopsvalid[7] = (iqentry_mem[7] & iqentry_a2_v[7] & iqentry_agen[7]),
-    iqentry_memopsvalid[8] = (iqentry_mem[8] & iqentry_a2_v[8] & iqentry_agen[8]),
-    iqentry_memopsvalid[9] = (iqentry_mem[9] & iqentry_a2_v[9] & iqentry_agen[9])
-    ;
+always @*
+for (n = 0; n < QENTRIES; n = n + 1)
+	iqentry_memopsvalid[n] <= (iqentry_mem[n] & iqentry_a2_v[n] & iqentry_agen[n]);
 
-assign  iqentry_memready[0] = (iqentry_v[0] & iqentry_memopsvalid[0] & ~iqentry_memissue[0] & ~iqentry_done[0] & ~iqentry_out[0] & ~iqentry_stomp[0]),
-    iqentry_memready[1] = (iqentry_v[1] & iqentry_memopsvalid[1] & ~iqentry_memissue[1] & ~iqentry_done[1] & ~iqentry_out[1] & ~iqentry_stomp[1]),
-    iqentry_memready[2] = (iqentry_v[2] & iqentry_memopsvalid[2] & ~iqentry_memissue[2] & ~iqentry_done[2] & ~iqentry_out[2] & ~iqentry_stomp[2]),
-    iqentry_memready[3] = (iqentry_v[3] & iqentry_memopsvalid[3] & ~iqentry_memissue[3] & ~iqentry_done[3] & ~iqentry_out[3] & ~iqentry_stomp[3]),
-    iqentry_memready[4] = (iqentry_v[4] & iqentry_memopsvalid[4] & ~iqentry_memissue[4] & ~iqentry_done[4] & ~iqentry_out[4] & ~iqentry_stomp[4]),
-    iqentry_memready[5] = (iqentry_v[5] & iqentry_memopsvalid[5] & ~iqentry_memissue[5] & ~iqentry_done[5] & ~iqentry_out[5] & ~iqentry_stomp[5]),
-    iqentry_memready[6] = (iqentry_v[6] & iqentry_memopsvalid[6] & ~iqentry_memissue[6] & ~iqentry_done[6] & ~iqentry_out[6] & ~iqentry_stomp[6]),
-    iqentry_memready[7] = (iqentry_v[7] & iqentry_memopsvalid[7] & ~iqentry_memissue[7] & ~iqentry_done[7] & ~iqentry_out[7] & ~iqentry_stomp[7]),
-    iqentry_memready[8] = (iqentry_v[8] & iqentry_memopsvalid[8] & ~iqentry_memissue[8] & ~iqentry_done[8] & ~iqentry_out[8] & ~iqentry_stomp[8]),
-    iqentry_memready[9] = (iqentry_v[9] & iqentry_memopsvalid[9] & ~iqentry_memissue[9] & ~iqentry_done[9] & ~iqentry_out[9] & ~iqentry_stomp[9])
-    ;
+always @*
+for (n = 0; n < QENTRIES; n = n + 1)
+	iqentry_memready[n] <= (iqentry_v[n] & iqentry_memopsvalid[n] & ~iqentry_memissue[n] & ~iqentry_done[n] & ~iqentry_out[n] & ~iqentry_stomp[n]);
 
 assign outstanding_stores = (dram0 && dram0_store) ||
                             (dram1 && dram1_store) ||
@@ -6218,16 +5645,9 @@ else begin
             	end
            end
 
-	    if (|iqentry_0_latestID)	 if (iqentry_thrd[0]==branchmiss_thrd) rf_source[ {iqentry_tgt[0][7:0]} ] <= { 1'b0, iqentry_mem[0], 4'd0 };
-        if (|iqentry_1_latestID)     if (iqentry_thrd[1]==branchmiss_thrd) rf_source[ {iqentry_tgt[1][7:0]} ] <= { 1'b0, iqentry_mem[1], 4'd1 };
-        if (|iqentry_2_latestID)     if (iqentry_thrd[2]==branchmiss_thrd) rf_source[ {iqentry_tgt[2][7:0]} ] <= { 1'b0, iqentry_mem[2], 4'd2 };
-        if (|iqentry_3_latestID)     if (iqentry_thrd[3]==branchmiss_thrd) rf_source[ {iqentry_tgt[3][7:0]} ] <= { 1'b0, iqentry_mem[3], 4'd3 };
-        if (|iqentry_4_latestID)     if (iqentry_thrd[4]==branchmiss_thrd) rf_source[ {iqentry_tgt[4][7:0]} ] <= { 1'b0, iqentry_mem[4], 4'd4 };
-        if (|iqentry_5_latestID)     if (iqentry_thrd[5]==branchmiss_thrd) rf_source[ {iqentry_tgt[5][7:0]} ] <= { 1'b0, iqentry_mem[5], 4'd5 };
-        if (|iqentry_6_latestID)     if (iqentry_thrd[6]==branchmiss_thrd) rf_source[ {iqentry_tgt[6][7:0]} ] <= { 1'b0, iqentry_mem[6], 4'd6 };
-        if (|iqentry_7_latestID)     if (iqentry_thrd[7]==branchmiss_thrd) rf_source[ {iqentry_tgt[7][7:0]} ] <= { 1'b0, iqentry_mem[7], 4'd7 };
-        if (|iqentry_8_latestID)     if (iqentry_thrd[8]==branchmiss_thrd) rf_source[ {iqentry_tgt[8][7:0]} ] <= { 1'b0, iqentry_mem[8], 4'd8 };
-        if (|iqentry_9_latestID)     if (iqentry_thrd[9]==branchmiss_thrd) rf_source[ {iqentry_tgt[9][7:0]} ] <= { 1'b0, iqentry_mem[9], 4'd9 };
+			for (n = 0; n < QENTRIES; n = n + 1)
+	    	if (|iqentry_latestID[n])
+	    		if (iqentry_thrd[n]==branchmiss_thrd) rf_source[ {iqentry_tgt[n][7:0]} ] <= { 1'b0, iqentry_mem[n], n[3:0] };
         
     end
 
@@ -7076,6 +6496,7 @@ for (n = 0; n < QENTRIES; n = n + 1)
 	end
 end
 
+// X's on unused busses cause problems in SIM.
     for (n = 0; n < QENTRIES; n = n + 1)
         if (iqentry_alu0_issue[n] && !(iqentry_v[n] && iqentry_stomp[n])) begin
             if (alu0_available & alu0_done) begin
@@ -7084,8 +6505,9 @@ end
 `ifdef FU_BYPASS                 									
                  									iqentry_a3_v[n] ? iqentry_a3[n]
 			                            : (iqentry_a3_s[n] == alu0_id) ? alu0_bus
+			                            : (iqentry_a3_s[n] == alu1_id) ? alu1_bus
 			                            : (iqentry_a3_s[n] == fpu1_id && `NUM_FPU > 0) ? fpu1_bus
-			                            : alu1_bus)
+			                            : `NOP_INSN)
 `else			                           
 																	iqentry_a3[n]) 
 `endif			                            
@@ -7098,8 +6520,9 @@ end
 `ifdef FU_BYPASS                  
                  							iqentry_a1_v[n] ? iqentry_a1[n]
                             : (iqentry_a1_s[n] == alu0_id) ? alu0_bus
+                            : (iqentry_a1_s[n] == alu1_id) ? alu1_bus
                             : (iqentry_a1_s[n] == fpu1_id && `NUM_FPU > 0) ? fpu1_bus
-                            : alu1_bus;
+                            : 64'hDEADDEADDEADDEAD;
 `else
 														iqentry_a1[n];                            
 `endif                            
@@ -7108,8 +6531,9 @@ end
 `ifdef FU_BYPASS                            
                             : (iqentry_a2_v[n] ? iqentry_a2[n]
                             : (iqentry_a2_s[n] == alu0_id) ? alu0_bus 
+                            : (iqentry_a2_s[n] == alu1_id) ? alu1_bus 
                             : (iqentry_a2_s[n] == fpu1_id && `NUM_FPU > 0) ? fpu1_bus
-                            : alu1_bus);
+                            : 64'hDEADDEADDEADDEAD);
 `else
 														: iqentry_a2[n];                         
 `endif                            
@@ -7156,8 +6580,9 @@ end
 `ifdef FU_BYPASS                  
                  							iqentry_a1_v[n] ? iqentry_a1[n]
                             : (iqentry_a1_s[n] == alu0_id) ? alu0_bus
+                            : (iqentry_a1_s[n] == alu1_id) ? alu1_bus
                             : (iqentry_a1_s[n] == fpu1_id && `NUM_FPU > 0) ? fpu1_bus
-                            : alu1_bus;
+                            : 64'hDEADDEADDEADDEAD;
 `else
 															iqentry_a1[n];                            
 `endif                           
@@ -7166,8 +6591,9 @@ end
 `ifdef FU_BYPASS                           
                             : (iqentry_a2_v[n] ? iqentry_a2[n]
                             : (iqentry_a2_s[n] == alu0_id) ? alu0_bus 
+                            : (iqentry_a2_s[n] == alu1_id) ? alu1_bus 
                             : (iqentry_a2_s[n] == fpu1_id && `NUM_FPU > 0) ? fpu1_bus
-                            : alu1_bus);
+                            : 64'hDEADDEADDEADDEAD);
 `else
 														: iqentry_a2[n];
 `endif                            
@@ -7208,8 +6634,9 @@ end
 `ifdef FU_BYPASS                  
                  							iqentry_a1_v[n] ? iqentry_a1[n]
                             : (iqentry_a1_s[n] == alu0_id) ? alu0_bus 
+                            : (iqentry_a1_s[n] == alu1_id) ? alu1_bus 
                             : (iqentry_a1_s[n] == fpu1_id && `NUM_FPU > 0) ? fpu1_bus
-                            : alu1_bus;
+                            : 64'hDEADDEADDEADDEAD;
 `else
 															iqentry_a1[n];                          
 `endif                            
@@ -7217,8 +6644,9 @@ end
 `ifdef FU_BYPASS                  
                  							(iqentry_a2_v[n] ? iqentry_a2[n]
                             : (iqentry_a2_s[n] == alu0_id) ? alu0_bus 
+                            : (iqentry_a2_s[n] == alu1_id) ? alu1_bus 
                             : (iqentry_a2_s[n] == fpu1_id && `NUM_FPU > 0) ? fpu1_bus
-                            : alu1_bus);
+                            : 64'hDEADDEADDEADDEAD);
 `else
 															iqentry_a2[n];
 `endif                            
@@ -7246,8 +6674,9 @@ end
 `ifdef FU_BYPASS                  
                  							iqentry_a1_v[n] ? iqentry_a1[n]
                             : (iqentry_a1_s[n] == alu0_id) ? alu0_bus 
+                            : (iqentry_a1_s[n] == alu1_id) ? alu1_bus 
                             : (iqentry_a1_s[n] == fpu1_id && `NUM_FPU > 0) ? fpu1_bus
-                            : alu1_bus;
+                            : 64'hDEADDEADDEADDEAD;
 `else
 															iqentry_a1[n];                          
 `endif                            
@@ -7255,8 +6684,9 @@ end
 `ifdef FU_BYPASS                  
                  							(iqentry_a2_v[n] ? iqentry_a2[n]
                             : (iqentry_a2_s[n] == alu0_id) ? alu0_bus 
+                            : (iqentry_a2_s[n] == alu1_id) ? alu1_bus 
                             : (iqentry_a2_s[n] == fpu1_id && `NUM_FPU > 0) ? fpu1_bus
-                            : alu1_bus);
+                            : 64'hDEADDEADDEADDEAD);
 `else
 															iqentry_a2[n];
 `endif                            
@@ -7397,7 +6827,7 @@ end
 			if (dram2_id[`QBITS] == n[`QBITS])  dram2 <= `DRAMSLOT_AVAIL;
 		end
 
-	last_issue = 8;
+	last_issue = QENTRIES;
     for (n = 0; n < QENTRIES; n = n + 1)
         if (~iqentry_stomp[n] && iqentry_memissue[n] && iqentry_agen[n] && ~iqentry_out[n] && ~iqentry_done[n]) begin
             if (mem1_available && dram0 == `DRAMSLOT_AVAIL) begin
@@ -7425,7 +6855,7 @@ end
              last_issue = n;
             end
         end
-    if (last_issue < 8)
+    if (last_issue < QENTRIES)
        	iqentry_out[last_issue] <= `VAL;
     for (n = 0; n < QENTRIES; n = n + 1)
         if (~iqentry_stomp[n] && iqentry_memissue[n] && iqentry_agen[n] && ~iqentry_out[n] && ~iqentry_done[n]) begin
@@ -7453,7 +6883,7 @@ end
 	            end
         	end
         end
-    if (last_issue < 8)
+    if (last_issue < QENTRIES)
        	iqentry_out[last_issue] <= `VAL;
     for (n = 0; n < QENTRIES; n = n + 1)
         if (~iqentry_stomp[n] && iqentry_memissue[n] && iqentry_agen[n] && ~iqentry_out[n] && ~iqentry_done[n]) begin
@@ -7480,7 +6910,7 @@ end
 	            end
         	end
         end
-    if (last_issue < 8)
+    if (last_issue < QENTRIES)
        	iqentry_out[last_issue] <= `VAL;
 
 for (n = 0; n < QENTRIES; n = n + 1)

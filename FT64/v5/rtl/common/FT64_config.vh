@@ -29,7 +29,7 @@
 `define AMSB			31
 `define ABITS			`AMSB:0
 `define QBITS			3:0
-`define QENTRIES	10
+`define QENTRIES	10			// changing this still requires changing code in FT64.
 `define XBITS			7:0
 
 //`define SUPPORT_DBG		1'b1
@@ -67,4 +67,6 @@
 `define SIMD	1'b1
 
 // Comment the following to disable registering the output of instruction decoders.
-`define REGISTER_DECODE
+// Inline decoding should not be registered.
+`define REGISTER_DECODE		1'b1
+//`define INLINE_DECODE		1'b1

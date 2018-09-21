@@ -60,6 +60,8 @@ parameter octa = 3'd3;
 //endcase
 //endfunction
 
+wire [10:0] brdisp = instr[31:21];
+
 wire iAlu;
 mIsALU uialu1
 (
@@ -197,7 +199,7 @@ endcase
 
 // fnCanException
 //
-// Used by memory issue logic.
+// Used by memory issue logic (stores).
 // Returns TRUE if the instruction can cause an exception.
 // In debug mode any instruction could potentially cause a breakpoint exception.
 // Rather than check all the addresses for potential debug exceptions it's
@@ -221,26 +223,28 @@ case(isn[`INSTRUCTION_OP])
         fnCanException = `TRUE;
     default:    fnCanException = `FALSE;
     endcase
-`ADDI,`DIVI,`MODI,`MULI:
+`DIVI,`MODI,`MULI:
     fnCanException = `TRUE;
 `R2:
     case(isn[`INSTRUCTION_S2])
-    `ADD,`SUB,`MUL,
+    `MUL,
     `DIV,`MULSU,`DIVSU,
     `MOD,`MODSU:
        fnCanException = TRUE;
     `RTI:   fnCanException = TRUE;
     default:    fnCanException = FALSE;
     endcase
-`Bcc:	fnCanException = TRUE;
-`BEQI:	fnCanException = TRUE;
+// Had branches that could exception if looping to self. But in a tight loop
+// it affects store performance.
+// -> A branch may only exception if it loops back to itself.
+`Bcc,`BBc,`BEQI:	fnCanException = isn[7] ? brdisp == 11'h7FF : brdisp == 11'h7FE;
 `CHK:	fnCanException = TRUE;
 default:
 // Stores can stil exception if there is a write buffer, but we allow following
 // stores to be issued by ignoring the fact they can exception because the stores
 // can be undone by invalidating the write buffer.
 `ifdef HAS_WB
-    fnCanException = IsLoad(isn);
+    fnCanException = IsMem(isn) && !IsStore(isn);
 `else
     fnCanException = IsMem(isn);
 `endif
