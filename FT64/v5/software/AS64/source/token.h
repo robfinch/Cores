@@ -173,6 +173,7 @@ enum {
      tk_fdiv,
      tk_fdx,
      tk_fex,
+		 tk_file,
      tk_fill,
      tk_fix2flt,//220
      tk_flt2fix,
@@ -385,6 +386,7 @@ enum {
      tk_stcmp,
      tk_stmov,
      tk_stop,
+			 tk_strconst,
      tk_stset,
      tk_stsb,
      tk_stsc,

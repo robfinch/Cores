@@ -14,6 +14,7 @@
 #include <ctype.h>
 #include <math.h>
 #include <io.h>
+#include <fstream>
 //#include <unistd.h>
 
 #ifndef int64_t
@@ -36,5 +37,6 @@
 #include "token.h"
 #include "symbol.h"
 #include "NameTable.hpp"
+#include "proto.h"
 
 // TODO: reference additional headers your program requires here

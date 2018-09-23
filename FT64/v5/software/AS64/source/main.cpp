@@ -27,6 +27,8 @@
 
 #define MAX_PASS  6
 
+FilenameStack fns;
+
 int gCpu = 888;
 int verbose = 1;
 int debug = 1;
@@ -58,12 +60,16 @@ int64_t data_address;
 int64_t bss_address;
 int64_t start_address;
 FILE *ofp, *vfp;
+std::ofstream mofs;
+
 int regno;
 char first_org = 1;
 char current_label[500];
 
+std::string mname;
 char buf[10000];
-char masterFile[10000000];
+int masterFileLength = 0;
+char *masterFile;
 char segmentFile[10000000];
 int NumSections = 12;
 clsElf64Section sections[12];
@@ -114,6 +120,12 @@ extern void FT64_processMaster();
 extern void FT64x36_processMaster();
 extern void SymbolInit();
 extern void dsd9_VerilogOut(FILE *fp);
+
+Arg gArgs[12];
+int gArgCount;
+Arglist gArglist;
+
+FILE *mfp;	// master file pointer
 
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
@@ -562,17 +574,17 @@ void process_org()
         }
         else {
             if (first_org && segment==codeseg) {
-				program_address = new_address;
-               code_address = new_address;
-               start_address = new_address*mul;
-               sections[0].address = new_address*mul;
-               first_org = 0;
+							program_address = new_address;
+              code_address = new_address;
+              start_address = new_address*mul;
+              sections[0].address = new_address*mul;
+              first_org = 0;
             }
             else {
-                 // Ignore the org directive in initialized data area of rodata
-                 if (!isInitializationData)
-                while(sections[0].address < new_address*mul)
-                    emitByte(0x00);
+							// Ignore the org directive in initialized data area of rodata
+							if (!isInitializationData)
+								while(sections[0].address < new_address*mul)
+									emitByte(0x00);
             }
         }
     }
@@ -1030,6 +1042,59 @@ void bump_address()
 }
 
 // ---------------------------------------------------------------------------
+// macro <name> (<arg1, arg2, arg3, ...>)
+//	< macro body >
+// endm
+// ---------------------------------------------------------------------------
+
+void process_macro()
+{
+	SYM *sym;
+	Macro *macr;
+	bool alreadyDef = false;
+	char *p;
+
+	if (pass == 3) {
+		macr = new Macro;
+		SkipSpaces();
+		getIdentifier();
+		sym = find_symbol(lastid);
+		if (sym != nullptr) {
+			printf("Macro already defined %d.", lineno);
+			alreadyDef = true;
+		}
+		else {
+			sym = new_symbol(lastid);
+			sym->defined = 1;
+			sym->isMacro = true;
+			sym->macro = macr;
+		}
+		NextToken();
+		if (token == '(') {
+			macr->GetParmList();
+			NextToken();
+			need(')');
+		}
+		p = inptr;
+		macr->GetBody();
+		if (alreadyDef)
+			delete macr;
+	}
+	else if (pass > 3) {
+		Macro mthrowaway;
+		SkipSpaces();
+		getIdentifier();
+		NextToken();
+		if (token == '(') {
+			mthrowaway.GetParmList();
+			NextToken();
+			need(')');
+		}
+		mthrowaway.GetBody();
+	}
+}
+
+// ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
 void process_message()
 {
@@ -1057,12 +1122,12 @@ void process_message()
 
 void process_label()
 {
-    SYM *sym;
-    static char nm[500];
-    int64_t ca;
-    Int128 val;
-    int isEquate;
-    int shft = 0;
+  SYM *sym;
+  static char nm[500];
+  int64_t ca;
+  Int128 val;
+  int isEquate;
+  int shft = 0;
 
 	val.low = 0;
 	val.high = 0;
@@ -1216,65 +1281,89 @@ void process_label()
 
 void processSegments()
 {
-    char *pinptr;
-    int segment = codeseg;
-    int inComment;
-    
-    if (verbose)
-       printf("Processing segments.\r\n");
-    inptr = &masterFile[0];
-    pinptr = inptr;
-    codendx = 0;
-    datandx = 0;
-    rodatandx = 0;
-    tlsndx = 0;
-    bssndx = 0;
-    memset(codebuf,0,sizeof(codebuf));
-    memset(databuf,0,sizeof(databuf));
-    memset(rodatabuf,0,sizeof(rodatabuf));
-    memset(tlsbuf,0,sizeof(tlsbuf));
-    memset(bssbuf,0,sizeof(bssbuf));
-    inComment = 0;
+  char *pinptr;
+  int segment = codeseg;
+  int inComment;
+	std::string fname;
+	bool setname = false;
+   
+  if (verbose)
+    printf("Processing segments.\r\n");
+  inptr = &masterFile[0];
+  pinptr = inptr;
+  codendx = 0;
+  datandx = 0;
+  rodatandx = 0;
+  tlsndx = 0;
+  bssndx = 0;
+  ZeroMemory(codebuf,sizeof(codebuf));
+  ZeroMemory(databuf,sizeof(databuf));
+  ZeroMemory(rodatabuf,sizeof(rodatabuf));
+  ZeroMemory(tlsbuf,sizeof(tlsbuf));
+  ZeroMemory(bssbuf,sizeof(bssbuf));
+  inComment = 0;
 
-    while (*inptr) {
-        SkipSpaces();
-        if (*inptr==';')
-        	goto j1;
-        if (inptr[0]=='/' && inptr[1]=='/')
-        	goto j1;
-//        if (inptr[0]=='/' && inptr[1]=='*') {
-//        	inComment = 1;
-//        	goto j1;
-//		}
-//		if (inComment && inptr[0]=='*' && inptr[1]=='/')
-//			inComment = 0;
-//		if (inComment)
-//			goto j1;
-        if (*inptr=='.') inptr++;
-        if ((_strnicmp(inptr,"code",4)==0) && !isIdentChar(inptr[4])) {
-            segment = codeseg;
-        }
-        else if ((_strnicmp(inptr,"data",4)==0) && !isIdentChar(inptr[4])) {
-            segment = dataseg;
-        }
-        else if ((_strnicmp(inptr,"rodata",6)==0) && !isIdentChar(inptr[6])) {
-            segment = rodataseg;
-        }
-        else if ((_strnicmp(inptr,"tls",3)==0) && !isIdentChar(inptr[3])) {
-            segment = tlsseg;
-        }
-        else if ((_strnicmp(inptr,"bss",3)==0) && !isIdentChar(inptr[3])) {
-            segment = bssseg;
-        }
+	lineno = 1;
+	while (*inptr) {
+		if (*inptr == '\n')
+			lineno++;
+		SkipSpaces();
+		if (*inptr == ';')
+			goto j1;
+		if (inptr[0] == '/' && inptr[1] == '/')
+			goto j1;
+		//        if (inptr[0]=='/' && inptr[1]=='*') {
+		//        	inComment = 1;
+		//        	goto j1;
+		//		}
+		//		if (inComment && inptr[0]=='*' && inptr[1]=='/')
+		//			inComment = 0;
+		//		if (inComment)
+		//			goto j1;
+		if (*inptr == '.') inptr++;
+		if ((_strnicmp(inptr, "file", 4)==0) && !isIdentChar(inptr[4])) {
+			inptr += 4;
+			NextToken();
+			if (token == tk_strconst)
+				fname = std::string(laststr);
+			else
+				fname = std::string("<unknown file>");
+			NextToken();
+			lineno = expr();
+			setname = true;
+		}
+    else if ((_strnicmp(inptr,"code",4)==0) && !isIdentChar(inptr[4])) {
+      segment = codeseg;
+			setname = true;
+    }
+    else if ((_strnicmp(inptr,"data",4)==0) && !isIdentChar(inptr[4])) {
+        segment = dataseg;
+    }
+    else if ((_strnicmp(inptr,"rodata",6)==0) && !isIdentChar(inptr[6])) {
+        segment = rodataseg;
+    }
+    else if ((_strnicmp(inptr,"tls",3)==0) && !isIdentChar(inptr[3])) {
+        segment = tlsseg;
+    }
+    else if ((_strnicmp(inptr,"bss",3)==0) && !isIdentChar(inptr[3])) {
+        segment = bssseg;
+    }
 j1:
         ScanToEOL();
         inptr++;
         switch(segment) {
         case codeseg:   
-             strncpy(&codebuf[codendx], pinptr, inptr-pinptr);
-             codendx += inptr-pinptr;
-             break;
-        case dataseg:
+					if (setname) {
+						setname = false;
+						if (fname.length() > 0) {
+							sprintf(&codebuf[codendx], ".file \x22%s\x22,%d\n", fname.c_str(), lineno);
+							codendx += strlen(&codebuf[codendx]);
+						}
+					}
+          strncpy(&codebuf[codendx], pinptr, inptr-pinptr);
+          codendx += inptr-pinptr;
+          break;
+	      case dataseg:
              strncpy(&databuf[datandx], pinptr, inptr-pinptr);
              datandx += inptr-pinptr;
              break;
@@ -1293,7 +1382,7 @@ j1:
         }
         pinptr = inptr;
     }
-    memset(masterFile,0,sizeof(masterFile));
+    ZeroMemory(masterFile,sizeof(masterFile));
     strcat(masterFile, codebuf);
     strcat(masterFile, rodatabuf);
     strcat(masterFile, "\r\n\trodata\r\n");
@@ -1314,6 +1403,103 @@ j1:
                 fclose(fp);
         }
     }
+}
+
+void ProcessSegments2()
+{
+	char buf[1000];
+	char *lptr;
+	char fname[600];
+	bool setname = false;
+
+	std::ifstream ifs("as64-master.asm");
+	std::ofstream codeofs("as64-code.asm");
+	std::ofstream dataofs("as64-data.asm");
+	std::ofstream idataofs("as64-idata.asm");
+	std::ofstream rodataofs("as64-rodata.asm");
+	std::ofstream bssofs("as64-bss.asm");
+	std::ofstream tlsofs("as64-tls.asm");
+
+	ZeroMemory(buf, sizeof(buf));
+	ZeroMemory(fname, sizeof(fname));
+	while (ifs.getline(buf, sizeof(buf))) {
+		inptr = buf;
+		SkipSpaces();
+		if (*inptr == ';')
+			goto j1;
+		if (inptr[0] == '/' && inptr[1] == '/')
+			goto j1;
+		if (*inptr == '.') inptr++;
+		if ((_strnicmp(inptr, "file", 4)==0) && !isIdentChar(inptr[4])) {
+			inptr += 4;
+			if (inptr[0] == ':')
+				inptr++;
+			getIdentifier();
+			strcpy_s(fname, sizeof(fname), lastid);
+		}
+		if ((_strnicmp(inptr, "code", 4) == 0) && !isIdentChar(inptr[4])) {
+			segment = codeseg;
+			setname = true;
+		}
+		else if ((_strnicmp(inptr, "data", 4) == 0) && !isIdentChar(inptr[4])) {
+			segment = dataseg;
+		}
+		else if ((_strnicmp(inptr, "rodata", 6) == 0) && !isIdentChar(inptr[6])) {
+			segment = rodataseg;
+		}
+		else if ((_strnicmp(inptr, "tls", 3) == 0) && !isIdentChar(inptr[3])) {
+			segment = tlsseg;
+		}
+		else if ((_strnicmp(inptr, "bss", 3) == 0) && !isIdentChar(inptr[3])) {
+			segment = bssseg;
+		}
+		j1:
+			switch (segment) {
+			case codeseg:
+				if (setname) {
+					setname = false;
+					codeofs << ".file: ";
+					codeofs << fname;
+				}
+				codeofs << buf;
+				break;
+			case dataseg:
+				dataofs << buf;
+				break;
+			case rodataseg:
+				rodataofs << buf;
+				break;
+			case tlsseg:
+				tlsofs << buf;
+				break;
+			case bssseg:
+				bssofs << buf;
+				break;
+			}
+	}
+	codeofs.close();
+	dataofs.close();
+	idataofs.close();
+	rodataofs.close();
+	bssofs.close();
+	tlsofs.close();
+	ifs.close();
+	system("type as64-code.asm > as64-segments.asm");
+	system("type as64-rodata.asm >> as64-segments.asm");
+	std::ofstream ofs("as64-segments.asm", std::ofstream::out | std::ofstream::app);
+	ofs << "\nrodata\n";
+	ofs << "\talign 8\n";
+	ofs << "begin_init_data:\n";
+	ofs.close();
+	system("type as64-data.asm >> as64-segments.asm");
+	ofs.open("as64-segments.asm", std::ofstream::out | std::ofstream::app);
+	ofs << "\nrodata\n";
+	ofs << "\talign 8\n";
+	ofs << "end_init_data:\n";
+	ofs.close();
+	system("type as64-data.asm >> as64-segments.asm");
+	system("type as64-bss.asm >> as64-segments.asm");
+	system("type as64-tls.asm >> as64-segments.asm");
 }
 
 void skipif(int64_t val)
@@ -1416,47 +1602,49 @@ void doifndef()
 
 void processLine(char *line)
 {
-    char *p;
-    int quoteType;
-    static char fnm[300];
-    char *fname;
-    int nn;
-    int lb;
+  char *p;
+  int quoteType;
+  static char fnm[300];
+  char *fname;
+  int nn;
+  int lb;
 
-    p = line;
+  p = line;
+	fns.GetTos()->lineno = lineno;
+	while(isspace(*p)) p++;
+  if (!*p) goto addToMaster;
+  // see if the first thing on the line is an include directive
+  if (*p=='.') p++;
+  if (strnicmp(p, "include", 7)==0 && !isIdentChar(p[7]))
+  {
+    p += 7;
+    // Capture the file name
     while(isspace(*p)) p++;
-    if (!*p) goto addToMaster;
-    // see if the first thing on the line is an include directive
-    if (*p=='.') p++;
-    if (strnicmp(p, "include", 7)==0 && !isIdentChar(p[7]))
-    {
-        p += 7;
-        // Capture the file name
-        while(isspace(*p)) p++;
-        if (*p=='"') { quoteType = '"'; p++; }
-        else if (*p=='<') { quoteType = '>'; p++; }
-        else quoteType = ' ';
-        nn = 0;
-        do {
-           fnm[nn] = *p;
-           p++; nn++;
-           if (quoteType==' ' && isspace(*p)) break;
-           else if (*p == quoteType) break;
-           else if (*p=='\n') break;
-        } while(nn < sizeof(fnm)/sizeof(char));
-        fnm[nn] = '\0';
-        fname = strdup(fnm);
-        lb = lineno;
-        lineno = 1;
-        processFile(fname,1);
-        lineno = lb;
-        free(fname);
-        return;
-    }
-    // Not an include directive, then just copy the line to the master buffer.
+    if (*p=='"') { quoteType = '"'; p++; }
+    else if (*p=='<') { quoteType = '>'; p++; }
+    else quoteType = ' ';
+    nn = 0;
+    do {
+      fnm[nn] = *p;
+      p++; nn++;
+      if (quoteType==' ' && isspace(*p)) break;
+      else if (*p == quoteType) break;
+      else if (*p=='\n') break;
+    } while(nn < sizeof(fnm)/sizeof(char));
+    fnm[nn] = '\0';
+    fname = strdup(fnm);
+    lb = lineno;
+    lineno = 1;
+    processFile(fname,1);
+    lineno = lb;
+    free(fname);
+    return;
+  }
+  // Not an include directive, then just copy the line to the master buffer.
 addToMaster:
-    strcpy(&masterFile[mfndx], line);
-    mfndx += strlen(line);
+  //strcpy(&masterFile[mfndx], line);
+  //mfndx += strlen(line);
+	mofs << line;
 }
 
 // ----------------------------------------------------------------------------
@@ -1465,34 +1653,45 @@ addToMaster:
 
 void processFile(char *fname, int searchincl)
 {
-     FILE *fp;
-     char *pathname;
+  FILE *fp;
+	std::ifstream ifs;
+  char *pathname;
+	char buf[700];
 
-     if (verbose)
-        printf("Processing file:%s\r\n", fname);
-     pathname = (char *)NULL;
-     fp = fopen(fname, "r");
-     if (!fp) {
-         if (searchincl) {
-             searchenv(fname, "INCLUDE", &pathname);
-             if (strlen(pathname)) {
-                 fp = fopen(pathname, "r");
-                 if (fp) goto j1;
-             }
-         }
-         printf("Can't open file <%s>\r\n", fname);
-         goto j2;
-     }
+	fns.Push(mname, lineno);
+	mname = std::string(fname);
+	lineno = 1;
+	mofs << ".file \x22";
+	mofs << mname.c_str();
+	mofs << "\x22," << lineno << "\n";
+	if (verbose)
+    printf("Processing file:%s\n", fname);
+  pathname = (char *)NULL;
+	ifs.open(fname);
+  if (ifs.fail()) {
+    if (searchincl) {
+      searchenv(fname, "INCLUDE", &pathname);
+      if (strlen(pathname)) {
+        ifs.open(pathname);
+        if (!ifs.fail()) goto j1;
+      }
+    }
+    printf("Can't open file <%s>\n", fname);
+    goto j2;
+  }
 j1:
-     while (!feof(fp)) {
-         fgets(buf, sizeof(buf)/sizeof(char), fp);
-         processLine(buf);
-		 ZeroMemory(buf,sizeof(buf));
-     }
-     fclose(fp);
+	while (ifs.getline(buf, sizeof(buf))) {
+		strcat(buf,"\n");
+		processLine(buf);
+	}
+	ifs.close();
 j2:
-     if (pathname)
-         free(pathname);
+  if (pathname)
+      free(pathname);
+	fns.Pop(&mname, &lineno);
+	mofs << ".file \x22";
+	mofs << mname.c_str();
+	mofs << "\x22," << lineno << "\n";
 }
 
 // ----------------------------------------------------------------------------
@@ -1527,7 +1726,7 @@ int checksum64(int64_t *val)
 
 void processMaster()
 {
-    expandedBlock = 0;
+  expandedBlock = 0;
 	switch(gCpu) {
 	case 888:	Table888_processMaster();	break;
 	case 889:	Table888mmu_processMaster();	break;
@@ -1869,57 +2068,66 @@ int PreProcessFile(char *nm)
 
 int main(int argc, char *argv[])
 {
-    int nn,qq,kk;
-    static char fname[500];
-    static char hexbuf[500];
-    char *p;
-    uint64_t lsa;      // last start address
-    double bpi;
-    int64_t i64;
-    uint32_t u32;
+  int nn,qq,kk;
+  static char fname[500];
+  static char hexbuf[500];
+  char *p;
+  uint64_t lsa;      // last start address
+  double bpi;
+  int64_t i64;
+  uint32_t u32;
 	float nc2;
+	std::ifstream ifs;
 
-    processOpt = 1;
+  processOpt = 1;
 	sections[bssseg].storebyte = 0;
-    ofp = stdout;
-    nn = processOptions(argc, argv);
-    if (nn > argc-1) {
-       displayHelp();
-       return 0;
-    }
-    SymbolInit();
-    strcpy_s(fname, sizeof(fname), argv[nn]);
-    mfndx = 0;
-    start_address = 0;
-    code_address = 0;
-    bss_address = 0;
-    data_address = 0;
-    isInitializationData = 0;
-    for (qq = 0; qq < 12; qq++)
-        sections[qq].Clear();
-    nmTable.Clear();
-    memset(masterFile,0,sizeof(masterFile));
-    if (verbose) printf("Pass 1 - collect all input files.\r\n");
+  ofp = stdout;
+  nn = processOptions(argc, argv);
+  if (nn > argc-1) {
+      displayHelp();
+      return 0;
+  }
+  SymbolInit();
+  strcpy_s(fname, sizeof(fname), argv[nn]);
+  mfndx = 0;
+  start_address = 0;
+  code_address = 0;
+  bss_address = 0;
+  data_address = 0;
+  isInitializationData = 0;
+  for (qq = 0; qq < 12; qq++)
+    sections[qq].Clear();
+  nmTable.Clear();
+	mofs.open("as64-master.asm");
+  if (verbose) printf("Pass 1 - collect all input files.\r\n");
 	//PreProcessFile(fname);
 	//strcat_s(fname,sizeof(fname),".app.asm");
-    processFile(fname,0);   // Pass 1, collect all include files
-    if (debug) {
-        FILE *fp;
-        fopen_s(&fp, "a64-master.asm", "w");
-        if (fp) {
-                fwrite(masterFile, 1, strlen(masterFile), fp);
-                fclose(fp);
-        }
-    }
+	mname = std::string(fname);
+  processFile(fname,0);   // Pass 1, collect all include files
+	masterFileLength = mofs.tellp();
+	mofs.close();
+	masterFile = new char[masterFileLength + 10000];
+  //if (debug) {
+  //  FILE *fp;
+  //  fopen_s(&fp, "a64-master.asm", "w");
+  //  if (fp) {
+  //    fwrite(masterFile, 1, strlen(masterFile), fp);
+  //    fclose(fp);
+  //  }
+  //}
+	ZeroMemory(masterFile, masterFileLength + 10000);
+	ifs.open("as64-master.asm");
+	ifs.read(masterFile, masterFileLength + 10000);
+	ifs.close();
+  if (verbose) printf("Pass 2 - group and reorder segments\r\n");
+  first_org = 1;
+  processSegments();     // Pass 2, group and order segments
+//	ProcessSegments2();
 
-    if (verbose) printf("Pass 2 - group and reorder segments\r\n");
-    first_org = 1;
-    processSegments();     // Pass 2, group and order segments
-
-    pass = 3;
-    processMaster();       // Pass 3 collect up opcodes
-    printf("Qsorting\r\n");
-    qsort((HTBLE*)hTable, htblmax, sizeof(HTBLE), hcmp);
+  pass = 3;
+  processMaster();       // Pass 3 collect up opcodes
+  printf("Qsorting\r\n");
+  qsort((HTBLE*)hTable, htblmax, sizeof(HTBLE), hcmp);
    
     pass = 4;
     if (verbose) printf("Pass 4 - get all symbols, set initial values.\r\n");
@@ -2296,7 +2504,8 @@ int main(int argc, char *argv[])
         }
         else
             printf("Can't create .hex file.\r\n");
-    return 0;
+	delete[] masterFile;
+  return (0);
 }
 
 bool IsNBit(int64_t val, int64_t n)

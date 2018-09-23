@@ -27,6 +27,7 @@
 
 char *pinptr;
 char lastid[500];
+char laststr[500];
 char lastch;
 Int128 last_icon;
 Int128 ival;
@@ -35,22 +36,25 @@ double rval;
 int my_isspace(char ch)
 {
     if (ch==' ' || ch=='\t' || ch=='\r')
-        return 1;
-    return 0;
+        return (1);
+    return (0);
 }
 int isspaceOrDot(char ch)
 {
-	return my_isspace(ch) || ch=='.';
+	ch &= 0x7f;
+	return (my_isspace(ch) || ch=='.');
 }
 
 int isFirstIdentChar(char ch)
 {
-    return isalpha(ch) || ch=='_';
+	ch &= 0x7f;
+  return (isalpha(ch) || ch=='_');
 }
 
 int isIdentChar(char ch)
 {
-    return isalnum(ch) || ch=='_';
+	ch &= 0x7f;
+	return (isalnum(ch) || ch=='_');
 }
 
 int need(int tk)
@@ -282,57 +286,71 @@ int64_t getsch()        /* return an in-quote character */
 
 int getIdentifier()
 {
-    int nn;
+  int nn;
 
 //    printf("GetIdentifier: %.30s\r\n", inptr);
-    if (isFirstIdentChar(*inptr) || (*inptr=='.' && isIdentChar(inptr[1]))) {
-        nn = 1;
-        lastid[0] = *inptr;
-        inptr++;
-        while(isIdentChar(*inptr) && nn < sizeof(lastid)-1) {
-            lastid[nn] = *inptr;
-            inptr++;
-            nn++;
-        }
-        lastid[nn] = '\0';
-        return 1;
+  if (isFirstIdentChar(*inptr) || (*inptr=='.' && isIdentChar(inptr[1]))) {
+    nn = 1;
+    lastid[0] = *inptr;
+    inptr++;
+    while(isIdentChar(*inptr) && nn < sizeof(lastid)-1) {
+      lastid[nn] = *inptr;
+      inptr++;
+      nn++;
     }
-    else
-        return 0;
+    lastid[nn] = '\0';
+    return 1;
+  }
+  else
+    return 0;
+}
+
+void getString()
+{
+	int nn;
+
+	nn = 0;
+	while (*inptr && *inptr != '"' && *inptr != '\n' && nn < sizeof(laststr) - 2) {
+		laststr[nn] = *inptr;
+		nn++;
+		inptr++;
+	}
+	inptr++;
+	laststr[nn] = '\0';
 }
 
 static char *pseudos[] = {
-    "align", "code", "data", "tls", "rodata",
-    "fill", "org", "byte", "message",(char *)NULL
+    "align", "code", "data", "tls", "rodata", "file",
+		"fill", "org", "byte", "message",(char *)NULL
 };
 static int pseudoTokens[] = {
-    tk_align, tk_code, tk_data, tk_tls, tk_rodata,
+    tk_align, tk_code, tk_data, tk_tls, tk_rodata, tk_file,
     tk_fill, tk_org, tk_db, tk_message, tk_none
 };
 
 int isPseudoOp()
 {
-    static char buf[500];
-    char *p = inptr;
-    int nn = 0;
+  static char buf[500];
+  char *p = inptr;
+  int nn = 0;
 
-    if (*p=='.') p++;
-    if (!isFirstIdentChar(*p))
-        return 0;
-    while(isIdentChar(*p)) {
-        buf[nn] = tolower(*p);
-        p++;
-        nn++;
+  if (*p=='.') p++;
+  if (!isFirstIdentChar(*p))
+    return (0);
+  while(isIdentChar(*p)) {
+    buf[nn] = tolower(*p);
+    p++;
+    nn++;
+  }
+  buf[nn] = '\0';
+  for (nn = 0; nn < 9; nn++) {
+    if (strcmp(buf, pseudos[nn])==0) {
+      //inptr = p;
+      //token = pseudoTokens[nn];
+      return (1);
     }
-    buf[nn] = '\0';
-    for (nn = 0; nn < 8; nn++) {
-        if (strcmp(buf, pseudos[nn])==0) {
-            //inptr = p;
-            //token = pseudoTokens[nn];
-            return 1;
-        }
-    }
-    return 0;
+  }
+  return (0);
 }
 
 void prevToken()
@@ -342,6 +360,9 @@ void prevToken()
 
 int NextToken()
 {
+	char ch;
+	char *p;
+
     pinptr = inptr;    
     do {
         if (*inptr=='\0')
@@ -351,13 +372,18 @@ int NextToken()
             ScanToEOL();
             continue;
         }
-        if (isdigit(*inptr)) {
+				ch = *inptr & 0x7f;
+        if (isdigit(ch)) {
            getnum();
            return token;
         }
         switch(*inptr) {
+				case '"':
+					inptr++;
+					getString();
+					return (token = tk_strconst);
         case '.': if (isPseudoOp()) { inptr++; continue; }
-                  else if (getIdentifier()) { return token = tk_id; }
+                  else if (getIdentifier()) { return (token = tk_id); }
                   else { inptr++; continue; }
         case '\n': inptr++; return token = tk_eol;
         case '$': inptr++; getbase(16); return token = tk_icon;
@@ -1439,6 +1465,14 @@ int NextToken()
 					 return token = tk_ftoi;
 				 }
 			 }
+			 if ((inptr[1] == 'i' || inptr[1] == 'I') &&
+				 (inptr[2] == 'l' || inptr[2] == 'L') &&
+				 (inptr[3] == 'e' || inptr[3] == 'E') &&
+				 (isspace(inptr[4]) || inptr[4] == ':')) {
+				 inptr += 4;
+				 return (token = tk_file);
+			 }
+
              break;
 
         // gran
@@ -2036,12 +2070,12 @@ int NextToken()
                 }
 			}
             if ((inptr[1]=='a' || inptr[1]=='A') &&
-                (inptr[2]=='r' || inptr[2]=='R') &&
-                (inptr[3]=='c' || inptr[3]=='C') &&
+                (inptr[2]=='c' || inptr[2]=='C') &&
+                (inptr[3]=='r' || inptr[3]=='R') &&
                 (inptr[4]=='o' || inptr[4]=='O') &&
                 isspace(inptr[5])) {
                 inptr += 5;
-                return token = tk_macro;
+                return (token = tk_macro);
             }
             break;
 
@@ -2966,12 +3000,25 @@ int NextToken()
         }
         // The text wasn't recognized as any of the above tokens. So try for an
         // identifier name.
+				p = inptr;
         if (getIdentifier()) {
-            return token = tk_id;
+					SYM *sym;
+					char *q;
+					if (sym = find_symbol(lastid)) {
+						if (sym->isMacro) {
+							Arglist args;
+							args.Get();
+							q = sym->macro->SubArgs(&args);
+							Macro::Substitute(q, inptr-p);
+							inptr = p;
+							continue;
+						}
+					}
+            return (token = tk_id);
         }
         inptr++;
     } while (*inptr);
-    return token = tk_eof;
+    return (token = tk_eof);
 }
 
 // ----------------------------------------------------------------------------

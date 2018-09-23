@@ -144,6 +144,7 @@ SYM *new_symbol(char *name)
      ts.segment = segment;
      ts.scope = ' ';
      ts.isExtern = 0;
+		 ts.isMacro = false;
      p = insert_symbol(&ts);
      numsym++;
      return p;
@@ -182,7 +183,16 @@ void DumpSymbols()
     for (nn = 0; nn < ii; nn++) {
 //        qq = symorder[nn];
         dp = &pt[nn];
-        if (dp->name)
+        if (dp->name && !dp->isMacro)
         fprintf(ofp, "%c %-40s %6s  %06llx %d\n", dp->phaserr, nmTable.GetName(dp->name), segname(dp->segment), dp->value.low, dp->bits);
     }
+		fprintf(ofp, "\n  Macro Name\n");
+		for (nn = 0; nn < ii; nn++) {
+			dp = &pt[nn];
+			if (dp->name && dp->isMacro) {
+				fprintf(ofp, " %-40s  %d\n", nmTable.GetName(dp->name), dp->macro->parms.count);
+				fprintf(ofp, "%s", dp->macro->body);
+				fprintf(ofp, "\n");
+			}
+		}
 }

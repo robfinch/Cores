@@ -22,7 +22,8 @@
 //
 // ============================================================================
 //
-`define SIM
+//`define SIM
+`define AVIC
 
 module FT64v5SoC(cpu_resetn, xclk, led, sw,
     TMDS_OUT_clk_p, TMDS_OUT_clk_n, TMDS_OUT_data_p, TMDS_OUT_data_n
@@ -95,6 +96,8 @@ wire rnd_ack;
 wire [31:0] rnd_dato;
 wire dram_ack;
 wire [63:0] dram_dato;
+wire avic_ack;
+wire [63:0] avic_dato;
 
 NexysVideoClkgen ucg1
  (
@@ -113,6 +116,7 @@ NexysVideoClkgen ucg1
 );
 assign rst = !locked;
 
+`ifndef AVIC
 WXGASyncGen1280x768_60Hz u4
 (
 	.rst(rst),
@@ -122,6 +126,7 @@ WXGASyncGen1280x768_60Hz u4
 	.blank(blank),
 	.border(border)
 );
+`endif
 
 rgb2dvi #(
 	.kGenerateSerialClk(1'b0),
@@ -167,8 +172,10 @@ wire cs_br = adr[31:18]==14'h3FFF;
 wire cs_tc1 = adr[31:16]==16'hFFD0;
 wire cs_scr = adr[31:20]==12'hFF4;
 wire cs_rnd = adr[31:4]==28'hFFDC0C0;
+wire cs_avic = adr[31:13]==19'b1111_1111_1101_1100_110;	// FFDCC000-FFDCDFFF
 wire cs_led = cyc && stb && (adr[31:4]==28'hFFDC060);
 
+`ifdef TEXT_CONTROLLER
 FT64_TextController #(.num(1)) tc1
 (
 	.rst_i(rst),
@@ -194,6 +201,64 @@ FT64_TextController #(.num(1)) tc1
 assign red = tc1_rgb[23:16];
 assign green = tc1_rgb[15:8];
 assign blue = tc1_rgb[7:0];
+`endif
+
+wire [23:0] rgb;
+wire vde;
+wire vm_cyc, vm_stb, vm_ack, vm_we;
+wire [15:0] vm_sel;
+wire [31:0] vm_adr;
+wire [127:0] vm_dat_o;
+wire [127:0] vm_dat_i;
+wire [15:0] aud0, aud1, aud2, aud3;
+reg [15:0] audi = 16'h0000;
+wire [7:0] gst;
+
+`ifndef SIM
+AVIC128 uavic1
+(
+	// Slave port
+	.rst_i(rst),
+	.clk_i(clk20),
+	.cs_i(cs_avic),
+	.cyc_i(cyc),
+	.stb_i(stb),
+	.ack_o(avic_ack),
+	.we_i(we),
+	.sel_i(sel),
+	.adr_i(adr[12:0]),
+	.dat_i(dato),
+	.dat_o(avic_dat_o),
+	// Bus master
+	.m_clk_i(clk40),
+	.m_cyc_o(vm_cyc),
+	.m_stb_o(vm_stb),
+	.m_ack_i(vm_ack),
+	.m_we_o(vm_we),
+	.m_sel_o(vm_sel),
+	.m_adr_o(vm_adr),
+	.m_dat_i(vm_dat_i),
+	.m_dat_o(vm_dat_o),
+	// Video port
+	.vclk(clk40),
+	.hSync(hSync),
+	.vSync(vSync),
+	.de(vde),
+	.rgb(rgb),
+	// Audio ports
+	.aud0_out(aud0),
+	.aud1_out(aud1),
+	.aud2_out(aud2),
+	.aud3_out(aud3),
+	.aud_in(audi),
+	// Debug
+	.state(gst)
+);
+assign red = rgb[23:16];
+assign green = rgb[15:8];
+assign blue = rgb[7:0];
+assign blank = ~vde;
+`endif
 
 wire ack_led = cs_led;
 always @(posedge clk20)
@@ -205,15 +270,16 @@ if (cs_led)
 end
 wire [7:0] led_dato = sw;
 
-assign ack = ack_scr|ack_led|tc1_ack|ack_br|rnd_ack|dram_ack;
+assign ack = ack_scr|ack_led|tc1_ack|ack_br|rnd_ack|dram_ack|avic_ack;
 always @*
-casez({cs_br,cs_tc1,cs_scr,cs_led,cs_rnd,cs_dram})
-6'b1?????:  dati <= br_dato;
-6'b01????:  dati <= {2{tc1_dato}};
-6'b001???:  dati <= scr_dato;
-6'b0001??:  dati <= {8{led_dato}};
-6'b00001?:  dati <= {2{rnd_dato}};
-6'b000001:	dati <= dram_dato;
+casez({cs_br,cs_tc1,cs_scr,cs_led,cs_rnd,cs_dram,cs_avic})
+7'b1??????: dati <= br_dato;
+7'b01?????: dati <= {2{tc1_dato}};
+7'b001????: dati <= scr_dato;
+7'b0001???: dati <= {8{led_dato}};
+7'b00001??: dati <= {2{rnd_dato}};
+7'b000001?:	dati <= dram_dato;
+7'b000000?:	dati <= avic_dato;
 default:    dati <= {2{32'h1C}}; // NOP
 endcase
 
@@ -248,7 +314,7 @@ mpmc6 umc1
 	.clk100MHz(xclk_bufg),
 	.clk200MHz(clk200),
 	.mem_ui_clk(mem_ui_clk),
-/*
+
 	.cyc0(vm_cyc),
 	.stb0(vm_stb),
 	.ack0(vm_ack),
@@ -257,7 +323,7 @@ mpmc6 umc1
 	.adr0(vm_adr),
 	.dati0(vm_dat_o),
 	.dato0(vm_dat_i),
-*/
+
 /*
 cs1, cyc1, stb1, ack1, we1, sel1, adr1, dati1, dato1, sr1, cr1, rb1,
 cyc2, stb2, ack2, we2, sel2, adr2, dati2, dato2,

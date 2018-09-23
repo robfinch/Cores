@@ -37,6 +37,8 @@ typedef struct {
     char isExtern;
     char phaserr;
     char scope;     // P = public
+		bool isMacro;
+		Macro *macro;
     int bits;
 } SYM;
 

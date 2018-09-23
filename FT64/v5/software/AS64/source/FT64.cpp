@@ -58,6 +58,14 @@ static int regCnst;
 #define LB16	-31653LL
 
 // ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+
+static void error(char *msg)
+{
+	printf("%s. (%d)\n", msg, /*mname.c_str(), */lineno);
+}
+
+// ----------------------------------------------------------------------------
 // Return the register number or -1 if not a register.
 // Parses pretty register names like SP or BP in addition to r1,r2,etc.
 // ----------------------------------------------------------------------------
@@ -1028,7 +1036,7 @@ static int GetFPSize()
             inptr++;
         }
         else
-            printf("Illegal float size.\r\n");
+            error("Illegal float size");
     }
 	switch(sz) {
 	case 'h':	sz = 0; break;
@@ -1062,7 +1070,7 @@ static void emit_insn(int64_t oc, int can_compress, int sz)
           htblmax++;
           return;  
        }
-       printf("Too many instructions.\r\n");
+       error("Too many instructions");
        return;
     }
     if (pass > 3) {
@@ -1286,11 +1294,11 @@ static void getSz(int *sz)
 		break;
 	case 'd': case 'D': *sz = 0x83; break;
 	case 'i': case 'I': *sz = 0x43; break;
-    default: 
-             printf("%d bad size.\r\n", lineno);
-             *sz = 3;
-    }
-    inptr += 1;
+  default: 
+    error("Bad size");
+    *sz = 3;
+  }
+  inptr += 1;
 }
 
 // ---------------------------------------------------------------------------
@@ -1330,21 +1338,21 @@ static void GetArBits(int64_t *aq, int64_t *rl)
 
 static void process_riop(int64_t opcode6)
 {
-    int Ra;
-    int Rt, Rtp;
-    char *p;
-    int64_t val;
+  int Ra;
+  int Rt, Rtp;
+  char *p;
+  int64_t val;
 	int sz = 3;
     
-    p = inptr;
+  p = inptr;
 	if (*p == '.')
 		getSz(&sz);
 	Rt = getRegisterX();
-    need(',');
-    Ra = getRegisterX();
-    need(',');
-    NextToken();
-    val = expr();
+  need(',');
+  Ra = getRegisterX();
+  need(',');
+  NextToken();
+  val = expr();
 	if (opcode6==-4LL)	{ // subi
 		val = -val;
 		opcode6 = 0x04LL;	// change to addi
@@ -1360,7 +1368,7 @@ static void process_riop(int64_t opcode6)
 						(2 << 6) |
 						(((val >> 3) & 0x1) << 5) |
 						regSP, 0, 2);
-					return;
+					goto xit;
 				}
 			}
 			else {
@@ -1371,7 +1379,7 @@ static void process_riop(int64_t opcode6)
 						(2 << 6) |
 						((val & 0x1) << 5) |
 						Ra, 0, 2);
-					return;
+					goto xit;
 				}
 			}
 		}
@@ -1386,7 +1394,7 @@ static void process_riop(int64_t opcode6)
 				(((val >> 3) & 0x1) << 5) |
 				Rt, 0, 2
 			);
-			return;
+			goto xit;
 		}
 	}
 	// Compress ORI ?
@@ -1401,7 +1409,7 @@ static void process_riop(int64_t opcode6)
 				Rtp, 0, 2
 			);
 		}
-		return;
+		goto xit;
 	}
 	if (!IsNBit(val, 14)) {
 		if (!IsNBit(val, 30)) {
@@ -1420,7 +1428,7 @@ static void process_riop(int64_t opcode6)
 				(23 << 13) |
 				(Ra << 8) |
 				0x02, !expand_flag, 4);
-			return;
+			goto xit;
 		}
 		emit_insn(
 			(val << 18LL) |
@@ -1428,10 +1436,12 @@ static void process_riop(int64_t opcode6)
 			(Ra << 8) |
 			(1 << 6) |
 			opcode6, !expand_flag, 6);
-		return;
+		goto xit;
 	}
 	emit_insn(
 		(val << 18)|(Rt << 13)|(Ra << 8)|opcode6,!expand_flag,4);
+xit:
+	ScanToEOL();
 }
 
 // ---------------------------------------------------------------------------
@@ -1511,7 +1521,7 @@ static void process_setiop(int64_t opcode6)
 			);
 			return;
 		}
-		printf("Illegal set immediate instruction %d.", lineno);
+		error("Illegal set immediate instruction");
 		return;
 	}
 	if (!IsNBit(val, 14)) {
@@ -1645,10 +1655,10 @@ static void process_rrop(int64_t funct6, int64_t iop)
     NextToken();
     if (token=='#') {
 		if (iop < 0 && iop!=-4)
-			printf("Immediate mode not supported (%d).", lineno);
-        inptr = p;
-        process_riop(iop);
-        return;
+			error("Immediate mode not supported");
+      inptr = p;
+      process_riop(iop);
+      return;
     }
     prevToken();
     Rb = getRegisterX();
@@ -1662,7 +1672,7 @@ static void process_rrop(int64_t funct6, int64_t iop)
 			(Rt),
 			0,2
 		);
-		return;
+		goto xit;
 	}
 	// Compress SUB
 	if (funct6 == 0x05 && Ra == Rt && (Rtp = CmpReg(Rt)) >= 0 && (Rbp = CmpReg(Rb)) >= 0) {
@@ -1676,7 +1686,7 @@ static void process_rrop(int64_t funct6, int64_t iop)
 			(Rtp),
 			0, 2
 		);
-		return;
+		goto xit;
 	}
 	// Compress AND
 	if (funct6 == 0x08 && Ra == Rt && (Rtp = CmpReg(Rt)) >= 0 && (Rbp = CmpReg(Rb)) >= 0) {
@@ -1690,7 +1700,7 @@ static void process_rrop(int64_t funct6, int64_t iop)
 			(Rtp),
 			0, 2
 		);
-		return;
+		goto xit;
 	}
 	// Compress OR
 	if (funct6 == 0x09 && Ra == Rt && (Rtp = CmpReg(Rt)) >= 0 && (Rbp = CmpReg(Rb)) >= 0) {
@@ -1704,7 +1714,7 @@ static void process_rrop(int64_t funct6, int64_t iop)
 			(Rtp),
 			0, 2
 		);
-		return;
+		goto xit;
 	}
 	// Compress XOR
 	if (funct6 == 0x0A && Ra == Rt && (Rtp = CmpReg(Rt)) >= 0 && (Rbp = CmpReg(Rb)) >= 0) {
@@ -1718,19 +1728,21 @@ static void process_rrop(int64_t funct6, int64_t iop)
 			(Rtp),
 			0, 2
 		);
-		return;
+		goto xit;
 	}
 	//prevToken();
 	if (funct6==0x2E || funct6==0x2C || funct6==0x2D) {
 		funct6 += 0x10;	// change to divmod
 	    emit_insn((funct6<<26LL)||(1<<23)||(Rt<<18)|(Rb<<13)|(Ra<<8)|0x02,!expand_flag,4);
-		return;
+		goto xit;
 	}
 	else if (funct6==0x3C || funct6==0x3D || funct6==0x3E) {
 	    emit_insn((funct6<<26LL)||(0<<23)|(Rt<<18)|(Rb<<13)|(Ra<<8)|0x02,!expand_flag,4);
-		return;
+			goto xit;
 	}
     emit_insn((funct6<<26LL)|(sz << 23)|(Rt<<18)|(Rb<<13)|(Ra<<8)|0x02,!expand_flag,4);
+xit:
+		ScanToEOL();
 }
        
 // ---------------------------------------------------------------------------
@@ -1812,31 +1824,29 @@ static void process_cmove(int64_t funct6)
 
 static void process_jal(int64_t oc)
 {
-    int64_t addr, val;
-    int Ra;
-    int Rt;
+  int64_t addr, val;
+  int Ra;
+  int Rt;
 	bool noRt;
 	char *p;
 
 	noRt = false;
 	Ra = 0;
-    Rt = 0;
+  Rt = 0;
 	p = inptr;
-    NextToken();
+  NextToken();
 	if (token == '(' || token == '[') {
 	j1:
 		Ra = getRegisterX();
 		if (Ra == -1) {
 			printf("Expecting a register\r\n");
-			return;
+			goto xit;
 		}
 		// Simple jmp [Rn]
-		else {
-			if (token != ')' && token != ']')
-				printf("Missing close bracket\r\n");
-			emit_insn((Ra << 8) | (Rt << 13) | 0x18, 0, 4);
-			return;
-		}
+		if (token != ')' && token != ']')
+			printf("Missing close bracket %d\n", lineno);
+		emit_insn((Ra << 8) | (Rt << 13) | 0x18, 0, 4);
+		goto xit;
 	}
 	else
 		inptr = p;
@@ -1849,10 +1859,10 @@ static void process_jal(int64_t oc)
            goto j1;
     }
     else {
-        Rt = 0;
-		noRt = true;
-	}
-	addr = expr();
+      Rt = 0;
+			noRt = true;
+		}
+		addr = expr();
     // d(Rn)? 
     //NextToken();
     if (token=='(' || token=='[') {
@@ -1871,7 +1881,7 @@ static void process_jal(int64_t oc)
 			(Rt << 13) |
 			(Ra << 8) |
 			0x18, !expand_flag, 4);
-		return;
+		goto xit;
 	}
 	if (IsNBit(val, 30)) {
 		emit_insn(
@@ -1880,7 +1890,7 @@ static void process_jal(int64_t oc)
 			(Ra << 8) |
 			(1 << 6) |
 			0x18, !expand_flag, 6);
-		return;
+		goto xit;
 	}
 
 	{
@@ -1900,13 +1910,15 @@ static void process_jal(int64_t oc)
 				(0 << 18) |
 				(Rt << 12) |
 				(23 << 8) | 0x18, !expand_flag, 4);
-			return;
+			goto xit;
 		}
 		emit_insn(
 			(Rt << 12) |
 			(23 << 8) | 0x18, !expand_flag, 4);
-		return;
+		goto xit;
 	}
+xit:
+	ScanToEOL();
 }
 
 // ---------------------------------------------------------------------------
@@ -2247,20 +2259,20 @@ static void process_beqi(int64_t opcode6, int64_t opcode3)
 
 static void process_bcc(int opcode6, int opcode4)
 {
-    int Ra, Rb, pred;
+  int Ra, Rb, pred;
 	int fmt;
-    int64_t val;
-    int64_t disp;
+  int64_t val;
+  int64_t disp, cdisp;
 	char *p1;
 	bool ins48 = false;
 
-    fmt = GetFPSize();
+  fmt = GetFPSize();
 	pred = 0;
 	p1 = inptr;
-    Ra = getRegisterX();
-    need(',');
-    Rb = getRegisterX();
-    need(',');
+  Ra = getRegisterX();
+  need(',');
+  Rb = getRegisterX();
+  need(',');
 	NextToken();
 	if (token=='#' && opcode4==0) {
 		inptr = p1;
@@ -2269,31 +2281,32 @@ static void process_bcc(int opcode6, int opcode4)
 	}
 	val = expr();
 	disp = val - (code_address + 4);
+	cdisp = val - (code_address + 2);
 	if (!IsNBit(disp, 12)) {
+		error("Branch displacement too large");
 		disp = val - (code_address + 6);
 		ins48 = true;
 	}
 	disp >>= 1;
+	cdisp >>= 1;
 	// Check for compressed bnez
-	if (opcode4 == 1 && Rb == 0 && IsNBit(disp+1,7)) {	// disp+1 to account for 2 byte instruction
-		disp++;
+	if (opcode4 == 1 && Rb == 0 && IsNBit(cdisp,7)) {
 		emit_insn(
 			(3 << 14) |
-			(((disp >> 1) & 0x3f) << 8) |
+			(((cdisp >> 1) & 0x3f) << 8) |
 			(2 << 6) |
-			((disp & 1) << 5) |
+			((cdisp & 1) << 5) |
 			Ra,0,2
 		);
 		return;
 	}
 	// compressed beqz
-	if (opcode4 == 0 && Rb == 0 && IsNBit(disp+1, 7)) {
-		disp++;
+	if (opcode4 == 0 && Rb == 0 && IsNBit(cdisp, 7)) {
 		emit_insn(
 			(2 << 14) |
-			(((disp >> 1) & 0x3f) << 8) |
+			(((cdisp >> 1) & 0x3f) << 8) |
 			(2 << 6) |
-			((disp & 1) << 5) |
+			((cdisp & 1) << 5) |
 			Ra, 0, 2
 		);
 		return;
@@ -2348,7 +2361,7 @@ static void process_dbnz(int opcode6, int opcode3)
 	    NextToken();
 		val = expr();
 		disp = val - (code_address + 4LL);
-		disp >>= 1;
+		disp >>= 1LL;
 		emit_insn(
 			(disp << 21LL) |
 			((opcode3 & 3) << 19) |
@@ -2358,7 +2371,7 @@ static void process_dbnz(int opcode6, int opcode3)
 		);
 		return;
 	}
-	printf("dbnz: target must be a label %d.\n", lineno);
+	error("dbnz: target must be a label");
 	emit_insn(
 		(opcode3 << 19) |
 		(0 << 13) |
@@ -2413,7 +2426,7 @@ static void process_ibne(int opcode6, int opcode3)
 		);
 		return;
 	}
-	printf("ibne: target must be a label %d.\n", lineno);
+	error("ibne: target must be a label");
 	emit_insn(
 		(opcode3 << 19) |
 		(Rb << 13) |
@@ -2428,10 +2441,10 @@ static void process_ibne(int opcode6, int opcode3)
 
 static void process_bitfield(int64_t oc)
 {
-    int Ra, Rb, Rc;
-    int Rt;
-    int64_t mb;
-    int64_t me;
+	int Ra, Rb, Rc;
+	int Rt;
+	int64_t mb;
+	int64_t me;
 	int64_t val;
 	int64_t op;
 	int sz = 3;
@@ -2443,43 +2456,39 @@ static void process_bitfield(int64_t oc)
 	if (*p == '.')
 		getSz(&sz);
 
-    Rt = getRegisterX();
-    need(',');
-	NextToken();
-	if (token == '#') {
+	Rt = getRegisterX();
+	need(',');
+	p = inptr;
+	Ra = getRegisterX();
+	if (Ra == -1) {
+		inptr = p;
+		NextToken();
 		mb = expr();
 		gmb = true;
 	}
-	else {
-		prevToken();
-		Ra = getRegisterX();
-	}
 	need(',');
-	NextToken();
-	if (token == '#') {
+	p = inptr;
+	Rb = getRegisterX();
+	if (Rb == -1) {
+		inptr = p;
+		NextToken();
 		me = expr();
 		gme = true;
 	}
-	else {
-		prevToken();
-		Rb = getRegisterX();
-	}
 	need(',');
-	NextToken();
-	if (token == '#') {
+	p = inptr;
+	Rc = getRegisterX();
+	if (Rc == -1) {
+		inptr = p;
+		NextToken();
 		val = expr();
 		gval = true;
 	}
-	else {
-		prevToken();
-		Rc = getRegisterX();
-	}
-
 	op =
 		(oc << 44LL) |
-		(gval << 32) |
-		(gme << 31) |
-		(gmb << 30) |
+		((gval?1LL:0LL) << 32LL) |
+		((gme?1LL:0LL) << 31LL) |
+		((gmb?1:0) << 30) |
 		(Rt << 23) |
 		(1 << 6) |
 		0x22;
@@ -2497,6 +2506,7 @@ static void process_bitfield(int64_t oc)
 		op |= (Rc << 18);
 
 	emit_insn(op, 0, 6);
+	ScanToEOL();
 }
 
 
@@ -2508,24 +2518,26 @@ static void process_bra(int oc)
 {
     int Ra = 0, Rb = 0;
     int64_t val;
-    int64_t disp;
+    int64_t disp, cdisp;
 	bool ins48 = false;
 
     NextToken();
     val = expr();
     disp = val - (code_address + 4LL);
+	cdisp = val - (code_address + 2LL);
 	if (!IsNBit(disp, 12)) {
+		error("Branch displacement too large");
 		disp = val - (code_address + 6LL);
 		ins48 = true;
 	}
 	disp >>= 1;
-	if (disp+1 > -512 && disp+1 < 512) {	// disp+1 accounts for instruction size of 2 not 4
-		disp++;
+	cdisp >>= 1;
+	if (cdisp > -512 && cdisp < 512) {	// disp+1 accounts for instruction size of 2 not 4
 		emit_insn(
 			(7 << 12) |
-			(((disp >> 6) & 0xf) << 8) |
+			(((cdisp >> 6) & 0xf) << 8) |
 			(2 << 6) |
-			(disp & 0x3f), 0, 2
+			(cdisp & 0x3f), 0, 2
 		);
 		return;
 	}
@@ -2799,7 +2811,7 @@ static void process_inc(int64_t oc)
 	if (neg) incamt = -incamt;
 	if (Rb >= 0) {
        if (disp != 0)
-           printf("displacement not allowed with indexed addressing.\r\n");
+           error("displacement not allowed with indexed addressing");
        oc = 0x1A;  // INCX
 	   // ToDo: fix this
        emit_insn(
@@ -3221,19 +3233,19 @@ static void process_sv(int64_t opcode6)
 
 static void process_ldi()
 {
-    int Ra = 0;
-    int Rt;
-    int64_t val;
+  int Ra = 0;
+  int Rt;
+  int64_t val;
 	char *p;
 	int sz = 3;
 
-    p = inptr;
+  p = inptr;
 	if (*p=='.')
 		getSz(&sz);
 	sz &= 3;
-    Rt = getRegisterX();
-    expect(',');
-    val = expr();
+  Rt = getRegisterX();
+  expect(',');
+  val = expr();
 	if (IsNBit(val, 5) && Rt != 0) {
 		emit_insn(
 			(1 << 12) |
@@ -4553,6 +4565,16 @@ void FT64_processMaster()
         case tk_eor: process_rrop(0x0A,0x0A); break;
         case tk_eori: process_riop(0x0A); break;
         case tk_extern: process_extern(); break;
+				case tk_file:
+					NextToken();
+					if (token==tk_strconst)
+						mname = std::string(laststr);
+					//NextToken();
+					//if (token == ',') {
+					//	NextToken();
+					//	lineno = expr();
+					//}
+					break;
 		case tk_ftoi:	process_ftoi(0x12); break;
 		case tk_fadd:	process_fprrop(0x04); break;
         case tk_fbeq:	process_fbcc(0); break;
@@ -4596,6 +4618,7 @@ void FT64_processMaster()
 		case tk_lvw: ProcessLoadVolatile(0x3B,8); break;
         case tk_lw:  process_load(0x20,4); break;
         case tk_lwr:  process_load(0x1D,0); break;
+				case tk_macro:	process_macro(); break;
 		case tk_memdb: emit_insn(0x04400002,0,4); break;
 		case tk_memsb: emit_insn(0x04440002,0,4); break;
 		case tk_message: process_message(); break;

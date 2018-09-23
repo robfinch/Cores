@@ -4,7 +4,7 @@
 class Arg
 {
 public:
-	char text[120];
+	std::string text;
 public:
 	void Get();
 	void Clear();
@@ -14,7 +14,7 @@ class Arglist
 {
 public:
 	int count;
-	Arg args[10];
+	Arg args[20];
 public:
 	void Get();
 };
@@ -24,12 +24,50 @@ class Macro
 public:
 	static int inst;
 	char *body;	// template for macro body
+	Arglist parms;
 public:
-	char *SubArgs(Arglist *args);
-	char *GetArg();
-	char *GetBody(char *parmlist[]);
-	int GetParmList(char *[]);
-	void Substitute(char *, int);
+	char *SubArgs(Arglist *al);
+	//char *GetArg();
+	char *GetBody();
+	int GetParmList();
+	static void Substitute(char *, int);
+};
+
+class FileInfo
+{
+public:
+	std::string name;
+	int lineno;
+};
+
+class FilenameStack
+{
+public:
+	FileInfo stack[21];
+	int sp;
+public:
+	FilenameStack() { sp = 0; };
+	void Push(std::string nm, int ln) {
+		if (sp > 20) {
+			printf("Too many nested files.\n");
+			return;
+		}
+		stack[sp].name = nm;
+		stack[sp].lineno = ln;
+		sp++;
+	}
+	void Pop(std::string *nm, int *ln) {
+		if (sp == 0) {
+			printf("Filename stack underflow.\n");
+			return;
+		}
+		--sp;
+		*nm = stack[sp].name;
+		*ln = stack[sp].lineno;
+	}
+	FileInfo *GetTos() {
+		return (&stack[sp - 1]);
+	}
 };
 
 #endif
