@@ -221,6 +221,7 @@
 `define JAL	    6'h18
 `define CALL    6'h19
 `define INC			6'h1A
+`define LFx			6'h1B
 `define SGTUI		6'h1C
 `define LWR     6'h1D
 `define CACHE   6'h1E
@@ -237,7 +238,9 @@
 `define LUI			6'h27
 `define JMP     6'h28
 `define RET     6'h29
+`define SFx			6'h2B
 `define SGTI		6'h2C
+`define CMPRSSD	6'h2D
 `define MODI    6'h2E
 `define AMO			6'h2F
 `define AMO_SWAP	6'h00

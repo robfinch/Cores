@@ -24,6 +24,7 @@
 //
 `define SIM		1'b1
 //`define SUPPORT_SMT		1'b1
+`define SUPPORT_VECTOR	1'b1
 //`define DEBUG_LOGIC 1'b1
 
 `define AMSB			31

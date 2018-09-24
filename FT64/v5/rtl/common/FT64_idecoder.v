@@ -737,6 +737,7 @@ casez(isn[`INSTRUCTION_OP])
 `CAS:       IsRFW = TRUE;
 `AMO:				IsRFW = TRUE;
 `CSRRW:			IsRFW = TRUE;
+`LUI:				IsRFW = TRUE;
 default:    IsRFW = FALSE;
 endcase
 endfunction
@@ -940,11 +941,14 @@ begin
 	bus <= 144'h0;
 	bus[`IB_CONST] <= instr[6]==1'b1 ? {{34{instr[47]}},instr[47:18]} :
 																			{{50{instr[31]}},instr[31:18]};
-	case(instr[7:6])
-	2'b00:	bus[`IB_LN] <= 3'd4;
-	2'b01:	bus[`IB_LN] <= 3'd6;
-	default: bus[`IB_LN] <= 3'd2;
-	endcase
+	if (instr[`INSTRUCTION_OP]==`CMPRSSD)
+		bus[`IB_LN] <= 3'd2;
+	else
+		case(instr[7:6])
+		2'b00:	bus[`IB_LN] <= 3'd4;
+		2'b01:	bus[`IB_LN] <= 3'd6;
+		default: bus[`IB_LN] <= 3'd2;
+		endcase
 //	bus[`IB_RT]		 <= fnRt(instr,ven,vl,thrd) | {thrd,7'b0};
 //	bus[`IB_RC]		 <= fnRc(instr,ven,thrd) | {thrd,7'b0};
 //	bus[`IB_RA]		 <= fnRa(instr,ven,vl,thrd) | {thrd,7'b0};

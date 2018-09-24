@@ -34,6 +34,7 @@
 //
 module FT64_fetchbuf(rst, clk4x, clk, fcu_clk,
 	cs_i, cyc_i, stb_i, ack_o, we_i, adr_i, dat_i,
+	cmpgrp,
 	freezePC, thread_en,
 	regLR,
     insn0, insn1, phit,
@@ -72,6 +73,7 @@ output ack_o;
 input we_i;
 input [15:0] adr_i;
 input [31:0] dat_i;
+input [2:0] cmpgrp;
 input freezePC;
 input thread_en;
 input [4:0] regLR;
@@ -164,11 +166,14 @@ endfunction
 
 function [3:0] fnInsLength;
 input [47:0] ins;
-case(ins[7:6])
-2'd0:	fnInsLength = 4'd4;
-2'd1:	fnInsLength = 4'd6;
-default:	fnInsLength = 4'd2;
-endcase
+if (ins[`INSTRUCTION_OP]==`CMPRSSD)
+	fnInsLength = 4'd2;
+else
+	case(ins[7:6])
+	2'd0:	fnInsLength = 4'd4;
+	2'd1:	fnInsLength = 4'd6;
+	default:	fnInsLength = 4'd2;
+	endcase
 endfunction
 
 
@@ -191,12 +196,12 @@ FT64_iexpander ux2
 // Table of decompressed instructions.
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 assign ack_o = cs_i & cyc_i & stb_i;
-reg [47:0] DecompressTable [0:1023];
+reg [47:0] DecompressTable [0:2047];
 always @(posedge clk)
 	if (cs_i & cyc_i & stb_i & we_i)
-		DecompressTable[adr_i[11:2]] <= dat_i;
-wire [47:0] expand0 = DecompressTable[insn0[15:6]];
-wire [47:0] expand1 = DecompressTable[insn1[15:6]];
+		DecompressTable[adr_i[12:3]] <= dat_i;
+wire [47:0] expand0 = DecompressTable[{cmpgrp,insn0[15:8]}];
+wire [47:0] expand1 = DecompressTable[{cmpgrp,insn1[15:8]}];
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
@@ -798,7 +803,9 @@ assign fetchbuf1_thrd  = thread_en;
 
 always @*
 begin
-	if (insn0[7:6]==2'b00 && insn0[`INSTRUCTION_OP]==`EXEC)
+	if (insn0[5:0]==`CMPRSSD)
+		fetchbuf0_insln <= 4'd2;
+	else if (insn0[7:6]==2'b00 && insn0[`INSTRUCTION_OP]==`EXEC)
 		fetchbuf0_insln <= fnInsLength(codebuf0);
 	else
 		fetchbuf0_insln <= fnInsLength(insn0);
@@ -806,7 +813,9 @@ end
 
 always @*
 begin
-	if (insn1[7:6]==2'b00 && insn1[`INSTRUCTION_OP]==`EXEC)
+	if (insn1[5:0]==`CMPRSSD)
+		fetchbuf1_insln <= 4'd2;
+	else if (insn1[7:6]==2'b00 && insn1[`INSTRUCTION_OP]==`EXEC)
 		fetchbuf1_insln <= fnInsLength(codebuf1);
 	else
 		fetchbuf1_insln <= fnInsLength(insn1);
@@ -816,7 +825,9 @@ reg [47:0] cinsn0, cinsn1;
 
 always @*
 begin
-	if (insn0[7:6]==2'b00 && insn0[`INSTRUCTION_OP]==`EXEC)
+	if (insn0[5:0]==`CMPRSSD)
+		cinsn0 <= expand0;
+	else if (insn0[7:6]==2'b00 && insn0[`INSTRUCTION_OP]==`EXEC)
 		cinsn0 <= codebuf0;
 	else if (insn0[7])
 		cinsn0 <= xinsn0;
@@ -826,7 +837,9 @@ end
 
 always @*
 begin
-	if (insn1[7:6]==2'b00 && insn1[`INSTRUCTION_OP]==`EXEC)
+	if (insn1[5:0]==`CMPRSSD)
+		cinsn1 <= expand1;
+	else if (insn1[7:6]==2'b00 && insn1[`INSTRUCTION_OP]==`EXEC)
 		cinsn1 <= codebuf1;
 	else if (insn1[7])
 		cinsn1 <= xinsn1;

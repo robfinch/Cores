@@ -1114,9 +1114,9 @@ case(instr[`INSTRUCTION_OP])
 `LUI:
  	begin
  		if (instr[7:6]==2'b01)
- 			o[63:0] = {instr[47:13],30'd0};
+ 			o = {instr[47:13],30'd0};
  		else
- 			o[63:0] = {{15{instr[31]}},instr[31:13],30'd0};
+ 			o = {{15{instr[31]}},instr[31:13],30'd0};
 	end
 `ADDI:	o[63:0] = a + b;
 `SLTI:	o[63:0] = $signed(a) < $signed(b);
@@ -1143,17 +1143,18 @@ case(instr[`INSTRUCTION_OP])
 			end
 `LWR,`SWC,`CAS:
 			begin
-				o[63:0] = a + b;
+				o = a + b;
 			end
 `LV,`SV:    begin
-				o[63:0] = a + b + {ven,3'b0};
+				o = a + b + {ven,3'b0};
 			end
-`CSRRW:     case(instr[27:18])
-			10'h044:	o[63:0] = BIG ? csr | {thrd,24'h0} : 64'hDDDDDDDDDDDDDDDD;
-			default:	o[63:0] = BIG ? csr : 64'hDDDDDDDDDDDDDDDD;
+`CSRRW:     
+			case(instr[27:18])
+			10'h044:	o = BIG ? (csr | {39'd0,thrd,24'h0}) : 64'hDDDDDDDDDDDDDDDD;
+			default:	o = BIG ? csr : 64'hDDDDDDDDDDDDDDDD;
 			endcase
-`BITFIELD:  o[63:0] = BIG ? bfout : 64'hCCCCCCCCCCCCCCCC;
-default:    o[63:0] = 64'hDEADDEADDEADDEAD;
+`BITFIELD:  o = BIG ? bfout : 64'hCCCCCCCCCCCCCCCC;
+default:    o = 64'hDEADDEADDEADDEAD;
 endcase  
 end
 

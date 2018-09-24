@@ -37,8 +37,7 @@
 // You should have received a copy of the GNU General Public License        
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.    
 //
-// Approx. 100,000 LUTs. 160,000 LC's.
-// 38,000LUTs???
+// Approx 41,000 LUTs. 66,000 LC's.
 // ============================================================================
 //
 `include "FT64_config.vh"
@@ -92,7 +91,7 @@ parameter DEBUG = 1'b0;
 parameter NMAP = QENTRIES;
 parameter BRANCH_PRED = 1'b0;
 parameter SUP_TXE = 1'b0;
-parameter SUP_VECTOR = 1;
+parameter SUP_VECTOR = `SUPPORT_VECTOR;
 parameter DBW = 64;
 parameter ABW = 32;
 parameter AMSB = ABW-1;
@@ -389,7 +388,6 @@ reg StatusHWI;
 reg [47:0] insn0, insn1, insn2;
 wire [47:0] insn0a, insn1b, insn2b;
 reg [47:0] insn1a, insn2a;
-reg tgtq;
 // Only need enough bits in the seqnence number to cover the instructions in
 // the queue plus an extra count for skipping on branch misses. In this case
 // that would be four bits minimum (count 0 to 8). 
@@ -922,14 +920,16 @@ FT64_regfile2w6r_oc #(.RBIT(RBIT)) urf1
 assign rfoc0 = Rc0[11:6]==6'h3F ? vm[Rc0[2:0]] : rfoc0a;
 assign rfoc1 = Rc1[11:6]==6'h3F ? vm[Rc1[2:0]] : rfoc1a;
 
-function [2:0] fnInsLength;
+function [3:0] fnInsLength;
 input [47:0] ins;
-case(ins[7:6])
-2'b00:	fnInsLength = 3'd4;
-2'b01:	fnInsLength = 3'd6;
-2'b10:	fnInsLength = 3'd2;
-2'b11:	fnInsLength = 3'd2;
-endcase
+if (ins[`INSTRUCTION_OP]==`CMPRSSD)
+	fnInsLength = 4'd2;
+else
+	case(ins[7:6])
+	2'd0:	fnInsLength = 4'd4;
+	2'd1:	fnInsLength = 4'd6;
+	default:	fnInsLength = 4'd2;
+	endcase
 endfunction
 
 wire [`ABITS] pc0plus6 = pc0 + 32'd6;
@@ -1727,6 +1727,7 @@ casez(isn[`INSTRUCTION_OP])
 `RET:   fnRt = {rgs[thrd],1'b0,isn[`INSTRUCTION_RA]};
 `LV:    fnRt = {vqei,1'b1,isn[`INSTRUCTION_RB]};
 `AMO:	fnRt = isn[31] ? {rgs[thrd],1'b0,isn[`INSTRUCTION_RB]} : {rgs[thrd],1'b0,isn[`INSTRUCTION_RC]};
+`LUI:	fnRt = {rgs[thrd],1'b0,isn[`INSTRUCTION_RA]};
 default:    fnRt = {rgs[thrd],1'b0,isn[`INSTRUCTION_RB]};
 endcase
 endfunction
@@ -1950,6 +1951,7 @@ casez(isn[`INSTRUCTION_OP])
 `RET:   fnRt = {rgs,1'b0,isn[`INSTRUCTION_RA]};
 `LV:    fnRt = {vqei,1'b1,isn[`INSTRUCTION_RB]};
 `AMO:	fnRt = isn[31] ? {rgs,1'b0,isn[`INSTRUCTION_RB]} : {rgs,1'b0,isn[`INSTRUCTION_RC]};
+`LUI:	fnRt = {rgs,1'b0,isn[`INSTRUCTION_RA]};
 default:    fnRt = {rgs,1'b0,isn[`INSTRUCTION_RB]};
 endcase
 endfunction
@@ -2617,6 +2619,7 @@ casez(isn[`INSTRUCTION_OP])
 `CAS:       IsRFW = TRUE;
 `AMO:				IsRFW = TRUE;
 `CSRRW:			IsRFW = TRUE;
+`LUI:				IsRFW = TRUE;
 default:    IsRFW = FALSE;
 endcase
 endfunction
@@ -3027,6 +3030,7 @@ FT64_fetchbuf #(AMSB,RSTPC) ufb1
   .we_i(we_o),
   .adr_i(adr_o[15:0]),
   .dat_i(dat_o[31:0]),
+  .cmpgrp(cr0[10:8]),
   .freezePC(freezePC),
   .regLR(regLR),
   .thread_en(thread_en),
@@ -5161,6 +5165,15 @@ begin
 			|| (branchmiss && branchmiss_thrd == iqentry_thrd[commit0_id[`QBITS]] && iqentry_source[ commit1_id[`QBITS] ]));
 	end
 	regIsValid[0] = `VAL;
+	regIsValid[32] = `VAL;
+	regIsValid[64] = `VAL;
+	regIsValid[128] = `VAL;
+`ifdef SMT
+	regIsValid[144] = `VAL;
+	regIsValid[160] = `VAL;
+	regIsValid[192] = `VAL;
+	regIsValid[224] = `VAL;
+`endif
 end
 
 // Wait until the cycle after Ra becomes valid to give time to read
@@ -5369,10 +5382,10 @@ end
 always @(posedge clk)
 if (rst) begin
 `ifdef SUPPORT_SMT
-     mstatus[0] <= 64'h0007;	// select register set #0 for thread 0
-     mstatus[1] <= 64'h8007;	// select register set #2 for thread 1
+     mstatus[0] <= 64'h000F;	// select register set #0 for thread 0
+     mstatus[1] <= 64'h800F;	// select register set #2 for thread 1
 `else
-     mstatus <= 64'h0007;	// select register set #0 for thread 0
+     mstatus <= 64'h000F;	// select register set #0 for thread 0
 `endif
     for (n = 0; n < QENTRIES; n = n + 1) begin
        iqentry_v[n] <= `INV;
@@ -5515,7 +5528,7 @@ if (rst) begin
      adr_o <= RSTPC;
      icl_o <= `LOW;      	// instruction cache load
      cr0 <= 64'd0;
-     cr0[13:8] <= 6'd0;		// select register set #0
+     cr0[13:8] <= 6'd0;		// select compressed instruction group #0
      cr0[30] <= TRUE;    	// enable data caching
      cr0[32] <= TRUE;    	// enable branch predictor
      cr0[16] <= 1'b0;		// disable SMT
@@ -5525,7 +5538,6 @@ if (rst) begin
      pcr2 <= 64'd0;
     for (n = 0; n < PREGS; n = n + 1)
          rf_v[n] <= `VAL;
-     tgtq <= FALSE;
      fp_rm <= 3'd0;			// round nearest even - default rounding mode
      fpu_csr[37:32] <= 5'd31;	// register set #31
      waitctr <= 64'd0;
@@ -5721,7 +5733,6 @@ else begin
 		            	seq_num1 <= seq_num1 + 5'd1;
 		            else
 		            	seq_num <= seq_num + 5'd1;
-		             tgtq <= FALSE;
 		            if (fetchbuf1_rfw) begin
 		                 rf_source[ Rt1s ] <= { 1'b0, fetchbuf1_memld, tail0 };	// top bit indicates ALU/MEM bus
 		                 rf_v [Rt1s] <= `INV;
@@ -5739,7 +5750,6 @@ else begin
 			            	seq_num1 <= seq_num1 + 5'd2;
 			            else
 			            	seq_num <= seq_num + 5'd2;
-			             tgtq <= FALSE;
 			            if (fetchbuf1_rfw) begin
 			                 rf_source[ Rt1s ] <= { 1'b0, fetchbuf1_memld, tail1 };	// top bit indicates ALU/MEM bus
 			                 rf_v [Rt1s] <= `INV;
@@ -5752,7 +5762,6 @@ else begin
 		            	seq_num1 <= seq_num1 + 5'd1;
 		            else
 		            	seq_num <= seq_num + 5'd1;
-		             tgtq <= FALSE;
 		            if (fetchbuf1_rfw) begin
 		                 rf_source[ Rt1s ] <= { 1'b0, fetchbuf1_memld, tail0 };	// top bit indicates ALU/MEM bus
 		                 rf_v [Rt1s] <= `INV;
@@ -5762,68 +5771,7 @@ else begin
 
 	    2'b10:
 	    	if (canq1) begin
-//		    $display("queued1: %d", queued1);
-//			if (!IsBranch(fetchbuf0_instr))		panic <= `PANIC_FETCHBUFBEQ;
-//			if (!predict_taken0)	panic <= `PANIC_FETCHBUFBEQ;
-			//
-			// this should only happen when the first instruction is a BEQ-backwards and the IQ
-			// happened to be full on the previous cycle (thus we deleted fetchbuf1 but did not
-			// enqueue fetchbuf0) ... probably no need to check for LW -- sanity check, just in case
-			//
-	            if (IsVector(fetchbuf0_instr) && SUP_VECTOR) begin
-	                 vqe0 <= vqe0 + 4'd1;
-	                if (IsVCmprss(fetchbuf0_instr)) begin
-	                    if (vm[fetchbuf0_instr[25:23]][vqe0])
-	                         vqet0 <= vqet0 + 4'd1;
-	                end
-	                else
-	                     vqet0 <= vqet0 + 4'd1;
-	                if (vqe0 >= vl-2)
-	                	 nop_fetchbuf <= fetchbuf ? 4'b1000 : 4'b0010;
-		    		enque0(tail0, fetchbuf0_thrd ? seq_num1 : seq_num, vqe0);
-		    		if (fetchbuf0_thrd)
-		    			seq_num1 <= seq_num1 + 5'd1;
-		    		else
-		    			seq_num <= seq_num + 5'd1;
-		             tgtq <= FALSE;
-		    		if (fetchbuf0_rfw) begin
-		                 rf_source[ Rt0s ] <= { 1'b0, fetchbuf0_memld, tail0 };    // top bit indicates ALU/MEM bus
-		                 rf_v[Rt0s] <= `INV;
-		            end
-	                if (canq2) begin
-			            if (vqe0 < vl-2) begin
-			                 vqe0 <= vqe0 + 4'd2;
-			                if (IsVCmprss(fetchbuf0_instr)) begin
-			                    if (vm[fetchbuf0_instr[25:23]][vqe0+6'd1])
-			                         vqet0 <= vqet0 + 4'd2;
-			                end
-			                else
-			                     vqet0 <= vqet0 + 4'd2;
-			    			enque0(tail1, fetchbuf0_thrd ? seq_num1 + 5'd1 : seq_num+5'd1, vqe0 + 6'd1);
-				    		if (fetchbuf0_thrd)
-				    			seq_num1 <= seq_num1 + 5'd2;
-				    		else
-				    			seq_num <= seq_num + 5'd2;
-				             tgtq <= FALSE;
-				    		if (fetchbuf0_rfw) begin
-				                 rf_source[ Rt0s ] <= { 1'b0, fetchbuf0_memld, tail1 };    // top bit indicates ALU/MEM bus
-				                 rf_v[Rt0s] <= `INV;
-				            end
-			            end
-	            	end
-	            end
-	            else begin
-		    		enque0(tail0, fetchbuf0_thrd ? seq_num1 : seq_num, 6'd0);
-		    		if (fetchbuf0_thrd)
-		    			seq_num1 <= seq_num1 + 5'd1;
-		    		else
-		    			seq_num <= seq_num + 5'd1;
-		             tgtq <= FALSE;
-		    		if (fetchbuf0_rfw) begin
-		                 rf_source[ Rt0s ] <= { 1'b0, fetchbuf0_memld, tail0 };    // top bit indicates ALU/MEM bus
-		                 rf_v[Rt0s] <= `INV;
-		            end
-		        end
+	    		enque0x();
 		    end
 
 	    2'b11:
@@ -5833,16 +5781,7 @@ else begin
 				// but only if the following instruction is in the same thread. Otherwise we want to queue two.
 				//
 				if (take_branch0 && fetchbuf1_thrd==fetchbuf0_thrd) begin
-		             tgtq <= FALSE;
-		            enque0(tail0,fetchbuf0_thrd ? seq_num1 : seq_num,6'd0);
-		    		if (fetchbuf0_thrd)
-		    			seq_num1 <= seq_num1 + 5'd1;
-		    		else
-		    			seq_num <= seq_num + 5'd1;
-					if (fetchbuf0_rfw) begin
-					     rf_source[ Rt0s ] <= {1'b0,fetchbuf0_memld, tail0};
-					     rf_v [ Rt0s ] <= `INV;
-					end
+					enque0x();
 				end
 
 				else begin	// fetchbuf0 doesn't contain a predicted branch
@@ -5866,7 +5805,6 @@ else begin
 		                if (vqe0 >= vl-2)
 		                	nop_fetchbuf <= fetchbuf ? 4'b1000 : 4'b0010;
 		            end
-		            tgtq <= FALSE;
 		            if (vqe0 < vl || !IsVector(fetchbuf0_instr)) begin
 			            enque0(tail0, fetchbuf0_thrd ? seq_num1 : seq_num, vqe0);
 			    		if (fetchbuf0_thrd)
@@ -5914,58 +5852,13 @@ else begin
 					    		end
 
 								// SOURCE 1 ...
-								// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
-								if (~fetchbuf0_rfw) begin
-								     iqentry_a1_v [tail1] <= regIsValid[Ra1s];
-								     iqentry_a1_s [tail1] <= rf_source [Ra1s];
-								end
-								// otherwise, previous instruction does write to RF ... see if overlap
-								else if (Ra1 == Rt0) begin
-								    // if the previous instruction is a LW, then grab result from memq, not the iq
-								     iqentry_a1_v [tail1] <= `INV;
-								     iqentry_a1_s [tail1] <= { 1'b0, fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
-								end
-								// if no overlap, get info from rf_v and rf_source
-								else begin
-								     iqentry_a1_v [tail1] <= regIsValid[Ra1s];
-								     iqentry_a1_s [tail1] <= rf_source [Ra1s];
-								end
+								a1_vs();
 
 								// SOURCE 2 ...
-								// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
-								if (~fetchbuf0_rfw) begin
-								     iqentry_a2_v [tail1] <= regIsValid[Rb1s];
-								     iqentry_a2_s [tail1] <= rf_source[ Rb1s ];
-								end
-								// otherwise, previous instruction does write to RF ... see if overlap
-								else if (Rb1s == Rt0s) begin
-								    // if the previous instruction is a LW, then grab result from memq, not the iq
-								     iqentry_a2_v [tail1] <= `INV;
-								     iqentry_a2_s [tail1] <= { 1'b0, fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
-								end
-								// if no overlap, get info from rf_v and rf_source
-								else begin
-								     iqentry_a2_v [tail1] <= regIsValid[Rb1s];
-								     iqentry_a2_s [tail1] <= rf_source[ Rb1s ];
-								end
+								a2_vs();
 
 								// SOURCE 3 ...
-								// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
-								if (~fetchbuf0_rfw) begin
-								     iqentry_a3_v [tail1] <= regIsValid[Rc1s];
-								     iqentry_a3_s [tail1] <= rf_source[ Rc1s ];
-								end
-								// otherwise, previous instruction does write to RF ... see if overlap
-								else if (Rc1 == Rt0) begin
-								    // if the previous instruction is a LW, then grab result from memq, not the iq
-								     iqentry_a3_v [tail1] <= `INV;
-								     iqentry_a3_s [tail1] <= { 1'b0, fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
-								end
-								// if no overlap, get info from rf_v and rf_source
-								else begin
-								     iqentry_a3_v [tail1] <= regIsValid[Rc1s];
-								     iqentry_a3_s [tail1] <= rf_source[ Rc1s ];
-								end
+								a3_vs();
 
 								// if the two instructions enqueued target the same register, 
 								// make sure only the second writes to rf_v and rf_source.
@@ -6054,58 +5947,13 @@ else begin
 					    		end
 
 								// SOURCE 1 ...
-								// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
-								if (~fetchbuf0_rfw) begin
-								     iqentry_a1_v [tail1] <= regIsValid[Ra1s];
-								     iqentry_a1_s [tail1] <= rf_source [Ra1s];
-								end
-								// otherwise, previous instruction does write to RF ... see if overlap
-								else if (Ra1 == Rt0) begin
-								    // if the previous instruction is a LW, then grab result from memq, not the iq
-								     iqentry_a1_v [tail1] <= `INV;
-								     iqentry_a1_s [tail1] <= { 1'b0, fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
-								end
-								// if no overlap, get info from rf_v and rf_source
-								else begin
-								     iqentry_a1_v [tail1] <= regIsValid[Ra1s];
-								     iqentry_a1_s [tail1] <= rf_source [Ra1s];
-								end
+								a1_vs();
 
-								// SOURCE 2 ...
-								// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
-								if (~fetchbuf0_rfw) begin
-								     iqentry_a2_v [tail1] <= regIsValid[Rb1s];
-								     iqentry_a2_s [tail1] <= rf_source[ Rb1s ];
-								end
-								// otherwise, previous instruction does write to RF ... see if overlap
-								else if (Rb1s == Rt0s) begin
-								    // if the previous instruction is a LW, then grab result from memq, not the iq
-								     iqentry_a2_v [tail1] <= `INV;
-								     iqentry_a2_s [tail1] <= { 1'b0, fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
-								end
-								// if no overlap, get info from rf_v and rf_source
-								else begin
-								     iqentry_a2_v [tail1] <= regIsValid[Rb1s];
-								     iqentry_a2_s [tail1] <= rf_source[ Rb1s ];
-								end
+								// SOURCE 2 ..
+								a2_vs();
 
 								// SOURCE 3 ...
-								// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
-								if (~fetchbuf0_rfw) begin
-								     iqentry_a3_v [tail1] <= regIsValid[Rc1s];
-								     iqentry_a3_s [tail1] <= rf_source[ Rc1s ];
-								end
-								// otherwise, previous instruction does write to RF ... see if overlap
-								else if (Rc1 == Rt0) begin
-								    // if the previous instruction is a LW, then grab result from memq, not the iq
-								     iqentry_a3_v [tail1] <= `INV;
-								     iqentry_a3_s [tail1] <= { 1'b0, fetchbuf0_mem &IsLoad(fetchbuf0_instr), tail0 };
-								end
-								// if no overlap, get info from rf_v and rf_source
-								else begin
-								     iqentry_a3_v [tail1] <= regIsValid[Rc1s];
-								     iqentry_a3_s [tail1] <= rf_source[ Rc1s ];
-								end
+								a3_vs();
 
 								// if the two instructions enqueued target the same register, 
 								// make sure only the second writes to rf_v and rf_source.
@@ -6139,62 +5987,13 @@ else begin
 					    		end
 
 								// SOURCE 1 ...
-								// if previous instruction writes nothing to RF, then get info from rf_v and rf_source
-								if (~fetchbuf0_rfw) begin
-								     iqentry_a1_v [tail1] <= regIsValid[Ra1s];
-								     iqentry_a1_s [tail1] <= rf_source [Ra1s];
-								end
-								// otherwise, previous instruction does write to RF ... see if overlap
-								else if (Ra1s == Rt0s) begin
-								     iqentry_a1_v [tail1] <= `INV;
-								     iqentry_a1_s [tail1] <= { 1'b0, fetchbuf0_memld, tail0 };
-								end
-								// if no overlap, get info from regIsValid and rf_source
-								else begin
-								     iqentry_a1_v [tail1] <= regIsValid[Ra1s];
-								     iqentry_a1_s [tail1] <= rf_source [Ra1s];
-								end
+								a1_vs();
 
 								// SOURCE 2 ...
-								// if the argument is an immediate or not needed, we're done
-								$display("Rb1s=%h, Rt0s=%h", Rb1s, Rt0s);
-								$display("instr=%h", fetchbuf1_instr);
-								// if previous instruction writes nothing to RF, then get info from regIsValid and rf_source
-								if (~fetchbuf0_rfw) begin
-									$display("fetchbuf0_rfw=0");
-								     iqentry_a2_v [tail1] <= regIsValid[Rb1s];
-								     iqentry_a2_s [tail1] <= rf_source[ Rb1s ];
-								end
-								// otherwise, previous instruction does write to RF ... see if overlap
-								else if (Rb1s == Rt0s) begin
-								    // if the previous instruction is a LW, then grab result from memq, not the iq
-								     iqentry_a2_v [tail1] <= `INV;
-								     iqentry_a2_s [tail1] <= { 1'b0, fetchbuf0_memld, tail0 };
-								end
-								// if no overlap, get info from regIsValid and rf_source
-								else begin
-										$display("No overlap");
-								     iqentry_a2_v [tail1] <= regIsValid[Rb1s];
-								     iqentry_a2_s [tail1] <= rf_source[ Rb1s ];
-								end
+								a2_vs();
 
 								// SOURCE 3 ...
-								// if previous instruction writes nothing to RF, then get info from regIsValid and rf_source
-								if (~fetchbuf0_rfw) begin
-								     iqentry_a3_v [tail1] <= regIsValid[Rc1s];
-								     iqentry_a3_s [tail1] <= rf_source[ Rc1s ];
-								end
-								// otherwise, previous instruction does write to RF ... see if overlap
-								else if (Rc1s == Rt0s) begin
-								    // if the previous instruction is a LW, then grab result from memq, not the iq
-								     iqentry_a3_v [tail1] <= `INV;
-								     iqentry_a3_s [tail1] <= { 1'b0, fetchbuf0_memld, tail0 };
-								end
-								// if no overlap, get info from regIsValid and rf_source
-								else begin
-								     iqentry_a3_v [tail1] <= regIsValid[Rc1s];
-								     iqentry_a3_s [tail1] <= rf_source[ Rc1s ];
-								end
+								a3_vs();
 
 								// if the two instructions enqueued target the same register, 
 								// make sure only the second writes to regIsValid and rf_source.
@@ -6315,7 +6114,7 @@ if (fcu_wr & ~fcu_done) begin
   end
 	// Only safe place to propagate the miss pc is a0.
 	iqentry_a0[ fcu_id[`QBITS] ] <= fcu_misspc;
-	// Update branch taken indicator.
+	// Update branch target update indicator.
 	if (fcu_jal || fcu_ret || fcu_brk || fcu_rti) begin
 		iqentry_bt[ fcu_id[`QBITS] ] <= `VAL;
 	end
@@ -7085,12 +6884,13 @@ if (~|panic)
   endcase
 
 
-	rf_source[0] <= 0;
-	L1_wr0 <= FALSE;
-	L1_wr1 <= FALSE;
-	L1_invline <= FALSE;
-	icnxt <= FALSE;
-	L2_nxt <= FALSE;
+rf_source[0] <= 0;
+L1_wr0 <= FALSE;
+L1_wr1 <= FALSE;
+L1_wr2 <= FALSE;
+L1_invline <= FALSE;
+icnxt <= FALSE;
+L2_nxt <= FALSE;
 // Instruction cache state machine.
 // On a miss first see if the instruction is in the L2 cache. No need to go to
 // the BIU on an L1 miss.
@@ -7098,41 +6898,43 @@ if (~|panic)
 
 // Capture the previous ic state, used to determine how long to wait in
 // icstate #4.
-	picstate <= icstate;
+picstate <= icstate;
 case(icstate)
 IDLE:
 	// If the bus unit is busy doing an update involving L1_adr or L2_adr
 	// we have to wait.
 	if (bstate != B7 && bstate != B9) begin
 		if (!ihit0) begin
-			L1_adr <= {pcr[5:0],pc0[31:3],3'h0};
-			L2_adr <= {pcr[5:0],pc0[31:3],3'h0};
+			L1_adr <= {pcr[5:0],pc0[31:5],5'h0};
+			L2_adr <= {pcr[5:0],pc0[31:5],5'h0};
 			L1_invline <= TRUE;
 			icwhich <= 2'b00;
 			iccnt <= 3'b00;
 			icstate <= IC2;
 		end
 		else if (!ihit1 && `WAYS > 1) begin
-`ifdef SUPPORT_SMT
-			L1_adr <= {pcr[5:0],pc1[31:3],3'h0};
-			L2_adr <= {pcr[5:0],pc1[31:3],3'h0};
-`else
-			L1_adr <= {pcr[5:0],pc0plus6[31:3],3'h0};
-			L2_adr <= {pcr[5:0],pc0plus6[31:3],3'h0};
-`endif
+			if (thread_en) begin
+				L1_adr <= {pcr[5:0],pc1[31:5],5'h0};
+				L2_adr <= {pcr[5:0],pc1[31:5],5'h0};
+			end
+			else begin
+				L1_adr <= {pcr[5:0],pc0plus6[31:5],5'h0};
+				L2_adr <= {pcr[5:0],pc0plus6[31:5],5'h0};
+			end
 			L1_invline <= TRUE;
 			icwhich <= 2'b01;
 			iccnt <= 3'b00;
 			icstate <= IC2;
 		end
 		else if (!ihit2 && `WAYS > 2) begin
-`ifdef SUPPORT_SMT
-			L1_adr <= {pcr[5:0],pc2[31:3],3'h0};
-			L2_adr <= {pcr[5:0],pc2[31:3],3'h0};
-`else
-			L1_adr <= {pcr[5:0],pc0plus12[31:3],3'h0};
-			L2_adr <= {pcr[5:0],pc0plus12[31:3],3'h0};
-`endif
+			if (thread_en) begin
+				L1_adr <= {pcr[5:0],pc2[31:5],5'h0};
+				L2_adr <= {pcr[5:0],pc2[31:5],5'h0};
+			end
+			else begin
+				L1_adr <= {pcr[5:0],pc0plus12[31:5],5'h0};
+				L2_adr <= {pcr[5:0],pc0plus12[31:5],5'h0};
+			end
 			L1_invline <= TRUE;
 			icwhich <= 2'b10;
 			iccnt <= 3'b00;
@@ -8464,7 +8266,7 @@ begin
 //  	iqentry_Ra   [nn]  <= bus[`IB_RA];
   	iqentry_a0	 [nn]  <= bus[`IB_CONST];
   	iqentry_imm  [nn]  <= bus[`IB_IMM];
-		iqentry_insln[nn]  <= bus[`IB_LN];
+//		iqentry_insln[nn]  <= bus[`IB_LN];
 		iqentry_jal	 [nn]  <= bus[`IB_JAL];
 		iqentry_ret  [nn]  <= bus[`IB_RET];
 		iqentry_irq  [nn]  <= bus[`IB_IRQ];
@@ -8501,6 +8303,104 @@ begin
 end
 endtask
 
+task a1_vs;
+begin
+	// if there is not an overlapping write to the register file.
+	if (Ra1s != Rt0s || !fetchbuf0_rfw) begin
+		iqentry_a1_v [tail1] <= regIsValid[Ra1s];
+		iqentry_a1_s [tail1] <= rf_source [Ra1s];
+	end
+	else begin
+		iqentry_a1_v [tail1] <= `INV;
+		iqentry_a1_s [tail1] <= { 1'b0, fetchbuf0_memld, tail0 };
+	end
+end
+endtask
+
+task a2_vs;
+begin
+	// if there is not an overlapping write to the register file.
+	if (Rb1s != Rt0s || !fetchbuf0_rfw) begin
+		iqentry_a2_v [tail1] <= regIsValid[Rb1s];
+		iqentry_a2_s [tail1] <= rf_source [Rb1s];
+	end
+	else begin
+		iqentry_a2_v [tail1] <= `INV;
+		iqentry_a2_s [tail1] <= { 1'b0, fetchbuf0_memld, tail0 };
+	end
+end
+endtask
+
+task a3_vs;
+begin
+	// if there is not an overlapping write to the register file.
+	if (Rc1s != Rt0s || !fetchbuf0_rfw) begin
+		iqentry_a3_v [tail1] <= regIsValid[Rc1s];
+		iqentry_a3_s [tail1] <= rf_source [Rc1s];
+	end
+	else begin
+		iqentry_a3_v [tail1] <= `INV;
+		iqentry_a3_s [tail1] <= { 1'b0, fetchbuf0_memld, tail0 };
+	end
+end
+endtask
+
+task enque0x;
+begin
+	if (IsVector(fetchbuf0_instr) && SUP_VECTOR) begin
+		vqe0 <= vqe0 + 4'd1;
+		if (IsVCmprss(fetchbuf0_instr)) begin
+			if (vm[fetchbuf0_instr[25:23]][vqe0])
+			vqet0 <= vqet0 + 4'd1;
+		end
+		else
+			vqet0 <= vqet0 + 4'd1;
+		if (vqe0 >= vl-2)
+			nop_fetchbuf <= fetchbuf ? 4'b1000 : 4'b0010;
+		enque0(tail0, fetchbuf0_thrd ? seq_num1 : seq_num, vqe0);
+		if (fetchbuf0_thrd)
+			seq_num1 <= seq_num1 + 5'd1;
+		else
+			seq_num <= seq_num + 5'd1;
+		if (fetchbuf0_rfw) begin
+			rf_source[ Rt0s ] <= { 1'b0, fetchbuf0_memld, tail0 };    // top bit indicates ALU/MEM bus
+			rf_v[Rt0s] <= `INV;
+		end
+		if (canq2) begin
+			if (vqe0 < vl-2) begin
+				vqe0 <= vqe0 + 4'd2;
+				if (IsVCmprss(fetchbuf0_instr)) begin
+					if (vm[fetchbuf0_instr[25:23]][vqe0+6'd1])
+						vqet0 <= vqet0 + 4'd2;
+				end
+				else
+					vqet0 <= vqet0 + 4'd2;
+				enque0(tail1, fetchbuf0_thrd ? seq_num1 + 5'd1 : seq_num+5'd1, vqe0 + 6'd1);
+				if (fetchbuf0_thrd)
+					seq_num1 <= seq_num1 + 5'd2;
+				else
+					seq_num <= seq_num + 5'd2;
+				if (fetchbuf0_rfw) begin
+					rf_source[ Rt0s ] <= { 1'b0, fetchbuf0_memld, tail1 };    // top bit indicates ALU/MEM bus
+					rf_v[Rt0s] <= `INV;
+				end
+			end
+		end
+	end
+	else begin
+		enque0(tail0, fetchbuf0_thrd ? seq_num1 : seq_num, 6'd0);
+		if (fetchbuf0_thrd)
+			seq_num1 <= seq_num1 + 5'd1;
+		else
+			seq_num <= seq_num + 5'd1;
+		if (fetchbuf0_rfw) begin
+			rf_source[ Rt0s ] <= { 1'b0, fetchbuf0_memld, tail0 };    // top bit indicates ALU/MEM bus
+			rf_v[Rt0s] <= `INV;
+		end
+	end
+end
+endtask
+
 // Enqueue fetchbuf0 onto the tail of the instruction queue
 task enque0;
 input [`QBITS] tail;
@@ -8524,6 +8424,7 @@ begin
 	iqentry_out  [tail]    <=    `INV;
 	iqentry_res  [tail]    <=    `ZERO;
 	iqentry_instr[tail]    <=    IsVLS(fetchbuf0_instr) ? (vm[fnM2(fetchbuf0_instr)] ? fetchbuf0_instr : `NOP_INSN) : fetchbuf0_instr;
+	iqentry_insln[tail]		 <=  fetchbuf0_insln;
 	iqentry_pt   [tail]    <=  predict_taken0;
 	iqentry_agen [tail]    <=    `INV;
 	iqentry_state[tail]    <=   IQS_IDLE;
@@ -8578,6 +8479,7 @@ begin
 	iqentry_out  [tail]    <=   `INV;
 	iqentry_res  [tail]    <=   `ZERO;
 	iqentry_instr[tail]    <=   IsVLS(fetchbuf1_instr) ? (vm[fnM2(fetchbuf1_instr)] ? fetchbuf1_instr : `NOP_INSN) : fetchbuf1_instr; 
+	iqentry_insln[tail]		 <=  fetchbuf1_insln;
 	iqentry_pt   [tail]    <=  predict_taken1;
 	iqentry_agen [tail]    <=   `INV;
 	iqentry_state[tail]    <=   IQS_IDLE;

@@ -33,8 +33,6 @@ extern char *pif1;
 extern int first_rodata;
 extern int first_data;
 extern int first_bss;
-extern int htable[100000];
-extern int htblcnt[100000];
 extern int htblmax;
 extern int pass;
 extern int num_cinsns;
@@ -1055,89 +1053,70 @@ static int GetFPSize()
 
 static void emit_insn(int64_t oc, int can_compress, int sz)
 {
-    int ndx;
+	int ndx;
 
-    if (pass==3 && can_compress && gCanCompress) {
-       for (ndx = 0; ndx < htblmax; ndx++) {
-         if ((int)oc == hTable[ndx].opcode) {
-           hTable[ndx].count++;
-           return;
-         }
-       }
-       if (htblmax < 100000) {
-          hTable[htblmax].opcode = (int)oc;
-          hTable[htblmax].count = 1;
-          htblmax++;
-          return;  
-       }
-       error("Too many instructions");
-       return;
-    }
-    if (pass > 3) {
-     if (can_compress && gCanCompress) {
-       for (ndx = 0; ndx < min(128,htblmax); ndx++) {
-         if ((int)oc == hTable[ndx].opcode) {
-           emitCode(((ndx << 6)|0x3F) & 0xff);
-           emitCode(((ndx << 6)|0x3F) >> 8);
-		   num_bytes += 2;
-		   num_insns += 1;
-           return;
-         }
-       }
-     }
-	 if (sz==2) {
-	     emitCode(oc & 255);
-		 emitCode((oc >> 8) & 255);
-	     num_bytes += 2;
-	     num_insns += 1;
-		 num_cinsns += 1;
-		 return;
-	 }
-	 if (sz == 4) {
-		 emitCode(oc & 255);
-		 emitCode((oc >> 8) & 255);
-		 emitCode((oc >> 16) & 255);
-		 emitCode((oc >> 24) & 255);
-		 num_bytes += 4;
-		 num_insns += 1;
-		 return;
-	 }
-	 emitCode(oc & 255);
-	 emitCode((oc >> 8) & 255);
-	 emitCode((oc >> 16) & 255);
-	 emitCode((oc >> 24) & 255);
-	 emitCode((oc >> 32LL) & 255);
-	 emitCode((oc >> 40LL) & 255);
-	 num_bytes += 6;
-	//if (sz==3) {
-	//	emitCode((int)(oc >> 16));
- //	    num_bytes += 2;
-	//	emitCode(oc >> 32);
- //	    num_bytes += 2;
-	//}
-	num_insns += 1;
-    /*
-    if (processOpt==2) {
-       for (ndx = 0; ndx < htblmax; ndx++) {
-         if (oc == hTable[ndx].opcode) {
-           printf("found opcode\n");
-           emitAlignedCode(((ndx & 8) << 4)|0x50|(ndx & 0x7));
-           emitCode(ndx >> 4);
-           return;
-         }
-       }
-     emitAlignedCode(oc & 255);
-     emitCode((oc >> 8) & 255);
-     emitCode((oc >> 16) & 255);
-     emitCode((oc >> 24) & 255);
-    }
-    else {
-     emitAlignedCode(oc & 255);
-     emitCode((oc >> 8) & 255);
-     emitCode((oc >> 16) & 255);
-     emitCode((oc >> 24) & 255);
-    */
-    }
+	switch (sz) {
+	case 6:	oc = oc & 0xffffffffffffLL;	break;// 48-bits max
+	case 4:	oc = oc & 0xffffffffLL; break;
+	default: oc = oc & 0xffffLL; break;
+	}
+	if (sz > 2) {
+		if (pass == 3 && can_compress && gCanCompress) {
+			for (ndx = 0; ndx < htblmax; ndx++) {
+				if (oc == hTable[ndx].opcode) {
+					hTable[ndx].count++;
+					return;
+				}
+			}
+			if (htblmax < 100000) {
+				hTable[htblmax].opcode = oc;
+				hTable[htblmax].count = 1;
+				htblmax++;
+				return;
+			}
+			error("Too many instructions");
+			return;
+		}
+	}
+	if (pass > 3) {
+		if (can_compress && gCanCompress && sz > 2) {
+			for (ndx = 0; ndx < min(256, htblmax); ndx++) {
+				if (oc == hTable[ndx].opcode) {
+					emitCode(0x2D);
+					emitCode(ndx);
+					num_bytes += 2;
+					num_insns += 1;
+					num_cinsns += 1;
+					return;
+				}
+			}
+		}
+		if (sz==2) {
+			emitCode(oc & 255);
+			emitCode((oc >> 8) & 255);
+			num_bytes += 2;
+			num_insns += 1;
+			num_cinsns += 1;
+			return;
+		}
+		if (sz == 4) {
+			emitCode(oc & 255);
+			emitCode((oc >> 8) & 255);
+			emitCode((oc >> 16) & 255);
+			emitCode((oc >> 24) & 255);
+			num_bytes += 4;
+			num_insns += 1;
+			return;
+		}
+		emitCode(oc & 255);
+		emitCode((oc >> 8) & 255);
+		emitCode((oc >> 16) & 255);
+		emitCode((oc >> 24) & 255);
+		emitCode((oc >> 32LL) & 255);
+		emitCode((oc >> 40LL) & 255);
+		num_bytes += 6;
+		num_insns += 1;
+  }
 }
  
 void LoadConstant(int64_t val, int rg)
@@ -1159,13 +1138,14 @@ void LoadConstant(int64_t val, int rg)
 	}
 	if (IsNBit(val, 49)) {
 		emit_insn(
-			((val >> 30) << 13LL) |
+			((val >> 30LL) << 13LL) |
 			(rg << 8) |
 			0x27, !expand_flag, 4);	// LUI
-		if (((val >> 20) & 0xfffffLL) != 0)
+		if (((val >> 20LL) & 0xfffffLL) != 0)
 			emit_insn(
 			(val << 18LL) |
 			(rg << 13) |
+			(rg << 8) |
 			(1 << 6) |
 			0x09, !expand_flag, 6);
 		return;
@@ -1179,6 +1159,7 @@ void LoadConstant(int64_t val, int rg)
 		emit_insn(
 		(val << 18LL) |
 			(rg << 13) |
+			(rg << 8) |
 			(1 << 6) |
 			0x09, !expand_flag, 6);	// ORI
 	return;
@@ -3015,24 +2996,24 @@ static void mem_voperand(int64_t *disp, int *regA, int *regB)
 
 static void process_store(int64_t opcode6, int sz)
 {
-    int Ra,Rb;
-    int Rs;
+  int Ra,Rb;
+  int Rs;
 	int Sc;
-    int64_t disp,val;
+  int64_t disp,val;
 	int64_t aq = 0, rl = 0;
 	int ar;
 
 	GetArBits(&aq, &rl);
 	ar = (int)((aq << 1LL) | rl);
 	Rs = getRegisterX();
-    if (Rs < 0) {
-        printf("Expecting a source register (%d).\r\n", lineno);
-        printf("Line:%.60s\r\n",inptr);
-        ScanToEOL();
-        return;
-    }
-    expect(',');
-    mem_operand(&disp, &Ra, &Rb, &Sc);
+  if (Rs < 0) {
+      printf("Expecting a source register (%d).\r\n", lineno);
+      printf("Line:%.60s\r\n",inptr);
+      ScanToEOL();
+      return;
+  }
+  expect(',');
+  mem_operand(&disp, &Ra, &Rb, &Sc);
 	if (Ra > 0 && Rb > 0) {
 		switch (sz) {
 		case 1: opcode6 = 0x24; break;	// SCX
@@ -3049,8 +3030,8 @@ static void process_store(int64_t opcode6, int sz)
 			0x16,!expand_flag,4);
 		return;
 	}
-    if (Ra < 0) Ra = 0;
-    val = disp;
+  if (Ra < 0) Ra = 0;
+  val = disp;
 	if (Ra == 55)
 		val -= program_address;
 	if (sz == 4 && Ra == regSP) {
@@ -3098,7 +3079,7 @@ static void process_store(int64_t opcode6, int sz)
 			(Rs << 18) |
 			(23 << 13) |
 			(Ra << 8) |
-			0x02,!expand_flag,4);
+			0x16,!expand_flag,4);
 		ScanToEOL();
 		return;
 	}
@@ -3316,15 +3297,15 @@ static void process_ldi()
 
 static void process_load(int64_t opcode6, int sz)
 {
-    int Ra,Rb;
-    int Rt;
+  int Ra,Rb;
+  int Rt;
 	int Sc;
-    char *p;
-    int64_t disp;
-    int64_t val;
+  char *p;
+  int64_t disp;
+  int64_t val;
 	int64_t aq = 0, rl = 0;
 	int ar;
-    int fixup = 5;
+  int fixup = 5;
 
 	GetArBits(&aq, &rl);
 	ar = (int)((aq << 1LL) | rl);
@@ -3333,15 +3314,15 @@ static void process_load(int64_t opcode6, int sz)
 		Rt = getVecRegister();
 	else
 		Rt = getRegisterX();
-    if (Rt < 0) {
-        printf("Expecting a target register (%d).\r\n", lineno);
-        printf("Line:%.60s\r\n",p);
-        ScanToEOL();
-        inptr-=2;
-        return;
-    }
-    expect(',');
-    mem_operand(&disp, &Ra, &Rb, &Sc);
+  if (Rt < 0) {
+      printf("Expecting a target register (%d).\r\n", lineno);
+      printf("Line:%.60s\r\n",p);
+      ScanToEOL();
+      inptr-=2;
+      return;
+  }
+  expect(',');
+  mem_operand(&disp, &Ra, &Rb, &Sc);
 	if (Ra > 0 && Rb > 0) {
 		// Trap LEA, convert to LEAX opcode
 		if (opcode6==0x04) // ADD is really LEA
@@ -3364,7 +3345,7 @@ static void process_load(int64_t opcode6, int sz)
 			0x16,!expand_flag,4);
 		return;
 	}
-    if (Ra < 0) Ra = 0;
+  if (Ra < 0) Ra = 0;
     val = disp;
 	if (Ra == 55)
 		val -= program_address;
@@ -3414,7 +3395,7 @@ static void process_load(int64_t opcode6, int sz)
 			(Rt << 18) |
 			(23 << 13) |
 			(Ra << 8) |
-			0x02,!expand_flag,4);
+			0x16,!expand_flag,4);
 		ScanToEOL();
 		return;
 	}
@@ -3438,19 +3419,19 @@ static void process_load(int64_t opcode6, int sz)
 
 static void process_cache(int opcode6)
 {
-    int Ra,Rb;
+  int Ra,Rb;
 	int Sc;
-    char *p;
-    int64_t disp;
-    int64_t val;
-    int fixup = 5;
+  char *p;
+  int64_t disp;
+  int64_t val;
+  int fixup = 5;
 	int cmd;
 
-    p = inptr;
+  p = inptr;
 	NextToken();
 	cmd = (int)expr() & 0x1f;
-    expect(',');
-    mem_operand(&disp, &Ra, &Rb, &Sc);
+  expect(',');
+  mem_operand(&disp, &Ra, &Rb, &Sc);
 	if (Ra > 0 && Rb > 0) {
 		emit_insn(
 			(opcode6 << 26) |
@@ -4451,7 +4432,7 @@ void FT64_processMaster()
     first_data = 1;
     first_bss = 1;
 	expandedBlock = 0;
-    if (pass<3) {
+    if (pass==3) {
     htblmax = 0;
     for (nn = 0; nn < 100000; nn++) {
       hTable[nn].count = 0;
@@ -4525,7 +4506,7 @@ void FT64_processMaster()
             break;
 		case tk_cache: process_cache(0x1E); break;
 		case tk_call:  process_call(0x19); break;
-        case tk_cli: emit_insn(0xC0000002,0,4); break;
+        case tk_cli: emit_insn(0xC0000002,!expand_flag,4); break;
 		case tk_chk:  process_chk(0x34); break;
 		case tk_cmovenz: process_cmove(0x29); break;
 		//case tk_cmp:  process_rrop(0x06); break;
@@ -4619,8 +4600,8 @@ void FT64_processMaster()
         case tk_lw:  process_load(0x20,4); break;
         case tk_lwr:  process_load(0x1D,0); break;
 				case tk_macro:	process_macro(); break;
-		case tk_memdb: emit_insn(0x04400002,0,4); break;
-		case tk_memsb: emit_insn(0x04440002,0,4); break;
+		case tk_memdb: emit_insn(0x04400002,!expand_flag,4); break;
+		case tk_memsb: emit_insn(0x04440002,!expand_flag,4); break;
 		case tk_message: process_message(); break;
 		case tk_mod: process_rrop(0x16,0x2E); break;
 		case tk_modu: process_rrop(0x14,-1); break;
@@ -4630,13 +4611,13 @@ void FT64_processMaster()
 		case tk_mulu: process_rrop(0x38,0x38); break;
 		//case tk_muluh: process_rrop(0x24, 0x38); break;
 		case tk_neg: process_neg(); break;
-        case tk_nop: emit_insn(0x1C,0,4); break;
+        case tk_nop: emit_insn(0x1C,!expand_flag,4); break;
 		case tk_not: process_rop(0x05); break;
 //        case tk_not: process_rop(0x07); break;
         case tk_or:  process_rrop(0x09,0x09); break;
         case tk_ori: process_riop(0x09); break;
         case tk_org: process_org(); break;
-        case tk_plus: expand_flag = 1; break;
+				case tk_plus: compress_flag = 0;  expand_flag = 1; break;
         case tk_public: process_public(); break;
         case tk_rodata:
             if (first_rodata) {
@@ -4695,7 +4676,7 @@ void FT64_processMaster()
 		case tk_sxb: process_rop(0x1A); break;
 		case tk_sxc: process_rop(0x19); break;
 		case tk_sxh: process_rop(0x18); break;
-		case tk_sync: emit_insn(0x04480002,0,4); break;
+		case tk_sync: emit_insn(0x04480002,!expand_flag,4); break;
 		//case tk_unlink: emit_insn((0x1B << 26) | (0x1F << 16) | (30 << 11) | (0x1F << 6) | 0x02,0,4); break;
 		case tk_vadd: process_vrrop(0x04); break;
 		case tk_vadds: process_vsrrop(0x14); break;

@@ -1,6 +1,14 @@
 #ifndef _TYPES_H
 #define _TYPES_H
 
+// Compressed instructions table entry
+
+typedef struct _tagHBLE
+{
+	int count;
+	int64_t opcode;
+} HTBLE;
+
 class Arg
 {
 public:

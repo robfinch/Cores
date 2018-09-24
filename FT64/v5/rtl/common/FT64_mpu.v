@@ -40,7 +40,7 @@ input tm_clk_i;
 input pit_clk2;
 input pit_gate2;
 output pit_out2;
-output [2:0] irq_o;
+output [3:0] irq_o;
 input i1;
 input i2;
 input i3;
@@ -100,7 +100,7 @@ wire pit_out0, pit_out1;
 wire crd_ack;
 wire [63:0] crd_dato;
 wire ack;
-wire [2:0] ol;
+wire [1:0] ol;
 wire [31:0] pcr;
 wire [63:0] pcr2;
 wire icl;           // instruction cache load

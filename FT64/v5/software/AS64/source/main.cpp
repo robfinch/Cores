@@ -160,13 +160,13 @@ void DumphTable()
 
    // Sort the table (already sorted)
 //   qsort(pt, htblmax, sizeof(HTBLE), hcmp);
-    
+
    if (gCpu=='F') {
     fprintf(ofp, "%d compressable instructions\n", htblmax);
     fprintf(ofp, "The top 256 are:\n", htblmax);
     fprintf(ofp, "Comp  Opcode  Count\n"); 
     for (nn = 0; nn < htblmax && nn < 256; nn++) {
-        fprintf(ofp, " %03X %08X %d\n", nn, hTable[nn].opcode, hTable[nn].count);
+        fprintf(ofp, " %03X %012I64X %d\n", nn, hTable[nn].opcode, hTable[nn].count);
     }
 	return;
    }
@@ -863,9 +863,9 @@ void process_dh_htbl()
 	int nn;
 
 	if (gCpu=='F') {
-		emitHalf(htblmax > 1024 ? 1024 : htblmax);
+		emitWord(htblmax > 1024 ? 1024 : htblmax);
 		for (nn = 0; nn < htblmax && nn < 1024; nn++) {
-			emitHalf(hTable[nn].opcode);
+			emitWord(hTable[nn].opcode);
 		}
 		return;
 	}

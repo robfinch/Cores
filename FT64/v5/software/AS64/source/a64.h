@@ -115,12 +115,6 @@ extern int NumSections;
 extern clsElf64Section sections[12];
 extern SYM *lastsym;
 
-typedef struct _tagHBLE
-{
-  int count;
-  int opcode;
-} HTBLE;
-
 extern HTBLE hTable[100000];
 extern int processOpt;
 extern int expandedBlock;
