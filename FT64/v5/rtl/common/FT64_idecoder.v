@@ -737,6 +737,7 @@ casez(isn[`INSTRUCTION_OP])
 `CAS:       IsRFW = TRUE;
 `AMO:				IsRFW = TRUE;
 `CSRRW:			IsRFW = TRUE;
+`AUIPC:			IsRFW = TRUE;
 `LUI:				IsRFW = TRUE;
 default:    IsRFW = FALSE;
 endcase

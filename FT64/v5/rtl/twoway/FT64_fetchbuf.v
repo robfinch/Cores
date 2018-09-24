@@ -72,7 +72,7 @@ input stb_i;
 output ack_o;
 input we_i;
 input [15:0] adr_i;
-input [31:0] dat_i;
+input [47:0] dat_i;
 input [2:0] cmpgrp;
 input freezePC;
 input thread_en;
@@ -114,8 +114,8 @@ output [47:0] fetchbuf0_instr;
 output [47:0] fetchbuf1_instr;
 output [AMSB:0] fetchbuf0_pc;
 output [AMSB:0] fetchbuf1_pc;
-output reg [3:0] fetchbuf0_insln;
-output reg [3:0] fetchbuf1_insln;
+output [2:0] fetchbuf0_insln;
+output [2:0] fetchbuf1_insln;
 output fetchbuf0_v;
 output fetchbuf1_v;
 input [47:0] codebuf0;
@@ -164,18 +164,26 @@ input [47:0] isn;
 IsRTI = isn[`INSTRUCTION_OP]==`R2 && isn[`INSTRUCTION_S2]==`RTI;
 endfunction
 
-function [3:0] fnInsLength;
+function [2:0] fnInsLength;
 input [47:0] ins;
 if (ins[`INSTRUCTION_OP]==`CMPRSSD)
-	fnInsLength = 4'd2;
+	fnInsLength = 3'd2;
 else
 	case(ins[7:6])
-	2'd0:	fnInsLength = 4'd4;
-	2'd1:	fnInsLength = 4'd6;
-	default:	fnInsLength = 4'd2;
+	2'd0:	fnInsLength = 3'd4;
+	2'd1:	fnInsLength = 3'd6;
+	default:	fnInsLength = 3'd2;
 	endcase
 endfunction
 
+wire [2:0] fetchbufA_inslen;
+wire [2:0] fetchbufB_inslen;
+wire [2:0] fetchbufC_inslen;
+wire [2:0] fetchbufD_inslen;
+FT64_InsLength uilA (fetchbufA_instr, fetchbufA_inslen);
+FT64_InsLength uilB (fetchbufB_instr, fetchbufB_inslen);
+FT64_InsLength uilC (fetchbufC_instr, fetchbufC_inslen);
+FT64_InsLength uilD (fetchbufD_instr, fetchbufD_inslen);
 
 wire [47:0] xinsn0;
 wire [47:0] xinsn1;
@@ -199,7 +207,7 @@ assign ack_o = cs_i & cyc_i & stb_i;
 reg [47:0] DecompressTable [0:2047];
 always @(posedge clk)
 	if (cs_i & cyc_i & stb_i & we_i)
-		DecompressTable[adr_i[12:3]] <= dat_i;
+		DecompressTable[adr_i[12:3]] <= dat_i[47:0];
 wire [47:0] expand0 = DecompressTable[{cmpgrp,insn0[15:8]}];
 wire [47:0] expand1 = DecompressTable[{cmpgrp,insn1[15:8]}];
 
@@ -228,7 +236,7 @@ case(fetchbufA_instr[`INSTRUCTION_OP])
 `JMP,`CALL: branch_pcA = fetchbufA_instr[6] ? {fetchbufA_instr[39:8],1'b0} : {fetchbufA_pc[31:25],fetchbufA_instr[31:8],1'b0};
 `R2:		branch_pcA = btgtA;	// RTI
 `BRK,`JAL:	branch_pcA = btgtA;
-default:	branch_pcA = fetchbufA_pc + {{20{fetchbufA_instr[31]}},fetchbufA_instr[31:21],1'b0} + fnInsLength(fetchbufA_instr);
+default:	branch_pcA = fetchbufA_pc + {{20{fetchbufA_instr[31]}},fetchbufA_instr[31:21],1'b0} + fetchbufA_inslen;
 endcase
 
 always @*
@@ -237,7 +245,7 @@ case(fetchbufB_instr[`INSTRUCTION_OP])
 `JMP,`CALL: branch_pcB = fetchbufB_instr[6] ? {fetchbufB_instr[39:8],1'b0} : {fetchbufB_pc[31:25],fetchbufB_instr[31:8],1'b0};
 `R2:		branch_pcB = btgtB;	// RTI
 `BRK,`JAL:	branch_pcB = btgtB;
-default:	branch_pcB = fetchbufB_pc + {{20{fetchbufB_instr[31]}},fetchbufB_instr[31:21],1'b0} + fnInsLength(fetchbufB_instr);
+default:	branch_pcB = fetchbufB_pc + {{20{fetchbufB_instr[31]}},fetchbufB_instr[31:21],1'b0} + fetchbufB_inslen;
 endcase
 
 always @*
@@ -246,7 +254,7 @@ case(fetchbufC_instr[`INSTRUCTION_OP])
 `JMP,`CALL: branch_pcC = fetchbufC_instr[6] ? {fetchbufC_instr[39:8],1'b0} : {fetchbufC_pc[31:25],fetchbufC_instr[31:8],1'b0};
 `R2:		branch_pcC = btgtC;	// RTI
 `BRK,`JAL:	branch_pcC = btgtC;
-default:	branch_pcC = fetchbufC_pc + {{20{fetchbufC_instr[31]}},fetchbufC_instr[31:21],1'b0} + fnInsLength(fetchbufC_instr);
+default:	branch_pcC = fetchbufC_pc + {{20{fetchbufC_instr[31]}},fetchbufC_instr[31:21],1'b0} + fetchbufC_inslen;
 endcase
 
 always @*
@@ -255,7 +263,7 @@ case(fetchbufD_instr[`INSTRUCTION_OP])
 `JMP,`CALL: branch_pcD = fetchbufD_instr[6] ? {fetchbufD_instr[39:8],1'b0} : {fetchbufD_pc[31:25],fetchbufD_instr[31:8],1'b0};
 `R2:		branch_pcD = btgtD;	// RTI
 `BRK,`JAL:	branch_pcD = btgtD;
-default:	branch_pcD = fetchbufD_pc + {{20{fetchbufD_instr[31]}},fetchbufD_instr[31:21],1'b0} + fnInsLength(fetchbufD_instr);
+default:	branch_pcD = fetchbufD_pc + {{20{fetchbufD_instr[31]}},fetchbufD_instr[31:21],1'b0} + fetchbufD_inslen;
 endcase
 
 wire take_branchA = ({fetchbufA_v, IsBranch(fetchbufA_instr), predict_takenA}  == {`VAL, `TRUE, `TRUE}) ||
@@ -793,32 +801,35 @@ else begin
 end
 
 assign fetchbuf0_instr = (fetchbuf == 1'b0) ? fetchbufA_instr : fetchbufC_instr;
+assign fetchbuf0_insln = (fetchbuf == 1'b0) ? fetchbufA_inslen: fetchbufC_inslen;
 assign fetchbuf0_v     = (fetchbuf == 1'b0) ? fetchbufA_v     : fetchbufC_v    ;
 assign fetchbuf0_pc    = (fetchbuf == 1'b0) ? fetchbufA_pc    : fetchbufC_pc   ;
 assign fetchbuf1_instr = (fetchbuf == 1'b0) ? fetchbufB_instr : fetchbufD_instr;
+assign fetchbuf1_insln = (fetchbuf == 1'b0) ? fetchbufB_inslen: fetchbufD_inslen;
 assign fetchbuf1_v     = (fetchbuf == 1'b0) ? fetchbufB_v     : fetchbufD_v    ;
 assign fetchbuf1_pc    = (fetchbuf == 1'b0) ? fetchbufB_pc    : fetchbufD_pc   ;
 assign fetchbuf0_thrd  = 1'b0;
 assign fetchbuf1_thrd  = thread_en;
 
+reg [2:0] insln0, insln1;
 always @*
 begin
 	if (insn0[5:0]==`CMPRSSD)
-		fetchbuf0_insln <= 4'd2;
+		insln0 <= 3'd2;
 	else if (insn0[7:6]==2'b00 && insn0[`INSTRUCTION_OP]==`EXEC)
-		fetchbuf0_insln <= fnInsLength(codebuf0);
+		insln0 <= fnInsLength(codebuf0);
 	else
-		fetchbuf0_insln <= fnInsLength(insn0);
+		insln0 <= fnInsLength(insn0);
 end
 
 always @*
 begin
 	if (insn1[5:0]==`CMPRSSD)
-		fetchbuf1_insln <= 4'd2;
+		insln1 <= 3'd2;
 	else if (insn1[7:6]==2'b00 && insn1[`INSTRUCTION_OP]==`EXEC)
-		fetchbuf1_insln <= fnInsLength(codebuf1);
+		insln1 <= fnInsLength(codebuf1);
 	else
-		fetchbuf1_insln <= fnInsLength(insn1);
+		insln1 <= fnInsLength(insn1);
 end
 
 reg [47:0] cinsn0, cinsn1;
@@ -854,11 +865,11 @@ begin
 	fetchbufA_pc <= pc0;
 	if (phit && ~freezePC) begin
 		if (thread_en)
-			pc0 <= pc0 + fetchbuf0_insln;
+			pc0 <= pc0 + insln0;
 		else if (`WAYS > 1)
-			pc0 <= pc0 + fetchbuf0_insln + fetchbuf1_insln;
+			pc0 <= pc0 + insln0 + insln1;
 		else
-			pc0 <= pc0 + fetchbuf0_insln;
+			pc0 <= pc0 + insln0;
 	end
 end
 endtask
@@ -870,9 +881,9 @@ begin
 	if (thread_en)
 		fetchbufB_pc <= pc1;
 	else
-		fetchbufB_pc <= pc0 + fetchbuf0_insln;
+		fetchbufB_pc <= pc0 + insln0;
 	if (phit & thread_en)
-		pc1 <= pc1 + fetchbuf1_insln;
+		pc1 <= pc1 + insln1;
 end
 endtask
 
@@ -891,11 +902,11 @@ begin
 	fetchbufC_pc <= pc0;
 	if (phit && ~freezePC) begin
 		if (thread_en)
-			pc0 <= pc0 + fetchbuf0_insln;
+			pc0 <= pc0 + insln0;
 		else if (`WAYS > 1)
-			pc0 <= pc0 + fetchbuf0_insln + fetchbuf1_insln;
+			pc0 <= pc0 + insln0 + insln1;
 		else
-			pc0 <= pc0 + fetchbuf0_insln;
+			pc0 <= pc0 + insln0;
 	end
 end
 endtask
@@ -907,9 +918,9 @@ begin
 	if (thread_en)
 		fetchbufD_pc <= pc1;
 	else
-		fetchbufD_pc <= pc0 + fetchbuf0_insln;
+		fetchbufD_pc <= pc0 + insln0;
 	if (phit & thread_en)
-		pc1 <= pc1 + fetchbuf1_insln;
+		pc1 <= pc1 + insln1;
 end
 endtask
 

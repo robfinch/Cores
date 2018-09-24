@@ -114,7 +114,7 @@ input rst;
 input clka;
 input ena;
 input [7:0] wea;
-input [10:0] addra;
+input [13:0] addra;
 input [63:0] dina;
 input clkb;
 input [10:0] addrb;

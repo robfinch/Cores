@@ -1727,7 +1727,7 @@ casez(isn[`INSTRUCTION_OP])
 `RET:   fnRt = {rgs[thrd],1'b0,isn[`INSTRUCTION_RA]};
 `LV:    fnRt = {vqei,1'b1,isn[`INSTRUCTION_RB]};
 `AMO:	fnRt = isn[31] ? {rgs[thrd],1'b0,isn[`INSTRUCTION_RB]} : {rgs[thrd],1'b0,isn[`INSTRUCTION_RC]};
-`LUI:	fnRt = {rgs[thrd],1'b0,isn[`INSTRUCTION_RA]};
+`AUIPC,`LUI:	fnRt = {rgs[thrd],1'b0,isn[`INSTRUCTION_RA]};
 default:    fnRt = {rgs[thrd],1'b0,isn[`INSTRUCTION_RB]};
 endcase
 endfunction
@@ -1951,7 +1951,7 @@ casez(isn[`INSTRUCTION_OP])
 `RET:   fnRt = {rgs,1'b0,isn[`INSTRUCTION_RA]};
 `LV:    fnRt = {vqei,1'b1,isn[`INSTRUCTION_RB]};
 `AMO:	fnRt = isn[31] ? {rgs,1'b0,isn[`INSTRUCTION_RB]} : {rgs,1'b0,isn[`INSTRUCTION_RC]};
-`LUI:	fnRt = {rgs,1'b0,isn[`INSTRUCTION_RA]};
+`AUIPC,`LUI:	fnRt = {rgs,1'b0,isn[`INSTRUCTION_RA]};
 default:    fnRt = {rgs,1'b0,isn[`INSTRUCTION_RB]};
 endcase
 endfunction
@@ -2619,6 +2619,7 @@ casez(isn[`INSTRUCTION_OP])
 `CAS:       IsRFW = TRUE;
 `AMO:				IsRFW = TRUE;
 `CSRRW:			IsRFW = TRUE;
+`AUIPC:			IsRFW = TRUE;
 `LUI:				IsRFW = TRUE;
 default:    IsRFW = FALSE;
 endcase
@@ -3029,7 +3030,7 @@ FT64_fetchbuf #(AMSB,RSTPC) ufb1
   .ack_o(dc_ack),
   .we_i(we_o),
   .adr_i(adr_o[15:0]),
-  .dat_i(dat_o[31:0]),
+  .dat_i(dat_o[47:0]),
   .cmpgrp(cr0[10:8]),
   .freezePC(freezePC),
   .regLR(regLR),
@@ -5431,7 +5432,7 @@ if (rst) begin
        iqentry_rmw[n] <= FALSE;
        iqentry_pc[n] <= RSTPC;
     	 iqentry_instr[n] <= `NOP_INSN;
-    	 iqentry_insln[n] <= 4'd4;
+    	 iqentry_insln[n] <= 3'd4;
     	 iqentry_preload[n] <= FALSE;
     	 iqentry_mem[n] <= FALSE;
     	 iqentry_memndx[n] <= FALSE;
@@ -5718,55 +5719,44 @@ else begin
 
 	    2'b01:
 		    if (canq1) begin
-	            if (IsVector(fetchbuf1_instr) && SUP_VECTOR) begin
-	                 vqe1 <= vqe1 + 4'd1;
-	                if (IsVCmprss(fetchbuf1_instr)) begin
-	                    if (vm[fetchbuf1_instr[25:23]][vqe1])
-	                         vqet1 <= vqet1 + 4'd1;
-	                end
-	                else
-	                     vqet1 <= vqet1 + 4'd1; 
-	                if (vqe1 >= vl-2)
-	                	 nop_fetchbuf <= fetchbuf ? 4'b0100 : 4'b0001;
-		            enque1(tail0, fetchbuf1_thrd ? seq_num1 : seq_num, vqe1);
-		            if (fetchbuf1_thrd)
-		            	seq_num1 <= seq_num1 + 5'd1;
-		            else
-		            	seq_num <= seq_num + 5'd1;
-		            if (fetchbuf1_rfw) begin
-		                 rf_source[ Rt1s ] <= { 1'b0, fetchbuf1_memld, tail0 };	// top bit indicates ALU/MEM bus
-		                 rf_v [Rt1s] <= `INV;
-		            end
-	                if (canq2 && vqe1 < vl-2) begin
-		                 vqe1 <= vqe1 + 4'd2;
-		                if (IsVCmprss(fetchbuf1_instr)) begin
-		                    if (vm[fetchbuf1_instr[25:23]][vqe1+6'd1])
-		                         vqet1 <= vqet1 + 4'd2;
-		                end
-		                else
-		                     vqet1 <= vqet1 + 4'd2;
-			            enque1(tail1, fetchbuf1_thrd ? seq_num1 + 5'd1 : seq_num + 5'd1, vqe1 + 6'd1);
-			            if (fetchbuf1_thrd)
-			            	seq_num1 <= seq_num1 + 5'd2;
-			            else
-			            	seq_num <= seq_num + 5'd2;
-			            if (fetchbuf1_rfw) begin
-			                 rf_source[ Rt1s ] <= { 1'b0, fetchbuf1_memld, tail1 };	// top bit indicates ALU/MEM bus
-			                 rf_v [Rt1s] <= `INV;
-			            end
-	            	end
-	            end
-	            else begin
-		            enque1(tail0, fetchbuf1_thrd ? seq_num1 : seq_num, 6'd0);
-		            if (fetchbuf1_thrd)
-		            	seq_num1 <= seq_num1 + 5'd1;
-		            else
-		            	seq_num <= seq_num + 5'd1;
-		            if (fetchbuf1_rfw) begin
-		                 rf_source[ Rt1s ] <= { 1'b0, fetchbuf1_memld, tail0 };	// top bit indicates ALU/MEM bus
-		                 rf_v [Rt1s] <= `INV;
-		            end
-	        	end
+          if (fetchbuf1_thrd)
+          	seq_num1 <= seq_num1 + 5'd1;
+          else
+          	seq_num <= seq_num + 5'd1;
+					if (fetchbuf1_rfw) begin
+						rf_source[ Rt1s ] <= { 1'b0, fetchbuf1_memld, tail0 };	// top bit indicates ALU/MEM bus
+						rf_v [Rt1s] <= `INV;
+					end
+					if (IsVector(fetchbuf1_instr) && SUP_VECTOR) begin
+						vqe1 <= vqe1 + 4'd1;
+						if (IsVCmprss(fetchbuf1_instr)) begin
+							if (vm[fetchbuf1_instr[25:23]][vqe1])
+								vqet1 <= vqet1 + 4'd1;
+						end
+						else
+							vqet1 <= vqet1 + 4'd1; 
+						if (vqe1 >= vl-2)
+							nop_fetchbuf <= fetchbuf ? 4'b0100 : 4'b0001;
+						enque1(tail0, fetchbuf1_thrd ? seq_num1 : seq_num, vqe1);
+						if (canq2 && vqe1 < vl-2) begin
+							vqe1 <= vqe1 + 4'd2;
+							if (IsVCmprss(fetchbuf1_instr)) begin
+								if (vm[fetchbuf1_instr[25:23]][vqe1+6'd1])
+									vqet1 <= vqet1 + 4'd2;
+							end
+							else
+								vqet1 <= vqet1 + 4'd2;
+							enque1(tail1, fetchbuf1_thrd ? seq_num1 + 5'd1 : seq_num + 5'd1, vqe1 + 6'd1);
+							// Override the earlier udpate
+							if (fetchbuf1_thrd)
+								seq_num1 <= seq_num1 + 5'd2;
+							else
+								seq_num <= seq_num + 5'd2;
+						end
+					end
+					else begin
+						enque1(tail0, fetchbuf1_thrd ? seq_num1 : seq_num, 6'd0);
+					end
 		    end
 
 	    2'b10:
@@ -7923,7 +7913,7 @@ end
 	end
 	$display("FCU");
 	$display("%d %h %h %h %h #", fcu_v, fcu_bus, fcu_argI, fcu_argA, fcu_argB);
-	$display("%c %h %h #", fcu_branchmiss?"m":" ", fcu_sourceid, fcu_misspc); 
+	$display("%c %h %h %h %h #", fcu_branchmiss?"m":" ", fcu_sourceid, fcu_misspc, fcu_nextpc, fcu_brdisp); 
     $display("Commit");
 	$display("0: %c %h %o %d #", commit0_v?"v":" ", commit0_bus, commit0_id, commit0_tgt[4:0]);
 	$display("1: %c %h %o %d #", commit1_v?"v":" ", commit1_bus, commit1_id, commit1_tgt[4:0]);
@@ -8267,6 +8257,10 @@ begin
   	iqentry_a0	 [nn]  <= bus[`IB_CONST];
   	iqentry_imm  [nn]  <= bus[`IB_IMM];
 //		iqentry_insln[nn]  <= bus[`IB_LN];
+		if (iqentry_insln[nn] != bus[`IB_LN]) begin
+			$display("Insn length mismatch.");
+			$stop;
+		end
 		iqentry_jal	 [nn]  <= bus[`IB_JAL];
 		iqentry_ret  [nn]  <= bus[`IB_RET];
 		iqentry_irq  [nn]  <= bus[`IB_IRQ];
@@ -8299,6 +8293,22 @@ begin
 		iqentry_fsync[nn]  <= bus[`IB_FSYNC];
   	iqentry_rfw  [nn]  <= bus[`IB_RFW];
   	iqentry_we   [nn]  <= bus[`IB_WE];
+/*
+  	if (iqentry_vector[nn]) begin
+			iqentry_tgt[nn][RBIT:6] <= iqentry_Ra[nn][RBIT:6];
+  		if (iqentry_Ra[nn][RBIT:6]==6'd0)
+  			iqentry_tgt[nn][RBIT:6] = 6'd0;
+  		else begin
+				if (iqentry_vcmprss[nn]) begin
+					if (vm[iqentry_instr[nn][25:23]][iqentry_Ra[nn][RBIT:6]])
+						if (qcnt==2'd2 && iqentry_vector[(nn-1)%QENTRIES] && iqentry_Ra[(nn-1)%QENTRIES][RBIT:6] >= 6'd1)
+							iqentry_tgt[nn][RBIT:6] <= iqentry_tgt[(nn-2)%QENTRIES][RBIT:6] + 6'd2;
+						else
+							iqentry_tgt[nn][RBIT:6] <= iqentry_tgt[(nn-1)%QENTRIES][RBIT:6] + 6'd1;
+				end
+			end
+		end
+*/
   end
 end
 endtask
