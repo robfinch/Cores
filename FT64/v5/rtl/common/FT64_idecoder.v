@@ -942,9 +942,11 @@ begin
 	bus <= 144'h0;
 	bus[`IB_CONST] <= instr[6]==1'b1 ? {{34{instr[47]}},instr[47:18]} :
 																			{{50{instr[31]}},instr[31:18]};
+`ifdef SUPPORT_DCI																			
 	if (instr[`INSTRUCTION_OP]==`CMPRSSD)
 		bus[`IB_LN] <= 3'd2;
 	else
+`endif
 		case(instr[7:6])
 		2'b00:	bus[`IB_LN] <= 3'd4;
 		2'b01:	bus[`IB_LN] <= 3'd6;

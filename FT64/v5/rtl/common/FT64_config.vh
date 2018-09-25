@@ -25,6 +25,7 @@
 `define SIM		1'b1
 //`define SUPPORT_SMT		1'b1
 `define SUPPORT_VECTOR	1'b1
+//`define SUPPORT_DCI			1'b1	// dynamically compressed instructions
 //`define DEBUG_LOGIC 1'b1
 
 `define AMSB			31
@@ -36,7 +37,7 @@
 //`define SUPPORT_DBG		1'b1
 `define FULL_ISSUE_LOGIC	1'b1
 
-`define WAYS			2				// number of ways parallel (not working yet)
+`define WAYS			2				// number of ways parallel (1-3 3 not working yet)
 `define NUM_IDU		2				// number of instruction decode units (1-3)
 `define NUM_ALU		2				// number of ALU's (1-2)
 `define NUM_MEM		2				// number of memory queues (1-3)

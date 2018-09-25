@@ -123,30 +123,39 @@ assign clk = clk_i;
 
 wire dc_ack;
 wire acki = ack_i|dc_ack;
-wire [RBIT:0] Ra0, Ra1;
-wire [RBIT:0] Rb0, Rb1;
-wire [RBIT:0] Rc0, Rc1;
-wire [RBIT:0] Rt0, Rt1;
+wire [RBIT:0] Ra0, Ra1, Ra2;
+wire [RBIT:0] Rb0, Rb1, Rb2;
+wire [RBIT:0] Rc0, Rc1, Rc2;
+wire [RBIT:0] Rt0, Rt1, Rt2;
 wire [63:0] rfoa0,rfob0,rfoc0,rfoc0a;
 wire [63:0] rfoa1,rfob1,rfoc1,rfoc1a;
+wire [63:0] rfoa2,rfob2,rfoc2,rfoc2a;
 `ifdef SUPPORT_SMT
 wire [7:0] Ra0s = {Ra0[7:0]};
 wire [7:0] Ra1s = {Ra1[7:0]};
+wire [7:0] Ra2s = {Ra2[7:0]};
 wire [7:0] Rb0s = {Rb0[7:0]};
 wire [7:0] Rb1s = {Rb1[7:0]};
+wire [7:0] Rb2s = {Rb2[7:0]};
 wire [7:0] Rc0s = {Rc0[7:0]};
 wire [7:0] Rc1s = {Rc1[7:0]};
+wire [7:0] Rc2s = {Rc2[7:0]};
 wire [7:0] Rt0s = {Rt0[7:0]};
 wire [7:0] Rt1s = {Rt1[7:0]};
+wire [7:0] Rt2s = {Rt2[7:0]};
 `else
 wire [6:0] Ra0s = {Ra0[7],Ra0[5:0]};
 wire [6:0] Ra1s = {Ra1[7],Ra1[5:0]};
+wire [6:0] Ra2s = {Ra2[7],Ra2[5:0]};
 wire [6:0] Rb0s = {Rb0[7],Rb0[5:0]};
 wire [6:0] Rb1s = {Rb1[7],Rb1[5:0]};
+wire [6:0] Rb2s = {Rb2[7],Rb2[5:0]};
 wire [6:0] Rc0s = {Rc0[7],Rc0[5:0]};
 wire [6:0] Rc1s = {Rc1[7],Rc1[5:0]};
+wire [6:0] Rc2s = {Rc2[7],Rc2[5:0]};
 wire [6:0] Rt0s = {Rt0[7],Rt0[5:0]};
 wire [6:0] Rt1s = {Rt1[7],Rt1[5:0]};
+wire [6:0] Rt2s = {Rt2[7],Rt2[5:0]};
 /*
 wire [5:0] Ra0s = {Ra0[5:0]};
 wire [5:0] Ra1s = {Ra1[5:0]};
@@ -184,8 +193,8 @@ reg errq;               // accumulated err_i input status
 reg exvq;
 
 // Vector
-reg [5:0] vqe0, vqe1;   // vector element being queued
-reg [5:0] vqet0, vqet1;
+reg [5:0] vqe0, vqe1, vqe2;   // vector element being queued
+reg [5:0] vqet0, vqet1, vqet2;
 reg [7:0] vl;           // vector length
 reg [63:0] vm [0:7];    // vector mask registers
 reg [1:0] m2;
@@ -393,12 +402,14 @@ reg [47:0] insn1a, insn2a;
 // that would be four bits minimum (count 0 to 8). 
 reg [31:0] seq_num;
 reg [31:0] seq_num1;
+reg [31:0] seq_num2;
 wire [63:0] rdat0,rdat1,rdat2;
 reg [63:0] xdati;
 
-reg canq1, canq2;
+reg canq1, canq2, canq3;
 reg queued1;
 reg queued2;
+reg queued3;
 reg queuedNop;
 
 reg [47:0] codebuf[0:63];
@@ -565,6 +576,14 @@ wire		fetchbuf1_thrd;
 wire        fetchbuf1_mem;
 wire		fetchbuf1_memld;
 wire        fetchbuf1_rfw;
+wire [47:0] fetchbuf2_instr;
+wire  [2:0] fetchbuf2_insln;
+wire [`ABITS] fetchbuf2_pc;
+wire        fetchbuf2_v;
+wire		fetchbuf2_thrd;
+wire        fetchbuf2_mem;
+wire		fetchbuf2_memld;
+wire        fetchbuf2_rfw;
 
 wire [47:0] fetchbufA_instr;	
 wire [`ABITS] fetchbufA_pc;
@@ -578,6 +597,12 @@ wire        fetchbufC_v;
 wire [47:0] fetchbufD_instr;
 wire [`ABITS] fetchbufD_pc;
 wire        fetchbufD_v;
+wire [47:0] fetchbufE_instr;
+wire [`ABITS] fetchbufE_pc;
+wire        fetchbufE_v;
+wire [47:0] fetchbufF_instr;
+wire [`ABITS] fetchbufF_pc;
+wire        fetchbufF_v;
 
 //reg        did_branchback0;
 //reg        did_branchback1;
@@ -891,6 +916,45 @@ reg [287:0] L2_rdat;
 wire [287:0] L2_dato;
 reg L2_xsel;
 
+generate begin : gRegfileInst
+if (`WAYS > 2) begin : gb1
+FT64_regfile2w9r_oc #(.RBIT(RBIT)) urf1
+(
+  .clk(clk),
+  .clk4x(clk4x),
+  .wr0(commit0_v),
+  .wr1(commit1_v),
+  .we0(commit0_we),
+  .we1(commit1_we),
+  .wa0(commit0_tgt),
+  .wa1(commit1_tgt),
+  .i0(commit0_bus),
+  .i1(commit1_bus),
+	.rclk(~clk),
+	.ra0(Ra0),
+	.ra1(Rb0),
+	.ra2(Rc0),
+	.o0(rfoa0),
+	.o1(rfob0),
+	.o2(rfoc0a),
+	.ra3(Ra1),
+	.ra4(Rb1),
+	.ra5(Rc1),
+	.o3(rfoa1),
+	.o4(rfob1),
+	.o5(rfoc1a),
+	.ra6(Ra2),
+	.ra7(Rb2),
+	.ra8(Rc2),
+	.o6(rfoa2),
+	.o7(rfob2),
+	.o8(rfoc2a)
+);
+assign rfoc0 = Rc0[11:6]==6'h3F ? vm[Rc0[2:0]] : rfoc0a;
+assign rfoc1 = Rc1[11:6]==6'h3F ? vm[Rc1[2:0]] : rfoc1a;
+assign rfoc2 = Rc2[11:6]==6'h3F ? vm[Rc2[2:0]] : rfoc2a;
+end
+else if (`WAYS > 1) begin : gb1
 FT64_regfile2w6r_oc #(.RBIT(RBIT)) urf1
 (
   .clk(clk),
@@ -907,24 +971,47 @@ FT64_regfile2w6r_oc #(.RBIT(RBIT)) urf1
 	.ra0(Ra0),
 	.ra1(Rb0),
 	.ra2(Rc0),
-	.ra3(Ra1),
-	.ra4(Rb1),
-	.ra5(Rc1),
 	.o0(rfoa0),
 	.o1(rfob0),
 	.o2(rfoc0a),
+	.ra3(Ra1),
+	.ra4(Rb1),
+	.ra5(Rc1),
 	.o3(rfoa1),
 	.o4(rfob1),
 	.o5(rfoc1a)
 );
 assign rfoc0 = Rc0[11:6]==6'h3F ? vm[Rc0[2:0]] : rfoc0a;
 assign rfoc1 = Rc1[11:6]==6'h3F ? vm[Rc1[2:0]] : rfoc1a;
+end
+else begin : gb1
+FT64_regfile1w3r_oc #(.RBIT(RBIT)) urf1
+(
+  .clk(clk),
+  .wr0(commit0_v),
+  .we0(commit0_we),
+  .wa0(commit0_tgt),
+  .i0(commit0_bus),
+	.rclk(~clk),
+	.ra0(Ra0),
+	.ra1(Rb0),
+	.ra2(Rc0),
+	.o0(rfoa0),
+	.o1(rfob0),
+	.o2(rfoc0a)
+);
+end
+assign rfoc0 = Rc0[11:6]==6'h3F ? vm[Rc0[2:0]] : rfoc0a;
+end
+endgenerate
 
 function [3:0] fnInsLength;
 input [47:0] ins;
+`ifdef SUPPORT_DCI
 if (ins[`INSTRUCTION_OP]==`CMPRSSD)
 	fnInsLength = 4'd2;
 else
+`endif
 	case(ins[7:6])
 	2'd0:	fnInsLength = 4'd4;
 	2'd1:	fnInsLength = 4'd6;
@@ -1032,26 +1119,34 @@ FT64_L2_icache uic2
 wire predict_taken;
 wire predict_taken0;
 wire predict_taken1;
+wire predict_taken2;
 wire predict_takenA;
 wire predict_takenB;
 wire predict_takenC;
 wire predict_takenD;
+wire predict_takenE;
+wire predict_takenF;
 wire predict_takenA1;
 wire predict_takenB1;
 wire predict_takenC1;
 wire predict_takenD1;
 
-wire [`ABITS] btgtA, btgtB, btgtC, btgtD;
+wire [`ABITS] btgtA, btgtB, btgtC, btgtD, btgtE, btgtF;
 wire btbwr0 = iqentry_v[head0] && iqentry_done[head0] &&
         (
         iqentry_jal[head0] ||
         iqentry_brk[head0] ||
         iqentry_rti[head0]);
+generate begin: gbtbvar
+if (`WAYS > 1) begin
 wire btbwr1 = iqentry_v[head1] && iqentry_done[head1] &&
         (
         iqentry_jal[head1] ||
         iqentry_brk[head1] ||
         iqentry_rti[head1]);
+end
+end
+endgenerate
 
 wire fcu_clk;
 `ifdef FCU_ENH
@@ -1064,6 +1159,8 @@ wire fcu_clk;
 `endif
 assign fcu_clk = clk_i;
 
+generate begin: gBTBInst
+if (`WAYS > 2) begin
 `ifdef FCU_ENH
 FT64_BTB ubtb1
 (
@@ -1082,10 +1179,58 @@ FT64_BTB ubtb1
   .btgtC(btgtC),
   .pcD(fetchbufD_pc),
   .btgtD(btgtD),
+  .pcE(fetchbufE_pc),
+  .btgtE(btgtE),
+  .pcF(fetchbufF_pc),
+  .btgtF(btgtF),
   .npcA(BRKPC),
   .npcB(BRKPC),
   .npcC(BRKPC),
-  .npcD(BRKPC)
+  .npcD(BRKPC),
+  .npcE(BRKPC),
+  .npcF(BRKPC)
+);
+`else
+// Branch tergets are picked up by fetchbuf logic and need to be present.
+// Without a target predictor they are just set to the reset address.
+// This virtually guarentees a miss.
+assign btgtA = RSTPC;
+assign btgtB = RSTPC;
+assign btgtC = RSTPC;
+assign btgtD = RSTPC;
+assign btgtE = RSTPC;
+assign btgtF = RSTPC;
+`endif
+end
+else if (`WAYS > 1) begin
+`ifdef FCU_ENH
+FT64_BTB ubtb1
+(
+  .rst(rst),
+  .wclk(fcu_clk),
+  .wr(btbwr0 | btbwr1),  
+  .wadr(btbwr0 ? iqentry_pc[head0] : iqentry_pc[head1]),
+  .wdat(btbwr0 ? iqentry_a0[head0] : iqentry_a0[head1]),
+  .valid(btbwr0 ? iqentry_bt[head0] & iqentry_v[head0] : iqentry_bt[head1] & iqentry_v[head1]),
+  .rclk(~clk),
+  .pcA(fetchbufA_pc),
+  .btgtA(btgtA),
+  .pcB(fetchbufB_pc),
+  .btgtB(btgtB),
+  .pcC(fetchbufC_pc),
+  .btgtC(btgtC),
+  .pcD(fetchbufD_pc),
+  .btgtD(btgtD),
+  .pcE(32'd0),
+  .btgtE(),
+  .pcF(32'd0),
+  .btgtF(),
+  .npcA(BRKPC),
+  .npcB(BRKPC),
+  .npcC(BRKPC),
+  .npcD(BRKPC),
+  .npcE(BRKPC),
+  .npcF(BRKPC)
 );
 `else
 // Branch tergets are picked up by fetchbuf logic and need to be present.
@@ -1096,7 +1241,50 @@ assign btgtB = RSTPC;
 assign btgtC = RSTPC;
 assign btgtD = RSTPC;
 `endif
+end
+else begin
+`ifdef FCU_ENH
+FT64_BTB ubtb1
+(
+  .rst(rst),
+  .wclk(fcu_clk),
+  .wr(btbwr0),  
+  .wadr(iqentry_pc[head0]),
+  .wdat(iqentry_a0[head0]),
+  .valid(iqentry_bt[head0] & iqentry_v[head0]),
+  .rclk(~clk),
+  .pcA(fetchbufA_pc),
+  .btgtA(btgtA),
+  .pcB(fetchbufB_pc),
+  .btgtB(btgtB),
+  .pcC(32'd0),
+  .btgtC(),
+  .pcD(32'd0),
+  .btgtD(),
+  .pcE(32'd0),
+  .btgtE(),
+  .pcF(32'd0),
+  .btgtF(),
+  .npcA(BRKPC),
+  .npcB(BRKPC),
+  .npcC(BRKPC),
+  .npcD(BRKPC),
+  .npcE(BRKPC),
+  .npcF(BRKPC)
+);
+`else
+// Branch tergets are picked up by fetchbuf logic and need to be present.
+// Without a target predictor they are just set to the reset address.
+// This virtually guarentees a miss.
+assign btgtA = RSTPC;
+assign btgtB = RSTPC;
+`endif
+end
+end
+endgenerate
 
+generate begin: gBPInst
+if (`WAYS > 2) begin
 `ifdef FCU_ENH
 FT64_BranchPredictor ubp1
 (
@@ -1109,6 +1297,8 @@ FT64_BranchPredictor ubp1
   .pcB(fetchbufB_pc),
   .pcC(fetchbufC_pc),
   .pcD(fetchbufD_pc),
+  .pcE(fetchbufE_pc),
+  .pcF(fetchbufF_pc),
   .xpc0(iqentry_pc[head0]),
   .xpc1(iqentry_pc[head1]),
   .takb0(commit0_v & iqentry_takb[head0]),
@@ -1116,7 +1306,45 @@ FT64_BranchPredictor ubp1
   .predict_takenA(predict_takenA),
   .predict_takenB(predict_takenB),
   .predict_takenC(predict_takenC),
-  .predict_takenD(predict_takenD)
+  .predict_takenD(predict_takenD),
+  .predict_takenE(predict_takenE),
+  .predict_takenF(predict_takenF)
+);
+`else
+// Predict based on sign of displacement
+assign predict_takenA = fetchbufA_instr[31];
+assign predict_takenB = fetchbufB_instr[31];
+assign predict_takenC = fetchbufC_instr[31];
+assign predict_takenD = fetchbufD_instr[31];
+assign predict_takenE = fetchbufE_instr[31];
+assign predict_takenF = fetchbufF_instr[31];
+`endif
+end
+else if (`WAYS > 1) begin
+`ifdef FCU_ENH
+FT64_BranchPredictor ubp1
+(
+  .rst(rst),
+  .clk(fcu_clk),
+  .en(bpe),
+  .xisBranch0(iqentry_br[head0] & commit0_v),
+  .xisBranch1(iqentry_br[head1] & commit1_v),
+  .pcA(fetchbufA_pc),
+  .pcB(fetchbufB_pc),
+  .pcC(fetchbufC_pc),
+  .pcD(fetchbufD_pc),
+  .pcE(32'd0),
+  .pcF(32'd0),
+  .xpc0(iqentry_pc[head0]),
+  .xpc1(iqentry_pc[head1]),
+  .takb0(commit0_v & iqentry_takb[head0]),
+  .takb1(commit1_v & iqentry_takb[head1]),
+  .predict_takenA(predict_takenA),
+  .predict_takenB(predict_takenB),
+  .predict_takenC(predict_takenC),
+  .predict_takenD(predict_takenD),
+  .predict_takenE(),
+  .predict_takenF()
 );
 `else
 // Predict based on sign of displacement
@@ -1125,6 +1353,41 @@ assign predict_takenB = fetchbufB_instr[31];
 assign predict_takenC = fetchbufC_instr[31];
 assign predict_takenD = fetchbufD_instr[31];
 `endif
+end
+else begin
+`ifdef FCU_ENH
+FT64_BranchPredictor ubp1
+(
+  .rst(rst),
+  .clk(fcu_clk),
+  .en(bpe),
+  .xisBranch0(iqentry_br[head0] & commit0_v),
+  .xisBranch1(1'b0),
+  .pcA(fetchbufA_pc),
+  .pcB(fetchbufB_pc),
+  .pcC(32'd0),
+  .pcD(32'd0),
+  .pcE(32'd0),
+  .pcF(32'd0),
+  .xpc0(iqentry_pc[head0]),
+  .xpc1(32'd0),
+  .takb0(commit0_v & iqentry_takb[head0]),
+  .takb1(1'b0),
+  .predict_takenA(predict_takenA),
+  .predict_takenB(predict_takenB),
+  .predict_takenC(),
+  .predict_takenD(),
+  .predict_takenE(),
+  .predict_takenF()
+);
+`else
+// Predict based on sign of displacement
+assign predict_takenA = fetchbufA_instr[31];
+assign predict_takenB = fetchbufB_instr[31];
+`endif
+end
+end
+endgenerate
 
 //-----------------------------------------------------------------------------
 // Debug
@@ -1416,26 +1679,51 @@ assign rdat2 = dram2_unc ? xdati : dc2_out;
 reg preload;
 reg [1:0] dccnt;
 wire dhit0, dhit1, dhit2;
+wire dhit0a, dhit1a, dhit2a;
 wire dhit00, dhit10, dhit20;
 wire dhit01, dhit11, dhit21;
 reg [`ABITS] dc_wadr;
 reg [63:0] dc_wdat;
 reg isStore;
 
+// If the data is in the write buffer, give the buffer a chance to
+// write out the data before trying to load from the cache.
+reg wb_hit0, wb_hit1, wb_hit2;
+always @*
+begin
+	wb_hit0 <= FALSE;
+	wb_hit1 <= FALSE;
+	wb_hit2 <= FALSE;
+	for (n = 0; n < `WB_DEPTH; n = n + 1) begin
+		if (wb_v[n] && wb_addr[n][31:3]==dram0_addr[31:3])
+			wb_hit0 <= TRUE;
+		if (`NUM_MEM > 1 && wb_addr[n][31:3]==dram1_addr[31:3])
+			wb_hit1 <= TRUE;
+		if (`NUM_MEM > 2 && wb_addr[n][31:3]==dram2_addr[31:3])
+			wb_hit2 <= TRUE;
+	end
+end
+
+assign dhit0 = dhit0a & !wb_hit0;
+assign dhit1 = dhit1a & !wb_hit1;
+assign dhit2 = dhit2a & !wb_hit2;
+wire whit0, whit1, whit2;
+
 FT64_dcache udc0
 (
     .rst(rst),
     .wclk(clk),
-    .wr((bstate==B2d && ack_i)||((bstate==B1||(bstate==B19 && isStore)) && dhit0)),
+    .wr((bstate==B2d && ack_i)||((bstate==B1||(bstate==B19 && isStore)) && whit0)),
     .sel(sel_o),
     .wadr({pcr[5:0],adr_o}),
+    .whit(whit0),
     .i(bstate==B2d ? dat_i : dat_o),
     .rclk(clk),
     .rdsize(dram0_memsize),
     .radr({pcr[5:0],dram0_addr}),
     .o(dc0_out),
     .hit(),
-    .hit0(dhit0),
+    .hit0(dhit0a),
     .hit1()
 );
 generate begin : gDCacheInst
@@ -1444,16 +1732,17 @@ FT64_dcache udc1
 (
     .rst(rst),
     .wclk(clk),
-    .wr((bstate==B2d && ack_i)||((bstate==B1||(bstate==B19 && isStore)) && dhit1)),
+    .wr((bstate==B2d && ack_i)||((bstate==B1||(bstate==B19 && isStore)) && whit1)),
     .sel(sel_o),
     .wadr({pcr[5:0],adr_o}),
+    .whit(whit1),
     .i(bstate==B2d ? dat_i : dat_o),
     .rclk(clk),
     .rdsize(dram1_memsize),
     .radr({pcr[5:0],dram1_addr}),
     .o(dc1_out),
     .hit(),
-    .hit0(dhit1),
+    .hit0(dhit1a),
     .hit1()
 );
 end
@@ -1462,16 +1751,17 @@ FT64_dcache udc2
 (
     .rst(rst),
     .wclk(clk),
-    .wr((bstate==B2d && ack_i)||((bstate==B1||(bstate==B19 && isStore)) && dhit2)),
+    .wr((bstate==B2d && ack_i)||((bstate==B1||(bstate==B19 && isStore)) && whit2)),
     .sel(sel_o),
     .wadr({pcr[5:0],adr_o}),
+    .whit(whit2),
     .i(bstate==B2d ? dat_i : dat_o),
     .rclk(clk),
     .rdsize(dram2_memsize),
     .radr({pcr[5:0],dram2_addr}),
     .o(dc2_out),
     .hit(),
-    .hit0(dhit2),
+    .hit0(dhit2a),
     .hit1()
 );
 end
@@ -3014,10 +3304,113 @@ assign fetchbuf0_mem   = IsMem(fetchbuf0_instr);
 assign fetchbuf0_memld = IsMem(fetchbuf0_instr) & IsLoad(fetchbuf0_instr);
 assign fetchbuf0_rfw   = IsRFW(fetchbuf0_instr,vqe0,vl,fetchbuf0_thrd);
 
+generate begin: gFetchbufDec
+if (`WAYS > 1) begin
 assign fetchbuf1_mem   = IsMem(fetchbuf1_instr);
 assign fetchbuf1_memld = IsMem(fetchbuf1_instr) & IsLoad(fetchbuf1_instr);
 assign fetchbuf1_rfw   = IsRFW(fetchbuf1_instr,vqe1,vl,fetchbuf1_thrd);
+end
+if (`WAYS > 2) begin
+assign fetchbuf2_mem   = IsMem(fetchbuf2_instr);
+assign fetchbuf2_memld = IsMem(fetchbuf2_instr) & IsLoad(fetchbuf2_instr);
+assign fetchbuf2_rfw   = IsRFW(fetchbuf2_instr,vqe2,vl,fetchbuf2_thrd);
+end
+end
+endgenerate
 
+generate begin : gFetchbufInst
+if (`WAYS > 2) begin : gb1
+FT64_fetchbuf_x3 #(AMSB,RSTPC) ufb1
+(
+  .rst(rst),
+  .clk4x(clk4x),
+  .clk(clk),
+  .fcu_clk(fcu_clk),
+  .cs_i(adr_o[31:16]==16'hFFFF),
+  .cyc_i(cyc_o),
+  .stb_i(stb_o),
+  .ack_o(dc_ack),
+  .we_i(we_o),
+  .adr_i(adr_o[15:0]),
+  .dat_i(dat_o[47:0]),
+  .cmpgrp(cr0[10:8]),
+  .freezePC(freezePC),
+  .regLR(regLR),
+  .thread_en(thread_en),
+  .insn0(insn0),
+  .insn1(insn1),
+  .insn1(insn2),
+  .phit(phit), 
+  .threadx(threadx),
+  .branchmiss(branchmiss),
+  .misspc(misspc),
+  .branchmiss_thrd(branchmiss_thrd),
+  .predict_takenA(predict_takenA),
+  .predict_takenB(predict_takenB),
+  .predict_takenC(predict_takenC),
+  .predict_takenD(predict_takenD),
+  .predict_takenE(predict_takenE),
+  .predict_takenF(predict_takenF),
+  .predict_taken0(predict_taken0),
+  .predict_taken1(predict_taken1),
+  .predict_taken1(predict_taken2),
+  .queued1(queued1),
+  .queued2(queued2),
+  .queued2(queued3),
+  .queuedNop(queuedNop),
+  .pc0(pc0),
+  .pc1(pc1),
+  .fetchbuf(fetchbuf),
+  .fetchbufA_v(fetchbufA_v),
+  .fetchbufB_v(fetchbufB_v),
+  .fetchbufC_v(fetchbufC_v),
+  .fetchbufD_v(fetchbufD_v),
+  .fetchbufD_v(fetchbufE_v),
+  .fetchbufD_v(fetchbufF_v),
+  .fetchbufA_pc(fetchbufA_pc),
+  .fetchbufB_pc(fetchbufB_pc),
+  .fetchbufC_pc(fetchbufC_pc),
+  .fetchbufD_pc(fetchbufD_pc),
+  .fetchbufD_pc(fetchbufE_pc),
+  .fetchbufD_pc(fetchbufF_pc),
+  .fetchbufA_instr(fetchbufA_instr),
+  .fetchbufB_instr(fetchbufB_instr),
+  .fetchbufC_instr(fetchbufC_instr),
+  .fetchbufD_instr(fetchbufD_instr),
+  .fetchbufE_instr(fetchbufE_instr),
+  .fetchbufF_instr(fetchbufF_instr),
+  .fetchbuf0_instr(fetchbuf0_instr),
+  .fetchbuf1_instr(fetchbuf1_instr),
+  .fetchbuf0_thrd(fetchbuf0_thrd),
+  .fetchbuf1_thrd(fetchbuf1_thrd),
+  .fetchbuf2_thrd(fetchbuf2_thrd),
+  .fetchbuf0_pc(fetchbuf0_pc),
+  .fetchbuf1_pc(fetchbuf1_pc),
+  .fetchbuf2_pc(fetchbuf2_pc),
+  .fetchbuf0_v(fetchbuf0_v),
+  .fetchbuf1_v(fetchbuf1_v),
+  .fetchbuf2_v(fetchbuf2_v),
+  .fetchbuf0_insln(fetchbuf0_insln),
+  .fetchbuf1_insln(fetchbuf1_insln),
+  .fetchbuf2_insln(fetchbuf2_insln),
+  .codebuf0(codebuf[insn0[21:16]]),
+  .codebuf1(codebuf[insn1[21:16]]),
+  .codebuf2(codebuf[insn2[21:16]]),
+  .btgtA(btgtA),
+  .btgtB(btgtB),
+  .btgtC(btgtC),
+  .btgtD(btgtD),
+  .btgtE(btgtE),
+  .btgtF(btgtF),
+  .nop_fetchbuf(nop_fetchbuf),
+  .take_branch0(take_branch0),
+  .take_branch1(take_branch1),
+  .take_branch2(take_branch2),
+  .stompedRets(stompedOnRets),
+  .panic(fb_panic)
+);
+end
+else if (`WAYS > 1) begin : gb1
 FT64_fetchbuf #(AMSB,RSTPC) ufb1
 (
   .rst(rst),
@@ -3088,6 +3481,61 @@ FT64_fetchbuf #(AMSB,RSTPC) ufb1
   .stompedRets(stompedOnRets),
   .panic(fb_panic)
 );
+end
+else begin : gb1
+FT64_fetchbuf_x1 #(AMSB,RSTPC) ufb1
+(
+  .rst(rst),
+  .clk4x(clk4x),
+  .clk(clk),
+  .fcu_clk(fcu_clk),
+  .cs_i(adr_o[31:16]==16'hFFFF),
+  .cyc_i(cyc_o),
+  .stb_i(stb_o),
+  .ack_o(dc_ack),
+  .we_i(we_o),
+  .adr_i(adr_o[15:0]),
+  .dat_i(dat_o[47:0]),
+  .cmpgrp(cr0[10:8]),
+  .freezePC(freezePC),
+  .regLR(regLR),
+  .thread_en(thread_en),
+  .insn0(insn0),
+  .phit(phit), 
+  .threadx(threadx),
+  .branchmiss(branchmiss),
+  .misspc(misspc),
+  .branchmiss_thrd(branchmiss_thrd),
+  .predict_takenA(predict_takenA),
+  .predict_takenB(predict_takenB),
+  .predict_taken0(predict_taken0),
+  .queued1(queued1),
+  .queuedNop(queuedNop),
+  .pc0(pc0),
+  .fetchbuf(fetchbuf),
+  .fetchbufA_v(fetchbufA_v),
+  .fetchbufB_v(fetchbufB_v),
+  .fetchbufA_pc(fetchbufA_pc),
+  .fetchbufB_pc(fetchbufB_pc),
+  .fetchbufA_instr(fetchbufA_instr),
+  .fetchbufB_instr(fetchbufB_instr),
+  .fetchbuf0_instr(fetchbuf0_instr),
+  .fetchbuf0_thrd(fetchbuf0_thrd),
+  .fetchbuf0_pc(fetchbuf0_pc),
+  .fetchbuf0_v(fetchbuf0_v),
+  .fetchbuf0_insln(fetchbuf0_insln),
+  .codebuf0(codebuf[insn0[21:16]]),
+  .btgtA(btgtA),
+  .btgtB(btgtB),
+  .nop_fetchbuf(nop_fetchbuf),
+  .take_branch0(take_branch0),
+  .stompedRets(stompedOnRets),
+  .panic(fb_panic)
+);
+assign fetchbuf1_v = `INV;
+end
+end
+endgenerate
 
 
 
@@ -5597,6 +6045,9 @@ else begin
 	// Instruction decode output should only pulse once for a queue entry. We
 	// want the decode to be invalidated after a clock cycle so that it isn't
 	// inadvertently used to update the queue at a later point.
+	dramA_v <= `INV;
+	dramB_v <= `INV;
+	dramC_v <= `INV;
 	id1_vi <= `INV;
 	if (`NUM_IDU > 1)
 		id2_vi <= `INV;
@@ -7044,6 +7495,7 @@ BIDLE:
 			dat_o <= wb_data[0];
 			ol_o  <= wb_ol[0];
 			wbo_id <= wb_id[0];
+     	isStore <= TRUE;
 			bstate <= wb_rmw[0] ? B12 : B1;
 		end
 		begin
@@ -7167,6 +7619,7 @@ BIDLE:
                  adr_o <= dram0_addr;
                  dat_o <= fnDato(dram0_instr,dram0_data);
                  ol_o  <= dram0_ol;
+			        	isStore <= TRUE;
                  bstate <= B1;
 `else
 								if (wbptr<`WB_DEPTH-1) begin
@@ -7209,6 +7662,7 @@ BIDLE:
                  adr_o <= dram1_addr;
                  dat_o <= fnDato(dram1_instr,dram1_data);
                  ol_o  <= dram1_ol;
+			        	isStore <= TRUE;
                  bstate <= B1;
 `else
 								if (wbptr<`WB_DEPTH-1) begin
@@ -7251,6 +7705,7 @@ BIDLE:
                  adr_o <= dram2_addr;
                  dat_o <= fnDato(dram2_instr,dram2_data);
                  ol_o  <= dram2_ol;
+				       	isStore <= TRUE;
                  bstate <= B1;
 `else
 								if (wbptr<`WB_DEPTH-1) begin
@@ -7419,7 +7874,6 @@ B1:
          cyc_o <= `LOW;
          stb_o <= `LOW;
          we_o <= `LOW;
-         sel_o <= 8'h00;
          cr_o <= 1'b0;
         // This isn't a good way of doing things; the state should be propagated
         // to the commit stage, however since this is a store we know there will
@@ -7623,7 +8077,6 @@ B12:
                  cas <= dat_i;
                  cyc_o <= `LOW;
                  stb_o <= `LOW;
-                 sel_o <= 8'h00;
                 case(bwhich)
                 2'b00:   dram0 <= `DRAMREQ_READY;
                 2'b01:   dram1 <= `DRAMREQ_READY;
@@ -7658,7 +8111,6 @@ B12:
         else begin
              cyc_o <= `LOW;
              stb_o <= `LOW;
-             sel_o <= 8'h00;
              sr_o <= `LOW;
              xdati <= dat_i;
             case(bwhich)
@@ -7693,7 +8145,11 @@ B16:    begin
             end
 B17:     bstate <= B18;
 B18:     bstate <= B19;
-B19:    if (~acki)  begin bstate <= BIDLE; isStore <= `FALSE; end
+B19:    if (~acki)  begin
+					sel_o <= 8'h00;
+					bstate <= BIDLE;
+					isStore <= `FALSE;
+				end
 B20:
 	if (~ack_i) begin
 		stb_o <= `HIGH;
@@ -7823,10 +8279,10 @@ end
     $display ("Regfile: %d", rgs);
 	for (n=0; n < 32; n=n+4) begin
 	    $display("%d: %h %d %o   %d: %h %d %o   %d: %h %d %o   %d: %h %d %o#",
-	       n[4:0]+0, urf1.urf10.mem[{rgs,1'b0,n[4:2],2'b00}], regIsValid[n+0], rf_source[n+0],
-	       n[4:0]+1, urf1.urf10.mem[{rgs,1'b0,n[4:2],2'b01}], regIsValid[n+1], rf_source[n+1],
-	       n[4:0]+2, urf1.urf10.mem[{rgs,1'b0,n[4:2],2'b10}], regIsValid[n+2], rf_source[n+2],
-	       n[4:0]+3, urf1.urf10.mem[{rgs,1'b0,n[4:2],2'b11}], regIsValid[n+3], rf_source[n+3]
+	       n[4:0]+0, gRegfileInst.gb1.urf1.urf10.mem[{rgs,1'b0,n[4:2],2'b00}], regIsValid[n+0], rf_source[n+0],
+	       n[4:0]+1, gRegfileInst.gb1.urf1.urf10.mem[{rgs,1'b0,n[4:2],2'b01}], regIsValid[n+1], rf_source[n+1],
+	       n[4:0]+2, gRegfileInst.gb1.urf1.urf10.mem[{rgs,1'b0,n[4:2],2'b10}], regIsValid[n+2], rf_source[n+2],
+	       n[4:0]+3, gRegfileInst.gb1.urf1.urf10.mem[{rgs,1'b0,n[4:2],2'b11}], regIsValid[n+3], rf_source[n+3]
 	       );
 	end
 `endif
@@ -7834,10 +8290,10 @@ end
 	$display("Call Stack:");
 	for (n = 0; n < 16; n = n + 4)
 		$display("%c%d: %h   %c%d: %h   %c%d: %h   %c%d: %h",
-			ufb1.ursb1.rasp==n+0 ?">" : " ", n[4:0]+0, ufb1.ursb1.ras[n+0],
-			ufb1.ursb1.rasp==n+1 ?">" : " ", n[4:0]+1, ufb1.ursb1.ras[n+1],
-			ufb1.ursb1.rasp==n+2 ?">" : " ", n[4:0]+2, ufb1.ursb1.ras[n+2],
-			ufb1.ursb1.rasp==n+3 ?">" : " ", n[4:0]+3, ufb1.ursb1.ras[n+3]
+			gFetchbufInst.gb1.ufb1.ursb1.rasp==n+0 ?">" : " ", n[4:0]+0, gFetchbufInst.gb1.ufb1.ursb1.ras[n+0],
+			gFetchbufInst.gb1.ufb1.ursb1.rasp==n+1 ?">" : " ", n[4:0]+1, gFetchbufInst.gb1.ufb1.ursb1.ras[n+1],
+			gFetchbufInst.gb1.ufb1.ursb1.rasp==n+2 ?">" : " ", n[4:0]+2, gFetchbufInst.gb1.ufb1.ursb1.ras[n+2],
+			gFetchbufInst.gb1.ufb1.ursb1.rasp==n+3 ?">" : " ", n[4:0]+3, gFetchbufInst.gb1.ufb1.ursb1.ras[n+3]
 		);
 	$display("\n");
 `endif
@@ -7846,17 +8302,25 @@ end
 //        $display("%d %h", rasp+n[3:0], ras[rasp+n[3:0]]);
 	$display("TakeBr:%d #", take_branch);//, backpc);
 	$display("Insn%d: %h", 0, insn0);
-	if (`WAYS > 1)
+	if (`WAYS==1) begin
+	$display("%c%c A: %d %h %h #",
+	    45, fetchbuf?45:62, fetchbufA_v, fetchbufA_instr, fetchbufA_pc);
+	$display("%c%c B: %d %h %h #",
+	    45, fetchbuf?62:45, fetchbufB_v, fetchbufB_instr, fetchbufB_pc);
+	end
+	else if (`WAYS > 1) begin
 		$display("Insn%d: %h", 1, insn1);
 	$display("%c%c A: %d %h %h #",
 	    45, fetchbuf?45:62, fetchbufA_v, fetchbufA_instr, fetchbufA_pc);
 	$display("%c%c B: %d %h %h #",
 	    45, fetchbuf?45:62, fetchbufB_v, fetchbufB_instr, fetchbufB_pc);
-	$display("%c%c C: %d %h %h #",
-	    45, fetchbuf?62:45, fetchbufC_v, fetchbufC_instr, fetchbufC_pc);
-	$display("%c%c D: %d %h %h #",
-	    45, fetchbuf?62:45, fetchbufD_v, fetchbufD_instr, fetchbufD_pc);
-
+	end
+	else if (`WAYS > 2) begin	   
+		$display("%c%c C: %d %h %h #",
+		    45, fetchbuf?62:45, fetchbufC_v, fetchbufC_instr, fetchbufC_pc);
+		$display("%c%c D: %d %h %h #",
+		    45, fetchbuf?62:45, fetchbufD_v, fetchbufD_instr, fetchbufD_pc);
+	end
 	for (i=0; i<QENTRIES; i=i+1) 
 	    $display("%c%c %d: %c%c%c%c %d %d %c%c %c %c%h %d %o %h %h %h %d %o %h %d %o %h %d %o %d:%h %h %d#",
 		 (i[`QBITS]==head0)?"C":".",

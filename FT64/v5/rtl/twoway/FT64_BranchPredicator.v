@@ -26,8 +26,9 @@
 //
 module FT64_BranchPredictor(rst, clk, en,
     xisBranch0, xisBranch1,
-    pcA, pcB, pcC, pcD, xpc0, xpc1, takb0, takb1,
-    predict_takenA, predict_takenB, predict_takenC, predict_takenD);
+    pcA, pcB, pcC, pcD, pcE, pcF, xpc0, xpc1, takb0, takb1,
+    predict_takenA, predict_takenB, predict_takenC, predict_takenD,
+    predict_takenE, predict_takenF);
 parameter DBW=32;
 input rst;
 input clk;
@@ -38,6 +39,8 @@ input [DBW-1:0] pcA;
 input [DBW-1:0] pcB;
 input [DBW-1:0] pcC;
 input [DBW-1:0] pcD;
+input [DBW-1:0] pcE;
+input [DBW-1:0] pcF;
 input [DBW-1:0] xpc0;
 input [DBW-1:0] xpc1;
 input takb0;
@@ -46,6 +49,8 @@ output predict_takenA;
 output predict_takenB;
 output predict_takenC;
 output predict_takenD;
+output predict_takenE;
+output predict_takenF;
 
 integer n;
 reg [31:0] pcs [0:31];
@@ -67,15 +72,21 @@ wire [8:0] bht_raA = {pcA[8:2],gbl_branch_hist[2:1]};	// read address (IF stage)
 wire [8:0] bht_raB = {pcB[8:2],gbl_branch_hist[2:1]};	// read address (IF stage)
 wire [8:0] bht_raC = {pcC[8:2],gbl_branch_hist[2:1]};	// read address (IF stage)
 wire [8:0] bht_raD = {pcD[8:2],gbl_branch_hist[2:1]};	// read address (IF stage)
+wire [8:0] bht_raE = {pcE[8:2],gbl_branch_hist[2:1]};	// read address (IF stage)
+wire [8:0] bht_raF = {pcF[8:2],gbl_branch_hist[2:1]};	// read address (IF stage)
 wire [1:0] bht_xbits = branch_history_table[bht_wa];
 wire [1:0] bht_ibitsA = branch_history_table[bht_raA];
 wire [1:0] bht_ibitsB = branch_history_table[bht_raB];
 wire [1:0] bht_ibitsC = branch_history_table[bht_raC];
 wire [1:0] bht_ibitsD = branch_history_table[bht_raD];
+wire [1:0] bht_ibitsE = branch_history_table[bht_raE];
+wire [1:0] bht_ibitsF = branch_history_table[bht_raF];
 assign predict_takenA = (bht_ibitsA==2'd0 || bht_ibitsA==2'd1) && en;
 assign predict_takenB = (bht_ibitsB==2'd0 || bht_ibitsB==2'd1) && en;
 assign predict_takenC = (bht_ibitsC==2'd0 || bht_ibitsC==2'd1) && en;
 assign predict_takenD = (bht_ibitsD==2'd0 || bht_ibitsD==2'd1) && en;
+assign predict_takenE = (bht_ibitsE==2'd0 || bht_ibitsE==2'd1) && en;
+assign predict_takenF = (bht_ibitsF==2'd0 || bht_ibitsF==2'd1) && en;
 
 always @(posedge clk)
 if (rst)

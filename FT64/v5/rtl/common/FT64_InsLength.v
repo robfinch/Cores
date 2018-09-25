@@ -25,6 +25,7 @@
 // without the use of this module.
 // ============================================================================
 //
+`include "FT64_config.vh"
 `include "FT64_defines.vh"
 
 module FT64_InsLength(ins, len);
@@ -32,9 +33,11 @@ input [47:0] ins;
 output reg [2:0] len;
 
 always @*
+`ifdef SUPPORT_DCI
 if (ins[`INSTRUCTION_OP]==`CMPRSSD)
 	len <= 3'd2;
 else
+`endif
 	case(ins[7:6])
 	2'd0:	len <= 3'd4;
 	2'd1:	len <= 3'd6;

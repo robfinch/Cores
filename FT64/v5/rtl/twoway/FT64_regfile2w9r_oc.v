@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2013-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2018  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -63,9 +63,9 @@ assign doutb = mem[raddrb];
 	
 endmodule
 
-module FT64_regfile2w6r_oc(clk4x, clk, wr0, wr1, we0, we1, wa0, wa1, i0, i1,
-	rclk, ra0, ra1, ra2, ra3, ra4, ra5,
-	o0, o1, o2, o3, o4, o5);
+module FT64_regfile2w9r_oc(clk4x, clk, wr0, wr1, we0, we1, wa0, wa1, i0, i1,
+	rclk, ra0, ra1, ra2, ra3, ra4, ra5, ra6, ra7, ra8,
+	o0, o1, o2, o3, o4, o5, o6, o7, o8);
 parameter WID=64;
 parameter RBIT = 11;
 input clk4x;
@@ -85,18 +85,24 @@ input [RBIT:0] ra2;
 input [RBIT:0] ra3;
 input [RBIT:0] ra4;
 input [RBIT:0] ra5;
+input [RBIT:0] ra6;
+input [RBIT:0] ra7;
+input [RBIT:0] ra8;
 output [WID-1:0] o0;
 output [WID-1:0] o1;
 output [WID-1:0] o2;
 output [WID-1:0] o3;
 output [WID-1:0] o4;
 output [WID-1:0] o5;
+output [WID-1:0] o6;
+output [WID-1:0] o7;
+output [WID-1:0] o8;
 
 reg wr;
 reg [RBIT:0] wa;
 reg [WID-1:0] i;
 reg [7:0] we;
-wire [WID-1:0] o00, o01, o02, o03, o04, o05;
+wire [WID-1:0] o00, o01, o02, o03, o04, o05, o06, o07, o08;
 reg wr1x;
 reg [RBIT:0] wa1x;
 reg [WID-1:0] i1x;
@@ -176,6 +182,42 @@ FT64_regfileRam_sim urf15 (
   .addrb(ra5),
   .doutb(o05)
 );
+
+FT64_regfileRam_sim urf16 (
+  .clka(clk4x),
+  .ena(wr),
+  .wea(we),
+  .addra(wa),
+  .dina(i),
+  .clkb(rclk),
+  .enb(1'b1),
+  .addrb(ra6),
+  .doutb(o06)
+);
+
+FT64_regfileRam_sim urf17 (
+  .clka(clk4x),
+  .ena(wr),
+  .wea(we),
+  .addra(wa),
+  .dina(i),
+  .clkb(rclk),
+  .enb(1'b1),
+  .addrb(ra7),
+  .doutb(o07)
+);
+
+FT64_regfileRam_sim urf18 (
+  .clka(clk4x),
+  .ena(wr),
+  .wea(we),
+  .addra(wa),
+  .dina(i),
+  .clkb(rclk),
+  .enb(1'b1),
+  .addrb(ra8),
+  .doutb(o08)
+);
 `else
 FT64_regfileRam urf10 (
   .clka(clk4x),
@@ -185,9 +227,9 @@ FT64_regfileRam urf10 (
   .dina(i),
   .clkb(rclk),
   .enb(1'b1),
-  .web(1'b0),
+  .web(8'b0),
   .addrb(ra0),
-  .dinb(8'h00),
+  .dinb(64'h00),
   .doutb(o00)
 );
 
@@ -199,9 +241,9 @@ FT64_regfileRam urf11 (
   .dina(i),
   .clkb(rclk),
   .enb(1'b1),
-  .web(1'b0),
+  .web(8'b0),
   .addrb(ra1),
-  .dinb(8'h00),
+  .dinb(64'h00),
   .doutb(o01)
 );
 
@@ -213,9 +255,9 @@ FT64_regfileRam urf12 (
   .dina(i),
   .clkb(rclk),
   .enb(1'b1),
-  .web(1'b0),
+  .web(8'b0),
   .addrb(ra2),
-  .dinb(8'h00),
+  .dinb(64'h00),
   .doutb(o02)
 );
 
@@ -227,9 +269,9 @@ FT64_regfileRam urf13 (
   .dina(i),
   .clkb(rclk),
   .enb(1'b1),
-  .web(1'b0),
+  .web(8'b0),
   .addrb(ra3),
-  .dinb(8'h00),
+  .dinb(64'h00),
   .doutb(o03)
 );
 
@@ -241,9 +283,9 @@ FT64_regfileRam urf14 (
   .dina(i),
   .clkb(rclk),
   .enb(1'b1),
-  .web(1'b0),
+  .web(8'b0),
   .addrb(ra4),
-  .dinb(8'h00),
+  .dinb(64'h00),
   .doutb(o04)
 );
 
@@ -255,10 +297,52 @@ FT64_regfileRam urf15 (
   .dina(i),
   .clkb(rclk),
   .enb(1'b1),
-  .web(1'b0),
+  .web(8'b0),
   .addrb(ra5),
-  .dinb(8'h00),
+  .dinb(64'h00),
   .doutb(o05)
+);
+
+FT64_regfileRam urf16 (
+  .clka(clk4x),
+  .ena(wr),
+  .wea(we),
+  .addra(wa),
+  .dina(i),
+  .clkb(rclk),
+  .enb(1'b1),
+  .web(8'b0),
+  .addrb(ra6),
+  .dinb(64'h00),
+  .doutb(o06)
+);
+
+FT64_regfileRam urf17 (
+  .clka(clk4x),
+  .ena(wr),
+  .wea(we),
+  .addra(wa),
+  .dina(i),
+  .clkb(rclk),
+  .enb(1'b1),
+  .web(8'b0),
+  .addrb(ra7),
+  .dinb(64'h00),
+  .doutb(o07)
+);
+
+FT64_regfileRam urf18 (
+  .clka(clk4x),
+  .ena(wr),
+  .wea(we),
+  .addra(wa),
+  .dina(i),
+  .clkb(rclk),
+  .enb(1'b1),
+  .web(8'b0),
+  .addrb(ra8),
+  .dinb(64'h00),
+  .doutb(o08)
 );
 `endif
 
@@ -447,11 +531,81 @@ assign o5[55:48] = ra5[4:0]==5'd0 ? {8{1'b0}} :
 assign o5[63:56] = ra5[4:0]==5'd0 ? {8{1'b0}} :
 	(wr1 && we1[7] && (ra5==wa1)) ? i1[63:56] :
 	(wr0 && we0[7] && (ra5==wa0)) ? i0[63:56] : o05[63:56];
-/*
-assign o5 = ra5[4:0]==5'd0 ? {WID{1'b0}} :
-    (wr1 && (ra5==wa1)) ? i1 :
-    (wr0 && (ra5==wa0)) ? i0 : o05;
 
-*/
+assign o6[7:0] = ra6[4:0]==5'd0 ? {8{1'b0}} :
+	(wr1 && we1[0] && (ra6==wa1)) ? i1[7:0] :
+	(wr0 && we0[0] && (ra6==wa0)) ? i0[7:0] : o06[7:0];
+assign o6[15:8] = ra6[4:0]==5'd0 ? {8{1'b0}} :
+	(wr1 && we1[1] && (ra6==wa1)) ? i1[15:8] :
+	(wr0 && we0[1] && (ra6==wa0)) ? i0[15:8] : o06[15:8];
+assign o6[23:16] = ra6[4:0]==5'd0 ? {8{1'b0}} :
+	(wr1 && we1[2] && (ra6==wa1)) ? i1[23:16] :
+	(wr0 && we0[2] && (ra6==wa0)) ? i0[23:16] : o06[23:16];
+assign o6[31:24] = ra6[4:0]==5'd0 ? {8{1'b0}} :
+	(wr1 && we1[3] && (ra6==wa1)) ? i1[31:24] :
+	(wr0 && we0[3] && (ra6==wa0)) ? i0[31:24] : o06[31:24];
+assign o6[39:32] = ra6[4:0]==5'd0 ? {8{1'b0}} :
+	(wr1 && we1[4] && (ra6==wa1)) ? i1[39:32] :
+	(wr0 && we0[4] && (ra6==wa0)) ? i0[39:32] : o06[39:32];
+assign o6[47:40] = ra6[4:0]==5'd0 ? {8{1'b0}} :
+	(wr1 && we1[5] && (ra6==wa1)) ? i1[47:40] :
+	(wr0 && we0[5] && (ra6==wa0)) ? i0[47:40] : o06[47:40];
+assign o6[55:48] = ra6[4:0]==5'd0 ? {8{1'b0}} :
+	(wr1 && we1[6] && (ra6==wa1)) ? i1[55:48] :
+	(wr0 && we0[6] && (ra6==wa0)) ? i0[55:48] : o06[55:48];
+assign o6[63:56] = ra6[4:0]==5'd0 ? {8{1'b0}} :
+	(wr1 && we1[7] && (ra6==wa1)) ? i1[63:56] :
+	(wr0 && we0[7] && (ra6==wa0)) ? i0[63:56] : o06[63:56];
+
+assign o7[7:0] = ra7[4:0]==5'd0 ? {8{1'b0}} :
+	(wr1 && we1[0] && (ra7==wa1)) ? i1[7:0] :
+	(wr0 && we0[0] && (ra7==wa0)) ? i0[7:0] : o07[7:0];
+assign o7[15:8] = ra7[4:0]==5'd0 ? {8{1'b0}} :
+	(wr1 && we1[1] && (ra7==wa1)) ? i1[15:8] :
+	(wr0 && we0[1] && (ra7==wa0)) ? i0[15:8] : o07[15:8];
+assign o7[23:16] = ra7[4:0]==5'd0 ? {8{1'b0}} :
+	(wr1 && we1[2] && (ra7==wa1)) ? i1[23:16] :
+	(wr0 && we0[2] && (ra7==wa0)) ? i0[23:16] : o07[23:16];
+assign o7[31:24] = ra7[4:0]==5'd0 ? {8{1'b0}} :
+	(wr1 && we1[3] && (ra7==wa1)) ? i1[31:24] :
+	(wr0 && we0[3] && (ra7==wa0)) ? i0[31:24] : o07[31:24];
+assign o7[39:32] = ra7[4:0]==5'd0 ? {8{1'b0}} :
+	(wr1 && we1[4] && (ra7==wa1)) ? i1[39:32] :
+	(wr0 && we0[4] && (ra7==wa0)) ? i0[39:32] : o07[39:32];
+assign o7[47:40] = ra7[4:0]==5'd0 ? {8{1'b0}} :
+	(wr1 && we1[5] && (ra7==wa1)) ? i1[47:40] :
+	(wr0 && we0[5] && (ra7==wa0)) ? i0[47:40] : o07[47:40];
+assign o7[55:48] = ra7[4:0]==5'd0 ? {8{1'b0}} :
+	(wr1 && we1[6] && (ra7==wa1)) ? i1[55:48] :
+	(wr0 && we0[6] && (ra7==wa0)) ? i0[55:48] : o07[55:48];
+assign o7[63:56] = ra7[4:0]==5'd0 ? {8{1'b0}} :
+	(wr1 && we1[7] && (ra7==wa1)) ? i1[63:56] :
+	(wr0 && we0[7] && (ra7==wa0)) ? i0[63:56] : o07[63:56];
+
+assign o8[7:0] = ra8[4:0]==5'd0 ? {8{1'b0}} :
+	(wr1 && we1[0] && (ra8==wa1)) ? i1[7:0] :
+	(wr0 && we0[0] && (ra8==wa0)) ? i0[7:0] : o08[7:0];
+assign o8[15:8] = ra8[4:0]==5'd0 ? {8{1'b0}} :
+	(wr1 && we1[1] && (ra8==wa1)) ? i1[15:8] :
+	(wr0 && we0[1] && (ra8==wa0)) ? i0[15:8] : o08[15:8];
+assign o8[23:16] = ra8[4:0]==5'd0 ? {8{1'b0}} :
+	(wr1 && we1[2] && (ra8==wa1)) ? i1[23:16] :
+	(wr0 && we0[2] && (ra8==wa0)) ? i0[23:16] : o08[23:16];
+assign o8[31:24] = ra8[4:0]==5'd0 ? {8{1'b0}} :
+	(wr1 && we1[3] && (ra8==wa1)) ? i1[31:24] :
+	(wr0 && we0[3] && (ra8==wa0)) ? i0[31:24] : o08[31:24];
+assign o8[39:32] = ra8[4:0]==5'd0 ? {8{1'b0}} :
+	(wr1 && we1[4] && (ra8==wa1)) ? i1[39:32] :
+	(wr0 && we0[4] && (ra8==wa0)) ? i0[39:32] : o08[39:32];
+assign o8[47:40] = ra8[4:0]==5'd0 ? {8{1'b0}} :
+	(wr1 && we1[5] && (ra8==wa1)) ? i1[47:40] :
+	(wr0 && we0[5] && (ra8==wa0)) ? i0[47:40] : o08[47:40];
+assign o8[55:48] = ra8[4:0]==5'd0 ? {8{1'b0}} :
+	(wr1 && we1[6] && (ra8==wa1)) ? i1[55:48] :
+	(wr0 && we0[6] && (ra8==wa0)) ? i0[55:48] : o08[55:48];
+assign o8[63:56] = ra8[4:0]==5'd0 ? {8{1'b0}} :
+	(wr1 && we1[7] && (ra8==wa1)) ? i1[63:56] :
+	(wr0 && we0[7] && (ra8==wa0)) ? i0[63:56] : o08[63:56];
+
 endmodule
 

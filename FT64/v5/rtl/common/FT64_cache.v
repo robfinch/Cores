@@ -740,16 +740,18 @@ endmodule
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
 
-module FT64_dcache_tag(wclk, wr, wadr, rclk, radr, hit0, hit1);
+module FT64_dcache_tag(wclk, wr, wadr, rclk, radr, whit, hit0, hit1);
 input wclk;
 input wr;
 input [37:0] wadr;
 input rclk;
 input [37:0] radr;
+output reg whit;
 output reg hit0;
 output reg hit1;
 
 wire [31:0] tago0, tago1;
+wire [31:0] wtago;
 wire [37:0] radrp8 = radr + 32'd32;
 
 FT64_dcache_tag2 u1 (
@@ -758,6 +760,7 @@ FT64_dcache_tag2 u1 (
   .wea(wr),      // input wire [0 : 0] wea
   .addra(wadr[13:5]),  // input wire [8 : 0] addra
   .dina(wadr[37:14]),    // input wire [31 : 0] dina
+  .douta(wtago),
   .clkb(rclk),    // input wire clkb
   .web(1'b0),
   .dinb(32'd0),
@@ -784,18 +787,21 @@ always @(posedge rclk)
      hit0 <= tago0[23:0]==radr[37:14];
 always @(posedge rclk)
      hit1 <= tago1[23:0]==radrp8[37:14];
+always @(posedge wclk)
+		whit <= wtago[23:0]==wadr[37:14];
 
 endmodule
 
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
 
-module FT64_dcache(rst, wclk, wr, sel, wadr, i, li, rclk, rdsize, radr, o, lo, hit, hit0, hit1);
+module FT64_dcache(rst, wclk, wr, sel, wadr, whit, i, li, rclk, rdsize, radr, o, lo, hit, hit0, hit1);
 input rst;
 input wclk;
 input wr;
 input [7:0] sel;
 input [37:0] wadr;
+output whit;
 input [63:0] i;
 input [255:0] li;		// line input
 input rclk;
@@ -849,6 +855,7 @@ FT64_dcache_tag u3
     .wadr(wadr),
     .rclk(rclk),
     .radr(radr),
+    .whit(whit),
     .hit0(hit0a),
     .hit1(hit1a)
 );

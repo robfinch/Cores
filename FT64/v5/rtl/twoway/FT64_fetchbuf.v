@@ -166,9 +166,11 @@ endfunction
 
 function [2:0] fnInsLength;
 input [47:0] ins;
+`ifdef SUPPORT_DCI
 if (ins[`INSTRUCTION_OP]==`CMPRSSD)
 	fnInsLength = 3'd2;
 else
+`endif
 	case(ins[7:6])
 	2'd0:	fnInsLength = 3'd4;
 	2'd1:	fnInsLength = 3'd6;
@@ -204,12 +206,14 @@ FT64_iexpander ux2
 // Table of decompressed instructions.
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 assign ack_o = cs_i & cyc_i & stb_i;
+`ifdef SUPPORT_DCI
 reg [47:0] DecompressTable [0:2047];
 always @(posedge clk)
 	if (cs_i & cyc_i & stb_i & we_i)
 		DecompressTable[adr_i[12:3]] <= dat_i[47:0];
 wire [47:0] expand0 = DecompressTable[{cmpgrp,insn0[15:8]}];
 wire [47:0] expand1 = DecompressTable[{cmpgrp,insn1[15:8]}];
+`endif
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
@@ -814,9 +818,12 @@ assign fetchbuf1_thrd  = thread_en;
 reg [2:0] insln0, insln1;
 always @*
 begin
+`ifdef SUPPORT_DCI
 	if (insn0[5:0]==`CMPRSSD)
 		insln0 <= 3'd2;
-	else if (insn0[7:6]==2'b00 && insn0[`INSTRUCTION_OP]==`EXEC)
+	else
+`endif
+	if (insn0[7:6]==2'b00 && insn0[`INSTRUCTION_OP]==`EXEC)
 		insln0 <= fnInsLength(codebuf0);
 	else
 		insln0 <= fnInsLength(insn0);
@@ -824,9 +831,12 @@ end
 
 always @*
 begin
+`ifdef SUPPORT_DCI
 	if (insn1[5:0]==`CMPRSSD)
 		insln1 <= 3'd2;
-	else if (insn1[7:6]==2'b00 && insn1[`INSTRUCTION_OP]==`EXEC)
+	else
+`endif
+	if (insn1[7:6]==2'b00 && insn1[`INSTRUCTION_OP]==`EXEC)
 		insln1 <= fnInsLength(codebuf1);
 	else
 		insln1 <= fnInsLength(insn1);
@@ -836,9 +846,12 @@ reg [47:0] cinsn0, cinsn1;
 
 always @*
 begin
+`ifdef SUPPORT_DCI
 	if (insn0[5:0]==`CMPRSSD)
 		cinsn0 <= expand0;
-	else if (insn0[7:6]==2'b00 && insn0[`INSTRUCTION_OP]==`EXEC)
+	else
+`endif
+	if (insn0[7:6]==2'b00 && insn0[`INSTRUCTION_OP]==`EXEC)
 		cinsn0 <= codebuf0;
 	else if (insn0[7])
 		cinsn0 <= xinsn0;
@@ -848,9 +861,12 @@ end
 
 always @*
 begin
+`ifdef SUPPORT_DCI
 	if (insn1[5:0]==`CMPRSSD)
 		cinsn1 <= expand1;
-	else if (insn1[7:6]==2'b00 && insn1[`INSTRUCTION_OP]==`EXEC)
+	else
+`endif
+	if (insn1[7:6]==2'b00 && insn1[`INSTRUCTION_OP]==`EXEC)
 		cinsn1 <= codebuf1;
 	else if (insn1[7])
 		cinsn1 <= xinsn1;
