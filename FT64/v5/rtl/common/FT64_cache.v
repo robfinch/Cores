@@ -38,11 +38,12 @@
 module FT64_L1_icache_mem(rst, clk, wr, en, lineno, i, o, ov, invall, invline);
 parameter pLines = 64;
 parameter pLineWidth = 288;
+localparam pLNMSB = pLines==128 ? 6 : 5;
 input rst;
 input clk;
 input wr;
 input [8:0] en;
-input [5:0] lineno;
+input [pLNMSB:0] lineno;
 input [pLineWidth-1:0] i;
 output [pLineWidth-1:0] o;
 output [8:0] ov;
@@ -191,29 +192,32 @@ endmodule
 // -----------------------------------------------------------------------------
 
 module FT64_L1_icache_cmptag4way(rst, clk, nxt, wr, adr, lineno, hit);
+parameter pLines = 64;
+localparam pLNMSB = pLines==128 ? 6 : 5;
+localparam pMSB = pLines==128 ? 9 : 8;
 input rst;
 input clk;
 input nxt;
 input wr;
 input [37:0] adr;
-output reg [5:0] lineno;
+output reg [pLNMSB:0] lineno;
 output hit;
 
 (* ram_style="distributed" *)
-reg [32:0] mem0 [0:15];
-reg [32:0] mem1 [0:15];
-reg [32:0] mem2 [0:15];
-reg [32:0] mem3 [0:15];
+reg [32:0] mem0 [0:pLines/4-1];
+reg [32:0] mem1 [0:pLines/4-1];
+reg [32:0] mem2 [0:pLines/4-1];
+reg [32:0] mem3 [0:pLines/4-1];
 reg [37:0] rradr;
 integer n;
 initial begin
-    for (n = 0; n < 16; n = n + 1)
-    begin
-        mem0[n] = 0;
-        mem1[n] = 0;
-        mem2[n] = 0;
-        mem3[n] = 0;
-    end
+  for (n = 0; n < pLines/4; n = n + 1)
+  begin
+    mem0[n] = 0;
+    mem1[n] = 0;
+    mem2[n] = 0;
+    mem3[n] = 0;
+  end
 end
 
 wire [21:0] lfsro;
@@ -225,24 +229,24 @@ if (rst)
 else begin
 	if (wr) begin
 		case(lfsro[1:0])
-		2'b00:	begin  mem0[adr[8:5]] <= adr[37:5];  wlineno <= {2'b00,adr[8:5]}; end
-		2'b01:	begin  mem1[adr[8:5]] <= adr[37:5];  wlineno <= {2'b01,adr[8:5]}; end
-		2'b10:	begin  mem2[adr[8:5]] <= adr[37:5];  wlineno <= {2'b10,adr[8:5]}; end
-		2'b11:	begin  mem3[adr[8:5]] <= adr[37:5];  wlineno <= {2'b11,adr[8:5]}; end
+		2'b00:	begin  mem0[adr[pMSB:5]] <= adr[37:5];  wlineno <= {2'b00,adr[pMSB:5]}; end
+		2'b01:	begin  mem1[adr[pMSB:5]] <= adr[37:5];  wlineno <= {2'b01,adr[pMSB:5]}; end
+		2'b10:	begin  mem2[adr[pMSB:5]] <= adr[37:5];  wlineno <= {2'b10,adr[pMSB:5]}; end
+		2'b11:	begin  mem3[adr[pMSB:5]] <= adr[37:5];  wlineno <= {2'b11,adr[pMSB:5]}; end
 		endcase
 	end
 end
 
-wire hit0 = mem0[adr[8:5]]==adr[37:5];
-wire hit1 = mem1[adr[8:5]]==adr[37:5];
-wire hit2 = mem2[adr[8:5]]==adr[37:5];
-wire hit3 = mem3[adr[8:5]]==adr[37:5];
+wire hit0 = mem0[adr[pMSB:5]]==adr[37:5];
+wire hit1 = mem1[adr[pMSB:5]]==adr[37:5];
+wire hit2 = mem2[adr[pMSB:5]]==adr[37:5];
+wire hit3 = mem3[adr[pMSB:5]]==adr[37:5];
 always @*
     //if (wr2) lineno = wlineno;
-    if (hit0)  lineno = {2'b00,adr[8:5]};
-    else if (hit1)  lineno = {2'b01,adr[8:5]};
-    else if (hit2)  lineno = {2'b10,adr[8:5]};
-    else  lineno = {2'b11,adr[8:5]};
+    if (hit0)  lineno = {2'b00,adr[pMSB:5]};
+    else if (hit1)  lineno = {2'b01,adr[pMSB:5]};
+    else if (hit2)  lineno = {2'b10,adr[pMSB:5]};
+    else  lineno = {2'b11,adr[pMSB:5]};
 assign hit = hit0|hit1|hit2|hit3;
 endmodule
 
@@ -303,8 +307,11 @@ endmodule
 // -----------------------------------------------------------------------------
 
 module FT64_L1_icache(rst, clk, nxt, wr, wr_ack, en, wadr, adr, i, o, hit, invall, invline);
+parameter pSize = 2;
 parameter CAMTAGS = 1'b0;   // 32 way
 parameter FOURWAY = 1'b1;
+localparam pLines = pSize==4 ? 128 : 64;
+localparam pLNMSB = pSize==4 ? 6 : 5;
 input rst;
 input clk;
 input nxt;
@@ -322,8 +329,8 @@ input invline;
 wire [287:0] ic;
 reg [287:0] i1, i2;
 wire [8:0] lv;				// line valid
-wire [5:0] lineno;
-wire [5:0] wlineno;
+wire [pLNMSB:0] lineno;
+wire [pLNMSB:0] wlineno;
 wire taghit;
 reg wr1,wr2;
 reg [8:0] en1, en2;
@@ -351,7 +358,7 @@ always @(posedge clk)
 generate begin : tags
 if (FOURWAY) begin
 
-FT64_L1_icache_mem u1
+FT64_L1_icache_mem #(.pLines(pLines)) u1
 (
     .rst(rst),
     .clk(clk),
@@ -365,7 +372,7 @@ FT64_L1_icache_mem u1
     .invline(invline1)
 );
 
-FT64_L1_icache_cmptag4way u3
+FT64_L1_icache_cmptag4way #(.pLines(pLines)) u3
 (
 	.rst(rst),
 	.clk(clk),

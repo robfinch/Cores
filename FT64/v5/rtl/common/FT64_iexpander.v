@@ -58,7 +58,7 @@ casez({cinstr[15:12],cinstr[6]})
 	default:
 			begin
 			expand[47:32] = 16'h0000;
-			expand[31:18] = {{6{cinstr[11]}},cinstr[11:8],cinstr[5]};
+			expand[31:18] = {{9{cinstr[11]}},cinstr[11:8],cinstr[5]};
 			expand[17:13] = cinstr[4:0];
 			expand[12:8] = cinstr[4:0];
 			expand[7:6] = 2'b10;

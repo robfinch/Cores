@@ -25,8 +25,8 @@
 //=============================================================================
 //
 module FT64_BranchPredictor(rst, clk, en,
-    xisBranch0, xisBranch1,
-    pcA, pcB, pcC, pcD, pcE, pcF, xpc0, xpc1, takb0, takb1,
+    xisBranch0, xisBranch1, xisBranch2,
+    pcA, pcB, pcC, pcD, pcE, pcF, xpc0, xpc1, xpc2, takb0, takb1, takb2,
     predict_takenA, predict_takenB, predict_takenC, predict_takenD,
     predict_takenE, predict_takenF);
 parameter DBW=32;
@@ -35,6 +35,7 @@ input clk;
 input en;
 input xisBranch0;
 input xisBranch1;
+input xisBranch2;
 input [DBW-1:0] pcA;
 input [DBW-1:0] pcB;
 input [DBW-1:0] pcC;
@@ -43,8 +44,10 @@ input [DBW-1:0] pcE;
 input [DBW-1:0] pcF;
 input [DBW-1:0] xpc0;
 input [DBW-1:0] xpc1;
+input [DBW-1:0] xpc2;
 input takb0;
 input takb1;
+input takb2;
 output predict_takenA;
 output predict_takenB;
 output predict_takenC;
@@ -67,13 +70,13 @@ initial begin
 	for (n = 0; n < 512; n = n + 1)
 		branch_history_table[n] = 3;
 end
-wire [8:0] bht_wa = {pc[8:2],gbl_branch_hist[2:1]};		// write address
-wire [8:0] bht_raA = {pcA[8:2],gbl_branch_hist[2:1]};	// read address (IF stage)
-wire [8:0] bht_raB = {pcB[8:2],gbl_branch_hist[2:1]};	// read address (IF stage)
-wire [8:0] bht_raC = {pcC[8:2],gbl_branch_hist[2:1]};	// read address (IF stage)
-wire [8:0] bht_raD = {pcD[8:2],gbl_branch_hist[2:1]};	// read address (IF stage)
-wire [8:0] bht_raE = {pcE[8:2],gbl_branch_hist[2:1]};	// read address (IF stage)
-wire [8:0] bht_raF = {pcF[8:2],gbl_branch_hist[2:1]};	// read address (IF stage)
+wire [8:0] bht_wa = {pc[7:1],gbl_branch_hist[2:1]};		// write address
+wire [8:0] bht_raA = {pcA[7:1],gbl_branch_hist[2:1]};	// read address (IF stage)
+wire [8:0] bht_raB = {pcB[7:1],gbl_branch_hist[2:1]};	// read address (IF stage)
+wire [8:0] bht_raC = {pcC[7:1],gbl_branch_hist[2:1]};	// read address (IF stage)
+wire [8:0] bht_raD = {pcD[7:1],gbl_branch_hist[2:1]};	// read address (IF stage)
+wire [8:0] bht_raE = {pcE[7:1],gbl_branch_hist[2:1]};	// read address (IF stage)
+wire [8:0] bht_raF = {pcF[7:1],gbl_branch_hist[2:1]};	// read address (IF stage)
 wire [1:0] bht_xbits = branch_history_table[bht_wa];
 wire [1:0] bht_ibitsA = branch_history_table[bht_raA];
 wire [1:0] bht_ibitsB = branch_history_table[bht_raB];
@@ -92,19 +95,49 @@ always @(posedge clk)
 if (rst)
 	pcstail <= 5'd0;
 else begin
-	if (xisBranch0 & xisBranch1) begin
+	case({xisBranch0,xisBranch1,xisBranch2})
+	3'b000:	;
+	3'b001:
+		begin
+		pcs[pcstail] <= {xpc2[31:1],takb2};
+		pcstail <= pcstail + 5'd1;
+		end
+	3'b010:
+		begin
+		pcs[pcstail] <= {xpc1[31:1],takb1};
+		pcstail <= pcstail + 5'd1;
+		end
+	3'b011:
+		begin
+		pcs[pcstail] <= {xpc1[31:1],takb1};
+		pcs[pcstail+1] <= {xpc2[31:1],takb2};
+		pcstail <= pcstail + 5'd2;
+		end
+	3'b100:
+		begin
+		pcs[pcstail] <= {xpc0[31:1],takb0};
+		pcstail <= pcstail + 5'd1;
+		end
+	3'b101:
+		begin
+		pcs[pcstail] <= {xpc0[31:1],takb0};
+		pcs[pcstail+1] <= {xpc2[31:1],takb2};
+		pcstail <= pcstail + 5'd2;
+		end
+	3'b110:
+		begin
 		pcs[pcstail] <= {xpc0[31:1],takb0};
 		pcs[pcstail+1] <= {xpc1[31:1],takb1};
 		pcstail <= pcstail + 5'd2;
-	end
-	else if (xisBranch0) begin
+		end
+	3'b111:
+		begin
 		pcs[pcstail] <= {xpc0[31:1],takb0};
-		pcstail <= pcstail + 5'd1;
-	end
-	else if (xisBranch1) begin
-		pcs[pcstail] <= {xpc1[31:1],takb1};
-		pcstail <= pcstail + 5'd1;
-	end
+		pcs[pcstail+1] <= {xpc1[31:1],takb1};
+		pcs[pcstail+2] <= {xpc2[31:1],takb2};
+		pcstail <= pcstail + 5'd3;
+		end
+	endcase
 end
 
 always @(posedge clk)
@@ -147,11 +180,11 @@ always @(posedge clk)
 if (rst)
 	gbl_branch_hist <= 3'b000;
 else begin
-    if (en) begin
-        if (wrhist) begin
-            gbl_branch_hist <= {gbl_branch_hist[1:0],takb};
-            branch_history_table[bht_wa] <= xbits_new;
-        end
+  if (en) begin
+    if (wrhist) begin
+      gbl_branch_hist <= {gbl_branch_hist[1:0],takb};
+      branch_history_table[bht_wa] <= xbits_new;
+    end
 	end
 end
 

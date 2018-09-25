@@ -27,21 +27,42 @@
 `define SUPPORT_VECTOR	1'b1
 //`define SUPPORT_DCI			1'b1	// dynamically compressed instructions
 //`define DEBUG_LOGIC 1'b1
+`define L1_ICACHE_SIZE	4				// 2 or 4 for 2 or 4 kB
 
+// One way to tweak the size of the core a little bit is to limit the number
+// of address bits processed. The test system for instance has only 512MB of
+// memory, so the address size is limited to 32 bits.
 `define AMSB			31
 `define ABITS			`AMSB:0
-`define QBITS			3:0
+
+
+`define QBITS			3:0			// bitfield representing a queue entry index
 `define QENTRIES	10			// changing this still requires changing code in FT64.
 `define XBITS			7:0
 
 //`define SUPPORT_DBG		1'b1
+
+// Issue logic is not really required for every possible distance from
+// the head of the queue. Later queue entries tend to depend on prior
+// ones and hence may not be ready to be issued. Also note that 
+// instruction decode takes a cycle making the last entry or two in the
+// queue not ready to be issued. Commenting out this line will limit
+// much of the issue logic to the first six queue slots relative to the
+// head of the queue.
 `define FULL_ISSUE_LOGIC	1'b1
 
+// The WAYS config define affects things like the number of ports on the
+// register file, the number of ports on the instruction cache, and how
+// many entries are contained in the fetch buffers. It also indirectly
+// affects how many instructions are queued.
 `define WAYS			2				// number of ways parallel (1-3 3 not working yet)
 `define NUM_IDU		2				// number of instruction decode units (1-3)
 `define NUM_ALU		2				// number of ALU's (1-2)
 `define NUM_MEM		2				// number of memory queues (1-3)
 `define NUM_FPU		2				// number of floating-point units (0-2)
+// Note that even with just a single commit bus, multiple instructions may
+// commit if they do not target any registers. Up to three instruction may
+// commit even with just a single bus.
 `define NUM_CMT		2				// number of commit busses (1-2)
 // Comment out the following to remove FCU enhancements (branch predictor, BTB, RSB)
 `define FCU_ENH		1

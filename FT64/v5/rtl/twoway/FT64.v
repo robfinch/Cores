@@ -844,7 +844,8 @@ reg [63:0] dramC_bus;
 reg  [`XBITS] dramC_exc;
 
 wire        outstanding_stores;
-reg [63:0] I;	// instruction count
+reg [63:0] I;		// instruction count
+reg [63:0] CC;	// commit count
 
 reg        commit0_v;
 reg  [4:0] commit0_id;
@@ -856,15 +857,20 @@ reg  [4:0] commit1_id;
 reg [RBIT:0] commit1_tgt;
 reg  [7:0] commit1_we = 8'h00;
 reg [63:0] commit1_bus;
+reg        commit2_v;
+reg  [4:0] commit2_id;
+reg [RBIT:0] commit2_tgt;
+reg  [7:0] commit2_we = 8'h00;
+reg [63:0] commit2_bus;
 
 reg [4:0] bstate;
 parameter BIDLE = 5'd0;
-parameter B1 = 5'd1;
-parameter B2 = 5'd2;
-parameter B3 = 5'd3;
-parameter B4 = 5'd4;
-parameter B5 = 5'd5;
-parameter B6 = 5'd6;
+parameter B_DCacheStoreAck = 5'd1;
+parameter B_DCacheLoadStart = 5'd2;
+parameter B_DCacheLoadStb = 5'd3;
+parameter B_DCacheLoadWait1 = 5'd4;
+parameter B_DCacheLoadWait2 = 5'd5;
+parameter B_DCacheLoadResetBusy = 5'd6;
 parameter B7 = 5'd7;
 parameter B8 = 5'd8;
 parameter B9 = 5'd9;
@@ -881,9 +887,10 @@ parameter B19 = 5'd19;
 parameter B2a = 5'd20;
 parameter B2b = 5'd21;
 parameter B2c = 5'd22;
-parameter B2d = 5'd23;
+parameter B_DCacheLoadAck = 5'd23;
 parameter B20 = 5'd24;
 parameter B21 = 5'd25;
+parameter B_DCacheLoadWait3 = 5'd26;
 reg [1:0] bwhich;
 reg [3:0] icstate,picstate;
 parameter IDLE = 4'd0;
@@ -1040,7 +1047,7 @@ generate begin : gInsnVar
 end
 endgenerate
 
-FT64_L1_icache uic0
+FT64_L1_icache #(.pSize(`L1_ICACHE_SIZE)) uic0
 (
     .rst(rst),
     .clk(clk),
@@ -1057,7 +1064,7 @@ FT64_L1_icache uic0
 );
 generate begin : gICacheInst
 if (`WAYS > 1) begin
-FT64_L1_icache uic1
+FT64_L1_icache #(.pSize(`L1_ICACHE_SIZE)) uic1
 (
     .rst(rst),
     .clk(clk),
@@ -1077,7 +1084,7 @@ else begin
 assign ihit1 = 1'b1;
 end
 if (`WAYS > 2) begin
-FT64_L1_icache uic2
+FT64_L1_icache #(.pSize(`L1_ICACHE_SIZE)) uic2
 (
     .rst(rst),
     .clk(clk),
@@ -1293,6 +1300,7 @@ FT64_BranchPredictor ubp1
   .en(bpe),
   .xisBranch0(iqentry_br[head0] & commit0_v),
   .xisBranch1(iqentry_br[head1] & commit1_v),
+  .xisBranch2(iqentry_br[head2] & commit2_v),
   .pcA(fetchbufA_pc),
   .pcB(fetchbufB_pc),
   .pcC(fetchbufC_pc),
@@ -1301,8 +1309,10 @@ FT64_BranchPredictor ubp1
   .pcF(fetchbufF_pc),
   .xpc0(iqentry_pc[head0]),
   .xpc1(iqentry_pc[head1]),
+  .xpc2(iqentry_pc[head2]),
   .takb0(commit0_v & iqentry_takb[head0]),
   .takb1(commit1_v & iqentry_takb[head1]),
+  .takb2(commit2_v & iqentry_takb[head2]),
   .predict_takenA(predict_takenA),
   .predict_takenB(predict_takenB),
   .predict_takenC(predict_takenC),
@@ -1329,6 +1339,7 @@ FT64_BranchPredictor ubp1
   .en(bpe),
   .xisBranch0(iqentry_br[head0] & commit0_v),
   .xisBranch1(iqentry_br[head1] & commit1_v),
+  .xisBranch2(iqentry_br[head2] & commit2_v),
   .pcA(fetchbufA_pc),
   .pcB(fetchbufB_pc),
   .pcC(fetchbufC_pc),
@@ -1337,8 +1348,10 @@ FT64_BranchPredictor ubp1
   .pcF(32'd0),
   .xpc0(iqentry_pc[head0]),
   .xpc1(iqentry_pc[head1]),
+  .xpc2(iqentry_pc[head2]),
   .takb0(commit0_v & iqentry_takb[head0]),
   .takb1(commit1_v & iqentry_takb[head1]),
+  .takb2(commit2_v & iqentry_takb[head2]),
   .predict_takenA(predict_takenA),
   .predict_takenB(predict_takenB),
   .predict_takenC(predict_takenC),
@@ -1362,7 +1375,8 @@ FT64_BranchPredictor ubp1
   .clk(fcu_clk),
   .en(bpe),
   .xisBranch0(iqentry_br[head0] & commit0_v),
-  .xisBranch1(1'b0),
+  .xisBranch1(iqentry_br[head1] & commit1_v),
+  .xisBranch2(iqentry_br[head2] & commit2_v),
   .pcA(fetchbufA_pc),
   .pcB(fetchbufB_pc),
   .pcC(32'd0),
@@ -1370,9 +1384,11 @@ FT64_BranchPredictor ubp1
   .pcE(32'd0),
   .pcF(32'd0),
   .xpc0(iqentry_pc[head0]),
-  .xpc1(32'd0),
+  .xpc1(iqentry_pc[head1]),
+  .xpc2(iqentry_pc[head2]),
   .takb0(commit0_v & iqentry_takb[head0]),
-  .takb1(1'b0),
+  .takb1(commit1_v & iqentry_takb[head1]),
+  .takb2(commit2_v & iqentry_takb[head2]),
   .predict_takenA(predict_takenA),
   .predict_takenB(predict_takenB),
   .predict_takenC(),
@@ -1713,11 +1729,11 @@ FT64_dcache udc0
 (
     .rst(rst),
     .wclk(clk),
-    .wr((bstate==B2d && ack_i)||((bstate==B1||(bstate==B19 && isStore)) && whit0)),
+    .wr((bstate==B_DCacheLoadAck && ack_i)||((bstate==B_DCacheStoreAck||(bstate==B19 && isStore)) && whit0)),
     .sel(sel_o),
     .wadr({pcr[5:0],adr_o}),
     .whit(whit0),
-    .i(bstate==B2d ? dat_i : dat_o),
+    .i(bstate==B_DCacheLoadAck ? dat_i : dat_o),
     .rclk(clk),
     .rdsize(dram0_memsize),
     .radr({pcr[5:0],dram0_addr}),
@@ -1732,11 +1748,11 @@ FT64_dcache udc1
 (
     .rst(rst),
     .wclk(clk),
-    .wr((bstate==B2d && ack_i)||((bstate==B1||(bstate==B19 && isStore)) && whit1)),
+    .wr((bstate==B_DCacheLoadAck && ack_i)||((bstate==B_DCacheStoreAck||(bstate==B19 && isStore)) && whit1)),
     .sel(sel_o),
     .wadr({pcr[5:0],adr_o}),
     .whit(whit1),
-    .i(bstate==B2d ? dat_i : dat_o),
+    .i(bstate==B_DCacheLoadAck ? dat_i : dat_o),
     .rclk(clk),
     .rdsize(dram1_memsize),
     .radr({pcr[5:0],dram1_addr}),
@@ -1751,11 +1767,11 @@ FT64_dcache udc2
 (
     .rst(rst),
     .wclk(clk),
-    .wr((bstate==B2d && ack_i)||((bstate==B1||(bstate==B19 && isStore)) && whit2)),
+    .wr((bstate==B_DCacheLoadAck && ack_i)||((bstate==B_DCacheStoreAck||(bstate==B19 && isStore)) && whit2)),
     .sel(sel_o),
     .wadr({pcr[5:0],adr_o}),
     .whit(whit2),
-    .i(bstate==B2d ? dat_i : dat_o),
+    .i(bstate==B_DCacheLoadAck ? dat_i : dat_o),
     .rclk(clk),
     .rdsize(dram2_memsize),
     .radr({pcr[5:0],dram2_addr}),
@@ -5573,15 +5589,36 @@ begin
 	    commit1_tgt <= iqentry_tgt[head1];  
 	    commit1_we  <= iqentry_we[head1];
 	    commit1_bus <= iqentry_res[head1];
+	    // Need to set commit1, and commit2 valid bits for the branch predictor.
+	    if (`NUM_CMT > 2) begin
+	  	end
+	  	else begin
+	  		commit2_v <= ({iqentry_v[head0], iqentry_cmt[head0]} != 2'b10
+	  							 && {iqentry_v[head1], iqentry_cmt[head1]} != 2'b10
+	  							 && {iqentry_v[head2], iqentry_br[head2], iqentry_cmt[head2]}==3'b111
+		               && iqentry_tgt[head2][4:0]==5'd0 && ~|panic);	// watch out for dbnz and ibne
+	  		commit2_tgt <= 12'h000;
+	  		commit2_we <= 8'h00;
+	  	end
   	end
   	else begin
+  		commit1_v <= ({iqentry_v[head0], iqentry_cmt[head0]} != 2'b10
+  							 && {iqentry_v[head1], iqentry_br[head1], iqentry_cmt[head1]}==3'b111
+	               && iqentry_tgt[head1][4:0]==5'd0 && ~|panic);	// watch out for dbnz and ibne
   		commit1_tgt <= 12'h000;
   		commit1_we <= 8'h00;
+  		commit2_v <= ({iqentry_v[head0], iqentry_cmt[head0]} != 2'b10
+  							 && {iqentry_v[head1], iqentry_cmt[head1]} != 2'b10
+  							 && {iqentry_v[head2], iqentry_br[head2], iqentry_cmt[head2]}==3'b111
+	               && iqentry_tgt[head2][4:0]==5'd0 && ~|panic);	// watch out for dbnz and ibne
+  		commit2_tgt <= 12'h000;
+  		commit2_we <= 8'h00;
   	end
 end
     
-assign int_commit = (commit0_v && iqentry_irq[head0]) ||
-                    (commit0_v && commit1_v && iqentry_irq[head1] && `NUM_CMT > 1);
+assign int_commit = (commit0_v && iqentry_irq[head0])
+									 || (commit0_v && commit1_v && iqentry_irq[head1] && `NUM_CMT > 1)
+									 || (commit0_v && commit1_v && commit2_v && iqentry_irq[head2] && `NUM_CMT > 2);
 
 // Detect if a given register will become valid during the current cycle.
 // We want a signal that is active during the current clock cycle for the read
@@ -5611,7 +5648,10 @@ begin
 			|| (branchmiss && branchmiss_thrd == iqentry_thrd[commit0_id[`QBITS]] && iqentry_source[ commit0_id[`QBITS] ]));
 		if (commit1_v && n=={commit1_tgt[7:0]} && `NUM_CMT > 1)
 			regIsValid[n] = regIsValid[n] | (rf_source[ {commit1_tgt[7:0]} ] == commit1_id
-			|| (branchmiss && branchmiss_thrd == iqentry_thrd[commit0_id[`QBITS]] && iqentry_source[ commit1_id[`QBITS] ]));
+			|| (branchmiss && branchmiss_thrd == iqentry_thrd[commit1_id[`QBITS]] && iqentry_source[ commit1_id[`QBITS] ]));
+		if (commit2_v && n=={commit2_tgt[7:0]} && `NUM_CMT > 2)
+			regIsValid[n] = regIsValid[n] | (rf_source[ {commit2_tgt[7:0]} ] == commit2_id
+			|| (branchmiss && branchmiss_thrd == iqentry_thrd[commit2_id[`QBITS]] && iqentry_source[ commit2_id[`QBITS] ]));
 	end
 	regIsValid[0] = `VAL;
 	regIsValid[32] = `VAL;
@@ -5963,6 +6003,7 @@ if (rst) begin
      dramB_v <= 0;
      dramC_v <= 0;
      I <= 0;
+     CC <= 0;
      icstate <= IDLE;
      bstate <= BIDLE;
      tick <= 64'd0;
@@ -6142,6 +6183,22 @@ else begin
         rf_source[ {commit1_tgt[7:0]} ] == commit1_id || (branchmiss && iqentry_source[ commit1_id[`QBITS] ]));
         if (commit1_tgt[5:0]==6'd30 && commit1_bus==64'd0)
         	$display("FP <= 0");
+    end
+    if (commit2_v && `NUM_CMT > 2) begin
+      if (!rf_v[ {commit2_tgt[7:0]} ]) begin
+      	if ({commit2_tgt[7:0]}=={commit1_tgt[7:0]} && {commit2_tgt[7:0]}=={commit0_tgt[7:0]})
+      		 rf_v[ {commit2_tgt[7:0]} ] <= regIsValid[{commit0_tgt[7:0]}] | regIsValid[{commit1_tgt[7:0]}] | regIsValid[{commit2_tgt[7:0]}];
+      	else if ({commit2_tgt[7:0]}=={commit0_tgt[7:0]})
+      		 rf_v[ {commit2_tgt[7:0]} ] <= regIsValid[{commit0_tgt[7:0]}] | regIsValid[{commit2_tgt[7:0]}];
+      	else if ({commit2_tgt[7:0]}=={commit1_tgt[7:0]})
+      		 rf_v[ {commit2_tgt[7:0]} ] <= regIsValid[{commit1_tgt[7:0]}] | regIsValid[{commit2_tgt[7:0]}];
+      	else
+        	 rf_v[ {commit2_tgt[7:0]} ] <= regIsValid[{commit2_tgt[7:0]}];//rf_source[ commit1_tgt[4:0] ] == commit1_id || (branchmiss && iqentry_source[ commit1_id[`QBITS] ]);
+      end
+      if (commit2_tgt[5:0] != 6'd0) $display("r%d <- %h   v[%d]<-%d", commit2_tgt, commit2_bus, regIsValid[commit2_tgt[5:0]],
+      rf_source[ {commit2_tgt[7:0]} ] == commit2_id || (branchmiss && iqentry_source[ commit2_id[`QBITS] ]));
+      if (commit2_tgt[5:0]==6'd30 && commit2_bus==64'd0)
+      	$display("FP <= 0");
     end
      rf_v[0] <= 1;
 
@@ -6655,6 +6712,8 @@ begin
 	setargs(n,commit0_id,commit0_v,commit0_bus);
 	if (`NUM_CMT > 1)
 		setargs(n,commit1_id,commit1_v,commit1_bus);
+	if (`NUM_CMT > 2)
+		setargs(n,commit2_id,commit2_v,commit2_bus);
 
 	setinsn(n[`QBITS],id1_ido,id1_available&id1_vo,id1_bus);
 	if (`NUM_IDU > 1)
@@ -7171,6 +7230,8 @@ end
 oddball_commit(commit0_v, head0);
 if (`NUM_CMT > 1)
 	oddball_commit(commit1_v, head1);
+if (`NUM_CMT > 2)
+	oddball_commit(commit2_v, head2);
 //if (`NUM_CMT > 2)
 //	oddball_commit(commit2_v, head2);
 
@@ -7496,7 +7557,7 @@ BIDLE:
 			ol_o  <= wb_ol[0];
 			wbo_id <= wb_id[0];
      	isStore <= TRUE;
-			bstate <= wb_rmw[0] ? B12 : B1;
+			bstate <= wb_rmw[0] ? B12 : B_DCacheStoreAck;
 		end
 		begin
 			for (j = 1; j < `WB_DEPTH; j = j + 1) begin
@@ -7620,7 +7681,7 @@ BIDLE:
                  dat_o <= fnDato(dram0_instr,dram0_data);
                  ol_o  <= dram0_ol;
 			        	isStore <= TRUE;
-                 bstate <= B1;
+                 bstate <= B_DCacheStoreAck;
 `else
 								if (wbptr<`WB_DEPTH-1) begin
 									dram0 <= `DRAMREQ_READY;
@@ -7663,7 +7724,7 @@ BIDLE:
                  dat_o <= fnDato(dram1_instr,dram1_data);
                  ol_o  <= dram1_ol;
 			        	isStore <= TRUE;
-                 bstate <= B1;
+                 bstate <= B_DCacheStoreAck;
 `else
 								if (wbptr<`WB_DEPTH-1) begin
 									dram1 <= `DRAMREQ_READY;
@@ -7706,7 +7767,7 @@ BIDLE:
                  dat_o <= fnDato(dram2_instr,dram2_data);
                  ol_o  <= dram2_ol;
 				       	isStore <= TRUE;
-                 bstate <= B1;
+                 bstate <= B_DCacheStoreAck;
 `else
 								if (wbptr<`WB_DEPTH-1) begin
 									dram2 <= `DRAMREQ_READY;
@@ -7742,7 +7803,7 @@ BIDLE:
                  dram0 <= `DRAMSLOT_HASBUS;
                  bwhich <= 2'b00;
                  preload <= dram0_preload;
-                 bstate <= B2; 
+                 bstate <= B_DCacheLoadStart; 
             end
         end
         else if (~|wb_v && mem2_available && !dram1_unc && dram1==`DRAMSLOT_REQBUS && dram1_load && `NUM_MEM > 1) begin
@@ -7760,7 +7821,7 @@ BIDLE:
                  dram1 <= `DRAMSLOT_HASBUS;
                  bwhich <= 2'b01;
                  preload <= dram1_preload;
-                 bstate <= B2;
+                 bstate <= B_DCacheLoadStart;
             end 
         end
         else if (~|wb_v && mem3_available && !dram2_unc && dram2==`DRAMSLOT_REQBUS && dram2_load && `NUM_MEM > 2) begin
@@ -7778,7 +7839,7 @@ BIDLE:
                  dram2 <= `DRAMSLOT_HASBUS;
                  preload <= dram2_preload;
                  bwhich <= 2'b10;
-                 bstate <= B2;
+                 bstate <= B_DCacheLoadStart;
             end 
         end
         else if (~|wb_v && mem1_available && dram0_unc && dram0==`DRAMSLOT_BUSY && dram0_load) begin
@@ -7868,7 +7929,7 @@ BIDLE:
 // Terminal state for a store operation.
 // Note that if only a single memory channel is selected, bwhich will be a
 // constant 0. This should cause the extra code to be removed.
-B1:
+B_DCacheStoreAck:
     if (acki|err_i) begin
     	 isStore <= `TRUE;
          cyc_o <= `LOW;
@@ -7898,7 +7959,7 @@ B1:
 				end
 `else
         case(bwhich)
-        2'd0:   if (mem1_available) begin
+        2'd0:   begin
                  dram0 <= `DRAMREQ_READY;
                  iqentry_exc[dram0_id[`QBITS]] <= wrv_i|err_i ? `FLT_DWF : `FLT_NONE;
                 if (err_i|wrv_i)  iqentry_a1[dram0_id[`QBITS]] <= adr_o; 
@@ -7927,7 +7988,7 @@ B1:
 `endif
          bstate <= B19;
     end
-B2:
+B_DCacheLoadStart:
     begin
     dccnt <= 2'd0;
     case(bwhich)
@@ -7939,7 +8000,7 @@ B2:
              sel_o <= fnSelect(dram0_instr,dram0_addr);
              adr_o <= {dram0_addr[31:5],5'b0};
              ol_o  <= dram0_ol;
-             bstate <= B2d;
+             bstate <= B_DCacheLoadAck;
             end
     2'd1:   if (`NUM_MEM > 1) begin
              cti_o <= 3'b001;
@@ -7949,7 +8010,7 @@ B2:
              sel_o <= fnSelect(dram1_instr,dram1_addr);
              adr_o <= {dram1_addr[31:5],5'b0};
              ol_o  <= dram1_ol;
-             bstate <= B2d;
+             bstate <= B_DCacheLoadAck;
             end
     2'd2:   if (`NUM_MEM > 2) begin
              cti_o <= 3'b001;
@@ -7959,13 +8020,13 @@ B2:
              sel_o <= fnSelect(dram2_instr,dram2_addr);
              adr_o <= {dram2_addr[31:5],5'b0};
              ol_o  <= dram2_ol;
-             bstate <= B2d;
+             bstate <= B_DCacheLoadAck;
             end
     default:    if (~acki)  bstate <= BIDLE;
     endcase
     end
 // Data cache load terminal state
-B2d:
+B_DCacheLoadAck:
     if (ack_i|err_i) begin
         errq <= errq | err_i;
         rdvq <= rdvq | rdv_i;
@@ -7987,7 +8048,7 @@ B2d:
         endcase
         dccnt <= dccnt + 2'd1;
         adr_o[4:3] <= adr_o[4:3] + 2'd1;
-        bstate <= B2d;
+        bstate <= B_DCacheLoadAck;
         if (dccnt==2'd2)
              cti_o <= 3'b111;
         if (dccnt==2'd3) begin
@@ -7996,22 +8057,25 @@ B2d:
              cyc_o <= `LOW;
              stb_o <= `LOW;
              sel_o <= 8'h00;
-             bstate <= B4;
+             bstate <= B_DCacheLoadWait1;
         end
     end
-B3: begin
-         stb_o <= `HIGH;
-         bstate <= B2d;
-    end
-B4:  bstate <= B5;
-B5:  bstate <= B6;
-B6: begin
-    case(bwhich)
-    2'd0:    dram0 <= `DRAMSLOT_BUSY;  // causes retest of dhit
-    2'd1:    dram1 <= `DRAMSLOT_BUSY;
-    2'd2:    dram2 <= `DRAMSLOT_BUSY;
-    default:    ;
-    endcase
+B_DCacheLoadStb:
+	begin
+		stb_o <= `HIGH;
+		bstate <= B_DCacheLoadAck;
+  end
+B_DCacheLoadWait1: bstate <= B_DCacheLoadWait2;
+B_DCacheLoadWait2: bstate <= B_DCacheLoadResetBusy;
+//B_DCacheLoadWait3: bstate <= B_DCacheLoadResetBusy;
+B_DCacheLoadResetBusy: begin
+    // There could be more than one memory cycle active. We reset the state
+    // of all the machines to retest for a hit because otherwise sequential
+    // loading of memory will cause successive machines to miss resulting in 
+    // multiple dcache loads that aren't needed.
+    if (dram0 != `DRAMSLOT_AVAIL && dram0_addr[31:5]==adr_o[31:5]) dram0 <= `DRAMSLOT_BUSY;  // causes retest of dhit
+    if (dram1 != `DRAMSLOT_AVAIL && dram1_addr[31:5]==adr_o[31:5]) dram1 <= `DRAMSLOT_BUSY;
+    if (dram2 != `DRAMSLOT_AVAIL && dram2_addr[31:5]==adr_o[31:5]) dram2 <= `DRAMSLOT_BUSY;
     if (~ack_i)  bstate <= BIDLE;
     end
 
@@ -8155,7 +8219,7 @@ B20:
 		stb_o <= `HIGH;
 		we_o  <= `HIGH;
 		dat_o <= fnDato(rmw_instr,rmw_res);
-		bstate <= B1;
+		bstate <= B_DCacheStoreAck;
 	end
 B21:
 	if (~ack_i) begin
@@ -8381,7 +8445,7 @@ end
     $display("Commit");
 	$display("0: %c %h %o %d #", commit0_v?"v":" ", commit0_bus, commit0_id, commit0_tgt[4:0]);
 	$display("1: %c %h %o %d #", commit1_v?"v":" ", commit1_bus, commit1_id, commit1_tgt[4:0]);
-    $display("instructions committed: %d ticks: %d ", I, tick);
+    $display("instructions committed: %d valid committed: %d ticks: %d ", CC, I, tick);
     $display("Write merges: %d", wb_merges);
 `endif	// SIM
 
@@ -8653,8 +8717,9 @@ begin
      head7 <= (head7 + amt) % QENTRIES;
      head8 <= (head8 + amt) % QENTRIES;
      head9 <= (head9 + amt) % QENTRIES;
-     I <= I + amt;
+     CC <= CC + amt;
     if (amt==3'd3) begin
+    	I = I + iqentry_v[head0] + iqentry_v[head1] + iqentry_v[head2];
      	iqentry_agen[head0] <= `INV;
     	iqentry_agen[head1] <= `INV;
     	iqentry_agen[head2] <= `INV;
@@ -8669,6 +8734,7 @@ begin
     	iqentry_alu[head2] <= `FALSE;
    	end 
     else if (amt==3'd2) begin
+    	I = I + iqentry_v[head0] + iqentry_v[head1];
      iqentry_agen[head0] <= `INV;
      iqentry_agen[head1] <= `INV;
      iqentry_mem[head0] <= `FALSE;
@@ -8678,6 +8744,7 @@ begin
     	iqentry_alu[head0] <= `FALSE;
      iqentry_alu[head1] <= `FALSE;
     end else if (amt==3'd1) begin
+    	I = I + iqentry_v[head0];
 	    iqentry_agen[head0] <= `INV;
 	    iqentry_mem[head0] <= `FALSE;
      	iqentry_iv[head0] <= `INV;
