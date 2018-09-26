@@ -24,6 +24,10 @@
 //
 // ============================================================================
 //
+`define BEZIER_CURVE	1'b1
+`define FLOOD_FILL	1'b1
+`define ABITS	31:0
+
 `define TRUE	1'b1
 `define FALSE	1'b0
 `define HIGH	1'b1
@@ -37,8 +41,6 @@
 `define BLACK	16'h0000
 `define WHITE	16'h7FFF
 
-`define CMDQ_WID	64
-`define CMDQ_DEP	64
 `define CMDDAT	31:0
 `define CMDCMD	47:32
 
@@ -58,7 +60,7 @@ input stb_i;
 output reg ack_o;
 input we_i;
 input [7:0] sel_i;
-input [12:0] adr_i;
+input [11:0] adr_i;
 input [63:0] dat_i;
 output reg [63:0] dat_o;
 // WISHBONE master port
@@ -68,7 +70,7 @@ output m_stb_o;
 input m_ack_i;
 output reg m_we_o;
 output reg [15:0] m_sel_o;
-output reg [31:0] m_adr_o;
+output reg [`ABITS] m_adr_o;
 input [127:0] m_dat_i;
 output reg [127:0] m_dat_o;
 // Video Port
@@ -165,6 +167,7 @@ parameter HL_GETPIXEL = 8'd71;
 parameter HL_GETPIXEL_NACK = 8'd72;
 parameter HL_SETPIXEL = 8'd73;
 parameter HL_SETPIXEL_NACK = 8'd74;
+// Triangle draw states
 parameter DT_START = 8'd80;
 parameter DT_SORT = 8'd81;
 parameter DT_SLOPE1 = 8'd82;
@@ -178,6 +181,35 @@ parameter DT4 = 8'd89;
 parameter DT5 = 8'd90;
 parameter DT6 = 8'd91;
 parameter ST_WRITE_CHAR1 = 6'd92;
+// Bezier curve states
+parameter BC0 = 8'd100;
+parameter BC1 = 8'd101;
+parameter BC2 = 8'd102;
+parameter BC3 = 8'd103;
+parameter BC4 = 8'd104;
+parameter BC5 = 8'd105;
+parameter BC6 = 8'd106;
+parameter BC7 = 8'd107;
+parameter BC8 = 8'd108;
+parameter BC9 = 8'd109;
+parameter BC5a = 8'd110;
+// Flood Fill states
+parameter FF1 = 8'd111;
+parameter FF2 = 8'd112;
+parameter FF3 = 8'd113;
+parameter FF4 = 8'd114;
+parameter FF5 = 8'd115;
+parameter FF6 = 8'd116;
+parameter FF7 = 8'd117;
+parameter FF8 = 8'd118;
+parameter FF_EXIT = 8'd119;
+parameter FLOOD_FILL = 8'd120;
+
+parameter ST_COPPER_IFETCH = 8'd128;
+parameter ST_COPPER_IFETCH2 = 8'd129;
+parameter ST_COPPER_EXECUTE = 8'd130;
+parameter ST_COPPER_SKIP	= 8'd132;
+
 
 parameter HT_NONE = 3'd0;
 parameter HT_LINE_FETCH = 3'd1;
@@ -186,7 +218,7 @@ parameter HT_OTHERS = 3'd3;
 
 assign m_stb_o = m_cyc_o;
 
-reg [31:0] TargetBase = 32'h100000;
+reg [`ABITS] TargetBase = 32'h100000;
 reg [15:0] TargetWidth = 16'd600;
 reg [15:0] TargetHeight = 16'd800;
 
@@ -299,10 +331,33 @@ reg [11:0] hBlankOn = phBlankOn, hBlankOff = phBlankOff;
 reg [11:0] vBlankOn = pvBlankOn, vBlankOff = pvBlankOff;
 reg [11:0] hBorderOn = phBorderOn, hBorderOff = phBorderOff;
 reg [11:0] vBorderOn = pvBorderOn, vBorderOff = pvBorderOff;
+reg [11:0] hpos;
+reg [11:0] vpos;
+reg [4:0] fpos;
 wire [11:0] hctr, vctr;
 reg [11:0] m_hctr, m_vctr;
 reg [11:0] hstart = 12'hEFF;
 reg [11:0] vstart = 12'hFE6;
+
+reg [1:0] copper_op;
+reg copper_b;
+reg [5:0] copper_f, copper_mf;
+reg [11:0] copper_h, copper_v;
+reg [11:0] copper_mh, copper_mv;
+reg copper_go;
+reg [15:0] copper_ctrl;
+wire copper_en = copper_ctrl[0];
+reg [127:0] copper_ir;
+reg [`ABITS] copper_pc;
+reg [1:0] copper_state;
+reg [`ABITS] copper_adr [0:15];
+reg [7:0] reg_copper_sel;
+reg [`ABITS] reg_copper_adr;
+reg [63:0] reg_copper_dat;
+reg reg_copper;
+reg [7:0] reg_copper_rst;
+wire [29:0] cmppos = {fpos,vpos,hpos} & {copper_mf,copper_mv,copper_mh};
+
 reg [5:0] flashcnt;
 reg [127:0] latched_data;
 reg [31:0] irq_status;
@@ -373,6 +428,68 @@ reg [31:0] bezierP0plusP1x, bezierP1plusP2x;
 reg [31:0] bezierP0plusP1y, bezierP1plusP2y;
 reg [63:0] bezierBxw, bezierByw;
 
+// Point Transform
+reg transform, otransform;
+reg [31:0] aa, ab, ac, at;
+reg [31:0] ba, bb, bc, bt;
+reg [31:0] ca, cb, cc, ct;
+wire signed [63:0] aax0 = aa * up0x;
+wire signed [63:0] aby0 = ab * up0y;
+wire signed [63:0] acz0 = ac * up0z;
+wire signed [63:0] bax0 = ba * up0x;
+wire signed [63:0] bby0 = bb * up0y;
+wire signed [63:0] bcz0 = bc * up0z;
+wire signed [63:0] cax0 = ca * up0x;
+wire signed [63:0] cby0 = cb * up0y;
+wire signed [63:0] ccz0 = cc * up0z;
+wire signed [63:0] aax1 = aa * up1x;
+wire signed [63:0] aby1 = ab * up1y;
+wire signed [63:0] acz1 = ac * up1z;
+wire signed [63:0] bax1 = ba * up1x;
+wire signed [63:0] bby1 = bb * up1y;
+wire signed [63:0] bcz1 = bc * up1z;
+wire signed [63:0] cax1 = ca * up1x;
+wire signed [63:0] cby1 = cb * up1y;
+wire signed [63:0] ccz1 = cc * up1z;
+wire signed [63:0] aax2 = aa * up2x;
+wire signed [63:0] aby2 = ab * up2y;
+wire signed [63:0] acz2 = ac * up2z;
+wire signed [63:0] bax2 = ba * up2x;
+wire signed [63:0] bby2 = bb * up2y;
+wire signed [63:0] bcz2 = bc * up2z;
+wire signed [63:0] cax2 = ca * up2x;
+wire signed [63:0] cby2 = cb * up2y;
+wire signed [63:0] ccz2 = cc * up2z;
+
+wire signed [63:0] x0_prime = aax0 + aby0 + acz0 + {at,16'h0000};
+wire signed [63:0] y0_prime = bax0 + bby0 + bcz0 + {bt,16'h0000};
+wire signed [63:0] z0_prime = cax0 + cby0 + ccz0 + {ct,16'h0000};
+wire signed [63:0] x1_prime = aax1 + aby1 + acz1 + {at,16'h0000};
+wire signed [63:0] y1_prime = bax1 + bby1 + bcz1 + {bt,16'h0000};
+wire signed [63:0] z1_prime = cax1 + cby1 + ccz1 + {ct,16'h0000};
+wire signed [63:0] x2_prime = aax2 + aby2 + acz2 + {at,16'h0000};
+wire signed [63:0] y2_prime = bax2 + bby2 + bcz2 + {bt,16'h0000};
+wire signed [63:0] z2_prime = cax2 + cby2 + ccz2 + {ct,16'h0000};
+
+always @(posedge clk_i)
+	p0x <= transform ? x0_prime[47:16] : up0x;
+always @(posedge clk_i)
+	p0y <= transform ? y0_prime[47:16] : up0y;
+always @(posedge clk_i)
+	p0z <= transform ? z0_prime[47:16] : up0z;
+always @(posedge clk_i)
+	p1x <= transform ? x1_prime[47:16] : up1x;
+always @(posedge clk_i)
+	p1y <= transform ? y1_prime[47:16] : up1y;
+always @(posedge clk_i)
+	p1z <= transform ? z1_prime[47:16] : up1z;
+always @(posedge clk_i)
+	p2x <= transform ? x2_prime[47:16] : up2x;
+always @(posedge clk_i)
+	p2y <= transform ? y2_prime[47:16] : up2y;
+always @(posedge clk_i)
+	p2z <= transform ? z2_prime[47:16] : up2z;
+
 // Cursor related registers
 reg [31:0] collision;
 reg [4:0] spriteno;
@@ -387,8 +504,8 @@ reg [31:0] sprite_on;
 reg [31:0] sprite_on_d1;
 reg [31:0] sprite_on_d2;
 reg [31:0] sprite_on_d3;
-reg [31:0] spriteAddr [0:31];
-reg [31:0] spriteWaddr [0:31];
+reg [`ABITS] spriteAddr [0:31];
+reg [`ABITS] spriteWaddr [0:31];
 reg [15:0] spriteMcnt [0:31];
 reg [15:0] spriteWcnt [0:31];
 reg [127:0] m_spriteBmp [0:31];
@@ -404,8 +521,17 @@ reg [27:0] vndx;
 // read access counter, controls number of consecutive reads
 reg [7:0] rac;
 reg [7:0] rac_limit = 8'd100;
-reg [7:0] ngs;		// next graphic state
-reg [7:0] state1,state2,state3,state4,state5,state6;
+reg [7:0] state = ST_IDLE;
+reg [7:0] ngs = ST_IDLE;		// next graphic state for continue
+reg [7:0] pushstate;
+`ifdef FLOOD_FILL
+reg [11:0] retsp;
+reg [11:0] pointsp;
+reg [7:0] retstack [0:4095];
+reg [31:0] pointstack [0:4095];
+`else
+reg [7:0] stkstate [0:7];
+`endif
 reg [7:0] strip_cnt;
 reg [5:0] delay_cnt;
 wire [63:0] douta;
@@ -430,36 +556,36 @@ wire aud_mix3 = aud_ctrl[6];
 //             |    +--- amplitude modulate next channel
 //             +-------- frequency modulate next channel
 //
-reg [31:0] aud0_adr;
-reg [31:0] aud0_eadr;
+reg [`ABITS] aud0_adr;
+reg [`ABITS] aud0_eadr;
 reg [15:0] aud0_length;
 reg [19:0] aud0_period;
 reg [15:0] aud0_volume;
 reg signed [15:0] aud0_dat;
 reg signed [15:0] aud0_dat2;		// double buffering
-reg [31:0] aud1_adr;
-reg [31:0] aud1_eadr;
+reg [`ABITS] aud1_adr;
+reg [`ABITS] aud1_eadr;
 reg [15:0] aud1_length;
 reg [19:0] aud1_period;
 reg [15:0] aud1_volume;
 reg signed [15:0] aud1_dat;
 reg signed [15:0] aud1_dat2;
-reg [31:0] aud2_adr;
-reg [31:0] aud2_eadr;
+reg [`ABITS] aud2_adr;
+reg [`ABITS] aud2_eadr;
 reg [15:0] aud2_length;
 reg [19:0] aud2_period;
 reg [15:0] aud2_volume;
 reg signed [15:0] aud2_dat;
 reg signed [15:0] aud2_dat2;
-reg [31:0] aud3_adr;
-reg [31:0] aud3_eadr;
+reg [`ABITS] aud3_adr;
+reg [`ABITS] aud3_eadr;
 reg [15:0] aud3_length;
 reg [19:0] aud3_period;
 reg [15:0] aud3_volume;
 reg signed [15:0] aud3_dat;
 reg signed [15:0] aud3_dat2;
-reg [31:0] audi_adr;
-reg [31:0] audi_eadr;
+reg [`ABITS] audi_adr;
+reg [`ABITS] audi_eadr;
 reg [19:0] audi_length;
 reg [19:0] audi_period;
 reg [15:0] audi_volume;
@@ -483,7 +609,7 @@ wire [15:0] aud2_fifo_o;
 wire [15:0] aud3_fifo_o;
 
 reg [23:0] aud_test;
-reg [31:0] aud0_wadr, aud1_wadr, aud2_wadr, aud3_wadr, audi_wadr;
+reg [`ABITS] aud0_wadr, aud1_wadr, aud2_wadr, aud3_wadr, audi_wadr;
 reg [19:0] ch0_cnt, ch1_cnt, ch2_cnt, ch3_cnt, chi_cnt;
 // The request counter keeps track of the number of times a request was issued
 // without being serviced. There may be the occasional request missed by the
@@ -505,22 +631,22 @@ wire cmdpe;				// command pulse edge
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Text Blitting
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-reg [31:0] font_tbl_adr;
+reg [`ABITS] font_tbl_adr;
 reg [15:0] font_id;
-reg [31:0] glyph_tbl_adr;
+reg [`ABITS] glyph_tbl_adr;
 reg font_fixed;
 reg [5:0] font_width;
 reg [5:0] font_height;
 reg tblit_active;
 reg [7:0] tblit_state;
-reg [31:0] tblit_adr;
-reg [31:0] tgtaddr, tgtadr;
+reg [`ABITS] tblit_adr;
+reg [`ABITS] tgtaddr, tgtadr;
 reg [15:0] tgtindex;
 reg [15:0] charcode;
 reg [31:0] charndx;
 reg [31:0] charbmp;
 reg [31:0] charbmpr;
-reg [31:0] charBmpBase;
+reg [`ABITS] charBmpBase;
 reg [5:0] pixhc, pixvc;
 reg [31:0] charBoxX0, charBoxY0;
 
@@ -533,8 +659,8 @@ reg [3:0] zlayer;
 
 reg [11:0] ppl;
 reg [31:0] cyPPL;
-reg [31:0] offset;
-reg [31:0] ma;
+reg [`ABITS] offset;
+reg [`ABITS] ma;
 
 // Line draw vars
 reg signed [15:0] dx,dy;
@@ -549,7 +675,7 @@ reg [31:0] xpxl1, ypxl1, xpxl2, ypxl2;
 reg [31:0] intery;
 reg signed [31:0] dxa,dya;
 
-reg [31:0] rdadr;
+reg [`ABITS] rdadr;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // blitter vars
@@ -571,46 +697,46 @@ reg [15:0] bltA_shift, bltB_shift, bltC_shift;
 reg [15:0] bltLWMask = 16'hFFFF;
 reg [15:0] bltFWMask = 16'hFFFF;
 
-reg [31:0] bltA_badr;               // base address
+reg [`ABITS] bltA_badr;               // base address
 reg [31:0] bltA_mod;                // modulo
 reg [31:0] bltA_cnt;
-reg [31:0] bltA_badrx;               // base address
+reg [`ABITS] bltA_badrx;               // base address
 reg [31:0] bltA_modx;                // modulo
 reg [31:0] bltA_cntx;
-reg [31:0] bltA_wadr;				// working address
+reg [`ABITS] bltA_wadr;				// working address
 reg [31:0] bltA_wcnt;				// working count
 reg [31:0] bltA_dcnt;				// working count
 reg [31:0] bltA_hcnt;
 
-reg [31:0] bltB_badr;
+reg [`ABITS] bltB_badr;
 reg [31:0] bltB_mod;
 reg [31:0] bltB_cnt;
-reg [31:0] bltB_badrx;
+reg [`ABITS] bltB_badrx;
 reg [31:0] bltB_modx;
 reg [31:0] bltB_cntx;
-reg [31:0] bltB_wadr;				// working address
+reg [`ABITS] bltB_wadr;				// working address
 reg [31:0] bltB_wcnt;				// working count
 reg [31:0] bltB_dcnt;				// working count
 reg [31:0] bltB_hcnt;
 
-reg [31:0] bltC_badr;
+reg [`ABITS] bltC_badr;
 reg [31:0] bltC_mod;
 reg [31:0] bltC_cnt;
-reg [31:0] bltC_badrx;
+reg [`ABITS] bltC_badrx;
 reg [31:0] bltC_modx;
 reg [31:0] bltC_cntx;
-reg [31:0] bltC_wadr;				// working address
+reg [`ABITS] bltC_wadr;				// working address
 reg [31:0] bltC_wcnt;				// working count
 reg [31:0] bltC_dcnt;				// working count
 reg [31:0] bltC_hcnt;
 
-reg [31:0] bltD_badr;
+reg [`ABITS] bltD_badr;
 reg [31:0] bltD_mod;
 reg [31:0] bltD_cnt;
-reg [31:0] bltD_badrx;
+reg [`ABITS] bltD_badrx;
 reg [31:0] bltD_modx;
 reg [31:0] bltD_cntx;
-reg [31:0] bltD_wadr;				// working address
+reg [`ABITS] bltD_wadr;				// working address
 reg [31:0] bltD_wcnt;				// working count
 reg [31:0] bltD_hcnt;
 
@@ -689,6 +815,38 @@ always @*
 	4'hF:	bltabc <= `WHITE;
 	default:bltabc <= `BLACK;
 	endcase
+
+reg div_ld;
+reg signed [31:0] div_a, div_b;
+wire signed [63:0] div_qo;
+wire div_idle;
+
+AVICDivider #(.WID(64)) udiv1
+(
+	.rst(rst_i),
+	.clk(m_clk_i),
+	.ld(div_ld),
+	.abort(1'b0),
+	.sgn(1'b1),
+	.sgnus(1'b0),
+	.a({{16{div_a[31]}},div_a,16'h0}),
+	.b({{32{div_b[31]}},div_b}),
+	.qo(div_qo),
+	.ro(),
+	.dvByZr(),
+	.done(),
+	.idle(div_idle)
+);
+
+wire [63:0] trimult;
+AVICTriMult umul3
+(
+  .CLK(clk_i),
+  .A(div_qo[31:0]),
+  .B(v2x-v0x),
+  .P(trimult)
+);
+
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Component declarations
@@ -825,7 +983,7 @@ wire cmdq_full;
 wire cmdq_empty;
 wire cmdq_valid;
 wire cs = cs_i & cyc_i & stb_i;
-wire cs_cmdq = cs && adr_i[12:3]==10'b0_1101_1101_0 && we_i;
+wire cs_cmdq = cs && adr_i[11:3]==9'b1101_1101_0 && we_i;
 wire wr_cmd_fifo = cs_cmdq & cmdp;
 reg rd_cmd_fifo;
 
@@ -849,7 +1007,6 @@ AVIC128_CmdFifo ucf1
 );
 
 edge_det ued20 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(rdy2|rdy3), .pe(cmdp), .ne(), .ee());
-//vtdl #(.WID(`CMDQ_WID), .DEP(`CMDQ_DEP)) cmdq (.clk(clk_i), .ce(cs_cmdq & cmdp), .a(cmdq_ndx), .d(cmdq_in), .q(cmdq_out));
 // Here m_clk_i needs to be faster than clk_i.
 //edge_det ued1 (.rst(rst_i), .clk(m_clk_i), .ce(1'b1), .i(cs_cmdq), .pe(cmdpe), .ne(), .ee());
 
@@ -933,179 +1090,194 @@ edge_det ed10(.rst(rst_i), .clk(m_clk_i), .ce(1'b1), .i(cs_bltDstWidx), .pe(peBl
 always @(posedge m_clk_i)
 	dat_ix <= dat_i;
 
+wire [7:0] sel = reg_copper ? reg_copper_sel : sel_i;
+wire [11:0] adr = reg_copper ? reg_copper_adr : adr_i;
+wire [63:0] dat = reg_copper ? reg_copper_dat : dat_i;
+wire cpu_wr_reg = cs & we_i & (rdy2|rdy3) & ~rdy4;
+
 always @(posedge clk_i)
 begin
-	if (cs & we_i & (rdy2|rdy3) & ~rdy4)
-		casez(adr_i[11:3])
+	if (cpu_wr_reg | reg_copper)
+		casez(adr[11:3])
 		// Sprite color palette $000 to $7F8
-		9'b0???_????_?:	sprite_color[adr_i[10:3]] <= dat_i;
+		9'b0???_????_?:	sprite_color[adr[10:3]] <= dat;
 		// Sprite $800 to $9F8
-		9'b100?_????_0:	spriteAddr[adr_i[8:4]] <= dat_i;
+		9'b100?_????_0:	spriteAddr[adr[8:4]] <= dat[`ABITS];
 		9'b100?_????_1:
 			begin
-				if (|sel_i[1:0]) spriteMcnt[adr_i[8:4]] <= dat_i[15:0];
-				if ( sel_i[3]) sprite_pz[adr_i[8:4]] <= dat_i[31:24];
-				if (|sel_i[5:4]) sprite_ph[adr_i[8:4]] <= dat_i[43:32];
-				if (|sel_i[7:6]) sprite_pv[adr_i[8:4]] <= dat_i[59:48];
+				if (|sel[1:0]) spriteMcnt[adr[8:4]] <= dat[15:0];
+				if ( sel[3]) sprite_pz[adr[8:4]] <= dat[31:24];
+				if (|sel[5:4]) sprite_ph[adr[8:4]] <= dat[43:32];
+				if (|sel[7:6]) sprite_pv[adr[8:4]] <= dat[59:48];
 			end
 		// Reserved Area $A00 to $BF8
 		9'b101?_????_?:	;
 						
 		// Audio $C00 to $CB8
-    9'b1100_0000_0:   aud0_adr <= dat_i;
+    9'b1100_0000_0:   aud0_adr <= dat[`ABITS];
     9'b1100_0000_1:
     	begin 
-    		if (|sel_i[1:0]) aud0_length <= dat_i[15:0];
-    		if (|sel_i[7:4]) aud0_period <= dat_i[41:32];
+    		if (|sel[1:0]) aud0_length <= dat[15:0];
+    		if (|sel[7:4]) aud0_period <= dat[41:32];
     	end
     9'b1100_0001_0:
       begin
-	      if (|sel_i[1:0]) aud0_volume <= dat_i[15:0];
-	      if (|sel_i[3:2]) aud0_dat <= dat_i[31:16];
+	      if (|sel[1:0]) aud0_volume <= dat[15:0];
+	      if (|sel[3:2]) aud0_dat <= dat[31:16];
       end
-    9'b1100_0010_0:   aud1_adr <= dat_i;
+    9'b1100_0010_0:   aud1_adr <= dat[`ABITS];
     9'b1100_0010_1:
     	begin
-    		if (|sel_i[1:0]) aud1_length <= dat_i[15:0];
-    		if (|sel_i[7:4]) aud1_period <= dat_i[41:32];
+    		if (|sel[1:0]) aud1_length <= dat[15:0];
+    		if (|sel[7:4]) aud1_period <= dat[41:32];
     	end
     9'b1100_0011_0:
        begin
-        if (|sel_i[1:0]) aud1_volume <= dat_i[15:0];
-        if (|sel_i[3:2]) aud1_dat <= dat_i[31:16];
+        if (|sel[1:0]) aud1_volume <= dat[15:0];
+        if (|sel[3:2]) aud1_dat <= dat[31:16];
       end
-    9'b1100_0100_0:   aud2_adr <= dat_i;
+    9'b1100_0100_0:   aud2_adr <= dat[`ABITS];
     9'b1100_0100_1:
     	begin
-    		if (|sel_i[1:0]) aud2_length <= dat_i[15:0];
-    		if (|sel_i[7:4]) aud2_period <= dat_i[41:32];
+    		if (|sel[1:0]) aud2_length <= dat[15:0];
+    		if (|sel[7:4]) aud2_period <= dat[41:32];
     	end
     9'b1100_0101_0:
       begin
-        if (|sel_i[1:0]) aud2_volume <= dat_i[15:0];
-        if (|sel_i[3:2]) aud2_dat <= dat_i[31:16];
+        if (|sel[1:0]) aud2_volume <= dat[15:0];
+        if (|sel[3:2]) aud2_dat <= dat[31:16];
       end
-    9'b1100_0110_0:   aud3_adr <= dat_i;
+    9'b1100_0110_0:   aud3_adr <= dat[`ABITS];
     9'b1100_0110_1:
     	begin
-    		if (|sel_i[1:0]) aud3_length <= dat_i[15:0];
-    		if (|sel_i[7:4]) aud3_period <= dat_i[41:32];
+    		if (|sel[1:0]) aud3_length <= dat[15:0];
+    		if (|sel[7:4]) aud3_period <= dat[41:32];
     	end
     9'b1100_0111_0:
       begin
-        if (|sel_i[1:0]) aud3_volume <= dat_i[15:0];
-        if (|sel_i[3:2]) aud3_dat <= dat_i[31:16];
+        if (|sel[1:0]) aud3_volume <= dat[15:0];
+        if (|sel[3:2]) aud3_dat <= dat[31:16];
       end
-    9'b1100_1000_0:   audi_adr <= dat_i;
+    9'b1100_1000_0:   audi_adr <= dat[`ABITS];
     9'b1100_1000_1:
     	begin
-    		if (|sel_i[1:0]) audi_length <= dat_i[15:0];
-    		if (|sel_i[7:4]) audi_period <= dat_i[41:32];
+    		if (|sel[1:0]) audi_length <= dat[15:0];
+    		if (|sel[7:4]) audi_period <= dat[41:32];
     	end
     9'b1100_1001_0:
 			begin
-        if (|sel_i[1:0]) audi_volume <= dat_i[15:0];
-        //if (|sel_i[3:2]) audi_dat <= dat_i[31:16];
+        if (|sel[1:0]) audi_volume <= dat[15:0];
+        //if (|sel[3:2]) audi_dat <= dat[31:16];
       end
 
-    9'b1100_1010_0:    aud_ctrl <= dat_i;
+    9'b1100_1010_0:    aud_ctrl <= dat;
+
+		// Copper: $CB0 to $CF8
+		9'b1100_1101_0:	copper_ctrl <= reg_dat;
+		9'b1100_11??_?:	copper_adr[adr[5:3]] <= dat[`ABITS];
 
 		// Blitter: $D00 to $D98
-		9'b1101_0000_0:	bltA_badr <= dat_i;
-		9'b1101_0000_1:	bltA_mod <= dat_i;
-		9'b1101_0001_0:	bltA_cnt <= dat_i;
-		9'b1101_0010_0:	bltB_badr <= dat_i;
-		9'b1101_0010_1:	bltB_mod <= dat_i;
-		9'b1101_0011_0:	bltB_cnt <= dat_i;
-		9'b1101_0100_0:	bltC_badr <= dat_i;
-		9'b1101_0100_1:	bltC_mod <= dat_i;
-		9'b1101_0101_0:	bltC_cnt <= dat_i;
-		9'b1101_0110_0:	bltD_badr <= dat_i;
-		9'b1101_0110_1:	bltD_mod <= dat_i;
-		9'b1101_0111_0:	bltD_cnt <= dat_i;
-		9'b1101_0111_1:	bltD_dat <= dat_i[15:0];
+		9'b1101_0000_0:	bltA_badr <= dat[`ABITS];
+		9'b1101_0000_1:	bltA_mod <= dat;
+		9'b1101_0001_0:	bltA_cnt <= dat;
+		9'b1101_0010_0:	bltB_badr <= dat[`ABITS];
+		9'b1101_0010_1:	bltB_mod <= dat;
+		9'b1101_0011_0:	bltB_cnt <= dat;
+		9'b1101_0100_0:	bltC_badr <= dat[`ABITS];
+		9'b1101_0100_1:	bltC_mod <= dat;
+		9'b1101_0101_0:	bltC_cnt <= dat;
+		9'b1101_0110_0:	bltD_badr <= dat[`ABITS];
+		9'b1101_0110_1:	bltD_mod <= dat;
+		9'b1101_0111_0:	bltD_cnt <= dat;
+		9'b1101_0111_1:	bltD_dat <= dat[15:0];
 
-		9'b1101_1000_0:	bltSrcWid <= dat_i;
-		9'b1101_1000_1:	bltDstWid <= dat_i;
+		9'b1101_1000_0:	bltSrcWid <= dat;
+		9'b1101_1000_1:	bltDstWid <= dat;
 
-		9'b1101_1001_0:	blt_op <= dat_i[15:0];
+		9'b1101_1001_0:	blt_op <= dat[15:0];
 		9'b1101_1001_1:	
 							begin
-							if (sel_i[3]) bltPipedepth <= dat_i[29:24];
-							if (|sel_i[1:0]) bltCtrl <= dat_i[15:0];
+							if (sel[3]) bltPipedepth <= dat[29:24];
+							if (|sel[1:0]) bltCtrl <= dat[15:0];
 							end
 		// Command queue $DC0
 		9'b1101_1100_0:	
 			begin
-				if (sel[5:4]) cmdq_in[47:32] <= dat_i[47:32];
-				if (sel[0]) cmdq_in[7:0] <= dat_i[7:0];
-				if (sel[1]) cmdq_in[15:8] <= dat_i[15:8];
-				if (sel[2]) cmdq_in[23:16] <= dat_i[23:16];
-				if (sel[3]) cmdq_in[31:24] <= dat_i[31:24];
+				if (sel[5:4]) cmdq_in[47:32] <= dat[47:32];
+				if (sel[0]) cmdq_in[7:0] <= dat[7:0];
+				if (sel[1]) cmdq_in[15:8] <= dat[15:8];
+				if (sel[2]) cmdq_in[23:16] <= dat[23:16];
+				if (sel[3]) cmdq_in[31:24] <= dat[31:24];
 			end
-		9'b1101_1100_1:	;//cmdq_in[63:32] <= dat_i;
-		9'b1101_1110_0:	font_tbl_adr <= dat_i[31:0];
-		9'b1101_1110_1:	font_id <= dat_i[15:0];
+		9'b1101_1100_1:	;//cmdq_in[63:32] <= dat;
+		9'b1101_1110_0:	font_tbl_adr <= dat[`ABITS];
+		9'b1101_1110_1:	font_id <= dat[15:0];
 
-		9'b1111_0110_0:	spriteEnable <= dat_i[31:0];
-		9'b1111_0110_1:	spriteLink1 <= dat_i[31:0];
+		9'b1111_0110_0:	spriteEnable <= dat[31:0];
+		9'b1111_0110_1:	spriteLink1 <= dat[31:0];
+
+
+		9'b101_0???_???:	rasti_en[reg_adr[6:1]] <= reg_dat;
+		9'b101_1000_000:	irq_en <= reg_dat;
+		9'b101_1000_001:	irq_status <= irq_status & ~reg_dat;
 
 		// Sync generator control regs  $F80 to $FA0
     9'b1111_1000_0:
 			if (sgLock) begin
-				if (|sel_i[1:0]) hTotal <= dat_i[11:0];
-				if (|sel_i[3:2]) vTotal <= dat_i[27:16];
+				if (|sel[1:0]) hTotal <= dat[11:0];
+				if (|sel[3:2]) vTotal <= dat[27:16];
 			end
     9'b1111_1000_1:
     	if (sgLock) begin
-				if (|sel_i[1:0]) hSyncOn <= dat_i[11:0];
-				if (|sel_i[3:2]) hSyncOff <= dat_i[27:16];
-				if (|sel_i[5:4]) vSyncOn <= dat_i[43:32];
-				if (|sel_i[7:6]) vSyncOff <= dat_i[59:48];
+				if (|sel[1:0]) hSyncOn <= dat[11:0];
+				if (|sel[3:2]) hSyncOff <= dat[27:16];
+				if (|sel[5:4]) vSyncOn <= dat[43:32];
+				if (|sel[7:6]) vSyncOff <= dat[59:48];
 			end
     9'b1111_1001_0:
     	if (sgLock) begin
-				if (|sel_i[1:0]) hBlankOn <= dat_i[11:0];
-				if (|sel_i[3:2]) hBlankOff <= dat_i[27:16];
-				if (|sel_i[5:4]) vBlankOn <= dat_i[43:32];
-				if (|sel_i[7:6]) vBlankOff <= dat_i[59:48];
+				if (|sel[1:0]) hBlankOn <= dat[11:0];
+				if (|sel[3:2]) hBlankOff <= dat[27:16];
+				if (|sel[5:4]) vBlankOn <= dat[43:32];
+				if (|sel[7:6]) vBlankOff <= dat[59:48];
 			end
     9'b1111_1001_1:
   		begin
-				if (|sel_i[1:0]) hBorderOn <= dat_i[11:0];
-				if (|sel_i[3:2]) hBorderOff <= dat_i[27:16];
-				if (|sel_i[5:4]) vBorderOn <= dat_i[43:32];
-				if (|sel_i[7:6]) vBorderOff <= dat_i[59:48];
+				if (|sel[1:0]) hBorderOn <= dat[11:0];
+				if (|sel[3:2]) hBorderOff <= dat[27:16];
+				if (|sel[5:4]) vBorderOn <= dat[43:32];
+				if (|sel[7:6]) vBorderOff <= dat[59:48];
 			end
     9'b1111_1010_0:
     	begin
-				if (|sel_i[1:0]) hstart <= dat_i[11:0];
-				if (|sel_i[3:2]) vstart <= dat_i[27:16];
+				if (|sel[1:0]) hstart <= dat[11:0];
+				if (|sel[3:2]) vstart <= dat[27:16];
 			end
 
-    9'b1111_1100_0:		TargetBase <= dat_i;
+    9'b1111_1100_0:		TargetBase <= dat[`ABITS];
     9'b1111_1101_0:
     	begin
-				if (|sel_i[3:2]) TargetWidth <= dat_i[31:16];
-				if (|sel_i[1:0]) TargetHeight <= dat_i[15:0];
+				if (|sel[3:2]) TargetWidth <= dat[31:16];
+				if (|sel[1:0]) TargetHeight <= dat[15:0];
 			end
 
     9'b1111_1110_0:
      	begin
-				if (sel_i[2]) num_strips = dat_i[23:16];
-				if (sel_i[0]) lowres <= dat_i[1:0];   
+				if (sel[2]) num_strips = dat[23:16];
+				if (sel[0]) lowres <= dat[1:0];   
 			end
-    9'b1111_1110_1:	sgLock <= dat_i==32'hA1234567;
+    9'b1111_1110_1:	sgLock <= dat==32'hA1234567;
 		default:	;	// do nothing
 		endcase
     if (aud_test==24'hFFFFFF)
         aud_ctrl[14] <= 1'b0;
 end
 always @(posedge clk_i)
-	case(adr_i[12:3])
+	case(adr_i[11:3])
 	9'b1101_1001_1:	dat_o <= {bltPipedepth,8'h00,bltCtrlx};
 	9'b1101_1101_0:	dat_o <= {22'd0,cmdq_wcnt};
 	9'b1111_0111_0:	dat_o <= collision;
+	9'b1111_1010_1:	dat_o <= {27'h0,fpos,4'h0,vpos,4'h0,hpos};
 	default:	dat_o <= douta;
 	endcase
 
@@ -1120,6 +1292,46 @@ always @(posedge clk_i)
 //assign ack_o = cs ? rdy4 : pAckStyle;
 always @*
 	ack_o <= rdy4;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+wire [15:0] pixel_i = (m_dat_i >> {ma[3:1],4'b0}) & 16'hFFFF;
+
+`ifdef FLOOD_FILL
+reg [31:0] pointToPush;
+reg rstst, pushst, popst;
+reg rstpt, pushpt, poppt;
+
+always @(posedge clk_i)
+    if (pushst)
+        retstack[retsp-12'd1] <= pushstate;
+wire [7:0] retstacko = retstack[retsp];
+
+always @(posedge clk_i)
+    if (pushpt)
+        pointstack[pointsp-12'd1] <= pointToPush;
+wire [31:0] pointstacko = pointstack[pointsp];
+wire [15:0] lgcx = pointstacko[31:16];
+wire [15:0] lgcy = pointstacko[15:0];
+
+always @(posedge clk_i)
+    if (rstst)
+        retsp <= 12'd0;
+    else if (pushst)
+        retsp <= retsp - 12'd1;
+    else if (popst)
+        retsp <= retsp + 12'd1;
+
+always @(posedge clk_i)
+    if (rstpt)
+        pointsp <= 12'd0;
+    else if (pushpt)
+        pointsp <= pointsp - 12'd1;
+    else if (poppt)
+        pointsp <= pointsp + 12'd1;
+`endif
+
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -1273,9 +1485,25 @@ always @(posedge vclk)
 	else
 		vbl_reg <= {vbl_reg[8:0],1'b0};
 
-always @(posedge vclk)
-	if (eol & eof)
+always @(posedge clk)
+	if (eol)
+		hpos <= hstart;
+	else
+		hpos <= hpos + 12'd1;
+
+always @(posedge clk)
+	if (eol) begin
+		if (eof)
+			vpos <= vstart;
+		else
+			vpos <= vpos + 12'd1;
+	end
+
+always @(posedge clk)
+	if (eol & eof) begin
+		fpos <= fpos + 5'd1;
 		flashcnt <= flashcnt + 6'd1;
+	end
 
 // Generate fifo reset signal
 always @(posedge m_clk_i)
@@ -1313,6 +1541,11 @@ if (rst_i) begin
 	aud_test <= 24'h0;
 end
 else begin
+// Delay a few cycles after the copper selects a register to allow for a
+// difference in clock frequencies and metastability.
+reg_copper_rst <= {reg_copper_rst,1'b1};
+if (reg_copper_rst[3])
+	reg_copper <= `FALSE;
 
 rst_cmdq <= `FALSE;
 wr_aud0 <= `FALSE;
@@ -1463,7 +1696,9 @@ OTHERS:
 			irq_status[3] <= 1'b1;
 		goto(ST_AUDI);
 	end
-
+	else if (copper_state==2'b01 && copper_en) begin
+		goto(ST_COPPER_IFETCH);
+	end
 	else if (tblit_active)
 		goto(tblit_state);
  
@@ -1567,16 +1802,26 @@ ST_CMD:
 				ctrl[11:8] <= cmdq_out[7:4];	// raster op
 				state <= ST_TILERECT;
 				end
+*/
 		8'd6:	begin	// Draw triangle
 				ctrl[11:8] <= cmdq_out[7:4];	// raster op
-				call(ST_IDLE,DT_START);
+				goto(DT_START);
 				end
+`ifdef BEZIER_CURVE
 		8'd8:	begin	// Bezier Curve
 				ctrl[11:8] <= cmdq_out[7:4];	// raster op
 				fillCurve <= cmdq_out[1:0];
-				state <= BC0;
+				goto(BC0);
 				end
-		8'd9:	state <= FF1;
+`else
+		8'd8:	return();
+`endif
+`ifdef FLOOD_FILL
+		8'd9:	goto(FF1);
+`else
+		8'd9:	return();
+`endif
+/*
 		8'd11:	transform <= cmdq_out[0];
 */
 		8'd12:	begin penColor <= cmdq_out[`CMDDAT]; return(); $display("Set pen color"); end
@@ -1597,20 +1842,20 @@ ST_CMD:
 		8'd27:	begin clipX1 <= cmdq_out[15:0]; return(); end
 		8'd28:	begin clipY1 <= cmdq_out[15:0]; return(); end
 		8'd29:	begin clipEnable <= cmdq_out[0]; return(); end
-/*
-		8'd32:	aa <= cmdq_out[`CMDDAT];
-		8'd33:	ab <= cmdq_out[`CMDDAT];
-		8'd34:	ac <= cmdq_out[`CMDDAT];
-		8'd35:	at <= cmdq_out[`CMDDAT];
-		8'd36:	ba <= cmdq_out[`CMDDAT];
-		8'd37:	bb <= cmdq_out[`CMDDAT];
-		8'd38:	bc <= cmdq_out[`CMDDAT];
-		8'd39:	bt <= cmdq_out[`CMDDAT];
-		8'd40:	ca <= cmdq_out[`CMDDAT];
-		8'd41:	cb <= cmdq_out[`CMDDAT];
-		8'd42:	cc <= cmdq_out[`CMDDAT];
-		8'd43:	ct <= cmdq_out[`CMDDAT];
-*/
+
+		8'd32:	begin aa <= cmdq_out[`CMDDAT]; return(); end
+		8'd33:	begin ab <= cmdq_out[`CMDDAT]; return(); end
+		8'd34:	begin ac <= cmdq_out[`CMDDAT]; return(); end
+		8'd35:	begin at <= cmdq_out[`CMDDAT]; return(); end
+		8'd36:	begin ba <= cmdq_out[`CMDDAT]; return(); end
+		8'd37:	begin bb <= cmdq_out[`CMDDAT]; return(); end
+		8'd38:	begin bc <= cmdq_out[`CMDDAT]; return(); end
+		8'd39:	begin bt <= cmdq_out[`CMDDAT]; return(); end
+		8'd40:	begin ca <= cmdq_out[`CMDDAT]; return(); end
+		8'd41:	begin cb <= cmdq_out[`CMDDAT]; return(); end
+		8'd42:	begin cc <= cmdq_out[`CMDDAT]; return(); end
+		8'd43:	begin ct <= cmdq_out[`CMDDAT]; return(); end
+
 		8'd254:	begin rst_cmdq <= `TRUE; return(); end
 		8'd255:	return();	// NOP
 		default:	return();
@@ -2084,10 +2329,10 @@ HL_SETPIXEL_NACK:
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
 // Save off the original set of points defining the triangle. The points are
-// manipulatefd later by the anti-aliasing outline draw.
-/*
+// manipulated later by the anti-aliasing outline draw.
+
 DT_START:								// allows p?? to update
-    begin
+  begin
     up0xs <= up0x;
     up0ys <= up0y;
     up0zs <= up0z;
@@ -2097,7 +2342,7 @@ DT_START:								// allows p?? to update
     up2xs <= up2x;
     up2ys <= up2y;
     up2zs <= up2z;
-	goto(DT_SORT);
+		goto(DT_SORT);
 	end
 
 // First step - sort vertices
@@ -2106,6 +2351,7 @@ DT_START:								// allows p?? to update
 DT_SORT:
 	begin
 		ctrl[14] <= 1'b1;				// set busy indicator
+		// Just draw a horizontal line if all vertices have the same y co-ord.
 		if (p0y == p1y && p0y == p2y) begin
 		   if (p0x < p1x && p0x < p2x)
 		       curx0 <= p0x;
@@ -2120,10 +2366,10 @@ DT_SORT:
 		   else
 		       curx1 <= p2x;
 		   gcy <= fixToInt(p0y);
-           goto(HL_LINE);
+       goto(HL_LINE);
 		end
 		else if (p0y <= p1y && p0y <= p2y) begin
-		    minY <= p0y;
+		  minY <= p0y;
 			v0x <= p0x;
 			v0y <= p0y;
 			if (p1y <= p2y) begin
@@ -2142,7 +2388,7 @@ DT_SORT:
 			end
 		end
 		else if (p1y <= p2y) begin
-		    minY <= p1y;
+		  minY <= p1y;
 			v0y <= p1y;
 			v0x <= p1x;
 			if (p0y <= p2y) begin
@@ -2373,7 +2619,202 @@ DT6:
 		else
  		    return();
 	end
-*/
+
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+// Bezier Curve
+// B(t) = (1-t)[(1-t)P0+tP1] + t[(1-t)P1 + tP2], 0 <= t <= 1.
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+BC0:
+	begin
+	ctrl[14] <= 1'b1;
+	bv0x <= p0x;
+	bv0y <= p0y;
+	bv1x <= p1x;
+	bv1y <= p1y;
+	bv2x <= p2x;
+	bv2y <= p2y;
+	bezierT <= bezierInc;
+	otransform <= transform;
+	transform <= `FALSE;
+	up0x <= p0x;
+	up0y <= p0y;
+	goto(BC1);
+	end
+BC1:
+	begin
+	bezier1mT <= fixedOne - bezierT;
+	goto(BC2);
+	end
+BC2:
+	begin
+	bezier1mTP0xw <= bezier1mT * bv0x;
+	bezier1mTP1xw <= bezier1mT * bv1x;
+	bezierTP1x <= bezierT * bv1x;
+	bezierTP2x <= bezierT * bv2x;
+	bezier1mTP0yw <= bezier1mT * bv0y;
+	bezier1mTP1yw <= bezier1mT * bv1y;
+	bezierTP1y <= bezierT * bv1y;
+	bezierTP2y <= bezierT * bv2y;
+	goto(BC3);
+	end
+BC3:
+	begin
+	bezierP0plusP1x <= bezier1mTP0xw[47:16] + bezierTP1x[47:16];
+	bezierP1plusP2x <= bezier1mTP1xw[47:16] + bezierTP2x[47:16];
+	bezierP0plusP1y <= bezier1mTP0yw[47:16] + bezierTP1y[47:16];
+	bezierP1plusP2y <= bezier1mTP1yw[47:16] + bezierTP2y[47:16];
+	goto(BC4);
+	end
+BC4:
+	begin
+	bezierBxw <= bezier1mT * bezierP0plusP1x + bezierT * bezierP1plusP2x;
+	bezierByw <= bezier1mT * bezierP0plusP1y + bezierT * bezierP1plusP2y;
+	call(DELAY2,BC5);
+	end
+BC5:
+	begin
+	up1x <= bezierBxw[47:16];
+	up1y <= bezierByw[47:16];
+  if (fillCurve[1]) begin
+    up2x <= bv1x;
+    up2y <= bv1y;
+  end
+	goto(BC5a);
+	end
+BC5a:
+	begin
+	ctrl[14] <= 1'b0;
+	call(DL_PRECALC,|fillCurve ? BC6 : BC7);
+	end
+BC6:
+  begin
+	ctrl[14] <= 1'b0;
+	call(DT_START,BC7);
+  end
+BC7:
+	begin
+	goto(BC1);
+  up0x <= up1x;
+  up0y <= up1y;
+  bezierT <= bezierT + bezierInc;
+  if (bezierT >= fixedOne) begin
+  	up1x <= up2x;
+  	up1y <= up2y;
+		ctrl[14] <= 1'b0;
+  	call(|fillCurve ? DT_START : DL_PRECALC,BC8);
+  	//goto(BC8);
+  end
+	end
+BC8:
+	begin
+    ctrl[14] <= 1'b0;
+    //call(BC9,DL_PRECALC);
+    goto(BC9);
+    end
+BC9:
+	begin
+    ctrl[14] <= 1'b0;
+    transform <= otransform;
+    return();
+	end
+
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+// Flood filling.
+// The flood fill is called recursively. The caller saves the current point
+// on a stack, the called routine pops the current point from the stack.
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+`ifdef FLOOD_FILL
+FF1:
+	begin
+		ctrl[14] <= 1'b1;		// indicate we're busy
+		loopcnt <= 5'd31;
+		push_point(gcx,gcy);	// save old graphics cursor position
+		gcx <= fixToInt(p0x);	// convert fixed point point spec to int coord
+		gcy <= fixToInt(p0y);
+		call(FLOOD_FILL,FF_EXIT);	// call flood fill routine
+	end
+FLOOD_FILL:
+		call(DELAY3,FF2);	// addidtional delay needed for ma to settle
+FF2:
+	// If the point is outside of clipping region, just return.
+	if (gcx >= TargetWidth || gcy >= TargetHeight) begin
+		pop_point(gcx,gcy);
+		return();
+	end
+	else if (clipEnable==`TRUE && (gcx < clipX0 || gcx >= clipX1 || gcy < clipY0 || gcy >= clipY1)) begin
+		pop_point(gcx,gcy);
+		return();
+	end
+	// Point is inside clipping region, so a fetch has to take place
+	else begin
+		m_cyc_o <= `HIGH;
+		m_sel_o <= 16'hFFFF;
+		m_adr_o <= zbuf ? ma[19:3] : ma;
+		tocnt <= busto;
+		call(ST_LATCH_DATA,FF3);
+	end
+FF3:
+	// Color already filled ? -> return
+	if (fillColor==pixel_i) begin
+		pop_point(gcx,gcy);
+		return();
+	end
+	// Border hit ? -> return
+	else if (penColor==pixel_i) begin
+		pop_point(gcx,gcy);
+		return();
+	end
+	// Set the pixel color then check the surrounding points.
+	else begin
+		set_pixel(fillColor,alpha,4'd1);
+		loopcnt <= loopcnt - 5'd1;
+		if (loopcnt==5'd0)
+			pause(FF4);					// be nice to the rest of the system
+		else
+			goto(FF4);
+	end
+FF4:	// check to the "south"
+	begin
+//		zbram_we <= 2'b00;
+		push_point(gcx,gcy);			// save the point off
+		gcy <= gcy + 1;
+		call(FLOOD_FILL,FF5);		// call flood fill
+	end
+FF5:	// check to the "north"
+	if (gcy==16'h0)
+		goto(FF6);
+	else begin
+		push_point(gcx,gcy);		// save the point off
+		gcy <= gcy - 1;
+		call(FLOOD_FILL,FF6);	// call flood fill
+	end
+FF6:	// check to the "west"
+	if (gcx==16'd0)
+		goto(FF7);
+	else begin
+		push_point(gcx,gcy);		// save the point off
+		gcx <= gcx - 1;
+		call(FLOOD_FILL,FF7);	// call flood fill
+	end
+FF7:	// Check to the "east"
+	begin
+		push_point(gcx,gcy);			// save the point off
+		gcy <= gcx + 1;				// next horiz. pos.
+		call(FLOOD_FILL,FF8);		// call flood fill
+	end
+FF8:	// return
+	begin
+		pop_point(gcx,gcy);
+		return();
+	end
+FF_EXIT:
+	begin
+		ctrl[14] <= 1'b0;	// signal graphics operation done (not busy)
+		return();
+	end
+`endif
+
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 // Blitter DMA
 // Blitter has four DMA channels, three source channels and one destination
@@ -2392,18 +2833,18 @@ ST_BLTDMA2_NACK:
 	if (~m_ack_i) begin
 		bltA_datx <= latched_data >> {bltA_wadr[3:1],4'h0};
 		bltA_wadr <= bltA_wadr + bltinc;
-	    bltA_hcnt <= bltA_hcnt + 32'd1;
-	    if (bltA_hcnt==bltSrcWid) begin
-		    bltA_hcnt <= 32'd1;
-		    bltA_wadr <= bltA_wadr + {bltA_modx[31:1],1'b0} + bltinc;
+    bltA_hcnt <= bltA_hcnt + 32'd1;
+    if (bltA_hcnt==bltSrcWid) begin
+	    bltA_hcnt <= 32'd1;
+	    bltA_wadr <= bltA_wadr + {bltA_modx[31:1],1'b0} + bltinc;
 		end
-        bltA_wcnt <= bltA_wcnt + 32'd1;
-        bltA_dcnt <= bltA_dcnt + 32'd1;
-        if (bltA_wcnt>=bltA_cntx) begin
-            bltA_wadr <= bltA_badrx;
-            bltA_wcnt <= 32'd1;
-            bltA_hcnt <= 32'd1;
-        end
+    bltA_wcnt <= bltA_wcnt + 32'd1;
+    bltA_dcnt <= bltA_dcnt + 32'd1;
+    if (bltA_wcnt>=bltA_cntx) begin
+      bltA_wadr <= bltA_badrx;
+      bltA_wcnt <= 32'd1;
+      bltA_hcnt <= 32'd1;
+    end
 		if (bltA_dcnt>=bltD_cntx)
 			bltCtrlx[1] <= 1'b0;
 		if (bltCtrlx[3])
@@ -2429,19 +2870,19 @@ ST_BLTDMA4:
 ST_BLTDMA4_NACK:
 	if (~m_ack_i) begin
 		bltB_datx <= latched_data >> {bltB_wadr[3:1],4'h0};
-        bltB_wadr <= bltB_wadr + bltinc;
-        bltB_hcnt <= bltB_hcnt + 32'd1;
-        if (bltB_hcnt>=bltSrcWidx) begin
-            bltB_hcnt <= 32'd1;
-            bltB_wadr <= bltB_wadr + {bltB_modx[31:1],1'b0} + bltinc;
-        end
-        bltB_wcnt <= bltB_wcnt + 32'd1;
-        bltB_dcnt <= bltB_dcnt + 32'd1;
-        if (bltB_wcnt>=bltB_cntx) begin
-            bltB_wadr <= bltB_badrx;
-            bltB_wcnt <= 32'd1;
-            bltB_hcnt <= 32'd1;
-        end
+    bltB_wadr <= bltB_wadr + bltinc;
+    bltB_hcnt <= bltB_hcnt + 32'd1;
+    if (bltB_hcnt>=bltSrcWidx) begin
+      bltB_hcnt <= 32'd1;
+      bltB_wadr <= bltB_wadr + {bltB_modx[31:1],1'b0} + bltinc;
+    end
+    bltB_wcnt <= bltB_wcnt + 32'd1;
+    bltB_dcnt <= bltB_dcnt + 32'd1;
+    if (bltB_wcnt>=bltB_cntx) begin
+      bltB_wadr <= bltB_badrx;
+      bltB_wcnt <= 32'd1;
+      bltB_hcnt <= 32'd1;
+    end
 		if (bltB_dcnt==bltD_cntx)
 			bltCtrlx[3] <= 1'b0;
 		if (bltCtrlx[5])
@@ -2467,19 +2908,19 @@ ST_BLTDMA6:
 ST_BLTDMA6_NACK:
 	if (~m_ack_i) begin
 		bltC_datx <= latched_data >> {bltC_wadr[3:1],4'h0};
-        bltC_wadr <= bltC_wadr + bltinc;
-        bltC_hcnt <= bltC_hcnt + 32'd1;
-        if (bltC_hcnt==bltSrcWidx) begin
-            bltC_hcnt <= 32'd1;
-            bltC_wadr <= bltC_wadr + {bltC_modx[31:1],1'b0} + bltinc;
-        end
-        bltC_wcnt <= bltC_wcnt + 32'd1;
-        bltC_dcnt <= bltC_dcnt + 32'd1;
-        if (bltC_wcnt>=bltC_cntx) begin
-            bltC_wadr <= bltC_badrx;
-            bltC_wcnt <= 32'd1;
-            bltC_hcnt <= 32'd1;
-        end
+    bltC_wadr <= bltC_wadr + bltinc;
+    bltC_hcnt <= bltC_hcnt + 32'd1;
+    if (bltC_hcnt==bltSrcWidx) begin
+      bltC_hcnt <= 32'd1;
+      bltC_wadr <= bltC_wadr + {bltC_modx[31:1],1'b0} + bltinc;
+    end
+    bltC_wcnt <= bltC_wcnt + 32'd1;
+    bltC_dcnt <= bltC_dcnt + 32'd1;
+    if (bltC_wcnt>=bltC_cntx) begin
+      bltC_wadr <= bltC_badrx;
+      bltC_wcnt <= 32'd1;
+      bltC_hcnt <= 32'd1;
+    end
 		if (bltC_dcnt>=bltD_cntx)
 			bltCtrlx[5] <= 1'b0;
 		if (bltCtrlx[7])
@@ -2500,7 +2941,7 @@ ST_BLTDMA8:
 		m_we_o <= `HIGH;
 		m_sel_o <= 16'h0003 << {bltD_wadr[3:1],1'b0};
 		m_adr_o <= bltD_wadr;
-		// If there's no source then a fill operation muct be taking place.
+		// If there's no source then a fill operation must be taking place.
 		if (bltCtrlx[1]|bltCtrlx[3]|bltCtrlx[5])
 			m_dat_o <= {8{bltabc}};
 		else
@@ -2569,8 +3010,92 @@ ST_FILLRECT2:
 		return();
 	end
 
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+// Copper
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+ST_COPPER_IFETCH:
+	begin
+		m_cyc_o <= `HIGH;
+		m_sel_o <= 16'hFFFF;
+		m_adr_o <= copper_pc;
+		call(ST_LATCH_DATA,COPPER_IFETCH2);
+		copper_pc <= copper_pc + 20'd16;
+	end
+ST_COPPER_IFETCH2:
+	begin
+		copper_ir <= latched_data;
+		goto(ST_COPPER_EXECUTE);
+	end
+ST_COPPER_EXECUTE:
+	begin
+		case(copper_ir[127:126])
+		2'b00:	// WAIT
+			begin
+				copper_b <= copper_ir[112];
+				copper_f <= copper_ir[101:96];
+				copper_v <= copper_ir[91:80];
+				copper_h <= copper_ir[75:64];
+				copper_mf <= copper_ir[37:32];
+				copper_mv <= copper_ir[27:26];
+				copper_mh <= copper_ir[11:0];
+				copper_state <= 2'b10;
+				return();
+			end
+		2'b01:	// MOVE
+			if (reg_copper_rst[3:0]==4'hF) begin
+				reg_copper_rst <= 8'h00;
+				reg_copper <= `TRUE;
+				reg_copper_sel <= 8'hFF;
+				reg_copper_adr <= copper_ir[75:64];
+				reg_copper_dat <= copper_ir[63:0];
+				return();
+			end
+		2'b10:	// SKIP
+			begin
+				copper_b <= copper_ir[112];
+				copper_f <= copper_ir[101:96];
+				copper_v <= copper_ir[91:80];
+				copper_h <= copper_ir[75:64];
+				copper_mf <= copper_ir[37:32];
+				copper_mv <= copper_ir[27:26];
+				copper_mh <= copper_ir[11:0];
+				return();
+			end
+		2'b11:	// JUMP
+			begin
+				copper_adr[copper_ir[83:80]] <= copper_pc;
+				casez({copper_ir[74:72],bltCtrl[13]})
+				4'b000?:	copper_pc <= copper_ir[`ABITS];
+				4'b0010:	copper_pc <= copper_pc - 20'd16;
+				4'b0011:	copper_pc <= copper_ir[`ABITS];
+				4'b0100:	copper_pc <= copper_ir[`ABITS];
+				4'b0101:	copper_pc <= copper_pc - 20'd16;
+				4'b100?:	copper_pc <= copper_adr[copper_ir[67:64]];
+				4'b1010:	copper_pc <= copper_pc - 20'd16;
+				4'b1011:	copper_pc <= copper_adr[copper_ir[67:64]];
+				4'b1100:	copper_pc <= copper_adr[copper_ir[67:64]];
+				4'b1101:	copper_pc <= copper_pc - 20'd16;
+				default:	copper_pc <= copper_ir[`ABITS];
+				endcase
+				return();
+			end
+		endcase
+	end
+ST_COPPER_SKIP:
+	begin
+		if ((cmppos > {copper_f,copper_v,copper_h})&&(copper_b ? bltCtrl[13] : 1'b1))
+			copper_pc <= copper_pc + 20'd16;
+		return();
+	end
+
 default:    goto(WAIT_RESET);
 endcase
+if (hpos==12'd1 && vpos==12'd1 && (fpos==4'd1 || copper_ctrl[1])) begin
+	copper_pc <= copper_adr[0];
+	copper_state <= {1'b0,copper_en};
+end
+
     // Override any other state assignments
     if (m_hctr<=12'd16)
     	lrst <= `TRUE;
@@ -2894,7 +3419,6 @@ begin
 end
 endtask
 
-
 task goto;
 input [7:0] st;
 begin
@@ -2902,38 +3426,90 @@ begin
 end
 endtask
 
-task return;
+`ifdef FLOOD_FILL
+task call;
+input [7:0] st;
+input [7:0] nst;
 begin
-	state5 <= state6;
-	state4 <= state5;
-	state3 <= state4;
-	state2 <= state3;
-	state1 <= state2;
-	state <= state1;
+	if (retsp==12'd1) begin	// stack overflow ?
+    rstst <= `TRUE;
+		ctrl[14] <= 1'b0;
+		state <= ST_IDLE;	// abort operation, go back to idle
+	end
+	else begin
+    pushstate <= st;
+    pushst <= `TRUE;
+		goto(nst);
+	end
 end
 endtask
 
-task call;
-input [7:0] st;
-input [7:0] rst;
+task return;
 begin
-	state1 <= rst;
-	state2 <= state1;
-	state3 <= state2;
-	state4 <= state3;
-	state5 <= state4;
-	state6 <= state5;
-	state <= st;
+	state <= retstacko;
+	popst <= `TRUE;
 end
 endtask
+`else
+task call;
+input [7:0] st;
+input [7:0] nst;
+begin
+	for (n = 0; n < 7; n = n + 1)
+		stkstate[n+1] <= stkstate[n];
+	stkstate[0] <= st;
+	state <= nst;
+end
+endtask
+
+task return;
+begin
+	for (n = 0; n < 7; n = n + 1)
+		stkstate[n] <= stkstate[n+1];
+	stkstate[7] <= ST_IDLE;
+	state <= stkstate[0];
+end
+endtask
+
+`endif
 
 task pause;
 input [7:0] st;
 begin
 	ngs <= st;
-	return();
+	state <= ST_IDLE;
 end
 endtask
+
+`ifdef FLOOD_FILL
+task push_point;
+input [15:0] px;
+input [15:0] py;
+begin
+	if (pointsp==12'd1) begin
+		rstpt <= `TRUE;
+		rstst <= `TRUE;
+		ctrl[14] <= 1'b0;
+		state <= ST_IDLE;
+	end
+	else begin
+		pointToPush <= {px,py};
+		pushpt <= `TRUE;
+	end
+end
+endtask
+
+task pop_point;
+output [15:0] px;
+output [15:0] py;
+begin
+	px = pointstacko[31:16];
+	py = pointstacko[15:0];
+	poppt <= `TRUE;
+end
+endtask
+`endif
+
 
 endmodule
 
