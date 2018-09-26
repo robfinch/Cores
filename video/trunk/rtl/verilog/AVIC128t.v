@@ -24,6 +24,9 @@
 //
 // ============================================================================
 //
+`define BEZIER_CURVE	1'b1
+`define FLOOD_FILL	1'b1
+
 `define TRUE	1'b1
 `define FALSE	1'b0
 `define HIGH	1'b1
@@ -58,7 +61,7 @@ input stb_i;
 output reg ack_o;
 input we_i;
 input [7:0] sel_i;
-input [12:0] adr_i;
+input [11:0] adr_i;
 input [63:0] dat_i;
 output reg [63:0] dat_o;
 // WISHBONE master port
@@ -165,6 +168,7 @@ parameter HL_GETPIXEL = 8'd71;
 parameter HL_GETPIXEL_NACK = 8'd72;
 parameter HL_SETPIXEL = 8'd73;
 parameter HL_SETPIXEL_NACK = 8'd74;
+// Triangle draw states
 parameter DT_START = 8'd80;
 parameter DT_SORT = 8'd81;
 parameter DT_SLOPE1 = 8'd82;
@@ -178,6 +182,30 @@ parameter DT4 = 8'd89;
 parameter DT5 = 8'd90;
 parameter DT6 = 8'd91;
 parameter ST_WRITE_CHAR1 = 6'd92;
+// Bezier curve states
+parameter BC0 = 8'd100;
+parameter BC1 = 8'd101;
+parameter BC2 = 8'd102;
+parameter BC3 = 8'd103;
+parameter BC4 = 8'd104;
+parameter BC5 = 8'd105;
+parameter BC6 = 8'd106;
+parameter BC7 = 8'd107;
+parameter BC8 = 8'd108;
+parameter BC9 = 8'd109;
+parameter BC5a = 8'd110;
+// Flood Fill states
+parameter FF1 = 8'd111;
+parameter FF2 = 8'd112;
+parameter FF3 = 8'd113;
+parameter FF4 = 8'd114;
+parameter FF5 = 8'd115;
+parameter FF6 = 8'd116;
+parameter FF7 = 8'd117;
+parameter FF8 = 8'd118;
+parameter FF_EXIT = 8'd119;
+parameter FLOOD_FILL = 8'd120;
+
 
 parameter HT_NONE = 3'd0;
 parameter HT_LINE_FETCH = 3'd1;
@@ -373,6 +401,68 @@ reg [31:0] bezierP0plusP1x, bezierP1plusP2x;
 reg [31:0] bezierP0plusP1y, bezierP1plusP2y;
 reg [63:0] bezierBxw, bezierByw;
 
+// Point Transform
+reg transform, otransform;
+reg [31:0] aa, ab, ac, at;
+reg [31:0] ba, bb, bc, bt;
+reg [31:0] ca, cb, cc, ct;
+wire signed [63:0] aax0 = aa * up0x;
+wire signed [63:0] aby0 = ab * up0y;
+wire signed [63:0] acz0 = ac * up0z;
+wire signed [63:0] bax0 = ba * up0x;
+wire signed [63:0] bby0 = bb * up0y;
+wire signed [63:0] bcz0 = bc * up0z;
+wire signed [63:0] cax0 = ca * up0x;
+wire signed [63:0] cby0 = cb * up0y;
+wire signed [63:0] ccz0 = cc * up0z;
+wire signed [63:0] aax1 = aa * up1x;
+wire signed [63:0] aby1 = ab * up1y;
+wire signed [63:0] acz1 = ac * up1z;
+wire signed [63:0] bax1 = ba * up1x;
+wire signed [63:0] bby1 = bb * up1y;
+wire signed [63:0] bcz1 = bc * up1z;
+wire signed [63:0] cax1 = ca * up1x;
+wire signed [63:0] cby1 = cb * up1y;
+wire signed [63:0] ccz1 = cc * up1z;
+wire signed [63:0] aax2 = aa * up2x;
+wire signed [63:0] aby2 = ab * up2y;
+wire signed [63:0] acz2 = ac * up2z;
+wire signed [63:0] bax2 = ba * up2x;
+wire signed [63:0] bby2 = bb * up2y;
+wire signed [63:0] bcz2 = bc * up2z;
+wire signed [63:0] cax2 = ca * up2x;
+wire signed [63:0] cby2 = cb * up2y;
+wire signed [63:0] ccz2 = cc * up2z;
+
+wire signed [63:0] x0_prime = aax0 + aby0 + acz0 + {at,16'h0000};
+wire signed [63:0] y0_prime = bax0 + bby0 + bcz0 + {bt,16'h0000};
+wire signed [63:0] z0_prime = cax0 + cby0 + ccz0 + {ct,16'h0000};
+wire signed [63:0] x1_prime = aax1 + aby1 + acz1 + {at,16'h0000};
+wire signed [63:0] y1_prime = bax1 + bby1 + bcz1 + {bt,16'h0000};
+wire signed [63:0] z1_prime = cax1 + cby1 + ccz1 + {ct,16'h0000};
+wire signed [63:0] x2_prime = aax2 + aby2 + acz2 + {at,16'h0000};
+wire signed [63:0] y2_prime = bax2 + bby2 + bcz2 + {bt,16'h0000};
+wire signed [63:0] z2_prime = cax2 + cby2 + ccz2 + {ct,16'h0000};
+
+always @(posedge clk_i)
+	p0x <= transform ? x0_prime[47:16] : up0x;
+always @(posedge clk_i)
+	p0y <= transform ? y0_prime[47:16] : up0y;
+always @(posedge clk_i)
+	p0z <= transform ? z0_prime[47:16] : up0z;
+always @(posedge clk_i)
+	p1x <= transform ? x1_prime[47:16] : up1x;
+always @(posedge clk_i)
+	p1y <= transform ? y1_prime[47:16] : up1y;
+always @(posedge clk_i)
+	p1z <= transform ? z1_prime[47:16] : up1z;
+always @(posedge clk_i)
+	p2x <= transform ? x2_prime[47:16] : up2x;
+always @(posedge clk_i)
+	p2y <= transform ? y2_prime[47:16] : up2y;
+always @(posedge clk_i)
+	p2z <= transform ? z2_prime[47:16] : up2z;
+
 // Cursor related registers
 reg [31:0] collision;
 reg [4:0] spriteno;
@@ -404,8 +494,17 @@ reg [27:0] vndx;
 // read access counter, controls number of consecutive reads
 reg [7:0] rac;
 reg [7:0] rac_limit = 8'd100;
-reg [7:0] ngs;		// next graphic state
-reg [7:0] state1,state2,state3,state4,state5,state6;
+reg [7:0] state = ST_IDLE;
+reg [7:0] ngs = ST_IDLE;		// next graphic state for continue
+reg [7:0] pushstate;
+`ifdef FLOOD_FILL
+reg [11:0] retsp;
+reg [11:0] pointsp;
+reg [7:0] retstack [0:4095];
+reg [31:0] pointstack [0:4095];
+`else
+reg [7:0] stkstate [0:7];
+`endif
 reg [7:0] strip_cnt;
 reg [5:0] delay_cnt;
 wire [63:0] douta;
@@ -690,6 +789,38 @@ always @*
 	default:bltabc <= `BLACK;
 	endcase
 
+reg div_ld;
+reg signed [31:0] div_a, div_b;
+wire signed [63:0] div_qo;
+wire div_idle;
+
+AVICDivider #(.WID(64)) udiv1
+(
+	.rst(rst_i),
+	.clk(m_clk_i),
+	.ld(div_ld),
+	.abort(1'b0),
+	.sgn(1'b1),
+	.sgnus(1'b0),
+	.a({{16{div_a[31]}},div_a,16'h0}),
+	.b({{32{div_b[31]}},div_b}),
+	.qo(div_qo),
+	.ro(),
+	.dvByZr(),
+	.done(),
+	.idle(div_idle)
+);
+
+wire [63:0] trimult;
+AVICTriMult umul3
+(
+  .CLK(clk_i),
+  .A(div_qo[31:0]),
+  .B(v2x-v0x),
+  .P(trimult)
+);
+
+
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Component declarations
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -825,7 +956,7 @@ wire cmdq_full;
 wire cmdq_empty;
 wire cmdq_valid;
 wire cs = cs_i & cyc_i & stb_i;
-wire cs_cmdq = cs && adr_i[12:3]==10'b0_1101_1101_0 && we_i;
+wire cs_cmdq = cs && adr_i[11:3]==9'b1101_1101_0 && we_i;
 wire wr_cmd_fifo = cs_cmdq & cmdp;
 reg rd_cmd_fifo;
 
@@ -1037,11 +1168,11 @@ begin
 		// Command queue $DC0
 		9'b1101_1100_0:	
 			begin
-				if (sel[5:4]) cmdq_in[47:32] <= dat_i[47:32];
-				if (sel[0]) cmdq_in[7:0] <= dat_i[7:0];
-				if (sel[1]) cmdq_in[15:8] <= dat_i[15:8];
-				if (sel[2]) cmdq_in[23:16] <= dat_i[23:16];
-				if (sel[3]) cmdq_in[31:24] <= dat_i[31:24];
+				if (sel_i[5:4]) cmdq_in[47:32] <= dat_i[47:32];
+				if (sel_i[0]) cmdq_in[7:0] <= dat_i[7:0];
+				if (sel_i[1]) cmdq_in[15:8] <= dat_i[15:8];
+				if (sel_i[2]) cmdq_in[23:16] <= dat_i[23:16];
+				if (sel_i[3]) cmdq_in[31:24] <= dat_i[31:24];
 			end
 		9'b1101_1100_1:	;//cmdq_in[63:32] <= dat_i;
 		9'b1101_1110_0:	font_tbl_adr <= dat_i[31:0];
@@ -1120,6 +1251,46 @@ always @(posedge clk_i)
 //assign ack_o = cs ? rdy4 : pAckStyle;
 always @*
 	ack_o <= rdy4;
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+wire [15:0] pixel_i = (m_dat_i >> {ma[3:1],4'b0}) & 16'hFFFF;
+
+`ifdef FLOOD_FILL
+reg [31:0] pointToPush;
+reg rstst, pushst, popst;
+reg rstpt, pushpt, poppt;
+
+always @(posedge clk_i)
+    if (pushst)
+        retstack[retsp-12'd1] <= pushstate;
+wire [7:0] retstacko = retstack[retsp];
+
+always @(posedge clk_i)
+    if (pushpt)
+        pointstack[pointsp-12'd1] <= pointToPush;
+wire [31:0] pointstacko = pointstack[pointsp];
+wire [15:0] lgcx = pointstacko[31:16];
+wire [15:0] lgcy = pointstacko[15:0];
+
+always @(posedge clk_i)
+    if (rstst)
+        retsp <= 12'd0;
+    else if (pushst)
+        retsp <= retsp - 12'd1;
+    else if (popst)
+        retsp <= retsp + 12'd1;
+
+always @(posedge clk_i)
+    if (rstpt)
+        pointsp <= 12'd0;
+    else if (pushpt)
+        pointsp <= pointsp - 12'd1;
+    else if (poppt)
+        pointsp <= pointsp + 12'd1;
+`endif
+
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -1567,16 +1738,26 @@ ST_CMD:
 				ctrl[11:8] <= cmdq_out[7:4];	// raster op
 				state <= ST_TILERECT;
 				end
+*/
 		8'd6:	begin	// Draw triangle
 				ctrl[11:8] <= cmdq_out[7:4];	// raster op
-				call(ST_IDLE,DT_START);
+				goto(DT_START);
 				end
+`ifdef BEZIER_CURVE
 		8'd8:	begin	// Bezier Curve
 				ctrl[11:8] <= cmdq_out[7:4];	// raster op
 				fillCurve <= cmdq_out[1:0];
-				state <= BC0;
+				goto(BC0);
 				end
-		8'd9:	state <= FF1;
+`else
+		8'd8:	return();
+`endif
+`ifdef FLOOD_FILL
+		8'd9:	goto(FF1);
+`else
+		8'd9:	return();
+`endif
+/*
 		8'd11:	transform <= cmdq_out[0];
 */
 		8'd12:	begin penColor <= cmdq_out[`CMDDAT]; return(); $display("Set pen color"); end
@@ -1597,20 +1778,20 @@ ST_CMD:
 		8'd27:	begin clipX1 <= cmdq_out[15:0]; return(); end
 		8'd28:	begin clipY1 <= cmdq_out[15:0]; return(); end
 		8'd29:	begin clipEnable <= cmdq_out[0]; return(); end
-/*
-		8'd32:	aa <= cmdq_out[`CMDDAT];
-		8'd33:	ab <= cmdq_out[`CMDDAT];
-		8'd34:	ac <= cmdq_out[`CMDDAT];
-		8'd35:	at <= cmdq_out[`CMDDAT];
-		8'd36:	ba <= cmdq_out[`CMDDAT];
-		8'd37:	bb <= cmdq_out[`CMDDAT];
-		8'd38:	bc <= cmdq_out[`CMDDAT];
-		8'd39:	bt <= cmdq_out[`CMDDAT];
-		8'd40:	ca <= cmdq_out[`CMDDAT];
-		8'd41:	cb <= cmdq_out[`CMDDAT];
-		8'd42:	cc <= cmdq_out[`CMDDAT];
-		8'd43:	ct <= cmdq_out[`CMDDAT];
-*/
+
+		8'd32:	begin aa <= cmdq_out[`CMDDAT]; return(); end
+		8'd33:	begin ab <= cmdq_out[`CMDDAT]; return(); end
+		8'd34:	begin ac <= cmdq_out[`CMDDAT]; return(); end
+		8'd35:	begin at <= cmdq_out[`CMDDAT]; return(); end
+		8'd36:	begin ba <= cmdq_out[`CMDDAT]; return(); end
+		8'd37:	begin bb <= cmdq_out[`CMDDAT]; return(); end
+		8'd38:	begin bc <= cmdq_out[`CMDDAT]; return(); end
+		8'd39:	begin bt <= cmdq_out[`CMDDAT]; return(); end
+		8'd40:	begin ca <= cmdq_out[`CMDDAT]; return(); end
+		8'd41:	begin cb <= cmdq_out[`CMDDAT]; return(); end
+		8'd42:	begin cc <= cmdq_out[`CMDDAT]; return(); end
+		8'd43:	begin ct <= cmdq_out[`CMDDAT]; return(); end
+
 		8'd254:	begin rst_cmdq <= `TRUE; return(); end
 		8'd255:	return();	// NOP
 		default:	return();
@@ -2084,10 +2265,10 @@ HL_SETPIXEL_NACK:
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
 // Save off the original set of points defining the triangle. The points are
-// manipulatefd later by the anti-aliasing outline draw.
-/*
+// manipulated later by the anti-aliasing outline draw.
+
 DT_START:								// allows p?? to update
-    begin
+  begin
     up0xs <= up0x;
     up0ys <= up0y;
     up0zs <= up0z;
@@ -2097,7 +2278,7 @@ DT_START:								// allows p?? to update
     up2xs <= up2x;
     up2ys <= up2y;
     up2zs <= up2z;
-	goto(DT_SORT);
+		goto(DT_SORT);
 	end
 
 // First step - sort vertices
@@ -2106,6 +2287,7 @@ DT_START:								// allows p?? to update
 DT_SORT:
 	begin
 		ctrl[14] <= 1'b1;				// set busy indicator
+		// Just draw a horizontal line if all vertices have the same y co-ord.
 		if (p0y == p1y && p0y == p2y) begin
 		   if (p0x < p1x && p0x < p2x)
 		       curx0 <= p0x;
@@ -2120,10 +2302,10 @@ DT_SORT:
 		   else
 		       curx1 <= p2x;
 		   gcy <= fixToInt(p0y);
-           goto(HL_LINE);
+       goto(HL_LINE);
 		end
 		else if (p0y <= p1y && p0y <= p2y) begin
-		    minY <= p0y;
+		  minY <= p0y;
 			v0x <= p0x;
 			v0y <= p0y;
 			if (p1y <= p2y) begin
@@ -2142,7 +2324,7 @@ DT_SORT:
 			end
 		end
 		else if (p1y <= p2y) begin
-		    minY <= p1y;
+		  minY <= p1y;
 			v0y <= p1y;
 			v0x <= p1x;
 			if (p0y <= p2y) begin
@@ -2373,7 +2555,202 @@ DT6:
 		else
  		    return();
 	end
-*/
+
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+// Bezier Curve
+// B(t) = (1-t)[(1-t)P0+tP1] + t[(1-t)P1 + tP2], 0 <= t <= 1.
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+BC0:
+	begin
+	ctrl[14] <= 1'b1;
+	bv0x <= p0x;
+	bv0y <= p0y;
+	bv1x <= p1x;
+	bv1y <= p1y;
+	bv2x <= p2x;
+	bv2y <= p2y;
+	bezierT <= bezierInc;
+	otransform <= transform;
+	transform <= `FALSE;
+	up0x <= p0x;
+	up0y <= p0y;
+	goto(BC1);
+	end
+BC1:
+	begin
+	bezier1mT <= fixedOne - bezierT;
+	goto(BC2);
+	end
+BC2:
+	begin
+	bezier1mTP0xw <= bezier1mT * bv0x;
+	bezier1mTP1xw <= bezier1mT * bv1x;
+	bezierTP1x <= bezierT * bv1x;
+	bezierTP2x <= bezierT * bv2x;
+	bezier1mTP0yw <= bezier1mT * bv0y;
+	bezier1mTP1yw <= bezier1mT * bv1y;
+	bezierTP1y <= bezierT * bv1y;
+	bezierTP2y <= bezierT * bv2y;
+	goto(BC3);
+	end
+BC3:
+	begin
+	bezierP0plusP1x <= bezier1mTP0xw[47:16] + bezierTP1x[47:16];
+	bezierP1plusP2x <= bezier1mTP1xw[47:16] + bezierTP2x[47:16];
+	bezierP0plusP1y <= bezier1mTP0yw[47:16] + bezierTP1y[47:16];
+	bezierP1plusP2y <= bezier1mTP1yw[47:16] + bezierTP2y[47:16];
+	goto(BC4);
+	end
+BC4:
+	begin
+	bezierBxw <= bezier1mT * bezierP0plusP1x + bezierT * bezierP1plusP2x;
+	bezierByw <= bezier1mT * bezierP0plusP1y + bezierT * bezierP1plusP2y;
+	call(DELAY2,BC5);
+	end
+BC5:
+	begin
+	up1x <= bezierBxw[47:16];
+	up1y <= bezierByw[47:16];
+  if (fillCurve[1]) begin
+    up2x <= bv1x;
+    up2y <= bv1y;
+  end
+	goto(BC5a);
+	end
+BC5a:
+	begin
+	ctrl[14] <= 1'b0;
+	call(DL_PRECALC,|fillCurve ? BC6 : BC7);
+	end
+BC6:
+  begin
+	ctrl[14] <= 1'b0;
+	call(DT_START,BC7);
+  end
+BC7:
+	begin
+	goto(BC1);
+  up0x <= up1x;
+  up0y <= up1y;
+  bezierT <= bezierT + bezierInc;
+  if (bezierT >= fixedOne) begin
+  	up1x <= up2x;
+  	up1y <= up2y;
+		ctrl[14] <= 1'b0;
+  	call(|fillCurve ? DT_START : DL_PRECALC,BC8);
+  	//goto(BC8);
+  end
+	end
+BC8:
+	begin
+    ctrl[14] <= 1'b0;
+    //call(BC9,DL_PRECALC);
+    goto(BC9);
+    end
+BC9:
+	begin
+    ctrl[14] <= 1'b0;
+    transform <= otransform;
+    return();
+	end
+
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+// Flood filling.
+// The flood fill is called recursively. The caller saves the current point
+// on a stack, the called routine pops the current point from the stack.
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+`ifdef FLOOD_FILL
+FF1:
+	begin
+		ctrl[14] <= 1'b1;		// indicate we're busy
+		loopcnt <= 5'd31;
+		push_point(gcx,gcy);	// save old graphics cursor position
+		gcx <= fixToInt(p0x);	// convert fixed point point spec to int coord
+		gcy <= fixToInt(p0y);
+		call(FLOOD_FILL,FF_EXIT);	// call flood fill routine
+	end
+FLOOD_FILL:
+		call(DELAY3,FF2);	// addidtional delay needed for ma to settle
+FF2:
+	// If the point is outside of clipping region, just return.
+	if (gcx >= TargetWidth || gcy >= TargetHeight) begin
+		pop_point(gcx,gcy);
+		return();
+	end
+	else if (clipEnable==`TRUE && (gcx < clipX0 || gcx >= clipX1 || gcy < clipY0 || gcy >= clipY1)) begin
+		pop_point(gcx,gcy);
+		return();
+	end
+	// Point is inside clipping region, so a fetch has to take place
+	else begin
+		m_cyc_o <= `HIGH;
+		m_sel_o <= 16'hFFFF;
+		m_adr_o <= zbuf ? ma[19:3] : ma;
+		tocnt <= busto;
+		call(ST_LATCH_DATA,FF3);
+	end
+FF3:
+	// Color already filled ? -> return
+	if (fillColor==pixel_i) begin
+		pop_point(gcx,gcy);
+		return();
+	end
+	// Border hit ? -> return
+	else if (penColor==pixel_i) begin
+		pop_point(gcx,gcy);
+		return();
+	end
+	// Set the pixel color then check the surrounding points.
+	else begin
+		set_pixel(fillColor,alpha,4'd1);
+		loopcnt <= loopcnt - 5'd1;
+		if (loopcnt==5'd0)
+			pause(FF4);					// be nice to the rest of the system
+		else
+			goto(FF4);
+	end
+FF4:	// check to the "south"
+	begin
+//		zbram_we <= 2'b00;
+		push_point(gcx,gcy);			// save the point off
+		gcy <= gcy + 1;
+		call(FLOOD_FILL,FF5);		// call flood fill
+	end
+FF5:	// check to the "north"
+	if (gcy==16'h0)
+		goto(FF6);
+	else begin
+		push_point(gcx,gcy);		// save the point off
+		gcy <= gcy - 1;
+		call(FLOOD_FILL,FF6);	// call flood fill
+	end
+FF6:	// check to the "west"
+	if (gcx==16'd0)
+		goto(FF7);
+	else begin
+		push_point(gcx,gcy);		// save the point off
+		gcx <= gcx - 1;
+		call(FLOOD_FILL,FF7);	// call flood fill
+	end
+FF7:	// Check to the "east"
+	begin
+		push_point(gcx,gcy);			// save the point off
+		gcy <= gcx + 1;				// next horiz. pos.
+		call(FLOOD_FILL,FF8);		// call flood fill
+	end
+FF8:	// return
+	begin
+		pop_point(gcx,gcy);
+		return();
+	end
+FF_EXIT:
+	begin
+		ctrl[14] <= 1'b0;	// signal graphics operation done (not busy)
+		return();
+	end
+`endif
+
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 // Blitter DMA
 // Blitter has four DMA channels, three source channels and one destination
@@ -2392,18 +2769,18 @@ ST_BLTDMA2_NACK:
 	if (~m_ack_i) begin
 		bltA_datx <= latched_data >> {bltA_wadr[3:1],4'h0};
 		bltA_wadr <= bltA_wadr + bltinc;
-	    bltA_hcnt <= bltA_hcnt + 32'd1;
-	    if (bltA_hcnt==bltSrcWid) begin
-		    bltA_hcnt <= 32'd1;
-		    bltA_wadr <= bltA_wadr + {bltA_modx[31:1],1'b0} + bltinc;
+    bltA_hcnt <= bltA_hcnt + 32'd1;
+    if (bltA_hcnt==bltSrcWid) begin
+	    bltA_hcnt <= 32'd1;
+	    bltA_wadr <= bltA_wadr + {bltA_modx[31:1],1'b0} + bltinc;
 		end
-        bltA_wcnt <= bltA_wcnt + 32'd1;
-        bltA_dcnt <= bltA_dcnt + 32'd1;
-        if (bltA_wcnt>=bltA_cntx) begin
-            bltA_wadr <= bltA_badrx;
-            bltA_wcnt <= 32'd1;
-            bltA_hcnt <= 32'd1;
-        end
+    bltA_wcnt <= bltA_wcnt + 32'd1;
+    bltA_dcnt <= bltA_dcnt + 32'd1;
+    if (bltA_wcnt>=bltA_cntx) begin
+      bltA_wadr <= bltA_badrx;
+      bltA_wcnt <= 32'd1;
+      bltA_hcnt <= 32'd1;
+    end
 		if (bltA_dcnt>=bltD_cntx)
 			bltCtrlx[1] <= 1'b0;
 		if (bltCtrlx[3])
@@ -2429,19 +2806,19 @@ ST_BLTDMA4:
 ST_BLTDMA4_NACK:
 	if (~m_ack_i) begin
 		bltB_datx <= latched_data >> {bltB_wadr[3:1],4'h0};
-        bltB_wadr <= bltB_wadr + bltinc;
-        bltB_hcnt <= bltB_hcnt + 32'd1;
-        if (bltB_hcnt>=bltSrcWidx) begin
-            bltB_hcnt <= 32'd1;
-            bltB_wadr <= bltB_wadr + {bltB_modx[31:1],1'b0} + bltinc;
-        end
-        bltB_wcnt <= bltB_wcnt + 32'd1;
-        bltB_dcnt <= bltB_dcnt + 32'd1;
-        if (bltB_wcnt>=bltB_cntx) begin
-            bltB_wadr <= bltB_badrx;
-            bltB_wcnt <= 32'd1;
-            bltB_hcnt <= 32'd1;
-        end
+    bltB_wadr <= bltB_wadr + bltinc;
+    bltB_hcnt <= bltB_hcnt + 32'd1;
+    if (bltB_hcnt>=bltSrcWidx) begin
+      bltB_hcnt <= 32'd1;
+      bltB_wadr <= bltB_wadr + {bltB_modx[31:1],1'b0} + bltinc;
+    end
+    bltB_wcnt <= bltB_wcnt + 32'd1;
+    bltB_dcnt <= bltB_dcnt + 32'd1;
+    if (bltB_wcnt>=bltB_cntx) begin
+      bltB_wadr <= bltB_badrx;
+      bltB_wcnt <= 32'd1;
+      bltB_hcnt <= 32'd1;
+    end
 		if (bltB_dcnt==bltD_cntx)
 			bltCtrlx[3] <= 1'b0;
 		if (bltCtrlx[5])
@@ -2467,19 +2844,19 @@ ST_BLTDMA6:
 ST_BLTDMA6_NACK:
 	if (~m_ack_i) begin
 		bltC_datx <= latched_data >> {bltC_wadr[3:1],4'h0};
-        bltC_wadr <= bltC_wadr + bltinc;
-        bltC_hcnt <= bltC_hcnt + 32'd1;
-        if (bltC_hcnt==bltSrcWidx) begin
-            bltC_hcnt <= 32'd1;
-            bltC_wadr <= bltC_wadr + {bltC_modx[31:1],1'b0} + bltinc;
-        end
-        bltC_wcnt <= bltC_wcnt + 32'd1;
-        bltC_dcnt <= bltC_dcnt + 32'd1;
-        if (bltC_wcnt>=bltC_cntx) begin
-            bltC_wadr <= bltC_badrx;
-            bltC_wcnt <= 32'd1;
-            bltC_hcnt <= 32'd1;
-        end
+    bltC_wadr <= bltC_wadr + bltinc;
+    bltC_hcnt <= bltC_hcnt + 32'd1;
+    if (bltC_hcnt==bltSrcWidx) begin
+      bltC_hcnt <= 32'd1;
+      bltC_wadr <= bltC_wadr + {bltC_modx[31:1],1'b0} + bltinc;
+    end
+    bltC_wcnt <= bltC_wcnt + 32'd1;
+    bltC_dcnt <= bltC_dcnt + 32'd1;
+    if (bltC_wcnt>=bltC_cntx) begin
+      bltC_wadr <= bltC_badrx;
+      bltC_wcnt <= 32'd1;
+      bltC_hcnt <= 32'd1;
+    end
 		if (bltC_dcnt>=bltD_cntx)
 			bltCtrlx[5] <= 1'b0;
 		if (bltCtrlx[7])
@@ -2500,7 +2877,7 @@ ST_BLTDMA8:
 		m_we_o <= `HIGH;
 		m_sel_o <= 16'h0003 << {bltD_wadr[3:1],1'b0};
 		m_adr_o <= bltD_wadr;
-		// If there's no source then a fill operation muct be taking place.
+		// If there's no source then a fill operation must be taking place.
 		if (bltCtrlx[1]|bltCtrlx[3]|bltCtrlx[5])
 			m_dat_o <= {8{bltabc}};
 		else
@@ -2894,7 +3271,6 @@ begin
 end
 endtask
 
-
 task goto;
 input [7:0] st;
 begin
@@ -2902,38 +3278,90 @@ begin
 end
 endtask
 
-task return;
+`ifdef FLOOD_FILL
+task call;
+input [7:0] st;
+input [7:0] nst;
 begin
-	state5 <= state6;
-	state4 <= state5;
-	state3 <= state4;
-	state2 <= state3;
-	state1 <= state2;
-	state <= state1;
+	if (retsp==12'd1) begin	// stack overflow ?
+    rstst <= `TRUE;
+		ctrl[14] <= 1'b0;
+		state <= ST_IDLE;	// abort operation, go back to idle
+	end
+	else begin
+    pushstate <= st;
+    pushst <= `TRUE;
+		goto(nst);
+	end
 end
 endtask
 
-task call;
-input [7:0] st;
-input [7:0] rst;
+task return;
 begin
-	state1 <= rst;
-	state2 <= state1;
-	state3 <= state2;
-	state4 <= state3;
-	state5 <= state4;
-	state6 <= state5;
-	state <= st;
+	state <= retstacko;
+	popst <= `TRUE;
 end
 endtask
+`else
+task call;
+input [7:0] st;
+input [7:0] nst;
+begin
+	for (n = 0; n < 7; n = n + 1)
+		stkstate[n+1] <= stkstate[n];
+	stkstate[0] <= st;
+	state <= nst;
+end
+endtask
+
+task return;
+begin
+	for (n = 0; n < 7; n = n + 1)
+		stkstate[n] <= stkstate[n+1];
+	stkstate[7] <= ST_IDLE;
+	state <= stkstate[0];
+end
+endtask
+
+`endif
 
 task pause;
 input [7:0] st;
 begin
 	ngs <= st;
-	return();
+	state <= ST_IDLE;
 end
 endtask
+
+`ifdef FLOOD_FILL
+task push_point;
+input [15:0] px;
+input [15:0] py;
+begin
+	if (pointsp==12'd1) begin
+		rstpt <= `TRUE;
+		rstst <= `TRUE;
+		ctrl[14] <= 1'b0;
+		state <= ST_IDLE;
+	end
+	else begin
+		pointToPush <= {px,py};
+		pushpt <= `TRUE;
+	end
+end
+endtask
+
+task pop_point;
+output [15:0] px;
+output [15:0] py;
+begin
+	px = pointstacko[31:16];
+	py = pointstacko[15:0];
+	poppt <= `TRUE;
+end
+endtask
+`endif
+
 
 endmodule
 
