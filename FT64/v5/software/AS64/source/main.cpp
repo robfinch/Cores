@@ -1510,7 +1510,7 @@ void skipif(int64_t val)
 
 	// Cut out the if statement
 	p1 = pif1;
-	memmove(pif1,pif2,sizeof(masterFile)-(pif2-masterFile));
+	memmove(pif1,pif2,masterFileLength-(pif2-masterFile));
 
 	p1 = inptr = pif1;
 	while(*inptr) {
@@ -1526,13 +1526,13 @@ void skipif(int64_t val)
 				// If the if was false cut out the code between
 				// if and endif
 				if (val==0 && !codecut) {
-					memmove(pif1,p3,sizeof(masterFile)-(p3-masterFile));
+					memmove(pif1,p3,masterFileLength-(p3-masterFile));
 					inptr = pif1;
 					return;
 				}
 				else {
 					// remove endif but leave remaining text
-					memmove(p2,inptr,sizeof(masterFile)-(inptr-masterFile));
+					memmove(p2,inptr,masterFileLength-(inptr-masterFile));
 					inptr = p2;
 				}
 			}
@@ -1542,14 +1542,14 @@ void skipif(int64_t val)
 				// cut out code between if and else
 				// and keep going until endif
 				if (val==0) {
-					memmove(pif1,p2+4,sizeof(masterFile)-(p2+4-masterFile));
+					memmove(pif1,p2+4,masterFileLength-(p2+4-masterFile));
 					inptr = pif1;
 					codecut = true;
 				}
 				else {
 					// remove the else from text
 					// and keep going until endif
-					memmove(p2,inptr,sizeof(masterFile)-(inptr-masterFile));
+					memmove(p2,inptr,masterFileLength-(inptr-masterFile));
 					inptr = p2;
 				}
 			}
@@ -1576,11 +1576,12 @@ void doifdef()
 {
 	int64_t val;
 
+	SkipSpaces();
 	if (getIdentifier()==0)
 		printf("Expecting an identifier %d.\n", lineno);
-    val = (find_symbol(lastid)!=nullptr);
-	ScanToEOL();
+  val = (find_symbol(lastid)!=nullptr);
 	pif2 = inptr;
+	ScanToEOL();
 	skipif(val);
 }
 
@@ -1590,7 +1591,7 @@ void doifndef()
 
 	if (getIdentifier()==0)
 		printf("Expecting an identifier %d.\n", lineno);
-    val = (find_symbol(lastid)==nullptr);
+  val = (find_symbol(lastid)==nullptr);
 	ScanToEOL();
 	pif2 = inptr;
 	skipif(val);

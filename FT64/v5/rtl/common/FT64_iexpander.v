@@ -72,8 +72,8 @@ casez({cinstr[15:12],cinstr[6]})
 				expand[7:6] = 2'b10;
 				expand[15:8] = {3'd1,cinstr[11:8],cinstr[5]};
 				expand[16] = 1'b0;
-				expand[19:17] = 3'd0;
-				expand[23:20] = 4'd1;
+				expand[20:17] = 4'd0;
+				expand[23:21] = 3'd1;
 				expand[31:24] = 8'd0;
 			end
 			// LDI

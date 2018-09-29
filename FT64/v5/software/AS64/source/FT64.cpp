@@ -1312,9 +1312,6 @@ static void GetArBits(int64_t *aq, int64_t *rl)
 // So
 //		addi	r1,r2,#$12345678
 // Becomes:
-//		ldiq1	r52,#$00123
-//		oriq0	r52,#$45678
-//		addi	r1,r2,r52
 // ---------------------------------------------------------------------------
 
 static void process_riop(int64_t opcode6)
@@ -4572,6 +4569,7 @@ void FT64_processMaster()
 		case tk_ibne: process_ibne(0x26,2); break;
 		case tk_inc:	process_inc(0x1A); break;
 		case tk_if:		pif1 = inptr-2; doif(); break;
+		case tk_ifdef:		pif1 = inptr - 5; doifdef(); break;
 		case tk_itof: process_itof(0x15); break;
 		case tk_iret:	process_iret(0xC8000002); break;
 		case tk_isnull:  process_rop(0x0C); break;

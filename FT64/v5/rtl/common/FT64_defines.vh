@@ -303,6 +303,8 @@
 `define EXR			8'h7F
 
 `define NOP_INSN    {42'd0,`NOP}
+`define INSN_FLT_EXF  16'h1180
+`define INSN_FLT_IBE	16'h10A0
 
 `define CSR_CR0     11'h000
 `define CSR_HARTID  11'h001

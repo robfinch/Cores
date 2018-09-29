@@ -26,9 +26,6 @@
 //
 `define TRUE    1'b1
 `define FALSE   1'b0
-`define BRK         6'd0
-`define FLT_EXF     9'd497
-`define FLT_IBE     9'd509
 
 // -----------------------------------------------------------------------------
 // Small, 64 line cache memory (2kiB) made from distributed RAM. Access is
@@ -37,7 +34,7 @@
 
 module FT64_L1_icache_mem(rst, clk, wr, en, lineno, i, o, ov, invall, invline);
 parameter pLines = 64;
-parameter pLineWidth = 288;
+parameter pLineWidth = 290;
 localparam pLNMSB = pLines==128 ? 6 : 5;
 input rst;
 input clk;
@@ -50,6 +47,8 @@ output [8:0] ov;
 input invall;
 input invline;
 
+integer n;
+
 (* ram_style="distributed" *)
 reg [pLineWidth-1:0] mem [0:pLines-1];
 reg [pLines-1:0] valid0;
@@ -61,6 +60,11 @@ reg [pLines-1:0] valid5;
 reg [pLines-1:0] valid6;
 reg [pLines-1:0] valid7;
 reg [pLines-1:0] valid8;
+
+initial begin
+	for (n = 0; n < pLines; n = n + 1)
+		mem[n][289:288] <= 2'b00;
+end
 
 always  @(posedge clk)
     if (wr & en[0])  mem[lineno][31:0] <= i[31:0];
@@ -79,7 +83,7 @@ always  @(posedge clk)
 always  @(posedge clk)
     if (wr & en[7])  mem[lineno][255:224] <= i[255:224];
 always  @(posedge clk)
-    if (wr & en[8])  mem[lineno][287:256] <= i[287:256];
+    if (wr & en[8])  mem[lineno][289:256] <= i[289:256];
 always  @(posedge clk)
 if (rst) begin
      valid0 <= 64'd0;
@@ -306,7 +310,7 @@ endmodule
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
 
-module FT64_L1_icache(rst, clk, nxt, wr, wr_ack, en, wadr, adr, i, o, hit, invall, invline);
+module FT64_L1_icache(rst, clk, nxt, wr, wr_ack, en, wadr, adr, i, o, fault, hit, invall, invline);
 parameter pSize = 2;
 parameter CAMTAGS = 1'b0;   // 32 way
 parameter FOURWAY = 1'b1;
@@ -320,14 +324,15 @@ output wr_ack;
 input [8:0] en;
 input [37:0] adr;
 input [37:0] wadr;
-input [287:0] i;
+input [289:0] i;
 output reg [47:0] o;
+output reg [1:0] fault;
 output hit;
 input invall;
 input invline;
 
-wire [287:0] ic;
-reg [287:0] i1, i2;
+wire [289:0] ic;
+reg [289:0] i1, i2;
 wire [8:0] lv;				// line valid
 wire [pLNMSB:0] lineno;
 wire [pLNMSB:0] wlineno;
@@ -343,7 +348,7 @@ always @(posedge clk)
 always @(posedge clk)
 	wr2 <= wr1;
 always @(posedge clk)
-	i1 <= i[287:0];
+	i1 <= i[289:0];
 always @(posedge clk)
 	i2 <= i1;
 always @(posedge clk)
@@ -421,6 +426,8 @@ assign hit = taghit & lv[adr[4:2]] & lv[adr[4:2]+4'd1];
 //always @(radr or ic0 or ic1)
 always @(adr or ic)
 	o <= ic >> {adr[4:1],4'h0};
+always @*
+	fault <= ic[289:288];
 
 assign wr_ack = wr2;
 
@@ -429,13 +436,14 @@ endmodule
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
 
-module FT64_L2_icache_mem(clk, wr, lineno, sel, i, o, ov, invall, invline);
+module FT64_L2_icache_mem(clk, wr, lineno, sel, i, fault, o, ov, invall, invline);
 input clk;
 input wr;
 input [8:0] lineno;
 input [2:0] sel;
 input [63:0] i;
-output [287:0] o;
+input [1:0] fault;
+output [289:0] o;
 output reg ov;
 input invall;
 input invline;
@@ -446,6 +454,7 @@ reg [63:0] mem1 [0:511];
 reg [63:0] mem2 [0:511];
 reg [63:0] mem3 [0:511];
 reg [31:0] mem4 [0:511];
+reg [1:0] memf [0:511];
 reg [511:0] valid;
 reg [8:0] rrcl;
 
@@ -453,8 +462,10 @@ reg [8:0] rrcl;
 wire [8:0] cache_line;
 integer n;
 initial begin
-    for (n = 0; n < 512; n = n + 1)
+    for (n = 0; n < 512; n = n + 1) begin
         valid[n] <= 0;
+        memf[n] <= 2'b00;
+    end
 end
 
 always @(posedge clk)
@@ -466,11 +477,11 @@ always @(posedge clk)
 begin
     if (wr) begin
         case(sel[2:0])
-        3'd0:    mem0[lineno] <= i;
-        3'd1:    mem1[lineno] <= i;
-        3'd2:    mem2[lineno] <= i;
-        3'd3:    mem3[lineno] <= i;
-        3'd4:    mem4[lineno] <= i[31:0];
+        3'd0:    begin mem0[lineno] <= i; memf[lineno] <= fault; end
+        3'd1:    begin mem1[lineno] <= i; memf[lineno] <= memf[lineno] | fault; end
+        3'd2:    begin mem2[lineno] <= i; memf[lineno] <= memf[lineno] | fault; end
+        3'd3:    begin mem3[lineno] <= i; memf[lineno] <= memf[lineno] | fault; end
+        3'd4:    begin mem4[lineno] <= i[31:0]; memf[lineno] <= memf[lineno] | fault; end
         endcase
     end
 end
@@ -481,7 +492,7 @@ always @(posedge clk)
 always @(posedge clk)
      ov <= valid[lineno];
 
-assign o = {mem4[rrcl],mem3[rrcl],mem2[rrcl],mem1[rrcl],mem0[rrcl]};
+assign o = {memf[rrcl],mem4[rrcl],mem3[rrcl],mem2[rrcl],mem1[rrcl],mem0[rrcl]};
 
 endmodule
 
@@ -508,7 +519,7 @@ input [2:0] cnt;
 input exv_i;
 input [63:0] i;
 input err_i;
-output [287:0] o;
+output [289:0] o;
 output hit;
 input invall;
 input invline;
@@ -519,6 +530,7 @@ wire taghit;
 reg wr1,wr2;
 reg [2:0] sel1,sel2;
 reg [63:0] i1,i2;
+reg [1:0] f1, f2;
 reg [37:0] last_adr;
 
 // Must update the cache memory on the cycle after a write to the tag memmory.
@@ -533,7 +545,11 @@ always @(posedge clk)
 	sel2 <= sel1;
 always @(posedge clk)
 	last_adr <= adr;
-
+always @(posedge clk)
+	f1 <= {err_i,exv_i};
+always @(posedge clk)
+	f2 <= f1;
+	
 reg [3:0] rdackx;
 always @(posedge clk)
 if (rst)
@@ -547,10 +563,8 @@ end
 
 assign rd_ack = rdackx[3] & ~(last_adr!=adr || wr || wr1 || wr2);
 
-// An exception is forced to be stored in the event of an error loading the
-// the instruction line.
 always @(posedge clk)
-     i1 <= err_i ? {2{15'd0,1'b0,`FLT_IBE,2'b00,`BRK}} : exv_i ? {2{15'd0,1'b0,`FLT_EXF,2'b00,`BRK}} : i;
+     i1 <= i;
 always @(posedge clk)
      i2 <= i1;
 
@@ -564,6 +578,7 @@ FT64_L2_icache_mem u1
 	.lineno(lineno),
 	.sel(sel2),
 	.i(i2),
+	.fault(f2),
 	.o(o),
 	.ov(lv),
 	.invall(invall),

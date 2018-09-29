@@ -91,7 +91,11 @@ parameter DEBUG = 1'b0;
 parameter NMAP = QENTRIES;
 parameter BRANCH_PRED = 1'b0;
 parameter SUP_TXE = 1'b0;
-parameter SUP_VECTOR = `SUPPORT_VECTOR;
+`ifdef SUPPORT_VECTOR
+parameter SUP_VECTOR = 1'b1;
+`else
+parameter SUP_VECTOR = 1'b0;
+`endif
 parameter DBW = 64;
 parameter ABW = 32;
 parameter AMSB = ABW-1;
@@ -466,7 +470,7 @@ reg [63:0] iqentry_res	[0:QENTRIES-1];	// instruction result
 reg [47:0] iqentry_instr[0:QENTRIES-1];	// instruction opcode
 reg  [2:0] iqentry_insln[0:QENTRIES-1]; // instruction length
 reg  [7:0] iqentry_exc	[0:QENTRIES-1];	// only for branches ... indicates a HALT instruction
-reg [RBIT:0] iqentry_tgt	[0:QENTRIES-1];	// Rt field or ZERO -- this is the instruction's target (if any)
+reg [RBIT:0] iqentry_tgt[0:QENTRIES-1];	// Rt field or ZERO -- this is the instruction's target (if any)
 reg  [7:0] iqentry_vl   [0:QENTRIES-1];
 reg  [5:0] iqentry_ven  [0:QENTRIES-1];  // vector element number
 reg [63:0] iqentry_a0	[0:QENTRIES-1];	// argument 0 (immediate)
@@ -871,9 +875,9 @@ parameter B_DCacheLoadStb = 5'd3;
 parameter B_DCacheLoadWait1 = 5'd4;
 parameter B_DCacheLoadWait2 = 5'd5;
 parameter B_DCacheLoadResetBusy = 5'd6;
-parameter B7 = 5'd7;
+parameter B_ICacheAck = 5'd7;
 parameter B8 = 5'd8;
-parameter B9 = 5'd9;
+parameter B_ICacheNack = 5'd9;
 parameter B10 = 5'd10;
 parameter B11 = 5'd11;
 parameter B12 = 5'd12;
@@ -897,11 +901,11 @@ parameter IDLE = 4'd0;
 parameter IC1 = 4'd1;
 parameter IC2 = 4'd2;
 parameter IC3 = 4'd3;
-parameter IC4 = 4'd4;
+parameter IC_WaitL2 = 4'd4;
 parameter IC5 = 4'd5;
 parameter IC6 = 4'd6;
 parameter IC7 = 4'd7;
-parameter IC8 = 4'd8;
+parameter IC_Next = 4'd8;
 parameter IC9 = 4'd9;
 parameter IC10 = 4'd10;
 parameter IC3a = 4'd11;
@@ -917,10 +921,11 @@ always @*
 reg [2:0] iccnt;
 reg L1_wr0,L1_wr1,L1_wr2;
 reg L1_invline;
+wire [1:0] ic0_fault,ic1_fault,ic2_fault;
 reg [8:0] L1_en;
 reg [37:0] L1_adr, L2_adr;
-reg [287:0] L2_rdat;
-wire [287:0] L2_dato;
+reg [289:0] L2_rdat;
+wire [289:0] L2_dato;
 reg L2_xsel;
 
 generate begin : gRegfileInst
@@ -1054,10 +1059,11 @@ FT64_L1_icache #(.pSize(`L1_ICACHE_SIZE)) uic0
     .nxt(icnxt),
     .wr(L1_wr0),
     .en(L1_en),
-    .adr(icstate==IDLE||icstate==IC8 ? {pcr[5:0],pc0} : L1_adr),
+    .adr(icstate==IDLE||icstate==IC_Next ? {pcr[5:0],pc0} : L1_adr),
     .wadr(L1_adr),
     .i(L2_rdat),
     .o(insn0a),
+    .fault(ic0_fault),
     .hit(ihit0),
     .invall(invic),
     .invline(L1_invline)
@@ -1071,10 +1077,11 @@ FT64_L1_icache #(.pSize(`L1_ICACHE_SIZE)) uic1
     .nxt(icnxt),
     .wr(L1_wr1),
     .en(L1_en),
-    .adr(icstate==IDLE||icstate==IC8 ? (thread_en ? {pcr[5:0],pc1}: {pcr[5:0],pc0plus6} ): L1_adr),
+    .adr(icstate==IDLE||icstate==IC_Next ? (thread_en ? {pcr[5:0],pc1}: {pcr[5:0],pc0plus6} ): L1_adr),
     .wadr(L1_adr),
     .i(L2_rdat),
     .o(insn1b),
+    .fault(ic1_fault),
     .hit(ihit1),
     .invall(invic),
     .invline(L1_invline)
@@ -1091,10 +1098,11 @@ FT64_L1_icache #(.pSize(`L1_ICACHE_SIZE)) uic2
     .nxt(icnxt),
     .wr(L1_wr2),
     .en(L1_en),
-    .adr(icstate==IDLE||icstate==IC8 ? (thread_en ? {pcr[5:0],pc2} : {pcr[5:0],pc0plus12}) : L1_adr),
+    .adr(icstate==IDLE||icstate==IC_Next ? (thread_en ? {pcr[5:0],pc2} : {pcr[5:0],pc0plus12}) : L1_adr),
     .wadr(L1_adr),
     .i(L2_rdat),
     .o(insn2b),
+    .fault(ic2_fault),
     .hit(ihit2),
     .invall(invic),
     .invline(L1_invline)
@@ -1110,7 +1118,7 @@ FT64_L2_icache uic2
     .rst(rst),
     .clk(clk),
     .nxt(L2_nxt),
-    .wr(bstate==B7 && ack_i),
+    .wr(bstate==B_ICacheAck && ack_i),
     .xsel(L2_xsel),
     .adr(L2_adr),
     .cnt(iccnt),
@@ -1653,7 +1661,7 @@ else if (phit) begin
 	if (insn0a[`INSTRUCTION_OP]==`BRK && insn0a[23:21]==3'd0 && insn0a[7:6]==2'b00)
 		insn0 <= {8'd1,3'd0,4'b0,1'b0,`FLT_PRIV,2'b00,`BRK};
 	else
-		insn0 <= insn0a;
+		insn0 <= ic0_fault[1] ? `INSN_FLT_IBE : ic0_fault[0] ? `INSN_FLT_EXF : insn0a;
 end
 else
 	insn0 <= `NOP_INSN;
@@ -1666,7 +1674,7 @@ else if (phit) begin
 	if (insn1a[`INSTRUCTION_OP]==`BRK && insn1a[23:21]==3'd0 && insn1a[7:6]==2'b00)
 		insn1 <= {8'd1,3'd0,4'b0,1'b0,`FLT_PRIV,2'b00,`BRK};
 	else
-		insn1 <= insn1a;
+		insn1 <= ic1_fault[1] ? `INSN_FLT_IBE : ic1_fault[0] ? `INSN_FLT_EXF : insn1a;
 end
 else
 	insn1 <= `NOP_INSN;
@@ -1679,7 +1687,7 @@ else if (phit) begin
 	if (insn2a[`INSTRUCTION_OP]==`BRK && insn1a[23:21]==3'd0 && insn2a[7:6]==2'b00)
 		insn2 <= {8'd1,3'd0,4'b0,1'b0,`FLT_PRIV,2'b00,`BRK};
 	else
-		insn2 <= insn2a;
+		insn2 <= ic2_fault[1] ? `INSN_FLT_IBE : ic2_fault[0] ? `INSN_FLT_EXF : insn2a;
 end
 else
 	insn2 <= `NOP_INSN;
@@ -3871,6 +3879,106 @@ begin
 		) begin
 			iqentry_alu0_issue[head7] = `TRUE;
 		end
+		else if (could_issue[head8] && iqentry_alu[head8]
+		&& (!(iqentry_v[head1] && iqentry_sync[head1]) || !iqentry_v[head0])
+		&& (!(iqentry_v[head2] && iqentry_sync[head2]) ||
+		 		((!iqentry_v[head0])
+		 	&&   (!iqentry_v[head1]))
+		 	)
+		&& (!(iqentry_v[head3] && iqentry_sync[head3]) ||
+		 		((!iqentry_v[head0])
+		 	&&   (!iqentry_v[head1])
+		 	&&   (!iqentry_v[head2]))
+			)
+		&& (!(iqentry_v[head4] && iqentry_sync[head4]) ||
+		 		((!iqentry_v[head0])
+		 	&&   (!iqentry_v[head1])
+		 	&&   (!iqentry_v[head2])
+		 	&&   (!iqentry_v[head3]))
+			)
+		&& (!(iqentry_v[head5] && iqentry_sync[head5]) ||
+		 		((!iqentry_v[head0])
+		 	&&   (!iqentry_v[head1])
+		 	&&   (!iqentry_v[head2])
+		 	&&   (!iqentry_v[head3])
+		 	&&   (!iqentry_v[head4]))
+			)
+		&& (!(iqentry_v[head6] && iqentry_sync[head6]) ||
+		 		((!iqentry_v[head0])
+		 	&&   (!iqentry_v[head1])
+		 	&&   (!iqentry_v[head2])
+		 	&&   (!iqentry_v[head3])
+		 	&&   (!iqentry_v[head4])
+		 	&&   (!iqentry_v[head5]))
+			)
+		&& (!(iqentry_v[head7] && iqentry_sync[head7]) ||
+		 		((!iqentry_v[head0])
+		 	&&   (!iqentry_v[head1])
+		 	&&   (!iqentry_v[head2])
+		 	&&   (!iqentry_v[head3])
+		 	&&   (!iqentry_v[head4])
+		 	&&   (!iqentry_v[head5])
+		 	&&   (!iqentry_v[head6])
+		 	)
+			)
+		) begin
+			iqentry_alu0_issue[head8] = `TRUE;
+		end
+		else if (could_issue[head9] && iqentry_alu[head9]
+		&& (!(iqentry_v[head1] && iqentry_sync[head1]) || !iqentry_v[head0])
+		&& (!(iqentry_v[head2] && iqentry_sync[head2]) ||
+		 		((!iqentry_v[head0])
+		 	&&   (!iqentry_v[head1]))
+		 	)
+		&& (!(iqentry_v[head3] && iqentry_sync[head3]) ||
+		 		((!iqentry_v[head0])
+		 	&&   (!iqentry_v[head1])
+		 	&&   (!iqentry_v[head2]))
+			)
+		&& (!(iqentry_v[head4] && iqentry_sync[head4]) ||
+		 		((!iqentry_v[head0])
+		 	&&   (!iqentry_v[head1])
+		 	&&   (!iqentry_v[head2])
+		 	&&   (!iqentry_v[head3]))
+			)
+		&& (!(iqentry_v[head5] && iqentry_sync[head5]) ||
+		 		((!iqentry_v[head0])
+		 	&&   (!iqentry_v[head1])
+		 	&&   (!iqentry_v[head2])
+		 	&&   (!iqentry_v[head3])
+		 	&&   (!iqentry_v[head4]))
+			)
+		&& (!(iqentry_v[head6] && iqentry_sync[head6]) ||
+		 		((!iqentry_v[head0])
+		 	&&   (!iqentry_v[head1])
+		 	&&   (!iqentry_v[head2])
+		 	&&   (!iqentry_v[head3])
+		 	&&   (!iqentry_v[head4])
+		 	&&   (!iqentry_v[head5]))
+			)
+		&& (!(iqentry_v[head7] && iqentry_sync[head7]) ||
+		 		((!iqentry_v[head0])
+		 	&&   (!iqentry_v[head1])
+		 	&&   (!iqentry_v[head2])
+		 	&&   (!iqentry_v[head3])
+		 	&&   (!iqentry_v[head4])
+		 	&&   (!iqentry_v[head5])
+		 	&&   (!iqentry_v[head6]))
+		 	)
+		&& (!(iqentry_v[head8] && iqentry_sync[head8]) ||
+		 		((!iqentry_v[head0])
+		 	&&   (!iqentry_v[head1])
+		 	&&   (!iqentry_v[head2])
+		 	&&   (!iqentry_v[head3])
+		 	&&   (!iqentry_v[head4])
+		 	&&   (!iqentry_v[head5])
+		 	&&   (!iqentry_v[head6])
+		 	&&   (!iqentry_v[head7])
+		 	)
+			)
+		) begin
+			iqentry_alu0_issue[head9] = `TRUE;
+		end
 `endif
 	end
 
@@ -4663,6 +4771,106 @@ begin
     ) begin
    		iqentry_fcu_issue[head7] = `TRUE;
   	end
+    else if (could_issue[head8] && iqentry_fc[head8]
+    && (!(iqentry_v[head1] && iqentry_sync[head1]) || !iqentry_v[head0])
+    && (!(iqentry_v[head2] && iqentry_sync[head2]) ||
+     		((!iqentry_v[head0])
+     	&&   (!iqentry_v[head1]))
+     	)
+    && (!(iqentry_v[head3] && iqentry_sync[head3]) ||
+     		((!iqentry_v[head0])
+     	&&   (!iqentry_v[head1])
+     	&&   (!iqentry_v[head2]))
+    	)
+    && (!(iqentry_v[head4] && iqentry_sync[head4]) ||
+     		((!iqentry_v[head0])
+     	&&   (!iqentry_v[head1])
+     	&&   (!iqentry_v[head2])
+     	&&   (!iqentry_v[head3]))
+    	)
+    && (!(iqentry_v[head5] && iqentry_sync[head5]) ||
+     		((!iqentry_v[head0])
+     	&&   (!iqentry_v[head1])
+     	&&   (!iqentry_v[head2])
+     	&&   (!iqentry_v[head3])
+     	&&   (!iqentry_v[head4]))
+    	)
+    && (!(iqentry_v[head6] && iqentry_sync[head6]) ||
+     		((!iqentry_v[head0])
+     	&&   (!iqentry_v[head1])
+     	&&   (!iqentry_v[head2])
+     	&&   (!iqentry_v[head3])
+     	&&   (!iqentry_v[head4])
+     	&&   (!iqentry_v[head5]))
+    	)
+    && (!(iqentry_v[head7] && iqentry_sync[head7]) ||
+     		((!iqentry_v[head0])
+     	&&   (!iqentry_v[head1])
+     	&&   (!iqentry_v[head2])
+     	&&   (!iqentry_v[head3])
+     	&&   (!iqentry_v[head4])
+     	&&   (!iqentry_v[head5])
+     	&&   (!iqentry_v[head6])
+     	)
+    	)
+    ) begin
+   		iqentry_fcu_issue[head8] = `TRUE;
+  	end
+    else if (could_issue[head9] && iqentry_fc[head9]
+    && (!(iqentry_v[head1] && iqentry_sync[head1]) || !iqentry_v[head0])
+    && (!(iqentry_v[head2] && iqentry_sync[head2]) ||
+     		((!iqentry_v[head0])
+     	&&   (!iqentry_v[head1]))
+     	)
+    && (!(iqentry_v[head3] && iqentry_sync[head3]) ||
+     		((!iqentry_v[head0])
+     	&&   (!iqentry_v[head1])
+     	&&   (!iqentry_v[head2]))
+    	)
+    && (!(iqentry_v[head4] && iqentry_sync[head4]) ||
+     		((!iqentry_v[head0])
+     	&&   (!iqentry_v[head1])
+     	&&   (!iqentry_v[head2])
+     	&&   (!iqentry_v[head3]))
+    	)
+    && (!(iqentry_v[head5] && iqentry_sync[head5]) ||
+     		((!iqentry_v[head0])
+     	&&   (!iqentry_v[head1])
+     	&&   (!iqentry_v[head2])
+     	&&   (!iqentry_v[head3])
+     	&&   (!iqentry_v[head4]))
+    	)
+    && (!(iqentry_v[head6] && iqentry_sync[head6]) ||
+     		((!iqentry_v[head0])
+     	&&   (!iqentry_v[head1])
+     	&&   (!iqentry_v[head2])
+     	&&   (!iqentry_v[head3])
+     	&&   (!iqentry_v[head4])
+     	&&   (!iqentry_v[head5]))
+    	)
+    && (!(iqentry_v[head7] && iqentry_sync[head7]) ||
+     		((!iqentry_v[head0])
+     	&&   (!iqentry_v[head1])
+     	&&   (!iqentry_v[head2])
+     	&&   (!iqentry_v[head3])
+     	&&   (!iqentry_v[head4])
+     	&&   (!iqentry_v[head5])
+     	&&   (!iqentry_v[head6]))
+     	)
+    && (!(iqentry_v[head8] && iqentry_sync[head8]) ||
+     		((!iqentry_v[head0])
+     	&&   (!iqentry_v[head1])
+     	&&   (!iqentry_v[head2])
+     	&&   (!iqentry_v[head3])
+     	&&   (!iqentry_v[head4])
+     	&&   (!iqentry_v[head5])
+     	&&   (!iqentry_v[head6])
+     	&&   (!iqentry_v[head7])
+     	)
+    	)
+    ) begin
+   		iqentry_fcu_issue[head9] = `TRUE;
+  	end
 `endif
 	end
 end
@@ -5103,6 +5311,310 @@ begin
                        && !(iqentry_fc[head4]||iqentry_canex[head4])
                        && !(iqentry_fc[head5]||iqentry_canex[head5])
                        && !(iqentry_fc[head6]||iqentry_canex[head6]));
+
+	 memissue[ head8 ] =	~iqentry_stomp[head8] && iqentry_memready[ head8 ]		// addr and data are valid
+					// ... and no preceding instruction is ready to go
+					&& issue_count < `NUM_MEM
+					//&& ~iqentry_memready[head0]
+					//&& ~iqentry_memready[head1] 
+					//&& ~iqentry_memready[head2] 
+					//&& ~iqentry_memready[head3] 
+					//&& ~iqentry_memready[head4] 
+					//&& ~iqentry_memready[head5] 
+					//&& ~iqentry_memready[head6] 
+					// ... and there is no address-overlap with any preceding instruction
+					&& (!iqentry_mem[head0] || (iqentry_agen[head0] & iqentry_out[head0]) || iqentry_done[head0]
+						|| (iqentry_a1_v[head0] && (iqentry_a1[head8][AMSB:3] != iqentry_a1[head0][AMSB:3] || iqentry_out[head0] || iqentry_done[head0])))
+					&& (!iqentry_mem[head1] || (iqentry_agen[head1] & iqentry_out[head1]) || iqentry_done[head1]
+						|| (iqentry_a1_v[head1] && (iqentry_a1[head8][AMSB:3] != iqentry_a1[head1][AMSB:3] || iqentry_out[head1] || iqentry_done[head1])))
+					&& (!iqentry_mem[head2] || (iqentry_agen[head2] & iqentry_out[head2]) || iqentry_done[head2] 
+						|| (iqentry_a1_v[head2] && (iqentry_a1[head8][AMSB:3] != iqentry_a1[head2][AMSB:3] || iqentry_out[head2] || iqentry_done[head2])))
+					&& (!iqentry_mem[head3] || (iqentry_agen[head3] & iqentry_out[head3]) || iqentry_done[head3] 
+						|| (iqentry_a1_v[head3] && (iqentry_a1[head8][AMSB:3] != iqentry_a1[head3][AMSB:3] || iqentry_out[head3] || iqentry_done[head3])))
+					&& (!iqentry_mem[head4] || (iqentry_agen[head4] & iqentry_out[head4]) || iqentry_done[head4] 
+						|| (iqentry_a1_v[head4] && (iqentry_a1[head8][AMSB:3] != iqentry_a1[head4][AMSB:3] || iqentry_out[head4] || iqentry_done[head4])))
+					&& (!iqentry_mem[head5] || (iqentry_agen[head5] & iqentry_out[head5]) || iqentry_done[head5] 
+						|| (iqentry_a1_v[head5] && (iqentry_a1[head8][AMSB:3] != iqentry_a1[head5][AMSB:3] || iqentry_out[head5] || iqentry_done[head5])))
+					&& (!iqentry_mem[head6] || (iqentry_agen[head6] & iqentry_out[head6]) || iqentry_done[head6] 
+						|| (iqentry_a1_v[head6] && (iqentry_a1[head8][AMSB:3] != iqentry_a1[head6][AMSB:3] || iqentry_out[head6] || iqentry_done[head6])))
+					&& (!iqentry_mem[head7] || (iqentry_agen[head7] & iqentry_out[head7]) || iqentry_done[head7] 
+						|| (iqentry_a1_v[head7] && (iqentry_a1[head8][AMSB:3] != iqentry_a1[head7][AMSB:3] || iqentry_out[head7] || iqentry_done[head7])))
+					&& (iqentry_rl[head8] ? (iqentry_done[head0] || !iqentry_v[head0] || !iqentry_mem[head0])
+										 && (iqentry_done[head1] || !iqentry_v[head1] || !iqentry_mem[head1])
+										 && (iqentry_done[head2] || !iqentry_v[head2] || !iqentry_mem[head2])
+										 && (iqentry_done[head3] || !iqentry_v[head3] || !iqentry_mem[head3])
+										 && (iqentry_done[head4] || !iqentry_v[head4] || !iqentry_mem[head4])
+										 && (iqentry_done[head5] || !iqentry_v[head5] || !iqentry_mem[head5])
+										 && (iqentry_done[head6] || !iqentry_v[head6] || !iqentry_mem[head6])
+										 && (iqentry_done[head7] || !iqentry_v[head7] || !iqentry_mem[head7])
+											 : 1'b1)
+					// ... if a preivous op has the aquire bit set
+					&& !(iqentry_aq[head0] && iqentry_v[head0])
+					&& !(iqentry_aq[head1] && iqentry_v[head1])
+					&& !(iqentry_aq[head2] && iqentry_v[head2])
+					&& !(iqentry_aq[head3] && iqentry_v[head3])
+					&& !(iqentry_aq[head4] && iqentry_v[head4])
+					&& !(iqentry_aq[head5] && iqentry_v[head5])
+					&& !(iqentry_aq[head6] && iqentry_v[head6])
+					&& !(iqentry_aq[head7] && iqentry_v[head7])
+					// ... and there isn't a barrier, or everything before the barrier is done or invalid
+                    && (!(iqentry_iv[head1] && iqentry_memsb[head1]) || (iqentry_done[head0] || !iqentry_v[head0]))
+                    && (!(iqentry_iv[head2] && iqentry_memsb[head2]) ||
+                    			((iqentry_done[head0] || !iqentry_v[head0])
+                    		&&   (iqentry_done[head1] || !iqentry_v[head1]))
+                    		)
+                    && (!(iqentry_iv[head3] && iqentry_memsb[head3]) ||
+                    			((iqentry_done[head0] || !iqentry_v[head0])
+                    		&&   (iqentry_done[head1] || !iqentry_v[head1])
+                    		&&   (iqentry_done[head2] || !iqentry_v[head2]))
+                    		)
+                    && (!(iqentry_iv[head4] && iqentry_memsb[head4]) ||
+                    			((iqentry_done[head0] || !iqentry_v[head0])
+                    		&&   (iqentry_done[head1] || !iqentry_v[head1])
+                    		&&   (iqentry_done[head2] || !iqentry_v[head2])
+                    		&&   (iqentry_done[head3] || !iqentry_v[head3]))
+                    		)
+                    && (!(iqentry_iv[head5] && iqentry_memsb[head5]) ||
+                    			((iqentry_done[head0] || !iqentry_v[head0])
+                    		&&   (iqentry_done[head1] || !iqentry_v[head1])
+                    		&&   (iqentry_done[head2] || !iqentry_v[head2])
+                    		&&   (iqentry_done[head3] || !iqentry_v[head3])
+                    		&&   (iqentry_done[head4] || !iqentry_v[head4]))
+                    		)
+                    && (!(iqentry_iv[head6] && iqentry_memsb[head6]) ||
+                    			((iqentry_done[head0] || !iqentry_v[head0])
+                    		&&   (iqentry_done[head1] || !iqentry_v[head1])
+                    		&&   (iqentry_done[head2] || !iqentry_v[head2])
+                    		&&   (iqentry_done[head3] || !iqentry_v[head3])
+                    		&&   (iqentry_done[head4] || !iqentry_v[head4])
+                    		&&   (iqentry_done[head5] || !iqentry_v[head5]))
+                    		)
+                    && (!(iqentry_iv[head7] && iqentry_memsb[head7]) ||
+                    			((iqentry_done[head0] || !iqentry_v[head0])
+                    		&&   (iqentry_done[head1] || !iqentry_v[head1])
+                    		&&   (iqentry_done[head2] || !iqentry_v[head2])
+                    		&&   (iqentry_done[head3] || !iqentry_v[head3])
+                    		&&   (iqentry_done[head4] || !iqentry_v[head4])
+                    		&&   (iqentry_done[head5] || !iqentry_v[head5])
+                    		&&   (iqentry_done[head6] || !iqentry_v[head6])
+                    		)
+                    		)
+    				&& (!(iqentry_iv[head1] && iqentry_memdb[head1]) || (!iqentry_mem[head0] || iqentry_done[head0] || !iqentry_v[head0]))
+                    && (!(iqentry_iv[head2] && iqentry_memdb[head2]) ||
+                     		  ((!iqentry_mem[head0] || iqentry_done[head0] || !iqentry_v[head0])
+                     		&& (!iqentry_mem[head1] || iqentry_done[head1] || !iqentry_v[head1]))
+                     		)
+                    && (!(iqentry_iv[head3] && iqentry_memdb[head3]) ||
+                     		  ((!iqentry_mem[head0] || iqentry_done[head0] || !iqentry_v[head0])
+                     		&& (!iqentry_mem[head1] || iqentry_done[head1] || !iqentry_v[head1])
+                     		&& (!iqentry_mem[head2] || iqentry_done[head2] || !iqentry_v[head2]))
+                     		)
+                    && (!(iqentry_iv[head4] && iqentry_memdb[head4]) ||
+                     		  ((!iqentry_mem[head0] || iqentry_done[head0] || !iqentry_v[head0])
+                     		&& (!iqentry_mem[head1] || iqentry_done[head1] || !iqentry_v[head1])
+                     		&& (!iqentry_mem[head2] || iqentry_done[head2] || !iqentry_v[head2])
+                     		&& (!iqentry_mem[head3] || iqentry_done[head3] || !iqentry_v[head3]))
+                     		)
+                    && (!(iqentry_iv[head5] && iqentry_memdb[head5]) ||
+                     		  ((!iqentry_mem[head0] || iqentry_done[head0] || !iqentry_v[head0])
+                     		&& (!iqentry_mem[head1] || iqentry_done[head1] || !iqentry_v[head1])
+                     		&& (!iqentry_mem[head2] || iqentry_done[head2] || !iqentry_v[head2])
+                     		&& (!iqentry_mem[head3] || iqentry_done[head3] || !iqentry_v[head3])
+                     		&& (!iqentry_mem[head4] || iqentry_done[head4] || !iqentry_v[head4]))
+                     		)
+                    && (!(iqentry_iv[head6] && iqentry_memdb[head6]) ||
+                     		  ((!iqentry_mem[head0] || iqentry_done[head0] || !iqentry_v[head0])
+                     		&& (!iqentry_mem[head1] || iqentry_done[head1] || !iqentry_v[head1])
+                     		&& (!iqentry_mem[head2] || iqentry_done[head2] || !iqentry_v[head2])
+                     		&& (!iqentry_mem[head3] || iqentry_done[head3] || !iqentry_v[head3])
+                     		&& (!iqentry_mem[head4] || iqentry_done[head4] || !iqentry_v[head4])
+                     		&& (!iqentry_mem[head5] || iqentry_done[head5] || !iqentry_v[head5]))
+                     		)
+                    && (!(iqentry_iv[head7] && iqentry_memdb[head7]) ||
+                     		  ((!iqentry_mem[head0] || iqentry_done[head0] || !iqentry_v[head0])
+                     		&& (!iqentry_mem[head1] || iqentry_done[head1] || !iqentry_v[head1])
+                     		&& (!iqentry_mem[head2] || iqentry_done[head2] || !iqentry_v[head2])
+                     		&& (!iqentry_mem[head3] || iqentry_done[head3] || !iqentry_v[head3])
+                     		&& (!iqentry_mem[head4] || iqentry_done[head4] || !iqentry_v[head4])
+                     		&& (!iqentry_mem[head5] || iqentry_done[head5] || !iqentry_v[head5])
+                     		&& (!iqentry_mem[head6] || iqentry_done[head6] || !iqentry_v[head6])
+                     		)
+                     		)
+					// ... and, if it is a SW, there is no chance of it being undone
+					&& (iqentry_load[head8] ||
+		      		      !(iqentry_fc[head0]||iqentry_canex[head0])
+                       && !(iqentry_fc[head1]||iqentry_canex[head1])
+                       && !(iqentry_fc[head2]||iqentry_canex[head2])
+                       && !(iqentry_fc[head3]||iqentry_canex[head3])
+                       && !(iqentry_fc[head4]||iqentry_canex[head4])
+                       && !(iqentry_fc[head5]||iqentry_canex[head5])
+                       && !(iqentry_fc[head6]||iqentry_canex[head6])
+                       && !(iqentry_fc[head7]||iqentry_canex[head7])
+                       );
+	 memissue[ head9 ] =	~iqentry_stomp[head9] && iqentry_memready[ head9 ]		// addr and data are valid
+					// ... and no preceding instruction is ready to go
+					&& issue_count < `NUM_MEM
+					//&& ~iqentry_memready[head0]
+					//&& ~iqentry_memready[head1] 
+					//&& ~iqentry_memready[head2] 
+					//&& ~iqentry_memready[head3] 
+					//&& ~iqentry_memready[head4] 
+					//&& ~iqentry_memready[head5] 
+					//&& ~iqentry_memready[head6] 
+					// ... and there is no address-overlap with any preceding instruction
+					&& (!iqentry_mem[head0] || (iqentry_agen[head0] & iqentry_out[head0]) || iqentry_done[head0]
+						|| (iqentry_a1_v[head0] && (iqentry_a1[head9][AMSB:3] != iqentry_a1[head0][AMSB:3] || iqentry_out[head0] || iqentry_done[head0])))
+					&& (!iqentry_mem[head1] || (iqentry_agen[head1] & iqentry_out[head1]) || iqentry_done[head1]
+						|| (iqentry_a1_v[head1] && (iqentry_a1[head9][AMSB:3] != iqentry_a1[head1][AMSB:3] || iqentry_out[head1] || iqentry_done[head1])))
+					&& (!iqentry_mem[head2] || (iqentry_agen[head2] & iqentry_out[head2]) || iqentry_done[head2] 
+						|| (iqentry_a1_v[head2] && (iqentry_a1[head9][AMSB:3] != iqentry_a1[head2][AMSB:3] || iqentry_out[head2] || iqentry_done[head2])))
+					&& (!iqentry_mem[head3] || (iqentry_agen[head3] & iqentry_out[head3]) || iqentry_done[head3] 
+						|| (iqentry_a1_v[head3] && (iqentry_a1[head9][AMSB:3] != iqentry_a1[head3][AMSB:3] || iqentry_out[head3] || iqentry_done[head3])))
+					&& (!iqentry_mem[head4] || (iqentry_agen[head4] & iqentry_out[head4]) || iqentry_done[head4] 
+						|| (iqentry_a1_v[head4] && (iqentry_a1[head9][AMSB:3] != iqentry_a1[head4][AMSB:3] || iqentry_out[head4] || iqentry_done[head4])))
+					&& (!iqentry_mem[head5] || (iqentry_agen[head5] & iqentry_out[head5]) || iqentry_done[head5] 
+						|| (iqentry_a1_v[head5] && (iqentry_a1[head9][AMSB:3] != iqentry_a1[head5][AMSB:3] || iqentry_out[head5] || iqentry_done[head5])))
+					&& (!iqentry_mem[head6] || (iqentry_agen[head6] & iqentry_out[head6]) || iqentry_done[head6] 
+						|| (iqentry_a1_v[head6] && (iqentry_a1[head9][AMSB:3] != iqentry_a1[head6][AMSB:3] || iqentry_out[head6] || iqentry_done[head6])))
+					&& (!iqentry_mem[head7] || (iqentry_agen[head7] & iqentry_out[head7]) || iqentry_done[head7] 
+						|| (iqentry_a1_v[head7] && (iqentry_a1[head9][AMSB:3] != iqentry_a1[head7][AMSB:3] || iqentry_out[head7] || iqentry_done[head7])))
+					&& (!iqentry_mem[head8] || (iqentry_agen[head8] & iqentry_out[head8]) || iqentry_done[head8] 
+						|| (iqentry_a1_v[head8] && (iqentry_a1[head9][AMSB:3] != iqentry_a1[head8][AMSB:3] || iqentry_out[head8] || iqentry_done[head8])))
+					&& (iqentry_rl[head9] ? (iqentry_done[head0] || !iqentry_v[head0] || !iqentry_mem[head0])
+										 && (iqentry_done[head1] || !iqentry_v[head1] || !iqentry_mem[head1])
+										 && (iqentry_done[head2] || !iqentry_v[head2] || !iqentry_mem[head2])
+										 && (iqentry_done[head3] || !iqentry_v[head3] || !iqentry_mem[head3])
+										 && (iqentry_done[head4] || !iqentry_v[head4] || !iqentry_mem[head4])
+										 && (iqentry_done[head5] || !iqentry_v[head5] || !iqentry_mem[head5])
+										 && (iqentry_done[head6] || !iqentry_v[head6] || !iqentry_mem[head6])
+										 && (iqentry_done[head7] || !iqentry_v[head7] || !iqentry_mem[head7])
+										 && (iqentry_done[head8] || !iqentry_v[head8] || !iqentry_mem[head8])
+											 : 1'b1)
+					// ... if a preivous op has the aquire bit set
+					&& !(iqentry_aq[head0] && iqentry_v[head0])
+					&& !(iqentry_aq[head1] && iqentry_v[head1])
+					&& !(iqentry_aq[head2] && iqentry_v[head2])
+					&& !(iqentry_aq[head3] && iqentry_v[head3])
+					&& !(iqentry_aq[head4] && iqentry_v[head4])
+					&& !(iqentry_aq[head5] && iqentry_v[head5])
+					&& !(iqentry_aq[head6] && iqentry_v[head6])
+					&& !(iqentry_aq[head7] && iqentry_v[head7])
+					&& !(iqentry_aq[head8] && iqentry_v[head8])
+					// ... and there isn't a barrier, or everything before the barrier is done or invalid
+                    && (!(iqentry_iv[head1] && iqentry_memsb[head1]) || (iqentry_done[head0] || !iqentry_v[head0]))
+                    && (!(iqentry_iv[head2] && iqentry_memsb[head2]) ||
+                    			((iqentry_done[head0] || !iqentry_v[head0])
+                    		&&   (iqentry_done[head1] || !iqentry_v[head1]))
+                    		)
+                    && (!(iqentry_iv[head3] && iqentry_memsb[head3]) ||
+                    			((iqentry_done[head0] || !iqentry_v[head0])
+                    		&&   (iqentry_done[head1] || !iqentry_v[head1])
+                    		&&   (iqentry_done[head2] || !iqentry_v[head2]))
+                    		)
+                    && (!(iqentry_iv[head4] && iqentry_memsb[head4]) ||
+                    			((iqentry_done[head0] || !iqentry_v[head0])
+                    		&&   (iqentry_done[head1] || !iqentry_v[head1])
+                    		&&   (iqentry_done[head2] || !iqentry_v[head2])
+                    		&&   (iqentry_done[head3] || !iqentry_v[head3]))
+                    		)
+                    && (!(iqentry_iv[head5] && iqentry_memsb[head5]) ||
+                    			((iqentry_done[head0] || !iqentry_v[head0])
+                    		&&   (iqentry_done[head1] || !iqentry_v[head1])
+                    		&&   (iqentry_done[head2] || !iqentry_v[head2])
+                    		&&   (iqentry_done[head3] || !iqentry_v[head3])
+                    		&&   (iqentry_done[head4] || !iqentry_v[head4]))
+                    		)
+                    && (!(iqentry_iv[head6] && iqentry_memsb[head6]) ||
+                    			((iqentry_done[head0] || !iqentry_v[head0])
+                    		&&   (iqentry_done[head1] || !iqentry_v[head1])
+                    		&&   (iqentry_done[head2] || !iqentry_v[head2])
+                    		&&   (iqentry_done[head3] || !iqentry_v[head3])
+                    		&&   (iqentry_done[head4] || !iqentry_v[head4])
+                    		&&   (iqentry_done[head5] || !iqentry_v[head5]))
+                    		)
+                    && (!(iqentry_iv[head7] && iqentry_memsb[head7]) ||
+                    			((iqentry_done[head0] || !iqentry_v[head0])
+                    		&&   (iqentry_done[head1] || !iqentry_v[head1])
+                    		&&   (iqentry_done[head2] || !iqentry_v[head2])
+                    		&&   (iqentry_done[head3] || !iqentry_v[head3])
+                    		&&   (iqentry_done[head4] || !iqentry_v[head4])
+                    		&&   (iqentry_done[head5] || !iqentry_v[head5])
+                    		&&   (iqentry_done[head6] || !iqentry_v[head6]))
+                    		)
+                    && (!(iqentry_iv[head8] && iqentry_memsb[head8]) ||
+                    			((iqentry_done[head0] || !iqentry_v[head0])
+                    		&&   (iqentry_done[head1] || !iqentry_v[head1])
+                    		&&   (iqentry_done[head2] || !iqentry_v[head2])
+                    		&&   (iqentry_done[head3] || !iqentry_v[head3])
+                    		&&   (iqentry_done[head4] || !iqentry_v[head4])
+                    		&&   (iqentry_done[head5] || !iqentry_v[head5])
+                    		&&   (iqentry_done[head6] || !iqentry_v[head6])
+                    		&&   (iqentry_done[head7] || !iqentry_v[head7])
+                    		)
+                    		)
+    				&& (!(iqentry_iv[head1] && iqentry_memdb[head1]) || (!iqentry_mem[head0] || iqentry_done[head0] || !iqentry_v[head0]))
+                    && (!(iqentry_iv[head2] && iqentry_memdb[head2]) ||
+                     		  ((!iqentry_mem[head0] || iqentry_done[head0] || !iqentry_v[head0])
+                     		&& (!iqentry_mem[head1] || iqentry_done[head1] || !iqentry_v[head1]))
+                     		)
+                    && (!(iqentry_iv[head3] && iqentry_memdb[head3]) ||
+                     		  ((!iqentry_mem[head0] || iqentry_done[head0] || !iqentry_v[head0])
+                     		&& (!iqentry_mem[head1] || iqentry_done[head1] || !iqentry_v[head1])
+                     		&& (!iqentry_mem[head2] || iqentry_done[head2] || !iqentry_v[head2]))
+                     		)
+                    && (!(iqentry_iv[head4] && iqentry_memdb[head4]) ||
+                     		  ((!iqentry_mem[head0] || iqentry_done[head0] || !iqentry_v[head0])
+                     		&& (!iqentry_mem[head1] || iqentry_done[head1] || !iqentry_v[head1])
+                     		&& (!iqentry_mem[head2] || iqentry_done[head2] || !iqentry_v[head2])
+                     		&& (!iqentry_mem[head3] || iqentry_done[head3] || !iqentry_v[head3]))
+                     		)
+                    && (!(iqentry_iv[head5] && iqentry_memdb[head5]) ||
+                     		  ((!iqentry_mem[head0] || iqentry_done[head0] || !iqentry_v[head0])
+                     		&& (!iqentry_mem[head1] || iqentry_done[head1] || !iqentry_v[head1])
+                     		&& (!iqentry_mem[head2] || iqentry_done[head2] || !iqentry_v[head2])
+                     		&& (!iqentry_mem[head3] || iqentry_done[head3] || !iqentry_v[head3])
+                     		&& (!iqentry_mem[head4] || iqentry_done[head4] || !iqentry_v[head4]))
+                     		)
+                    && (!(iqentry_iv[head6] && iqentry_memdb[head6]) ||
+                     		  ((!iqentry_mem[head0] || iqentry_done[head0] || !iqentry_v[head0])
+                     		&& (!iqentry_mem[head1] || iqentry_done[head1] || !iqentry_v[head1])
+                     		&& (!iqentry_mem[head2] || iqentry_done[head2] || !iqentry_v[head2])
+                     		&& (!iqentry_mem[head3] || iqentry_done[head3] || !iqentry_v[head3])
+                     		&& (!iqentry_mem[head4] || iqentry_done[head4] || !iqentry_v[head4])
+                     		&& (!iqentry_mem[head5] || iqentry_done[head5] || !iqentry_v[head5]))
+                     		)
+                    && (!(iqentry_iv[head7] && iqentry_memdb[head7]) ||
+                     		  ((!iqentry_mem[head0] || iqentry_done[head0] || !iqentry_v[head0])
+                     		&& (!iqentry_mem[head1] || iqentry_done[head1] || !iqentry_v[head1])
+                     		&& (!iqentry_mem[head2] || iqentry_done[head2] || !iqentry_v[head2])
+                     		&& (!iqentry_mem[head3] || iqentry_done[head3] || !iqentry_v[head3])
+                     		&& (!iqentry_mem[head4] || iqentry_done[head4] || !iqentry_v[head4])
+                     		&& (!iqentry_mem[head5] || iqentry_done[head5] || !iqentry_v[head5])
+                     		&& (!iqentry_mem[head6] || iqentry_done[head6] || !iqentry_v[head6]))
+                     		)
+                    && (!(iqentry_iv[head8] && iqentry_memdb[head8]) ||
+                     		  ((!iqentry_mem[head0] || iqentry_done[head0] || !iqentry_v[head0])
+                     		&& (!iqentry_mem[head1] || iqentry_done[head1] || !iqentry_v[head1])
+                     		&& (!iqentry_mem[head2] || iqentry_done[head2] || !iqentry_v[head2])
+                     		&& (!iqentry_mem[head3] || iqentry_done[head3] || !iqentry_v[head3])
+                     		&& (!iqentry_mem[head4] || iqentry_done[head4] || !iqentry_v[head4])
+                     		&& (!iqentry_mem[head5] || iqentry_done[head5] || !iqentry_v[head5])
+                     		&& (!iqentry_mem[head6] || iqentry_done[head6] || !iqentry_v[head6])
+                     		&& (!iqentry_mem[head7] || iqentry_done[head7] || !iqentry_v[head7])
+                     		)
+                     		)
+					// ... and, if it is a SW, there is no chance of it being undone
+					&& (iqentry_load[head9] ||
+		      		      !(iqentry_fc[head0]||iqentry_canex[head0])
+                       && !(iqentry_fc[head1]||iqentry_canex[head1])
+                       && !(iqentry_fc[head2]||iqentry_canex[head2])
+                       && !(iqentry_fc[head3]||iqentry_canex[head3])
+                       && !(iqentry_fc[head4]||iqentry_canex[head4])
+                       && !(iqentry_fc[head5]||iqentry_canex[head5])
+                       && !(iqentry_fc[head6]||iqentry_canex[head6])
+                       && !(iqentry_fc[head7]||iqentry_canex[head7])
+                       && !(iqentry_fc[head8]||iqentry_canex[head8])
+                       );
 `endif
 end
 
@@ -5565,7 +6077,7 @@ for (n = 0; n < QENTRIES; n = n + 1)
 
 always @*
 for (n = 0; n < QENTRIES; n = n + 1)
-	iqentry_memready[n] <= (iqentry_v[n] & iqentry_memopsvalid[n] & ~iqentry_memissue[n] & ~iqentry_done[n] & ~iqentry_out[n] & ~iqentry_stomp[n]);
+	iqentry_memready[n] <= (iqentry_v[n] & iqentry_iv[n] & iqentry_memopsvalid[n] & ~iqentry_memissue[n] & ~iqentry_done[n] & ~iqentry_out[n] & ~iqentry_stomp[n]);
 
 assign outstanding_stores = (dram0 && dram0_store) ||
                             (dram1 && dram1_store) ||
@@ -6558,7 +7070,7 @@ if (alu0_v) begin
 	iqentry_res	[ alu0_id[`QBITS] ] <= alu0_bus;
 	iqentry_exc	[ alu0_id[`QBITS] ] <= alu0_exc;
 	iqentry_done[ alu0_id[`QBITS] ] <= !iqentry_mem[ alu0_id[`QBITS] ] && alu0_done;
-	iqentry_cmt[ alu0_id[`QBITS] ] <= !iqentry_mem[ alu0_id[`QBITS] ] && alu0_done;
+	iqentry_cmt [ alu0_id[`QBITS] ] <= !iqentry_mem[ alu0_id[`QBITS] ] && alu0_done;
 	iqentry_out	[ alu0_id[`QBITS] ] <= `INV;
 	iqentry_agen[ alu0_id[`QBITS] ] <= `VAL;//!iqentry_fc[alu0_id[`QBITS]];  // RET
 	alu0_dataready <= FALSE;
@@ -6569,7 +7081,7 @@ if (alu1_v && `NUM_ALU > 1) begin
 	iqentry_res	[ alu1_id[`QBITS] ] <= alu1_bus;
 	iqentry_exc	[ alu1_id[`QBITS] ] <= alu1_exc;
 	iqentry_done[ alu1_id[`QBITS] ] <= !iqentry_mem[ alu1_id[`QBITS] ] && alu1_done;
-	iqentry_cmt[ alu1_id[`QBITS] ] <= !iqentry_mem[ alu1_id[`QBITS] ] && alu1_done;
+	iqentry_cmt [ alu1_id[`QBITS] ] <= !iqentry_mem[ alu1_id[`QBITS] ] && alu1_done;
 	iqentry_out	[ alu1_id[`QBITS] ] <= `INV;
 	iqentry_agen[ alu1_id[`QBITS] ] <= `VAL;//!iqentry_fc[alu0_id[`QBITS]];  // RET
 	alu1_dataready <= FALSE;
@@ -6633,7 +7145,7 @@ if (fcu_branchmiss) begin
 	fcu_clearbm <= `TRUE;
 end
 
-if (mem1_available && dramA_v && iqentry_v[ dramA_id[`QBITS] ] && iqentry_load[ dramA_id[`QBITS] ]) begin
+if (mem1_available && dramA_v && iqentry_v[ dramA_id[`QBITS] ] && iqentry_load[ dramA_id[`QBITS] ] && !iqentry_stomp[dramA_id[`QBITS]]) begin
 	iqentry_res	[ dramA_id[`QBITS] ] <= dramA_bus;
 	iqentry_exc	[ dramA_id[`QBITS] ] <= dramA_exc;
 	iqentry_done[ dramA_id[`QBITS] ] <= `VAL;
@@ -6641,7 +7153,7 @@ if (mem1_available && dramA_v && iqentry_v[ dramA_id[`QBITS] ] && iqentry_load[ 
 	iqentry_cmt [ dramA_id[`QBITS] ] <= `VAL;
 	iqentry_aq  [ dramA_id[`QBITS] ] <= `INV;
 end
-if (mem2_available && `NUM_MEM > 1 && dramB_v && iqentry_v[ dramB_id[`QBITS] ] && iqentry_load[ dramB_id[`QBITS] ]) begin
+if (mem2_available && `NUM_MEM > 1 && dramB_v && iqentry_v[ dramB_id[`QBITS] ] && iqentry_load[ dramB_id[`QBITS] ] && !iqentry_stomp[dramB_id[`QBITS]]) begin
 	iqentry_res	[ dramB_id[`QBITS] ] <= dramB_bus;
 	iqentry_exc	[ dramB_id[`QBITS] ] <= dramB_exc;
 	iqentry_done[ dramB_id[`QBITS] ] <= `VAL;
@@ -6649,7 +7161,7 @@ if (mem2_available && `NUM_MEM > 1 && dramB_v && iqentry_v[ dramB_id[`QBITS] ] &
 	iqentry_cmt [ dramB_id[`QBITS] ] <= `VAL;
 	iqentry_aq  [ dramB_id[`QBITS] ] <= `INV;
 end
-if (mem3_available && `NUM_MEM > 2 && dramC_v && iqentry_v[ dramC_id[`QBITS] ] && iqentry_load[ dramC_id[`QBITS] ]) begin
+if (mem3_available && `NUM_MEM > 2 && dramC_v && iqentry_v[ dramC_id[`QBITS] ] && iqentry_load[ dramC_id[`QBITS] ] && !iqentry_stomp[dramC_id[`QBITS]]) begin
 	iqentry_res	[ dramC_id[`QBITS] ] <= dramC_bus;
 	iqentry_exc	[ dramC_id[`QBITS] ] <= dramC_exc;
 	iqentry_done[ dramC_id[`QBITS] ] <= `VAL;
@@ -7074,7 +7586,7 @@ end
 // grab requests that have finished and put them on the dram_bus
 if (mem1_available && dram0 == `DRAMREQ_READY) begin
 	dram0 <= `DRAMSLOT_AVAIL;
-	dramA_v <= dram0_load;
+	dramA_v <= dram0_load && !iqentry_stomp[dram0_id[`QBITS]];
 	dramA_id <= dram0_id;
 	dramA_exc <= dram0_exc;
 	dramA_bus <= fnDati(dram0_instr,dram0_addr,rdat0);
@@ -7084,7 +7596,7 @@ end
 //    	dramA_v <= `INV;
 if (mem2_available && dram1 == `DRAMREQ_READY && `NUM_MEM > 1) begin
 	dram1 <= `DRAMSLOT_AVAIL;
-	dramB_v <= dram1_load;
+	dramB_v <= dram1_load && !iqentry_stomp[dram1_id[`QBITS]];
 	dramB_id <= dram1_id;
 	dramB_exc <= dram1_exc;
 	dramB_bus <= fnDati(dram1_instr,dram1_addr,rdat1);
@@ -7094,12 +7606,26 @@ end
 //    	dramB_v <= `INV;
 if (mem3_available && dram2 == `DRAMREQ_READY && `NUM_MEM > 2) begin
 	dram2 <= `DRAMSLOT_AVAIL;
-	dramC_v <= dram2_load;
+	dramC_v <= dram2_load && !iqentry_stomp[dram2_id[`QBITS]];
 	dramC_id <= dram2_id;
 	dramC_exc <= dram2_exc;
 	dramC_bus <= fnDati(dram2_instr,dram2_addr,rdat2);
 	if (dram2_store)     $display("m[%h] <- %h", dram2_addr, dram2_data);
 end
+/*
+// Squash load results for stomped on instructions
+begin
+	if (iqentry_stomp[dram0_id[`QBITS]])
+		dram0_load <= `FALSE;
+	if (`NUM_MEM > 1)
+		if (iqentry_stomp[dram1_id[`QBITS]])
+			dram1_load <= `FALSE;
+	if (`NUM_MEM > 2)
+		if (iqentry_stomp[dram2_id[`QBITS]])
+			dram2_load <= `FALSE;
+end
+*/
+	
 //    else
 //    	dramC_v <= `INV;
 
@@ -7405,7 +7931,7 @@ case(icstate)
 IDLE:
 	// If the bus unit is busy doing an update involving L1_adr or L2_adr
 	// we have to wait.
-	if (bstate != B7 && bstate != B9) begin
+	if (bstate != B_ICacheAck && bstate != B_ICacheNack) begin
 		if (!ihit0) begin
 			L1_adr <= {pcr[5:0],pc0[31:5],5'h0};
 			L2_adr <= {pcr[5:0],pc0[31:5],5'h0};
@@ -7445,14 +7971,14 @@ IDLE:
 	end
 IC2:     icstate <= IC3;
 IC3:     icstate <= IC3a;
-IC3a:     icstate <= IC4;
-        // If data was in the L2 cache already there's no need to wait on the
-        // BIU to retrieve data. It can be determined if the hit signal was
-        // already active when this state was entered in which case waiting
-        // will do no good.
-        // The IC machine will stall in this state until the BIU has loaded the
-        // L2 cache. 
-IC4: 
+IC3a:     icstate <= IC_WaitL2;
+// If data was in the L2 cache already there's no need to wait on the
+// BIU to retrieve data. It can be determined if the hit signal was
+// already active when this state was entered in which case waiting
+// will do no good.
+// The IC machine will stall in this state until the BIU has loaded the
+// L2 cache. 
+IC_WaitL2: 
 	if (ihitL2 && picstate==IC3a) begin
 		L1_en <= 9'h1FF;
 		L1_wr0 <= TRUE;
@@ -7462,7 +7988,7 @@ IC4:
 		L2_rdat <= L2_dato;
 		icstate <= IC5;
 	end
-	else if (bstate!=B9)
+	else if (bstate!=B_ICacheNack)
 		;
 	else begin
 		L1_en <= 9'h1FF;
@@ -7470,7 +7996,8 @@ IC4:
 		L1_wr1 <= TRUE && `WAYS > 1;
 		L1_wr2 <= TRUE && `WAYS > 2;
 		L1_adr <= L2_adr;
-		L2_rdat <= L2_dato;
+		// L2_rdat set below while loading cache line
+		//L2_rdat <= L2_dato;
 		icstate <= IC5;
 	end
 IC5: 
@@ -7482,21 +8009,35 @@ IC5:
 		icstate <= IC6;
 	end
 IC6:  icstate <= IC7;
-IC7:	icstate <= IC8;
-IC8:    begin
-             icstate <= IDLE;
-             icnxt <= TRUE;
-        end
+IC7:	icstate <= IC_Next;
+IC_Next:
+  begin
+   icstate <= IDLE;
+   icnxt <= TRUE;
+	end
 default:     icstate <= IDLE;
 endcase
 
 if (mem1_available && dram0_load)
 case(dram0)
 `DRAMSLOT_AVAIL:	;
-`DRAMSLOT_BUSY:		dram0 <= dram0 + !dram0_unc;
-3'd2:				dram0 <= dram0 + 3'd1;
-3'd3:				dram0 <= dram0 + 3'd1;
-3'd4:				if (dhit0) dram0 <= `DRAMREQ_READY; else dram0 <= `DRAMSLOT_REQBUS;
+`DRAMSLOT_BUSY:
+	dram0 <= dram0 + !dram0_unc;
+3'd2:
+	dram0 <= dram0 + 3'd1;
+3'd3:
+	dram0 <= dram0 + 3'd1;
+3'd4:
+	if (iqentry_v[dram0_id[`QBITS]] && !iqentry_stomp[dram0_id[`QBITS]]) begin
+		if (dhit0)
+			dram0 <= `DRAMREQ_READY;
+		else
+			dram0 <= `DRAMSLOT_REQBUS;
+	end
+	else begin
+		dram0 <= `DRAMSLOT_AVAIL;
+		dram0_load <= `FALSE;
+	end
 `DRAMSLOT_REQBUS:	;
 `DRAMSLOT_HASBUS:	;
 `DRAMREQ_READY:		;
@@ -7505,10 +8046,23 @@ endcase
 if (mem2_available && dram1_load && `NUM_MEM > 1)
 case(dram1)
 `DRAMSLOT_AVAIL:	;
-`DRAMSLOT_BUSY:		dram1 <= dram1 + !dram1_unc;
-3'd2:				dram1 <= dram1 + 3'd1;
-3'd3:				dram1 <= dram1 + 3'd1;
-3'd4:				if (dhit1) dram1 <= `DRAMREQ_READY; else dram1 <= `DRAMSLOT_REQBUS;
+`DRAMSLOT_BUSY:
+	dram1 <= dram1 + !dram1_unc;
+3'd2:
+	dram1 <= dram1 + 3'd1;
+3'd3:
+	dram1 <= dram1 + 3'd1;
+3'd4:
+	if (iqentry_v[dram1_id[`QBITS]] && !iqentry_stomp[dram1_id[`QBITS]]) begin
+		if (dhit1)
+			dram1 <= `DRAMREQ_READY;
+		else
+			dram1 <= `DRAMSLOT_REQBUS;
+	end
+	else begin
+		dram1 <= `DRAMSLOT_AVAIL;
+		dram1_load <= `FALSE;
+	end
 `DRAMSLOT_REQBUS:	;
 `DRAMSLOT_HASBUS:	;
 `DRAMREQ_READY:		;
@@ -7517,10 +8071,23 @@ endcase
 if (mem3_available && dram2_load && `NUM_MEM > 2)
 case(dram2)
 `DRAMSLOT_AVAIL:	;
-`DRAMSLOT_BUSY:		dram2 <= dram2 + !dram2_unc;
-3'd2:				dram2 <= dram2 + 3'd1;
-3'd3:				dram2 <= dram2 + 3'd1;
-3'd4:				if (dhit2) dram2 <= `DRAMREQ_READY; else dram2 <= `DRAMSLOT_REQBUS;
+`DRAMSLOT_BUSY:
+	dram2 <= dram2 + !dram2_unc;
+3'd2:
+	dram2 <= dram2 + 3'd1;
+3'd3:
+	dram2 <= dram2 + 3'd1;
+3'd4:
+	if (iqentry_v[dram2_id[`QBITS]] && !iqentry_stomp[dram2_id[`QBITS]]) begin
+		if (dhit2)
+			dram2 <= `DRAMREQ_READY;
+		else
+			dram2 <= `DRAMSLOT_REQBUS;
+	end
+	else begin
+		dram2 <= `DRAMSLOT_AVAIL;
+		dram2_load <= `FALSE;
+	end
 `DRAMSLOT_REQBUS:	;
 `DRAMSLOT_HASBUS:	;
 `DRAMREQ_READY:		;
@@ -7923,7 +8490,7 @@ BIDLE:
              ol_o  <= ol[0];
              L2_adr <= {pcr[5:0],L1_adr[31:5],5'h0};
              L2_xsel <= 1'b0;
-             bstate <= B7;
+             bstate <= B_ICacheAck;
         end
     end
 // Terminal state for a store operation.
@@ -8080,7 +8647,7 @@ B_DCacheLoadResetBusy: begin
     end
 
 // Ack state for instruction cache load
-B7:
+B_ICacheAck:
     if (ack_i|err_i) begin
         errq <= errq | err_i;
         exvq <= exvq | exv_i;
@@ -8089,9 +8656,17 @@ B7:
 //        L1_wr1 <= `TRUE;
 //        L1_adr <= L2_adr;
         if (err_i)
-        	L2_rdat <= {9{11'b0,4'd7,1'b0,`FLT_IBE,2'b00,`BRK}};
+        	L2_rdat <= {18{`INSN_FLT_IBE}};
         else
-        	L2_rdat <= {dat_i[31:0],{4{dat_i}}};
+        	case(iccnt)
+        	3'd0:	L2_rdat[63:0] <= dat_i;
+        	3'd1:	L2_rdat[127:64] <= dat_i;
+        	3'd2:	L2_rdat[191:128] <= dat_i;
+        	3'd3:	L2_rdat[255:192] <= dat_i;
+        	3'd4:	L2_rdat[287:256] <= dat_i[31:0];
+        	default:	;
+        	endcase
+        	//L2_rdat <= {dat_i[31:0],{4{dat_i}}};
         iccnt <= iccnt + 3'd1;
         //stb_o <= `LOW;
         if (iccnt==3'd3)
@@ -8103,7 +8678,7 @@ B7:
             stb_o <= `LOW;
             sel_o <= 8'h00;
             icl_o <= `LOW;
-            bstate <= B9;
+            bstate <= B_ICacheNack;
         end
         else begin
             L2_adr[4:3] <= L2_adr[4:3] + 2'd1;
@@ -8111,7 +8686,7 @@ B7:
             	L2_xsel <= 1'b1;
         end
     end
-B9:
+B_ICacheNack:
  	begin
 		L1_wr0 <= `FALSE;
 		L1_wr1 <= `FALSE;
@@ -8549,15 +9124,16 @@ end
 	if (|panic && ~outstanding_stores) begin
 	    $finish;
 	end
+/*	
     for (n = 0; n < QENTRIES; n = n + 1)
         if (branchmiss) begin
             if (!setpred[n]) begin
                  iqentry_instr[n][`INSTRUCTION_OP] <= `NOP;
-                 iqentry_done[n] <= `VAL;
-                 iqentry_cmt[n] <= `VAL;
+                 iqentry_done[n] <= iqentry_v[n];
+                 iqentry_cmt[n] <= iqentry_v[n];
             end
         end
-
+*/
 	if (snr) begin
 		seq_num <= 32'd0;
 		seq_num1 <= 32'd0;
