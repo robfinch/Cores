@@ -22,12 +22,18 @@
 //
 // ============================================================================
 //
+//`define USE_CLOCK_GATE	1'b1
+
 `define TRUE	1'b1
 `define FALSE	1'b0
 `define HIGH	1'b1
 `define LOW		1'b0
 
 `define ABITS	31:0
+// The cycle at which it's safe to update the working count and address.
+// A good value is just before the end of the scan, but that depends on
+// display resolution.
+`define SPR_WCA	12'd638
 
 module rtfSpriteController2(rst_i, clk_i, cs_i, cyc_i, stb_i, ack_o, we_i, sel_i, adr_i, dat_i, dat_o,
 	m_clk_i, m_cyc_o, m_stb_o, m_ack_i, m_sel_o, m_adr_o, m_dat_i,
@@ -74,7 +80,7 @@ reg controller_enable;
 wire vclk;
 reg [2:0] state;
 reg [1:0] lowres;
-reg [3:0] flashcnt;
+wire [5:0] flashcnt;
 reg rst_collision;
 reg [31:0] collision, c_collision;
 reg [4:0] spriteno;
@@ -84,51 +90,57 @@ reg [31:0] spriteActive;
 reg [11:0] sprite_pv [0:31];
 reg [11:0] sprite_ph [0:31];
 reg [3:0] sprite_pz [0:31];
+(* ram_style="distributed" *)
 reg [37:0] sprite_color [0:255];
 reg [31:0] sprite_on;
 reg [31:0] sprite_on_d1;
 reg [31:0] sprite_on_d2;
 reg [31:0] sprite_on_d3;
+(* ram_style="distributed" *)
 reg [`ABITS] spriteAddr [0:31];
 reg [`ABITS] spriteWaddr [0:31];
 reg [15:0] spriteMcnt [0:31];
 reg [15:0] spriteWcnt [0:31];
 reg [63:0] m_spriteBmp [0:31];
 reg [63:0] spriteBmp [0:31];
-reg [15:0] spriteColor [0:31];
 reg [31:0] spriteLink1;
-reg [11:0] spriteColorNdx [0:31];
+reg [7:0] spriteColorNdx [0:31];
 
 initial begin
 	for (n = 0; n < 256; n = n + 1) begin
-		sprite_color[n][31:0] = $urandom;
-		sprite_color[n][37:32] = 6'd0;//$urandom & 6'd63;
+		sprite_color[n][31:0] <= {8'h00,n[7:5],5'd0,n[4:3],6'd0,n[2:0],5'd0};
 	end
 	for (n = 0; n < 32; n = n + 1) begin
-		sprite_ph[n] <= $urandom%800 + 260;
-		sprite_pv[n] <= $urandom%600 + 41;
-		sprite_pz[n] <= $urandom%256;
-		spriteMcnt[n] <= ($urandom%505 + 5) * 32;
+		sprite_ph[n] <= 260 + n * 40;
+		sprite_pv[n] <= 41 + n * 20;
+		sprite_pz[n] <= 8'h00;
+		spriteMcnt[n] <= 60 * 32;
+		spriteBmp[n] <= 64'hFFFFFFFFFFFFFFFF;
+		spriteAddr[n] <= 32'h40000 + (n << 12);
 	end
 end
 
 wire pe_hsync, pe_vsync;
-reg [11:0] hctr, vctr, m_hctr, m_vctr;
+wire [11:0] hctr, vctr;
+reg [11:0] m_hctr, m_vctr;
 
 // Generate acknowledge signal
 wire cs = cs_i & cyc_i & stb_i;
-reg rdy1,rdy2,rdy3;
+reg rdy1,rdy2,rdy3,rdy4;
 always @(posedge clk_i)
 	rdy1 <= cs;
 always @(posedge clk_i)
 	rdy2 <= rdy1 & cs;
 always @(posedge clk_i)
 	rdy3 <= rdy2 & cs;
-assign ack_o = cs & we_i ? 1'b1 : rdy3;
+always @(posedge clk_i)
+	rdy4 <= rdy3 & cs;
+assign ack_o = (cs & we_i) ? 1'b1 : rdy4;
 
 (* ram_style="block" *)
 reg [63:0] shadow_ram [0:511];
-reg [10:0] sradr;
+reg [63:0] shadow_ramo;
+reg [8:0] sradr;
 always @(posedge clk_i)
 	if (cs & we_i) begin
 		if (sel_i[0]) shadow_ram[adr_i[11:3]][ 7: 0] <= dat_i;
@@ -143,9 +155,11 @@ always @(posedge clk_i)
 always @(posedge clk_i)
 	sradr <= adr_i[11:3];
 always @(posedge clk_i)
+	shadow_ramo <= shadow_ram[sradr];
+always @(posedge clk_i)
 case(adr_i[11:3])
 9'b1010_0001_0:	dat_o <= c_collision;
-default:	dat_o <= shadow_ram[sradr];
+default:	dat_o <= shadow_ramo;
 endcase
 
 always @(posedge clk_i)
@@ -153,20 +167,21 @@ if (rst_i) begin
 	rst_collision <= `FALSE;
 	controller_enable <= `TRUE;
 	spriteEnable <= 32'hFFFFFFFF;
+	spriteLink1 <= 32'h0;
 end
 else begin
 	rst_collision <= `FALSE;
 	if (cs & we_i) begin
 		casez(adr_i[11:3])
 		9'b0???_????_?:	sprite_color[adr_i[10:3]] <= dat_i[37:0];
-		9'b100?_????_0:
+		9'b100?_????_0:	spriteAddr[adr_i[8:4]] <= dat_i[`ABITS];
+		9'b100?_????_1:
 			begin
 				if (|sel_i[1:0]) sprite_ph[adr_i[8:4]] <= dat_i[11: 0];
 				if (|sel_i[3:2]) sprite_pv[adr_i[8:4]] <= dat_i[27:16];
-				if ( sel_i[4]) sprite_pz[adr_i[8:4]] <= dat_i[39:32];
+				if ( sel_i[  4]) sprite_pz[adr_i[8:4]] <= dat_i[39:32];
 				if (|sel_i[7:6]) spriteMcnt[adr_i[8:4]] <= dat_i[63:48];
 			end
-		9'b100?_????_1:	spriteAddr[adr_i[8:4]] <= dat_i[`ABITS];
 		9'b1010_0000_0:	spriteEnable <= dat_i[31:0];
 		9'b1010_0000_1:	spriteLink1 <= dat_i[31:0];
 		9'b1010_0001_0:	rst_collision <= `TRUE;
@@ -232,9 +247,9 @@ else begin
 	MEM_ACCESS:
 		if (m_ack_i) begin
 			m_cyc_o <= `LOW;
-			spriteBmp[spriteno] <= dat_i;
+			m_spriteBmp[spriteno] <= dat_i;
 			if (test)
-				spriteBmp[spriteno] <= 64'hFFFFFFFFFFFFFFFF;
+				m_spriteBmp[spriteno] <= 64'h00005555AAAAFFFF;
 		end
 	NEXT_SPRITE:
 		spriteno <= spriteno + 5'd1;
@@ -245,35 +260,23 @@ end
 always @(posedge clk_i)
 	c_collision <= collision;
 
+`ifdef USE_CLOCK_GATE
 BUFHCE ucb1
 (
 	.I(dot_clk_i),
 	.CE(controller_enable),
 	.O(vclk)
 );
+`else
+assign vclk = dot_clk_i;
+`endif
 
 edge_det ued1 (.clk(vclk), .ce(1'b1), .i(hsync_i), .pe(pe_hsync), .ne(), .ee());
 edge_det ued2 (.clk(vclk), .ce(1'b1), .i(vsync_i), .pe(pe_vsync), .ne(), .ee());
 
-always @(posedge vclk)
-if (rst_i)
-	hctr <= 12'd0;
-else begin
-	if (pe_hsync)
-		hctr <= 12'd0;
-	else
-		hctr <= hctr + 12'd1;
-end
-
-always @(posedge vclk)
-if (rst_i)
-	vctr <= 12'd0;
-else begin
-	if (pe_vsync)
-		vctr <= 12'd0;
-	else if (pe_hsync)
-		vctr <= vctr + 12'd1;
-end
+VT163 #(12) uhctr (.clk(vclk), .clr_n(!rst_i), .ent(1'b1),     .enp(1'b1), .ld_n(!pe_hsync), .d(12'd0), .q(hctr), .rco());
+VT163 #(12) uvctr (.clk(vclk), .clr_n(!rst_i), .ent(pe_hsync), .enp(1'b1), .ld_n(!pe_vsync), .d(12'd0), .q(vctr), .rco());
+VT163 # (6) ufctr (.clk(vclk), .clr_n(!rst_i), .ent(pe_vsync), .enp(1'b1), .ld_n(1'b1),  .d( 6'd0), .q(flashcnt), .rco());
 
 always @(posedge vclk)
 begin
@@ -350,7 +353,7 @@ for (n = 0; n < NSPR; n = n + 1)
 		2'd2:		if ((vctr[11:2] == sprite_pv[n]) && (hctr == 12'h005)) spriteWcnt[n] <= 16'd0;
 		endcase
 		// The following assumes there are at least 640 clocks in a scan line.
-		if (hctr==12'd638)	// must be after image data fetch
+		if (hctr==`SPR_WCA)	// must be after image data fetch
   		if (spriteActive[n])
   		case(lowres)
   		2'd0,2'd3:	spriteWcnt[n] <= spriteWcnt[n] + 16'd32;
@@ -367,11 +370,11 @@ for (n = 0; n < NSPR; n = n + 1)
 		2'd1:		if ((vctr[11:1] == sprite_pv[n]) && (hctr == 12'h005)) spriteWaddr[n] <= spriteAddr[n];
 		2'd2:		if ((vctr[11:2] == sprite_pv[n]) && (hctr == 12'h005)) spriteWaddr[n] <= spriteAddr[n];
 		endcase
-		if (hctr==12'd638)	// must be after image data fetch
+		if (hctr==`SPR_WCA)	// must be after image data fetch
 		case(lowres)
-   		2'd0,2'd3:	spriteWaddr[n] <= spriteWaddr[n] + 32'd16;
-   		2'd1:		if (vctr[0]) spriteWaddr[n] <= spriteWaddr[n] + 32'd16;
-   		2'd2:		if (vctr[1:0]==2'b11) spriteWaddr[n] <= spriteWaddr[n] + 32'd16;
+   		2'd0,2'd3:	spriteWaddr[n] <= spriteWaddr[n] + 32'd8;
+   		2'd1:		if (vctr[0]) spriteWaddr[n] <= spriteWaddr[n] + 32'd8;
+   		2'd2:		if (vctr[1:0]==2'b11) spriteWaddr[n] <= spriteWaddr[n] + 32'd8;
    		endcase
 	end
 
@@ -403,25 +406,23 @@ begin
 	if (hctr==12'h5)
 		for (n = 0; n < NSPR; n = n + 1)
 			spriteBmp[n] <= m_spriteBmp[n];
-    for (n = 0; n < NSPR; n = n + 1)
-      if (spriteShift[n])
-      	case(lowres)
-      	2'd0,2'd3:	spriteBmp[n] <= {spriteBmp[n][61:0],2'h0};
-      	2'd1:	if (hctr[0]) spriteBmp[n] <= {spriteBmp[n][61:0],2'h0};
-      	2'd2:	if (&hctr[1:0]) spriteBmp[n] <= {spriteBmp[n][61:0],2'h0};
-  		endcase
+  for (n = 0; n < NSPR; n = n + 1)
+    if (spriteShift[n])
+    	case(lowres)
+    	2'd0,2'd3:	spriteBmp[n] <= {spriteBmp[n][61:0],2'h0};
+    	2'd1:	if (hctr[0]) spriteBmp[n] <= {spriteBmp[n][61:0],2'h0};
+    	2'd2:	if (&hctr[1:0]) spriteBmp[n] <= {spriteBmp[n][61:0],2'h0};
+			endcase
 end
 
 always @(posedge vclk)
 for (n = 0; n < NSPR; n = n + 1)
-if (spriteLink1[n]) begin
+if (spriteLink1[n])
   spriteColorNdx[n] <= {n[3:0],spriteBmp[(n+1)&31][63:62],spriteBmp[n][63:62]};
-end
-else if (spriteLink1[(n-1)&31]) begin
+else if (spriteLink1[(n-1)&31])
 	spriteColorNdx[n] <= 8'h00;	// transparent
-end
 else
-  spriteColorNdx[n] <= {n[4:0],spriteBmp[n][63:62]};
+  spriteColorNdx[n] <= {1'b0,n[4:0],spriteBmp[n][63:62]};
 
 // Compute index into sprite color palette
 // If none of the sprites are linked, each sprite has it's own set of colors.
@@ -438,8 +439,8 @@ reg [7:0] sprite_pzx;
 // The color index from each sprite can be mux'ed into a single value used to
 // access the color palette because output color is a priority chain. This
 // saves having mulriple read ports on the color palette.
-reg [31:0] spriteColorOut2; 
-reg [31:0] spriteColorOut3;
+reg [37:0] spriteColorOut2; 
+reg [37:0] spriteColorOut3;
 reg [7:0] spriteClrNdx;
 
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
@@ -461,7 +462,7 @@ end
         
 always @(posedge vclk)
 begin
-	sprite_z1 <= 3'h7;
+	sprite_z1 <= 8'hff;
 	for (n = NSPR-1; n >= 0; n = n -1)
 		if (sprite_on[n])
 			sprite_z1 <= sprite_pz[n]; 
@@ -490,13 +491,13 @@ always @(posedge vclk)
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 // Compute alpha blending
 
-wire [12:0] alphaRed = zrgb_i[23:16] * spriteColorOut2[31:24] + (spriteColorOut2[23:16] * (9'h100 - spriteColorOut2[31:24]));
-wire [12:0] alphaGreen = zrgb_i[15:8] * spriteColorOut2[31:24] + (spriteColorOut2[15:8]  * (9'h100 - spriteColorOut2[31:24]));
-wire [12:0] alphaBlue = zrgb_i[7:0] * spriteColorOut2[31:24] + (spriteColorOut2[7:0]  * (9'h100 - spriteColorOut2[31:24]));
+wire [15:0] alphaRed = (zrgb_i[23:16] * spriteColorOut2[31:24]) + (spriteColorOut2[23:16] * (9'h100 - spriteColorOut2[31:24]));
+wire [15:0] alphaGreen = (zrgb_i[15:8] * spriteColorOut2[31:24]) + (spriteColorOut2[15:8]  * (9'h100 - spriteColorOut2[31:24]));
+wire [15:0] alphaBlue = (zrgb_i[7:0] * spriteColorOut2[31:24]) + (spriteColorOut2[7:0]  * (9'h100 - spriteColorOut2[31:24]));
 reg [23:0] alphaOut;
 
 always @(posedge vclk)
-    alphaOut <= {alphaRed[12:5],alphaGreen[12:5],alphaBlue[12:5]};
+    alphaOut <= {alphaRed[15:8],alphaGreen[15:8],alphaBlue[15:8]};
 always @(posedge vclk)
     sprite_z3 <= sprite_z2;
 always @(posedge vclk)
@@ -542,7 +543,7 @@ always @(posedge vclk)
 
 always @(posedge dot_clk_i)
 	case(any_sprite_on4 & controller_enable)
-	1'b1:		zrgb_o <= {zrgb_i4[31:24],((zb_i4 < sprite_z4) ? zrgb_i4[23:0] : flashOut[23:0])};
+	1'b1:		zrgb_o <= (zb_i4 < sprite_z4) ? zrgb_i4 : {sprite_z4,flashOut};
 	1'b0:		zrgb_o <= zrgb_i4;
 	endcase
 

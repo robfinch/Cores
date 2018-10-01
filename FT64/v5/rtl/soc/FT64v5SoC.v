@@ -23,10 +23,12 @@
 // ============================================================================
 //
 //`define SIM
-`define AVIC
+//`define AVIC	1'b1
+`define TEXT_CONTROLLER	1'b1
 
 module FT64v5SoC(cpu_resetn, xclk, led, sw,
-    TMDS_OUT_clk_p, TMDS_OUT_clk_n, TMDS_OUT_data_p, TMDS_OUT_data_n
+    TMDS_OUT_clk_p, TMDS_OUT_clk_n, TMDS_OUT_data_p, TMDS_OUT_data_n,
+    oled_sdin, oled_sclk, oled_dc, oled_res, oled_vbat, oled_vdd
 `ifndef SIM
     ,ddr3_ck_p,ddr3_ck_n,ddr3_cke,ddr3_reset_n,ddr3_ras_n,ddr3_cas_n,ddr3_we_n,
     ddr3_ba,ddr3_addr,ddr3_dq,ddr3_dqs_p,ddr3_dqs_n,ddr3_dm,ddr3_odt
@@ -43,6 +45,12 @@ output TMDS_OUT_clk_p;
 output TMDS_OUT_clk_n;
 output [2:0] TMDS_OUT_data_p;
 output [2:0] TMDS_OUT_data_n;
+output oled_sdin;
+output oled_sclk;
+output oled_dc;
+output oled_res;
+output oled_vbat;
+output oled_vdd;
 `ifndef SIM
 output [0:0] ddr3_ck_p;
 output [0:0] ddr3_ck_n;
@@ -74,6 +82,7 @@ output [0:0] ddr3_odt;
 wire rst;
 wire xrst = ~cpu_resetn;
 wire clk20, clk40, clk50, clk80, clk100, clk200, clk400;
+wire mem_ui_clk;
 wire xclk_bufg;
 wire hSync, vSync, blank, border;
 wire [7:0] red, blue, green;
@@ -98,6 +107,51 @@ wire dram_ack;
 wire [63:0] dram_dato;
 wire avic_ack;
 wire [63:0] avic_dato;
+wire [23:0] avic_rgb;
+
+wire spr_ack;
+wire [63:0] spr_dato;
+wire spr_cyc;
+wire spr_stb;
+wire spr_acki;
+wire spr_we;
+wire [7:0] spr_sel;
+wire [31:0] spr_adr;
+wire [63:0] spr_dati;
+wire [31:0] spr_rgbo;
+
+wire bmp_ack;
+wire [63:0] bmp_cdato;
+wire bmp_cyc;
+wire bmp_stb;
+wire bmp_acki;
+wire bmp_we;
+wire [7:0] bmp_sel;
+wire [31:0] bmp_adr;
+wire [63:0] bmp_dati;
+wire [63:0] bmp_dato;
+wire [31:0] bmp_rgb;
+
+wire ack_bridge1;
+wire br1_cyc;
+wire br1_stb;
+reg br1_ack;
+wire br1_we;
+wire [7:0] br1_sel;
+wire [3:0] br1_sel32;
+wire [31:0] br1_adr;
+wire [31:0] br1_adr32;
+wire [63:0] br1_cdato;
+wire [63:0] br1_dato;
+wire [31:0] br1_dato32;
+reg [63:0] br1_dati;
+
+wire [3:0] sel32 = sel[7:4]|sel[3:0];
+wire [31:0] dat32 = |sel[7:4] ? dato[63:32] : dato[31:0];
+wire a0 = sel[1]|sel[3]|sel[5]|sel[7];
+wire a1 = |sel[3:2]| |sel[7:6];
+wire a2 = |sel[7:4];
+wire [31:0] adr32 = {adr[15:3],a2,a1,a0};
 
 NexysVideoClkgen ucg1
  (
@@ -117,15 +171,15 @@ NexysVideoClkgen ucg1
 assign rst = !locked;
 
 `ifndef AVIC
-WXGASyncGen1280x768_60Hz u4
-(
-	.rst(rst),
-	.clk(clk80),
-	.hSync(hSync),
-	.vSync(vSync),
-	.blank(blank),
-	.border(border)
-);
+//WXGASyncGen1280x768_60Hz u4
+//(
+//	.rst(rst),
+//	.clk(clk80),
+//	.hSync(hSync),
+//	.vSync(vSync),
+//	.blank(blank),
+//	.border(border)
+//);
 `endif
 
 rgb2dvi #(
@@ -144,10 +198,24 @@ ur2d1
 	.aRst_n(~rst),
 	.vid_pData({red,blue,green}),
 	.vid_pVDE(~blank),
-	.vid_pHSync(~hSync),    // hSync is neg going for 1366x768
+	.vid_pHSync(hSync),    // hSync is neg going for 1366x768
 	.vid_pVSync(vSync),
-	.PixelClk(clk80),
-	.SerialClk(clk400)
+	.PixelClk(clk40),
+	.SerialClk(clk200)
+);
+
+OLED uoled1
+(
+	.rst(rst),
+	.clk(xclk_bufg),
+	.adr(adr),
+	.dat(dati),
+	.SDIN(oled_sdin),
+	.SCLK(oled_sclk),
+	.DC(oled_dc),
+	.RES(oled_res),
+	.VBAT(oled_vbat),
+	.VDD(oled_vdd)
 );
 
 //top_level udp1
@@ -168,12 +236,16 @@ ur2d1
 //);
 
 wire cs_dram = adr[31:29]==3'h0;
-wire cs_br = adr[31:18]==14'h3FFF;
-wire cs_tc1 = adr[31:16]==16'hFFD0;
+wire cs_br = adr[31:16]==16'hFFFC
+					|| adr[31:16]==16'hFFFD
+					|| adr[31:16]==16'hFFFE;
 wire cs_scr = adr[31:20]==12'hFF4;
 wire cs_rnd = adr[31:4]==28'hFFDC0C0;
-wire cs_avic = adr[31:13]==19'b1111_1111_1101_1100_110;	// FFDCC000-FFDCDFFF
 wire cs_led = cyc && stb && (adr[31:4]==28'hFFDC060);
+wire cs_tc1 = br1_adr[31:16]==16'hFFD0;
+wire cs_spr = br1_adr[31:12]==20'hFFDAD;
+wire cs_bmp = br1_adr[31:12]==20'hFFDC5;
+wire cs_avic = br1_adr[31:13]==19'b1111_1111_1101_1100_110;	// FFDCC000-FFDCDFFF
 
 `ifdef TEXT_CONTROLLER
 FT64_TextController #(.num(1)) tc1
@@ -181,27 +253,87 @@ FT64_TextController #(.num(1)) tc1
 	.rst_i(rst),
 	.clk_i(clk20),
 	.cs_i(cs_tc1),
-	.cyc_i(cyc),
-	.stb_i(stb),
+	.cyc_i(br1_cyc),
+	.stb_i(br1_stb),
 	.ack_o(tc1_ack),
-	.wr_i(we),
-	.adr_i(adr[15:0]),
-	.dat_i(dato[31:0]),
+	.wr_i(br1_we),
+	.adr_i(br1_adr32),
+	.dat_i(br1_dat32),
 	.dat_o(tc1_dato),
 	.lp(),
 	.curpos(),
-	.vclk(clk80),
+	.vclk(clk40),
 	.hsync(hSync),
 	.vsync(vSync),
 	.blank(blank),
 	.border(border),
-	.rgbIn(24'd0),
+	.rgbIn(avic_rgb),
 	.rgbOut(tc1_rgb)
 );
-assign red = tc1_rgb[23:16];
-assign green = tc1_rgb[15:8];
-assign blue = tc1_rgb[7:0];
+assign red = spr_rgbo[23:16];
+assign green = spr_rgbo[15:8];
+assign blue = spr_rgbo[7:0];
 `endif
+
+rtfBitmapController5 ubmc1
+(
+	.rst_i(rst),
+	.s_clk_i(clk20),
+	.s_cs_i(cs_bmp),
+	.s_cyc_i(cyc),
+	.s_stb_i(stb),
+	.s_ack_o(bmp_ack),
+	.s_we_i(we),
+	.s_sel_i(sel),
+	.s_adr_i(adr[11:0]),
+	.s_dat_i(dato),
+	.s_dat_o(bmp_cdato),
+	.irq_o(),
+	.m_clk_i(mem_ui_clk),
+	.m_cyc_o(bmp_cyc),
+	.m_stb_o(bmp_stb),
+	.m_ack_i(bmp_acki),
+	.m_we_o(bmp_we),
+	.m_sel_o(bmp_sel),
+	.m_adr_o(bmp_adr),
+	.m_dat_i(bmp_dati),
+	.m_dat_o(bmp_dato),
+	.dot_clk_i(clk40),
+	.hsync_o(hSync),
+	.vsync_o(vSync),
+	.blank_o(blank),
+	.border_o(border),
+	.zrgb_o(bmp_rgb),
+	.xonoff_i(sw[2])
+);
+
+rtfSpriteController2 usc2
+(
+	.rst_i(rst),
+	.clk_i(clk20),
+	.cs_i(cs_spr),
+	.cyc_i(cyc),
+	.stb_i(stb),
+	.ack_o(spr_ack),
+	.we_i(we),
+	.sel_i(sel),
+	.adr_i(adr),
+	.dat_i(dato),
+	.dat_o(spr_dato),
+	.m_clk_i(mem_ui_clk),
+	.m_cyc_o(spr_cyc),
+	.m_stb_o(spr_stb),
+	.m_ack_i(spr_acki),
+	.m_sel_o(spr_sel),
+	.m_adr_o(spr_adr),
+	.m_dat_i(spr_dati),
+	.dot_clk_i(clk40),
+	.hsync_i(hSync),
+	.vsync_i(vSync),
+	.zrgb_i({bmp_rgb}),
+	.zrgb_o(spr_rgbo),
+	.test(sw[1])
+);
 
 wire [23:0] rgb;
 wire vde;
@@ -214,21 +346,21 @@ wire [15:0] aud0, aud1, aud2, aud3;
 reg [15:0] audi = 16'h0000;
 wire [7:0] gst;
 
-`ifndef SIM
+`ifdef AVIC
 AVIC128 uavic1
 (
 	// Slave port
 	.rst_i(rst),
 	.clk_i(clk20),
 	.cs_i(cs_avic),
-	.cyc_i(cyc),
-	.stb_i(stb),
+	.cyc_i(br1_cyc),
+	.stb_i(br1_stb),
 	.ack_o(avic_ack),
-	.we_i(we),
-	.sel_i(sel),
-	.adr_i(adr[12:0]),
-	.dat_i(dato),
-	.dat_o(avic_dat_o),
+	.we_i(br1_we),
+	.sel_i(br1_sel),
+	.adr_i(br1_adr[12:0]),
+	.dat_i(br1_dato),
+	.dat_o(avic_dato),
 	// Bus master
 	.m_clk_i(clk40),
 	.m_cyc_o(vm_cyc),
@@ -244,7 +376,7 @@ AVIC128 uavic1
 	.hSync(hSync),
 	.vSync(vSync),
 	.de(vde),
-	.rgb(rgb),
+	.rgb(avic_rgb),
 	// Audio ports
 	.aud0_out(aud0),
 	.aud1_out(aud1),
@@ -254,34 +386,79 @@ AVIC128 uavic1
 	// Debug
 	.state(gst)
 );
-assign red = rgb[23:16];
-assign green = rgb[15:8];
-assign blue = rgb[7:0];
 assign blank = ~vde;
+`else
+assign vm_cyc = 1'b0;
+assign vm_stb = 1'b0;
+assign vm_we = 1'b0;
+assign avic_ack = 1'b0;
 `endif
 
 wire ack_led = cs_led;
 always @(posedge clk20)
 begin
-led[0] <= cs_br;
-led[1] <= cs_scr;
+//led[0] <= cs_br;
+//led[1] <= cs_scr;
+//led[2] <= rst;
+//led[7:4] <= adr[6:3];
 if (cs_led)
     led <= dato[7:0];
 end
 wire [7:0] led_dato = sw;
 
-assign ack = ack_scr|ack_led|tc1_ack|ack_br|rnd_ack|dram_ack|avic_ack;
-always @*
-casez({cs_br,cs_tc1,cs_scr,cs_led,cs_rnd,cs_dram,cs_avic})
-7'b1??????: dati <= br_dato;
-7'b01?????: dati <= {2{tc1_dato}};
-7'b001????: dati <= scr_dato;
-7'b0001???: dati <= {8{led_dato}};
-7'b00001??: dati <= {2{rnd_dato}};
-7'b000001?:	dati <= dram_dato;
-7'b000000?:	dati <= avic_dato;
-default:    dati <= {2{32'h1C}}; // NOP
+reg ack1;
+assign ack = ack_scr|ack_led|ack_bridge1|ack_br|rnd_ack|dram_ack;
+always @(posedge clk20)
+	ack1 <= ack;
+always @(posedge clk20)
+casez({cs_br,ack_bridge1,cs_scr,cs_led,cs_rnd,cs_dram})
+6'b1?????: dati <= br_dato;
+6'b01????: dati <= br1_cdato;
+6'b001???: dati <= scr_dato;
+6'b0001??: dati <= {8{led_dato}};
+6'b00001?: dati <= {2{rnd_dato}};
+6'b000001: dati <= dram_dato;
+default:    dati <= {4{16'h0080}}; // NOP
 endcase
+
+wire br1_ack1 = tc1_ack|spr_ack|bmp_ack|avic_ack;
+always @(posedge clk20)
+	br1_ack <= br1_ack1;
+
+always @(posedge clk20)
+casez({cs_tc1,cs_spr,cs_bmp,cs_avic})
+4'b1???:	br1_dati <= {2{tc1_dato}};
+4'b01??:	br1_dati <= spr_dato;
+4'b001?:	br1_dati <= bmp_cdato;
+4'b0001:	br1_dati <= avic_dato;
+default:	br1_dati <= 64'hDEADDEADDEADDEAD;
+endcase
+
+IOBridge u_video_bridge
+(
+	.rst_i(rst),
+	.clk_i(clk20),
+	.s_cyc_i(cyc),
+	.s_stb_i(stb),
+	.s_ack_o(ack_bridge1),
+	.s_sel_i(sel),
+	.s_we_i(we),
+	.s_adr_i(adr),
+	.s_dat_i(dato),
+	.s_dat_o(br1_cdato),
+
+	.m_cyc_o(br1_cyc),
+	.m_stb_o(br1_stb),
+	.m_ack_i(br1_ack),
+	.m_we_o(br1_we),
+	.m_sel_o(br1_sel),
+	.m_adr_o(br1_adr),
+	.m_dat_i(br1_dati),
+	.m_dat_o(br1_dato),
+	.m_sel32_o(br1_sel32),
+	.m_adr32_o(br1_adr32),
+	.m_dat32_o(br1_dat32)
+);
 
 IBUFG #(.IBUF_LOW_PWR("FALSE"),.IOSTANDARD("DEFAULT")) ubg1
 (
@@ -314,7 +491,7 @@ mpmc6 umc1
 	.clk100MHz(xclk_bufg),
 	.clk200MHz(clk200),
 	.mem_ui_clk(mem_ui_clk),
-
+/*
 	.cyc0(vm_cyc),
 	.stb0(vm_stb),
 	.ack0(vm_ack),
@@ -323,6 +500,15 @@ mpmc6 umc1
 	.adr0(vm_adr),
 	.dati0(vm_dat_o),
 	.dato0(vm_dat_i),
+*/
+	.cyc0(bmp_cyc),
+	.stb0(bmp_stb),
+	.ack0(bmp_acki),
+	.we0(bmp_we),
+	.sel0(bmp_sel),
+	.adr0(bmp_adr),
+	.dati0(bmp_dato),
+	.dato0(bmp_dati),
 
 /*
 cs1, cyc1, stb1, ack1, we1, sel1, adr1, dati1, dato1, sr1, cr1, rb1,
@@ -333,6 +519,12 @@ cyc5, stb5, ack5, adr5, dato5,
 cyc6, stb6, ack6, we6, sel6, adr6, dati6, dato6,
 cs7, cyc7, stb7, ack7, we7, sel7, adr7, dati7, dato7, sr7, cr7, rb7,
 */
+	.cyc5(spr_cyc),
+	.stb5(spr_stb),
+	.ack5(spr_acki),
+	.adr5(spr_adr),
+	.dato5(spr_dati),
+
 	.cs7(cs_dram),
 	.cyc7(cyc),
 	.stb7(stb),
@@ -402,7 +594,7 @@ FT64_mpu ucpu1
     .hartid_i(64'h1),
     .rst_i(rst),
     .clk_i(clk20),
-    .clk4x_i(clk40),
+    .clk4x_i(clk80),
     .tm_clk_i(clk20),
     .i1(1'b0),
     .i2(1'b0),
@@ -437,7 +629,7 @@ FT64_mpu ucpu1
     .cti_o(cti),
     .cyc_o(cyc),
     .stb_o(stb),
-    .ack_i(ack),
+    .ack_i(ack1),
     .err_i(1'b0),
     .we_o(we),
     .sel_o(sel),
@@ -459,7 +651,7 @@ random	uprg1
 	.ack_o(rnd_ack),
 	.we_i(we),
 	.adr_i(adr[3:0]|(|sel[7:4]<<2)),
-	.dat_i(|sel[7:4] ? dato[63:32] : dato[31:0]),
+	.dat_i(dat32),
 	.dat_o(rnd_dato)
 );
 

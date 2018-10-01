@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2008-2015  Robert Finch, Stratford
+//   \\__/ o\    (C) 2008-2018  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -26,20 +26,21 @@
 // ============================================================================
 //
 module rtfVideoFifo3(wrst, wclk, wr, di, rrst, rclk, rd, dout, cnt);
+parameter WID=128;
 input wrst;
 input wclk;
 input wr;
-input [127:0] di;
+input [WID-1:0] di;
 input rrst;
 input rclk;
 input rd;
-output [127:0] dout;
+output [WID-1:0] dout;
 output [7:0] cnt;
 reg [7:0] cnt;
 
 reg [7:0] wr_ptr;
 reg [7:0] rd_ptr,rrd_ptr;
-reg [127:0] mem [0:255];
+reg [WID-1:0] mem [0:255];
 
 wire [7:0] wr_ptr_p1 = wr_ptr + 8'd1;
 wire [7:0] rd_ptr_p1 = rd_ptr + 8'd1;
