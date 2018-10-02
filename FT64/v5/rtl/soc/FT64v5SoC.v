@@ -24,10 +24,13 @@
 //
 //`define SIM
 //`define AVIC	1'b1
+//`define ORSOC_GRAPHICS	1'b1
 `define TEXT_CONTROLLER	1'b1
 
-module FT64v5SoC(cpu_resetn, xclk, led, sw,
+module FT64v5SoC(cpu_resetn, xclk, led, sw, btnl, btnr, btnc, btnd, btnu, 
+    kclk, kd,
     TMDS_OUT_clk_p, TMDS_OUT_clk_n, TMDS_OUT_data_p, TMDS_OUT_data_n,
+    ac_mclk, ac_adc_sdata, ac_dac_sdata, ac_bclk, ac_lrclk,
     oled_sdin, oled_sclk, oled_dc, oled_res, oled_vbat, oled_vdd
 `ifndef SIM
     ,ddr3_ck_p,ddr3_ck_n,ddr3_cke,ddr3_reset_n,ddr3_ras_n,ddr3_cas_n,ddr3_we_n,
@@ -41,10 +44,24 @@ input cpu_resetn;
 input xclk;
 output reg [7:0] led;
 input [7:0] sw;
+input btnl;
+input btnr;
+input btnc;
+input btnd;
+input btnu;
+inout kclk;
+tri kclk;
+inout kd;
+tri kd;
 output TMDS_OUT_clk_p;
 output TMDS_OUT_clk_n;
 output [2:0] TMDS_OUT_data_p;
 output [2:0] TMDS_OUT_data_n;
+output ac_mclk;
+input ac_adc_sdata;
+output ac_dac_sdata;
+inout ac_bclk;
+inout ac_lrclk;
 output oled_sdin;
 output oled_sclk;
 output oled_dc;
@@ -96,9 +113,9 @@ reg [63:0] dati;
 wire [63:0] dato;
 wire sr,cr,rb;
 
-wire [23:0] tc1_rgb;
+wire [31:0] tc1_rgb;
 wire tc1_ack;
-wire [31:0] tc1_dato;
+wire [63:0] tc1_dato;
 wire ack_scr, ack_br;
 wire [63:0] scr_dato, br_dato;
 wire rnd_ack;
@@ -107,7 +124,11 @@ wire dram_ack;
 wire [63:0] dram_dato;
 wire avic_ack;
 wire [63:0] avic_dato;
-wire [23:0] avic_rgb;
+wire [31:0] avic_rgb;
+wire kbd_rst;
+wire kbd_ack;
+wire [7:0] kbd_dato;
+wire kbd_irq;
 
 wire spr_ack;
 wire [63:0] spr_dato;
@@ -119,6 +140,7 @@ wire [7:0] spr_sel;
 wire [31:0] spr_adr;
 wire [63:0] spr_dati;
 wire [31:0] spr_rgbo;
+wire [4:0] spr_spriteno;
 
 wire bmp_ack;
 wire [63:0] bmp_cdato;
@@ -131,6 +153,7 @@ wire [31:0] bmp_adr;
 wire [63:0] bmp_dati;
 wire [63:0] bmp_dato;
 wire [31:0] bmp_rgb;
+wire [11:0] hctr, vctr;
 
 wire ack_bridge1;
 wire br1_cyc;
@@ -146,12 +169,61 @@ wire [63:0] br1_dato;
 wire [31:0] br1_dato32;
 reg [63:0] br1_dati;
 
+wire ack_bridge2;
+wire br2_cyc;
+wire br2_stb;
+reg br2_ack;
+wire br2_we;
+wire [7:0] br2_sel;
+wire [3:0] br2_sel32;
+wire [31:0] br2_adr;
+wire [31:0] br2_adr32;
+wire [63:0] br2_cdato;
+wire [63:0] br2_dato;
+wire [31:0] br2_dato32;
+reg [63:0] br2_dati;
+
+wire gpio_ack;
+wire [15:0] aud0, aud1, aud2, aud3;
+wire [15:0] audi;
+wire aud_cyc;
+wire aud_stb;
+wire aud_acki;
+wire aud_we;
+wire [1:0] aud_sel;
+wire [31:0] aud_adr;
+wire [15:0] aud_dati;
+wire [15:0] aud_dato;
+wire aud_ack;
+wire [63:0] aud_cdato;
+
+wire ack_gbridge1;
+wire gbr1_cyc;
+wire gbr1_stb;
+reg gbr1_ack;
+wire gbr1_we;
+wire [7:0] gbr1_sel;
+wire [3:0] gbr1_sel32;
+wire [31:0] gbr1_adr;
+wire [31:0] gbr1_adr32;
+wire [63:0] gbr1_cdato;
+wire [63:0] gbr1_dato;
+wire [31:0] gbr1_dato32;
+reg [63:0] gbr1_dati;
+
 wire [3:0] sel32 = sel[7:4]|sel[3:0];
 wire [31:0] dat32 = |sel[7:4] ? dato[63:32] : dato[31:0];
 wire a0 = sel[1]|sel[3]|sel[5]|sel[7];
 wire a1 = |sel[3:2]| |sel[7:6];
 wire a2 = |sel[7:4];
 wire [31:0] adr32 = {adr[15:3],a2,a1,a0};
+
+wire btnu_db, btnd_db, btnl_db, btnr_db, btnc_db;
+BtnDebounce(clk20, btnu, btnu_db);
+BtnDebounce(clk20, btnd, btnd_db);
+BtnDebounce(clk20, btnl, btnl_db);
+BtnDebounce(clk20, btnr, btnr_db);
+BtnDebounce(clk20, btnc, btnc_db);
 
 NexysVideoClkgen ucg1
  (
@@ -235,20 +307,387 @@ OLED uoled1
 //    .dp_rx_aux_n(dp_rx_aux_n)
 //);
 
+// -----------------------------------------------------------------------------
+// Address Decoding
+// -----------------------------------------------------------------------------
 wire cs_dram = adr[31:29]==3'h0;
 wire cs_br = adr[31:16]==16'hFFFC
 					|| adr[31:16]==16'hFFFD
 					|| adr[31:16]==16'hFFFE;
 wire cs_scr = adr[31:20]==12'hFF4;
-wire cs_rnd = adr[31:4]==28'hFFDC0C0;
-wire cs_led = cyc && stb && (adr[31:4]==28'hFFDC060);
 wire cs_tc1 = br1_adr[31:16]==16'hFFD0;
 wire cs_spr = br1_adr[31:12]==20'hFFDAD;
 wire cs_bmp = br1_adr[31:12]==20'hFFDC5;
 wire cs_avic = br1_adr[31:13]==19'b1111_1111_1101_1100_110;	// FFDCC000-FFDCDFFF
+wire cs_gfx00 = br1_adr[31:12]==20'hFFDD8;
+wire cs_rnd = br2_adr[31:4]==28'hFFDC0C0;
+wire cs_led = br2_cyc && br2_stb && (br2_adr[31:4]==28'hFFDC060);
+wire cs_kbd  = br2_adr[31:4]==28'hFFDC000;
+wire cs_psg = (br2_adr[31:12]==20'hFFD50);
+wire cs_gpio = br2_adr[31:4]==28'hFFDC070;
+
+//wire cs_gfx00 = gbr1_adr[31:12]==20'hFFDD8 && gbr1_cyc && gbr1_stb;
+wire cs_gfx01 = gbr1_adr[31:12]==20'hFFDD9 && gbr1_cyc && gbr1_stb;
+wire cs_gfx10 = gbr1_adr[31:12]==20'hFFDDA && gbr1_cyc && gbr1_stb;
+wire cs_gfx11 = gbr1_adr[31:12]==20'hFFDDB && gbr1_cyc && gbr1_stb;
+
+reg [31:0] gfx_rgb;
+wire gfx00_cyc;
+wire gfx00_stb;
+wire gfx00_ack;
+wire gfx00_cack;
+wire gfx00_we;
+wire [7:0] gfx00_sel;
+wire [31:0] gfx00_adr;
+wire [63:0] gfx00_cdato;
+wire [63:0] gfx00_dati;
+wire [63:0] gfx00_dato;
+
+`ifdef ORSOC_GRAPHICS
+wire gfx00_cyc, gfx01_cyc, gfx10_cyc, gfx11_cyc;
+wire gfx00_ack, gfx01_ack, gfx10_ack, gfx11_ack;
+wire [63:0] gfx00_cdato, gfx01_cdato, gfx10_cdato, gfx11_cdato;
+wire [7:0] gfx00_sel, gfx01_sel, gfx10_sel, gfx11_sel;
+wire gfx00_we, gfx01_we, gfx10_we, gfx11_we;
+wire [31:0] gfx00_adr, gfx01_adr, gfx10_adr, gfx11_adr;
+wire [12:0] gfx00x_adr, gfx01x_adr, gfx10x_adr, gfx11x_adr;
+wire [63:0] gfx00_dato, gfx01_dato, gfx10_dato, gfx11_dato;
+wire [63:0] gfx00_dati, gfx01_dati, gfx10_dati, gfx11_dati;
+reg [17:0] scan_addr;
+
+always @(posedge clk40)
+	scan_addr <= {((vctr[11:1]-11'd13) * 256) + (hctr[11:1] - 11'd109),1'b0};
+
+wire [12:0] scan_addr1 = {scan_addr[17:8],scan_addr[5:3]};
+assign gfx00x_adr = {gfx00_adr[17:8],gfx00_adr[5:3]};
+assign gfx01x_adr = {gfx01_adr[17:8],gfx01_adr[5:3]};
+assign gfx10x_adr = {gfx10_adr[17:8],gfx10_adr[5:3]};
+assign gfx11x_adr = {gfx11_adr[17:8],gfx11_adr[5:3]};
+wire [7:0] gfx00_wea = {8{gfx00_we}} & gfx00_sel;
+wire [7:0] gfx01_wea = {8{gfx01_we}} & gfx01_sel;
+wire [7:0] gfx10_wea = {8{gfx10_we}} & gfx10_sel;
+wire [7:0] gfx11_wea = {8{gfx11_we}} & gfx11_sel;
+
+video_display_ram udr00
+(
+  .clka(clk20),    // input wire clka
+  .ena(gfx00_cyc),      // input wire ena
+  .wea(gfx00_wea),      // input wire [7 : 0] wea
+  .addra(gfx00x_adr),  // input wire [12 : 0] addra
+  .dina(gfx00_dato),    // input wire [63 : 0] dina
+  .douta(gfx00_dati),  // output wire [63 : 0] douta
+  .clkb(clk40),    // input wire clkb
+  .enb(1'b1),      // input wire enb
+  .web(1'b0),      // input wire [7 : 0] web
+  .addrb(scan_addr1),  // input wire [12 : 0] addrb
+  .dinb(64'h0),    // input wire [63 : 0] dinb
+  .doutb(pixdata00)  // output wire [63 : 0] doutb
+);
+
+video_display_ram udr01
+(
+  .clka(clk20),    // input wire clka
+  .ena(gfx01_cyc),      // input wire ena
+  .wea(gfx01_wea),      // input wire [7 : 0] wea
+  .addra(gfx01x_adr),  // input wire [12 : 0] addra
+  .dina(gfx01_dato),    // input wire [63 : 0] dina
+  .douta(gfx01_dati),  // output wire [63 : 0] douta
+  .clkb(clk40),    // input wire clkb
+  .enb(1'b1),      // input wire enb
+  .web(1'b0),      // input wire [7 : 0] web
+  .addrb(scan_addr1),  // input wire [12 : 0] addrb
+  .dinb(64'h0),    // input wire [63 : 0] dinb
+  .doutb(pixdata01)  // output wire [63 : 0] doutb
+);
+
+video_display_ram udr10
+(
+  .clka(clk20),    // input wire clka
+  .ena(gfx10_cyc),      // input wire ena
+  .wea(gfx10_wea),      // input wire [7 : 0] wea
+  .addra(gfx10x_adr),  // input wire [12 : 0] addra
+  .dina(gfx10_dato),    // input wire [63 : 0] dina
+  .douta(gfx10_dati),  // output wire [63 : 0] douta
+  .clkb(clk40),    // input wire clkb
+  .enb(1'b1),      // input wire enb
+  .web(1'b0),      // input wire [7 : 0] web
+  .addrb(scan_addr1),  // input wire [12 : 0] addrb
+  .dinb(64'h0),    // input wire [63 : 0] dinb
+  .doutb(pixdata10)  // output wire [63 : 0] doutb
+);
+
+video_display_ram udr11
+(
+  .clka(clk20),    // input wire clka
+  .ena(gfx11_cyc),      // input wire ena
+  .wea(gfx11_wea),      // input wire [7 : 0] wea
+  .addra(gfx11x_adr),  // input wire [12 : 0] addra
+  .dina(gfx11_dato),    // input wire [63 : 0] dina
+  .douta(gfx11_dati),  // output wire [63 : 0] douta
+  .clkb(clk40),    // input wire clkb
+  .enb(1'b1),      // input wire enb
+  .web(1'b0),      // input wire [7 : 0] web
+  .addrb(scan_addr1),  // input wire [12 : 0] addrb
+  .dinb(64'h0),    // input wire [63 : 0] dinb
+  .doutb(pixdata11)  // output wire [63 : 0] doutb
+);
+
+reg rdy001, rdy002, rdy003, rdy004;
+always @(posedge clk20)
+begin
+	rdy001 <= cs_gfx00;
+	rdy002 <= rdy001 & cs_gfx00;
+	rdy003 <= rdy002 & cs_gfx00;
+	rdy004 <= rdy003 & cs_gfx00;
+end
+
+gfx_top64 ugfx00
+(
+	.wb_clk_i(clk20),
+	.wb_rst_i(rst),
+	.wb_inta_o(),
+  // Wishbone master signals (interfaces with video memory, write)
+  .wbm_cyc_o(gfx00_cyc),
+  .wbm_stb_o(),
+  .wbm_cti_o(),
+  .wbm_bte_o(),
+  .wbm_we_o(gfx00_we),
+  .wbm_adr_o(gfx00_adr),
+  .wbm_sel_o(gfx00_sel),
+  .wbm_ack_i(gfx00_we ? 1'b1 : rdy004),
+  .wbm_err_i(),
+  .wbm_dat_i(gfx00_dati),
+  .wbm_dat_o(gfx00_dato),
+  // Wishbone slave signals (interfaces with main bus/CPU)
+  .wbs_cs_i(cs_gfx00),
+  .wbs_cyc_i(gbr1_cyc),
+  .wbs_stb_i(gbr1_stb),
+  .wbs_cti_i(),
+  .wbs_bte_i(),
+  .wbs_we_i(gbr1_we),
+  .wbs_adr_i(gbr1_adr),
+  .wbs_sel_i(gbr1_sel),
+  .wbs_ack_o(gfx00_ack),
+  .wbs_err_o(),
+  .wbs_dat_i(gbr1_dato),
+  .wbs_dat_o(gfx00_cdato)
+);
+
+reg rdy011, rdy012, rdy013, rdy014;
+always @(posedge clk20)
+begin
+	rdy011 <= cs_gfx01;
+	rdy012 <= rdy011 & cs_gfx01;
+	rdy013 <= rdy012 & cs_gfx01;
+	rdy014 <= rdy013 & cs_gfx01;
+end
+
+gfx_top64 ugfx01
+(
+	.wb_clk_i(clk20),
+	.wb_rst_i(rst),
+	.wb_inta_o(),
+  // Wishbone master signals (interfaces with video memory, write)
+  .wbm_cyc_o(gfx01_cyc),
+  .wbm_stb_o(),
+  .wbm_cti_o(),
+  .wbm_bte_o(),
+  .wbm_we_o(gfx01_we),
+  .wbm_adr_o(gfx01_adr),
+  .wbm_sel_o(gfx01_sel),
+  .wbm_ack_i(gfx01_we ? 1'b1 : rdy014),
+  .wbm_err_i(),
+  .wbm_dat_i(gfx01_dati),
+  .wbm_dat_o(gfx01_dato),
+  // Wishbone slave signals (interfaces with main bus/CPU)
+  .wbs_cs_i(cs_gfx01),
+  .wbs_cyc_i(gbr1_cyc),
+  .wbs_stb_i(gbr1_stb),
+  .wbs_cti_i(),
+  .wbs_bte_i(),
+  .wbs_we_i(gbr1_we),
+  .wbs_adr_i(gbr1_adr),
+  .wbs_sel_i(gbr1_sel),
+  .wbs_ack_o(gfx01_ack),
+  .wbs_err_o(),
+  .wbs_dat_i(gbr1_dato),
+  .wbs_dat_o(gfx01_cdato)
+);
+
+reg rdy101, rdy102, rdy103, rdy104;
+always @(posedge clk20)
+begin
+	rdy101 <= cs_gfx10;
+	rdy102 <= rdy101 & cs_gfx10;
+	rdy103 <= rdy102 & cs_gfx10;
+	rdy104 <= rdy103 & cs_gfx10;
+end
+
+gfx_top64 ugfx10
+(
+	.wb_clk_i(clk20),
+	.wb_rst_i(rst),
+	.wb_inta_o(),
+  // Wishbone master signals (interfaces with video memory, write)
+  .wbm_cyc_o(gfx10_cyc),
+  .wbm_stb_o(),
+  .wbm_cti_o(),
+  .wbm_bte_o(),
+  .wbm_we_o(gfx10_we),
+  .wbm_adr_o(gfx10_adr),
+  .wbm_sel_o(gfx10_sel),
+  .wbm_ack_i(gfx10_we ? 1'b1 : rdy104),
+  .wbm_err_i(),
+  .wbm_dat_i(gfx10_dati),
+  .wbm_dat_o(gfx10_dato),
+  // Wishbone slave signals (interfaces with main bus/CPU)
+  .wbs_cs_i(cs_gfx10),
+  .wbs_cyc_i(gbr1_cyc),
+  .wbs_stb_i(gbr1_stb),
+  .wbs_cti_i(),
+  .wbs_bte_i(),
+  .wbs_we_i(gbr1_we),
+  .wbs_adr_i(gbr1_adr),
+  .wbs_sel_i(gbr1_sel),
+  .wbs_ack_o(gfx10_ack),
+  .wbs_err_o(),
+  .wbs_dat_i(gbr1_dato),
+  .wbs_dat_o(gfx10_cdato)
+);
+
+reg rdy111, rdy112, rdy113, rdy114;
+always @(posedge clk20)
+begin
+	rdy111 <= cs_gfx11;
+	rdy112 <= rdy111 & cs_gfx11;
+	rdy113 <= rdy112 & cs_gfx11;
+	rdy114 <= rdy113 & cs_gfx11;
+end
+
+gfx_top64 ugfx11
+(
+	.wb_clk_i(clk20),
+	.wb_rst_i(rst),
+	.wb_inta_o(),
+  // Wishbone master signals (interfaces with video memory, write)
+  .wbm_cyc_o(gfx11_cyc),
+  .wbm_stb_o(),
+  .wbm_cti_o(),
+  .wbm_bte_o(),
+  .wbm_we_o(gfx11_we),
+  .wbm_adr_o(gfx11_adr),
+  .wbm_sel_o(gfx11_sel),
+  .wbm_ack_i(gfx11_we ? 1'b1 : rdy114),
+  .wbm_err_i(),
+  .wbm_dat_i(gfx11_dati),
+  .wbm_dat_o(gfx11_dato),
+  // Wishbone slave signals (interfaces with main bus/CPU)
+  .wbs_cs_i(cs_gfx11),
+  .wbs_cyc_i(gbr1_cyc),
+  .wbs_stb_i(gbr1_stb),
+  .wbs_cti_i(),
+  .wbs_bte_i(),
+  .wbs_we_i(gbr1_we),
+  .wbs_adr_i(gbr1_adr),
+  .wbs_sel_i(gbr1_sel),
+  .wbs_ack_o(gfx11_ack),
+  .wbs_err_o(),
+  .wbs_dat_i(gbr1_dato),
+  .wbs_dat_o(gfx11_cdato)
+);
+
+reg [15:0] pixdata;
+always @(posedge clk40)
+case(scan_addr[7:6])
+2'd0:	pixdata <= pixdata00 >> {scan_addr[5:1],1'b0};
+2'd1:	pixdata <= pixdata01 >> {scan_addr[5:1],1'b0};
+2'd2:	pixdata <= pixdata10 >> {scan_addr[5:1],1'b0};
+2'd3:	pixdata <= pixdata11 >> {scan_addr[5:1],1'b0};
+endcase
+
+wire blank3;
+delay3 udel1(.clk(clk40), .ce(1'b1), .i(blank), .o(blank3));
+always @(posedge clk40)
+	gfx_rgb <= blank3 ? 32'h0 : {pixdata[15:12],4'h0,pixdata[11:8],4'h0,pixdata[7:4],4'h0,pixdata[3:0],4'h0};
+
+wire gbr1_ack1 = gfx00_ack|gfx01_ack|gfx10_ack|gfx11_ack;
+always @(posedge clk20)
+	gbr1_ack <= gbr1_ack1;
+
+always @(posedge clk20)
+casez({cs_gfx00,cs_gfx01,cs_gfx10,cs_gfx11})
+4'b1???:	gbr1_dati <= gfx00_cdato;
+4'b01??:	gbr1_dati <= gfx01_cdato;
+4'b001?:	gbr1_dati <= gfx10_cdato;
+4'b0001:	gbr1_dati <= gfx11_cdato;
+default:	gbr1_dati <= 64'hDEADDEADDEADDEAD;
+endcase
+
+
+IOBridge u_gfx_bridge
+(
+	.rst_i(rst),
+	.clk_i(clk20),
+	.s1_cyc_i(cyc),
+	.s1_stb_i(stb),
+	.s1_ack_o(ack_gbridge1),
+	.s1_sel_i(sel),
+	.s1_we_i(we),
+	.s1_adr_i(adr),
+	.s1_dat_i(dato),
+	.s1_dat_o(gbr1_cdato),
+
+	.m_cyc_o(gbr1_cyc),
+	.m_stb_o(gbr1_stb),
+	.m_ack_i(gbr1_ack),
+	.m_we_o(gbr1_we),
+	.m_sel_o(gbr1_sel),
+	.m_adr_o(gbr1_adr),
+	.m_dat_i(gbr1_dati),
+	.m_dat_o(gbr1_dato),
+	.m_sel32_o(),
+	.m_adr32_o(),
+	.m_dat32_o()
+);
+`else
+assign ack_gbridge1 = 1'b0;
+
+`endif
+
+gfx_top64 ugfx00
+(
+	.wb_clk_i(clk20),
+	.wb_rst_i(rst),
+	.wb_inta_o(),
+  // Wishbone master signals (interfaces with video memory, write)
+  .wbm_cyc_o(gfx00_cyc),
+  .wbm_stb_o(gfx00_stb),
+  .wbm_cti_o(),
+  .wbm_bte_o(),
+  .wbm_we_o(gfx00_we),
+  .wbm_adr_o(gfx00_adr),
+  .wbm_sel_o(gfx00_sel),
+  .wbm_ack_i(gfx00_ack),
+  .wbm_err_i(),
+  .wbm_dat_i(gfx00_dati),
+  .wbm_dat_o(gfx00_dato),
+  // Wishbone slave signals (interfaces with main bus/CPU)
+  .wbs_cs_i(cs_gfx00),
+  .wbs_cyc_i(br1_cyc),
+  .wbs_stb_i(br1_stb),
+  .wbs_cti_i(),
+  .wbs_bte_i(),
+  .wbs_we_i(br1_we),
+  .wbs_adr_i(br1_adr),
+  .wbs_sel_i(br1_sel),
+  .wbs_ack_o(gfx00_cack),
+  .wbs_err_o(),
+  .wbs_dat_i(br1_dato),
+  .wbs_dat_o(gfx00_cdato)
+);
 
 `ifdef TEXT_CONTROLLER
-FT64_TextController #(.num(1)) tc1
+FT64_TextController2 #(.num(1)) tc1
 (
 	.rst_i(rst),
 	.clk_i(clk20),
@@ -257,18 +696,18 @@ FT64_TextController #(.num(1)) tc1
 	.stb_i(br1_stb),
 	.ack_o(tc1_ack),
 	.wr_i(br1_we),
-	.adr_i(br1_adr32),
-	.dat_i(br1_dat32),
+	.adr_i(br1_adr),
+	.dat_i(br1_dato),
 	.dat_o(tc1_dato),
-	.lp(),
-	.curpos(),
-	.vclk(clk40),
-	.hsync(hSync),
-	.vsync(vSync),
-	.blank(blank),
-	.border(border),
-	.rgbIn(avic_rgb),
-	.rgbOut(tc1_rgb)
+	.lp_i(),
+	.dot_clk_i(clk40),
+	.hsync_i(hSync),
+	.vsync_i(vSync),
+	.blank_i(blank),
+	.border_i(border),
+	.zrgb_i(bmp_rgb),
+	.zrgb_o(tc1_rgb),
+	.xonoff_i(sw[3])
 );
 assign red = spr_rgbo[23:16];
 assign green = spr_rgbo[15:8];
@@ -280,16 +719,16 @@ rtfBitmapController5 ubmc1
 	.rst_i(rst),
 	.s_clk_i(clk20),
 	.s_cs_i(cs_bmp),
-	.s_cyc_i(cyc),
-	.s_stb_i(stb),
+	.s_cyc_i(br1_cyc),
+	.s_stb_i(br1_stb),
 	.s_ack_o(bmp_ack),
-	.s_we_i(we),
-	.s_sel_i(sel),
-	.s_adr_i(adr[11:0]),
-	.s_dat_i(dato),
+	.s_we_i(br1_we),
+	.s_sel_i(br1_sel),
+	.s_adr_i(br1_adr[11:0]),
+	.s_dat_i(br1_dato),
 	.s_dat_o(bmp_cdato),
 	.irq_o(),
-	.m_clk_i(mem_ui_clk),
+	.m_clk_i(clk20),
 	.m_cyc_o(bmp_cyc),
 	.m_stb_o(bmp_stb),
 	.m_ack_i(bmp_acki),
@@ -303,6 +742,8 @@ rtfBitmapController5 ubmc1
 	.vsync_o(vSync),
 	.blank_o(blank),
 	.border_o(border),
+	.hctr_o(hctr),
+	.vctr_o(vctr),
 	.zrgb_o(bmp_rgb),
 	.xonoff_i(sw[2])
 );
@@ -312,13 +753,13 @@ rtfSpriteController2 usc2
 	.rst_i(rst),
 	.clk_i(clk20),
 	.cs_i(cs_spr),
-	.cyc_i(cyc),
-	.stb_i(stb),
+	.cyc_i(br1_cyc),
+	.stb_i(br1_stb),
 	.ack_o(spr_ack),
-	.we_i(we),
-	.sel_i(sel),
-	.adr_i(adr),
-	.dat_i(dato),
+	.we_i(br1_we),
+	.sel_i(br1_sel),
+	.adr_i(br1_adr),
+	.dat_i(br1_dato),
 	.dat_o(spr_dato),
 	.m_clk_i(mem_ui_clk),
 	.m_cyc_o(spr_cyc),
@@ -327,10 +768,12 @@ rtfSpriteController2 usc2
 	.m_sel_o(spr_sel),
 	.m_adr_o(spr_adr),
 	.m_dat_i(spr_dati),
+	.m_spriteno_o(spr_spriteno),
 	.dot_clk_i(clk40),
 	.hsync_i(hSync),
 	.vsync_i(vSync),
-	.zrgb_i({bmp_rgb}),
+	.border_i(border),
+	.zrgb_i(tc1_rgb),
 	.zrgb_o(spr_rgbo),
 	.test(sw[1])
 );
@@ -404,48 +847,62 @@ begin
 if (cs_led)
     led <= dato[7:0];
 end
-wire [7:0] led_dato = sw;
+wire [31:0] led_dato = {11'h0,btnc,btnu,btnd,btnl,btnr,8'h00,sw};
 
 reg ack1;
-assign ack = ack_scr|ack_led|ack_bridge1|ack_br|rnd_ack|dram_ack;
+assign ack = ack_scr|ack_bridge1|ack_bridge2|ack_gbridge1|ack_br|dram_ack;
 always @(posedge clk20)
 	ack1 <= ack;
 always @(posedge clk20)
-casez({cs_br,ack_bridge1,cs_scr,cs_led,cs_rnd,cs_dram})
+casez({cs_br,ack_bridge1,ack_gbridge1,cs_scr,ack_bridge2,cs_dram})
 6'b1?????: dati <= br_dato;
 6'b01????: dati <= br1_cdato;
-6'b001???: dati <= scr_dato;
-6'b0001??: dati <= {8{led_dato}};
-6'b00001?: dati <= {2{rnd_dato}};
+6'b001???: dati <= gbr1_cdato;
+6'b0001??: dati <= scr_dato;
+6'b00001?: dati <= br2_cdato;
 6'b000001: dati <= dram_dato;
 default:    dati <= {4{16'h0080}}; // NOP
 endcase
 
-wire br1_ack1 = tc1_ack|spr_ack|bmp_ack|avic_ack;
+wire br1_ack1 = tc1_ack|spr_ack|bmp_ack|avic_ack|gfx00_cack;
 always @(posedge clk20)
 	br1_ack <= br1_ack1;
 
 always @(posedge clk20)
-casez({cs_tc1,cs_spr,cs_bmp,cs_avic})
-4'b1???:	br1_dati <= {2{tc1_dato}};
-4'b01??:	br1_dati <= spr_dato;
-4'b001?:	br1_dati <= bmp_cdato;
-4'b0001:	br1_dati <= avic_dato;
+casez({cs_tc1,cs_spr,cs_bmp,cs_avic,cs_gfx00})
+5'b1????:	br1_dati <= tc1_dato;
+5'b01???:	br1_dati <= spr_dato;
+5'b001??:	br1_dati <= bmp_cdato;
+5'b0001?:	br1_dati <= avic_dato;
+5'b00001:	br1_dati <= gfx00_cdato;
 default:	br1_dati <= 64'hDEADDEADDEADDEAD;
+endcase
+
+wire br2_ack1 = rnd_ack|ack_led|kbd_ack|gpio_ack|aud_ack;
+always @(posedge clk20)
+	br2_ack <= br2_ack1;
+
+always @(posedge clk20)
+casez({cs_rnd,cs_led,cs_kbd,cs_aud})
+4'b1???:	br2_dati <= {2{rnd_dato}};
+4'b01??:	br2_dati <= {2{led_dato}};
+4'b001?:	br2_dati <= {8{kbd_dato}};
+4'b0001:	br2_dati <= aud_cdato;
+default:	br2_dati <= 64'hDEADDEADDEADDEAD;
 endcase
 
 IOBridge u_video_bridge
 (
 	.rst_i(rst),
 	.clk_i(clk20),
-	.s_cyc_i(cyc),
-	.s_stb_i(stb),
-	.s_ack_o(ack_bridge1),
-	.s_sel_i(sel),
-	.s_we_i(we),
-	.s_adr_i(adr),
-	.s_dat_i(dato),
-	.s_dat_o(br1_cdato),
+	.s1_cyc_i(cyc),
+	.s1_stb_i(stb),
+	.s1_ack_o(ack_bridge1),
+	.s1_sel_i(sel),
+	.s1_we_i(we),
+	.s1_adr_i(adr),
+	.s1_dat_i(dato),
+	.s1_dat_o(br1_cdato),
 
 	.m_cyc_o(br1_cyc),
 	.m_stb_o(br1_stb),
@@ -460,11 +917,121 @@ IOBridge u_video_bridge
 	.m_dat32_o(br1_dat32)
 );
 
+IOBridge u_bridge2
+(
+	.rst_i(rst),
+	.clk_i(clk20),
+	.s1_cyc_i(cyc),
+	.s1_stb_i(stb),
+	.s1_ack_o(ack_bridge2),
+	.s1_sel_i(sel),
+	.s1_we_i(we),
+	.s1_adr_i(adr),
+	.s1_dat_i(dato),
+	.s1_dat_o(br2_cdato),
+
+	.m_cyc_o(br2_cyc),
+	.m_stb_o(br2_stb),
+	.m_ack_i(br2_ack),
+	.m_we_o(br2_we),
+	.m_sel_o(br2_sel),
+	.m_adr_o(br2_adr),
+	.m_dat_i(br2_dati),
+	.m_dat_o(br2_dato),
+	.m_sel32_o(br2_sel32),
+	.m_adr32_o(br2_adr32),
+	.m_dat32_o(br2_dat32)
+);
+
+random	uprg1
+(
+	.rst_i(rst),
+	.clk_i(clk20),
+	.cs_i(cs_rnd),
+	.cyc_i(br2_cyc),
+	.stb_i(br2_stb),
+	.ack_o(rnd_ack),
+	.we_i(br2_we),
+	.adr_i(br2_adr32),
+	.dat_i(br2_dat32),
+	.dat_o(rnd_dato)
+);
+
+AudioController uaud1
+(
+	.rst_i(rst),
+	.s_clk_i(clk20),
+	.s_cyc_i(br2_cyc),
+	.s_stb_i(br2_stb),
+	.s_ack_o(aud_acko),
+	.s_we_i(br2_we),
+	.s_sel_i(br2_sel),
+	.s_adr_i(br2_adr[7:0]),
+	.s_dat_o(aud_cdato),
+	.s_dati(br2_dato),
+	.s_cs_i(cs_aud),
+	.m_clk_i(clk20),
+	.m_cyc_o(aud_cyc),
+	.m_stb_o(aud_stb),
+	.m_ack_i(aud_acki),
+	.m_we_o(aud_we),
+	.m_sel_o(aud_sel),
+	.m_adr_o(aud_adr),
+	.m_dat_i(aud_dati),
+	.m_dat_o(aud_dato),
+	.aud0_out(aud0),
+	.aud1_out(aud1),
+	.aud2_out(aud2),
+	.aud3_out(aud3),
+	.audi_in(audi),
+	.record_i(btnl_db),
+	.playback_i(btnr_db)
+);
+
+reg br2_dat8;
+always @*
+case(br2_sel)
+8'b00000001:	br2_dat8 <= br2_dato[7:0];
+8'b00000010:	br2_dat8 <= br2_dato[15:8];
+8'b00000100:	br2_dat8 <= br2_dato[23:16];
+8'b00001000:	br2_dat8 <= br2_dato[31:24];
+8'b00010000:	br2_dat8 <= br2_dato[39:32];
+8'b00100000:	br2_dat8 <= br2_dato[47:40];
+8'b01000000:	br2_dat8 <= br2_dato[55:48];
+8'b10000000:	br2_dat8 <= br2_dato[63:56];
+8'b00000011:	br2_dat8 <= br2_dato[7:0];
+8'b00001100:	br2_dat8 <= br2_dato[23:16];
+8'b00110000:	br2_dat8 <= br2_dato[39:32];
+8'b11000000:	br2_dat8 <= br2_dato[55:48];
+8'b00001111:	br2_dat8 <= br2_dato[7:0];
+8'b11110000:	br2_dat8 <= br2_dato[39:32];
+8'b11111111:	br2_dat8 <= br2_dato[7:0];
+default:		br2_dat8 <= br2_dato[7:0];
+endcase
+
+Ps2Keyboard u_ps2kbd
+(
+  .rst_i(rst),
+  .clk_i(clk),
+  .cs_i(cs_kbd),
+  .cyc_i(br2_cyc),
+  .stb_i(br2_stb),
+  .ack_o(kbd_ack),
+  .we_i(br2_wr),
+  .adr_i(br2_adr32),
+  .dat_i(br2_dat8),
+  .dat_o(kbd_dato),
+  .kclk(kclk),
+  .kd(kd),
+  .irq_o(kbd_irq)
+);
+
 IBUFG #(.IBUF_LOW_PWR("FALSE"),.IOSTANDARD("DEFAULT")) ubg1
 (
     .I(xclk),
     .O(xclk_bufg)
 );
+
 
 `ifdef SIM
 mainmem_sim umm1
@@ -519,11 +1086,30 @@ cyc5, stb5, ack5, adr5, dato5,
 cyc6, stb6, ack6, we6, sel6, adr6, dati6, dato6,
 cs7, cyc7, stb7, ack7, we7, sel7, adr7, dati7, dato7, sr7, cr7, rb7,
 */
+	.cyc3(aud_cyc),
+	.stb3(aud_stb),
+	.ack3(aud_acki),
+	.we3(aud_we),
+	.sel3(aud_sel),
+	.adr3(aud_adr),
+	.dati3(aud_dato),
+	.dato3(aud_dati),
+
+	.cyc4(gfx00_cyc),
+	.stb4(gfx00_stb),
+	.ack4(gfx00_ack),
+	.we4(gfx00_we),
+	.sel4(gfx00_sel),
+	.adr4(gfx00_adr),
+	.dati4(gfx00_dato),
+	.dato4(gfx00_dati),
+
 	.cyc5(spr_cyc),
 	.stb5(spr_stb),
 	.ack5(spr_acki),
 	.adr5(spr_adr),
 	.dato5(spr_dati),
+	.spriteno(spr_spriteno),
 
 	.cs7(cs_dram),
 	.cyc7(cyc),
@@ -562,97 +1148,143 @@ cs7, cyc7, stb7, ack7, we7, sel7, adr7, dati7, dato7, sr7, cr7, rb7,
 
 scratchmem uscr1
 (
-    .rst_i(rst),
-    .clk_i(clk20),
-    .cti_i(cti),
-    .cs_i(cs_scr),
-    .cyc_i(cyc),
-    .stb_i(stb),
-    .ack_o(ack_scr),
-    .we_i(we),
-    .sel_i(sel),
-    .adr_i(adr[14:0]),
-    .dat_i(dato),
-    .dat_o(scr_dato)
+  .rst_i(rst),
+  .clk_i(clk20),
+  .cti_i(cti),
+  .cs_i(cs_scr),
+  .cyc_i(cyc),
+  .stb_i(stb),
+  .ack_o(ack_scr),
+  .we_i(we),
+  .sel_i(sel),
+  .adr_i(adr[14:0]),
+  .dat_i(dato),
+  .dat_o(scr_dato)
 );
 
 bootrom #(64) ubr1
 (
-    .rst_i(rst),
-    .clk_i(clk20),
-    .cti_i(cti),
-    .cs_i(cs_br),
-    .cyc_i(cyc),
-    .stb_i(stb),
-    .ack_o(ack_br),
-    .adr_i(adr[17:0]),
-    .dat_o(br_dato)
+  .rst_i(rst),
+  .clk_i(clk20),
+  .cti_i(cti),
+  .cs_i(cs_br),
+  .cyc_i(cyc),
+  .stb_i(stb),
+  .ack_o(ack_br),
+  .adr_i(adr[17:0]),
+  .dat_o(br_dato)
 );
 
 FT64_mpu ucpu1
 (
-    .hartid_i(64'h1),
-    .rst_i(rst),
-    .clk_i(clk20),
-    .clk4x_i(clk80),
-    .tm_clk_i(clk20),
-    .i1(1'b0),
-    .i2(1'b0),
-    .i3(1'b0),
-    .i4(1'b0),
-    .i5(1'b0),
-    .i6(1'b0),
-    .i7(1'b0),
-    .i8(1'b0),
-    .i9(1'b0),
-    .i10(1'b0),
-    .i11(1'b0),
-    .i12(1'b0),
-    .i13(1'b0),
-    .i14(1'b0),
-    .i15(1'b0),
-    .i16(1'b0),
-    .i17(1'b0),
-    .i18(1'b0),
-    .i19(1'b0),
-    .i20(1'b0),
-    .i21(1'b0),
-    .i22(1'b0),
-    .i23(1'b0),
-    .i24(1'b0),
-    .i25(1'b0),
-    .i26(1'b0),
-    .i27(1'b0),
-    .i28(1'b0),
-    .i29(1'b0),
-    .irq_o(),
-    .cti_o(cti),
-    .cyc_o(cyc),
-    .stb_o(stb),
-    .ack_i(ack1),
-    .err_i(1'b0),
-    .we_o(we),
-    .sel_o(sel),
-    .adr_o(adr),
-    .dat_o(dato),
-    .dat_i(dati),
-    .sr_o(sr),
-    .cr_o(cr),
-    .rb_i(rb)
+  .hartid_i(64'h1),
+  .rst_i(rst),
+  .clk_i(clk20),
+  .clk4x_i(clk80),
+  .tm_clk_i(clk20),
+  .i1(1'b0),
+  .i2(1'b0),
+  .i3(1'b0),
+  .i4(1'b0),
+  .i5(1'b0),
+  .i6(1'b0),
+  .i7(1'b0),
+  .i8(1'b0),
+  .i9(1'b0),
+  .i10(1'b0),
+  .i11(1'b0),
+  .i12(1'b0),
+  .i13(1'b0),
+  .i14(1'b0),
+  .i15(1'b0),
+  .i16(1'b0),
+  .i17(1'b0),
+  .i18(1'b0),
+  .i19(1'b0),
+  .i20(1'b0),
+  .i21(1'b0),
+  .i22(1'b0),
+  .i23(1'b0),
+  .i24(1'b0),
+  .i25(1'b0),
+  .i26(1'b0),
+  .i27(1'b0),
+  .i28(1'b0),
+  .i29(kbd_irq),
+  .irq_o(),
+  .cti_o(cti),
+  .cyc_o(cyc),
+  .stb_o(stb),
+  .ack_i(ack1),
+  .err_i(1'b0),
+  .we_o(we),
+  .sel_o(sel),
+  .adr_o(adr),
+  .dat_o(dato),
+  .dat_i(dati),
+  .sr_o(sr),
+  .cr_o(cr),
+  .rb_i(rb)
 );
 
-random	uprg1
-(
-	.rst_i(rst),
-	.clk_i(clk20),
-	.cs_i(cs_rnd),
-	.cyc_i(cyc),
-	.stb_i(stb),
-	.ack_o(rnd_ack),
-	.we_i(we),
-	.adr_i(adr[3:0]|(|sel[7:4]<<2)),
-	.dat_i(dat32),
-	.dat_o(rnd_dato)
-);
+
+reg en_tx;
+reg en_rx;
+
+always @(posedge clk20)
+begin
+	if (btnl_db)
+		en_rx <= 1'b1;
+	if (btnr_db)
+		en_tx <= 1'b1;
+	if (btnc_db) begin
+		en_rx <= 1'b0;
+		en_tx <= 1'b0;
+	end
+	if (cs_gpio & br2_cyc & br2_stb & br2_we) begin
+		en_tx <= br2_dat[1];
+		en_rx <= br2_dat[0];
+	end
+end
+assign gpio_ack = cs_gpio & br2_stb & br2_cyc;
+
+wire en_rxtx = en_tx|en_rx;
+reg [3:0] bclk;
+reg [63:0] lrclk;
+reg [31:0] ldato, rdato, ain;
+reg [63:0] sdato;
+assign ac_mclk = clk12;
+assign ac_bclk = en_rxtx ? bclk[3] : 1'bz;
+assign ac_lrclk = en_rxtx ? lrclk[63] : 1'bz;
+assign ac_dac_sdata = en_tx ? sdato[31] : 1'b0;
+
+always @(posedge clk12)
+if (rst)
+    bclk <= 4'b0011;
+else
+    bclk <= {bclk[2:0],bclk[3]};
+
+always @(posedge clk12)
+if (rst)
+    lrclk <= 64'hFFFFFFFF00000000;
+else
+    lrclk <= {lrclk[62:0],lrclk[63]};
+
+always @(posedge clk12)
+if (rst)
+    sdato <= {1'b0,aud0,16'h0000,aud1[15:1]};
+else begin
+    if (bclk==4'b1001) begin
+        if (lrclk==64'h800000007FFFFFFF)
+            sdato <= {aud0,16'h0000,aud2,16'h0000};
+        else
+            sdato <= {sdato[62:0],1'b0};
+    end
+    if (bclk==4'b1100) begin
+        ain <= {ain[30:0],ac_adc_sdata};
+        if (lrclk==64'hFFFFFFFC00000003 || lrclk==64'h00000003FFFFFFFC)
+            audi <= {ain[14:0],ac_adc_sdata};
+    end
+end
 
 endmodule

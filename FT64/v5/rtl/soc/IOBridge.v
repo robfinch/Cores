@@ -31,7 +31,9 @@
 // devices which are low-speed it doesn't matter much.              
 // ============================================================================
 //
-module IOBridge(rst_i, clk_i, s_cyc_i, s_stb_i, s_ack_o, s_sel_i, s_we_i, s_adr_i, s_dat_i, s_dat_o,
+module IOBridge(rst_i, clk_i,
+	s1_cyc_i, s1_stb_i, s1_ack_o, s1_sel_i, s1_we_i, s1_adr_i, s1_dat_i, s1_dat_o,
+	s2_cyc_i, s2_stb_i, s2_ack_o, s2_sel_i, s2_we_i, s2_adr_i, s2_dat_i, s2_dat_o,
 	m_cyc_o, m_stb_o, m_ack_i, m_we_o, m_sel_o, m_adr_o, m_dat_i, m_dat_o,
 	m_sel32_o, m_adr32_o, m_dat32_o);
 parameter IDLE = 2'd0;
@@ -40,14 +42,23 @@ parameter WAIT_NACK = 2'd2;
 
 input rst_i;
 input clk_i;
-input s_cyc_i;
-input s_stb_i;
-output s_ack_o;
-input [7:0] s_sel_i;
-input s_we_i;
-input [31:0] s_adr_i;
-input [63:0] s_dat_i;
-output reg [63:0] s_dat_o;
+input s1_cyc_i;
+input s1_stb_i;
+output s1_ack_o;
+input [7:0] s1_sel_i;
+input s1_we_i;
+input [31:0] s1_adr_i;
+input [63:0] s1_dat_i;
+output reg [63:0] s1_dat_o;
+
+input s2_cyc_i;
+input s2_stb_i;
+output s2_ack_o;
+input [7:0] s2_sel_i;
+input s2_we_i;
+input [31:0] s2_adr_i;
+input [63:0] s2_dat_i;
+output reg [63:0] s2_dat_o;
 
 output reg m_cyc_o;
 output reg m_stb_o;
@@ -61,13 +72,18 @@ output reg [3:0] m_sel32_o;
 output reg [31:0] m_adr32_o;
 output reg [31:0] m_dat32_o;
 
+reg which;
 reg [1:0] state;
 reg s_ack;
-assign s_ack_o = s_ack & s_stb_i;
+assign s1_ack_o = s_ack & s1_stb_i & ~which;
+assign s2_ack_o = s_ack & s2_stb_i &  which;
 reg [63:0] dat1;
-wire a0 = s_sel_i[1]|s_sel_i[3]|s_sel_i[5]|s_sel_i[7];
-wire a1 = |s_sel_i[3:2]| |s_sel_i[7:6];
-wire a2 = |s_sel_i[7:4];
+wire a10 = s1_sel_i[1]|s1_sel_i[3]|s1_sel_i[5]|s1_sel_i[7];
+wire a11 = |s1_sel_i[3:2]| |s1_sel_i[7:6];
+wire a12 = |s1_sel_i[7:4];
+wire a20 = s2_sel_i[1]|s2_sel_i[3]|s2_sel_i[5]|s2_sel_i[7];
+wire a21 = |s2_sel_i[3:2]| |s2_sel_i[7:6];
+wire a22 = |s2_sel_i[7:4];
 
 always @(posedge clk_i)
 if (rst_i) begin
@@ -89,18 +105,32 @@ case(state)
 IDLE:
   begin
     // Filter requests to the I/O address range
-    if (s_cyc_i && s_adr_i[31:20]==12'hFFD) begin
+    if (s1_cyc_i && s1_adr_i[31:20]==12'hFFD) begin
+    	which <= 1'b0;
       m_cyc_o <= 1'b1;
       m_stb_o <= 1'b1;
       state <= WAIT_ACK;
+	    m_sel_o <= s1_sel_i;
+	    m_we_o <= s1_we_i;
+	    m_adr_o <= {12'hFFD,s1_adr_i[19:0]};	// fix the upper 12 bits of the address to help trim cores
+	    m_dat_o <= s1_dat_i;
+	    m_sel32_o <= s1_sel_i[7:4]|s1_sel_i[3:0];
+	    m_adr32_o <= {s1_adr_i[31:3],a12,a11,a10};
+	    m_dat32_o <= a12 ? s1_dat_i[63:0] : s1_dat_i[31:0];
     end
-    m_sel_o <= s_sel_i;
-    m_we_o <= s_we_i;
-    m_adr_o <= {12'hFFD,s_adr_i[19:0]};	// fix the upper 12 bits of the address to help trim cores
-    m_dat_o <= s_dat_i;
-    m_sel32_o <= s_sel_i[7:4]|s_sel_i[3:0];
-    m_adr32_o <= {s_adr_i[31:3],a2,a1,a0};
-    m_dat32_o <= a2 ? s_dat_i[63:0] : s_dat_i[31:0];
+    else if (s2_cyc_i && s2_adr_i[31:20]==12'hFFD) begin
+    	which <= 1'b1;
+      m_cyc_o <= 1'b1;
+      m_stb_o <= 1'b1;
+      state <= WAIT_ACK;
+	    m_sel_o <= s2_sel_i;
+	    m_we_o <= s2_we_i;
+	    m_adr_o <= {12'hFFD,s2_adr_i[19:0]};	// fix the upper 12 bits of the address to help trim cores
+	    m_dat_o <= s2_dat_i;
+	    m_sel32_o <= s2_sel_i[7:4]|s2_sel_i[3:0];
+	    m_adr32_o <= {s2_adr_i[31:3],a22,a21,a20};
+	    m_dat32_o <= a22 ? s1_dat_i[63:0] : s2_dat_i[31:0];
+    end
 	end
 WAIT_ACK:
 	if (m_ack_i) begin
@@ -114,7 +144,7 @@ WAIT_ACK:
 		dat1 <= m_dat_i;
 		state <= WAIT_NACK;
 	end
-	else if (!s_cyc_i) begin
+	else if (which ? !s2_cyc_i : !s1_cyc_i) begin
 		m_cyc_o <= 1'b0;
 		m_stb_o <= 1'b0;
 		m_we_o <= 1'b0;
@@ -124,7 +154,7 @@ WAIT_ACK:
 		state <= IDLE;
 	end
 WAIT_NACK:
-	if (!s_stb_i) begin
+	if (which ? !s2_stb_i : !s2_stb_i) begin
 		s_ack <= 1'b0;
 		dat1 <= 64'h0;
 		state <= IDLE;
@@ -133,7 +163,9 @@ endcase
 end
 
 always @(negedge clk_i)
-	s_dat_o <= dat1;
+	s1_dat_o <= dat1;
+always @(negedge clk_i)
+	s2_dat_o <= dat1;
 
 endmodule
 
