@@ -26,6 +26,7 @@
 //`define AVIC	1'b1
 //`define ORSOC_GRAPHICS	1'b1
 `define TEXT_CONTROLLER	1'b1
+`define BMP_CONTROLLER 1'b1		// needed for sync generation
 
 module FT64v5SoC(cpu_resetn, xclk, led, sw, btnl, btnr, btnc, btnd, btnu, 
     kclk, kd,
@@ -98,6 +99,7 @@ output [0:0] ddr3_odt;
 
 wire rst;
 wire xrst = ~cpu_resetn;
+wire clk12;
 wire clk20, clk40, clk50, clk80, clk100, clk200, clk400;
 wire mem_ui_clk;
 wire xclk_bufg;
@@ -155,6 +157,8 @@ wire [63:0] bmp_dato;
 wire [31:0] bmp_rgb;
 wire [11:0] hctr, vctr;
 
+wire ack_1761;
+
 wire ack_bridge1;
 wire br1_cyc;
 wire br1_stb;
@@ -211,19 +215,22 @@ wire [63:0] gbr1_dato;
 wire [31:0] gbr1_dato32;
 reg [63:0] gbr1_dati;
 
-wire [3:0] sel32 = sel[7:4]|sel[3:0];
-wire [31:0] dat32 = |sel[7:4] ? dato[63:32] : dato[31:0];
-wire a0 = sel[1]|sel[3]|sel[5]|sel[7];
-wire a1 = |sel[3:2]| |sel[7:6];
-wire a2 = |sel[7:4];
-wire [31:0] adr32 = {adr[15:3],a2,a1,a0};
+wire [31:0] grid_zrgb;
+
+// -----------------------------------------------------------------------------
+// Input debouncing
+// -----------------------------------------------------------------------------
 
 wire btnu_db, btnd_db, btnl_db, btnr_db, btnc_db;
-BtnDebounce(clk20, btnu, btnu_db);
-BtnDebounce(clk20, btnd, btnd_db);
-BtnDebounce(clk20, btnl, btnl_db);
-BtnDebounce(clk20, btnr, btnr_db);
-BtnDebounce(clk20, btnc, btnc_db);
+BtnDebounce udbu (clk20, btnu, btnu_db);
+BtnDebounce udbd (clk20, btnd, btnd_db);
+BtnDebounce udbl (clk20, btnl, btnl_db);
+BtnDebounce udbr (clk20, btnr, btnr_db);
+BtnDebounce udbc (clk20, btnc, btnc_db);
+
+// -----------------------------------------------------------------------------
+// Clock generation
+// -----------------------------------------------------------------------------
 
 NexysVideoClkgen ucg1
  (
@@ -234,6 +241,7 @@ NexysVideoClkgen ucg1
   .clk20(clk20),
   .clk40(clk40),
   .clk200(clk200),
+  .clk12(clk12),
   // Status and control signals
   .reset(xrst), 
   .locked(locked),       // output locked
@@ -257,7 +265,7 @@ assign rst = !locked;
 rgb2dvi #(
 	.kGenerateSerialClk(1'b0),
 	.kClkPrimitive("MMCM"),
-	.kClkRange(2),
+	.kClkRange(3),
 	.kRstActiveHigh(1'b1)
 )
 ur2d1 
@@ -280,8 +288,8 @@ OLED uoled1
 (
 	.rst(rst),
 	.clk(xclk_bufg),
-	.adr(adr),
-	.dat(dati),
+	.adr_i(adr),
+	.dat_i(dati),
 	.SDIN(oled_sdin),
 	.SCLK(oled_sclk),
 	.DC(oled_dc),
@@ -317,20 +325,46 @@ wire cs_br = adr[31:16]==16'hFFFC
 wire cs_scr = adr[31:20]==12'hFF4;
 wire cs_tc1 = br1_adr[31:16]==16'hFFD0;
 wire cs_spr = br1_adr[31:12]==20'hFFDAD;
-wire cs_bmp = br1_adr[31:12]==20'hFFDC5;
+//wire cs_bmp = br1_adr[31:12]==20'hFFDC5;
+wire cs_bmp = 1'b0;
 wire cs_avic = br1_adr[31:13]==19'b1111_1111_1101_1100_110;	// FFDCC000-FFDCDFFF
 wire cs_gfx00 = br1_adr[31:12]==20'hFFDD8;
 wire cs_rnd = br2_adr[31:4]==28'hFFDC0C0;
 wire cs_led = br2_cyc && br2_stb && (br2_adr[31:4]==28'hFFDC060);
 wire cs_kbd  = br2_adr[31:4]==28'hFFDC000;
-wire cs_psg = (br2_adr[31:12]==20'hFFD50);
-wire cs_gpio = br2_adr[31:4]==28'hFFDC070;
+wire cs_aud  = br2_adr[31:8]==24'hFFD510;
+wire cs_1761 = br2_adr[31:4]==28'hFFDC070;
+wire cs_cmdc = br2_adr[31:4]==28'hFFDC080;
+wire cs_grid = br2_adr[31:8]==24'hFFD520;
 
 //wire cs_gfx00 = gbr1_adr[31:12]==20'hFFDD8 && gbr1_cyc && gbr1_stb;
 wire cs_gfx01 = gbr1_adr[31:12]==20'hFFDD9 && gbr1_cyc && gbr1_stb;
 wire cs_gfx10 = gbr1_adr[31:12]==20'hFFDDA && gbr1_cyc && gbr1_stb;
 wire cs_gfx11 = gbr1_adr[31:12]==20'hFFDDB && gbr1_cyc && gbr1_stb;
 
+reg [14:0] cmd_core;
+always @(posedge clk20)
+	if (cs_cmdc & br2_cyc & br2_stb & br2_we)
+		cmd_core <= br2_dato[14:0];
+
+FT_GPUGrid ugpugrid1
+(
+	.rst_i(rst),
+	.cmd_clk_i(clk20),
+	.cmd_core_i(cmd_core),
+	.wr_cmd_i(cs_grid & br2_cyc & br2_stb & br2_we),
+	.cmd_adr_i(br2_adr[7:0]),
+	.cmd_dat_i(br2_dato[31:0]),
+	.cmd_count_o(),
+	.dot_clk_i(clk40),
+	.blank_i(blank),
+	.vctr_i(vctr),
+	.hctr_i(hctr),
+	.zrgb_o(grid_zrgb)
+);
+
+// -----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 reg [31:0] gfx_rgb;
 wire gfx00_cyc;
 wire gfx00_stb;
@@ -343,317 +377,7 @@ wire [63:0] gfx00_cdato;
 wire [63:0] gfx00_dati;
 wire [63:0] gfx00_dato;
 
-`ifdef ORSOC_GRAPHICS
-wire gfx00_cyc, gfx01_cyc, gfx10_cyc, gfx11_cyc;
-wire gfx00_ack, gfx01_ack, gfx10_ack, gfx11_ack;
-wire [63:0] gfx00_cdato, gfx01_cdato, gfx10_cdato, gfx11_cdato;
-wire [7:0] gfx00_sel, gfx01_sel, gfx10_sel, gfx11_sel;
-wire gfx00_we, gfx01_we, gfx10_we, gfx11_we;
-wire [31:0] gfx00_adr, gfx01_adr, gfx10_adr, gfx11_adr;
-wire [12:0] gfx00x_adr, gfx01x_adr, gfx10x_adr, gfx11x_adr;
-wire [63:0] gfx00_dato, gfx01_dato, gfx10_dato, gfx11_dato;
-wire [63:0] gfx00_dati, gfx01_dati, gfx10_dati, gfx11_dati;
-reg [17:0] scan_addr;
-
-always @(posedge clk40)
-	scan_addr <= {((vctr[11:1]-11'd13) * 256) + (hctr[11:1] - 11'd109),1'b0};
-
-wire [12:0] scan_addr1 = {scan_addr[17:8],scan_addr[5:3]};
-assign gfx00x_adr = {gfx00_adr[17:8],gfx00_adr[5:3]};
-assign gfx01x_adr = {gfx01_adr[17:8],gfx01_adr[5:3]};
-assign gfx10x_adr = {gfx10_adr[17:8],gfx10_adr[5:3]};
-assign gfx11x_adr = {gfx11_adr[17:8],gfx11_adr[5:3]};
-wire [7:0] gfx00_wea = {8{gfx00_we}} & gfx00_sel;
-wire [7:0] gfx01_wea = {8{gfx01_we}} & gfx01_sel;
-wire [7:0] gfx10_wea = {8{gfx10_we}} & gfx10_sel;
-wire [7:0] gfx11_wea = {8{gfx11_we}} & gfx11_sel;
-
-video_display_ram udr00
-(
-  .clka(clk20),    // input wire clka
-  .ena(gfx00_cyc),      // input wire ena
-  .wea(gfx00_wea),      // input wire [7 : 0] wea
-  .addra(gfx00x_adr),  // input wire [12 : 0] addra
-  .dina(gfx00_dato),    // input wire [63 : 0] dina
-  .douta(gfx00_dati),  // output wire [63 : 0] douta
-  .clkb(clk40),    // input wire clkb
-  .enb(1'b1),      // input wire enb
-  .web(1'b0),      // input wire [7 : 0] web
-  .addrb(scan_addr1),  // input wire [12 : 0] addrb
-  .dinb(64'h0),    // input wire [63 : 0] dinb
-  .doutb(pixdata00)  // output wire [63 : 0] doutb
-);
-
-video_display_ram udr01
-(
-  .clka(clk20),    // input wire clka
-  .ena(gfx01_cyc),      // input wire ena
-  .wea(gfx01_wea),      // input wire [7 : 0] wea
-  .addra(gfx01x_adr),  // input wire [12 : 0] addra
-  .dina(gfx01_dato),    // input wire [63 : 0] dina
-  .douta(gfx01_dati),  // output wire [63 : 0] douta
-  .clkb(clk40),    // input wire clkb
-  .enb(1'b1),      // input wire enb
-  .web(1'b0),      // input wire [7 : 0] web
-  .addrb(scan_addr1),  // input wire [12 : 0] addrb
-  .dinb(64'h0),    // input wire [63 : 0] dinb
-  .doutb(pixdata01)  // output wire [63 : 0] doutb
-);
-
-video_display_ram udr10
-(
-  .clka(clk20),    // input wire clka
-  .ena(gfx10_cyc),      // input wire ena
-  .wea(gfx10_wea),      // input wire [7 : 0] wea
-  .addra(gfx10x_adr),  // input wire [12 : 0] addra
-  .dina(gfx10_dato),    // input wire [63 : 0] dina
-  .douta(gfx10_dati),  // output wire [63 : 0] douta
-  .clkb(clk40),    // input wire clkb
-  .enb(1'b1),      // input wire enb
-  .web(1'b0),      // input wire [7 : 0] web
-  .addrb(scan_addr1),  // input wire [12 : 0] addrb
-  .dinb(64'h0),    // input wire [63 : 0] dinb
-  .doutb(pixdata10)  // output wire [63 : 0] doutb
-);
-
-video_display_ram udr11
-(
-  .clka(clk20),    // input wire clka
-  .ena(gfx11_cyc),      // input wire ena
-  .wea(gfx11_wea),      // input wire [7 : 0] wea
-  .addra(gfx11x_adr),  // input wire [12 : 0] addra
-  .dina(gfx11_dato),    // input wire [63 : 0] dina
-  .douta(gfx11_dati),  // output wire [63 : 0] douta
-  .clkb(clk40),    // input wire clkb
-  .enb(1'b1),      // input wire enb
-  .web(1'b0),      // input wire [7 : 0] web
-  .addrb(scan_addr1),  // input wire [12 : 0] addrb
-  .dinb(64'h0),    // input wire [63 : 0] dinb
-  .doutb(pixdata11)  // output wire [63 : 0] doutb
-);
-
-reg rdy001, rdy002, rdy003, rdy004;
-always @(posedge clk20)
-begin
-	rdy001 <= cs_gfx00;
-	rdy002 <= rdy001 & cs_gfx00;
-	rdy003 <= rdy002 & cs_gfx00;
-	rdy004 <= rdy003 & cs_gfx00;
-end
-
-gfx_top64 ugfx00
-(
-	.wb_clk_i(clk20),
-	.wb_rst_i(rst),
-	.wb_inta_o(),
-  // Wishbone master signals (interfaces with video memory, write)
-  .wbm_cyc_o(gfx00_cyc),
-  .wbm_stb_o(),
-  .wbm_cti_o(),
-  .wbm_bte_o(),
-  .wbm_we_o(gfx00_we),
-  .wbm_adr_o(gfx00_adr),
-  .wbm_sel_o(gfx00_sel),
-  .wbm_ack_i(gfx00_we ? 1'b1 : rdy004),
-  .wbm_err_i(),
-  .wbm_dat_i(gfx00_dati),
-  .wbm_dat_o(gfx00_dato),
-  // Wishbone slave signals (interfaces with main bus/CPU)
-  .wbs_cs_i(cs_gfx00),
-  .wbs_cyc_i(gbr1_cyc),
-  .wbs_stb_i(gbr1_stb),
-  .wbs_cti_i(),
-  .wbs_bte_i(),
-  .wbs_we_i(gbr1_we),
-  .wbs_adr_i(gbr1_adr),
-  .wbs_sel_i(gbr1_sel),
-  .wbs_ack_o(gfx00_ack),
-  .wbs_err_o(),
-  .wbs_dat_i(gbr1_dato),
-  .wbs_dat_o(gfx00_cdato)
-);
-
-reg rdy011, rdy012, rdy013, rdy014;
-always @(posedge clk20)
-begin
-	rdy011 <= cs_gfx01;
-	rdy012 <= rdy011 & cs_gfx01;
-	rdy013 <= rdy012 & cs_gfx01;
-	rdy014 <= rdy013 & cs_gfx01;
-end
-
-gfx_top64 ugfx01
-(
-	.wb_clk_i(clk20),
-	.wb_rst_i(rst),
-	.wb_inta_o(),
-  // Wishbone master signals (interfaces with video memory, write)
-  .wbm_cyc_o(gfx01_cyc),
-  .wbm_stb_o(),
-  .wbm_cti_o(),
-  .wbm_bte_o(),
-  .wbm_we_o(gfx01_we),
-  .wbm_adr_o(gfx01_adr),
-  .wbm_sel_o(gfx01_sel),
-  .wbm_ack_i(gfx01_we ? 1'b1 : rdy014),
-  .wbm_err_i(),
-  .wbm_dat_i(gfx01_dati),
-  .wbm_dat_o(gfx01_dato),
-  // Wishbone slave signals (interfaces with main bus/CPU)
-  .wbs_cs_i(cs_gfx01),
-  .wbs_cyc_i(gbr1_cyc),
-  .wbs_stb_i(gbr1_stb),
-  .wbs_cti_i(),
-  .wbs_bte_i(),
-  .wbs_we_i(gbr1_we),
-  .wbs_adr_i(gbr1_adr),
-  .wbs_sel_i(gbr1_sel),
-  .wbs_ack_o(gfx01_ack),
-  .wbs_err_o(),
-  .wbs_dat_i(gbr1_dato),
-  .wbs_dat_o(gfx01_cdato)
-);
-
-reg rdy101, rdy102, rdy103, rdy104;
-always @(posedge clk20)
-begin
-	rdy101 <= cs_gfx10;
-	rdy102 <= rdy101 & cs_gfx10;
-	rdy103 <= rdy102 & cs_gfx10;
-	rdy104 <= rdy103 & cs_gfx10;
-end
-
-gfx_top64 ugfx10
-(
-	.wb_clk_i(clk20),
-	.wb_rst_i(rst),
-	.wb_inta_o(),
-  // Wishbone master signals (interfaces with video memory, write)
-  .wbm_cyc_o(gfx10_cyc),
-  .wbm_stb_o(),
-  .wbm_cti_o(),
-  .wbm_bte_o(),
-  .wbm_we_o(gfx10_we),
-  .wbm_adr_o(gfx10_adr),
-  .wbm_sel_o(gfx10_sel),
-  .wbm_ack_i(gfx10_we ? 1'b1 : rdy104),
-  .wbm_err_i(),
-  .wbm_dat_i(gfx10_dati),
-  .wbm_dat_o(gfx10_dato),
-  // Wishbone slave signals (interfaces with main bus/CPU)
-  .wbs_cs_i(cs_gfx10),
-  .wbs_cyc_i(gbr1_cyc),
-  .wbs_stb_i(gbr1_stb),
-  .wbs_cti_i(),
-  .wbs_bte_i(),
-  .wbs_we_i(gbr1_we),
-  .wbs_adr_i(gbr1_adr),
-  .wbs_sel_i(gbr1_sel),
-  .wbs_ack_o(gfx10_ack),
-  .wbs_err_o(),
-  .wbs_dat_i(gbr1_dato),
-  .wbs_dat_o(gfx10_cdato)
-);
-
-reg rdy111, rdy112, rdy113, rdy114;
-always @(posedge clk20)
-begin
-	rdy111 <= cs_gfx11;
-	rdy112 <= rdy111 & cs_gfx11;
-	rdy113 <= rdy112 & cs_gfx11;
-	rdy114 <= rdy113 & cs_gfx11;
-end
-
-gfx_top64 ugfx11
-(
-	.wb_clk_i(clk20),
-	.wb_rst_i(rst),
-	.wb_inta_o(),
-  // Wishbone master signals (interfaces with video memory, write)
-  .wbm_cyc_o(gfx11_cyc),
-  .wbm_stb_o(),
-  .wbm_cti_o(),
-  .wbm_bte_o(),
-  .wbm_we_o(gfx11_we),
-  .wbm_adr_o(gfx11_adr),
-  .wbm_sel_o(gfx11_sel),
-  .wbm_ack_i(gfx11_we ? 1'b1 : rdy114),
-  .wbm_err_i(),
-  .wbm_dat_i(gfx11_dati),
-  .wbm_dat_o(gfx11_dato),
-  // Wishbone slave signals (interfaces with main bus/CPU)
-  .wbs_cs_i(cs_gfx11),
-  .wbs_cyc_i(gbr1_cyc),
-  .wbs_stb_i(gbr1_stb),
-  .wbs_cti_i(),
-  .wbs_bte_i(),
-  .wbs_we_i(gbr1_we),
-  .wbs_adr_i(gbr1_adr),
-  .wbs_sel_i(gbr1_sel),
-  .wbs_ack_o(gfx11_ack),
-  .wbs_err_o(),
-  .wbs_dat_i(gbr1_dato),
-  .wbs_dat_o(gfx11_cdato)
-);
-
-reg [15:0] pixdata;
-always @(posedge clk40)
-case(scan_addr[7:6])
-2'd0:	pixdata <= pixdata00 >> {scan_addr[5:1],1'b0};
-2'd1:	pixdata <= pixdata01 >> {scan_addr[5:1],1'b0};
-2'd2:	pixdata <= pixdata10 >> {scan_addr[5:1],1'b0};
-2'd3:	pixdata <= pixdata11 >> {scan_addr[5:1],1'b0};
-endcase
-
-wire blank3;
-delay3 udel1(.clk(clk40), .ce(1'b1), .i(blank), .o(blank3));
-always @(posedge clk40)
-	gfx_rgb <= blank3 ? 32'h0 : {pixdata[15:12],4'h0,pixdata[11:8],4'h0,pixdata[7:4],4'h0,pixdata[3:0],4'h0};
-
-wire gbr1_ack1 = gfx00_ack|gfx01_ack|gfx10_ack|gfx11_ack;
-always @(posedge clk20)
-	gbr1_ack <= gbr1_ack1;
-
-always @(posedge clk20)
-casez({cs_gfx00,cs_gfx01,cs_gfx10,cs_gfx11})
-4'b1???:	gbr1_dati <= gfx00_cdato;
-4'b01??:	gbr1_dati <= gfx01_cdato;
-4'b001?:	gbr1_dati <= gfx10_cdato;
-4'b0001:	gbr1_dati <= gfx11_cdato;
-default:	gbr1_dati <= 64'hDEADDEADDEADDEAD;
-endcase
-
-
-IOBridge u_gfx_bridge
-(
-	.rst_i(rst),
-	.clk_i(clk20),
-	.s1_cyc_i(cyc),
-	.s1_stb_i(stb),
-	.s1_ack_o(ack_gbridge1),
-	.s1_sel_i(sel),
-	.s1_we_i(we),
-	.s1_adr_i(adr),
-	.s1_dat_i(dato),
-	.s1_dat_o(gbr1_cdato),
-
-	.m_cyc_o(gbr1_cyc),
-	.m_stb_o(gbr1_stb),
-	.m_ack_i(gbr1_ack),
-	.m_we_o(gbr1_we),
-	.m_sel_o(gbr1_sel),
-	.m_adr_o(gbr1_adr),
-	.m_dat_i(gbr1_dati),
-	.m_dat_o(gbr1_dato),
-	.m_sel32_o(),
-	.m_adr32_o(),
-	.m_dat32_o()
-);
-`else
-assign ack_gbridge1 = 1'b0;
-
-`endif
-
+`ifdef ORSOC_GFX
 gfx_top64 ugfx00
 (
 	.wb_clk_i(clk20),
@@ -685,6 +409,16 @@ gfx_top64 ugfx00
   .wbs_dat_i(br1_dato),
   .wbs_dat_o(gfx00_cdato)
 );
+`else
+assign gfx00_cyc = 1'b0;
+assign gfx00_stb = 1'b0;
+assign gfx00_we = 1'b0;
+assign gfx00_sel = 8'h00;
+assign gfx00_adr = 32'h0;
+assign gfx00_dato = 64'd0;
+assign gfx00_cack = 1'b0;
+assign gfx00_cdato = 64'd0;
+`endif
 
 `ifdef TEXT_CONTROLLER
 FT64_TextController2 #(.num(1)) tc1
@@ -705,7 +439,7 @@ FT64_TextController2 #(.num(1)) tc1
 	.vsync_i(vSync),
 	.blank_i(blank),
 	.border_i(border),
-	.zrgb_i(bmp_rgb),
+	.zrgb_i(grid_zrgb),
 	.zrgb_o(tc1_rgb),
 	.xonoff_i(sw[3])
 );
@@ -714,6 +448,7 @@ assign green = spr_rgbo[15:8];
 assign blue = spr_rgbo[7:0];
 `endif
 
+`ifdef BMP_CONTROLLER
 rtfBitmapController5 ubmc1
 (
 	.rst_i(rst),
@@ -747,6 +482,16 @@ rtfBitmapController5 ubmc1
 	.zrgb_o(bmp_rgb),
 	.xonoff_i(sw[2])
 );
+`else
+assign bmp_ack = 1'b0;
+assign bmp_cdato = 64'd0;
+assign bmp_cyc = 1'b0;
+assign bmp_stb = 1'b0;
+assign bmp_we = 1'b0;
+assign bmp_sel = 8'h00;
+assign bmp_adr = 32'h0;
+assign bmp_dato = 64'h0;
+`endif
 
 rtfSpriteController2 usc2
 (
@@ -785,8 +530,6 @@ wire [15:0] vm_sel;
 wire [31:0] vm_adr;
 wire [127:0] vm_dat_o;
 wire [127:0] vm_dat_i;
-wire [15:0] aud0, aud1, aud2, aud3;
-reg [15:0] audi = 16'h0000;
 wire [7:0] gst;
 
 `ifdef AVIC
@@ -844,28 +587,33 @@ begin
 //led[1] <= cs_scr;
 //led[2] <= rst;
 //led[7:4] <= adr[6:3];
-if (cs_led)
-    led <= dato[7:0];
+if (cs_led & br2_we)
+  led <= br2_dato[7:0];
 end
 wire [31:0] led_dato = {11'h0,btnc,btnu,btnd,btnl,btnr,8'h00,sw};
 
 reg ack1;
-assign ack = ack_scr|ack_bridge1|ack_bridge2|ack_gbridge1|ack_br|dram_ack;
+assign ack = ack_scr|ack_bridge1|ack_bridge2|ack_br|dram_ack;
 always @(posedge clk20)
+if (rst)
+	ack1 <= 1'b0;
+else
 	ack1 <= ack;
 always @(posedge clk20)
-casez({cs_br,ack_bridge1,ack_gbridge1,cs_scr,ack_bridge2,cs_dram})
-6'b1?????: dati <= br_dato;
-6'b01????: dati <= br1_cdato;
-6'b001???: dati <= gbr1_cdato;
-6'b0001??: dati <= scr_dato;
-6'b00001?: dati <= br2_cdato;
-6'b000001: dati <= dram_dato;
+casez({cs_br,ack_bridge1,cs_scr,ack_bridge2,cs_dram})
+5'b1????: dati <= br_dato;
+5'b01???: dati <= br1_cdato;
+5'b001??: dati <= scr_dato;
+5'b0001?: dati <= br2_cdato;
+5'b00001: dati <= dram_dato;
 default:    dati <= {4{16'h0080}}; // NOP
 endcase
 
 wire br1_ack1 = tc1_ack|spr_ack|bmp_ack|avic_ack|gfx00_cack;
 always @(posedge clk20)
+if (rst)
+	br1_ack <= 1'b0;
+else
 	br1_ack <= br1_ack1;
 
 always @(posedge clk20)
@@ -878,8 +626,11 @@ casez({cs_tc1,cs_spr,cs_bmp,cs_avic,cs_gfx00})
 default:	br1_dati <= 64'hDEADDEADDEADDEAD;
 endcase
 
-wire br2_ack1 = rnd_ack|ack_led|kbd_ack|gpio_ack|aud_ack;
+wire br2_ack1 = rnd_ack|ack_led|kbd_ack|ack_1761|aud_ack|cs_cmdc|cs_grid;
 always @(posedge clk20)
+if (rst)
+	br2_ack <= 1'b0;
+else
 	br2_ack <= br2_ack1;
 
 always @(posedge clk20)
@@ -963,12 +714,12 @@ AudioController uaud1
 	.s_clk_i(clk20),
 	.s_cyc_i(br2_cyc),
 	.s_stb_i(br2_stb),
-	.s_ack_o(aud_acko),
+	.s_ack_o(aud_ack),
 	.s_we_i(br2_we),
 	.s_sel_i(br2_sel),
 	.s_adr_i(br2_adr[7:0]),
 	.s_dat_o(aud_cdato),
-	.s_dati(br2_dato),
+	.s_dat_i(br2_dato),
 	.s_cs_i(cs_aud),
 	.m_clk_i(clk20),
 	.m_cyc_o(aud_cyc),
@@ -987,6 +738,39 @@ AudioController uaud1
 	.record_i(btnl_db),
 	.playback_i(btnr_db)
 );
+
+wire ac_dac_sdata1;
+wire ac_bclk1;
+wire ac_lrclk1;
+wire en_rxtx;
+wire en_tx;
+ADAU1761_Interface uai1
+(
+	.rst_i(rst),
+	.clk_i(clk20),
+	.cs_i(cs_1761),
+	.cyc_i(br2_cyc),
+	.stb_i(br2_stb),
+	.ack_o(ack_1761),
+	.we_i(br2_we),
+	.dat_i(br2_dato[7:0]),
+	.aud0_i(aud0),
+	.aud2_i(aud2),
+	.audi_o(audi),
+	.ac_mclk_i(ac_mclk),
+	.ac_bclk_o(ac_bclk1),
+	.ac_lrclk_o(ac_lrclk1),
+	.ac_adc_sdata_i(ac_adc_sdata),
+	.ac_dac_sdata_o(ac_dac_sdata1),
+	.en_rxtx_o(en_rxtx),
+	.en_tx_o(en_tx),
+	.record_i(btnl_db),
+	.playback_i(btnr_db)
+);
+assign ac_mclk = clk12;
+assign ac_bclk = en_rxtx ? ac_bclk1 : 1'bz;
+assign ac_lrclk = en_rxtx ? ac_lrclk1 : 1'bz;
+assign ac_dac_sdata = en_tx ? ac_dac_sdata1 : 1'b0;
 
 reg br2_dat8;
 always @*
@@ -1180,7 +964,7 @@ FT64_mpu ucpu1
   .hartid_i(64'h1),
   .rst_i(rst),
   .clk_i(clk20),
-  .clk4x_i(clk80),
+  .clk4x_i(clk40),
   .tm_clk_i(clk20),
   .i1(1'b0),
   .i2(1'b0),
@@ -1226,65 +1010,5 @@ FT64_mpu ucpu1
   .cr_o(cr),
   .rb_i(rb)
 );
-
-
-reg en_tx;
-reg en_rx;
-
-always @(posedge clk20)
-begin
-	if (btnl_db)
-		en_rx <= 1'b1;
-	if (btnr_db)
-		en_tx <= 1'b1;
-	if (btnc_db) begin
-		en_rx <= 1'b0;
-		en_tx <= 1'b0;
-	end
-	if (cs_gpio & br2_cyc & br2_stb & br2_we) begin
-		en_tx <= br2_dat[1];
-		en_rx <= br2_dat[0];
-	end
-end
-assign gpio_ack = cs_gpio & br2_stb & br2_cyc;
-
-wire en_rxtx = en_tx|en_rx;
-reg [3:0] bclk;
-reg [63:0] lrclk;
-reg [31:0] ldato, rdato, ain;
-reg [63:0] sdato;
-assign ac_mclk = clk12;
-assign ac_bclk = en_rxtx ? bclk[3] : 1'bz;
-assign ac_lrclk = en_rxtx ? lrclk[63] : 1'bz;
-assign ac_dac_sdata = en_tx ? sdato[31] : 1'b0;
-
-always @(posedge clk12)
-if (rst)
-    bclk <= 4'b0011;
-else
-    bclk <= {bclk[2:0],bclk[3]};
-
-always @(posedge clk12)
-if (rst)
-    lrclk <= 64'hFFFFFFFF00000000;
-else
-    lrclk <= {lrclk[62:0],lrclk[63]};
-
-always @(posedge clk12)
-if (rst)
-    sdato <= {1'b0,aud0,16'h0000,aud1[15:1]};
-else begin
-    if (bclk==4'b1001) begin
-        if (lrclk==64'h800000007FFFFFFF)
-            sdato <= {aud0,16'h0000,aud2,16'h0000};
-        else
-            sdato <= {sdato[62:0],1'b0};
-    end
-    if (bclk==4'b1100) begin
-        ain <= {ain[30:0],ac_adc_sdata};
-        if (lrclk==64'hFFFFFFFC00000003 || lrclk==64'h00000003FFFFFFFC)
-            audi <= {ain[14:0],ac_adc_sdata};
-    end
-end
 
 endmodule

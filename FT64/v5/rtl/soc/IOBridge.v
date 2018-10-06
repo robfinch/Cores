@@ -44,7 +44,7 @@ input rst_i;
 input clk_i;
 input s1_cyc_i;
 input s1_stb_i;
-output s1_ack_o;
+output reg s1_ack_o;
 input [7:0] s1_sel_i;
 input s1_we_i;
 input [31:0] s1_adr_i;
@@ -53,7 +53,7 @@ output reg [63:0] s1_dat_o;
 
 input s2_cyc_i;
 input s2_stb_i;
-output s2_ack_o;
+output reg s2_ack_o;
 input [7:0] s2_sel_i;
 input s2_we_i;
 input [31:0] s2_adr_i;
@@ -75,8 +75,16 @@ output reg [31:0] m_dat32_o;
 reg which;
 reg [1:0] state;
 reg s_ack;
-assign s1_ack_o = s_ack & s1_stb_i & ~which;
-assign s2_ack_o = s_ack & s2_stb_i &  which;
+always @(posedge clk_i)
+if (rst_i)
+	s1_ack_o <= 1'b0;
+else
+	s1_ack_o <= s_ack & s1_stb_i & ~which;
+always @(posedge clk_i)
+if (rst_i)
+	s2_ack_o <= 1'b0;
+else
+	s2_ack_o <= s_ack & s2_stb_i &  which;
 reg [63:0] dat1;
 wire a10 = s1_sel_i[1]|s1_sel_i[3]|s1_sel_i[5]|s1_sel_i[7];
 wire a11 = |s1_sel_i[3:2]| |s1_sel_i[7:6];
@@ -103,7 +111,7 @@ end
 else begin
 case(state)
 IDLE:
-  begin
+  if (~m_ack_i) begin
     // Filter requests to the I/O address range
     if (s1_cyc_i && s1_adr_i[31:20]==12'hFFD) begin
     	which <= 1'b0;
@@ -151,20 +159,22 @@ WAIT_ACK:
 //		m_sel_o <= 4'h0;
 //		m_adr_o <= 32'h0;
 //		m_dat_o <= 32'd0;
+		s_ack <= 1'b0;
 		state <= IDLE;
 	end
 WAIT_NACK:
-	if (which ? !s2_stb_i : !s2_stb_i) begin
+	if (which ? !s2_stb_i : !s1_stb_i) begin
 		s_ack <= 1'b0;
 		dat1 <= 64'h0;
 		state <= IDLE;
 	end
+default:	state <= IDLE;
 endcase
 end
 
-always @(negedge clk_i)
+always @(posedge clk_i)
 	s1_dat_o <= dat1;
-always @(negedge clk_i)
+always @(posedge clk_i)
 	s2_dat_o <= dat1;
 
 endmodule
