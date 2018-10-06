@@ -72,6 +72,8 @@
 //
 // ============================================================================
 
+//`define USE_CLOCK_GATE
+
 module FT64_TextController2(
 	rst_i, clk_i, cs_i,
 	cyc_i, stb_i, ack_o, wr_i, sel_i, adr_i, dat_i, dat_o,
@@ -79,8 +81,8 @@ module FT64_TextController2(
 	dot_clk_i, hsync_i, vsync_i, blank_i, border_i, zrgb_i, zrgb_o, xonoff_i
 );
 parameter num = 4'd1;
-parameter COLS = 8'd96;
-parameter ROWS = 8'd71;
+parameter COLS = 8'd48;
+parameter ROWS = 8'd35;
 
 // Syscon
 input  rst_i;			// reset
@@ -111,8 +113,8 @@ output reg [31:0] zrgb_o;	// output pixel stream
 input xonoff_i;
 
 reg controller_enable;
-reg [31:0] bkColor32;	// background color
-reg [31:0] fgColor32;	// foreground color
+reg [31:0] bkColor32, bkColor32d;	// background color
+reg [31:0] fgColor32, fgColor32d;	// foreground color
 wire [23:0] tcColor24;	// transparent color
 
 wire pix;				// pixel value from character generator 1=on,0=off
@@ -139,8 +141,8 @@ reg [ 3:0] pixelHeight;	// vertical pixel height in scan lines
 
 wire [11:0] hctr;		// horizontal reference counter (counts clocks since hSync)
 wire [11:0] scanline;	// scan line
-wire [11:0] row;		// vertical reference counter (counts rows since vSync)
-wire [11:0] col;		// horizontal column
+wire [ 7:0] row;		// vertical reference counter (counts rows since vSync)
+wire [ 7:0] col;		// horizontal column
 reg  [ 4:0] rowscan;	// scan line within row
 wire nxt_row;			// when to increment the row counter
 wire nxt_col;			// when to increment the column counter
@@ -155,13 +157,13 @@ wire ld_shft = nxt_col & nhp;
 // display and timing signals
 reg [15:0] txtAddr;		// index into memory
 reg [15:0] penAddr;
-wire [63:0] txtOut;		// character code
-wire [8:0] charOut;		// character ROM output
+wire [63:0] screen_ram_out;		// character code
+wire [8:0] char_bmp;		// character ROM output
 wire [15:0] txtBkColor;	// background color code
 wire [15:0] txtFgColor;	// foreground color code
 wire [7:0] txtZorder;
 reg  [15:0] txtTcCode;	// transparent color code
-reg  bgt;
+reg  bgt, bgtd;
 
 wire [63:0] tdat_o;
 wire [8:0] chdat_o;
@@ -169,27 +171,70 @@ wire [8:0] chdat_o;
 wire [2:0] scanindex = scanline[2:0];
 
 //--------------------------------------------------------------------
+// bus interfacing
 // Address Decoding
 // I/O range Dx
 //--------------------------------------------------------------------
-wire cs_rom  = cs_i && cyc_i && stb_i && (adr_i[15:8] >= 8'hE0);
-wire cs_reg  = cs_i && cyc_i && stb_i && (adr_i[15:8] == 8'hDF);
-wire cs_text = cs_i && cyc_i && stb_i && (adr_i[15:8] <  8'hDF);
-wire cs_any  = cs_i && cyc_i && stb_i;
- 
+// Register the inputs
+reg cs_rom, cs_reg, cs_text, cs_any;
+reg [15:0] radr_i;
+reg [63:0] rdat_i;
+reg rwr_i;
+reg [7:0] rsel_i;
+always @(posedge clk_i)
+	cs_rom <= cs_i && cyc_i && stb_i && (adr_i[15:8] >= 8'hE0);
+always @(posedge clk_i)
+	cs_reg <= cs_i && cyc_i && stb_i && (adr_i[15:8] == 8'hDF);
+always @(posedge clk_i)
+	cs_text <= cs_i && cyc_i && stb_i && (adr_i[15:8] <  8'hDF);
+always @(posedge clk_i)
+	cs_any <= cs_i && cyc_i && stb_i;
+always @(posedge clk_i)
+	rwr_i <= wr_i;
+always @(posedge clk_i)
+	rsel_i <= sel_i;
+always @(posedge clk_i)
+	radr_i <= adr_i;
+always @(posedge clk_i)
+	rdat_i <= dat_i;	
+
 // Register outputs
 always @(posedge clk_i)
 	if (cs_text) dat_o <= tdat_o;
 	else if (cs_rom) dat_o <= {55'd0,chdat_o};
 	else if (cs_reg) dat_o <= {32'd0,rego};
-	else dat_o <= 64'h0000;
+	else dat_o <= 64'h0;
 
-assign vclk = dot_clk_i;
 //always @(posedge clk_i)
 //	if (cs_text) begin
 //		$display("TC WRite: %h %h", adr_i, dat_i);
 //		$stop;
 //	end
+
+// - there is a four cycle latency for reads, an ack is generated
+//   after the synchronous RAM read
+// - writes can be acknowledged right away.
+
+ack_gen #(
+	.READ_STAGES(4),
+	.WRITE_STAGES(0),
+	.REGISTER_OUTPUT(1)
+)
+uag1 (
+	.clk_i(clk_i),
+	.ce_i(1'b1),
+	.i(cs_any),
+	.we_i(rwr_i),
+	.o(ack_o)
+);
+
+//--------------------------------------------------------------------
+//--------------------------------------------------------------------
+`ifdef USE_CLOCK_GATE
+BUFHCE ucb1 (.I(dot_clk_i), .CE(controller_enable), .O(vclk));
+`else
+assign vclk = dot_clk_i;
+`endif
 
 //--------------------------------------------------------------------
 // Video Memory
@@ -200,12 +245,14 @@ assign vclk = dot_clk_i;
 //    base screen address
 //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-wire [17:0] rowcol = row * numCols;
+reg [15:0] rowcol;
 always @(posedge vclk)
-	txtAddr <= startAddress + rowcol[15:0] + col;
+	rowcol = row * numCols;
+always @(posedge vclk)
+	txtAddr <= startAddress + rowcol + col;
 
 // Register read-back memory
-wire [3:0] rrm_adr = adr_i[6:3];
+wire [3:0] rrm_adr = radr_i[6:3];
 wire [63:0] rrm_o;
 
 regReadbackMem #(.WID(16)) rrm0
@@ -213,8 +260,8 @@ regReadbackMem #(.WID(16)) rrm0
   .wclk(clk_i),
   .adr(rrm_adr),
   .wce(cs_reg),
-  .we(wr_i & |sel_i[1:0]),
-  .i(dat_i[15:0]),
+  .we(rwr_i & |rsel_i[1:0]),
+  .i(rdat_i[15:0]),
   .o(rrm_o[15:0])
 );
 
@@ -223,8 +270,8 @@ regReadbackMem #(.WID(16)) rrm1
   .wclk(clk_i),
   .adr(rrm_adr),
   .wce(cs_reg),
-  .we(wr_i & |sel_i[3:2]),
-  .i(dat_i[31:16]),
+  .we(rwr_i & |rsel_i[3:2]),
+  .i(rdat_i[31:16]),
   .o(rrm_o[31:16])
 );
 
@@ -233,8 +280,8 @@ regReadbackMem #(.WID(16)) rrm2
   .wclk(clk_i),
   .adr(rrm_adr),
   .wce(cs_reg),
-  .we(wr_i & |sel_i[5:4]),
-  .i(dat_i[47:32]),
+  .we(wrr_i & |rsel_i[5:4]),
+  .i(rdat_i[47:32]),
   .o(rrm_o[47:32])
 );
 
@@ -243,8 +290,8 @@ regReadbackMem #(.WID(16)) rrm3
   .wclk(clk_i),
   .adr(rrm_adr),
   .wce(cs_reg),
-  .we(wr_i & |sel_i[7:6]),
-  .i(dat_i[63:48]),
+  .we(rwr_i & |rsel_i[7:6]),
+  .i(rdat_i[63:48]),
   .o(rrm_o[63:48])
 );
 
@@ -253,78 +300,73 @@ lfsr #(24) ulfsr1(rst_i, dot_clk_i, 1'b1, 1'b0, lfsr1_o);
 wire [63:0] lfsr_o = {16'h0,
 												lfsr1_o[23:21],2'b0,lfsr1_o[20:18],3'b0,lfsr1_o[17:16],3'b0,
 												lfsr1_o[15:13],2'b0,lfsr1_o[12:10],3'b0,lfsr1_o[9:8],3'b0,
-												8'h00,lfsr_o[7:0]
+												8'h00,lfsr1_o[7:0]
 										};
 
 // text screen RAM
-wire [11:0] bram_adr = adr_i[14:3];
+wire [12:0] bram_adr = radr_i[15:3];
 syncRam8kx64 screen_ram1	// This ram is really only 56k
 (
   .clka(clk_i),
   .ena(cs_text),
-  .wea({8{wr_i}}&sel_i),
+  .wea({8{rwr_i}}&rsel_i),
   .addra(bram_adr),  // input wire [11 : 0] addra
-  .dina(dat_i),
+  .dina(rdat_i),
   .douta(tdat_o),
   .clkb(vclk),
   .enb(ld_shft|por),
   .web({8{por}}),
   .addrb(txtAddr[11:0]),
   .dinb(lfsr_o),
-  .doutb(txtOut)
+  .doutb(screen_ram_out)
 );
 
 //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Character bitmap ROM
 // - room for 512 characters
 //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-syncRam4kx9_1rw1r charRam0
+char_ram charRam0
 (
-	.wclk(clk_i),
-	.wadr(bram_adr),
-	.i(dat_i[8:0]),
-	.wo(chdat_o),
-	.wce(cs_rom),
-	.we(1'b0),//we_i),
-	.wrst(1'b0),
-
-	.rclk(vclk),
-	.radr({txtOut[8:0],rowscan[2:0]}),
-	.o(charOut),
-	.rce(ld_shft),
-	.rrst(1'b0)
+	.clk_i(clk_i),
+	.cs_i(cs_rom),
+	.we_i(1'b0),
+	.adr_i(bram_adr),
+	.dat_i(rdat_i[8:0]),
+	.dat_o(chdat_o),
+	.dot_clk_i(vclk),
+	.ce_i(ld_shft),
+	.char_code_i(screen_ram_out[8:0]),
+	.scanline_i(rowscan[2:0]),
+	.bmp_o(char_bmp)
 );
-
+/*
+syncRam4kx9 charRam0
+(
+  .clka(clk_i),    // input wire clka
+  .ena(cs_rom),      // input wire ena
+  .wea(1'b0),//rwr_i),      // input wire [0 : 0] wea
+  .addra(bram_adr),  // input wire [11 : 0] addra
+  .dina(rdat_i[8:0]),    // input wire [8 : 0] dina
+  .douta(chdat_o),  // output wire [8 : 0] douta
+  .clkb(vclk),    // input wire clkb
+  .enb(ld_shft),      // input wire enb
+  .web(1'b0),      // input wire [0 : 0] web
+  .addrb({screen_ram_out[8:0],rowscan[2:0]}),  // input wire [11 : 0] addrb
+  .dinb(9'h0),    // input wire [8 : 0] dinb
+  .doutb(char_bmp)  // output wire [8 : 0] doutb
+);
+*/
 
 // pipeline delay - sync color with character bitmap output
 reg [15:0] txtBkCode1;
 reg [15:0] txtFgCode1;
 reg [7:0] txtZorder1;
 always @(posedge vclk)
-	if (nhp & ld_shft) txtBkCode1 <= txtOut[31:16];
+	if (ld_shft) txtBkCode1 <= screen_ram_out[31:16];
 always @(posedge vclk)
-	if (nhp & ld_shft) txtFgCode1 <= txtOut[47:32];
+	if (ld_shft) txtFgCode1 <= screen_ram_out[47:32];
 always @(posedge vclk)
-	if (nhp & ld_shft) txtZorder1 <= txtOut[55:48];
-
-//--------------------------------------------------------------------
-// bus interfacing
-// - there is a four cycle latency for reads, an ack is generated
-//   after the synchronous RAM read
-// - writes can be acknowledged right away.
-//--------------------------------------------------------------------
-reg ramRdy,ramRdy1,ramRdy2,ramRdy3,ramRdy4;
-always @(posedge clk_i)
-begin
-	ramRdy1 <= cs_any;
-	ramRdy2 <= ramRdy1 & cs_any;
-	ramRdy3 <= ramRdy2 & cs_any;
-	ramRdy4 <= ramRdy3 & cs_any;
-	ramRdy <= ramRdy1 & cs_any;
-end
-
-assign ack_o = cs_any ? (wr_i ? 1'b1 : ramRdy) : 1'b0;
-
+	if (ld_shft) txtZorder1 <= screen_ram_out[55:48];
 
 //--------------------------------------------------------------------
 // Light Pen
@@ -380,10 +422,10 @@ always @(posedge clk_i)
 */
 		// 56x31
 		if (num==4'd1) begin
-      windowTop    <= 12'd16;//12'd16;
-      windowLeft   <= 12'h64;//12'd86;
-      pixelWidth   <= 4'd0;		// 800 pixels
-      pixelHeight  <= 4'd0;		// 600 pixels
+      windowTop    <= 12'd18;//12'd16;
+      windowLeft   <= 12'h41;//12'd86;
+      pixelWidth   <= 4'd1;		// 800 pixels
+      pixelHeight  <= 4'd1;		// 600 pixels
       numCols      <= COLS;
       numRows      <= ROWS;
       maxScanline  <= 5'd7;
@@ -395,7 +437,7 @@ always @(posedge clk_i)
       cursorPos    <= 16'h0003;
       cursorType 	 <= 2'b00;
       txtTcCode    <= 16'h1ff;
-      charOutDelay <= 12'd3;
+      charOutDelay <= 12'd6;
 		end
 		else if (num==4'd2) begin
       windowTop    <= 12'd64;//12'd16;
@@ -413,7 +455,7 @@ always @(posedge clk_i)
       cursorPos    <= 16'h0003;
       cursorType   <= 2'b00;
       txtTcCode    <= 9'h1ff;
-      charOutDelay <= 12'd3;
+      charOutDelay <= 12'd6;
 		end
 	end
 	else begin
@@ -421,40 +463,40 @@ always @(posedge clk_i)
 		if (bcnt > 6'd60)
 			por <= 1'b0;
 		
-		if (cs_reg & wr_i) begin	// register write ?
-			$display("TC Write: r%d=%h", rrm_adr, dat_i);
+		if (cs_reg & rwr_i) begin	// register write ?
+			$display("TC Write: r%d=%h", rrm_adr, rdat_i);
 			case(rrm_adr)
 			4'd0:	begin
-					if (sel_i[0]) numCols    <= dat_i[7:0];
-					if (sel_i[1]) numRows    <= dat_i[15:8];
-					if (sel_i[2]) charOutDelay <= dat_i[19:16];
-					if (|sel_i[5:4]) windowLeft <= dat_i[43:32];
-					if (|sel_i[7:6]) windowTop  <= dat_i[59:48];
+					if (rsel_i[0]) numCols    <= rdat_i[7:0];
+					if (rsel_i[1]) numRows    <= rdat_i[15:8];
+					if (rsel_i[2]) charOutDelay <= rdat_i[19:16];
+					if (|rsel_i[5:4]) windowLeft <= rdat_i[43:32];
+					if (|rsel_i[7:6]) windowTop  <= rdat_i[59:48];
 					end
 			4'd1:
 				begin
-					if (sel_i[0]) maxScanline <= dat_i[4:0];
-					if (sel_i[1]) begin
-						pixelHeight <= dat_i[15:12];
-						pixelWidth  <= dat_i[11:8];	// horizontal pixel width
+					if (rsel_i[0]) maxScanline <= rdat_i[4:0];
+					if (rsel_i[1]) begin
+						pixelHeight <= rdat_i[15:12];
+						pixelWidth  <= rdat_i[11:8];	// horizontal pixel width
 					end
-					if (sel_i[3]) por <= dat_i[24];
-					if (sel_i[4]) controller_enable <= dat_i[32];
+					if (rsel_i[3]) por <= rdat_i[24];
+					if (rsel_i[4]) controller_enable <= rdat_i[32];
 				end
-			4'd2:	if (|sel_i[1:0]) txtTcCode <= dat_i[15:0];
+			4'd2:	if (|rsel_i[1:0]) txtTcCode <= rdat_i[15:0];
 			4'd3:	
 				begin
-					if (sel_i[0]) begin
-						cursorEnd <= dat_i[4:0];	// scan line sursor starts on
-						rBlink      <= dat_i[7:5];
+					if (rsel_i[0]) begin
+						cursorEnd <= rdat_i[4:0];	// scan line sursor starts on
+						rBlink      <= rdat_i[7:5];
 					end
-					if (sel_i[1]) begin
-						cursorStart <= dat_i[12:8];	// scan line cursor ends on
-						cursorType  <= dat_i[15:14];
+					if (rsel_i[1]) begin
+						cursorStart <= rdat_i[12:8];	// scan line cursor ends on
+						cursorType  <= rdat_i[15:14];
 					end
-					if (|sel_i[7:4]) cursorPos <= dat_i[47:32];
+					if (|rsel_i[7:4]) cursorPos <= rdat_i[47:32];
 				end
-			4'd4:	if (|sel_i[3:0]) startAddress <= dat_i[15:0];
+			4'd4:	if (|rsel_i[3:0]) startAddress <= rdat_i[15:0];
 			default: ;
 			endcase
 		end
@@ -466,7 +508,7 @@ always @(posedge clk_i)
 
 // "Box" cursor bitmap
 reg [7:0] curout;
-always @(scanindex or cursorType)
+always @*
 	case({cursorType,scanindex})
 	// Box cursor
 	5'b00_000:	curout = 8'b11111111;
@@ -570,8 +612,16 @@ HVCounter uhv2
 	.ctr(scanline)
 );
 
+// Takes 3 clock for rowscan to become stable, but should be stable before any
+// chars are displayed.
+reg [4:0] maxScanlinePlusOne;
+reg [13:0] rxmslp1;
 always @(posedge vclk)
-	rowscan <= scanline - row * (maxScanline+1);
+	maxScanlinePlusOne <= maxScanline + 1;
+always @(posedge vclk)
+	rxmslp1 <= row * maxScanlinePlusOne;
+always @(posedge vclk)
+	rowscan <= scanline - rxmslp1;
 
 
 // Blink counter
@@ -588,7 +638,9 @@ VT163 #(6) ub1
 	.rco()
 );
 
-wire blink_en = (cursorPos+2==txtAddr) && (scanline[4:0] >= cursorStart) && (scanline[4:0] <= cursorEnd);
+reg blink_en;
+always @(posedge vclk)
+	blink_en <= (cursorPos+2==txtAddr) && (scanline[4:0] >= cursorStart) && (scanline[4:0] <= cursorEnd);
 
 VT151 ub2
 (
@@ -601,16 +653,24 @@ VT151 ub2
 );
 
 always @(posedge vclk)
-	if (nhp & ld_shft)
+	if (ld_shft)
 		bkColor32 <= {txtZorder1,txtBkCode1[15:11],3'h0,txtBkCode1[10:5],2'h0,txtBkCode1[4:0],3'h0};
 always @(posedge vclk)
-	if (nhp & ld_shft)
+	if (nhp)
+		bkColor32d <= bkColor32;
+always @(posedge vclk)
+	if (ld_shft)
 		fgColor32 <= {txtZorder1,txtFgCode1[15:11],3'h0,txtFgCode1[10:5],2'h0,txtFgCode1[4:0],3'h0};
+always @(posedge vclk)
+	if (nhp)
+		fgColor32d <= fgColor32;
 
 always @(posedge vclk)
-	if (nhp & ld_shft)
+	if (ld_shft)
 		bgt <= txtBkCode1==txtTcCode;
-
+always @(posedge vclk)
+	if (nhp)
+		bgtd <= bgt;
 
 // Convert character bitmap to pixels
 // For convenience, the character bitmap data in the ROM is in the
@@ -618,17 +678,19 @@ always @(posedge vclk)
 // just alters the order without adding any hardware.
 //
 wire [7:0] charRev = {
-	charOut[0],
-	charOut[1],
-	charOut[2],
-	charOut[3],
-	charOut[4],
-	charOut[5],
-	charOut[6],
-	charOut[7]
+	char_bmp[0],
+	char_bmp[1],
+	char_bmp[2],
+	char_bmp[3],
+	char_bmp[4],
+	char_bmp[5],
+	char_bmp[6],
+	char_bmp[7]
 };
 
-wire [7:0] charout1 = blink ? (charRev ^ curout) : charRev;
+reg [7:0] charout1;
+always @(posedge vclk)
+	charout1 <= blink ? (charRev ^ curout) : charRev;
 
 // Convert parallel to serial
 ParallelToSerial ups1
@@ -665,8 +727,8 @@ always @(posedge dot_clk_i)
 	6'b?1????:	zrgb_o <= 32'h0000000;
 	6'b10010?:	zrgb_o <= 32'hFFBF2020;
 	6'b10011?:	zrgb_o <= 32'hFFDFDFDF;
-	6'b1000?0:	zrgb_o <= bgt ? zrgb_i : bkColor32;
-	6'b1000?1:	zrgb_o <= fgColor32;
+	6'b1000?0:	zrgb_o <= bgtd ? zrgb_i : bkColor32d;
+	6'b1000?1:	zrgb_o <= fgColor32d;
 	default:	zrgb_o <= zrgb_i;
 	endcase
 

@@ -1,7 +1,10 @@
 `timescale 1ns / 1ps
 // ============================================================================
-//	2011  Robert Finch
-//	robfinch@<remove>sympatico.ca
+//        __
+//   \\__/ o\    (C) 2011-2018  Robert Finch, Waterloo
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
 //
 // HVCounter.v
 // Horizontal / Vertical counter:

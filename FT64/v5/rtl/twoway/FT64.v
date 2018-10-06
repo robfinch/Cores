@@ -5619,6 +5619,7 @@ begin
 end
 
 reg [2:0] wbptr;
+/*
 always @*
 begin
 	// Crashes sim
@@ -5648,7 +5649,7 @@ begin
 	else
 		wbptr <= 3'd0;
 end
-
+*/
 // Stomp logic for branch miss.
 
 FT64_stomp #(QENTRIES) ustmp1
@@ -6365,6 +6366,11 @@ begin
 	end
 end
 
+wire writing_wb =
+	 		(mem1_available && dram0==`DRAMSLOT_BUSY && dram0_store && wbptr<`WB_DEPTH-1)
+	 || (mem2_available && dram1==`DRAMSLOT_BUSY && dram1_store && `NUM_MEM > 1 && wbptr<`WB_DEPTH-1)
+	 || (mem3_available && dram2==`DRAMSLOT_BUSY && dram2_store && `NUM_MEM > 2 && wbptr<`WB_DEPTH-1)
+	 ;
 
 // Monster clock domain.
 // Like to move some of this to clocking under different always blocks in order
@@ -6577,9 +6583,14 @@ if (rst) begin
      	wb_v[n] <= 1'b0;
      	wb_rmw[n] <= 1'b0;
      	wb_id[n] <= {QENTRIES{1'b0}};
+     	wb_ol[n] <= 2'b00;
+     	wb_sel[n] <= 8'h00;
+     	wb_addr[n] <= 32'd0;
+     	wb_data[n] <= 64'd0;
      end
      wb_en <= `TRUE;
      wbo_id <= {QENTRIES{1'b0}};
+     wbptr <= 2'd0;
 `ifdef SIM
 		wb_merges <= 32'd0;
 `endif
@@ -8093,12 +8104,64 @@ case(dram2)
 `DRAMREQ_READY:		;
 endcase
 
+
 // Bus Interface Unit (BIU)
 // Interfaces to the external bus which is WISHBONE compatible.
 // Stores take precedence over other operations.
 // Next data cache read misses are serviced.
 // Uncached data reads are serviced.
 // Finally L2 instruction cache misses are serviced.
+
+`ifdef HAS_WB
+  if (mem1_available && dram0==`DRAMSLOT_BUSY && dram0_store) begin
+		if (wbptr<`WB_DEPTH-1) begin
+			dram0 <= `DRAMREQ_READY;
+			dram0_instr[`INSTRUCTION_OP] <= `NOP;
+			wb_update(
+				dram0_id,
+				`FALSE,
+				fnSelect(dram0_instr,dram0_addr),
+				dram0_ol,
+				dram0_addr,
+				fnDato(dram0_instr,dram0_data)
+			);
+			iqentry_done[ dram0_id[`QBITS] ] <= `VAL;
+			iqentry_out[ dram0_id[`QBITS] ] <= `INV;
+		end
+  end
+  else if (mem2_available && dram1==`DRAMSLOT_BUSY && dram1_store && `NUM_MEM > 1) begin
+		if (wbptr<`WB_DEPTH-1) begin
+			dram1 <= `DRAMREQ_READY;
+      dram1_instr[`INSTRUCTION_OP] <= `NOP;
+			wb_update(
+				dram1_id,
+				`FALSE,
+				fnSelect(dram1_instr,dram1_addr),
+				dram1_ol,
+				dram1_addr,
+				fnDato(dram1_instr,dram1_data)
+			);
+			iqentry_done[ dram1_id[`QBITS] ] <= `VAL;
+			iqentry_out[ dram1_id[`QBITS] ] <= `INV;
+		end
+  end
+  else if (mem3_available && dram2==`DRAMSLOT_BUSY && dram2_store && `NUM_MEM > 2) begin
+		if (wbptr<`WB_DEPTH-1) begin
+			dram2 <= `DRAMREQ_READY;
+      dram2_instr[`INSTRUCTION_OP] <= `NOP;
+			wb_update(
+				dram2_id,
+				`FALSE,
+				fnSelect(dram2_instr,dram2_addr),
+				dram2_ol,
+				dram2_addr,
+				fnDato(dram2_instr,dram2_data)
+			);
+			iqentry_done[ dram2_id[`QBITS] ] <= `VAL;
+			iqentry_out[ dram2_id[`QBITS] ] <= `INV;
+		end
+  end
+`endif
 
 case(bstate)
 BIDLE:
@@ -8114,7 +8177,7 @@ BIDLE:
 		bwhich <= 2'b00;
 		preload <= FALSE;
 `ifdef HAS_WB
-		if (wb_v[0] & wb_en) begin
+		if (wb_v[0] & wb_en & ~acki) begin
 			cyc_o <= `HIGH;
 			stb_o <= `HIGH;
 			we_o <= `HIGH;
@@ -8125,8 +8188,9 @@ BIDLE:
 			wbo_id <= wb_id[0];
      	isStore <= TRUE;
 			bstate <= wb_rmw[0] ? B12 : B_DCacheStoreAck;
+			wb_v[0] <= `INV;
 		end
-		begin
+		if (wb_v[0]==`INV && !writing_wb) begin
 			for (j = 1; j < `WB_DEPTH; j = j + 1) begin
 	     	wb_v[j-1] <= wb_v[j];
 	     	wb_id[j-1] <= wb_id[j];
@@ -8135,6 +8199,8 @@ BIDLE:
 	     	wb_addr[j-1] <= wb_addr[j];
 	     	wb_data[j-1] <= wb_data[j];
 	     	wb_ol[j-1] <= wb_ol[j];
+	     	if (wbptr > 2'd0)
+	     		wbptr <= wbptr - 2'd1;
     	end
     	wb_v[`WB_DEPTH-1] <= `INV;
     	wb_rmw[`WB_DEPTH-1] <= `FALSE;
@@ -8152,7 +8218,7 @@ BIDLE:
             end
             else
 `endif            
-            begin
+            if (!acki) begin
                  isRMW <= dram0_rmw;
                  isCAS <= IsCAS(dram0_instr);
                  isAMO <= IsAMO(dram0_instr);
@@ -8180,7 +8246,7 @@ BIDLE:
             end
             else
 `endif            
-            begin
+            if (!acki) begin
                  isRMW <= dram1_rmw;
                  isCAS <= IsCAS(dram1_instr);
                  isAMO <= IsAMO(dram1_instr);
@@ -8208,7 +8274,7 @@ BIDLE:
             end
             else
 `endif            
-            begin
+            if (!acki) begin
                  isRMW <= dram2_rmw;
                  isCAS <= IsCAS(dram2_instr);
                  isAMO <= IsAMO(dram2_instr);
@@ -8225,6 +8291,7 @@ BIDLE:
                  bstate <= B12;
             end
         end
+`ifndef HAS_WB
         else if (mem1_available && dram0==`DRAMSLOT_BUSY && dram0_store) begin
 `ifdef SUPPORT_DBG        	
             if (dbg_smatch0) begin
@@ -8238,33 +8305,18 @@ BIDLE:
 `endif            
             begin
 							bwhich <= 2'b00;
-`ifndef HAS_WB                 
-							dram0 <= `DRAMSLOT_HASBUS;
-							dram0_instr[`INSTRUCTION_OP] <= `NOP;
-                 cyc_o <= `HIGH;
-                 stb_o <= `HIGH;
-                 sel_o <= fnSelect(dram0_instr,dram0_addr);
-                 adr_o <= dram0_addr;
-                 dat_o <= fnDato(dram0_instr,dram0_data);
-                 ol_o  <= dram0_ol;
+							if (!acki) begin                 
+								dram0 <= `DRAMSLOT_HASBUS;
+								dram0_instr[`INSTRUCTION_OP] <= `NOP;
+                cyc_o <= `HIGH;
+                stb_o <= `HIGH;
+                sel_o <= fnSelect(dram0_instr,dram0_addr);
+                adr_o <= dram0_addr;
+                dat_o <= fnDato(dram0_instr,dram0_data);
+                ol_o  <= dram0_ol;
 			        	isStore <= TRUE;
-                 bstate <= B_DCacheStoreAck;
-`else
-								if (wbptr<`WB_DEPTH-1) begin
-									dram0 <= `DRAMREQ_READY;
-									dram0_instr[`INSTRUCTION_OP] <= `NOP;
-									wb_update(
-										dram0_id,
-										`FALSE,
-										fnSelect(dram0_instr,dram0_addr),
-										dram0_ol,
-										dram0_addr,
-										fnDato(dram0_instr,dram0_data)
-									);
-									iqentry_done[ dram0_id[`QBITS] ] <= `VAL;
-									iqentry_out[ dram0_id[`QBITS] ] <= `INV;
-								end
-`endif                 
+                bstate <= B_DCacheStoreAck;
+              end
 //                 cr_o <= IsSWC(dram0_instr);
             end
         end
@@ -8281,33 +8333,18 @@ BIDLE:
 `endif            
             begin
                  bwhich <= 2'b01;
-`ifndef HAS_WB                 
-                 dram1 <= `DRAMSLOT_HASBUS;
-                 dram1_instr[`INSTRUCTION_OP] <= `NOP;
-                 cyc_o <= `HIGH;
-                 stb_o <= `HIGH;
-                 sel_o <= fnSelect(dram1_instr,dram1_addr);
-                 adr_o <= dram1_addr;
-                 dat_o <= fnDato(dram1_instr,dram1_data);
-                 ol_o  <= dram1_ol;
+							if (!acki) begin
+                dram1 <= `DRAMSLOT_HASBUS;
+                dram1_instr[`INSTRUCTION_OP] <= `NOP;
+                cyc_o <= `HIGH;
+                stb_o <= `HIGH;
+                sel_o <= fnSelect(dram1_instr,dram1_addr);
+                adr_o <= dram1_addr;
+                dat_o <= fnDato(dram1_instr,dram1_data);
+                ol_o  <= dram1_ol;
 			        	isStore <= TRUE;
-                 bstate <= B_DCacheStoreAck;
-`else
-								if (wbptr<`WB_DEPTH-1) begin
-									dram1 <= `DRAMREQ_READY;
-	                dram1_instr[`INSTRUCTION_OP] <= `NOP;
-									wb_update(
-										dram1_id,
-										`FALSE,
-										fnSelect(dram1_instr,dram1_addr),
-										dram1_ol,
-										dram1_addr,
-										fnDato(dram1_instr,dram1_data)
-									);
-									iqentry_done[ dram1_id[`QBITS] ] <= `VAL;
-									iqentry_out[ dram1_id[`QBITS] ] <= `INV;
-								end
-`endif                 
+                bstate <= B_DCacheStoreAck;
+              end
 //                 cr_o <= IsSWC(dram0_instr);
             end
         end
@@ -8324,36 +8361,22 @@ BIDLE:
 `endif            
             begin
                  bwhich <= 2'b10;
-`ifndef HAS_WB                 
-                 dram2 <= `DRAMSLOT_HASBUS;
-                 dram2_instr[`INSTRUCTION_OP] <= `NOP;
-                 cyc_o <= `HIGH;
-                 stb_o <= `HIGH;
-                 sel_o <= fnSelect(dram2_instr,dram2_addr);
-                 adr_o <= dram2_addr;
-                 dat_o <= fnDato(dram2_instr,dram2_data);
-                 ol_o  <= dram2_ol;
+							if (!acki) begin
+                dram2 <= `DRAMSLOT_HASBUS;
+                dram2_instr[`INSTRUCTION_OP] <= `NOP;
+                cyc_o <= `HIGH;
+                stb_o <= `HIGH;
+                sel_o <= fnSelect(dram2_instr,dram2_addr);
+                adr_o <= dram2_addr;
+                dat_o <= fnDato(dram2_instr,dram2_data);
+                ol_o  <= dram2_ol;
 				       	isStore <= TRUE;
-                 bstate <= B_DCacheStoreAck;
-`else
-								if (wbptr<`WB_DEPTH-1) begin
-									dram2 <= `DRAMREQ_READY;
-	                dram2_instr[`INSTRUCTION_OP] <= `NOP;
-									wb_update(
-										dram2_id,
-										`FALSE,
-										fnSelect(dram2_instr,dram2_addr),
-										dram2_ol,
-										dram2_addr,
-										fnDato(dram2_instr,dram2_data)
-									);
-									iqentry_done[ dram2_id[`QBITS] ] <= `VAL;
-									iqentry_out[ dram2_id[`QBITS] ] <= `INV;
-								end
-`endif                 
+                bstate <= B_DCacheStoreAck;
+              end
 //                 cr_o <= IsSWC(dram0_instr);
             end
         end
+`endif
         // Check for read misses on the data cache
         else if (~|wb_v && mem1_available && !dram0_unc && dram0==`DRAMSLOT_REQBUS && dram0_load) begin
 `ifdef SUPPORT_DBG        	
@@ -8420,7 +8443,7 @@ BIDLE:
             end
             else
 `endif            
-            begin
+            if (!acki) begin
                  bwhich <= 2'b00;
                  cyc_o <= `HIGH;
                  stb_o <= `HIGH;
@@ -8442,7 +8465,7 @@ BIDLE:
             end
             else
 `endif            
-            begin
+            if (!acki) begin
                  bwhich <= 2'b01;
                  cyc_o <= `HIGH;
                  stb_o <= `HIGH;
@@ -8464,7 +8487,7 @@ BIDLE:
             end
             else
 `endif            
-            begin
+            if (!acki) begin
                  bwhich <= 2'b10;
                  cyc_o <= `HIGH;
                  stb_o <= `HIGH;
@@ -8476,7 +8499,7 @@ BIDLE:
             end
         end
         // Check for L2 cache miss
-        else if (~|wb_v && !ihitL2) begin
+        else if (~|wb_v && !ihitL2 && !acki) begin
              cti_o <= 3'b001;
              bte_o <= 2'b00;//2'b01;	// 4 beat burst wrap
              cyc_o <= `HIGH;
@@ -8663,7 +8686,7 @@ B_ICacheAck:
         	3'd1:	L2_rdat[127:64] <= dat_i;
         	3'd2:	L2_rdat[191:128] <= dat_i;
         	3'd3:	L2_rdat[255:192] <= dat_i;
-        	3'd4:	L2_rdat[287:256] <= dat_i[31:0];
+        	3'd4:	L2_rdat[289:256] <= {2'b00,dat_i[31:0]};
         	default:	;
         	endcase
         	//L2_rdat <= {dat_i[31:0],{4{dat_i}}};
@@ -9271,6 +9294,7 @@ begin
 		wb_sel[wbptr] <= sel;
 		wb_addr[wbptr] <= {addr[AMSB:3],3'b0};
 		wb_data[wbptr] <= data;
+		wbptr <= wbptr + 2'd1;
 	end
 end
 endtask
