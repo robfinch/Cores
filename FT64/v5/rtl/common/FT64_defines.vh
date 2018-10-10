@@ -171,6 +171,7 @@
 `define MULU        6'h38
 `define MULSU       6'h39
 `define MUL         6'h3A
+`define FXMUL				6'h3B
 `define DIVU     		6'h3C
 `define DIVSU    		6'h3D
 `define DIV      		6'h3E

@@ -8,7 +8,7 @@
 //
 //	fpNormalize.v
 //    - floating point normalization unit
-//    - two cycle latency
+//    - one cycle latency
 //    - parameterized width
 //    - IEEE 754 representation
 //

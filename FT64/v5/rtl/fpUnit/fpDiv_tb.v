@@ -57,8 +57,8 @@ initial begin
 	clk = 1'b0;
 	clk4x = 0;
 	adr = 0;
-	$readmemh("c:/cores5/ft64/trunk/rtl/fpUnit/fpDiv_tv.txt", mem);
-	$readmemh("c:/cores5/ft64/trunk/rtl/fpUnit/fpDiv_tvd.txt", memd);
+	$readmemh("d:/cores5/ft64/v5/rtl/fpUnit/fpDiv_tv.txt", mem);
+	$readmemh("d:/cores5/ft64/v5/rtl/fpUnit/fpDiv_tvd.txt", memd);
 	#20 rst = 1;
 	#50 rst = 0;
 end
@@ -71,7 +71,7 @@ always #8
 always @(posedge clk)
 if (rst) begin
 	adr = 0;
-	state <= 1;
+	state <= 3;
 end
 else
 begin
@@ -87,24 +87,26 @@ case(state)
 		state <= 2;
 	end
 4'd2:
-	if (done) begin
+	if (done)
+		state <= 4'd3;
+4'd3:
+	begin
 		memo[adr] <= {o,b,a};
 		memdo[adr] <= {od,bd,ad};
 		adr <= adr + 1;
 		if (adr==8191) begin
-			$writememh("c:/cores5/ft64/trunk/rtl/fpUnit/fpDiv_tvo.txt", memo);
-			$writememh("c:/cores5/ft64/trunk/rtl/fpUnit/fpDiv_tvdo.txt", memdo);
+			$writememh("d:/cores5/ft64/v5/rtl/fpUnit/fpDiv_tvo.txt", memo);
+			$writememh("d:/cores5/ft64/v5/rtl/fpUnit/fpDiv_tvdo.txt", memdo);
 			$finish;
 		end
-		state <= 3;
+		state <= 4;
 	end
-4'd3:	state <= 4;
 4'd4:	state <= 5;
 4'd5:	state <= 1;
 endcase
 end
 
-fpDivnr #(32) u1 (clk, clk4x, 1'b1, ld, 1'b0, a, b, o, 3'b000);//, sign_exe, inf, overflow, underflow);
-fpDivnr #(64) u2 (clk, clk4x, 1'b1, ld, 1'b0, ad, bd, od, 3'b000, done);//, sign_exe, inf, overflow, underflow);
+fpDivnr #(32) u1 (rst, clk, clk4x, 1'b1, ld, 1'b0, a, b, o, 3'b000);//, sign_exe, inf, overflow, underflow);
+fpDivnr #(64) u2 (rst, clk, clk4x, 1'b1, ld, 1'b0, ad, bd, od, 3'b000, done);//, sign_exe, inf, overflow, underflow);
 
 endmodule

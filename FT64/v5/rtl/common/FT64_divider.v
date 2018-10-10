@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2013-2017  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2013-2018  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -61,10 +61,48 @@ wire b0 = bb <= r;
 wire [WID-1:0] r1 = b0 ? r - bb : r;
 
 initial begin
-    q = 64'd0;
-    r = 64'd0;
-    qo = 64'd0;
-    ro = 64'd0;
+  q = 64'd0;
+  r = 64'd0;
+  qo = 64'd0;
+  ro = 64'd0;
+end
+
+always @(posedge clk)
+if (rst)
+	state <= IDLE;
+else
+	case(state)
+	IDLE:
+		if (ld)
+			state <= DIV;
+	DIV:
+		if (dvByZr)
+			state <= DONE;
+		else if (cnt_done)
+			state <= DONE;
+	DONE:
+		state <= IDLE;
+	default:	state <= IDLE;
+	endcase
+
+always @(posedge clk)
+if (rst)
+	cnt <= 8'h00;
+else begin
+	if (abort)
+	  cnt <= 8'd00;
+	else if (ld)
+		cnt <= WID+1;
+	else if (!cnt_done)
+		cnt <= cnt - 8'd1;
+end
+
+always @(posedge clk)
+if (rst)
+	dvByZr <= 1'b0;
+else begin
+	if (ld)
+		dvByZr <= b=={WID{1'b0}};
 end
 
 always @(posedge clk)
@@ -74,16 +112,9 @@ if (rst) begin
 	r <= {WID{1'b0}};
 	qo <= {WID{1'b0}};
 	ro <= {WID{1'b0}};
-	cnt <= 8'd0;
-	dvByZr <= 1'b0;
-	state <= IDLE;
 end
 else
 begin
-if (abort)
-    cnt <= 8'd00;
-else if (!cnt_done)
-	cnt <= cnt - 8'd1;
 
 case(state)
 IDLE:
@@ -95,8 +126,8 @@ IDLE:
 		end
 		else if (sgnus) begin
 			q <= a[WID-1] ? -a : a;
-            bb <= b;
-            so <= a[WID-1];
+      bb <= b;
+      so <= a[WID-1];
 		end
 		else begin
 			q <= a;
@@ -104,18 +135,13 @@ IDLE:
 			so <= 1'b0;
 			$display("bb=%d", b);
 		end
-		dvByZr <= b=={WID{1'b0}};
 		r <= {WID{1'b0}};
-		cnt <= WID+1;
-		state <= DIV;
 	end
 DIV:
-	if (!cnt_done) begin
+	if (!cnt_done && !dvByZr) begin
 		$display("cnt:%d r1=%h q[63:0]=%h", cnt,r1,q);
 		q <= {q[WID-2:0],b0};
 		r <= {r1,q[WID-1]};
-		if (dvByZr)
-			cnt <= 8'h00;
 	end
 	else begin
 		$display("cnt:%d r1=%h q[63:0]=%h", cnt,r1,q);
@@ -133,11 +159,8 @@ DIV:
 			qo <= dvByZr ? {WID-1{1'b1}} : q;
 			ro <= dvByZr ? {WID-1{1'b1}} : r[WID:1];
 		end
-		state <= DONE;
 	end
-DONE:
-	state <= IDLE;
-default: state <= IDLE;
+default: ;
 endcase
 end
 

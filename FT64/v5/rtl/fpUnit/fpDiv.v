@@ -34,8 +34,9 @@
 // ============================================================================
 
 `include "fp_defines.v"
+//`define GOLDSCHMIDT	1'b1
 
-module fpDiv(clk, clk4x, ce, ld, op, a, b, o, done, sign_exe, overflow, underflow);
+module fpDiv(rst, clk, clk4x, ce, ld, op, a, b, o, done, sign_exe, overflow, underflow);
 
 parameter WID = 128;
 localparam MSB = WID-1;
@@ -76,7 +77,7 @@ localparam FADD = WID==128 ? 9 :
 				  
 localparam FX = (FMSB+2)*2-1;	// the MSB of the expanded fraction
 localparam EX = FX + 1 + EMSB + 1 + 1 - 1;
-
+input rst;
 input clk;
 input clk4x;
 input ce;
@@ -90,10 +91,10 @@ output overflow;
 output underflow;
 
 // registered outputs
-reg sign_exe;
-reg inf;
-reg	overflow;
-reg	underflow;
+reg sign_exe=0;
+reg inf=0;
+reg	overflow=0;
+reg	underflow=0;
 
 reg so;
 reg [EMSB:0] xo;
@@ -110,7 +111,11 @@ wire [FMSB:0] qNaN  = {1'b1,{FMSB{1'b0}}};
 
 // variables
 wire [EMSB+2:0] ex1;	// sum of exponents
+`ifndef GOLDSCHMIDT
 wire [(FMSB+FADD)*2-1:0] divo;
+`else
+wire [(FMSB+1)*2-1:0] divo;
+`endif
 
 // Operands
 wire sa, sb;			// sign bit
@@ -121,7 +126,7 @@ wire az, bz;
 wire aInf, bInf;
 wire aNan,bNan;
 wire done1;
-wire [7:0] lzcnt;
+wire signed [7:0] lzcnt;
 
 // -----------------------------------------------------------
 // - decode the input operands
@@ -137,7 +142,11 @@ fpDecomp #(WID) u1b (.i(b), .sgn(sb), .exp(xb), .fract(fractb), .xz(b_dn), .vz(b
 // - correct the exponent for denormalized operands
 // - adjust the difference by the bias (add 127)
 // - also factor in the different decimal position for division
-assign ex1 = (xa|a_dn) - (xb|b_dn) + bias + FMSB + (FADD-1) - lzcnt;
+`ifndef GOLDSCHMIDT
+assign ex1 = (xa|a_dn) - (xb|b_dn) + bias + FMSB + (FADD-1) - lzcnt - 8'd1;
+`else
+assign ex1 = (xa|a_dn) - (xb|b_dn) + bias + FMSB - lzcnt;
+`endif
 
 // check for exponent underflow/overflow
 wire under = ex1[EMSB+2];	// MSB set = negative exponent
@@ -145,8 +154,17 @@ wire over = (&ex1[EMSB:0] | ex1[EMSB+1]) & !ex1[EMSB+2];
 
 // Perform divide
 // Divider width must be a multiple of four
+`ifndef GOLDSCHMIDT
 fpdivr16 #(FMSB+FADD) u2 (.clk(clk), .ld(ld), .a({3'b0,fracta,8'b0}), .b({3'b0,fractb,8'b0}), .q(divo), .r(), .done(done1), .lzcnt(lzcnt));
 wire [(FMSB+FADD)*2-1:0] divo1 = divo[(FMSB+FADD)*2-1:0] << (lzcnt-2);
+`else
+DivGoldschmidt #(.WID(FMSB+2),.WHOLE(1),.POINTS(FMSB+1))
+	u2 (.rst(rst), .clk(clk), .ld(ld), .a(fracta), .b(fractb), .q(divo), .done(done1), .lzcnt(lzcnt));
+wire [(FMSB+2)*2+1:0] divo1 =
+	lzcnt > 1 ? divo << (lzcnt-8'd2) :
+	divo >> (8'd2-lzcnt);
+	;
+`endif
 delay1 #(1) u3 (.clk(clk), .ce(ce), .i(done1), .o(done));
 
 
@@ -154,39 +172,53 @@ delay1 #(1) u3 (.clk(clk), .ce(ce), .i(done1), .o(done));
 wire qNaNOut = (az&bz)|(aInf&bInf);
 
 always @(posedge clk)
-	if (ce) begin
+// Simulation likes to see these values reset to zero on reset. Otherwise the
+// values propagate in sim as X's.
+if (rst) begin
+	xo <= 1'd0;
+	mo <= 1'd0;
+	so <= 1'd0;
+	sign_exe <= 1'd0;
+	overflow <= 1'd0;
+	underflow <= 1'd0;
+end
+else if (ce) begin
 		if (done1) begin
 			casez({qNaNOut|aNan|bNan,bInf,bz,over,under})
-			5'b1????:		xo = infXp;	// NaN exponent value
-			5'b01???:		xo = 0;		// divide by inf
-			5'b001??:		xo = infXp;	// divide by zero
-			5'b0001?:		xo = infXp;	// overflow
-			5'b00001:		xo = 0;		// underflow
-			default:		xo = ex1;	// normal or underflow: passthru neg. exp. for normalization
+			5'b1????:		xo <= infXp;	// NaN exponent value
+			5'b01???:		xo <= 1'd0;		// divide by inf
+			5'b001??:		xo <= infXp;	// divide by zero
+			5'b0001?:		xo <= infXp;	// overflow
+			5'b00001:		xo <= 1'd0;		// underflow
+			default:		xo <= ex1;	// normal or underflow: passthru neg. exp. for normalization
 			endcase
 
 			casez({aNan,bNan,qNaNOut,bInf,bz,over,aInf&bInf,az&bz})
-			8'b1???????:    mo = {1'b1,a[FMSB:0],{FMSB+1{1'b0}}};
-			8'b01??????:    mo = {1'b1,b[FMSB:0],{FMSB+1{1'b0}}};
-			8'b001?????:	mo = {1'b1,qNaN[FMSB:0]|{aInf,1'b0}|{az,bz},{FMSB+1{1'b0}}};
-			8'b0001????:	mo = 0;	// div by inf
-			8'b00001???:	mo = 0;	// div by zero
-			8'b000001??:	mo = 0;	// Inf exponent
-			8'b0000001?:	mo = {1'b1,qNaN|`QINFDIV,{FMSB+1{1'b0}}};	// infinity / infinity
-			8'b00000001:	mo = {1'b1,qNaN|`QZEROZERO,{FMSB+1{1'b0}}};	// zero / zero
-			default:		mo = divo1[(FMSB+FADD)*2-1:(FADD-2)*2-2];	// plain div
+			8'b1???????:    mo <= {1'b1,a[FMSB:0],{FMSB+1{1'b0}}};
+			8'b01??????:    mo <= {1'b1,b[FMSB:0],{FMSB+1{1'b0}}};
+			8'b001?????:	mo <= {1'b1,qNaN[FMSB:0]|{aInf,1'b0}|{az,bz},{FMSB+1{1'b0}}};
+			8'b0001????:	mo <= 1'd0;	// div by inf
+			8'b00001???:	mo <= 1'd0;	// div by zero
+			8'b000001??:	mo <= 1'd0;	// Inf exponent
+			8'b0000001?:	mo <= {1'b1,qNaN|`QINFDIV,{FMSB+1{1'b0}}};	// infinity / infinity
+			8'b00000001:	mo <= {1'b1,qNaN|`QZEROZERO,{FMSB+1{1'b0}}};	// zero / zero
+`ifndef GOLDSCHMIDT
+			default:		mo <= divo1[(FMSB+FADD)*2-1:(FADD-2)*2-2];	// plain div
+`else
+			default:		mo <= {divo1,2'b0};	// plain div
+`endif
 			endcase
 
-			so  		= sa ^ sb;
-			sign_exe 	= sa & sb;
-			overflow	= over;
-			underflow 	= under;
+			so  		<= sa ^ sb;
+			sign_exe 	<= sa & sb;
+			overflow	<= over;
+			underflow 	<= under;
 		end
 	end
 
 endmodule
 
-module fpDivnr(clk, clk4x, ce, ld, op, a, b, o, rm, done, sign_exe, inf, overflow, underflow);
+module fpDivnr(rst, clk, clk4x, ce, ld, op, a, b, o, rm, done, sign_exe, inf, overflow, underflow);
 parameter WID=32;
 localparam MSB = WID-1;
 localparam EMSB = WID==128 ? 14 :
@@ -214,6 +246,7 @@ localparam FMSB = WID==128 ? 111 :
 
 localparam FX = (FMSB+2)*2-1;	// the MSB of the expanded fraction
 localparam EX = FX + 1 + EMSB + 1 + 1 - 1;
+input rst;
 input clk;
 input clk4x;
 input ce;
@@ -233,13 +266,13 @@ wire sign_exe1, inf1, overflow1, underflow1;
 wire [MSB+3:0] fpn0;
 wire done1;
 
-fpDiv       #(WID) u1 (clk, clk4x, ce, ld, op, a, b, o1, done1, sign_exe1, overflow1, underflow1);
+fpDiv       #(WID) u1 (rst, clk, clk4x, ce, ld, op, a, b, o1, done1, sign_exe1, overflow1, underflow1);
 fpNormalize #(WID) u2(.clk(clk), .ce(ce), .under(underflow1), .i(o1), .o(fpn0) );
 fpRoundReg  #(WID) u3(.clk(clk), .ce(ce), .rm(rm), .i(fpn0), .o(o) );
 delay2      #(1)   u4(.clk(clk), .ce(ce), .i(sign_exe1), .o(sign_exe));
 delay2      #(1)   u5(.clk(clk), .ce(ce), .i(inf1), .o(inf));
 delay2      #(1)   u6(.clk(clk), .ce(ce), .i(overflow1), .o(overflow));
 delay2      #(1)   u7(.clk(clk), .ce(ce), .i(underflow1), .o(underflow));
-delay2		#(1)   u8(.clk(clk), .ce(ce), .i(done1), .o(done));
+delay2		  #(1)   u8(.clk(clk), .ce(ce), .i(done1), .o(done));
 endmodule
 

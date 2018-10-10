@@ -2298,7 +2298,8 @@ casez(isn[`INSTRUCTION_OP])
 	`DIV,`DIVU,`DIVSU,
 	`MOD,`MODU,`MODSU,
 	`MUL,`MULU,`MULSU,
-	`MULH,`MULUH,`MULSUH:
+	`MULH,`MULUH,`MULSUH,
+	`FXMUL:
 		case(isn[25:23])
 		3'b000: fnWe = 8'h01;
 		3'b001:	fnWe = 8'h03;
@@ -2861,6 +2862,7 @@ casez(isn[`INSTRUCTION_OP])
 	    `MULUH:  IsRFW = TRUE;
 	    `MULSUH: IsRFW = TRUE;
 	    `MULH:   IsRFW = TRUE;
+	    `FXMUL:	IsRFW = TRUE;
 	    `DIVU:  IsRFW = TRUE;
 	    `DIVSU: IsRFW = TRUE;
 	    `DIV:IsRFW = TRUE;
@@ -8292,6 +8294,7 @@ BIDLE:
             end
         end
 `ifndef HAS_WB
+				// Check write buffer enable ?
         else if (mem1_available && dram0==`DRAMSLOT_BUSY && dram0_store) begin
 `ifdef SUPPORT_DBG        	
             if (dbg_smatch0) begin

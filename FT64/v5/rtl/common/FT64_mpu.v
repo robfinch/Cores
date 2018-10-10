@@ -25,6 +25,8 @@
 //
 // ============================================================================
 //
+//`define CARD_MEMORY	1'b1
+
 module FT64_mpu(hartid_i,rst_i, clk4x_i, clk_i, tm_clk_i,
 	pit_clk2, pit_gate2, pit_out2,
 	irq_o,
@@ -109,7 +111,11 @@ wire pulse60;
 wire sptr_o;
 
 wire cs_pit = adr[31:8]==24'hFFDC11;
+`ifdef CARD_MEMORY
 wire cs_crd = adr[31:11]==21'd0;	// $00000000 in virtual address space
+`else
+wire cs_crd = 1'b0;
+`endif
 
 // Need to recreate the a2 address bit for 32 bit peripherals.
 wire [31:0] adr32 = {adr[31:3],|sel_o[7:4],2'b00};
@@ -214,6 +220,7 @@ FT64_mmu ummu1
 	.wrv_o(wrv)
 );
 
+`ifdef CARD_MEMORY
 CardMemory ucrd1
 (
 	.clk_i(clk_i),
@@ -226,7 +233,10 @@ CardMemory ucrd1
 	.stp(1'b0),
 	.mapno(pcr[5:0])
 );
-
+`else
+assign crd_dato = 64'd0;
+assign crd_ack = 1'b0;
+`endif
 
 always @*
 casez({mmu_ack,pic_ack,pit_ack,crd_ack})

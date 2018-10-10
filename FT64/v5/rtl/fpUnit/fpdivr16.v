@@ -36,7 +36,7 @@ input [WID-1:0] b;
 output reg [WID*2-1:0] q;
 output reg [WID-1:0] r;
 output reg done;
-output reg [7:0] lzcnt;
+output reg [7:0] lzcnt = 0;
 
 initial begin
 	if (WID % 4) begin
@@ -50,7 +50,7 @@ reg [8:0] cnt;				// iteration count
 reg [DMSB+1:0] ri = 0; 
 wire b0,b1,b2,b3;
 wire [DMSB+1:0] r1,r2,r3,r4;
-reg gotnz;
+reg gotnz = 0;
 
 wire [7:0] maxcnt;
 wire [2:0] n1;

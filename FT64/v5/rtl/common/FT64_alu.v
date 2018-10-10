@@ -126,6 +126,7 @@ case(isn[`INSTRUCTION_OP])
   case(isn[`INSTRUCTION_S2])
   `MULU,`MULSU,`MUL: IsMul = TRUE;
   `MULUH,`MULSUH,`MULH: IsMul = TRUE;
+  `FXMUL: IsMul = TRUE;
   default:    IsMul = FALSE;
   endcase
 `MULUI,`MULI:  IsMul = TRUE;
@@ -163,6 +164,7 @@ case(isn[`INSTRUCTION_OP])
 `R2:
   case(isn[`INSTRUCTION_S2])
   `MUL,`DIV,`MOD,`MULH:   IsSgn = TRUE;
+  `FXMUL: IsSgn = TRUE;
   default:    IsSgn = FALSE;
   endcase
 `MULI,`DIVI,`MODI:    IsSgn = TRUE;
@@ -966,15 +968,21 @@ case(instr[`INSTRUCTION_OP])
 	    `MUX:       for (n = 0; n < 64; n = n + 1)
 	                    o[n] <= a[n] ? b[n] : c[n];
 	    `MULU,`MULSU,`MUL:
-	        case(sz)
-	        byt:				o[63:0] = prod80;
-	        byt_para:		o[63:0] = {prod87[7:0],prod86[7:0],prod85[7:0],prod84[7:0],prod83[7:0],prod82[7:0],prod81[7:0],prod80[7:0]};
-	        char:				o[63:0] = prod160;
-	        char_para:	o[63:0] = {prod163[15:0],prod162[15:0],prod161[15:0],prod160[15:0]};
-					half: 			o[63:0] = prod320;
-					half_para:	o[63:0] = {prod321[31:0],prod320[31:0]};
-					default:		o[63:0] = prod[DBW-1:0];
-					endcase
+        case(sz)
+        byt:				o[63:0] = prod80;
+        byt_para:		o[63:0] = {prod87[7:0],prod86[7:0],prod85[7:0],prod84[7:0],prod83[7:0],prod82[7:0],prod81[7:0],prod80[7:0]};
+        char:				o[63:0] = prod160;
+        char_para:	o[63:0] = {prod163[15:0],prod162[15:0],prod161[15:0],prod160[15:0]};
+				half: 			o[63:0] = prod320;
+				half_para:	o[63:0] = {prod321[31:0],prod320[31:0]};
+				default:		o[63:0] = prod[DBW-1:0];
+				endcase
+			`FXMUL:
+				case(sz)
+				half:				o = prod320[47:16] + prod320[15];
+				half_para:	o = {prod321[47:16] + prod321[15],prod320[47:16] + prod320[15]};
+				default:		o = prod[95:32] + prod[31];
+				endcase
 	    `DIVU:   o[63:0] = BIG ? divq : 64'hCCCCCCCCCCCCCCCC;
 	    `DIVSU:  o[63:0] = BIG ? divq : 64'hCCCCCCCCCCCCCCCC;
 	    `DIV:    o[63:0] = BIG ? divq : 64'hCCCCCCCCCCCCCCCC;
@@ -1263,6 +1271,8 @@ case(instr[`INSTRUCTION_OP])
 //    `ASL,`ASLI:     exc <= (BIG & aslo & excen[2]) ? `FLT_OFL : `FLT_NONE;
     `MUL,`MULSU:    exc <= prod[63] ? (prod[127:64] != 64'hFFFFFFFFFFFFFFFF && excen[3] ? `FLT_OFL : `FLT_NONE ):
                            (prod[127:64] != 64'd0 && excen[3] ? `FLT_OFL : `FLT_NONE);
+    `FXMUL:     exc <= prod[95] ? (prod[127:96] != 32'hFFFFFFFF && excen[3] ? `FLT_OFL : `FLT_NONE ):
+                           (prod[127:96] != 32'd0 && excen[3] ? `FLT_OFL : `FLT_NONE);
     `MULU:      exc <= prod[127:64] != 64'd0 && excen[3] ? `FLT_OFL : `FLT_NONE;
     `DIV,`DIVSU,`DIVU: exc <= BIG && excen[4] & divByZero ? `FLT_DBZ : `FLT_NONE;
     `MOD,`MODSU,`MODU: exc <= BIG && excen[4] & divByZero ? `FLT_DBZ : `FLT_NONE;

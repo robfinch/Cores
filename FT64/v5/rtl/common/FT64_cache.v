@@ -63,7 +63,7 @@ reg [pLines-1:0] valid8;
 
 initial begin
 	for (n = 0; n < pLines; n = n + 1)
-		mem[n][289:288] <= 2'b00;
+		mem[n] <= 2'b00;
 end
 
 always  @(posedge clk)

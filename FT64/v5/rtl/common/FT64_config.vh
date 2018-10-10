@@ -24,7 +24,7 @@
 //
 // The following line is to enable simulation versions of some modules.
 // Comment out for synthesis.
-`define SIM		1'b1
+//`define SIM		1'b1
 
 //`define SUPPORT_SMT		1'b1
 //`define SUPPORT_VECTOR	1'b1
@@ -62,15 +62,15 @@
 `define NUM_IDU		1				// number of instruction decode units (1-3)
 `define NUM_ALU		1				// number of ALU's (1-2)
 `define NUM_MEM		1				// number of memory queues (1-3)
-`define NUM_FPU		1				// number of floating-point units (0-2)
+`define NUM_FPU		0				// number of floating-point units (0-2)
 // Note that even with just a single commit bus, multiple instructions may
 // commit if they do not target any registers. Up to three instruction may
 // commit even with just a single bus.
 `define NUM_CMT		1				// number of commit busses (1-2)
 // Comment out the following to remove FCU enhancements (branch predictor, BTB, RSB)
-`define FCU_ENH		1
+//`define FCU_ENH		1
 // Comment out the following to remove bypassing logic on the functional units
-`define FU_BYPASS	1
+//`define FU_BYPASS	1
 
 // These are unit availability settings at reset.
 `define ID1_AVAIL	1'b1
@@ -87,10 +87,10 @@
 
 // Comment out to remove the write buffer from the core.
 `define HAS_WB	1'b1
-`define	WB_DEPTH	8			// must be one more than desired depth
+`define	WB_DEPTH	5			// must be one more than desired depth
 
 // Uncomment to allow SIMD operations
-`define SIMD	1'b1
+//`define SIMD	1'b1
 
 // Comment the following to disable registering the output of instruction decoders.
 // Inline decoding should not be registered.
