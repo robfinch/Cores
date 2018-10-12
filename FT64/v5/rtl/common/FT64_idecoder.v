@@ -491,13 +491,30 @@ input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
 `R2:
 	if (isn[`INSTRUCTION_L2]==2'b01)
-	    case(isn[47:42])
-	    `SHIFTR: IsShift48 = TRUE;
-	    default: IsShift48 = FALSE;
-	    endcase
-    else
-    	IsShift48 = FALSE;
+    case(isn[47:42])
+    `SHIFTR: IsShift48 = TRUE;
+    default: IsShift48 = FALSE;
+    endcase
+  else
+  	IsShift48 = FALSE;
 default: IsShift48 = FALSE;
+endcase
+endfunction
+
+function IsShift;
+input [47:0] isn;
+case(isn[`INSTRUCTION_OP])
+`R2:
+	if (isn[`INSTRUCTION_L2]==2'b00)
+    case(isn[31:26])
+    `SHIFTR: IsShift = TRUE;
+    `SHIFT31: IsShift = TRUE;
+    `SHIFT63: IsShift = TRUE;
+    default: IsShift = FALSE;
+    endcase
+  else
+  	IsShift = FALSE;
+default: IsShift = FALSE;
 endcase
 endfunction
 
@@ -935,6 +952,11 @@ default:    Source3Valid = TRUE;
 endcase
 endfunction
 
+wire isRet = IsRet(instr);
+wire isJal = IsJAL(instr);
+wire isBrk = IsBrk(instr);
+wire isRti = IsRti(instr);
+
 `ifdef REGISTER_DECODE
 always @(posedge clk)
 `else
@@ -962,11 +984,14 @@ begin
 //	bus[`IB_A2V]   <= Source2Valid(instr);
 //	bus[`IB_A1V]   <= Source1Valid(instr);
 	bus[`IB_IRQ]	 <= IsIrq(instr);
-	bus[`IB_BRK]	 <= IsBrk(instr);
-	bus[`IB_RTI]	 <= IsRti(instr);
-	bus[`IB_RET]	 <= IsRet(instr);
-	bus[`IB_JAL]	 <= IsJAL(instr);
-	bus[`IB_BT]    <= (IsBranch(instr) && predict_taken);
+	bus[`IB_BRK]	 <= isBrk;
+	bus[`IB_RTI]	 <= isRti;
+	bus[`IB_RET]	 <= isRet;
+	bus[`IB_JAL]	 <= isJal;
+	// IB_BT is now used to indicate when to update the branch target buffer.
+	// This occurs when one of the instructions with an unknown or calculated
+	// target is present.
+	bus[`IB_BT]		 <= isJal | isRet | isBrk | isRti;
 	bus[`IB_ALU]   <= IsALU;
 	bus[`IB_ALU0]  <= IsAlu0Only(instr);
 	bus[`IB_FPU]   <= IsFPU(instr);
@@ -983,7 +1008,7 @@ begin
 	bus[`IB_RMW]		<= IsCAS(instr) || IsAMO(instr) || IsInc(instr);
 	bus[`IB_MEMDB]	<= IsMemdb(instr);
 	bus[`IB_MEMSB]	<= IsMemsb(instr);
-	bus[`IB_SHFT48] <= IsShift48(instr);
+	bus[`IB_SHFT]   <= IsShift48(instr)|IsShift(instr);
 	bus[`IB_SEI]		<= IsSEI(instr);
 	bus[`IB_AQ]			<= (IsAMO(instr)|IsLWRX(instr)|IsSWCX(instr)) & instr[25];
 	bus[`IB_RL]			<= (IsAMO(instr)|IsLWRX(instr)|IsSWCX(instr)) & instr[24];

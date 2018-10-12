@@ -468,7 +468,7 @@
 `define IB_RMW		19
 `define IB_MEMDB	18
 `define IB_MEMSB	17
-`define IB_SHFT48	16
+`define IB_SHFT  	16
 `define IB_SEI		15
 `define IB_AQ			14
 `define IB_RL			13

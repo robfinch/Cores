@@ -25,7 +25,7 @@
 `include "FT64_defines.vh"
 
 module FT64_alu(rst, clk, ld, abort, instr, a, b, c, pc, tgt, tgt2, ven, vm, sbl, sbu,
-    csr, o, ob, done, idle, excen, exc, thrd, ptrmask, state, mem, shift48);
+    csr, o, ob, done, idle, excen, exc, thrd, ptrmask, state, mem, shift);
 parameter DBW = 64;
 parameter BIG = 1'b1;
 parameter SUP_VECTOR = 1;
@@ -58,7 +58,7 @@ input thrd;
 input [63:0] ptrmask;
 input [1:0] state;
 input mem;
-input shift48;
+input shift;
 
 parameter byt = 3'd0;
 parameter char = 3'd1;
@@ -73,7 +73,7 @@ integer n;
 
 reg adrDone, adrIdle;
 reg [63:0] addro;
-reg [63:0] addr8;
+reg [63:0] shift8;
 
 wire [7:0] a8 = a[7:0];
 wire [15:0] a16 = a[15:0];
@@ -112,7 +112,7 @@ wire mult_done, mult_idle, div_done, div_idle;
 wire aslo;
 wire [6:0] clzo,cloo,cpopo;
 wire [63:0] shftho;
-reg [34:0] addr9;
+reg [63:0] shift9;
 
 function IsMul;
 input [47:0] isn;
@@ -196,6 +196,9 @@ wire [2:0] sz =
 wire [63:0] bfout,shfto;
 wire [63:0] shftob;
 wire [63:0] shftco;
+
+always @(posedge clk)
+	shift9 <= shift8;
 
 FT64_bitfield #(DBW) ubf1
 (
@@ -783,29 +786,29 @@ case(instr[`INSTRUCTION_OP])
 			case(instr[35:33])
 			`ASL,`ASR,`ROL,`ROR:
 				case(instr[32:30])	// size
-				3'd0:	addr8 = {{56{shftob[7]}},shftob[7:0]};
-				3'd1:	addr8 = {{48{shftob[15]}},shftco[15:0]};
-				3'd2:	addr8 = {{32{shftho[31]}},shftho[31:0]};
-				3'd3,3'd7:	addr8 = shfto;
-				3'd4:	addr8 = shftob;
-				3'd5:	addr8 = shftco;
-				3'd6:	addr8 = shftho;
+				3'd0:	shift8 = {{56{shftob[7]}},shftob[7:0]};
+				3'd1:	shift8 = {{48{shftob[15]}},shftco[15:0]};
+				3'd2:	shift8 = {{32{shftho[31]}},shftho[31:0]};
+				3'd3,3'd7:	shift8 = shfto;
+				3'd4:	shift8 = shftob;
+				3'd5:	shift8 = shftco;
+				3'd6:	shift8 = shftho;
 				endcase
 			`SHL,`SHR:
 				case(instr[32:30])	// size
-				3'd0:	addr8 = {56'd0,shftob[7:0]};
-				3'd1:	addr8 = {48'd0,shftco[15:0]};
-				3'd2:	addr8 = {32'd0,shftho[31:0]};
-				3'd3,3'd7:	addr8 = shfto;
-				3'd4:	addr8 = shftob;
-				3'd5:	addr8 = shftco;
-				3'd6:	addr8 = shftho;
+				3'd0:	shift8 = {56'd0,shftob[7:0]};
+				3'd1:	shift8 = {48'd0,shftco[15:0]};
+				3'd2:	shift8 = {32'd0,shftho[31:0]};
+				3'd3,3'd7:	shift8 = shfto;
+				3'd4:	shift8 = shftob;
+				3'd5:	shift8 = shftco;
+				3'd6:	shift8 = shftho;
 				endcase
 			default:	o[63:0] = 64'hDCDCDCDCDCDCDCDC;
 			endcase
 			case(instr[35:33])
 			`ASL,`ASR,`SHL,`SHR,`ROL,`ROR:
-				o[63:0] = addr9;
+				o[63:0] = shift9;
 			default:	o[63:0] = 64'hDCDCDCDCDCDCDCDC;
 			endcase
 			end
@@ -992,7 +995,7 @@ case(instr[`INSTRUCTION_OP])
 			`LEAX:
 					begin
 					o[63:0] = BIG ? a + (b << instr[22:21]) : 64'hCCCCCCCCEEEEEEEE;
-					o[63:44] = PTR;
+					//o[63:44] = PTR;
 					end
 	    `MIN: 
 `ifdef SIMD
@@ -1169,7 +1172,7 @@ end
 always @(posedge clk)
 	if (ld)
 		adrDone <= FALSE;
-	else if (mem|shift48)
+	else if (mem|shift)
 		adrDone <= TRUE;
 
 always @(posedge clk)
@@ -1183,16 +1186,16 @@ case(instr[`INSTRUCTION_OP])
 			case(instr[41:36])
 			`R1:
 				case(instr[22:18])
-				`COM:	addro[63:0] = ~addr8;
-				`NOT:	addro[63:0] = ~|addr8;
-				`NEG:	addro[63:0] = -addr8;
+				`COM:	addro[63:0] = ~shift8;
+				`NOT:	addro[63:0] = ~|shift8;
+				`NEG:	addro[63:0] = -shift8;
 				default:	addro[63:0] = 64'hDCDCDCDCDCDCDCDC;
 				endcase
-			`ADD:	addro[63:0] = addr8 + c;
-			`SUB:	addro[63:0] = addr8 - c;
-			`AND:	addro[63:0] = addr8 & c;
-			`OR:	addro[63:0] = addr8 | c;
-			`XOR:	addro[63:0] = addr8 ^ c;
+			`ADD:	addro[63:0] = shift8 + c;
+			`SUB:	addro[63:0] = shift8 - c;
+			`AND:	addro[63:0] = shift8 & c;
+			`OR:	addro[63:0] = shift8 | c;
+			`XOR:	addro[63:0] = shift8 ^ c;
 			default:	addro[63:0] = 64'hDCDCDCDCDCDCDCDC;
 			endcase
 		default:	addro[63:0] = 64'hDCDCDCDCDCDCDCDC;
@@ -1221,7 +1224,7 @@ else begin
 		done <= div_done;
 	else if (IsShiftAndOp(instr) & BIG)
 		done <= sao_done;
-	else if (shift48)
+	else if (shift)
 		done <= adrDone;
 	else
 		done <= TRUE;
@@ -1244,7 +1247,7 @@ else begin
 		idle <= div_idle;
 	else if (IsShiftAndOp(instr) & BIG)
 		idle <= sao_idle;
-	else if (shift48)
+	else if (shift)
 		idle <= adrIdle;
 	else
 		idle <= TRUE;
