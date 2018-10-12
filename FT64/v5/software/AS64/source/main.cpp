@@ -30,6 +30,7 @@
 FilenameStack fns;
 
 int gCpu = 888;
+bool gpu = false;
 int verbose = 1;
 int debug = 1;
 int listing = 1;
@@ -254,12 +255,16 @@ int processOptions(int argc, char **argv)
 				 mm = 3;
 				 gCanCompress = 0;
 				 while(argv[nn][mm]) {
-					 if (argv[nn][mm]=='3')
+					 if (argv[nn][mm] == '3')
 						 gCpu = 'H';
-					 else if (argv[nn][mm]=='c')
+					 else if (argv[nn][mm] == 'c')
 						 gCanCompress = 1;
-					 else if (argv[nn][mm]=='n')
+					 else if (argv[nn][mm] == 'n')
 						 vebits = 64;
+					 else if (argv[nn][mm] == 'm')
+						 vebits = 32;
+					 else if (argv[nn][mm] == 'g')
+						 gpu = true;
 					 mm++;
 				 }
               }
@@ -2313,7 +2318,14 @@ int main(int argc, char *argv[])
 							binfile[kk+3], binfile[kk+2], binfile[kk+1], binfile[kk]);
 					}
 				}
-            }
+				else if (vebits == 32) {
+					for (kk = 0; kk < binndx; kk += 4) {
+						fprintf(vfp, "\trommem[%d] = 32'h%02X%02X%02X%02X;\n",
+							((((unsigned int)start_address + kk) / 4) % 16384), //checksum64((int64_t *)&binfile[kk]),
+							binfile[kk + 3], binfile[kk + 2], binfile[kk + 1], binfile[kk]);
+					}
+				}
+			}
 			/*
 			else if (gCpu=='G') {
                 for (kk = 0; kk < binndx; kk+=32) {

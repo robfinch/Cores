@@ -1165,6 +1165,16 @@ void LoadConstant(int64_t val, int rg)
 	return;
 }
 
+static void Lui32(int64_t val, int rg)
+{
+	emit_insn(
+		((val >> 14) << 13) |
+		(rg << 8) |
+		(0 << 6) |
+		0x27, !expand_flag, 4
+	);
+}
+
 static void Lui34(int64_t val, int rg)
 {
 	if (IsNBit(val, 49)) {
@@ -1336,7 +1346,7 @@ static void process_riop(int64_t opcode6)
 		opcode6 = 0x04LL;	// change to addi
 	}
 	// ADDI
-	if (opcode6 == 0x04) {
+	if (opcode6 == 0x04 && !gpu) {
 		if (Ra == Rt) {
 			if (Rt == regSP) {
 				if (val >= -128 && val < 128 && ((val & 7) == 0)) {
@@ -1363,7 +1373,7 @@ static void process_riop(int64_t opcode6)
 		}
 	}
 	// Compress ANDI ?
-	if (opcode6 == 0x08 && Ra == Rt && Ra != 0) {
+	if (opcode6 == 0x08 && Ra == Rt && Ra != 0 && !gpu) {
 		if (val > -16 && val < 16) {
 			emit_insn(
 				(2 << 12) |
@@ -1376,7 +1386,7 @@ static void process_riop(int64_t opcode6)
 		}
 	}
 	// Compress ORI ?
-	if (opcode6 == 0x09 && Ra == Rt && (Rtp = CmpReg(Ra)) >= 0) {
+	if (opcode6 == 0x09 && Ra == Rt && (Rtp = CmpReg(Ra)) >= 0 && !gpu) {
 		if (val > -16 && val < 16) {
 			emit_insn(
 				(4 << 12) |
@@ -1390,6 +1400,20 @@ static void process_riop(int64_t opcode6)
 		goto xit;
 	}
 	if (!IsNBit(val, 14)) {
+		if (gpu) {
+			if ((val >> 13) & 1)
+				Lui32(val + 0x2000, 23);
+			else
+				Lui32(val, 23);
+			emit_insn(
+				(val << 18) |
+				(23 << 13) |
+				(23 << 8) |
+				(0 << 6) |
+				0x04, !expand_flag, 4	// ADDI
+			);
+			goto xit;
+		}
 		if (!IsNBit(val, 30)) {
 			Lui34(val, 23);
 			emit_insn(
@@ -1619,29 +1643,46 @@ static void process_setop(int64_t opcode6)
 
 static void process_rrop(int64_t funct6, int64_t iop)
 {
-    int Ra,Rb,Rt,Rbp,Rtp;
-    char *p;
+  int Ra,Rb,Rt,Rbp,Rtp;
+  char *p;
 	int sz = 3;
+	int64_t instr;
 
-    p = inptr;
+	instr = 0LL;
+  p = inptr;
+	// fxdiv, transform
+	// - check for writeback indicator
+	if (gpu && (funct6 == 0x2B || funct6 == 0x11)) {
+		if (*p == '.') {
+			if (p[1] == 'w' || p[1] == 'W') {	// .wr or .write
+				instr = (1 << 25);
+				p++;
+				NextToken();
+			}
+			else if (p[1] == 's' || p[1] == 'S') {	// .st or .start
+				p++;
+				NextToken();
+			}
+		}
+	}
 	if (*p=='.')
 		getSz(&sz);
-    Rt = getRegisterX();
-    need(',');
-    Ra = getRegisterX();
-    need(',');
-    NextToken();
-    if (token=='#') {
-		if (iop < 0 && iop!=-4)
-			error("Immediate mode not supported");
-      inptr = p;
-      process_riop(iop);
-      return;
-    }
-    prevToken();
-    Rb = getRegisterX();
+  Rt = getRegisterX();
+  need(',');
+  Ra = getRegisterX();
+  need(',');
+  NextToken();
+  if (token=='#') {
+	if (iop < 0 && iop!=-4)
+		error("Immediate mode not supported");
+    inptr = p;
+    process_riop(iop);
+    return;
+  }
+  prevToken();
+  Rb = getRegisterX();
 	// Compress ADD
-	if (funct6 == 0x04 && Ra == Rt) {
+	if (funct6 == 0x04 && Ra == Rt && !gpu) {
 		emit_insn(
 			(1 << 12) |
 			(((Ra >> 1) & 0xF) << 8) |
@@ -1653,7 +1694,7 @@ static void process_rrop(int64_t funct6, int64_t iop)
 		goto xit;
 	}
 	// Compress SUB
-	if (funct6 == 0x05 && Ra == Rt && (Rtp = CmpReg(Rt)) >= 0 && (Rbp = CmpReg(Rb)) >= 0) {
+	if (funct6 == 0x05 && Ra == Rt && (Rtp = CmpReg(Rt)) >= 0 && (Rbp = CmpReg(Rb)) >= 0 && !gpu) {
 		emit_insn(
 			(4 << 12) |
 			(0 << 10) |
@@ -1667,7 +1708,7 @@ static void process_rrop(int64_t funct6, int64_t iop)
 		goto xit;
 	}
 	// Compress AND
-	if (funct6 == 0x08 && Ra == Rt && (Rtp = CmpReg(Rt)) >= 0 && (Rbp = CmpReg(Rb)) >= 0) {
+	if (funct6 == 0x08 && Ra == Rt && (Rtp = CmpReg(Rt)) >= 0 && (Rbp = CmpReg(Rb)) >= 0 && !gpu) {
 		emit_insn(
 			(4 << 12) |
 			(1 << 10) |
@@ -1681,7 +1722,7 @@ static void process_rrop(int64_t funct6, int64_t iop)
 		goto xit;
 	}
 	// Compress OR
-	if (funct6 == 0x09 && Ra == Rt && (Rtp = CmpReg(Rt)) >= 0 && (Rbp = CmpReg(Rb)) >= 0) {
+	if (funct6 == 0x09 && Ra == Rt && (Rtp = CmpReg(Rt)) >= 0 && (Rbp = CmpReg(Rb)) >= 0 && !gpu) {
 		emit_insn(
 			(4 << 12) |
 			(2 << 10) |
@@ -1695,7 +1736,7 @@ static void process_rrop(int64_t funct6, int64_t iop)
 		goto xit;
 	}
 	// Compress XOR
-	if (funct6 == 0x0A && Ra == Rt && (Rtp = CmpReg(Rt)) >= 0 && (Rbp = CmpReg(Rb)) >= 0) {
+	if (funct6 == 0x0A && Ra == Rt && (Rtp = CmpReg(Rt)) >= 0 && (Rbp = CmpReg(Rb)) >= 0 && !gpu) {
 		emit_insn(
 			(4 << 12) |
 			(3 << 10) |
@@ -1718,8 +1759,9 @@ static void process_rrop(int64_t funct6, int64_t iop)
 	    emit_insn((funct6<<26LL)||(0<<23)|(Rt<<18)|(Rb<<13)|(Ra<<8)|0x02,!expand_flag,4);
 			goto xit;
 	}
-    emit_insn((funct6<<26LL)|(sz << 23)|(Rt<<18)|(Rb<<13)|(Ra<<8)|0x02,!expand_flag,4);
-xit:
+    emit_insn(instr | (funct6<<26LL)|(sz << 23)|(Rt<<18)|(Rb<<13)|(Ra<<8)|0x02,!expand_flag,4);
+	xit:
+		prevToken();
 		ScanToEOL();
 }
        
@@ -2241,7 +2283,7 @@ static void process_bcc(int opcode6, int opcode4)
 	int fmt;
   int64_t val;
   int64_t disp, cdisp;
-	char *p1;
+	char *p1, *p2;
 	bool ins48 = false;
 
   fmt = GetFPSize();
@@ -2251,24 +2293,26 @@ static void process_bcc(int opcode6, int opcode4)
   need(',');
   Rb = getRegisterX();
   need(',');
+	p2 = inptr;
 	NextToken();
 	if (token=='#' && opcode4==0) {
 		inptr = p1;
 		process_beqi(0x32,0);
 		return;
 	}
+	inptr = p2;
 	val = expr();
-	disp = val - (code_address + 4);
-	cdisp = val - (code_address + 2);
-	if (!IsNBit(disp, 12)) {
-		error("Branch displacement too large");
+	disp = val - (code_address + 4LL);
+	cdisp = val - (code_address + 2LL);
+	if (!IsNBit(disp, 12LL)) {
+		printf("Branch displacement (%llX-%llX=%llX) too large %d.\n", val, code_address, disp, lineno);
 		disp = val - (code_address + 6);
-		ins48 = true;
+		//ins48 = true;
 	}
 	disp >>= 1;
 	cdisp >>= 1;
 	// Check for compressed bnez
-	if (opcode4 == 1 && Rb == 0 && IsNBit(cdisp,7)) {
+	if (opcode4 == 1 && Rb == 0 && IsNBit(cdisp,7) && !gpu) {
 		emit_insn(
 			(3 << 14) |
 			(((cdisp >> 1) & 0x3f) << 8) |
@@ -2279,7 +2323,7 @@ static void process_bcc(int opcode6, int opcode4)
 		return;
 	}
 	// compressed beqz
-	if (opcode4 == 0 && Rb == 0 && IsNBit(cdisp, 7)) {
+	if (opcode4 == 0 && Rb == 0 && IsNBit(cdisp, 7) && !gpu) {
 		emit_insn(
 			(2 << 14) |
 			(((cdisp >> 1) & 0x3f) << 8) |
@@ -2510,7 +2554,7 @@ static void process_bra(int oc)
 	}
 	disp >>= 1;
 	cdisp >>= 1;
-	if (cdisp > -512 && cdisp < 512) {	// disp+1 accounts for instruction size of 2 not 4
+	if (cdisp > -512 && cdisp < 512 && !gpu) {	// disp+1 accounts for instruction size of 2 not 4
 		emit_insn(
 			(7 << 12) |
 			(((cdisp >> 6) & 0xf) << 8) |
@@ -2642,20 +2686,30 @@ static void process_call(int opcode)
 				(Ra << 6) |
 				0x18,!expand_flag,4
 			);
-		else
+		else {
+			if (gpu) {
+				emit_insn(
+					(29 << 13) |
+					(Ra << 8) |
+					0x18,!expand_flag,4
+				);
+			}
 			// jal lr,[Ra]	- call [Ra]
 			//emit_insn(
 			//	(29 << 13) |
 			//	(Ra << 8) |
 			//	0x18,!expand_flag,4
 			//);
-			emit_insn(
-				(2 << 12) | 
-				(((29 >> 1) & 0xf) << 8) |
-				(3 << 6) |
-				((29 & 1) << 5) |
-				Ra,0,2
-			);
+			else {
+				emit_insn(
+					(2 << 12) |
+					(((29 >> 1) & 0xf) << 8) |
+					(3 << 6) |
+					((29 & 1) << 5) |
+					Ra, 0, 2
+				);
+			}
+		}
 		return;
 	}
 	if (code_bits > 27 && !IsNBit(val,40)) {
@@ -2685,11 +2739,11 @@ static void process_call(int opcode)
 				);
 		return;
 	}
-	if (!IsNBit(val, 24)) {
+	if (!IsNBit(val, 24) & !gpu) {
 		emit_insn(
 			((((val >> 1) & 0xFFFFFFFFFFLL)) << 8) |
 			(1 << 6) |
-			opcode, !expand_flag, 4
+			opcode, !expand_flag, 6
 		);
 		return;
 	}
@@ -2725,7 +2779,7 @@ static void process_ret()
 		val = expr();
 	}
 	// Compress ?
-	if (val >= 0 && val < 256) {
+	if (val >= 0 && val < 256 && !gpu) {
 		emit_insn(
 			(2 << 12) |
 			(((val >> 4) & 0x0F) << 8) |
@@ -2736,7 +2790,7 @@ static void process_ret()
 		return;
 	}
 	// If too large a constant, do the SP adjusment directly.
-	if (!IsNBit(val,30)) {
+	if (!IsNBit(val,30) && !gpu) {
 		LoadConstant(val,23);
 		// add.w r63,r63,r23
 		emit_insn(
@@ -2749,7 +2803,7 @@ static void process_ret()
 			);
 		val = 0;
 	}
-	ins48 = !IsNBit(val, 14);
+	ins48 = !IsNBit(val, 14) && !gpu;
 	emit_insn(
 		(val << 18LL) |
 		(regLR << 13) |
@@ -2977,15 +3031,14 @@ static void mem_voperand(int64_t *disp, int *regA, int *regB)
 }
 
 // ---------------------------------------------------------------------------
-// If the displacement is too large the instruction is converted to an
-// indexed form and the displacement loaded into a second register.
+// If the displacement is too large the displacment is loaded into r23.
 //
 // So
-//      sw   r2,$12345678[r2]
+//    sw    r2,$12345678[r2]
 // Becomes:
-//		ori  r23,r0,#$5678
-//      orq1 r23,#$1234
-//      sw   r2,[r2+r23]
+//		lui		r23,#$12345
+//    add   r23,r23,r2
+//    sw    $678[r23]
 //
 // sw disp[r1],r2
 // sw [r1+r2],r3
@@ -3031,7 +3084,7 @@ static void process_store(int64_t opcode6, int sz)
   val = disp;
 	if (Ra == 55)
 		val -= program_address;
-	if (sz == 4 && Ra == regSP) {
+	if (sz == 4 && Ra == regSP && !gpu) {
 		if ((val & 7) == 0) {
 			if (val >= -128 && val < 128) {
 				emit_insn(
@@ -3046,7 +3099,7 @@ static void process_store(int64_t opcode6, int sz)
 			}
 		}
 	}
-	if (sz == 4 && Ra == regFP) {
+	if (sz == 4 && Ra == regFP && !gpu) {
 		if ((val & 7) == 0) {
 			if (val >= -128 && val < 128) {
 				emit_insn(
@@ -3061,7 +3114,7 @@ static void process_store(int64_t opcode6, int sz)
 			}
 		}
 	}
-	if (!IsNBit(val,30)) {
+	if (!IsNBit(val,30) && !gpu) {
 		LoadConstant(val,23);
 		// Change to indexed addressing
 		switch (sz) {
@@ -3081,14 +3134,37 @@ static void process_store(int64_t opcode6, int sz)
 		return;
 	}
 	if (!IsNBit(val, 14)) {
-		emit_insn(
-			((val|sz) << 18) |
-			(Rs << 13) |
-			(Ra << 8) |
-			(1 << 6) |
-			opcode6, !expand_flag, 6);
-		ScanToEOL();
-		return;
+		if (gpu) {
+			if (val & 0x2000)
+				Lui32(val + 2000, 23);
+			else
+				Lui32(val, 23);
+			emit_insn(
+				(0x04 << 26) |
+				(7 << 23) |
+				(23 << 18) |
+				(23 << 13) |
+				(Ra << 8) |
+				0x02, 0, 4
+			);
+			emit_insn(
+				((val | abs(sz)) << 18LL) |
+				(Rs << 13) |
+				(23 << 8) |
+				opcode6, !expand_flag, 4);
+			ScanToEOL();
+			return;
+		}
+		else {
+			emit_insn(
+				((val | sz) << 18) |
+				(Rs << 13) |
+				(Ra << 8) |
+				(1 << 6) |
+				opcode6, !expand_flag, 6);
+			ScanToEOL();
+			return;
+		}
 	}
 	emit_insn(
 		((val|sz) << 18) |
@@ -3224,7 +3300,7 @@ static void process_ldi()
   Rt = getRegisterX();
   expect(',');
   val = expr();
-	if (IsNBit(val, 5) && Rt != 0) {
+	if (IsNBit(val, 5) && Rt != 0 && !gpu) {
 		emit_insn(
 			(1 << 12) |
 			(((val >> 1) & 0x0f) << 8)|
@@ -3241,6 +3317,20 @@ static void process_ldi()
 			(Rt << 13) |
 			(0 << 8) |		// ADDI
 			0x04, !expand_flag, 4);
+		return;
+	}
+	else if (gpu) {
+		if ((val >> 13) & 1)
+			Lui32(val + 0x2000, 23);
+		else
+			Lui32(val, 23);
+		emit_insn(
+			(val << 18) |
+			(Rt << 13) |
+			(23 << 8) |
+			(0 << 6) |
+			0x04, !expand_flag, 4	// ADDI
+		);
 		return;
 	}
 	if (IsNBit(val, 30)) {
@@ -3321,6 +3411,8 @@ static void process_load(int64_t opcode6, int sz)
   expect(',');
   mem_operand(&disp, &Ra, &Rb, &Sc);
 	if (Ra > 0 && Rb > 0) {
+		if (gpu)
+			error("Indexed addressing not supported on GPU");
 		// Trap LEA, convert to LEAX opcode
 		if (opcode6==0x04) // ADD is really LEA
 			opcode6 = 0x18;
@@ -3346,7 +3438,7 @@ static void process_load(int64_t opcode6, int sz)
     val = disp;
 	if (Ra == 55)
 		val -= program_address;
-	if (sz == 4 && Ra == regSP) {
+	if (sz == 4 && Ra == regSP && !gpu) {
 		if ((val & 7) == 0) {
 			if (val >= -128 && val < 128) {
 				emit_insn(
@@ -3361,7 +3453,7 @@ static void process_load(int64_t opcode6, int sz)
 			}
 		}
 	}
-	if (sz == 4 && Ra == regFP) {
+	if (sz == 4 && Ra == regFP && !gpu) {
 		if ((val & 7) == 0) {
 			if (val >= -128 && val < 128) {
 				emit_insn(
@@ -3376,7 +3468,7 @@ static void process_load(int64_t opcode6, int sz)
 			}
 		}
 	}
-	if (!IsNBit(val, 30)) {
+	if (!IsNBit(val, 30) && !gpu) {
 		LoadConstant(val, 23);
 		// Change to indexed addressing
 		switch (sz) {
@@ -3397,14 +3489,36 @@ static void process_load(int64_t opcode6, int sz)
 		return;
 	}
 	if (!IsNBit(val, 14)) {
-		emit_insn(
-			((val|abs(sz)) << 18LL) |
-			(Rt << 13) |
-			(Ra << 8) |
-			(1 << 6) |
-			opcode6, !expand_flag, 6);
-		ScanToEOL();
-		return;
+		if (gpu) {
+			if (val & 0x2000)
+				Lui32(val + 2000, 23);
+			else
+				Lui32(val, 23);
+			emit_insn(
+				(0x04 << 26) |
+				(23 << 18) |
+				(23 << 13) |
+				(Ra << 8) |
+				0x02,0,4
+			);
+			emit_insn(
+				((val | abs(sz)) << 18LL) |
+				(Rt << 13) |
+				(23 << 8) |
+				opcode6, !expand_flag, 4);
+			ScanToEOL();
+			return;
+		}
+		else {
+			emit_insn(
+				((val | abs(sz)) << 18LL) |
+				(Rt << 13) |
+				(Ra << 8) |
+				(1 << 6) |
+				opcode6, !expand_flag, 6);
+			ScanToEOL();
+			return;
+		}
 	}
 	emit_insn(
 		((val|abs(sz)) << 18LL) |
@@ -3921,7 +4035,7 @@ static void process_shifti(int64_t op4)
      NextToken();
      val = expr();
 	 val &= 63;
-	 if (val < 32 && op4 == 0 && Rt==Ra) {
+	 if (val < 32 && op4 == 0 && Rt==Ra && !gpu) {
 		 emit_insn(
 			 (3 << 12) |
 			 (((val >> 1) & 0x0f) << 8) |
@@ -4536,6 +4650,7 @@ void FT64_processMaster()
 		case tk_div: process_rrop(0x3E,0x3E); break;
 		//case tk_divsu:	process_rrop(0x3D, -1); break;
 		case tk_divu: process_rrop(0x3C,0x3C); break;
+		case tk_divwait: process_rop(0x13); break;
 		case tk_dw:  process_dw(); break;
         case tk_end: goto j1;
         case tk_end_expand: expandedBlock = 0; break;
@@ -4565,6 +4680,8 @@ void FT64_processMaster()
 		case tk_fmul:	process_fprrop(0x08); break;
 		case tk_fneg:	process_fprop(0x14); break;
 		case tk_fsub:	process_fprrop(0x05); break;
+		case tk_fxdiv: process_rrop(0x2B, -1); break;
+		case tk_fxmul: process_rrop(0x3B, -1); break;
 		case tk_hint:	process_hint(); break;
 		case tk_ibne: process_ibne(0x26,2); break;
 		case tk_inc:	process_inc(0x1A); break;
@@ -4675,6 +4792,7 @@ void FT64_processMaster()
 		case tk_sxc: process_rop(0x19); break;
 		case tk_sxh: process_rop(0x18); break;
 		case tk_sync: emit_insn(0x04480002,!expand_flag,4); break;
+		case tk_transform: process_rrop(0x11, -1); break;
 		//case tk_unlink: emit_insn((0x1B << 26) | (0x1F << 16) | (30 << 11) | (0x1F << 6) | 0x02,0,4); break;
 		case tk_vadd: process_vrrop(0x04); break;
 		case tk_vadds: process_vsrrop(0x14); break;

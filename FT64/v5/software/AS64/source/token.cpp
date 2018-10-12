@@ -1173,7 +1173,19 @@ int NextToken()
                  inptr += 7;
                  return token = tk_dh_htbl;
              }
-             break;
+						 if (gCpu == 'F') {
+							 if ((inptr[1] == 'i' || inptr[1] == 'I') &&
+								 (inptr[2] == 'v' || inptr[2] == 'V') &&
+								 (inptr[3] == 'w' || inptr[3] == 'W') &&
+								 (inptr[4] == 'a' || inptr[4] == 'A') &&
+								 (inptr[5] == 'i' || inptr[4] == 'I') &&
+								 (inptr[6] == 't' || inptr[4] == 'T') &&
+								 isspace(inptr[7])) {
+								 inptr += 7;
+								 return (token = tk_divwait);
+							 }
+						 }
+						 break;
 
         // end eor eori endif endpublic extern equ eret es
         case 'e': case 'E':
@@ -1262,7 +1274,7 @@ int NextToken()
              break;
 
         // fill fabs fadd fb__
-		// fcmp fcx fdiv fmul fnabs fneg fsub fix2flt flt2fix ftst ftoi
+		// fcmp fcx fdiv fmul fnabs fneg fsub fix2flt flt2fix ftst ftoi fxdiv fxmul
         case 'f': case 'F':
              if ((inptr[1]=='i' || inptr[1]=='I') &&
                  (inptr[2]=='l' || inptr[2]=='L') &&
@@ -1471,6 +1483,24 @@ int NextToken()
 				 (isspace(inptr[4]) || inptr[4] == ':')) {
 				 inptr += 4;
 				 return (token = tk_file);
+			 }
+			 if (gCpu == 'F') {
+				 if ((inptr[1] == 'x' || inptr[1] == 'X') &&
+					 (inptr[2] == 'd' || inptr[2] == 'D') &&
+					 (inptr[3] == 'i' || inptr[3] == 'I') &&
+					 (inptr[4] == 'v' || inptr[4] == 'V') &&
+					 (isspace(inptr[5]) || inptr[5] == '.')) {
+					 inptr += 5;
+					 return token = tk_fxdiv;
+				 }
+				 if ((inptr[1] == 'x' || inptr[1] == 'X') &&
+					 (inptr[2] == 'm' || inptr[2] == 'M') &&
+					 (inptr[3] == 'u' || inptr[3] == 'U') &&
+					 (inptr[4] == 'l' || inptr[4] == 'L') &&
+					 (isspace(inptr[5]) || inptr[5] == '.')) {
+					 inptr += 5;
+					 return token = tk_fxmul;
+				 }
 			 }
 
              break;
@@ -2714,7 +2744,7 @@ int NextToken()
 			}
             break;
 
-        // tgt to tlbdis tlben tlbpb tlbrd tlbrdreg tlbwi tlbwr tlbwrreg
+        // tgt to tlbdis tlben tlbpb tlbrd tlbrdreg tlbwi tlbwr tlbwrreg transform
         case 't': case 'T':
              if ((inptr[1]=='o' || inptr[1]=='O') &&
                  isspace(inptr[2])) {
@@ -2807,7 +2837,21 @@ int NextToken()
                      return token = tk_tlbwrreg;
                  }
              }
-             break;
+						 if (gCpu == 'F') {
+							 if ((inptr[1] == 'r' || inptr[1] == 'R') &&
+								 (inptr[2] == 'a' || inptr[2] == 'A') &&
+								 (inptr[3] == 'n' || inptr[3] == 'N') &&
+								 (inptr[4] == 's' || inptr[4] == 'S') &&
+								 (inptr[5] == 'f' || inptr[5] == 'F') &&
+								 (inptr[6] == 'o' || inptr[6] == 'O') &&
+								 (inptr[7] == 'r' || inptr[7] == 'R') &&
+								 (inptr[8] == 'm' || inptr[8] == 'M') &&
+								 isspaceOrDot(inptr[9])) {
+								 inptr += 9;
+								 return token = tk_transform;
+							 }
+						 }
+						 break;
 		
 		// unlink
 		case 'u': case 'U':

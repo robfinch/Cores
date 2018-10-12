@@ -1,0 +1,484 @@
+                        	.file ".\boot\GPU.asm",1
+                        	.file ".\boot\GPU.asm",1
+                        	; GPU Grid
+                        	
+                        	SCREEN	equ	$00100000
+                        	REGS		equ	$FFD00000
+                        	CONTROL	equ	$00
+                        	STATUS	equ	$04
+                        	DEST_X	equ	$38
+                        	DEST_Y	equ	$3C
+                        	DEST_Z	equ	$40
+                        	TARGET_X0		equ	$AC
+                        	TARGET_Y0		equ	$B0
+                        	TARGET_X1		equ	$B4
+                        	TARGET_Y1		equ	$B8
+                        	CLIP_P0_X		equ	$74
+                        	CLIP_P0_Y		equ	$78
+                        	CLIP_P1_X		equ	$7C
+                        	CLIP_P1_Y		equ	$80
+                        	VAR_AREA	equ	$00105000
+                        	dest_p0_x	equ	VAR_AREA
+                        	dest_p0_y	equ	dest_p0_x + 4
+                        	dest_p0_z	equ	dest_p0_y + 4
+                        	dest_p1_x equ	dest_p0_z + 4
+                        	dest_p1_y equ dest_p1_x + 4
+                        	dest_p1_z equ dest_p1_y + 4
+                        	dest_p2_x equ	dest_p1_z + 4
+                        	dest_p2_y equ dest_p2_x + 4
+                        	dest_p2_z equ dest_p2_y + 4
+                        	
+                        	.file ".\boot\GPU.asm",32
+                        			code
+                        			org	$FFFC0000
+FFFC0000 28 80 00 FE                 			jmp	start
+                        	
+FFFC0004 00 00 00 00 00 00 00 00     			org		$FFFC0100
+FFFC000C 00 00 00 00 00 00 00 00     
+FFFC0014 00 00 00 00 00 00 00 00     
+FFFC001C 00 00 00 00 00 00 00 00     
+FFFC0024 00 00 00 00 00 00 00 00     
+FFFC002C 00 00 00 00 00 00 00 00     
+FFFC0034 00 00 00 00 00 00 00 00     
+FFFC003C 00 00 00 00 00 00 00 00     
+FFFC0044 00 00 00 00 00 00 00 00     
+FFFC004C 00 00 00 00 00 00 00 00     
+FFFC0054 00 00 00 00 00 00 00 00     
+FFFC005C 00 00 00 00 00 00 00 00     
+FFFC0064 00 00 00 00 00 00 00 00     
+FFFC006C 00 00 00 00 00 00 00 00     
+FFFC0074 00 00 00 00 00 00 00 00     
+FFFC007C 00 00 00 00 00 00 00 00     
+FFFC0084 00 00 00 00 00 00 00 00     
+FFFC008C 00 00 00 00 00 00 00 00     
+FFFC0094 00 00 00 00 00 00 00 00     
+FFFC009C 00 00 00 00 00 00 00 00     
+FFFC00A4 00 00 00 00 00 00 00 00     
+FFFC00AC 00 00 00 00 00 00 00 00     
+FFFC00B4 00 00 00 00 00 00 00 00     
+FFFC00BC 00 00 00 00 00 00 00 00     
+FFFC00C4 00 00 00 00 00 00 00 00     
+FFFC00CC 00 00 00 00 00 00 00 00     
+FFFC00D4 00 00 00 00 00 00 00 00     
+FFFC00DC 00 00 00 00 00 00 00 00     
+FFFC00E4 00 00 00 00 00 00 00 00     
+FFFC00EC 00 00 00 00 00 00 00 00     
+FFFC00F4 00 00 00 00                 
+FFFC00F8 00 00 00 00                 
+FFFC00FC 00 00 00 00                 
+                        	start:
+FFFC0100 04 20 00 3C                 			ldi		r1,#$0F00	; red
+FFFC0104 27 17 00 00                 			ldi		r2,#10000	; number of pixels
+FFFC0108 04 57 40 9C                 
+FFFC010C 27 17 08 00                 			ldi		r3,#SCREEN
+FFFC0110 04 77 00 00                 
+                        	.0001:
+FFFC0114 24 23 04 00                 			sc		r1,[r3]
+FFFC0118 04 63 08 00                 			add		r3,r3,#2
+FFFC011C 04 42 FC FF                 			sub		r2,r2,#1
+FFFC0120 30 02 04 FF                 			bne		r2,r0,.0001
+FFFC0124 28 80 00 FE                 			jmp		start
+                        	
+                        	;
+                        	table1:
+FFFC0128 00 01 00 00                 			dh		$100
+FFFC012C 00 02 00 00                 			dh		$200
+FFFC0130 00 04 00 00                 			dh		$400
+FFFC0134 00 08 00 00                 			dh		$800
+FFFC0138 00 00 04 00                 			dh		$40000
+FFFC013C 00 00 08 00                 			dh		$80000
+                        	table2:
+FFFC0140 FC 03 FC FF                 			dh		writeRect
+FFFC0144 6C 02 FC FF                 			dh		writeLine
+FFFC0148 1F 00 00 00                 			dh		writeTriangle
+FFFC014C 20 00 00 00                 			dh		writeCurve
+FFFC0150 A8 01 FC FF                 			dh		fwdPoint
+FFFC0154 54 02 FC FF                 			dh		transformPoint
+                        	
+                        	nextCmd:
+FFFC0158 27 17 E8 7F                 			ldi		r20,#REGS
+FFFC015C 04 97 02 00                 
+FFFC0160 20 34 08 00                 			lh		r1,CONTROL[r20]
+FFFC0164 27 17 06 00                 			and		r2,r1,#$100|$200|$400|$800|$40000|$80000
+FFFC0168 04 F7 02 3C                 
+FFFC016C 30 02 00 03                 			beq		r2,r0,.0003	; no command to execute
+FFFC0170 04 40 50 00                 			ldi		r2,#20
+                        	.0002:
+FFFC0174 27 17 FE 7F                 			lh		r3,table1[r2]
+FFFC0178 02 E2 5E 10                 
+FFFC017C 20 77 A8 04                 
+FFFC0180 02 61 90 21                 			and		r4,r1,r3
+FFFC0184 30 04 00 01                 			beq		r4,r0,.0001
+FFFC0188 27 17 FE 7F                 			lh		r3,table2[r2]
+FFFC018C 02 E2 5E 10                 
+FFFC0190 20 77 08 05                 
+FFFC0194 D8 00 00 00                 			jmp		[r3]
+                        	.0001:
+FFFC0198 04 42 F0 FF                 			sub		r2,r2,#4
+FFFC019C 30 02 4C FD                 			bge		r2,r0,.0002
+                        			; no graphics commands left to perform
+                        	.0003:
+FFFC01A0 24 14 14 00                 			sc		r0,STATUS[r20]
+FFFC01A4 28 AC 00 FE                 			jmp		nextCmd
+                        	
+                        	fwdPoint:
+FFFC01A8 20 54 E8 00                 			lh		r2,DEST_X[r20]
+FFFC01AC 20 74 F8 00                 			lh		r3,DEST_Y[r20]
+FFFC01B0 20 94 E8 00                 			lh		r4,DEST_X[r20]
+                        	storePoint:
+FFFC01B4 02 A1 C0 3C                 			shr		r5,r1,#16
+FFFC01B8 08 A5 0C 00                 			and		r5,r5,#3
+FFFC01BC 30 05 00 01                 			beq		r5,r0,.pt0
+FFFC01C0 32 25 80 03                 			beqi	r5,#1,.pt1
+FFFC01C4 32 45 00 06                 			beqi	r5,#2,.pt2
+FFFC01C8 24 14 14 00                 			sc		r0,STATUS[r20]
+FFFC01CC 28 AC 00 FE                 			jmp		nextCmd
+                        	.pt0:
+FFFC01D0 27 37 08 00                 			sh		r2,dest_p0_x
+FFFC01D4 02 E0 5E 10                 
+FFFC01D8 24 57 08 40                 
+FFFC01DC 27 37 08 00                 			sh		r3,dest_p0_y
+FFFC01E0 02 E0 5E 10                 
+FFFC01E4 24 77 18 40                 
+FFFC01E8 27 37 08 00                 			sh		r4,dest_p0_z
+FFFC01EC 02 E0 5E 10                 
+FFFC01F0 24 97 28 40                 
+FFFC01F4 24 14 14 00                 			sc		r0,STATUS[r20]
+FFFC01F8 28 AC 00 FE                 			jmp		nextCmd
+                        	.pt1:
+FFFC01FC 27 37 08 00                 			sh		r2,dest_p1_x
+FFFC0200 02 E0 5E 10                 
+FFFC0204 24 57 38 40                 
+FFFC0208 27 37 08 00                 			sh		r3,dest_p1_y
+FFFC020C 02 E0 5E 10                 
+FFFC0210 24 77 48 40                 
+FFFC0214 27 37 08 00                 			sh		r4,dest_p1_z
+FFFC0218 02 E0 5E 10                 
+FFFC021C 24 97 58 40                 
+FFFC0220 24 14 14 00                 			sc		r0,STATUS[r20]
+FFFC0224 28 AC 00 FE                 			jmp		nextCmd
+                        	.pt2:
+FFFC0228 27 37 08 00                 			sh		r2,dest_p2_x
+FFFC022C 02 E0 5E 10                 
+FFFC0230 24 57 68 40                 
+FFFC0234 27 37 08 00                 			sh		r3,dest_p2_y
+FFFC0238 02 E0 5E 10                 
+FFFC023C 24 77 78 40                 
+FFFC0240 27 37 08 00                 			sh		r4,dest_p2_z
+FFFC0244 02 E0 5E 10                 
+FFFC0248 24 97 88 40                 
+FFFC024C 24 14 14 00                 			sc		r0,STATUS[r20]
+FFFC0250 28 AC 00 FE                 			jmp		nextCmd
+                        	
+                        	transformPoint:
+FFFC0254 20 54 E8 00                 			lh		r2,DEST_X[r20]
+FFFC0258 20 74 F8 00                 			lh		r3,DEST_Y[r20]
+FFFC025C 20 94 E8 00                 			lh		r4,DEST_X[r20]
+FFFC0260 02 83 88 45                 			transform		r2,r3,r4
+FFFC0264 02 83 88 47                 			transform.w	r2,r3,r4
+FFFC0268 28 DA 00 FE                 			jmp		storePoint
+                        	
+                        	writeLine:
+FFFC026C 27 37 08 00                 			lh		r2,dest_p0_x
+FFFC0270 02 E0 5E 10                 
+FFFC0274 20 57 08 40                 
+FFFC0278 27 37 08 00                 			lh		r3,dest_p0_y
+FFFC027C 02 E0 5E 10                 
+FFFC0280 20 77 18 40                 
+FFFC0284 27 37 08 00                 			lh		r4,dest_p1_x
+FFFC0288 02 E0 5E 10                 
+FFFC028C 20 97 38 40                 
+FFFC0290 27 37 08 00                 			lh		r5,dest_p1_y
+FFFC0294 02 E0 5E 10                 
+FFFC0298 20 B7 48 40                 
+                        			; swap points so that we are drawing left to right
+FFFC029C 30 82 88 01                 			blt		r2,r4,.0001
+FFFC02A0 02 02 98 25                 			or		r6,r2,r0
+FFFC02A4 02 04 88 25                 			or		r2,r4,r0
+FFFC02A8 02 06 90 25                 			or		r4,r6,r0
+FFFC02AC 02 03 98 25                 			or		r6,r3,r0		
+FFFC02B0 02 05 8C 25                 			or		r3,r5,r0
+FFFC02B4 02 06 94 25                 			or		r5,r6,r0
+                        	.0001:
+                        			; compute slope
+FFFC02B8 02 44 9C 15                 			sub		r7,r4,r2		; x1-x0
+FFFC02BC 02 65 A0 15                 			sub		r8,r5,r3		; y1-y0
+FFFC02C0 30 07 C4 00                 			bne		r7,r0,.0006
+FFFC02C4 30 08 84 00                 			bne		r8,r0,.0006
+FFFC02C8 24 14 14 00                 			sc		r0,STATUS[r20]
+FFFC02CC 28 AC 00 FE                 			jmp		nextCmd			; dx and dy = 0, zero length line
+                        	.0006:
+FFFC02D0 02 E8 A4 AD                 			fxdiv	r9,r8,r7		; dy/dx
+FFFC02D4 02 07 B1 AD                 			fxdiv	r12,r7,r8		; dx/dy
+FFFC02D8 20 14 BA 02                 			lh		r16,TARGET_X0[r20]
+FFFC02DC 20 34 CA 02                 			lh		r17,TARGET_Y0[r20]
+FFFC02E0 20 54 DA 02                 			lh		r18,TARGET_X1[r20]
+FFFC02E4 20 74 EA 02                 			lh		r19,TARGET_Y1[r20]
+FFFC02E8 02 09 A4 AF                 			fxdiv.w	r9,r9,r0
+FFFC02EC 02 0C B0 AF                 			fxdiv.w	r12,r12,r0
+FFFC02F0 19 D4 01 FE                 			call	CheckLineInArea
+FFFC02F4 30 01 84 00                 			bne		r1,r0,.0002
+FFFC02F8 24 14 14 00                 			sc		r0,STATUS[r20]
+FFFC02FC 28 AC 00 FE                 			jmp		nextCmd
+                        	.0002:
+FFFC0300 20 34 08 00                 			lh		r1,CONTROL[r20]
+FFFC0304 08 41 80 00                 			and		r2,r1,#$20				; is clipping enabled ?
+FFFC0308 30 02 00 02                 			beq		r2,r0,.0003
+FFFC030C 20 14 DA 01                 			lh		r16,CLIP_P0_X[r20]
+FFFC0310 20 34 EA 01                 			lh		r17,CLIP_P0_Y[r20]
+FFFC0314 20 54 FA 01                 			lh		r18,CLIP_P1_X[r20]
+FFFC0318 20 74 0A 02                 			lh		r19,CLIP_P1_Y[r20]
+FFFC031C 19 D4 01 FE                 			call	CheckLineInArea
+FFFC0320 30 01 84 00                 			bne		r1,r0,.0003
+FFFC0324 24 14 14 00                 			sc		r0,STATUS[r20]
+FFFC0328 28 AC 00 FE                 			jmp		nextCmd
+                        	.0003:
+                        			; Draw line according to slope
+FFFC032C 02 E7 84 05                 			abs		r7,r7
+FFFC0330 02 08 85 05                 			abs		r8,r8
+FFFC0334 30 07 49 02                 			blt		r7,r8,.0004		; dx < dy ?
+                        	.0007:
+FFFC0338 02 02 B8 25                 			or		r14,r2,r0			;
+FFFC033C 02 03 BC 25                 			or		r15,r3,r0
+FFFC0340 19 FC 01 FE                 			call	plotPoint
+FFFC0344 27 97 00 00                 			add		r2,r2,#$10000	; fixed point 1.0
+FFFC0348 04 F7 02 00                 
+FFFC034C 02 23 8D 11                 			add		r3,r3,r9
+FFFC0350 30 82 48 FE                 			blt		r2,r4,.0007
+FFFC0354 24 14 14 00                 			sc		r0,STATUS[r20]
+FFFC0358 28 AC 00 FE                 			jmp		nextCmd
+                        	.0004:
+FFFC035C 30 A3 48 02                 			blt		r3,r5,.0008		; y0 < y1 ?
+                        	.0009:
+FFFC0360 02 02 B8 25                 			or		r14,r2,r0			;
+FFFC0364 02 03 BC 25                 			or		r15,r3,r0
+FFFC0368 19 FC 01 FE                 			call	plotPoint
+FFFC036C 27 17 00 00                 			sub		r3,r3,#10000			; fixed point 1.0
+FFFC0370 04 F7 C2 63                 
+FFFC0374 02 82 89 11                 			add		r2,r2,r12
+FFFC0378 30 65 48 FE                 			blt		r5,r3,.0009
+FFFC037C 24 14 14 00                 			sc		r0,STATUS[r20]
+FFFC0380 28 AC 00 FE                 			jmp		nextCmd
+                        	.0008:
+FFFC0384 02 02 B8 25                 			or		r14,r2,r0			;
+FFFC0388 02 03 BC 25                 			or		r15,r3,r0
+FFFC038C 19 FC 01 FE                 			call	plotPoint
+FFFC0390 27 97 00 00                 			add		r3,r3,#$10000			; fixed point 1.0
+FFFC0394 04 F7 02 00                 
+FFFC0398 02 82 89 11                 			add		r2,r2,r12
+FFFC039C 30 A3 48 FE                 			blt		r3,r5,.0008
+FFFC03A0 24 14 14 00                 			sc		r0,STATUS[r20]
+FFFC03A4 28 AC 00 FE                 			jmp		nextCmd
+                        	
+                        	CheckLineInArea:
+                        			; if right point is before target area, nothing to do
+FFFC03A8 30 04 8A 00                 			blt		r4,r16,.0002
+                        	.0003:
+FFFC03AC 04 20 00 00                 			ldi		r1,#0
+FFFC03B0 29 BF 03 00                 			ret
+.0002:
+                        			; if left point is after target area, nothing to do
+FFFC03B4 30 52 48 FF                 			blt		r18,r2,.0003
+FFFC03B8 30 02 CA 01                 			blt		r2,r16,.xBeforeTarget
+                        	.0004:
+FFFC03BC 30 92 88 02                 			blt		r18,r4,.xAfterTarget
+                        	.0005:
+                        			; if y0 is less than target y0 and slope is positive (downwards)
+                        			; line is outside of target area
+FFFC03C0 30 71 48 00                 			blt		r17,r3,.0006
+FFFC03C4 30 20 49 FE                 			blt		r0,r9,.0003		; line outside area, nothing to do
+                        	.0006:
+                        			; if y0 is greater than target y1 and slope is negative (upwards)
+FFFC03C8 30 63 4A 00                 			blt		r3,r19,.0007
+FFFC03CC 30 09 C8 FD                 			blt		r9,r0,.0003		; line outside area
+                        	.0007:
+                        			; The line is probably somewhere in the target area
+FFFC03D0 04 20 04 00                 			ldi		r1,#1
+FFFC03D4 29 BF 03 00                 			ret		
+
+                        	.xBeforeTarget:
+FFFC03D8 02 50 AC 15                 			sub			r11,r16,r2	; compute distance before target
+FFFC03DC 02 2B AD ED                 			fxmul		r11,r11,r9	; y0 = y0 + dy/dx * xdiff
+FFFC03E0 02 6B 8C 11                 			add			r3,r11,r3		; add y0 to get new y0
+FFFC03E4 30 00 40 FD                 			bra			.0004
+                        			
+                        	.xAfterTarget:
+FFFC03E8 02 44 AE 15                 			sub			r11,r4,r18	; compute distance after target
+FFFC03EC 02 2B AD ED                 			fxmul		r11,r11,r9
+FFFC03F0 02 AB 94 15                 			sub			r5,r11,r5		; y1 = y1 - dy/dx * xdiff
+FFFC03F4 30 00 80 FC                 			bra			.0005		
+                        					
+                        	plotPoint:
+FFFC03F8 29 BF 03 00                 			ret
+
+                        	writeRect:
+FFFC03FC 27 37 08 00                 			lh		r2,dest_p0_x
+FFFC0400 02 E0 5E 10                 
+FFFC0404 20 57 08 40                 
+FFFC0408 27 37 08 00                 			lh		r3,dest_p0_y
+FFFC040C 02 E0 5E 10                 
+FFFC0410 20 77 18 40                 
+FFFC0414 27 37 08 00                 			lh		r4,dest_p1_x
+FFFC0418 02 E0 5E 10                 
+FFFC041C 20 97 38 40                 
+FFFC0420 27 37 08 00                 			lh		r5,dest_p1_y
+FFFC0424 02 E0 5E 10                 
+FFFC0428 20 B7 48 40                 
+                        			; swap points so that we are drawing left to right
+FFFC042C 30 82 C8 00                 			blt		r2,r4,.0001
+FFFC0430 02 02 98 25                 			or		r6,r2,r0
+FFFC0434 02 04 88 25                 			or		r2,r4,r0
+FFFC0438 02 06 90 25                 			or		r4,r6,r0
+                        	.0001:
+                        			; swap y so we are drawing top to bottom
+FFFC043C 30 A3 C8 00                 			blt		r3,r5,.0002
+FFFC0440 02 03 98 25                 			or		r6,r3,r0
+FFFC0444 02 05 8C 25                 			or		r3,r5,r0
+FFFC0448 02 06 94 25                 			or		r5,r6,r0
+                        	.0002:
+FFFC044C 20 14 BA 02                 			lh		r16,TARGET_X0[r20]
+FFFC0450 20 34 CA 02                 			lh		r17,TARGET_Y0[r20]
+FFFC0454 20 54 DA 02                 			lh		r18,TARGET_X1[r20]
+FFFC0458 20 74 EA 02                 			lh		r19,TARGET_Y1[r20]
+                        			; Clip x0
+FFFC045C 30 42 8A 00                 			blt		r2,r18,.0003
+                        	.0004:
+FFFC0460 24 14 14 00                 			sc		r0,STATUS[r20]		; rect is after target area
+FFFC0464 28 AC 00 FE                 			jmp		nextCmd						; nothing to draw
+                        	.0003:
+FFFC0468 30 04 4A FF                 			blt		r4,r16,.0004			; rect is before target area
+FFFC046C 30 25 0A FF                 			blt		r5,r17,.0004			; rect is above target area
+FFFC0470 30 73 C8 FE                 			bgt		r3,r19,.0004			; rect is below target area
+                        			; The rect at least partially overlaps the target area
+                        			; Ensure the rect coords limited by target
+                        			max		r2,r2,r16
+                        			max		r3,r3,r17
+                        			min		r4,r4,r18
+                        			min		r5,r5,r19
+                        			; Check for clipping area
+FFFC0474 08 C1 80 00                 			and		r6,r1,#$20				; is clipping enabled ?
+FFFC0478 30 06 00 01                 			beq		r6,r0,.0005
+FFFC047C 20 14 DA 01                 			lh		r16,CLIP_P0_X[r20]
+FFFC0480 20 34 EA 01                 			lh		r17,CLIP_P0_Y[r20]
+FFFC0484 20 54 FA 01                 			lh		r18,CLIP_P1_X[r20]
+FFFC0488 20 74 0A 02                 			lh		r19,CLIP_P1_Y[r20]
+                        			max		r2,r2,r16
+                        			max		r3,r3,r17
+                        			min		r4,r4,r18
+                        			min		r5,r5,r19
+                        	.0005:
+FFFC048C 02 02 B8 25                 			or		r14,r2,r0
+FFFC0490 02 03 BC 25                 			or		r15,r3,r0
+                        	.nextPoint:
+FFFC0494 19 FC 01 FE                 			call	plotPoint
+FFFC0498 04 CE 05 00                 			add		r14,r14,#1
+FFFC049C 30 8E 48 FF                 			blt		r14,r4,.nextPoint
+FFFC04A0 02 02 B8 25                 			or		r14,r2,r0
+FFFC04A4 04 EF 05 00                 			add		r15,r15,#1
+FFFC04A8 30 AF 88 FE                 			blt		r15,r5,.nextPoint
+FFFC04AC 24 14 14 00                 			sc		r0,STATUS[r20]
+FFFC04B0 28 AC 00 FE                 			jmp		nextCmd
+                        	
+                        				
+                        			
+                        	.file ".\boot\GPU.asm",1
+                        	.file ".\boot\GPU.asm",1
+                        	
+                        		rodata
+                        		align 8                        	
+                        	begin_init_data:
+                        	
+                        		rodata
+                        		align 8                        	
+                        	end_init_data:
+78 symbols
+  Symbol Name                              seg     address bits
+Ì CLIP_P0_X                                 const  000074 8
+Ì CLIP_P0_Y                                 const  000078 8
+Ì CLIP_P1_X                                 const  00007c 8
+Ì CLIP_P1_Y                                 const  000080 9
+Ì CONTROL                                   const  000000 1
+  CheckLineInArea                            code  fffc03a8 32
+  CheckLineInArea.0002                       code  fffc03b4 32
+  CheckLineInArea.0003                       code  fffc03ac 32
+  CheckLineInArea.0004                       code  fffc03bc 32
+  CheckLineInArea.0005                       code  fffc03c0 32
+  CheckLineInArea.0006                       code  fffc03c8 32
+  CheckLineInArea.0007                       code  fffc03d0 32
+  CheckLineInArea.xAfterTarget               code  fffc03e8 32
+  CheckLineInArea.xBeforeTarget              code  fffc03d8 32
+Ì DEST_X                                    const  000038 7
+Ì DEST_Y                                    const  00003c 7
+Ì DEST_Z                                    const  000040 8
+Ì REGS                                      const  ffd00000 33
+Ì SCREEN                                    const  100000 22
+Ì STATUS                                    const  000004 4
+Ì TARGET_X0                                 const  0000ac 9
+Ì TARGET_X1                                 const  0000b4 9
+Ì TARGET_Y0                                 const  0000b0 9
+Ì TARGET_Y1                                 const  0000b8 9
+Ì VAR_AREA                                  const  105000 22
+  begin_init_data                          rodata  fffc1000 32
+Ì dest_p0_x                                 const  105000 22
+Ì dest_p0_y                                 const  105004 22
+Ì dest_p0_z                                 const  105008 22
+Ì dest_p1_x                                 const  10500c 22
+Ì dest_p1_y                                 const  105010 22
+Ì dest_p1_z                                 const  105014 22
+Ì dest_p2_x                                 const  105018 22
+Ì dest_p2_y                                 const  10501c 22
+Ì dest_p2_z                                 const  105020 22
+  end_init_data                            rodata  fffc1000 32
+  fwdPoint                                   code  fffc01a8 32
+  min                                        code  fffc048c 32
+  nextCmd                                    code  fffc0158 32
+  nextCmd.0001                               code  fffc0198 32
+  nextCmd.0002                               code  fffc0174 32
+  nextCmd.0003                               code  fffc01a0 32
+  plotPoint                                  code  fffc03f8 32
+* r16                                        code  fffc048c 32
+* r17                                        code  fffc048c 32
+* r18                                        code  fffc048c 32
+* r19                                        code  fffc048c 32
+  r19.0005                                   code  fffc048c 32
+  r19.nextPoint                              code  fffc0494 32
+  r2                                         code  fffc048c 32
+  r3                                         code  fffc048c 32
+  r4                                         code  fffc048c 32
+  r5                                         code  fffc048c 32
+  start                                      code  fffc0100 32
+  start.0001                                 code  fffc0114 32
+  storePoint                                 code  fffc01b4 32
+  storePoint.pt0                             code  fffc01d0 32
+  storePoint.pt1                             code  fffc01fc 32
+  storePoint.pt2                             code  fffc0228 32
+  table1                                     code  fffc0128 32
+  table2                                     code  fffc0140 32
+  transformPoint                             code  fffc0254 32
+Ì writeCurve                                 code  8000000000000020 -858993460
+  writeLine                                  code  fffc026c 32
+  writeLine.0001                             code  fffc02b8 32
+  writeLine.0002                             code  fffc0300 32
+  writeLine.0003                             code  fffc032c 32
+  writeLine.0004                             code  fffc035c 32
+  writeLine.0006                             code  fffc02d0 32
+  writeLine.0007                             code  fffc0338 32
+  writeLine.0008                             code  fffc0384 32
+  writeLine.0009                             code  fffc0360 32
+  writeRect                                  code  fffc03fc 32
+  writeRect.0001                             code  fffc043c 32
+  writeRect.0002                             code  fffc044c 32
+  writeRect.0003                             code  fffc0468 32
+  writeRect.0004                             code  fffc0460 32
+Ì writeTriangle                              code  800000000000001f -858993460
+
+  Macro Name
+0 compressable instructions
+The top 256 are:
+Comp  Opcode  Count
+
+number of bytes: 1808.000000
+number of instructions: 452
+number of compressed instructions: 0
+4.000000 bytes (32 bits) per instruction
+Compression ratio: 0.000000%

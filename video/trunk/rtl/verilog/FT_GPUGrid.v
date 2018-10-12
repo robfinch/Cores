@@ -22,9 +22,11 @@
 //
 // ============================================================================
 //
-module FT_GPUGrid(rst_i, cmd_clk_i, cmd_core_i, wr_cmd_i, cmd_adr_i, cmd_dat_i, cmd_count_o,
+module FT_GPUGrid(rst_i, 
+	cmd_clk_i, cmd_core_i, wr_cmd_i, cmd_adr_i, cmd_dat_i, cmd_count_o,
+	imem_wr_i, imem_adr_i, imem_dat_i,
 	cyc_o, stb_o, ack_i, we_o, sel_o, adr_o, dat_i, dat_o,
-	dot_clk_i, blank_i, vctr_i, hctr_i, zrgb_o);
+	dot_clk_i, blank_i, vctr_i, hctr_i, fctr_i, zrgb_o);
 input rst_i;
 input cmd_clk_i;
 input [14:0] cmd_core_i;
@@ -32,6 +34,9 @@ input wr_cmd_i;
 input [31:0] cmd_dat_i;
 input [7:0] cmd_adr_i;
 output [6:0] cmd_count_o;
+input imem_wr_i;
+input [13:0] imem_adr_i;
+input [31:0] imem_dat_i;
 output cyc_o;
 output stb_o;
 input ack_i;
@@ -44,12 +49,13 @@ input dot_clk_i;
 input blank_i;
 input [11:0] vctr_i;
 input [11:0] hctr_i;
+input [5:0] fctr_i;
 output reg [31:0] zrgb_o;
 
 wire [11:0] vctr = vctr_i;
 wire [11:0] hctr = hctr_i;
 
-reg [13:0] scan_adr [0:11];
+reg [15:0] scan_adr [0:11];
 reg [15:0] scan_out;
 wire [15:0] scan_out00;
 wire [15:0] scan_out01;
@@ -63,25 +69,29 @@ wire [15:0] scan_out20;
 wire [15:0] scan_out21;
 wire [15:0] scan_out22;
 wire [15:0] scan_out23;
+reg [11:0] hoffs = 12'hF32;
+reg [11:0] voffs = 12'hFDA;
 
 always @(posedge dot_clk_i)
 begin
-	scan_adr[0] <= (vctr[11:1]-8'd000) * 8'd100 + (hctr[11:1]-8'd000);
-	scan_adr[1] <= (vctr[11:1]-8'd000) * 8'd100 + (hctr[11:1]-8'd100);
-	scan_adr[2] <= (vctr[11:1]-8'd000) * 8'd100 + (hctr[11:1]-8'd200);
-	scan_adr[3] <= (vctr[11:1]-8'd000) * 8'd100 + (hctr[11:1]-8'd300);
-	scan_adr[4] <= (vctr[11:1]-8'd100) * 8'd100 + (hctr[11:1]-8'd000);
-	scan_adr[5] <= (vctr[11:1]-8'd100) * 8'd100 + (hctr[11:1]-8'd100);
-	scan_adr[6] <= (vctr[11:1]-8'd100) * 8'd100 + (hctr[11:1]-8'd200);
-	scan_adr[7] <= (vctr[11:1]-8'd100) * 8'd100 + (hctr[11:1]-8'd300);
-	scan_adr[8] <= (vctr[11:1]-8'd200) * 8'd100 + (hctr[11:1]-8'd000);
-	scan_adr[9] <= (vctr[11:1]-8'd200) * 8'd100 + (hctr[11:1]-8'd100);
-	scan_adr[10] <= (vctr[11:1]-8'd200) * 8'd100 + (hctr[11:1]-8'd200);
-	scan_adr[11] <= (vctr[11:1]-8'd200) * 8'd100 + (hctr[11:1]-8'd300);
+	scan_adr[0] <= {(vctr[11:1]-8'd000 + voffs[11:1]),7'd0} + (hctr[11:1]-11'd000 + hoffs[11:1]);
+	scan_adr[1] <= {(vctr[11:1]-8'd000 + voffs[11:1]),7'd0} + (hctr[11:1]-11'd128 + hoffs[11:1]);
+	scan_adr[2] <= {(vctr[11:1]-8'd000 + voffs[11:1]),7'd0} + (hctr[11:1]-11'd256 + hoffs[11:1]);
+	scan_adr[3] <= {(vctr[11:1]-8'd000 + voffs[11:1]),7'd0} + (hctr[11:1]-11'd384 + hoffs[11:1]);
+	scan_adr[4] <= {(vctr[11:1]-8'd160 + voffs[11:1]),7'd0} + (hctr[11:1]-11'd000 + hoffs[11:1]);
+	scan_adr[5] <= {(vctr[11:1]-8'd160 + voffs[11:1]),7'd0} + (hctr[11:1]-11'd128 + hoffs[11:1]);
+	scan_adr[6] <= {(vctr[11:1]-8'd160 + voffs[11:1]),7'd0} + (hctr[11:1]-11'd256 + hoffs[11:1]);
+	scan_adr[7] <= {(vctr[11:1]-8'd160 + voffs[11:1]),7'd0} + (hctr[11:1]-11'd384 + hoffs[11:1]);
+	/*
+	scan_adr[8] <= (vctr[11:1]-8'd200) * 8'd100 + (hctr[11:1]-11'd000);
+	scan_adr[9] <= (vctr[11:1]-8'd200) * 8'd100 + (hctr[11:1]-11'd100);
+	scan_adr[10] <= (vctr[11:1]-8'd200) * 8'd100 + (hctr[11:1]-11'd200);
+	scan_adr[11] <= (vctr[11:1]-8'd200) * 8'd100 + (hctr[11:1]-11'd300);
+	*/
 end
-
+/*
 always @(posedge dot_clk_i)
-	casez({blank_i, (vctr < 8'd100), (vctr < 8'd200), (hctr < 8'd100), (hctr < 8'd200), (hctr < 8'd300)})
+	casez({blank_i, (vctr < 8'd100), (vctr < 8'd200), (hctr < 11'd100), (hctr < 11'd200), (hctr < 11'd300)})
 	6'b1?????:	scan_out <= 16'h0;
 	6'b011111:	scan_out <= scan_out00;
 	6'b011011:	scan_out <= scan_out01;
@@ -97,7 +107,20 @@ always @(posedge dot_clk_i)
 	6'b000000:	scan_out <= scan_out23;
 	default:	scan_out <= 16'h0;
 	endcase
-
+*/
+always @(posedge dot_clk_i)
+	casez({blank_i, (vctr < 8'd160 - voffs), (vctr < 8'd320 - voffs), (hctr < 11'd128 - hoffs), (hctr < 11'd256 - hoffs), (hctr < 11'd384 - hoffs), (hctr < 11'd512 - hoffs)})
+	7'b1??????:	scan_out <= 16'h0;
+	7'b0111111:	scan_out <= scan_out00;
+	7'b0110111:	scan_out <= scan_out01;
+	7'b0110011:	scan_out <= scan_out02;
+	7'b0110001:	scan_out <= scan_out03;
+	7'b0011111:	scan_out <= scan_out10;
+	7'b0010111:	scan_out <= scan_out11;
+	7'b0010011:	scan_out <= scan_out12;
+	7'b0010001:	scan_out <= scan_out13;
+	default:	scan_out <= 16'h0;
+	endcase
 always @(posedge dot_clk_i)
 	zrgb_o <= {scan_out[15:12],4'd0,scan_out[11:8],4'd0,scan_out[7:4],4'd0,scan_out[3:0],4'd0};
 
@@ -129,65 +152,79 @@ wire [31:0] u22_adr, u22_dati, u22_dato;
 wire u23_cyc, u23_ack, u23_we;
 wire [31:0] u23_adr, u23_dati, u23_dato;
 
-wire m2_cyc, m_stb, m2_ack, m2_we;
+wire m2_cyc, m2_stb, m2_ack, m2_we;
 wire [3:0] m2_sel;
 wire [31:0] m2_adr, m2_dato, m2_dati;
 wire [14:0] m2_rsp, m2_req;
 
-wire m3_cyc, m_stb, m3_ack, m3_we;
+wire m3_cyc, m3_stb, m3_ack, m3_we;
 wire [3:0] m3_sel;
 wire [31:0] m3_adr, m3_dato, m3_dati;
 wire [14:0] m3_rsp, m3_req;
 
-wire m4_cyc, m_stb, m4_ack, m4_we;
+wire m4_cyc, m4_stb, m4_ack, m4_we;
 wire [3:0] m4_sel;
 wire [31:0] m4_adr, m4_dato, m4_dati;
 wire [14:0] m4_rsp, m4_req;
 
-wire m5_cyc, m_stb, m5_ack, m5_we;
+wire m5_cyc, m5_stb, m5_ack, m5_we;
 wire [3:0] m5_sel;
 wire [31:0] m5_adr, m5_dato, m5_dati;
 wire [14:0] m5_rsp, m5_req;
 
-wire m6_cyc, m_stb, m6_ack, m6_we;
+wire m6_cyc, m6_stb, m6_ack, m6_we;
 wire [3:0] m6_sel;
 wire [31:0] m6_adr, m6_dato, m6_dati;
 wire [14:0] m6_rsp, m6_req;
 
-wire m7_cyc, m_stb, m7_ack, m7_we;
+wire m7_cyc, m7_stb, m7_ack, m7_we;
 wire [3:0] m7_sel;
 wire [31:0] m7_adr, m7_dato, m7_dati;
 wire [14:0] m7_rsp, m7_req;
 
-wire m8_cyc, m_stb, m8_ack, m8_we;
+wire m8_cyc, m8_stb, m8_ack, m8_we;
 wire [3:0] m8_sel;
 wire [31:0] m8_adr, m8_dato, m8_dati;
 wire [14:0] m8_rsp, m8_req;
 
-wire m9_cyc, m_stb, m9_ack, m9_we;
+wire m9_cyc, m9_stb, m9_ack, m9_we;
 wire [3:0] m9_sel;
 wire [31:0] m9_adr, m9_dato, m9_dati;
 wire [14:0] m9_rsp, m9_req;
 
-wire m10_cyc, m_stb, m10_ack, m10_we;
+wire m10_cyc, m10_stb, m10_ack, m10_we;
 wire [3:0] m10_sel;
 wire [31:0] m10_adr, m10_dato, m10_dati;
 wire [14:0] m10_rsp, m10_req;
 
-wire m11_cyc, m_stb, m11_ack, m11_we;
+wire m11_cyc, m11_stb, m11_ack, m11_we;
 wire [3:0] m11_sel;
 wire [31:0] m11_adr, m11_dato, m11_dati;
 wire [14:0] m11_rsp, m11_req;
 
-wire m12_cyc, m_stb, m12_ack, m12_we;
+wire m12_cyc, m12_stb, m12_ack, m12_we;
 wire [3:0] m12_sel;
 wire [31:0] m12_adr, m12_dato, m12_dati;
 wire [14:0] m12_rsp, m12_req;
 
-wire m13_cyc, m_stb, m13_ack, m13_we;
+wire m13_cyc, m13_stb, m13_ack, m13_we;
 wire [3:0] m13_sel;
 wire [31:0] m13_adr, m13_dato, m13_dati;
 wire [14:0] m13_rsp, m13_req;
+
+wire grnt00, grnt01, grnt02, grnt03;
+wire grnt10, grnt11, grnt12, grnt13;
+wire grnt20, grnt21, grnt22, grnt23;
+
+round_robin #(12) urr1
+(
+	.rst(rst_i),
+	.clk(clk_i),
+	.ce(1'b1),
+	.req({u23_cyc,u22_cyc,u21_cyc,u20_cyc,u13_cyc,u12_cyc,u11_cyc,u10_cyc,u03_cyc,u02_cyc,u01_cyc,u00_cyc}),
+	.lock({u23_cyc,u22_cyc,u21_cyc,u20_cyc,u13_cyc,u12_cyc,u11_cyc,u10_cyc,u03_cyc,u02_cyc,u01_cyc,u00_cyc}),
+	.sel({grnt23,grnt22,grnt21,grnt20,grnt13,grnt12,grnt11,grnt10,grnt03,grnt02,grnt01,grnt00})
+);
 
 FTRISC32a u00 (
 	.corenum_i(15'h00),
@@ -199,6 +236,9 @@ FTRISC32a u00 (
 	.cmd_adr_i(cmd_adr_i),
 	.cmd_dat_i(cmd_dat_i),
 	.cmd_count_o(cmd_count_o), 
+	.imem_wr_i(imem_wr_i),
+	.imem_wadr_i(imem_adr_i),
+	.imem_dat_i(imem_dat_i),
 	.cyc_o(u00_cyc),
 	.ack_i(u00_ack),
 	.we_o(u00_we),
@@ -207,13 +247,17 @@ FTRISC32a u00 (
 	.dat_o(u00_dato),
 	.dot_clk_i(dot_clk_i),
 	.scan_adr_i(scan_adr[0]),
-	.scan_dat_o(scan_out00)
+	.scan_dat_o(scan_out00),
+	.vctr_i(vctr_i),
+	.hctr_i(hctr_i),
+	.frame_i(fctr_i)
 );
 
 FT64_GPUBusMux ubm2 (
 	.rst_i(rst_i),
 	.clk_i(dot_clk_i),
-	.ce_i(ack_i),
+	.ce_i(1'b1),
+	.grnt_i(grnt00),
 	.s1_req_i(15'h7ffe),
 	.s1_cyc_i(1'b0),
 	.s1_stb_i(1'b0),
@@ -221,8 +265,8 @@ FT64_GPUBusMux ubm2 (
 	.s1_we_i(1'b0),
 	.s1_sel_i(4'h0),
 	.s1_adr_i(32'd0),
-	.s1_dat_o(32'd0),
-	.s1_dat_i(),
+	.s1_dat_o(),
+	.s1_dat_i(32'd0),
 	.s2_req_i(15'h00),
 	.s2_cyc_i(u00_cyc),
 	.s2_stb_i(u00_cyc),
@@ -254,6 +298,9 @@ FTRISC32a u01 (
 	.cmd_adr_i(cmd_adr_i),
 	.cmd_dat_i(cmd_dat_i),
 	.cmd_count_o(), 
+	.imem_wr_i(imem_wr_i),
+	.imem_wadr_i(imem_adr_i),
+	.imem_dat_i(imem_dat_i),
 	.cyc_o(u01_cyc),
 	.ack_i(u01_ack),
 	.we_o(u01_we),
@@ -262,13 +309,17 @@ FTRISC32a u01 (
 	.dat_o(u01_dato),
 	.dot_clk_i(dot_clk_i),
 	.scan_adr_i(scan_adr[1]),
-	.scan_dat_o(scan_out01)
+	.scan_dat_o(scan_out01),
+	.vctr_i(vctr_i),
+	.hctr_i(hctr_i),
+	.frame_i(fctr_i)
 );
 
 FT64_GPUBusMux ubm3 (
 	.rst_i(rst_i),
 	.clk_i(dot_clk_i),
-	.ce_i(ack_i),
+	.ce_i(1'b1),
+	.grnt_i(grnt01),
 	.s1_req_i(m2_req),
 	.s1_cyc_i(m2_cyc),
 	.s1_stb_i(m2_stb),
@@ -309,6 +360,9 @@ FTRISC32a u02 (
 	.cmd_adr_i(cmd_adr_i),
 	.cmd_dat_i(cmd_dat_i),
 	.cmd_count_o(), 
+	.imem_wr_i(imem_wr_i),
+	.imem_wadr_i(imem_adr_i),
+	.imem_dat_i(imem_dat_i),
 	.cyc_o(u02_cyc),
 	.ack_i(u02_ack),
 	.we_o(u02_we),
@@ -317,13 +371,17 @@ FTRISC32a u02 (
 	.dat_o(u02_dato),
 	.dot_clk_i(dot_clk_i),
 	.scan_adr_i(scan_adr[2]),
-	.scan_dat_o(scan_out02)
+	.scan_dat_o(scan_out02),
+	.vctr_i(vctr_i),
+	.hctr_i(hctr_i),
+	.frame_i(fctr_i)
 );
 
 FT64_GPUBusMux ubm4 (
 	.rst_i(rst_i),
 	.clk_i(dot_clk_i),
-	.ce_i(ack_i),
+	.ce_i(1'b1),
+	.grnt_i(grnt02),
 	.s1_req_i(m3_req),
 	.s1_cyc_i(m3_cyc),
 	.s1_stb_i(m3_stb),
@@ -364,6 +422,9 @@ FTRISC32a u03 (
 	.cmd_adr_i(cmd_adr_i),
 	.cmd_dat_i(cmd_dat_i),
 	.cmd_count_o(), 
+	.imem_wr_i(imem_wr_i),
+	.imem_wadr_i(imem_adr_i),
+	.imem_dat_i(imem_dat_i),
 	.cyc_o(u03_cyc),
 	.ack_i(u03_ack),
 	.we_o(u03_we),
@@ -372,13 +433,17 @@ FTRISC32a u03 (
 	.dat_o(u03_dato),
 	.dot_clk_i(dot_clk_i),
 	.scan_adr_i(scan_adr[3]),
-	.scan_dat_o(scan_out03)
+	.scan_dat_o(scan_out03),
+	.vctr_i(vctr_i),
+	.hctr_i(hctr_i),
+	.frame_i(fctr_i)
 );
 
 FT64_GPUBusMux ubm5 (
 	.rst_i(rst_i),
 	.clk_i(dot_clk_i),
-	.ce_i(ack_i),
+	.ce_i(1'b1),
+	.grnt_i(grnt03),
 	.s1_req_i(m4_req),
 	.s1_cyc_i(m4_cyc),
 	.s1_stb_i(m4_stb),
@@ -419,6 +484,9 @@ FTRISC32a u10 (
 	.cmd_adr_i(cmd_adr_i),
 	.cmd_dat_i(cmd_dat_i),
 	.cmd_count_o(), 
+	.imem_wr_i(imem_wr_i),
+	.imem_wadr_i(imem_adr_i),
+	.imem_dat_i(imem_dat_i),
 	.cyc_o(u10_cyc),
 	.ack_i(u10_ack),
 	.we_o(u10_we),
@@ -427,13 +495,17 @@ FTRISC32a u10 (
 	.dat_o(u10_dato),
 	.dot_clk_i(dot_clk_i),
 	.scan_adr_i(scan_adr[4]),
-	.scan_dat_o(scan_out10)
+	.scan_dat_o(scan_out10),
+	.vctr_i(vctr_i),
+	.hctr_i(hctr_i),
+	.frame_i(fctr_i)
 );
 
 FT64_GPUBusMux ubm6 (
 	.rst_i(rst_i),
 	.clk_i(dot_clk_i),
-	.ce_i(ack_i),
+	.ce_i(1'b1),
+	.grnt_i(grnt10),
 	.s1_req_i(m5_req),
 	.s1_cyc_i(m5_cyc),
 	.s1_stb_i(m5_stb),
@@ -474,6 +546,9 @@ FTRISC32a u11 (
 	.cmd_adr_i(cmd_adr_i),
 	.cmd_dat_i(cmd_dat_i),
 	.cmd_count_o(), 
+	.imem_wr_i(imem_wr_i),
+	.imem_wadr_i(imem_adr_i),
+	.imem_dat_i(imem_dat_i),
 	.cyc_o(u11_cyc),
 	.ack_i(u11_ack),
 	.we_o(u11_we),
@@ -482,13 +557,17 @@ FTRISC32a u11 (
 	.dat_o(u11_dato),
 	.dot_clk_i(dot_clk_i),
 	.scan_adr_i(scan_adr[5]),
-	.scan_dat_o(scan_out11)
+	.scan_dat_o(scan_out11),
+	.vctr_i(vctr_i),
+	.hctr_i(hctr_i),
+	.frame_i(fctr_i)
 );
 
 FT64_GPUBusMux ubm7 (
 	.rst_i(rst_i),
 	.clk_i(dot_clk_i),
-	.ce_i(ack_i),
+	.ce_i(1'b1),
+	.grnt_i(grnt11),
 	.s1_req_i(m6_req),
 	.s1_cyc_i(m6_cyc),
 	.s1_stb_i(m6_stb),
@@ -529,6 +608,9 @@ FTRISC32a u12 (
 	.cmd_adr_i(cmd_adr_i),
 	.cmd_dat_i(cmd_dat_i),
 	.cmd_count_o(), 
+	.imem_wr_i(imem_wr_i),
+	.imem_wadr_i(imem_adr_i),
+	.imem_dat_i(imem_dat_i),
 	.cyc_o(u12_cyc),
 	.ack_i(u12_ack),
 	.we_o(u12_we),
@@ -537,13 +619,17 @@ FTRISC32a u12 (
 	.dat_o(u12_dato),
 	.dot_clk_i(dot_clk_i),
 	.scan_adr_i(scan_adr[6]),
-	.scan_dat_o(scan_out12)
+	.scan_dat_o(scan_out12),
+	.vctr_i(vctr_i),
+	.hctr_i(hctr_i),
+	.frame_i(fctr_i)
 );
 
 FT64_GPUBusMux ubm8 (
 	.rst_i(rst_i),
 	.clk_i(dot_clk_i),
-	.ce_i(ack_i),
+	.ce_i(1'b1),
+	.grnt_i(grnt12),
 	.s1_req_i(m7_req),
 	.s1_cyc_i(m7_cyc),
 	.s1_stb_i(m7_stb),
@@ -584,6 +670,9 @@ FTRISC32a u13 (
 	.cmd_adr_i(cmd_adr_i),
 	.cmd_dat_i(cmd_dat_i),
 	.cmd_count_o(), 
+	.imem_wr_i(imem_wr_i),
+	.imem_wadr_i(imem_adr_i),
+	.imem_dat_i(imem_dat_i),
 	.cyc_o(u13_cyc),
 	.ack_i(u13_ack),
 	.we_o(u13_we),
@@ -592,13 +681,17 @@ FTRISC32a u13 (
 	.dat_o(u13_dato),
 	.dot_clk_i(dot_clk_i),
 	.scan_adr_i(scan_adr[7]),
-	.scan_dat_o(scan_out13)
+	.scan_dat_o(scan_out13),
+	.vctr_i(vctr_i),
+	.hctr_i(hctr_i),
+	.frame_i(fctr_i)
 );
 
 FT64_GPUBusMux ubm9 (
 	.rst_i(rst_i),
 	.clk_i(dot_clk_i),
-	.ce_i(ack_i),
+	.ce_i(1'b1),
+	.grnt_i(grnt13),
 	.s1_req_i(m8_req),
 	.s1_cyc_i(m8_cyc),
 	.s1_stb_i(m8_stb),
@@ -629,6 +722,7 @@ FT64_GPUBusMux ubm9 (
 	.m1_dat_i(m9_dati)
 );
 
+/*
 FTRISC32a u20 (
 	.corenum_i(15'h20),
 	.rst_i(rst_i),
@@ -647,13 +741,15 @@ FTRISC32a u20 (
 	.dat_o(u20_dato),
 	.dot_clk_i(dot_clk_i),
 	.scan_adr_i(scan_adr[8]),
-	.scan_dat_o(scan_out20)
+	.scan_dat_o(scan_out20),
+	.frame_i(fctr_i)
 );
 
 FT64_GPUBusMux ubm10 (
 	.rst_i(rst_i),
 	.clk_i(dot_clk_i),
-	.ce_i(ack_i),
+	.ce_i(1'b1),
+	.grnt_i(grnt20),
 	.s1_req_i(m9_req),
 	.s1_cyc_i(m9_cyc),
 	.s1_stb_i(m9_stb),
@@ -702,13 +798,15 @@ FTRISC32a u21 (
 	.dat_o(u21_dato),
 	.dot_clk_i(dot_clk_i),
 	.scan_adr_i(scan_adr[9]),
-	.scan_dat_o(scan_out21)
+	.scan_dat_o(scan_out21),
+	.frame_i(fctr_i)
 );
 
 FT64_GPUBusMux ubm11 (
 	.rst_i(rst_i),
 	.clk_i(dot_clk_i),
-	.ce_i(ack_i),
+	.ce_i(1'b1),
+	.grnt_i(grnt21),
 	.s1_req_i(m10_req),
 	.s1_cyc_i(m10_cyc),
 	.s1_stb_i(m10_stb),
@@ -757,13 +855,15 @@ FTRISC32a u22 (
 	.dat_o(u22_dato),
 	.dot_clk_i(dot_clk_i),
 	.scan_adr_i(scan_adr[10]),
-	.scan_dat_o(scan_out22)
+	.scan_dat_o(scan_out22),
+	.frame_i(fctr_i)
 );
 
 FT64_GPUBusMux ubm12 (
 	.rst_i(rst_i),
 	.clk_i(dot_clk_i),
-	.ce_i(ack_i),
+	.ce_i(1'b1),
+	.grnt_i(grnt22),
 	.s1_req_i(m11_req),
 	.s1_cyc_i(m11_cyc),
 	.s1_stb_i(m11_stb),
@@ -812,13 +912,15 @@ FTRISC32a u23 (
 	.dat_o(u23_dato),
 	.dot_clk_i(dot_clk_i),
 	.scan_adr_i(scan_adr[11]),
-	.scan_dat_o(scan_out23)
+	.scan_dat_o(scan_out23),
+	.frame_i(fctr_i)
 );
 
 FT64_GPUBusMux ubm13 (
 	.rst_i(rst_i),
 	.clk_i(dot_clk_i),
-	.ce_i(ack_i),
+	.ce_i(1'b1),
+	.grnt_i(grnt23),
 	.s1_req_i(m12_req),
 	.s1_cyc_i(m12_cyc),
 	.s1_stb_i(m12_stb),
@@ -848,13 +950,22 @@ FT64_GPUBusMux ubm13 (
 	.m1_dat_o(m13_dato),
 	.m1_dat_i(m13_dati)
 );
-
+*/
+/*
 assign cyc_o = m13_cyc;
 assign stb_o = m13_stb;
 assign we_o = m13_we;
 assign sel_o = m13_sel;
 assign adr_o = m13_adr;
 assign dat_o = m13_dato;
+*/
+assign cyc_o = m9_cyc;
+assign stb_o = m9_stb;
+assign we_o = m9_we;
+assign sel_o = m9_sel;
+assign adr_o = m9_adr;
+assign dat_o = m9_dato;
+
 assign m13_dati = dat_i;
 assign m12_dati = dat_i;
 assign m11_dati = dat_i;
@@ -879,17 +990,17 @@ assign m5_ack = ack_i;
 assign m4_ack = ack_i;
 assign m3_ack = ack_i;
 assign m2_ack = ack_i;
-assign m13_rsp = m13_req;
-assign m12_rsp = m13_req;
-assign m11_rsp = m13_req;
-assign m10_rsp = m13_req;
-assign m9_rsp = m13_req;
-assign m8_rsp = m13_req;
-assign m7_rsp = m13_req;
-assign m6_rsp = m13_req;
-assign m5_rsp = m13_req;
-assign m4_rsp = m13_req;
-assign m3_rsp = m13_req;
-assign m2_rsp = m13_req;
+assign m13_rsp = m9_req;
+assign m12_rsp = m9_req;
+assign m11_rsp = m9_req;
+assign m10_rsp = m9_req;
+assign m9_rsp = m9_req;
+assign m8_rsp = m9_req;
+assign m7_rsp = m9_req;
+assign m6_rsp = m9_req;
+assign m5_rsp = m9_req;
+assign m4_rsp = m9_req;
+assign m3_rsp = m9_req;
+assign m2_rsp = m9_req;
 
 endmodule

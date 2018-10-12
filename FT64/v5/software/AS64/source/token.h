@@ -139,6 +139,7 @@ enum {
      tk_divi,
      tk_divu,
      tk_divui, // 200
+		 tk_divwait,
 	 tk_dd,
 	 tk_do,
      tk_ds,
@@ -188,6 +189,8 @@ enum {
 	 tk_ftoi,
      tk_ftst, // 230
      tk_ftx,
+			 tk_fxdiv,
+			 tk_fxmul,
      tk_ge,
      tk_gran,
      tk_gs,
@@ -284,6 +287,7 @@ enum {
 	tk_modsu,
      tk_modu,
      tk_modui,
+			 tk_modwait,
      tk_mov,
      tk_mtfp,
      tk_mtspr,
@@ -419,6 +423,7 @@ enum {
      tk_tlbwrreg,
      tk_tls,
      tk_to,
+			 tk_transform,
      tk_tst,
 	 tk_unlink,
 	 tk_vadd,

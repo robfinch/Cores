@@ -23,19 +23,24 @@
 // ============================================================================
 //
 module FTRISC32a(corenum_i, rst_i, clk_i,
-	cmd_core_i, cmd_clk_i, wr_cmd_i, cmd_adr_i, cmd_dat_i, cmd_count_o, 
+	imem_wr_i, imem_wadr_i, imem_dat_i,
+	cmd_core_i, cmd_clk_i, wr_cmd_i, cmd_adr_i, cmd_dat_i, cmd_dat_o, cmd_count_o, 
 	cyc_o, ack_i, we_o, sel_o, adr_o, dat_i, dat_o,
-	dot_clk_i, scan_adr_i, scan_dat_o);
+	dot_clk_i, scan_adr_i, scan_dat_o, vctr_i, hctr_i, frame_i);
 input [14:0] corenum_i;
 input rst_i;
 input clk_i;
+input imem_wr_i;
+input [13:0] imem_wadr_i;
+input [31:0] imem_dat_i;
 input [14:0] cmd_core_i;
 input cmd_clk_i;
 input wr_cmd_i;
 input [7:0] cmd_adr_i;
 input [31:0] cmd_dat_i;
+output reg [31:0] cmd_dat_o;
 output [6:0] cmd_count_o;
-output reg cyc_o;
+output cyc_o;
 input ack_i;
 output reg we_o;
 output reg [3:0] sel_o;
@@ -43,8 +48,11 @@ output reg [31:0] adr_o;
 input [31:0] dat_i;
 output reg [31:0] dat_o;
 input dot_clk_i;
-input [14:0] scan_adr_i;
+input [15:0] scan_adr_i;
 output [15:0] scan_dat_o;
+input [11:0] vctr_i;
+input [11:0] hctr_i;
+input [5:0] frame_i;
 
 parameter i_r2 = 6'h02;
 parameter i_r1  = 6'h01;
@@ -55,11 +63,9 @@ parameter i_redor = 5'h06;
 parameter i_zxb = 5'h0A;
 parameter i_4to8 = 5'h0B;
 parameter i_2to8 = 5'h0C;
-parameter i_zxh = 5'h09;
+parameter i_zxc = 5'h09;
 parameter i_popr  = 5'h0E;
-parameter i_divwait = 5'h13;
-parameter i_modwait = 5'h17;
-parameter i_sxh = 5'h19;
+parameter i_sxc = 5'h19;
 parameter i_sxb = 5'h1A;
 parameter i_8to4 = 5'h1B;
 parameter i_8to2 = 5'h1C;
@@ -67,6 +73,7 @@ parameter i_rdcmd = 5'h1E;
 parameter i_rdcmdcnt = 5'h1F;
 
 parameter i_add = 6'h04;
+parameter i_sub = 6'h05;
 parameter i_slt = 6'h06;
 parameter i_sltu = 6'h07;
 parameter i_sle = 6'h28;
@@ -78,11 +85,12 @@ parameter i_nand = 6'h0C;
 parameter i_nor  = 6'h0D;
 parameter i_xnor = 6'h0E;
 parameter i_shifti = 6'h0F;
-parameter i_blend = 6'h10;
 parameter i_transform = 6'h11;
 parameter i_shl		= 3'h0;
 parameter i_shr		= 3'h1;
 parameter i_asr		= 3'h3;
+parameter i_testscn = 6'h20;
+parameter i_testclip = 6'h21;
 parameter i_fxdiv = 6'h2B;
 parameter i_min  = 6'h2C;
 parameter i_max  = 6'h2D;
@@ -96,12 +104,18 @@ parameter i_sltui = 6'h07;
 parameter i_andi = 6'h08;
 parameter i_ori  = 6'h09;
 parameter i_xori = 6'h0A;
+parameter i_blend = 6'h0C;
 parameter i_xnori = 6'h0E;
 parameter i_jal  = 6'h18;
 parameter i_call = 6'h19;
 parameter i_sgtui = 6'h1C;
 parameter i_ld   = 6'h20;
 parameter i_st   = 6'h24;
+parameter i_bb_  = 6'h26;
+parameter i_bbs  = 2'd0;
+parameter i_bbc  = 2'd1;
+parameter i_ibne = 2'd2;
+parameter i_dbnz = 2'd3;
 parameter i_lui  = 6'h27;
 parameter i_jmp  = 6'h28;
 parameter i_ret  = 6'h29;
@@ -118,6 +132,14 @@ parameter i_fxmuli = 6'h39;
 parameter i_muli = 6'h3A;
 parameter i_nop  = 6'h3D;
 
+parameter i_lcx = 6'h20;
+parameter i_lhx = 6'h10;
+parameter i_scx	= 6'h24;
+parameter i_shx = 6'h14;
+
+parameter char = 2'd1;
+parameter half = 2'd2;
+
 parameter IDLE = 6'd0;
 parameter IFETCH = 6'd1;
 parameter DECODE = 6'd2;
@@ -127,14 +149,10 @@ parameter LD1 = 6'd5;
 parameter LD2 = 6'd6;
 parameter LD3 = 6'd7;
 parameter ST1 = 6'd8;
-parameter ST2 = 6'd9;
 parameter BLEND1 = 6'd10;
 parameter BLEND2 = 6'd11;
 parameter BLEND3 = 6'd12;
-parameter TRANSFORM1 = 6'd13;
-parameter TRANSFORM2 = 6'd14;
-parameter TRANSFORM3 = 6'd15;
-parameter TRANSFORM4 = 6'd16;
+parameter BBC = 6'd13;
 parameter TRANSFORM5 = 6'd17;
 parameter TRANSFORM6 = 6'd18;
 parameter TRANSFORM7 = 6'd19;
@@ -146,12 +164,30 @@ parameter FXMUL2 = 6'd24;
 parameter MUL1 = 6'd25;
 parameter MUL2 = 6'd26;
 
+parameter TRANSFORM1 = 3'd1;
+parameter TRANSFORM2 = 3'd2;
+parameter TRANSFORM3 = 3'd3;
+parameter TRANSFORM4 = 3'd4;
+parameter TDELAY3 = 3'd5;
+parameter TDELAY2 = 3'd6;
+parameter TDELAY1 = 3'd7;
+
+parameter ST_IDLE = 2'd00;
+parameter ST2 = 2'd01;
+
 integer n;
+reg cyc;
+reg [1:0] memsize;
 reg [5:0] state;
 reg [5:0] stkstate;
+reg [2:0] tstate;
+reg [2:0] tstkstate;
+reg [1:0] sstate;
 reg [13:0] pc;
 reg [31:0] ir;
 reg [31:0] control;
+reg [31:0] status;
+reg clear_status;
 reg [7:0] alpha;
 reg [7:0] alpha_pt0, alpha_pt1, alpha_pt2, gbl_alpha;
 reg [31:0] colorkey;
@@ -183,7 +219,9 @@ reg [31:0] u2;
 reg [31:0] v2;
 reg [31:0] zbuffer_base;
 
-reg [1:0] which_dv;
+wire [29:0] scanpos = {frame_i,vctr_i,hctr_i};
+
+reg which_dv;
 reg [3:0] ld_dv;
 wire [3:0] dv_done;
 wire [63:0] dv1_qo, dv2_qo, dv3_qo, dv4_qo;
@@ -202,23 +240,37 @@ always @(posedge clk_i)
 	if (rd_cmd)
 		cmd_shadow[cmd_fifo[39:34]] <= cmd_fifo[31:0];
 wire [31:0] cmd_shadow_o = cmd_shadow[adr_o[7:2]];
+wire [31:0] cmd_shadow1_o = cmd_shadow[cmd_adr_i[7:2]];
+always @(posedge clk_i)
+if (cmd_core_i==corenum_i)
+	case(cmd_adr_i)
+	8'h00:	cmd_dat_o <= control;
+	8'h04:	cmd_dat_o <= status;
+	default:	cmd_dat_o <= cmd_shadow1_o;
+	endcase
+else
+	cmd_dat_o <= 32'd0;
 
 (* ram_style="distributed" *)
 reg [31:0] regfile [0:31];
-reg [12:0] imem_adr;
+reg [14:0] imem_adr;
 (* ram_style="block" *)
-reg [31:0] imem [0:4095];
+reg [31:0] rommem [0:4095];
 initial begin
-	for (n = 0; n < 4096; n = n + 1)
-		imem[n] <= n;
+`include "d:\\cores5\\FT64\\v5\\software\\boot\\GPU.ve0";
 end
 reg [31:0] imem_o;
 always @(posedge clk_i)
-	imem_o <= imem[imem_adr];
+	if (imem_wr_i)
+		rommem[imem_wadr_i[13:2]] <= imem_dat_i;
+always @(posedge clk_i)
+	imem_o <= rommem[imem_adr[13:2]];
 
 wire cs_imem = adr_o[31:16]==16'hFFFC;
 wire cs_ram  = adr_o[31:16]==16'h0010;
 wire cs_cmd  = adr_o[31: 8]==24'hFFD000;
+wire cs_ext = ~(cs_imem|cs_ram|cs_cmd);
+assign cyc_o = cs_ext & cyc;
 always @*
 casez({cs_imem,cs_ram,cs_cmd})
 3'b1??:	dati <= imem_o;
@@ -235,11 +287,11 @@ case(ir[5:0])
 i_r2:
 	case(ir[31:26])
 	i_add, i_slt, i_sltu, i_sle, i_sleu, i_and, i_or, i_xor, i_nand, i_nor, i_xnor,
-	i_shifti, i_shiftr, i_min, i_max:
+	i_shifti, i_shiftr, i_min, i_max, i_testclip:
 		qrfw <= 1'b1;
 	i_r1:
 		case(ir[22:18])
-		i_abs, i_com, i_not, i_redor, i_zxb, i_zxh, i_sxb, i_sxh,
+		i_abs, i_com, i_not, i_redor, i_zxb, i_zxc, i_sxb, i_sxc,
 		i_4to8, i_8to4, i_2to8, i_8to2, i_rdcmdcnt:
 			qrfw <= 1'b1;
 		default:	qrfw <= 1'b0;
@@ -247,14 +299,14 @@ i_r2:
 	default:	qrfw <= 1'b0;
 	endcase
 i_addi, i_csr, i_slti, i_sltui, i_andi, i_ori, i_xori, i_xnori,
-i_jal, i_ret, i_sgtui, i_sgti, i_ld, i_lui:
+i_jal, i_sgtui, i_sgti, i_ld, i_lui:
 	qrfw <= 1'b1;
 default:	qrfw <= 1'b0;
 endcase
 
 reg takb;
 always @*
-case(ir[31:26])
+case(ir[5:0])
 i_bcc:
 	case (ir[20:18])
 	i_beq:	takb <= a == b;
@@ -263,11 +315,35 @@ i_bcc:
 	i_bge:	takb <= $signed(a) >= $signed(b);
 	i_bltu:	takb <= a < b;
 	i_bgeu:	takb <= a >= b;
-	default	takb <= 1'b0;
+	default:	takb <= 1'b0;
+	endcase
+i_bb_:
+	case(ir[20:19])
+	i_bbs:	takb <=  a[ir[17:13]];
+	i_bbc:	takb <= ~a[ir[17:13]];
+	i_dbnz:	takb <=  a-2'd1 != 32'd0;
+	i_ibne:	takb <=  a+2'd1 != b;
+	default:	takb <= 1'b0;
 	endcase
 i_beqi:	takb <= a == {{24{ir[20]}},ir[20:13]};
 default:	takb <= 1'b0;
 endcase
+
+reg clp;
+always @*
+begin
+	clp <= 1'b0;
+	if (a < target_x0 || a >= target_x1)
+		clp <= 1'b1;
+	else if (b < target_y0 || b >= target_y1)
+		clp <= 1'b1;
+	else if (control[5]) begin
+		if (a < clip_p0_x || a >= clip_p1_x)
+			clp <= 1'b1;
+		else if (b < clip_p0_y || b >= clip_p1_y)
+			clp <= 1'b1;
+	end
+end
 
 reg [13:0] r0;
 (* ram_style="distributed" *)
@@ -276,7 +352,7 @@ reg [13:0] rstack [0:63];
 reg [31:0] dstack [0:63];
 reg [31:0] s0;
 
-wire [4:0] Ra = ir[12:8];
+wire [4:0] Ra = ir[12: 8];
 wire [4:0] Rb = ir[17:13];
 wire [4:0] Rc = ir[22:18];
 reg [4:0] Rt;
@@ -284,7 +360,7 @@ reg [4:0] Rt;
 wire [31:0] rfoa = regfile[Ra];
 wire [31:0] rfob = regfile[Rb];
 wire [31:0] rfoc = regfile[Rc];
-reg [31:0] a, b, c, imm, res, ea;
+reg [31:0] a, b, c, d, imm, res, ea;
 
 wire signed [63:0] prod = $signed(a) * $signed(b);
 reg [63:0] prod1, prod2;
@@ -295,9 +371,9 @@ always @(posedge clk_i)
 
 wire [31:0] color4to8 = {a[15:12],4'h0,a[11:8],4'h0,a[7:4],4'h0,a[3:0],4'h0};
 wire [31:0] color8to4 = {a[31:28],a[23:20],a[15:12],a[7:4]};
-wire [15:0] aprod_r = (alpha * a[23:16]) + (~alpha * b[23:16]);
-wire [15:0] aprod_g = (alpha * a[15: 8]) + (~alpha * b[15: 8]);
-wire [15:0] aprod_b = (alpha * a[ 7: 0]) + (~alpha * b[ 7: 0]);
+wire [15:0] aprod_r = (c[7:0] * a[23:16]) + (~c[7:0] * b[23:16]);
+wire [15:0] aprod_g = (c[7:0] * a[15: 8]) + (~c[7:0] * b[15: 8]);
+wire [15:0] aprod_b = (c[7:0] * a[ 7: 0]) + (~c[7:0] * b[ 7: 0]);
 wire [31:0] aprod = {a[31:24],aprod_r[15:8],aprod_g[15:8],aprod_b[15:8]};
 reg [31:0] aprod1,aprod2;
 always @(posedge clk_i)
@@ -306,6 +382,7 @@ always @(posedge clk_i)
 	aprod2 <= aprod1;
 
 reg [31:0] a1, b1, c1, x1;
+reg [31:0] at, bt, ct;
 // Transform matrix co-efficients
 reg [31:0] aa, ab, ac, tx;
 reg [31:0] ba, bb, bc, ty;
@@ -339,9 +416,25 @@ FT_GPUCmdFifo ucf1 (
 );
 
 always @(posedge clk_i)
+if (rst_i) begin
+	rd_cmd <= 1'b0;
+	control <= 32'h2;			// 16bpp color depth
+	status[31:16] <= 16'd64;
+//	target_x0 <= corenum_i[4:0] * 8'd100;
+//	target_y0 <= corenum_i[9:5] * 8'd100;
+//	target_x1 <= (corenum_i[4:0] + 5'd1) * 8'd100;
+//	target_y1 <= (corenum_i[9:5] + 5'd1) * 8'd100;
+end
+else begin
+	rd_cmd <= 1'b0;
 if (rd_cmd) begin
 	case(cmd_fifo[39:32])
-	8'h00:	control <= cmd_fifo[31:0];
+	8'h00:	
+		begin
+			control <= cmd_fifo[31:0];
+			if (|control[13:8] || |control[19:18])
+				status[0] <= 1'b1;
+		end
 	8'h08:
 		begin	
 			alpha_pt0 <= cmd_fifo[31:24];
@@ -394,49 +487,102 @@ if (rd_cmd) begin
 	default:	;
 	endcase
 end
+else if (cs_cmd && adr_o[7:2]==8'h04 && we_o) begin
+	status[0] <= dat_o[0];
+	if (!dat_o[1])
+		rd_cmd <= 1'b1;
+end
+end
+
+wire [23:0] lfsr1_o;
+lfsr #(24) ulfsr1(rst_i, dot_clk_i, 1'b1, 1'b0, lfsr1_o);
+wire [15:0] lfsr_o = lfsr1_o[15:0];
+reg por;
+
+always @(posedge dot_clk_i)
+if (rst_i)
+	por <= 1'b1;
+else begin
+	if (frame_i > 6'd60)
+		por <= 1'b0;
+end
 
 FT_GPURam ulr1
 (
   .clka(clk_i),
-  .ena(cyc_o & cs_ram),
+  .ena(cyc & cs_ram),
   .wea({4{we_o}} & sel_o),
   .addra(adr_o[15:2]),
   .dina(dat_o),
   .douta(ram_dat),
   .clkb(dot_clk_i),
   .enb(1'b1),
-  .web(2'b0),
+  .web({2{por}}),
   .addrb(scan_adr_i),
-  .dinb(16'h0),
+  .dinb(lfsr_o),
   .doutb(scan_dat_o)
 );
 
-ack_gen #(.READ_STAGES(3),
+ack_gen #(
+	.READ_STAGES(3),
 	.WRITE_STAGES(1),
 	.REGISTER_OUTPUT(1)
 ) ag1
 (
 	.clk_i(clk_i),
 	.ce_i(1'b1),
-	.i(cyc_o && adr_o[15:14]!=2'b11),
-	.we_i(we_o),
+	.i(cyc & cs_ram),
+	.we_i(cyc & cs_ram & we_o),
 	.o(ram_ack)
 );
 
 wire imem_ack;
-ack_gen #(.READ_STAGES(3),
+ack_gen #(
+	.READ_STAGES(3),
 	.WRITE_STAGES(1),
 	.REGISTER_OUTPUT(1)
 ) ag2
 (
 	.clk_i(clk_i),
 	.ce_i(1'b1),
-	.i(cs_imem & cyc_o),
+	.i(cs_imem & cyc),
 	.we_i(1'b0),
 	.o(imem_ack)
 );
 
 wire acki = ram_ack | ack_i | cs_cmd | imem_ack;
+
+/*
+FT64_GSdivider #(.WID(32), .WHOLE(16), .POINTS(16)) udv1 (
+	.rst(rst_i),
+	.clk(clk_i),
+	.ld(ld_dv[0]),
+	.abort(1'b0),
+	.sgn(1'b1),
+	.sgnus(1'b0),
+	.a(a),
+	.b(b),
+	.qo(dv1_qo),
+	.dvByZr(),
+	.done(dv_done[0]),
+	.idle()
+);
+
+FT64_GSdivider #(.WID(32), .WHOLE(16), .POINTS(16)) udv2 (
+	.rst(rst_i),
+	.clk(clk_i),
+	.ld(ld_dv[1]),
+	.abort(1'b0),
+	.sgn(1'b1),
+	.sgnus(1'b0),
+	.a(a),
+	.b(b),
+	.qo(dv2_qo),
+	.dvByZr(),
+	.done(dv_done[1]),
+	.idle()
+);
+*/
 
 FT64_divider #(64) udv1 (
 	.rst(rst_i),
@@ -469,7 +615,7 @@ FT64_divider #(64) udv2 (
 	.done(dv_done[1]),
 	.idle()
 );
-
+/*
 FT64_divider #(64) udv3 (
 	.rst(rst_i),
 	.clk(clk_i),
@@ -501,16 +647,78 @@ FT64_divider #(64) udv4 (
 	.done(dv_done[3]),
 	.idle()
 );
+*/
 
 always @(posedge clk_i)
 if (rst_i) begin
 	pc <= 32'hFFFC0100;
-	rd_cmd <= 1'b0;
+	imem_adr <= 32'hFFFC0100;
 	call (DELAY3,IFETCH);
+	tstate <= TRANSFORM4;
+	sstate <= ST_IDLE;
+	cyc <= 1'b0;
+	we_o <= 1'b0;
+	adr_o <= 32'h0;
 end
 else begin
 	ld_dv <= 4'b0;
-	rd_cmd <= 1'b0;
+
+case(sstate)
+ST_IDLE:
+	;
+ST2:
+	if (acki) begin
+		cyc <= 1'b0;
+		we_o <= 1'b0;
+		sstate <= ST_IDLE;
+	end
+endcase
+
+case(tstate)
+TRANSFORM1:
+	begin
+		a1 <= aa;
+		b1 <= ab;
+		c1 <= ac;
+		x1 <= at;
+		tstkstate <= TRANSFORM2;
+		tstate <= TDELAY3;
+	end
+TRANSFORM2:
+	begin
+		aax <= pax;
+		bax <= pbx;
+		cax <= pcx;
+		a1 <= ab;
+		b1 <= bb;
+		c1 <= cb;
+		x1 <= bt;
+		tstkstate <= TRANSFORM3;
+		tstate <= TDELAY3;
+	end
+TRANSFORM3:
+	begin
+		aby <= pax;
+		bby <= pbx;
+		cby <= pcx;
+		a1 <= ac;
+		b1 <= bc;
+		c1 <= cc;
+		x1 <= ct;
+		tstkstate <= TRANSFORM4;
+		tstate <= TDELAY3;
+	end
+TRANSFORM4:
+	begin
+		acz <= pax;
+		bcz <= pbx;
+		ccz <= pcx;
+	end
+TDELAY3:	tstate <= TDELAY2;
+TDELAY2:	tstate <= TDELAY1;
+TDELAY1:	tstate <= tstkstate;
+endcase
+
 case(state)
 IFETCH:
 	begin
@@ -540,12 +748,11 @@ DECODE:
 			case(ir[5:0])
 			i_r2:
 				case(ir[31:26])
-				i_r1, i_shifti:	Rt <= ir[17:13];
-				default:	Rt <= ir[22:18];
+				i_r1, i_shifti:	Rt <= Rb;
+				default:	Rt <= Rc;
 				endcase
-			i_lui:	Rt <= ir[12:8];
-			i_ret:	Rt <= ir[12:8];
-			default:	Rt <= ir[17:13];
+			i_lui:	Rt <= Ra;
+			default:	Rt <= Rb;
 			endcase
 		// Multi-cycle ops
 		else begin
@@ -553,10 +760,17 @@ DECODE:
 			i_r2:
 				case(ir[31:26])
 				i_fxdiv,
-				i_fxmul,i_mul:	Rt <= ir[22:18];
+				i_fxmul,i_mul:	Rt <= Rc;
 				default:	Rt <= 5'd0;
 				endcase
-			i_fxmuli,i_muli:	Rt <= ir[17:13];
+			i_fxmuli,i_muli:	Rt <= Rb;
+			i_bb_:
+				case(ir[20:19])
+				i_dbnz:	  Rt <= Ra;
+				i_ibne:		Rt <= Ra;
+				default:	Rt <= 5'd0;
+				endcase
+			i_ret:	Rt <= Ra;
 			default:	Rt <= 5'd0;
 			endcase
 		end
@@ -575,34 +789,28 @@ EXECUTE:
 				i_not:	res <= a != 32'd0;
 				i_redor:	res <= |a;
 				i_zxb:	res <= {24'd0,a[7:0]};
-				i_zxh:	res <= {16'd0,a[15:0]};
+				i_zxc:	res <= {16'd0,a[15:0]};
 				i_sxb:	res <= {{24{a[7]}},a[7:0]};
-				i_sxh:	res <= {{16{a[15]}},a[15:0]};
+				i_sxc:	res <= {{16{a[15]}},a[15:0]};
 				i_4to8:	res <= color4to8;
 				i_8to4:	res <= color8to4;
 				i_popr:	begin popr(); call (DELAY2,IFETCH); end
-				i_divwait:
-						case(a[1:0])
-						2'd0:	if (!dv_done[0]) goto (EXECUTE); else begin Rt = Ra; res <= dv1_qo[31:0]; call (WRITEBACK,IFETCH); end
-						2'd1:	if (!dv_done[1]) goto (EXECUTE); else begin Rt = Ra; res <= dv2_qo[31:0]; call (WRITEBACK,IFETCH); end
-						2'd2:	if (!dv_done[2]) goto (EXECUTE); else begin Rt = Ra; res <= dv3_qo[31:0]; call (WRITEBACK,IFETCH); end
-						2'd3:	if (!dv_done[3]) goto (EXECUTE); else begin Rt = Ra; res <= dv4_qo[31:0]; call (WRITEBACK,IFETCH); end
-						endcase
-				i_modwait:
-						case(a[1:0])
-						2'd0:	if (!dv_done[0]) goto (EXECUTE); else begin Rt = Ra; res <= dv1_ro[31:0]; call (WRITEBACK,IFETCH); end
-						2'd1:	if (!dv_done[1]) goto (EXECUTE); else begin Rt = Ra; res <= dv2_ro[31:0]; call (WRITEBACK,IFETCH); end
-						2'd2:	if (!dv_done[2]) goto (EXECUTE); else begin Rt = Ra; res <= dv3_ro[31:0]; call (WRITEBACK,IFETCH); end
-						2'd3:	if (!dv_done[3]) goto (EXECUTE); else begin Rt = Ra; res <= dv4_ro[31:0]; call (WRITEBACK,IFETCH); end
-						endcase
-				i_rdcmd:	begin rd_cmd <= 1'b1; goto (IFETCH); end
 				i_rdcmdcnt:	res <= cmd_count;
 				default:	;
 				endcase
 			i_add:	res <= a + b;
+			i_sub:	res <= a - b;
 			i_fxmul:	goto (FXMUL1);
 			i_fxdiv:
-				begin
+				if (ir[25]) begin
+						case(a[1:0])
+						2'd0:	if (!dv_done[0]) goto (EXECUTE); else begin res <= dv1_qo[31:0]; call (WRITEBACK,IFETCH); end
+						2'd1:	if (!dv_done[1]) goto (EXECUTE); else begin res <= dv2_qo[31:0]; call (WRITEBACK,IFETCH); end
+						2'd2:	if (!dv_done[2]) goto (EXECUTE); else begin res <= dv3_qo[31:0]; call (WRITEBACK,IFETCH); end
+						2'd3:	if (!dv_done[3]) goto (EXECUTE); else begin res <= dv4_qo[31:0]; call (WRITEBACK,IFETCH); end
+						endcase
+				end
+				else begin
 					if (dv_done[which_dv]) begin
 						ld_dv[which_dv] <= 1'b1;
 						which_dv <= which_dv + 1'd1;
@@ -625,9 +833,9 @@ EXECUTE:
 			i_sleu:	res <= a <= b;
 			i_shifti:
 				case(ir[25:23])
-				i_shl:	res <= a << ir[22:18];
-				i_shr:	res <= a >> ir[22:18];
-				i_asr:	res <= a[31] ? (a >> ir[22:18]) | ~({32{1'b1}} >> ir[22:18]) : a >> ir[22:18];
+				i_shl:	res <= a << Rc;
+				i_shr:	res <= a >> Rc;
+				i_asr:	res <= a[31] ? (a >> Rc) | ~({32{1'b1}} >> Rc) : a >> Rc;
 				default:	;
 				endcase
 			i_shiftr:
@@ -637,7 +845,40 @@ EXECUTE:
 				i_asr:	res <= a[31] ? (a >> b[4:0]) | ~({32{1'b1}} >> b[4:0]) : a >> b[4:0];
 				default:	;
 				endcase
-			i_blend:	goto (BLEND1);
+			i_testscn: res <= (scanpos & a) > b;
+			i_testclip:	res <= clp;
+			i_min:	res <= $signed(a) < $signed(b) ? a : b;
+			i_max:	res <= $signed(a) > $signed(b) ? a : b;
+			i_lcx:
+				begin
+					ea <= a + (b << ir[24:23]);
+					ea[0] <= 1'b0;
+					memsize = char;
+					goto (LD1);
+				end
+			i_lhx:
+				begin
+					ea <= a + (b << ir[24:23]);
+					ea[1:0] <= 1'b0;
+					memsize = half;
+					goto (LD1);
+				end
+			i_scx:
+				begin
+					ea <= a + (b << ir[24:23]);
+					ea[0] <= 1'b0;
+					d <= c;
+					memsize = char;
+					goto (ST1);
+				end
+			i_shx:
+				begin
+					ea <= a + (b << ir[24:23]);
+					ea[1:0] <= 1'b0;
+					d <= c;
+					memsize = half;
+					goto (ST1);
+				end
 			endcase
 		i_lui:	res <= {ir[31:13],14'h0};
 		i_addi:	res <= a + imm;
@@ -649,34 +890,61 @@ EXECUTE:
 		i_sltui:	res <= a < b;
 		i_sgti:	res <= $signed(a) > $signed(b);
 		i_sgtui:	res <= a > b;
-		i_transform:	goto (TRANSFORM1);
+		i_blend:	goto (BLEND1);
+		i_transform:	
+			if (ir[25])
+				goto (TRANSFORM5);
+			else begin
+				at <= a;
+				bt <= b;
+				ct <= c;
+				tstate <= TRANSFORM1;
+				goto (IFETCH);
+			end
+		i_bb_:
+			if (takb) begin
+				pc <= pc + {{20{ir[31]}},ir[31:22],2'b0};
+				imem_adr <= pc + {{20{ir[31]}},ir[31:22],2'b0};
+				call (DELAY2,BBC);
+			end
+			else
+				goto (BBC);
 		i_bcc,i_beqi:
 			if (takb) begin
-				pc <= pc + {{21{ir[31]}},ir[31:21]};
-				imem_adr <= pc + {{21{ir[31]}},ir[31:21]};
+				pc <= pc + {{20{ir[31]}},ir[31:22],2'b0};
+				imem_adr <= pc + {{20{ir[31]}},ir[31:22],2'b0};
 				call (DELAY3,IFETCH);
 			end
 			else
 				call(DELAY1,IFETCH);
-		i_jmp:	begin pc <= ir[23:8]; imem_adr <= ir[23:8]; call (DELAY3,IFETCH); end
-		i_call:	begin r0 <= pc + 16'd4; pushr(); pc <= ir[23:8]; imem_adr <= ir[23:8]; call (DELAY3,IFETCH); end
-		i_ret:	begin pc <= r0; imem_adr <= r0; popr(); res <= a + imm; end
+		i_jmp:	begin pc <= {ir[31:9],2'b0}; imem_adr <= {ir[31:9],2'b0}; call (DELAY3,IFETCH); end
+		i_call:	begin r0 <= pc + 16'd4; pushr(); pc <= {ir[31:9],2'b0}; imem_adr <= {ir[31:9],2'b0}; call (DELAY3,IFETCH); end
+		i_ret:	begin pc <= r0; imem_adr <= r0; popr(); res <= a + imm; call (DELAY2,LD3); end
 		i_ld:	
 			begin
 				ea <= a + imm;
-				if (ir[19:18]==2'b10)
+				if (ir[19:18]==2'b10) begin
+					memsize = half;
 					ea[1:0] <= 2'd0;
-				else
+				end
+				else begin
+					memsize = char;
 					ea[0] <= 1'd0;
+				end
 				goto (LD1);
 			end
 		i_st:
 			begin
 				ea <= a + imm;
-				if (ir[19:18]==2'b10)
+				if (ir[19:18]==2'b10) begin
 					ea[1:0] <= 2'd0;
-				else
+					memsize = half;
+				end
+				else begin
 					ea[0] <= 1'd0;
+					memsize = char;
+				end
+				d <= b;
 				goto (ST1);
 			end
 		endcase
@@ -686,12 +954,20 @@ WRITEBACK:
 		regfile[Rt] <= res;
 		return();
 	end
+BBC:
+	begin
+		case(ir[20:19])
+		i_dbnz:	begin res <= a - 2'd1; call(WRITEBACK,IFETCH); end
+		i_ibne:	begin res <= a + 2'd1; call(WRITEBACK,IFETCH); end
+		default:	goto (IFETCH);
+		endcase
+	end
 LD1:
-	if (~acki) begin
-		cyc_o <= 1'b1;
+	if (~acki & ~cyc) begin
+		cyc <= 1'b1;
 		adr_o <= ea;
 		imem_adr <= ea[12:0];
-		if (ir[19:18]==2'b10)
+		if (memsize==half)
 			sel_o <= 4'hF;
 		else
 			sel_o <= ea[1] ? 4'b1100 : 4'b0011;
@@ -699,8 +975,8 @@ LD1:
 	end
 LD2:
 	if (acki) begin
-		cyc_o <= 1'b0;
-		if (ir[19:18]==2'b10)
+		cyc <= 1'b0;
+		if (memsize==half)
 			res <= dat_i;
 		else
 			res <= ea[1] ? {{16{dat_i[31]}},dat_i[31:16]} : {{16{dat_i[15]}},dat_i[15:0]};
@@ -710,25 +986,20 @@ LD2:
 LD3:
 	call (WRITEBACK,IFETCH);
 ST1:
-	if (~acki) begin
-		cyc_o <= 1'b1;
+	if (~acki & ~cyc) begin
+		cyc <= 1'b1;
 		we_o <= 1'b1;
 		adr_o <= ea;
-		if (ir[19:18]==2'b10) begin
+		if (memsize==half) begin
 			sel_o <= 4'hF;
-			dat_o <= b;
+			dat_o <= d;
 		end
 		else begin
 			sel_o <= ea[1] ? 4'b1100 : 4'b0011;
-			dat_o <= {2{b[15:0]}};
+			dat_o <= {2{d[15:0]}};
 		end
-		goto (ST2);
-	end
-ST2:
-	if (acki) begin
-		cyc_o <= 1'b0;
-		we_o <= 1'b0;
-		goto(IFETCH);
+		sstate <= ST2;
+		goto (IFETCH);
 	end
 FXMUL1:	call(DELAY3,FXMUL2);
 FXMUL2:
@@ -746,68 +1017,35 @@ BLEND1:	goto (BLEND2);
 BLEND2:	goto (BLEND3);
 BLEND3:	
 	begin
-		Rt <= ir[22:18];
+		Rt <= ir[27:23];
 		res <= aprod2;
 		call (WRITEBACK,IFETCH);
 	end
-TRANSFORM1:
-	begin
-		a1 <= aa;
-		b1 <= ab;
-		c1 <= ac;
-		x1 <= a;
-		call (DELAY3,TRANSFORM2);
-	end
-TRANSFORM2:
-	begin
-		aax <= pax;
-		bax <= pbx;
-		cax <= pcx;
-		a1 <= ab;
-		b1 <= bb;
-		c1 <= cb;
-		x1 <= b;
-		call (DELAY3,TRANSFORM3);
-	end
-TRANSFORM3:
-	begin
-		aby <= pax;
-		bby <= pbx;
-		cby <= pcx;
-		a1 <= ac;
-		b1 <= bc;
-		c1 <= cc;
-		x1 <= c;
-		call (DELAY3,TRANSFORM4);
-	end
-TRANSFORM4:
-	begin
-		acz <= pax;
-		bcz <= pbx;
-		ccz <= pcx;
-	end
 TRANSFORM5:
-	begin
+	if (tstate==TRANSFORM4) begin
 		Rt <= Ra;
 		res <= x_prime[47:16];
-		call (WRITEBACK,TRANSFORM6);
+		goto (TRANSFORM6);
 	end
 TRANSFORM6:
 	begin
 		Rt <= Rb;
 		res <= y_prime[47:16];
-		call (WRITEBACK,TRANSFORM7);
+		regfile[Rt] <= res;
+		goto (TRANSFORM7);
 	end
 TRANSFORM7:
 	begin
 		Rt <= Rc;
 		res <= z_prime[47:16];
+		regfile[Rt] <= res;
 		call (WRITEBACK,IFETCH);
 	end
 DELAY3:	goto (DELAY2);
 DELAY2:	goto (DELAY1);
 DELAY1:	return();
 endcase
+
 end
 
 task goto;

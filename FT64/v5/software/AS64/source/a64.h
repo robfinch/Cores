@@ -59,6 +59,7 @@ extern SHashTbl HashInfo;
 extern FilenameStack fns;
 extern std::string mname;
 extern int gCpu;
+extern bool gpu;
 extern char lastid[500];
 extern char laststr[500];
 extern char current_label[500];
