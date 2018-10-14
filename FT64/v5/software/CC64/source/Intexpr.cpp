@@ -1,11 +1,11 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2017  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2018  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-// C64 - 'C' derived language compiler
+// CC64 - 'C' derived language compiler
 //  - 64 bit CPU
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -33,21 +33,21 @@ int64_t GetIntegerExpression(ENODE **pnode)       /* simple integer value */
 	tp = NonCommaExpression(&node);
 	if (node==NULL) {
 		error(ERR_SYNTAX);
-		return 0;
+		return (0);
 	}
 	opt_const(&node);	// This should reduce to a single integer expression
 	if (node==NULL) {
 		fatal("Compiler Error: GetIntegerExpression: node is NULL");
-		return 0;
+		return (0);
 	}
-	if (node->nodetype != en_icon && node->nodetype != en_cnacon) {
-        printf("\r\nnode:%d \r\n", node->nodetype);
+	if (node->nodetype != en_icon && node->nodetype != en_cnacon && node->nodetype != en_labcon) {
+    printf("\r\nnode:%d \r\n", node->nodetype);
 		error(ERR_INT_CONST);
-		return 0;
+		return (0);
 	}
 	if (pnode)
 		*pnode = node;
-	return node->i;
+	return (node->i);
 }
 
 Float128 *GetFloatExpression(ENODE **pnode)       /* simple integer value */
@@ -72,7 +72,7 @@ Float128 *GetFloatExpression(ENODE **pnode)       /* simple integer value */
 			if (node->p[0]->nodetype != en_fcon) {
 				printf("\r\nnode:%d \r\n", node->nodetype);
 				error(ERR_INT_CONST);
-				return 0;
+				return (0);
 			}
 			Float128::Assign(flt, &node->p[0]->f128);
 			flt->sign = !flt->sign;
@@ -83,7 +83,7 @@ Float128 *GetFloatExpression(ENODE **pnode)       /* simple integer value */
 	}
 	if (pnode)
 		*pnode = node;
-	return &node->f128;
+	return (&node->f128);
 }
 
 int64_t GetConstExpression(ENODE **pnode)       /* simple integer value */
@@ -132,7 +132,9 @@ int64_t GetConstExpression(ENODE **pnode)       /* simple integer value */
 			*pnode = node;
 		return (node->i);
 	default:
-		error(ERR_CONST);
+		if (pnode)
+			*pnode = node;
+		//error(ERR_CONST);
 		return (0);
 	}
 	error(ERR_CONST);

@@ -471,7 +471,7 @@ void GenerateChar(int64_t val)
 	genst_cumulative += 2;
 }
 
-void genhalf(int64_t val)
+void GenerateHalf(int64_t val)
 {
 	if( gentype == halfgen && outcol < 60) {
         ofs.printf(",%ld",(long)(val & 0xffffffff));

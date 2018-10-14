@@ -31,7 +31,6 @@ extern SYM *currentClass;
 static unsigned char sizeof_flag = 0;
 static TYP *ParseCastExpression(ENODE **node);
 static TYP *NonAssignExpression(ENODE **node);
-TYP *forcefit(ENODE **node1,TYP *tp1,ENODE **node2,TYP *tp2,bool);
 extern void backup();
 extern char *inpline;
 extern int parsingParameterList;
@@ -535,7 +534,7 @@ TYP *CondDeref(ENODE **node, TYP *tp)
 			&& tp->type != bt_class
 			&& tp->type != bt_ifunc
 			&& tp->type != bt_func)
-			return deref(node, tp);
+			return (deref(node, tp));
 	if (tp->type == bt_pointer && sizeof_flag == 0) {
 		sz = tp->size;
 		dimen = tp->dimen;
@@ -551,10 +550,10 @@ TYP *CondDeref(ENODE **node, TYP *tp)
 		tp->isUnsigned = TRUE;
 	}
 	else if (tp->type==bt_pointer)
-		return tp;
+		return (tp);
 	//    else if (tp->type==bt_struct || tp->type==bt_union)
 	//       return deref(node, tp);
-	return tp;
+	return (tp);
 }
 /*
 TYP *CondDeref(ENODE **node, TYP *tp)
@@ -1032,6 +1031,22 @@ TYP *ParsePrimaryExpression(ENODE **node, int got_pa)
 	case ellipsis:
     case id:
         tptr = nameref(&pnode,TRUE);
+				//pnode->p[3] = (ENODE *)tptr->size;
+//				if (pnode->nodetype==en_nacon)
+//					pnode->p[0] = makenode(en_list,tptr->BuildEnodeTree(),nullptr);
+		//else if (sp = gsyms->Find(lastid, false)) {
+		//	if (TABLE::matchno > 1) {
+		//		for (i = 0; i < TABLE::matchno) {
+		//			sp = TABLE::match[i];
+		//		}
+		//	}
+		//	if (sp->tp == &stdconst) {
+		//		ival = sp->value.i;
+		//		lastst = iconst;
+		//		return;
+		//	}
+		//}
+
 /*
 		// Try and find the symbol, if not found, assume a function
 		// but only if it's followed by a (
@@ -1296,7 +1311,7 @@ int IsLValue(ENODE *node)
 	// the same as an *_ref node. It's an LValue.
 	case en_add:
 		if (node->tp)
-			return node->tp->type==bt_pointer && node->tp->isArray;
+			return (node->tp->type==bt_pointer && node->tp->isArray) || node->tp->type==bt_struct;
 		else
 			return FALSE;
 	// A typecast will connect the types with a void node
@@ -1713,7 +1728,7 @@ j2:
 				ep1 = makenode(en_add,ep1,qnode);
 				ep1->constflag = ep1->p[0]->constflag;
 				ep1->isUnsigned = iu;
-				ep1->esize = 2;
+				ep1->esize = 8;
 				ep1->p[2] = pep1;
 				if (tp1->type==bt_pointer && (tp1->GetBtp()->type==bt_func || tp1->GetBtp()->type==bt_ifunc))
 					dfs.printf("Pointer to func");
@@ -2123,8 +2138,8 @@ static TYP *ParseCastExpression(ENODE **node)
 	TYP *tp, *tp1, *tp2;
 	ENODE *ep1, *ep2;
 
-    Enter("ParseCast ");
-    *node = (ENODE *)NULL;
+  Enter("ParseCast ");
+  *node = (ENODE *)NULL;
 	switch(lastst) {
  /*
 	case openpa:
@@ -2173,28 +2188,40 @@ static TYP *ParseCastExpression(ENODE **node)
 			*/
 			if (tp == nullptr)
 				error(ERR_NULLPOINTER);
-			if (tp && tp->IsFloatType())
-				ep2 = makenode(en_tempfpref, (ENODE *)NULL, (ENODE *)NULL);
+			if (tp && tp->IsFloatType()) {
+				//if (tp2->IsFloatType() && ep1->constflag)
+				//	ep2 = makefnode(en_fcon, ep1->f);
+				//else if (ep1->constflag)
+				//	ep2 = makeinode(en_icon, ep1->i);
+				//else
+					ep2 = makenode(en_tempfpref, (ENODE *)NULL, (ENODE *)NULL);
+			}
 			else {
-				ep2 = makenode(en_tempref, (ENODE *)NULL, (ENODE *)NULL);
+				//if (tp2->IsFloatType() && ep1->constflag)
+				//	ep2 = makefnode(en_fcon, ep1->f);
+				//else if (ep1->constflag)
+				//	ep2 = makeinode(en_icon, ep1->i);
+				//else
+					ep2 = makenode(en_tempref, (ENODE *)NULL, (ENODE *)NULL);
 				ep2->SetType(tp);
 			}
-			ep2 = makenode(en_void,ep2,ep1);
+			//ep2 = makenode(en_void,ep2,ep1);
 			if (ep1==nullptr)
-                error(ERR_NULLPOINTER);
+        error(ERR_NULLPOINTER);
 			else {
 				ep2->constflag = ep1->constflag;
 				ep2->isUnsigned = ep1->isUnsigned;
-				ep2->etype = ep1->etype;
-				ep2->esize = ep1->esize;
-				forcefit(&ep2,tp,&ep1,tp2,false);
+				//ep2->etype = ep1->etype;
+				//ep2->esize = ep1->esize;
+//				forcefit(&ep2,tp,&ep1,tp2,false);
+				forcefit(&ep1,tp2,&ep2,tp,false,true);
 			}
 //			forcefit(&ep2,tp2,&ep1,tp,false);
 			head = tp;
 			tail = tp1;
 			*node = ep2;
-      		(*node)->SetType(tp);
-			return tp;
+      (*node)->SetType(tp);
+			return (tp);
         }
 		else {
 			tp = ParseUnaryExpression(&ep1,1);
@@ -2212,7 +2239,7 @@ static TYP *ParseCastExpression(ENODE **node)
 	Leave("ParseCast", tp->type);
 	else
 	Leave("ParseCast", 0);
-	return tp;
+	return (tp);
 }
 
 /*
@@ -2251,7 +2278,7 @@ TYP *multops(ENODE **node)
                         return tp1;
                         }
 				isScalar = !tp2->IsVectorType();
-                tp1 = forcefit(&ep2,tp2,&ep1,tp1,true);
+                tp1 = forcefit(&ep2,tp2,&ep1,tp1,true,false);
                 switch( oper ) {
                         case star:
 								switch(tp1->type) {
@@ -2313,11 +2340,11 @@ TYP *multops(ENODE **node)
 									ep1 = makenode(en_fdiv,ep1,ep2);
 									ep1->esize = sizeOfFP;
 								}
-                                else if( tp1->isUnsigned )
-                                    ep1 = makenode(en_udiv,ep1,ep2);
-                                else
-                                    ep1 = makenode(en_div,ep1,ep2);
-                                break;
+                else if( tp1->isUnsigned )
+                    ep1 = makenode(en_udiv,ep1,ep2);
+                else
+                    ep1 = makenode(en_div,ep1,ep2);
+                break;
 								ep1->esize = tp1->size;
 								ep1->etype = (e_bt)tp1->type;
                         case modop:
@@ -2389,16 +2416,23 @@ static TYP *addops(ENODE **node)
 			}
 			else {
                 if( tp1->type == bt_pointer ) {
-                        tp2 = forcefit(&ep2,tp2,0,&stdint,true);
+                        tp2 = forcefit(&ep2,tp2,0,&stdint,true,false);
                         ep3 = makeinode(en_icon,tp1->GetBtp()->size);
                         ep3->constflag = TRUE;
-    					ep3->esize = tp2->size;
-                        ep2 = makenode(en_mulu,ep3,ep2);
-                        ep2->constflag = ep2->p[1]->constflag;
-    					ep2->esize = tp2->size;
+    										ep3->esize = tp2->size;
+												//if (ep2->nodetype == en_icon) {
+												//	ep2 = makeinode(en_icon, ep3->i * ep2->i);
+												//	ep2->constflag = TRUE;
+												//}
+												//else
+												{
+													ep2 = makenode(en_mulu, ep3, ep2);
+													ep2->constflag = ep2->p[1]->constflag;
+													ep2->esize = tp2->size;
+												}
                         }
                 else if( tp2->type == bt_pointer ) {
-                        tp1 = forcefit(&ep1,tp1,0,&stdint,true);
+                        tp1 = forcefit(&ep1,tp1,0,&stdint,true,false);
                         ep3 = makeinode(en_icon,tp2->GetBtp()->size);
                         ep3->constflag = TRUE;
     					ep3->esize = tp2->size;
@@ -2406,7 +2440,7 @@ static TYP *addops(ENODE **node)
                         ep1->constflag = ep1->p[1]->constflag;
     					ep2->esize = tp2->size;
                         }
-                tp1 = forcefit(&ep2,tp2,&ep1,tp1,true);
+                tp1 = forcefit(&ep2,tp2,&ep1,tp1,true,false);
 				switch (tp1->type) {
 				case bt_triple:
     				ep1 = makenode( oper ? en_fadd : en_fsub,ep1,ep2);
@@ -2417,7 +2451,7 @@ static TYP *addops(ENODE **node)
 					ep1->esize = sizeOfFPD;
 					break;
 				case bt_quad:
-                    //tp1 = forcefit(&ep1,tp1,&ep2,tp2,true);
+                    //tp1 = forcefit(&ep1,tp1,&ep2,tp2,true,false);
     				ep1 = makenode( oper ? en_fadd : en_fsub,ep1,ep2);
 					ep1->esize = sizeOfFPQ;
 					break;
@@ -2480,7 +2514,7 @@ TYP *shiftop(ENODE **node)
             if( tp2 == 0 )
                     error(ERR_IDEXPECT);
             else    {
-                    tp1 = forcefit(&ep2,tp2,&ep1,tp1,true);
+                    tp1 = forcefit(&ep2,tp2,&ep1,tp1,true,false);
 					if (tp1->IsFloatType())
 						error(ERR_UNDEF_OP);
 					else {
@@ -2583,7 +2617,7 @@ TYP     *relation(ENODE **node)
                 else    {
 					if (tp2->IsVectorType())
 						isVector = true;
-                        tp1 = forcefit(&ep2,tp2,&ep1,tp1,true);
+					tp1 = forcefit(&ep2, tp2, &ep1, tp1, true, false);
                         ep1 = makenode(nt,ep1,ep2);
 						ep1->esize = 1;
 						if (isVector)
@@ -2625,7 +2659,7 @@ TYP *equalops(ENODE **node)
         else {
 			if (tp2->IsVectorType())
 				isVector = true;
-            tp1 = forcefit(&ep2,tp2,&ep1,tp1,true);
+            tp1 = forcefit(&ep2,tp2,&ep1,tp1,true,false);
 			if (tp1->IsVectorType())
 				ep1 = makenode( oper ? en_veq : en_vne,ep1,ep2);
             else if (tp1->IsFloatType())
@@ -2666,7 +2700,7 @@ TYP *binop(ENODE **node, TYP *(*xfunc)(ENODE **),int nt, int sy)
                 if( tp2 == 0 )
                         error(ERR_IDEXPECT);
                 else    {
-                        tp1 = forcefit(&ep2,tp2,&ep1,tp1,true);
+                        tp1 = forcefit(&ep2,tp2,&ep1,tp1,true,false);
                         ep1 = makenode(nt,ep1,ep2);
 						ep1->esize = tp1->size;
 						ep1->etype = tp1->type;
@@ -2731,7 +2765,7 @@ TYP *conditional(ENODE **node)
                     error(ERR_IDEXPECT);
                     goto cexit;
                     }
-            tp1 = forcefit(&ep3,tp3,&ep2,tp2,true);
+            tp1 = forcefit(&ep3,tp3,&ep2,tp2,true,false);
             ep2 = makenode(en_void,ep2,ep3);
 			ep2->esize = tp1->size;
             ep1 = makenode(en_cond,ep1,ep2);
@@ -2772,7 +2806,7 @@ ascomm2:
 		        if( tp2 == 0 || !IsLValue(ep1) )
                     error(ERR_LVALUE);
 				else {
-					tp1 = forcefit(&ep2,tp2,&ep1,tp1,false);
+					tp1 = forcefit(&ep2,tp2,&ep1,tp1,false,true);
 					ep1 = makenode(op,ep1,ep2);
 					ep1->esize = tp1->size;
 					ep1->etype = tp1->type;

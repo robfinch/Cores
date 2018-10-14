@@ -1,11 +1,11 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2017  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2018  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-// C64 - 'C' derived language compiler
+// CC64 - 'C' derived language compiler
 //  - 64 bit CPU
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -25,29 +25,15 @@
 //
 #include "stdafx.h"
 
-/*
- *	68000 C compiler
- *
- *	Copyright 1984, 1985, 1986 Matthew Brandt.
- *  all commercial rights reserved.
- *
- *	This compiler is intended as an instructive tool for personal use. Any
- *	use for profit without the written consent of the author is prohibited.
- *
- *	This compiler may be distributed freely for non-commercial use as long
- *	as this notice stays intact. Please forward any enhancements or questions
- *	to:
- *
- *		Matthew Brandt
- *		Box 920337
- *		Norcross, Ga 30092
- */
-/*******************************************************
-	Modified to support Raptor64 'C64' language
-	by Robert Finch
-	robfinch@opencores.org
-*******************************************************/
 extern char *errtext(int);
+
+int token_stack[5];
+char *id_stack[5];
+Float128 rval128_stack[5];
+double rval_stack[5];
+int64_t ival_stack[5];
+char ch_stack[5];
+int token_sp = 0;
 
 int inComment = FALSE;
 int      my_errno[80];
@@ -64,6 +50,32 @@ int             lstackptr = 0;  /* substitution stack pointer */
 static char numstr[100];
 static char *numstrptr;
 static char backup_token = 0;
+
+void push_token()
+{
+	if (token_sp < 5) {
+		ch_stack[token_sp] = lastch;
+		token_stack[token_sp] = lastst;
+		rval128_stack[token_sp] = rval128;
+		rval_stack[token_sp] = rval;
+		ival_stack[token_sp] = ival;
+		id_stack[token_sp] = strdup(lastid);
+		token_sp++;
+	}
+}
+
+void pop_token()
+{
+	if (token_sp > 0) {
+		token_sp--;
+		lastch = ch_stack[token_sp];
+		lastst = token_stack[token_sp];
+		rval128 = rval128_stack[token_sp];
+		rval = rval_stack[token_sp];
+		ival = ival_stack[token_sp];
+		strcpy_s(lastid, sizeof(lastid), id_stack[token_sp]);
+	}
+}
 
 int isalnum(char c)
 {       return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
@@ -459,6 +471,10 @@ void NextToken()
   SYM *sp;
   int tch;
 restart:        /* we come back here after comments */
+	if (token_sp > 0) {
+		pop_token();
+		return;
+	}
   if (backup_token) {
      backup_token = 0;
      lastch = '(';
@@ -488,7 +504,6 @@ restart:        /* we come back here after comments */
 				goto restart;
 			}
 		}
-
   }
   else {
   switch(lastch) {
@@ -787,14 +802,15 @@ restart:        /* we come back here after comments */
 void needpunc(enum e_sym p,int clue)
 {
 	if( lastst == p)
-        NextToken();
+    NextToken();
 	else {
 		//printf("%d %s\r\n", lineno, inpline);
 		printf("*************clue:%d************\r\n",clue);
-        error(ERR_PUNCT);
+    error(ERR_PUNCT);
 	}
 }
 
 void backup() {
     backup_token = 1;
 }
+

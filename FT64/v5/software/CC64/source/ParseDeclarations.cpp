@@ -900,7 +900,7 @@ j1:
 	}
 lxit:
 	dfs.puts("</ParseDeclPrefix>\n");
-	return sp;
+	return (sp);
 }
 
 
@@ -1468,11 +1468,24 @@ int Declaration::declare(SYM *parent,TABLE *table,int al,int ilc,int ztype)
       }
 
 		if (funcdecl>0) {
-			if (lastst==comma || lastst==semicolon) {
+			if (lastst == comma)
+				break;// goto next;
+			if (lastst==semicolon) {
 				break;
 			}
 			if (lastst==closepa) {
 				goto xit1;
+				NextToken();
+				if (lastst == comma)
+					goto next;
+				else if (lastst == semicolon)
+					break;
+				else if (lastst == begin) {
+					push_token();
+					break;
+				}
+				else
+					goto xit1;
 			}
 		}
 		else if (catchdecl==TRUE) {
@@ -1535,19 +1548,19 @@ int Declaration::declare(SYM *parent,TABLE *table,int al,int ilc,int ztype)
             if( tp2 == 0 || !IsLValue(ep1) )
                 error(ERR_LVALUE);
             else {
-                tp1 = forcefit(&ep1,tp1,&ep2,tp2,false);
+                tp1 = forcefit(&ep1,tp1,&ep2,tp2,false,true);
                 ep1 = makenode(op,ep1,ep2);
             }
 			sp->initexp = ep1;
 			if (lastst==semicolon)
 				break;
 		}
-
+next:
 		// See if there is a list of variable declarations
-        needpunc(comma,24);
-        if(declbegin(lastst) == 0)
-            break;
-        head = dhead;
+      needpunc(comma,24);
+      if(declbegin(lastst) == 0)
+        break;
+      head = dhead;
     }
     NextToken();
 xit1:
@@ -1613,11 +1626,11 @@ void GlobalDeclaration::Parse()
 				isInline = false;
 				break;
 		case kw_register:
-				NextToken();
-                error(ERR_ILLCLASS);
-                lc_static += declare(NULL,&gsyms[0],sc_global,lc_static,bt_struct);
-				isInline = false;
-				break;
+			NextToken();
+      error(ERR_ILLCLASS);
+      lc_static += declare(NULL,&gsyms[0],sc_global,lc_static,bt_struct);
+			isInline = false;
+			break;
 		case kw_private:
         case kw_static:
                 NextToken();
@@ -1712,9 +1725,9 @@ void AutoDeclaration::Parse(SYM *parent, TABLE *ssyms)
 		case kw_oscall:
 		case kw_pascal:
 		case kw_typedef:
-                error(ERR_ILLCLASS);
-	            lc_auto += declare(parent,ssyms,sc_auto,lc_auto,bt_struct);
-				break;
+      error(ERR_ILLCLASS);
+	    lc_auto += declare(parent,ssyms,sc_auto,lc_auto,bt_struct);
+			break;
 		case ellipsis:
 		case id: //return;
         dfs.printf("Found %s\n", lastid);
@@ -1808,7 +1821,7 @@ j1:
 dfs.printf("B");
       error(ERR_ILLCLASS);
       declare(NULL,&currentFn->params,sc_auto,0,bt_struct);
-				isAuto = false;
+			isAuto = false;
 			break;
 		case ellipsis:
 		case id:
@@ -1825,18 +1838,22 @@ dfs.printf("C");
 				isAuto = false;
 	            break;
         case kw_thread:
-                NextToken();
-                error(ERR_ILLCLASS);
-				lc_thread += declare(NULL,&gsyms[0],sc_thread,lc_thread,bt_struct);
-				isAuto = false;
-				break;
+          NextToken();
+          error(ERR_ILLCLASS);
+					lc_thread += declare(NULL,&gsyms[0],sc_thread,lc_thread,bt_struct);
+					isAuto = false;
+					break;
         case kw_static:
-                NextToken();
-                error(ERR_ILLCLASS);
-				lc_static += declare(NULL,&gsyms[0],sc_static,lc_static,bt_struct);
-				isAuto = false;
-				break;
+          NextToken();
+          error(ERR_ILLCLASS);
+					lc_static += declare(NULL,&gsyms[0],sc_static,lc_static,bt_struct);
+					isAuto = false;
+					break;
+				// A list of externals could be following a function prototype. This
+				// could be confused with a parameter list.
         case kw_extern:
+//					push_token();
+//					goto xit;
 dfs.printf("D");
                 NextToken();
                 error(ERR_ILLCLASS);
@@ -1861,7 +1878,7 @@ xit:
 	funcdecl = ofd;
 	isPascal = opascal;
 	dfs.printf("</ParseParmDecls>\n");
-	return nparms;
+	return (nparms);
 }
 
 GlobalDeclaration *GlobalDeclaration::Make()

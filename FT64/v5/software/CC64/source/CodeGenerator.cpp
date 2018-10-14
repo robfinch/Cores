@@ -859,6 +859,7 @@ void GenerateStructAssign(TYP *tp, int64_t offset, ENODE *ep, Operand *base)
 	SYM *thead, *first;
 	Operand *ap1, *ap2;
 	int64_t offset2;
+	ENODE *node;
 
 	first = thead = SYM::GetPtr(tp->lst.GetHead());
 	ep = ep->p[0];
@@ -866,8 +867,50 @@ void GenerateStructAssign(TYP *tp, int64_t offset, ENODE *ep, Operand *base)
 		if (ep == nullptr)
 			break;
 		if (thead->tp->IsAggregateType()) {
-			if (ep->p[2])
-				GenerateStructAssign(thead->tp, offset, ep->p[2], base);
+			/*
+			if (thead->tp->isArray) {
+				if (ep->p[2])
+					GenerateArrayAssign(thead->tp, offset, ep->p[2], base);
+				else if (ep->p[0])
+					GenerateArrayAssign(thead->tp, offset, ep->p[0], base);
+			}
+			else
+			*/
+			{
+				if (ep->p[2])
+					GenerateStructAssign(thead->tp, offset, ep->p[2], base);
+				else if (ep->p[0])
+					GenerateStructAssign(thead->tp, offset, ep->p[0], base);
+			}
+/*
+			else {
+				ap1 = GenerateExpression(ep, F_REG, thead->tp->size);
+				if (ap1->mode == am_imm) {
+					ap2 = GetTempRegister();
+					GenLdi(ap2, ap1);
+				}
+				else {
+					ap2 = ap1;
+					ap1 = nullptr;
+				}
+				if (base->offset)
+					offset2 = base->offset->i + offset;
+				else
+					offset2 = offset;
+				switch (thead->tp->size)
+				{
+				case 1:	GenerateDiadic(op_sb, 0, ap2, make_indexed(offset, base->preg)); break;
+				case 2:	GenerateDiadic(op_sc, 0, ap2, make_indexed(offset, base->preg)); break;
+				case 4:	GenerateDiadic(op_sh, 0, ap2, make_indexed(offset, base->preg)); break;
+				case 512:	GenerateDiadic(op_sv, 0, ap2, make_indexed(offset, base->preg)); break;
+				default:	GenerateDiadic(op_sw, 0, ap2, make_indexed(offset, base->preg)); break;
+				}
+				if (ap2)
+					ReleaseTempReg(ap2);
+				if (ap1)
+					ReleaseTempReg(ap1);
+			}
+*/
 		}
 		else {
 			ap2 = nullptr;
@@ -976,14 +1019,21 @@ void GenerateArrayAssign(TYP *tp, ENODE *node1, ENODE *node2, Operand *base)
 
 Operand *GenerateAggregateAssign(ENODE *node1, ENODE *node2)
 {
-	Operand *base;
+	Operand *base, *base2;
 	TYP *tp;
 	int64_t offset = 0;
 
 	if (node1==nullptr || node2==nullptr)
 		return nullptr;
 	//DumpStructEnodes(node2);
-	base = GenerateExpression(node1,F_MEM,sizeOfWord);
+	base = GenerateExpression(node1,F_REG,sizeOfWord);
+	base2 = GenerateExpression(node2, F_REG, sizeOfWord);
+	GenerateDiadic(op_mov, 0, makereg(regFirstArg), base);
+	GenerateDiadic(op_mov, 0, makereg(regFirstArg+1), base2);
+	GenerateDiadic(op_ldi, 0, makereg(regFirstArg+2), make_immed(node2->tp->size));
+	GenerateMonadic(op_call, 0, make_string("memcpy"));
+	ReleaseTempReg(base2);
+	return (base);
 	//base = GenerateDereference(node1,F_MEM,sizeOfWord,0);
 	tp = node1->tp;
 	if (tp==nullptr)

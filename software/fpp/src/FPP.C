@@ -7,6 +7,7 @@
 #include <time.h>
 #include <dos.h>
 #include <ht.h>
+#include <direct.h>
 
 #define ALLOC
 #include "fpp.h"
@@ -131,7 +132,9 @@ void ddefine()
    dp.body = ptr;
    p = (SDef *)htFind(&HashInfo, &dp);
    if (p) {
-      err((strcmp(p->body, dp.body) ? 6 : 23), dp.name);
+		 if (strcmp(p->body, dp.body))
+			 err(6, dp.name);
+      //err((strcmp(p->body, dp.body) ? 6 : 23), dp.name);
       free(dp.name);
       return;
    }
@@ -175,8 +178,9 @@ void dinclude()
 {
    char *tname;
    char *f;
-   char path[150];
-   char name[150];
+   char path[250];
+   char name[250];
+   char wpath[250];
    int ch;
    SDef *p;
 
@@ -200,6 +204,7 @@ void dinclude()
       *f = 0;
       strcpy(path, name);
       if (_access(path, 0) < 0) {
+		  _getcwd(wpath, sizeof(wpath) - 1);
            strcpy(path, SourceName);
            f = strrchr(path,'\\');
            if (!f)
@@ -207,6 +212,16 @@ void dinclude()
            if (f) {
                strcpy(f+1,name);
            }
+				// Can't find the file in the given path, try the include paths.
+		   if (!f || _access(path, 0) < 0) {
+				 searchenv((char *)name, (char *)"FPPINC", (char *)path, sizeof(path));
+				 if (path[0] == '\0')
+					 searchenv((char *)name, (char *)"INCLUDE", (char *)path, sizeof(path));
+				 if (path[0] == '\0') {
+					 err(9, name);
+					 return;
+				 }
+		   }
       }
    }
    else if (ch == '<')
@@ -383,7 +398,7 @@ void ProcLine()
 	  // write out the current input buffer
 	  if (fdbg) fprintf(fdbg, "aft paste:%s", inbuf);
       if (fputs(inbuf,ofp)==EOF)
-		  printf("fputs failed.\r\n");
+		  printf("fputs failed.\n");
    }
    InLineNo++;          // Update line number (including __LINE__).
    sprintf(bbline.body, "%5d", InLineNo);
@@ -605,7 +620,7 @@ main(int argc, char *argv[]) {
    HashInfo.width = sizeof(SDef);
    if (argc < 2)
    {
-		fprintf(stderr, "FPP version 1.21  (C) 1998-2017 Robert T Finch  \n");
+		fprintf(stderr, "FPP version 1.23  (C) 1998-2018 Robert T Finch  \n");
 		fprintf(stderr, "\nfpp [options] <filename> [<output filename>]\n\n");
 		fprintf(stderr, "Options:\n");
 		fprintf(stderr, "/D<macro name>[=<definition>] - define a macro\n");
@@ -631,7 +646,7 @@ main(int argc, char *argv[]) {
       parsesw(argv[xx]);
 
 	if (banner)
-		fprintf(stderr, "FPP version 1.21  (C) 1998-2017 Robert T Finch  \n");
+		fprintf(stderr, "FPP version 1.23  (C) 1998-2018 Robert T Finch  \n");
 
    /* ---------------------------
          Get source file name.

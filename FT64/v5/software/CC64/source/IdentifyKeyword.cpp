@@ -255,7 +255,7 @@ int IdentifyKeyword()
 			return lastst = kw_naked;
 		if (p[1]=='o' && p[2]=='c' && p[3]=='a' && p[4]=='l' && p[5]=='l' && p[6]=='\0')
 			return lastst = kw_nocall;
-		if (p[1]=='u' && p[2]=='l' && p[3]=='l' && p[4]=='\0') {
+		if (p[1]=='u' && p[2]=='l' && p[3]=='l' && p[4]=='\0' && false) {
 			ival = 0;
 			return lastst = iconst;
 		}

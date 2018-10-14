@@ -74,7 +74,7 @@ void doinit(SYM *sp)
 	if (sp->storage_class == sc_thread) {
         if (sp->tp->type==bt_struct || sp->tp->type==bt_union)
            algn = imax(sp->tp->alignment,8);
-        else if (sp->tp->type==bt_pointer && sp->tp->val_flag)
+        else if (sp->tp->type==bt_pointer)// && sp->tp->val_flag)
            algn = imax(sp->tp->GetBtp()->alignment,8);
         else
             algn = 2;
@@ -84,7 +84,7 @@ void doinit(SYM *sp)
 	else if (sp->storage_class == sc_static || lastst==assign) {
         if (sp->tp->type==bt_struct || sp->tp->type==bt_union)
            algn = imax(sp->tp->alignment,8);
-        else if (sp->tp->type==bt_pointer && sp->tp->val_flag)
+        else if (sp->tp->type==bt_pointer)// && sp->tp->val_flag)
            algn = imax(sp->tp->GetBtp()->alignment,8);
         else
             algn = 2;
@@ -94,7 +94,7 @@ void doinit(SYM *sp)
 	else {
         if (sp->tp->type==bt_struct || sp->tp->type==bt_union)
            algn = imax(sp->tp->alignment,8);
-        else if (sp->tp->type==bt_pointer && sp->tp->val_flag)
+        else if (sp->tp->type==bt_pointer)// && sp->tp->val_flag)
            algn = imax(sp->tp->GetBtp()->alignment,8);
         else
             algn = 2;
@@ -199,7 +199,7 @@ int64_t initchar()
 
 int64_t initshort()
 {
-	GenerateWord((int)GetIntegerExpression((ENODE **)NULL));
+	GenerateHalf((int)GetIntegerExpression((ENODE **)NULL));
     return (4LL);
 }
 
@@ -232,9 +232,50 @@ int64_t InitializePointer()
 	SYM *sp;
 	ENODE *n = nullptr;
 	int64_t lng;
+	TYP *tp;
 
+	sp = nullptr;
     if(lastst == bitandd) {     /* address of a variable */
         NextToken();
+				tp = expression(&n);
+				opt_const(&n);
+				if (n->nodetype != en_icon) {
+					if (n->nodetype == en_h_ref
+						|| n->nodetype == en_uh_ref
+						|| n->nodetype == en_w_ref
+						|| n->nodetype == en_uw_ref) {
+						if (n->p[0]->nodetype == en_add) {
+							if (n->p[0]->p[0]->nodetype == en_labcon) {
+								sp = n->p[0]->p[0]->sym;
+								GenerateReference(n->p[0]->p[0]->sym, n->p[0]->p[1]->i);
+							}
+							else if (n->p[0]->p[1]->nodetype == en_labcon) {
+								sp = n->p[0]->p[1]->sym;
+								GenerateReference(n->p[0]->p[1]->sym, n->p[0]->p[0]->i);
+							}
+							else
+								error(ERR_ILLINIT);
+						}
+						else if (n->p[0]->nodetype == en_sub) {
+							if (n->p[0]->p[0]->nodetype == en_labcon) {
+								sp = n->p[0]->p[0]->sym;
+								GenerateReference(n->p[0]->p[0]->sym, -n->p[0]->p[1]->i);
+							}
+							else if (n->p[0]->p[1]->nodetype == en_labcon) {
+								sp = n->p[0]->p[1]->sym;
+								GenerateReference(n->p[0]->p[1]->sym, -n->p[0]->p[0]->i);
+							}
+							else
+								error(ERR_ILLINIT);
+						}
+					}
+				}
+				else
+					GenerateLong(n->i);
+				if (sp)
+					if (sp->storage_class == sc_auto)
+						error(ERR_NOINIT);
+				/*
         if( lastst != id)
             error(ERR_IDEXPECT);
 		else if( (sp = gsearch(lastid)) == NULL)
@@ -248,6 +289,7 @@ int64_t InitializePointer()
             if( sp->storage_class == sc_auto)
                     error(ERR_NOINIT);
         }
+				*/
     }
     else if(lastst == sconst) {
         GenerateLabelReference(stringlit(laststr));
@@ -276,6 +318,9 @@ int64_t InitializePointer()
 			else
 				GenerateLong(lng);
 		}
+		else if (n && n->nodetype == en_labcon) {
+			GenerateLabelReference(n->i);
+		}
 		else {
 			GenerateLong((lng & 0xFFFFFFFFFFFLL)|0xFFF0100000000000LL);
         }
@@ -286,13 +331,13 @@ int64_t InitializePointer()
 
 void endinit()
 {    
-    if (catchdecl) {
-        if (lastst!=closepa)
-        		error(ERR_PUNCT);
-    }
-    else if( lastst != comma && lastst != semicolon && lastst != end) {
+  if (catchdecl) {
+    if (lastst!=closepa)
+      error(ERR_PUNCT);
+  }
+  else if( lastst != comma && lastst != semicolon && lastst != end) {
 		error(ERR_PUNCT);
-		while( lastst != comma && lastst != semicolon && lastst != end)
-            NextToken();
-    }
+	while( lastst != comma && lastst != semicolon && lastst != end)
+    NextToken();
+  }
 }

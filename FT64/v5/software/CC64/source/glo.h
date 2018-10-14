@@ -299,7 +299,6 @@ extern ENODE *makenode(int nt, ENODE *v1, ENODE *v2);
 extern ENODE *makeinode(int nt, int64_t v1);
 extern ENODE *makesnode(int nt, std::string *v1, std::string *v2, int64_t i);
 extern TYP *nameref(ENODE **node,int);
-extern TYP *forcefit(ENODE **node1,TYP *tp1,ENODE **node2,TYP *tp2,bool);
 extern TYP *expression(ENODE **node);
 extern int IsLValue(ENODE *node);
 extern Operand *GenerateExpression(ENODE *node, int flags, int size);

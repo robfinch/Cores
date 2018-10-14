@@ -340,7 +340,7 @@ public:
 	int8_t		bit_width;
 	int8_t		bit_offset;
 	int8_t		ven;			// vector element number
-	long        size;
+	int64_t   size;
 	int8_t dimen;
 	int numele;					// number of elements in array / vector length
 	TABLE lst;
@@ -373,6 +373,7 @@ public:
 	ENODE *BuildEnodeTree();
 
 	// Initialization
+	int64_t GenerateT(TYP *tp, ENODE *node);
 	int64_t InitializeArray();
 	int64_t InitializeStruct();
 	int64_t InitializeUnion();

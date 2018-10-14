@@ -218,7 +218,7 @@ int Function::Parse()
 	}
 j2:
 	dfs.printf("E");
-	if (lastst == semicolon) {	// Function prototype
+	if (lastst == semicolon || lastst == comma) {	// Function prototype
 		dfs.printf("e");
 		sp->IsPrototype = 1;
 		sp->Init(nump, numar);

@@ -1,6 +1,8 @@
 #ifndef _PROTO_H
 #define _PROTO_H
 
+TYP *forcefit(ENODE **srcnode, TYP *srctp, ENODE **dstnode, TYP *dsttp, bool promote, bool typecast);
+
 // Register.cpp
 bool IsArgumentReg(int regno);
 bool IsCalleeSave(int regno);
@@ -35,7 +37,7 @@ void FreeFunction(Function *fn);
 extern void genstorage(int64_t nbytes);
 extern void GenerateByte(int64_t val);
 extern void GenerateChar(int64_t val);
-extern void genhalf(int64_t val);
+extern void GenerateHalf(int64_t val);
 extern void GenerateWord(int64_t val);
 extern void GenerateLong(int64_t val);
 extern void GenerateFloat(Float128 *val);
@@ -44,5 +46,7 @@ extern void GenerateReference(SYM *sp, int64_t offset);
 extern void GenerateLabelReference(int n);
 
 extern char *RegMoniker(int regno);
+extern void push_token();
+extern void pop_token();
 
 #endif

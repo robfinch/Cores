@@ -115,8 +115,8 @@ TYP *TYP::Make(int bt, int siz)
 int TYP::GetSize(int num)
 {
   if (num == 0)
-    return 0;
-  return compiler.typeTable[num].size;
+    return (0);
+  return (compiler.typeTable[num].size);
 }
 
 // Basic type is one of the built in types supported by the compiler.
@@ -454,6 +454,9 @@ bool TYP::IsSameType(TYP *a, TYP *b, bool exact)
 		return (false);
 
 	case bt_pointer:
+		if (a->val_flag && b->type == bt_struct) {
+			return (true);
+		}
 		if (a->type != b->type)
 			return (false);
 		if (a->GetBtp() == b->GetBtp())
@@ -467,7 +470,7 @@ bool TYP::IsSameType(TYP *a, TYP *b, bool exact)
 	case bt_class:
 		if (a->type != b->type)
 			return (false);
-		if (a->GetBtp() == b->GetBtp())
+		if (a->GetBtp() == b->GetBtp() || !exact)
 			return (true);
 		if (a->GetBtp() && b->GetBtp())
 			return (TYP::IsSameType(a->GetBtp(), b->GetBtp(), exact));
@@ -604,7 +607,7 @@ int64_t TYP::InitializeStruct()
 		while (nbytes < sp->value.i) {     /* align properly */
 										   //                    nbytes += GenerateByte(0);
 			GenerateByte(0);
-			//                    nbytes++;
+			nbytes++;
 		}
 		nbytes += sp->tp->Initialize();
 		if (lastst == comma)
@@ -621,10 +624,73 @@ int64_t TYP::InitializeStruct()
 	return (size);
 }
 
+int64_t TYP::GenerateT(TYP *tp, ENODE *node)
+{
+	int nbytes;
+	int64_t val;
+	TYP *tp2;
+	int64_t n, nele;
+	ENODE *nd;
+
+	switch (tp->type) {
+	case bt_byte:
+		val = node->i;
+		nbytes = 1; GenerateByte(val);
+		break;
+	case bt_ubyte:
+		val = node->i;
+		nbytes = 1;
+		GenerateByte(val);
+		break;
+	case bt_char:
+		val = node->i;
+		nbytes = 2; GenerateChar(val); break;
+	case bt_uchar:
+		val = node->i;
+		nbytes = 2; GenerateChar(val); break;
+	case bt_short:
+		val = node->i;
+		nbytes = 4; GenerateWord(val); break;
+	case bt_ushort:
+		val = node->i;
+		nbytes = 4; GenerateWord(val); break;
+	case bt_long:
+		val = node->i;
+		nbytes = 8; GenerateLong(val); break;
+	case bt_ulong:
+		val = node->i;
+		nbytes = 8; GenerateLong(val); break;
+	case bt_float:
+		nbytes = 8; GenerateFloat((Float128 *)&node->f128); break;
+	case bt_double:
+		nbytes = 8; GenerateFloat((Float128 *)&node->f128); break;
+	case bt_quad:
+		nbytes = 16; GenerateQuad((Float128 *)&node->f128); break;
+	case bt_pointer:
+		if (tp->val_flag) {
+			nbytes = 0;
+			nele = tp->numele;
+			tp = tp->GetBtp();
+			nd = node->p[0]->p[2];
+			for (n = 0; n < nele; n++) {
+				if (nd == nullptr)
+					break;
+				nbytes += GenerateT(tp,nd);
+				nd = nd->p[2];
+			}
+		}
+		else {
+			val = node->i;
+			nbytes = sizeOfPtr;
+		}
+		//case bt_struct:	nbytes = InitializeStruct(); break;
+	}
+	return (nbytes);
+}
 
 int64_t TYP::InitializeUnion()
 {
-	SYM *sp;
+	SYM *sp, *osp;
 	int64_t nbytes;
 	int64_t val;
 	ENODE *node = nullptr;
@@ -635,30 +701,21 @@ int64_t TYP::InitializeUnion()
 	if (node == nullptr)	// syntax error in GetConstExpression()
 		return (0);
 	sp = sp->GetPtr(lst.GetHead());      /* start at top of symbol table */
+	osp = sp;
 	while (sp != 0) {
 		if (IsSameType(sp->tp, node->tp, false)) {
 			nbytes = node->esize;
-			switch (sp->tp->type) {
-			case bt_byte:	nbytes = 1; GenerateByte(val); break;
-			case bt_ubyte:	nbytes = 1; GenerateByte(val); break;
-			case bt_char:	nbytes = 2; GenerateChar(val); break;
-			case bt_uchar:	nbytes = 2; GenerateChar(val); break;
-			case bt_short:	nbytes = 4; GenerateWord(val); break;
-			case bt_ushort:	nbytes = 4; GenerateWord(val); break;
-			case bt_long:	nbytes = 8; GenerateLong(val); break;
-			case bt_ulong:	nbytes = 8; GenerateLong(val); break;
-			case bt_float:	nbytes = 8; GenerateFloat((Float128 *)val); break;
-			case bt_double:	nbytes = 8; GenerateFloat((Float128 *)val); break;
-			case bt_quad:	nbytes = 16; GenerateQuad((Float128 *)val); break;
-			}
+			nbytes = GenerateT(sp->tp, node);
 			found = true;
 			break;
 		}
 		sp = sp->GetNextPtr();
+		if (sp == osp)
+			break;
 	}
 	if (!found)
 		error(ERR_INIT_UNION);
-	if (lastst != semicolon)
+	if (lastst != semicolon && lastst != comma)
 		error(ERR_PUNCT);
 	if (nbytes < size)
 		genstorage(size - nbytes);
@@ -732,7 +789,7 @@ ENODE *TYP::BuildEnodeTree()
 		}
 		else
 			ep3 = nullptr;
-		ep1 = makenode(en_void, ep2, ep1);
+		ep1 = makenode(en_void, ep1, ep2);
 		ep1->SetType(thead->tp);
 		ep1->p[2] = ep3;
 		thead = SYM::GetPtr(thead->next);

@@ -32,7 +32,7 @@
 // Generally if the promote flag is set then the whichever type is larger
 // is returned. Code is emitted to convert the shorter type to the longer type.
 // ----------------------------------------------------------------------------
-TYP *forcefit(ENODE **srcnode, TYP *srctp, ENODE **dstnode, TYP *dsttp, bool promote)
+TYP *forcefit(ENODE **srcnode, TYP *srctp, ENODE **dstnode, TYP *dsttp, bool promote, bool typecast)
 {
 	ENODE *n2;
 
@@ -137,9 +137,18 @@ TYP *forcefit(ENODE **srcnode, TYP *srctp, ENODE **dstnode, TYP *dsttp, bool pro
 		case bt_long:	
 		case bt_ulong:	
 		case bt_exception:
-		case bt_enum:	*srcnode = makenode(en_i2d, *srcnode, *dstnode); return (dsttp);
+		case bt_enum:
+			if (typecast) {
+				*srcnode = makenode(en_d2i, *srcnode, *dstnode);
+				return (dsttp);
+			}
+			else {
+				*dstnode = makenode(en_i2d, *dstnode, *srcnode);
+				return (srctp);
+			}
 		case bt_pointer: return(dsttp);
-		case bt_double:	return (dsttp);
+		case bt_double:	
+			return (dsttp);
 		case bt_triple:	*srcnode = makenode(en_d2t, *srcnode, *dstnode); return (dsttp);
 		case bt_quad:	*srcnode = makenode(en_d2q, *srcnode, *dstnode); return (dsttp);
 		case bt_vector:	return (dsttp);
@@ -162,7 +171,15 @@ TYP *forcefit(ENODE **srcnode, TYP *srctp, ENODE **dstnode, TYP *dsttp, bool pro
 		case bt_long:
 		case bt_ulong:
 		case bt_exception:
-		case bt_enum:	*dstnode = makenode(en_i2d, *dstnode, *srcnode); return (srctp);
+		case bt_enum:
+			if (typecast) {
+				*dstnode = makenode(en_d2i, *srcnode, *dstnode);
+				return (dsttp);
+			}
+			else {
+				*dstnode = makenode(en_i2d, *dstnode, *srcnode);
+				return (srctp);
+			}
 		case bt_pointer: return(dsttp);
 		case bt_double:	return (dsttp);
 		case bt_triple:	*srcnode = makenode(en_d2t, *srcnode, *dstnode); return (dsttp);
@@ -229,9 +246,9 @@ TYP *forcefit(ENODE **srcnode, TYP *srctp, ENODE **dstnode, TYP *dsttp, bool pro
 	case bt_class:
 	case bt_struct:
 	case bt_union:
-		if (dsttp->size > srctp->size)
-			return dsttp;
-		return srctp;
+		if (dsttp->size > srctp->size || typecast)
+			return (dsttp);
+		return (srctp);
 		// Really working with pointers to functions.
 	case bt_func:
 	case bt_ifunc:
