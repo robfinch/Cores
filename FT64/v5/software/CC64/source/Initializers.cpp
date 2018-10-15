@@ -35,6 +35,7 @@ static char glbl2[500];
 bool hasPointer;
 bool firstPrim;
 std::streampos patchpoint;
+short int brace_level;
 
 static void pad(char *p, int n)
 {
@@ -57,6 +58,7 @@ void doinit(SYM *sp)
   enum e_sg oseg;
   char buf[500];
   std::streampos endpoint;
+	TYP *tp;
 
   hasPointer = false;
   if (first) {
@@ -142,7 +144,22 @@ void doinit(SYM *sp)
 	else {
 		NextToken();
 		hasPointer = sp->tp->FindPointer();
-		sp->tp->Initialize();
+		typ_sp = 0;
+		tp = sp->tp;
+		push_typ(tp);
+		while (tp = tp->GetBtp()) {
+			push_typ(tp);
+		}
+		brace_level = 0;
+		sp->tp->Initialize(nullptr);
+		if (sp->tp->numele == 0) {
+			if (sp->tp->GetBtp()) {
+				if (sp->tp->GetBtp()->type == bt_char || sp->tp->GetBtp()->type == bt_uchar) {
+					sp->tp->numele = laststrlen;
+					sp->tp->size = laststrlen;
+				}
+			}
+		}
 	}
 	if (!hasPointer && sp->tp->IsSkippable()) {
 		endpoint = ofs.tellp();
@@ -227,14 +244,26 @@ int64_t inittriple()
 	return (12LL);
 }
 
-int64_t InitializePointer()
+int64_t InitializePointer(TYP *tp2)
 {   
 	SYM *sp;
 	ENODE *n = nullptr;
 	int64_t lng;
 	TYP *tp;
+	bool need_end = false;
 
 	sp = nullptr;
+	if (lastst == begin) {
+		need_end = true;
+		NextToken();
+		if (lastst == begin) {
+			NextToken();
+			lng = tp2->Initialize(nullptr);
+			needpunc(end, 13);
+			needpunc(end, 14);
+			return (lng);
+		}
+	}
     if(lastst == bitandd) {     /* address of a variable */
         NextToken();
 				tp = expression(&n);
@@ -292,8 +321,11 @@ int64_t InitializePointer()
 				*/
     }
     else if(lastst == sconst) {
-        GenerateLabelReference(stringlit(laststr));
-        NextToken();
+			char *str;
+
+			str = GetStrConst();
+      GenerateLabelReference(stringlit(str));
+			free(str);
     }
 	else if (lastst == rconst) {
         GenerateLabelReference(quadlit(&rval128));
@@ -325,8 +357,10 @@ int64_t InitializePointer()
 			GenerateLong((lng & 0xFFFFFFFFFFFLL)|0xFFF0100000000000LL);
         }
 	}
-    endinit();
-    return 8;       /* pointers are 8 bytes long */
+	if (need_end)
+		needpunc(end, 8);
+	endinit();
+    return (sizeOfPtr);       /* pointers are 8 bytes long */
 }
 
 void endinit()

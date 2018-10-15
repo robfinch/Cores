@@ -1412,6 +1412,7 @@ Operand *GenerateExpression(ENODE *node, int flags, int size)
 		case bt_double:	return GenAutocon(node, flags, size, stddouble.GetIndex());
 		case bt_triple:	return GenAutocon(node, flags, size, stdtriple.GetIndex());
 		case bt_quad:	return GenAutocon(node, flags, size, stdquad.GetIndex());
+		case bt_pointer:	return GenAutocon(node, flags, size, stdint.GetIndex());
 		}
 		break;
     case en_autovcon:	return GenAutocon(node, flags, size, stdvector.GetIndex());

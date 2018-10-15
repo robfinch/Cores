@@ -117,6 +117,7 @@ extern int              lastst;
 extern char             lastid[128];
 extern char             lastkw[128];
 extern char             laststr[MAX_STLP1];
+extern int laststrlen;
 extern int64_t	ival;
 extern double           rval;
 extern Float128			rval128;
@@ -227,6 +228,7 @@ extern int isStructDecl;
 extern int worstAlignment;
 extern Map map;
 extern int optimized;
+extern short int typ_sp;
 
 // Analyze.c
 extern short int csendx;

@@ -30,65 +30,66 @@ extern TYP *head;
 extern TYP stdconst;
 
 void enumbody(TABLE *table);
-void ParseEnumerationList(TABLE *table, int amt);
+void ParseEnumerationList(TABLE *table, int amt, SYM *parent);
 
 void ParseEnumDeclaration(TABLE *table)
 {   
 	SYM *sp;
-    TYP     *tp;
+  TYP *tp;
 	int amt = 1;
 
-    if( lastst == id) {
-        if((sp = search(lastid,&tagtable)) == NULL) {
-            sp = allocSYM();
-            sp->tp = TYP::Make(bt_enum,1);
-            sp->storage_class = sc_type;
-            sp->SetName(*(new std::string(lastid)));
-            sp->tp->sname = new std::string(*sp->name);
-            NextToken();
-            if( lastst != begin)
-                    error(ERR_INCOMPLETE);
-            else {
+  if(lastst == id) {
+    if((sp = search(lastid,&tagtable)) == NULL) {
+      sp = allocSYM();
+      sp->tp = TYP::Make(bt_enum,1);
+      sp->storage_class = sc_type;
+      sp->SetName(*(new std::string(lastid)));
+      sp->tp->sname = new std::string(*sp->name);
+      NextToken();
+      if(lastst != begin)
+        error(ERR_INCOMPLETE);
+      else {
 				tagtable.insert(sp);
 				NextToken();
-				ParseEnumerationList(table,amt);
-            }
-        }
-        else
-            NextToken();
-        head = sp->tp;
-    }
-    else {
-        tp = allocTYP();	// fix here
-        tp->type = bt_enum;
+				ParseEnumerationList(table,amt,sp);
+      }
+		}
+    else
+      NextToken();
+    head = sp->tp;
+  }
+  else {
+    tp = allocTYP();	// fix here
+    tp->type = bt_enum;
 		tp->size = 2;
 		if (lastst==openpa) {
 			NextToken();
 			amt = (int)GetIntegerExpression((ENODE **)NULL);
 			needpunc(closepa,10);
 		}
-        if( lastst != begin)
-            error(ERR_INCOMPLETE);
-        else {
-            NextToken();
-            ParseEnumerationList(table,amt);
-        }
-    head = tp;
+    if( lastst != begin)
+      error(ERR_INCOMPLETE);
+    else {
+      NextToken();
+      ParseEnumerationList(table,amt,nullptr);
     }
+    head = tp;
+  }
 }
 
-void ParseEnumerationList(TABLE *table, int amt)
+void ParseEnumerationList(TABLE *table, int amt, SYM *parent)
 {
-	int     evalue;
-    SYM     *sp;
-    evalue = 0;
-    while(lastst == id) {
-        sp = allocSYM();
-        sp->SetName(*(new std::string(lastid)));
-        sp->storage_class = sc_const;
-        sp->tp = &stdconst;
-        table->insert(sp);
-        NextToken();
+	int evalue;
+  SYM *sp;
+  evalue = 0;
+  while(lastst == id) {
+    sp = allocSYM();
+    sp->SetName(*(new std::string(lastid)));
+    sp->storage_class = sc_const;
+    sp->tp = &stdconst;
+		sp->parent = parent->id;
+    table->insert(sp);
+    NextToken();
 		if (lastst==assign) {
 			NextToken();
 			sp->value.i = GetIntegerExpression((ENODE **)NULL);
@@ -96,11 +97,10 @@ void ParseEnumerationList(TABLE *table, int amt)
 		}
 		else
 			sp->value.i = evalue++;
-        if( lastst == comma)
-                NextToken();
-        else if(lastst != end)
-                break;
-    }
-    needpunc(end,48);
+    if(lastst == comma)
+      NextToken();
+    else if(lastst != end)
+      break;
+  }
+  needpunc(end,48);
 }
-

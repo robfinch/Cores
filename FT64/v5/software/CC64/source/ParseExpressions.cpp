@@ -41,6 +41,7 @@ extern int round8(int n);
 ENODE *pep1;
 TYP *ptp1;	// the type just previous to the last dot
 int pop;   // the just previous operator.
+int laststrlen;
 
 // Tells subsequent levels that ParseCastExpression already fetched a token.
 //static unsigned char expr_flag = 0;
@@ -251,6 +252,36 @@ ENODE *makefqnode(int nt, Float128 *f128)
 	ep->p[1] = 0;
 	ep->p[2] = 0;
   return ep;
+}
+
+char *GetStrConst()
+{
+	int len;
+	char *str, *nstr;
+
+	len = MAX_STLP1 + 1;
+	str = (char *)malloc(len);
+	if (str == nullptr) {
+		error(ERR_OUT_OF_MEMORY);
+	}
+	strcpy_s(str, len, laststr);
+	do {
+		NextToken();
+		if (lastst == sconst) {
+			len = strlen(str) + MAX_STLP1 + 1;
+			nstr = (char *)malloc(len);
+			if (nstr == nullptr) {
+				error(ERR_OUT_OF_MEMORY);
+				break;
+			}
+			strcpy_s(nstr, len, str);
+			strcat_s(nstr, len, laststr);
+			free(str);
+			str = nstr;
+		}
+	} while (lastst == sconst);
+	laststrlen = strlen(str);
+	return (str);
 }
 
 void AddToList(ENODE *list, ENODE *ele)
@@ -786,26 +817,13 @@ xit:
 TYP *nameref(ENODE **node,int nt)
 {
 	TYP *tp;
-  bool found;
  
-	dfs.puts("<Nameref>\n");
+	dfs.puts("<Nameref>");
 	dfs.printf("GSearchfor:%s|",lastid);
-	found = false;
-/*
-	if (ptp1) {
-	  if (ptp1->type == bt_pointer) {
-      found = ptp1->GetBtp()->lst.FindRising(lastid) > 0;
-	  }
-	  else {
-      found = ptp1->lst.FindRising(lastid) > 0;
-    }
-  }
-  if (!found)
- */
   gsearch2(lastid,(__int16)bt_long,nullptr,false);
 	tp = nameref2(lastid, node, nt, true, nullptr, nullptr);
 	dfs.puts("</Nameref>\n");
-	return tp;
+	return (tp);
 }
 /*
       // Look for a function
@@ -891,11 +909,11 @@ int IsBeginningOfTypecast(int st)
 		if (sp == nullptr)
 			sp = gsyms[0].Find(lastid,false);
 		if (sp)
-			return sp->storage_class==sc_typedef;
-		return FALSE;
+			return (sp->storage_class==sc_typedef || sp->storage_class==sc_type);
+		return (FALSE);
 	}
 	else
-		return IsIntrinsicType(st) || st==kw_volatile;
+		return (IsIntrinsicType(st) || st==kw_volatile);
 }
 
 SYM *makeint2(std::string name)
@@ -991,6 +1009,27 @@ SYM *CreateDummyParameters(ENODE *ep, SYM *parent, TYP *tp)
 	return list;
 }
 
+// ----------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+
+ENODE *Sub1(TYP *tptr, int64_t val)
+{
+	ENODE *pnode;
+
+	tptr->isConst = TRUE;
+	pnode = makeinode(en_icon, val);
+	pnode->constflag = TRUE;
+	if (val >= -128 && ival < 128)
+		pnode->esize = 1;
+	else if (val >= -32768 && val < 32768)
+		pnode->esize = 2;
+	else if (val >= -2147483648LL && val < 2147483648LL)
+		pnode->esize = 4;
+	else
+		pnode->esize = 2;
+	pnode->SetType(tptr);
+	return (pnode);
+}
 
 // ----------------------------------------------------------------------------
 //      primary will parse a primary expression and set the node pointer
@@ -1005,32 +1044,44 @@ SYM *CreateDummyParameters(ENODE *ep, SYM *parent, TYP *tp)
 TYP *ParsePrimaryExpression(ENODE **node, int got_pa)
 {
 	ENODE *pnode, *qnode1, *qnode2;
-    TYP *tptr;
+  TYP *tptr;
 	TypeArray typearray;
 
 	qnode1 = (ENODE *)NULL;
 	qnode2 = (ENODE *)NULL;
 	pnode = (ENODE *)NULL;
-    *node = (ENODE *)NULL;
-    Enter("ParsePrimary ");
-    if (got_pa) {
-        tptr = expression(&pnode);
-        needpunc(closepa,7);
-        *node = pnode;
-        if (pnode==NULL)
-           dfs.printf("pnode is NULL\r\n");
-        else
-           (*node)->SetType(tptr);
-        if (tptr)
-        Leave("ParsePrimary", tptr->type);
-        else
-        Leave("ParsePrimary", 0);
-        return tptr;
-    }
-    switch( lastst ) {
+  *node = (ENODE *)NULL;
+  Enter("ParsePrimary ");
+  if (got_pa) {
+    tptr = expression(&pnode);
+    needpunc(closepa,7);
+    *node = pnode;
+    if (pnode==NULL)
+      dfs.printf("pnode is NULL\r\n");
+    else
+      (*node)->SetType(tptr);
+    if (tptr)
+    Leave("ParsePrimary", tptr->type);
+    else
+    Leave("ParsePrimary", 0);
+    return (tptr);
+  }
+  switch( lastst ) {
 	case ellipsis:
-    case id:
-        tptr = nameref(&pnode,TRUE);
+  case id:
+    tptr = nameref(&pnode,TRUE);
+		// Convert a reference to a constant to a constant. Need this for
+		// GetIntegerExpression().
+		if (pnode->IsRefType()) {
+			if (pnode->p[0]->nodetype == en_icon) {
+				pnode = Sub1(tptr, pnode->p[0]->i);
+			}
+			//else if (pnode->p[0]->nodetype == en_fcon) {
+			//	rval = pnode->p[0]->f;
+			//	rval128 = pnode->p[0]->f128;
+			//	goto j2;
+			//}
+		}
 				//pnode->p[3] = (ENODE *)tptr->size;
 //				if (pnode->nodetype==en_nacon)
 //					pnode->p[0] = makenode(en_list,tptr->BuildEnodeTree(),nullptr);
@@ -1081,97 +1132,92 @@ TYP *ParsePrimaryExpression(ENODE **node, int got_pa)
 		}
 		*/
         break;
-    case cconst:
-        tptr = &stdchar;
-        tptr->isConst = TRUE;
-        pnode = makeinode(en_icon,ival);
-        pnode->constflag = TRUE;
+  case cconst:
+    tptr = &stdchar;
+    tptr->isConst = TRUE;
+    pnode = makeinode(en_icon,ival);
+    pnode->constflag = TRUE;
 		pnode->esize = 1;
-        pnode->SetType(tptr);
-        NextToken();
-        break;
-    case iconst:
-        tptr = &stdint;
-        tptr->isConst = TRUE;
-        pnode = makeinode(en_icon,ival);
-        pnode->constflag = TRUE;
-		if (ival >= -128 && ival < 128)
-			pnode->esize = 1;
-		else if (ival >= -32768 && ival < 32768)
-			pnode->esize = 2;
-		else if (ival >= -2147483648LL && ival < 2147483648LL)
-			pnode->esize = 4;
-		else
-			pnode->esize = 2;
-        pnode->SetType(tptr);
-        NextToken();
-        break;
+    pnode->SetType(tptr);
+    NextToken();
+    break;
+  case iconst:
+    tptr = &stdint;
+		pnode = Sub1(tptr, ival);
+    NextToken();
+    break;
 
 	case kw_floatmax:
-        tptr = &stdquad;
-        tptr->isConst = TRUE;
-        pnode = makefnode(en_fcon,rval);
-        pnode->constflag = TRUE;
-        pnode->SetType(tptr);
+    tptr = &stdquad;
+    tptr->isConst = TRUE;
+    pnode = makefnode(en_fcon,rval);
+    pnode->constflag = TRUE;
+    pnode->SetType(tptr);
 		pnode->i = quadlit(Float128::FloatMax());
-        NextToken();
+    NextToken();
 		break;
 
     case rconst:
-        pnode = makefnode(en_fcon,rval);
-        pnode->constflag = TRUE;
-		pnode->i = quadlit(&rval128);
-		pnode->f128 = rval128;
-		switch(float_precision) {
-		case 'Q': case 'q':
-			tptr = &stdquad;
-			//getch();
-			break;
-		case 'D': case 'd':
-			tptr = &stddouble;
-			//getch();
-			break;
-		case 'T': case 't':
-			tptr = &stdtriple;
-			//getch();
-			break;
-		case 'S': case 's':
-			tptr = &stdflt;
-			//getch();
-			break;
-		default:
-			tptr = &stddouble;
-			break;
-		}
-        pnode->SetType(tptr);
-        tptr->isConst = TRUE;
-        NextToken();
-        break;
+j2:
+      pnode = makefnode(en_fcon,rval);
+      pnode->constflag = TRUE;
+			pnode->i = quadlit(&rval128);
+			pnode->f128 = rval128;
+			switch(float_precision) {
+			case 'Q': case 'q':
+				tptr = &stdquad;
+				//getch();
+				break;
+			case 'D': case 'd':
+				tptr = &stddouble;
+				//getch();
+				break;
+			case 'T': case 't':
+				tptr = &stdtriple;
+				//getch();
+				break;
+			case 'S': case 's':
+				tptr = &stdflt;
+				//getch();
+				break;
+			default:
+				tptr = &stddouble;
+				break;
+			}
+      pnode->SetType(tptr);
+      tptr->isConst = TRUE;
+      NextToken();
+      break;
 
 	case sconst:
+	{
+		char *str;
+
+		str = GetStrConst();
 		if (sizeof_flag) {
 			tptr = (TYP *)TYP::Make(bt_pointer, 0);
-			tptr->size = strlen(laststr) + 1;
+			tptr->size = strlen(str) + 1;
 			tptr->btp = stdchar.GetIndex();
-            tptr->GetBtp()->isConst = TRUE;
+			tptr->GetBtp()->isConst = TRUE;
 			tptr->val_flag = 1;
 			tptr->isConst = TRUE;
 			tptr->isUnsigned = TRUE;
 		}
 		else {
-            tptr = &stdstring;
+			tptr = &stdstring;
 		}
-        pnode = makenodei(en_labcon,(ENODE *)NULL,0);
+		pnode = makenodei(en_labcon, (ENODE *)NULL, 0);
 		if (sizeof_flag == 0)
-			pnode->i = stringlit(laststr);
+			pnode->i = stringlit(str);
+		free(str);
 		pnode->etype = bt_pointer;
 		pnode->esize = 2;
-        pnode->constflag = TRUE;
+		pnode->constflag = TRUE;
 		pnode->segment = rodataseg;
-        pnode->SetType(tptr);
-     	tptr->isConst = TRUE;
-        NextToken();
-        break;
+		pnode->SetType(tptr);
+		tptr->isConst = TRUE;
+	}
+  break;
 
     case openpa:
         NextToken();
@@ -1317,6 +1363,9 @@ int IsLValue(ENODE *node)
 	// A typecast will connect the types with a void node
 	case en_void:
 		return (node->etype == bt_pointer);
+	case en_nacon:
+	case en_autocon:
+		return (node->etype == bt_struct || node->etype == bt_union || node->etype == bt_class);
     }
     return FALSE;
 }
@@ -1399,9 +1448,9 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 	int sa[20];
 	bool firstBr = true;
 
-    ep1 = (ENODE *)NULL;
-    Enter("<ParsePostfix>");
-    *node = (ENODE *)NULL;
+  ep1 = (ENODE *)NULL;
+  Enter("<ParsePostfix>");
+  *node = (ENODE *)NULL;
 	tp1 = ParsePrimaryExpression(&ep1, got_pa);
 	if (ep1==NULL) {
 //		ep1 = makeinode(en_icon, 0);
@@ -1759,12 +1808,12 @@ j2:
 j1:
 	*node = ep1;
 	if (ep1)
-    	(*node)->SetType(tp1);
+    (*node)->SetType(tp1);
 	if (tp1)
 	Leave("</ParsePostfix>", tp1->type);
 	else
 	Leave("</ParsePostfix>", 0);
-	return tp1;
+	return (tp1);
 }
 
 /*
@@ -1806,7 +1855,7 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
         Leave("</ParseUnary>", tp->type);
         else
         Leave("</ParseUnary>", 0);
-		return tp;
+		return (tp);
 	}
     switch( lastst ) {
     case autodec:
@@ -1907,27 +1956,32 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
         break;
 
     case bitandd:
-        NextToken();
-        tp = ParseCastExpression(&ep1);
-        if( tp == NULL ) {
-            error(ERR_IDEXPECT);
-            return (TYP *)NULL;
-        }
-        if( IsLValue(ep1))
-            ep1 = ep1->p[0];
-        ep1->esize = 8;     // converted to a pointer so size is now 8
-        tp1 = TYP::Make(bt_pointer,8);
-        tp1->btp = tp->GetIndex();
-        tp1->val_flag = FALSE;
-		tp1->isUnsigned = TRUE;
-        tp = tp1;
-//        printf("tp %p: %d\r\n", tp, tp->type);
-/*
-		sp = search("ta_int",&tp->GetBtp()->lst);
-		if (sp) {
-			printf("bitandd: ta_int\r\n");
+		{
+			int t;
+
+			NextToken();
+			tp = ParseCastExpression(&ep1);
+			if (tp == NULL) {
+				error(ERR_IDEXPECT);
+				return (TYP *)NULL;
+			}
+			t = ep1->tp->type;
+			if (IsLValue(ep1) && !(t == bt_struct || t==bt_union || t==bt_class))
+				ep1 = ep1->p[0];
+			ep1->esize = 8;     // converted to a pointer so size is now 8
+			tp1 = TYP::Make(bt_pointer, 8);
+			tp1->btp = tp->GetIndex();
+			tp1->val_flag = FALSE;
+			tp1->isUnsigned = TRUE;
+			tp = tp1;
+			//        printf("tp %p: %d\r\n", tp, tp->type);
+			/*
+					sp = search("ta_int",&tp->GetBtp()->lst);
+					if (sp) {
+						printf("bitandd: ta_int\r\n");
+					}
+			*/
 		}
-*/
         break;
 /*
 	case kw_abs:
@@ -1990,41 +2044,41 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
 		break;
 */
     case kw_sizeof:
-        NextToken();
-		if (lastst==openpa) {
-			flag2 = TRUE;
-			NextToken();
-		}
-		if (flag2 && IsBeginningOfTypecast(lastst)) {
-			tp = head;
-			tp1 = tail;
-			Declaration::ParseSpecifier(0);
-			Declaration::ParsePrefix(FALSE);
-			if( head != NULL )
-				ep1 = makeinode(en_icon,head->size);
-			else {
-				error(ERR_IDEXPECT);
-				ep1 = makeinode(en_icon,1);
+      NextToken();
+			if (lastst==openpa) {
+				flag2 = TRUE;
+				NextToken();
 			}
-			head = tp;
-			tail = tp1;
-		}
-		else {
-			sizeof_flag++;
-			tp = ParseUnaryExpression(&ep1, got_pa);
-			sizeof_flag--;
-			if (tp == 0) {
-				error(ERR_SYNTAX);
-				ep1 = makeinode(en_icon,1);
-			} else
-				ep1 = makeinode(en_icon, (long) tp->size);
-		}
-		if (flag2)
-			needpunc(closepa,2);
-		ep1->constflag = TRUE;
-		ep1->esize = 2;
-		tp = &stdint;
-        break;
+			if (flag2 && IsBeginningOfTypecast(lastst)) {
+				tp = head;
+				tp1 = tail;
+				Declaration::ParseSpecifier(0);
+				Declaration::ParsePrefix(FALSE);
+				if( head != NULL )
+					ep1 = makeinode(en_icon,head->size);
+				else {
+					error(ERR_IDEXPECT);
+					ep1 = makeinode(en_icon,1);
+				}
+				head = tp;
+				tail = tp1;
+			}
+			else {
+				sizeof_flag++;
+				tp = ParseUnaryExpression(&ep1, false);
+				sizeof_flag--;
+				if (tp == 0) {
+					error(ERR_SYNTAX);
+					ep1 = makeinode(en_icon,1);
+				} else
+					ep1 = makeinode(en_icon, (long) tp->size);
+			}
+			if (flag2)
+				needpunc(closepa,2);
+			ep1->constflag = TRUE;
+			ep1->esize = 2;
+			tp = &stdint;
+      break;
 
     case kw_new:
 		{
@@ -2186,6 +2240,7 @@ static TYP *ParseCastExpression(ENODE **node)
 				return tp;
 			}
 			*/
+			opt_const(&ep1);
 			if (tp == nullptr)
 				error(ERR_NULLPOINTER);
 			if (tp && tp->IsFloatType()) {
@@ -2205,7 +2260,7 @@ static TYP *ParseCastExpression(ENODE **node)
 					ep2 = makenode(en_tempref, (ENODE *)NULL, (ENODE *)NULL);
 				ep2->SetType(tp);
 			}
-			//ep2 = makenode(en_void,ep2,ep1);
+			ep2 = makenode(en_void,ep2,ep1);
 			if (ep1==nullptr)
         error(ERR_NULLPOINTER);
 			else {
@@ -2627,10 +2682,10 @@ TYP     *relation(ENODE **node)
                 }
 fini:   *node = ep1;
 xit:
-     if (*node)
+  if (*node)
 		(*node)->SetType(tp1);
-        Leave("Relation",0);
-        return tp1;
+  Leave("Relation",0);
+  return (tp1);
 }
 
 /*

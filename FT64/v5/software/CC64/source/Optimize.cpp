@@ -52,21 +52,25 @@ void dooper(ENODE *node)
 		case en_i2d:
 			ep->nodetype = en_fcon;
 			ep->f = (double)ep->p[0]->i;
+			ep->tp = ep->p[0]->tp;
 			Float128::IntToFloat(&ep->f128, ep->p[0]->i);
 			break;
 		case en_fadd:
 			ep->nodetype = en_fcon;
 			ep->f = ep->p[0]->f + ep->p[1]->f;
+			ep->tp = ep->p[0]->tp;
 			Float128::Add(&ep->f128, &ep->p[0]->f128, &ep->p[1]->f128);
 			break;
 		case en_fsub:
 			ep->nodetype = en_fcon;
 			ep->f = ep->p[0]->f - ep->p[1]->f;
+			ep->tp = ep->p[0]->tp;
 			Float128::Sub(&ep->f128, &ep->p[0]->f128, &ep->p[1]->f128);
 			break;
 		case en_fmul:
 			ep->nodetype = en_fcon;
 			ep->f = ep->p[0]->f * ep->p[1]->f;
+			ep->tp = ep->p[0]->tp;
 			Float128::Mul(&ep->f128, &ep->p[0]->f128, &ep->p[1]->f128);
 			break;
 
@@ -594,7 +598,7 @@ static void opt0(ENODE **node)
             case en_asmul:  case en_asdiv:
             case en_asmod:  case en_asrsh:
             case en_aslsh:  
-            case en_fcall:  case en_void:
+            case en_fcall:
                     opt0(&(ep->p[0]));
                     opt0(&(ep->p[1]));
                     break;
@@ -602,7 +606,15 @@ static void opt0(ENODE **node)
                     opt0(&(ep->p[0]));
                     opt0(&(ep->p[1]));
                     break;
-            }
+						case en_void:
+							opt0(&(ep->p[0]));
+							opt0(&(ep->p[1]));
+							if (ep->p[0]->nodetype == en_tempref) {
+								(*node)->nodetype = ep->p[1]->nodetype;
+								*node = ep->p[1];
+							}
+							break;
+						}
 }
 
 /*

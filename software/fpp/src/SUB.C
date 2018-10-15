@@ -112,6 +112,7 @@ void SearchAndSub()
 	static int InComment = 0;
    int c, InComment2 = 0;
    int QuoteToggle = 0;
+	 int Quote2 = 0;
    char *id, *ptr, *optr;
    SDef *p, tdef;
 
@@ -127,6 +128,7 @@ void SearchAndSub()
       if (c == '\n') {
          c = NextCh();
          QuoteToggle = 0;     // Quotes cannot cross newlines
+				 Quote2 = 0;
          InComment2 = 0;
          continue;
       }
@@ -153,6 +155,16 @@ void SearchAndSub()
          c = NextCh();
          continue;
       }
+
+			if (c == '\'') {
+				c = NextCh();
+				Quote2 = !Quote2;
+				continue;
+			}
+			if (Quote2) {      // Just keep getting characters as long as
+				c = NextCh();        // we're inside quotes
+				continue;
+			}
 
       if (c == '"') {         // Toggle quotation mode
          c = NextCh();
@@ -188,7 +200,9 @@ void SearchAndSub()
 				 if (fdbg) fprintf(fdbg, "aft:%s", inbuf);
 			 }
 			else {
-                SubMacro(p->body, strlen(p->name));
+				if (fdbg) fprintf(fdbg, "bef:%s", inbuf);
+				SubMacro(p->body, strlen(p->name));
+				if (fdbg) fprintf(fdbg, "aft:%s", inbuf);
 			}
          }
          free(tdef.name);

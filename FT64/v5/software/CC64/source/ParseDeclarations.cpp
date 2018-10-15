@@ -942,10 +942,52 @@ void Declaration::ParseSuffixOpenbr()
 		needpunc(closebr,22);
 	}
 	head = temp1;
-	if( tail == NULL)
+	if(tail == NULL)
 		tail = head;
 }
 
+/*
+void Declaration::ParseSuffixOpenbr()
+{
+	TYP *temp1;
+	long sz2;
+
+	NextToken();
+	temp1 = (TYP *)TYP::Make(bt_pointer, sizeOfPtr);
+	temp1->val_flag = 1;
+	temp1->isArray = TRUE;
+	if (tail)
+		tail->btp = temp1->GetIndex();
+	if (lastst == closebr) {
+		temp1->size = 0;
+		temp1->numele = 0;
+		if (tail)
+			temp1->dimen = tail->dimen + 1;
+		else
+			temp1->dimen = 1;
+		NextToken();
+	}
+	else if (tail != NULL) {
+		sz2 = (int)GetIntegerExpression((ENODE **)NULL);
+		temp1->size = sz2 * head->size;
+		temp1->numele = sz2;
+		temp1->dimen = tail->dimen + 1;
+		dfs.printf("Setting array size:%d\n", (int)temp1->size);
+		temp1->alignment = tail->alignment;
+		needpunc(closebr, 21);
+	}
+	else {
+		sz2 = (int)GetIntegerExpression((ENODE **)NULL);
+		temp1->size = sz2;
+		temp1->numele = sz2;
+		temp1->dimen = 1;
+		needpunc(closebr, 22);
+	}
+	if (head == nullptr)
+		head = temp1;
+	tail = temp1;
+}
+*/
 void Declaration::ParseFunctionAttribute(Function *sym)
 {
 	NextToken();

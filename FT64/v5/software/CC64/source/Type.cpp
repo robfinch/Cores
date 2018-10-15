@@ -32,8 +32,26 @@ extern int64_t initlong();
 extern int64_t initquad();
 extern int64_t initfloat();
 extern int64_t inittriple();
-int64_t InitializePointer();
+int64_t InitializePointer(TYP *);
+extern short int brace_level;
+TYP *typ_vector[100];
+short int typ_sp = 0;
 
+void push_typ(TYP *tp)
+{
+	if (typ_sp < 99) {
+		typ_vector[typ_sp] = tp;
+		typ_sp++;
+	}
+}
+
+TYP *pop_typ()
+{
+	if (typ_sp >= 0) {
+		typ_sp--;
+		return (typ_vector[typ_sp]);
+	}
+}
 
 bool TYP::IsScalar()
 {
@@ -497,100 +515,161 @@ bool TYP::IsSameType(TYP *a, TYP *b, bool exact)
 
 // Initialize the type. Unions can't be initialized.
 
-int64_t TYP::Initialize()
+int64_t TYP::Initialize(TYP *tp2)
 {
 	int64_t nbytes;
+	TYP *tp;
+	int base, nn;
+	int64_t sizes[100];
 
-	switch (type) {
-	case bt_ubyte:
-	case bt_byte:
-		nbytes = initbyte();
-		break;
-	case bt_uchar:
-	case bt_char:
-	case bt_enum:
-		nbytes = initchar();
-		break;
-	case bt_ushort:
-	case bt_short:
-		nbytes = initshort();
-		break;
-	case bt_pointer:
-		if (val_flag)
-			nbytes = InitializeArray();
-		else
-			nbytes = InitializePointer();
-		break;
-	case bt_exception:
-	case bt_ulong:
-	case bt_long:
-		nbytes = initlong();
-		break;
-	case bt_struct:
-		nbytes = InitializeStruct();
-		break;
-	case bt_union:
-		nbytes = InitializeUnion();
-		break;
-	case bt_quad:
-		nbytes = initquad();
-		break;
-	case bt_float:
-	case bt_double:
-		nbytes = initfloat();
-		break;
-	case bt_triple:
-		nbytes = inittriple();
-		break;
-	default:
-		error(ERR_NOINIT);
-		nbytes = 0;
+	for (base = typ_sp-1; base >= 0; base--) {
+		if (typ_vector[base]->isArray)
+			break;
+		if (typ_vector[base]->IsStructType())
+			break;
+	}
+	sizes[0] = typ_vector[min(base + 1,typ_sp-1)]->size * typ_vector[0]->numele;
+	for (nn = 1; nn <= base; nn++)
+		sizes[nn] = sizes[nn - 1] * typ_vector[nn]->numele;
+
+j1:
+	while (lastst == begin) {
+		brace_level++;
+		NextToken();
+	}
+	if (tp2)
+		tp = tp2;
+	else {
+		tp = typ_vector[max(base-brace_level,0)];
+	}
+	do {
+		switch (tp->type) {
+		case bt_ubyte:
+		case bt_byte:
+			nbytes = initbyte();
+			break;
+		case bt_uchar:
+		case bt_char:
+		case bt_enum:
+			nbytes = initchar();
+			break;
+		case bt_ushort:
+		case bt_short:
+			nbytes = initshort();
+			break;
+		case bt_pointer:
+			if (tp->val_flag)
+				nbytes = tp->InitializeArray(sizes[max(base-brace_level,0)]);
+			else
+				nbytes = InitializePointer(tp);
+			break;
+		case bt_exception:
+		case bt_ulong:
+		case bt_long:
+			nbytes = initlong();
+			break;
+		case bt_struct:
+			nbytes = tp->InitializeStruct();
+			break;
+		case bt_union:
+			nbytes = tp->InitializeUnion();
+			break;
+		case bt_quad:
+			nbytes = initquad();
+			break;
+		case bt_float:
+		case bt_double:
+			nbytes = initfloat();
+			break;
+		case bt_triple:
+			nbytes = inittriple();
+			break;
+		default:
+			error(ERR_NOINIT);
+			nbytes = 0;
+		}
+		//if (brace_level > 0) {
+		//	if (typ_vector[brace_level - 1]->val_flag) {
+
+		//	}
+		//}
+		if (tp2 != nullptr)
+			return (nbytes);
+		if (lastst != comma)
+			break;
+		NextToken();
+		if (lastst == end)
+			break;
+	} while (1);
+j2:
+	while (lastst == end) {
+		brace_level--;
+		NextToken();
+	}
+	if (brace_level != 0) {
+		if (lastst == comma) {
+			NextToken();
+			if (lastst == end)
+				goto j2;
+			goto j1;
+		}
 	}
 	return (nbytes);
 }
 
-int64_t TYP::InitializeArray()
+int64_t TYP::InitializeArray(int64_t maxsz)
 {
 	int64_t nbytes;
 	char *p;
+	char *str;
+	int64_t sz;
 
 	nbytes = 0;
-	if (lastst == begin) {
-		NextToken();               /* skip past the brace */
+//	if (lastst == begin)
+	{
+//		NextToken();               /* skip past the brace */
 		while (lastst != end) {
 			// Allow char array initialization like { "something", "somethingelse" }
 			if (lastst == sconst && (GetBtp()->type == bt_char || GetBtp()->type == bt_uchar)) {
-				nbytes = strlen(laststr) * 2 + 2;
-				p = laststr;
+				str = GetStrConst();
+				nbytes = strlen(str) * 2 + 2;
+				p = str;
 				while (*p)
 					GenerateChar(*p++);
 				GenerateChar(0);
-				NextToken();
+				free(str);
 			}
 			else
-				nbytes += GetBtp()->Initialize();
+				nbytes += GetBtp()->Initialize(GetBtp());
 			if (lastst == comma)
 				NextToken();
-			else if (lastst != end)
+			else if (lastst == end) {
+				//brace_level--;
+				break;
+			}
+			else if (lastst == semicolon)
+				break;
+			else
 				error(ERR_PUNCT);
 		}
-		NextToken();               /* skip closing brace */
+//		NextToken();               /* skip closing brace */
 	}
-	else if (lastst == sconst && (GetBtp()->type == bt_char || GetBtp()->type == bt_uchar)) {
-		nbytes = strlen(laststr) * 2 + 2;
-		p = laststr;
-		while (*p)
-			GenerateChar(*p++);
-		GenerateChar(0);
-		NextToken();
+	//else if (lastst == sconst && (GetBtp()->type == bt_char || GetBtp()->type == bt_uchar)) {
+	//	str = GetStrConst();
+	//	nbytes = strlen(str) * 2 + 2;
+	//	p = str;
+	//	while (*p)
+	//		GenerateChar(*p++);
+	//	GenerateChar(0);
+	//	free(str);
+	//}
+	//else if (lastst != semicolon)
+	//	error(ERR_ILLINIT);
+	if (nbytes < maxsz) {
+		genstorage(maxsz - nbytes);
+		nbytes = maxsz;
 	}
-	else if (lastst != semicolon)
-		error(ERR_ILLINIT);
-	if (nbytes < size) {
-		genstorage(size - nbytes);
-		nbytes = size;
-	}
-	else if (size != 0 && nbytes > size)
+	else if (maxsz != 0 && nbytes > maxsz)
 		error(ERR_INITSIZE);    /* too many initializers */
 	return (nbytes);
 }
@@ -599,28 +678,39 @@ int64_t TYP::InitializeStruct()
 {
 	SYM *sp;
 	int64_t nbytes;
+	int count;
 
-	needpunc(begin, 25);
+//	needpunc(begin, 25);
 	nbytes = 0;
 	sp = sp->GetPtr(lst.GetHead());      /* start at top of symbol table */
+	count = 0;
 	while (sp != 0) {
 		while (nbytes < sp->value.i) {     /* align properly */
 										   //                    nbytes += GenerateByte(0);
 			GenerateByte(0);
 			nbytes++;
 		}
-		nbytes += sp->tp->Initialize();
+		nbytes += sp->tp->Initialize(sp->tp);
 		if (lastst == comma)
 			NextToken();
-		else if (lastst == end)
+		else if (lastst == end || lastst==semicolon) {
 			break;
+		}
 		else
 			error(ERR_PUNCT);
 		sp = sp->GetNextPtr();
+		count++;
+	}
+	if (sp == nullptr) {
+		if (lastst != end && lastst != semicolon) {
+			error(ERR_INITSIZE);
+			while (lastst != end && lastst != semicolon && lastst != end)
+				NextToken();
+		}
 	}
 	if (nbytes < size)
 		genstorage(size - nbytes);
-	needpunc(end, 26);
+//	needpunc(end, 26);
 	return (size);
 }
 
@@ -650,10 +740,10 @@ int64_t TYP::GenerateT(TYP *tp, ENODE *node)
 		nbytes = 2; GenerateChar(val); break;
 	case bt_short:
 		val = node->i;
-		nbytes = 4; GenerateWord(val); break;
+		nbytes = 4; GenerateHalf(val); break;
 	case bt_ushort:
 		val = node->i;
-		nbytes = 4; GenerateWord(val); break;
+		nbytes = 4; GenerateHalf(val); break;
 	case bt_long:
 		val = node->i;
 		nbytes = 8; GenerateLong(val); break;
@@ -695,6 +785,8 @@ int64_t TYP::InitializeUnion()
 	int64_t val;
 	ENODE *node = nullptr;
 	bool found = false;
+	TYP *tp;
+	int count;
 
 	nbytes = 0;
 	val = GetConstExpression(&node);
@@ -702,7 +794,28 @@ int64_t TYP::InitializeUnion()
 		return (0);
 	sp = sp->GetPtr(lst.GetHead());      /* start at top of symbol table */
 	osp = sp;
+	count = 0;
 	while (sp != 0) {
+		// Detect array of values
+		if (sp->tp->type == bt_pointer && sp->tp->val_flag) {
+			tp = sp->tp->GetBtp();
+			if (IsSameType(tp, node->tp, false))
+			{
+				nbytes = node->esize;
+				nbytes = GenerateT(tp, node);
+				found = true;
+				while (lastst == comma && count < sp->tp->numele) {
+					NextToken();
+					val = GetConstExpression(&node);
+					nbytes = node->esize;
+					nbytes = GenerateT(tp, node);
+					count++;
+				}
+				if (count >= sp->tp->numele)
+					error(ERR_INITSIZE);
+				goto j1;
+			}
+		}
 		if (IsSameType(sp->tp, node->tp, false)) {
 			nbytes = node->esize;
 			nbytes = GenerateT(sp->tp, node);
@@ -713,9 +826,10 @@ int64_t TYP::InitializeUnion()
 		if (sp == osp)
 			break;
 	}
+j1:
 	if (!found)
 		error(ERR_INIT_UNION);
-	if (lastst != semicolon && lastst != comma)
+	if (lastst != semicolon && lastst != comma && lastst != end)
 		error(ERR_PUNCT);
 	if (nbytes < size)
 		genstorage(size - nbytes);

@@ -48,5 +48,9 @@ extern void GenerateLabelReference(int n);
 extern char *RegMoniker(int regno);
 extern void push_token();
 extern void pop_token();
+extern char *GetStrConst();
+
+extern void push_typ(TYP *tp);
+extern TYP *pop_typ();
 
 #endif

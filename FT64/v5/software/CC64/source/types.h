@@ -374,11 +374,11 @@ public:
 
 	// Initialization
 	int64_t GenerateT(TYP *tp, ENODE *node);
-	int64_t InitializeArray();
+	int64_t InitializeArray(int64_t sz);
 	int64_t InitializeStruct();
 	int64_t InitializeUnion();
 	int64_t Initialize(int64_t val);
-	int64_t Initialize();
+	int64_t Initialize(TYP *);
 
 	// GC support
 	bool FindPointer();
@@ -446,6 +446,9 @@ public:
 	bool IsPtr() { return (etype == bt_pointer || etype == bt_struct || etype == bt_union || etype == bt_class); };
 	bool IsFloatType() { return (etype == bt_double || etype == bt_quad || etype == bt_float || etype == bt_triple); };
 	bool IsUnsignedType() { return (etype == bt_ubyte || etype == bt_uchar || etype == bt_ushort || etype == bt_ulong || etype == bt_pointer); };
+	bool IsRefType() {
+		return (nodetype == en_w_ref || nodetype == en_uw_ref || nodetype == en_h_ref || nodetype == en_uh_ref
+			|| nodetype == en_c_ref || nodetype == en_uc_ref || nodetype == en_b_ref || nodetype == en_ub_ref);	}
 	bool IsBitfield();
 	static bool IsEqualOperand(Operand *a, Operand *b);
 	char fsize();
