@@ -1544,13 +1544,15 @@ void RemoveMoves()
 	for (ip = peep_head; ip; ip = ip->fwd) {
 		if (ip->opcode==op_mov) {
 			foundMove = true;
-			reg1 = ip->oper1->preg;
-			reg2 = ip->oper2->preg;
-			// Registers used as register parameters cannot be coalesced.
-			if (IsArgumentReg(reg1) || IsArgumentReg(reg2))
-				continue;
-			// Remove the move instruction
-			MarkRemove(ip);
+			if (ip->oper1 && ip->oper2) {
+				reg1 = ip->oper1->preg;
+				reg2 = ip->oper2->preg;
+				// Registers used as register parameters cannot be coalesced.
+				if (IsArgumentReg(reg1) || IsArgumentReg(reg2))
+					continue;
+				// Remove the move instruction
+				MarkRemove(ip);
+			}
 		}
 	}
 	if (!foundMove)

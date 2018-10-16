@@ -687,7 +687,7 @@ TYP *nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeArray *typear
 				//strcat(stnm,"_");
 				stnm = "";
 				stnm += *sp->name;
-				*node = makesnode(en_cnacon,&stnm, sp->fi->BuildSignature(),sp->value.i);
+				*node = makesnode(en_cnacon,new std::string(stnm), sp->fi->BuildSignature(),sp->value.i);
 				(*node)->isPascal = sp->fi->IsPascal;
 				(*node)->constflag = TRUE;
 				(*node)->esize = 8;

@@ -71,7 +71,7 @@ int bit_offset;	/* the actual offset */
 int      bit_width;	/* the actual width */
 int bit_next;	/* offset for next variable */
 
-int declbegin(int st);
+bool declbegin(int st);
 void dodecl(int defclass);
 SYM *ParseDeclarationSuffix(SYM *);
 void declstruct(int ztype);
@@ -528,6 +528,8 @@ SYM *Declaration::ParseId()
 	SYM *sp;
 
   dfs.printf("<ParseId>%s",lastid);
+	if (strcmp(lastid, "__Cmpfun") == 0)
+		printf("hi");
 	sp = tagtable.Find(lastid,false);//gsyms[0].Find(lastid);
 	if (sp==nullptr)
 		sp = gsyms[0].Find(lastid,false);
@@ -586,12 +588,12 @@ int Declaration::ParseSpecifier(TABLE *table)
 				tail = head;
 				NextToken();
 				if (lastst==openpa) {
-                    NextToken();
-                    if (lastst!=id) 
-                       error(ERR_IDEXPECT);
-                    needpunc(closepa,49);
-                    stkname = my_strdup(lastid);
-                }
+          NextToken();
+          if (lastst!=id) 
+              error(ERR_IDEXPECT);
+          needpunc(closepa,49);
+          stkname = my_strdup(lastid);
+        }
 				goto lxit;
 
       case kw_virtual:
@@ -635,9 +637,9 @@ int Declaration::ParseSpecifier(TABLE *table)
 			case kw_long:	ParseLong();	goto lxit;	// long, long int
 			case kw_int:	ParseInt();		goto lxit;
 
-            case kw_task:
-                isTask = TRUE;
-                NextToken();
+      case kw_task:
+        isTask = TRUE;
+        NextToken();
 				break;
 
 			case kw_signed:
@@ -785,6 +787,8 @@ SYM *Declaration::ParsePrefixId()
 	dfs.puts("<ParsePrefixId>");            
 	if (declid) delete declid;
 	declid = new std::string(lastid);
+	if (strcmp(lastid, "__Scanf") == 0)
+		printf("hi");
 	dfs.printf("B|%s|",(char *)declid->c_str());
 	sp = allocSYM();
 	dfs.printf("C"); 
@@ -1073,21 +1077,21 @@ void Declaration::ParseSuffixOpenpa(Function *sp)
 	  else {
 		  if (lastst != semicolon) {
 				goto j2;
-			cf = currentFn;
-			currentFn = sp;
-			nump = 0;
-			sp->BuildParameterList(&nump, &numa);
-			currentFn = cf;
-			if (lastst==begin) {
-				temp1->type = bt_ifunc;
+				cf = currentFn;
 				currentFn = sp;
-				sp->NumParms = nump;
-				sp->numa = numa;
-				needParseFunction = 2;
-				goto j1;
+				nump = 0;
+				sp->BuildParameterList(&nump, &numa);
+				currentFn = cf;
+				if (lastst==begin) {
+					temp1->type = bt_ifunc;
+					currentFn = sp;
+					sp->NumParms = nump;
+					sp->numa = numa;
+					needParseFunction = 2;
+					goto j1;
+				}
 			}
-		}
-	      temp1->type = bt_func;
+	    temp1->type = bt_func;
 		  needParseFunction = 0;
 		  dfs.printf("Set false\n");
 	  }
@@ -1099,6 +1103,7 @@ j1: ;
   else {
 j2:
     dfs.printf("r");
+		cf = currentFn;
 	  currentFn = sp;
     dfs.printf("s");
     temp1->type = bt_func;
@@ -1111,17 +1116,20 @@ j2:
   		fd = funcdecl;
   		needParseFunction = FALSE;
   	  dfs.printf("Set false\n");
-		if (declid)
+			if (declid)
   			odecl = *declid;
-		else
-			odecl = "";
+			else
+				odecl = "";
   		tempHead = head;
   		tempTail = tail;
   		isd = isStructDecl;
   		//ParseParameterDeclarations(10);	// parse and discard
   		funcdecl = 10;
   //				SetType(sp);
+			//cf = currentFn;
+			//currentFn = sp;
   		sp->BuildParameterList(&nump, &numa);
+			currentFn = cf;
   		needParseFunction = 0;
   	  dfs.printf("Set false\n");
   //				sp->parms = sym;
@@ -1138,16 +1146,21 @@ j2:
 		}
   		needpunc(closepa,23);
   
-  		if (lastst==begin) {
-  		  needParseFunction = 2;
-  		  dfs.printf("Set true1\n");
-  			if (sp->params.GetHead() && sp->proto.GetHead()) {
-  			  dfs.printf("Matching parameter types to prototype.\n");
-  			  if (!sp->ParameterTypesMatch(sp))
-  			     error(ERR_PARMLIST_MISMATCH);
-  		  }
-  			temp1->type = bt_ifunc;
-  		}
+			if (lastst == begin) {
+				needParseFunction = 2;
+				dfs.printf("Set true1\n");
+				if (sp->params.GetHead() && sp->proto.GetHead()) {
+					dfs.printf("Matching parameter types to prototype.\n");
+					if (!sp->ParameterTypesMatch(sp))
+						error(ERR_PARMLIST_MISMATCH);
+				}
+				temp1->type = bt_ifunc;
+			}
+			// Could be a function prototype in a parameter list followed by a comma.
+			else if (lastst == comma && parsingParameterList > 0) {
+				sp->params.CopyTo(&sp->proto);
+				return;
+			}
   		// If the declaration is ending in a semicolon then it was really
   		// a function prototype, so move the parameters to the prototype
   		// area.
@@ -1155,10 +1168,10 @@ j2:
   			sp->params.CopyTo(&sp->proto);
       }
   	  else {
-		if (funcdecl > 0 && lastst==closepa)
-			;
-		else
-  			error(ERR_SYNTAX);
+				if (funcdecl > 0 && lastst==closepa)
+					;
+				else
+  				error(ERR_SYNTAX);
   	  }
       dfs.printf("Z\r\n");
 //				if (isFuncPtr)
@@ -1290,10 +1303,13 @@ int Declaration::declare(SYM *parent,TABLE *table,int al,int ilc,int ztype)
 	bool flag;
 	int parentBytes = 0;
 	std::string name;
- 
-    int nbytes;
+  int nbytes;
+	static int decl_level = 0;
+	int itdef;
 
-	dfs.printf("Enter declare()\r\n");
+	itdef = isTypedef;
+	decl_level++;
+	dfs.printf("<declare>\n");
 	nbytes = 0;
 	dfs.printf("A");
 	classname = new std::string("");
@@ -1350,10 +1366,11 @@ int Declaration::declare(SYM *parent,TABLE *table,int al,int ilc,int ztype)
 			sp->isConst = isConst;
 			if (isConst)
 				sp->tp->isConst = TRUE;
-			if (al != sc_member) {
+			if (al != sc_member && parsingParameterList == 0) {
 				//							sp->isTypedef = isTypedef;
-				if (isTypedef)
+				if (isTypedef) {
 					sp->storage_class = sc_typedef;
+				}
 				isTypedef = FALSE;
 			}
 
@@ -1447,20 +1464,20 @@ int Declaration::declare(SYM *parent,TABLE *table,int al,int ilc,int ztype)
   				dfs.printf("bt_ifunc\r\n");
   				sp1->SetType(sp->tp);
   				sp1->storage_class = sp->storage_class;
-			  sp1->value.i = sp->value.i;
-			  if (!sp1->fi) {
-				  sp1->fi = allocFunction(sp1->id);
-				  sp1->fi->sym = sp1;
-			  }
-	          sp1->fi->IsPascal = sp->fi->IsPascal;
+					sp1->value.i = sp->value.i;
+					if (!sp1->fi) {
+						sp1->fi = allocFunction(sp1->id);
+						sp1->fi->sym = sp1;
+					}
+	        sp1->fi->IsPascal = sp->fi->IsPascal;
   				sp1->fi->IsPrototype = sp->fi->IsPrototype;
   				sp1->fi->IsVirtual = sp->fi->IsVirtual;
   				sp1->parent = sp->parent;
-  				sp1->fi->params = sp->fi->params;
-  				sp1->fi->proto = sp->fi->proto;
+  				sp->fi->params.CopyTo(&sp1->fi->params);
+  				sp->fi->proto.CopyTo(&sp1->fi->proto);
   				sp1->lsyms = sp->lsyms;
   				sp = sp1;
-              }
+        }
   			else {
   dfs.printf("Ib");
   				// Here the symbol wasn't found in the table.
@@ -1503,31 +1520,29 @@ int Declaration::declare(SYM *parent,TABLE *table,int al,int ilc,int ztype)
      //             return nbytes;
      //         }
   dfs.printf("K");
-              if( (al == sc_global || al == sc_static || al==sc_thread) && !fn_doneinit &&
-                      sp->tp->type != bt_func && sp->tp->type != bt_ifunc && sp->storage_class!=sc_typedef)
-                      doinit(sp);
+            if( (al == sc_global || al == sc_static || al==sc_thread) && !fn_doneinit &&
+              sp->tp->type != bt_func && sp->tp->type != bt_ifunc && sp->storage_class!=sc_typedef)
+              doinit(sp);
           }
       }
 
 		if (funcdecl>0) {
-			if (lastst == comma)
-				break;// goto next;
+			if (strcmp(sp->name->c_str(), "__Cmpfun") == 0)
+				printf("hi");
+			if (lastst == closepa) {
+				goto xit1;
+			}
+			if (lastst == comma) {
+				break;
+				NextToken();
+				if (declbegin(lastst) == false)
+					goto xit1;
+				head = dhead;
+				continue;
+//				break;
+			}
 			if (lastst==semicolon) {
 				break;
-			}
-			if (lastst==closepa) {
-				goto xit1;
-				NextToken();
-				if (lastst == comma)
-					goto next;
-				else if (lastst == semicolon)
-					break;
-				else if (lastst == begin) {
-					push_token();
-					break;
-				}
-				else
-					goto xit1;
 			}
 		}
 		else if (catchdecl==TRUE) {
@@ -1584,33 +1599,33 @@ int Declaration::declare(SYM *parent,TABLE *table,int al,int ilc,int ztype)
 		// Handle an assignment
 		else if (lastst == assign) {
 			tp1 = nameref(&ep1,TRUE);
-            op = en_assign;
-//            NextToken();
-            tp2 = asnop(&ep2);
-            if( tp2 == 0 || !IsLValue(ep1) )
-                error(ERR_LVALUE);
-            else {
-                tp1 = forcefit(&ep1,tp1,&ep2,tp2,false,true);
-                ep1 = makenode(op,ep1,ep2);
-            }
+      op = en_assign;
+      tp2 = asnop(&ep2);
+      if(tp2 == nullptr || !IsLValue(ep1))
+        error(ERR_LVALUE);
+      else {
+        tp1 = forcefit(&ep1,tp1,&ep2,tp2,false,true);
+        ep1 = makenode(op,ep1,ep2);
+      }
 			sp->initexp = ep1;
 			if (lastst==semicolon)
 				break;
 		}
-next:
 		// See if there is a list of variable declarations
-      needpunc(comma,24);
-      if(declbegin(lastst) == 0)
-        break;
-      head = dhead;
-    }
-    NextToken();
+    needpunc(comma,24);
+    if(declbegin(lastst) == false)
+      break;
+    head = dhead;
+  }
+  NextToken();
 xit1:
-//	printf("Leave declare()\r\n");
-    return (nbytes);
+	dfs.printf("</declare>\n");
+	isTypedef = itdef;
+	decl_level--;
+  return (nbytes);
 }
 
-int declbegin(int st)
+bool declbegin(int st)
 {
 	return st == star || st == id || st == openpa || st == openbr; 
 }
@@ -1640,9 +1655,12 @@ void GlobalDeclaration::Parse()
 		  NextToken();
 		  isInline = true;
 		  break;
-		case ellipsis:
 		case id:
-        case kw_kernel:
+			lc_static += declare(NULL, &gsyms[0], sc_global, lc_static, bt_struct);
+			isInline = false;
+			break;
+		case ellipsis:
+		case kw_kernel:
 		case kw_interrupt:
         case kw_task:
 		case kw_cdecl:
@@ -1866,34 +1884,39 @@ dfs.printf("B");
 			isAuto = false;
 			break;
 		case ellipsis:
-		case id:
 		case kw_volatile: case kw_const:
         case kw_exception:
 		case kw_int8: case kw_int16: case kw_int32: case kw_int64: case kw_int40: case kw_int80:
 		case kw_byte: case kw_char: case kw_int: case kw_short: case kw_unsigned: case kw_signed:
     case kw_long: case kw_struct: case kw_union: case kw_class:
     case kw_enum: case kw_void:
-	case kw_float: case kw_double: case kw_float128:
-	case kw_vector: case kw_vector_mask:
+		case kw_float: case kw_double: case kw_float128:
+		case kw_vector: case kw_vector_mask:
 dfs.printf("C");
-    declare(NULL,&currentFn->params,sc_auto,0,bt_struct);
-				isAuto = false;
-	            break;
-        case kw_thread:
-          NextToken();
-          error(ERR_ILLCLASS);
-					lc_thread += declare(NULL,&gsyms[0],sc_thread,lc_thread,bt_struct);
-					isAuto = false;
-					break;
-        case kw_static:
-          NextToken();
-          error(ERR_ILLCLASS);
-					lc_static += declare(NULL,&gsyms[0],sc_static,lc_static,bt_struct);
-					isAuto = false;
-					break;
-				// A list of externals could be following a function prototype. This
-				// could be confused with a parameter list.
-        case kw_extern:
+			declare(NULL,&currentFn->params,sc_auto,0,bt_struct);
+			isAuto = false;
+	    break;
+		case id:
+			if (strcmp(lastid, "__Cmpfun") == 0)
+				printf("hi");
+			declare(NULL, &currentFn->params, sc_auto, 0, bt_struct);
+			isAuto = false;
+			break;
+		case kw_thread:
+      NextToken();
+      error(ERR_ILLCLASS);
+			lc_thread += declare(NULL,&gsyms[0],sc_thread,lc_thread,bt_struct);
+			isAuto = false;
+			break;
+    case kw_static:
+      NextToken();
+      error(ERR_ILLCLASS);
+			lc_static += declare(NULL,&gsyms[0],sc_static,lc_static,bt_struct);
+			isAuto = false;
+			break;
+		// A list of externals could be following a function prototype. This
+		// could be confused with a parameter list.
+    case kw_extern:
 //					push_token();
 //					goto xit;
 dfs.printf("D");
@@ -1907,11 +1930,11 @@ dfs.printf("D");
                 --global_flag;
                 break;
 		case kw_register:
-				isRegister = true;
-				NextToken();
-				goto j1;
-        default:
-				goto xit;
+			isRegister = true;
+			NextToken();
+			goto j1;
+    default:
+			goto xit;
 		}
 dfs.printf("E");
 	}

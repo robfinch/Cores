@@ -681,6 +681,7 @@ Operand *ENODE::GenHook(int flags, int size)
 	if (opt_nocgo)
 		n1 = 9999;
 	if (n1 > 4) {
+		ReleaseTempReg(ap2);
 		peep_tail = ip1;
 		peep_tail->fwd = nullptr;
 	}
@@ -704,8 +705,6 @@ Operand *ENODE::GenHook(int flags, int size)
 			GenerateMonadic(op_hint, 0, make_immed(2));
 			GenerateDiadic(op_mov, 0, ap1, ap2);
 		}
-	}
-	if (n1 > 4) {
 		ReleaseTempReg(ap2);
 		GenerateLabel(end_label);
 		return (ap1);

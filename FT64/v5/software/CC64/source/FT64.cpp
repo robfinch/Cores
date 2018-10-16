@@ -910,7 +910,7 @@ static int GeneratePushParameter(ENODE *ep, int regno, int stkoffs)
 //        }
     	break;
     }
-//	ReleaseTempReg(ap);
+	ReleaseTempReg(ap);
 	return nn;
 }
 
@@ -971,7 +971,6 @@ Operand *GenerateFunctionCall(ENODE *node, int flags)
 		s = gsearch(*node->p[0]->sp);
  		sym = s->fi;
         i = 0;
-		sym->SaveTemporaries(&sp, &fsp);
   /*
     	if ((sym->tp->GetBtp()->type==bt_struct || sym->tp->GetBtp()->type==bt_union) && sym->tp->GetBtp()->size > 8) {
             nn = tmpAlloc(sym->tp->GetBtp()->size) + lc_auto + round8(sym->tp->GetBtp()->size);
@@ -981,8 +980,9 @@ Operand *GenerateFunctionCall(ENODE *node, int flags)
 */
 		if (currentFn->HasRegisterParameters())
 			sym->SaveRegisterArguments();
-        i = i + GenerateStoreArgumentList(sym,node->p[1]);
+    i = i + GenerateStoreArgumentList(sym,node->p[1]);
 //		ReleaseTempRegister(ap);
+		sym->SaveTemporaries(&sp, &fsp);
 		if (sym && sym->IsInline) {
 			o_fn = currentFn;
 			mask = save_mask;
@@ -1013,10 +1013,10 @@ Operand *GenerateFunctionCall(ENODE *node, int flags)
 		ap = GenerateExpression(node->p[0],F_REG,sizeOfWord);
 		if (ap->offset)
 			sym = ap->offset->sym->fi;
-		sym->SaveTemporaries(&sp, &fsp);
 		if (currentFn->HasRegisterParameters())
 			sym->SaveRegisterArguments();
-        i = i + GenerateStoreArgumentList(sym,node->p[1]);
+    i = i + GenerateStoreArgumentList(sym,node->p[1]);
+		sym->SaveTemporaries(&sp, &fsp);
 		ap->mode = am_ind;
 		ap->offset = 0;
 		if (sym && sym->IsInline) {
@@ -1046,9 +1046,9 @@ Operand *GenerateFunctionCall(ENODE *node, int flags)
 		else
 			GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),make_immed(i * sizeOfWord));
 	}
+	sym->RestoreTemporaries(sp, fsp);
 	if (currentFn->HasRegisterParameters())
 		sym->RestoreRegisterArguments();
-	sym->RestoreTemporaries(sp, fsp);
 	/*
 	if (sym) {
 	   if (sym->tp->type==bt_double)

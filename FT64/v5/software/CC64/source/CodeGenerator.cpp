@@ -1679,15 +1679,15 @@ Operand *GenerateExpression(ENODE *node, int flags, int size)
       return GenExpr(node);
 
 	case en_cond:
-            return node->GenHook(flags,size);
-    case en_void:
-            natsize = GetNaturalSize(node->p[0]);
-            ReleaseTempRegister(GenerateExpression(node->p[0],F_ALL | F_NOVALUE,natsize));
-			ap1 = GenerateExpression(node->p[1], flags, size);
-			ap1->isPtr = node->IsPtr();
-            return (ap1);
+    return (node->GenHook(flags,size));
+  case en_void:
+    natsize = GetNaturalSize(node->p[0]);
+    ReleaseTempRegister(GenerateExpression(node->p[0],F_ALL | F_NOVALUE,natsize));
+		ap1 = GenerateExpression(node->p[1], flags, size);
+		ap1->isPtr = node->IsPtr();
+    return (ap1);
 
-    case en_fcall:
+  case en_fcall:
 		return (GenerateFunctionCall(node,flags));
 
 	case en_sxb:

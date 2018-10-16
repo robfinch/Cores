@@ -662,6 +662,7 @@ int TempInvalidate(int *fsp)
 {
     int i;
 	int sp;
+	int64_t mask = 0;
 
 	sp = 0;
 	TRACE(printf("TempInvalidate()\r\n");)
@@ -674,8 +675,11 @@ int TempInvalidate(int *fsp)
     	if (reg_alloc[i].f.isPushed == 'F') {
 			// ToDo: fix this line
 			reg_alloc[i].Operand->mode = am_reg;
-			SpillRegister(reg_alloc[i].Operand, i);
-    		//GenerateTempRegPush(reg_alloc[i].reg, /*reg_alloc[i].Operand->mode*/am_reg, i, sp);
+			if (!(mask & (1LL << reg_alloc[i].Operand->preg))) {
+				SpillRegister(reg_alloc[i].Operand, i);
+				mask = mask | (1LL << reg_alloc[i].Operand->preg);
+			}
+			//GenerateTempRegPush(reg_alloc[i].reg, /*reg_alloc[i].Operand->mode*/am_reg, i, sp);
     		stacked_regs[sp].reg = reg_alloc[i].reg;
     		stacked_regs[sp].Operand = reg_alloc[i].Operand;
     		stacked_regs[sp].f.allocnum = i;
@@ -684,6 +688,7 @@ int TempInvalidate(int *fsp)
     		reg_in_use[reg_alloc[i].reg] = -1;
     	}
 	}
+	memset(reg_in_use, -1, sizeof(reg_in_use));
 
 	save_fpreg_alloc_ptr = fpreg_alloc_ptr;
 	memcpy(save_fpreg_alloc, fpreg_alloc, sizeof(save_fpreg_alloc));
@@ -718,6 +723,7 @@ int TempInvalidate(int *fsp)
 void TempRevalidate(int sp, int fsp)
 {
 	int nn;
+	int64_t mask;
 
 	for (nn = fsp-1; nn >= 0; nn--) {
 		if (stacked_fpregs[nn].Operand)
@@ -728,8 +734,11 @@ void TempRevalidate(int sp, int fsp)
 	memcpy(fpreg_alloc, save_fpreg_alloc, sizeof(fpreg_alloc));
 	memcpy(fpreg_in_use, save_fpreg_in_use, sizeof(fpreg_in_use));
 
+	mask = 0;
 	for (nn = sp-1; nn >= 0; nn--) {
-		LoadRegister(stacked_regs[nn].Operand->preg, stacked_regs[nn].f.allocnum);
+		if (!(mask & (1LL << stacked_regs[nn].Operand->preg)))
+			LoadRegister(stacked_regs[nn].Operand->preg, stacked_regs[nn].f.allocnum);
+		mask = mask | (1LL << stacked_regs[nn].Operand->preg);
 		//GenerateTempRegPop(stacked_regs[nn].reg, /*stacked_regs[nn].Operand->mode*/am_reg, stacked_regs[nn].f.allocnum,sp-nn-1);
 	}
 	wrapno = save_wrapno;

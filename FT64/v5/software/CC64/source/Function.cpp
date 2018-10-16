@@ -1027,10 +1027,15 @@ void Function::BuildParameterList(int *num, int *numa)
 	int onp;
 	int np;
 	bool noParmOffset = false;
+	Stringx oldnames[20];
+	int old_nparms;
 
 	dfs.printf("<BuildParameterList\n>");
 	poffset = 0;//GetReturnBlockSize();
 				//	sp->parms = (SYM *)NULL;
+	old_nparms = nparms;
+	for (np = 0; np < nparms; np++)
+		oldnames[np] = names[np];
 	onp = nparms;
 	nparms = 0;
 	preg = regFirstArg;
@@ -1041,7 +1046,10 @@ void Function::BuildParameterList(int *num, int *numa)
 	*num += np;
 	*numa = 0;
 	dfs.printf("B");
+	if (nparms == 4)
+		printf("hi");
 	nparms = onp;
+	this->NumParms = np;
 	for (i = 0; i < np && i < 20; ++i) {
 		if ((sp1 = currentFn->params.Find(names[i].str, false)) == NULL) {
 			dfs.printf("C");
@@ -1127,6 +1135,9 @@ void Function::BuildParameterList(int *num, int *numa)
 			}
 		}
 	}
+	nparms = old_nparms;
+	for (np = 0; np < nparms; np++)
+		names[np] = oldnames[np];
 	dfs.printf("</BuildParameterList>\n");
 }
 
