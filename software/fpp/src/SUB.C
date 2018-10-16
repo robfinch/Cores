@@ -213,6 +213,11 @@ void SearchAndSub()
       c = NextCh();
    }
    inptr = optr;
+	 while (*optr) {
+		 if (*optr == '\x15')
+			 *optr = '\x22';
+		 optr++;
+	 }
 }
 
 

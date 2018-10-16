@@ -343,9 +343,12 @@ void PromoteConstFlag(ENODE *ep)
  */
 TYP *deref(ENODE **node, TYP *tp)
 {
+	SYM *sp;
+
   dfs.printf("<Deref>");
   if (tp==nullptr || node==nullptr || *node==nullptr)
     throw new C64PException(ERR_NULLPOINTER,8);
+	sp = (*node)->sym;
 	switch( tp->type ) {
 		case bt_byte:
 			if (tp->isUnsigned) {
@@ -361,14 +364,17 @@ TYP *deref(ENODE **node, TYP *tp)
 	            tp = &stdubyte;//&stduint;
 			else
 	            tp = &stdbyte;//&stdint;
-            break;
+			(*node)->sym = sp;
+      break;
+
 		case bt_ubyte:
 			*node = makenode(en_ub_ref,*node,(ENODE *)NULL);
 			(*node)->isUnsigned = TRUE;
 			(*node)->esize = tp->size;
 			(*node)->etype = (enum e_bt)tp->type;
             tp = &stdubyte;//&stduint;
-            break;
+						(*node)->sym = sp;
+						break;
 		case bt_uchar:
 		case bt_char:
         case bt_enum:
@@ -384,7 +390,8 @@ TYP *deref(ENODE **node, TYP *tp)
 	            tp = &stduchar;
 			else
 	            tp = &stdchar;
-            break;
+			(*node)->sym = sp;
+			break;
 		case bt_ushort:
 		case bt_short:
 			if (tp->isUnsigned) {
@@ -400,13 +407,15 @@ TYP *deref(ENODE **node, TYP *tp)
 				(*node)->etype = (enum e_bt)tp->type;
 				tp = &stdint;
 			}
-      break;
+			(*node)->sym = sp;
+			break;
 		case bt_exception:
 			(*node)->esize = tp->size;
 			(*node)->etype = (enum e_bt)tp->type;
 			(*node)->isUnsigned = TRUE;
 			*node = makenode(en_uw_ref,*node,(ENODE *)NULL);
-            break;
+			(*node)->sym = sp;
+			break;
 
 		case bt_ulong:
 		case bt_long:
@@ -419,6 +428,7 @@ TYP *deref(ENODE **node, TYP *tp)
 			else {
 				*node = makenode(en_w_ref,*node,(ENODE *)NULL);
 			}
+			(*node)->sym = sp;
 			break;
 
 		case bt_vector:
@@ -426,14 +436,16 @@ TYP *deref(ENODE **node, TYP *tp)
 			(*node)->etype = (enum e_bt)tp->type;
             *node = makenode(en_vector_ref,*node,(ENODE *)NULL);
 			(*node)->isUnsigned = TRUE;
-            break;
+			(*node)->sym = sp;
+			break;
 		case bt_vector_mask:
 			(*node)->esize = tp->size;
 			(*node)->etype = (enum e_bt)tp->type;
             *node = makenode(en_uw_ref,*node,(ENODE *)NULL);
 			(*node)->isUnsigned = TRUE;
 			(*node)->vmask = (*node)->p[0]->vmask;
-            break;
+			(*node)->sym = sp;
+			break;
 
 		// Pointers (addresses) are always unsigned
 		case bt_pointer:
@@ -441,39 +453,45 @@ TYP *deref(ENODE **node, TYP *tp)
 			(*node)->etype = (enum e_bt)tp->type;
 			*node = makenode(sizeOfPtr==4 ? en_hp_ref : en_wp_ref,*node,(ENODE *)NULL);
 			(*node)->isUnsigned = TRUE;
-            break;
+			(*node)->sym = sp;
+			break;
 
 		case bt_unsigned:
 			(*node)->esize = tp->size;
 			(*node)->etype = (enum e_bt)tp->type;
             *node = makenode(en_uw_ref,*node,(ENODE *)NULL);
 			(*node)->isUnsigned = TRUE;
-            break;
+			(*node)->sym = sp;
+			break;
 
     case bt_triple:
             *node = makenode(en_triple_ref,*node,(ENODE *)NULL);
 			(*node)->esize = tp->size;
 			(*node)->etype = (enum e_bt)tp->type;
             tp = &stdtriple;
-            break;
+						(*node)->sym = sp;
+						break;
         case bt_quad:
             *node = makenode(en_quad_ref,*node,(ENODE *)NULL);
 			(*node)->esize = tp->size;
 			(*node)->etype = (enum e_bt)tp->type;
             tp = &stdquad;
-            break;
+						(*node)->sym = sp;
+						break;
         case bt_double:
             *node = makenode(en_dbl_ref,*node,(ENODE *)NULL);
 			(*node)->esize = tp->size;
 			(*node)->etype = (enum e_bt)tp->type;
             tp = &stddbl;
-            break;
+						(*node)->sym = sp;
+						break;
         case bt_float:
             *node = makenode(en_flt_ref,*node,(ENODE *)NULL);
 			(*node)->esize = tp->size;
 			(*node)->etype = (enum e_bt)tp->type;
             tp = &stdflt;
-            break;
+						(*node)->sym = sp;
+						break;
 		case bt_bitfield:
 			if (tp->isUnsigned){
 				switch (tp->size) {
@@ -500,6 +518,7 @@ TYP *deref(ENODE **node, TYP *tp)
 			(*node)->etype = tp->type;//(enum e_bt)stdint.type;
 			(*node)->esize = tp->size;
 			tp = &stdint;
+			(*node)->sym = sp;
 			break;
 		case bt_ubitfield:
 			switch (tp->size) {
@@ -516,6 +535,7 @@ TYP *deref(ENODE **node, TYP *tp)
 			(*node)->etype = tp->type;//(enum e_bt)stdint.type;
 			(*node)->esize = tp->size;
 			tp = &stdint;
+			(*node)->sym = sp;
 			break;
 		//case bt_func:
 		//case bt_ifunc:
@@ -533,6 +553,19 @@ TYP *deref(ENODE **node, TYP *tp)
   //    *node = makenode(en_struct_ref,*node,NULL);
 		//	(*node)->isUnsigned = TRUE;
   //    break;
+
+		// Not sure about this, dereferencing a void type.
+		// NULL is often defined as a pointer with the value zero.
+		// It's actually a pointer to void that's desired for dereferencing.
+		// For now, uses a pointer to word or half word.
+		case bt_void:
+			(*node)->esize = 0;
+			(*node)->etype = (enum e_bt)tp->type;
+			*node = makenode(sizeOfPtr == 4 ? en_hp_ref : en_wp_ref, *node, (ENODE *)NULL);
+			(*node)->isUnsigned = TRUE;
+			(*node)->sym = sp;
+			break;
+
 		default:
 		  dfs.printf("Deref :%d\n", tp->type);
 		  if ((*node)->msp)
@@ -542,7 +575,8 @@ TYP *deref(ENODE **node, TYP *tp)
     }
 	(*node)->isVolatile = tp->isVolatile;
 	(*node)->constflag = tp->isConst;
-  dfs.printf("</Deref>");
+	(*node)->sym = sp;
+	dfs.printf("</Deref>");
     return tp;
 }
 
@@ -1437,7 +1471,7 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 	TYP *tp1, *tp2, *tp3, *tp4;
 	ENODE *ep1, *ep2, *ep3, *ep4;
 	ENODE *rnode, *qnode, *pnode;
-	SYM *sp;
+	SYM *sp, *sp1;
 	int iu;
 	int ii;
 	bool classdet = false;
@@ -1565,15 +1599,22 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 			qnode->esize = 8;
 			qnode->constflag = cf & rnode->constflag;
 			qnode->isUnsigned = rnode->isUnsigned;
+			if (rnode->sym)
+				qnode->sym = rnode->sym;
 
 			//(void) cast_op(&qnode, &tp_int32, tp1);
 			cf = pnode->constflag;
 			uf = pnode->isUnsigned;
+			sp1 = pnode->sym;
 			pnode = makenode(en_add, qnode, pnode);
 			pnode->etype = bt_pointer;
 			pnode->esize = sizeOfPtr;
 			pnode->constflag = cf & qnode->constflag;
 			pnode->isUnsigned = uf & qnode->isUnsigned;
+			if (pnode->sym == nullptr)
+				pnode->sym = sp1;
+			if (pnode->sym == nullptr)
+				pnode->sym = qnode->sym;
 
 			tp1 = CondDeref(&pnode, tp1);
 			pnode->tp = tp1;
@@ -1624,6 +1665,8 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 				break;
 			}
 			dfs.printf("openpa calling gsearch2");
+			sp = ep1->sym;
+			/*
 			sp = nullptr;
 			ii = tp1->lst.FindRising(name);
 			if (ii) {
@@ -1631,6 +1674,7 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 			}
 			if (!sp)
 				sp = gsearch2(name,bt_long,&typearray,true);
+			*/
 			if (sp==nullptr) {
 				sp = allocSYM();
 				sp->fi = allocFunction(sp->id);
@@ -1664,8 +1708,13 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 				dfs.printf("Got direct function %s ", (char *)sp->name->c_str());
 				ep3 = makesnode(en_cnacon,sp->name,sp->mangledName,sp->value.i);
 				ep1 = makefcnode(en_fcall,ep3,ep2,sp);
-				if (!sp->fi->IsInline)
-					currentFn->IsLeaf = FALSE;
+				//if (sp->fi)
+				{
+					if (!sp->fi->IsInline)
+						currentFn->IsLeaf = FALSE;
+				}
+				//else
+				//	currentFn->IsLeaf = FALSE;
 			}
 			tp1 = sp->tp->GetBtp();
 //			tp1 = ExprFunction(tp1, &ep1);

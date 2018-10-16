@@ -1313,6 +1313,11 @@ Operand *GenerateExpression(ENODE *node, int flags, int size)
 	//size = node->esize;
     switch( node->nodetype )
     {
+		case en_aggregate:
+			ap1 = allocOperand();
+			ap1->offset = node;
+			ap1->type = 9999;
+			return (ap1);
 	case en_fcon:
         ap1 = allocOperand();
 		ap1->isPtr = node->IsPtr();
@@ -1757,10 +1762,10 @@ Operand *GenerateExpression(ENODE *node, int flags, int size)
 			GenerateDiadic(op_lea,0,ap1,make_indexed(-8,regFP));
 			ap1->MakeLegal(flags,sizeOfWord);
 			return (ap1);
-    default:
-            printf("DIAG - uncoded node (%d) in GenerateExpression.\n", node->nodetype);
-            return 0;
-    }
+  default:
+    printf("DIAG - uncoded node (%d) in GenerateExpression.\n", node->nodetype);
+    return 0;
+  }
 	return(0);
 }
 
@@ -1880,7 +1885,7 @@ int GetNaturalSize(ENODE *node)
 	case en_asadd:  case en_assub:
 	case en_asmul:  case en_asmulu:
 	case en_asdiv:	case en_asdivu:
-	case en_asmod:  case en_asand:
+	case en_asmod:  case en_asmodu: case en_asand:
 	case en_asor:   case en_asxor:	case en_aslsh:
 	case en_asrsh:
 		siz0 = GetNaturalSize(node->p[0]);

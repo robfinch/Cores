@@ -253,6 +253,8 @@ TYP *forcefit(ENODE **srcnode, TYP *srctp, ENODE **dstnode, TYP *dsttp, bool pro
 	case bt_func:
 	case bt_ifunc:
 		return srctp;
+	case bt_void:
+		return (dsttp);
 	}
 	error(ERR_MISMATCH);
 	return srctp;

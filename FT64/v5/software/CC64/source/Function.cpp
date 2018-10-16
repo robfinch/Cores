@@ -1046,8 +1046,6 @@ void Function::BuildParameterList(int *num, int *numa)
 	*num += np;
 	*numa = 0;
 	dfs.printf("B");
-	if (nparms == 4)
-		printf("hi");
 	nparms = onp;
 	this->NumParms = np;
 	for (i = 0; i < np && i < 20; ++i) {

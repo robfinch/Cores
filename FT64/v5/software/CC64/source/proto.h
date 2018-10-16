@@ -43,7 +43,7 @@ extern void GenerateLong(int64_t val);
 extern void GenerateFloat(Float128 *val);
 extern void GenerateQuad(Float128 *);
 extern void GenerateReference(SYM *sp, int64_t offset);
-extern void GenerateLabelReference(int n);
+extern void GenerateLabelReference(int n, int64_t);
 
 extern char *RegMoniker(int regno);
 extern void push_token();

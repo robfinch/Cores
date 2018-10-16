@@ -19,16 +19,30 @@ char *rtrim(char *str);
 
 char *SubMacroArg(char *bdy, int n, char *sub)
 {
-   static char buf[16000];
-   char *s = sub, *o = buf;
+	static char buf[16000];
+	char *s = sub, *o = buf;
+	int stringize = 0;
+	SDef *p, tdef;
 
    memset(buf, 0, sizeof(buf));
    for (o = buf; *bdy; bdy++, o++)
    {
+		 stringize = 0;
       if (*bdy == '' && *(bdy+1) == (char)n + '0') {  // we have found parameter to sub
+				if (bdy[-1] == '#') {
+					stringize = 1;
+					o[-1] = '\x15';
+				}
          // Copy substitution to output buffer
-         for (s = sub; *s;)
-            *o++ = *s++;
+				for (s = sub; *s;) {
+					if (stringize) {
+						if (*s=='"')
+							*o++ = '\\';
+					}
+					*o++ = *s++;
+				}
+				if (stringize)
+					*o++ = '\x15';
          --o;
          bdy++;
          continue;

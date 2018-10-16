@@ -324,11 +324,11 @@ int64_t InitializePointer(TYP *tp2)
 			char *str;
 
 			str = GetStrConst();
-      GenerateLabelReference(stringlit(str));
+      GenerateLabelReference(stringlit(str),0);
 			free(str);
     }
 	else if (lastst == rconst) {
-        GenerateLabelReference(quadlit(&rval128));
+        GenerateLabelReference(quadlit(&rval128),0);
         NextToken();
 	}
 	//else if (lastst == id) {
@@ -351,7 +351,13 @@ int64_t InitializePointer(TYP *tp2)
 				GenerateLong(lng);
 		}
 		else if (n && n->nodetype == en_labcon) {
-			GenerateLabelReference(n->i);
+			GenerateLabelReference(n->i,0);
+		}
+		else if (n && n->nodetype == en_add) {
+			if (n->p[0]->nodetype==en_labcon)
+				GenerateLabelReference(n->p[0]->i, n->p[1]->i);
+			else
+				GenerateLabelReference(n->p[1]->i, n->p[0]->i);
 		}
 		else {
 			GenerateLong((lng & 0xFFFFFFFFFFFLL)|0xFFF0100000000000LL);

@@ -75,8 +75,6 @@ BasicBlock *BasicBlock::Blockize(OCODE *start)
 	start->leader = true;
 	for (ip = start; ip; ip = ip2) {
 		ip->bb = pb;
-		if (pb == nullptr)
-			printf("hi");
 		pb->depth = ip->loop_depth + 1;
 		ip2 = ip->fwd;
 		if (ip->opcode != op_label && ip->opcode != op_rem && ip->opcode != op_rem2 && ip->opcode != op_hint && ip->opcode != op_hint2)
@@ -644,8 +642,6 @@ void BasicBlock::InsertMove(int reg, int rreg, int blk)
 	cd->back = ip->back;
 	cd->fwd = ip;
 	cd->bb = ip->bb;
-	if (ip->bb == nullptr)
-		printf("hi");
 	if (ip->back)
 		ip->back->fwd = cd;
 	ip->back = cd;

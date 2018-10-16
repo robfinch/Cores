@@ -74,6 +74,7 @@ void TABLE::insert(SYM *sp)
 	TABLE *tab = this;
 	int s1,s2,s3;
 	std::string nm;
+	SYM *sp1;
 //  std::string sig;
 
 	if (sp == nullptr || this == nullptr ) {
@@ -115,8 +116,18 @@ void TABLE::insert(SYM *sp)
     dfs.printf("At insert:\n");
     sp->fi->GetProtoTypes()->Print();
   }
-  else
-    error(ERR_DUPSYM);
+	// If we have an exactly matching symbol, just ignore.
+	else {
+		for (nn = 0; nn < TABLE::matchno; nn++) {
+			sp1 = TABLE::match[0];
+			if (sp1->fi->ParameterTypesMatch(sp->fi->GetParameterTypes()))
+				goto j1;
+			if (sp1->fi->ParameterTypesMatch(sp->fi->GetProtoTypes()))
+				goto j1;
+		}
+		error(ERR_DUPSYM);
+	}
+j1:
 	if (ta)
 		delete ta;
 //  p = tab->GetHead();

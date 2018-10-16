@@ -331,8 +331,6 @@ char *RegMoniker(int regno)
 	else if (regno >= 11 && regno <= 17)
 		sprintf_s(&buf[n][0], 20, "$r%d", regno);
 	else {
-		if (regno == 3533)
-			printf("hi");
 		sprintf_s(&buf[n][0], 20, "$r%d", regno);
 	}
 	return &buf[n][0];
@@ -630,15 +628,25 @@ void genstorage(int64_t nbytes)
 	genst_cumulative += nbytes;
 }
 
-void GenerateLabelReference(int n)
+void GenerateLabelReference(int n, int64_t offset)
 { 
+	char buf[200];
+
 	if( gentype == longgen && outcol < 58) {
-        ofs.printf(",%s_%d",GetNamespace(),n);
+		if (offset==0)
+			sprintf_s(buf, sizeof(buf), ",%s_%d", GetNamespace(), n);
+		else
+			sprintf_s(buf, sizeof(buf), ",%s_%d+%lld", GetNamespace(), n, offset);
+		ofs.printf(buf);
         outcol += 6;
     }
     else {
         nl();
-        ofs.printf("\tdw\t%s_%d",GetNamespace(),n);
+				if (offset == 0)
+					sprintf_s(buf, sizeof(buf), "\tdw\t%s_%d", GetNamespace(), n);
+				else
+					sprintf_s(buf, sizeof(buf), "\tdw\t%s_%d+%lld", GetNamespace(), n, offset);
+				ofs.printf(buf);
         outcol = 22;
         gentype = longgen;
     }
@@ -764,7 +772,7 @@ void dumplits()
 		nl();
 		put_label(casetab->label,"",casetab->nmspace,'D');
 		for (nn = 0; nn < casetab->num; nn++)
-			GenerateLabelReference(casetab->cases[nn].label);
+			GenerateLabelReference(casetab->cases[nn].label,0);
 		casetab = casetab->next;
 	}
 	if (quadtab) {

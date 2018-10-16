@@ -40,6 +40,18 @@ int64_t GetIntegerExpression(ENODE **pnode)       /* simple integer value */
 		fatal("Compiler Error: GetIntegerExpression: node is NULL");
 		return (0);
 	}
+	if (node->nodetype == en_add) {
+		if (node->p[0]->nodetype == en_labcon && node->p[1]->nodetype == en_icon) {
+			if (pnode)
+				*pnode = node;
+			return (node->i);
+		}
+		if (node->p[0]->nodetype == en_icon && node->p[1]->nodetype == en_labcon) {
+			if (pnode)
+				*pnode = node;
+			return (node->i);
+		}
+	}
 	if (node->nodetype != en_icon && node->nodetype != en_cnacon && node->nodetype != en_labcon) {
     printf("\r\nnode:%d \r\n", node->nodetype);
 		error(ERR_INT_CONST);

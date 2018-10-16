@@ -528,8 +528,6 @@ SYM *Declaration::ParseId()
 	SYM *sp;
 
   dfs.printf("<ParseId>%s",lastid);
-	if (strcmp(lastid, "__Cmpfun") == 0)
-		printf("hi");
 	sp = tagtable.Find(lastid,false);//gsyms[0].Find(lastid);
 	if (sp==nullptr)
 		sp = gsyms[0].Find(lastid,false);
@@ -787,8 +785,6 @@ SYM *Declaration::ParsePrefixId()
 	dfs.puts("<ParsePrefixId>");            
 	if (declid) delete declid;
 	declid = new std::string(lastid);
-	if (strcmp(lastid, "__Scanf") == 0)
-		printf("hi");
 	dfs.printf("B|%s|",(char *)declid->c_str());
 	sp = allocSYM();
 	dfs.printf("C"); 
@@ -1527,8 +1523,6 @@ int Declaration::declare(SYM *parent,TABLE *table,int al,int ilc,int ztype)
       }
 
 		if (funcdecl>0) {
-			if (strcmp(sp->name->c_str(), "__Cmpfun") == 0)
-				printf("hi");
 			if (lastst == closepa) {
 				goto xit1;
 			}
@@ -1604,7 +1598,7 @@ int Declaration::declare(SYM *parent,TABLE *table,int al,int ilc,int ztype)
       if(tp2 == nullptr || !IsLValue(ep1))
         error(ERR_LVALUE);
       else {
-        tp1 = forcefit(&ep1,tp1,&ep2,tp2,false,true);
+        tp1 = forcefit(&ep2,tp2,&ep1,tp1,false,true);
         ep1 = makenode(op,ep1,ep2);
       }
 			sp->initexp = ep1;
@@ -1897,8 +1891,6 @@ dfs.printf("C");
 			isAuto = false;
 	    break;
 		case id:
-			if (strcmp(lastid, "__Cmpfun") == 0)
-				printf("hi");
 			declare(NULL, &currentFn->params, sc_auto, 0, bt_struct);
 			isAuto = false;
 			break;
