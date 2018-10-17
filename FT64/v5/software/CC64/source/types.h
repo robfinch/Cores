@@ -464,6 +464,7 @@ public:
 	Operand *GenIndex();
 	Operand *GenHook(int flags, int size);
 	Operand *GenShift(int flags, int size, int op);
+	Operand *GenMultiply(int flags, int size, int op);
 	Operand *GenDivMod(int flags, int size, int op);
 	Operand *GenUnary(int flags, int size, int op);
 	Operand *GenBinary(int flags, int size, int op);

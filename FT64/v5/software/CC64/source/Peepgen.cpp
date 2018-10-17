@@ -1270,6 +1270,10 @@ static void RemoveDoubleTargets(OCODE *ip)
 		return;
 	ip2->GetTargetReg(&rg1, &rg2);
 	ip->GetTargetReg(&rg3, &rg4);
+	// Should look at this more carefully sometime. Generally however target 
+	// register classes won't match between integer and float instructions.
+	if (ip->insn->regclass1 != ip2->insn->regclass1)
+		return;
 	if (rg1 != rg3)
 		return;
 	if (ip2->HasSourceReg(rg3))

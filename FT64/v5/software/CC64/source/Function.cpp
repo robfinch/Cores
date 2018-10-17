@@ -544,7 +544,7 @@ void Function::SetupReturnBlock()
 //
 void Function::GenReturn(Statement *stmt)
 {
-	Operand *ap;
+	Operand *ap, *ap2;
 	int nn;
 	int cnt, cnt2;
 	int toAdd;
@@ -557,7 +557,7 @@ void Function::GenReturn(Statement *stmt)
 		initstack();
 		isFloat = sym->tp->GetBtp() && sym->tp->GetBtp()->IsFloatType();
 		if (isFloat)
-			ap = GenerateExpression(stmt->exp, F_REG, sizeOfFP);
+			ap = GenerateExpression(stmt->exp, F_FPREG, sizeOfFP);
 		else
 			ap = GenerateExpression(stmt->exp, F_REG | F_IMMED, sizeOfWord);
 		GenerateMonadic(op_hint, 0, make_immed(2));
@@ -571,9 +571,13 @@ void Function::GenReturn(Statement *stmt)
 						GenerateDiadic(op_mov, 0, makereg(1), makereg(p->reg));
 					else
 						GenerateDiadic(op_lw, 0, makereg(1), make_indexed(p->value.i, regFP));
-					GenerateMonadic(op_push, 0, make_immed(sym->tp->GetBtp()->size));
-					GenerateMonadic(op_push, 0, ap);
-					GenerateMonadic(op_push, 0, makereg(1));
+					GenerateTriadic(op_sub, 0, makereg(regSP), makereg(regSP), make_immed(sizeOfWord * 3));
+					ap2 = GetTempRegister();
+					GenerateDiadic(op_ldi, 0, ap2, make_immed(sym->tp->GetBtp()->size));
+					GenerateDiadic(op_sw, 0, makereg(1), make_indirect(regSP));
+					GenerateDiadic(op_sw, 0, ap, make_indexed(sizeOfWord,regSP));
+					GenerateDiadic(op_sw, 0, ap2, make_indexed(sizeOfWord * 2, regSP));
+					ReleaseTempReg(ap2);
 					GenerateMonadic(op_call, 0, make_string("_memcpy"));
 					GenerateTriadic(op_add, 0, makereg(regSP), makereg(regSP), make_immed(sizeOfWord * 3));
 				}

@@ -73,6 +73,12 @@ void dooper(ENODE *node)
 			ep->tp = ep->p[0]->tp;
 			Float128::Mul(&ep->f128, &ep->p[0]->f128, &ep->p[1]->f128);
 			break;
+		case en_fdiv:
+			ep->nodetype = en_fcon;
+			ep->f = ep->p[0]->f / ep->p[1]->f;
+			ep->tp = ep->p[0]->tp;
+			Float128::Div(&ep->f128, &ep->p[0]->f128, &ep->p[1]->f128);
+			break;
 
     case en_mul:
 	case en_mulu:
@@ -397,18 +403,33 @@ static void opt0(ENODE **node)
 						dooper(*node);
 						return;
 					}
-					else if (ep->p[1]->nodetype == en_icon) {
-						ep->nodetype = en_fcon;
-						ep->f = ep->p[0]->f * ep->p[1]->i;
-						return;
-					}
+					//else if (ep->p[1]->nodetype == en_icon) {
+					//	ep->nodetype = en_fcon;
+					//	ep->f = ep->p[0]->f * ep->p[1]->i;
+					//	return;
+					//}
 				}
-				else if (ep->p[0]->nodetype == en_icon) {
+				//else if (ep->p[0]->nodetype == en_icon) {
+				//	if (ep->p[1]->nodetype == en_fcon) {
+				//		ep->nodetype = en_fcon;
+				//		ep->f = ep->p[0]->i * ep->p[1]->f;
+				//		return;
+				//	}
+				//}
+				break;
+			case en_fdiv:
+				opt0(&(ep->p[0]));
+				opt0(&(ep->p[1]));
+				if (ep->p[0]->nodetype == en_fcon) {
 					if (ep->p[1]->nodetype == en_fcon) {
-						ep->nodetype = en_fcon;
-						ep->f = ep->p[0]->i * ep->p[1]->f;
+						dooper(*node);
 						return;
 					}
+					//else if (ep->p[1]->nodetype == en_icon) {
+					//	ep->nodetype = en_fcon;
+					//	ep->f = ep->p[0]->f / ep->p[1]->i;
+					//	return;
+					//}
 				}
 				break;
 			case en_vmul:

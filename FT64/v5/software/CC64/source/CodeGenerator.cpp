@@ -293,9 +293,9 @@ void GenStore(Operand *ap1, Operand *ap3, int size)
 Operand *GenerateDereference(ENODE *node,int flags,int size, int su)
 {    
 	Operand *ap1;
-    int siz1;
+  int siz1;
 
-    Enter("Genderef");
+  Enter("<Genderef>");
 	siz1 = node->GetReferenceSize();
 	// When dereferencing a struct or union return a pointer to the struct or
 	// union.
@@ -357,11 +357,13 @@ Operand *GenerateDereference(ENODE *node,int flags,int size, int su)
     }
     else if( node->p[0]->nodetype == en_autofcon )
     {
-        ap1 = allocOperand();
-		ap1->isPtr = node->nodetype == en_wp_ref || node->nodetype == en_hp_ref;
+    ap1 = allocOperand();
+		ap1->isPtr = node->nodetype == en_wp_ref || node->nodetype == en_hp_ref
+			|| node->nodetype == en_dbl_ref || node->nodetype == en_flt_ref 
+			|| node->nodetype == en_triple_ref || node->nodetype == en_quad_ref;
 		ap1->mode = am_indx;
-        ap1->preg = regFP;
-        ap1->offset = makeinode(en_icon,node->p[0]->i);
+    ap1->preg = regFP;
+    ap1->offset = makeinode(en_icon,node->p[0]->i);
 		ap1->offset->sym = node->p[0]->sym;
 		if (node->p[0]->tp)
 			switch(node->p[0]->tp->precision) {
@@ -536,7 +538,7 @@ Operand *GenerateDereference(ENODE *node,int flags,int size, int su)
 		case bt_quad:	ap1->type = stdquad.GetIndex(); break;
 		}
         ap1->MakeLegal(flags,size);
-	    Leave("Genderef",3);
+	    Leave("</Genderef>",3);
         return (ap1);
 	}
 	else if (node->p[0]->nodetype == en_vex) {
@@ -619,45 +621,10 @@ Operand *GenerateDereference(ENODE *node,int flags,int size, int su)
     ap1->isVolatile = node->isVolatile;
     ap1->MakeLegal(flags,size);
 xit:
-    Leave("Genderef",0);
+    Leave("</Genderef>",0);
     return (ap1);
 }
 
-/*
- *      generate code to evaluate a multiply node. 
- */
-Operand *GenerateMultiply(ENODE *node, int flags, int size, int op)
-{       
-	Operand *ap1, *ap2, *ap3;
-  Enter("Genmul");
-    if( node->p[0]->nodetype == en_icon )
-        swap_nodes(node);
-    if (op==op_fmul) {
-        ap3 = GetTempFPRegister();
-        ap1 = GenerateExpression(node->p[0],F_FPREG,size);
-        ap2 = GenerateExpression(node->p[1],F_FPREG,size);
-    }
-    else {
-        ap3 = GetTempRegister();
-        ap1 = GenerateExpression(node->p[0],F_REG,8);
-        ap2 = GenerateExpression(node->p[1],F_REG | F_IMMED,8);
-    }
-	if (op==op_fmul) {
-		// Generate a convert operation ?
-		if (ap1->fpsize() != ap2->fpsize()) {
-			if (ap2->fpsize()=='s')
-				GenerateDiadic(op_fcvtsq, 0, ap2, ap2);
-		}
-	    GenerateTriadic(op,ap1->fpsize(),ap3,ap1,ap2);
-	}
-	else
-		GenerateTriadic(op,0,ap3,ap1,ap2);
-	ReleaseTempReg(ap2);
-	ReleaseTempReg(ap1);
-	ap3->MakeLegal(flags,2);
-	Leave("Genmul",0);
-	return ap3;
-}
 
 void GenMemop(int op, Operand *ap1, Operand *ap2, int ssize)
 {
@@ -1319,14 +1286,15 @@ Operand *GenerateExpression(ENODE *node, int flags, int size)
 			ap1->type = 9999;
 			return (ap1);
 	case en_fcon:
-        ap1 = allocOperand();
+    ap1 = allocOperand();
 		ap1->isPtr = node->IsPtr();
 		ap1->mode = am_direct;
-        ap1->offset = node;
+    ap1->offset = node;
 		ap1->type = stddouble.GetIndex();
-        ap1->MakeLegal(flags,size);
-        Leave("</GenerateExpression>",2); 
-        return (ap1);
+		// Don't allow the constant to be loaded into an integer register.
+    ap1->MakeLegal(flags & ~F_REG,size);
+    Leave("</GenerateExpression>",2); 
+    return (ap1);
 		/*
             ap1 = allocOperand();
             ap1->mode = am_imm;
@@ -1440,33 +1408,37 @@ Operand *GenerateExpression(ENODE *node, int flags, int size)
 		return ap1;
 	case en_hp_ref:
 	case en_wp_ref:
-			ap1 = GenerateDereference(node,flags,size,0);
-			ap1->isPtr = TRUE;
-			ap1->isUnsigned = TRUE;
-            return ap1;
+		ap1 = GenerateDereference(node,flags,size,0);
+		ap1->isPtr = TRUE;
+		ap1->isUnsigned = TRUE;
+    return ap1;
 	case en_vector_ref:	return GenerateDereference(node,flags,512,0);
 	case en_ref32:	return GenerateDereference(node,flags,4,1);
 	case en_ref32u:	return GenerateDereference(node,flags,4,0);
-    case en_b_ref:	return GenerateDereference(node,flags,1,1);
+  case en_b_ref:	return GenerateDereference(node,flags,1,1);
 	case en_c_ref:	return GenerateDereference(node,flags,2,1);
 	case en_h_ref:	return GenerateDereference(node,flags,4,1);
-    case en_w_ref:	return GenerateDereference(node,flags,8,1);
+  case en_w_ref:	return GenerateDereference(node,flags,8,1);
 	case en_flt_ref:
 		ap1 = GenerateDereference(node, flags, size, 1);
 		ap1->type = stdflt.GetIndex();
+		ap1->MakeLegal(flags, size);
 		return (ap1);
 	case en_dbl_ref:
 		ap1 = GenerateDereference(node, flags, size, 1);
 		ap1->type = stddouble.GetIndex();
+		ap1->MakeLegal(flags, size);
 		return (ap1);
 	case en_triple_ref:
 		ap1 = GenerateDereference(node, flags, size, 1);
 		ap1->type = stdtriple.GetIndex();
+		ap1->MakeLegal(flags, size);
 		return (ap1);
 	case en_quad_ref:
-			ap1 = GenerateDereference(node,flags,size,1);
-			ap1->type = stdquad.GetIndex();
-            return (ap1);
+		ap1 = GenerateDereference(node,flags,size,1);
+		ap1->type = stdquad.GetIndex();
+		ap1->MakeLegal(flags, size);
+		return (ap1);
 	case en_ubfieldref:
 	case en_ucfieldref:
 	case en_uhfieldref:
@@ -1481,47 +1453,54 @@ Operand *GenerateExpression(ENODE *node, int flags, int size)
 			ap1 = (flags & BF_ASSIGN) ? GenerateDereference(node,flags & ~BF_ASSIGN,size,1) : GenerateBitfieldDereference(node,flags,size);
 			return ap1;
 	case en_regvar:
-    case en_tempref:
-            ap1 = allocOperand();
-			ap1->isPtr = node->IsPtr();
-            ap1->mode = am_reg;
-            ap1->preg = node->i;
-            ap1->tempflag = 0;      /* not a temporary */
-            ap1->MakeLegal(flags,size);
-            return (ap1);
-    case en_tempfpref:
-            ap1 = allocOperand();
-            ap1->mode = am_fpreg;
-            ap1->preg = node->i;
-            ap1->tempflag = 0;      /* not a temporary */
-			if (node->tp)
-				switch (node->tp->type) {
-				case bt_float:	ap1->type = stdflt.GetIndex(); break;
-				case bt_double:	ap1->type = stddouble.GetIndex(); break;
-				case bt_triple:	ap1->type = stdtriple.GetIndex(); break;
-				case bt_quad:	ap1->type = stdquad.GetIndex(); break;
-				}
-			else
-				ap1->type = stddouble.GetIndex();
-			ap1->MakeLegal(flags,size);
-            return ap1;
+  case en_tempref:
+    ap1 = allocOperand();
+		ap1->isPtr = node->IsPtr();
+    ap1->mode = am_reg;
+    ap1->preg = node->i;
+    ap1->tempflag = 0;      /* not a temporary */
+    ap1->MakeLegal(flags,size);
+    return (ap1);
+
+	case en_tempfpref:
+		ap1 = allocOperand();
+		ap1->isPtr = node->IsPtr();
+		ap1->mode = node->IsPtr() ? am_reg : am_fpreg;
+		ap1->preg = node->i;
+		ap1->tempflag = 0;      /* not a temporary */
+		if (node->tp)
+			switch (node->tp->type) {
+			case bt_float:	ap1->type = stdflt.GetIndex(); break;
+			case bt_double:	ap1->type = stddouble.GetIndex(); break;
+			case bt_triple:	ap1->type = stdtriple.GetIndex(); break;
+			case bt_quad:	ap1->type = stdquad.GetIndex(); break;
+			default: ap1->type = stdint.GetIndex(); break;
+			}
+		else
+			ap1->type = stddouble.GetIndex();
+		ap1->MakeLegal(flags,size);
+    return (ap1);
+
 	case en_fpregvar:
 //    case en_fptempref:
-            ap1 = allocOperand();
-            ap1->mode = am_fpreg;
-            ap1->preg = node->i;
-            ap1->tempflag = 0;      /* not a temporary */
-			if (node->tp)
-				switch (node->tp->type) {
-				case bt_float:	ap1->type = stdflt.GetIndex(); break;
-				case bt_double:	ap1->type = stddouble.GetIndex(); break;
-				case bt_triple:	ap1->type = stdtriple.GetIndex(); break;
-				case bt_quad:	ap1->type = stdquad.GetIndex(); break;
-				}
-			else
-				ap1->type = stddouble.GetIndex();
-			ap1->MakeLegal(flags,size);
-            return ap1;
+    ap1 = allocOperand();
+		ap1->isPtr = node->IsPtr();
+		ap1->mode = node->IsPtr() ? am_reg : am_fpreg;
+    ap1->preg = node->i;
+    ap1->tempflag = 0;      /* not a temporary */
+		if (node->tp)
+			switch (node->tp->type) {
+			case bt_float:	ap1->type = stdflt.GetIndex(); break;
+			case bt_double:	ap1->type = stddouble.GetIndex(); break;
+			case bt_triple:	ap1->type = stdtriple.GetIndex(); break;
+			case bt_quad:	ap1->type = stdquad.GetIndex(); break;
+			default: ap1->type = stdint.GetIndex(); break;
+			}
+		else
+			ap1->type = stddouble.GetIndex();
+		ap1->MakeLegal(flags,size);
+    return (ap1);
+
 	case en_abs:	return node->GenUnary(flags,size,op_abs);
     case en_uminus: return node->GenUnary(flags,size,op_neg);
     case en_compl:  return node->GenUnary(flags,size,op_com);
@@ -1616,22 +1595,22 @@ Operand *GenerateExpression(ENODE *node, int flags, int size)
     case en_fdsub:    return node->GenBinary(flags,size,op_fdsub);
     case en_fsadd:    return node->GenBinary(flags,size,op_fsadd);
     case en_fssub:    return node->GenBinary(flags,size,op_fssub);
-    case en_fdmul:    return GenerateMultiply(node,flags,size,op_fmul);
-    case en_fsmul:    return GenerateMultiply(node,flags,size,op_fmul);
-    case en_fddiv:    return GenerateMultiply(node,flags,size,op_fddiv);
-    case en_fsdiv:    return GenerateMultiply(node,flags,size,op_fsdiv);
+    case en_fdmul:    return node->GenMultiply(flags,size,op_fmul);
+    case en_fsmul:    return node->GenMultiply(flags,size,op_fmul);
+    case en_fddiv:    return node->GenMultiply(flags,size,op_fddiv);
+    case en_fsdiv:    return node->GenMultiply(flags,size,op_fsdiv);
 	case en_ftadd:    return node->GenBinary(flags,size,op_ftadd);
     case en_ftsub:    return node->GenBinary(flags,size,op_ftsub);
-    case en_ftmul:    return GenerateMultiply(node,flags,size,op_ftmul);
-    case en_ftdiv:    return GenerateMultiply(node,flags,size,op_ftdiv);
+    case en_ftmul:    return node->GenMultiply(flags,size,op_ftmul);
+    case en_ftdiv:    return node->GenMultiply(flags,size,op_ftdiv);
 
 	case en_land:	return (node->GenLand(flags,op_and));
 	case en_lor:	return (node->GenLand(flags, op_or));
 	case en_and:    return node->GenBinary(flags,size,op_and);
     case en_or:     return node->GenBinary(flags,size,op_or);
 	case en_xor:	return node->GenBinary(flags,size,op_xor);
-    case en_mul:    return GenerateMultiply(node,flags,size,op_mul);
-    case en_mulu:   return GenerateMultiply(node,flags,size,op_mulu);
+    case en_mul:    return node->GenMultiply(flags,size,op_mul);
+    case en_mulu:   return node->GenMultiply(flags,size,op_mulu);
     case en_div:    return node->GenDivMod(flags,size,op_div);
     case en_udiv:   return node->GenDivMod(flags,size,op_divu);
     case en_mod:    return node->GenDivMod(flags,size,op_mod);
@@ -1969,10 +1948,13 @@ void GenerateTrueJump(ENODE *node, int label, unsigned int prediction)
 		break;
 	default:
 		siz1 = GetNaturalSize(node);
-		ap1 = GenerateExpression(node,F_REG,siz1);
+		ap1 = GenerateExpression(node,F_REG|F_FPREG,siz1);
 		//                        GenerateDiadic(op_tst,siz1,ap1,0);
 		ReleaseTempRegister(ap1);
-		GenerateTriadic(op_bne,0,ap1,makereg(0),make_label(label));
+		if (ap1->mode == am_fpreg)
+			GenerateTriadic(op_fbne, 0, ap1, makefpreg(0), make_label(label));
+		else
+			GenerateTriadic(op_bne,0,ap1,makereg(0),make_label(label));
 		break;
 	}
 }
@@ -2029,10 +2011,13 @@ void GenerateFalseJump(ENODE *node,int label, unsigned int prediction)
 		break;
 	default:
 		siz1 = GetNaturalSize(node);
-		ap = GenerateExpression(node,F_REG,siz1);
+		ap = GenerateExpression(node,F_REG|F_FPREG,siz1);
 		//                        GenerateDiadic(op_tst,siz1,ap,0);
 		ReleaseTempRegister(ap);
-		GenerateTriadic(op_beq,0,ap,makereg(0),make_label(label));
+		if (ap->mode==am_fpreg)
+			GenerateTriadic(op_fbeq, 0, ap, makefpreg(0), make_label(label));
+		else
+			GenerateTriadic(op_beq,0,ap,makereg(0),make_label(label));
 		break;
 	}
 }

@@ -205,18 +205,26 @@ void Operand::MakeLegal(int flags, int size)
 			ap2 = GetTempRegister();// GetTempReg(ap->type);
 		else
 			ap2 = GetTempReg(stdint.GetIndex());
-		if (mode == am_ind || mode == am_indx)
+		switch (mode) {
+		case am_ind:
+		case am_indx:
 			GenLoad(ap2, this, size, size);
-		else if (mode == am_imm) {
+			break;
+		case am_imm:
 			GenerateDiadic(op_ldi, 0, ap2, this);
-		}
-		else {
-			if (mode == am_reg || mode == am_fpreg)
-				GenerateDiadic(op_mov, 0, ap2, this);
-			else
-				GenLoad(ap2, this, size, size);
+			break;
+		case am_reg:
+			GenerateDiadic(op_mov, 0, ap2, this);
+			break;
+		case am_fpreg:
+			GenerateDiadic(op_ftoi, fpsize(), ap2, this);
+			break;
+		default:
+			GenLoad(ap2, this, size, size);
+			break;
 		}
 		mode = am_reg;
+		type = stdint.GetIndex();
 		preg = ap2->preg;
 		deep = ap2->deep;
 		pdeep = ap2->pdeep;
@@ -225,23 +233,36 @@ void Operand::MakeLegal(int flags, int size)
 	}
 	if (flags & F_FPREG)
 	{
+		if (mode == am_fpreg)
+			return;
 		ReleaseTempReg(this);      /* maybe we can use it... */
 		ap2 = GetTempFPRegister();
-		if (mode == am_ind || mode == am_indx)
+		switch (mode) {
+		case am_ind:
+		case am_indx:
 			GenLoad(ap2, this, size, size);
-		else if (mode == am_imm) {
+			break;
+		case am_imm:
 			ap1 = GetTempRegister();
 			GenerateDiadic(op_ldi, 0, ap1, this);
 			GenerateDiadic(op_mov, 0, ap2, ap1);
 			ReleaseTempReg(ap1);
-		}
-		else {
-			if (mode == am_reg)
-				GenerateDiadic(op_mov, 0, ap2, this);
-			else
-				GenLoad(ap2, this, size, size);
+			break;
+		case am_reg:
+			GenerateDiadic(op_itof, ap2->fpsize(), ap2, this);
+			break;
+		default:
+			GenLoad(ap2, this, size, size);
+			break;
 		}
 		mode = am_fpreg;
+		switch (ap2->fpsize()) {
+		case 'd':	type = stddouble.GetIndex(); break;
+		case 's': type = stddouble.GetIndex(); break;
+		case 't': type = stdtriple.GetIndex(); break;
+		case 'q':	type = stdquad.GetIndex(); break;
+		default:	type = stddouble.GetIndex(); break;
+		}
 		preg = ap2->preg;
 		deep = ap2->deep;
 		pdeep = ap2->pdeep;

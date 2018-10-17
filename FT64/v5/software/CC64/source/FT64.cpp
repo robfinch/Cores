@@ -325,14 +325,14 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int predi
 	Operand *ap1, *ap2, *ap3;
 
 	size = GetNaturalSize(node);
-    if (op==op_flt || op==op_fle || op==op_fgt || op==op_fge || op==op_feq || op==op_fne) {
-    	ap1 = GenerateExpression(node->p[0],F_FPREG,size);
-	    ap2 = GenerateExpression(node->p[1],F_FPREG,size);
-    }
-    else {
-    	ap1 = GenerateExpression(node->p[0],F_REG, size);
-	    ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
-    }
+  if (op==op_flt || op==op_fle || op==op_fgt || op==op_fge || op==op_feq || op==op_fne) {
+    ap1 = GenerateExpression(node->p[0],F_FPREG,size);
+	  ap2 = GenerateExpression(node->p[1],F_FPREG,size);
+  }
+  else {
+    ap1 = GenerateExpression(node->p[0],F_REG, size);
+	  ap2 = GenerateExpression(node->p[1],F_REG|F_IMMED,size);
+  }
 	/*
 	// Optimize CMP to zero and branch into plain branch, this works only for
 	// signed relational compares.

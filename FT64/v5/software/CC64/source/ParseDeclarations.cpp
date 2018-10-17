@@ -837,8 +837,14 @@ SYM *Declaration::ParsePrefixOpenpa(bool isUnion)
 		isFuncPtr = head->type == bt_pointer;
 	temp3 = head;
 	temp4 = tail;
-	head = temp1;
-	tail = temp2;
+	//if (isFuncPtr) {
+	//	head->btp = temp1->GetIndex();
+	//}
+	//else
+	{
+		head = temp1;
+		tail = temp2;
+	}
 	sp = ParseSuffix(sp);
 	// (getchar)() returns temp4 = NULL
 	if (temp4!=NULL) {
@@ -848,7 +854,7 @@ SYM *Declaration::ParsePrefixOpenpa(bool isUnion)
 		head = temp3;
 	}
 	dfs.puts("</ParsePrefixOpenpa>\n");
-	return sp;
+	return (sp);
 }
 
 // There may be only a single identifier in the prefix. This identifier may
@@ -1016,7 +1022,7 @@ void Declaration::ParseFunctionAttribute(Function *sym)
 
 void Declaration::ParseSuffixOpenpa(Function *sp)
 {
-	TYP *temp1;
+	TYP *temp1, *temp2;
 	TYP *tempHead, *tempTail;
 	int fd;
 	std::string odecl;
@@ -1044,8 +1050,12 @@ void Declaration::ParseSuffixOpenpa(Function *sp)
 	dfs.printf("o ");
 	if (isFuncPtr) {
 		dfs.printf("Got function pointer in declarations.\n");
-		temp1->btp = head->btp;
-		head->btp = temp1->GetIndex();
+		temp2 = (TYP *)TYP::Make(bt_pointer, 0);
+		//temp1->btp = head->btp;
+		//head->btp = temp1->GetIndex();
+		temp1->btp = head->GetIndex();
+		temp2->btp = temp1->GetIndex();
+		head = temp1;
 	}
 	else {
 		temp1->btp= head->GetIndex();

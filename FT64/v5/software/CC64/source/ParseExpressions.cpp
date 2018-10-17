@@ -1366,7 +1366,7 @@ int IsLValue(ENODE *node)
 	case en_ref32:
 	case en_ref32u:
 	case en_vector_ref:
-            return TRUE;
+    return (TRUE);
 	case en_cbc:
 	case en_cbh:
     case en_cbw:
@@ -1385,13 +1385,14 @@ int IsLValue(ENODE *node)
 	case en_cuhu:
 	case en_ccwp:
 	case en_cucwp:
-            return IsLValue(node->p[0]);
+    return IsLValue(node->p[0]);
 	// For an array reference there will be an add node at the top of the
 	// expression tree. This evaluates to an address which is essentially
 	// the same as an *_ref node. It's an LValue.
 	case en_add:
 		if (node->tp)
-			return (node->tp->type==bt_pointer && node->tp->isArray) || node->tp->type==bt_struct;
+			return (node->tp->type == bt_pointer) || node->tp->type == bt_struct;
+//			return (node->tp->type==bt_pointer && node->tp->isArray) || node->tp->type==bt_struct;
 		else
 			return FALSE;
 	// A typecast will connect the types with a void node
@@ -1906,25 +1907,25 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
         Leave("</ParseUnary>", 0);
 		return (tp);
 	}
-    switch( lastst ) {
-    case autodec:
+  switch(lastst) {
+  case autodec:
 		NextToken();
 		tp = ParseUnaryExpression(&ep1, got_pa);
 		Autoincdec(tp,&ep1,1);
 		break;
-    case autoinc:
+  case autoinc:
 		NextToken();
 		tp = ParseUnaryExpression(&ep1, got_pa);
 		Autoincdec(tp,&ep1,0);
 		break;
 	case plus:
-        NextToken();
-        tp = ParseCastExpression(&ep1);
-        if( tp == NULL ) {
-            error(ERR_IDEXPECT);
-            return (TYP *)NULL;
-        }
-        break;
+    NextToken();
+    tp = ParseCastExpression(&ep1);
+    if(tp == NULL) {
+      error(ERR_IDEXPECT);
+      return (TYP *)NULL;
+    }
+    break;
 
 	// Negative constants are trapped here and converted to proper form.
     case minus:
@@ -2015,23 +2016,17 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
 				return (TYP *)NULL;
 			}
 			t = ep1->tp->type;
-			if (IsLValue(ep1) && !(t == bt_struct || t==bt_union || t==bt_class))
+			if (IsLValue(ep1) && !(t == bt_struct || t == bt_union || t == bt_class)) {
 				ep1 = ep1->p[0];
-			ep1->esize = 8;     // converted to a pointer so size is now 8
-			tp1 = TYP::Make(bt_pointer, 8);
-			tp1->btp = tp->GetIndex();
-			tp1->val_flag = FALSE;
-			tp1->isUnsigned = TRUE;
-			tp = tp1;
-			//        printf("tp %p: %d\r\n", tp, tp->type);
-			/*
-					sp = search("ta_int",&tp->GetBtp()->lst);
-					if (sp) {
-						printf("bitandd: ta_int\r\n");
-					}
-			*/
+				ep1->esize = 8;     // converted to a pointer so size is now 8
+				tp1 = TYP::Make(bt_pointer, 8);
+				tp1->btp = tp->GetIndex();
+				tp1->val_flag = FALSE;
+				tp1->isUnsigned = TRUE;
+				tp = tp1;
+			}
 		}
-        break;
+    break;
 /*
 	case kw_abs:
 		NextToken();
@@ -2384,32 +2379,36 @@ TYP *multops(ENODE **node)
 				isScalar = !tp2->IsVectorType();
                 tp1 = forcefit(&ep2,tp2,&ep1,tp1,true,false);
                 switch( oper ) {
-                        case star:
-								switch(tp1->type) {
-								case bt_triple:
-									ep1 = makenode(en_fmul,ep1,ep2);
-									ep1->esize = sizeOfFPT;
-									break;
-								case bt_double:
-									ep1 = makenode(en_fmul,ep1,ep2);
-									ep1->esize = sizeOfFPD;
-									break;
-								case bt_quad:
-									ep1 = makenode(en_fmul,ep1,ep2);
-									ep1->esize = sizeOfFPQ;
-									break;
-								case bt_float:
-									ep1 = makenode(en_fmul,ep1,ep2);
-									ep1->esize = sizeOfFP;
-									break;
-								case bt_vector:
-									if (isScalar)
-										ep1 = makenode(en_vmuls,ep1,ep2);
-									else
-										ep1 = makenode(en_vmul,ep1,ep2);
-									ep1->esize = 512;
-									break;
-                                default:
+                case star:
+									switch(tp1->type) {
+									case bt_triple:
+										ep1 = makenode(en_fmul,ep1,ep2);
+										ep1->esize = sizeOfFPT;
+										ep1->etype = bt_triple;
+										break;
+									case bt_double:
+										ep1 = makenode(en_fmul,ep1,ep2);
+										ep1->esize = sizeOfFPD;
+										ep1->etype = bt_double;
+										break;
+									case bt_quad:
+										ep1 = makenode(en_fmul,ep1,ep2);
+										ep1->esize = sizeOfFPQ;
+										ep1->etype = bt_quad;
+										break;
+									case bt_float:
+										ep1 = makenode(en_fmul,ep1,ep2);
+										ep1->esize = sizeOfFP;
+										ep1->etype = bt_double;
+										break;
+									case bt_vector:
+										if (isScalar)
+											ep1 = makenode(en_vmuls,ep1,ep2);
+										else
+											ep1 = makenode(en_vmul,ep1,ep2);
+										ep1->esize = 512;
+										break;
+	                default:
 									// place constant as second operand.
 									if (ep1->nodetype == en_icon) {
 										if (tp1->isUnsigned)
@@ -2426,23 +2425,27 @@ TYP *multops(ENODE **node)
 								}
 								ep1->esize = tp1->size;
 								ep1->etype = (e_bt)tp1->type;
-                                break;
-                        case divide:
-                                if (tp1->type==bt_triple) {
+                 break;
+                case divide:
+                if (tp1->type==bt_triple) {
 									ep1 = makenode(en_fdiv,ep1,ep2);
 									ep1->esize = sizeOfFPT;
+									ep1->etype = bt_triple;
 								}
 								else if (tp1->type==bt_double) {
 									ep1 = makenode(en_fdiv,ep1,ep2);
 									ep1->esize = sizeOfFPD;
+									ep1->etype = bt_double;
 								}
 								else if (tp1->type==bt_quad) {
 									ep1 = makenode(en_fdiv,ep1,ep2);
 									ep1->esize = sizeOfFPQ;
+									ep1->etype = bt_quad;
 								}
 								else if (tp1->type==bt_float) {
 									ep1 = makenode(en_fdiv,ep1,ep2);
 									ep1->esize = sizeOfFP;
+									ep1->etype = bt_double;
 								}
                 else if( tp1->isUnsigned )
                     ep1 = makenode(en_udiv,ep1,ep2);

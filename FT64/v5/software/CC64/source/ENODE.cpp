@@ -122,6 +122,8 @@ bool ENODE::IsBitfield()
 //
 bool ENODE::IsEqual(ENODE *node1, ENODE *node2)
 {
+	if (node1 == nullptr && node2 == nullptr)
+		return (true);
 	if (node1 == nullptr || node2 == nullptr) {
 		return (false);
 	}
@@ -135,6 +137,7 @@ bool ENODE::IsEqual(ENODE *node1, ENODE *node2)
 	case en_regvar:
 	case en_fpregvar:
 	case en_tempref:
+	case en_tempfpref:
 	case en_icon:
 	case en_labcon:
 	case en_classcon:	// Check type ?
@@ -150,10 +153,17 @@ bool ENODE::IsEqual(ENODE *node1, ENODE *node2)
 	case en_cnacon:
 		return (node1->sp->compare(*node2->sp) == 0);
 	default:
-		if (IsLValue(node1) && IsEqual(node1->p[0], node2->p[0])) {
-			//	        if( equalnode(node1->p[0], node2->p[0])  )
-			return (true);
-		}
+		if (!IsEqual(node1->p[0], node2->p[0]))
+			return (false);
+		if (!IsEqual(node1->p[1], node2->p[1]))
+			return (false);
+		if (!IsEqual(node1->p[2], node2->p[2]))
+			return (false);
+		return (true);
+		//if (IsLValue(node1) && IsEqual(node1->p[0], node2->p[0])) {
+		//	//	        if( equalnode(node1->p[0], node2->p[0])  )
+		//	return (true);
+		//}
 	}
 	return (false);
 }
@@ -182,10 +192,19 @@ void ENODE::repexpr()
 		return;
 	switch (nodetype) {
 	case en_fcon:
-	case en_autofcon:
 	case en_tempfpref:
 		if ((csp = currentFn->csetbl->Search(this)) != nullptr) {
 			csp->isfp = TRUE; //**** a kludge
+			if (csp->reg > 0) {
+				nodetype = en_fpregvar;
+				i = csp->reg;
+			}
+		}
+		break;
+	// Autofcon resolve to *pointers* which are stored in integer registers.
+	case en_autofcon:
+		if ((csp = currentFn->csetbl->Search(this)) != nullptr) {
+			csp->isfp = FALSE; //**** a kludge
 			if (csp->reg > 0) {
 				nodetype = en_fpregvar;
 				i = csp->reg;
@@ -375,6 +394,13 @@ void ENODE::scanexpr(int duse)
 		currentFn->csetbl->InsertNode(this, duse);
 		break;
 	case en_autofcon:
+		csp1 = currentFn->csetbl->InsertNode(this, duse);
+		csp1->isfp = FALSE;
+		if ((nn = currentFn->csetbl->voidauto2(this)) > 0) {
+			csp1->duses += loop_active;
+			csp1->uses = csp1->duses + nn - loop_active;
+		}
+		break;
 	case en_tempfpref:
 		csp1 = currentFn->csetbl->InsertNode(this, duse);
 		csp1->isfp = TRUE;
@@ -648,7 +674,8 @@ Operand *ENODE::GenHook(int flags, int size)
 
 	false_label = nextlabel++;
 	end_label = nextlabel++;
-	flags = (flags & F_REG) | F_VOL;
+	//flags = (flags & F_REG) | F_VOL;
+	flags |= F_VOL;
 	/*
 	if (p[0]->constflag && p[1]->constflag) {
 	GeneratePredicateMonadic(hook_predreg,op_op_ldi,make_immed(p[0]->i));
@@ -656,17 +683,19 @@ Operand *ENODE::GenHook(int flags, int size)
 	}
 	*/
 	ip1 = peep_tail;
-	if (!opt_nocgo) {
+	// cmovenz integer only
+	if (!opt_nocgo & !(flags & F_FPREG)) {
 		ap4 = GetTempRegister();
-		ap1 = GenerateExpression(p[0], flags, size);
-		ap2 = GenerateExpression(p[1]->p[0], flags, size);
-		ap3 = GenerateExpression(p[1]->p[1], (flags & ~F_VOL) | F_IMMED, size);
+		ap1 = GenerateExpression(p[0], F_REG, size);
+		ap2 = GenerateExpression(p[1]->p[0], F_REG, size);
+		ap3 = GenerateExpression(p[1]->p[1], F_REG | F_IMMED, size);
 		n1 = PeepCount(ip1);
 		if (n1 < 20) {
 			Generate4adic(op_cmovenz, 0, ap4, ap1, ap2, ap3);
 			ReleaseTempReg(ap3);
 			ReleaseTempReg(ap2);
 			ReleaseTempReg(ap1);
+			ap4->MakeLegal(flags,size);
 			return (ap4);
 		}
 		ReleaseTempReg(ap3);
@@ -707,11 +736,13 @@ Operand *ENODE::GenHook(int flags, int size)
 		}
 		ReleaseTempReg(ap2);
 		GenerateLabel(end_label);
+		ap1->MakeLegal(flags, size);
 		return (ap1);
 	}
 	else {
 		ReleaseTempReg(ap1);
 		GenerateLabel(end_label);
+		ap2->MakeLegal(flags, size);
 		return (ap2);
 	}
 }
@@ -781,7 +812,10 @@ Operand *ENODE::GenDivMod(int flags, int size, int op)
 	else {
 		ap3 = GetTempRegister();
 		ap1 = GenerateExpression(p[0], F_REG, 8);
-		ap2 = GenerateExpression(p[1], F_REG | F_IMMED, 8);
+		if (op == op_modu)	// modu only supports register mode
+			ap2 = GenerateExpression(p[1], F_REG, 8);
+		else
+			ap2 = GenerateExpression(p[1], F_REG | F_IMMED, 8);
 	}
 	if (op == op_fdiv) {
 		// Generate a convert operation ?
@@ -798,6 +832,56 @@ Operand *ENODE::GenDivMod(int flags, int size, int op)
 	ReleaseTempReg(ap2);
 	ReleaseTempReg(ap1);
 	return (ap3);
+}
+
+
+//
+//      generate code to evaluate a multiply node.
+//
+Operand *ENODE::GenMultiply(int flags, int size, int op)
+{
+	Operand *ap1, *ap2, *ap3;
+	bool square = false;
+
+	//Enter("Genmul");
+	if (p[0]->nodetype == en_icon)
+		swap_nodes(this);
+	if (IsEqual(p[0], p[1]))
+		square = !opt_nocgo;
+	if (op == op_fmul) {
+		ap3 = GetTempFPRegister();
+		ap1 = GenerateExpression(p[0], F_FPREG, size);
+		if (!square)
+			ap2 = GenerateExpression(p[1], F_FPREG, size);
+	}
+	else {
+		ap3 = GetTempRegister();
+		ap1 = GenerateExpression(p[0], F_REG, 8);
+		if (!square)
+			ap2 = GenerateExpression(p[1], F_REG | F_IMMED, 8);
+	}
+	if (op == op_fmul) {
+		// Generate a convert operation ?
+		if (ap1->fpsize() != ap2->fpsize()) {
+			if (ap2->fpsize() == 's')
+				GenerateDiadic(op_fcvtsq, 0, ap2, ap2);
+		}
+		if (square)
+			GenerateTriadic(op, ap1->fpsize(), ap3, ap1, ap1);
+		else
+			GenerateTriadic(op, ap1->fpsize(), ap3, ap1, ap2);
+	}
+	else {
+		if (square)
+			GenerateTriadic(op, 0, ap3, ap1, ap1);
+		else
+			GenerateTriadic(op, 0, ap3, ap1, ap2);
+	}
+	ReleaseTempReg(ap2);
+	ReleaseTempReg(ap1);
+	ap3->MakeLegal(flags, 2);
+	//Leave("Genmul", 0);
+	return ap3;
 }
 
 
@@ -827,7 +911,7 @@ Operand *ENODE::GenUnary(int flags, int size, int op)
 		GenerateDiadic(op, 0, ap2, ap);
 	}
 	ReleaseTempReg(ap);
-	ap2->MakeLegal( flags, size);
+	ap2->MakeLegal(flags, size);
 	return (ap2);
 }
 
@@ -836,18 +920,27 @@ Operand *ENODE::GenUnary(int flags, int size, int op)
 Operand *ENODE::GenBinary(int flags, int size, int op)
 {
 	Operand *ap1, *ap2, *ap3, *ap4;
+	bool dup = false;
 
 	if (IsFloatType())
 	{
 		ap3 = GetTempFPRegister();
+		if (IsEqual(p[0], p[1]))
+			dup = !opt_nocgo;
 		ap1 = GenerateExpression(p[0], F_FPREG, size);
-		ap2 = GenerateExpression(p[1], F_FPREG, size);
+		if (!dup)
+			ap2 = GenerateExpression(p[1], F_FPREG, size);
 		// Generate a convert operation ?
-		if (ap1->fpsize() != ap2->fpsize()) {
-			if (ap2->fpsize() == 's')
-				GenerateDiadic(op_fcvtsq, 0, ap2, ap2);
+		if (!dup) {
+			if (ap1->fpsize() != ap2->fpsize()) {
+				if (ap2->fpsize() == 's')
+					GenerateDiadic(op_fcvtsq, 0, ap2, ap2);
+			}
 		}
-		GenerateTriadic(op, ap1->fpsize(), ap3, ap1, ap2);
+		if (dup)
+			GenerateTriadic(op, ap1->fpsize(), ap3, ap1, ap1);
+		else
+			GenerateTriadic(op, ap1->fpsize(), ap3, ap1, ap2);
 		ap3->type = ap1->type;
 	}
 	else if (op == op_vadd || op == op_vsub || op == op_vmul || op == op_vdiv
@@ -939,8 +1032,9 @@ Operand *ENODE::GenBinary(int flags, int size, int op)
 				GenerateTriadic(op, 0, ap3, ap1, ap2);
 		}
 	}
-	if (ap2)
-		ReleaseTempReg(ap2);
+	if (!dup)
+		if (ap2)
+			ReleaseTempReg(ap2);
 	ReleaseTempReg(ap1);
 	ap3->MakeLegal( flags, size);
 	return (ap3);

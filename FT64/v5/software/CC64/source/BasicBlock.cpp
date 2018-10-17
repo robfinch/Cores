@@ -215,6 +215,7 @@ void BasicBlock::ComputeLiveVars()
 		if (ip->opcode == op_label)
 			continue;
 		if (ip->HasTargetReg()) {
+			// Should check the register classes here.
 			ip->GetTargetReg(&rg1, &rg2);
 			tr = rg1;
 			if ((tr & 0xFFF) >= 0x800) {

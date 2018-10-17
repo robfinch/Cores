@@ -142,7 +142,7 @@ void StructDeclaration::ParseMembers(SYM *sym, TYP *tp, int ztype)
 		isPrivate = false;    
 		if(ztype == bt_struct || ztype==bt_class)
 			slc += declare(sym,&(tp->lst),sc_member,slc,ztype);
-		else
+		else // union
 			slc = imax(slc,declare(sym,&tp->lst,sc_member,0,ztype));
 		isPrivate = priv;
 	}
@@ -150,6 +150,7 @@ void StructDeclaration::ParseMembers(SYM *sym, TYP *tp, int ztype)
 	bit_next = 0;
 	bit_width = -1;
 	tp->size = tp->alignment ? tp->alignment : slc;
+	//ListTable(&tp->lst,0);
 	NextToken();
 }
 
