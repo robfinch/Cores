@@ -41,10 +41,11 @@ Statement *Function::ParseBody()
 	cseg();
 	if (sym->storage_class == sc_static)
 	{
+		//lbl = GetNamespace() + std::string("_");
 		//strcpy(lbl,GetNamespace());
 		//strcat(lbl,"_");
 		//		strcpy(lbl,sp->name);
-		lbl = *sym->mangledName;
+		lbl += *sym->mangledName;
 		//gen_strlab(lbl);
 	}
 	//	put_label((unsigned int) sp->value.i);

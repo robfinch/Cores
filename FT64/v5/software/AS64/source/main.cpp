@@ -95,6 +95,7 @@ int isInitializationData;
 float num_bytes;
 int num_insns;
 int num_cinsns;
+int num_lbranch;
 HTBLE hTable[100000];
 int htblmax;
 int processOpt;
@@ -192,7 +193,9 @@ int processOptions(int argc, char **argv)
         if (nn >= argc-1)
            break;
         if (argv[nn][0]=='-') {
-           if (argv[nn][1]=='o') {
+					if (argv[nn][1] == 'v')
+						verbose = 0;
+           else if (argv[nn][1]=='o') {
                mm = 2;
                while(argv[nn][mm] && !isspace(argv[nn][mm])) {
                    if (argv[nn][mm]=='b')
@@ -211,12 +214,14 @@ int processOptions(int argc, char **argv)
         }
         else if (argv[nn][0]=='+') {
            mm = 2;
-           if (argv[nn][1]=='r') {
+					 if (argv[nn][1] == 'v')
+						 verbose = 1;
+           else if (argv[nn][1]=='r') {
                rel_out = 1;
            }
-           if (argv[nn][1]=='s')
+           else if (argv[nn][1]=='s')
                fSeg = 1;
-           if (argv[nn][1]=='g') {
+           else if (argv[nn][1]=='g') {
               if (argv[nn][2]=='9') {
                  gCpu=889;
                  fSeg = 1;
@@ -1233,43 +1238,45 @@ void process_label()
                 sym->bits = (int)ceil(log(fabs((double)val.low)+1) / log(2.0))+1;
             }
             else {
-				if (gCpu=='G')
-					sym->value.low = ca & -4LL;
-				else
-					sym->value.low = ca;
-				sym->value.high = 0;
-				sym->segment = segment;
-                if (segment==codeseg)
-                   sym->bits = code_bits;
-                else
-                    sym->bits = data_bits;
+							if (gCpu=='G')
+								sym->value.low = ca & -4LL;
+							else
+								sym->value.low = ca;
+							sym->value.high = 0;
+							sym->segment = segment;
+              if (segment==codeseg)
+                sym->bits = code_bits;
+              else
+                sym->bits = data_bits;
             }
         }
     }
     else if (pass>4) {
-         if (!sym) {
-            printf("Internal error: SYM is NULL.\r\n");
-            printf("Couldn't find <%s>\r\n", nm);
-         }
-         else {
-             if (isEquate) {
-                 sym->value = val;
-             }
-             else {
-				 if ((sym->value.low != ca && gCpu!='G') || (sym->value.low != (ca & -4LL) && gCpu=='G')) {
-                     phasing_errors++;
-                     sym->phaserr = '*';
-                     //if (bGen) printf("%s=%06llx ca=%06llx\r\n", nmTable.GetName(sym->name),  sym->value, code_address);
-                 }
-                 else
-                     sym->phaserr = ' ';
+      if (!sym) {
+        printf("Internal error: SYM is NULL.\r\n");
+        printf("Couldn't find <%s>\r\n", nm);
+      }
+      else {
+        if (isEquate) {
+            sym->value = val;
+        }
+        else {
+					if ((sym->value.low != ca && gCpu!='G') || (sym->value.low != (ca & -4LL) && gCpu=='G')) {
+						if (verbose)
+							printf("Phase error %s=%06llx, Address=%06llX\n", nmTable.GetName(sym->name), sym->value.low, ca);
+            phasing_errors++;
+            sym->phaserr = '*';
+            //if (bGen) printf("%s=%06llx ca=%06llx\r\n", nmTable.GetName(sym->name),  sym->value, code_address);
+          }
+          else
+            sym->phaserr = ' ';
 					if (gCpu=='G')
 						sym->value.low = ca & -4LL;
 					else
 						sym->value.low = ca;
-				 sym->value.high = 0;
-			 }
-         }
+					sym->value.high = 0;
+				}
+      }
     }
     if (strcmp("begin_init_data", nm)==0)
        isInitializationData = 1;
@@ -1312,6 +1319,8 @@ void processSegments()
 	while (*inptr) {
 		if (*inptr == '\n')
 			lineno++;
+		if (verbose && ((lineno % 1000) == 0))
+			printf("Line: %d\r", lineno);
 		SkipSpaces();
 		if (*inptr == ';')
 			goto j1;
@@ -2195,7 +2204,8 @@ int main(int argc, char *argv[])
 	bpi = (double)num_bytes/(double)num_insns;
     fprintf(ofp, "%0.6f bytes (%d bits) per instruction\n", bpi, (int)(bpi*8));
 	nc2 = (float)num_cinsns * 2.0;
-	fprintf(ofp, "Compression ratio: %f%%", (nc2 / (num_bytes + nc2)) * 100.0);
+	fprintf(ofp, "Compression ratio: %f%%\n", (nc2 / (num_bytes + nc2)) * 100.0);
+	fprintf(ofp, "Number of long branches: %d\n", num_lbranch);
 
 /*
     chksum = 0;

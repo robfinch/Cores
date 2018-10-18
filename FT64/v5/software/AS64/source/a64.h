@@ -83,6 +83,7 @@ extern NameTable nmTable;
 extern float num_bytes;
 extern int num_insns;
 extern int num_cinsns;
+extern int num_lbranch;
 
 extern void doif();
 extern int64_t expr();

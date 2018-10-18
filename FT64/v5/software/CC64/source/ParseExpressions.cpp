@@ -337,10 +337,10 @@ void PromoteConstFlag(ENODE *ep)
 	ep->constflag = ep->p[0]->constflag && ep->p[1]->constflag;
 }
 
-/*
- *      build the proper dereference operation for a node using the
- *      type pointer tp.
- */
+//
+// Build the proper dereference operation for a node using the
+// type pointer tp.
+//
 TYP *deref(ENODE **node, TYP *tp)
 {
 	SYM *sp;
@@ -349,23 +349,23 @@ TYP *deref(ENODE **node, TYP *tp)
   if (tp==nullptr || node==nullptr || *node==nullptr)
     throw new C64PException(ERR_NULLPOINTER,8);
 	sp = (*node)->sym;
-	switch( tp->type ) {
-		case bt_byte:
-			if (tp->isUnsigned) {
-				*node = makenode(en_ub_ref,*node,(ENODE *)NULL);
-				(*node)->isUnsigned = TRUE;
-			}
-			else {
-				*node = makenode(en_b_ref,*node,(ENODE *)NULL);
-			}
-			(*node)->esize = tp->size;
-			(*node)->etype = (enum e_bt)tp->type;
-			if (tp->isUnsigned)
-	            tp = &stdubyte;//&stduint;
-			else
-	            tp = &stdbyte;//&stdint;
-			(*node)->sym = sp;
-      break;
+	switch(tp->type) {
+	case bt_byte:
+		if (tp->isUnsigned) {
+			*node = makenode(en_ub_ref,*node,(ENODE *)NULL);
+			(*node)->isUnsigned = TRUE;
+		}
+		else {
+			*node = makenode(en_b_ref,*node,(ENODE *)NULL);
+		}
+		(*node)->esize = tp->size;
+		(*node)->etype = (enum e_bt)tp->type;
+		if (tp->isUnsigned)
+	          tp = &stdubyte;//&stduint;
+		else
+	          tp = &stdbyte;//&stdint;
+		(*node)->sym = sp;
+    break;
 
 		case bt_ubyte:
 			*node = makenode(en_ub_ref,*node,(ENODE *)NULL);
@@ -434,14 +434,15 @@ TYP *deref(ENODE **node, TYP *tp)
 		case bt_vector:
 			(*node)->esize = tp->size;
 			(*node)->etype = (enum e_bt)tp->type;
-            *node = makenode(en_vector_ref,*node,(ENODE *)NULL);
+      *node = makenode(en_vector_ref,*node,(ENODE *)NULL);
 			(*node)->isUnsigned = TRUE;
 			(*node)->sym = sp;
 			break;
+
 		case bt_vector_mask:
 			(*node)->esize = tp->size;
 			(*node)->etype = (enum e_bt)tp->type;
-            *node = makenode(en_uw_ref,*node,(ENODE *)NULL);
+      *node = makenode(en_uw_ref,*node,(ENODE *)NULL);
 			(*node)->isUnsigned = TRUE;
 			(*node)->vmask = (*node)->p[0]->vmask;
 			(*node)->sym = sp;
@@ -459,7 +460,7 @@ TYP *deref(ENODE **node, TYP *tp)
 		case bt_unsigned:
 			(*node)->esize = tp->size;
 			(*node)->etype = (enum e_bt)tp->type;
-            *node = makenode(en_uw_ref,*node,(ENODE *)NULL);
+      *node = makenode(en_uw_ref,*node,(ENODE *)NULL);
 			(*node)->isUnsigned = TRUE;
 			(*node)->sym = sp;
 			break;
@@ -593,6 +594,8 @@ TYP *CondDeref(ENODE **node, TYP *tp)
 	int dimen;
 	int numele;
   
+	//if (tp->type == bt_pointer && !tp->isArray)
+	//	return (tp);
 	if (tp->isArray == false)
 		if (tp->type != bt_struct
 			&& tp->type != bt_union
@@ -851,11 +854,22 @@ xit:
 TYP *nameref(ENODE **node,int nt)
 {
 	TYP *tp;
- 
+	std::string str;
+	Function *fn;
+	SYM *sym;
+
 	dfs.puts("<Nameref>");
 	dfs.printf("GSearchfor:%s|",lastid);
-  gsearch2(lastid,(__int16)bt_long,nullptr,false);
-	tp = nameref2(lastid, node, nt, true, nullptr, nullptr);
+	str = GetNamespace();
+	str += lastid;
+	gsearch2(str.c_str(), (__int16)bt_long, nullptr, false);
+	if (TABLE::matchno == 0) {
+		gsearch2(lastid, (__int16)bt_long, nullptr, false);
+		tp = nameref2(lastid, node, nt, true, nullptr, nullptr);
+	}
+	else {
+		tp = nameref2(str.c_str(), node, nt, true, nullptr, nullptr);
+	}
 	dfs.puts("</Nameref>\n");
 	return (tp);
 }
@@ -1394,15 +1408,17 @@ int IsLValue(ENODE *node)
 			return (node->tp->type == bt_pointer) || node->tp->type == bt_struct;
 //			return (node->tp->type==bt_pointer && node->tp->isArray) || node->tp->type==bt_struct;
 		else
-			return FALSE;
+			return (FALSE);
 	// A typecast will connect the types with a void node
 	case en_void:
 		return (node->etype == bt_pointer);
 	case en_nacon:
 	case en_autocon:
-		return (node->etype == bt_struct || node->etype == bt_union || node->etype == bt_class);
-    }
-    return FALSE;
+		return (node->etype == bt_pointer || node->etype == bt_struct || node->etype == bt_union || node->etype == bt_class);
+	//case en_fcall:
+	//	return (node->etype == bt_pointer);
+	}
+	return (FALSE);
 }
 
 // ----------------------------------------------------------------------------
@@ -1985,25 +2001,25 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
         break;
 
     case star:
-        NextToken();
-        tp = ParseCastExpression(&ep1);
-        if( tp == NULL ) {
-            error(ERR_IDEXPECT);
-            return (TYP *)NULL;
-        }
-        if( tp->GetBtp() == NULL )
-			    error(ERR_DEREF);
-        else {
-			// A star before a function pointer just means that we want to
-			// invoke the function. We want to retain the pointer to the
-			// function as the type.
-			if (tp->GetBtp()->type!=bt_func && tp->GetBtp()->type!=bt_ifunc)
-				tp = tp->GetBtp();
-        }
+      NextToken();
+      tp = ParseCastExpression(&ep1);
+      if(tp == NULL) {
+        error(ERR_IDEXPECT);
+        return (TYP *)NULL;
+      }
+      if( tp->GetBtp() == NULL )
+			  error(ERR_DEREF);
+      else {
+				// A star before a function pointer just means that we want to
+				// invoke the function. We want to retain the pointer to the
+				// function as the type.
+				if (tp->GetBtp()->type!=bt_func && tp->GetBtp()->type!=bt_ifunc)
+					tp = tp->GetBtp();
+      }
 	    tp1 = tp;
 		//Autoincdec(tp,&ep1);
 	    tp = CondDeref(&ep1,tp);
-        break;
+      break;
 
     case bitandd:
 		{
@@ -2015,15 +2031,19 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
 				error(ERR_IDEXPECT);
 				return (TYP *)NULL;
 			}
-			t = ep1->tp->type;
-			if (IsLValue(ep1) && !(t == bt_struct || t == bt_union || t == bt_class)) {
-				ep1 = ep1->p[0];
-				ep1->esize = 8;     // converted to a pointer so size is now 8
-				tp1 = TYP::Make(bt_pointer, 8);
-				tp1->btp = tp->GetIndex();
-				tp1->val_flag = FALSE;
-				tp1->isUnsigned = TRUE;
-				tp = tp1;
+			if (ep1) {
+				t = ep1->tp->type;
+				if (IsLValue(ep1) && !(t == bt_pointer || t == bt_struct || t == bt_union || t == bt_class)) {
+					ep1 = ep1->p[0];
+					if (ep1) {
+						ep1->esize = 8;     // converted to a pointer so size is now 8
+						tp1 = TYP::Make(bt_pointer, 8);
+						tp1->btp = tp->GetIndex();
+						tp1->val_flag = FALSE;
+						tp1->isUnsigned = TRUE;
+						tp = tp1;
+					}
+				}
 			}
 		}
     break;
@@ -2654,85 +2674,88 @@ TYP *shiftop(ENODE **node)
     return tp1;
 }
 
-/*
- *      relation handles the relational operators < <= > and >=.
- */
-TYP     *relation(ENODE **node)
+//
+// relation handles the relational operators < <= > and >=.
+//
+TYP *relation(ENODE **node)
 {
 	ENODE *ep1, *ep2;
-    TYP *tp1, *tp2;
+  TYP *tp1, *tp2;
 	bool isVector = false;
+	int st;
 
-        int             nt;
-        Enter("Relation");
-        *node = (ENODE *)NULL;
-        tp1 = shiftop(&ep1);
-        if( tp1 == 0 )
-                goto xit;
-        for(;;) {
-			if (tp1->IsVectorType())
+  int nt;
+  Enter("Relation");
+  *node = (ENODE *)NULL;
+  tp1 = shiftop(&ep1);
+  if( tp1 == 0 )
+    goto xit;
+  for(;;) {
+		if (tp1->IsVectorType())
+			isVector = true;
+		st = lastst;
+		if (st != lt && st != leq && st != gt && st != geq)
+			goto fini;
+		NextToken();
+		tp2 = shiftop(&ep2);
+		if (tp2 == 0)
+			error(ERR_IDEXPECT);
+		else {
+			if (tp2->IsVectorType())
 				isVector = true;
-                switch( lastst ) {
-
-                        case lt:
-							if (tp1->IsVectorType())
-								nt = en_vlt;
-							else if (tp1->IsFloatType())
-                                nt = en_flt;
-                            else if( tp1->isUnsigned )
-                                    nt = en_ult;
-                            else
-                                    nt = en_lt;
-                            break;
-                        case gt:
-							if (tp1->IsVectorType())
-								nt = en_vgt;
-							else if (tp1->IsFloatType())
-                                nt = en_fgt;
-                            else if( tp1->isUnsigned )
-                                    nt = en_ugt;
-                            else
-                                    nt = en_gt;
-                            break;
-                        case leq:
-							if (tp1->IsVectorType())
-								nt = en_vle;
-							else if (tp1->IsFloatType())
-                                nt = en_fle;
-                            else if( tp1->isUnsigned )
-                                    nt = en_ule;
-                            else
-                                    nt = en_le;
-                            break;
-                        case geq:
-							if (tp1->IsVectorType())
-								nt = en_vge;
-							else if (tp1->IsFloatType())
-                                nt = en_fge;
-                            else if( tp1->isUnsigned )
-                                    nt = en_uge;
-                            else
-                                    nt = en_ge;
-                            break;
-                        default:
-                                goto fini;
-                        }
-                NextToken();
-                tp2 = shiftop(&ep2);
-                if( tp2 == 0 )
-                        error(ERR_IDEXPECT);
-                else    {
-					if (tp2->IsVectorType())
-						isVector = true;
-					tp1 = forcefit(&ep2, tp2, &ep1, tp1, true, false);
-                        ep1 = makenode(nt,ep1,ep2);
-						ep1->esize = 1;
-						if (isVector)
-							tp1 = TYP::Make(bt_vector_mask,sizeOfWord);
-						PromoteConstFlag(ep1);
-                        }
-                }
-fini:   *node = ep1;
+			tp1 = forcefit(&ep2, tp2, &ep1, tp1, true, false);
+		}
+		switch(st) {
+    case lt:
+			if (tp1->IsVectorType())
+				nt = en_vlt;
+			else if (tp1->IsFloatType())
+        nt = en_flt;
+      else if( tp1->isUnsigned )
+        nt = en_ult;
+      else
+        nt = en_lt;
+      break;
+    case gt:
+			if (tp1->IsVectorType())
+				nt = en_vgt;
+			else if (tp1->IsFloatType())
+        nt = en_fgt;
+      else if( tp1->isUnsigned )
+        nt = en_ugt;
+      else
+        nt = en_gt;
+      break;
+		case leq:
+			if (tp1->IsVectorType())
+				nt = en_vle;
+			else if (tp1->IsFloatType())
+        nt = en_fle;
+      else if( tp1->isUnsigned )
+        nt = en_ule;
+      else
+        nt = en_le;
+      break;
+		case geq:
+			if (tp1->IsVectorType())
+				nt = en_vge;
+			else if (tp1->IsFloatType())
+        nt = en_fge;
+      else if( tp1->isUnsigned )
+        nt = en_uge;
+      else
+        nt = en_ge;
+      break;
+    default:
+      goto fini;
+    }
+		ep1 = makenode(nt, ep1, ep2);
+		ep1->esize = 1;
+		if (isVector)
+			tp1 = TYP::Make(bt_vector_mask, sizeOfWord);
+		PromoteConstFlag(ep1);
+	}
+fini: *node = ep1;
 xit:
   if (*node)
 		(*node)->SetType(tp1);
@@ -2851,41 +2874,38 @@ TYP *orop(ENODE **node)
  */
 TYP *conditional(ENODE **node)
 {
-	TYP             *tp1, *tp2, *tp3;
-    ENODE    *ep1, *ep2, *ep3;
-    Enter("Conditional");
-    *node = (ENODE *)NULL;
-    tp1 = orop(&ep1);       /* get condition */
-    if( tp1 == (TYP *)NULL )
-        goto xit;
-    if( lastst == hook ) {
-			iflevel++;
-	        if ((iflevel > maxPn-1) && isThor)
-	            error(ERR_OUTOFPREDS);
-            NextToken();
-            if( (tp2 = conditional(&ep2)) == NULL) {
-                    error(ERR_IDEXPECT);
-                    goto cexit;
-                    }
-            needpunc(colon,6);
-            if( (tp3 = conditional(&ep3)) == NULL) {
-                    error(ERR_IDEXPECT);
-                    goto cexit;
-                    }
-            tp1 = forcefit(&ep3,tp3,&ep2,tp2,true,false);
-            ep2 = makenode(en_void,ep2,ep3);
-			ep2->esize = tp1->size;
-            ep1 = makenode(en_cond,ep1,ep2);
-            ep1->predreg = iflevel;
-			ep1->esize = tp1->size;
-			iflevel--;
-            }
+	TYP *tp1, *tp2, *tp3;
+  ENODE *ep1, *ep2, *ep3;
+  Enter("Conditional");
+  *node = (ENODE *)NULL;
+  tp1 = orop(&ep1);       /* get condition */
+  if(tp1 == (TYP *)NULL )
+    goto xit;
+  if( lastst == hook ) {
+		iflevel++;
+		NextToken();
+		if((tp2 = conditional(&ep2)) == NULL) {
+			error(ERR_IDEXPECT);
+			goto cexit;
+		}
+		needpunc(colon,6);
+		if((tp3 = conditional(&ep3)) == NULL) {
+			error(ERR_IDEXPECT);
+			goto cexit;
+		}
+		tp1 = forcefit(&ep3,tp3,&ep2,tp2,true,false);
+		ep2 = makenode(en_void,ep2,ep3);
+		ep2->esize = tp1->size;
+		ep1 = makenode(en_cond,ep1,ep2);
+		ep1->esize = tp1->size;
+		iflevel--;
+  }
 cexit:  *node = ep1;
 xit:
-     if (*node)
-     	(*node)->SetType(tp1);
-    Leave("Conditional",0);
-    return tp1;
+  if (*node)
+    (*node)->SetType(tp1);
+  Leave("Conditional",0);
+  return tp1;
 }
 
 // ----------------------------------------------------------------------------
@@ -2895,23 +2915,24 @@ xit:
 TYP *asnop(ENODE **node)
 {      
 	ENODE *ep1, *ep2, *ep3;
-    TYP *tp1, *tp2;
-    int op;
+  TYP *tp1, *tp2;
+  int op;
 
-    Enter("Assignop");
-    *node = (ENODE *)NULL;
-    tp1 = conditional(&ep1);
-    if( tp1 == 0 )
-        goto xit;
-    for(;;) {
-        switch( lastst ) {
-            case assign:
-                op = en_assign;
-ascomm:         NextToken();
-                tp2 = asnop(&ep2);
+  Enter("Assignop");
+  *node = (ENODE *)NULL;
+  tp1 = conditional(&ep1);
+  if (tp1 == 0)
+    goto xit;
+  for(;;) {
+    switch( lastst ) {
+      case assign:
+        op = en_assign;
+ascomm:
+				NextToken();
+        tp2 = asnop(&ep2);
 ascomm2:
-		        if( tp2 == 0 || !IsLValue(ep1) )
-                    error(ERR_LVALUE);
+		    if( tp2 == 0 || !IsLValue(ep1) )
+          error(ERR_LVALUE);
 				else {
 					tp1 = forcefit(&ep2,tp2,&ep1,tp1,false,true);
 					ep1 = makenode(op,ep1,ep2);
@@ -2926,9 +2947,10 @@ ascomm2:
 				break;
 			case asplus:
 				op = en_asadd;
-ascomm3:        NextToken();
+ascomm3:        
+				NextToken();
 				tp2 = asnop(&ep2);
-				if( tp1->type == bt_pointer ) {
+				if(tp1->type == bt_pointer) {
 					ep3 = makeinode(en_icon,tp1->GetBtp()->size);
 					ep3->esize = sizeOfPtr;
 					ep2 = makenode(en_mul,ep2,ep3);
@@ -2980,10 +3002,10 @@ ascomm3:        NextToken();
 	}
 asexit: *node = ep1;
 xit:
-     if (*node)
-     	(*node)->SetType(tp1);
-    Leave("Assignop",0);
-        return tp1;
+  if (*node)
+	  (*node)->SetType(tp1);
+  Leave("Assignop",0);
+  return (tp1);
 }
 
 // ----------------------------------------------------------------------------

@@ -713,38 +713,113 @@ Operand *ENODE::GenHook(int flags, int size)
 		ReleaseTempReg(ap2);
 		peep_tail = ip1;
 		peep_tail->fwd = nullptr;
-	}
-	GenerateFalseJump(p[0], false_label, 0);
-	node = p[1];
-	ap1 = GenerateExpression(node->p[0], flags, size);
-	if (n1 > 4)
+		GenerateFalseJump(p[0], false_label, 0);
+		node = p[1];
+		ap1 = GenerateExpression(node->p[0], flags, size);
 		GenerateDiadic(op_bra, 0, make_clabel(end_label), 0);
-	else {
-		if (!IsEqualOperand(ap1, ap2))
-		{
-			GenerateMonadic(op_hint, 0, make_immed(2));
-			GenerateDiadic(op_mov, 0, ap2, ap1);
-		}
-	}
-	GenerateLabel(false_label);
-	if (n1 > 4) {
+		GenerateLabel(false_label);
 		ap2 = GenerateExpression(node->p[1], flags, size);
 		if (!IsEqualOperand(ap1, ap2))
 		{
 			GenerateMonadic(op_hint, 0, make_immed(2));
-			GenerateDiadic(op_mov, 0, ap1, ap2);
+			switch (ap1->mode)
+			{
+			case am_reg:
+				switch (ap2->mode) {
+				case am_reg:
+					GenerateDiadic(op_mov, 0, ap1, ap2);
+					break;
+				case am_imm:
+					GenerateDiadic(op_ldi, 0, ap1, ap2);
+					if (ap2->isPtr)
+						ap1->isPtr = true;
+					break;
+				default:
+					GenLoad(ap1, ap2, size, size);
+					break;
+				}
+				break;
+			case am_fpreg:
+				switch (ap2->mode) {
+				case am_fpreg:
+					GenerateDiadic(op_mov, 0, ap1, ap2);
+					break;
+				case am_imm:
+					ap4 = GetTempRegister();
+					GenerateDiadic(op_ldi, 0, ap4, ap2);
+					GenerateDiadic(op_mov, 0, ap1, ap4);
+					if (ap2->isPtr)
+						ap1->isPtr = true;
+					break;
+				default:
+					GenLoad(ap1, ap2, size, size);
+					break;
+				}
+				break;
+			case am_imm:
+				break;
+			default:
+				GenStore(ap2, ap1, size);
+				break;
+			}
 		}
-		ReleaseTempReg(ap2);
 		GenerateLabel(end_label);
 		ap1->MakeLegal(flags, size);
 		return (ap1);
 	}
-	else {
-		ReleaseTempReg(ap1);
-		GenerateLabel(end_label);
-		ap2->MakeLegal(flags, size);
-		return (ap2);
+	// N1 <= 4
+	GenerateFalseJump(p[0], false_label, 0);
+	node = p[1];
+	ap1 = GenerateExpression(node->p[0], flags, size);
+	GenerateDiadic(op_bra, 0, make_clabel(end_label), 0);
+	GenerateLabel(false_label);
+	if (!IsEqualOperand(ap1, ap2))
+	{
+		GenerateMonadic(op_hint, 0, make_immed(2));
+		switch (ap1->mode)
+		{
+		case am_reg:
+			switch (ap2->mode) {
+			case am_reg:
+				GenerateDiadic(op_mov, 0, ap1, ap2);
+				break;
+			case am_imm:
+				GenerateDiadic(op_ldi, 0, ap1, ap2);
+				if (ap2->isPtr)
+					ap1->isPtr = true;
+				break;
+			default:
+				GenLoad(ap1, ap2, size, size);
+				break;
+			}
+			break;
+		case am_fpreg:
+			switch (ap2->mode) {
+			case am_fpreg:
+				GenerateDiadic(op_mov, 0, ap1, ap2);
+				break;
+			case am_imm:
+				ap4 = GetTempRegister();
+				GenerateDiadic(op_ldi, 0, ap4, ap2);
+				GenerateDiadic(op_mov, 0, ap1, ap4);
+				if (ap2->isPtr)
+					ap1->isPtr = true;
+				break;
+			default:
+				GenLoad(ap1, ap2, size, size);
+				break;
+			}
+			break;
+		case am_imm:
+			break;
+		default:
+			GenStore(ap2, ap1, size);
+			break;
+		}
 	}
+	GenerateLabel(end_label);
+	ap1->MakeLegal(flags, size);
+	return (ap1);
 }
 
 Operand *ENODE::GenShift(int flags, int size, int op)
@@ -921,6 +996,7 @@ Operand *ENODE::GenBinary(int flags, int size, int op)
 {
 	Operand *ap1, *ap2, *ap3, *ap4;
 	bool dup = false;
+	int flags2;
 
 	if (IsFloatType())
 	{
@@ -982,7 +1058,8 @@ Operand *ENODE::GenBinary(int flags, int size, int op)
 		}
 		else {
 			ap1 = GenerateExpression(p[0], F_REG, size);
-			ap2 = GenerateExpression(p[1], F_REG | F_IMMED, size);
+			// modu does not have an immediate mode
+			ap2 = GenerateExpression(p[1], op==op_modu ? F_REG: F_REG | F_IMMED, size);
 			if (ap2->mode == am_imm) {
 				switch (op) {
 				case op_and:
@@ -1158,10 +1235,10 @@ Operand *ENODE::GenLand(int flags, int op)
 	Operand *ap1, *ap2, *ap3, *ap4, *ap5;
 
 	ap3 = GetTempRegister();
-	ap1 = GenerateExpression(p[0], flags, 8);
+	ap1 = GenerateExpression(p[0], F_REG, 8);
 	ap4 = GetTempRegister();
 	GenerateDiadic(op_redor, 0, ap4, ap1);
-	ap2 = GenerateExpression(p[1], flags, 8);
+	ap2 = GenerateExpression(p[1], F_REG, 8);
 	ap5 = GetTempRegister();
 	GenerateDiadic(op_redor, 0, ap5, ap2);
 	GenerateTriadic(op, 0, ap3, ap4, ap5);

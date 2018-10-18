@@ -1309,6 +1309,7 @@ int Declaration::declare(SYM *parent,TABLE *table,int al,int ilc,int ztype)
 	bool flag;
 	int parentBytes = 0;
 	std::string name;
+	std::string tmpstr;
   int nbytes;
 	static int decl_level = 0;
 	int itdef;
@@ -1332,6 +1333,11 @@ int Declaration::declare(SYM *parent,TABLE *table,int al,int ilc,int ztype)
 		sp = ParsePrefix(ztype==bt_union);
 		if (declid==nullptr)
 			declid = new std::string("");
+		if (al == sc_static) {
+			tmpstr = GetNamespace();
+			tmpstr += *declid;
+			declid = new std::string(tmpstr);
+		}
 		// If a function declaration is taking place and just the type is
 		// specified without a parameter name, assign an internal compiler
 		// generated name.

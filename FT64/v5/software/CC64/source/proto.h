@@ -53,4 +53,6 @@ extern char *GetStrConst();
 extern void push_typ(TYP *tp);
 extern TYP *pop_typ();
 
+extern void opt_const_unchecked(ENODE **node);
+
 #endif

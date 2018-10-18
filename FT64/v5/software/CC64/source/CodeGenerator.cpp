@@ -302,43 +302,46 @@ Operand *GenerateDereference(ENODE *node,int flags,int size, int su)
 //	if (node->tp->type==bt_struct || node->tp->type==bt_union) {
 //        return GenerateExpression(node,F_REG|F_MEM,size);
 //    }
+
     if( node->p[0]->nodetype == en_add )
     {
-//        ap2 = GetTempRegister();
-        ap1 = node->p[0]->GenIndex();
+//    ap2 = GetTempRegister();
+      ap1 = node->p[0]->GenIndex();
 //        GenerateTriadic(op_add,0,ap2,makereg(ap1->preg),makereg(regGP));
-		ap1->isUnsigned = !su;//node->isUnsigned;
+			ap1->isUnsigned = !su;//node->isUnsigned;
 		// *** may have to fix for stackseg
-		ap1->segment = dataseg;
+			ap1->segment = dataseg;
 //		ap2->mode = ap1->mode;
 //		ap2->segment = dataseg;
 //		ap2->offset = ap1->offset;
 //		ReleaseTempRegister(ap1);
-		if (!node->isUnsigned)
-			ap1->GenSignExtend(siz1,size,flags);
-		else
-		    ap1->MakeLegal(flags,siz1);
-        ap1->MakeLegal(flags,size);
-		goto xit;
-    }
-    else if( node->p[0]->nodetype == en_autocon )
-    {
-        ap1 = allocOperand();
+			if (!node->isUnsigned)
+				ap1->GenSignExtend(siz1,size,flags);
+			else
+				ap1->MakeLegal(flags,siz1);
+      ap1->MakeLegal(flags,size);
+			return (ap1);
+		}
+
+  if(node->p[0]->nodetype == en_autocon)
+  {
+    ap1 = allocOperand();
 		ap1->isPtr = node->nodetype == en_wp_ref || node->nodetype == en_hp_ref;
 		ap1->mode = am_indx;
-        ap1->preg = regFP;
+		ap1->preg = regFP;
 		ap1->segment = stackseg;
-        ap1->offset = makeinode(en_icon,node->p[0]->i);
+		ap1->offset = makeinode(en_icon,node->p[0]->i);
 		ap1->offset->sym = node->p[0]->sym;
 		ap1->isUnsigned = !su;
 		if (!node->isUnsigned)
-	        ap1->GenSignExtend(siz1,size,flags);
+			ap1->GenSignExtend(siz1,size,flags);
 		else
-		    ap1->MakeLegal(flags,siz1);
-        ap1->MakeLegal(flags,size);
-		goto xit;
-    }
-    else if( node->p[0]->nodetype == en_classcon )
+			ap1->MakeLegal(flags,siz1);
+		ap1->MakeLegal(flags,size);
+		return (ap1);
+  }
+
+    if( node->p[0]->nodetype == en_classcon )
     {
         ap1 = allocOperand();
 		ap1->isPtr = node->nodetype == en_wp_ref || node->nodetype == en_hp_ref;
@@ -513,12 +516,13 @@ Operand *GenerateDereference(ENODE *node,int flags,int size, int su)
 		goto xit;
 	}
 	else if (node->p[0]->nodetype == en_regvar) {
-        ap1 = allocOperand();
+    ap1 = allocOperand();
 		ap1->isPtr = node->nodetype == en_wp_ref || node->nodetype == en_hp_ref;
+
 		// For parameters we want Rn, for others [Rn]
 		// This seems like an error earlier in the compiler
 		// See setting val_flag in ParseExpressions
-		ap1->mode = node->p[0]->i < 18 ? am_ind : am_reg;
+		ap1->mode = node->p[0]->i < regFirstArg ? am_ind : am_reg;
 //		ap1->mode = node->p[0]->tp->val_flag ? am_reg : am_ind;
 		ap1->preg = node->p[0]->i;
 		ap1->MakeLegal(flags,size);
@@ -529,7 +533,7 @@ Operand *GenerateDereference(ENODE *node,int flags,int size, int su)
 		/*error(ERR_DEREF)*/;
 		ap1 = allocOperand();
 		ap1->isPtr = node->nodetype == en_wp_ref || node->nodetype == en_hp_ref;
-		ap1->mode = node->p[0]->i < 18 ? am_ind : am_fpreg;
+		ap1->mode = node->p[0]->i < regFirstArg ? am_ind : am_fpreg;
 		ap1->preg = node->p[0]->i;
 		switch (node->p[0]->tp->type) {
 		case bt_float:	ap1->type = stdflt.GetIndex(); break;
@@ -557,27 +561,36 @@ Operand *GenerateDereference(ENODE *node,int flags,int size, int su)
 			return (ap1);
 		}
 	}
-    ap1 = GenerateExpression(node->p[0],F_REG | F_IMMED,8); /* generate address */
+  ap1 = GenerateExpression(node->p[0],F_REG | F_IMMED,8); /* generate address */
 	ap1->isPtr = node->nodetype == en_wp_ref || node->nodetype == en_hp_ref;
 	if( ap1->mode == am_reg)
     {
-//        ap1->mode = am_ind;
-          if (use_gp) {
-              ap1->mode = am_indx;
-              ap1->sreg = regGP;
-          }
-          else
-             ap1->mode = am_ind;
-		  if (node->p[0]->constflag==TRUE)
-			  ap1->offset = node->p[0];
-		  else
-			ap1->offset = nullptr;	// ****
-		  ap1->isUnsigned = !su | ap1->isPtr;
-		if (!node->isUnsigned)
-	        ap1->GenSignExtend(siz1,size,flags);
-		else
-		    ap1->MakeLegal(flags,siz1);
-        ap1->isVolatile = node->isVolatile;
+			// This seems a bit of a kludge. If we are dereferencing and there's a
+			// pointer in the register, then we want the value at the pointer location.
+			if (ap1->isPtr) {
+				GenLoad(ap1, make_indirect(ap1->preg), size, size);
+				ap1->mode = am_reg;
+			}
+			else
+			{
+				//        ap1->mode = am_ind;
+				if (use_gp) {
+					ap1->mode = am_indx;
+					ap1->sreg = regGP;
+				}
+				else
+					ap1->mode = am_ind;
+				if (node->p[0]->constflag == TRUE)
+					ap1->offset = node->p[0];
+				else
+					ap1->offset = nullptr;	// ****
+				ap1->isUnsigned = !su | ap1->isPtr;
+				if (!node->isUnsigned)
+					ap1->GenSignExtend(siz1, size, flags);
+				else
+					ap1->MakeLegal(flags, siz1);
+				ap1->isVolatile = node->isVolatile;
+			}
         ap1->MakeLegal(flags,size);
 		goto xit;
     }
@@ -771,8 +784,10 @@ Operand *GenerateAssignModiv(ENODE *node,int flags,int size,int op)
     //GenerateSignExtend(ap1,siz1,2,flags);
     if (isFP)
         ap3 = GenerateExpression(node->p[1],F_FPREG,8);
-    else
-        ap3 = GenerateExpression(node->p[1],F_REG|F_IMMED,8);
+		else {
+			// modu doesn't support immediate mode
+			ap3 = GenerateExpression(node->p[1], op==op_modu ? F_REG : F_REG | F_IMMED, 8);
+		}
 	if (op==op_fdiv) {
 		GenerateTriadic(op,siz1==4?'s':siz1==8?'d':siz1==12?'t':siz1==16?'q':'d',ap1,ap1,ap3);
 	}
@@ -1261,14 +1276,14 @@ Operand *GenAutocon(ENODE *node, int flags, int size, int type)
 Operand *GenerateExpression(ENODE *node, int flags, int size)
 {   
 	Operand *ap1, *ap2;
-    int natsize;
+  int natsize;
 	static char buf[4][20];
 	static int ndx;
 	static int numDiags = 0;
 
-    Enter("<GenerateExpression>"); 
-    if( node == (ENODE *)NULL )
-    {
+  Enter("<GenerateExpression>"); 
+  if( node == (ENODE *)NULL )
+  {
 		throw new C64PException(ERR_NULLPOINTER, 'G');
 		numDiags++;
         printf("DIAG - null node in GenerateExpression.\n");
@@ -1278,13 +1293,13 @@ Operand *GenerateExpression(ENODE *node, int flags, int size)
         return (Operand *)NULL;
     }
 	//size = node->esize;
-    switch( node->nodetype )
-    {
-		case en_aggregate:
-			ap1 = allocOperand();
-			ap1->offset = node;
-			ap1->type = 9999;
-			return (ap1);
+  switch( node->nodetype )
+  {
+	case en_aggregate:
+		ap1 = allocOperand();
+		ap1->offset = node;
+		ap1->type = 9999;
+		return (ap1);
 	case en_fcon:
     ap1 = allocOperand();
 		ap1->isPtr = node->IsPtr();
@@ -1304,13 +1319,13 @@ Operand *GenerateExpression(ENODE *node, int flags, int size)
          Leave("GenExperssion",2); 
             return ap1;
 		*/
-    case en_icon:
-        ap1 = allocOperand();
-        ap1->mode = am_imm;
-        ap1->offset = node;
-        ap1->MakeLegal(flags,size);
-        Leave("GenExpression",3); 
-        return (ap1);
+  case en_icon:
+      ap1 = allocOperand();
+      ap1->mode = am_imm;
+      ap1->offset = node;
+      ap1->MakeLegal(flags,size);
+      Leave("GenExpression",3); 
+      return (ap1);
 
 	case en_labcon:
             if (use_gp) {
@@ -1377,8 +1392,8 @@ Operand *GenerateExpression(ENODE *node, int flags, int size)
             ap1->MakeLegal(flags,size);
 			Leave("GenExpression",7); 
             return ap1;
-    case en_autocon:	return GenAutocon(node, flags, size, stdint.GetIndex());
-    case en_autofcon:	
+  case en_autocon:	return GenAutocon(node, flags, size, stdint.GetIndex());
+  case en_autofcon:	
 		switch (node->tp->type)
 		{
 		case bt_float:	return GenAutocon(node, flags, size, stdflt.GetIndex());

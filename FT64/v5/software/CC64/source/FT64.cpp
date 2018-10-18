@@ -936,11 +936,13 @@ static int GenerateStoreArgumentList(Function *sym, ENODE *plist)
 		pl[nn] = p->p[0];
 	}
 	for(--nn, i = 0; nn >= 0; --nn,i++ )
-    {
+  {
 //		sum += GeneratePushParameter(pl[nn],ta ? ta->preg[ta->length - i - 1] : 0,sum*8);
-		sum += GeneratePushParameter(pl[nn],ta ? ta->preg[i] : 0,sum*8);
+		// Variable argument list functions may cause the type array values to be
+		// exhausted before all the parameters are pushed. So, we check the parm number.
+		sum += GeneratePushParameter(pl[nn],ta ? (i < ta->length ? ta->preg[i] : 0) : 0,sum*8);
 //		plist = plist->p[1];
-    }
+  }
 	if (sum==0)
 		MarkRemove(ip->fwd);
 	else

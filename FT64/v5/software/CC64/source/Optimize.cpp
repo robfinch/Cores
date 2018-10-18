@@ -627,6 +627,7 @@ static void opt0(ENODE **node)
                     opt0(&(ep->p[0]));
                     opt0(&(ep->p[1]));
                     break;
+						// en_tempref comes from typecasting
 						case en_void:
 							opt0(&(ep->p[0]));
 							opt0(&(ep->p[1]));
@@ -756,6 +757,15 @@ static void fold_const(ENODE **node)
                 }
 }
 
+void opt_const_unchecked(ENODE **node)
+{
+	dfs.printf("<OptConst2>");
+	opt0(node);
+	fold_const(node);
+	opt0(node);
+	dfs.printf("</OptConst2>");
+}
+
 //
 //      apply all constant optimizations.
 //
@@ -769,3 +779,4 @@ void opt_const(ENODE **node)
     }
 	dfs.printf("</OptConst>");
 }
+

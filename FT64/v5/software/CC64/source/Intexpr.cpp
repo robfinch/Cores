@@ -35,7 +35,9 @@ int64_t GetIntegerExpression(ENODE **pnode)       /* simple integer value */
 		error(ERR_SYNTAX);
 		return (0);
 	}
-	opt_const(&node);	// This should reduce to a single integer expression
+	// Do constant optimizations to reduce a set of constants to a single constant.
+	// Otherwise some codes won't compile without errors.
+	opt_const_unchecked(&node);	// This should reduce to a single integer expression
 	if (node==NULL) {
 		fatal("Compiler Error: GetIntegerExpression: node is NULL");
 		return (0);
@@ -74,7 +76,7 @@ Float128 *GetFloatExpression(ENODE **pnode)       /* simple integer value */
 		error(ERR_SYNTAX);
 		return 0;
 	}
-	opt_const(&node);	// This should reduce to a single integer expression
+	opt_const_unchecked(&node);
 	if (node==NULL) {
 		fatal("Compiler Error: GetFloatExpression: node is NULL");
 		return 0;
@@ -109,7 +111,7 @@ int64_t GetConstExpression(ENODE **pnode)       /* simple integer value */
 		error(ERR_SYNTAX);
 		return (0);
 	}
-	opt_const(&node);	// This should reduce to a single integer expression
+	opt_const_unchecked(&node);
 	if (node == NULL) {
 		fatal("Compiler Error: GetConstExpression: node is NULL");
 		return (0);

@@ -1013,6 +1013,7 @@ int CmpReg(int reg)
 		return(-1);
 	}
 }
+
 // ---------------------------------------------------------------------------
 // Process the size specifier for a FP instruction.
 // h: half (16 bit)
@@ -1026,16 +1027,16 @@ static int GetFPSize()
 {
 	int sz;
 
-    sz = 'd';
-    if (*inptr=='.') {
-        inptr++;
-        if (strchr("hsdtqHSDTQ",*inptr)) {
-            sz = tolower(*inptr);
-            inptr++;
-        }
-        else
-            error("Illegal float size");
+  sz = 'd';
+  if (*inptr=='.') {
+    inptr++;
+    if (strchr("hsdtqHSDTQ",*inptr)) {
+      sz = tolower(*inptr);
+      inptr++;
     }
+    else
+      error("Illegal float size");
+  }
 	switch(sz) {
 	case 'h':	sz = 0; break;
 	case 's':	sz = 1; break;
@@ -1541,6 +1542,11 @@ static void process_setiop(int64_t opcode6)
 		opcode6,!expand_flag,4);
 }
 
+
+// ---------------------------------------------------------------------------
+// slt $t0,$t1,$r16
+// ---------------------------------------------------------------------------
+
 static void process_setop(int64_t opcode6)
 {
 	int Ra, Rb, Rt;
@@ -1675,6 +1681,7 @@ static void process_rrop(int64_t funct6, int64_t iop)
   if (token=='#') {
 	if (iop < 0 && iop!=-4)
 		error("Immediate mode not supported");
+		//printf("Insn:%d\n", token);
     inptr = p;
     process_riop(iop);
     return;
@@ -1834,7 +1841,26 @@ static void process_cmove(int64_t funct6)
 	}
 	prevToken();
 	Rc = getRegisterX();
-	emit_insn((funct6 << 42LL) | (Rt << 23) | (Rc << 18) | (Rb << 13) | (Ra << 8) | 0x02, !expand_flag, 6);
+	emit_insn((funct6 << 42LL) | (Rt << 23) | (Rc << 18) | (Rb << 13) | (Ra << 8) | (1 << 6) | 0x02, !expand_flag, 6);
+}
+
+static void process_cmovf(int64_t funct6)
+{
+	int Ra, Rb, Rc = 0, Rt;
+	char *p;
+	int sz = 3;
+	int64_t val;
+
+	p = inptr;
+	Rt = getFPRegister();
+	need(',');
+	Ra = getRegisterX();
+	need(',');
+	Rb = getFPRegister();
+	need(',');
+	NextToken();
+	Rc = getFPRegister();
+	emit_insn((funct6 << 42LL) | (Rt << 23) | (Rc << 18) | (Rb << 13) | (Ra << 8) | (1 << 6) | 0x02, !expand_flag, 6);
 }
 
 // ---------------------------------------------------------------------------
@@ -2023,25 +2049,25 @@ static void process_fprop(int64_t oc)
 }
 
 // ---------------------------------------------------------------------------
-// fabs.d r1,r2[,rm]
+// itof.d $fp1,$r2[,rm]
 // ---------------------------------------------------------------------------
 
 static void process_itof(int64_t oc)
 {
-    int Ra;
-    int Rt;
-    char *p;
-    int fmt;
-    int64_t rm;
+  int Ra;
+  int Rt;
+  char *p;
+  int fmt;
+  int64_t rm;
 
-    rm = 0;
-    fmt = GetFPSize();
-    p = inptr;
-    Rt = getFPRegister();
-    need(',');
-    Ra = getRegisterX();
-    if (token==',')
-       rm = getFPRoundMode();
+  rm = 0;
+  fmt = GetFPSize();
+  p = inptr;
+  Rt = getFPRegister();
+  need(',');
+  Ra = getRegisterX();
+  if (token==',')
+    rm = getFPRoundMode();
 //    prevToken();
 	if (fmt != 2) {
 		emit_insn(
@@ -2055,14 +2081,14 @@ static void process_itof(int64_t oc)
 		);
 		return;
 	}
-    emit_insn(
-			(oc << 26LL) |
-			(rm << 23LL)|
-			(Rt << 18)|
-			(0 << 13)|
-			(Ra << 8) |
-			0x0F,!expand_flag,4
-			);
+  emit_insn(
+		(oc << 26LL) |
+		(rm << 23LL)|
+		(Rt << 18)|
+		(0 << 13)|
+		(Ra << 8) |
+		0x0F,!expand_flag,4
+		);
 }
 
 static void process_ftoi(int64_t oc)
@@ -2217,57 +2243,79 @@ static void process_rop(int oc)
 
 static void process_beqi(int64_t opcode6, int64_t opcode3)
 {
-    int Ra, pred = 0;
-    int64_t val, imm;
-    int64_t disp;
+  int Ra, pred = 0;
+  int64_t val, imm;
+  int64_t disp;
 	int sz = 3;
 	char *p;
-	bool isn48 = false;
 
 	p = inptr;
 	if (*p == '.')
 		getSz(&sz);
 
-    Ra = getRegisterX();
-    need(',');
-    NextToken();
-    imm = expr();
+	Ra = getRegisterX();
+	need(',');
+	NextToken();
+	imm = expr();
 	need(',');
 	NextToken();
 	val = expr();
-	disp = val - (code_address + 4LL);
-	if (!IsNBit(disp, 11)) {
-		disp = val - (code_address + 6LL);
-		isn48 = true;
-	}
-	disp >>= 1;
-	if (!IsNBit(imm,8)) {
+	if (!IsNBit(imm,8LL)) {
 		//printf("Branch immediate too large: %d %I64d", lineno, imm);
-		isn48 = false;
-		LoadConstant(imm, 23);
+		LoadConstant(imm, 23LL);
 		disp = val - (code_address + 4LL);
-		if (!IsNBit(disp, 11)) {
-			disp = val - (code_address + 6LL);
-			isn48 = true;
-		}
 		disp >>= 1;
 		emit_insn(
 			(disp << 21LL) |
 			(0x00 << 18) |		// BEQ
 			(23 << 13) |
 			(Ra << 8) |
-			0x30, !expand_flag, isn48 ? 6 : 4
+			0x30, !expand_flag, 4
 		);
 		return;
 	}
+	disp = val - (code_address + 4LL);
+	if (!IsNBit(disp, 12LL)) {
+		// Branch +4  to a jump instruction
+		emit_insn((2 << 21LL) |
+			((imm & 0xFF) << 13) |
+			(Ra << 8) |
+			opcode6, !expand_flag, 4
+		);
+		// Branch +4 around the jump instruction
+		emit_insn((2 << 21LL) |
+			(0 << 18) |
+			(0 << 13) |
+			(0 << 8) |
+			0x30, !expand_flag, 4
+		);
+		// jump instruction
+		emit_insn(
+			((((val >> 1) & 0xFFFFFFLL)) << 8) |
+			0x28, !expand_flag, 4
+		);
+		return;
+		//error("BEQI Branch displacement too far.");
+	}
+	disp >>= 1;
 	emit_insn((disp << 21LL) |
 		((imm & 0xFF) << 13) |
 		(Ra << 8) |
-		opcode6,!expand_flag,isn48 ? 6 : 4
+		opcode6,!expand_flag,4
 	);
-    return;
+	return;
 }
 
+// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+int InvertBranchOpcode(int opcode4)
+{
+	switch (opcode4) {
+	case 0:	return (1);	// BEQ to BNE
+	case 1:	return (0);	// BNE to BEQ
+	default:	return (opcode4);	// Otherwise operands are swapped.
+	}
+}
 
 // ---------------------------------------------------------------------------
 // beq r1,r2,label
@@ -2284,7 +2332,6 @@ static void process_bcc(int opcode6, int opcode4)
   int64_t val;
   int64_t disp, cdisp;
 	char *p1, *p2;
-	bool ins48 = false;
 
   fmt = GetFPSize();
 	pred = 0;
@@ -2305,8 +2352,27 @@ static void process_bcc(int opcode6, int opcode4)
 	disp = val - (code_address + 4LL);
 	cdisp = val - (code_address + 2LL);
 	if (!IsNBit(disp, 12LL)) {
-		printf("Branch displacement (%llX-%llX=%llX) too large %d.\n", val, code_address, disp, lineno);
-		disp = val - (code_address + 6);
+		cdisp = 4;
+		cdisp >>= 1;
+		// Emit a branch around a jump
+		if (opcode4 < 0) {
+			opcode4 = -opcode4;
+		}
+		opcode4 = InvertBranchOpcode(opcode4);
+		emit_insn((2 << 21LL) |
+			(opcode4 << 18) |
+			(Ra << 13) |
+			(Rb << 8) |
+			opcode6, !expand_flag, 4
+		);
+		emit_insn(
+			((((val >> 1) & 0xFFFFFFLL)) << 8) |
+			0x28, !expand_flag, 4
+		);
+		return;
+		//if (!IsNBit(disp,27LL))
+		//	printf("Branch displacement (%llX-%llX=%llX) too large %d.\n", val, code_address, disp, lineno);
+		//disp = val - (code_address + 6);
 		//ins48 = true;
 	}
 	disp >>= 1;
@@ -2339,8 +2405,7 @@ static void process_bcc(int opcode6, int opcode4)
 			(opcode4 << 18) |
 			(Ra << 13) |
 			(Rb << 8) |
-			(ins48 << 6) |
-			opcode6,!expand_flag,ins48 ? 6 : 4
+			opcode6,!expand_flag, 4
 		);
 		return;
 	}
@@ -2348,8 +2413,7 @@ static void process_bcc(int opcode6, int opcode4)
 		(opcode4 << 18) |
 		(Rb << 13) |
 		(Ra << 8) |
-		(ins48 << 6) |
-		opcode6, !expand_flag, ins48 ? 6 : 4
+		opcode6, !expand_flag, 4
 	);
 	return;
 }
@@ -2361,9 +2425,9 @@ static void process_bcc(int opcode6, int opcode4)
 
 static void process_dbnz(int opcode6, int opcode3)
 {
-    int Ra, Rc, pred;
-    int64_t val;
-    int64_t disp;
+  int Ra, Rc, pred;
+  int64_t val;
+  int64_t disp;
 	char *p1;
 	int sz = 3;
 	char *p;
@@ -2383,6 +2447,9 @@ static void process_dbnz(int opcode6, int opcode3)
 	    NextToken();
 		val = expr();
 		disp = val - (code_address + 4LL);
+		if (!IsNBit(disp, 12LL)) {
+			printf("Branch displacement (%llX-%llX=%llX) too large %d.\n", val, code_address, disp, lineno);
+		}
 		disp >>= 1LL;
 		emit_insn(
 			(disp << 21LL) |
@@ -2538,19 +2605,20 @@ static void process_bitfield(int64_t oc)
 
 static void process_bra(int oc)
 {
-    int Ra = 0, Rb = 0;
-    int64_t val;
-    int64_t disp, cdisp;
-	bool ins48 = false;
+  int Ra = 0, Rb = 0;
+  int64_t val;
+  int64_t disp, cdisp;
 
-    NextToken();
-    val = expr();
-    disp = val - (code_address + 4LL);
+  NextToken();
+  val = expr();
+  disp = val - (code_address + 4LL);
 	cdisp = val - (code_address + 2LL);
 	if (!IsNBit(disp, 12)) {
-		error("Branch displacement too large");
-		disp = val - (code_address + 6LL);
-		ins48 = true;
+		emit_insn(
+			((((val >> 1) & 0xFFFFFFLL)) << 8) |
+			0x28, !expand_flag, 4
+		);
+		return;
 	}
 	disp >>= 1;
 	cdisp >>= 1;
@@ -2563,7 +2631,7 @@ static void process_bra(int oc)
 		);
 		return;
 	}
-	emit_insn((disp << 21) |
+	emit_insn((disp << 21LL) |
 		(0 << 18) |	// BEQ
         (0 << 13) |
         (0 << 8) |
@@ -3848,37 +3916,37 @@ static void process_ltcb(int oc)
 
 static void process_mov(int64_t oc, int64_t fn)
 {
-     int Ra;
-     int Rt;
-     char *p;
-	 int vec = 0;
-	 int fp = 0;
-	 int d3;
-	 int rgs = 8;
-	 int sz = 3;
+  int Ra;
+  int Rt;
+  char *p;
+	int vec = 0;
+	int fp = 0;
+	int d3;
+	int rgs = 8;
+	int sz = 3;
 
-	 p = inptr;
-	 if (*p == '.')
-		 getSz(&sz);
+	p = inptr;
+	if (*p == '.')
+		getSz(&sz);
 
-	 d3 = 7;	// current to current
-	 p = inptr;
-     Rt = getRegisterX();
-	 if (Rt==-1) {
-		 inptr = p;
-		 Rt = getFPRegister();
-		 if (Rt == -1) {
-			 d3 = 4;
-			 inptr = p;
-			 vec = 1;
-			 Rt = getVecRegister();
-		 }
-		 else {
-			 d3 = 4;
-			 fp = 1;
-		 }
-	 }
-	 Rt &= 31;
+	d3 = 7;	// current to current
+	p = inptr;
+  Rt = getRegisterX();
+	if (Rt==-1) {
+		inptr = p;
+		Rt = getFPRegister();
+		if (Rt == -1) {
+			d3 = 4;
+			inptr = p;
+			vec = 1;
+			Rt = getVecRegister();
+		}
+		else {
+			d3 = 4;
+			fp = 1;
+		}
+	}
+	Rt &= 31;
 	if (inptr[-1]==':') {
 		if (*inptr=='x' || *inptr=='X') {
 			d3 = 2;
@@ -3890,26 +3958,26 @@ static void process_mov(int64_t oc, int64_t fn)
 			d3 = 0;
 		}
 	}
-     need(',');
-	 p = inptr;
-     Ra = getRegisterX();
-	 if (Ra==-1) {
-		 inptr = p;
-		 Ra = getFPRegister();
-		 if (Ra == -1) {
-			 inptr = p;
-			 Ra = getVecRegister();
-			 vec |= 2;
-		 }
-		 else {
-			 if (fp == 1)
-				 d3 = 6;
-			 else
-				 d3 = 5;
-			 fp |= 2;
-		 }
-	 }
-	 Ra &= 31;
+  need(',');
+	p = inptr;
+  Ra = getRegisterX();
+	if (Ra==-1) {
+		inptr = p;
+		Ra = getFPRegister();
+		if (Ra == -1) {
+			inptr = p;
+			Ra = getVecRegister();
+			vec |= 2;
+		}
+		else {
+			if (fp == 1)
+				d3 = 6;
+			else
+				d3 = 5;
+			fp |= 2;
+		}
+	}
+	Ra &= 31;
 	if (inptr[-1]==':') {
 		if (*inptr=='x' || *inptr=='X') {
 			inptr++;
@@ -3941,10 +4009,14 @@ static void process_mov(int64_t oc, int64_t fn)
 		 );
 		 return;
 	 }
-	 else if (vec==3)
+	 else if (vec == 3) {
 		 printf("Unsupported mov operation. %d\n", lineno);
-	 if (rgs < 0 || rgs > 63)
+		 return;
+	 }
+	 if (rgs < 0 || rgs > 63) {
 		 printf("Illegal register set spec: %d\n", lineno);
+		 return;
+	 }
 	 rgs &= 0x31;
 	 if (d3 == 7) {
 		 emit_insn(
@@ -4531,6 +4603,7 @@ void FT64_processMaster()
     lineno = 1;
     binndx = 0;
     binstart = 0;
+		num_lbranch = 0;
     bs1 = 0;
     bs2 = 0;
     inptr = &masterFile[0];
@@ -4620,7 +4693,8 @@ void FT64_processMaster()
         case tk_cli: emit_insn(0xC0000002,!expand_flag,4); break;
 		case tk_chk:  process_chk(0x34); break;
 		case tk_cmovenz: process_cmove(0x29); break;
-		//case tk_cmp:  process_rrop(0x06); break;
+		case tk_cmovfnz: process_cmovf(0x27); break;
+			//case tk_cmp:  process_rrop(0x06); break;
 		//case tk_cmpi:  process_riop(0x06); break;
 		//case tk_cmpu:  process_rrop(0x07); break;
 		//case tk_cmpui:  process_riop(0x07); break;
@@ -4670,16 +4744,17 @@ void FT64_processMaster()
 					break;
 		case tk_ftoi:	process_ftoi(0x12); break;
 		case tk_fadd:	process_fprrop(0x04); break;
-        case tk_fbeq:	process_fbcc(0); break;
-        case tk_fbge:	process_fbcc(3); break;
-        case tk_fblt:	process_fbcc(2); break;
-        case tk_fbne:	process_fbcc(1); break;
+    case tk_fbeq:	process_fbcc(0); break;
+    case tk_fbge:	process_fbcc(3); break;
+    case tk_fblt:	process_fbcc(2); break;
+    case tk_fbne:	process_fbcc(1); break;
 		case tk_fdiv:	process_fprrop(0x09); break;
-        case tk_fill: process_fill(); break;
+    case tk_fill: process_fill(); break;
 		case tk_fmov:	process_fprop(0x10); break;
 		case tk_fmul:	process_fprrop(0x08); break;
 		case tk_fneg:	process_fprop(0x14); break;
 		case tk_fsub:	process_fprrop(0x05); break;
+		case tk_fslt:	process_fprrop(0x38); break;
 		case tk_fxdiv: process_rrop(0x2B, -1); break;
 		case tk_fxmul: process_rrop(0x3B, -1); break;
 		case tk_hint:	process_hint(); break;
@@ -4756,6 +4831,7 @@ void FT64_processMaster()
         case tk_sb:  process_store(0x15,0); break;
         case tk_sc:  process_store(0x24,1); break;
         case tk_sei: process_sei(); break;
+				case tk_setwb: emit_insn(0x04580002,!expand_flag,4); break;
 		//case tk_seq:	process_riop(0x1B,2); break;
 		case tk_sf:		process_lsfloat(0x2B,0x00); break;
 		case tk_sge:	process_setop(-6); break;

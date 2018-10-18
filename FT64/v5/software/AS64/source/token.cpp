@@ -1066,7 +1066,16 @@ int NextToken()
 					   inptr += 7;
 					   return (token = tk_cmovenz);
 				   }
-
+					 if ((inptr[1] == 'm' || inptr[1] == 'M') &&
+						 (inptr[2] == 'o' || inptr[2] == 'O') &&
+						 (inptr[3] == 'v' || inptr[3] == 'V') &&
+						 (inptr[4] == 'f' || inptr[4] == 'F') &&
+						 (inptr[5] == 'n' || inptr[5] == 'N') &&
+						 (inptr[6] == 'z' || inptr[6] == 'Z') &&
+						 isspace(inptr[7])) {
+						 inptr += 7;
+						 return (token = tk_cmovfnz);
+					 }
 			   }
              }
              break;
@@ -1485,6 +1494,13 @@ int NextToken()
 				 return (token = tk_file);
 			 }
 			 if (gCpu == 'F') {
+				 if ((inptr[1] == 's' || inptr[1] == 'S') &&
+					 (inptr[2] == 'l' || inptr[2] == 'L') &&
+					 (inptr[3] == 't' || inptr[3] == 'T') &&
+					 isspaceOrDot(inptr[4])) {
+					 inptr += 4;
+					 return token = tk_fslt;
+				 }
 				 if ((inptr[1] == 'x' || inptr[1] == 'X') &&
 					 (inptr[2] == 'd' || inptr[2] == 'D') &&
 					 (inptr[3] == 'i' || inptr[3] == 'I') &&
@@ -1610,7 +1626,7 @@ int NextToken()
 					 (inptr[3]=='f' || inptr[3]=='F') &&
 					 (isspace(inptr[4]) || inptr[4]=='.')) {
 					 inptr += 4;
-					 return token = tk_itof;
+					 return (token = tk_itof);
 				 }
 			 }
              if (inptr[1]=='f' || inptr[1]=='F') {
@@ -2504,9 +2520,9 @@ int NextToken()
                 inptr += 4;
                 return token = tk_slei;
             }
-            if ((inptr[1]=='l' || inptr[1]=='L') && (inptr[2]=='t' || inptr[2]=='T') && isspace(inptr[3])) {
+            if ((inptr[1]=='l' || inptr[1]=='L') && (inptr[2]=='t' || inptr[2]=='T') && isspaceOrDot(inptr[3])) {
                 inptr += 3;
-                return token = tk_slt;
+                return (token = tk_slt);
             }
             if ((inptr[1]=='l' || inptr[1]=='L') && (inptr[2]=='t' || inptr[2]=='T') && (inptr[3]=='i' || inptr[3]=='I') && isspace(inptr[4])) {
                 inptr += 4;
@@ -2741,8 +2757,16 @@ int NextToken()
 					inptr += 4;
 					return (token = tk_sptr);
 				}
+				if ((inptr[1] == 'e' || inptr[1] == 'E') &&
+					(inptr[2] == 't' || inptr[2] == 't') &&
+					(inptr[3] == 'w' || inptr[3] == 'W') &&
+					(inptr[4] == 'b' || inptr[3] == 'B') &&
+					isspace(inptr[5])) {
+					inptr += 5;
+					return token = tk_setwb;
+				}
 			}
-            break;
+      break;
 
         // tgt to tlbdis tlben tlbpb tlbrd tlbrdreg tlbwi tlbwr tlbwrreg transform
         case 't': case 'T':

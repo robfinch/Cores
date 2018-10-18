@@ -431,10 +431,13 @@ char *put_label(int lab, char *nm, char *ns, char d)
   sprintf_s(buf, sizeof(buf), "%.400s_%d", ns, lab);
 	if (nm==NULL)
 		ofs.printf("%s:\n",buf);
-	else if (strlen(nm)==0)
-		ofs.printf("%s:\n",buf);
-	else
-		ofs.printf("%s:	; %s\n",buf,nm);
+	else if (strlen(nm) == 0) {
+		ofs.printf("%s:\n", buf);
+	}
+	else {
+		//sprintf_s(buf, sizeof(buf), "%s_%s:\n", nm, ns);
+		ofs.printf("%s:	; %s\n", buf, nm);
+	}
 	return buf;
 }
 

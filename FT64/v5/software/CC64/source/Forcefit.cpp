@@ -26,11 +26,13 @@
 #include "stdafx.h"
 
 // ----------------------------------------------------------------------------
-//      forcefit will coerce the nodes passed into compatible
-//      types and return the type of the resulting expression.
+// forcefit will coerce the nodes passed into compatible
+// types and return the type of the resulting expression.
 //
 // Generally if the promote flag is set then the whichever type is larger
 // is returned. Code is emitted to convert the shorter type to the longer type.
+// Unless... a explicit typecast is taking place. The typecast using the
+// typecast operator OR an assignment is taking place.
 // ----------------------------------------------------------------------------
 TYP *forcefit(ENODE **srcnode, TYP *srctp, ENODE **dstnode, TYP *dsttp, bool promote, bool typecast)
 {
@@ -65,9 +67,27 @@ TYP *forcefit(ENODE **srcnode, TYP *srctp, ENODE **dstnode, TYP *dsttp, bool pro
 		// If we have a pointer involved we likely want a pointer result.
 		case bt_pointer:return (dsttp);
 		case bt_float:
-		case bt_double:	*srcnode = makenode(en_i2d, *srcnode, *dstnode); (*srcnode)->esize = 8; return (dsttp);
-		case bt_triple:	*srcnode = makenode(en_i2t, *srcnode, *dstnode); (*srcnode)->esize = 12; return (dsttp);
-		case bt_quad:	*srcnode = makenode(en_i2q, *srcnode, *dstnode); (*srcnode)->esize = 16; return (dsttp);
+		case bt_double:
+			if (typecast) {
+				*dstnode = makenode(en_i2d, *srcnode, *dstnode); (*dstnode)->esize = 8; return (dsttp);
+			}
+			else {
+				*srcnode = makenode(en_i2d, *srcnode, *dstnode); (*srcnode)->esize = 8; return (dsttp);
+			}
+		case bt_triple:
+			if (typecast) {
+				*dstnode = makenode(en_i2t, *srcnode, *dstnode); (*dstnode)->esize = 12; return (dsttp);
+			}
+			else {
+				*srcnode = makenode(en_i2t, *srcnode, *dstnode); (*srcnode)->esize = 12; return (dsttp);
+			}
+		case bt_quad:	
+			if (typecast) {
+				*dstnode = makenode(en_i2q, *srcnode, *dstnode); (*dstnode)->esize = 16; return (dsttp);
+			}
+			else {
+				*srcnode = makenode(en_i2q, *srcnode, *dstnode); (*srcnode)->esize = 16; return (dsttp);
+			}
 		case bt_exception:	return &stdexception;
 		case bt_vector:	return (dsttp);
 		case bt_union:	return (dsttp);
@@ -92,9 +112,27 @@ TYP *forcefit(ENODE **srcnode, TYP *srctp, ENODE **dstnode, TYP *dsttp, bool pro
 		case bt_pointer:/**srcnode = makenode(en_ccu, *srcnode, *dstnode);*/ (*srcnode)->esize = 8; return dsttp;
 		case bt_exception:	/**srcnode = makenode(en_ccu, *srcnode, *dstnode);*/ (*srcnode)->esize = 8; return &stdexception;
 		case bt_float:
-		case bt_double:	*srcnode = makenode(en_i2d, *srcnode, *dstnode); (*srcnode)->esize = 8;	return (dsttp);
-		case bt_triple:	*srcnode = makenode(en_i2t, *srcnode, *dstnode); (*srcnode)->esize = 12; return (dsttp);
-		case bt_quad:	*srcnode = makenode(en_i2q, *srcnode, *dstnode); (*srcnode)->esize = 16; return (dsttp);
+		case bt_double:
+			if (typecast) {
+				*dstnode = makenode(en_i2d, *srcnode, *dstnode); (*dstnode)->esize = 8;	return (dsttp);
+			}
+			else {
+				*srcnode = makenode(en_i2d, *srcnode, *dstnode); (*srcnode)->esize = 8;	return (dsttp);
+			}
+		case bt_triple:
+			if (typecast) {
+				*dstnode = makenode(en_i2t, *srcnode, *dstnode); (*dstnode)->esize = 12; return (dsttp);
+			}
+			else {
+				*srcnode = makenode(en_i2t, *srcnode, *dstnode); (*srcnode)->esize = 12; return (dsttp);
+			}
+		case bt_quad:
+			if (typecast) {
+				*dstnode = makenode(en_i2q, *srcnode, *dstnode); (*dstnode)->esize = 16; return (dsttp);
+			}
+			else {
+				*srcnode = makenode(en_i2q, *srcnode, *dstnode); (*srcnode)->esize = 16; return (dsttp);
+			}
 		case bt_vector:	return (dsttp);
 		case bt_union:	return (dsttp);
 		case bt_struct:

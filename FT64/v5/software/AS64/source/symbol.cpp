@@ -121,33 +121,34 @@ SYM *insert_symbol(SYM *sym)
 
 SYM *new_symbol(char *name)
 {
-    SYM *p;
-    SYM ts;
+  SYM *p;
+  SYM ts;
 
-    if (p = find_symbol(name)) {
-        printf("Symbol already in table.\r\n");
-        return p;
-    }
-    if (numsym > 65525) {
-        printf("Too many symbols.\r\n");
-        return (SYM *)NULL;
-    }
-    if (pass > 5) {
-        //printf("%s: added\r\n", name);
-    }
-     ts.name = nmTable.AddName(name);
+  if (p = find_symbol(name)) {
+    printf("Symbol already in table.\r\n");
+    return p;
+  }
+  if (numsym > 65525) {
+    printf("Too many symbols.\r\n");
+    return (SYM *)NULL;
+  }
+  if (pass > 5) {
+    //printf("%s: added\r\n", name);
+  }
+  ts.name = nmTable.AddName(name);
 //     strncpy(syms[numsym].name, name, sizeof(syms[numsym].name)/sizeof(char)-1);
 //     syms[numsym].name[199] = '\0';
-     ts.value.low = 0x8000000000000000LL | numsym;
-	 ts.value.high = 0; 
-     ts.defined = 0;
-     ts.segment = segment;
-     ts.scope = ' ';
-     ts.isExtern = 0;
-		 ts.isMacro = false;
-     p = insert_symbol(&ts);
-     numsym++;
-     return p;
+	ts.value.low = 0x8000000000000000LL | numsym;
+	ts.value.high = 0; 
+  ts.defined = 0;
+  ts.segment = segment;
+  ts.scope = ' ';
+  ts.isExtern = 0;
+	ts.isMacro = false;
+	ts.phaserr = ' ';
+  p = insert_symbol(&ts);
+  numsym++;
+  return p;
 }
 
 
