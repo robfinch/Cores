@@ -120,6 +120,11 @@ default: IsBranch = FALSE;
 endcase
 endfunction
 
+function IsJAL;
+input [47:0] isn;
+IsJAL = isn[`INSTRUCTION_OP]==`JAL;
+endfunction
+
 function IsJmp;
 input [47:0] isn;
 IsJmp = isn[`INSTRUCTION_OP]==`JMP;
@@ -133,6 +138,11 @@ endfunction
 function IsRet;
 input [47:0] isn;
 IsRet = isn[`INSTRUCTION_OP]==`RET;
+endfunction
+
+function IsBrk;
+input [47:0] isn;
+IsBrk = isn[`INSTRUCTION_OP]==`BRK;
 endfunction
 
 function IsRTI;
@@ -198,28 +208,38 @@ reg [AMSB:0] branch_pcB;
 always @*
 case(fetchbufA_instr[`INSTRUCTION_OP])
 `RET:		branch_pcA = retpc0;
-`JMP,`CALL: branch_pcA = fetchbufA_instr[6] ? {fetchbufA_instr[39:8],1'b0} : {fetchbufA_pc[31:25],fetchbufA_instr[31:8],1'b0};
+`JMP,`CALL: branch_pcA = fetchbufA_instr[6] ? {fetchbufA_instr[47:8],1'b0} : {fetchbufA_pc[31:25],fetchbufA_instr[31:8],1'b0};
 `R2:		branch_pcA = btgtA;	// RTI
 `BRK,`JAL:	branch_pcA = btgtA;
-default:	branch_pcA = fetchbufA_pc + {{20{fetchbufA_instr[31]}},fetchbufA_instr[31:23],fetchbufA_instr[17:16],1'b0} + fetchbufA_inslen;
+default:
+	begin
+	branch_pcA[31:8] = fetchbufA_pc[31:8] +
+		(fetchbufA_instr[7:6]==2'b01 ? {{4{fetchbufA_instr[47]}},fetchbufA_instr[47:28]} : {{20{fetchbufA_instr[31]}},fetchbufA_instr[31:28]});
+	branch_pcA[7:0] = {fetchbufA_instr[27:23],fetchbufA_instr[17:16],1'b0};
+	end
 endcase
 
 always @*
 case(fetchbufB_instr[`INSTRUCTION_OP])
 `RET:		branch_pcB = retpc0;
-`JMP,`CALL: branch_pcB = fetchbufB_instr[6] ? {fetchbufB_instr[39:8],1'b0} : {fetchbufB_pc[31:25],fetchbufB_instr[31:8],1'b0};
+`JMP,`CALL: branch_pcB = fetchbufB_instr[6] ? {fetchbufB_instr[47:8],1'b0} : {fetchbufB_pc[31:25],fetchbufB_instr[31:8],1'b0};
 `R2:		branch_pcB = btgtB;	// RTI
 `BRK,`JAL:	branch_pcB = btgtB;
-default:	branch_pcB = fetchbufB_pc + {{20{fetchbufB_instr[31]}},fetchbufB_instr[31:23],fetchbufB_instr[17:16],1'b0} + fetchbufB_inslen;
+default:
+	begin
+	branch_pcB[31:8] = fetchbufB_pc[31:8] +
+		(fetchbufB_instr[7:6]==2'b01 ? {{4{fetchbufB_instr[47]}},fetchbufB_instr[47:28]} : {{20{fetchbufB_instr[31]}},fetchbufB_instr[31:28]});
+	branch_pcB[7:0] = {fetchbufB_instr[27:23],fetchbufB_instr[17:16],1'b0};
+	end
 endcase
 
 wire take_branchA = ({fetchbufA_v, IsBranch(fetchbufA_instr), predict_takenA}  == {`VAL, `TRUE, `TRUE}) ||
                         ((IsRet(fetchbufA_instr)||IsJmp(fetchbufA_instr)||IsCall(fetchbufA_instr)||
-                        IsRTI(fetchbufA_instr)|| fetchbufA_instr[`INSTRUCTION_OP]==`BRK || fetchbufA_instr[`INSTRUCTION_OP]==`JAL) &&
+                        IsRTI(fetchbufA_instr)|| IsBrk(fetchbufA_instr) || IsJAL(fetchbufA_instr)) &&
                         fetchbufA_v);
 wire take_branchB = ({fetchbufB_v, IsBranch(fetchbufB_instr), predict_takenB}  == {`VAL, `TRUE, `TRUE}) ||
                         ((IsRet(fetchbufB_instr)|IsJmp(fetchbufB_instr)|IsCall(fetchbufB_instr) ||
-                        IsRTI(fetchbufB_instr)|| fetchbufB_instr[`INSTRUCTION_OP]==`BRK || fetchbufB_instr[`INSTRUCTION_OP]==`JAL) &&
+                        IsRTI(fetchbufB_instr)|| IsBrk(fetchbufB_instr) || IsJAL(fetchbufB_instr)) &&
                         fetchbufB_v);
 
 wire take_branch = fetchbuf==1'b0 ? take_branchA : take_branchB;

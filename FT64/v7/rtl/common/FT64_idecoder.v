@@ -257,7 +257,7 @@ input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
 `MEMNDX:
 	if (isn[`INSTRUCTION_L2]==2'b00)
-    case(isn[`INSTRUCTION_S2])
+    case({isn[31:28],isn[22:21]})
     `LBX:   IsLoad = TRUE;
     `LBUX:  IsLoad = TRUE;
     `LCX:   IsLoad = TRUE;
@@ -294,7 +294,7 @@ input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
 `MEMNDX:
 	if (isn[`INSTRUCTION_L2]==2'b00)
-    case(isn[`INSTRUCTION_S2])
+    case({isn[31:28],isn[22:21]})
     `LWRX:	IsVolatileLoad = TRUE;
     `LVBX:	IsVolatileLoad = TRUE;
     `LVBUX:	IsVolatileLoad = TRUE;
@@ -376,26 +376,29 @@ input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
 `MEMNDX:
 	if (isn[`INSTRUCTION_L2]==2'b00) begin
-    case(isn[`INSTRUCTION_S2])
-    `LVBX,`LVBUX:	MemSize = byt;
-    `LBX,`LBUX:   MemSize = byt;
-    `LVCX,`LVCUX:			 MemSize = wyde;
-    `LCX,`LCUX:   MemSize = wyde;
-    `LVHX,`LVHUX:		MemSize = tetra;
-    `LHX:   MemSize = tetra;
-    `LHUX: MemSize = tetra;
-    `LVWX:			 MemSize = octa;
-    `LWX:   MemSize = octa;
-    `LWRX: MemSize = octa;
-    `LVX:   MemSize = octa;
-    `LVx:
-    	case(isn[25:23])
-    	3'd0,3'd1:	MemSize = byt;
-    	3'd2,3'd3:	MemSize = wyde;
-    	3'd4,3'd5:	MemSize = tetra;
-    	default:	MemSize = octa;
-    	endcase
-    default:
+		if (IsLoad(isn))
+	    case({isn[31:28],isn[22:21]})
+	    `LVBX,`LVBUX:	MemSize = byt;
+	    `LBX,`LBUX:   MemSize = byt;
+	    `LVCX,`LVCUX:			 MemSize = wyde;
+	    `LCX,`LCUX:   MemSize = wyde;
+	    `LVHX,`LVHUX:		MemSize = tetra;
+	    `LHX:   MemSize = tetra;
+	    `LHUX: MemSize = tetra;
+	    `LVWX:			 MemSize = octa;
+	    `LWX:   MemSize = octa;
+	    `LWRX: MemSize = octa;
+	    `LVX:   MemSize = octa;
+	    `LVx:
+	    	case(isn[20:18])
+	    	3'd0,3'd1:	MemSize = byt;
+	    	3'd2,3'd3:	MemSize = wyde;
+	    	3'd4,3'd5:	MemSize = tetra;
+	    	default:	MemSize = octa;
+	    	endcase
+	    default: MemSize = octa;
+	  	endcase
+	  else
 			case({isn[31:28],isn[17:16]})
 	    `SBX:   MemSize = byt;
 	    `SCX:   MemSize = wyde;
@@ -405,7 +408,6 @@ case(isn[`INSTRUCTION_OP])
 	    `SVX:   MemSize = octa;
 	    default: MemSize = octa;   
 			endcase
-    endcase
   end
 	else
 		MemSize = octa;
@@ -543,10 +545,10 @@ input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
 `MEMNDX:
 	if (isn[`INSTRUCTION_L2]==2'b00)
-	    case(isn[`INSTRUCTION_S2])
-	    `LWRX:   IsLWRX = TRUE;
-	    default:    IsLWRX = FALSE;
-	    endcase
+    case({isn[31:28],isn[22:21]})
+    `LWRX:   IsLWRX = TRUE;
+    default:    IsLWRX = FALSE;
+    endcase
 	else
 		IsLWRX = FALSE;
 default:    IsLWRX = FALSE;
@@ -571,7 +573,7 @@ endfunction
 
 function IsJmp;
 input [47:0] isn;
-IsJmp = isn[`INSTRUCTION_OP]==`JMP;// && isn[7]==1'b0;
+IsJmp = isn[`INSTRUCTION_OP]==`JMP;
 endfunction
 
 // Really IsPredictableBranch
@@ -589,27 +591,27 @@ endfunction
 
 function IsJAL;
 input [47:0] isn;
-IsJAL = isn[`INSTRUCTION_OP]==`JAL;// && isn[7]==1'b0;
+IsJAL = isn[`INSTRUCTION_OP]==`JAL;
 endfunction
 
 function IsRet;
 input [47:0] isn;
-IsRet = isn[`INSTRUCTION_OP]==`RET;// && isn[7]==1'b0;
+IsRet = isn[`INSTRUCTION_OP]==`RET;
 endfunction
 
 function IsIrq;
 input [47:0] isn;
-IsIrq = isn[`INSTRUCTION_OP]==`BRK /*&& isn[`INSTRUCTION_L2]==2'b00*/ && isn[23:20]==4'h0;
+IsIrq = isn[`INSTRUCTION_OP]==`BRK && isn[23:20]==4'h0;
 endfunction
 
 function IsBrk;
 input [47:0] isn;
-IsBrk = isn[`INSTRUCTION_OP]==`BRK;// && isn[`INSTRUCTION_L2]==2'b00;
+IsBrk = isn[`INSTRUCTION_OP]==`BRK;
 endfunction
 
 function IsRti;
 input [47:0] isn;
-IsRti = isn[`INSTRUCTION_OP]==`RR /*&& isn[`INSTRUCTION_L2]==2'b00*/ && isn[`INSTRUCTION_S2]==`RTI;
+IsRti = isn[`INSTRUCTION_OP]==`RR && isn[`INSTRUCTION_S2]==`RTI;
 endfunction
 
 // Has an extendable 14-bit constant
@@ -668,8 +670,8 @@ case(instr[`INSTRUCTION_OP])
     default:    IsOddball = FALSE;
     endcase
 `MEMNDX:
-    case(instr[`INSTRUCTION_S2])
-    `CACHEX: IsOddball = TRUE;
+		case({instr[31:28],instr[17:16]})
+    `CACHEX:  IsOddball = TRUE;
     default:    IsOddball = FALSE;
     endcase
 `CSRRW,`REX,`CACHE,`FLOAT:  IsOddball = TRUE;
@@ -720,39 +722,36 @@ casez(isn[`INSTRUCTION_OP])
 		IsRFW = FALSE;
 `MEMNDX:
 	if (isn[`INSTRUCTION_L2]==2'b00) begin
-    case(isn[`INSTRUCTION_S2])
-    `LBX:   IsRFW = TRUE;
-    `LBUX:  IsRFW = TRUE;
-    `LCX:   IsRFW = TRUE;
-    `LCUX:  IsRFW = TRUE;
-    `LHX:   IsRFW = TRUE;
-    `LHUX:  IsRFW = TRUE;
-    `LWX:   IsRFW = TRUE;
-    `LVBX:  IsRFW = TRUE;
-    `LVBUX: IsRFW = TRUE;
-    `LVCX:  IsRFW = TRUE;
-    `LVCUX: IsRFW = TRUE;
-    `LVHX:  IsRFW = TRUE;
-    `LVHUX: IsRFW = TRUE;
-    `LVWX:  IsRFW = TRUE;
-    `LWX:   IsRFW = TRUE;
-    `LWRX:  IsRFW = TRUE;
-    `LVX:   IsRFW = TRUE;
-    default:
+		if (IsLoad(isn))
+	    case({isn[31:28],isn[22:21]})
+	    `LBX:   IsRFW = TRUE;
+	    `LBUX:  IsRFW = TRUE;
+	    `LCX:   IsRFW = TRUE;
+	    `LCUX:  IsRFW = TRUE;
+	    `LHX:   IsRFW = TRUE;
+	    `LHUX:  IsRFW = TRUE;
+	    `LWX:   IsRFW = TRUE;
+	    `LVBX:  IsRFW = TRUE;
+	    `LVBUX: IsRFW = TRUE;
+	    `LVCX:  IsRFW = TRUE;
+	    `LVCUX: IsRFW = TRUE;
+	    `LVHX:  IsRFW = TRUE;
+	    `LVHUX: IsRFW = TRUE;
+	    `LVWX:  IsRFW = TRUE;
+	    `LWX:   IsRFW = TRUE;
+	    `LWRX:  IsRFW = TRUE;
+	    `LVX:   IsRFW = TRUE;
+	    default:	IsRFW = FALSE;
+	  	endcase
+	  else
 			case({isn[31:28],isn[17:16]})
 	    `CASX:  IsRFW = TRUE;
 	    default:    IsRFW = FALSE;
 	    endcase
-    endcase
   end
 	else
 		IsRFW = FALSE;
-`BBc:
-	case(isn[20:19])
-	`IBNE:	IsRFW = TRUE;
-	`DBNZ:	IsRFW = TRUE;
-	default:	IsRFW = FALSE;
-	endcase
+`BBc:	IsRFW = FALSE;
 `BITFIELD:  IsRFW = TRUE;
 `ADDI:      IsRFW = TRUE;
 `SLTI:      IsRFW = TRUE;
@@ -895,10 +894,17 @@ casez(isn[`INSTRUCTION_OP])
         `SHIFT63:  Source2Valid = isn[25] ? 1'b1 : isn[`INSTRUCTION_RB]==5'd0;
         default:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
         endcase
-`MEMNDX: case(isn[`INSTRUCTION_S2])
-        `LVX,`SVX: Source2Valid = FALSE;
-        default:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
-        endcase
+`MEMNDX:
+				if (IsLoad(isn)) 
+					case({isn[31:28],isn[22:21]})
+        	`LVX: Source2Valid = FALSE;
+        	default:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
+        	endcase
+        else
+					case({isn[31:28],isn[17:16]})
+        	`SVX: Source2Valid = FALSE;
+        	default:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
+        	endcase
 `ADDI:  Source2Valid = TRUE;
 `SLTI:  Source2Valid = TRUE;
 `SLTUI: Source2Valid = TRUE;
@@ -963,7 +969,7 @@ case(isn[`INSTRUCTION_OP])
     endcase
 `MEMNDX:
 	if (isn[`INSTRUCTION_L2]==2'b00)
-    case(isn[`INSTRUCTION_S2])
+		case({isn[31:28],isn[17:16]})
     `SBX:   Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
     `SCX:   Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
     `SHX:   Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
@@ -972,6 +978,8 @@ case(isn[`INSTRUCTION_OP])
     `CASX:  Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
     default:    Source3Valid = TRUE;
     endcase
+  else
+  	Source3Valid = TRUE;
 default:    Source3Valid = TRUE;
 endcase
 endfunction

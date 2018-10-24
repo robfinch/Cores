@@ -226,7 +226,7 @@ end
 
 wire [21:0] lfsro;
 lfsr #(22,22'h0ACE3) u1 (rst, clk, nxt, 1'b0, lfsro);
-reg [5:0] wlineno;
+reg [pLNMSB:0] wlineno;
 always @(posedge clk)
 if (rst)
 	wlineno <= 6'h00;

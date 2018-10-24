@@ -1,12 +1,14 @@
+`timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2017-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2006-2017  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-// FT64_FCU_Calc.v
-// - FT64 flow control calcs
+//	fd2s.v
+//    - convert floating point double to single
+//
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -20,46 +22,44 @@
 //                                                                          
 // You should have received a copy of the GNU General Public License        
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.    
-//
+//                                                                          
 // ============================================================================
-//
-`include ".\FT64_defines.vh"
 
-module FT64_FCU_Calc(ol, instr, tvec, a, pc, im, waitctr, bus);
-parameter WID = 64;
-parameter AMSB = 31;
-input [1:0] ol;
-input [47:0] instr;
-input [WID-1:0] tvec;
-input [WID-1:0] a;
-input [AMSB:0] pc;
-input [3:0] im;
-input [WID-1:0] waitctr;
-output reg [WID-1:0] bus;
+module fd2s(a, o);
+input [63:0] a;
+output reg [31:0] o;
+
+wire signi;
+wire [10:0] expi;
+wire [51:0] mani;
+wire xinf;
+wire xz;
+wire vz;
+fpDecomp #(64) u1 (.i(a), .sgn(signi), .exp(expi), .man(mani), .xinf(xinf), .xz(xz), .vz(vz) );
+wire [11:0] exp = expi - 11'h896;   // 1023-127 (difference of the bias)
 
 always @*
 begin
-  casez(instr[`INSTRUCTION_OP])
-  `BRK:   bus <= {{56{1'b0}},instr[15:8]};
-  `BBc:
-    case(instr[20:19])
-		`IBNE:	bus <=  a + 64'd1;
-		`DBNZ:	bus <=  a - 64'd1;
-		default:	bus <= 64'hCCCCCCCCCCCCCCCC;
-		endcase
-  `JAL:   bus <= pc + (instr[6] ? 32'd6 : 32'd4);
-  `CALL:	bus <= pc + (instr[6] ? 32'd6 : 32'd4);
-  `RET:		bus <= a + (instr[7:6]==2'b01 ? {instr[47:23],3'b0} : {instr[31:23],3'b0});
-  `REX:
-    case(ol)
-    `OL_USER:   bus <= 64'hCCCCCCCCCCCCCCCC;
-    // ToDo: fix im test
-    default:    bus <= (im < ~{ol,2'b00}) ? tvec : pc + 32'd4;
-    endcase
-  `WAIT:  bus = waitctr==64'd1;
-  default:    bus <= 64'hCCCCCCCCCCCCCCCC;
-  endcase
+o[31] <= signi;         // sign out = sign in, easy
+o[22:0] <= a[51:29];
+if (xinf)
+    o[30:23] <= 8'hFF;
+else if (vz)
+    o[30:23] <= 8'h00;
+else if (xz)
+    o[30:23] <= 8'h00;
+else begin
+    if (exp[11]) begin  // exponent is too low - set number to zero
+        o[30:23] <= 8'h00;
+        o[22:0] <= 23'h000000;
+    end
+    else if (|exp[10:8]) begin  // exponent is too high - set number to infinity
+        o[30:23] <= 8'hFF;
+        o[22:0] <= 23'h000000;
+    end
+    else    // exponent in range
+        o[30:23] <= exp[7:0];
+end
 end
 
 endmodule
-

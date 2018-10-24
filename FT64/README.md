@@ -1,5 +1,5 @@
 # Welcome to the FT64 core
-Please see the v5 core in the v5 directory for the most recent version of the core.
+Please see the v7 core in the v7 directory for the most recent version of the core.
 
 ## Overview
 FT64 is a superscalar core with the following features:

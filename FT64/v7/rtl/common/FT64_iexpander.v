@@ -88,11 +88,12 @@ casez({cinstr[15:12],cinstr[6]})
 5'b00100:	// RET / ANDI
 			if (cinstr[4:0]==5'd0) begin
 				expand[47:32] = 16'h0000;
-				expand[5:0] = `RET;
-				expand[7:6] = 2'b10;
+				expand[31:23] = {4'd0,cinstr[11:8],cinstr[5]};
+				expand[22:18] = 5'd29;
+				expand[17:13] = 5'd31;
 				expand[12:8] = 5'd31;
-				expand[17:13] = 5'd29;
-				expand[31:18] = {8'd0,cinstr[11:8],cinstr[5],3'd0};
+				expand[7:6] = 2'b10;
+				expand[5:0] = `RET;
 			end
 			else begin
 				expand[47:32] = 16'h0000;

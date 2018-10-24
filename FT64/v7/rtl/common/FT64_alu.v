@@ -1089,43 +1089,43 @@ case(instr[`INSTRUCTION_OP])
 	    endcase
 `MEMNDX:
 	if (instr[7:6]==2'b00) begin
-		case(instr[`INSTRUCTION_S2])
-		`LVX,
+		case({instr[31:28],instr[22:21]})
+		`CACHEX,`LVX,
     `LBX,`LBUX,`LCX,`LCUX,
     `LVBX,`LVBUX,`LVCX,`LVCUX,`LVHX,`LVHUX,`LVWX,
-    `LHX,`LHUX,`LWX,`LWRX,`SBX,`SCX,`SHX,`SWX,`SWCX:
+    `LHX,`LHUX,`LWX,`LWRX:
 				if (BIG) begin
-					o[63:0] = a + (b << instr[24:23]);
+					o[63:0] = a + (c << instr[19:18]);
 				end
 				else
 					o[63:0] = 64'hCCCCCCCCEEEEEEEE;
     `LVX,`SVX:  if (BIG) begin
-    				o[63:0] = a + (b << 2'd3);
+    				o[63:0] = a + (c << 2'd3);
     			end
     			else
     				o[63:0] = 64'hCCCCCCCCCCCCCCCC;
     `LVWS,`SVWS:
     			if (BIG) begin    
-    				o[63:0] = a + ({b * ven,3'b000});
+    				o[63:0] = a + ({c * ven,3'b000});
     			end
     			else
     				o[63:0] = 64'hCCCCCCCCCCCCCCCC;
 		endcase
-		case({isn[31:28],isn[17:16]})
+		case({instr[31:28],instr[17:16]})
     `SBX,`SCX,`SHX,`SWX,`SWCX:
 				if (BIG) begin
-					o[63:0] = a + (b << instr[14:13]);
+					o[63:0] = a + (c << instr[14:13]);
 				end
 				else
 					o[63:0] = 64'hCCCCCCCCEEEEEEEE;
     `SVX:  if (BIG) begin
-    				o[63:0] = a + (b << 2'd3);
+    				o[63:0] = a + (c << 2'd3);
     			end
     			else
     				o[63:0] = 64'hCCCCCCCCCCCCCCCC;
     `SVWS:
     			if (BIG) begin    
-    				o[63:0] = a + ({b * ven,3'b000});
+    				o[63:0] = a + ({c * ven,3'b000});
     			end
     			else
     				o[63:0] = 64'hCCCCCCCCCCCCCCCC;
@@ -1172,7 +1172,7 @@ case(instr[`INSTRUCTION_OP])
 				default:	o = a + {b[63:1],1'b0};	// LC / LCU / SC
 				endcase
 			end
-`LWR,`SWC,`CAS:
+`LWR,`SWC,`CAS,`CACHE:
 			begin
 				o = a + b;
 			end

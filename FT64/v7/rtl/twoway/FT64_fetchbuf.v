@@ -144,6 +144,11 @@ default: IsBranch = FALSE;
 endcase
 endfunction
 
+function IsJAL;
+input [47:0] isn;
+IsJAL = isn[`INSTRUCTION_OP]==`JAL;
+endfunction
+
 function IsJmp;
 input [47:0] isn;
 IsJmp = isn[`INSTRUCTION_OP]==`JMP;
@@ -159,10 +164,16 @@ input [47:0] isn;
 IsRet = isn[`INSTRUCTION_OP]==`RET;
 endfunction
 
+function IsBrk;
+input [47:0] isn;
+IsBrk = isn[`INSTRUCTION_OP]==`BRK;
+endfunction
+
 function IsRTI;
 input [47:0] isn;
 IsRTI = isn[`INSTRUCTION_OP]==`R2 && isn[`INSTRUCTION_S2]==`RTI;
 endfunction
+
 
 function [2:0] fnInsLength;
 input [47:0] ins;
@@ -240,7 +251,12 @@ case(fetchbufA_instr[`INSTRUCTION_OP])
 `JMP,`CALL: branch_pcA = fetchbufA_instr[6] ? {fetchbufA_instr[39:8],1'b0} : {fetchbufA_pc[31:25],fetchbufA_instr[31:8],1'b0};
 `R2:		branch_pcA = btgtA;	// RTI
 `BRK,`JAL:	branch_pcA = btgtA;
-default:	branch_pcA = fetchbufA_pc + {{20{fetchbufA_instr[31]}},fetchbufA_instr[31:23],fetchbufA_instr[17:16],1'b0} + fetchbufA_inslen;
+default:
+	begin
+	branch_pcA[31:8] = fetchbufA_pc[31:8] +
+		(fetchbufA_instr[7:6]==2'b01 ? {{4{fetchbufA_instr[47]}},fetchbufA_instr[47:28]} : {{20{fetchbufA_instr[31]}},fetchbufA_instr[31:28]});
+	branch_pcA[7:0] = {fetchbufA_instr[27:23],fetchbufA_instr[17:16],1'b0};
+	end
 endcase
 
 always @*
@@ -249,7 +265,12 @@ case(fetchbufB_instr[`INSTRUCTION_OP])
 `JMP,`CALL: branch_pcB = fetchbufB_instr[6] ? {fetchbufB_instr[39:8],1'b0} : {fetchbufB_pc[31:25],fetchbufB_instr[31:8],1'b0};
 `R2:		branch_pcB = btgtB;	// RTI
 `BRK,`JAL:	branch_pcB = btgtB;
-default:	branch_pcB = fetchbufB_pc + {{20{fetchbufB_instr[31]}},fetchbufB_instr[31:23],fetchbufB_instr[17:16],1'b0} + fetchbufB_inslen;
+default:
+	begin
+	branch_pcB[31:8] = fetchbufB_pc[31:8] +
+		(fetchbufB_instr[7:6]==2'b01 ? {{4{fetchbufB_instr[47]}},fetchbufB_instr[47:28]} : {{20{fetchbufB_instr[31]}},fetchbufB_instr[31:28]});
+	branch_pcB[7:0] = {fetchbufB_instr[27:23],fetchbufB_instr[17:16],1'b0};
+	end
 endcase
 
 always @*
@@ -258,7 +279,12 @@ case(fetchbufC_instr[`INSTRUCTION_OP])
 `JMP,`CALL: branch_pcC = fetchbufC_instr[6] ? {fetchbufC_instr[39:8],1'b0} : {fetchbufC_pc[31:25],fetchbufC_instr[31:8],1'b0};
 `R2:		branch_pcC = btgtC;	// RTI
 `BRK,`JAL:	branch_pcC = btgtC;
-default:	branch_pcC = fetchbufC_pc + {{20{fetchbufC_instr[31]}},fetchbufC_instr[31:23],fetchbufC_instr[17:16],1'b0} + fetchbufC_inslen;
+default:
+	begin
+	branch_pcC[31:8] = fetchbufC_pc[31:8] +
+		(fetchbufC_instr[7:6]==2'b01 ? {{4{fetchbufC_instr[47]}},fetchbufC_instr[47:28]} : {{20{fetchbufC_instr[31]}},fetchbufC_instr[31:28]});
+	branch_pcC[7:0] = {fetchbufC_instr[27:23],fetchbufC_instr[17:16],1'b0};
+	end
 endcase
 
 always @*
@@ -267,24 +293,29 @@ case(fetchbufD_instr[`INSTRUCTION_OP])
 `JMP,`CALL: branch_pcD = fetchbufD_instr[6] ? {fetchbufD_instr[39:8],1'b0} : {fetchbufD_pc[31:25],fetchbufD_instr[31:8],1'b0};
 `R2:		branch_pcD = btgtD;	// RTI
 `BRK,`JAL:	branch_pcD = btgtD;
-default:	branch_pcD = fetchbufD_pc + {{20{fetchbufD_instr[31]}},fetchbufD_instr[31:23],fetchbufD_instr[17:16],1'b0} + fetchbufD_inslen;
+default:
+	begin
+	branch_pcD[31:8] = fetchbufD_pc[31:8] +
+		(fetchbufD_instr[7:6]==2'b01 ? {{4{fetchbufD_instr[47]}},fetchbufD_instr[47:28]} : {{20{fetchbufD_instr[31]}},fetchbufD_instr[31:28]});
+	branch_pcD[7:0] = {fetchbufD_instr[27:23],fetchbufD_instr[17:16],1'b0};
+	end
 endcase
 
 wire take_branchA = ({fetchbufA_v, IsBranch(fetchbufA_instr), predict_takenA}  == {`VAL, `TRUE, `TRUE}) ||
                         ((IsRet(fetchbufA_instr)||IsJmp(fetchbufA_instr)||IsCall(fetchbufA_instr)||
-                        IsRTI(fetchbufA_instr)|| fetchbufA_instr[`INSTRUCTION_OP]==`BRK || fetchbufA_instr[`INSTRUCTION_OP]==`JAL) &&
+                        IsRTI(fetchbufA_instr)|| IsBrk(fetchbufA_instr) || IsJAL(fetchbufA_instr)) &&
                         fetchbufA_v);
 wire take_branchB = ({fetchbufB_v, IsBranch(fetchbufB_instr), predict_takenB}  == {`VAL, `TRUE, `TRUE}) ||
                         ((IsRet(fetchbufB_instr)|IsJmp(fetchbufB_instr)|IsCall(fetchbufB_instr) ||
-                        IsRTI(fetchbufB_instr)|| fetchbufB_instr[`INSTRUCTION_OP]==`BRK || fetchbufB_instr[`INSTRUCTION_OP]==`JAL) &&
+                        IsRTI(fetchbufB_instr)|| IsBrk(fetchbufB_instr) || IsJAL(fetchbufB_instr)) &&
                         fetchbufB_v);
 wire take_branchC = ({fetchbufC_v, IsBranch(fetchbufC_instr), predict_takenC}  == {`VAL, `TRUE, `TRUE}) ||
                         ((IsRet(fetchbufC_instr)|IsJmp(fetchbufC_instr)|IsCall(fetchbufC_instr) ||
-                        IsRTI(fetchbufC_instr)|| fetchbufC_instr[`INSTRUCTION_OP]==`BRK || fetchbufC_instr[`INSTRUCTION_OP]==`JAL) &&
+                        IsRTI(fetchbufC_instr)|| IsBrk(fetchbufC_instr) || IsJAL(fetchbufC_instr)) &&
                         fetchbufC_v);
 wire take_branchD = ({fetchbufD_v, IsBranch(fetchbufD_instr), predict_takenD}  == {`VAL, `TRUE, `TRUE}) ||
                         ((IsRet(fetchbufD_instr)|IsJmp(fetchbufD_instr)|IsCall(fetchbufD_instr) ||
-                        IsRTI(fetchbufD_instr)|| fetchbufD_instr[`INSTRUCTION_OP]==`BRK || fetchbufD_instr[`INSTRUCTION_OP]==`JAL) &&
+                        IsRTI(fetchbufD_instr)|| IsBrk(fetchbufD_instr) || IsJAL(fetchbufD_instr)) &&
                         fetchbufD_v);
 
 assign take_branch0 = fetchbuf==1'b0 ? take_branchA : take_branchC;
@@ -375,22 +406,24 @@ else begin
 		$display("Branch miss");
 		$display("***********");
 		if (branchmiss_thrd) begin
- 			pc0 <= fetchbuf0_pc;
-`ifdef SUPPORT_SMT
 			pc1 <= misspc;
-`endif
+			fetchbufB_v <= `INV;
+			fetchbufD_v <= `INV;
 		end
 		else begin
 			pc0 <= misspc;
-`ifdef SUPPORT_SMT
- 			pc1 <= fetchbuf1_pc;
-`endif
+			if (thread_en) begin
+				fetchbufA_v <= `INV;
+				fetchbufC_v <= `INV;
+			end
+			else begin
+				fetchbufA_v <= `INV;
+				fetchbufB_v <= `INV;
+				fetchbufC_v <= `INV;
+				fetchbufD_v <= `INV;
+				fetchbuf <= 1'b0;
+			end
  		end
-		fetchbufA_v <= `INV;
-		fetchbufB_v <= `INV;
-		fetchbufC_v <= `INV;
-		fetchbufD_v <= `INV;
-		fetchbuf <= 1'b0;
 	     $display("********************");
 	     $display("********************");
 	     $display("********************");
@@ -400,94 +433,95 @@ else begin
 	     $display("********************");
 	     $display("********************");
 	end
-	// Some of the testing for valid branch conditions has been removed. In real
-	// hardware it isn't needed, and just increases the size of the core. It's
-	// assumed that the hardware is working.
-	// The risk is an error will occur during simulation and go missed.
 	else if (take_branch) begin
 
-	    // update the fetchbuf valid bits as well as fetchbuf itself
-	    // ... this must be based on which things are backwards branches, how many things
-	    // will get enqueued (0, 1, or 2), and how old the instructions are
-	    if (fetchbuf == 1'b0) case ({fetchbufA_v, fetchbufB_v, fetchbufC_v, fetchbufD_v})
+    // update the fetchbuf valid bits as well as fetchbuf itself
+    // ... this must be based on which things are backwards branches, how many things
+    // will get enqueued (0, 1, or 2), and how old the instructions are
+    if (fetchbuf == 1'b0) case ({fetchbufA_v, fetchbufB_v, fetchbufC_v, fetchbufD_v})
 
-		4'b0000	: ;	// do nothing
-//		4'b0001	: panic <= `PANIC_INVALIDFBSTATE;
-//		4'b0010	: panic <= `PANIC_INVALIDFBSTATE;
-//		4'b0011	: panic <= `PANIC_INVALIDFBSTATE;	// this looks like it might be screwy fetchbuf logic
-
-		// because the first instruction has been enqueued, 
-		// we must have noted this in the previous cycle.
-		// therefore, pc0 and pc1 have to have been set appropriately ... so do a regular fetch
-		// this looks like the following:
-		//   cycle 0 - fetched a INSTR+BEQ, with fbB holding a branchback
-		//   cycle 1 - enqueued fbA, stomped on fbB, stalled fetch + updated pc0/pc1
-		//   cycle 2 - where we are now ... fetch the two instructions & update fetchbufB_v appropriately
+		4'b0000: ;	// do nothing
+		4'b0001: if (thread_en) FetchC();
+		4'b0010: if (thread_en) FetchD();
+		4'b0011: ;
 		4'b0100 :
-		    begin
-			    FetchCD();
-			     fetchbufB_v <= !(queued1|queuedNop);	// if it can be queued, it will
-			      fetchbuf <= fetchbuf + (queued1|queuedNop);
+	    begin
+		    if (thread_en) begin
+		    	FetchC();
+		    	pc1 <= branch_pcB;
+		    end
+		    else
+		    	pc0 <= branch_pcB;
+		    fetchbufB_v <= !(queued1|queuedNop);	// if it can be queued, it will
+		    fetchbuf <= fetchbuf + (queued1|queuedNop);
 			end
-
-		// Can occur with threading enabled
 		4'b0101:
-			fetchbufB_v <= !(queued1|queuedNop);
-
-//		4'b0101	: panic <= `PANIC_INVALIDFBSTATE;
-//		4'b0110	: panic <= `PANIC_INVALIDFBSTATE;
-
-		// this looks like the following:
-		//   cycle 0 - fetched an INSTR+BEQ, with fbB holding a branchback
-		//   cycle 1 - enqueued fbA, but not fbB, recognized branchback in fbB, stalled fetch + updated pc0/pc1
-		//   cycle 2 - still could not enqueue fbB, but fetched from backwards target
-		//   cycle 3 - where we are now ... update fetchbufB_v appropriately
-		//
-		// however -- if there are backwards branches in the latter two slots, it is more complex.
-		// simple solution: leave it alone and wait until we are through with the first two slots.
-		4'b0111 :
 			begin
-			    fetchbufB_v <= !(queued1|queuedNop);	// if it can be queued, it will
+				if (thread_en) begin
+					pc1 <= branch_pcB;
+					FetchC();
+				end
+				else
+					pc0 <= branch_pcB;
+				fetchbufD_v <= `INV;
+				fetchbufB_v <= !(queued1|queuedNop);
+			end
+		4'b0110:
+			begin
+				if (thread_en)
+					pc1 <= branch_pcB;
+				else begin
+					pc0 <= branch_pcB;
+					fetchbufC_v <= `INV;
+				end
+				fetchbufB_v <= !(queued1|queuedNop);
+			end
+		4'b0111:
+			begin
+				if (thread_en) begin
+					pc1 <= branch_pcB;
+					fetchbufD_v <= `INV;
+				end
+				else begin
+					pc0 <= branch_pcB;
+					fetchbufC_v <= `INV;
+					fetchbufD_v <= `INV;
+				end
+			  fetchbufB_v <= !(queued1|queuedNop);	// if it can be queued, it will
 				fetchbuf <= fetchbuf + (queued1|queuedNop);
 			end
-
-		// this looks like the following:
-		//   cycle 0 - fetched a BEQ+INSTR, with fbA holding a branchback
-		//   cycle 1 - stomped on fbB, but could not enqueue fbA, stalled fetch + updated pc0/pc1
-		//   cycle 2 - where we are now ... fetch the two instructions & update fetchbufA_v appropriately
 		4'b1000 :
 			begin
-			    FetchCD();
-			     fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
-			      fetchbuf <= fetchbuf + (queued1|queuedNop);
+				if (thread_en) FetchD();
+		    pc0 <= branch_pcA;
+		    fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
+		    fetchbuf <= fetchbuf + (queued1|queuedNop);
 			end
-
-//		4'b1001	: panic <= `PANIC_INVALIDFBSTATE;
-//		4'b1010	: panic <= `PANIC_INVALIDFBSTATE;
-
-		// this looks like the following:
-		//   cycle 0 - fetched a BEQ+INSTR, with fbA holding a branchback
-		//   cycle 1 - stomped on fbB, but could not enqueue fbA, stalled fetch + updated pc0/pc1
-		//   cycle 2 - still could not enqueue fbA, but fetched from backwards target
-		//   cycle 3 - where we are now ... set fetchbufA_v appropriately
-		//
-		// however -- if there are backwards branches in the latter two slots, it is more complex.
-		// simple solution: leave it alone and wait until we are through with the first two slots.
-		4'b1011 :
+		4'b1001:
 			begin
-			     fetchbufA_v <=!(queued1|queuedNop);	// if it can be queued, it will
-			      fetchbuf <= fetchbuf + (queued1|queuedNop);
+				pc0 <= branch_pcA;
+				if (!thread_en)
+					fetchbufD_v <= `INV;
+		    fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
+		    fetchbuf <= fetchbuf + (queued1|queuedNop);
 			end
-
-		// if fbB has the branchback, can't immediately tell which of the following scenarios it is:
-		//   cycle 0 - fetched a pair of instructions, one or both of which is a branchback
-		//   cycle 1 - where we are now.  stomp, enqueue, and update pc0/pc1
-		// or
-		//   cycle 0 - fetched a INSTR+BEQ, with fbB holding a branchback
-		//   cycle 1 - could not enqueue fbA or fbB, stalled fetch + updated pc0/pc1
-		//   cycle 2 - where we are now ... fetch the two instructions & update fetchbufX_v appropriately
-		// if fbA has the branchback, then it is scenario 1.
-		// if fbB has it: if pc0 == fbB_pc, then it is the former scenario, else it is the latter
+		4'b1010:
+			begin
+				pc0 <= branch_pcA;
+				fetchbufC_v <= `INV;
+				if (thread_en) FetchD();
+		    fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
+		    fetchbuf <= fetchbuf + (queued1|queuedNop);
+			end
+		4'b1011:
+			begin
+				pc0 <= branch_pcA;
+				fetchbufC_v <= `INV;
+				if (!thread_en)
+					fetchbufD_v <= `INV;
+				fetchbufA_v <=!(queued1|queuedNop);	// if it can be queued, it will
+				fetchbuf <= fetchbuf + (queued1|queuedNop);
+			end
 		4'b1100:
 			if (thread_en) begin
 				if (take_branchA && take_branchB) begin
@@ -498,12 +532,14 @@ else begin
 					if ((queued2|queuedNop))   fetchbuf <= 1'b1;
 				end
 				else if (take_branchA) begin
+					FetchD();
 					pc0 <= branch_pcA;
 					fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
 					fetchbufB_v <= !(queued2|queuedNop);	// if it can be queued, it will
 					if ((queued2|queuedNop))   fetchbuf <= 1'b1;
 				end
 				else if (take_branchB) begin
+					FetchC();
 					pc1 <= branch_pcB;
 					fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
 					fetchbufB_v <= !(queued2|queuedNop);	// if it can be queued, it will
@@ -517,119 +553,228 @@ else begin
 					fetchbufB_v <= `INV;
 					if ((queued1|queuedNop))   fetchbuf <= 1'b1;
 				end
-				else begin
-					if (did_branchback0) begin
-						FetchCD();
-						fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
-						fetchbufB_v <= !(queued2|queuedNop);	// if it can be queued, it will
-						fetchbuf <= fetchbuf + ((queued2|queuedNop));
-					end
-					else begin
-						pc0 <= branch_pcB;
-						fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
-						fetchbufB_v <= !(queued2|queuedNop);	// if it can be queued, it will
-						if ((queued2|queuedNop))   fetchbuf <= 1'b1;
-					end
+				else if (take_branchB) begin
+					pc0 <= branch_pcB;
+					fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
+					fetchbufB_v <= !(queued2|queuedNop);	// if it can be queued, it will
+					if ((queued2|queuedNop))   fetchbuf <= 1'b1;
 		    end
+		    // else hardware error
 		  end
-
-//		4'b1101	: panic <= `PANIC_INVALIDFBSTATE;
-//		4'b1110	: panic <= `PANIC_INVALIDFBSTATE;
-
-		// this looks like the following:
-		//   cycle 0 - fetched an INSTR+BEQ, with fbB holding a branchback
-		//   cycle 1 - enqueued neither fbA nor fbB, recognized branchback in fbB, stalled fetch + updated pc0/pc1
-		//   cycle 2 - still could not enqueue fbB, but fetched from backwards target
-		//   cycle 3 - where we are now ... update fetchbufX_v appropriately
-		//
-		// however -- if there are backwards branches in the latter two slots, it is more complex.
-		// simple solution: leave it alone and wait until we are through with the first two slots.
-		4'b1111 :
-			begin
-			     fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
-			     fetchbufB_v <= !(queued2|queuedNop);	// if it can be queued, it will
-			      fetchbuf <= fetchbuf + (queued2|queuedNop);
+		4'b1101:
+			if (thread_en) begin
+				if (take_branchA && take_branchB) begin
+					pc0 <= branch_pcA;
+					pc1 <= branch_pcB;
+					fetchbufD_v <= `INV;
+					fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
+					fetchbufB_v <= !(queued2|queuedNop);	// if it can be queued, it will
+					if ((queued2|queuedNop))   fetchbuf <= 1'b1;
+				end
+				else if (take_branchA) begin
+					pc0 <= branch_pcA;
+					fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
+					fetchbufB_v <= !(queued2|queuedNop);	// if it can be queued, it will
+					if ((queued2|queuedNop))   fetchbuf <= 1'b1;
+				end
+				else if (take_branchB) begin
+					FetchC();
+					pc1 <= branch_pcB;
+					fetchbufD_v <= `INV;
+					fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
+					fetchbufB_v <= !(queued2|queuedNop);	// if it can be queued, it will
+					if ((queued2|queuedNop))   fetchbuf <= 1'b1;
+				end
 			end
-        default:    ;
-	    endcase
-	    else case ({fetchbufC_v, fetchbufD_v, fetchbufA_v, fetchbufB_v})
+			else begin
+				fetchbufD_v <= `INV;
+				if (take_branchA) begin
+					pc0 <= branch_pcA;
+					fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
+					fetchbufB_v <= `INV;
+					if ((queued1|queuedNop))   fetchbuf <= 1'b1;
+				end
+				else if (take_branchB) begin
+					pc0 <= branch_pcB;
+					fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
+					fetchbufB_v <= !(queued2|queuedNop);	// if it can be queued, it will
+					if ((queued2|queuedNop))   fetchbuf <= 1'b1;
+		    end
+		    // else hardware error
+		  end
+		4'b1110:
+			if (thread_en) begin
+				if (take_branchA && take_branchB) begin
+					pc0 <= branch_pcA;
+					pc1 <= branch_pcB;
+					fetchbufC_v <= `INV;
+					fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
+					fetchbufB_v <= !(queued2|queuedNop);	// if it can be queued, it will
+					if ((queued2|queuedNop))   fetchbuf <= 1'b1;
+				end
+				else if (take_branchA) begin
+					FetchD();
+					pc0 <= branch_pcA;
+					fetchbufC_v <= `INV;
+					fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
+					fetchbufB_v <= !(queued2|queuedNop);	// if it can be queued, it will
+					if ((queued2|queuedNop))   fetchbuf <= 1'b1;
+				end
+				else if (take_branchB) begin
+					pc1 <= branch_pcB;
+					fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
+					fetchbufB_v <= !(queued2|queuedNop);	// if it can be queued, it will
+					if ((queued2|queuedNop))   fetchbuf <= 1'b1;
+				end
+			end
+			else begin
+				fetchbufC_v <= `INV;
+				if (take_branchA) begin
+					pc0 <= branch_pcA;
+					fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
+					fetchbufB_v <= `INV;
+					if ((queued1|queuedNop))   fetchbuf <= 1'b1;
+				end
+				else if (take_branchB) begin
+					pc0 <= branch_pcB;
+					fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
+					fetchbufB_v <= !(queued2|queuedNop);	// if it can be queued, it will
+					if ((queued2|queuedNop))   fetchbuf <= 1'b1;
+		    end
+		    // else hardware error
+		  end
+		4'b1111:
+			begin
+				if (thread_en) begin
+					if (take_branchA & take_branchB) begin
+						pc0 <= branch_pcA;
+						pc1 <= branch_pcB;
+						fetchbufC_v <= `INV;
+						fetchbufD_v <= `INV;
+						fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
+						fetchbufB_v <= !(queued2|queuedNop);	// if it can be queued, it will
+						fetchbuf <= fetchbuf + (queued2|queuedNop);
+					end
+					else if (take_branchA) begin
+						pc0 <= branch_pcA;
+						fetchbufC_v <= `INV;
+						fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
+						fetchbufB_v <= !(queued2|queuedNop);	// if it can be queued, it will
+						fetchbuf <= fetchbuf + (queued2|queuedNop);
+					end
+					else if (take_branchB) begin
+						pc1 <= branch_pcB;
+						fetchbufD_v <= `INV;
+						fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
+						fetchbufB_v <= !(queued2|queuedNop);	// if it can be queued, it will
+						fetchbuf <= fetchbuf + (queued2|queuedNop);
+					end
+				end
+				else begin
+					if (take_branchA) begin
+						pc0 <= branch_pcA;
+						fetchbufB_v <= `INV;
+						fetchbufC_v <= `INV;
+						fetchbufD_v <= `INV;
+						fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
+						fetchbuf <= fetchbuf + (queued1|queuedNop);
+					end
+					else if (take_branchB) begin
+						pc0 <= branch_pcB;
+						fetchbufC_v <= `INV;
+						fetchbufD_v <= `INV;
+						fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
+						fetchbufB_v <= !(queued2|queuedNop);	// if it can be queued, it will
+						fetchbuf <= fetchbuf + (queued2|queuedNop);
+					end
+				end
+			end
+    default:    ;
+	  endcase
+	  else case ({fetchbufC_v, fetchbufD_v, fetchbufA_v, fetchbufB_v})
 
-		4'b0000	: ; // do nothing
-//		4'b0001	: panic <= `PANIC_INVALIDFBSTATE;
-//		4'b0010	: panic <= `PANIC_INVALIDFBSTATE;
-//		4'b0011	: panic <= `PANIC_INVALIDFBSTATE;	// this looks like it might be screwy fetchbuf logic
-
-		// because the first instruction has been enqueued, 
-		// we must have noted this in the previous cycle.
-		// therefore, pc0 and pc1 have to have been set appropriately ... so do a regular fetch
-		// this looks like the following:
-		//   cycle 0 - fetched a INSTR+BEQ, with fbD holding a branchback
-		//   cycle 1 - enqueued fbC, stomped on fbD, stalled fetch + updated pc0/pc1
-		//   cycle 2 - where we are now ... fetch the two instructions & update fetchbufB_v appropriately
+		4'b0000: ;	// do nothing
+		4'b0001: if (thread_en) FetchA();
+		4'b0010: if (thread_en) FetchB();
+		4'b0011: ;
 		4'b0100 :
-			begin
-			    FetchAB();
-			     fetchbufD_v <= !(queued1|queuedNop);	// if it can be queued, it will
-			      fetchbuf <= fetchbuf + (queued1|queuedNop);
+	    begin
+		    if (thread_en) begin
+		    	FetchA();
+		    	pc1 <= branch_pcD;
+		    end
+		    else
+		    	pc0 <= branch_pcD;
+		    fetchbufD_v <= !(queued1|queuedNop);	// if it can be queued, it will
+		    fetchbuf <= fetchbuf + (queued1|queuedNop);
 			end
-
 		4'b0101:
-			fetchbufD_v <= !(queued1|queuedNop);
-			
-//		4'b0101	: panic <= `PANIC_INVALIDFBSTATE;
-//		4'b0110	: panic <= `PANIC_INVALIDFBSTATE;
-
-		// this looks like the following:
-		//   cycle 0 - fetched an INSTR+BEQ, with fbD holding a branchback
-		//   cycle 1 - enqueued fbC, but not fbD, recognized branchback in fbD, stalled fetch + updated pc0/pc1
-		//   cycle 2 - still could not enqueue fbD, but fetched from backwards target
-		//   cycle 3 - where we are now ... update fetchbufD_v appropriately
-		//
-		// however -- if there are backwards branches in the latter two slots, it is more complex.
-		// simple solution: leave it alone and wait until we are through with the first two slots.
-		4'b0111 :
 			begin
-			     fetchbufD_v <= !(queued1|queuedNop);	// if it can be queued, it will
-			      fetchbuf <= fetchbuf + (queued1|queuedNop);
+				if (thread_en) begin
+					pc1 <= branch_pcD;
+					FetchA();
+				end
+				else
+					pc0 <= branch_pcD;
+				fetchbufB_v <= `INV;
+				fetchbufD_v <= !(queued1|queuedNop);
 			end
-
-		// this looks like the following:
-		//   cycle 0 - fetched a BEQ+INSTR, with fbC holding a branchback
-		//   cycle 1 - stomped on fbD, but could not enqueue fbC, stalled fetch + updated pc0/pc1
-		//   cycle 2 - where we are now ... fetch the two instructions & update fetchbufC_v appropriately
+		4'b0110:
+			begin
+				if (thread_en)
+					pc1 <= branch_pcD;
+				else begin
+					pc0 <= branch_pcD;
+					fetchbufA_v <= `INV;
+				end
+				fetchbufD_v <= !(queued1|queuedNop);
+			end
+		4'b0111:
+			begin
+				if (thread_en) begin
+					pc1 <= branch_pcD;
+					fetchbufB_v <= `INV;
+				end
+				else begin
+					pc0 <= branch_pcD;
+					fetchbufA_v <= `INV;
+					fetchbufB_v <= `INV;
+				end
+			  fetchbufD_v <= !(queued1|queuedNop);	// if it can be queued, it will
+				fetchbuf <= fetchbuf + (queued1|queuedNop);
+			end
 		4'b1000 :
 			begin
-			    FetchAB();
-			     fetchbufC_v <= !(queued1|queuedNop);	// if it can be queued, it will
-			      fetchbuf <= fetchbuf + (queued1|queuedNop);
+				if (thread_en) FetchB();
+		    pc0 <= branch_pcC;
+		    fetchbufC_v <= !(queued1|queuedNop);	// if it can be queued, it will
+		    fetchbuf <= fetchbuf + (queued1|queuedNop);
 			end
-
-//		4'b1001	: panic <= `PANIC_INVALIDFBSTATE;
-//		4'b1010	: panic <= `PANIC_INVALIDFBSTATE;
-
-		// this looks like the following:
-		//   cycle 0 - fetched a BEQ+INSTR, with fbC holding a branchback
-		//   cycle 1 - stomped on fbD, but could not enqueue fbC, stalled fetch + updated pc0/pc1
-		//   cycle 2 - still could not enqueue fbC, but fetched from backwards target
-		//   cycle 3 - where we are now ... set fetchbufC_v appropriately
-		//
-		// however -- if there are backwards branches in the latter two slots, it is more complex.
-		// simple solution: leave it alone and wait until we are through with the first two slots.
-		4'b1011 :
+		4'b1001:
 			begin
-			     fetchbufC_v <= !(queued1|queuedNop);	// if it can be queued, it will
-			      fetchbuf <= fetchbuf + (queued1|queuedNop);
+				pc0 <= branch_pcC;
+				if (!thread_en)
+					fetchbufB_v <= `INV;
+		    fetchbufC_v <= !(queued1|queuedNop);	// if it can be queued, it will
+		    fetchbuf <= fetchbuf + (queued1|queuedNop);
 			end
-
-		// if fbD has the branchback, can't immediately tell which of the following scenarios it is:
-		//   cycle 0 - fetched a pair of instructions, one or both of which is a branchback
-		//   cycle 1 - where we are now.  stomp, enqueue, and update pc0/pc1
-		// or
-		//   cycle 0 - fetched a INSTR+BEQ, with fbD holding a branchback
-		//   cycle 1 - could not enqueue fbC or fbD, stalled fetch + updated pc0/pc1
-		//   cycle 2 - where we are now ... fetch the two instructions & update fetchbufX_v appropriately
-		// if fbC has the branchback, then it is scenario 1.
-		// if fbD has it: if pc0 == fbB_pc, then it is the former scenario, else it is the latter
+		4'b1010:
+			begin
+				pc0 <= branch_pcC;
+				fetchbufA_v <= `INV;
+				if (thread_en) FetchB();
+		    fetchbufC_v <= !(queued1|queuedNop);	// if it can be queued, it will
+		    fetchbuf <= fetchbuf + (queued1|queuedNop);
+			end
+		4'b1011:
+			begin
+				pc0 <= branch_pcC;
+				fetchbufA_v <= `INV;
+				if (!thread_en)
+					fetchbufB_v <= `INV;
+				fetchbufC_v <=!(queued1|queuedNop);	// if it can be queued, it will
+				fetchbuf <= fetchbuf + (queued1|queuedNop);
+			end
 		4'b1100:
 			if (thread_en) begin
 				if (take_branchC && take_branchD) begin
@@ -640,12 +785,14 @@ else begin
 					if ((queued2|queuedNop))   fetchbuf <= 1'b1;
 				end
 				else if (take_branchC) begin
+					FetchB();
 					pc0 <= branch_pcC;
 					fetchbufC_v <= !(queued1|queuedNop);	// if it can be queued, it will
 					fetchbufD_v <= !(queued2|queuedNop);	// if it can be queued, it will
 					if ((queued2|queuedNop))   fetchbuf <= 1'b1;
 				end
 				else if (take_branchD) begin
+					FetchA();
 					pc1 <= branch_pcD;
 					fetchbufC_v <= !(queued1|queuedNop);	// if it can be queued, it will
 					fetchbufD_v <= !(queued2|queuedNop);	// if it can be queued, it will
@@ -659,140 +806,238 @@ else begin
 					fetchbufD_v <= `INV;
 					if ((queued1|queuedNop))   fetchbuf <= 1'b1;
 				end
-				else begin
-					if (did_branchback1) begin
-						FetchAB();
+				else if (take_branchD) begin
+					pc0 <= branch_pcD;
+					fetchbufC_v <= !(queued1|queuedNop);	// if it can be queued, it will
+					fetchbufD_v <= !(queued2|queuedNop);	// if it can be queued, it will
+					if ((queued2|queuedNop))   fetchbuf <= 1'b1;
+		    end
+		    // else hardware error
+		  end
+		4'b1101:
+			if (thread_en) begin
+				if (take_branchC && take_branchD) begin
+					pc0 <= branch_pcC;
+					pc1 <= branch_pcD;
+					fetchbufB_v <= `INV;
+					fetchbufC_v <= !(queued1|queuedNop);	// if it can be queued, it will
+					fetchbufD_v <= !(queued2|queuedNop);	// if it can be queued, it will
+					if ((queued2|queuedNop))   fetchbuf <= 1'b1;
+				end
+				else if (take_branchC) begin
+					pc0 <= branch_pcC;
+					fetchbufC_v <= !(queued1|queuedNop);	// if it can be queued, it will
+					fetchbufD_v <= !(queued2|queuedNop);	// if it can be queued, it will
+					if ((queued2|queuedNop))   fetchbuf <= 1'b1;
+				end
+				else if (take_branchC) begin
+					FetchA();
+					pc1 <= branch_pcD;
+					fetchbufB_v <= `INV;
+					fetchbufC_v <= !(queued1|queuedNop);	// if it can be queued, it will
+					fetchbufD_v <= !(queued2|queuedNop);	// if it can be queued, it will
+					if ((queued2|queuedNop))   fetchbuf <= 1'b1;
+				end
+			end
+			else begin
+				fetchbufB_v <= `INV;
+				if (take_branchC) begin
+					pc0 <= branch_pcC;
+					fetchbufC_v <= !(queued1|queuedNop);	// if it can be queued, it will
+					fetchbufD_v <= `INV;
+					if ((queued1|queuedNop))   fetchbuf <= 1'b1;
+				end
+				else if (take_branchD) begin
+					pc0 <= branch_pcD;
+					fetchbufC_v <= !(queued1|queuedNop);	// if it can be queued, it will
+					fetchbufD_v <= !(queued2|queuedNop);	// if it can be queued, it will
+					if ((queued2|queuedNop))   fetchbuf <= 1'b1;
+		    end
+		    // else hardware error
+		  end
+		4'b1110:
+			if (thread_en) begin
+				if (take_branchC && take_branchD) begin
+					pc0 <= branch_pcC;
+					pc1 <= branch_pcD;
+					fetchbufA_v <= `INV;
+					fetchbufC_v <= !(queued1|queuedNop);	// if it can be queued, it will
+					fetchbufD_v <= !(queued2|queuedNop);	// if it can be queued, it will
+					if ((queued2|queuedNop))   fetchbuf <= 1'b1;
+				end
+				else if (take_branchC) begin
+					FetchB();
+					pc0 <= branch_pcC;
+					fetchbufA_v <= `INV;
+					fetchbufC_v <= !(queued1|queuedNop);	// if it can be queued, it will
+					fetchbufD_v <= !(queued2|queuedNop);	// if it can be queued, it will
+					if ((queued2|queuedNop))   fetchbuf <= 1'b1;
+				end
+				else if (take_branchD) begin
+					pc1 <= branch_pcD;
+					fetchbufC_v <= !(queued1|queuedNop);	// if it can be queued, it will
+					fetchbufD_v <= !(queued2|queuedNop);	// if it can be queued, it will
+					if ((queued2|queuedNop))   fetchbuf <= 1'b1;
+				end
+			end
+			else begin
+				fetchbufA_v <= `INV;
+				if (take_branchC) begin
+					pc0 <= branch_pcC;
+					fetchbufC_v <= !(queued1|queuedNop);	// if it can be queued, it will
+					fetchbufD_v <= `INV;
+					if ((queued1|queuedNop))   fetchbuf <= 1'b1;
+				end
+				else if (take_branchD) begin
+					pc0 <= branch_pcD;
+					fetchbufC_v <= !(queued1|queuedNop);	// if it can be queued, it will
+					fetchbufD_v <= !(queued2|queuedNop);	// if it can be queued, it will
+					if ((queued2|queuedNop))   fetchbuf <= 1'b1;
+		    end
+		    // else hardware error
+		  end
+		4'b1111:
+			begin
+				if (thread_en) begin
+					if (take_branchC & take_branchD) begin
+						pc0 <= branch_pcC;
+						pc1 <= branch_pcD;
+						fetchbufA_v <= `INV;
+						fetchbufB_v <= `INV;
 						fetchbufC_v <= !(queued1|queuedNop);	// if it can be queued, it will
 						fetchbufD_v <= !(queued2|queuedNop);	// if it can be queued, it will
-						fetchbuf <= fetchbuf + ((queued2|queuedNop));
+						fetchbuf <= fetchbuf + (queued2|queuedNop);
 					end
-					else begin
+					else if (take_branchC) begin
 						pc0 <= branch_pcD;
+						fetchbufA_v <= `INV;
 						fetchbufC_v <= !(queued1|queuedNop);	// if it can be queued, it will
 						fetchbufD_v <= !(queued2|queuedNop);	// if it can be queued, it will
-						if ((queued2|queuedNop))   fetchbuf <= 1'b1;
+						fetchbuf <= fetchbuf + (queued2|queuedNop);
+					end
+					else if (take_branchD) begin
+						pc1 <= branch_pcD;
+						fetchbufB_v <= `INV;
+						fetchbufC_v <= !(queued1|queuedNop);	// if it can be queued, it will
+						fetchbufD_v <= !(queued2|queuedNop);	// if it can be queued, it will
+						fetchbuf <= fetchbuf + (queued2|queuedNop);
+					end
+				end
+				else begin
+					if (take_branchC) begin
+						pc0 <= branch_pcC;
+						fetchbufD_v <= `INV;
+						fetchbufA_v <= `INV;
+						fetchbufB_v <= `INV;
+						fetchbufC_v <= !(queued1|queuedNop);	// if it can be queued, it will
+						fetchbuf <= fetchbuf + (queued1|queuedNop);
+					end
+					else if (take_branchD) begin
+						pc0 <= branch_pcD;
+						fetchbufA_v <= `INV;
+						fetchbufB_v <= `INV;
+						fetchbufC_v <= !(queued1|queuedNop);	// if it can be queued, it will
+						fetchbufD_v <= !(queued2|queuedNop);	// if it can be queued, it will
+						fetchbuf <= fetchbuf + (queued2|queuedNop);
 					end
 				end
 			end
-
-//		4'b1101	: panic <= `PANIC_INVALIDFBSTATE;
-//		4'b1110	: panic <= `PANIC_INVALIDFBSTATE;
-
-		// this looks like the following:
-		//   cycle 0 - fetched an INSTR+BEQ, with fbD holding a branchback
-		//   cycle 1 - enqueued neither fbC nor fbD, recognized branchback in fbD, stalled fetch + updated pc0/pc1
-		//   cycle 2 - still could not enqueue fbD, but fetched from backwards target
-		//   cycle 3 - where we are now ... update fetchbufX_v appropriately
-		//
-		// however -- if there are backwards branches in the latter two slots, it is more complex.
-		// simple solution: leave it alone and wait until we are through with the first two slots.
-		4'b1111 :
-			begin
-			     fetchbufC_v <= !(queued1|queuedNop);	// if it can be queued, it will
-			     fetchbufD_v <= !(queued2|queuedNop);	// if it can be queued, it will
-			      fetchbuf <= fetchbuf + (queued2|queuedNop);
-			end
-	    default:   ;
-	    endcase
-
+    default:    ;
+	  endcase
 	end // if branchback
 
 	else begin	// there is no branchback in the system
 	    //
 	    // update fetchbufX_v and fetchbuf ... relatively simple, as
 	    // there are no backwards branches in the mix
-	    if (fetchbuf == 1'b0) case ({fetchbufA_v, fetchbufB_v, (queued1|queuedNop), (queued2|queuedNop)})
+    if (fetchbuf == 1'b0) case ({fetchbufA_v, fetchbufB_v, (queued1|queuedNop), (queued2|queuedNop)})
 		4'b00_00 : ;	// do nothing
-//		4'b00_01 : panic <= `PANIC_INVALIDIQSTATE;
+		4'b00_01:	;
+		4'b00_10:	;
+		4'b00_11:	;
+		4'b01_00: ;	// do nothing
+		4'b01_01:	;
+		4'b01_10,
+		4'b01_11:
+			begin	// enqueue fbB and flip fetchbuf
+				fetchbufB_v <= `INV;
+			  fetchbuf <= ~fetchbuf;
+		  end
+		4'b10_00: ;	// do nothing
+		4'b10_01: ;
+		4'b10_10,
+		4'b10_11:
+			begin	// enqueue fbA and flip fetchbuf
+				fetchbufA_v <= `INV;
+			  fetchbuf <= ~fetchbuf;
+		  end
+		4'b11_00: ;	// do nothing
+		4'b11_01: ;
+		4'b11_10:
+			begin	// enqueue fbA but leave fetchbuf
+				fetchbufA_v <= `INV;
+		  end
+		4'b11_11:
+			begin	// enqueue both and flip fetchbuf
+				fetchbufA_v <= `INV;
+				fetchbufB_v <= `INV;
+			  fetchbuf <= ~fetchbuf;
+		  end
+		default:  panic <= `PANIC_INVALIDIQSTATE;
+    endcase
+    else case ({fetchbufC_v, fetchbufD_v, (queued1|queuedNop), (queued2|queuedNop)})
+		4'b00_00 : ;	// do nothing
+		4'b00_01: ;
 		4'b00_10 : ;	// do nothing
 		4'b00_11 : ;	// do nothing
 		4'b01_00 : ;	// do nothing
-//		4'b01_01 : panic <= `PANIC_INVALIDIQSTATE;
-
+		4'b01_01 : ;
 		4'b01_10,
-		4'b01_11 : begin	// enqueue fbB and flip fetchbuf
-			 fetchbufB_v <= `INV;
+		4'b01_11 :
+			begin	// enqueue fbD and flip fetchbuf
+				fetchbufD_v <= `INV;
 			  fetchbuf <= ~fetchbuf;
-		    end
-
+		  end
 		4'b10_00 : ;	// do nothing
-//		4'b10_01 : panic <= `PANIC_INVALIDIQSTATE;
-
+		4'b10_01: ;
 		4'b10_10,
-		4'b10_11 : begin	// enqueue fbA and flip fetchbuf
-			 fetchbufA_v <= `INV;
+		4'b10_11:
+			begin	// enqueue fbC and flip fetchbuf
+				fetchbufC_v <= `INV;
 			  fetchbuf <= ~fetchbuf;
-		    end
-
+		  end
 		4'b11_00 : ;	// do nothing
-//		4'b11_01 : panic <= `PANIC_INVALIDIQSTATE;
-
-		4'b11_10 : begin	// enqueue fbA but leave fetchbuf
-			 fetchbufA_v <= `INV;
-		    end
-
-		4'b11_11 : begin	// enqueue both and flip fetchbuf
-			 fetchbufA_v <= `INV;
-			 fetchbufB_v <= `INV;
+		4'b11_01: ;
+		4'b11_10:
+			begin	// enqueue fbC but leave fetchbuf
+				fetchbufC_v <= `INV;
+		  end
+		4'b11_11:
+			begin	// enqueue both and flip fetchbuf
+				fetchbufC_v <= `INV;
+				fetchbufD_v <= `INV;
 			  fetchbuf <= ~fetchbuf;
-		    end
+		  end
 		default:  panic <= `PANIC_INVALIDIQSTATE;
-	    endcase
-	    else case ({fetchbufC_v, fetchbufD_v, (queued1|queuedNop), (queued2|queuedNop)})
-		4'b00_00 : ;	// do nothing
-//		4'b00_01 : panic <= `PANIC_INVALIDIQSTATE;
-		4'b00_10 : ;	// do nothing
-		4'b00_11 : ;	// do nothing
-		4'b01_00 : ;	// do nothing
-//		4'b01_01 : panic <= `PANIC_INVALIDIQSTATE;
-
-		4'b01_10,
-		4'b01_11 : begin	// enqueue fbD and flip fetchbuf
-			 fetchbufD_v <= `INV;
-			  fetchbuf <= ~fetchbuf;
-		    end
-
-		4'b10_00 : ;	// do nothing
-//		4'b10_01 : panic <= `PANIC_INVALIDIQSTATE;
-
-		4'b10_10,
-		4'b10_11 : begin	// enqueue fbC and flip fetchbuf
-			 fetchbufC_v <= `INV;
-			  fetchbuf <= ~fetchbuf;
-		    end
-
-		4'b11_00 : ;	// do nothing
-//		4'b11_01 : panic <= `PANIC_INVALIDIQSTATE;
-
-		4'b11_10 : begin	// enqueue fbC but leave fetchbuf
-			 fetchbufC_v <= `INV;
-		    end
-
-		4'b11_11 : begin	// enqueue both and flip fetchbuf
-			 fetchbufC_v <= `INV;
-			 fetchbufD_v <= `INV;
-			  fetchbuf <= ~fetchbuf;
-		    end
-		default:  panic <= `PANIC_INVALIDIQSTATE;
-	    endcase
-	    //
-	    // get data iff the fetch buffers are empty
-	    //
-	    if (fetchbufA_v == `INV && fetchbufB_v == `INV) begin
-	        FetchAB();
-	        // fetchbuf steering logic correction
-	        if (fetchbufC_v==`INV && fetchbufD_v==`INV && phit)
-	              fetchbuf <= 1'b0;
-	    end
-	    else if (fetchbufC_v == `INV && fetchbufD_v == `INV)
-		    FetchCD();
+	  endcase
+    //
+    // get data iff the fetch buffers are empty
+    //
+    if (fetchbufA_v == `INV && fetchbufB_v == `INV) begin
+      FetchAB();
+      // fetchbuf steering logic correction
+      if (fetchbufC_v==`INV && fetchbufD_v==`INV && phit)
+        fetchbuf <= 1'b0;
+    end
+    else if (fetchbufC_v == `INV && fetchbufD_v == `INV)
+	    FetchCD();
 	end
     //
     // get data iff the fetch buffers are empty
     //
     if (fetchbufA_v == `INV && fetchbufB_v == `INV && fetchbufC_v==`INV && fetchbufD_v==`INV) begin
-        FetchAB();
-         fetchbuf <= 1'b0;
+			FetchAB();
+			fetchbuf <= 1'b0;
     end
 	end
 	

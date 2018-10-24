@@ -81,7 +81,7 @@ input err_i;
 output we_o;
 output [7:0] sel_o;
 output [31:0] adr_o;
-output [63:0] dat_o;
+output reg [63:0] dat_o;
 input [63:0] dat_i;
 output sr_o;
 output cr_o;
@@ -90,6 +90,7 @@ input rb_i;
 wire cyc,stb,we;
 wire [31:0] adr;
 reg [63:0] dati;
+wire [63:0] dato;
 wire [3:0] irq;
 wire [7:0] cause;
 wire mmu_ack;
@@ -101,7 +102,7 @@ wire [31:0] pit_dato;
 wire pit_out0, pit_out1;
 wire crd_ack;
 wire [63:0] crd_dato;
-wire ack;
+reg ack;
 wire [1:0] ol;
 wire [31:0] pcr;
 wire [63:0] pcr2;
@@ -109,6 +110,12 @@ wire icl;           // instruction cache load
 wire exv,rdv,wrv;
 wire pulse60;
 wire sptr_o;
+
+// We can get away with registering the output data here because the mmu
+// delays the cycle active signal by two clocks. Meaning the output data
+// is still available one cycle before the cycle is active.
+always @(posedge clk_i)
+	dat_o <= dato;
 
 wire cs_pit = adr[31:8]==24'hFFDC11;
 `ifdef CARD_MEMORY
@@ -119,7 +126,7 @@ wire cs_crd = 1'b0;
 
 // Need to recreate the a2 address bit for 32 bit peripherals.
 wire [31:0] adr32 = {adr[31:3],|sel_o[7:4],2'b00};
-wire [31:0] dat32 = |sel_o[7:4] ? dat_o[63:32] : dat_o[31:0];
+wire [31:0] dat32 = |sel_o[7:4] ? dato[63:32] : dato[31:0];
 
 FT64_pit upit1
 (
@@ -228,7 +235,7 @@ CardMemory ucrd1
 	.ack_o(crd_ack),
 	.wr_i(we_o),
 	.adr_i(adr),
-	.dat_i(dat_o),
+	.dat_i(dato),
 	.dat_o(crd_dato),
 	.stp(1'b0),
 	.mapno(pcr[5:0])
@@ -238,16 +245,17 @@ assign crd_dato = 64'd0;
 assign crd_ack = 1'b0;
 `endif
 
-always @*
+always @(posedge clk_i)
 casez({mmu_ack,pic_ack,pit_ack,crd_ack})
-4'b1???:    dati <= {2{mmu_dato}};
+4'b1???:  dati <= {2{mmu_dato}};
 4'b01??:	dati <= {2{pic_dato}};
 4'b001?:	dati <= {2{pit_dato}};
 4'b0001:	dati <= crd_dato;
-default:    dati <= dat_i;
+default:  dati <= dat_i;
 endcase
 
-assign ack = ack_i|mmu_ack|pic_ack|pit_ack|crd_ack;
+always @(posedge clk_i)
+	ack <= ack_i|mmu_ack|pic_ack|pit_ack|crd_ack;
 
 FT64 ucpu1
 (
@@ -267,7 +275,7 @@ FT64 ucpu1
     .we_o(we_o),
     .sel_o(sel_o),
     .adr_o(adr),
-    .dat_o(dat_o),
+    .dat_o(dato),
     .dat_i(dati),
     .ol_o(ol),
     .pcr_o(pcr),
