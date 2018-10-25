@@ -227,7 +227,8 @@ casez({cinstr[15:12],cinstr[6]})
 5'b00001:
 		begin
 			expand[47:32] = 16'h0000;
-			expand[31:26] = `MOV;
+			expand[31:26] = `MOV;			// `MOV is 6'b01001?
+			expand[26] = 1'b0;
 			expand[25:23] = 3'd7;			// move current to current
 			expand[22:18] = 5'd0;			// register set (ignored)
 			expand[17:13] = {cinstr[11:8],cinstr[5]};

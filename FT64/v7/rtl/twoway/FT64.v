@@ -100,7 +100,7 @@ parameter DBW = 64;
 parameter ABW = 32;
 parameter AMSB = ABW-1;
 parameter NTHREAD = 1;
-reg [3:0] i;
+reg [7:0] i;
 integer n;
 integer j, k;
 genvar g, h;
@@ -231,6 +231,10 @@ wire thread_en = cr0[16];
 wire thread_en = 1'b0;
 `endif
 wire vechain = cr0[18];
+reg [39:0] irq_ctr;					// count of number of interrupts
+reg [39:0] bm_ctr;					// branch miss counter
+reg [39:0] icl_ctr;					// instruction cache load counter
+
 reg [7:0] fcu_timeout;
 reg [63:0] tick;
 reg [63:0] wc_time;
@@ -420,10 +424,10 @@ reg [47:0] codebuf[0:63];
 reg [QENTRIES-1:0] setpred;
 
 // instruction queue (ROB)
-reg [31:0]  iqentry_sn   [0:QENTRIES-1];  // instruction sequence number
+reg [`SNBITS] iqentry_sn [0:QENTRIES-1];  // instruction sequence number
 reg [QENTRIES-1:0] iqentry_v;			// entry valid?  -- this should be the first bit
 reg [QENTRIES-1:0] iqentry_iv;		// instruction is valid
-reg [4:0]  iqentry_is   [0:QENTRIES-1];	// source of instruction
+reg [4:0] iqentry_is [0:QENTRIES-1];	// source of instruction
 reg [QENTRIES-1:0] iqentry_out;	// instruction has been issued to an ALU ... 
 reg [QENTRIES-1:0] iqentry_done;	// instruction result valid
 reg [QENTRIES-1:0] iqentry_cmt;
@@ -507,7 +511,7 @@ reg  [QENTRIES-1:0] memissue = {QENTRIES{1'b0}};
 reg [1:0] missued;
 integer last_issue;
 reg  [QENTRIES-1:0] iqentry_memissue;
-wire [QENTRIES-1:0] iqentry_stomp;
+reg [QENTRIES-1:0] iqentry_stomp;
 reg [3:0] stompedOnRets;
 reg  [QENTRIES-1:0] iqentry_alu0_issue;
 reg  [QENTRIES-1:0] iqentry_alu1_issue;
@@ -520,28 +524,8 @@ reg [QENTRIES-1:0] iqentry_fcu_issue;
 reg [QENTRIES-1:0] iqentry_fpu1_issue;
 reg [QENTRIES-1:0] iqentry_fpu2_issue;
 
-wire [PREGS-1:1] livetarget;
-wire  [PREGS-1:1] iqentry_0_livetarget;
-wire  [PREGS-1:1] iqentry_1_livetarget;
-wire  [PREGS-1:1] iqentry_2_livetarget;
-wire  [PREGS-1:1] iqentry_3_livetarget;
-wire  [PREGS-1:1] iqentry_4_livetarget;
-wire  [PREGS-1:1] iqentry_5_livetarget;
-wire  [PREGS-1:1] iqentry_6_livetarget;
-wire  [PREGS-1:1] iqentry_7_livetarget;
-wire  [PREGS-1:1] iqentry_8_livetarget;
-wire  [PREGS-1:1] iqentry_9_livetarget;
-wire [PREGS-1:1] iqentry_livetarget [0:QENTRIES-1];
-assign iqentry_livetarget[0] = iqentry_0_livetarget;
-assign iqentry_livetarget[1] = iqentry_1_livetarget;
-assign iqentry_livetarget[2] = iqentry_2_livetarget;
-assign iqentry_livetarget[3] = iqentry_3_livetarget;
-assign iqentry_livetarget[4] = iqentry_4_livetarget;
-assign iqentry_livetarget[5] = iqentry_5_livetarget;
-assign iqentry_livetarget[6] = iqentry_6_livetarget;
-assign iqentry_livetarget[7] = iqentry_7_livetarget;
-assign iqentry_livetarget[8] = iqentry_8_livetarget;
-assign iqentry_livetarget[9] = iqentry_9_livetarget;
+reg [PREGS-1:1] livetarget;
+reg [PREGS-1:1] iqentry_livetarget [0:QENTRIES-1];
 reg [PREGS-1:1] iqentry_latestID [0:QENTRIES-1];
 reg [PREGS-1:1] iqentry_cumulative [0:QENTRIES-1];
 wire  [PREGS-1:1] iq_out [0:QENTRIES-1];
@@ -717,8 +701,8 @@ wire  [`XBITS] fpu2_exc = 9'h000;
 wire        fpu2_v;
 wire [31:0] fpu2_status;
 
+reg [7:0] fccnt;
 reg [63:0] waitctr;
-reg [31:0] fcu_sn;
 reg        fcu_ld;
 reg        fcu_dataready;
 reg        fcu_done;
@@ -2002,19 +1986,21 @@ casez(isn[`INSTRUCTION_OP])
         endcase
 `MEMNDX:
 	begin
-		case({isn[31:28],isn[22:21]})
-		`LVX,
-		`CACHEX,
-		`LVBX,`LVBUX,`LVCX,`LVCUX,`LVHX,`LVHUX,`LVWX,
-		`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,`LWRX:
-			fnRt = {rgs[thrd],1'b0,isn[`INSTRUCTION_RT]};
-		default: fnRt = 12'd0;
-		endcase
-		case({isn[31:28],isn[17:16]})
-	  `SBX,`SCX,`SHX,`SWX,`SWCX,`CACHEX:
-	  			fnRt = 12'd0;
-	  default:    fnRt = 12'd0;
-	  endcase
+		if (IsLoad(isn))
+			case({isn[31:28],isn[22:21]})
+			`LVX,
+			`CACHEX,
+			`LVBX,`LVBUX,`LVCX,`LVCUX,`LVHX,`LVHUX,`LVWX,
+			`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,`LWRX:
+				fnRt = {rgs[thrd],1'b0,isn[`INSTRUCTION_RT]};
+			default: fnRt = 12'd0;
+			endcase
+		else
+			case({isn[31:28],isn[17:16]})
+		  `SBX,`SCX,`SHX,`SWX,`SWCX,`CACHEX:
+		  			fnRt = 12'd0;
+		  default:    fnRt = 12'd0;
+		  endcase
 	end
 `FLOAT:
 		case(isn[31:26])
@@ -2231,19 +2217,21 @@ casez(isn[`INSTRUCTION_OP])
   endcase
 `MEMNDX:
 	begin
-		case({isn[31:28],isn[22:21]})
-		`LVX,
-		`CACHEX,
-		`LVBX,`LVBUX,`LVCX,`LVCUX,`LVHX,`LVHUX,`LVWX,
-		`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,`LWRX:
-			fnRt = {rgs,1'b0,isn[`INSTRUCTION_RT]};
-		default: fnRt = 12'd0;
-		endcase
-		case({isn[31:28],isn[17:16]})
-	  `SBX,`SCX,`SHX,`SWX,`SWCX,`CACHEX:
-	  			fnRt = 12'd0;
-	  default:    fnRt = 12'd0;
-	  endcase
+		if (IsLoad(isn))
+			case({isn[31:28],isn[22:21]})
+			`LVX,
+			`CACHEX,
+			`LVBX,`LVBUX,`LVCX,`LVCUX,`LVHX,`LVHUX,`LVWX,
+			`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,`LWRX:
+				fnRt = {rgs,1'b0,isn[`INSTRUCTION_RT]};
+			default: fnRt = 12'd0;
+			endcase
+		else
+			case({isn[31:28],isn[17:16]})
+		  `SBX,`SCX,`SHX,`SWX,`SWCX,`CACHEX:
+		  			fnRt = 12'd0;
+		  default:    fnRt = 12'd0;
+		  endcase
 	end
 `FLOAT:
 		case(isn[31:26])
@@ -2257,12 +2245,7 @@ casez(isn[`INSTRUCTION_OP])
 `CHK:	fnRt = 12'd0;
 `EXEC:	fnRt = 12'd0;
 `Bcc:   fnRt = 12'd0;
-`BBc:
-	case(isn[20:19])
-	`IBNE:	fnRt = {rgs,1'b0,isn[`INSTRUCTION_RT]};
-	`DBNZ:	fnRt = {rgs,1'b0,isn[`INSTRUCTION_RT]};
-	default:	fnRt = 12'd0;
-	endcase
+`BBc:	fnRt = 12'd0;
 `NOP:  fnRt = 12'd0;
 `BEQI:  fnRt = 12'd0;
 `SB,`Sx,`SWC,`CACHE:
@@ -2390,17 +2373,19 @@ casez(isn[`INSTRUCTION_OP])
         endcase
 `MEMNDX:
 	begin
-		case({isn[31:28],isn[22:21]})
-		`LVX: Source2Valid = FALSE;
-		`CACHEX,
-		`LVBX,`LVBUX,`LVCX,`LVCUX,`LVHX,`LVHUX,`LVWX,
-		`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,`LWRX:	Source2Valid = TRUE;
-		default:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
-		endcase
-		case({isn[31:28],isn[17:16]})
-		`SVX: Source2Valid = FALSE;
-		default:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
-		endcase
+		if (IsLoad(isn))
+			case({isn[31:28],isn[22:21]})
+			`LVX: Source2Valid = FALSE;
+			`CACHEX,
+			`LVBX,`LVBUX,`LVCX,`LVCUX,`LVHX,`LVHUX,`LVWX,
+			`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,`LWRX:	Source2Valid = TRUE;
+			default:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
+			endcase
+		else
+			case({isn[31:28],isn[17:16]})
+			`SVX: Source2Valid = FALSE;
+			default:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
+			endcase
 	end
 `ADDI:  Source2Valid = TRUE;
 `SLTI:  Source2Valid = TRUE;
@@ -2473,22 +2458,24 @@ case(isn[`INSTRUCTION_OP])
     endcase
 `MEMNDX:
 	if (isn[`INSTRUCTION_L2]==2'b00) begin
-		case({isn[31:28],isn[22:21]})
-		`CACHEX,
-		`LVBX,`LVBUX,`LVCX,`LVCUX,`LVHX,`LVHUX,`LVWX,
-		`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,`LWRX:
-			Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
-		endcase
-    case({isn[31:28],isn[17:16]})
-    `SBX:   Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
-    `SCX:   Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
-    `SHX:   Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
-    `SWX:   Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
-    `SWCX:  Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
-    `CASX:  Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
-    default:    Source3Valid = TRUE;
-    endcase
-  	end
+		if (IsLoad(isn))
+			case({isn[31:28],isn[22:21]})
+			`CACHEX,
+			`LVBX,`LVBUX,`LVCX,`LVCUX,`LVHX,`LVHUX,`LVWX,
+			`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,`LWRX:
+				Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
+			endcase
+		else
+	    case({isn[31:28],isn[17:16]})
+	    `SBX:   Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
+	    `SCX:   Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
+	    `SHX:   Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
+	    `SWX:   Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
+	    `SWCX:  Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
+	    `CASX:  Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
+	    default:    Source3Valid = TRUE;
+	    endcase
+ 	end
 `BITFIELD: 	Source3Valid = isn[`INSTRUCTION_RC]==5'd0 || isn[32]==1'b0;
 default:    Source3Valid = TRUE;
 endcase
@@ -2562,10 +2549,16 @@ function IsVLS;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
 `MEMNDX:
-    case(isn[`INSTRUCTION_S2])
-    `LVX,`SVX,`LVWS,`SVWS:  IsVLS = TRUE;
-    default:    IsVLS = FALSE;
-    endcase
+		if (IsLoad(isn))
+	    case({isn[31:28],isn[22:21]})
+	    `LVX,`LVWS:  IsVLS = TRUE;
+	    default:    IsVLS = FALSE;
+	    endcase
+    else
+	    case({isn[31:28],isn[17:16]})
+	    `SVX,`SVWS:  IsVLS = TRUE;
+	    default:    IsVLS = FALSE;
+	    endcase
 `LV,`SV:    IsVLS = TRUE;
 default:    IsVLS = FALSE;
 endcase
@@ -3641,34 +3634,16 @@ endgenerate
 // therefore, if it is zero it implies the rf_v value should become VALID on a branchmiss
 // 
 
-generate begin : live_target
-    for (g = 1; g < PREGS; g = g + 1) begin : lvtgt
-    assign livetarget[g] = iqentry_0_livetarget[g] |
-                        iqentry_1_livetarget[g] |
-                        iqentry_2_livetarget[g] |
-                        iqentry_3_livetarget[g] |
-                        iqentry_4_livetarget[g] |
-                        iqentry_5_livetarget[g] |
-                        iqentry_6_livetarget[g] |
-                        iqentry_7_livetarget[g] |
-                        iqentry_8_livetarget[g] |
-                        iqentry_9_livetarget[g]
-                        ;
-    end
+always @*
+for (j = 1; j < PREGS; j = j + 1) begin
+	livetarget[j] = 1'b0;
+	for (n = 0; n < QENTRIES; n = n + 1)
+		livetarget[j] = livetarget[j] | iqentry_livetarget[n][j];
 end
-endgenerate
 
-    assign  iqentry_0_livetarget = {PREGS {iqentry_v[0]}} & {PREGS {~iqentry_stomp[0] && iqentry_thrd[0]==branchmiss_thrd}} & iq_out[0],
-	    iqentry_1_livetarget = {PREGS {iqentry_v[1]}} & {PREGS {~iqentry_stomp[1] && iqentry_thrd[1]==branchmiss_thrd}} & iq_out[1],
-	    iqentry_2_livetarget = {PREGS {iqentry_v[2]}} & {PREGS {~iqentry_stomp[2] && iqentry_thrd[2]==branchmiss_thrd}} & iq_out[2],
-	    iqentry_3_livetarget = {PREGS {iqentry_v[3]}} & {PREGS {~iqentry_stomp[3] && iqentry_thrd[3]==branchmiss_thrd}} & iq_out[3],
-	    iqentry_4_livetarget = {PREGS {iqentry_v[4]}} & {PREGS {~iqentry_stomp[4] && iqentry_thrd[4]==branchmiss_thrd}} & iq_out[4],
-	    iqentry_5_livetarget = {PREGS {iqentry_v[5]}} & {PREGS {~iqentry_stomp[5] && iqentry_thrd[5]==branchmiss_thrd}} & iq_out[5],
-	    iqentry_6_livetarget = {PREGS {iqentry_v[6]}} & {PREGS {~iqentry_stomp[6] && iqentry_thrd[6]==branchmiss_thrd}} & iq_out[6],
-	    iqentry_7_livetarget = {PREGS {iqentry_v[7]}} & {PREGS {~iqentry_stomp[7] && iqentry_thrd[7]==branchmiss_thrd}} & iq_out[7],
-	    iqentry_8_livetarget = {PREGS {iqentry_v[8]}} & {PREGS {~iqentry_stomp[8] && iqentry_thrd[8]==branchmiss_thrd}} & iq_out[8],
-	    iqentry_9_livetarget = {PREGS {iqentry_v[9]}} & {PREGS {~iqentry_stomp[9] && iqentry_thrd[9]==branchmiss_thrd}} & iq_out[9]
-	    ;
+always @*
+	for (n = 0; n < QENTRIES; n = n + 1)
+		iqentry_livetarget[n] = {PREGS {iqentry_v[n]}} & {PREGS {~iqentry_stomp[n] && iqentry_thrd[n]==branchmiss_thrd}} & iq_out[n];
 
 //
 // BRANCH-MISS LOGIC: latestID
@@ -3678,7 +3653,7 @@ endgenerate
 // 
 always @*
 	for (n = 0; n < QENTRIES; n = n + 1) begin
-		iqentry_cumulative[n] = 0;
+		iqentry_cumulative[n] = 1'b0;
 		for (j = n; j < n + QENTRIES; j = j + 1) begin
 			if (missid==(j % QENTRIES))
 				for (k = n; k <= j; k = k + 1)
@@ -4556,7 +4531,7 @@ begin
 	// Add one more compare and set
 end
 */
-
+/*
 reg [`QBITS] nid0;
 always @*
 if (iqentry_thrd[1]==iqentry_thrd[0])
@@ -4786,8 +4761,19 @@ else if (iqentry_thrd[8]==iqentry_thrd[9])
 	nid9 = 4'd8;
 else
 	nid9 = 4'd9;
-
-wire [`QBITS] nids [0:QENTRIES-1];
+*/
+reg [`QBITS] nids [0:QENTRIES-1];
+always @*
+for (j = 0; j < QENTRIES; j = j + 1) begin
+	// We can't both start and stop at j
+	for (n = j; n != (j+1)%QENTRIES; n = (n + (QENTRIES-1)) % QENTRIES)
+		if (iqentry_thrd[n]==iqentry_thrd[j])
+			nids[j] = n;
+	// Do the last one
+	if (iqentry_thrd[(j+1)%QENTRIES]==iqentry_thrd[j])
+		nids[j] = (j+1)%QENTRIES;
+end
+/*
 assign nids[0] = nid0;
 assign nids[1] = nid1;
 assign nids[2] = nid2;
@@ -4798,9 +4784,17 @@ assign nids[6] = nid6;
 assign nids[7] = nid7;
 assign nids[8] = nid8;
 assign nids[9] = nid9;
-
+*/
 // Search the queue for the next entry on the same thread.
 reg [`QBITS] nid;
+always @*
+begin
+	nid = fcu_id;
+	for (n = QENTRIES-1; n > 0; n = n - 1)
+		if (iqentry_thrd[(fcu_id + n) % QENTRIES]==fcu_thrd)
+			nid = (fcu_id + n) % QENTRIES;
+end
+/*
 always @*
 if (iqentry_thrd[idp1(fcu_id)]==iqentry_thrd[fcu_id[`QBITS]])
 	nid = idp1(fcu_id);
@@ -4822,7 +4816,7 @@ else if (iqentry_thrd[idp9(fcu_id)]==iqentry_thrd[fcu_id[`QBITS]])
 	nid = idp9(fcu_id);
 else
 	nid = fcu_id;
-
+*/
 always @*
 for (n = 0; n < QENTRIES; n = n + 1)
 	nextqd[n] <= iqentry_sn[nids[n]] > iqentry_sn[n] || iqentry_v[n];
@@ -5852,7 +5846,7 @@ begin
 end
 */
 // Stomp logic for branch miss.
-
+/*
 FT64_stomp #(QENTRIES) ustmp1
 (
 	.branchmiss(branchmiss),
@@ -5863,29 +5857,26 @@ FT64_stomp #(QENTRIES) ustmp1
 	.iqentry_v(iqentry_v),
 	.stomp(iqentry_stomp)
 );
+*/
+always @*
+begin
+	iqentry_stomp <= 1'b0;
+	if (branchmiss) begin
+		for (n = 0; n < QENTRIES; n = n + 1) begin
+			if (iqentry_v[n] && iqentry_thrd[n]==branchmiss_thrd) begin
+				if (iqentry_sn[n] > iqentry_sn[fcu_id[`QBITS]])
+					iqentry_stomp[n] <= `TRUE;
+			end
+		end
+	end
+end
 
 always @*
 begin
-	if (iqentry_stomp[0] && iqentry_ret[0])
-		stompedOnRets = stompedOnRets + 4'd1;
-	if (iqentry_stomp[1] && iqentry_ret[1])
-		stompedOnRets = stompedOnRets + 4'd1;
-	if (iqentry_stomp[2] && iqentry_ret[2])
-		stompedOnRets = stompedOnRets + 4'd1;
-	if (iqentry_stomp[3] && iqentry_ret[3])
-		stompedOnRets = stompedOnRets + 4'd1;
-	if (iqentry_stomp[4] && iqentry_ret[4])
-		stompedOnRets = stompedOnRets + 4'd1;
-	if (iqentry_stomp[5] && iqentry_ret[5])
-		stompedOnRets = stompedOnRets + 4'd1;
-	if (iqentry_stomp[6] && iqentry_ret[6])
-		stompedOnRets = stompedOnRets + 4'd1;
-	if (iqentry_stomp[7] && iqentry_ret[7])
-		stompedOnRets = stompedOnRets + 4'd1;
-	if (iqentry_stomp[8] && iqentry_ret[8])
-		stompedOnRets = stompedOnRets + 4'd1;
-	if (iqentry_stomp[9] && iqentry_ret[9])
-		stompedOnRets = stompedOnRets + 4'd1;
+	stompedOnRets = 1'b0;
+	for (n = 0; n < QENTRIES; n = n + 1)
+		if (iqentry_stomp[n] && iqentry_ret[n])
+			stompedOnRets = stompedOnRets + 4'd1;
 end
 
 reg id1_vi, id2_vi, id3_vi;
@@ -6117,6 +6108,17 @@ wire [1:0] olm = ol[fcu_thrd];
 wire [1:0] olm = ol;
 `endif
 
+reg [`SNBITS] maxsn [0:`WAYS-1];
+always @*
+begin
+	for (j = 0; j < `WAYS; j = j + 1) begin
+		maxsn[j] = 8'd0;
+		for (n = 0; n < QENTRIES; n = n + 1)
+			if (iqentry_sn[n] > maxsn[j] && iqentry_thrd[n]==j && iqentry_v[n])
+				maxsn[j] = iqentry_sn[n];
+	end
+end
+
 assign  fcu_v = fcu_dataready;
 assign  fcu_id = fcu_sourceid;
 
@@ -6186,7 +6188,7 @@ wire fcu_brk_miss = (fcu_brk || fcu_rti) && fcu_v;
 `ifdef FCU_ENH
 wire fcu_ret_miss = fcu_ret && fcu_v && (fcu_argB != iqentry_pc[nid]);
 wire fcu_jal_miss = fcu_jal && fcu_v && fcu_argA + fcu_argI != iqentry_pc[nid];
-wire fcu_followed = iqentry_sn[nid] > fcu_sn;
+wire fcu_followed = iqentry_sn[nid] > iqentry_sn[fcu_id[`QBITS]];
 `else
 wire fcu_ret_miss = fcu_ret && fcu_v;
 wire fcu_jal_miss = fcu_jal && fcu_v;
@@ -6257,7 +6259,7 @@ else
 // The fcu_timeout tracks how long the flow control op has been in the "out" state.
 // It should never be that way more than a couple of cycles. Sometimes the fcu_wr pulse got missed
 // because the following instruction got stomped on during a branchmiss, hence iqentry_v isn't true.
-wire fcu_wr = (fcu_v && iqentry_v[nid] && iqentry_sn[nid] > fcu_sn);//	// && iqentry_v[nid]
+wire fcu_wr = (fcu_v && iqentry_v[fcu_id[`QBITS]] && iqentry_iv[fcu_id[`QBITS]] && iqentry_v[nid] && iqentry_sn[nid] > iqentry_sn[fcu_id[`QBITS]] && !fcu_done);//	// && iqentry_v[nid]
 //					&& fcu_instr==iqentry_instr[fcu_id[`QBITS]]);// || fcu_timeout==8'h05;
 
 FT64_RMW_alu urmwalu0 (rmw_instr, rmw_argA, rmw_argB, rmw_argC, rmw_res);
@@ -6609,7 +6611,7 @@ if (rst) begin
        iqentry_cmt[n] <= FALSE;
        iqentry_out[n] <= FALSE;
        iqentry_agen[n] <= FALSE;
-       iqentry_sn[n] <= 32'd0;
+       iqentry_sn[n] <= 4'd0;
        iqentry_pt[n] <= FALSE;
        iqentry_bt[n] <= FALSE;
        iqentry_br[n] <= FALSE;
@@ -6801,6 +6803,9 @@ if (rst) begin
 `ifdef SIM
 		wb_merges <= 32'd0;
 `endif
+		icl_ctr <= 40'd0;
+		bm_ctr <= 40'd0;
+		irq_ctr <= 40'd0;
 end
 else begin
 	if (|fb_panic)
@@ -6975,7 +6980,7 @@ else begin
 							vqet1 <= vqet1 + 4'd1; 
 						if (vqe1 >= vl-2)
 							nop_fetchbuf <= fetchbuf ? 4'b0100 : 4'b0001;
-						enque1(tail0, fetchbuf1_thrd ? seq_num1 : seq_num, vqe1);
+						enque1(tail0, fetchbuf1_thrd ? maxsn[1]+4'd1 : maxsn[0]+4'd1, vqe1);
 						if (canq2 && vqe1 < vl-2) begin
 							vqe1 <= vqe1 + 4'd2;
 							if (IsVCmprss(fetchbuf1_instr)) begin
@@ -6984,16 +6989,11 @@ else begin
 							end
 							else
 								vqet1 <= vqet1 + 4'd2;
-							enque1(tail1, fetchbuf1_thrd ? seq_num1 + 5'd1 : seq_num + 5'd1, vqe1 + 6'd1);
-							// Override the earlier udpate
-							if (fetchbuf1_thrd)
-								seq_num1 <= seq_num1 + 5'd2;
-							else
-								seq_num <= seq_num + 5'd2;
+							enque1(tail1, fetchbuf1_thrd ? maxsn[1] + 4'd2 : maxsn[0] + 4'd2, vqe1 + 6'd1);
 						end
 					end
 					else begin
-						enque1(tail0, fetchbuf1_thrd ? seq_num1 : seq_num, 6'd0);
+						enque1(tail0, fetchbuf1_thrd ? maxsn[1]+4'd1 : maxsn[0]+4'd1, 6'd0);
 					end
 		    end
 
@@ -7034,11 +7034,7 @@ else begin
 		                	nop_fetchbuf <= fetchbuf ? 4'b1000 : 4'b0010;
 		            end
 		            if (vqe0 < vl || !IsVector(fetchbuf0_instr)) begin
-			            enque0(tail0, fetchbuf0_thrd ? seq_num1 : seq_num, vqe0);
-			    		if (fetchbuf0_thrd)
-			    			seq_num1 <= seq_num1 + 5'd1;
-			    		else
-			    			seq_num <= seq_num + 5'd1;
+			            enque0(tail0, fetchbuf0_thrd ? maxsn[1]+4'd1 : maxsn[0]+4'd1, vqe0);
 					    //
 					    // if there is room for a second instruction, enqueue it
 					    //
@@ -7063,21 +7059,9 @@ else begin
 				                if (vqe1 >= vl-2)
 				                	nop_fetchbuf <= fetchbuf ? 4'b0100 : 4'b0001;
 					      		enque1(tail1,
-					      			fetchbuf1_thrd==fetchbuf0_thrd && fetchbuf1_thrd==1'b1 ? seq_num1 + 5'd1 :
-					      			fetchbuf1_thrd==fetchbuf0_thrd && fetchbuf1_thrd==1'b0 ? seq_num + 5'd1 :
-					      			fetchbuf1_thrd ? seq_num1 + 5'd1: seq_num + 5'd1, 6'd0);
-					      		if (fetchbuf1_thrd==fetchbuf0_thrd) begin
-						    		if (fetchbuf1_thrd)
-						    			seq_num1 <= seq_num1 + 5'd2;
-						    		else
-						    			seq_num <= seq_num + 5'd2;
-					    		end
-					    		else begin
-						    		if (fetchbuf1_thrd)
-						    			seq_num1 <= seq_num1 + 5'd1;
-						    		else
-						    			seq_num <= seq_num + 5'd1;
-					    		end
+					      			fetchbuf1_thrd==fetchbuf0_thrd && fetchbuf1_thrd==1'b1 ? maxsn[1] + 4'd2 :
+					      			fetchbuf1_thrd==fetchbuf0_thrd && fetchbuf1_thrd==1'b0 ? maxsn[0] + 4'd2 :
+					      			fetchbuf1_thrd ? maxsn[1] + 4'd2: maxsn[0] + 4'd2, 6'd0);
 
 								// SOURCE 1 ...
 								a1_vs();
@@ -7116,11 +7100,7 @@ else begin
 				                if (vqe0 >= vl-3)
 			    	            	 nop_fetchbuf <= fetchbuf ? 4'b1000 : 4'b0010;
 			    	            if (vqe0 < vl-1) begin
-						      		enque0(tail1, fetchbuf0_thrd ? seq_num1 + 5'd1 : seq_num + 5'd1, vqe0 + 6'd1);
-						    		if (fetchbuf0_thrd)
-						    			seq_num1 <= seq_num1 + 5'd2;
-						    		else
-						    			seq_num <= seq_num + 5'd2;
+						      		enque0(tail1, fetchbuf0_thrd ? maxsn[1] + 4'd2 : maxsn[0] + 4'd2, vqe0 + 6'd1);
 
 									// SOURCE 1 ...
 						     iqentry_a1_v [tail1] <= regIsValid[Ra0s];
@@ -7158,21 +7138,9 @@ else begin
 			                    if (IsVector(fetchbuf0_instr) && SUP_VECTOR)
 			   	            		nop_fetchbuf <= fetchbuf ? 4'b1000 : 4'b0010;
 					      		enque1(tail1,
-					      			fetchbuf1_thrd==fetchbuf0_thrd && fetchbuf1_thrd==1'b1 ? seq_num1 + 5'd1 :
-					      			fetchbuf1_thrd==fetchbuf0_thrd && fetchbuf1_thrd==1'b0 ? seq_num + 5'd1 :
-					      			fetchbuf1_thrd ? seq_num1 + 5'd1: seq_num + 5'd1, 6'd0);
-					      		if (fetchbuf1_thrd==fetchbuf0_thrd) begin
-						    		if (fetchbuf1_thrd)
-						    			seq_num1 <= seq_num1 + 5'd2;
-						    		else
-						    			seq_num <= seq_num + 5'd2;
-					    		end
-					    		else begin
-						    		if (fetchbuf1_thrd)
-						    			seq_num1 <= seq_num1 + 5'd1;
-						    		else
-						    			seq_num <= seq_num + 5'd1;
-					    		end
+					      			fetchbuf1_thrd==fetchbuf0_thrd && fetchbuf1_thrd==1'b1 ? maxsn[1] + 4'd2 :
+					      			fetchbuf1_thrd==fetchbuf0_thrd && fetchbuf1_thrd==1'b0 ? maxsn[0] + 4'd2 :
+					      			fetchbuf1_thrd ? maxsn[1] + 4'd2: maxsn[0] + 4'd2, 6'd0);
 
 								// SOURCE 1 ...
 								a1_vs();
@@ -7200,19 +7168,9 @@ else begin
 				            else begin
 //					      		enque1(tail1, seq_num + 5'd1, 6'd0);
 					      		enque1(tail1,
-					      			fetchbuf1_thrd==fetchbuf0_thrd && fetchbuf1_thrd==1'b1 ? seq_num1 + 5'd1 :
-					      			fetchbuf1_thrd==fetchbuf0_thrd && fetchbuf1_thrd==1'b0 ? seq_num + 5'd1 :
-					      			fetchbuf1_thrd ? seq_num1: seq_num, 6'd0);
-					      		if (fetchbuf1_thrd==fetchbuf0_thrd) begin
-						    		if (fetchbuf1_thrd)
-						    			seq_num1 <= seq_num1 + 5'd2;
-						    		else
-						    			seq_num <= seq_num + 5'd2;
-					    		end
-					    		else begin
-						    			seq_num1 <= seq_num1 + 5'd1;
-						    			seq_num <= seq_num + 5'd1;
-					    		end
+					      			fetchbuf1_thrd==fetchbuf0_thrd && fetchbuf1_thrd==1'b1 ? maxsn[1] + 4'd2 :
+					      			fetchbuf1_thrd==fetchbuf0_thrd && fetchbuf1_thrd==1'b0 ? maxsn[0] + 4'd2 :
+					      			fetchbuf1_thrd ? maxsn[1] + 4'd1: maxsn[0]+4'd1, 6'd0);
 
 								// SOURCE 1 ...
 								a1_vs();
@@ -7258,6 +7216,7 @@ else begin
 		    end
 		endcase
 	if (pebm) begin
+		bm_ctr <= bm_ctr + 40'd1;
 		if (branchmiss_thrd==1'b0)
 			seq_num <= seq_num + 5'd3;
 		else
@@ -7363,6 +7322,7 @@ if (fcu_branchmiss) begin
 		(fetchbuf1_v && fetchbuf1_pc==misspc))
 	fcu_clearbm <= `TRUE;
 end
+
 
 if (mem1_available && dramA_v && iqentry_v[ dramA_id[`QBITS] ] && iqentry_load[ dramA_id[`QBITS] ] && !iqentry_stomp[dramA_id[`QBITS]]) begin
 	iqentry_res	[ dramA_id[`QBITS] ] <= dramA_bus;
@@ -7728,7 +7688,6 @@ end
                  fcu_sourceid	<= n[3:0];
                  fcu_instr	<= iqentry_instr[n];
                  fcu_insln  <= iqentry_insln[n];
-                 fcu_sn     <= iqentry_sn[n];
                  fcu_pc		<= iqentry_pc[n];
                  fcu_nextpc <= iqentry_pc[n] + iqentry_insln[n];
                  fcu_pt     <= iqentry_pt[n];
@@ -7868,11 +7827,12 @@ for (n = 0; n < QENTRIES; n = n + 1)
          // This will cause the a1 bus to look for new data from memory (a1_s is pointed to a memory bus)
          // This is used for the load and compare instructions.
          iqentry_a1_v[n] <= `INV;
+		   	 iqentry_out[n] <= `VAL;
          last_issue = n;
         end
     end
-if (last_issue < QENTRIES)
-   	iqentry_out[last_issue] <= `VAL;
+//if (last_issue < QENTRIES)
+//   	iqentry_out[last_issue] <= `VAL;
 for (n = 0; n < QENTRIES; n = n + 1)
     if (~iqentry_stomp[n] && iqentry_memissue[n] && iqentry_agen[n] && ~iqentry_out[n] && ~iqentry_done[n]) begin
     	if (mem2_available && n < last_issue && `NUM_MEM > 1) begin
@@ -7895,12 +7855,13 @@ for (n = 0; n < QENTRIES; n = n + 1)
            dram1_store <= iqentry_store[n];
            dram1_ol   <= (iqentry_Ra[n][4:0]==5'd31 || iqentry_Ra[n][4:0]==5'd30) ? ol[iqentry_thrd[n]] : dl[iqentry_thrd[n]];
 	         iqentry_a1_v[n] <= `INV;
+						iqentry_out[n] <= `VAL;
            last_issue = n;
           end
     	end
     end
-if (last_issue < QENTRIES)
-   	iqentry_out[last_issue] <= `VAL;
+//if (last_issue < QENTRIES)
+//   	iqentry_out[last_issue] <= `VAL;
 for (n = 0; n < QENTRIES; n = n + 1)
     if (~iqentry_stomp[n] && iqentry_memissue[n] && iqentry_agen[n] && ~iqentry_out[n] && ~iqentry_done[n]) begin
     	if (mem3_available && n < last_issue && `NUM_MEM > 2) begin
@@ -7923,11 +7884,12 @@ for (n = 0; n < QENTRIES; n = n + 1)
            dram2_store <= iqentry_store[n];
            dram2_ol   <= (iqentry_Ra[n][4:0]==5'd31 || iqentry_Ra[n][4:0]==5'd30) ? ol[iqentry_thrd[n]] : dl[iqentry_thrd[n]];
            iqentry_a1_v[n] <= `INV;
+			   	iqentry_out[n] <= `VAL;
         end
     	end
     end
-if (last_issue < QENTRIES)
-   	iqentry_out[last_issue] <= `VAL;
+//if (last_issue < QENTRIES)
+//   	iqentry_out[last_issue] <= `VAL;
 
 for (n = 0; n < QENTRIES; n = n + 1)
 begin
@@ -8898,6 +8860,7 @@ B_ICacheNack:
 		L1_en <= 9'h1FF;
 		L2_xsel <= 1'b0;
 		if (~ack_i) begin
+			icl_ctr <= icl_ctr + 40'd1;
 			bstate <= BIDLE;
 			L2_nxt <= TRUE;
 		end
@@ -9043,46 +9006,11 @@ if (!branchmiss) begin
     endcase
 end
 else if (!thread_en) begin	// if branchmiss
-    if (iqentry_stomp[0] & ~iqentry_stomp[QENTRIES-1]) begin
-         tail0 <= 4'd0;
-         tail1 <= 4'd1;
-    end
-    else if (iqentry_stomp[1] & ~iqentry_stomp[0]) begin
-         tail0 <= 4'd1;
-         tail1 <= 4'd2;
-    end
-    else if (iqentry_stomp[2] & ~iqentry_stomp[1]) begin
-         tail0 <= 4'd2;
-         tail1 <= 4'd3;
-    end
-    else if (iqentry_stomp[3] & ~iqentry_stomp[2]) begin
-         tail0 <= 4'd3;
-         tail1 <= 4'd4;
-    end
-    else if (iqentry_stomp[4] & ~iqentry_stomp[3]) begin
-         tail0 <= 4'd4;
-         tail1 <= 4'd5;
-    end
-    else if (iqentry_stomp[5] & ~iqentry_stomp[4]) begin
-         tail0 <= 4'd5;
-         tail1 <= 4'd6;
-    end
-    else if (iqentry_stomp[6] & ~iqentry_stomp[5]) begin
-         tail0 <= 4'd6;
-         tail1 <= 4'd7;
-    end
-    else if (iqentry_stomp[7] & ~iqentry_stomp[6]) begin
-         tail0 <= 4'd7;
-         tail1 <= 4'd8;
-    end
-    else if (iqentry_stomp[8] & ~iqentry_stomp[7]) begin
-         tail0 <= 4'd8;
-         tail1 <= 4'd9;
-    end
-    else if (iqentry_stomp[9] & ~iqentry_stomp[8]) begin
-         tail0 <= 4'd9;
-         tail1 <= 4'd0;
-    end
+	for (n = QENTRIES-1; n >= 0; n = n - 1)
+		if (iqentry_stomp[n] & ~iqentry_stomp[(n+(QENTRIES-1))%QENTRIES]) begin
+			tail0 <= n;
+			tail1 <= (n + 1) % QENTRIES;	
+		end
     // otherwise, it is the last instruction in the queue that has been mispredicted ... do nothing
 end
 
@@ -9488,17 +9416,9 @@ endtask
 task head_inc;
 input [`QBITS] amt;
 begin
-     heads[0] <= (heads[0] + amt) % QENTRIES;
-     heads[1] <= (heads[1] + amt) % QENTRIES;
-     heads[2] <= (heads[2] + amt) % QENTRIES;
-     heads[3] <= (heads[3] + amt) % QENTRIES;
-     heads[4] <= (heads[4] + amt) % QENTRIES;
-     heads[5] <= (heads[5] + amt) % QENTRIES;
-     heads[6] <= (heads[6] + amt) % QENTRIES;
-     heads[7] <= (heads[7] + amt) % QENTRIES;
-     heads[8] <= (heads[8] + amt) % QENTRIES;
-     heads[9] <= (heads[9] + amt) % QENTRIES;
-     CC <= CC + amt;
+	for (n = 0; n < QENTRIES; n = n + 1)
+     heads[n] <= (heads[n] + amt) % QENTRIES;
+	CC <= CC + amt;
     if (amt==3'd3) begin
     	I = I + iqentry_v[heads[0]] + iqentry_v[heads[1]] + iqentry_v[heads[2]];
      	iqentry_agen[heads[0]] <= `INV;
@@ -9513,6 +9433,12 @@ begin
     	iqentry_alu[heads[0]] <= `FALSE;
     	iqentry_alu[heads[1]] <= `FALSE;
     	iqentry_alu[heads[2]] <= `FALSE;
+  		for (n = 0; n < QENTRIES; n = n + 1)
+  			if (iqentry_v[n])
+  				iqentry_sn[n] <= iqentry_sn[n] - (iqentry_v[heads[2]] ? iqentry_sn[heads[2]]
+  																			 : iqentry_v[heads[1]] ? iqentry_sn[heads[1]]
+  																			 : iqentry_v[heads[0]] ? iqentry_sn[heads[0]]
+  																			 : 4'b0);
    	end 
     else if (amt==3'd2) begin
     	I = I + iqentry_v[heads[0]] + iqentry_v[heads[1]];
@@ -9524,12 +9450,21 @@ begin
      iqentry_iv[heads[1]] <= `INV;
     	iqentry_alu[heads[0]] <= `FALSE;
      iqentry_alu[heads[1]] <= `FALSE;
+  		for (n = 0; n < QENTRIES; n = n + 1)
+  			if (iqentry_v[n])
+  				iqentry_sn[n] <= iqentry_sn[n] - (iqentry_v[heads[1]] ? iqentry_sn[heads[1]]
+  																			 : iqentry_v[heads[0]] ? iqentry_sn[heads[0]]
+  																			 : 4'b0);
     end else if (amt==3'd1) begin
     	I = I + iqentry_v[heads[0]];
 	    iqentry_agen[heads[0]] <= `INV;
 	    iqentry_mem[heads[0]] <= `FALSE;
      	iqentry_iv[heads[0]] <= `INV;
     	iqentry_alu[heads[0]] <= `FALSE;
+  		for (n = 0; n < QENTRIES; n = n + 1)
+   			if (iqentry_v[n])
+  				iqentry_sn[n] <= iqentry_sn[n] - (iqentry_v[heads[0]] ? iqentry_sn[heads[0]]
+  																			 : 4'b0);
 	end
 end
 endtask
@@ -9679,11 +9614,7 @@ begin
 			vqet0 <= vqet0 + 4'd1;
 		if (vqe0 >= vl-2)
 			nop_fetchbuf <= fetchbuf ? 4'b1000 : 4'b0010;
-		enque0(tail0, fetchbuf0_thrd ? seq_num1 : seq_num, vqe0);
-		if (fetchbuf0_thrd)
-			seq_num1 <= seq_num1 + 5'd1;
-		else
-			seq_num <= seq_num + 5'd1;
+		enque0(tail0, fetchbuf0_thrd ? maxsn[1]+4'd1 : maxsn[0]+4'd1, vqe0);
 		if (fetchbuf0_rfw) begin
 			rf_source[ Rt0s ] <= { 1'b0, fetchbuf0_memld, tail0 };    // top bit indicates ALU/MEM bus
 			rf_v[Rt0s] <= `INV;
@@ -9697,11 +9628,7 @@ begin
 				end
 				else
 					vqet0 <= vqet0 + 4'd2;
-				enque0(tail1, fetchbuf0_thrd ? seq_num1 + 5'd1 : seq_num+5'd1, vqe0 + 6'd1);
-				if (fetchbuf0_thrd)
-					seq_num1 <= seq_num1 + 5'd2;
-				else
-					seq_num <= seq_num + 5'd2;
+				enque0(tail1, fetchbuf0_thrd ? maxsn[1] + 4'd2 : maxsn[0]+4'd2, vqe0 + 6'd1);
 				if (fetchbuf0_rfw) begin
 					rf_source[ Rt0s ] <= { 1'b0, fetchbuf0_memld, tail1 };    // top bit indicates ALU/MEM bus
 					rf_v[Rt0s] <= `INV;
@@ -9710,11 +9637,7 @@ begin
 		end
 	end
 	else begin
-		enque0(tail0, fetchbuf0_thrd ? seq_num1 : seq_num, 6'd0);
-		if (fetchbuf0_thrd)
-			seq_num1 <= seq_num1 + 5'd1;
-		else
-			seq_num <= seq_num + 5'd1;
+		enque0(tail0, fetchbuf0_thrd ? maxsn[1]+4'd1 : maxsn[0]+4'd1, 6'd0);
 		if (fetchbuf0_rfw) begin
 			rf_source[ Rt0s ] <= { 1'b0, fetchbuf0_memld, tail0 };    // top bit indicates ALU/MEM bus
 			rf_v[Rt0s] <= `INV;
@@ -9726,7 +9649,7 @@ endtask
 // Enqueue fetchbuf0 onto the tail of the instruction queue
 task enque0;
 input [`QBITS] tail;
-input [63:0] seqnum;
+input [`SNBITS] seqnum;
 input [5:0] venno;
 begin
 	iqentry_exc[tail] <= `FLT_NONE;
@@ -9747,6 +9670,11 @@ begin
 	iqentry_res  [tail]    <=    `ZERO;
 	iqentry_instr[tail]    <=    IsVLS(fetchbuf0_instr) ? (vm[fnM2(fetchbuf0_instr)] ? fetchbuf0_instr : `NOP_INSN) : fetchbuf0_instr;
 	iqentry_insln[tail]		 <=  fetchbuf0_insln;
+	iqentry_fc   [tail]    <=  `INV;
+	iqentry_mem	 [tail]		 <=  `INV;
+	iqentry_alu	 [tail]		 <=  `INV;
+	iqentry_fpu	 [tail]		 <=  `INV;
+	iqentry_load [tail]		 <=  `INV;
 	iqentry_pt   [tail]    <=  predict_taken0;
 	iqentry_agen [tail]    <=    `INV;
 	iqentry_state[tail]    <=   IQS_IDLE;
@@ -9781,7 +9709,7 @@ endtask
 // of this code checks to see which tail it is being queued on.
 task enque1;
 input [`QBITS] tail;
-input [63:0] seqnum;
+input [`SNBITS] seqnum;
 input [5:0] venno;
 begin
  iqentry_exc[tail] <= `FLT_NONE;
@@ -9802,6 +9730,11 @@ begin
 	iqentry_res  [tail]    <=   `ZERO;
 	iqentry_instr[tail]    <=   IsVLS(fetchbuf1_instr) ? (vm[fnM2(fetchbuf1_instr)] ? fetchbuf1_instr : `NOP_INSN) : fetchbuf1_instr; 
 	iqentry_insln[tail]		 <=  fetchbuf1_insln;
+	iqentry_fc   [tail]    <=  `INV;
+	iqentry_mem	 [tail]		 <=  `INV;
+	iqentry_alu	 [tail]		 <=  `INV;
+	iqentry_fpu	 [tail]		 <=  `INV;
+	iqentry_load [tail]		 <=  `INV;
 	iqentry_pt   [tail]    <=  predict_taken1;
 	iqentry_agen [tail]    <=   `INV;
 	iqentry_state[tail]    <=   IQS_IDLE;
@@ -10241,6 +10174,10 @@ begin
     `CSR_EPC7:      dat <= epc7;
 `endif    
     `CSR_CODEBUF:   dat <= codebuf[csrno[5:0]];
+    `CSR_Q_CTR:		dat <= seq_num;
+    `CSR_BM_CTR:	dat <= bm_ctr;
+    `CSR_ICL_CTR:	dat <= icl_ctr;
+    `CSR_IRQ_CTR:	dat <= irq_ctr;
     `CSR_TIME:		dat <= wc_times;
     `CSR_INFO:
                     case(csrno[3:0])

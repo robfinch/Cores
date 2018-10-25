@@ -24,7 +24,7 @@
 //
 // The following line is to enable simulation versions of some modules.
 // Comment out for synthesis.
-//`define SIM		1'b1
+`define SIM		1'b1
 
 //`define SUPPORT_SMT		1'b1
 //`define SUPPORT_VECTOR	1'b1
@@ -39,8 +39,22 @@
 `define ABITS			`AMSB:0
 
 
-`define QBITS			3:0			// bitfield representing a queue entry index
-`define QENTRIES	10			// changing this still requires changing code in FT64.
+// bitfield representing a queue entry index. The field must be large
+// enough to accomodate a queue entry number, determined by the number
+// of queue entries below.
+`define QBITS			3:0
+
+// The following bitfield spec is for the instruction seqneunce number. It
+// must have at least one more bit in it than the QBITS above as the counter
+// can overflow a little bit.
+`define SNBITS		4:0
+
+// Memory issue logic is for 10 queue entries, so this define should not be
+// set less than 10. If set greater than 10, then memory instructions won't
+// issue until they are within 10 of the head of the queue.
+`define QENTRIES	12
+
+// Bitfield for representing exception codes
 `define XBITS			7:0
 
 //`define SUPPORT_DBG		1'b1

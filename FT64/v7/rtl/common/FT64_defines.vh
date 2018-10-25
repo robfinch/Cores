@@ -350,7 +350,11 @@
 `define CSR_GOLEX3	12'h053
 `define CSR_GOLEXVP	12'h054
 `define CSR_CODEBUF 11'b00010??????
-`define CSR_TIME	11'h7E0
+`define CSR_Q_CTR		11'h7C0
+`define CSR_BM_CTR	11'h7C1
+`define CSR_ICL_CTR	11'h7C2
+`define CSR_IRQ_CTR	11'h7C3
+`define CSR_TIME		11'h7E0
 `define CSR_INFO    11'b111_1111_????
 
 `define OL_USER         2'd3
