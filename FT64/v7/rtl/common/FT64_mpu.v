@@ -93,8 +93,6 @@ reg [63:0] dati;
 wire [63:0] dato;
 wire [3:0] irq;
 wire [7:0] cause;
-wire mmu_ack;
-wire [31:0] mmu_dato;
 wire pic_ack;
 wire [31:0] pic_dato;
 wire pit_ack;
@@ -117,15 +115,15 @@ wire sptr_o;
 always @(posedge clk_i)
 	dat_o <= dato;
 
-wire cs_pit = adr[31:8]==24'hFFDC11;
+wire cs_pit = adr_o[31:8]==24'hFFDC11;
 `ifdef CARD_MEMORY
-wire cs_crd = adr[31:11]==21'd0;	// $00000000 in virtual address space
+wire cs_crd = adr_o[31:11]==21'd0;	// $00000000 in virtual address space
 `else
 wire cs_crd = 1'b0;
 `endif
 
 // Need to recreate the a2 address bit for 32 bit peripherals.
-wire [31:0] adr32 = {adr[31:3],|sel_o[7:4],2'b00};
+wire [31:0] adr32 = {adr_o[31:3],|sel_o[7:4],2'b00};
 wire [31:0] dat32 = |sel_o[7:4] ? dato[63:32] : dato[31:0];
 
 FT64_pit upit1
@@ -133,8 +131,8 @@ FT64_pit upit1
 	.rst_i(rst_i),
 	.clk_i(clk_i),
 	.cs_i(cs_pit),
-	.cyc_i(cyc),
-	.stb_i(stb),
+	.cyc_i(cyc_o),
+	.stb_i(stb_o),
 	.ack_o(pit_ack),
 	.sel_i(sel_o[7:4]|sel_o[3:0]),
 	.we_i(we_o),
@@ -156,8 +154,8 @@ FT64_pic upic1
 (
 	.rst_i(rst_i),		// reset
 	.clk_i(clk_i),		// system clock
-	.cyc_i(cyc),
-	.stb_i(stb),
+	.cyc_i(cyc_o),
+	.stb_i(stb_o),
 	.ack_o(pic_ack),    // controller is ready
 	.wr_i(we_o),		// write
 	.adr_i(adr32),		// address
@@ -203,30 +201,6 @@ FT64_pic upic1
 
 assign irq_o = irq;
 
-FT64_mmu ummu1
-(
-	.rst_i(rst_i),
-	.clk_i(clk_i),
-	.ol_i(ol),
-	.pcr_i(pcr),
-	.pcr2_i(pcr2),
-	.mapen_i(pcr[31]),
-	.s_ex_i(icl),
-	.s_cyc_i(cyc),
-	.s_stb_i(stb),
-	.s_ack_o(mmu_ack),
-	.s_wr_i(we_o),
-	.s_adr_i(adr32),
-	.s_dat_i(dat32),
-	.s_dat_o(mmu_dato),
-	.cyc_o(cyc_o),
-	.stb_o(stb_o),
-	.pea_o(adr_o),
-	.exv_o(exv),
-	.rdv_o(rdv),
-	.wrv_o(wrv)
-);
-
 `ifdef CARD_MEMORY
 CardMemory ucrd1
 (
@@ -246,16 +220,15 @@ assign crd_ack = 1'b0;
 `endif
 
 always @(posedge clk_i)
-casez({mmu_ack,pic_ack,pit_ack,crd_ack})
-4'b1???:  dati <= {2{mmu_dato}};
-4'b01??:	dati <= {2{pic_dato}};
-4'b001?:	dati <= {2{pit_dato}};
-4'b0001:	dati <= crd_dato;
+casez({pic_ack,pit_ack,crd_ack})
+3'b1??:	dati <= {2{pic_dato}};
+3'b01?:	dati <= {2{pit_dato}};
+3'b001:	dati <= crd_dato;
 default:  dati <= dat_i;
 endcase
 
 always @(posedge clk_i)
-	ack <= ack_i|mmu_ack|pic_ack|pit_ack|crd_ack;
+	ack <= ack_i|pic_ack|pit_ack|crd_ack;
 
 FT64 ucpu1
 (
@@ -268,22 +241,19 @@ FT64 ucpu1
     .vec_i(cause),
     .cti_o(cti_o),
     .bte_o(bte_o),
-    .cyc_o(cyc),
-    .stb_o(stb),
+    .cyc_o(cyc_o),
+    .stb_o(stb_o),
     .ack_i(ack),
     .err_i(err_i),
     .we_o(we_o),
     .sel_o(sel_o),
-    .adr_o(adr),
+    .adr_o(adr_o),
     .dat_o(dato),
     .dat_i(dati),
     .ol_o(ol),
     .pcr_o(pcr),
     .pcr2_o(pcr2),
     .icl_o(icl),
-    .exv_i(exv),
-    .rdv_i(rdv),
-    .wrv_i(wrv),
     .sr_o(sr_o),
     .cr_o(cr_o),
     .rbi_i(rb_i)

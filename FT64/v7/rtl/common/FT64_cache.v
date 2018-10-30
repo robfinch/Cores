@@ -885,6 +885,7 @@ FT64_dcache_tag u3
 wire [7:0] v0a = v0 >> radr[4:0];
 wire [7:0] v1a = v1 >> radrp8[4:0];
 always @*
+begin
 case(rdsize)
 byt:    begin
         hit0 = hit0a & v0a[0];
@@ -921,6 +922,8 @@ default:    begin
             hit1 = 1'b0;
             end
 endcase
+        hit1 = `TRUE;
+end
 
 // hit0, hit1 are also delayed by a clock already
 always @(posedge rclk)

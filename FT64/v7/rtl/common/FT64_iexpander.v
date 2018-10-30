@@ -261,7 +261,7 @@ casez({cinstr[15:12],cinstr[6]})
 			expand[47:32] = 16'h0000;
 			expand[31:18] = {{7{cinstr[11]}},cinstr[11:8],cinstr[5],2'd2};
 			expand[17:13] = {cinstr[4:0]};
-			expand[12:8] = 65'd31;
+			expand[12:8] = 5'd31;
 			expand[7:6] = 2'b10;
 			expand[5:0] = `Lx;
 		end
@@ -279,7 +279,7 @@ casez({cinstr[15:12],cinstr[6]})
 			expand[47:32] = 16'h0000;
 			expand[31:18] = {{7{cinstr[11]}},cinstr[11:8],cinstr[5],2'd2};
 			expand[17:13] = cinstr[4:0];
-			expand[12:8] = 6'd30;
+			expand[12:8] = 5'd30;
 			expand[7:6] = 2'b10;
 			expand[5:0] = `Lx;
 		end

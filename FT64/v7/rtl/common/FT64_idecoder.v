@@ -69,6 +69,17 @@ mIsALU uialu1
 	.IsALU(iAlu)
 );
 
+function IsTLB;
+input [47:0] isn;
+case(isn[`INSTRUCTION_OP])
+`R2:
+  case(isn[`INSTRUCTION_S2])
+  `TLB:   IsTLB = TRUE;
+  default:    IsTLB = FALSE;
+  endcase
+default:    IsTLB = FALSE;
+endcase
+endfunction
 
 reg IsALU;
 always @*
@@ -112,6 +123,7 @@ case(isn[`INSTRUCTION_OP])
 `R2:
 	if (isn[`INSTRUCTION_L2]==2'b00)
 		case(isn[`INSTRUCTION_S2])
+		`TLB:				IsAlu0Only = TRUE;
 		`R1:        IsAlu0Only = TRUE;
 		`SHIFTR,`SHIFT31,`SHIFT63:
 			IsAlu0Only = !(instr[25:23]==`SHL || instr[25:23]==`ASL);
@@ -686,7 +698,8 @@ casez(isn[`INSTRUCTION_OP])
 `FVECTOR:   IsRFW = TRUE;
 `R2:
 	if (isn[`INSTRUCTION_L2]==2'b00)
-    case(isn[`INSTRUCTION_S2])
+    casez(isn[`INSTRUCTION_S2])
+    `TLB:		IsRFW = TRUE;
     `R1:    IsRFW = TRUE;
     `ADD:   IsRFW = TRUE;
     `SUB:   IsRFW = TRUE;
@@ -718,6 +731,18 @@ casez(isn[`INSTRUCTION_OP])
     `SEI:	IsRFW = TRUE;
     default:    IsRFW = FALSE;
     endcase
+	else if (isn[`INSTRUCTION_L2]==2'b10)
+    casez(isn[`INSTRUCTION_S2])
+    `ADD:   IsRFW = TRUE;
+    `SUB:   IsRFW = TRUE;
+    `AND:   IsRFW = TRUE;
+    `OR:    IsRFW = TRUE;
+    `XOR:   IsRFW = TRUE;
+    `MOV:	IsRFW = TRUE;
+    `SHIFTR,`SHIFT31,`SHIFT63:
+	    	IsRFW = TRUE;
+    default:    IsRFW = FALSE;
+    endcase
 	else
 		IsRFW = FALSE;
 `MEMNDX:
@@ -745,6 +770,7 @@ casez(isn[`INSTRUCTION_OP])
 	  	endcase
 	  else
 			case({isn[31:28],isn[17:16]})
+			`PUSH:	IsRFW = TRUE;
 	    `CASX:  IsRFW = TRUE;
 	    default:    IsRFW = FALSE;
 	    endcase

@@ -6,7 +6,11 @@
 //       ||
 //
 //	FT64_pmmu.v
-//  - 64 bit CPU memory management unit
+//  - 64 bit CPU paged memory management unit
+//	- 512 entry TLB, 8 way associative
+//  - variable page table depth
+//	- address short-cutting for larger page sizes (8MB)
+//  - hardware clearing of access bit
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -35,21 +39,26 @@ parameter
 	pAssociativity = 8,		// number of ways (parallel compares)
 	pTLB_size = 64,
 	S_WAIT_MISS = 0,
-	S_WR_PTL0 = 1,
-	S_RD_PTL0 = 2,
-	S_RD_PTL1 = 3,
-	S_RD_PTL2 = 4,
-	S_RD_PTL3 = 5,
-	S_RD_PTL4 = 6,
-	S_RD_PTL5 = 7,
-	S_RD_PTL5_ACK = 8,
-	S_RD_PTL = 9,
-	S_WR_PTL = 10
+	S_WR_PTL0L = 1,
+	S_WR_PTL0H = 2,
+	S_RD_PTL0L = 3,
+	S_RD_PTL0H = 4,
+	S_RD_PTL1L = 5,
+	S_RD_PTL1H = 6,
+	S_RD_PTL2 = 7,
+	S_RD_PTL3 = 8,
+	S_RD_PTL4 = 9,
+	S_RD_PTL5 = 10,
+	S_RD_PTL5_ACK = 11,
+	S_RD_PTL = 12,
+	S_WR_PTL = 13
 )
 (
 // syscon
 input rst_i,
 input clk_i,
+
+input clock_tick_i,		// indicates when to run the clock algorithm
 
 // master
 output reg m_cyc_o,		// valid memory address
@@ -102,6 +111,9 @@ reg [3:0] stkstate;
 reg [2:0] cnt;	// tlb replacement counter
 reg [2:0] whichSet;		// which set to update
 reg dbit;				// temp dirty bit
+reg clock;
+reg clock_tick;
+reg [64:0] clock_adr;
 reg miss;
 reg proc;
 reg [63:0] miss_adr;
@@ -269,8 +281,20 @@ if (rst_i) begin
 	for (nn = 0; nn < pAssociativity * pTLB_size; nn = nn + 1)
 		tlb_v[nn] <= 1'b0;		// all entries are invalid on reset
   page_fault <= `FALSE;
+  clock_tick <= `FALSE;
+  clock_adr[64] <= 1'b1;	// start out done
+  clock_adr[63:0] <= 4'd0;
 end
 else begin
+
+	if (clock_tick_i)
+		clock_tick <= `TRUE;
+
+	// Reset clock algorithm address on change of page table.
+	if (invalidate_all || pta_changed) begin
+		clock_adr[64] <= 1'b1;
+		clock_adr[63:0] <= 4'd0;
+	end
 
 	// page fault pulses
 	page_fault <= `FALSE;
@@ -297,6 +321,7 @@ else begin
 			goto(S_WAIT_MISS);
 			dbit <= we_i;
 			proc <= `FALSE;
+			clock <= `FALSE;
 
 			if (miss) begin
 			  proc <= `TRUE;
@@ -317,6 +342,55 @@ else begin
 				whichSet <= nnx;
 				goto(S_RD_PTL5);
 			end
+			else if (clock_tick) begin
+				clock_tick <= `FALSE;
+				clock <= `TRUE;
+				case(pta[10:8])
+				3'd0:	
+					if (clock_adr[23]) begin
+						miss_adr <= 4'h0;
+						clock_adr <= 4'h0;
+					end
+					else
+						miss_adr <= clock_adr[63:0];
+				3'd1:
+					if (clock_adr[33]) begin
+						miss_adr <= 4'h0;
+						clock_adr <= 4'h0;
+					end
+					else
+						miss_adr <= clock_adr[63:0];
+				3'd2:
+					if (clock_adr[43]) begin
+						miss_adr <= 4'h0;
+						clock_adr <= 4'h0;
+					end
+					else
+						miss_adr <= clock_adr[63:0];
+				3'd3:
+					if (clock_adr[53]) begin
+						miss_adr <= 4'h0;
+						clock_adr <= 4'h0;
+					end
+					else
+						miss_adr <= clock_adr[63:0];
+				3'd4:
+					if (clock_adr[63]) begin
+						miss_adr <= 4'h0;
+						clock_adr <= 4'h0;
+					end
+					else
+						miss_adr <= clock_adr[63:0];
+				default:
+					if (clock_adr[64]) begin
+						miss_adr <= 4'h0;
+						clock_adr <= 4'h0;
+					end
+					else
+						miss_adr <= clock_adr[63:0];
+				endcase
+				goto(S_RD_PTL5);
+			end
 		end
 
 	S_RD_PTL5:
@@ -326,8 +400,8 @@ else begin
 			m_lock_o <= 1'b0;
 			m_we_o  <= 1'b0;
 			case(pta[10:8])
-			3'd0:	state <= S_RD_PTL0;
-			3'd1:	state <= S_RD_PTL1;
+			3'd0:	state <= S_RD_PTL0L;
+			3'd1:	state <= S_RD_PTL1L;
 			3'd2:	state <= S_RD_PTL2;
 			3'd3:	state <= S_RD_PTL3;
 			3'd4:	state <= S_RD_PTL4;
@@ -336,12 +410,12 @@ else begin
 			endcase
 			// Set page table address for lookup
 			case(pta[10:8])
-			3'b000:	m_adr_o <= {pta[47:13],miss_adr[22:13],3'b0};	// 8MB translations
-			3'b001:	m_adr_o <= {pta[47:13],miss_adr[32:23],3'b0};	// 8GB translations
-			3'b010:	m_adr_o <= {pta[47:13],miss_adr[42:33],3'b0};	// 8TB translations
-			3'b011:	m_adr_o <= {pta[47:13],miss_adr[52:43],3'b0};	// 8XB translations
-			3'b100:	m_adr_o <= {pta[47:13],miss_adr[62:53],3'b0};	//     translations
-			3'b101:	m_adr_o <= {pta[47:13],9'b00,miss_adr[63],3'b0};	//  translations
+			3'b000:	m_adr_o <= {pta[47:14],miss_adr[22:13],4'h0};	// 8MB translations
+			3'b001:	m_adr_o <= {pta[47:14],miss_adr[32:23],4'h0};	// 8GB translations
+			3'b010:	m_adr_o <= {pta[47:14],miss_adr[42:33],4'h8};	// 8TB translations
+			3'b011:	m_adr_o <= {pta[47:14],miss_adr[52:43],4'h8};	// 8XB translations
+			3'b100:	m_adr_o <= {pta[47:14],miss_adr[62:53],4'h8};	//     translations
+			3'b101:	m_adr_o <= {pta[47:14],9'b00,miss_adr[63],4'h8};	//  translations
 			default:	;
 			endcase
 		end
@@ -350,14 +424,22 @@ else begin
 	// If app uses a page directory, now address the page table
 	S_RD_PTL5_ACK:
 		if (m_ack_i) begin
+			nack();
 			if (|m_dat_i[2:0]) begin	// pte valid bit
-				tmpadr <= {m_dat_i[50:16],miss_adr[62:53],3'b0};
+				tmpadr <= {m_dat_i[33:0],miss_adr[62:53],4'h8};
 				call(S_RD_PTL,S_RD_PTL4);
 			end
-			else
-		    raise_page_fault();
+			else begin
+				if (clock) begin
+					clock_adr[64:63] <= clock_adr[64:63] + 4'h1;
+					clock_adr[62:0] <= 4'h0;
+					goto (S_WAIT_MISS);
+				end
+				else
+		  	  raise_page_fault();
 				// not a valid translation
 				// OS messed up ?
+			end
 		end
 
 	// Wait for ack from system
@@ -365,12 +447,20 @@ else begin
 	// If app uses a page directory, now address the page table
 	S_RD_PTL4:
 		if (m_ack_i) begin
+			nack();
 			if (|m_dat_i[2:0]) begin	// pte valid bit
 				tmpadr <= {m_dat_i[50:16],miss_adr[52:43],3'b0};
 				call(S_RD_PTL,S_RD_PTL3);
 			end
-			else
-		    raise_page_fault();
+			else begin
+				if (clock) begin
+					clock_adr[64:53] <= clock_adr[64:53] + 4'h1;
+					clock_adr[52:0] <= 4'h0;
+					goto (S_WAIT_MISS);
+				end
+				else
+		  	  raise_page_fault();
+		  end
 		end
 
 	// Wait for ack from system
@@ -378,12 +468,20 @@ else begin
 	// If app uses a page directory, now address the page table
 	S_RD_PTL3:
 		if (m_ack_i) begin
+			nack();
 			if (|m_dat_i[2:0]) begin	// pte valid bit
 				tmpadr <= {m_dat_i[50:16],miss_adr[42:33],3'b0};
 				call(S_RD_PTL,S_RD_PTL2);
 			end
-			else
-		    raise_page_fault();
+			else begin
+				if (clock) begin
+					clock_adr[64:43] <= clock_adr[64:43] + 4'h1;
+					clock_adr[32:0] <= 4'h0;
+					goto (S_WAIT_MISS);
+				end
+				else
+		  	  raise_page_fault();
+		  end
 		end
 
 	// Wait for ack from system
@@ -391,12 +489,20 @@ else begin
 	// If app uses a page directory, now address the page table
 	S_RD_PTL2:
 		if (m_ack_i) begin
+			nack();
 			if (|m_dat_i[2:0]) begin	// pte valid bit
 				tmpadr <= {m_dat_i[50:16],miss_adr[32:23],3'b0};
 				call(S_RD_PTL,S_RD_PTL1);
 			end
-		  else
-		    raise_page_fault();
+			else begin
+				if (clock) begin
+					clock_adr[64:33] <= clock_adr[64:33] + 4'h1;
+					clock_adr[32:0] <= 4'h0;
+					goto (S_WAIT_MISS);
+				end
+				else
+		  	  raise_page_fault();
+		  end
 		end
 
 	// Wait for ack from system
@@ -404,11 +510,13 @@ else begin
 	// If app uses a page directory, now address the page table
 	S_RD_PTL1:
 		if (m_ack_i) begin
+			nack();
 			if (|m_dat_i[2:0]) begin	// pte valid bit
 		    // Shortcut 8MiB page ?
 		    if (m_dat_i[`_8MBPG]) begin
-	        pte <= m_dat_i[50:0];
-    			m_dat_o <= m_dat_i|{dbit,2'b00,1'b1,4'b0};
+	        pte <= m_dat_i;
+    			m_dat_o <= m_dat_i|{dbit,2'b00,~clock,4'b0};
+    			m_dat_o[4] <= ~clock;
 					call(S_WR_PTL,S_WR_PTL0);
 		    end
 		    else begin
@@ -416,8 +524,15 @@ else begin
 					call(S_RD_PTL,S_RD_PTL0);
 				end
 			end
-			else
-		    raise_page_fault();
+			else begin
+				if (clock) begin
+					clock_adr[64:23] <= clock_adr[64:23] + 4'h1;
+					clock_adr[22:0] <= 4'h0;
+					goto (S_WAIT_MISS);
+				end
+				else
+		  	  raise_page_fault();
+		  end
 		end
 
 	//---------------------------------------------------
@@ -432,16 +547,23 @@ else begin
 		if (m_ack_i) begin
 			nack();
 			pte <= m_dat_i[50:0];
-			m_dat_o <= m_dat_i|{dbit,2'b00,1'b1,4'b0};
+			m_dat_o <= m_dat_i|{dbit,2'b00,~clock,4'b0};	// This line will only set bits
+			m_dat_o[4] <= ~clock;
 			call(S_WR_PTL,S_WR_PTL0);
 		end
 
 	S_WR_PTL0:
 		if (m_ack_i) begin
 			nack();
-			tlb_v[{whichSet,miss_adr[18:13]}] <= |pte[2:0];
-			if (~|pte[2:0]) begin
-		    raise_page_fault();
+			if (!clock) begin
+				tlb_v[{whichSet,miss_adr[18:13]}] <= |pte[2:0];
+				if (~|pte[2:0]) begin
+			    raise_page_fault();
+				end
+			end
+			else begin
+				clock_adr[64:13] <= clock_adr[64:13] + 4'h1;
+				clock_adr[12:0] <= 4'h0;
 			end
 			goto(S_WAIT_MISS);
 		end
@@ -468,7 +590,8 @@ else begin
 			m_sel_o <= 8'hFF;
 			m_lock_o <= 1'b0;
 			m_we_o  <= 1'b1;
-			m_adr_o <= tmpadr;
+			// Address comes from a previous read address
+//			m_adr_o <= tmpadr;
 			return();
 		end
 

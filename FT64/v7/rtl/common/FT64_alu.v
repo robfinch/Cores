@@ -23,10 +23,14 @@
 // ============================================================================
 //
 `include "FT64_defines.vh"
+`include "FT64_config.vh"
 
 module FT64_alu(rst, clk, ld, abort, instr, a, b, c, pc, tgt, tgt2, ven, vm, sbl, sbu,
-    csr, o, ob, done, idle, excen, exc, thrd, ptrmask, state, mem, shift);
+    csr, o, ob, done, idle, excen, exc, thrd, ptrmask, state, mem, shift,
+    ol, ASID, icl_i, cyc_i, we_i, vadr_i, cyc_o, we_o, padr_o, uncached, tlb_miss,
+    exv_o, rdv_o, wrv_o);
 parameter DBW = 64;
+parameter ABW = 32;
 parameter BIG = 1'b1;
 parameter SUP_VECTOR = 1;
 parameter TRUE = 1'b1;
@@ -59,6 +63,20 @@ input [63:0] ptrmask;
 input [1:0] state;
 input mem;
 input shift;
+input [1:0] ol;
+input [7:0] ASID;
+input icl_i;
+input cyc_i;
+input we_i;
+input [ABW-1:0] vadr_i;
+output cyc_o;
+output we_o;
+output [ABW-1:0] padr_o;
+output uncached;
+output tlb_miss;
+output wrv_o;
+output rdv_o;
+output exv_o;
 
 parameter byt = 3'd0;
 parameter char = 3'd1;
@@ -113,6 +131,43 @@ wire aslo;
 wire [6:0] clzo,cloo,cpopo;
 wire [63:0] shftho;
 reg [63:0] shift9;
+
+function IsLoad;
+input [47:0] isn;
+case(isn[`INSTRUCTION_OP])
+`MEMNDX:
+	if (isn[`INSTRUCTION_L2]==2'b00)
+    case({isn[31:28],isn[22:21]})
+    `LBX:   IsLoad = TRUE;
+    `LBUX:  IsLoad = TRUE;
+    `LCX:   IsLoad = TRUE;
+    `LCUX:  IsLoad = TRUE;
+    `LHX:   IsLoad = TRUE;
+    `LHUX:  IsLoad = TRUE;
+    `LWX:   IsLoad = TRUE;
+    `LVBX:	IsLoad = TRUE;
+    `LVBUX: IsLoad = TRUE;
+    `LVCX:  IsLoad = TRUE;
+    `LVCUX: IsLoad = TRUE;
+    `LVHX:  IsLoad = TRUE;
+    `LVHUX: IsLoad = TRUE;
+    `LVWX:  IsLoad = TRUE;
+    `LWRX:  IsLoad = TRUE;
+    `LVX:   IsLoad = TRUE;
+    default: IsLoad = FALSE;   
+    endcase
+	else
+		IsLoad = FALSE;
+`LB:    IsLoad = TRUE;
+`LBU:   IsLoad = TRUE;
+`Lx:    IsLoad = TRUE;
+`LxU:   IsLoad = TRUE;
+`LWR:   IsLoad = TRUE;
+`LV:    IsLoad = TRUE;
+`LVx:   IsLoad = TRUE;
+default:    IsLoad = FALSE;
+endcase
+endfunction
 
 function IsMul;
 input [47:0] isn;
@@ -184,6 +239,18 @@ default:    IsSgnus = FALSE;
 endcase
 endfunction
 
+function IsTLB;
+input [47:0] isn;
+case(isn[`INSTRUCTION_OP])
+`R2:
+  case(isn[`INSTRUCTION_S2])
+  `TLB:   IsTLB = TRUE;
+  default:    IsTLB = FALSE;
+  endcase
+default:    IsTLB = FALSE;
+endcase
+endfunction
+
 function IsShiftAndOp;
 input [47:0] isn;
 IsShiftAndOp = FALSE;
@@ -199,6 +266,48 @@ wire [63:0] shftco;
 
 always @(posedge clk)
 	shift9 <= shift8;
+
+wire tlb_done, tlb_idle;
+wire [DBW-1:0] tlbo;
+
+`ifdef SUPPORT_TLB
+FT64_TLB utlb1 (
+	.rst(rst),
+	.clk(clk),
+	.ld(ld & IsTLB(instr)),
+	.done(tlb_done),
+	.idle(tlb_idle),
+	.ol(ol),
+	.ASID(ASID),
+	.op(instr[25:22]),
+	.regno(instr[21:18]),
+	.dati(a),
+	.dato(tlbo),
+	.uncached(uncached),
+	.icl_i(icl_i),
+	.cyc_i(cyc_i),
+	.we_i(we_i),
+	.vadr_i(vadr_i),
+	.cyc_o(cyc_o),
+	.we_o(we_o),
+	.padr_o(padr_o),
+	.TLBMiss(tlb_miss),
+	.wrv_o(wrv_o),
+	.rdv_o(rdv_o),
+	.exv_o(exv_o),
+	.HTLBVirtPageo()
+);
+`else
+assign tlbo = 64'hDEADDEADDEADDEAD;
+assign uncached = 1'b0;
+assign padr_o = vadr_i;
+assign cyc_o = cyc_i;
+assign we_o = we_i;
+assign tlb_miss = 1'b0;
+assign wrv_o = 1'b0;
+assign rdv_o = 1'b0;
+assign exv_o = 1'b0;
+`endif
 
 FT64_bitfield #(DBW) ubf1
 (
@@ -454,7 +563,7 @@ FT64_divider #(DBW) udiv1
 	.idle(div_idle)
 );
 
-wire [5:0] bshift = instr[31:26]==`SHIFTR ? b : {instr[30],instr[17:13]};
+wire [5:0] bshift = instr[31:26]==`SHIFTR ? b[5:0] : {instr[30],instr[22:18]};
 
 FT64_shift ushft1
 (
@@ -821,10 +930,19 @@ case(instr[`INSTRUCTION_OP])
 					o[63:0] = bs;
 				else
 					o[63:0] = cs;
+	    default:	o = 64'hDEADDEADDEADDEAD;
 			endcase
+    `CMOVEZ:    begin
+    			o[63:0] = (a==64'd0) ? b : c;
+    			end
+    `CMOVNZ:	if (instr[41:39]==3'd4)
+    				o = (a!=64'd0) ? b : {{48{instr[38]}},instr[38:23]};
+    			else
+    				o = (a!=64'd0) ? b : c;
+    default:	o = 64'hDEADDEADDEADDEAD;
 		endcase
 	else
-	    case(instr[`INSTRUCTION_S2])
+	    casez(instr[`INSTRUCTION_S2])
 	    `BCD:
 	        case(instr[`INSTRUCTION_S1])
 	        `BCDADD:    o[63:0] = BIG ? bcdaddo :  64'hCCCCCCCCCCCCCCCC;
@@ -961,13 +1079,6 @@ case(instr[`INSTRUCTION_OP])
 	    `XNOR:  o[63:0] = ~xor64;
 	    `SEI:       o[63:0] = a | instr[21:16];
 	    `RTI:       o[63:0] = a | instr[21:16];
-	    `CMOVEZ:    begin
-	    			o[63:0] = (a==64'd0) ? b : c;
-	    			end
-	    `CMOVNZ:	if (instr[41])
-	    				o[63:0] = (a!=64'd0) ? b : {{48{instr[38]}},instr[38:28],instr[22:18]};
-	    			else
-	    				o[63:0] = (a!=64'd0) ? b : c;
 	    `MUX:       for (n = 0; n < 64; n = n + 1)
 	                    o[n] <= a[n] ? b[n] : c[n];
 	    `MULU,`MULSU,`MUL:
@@ -1085,52 +1196,58 @@ case(instr[`INSTRUCTION_OP])
 	    			`RTSNE:	o = as!=bs;
 	    			endcase
 	    */
+	    `TLB:		o = BIG ? tlbo : 64'hDEADDEADDEADDEAD;
 	    default:    o[63:0] = 64'hDEADDEADDEADDEAD;
 	    endcase
 `MEMNDX:
 	if (instr[7:6]==2'b00) begin
-		case({instr[31:28],instr[22:21]})
-		`CACHEX,`LVX,
-    `LBX,`LBUX,`LCX,`LCUX,
-    `LVBX,`LVBUX,`LVCX,`LVCUX,`LVHX,`LVHUX,`LVWX,
-    `LHX,`LHUX,`LWX,`LWRX:
-				if (BIG) begin
-					o[63:0] = a + (c << instr[19:18]);
-				end
-				else
-					o[63:0] = 64'hCCCCCCCCEEEEEEEE;
-    `LVX,`SVX:  if (BIG) begin
-    				o[63:0] = a + (c << 2'd3);
-    			end
-    			else
-    				o[63:0] = 64'hCCCCCCCCCCCCCCCC;
-    `LVWS,`SVWS:
-    			if (BIG) begin    
-    				o[63:0] = a + ({c * ven,3'b000});
-    			end
-    			else
-    				o[63:0] = 64'hCCCCCCCCCCCCCCCC;
-		endcase
-		case({instr[31:28],instr[17:16]})
-    `SBX,`SCX,`SHX,`SWX,`SWCX:
-				if (BIG) begin
-					o[63:0] = a + (c << instr[14:13]);
-				end
-				else
-					o[63:0] = 64'hCCCCCCCCEEEEEEEE;
-    `SVX:  if (BIG) begin
-    				o[63:0] = a + (c << 2'd3);
-    			end
-    			else
-    				o[63:0] = 64'hCCCCCCCCCCCCCCCC;
-    `SVWS:
-    			if (BIG) begin    
-    				o[63:0] = a + ({c * ven,3'b000});
-    			end
-    			else
-    				o[63:0] = 64'hCCCCCCCCCCCCCCCC;
-		endcase
-	  end
+		if (IsLoad(instr))
+			case({instr[31:28],instr[22:21]})
+			`CACHEX,`LVX,
+	    `LBX,`LBUX,`LCX,`LCUX,
+	    `LVBX,`LVBUX,`LVCX,`LVCUX,`LVHX,`LVHUX,`LVWX,
+	    `LHX,`LHUX,`LWX,`LWRX:
+					if (BIG) begin
+						o[63:0] = a + (c << instr[19:18]);
+					end
+					else
+						o[63:0] = 64'hCCCCCCCCEEEEEEEE;
+	    `LVX,`SVX:  if (BIG) begin
+	    				o[63:0] = a + (c << 2'd3);
+	    			end
+	    			else
+	    				o[63:0] = 64'hCCCCCCCCCCCCCCCC;
+	    `LVWS,`SVWS:
+	    			if (BIG) begin    
+	    				o[63:0] = a + ({c * ven,3'b000});
+	    			end
+	    			else
+	    				o[63:0] = 64'hCCCCCCCCCCCCCCCC;
+	    default:	o = 64'hDEADDEADDEADDEAD;
+			endcase
+		else
+			case({instr[31:28],instr[17:16]})
+			`PUSH:	o = a - 4'd8;
+	    `SBX,`SCX,`SHX,`SWX,`SWCX:
+					if (BIG) begin
+						o[63:0] = a + (c << instr[14:13]);
+					end
+					else
+						o[63:0] = 64'hCCCCCCCCEEEEEEEE;
+	    `SVX:  if (BIG) begin
+	    				o[63:0] = a + (c << 2'd3);
+	    			end
+	    			else
+	    				o[63:0] = 64'hCCCCCCCCCCCCCCCC;
+	    `SVWS:
+	    			if (BIG) begin    
+	    				o[63:0] = a + ({c * ven,3'b000});
+	    			end
+	    			else
+	    				o[63:0] = 64'hCCCCCCCCCCCCCCCC;
+	    default:	o = 64'hDEADDEADDEADDEAD;
+			endcase
+	end
 	else
 		o[63:0] = 64'hDEADDEADDEADDEAD;
 `AUIPC:
@@ -1190,10 +1307,24 @@ endcase
 end
 
 always @(posedge clk)
+if (rst)
+	adrDone <= TRUE;
+else begin
 	if (ld)
 		adrDone <= FALSE;
 	else if (mem|shift)
 		adrDone <= TRUE;
+end
+
+always @(posedge clk)
+if (rst)
+	adrIdle <= TRUE;
+else begin
+	if (ld)
+		adrIdle <= FALSE;
+	else if (mem|shift)
+		adrIdle <= TRUE;
+end
 
 always @(posedge clk)
 case(instr[`INSTRUCTION_OP])
@@ -1226,6 +1357,23 @@ default:	addro = 64'hCCCCCCCCCCCCCCCE;
 endcase
 
 reg sao_done, sao_idle;
+always @(posedge clk)
+if (rst) begin
+	sao_done <= 1'b1;
+	sao_idle <= 1'b1;
+end
+else begin
+if (ld & IsShiftAndOp(instr) & BIG) begin
+	sao_done <= 1'b0;
+	sao_idle <= 1'b0;
+end
+else begin
+	if (IsShiftAndOp(instr) & BIG) begin
+		sao_done <= 1'b1;
+		sao_idle <= 1'b1;
+	end
+end
+end
 
 // Generate done signal
 always @*
@@ -1246,6 +1394,8 @@ else begin
 		done <= sao_done;
 	else if (shift)
 		done <= adrDone;
+	else if (IsTLB(instr) & BIG)
+		done <= tlb_done;
 	else
 		done <= TRUE;
 end
@@ -1269,6 +1419,8 @@ else begin
 		idle <= sao_idle;
 	else if (shift)
 		idle <= adrIdle;
+	else if (IsTLB(instr) & BIG)
+		idle <= tlb_idle;
 	else
 		idle <= TRUE;
 end

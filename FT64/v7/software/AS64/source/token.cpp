@@ -1957,13 +1957,17 @@ int NextToken()
 			}
             break;
 
-        // max mod modu modi modui mov mul muli mulu mului mtspr mfspr mtfp mffp message memdb memsb
+        // max min mod modu modi modui mov mul muli mulu mului mtspr mfspr mtfp mffp message memdb memsb
         case 'm': case 'M':
-            if ((inptr[1]=='a' || inptr[1]=='A') && (inptr[2]=='x' || inptr[2]=='X') && isspace(inptr[3])) {
+            if ((inptr[1]=='a' || inptr[1]=='A') && (inptr[2]=='x' || inptr[2]=='X') && isspaceOrDot(inptr[3])) {
                 inptr += 3;
-                return token = tk_max;
+                return (token = tk_max);
             }
-            if ((inptr[1]=='o' || inptr[1]=='O') && (inptr[2]=='v' || inptr[2]=='V') && isspace(inptr[3])) {
+						if ((inptr[1] == 'i' || inptr[1] == 'I') && (inptr[2] == 'n' || inptr[2] == 'N') && isspaceOrDot(inptr[3])) {
+							inptr += 3;
+							return (token = tk_min);
+						}
+						if ((inptr[1]=='o' || inptr[1]=='O') && (inptr[2]=='v' || inptr[2]=='V') && isspace(inptr[3])) {
                 inptr += 3;
                 return token = tk_mov;
             }
@@ -2783,12 +2787,14 @@ int NextToken()
                      return token = tk_tgt;
                  }
 			 }
-             if (gCpu==4) {
-                 if ((inptr[1]=='s' || inptr[1]=='S') && (inptr[2]=='t' || inptr[2]=='T') &&
-                     isspace(inptr[3])) {
-                     inptr += 3;
-                     return token = tk_tst;
-                 }
+			 if (gCpu == 4) {
+				 if ((inptr[1] == 's' || inptr[1] == 'S') && (inptr[2] == 't' || inptr[2] == 'T') &&
+					 isspace(inptr[3])) {
+					 inptr += 3;
+					 return token = tk_tst;
+				 }
+			 }
+			 if (gCpu==4 || gCpu=='F') {
                  if ((inptr[1]=='l' || inptr[1]=='L') &&
                      (inptr[2]=='b' || inptr[2]=='B') &&
                      (inptr[3]=='d' || inptr[3]=='D') &&

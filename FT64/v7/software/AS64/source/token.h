@@ -284,6 +284,7 @@ enum {
      tk_message,
      tk_mffp, //280
      tk_mfspr,
+			tk_min,
      tk_mod,
      tk_modi,
 	tk_modsu,

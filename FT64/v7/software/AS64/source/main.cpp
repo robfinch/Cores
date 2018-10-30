@@ -120,6 +120,7 @@ extern void dsd7_processMaster();
 extern void dsd9_processMaster();
 extern void FT64_processMaster();
 extern void FT64x36_processMaster();
+extern void FT8088_processMaster();
 extern void SymbolInit();
 extern void dsd9_VerilogOut(FILE *fp);
 
@@ -139,7 +140,7 @@ void displayHelp()
      printf("    +r      = relocatable output\r\n");
      printf("    -s      = non-segmented\r\n");
      printf("    +g[n]   = cpu version 8=Table888, 9=Table888mmu V=RISCV 6=FISA64 T=Thor\r\n");
-     printf("                          D=DSD6 7=DSD7 A=DSD9 F=FT64 G=FT64x36\r\n");
+     printf("                          D=DSD6 7=DSD7 A=DSD9 F=FT64 G=FT64x36 X=FT8088\r\n");
      printf("    -o[bvlc] = suppress output file b=binary, v=verilog, l=listing, c=coe\r\n");
 }
 
@@ -248,7 +249,10 @@ int processOptions(int argc, char **argv)
               if (argv[nn][2]=='D') {
                  gCpu = 14;
               }
-              if (argv[nn][2]=='A') {
+							if (argv[nn][2] == 'X') {
+								gCpu = 'X';
+							}
+							if (argv[nn][2]=='A') {
                  gCpu = 'A';
 				 if (argv[nn][3]=='c')
 					 gCanCompress = 1;
@@ -257,30 +261,30 @@ int processOptions(int argc, char **argv)
               }
               if (argv[nn][2]=='F') {
                  gCpu = 'F';
-				 mm = 3;
-				 gCanCompress = 0;
-				 while(argv[nn][mm]) {
-					 if (argv[nn][mm] == '3')
-						 gCpu = 'H';
-					 else if (argv[nn][mm] == 'c')
-						 gCanCompress = 1;
-					 else if (argv[nn][mm] == 'n')
-						 vebits = 64;
-					 else if (argv[nn][mm] == 'm')
-						 vebits = 32;
-					 else if (argv[nn][mm] == 'g')
-						 gpu = true;
-					 mm++;
-				 }
+							 mm = 3;
+							 gCanCompress = 0;
+							 while(argv[nn][mm]) {
+								 if (argv[nn][mm] == '3')
+									 gCpu = 'H';
+								 else if (argv[nn][mm] == 'c')
+									 gCanCompress = 1;
+								 else if (argv[nn][mm] == 'n')
+									 vebits = 64;
+								 else if (argv[nn][mm] == 'm')
+									 vebits = 32;
+								 else if (argv[nn][mm] == 'g')
+									 gpu = true;
+								 mm++;
+							 }
               }
               if (argv[nn][2]=='G') {
                  gCpu = 'G';
-				 if (argv[nn][3]=='n')
-					 vebits = 64;
-				 else if (argv[nn][3]=='c')
-					 gCanCompress = 1;
-				 else
-					 gCanCompress = 0;
+							 if (argv[nn][3]=='n')
+								 vebits = 64;
+							 else if (argv[nn][3]=='c')
+								 gCanCompress = 1;
+							 else
+								 gCanCompress = 0;
               }
            }
            nn++;
@@ -1620,9 +1624,13 @@ void processLine(char *line)
   char *p;
   int quoteType;
   static char fnm[300];
+	char *path;
   char *fname;
+	char *fn;
   int nn;
   int lb;
+	char *q;
+	char *wd;
 
   p = line;
 	fns.GetTos()->lineno = lineno;
@@ -1648,9 +1656,21 @@ void processLine(char *line)
     } while(nn < sizeof(fnm)/sizeof(char));
     fnm[nn] = '\0';
     fname = strdup(fnm);
+		path = fname;
+		wd = _getcwd(NULL, 0);
+		q = strrchr(path, '\\');
+		if (q) {
+			*q = '\0';
+			fn = q + 1;
+			_chdir(path);
+		}
+		else
+			fn = fname;
     lb = lineno;
     lineno = 1;
-    processFile(fname,1);
+    processFile(fn,1);
+		_chdir(wd);
+		free(wd);
     lineno = lb;
     free(fname);
     return;
@@ -1753,6 +1773,7 @@ void processMaster()
 	case 'A':	dsd9_processMaster();	break;
 	case 'F':	FT64_processMaster();	break;
 	case 'G':	FT64x36_processMaster();	break;
+	case 'X': FT8088_processMaster(); break;
 	default:	FT64_processMaster();
 	}
 }
@@ -2323,7 +2344,7 @@ int main(int argc, char *argv[])
 				else if (vebits==64) {
 					for (kk = 0; kk < binndx; kk+=8) {
 						fprintf(vfp, "\trommem[%d] = 64'h%02X%02X%02X%02X%02X%02X%02X%02X;\n", 
-							((((unsigned int)start_address+kk)/8)%16384), //checksum64((int64_t *)&binfile[kk]),
+							((((unsigned int)start_address+kk)/8)%32768), //checksum64((int64_t *)&binfile[kk]),
 							binfile[kk+7], binfile[kk+6], binfile[kk+5], binfile[kk+4], 
 							binfile[kk+3], binfile[kk+2], binfile[kk+1], binfile[kk]);
 					}

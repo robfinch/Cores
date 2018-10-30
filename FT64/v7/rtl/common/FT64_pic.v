@@ -30,7 +30,7 @@
 //			If there is no
 //			active request, then this number will be 
 //			zero.
-//          bits 8 to 13 set the base number for the vector
+//          bits 8 to 15 set the base number for the vector
 //
 //	0x04	- request enable (read / write)
 //			this register contains request enable bits
@@ -95,7 +95,6 @@ reg [31:0] ib;
 reg [31:0] iedge;
 reg [31:0] rste;
 reg [31:0] es;
-reg [5:0] cause_base;
 reg [3:0] irq [0:31];
 reg [7:0] cause [0:31];
 integer n;
@@ -127,7 +126,7 @@ always @(posedge clk_i)
 		rste <= 32'h0;
 		if (cs & wr_i) begin
 			casez (adr_i[7:2])
-			6'd0:    ;
+			6'd0: ;
 			6'd1:
 				begin
 					ie[31:0] <= dat_i[31:0];
@@ -154,7 +153,7 @@ begin
 		$display("PIC: %d",irqenc);
 	if (cs)
 		casez (adr_i[7:2])
-		6'd0:	dat_o <= {cause_base,3'd0} + irqenc;
+		6'd0:	dat_o <= cause[irqenc];
 		6'b1?????: dat_o <= {es[adr_i[6:2]],ie[adr_i[6:2]],4'b0,irq[adr_i[6:2]],cause[adr_i[6:2]]};
 		default:	dat_o <= ie;
 		endcase

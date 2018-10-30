@@ -24,7 +24,7 @@
 //
 // The following line is to enable simulation versions of some modules.
 // Comment out for synthesis.
-`define SIM		1'b1
+//`define SIM		1'b1
 
 //`define SUPPORT_SMT		1'b1
 //`define SUPPORT_VECTOR	1'b1
@@ -44,15 +44,14 @@
 // of queue entries below.
 `define QBITS			3:0
 
-// The following bitfield spec is for the instruction seqneunce number. It
+// The following bitfield spec is for the instruction sequence number. It
 // must have at least one more bit in it than the QBITS above as the counter
 // can overflow a little bit.
 `define SNBITS		4:0
 
-// Memory issue logic is for 10 queue entries, so this define should not be
-// set less than 10. If set greater than 10, then memory instructions won't
+// If set greater than 10, then memory instructions won't
 // issue until they are within 10 of the head of the queue.
-`define QENTRIES	12
+`define QENTRIES	6
 
 // Bitfield for representing exception codes
 `define XBITS			7:0
@@ -86,6 +85,8 @@
 // Comment out the following to remove bypassing logic on the functional units
 //`define FU_BYPASS	1
 
+//`define SUPPORT_TLB		1
+
 // These are unit availability settings at reset.
 `define ID1_AVAIL	1'b1
 `define ID2_AVAIL	1'b1
@@ -108,5 +109,5 @@
 
 // Comment the following to disable registering the output of instruction decoders.
 // Inline decoding should not be registered.
-`define REGISTER_DECODE		1'b1
-//`define INLINE_DECODE		1'b1
+//`define REGISTER_DECODE		1'b1
+`define INLINE_DECODE		1'b1

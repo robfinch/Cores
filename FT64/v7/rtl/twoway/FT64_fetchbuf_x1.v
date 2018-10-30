@@ -198,8 +198,6 @@ reg stompedRet;
 reg ret0Counted;
 wire [AMSB:0] retpc0;
 
-reg did_branchback0;
-
 assign predict_taken0 = (fetchbuf==1'b0) ? predict_takenA : predict_takenB;
 
 reg [AMSB:0] branch_pcA;
@@ -233,13 +231,19 @@ default:
 	end
 endcase
 
-wire take_branchA = ({fetchbufA_v, IsBranch(fetchbufA_instr), predict_takenA}  == {`VAL, `TRUE, `TRUE}) ||
-                        ((IsRet(fetchbufA_instr)||IsJmp(fetchbufA_instr)||IsCall(fetchbufA_instr)||
-                        IsRTI(fetchbufA_instr)|| IsBrk(fetchbufA_instr) || IsJAL(fetchbufA_instr)) &&
+wire take_branchA = ({fetchbufA_v, IsBranch(fetchbufA_instr), predict_takenA}  == {`VAL, `TRUE, `TRUE}) || ((
+`ifdef FCU_ENH
+                           IsRet(fetchbufA_instr)
+                        || IsRTI(fetchbufA_instr)|| IsBrk(fetchbufA_instr) || IsJAL(fetchbufA_instr) ||
+`endif                      
+                           IsJmp(fetchbufA_instr)||IsCall(fetchbufA_instr)) &&
                         fetchbufA_v);
-wire take_branchB = ({fetchbufB_v, IsBranch(fetchbufB_instr), predict_takenB}  == {`VAL, `TRUE, `TRUE}) ||
-                        ((IsRet(fetchbufB_instr)|IsJmp(fetchbufB_instr)|IsCall(fetchbufB_instr) ||
-                        IsRTI(fetchbufB_instr)|| IsBrk(fetchbufB_instr) || IsJAL(fetchbufB_instr)) &&
+wire take_branchB = ({fetchbufB_v, IsBranch(fetchbufB_instr), predict_takenB}  == {`VAL, `TRUE, `TRUE}) || ((
+`ifdef FCU_ENH
+                           IsRet(fetchbufB_instr)
+                        || IsRTI(fetchbufB_instr)|| IsBrk(fetchbufB_instr) || IsJAL(fetchbufB_instr) ||
+`endif                        
+                           IsJmp(fetchbufB_instr)||IsCall(fetchbufB_instr)) &&
                         fetchbufB_v);
 
 wire take_branch = fetchbuf==1'b0 ? take_branchA : take_branchB;
@@ -291,8 +295,6 @@ if (rst) begin
 end
 else begin
 	
-	did_branchback0 <= take_branch0;
-
 	begin
 
 	// On a branch miss with threading enabled all fectch buffers are

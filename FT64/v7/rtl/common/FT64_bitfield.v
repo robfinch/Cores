@@ -62,13 +62,13 @@ wire [5:0] ml = mw;		// mask length-1
 wire [63:0] imm = {59'd0,inst[10:6]};
 
 integer nn,n;
-always @(mb or me or nn)
+always @*
 	for (nn = 0; nn < DWIDTH; nn = nn + 1)
 		mask[nn] <= (nn >= mb) ^ (nn <= me) ^ (me >= mb);
 
 ffo96 u1 ({32'h0,o1},ffoo);
 
-always @(op,mask,b,a,da,imm,mb,ml)
+always @*
 case (op)
 // ToDo: Fix bitfield inserts
 `BFINS: 	begin
