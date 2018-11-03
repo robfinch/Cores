@@ -43,6 +43,7 @@
 // enough to accomodate a queue entry number, determined by the number
 // of queue entries below.
 `define QBITS			3:0
+`define QBITSP1		4:0
 
 // The following bitfield spec is for the instruction sequence number. It
 // must have at least one more bit in it than the QBITS above as the counter
@@ -51,7 +52,7 @@
 
 // If set greater than 10, then memory instructions won't
 // issue until they are within 10 of the head of the queue.
-`define QENTRIES	6
+`define QENTRIES	5
 
 // Bitfield for representing exception codes
 `define XBITS			7:0

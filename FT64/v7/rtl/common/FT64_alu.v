@@ -25,7 +25,7 @@
 `include "FT64_defines.vh"
 `include "FT64_config.vh"
 
-module FT64_alu(rst, clk, ld, abort, instr, a, b, c, pc, tgt, tgt2, ven, vm, sbl, sbu,
+module FT64_alu(rst, clk, ld, abort, instr, sz, tlb, a, b, c, pc, tgt, tgt2, ven, vm, sbl, sbu,
     csr, o, ob, done, idle, excen, exc, thrd, ptrmask, state, mem, shift,
     ol, ASID, icl_i, cyc_i, we_i, vadr_i, cyc_o, we_o, padr_o, uncached, tlb_miss,
     exv_o, rdv_o, wrv_o);
@@ -41,6 +41,8 @@ input clk;
 input ld;
 input abort;
 input [47:0] instr;
+input [2:0] sz;
+input tlb;
 input [63:0] a;
 input [63:0] b;
 input [63:0] c;
@@ -239,26 +241,10 @@ default:    IsSgnus = FALSE;
 endcase
 endfunction
 
-function IsTLB;
-input [47:0] isn;
-case(isn[`INSTRUCTION_OP])
-`R2:
-  case(isn[`INSTRUCTION_S2])
-  `TLB:   IsTLB = TRUE;
-  default:    IsTLB = FALSE;
-  endcase
-default:    IsTLB = FALSE;
-endcase
-endfunction
-
 function IsShiftAndOp;
 input [47:0] isn;
 IsShiftAndOp = FALSE;
 endfunction
-
-wire [2:0] sz =
-    instr[`INSTRUCTION_OP]==`IVECTOR ? 2'd3 : 
-    instr[`INSTRUCTION_S2]==`R1 ? instr[25:23] : instr[25:23];
 
 wire [63:0] bfout,shfto;
 wire [63:0] shftob;
@@ -274,7 +260,7 @@ wire [DBW-1:0] tlbo;
 FT64_TLB utlb1 (
 	.rst(rst),
 	.clk(clk),
-	.ld(ld & IsTLB(instr)),
+	.ld(ld & tlb),
 	.done(tlb_done),
 	.idle(tlb_idle),
 	.ol(ol),
@@ -334,12 +320,11 @@ FT64_multiplier #(DBW) umult1
 	.idle(mult_idle)
 );
 
-`ifdef SIMD
 FT64_multiplier #(32) umulth0
 (
 	.rst(rst),
 	.clk(clk),
-	.ld(ld && IsMul(instr) && (sz==half_para)),
+	.ld(ld && IsMul(instr) && (sz==half || sz==half_para)),
 	.abort(abort),
 	.sgn(IsSgn(instr)),
 	.sgnus(IsSgnus(instr)),
@@ -348,21 +333,6 @@ FT64_multiplier #(32) umulth0
 	.o(prod320),
 	.done(mult_done320),
 	.idle(mult_idle320)
-);
-
-FT64_multiplier #(32) umulth1
-(
-	.rst(rst),
-	.clk(clk),
-	.ld(ld && IsMul(instr) && (sz==half || sz==half_para)),
-	.abort(abort),
-	.sgn(IsSgn(instr)),
-	.sgnus(IsSgnus(instr)),
-	.a(a[63:32]),
-	.b(b[63:32]),
-	.o(prod321),
-	.done(mult_done321),
-	.idle(mult_idle321)
 );
 
 FT64_multiplier #(16) umultc0
@@ -378,6 +348,37 @@ FT64_multiplier #(16) umultc0
 	.o(prod160),
 	.done(mult_done160),
 	.idle(mult_idle160)
+);
+
+FT64_multiplier #(8) umultb0
+(
+	.rst(rst),
+	.clk(clk),
+	.ld(ld && IsMul(instr) && (sz==byt || sz==byt_para)),
+	.abort(abort),
+	.sgn(IsSgn(instr)),
+	.sgnus(IsSgnus(instr)),
+	.a(a[7:0]),
+	.b(b[7:0]),
+	.o(prod80),
+	.done(mult_done80),
+	.idle(mult_idle80)
+);
+
+`ifdef SIMD
+FT64_multiplier #(32) umulth1
+(
+	.rst(rst),
+	.clk(clk),
+	.ld(ld && IsMul(instr) && (sz==half || sz==half_para)),
+	.abort(abort),
+	.sgn(IsSgn(instr)),
+	.sgnus(IsSgnus(instr)),
+	.a(a[63:32]),
+	.b(b[63:32]),
+	.o(prod321),
+	.done(mult_done321),
+	.idle(mult_idle321)
 );
 
 FT64_multiplier #(16) umultc1
@@ -423,21 +424,6 @@ FT64_multiplier #(16) umultc3
 	.o(prod163),
 	.done(mult_done163),
 	.idle(mult_idle163)
-);
-
-FT64_multiplier #(8) umultb0
-(
-	.rst(rst),
-	.clk(clk),
-	.ld(ld && IsMul(instr) && (sz==byt || sz==byt_para)),
-	.abort(abort),
-	.sgn(IsSgn(instr)),
-	.sgnus(IsSgnus(instr)),
-	.a(a[7:0]),
-	.b(b[7:0]),
-	.o(prod80),
-	.done(mult_done80),
-	.idle(mult_idle80)
 );
 
 FT64_multiplier #(8) umultb1
@@ -1200,7 +1186,16 @@ case(instr[`INSTRUCTION_OP])
 	    default:    o[63:0] = 64'hDEADDEADDEADDEAD;
 	    endcase
 `MEMNDX:
-	if (instr[7:6]==2'b00) begin
+	if (instr[7:6]==2'b10) begin
+		if (instr[31])
+			case({instr[31:28],instr[17:16]})
+			`PUSH:	o = a - 4'd8;
+	    default:	o = 64'hDEADDEADDEADDEAD;
+			endcase
+		else
+			o = 64'hDEADDEADDEADDEAD;
+	end
+	else if (instr[7:6]==2'b00) begin
 		if (IsLoad(instr))
 			case({instr[31:28],instr[22:21]})
 			`CACHEX,`LVX,
@@ -1281,7 +1276,7 @@ case(instr[`INSTRUCTION_OP])
 `DIVI:		o[63:0] = BIG ? divq : 64'hCCCCCCCCCCCCCCCC;
 `MODI:		o[63:0] = BIG ? rem : 64'hCCCCCCCCCCCCCCCC;
 `LB,`LBU,`SB:	o[63:0] = a + b;
-`Lx,`LxU,`Sx,`LVx:
+`Lx,`LxU,`Sx,`LVx,`LVxU:
 			begin
 				casez(b[2:0])
 				3'b100:		o = a + {b[63:3],3'b0};	// LW / SW
@@ -1394,7 +1389,7 @@ else begin
 		done <= sao_done;
 	else if (shift)
 		done <= adrDone;
-	else if (IsTLB(instr) & BIG)
+	else if (tlb & BIG)
 		done <= tlb_done;
 	else
 		done <= TRUE;
@@ -1419,7 +1414,7 @@ else begin
 		idle <= sao_idle;
 	else if (shift)
 		idle <= adrIdle;
-	else if (IsTLB(instr) & BIG)
+	else if (tlb & BIG)
 		idle <= tlb_idle;
 	else
 		idle <= TRUE;

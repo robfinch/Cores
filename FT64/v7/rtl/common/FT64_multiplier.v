@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2013-2017  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2013-2018  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -51,39 +51,71 @@ reg [7:0] cnt;
 wire cnt_done = cnt==8'd0;
 assign done = state==DONE || (state==IDLE && !ld); // State == DONE
 assign idle = state==IDLE;
-reg [WID*2-1:0] prod;
-//wire [64:0] p1 = aa[0] ? prod[127:64] + b : prod[127:64];
-//wire [65:0] p2 = aa[1] ? p1 + {b,1'b0} : p1;
-wire [WID+WID/4-1:0] p1 = bb * aa[WID/4-1:0] + prod[WID*2-1:WID];
 
-initial begin
-    prod = 64'd0;
-    o = 64'd0;
+wire [127:0] pp;
+
+generate begin : gMults
+if (WID > 32) begin
+FT64_mult umul1
+(
+  .CLK(clk),  // input wire CLK
+  .A(aa),      // input wire [63 : 0] A
+  .B(bb),      // input wire [63 : 0] B
+  .P(pp)      // output wire [127 : 0] P
+);
 end
+else if (WID > 16) begin
+FT64_mult32 umul1
+(
+  .CLK(clk),  // input wire CLK
+  .A(aa),      // input wire [63 : 0] A
+  .B(bb),      // input wire [63 : 0] B
+  .P(pp)      // output wire [127 : 0] P
+);
+end
+else if (WID > 8) begin
+FT64_mult16 umul1
+(
+  .CLK(clk),  // input wire CLK
+  .A(aa),      // input wire [63 : 0] A
+  .B(bb),      // input wire [63 : 0] B
+  .P(pp)      // output wire [127 : 0] P
+);
+end
+else begin
+FT64_mult8 umul1
+(
+  .CLK(clk),  // input wire CLK
+  .A(aa),      // input wire [63 : 0] A
+  .B(bb),      // input wire [63 : 0] B
+  .P(pp)      // output wire [127 : 0] P
+);
+end
+end
+endgenerate
 
 always @(posedge clk)
 if (rst) begin
 	aa <= {WID{1'b0}};
 	bb <= {WID{1'b0}};
-	prod <= {WID*2{1'b0}};
 	o <= {WID*2{1'b0}};
 	state <= IDLE;
 end
 else
 begin
 if (abort)
-    cnt <= 8'd00;
+  cnt <= 8'd00;
 else if (!cnt_done)
 	cnt <= cnt - 8'd1;
 
 case(state)
 IDLE:
 	if (ld) begin
-	    if (sgnus) begin
+	  if (sgnus) begin
 			aa <= a[WID-1] ? -a : a;
 			bb <= b;
 			so = a[WID-1];
-	    end
+	  end
 		else if (sgn) begin
 			aa <= a[WID-1] ? -a : a;
 			bb <= b[WID-1] ? -b : b;
@@ -94,27 +126,23 @@ IDLE:
 			bb <= b;
 			so <= 1'b0;
 		end
-		prod <= {WID*2{1'b0}};
-		cnt <= 8'd4;
+		cnt <= 8'd20;
 		state <= MULT;
 	end
 MULT:
-	if (!cnt_done) begin
-		aa <= {16'b0,aa[WID-1:WID/4]};
-		prod <= {16'b0,prod[WID*2-1:WID/4]};
-		prod[WID*2-1:WID*3/4] <= p1;
-	end
-	else begin
+	if (cnt_done) begin
 		if (sgn|sgnus) begin
 			if (so)
-				o <= -prod;
+				o <= -pp;
 			else
-				o <= prod;
+				o <= pp;
 		end
 		else
-			o <= prod;
+			o <= pp;
 		state <= DONE;
 	end
+DONE:
+	state <= IDLE;
 default:
 	state <= IDLE;
 endcase
@@ -146,11 +174,10 @@ FT64_multiplier u1
 	.rst(rst),
 	.clk(clk),
 	.ld(ld),
-	.sgn(1'b0),
-	.isMuli(1'b1),
-	.a(64'd56),
-	.b(64'd0),
-	.imm(64'd27),
+	.sgn(1'b1),
+	.isMuli(1'b0),
+	.a(64'd0),
+	.b(64'd48),
 	.o(o)
 );
 

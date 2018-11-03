@@ -267,29 +267,7 @@ endfunction
 function IsLoad;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`MEMNDX:
-	if (isn[`INSTRUCTION_L2]==2'b00)
-    case({isn[31:28],isn[22:21]})
-    `LBX:   IsLoad = TRUE;
-    `LBUX:  IsLoad = TRUE;
-    `LCX:   IsLoad = TRUE;
-    `LCUX:  IsLoad = TRUE;
-    `LHX:   IsLoad = TRUE;
-    `LHUX:  IsLoad = TRUE;
-    `LWX:   IsLoad = TRUE;
-    `LVBX:  IsLoad = TRUE;
-    `LVBUX: IsLoad = TRUE;
-    `LVCX:  IsLoad = TRUE;
-    `LVCUX: IsLoad = TRUE;
-    `LVHX:  IsLoad = TRUE;
-    `LVHUX: IsLoad = TRUE;
-    `LVWX:  IsLoad = TRUE;
-    `LWRX:  IsLoad = TRUE;
-    `LVX:   IsLoad = TRUE;
-    default: IsLoad = FALSE;   
-    endcase
-	else
-		IsLoad = FALSE;
+`MEMNDX:	IsLoad = !isn[31];
 `LB:    IsLoad = TRUE;
 `LBU:   IsLoad = TRUE;
 `Lx:    IsLoad = TRUE;
@@ -297,6 +275,7 @@ case(isn[`INSTRUCTION_OP])
 `LWR:   IsLoad = TRUE;
 `LV:    IsLoad = TRUE;
 `LVx:   IsLoad = TRUE;
+`LVxU:  IsLoad = TRUE;
 default:    IsLoad = FALSE;
 endcase
 endfunction
@@ -321,6 +300,7 @@ case(isn[`INSTRUCTION_OP])
 		IsVolatileLoad = FALSE;
 `LWR:	IsVolatileLoad = TRUE;
 `LVx:   IsVolatileLoad = TRUE;
+`LVxU:  IsVolatileLoad = TRUE;
 default:    IsVolatileLoad = FALSE;
 endcase
 endfunction
@@ -329,8 +309,18 @@ function IsStore;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
 `MEMNDX:
-	if (isn[`INSTRUCTION_L2]==2'b00)
+	if (isn[`INSTRUCTION_L2]==2'b10) begin
+		if (isn[31])
+			case({isn[31:28],isn[17:16]})
+			`PUSH:	IsStore = TRUE;
+	    default:    IsStore = FALSE;
+			endcase
+		else
+			IsStore = FALSE;
+	end
+	else if (isn[`INSTRUCTION_L2]==2'b00)
 		case({isn[31:28],isn[17:16]})
+		`PUSH:	IsStore = TRUE;
     `SBX:   IsStore = TRUE;
     `SCX:   IsStore = TRUE;
     `SHX:   IsStore = TRUE;
@@ -371,6 +361,7 @@ case(isn[`INSTRUCTION_OP])
 `SWC:   IsMem = TRUE;
 `CAS:   IsMem = TRUE;
 `LVx:		IsMem = TRUE;
+`LVxU:	IsMem = TRUE;
 default:    IsMem = FALSE;
 endcase
 endfunction
@@ -424,7 +415,7 @@ case(isn[`INSTRUCTION_OP])
 	else
 		MemSize = octa;
 `LB,`LBU:    MemSize = byt;
-`Lx,`LxU,`LVx:
+`Lx,`LxU,`LVx,`LVxU:
 	casez(isn[20:18])
 	3'b100:	MemSize = octa;
 	3'b?10:	MemSize = tetra;
@@ -647,6 +638,7 @@ casez(isn[`INSTRUCTION_OP])
 `LB:    HasConst = TRUE;
 `LBU:   HasConst = TRUE;
 `Lx:    HasConst = TRUE;
+`LxU:   HasConst = TRUE;
 `LWR:		HasConst = TRUE;
 `LV:    HasConst = TRUE;
 `SB:  	HasConst = TRUE;
@@ -659,6 +651,7 @@ casez(isn[`INSTRUCTION_OP])
 `CALL:  HasConst = TRUE;
 `RET:   HasConst = TRUE;
 `LVx:		HasConst = TRUE;
+`LVxU:	HasConst = TRUE;
 default:    HasConst = FALSE;
 endcase
 endfunction
@@ -746,7 +739,17 @@ casez(isn[`INSTRUCTION_OP])
 	else
 		IsRFW = FALSE;
 `MEMNDX:
-	if (isn[`INSTRUCTION_L2]==2'b00) begin
+	if (isn[`INSTRUCTION_L2]==2'b10) begin
+		if (IsLoad(isn))
+			IsRFW = TRUE;
+		else
+			case({isn[31:28],isn[17:16]})
+			`PUSH:	IsRFW = TRUE;
+	    `CASX:  IsRFW = TRUE;
+	    default:    IsRFW = FALSE;
+	    endcase
+	end
+	else if (isn[`INSTRUCTION_L2]==2'b00) begin
 		if (IsLoad(isn))
 	    case({isn[31:28],isn[22:21]})
 	    `LBX:   IsRFW = TRUE;
@@ -798,9 +801,11 @@ casez(isn[`INSTRUCTION_OP])
 `LB:        IsRFW = TRUE;
 `LBU:       IsRFW = TRUE;
 `Lx:        IsRFW = TRUE;
+`LxU:       IsRFW = TRUE;
 `LWR:       IsRFW = TRUE;
 `LV:        IsRFW = TRUE;
 `LVx:				IsRFW = TRUE;
+`LVxU:			IsRFW = TRUE;
 `CAS:       IsRFW = TRUE;
 `AMO:				IsRFW = TRUE;
 `CSRRW:			IsRFW = TRUE;
@@ -1045,6 +1050,8 @@ begin
 //	bus[`IB_A3V]   <= Source3Valid(instr);
 //	bus[`IB_A2V]   <= Source2Valid(instr);
 //	bus[`IB_A1V]   <= Source1Valid(instr);
+	bus[`IB_TLB]	 <= IsTLB(instr);
+	bus[`IB_SZ]    <= instr[`INSTRUCTION_OP]==`R2 ? instr[25:23] : 3'd3;	// 3'd3=word size
 	bus[`IB_IRQ]	 <= IsIrq(instr);
 	bus[`IB_BRK]	 <= isBrk;
 	bus[`IB_RTI]	 <= isRti;
@@ -1070,7 +1077,7 @@ begin
 	bus[`IB_RMW]		<= IsCAS(instr) || IsAMO(instr) || IsInc(instr);
 	bus[`IB_MEMDB]	<= IsMemdb(instr);
 	bus[`IB_MEMSB]	<= IsMemsb(instr);
-	bus[`IB_SHFT]   <= IsShift48(instr)|IsShift(instr);
+	bus[`IB_SHFT]   <= IsShift48(instr);//|IsShift(instr);
 	bus[`IB_SEI]		<= IsSEI(instr);
 	bus[`IB_AQ]			<= (IsAMO(instr)|IsLWRX(instr)|IsSWCX(instr)) & instr[25];
 	bus[`IB_RL]			<= (IsAMO(instr)|IsLWRX(instr)|IsSWCX(instr)) & instr[24];

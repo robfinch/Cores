@@ -194,7 +194,7 @@ casez({cinstr[15:12],cinstr[6]})
 5'b01110:
 		begin
 			expand[47:32] = 16'h0000;
-			expand[31:23] = {{1{cinstr[11]}},{cinstr[11:8],cinstr[5:0]}};
+			expand[31:23] = {{1{cinstr[11]}},{cinstr[11:8],cinstr[5:2]}};
 			expand[22:18] = 5'd0;		// Rb = 0
 			expand[17:16] = cinstr[1:0];
 			expand[15:13] = 3'd0;		// BEQ
@@ -255,6 +255,22 @@ casez({cinstr[15:12],cinstr[6]})
 			expand[12:8] = cinstr[4:0];
 			expand[7:6] = 2'b10;
 			expand[5:0] = `JAL;
+		end
+5'b00111:
+		if ({cinstr[11:8],cinstr[5]}==5'b0) begin	// PUSH
+			expand[47:32] = 16'h0000;
+			expand[31:28] = 4'hC;
+			expand[27:23] = 5'd0;
+			expand[22:18] = cinstr[4:0];
+			expand[17:13] = 5'd31;
+			expand[12:8] = 5'd31;
+			expand[7:6] = 2'b10;
+			expand[5:0] = `MEMNDX;
+		end
+		else begin
+			expand[47:8] = 40'd0;
+			expand[7:6] = 2'b10;
+			expand[5:0] = `NOP;
 		end
 5'b01001:	// LH Rt,d[SP]
 		begin
@@ -335,7 +351,7 @@ casez({cinstr[15:12],cinstr[6]})
 5'b11001:
 		begin	// LH
 			expand[47:32] = 16'h0000;
-			expand[31:18] = {{7{cinstr[11]}},cinstr[11:10],cinstr[4:3],2'd2};
+			expand[31:18] = {{8{cinstr[11]}},cinstr[11:10],cinstr[4:3],2'd2};
 			expand[17:13] = fnRp({cinstr[9:8],cinstr[5]});
 			expand[12:8] = fnRp(cinstr[2:0]);
 			expand[7:6] = 2'b10;
@@ -344,7 +360,7 @@ casez({cinstr[15:12],cinstr[6]})
 5'b11011:	// LW
 		begin
 			expand[47:32] = 16'h0000;
-			expand[31:18] = {{6{cinstr[11]}},cinstr[11:10],cinstr[4:3],3'd4};
+			expand[31:18] = {{7{cinstr[11]}},cinstr[11:10],cinstr[4:3],3'd4};
 			expand[17:13] = fnRp({cinstr[9:8],cinstr[5]});
 			expand[12:8] = fnRp(cinstr[2:0]);
 			expand[7:6] = 2'b10;

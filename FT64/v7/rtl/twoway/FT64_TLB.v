@@ -271,6 +271,8 @@ ONE:
 		state <= TWO;
 TWO:
 	state <= IDLE;
+default:
+	state <= IDLE;
 endcase
 end
 

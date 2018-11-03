@@ -189,6 +189,7 @@
 `define REX     6'h0D
 `define XNORI		6'h0E
 `define FLOAT   6'h0F
+`define LVxU		6'h11
 `define LB      6'h13
 `define SB      6'h15
 `define MEMNDX	6'h16
@@ -453,6 +454,8 @@
 `define IB_RC		  70:66
 `define IB_RB			65:61
 `define IB_RA			60:56
+`define IB_TLB		46
+`define IB_SZ			45:43
 `define IB_IRQ		42
 `define IB_RTI		41
 `define IB_BRK		40
