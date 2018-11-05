@@ -316,7 +316,7 @@ Operand *GenerateDereference(ENODE *node,int flags,int size, int su)
 //		ap2->offset = ap1->offset;
 //		ReleaseTempRegister(ap1);
 			if (!node->isUnsigned)
-				ap1->GenSignExtend(siz1,size,flags);
+				ap1 = ap1->GenSignExtend(siz1,size,flags);
 			else
 				ap1->MakeLegal(flags,siz1);
       ap1->MakeLegal(flags,size);
@@ -334,7 +334,7 @@ Operand *GenerateDereference(ENODE *node,int flags,int size, int su)
 		ap1->offset->sym = node->p[0]->sym;
 		ap1->isUnsigned = !su;
 		if (!node->isUnsigned)
-			ap1->GenSignExtend(siz1,size,flags);
+			ap1 = ap1->GenSignExtend(siz1,size,flags);
 		else
 			ap1->MakeLegal(flags,siz1);
 		ap1->MakeLegal(flags,size);
@@ -352,10 +352,10 @@ Operand *GenerateDereference(ENODE *node,int flags,int size, int su)
 		ap1->offset->sym = node->p[0]->sym;
 		ap1->isUnsigned = !su;
 		if (!node->isUnsigned)
-	        ap1->GenSignExtend(siz1,size,flags);
+	    ap1 = ap1->GenSignExtend(siz1,size,flags);
 		else
-		    ap1->MakeLegal(flags,siz1);
-        ap1->MakeLegal(flags,size);
+		  ap1->MakeLegal(flags,siz1);
+    ap1->MakeLegal(flags,size);
 		goto xit;
     }
     else if( node->p[0]->nodetype == en_autofcon )
@@ -445,7 +445,7 @@ Operand *GenerateDereference(ENODE *node,int flags,int size, int su)
 		ap1->offset = node->p[0];//makeinode(en_icon,node->p[0]->i);
 		ap1->isUnsigned = !su;
 		if (!node->isUnsigned)
-			ap1->GenSignExtend(siz1, size, flags);
+			ap1 = ap1->GenSignExtend(siz1, size, flags);
 		else
 			ap1->MakeLegal( flags, siz1);
 		ap1->isVolatile = node->isVolatile;
@@ -462,7 +462,7 @@ Operand *GenerateDereference(ENODE *node,int flags,int size, int su)
         ap1->offset = node->p[0];//makeinode(en_icon,node->p[0]->i);
 		ap1->isUnsigned = !su;
 		if (!node->isUnsigned)
-	        ap1->GenSignExtend(siz1,size,flags);
+	       ap1 = ap1->GenSignExtend(siz1,size,flags);
 		else
 		    ap1->MakeLegal(flags,siz1);
         ap1->isVolatile = node->isVolatile;
@@ -485,7 +485,7 @@ Operand *GenerateDereference(ENODE *node,int flags,int size, int su)
 		ap1->offset = node->p[0];//makeinode(en_icon,node->p[0]->i);
 		ap1->isUnsigned = !su;
 		if (!node->isUnsigned)
-			ap1->GenSignExtend(siz1, size, flags);
+			ap1 = ap1->GenSignExtend(siz1, size, flags);
 		else
 			ap1->MakeLegal( flags, siz1);
 		ap1->isVolatile = node->isVolatile;
@@ -502,7 +502,7 @@ Operand *GenerateDereference(ENODE *node,int flags,int size, int su)
 		ap1->offset = node->p[0];//makeinode(en_icon,node->p[0]->i);
 		ap1->isUnsigned = !su;
 		if (!node->isUnsigned)
-			ap1->GenSignExtend(siz1, size, flags);
+			ap1 = ap1->GenSignExtend(siz1, size, flags);
 		else
 			ap1->MakeLegal( flags, siz1);
 		ap1->isVolatile = node->isVolatile;
@@ -586,7 +586,7 @@ Operand *GenerateDereference(ENODE *node,int flags,int size, int su)
 					ap1->offset = nullptr;	// ****
 				ap1->isUnsigned = !su | ap1->isPtr;
 				if (!node->isUnsigned)
-					ap1->GenSignExtend(siz1, size, flags);
+					ap1 = ap1->GenSignExtend(siz1, size, flags);
 				else
 					ap1->MakeLegal(flags, siz1);
 				ap1->isVolatile = node->isVolatile;
@@ -628,7 +628,7 @@ Operand *GenerateDereference(ENODE *node,int flags,int size, int su)
 //    ap1->offset = makeinode(en_icon,node->p[0]->i);
     ap1->isUnsigned = !su | ap1->isPtr;
 	if (!node->isUnsigned)
-	    ap1->GenSignExtend(siz1,size,flags);
+	    ap1 = ap1->GenSignExtend(siz1,size,flags);
 	else
 		ap1->MakeLegal(flags,siz1);
     ap1->isVolatile = node->isVolatile;
@@ -729,7 +729,7 @@ Operand *GenerateAssignMultiply(ENODE *node,int flags, int size, int op)
 		GenMemop(op, ap1, ap2, ssize);
 	}
     ReleaseTempReg(ap2);
-    ap1->GenSignExtend(ssize,size,flags);
+    ap1 = ap1->GenSignExtend(ssize,size,flags);
     ap1->MakeLegal(flags,size);
     return (ap1);
 }
@@ -1427,13 +1427,13 @@ Operand *GenerateExpression(ENODE *node, int flags, int size)
 		ap1->isPtr = TRUE;
 		ap1->isUnsigned = TRUE;
     return ap1;
-	case en_vector_ref:	return GenerateDereference(node,flags,512,0);
-	case en_ref32:	return GenerateDereference(node,flags,4,1);
-	case en_ref32u:	return GenerateDereference(node,flags,4,0);
-  case en_b_ref:	return GenerateDereference(node,flags,1,1);
-	case en_c_ref:	return GenerateDereference(node,flags,2,1);
-	case en_h_ref:	return GenerateDereference(node,flags,4,1);
-  case en_w_ref:	return GenerateDereference(node,flags,8,1);
+	case en_vector_ref:	return GenerateDereference(node,flags,size,0);
+	case en_ref32:	return GenerateDereference(node,flags,size,1);
+	case en_ref32u:	return GenerateDereference(node,flags,size,0);
+  case en_b_ref:	return GenerateDereference(node,flags,size,1);
+	case en_c_ref:	return GenerateDereference(node,flags,size,1);
+	case en_h_ref:	return GenerateDereference(node,flags,size,1);
+  case en_w_ref:	return GenerateDereference(node,flags,size,1);
 	case en_flt_ref:
 		ap1 = GenerateDereference(node, flags, size, 1);
 		ap1->type = stdflt.GetIndex();
@@ -1774,16 +1774,16 @@ int GetNaturalSize(ENODE *node)
 	{
 	case en_uwfieldref:
 	case en_wfieldref:
-		return sizeOfWord;
+		return (sizeOfWord);
 	case en_bfieldref:
 	case en_ubfieldref:
-		return 1;
+		return (1);
 	case en_cfieldref:
 	case en_ucfieldref:
-		return 2;
+		return (2);
 	case en_hfieldref:
 	case en_uhfieldref:
-		return 4;
+		return (4);
 	case en_icon:
 		if (node->i >= -128 && node->i < 128)
 			return (1);
@@ -1793,9 +1793,9 @@ int GetNaturalSize(ENODE *node)
 			return (4);
 		return (8);
 	case en_fcon:
-		return node->tp->precision / 16;
-	case en_tcon: return 6;
-	case en_fcall:  case en_labcon: case en_clabcon:
+		return (node->tp->precision / 16);
+	case en_tcon: return (6);
+	case en_labcon: case en_clabcon:
 	case en_cnacon: case en_nacon:  case en_autocon: case en_classcon:
 	case en_tempref:
 	case en_cbw: case en_cubw:
@@ -1805,7 +1805,8 @@ int GetNaturalSize(ENODE *node)
 	case en_cubu: case en_cucu: case en_cuhu:
 	case en_ccwp: case en_cucwp:
 	case en_sxb:	case en_sxc:	case en_sxh:
-		return 8;
+		return (8);
+	case en_fcall:
 	case en_regvar:
 	case en_fpregvar:
 		if (node->tp)
@@ -1813,40 +1814,40 @@ int GetNaturalSize(ENODE *node)
 		else
 			return (8);
 	case en_autofcon:
-		return 8;
+		return (8);
 	case en_ref32: case en_ref32u:
-		return 4;
+		return (4);
 	case en_b_ref:
 	case en_ub_ref:
-		return 1;
+		return (1);
 	case en_cbc:
-	case en_c_ref:	return 2;
-	case en_uc_ref:	return 2;
-	case en_cbh:	return 2;
-	case en_cch:	return 2;
-	case en_h_ref:	return 4;
-	case en_uh_ref:	return 4;
-	case en_flt_ref: return sizeOfFPS;
+	case en_c_ref:	return (2);
+	case en_uc_ref:	return (2);
+	case en_cbh:	return (4);
+	case en_cch:	return (4);
+	case en_h_ref:	return (4);
+	case en_uh_ref:	return (4);
+	case en_flt_ref: return (sizeOfFPS);
 	case en_w_ref:  case en_uw_ref:
-		return 8;
+		return (8);
 	case en_hp_ref:
-		return 4;
+		return (4);
 	case en_wp_ref:
-		return 8;
+		return (8);
 	case en_autovcon:
 	case en_vector_ref:
-		return 512;
+		return (512);
 	case en_dbl_ref:
-		return sizeOfFPD;
+		return (sizeOfFPD);
 	case en_quad_ref:
-		return sizeOfFPQ;
+		return (sizeOfFPQ);
 	case en_triple_ref:
-		return sizeOfFPT;
+		return (sizeOfFPT);
 	case en_tempfpref:
 	if (node->tp)
-		return node->tp->precision/16;
+		return (node->tp->precision/16);
 	else
-		return 8;
+		return (8);
 	case en_not:    case en_compl:
 	case en_uminus: case en_assign:
 		return GetNaturalSize(node->p[0]);
@@ -1885,11 +1886,11 @@ int GetNaturalSize(ENODE *node)
 		siz0 = GetNaturalSize(node->p[0]);
 		siz1 = GetNaturalSize(node->p[1]);
 		if( siz1 > siz0 )
-			return siz1;
+			return (siz1);
 		else
-			return siz0;
+			return (siz0);
 	case en_void:   case en_cond:
-		return GetNaturalSize(node->p[1]);
+		return (GetNaturalSize(node->p[1]));
 	case en_bchk:
 		return (GetNaturalSize(node->p[0]));
 	case en_chk:
@@ -1906,11 +1907,13 @@ int GetNaturalSize(ENODE *node)
 	case en_d2q:
 	case en_t2q:
 		return (sizeOfFPQ);
+	case en_object_list:
+		return (GetNaturalSize(node->p[0]));
 	default:
 		printf("DIAG - natural size error %d.\n", node->nodetype);
 		break;
 	}
-	return 0;
+	return (0);
 }
 
 

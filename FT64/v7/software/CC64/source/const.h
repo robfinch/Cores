@@ -22,7 +22,7 @@ enum e_node {
 		en_cubw, en_cucw, en_cuhw,
 		en_cucwp, en_ccwp,
 
-        en_cbc, en_cbh,
+    en_cbc, en_cbh, en_cbuc, en_cubc,
 		en_cch,
 		en_cwl, en_cld, en_cfd,
 		en_sxb, en_sxc, en_sxh,

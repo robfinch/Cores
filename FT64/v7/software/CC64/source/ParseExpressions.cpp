@@ -392,6 +392,7 @@ TYP *deref(ENODE **node, TYP *tp)
 	            tp = &stdchar;
 			(*node)->sym = sp;
 			break;
+
 		case bt_ushort:
 		case bt_short:
 			if (tp->isUnsigned) {
@@ -399,16 +400,18 @@ TYP *deref(ENODE **node, TYP *tp)
 				(*node)->esize = tp->size;
 				(*node)->etype = (enum e_bt)tp->type;
 				(*node)->isUnsigned = TRUE;
-				tp = &stduint;
+				tp = &stdushort;
 			}
 			else {
 				*node = makenode(en_h_ref,*node,(ENODE *)NULL);
 				(*node)->esize = tp->size;
 				(*node)->etype = (enum e_bt)tp->type;
-				tp = &stdint;
+				(*node)->isUnsigned = FALSE;
+				tp = &stdshort;
 			}
 			(*node)->sym = sp;
 			break;
+
 		case bt_exception:
 			(*node)->esize = tp->size;
 			(*node)->etype = (enum e_bt)tp->type;

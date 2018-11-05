@@ -3088,7 +3088,7 @@ int NextToken()
 							continue;
 						}
 					}
-            return (token = tk_id);
+          return (token = tk_id);
         }
         inptr++;
     } while (*inptr);

@@ -663,6 +663,7 @@ int TempInvalidate(int *fsp)
     int i;
 	int sp;
 	int64_t mask = 0;
+	int mode;
 
 	sp = 0;
 	TRACE(printf("TempInvalidate()\r\n");)
@@ -674,11 +675,13 @@ int TempInvalidate(int *fsp)
 	for (sp = i = 0; i < reg_alloc_ptr; i++) {
     	if (reg_alloc[i].f.isPushed == 'F') {
 			// ToDo: fix this line
+			mode = reg_alloc[i].Operand->mode;
 			reg_alloc[i].Operand->mode = am_reg;
 			if (!(mask & (1LL << reg_alloc[i].Operand->preg))) {
 				SpillRegister(reg_alloc[i].Operand, i);
 				mask = mask | (1LL << reg_alloc[i].Operand->preg);
 			}
+			reg_alloc[i].Operand->mode = mode;
 			//GenerateTempRegPush(reg_alloc[i].reg, /*reg_alloc[i].Operand->mode*/am_reg, i, sp);
     		stacked_regs[sp].reg = reg_alloc[i].reg;
     		stacked_regs[sp].Operand = reg_alloc[i].Operand;
@@ -697,8 +700,10 @@ int TempInvalidate(int *fsp)
         if (fpreg_in_use[fpreg_alloc[i].reg] != -1) {
     		if (fpreg_alloc[i].f.isPushed == 'F') {
 				// ToDo: fix this line
+				mode = fpreg_alloc[i].Operand->mode;
 				fpreg_alloc[i].Operand->mode = am_fpreg;
 				SpillFPRegister(fpreg_alloc[i].Operand, i);
+				fpreg_alloc[i].Operand->mode = mode;
     			//GenerateTempRegPush(reg_alloc[i].reg, /*reg_alloc[i].Operand->mode*/am_reg, i, sp);
     			stacked_fpregs[sp].reg = fpreg_alloc[i].reg;
     			stacked_fpregs[sp].Operand = fpreg_alloc[i].Operand;

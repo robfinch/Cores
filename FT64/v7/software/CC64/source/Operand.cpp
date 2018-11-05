@@ -107,27 +107,28 @@ void Operand::GenZeroExtend(int isize, int osize)
 	}
 }
 
-void Operand::GenSignExtend(int isize, int osize, int flags)
+Operand *Operand::GenSignExtend(int isize, int osize, int flags)
 {
 	Operand *ap1;
 	Operand *ap = this;
 
 	if (isize == osize)
-		return;
+		return (ap);
 	if (ap->isUnsigned)
-		return;
+		return (ap);
 	if (ap->mode != am_reg && ap->mode != am_fpreg) {
 		ap1 = GetTempRegister();
 		GenLoad(ap1, ap, isize, isize);
+		ReleaseTempRegister(ap);
 		switch (isize)
 		{
 		case 1:	GenerateDiadic(op_sxb, 0, ap1, ap1); break;
 		case 2:	GenerateDiadic(op_sxc, 0, ap1, ap1); break;
 		case 4:	GenerateDiadic(op_sxh, 0, ap1, ap1); break;
 		}
-		GenStore(ap1, ap, osize);
-		ReleaseTempRegister(ap1);
-		return;
+		//GenStore(ap1, ap, osize);
+		//ReleaseTempRegister(ap1);
+		return (ap1);
 		//MakeLegalOperand(ap,flags & (F_REG|F_FPREG),isize);
 	}
 	if (ap->type == stddouble.GetIndex()) {
@@ -143,6 +144,7 @@ void Operand::GenSignExtend(int isize, int osize, int flags)
 		case 4:	GenerateDiadic(op_sxh, 0, ap, ap); break;
 		}
 	}
+	return (ap);
 }
 
 // ----------------------------------------------------------------------------
@@ -224,7 +226,13 @@ void Operand::MakeLegal(int flags, int size)
 			break;
 		}
 		mode = am_reg;
-		type = stdint.GetIndex();
+		switch (size) {
+		case 1: type = stdbyte.GetIndex(); break;
+		case 2: type = stdchar.GetIndex(); break;
+		case 4:	type = stdshort.GetIndex(); break;
+		default:
+			type = stdint.GetIndex();
+		}
 		preg = ap2->preg;
 		deep = ap2->deep;
 		pdeep = ap2->pdeep;

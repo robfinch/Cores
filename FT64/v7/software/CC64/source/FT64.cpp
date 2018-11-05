@@ -783,12 +783,13 @@ static void RestoreTemporaries(Function *sym, int sp, int fsp)
 // 8 we assume a structure variable and we assume we have the address in a reg.
 // Returns: number of stack words pushed.
 //
-static int GeneratePushParameter(ENODE *ep, int regno, int stkoffs)
+static int GeneratePushParameter(ENODE *ep, int regno, int stkoffs, bool *isFloat)
 {    
 	Operand *ap, *ap3;
 	int nn = 0;
 	int sz;
-	
+
+	*isFloat = false;
 	switch(ep->etype) {
 	case bt_quad:	sz = sizeOfFPD; break;
 	case bt_triple:	sz = sizeOfFPT; break;
@@ -800,7 +801,7 @@ static int GeneratePushParameter(ENODE *ep, int regno, int stkoffs)
 		if (ep->tp->IsFloatType())
 			ap = GenerateExpression(ep,F_REG,sizeOfFP);
 		else
-			ap = GenerateExpression(ep,F_REG|F_IMMED,sizeOfWord);
+			ap = GenerateExpression(ep,F_REG|F_IMMED,GetNaturalSize(ep));
 	}
 	else if (ep->etype==bt_quad)
 		ap = GenerateExpression(ep,F_REG,sz);
@@ -811,11 +812,12 @@ static int GeneratePushParameter(ENODE *ep, int regno, int stkoffs)
 	else if (ep->etype==bt_float)
 		ap = GenerateExpression(ep,F_REG,sz);
 	else
-		ap = GenerateExpression(ep,F_REG|F_IMMED,sz);
+		ap = GenerateExpression(ep,F_REG|F_IMMED,GetNaturalSize(ep));
 	switch(ap->mode) {
-    case am_reg:
-    case am_fpreg:
-    case am_imm:
+	case am_fpreg:
+		*isFloat = true;
+	case am_reg:
+  case am_imm:
 /*
         nn = round8(ep->esize); 
         if (nn > 8) {// && (ep->tp->type==bt_struct || ep->tp->type==bt_union)) {           // structure or array ?
@@ -843,6 +845,7 @@ static int GeneratePushParameter(ENODE *ep, int regno, int stkoffs)
 					}
 				}
 				else if (ap->mode==am_fpreg) {
+					*isFloat = true;
 					GenerateDiadic(op_mov,0,makefpreg(regno & 0x7fff), ap);
 					if (regno & 0x8000) {
 						GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(sz));
@@ -872,7 +875,9 @@ static int GeneratePushParameter(ENODE *ep, int regno, int stkoffs)
 						nn = 1;
 					}
 					else {
-						if (ap->type=stddouble.GetIndex()) {
+						if (ap->type==stddouble.GetIndex()) 
+						{
+							*isFloat = true;
 							GenerateMonadic(op_push,ap->FloatSize,ap);
 							nn = sz/sizeOfWord;
 						}
@@ -897,6 +902,7 @@ static int GeneratePushParameter(ENODE *ep, int regno, int stkoffs)
 					}
 					else {
 						if (ap->type==stddouble.GetIndex() || ap->mode==am_fpreg) {
+							*isFloat = true;
 							GenerateDiadic(op_sf,'d',ap,make_indexed(stkoffs,regSP));
 							nn = sz/sizeOfWord;
 						}
@@ -923,33 +929,46 @@ static int GenerateStoreArgumentList(Function *sym, ENODE *plist)
 	OCODE *ip;
 	ENODE *p;
 	ENODE *pl[100];
-	int nn;
+	int nn, maxnn;
+	bool isFloat;
+	bool sumFloat;
 
 	sum = 0;
 	if (sym)
 		ta = sym->GetProtoTypes();
 
+	sumFloat = false;
 	ip = peep_tail;
 	GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(0));
 	// Capture the parameter list. It is needed in the reverse order.
 	for (nn = 0, p = plist; p != NULL; p = p->p[1], nn++) {
 		pl[nn] = p->p[0];
 	}
+	maxnn = nn;
 	for(--nn, i = 0; nn >= 0; --nn,i++ )
   {
 //		sum += GeneratePushParameter(pl[nn],ta ? ta->preg[ta->length - i - 1] : 0,sum*8);
 		// Variable argument list functions may cause the type array values to be
 		// exhausted before all the parameters are pushed. So, we check the parm number.
-		sum += GeneratePushParameter(pl[nn],ta ? (i < ta->length ? ta->preg[i] : 0) : 0,sum*8);
+		sum += GeneratePushParameter(pl[nn],ta ? (i < ta->length ? ta->preg[i] : 0) : 0,sum*8, &isFloat);
+		sumFloat |= isFloat;
 //		plist = plist->p[1];
   }
 	if (sum==0)
 		MarkRemove(ip->fwd);
 	else
 		ip->fwd->oper3 = make_immed(sum*sizeOfWord);
+	if (!sumFloat) {
+		cpu.SupportsPush = true;
+		peep_tail = ip;
+		peep_tail->fwd = nullptr;
+		for (nn = i = 0; nn < maxnn; nn++, i++)
+			GeneratePushParameter(pl[nn], ta ? (i < ta->length ? ta->preg[i] : 0) : 0, sum * 8, &isFloat);
+		cpu.SupportsPush = false;
+	}
 	if (ta)
 		delete ta;
-    return sum;
+    return (sum);
 }
 
 Operand *GenerateFunctionCall(ENODE *node, int flags)

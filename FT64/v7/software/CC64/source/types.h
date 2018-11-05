@@ -511,7 +511,7 @@ public:
 	char fpsize();
 
 	void GenZeroExtend(int isize, int osize);
-	void GenSignExtend(int isize, int osize, int flags);
+	Operand *GenSignExtend(int isize, int osize, int flags);
 	void MakeLegal(int flags, int size);
 
 	// Storage

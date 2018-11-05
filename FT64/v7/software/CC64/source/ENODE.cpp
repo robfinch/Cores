@@ -952,7 +952,8 @@ Operand *ENODE::GenMultiply(int flags, int size, int op)
 		else
 			GenerateTriadic(op, 0, ap3, ap1, ap2);
 	}
-	ReleaseTempReg(ap2);
+	if (!square)
+		ReleaseTempReg(ap2);
 	ReleaseTempReg(ap1);
 	ap3->MakeLegal(flags, 2);
 	//Leave("Genmul", 0);
@@ -1175,7 +1176,7 @@ Operand *ENODE::GenAssignAdd(int flags, int size, int op)
 	}
 	ReleaseTempReg(ap2);
 	if (ap1->type != stddouble.GetIndex() && !ap1->isUnsigned)
-		ap1->GenSignExtend(ssize, size, flags);
+		ap1 = ap1->GenSignExtend(ssize, size, flags);
 	ap1->MakeLegal( flags, size);
 	return (ap1);
 }
@@ -1224,7 +1225,7 @@ Operand *ENODE::GenAssignLogic(int flags, int size, int op)
 			ap1->MakeLegal( flags, size);
 			return (ap1);
 		}
-		ap1->GenSignExtend(ssize, size, flags);
+		ap1 = ap1->GenSignExtend(ssize, size, flags);
 	}
 	ap1->MakeLegal( flags, size);
 	return (ap1);

@@ -1459,18 +1459,18 @@ xit:
 
 static void process_setiop(int64_t opcode6)
 {
-    int Ra;
-    int Rt;
-    char *p;
-    int64_t val;
+	int Ra;
+	int Rt;
+	char *p;
+	int64_t val;
 
-    p = inptr;
-    Rt = getRegisterX();
-    need(',');
-    Ra = getRegisterX();
-    need(',');
-    NextToken();
-    val = expr();
+	p = inptr;
+	Rt = getRegisterX();
+	need(',');
+	Ra = getRegisterX();
+	need(',');
+	NextToken();
+	val = expr();
 	if (!IsNBit(val, 30)) {
 		LoadConstant(val, 23);
 		switch (opcode6)
@@ -2287,11 +2287,11 @@ static void process_beqi(int64_t opcode6, int64_t opcode3)
 	if (!IsNBit(imm,8LL)) {
 		//printf("Branch immediate too large: %d %I64d", lineno, imm);
 		LoadConstant(imm, 23LL);
-		disp = (val >> 8LL) - ((code_address + 4LL) >> 8LL);
+		disp = (val >> 8LL) - ((code_address) >> 8LL);
 		offset = val & 0xffLL;
 		if (!IsNBit(disp, 4LL)) {
 			ins48 = !gpu;
-			disp = (val >> 8LL) - ((code_address + 6LL) >> 8LL);
+			disp = (val >> 8LL) - ((code_address) >> 8LL);
 			if (!IsNBit(disp, 20LL) || gpu) {
 				if (pass > 4)
 					error("BEQI Branch target too far away");
@@ -2309,12 +2309,12 @@ static void process_beqi(int64_t opcode6, int64_t opcode3)
 		);
 		return;
 	}
-	disp = val - (code_address + 4LL);
-	disp = (val >> 8LL) - ((code_address + 4LL) >> 8LL);
+	disp = val - (code_address);
+	disp = (val >> 8LL) - ((code_address) >> 8LL);
 	offset = val & 0xffLL;
 	if (!IsNBit(disp, 4LL)) {
 		ins48 = !gpu;
-		disp = (val >> 8LL) - ((code_address + 6LL) >> 8LL);
+		disp = (val >> 8LL) - ((code_address) >> 8LL);
 		if (!IsNBit(disp, 20LL) || gpu) {
 			if (pass > 4)
 				error("BEQI Branch target too far away");
@@ -2381,11 +2381,11 @@ static void process_bcc(int opcode6, int opcode4)
 	val = expr();
 	ca4 = (code_address + 4LL);
 	ca2 = (code_address + 2LL);
-	disp = (val >> 8LL) - ((code_address + 4LL) >> 8LL);
+	disp = (val >> 8LL) - ((code_address) >> 8LL);
 	offset = val & 0xffLL;
 	if (!IsNBit(disp, 4LL)) {
 		ins48 = !gpu;
-		disp = (val >> 8LL) - ((code_address + 6LL) >> 8LL);
+		disp = (val >> 8LL) - ((code_address) >> 8LL);
 		if (!IsNBit(disp, 20LL) || gpu) {
 			if (pass > 4)
 				error("Branch target too far away");
@@ -2471,10 +2471,10 @@ static void process_dbnz(int opcode6, int opcode3)
 		inptr = p;
 	  NextToken();
 		val = expr();
-		disp = (val >> 8LL) - ((code_address + 4LL) >> 8LL);
+		disp = (val >> 8LL) - ((code_address) >> 8LL);
 		offset = val & 0xffLL;
 		if (!IsNBit(disp, 4LL)) {
-			disp = (val >> 8LL) - ((code_address + 6LL) >> 8LL);
+			disp = (val >> 8LL) - ((code_address) >> 8LL);
 			ins48 = 1;
 			if (!IsNBit(disp, 20LL)) {
 				printf("Branch displacement (%llX-%llX=%llX) too large %d.\n", val, code_address, disp, lineno);
@@ -2533,10 +2533,10 @@ static void process_bbc(int opcode6, int opcode3)
 		inptr = p;
     NextToken();
 		val = expr();
-		disp = (val >> 8) - ((code_address + 4LL) >> 8);
+		disp = (val >> 8) - ((code_address) >> 8);
 		offset = val & 0xff;
 		if (!IsNBit(disp, 4LL)) {
-			disp = (val >> 8) - ((code_address + 6LL) >> 8);
+			disp = (val >> 8) - ((code_address) >> 8);
 			isn48 = !gpu;
 			if (!IsNBit(disp, 20LL) || gpu) {
 				if (pass > 4)
@@ -2666,11 +2666,11 @@ static void process_bra(int oc)
 		);
 		return;
 	}
-	disp = (val >> 8LL) - ((code_address + 4LL) >> 8LL);
+	disp = (val >> 8LL) - ((code_address) >> 8LL);
 	offset = val & 0xff;
 	if (!IsNBit(disp, 4LL)) {
 		ins48 = !gpu;
-		disp = (val >> 8LL) - ((code_address + 6LL) >> 8LL);
+		disp = (val >> 8LL) - ((code_address) >> 8LL);
 		if (!IsNBit(disp, 20LL) || gpu) {
 			if (pass > 4)
 				error("Bra target too far away");
@@ -3454,30 +3454,32 @@ static void process_ldi()
 	}
 	if (IsNBit(val, 49)) {
 		emit_insn(
-			((val >> 30LL) << 13LL) |
-			(Rt << 8) |
+			((val >> 35LL) << 18LL) |
+			(((val >> 30LL) & 0x1fLL) << 8LL) |
+			(Rt << 13) |
 			(0 << 6) |
 			0x27, !expand_flag, 4
 		);
 		emit_insn(
 			(val << 18LL) |
 			(Rt << 13) |
-			(0 << 8) |		// ORI
+			(Rt << 8) |		// ORI
 			(1 << 6) |
 			0x09, !expand_flag, 6);
 		return;
 	}
 	// 64 bit constant
 	emit_insn(
-		((val >> 30LL) << 13LL) |
-		(Rt << 8) |
+		((val >> 35LL) << 18LL) |
+		(((val >> 30LL) & 0x1fLL) << 8LL) |
+		(Rt << 13) |
 		(1 << 6) |
 		0x27, !expand_flag, 6
 	);
 	emit_insn(
 		(val << 18LL) |
 		(Rt << 13) |
-		(0 << 8) |		// ORI
+		(Rt << 8) |		// ORI
 		(1 << 6) |
 		0x09, !expand_flag, 6);
 	return;
@@ -3582,6 +3584,8 @@ static void process_load(int64_t opcode6, int64_t funct6, int sz)
 		ScanToEOL();
 		return;
 	}
+	if (opcode6 < 0)
+		error("Load: displacement mode not supported");
 	if (!IsNBit(val, 14)) {
 		if (gpu) {
 			if (val & 0x2000)
@@ -4472,6 +4476,34 @@ static void process_neg()
 	prevToken();
 }
 
+// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+
+static void process_push(int64_t fn4)
+{
+	int Ra;
+
+	Ra = getRegisterX();
+	if (gpu) {
+		emit_insn(
+			(fn4 << 28LL) |
+			(31 << 18) |
+			(31 << 13) |
+			(Ra << 8) |
+			0x16, !expand_flag, 4
+		);
+		prevToken();
+		return;
+	}
+	emit_insn(
+		(3 << 12) |
+		(0 << 8) |
+		(3 << 6) |
+		Ra, !expand_flag, 2
+	);
+	prevToken();
+}
+
 static void process_sync(int oc)
 {
 //    emit_insn(oc,!expand_flag);
@@ -4888,11 +4920,11 @@ void FT64_processMaster()
 		//case tk_lui: process_lui(0x27); break;
     case tk_lv:  process_lv(0x36); break;
 		case tk_lvb: process_load(0x3B,0x00,1); break;
-		case tk_lvbu: process_load(0x3B,0x01,-1); break;
+		case tk_lvbu: process_load(-1,0x01,-1); break;
 		case tk_lvc: process_load(0x3B,0x02,2); break;
-		case tk_lvcu: process_load(0x3B,0x03,-2); break;
+		case tk_lvcu: process_load(0x11,0x03,-2); break;
 		case tk_lvh: process_load(0x3B,0x04,4); break;
-		case tk_lvhu: process_load(0x3B,0x05,-4); break;
+		case tk_lvhu: process_load(0x11,0x05,-4); break;
 		case tk_lvw: process_load(0x3B,0x06,8); break;
     case tk_lw:  process_load(0x20,0x12,4); break;
     case tk_lwr:  process_load(0x1D,0x14,0); break;
@@ -4918,6 +4950,7 @@ void FT64_processMaster()
         case tk_org: process_org(); break;
 				case tk_plus: compress_flag = 0;  expand_flag = 1; break;
         case tk_public: process_public(); break;
+		case tk_push: process_push(0x0c); break;
         case tk_rodata:
             if (first_rodata) {
                 while(sections[segment].address & 4095)

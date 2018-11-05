@@ -1221,16 +1221,16 @@ void process_label()
                 sym->bits = (int)ceil(log(fabs((double)val.low)+1) / log(2.0))+1;
             }
             else {
-				if (gCpu=='G')
-					sym->value.low = ca & -4LL;
-				else
-					sym->value.low = ca;
-				sym->value.high = 0;
-                sym->segment = segment;
-                if (segment==codeseg)
-                   sym->bits = code_bits;
-                else
-                    sym->bits = data_bits;
+							if (gCpu=='G')
+								sym->value.low = ca & -4LL;
+							else
+								sym->value.low = ca;
+							sym->value.high = 0;
+              sym->segment = segment;
+              if (segment==codeseg)
+                sym->bits = code_bits;
+              else
+                sym->bits = data_bits;
             }
         }
         else {

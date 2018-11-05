@@ -87,7 +87,10 @@ void ParseEnumerationList(TABLE *table, int amt, SYM *parent)
     sp->SetName(*(new std::string(lastid)));
     sp->storage_class = sc_const;
     sp->tp = &stdconst;
-		sp->parent = parent->id;
+		if (parent)
+			sp->parent = parent->id;
+		else
+			sp->parent = 0;
     table->insert(sp);
     NextToken();
 		if (lastst==assign) {
