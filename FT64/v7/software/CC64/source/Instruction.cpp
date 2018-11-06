@@ -64,14 +64,14 @@ static int fbmcmp(const void *a, const void *b)
 
 Instruction *Instruction::FindByMnem(std::string& mn)
 {
-	return ((Instruction *)bsearch(mn.c_str(), &opl[1], 222, sizeof(Instruction), fbmcmp));
+	return ((Instruction *)bsearch(mn.c_str(), &opl[1], sizeof(opl) / sizeof(Instruction) - sizeof(Instruction), sizeof(Instruction), fbmcmp));
 }
 
 Instruction *Instruction::Get(int op)
 {
 	int i;
 
-	for (i = 0; opl[i].mnem; i++)
+	for (i = 0; i < sizeof(opl) / sizeof(Instruction); i++)
 		if (opl[i].opcode == op)
 			return (&opl[i]);
 	return (nullptr);

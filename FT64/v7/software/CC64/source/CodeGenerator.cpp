@@ -1624,7 +1624,8 @@ Operand *GenerateExpression(ENODE *node, int flags, int size)
 	case en_and:    return node->GenBinary(flags,size,op_and);
     case en_or:     return node->GenBinary(flags,size,op_or);
 	case en_xor:	return node->GenBinary(flags,size,op_xor);
-    case en_mul:    return node->GenMultiply(flags,size,op_mul);
+	case en_mulf:    return node->GenMultiply(flags, size, op_mulf);
+	case en_mul:    return node->GenMultiply(flags,size,op_mul);
     case en_mulu:   return node->GenMultiply(flags,size,op_mulu);
     case en_div:    return node->GenDivMod(flags,size,op_div);
     case en_udiv:   return node->GenDivMod(flags,size,op_divu);

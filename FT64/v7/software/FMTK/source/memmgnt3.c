@@ -76,9 +76,10 @@ void init_memory_management()
 	// System break positions.
 	// All breaks start out at address 8192 to allow a failed memory allocation
 	// to return 0 as the page address.
+	DBGDispChar('A');
 	memsetW(brks,8192,256);
-
 	sys_pages_available = NPAGES;
+	DBGDispChar('a');
   
   // Allocate 4MB to the OS
   ipt_alloc(0,4194303,7);
@@ -91,9 +92,12 @@ void init_memory_management()
 
 static pascal void ipt_alloc_page(int asid, byte *vadr, int acr, int last_page)
 {
+	DBGDispChar('F');
 	out64(IPT_MMU+0x10,(asid<<24)|(acr&7)|(last_page<<22));
+	DBGDispChar('G');
 	out64(IPT_MMU+0x18,vadr);
 	out64(IPT_MMU+0x00,1);	// trigger translation update
+	DBGDispChar('H');
 }
 
 // ----------------------------------------------------------------------------
@@ -108,19 +112,24 @@ void *ipt_alloc(int asid, int amt, int acr)
 	if (asid < 0 || asid > 255)
 		throw (E_BadASID);
 	p = 0;
+	DBGDispChar('B');
 	amt = round8k(amt);
 	npages = amt >> 13;
 	if (npages==0)
 		return (p);
+	DBGDispChar('C');
 	if (npages < sys_pages_available) {
 		sys_pages_available -= npages;
 		p = brks[asid];
 		brks[asid] += amt;
-		for (nn = 0; nn < npages-1; nn++)
+		for (nn = 0; nn < npages-1; nn++) {
+			DBGDispChar('D');
 			ipt_alloc_page(asid,p+(nn << 13),acr,0);
+		}
 		ipt_alloc_page(asid,p+(nn << 13),acr,1);
 		p |= (asid << 56);
 	}
+	DBGDispChar('E');
 	return (p);
 }
 

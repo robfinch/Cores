@@ -65,6 +65,7 @@ enum e_node {
 		en_autovcon, en_autovmcon, en_vector_ref, en_vex, en_veins,
 		en_vadd, en_vsub, en_vmul, en_vdiv,
 		en_vadds, en_vsubs, en_vmuls, en_vdivs,
+		en_mulf,
 
 		en_object_list
 		};
@@ -138,7 +139,7 @@ enum e_sym {
 	kw_unordered, kw_inline, kw_kernel, kw_inout, kw_leafs,
 	kw_unique, kw_virtual, kw_this,
 	kw_new, kw_delete, kw_using, kw_namespace, kw_not, kw_attribute,
-	kw_no_temps, kw_no_parms, kw_floatmax,
+	kw_no_temps, kw_no_parms, kw_floatmax, kw_mulf,
 	my_eof
 };
 
@@ -228,7 +229,7 @@ enum e_op {
 	op_orq1, op_orq2, op_orq3,
 	op_swp,
 	// Built in functions
-	op_abs,
+	op_abs, op_mulf,
 	op_phi,
     op_empty
 };

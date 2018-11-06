@@ -1395,10 +1395,13 @@ void Statement::GenerateLinearSwitch()
 		{
 			bf = (int64_t *)stmt->casevals;
 			for (nn = (int)bf[0]; nn >= 1; nn--) {
+				/* Can't use bbs here! There could be other bits in the value besides the one tested.
 				if ((jj = pwrof2(bf[nn])) != -1) {
 					GenerateTriadic(op_bbs, 0, ap, make_immed(jj), make_clabel(curlab));
 				}
-				else if (bf[nn] < -256 || bf[nn] > 255) {
+				else
+				*/
+				if (bf[nn] < -256 || bf[nn] > 255) {
 					ap1 = GetTempRegister();
 					GenerateTriadic(op_xor, 0, ap1, ap, make_immed(bf[nn]));
 					ReleaseTempRegister(ap1);

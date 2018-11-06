@@ -43,9 +43,12 @@ int        outcol = 0;
 // Please keep table in alphabetical order.
 // Instruction.cpp has the number of table elements hard-coded in it.
 //
-Instruction opl[] =
+Instruction opl[227] =
 {   
 { ";", op_rem },
+{ ";asm",op_asm,300 },
+{ ";empty",op_empty },
+{ ";fname", op_fnname },
 { "abs", op_abs,2,1,false,am_reg,am_reg,0,0 },
 { "add",op_add,1,1,false,am_reg,am_reg,am_reg|am_imm,0 },
 { "addu", op_addu,1,1 },
@@ -179,6 +182,7 @@ Instruction opl[] =
 { "movs", op_movs },
 { "mtfp", op_mtfp },
 { "mul",op_mul,18,1,false,am_reg,am_reg,am_reg|am_imm,0 },
+{ "mulf",op_mulf,1,1,false,am_reg,am_reg,am_reg | am_imm,0 },
 { "mulu",op_mulu,10,1,false,am_reg,am_reg,am_reg|am_imm,0 },
 { "nand",op_nand,1,1,false,am_reg,am_reg,am_reg,0 },
 { "ne",op_ne },
@@ -267,11 +271,7 @@ Instruction opl[] =
 { "xor",op_xor,1,1,false,am_reg,am_reg,am_reg|am_imm,0 },
 { "zxb",op_zxb,1,1,false,am_reg,am_reg,0,0 },
 { "zxc",op_zxc,1,1,false,am_reg,am_reg,0,0 },
-{ "zxh",op_zxh,1,1,false,am_reg,am_reg,0,0 },
-{ "",op_empty },
-{ "",op_asm,300 },
-{ "", op_fnname },
-{0,0,0,0,false,0,0,0,0}
+{ "zxh",op_zxh,1,1,false,am_reg,am_reg,0,0 }
 };
 
 Instruction *GetInsn(int op)

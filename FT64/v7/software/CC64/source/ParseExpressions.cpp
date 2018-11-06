@@ -1902,14 +1902,15 @@ j1:
  *                      sizeof(typecast)
  *                      sizeof unary
  *                      typenum(typecast)
+												__mulf(a,b)
  //                     new 
  *
  */
 TYP *ParseUnaryExpression(ENODE **node, int got_pa)
 {
-	TYP *tp, *tp1;
-    ENODE *ep1, *ep2, *ep3;
-    int flag2;
+	TYP *tp, *tp1, *tp2;
+  ENODE *ep1, *ep2, *ep3;
+  int flag2;
 
 	Enter("<ParseUnary>");
     ep1 = NULL;
@@ -2050,6 +2051,19 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
 			}
 		}
     break;
+
+	case kw_mulf:
+		NextToken();
+		needpunc(openpa,46);
+		tp1 = NonCommaExpression(&ep1);
+		needpunc(comma, 47);
+		tp2 = NonCommaExpression(&ep2);
+		needpunc(closepa, 48);
+		ep1 = makenode(en_mulf, ep1, ep2);
+		ep1->isUnsigned = TRUE;
+		ep1->esize = 8;
+		tp = &stduint;
+		break;
 /*
 	case kw_abs:
 		NextToken();

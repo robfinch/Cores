@@ -309,7 +309,7 @@ void ENODE::repexpr()
 		p[0]->repexpr();
 		break;
 	case en_add:    case en_sub:
-	case en_mul:    case en_mulu:   case en_div:	case en_udiv:
+	case en_mulf:   case en_mul:    case en_mulu:   case en_div:	case en_udiv:
 	case en_mod:    case en_umod:
 	case en_shl:	case en_asl:
 	case en_shlu:	case en_shru:	case en_asr:
@@ -531,6 +531,7 @@ void ENODE::scanexpr(int duse)
 		p[0]->scanexpr(duse);
 		p[1]->scanexpr(duse);
 		break;
+	case en_mulf:
 	case en_mul:    case en_mulu:   case en_div:	case en_udiv:
 	case en_shl:    case en_asl:	case en_shlu:	case en_shr:	case en_shru:	case en_asr:
 	case en_mod:    case en_umod:   case en_and:
@@ -957,7 +958,7 @@ Operand *ENODE::GenMultiply(int flags, int size, int op)
 	ReleaseTempReg(ap1);
 	ap3->MakeLegal(flags, 2);
 	//Leave("Genmul", 0);
-	return ap3;
+	return (ap3);
 }
 
 

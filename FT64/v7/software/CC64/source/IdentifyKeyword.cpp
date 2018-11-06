@@ -1,11 +1,11 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2017  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2018  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-// C64 - 'C' derived language compiler
+// CC64 - 'C' derived language compiler
 //  - 64 bit CPU
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -289,7 +289,7 @@ int IdentifyKeyword()
 
 
 	// __cdecl,__asm,__int64,__int32,__int16,__int8,__check,__exception,__task,__unordered,__leafs,__attribute__
-	// __no_temps __no_parms __floatmax
+	// __no_temps __no_parms __floatmax __mulf
 	if (p[0]=='_' && p[1]=='_') {
 		if (p[2]=='a' && p[3]=='s' && p[4]=='m' && p[5]=='\0')
 			return lastst = kw_asm;
@@ -309,6 +309,8 @@ int IdentifyKeyword()
 			if (p[5]=='8' && p[6]=='\0')
 				return lastst = kw_int8;
 		}
+		if (p[2] == 'm' && p[3] == 'u' && p[4] == 'l' && p[5] == 'f' && p[6] == '\0')
+			return (lastst = kw_mulf);
 		if (p[2]=='c' && p[3]=='h' && p[4]=='e' && p[5]=='c' && p[6]=='k' && p[7]=='\0')
 			return lastst = kw_check;
 		if (p[2]=='e' && p[3]=='x' && p[4]=='c' && p[5]=='e' && p[6]=='p' && p[7]=='t' && p[8]=='i' && p[9]=='o' && p[10]=='n' && p[11]=='\0')

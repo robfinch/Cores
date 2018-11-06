@@ -51,6 +51,7 @@
 ;SUPPORT_SMT		equ		0
 ; SUPPORT_AVIC	equ		1
 SUPPORT_BMP		equ		1
+;SUPPORT_TLB		equ		1
 
 E_BadCallno	equ		-4
 
@@ -234,13 +235,16 @@ start:
 		sw		r1,_DBGAttr
 		call	_DBGClearScreen
 		call	_DBGHomeCursor
-		ldi		$r1,#7
-		sb		$r1,LEDS
 		ldi		$r1,#MsgBoot
 		push	$r1
 		call	_DBGDisplayStringCRLF
 		add		sp,sp,#8
+		ldi		$r1,#7
+		sb		$r1,LEDS
+		call  _RandomizeSpritePositions2
 		call	_init_memory_management
+		ldi		$r1,#8
+		sb		$r1,LEDS
 		call	_SetTrapVector
 		call	_InitPIC
 		call	_InitPIT
@@ -512,7 +516,7 @@ _Delay2s:
 ;------------------------------------------------------------------------------
 ; Initialize the TLB with entries for the BIOS rom and variables.
 ;------------------------------------------------------------------------------
-
+ifdef SUPPORT_TLB
 _InitTLB:
 		; Set ASID to 1
 		sub				sp,sp,#8
@@ -551,6 +555,7 @@ _InitTLB:
 ;		tlben
 		lw			lr,[sp]
 		ret			#8
+endif
 
 ;------------------------------------------------------------------------------
 ; Set400x300 video mode.
@@ -1358,6 +1363,8 @@ vec2data:
 ;.include "d:\Cores5\FT64\v7\software\cc64libc\source\ctype.s"
 ;.include "d:\Cores5\FT64\v7\software\cc64libc\source\string.s"
 ;.include "d:\Cores5\FT64\v7\software\cc64libc\source\malloc.s"
+.include "d:\Cores5\FT64\v7\software\cc64libc\source\putch.s"
+.include "d:\Cores5\FT64\v7\software\cc64libc\source\puthexnum.s"
 .include "d:\Cores5\FT64\v7\software\cc64libc\source\prtflt.s"
 .include "d:\Cores5\FT64\v7\software\cc64libc\source\FT64\io.s"
 .include "d:\Cores5\FT64\v7\software\cc64libc\source\FT64\getCPU.s"

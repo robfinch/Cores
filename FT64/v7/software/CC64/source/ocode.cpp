@@ -241,6 +241,7 @@ void OCODE::store(txtoStream& ofs)
 	char buf[8];
 	int nn;
 
+	nn = 0;
 	ap1 = oper1;
 	ap2 = oper2;
 	ap3 = oper3;
@@ -271,7 +272,8 @@ void OCODE::store(txtoStream& ofs)
 		else {
 			ofs.printf("\t");
 			ofs.printf("%6.6s\t", "");
-			nn = insn->store(ofs);
+			if (insn)
+				nn = insn->store(ofs);
 			buf[0] = '\0';
 			if (length) {
 				if (length <= 16) {

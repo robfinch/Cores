@@ -432,6 +432,10 @@ static void opt0(ENODE **node)
 					//}
 				}
 				break;
+			case en_mulf:
+				opt0(&(ep->p[0]));
+				opt0(&(ep->p[1]));
+				return;
 			case en_vmul:
 			case en_vmuls:
       case en_mul:
@@ -664,6 +668,7 @@ static int64_t xfold(ENODE *node)
                         return xfold(node->p[0]) + xfold(node->p[1]);
                 case en_sub:
                         return xfold(node->p[0]) - xfold(node->p[1]);
+								case en_mulf:
                 case en_mul:
 				case en_mulu:
                         if( node->p[0]->nodetype == en_icon )
