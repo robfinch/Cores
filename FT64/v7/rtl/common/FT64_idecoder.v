@@ -632,6 +632,7 @@ casez(isn[`INSTRUCTION_OP])
 `XNORI: HasConst = TRUE;
 `MULUI: HasConst = TRUE;
 `MULI:  HasConst = TRUE;
+`MULFI:	HasConst = TRUE;
 `DIVUI: HasConst = TRUE;
 `DIVI:  HasConst = TRUE;
 `MODI:  HasConst = TRUE;
@@ -709,6 +710,7 @@ casez(isn[`INSTRUCTION_OP])
     `MULUH:  IsRFW = TRUE;
     `MULSUH: IsRFW = TRUE;
     `MULH:   IsRFW = TRUE;
+    `MULF:	IsRFW = TRUE;
     `FXMUL:	IsRFW = TRUE;
     `DIVU:  IsRFW = TRUE;
     `DIVSU: IsRFW = TRUE;
@@ -724,7 +726,7 @@ casez(isn[`INSTRUCTION_OP])
     `SEI:	IsRFW = TRUE;
     default:    IsRFW = FALSE;
     endcase
-	else if (isn[`INSTRUCTION_L2]==2'b10)
+	else if (isn[7]==1'b1)
     casez(isn[`INSTRUCTION_S2])
     `ADD:   IsRFW = TRUE;
     `SUB:   IsRFW = TRUE;
@@ -792,6 +794,7 @@ casez(isn[`INSTRUCTION_OP])
 `XORI:      IsRFW = TRUE;
 `MULUI:     IsRFW = TRUE;
 `MULI:      IsRFW = TRUE;
+`MULFI:			IsRFW = TRUE;
 `DIVUI:     IsRFW = TRUE;
 `DIVI:      IsRFW = TRUE;
 `MODI:      IsRFW = TRUE;
@@ -818,6 +821,8 @@ endfunction
 // Determines which lanes of the target register get updated.
 function [7:0] fnWe;
 input [47:0] isn;
+fnWe = 8'hFF;
+/*
 casez(isn[`INSTRUCTION_OP])
 `R2:
 	case(isn[`INSTRUCTION_S2])
@@ -855,6 +860,7 @@ casez(isn[`INSTRUCTION_OP])
 	endcase
 default:	fnWe = 8'hFF;
 endcase
+*/
 endfunction
 
 // Detect if a source is automatically valid

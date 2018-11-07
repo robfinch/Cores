@@ -35,7 +35,8 @@
 // One way to tweak the size of the core a little bit is to limit the number
 // of address bits processed. The test system for instance has only 512MB of
 // memory, so the address size is limited to 32 bits.
-`define AMSB			31
+// ** The ASID is stored in the upper 8 bits of the address
+`define AMSB			63
 `define ABITS			`AMSB:0
 
 
@@ -52,7 +53,7 @@
 
 // If set greater than 10, then memory instructions won't
 // issue until they are within 10 of the head of the queue.
-`define QENTRIES	5
+`define QENTRIES	4
 
 // Bitfield for representing exception codes
 `define XBITS			7:0
@@ -84,7 +85,7 @@
 // Comment out the following to remove FCU enhancements (branch predictor, BTB, RSB)
 //`define FCU_ENH		1
 // Comment out the following to remove bypassing logic on the functional units
-//`define FU_BYPASS	1
+`define FU_BYPASS	1
 
 //`define SUPPORT_TLB		1
 

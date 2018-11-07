@@ -85,7 +85,7 @@ FT64_iptram uram1 (
   .douta(pt_dat)
 );
 
-wire pte_last = pt_dat[23];
+wire pt_last = pt_dat[23];
 wire [18:0] pt_vadr = pt_dat[22:4];
 wire [7:0] pt_asid = pt_dat[31:24];
 wire [3:0] pt_drwx = pt_dat[3:0];
@@ -200,6 +200,8 @@ S_CMP2:
 S_CMP3:
 	if (pt_drwx[2:0]==3'b0) begin
 		if (upd) begin
+			pte_last <= 1'b0;
+			pte_drwx <= 4'd0;
 			pt_wr <= 1'b1;
 			pt_dati <= {pte_asid,pte_last,pte_vadr[18:0],pte_drwx};
 			upd_done <= 1'b1;
@@ -220,6 +222,8 @@ S_CMP3:
 	end
 	else if (pt_asid==vadr_i[63:56] && pt_vadr==vadr_i[31:13]) begin
 		if (upd) begin
+			pte_last <= pt_last;
+			pte_drwx <= pt_drwx;
 			pt_wr <= 1'b1;
 			pt_dati <= {pt_dat[31:4],pte_drwx};
 			upd_done <= 1'b1;
@@ -256,6 +260,8 @@ S_CMP5:
 S_CMP6:
 	if (pt_drwx[2:0]==3'b0) begin
 		if (upd) begin
+			pte_last <= 1'b0;
+			pte_drwx <= 4'd0;
 			pt_wr <= 1'b1;
 			pt_dati <= {pte_asid,pte_last,pte_vadr[18:0],pte_drwx};
 			upd_done <= 1'b1;
@@ -276,6 +282,8 @@ S_CMP6:
 	end
 	else if (pt_asid==vadr_i[63:56] && pt_vadr==vadr_i[31:13]) begin
 		if (upd) begin
+			pte_last <= pt_last;
+			pte_drwx <= pt_drwx;
 			pt_wr <= 1'b1;
 			pt_dati <= {pt_dat[31:4],pte_drwx};
 			upd_done <= 1'b1;

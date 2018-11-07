@@ -30,7 +30,7 @@ module FT64_alu(rst, clk, ld, abort, instr, sz, tlb, a, b, c, pc, tgt, tgt2, ven
     ol, ASID, icl_i, cyc_i, we_i, vadr_i, cyc_o, we_o, padr_o, uncached, tlb_miss,
     exv_o, rdv_o, wrv_o);
 parameter DBW = 64;
-parameter ABW = 32;
+parameter ABW = 64;
 parameter BIG = 1'b1;
 parameter SUP_VECTOR = 1;
 parameter TRUE = 1'b1;
@@ -139,25 +139,7 @@ input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
 `MEMNDX:
 	if (isn[`INSTRUCTION_L2]==2'b00)
-    case({isn[31:28],isn[22:21]})
-    `LBX:   IsLoad = TRUE;
-    `LBUX:  IsLoad = TRUE;
-    `LCX:   IsLoad = TRUE;
-    `LCUX:  IsLoad = TRUE;
-    `LHX:   IsLoad = TRUE;
-    `LHUX:  IsLoad = TRUE;
-    `LWX:   IsLoad = TRUE;
-    `LVBX:	IsLoad = TRUE;
-    `LVBUX: IsLoad = TRUE;
-    `LVCX:  IsLoad = TRUE;
-    `LVCUX: IsLoad = TRUE;
-    `LVHX:  IsLoad = TRUE;
-    `LVHUX: IsLoad = TRUE;
-    `LVWX:  IsLoad = TRUE;
-    `LWRX:  IsLoad = TRUE;
-    `LVX:   IsLoad = TRUE;
-    default: IsLoad = FALSE;   
-    endcase
+		IsLoad = !isn[31];
 	else
 		IsLoad = FALSE;
 `LB:    IsLoad = TRUE;
@@ -167,6 +149,7 @@ case(isn[`INSTRUCTION_OP])
 `LWR:   IsLoad = TRUE;
 `LV:    IsLoad = TRUE;
 `LVx:   IsLoad = TRUE;
+`LVxU:  IsLoad = TRUE;
 default:    IsLoad = FALSE;
 endcase
 endfunction
@@ -945,19 +928,19 @@ case(instr[`INSTRUCTION_OP])
 	        `CNTLZ:     o[63:0] = BIG ? {57'd0,clzo} : 64'hCCCCCCCCCCCCCCCC;
 	        `CNTLO:     o[63:0] = BIG ? {57'd0,cloo} : 64'hCCCCCCCCCCCCCCCC;
 	        `CNTPOP:    o[63:0] = BIG ? {57'd0,cpopo} : 64'hCCCCCCCCCCCCCCCC;
-	        `ABS:       case(sz)
+	        `ABS:       case(sz[1:0])
 	                    2'd0:   o[63:0] = BIG ? (a[7] ? -a[7:0] : a[7:0]) : 64'hCCCCCCCCCCCCCCCC;
 	                    2'd1:   o[63:0] = BIG ? (a[15] ? -a[15:0] : a[15:0]) : 64'hCCCCCCCCCCCCCCCC;
 	                    2'd2:   o[63:0] = BIG ? (a[31] ? -a[31:0] : a[31:0]) : 64'hCCCCCCCCCCCCCCCC;
 	                    2'd3:   o[63:0] = BIG ? (a[63] ? -a : a) : 64'hCCCCCCCCCCCCCCCC;
 	                    endcase
-	        `NOT:   case(sz)
-	                2'd0:   o[63:0] = ~|a[7:0];
-	                2'd1:   o[63:0] = ~|a[15:0];
-	                2'd2:   o[63:0] = ~|a[31:0];
-	                2'd3:   o[63:0] = ~|a[63:0];
+	        `NOT:   case(sz[1:0])
+	                2'd0:   o = {~|a[63:56],~|a[55:48],~|a[47:40],~|a[39:32],~|a[31:24],~|a[23:16],~|a[15:8],~|a[7:0]};
+	                2'd1:   o = {~|a[63:48],~|a[47:32],~|a[31:16],~|a[15:0]};
+	                2'd2:   o = {~|a[63:32],~|a[31:0]};
+	                2'd3:   o = ~|a[63:0];
 	                endcase
-	        `REDOR: case(sz)
+	        `REDOR: case(sz[1:0])
 	                2'd0:   o[63:0] = redor8;
 	                2'd1:   o[63:0] = redor16;
 	                2'd2:   o[63:0] = redor32;
@@ -1057,32 +1040,29 @@ case(instr[`INSTRUCTION_OP])
 	    `SLTU:  tskSltu(instr,instr[25:23],a,b,o);
 	    `SLE:   tskSle(instr,instr[25:23],a,b,o);
 	    `SLEU:  tskSleu(instr,instr[25:23],a,b,o);
-	    `AND:   o[63:0] = and64;
-	    `OR:    o[63:0] = or64;
-	    `XOR:   o[63:0] = xor64;
-	    `NAND:  o[63:0] = ~and64;
-	    `NOR:   o[63:0] = ~or64;
-	    `XNOR:  o[63:0] = ~xor64;
-	    `SEI:       o[63:0] = a | instr[21:16];
-	    `RTI:       o[63:0] = a | instr[21:16];
+	    `AND:   o = and64;
+	    `OR:    o = or64;
+	    `XOR:   o = xor64;
+	    `NAND:  o = ~and64;
+	    `NOR:   o = ~or64;
+	    `XNOR:  o = ~xor64;
+	    `SEI:   o = a | instr[21:16];
+	    `RTI:   o = a | instr[21:16];
 	    `MUX:       for (n = 0; n < 64; n = n + 1)
 	                    o[n] <= a[n] ? b[n] : c[n];
 	    `MULU,`MULSU,`MUL:
         case(sz)
-        byt:				o[63:0] = prod80;
         byt_para:		o[63:0] = {prod87[7:0],prod86[7:0],prod85[7:0],prod84[7:0],prod83[7:0],prod82[7:0],prod81[7:0],prod80[7:0]};
-        char:				o[63:0] = prod160;
         char_para:	o[63:0] = {prod163[15:0],prod162[15:0],prod161[15:0],prod160[15:0]};
-				half: 			o[63:0] = prod320;
 				half_para:	o[63:0] = {prod321[31:0],prod320[31:0]};
 				default:		o[63:0] = prod[DBW-1:0];
 				endcase
 			`FXMUL:
 				case(sz)
-				half:				o = prod320[47:16] + prod320[15];
 				half_para:	o = {prod321[47:16] + prod321[15],prod320[47:16] + prod320[15]};
 				default:		o = prod[95:32] + prod[31];
 				endcase
+			`MULF:	o = a[23:0] * b[15:0];
 	    `DIVU:   o[63:0] = BIG ? divq : 64'hCCCCCCCCCCCCCCCC;
 	    `DIVSU:  o[63:0] = BIG ? divq : 64'hCCCCCCCCCCCCCCCC;
 	    `DIV:    o[63:0] = BIG ? divq : 64'hCCCCCCCCCCCCCCCC;
@@ -1196,7 +1176,7 @@ case(instr[`INSTRUCTION_OP])
 			o = 64'hDEADDEADDEADDEAD;
 	end
 	else if (instr[7:6]==2'b00) begin
-		if (IsLoad(instr))
+		if (!instr[31])
 			case({instr[31:28],instr[22:21]})
 			`CACHEX,`LVX,
 	    `LBX,`LBUX,`LCX,`LCUX,
@@ -1270,8 +1250,9 @@ case(instr[`INSTRUCTION_OP])
 `ORI:		o[63:0] = a | orb;
 `XORI:	o[63:0] = a ^ orb;
 `XNORI:	o[63:0] = ~(a ^ orb);
-`MULUI:		o[63:0] = prod[DBW-1:0];
-`MULI:		o[63:0] = prod[DBW-1:0];
+`MULUI:	o = prod[DBW-1:0];
+`MULI:	o = prod[DBW-1:0];
+`MULFI:	o = a[23:0] * b[15:0];
 `DIVUI:		o[63:0] = BIG ? divq : 64'hCCCCCCCCCCCCCCCC;
 `DIVI:		o[63:0] = BIG ? divq : 64'hCCCCCCCCCCCCCCCC;
 `MODI:		o[63:0] = BIG ? rem : 64'hCCCCCCCCCCCCCCCC;
@@ -1555,11 +1536,7 @@ output [63:0] o;
 begin
 `ifdef SIMD
 	case(sz[2:0])
-  3'd0:   o[63:0] = (a[7:0]) < (b[7:0]);
-  3'd1:   o[63:0] = (a[15:0]) < (b[15:0]);
-  3'd2:   o[63:0] = (a[31:0]) < (b[31:0]);
-  3'd3:   o[63:0] = (a) < (b);
-  3'd4:		o[63:0] = {
+  3'd4,3'd0:		o = {
 					        	7'h0,(a[7:0]) < (b[7:0]),
 					        	7'h0,(a[15:8]) < (b[15:8]),
 					        	7'h0,(a[23:16]) < (b[23:16]),
@@ -1569,20 +1546,20 @@ begin
 					        	7'h0,(a[55:48]) < (b[55:48]),
 					        	7'h0,(a[63:56]) < (b[63:56])
 						        };
-  3'd5:		o[63:0] = {
+  3'd5,3'd1:		o = {
 					        	15'h0,(a[15:0]) < (b[15:0]),
 					        	15'h0,(a[31:16]) < (b[31:16]),
 					        	15'h0,(a[47:32]) < (b[47:32]),
 					        	15'h0,(a[63:48]) < (b[63:48])
 						        };
-  3'd6:		o[63:0] = {
+  3'd6,3'd2:		o = {
 					        	31'h0,(a[31:0]) < (b[31:0]),
 					        	31'h0,(a[63:32]) < (b[63:32])
 						        };
-	3'd7:		o[63:0] = (a[63:0]) < (b[63:0]);
+	3'd7,3'd3:		o = (a[63:0]) < (b[63:0]);
   endcase
 `else
-	o[63:0] = (a[63:0]) < (b[63:0]);
+	o = (a) < (b);
 `endif
 end
 endtask

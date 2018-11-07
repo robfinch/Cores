@@ -101,6 +101,9 @@ reg wr1x;
 reg [RBIT:0] wa1x;
 reg [WID-1:0] i1x;
 reg [7:0] we1x;
+reg holdwr0,holdwr1;
+reg [63:0] holdi0, holdi1;
+reg [RBIT:0] holdwa0,holdwa1;
 
 integer n;
 
@@ -262,6 +265,19 @@ FT64_regfileRam urf15 (
 );
 `endif
 
+always @(posedge clk)
+	holdwr0 <= wr0;
+always @(posedge clk)
+	holdwr1 <= wr1;
+always @(posedge clk)
+	holdwa0 <= wa0;
+always @(posedge clk)
+	holdwa1 <= wa1;
+always @(posedge clk)
+	holdi0 <= i0;
+always @(posedge clk)
+	holdi1 <= i1;
+
 // The same clock edge that would normally update the register file is the
 // clock edge that causes the data to disappear for the next cycle. The
 // data needs to be held onto so that it can update the register file on
@@ -297,6 +313,46 @@ begin
 		i <= 'd0;
 	end
 end
+
+/*
+function [63:0] fwdmux;
+input [RBIT:0] ra;
+input wr0;
+input wr1;
+input hwr0;
+input hwr1;
+input [RBIT:0] wa0;
+input [RBIT:0] wa1;
+input [RBIT:0] hwa0;
+input [RBIT:0] hwa1;
+input [63:0] i0;
+input [63:0] i1;
+input [63:0] hi0;
+input [63:0] hi1;
+input [63:0] oo;
+begin
+	if (ra[4:0]==5'd0)
+		fwdmux = 64'd0;
+	else if (wr1 && ra==wa1)
+		fwdmux = i1;
+	else if (wr0 && ra==wa0)
+		fwdmux = i0;
+	else if (hwr1 && ra==hwa1)
+		fwdmux = hi1;
+	else if (hwr0 && ra==hwa0)
+		fwdmux = hi0;
+	else
+		fwdmux = oo;
+end
+endfunction
+
+assign o0 = fwdmux(ra0,wr0,wr1,holdwr0,holdwr1,wa0,wa1,holdwa0,holdwa1,i0,i1,holdi0,holdi1,o00);
+assign o1 = fwdmux(ra1,wr0,wr1,holdwr0,holdwr1,wa0,wa1,holdwa0,holdwa1,i0,i1,holdi0,holdi1,o01);
+assign o2 = fwdmux(ra2,wr0,wr1,holdwr0,holdwr1,wa0,wa1,holdwa0,holdwa1,i0,i1,holdi0,holdi1,o02);
+assign o3 = fwdmux(ra3,wr0,wr1,holdwr0,holdwr1,wa0,wa1,holdwa0,holdwa1,i0,i1,holdi0,holdi1,o03);
+assign o4 = fwdmux(ra3,wr0,wr1,holdwr0,holdwr1,wa0,wa1,holdwa0,holdwa1,i0,i1,holdi0,holdi1,o04);
+assign o5 = fwdmux(ra3,wr0,wr1,holdwr0,holdwr1,wa0,wa1,holdwa0,holdwa1,i0,i1,holdi0,holdi1,o05);
+*/
 
 assign o0[7:0] = ra0[4:0]==5'd0 ? {8{1'b0}} :
 	(wr1 && we1[0] && (ra0==wa1)) ? i1[7:0] :
@@ -447,6 +503,7 @@ assign o5[55:48] = ra5[4:0]==5'd0 ? {8{1'b0}} :
 assign o5[63:56] = ra5[4:0]==5'd0 ? {8{1'b0}} :
 	(wr1 && we1[7] && (ra5==wa1)) ? i1[63:56] :
 	(wr0 && we0[7] && (ra5==wa0)) ? i0[63:56] : o05[63:56];
+
 /*
 assign o5 = ra5[4:0]==5'd0 ? {WID{1'b0}} :
     (wr1 && (ra5==wa1)) ? i1 :

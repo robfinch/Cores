@@ -36,6 +36,7 @@
 module FT64_pmmu
 #(
 parameter
+	AMSB = 31,
 	pAssociativity = 8,		// number of ways (parallel compares)
 	pTLB_size = 64,
 	S_WAIT_MISS = 0,
@@ -58,17 +59,17 @@ parameter
 input rst_i,
 input clk_i,
 
-input clock_tick_i,		// indicates when to run the clock algorithm
+input age_tick_i,			// indicates when to age reference counts
 
 // master
 output reg m_cyc_o,		// valid memory address
 output reg m_lock_o,	// lock the bus
 input      m_ack_i,		// acknowledge from memory system
 output reg m_we_o,		// write enable output
-output reg [ 7:0] m_sel_o,	// lane selects (always all active)
-output reg [47:0] m_adr_o,
-input      [63:0] m_dat_i,	// data input from memory
-output reg [63:0] m_dat_o,	// data to memory
+output reg [15:0] m_sel_o,	// lane selects (always all active)
+output reg [AMSB:0] m_adr_o,
+input      [127:0] m_dat_i,	// data input from memory
+output reg [127:0] m_dat_o,	// data to memory
 
 // Translation request / control
 input invalidate,		// invalidate a specific entry
@@ -76,6 +77,7 @@ input invalidate_all,	// causes all entries to be invalidated
 input [47:0] pta,		// page directory/table address register
 output reg page_fault,
 
+input [7:0] asid_i,
 input [7:0] pl_i,
 input [1:0] ol_i,		// operating level
 input icl_i,				// instruction cache load
@@ -87,7 +89,7 @@ input [63:0] vadr_i,	    // virtual address to translate
 output reg cyc_o,
 output reg we_o,
 output reg [7:0] sel_o,
-output reg [47:0] padr_o,	// translated address
+output reg [AMSB:0] padr_o,	// translated address
 output reg cac_o,		// cachable
 output reg prv_o,		// privilege violation
 output reg exv_o,		// execute violation
@@ -96,7 +98,10 @@ output reg wrv_o		// write violation
 );
 
 integer nn;
-reg [47:0] tmpadr;
+reg [8:0] tlb_wa;
+reg [8:0] tlb_ra;
+reg [8:0] tlb_ua;
+reg [AMSB:0] tmpadr;
 reg pv_o;
 reg v_o;
 reg r_o;
@@ -105,15 +110,13 @@ reg x_o;
 reg c_o;
 reg a_o;
 reg [2:0] nnx;
-reg [50:0] pte;			// holding place for data
+reg [127:0] pte;			// holding place for data
+reg [AMSB-4:0] pte_adr;
 reg [3:0] state;
 reg [3:0] stkstate;
 reg [2:0] cnt;	// tlb replacement counter
 reg [2:0] whichSet;		// which set to update
 reg dbit;				// temp dirty bit
-reg clock;
-reg clock_tick;
-reg [64:0] clock_adr;
 reg miss;
 reg proc;
 reg [63:0] miss_adr;
@@ -121,13 +124,18 @@ wire pta_changed;
 assign ack_o = !miss||page_fault;
 wire pgen = pta[11];
 
+wire [AMSB:0] tlb_pte_adr [pAssociativity-1:0];
 wire [pAssociativity-1:0] tlb_d;
 wire [ 6: 0] tlb_flags [pAssociativity-1:0];
 wire [ 7: 0] tlb_pl [pAssociativity-1:0];
+wire [ 7: 0] tlb_asid [pAssociativity-1:0];
+wire [31: 0] tlb_refcount [pAssociativity-1:0];
+wire tlb_g [pAssociativity-1:0];
 wire [63:19] tlb_vadr  [pAssociativity-1:0];
 wire [34:0] tlb_tadr  [pAssociativity-1:0];
 
-wire wr_tlb = state==S_WR_PTL0;
+//wire wr_tlb = state==S_WR_PTL0;
+reg wr_tlb;
 always @(posedge clk_i)
 	cyc_o <= cyc_i & v_o & ~pv_o;
 always @(posedge clk_i)
@@ -156,18 +164,18 @@ generate
 			.we(wr_tlb),
 			.wa(miss_adr[18:13]),
 			.ra(vadr_i[18:13]),
-			.i(miss_adr [63:19]),
+			.i(miss_adr[63:19]),
 			.o(tlb_vadr[g])
 		);
-		ram_ar1w1r #(35,pTLB_size) tlbTadr
+		ram_ar1w1r #(AMSB+1,pTLB_size) tlbPteAdr
 		(
 			.clk(clk_i),
 			.ce(whichSet==g),
 			.we(wr_tlb),
 			.wa(miss_adr[18:13]),
 			.ra(vadr_i[18:13]),
-			.i(pte[50:16]),
-			.o(tlb_tadr[g])
+			.i(pte_adr),
+			.o(tlb_pte_adr[g])
 		);
 		ram_ar1w1r #( 7,pTLB_size) tlbFlag
 		(
@@ -176,7 +184,7 @@ generate
 			.we(wr_tlb),
 			.wa(miss_adr[18:13]),
 			.ra(vadr_i[18:13]),
-			.i(pte[ 6: 0]),
+			.i(pte[6:0]),
 			.o(tlb_flags[g])
 		);
 		ram_ar1w1r #(8,pTLB_size) tlbPL
@@ -186,14 +194,64 @@ generate
       .we(wr_tlb),
       .wa(miss_adr[18:13]),
       .ra(vadr_i[18:13]),
-      .i(pte[ 15: 8]),
+      .i(pte[15:8]),
       .o(tlb_pl[g])
     );
+		ram_ar1w1r #( 1,pTLB_size) tlbG
+		(
+			.clk(clk_i),
+			.ce(whichSet==g),
+			.we(wr_tlb),
+			.wa(miss_adr[18:13]),
+			.ra(vadr_i[18:13]),
+			.i(pte[23]),
+			.o(tlb_g[g])
+		);
+		ram_ar1w1r #(8,pTLB_size) tlbASID
+    (
+      .clk(clk_i),
+      .ce(whichSet==g),
+      .we(wr_tlb),
+      .wa(miss_adr[18:13]),
+      .ra(vadr_i[18:13]),
+      .i(pte[31:24]),
+      .o(tlb_asid[g])
+    );
+		ram_ar1w1r #(32,pTLB_size) tlbRefCount
+    (
+      .clk(clk_i),
+      .ce(whichSet==g),
+      .we(wr_tlb),
+      .wa(miss_adr[18:13]),
+      .ra(vadr_i[18:13]),
+      .i(pte[63:32]),
+      .o(tlb_refcount[g])
+    );
+		ram_ar1w1r #(32,pTLB_size) tlbRefCount
+		(
+			.clk(clk_i),
+			.ce(wr_tlb?whichSet==g:nnx==g),
+			.we(wr_tlb||state==S_WAIT_MISS && !miss && cyc_i),
+			.wa(wr_tlb?miss_adr[18:13]:vadr_i[18:13]),
+			.ra(vadr_i[18:13]),
+			.i(pte[63:32]),
+			.o(tlb_refcount[g])
+		);
+		ram_ar1w1r #(35,pTLB_size) tlbTadr
+		(
+			.clk(clk_i),
+			.ce(whichSet==g),
+			.we(wr_tlb),
+			.wa(miss_adr[18:13]),
+			.ra(vadr_i[18:13]),
+			.i(pte[98:64]),
+			.o(tlb_tadr[g])
+		);
 		ram_ar1w1r #( 1,pTLB_size) tlbD    
 		(
 			.clk(clk_i),
 			.ce(wr_tlb?whichSet==g:nnx==g),
-			.we(wr_tlb||state==S_WAIT_MISS && wr && !miss && vda_i),
+			.we(wr_tlb||state==S_WAIT_MISS && wr && !miss && cyc_i),
 			.wa(wr_tlb?miss_adr[18:13]:vadr_i[18:13]),
 			.ra(vadr_i[18:13]),
 			.i(!wr_tlb),
@@ -268,12 +326,16 @@ begin
 	end
 end
 
+reg age_tick_r;
+wire pe_age_rtick;
+edge_det ued1(.clk(clk_i), .ce(1'b1), .i(age_tick), .pe(pe_age_tick), .ne(), .ee());
 
 // The following state machine loads the tlb buffer on a
 // miss.
 always @(posedge clk_i)
 if (rst_i) begin
 	nack();
+	wr_tlb <= 1'b0;
 	m_adr_o <= 1'b0;
 	goto(S_WAIT_MISS);
 	dbit  <= 1'b0;
@@ -281,33 +343,26 @@ if (rst_i) begin
 	for (nn = 0; nn < pAssociativity * pTLB_size; nn = nn + 1)
 		tlb_v[nn] <= 1'b0;		// all entries are invalid on reset
   page_fault <= `FALSE;
-  clock_tick <= `FALSE;
-  clock_adr[64] <= 1'b1;	// start out done
-  clock_adr[63:0] <= 4'd0;
+  age_tick_r <= 1'b0;
 end
 else begin
-
-	if (clock_tick_i)
-		clock_tick <= `TRUE;
-
-	// Reset clock algorithm address on change of page table.
-	if (invalidate_all || pta_changed) begin
-		clock_adr[64] <= 1'b1;
-		clock_adr[63:0] <= 4'd0;
-	end
+	wr_tlb <= 1'b0;
 
 	// page fault pulses
 	page_fault <= `FALSE;
 
+	if (pe_age_tick)
+		age_tick_r <= 1'b1;
+
 	// changing the address of the page table invalidates all entries
-	if (invalidate_all || pta_changed)
+	if (invalidate_all)
 		for (nn = 0; nn < pAssociativity * pTLB_size; nn = nn + 1)
 			tlb_v[nn] <= 1'b0;
 
 	// handle invalidate command
 	if (invalidate)
 		for (nn = 0; nn < pAssociativity; nn = nn + 1)
-			if (vadr_i[63:19]==tlb_vadr[nn])
+			if (vadr_i[63:19]==tlb_vadr[nn] && (tlb_g[nn] || tlb_asid[nn]==asid_i))
 				tlb_v[{nn,vadr_i[18:13]}] <= 1'b0;
 
 	case (state)	// synopsys full_case parallel_case
@@ -321,7 +376,6 @@ else begin
 			goto(S_WAIT_MISS);
 			dbit <= we_i;
 			proc <= `FALSE;
-			clock <= `FALSE;
 
 			if (miss) begin
 			  proc <= `TRUE;
@@ -342,59 +396,24 @@ else begin
 				whichSet <= nnx;
 				goto(S_RD_PTL5);
 			end
-			else if (clock_tick) begin
-				clock_tick <= `FALSE;
-				clock <= `TRUE;
-				case(pta[10:8])
-				3'd0:	
-					if (clock_adr[23]) begin
-						miss_adr <= 4'h0;
-						clock_adr <= 4'h0;
-					end
-					else
-						miss_adr <= clock_adr[63:0];
-				3'd1:
-					if (clock_adr[33]) begin
-						miss_adr <= 4'h0;
-						clock_adr <= 4'h0;
-					end
-					else
-						miss_adr <= clock_adr[63:0];
-				3'd2:
-					if (clock_adr[43]) begin
-						miss_adr <= 4'h0;
-						clock_adr <= 4'h0;
-					end
-					else
-						miss_adr <= clock_adr[63:0];
-				3'd3:
-					if (clock_adr[53]) begin
-						miss_adr <= 4'h0;
-						clock_adr <= 4'h0;
-					end
-					else
-						miss_adr <= clock_adr[63:0];
-				3'd4:
-					if (clock_adr[63]) begin
-						miss_adr <= 4'h0;
-						clock_adr <= 4'h0;
-					end
-					else
-						miss_adr <= clock_adr[63:0];
-				default:
-					if (clock_adr[64]) begin
-						miss_adr <= 4'h0;
-						clock_adr <= 4'h0;
-					end
-					else
-						miss_adr <= clock_adr[63:0];
-				endcase
-				goto(S_RD_PTL5);
+			else if (age_tick_r) begin
+				age_tick_r <= 1'b0;
+				tlb_wa <= tlb_ua + 3'd1;
+				tlb_ra <= tlb_ua + 3'd1;
+				tlb_ua <= tlb_ua + 3'd1;
+				goto(S_AGE);
+			end
+			else begin
+				tlb_wa <= {nnx,vadr_i[18:13]};
+				tlb_ra <= {nnx,vadr_i[18:13]};
+				goto(S_COUNT);
 			end
 		end
 
 	S_RD_PTL5:
 		if (~m_ack_i & ~m_cyc_o) begin
+			tlb_ra <= {whichSet,miss_adr[18:13]};
+			tlb_wa <= {whichSet,miss_adr[18:13]};
 			m_cyc_o <= 1'b1;
 			m_sel_o <= 8'hFF;
 			m_lock_o <= 1'b0;
@@ -546,25 +565,55 @@ else begin
     // Also set dirty bit if a write access.
 		if (m_ack_i) begin
 			nack();
-			pte <= m_dat_i[50:0];
-			m_dat_o <= m_dat_i|{dbit,2'b00,~clock,4'b0};	// This line will only set bits
-			m_dat_o[4] <= ~clock;
-			call(S_WR_PTL,S_WR_PTL0);
+			tlb_wr <= 1'b1;
+			pte_adr <= m_adr_o[AMSB:4];
+			m_dat_o <= m_dat_i|{dbit,2'b00,1'b1,4'b0};	// This line will only set bits
+			pte <= m_dat_i|{dbit,2'b00,1'b1,4'b0};
+			// If the tlb entry is already marked dirty don't bother with updating
+			// the pte in memory. Only write on a new dirty status.
+			if (tlb_d[tlb_ra[8:6]])
+				goto(S_WAIT_MISS);
+			else
+				call(S_WR_PTL,S_WR_PTL0);
 		end
 
 	S_WR_PTL0:
 		if (m_ack_i) begin
+			tlb_wr <= 1'b1;
 			nack();
-			if (!clock) begin
-				tlb_v[{whichSet,miss_adr[18:13]}] <= |pte[2:0];
-				if (~|pte[2:0]) begin
-			    raise_page_fault();
-				end
-			end
-			else begin
-				clock_adr[64:13] <= clock_adr[64:13] + 4'h1;
-				clock_adr[12:0] <= 4'h0;
-			end
+			tlb_v[tlb_wa] <= |pte[2:0];
+			if (~|pte[2:0])
+		    raise_page_fault();
+			goto(S_WAIT_MISS);
+		end
+
+	//---------------------------------------------------
+	// Take care of reference counting and aging.
+	//---------------------------------------------------
+
+	S_COUNT:
+		begin
+			pte[6:0] <= tlb_flags[tlb_ra[8:6]];
+			pte[7] <= tlb_d[tlb_ra[8:6]];
+			pte[15:8] <= tlb_pl[tlb_ra[8:6]];
+			pte[23] <= tlb_g[tlb_ra[8:6]];
+			pte[31:24] <= tlb_asid[tlb_ra[8:6]];
+			pte[63:32] <= {tlb_refcount[tlb_ra[8:6]][63:42] + 4'd1,tlb_refcount[tlb_ra[8:6]][41:32]};
+			pte[127:64] <= tlb_tadr[tlb_ra[8:6]];
+			tlb_wr <= 1'b1;
+			goto(S_WAIT_MISS);
+		end
+
+	S_AGE:
+		begin
+			pte[6:0] <= tlb_flags[tlb_ra[8:6]];
+			pte[7] <= tlb_d[tlb_ra[8:6]];
+			pte[15:8] <= tlb_pl[tlb_ra[8:6]];
+			pte[23] <= tlb_g[tlb_ra[8:6]];
+			pte[31:24] <= tlb_asid[tlb_ra[8:6]];
+			pte[63:32] <= {1'b0,tlb_refcount[tlb_ra[8:6]][63:33]};
+			pte[127:64] <= tlb_tadr[tlb_ra[8:6]];
+			tlb_wr <= 1'b1;
 			goto(S_WAIT_MISS);
 		end
 

@@ -74,8 +74,8 @@ input [31:0] signal_i;
 
 parameter TM_CLKFREQ = 20000000;
 parameter QENTRIES = `QENTRIES;
-parameter RSTPC = 32'hFFFC0100;
-parameter BRKPC = 32'hFFFC0000;
+parameter RSTPC = 64'hFFFC0100;
+parameter BRKPC = 64'hFFFC0000;
 `ifdef SUPPORT_SMT
 parameter PREGS = 256;   // number of physical registers - 1
 parameter AREGS = 256;   // number of architectural registers
@@ -94,7 +94,7 @@ parameter SUP_VECTOR = 1'b1;
 parameter SUP_VECTOR = 1'b0;
 `endif
 parameter DBW = 64;
-parameter ABW = 32;
+parameter ABW = 64;
 parameter AMSB = ABW-1;
 parameter NTHREAD = 1;
 reg [7:0] i;
@@ -264,13 +264,13 @@ reg [63:0] mstatus [0:NTHREAD];  		// machine status
 wire [3:0] im = mstatus[0][3:0];
 wire [1:0] ol [0:NTHREAD];
 wire [1:0] dl [0:NTHREAD];
-assign ol[0] = mstatus[0][5:3];	// operating level
+assign ol[0] = mstatus[0][5:4];	// operating level
 assign dl[0] = mstatus[0][21:20];
 wire [7:0] cpl [0:NTHREAD];
 assign cpl[0] = mstatus[0][13:6];	// current privilege level
 wire [5:0] rgs [0:NTHREAD];
 assign rgs[0] = mstatus[0][19:14];
-assign ol[1] = mstatus[1][5:3];	// operating level
+assign ol[1] = mstatus[1][5:4];	// operating level
 assign cpl[1] = mstatus[1][13:6];	// current privilege level
 assign rgs[1] = mstatus[1][19:14];
 assign dl[1] = mstatus[1][21:20];
@@ -299,7 +299,7 @@ reg [63:0] mstatus ;  		// machine status
 wire [3:0] im = mstatus[3:0];
 wire [1:0] ol ;
 wire [1:0] dl;
-assign ol = mstatus[5:3];	// operating level
+assign ol = mstatus[5:4];	// operating level
 assign dl = mstatus[21:20];
 wire [7:0] cpl ;
 assign cpl = mstatus[13:6];	// current privilege level
@@ -908,7 +908,7 @@ reg L1_wr0,L1_wr1,L1_wr2;
 reg L1_invline;
 wire [1:0] ic0_fault,ic1_fault,ic2_fault;
 reg [8:0] L1_en;
-reg [37:0] L1_adr, L2_adr;
+reg [71:0] L1_adr, L2_adr;
 reg [289:0] L2_rdat;
 wire [289:0] L2_dato;
 reg L2_xsel;
@@ -2233,7 +2233,7 @@ casez(isn[`INSTRUCTION_OP])
   endcase
 `MEMNDX:
 	begin
-		if (IsLoad(isn))
+		if (!isn[31])
 			case({isn[31:28],isn[22:21]})
 			`LVX,
 			`CACHEX,
@@ -2278,8 +2278,11 @@ endfunction
 `endif
 
 // Determines which lanes of the target register get updated.
+// Duh, all the lanes.
 function [7:0] fnWe;
 input [47:0] isn;
+fnWe = 8'hFF;
+/*
 casez(isn[`INSTRUCTION_OP])
 `R2:
 	case(isn[`INSTRUCTION_S2])
@@ -2317,6 +2320,7 @@ casez(isn[`INSTRUCTION_OP])
 	endcase
 default:	fnWe = 8'hFF;
 endcase
+*/
 endfunction
 
 // Detect if a source is automatically valid
@@ -2346,6 +2350,7 @@ casez(isn[`INSTRUCTION_OP])
 `XNORI: Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `MULI: 	Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `MULUI: Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`MULFI: Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `DIVI: 	Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `DIVUI: Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `AMO: 	Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
@@ -2420,6 +2425,7 @@ casez(isn[`INSTRUCTION_OP])
 `XORI:  Source2Valid = TRUE;
 `XNORI: Source2Valid = TRUE;
 `MULUI: Source2Valid = TRUE;
+`MULFI: Source2Valid = TRUE;
 `LB:    Source2Valid = TRUE;
 `LBU:   Source2Valid = TRUE;
 `Lx:    Source2Valid = TRUE;
@@ -2876,6 +2882,7 @@ casez(isn[`INSTRUCTION_OP])
 	    `MULUH:  IsRFW = TRUE;
 	    `MULSUH: IsRFW = TRUE;
 	    `MULH:   IsRFW = TRUE;
+	    `MULF:	IsRFW = TRUE;
 	    `FXMUL:	IsRFW = TRUE;
 	    `DIVU:  IsRFW = TRUE;
 	    `DIVSU: IsRFW = TRUE;
@@ -2891,7 +2898,7 @@ casez(isn[`INSTRUCTION_OP])
 	    `SEI:	IsRFW = TRUE;
 	    default:    IsRFW = FALSE;
 	    endcase
-	else if (isn[`INSTRUCTION_L2]==2'b10)
+	else if (isn[7]==1'b1)
 	// The following instructions might come from a compressed version.
 	    casez(isn[`INSTRUCTION_S2])
 	    `ADD:   IsRFW = TRUE;
@@ -2908,7 +2915,7 @@ casez(isn[`INSTRUCTION_OP])
 		IsRFW = FALSE;
 `MEMNDX:
 	if (isn[`INSTRUCTION_L2]==2'b10) begin
-		if (IsLoad(isn))
+		if (!isn[31])
 			IsRFW = TRUE;
 		else
 			case({isn[31:28],isn[17:16]})
@@ -2918,7 +2925,7 @@ casez(isn[`INSTRUCTION_OP])
 	    endcase
 	end
 	else if (isn[`INSTRUCTION_L2]==2'b00) begin
-		if (IsLoad(isn))
+		if (!isn[31])
 	    case({isn[31:28],isn[22:21]})
 	    `LBX:   IsRFW = TRUE;
 	    `LBUX:  IsRFW = TRUE;
@@ -2959,6 +2966,7 @@ casez(isn[`INSTRUCTION_OP])
 `XORI:      IsRFW = TRUE;
 `MULUI:     IsRFW = TRUE;
 `MULI:      IsRFW = TRUE;
+`MULFI:			IsRFW = TRUE;
 `DIVUI:     IsRFW = TRUE;
 `DIVI:      IsRFW = TRUE;
 `MODI:      IsRFW = TRUE;
@@ -3072,7 +3080,7 @@ begin
 				fnSelect = 8'h00;
 		end
 		else if (ins[`INSTRUCTION_L2]==2'b00) begin
-			if (IsLoad(ins))
+			if (!ins[31])
 				case({ins[31:28],ins[22:21]})
 				`LBX,`LBUX,`LVBX,`LVBUX:
 				   case(adr[2:0])
@@ -3787,6 +3795,16 @@ begin
 		end
 		else begin
 			hi_amt <= 3'd1;
+		end
+	default:
+		begin
+			hi_amt <= 3'd0;
+			$display("hi_amt: Uncoded case %b",{ iqentry_v[heads[0]],
+				iqentry_cmt[heads[0]],
+				iqentry_v[heads[1]],
+				iqentry_cmt[heads[1]],
+				iqentry_v[heads[2]],
+				iqentry_cmt[heads[2]]});
 		end
   endcase
 end
@@ -5351,6 +5369,7 @@ begin
 	 if (memissue[heads[3]])
 	 	issue_count = issue_count + 1;
 
+	if (QENTRIES > 4) begin
 	 memissue[ heads[4] ] =	~iqentry_stomp[heads[4]] && iqentry_memready[ heads[4] ]		// addr and data are valid
 					// ... and no preceding instruction is ready to go
 					&& issue_count < `NUM_MEM
@@ -5407,6 +5426,7 @@ begin
                        && !(iqentry_fc[heads[3]]||iqentry_canex[heads[3]]));
 	 if (memissue[heads[4]])
 	 	issue_count = issue_count + 1;
+	end
 
 	if (QENTRIES > 5) begin
 	 memissue[ heads[5] ] =	~iqentry_stomp[heads[5]] && iqentry_memready[ heads[5] ]		// addr and data are valid
@@ -6254,7 +6274,7 @@ FT64_alu #(.BIG(1'b0),.SUP_VECTOR(SUP_VECTOR)) ualu1 (
   .ASID(8'h0),
   .cyc_i(1'b0),
   .we_i(1'b0),
-  .vadr_i(32'd0),
+  .vadr_i(64'd0),
   .cyc_o(),
   .we_o(),
   .padr_o(),
@@ -6416,7 +6436,7 @@ case(fcu_instr[`INSTRUCTION_OP])
 `JAL:	fcu_misspc = fcu_argA + fcu_argI;
 //`CHK:	fcu_misspc = fcu_nextpc + fcu_argI;	// Handled as an instruction exception
 // Default: branch
-default:	fcu_misspc = fcu_takb ? {fcu_nextpc[31:8] + fcu_brdisp[31:8],fcu_brdisp[7:0]} : fcu_nextpc;
+default:	fcu_misspc = fcu_takb ? {fcu_pc[31:8] + fcu_brdisp[31:8],fcu_brdisp[7:0]} : fcu_nextpc;
 endcase
 fcu_misspc[0] = 1'b0;
 end
@@ -6607,13 +6627,13 @@ begin
 	       		end
 	       end
 		if (commit0_v && n=={commit0_tgt[7:0]})
-			regIsValid[n] = regIsValid[n] | (rf_source[ {commit0_tgt[7:0]} ] == commit0_id
+			regIsValid[n] = regIsValid[n] | ((rf_source[ {commit0_tgt[7:0]} ] == commit0_id)
 			|| (branchmiss && branchmiss_thrd == iqentry_thrd[commit0_id[`QBITS]] && iqentry_source[ commit0_id[`QBITS] ]));
 		if (commit1_v && n=={commit1_tgt[7:0]} && `NUM_CMT > 1)
-			regIsValid[n] = regIsValid[n] | (rf_source[ {commit1_tgt[7:0]} ] == commit1_id
+			regIsValid[n] = regIsValid[n] | ((rf_source[ {commit1_tgt[7:0]} ] == commit1_id)
 			|| (branchmiss && branchmiss_thrd == iqentry_thrd[commit1_id[`QBITS]] && iqentry_source[ commit1_id[`QBITS] ]));
 		if (commit2_v && n=={commit2_tgt[7:0]} && `NUM_CMT > 2)
-			regIsValid[n] = regIsValid[n] | (rf_source[ {commit2_tgt[7:0]} ] == commit2_id
+			regIsValid[n] = regIsValid[n] | ((rf_source[ {commit2_tgt[7:0]} ] == commit2_id)
 			|| (branchmiss && branchmiss_thrd == iqentry_thrd[commit2_id[`QBITS]] && iqentry_source[ commit2_id[`QBITS] ]));
 	end
 	regIsValid[0] = `VAL;
@@ -6968,6 +6988,7 @@ if (rst) begin
      icstate <= IDLE;
      bstate <= BIDLE;
      tick <= 64'd0;
+     ol_o <= 2'b0;
      bte_o <= 2'b00;
      cti_o <= 3'b000;
      cyc <= `LOW;
@@ -7588,25 +7609,6 @@ if (mem3_available && `NUM_MEM > 2 && dramC_v && iqentry_v[ dramC_id[`QBITS] ] &
 end
 
 //
-// set the IQ entry == DONE as soon as the SW is let loose to the memory system
-//
-if (mem1_available && dram0 == `DRAMSLOT_BUSY && dram0_store) begin
-	if ((alu0_v && (dram0_id[`QBITS] == alu0_id[`QBITS])) || (alu1_v && (dram0_id[`QBITS] == alu1_id[`QBITS])))	 panic <= `PANIC_MEMORYRACE;
-	iqentry_done[ dram0_id[`QBITS] ] <= `VAL;
-	iqentry_out[ dram0_id[`QBITS] ] <= `INV;
-end
-if (mem2_available && `NUM_MEM > 1 && dram1 == `DRAMSLOT_BUSY && dram1_store) begin
-	if ((alu0_v && (dram1_id[`QBITS] == alu0_id[`QBITS])) || (alu1_v && (dram1_id[`QBITS] == alu1_id[`QBITS])))	 panic <= `PANIC_MEMORYRACE;
-	iqentry_done[ dram1_id[`QBITS] ] <= `VAL;
-	iqentry_out[ dram1_id[`QBITS] ] <= `INV;
-end
-if (mem3_available && `NUM_MEM > 2 && dram2 == `DRAMSLOT_BUSY && dram2_store) begin
-	if ((alu0_v && (dram2_id[`QBITS] == alu0_id[`QBITS])) || (alu1_v && (dram2_id[`QBITS] == alu1_id[`QBITS])))	 panic <= `PANIC_MEMORYRACE;
-	iqentry_done[ dram2_id[`QBITS] ] <= `VAL;
-	iqentry_out[ dram2_id[`QBITS] ] <= `INV;
-end
-
-//
 // see if anybody else wants the results ... look at lots of buses:
 //  - fpu_bus
 //  - alu0_bus
@@ -8075,8 +8077,6 @@ if (`NUM_CMT > 1)
 	oddball_commit(commit1_v, heads[1]);
 if (`NUM_CMT > 2)
 	oddball_commit(commit2_v, heads[2]);
-//if (`NUM_CMT > 2)
-//	oddball_commit(commit2_v, heads[2]);
 
 // Fetch and queue are limited to two instructions per cycle, so we might as
 // well limit retiring to two instructions max to conserve logic.
@@ -8225,6 +8225,16 @@ if (~|panic)
 		else begin
 			iqentry_v[heads[0]] <= `INV;
 			head_inc(1);
+		end
+	default:
+		begin
+			$display("head_inc: Uncoded case %b",{ iqentry_v[heads[0]],
+				iqentry_cmt[heads[0]],
+				iqentry_v[heads[1]],
+				iqentry_cmt[heads[1]],
+				iqentry_v[heads[2]],
+				iqentry_cmt[heads[2]]});
+			$stop;
 		end
   endcase
 
@@ -8416,7 +8426,26 @@ endcase
 // Stores take precedence over other operations.
 // Next data cache read misses are serviced.
 // Uncached data reads are serviced.
-// Finally L2 instruction cache misses are serviced.
+// Finally L2 instruction cache misses are serviced.//
+// set the IQ entry == DONE as soon as the SW is let loose to the memory system
+//
+`ifndef HAS_WB
+if (mem1_available && dram0 == `DRAMSLOT_BUSY && dram0_store) begin
+	if ((alu0_v && (dram0_id[`QBITS] == alu0_id[`QBITS])) || (alu1_v && (dram0_id[`QBITS] == alu1_id[`QBITS])))	 panic <= `PANIC_MEMORYRACE;
+	iqentry_done[ dram0_id[`QBITS] ] <= `VAL;
+	iqentry_out[ dram0_id[`QBITS] ] <= `INV;
+end
+if (mem2_available && `NUM_MEM > 1 && dram1 == `DRAMSLOT_BUSY && dram1_store) begin
+	if ((alu0_v && (dram1_id[`QBITS] == alu0_id[`QBITS])) || (alu1_v && (dram1_id[`QBITS] == alu1_id[`QBITS])))	 panic <= `PANIC_MEMORYRACE;
+	iqentry_done[ dram1_id[`QBITS] ] <= `VAL;
+	iqentry_out[ dram1_id[`QBITS] ] <= `INV;
+end
+if (mem3_available && `NUM_MEM > 2 && dram2 == `DRAMSLOT_BUSY && dram2_store) begin
+	if ((alu0_v && (dram2_id[`QBITS] == alu0_id[`QBITS])) || (alu1_v && (dram2_id[`QBITS] == alu1_id[`QBITS])))	 panic <= `PANIC_MEMORYRACE;
+	iqentry_done[ dram2_id[`QBITS] ] <= `VAL;
+	iqentry_out[ dram2_id[`QBITS] ] <= `INV;
+end
+`endif
 
 `ifdef HAS_WB
   if (mem1_available && dram0==`DRAMSLOT_BUSY && dram0_store) begin
@@ -8755,7 +8784,7 @@ BIDLE:
                  cyc <= `HIGH;
                  stb_o <= `HIGH;
                  sel_o <= fnSelect(dram0_instr,dram0_addr);
-                 vadr <= {dram0_addr[31:3],3'b0};
+                 vadr <= {dram0_addr[AMSB:3],3'b0};
                  sr_o <=  IsLWR(dram0_instr);
                  ol_o  <= dram0_ol;
                  bstate <= B12;
@@ -8777,7 +8806,7 @@ BIDLE:
                  cyc <= `HIGH;
                  stb_o <= `HIGH;
                  sel_o <= fnSelect(dram1_instr,dram1_addr);
-                 vadr <= {dram1_addr[31:3],3'b0};
+                 vadr <= {dram1_addr[AMSB:3],3'b0};
                  sr_o <=  IsLWR(dram1_instr);
                  ol_o  <= dram1_ol;
                  bstate <= B12;
@@ -8799,7 +8828,7 @@ BIDLE:
                  cyc <= `HIGH;
                  stb_o <= `HIGH;
                  sel_o <= fnSelect(dram2_instr,dram2_addr);
-                 vadr <= {dram2_addr[31:3],3'b0};
+                 vadr <= {dram2_addr[AMSB:3],3'b0};
                  sr_o <=  IsLWR(dram2_instr);
                  ol_o  <= dram2_ol;
                  bstate <= B12;
@@ -8816,9 +8845,9 @@ BIDLE:
              iccnt <= 3'd0;
 //            adr_o <= icwhich ? {pc0[31:5],5'b0} : {pc1[31:5],5'b0};
 //            L2_adr <= icwhich ? {pc0[31:5],5'b0} : {pc1[31:5],5'b0};
-             vadr <= {pcr[5:0],L1_adr[31:5],5'h0};
+             vadr <= {pcr[5:0],L1_adr[AMSB:5],5'h0};
              ol_o  <= ol[0];
-             L2_adr <= {pcr[5:0],L1_adr[31:5],5'h0};
+             L2_adr <= {pcr[5:0],L1_adr[AMSB:5],5'h0};
              L2_xsel <= 1'b0;
              bstate <= B_ICacheAck;
         end
@@ -8895,7 +8924,7 @@ B_DCacheLoadStart:
              cyc <= `HIGH;
              stb_o <= `HIGH;
              sel_o <= fnSelect(dram0_instr,dram0_addr);
-             vadr <= {dram0_addr[31:5],5'b0};
+             vadr <= {dram0_addr[AMSB:5],5'b0};
              ol_o  <= dram0_ol;
              bstate <= B_DCacheLoadAck;
             end
@@ -8905,7 +8934,7 @@ B_DCacheLoadStart:
              cyc <= `HIGH;
              stb_o <= `HIGH;
              sel_o <= fnSelect(dram1_instr,dram1_addr);
-             vadr <= {dram1_addr[31:5],5'b0};
+             vadr <= {dram1_addr[AMSB:5],5'b0};
              ol_o  <= dram1_ol;
              bstate <= B_DCacheLoadAck;
             end
@@ -8915,7 +8944,7 @@ B_DCacheLoadStart:
              cyc <= `HIGH;
              stb_o <= `HIGH;
              sel_o <= fnSelect(dram2_instr,dram2_addr);
-             vadr <= {dram2_addr[31:5],5'b0};
+             vadr <= {dram2_addr[AMSB:5],5'b0};
              ol_o  <= dram2_ol;
              bstate <= B_DCacheLoadAck;
             end
@@ -9199,6 +9228,8 @@ if (!branchmiss) begin
 end
 else if (!thread_en) begin	// if branchmiss
 	for (n = QENTRIES-1; n >= 0; n = n - 1)
+		// (QENTRIES-1) is needed to ensure that n increments forwards so that the modulus is
+		// a positive number.
 		if (iqentry_stomp[n] & ~iqentry_stomp[(n+(QENTRIES-1))%QENTRIES]) begin
 			tail0 <= n;
 			tail1 <= (n + 1) % QENTRIES;	

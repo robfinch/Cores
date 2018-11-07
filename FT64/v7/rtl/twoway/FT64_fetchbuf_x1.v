@@ -56,7 +56,7 @@ module FT64_fetchbuf_x1(rst, clk4x, clk, fcu_clk,
     panic
 );
 parameter AMSB = `AMSB;
-parameter RSTPC = 32'hFFFC0100;
+parameter RSTPC = 64'hFFFC0100;
 parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
 input rst;
@@ -206,7 +206,11 @@ reg [AMSB:0] branch_pcB;
 always @*
 case(fetchbufA_instr[`INSTRUCTION_OP])
 `RET:		branch_pcA = retpc0;
-`JMP,`CALL: branch_pcA = fetchbufA_instr[6] ? {fetchbufA_instr[47:8],1'b0} : {fetchbufA_pc[31:25],fetchbufA_instr[31:8],1'b0};
+`JMP,`CALL:
+	begin
+	branch_pcA[31:0] = fetchbufA_instr[6] ? {fetchbufA_instr[47:8],1'b0} : {fetchbufA_pc[31:25],fetchbufA_instr[31:8],1'b0};
+	branch_pcA[63:32] = fetchbufA_pc[63:32];
+	end
 `R2:		branch_pcA = btgtA;	// RTI
 `BRK,`JAL:	branch_pcA = btgtA;
 default:
@@ -214,13 +218,18 @@ default:
 	branch_pcA[31:8] = fetchbufA_pc[31:8] +
 		(fetchbufA_instr[7:6]==2'b01 ? {{4{fetchbufA_instr[47]}},fetchbufA_instr[47:28]} : {{20{fetchbufA_instr[31]}},fetchbufA_instr[31:28]});
 	branch_pcA[7:0] = {fetchbufA_instr[27:23],fetchbufA_instr[17:16],1'b0};
+	branch_pcA[63:32] = fetchbufA_pc[63:32];
 	end
 endcase
 
 always @*
 case(fetchbufB_instr[`INSTRUCTION_OP])
 `RET:		branch_pcB = retpc0;
-`JMP,`CALL: branch_pcB = fetchbufB_instr[6] ? {fetchbufB_instr[47:8],1'b0} : {fetchbufB_pc[31:25],fetchbufB_instr[31:8],1'b0};
+`JMP,`CALL: 
+	begin
+		branch_pcB[31:0] = fetchbufB_instr[6] ? {fetchbufB_instr[47:8],1'b0} : {fetchbufB_pc[31:25],fetchbufB_instr[31:8],1'b0};
+		branch_pcB[63:32] = fetchbufB_pc[63:32];
+	end
 `R2:		branch_pcB = btgtB;	// RTI
 `BRK,`JAL:	branch_pcB = btgtB;
 default:
@@ -228,6 +237,7 @@ default:
 	branch_pcB[31:8] = fetchbufB_pc[31:8] +
 		(fetchbufB_instr[7:6]==2'b01 ? {{4{fetchbufB_instr[47]}},fetchbufB_instr[47:28]} : {{20{fetchbufB_instr[31]}},fetchbufB_instr[31:28]});
 	branch_pcB[7:0] = {fetchbufB_instr[27:23],fetchbufB_instr[17:16],1'b0};
+	branch_pcB[63:32] = fetchbufB_pc[63:32];
 	end
 endcase
 

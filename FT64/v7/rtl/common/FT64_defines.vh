@@ -157,6 +157,7 @@
 `define MULH				6'h26
 `define SLE     		6'h28
 `define SLEU    		6'h29
+`define MULF				6'h2A
 // The following two instructions are 48 bit ops
 `define CMOVEZ      6'h28	
 `define CMOVNZ      6'h29
@@ -242,6 +243,7 @@
 `define LUI			6'h27
 `define JMP     6'h28
 `define RET     6'h29
+`define MULFI		6'h2A
 `define SFx			6'h2B
 `define SGTI		6'h2C
 `define CMPRSSD	6'h2D

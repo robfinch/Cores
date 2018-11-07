@@ -31,7 +31,7 @@ module FT64_mpu(hartid_i,rst_i, clk4x_i, clk_i, tm_clk_i,
 	pit_clk2, pit_gate2, pit_out2,
 	irq_o,
     i1,i2,i3,i4,i5,i6,i7,i8,i9,i10,i11,i12,i13,i14,i15,i16,i17,i18,i19,
-    i20,i21,i22,i23,i24,i25,i26,i27,i28,i29,
+    i20,i21,i22,i23,i24,i25,i26,i27,i28,
 	cti_o,bte_o,cyc_o,stb_o,ack_i,err_i,we_o,sel_o,adr_o,dat_o,dat_i,
 	sr_o, cr_o, rb_i);
 input [63:0] hartid_i;
@@ -71,16 +71,15 @@ input i25;
 input i26;
 input i27;
 input i28;
-input i29;
 output reg [2:0] cti_o;
 output reg [1:0] bte_o;
-output reg cyc_o;
+output cyc_o;
 output reg stb_o;
 input ack_i;
 input err_i;
-output reg we_o;
+output we_o;
 output reg [7:0] sel_o;
-output reg [31:0] adr_o;
+output [31:0] adr_o;
 output reg [63:0] dat_o;
 input [63:0] dat_i;
 output sr_o;
@@ -91,7 +90,7 @@ wire [3:0] cti;
 wire [2:0] bte;
 wire cyc,stb,we;
 wire [7:0] sel;
-wire [31:0] adr;
+wire [63:0] adr;
 reg [63:0] dati;
 wire [63:0] dato;
 wire [3:0] irq;
@@ -104,6 +103,8 @@ wire pit_out0, pit_out1;
 wire crd_ack;
 wire [63:0] crd_dato;
 reg ack;
+wire [63:0] ipt_dato;
+wire ipt_ack;
 wire [1:0] ol;
 wire [31:0] pcr;
 wire [63:0] pcr2;
@@ -116,20 +117,21 @@ always @(posedge clk_i)
 	cti_o <= cti;
 always @(posedge clk_i)
 	bte_o <= bte;
-always @(posedge clk_i)
-	cyc_o <= cyc;
+//always @(posedge clk_i)
+//	cyc_o <= cyc;
 always @(posedge clk_i)
 	stb_o <= stb;
-always @(posedge clk_i)
-	we_o <= we;
+//always @(posedge clk_i)
+//	we_o <= we;
 always @(posedge clk_i)
 	sel_o <= sel;
-always @(posedge clk_i)
-	adr_o <= adr;
+//always @(posedge clk_i)
+//	adr_o <= adr;
 always @(posedge clk_i)
 	dat_o <= dato;
 
 wire cs_pit = adr[31:8]==24'hFFDC11;
+wire cs_ipt = adr[31:8]==24'hFFDCD0;
 `ifdef CARD_MEMORY
 wire cs_crd = adr[31:11]==21'd0;	// $00000000 in virtual address space
 `else
@@ -233,16 +235,42 @@ assign crd_dato = 64'd0;
 assign crd_ack = 1'b0;
 `endif
 
+FT64_ipt uipt1
+(
+	.rst(rst_i),
+	.clk(clk_i),
+	.ol_i(ol),
+	.cti_i(cti),
+	.cs_i(cs_ipt),
+	.icl_i(icl),
+	.cyc_i(cyc),
+	.stb_i(stb),
+	.ack_o(ipt_ack),
+	.we_i(we),
+	.sel_i(sel),
+	.vadr_i(adr),
+	.dat_i(dato),
+	.dat_o(ipt_dato),
+	.cyc_o(cyc_o),
+	.ack_i(ack),
+	.we_o(we_o),
+	.padr_o(adr_o),
+	.exv_o(exv),
+	.rdv_o(rdv),
+	.wrv_o(wrv)
+);
+
 always @(posedge clk_i)
-casez({pic_ack,pit_ack,crd_ack})
-3'b1??:	dati <= {2{pic_dato}};
-3'b01?:	dati <= {2{pit_dato}};
-3'b001:	dati <= crd_dato;
+casez({pic_ack,pit_ack,crd_ack,cs_ipt})
+4'b1???:	dati <= {2{pic_dato}};
+4'b01??:	dati <= {2{pit_dato}};
+4'b001?:	dati <= crd_dato;
+4'b0001:	dati <= ipt_dato;
 default:  dati <= dat_i;
 endcase
 
 always @(posedge clk_i)
-	ack <= ack_i|pic_ack|pit_ack|crd_ack;
+	ack <= ack_i|pic_ack|pit_ack|crd_ack|ipt_ack;
 
 FT64 ucpu1
 (
