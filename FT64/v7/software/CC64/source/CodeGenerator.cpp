@@ -1374,10 +1374,10 @@ Operand *GenerateExpression(ENODE *node, int flags, int size)
             }
             // fallthru
 	case en_cnacon:
-            ap1 = allocOperand();
+      ap1 = allocOperand();
 			ap1->isPtr = node->IsPtr();
 			ap1->mode = am_imm;
-            ap1->offset = node;
+      ap1->offset = node;
 			if (node->i==0)
 				node->i = -1;
 			ap1->isUnsigned = node->isUnsigned;
@@ -1385,13 +1385,13 @@ Operand *GenerateExpression(ENODE *node, int flags, int size)
 			Leave("GenExpression",7); 
             return ap1;
 	case en_clabcon:
-            ap1 = allocOperand();
-            ap1->mode = am_imm;
-            ap1->offset = node;
-			ap1->isUnsigned = node->isUnsigned;
-            ap1->MakeLegal(flags,size);
-			Leave("GenExpression",7); 
-            return ap1;
+    ap1 = allocOperand();
+    ap1->mode = am_imm;
+    ap1->offset = node;
+		ap1->isUnsigned = node->isUnsigned;
+    ap1->MakeLegal(flags,size);
+		Leave("GenExpression",7); 
+    return (ap1);
   case en_autocon:	return GenAutocon(node, flags, size, stdint.GetIndex());
   case en_autofcon:	
 		switch (node->tp->type)

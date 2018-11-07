@@ -295,6 +295,7 @@ enum {
      tk_mtfp,
      tk_mtspr,
      tk_mul,
+		tk_mulf,
 	tk_mulh,
      tk_muli, //290
 	tk_mulsu,

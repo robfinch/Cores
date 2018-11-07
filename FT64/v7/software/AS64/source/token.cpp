@@ -1973,10 +1973,19 @@ int NextToken()
             }
             if ((inptr[1]=='u' || inptr[1]=='U') &&
                 (inptr[2]=='l' || inptr[2]=='L') &&
-                isspace(inptr[3])) {
+                isspaceOrDot(inptr[3])) {
                 inptr += 3;
-                return token = tk_mul;
+                return (token = tk_mul);
             }
+						if (gCpu == 'F') {
+							if ((inptr[1] == 'u' || inptr[1] == 'U') &&
+								(inptr[2] == 'l' || inptr[2] == 'L') &&
+								(inptr[3] == 'f' || inptr[3] == 'F') &&
+								isspaceOrDot(inptr[4])) {
+								inptr += 4;
+								return (token = tk_mulf);
+							}
+						}
             if ((inptr[1]=='u' || inptr[1]=='U') &&
                 (inptr[2]=='l' || inptr[2]=='L') &&
                 (inptr[3]=='u' || inptr[3]=='U') &&

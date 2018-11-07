@@ -2301,7 +2301,7 @@ static void process_beqi(int64_t opcode6, int64_t opcode3)
 		emit_insn(
 			(disp << 28LL) |
 			((offset >> 3LL) << 23LL) |
-			((offset & 3LL) << 16LL) |
+			(((offset >> 1LL) & 3LL) << 16LL) |
 			(23 << 18) |
 			(Ra << 8) |
 			(ins48 << 6) |
@@ -2324,7 +2324,7 @@ static void process_beqi(int64_t opcode6, int64_t opcode3)
 	emit_insn(
 		(disp << 28LL) |
 		((offset >> 3LL) << 23LL) |
-		((offset & 3LL) << 16LL) | 
+		(((offset >> 1LL) & 3LL) << 16LL) |
 		(((imm >> 3LL) & 0x1FLL) << 18LL) |
 		((imm & 7LL) << 13LL) |
 		(Ra << 8) |
@@ -4805,13 +4805,13 @@ void FT64_processMaster()
 			case tk_bfinsi: process_bitfield(4); break;
 			case tk_bfset: process_bitfield(0); break;
       case tk_bge: process_bcc(0x30,3); break;
-      case tk_bgeu: process_bcc(0x30,5); break;
+      case tk_bgeu: process_bcc(0x30,7); break;
       case tk_bgt: process_bcc(0x30,-2); break;
-      case tk_bgtu: process_bcc(0x30,-4); break;
+      case tk_bgtu: process_bcc(0x30,-6); break;
       case tk_ble: process_bcc(0x30,-3); break;
-      case tk_bleu: process_bcc(0x30,-5); break;
+      case tk_bleu: process_bcc(0x30,-7); break;
       case tk_blt: process_bcc(0x30,2); break;
-      case tk_bltu: process_bcc(0x30,4); break;
+      case tk_bltu: process_bcc(0x30,6); break;
       case tk_bne: process_bcc(0x30,1); break;
       case tk_bra: process_bra(0x01); break;
 			case tk_brk: process_brk(); break;
@@ -4919,13 +4919,13 @@ void FT64_processMaster()
     case tk_lhu: process_load(0x20,0x11,-2); break;
 		//case tk_lui: process_lui(0x27); break;
     case tk_lv:  process_lv(0x36); break;
-		case tk_lvb: process_load(0x3B,0x00,1); break;
-		case tk_lvbu: process_load(-1,0x01,-1); break;
-		case tk_lvc: process_load(0x3B,0x02,2); break;
-		case tk_lvcu: process_load(0x11,0x03,-2); break;
-		case tk_lvh: process_load(0x3B,0x04,4); break;
-		case tk_lvhu: process_load(0x11,0x05,-4); break;
-		case tk_lvw: process_load(0x3B,0x06,8); break;
+		case tk_lvb: process_load(0x3B,0x00,0); break;
+		case tk_lvbu: process_load(-1,0x01,0); break;
+		case tk_lvc: process_load(0x3B,0x02,1); break;
+		case tk_lvcu: process_load(0x11,0x03,-1); break;
+		case tk_lvh: process_load(0x3B,0x04,2); break;
+		case tk_lvhu: process_load(0x11,0x05,-2); break;
+		case tk_lvw: process_load(0x3B,0x06,4); break;
     case tk_lw:  process_load(0x20,0x12,4); break;
     case tk_lwr:  process_load(0x1D,0x14,0); break;
 		case tk_macro:	process_macro(); break;
@@ -4938,7 +4938,8 @@ void FT64_processMaster()
 		case tk_modu: process_rrop(0x14,-1); break;
         case tk_mov: process_mov(0x02, 0x22); break;
 		case tk_mul: process_rrop(0x3A,0x3A); break;
-		//case tk_mulh: process_rrop(0x26, 0x3A); break;
+		case tk_mulf: process_rrop(0x2A, 0x2A); break;
+			//case tk_mulh: process_rrop(0x26, 0x3A); break;
 		case tk_mulu: process_rrop(0x38,0x38); break;
 		//case tk_muluh: process_rrop(0x24, 0x38); break;
 		case tk_neg: process_neg(); break;
