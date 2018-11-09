@@ -1126,7 +1126,7 @@ void LoadConstant(int64_t val, int rg)
 		emit_insn(
 			(val << 18LL) |
 			(rg << 13) |
-			0x09, !expand_flag, 4);	// ORI
+			0x04, !expand_flag, 4);	// ADDI (sign extends)
 		return;
 	}
 	if (IsNBit(val, 30)) {
@@ -1134,35 +1134,35 @@ void LoadConstant(int64_t val, int rg)
 			(val << 18LL) |
 			(rg << 13) |
 			(1 << 6) |
-			0x09, !expand_flag, 6);
+			0x04, !expand_flag, 6);	// ADDI
 		return;
 	}
 	if (IsNBit(val, 49)) {
 		emit_insn(
-			((val >> 30LL) << 13LL) |
-			(rg << 8) |
+			((val >> 35LL) << 18LL) |
+			(((val >> 30LL) & 0x1fLL) << 8LL) |
+			(rg << 13) |
 			0x27, !expand_flag, 4);	// LUI
-		if (((val >> 20LL) & 0xfffffLL) != 0)
-			emit_insn(
+		emit_insn(
 			(val << 18LL) |
 			(rg << 13) |
 			(rg << 8) |
 			(1 << 6) |
-			0x09, !expand_flag, 6);
+			0x09, !expand_flag, 6);	// ORI (zero extends)
 		return;
 	}
 	// Won't fit into 49 bits, assume 64 bit constant
 	emit_insn(
-		((val >> 30) << 13LL) |
-		(rg << 8) |
+		((val >> 35LL) << 18LL) |
+		(((val >> 30LL) & 0x1fLL) << 8LL) |
+		(rg << 13) |
 		0x27, !expand_flag, 6);	// LUI
-	if (((val >> 20) & 0xfffffLL) != 0)
-		emit_insn(
+	emit_insn(
 		(val << 18LL) |
-			(rg << 13) |
-			(rg << 8) |
-			(1 << 6) |
-			0x09, !expand_flag, 6);	// ORI
+		(rg << 13) |
+		(rg << 8) |
+		(1 << 6) |
+		0x09, !expand_flag, 6);	// ORI
 	return;
 }
 
