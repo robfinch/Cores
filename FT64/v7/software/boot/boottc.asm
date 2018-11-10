@@ -58,11 +58,13 @@ E_BadCallno	equ		-4
 ROMBASE		equ		$FFFFFFFFFFFC0000
 IOBASE		equ		$FFFFFFFFFFD00000
 TEXTSCR		equ		$FFFFFFFFFFD00000
+KEYBD		equ		$FFFFFFFFFFDC0000
 LEDS		equ		$FFFFFFFFFFDC0600
 BUTTONS		equ		$FFFFFFFFFFDC0600
 SCRATCHPAD	equ		$FFFFFFFFFF400000
 AVIC		equ		$FFFFFFFFFFDCC000
 TC1			equ		$FFFFFFFFFFD0DF00
+I2C			equ		$FFFFFFFFFFDC0200
 PIT			equ		$FFFFFFFFFFDC1100
 PIC			equ		$FFFFFFFFFFDC0F00
 SPRCTRL	equ		$FFFFFFFFFFDAD000		// sprite controller
@@ -98,11 +100,17 @@ bkcolor				dw		0
 _randStream		dw		0	
 _DBGCursorCol	db		0
 _DBGCursorRow	db		0
+_KeybdID			dc		0
+_KeyState1		db		0
+_KeyState2		db		0
+_KeyLED				db		0
+_RTCBuf				fill.b	96,0
 			align		8
 _DBGAttr			dw		0
 _milliseconds	dw		0
 ___garbage_list	dw	0
-			org		SCRATCHPAD + 2048
+_regfile			fill.w	32,0
+			org		SCRATCHPAD + 32752
 __brk_stack		dw		0
 
 ; Help the assembler out by telling it how many bits are required for code
@@ -151,7 +159,7 @@ test_icache:
 		; set trap vector
 		ldi		r1,#ROMBASE
 		csrrw	r0,#$30,r1
-		ldi		$sp,#$10000000+$FF8	; set stack pointer
+		ldi		$sp,#$10000000+$7BF8	; set stack pointer
 		sei		#0
 
 	; Seed random number generator
@@ -228,8 +236,8 @@ start:
 	; on. At power on the reg should be zero, but let's not assume that and
 	; write a zero to it.
 		and		r0,r0,#0		; cannot use LDI which does an or operation
-		ldi		$sp,#SCRATCHPAD+$FF8	; set stack pointer
-		
+		ldi		$sp,#SCRATCHPAD+$7BF8	; set stack pointer
+	
 		call	_Delay2s
 		ldi		r1,#$FFFF000F0000
 		sw		r1,_DBGAttr
@@ -241,16 +249,23 @@ start:
 		add		sp,sp,#8
 		ldi		$r1,#7
 		sb		$r1,LEDS
+		call	_InitPRNG
 		call  _RandomizeSpritePositions2
-		call	_init_memory_management
-		ldi		$r1,#8
-		sb		$r1,LEDS
+		call	_i2c_init
+		call	_KeybdInit
 		call	_SetTrapVector
 		call	_InitPIC
 		call	_InitPIT
-
 		; Enable interrupts
-;		sei		#0
+		sei		#0
+		call	_monitor
+;		call	_ramtest
+		call	_SpriteDemo
+		call	_SetCursorImage
+		call	_init_memory_management
+		ldi		$r1,#8
+		sb		$r1,LEDS
+
 		
 		
 	; The following code must run shortly after the org statement determining
@@ -1018,7 +1033,13 @@ _RandomizeSpritePositions2:
 .0001:
 		mov		r18,r0
 		call	_GetRand
-		and		r1,r1,#$00FF00FF
+		shr		r2,r1,#10
+		mod		r1,r1,#800
+		mod		r2,r2,#600
+;		and		r1,r1,#$01FF01FF	; 512,512
+;		add		r1,r1,#$000E0080	; add +28 to y and +256 to x
+		shl		r2,r2,#16
+		or		r1,r1,r2
 		add		r1,r1,#$000E0080	; add +28 to y and +256 to x
 		sh		r1,[r6+r7]
 		add		r7,r7,#$10			; advance to next sprite
@@ -1181,6 +1202,387 @@ __GCStop:
 		
 MsgBoot:
 		dc		"FT64 ROM BIOS v1.0",0
+msgBadKeybd:
+		dc		"Keyboard not responding.",0
+
+;===============================================================================
+; Keyboard routines
+;===============================================================================
+
+_KeybdInit:
+	  push  lr
+	  push	r3
+		ldi		r3,#5
+.0002:
+		call	_Wait10ms
+		ldi		$a0,#-1			; send reset code to keyboard
+		sb		$a0,KEYBD+1	; write $FF to status reg to clear TX state
+		memdb
+		call	_KeybdSendByte	; now write to transmit register
+		call	_KeybdWaitTx		; wait until no longer busy
+		call	_KeybdRecvByte	; look for an ACK ($FA)
+		xor		r2,r1,#$FA
+		bne		r2,r0,.tryAgain
+		call	_KeybdRecvByte	; look for BAT completion code ($AA)
+		xor		r2,r1,#$FC	; reset error ?
+		beq		r2,r0,.tryAgain
+		xor		r1,r1,#$AA	; reset complete okay ?
+		bne		r2,r0,.tryAgain
+
+		; After a reset, scan code set #2 should be active
+.config:
+		ldi		$a0,#$F0			; send scan code select
+		sb		$a0,LEDS
+		call	_KeybdSendByte
+		call	_KeybdWaitTx
+		bbs		r1,#7,.tryAgain
+		call	_KeybdRecvByte	; wait for response from keyboard
+		bbs		r1,#7,.tryAgain
+		xor		r2,r1,#$FA
+		beq		r2,r0,.0004
+.tryAgain:
+    sub   r3,r3,#1
+		bne	  r3,r0,.0002
+.keybdErr:
+		ldi		r1,#msgBadKeybd
+		push	$r1
+		call	_DBGDisplayStringCRLF
+		add		sp,sp,#8
+		bra		ledxit
+.0004:
+		ldi		$a0,#2			; select scan code set #2
+		call	_KeybdSendByte
+		call	_KeybdWaitTx
+		bbs		r1,#7,.tryAgain
+		call	_KeybdRecvByte	; wait for response from keyboard
+		bbs		r1,#7,.tryAgain
+		xor		r2,r1,#$FA
+		bne		r2,r0,.tryAgain
+		call	_KeybdGetID
+ledxit:
+		ldi		$a0,#$07
+		call	_KeybdSetLED
+		call	_Wait300ms
+		ldi		$a0,#$00
+		call	_KeybdSetLED
+		lw		r3,[sp]
+		lw		lr,8[sp]
+		ret		#16
+
+_KeybdSetLED:
+		push	lr
+		mov		$r1,$a0
+		ldi		$a0,#$ED
+		call	_KeybdSendByte
+		call	_KeybdWaitTx
+		mov		$a0,$r1
+		call	_KeybdSendByte
+		call	_KeybdWaitTx
+		lw		lr,[sp]
+		ret		#8
+
+; Get ID
+;
+_KeybdGetID:
+		push	lr
+		ldi		$a0,#$F2
+		call	_KeybdSendByte
+		call	_KeybdWaitTx
+		call	_KeybdRecvByte
+		bbs		r1,#7,.notKbd
+		xor		r2,r1,#$AB
+		bne		r2,r0,.notKbd
+		call	_KeybdRecvByte
+		bbs		r1,#7,.notKbd
+		xor		r2,r1,#$83
+		bne		r2,r0,.notKbd
+		ldi		r1,#$AB83
+.0001:
+		sc		r1,_KeybdID
+		lw		lr,[sp]
+		ret		#8
+.notKbd:
+		ldi		r1,#$00
+		bra		.0001
+
+; Recieve a byte from the keyboard, used after a command is sent to the
+; keyboard in order to wait for a response.
+;
+_KeybdRecvByte:
+  	push  lr
+		push	r3
+		ldi		r3,#100			; wait up to 1s
+.0003:
+		call	_KeybdGetStatus	; wait for response from keyboard
+		bbs		r1,#7,.0004			; is input buffer full ? yes, branch
+		call	_Wait10ms				; wait a bit
+		sub   r3,r3,#1
+		bne   r3,r0,.0003			; go back and try again
+		lw		r3,[sp]					; timeout
+		lw		lr,8[sp]
+		ldi		r1,#-1				; return -1
+		ret		#16
+.0004:
+		call	_KeybdGetScancode
+		lw		r3,[sp]
+		lw		lr,8[sp]
+		ret		#16
+
+_KeybdSendByte:
+		sb		$a0,KEYBD
+		memdb
+		ret
+	
+_Wait10ms:
+		push	r3
+    push  r4
+    csrrd	r3,#$002,r0		; get orginal count
+.0001:
+		csrrd	r4,#$002,r0
+		sub		r4,r4,r3
+		blt  	r4,r0,.0002			; shouldn't be -ve unless counter overflowed
+		slt		r4,r4,#100000		; about 10ms at 10 MHz
+		bne		r4,r0,.0001
+.0002:
+		lw		r4,[sp]
+		lw		r3,8[sp]
+		ret		#16
+
+_Wait300ms:
+		push	r3
+    push  r4
+    csrrd	r3,#$002,r0		; get orginal count
+.0001:
+		csrrd	r4,#$002,r0
+		sub		r4,r4,r3
+		blt  	r4,r0,.0002			; shouldn't be -ve unless counter overflowed
+		slt		r4,r4,#3000000	; about 300ms at 10 MHz
+		bne		r4,r0,.0001
+.0002:
+		lw		r4,[sp]
+		lw		r3,8[sp]
+		ret		#16
+
+
+
+; Wait until the keyboard transmit is complete
+; Returns r1 = 0 if successful, r1 = -1 timeout
+;
+_KeybdWaitTx:
+		push  lr
+		push	r2
+    push  r3
+		ldi		r3,#100			; wait a max of 1s
+.0001:
+		call	_KeybdGetStatus
+		bbs	  r1,#6,.0002	; check for transmit complete bit; branch if bit set
+		call	_Wait10ms		; delay a little bit
+		sub   r3,r3,#1
+		bne	  r3,r0,.0001	; go back and try again
+		lw		r3,[sp]
+		lw		r2,8[sp]		; timed out
+		lw		lr,16[sp]
+		ldi		r1,#-1			; return -1
+		ret		#24
+.0002:
+		lw		r3,[sp]
+		lw		r2,8[sp]		; wait complete, return 
+		lw		lr,16[sp]
+		ldi		r1,#0				; return 0
+		ret		#24
+
+
+; Get the keyboard status
+;
+_KeybdGetStatus:
+		ldi		$r1,#KEYBD+1
+		lvb		$r1,[$r1+$r0]
+		memdb
+		ret
+
+; Get the scancode from the keyboard port
+;
+_KeybdGetScancode:
+		ldi		$r1,#KEYBD
+		lvbu	$r1,[$r1+$r0]		; get the scan code
+		memdb									; need the following store in order
+		sb		$r0,KEYBD+1			; clear receive register
+		memdb
+		ret
+
+;===============================================================================
+; Generic I2C routines
+;===============================================================================
+
+I2C_PREL	EQU		$0
+I2C_PREH	EQU		$2
+I2C_CTRL	EQU		$4
+I2C_RXR		EQU		$6
+I2C_TXR		EQU		$6
+I2C_CMD		EQU		$8
+I2C_STAT	EQU		$A
+
+; i2c
+_i2c_init:
+		push	r6
+		ldi		r6,#I2C
+		ldi		r1,#4								; setup prescale for 400kHz clock
+		sb		r1,I2C_PREL[r6]
+		sb		r0,I2C_PREH[r6]
+		lw		r6,[sp]
+		ret		#8
+
+; Wait for I2C transfer to complete
+;
+; Parameters
+; 	a0 - I2C controller base address
+
+i2c_wait_tip:
+		push		r1
+.0001:					
+		lb			r1,I2C_STAT[$a0]
+		bbs			r1,#1,.0001				; wait for tip to clear
+		lw			r1,[sp]
+		ret			#8
+
+; Parameters
+;		a2 - data to transmit
+;		a1 - command value
+;		a0 - I2C controller base address
+;
+i2c_wr_cmd:
+		push		lr
+		sb			$a2,I2C_TXR[$a0]
+		memdb
+		sb			$a1,I2C_CMD[$a0]
+		memdb
+		call		i2c_wait_tip
+		lb			$r1,I2C_STAT[$a0]
+		lw			lr,[sp]
+		ret			#8
+
+; Parameters
+;		a0 - I2C controller base address
+;		a1 - data to send
+;
+_i2c_xmit1:
+		push		lr
+		push		$a1								; save data value
+		ldi			$a1,#1
+		sb			$a1,I2C_CTRL[$a0]	; enable the core
+		memdb
+		ldi			$a2,#$76					; set slave address = %0111011
+		ldi			$a1,#$90					; set STA, WR
+		call		i2c_wr_cmd
+		call		i2c_wait_rx_nack
+		lw			$a2,[sp]					; get back data value
+		add			sp,sp,#8
+		ldi			$a1,#$50					; set STO, WR
+		call		i2c_wr_cmd
+		call		i2c_wait_rx_nack
+		lw			$a1,[sp]
+		lw			lr,8[sp]
+		ret			#16
+
+i2c_wait_rx_nack:
+		push		$a1
+.0001:
+		lb			$a1,I2C_STAT[$a0]	; wait for RXack = 0
+		bbs			$a1,#7,.0001
+		lw			$a1,[sp]
+		ret			#8
+
+;===============================================================================
+; Realtime clock routines
+;===============================================================================
+
+_rtc_read:
+		push		lr
+		push		$r3
+		ldi			$a0,#I2C
+		ldi			$a3,#RTCBuf
+		ldi			$r1,#$80
+		sb			$r1,I2C_CTRL[$a0]	; enable I2C
+		ldi			$a2,#$DE			; read address, write op
+		ldi			$a1,#$90			; STA + wr bit
+		call		i2c_wr_cmd
+		bbs			$r1,#7,.rxerr
+		ldi			$a2,#$00			; address zero
+		ldi			$a1,#$10			; wr bit
+		call		i2c_wr_cmd
+		bbs			$r1,#7,.rxerr
+		ldi			$a2,#$DF			; read address, read op
+		ldi			$a1,#$90			; STA + wr bit
+		call		i2c_wr_cmd
+		bbs			$r1,#7,.rxerr
+		
+		ldi			$r2,#$00
+.0001:
+		ldi			$r3,#$20
+		sb			$r3,I2C_CMD[$a0]	; rd bit
+		call		i2c_wait_tip
+		call		i2c_wait_rx_nack
+		lb			$r1,I2C_STAT[$a0]
+		bbs			$r1,#7,.rxerr
+		lb			$r1,I2C_RXR[$a0]
+		sb			$r1,[$a3+$r2]
+		add			$r2,$r2,#1
+		slt			$r1,$r2,#$5F
+		bne			$r1,$r0,.0001
+		ldi			$r1,#$68
+		sb			$r1,I2C_CMD[$a0]	; STO, rd bit + nack
+		call		i2c_wait_tip
+		call		i2c_wait_rx_nack
+		lb			$r1,I2C_STAT[$a0]
+		bbs			$r1,#7,.rxerr
+		lb			$r1,I2C_RXR[$a0]
+		sb			$r1,[$a3+$r2]
+		mov			$r1,$r0						; return 0
+.rxerr:
+		sb			$r0,I2C_CTRL[$a0]	; disable I2C and return status
+		lw			$r3,[sp]
+		lw			lr,8[sp]
+		ret			#16
+
+_rtc_write:
+		push		lr
+		push		$r3
+		ldi			$a0,#I2C
+		ldi			$a3,#RTCBuf
+		ldi			$r1,#$80
+		sb			$r1,I2C_CTRL[$a0]	; enable I2C
+		ldi			$a2,#$DE			; read address, write op
+		ldi			$a1,#$90			; STA + wr bit
+		call		i2c_wr_cmd
+		bbs			$r1,#7,.rxerr
+		ldi			$a2,#$00			; address zero
+		ldi			$a1,#$10			; wr bit
+		call		i2c_wr_cmd
+		bbs			$r1,#7,.rxerr
+
+		ldi			$r2,#0
+.0001:
+		lb			$a2,[$a0+$r2]
+		ldi			$a1,#$10
+		call		i2c_wr_cmd
+		bbs			$r1,#7,.rxerr
+		add			$r2,$r2,#1
+		slt			$r1,$r2,#$5F
+		bne			$r1,$r0,.0001
+		lb			$a2,[$a0+$r2]
+		ldi			$a1,#$50			; STO, wr bit
+		call		i2c_wr_cmd
+		bbs			$r1,#7,.rxerr
+		mov			$r1,$r0						; return 0
+.rxerr:
+		sb			$r0,I2C_CTRL[$a0]	; disable I2C and return status
+		lw			$r3,[sp]
+		lw			lr,8[sp]
+		ret			#16
+
+msgRtcReadFail:
+		dc	"RTC read/write failed.",$0D,$0A,$00
+
 
 ;===============================================================================
 ;===============================================================================
@@ -1357,7 +1759,7 @@ vec2data:
 .include "d:\Cores5\FT64\v7\software\boot\brkrout.asm"
 .include "d:\Cores5\FT64\v7\software\boot\BIOSMain.s"
 .include "d:\Cores5\FT64\v7\software\boot\FloatTest.s"
-.include "d:\Cores5\FT64\v7\software\boot\ramtest.s"
+;.include "d:\Cores5\FT64\v7\software\boot\ramtest.s"
 	align	4096
 ;.include "d:\Cores5\FT64\v7\software\cc64libc\source\stdio.s"
 ;.include "d:\Cores5\FT64\v7\software\cc64libc\source\ctype.s"
@@ -1386,6 +1788,7 @@ vec2data:
 .include "d:\Cores5\FT64\v7\software\FMTK\source\app.s"
 .include "d:\Cores5\FT64\v7\software\FMTK\source\shell.s"
 .include "d:\Cores5\FT64\v7\software\FMTK\source\misc.s"
+.include "d:\Cores5\FT64\v7\software\FMTK\source\monitor.s"
 .include "d:\Cores5\FT64\v7\software\bootrom\source\video.asm"
 .include "d:\Cores5\FT64\v7\software\bootrom\source\TinyBasicDSD9.asm"
 
