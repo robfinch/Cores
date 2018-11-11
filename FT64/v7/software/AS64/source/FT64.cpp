@@ -1381,9 +1381,9 @@ static void process_riop(int64_t opcode6)
 		if (val > -16 && val < 16) {
 			emit_insn(
 				(2 << 12) |
-				(((val >> 4) & 0x0F) << 8) |
+				(((val >> 1) & 0x0F) << 8) |
 				(2 << 6) |
-				(((val >> 3) & 0x1) << 5) |
+				((val & 0x1) << 5) |
 				Rt, 0, 2
 			);
 			goto xit;
@@ -1445,7 +1445,10 @@ static void process_riop(int64_t opcode6)
 		goto xit;
 	}
 	emit_insn(
-		(val << 18)|(Rt << 13)|(Ra << 8)|opcode6,!expand_flag,4);
+		(val << 18LL) |
+		(Rt << 13) |
+		(Ra << 8) |
+		opcode6,!expand_flag,4);
 xit:
 	ScanToEOL();
 }
@@ -1550,11 +1553,12 @@ static void process_setiop(int64_t opcode6)
 // slt $t0,$t1,$r16
 // ---------------------------------------------------------------------------
 
-static void process_setop(int64_t opcode6)
+static void process_setop(int64_t funct6, int64_t opcode6)
 {
 	int Ra, Rb, Rt;
-	char *p;
+	char *p, *q;
 	int sz = 3;
+	int64_t val;
 
 	p = inptr;
 	if (*p == '.')
@@ -1565,21 +1569,37 @@ static void process_setop(int64_t opcode6)
 	Ra = getRegisterX();
 	need(',');
 	NextToken();
+	q = inptr;
 	Rb = getRegisterX();
 	if (Rb == -1) {
 		inptr = p;
+		if (opcode6 < 0) {
+			inptr = q;
+			val = expr();
+			LoadConstant(val, 23);
+			emit_insn(
+				(funct6 << 26) |
+				(3 << 23) |
+				(23 << 18) |
+				(Rt << 13) |
+				(Ra << 8) |
+				(0 << 6) |
+				0x02, !expand_flag, 4
+			);
+			return;
+		}
 		process_setiop(opcode6);
 		return;
 	}
-	switch (opcode6)
+	switch (funct6)
 	{
 	case -6:	// SGE = !SLT
 	case -7:	// SGEU	= !SLTU
 		emit_insn(
-			(-opcode6 << 26) |
+			(-funct6 << 26) |
 			(sz << 23) |
-			(Rt << 18) |
-			(Rb << 13) |
+			(Rb << 18) |
+			(Rt << 13) |
 			(Ra << 8) |
 			(0 << 6) |
 			0x02, !expand_flag, 4
@@ -1598,8 +1618,8 @@ static void process_setop(int64_t opcode6)
 		emit_insn(
 			(0x28 << 26) |
 			(sz << 23) |
-			(Rt << 18) |
-			(Rb << 13) |
+			(Rb << 18) |
+			(Rt << 13) |
 			(Ra << 8) |
 			(0 << 6) |
 			0x02, !expand_flag, 4
@@ -1618,8 +1638,8 @@ static void process_setop(int64_t opcode6)
 		emit_insn(
 			(0x29 << 26) |
 			(sz << 23) |
-			(Rt << 18) |
-			(Rb << 13) |
+			(Rb << 18) |
+			(Rt << 13) |
 			(Ra << 8) |
 			(0 << 6) |
 			0x02, !expand_flag, 4
@@ -1636,10 +1656,10 @@ static void process_setop(int64_t opcode6)
 		return;
 	}
 	emit_insn(
-		(opcode6 << 26) |
+		(funct6 << 26) |
 		(sz << 23) |
-		(Rt << 18) |
-		(Rb << 13) |
+		(Rb << 18) |
+		(Rt << 13) |
 		(Ra << 8) |
 		(0 << 6) |
 		0x02, !expand_flag, 4
@@ -1847,7 +1867,7 @@ static void process_cmove(int64_t funct6)
 		emit_insn(
 			(funct6 << 42LL) |
 			(4LL << 39LL) |
-			((val & 0xffff) << 23) |
+			((val & 0xffffLL) << 23LL) |
 			(Rb << 18) |
 			(Rt << 13) |
 			(Ra << 8) |
@@ -2305,7 +2325,7 @@ static void process_beqi(int64_t opcode6, int64_t opcode3)
 			(23 << 18) |
 			(Ra << 8) |
 			(ins48 << 6) |
-			opcode6, !expand_flag, ins48 ? 6 : 4
+			0x30, !expand_flag, ins48 ? 6 : 4
 		);
 		return;
 	}
@@ -3181,7 +3201,7 @@ static void process_store(int64_t opcode6, int funct6, int sz)
   }
   expect(',');
   mem_operand(&disp, &Ra, &Rc, &Sc);
-	if (Ra > 0 && Rc > 0) {
+	if (Ra >= 0 && Rc >= 0) {
 		emit_insn(
 			((funct6 >> 2) << 28) |
 			((funct6 & 3) << 16) |
@@ -3522,7 +3542,7 @@ static void process_load(int64_t opcode6, int64_t funct6, int sz)
   }
   expect(',');
   mem_operand(&disp, &Ra, &Rc, &Sc);
-	if (Ra > 0 && Rc > 0) {
+	if (Ra >= 0 && Rc >= 0) {
 		//if (gpu)
 		//	error("Indexed addressing not supported on GPU");
 		// Trap LEA, convert to LEAX opcode
@@ -4919,7 +4939,7 @@ void FT64_processMaster()
     case tk_lhu: process_load(0x20,0x11,-2); break;
 		//case tk_lui: process_lui(0x27); break;
     case tk_lv:  process_lv(0x36); break;
-		case tk_lvb: process_load(0x3B,0x00,0); break;
+		case tk_lvb: process_load(-1,0x00,0); break;
 		case tk_lvbu: process_load(-1,0x01,0); break;
 		case tk_lvc: process_load(0x3B,0x02,1); break;
 		case tk_lvcu: process_load(0x11,0x03,-1); break;
@@ -4977,7 +4997,7 @@ void FT64_processMaster()
 				case tk_setwb: emit_insn(0x04580002,!expand_flag,4); break;
 		//case tk_seq:	process_riop(0x1B,2); break;
 		case tk_sf:		process_lsfloat(0x2B,0x00); break;
-		case tk_sge:	process_setop(-6); break;
+		case tk_sge:	process_setop(-6,-1); break;
 		case tk_sgeu:	process_setiop(-7); break;
 		case tk_sgt:	process_setiop(-0x2C); break;
 		case tk_sgtu:	process_setiop(-0x1C); break;
@@ -4992,10 +5012,10 @@ void FT64_processMaster()
         case tk_shri: process_shifti(0x1); break;
 		case tk_shru: process_shift(0x1); break;
 		case tk_shrui: process_shifti(0x1); break;
-		case tk_sle:	process_setop(0x28); break;
-		case tk_sleu:	process_setop(0x29); break;
-		case tk_slt:	process_setop(0x06); break;
-		case tk_sltu:	process_setop(0x07); break;
+		case tk_sle:	process_setop(0x28,-1); break;
+		case tk_sleu:	process_setop(0x29,-1); break;
+		case tk_slt:	process_setop(0x06,0x06); break;
+		case tk_sltu:	process_setop(0x07,0x06); break;
 		//case tk_sne:	process_setiop(0x1B,3); break;
         case tk_slli: process_shifti(0x8); break;
 		case tk_srai: process_shifti(0xB); break;

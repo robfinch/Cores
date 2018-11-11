@@ -98,12 +98,18 @@ __GCStopPtr		dw		0
 fgcolor				dw		0
 bkcolor				dw		0
 _randStream		dw		0	
+_S19Address		dw		0
+_S19StartAddress	dw		0
 _DBGCursorCol	db		0
 _DBGCursorRow	db		0
 _KeybdID			dc		0
 _KeyState1		db		0
 _KeyState2		db		0
 _KeyLED				db		0
+_S19Abort			db		0
+_S19Reclen		db		0
+			align		8
+_mmu_key			dw		0
 _RTCBuf				fill.b	96,0
 			align		8
 _DBGAttr			dw		0
@@ -245,7 +251,7 @@ start:
 		call	_DBGHomeCursor
 		ldi		$r1,#MsgBoot
 		push	$r1
-		call	_DBGDisplayStringCRLF
+		call	_DBGDisplayAsciiStringCRLF
 		add		sp,sp,#8
 		ldi		$r1,#7
 		sb		$r1,LEDS
@@ -257,11 +263,12 @@ start:
 		call	_InitPIC
 		call	_InitPIT
 		; Enable interrupts
-		sei		#0
+;		sei		#0
 		call	_monitor
 ;		call	_ramtest
 		call	_SpriteDemo
 		call	_SetCursorImage
+		; The following must be after the RTC is read
 		call	_init_memory_management
 		ldi		$r1,#8
 		sb		$r1,LEDS
@@ -1200,14 +1207,13 @@ __GCStop:
 .stopRti:
 		rti
 		
-MsgBoot:
-		dc		"FT64 ROM BIOS v1.0",0
-msgBadKeybd:
-		dc		"Keyboard not responding.",0
-
 ;===============================================================================
 ; Keyboard routines
 ;===============================================================================
+
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+; Initialize the keyboard.
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 _KeybdInit:
 	  push  lr
@@ -1246,7 +1252,7 @@ _KeybdInit:
 .keybdErr:
 		ldi		r1,#msgBadKeybd
 		push	$r1
-		call	_DBGDisplayStringCRLF
+		call	_DBGDisplayAsciiStringCRLF
 		add		sp,sp,#8
 		bra		ledxit
 .0004:
@@ -1269,22 +1275,43 @@ ledxit:
 		lw		lr,8[sp]
 		ret		#16
 
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+; Set the LEDs on the keyboard.
+;
+; Parameters: $a0 LED status to set
+; Returns: none
+; Modifies: none
+; Stack Space: 2 words
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
 _KeybdSetLED:
 		push	lr
+		push	$r1
 		mov		$r1,$a0
 		ldi		$a0,#$ED
 		call	_KeybdSendByte
 		call	_KeybdWaitTx
+		call	_KeybdRecvByte	; should be an ack
 		mov		$a0,$r1
 		call	_KeybdSendByte
 		call	_KeybdWaitTx
-		lw		lr,[sp]
-		ret		#8
+		call	_KeybdRecvByte	; should be an ack
+		lw		$r1,[sp]
+		lw		lr,8[sp]
+		ret		#16
 
-; Get ID
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+; Get ID - get the keyboards identifier code.
 ;
+; Parameters: none
+; Returns: r1 = $AB83, $00 on fail
+; Modifies: r1, KeybdID updated
+; Stack Space: 2 words
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
 _KeybdGetID:
 		push	lr
+		push	$a0
 		ldi		$a0,#$F2
 		call	_KeybdSendByte
 		call	_KeybdWaitTx
@@ -1299,15 +1326,23 @@ _KeybdGetID:
 		ldi		r1,#$AB83
 .0001:
 		sc		r1,_KeybdID
-		lw		lr,[sp]
-		ret		#8
+		lw		$a0,[sp]
+		lw		lr,8[sp]
+		ret		#16
 .notKbd:
 		ldi		r1,#$00
 		bra		.0001
 
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ; Recieve a byte from the keyboard, used after a command is sent to the
 ; keyboard in order to wait for a response.
 ;
+; Parameters: none
+; Returns: r1 = recieved byte ($00 to $FF), -1 on timeout
+; Modifies: r1
+; Stack Space: 2 words
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
 _KeybdRecvByte:
   	push  lr
 		push	r3
@@ -1328,11 +1363,29 @@ _KeybdRecvByte:
 		lw		lr,8[sp]
 		ret		#16
 
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+; Send a byte to the keyboard.
+;
+; Parameters: $a0 byte to send
+; Returns: none
+; Modifies: none
+; Stack Space: 0 words
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
 _KeybdSendByte:
 		sb		$a0,KEYBD
 		memdb
 		ret
 	
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+; Wait for 10 ms
+;
+; Parameters: none
+; Returns: none
+; Modifies: none
+; Stack Space: 2 words
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
 _Wait10ms:
 		push	r3
     push  r4
@@ -1347,6 +1400,16 @@ _Wait10ms:
 		lw		r4,[sp]
 		lw		r3,8[sp]
 		ret		#16
+
+
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+; Wait for 300 ms
+;
+; Parameters: none
+; Returns: none
+; Modifies: none
+; Stack Space: 2 words
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 _Wait300ms:
 		push	r3
@@ -1364,10 +1427,15 @@ _Wait300ms:
 		ret		#16
 
 
-
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ; Wait until the keyboard transmit is complete
-; Returns r1 = 0 if successful, r1 = -1 timeout
 ;
+; Parameters: none
+; Returns: r1 = 0 if successful, r1 = -1 timeout
+; Modifies: r1
+; Stack Space: 3 words
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
 _KeybdWaitTx:
 		push  lr
 		push	r2
@@ -1392,16 +1460,28 @@ _KeybdWaitTx:
 		ret		#24
 
 
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ; Get the keyboard status
 ;
+; Parameters: none
+; Returns: r1 = status
+; Modifies: r1
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
 _KeybdGetStatus:
 		ldi		$r1,#KEYBD+1
 		lvb		$r1,[$r1+$r0]
 		memdb
 		ret
 
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ; Get the scancode from the keyboard port
 ;
+; Parameters: none
+; Returns: r1 = scancode
+; Modifies: r1
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
 _KeybdGetScancode:
 		ldi		$r1,#KEYBD
 		lvbu	$r1,[$r1+$r0]		; get the scan code
@@ -1415,14 +1495,20 @@ _KeybdGetScancode:
 ;===============================================================================
 
 I2C_PREL	EQU		$0
-I2C_PREH	EQU		$2
-I2C_CTRL	EQU		$4
-I2C_RXR		EQU		$6
-I2C_TXR		EQU		$6
-I2C_CMD		EQU		$8
-I2C_STAT	EQU		$A
+I2C_PREH	EQU		$1
+I2C_CTRL	EQU		$2
+I2C_RXR		EQU		$3
+I2C_TXR		EQU		$3
+I2C_CMD		EQU		$4
+I2C_STAT	EQU		$4
 
-; i2c
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+; i2c initialization, sets the clock prescaler
+;
+; Parameters: none
+; Returns: none
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
 _i2c_init:
 		push	r6
 		ldi		r6,#I2C
@@ -1432,10 +1518,12 @@ _i2c_init:
 		lw		r6,[sp]
 		ret		#8
 
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ; Wait for I2C transfer to complete
 ;
 ; Parameters
 ; 	a0 - I2C controller base address
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 i2c_wait_tip:
 		push		r1
@@ -1445,11 +1533,15 @@ i2c_wait_tip:
 		lw			r1,[sp]
 		ret			#8
 
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+; Write command to i2c
+;
 ; Parameters
 ;		a2 - data to transmit
 ;		a1 - command value
 ;		a0 - I2C controller base address
-;
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
 i2c_wr_cmd:
 		push		lr
 		sb			$a2,I2C_TXR[$a0]
@@ -1461,13 +1553,18 @@ i2c_wr_cmd:
 		lw			lr,[sp]
 		ret			#8
 
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ; Parameters
 ;		a0 - I2C controller base address
 ;		a1 - data to send
-;
+; Returns: none
+; Stack space: 3 words
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
 _i2c_xmit1:
 		push		lr
 		push		$a1								; save data value
+		push		$a2
 		ldi			$a1,#1
 		sb			$a1,I2C_CTRL[$a0]	; enable the core
 		memdb
@@ -1480,9 +1577,13 @@ _i2c_xmit1:
 		ldi			$a1,#$50					; set STO, WR
 		call		i2c_wr_cmd
 		call		i2c_wait_rx_nack
-		lw			$a1,[sp]
-		lw			lr,8[sp]
-		ret			#16
+		lw			$a2,[sp]
+		lw			$a1,8[sp]
+		lw			lr,16[sp]
+		ret			#24
+
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 i2c_wait_rx_nack:
 		push		$a1
@@ -1496,9 +1597,25 @@ i2c_wait_rx_nack:
 ; Realtime clock routines
 ;===============================================================================
 
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+; Read the real-time-clock chip.
+;
+; The entire contents of the clock registers and sram are read into a buffer
+; in one-shot rather than reading the registers individually.
+;
+; Parameters: none
+; Returns: r1 = 0 on success, otherwise non-zero
+; Modifies: r1 and RTCBuf
+; Stack space: 6 words
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
 _rtc_read:
 		push		lr
 		push		$r3
+		push		$a0
+		push		$a1
+		push		$a2
+		push		$a3
 		ldi			$a0,#I2C
 		ldi			$a3,#RTCBuf
 		ldi			$r1,#$80
@@ -1540,13 +1657,33 @@ _rtc_read:
 		mov			$r1,$r0						; return 0
 .rxerr:
 		sb			$r0,I2C_CTRL[$a0]	; disable I2C and return status
-		lw			$r3,[sp]
-		lw			lr,8[sp]
-		ret			#16
+		lw			$a3,[sp]
+		lw			$a2,8[sp]
+		lw			$a1,16[sp]
+		lw			$a0,24[sp]
+		lw			$r3,32[sp]
+		lw			lr,40[sp]
+		ret			#48
+
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+; Write the real-time-clock chip.
+;
+; The entire contents of the clock registers and sram are written from a 
+; buffer (RTCBuf) in one-shot rather than writing the registers individually.
+;
+; Parameters: none
+; Returns: r1 = 0 on success, otherwise non-zero
+; Modifies: r1 and RTCBuf
+; Stack space: 6 words
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 _rtc_write:
 		push		lr
 		push		$r3
+		push		$a0
+		push		$a1
+		push		$a2
+		push		$a3
 		ldi			$a0,#I2C
 		ldi			$a3,#RTCBuf
 		ldi			$r1,#$80
@@ -1562,27 +1699,40 @@ _rtc_write:
 
 		ldi			$r2,#0
 .0001:
-		lb			$a2,[$a0+$r2]
+		lb			$a2,[$a3+$r2]
 		ldi			$a1,#$10
 		call		i2c_wr_cmd
 		bbs			$r1,#7,.rxerr
 		add			$r2,$r2,#1
 		slt			$r1,$r2,#$5F
 		bne			$r1,$r0,.0001
-		lb			$a2,[$a0+$r2]
+		lb			$a2,[$a3+$r2]
 		ldi			$a1,#$50			; STO, wr bit
 		call		i2c_wr_cmd
 		bbs			$r1,#7,.rxerr
 		mov			$r1,$r0						; return 0
 .rxerr:
 		sb			$r0,I2C_CTRL[$a0]	; disable I2C and return status
-		lw			$r3,[sp]
-		lw			lr,8[sp]
-		ret			#16
+		lw			$a3,[sp]
+		lw			$a2,8[sp]
+		lw			$a1,16[sp]
+		lw			$a0,24[sp]
+		lw			$r3,32[sp]
+		lw			lr,40[sp]
+		ret			#48
 
+;===============================================================================
+; String literals
+;===============================================================================
+
+MsgBoot:
+		db		"FT64 ROM BIOS v1.0",0
+msgBadKeybd:
+		db		"Keyboard not responding.",0
 msgRtcReadFail:
-		dc	"RTC read/write failed.",$0D,$0A,$00
+		db		"RTC read/write failed.",$0D,$0A,$00
 
+		align		2
 
 ;===============================================================================
 ;===============================================================================
@@ -1718,6 +1868,12 @@ font8:
 	db	$70,$18,$18,$0E,$18,$18,$70,$00	; }
 	db	$72,$9C,$00,$00,$00,$00,$00,$00	; ~
 	db	$FE,$FE,$FE,$FE,$FE,$FE,$FE,$00	; 
+
+	align 	64
+_msgTestString:
+	db	"ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	db	"abcdefghijklmnopqrstuvwxyz"
+	db	"0123456789#$",0
 
 	align	8
 cmp_insns:
