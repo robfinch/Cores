@@ -1209,6 +1209,9 @@ void Statement::GenerateIf()
 	initstack();            // clear temps
 	ep = node = exp;
 
+	if (ep == nullptr)
+		return;
+
 	// Note the compiler makes two passes at code generation. During the first pass
 	// the node type is set to en_bchk and the node pointers are manipulated. So for
 	// the second pass this does not need to be done again.

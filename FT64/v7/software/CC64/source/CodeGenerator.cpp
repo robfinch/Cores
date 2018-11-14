@@ -573,6 +573,7 @@ Operand *GenerateDereference(ENODE *node,int flags,int size, int su)
 			}
 			else
 			{
+j1:
 				//        ap1->mode = am_ind;
 				if (use_gp) {
 					ap1->mode = am_indx;
@@ -660,7 +661,8 @@ void GenMemop(int op, Operand *ap1, Operand *ap2, int ssize)
 		return;
 	}
 	//if (ap1->mode != am_indx2)
-	{
+	// Increment / decrement not supported
+	if (0) {
 		if (op==op_add && ap2->mode==am_imm && ap2->offset->i >= -16 && ap2->offset->i < 16 && ssize==8) {
 			GenerateDiadic(op_inc,0,ap1,ap2);
 			return;

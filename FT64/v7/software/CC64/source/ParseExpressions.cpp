@@ -455,7 +455,7 @@ TYP *deref(ENODE **node, TYP *tp)
 		case bt_pointer:
 			(*node)->esize = tp->size;
 			(*node)->etype = (enum e_bt)tp->type;
-			*node = makenode(sizeOfPtr==4 ? en_hp_ref : en_wp_ref,*node,(ENODE *)NULL);
+			*node = makenode(sizeOfPtr == 4 ? en_hp_ref : en_wp_ref, *node, (ENODE *)NULL);
 			(*node)->isUnsigned = TRUE;
 			(*node)->sym = sp;
 			break;
@@ -547,7 +547,7 @@ TYP *deref(ENODE **node, TYP *tp)
 		//	(*node)->etype = tp->type;
 		//	(*node)->isUnsigned = TRUE;
 		//	*node = makenode(en_uw_ref,*node,NULL);
-  //          break;
+  //    break;
 		//case bt_class:
 		//case bt_struct:
 		//case bt_union:
@@ -604,7 +604,8 @@ TYP *CondDeref(ENODE **node, TYP *tp)
 			&& tp->type != bt_union
 			&& tp->type != bt_class
 			&& tp->type != bt_ifunc
-			&& tp->type != bt_func)
+			&& tp->type != bt_func
+			)
 			return (deref(node, tp));
 	if (tp->type == bt_pointer && sizeof_flag == 0) {
 		sz = tp->size;
@@ -2017,8 +2018,13 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
 				// A star before a function pointer just means that we want to
 				// invoke the function. We want to retain the pointer to the
 				// function as the type.
-				if (tp->GetBtp()->type!=bt_func && tp->GetBtp()->type!=bt_ifunc)
+				if (tp->GetBtp()->type != bt_func && tp->GetBtp()->type != bt_ifunc) {
 					tp = tp->GetBtp();
+				}
+				else {
+					tp1 = tp;
+					break;	// Don't derefence the function pointer
+				}
       }
 	    tp1 = tp;
 		//Autoincdec(tp,&ep1);
