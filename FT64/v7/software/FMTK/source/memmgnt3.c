@@ -43,12 +43,87 @@ extern __int16 mmu_freelist;		// head of list of free pages
 extern int syspages;
 extern int sys_pages_available;
 extern int mmu_FreeMaps;
+extern int mmu_key;
 extern __int8 hSearchMap;
 extern MEMORY memoryList[NR_MEMORY];
+extern int RTCBuf[12];
+void puthexnum(int num, int wid, int ul, char padchar);
+void putnum(int num, int wid, int sepchar, int padchar);
+extern void DBGHideCursor(int hide);
 
 //unsigned __int32 *mmu_entries;
 
 extern byte *brks[256];
+
+// Checkerboard ram test routine.
+
+void ramtest()
+{
+	int *p;
+	int errcount;
+	
+	errcount = 0;
+	DBGHideCursor(1);
+	DBGDisplayStringCRLF("Writing 5A code to ram");
+	for (p = 0; p < 536870912; p += 2) {
+		if ((p & 0xfffff)==0) {
+			putnum(p>>20,5,',',' ');
+			DBGDisplayChar('M');
+			DBGDisplayChar('B');
+			DBGDisplayChar('\r');
+		}
+		p[0] = 0x5555555555555555L;
+		p[1] = 0xAAAAAAAAAAAAAAAAL;
+	}
+	DBGDisplayStringCRLF("\r\nReadback 5A code from ram");
+	for (p = 0; p < 536870912; p += 2) {
+		if ((p & 0xfffff)==0) {
+			putnum(p>>20,5,',',' ');
+			DBGDisplayChar('M');
+			DBGDisplayChar('B');
+			DBGDisplayChar('\r');
+		}
+		if (p[0] != 0x5555555555555555L || p[1] != 0xAAAAAAAAAAAAAAAAL) {
+			errcount++;
+			if (errcount > 10)
+				break;
+		}
+	}
+	DBGDisplayString("\r\nerrors: ");
+	putnum(errcount,5,',',' ');
+	errcount = 0;
+	DBGDisplayStringCRLF("\r\nWriting A5 code to ram");
+	for (p = 0; p < 536870912; p += 2) {
+		if ((p & 0xfffff)==0) {
+			putnum(p>>20,5,',',' ');
+			DBGDisplayChar('M');
+			DBGDisplayChar('B');
+			DBGDisplayChar('\r');
+		}
+		p[0] = 0xAAAAAAAAAAAAAAAAL;
+		p[1] = 0x5555555555555555L;
+	}
+	DBGDisplayStringCRLF("\r\nReadback A5 code from ram");
+	for (p = 0; p < 536870912; p += 2) {
+		if ((p & 0xfffff)==0) {
+			putnum(p>>20,5,',',' ');
+			DBGDisplayChar('M');
+			DBGDisplayChar('B');
+			DBGDisplayChar('\r');
+		}
+		if (p[1] != 0x5555555555555555L || p[0] != 0xAAAAAAAAAAAAAAAAL) {
+			errcount++;
+			if (errcount > 10)
+				break;
+		}
+	}
+	DBGDisplayString("\r\nerrors: ");
+	putnum(errcount,5,',',' ');
+	DBGDisplayChar('\r');
+	DBGDisplayChar('\n');
+	DBGHideCursor(0);
+}
+
 
 //private __int16 pam[NPAGES];	
 // There are 128, 4MB pages in the system. Each 4MB page is composed of 64 64kb pages.
@@ -76,10 +151,11 @@ void init_memory_management()
 	// System break positions.
 	// All breaks start out at address 8192 to allow a failed memory allocation
 	// to return 0 as the page address.
-	DBGDispChar('A');
+	DBGDisplayChar('A');
+	mmu_key = RTCBuf[0];	
 	memsetW(brks,8192,256);
 	sys_pages_available = NPAGES;
-	DBGDispChar('a');
+	DBGDisplayChar('a');
   
   // Allocate 4MB to the OS
   ipt_alloc(0,4194303,7);
@@ -90,14 +166,14 @@ void init_memory_management()
 // picking out the page to allocate. It does it's own search for free pages.
 // ----------------------------------------------------------------------------
 
-static pascal void ipt_alloc_page(int asid, byte *vadr, int acr, int last_page)
+private pascal void ipt_alloc_page(int asid, byte *vadr, int acr, int last_page)
 {
-	DBGDispChar('F');
+	DBGDisplayChar('F');
 	out64(IPT_MMU+0x10,(asid<<24)|(acr&7)|(last_page<<22));
-	DBGDispChar('G');
-	out64(IPT_MMU+0x18,vadr);
+	DBGDisplayChar('G');
+	out64(IPT_MMU+0x18,vadr ^ mmu_key);
 	out64(IPT_MMU+0x00,1);	// trigger translation update
-	DBGDispChar('H');
+	DBGDisplayChar('H');
 }
 
 // ----------------------------------------------------------------------------
@@ -112,24 +188,24 @@ void *ipt_alloc(int asid, int amt, int acr)
 	if (asid < 0 || asid > 255)
 		throw (E_BadASID);
 	p = 0;
-	DBGDispChar('B');
+	DBGDisplayChar('B');
 	amt = round8k(amt);
 	npages = amt >> 13;
 	if (npages==0)
 		return (p);
-	DBGDispChar('C');
+	DBGDisplayChar('C');
 	if (npages < sys_pages_available) {
 		sys_pages_available -= npages;
 		p = brks[asid];
 		brks[asid] += amt;
 		for (nn = 0; nn < npages-1; nn++) {
-			DBGDispChar('D');
+			DBGDisplayChar('D');
 			ipt_alloc_page(asid,p+(nn << 13),acr,0);
 		}
 		ipt_alloc_page(asid,p+(nn << 13),acr,1);
 		p |= (asid << 56);
 	}
-	DBGDispChar('E');
+	DBGDisplayChar('E');
 	return (p);
 }
 

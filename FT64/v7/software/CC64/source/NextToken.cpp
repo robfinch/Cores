@@ -192,17 +192,42 @@ int     getsch()        /* return an in-quote character */
                 return i;
                 }
         getch();        /* get an escaped character */
-        if(isdigit(lastch)) {
-                i = 0;
-                for(j = i = 0;j < 3;++j) {
-                        if(lastch <= '7' && lastch >= '0')
-                                i = (i << 3) + lastch - '0';
-                        else
-                                break;
-                        getch();
-                        }
-                return i;
-                }
+				if (lastch=='0')
+        {
+          for(j = i = 0; j < 6; ++j) {
+            if(lastch <= '7' && lastch >= '0')
+              i = (i << 3) + lastch - '0';
+            else
+              break;
+            getch();
+          }
+          return i;
+        }
+				else if (isdigit(lastch)) {
+					for (j = i = 0; j < 5; ++j) {
+						if (lastch <= '9' && lastch >= '0')
+							i = (i * 10) + lastch - '0';
+						else
+							break;
+						getch();
+					}
+					return i;
+				}
+				else if (lastch == 'x' || lastch == 'X') {
+					getch();
+					for (j = i = 0; j < 4; ++j) {
+						if (lastch <= '9' && lastch >= '0')
+							i = (i << 4) + lastch - '0';
+						else if (lastch >= 'A' && lastch <= 'F')
+							i = (i << 4) + lastch - 'A' + 10;
+						else if (lastch >= 'a' && lastch <= 'f')
+							i = (i << 4) + lastch - 'a' + 10;
+						else
+							break;
+						getch();
+					}
+					return i;
+				}
         i = lastch;
         getch();
         switch(i) {

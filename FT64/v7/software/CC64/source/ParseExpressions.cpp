@@ -1681,7 +1681,7 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 			dfs.printf("Got Type: %d",tp1->type);
 			if (tp1->type==bt_pointer) {
 				dfs.printf("Got function pointer.\n");
-				ep1 = makenode(en_fcall,ep1,ep2);
+				ep1 = makefcnode(en_fcall,ep1,ep2,nullptr);
 				currentFn->IsLeaf = FALSE;
 				break;
 			}
@@ -1849,9 +1849,9 @@ j2:
 				ep1->isUnsigned = iu;
 				ep1->esize = 8;
 				ep1->p[2] = pep1;
-				if (tp1->type==bt_pointer && (tp1->GetBtp()->type==bt_func || tp1->GetBtp()->type==bt_ifunc))
-					dfs.printf("Pointer to func");
-				else
+				//if (tp1->type==bt_pointer && (tp1->GetBtp()->type==bt_func || tp1->GetBtp()->type==bt_ifunc))
+				//	dfs.printf("Pointer to func");
+				//else
 					tp1 = CondDeref(&ep1,tp1);
 				ep1->SetType(tp1);
 				dfs.printf("tp1->type:%d",tp1->type);
@@ -2021,10 +2021,12 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
 				if (tp->GetBtp()->type != bt_func && tp->GetBtp()->type != bt_ifunc) {
 					tp = tp->GetBtp();
 				}
-				else {
-					tp1 = tp;
-					break;	// Don't derefence the function pointer
-				}
+				else
+					break;
+				//else {
+				//	tp1 = tp;
+				//	break;	// Don't derefence the function pointer
+				//}
       }
 	    tp1 = tp;
 		//Autoincdec(tp,&ep1);

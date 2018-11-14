@@ -52,6 +52,7 @@
 ; SUPPORT_AVIC	equ		1
 SUPPORT_BMP		equ		1
 ;SUPPORT_TLB		equ		1
+;ICACHE_TEST		equ		1
 
 E_BadCallno	equ		-4
 
@@ -59,7 +60,7 @@ ROMBASE		equ		$FFFFFFFFFFFC0000
 IOBASE		equ		$FFFFFFFFFFD00000
 TEXTSCR		equ		$FFFFFFFFFFD00000
 KEYBD		equ		$FFFFFFFFFFDC0000
-LEDS		equ		$FFFFFFFFFFDC0600
+LEDS		equ			$FFFFFFFFFFDC0600
 BUTTONS		equ		$FFFFFFFFFFDC0600
 SCRATCHPAD	equ		$FFFFFFFFFF400000
 AVIC		equ		$FFFFFFFFFFDCC000
@@ -100,6 +101,8 @@ bkcolor				dw		0
 _randStream		dw		0	
 _S19Address		dw		0
 _S19StartAddress	dw		0
+_ExecAddress	dw		0
+_HexChecksum	dw		0
 _DBGCursorCol	db		0
 _DBGCursorRow	db		0
 _KeybdID			dc		0
@@ -108,14 +111,21 @@ _KeyState2		db		0
 _KeyLED				db		0
 _S19Abort			db		0
 _S19Reclen		db		0
+_pti_onoff		db		0
 			align		8
 _mmu_key			dw		0
 _RTCBuf				fill.b	96,0
 			align		8
 _DBGAttr			dw		0
 _milliseconds	dw		0
+_pti_rbuf			dw		0
+_pti_wbuf			dw		0
+_pti_rcnt			dw		0
+_pti_wcnt			dw		0
 ___garbage_list	dw	0
 _regfile			fill.w	32,0
+_DeviceTable	fill.b	32*104,0
+
 			org		SCRATCHPAD + 32752
 __brk_stack		dw		0
 
@@ -154,6 +164,7 @@ ifdef SUPPORT_SMT
 		jmp		_SieveOfEratosthenes
 endif
 
+ifdef ICACHE_TEST
 test_icache:
 	; This seems stupid but maybe necessary. Writes to r0 always cause it to
 	; be loaded with the value zero regardless of the value written. Readback
@@ -234,6 +245,7 @@ test_icache:
 		add		r1,r1,#1		
 		ret
 .st6:
+endif
 
 start:
 	; This seems stupid but maybe necessary. Writes to r0 always cause it to
@@ -244,6 +256,7 @@ start:
 		and		r0,r0,#0		; cannot use LDI which does an or operation
 		ldi		$sp,#SCRATCHPAD+$7BF8	; set stack pointer
 	
+		call	_OSMain
 		call	_Delay2s
 		ldi		r1,#$FFFF000F0000
 		sw		r1,_DBGAttr
@@ -258,14 +271,16 @@ start:
 		call	_InitPRNG
 		call  _RandomizeSpritePositions2
 		call	_i2c_init
-		call	_KeybdInit
+;		call	_KeybdInit
 		call	_SetTrapVector
 		call	_InitPIC
 		call	_InitPIT
 		; Enable interrupts
 ;		sei		#0
-		call	_monitor
+		call	_HexLoader
+;		call	_S19Loader
 ;		call	_ramtest
+		call	_monitor
 		call	_SpriteDemo
 		call	_SetCursorImage
 		; The following must be after the RTC is read
@@ -1469,6 +1484,7 @@ _KeybdWaitTx:
 ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 _KeybdGetStatus:
+		memsb
 		ldi		$r1,#KEYBD+1
 		lvb		$r1,[$r1+$r0]
 		memdb
@@ -1483,6 +1499,7 @@ _KeybdGetStatus:
 ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 _KeybdGetScancode:
+		memsb
 		ldi		$r1,#KEYBD
 		lvbu	$r1,[$r1+$r0]		; get the scan code
 		memdb									; need the following store in order
@@ -1527,7 +1544,8 @@ _i2c_init:
 
 i2c_wait_tip:
 		push		r1
-.0001:					
+.0001:
+		memsb
 		lb			r1,I2C_STAT[$a0]
 		bbs			r1,#1,.0001				; wait for tip to clear
 		lw			r1,[sp]
@@ -1549,6 +1567,7 @@ i2c_wr_cmd:
 		sb			$a1,I2C_CMD[$a0]
 		memdb
 		call		i2c_wait_tip
+		memsb
 		lb			$r1,I2C_STAT[$a0]
 		lw			lr,[sp]
 		ret			#8
@@ -1588,6 +1607,7 @@ _i2c_xmit1:
 i2c_wait_rx_nack:
 		push		$a1
 .0001:
+		memsb
 		lb			$a1,I2C_STAT[$a0]	; wait for RXack = 0
 		bbs			$a1,#7,.0001
 		lw			$a1,[sp]
@@ -1617,7 +1637,7 @@ _rtc_read:
 		push		$a2
 		push		$a3
 		ldi			$a0,#I2C
-		ldi			$a3,#RTCBuf
+		ldi			$a3,#_RTCBuf
 		ldi			$r1,#$80
 		sb			$r1,I2C_CTRL[$a0]	; enable I2C
 		ldi			$a2,#$DE			; read address, write op
@@ -1639,8 +1659,10 @@ _rtc_read:
 		sb			$r3,I2C_CMD[$a0]	; rd bit
 		call		i2c_wait_tip
 		call		i2c_wait_rx_nack
+		memsb
 		lb			$r1,I2C_STAT[$a0]
 		bbs			$r1,#7,.rxerr
+		memsb
 		lb			$r1,I2C_RXR[$a0]
 		sb			$r1,[$a3+$r2]
 		add			$r2,$r2,#1
@@ -1649,9 +1671,10 @@ _rtc_read:
 		ldi			$r1,#$68
 		sb			$r1,I2C_CMD[$a0]	; STO, rd bit + nack
 		call		i2c_wait_tip
-		call		i2c_wait_rx_nack
+		memsb
 		lb			$r1,I2C_STAT[$a0]
 		bbs			$r1,#7,.rxerr
+		memsb
 		lb			$r1,I2C_RXR[$a0]
 		sb			$r1,[$a3+$r2]
 		mov			$r1,$r0						; return 0
@@ -1685,7 +1708,7 @@ _rtc_write:
 		push		$a2
 		push		$a3
 		ldi			$a0,#I2C
-		ldi			$a3,#RTCBuf
+		ldi			$a3,#_RTCBuf
 		ldi			$r1,#$80
 		sb			$r1,I2C_CTRL[$a0]	; enable I2C
 		ldi			$a2,#$DE			; read address, write op
@@ -1913,6 +1936,9 @@ vec2data:
 .include "d:\Cores5\FT64\v7\software\cc64libc\source\gc.s"
 .include "d:\Cores5\FT64\v7\software\cc64libc\source\cc64rt.s"
 .include "d:\Cores5\FT64\v7\software\boot\brkrout.asm"
+.include "d:\Cores5\FT64\v7\software\boot\pti_driver.s"
+.include "d:\Cores5\FT64\v7\software\boot\HexLoader.s"
+.include "d:\Cores5\FT64\v7\software\boot\S19Loader.s"
 .include "d:\Cores5\FT64\v7\software\boot\BIOSMain.s"
 .include "d:\Cores5\FT64\v7\software\boot\FloatTest.s"
 ;.include "d:\Cores5\FT64\v7\software\boot\ramtest.s"
@@ -1922,6 +1948,7 @@ vec2data:
 ;.include "d:\Cores5\FT64\v7\software\cc64libc\source\string.s"
 ;.include "d:\Cores5\FT64\v7\software\cc64libc\source\malloc.s"
 .include "d:\Cores5\FT64\v7\software\cc64libc\source\putch.s"
+.include "d:\Cores5\FT64\v7\software\cc64libc\source\putnum.s"
 .include "d:\Cores5\FT64\v7\software\cc64libc\source\puthexnum.s"
 .include "d:\Cores5\FT64\v7\software\cc64libc\source\prtflt.s"
 .include "d:\Cores5\FT64\v7\software\cc64libc\source\FT64\io.s"
@@ -1934,12 +1961,16 @@ vec2data:
 .include "d:\Cores5\FT64\v7\software\FMTK\source\kernel\PIT.s"
 .include "d:\Cores5\FT64\v7\software\FMTK\source\kernel\PIC.s"
 	align	4096
+.include "d:\Cores5\FT64\v7\software\FMTK\source\kernel\OSMain.s"
 .include "d:\Cores5\FT64\v7\software\FMTK\source\kernel\FMTKc.s"
 .include "d:\Cores5\FT64\v7\software\FMTK\source\kernel\FMTKmsg.s"
 .include "d:\Cores5\FT64\v7\software\FMTK\source\kernel\TCB.s"
 .include "d:\Cores5\FT64\v7\software\FMTK\source\kernel\IOFocusc.s"
 
 .include "d:\Cores5\FT64\v7\software\FMTK\source\kernel\keybd.s"
+.include "d:\Cores5\FT64\v7\software\FMTK\source\open.s"
+.include "d:\Cores5\FT64\v7\software\FMTK\source\read.s"
+.include "d:\Cores5\FT64\v7\software\FMTK\source\write.s"
 .include "d:\Cores5\FT64\v7\software\FMTK\source\memmgnt3.s"
 .include "d:\Cores5\FT64\v7\software\FMTK\source\app.s"
 .include "d:\Cores5\FT64\v7\software\FMTK\source\shell.s"

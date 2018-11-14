@@ -81,6 +81,7 @@ Statement *Function::ParseBody()
 		pass = 1;
 		ip = peep_tail;
 		looplevel = 0;
+		max_reg_alloc_ptr = 0;
 		Gen();
 		stkspace += (ArgRegCount - regFirstArg) * sizeOfWord;
 		argbot = -stkspace;

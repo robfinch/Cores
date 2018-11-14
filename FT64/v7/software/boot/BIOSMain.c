@@ -8,6 +8,7 @@
 #define BTNL	2
 #define BTNR	1
 #define AVIC	((unsigned __int32 *)0xFFDCC000)
+#define SPRCTRL ((unsigned __int64 *)0xFFDAD000)
 
 extern int StartApp;
 extern __int32 *begin_init_data;
@@ -25,13 +26,13 @@ extern int GetRand(register int stream) __attribute__(__no_temps);
 extern int DBGAttr;
 extern void DBGClearScreen();
 extern void DBGHomeCursor();
-extern void putch(register char);
+extern void putch(char);
 extern int printf(char *, ...);
 extern pascal int prtflt(register float, register int, register int, register char);
 extern void ramtest();
 extern void FloatTest();
 extern void DBGDisplayString(char *p);
-extern void puthex(register int num);
+extern void puthexnum(int num, int wid, int ul, char pad);
 void SpriteDemo();
 
 extern int randStream;
@@ -41,13 +42,13 @@ void interrupt DBERout()
 	int nn;
 
 	DBGDisplayString("\r\nDatabus error: ");
-	puthex(GetEPC());
+	puthexnum(GetEPC(),8,1,'0');
 	putch(' ');
-	puthex(GetBadAddr());
+	puthexnum(GetBadAddr(),8,1,'0');
 	putch(' ');
 	for (nn = 63; nn >= 0; nn--) {
 		SetPCHNDX(nn);
-		puthex(ReadPCHIST());
+		puthexnum(ReadPCHIST(),8,1,'0');
 		putch(' ');
 	}
 	forever {}
@@ -63,7 +64,9 @@ static naked inline void LEDS(register int n)
 static naked inline int GetButton()
 {
 	__asm {
-		lb		$v0,BUTTONS
+		lh		$v0,BUTTONS
+		shr		$v0,$v0,#16
+		and		$v0,$v0,#$1F
 	}
 }
 
@@ -215,7 +218,7 @@ void interrupt BTNCIRQHandler()
 	DBGDisplayString("\r\nPC History:\r\n");
 	for (nn = 63; nn >= 0; nn--) {
 		SetPCHNDX(nn);
-		puthex(ReadPCHIST());
+		puthexnum(ReadPCHIST(),8,1,'0');
 		putch(' ');
 	}
 }
@@ -228,7 +231,7 @@ void interrupt IBERout()
 	DBGDisplayString("PC History:\r\n");
 	for (nn = 63; nn >= 0; nn--) {
 		SetPCHNDX(nn);
-		puthex(ReadPCHIST());
+		puthexnum(ReadPCHIST(),8,1,'0');
 		putch(' ');
 	}
 	forever {}
@@ -458,43 +461,43 @@ void ColorBandMemory()
 
 void EnableSprite(int spriteno)
 {
-	unsigned __int32 *pAVIC = AVIC;
-	pAVIC[492] = pAVIC[492] | (1 << spriteno);
+	unsigned int *pSPRCTRL = SPRCTRL;
+	pSPRCTRL[0x140] = pSPRCTRL[0x140] | (1 << spriteno);
 }
 
 void EnableSprites(int sprites)
 {
-	unsigned __int32 *pAVIC = AVIC;
-	pAVIC[492] = pAVIC[492] | sprites;
+	unsigned int *pSPRCTRL = SPRCTRL;
+	pSPRCTRL[0x140] = pSPRCTRL[0x140] | sprites;
 }
 
 void RandomizeSpriteColors()
 {
 	int colorno;
-	unsigned __int32 *pSprite = &AVIC[0];
+	unsigned int *pSprite = &SPRCTRL[0];
 	randStream = 0;
 	for (colorno = 2; colorno < 256; colorno++) {
-		pSprite[colorno] = GetRand(randStream) & 0x7fff;
+		pSprite[colorno] = GetRand(randStream) & 0xffffffff;
 	}
 }
 
 void SetSpritePos(int spriteno, int x, int y)
 {
-	__int32 *pSprite = &AVIC[0x100];
-	pSprite[spriteno*4 + 2] = (__int32)((y << 16) | x);
+	__int32 *pSprite = &SPRCTRL[0x100];
+	pSprite[spriteno*4 + 2] = (y << 16) | x;
 }
 
 void RandomizeSpritePositions()
 {
 	int spriteno;
 	int x,y;
-	__int32 *pSprite = &AVIC[0x100];
+	int *pSprite = &SPRCTRL[0x100];
 	randStream = 0;
 	for (spriteno = 0; spriteno < 32; spriteno++) {
-		x = (GetRand(randStream) % 400) + 128;
-		y = (GetRand(randStream) % 300) + 14;
-		pSprite[2] = (y << 16) | x;
-		pSprite += 4;
+		x = (GetRand(randStream) % 800) + 256;
+		y = (GetRand(randStream) % 600) + 28;
+		pSprite[1] = (2560 << 48) | (y << 16) | x;
+		pSprite += 2;
 	}
 }
 
@@ -509,8 +512,8 @@ void SpriteDemo()
 	int btn;
 	int x,y;
 
-	unsigned __int32 *pSprite = &AVIC[0x100];
-	unsigned __int32 *pImages = (unsigned __int32 *)0x1E000000;
+	unsigned int *pSprite = &SPRCTRL[0x100];
+	unsigned int *pImages = (unsigned int *)0x1E000000;
 	int n;
 	
 	randStream = 0;
@@ -520,59 +523,61 @@ void SpriteDemo()
 	// Set some random image data
 	for (n = 0; n < 32 * 32 * 4; n = n + 1)
 		pImages[n] = GetRand(randStream);
-	x = 128; y = 64;
+	x = 256; y = 64;
 	for (spriteno = 0; spriteno < 32; spriteno++) {
-		pSprite[spriteno*4] = (__int32)&pImages[spriteno * 128];
-		pSprite[spriteno*4+1] = 32*60;
+		pSprite[spriteno*2] = (int)&pImages[spriteno * 128];
+//		pSprite[spriteno*2+1] = 32*60;
 		xpos[spriteno] = x;
 		ypos[spriteno] = y;
 		SetSpritePos(spriteno, x, y);
 		x += 20;
-		if (x >= 500) {
-			x = 128;
+		if (x >= 800) {
+			x = 256;
 			y += 64;
 		}
 	}
 	LEDS(0xf7);
-	forever {
-		btn = GetButton() & 31;
-		LEDS(btn);
-		switch(btn) {
-		case BTNU:	goto j1;
-		}
-	}
-j1:
-	while (GetButton() & 31);
+//	forever {
+//		btn = GetButton();
+//		LEDS(btn);
+//		switch(btn) {
+//		case BTNU:	goto j1;
+//		}
+//	}
+//j1:
+//	while (GetButton());
 	for (spriteno = 0; spriteno < 32; spriteno++) {
 //		xpos[spriteno] = (GetRand(randStream) % 400) + 128;
 //		ypos[spriteno] = (GetRand(randStream) % 300) + 14;
 //		SetSpritePos(spriteno, (int)xpos[spriteno], (int)ypos[spriteno]);
-		dx[spriteno] = (GetRand(randStream) % 16) - 8;
-		dy[spriteno] = (GetRand(randStream) % 16) - 8;
+		dx[spriteno] = (GetRand(randStream) & 15) - 8;
+		dy[spriteno] = (GetRand(randStream) & 15) - 8;
 	}
 	// Set some random image data
 	for (n = 0; n < 32 * 32 * 2; n = n + 1)
 		pImages[n] = GetRand(randStream);
 	forever {
+		btn = GetButton();
+		LEDS(btn);
 		for (m = 0; m < 50000; m++);	// Timing delay
 		for (spriteno = 0; spriteno < 32; spriteno++) {
 			LEDS(spriteno);
 			xpos[spriteno] = xpos[spriteno] + dx[spriteno];
 			ypos[spriteno] = ypos[spriteno] + dy[spriteno];
-			if (xpos[spriteno] < 128) {
-				xpos[spriteno] = 128;
+			if (xpos[spriteno] < 256) {
+				xpos[spriteno] = 256;
 				dx[spriteno] = -dx[spriteno];
 			}
-			if (xpos[spriteno] >= 528) {
-				xpos[spriteno] = 528;
+			if (xpos[spriteno] >= 816) {
+				xpos[spriteno] = 816;
 				dx[spriteno] = -dx[spriteno];
 			}
-			if (ypos[spriteno] < 14) {
-				ypos[spriteno] = 14;
+			if (ypos[spriteno] < 28) {
+				ypos[spriteno] = 28;
 				dy[spriteno] = -dy[spriteno];
 			}
-			if (ypos[spriteno] >= 314) 
-				ypos[spriteno] = 314;
+			if (ypos[spriteno] >= 614) 
+				ypos[spriteno] = 614;
 				dy[spriteno] = -dy[spriteno];
 			}
 			SetSpritePos(spriteno, (int)xpos[spriteno], (int)ypos[spriteno]);

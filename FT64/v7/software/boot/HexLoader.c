@@ -5,7 +5,7 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	S19Loader.c
+//	HexLoader.c
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -22,44 +22,29 @@
 //
 // ============================================================================
 //
+#include <stdio.h>
+
+#define XON				0x11
+#define XOFF			0x13
 extern int DBGCheckForKey();
 extern int DBGGetKey(int block);
 extern __int8 S19Abort;
 extern __int8 S19Reclen;
 extern unsigned int *S19Address;
 extern unsigned int *S19StartAddress;
+extern unsigned int (*ExecAddress)();
+extern int HexChecksum;
 extern void pti_init();
 extern int pti_get(int *);
+extern void pti_put(char);
+extern void pti_flush();
 
-static char sGetChar()
+static int GetChar()
 {
-	char ch;
+	int ch;
 
-	ch = pti_get(&S19Abort);
+	ch = pti_get(&S19Abort, 100);
 	return (ch);
-}
-
-static char sGetChar2()
-{
-	char ch;
-
-	do {
-		if (DBGCheckForKey() < 0) {
-			if ((DBGGetKey(1) & 0xff) == 0x03) {
-				S19Abort = 1;
-			}
-		}
-	}	while ((ch = GetAuxIn())==0 && !S19Abort);	
-	return (ch);
-}
-
-static NextRec()
-{
-	char ch;
-	
-	do {
-		ch = sGetChar();
-	} while (ch != 0x0A && !S19Abort);
 }
 
 static int AsciiToNybble(char ch)
@@ -78,13 +63,14 @@ static int GetByte()
 	char ch;
 	int num;
 
-	ch = sGetChar();
+	ch = GetChar();
 	num = ASciiToNybble(ch);
 	if (S19Abort)
 		return (num);
 	num <<= 4;
-	ch = sGetChar();
+	ch = GetChar();
 	num |= ASciiToNybble(ch);
+	HexChecksum += num;
 	return (num);
 }
 
@@ -92,48 +78,42 @@ static void Get16BitAddress()
 {
 	int num;
 	
-	S19Address = GetByte();
+	S19Address &= 0xFFFF0000;
+	S19Address |= GetByte() << 8;
 	if (S19Abort)
 		return;
-	S19Address <<= 8;
 	S19Address |= GetByte();
 	return;
 }
 
-static void Get24BitAddress()
+static void GetAddressExtension16()
 {
 	int num;
-	
-	S19Address = GetByte();
-	if (S19Abort)
-		return;
-	S19Address <<= 8;
-	S19Address |= GetByte();
-	if (S19Abort)
-		return;
-	S19Address <<= 8;
-	S19Address |= GetByte();
-	return;
+
+	S19Address &= 0xFFFF;
+	num = GetByte() << 8;
+	num |= GetByte();
+	num <<= 4;
+	S19Address += num;
+	GetByte();	// get checksum
 }
 
-static void Get32BitAddress()
+static void GetAddressExtension()
 {
-	int num;
-	
-	S19Address = GetByte();
-	if (S19Abort)
-		return;
-	S19Address <<= 8;
-	S19Address |= GetByte();
-	if (S19Abort)
-		return;
-	S19Address <<= 8;
-	S19Address |= GetByte();
-	if (S19Abort)
-		return;
-	S19Address <<= 8;
-	S19Address |= GetByte();
-	return;
+	S19Address &= 0xFFFF;
+	S19Address |= GetByte() << 24;
+	S19Address |= GetByte() << 16;
+	GetByte();	// get checksum
+}
+
+static void GetExecAddress()
+{
+	ExecAddress = 0;
+	ExecAddress |= GetByte() << 24;
+	ExecAddress |= GetByte() << 16;
+	ExecAddress |= GetByte() << 8;
+	ExecAddress |= GetByte();
+	GetByte();	
 }
 
 static void PutMem()
@@ -152,98 +132,69 @@ static void PutMem()
 	byt = GetByte();	
 }
 
-static void ProcessS1()
+static void NextRec()
 {
-	Get16BitAddress();	
-	PutMem();
+	char ch;
+	
+	do {
+		ch = GetChar();
+	} while (ch != 0x0A && !S19Abort);
 }
 
-static void ProcessS2()
-{
-	Get24BitAddress();	
-	PutMem();
-}
-
-static void ProcessS3()
-{
-	Get32BitAddress();
-	PutMem();
-}
-
-static void ProcessS7()
-{
-	Get16BitAddress();
-	S19StartAddress = S19Address;
-}
-
-static void ProcessS8()
-{
-	Get24BitAddress();
-	S19StartAddress = S19Address;
-}
-
-static void ProcessS9()
-{
-	Get32BitAddress();
-	S19StartAddress = S19Address;
-}
-
-void S19Loader()
+void HexLoader()
 {
 	char ch;
 	char rectype;
-
+	FILE *fp;
+	
 	pti_init();
-	DBGDisplayStringCRLF("S19 Loader Active");
+	fp = fopen("PTI",0,0);
+	fputc(XON,fp);
+//	pti_put(XON);
+	DBGDisplayStringCRLF("Intel Hex Loader Active");
+	S19Address = 0;
 	S19Abort = 0;
+	ExecAddress = 0;
 	forever {
-		ch = sGetChar();
-		if (ch==0x1A)	// CTRL-Z ? (end of file)
-			break;
-		// The record must start with an 'S'
-		if (ch != 'S')
+		ch = GetChar();
+		if (ch == -1)
+			continue;
+		// The record must start with a ':'
+		if (ch != ':')
 			goto nextrec;
-		// Followed by a single digit record type
-		if (!isdigit(ch))
-			goto nextrec;
-		rectype = ch;
-		// Followed by a byte record length
+		// Followed by number of data bytes
+		HexChecksum = 0;
 		S19Reclen = GetByte();
 		if (S19Abort)
 			break;
+		Get16BitAddress();
+		rectype = GetByte();
+		if (S19Abort)
+			break;
 		switch(rectype) {
-		case '0':	// manufacturer id - ignore
-			goto nextrec;
-		case '1':
-			ProcessS1();
-			break;
-		case '2':
-			ProcessS2();
-			break;
-		case '3':
-			ProcessS3();
-			break;
-		case '5':	// record count - ignore
-			goto nextrec;
-		case '7':
-			ProcessS7();
-			goto xit;
-		case '8':
-			ProcessS8();
-			goto xit;
-		case '9':
-			ProcessS9();
-			goto xit;
-		default:
-			goto nextrec;
+		case 00:	PutMem(); break;
+		case 01:	NextRec(); goto xit;
+		case 02:	GetAddressExtension16(); break;
+		case 04:	GetAddressExtension(); break;
+		case 05:	GetExecAddress(); break;
+		default:	;
 		}
 nextrec:
+		if ((HexChecksum & 0xff) != 0)
+			DBGDisplayChar('E');
 		DBGDisplayChar('.');
 		NextRec();
 		if (S19Abort)
 			break;
 	}
 xit:
-	;
+	pti_put('O');
+	pti_put('K');
+	pti_put('\r');
+	pti_put('\n');
+	pti_flush();
+	if (fp)
+		fclose(fp);
+	if (ExecAddress)
+		(*ExecAddress)();
 }
-

@@ -408,6 +408,7 @@ extern void tmpFreeAll();
 extern void tmpReset();
 extern int tmpAlloc(int);
 extern void tmpFree(int);
+extern int max_reg_alloc_ptr;
 extern BasicBlock *basicBlocks[10000];
 extern BasicBlock *sortedBlocks[10000];
 extern Forest forest;

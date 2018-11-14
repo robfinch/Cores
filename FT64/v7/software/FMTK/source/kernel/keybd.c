@@ -272,6 +272,11 @@ char KeybdGetBufferedCharNoWait() {
     return (KeybdGetBufferedChar());
 }
 
+int DBGCheckForKey()
+{
+	return (KeybdGetStatus());	
+}
+
 int DBGGetKey(int block)
 {
 	unsigned int sc;

@@ -1032,12 +1032,16 @@ Operand *GenerateFunctionCall(ENODE *node, int flags)
         }
      */
 		ap = GenerateExpression(node->p[0],F_REG,sizeOfWord);
-		if (ap->offset)
-			sym = ap->offset->sym->fi;
+		if (ap->offset) {
+			if (ap->offset->sym)
+				sym = ap->offset->sym->fi;
+		}
 		if (currentFn->HasRegisterParameters())
-			sym->SaveRegisterArguments();
+			if (sym)
+				sym->SaveRegisterArguments();
     i = i + GenerateStoreArgumentList(sym,node->p[1]);
-		sym->SaveTemporaries(&sp, &fsp);
+		if (sym)
+			sym->SaveTemporaries(&sp, &fsp);
 		ap->mode = am_ind;
 		ap->offset = 0;
 		if (sym && sym->IsInline) {
@@ -1067,9 +1071,11 @@ Operand *GenerateFunctionCall(ENODE *node, int flags)
 		else
 			GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),make_immed(i * sizeOfWord));
 	}
-	sym->RestoreTemporaries(sp, fsp);
+	if (sym)
+		sym->RestoreTemporaries(sp, fsp);
 	if (currentFn->HasRegisterParameters())
-		sym->RestoreRegisterArguments();
+		if (sym)
+			sym->RestoreRegisterArguments();
 	/*
 	if (sym) {
 	   if (sym->tp->type==bt_double)

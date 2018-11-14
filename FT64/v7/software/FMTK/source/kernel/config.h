@@ -7,5 +7,6 @@
 #define NR_MBX  1024
 #define NR_MSG  16384
 #define NR_MEMORY	128
+#define NR_DCB	32
 
 #endif

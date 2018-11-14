@@ -15,6 +15,8 @@ extern __int8 DBGCursorCol;
 extern __int8 DBGCursorRow;
 extern int DBGAttr;
 extern void DispChar(register char ch);
+extern void puthexnum(int num, int wid, int ul, char padchar);
+extern void out64(int port, int val);
 
 void DBGClearScreen()
 {
@@ -159,7 +161,7 @@ void DBGUpdateCursorPos()
 {
 	__int32 pos;
 
-	pos = DBGCursorRow * DBGCOLS + DBGCursorCol;
+	pos = __mulf(DBGCursorRow, DBGCOLS) + DBGCursorCol;
   DBGSetCursorPos(pos);
 }
 
@@ -178,10 +180,6 @@ void DBGHomeCursor()
 	DBGCursorCol = 0;
 	DBGCursorRow = 0;
 	DBGUpdateCursorPos();
-		__asm {
-			ldi		r1,#54
-			sb		r1,LEDS
-		}
 }
 
 int *CalcScreenLocation()
@@ -211,7 +209,7 @@ void ClearScreen()
 	// before assigning it to mx. The (int) casts force the compiler to use
 	// an int result.
 	mx = (int)j->VideoRows * (int)j->VideoCols;
-	vc = GetCurrAttr() | AsciiToScreen(' ');
+	vc = GetCurrAttr() | ' ';
 	memsetW(p, vc, mx);
 }
 
@@ -231,7 +229,7 @@ void BlankLine(int row)
 	j = GetACBPtr();
 	p = GetScreenLocation();
 	p = p + (int)j->VideoCols * row;
-	vc = GetCurrAttr() | AsciiToScreen(' ');
+	vc = GetCurrAttr() | ' ';
 	memsetW(p, vc, j->VideoCols);
 }
 
@@ -243,8 +241,8 @@ void DBGBlankLine(int row)
 	int vc;
 
 	p = DBGScreen;
-	p = p + row * DBGCOLS;
-	vc = DBGAttr | AsciiToScreen(' ');
+	p = p + __mulf(row, DBGCOLS);
+	vc = DBGAttr | ' ';
 	memsetW(p, vc, DBGCOLS);
 }
 
@@ -269,7 +267,7 @@ void DBGScrollUp()
 	int nn;
 	int count;
 
-	count = DBGROWS * DBGCOLS;
+	count = __mulf(DBGROWS, DBGCOLS);
 	for (nn = 0; nn < count; nn++)
 		scrn[nn] = scrn[nn+DBGCOLS];
 
@@ -424,79 +422,73 @@ void DBGDisplayChar(char ch)
 {
 	int *p;
 	int nn;
-	ACB *j;
 
 	switch(ch) {
 	case '\r':  DBGCursorCol = 0; DBGUpdateCursorPos(); break;
 	case '\n':  DBGIncrementCursorRow(); break;
 	case 0x91:
-	    if (DBGCursorCol < DBGCOLS - 1) {
-	       DBGCursorCol++;
-	       DBGUpdateCursorPos();
-	    }
-	    break;
+    if (DBGCursorCol < DBGCOLS - 1) {
+       DBGCursorCol++;
+       DBGUpdateCursorPos();
+    }
+    break;
 	case 0x90:
-	    if (DBGCursorRow > 0) {
-	         DBGCursorRow--;
-	         DBGUpdateCursorPos();
-	    }
-	    break;
+    if (DBGCursorRow > 0) {
+         DBGCursorRow--;
+         DBGUpdateCursorPos();
+    }
+    break;
 	case 0x93:
-	    if (DBGCursorCol > 0) {
-	         DBGCursorCol--;
-	         DBGUpdateCursorPos();
-	    }
-	    break;
+    if (DBGCursorCol > 0) {
+         DBGCursorCol--;
+         DBGUpdateCursorPos();
+    }
+    break;
 	case 0x92:
-	    if (DBGCursorRow < DBGROWS-1) {
-	       DBGCursorRow++;
-	       DBGUpdateCursorPos();
-	    }
-	    break;
+    if (DBGCursorRow < DBGROWS-1) {
+       DBGCursorRow++;
+       DBGUpdateCursorPos();
+    }
+    break;
 	case 0x94:
-	    if (DBGCursorCol==0)
-	       DBGCursorRow = 0;
-	    DBGCursorCol = 0;
-	    DBGUpdateCursorPos();
-	    break;
+    if (DBGCursorCol==0)
+       DBGCursorRow = 0;
+    DBGCursorCol = 0;
+    DBGUpdateCursorPos();
+    break;
 	case 0x99:  // delete
-	    p = DBGScreen + DBGCursorRow * DBGCOLS;
-	    for (nn = DBGCursorCol; nn < DBGCOLS-1; nn++) {
-        p[nn-DBGCursorCol] = p[nn+1-DBGCursorCol];
-	    }
-			p[nn-DBGCursorCol] = DBGAttr | AsciiToScreen((char)' ');
-	    break;
+    p = DBGScreen + __mulf(DBGCursorRow, DBGCOLS);
+    for (nn = DBGCursorCol; nn < DBGCOLS-1; nn++) {
+      p[nn] = p[nn+1];
+    }
+		p[nn] = DBGAttr | ' ';
+    break;
 	case 0x08: // backspace
-	    if (DBGCursorCol > 0) {
-        DBGCursorCol--;
+    if (DBGCursorCol > 0) {
+      DBGCursorCol--;
 //	      p = DBGScreen;
-    		p = DBGScreen + DBGCursorRow * DBGCOLS;
-        for (nn = DBGCursorCol; nn < DBGCOLS-1; nn++) {
-            p[nn-DBGCursorCol] = p[nn+1-DBGCursorCol];
-        }
-        p[nn-DBGCursorCol] = DBGAttr | AsciiToScreen((char)' ');
-			}
-      break;
-	case 0x0C:   // CTRL-L
-	    DBGClearScreen();
-	    DBGHomeCursor();
-	    break;
-	case '\t':
-	    DBGDisplayChar(' ');
-	    DBGDisplayChar(' ');
-	    DBGDisplayChar(' ');
-	    DBGDisplayChar(' ');
-	    break;
-	default:
-		__asm {
-			ldi		r1,#50
-			sb		r1,LEDS
+  		p = DBGScreen + __mulf(DBGCursorRow, DBGCOLS);
+      for (nn = DBGCursorCol; nn < DBGCOLS-1; nn++) {
+          p[nn] = p[nn+1];
+      }
+      p[nn] = DBGAttr | ' ';
 		}
+    break;
+	case 0x0C:   // CTRL-L
+    DBGClearScreen();
+    DBGHomeCursor();
+    break;
+	case '\t':
+    DBGDisplayChar(' ');
+    DBGDisplayChar(' ');
+    DBGDisplayChar(' ');
+    DBGDisplayChar(' ');
+    break;
+	default:
 	  p = DBGScreen;
-	  nn = DBGCursorRow * DBGCOLS + DBGCursorCol;
-	          //p[nn] = AsciiToScreen(ch) | DBGAttr;
-	          //DispChar(ch);
-	  p[nn] = ch | DBGAttr;
+	  nn = __mulf(DBGCursorRow, DBGCOLS) + DBGCursorCol;
+	  //p[nn] = ch | DBGAttr;
+	  out64(&p[nn],ch | DBGAttr);
 	  DBGIncrementCursorPos();
 		__asm {
 			ldi		r1,#51
@@ -510,45 +502,55 @@ void DBGCRLF()
 {
    DBGDisplayChar('\r');
    DBGDisplayChar('\n');
+		__asm {
+			ldi		r1,#48
+			sb		r1,LEDS
+		}
 }
 
 void DBGDisplayString(char *s)
 {
 	// Declaring ch here causes the compiler to generate shorter faster code
-	// because it doesn't have to process the *s inside in the loop.
+	// because it doesn't have to process another *s inside in the loop.
 	char ch;
-		__asm {
-			ldi		r1,#52
-			sb		r1,LEDS
-		}
-  while (ch = *s) {DBGDisplayChar(ch); s++; }
+  while (ch = *s) { DBGDisplayChar(ch); s++; }
+}
+
+void DBGDisplayAsciiString(__int8 *s)
+{
+	// Declaring ch here causes the compiler to generate shorter faster code
+	// because it doesn't have to process another *s inside in the loop.
+	__int8 ch;
+  while (ch = *s) { DBGDisplayChar(ch); s++; }
 }
 
 void DBGDisplayStringCRLF(char *s)
 {
-		__asm {
-			ldi		r1,#48
-			sb		r1,LEDS
-		}
    DBGDisplayString(s);
+   DBGCRLF();
+}
+
+void DBGDisplayAsciiStringCRLF(__int8 *s)
+{
+   DBGDisplayAsciiString(s);
    DBGCRLF();
 }
 
 void DBGHideCursor(int hide)
 {
-	/*
 	if (hide) {
-		asm {
-			ldi		r1,#%00100000
-			stt		r1,$FFD0DF10
+		__asm {
+			ldi		$r1,#$FFFF
+			sc		$r1,$FFFFFFFFFFD0DF18
+			memdb
 		}
 	}
 	else {
-		asm {
-			ldi		r1,#%11100000
-			stt		r1,$FFD0DF10
+		__asm {
+			ldi		$r1,#$00E7
+			sc		$r1,$FFFFFFFFFFD0DF18
+			memdb
 		}
 	}
-	*/
 }
 

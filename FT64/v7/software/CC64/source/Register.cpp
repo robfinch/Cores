@@ -43,6 +43,7 @@ static unsigned short int next_fpreg;
 static unsigned short int next_vreg;
 static unsigned short int next_vmreg;
 static short int next_breg;
+int max_reg_alloc_ptr;
 #define MAX_REG 4			/* max. scratch data	register (D2) */
 #define	MAX_REG_STACK	30
 
@@ -309,6 +310,7 @@ Operand *GetTempRegister()
 	}
     if (reg_alloc_ptr++ == MAX_REG_STACK)
 		fatal("GetTempRegister(): register stack overflow");
+		max_reg_alloc_ptr = max(max_reg_alloc_ptr, reg_alloc_ptr);
 	return (ap);
 }
 
@@ -814,7 +816,7 @@ void ReleaseTempReg(Operand *ap)
 
 int GetTempMemSpace()
 {
-	return (reg_alloc_ptr * sizeOfWord);
+	return (max_reg_alloc_ptr * sizeOfWord);
 }
 
 bool IsArgumentReg(int regno)
