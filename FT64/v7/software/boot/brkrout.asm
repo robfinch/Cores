@@ -7,21 +7,27 @@ GCS_IRQ			equ		157
 GC_IRQ			equ		158
 TS_IRQ			equ		159
 
+__BrkHandlerOL01:
+__BrkHandlerOL02:
+__BrkHandlerOL03:
 __BrkHandler:
 		add		r0,r0,#0			// load r0 with 0
 		csrrd	r22,#6,r0			// Get cause code
-		beq		r22,#TS_IRQ,.ts
-		beq		r22,#GC_IRQ,.lvl6
-		beq		r22,#KBD_IRQ,.kbd
+		xor		r1,r22,#TS_IRQ
+		beq		r1,r0,.ts
+		xor		r1,r22,#GC_IRQ
+		beq		r1,r0,.lvl6
+		xor		r1,r22,#KBD_IRQ
+		beq		r1,r0,.kbd
 		beq		r22,#FMTK_SYSCALL,.lvl6
 		beq		r22,#FMTK_SCHEDULE,.ts2
 		rti						// Unknown interrupt
 .lvl6:
 		// Redirect to level #6
-		rex		r0,6,6,1
+;		rex		r0,6,6,1
 		rti						// Redirect failed
 .kbd:
-		rex		r0,6,6,2
+;		rex		r0,6,6,2
 		rti
 .ts:
 		ldi		$r1,#31						; interrupt to reset
@@ -32,9 +38,9 @@ __BrkHandler:
 		shl		$r2,$r1,#16
 		and		$r1,$r1,#$FFFF
 		or		$r1,$r1,$r2
-		sw		$r1,$FFFFFFFFFFD0178
+		sw		$r1,$FFFFFFFFFFD00178	; screen display
 		rti
-		
+.ts2:
 		jmp		_FMTK_SchedulerIRQ
 
 __BrkHandler6:

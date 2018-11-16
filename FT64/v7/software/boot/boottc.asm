@@ -105,6 +105,7 @@ _ExecAddress	dw		0
 _HexChecksum	dw		0
 _DBGCursorCol	db		0
 _DBGCursorRow	db		0
+_spinner			dc		0
 _KeybdID			dc		0
 _KeyState1		db		0
 _KeyState2		db		0
@@ -135,12 +136,18 @@ __brk_stack		dw		0
 		code	18 bits
 		org		ROMBASE			; start of ROM memory space
 		jmp		__BrkHandler	; jump to the exception handler
+		org		ROMBASE + $020
+		jmp		__BrkHandlerOL01
+		org		ROMBASE + $040
+		jmp		__BrkHandlerOL02
+		org		ROMBASE + $060
+		jmp		__BrkHandlerOL03
 		org		ROMBASE + $100	; The PC is set here on reset
 start2:
+	; First thing to do, LED status indicates core at least hit the reset
+	; vector.
 		ldi		r1,#$AA
 		sb		r1,LEDS
-;		call	ClearTxtScreen
-;		jmp		StartHere
 		jmp		start			; Comment out this jump to test i-cache
 ;		jmp		_SieveOfEratosthenes	
 
@@ -256,8 +263,11 @@ start:
 		and		r0,r0,#0		; cannot use LDI which does an or operation
 		ldi		$sp,#SCRATCHPAD+$7BF8	; set stack pointer
 	
-		call	_OSMain
 		call	_Delay2s
+ifdef SUPPORT_DCI
+		call	_InitCompressedInsns
+endif
++}
 		ldi		r1,#$FFFF000F0000
 		sw		r1,_DBGAttr
 		call	_DBGClearScreen
@@ -269,123 +279,29 @@ start:
 		ldi		$r1,#7
 		sb		$r1,LEDS
 		call	_InitPRNG
-		call  _RandomizeSpritePositions2
+;		call  _RandomizeSpritePositions2
 		call	_i2c_init
 ;		call	_KeybdInit
 		call	_SetTrapVector
+		sw		r0,_milliseconds
 		call	_InitPIC
 		call	_InitPIT
+;		call	_SetGCHandlers
 		; Enable interrupts
 ;		sei		#0
 		call	_HexLoader
 ;		call	_S19Loader
-;		call	_ramtest
 		call	_monitor
-		call	_SpriteDemo
-		call	_SetCursorImage
+
 		; The following must be after the RTC is read
 		call	_init_memory_management
+		call	_FMTK_Initialize
 		ldi		$r1,#8
 		sb		$r1,LEDS
-
-		
-		
-	; The following code must run shortly after the org statement determining
-	; where code is located.
-	; Get the high order bits of the program address into the program
-	; address pointer register r22.
-		jal		$r22,.st3
-.st3:
-		and		$r22,$r22,#$FFFC0000	; mask off the low order bits
-ifdef SUPPORT_DCI
-		call	_InitCompressedInsns
-endif
-+}
-		bra		.st1
 .st2:
 		ldi		r2,#$AA
 		sb		r2,LEDS			; write to LEDs
 		bra		.st2
-
-	; First thing to do, LED status indicates core at least hit the reset
-	; vector.
-.st1:
-		ldi		r2,#$FF
-		sb		r2,LEDS			; write to LEDs
-
-		; set garbage handler vectors
-		ldi		$r1,#__GCExec
-		sw		$r1,__GCExecPtr
-		ldi		$r1,#__GCStop
-		sw		$r1,__GCStopPtr
-
-		; set trap vector
-		ldi		r1,#$FFFFFFFFFFFC0000
-		csrrw	r0,#$30,r1
-		ldi		r1,#__BrkHandler6
-		csrrw	r0,#$36,r1			// tvec[6]
-		ldi		sp,#__brk_stack+4088
-		sw		r0,_milliseconds
-		jmp		StartHere
-
-	; Write buffering test
-;		sb		r0,_milliseconds
-;		ldi		r1,#1
-;		sb		r1,_milliseconds+1
-;		ldi		r1,#2
-;		sb		r1,_milliseconds+2
-;		ldi		r1,#3
-;		sb		r1,_milliseconds+3
-;		ldi		r1,#4
-;		sb		r1,_milliseconds+4
-;		ldi		r1,#5
-;		sb		r1,_milliseconds+5
-;		ldi		r1,#6
-;		sb		r1,_milliseconds+6
-;		ldi		r1,#7
-;		sb		r1,_milliseconds+7
-;		ldi		r1,#8
-;		sb		r1,_milliseconds+8
-;		ldi		r1,#9
-;		sb		r1,_milliseconds+9
-;		ldi		r1,#10
-;		sb		r1,_milliseconds+10
-;		ldi		r1,#11
-;		sb		r1,_milliseconds+11
-;		ldi		r1,#12
-;		sb		r1,_milliseconds+12
-;		ldi		r1,#13
-;		sb		r1,_milliseconds+13
-
-		; enable time slice interrupt
-;		ldi		$r1,#31
-;		sh		$r1,PIC+$0C
-;		sei		#0
-
-		call	_init_memory_management
-		call	_FMTK_Initialize
-		call	_InitPIC
-		call	_InitPIT
-		
-		; Enable interrupts
-		sei		#0
-		
-		ldi		r1,#$00000		; turn on SMT use $10000
-		csrrs	r0,#0,r1
-		add		r0,r0,#0		; fetch adjustment ramp
-		add		r0,r0,#0
-		add		r0,r0,#0
-		add		r0,r0,#0
-		add		r0,r0,#0
-		add		r0,r0,#0
-		add		r0,r0,#0
-		add		r0,r0,#0
-		add		r0,r0,#0
-		add		r0,r0,#0
-		csrrd	r1,#$044,r0		; which thread is running ?
-		bbs		r1,#24,.st2
-
-		call	calltest3
 
 ;		ldi		r1,#16
 ;		vmov	vl,r1
@@ -401,27 +317,6 @@ endif
 		ldi		r1,#WHITE
 		sh		r1,fgcolor		; set foreground color
 
-	ldi		r1,#$AAAA5555	; pick some data to write
-	ldi		r3,#0
-	ldi		r4,#start1
-start1:
-	shr		r2,r1,#12
-	sb		r2,LEDS			; write to LEDs
-	add		r1,r1,#1
-	add		r3,r3,#1
-	xor		r2,r3,#10	; stop after a few cycles
-;	bne		r2,r0,r4
-
-	; Initialize PRNG
-		call	_InitPRNG
-
-		ldi		r2,#6
-		sb		r2,LEDS			; write to LEDs
-		jal		lr,clearTxtScreen
-		ldi		r4,#$0025
-		sb		r4,LEDS
-_StartApp:
-		jmp		_BIOSMain
 start3:
 		bra		start3
 
@@ -460,38 +355,7 @@ brkrout:
 ;		add		sp,sp,#16
 		rti
 
-calltest:
-		sw		r1,SCRATCHPAD		; 1
-		add		r1,r1,#2			; 2
-		lw		r1,SCRATCHPAD		; 3
-		ret
-
-calltest1:
-		sub		sp,sp,#8
-		sw		lr,[sp]
-		call	calltest
-		lw		lr,[sp]
-		add		sp,sp,#8
-		ret
-
-calltest2:
-		sub		sp,sp,#8
-		sw		lr,[sp]
-		call	calltest1
-		lw		lr,[sp]
-		add		sp,sp,#8
-		ret
-
-calltest3:
-		sub		sp,sp,#8
-		sw		lr,[sp]
-		call	calltest2
-		lw		lr,[sp]
-		add		sp,sp,#8
-		ret
-
 StartHere:
-		ldi		$sp,#SCRATCHPAD+$FF8	; set stack pointer
 ;		call	_InitTLB
 		call	_Set400x300
 ifdef SUPPORT_AVIC
@@ -500,7 +364,6 @@ endif
 		call	_InitPRNG
 		call	_SetCursorPalette
 		call	_SetCursorImage
-		call	_RandomizeSpritePositions2
 		call	_ColorBandMemory2
 .0001:
 		jmp		.0001
@@ -534,8 +397,19 @@ endif
 _SetTrapVector:
 		ldi		r1,#$FFFFFFFFFFFC0000
 		csrrw	r0,#$30,r1
-		ldi		r1,#__BrkHandler6
-		csrrw	r0,#$36,r1			// tvec[6]
+		ldi		r1,#__BrkHandlerL3
+		csrrw	r0,#$33,r1			// tvec[3]
+		ret
+
+;------------------------------------------------------------------------------
+; set garbage handler vectors
+;------------------------------------------------------------------------------
+
+_SetGCHandlers:
+		ldi		$r1,#__GCExec
+		sw		$r1,__GCExecPtr
+		ldi		$r1,#__GCStop
+		sw		$r1,__GCStopPtr
 		ret
 		
 ;------------------------------------------------------------------------------
@@ -1961,7 +1835,7 @@ vec2data:
 .include "d:\Cores5\FT64\v7\software\FMTK\source\kernel\PIT.s"
 .include "d:\Cores5\FT64\v7\software\FMTK\source\kernel\PIC.s"
 	align	4096
-.include "d:\Cores5\FT64\v7\software\FMTK\source\kernel\OSMain.s"
+.include "d:\Cores5\FT64\v7\software\FMTK\source\kernel\SetupDevices.s"
 .include "d:\Cores5\FT64\v7\software\FMTK\source\kernel\FMTKc.s"
 .include "d:\Cores5\FT64\v7\software\FMTK\source\kernel\FMTKmsg.s"
 .include "d:\Cores5\FT64\v7\software\FMTK\source\kernel\TCB.s"
@@ -1971,6 +1845,7 @@ vec2data:
 .include "d:\Cores5\FT64\v7\software\FMTK\source\open.s"
 .include "d:\Cores5\FT64\v7\software\FMTK\source\read.s"
 .include "d:\Cores5\FT64\v7\software\FMTK\source\write.s"
+.include "d:\Cores5\FT64\v7\software\FMTK\source\sleep.s"
 .include "d:\Cores5\FT64\v7\software\FMTK\source\memmgnt3.s"
 .include "d:\Cores5\FT64\v7\software\FMTK\source\app.s"
 .include "d:\Cores5\FT64\v7\software\FMTK\source\shell.s"

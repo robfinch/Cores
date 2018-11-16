@@ -30,9 +30,10 @@ extern int DBGCheckForKey();
 extern int DBGGetKey(int block);
 extern __int8 S19Abort;
 extern __int8 S19Reclen;
-extern unsigned int *S19Address;
+extern unsigned __int8 *S19Address;
 extern unsigned int *S19StartAddress;
 extern unsigned int (*ExecAddress)();
+extern __int16 spinner;
 extern int HexChecksum;
 extern void pti_init();
 extern int pti_get(int *);
@@ -42,8 +43,14 @@ extern void pti_flush();
 static int GetChar()
 {
 	int ch;
-
-	ch = pti_get(&S19Abort, 100);
+	int *p;
+	
+	p = 0xFFFFFFFFFFD00178L;
+	p[0] = (p[0] & 0xFFFFFFFFFFFF0000) | spinner;
+	spinner++;
+	ch = pti_get();
+	if (ch > 0)
+		DBGDisplayChar(ch);
 	return (ch);
 }
 
@@ -64,12 +71,10 @@ static int GetByte()
 	int num;
 
 	ch = GetChar();
-	num = ASciiToNybble(ch);
-	if (S19Abort)
-		return (num);
+	num = AsciiToNybble(ch);
 	num <<= 4;
 	ch = GetChar();
-	num |= ASciiToNybble(ch);
+	num |= AsciiToNybble(ch);
 	HexChecksum += num;
 	return (num);
 }
@@ -78,10 +83,8 @@ static void Get16BitAddress()
 {
 	int num;
 	
-	S19Address &= 0xFFFF0000;
+	S19Address &= 0xFFFFFFFFFFFF0000;
 	S19Address |= GetByte() << 8;
-	if (S19Abort)
-		return;
 	S19Address |= GetByte();
 	return;
 }
@@ -123,8 +126,6 @@ static void PutMem()
 
 	for (n = 0; n < S19Reclen; n++) {
 		byt = GetByte();
-		if (S19Abort)
-			break;
 		*S19Address = byt;
 		S19Address++;
 	}
@@ -132,13 +133,10 @@ static void PutMem()
 	byt = GetByte();	
 }
 
-static void NextRec()
+static void PutString(char *str)
 {
 	char ch;
-	
-	do {
-		ch = GetChar();
-	} while (ch != 0x0A && !S19Abort);
+	while (ch = *str) { pti_put(ch); str++; }
 }
 
 void HexLoader()
@@ -147,54 +145,50 @@ void HexLoader()
 	char rectype;
 	FILE *fp;
 	
+	fp = 0;
 	pti_init();
-	fp = fopen("PTI",0,0);
-	fputc(XON,fp);
+	//fp = fopen("PTI",0,0);
+	//fputc(XON,fp);
 //	pti_put(XON);
+//	PutString("Intel Hex Loader Active\n");
+//	PutString("Send file\n");
 	DBGDisplayStringCRLF("Intel Hex Loader Active");
 	S19Address = 0;
 	S19Abort = 0;
 	ExecAddress = 0;
 	forever {
+		ch = DBGGetKey(0);
+		if (ch == 'C' || ch=='c' || ch == 0x03)
+			break;
 		ch = GetChar();
 		if (ch == -1)
 			continue;
 		// The record must start with a ':'
 		if (ch != ':')
-			goto nextrec;
+			continue;
 		// Followed by number of data bytes
 		HexChecksum = 0;
 		S19Reclen = GetByte();
-		if (S19Abort)
-			break;
 		Get16BitAddress();
 		rectype = GetByte();
-		if (S19Abort)
-			break;
 		switch(rectype) {
 		case 00:	PutMem(); break;
-		case 01:	NextRec(); goto xit;
+		case 01:	goto xit;
 		case 02:	GetAddressExtension16(); break;
 		case 04:	GetAddressExtension(); break;
 		case 05:	GetExecAddress(); break;
 		default:	;
 		}
-nextrec:
 		if ((HexChecksum & 0xff) != 0)
 			DBGDisplayChar('E');
 		DBGDisplayChar('.');
-		NextRec();
-		if (S19Abort)
-			break;
 	}
 xit:
-	pti_put('O');
-	pti_put('K');
-	pti_put('\r');
-	pti_put('\n');
-	pti_flush();
-	if (fp)
-		fclose(fp);
-	if (ExecAddress)
-		(*ExecAddress)();
+	;
+//	PutString("OK\n");
+//	pti_flushi();
+//	if (fp)
+//		fclose(fp);
+//	if (ExecAddress)
+//		(*ExecAddress)();
 }

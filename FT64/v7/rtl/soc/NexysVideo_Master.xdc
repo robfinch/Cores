@@ -246,7 +246,7 @@ set_property -dict { PACKAGE_PIN V17   IOSTANDARD LVCMOS33 } [get_ports { pti_oe
 set_property -dict { PACKAGE_PIN P19   IOSTANDARD LVCMOS33 } [get_ports { pti_rd }]; #IO_L5P_T0_D06_14 Sch=prog_rdn
 set_property -dict { PACKAGE_PIN N17   IOSTANDARD LVCMOS33 } [get_ports { pti_rxf }]; #IO_L21P_T3_DQS_14 Sch=prog_rxen
 set_property -dict { PACKAGE_PIN P17   IOSTANDARD LVCMOS33 } [get_ports { pti_siwu }]; #IO_L21N_T3_DQS_A06_D22_14 Sch=prog_siwun
-#set_property -dict { PACKAGE_PIN R14   IOSTANDARD LVCMOS33 } [get_ports { prog_spien }]; #IO_L19N_T3_A09_D25_VREF_14 Sch=prog_spien
+set_property -dict { PACKAGE_PIN R14   IOSTANDARD LVCMOS33 } [get_ports { spien }]; #IO_L19N_T3_A09_D25_VREF_14 Sch=prog_spien
 set_property -dict { PACKAGE_PIN Y19   IOSTANDARD LVCMOS33 } [get_ports { pti_txe }]; #IO_L13N_T2_MRCC_14 Sch=prog_txen
 set_property -dict { PACKAGE_PIN R19   IOSTANDARD LVCMOS33 } [get_ports { pti_wr }]; #IO_L5N_T0_D07_14 Sch=prog_wrn
 

@@ -2258,8 +2258,8 @@ static void process_fpstat(int oc)
 
 static void process_rop(int oc)
 {
-    int Ra;
-    int Rt;
+  int Ra;
+  int Rt;
 	int sz = 3;
 	char *p;
 
@@ -2267,8 +2267,8 @@ static void process_rop(int oc)
 	if (*p == '.')
 		getSz(&sz);
 	Rt = getRegisterX();
-    need(',');
-    Ra = getRegisterX();
+  need(',');
+  Ra = getRegisterX();
 	emit_insn(
 		(1LL << 26LL) |
 		(sz << 23) |
@@ -2801,7 +2801,7 @@ static void process_call(int opcode)
 	int64_t val;
 	int Ra = 0;
 
-    NextToken();
+  NextToken();
 	if (token == '[')
 		val = 0;
 	else
@@ -2817,7 +2817,7 @@ static void process_call(int opcode)
 		if (opcode==0x28)	// JMP [Ra]
 			// jal r0,[Ra]
 			emit_insn(
-				(Ra << 6) |
+				(Ra << 8) |
 				0x18,!expand_flag,4
 			);
 		else {
@@ -2887,19 +2887,28 @@ static void process_call(int opcode)
 		);
 }
 
-static void process_iret(int op)
+static void process_iret(int64_t op)
 {
 	int64_t val = 0;
+	int Ra;
+	char *p;
 
-    NextToken();
-	if (token=='#') {
-		val = expr();
+	p = inptr;
+	Ra = getRegisterX();
+	if (Ra == -1) {
+		Ra = 0;
+		NextToken();
+		if (token == '#') {
+			val = expr();
+		}
+		else
+			inptr = p;
 	}
 	emit_insn(
-		((val & 0x3F) << 18) |
-		(0 << 12) |
-		(0 << 6) |
-		op,!expand_flag,5
+		((val & 0x3FLL) << 18LL) |
+		(0 << 13) |
+		(Ra << 8) |
+		op,!expand_flag,4
 	);
 }
 
@@ -3028,12 +3037,15 @@ static void process_inc(int64_t oc)
 }
        
 // ---------------------------------------------------------------------------
+// brk r1,1,0
+// brk 240,1,0
 // ---------------------------------------------------------------------------
 
 static void process_brk()
 {
 	int64_t val;
 	int inc = 1;
+	int user = 0;
 	int Ra = -1;
 
 	Ra = getRegisterX();
@@ -3043,27 +3055,39 @@ static void process_brk()
 		NextToken();
 		if (token == ',') {
 			inc = (int)expr();
+			NextToken();
+			if (token == ',')
+				user = (int)expr;
+			else
+				prevToken();
 		}
 		else
 			prevToken();
 		emit_insn(
-			((inc & 0x1f) << 19) |
-			((val & 0x1FFLL) << 6) |
-			0x00, !expand_flag, 5
+			(user << 24) |
+			((inc & 0x7) << 21) |
+			((val & 0xFFLL) << 8) |
+			0x00, !expand_flag, 4
 		);
 		return;
 	}
 	NextToken();
 	if (token == ',') {
 		inc = (int)expr();
+		NextToken();
+		if (token == ',')
+			user = (int)expr;
+		else
+			prevToken();
 	}
 	else
 		prevToken();
 	emit_insn(
-		((inc & 0x1f) << 19) |
-		(1 << 15) |
-		((Ra & 0x3FLL) << 6) |
-		0x00, !expand_flag, 5
+		(user << 24) |
+		((inc & 0x7) << 21) |
+		(1 << 16) |
+		((Ra & 0x1fLL) << 8) |
+		0x00, !expand_flag, 4
 	);
 }
 

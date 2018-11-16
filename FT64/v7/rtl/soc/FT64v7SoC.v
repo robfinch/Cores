@@ -36,7 +36,7 @@ module FT64v7SoC(cpu_resetn, xclk, led, sw, btnl, btnr, btnc, btnd, btnu,
     rtc_clk, rtc_data,
     spiClkOut, spiDataIn, spiDataOut, spiCS_n,
     sd_cmd, sd_dat, sd_clk, sd_cd, sd_reset,
-    pti_clk, pti_rxf, pti_txe, pti_rd, pti_wr, pti_siwu, pti_oe, pti_dat,
+    pti_clk, pti_rxf, pti_txe, pti_rd, pti_wr, pti_siwu, pti_oe, pti_dat, spien,
     oled_sdin, oled_sclk, oled_dc, oled_res, oled_vbat, oled_vdd
 `ifndef SIM
     ,ddr3_ck_p,ddr3_ck_n,ddr3_cke,ddr3_reset_n,ddr3_ras_n,ddr3_cas_n,ddr3_we_n,
@@ -88,7 +88,8 @@ input pti_rxf;
 input pti_txe;
 output pti_rd;
 output pti_wr;
-input pti_siwu;
+input spien;
+output pti_siwu;
 output pti_oe;
 inout [7:0] pti_dat;
 output oled_sdin;
@@ -129,7 +130,7 @@ wire rst;
 wire xrst = ~cpu_resetn;
 wire clk12;
 wire clk10, clk20, clk40, clk80, clk100, clk200;
-wire cpu_clk = clk10;
+wire cpu_clk = clk20;
 wire mem_ui_clk;
 wire xclk_bufg;
 wire hSync, vSync, blank, border;
@@ -260,7 +261,7 @@ wire [7:0] rtc_cdato;
 wire spi_ack;
 wire [7:0] spi_dato;
 wire pti_ack;
-wire [63:0] pti_cdato;
+wire [7:0] pti_cdato;
 
 wire sdc_ack;
 wire [31:0] sdc_cdato;
@@ -1223,7 +1224,7 @@ casez({rtc_ack,spi_ack,sdc_ack,pti_ack})
 4'b1???:	br3_dati <= {8{rtc_cdato}};
 4'b01??:	br3_dati <= {8{spi_dato}};
 4'b001?:	br3_dati <= {2{sdc_cdato}};
-4'b0001:	br3_dati <= pti_cdato;
+4'b0001:	br3_dati <= {8{pti_cdato}};
 default:	br3_dati <= 64'hDEADDEADDEADDEAD;
 endcase
 
@@ -1332,10 +1333,7 @@ sdc_controller usdc1
 */
 );
 
-wire [7:0] pti_dato;
-assign pti_dat = pti_oe ? 8'bz : pti_dato;
-
-FT64_pti upti1
+FT64_pti2 upti1
 (
 	.rst_i(rst),
 	.clk_i(pti_clk),
@@ -1343,18 +1341,18 @@ FT64_pti upti1
 	.txe_ni(pti_txe),
 	.rd_no(pti_rd),
 	.wr_no(pti_wr),
-	.siwu_ni(pti_siwu),
+	.spien_i(spien),
+  .siwu_no(pti_siwu),
 	.oe_no(pti_oe),
-	.dat_i(pti_dat),
-	.dat_o(pti_dato),
-	.cs_i(pti_cs),
+	.dat_io(pti_dat),
+	.cs_i(cs_pti),
 	.wb_clk_i(cpu_clk),
 	.wb_cyc_i(br3_cyc),
 	.wb_stb_i(br3_stb),
 	.wb_ack_o(pti_ack),
 	.wb_we_i(br3_we),
-	.wb_adr_i(br3_adr[4:0]),
-	.wb_dat_i(br3_dato),
+	.wb_adr_i(br3_adr32[3:0]),
+	.wb_dat_i(br3_dat8),
 	.wb_dat_o(pti_cdato)
 );
 

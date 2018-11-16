@@ -36,16 +36,12 @@
 #define XON				0x11
 #define XOFF			0x13
 
-extern __int8 pti_onoff;
 extern int in8u(int port);
 extern void out8(int port, int val);
-extern void putnum(int, int, char, char);
-extern void puthexnum(int, int, int, char);
 
 void pti_init()
 {
-	pti_onoff = 0;				// off
-	out8(PTI|PTI_RST,0);	// Trigger fifo reset
+	out8(PTI|PTI_RST,0);	// Trigger fifo reset, turn off loopback
 }
 
 int pti_stat()
@@ -57,51 +53,44 @@ int pti_stat()
 	out8(PTI|PTI_RCL,0);
 	stat = in8u(PTI|PTI_RCL) | (in8u(PTI|PTI_RCH) << 8)
 				| (in8u(PTI|PTI_WCL) << 16) | (in8u(PTI|PTI_WCH) << 24);
-	puthexnum(stat,8,1,'0');
-	DBGDisplayChar('\r');
+//	puthexnum(stat,8,1,'0');
+//	DBGDisplayChar('\r');
 	return (stat);
 }
 
-int pti_get(int *abortt, int retries)
+int pti_peek()
 {
 	int val;
-	int stat;
 
-	if (pti_onoff==0)
-		pti_put(XON);
-	for (; retries != 0; retries--) {
-		stat = pti_stat();
-		if (stat & 0xffff)	// Is there something to read?
-			break;
-	}
-	out8(PTI|PTI_TRG,0);
 	val = in8u(PTI|PTI_DAT);
-	if (retries <= 0)
-		val = -1;
+	return (val);
+}
+
+
+int pti_get()
+{
+	int val;
+
+	val = in8u(PTI|PTI_DAT);
+	out8(PTI|PTI_TRG,0);
 	return (val);
 }
 
 void pti_put(int val)
 {
-	if (val==XON)
-		pti_onoff = 1;
-	else if (val==XOFF)
-		pti_onoff = 0;
 	out8(PTI|PTI_DAT,val);
 }
 
 // The fifo is 4kB in size. Potentially it could be full.
-// An XOFF is sent back to the host to terminate transmission.
 
 void pti_flushi()
 {
 	int stat;
 
 	stat = pti_stat();
-	while ((stat & 0xffff) != 0) {
+	while ((stat & 0x8000) != 0) {
 		pti_get();
 		stat = pti_stat();
-		pti_put(XOFF);
 	}
 }
 
@@ -112,11 +101,15 @@ int pti_CmdProc(int cmd, int cmdParm1, int cmdParm2, int cmdParm3, int cmdParm4)
 
 	switch(cmd) {
 	case DVC_GetUnit:
-		val = pti_get(0,100);
+		val = pti_get();
 		*(int *)cmdParm1 = val;
 		break;
 	case DVC_PutUnit:
 		pti_put(cmdParm1);
+		break;
+	case DVC_PeekUnit:
+		val = pti_peek();
+		*(int *)cmdParm1 = val;
 		break;
 	case DVC_Open:
 		pti_put(XON);

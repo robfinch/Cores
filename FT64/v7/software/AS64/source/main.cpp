@@ -1298,10 +1298,17 @@ void process_label()
 void processSegments()
 {
   char *pinptr;
+	char savech;
   int segment = codeseg;
   int inComment;
 	std::string fname;
 	bool setname = false;
+	std::string str;
+	std::string codebuf;
+	std::ofstream ofs;
+	std::string newstr;
+	int fndx;
+	char *p1, *p2;
    
   if (verbose)
     printf("Processing segments.\r\n");
@@ -1312,7 +1319,8 @@ void processSegments()
   rodatandx = 0;
   tlsndx = 0;
   bssndx = 0;
-  ZeroMemory(codebuf,sizeof(codebuf));
+//  ZeroMemory(codebuf,sizeof(codebuf));
+	codebuf = "";
   ZeroMemory(databuf,sizeof(databuf));
   ZeroMemory(rodatabuf,sizeof(rodatabuf));
   ZeroMemory(tlsbuf,sizeof(tlsbuf));
@@ -1320,6 +1328,11 @@ void processSegments()
   inComment = 0;
 
 	lineno = 1;
+	p1 = strstr(inptr, "GetOperatingLevel:");
+	if (p1) {
+		p2 = strstr(p1+1, "GetOperatingLevel:");
+	}
+
 	while (*inptr) {
 		if (*inptr == '\n')
 			lineno++;
@@ -1367,60 +1380,91 @@ void processSegments()
         segment = bssseg;
     }
 j1:
-        ScanToEOL();
-        inptr++;
-        switch(segment) {
-        case codeseg:   
-					if (setname) {
-						setname = false;
-						if (fname.length() > 0) {
-							sprintf(&codebuf[codendx], ".file \x22%s\x22,%d\n", fname.c_str(), lineno);
-							codendx += strlen(&codebuf[codendx]);
-						}
-					}
-          strncpy(&codebuf[codendx], pinptr, inptr-pinptr);
-          codendx += inptr-pinptr;
+    ScanToEOL();
+    inptr++;
+    switch(segment) {
+    case codeseg:   
+			if (setname) {
+				setname = false;
+				if (fname.length() > 0) {
+					codebuf += ".file \"";
+					codebuf += fname;
+					codebuf += "\",";
+					codebuf += std::to_string(lineno);
+					codebuf += "\n";
+					//sprintf(&codebuf[codendx], ".file \x22%s\x22,%d\n", fname.c_str(), lineno);
+					//codendx += strlen(&codebuf[codendx]);
+				}
+			}
+			savech = *inptr;
+			*inptr = '\0';
+			newstr = std::string(pinptr);
+			codebuf += newstr;
+			*inptr = savech;
+      //strncpy(&codebuf[codendx], pinptr, inptr-pinptr);
+      //codendx += inptr-pinptr;
+      break;
+	  case dataseg:
+          strncpy(&databuf[datandx], pinptr, inptr-pinptr);
+          datandx += inptr-pinptr;
           break;
-	      case dataseg:
-             strncpy(&databuf[datandx], pinptr, inptr-pinptr);
-             datandx += inptr-pinptr;
-             break;
-        case rodataseg:
-             strncpy(&rodatabuf[rodatandx], pinptr, inptr-pinptr);
-             rodatandx += inptr-pinptr;
-             break;
-        case tlsseg:
-             strncpy(&tlsbuf[tlsndx], pinptr, inptr-pinptr);
-             tlsndx += inptr-pinptr;
-             break;
-        case bssseg:
-             strncpy(&bssbuf[bssndx], pinptr, inptr-pinptr);
-             bssndx += inptr-pinptr;
-             break;
-        }
-        pinptr = inptr;
+    case rodataseg:
+          strncpy(&rodatabuf[rodatandx], pinptr, inptr-pinptr);
+          rodatandx += inptr-pinptr;
+          break;
+    case tlsseg:
+          strncpy(&tlsbuf[tlsndx], pinptr, inptr-pinptr);
+          tlsndx += inptr-pinptr;
+          break;
+    case bssseg:
+          strncpy(&bssbuf[bssndx], pinptr, inptr-pinptr);
+          bssndx += inptr-pinptr;
+          break;
     }
-    ZeroMemory(masterFile,sizeof(masterFile));
-    strcat(masterFile, codebuf);
-    strcat(masterFile, rodatabuf);
-    strcat(masterFile, "\r\n\trodata\r\n");
-    strcat(masterFile, "\talign 8\r\n");
-    strcat(masterFile, "begin_init_data:\r\n");
-    strcat(masterFile, databuf);
-    strcat(masterFile, "\r\n\trodata\r\n");
-    strcat(masterFile, "\talign 8\r\n");
-    strcat(masterFile, "end_init_data:\r\n");
-    strcat(masterFile, databuf);
-    strcat(masterFile, bssbuf);
-    strcat(masterFile, tlsbuf);
-    if (debug) {
-        FILE *fp;
-        fp = fopen("a64-segments.asm", "w");
-        if (fp) {
-                fwrite(masterFile, 1, strlen(masterFile), fp);
-                fclose(fp);
-        }
-    }
+    pinptr = inptr;
+  }
+//  ZeroMemory(masterFile,masterFileLength);
+	//strcat_s(masterFile, masterFileLength, codebuf);
+	//strcat_s(masterFile, masterFileLength, rodatabuf);
+	//strcat_s(masterFile, masterFileLength, "\r\n\trodata\r\n");
+	//strcat_s(masterFile, masterFileLength, "\talign 8\r\n");
+	//strcat_s(masterFile, masterFileLength, "begin_init_data:\r\n");
+	//strcat_s(masterFile, masterFileLength, databuf);
+	//strcat_s(masterFile, masterFileLength, "\r\n\trodata\r\n");
+	//strcat_s(masterFile, masterFileLength, "\talign 8\r\n");
+	//strcat_s(masterFile, masterFileLength, "end_init_data:\r\n");
+	//strcat_s(masterFile, masterFileLength, databuf);
+	//strcat_s(masterFile, masterFileLength, bssbuf);
+//  strcat_s(masterFile, masterFileLength, tlsbuf);
+	str = codebuf;
+	str += rodatabuf;
+	str += "\r\n\trodata\r\n";
+	str += "\talign 8\r\n";
+	str += "begin_init_data:\r\n";
+	str += databuf;
+	str += "\r\n\trodata\r\n";
+	str += "\talign 8\r\n";
+	str += "end_init_data:\r\n";
+	str += databuf;
+	str += bssbuf;
+	str += tlsbuf;
+  if (debug) {
+      //FILE *fp;
+      //fp = fopen("as64-segments.asm", "w");
+			ofs.open("as64-segments.asm");
+			ofs.write(str.c_str(), str.length());
+			ofs.close();
+    //   if (fp) {
+    //           //fwrite(masterFile, 1, strlen(masterFile), fp);
+				//fwrite(str.c_str(), 1, str.length(), fp);
+				//fclose(fp);
+    //   }
+  }
+	if (masterFileLength < str.length()) {
+		delete masterFile;
+		masterFile = new char[str.length() + 10000];
+	}
+	strcpy_s(masterFile, str.length() + 10000, str.c_str());
 }
 
 void ProcessSegments2()
@@ -2114,6 +2158,8 @@ int main(int argc, char *argv[])
   uint32_t u32;
 	float nc2;
 	std::ifstream ifs;
+	char *p1, *p2;
+	int count;
 
   processOpt = 1;
 	sections[bssseg].storebyte = 0;
@@ -2142,7 +2188,7 @@ int main(int argc, char *argv[])
   processFile(fname,0);   // Pass 1, collect all include files
 	masterFileLength = mofs.tellp();
 	mofs.close();
-	masterFile = new char[masterFileLength + 10000];
+	masterFile = new char[masterFileLength + 1000000];
   //if (debug) {
   //  FILE *fp;
   //  fopen_s(&fp, "a64-master.asm", "w");
@@ -2151,11 +2197,17 @@ int main(int argc, char *argv[])
   //    fclose(fp);
   //  }
   //}
-	ZeroMemory(masterFile, masterFileLength + 10000);
-	ifs.open("as64-master.asm");
-	ifs.read(masterFile, masterFileLength + 10000);
+	ZeroMemory(masterFile, masterFileLength + 1000000);
+	ifs.open("as64-master.asm", std::ios::in|std::ios::binary);
+	if (ifs.fail())
+		exit(0);
+	ifs.read(masterFile, masterFileLength);
 	ifs.close();
-  if (verbose) printf("Pass 2 - group and reorder segments\r\n");
+	p1 = strstr(masterFile, "GetOperatingLevel:");
+	if (p1) {
+		p2 = strstr(p1 + 1, "GetOperatingLevel:");
+	}
+	if (verbose) printf("Pass 2 - group and reorder segments\r\n");
   first_org = 1;
   processSegments();     // Pass 2, group and order segments
 //	ProcessSegments2();
@@ -2512,11 +2564,11 @@ int main(int argc, char *argv[])
         if (vfp) {
             if (gCpu==64||gCpu=='F'||gCpu=='G') {
                 for (kk = 0; kk < binndx; kk+=4) {
-                    if (lsa != (start_address + kk) >> 16) {
-                        sprintf_s(hexbuf, sizeof(hexbuf), ":02000004%04X00\n", (int)((start_address+kk) >> 16));
+                    if (lsa != (start_address + kk) >> 16LL) {
+                        sprintf_s(hexbuf, sizeof(hexbuf), ":02000004%04X00\n", (int)((start_address+(int64_t)kk) >> 16LL) & 0xffff);
                         IHChecksum(hexbuf, 2);
                         fprintf(vfp, hexbuf);
-                        lsa = (start_address+kk) >> 16;
+                        lsa = (start_address+kk) >> 16LL;
                     }
                     sprintf_s(hexbuf, sizeof(hexbuf), ":%02X%04X00%02X%02X%02X%02X\n",
                         4, (int)(start_address + kk) & 0xFFFF,
@@ -2529,7 +2581,7 @@ int main(int argc, char *argv[])
             else if (gCpu==4) {
                 for (kk = 0; kk < binndx; kk+=8) {
                     if (lsa != (start_address + kk) >> 16) {
-                        sprintf_s(hexbuf, sizeof(hexbuf), ":02000004%04X00\n", (int)((start_address+kk) >> 16));
+                        sprintf_s(hexbuf, sizeof(hexbuf), ":02000004%04X00\n", (int)((start_address+(int64_t)kk) >> 16)& 0xffff);
                         IHChecksum(hexbuf, 2);
                         fprintf(vfp, hexbuf);
                         lsa = (start_address+kk) >> 16;
