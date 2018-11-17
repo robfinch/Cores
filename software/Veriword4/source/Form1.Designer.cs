@@ -32,13 +32,11 @@
 			this.menuStrip1 = new System.Windows.Forms.MenuStrip();
 			this.fileToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
 			this.openToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+			this.saveToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
 			this.openFileDialog1 = new System.Windows.Forms.OpenFileDialog();
 			this.vScrollBar1 = new System.Windows.Forms.VScrollBar();
 			this.pictureBox2 = new System.Windows.Forms.PictureBox();
-			this.textBox1 = new System.Windows.Forms.TextBox();
-			this.textBox2 = new System.Windows.Forms.TextBox();
 			this.hScrollBar1 = new System.Windows.Forms.HScrollBar();
-			this.saveToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
 			this.saveFileDialog1 = new System.Windows.Forms.SaveFileDialog();
 			((System.ComponentModel.ISupportInitialize)(this.pictureBox1)).BeginInit();
 			this.menuStrip1.SuspendLayout();
@@ -61,7 +59,7 @@
             this.fileToolStripMenuItem});
 			this.menuStrip1.Location = new System.Drawing.Point(0, 0);
 			this.menuStrip1.Name = "menuStrip1";
-			this.menuStrip1.Size = new System.Drawing.Size(909, 24);
+			this.menuStrip1.Size = new System.Drawing.Size(785, 24);
 			this.menuStrip1.TabIndex = 1;
 			this.menuStrip1.Text = "menuStrip1";
 			// 
@@ -81,6 +79,13 @@
 			this.openToolStripMenuItem.Text = "&Open";
 			this.openToolStripMenuItem.Click += new System.EventHandler(this.openToolStripMenuItem_Click);
 			// 
+			// saveToolStripMenuItem
+			// 
+			this.saveToolStripMenuItem.Name = "saveToolStripMenuItem";
+			this.saveToolStripMenuItem.Size = new System.Drawing.Size(103, 22);
+			this.saveToolStripMenuItem.Text = "&Save";
+			this.saveToolStripMenuItem.Click += new System.EventHandler(this.saveToolStripMenuItem_Click);
+			// 
 			// openFileDialog1
 			// 
 			this.openFileDialog1.FileName = "openFileDialog1";
@@ -92,35 +97,18 @@
 			this.vScrollBar1.Size = new System.Drawing.Size(19, 297);
 			this.vScrollBar1.TabIndex = 4;
 			this.vScrollBar1.Scroll += new System.Windows.Forms.ScrollEventHandler(this.vScrollBar1_Scroll);
+			this.vScrollBar1.KeyDown += new System.Windows.Forms.KeyEventHandler(this.vScrollBar1_KeyDown);
+			this.vScrollBar1.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.vScrollBar1_KeyPress);
+			this.vScrollBar1.KeyUp += new System.Windows.Forms.KeyEventHandler(this.vScrollBar1_KeyUp);
 			// 
 			// pictureBox2
 			// 
-			this.pictureBox2.Location = new System.Drawing.Point(30, 22);
+			this.pictureBox2.Location = new System.Drawing.Point(100, 382);
 			this.pictureBox2.Name = "pictureBox2";
 			this.pictureBox2.Size = new System.Drawing.Size(17, 21);
 			this.pictureBox2.TabIndex = 5;
 			this.pictureBox2.TabStop = false;
 			this.pictureBox2.Paint += new System.Windows.Forms.PaintEventHandler(this.pictureBox2_Paint);
-			// 
-			// textBox1
-			// 
-			this.textBox1.AcceptsReturn = true;
-			this.textBox1.AcceptsTab = true;
-			this.textBox1.Location = new System.Drawing.Point(30, 382);
-			this.textBox1.MaxLength = 2000000;
-			this.textBox1.Multiline = true;
-			this.textBox1.Name = "textBox1";
-			this.textBox1.Size = new System.Drawing.Size(39, 20);
-			this.textBox1.TabIndex = 6;
-			this.textBox1.KeyDown += new System.Windows.Forms.KeyEventHandler(this.textBox1_KeyDown);
-			this.textBox1.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.textBox1_KeyPress);
-			// 
-			// textBox2
-			// 
-			this.textBox2.Location = new System.Drawing.Point(30, 408);
-			this.textBox2.Name = "textBox2";
-			this.textBox2.Size = new System.Drawing.Size(714, 20);
-			this.textBox2.TabIndex = 7;
 			// 
 			// hScrollBar1
 			// 
@@ -129,28 +117,24 @@
 			this.hScrollBar1.Size = new System.Drawing.Size(714, 17);
 			this.hScrollBar1.TabIndex = 8;
 			// 
-			// saveToolStripMenuItem
-			// 
-			this.saveToolStripMenuItem.Name = "saveToolStripMenuItem";
-			this.saveToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
-			this.saveToolStripMenuItem.Text = "&Save";
-			this.saveToolStripMenuItem.Click += new System.EventHandler(this.saveToolStripMenuItem_Click);
-			// 
 			// Form1
 			// 
 			this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
 			this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-			this.ClientSize = new System.Drawing.Size(909, 486);
+			this.ClientSize = new System.Drawing.Size(785, 442);
 			this.Controls.Add(this.hScrollBar1);
-			this.Controls.Add(this.textBox2);
-			this.Controls.Add(this.textBox1);
 			this.Controls.Add(this.pictureBox2);
 			this.Controls.Add(this.vScrollBar1);
 			this.Controls.Add(this.pictureBox1);
 			this.Controls.Add(this.menuStrip1);
 			this.MainMenuStrip = this.menuStrip1;
 			this.Name = "Form1";
+			this.StartPosition = System.Windows.Forms.FormStartPosition.CenterParent;
 			this.Text = "Form1";
+			this.WindowState = System.Windows.Forms.FormWindowState.Maximized;
+			this.KeyDown += new System.Windows.Forms.KeyEventHandler(this.Form1_KeyDown);
+			this.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.Form1_KeyPress);
+			this.KeyUp += new System.Windows.Forms.KeyEventHandler(this.Form1_KeyUp);
 			((System.ComponentModel.ISupportInitialize)(this.pictureBox1)).EndInit();
 			this.menuStrip1.ResumeLayout(false);
 			this.menuStrip1.PerformLayout();
@@ -169,8 +153,6 @@
 		private System.Windows.Forms.OpenFileDialog openFileDialog1;
 		private System.Windows.Forms.VScrollBar vScrollBar1;
 		private System.Windows.Forms.PictureBox pictureBox2;
-		private System.Windows.Forms.TextBox textBox1;
-		private System.Windows.Forms.TextBox textBox2;
 		private System.Windows.Forms.HScrollBar hScrollBar1;
 		private System.Windows.Forms.ToolStripMenuItem saveToolStripMenuItem;
 		private System.Windows.Forms.SaveFileDialog saveFileDialog1;
