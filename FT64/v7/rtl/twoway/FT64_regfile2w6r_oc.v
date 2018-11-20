@@ -265,6 +265,8 @@ FT64_regfileRam urf15 (
 );
 `endif
 
+// Record what was written in the previous clock cycle so that read
+// forwarding logic may use it.
 always @(posedge clk)
 	holdwr0 <= wr0;
 always @(posedge clk)
@@ -296,25 +298,25 @@ begin
 	wclk2 <= clk;
 	if (clk & ~wclk2) begin
 		wr <= wr0;
-		we <= we0;
+		we <= 8'hFF;
 		wa <= wa0;
 		i <= i0;
 	end
-	else if (~clk & wclk2) begin
+	else if (clk & wclk2) begin
 		wr <= wr1x;
-		we <= we1x;
+		we <= 8'hFF;
 		wa <= wa1x;
 		i <= i1x;
 	end
 	else begin
 		wr <= 1'b0;
-		we <= 8'h00;
+		we <= 8'hFF;
 		wa <= 'd0;
 		i <= 'd0;
 	end
 end
 
-/*
+
 function [63:0] fwdmux;
 input [RBIT:0] ra;
 input wr0;
@@ -350,10 +352,10 @@ assign o0 = fwdmux(ra0,wr0,wr1,holdwr0,holdwr1,wa0,wa1,holdwa0,holdwa1,i0,i1,hol
 assign o1 = fwdmux(ra1,wr0,wr1,holdwr0,holdwr1,wa0,wa1,holdwa0,holdwa1,i0,i1,holdi0,holdi1,o01);
 assign o2 = fwdmux(ra2,wr0,wr1,holdwr0,holdwr1,wa0,wa1,holdwa0,holdwa1,i0,i1,holdi0,holdi1,o02);
 assign o3 = fwdmux(ra3,wr0,wr1,holdwr0,holdwr1,wa0,wa1,holdwa0,holdwa1,i0,i1,holdi0,holdi1,o03);
-assign o4 = fwdmux(ra3,wr0,wr1,holdwr0,holdwr1,wa0,wa1,holdwa0,holdwa1,i0,i1,holdi0,holdi1,o04);
-assign o5 = fwdmux(ra3,wr0,wr1,holdwr0,holdwr1,wa0,wa1,holdwa0,holdwa1,i0,i1,holdi0,holdi1,o05);
-*/
+assign o4 = fwdmux(ra4,wr0,wr1,holdwr0,holdwr1,wa0,wa1,holdwa0,holdwa1,i0,i1,holdi0,holdi1,o04);
+assign o5 = fwdmux(ra5,wr0,wr1,holdwr0,holdwr1,wa0,wa1,holdwa0,holdwa1,i0,i1,holdi0,holdi1,o05);
 
+/*
 assign o0[7:0] = ra0[4:0]==5'd0 ? {8{1'b0}} :
 	(wr1 && we1[0] && (ra0==wa1)) ? i1[7:0] :
 	(wr0 && we0[0] && (ra0==wa0)) ? i0[7:0] : o00[7:0];
@@ -503,7 +505,7 @@ assign o5[55:48] = ra5[4:0]==5'd0 ? {8{1'b0}} :
 assign o5[63:56] = ra5[4:0]==5'd0 ? {8{1'b0}} :
 	(wr1 && we1[7] && (ra5==wa1)) ? i1[63:56] :
 	(wr0 && we0[7] && (ra5==wa0)) ? i0[63:56] : o05[63:56];
-
+*/
 /*
 assign o5 = ra5[4:0]==5'd0 ? {WID{1'b0}} :
     (wr1 && (ra5==wa1)) ? i1 :

@@ -344,6 +344,30 @@ default:    IsStore = FALSE;
 endcase
 endfunction
 
+function IsPush;
+input [47:0] isn;
+case(isn[`INSTRUCTION_OP])
+`MEMNDX:
+	if (isn[`INSTRUCTION_L2]==2'b10) begin
+		if (isn[31])
+			case({isn[31:28],isn[17:16]})
+			`PUSH:	IsPush = TRUE;
+	    default:    IsPush = FALSE;
+			endcase
+		else
+			IsPush = FALSE;
+	end
+	else if (isn[`INSTRUCTION_L2]==2'b00)
+		case({isn[31:28],isn[17:16]})
+		`PUSH:	IsPush = TRUE;
+    default:    IsPush = FALSE;
+    endcase
+	else
+		IsPush = FALSE;
+default:    IsPush = FALSE;
+endcase
+endfunction
+
 function [0:0] IsMem;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
@@ -704,6 +728,9 @@ casez(isn[`INSTRUCTION_OP])
     `AND:   IsRFW = TRUE;
     `OR:    IsRFW = TRUE;
     `XOR:   IsRFW = TRUE;
+    `NAND:	IsRFW = TRUE;
+    `NOR:		IsRFW = TRUE;
+    `XNOR:	IsRFW = TRUE;
     `MULU:  IsRFW = TRUE;
     `MULSU: IsRFW = TRUE;
     `MUL:   IsRFW = TRUE;
@@ -792,6 +819,7 @@ casez(isn[`INSTRUCTION_OP])
 `ANDI:      IsRFW = TRUE;
 `ORI:       IsRFW = TRUE;
 `XORI:      IsRFW = TRUE;
+`XNORI:     IsRFW = TRUE;
 `MULUI:     IsRFW = TRUE;
 `MULI:      IsRFW = TRUE;
 `MULFI:			IsRFW = TRUE;
@@ -1076,6 +1104,7 @@ begin
 	bus[`IB_LOAD]	 <= IsLoad(instr);
 	bus[`IB_PRELOAD] <=   IsLoad(instr) && Rt==5'd0;
 	bus[`IB_STORE]	<= IsStore(instr);
+	bus[`IB_PUSH]   <= IsPush(instr);
 	bus[`IB_ODDBALL] <= IsOddball(instr);
 	bus[`IB_MEMSZ]  <= MemSize(instr);
 	bus[`IB_MEM]		<= IsMem(instr);

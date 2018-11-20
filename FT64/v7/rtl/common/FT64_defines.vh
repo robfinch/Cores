@@ -403,6 +403,7 @@
 `define FLT_DWF     8'd50
 `define FLT_DRF     8'd51
 `define FLT_PRIV    8'd53
+`define FLT_CMT			8'd54
 `define FLT_BD		8'd55
 `define FLT_STK     8'd56
 `define FLT_DBE     8'd60
@@ -456,6 +457,7 @@
 `define IB_RC		  70:66
 `define IB_RB			65:61
 `define IB_RA			60:56
+`define IB_PUSH		47
 `define IB_TLB		46
 `define IB_SZ			45:43
 `define IB_IRQ		42
