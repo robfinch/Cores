@@ -705,9 +705,10 @@ wire [63:0] and64 = a & b;
 wire [63:0] or64 = a | b;
 wire [63:0] xor64 = a ^ b;
 wire [63:0] redor64 = {63'd0,|a};
-wire [63:0] redor32 = {63'd0,|a[31:0]};
-wire [63:0] redor16 = {63'd0,|a[15:0]};
-wire [63:0] redor8 = {63'd0,|a[7:0]};
+wire [63:0] redor32 = {31'd0,|a[63:32],31'd0,|a[31:0]};
+wire [63:0] redor16 = {15'd0,|a[63:48],15'd0,|a[47:32],15'd0,|a[31:16],15'd0,|a[15:0]};
+wire [63:0] redor8 = {7'b0,|a[63:56],6'b0,|a[55:48],7'd0,|a[47:40],7'd0,|a[39:32],7'd0,
+													 |a[31:24],7'd0,|a[23:16],7'd0,|a[15:8],7'd0,|a[7:0]};
 wire [63:0] zxb10 = {54'd0,b[9:0]};
 wire [63:0] sxb10 = {{54{b[9]}},b[9:0]};
 wire [63:0] zxb26 = {38'd0,instr[47:32],instr[27:18]};
@@ -902,7 +903,7 @@ case(instr[`INSTRUCTION_OP])
 	    default:	o = 64'hDEADDEADDEADDEAD;
 			endcase
     `CMOVEZ:    begin
-    			o[63:0] = (a==64'd0) ? b : c;
+    			o = (a==64'd0) ? b : c;
     			end
     `CMOVNZ:	if (instr[41:39]==3'd4)
     				o = (a!=64'd0) ? b : {{48{instr[38]}},instr[38:23]};
@@ -941,10 +942,10 @@ case(instr[`INSTRUCTION_OP])
 	                2'd3:   o = ~|a[63:0];
 	                endcase
 	        `REDOR: case(sz[1:0])
-	                2'd0:   o[63:0] = redor8;
-	                2'd1:   o[63:0] = redor16;
-	                2'd2:   o[63:0] = redor32;
-	                2'd3:   o[63:0] = redor64;
+	                2'd0:   o = redor8;
+	                2'd1:   o = redor16;
+	                2'd2:   o = redor32;
+	                2'd3:   o = redor64;
 	                endcase
 	        `ZXH:		o[63:0] = {32'd0,a[31:0]};
 	        `ZXC:		o[63:0] = {48'd0,a[15:0]};
@@ -1183,21 +1184,21 @@ case(instr[`INSTRUCTION_OP])
 	    `LVBX,`LVBUX,`LVCX,`LVCUX,`LVHX,`LVHUX,`LVWX,
 	    `LHX,`LHUX,`LWX,`LWRX:
 					if (BIG) begin
-						o[63:0] = a + (c << instr[19:18]);
+						o = a + (c << instr[19:18]);
 					end
 					else
-						o[63:0] = 64'hCCCCCCCCEEEEEEEE;
+						o = 64'hCCCCCCCCEEEEEEEE;
 	    `LVX,`SVX:  if (BIG) begin
-	    				o[63:0] = a + (c << 2'd3);
+	    				o = a + (c << 2'd3);
 	    			end
 	    			else
-	    				o[63:0] = 64'hCCCCCCCCCCCCCCCC;
+	    				o = 64'hCCCCCCCCCCCCCCCC;
 	    `LVWS,`SVWS:
 	    			if (BIG) begin    
-	    				o[63:0] = a + ({c * ven,3'b000});
+	    				o = a + ({c * ven,3'b000});
 	    			end
 	    			else
-	    				o[63:0] = 64'hCCCCCCCCCCCCCCCC;
+	    				o = 64'hCCCCCCCCCCCCCCCC;
 	    default:	o = 64'hDEADDEADDEADDEAD;
 			endcase
 		else
@@ -1205,21 +1206,21 @@ case(instr[`INSTRUCTION_OP])
 			`PUSH:	o = a - 4'd8;
 	    `SBX,`SCX,`SHX,`SWX,`SWCX:
 					if (BIG) begin
-						o[63:0] = a + (c << instr[14:13]);
+						o = a + (c << instr[14:13]);
 					end
 					else
-						o[63:0] = 64'hCCCCCCCCEEEEEEEE;
+						o = 64'hCCCCCCCCEEEEEEEE;
 	    `SVX:  if (BIG) begin
-	    				o[63:0] = a + (c << 2'd3);
+	    				o = a + (c << 2'd3);
 	    			end
 	    			else
-	    				o[63:0] = 64'hCCCCCCCCCCCCCCCC;
+	    				o = 64'hCCCCCCCCCCCCCCCC;
 	    `SVWS:
 	    			if (BIG) begin    
-	    				o[63:0] = a + ({c * ven,3'b000});
+	    				o = a + ({c * ven,3'b000});
 	    			end
 	    			else
-	    				o[63:0] = 64'hCCCCCCCCCCCCCCCC;
+	    				o = 64'hCCCCCCCCCCCCCCCC;
 	    default:	o = 64'hDEADDEADDEADDEAD;
 			endcase
 	end
@@ -1241,21 +1242,21 @@ case(instr[`INSTRUCTION_OP])
  		else
  			o = {{15{instr[31]}},instr[31:18],instr[12:8],30'd0};
 	end
-`ADDI:	o[63:0] = a + b;
-`SLTI:	o[63:0] = $signed(a) < $signed(b);
-`SLTUI: o[63:0] = a < b;
-`SGTI:	o[63:0] = $signed(a) > $signed(b);
-`SGTUI: o[63:0] = a > b;
-`ANDI:	o[63:0] = a & andb;
-`ORI:		o[63:0] = a | orb;
-`XORI:	o[63:0] = a ^ orb;
-`XNORI:	o[63:0] = ~(a ^ orb);
+`ADDI:	o = a + b;
+`SLTI:	o = $signed(a) < $signed(b);
+`SLTUI: o = a < b;
+`SGTI:	o = $signed(a) > $signed(b);
+`SGTUI: o = a > b;
+`ANDI:	o = a & andb;
+`ORI:		o = a | orb;
+`XORI:	o = a ^ orb;
+`XNORI:	o = ~(a ^ orb);
 `MULUI:	o = prod[DBW-1:0];
 `MULI:	o = prod[DBW-1:0];
 `MULFI:	o = a[23:0] * b[15:0];
-`DIVUI:		o[63:0] = BIG ? divq : 64'hCCCCCCCCCCCCCCCC;
-`DIVI:		o[63:0] = BIG ? divq : 64'hCCCCCCCCCCCCCCCC;
-`MODI:		o[63:0] = BIG ? rem : 64'hCCCCCCCCCCCCCCCC;
+`DIVUI:		o = BIG ? divq : 64'hCCCCCCCCCCCCCCCC;
+`DIVI:		o = BIG ? divq : 64'hCCCCCCCCCCCCCCCC;
+`MODI:		o = BIG ? rem : 64'hCCCCCCCCCCCCCCCC;
 `LB,`LBU,`SB:	o[63:0] = a + b;
 `Lx,`LxU,`Sx,`LVx,`LVxU:
 			begin

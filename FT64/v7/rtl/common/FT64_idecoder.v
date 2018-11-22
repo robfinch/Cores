@@ -168,7 +168,6 @@ end
 endfunction
 
 reg IsFlowCtrl;
-
 always @*
 case(instr[`INSTRUCTION_OP])
 `BRK:    IsFlowCtrl <= TRUE;
@@ -753,6 +752,12 @@ casez(isn[`INSTRUCTION_OP])
     `SEI:	IsRFW = TRUE;
     default:    IsRFW = FALSE;
     endcase
+	else if (isn[`INSTRUCTION_L2]==2'b01)
+		case(isn[47:42])
+		`CMOVEZ:	IsRFW = TRUE;
+		`CMOVNZ:	IsRFW = TRUE;
+		default:	IsRFW = FALSE;
+		endcase
 	else if (isn[7]==1'b1)
     casez(isn[`INSTRUCTION_S2])
     `ADD:   IsRFW = TRUE;

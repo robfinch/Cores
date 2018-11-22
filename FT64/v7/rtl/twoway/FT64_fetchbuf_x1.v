@@ -198,7 +198,8 @@ reg stompedRet;
 reg ret0Counted;
 wire [AMSB:0] retpc0;
 
-assign predict_taken0 = (fetchbuf==1'b0) ? predict_takenA : predict_takenB;
+assign predict_taken0 = (fetchbuf==1'b0) ? ({fetchbufA_v, IsBranch(fetchbufA_instr), predict_takenA}  == {`VAL, `TRUE, `TRUE})
+																				 : ({fetchbufB_v, IsBranch(fetchbufB_instr), predict_takenB}  == {`VAL, `TRUE, `TRUE});
 
 reg [AMSB:0] branch_pcA;
 reg [AMSB:0] branch_pcB;
@@ -216,7 +217,7 @@ case(fetchbufA_instr[`INSTRUCTION_OP])
 default:
 	begin
 	branch_pcA[31:8] = fetchbufA_pc[31:8] +
-		(fetchbufA_instr[7:6]==2'b01 ? {{4{fetchbufA_instr[47]}},fetchbufA_instr[47:28]} : {{20{fetchbufA_instr[31]}},fetchbufA_instr[31:28]});
+		((fetchbufA_instr[7:6]==2'b01) ? {{4{fetchbufA_instr[47]}},fetchbufA_instr[47:28]} : {{20{fetchbufA_instr[31]}},fetchbufA_instr[31:28]});
 	branch_pcA[7:0] = {fetchbufA_instr[27:23],fetchbufA_instr[17:16],1'b0};
 	branch_pcA[63:32] = fetchbufA_pc[63:32];
 	end
@@ -235,7 +236,7 @@ case(fetchbufB_instr[`INSTRUCTION_OP])
 default:
 	begin
 	branch_pcB[31:8] = fetchbufB_pc[31:8] +
-		(fetchbufB_instr[7:6]==2'b01 ? {{4{fetchbufB_instr[47]}},fetchbufB_instr[47:28]} : {{20{fetchbufB_instr[31]}},fetchbufB_instr[31:28]});
+		((fetchbufB_instr[7:6]==2'b01) ? {{4{fetchbufB_instr[47]}},fetchbufB_instr[47:28]} : {{20{fetchbufB_instr[31]}},fetchbufB_instr[31:28]});
 	branch_pcB[7:0] = {fetchbufB_instr[27:23],fetchbufB_instr[17:16],1'b0};
 	branch_pcB[63:32] = fetchbufB_pc[63:32];
 	end
@@ -256,7 +257,7 @@ wire take_branchB = ({fetchbufB_v, IsBranch(fetchbufB_instr), predict_takenB}  =
                            IsJmp(fetchbufB_instr)||IsCall(fetchbufB_instr)) &&
                         fetchbufB_v);
 
-wire take_branch = fetchbuf==1'b0 ? take_branchA : take_branchB;
+wire take_branch = (fetchbuf==1'b0) ? take_branchA : take_branchB;
 assign take_branch0 = take_branch;
 
 /*
@@ -295,16 +296,21 @@ assign retpc1 = RSTPC;
 wire peclk, neclk;
 edge_det ued1 (.rst(rst), .clk(clk4x), .ce(1'b1), .i(clk), .pe(peclk), .ne(neclk), .ee());
 
+reg did_branch;
+
 always @(posedge clk)
 if (rst) begin
 	pc0 <= RSTPC;
-	fetchbufA_v <= 0;
-	fetchbufB_v <= 0;
-	fetchbuf <= 0;
+	fetchbufA_v <= 1'b0;
+	fetchbufB_v <= 1'b0;
+	fetchbuf <= 1'b0;
 	panic <= `PANIC_NONE;
+	did_branch <= 1'b0;
 end
 else begin
 	
+	did_branch <= take_branch & ~branchmiss;
+
 	begin
 
 	// On a branch miss with threading enabled all fectch buffers are
@@ -315,60 +321,69 @@ else begin
 	// for that thread is assigned the current fetchbuf pc.
 	// For the thread that misses the pc is simply assigned the misspc.
 	if (branchmiss) begin
-		$display("***********");
-		$display("Branch miss");
-		$display("***********");
 		pc0 <= misspc;
 		fetchbufA_v <= `INV;
 		fetchbufB_v <= `INV;
 		fetchbuf <= 1'b0;
-	     $display("********************");
-	     $display("********************");
-	     $display("********************");
-	     $display("Branch miss");
-	     $display("misspc=%h", misspc);
-	     $display("********************");
-	     $display("********************");
-	     $display("********************");
+		$display("********************");
+		$display("********************");
+		$display("********************");
+		$display("Branch miss");
+		$display("misspc=%h", misspc);
+		$display("********************");
+		$display("********************");
+		$display("********************");
 	end
 	else if (take_branch) begin
-    if (fetchbuf == 1'b0) case ({fetchbufA_v, fetchbufB_v})
-		2'b00: ;	// do nothing
-//		2'b01	: panic <= `PANIC_INVALIDFBSTATE;
-		2'b10:
-			begin
-				pc0 <= branch_pcA;
-			  fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
-			  fetchbuf <= fetchbuf + (queued1|queuedNop);
-			end
-		2'b11:
-			begin
-				pc0 <= branch_pcA;
-				fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
-				fetchbufB_v <= `INV;
-	      fetchbuf <= fetchbuf + (queued1|queuedNop);
-			end
-    default:    ;
-	  endcase
-    else case ({fetchbufB_v, fetchbufA_v})
-		2'b00: ; // do nothing
-		2'b10:
-			begin
-				pc0 <= branch_pcB;
-			  fetchbufB_v <= !(queued1|queuedNop);
-			  fetchbuf <= fetchbuf + (queued1|queuedNop);
-			end
-		2'b11:
-			begin
-				pc0 <= branch_pcB;
-				fetchbufB_v <= !(queued1|queuedNop);
-				fetchbufA_v <= `INV;
-	      fetchbuf <= fetchbuf + (queued1|queuedNop);
-			end
-    default:    ;
-    endcase
-
-	end // if branchback
+    if (fetchbuf == 1'b0) begin
+    	case({fetchbufA_v, fetchbufB_v})
+    	2'b00:	;
+    	2'b01:	;
+    	2'b10:
+    		begin
+					pc0 <= branch_pcA;
+				  fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
+					fetchbufB_v <= `INV;
+				  fetchbuf <= (queued1|queuedNop);
+    		end
+    	2'b11:
+  			if (did_branch) begin
+				  fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
+				  fetchbuf <= (queued1|queuedNop);
+  			end
+  			else begin
+					pc0 <= branch_pcA;
+				  fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
+					fetchbufB_v <= `INV;
+				  fetchbuf <= (queued1|queuedNop);
+  			end
+    	endcase
+		end
+    else begin
+    	case({fetchbufB_v, fetchbufA_v})
+    	2'b00:	;
+    	2'b01:	;
+    	2'b10:
+    		begin
+					pc0 <= branch_pcB;
+				  fetchbufB_v <= !(queued1|queuedNop);
+					fetchbufA_v <= `INV;
+				  fetchbuf <= ~(queued1|queuedNop);
+				end
+			2'b11:
+				if (did_branch) begin
+				  fetchbufB_v <= !(queued1|queuedNop);
+				  fetchbuf <= ~(queued1|queuedNop);
+				end
+				else begin
+					pc0 <= branch_pcB;
+				  fetchbufB_v <= !(queued1|queuedNop);
+					fetchbufA_v <= `INV;
+				  fetchbuf <= ~(queued1|queuedNop);
+				end
+			endcase
+		end
+	end // if branch
 
 	else begin	// there is no branchback in the system
     // update fetchbufX_v and fetchbuf ... relatively simple, as
@@ -404,6 +419,12 @@ else begin
   	FetchA();
     fetchbuf <= 1'b0;
   end
+//  else if (fetchbufA_v == `INV) begin
+//  	FetchA();
+//	end
+//	else if (fetchbufB_v == `INV) begin
+//		FetchB();
+//	end
 end
 	
 	// The fetchbuffer is invalidated at the end of a vector instruction
@@ -456,6 +477,8 @@ begin
 	fetchbufA_pc <= pc0;
 	if (phit && ~freezePC)
 		pc0 <= pc0 + insln0;
+	else
+		pc0 <= pc0;
 end
 endtask
 
@@ -466,6 +489,8 @@ begin
 	fetchbufB_pc <= pc0;
 	if (phit && ~freezePC)
 		pc0 <= pc0 + insln0;
+	else
+		pc0 <= pc0;
 end
 endtask
 
