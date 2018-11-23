@@ -1,8 +1,9 @@
 
 #include <stdlib.h>
-static int *inptr;
-static int ndx;
-static int col;
+extern int *inptr;
+extern char cmdbuf[48];
+extern int ndx;
+extern int col;
 extern __int8 DBGCursorRow;
 extern __int8 KeyLED;
 extern __int8 KeyState1;
@@ -11,23 +12,14 @@ extern int DBGGetKey(int block);
 extern int GetRand(int stream);
 extern __int8 RTCBuf[96];
 extern __int8 msgTestString[64];
-
-char *op_major[64] = {
-	"BRK","","","AUIPC","ADD","CSR","SLT","SLTU",
-	"AND","OR","XOR","","BLEND","REX","XNOR","FLT",
-	"", "LV?U", "", "LB", "", "SB", "NDX", "SWC",
-	"JAL","CALL","","LF?","SGTU","LWR","CACHE","EXEC",
-	"L?", "L?U", "BF?", "LBU", "S?", "CAS", "BB?", "LUI",
-	"JMP", "RET", "MULF", "SF?", "SGT", "", "MOD", "AMO",
-	"B??", "", "BEQ", "", "", "", "LV", "SV",
-	"MULU", "FXMUL", "MUL", "LV?", "DIVU", "NOP", "DIV", "AMO"
-};
+extern int int64(int port);
+extern void out64(int port, int val);
 
 void help()
 {
 	DBGDisplayStringCRLF("Commands");
 	DBGDisplayStringCRLF("C <address> - call subroutine");
-	DBGDisplayStringCRLF("D <address> - disassemble code");
+	DBGDisplayStringCRLF("D start debugger");
 	DBGDisplayStringCRLF("M <address> <length> - dump memory");
 }
 
@@ -67,13 +59,13 @@ static int GetNum(int *ln)
 	int ch;
 
 	SkipSpaces();
-	ch = inptr[ndx] & 0xff;
+	ch = in64(&inptr[ndx]);
 	if (ch=='$')
 		radix = 16;
 	else
 		radix = 10;
 	for (count = 0; count < 20; count++) {
-		ch = inptr[ndx] & 0xff;
+		ch = in64(&inptr[ndx]) & 0xff;
 		if (radix==10) {
 			if (isdigit(ch))
 				buf[count] = ch;
@@ -90,6 +82,7 @@ static int GetNum(int *ln)
 				break;
 			}
 		}
+		ndx++;
 	}
 	*ln = count;
 	num = strtoul(buf,NULL,radix);
@@ -175,7 +168,7 @@ static void ProcessR()
 {
 	char ch;
 	
-	ch = inptr[ndx] & 0xff;
+	ch = in64(&inptr[ndx]);
 	switch(ch) {
 	case 'C':
 		ndx++;
@@ -216,11 +209,13 @@ static void ProcessT()
 {
 	char ch;
 
-	ch = inptr[ndx] & 0xff;
+	ch = in64(&inptr[ndx]);
+	ch &= 0xff;
 	switch(ch) {
 	case 'I':
 		ndx++;
-		ch = inptr[ndx] & 0xff;
+		ch = in64(&inptr[ndx]);
+		ch &= 0xff;
 		if (ch=='M') {
 			DisplayTime();
 		}
@@ -235,7 +230,7 @@ void ProcessW()
 {
 	char ch;
 
-	ch = inptr[ndx] & 0xff;
+	ch = in64(&inptr[ndx]);
 	switch(ch) {
 	case 'T':
 		rtc_write();
@@ -247,9 +242,10 @@ static void SkipSpaces()
 {
 	int ch;
 
-	for (; col < 48; col++, ndx++) {
-		ch = inptr[ndx];
-		if ((ch & 0xff) != 0x20)
+	for (; ; ndx++) {
+		ch = in64(&inptr[ndx]);
+		ch &= 0xff;
+		if ((ch & 0xff) != ' ')
 			break;
 	}
 }
@@ -280,7 +276,7 @@ void DumpMem()
 		}
 		DBGDisplayChar('"');
 		pb += 16;
-		if ((ch = DBGGetKey()) >= 0)
+		if ((ch = DBGGetKey(0)) >= 0)
 			break;
 	}
 }
@@ -293,7 +289,7 @@ void EditMem()
 	__int8 byt;
 	char ch;
 
-	ch = inptr[ndx];
+	ch = in64(&inptr[ndx]);
 	if (ch=='W')
 		ndx++;
 	st = GetNum(&ln);
@@ -308,30 +304,6 @@ void EditMem()
 		pb++;
 	}
 }
-
-void Disassemble()
-{
-	unsigned __int8 *p;
-	int count;
-	unsigned int opcode;
-
-	p = GetNum();
-	DBGCRLF();
-	for (count = 0; count < 16; count++) {
-		opcode = *p;
-		DispHalf(p);
-		DBGDisplayChar(' ');
-		DBGDisplayString(op_major[opcode & 0x3f]);
-		DBGCRLF();
-		switch((opcode>>6) & 3) {
-		case 0:	p += 4; break;
-		case 1:	p += 6; break;
-		case 2:
-		case 3: p += 2; break;
-		}
-	}	
-}
-
 
 // DCache test routine.
 // Writes a 65-character string to a random place in the scratchpad memory then
@@ -369,28 +341,30 @@ int ProcessCmd()
 	
 	inptr = (int *)0xFFFFFFFFFFD00000L;
 	row = DBGCursorRow;
-	col = 0;
 	ndx = __mulf(row, 48);
 	SkipSpaces();
-	ch = inptr[ndx] & 0xff;
+	ch = in64(&inptr[ndx]);
+	ch &= 0xff;
 //	DispByte(ch);
 	if (ch=='>') {
 		ndx++;
 		SkipSpaces();
 	}
-	ch = inptr[ndx] & 0xff;
-//	DispByte(ch);
-	switch(ch & 0xff) {
+	ch = in64(&inptr[ndx]);
+	ch &= 0xff;
+	//	DispByte(ch);
+	switch(ch) {
 	case ':': EditMem(); break;
 	case 'C': CallCode(); break;
-	case 'D': Disassemble(); break;
-	case 'S':	SpriteDemo(); break;
+	case 'D','d': dbg_init(); debugger(0xfffffffffffc0000,0); break;
+	case 'H', 'h': HexLoader(); break;
+	case 'S','s':	SpriteDemo(); break;
 	case 'M':	DumpMem(); break;
-	case 'R':
+	case 'R', 'r':
 		ndx++;	
 		ProcessR();
 		break;
-	case 'T':
+	case 'T','t':
 		ndx++;
 		ProcessT();
 		break;
@@ -398,7 +372,7 @@ int ProcessCmd()
 		ndx++;
 		ProcessW();
 		break;
-	case 'X': return (0);
+	case 'X','x': return (0);
 	case '?': help(); break;
 	}	
 	return (1);
@@ -419,12 +393,13 @@ void monitor()
 		ch = DBGGetKey(1) & 0xff;
 		switch(ch) {
 		case '\r':
-			DBGCRLF();
+			//DBGCRLF();
 			if (ProcessCmd()==0) goto xit; 
 			DBGDisplayString("\r\n>");
 			break;
 		case 255:	break;
-		default:	DBGDisplayChar(ch);
+		default:
+			DBGDisplayChar(ch);
 		}
 	}
 xit:

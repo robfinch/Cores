@@ -153,7 +153,7 @@ void UpdateCursorPos()
 naked inline void DBGSetCursorPos(register __int32 pos)
 {
 	__asm {
-		sh		$r18,$FFFFFFFFFFD0DF1C
+		sh		$r18,$FFFFFFFFFFD1DF1C
 	}
 }
 
@@ -516,11 +516,11 @@ void DBGDisplayString(char *s)
   while (ch = *s) { DBGDisplayChar(ch); s++; }
 }
 
-void DBGDisplayAsciiString(__int8 *s)
+void DBGDisplayAsciiString(unsigned __int8 *s)
 {
 	// Declaring ch here causes the compiler to generate shorter faster code
 	// because it doesn't have to process another *s inside in the loop.
-	__int8 ch;
+	unsigned __int8 ch;
   while (ch = *s) { DBGDisplayChar(ch); s++; }
 }
 
@@ -530,7 +530,7 @@ void DBGDisplayStringCRLF(char *s)
    DBGCRLF();
 }
 
-void DBGDisplayAsciiStringCRLF(__int8 *s)
+void DBGDisplayAsciiStringCRLF(unsigned __int8 *s)
 {
    DBGDisplayAsciiString(s);
    DBGCRLF();
@@ -541,14 +541,14 @@ void DBGHideCursor(int hide)
 	if (hide) {
 		__asm {
 			ldi		$r1,#$FFFF
-			sc		$r1,$FFFFFFFFFFD0DF18
+			sc		$r1,$FFFFFFFFFFD1DF18
 			memdb
 		}
 	}
 	else {
 		__asm {
 			ldi		$r1,#$00E7
-			sc		$r1,$FFFFFFFFFFD0DF18
+			sc		$r1,$FFFFFFFFFFD1DF18
 			memdb
 		}
 	}

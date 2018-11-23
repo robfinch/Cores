@@ -67,67 +67,68 @@ extern int im_save;
 
 naked void FMTK_FuncTbl()
 {
-      asm {
-          dw  _FMTK_Initialize
-          dw  _FMTK_StartThread
-          dw  _FMTK_ExitThread
-          dw  _FMTK_KillThread
-          dw  _FMTK_SetThreadPriority
-          dw  _FMTK_Sleep
-          dw  _FMTK_AllocMbx
-          dw  _FMTK_FreeMbx
-          dw  _FMTK_PostMsg
-          dw  _FMTK_SendMsg
-          dw  _FMTK_WaitMsg
-          dw  _FMTK_CheckMsg
-          dw  _FMTK_StartApp
-      }
+  __asm {
+  	align	8
+    dw  _FMTK_Initialize
+    dw  _FMTK_StartThread
+    dw  _FMTK_ExitThread
+    dw  _FMTK_KillThread
+    dw  _FMTK_SetThreadPriority
+    dw  _FMTK_Sleep
+    dw  _FMTK_AllocMbx
+    dw  _FMTK_FreeMbx
+    dw  _FMTK_PostMsg
+    dw  _FMTK_SendMsg
+    dw  _FMTK_WaitMsg
+    dw  _FMTK_CheckMsg
+    dw  _FMTK_StartApp
+  }
 }
 
 naked inline int GetCauseCode()
 {
-    asm {
+  __asm {
 		csrrd	r1,#6,r0
-    }
+  }
 }
 
 naked inline int GetTick()
 {
-	asm	{
+	__asm	{
 		csrrd	r1,#2,r0
 	}
 }
 
 naked inline void SetR1(register int t)
 {
-	asm {
+	__asm {
 		mov		r1,r18
 	}
 }
 
 naked inline void SetSP(register int *t)
 {
-	asm {
+	__asm {
 		mov		sp,r18
 	}
 }
 
 naked inline void AckTimerIRQ()
 {
-    asm {
-        ld		r3,#3				; reset the edge sense circuit
-        sh		r3,PIC_ESR
-    }
+  __asm {
+    ld		r3,#3				; reset the edge sense circuit
+    sh		r3,PIC_ESR
+  }
 }
 
 naked void DisplayIRQLive()
 {
-     asm {
-         lhu      r1,$FFD00000+220
-         addi     r1,r1,#1
-         sh       r1,$FFD00000+220
-         ret
-     }
+   __asm {
+     lhu      r1,$FFD00000+440
+     addi     r1,r1,#1
+     sh       r1,$FFD00000+440
+     ret
+   }
 }
 
 inline TCB *GetRunningTCBPtr()
@@ -167,8 +168,8 @@ ACB *GetRunningACBPtr()
 
 naked inline void SevenSeg(register int val) __attribute__(__no_temps)
 {
-	asm {
-		sh		r18,$FFDC0080
+	__asm {
+		sh		r18,$FFFFFFFFFFDC0080
 	}
 }
 
@@ -189,9 +190,11 @@ int SetImLevel(register int level)
 		return (x);
 	__asm {
 		csrrd	r1,#$044,r0		// read machine status register #$044
-		bfins	r1,r18,0,2		// insert the desired level in the im bits
+		and		r1,r1,#$FFFFFFFFFFFFFFF0
+		and		r18,r18,#15
+		or		r1,r1,r18			// insert the desired level in the im bits
 		csrrw	r1,#$044,r1		// and update the status reg
-		and		r1,r1,#7		// return only the im bits
+		and		r1,r1,#15			// return only the im bits
 		// The following safety ramp is present because the interrupt level
 		// won't be set for a few machine cycles after the instruction to 
 		// set the level is fetched. An interrupt still might occur and
@@ -215,7 +218,7 @@ int SetImLevel(register int level)
 naked int LockSysSemaphore(register int retries)
 {
 	__asm {
-		ldi		r1,#7		// set interrupt mask level seven
+		ldi		r1,#15		// set interrupt mask level fifteen
 		csrrs	r1,#$044,r1	// disable all interrupts
 		sw		r1,_im_save	// save off old setting
 		mov		r2,r18
@@ -253,7 +256,8 @@ naked int LockIOFSemaphore(register int retries)
 .loop:
 		ldi		r1,#8
 		csrrs	r1,#12,r1
-		bfextu	$r1,3,1,$r1	// extract the previous lock status
+		shr		r1,r1,#3	// extract the previous lock status
+		and		r1,r1,#1
 		xor		r1,r1,#1	// return true if semaphore wasn't locked
 		bne		r1,r0,.xit
 		sub		r2,r2,#1
@@ -271,7 +275,8 @@ naked int LockKbdSemaphore(register int retries)
 .loop:
 		ldi		r1,#16
 		csrrs	r1,#12,r1
-		bfextu	r1,4,1,r1	// extract the previous lock status
+		shr		r1,r1,#4	// extract the previous lock status
+		and		r1,r1,#1
 		xor		r1,r1,#1	// return true if semaphore wasn't locked
 		bne		r1,r0,.xit
 		sub		r2,r2,#1
@@ -287,17 +292,17 @@ naked int LockKbdSemaphore(register int retries)
 
 naked void FMTK_IRQDispatch()
 {
-	asm {
+	__asm {
 		jmp		_FMTK_IRQDispatch2
 	}
 }
 
 naked void FMTK_IRQDispatch2()
 {
-	asm {
+	__asm {
 		csrrd	r1,#6,r0	// get the cause code
 		shl		r1,r1,#3
-		lw		r1,interrupt_table[r1]
+		lw		r1,_interrupt_table[r1]
 		jmp		[r1]
 	}
 }
@@ -384,9 +389,10 @@ naked inline int SetEpc(register int v)
 
 naked void SwapContext(register TCB *octx, register TCB *nctx)
 {
+/*
 	__asm {
 		sw		r1,520[r18]
-		sw		r2,528]r18]
+		sw		r2,528[r18]
 		sw		r3,536[r18]
 		sw		r4,544[r18]
 		sw		r5,552[r18]
@@ -418,6 +424,7 @@ naked void SwapContext(register TCB *octx, register TCB *nctx)
 		sw		r30,760[r18]
 		sw		r31,768[r18]
 	}
+*/
 	octx->regs[1] = GetRegx1();
 	octx->regs[2] = GetRegx2();
 	octx->regs[3] = GetRegx3();
@@ -481,6 +488,7 @@ naked void SwapContext(register TCB *octx, register TCB *nctx)
 	SetRegx29(nctx->regs[29]);
 	SetRegx30(nctx->regs[30]);
 	SetRegx31(nctx->regs[31]);
+/*
 	__asm {
 		lw		r1,520[r19]
 		lw		r2,528]r19]
@@ -516,6 +524,7 @@ naked void SwapContext(register TCB *octx, register TCB *nctx)
 		lw		r19,664[r19]
 		ret
 	}
+*/
 }
 
 // ----------------------------------------------------------------------------
@@ -530,7 +539,7 @@ private hTCB SelectTaskToRun()
 	int nn,kk;
 	TCB *p, *q;
 	int qToCheck;
-    hTCB h;
+  hTCB h;
  
 	startQNdx++;
 	startQNdx &= 31;
@@ -539,25 +548,25 @@ private hTCB SelectTaskToRun()
 	for (nn = 0; nn < 8; nn++) {
 		h = readyQ[qToCheck];
 		if (h >= 0 && h < NR_TCB) {
-    		p = &tcbs[h];
-            kk = 0;
-            // Can run the head of a lower Q level if it's not the running
-            // task, otherwise look to the next task.
-            if (h != GetRunningTCB())
-           		q = p;
-    		else
-           		q = &tcbs[p->next];
-            do {  
-                if (!(q->status & TS_RUNNING)) {
-                    if (q->affinity == getCPU()) {
-        			   readyQ[qToCheck] = q - tcbs;
-        			   return (q - tcbs);
-                    }
-                }
-                q = &tcbs[q->next];
-                kk = kk + 1;
-            } while (q != p && kk < NR_TCB);
+			p = &tcbs[h];
+      kk = 0;
+      // Can run the head of a lower Q level if it's not the running
+      // task, otherwise look to the next task.
+      if (h != GetRunningTCB())
+     		q = p;
+			else
+     		q = &tcbs[p->next];
+      do {  
+        if (!(q->status & TS_RUNNING)) {
+          if (q->affinity == getCPU()) {
+				  	readyQ[qToCheck] = q - tcbs;
+				   	return (q - tcbs);
+          }
         }
+        q = &tcbs[q->next];
+        kk = kk + 1;
+      } while (q != p && kk < NR_TCB);
+    }
 		qToCheck++;
 		qToCheck &= 7;
 	}
@@ -582,31 +591,29 @@ naked FMTK_SystemCall()
     __asm {
     	// Spinlock waiting for system availability.
 .0001:
-		 ldi    r1,#32
-		 csrrs  r1,#$0C,r1			// read status bit and set it
-		 bbs    r1,#5,.0001			// if it wasn't already set, okay to process
-		 csrrd	r10,#$48,r0			// get return address into r10
-    	 lhu    r11,4[r10]			// get static call number parameter into r11
-    	 add    r10,r10,#4			// update return address
-		 csrrw	r0,#$48,r10			// set return address
-		 ldi	r1,#20
-		 bgtu   r11,r1,.bad_callno	// check the call number
-		 // 'C' uses r18 to r22 in order to pass parameters to a function
-		 // in registers. Copy registers from the exceptioned register set.
-		 mov	r18,r18:x
-		 mov	r19,r19:x
-		 mov	r20,r20:x
-		 mov	r21,r21:x
-		 mov	r22,r22:x
-    	 shl    r11,r11,#3
-		 lw		r11,_FMTK_FuncTbl[r11]
-    	 call   [r11]				// do the system function
-    	 mov	r1:x,r1				// return value in r1
-		 rti	#5
+			ldi   r1,#32
+		 	csrrs r1,#$0C,r1			// read status bit and set it
+		 	bbs   r1,#5,.0001			// if it wasn't already set, okay to process
+		 	csrrd	r10,#$48,r0			// get return address into r10
+    	lhu   r11,-4[r10]			// get static call number parameter into r11
+		 	ldi		r1,#20
+		 	bgtu  r11,r1,.bad_callno	// check the call number
+		 	// 'C' uses r18 to r22 in order to pass register parameters to a function
+		 	// in registers. Copy registers from the exceptioned register set.
+		 	mov		r18,r18:x
+		 	mov		r19,r19:x
+		 	mov		r20,r20:x
+		 	mov		r21,r21:x
+		 	mov		r22,r22:x
+    	shl   r11,r11,#3
+		 	lw		r11,_FMTK_FuncTbl[r11]
+    	call  [r11]				// do the system function
+    	mov		r1:x,r1				// return value in r1
+		 	rti		#5
 .bad_callno:
-         ldi	r1,#E_BadCallno
-         mov	r1:x,r1
-         rti	#5
+      ldi	r1,#E_BadCallno
+      mov	r1:x,r1
+      rti	#5
     }
 }
 
@@ -649,13 +656,13 @@ void FMTK_Reschedule()
 
 void interrupt FMTK_SchedulerIRQ()
 {
-    TCB *t, *ot;
+  TCB *t, *ot;
 
 	ot = t = GetRunningTCBPtr();
 	t->endTick = GetTick();
 	switch(GetCauseCode()) {
 	// Timer tick interrupt
-	case 131:
+	case 159:
 //		AckTimerIRQ();
 		if (getCPU()==0) DisplayIRQLive();
 		if (LockSysSemaphore(20)) {
@@ -684,7 +691,7 @@ void interrupt FMTK_SchedulerIRQ()
 		}
 		break;
 	// Explicit rescheduling request.
-	case 66:
+	case 241:
 		t->ticks = t->ticks + (t->endTick - t->startTick);
 		t->status = TS_PREEMPT;
 //		t->epc = t->epc + 1;  // advance the return address
@@ -719,26 +726,26 @@ j1:  goto j1;
 
 void IdleThread()
 {
-     int ii;
-     __int32 *screen = (__int32 *)0xFFD00000;
+   int ii;
+   int *screen = (int *)0xFFFFFFFFFFD00000L;
 
 //     try {
 j1:  ;
-         forever {
-             try {
-                 ii++;
-                 if (getCPU()==0) {
-                     screen[57] = ii;
-				 }
-             }
-             catch(static __exception ex=0) {
-                 if (ex&0xFFFFFFFFL==515) {
-                     printf("IdleTask: CTRL-C pressed.\r\n");
-                 }
-                 else
-                     throw ex;
-             }
-         }
+   forever {
+     try {
+       ii++;
+       if (getCPU()==0) {
+         screen[57] = 0xFFFF000F0000L|ii;
+			 }
+     }
+     catch(static __exception ex=0) {
+       if (ex&0xFFFFFFFFFFFFFFFFL==515) {
+         printf("IdleTask: CTRL-C pressed.\r\n");
+       }
+       else
+         throw ex;
+     }
+   }
 /*
      }
      catch (static __exception ex1=0) {
@@ -753,45 +760,45 @@ j1:  ;
 
 int FMTK_KillThread(register int threadno)
 {
-    hTCB ht, pht;
-    hACB hApp;
-    int nn;
-    ACB *j;
+  hTCB ht, pht;
+  hACB hApp;
+  int nn;
+  ACB *j;
 
-    ht = threadno;
-    if (LockSysSemaphore(-1)) {
-        RemoveFromReadyList(ht);
-        RemoveFromTimeoutList(ht);
-        for (nn = 0; nn < 4; nn++)
-            if (tcbs[ht].hMailboxes[nn] >= 0 && tcbs[ht].hMailboxes[nn] < NR_MBX) {
-                FMTK_FreeMbx(tcbs[ht].hMailboxes[nn]);
-                tcbs[ht].hMailboxes[nn] = -1;
-            }
-        // remove task from job's task list
-        hApp = tcbs[ht].hApp;
-        j = GetACBPtr(hApp);
-        ht = j->thrd;
-        if (ht==threadno)
-        	j->thrd = tcbs[ht].acbnext;
-        else {
-        	while (ht >= 0) {
-        		pht = ht;
-        		ht = tcbs[ht].acbnext;
-        		if (ht==threadno) {
-        			tcbs[pht].acbnext = tcbs[ht].acbnext;
-        			break;
-        		}
-        	}
-        }
-		tcbs[ht].acbnext = -1;
-        // If the job no longer has any threads associated with it, it is 
-        // finished.
-        if (j->thrd == -1) {
-        	j->magic = 0;
-        	mmu_FreeMap(hApp);
-        }
-        UnlockSysSemaphore();
+  ht = threadno;
+  if (LockSysSemaphore(-1)) {
+    RemoveFromReadyList(ht);
+    RemoveFromTimeoutList(ht);
+    for (nn = 0; nn < 4; nn++)
+      if (tcbs[ht].hMailboxes[nn] >= 0 && tcbs[ht].hMailboxes[nn] < NR_MBX) {
+        FMTK_FreeMbx(tcbs[ht].hMailboxes[nn]);
+        tcbs[ht].hMailboxes[nn] = -1;
+      }
+    // remove task from job's task list
+    hApp = tcbs[ht].hApp;
+    j = GetACBPtr(hApp);
+    ht = j->thrd;
+    if (ht==threadno)
+    	j->thrd = tcbs[ht].acbnext;
+    else {
+    	while (ht >= 0) {
+    		pht = ht;
+    		ht = tcbs[ht].acbnext;
+    		if (ht==threadno) {
+    			tcbs[pht].acbnext = tcbs[ht].acbnext;
+    			break;
+    		}
+    	}
     }
+		tcbs[ht].acbnext = -1;
+    // If the job no longer has any threads associated with it, it is 
+    // finished.
+    if (j->thrd == -1) {
+    	j->magic = 0;
+    	mmu_FreeMap(hApp);
+    }
+    UnlockSysSemaphore();
+  }
 }
 
 
@@ -800,11 +807,11 @@ int FMTK_KillThread(register int threadno)
 
 int FMTK_ExitThread()
 {
-    KillThread(GetRunningTCB());
+  KillThread(GetRunningTCB());
 	// The thread should not return from this reschedule because it's been
 	// killed.
 	forever {
-    	FMTK_Reschedule();
+  	FMTK_Reschedule();
 	}
 }
 
@@ -823,86 +830,86 @@ int FMTK_StartThread(
 	register int info
 )
 {
-    hTCB ht;
-    TCB *t;
-    int nn;
-    __int32 affinity;
+  hTCB ht;
+  TCB *t;
+  int nn;
+  __int32 affinity;
 	hACB hApp;
 	__int8 priority;
 
-    asm {
-        ldi   r1,#60
-        sb    r1,$FFDC0600
-    }
+  __asm {
+    ldi   r1,#60
+    sb    r1,$FFFFFFFFFFDC0600
+  }
 
 	// These fields extracted from a single parameter as there can be only
 	// five register values passed to the function.	
-    affinity = info & 0xffffffffL;
+  affinity = info & 0xffffffffL;
 	hApp = (info >> 32) & 0xffffL;
 	priority = (info >> 48) & 0xff;
 
-    if (LockSysSemaphore(100000)) {
-	    asm {
-	        ldi   r1,#61
-	        sb    r1,$FFDC0600
-	    }
-        ht = freeTCB;
-        if (ht < 0 || ht >= NR_TCB) {
-	        UnlockSysSemaphore();
-        	return (E_NoMoreTCBs);
-        }
-        freeTCB = tcbs[ht].next;
-        UnlockSysSemaphore();
+  if (LockSysSemaphore(100000)) {
+    __asm {
+      ldi   r1,#61
+      sb    r1,$FFFFFFFFFFDC0600
     }
+    ht = freeTCB;
+    if (ht < 0 || ht >= NR_TCB) {
+      UnlockSysSemaphore();
+    	return (E_NoMoreTCBs);
+    }
+    freeTCB = tcbs[ht].next;
+    UnlockSysSemaphore();
+  }
 	else {
-		asm {
-        ldi   r1,#69
-        sb    r1,$FFDC0600
+		__asm {
+      ldi   r1,#69
+      sb    r1,$FFFFFFFFFFDC0600
 		}
 		return (E_Busy);
 	}
-    asm {
-        ldi   r1,#62
-        sb    r1,$FFDC0600
-    }
-    t = &tcbs[ht];
-    t->affinity = affinity;
-    t->priority = priority;
-    t->hApp = hApp;
-    // Insert into the job's list of tasks.
-    asm {
-        ldi   r1,#63
-        sb    r1,$FFDC0600
-    }
-    tcbs[ht].acbnext = ACBPtrs[hApp]->thrd;
-    ACBPtrs[hApp]->thrd = ht;
-    t->regs[1] = parm;
-    t->regs[28] = FMTK_ExitThread;
-    t->regs[31] = (int)pStack + stacksize - 2048;
-    t->bios_stack = (int)pStack + stacksize - 8;
-    t->sys_stack = (int)pStack + stacksize - 1024;
-    t->epc = StartAddr;
-    t->cr0 = 0x140000000L;				// enable data cache and branch predictor
-    t->startTick = GetTick();
-    t->endTick = GetTick();
-    t->ticks = 0;
-    t->exception = 0;
-    asm {
-        ldi   r1,#65
-        sb    r1,$FFDC0600
-    }
-    if (LockSysSemaphore(100000)) {
-        InsertIntoReadyList(ht);
-        UnlockSysSemaphore();
-    }
+  __asm {
+    ldi   r1,#62
+    sb    r1,$FFDC0600
+  }
+  t = &tcbs[ht];
+  t->affinity = affinity;
+  t->priority = priority;
+  t->hApp = hApp;
+  // Insert into the job's list of tasks.
+  __asm {
+    ldi   r1,#63
+    sb    r1,$FFFFFFFFFFDC0600
+  }
+  tcbs[ht].acbnext = ACBPtrs[hApp]->thrd;
+  ACBPtrs[hApp]->thrd = ht;
+  t->regs[1] = parm;
+  t->regs[28] = FMTK_ExitThread;
+  t->regs[31] = (int)pStack + stacksize - 2048;
+  t->bios_stack = (int)pStack + stacksize - 8;
+  t->sys_stack = (int)pStack + stacksize - 1024;
+  t->epc = StartAddr;
+  t->cr0 = 0x140000000L;				// enable data cache and branch predictor
+  t->startTick = GetTick();
+  t->endTick = GetTick();
+  t->ticks = 0;
+  t->exception = 0;
+  __asm {
+    ldi   r1,#65
+    sb    r1,$FFFFFFFFFFDC0600
+  }
+  if (LockSysSemaphore(100000)) {
+      InsertIntoReadyList(ht);
+      UnlockSysSemaphore();
+  }
 	else {
 		return (E_Busy);
 	}
-    asm {
-        ldi   r1,#67
-        sb    r1,$FFDC0600
-    }
-    return (ht);
+  __asm {
+    ldi   r1,#67
+    sb    r1,$FFFFFFFFFFDC0600
+  }
+  return (ht);
 }
 
 // ----------------------------------------------------------------------------
@@ -911,25 +918,25 @@ int FMTK_StartThread(
 
 int FMTK_Sleep(register int timeout)
 {
-    hTCB ht;
-    int tick1, tick2;
+  hTCB ht;
+  int tick1, tick2;
 
 	while (timeout > 0) {
 		tick1 = GetTick();
-	    if (LockSysSemaphore(100000)) {
-	        ht = GetRunningTCB();
-	        RemoveFromReadyList(ht);
-	        InsertIntoTimeoutList(ht, timeout);
-	        UnlockSysSemaphore();
+    if (LockSysSemaphore(100000)) {
+      ht = GetRunningTCB();
+      RemoveFromReadyList(ht);
+      InsertIntoTimeoutList(ht, timeout);
+      UnlockSysSemaphore();
 			FMTK_Reschedule();
-	        break;
-	    }
+      break;
+    }
 		else {
 			tick2 = GetTick();
 			timeout -= (tick2-tick1);
 		}
 	}
-    return (E_Ok);
+  return (E_Ok);
 }
 
 // ----------------------------------------------------------------------------
@@ -937,22 +944,22 @@ int FMTK_Sleep(register int timeout)
 
 int FMTK_SetThreadPriority(register hTCB ht, register int priority)
 {
-    TCB *t;
+  TCB *t;
 
-    if (priority > 077 || priority < 000)
-       return (E_Arg);
-    if (LockSysSemaphore(-1)) {
-        t = &tcbs[ht];
-        if (t->status & (TS_RUNNING | TS_READY)) {
-            RemoveFromReadyList(ht);
-            t->priority = priority;
-            InsertIntoReadyList(ht);
-        }
-        else
-            t->priority = priority;
-        UnlockSysSemaphore();
+  if (priority > 077 || priority < 000)
+   return (E_Arg);
+  if (LockSysSemaphore(-1)) {
+    t = &tcbs[ht];
+    if (t->status & (TS_RUNNING | TS_READY)) {
+      RemoveFromReadyList(ht);
+      t->priority = priority;
+      InsertIntoReadyList(ht);
     }
-    return (E_Ok);
+    else
+      t->priority = priority;
+    UnlockSysSemaphore();
+  }
+  return (E_Ok);
 }
 
 // ----------------------------------------------------------------------------
@@ -964,73 +971,73 @@ void FMTK_Initialize()
 	int nn,jj;
 
 //    firstcall
-    {
-        asm {
-            ldi   r1,#20
-            sb    r1,$FFDC0600
-        }
-        hasUltraHighPriorityTasks = 0;
-        missed_ticks = 0;
+  {
+    __asm {
+      ldi   r1,#20
+      sb    r1,$FFFFFFFFFFDC0600
+    }
+    hasUltraHighPriorityTasks = 0;
+    missed_ticks = 0;
 
-        IOFocusTbl[0] = 0;
-        IOFocusNdx = null;
-        iof_switch = 0;
-        hSearchApp = 0;
-        hFreeApp = -1;
+    IOFocusTbl[0] = 0;
+    IOFocusNdx = null;
+    iof_switch = 0;
+    hSearchApp = 0;
+    hFreeApp = -1;
 
-    	SetRunningTCBPtr(0);
-        im_save = 7;
-        UnlockSysSemaphore();
-        UnlockIOFSemaphore();
-        UnlockKbdSemaphore();
+		SetRunningTCBPtr(0);
+    im_save = 7;
+    UnlockSysSemaphore();
+    UnlockIOFSemaphore();
+    UnlockKbdSemaphore();
 
 		// Setting up message array
-        for (nn = 0; nn < NR_MSG; nn++) {
-            message[nn].link = nn+1;
-        }
-        message[NR_MSG-1].link = -1;
-        freeMSG = 0;
+    for (nn = 0; nn < NR_MSG; nn++) {
+      message[nn].link = nn+1;
+    }
+    message[NR_MSG-1].link = -1;
+    freeMSG = 0;
 
-        asm {
-            ldi   r1,#30
-            sb    r1,$FFDC0600
-        }
+    __asm {
+      ldi   r1,#30
+      sb    r1,$FFDC0600
+    }
 
-    	for (nn = 0; nn < 8; nn++)
-    		readyQ[nn] = -1;
-    	for (nn = 0; nn < NR_TCB; nn++) {
-            tcbs[nn].number = nn;
-            tcbs[nn].acbnext = -1;
-    		tcbs[nn].next = nn+1;
-    		tcbs[nn].prev = -1;
-    		tcbs[nn].status = 0;
-    		tcbs[nn].priority = 070;
-    		tcbs[nn].affinity = 0;
-    		tcbs[nn].hApp = 0;
-    		tcbs[nn].timeout = 0;
-    		tcbs[nn].hMailboxes[0] = -1;
-    		tcbs[nn].hMailboxes[1] = -1;
-    		tcbs[nn].hMailboxes[2] = -1;
-    		tcbs[nn].hMailboxes[3] = -1;
-    		if (nn<2) {
-                tcbs[nn].affinity = nn;
-                tcbs[nn].priority = 030;
-            }
-            tcbs[nn].exception = 0;
-    	}
-    	tcbs[NR_TCB-1].next = -1;
-    	freeTCB = 2;
-        asm {
-            ldi   r1,#42
-            sb    r1,$FFDC0600
-        }
+  	for (nn = 0; nn < 8; nn++)
+  		readyQ[nn] = -1;
+  	for (nn = 0; nn < NR_TCB; nn++) {
+      tcbs[nn].number = nn;
+      tcbs[nn].acbnext = -1;
+  		tcbs[nn].next = nn+1;
+  		tcbs[nn].prev = -1;
+  		tcbs[nn].status = 0;
+  		tcbs[nn].priority = 070;
+  		tcbs[nn].affinity = 0;
+  		tcbs[nn].hApp = 0;
+  		tcbs[nn].timeout = 0;
+  		tcbs[nn].hMailboxes[0] = -1;
+  		tcbs[nn].hMailboxes[1] = -1;
+  		tcbs[nn].hMailboxes[2] = -1;
+  		tcbs[nn].hMailboxes[3] = -1;
+  		if (nn<2) {
+        tcbs[nn].affinity = nn;
+        tcbs[nn].priority = 030;
+      }
+      tcbs[nn].exception = 0;
+  	}
+  	tcbs[NR_TCB-1].next = -1;
+  	freeTCB = 2;
+    __asm {
+      ldi   r1,#42
+      sb    r1,$FFFFFFFFFFDC0600
+    }
 
-    	TimeoutList = -1;
+  	TimeoutList = -1;
 
-        asm {
-            ldi   r1,#40
-            sb    r1,$FFDC0600
-        }
+    __asm {
+      ldi   r1,#40
+      sb    r1,$FFFFFFFFFFDC0600
+    }
 /*
     	InsertIntoReadyList(0);
     	InsertIntoReadyList(1);
@@ -1046,15 +1053,16 @@ void FMTK_Initialize()
 //    	set_vector(2,(unsigned int)FMTK_SchedulerIRQ);
 		hKeybdMbx = -1;
 		hFocusSwitchMbx = -1;
-        asm {
-            ldi   r1,#45
-            sb    r1,$FFDC0600
-        }
-    	FMTK_Inited = 0x12345678;
-        asm {
-            ldi   r1,#50
-            sb    r1,$FFDC0600
-        }
+    __asm {
+      ldi   r1,#45
+      sb    r1,$FFFFFFFFFFDC0600
     }
+  	FMTK_Inited = 0x12345678;
+    __asm {
+      ldi   r1,#50
+      sb    r1,$FFFFFFFFFFDC0600
+    }
+    SetupDevices();
+  }
 }
 
