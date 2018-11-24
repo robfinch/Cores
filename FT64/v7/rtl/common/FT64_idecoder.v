@@ -25,7 +25,7 @@
 `include ".\FT64_config.vh"
 `include ".\FT64_defines.vh"
 
-module FT64_idecoder(clk,idv_i,id_i,instr,vl,ven,thrd,predict_taken,Rt,bus,id_o,idv_o);
+module FT64_idecoder(clk,idv_i,id_i,instr,vl,ven,thrd,predict_taken,Rt,bus,id_o,idv_o,debug_on);
 input clk;
 input idv_i;
 input [4:0] id_i;
@@ -38,6 +38,7 @@ input [4:0] Rt;
 output reg [143:0] bus;
 output reg [4:0] id_o;
 output reg idv_o;
+input debug_on;
 
 parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
@@ -717,7 +718,11 @@ casez(isn[`INSTRUCTION_OP])
 	if (isn[`INSTRUCTION_L2]==2'b00)
     casez(isn[`INSTRUCTION_S2])
     `TLB:		IsRFW = TRUE;
-    `R1:    IsRFW = TRUE;
+    `R1:
+	    	case(isn[22:18])
+	    	`MEMDB,`MEMSB,`SYNC,`SETWB,5'h14,5'h15:	IsRFW = FALSE;
+	    	default:	IsRFW = TRUE;
+	    	endcase
     `ADD:   IsRFW = TRUE;
     `SUB:   IsRFW = TRUE;
     `SLT:   IsRFW = TRUE;

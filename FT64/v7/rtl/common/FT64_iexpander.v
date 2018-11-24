@@ -83,7 +83,7 @@ casez({cinstr[15:12],cinstr[6]})
 				expand[17:13] = cinstr[4:0];
 				expand[12:8] = 5'd0;
 				expand[7:6] = 2'b10;
-				expand[5:0] = `ORI;
+				expand[5:0] = `ADDI;	// ADDI to sign extend
 			end
 5'b00100:	// RET / ANDI
 			if (cinstr[4:0]==5'd0) begin

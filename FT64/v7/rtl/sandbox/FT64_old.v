@@ -43,7 +43,7 @@
 `include "FT64_config.vh"
 `include "FT64_defines.vh"
 
-module FT64(hartid, rst, clk_i, clk4x, tm_clk_i, irq_i, vec_i, bte_o, cti_o, bok_i, cyc_o, stb_o, ack_i, err_i, we_o, sel_o, adr_o, dat_o, dat_i,
+module FT64(hartid, rst, clk_i, clk4x, tm_clk_i, irq_i, vec_i, bte_o, cti_o, cyc_o, stb_o, ack_i, err_i, we_o, sel_o, adr_o, dat_o, dat_i,
     ol_o, pcr_o, pcr2_o, icl_o, sr_o, cr_o, rbi_i, signal_i);
 input [63:0] hartid;
 input rst;
@@ -54,7 +54,6 @@ input [3:0] irq_i;
 input [7:0] vec_i;
 output reg [1:0] bte_o;
 output reg [2:0] cti_o;
-input bok_i;
 output cyc_o;
 output reg stb_o;
 input ack_i;
@@ -215,7 +214,6 @@ wire snr = cr0[17];		// sequence number reset
 wire dce = cr0[30];     // data cache enable
 wire bpe = cr0[32];     // branch predictor enable
 wire wbm = cr0[34];
-wire sple = cr0[35];		// speculative load enable
 wire ctgtxe = cr0[33];
 reg [63:0] pmr;
 wire id1_available = pmr[0];
@@ -725,7 +723,7 @@ wire        fpu2_v;
 wire [31:0] fpu2_status;
 
 reg [7:0] fccnt;
-reg [47:0] waitctr;
+reg [63:0] waitctr;
 reg        fcu_ld;
 reg        fcu_dataready;
 reg        fcu_done;
@@ -877,7 +875,7 @@ parameter B_DCacheLoadResetBusy = 5'd6;
 parameter B_ICacheAck = 5'd7;
 parameter B8 = 5'd8;
 parameter B_ICacheNack = 5'd9;
-parameter B_ICacheNack2 = 5'd10;
+parameter B10 = 5'd10;
 parameter B11 = 5'd11;
 parameter B12 = 5'd12;
 parameter B_DLoadAck = 5'd13;
@@ -1945,7 +1943,7 @@ casez(isn[`INSTRUCTION_OP])
             endcase
         `R1:    
         	case(isn[22:18])
-        	`CNTLO,`CNTLZ,`CNTPOP,`ABS,`NOT,`NEG,`REDOR,`ZXB,`ZXC,`ZXH,`SXB,`SXC,`SXH:
+        	`CNTLO,`CNTLZ,`CNTPOP,`ABS,`NOT,`REDOR,`ZXB,`ZXC,`ZXH,`SXB,`SXC,`SXH:
         		fnRt = {rgs[thrd],1'b0,isn[`INSTRUCTION_RT]};
         	`MEMDB,`MEMSB,`SYNC:
         		fnRt = 12'd0;
@@ -2179,7 +2177,7 @@ casez(isn[`INSTRUCTION_OP])
     endcase
   `R1:    
   	case(isn[22:18])
-  	`CNTLO,`CNTLZ,`CNTPOP,`ABS,`NOT,`NEG,`REDOR,`ZXB,`ZXC,`ZXH,`SXB,`SXC,`SXH:
+  	`CNTLO,`CNTLZ,`CNTPOP,`ABS,`NOT,`REDOR,`ZXB,`ZXC,`ZXH,`SXB,`SXC,`SXH:
   		fnRt = {rgs,1'b0,isn[`INSTRUCTION_RT]};
   	`MEMDB,`MEMSB,`SYNC:
   		fnRt = 12'd0;
@@ -2833,11 +2831,7 @@ casez(isn[`INSTRUCTION_OP])
 	if (isn[`INSTRUCTION_L2]==2'b00)
 	    casez(isn[`INSTRUCTION_S2])
 	    `TLB:		IsRFW = TRUE;
-	    `R1:  
-	    	case(isn[22:18])
-	    	`MEMDB,`MEMSB,`SYNC,`SETWB,5'h14,5'h15:	IsRFW = FALSE;
-	    	default:	IsRFW = TRUE;
-	    	endcase
+	    `R1:    IsRFW = TRUE;
 	    `ADD:   IsRFW = TRUE;
 	    `SUB:   IsRFW = TRUE;
 	    `SLT:   IsRFW = TRUE;
@@ -4392,7 +4386,7 @@ begin
 	
 	if (fcu_done) begin
 		for (n = 0; n < QENTRIES; n = n + 1) begin
-			if (could_issue[heads[n]] && iqentry_fc[heads[n]] && (nextqd[heads[n]] || iqentry_br[heads[n]])
+			if (could_issue[heads[n]] && iqentry_fc[heads[n]] && nextqd[heads[n]]
 			&& iqentry_fcu_issue == {QENTRIES{1'b0}}
 			&& (!prior_sync[heads[n]] || !prior_valid[heads[n]])
 			)
@@ -4409,7 +4403,7 @@ generate begin : gMemIssue
 always @*
 begin
 	issue_count = 0;
-	 memissue[ heads[0] ] =	iqentry_memready[ heads[0] ] && !(iqentry_load[heads[0]] && wb_v!=1'b0);		// first in line ... go as soon as ready
+	 memissue[ heads[0] ] =	iqentry_memready[ heads[0] ];		// first in line ... go as soon as ready
 	 if (memissue[heads[0]])
 	 	issue_count = issue_count + 1;
 
@@ -4424,10 +4418,8 @@ begin
 					&& (iqentry_rl[heads[1]] ? iqentry_done[heads[0]] || !iqentry_v[heads[0]] || !iqentry_mem[heads[0]] : 1'b1)
 					// ... if a preivous op has the aquire bit set
 					&& !(iqentry_aq[heads[0]] && iqentry_v[heads[0]])
-					// ... and there's nothing in the write buffer during a load
-					&& !(iqentry_load[heads[1]] && wb_v!=1'b0)
 					// ... and, if it is a store, there is no chance of it being undone
-					&& ((iqentry_load[heads[1]] && sple) ||
+					&& (iqentry_load[heads[1]] ||
 					   !(iqentry_fc[heads[0]]||iqentry_canex[heads[0]]));
 	 if (memissue[heads[1]])
 	 	issue_count = issue_count + 1;
@@ -4449,13 +4441,11 @@ begin
 					// ... if a preivous op has the aquire bit set
 					&& !(iqentry_aq[heads[0]] && iqentry_v[heads[0]])
 					&& !(iqentry_aq[heads[1]] && iqentry_v[heads[1]])
-					// ... and there's nothing in the write buffer during a load
-					&& !(iqentry_load[heads[2]] && wb_v!=1'b0)
 					// ... and there isn't a barrier, or everything before the barrier is done or invalid
             && (!(iqentry_iv[heads[1]] && iqentry_memsb[heads[1]]) || (iqentry_done[heads[0]] || !iqentry_v[heads[0]]))
     				&& (!(iqentry_iv[heads[1]] && iqentry_memdb[heads[1]]) || (!iqentry_mem[heads[0]] || iqentry_done[heads[0]] || !iqentry_v[heads[0]]))
 					// ... and, if it is a SW, there is no chance of it being undone
-					&& ((iqentry_load[heads[2]] && sple) ||
+					&& (iqentry_load[heads[2]] ||
 					      !(iqentry_fc[heads[0]]||iqentry_canex[heads[0]])
 					   && !(iqentry_fc[heads[1]]||iqentry_canex[heads[1]]));
 	 if (memissue[heads[2]])
@@ -4483,8 +4473,6 @@ begin
 					&& !(iqentry_aq[heads[0]] && iqentry_v[heads[0]])
 					&& !(iqentry_aq[heads[1]] && iqentry_v[heads[1]])
 					&& !(iqentry_aq[heads[2]] && iqentry_v[heads[2]])
-					// ... and there's nothing in the write buffer during a load
-					&& !(iqentry_load[heads[3]] && wb_v!=1'b0)
 					// ... and there isn't a barrier, or everything before the barrier is done or invalid
                     && (!(iqentry_iv[heads[1]] && iqentry_memsb[heads[1]]) || (iqentry_done[heads[0]] || !iqentry_v[heads[0]]))
                     && (!(iqentry_iv[heads[2]] && iqentry_memsb[heads[2]]) ||
@@ -4497,7 +4485,7 @@ begin
                      		&& (!iqentry_mem[heads[1]] || iqentry_done[heads[1]] || !iqentry_v[heads[1]]))
                      		)
                     // ... and, if it is a SW, there is no chance of it being undone
-					&& ((iqentry_load[heads[3]] && sple) ||
+					&& (iqentry_load[heads[3]] ||
 		      		      !(iqentry_fc[heads[0]]||iqentry_canex[heads[0]])
                        && !(iqentry_fc[heads[1]]||iqentry_canex[heads[1]])
                        && !(iqentry_fc[heads[2]]||iqentry_canex[heads[2]]));
@@ -4532,8 +4520,6 @@ begin
 					&& !(iqentry_aq[heads[1]] && iqentry_v[heads[1]])
 					&& !(iqentry_aq[heads[2]] && iqentry_v[heads[2]])
 					&& !(iqentry_aq[heads[3]] && iqentry_v[heads[3]])
-					// ... and there's nothing in the write buffer during a load
-					&& !(iqentry_load[heads[4]] && wb_v!=1'b0)
 					// ... and there isn't a barrier, or everything before the barrier is done or invalid
                     && (!(iqentry_iv[heads[1]] && iqentry_memsb[heads[1]]) || (iqentry_done[heads[0]] || !iqentry_v[heads[0]]))
                     && (!(iqentry_iv[heads[2]] && iqentry_memsb[heads[2]]) ||
@@ -4556,7 +4542,7 @@ begin
                      		&& (!iqentry_mem[heads[2]] || iqentry_done[heads[2]] || !iqentry_v[heads[2]]))
                      		)
 					// ... and, if it is a SW, there is no chance of it being undone
-					&& ((iqentry_load[heads[4]] && sple) ||
+					&& (iqentry_load[heads[4]] ||
 		      		      !(iqentry_fc[heads[0]]||iqentry_canex[heads[0]])
                        && !(iqentry_fc[heads[1]]||iqentry_canex[heads[1]])
                        && !(iqentry_fc[heads[2]]||iqentry_canex[heads[2]])
@@ -4598,8 +4584,6 @@ begin
 					&& !(iqentry_aq[heads[2]] && iqentry_v[heads[2]])
 					&& !(iqentry_aq[heads[3]] && iqentry_v[heads[3]])
 					&& !(iqentry_aq[heads[4]] && iqentry_v[heads[4]])
-					// ... and there's nothing in the write buffer during a load
-					&& !(iqentry_load[heads[5]] && wb_v!=1'b0)
 					// ... and there isn't a barrier, or everything before the barrier is done or invalid
                     && (!(iqentry_iv[heads[1]] && iqentry_memsb[heads[1]]) || (iqentry_done[heads[0]] || !iqentry_v[heads[0]]))
                     && (!(iqentry_iv[heads[2]] && iqentry_memsb[heads[2]]) ||
@@ -4634,7 +4618,7 @@ begin
                      		&& (!iqentry_mem[heads[3]] || iqentry_done[heads[3]] || !iqentry_v[heads[3]]))
                      		)
 					// ... and, if it is a SW, there is no chance of it being undone
-					&& ((iqentry_load[heads[5]] && sple) ||
+					&& (iqentry_load[heads[5]] ||
 		      		      !(iqentry_fc[heads[0]]||iqentry_canex[heads[0]])
                        && !(iqentry_fc[heads[1]]||iqentry_canex[heads[1]])
                        && !(iqentry_fc[heads[2]]||iqentry_canex[heads[2]])
@@ -4682,8 +4666,6 @@ if (QENTRIES > 6) begin
 					&& !(iqentry_aq[heads[3]] && iqentry_v[heads[3]])
 					&& !(iqentry_aq[heads[4]] && iqentry_v[heads[4]])
 					&& !(iqentry_aq[heads[5]] && iqentry_v[heads[5]])
-					// ... and there's nothing in the write buffer during a load
-					&& !(iqentry_load[heads[6]] && wb_v!=1'b0)
 					// ... and there isn't a barrier, or everything before the barrier is done or invalid
                     && (!(iqentry_iv[heads[1]] && iqentry_memsb[heads[1]]) || (iqentry_done[heads[0]] || !iqentry_v[heads[0]]))
                     && (!(iqentry_iv[heads[2]] && iqentry_memsb[heads[2]]) ||
@@ -4732,7 +4714,7 @@ if (QENTRIES > 6) begin
                      		&& (!iqentry_mem[heads[4]] || iqentry_done[heads[4]] || !iqentry_v[heads[4]]))
                      		)
 					// ... and, if it is a SW, there is no chance of it being undone
-					&& ((iqentry_load[heads[6]] && sple) ||
+					&& (iqentry_load[heads[6]] ||
 		      		      !(iqentry_fc[heads[0]]||iqentry_canex[heads[0]])
                        && !(iqentry_fc[heads[1]]||iqentry_canex[heads[1]])
                        && !(iqentry_fc[heads[2]]||iqentry_canex[heads[2]])
@@ -4785,8 +4767,6 @@ if (QENTRIES > 6) begin
 					&& !(iqentry_aq[heads[4]] && iqentry_v[heads[4]])
 					&& !(iqentry_aq[heads[5]] && iqentry_v[heads[5]])
 					&& !(iqentry_aq[heads[6]] && iqentry_v[heads[6]])
-					// ... and there's nothing in the write buffer during a load
-					&& !(iqentry_load[heads[7]] && wb_v!=1'b0)
 					// ... and there isn't a barrier, or everything before the barrier is done or invalid
                     && (!(iqentry_iv[heads[1]] && iqentry_memsb[heads[1]]) || (iqentry_done[heads[0]] || !iqentry_v[heads[0]]))
                     && (!(iqentry_iv[heads[2]] && iqentry_memsb[heads[2]]) ||
@@ -4851,7 +4831,7 @@ if (QENTRIES > 6) begin
                      		&& (!iqentry_mem[heads[5]] || iqentry_done[heads[5]] || !iqentry_v[heads[5]]))
                      		)
 					// ... and, if it is a SW, there is no chance of it being undone
-					&& ((iqentry_load[heads[7]] && sple) ||
+					&& (iqentry_load[heads[7]] ||
 		      		      !(iqentry_fc[heads[0]]||iqentry_canex[heads[0]])
                        && !(iqentry_fc[heads[1]]||iqentry_canex[heads[1]])
                        && !(iqentry_fc[heads[2]]||iqentry_canex[heads[2]])
@@ -4909,8 +4889,6 @@ if (QENTRIES > 6) begin
 					&& !(iqentry_aq[heads[5]] && iqentry_v[heads[5]])
 					&& !(iqentry_aq[heads[6]] && iqentry_v[heads[6]])
 					&& !(iqentry_aq[heads[7]] && iqentry_v[heads[7]])
-					// ... and there's nothing in the write buffer during a load
-					&& !(iqentry_load[heads[8]] && wb_v!=1'b0)
 					// ... and there isn't a barrier, or everything before the barrier is done or invalid
                     && (!(iqentry_iv[heads[1]] && iqentry_memsb[heads[1]]) || (iqentry_done[heads[0]] || !iqentry_v[heads[0]]))
                     && (!(iqentry_iv[heads[2]] && iqentry_memsb[heads[2]]) ||
@@ -4995,7 +4973,7 @@ if (QENTRIES > 6) begin
                      		)
                      		)
 					// ... and, if it is a SW, there is no chance of it being undone
-					&& ((iqentry_load[heads[8]] && sple) ||
+					&& (iqentry_load[heads[8]] ||
 		      		      !(iqentry_fc[heads[0]]||iqentry_canex[heads[0]])
                        && !(iqentry_fc[heads[1]]||iqentry_canex[heads[1]])
                        && !(iqentry_fc[heads[2]]||iqentry_canex[heads[2]])
@@ -5059,8 +5037,6 @@ if (QENTRIES > 6) begin
 					&& !(iqentry_aq[heads[6]] && iqentry_v[heads[6]])
 					&& !(iqentry_aq[heads[7]] && iqentry_v[heads[7]])
 					&& !(iqentry_aq[heads[8]] && iqentry_v[heads[8]])
-					// ... and there's nothing in the write buffer during a load
-					&& !(iqentry_load[heads[9]] && wb_v!=1'b0)
 					// ... and there isn't a barrier, or everything before the barrier is done or invalid
                     && (!(iqentry_iv[heads[1]] && iqentry_memsb[heads[1]]) || (iqentry_done[heads[0]] || !iqentry_v[heads[0]]))
                     && (!(iqentry_iv[heads[2]] && iqentry_memsb[heads[2]]) ||
@@ -5165,7 +5141,7 @@ if (QENTRIES > 6) begin
                      		)
                      		)
 					// ... and, if it is a store, there is no chance of it being undone
-					&& ((iqentry_load[heads[9]] && sple) ||
+					&& (iqentry_load[heads[9]] ||
 		      		      !(iqentry_fc[heads[0]]||iqentry_canex[heads[0]])
                        && !(iqentry_fc[heads[1]]||iqentry_canex[heads[1]])
                        && !(iqentry_fc[heads[2]]||iqentry_canex[heads[2]])
@@ -5292,8 +5268,7 @@ FT64_idecoder uid1
 	.Rt(id1_Rt),
 	.bus(id1_bus),
 	.id_o(id1_ido),
-	.idv_o(id1_vo),
-	.debug_on(debug_on)
+	.idv_o(id1_vo)
 );
 
 generate begin : gIDUInst
@@ -5323,8 +5298,7 @@ FT64_idecoder uid2
 	.Rt(id2_Rt),
 	.bus(id2_bus),
 	.id_o(id2_ido),
-	.idv_o(id2_vo),
-	.debug_on(debug_on)
+	.idv_o(id2_vo)
 );
 end
 if (`NUM_IDU > 2) begin
@@ -5353,8 +5327,7 @@ FT64_idecoder uid2
 	.Rt(id3_Rt),
 	.bus(id3_bus),
 	.id_o(id3_ido),
-	.idv_o(id3_vo),
-	.debug_on(debug_on)
+	.idv_o(id3_vo)
 );
 end
 end
@@ -5596,8 +5569,6 @@ FT64_FCU_Calc #(.AMSB(AMSB)) ufcuc1
 	.bus(fcu_bus)
 );
 
-wire will_clear_branchmiss = branchmiss && ((fetchbuf0_v && fetchbuf0_pc==fcu_misspc) || (fetchbuf1_v && fetchbuf1_pc==fcu_misspc));
-
 always @*
 begin
 case(fcu_instr[`INSTRUCTION_OP])
@@ -5617,10 +5588,10 @@ end
 // following instruction queues. The address of the next instruction is
 // looked at to see if the BTB predicted correctly.
 
-wire fcu_brk_miss = fcu_brk || fcu_rti;
+wire fcu_brk_miss = (fcu_brk || fcu_rti) && fcu_v;
 `ifdef FCU_ENH
 wire fcu_ret_miss = fcu_ret && fcu_v && (fcu_argB != iqentry_pc[nid]);
-wire fcu_jal_miss = fcu_jal && fcu_v && (fcu_argA + fcu_argI != iqentry_pc[nid]);
+wire fcu_jal_miss = fcu_jal && fcu_v && fcu_argA + fcu_argI != iqentry_pc[nid];
 wire fcu_followed = iqentry_sn[nid] > iqentry_sn[fcu_id[`QBITS]];
 `else
 wire fcu_ret_miss = fcu_ret && fcu_v;
@@ -5628,36 +5599,86 @@ wire fcu_jal_miss = fcu_jal && fcu_v;
 wire fcu_followed = `TRUE;
 `endif
 always @*
-if (fcu_v) begin
+if (fcu_dataready) begin
+//	if (fcu_timeout[7])
+//		fcu_branchmiss = TRUE;
 	// Break and RTI switch register sets, and so are always treated as a branch miss in order to
 	// flush the pipeline. Hardware interrupts also stream break instructions so they need to 
 	// flushed from the queue so the interrupt is recognized only once.
 	// BRK and RTI are handled as excmiss types which are processed during the commit stage.
+//	else
 	if (fcu_brk_miss)
-		fcu_branchmiss = TRUE;
-	else if (fcu_branch && (fcu_takb ^ fcu_pt))
-    fcu_branchmiss = TRUE;
+		fcu_branchmiss = TRUE & ~fcu_clearbm;
+	else if (fcu_branch && fcu_v && (fcu_takb ^ fcu_pt))
+    fcu_branchmiss = TRUE & ~fcu_clearbm;
+  // the following instruction is queued
 	else
+	if (fcu_followed) begin
 `ifdef SUPPORT_SMT		
-		if (fcu_instr[`INSTRUCTION_OP] == `REX && (im < ~ol[fcu_thrd]))
+		if (fcu_instr[`INSTRUCTION_OP] == `REX && (im < ~ol[fcu_thrd]) && fcu_v)
 `else
-		if (fcu_instr[`INSTRUCTION_OP] == `REX && (im < ~ol))
+		if (fcu_instr[`INSTRUCTION_OP] == `REX && (im < ~ol) && fcu_v)
 `endif		
-		fcu_branchmiss = TRUE;
-	else if (fcu_ret_miss)
-		fcu_branchmiss = TRUE;
-	else if (fcu_jal_miss)
-    fcu_branchmiss = TRUE;
-	else if (fcu_instr[`INSTRUCTION_OP] == `CHK && ~fcu_takb)
-    fcu_branchmiss = TRUE;
-	else
-    fcu_branchmiss = FALSE;
+			fcu_branchmiss = TRUE & ~fcu_clearbm;
+		else if (fcu_ret_miss)
+			fcu_branchmiss = TRUE & ~fcu_clearbm;
+//		else if (fcu_branch && fcu_v && (((fcu_takb && (fcu_misspc != iqentry_pc[nid])) ||
+//		                            (~fcu_takb && (fcu_pc + fcu_insln != iqentry_pc[nid])))))// || iqentry_v[nid]))
+		else if (fcu_jal_miss)
+		    fcu_branchmiss = TRUE & ~fcu_clearbm;
+		else if (fcu_instr[`INSTRUCTION_OP] == `CHK && ~fcu_takb && fcu_v)
+		    fcu_branchmiss = TRUE & ~fcu_clearbm;
+		else
+		    fcu_branchmiss = FALSE;
+	end
+	else begin
+		// Stuck at the head and can't finish because there's still an uncommitted instruction in the queue.
+		// -> cause a branch miss to clear the queue.
+		if (iqentry_v[nid] && !IsCall(fcu_instr) && !IsJmp(fcu_instr) && fcu_v)
+			fcu_branchmiss = TRUE & ~fcu_clearbm;
+		else
+		/*
+		if (fcu_id==heads[0] && iqentry_v[idp1(heads[0])]) begin
+			if ((fcu_bus[0] && (~fcu_bt || (fcu_misspc == iqentry_pc[nid]))) ||
+		                            (~fcu_bus[0] && ( fcu_bt || (fcu_pc + 32'd4 == iqentry_pc[nid]))))
+		        fcu_branchmiss = FALSE;
+		    else
+				fcu_branchmiss = TRUE;
+		end
+		else if (fcu_id==heads[1] && iqentry_v[idp2(heads[1])]) begin
+			if ((fcu_bus[0] && (~fcu_bt || (fcu_misspc == iqentry_pc[nid]))) ||
+		                            (~fcu_bus[0] && ( fcu_bt || (fcu_pc + 32'd4 == iqentry_pc[nid]))))
+		        fcu_branchmiss = FALSE;
+		    else
+				fcu_branchmiss = TRUE;
+		end
+		else*/
+			fcu_branchmiss = FALSE;
+	end
 end
 else
 	fcu_branchmiss = FALSE;
 
+// Flow control ops don't issue until the next instruction queues.
+// The fcu_timeout tracks how long the flow control op has been in the "out" state.
+// It should never be that way more than a couple of cycles. Sometimes the fcu_wr pulse got missed
+// because the following instruction got stomped on during a branchmiss, hence iqentry_v isn't true.
+wire fcu_wr = (fcu_v && iqentry_v[fcu_id[`QBITS]] && iqentry_iv[fcu_id[`QBITS]] && iqentry_v[nid] && iqentry_sn[nid] > iqentry_sn[fcu_id[`QBITS]] && !fcu_done);//	// && iqentry_v[nid]
+//					&& fcu_instr==iqentry_instr[fcu_id[`QBITS]]);// || fcu_timeout==8'h05;
+
 FT64_RMW_alu urmwalu0 (rmw_instr, rmw_argA, rmw_argB, rmw_argC, rmw_res);
 
+//assign fcu_done = IsWait(fcu_instr) ? ((waitctr==64'd1) || signal_i[fcu_argA[4:0]|fcu_argI[4:0]]) :
+//					fcu_v && iqentry_v[idp1(fcu_id)] && iqentry_sn[idp1(fcu_id)]==iqentry_sn[fcu_id[`QBITS]]+5'd1;
+
+// An exception in a committing instruction takes precedence
+/*
+Too slow. Needs to be registered
+assign  branchmiss = excmiss|fcu_branchmiss,
+    misspc = excmiss ? excmisspc : fcu_misspc,
+    missid = excmiss ? (|iqentry_exc[heads[0]] ? heads[0] : heads[1]) : fcu_sourceid;
+assign branchmiss_thrd =  excmiss ? excthrd : fcu_thrd;
+*/
 
 //
 // additional DRAM-enqueue logic
@@ -5977,10 +5998,9 @@ wire writing_wb =
 //    missid <= excmiss ? (|iqentry_exc[heads[0]] ? heads[0] : heads[1]) : fcu_sourceid;
 //	branchmiss_thrd <=  excmiss ? excthrd : fcu_thrd;
 //end
-wire alu0_done_pe, alu1_done_pe, pe_wait;
+wire alu0_done_pe, alu1_done_pe;
 edge_det uedalu0d (.clk(clk), .ce(1'b1), .i(alu0_done), .pe(alu0_done_pe), .ne(), .ee());
 edge_det uedalu1d (.clk(clk), .ce(1'b1), .i(alu1_done), .pe(alu1_done_pe), .ne(), .ee());
-edge_det uedwait1 (.clk(clk), .ce(1'b1), .i((waitctr==48'd1) || signal_i[fcu_argA[4:0]|fcu_argI[4:0]]), .pe(pe_wait), .ne(), .ee());
 
 always @(posedge clk)
 if (rst) begin
@@ -6130,14 +6150,13 @@ if (rst) begin
      cr0[16] <= 1'b0;		// disable SMT
      cr0[17] <= 1'b0;		// sequence number reset = 1
      cr0[34] <= FALSE;	// write buffer merging enable
-     cr0[35] <= FALSE;		// load speculation enable
      pcr <= 32'd0;
      pcr2 <= 64'd0;
     for (n = 0; n < PREGS; n = n + 1)
          rf_v[n] <= `VAL;
      fp_rm <= 3'd0;			// round nearest even - default rounding mode
      fpu_csr[37:32] <= 5'd31;	// register set #31
-     waitctr <= 48'd0;
+     waitctr <= 64'd0;
     for (n = 0; n < 16; n = n + 1)
          badaddr[n] <= 64'd0;
      sbl <= 32'h0;
@@ -6210,6 +6229,8 @@ else begin
 		id2_vi <= `INV;
 	if (`NUM_IDU > 2)
 		id3_vi <= `INV;
+	if (iqentry_v[nid] && iqentry_sn[nid] > iqentry_sn[fcu_id[`QBITS]])
+		fcu_dataready <= `INV;
 	wb_shift <= FALSE;
 	ld_time <= {ld_time[4:0],1'b0};
 	wc_times <= wc_time;
@@ -6244,8 +6265,8 @@ else begin
      dramB_v <= FALSE;
      dramC_v <= FALSE;
      cr0[17] <= 1'b0;
-    if (waitctr != 48'd0)
-         waitctr <= waitctr - 4'd1;
+    if (waitctr != 64'd0)
+         waitctr <= waitctr - 64'd1;
 
 
     if (iqentry_fc[fcu_id[`QBITS]] && iqentry_v[fcu_id[`QBITS]] && !iqentry_done[fcu_id[`QBITS]] && iqentry_out[fcu_id[`QBITS]])
@@ -6673,28 +6694,36 @@ if (fpu2_v && `NUM_FPU > 1) begin
 	fpu2_dataready <= FALSE;
 end
 
-if (IsWait(fcu_instr)) begin
-	if (pe_wait)
-		fcu_dataready <= `TRUE;
-end
-
-if (fcu_v) begin
+if (fcu_wr & ~fcu_done) begin
 	fcu_done <= `TRUE;
-	iqentry_ma  [ fcu_id[`QBITS] ] <= fcu_misspc;
+  if (fcu_ld)
+    waitctr <= fcu_argA;
   iqentry_res [ fcu_id[`QBITS] ] <= fcu_bus;
   iqentry_exc [ fcu_id[`QBITS] ] <= fcu_exc;
-	iqentry_done[ fcu_id[`QBITS] ] <= `TRUE;
-	iqentry_cmt [ fcu_id[`QBITS] ] <= `TRUE;
-	iqentry_out [ fcu_id[`QBITS] ] <= `INV;
+  if (IsWait(fcu_instr)) begin
+		iqentry_done [ fcu_id[`QBITS] ] <= (waitctr==64'd1) || signal_i[fcu_argA[4:0]|fcu_argI[4:0]];
+		iqentry_cmt [ fcu_id[`QBITS] ] <= (waitctr==64'd1) || signal_i[fcu_argA[4:0]|fcu_argI[4:0]];
+  end
+  else begin
+		iqentry_done[ fcu_id[`QBITS] ] <= `TRUE;
+		iqentry_cmt[ fcu_id[`QBITS] ] <= `TRUE;
+  end
+	// Only safe place to propagate the miss pc is a0.
+	iqentry_ma[ fcu_id[`QBITS] ] <= fcu_misspc;
 	// takb is looked at only for branches to update the predictor. Here it is
 	// unconditionally set, the value will be ignored if it's not a branch.
 	iqentry_takb[ fcu_id[`QBITS] ] <= fcu_takb;
-	fcu_dataready <= `INV;
+	iqentry_out [ fcu_id[`QBITS] ] <= `INV;
+	fcu_dataready <= `VAL;
 end
 // Clear a branch miss when target instruction is fetched.
-if (will_clear_branchmiss) begin
-	fcu_branch <= `FALSE;
-	branchmiss <= `FALSE;
+if (branchmiss) begin
+	if ((fetchbuf0_v && fetchbuf0_pc==fcu_misspc) ||
+		(fetchbuf1_v && fetchbuf1_pc==fcu_misspc)) begin
+		fcu_clearbm <= `TRUE;
+		fcu_branch <= `FALSE;
+		branchmiss <= `FALSE;
+	end
 end
 
 
@@ -6751,7 +6780,7 @@ begin
 	if (`NUM_ALU > 1)
 		setargs(n,{1'b0,alu1_id},alu1_v & (~alu1_mem | alu1_push),alu1_bus);
 
-	setargs(n,{1'b0,fcu_id},fcu_v,fcu_bus);
+	setargs(n,{1'b0,fcu_id},fcu_wr,fcu_bus);
 
 	setargs(n,{1'b0,dramA_id},dramA_v,dramA_bus);
 	if (`NUM_MEM > 1)
@@ -7080,16 +7109,15 @@ end
                             : (iqentry_a2_s[n] == alu0_id) ? alu0_bus 
                             : (iqentry_a2_s[n] == fpu1_id && `NUM_FPU > 0) ? fpu1_bus
                             : alu1_bus);
-                 // argB
-                 waitctr  <=  (iqentry_a2_v[n] ? iqentry_a2[n][47:0]
-                            : (iqentry_a2_s[n] == alu0_id) ? alu0_bus[47:0]
-                            : (iqentry_a2_s[n] == fpu1_id && `NUM_FPU > 0) ? fpu1_bus[47:0]
-                            : alu1_bus[47:0]);
+                 waitctr	    <= iqentry_imm[n]
+                            ? iqentry_a0[n]
+                            : (iqentry_a2_v[n] ? iqentry_a2[n]
+                            : (iqentry_a2_s[n] == alu0_id) ? alu0_bus : alu1_bus);
                  fcu_argC	<= iqentry_a3_v[n] ? iqentry_a3[n]
                             : (iqentry_a3_s[n] == alu0_id) ? alu0_bus : alu1_bus;
                  fcu_argI	<= iqentry_a0[n];
                  fcu_thrd   <= iqentry_thrd[n];
-                 fcu_dataready <= !IsWait(iqentry_instr[n]);
+                 fcu_dataready <= `VAL;
                  fcu_clearbm <= `FALSE;
                  fcu_ld <= TRUE;
                  fcu_timeout <= 8'h00;
@@ -8122,10 +8150,6 @@ B_DCacheLoadStart:
 // Data cache load terminal state
 B_DCacheLoadAck:
   if (ack_i|err_i|tlb_miss|rdv_i) begin
-  	if (!bok_i) begin
-  		stb_o <= `LOW;
-  		bstate <= B_DCacheLoadStb;
-  	end
     errq <= errq | err_i;
     rdvq <= rdvq | rdv_i;
     if (!preload)	// A preload instruction ignores any error
@@ -8147,7 +8171,11 @@ B_DCacheLoadAck:
     if (dccnt==2'd2)
 			cti_o <= 3'b111;
     if (dccnt==2'd3) begin
-    	wb_nack();
+			cti_o <= 3'b000;
+			bte_o <= 2'b00;
+			cyc <= `LOW;
+			stb_o <= `LOW;
+			sel_o <= 8'h00;
 			bstate <= B_DCacheLoadWait1;
     end
   end
@@ -8174,10 +8202,6 @@ B_DCacheLoadResetBusy: begin
 // Ack state for instruction cache load
 B_ICacheAck:
   if (ack_i|err_i|tlb_miss|exv_i) begin
-  	if (!bok_i) begin
-  		stb_o <= `LOW;
-  		bstate <= B_ICacheNack2;
-  	end
     errq <= errq | err_i;
     exvq <= exvq | exv_i;
 //        L1_en <= 9'h3 << {L2_xsel,L2_adr[4:3],1'b0};
@@ -8227,12 +8251,6 @@ B_ICacheAck:
       	L2_xsel <= 1'b1;
     end
   end
-B_ICacheNack2:
-	if (~acki) begin
-		stb_o <= `HIGH;
-		vadr[AMSB:3] <= vadr[AMSB:3] + 2'd1;
-		bstate <= B_ICacheAck;
-	end
 B_ICacheNack:
  	begin
 		L1_wr0 <= `FALSE;

@@ -32,7 +32,7 @@ module FT64_mpu(hartid_i,rst_i, clk4x_i, clk_i, tm_clk_i,
 	irq_o,
     i1,i2,i3,i4,i5,i6,i7,i8,i9,i10,i11,i12,i13,i14,i15,i16,i17,i18,i19,
     i20,i21,i22,i23,i24,i25,i26,i27,i28,
-	cti_o,bte_o,cyc_o,stb_o,ack_i,err_i,we_o,sel_o,adr_o,dat_o,dat_i,
+	cti_o,bte_o,bok_i,cyc_o,stb_o,ack_i,err_i,we_o,sel_o,adr_o,dat_o,dat_i,
 	sr_o, cr_o, rb_i);
 input [63:0] hartid_i;
 input rst_i;
@@ -73,6 +73,7 @@ input i27;
 input i28;
 output reg [2:0] cti_o;
 output reg [1:0] bte_o;
+input bok_i;
 output cyc_o;
 output reg stb_o;
 input ack_i;
@@ -283,6 +284,7 @@ FT64 ucpu1
     .vec_i(cause),
     .cti_o(cti),
     .bte_o(bte),
+    .bok_i(bok_i),
     .cyc_o(cyc),
     .stb_o(stb),
     .ack_i(ack),

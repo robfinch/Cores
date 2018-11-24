@@ -53,12 +53,12 @@
 
 // If set greater than 10, then memory instructions won't
 // issue until they are within 10 of the head of the queue.
-`define QENTRIES	8
+`define QENTRIES	4
 
 // Bitfield for representing exception codes
 `define XBITS			7:0
 
-//`define SUPPORT_DBG		1'b1
+`define SUPPORT_DBG		1'b1
 
 // Issue logic is not really required for every possible distance from
 // the head of the queue. Later queue entries tend to depend on prior
@@ -73,15 +73,15 @@
 // register file, the number of ports on the instruction cache, and how
 // many entries are contained in the fetch buffers. It also indirectly
 // affects how many instructions are queued.
-`define WAYS			2				// number of ways parallel (1-3 3 not working yet)
-`define NUM_IDU		2				// number of instruction decode units (1-3)
-`define NUM_ALU		2				// number of ALU's (1-2)
-`define NUM_MEM		2				// number of memory queues (1-3)
+`define WAYS			1				// number of ways parallel (1-3 3 not working yet)
+`define NUM_IDU		1				// number of instruction decode units (1-3)
+`define NUM_ALU		1				// number of ALU's (1-2)
+`define NUM_MEM		1				// number of memory queues (1-3)
 `define NUM_FPU		0				// number of floating-point units (0-2)
 // Note that even with just a single commit bus, multiple instructions may
 // commit if they do not target any registers. Up to three instruction may
 // commit even with just a single bus.
-`define NUM_CMT		2				// number of commit busses (1-2)
+`define NUM_CMT		1				// number of commit busses (1-2)
 // Comment out the following to remove FCU enhancements (branch predictor, BTB, RSB)
 `define FCU_ENH		1
 // Comment out the following to remove bypassing logic on the functional units
@@ -104,7 +104,7 @@
 
 // Comment out to remove the write buffer from the core.
 `define HAS_WB	1'b1
-`define	WB_DEPTH	6			// must be one more than desired depth
+`define	WB_DEPTH	5			// must be one more than desired depth
 
 // Uncomment to allow SIMD operations
 //`define SIMD	1'b1

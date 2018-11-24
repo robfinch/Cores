@@ -93,6 +93,7 @@ integer n;
 
 reg adrDone, adrIdle;
 reg [63:0] addro;
+reg [63:0] adr;			// load / store address
 reg [63:0] shift8;
 
 wire [7:0] a8 = a[7:0];
@@ -941,6 +942,13 @@ case(instr[`INSTRUCTION_OP])
 	                2'd2:   o = {~|a[63:32],~|a[31:0]};
 	                2'd3:   o = ~|a[63:0];
 	                endcase
+	        `NEG:
+	        				case(sz[1:0])
+	        				2'd0:	o = {-a[63:56],-a[55:48],-a[47:40],-a[39:32],-a[31:24],-a[23:16],-a[15:8],-a[7:0]};
+	        				2'd1: o = {-a[63:48],-a[47:32],-a[31:16],-a[15:0]};
+	        				2'd2:	o = {-a[63:32],-a[31:0]};
+	        				2'd3:	o = -a;
+	        				endcase
 	        `REDOR: case(sz[1:0])
 	                2'd0:   o = redor8;
 	                2'd1:   o = redor16;
@@ -1257,7 +1265,7 @@ case(instr[`INSTRUCTION_OP])
 `DIVUI:		o = BIG ? divq : 64'hCCCCCCCCCCCCCCCC;
 `DIVI:		o = BIG ? divq : 64'hCCCCCCCCCCCCCCCC;
 `MODI:		o = BIG ? rem : 64'hCCCCCCCCCCCCCCCC;
-`LB,`LBU,`SB:	o[63:0] = a + b;
+`LB,`LBU,`SB:	o = a + b;
 `Lx,`LxU,`Sx,`LVx,`LVxU:
 			begin
 				casez(b[2:0])
@@ -1434,6 +1442,61 @@ case(instr[`INSTRUCTION_OP])
                                     (prod[127:64] != 64'd0 & excen[3] ? `FLT_OFL : `FLT_NONE);
 `DIVI: exc <= BIG & excen[4] & divByZero & instr[27] ? `FLT_DBZ : `FLT_NONE;
 `MODI: exc <= BIG & excen[4] & divByZero & instr[27] ? `FLT_DBZ : `FLT_NONE;
+`MEMNDX:
+	if (instr[7:6]==2'b10) begin
+		if (instr[31])
+			case({instr[31:28],instr[17:16]})
+			`PUSH:	exc <= |o[2:0] ? `FLT_ALN : `FLT_NONE;
+	    default:	exc <= `FLT_UNIMP;
+			endcase
+		else
+			exc <= `FLT_UNIMP;
+	end
+	else if (instr[7:6]==2'b00) begin
+		if (!instr[31]) begin
+			if (BIG) begin
+				case({instr[31:28],instr[22:21]})
+				`LBX,`LBUX,`LVBX,`LVBUX:	exc <= `FLT_NONE;
+		    `LCX,`LCUX,`LVCX,`LVCUX:	exc <= |o[  0] ? `FLT_ALN : `FLT_NONE;
+		    `LVHX,`LVHUX,`LHX,`LHUX:	exc <= |o[1:0] ? `FLT_ALN : `FLT_NONE;
+		    `LWX,`LVWX,`LWRX,
+				`CACHEX,`LVX:							exc <= |o[2:0] ? `FLT_ALN : `FLT_NONE;
+		    `LVX,`SVX,`LVWS,`SVWS:		exc <= |o[2:0] ? `FLT_ALN : `FLT_NONE;
+		    default:	exc <= `FLT_UNIMP;
+				endcase
+			end
+			else
+				exc <= `FLT_UNIMP;
+		end
+		else begin
+			if (BIG) begin
+				case({instr[31:28],instr[17:16]})
+				`PUSH:	exc <= |o[2:0] ? `FLT_ALN : `FLT_NONE;
+				`SBX:		exc <= `FLT_NONE;
+		    `SCX:		exc <= |o[  0] ? `FLT_ALN : `FLT_NONE;
+		    `SHX:		exc <= |o[1:0] ? `FLT_ALN : `FLT_NONE;
+		    `SWX,`SWCX:	exc <= |o[2:0] ? `FLT_ALN : `FLT_NONE;
+		    `SVX:  	exc <= |o[2:0] ? `FLT_ALN : `FLT_NONE;
+		    `SVWS:	exc <= |o[2:0] ? `FLT_ALN : `FLT_NONE;
+		    default:	exc <= `FLT_UNIMP;
+				endcase
+			end
+			else
+				exc <= `FLT_UNIMP;
+		end
+	end
+	else
+		exc <= `FLT_UNIMP;
+`Lx,`Sx,`LxU,`LVx,`LVxU:
+			begin
+				casez(b[2:0])
+				3'b100:		exc <= |o[2:0] ? `FLT_ALN : `FLT_NONE;	// LW / SW
+				3'b?10: 	exc <= |o[1:0] ? `FLT_ALN : `FLT_NONE;	// LH / LHU / SH
+				default:	exc <= |o[  0] ? `FLT_ALN : `FLT_NONE;	// LC / LCU / SC
+				endcase
+			end
+`LWR,`SWC,`CAS,`CACHE:
+	exc <= |o[2:0] ? `FLT_ALN : `FLT_NONE;
 default:    exc <= `FLT_NONE;
 endcase
 end

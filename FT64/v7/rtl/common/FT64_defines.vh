@@ -128,6 +128,7 @@
 `define SYNC        5'h12
 `define CHAIN_OFF		5'h14
 `define CHAIN_ON		5'h15
+`define SETWB				5'h16
 `define SXH					5'h18
 `define SXC					5'h19
 `define SXB					5'h1A
@@ -400,6 +401,7 @@
 `define FLT_CHK     8'd39
 `define FLT_DBZ     8'd40
 `define FLT_OFL     8'd41
+`define FLT_ALN			8'd48
 `define FLT_DWF     8'd50
 `define FLT_DRF     8'd51
 `define FLT_PRIV    8'd53
