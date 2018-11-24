@@ -4390,7 +4390,7 @@ always @*
 begin
 	iqentry_fcu_issue = {QENTRIES{1'b0}};
 	
-	if (fcu_done) begin
+	if (fcu_done & ~branchmiss) begin
 		for (n = 0; n < QENTRIES; n = n + 1) begin
 			if (could_issue[heads[n]] && iqentry_fc[heads[n]] && (nextqd[heads[n]] || iqentry_br[heads[n]])
 			&& iqentry_fcu_issue == {QENTRIES{1'b0}}
@@ -5596,7 +5596,7 @@ FT64_FCU_Calc #(.AMSB(AMSB)) ufcuc1
 	.bus(fcu_bus)
 );
 
-wire will_clear_branchmiss = branchmiss && ((fetchbuf0_v && fetchbuf0_pc==fcu_misspc) || (fetchbuf1_v && fetchbuf1_pc==fcu_misspc));
+wire will_clear_branchmiss = branchmiss && ((fetchbuf0_v && fetchbuf0_pc==misspc) || (fetchbuf1_v && fetchbuf1_pc==misspc));
 
 always @*
 begin
@@ -6191,12 +6191,34 @@ end
 else begin
 	if (|fb_panic)
 		panic <= fb_panic;
-	begin
-		branchmiss <= excmiss|fcu_branchmiss;
-		misspc <= excmiss ? excmisspc : fcu_misspc;
-		missid <= excmiss ? (|iqentry_exc[heads[0]] ? heads[0] : heads[1]) : fcu_sourceid;
-		branchmiss_thrd <=  excmiss ? excthrd : fcu_thrd;
+
+	// Only one branchmiss is allowed to be processed at a time. If a second 
+	// branchmiss occurs while the first is being processed, it would have
+	// to of occurred as a speculation in the branch shadow of the first.
+	// The second instruction would be stomped on by the first branchmiss so
+	// there is no need to process it.
+	// The branchmiss has to be latched, then cleared later as there could
+	// be a cache miss at the same time meaning the switch to the new pc
+	// does not take place immediately.
+	if (!branchmiss) begin
+		if (excmiss) begin
+			branchmiss <= `TRUE;
+			misspc <= excmisspc;
+			missid <= (|iqentry_exc[heads[0]] ? heads[0] : heads[1]);
+			branchmiss_thrd <= excthrd;
+		end
+		else if (fcu_branchmiss) begin
+			branchmiss <= `TRUE;
+			misspc <= fcu_misspc;
+			missid <= fcu_sourceid;
+			branchmiss_thrd <= fcu_thrd;
+		end
 	end
+	// Clear a branch miss when target instruction is fetched.
+	if (will_clear_branchmiss) begin
+		branchmiss <= `FALSE;
+	end
+
 	// The following signals only pulse
 
 	// Instruction decode output should only pulse once for a queue entry. We
@@ -6690,11 +6712,6 @@ if (fcu_v) begin
 	// unconditionally set, the value will be ignored if it's not a branch.
 	iqentry_takb[ fcu_id[`QBITS] ] <= fcu_takb;
 	fcu_dataready <= `INV;
-end
-// Clear a branch miss when target instruction is fetched.
-if (will_clear_branchmiss) begin
-	fcu_branch <= `FALSE;
-	branchmiss <= `FALSE;
 end
 
 
