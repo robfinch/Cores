@@ -1103,13 +1103,23 @@ Operand *GenerateFunctionCall(ENODE *node, int flags)
 		&& sym->sym->tp->GetBtp()
 		&& sym->sym->tp->GetBtp()->IsVectorType())
 		return (makevreg(1));
-	ap = makereg(1);
-	if (sym 
+	if (sym
 		&& sym->sym
 		&& sym->sym->tp
 		&& sym->sym->tp->GetBtp()
-		)
+		) {
+		if (sym->sym->tp->GetBtp()->type != bt_void) {
+			ap = GetTempRegister();
+			GenerateDiadic(op_mov, 0, ap, makereg(1));
+		}
+		else
+			ap = makereg(0);
 		ap->isPtr = sym->sym->tp->GetBtp()->type == bt_pointer;
+	}
+	else {
+		ap = GetTempRegister();
+		GenerateDiadic(op_mov, 0, ap, makereg(1));
+	}
 	return (ap);
 	/*
 	else {

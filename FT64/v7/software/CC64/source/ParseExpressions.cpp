@@ -2045,8 +2045,9 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
 			}
 			if (ep1) {
 				t = ep1->tp->type;
-				if (IsLValue(ep1) && !(t == bt_pointer || t == bt_struct || t == bt_union || t == bt_class)) {
-					ep1 = ep1->p[0];
+//				if (IsLValue(ep1) && !(t == bt_pointer || t == bt_struct || t == bt_union || t == bt_class)) {
+				if (IsLValue(ep1) && !(t == bt_struct || t == bt_union || t == bt_class)) {
+				ep1 = ep1->p[0];
 					if (ep1) {
 						ep1->esize = 8;     // converted to a pointer so size is now 8
 						tp1 = TYP::Make(bt_pointer, 8);

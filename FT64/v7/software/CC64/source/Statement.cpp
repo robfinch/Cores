@@ -1533,7 +1533,7 @@ void Statement::GenerateSwitch()
 			}
 			// value not found
 			casetab[mm].val = kk;
-			casetab[mm].label = defcase ? (int)defcase->label : breaklab;
+			casetab[mm].label = defcase ? deflbl : breaklab;
 			mm++;
 		j1:;
 		}
@@ -1544,9 +1544,9 @@ void Statement::GenerateSwitch()
 		ap2 = GetTempRegister();
 		if (!nkd) {
 			GenerateDiadic(op_ldi, 0, ap1, make_immed(minv));
-			GenerateTriadic(op_blt, 0, ap, ap1, make_clabel(defcase ? (int)defcase->label : breaklab));
+			GenerateTriadic(op_blt, 0, ap, ap1, make_clabel(defcase ? deflbl : breaklab));
 			GenerateDiadic(op_ldi, 0, ap2, make_immed(maxv + 1));
-			GenerateTriadic(op_bge, 0, ap, ap2, make_clabel(defcase ? (int)defcase->label : breaklab));
+			GenerateTriadic(op_bge, 0, ap, ap2, make_clabel(defcase ? deflbl : breaklab));
 			//Generate4adic(op_chk,0,ap,ap1,ap2,make_clabel(defcase ? (int)defcase->label : breaklab));
 		}
 		if (minv != 0)
