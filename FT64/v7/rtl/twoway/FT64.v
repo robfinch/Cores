@@ -23,6 +23,7 @@
 //    re-written for synchronous operation, not as elegant
 //    but required for operation in an FPGA
 //	- fine-grained simultaneous multi-threading (SMT)
+//  - bus randomizer on exceptional conditions
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -1179,7 +1180,7 @@ assign fcu_clk = clk_i;
 generate begin: gBTBInst
 if (`WAYS > 2) begin
 `ifdef FCU_ENH
-FT64_BTB ubtb1
+FT64_BTB #(.AMSB(AMSB)) ubtb1
 (
   .rst(rst),
   .wclk(fcu_clk),
@@ -1221,7 +1222,7 @@ assign btgtF = RSTPC;
 end
 else if (`WAYS > 1) begin
 `ifdef FCU_ENH
-FT64_BTB ubtb1
+FT64_BTB #(.AMSB(AMSB)) ubtb1
 (
   .rst(rst),
   .wclk(fcu_clk),
@@ -1261,7 +1262,7 @@ assign btgtD = RSTPC;
 end
 else begin
 `ifdef FCU_ENH
-FT64_BTB ubtb1
+FT64_BTB #(.AMSB(AMSB)) ubtb1
 (
   .rst(rst),
   .wclk(fcu_clk),
@@ -4401,6 +4402,31 @@ begin
 	end
 end
 
+
+// Test if a given address is in the write buffer. This is done only for the
+// first two queue slots to save logic on comparators.
+reg inwb0;
+always @*
+begin
+	inwb0 = FALSE;
+`ifdef HAS_WB
+	for (n = 0; n < `WB_DEPTH; n = n + 1)
+		if (iqentry_ma[heads[0]][AMSB:3]==wb_addr[n][AMSB:3] && wb_v[n])
+			inwb0 = TRUE;
+`endif
+end
+
+reg inwb1;
+always @*
+begin
+	inwb1 = FALSE;
+`ifdef HAS_WB
+	for (n = 0; n < `WB_DEPTH; n = n + 1)
+		if (iqentry_ma[heads[1]][AMSB:3]==wb_addr[n][AMSB:3] && wb_v[n])
+			inwb1 = TRUE;
+`endif
+end
+
 //
 // determine if the instructions ready to issue can, in fact, issue.
 // "ready" means that the instruction has valid operands but has not gone yet
@@ -4409,7 +4435,7 @@ generate begin : gMemIssue
 always @*
 begin
 	issue_count = 0;
-	 memissue[ heads[0] ] =	iqentry_memready[ heads[0] ] && !(iqentry_load[heads[0]] && wb_v!=1'b0);		// first in line ... go as soon as ready
+	 memissue[ heads[0] ] =	iqentry_memready[ heads[0] ] && !(iqentry_load[heads[0]] && inwb0);		// first in line ... go as soon as ready
 	 if (memissue[heads[0]])
 	 	issue_count = issue_count + 1;
 
@@ -4425,7 +4451,7 @@ begin
 					// ... if a preivous op has the aquire bit set
 					&& !(iqentry_aq[heads[0]] && iqentry_v[heads[0]])
 					// ... and there's nothing in the write buffer during a load
-					&& !(iqentry_load[heads[1]] && wb_v!=1'b0)
+					&& !(iqentry_load[heads[1]] && (inwb1 || iqentry_store[heads[0]]))
 					// ... and, if it is a store, there is no chance of it being undone
 					&& ((iqentry_load[heads[1]] && sple) ||
 					   !(iqentry_fc[heads[0]]||iqentry_canex[heads[0]]));
@@ -4450,7 +4476,8 @@ begin
 					&& !(iqentry_aq[heads[0]] && iqentry_v[heads[0]])
 					&& !(iqentry_aq[heads[1]] && iqentry_v[heads[1]])
 					// ... and there's nothing in the write buffer during a load
-					&& !(iqentry_load[heads[2]] && wb_v!=1'b0)
+					&& !(iqentry_load[heads[2]] && (wb_v!=1'b0
+						|| iqentry_store[heads[0]] || iqentry_store[heads[1]]))
 					// ... and there isn't a barrier, or everything before the barrier is done or invalid
             && (!(iqentry_iv[heads[1]] && iqentry_memsb[heads[1]]) || (iqentry_done[heads[0]] || !iqentry_v[heads[0]]))
     				&& (!(iqentry_iv[heads[1]] && iqentry_memdb[heads[1]]) || (!iqentry_mem[heads[0]] || iqentry_done[heads[0]] || !iqentry_v[heads[0]]))
@@ -4484,7 +4511,8 @@ begin
 					&& !(iqentry_aq[heads[1]] && iqentry_v[heads[1]])
 					&& !(iqentry_aq[heads[2]] && iqentry_v[heads[2]])
 					// ... and there's nothing in the write buffer during a load
-					&& !(iqentry_load[heads[3]] && wb_v!=1'b0)
+					&& !(iqentry_load[heads[3]] && (wb_v!=1'b0
+						|| iqentry_store[heads[0]] || iqentry_store[heads[1]] || iqentry_store[heads[2]]))
 					// ... and there isn't a barrier, or everything before the barrier is done or invalid
                     && (!(iqentry_iv[heads[1]] && iqentry_memsb[heads[1]]) || (iqentry_done[heads[0]] || !iqentry_v[heads[0]]))
                     && (!(iqentry_iv[heads[2]] && iqentry_memsb[heads[2]]) ||
@@ -4533,7 +4561,8 @@ begin
 					&& !(iqentry_aq[heads[2]] && iqentry_v[heads[2]])
 					&& !(iqentry_aq[heads[3]] && iqentry_v[heads[3]])
 					// ... and there's nothing in the write buffer during a load
-					&& !(iqentry_load[heads[4]] && wb_v!=1'b0)
+					&& !(iqentry_load[heads[4]] && (wb_v!=1'b0
+						|| iqentry_store[heads[0]] || iqentry_store[heads[1]] || iqentry_store[heads[2]] || iqentry_store[heads[3]]))
 					// ... and there isn't a barrier, or everything before the barrier is done or invalid
                     && (!(iqentry_iv[heads[1]] && iqentry_memsb[heads[1]]) || (iqentry_done[heads[0]] || !iqentry_v[heads[0]]))
                     && (!(iqentry_iv[heads[2]] && iqentry_memsb[heads[2]]) ||
@@ -4599,7 +4628,9 @@ begin
 					&& !(iqentry_aq[heads[3]] && iqentry_v[heads[3]])
 					&& !(iqentry_aq[heads[4]] && iqentry_v[heads[4]])
 					// ... and there's nothing in the write buffer during a load
-					&& !(iqentry_load[heads[5]] && wb_v!=1'b0)
+					&& !(iqentry_load[heads[5]] && (wb_v!=1'b0
+						|| iqentry_store[heads[0]] || iqentry_store[heads[1]] || iqentry_store[heads[2]] || iqentry_store[heads[3]]
+						|| iqentry_store[heads[4]]))
 					// ... and there isn't a barrier, or everything before the barrier is done or invalid
                     && (!(iqentry_iv[heads[1]] && iqentry_memsb[heads[1]]) || (iqentry_done[heads[0]] || !iqentry_v[heads[0]]))
                     && (!(iqentry_iv[heads[2]] && iqentry_memsb[heads[2]]) ||
@@ -4683,7 +4714,9 @@ if (QENTRIES > 6) begin
 					&& !(iqentry_aq[heads[4]] && iqentry_v[heads[4]])
 					&& !(iqentry_aq[heads[5]] && iqentry_v[heads[5]])
 					// ... and there's nothing in the write buffer during a load
-					&& !(iqentry_load[heads[6]] && wb_v!=1'b0)
+					&& !(iqentry_load[heads[6]] && (wb_v!=1'b0
+						|| iqentry_store[heads[0]] || iqentry_store[heads[1]] || iqentry_store[heads[2]] || iqentry_store[heads[3]]
+						|| iqentry_store[heads[4]] || iqentry_store[heads[5]]))
 					// ... and there isn't a barrier, or everything before the barrier is done or invalid
                     && (!(iqentry_iv[heads[1]] && iqentry_memsb[heads[1]]) || (iqentry_done[heads[0]] || !iqentry_v[heads[0]]))
                     && (!(iqentry_iv[heads[2]] && iqentry_memsb[heads[2]]) ||
@@ -4786,7 +4819,9 @@ if (QENTRIES > 6) begin
 					&& !(iqentry_aq[heads[5]] && iqentry_v[heads[5]])
 					&& !(iqentry_aq[heads[6]] && iqentry_v[heads[6]])
 					// ... and there's nothing in the write buffer during a load
-					&& !(iqentry_load[heads[7]] && wb_v!=1'b0)
+					&& !(iqentry_load[heads[7]] && (wb_v!=1'b0
+						|| iqentry_store[heads[0]] || iqentry_store[heads[1]] || iqentry_store[heads[2]] || iqentry_store[heads[3]]
+						|| iqentry_store[heads[4]] || iqentry_store[heads[5]] || iqentry_store[heads[6]]))
 					// ... and there isn't a barrier, or everything before the barrier is done or invalid
                     && (!(iqentry_iv[heads[1]] && iqentry_memsb[heads[1]]) || (iqentry_done[heads[0]] || !iqentry_v[heads[0]]))
                     && (!(iqentry_iv[heads[2]] && iqentry_memsb[heads[2]]) ||
@@ -4910,7 +4945,9 @@ if (QENTRIES > 6) begin
 					&& !(iqentry_aq[heads[6]] && iqentry_v[heads[6]])
 					&& !(iqentry_aq[heads[7]] && iqentry_v[heads[7]])
 					// ... and there's nothing in the write buffer during a load
-					&& !(iqentry_load[heads[8]] && wb_v!=1'b0)
+					&& !(iqentry_load[heads[8]] && (wb_v!=1'b0
+						|| iqentry_store[heads[0]] || iqentry_store[heads[1]] || iqentry_store[heads[2]] || iqentry_store[heads[3]]
+						|| iqentry_store[heads[4]] || iqentry_store[heads[5]] || iqentry_store[heads[6]] || iqentry_store[heads[7]]))
 					// ... and there isn't a barrier, or everything before the barrier is done or invalid
                     && (!(iqentry_iv[heads[1]] && iqentry_memsb[heads[1]]) || (iqentry_done[heads[0]] || !iqentry_v[heads[0]]))
                     && (!(iqentry_iv[heads[2]] && iqentry_memsb[heads[2]]) ||
@@ -5060,7 +5097,10 @@ if (QENTRIES > 6) begin
 					&& !(iqentry_aq[heads[7]] && iqentry_v[heads[7]])
 					&& !(iqentry_aq[heads[8]] && iqentry_v[heads[8]])
 					// ... and there's nothing in the write buffer during a load
-					&& !(iqentry_load[heads[9]] && wb_v!=1'b0)
+					&& !(iqentry_load[heads[9]] && (wb_v!=1'b0
+						|| iqentry_store[heads[0]] || iqentry_store[heads[1]] || iqentry_store[heads[2]] || iqentry_store[heads[3]]
+						|| iqentry_store[heads[4]] || iqentry_store[heads[5]] || iqentry_store[heads[6]] || iqentry_store[heads[7]]
+						|| iqentry_store[heads[8]]))
 					// ... and there isn't a barrier, or everything before the barrier is done or invalid
                     && (!(iqentry_iv[heads[1]] && iqentry_memsb[heads[1]]) || (iqentry_done[heads[0]] || !iqentry_v[heads[0]]))
                     && (!(iqentry_iv[heads[2]] && iqentry_memsb[heads[2]]) ||
@@ -5363,6 +5403,9 @@ endgenerate
 //
 // EXECUTE
 //
+wire [15:0] lfsro;
+lfsr #(16,16'hACE4) u1 (rst, clk, 1'b1, 1'b0, lfsro);
+
 reg [63:0] csr_r;
 always @*
     read_csr(alu0_instr[29:18],csr_r,alu0_thrd);
@@ -5619,12 +5662,12 @@ end
 
 wire fcu_brk_miss = fcu_brk || fcu_rti;
 `ifdef FCU_ENH
-wire fcu_ret_miss = fcu_ret && fcu_v && (fcu_argB != iqentry_pc[nid]);
-wire fcu_jal_miss = fcu_jal && fcu_v && (fcu_argA + fcu_argI != iqentry_pc[nid]);
+wire fcu_ret_miss = fcu_ret && (fcu_argB != iqentry_pc[nid]);
+wire fcu_jal_miss = fcu_jal && (fcu_argA + fcu_argI != iqentry_pc[nid]);
 wire fcu_followed = iqentry_sn[nid] > iqentry_sn[fcu_id[`QBITS]];
 `else
-wire fcu_ret_miss = fcu_ret && fcu_v;
-wire fcu_jal_miss = fcu_jal && fcu_v;
+wire fcu_ret_miss = fcu_ret;
+wire fcu_jal_miss = fcu_jal;
 wire fcu_followed = `TRUE;
 `endif
 always @*
@@ -5982,6 +6025,16 @@ edge_det uedalu0d (.clk(clk), .ce(1'b1), .i(alu0_done), .pe(alu0_done_pe), .ne()
 edge_det uedalu1d (.clk(clk), .ce(1'b1), .i(alu1_done), .pe(alu1_done_pe), .ne(), .ee());
 edge_det uedwait1 (.clk(clk), .ce(1'b1), .i((waitctr==48'd1) || signal_i[fcu_argA[4:0]|fcu_argI[4:0]]), .pe(pe_wait), .ne(), .ee());
 
+// Bus randomization to mitigate meltdown attacks
+wire [63:0] ralu0_bus = |alu0_exc ? {4{lfsro}} : alu0_bus;
+wire [63:0] ralu1_bus = |alu1_exc ? {4{lfsro}} : alu1_bus;
+wire [63:0] rfpu1_bus = |fpu1_exc ? {4{lfsro}} : fpu1_bus;
+wire [63:0] rfpu2_bus = |fpu2_exc ? {4{lfsro}} : fpu2_bus;
+wire [63:0] rfcu_bus = |fcu_exc ? {4{lfsro}} : fcu_bus;
+wire [63:0] rdramA_bus = |dramA_exc ? {4{lfsro}} : dramA_bus;
+wire [63:0] rdramB_bus = |dramB_exc ? {4{lfsro}} : dramB_bus;
+wire [63:0] rdramC_bus = |dramC_exc ? {4{lfsro}} : dramC_bus;
+
 always @(posedge clk)
 if (rst) begin
 `ifdef SUPPORT_SMT
@@ -6130,7 +6183,7 @@ if (rst) begin
      cr0[16] <= 1'b0;		// disable SMT
      cr0[17] <= 1'b0;		// sequence number reset = 1
      cr0[34] <= FALSE;	// write buffer merging enable
-     cr0[35] <= FALSE;		// load speculation enable
+     cr0[35] <= TRUE;		// load speculation enable
      pcr <= 32'd0;
      pcr2 <= 64'd0;
     for (n = 0; n < PREGS; n = n + 1)
@@ -6652,7 +6705,7 @@ if (alu0_v) begin
 	iqentry_tgt [ alu0_id[`QBITS] ] <= alu0_tgt;
 	if (iqentry_mem[ alu0_id[`QBITS] ] && !iqentry_agen[ alu0_id[`QBITS] ])
 		iqentry_ma[ alu0_id[`QBITS] ] <= alu0_bus;
-	iqentry_res	[ alu0_id[`QBITS] ] <= alu0_bus;
+	iqentry_res	[ alu0_id[`QBITS] ] <= ralu0_bus;
 	iqentry_exc	[ alu0_id[`QBITS] ] <= alu0_exc;
 	iqentry_done[ alu0_id[`QBITS] ] <= !iqentry_mem[ alu0_id[`QBITS] ] && alu0_done;
 	iqentry_cmt [ alu0_id[`QBITS] ] <= !iqentry_mem[ alu0_id[`QBITS] ] && alu0_done;
@@ -6665,7 +6718,7 @@ if (alu1_v && `NUM_ALU > 1) begin
 	iqentry_tgt [ alu1_id[`QBITS] ] <= alu1_tgt;
 	if (iqentry_mem[ alu1_id[`QBITS] ] && !iqentry_agen[ alu1_id[`QBITS] ])
 		iqentry_ma[ alu1_id[`QBITS] ] <= alu1_bus;
-	iqentry_res	[ alu1_id[`QBITS] ] <= alu1_bus;
+	iqentry_res	[ alu1_id[`QBITS] ] <= ralu1_bus;
 	iqentry_exc	[ alu1_id[`QBITS] ] <= alu1_exc;
 	iqentry_done[ alu1_id[`QBITS] ] <= !iqentry_mem[ alu1_id[`QBITS] ] && alu1_done;
 	iqentry_cmt [ alu1_id[`QBITS] ] <= !iqentry_mem[ alu1_id[`QBITS] ] && alu1_done;
@@ -6675,7 +6728,7 @@ if (alu1_v && `NUM_ALU > 1) begin
 end
 
 if (fpu1_v) begin
-	iqentry_res [ fpu1_id[`QBITS] ] <= fpu1_bus;
+	iqentry_res [ fpu1_id[`QBITS] ] <= rfpu1_bus;
 	iqentry_ares[ fpu1_id[`QBITS] ] <= fpu1_status;
 	iqentry_exc [ fpu1_id[`QBITS] ] <= fpu1_exc;
 	iqentry_done[ fpu1_id[`QBITS] ] <= fpu1_done;
@@ -6685,7 +6738,7 @@ if (fpu1_v) begin
 end
 
 if (fpu2_v && `NUM_FPU > 1) begin
-	iqentry_res [ fpu2_id[`QBITS] ] <= fpu2_bus;
+	iqentry_res [ fpu2_id[`QBITS] ] <= rfpu2_bus;
 	iqentry_ares[ fpu2_id[`QBITS] ] <= fpu2_status;
 	iqentry_exc [ fpu2_id[`QBITS] ] <= fpu2_exc;
 	iqentry_done[ fpu2_id[`QBITS] ] <= fpu2_done;
@@ -6703,7 +6756,7 @@ end
 if (fcu_v) begin
 	fcu_done <= `TRUE;
 	iqentry_ma  [ fcu_id[`QBITS] ] <= fcu_misspc;
-  iqentry_res [ fcu_id[`QBITS] ] <= fcu_bus;
+  iqentry_res [ fcu_id[`QBITS] ] <= rfcu_bus;
   iqentry_exc [ fcu_id[`QBITS] ] <= fcu_exc;
 	iqentry_done[ fcu_id[`QBITS] ] <= `TRUE;
 	iqentry_cmt [ fcu_id[`QBITS] ] <= `TRUE;
@@ -6716,7 +6769,7 @@ end
 
 
 if (mem1_available && dramA_v && iqentry_v[ dramA_id[`QBITS] ] && iqentry_load[ dramA_id[`QBITS] ] && !iqentry_stomp[dramA_id[`QBITS]]) begin
-	iqentry_res	[ dramA_id[`QBITS] ] <= dramA_bus;
+	iqentry_res	[ dramA_id[`QBITS] ] <= rdramA_bus;
 	iqentry_exc	[ dramA_id[`QBITS] ] <= dramA_exc;
 	iqentry_done[ dramA_id[`QBITS] ] <= `VAL;
 	iqentry_out [ dramA_id[`QBITS] ] <= `INV;
@@ -6724,7 +6777,7 @@ if (mem1_available && dramA_v && iqentry_v[ dramA_id[`QBITS] ] && iqentry_load[ 
 	iqentry_aq  [ dramA_id[`QBITS] ] <= `INV;
 end
 if (mem2_available && `NUM_MEM > 1 && dramB_v && iqentry_v[ dramB_id[`QBITS] ] && iqentry_load[ dramB_id[`QBITS] ] && !iqentry_stomp[dramB_id[`QBITS]]) begin
-	iqentry_res	[ dramB_id[`QBITS] ] <= dramB_bus;
+	iqentry_res	[ dramB_id[`QBITS] ] <= rdramB_bus;
 	iqentry_exc	[ dramB_id[`QBITS] ] <= dramB_exc;
 	iqentry_done[ dramB_id[`QBITS] ] <= `VAL;
 	iqentry_out [ dramB_id[`QBITS] ] <= `INV;
@@ -6732,7 +6785,7 @@ if (mem2_available && `NUM_MEM > 1 && dramB_v && iqentry_v[ dramB_id[`QBITS] ] &
 	iqentry_aq  [ dramB_id[`QBITS] ] <= `INV;
 end
 if (mem3_available && `NUM_MEM > 2 && dramC_v && iqentry_v[ dramC_id[`QBITS] ] && iqentry_load[ dramC_id[`QBITS] ] && !iqentry_stomp[dramC_id[`QBITS]]) begin
-	iqentry_res	[ dramC_id[`QBITS] ] <= dramC_bus;
+	iqentry_res	[ dramC_id[`QBITS] ] <= rdramC_bus;
 	iqentry_exc	[ dramC_id[`QBITS] ] <= dramC_exc;
 	iqentry_done[ dramC_id[`QBITS] ] <= `VAL;
 	iqentry_out [ dramC_id[`QBITS] ] <= `INV;
@@ -6756,25 +6809,25 @@ end
 for (n = 0; n < QENTRIES; n = n + 1)
 begin
 	if (`NUM_FPU > 0)
-		setargs(n,{1'b0,fpu1_id},fpu1_v,fpu1_bus);
+		setargs(n,{1'b0,fpu1_id},fpu1_v,rfpu1_bus);
 	if (`NUM_FPU > 1)
-		setargs(n,{1'b0,fpu2_id},fpu2_v,fpu2_bus);
+		setargs(n,{1'b0,fpu2_id},fpu2_v,rfpu2_bus);
 
 	// The memory address generated by the ALU should not be posted to be
 	// recieved into waiting argument registers. The arguments will be waiting
 	// for the result of the memory load, picked up from the dram busses. The
 	// only mem operation requiring the alu result bus is the push operation.
-	setargs(n,{1'b0,alu0_id},alu0_v & (~alu0_mem | alu0_push),alu0_bus);
+	setargs(n,{1'b0,alu0_id},alu0_v & (~alu0_mem | alu0_push),ralu0_bus);
 	if (`NUM_ALU > 1)
-		setargs(n,{1'b0,alu1_id},alu1_v & (~alu1_mem | alu1_push),alu1_bus);
+		setargs(n,{1'b0,alu1_id},alu1_v & (~alu1_mem | alu1_push),ralu1_bus);
 
-	setargs(n,{1'b0,fcu_id},fcu_v,fcu_bus);
+	setargs(n,{1'b0,fcu_id},fcu_v,rfcu_bus);
 
-	setargs(n,{1'b0,dramA_id},dramA_v,dramA_bus);
+	setargs(n,{1'b0,dramA_id},dramA_v,rdramA_bus);
 	if (`NUM_MEM > 1)
-		setargs(n,{1'b0,dramB_id},dramB_v,dramB_bus);
+		setargs(n,{1'b0,dramB_id},dramB_v,rdramB_bus);
 	if (`NUM_MEM > 2)
-		setargs(n,{1'b0,dramC_id},dramC_v,dramC_bus);
+		setargs(n,{1'b0,dramC_id},dramC_v,rdramC_bus);
 
 	setargs(n,commit0_id,commit0_v,commit0_bus);
 	if (`NUM_CMT > 1)
@@ -6872,9 +6925,9 @@ end
                  alu0_instr	<= iqentry_rtop[n] ? (
 `ifdef FU_BYPASS                 									
                  									iqentry_a3_v[n] ? iqentry_a3[n]
-			                            : (iqentry_a3_s[n] == alu0_id) ? alu0_bus
-			                            : (iqentry_a3_s[n] == alu1_id) ? alu1_bus
-			                            : (iqentry_a3_s[n] == fpu1_id && `NUM_FPU > 0) ? fpu1_bus
+			                            : (iqentry_a3_s[n] == alu0_id) ? ralu0_bus
+			                            : (iqentry_a3_s[n] == alu1_id) ? ralu1_bus
+			                            : (iqentry_a3_s[n] == fpu1_id && `NUM_FPU > 0) ? rfpu1_bus
 			                            : `NOP_INSN)
 `else			                           
 																	iqentry_a3[n]) 
@@ -6890,9 +6943,9 @@ end
                  alu0_argA	<=
 `ifdef FU_BYPASS                  
                  							iqentry_a1_v[n] ? iqentry_a1[n]
-                            : (iqentry_a1_s[n] == alu0_id) ? alu0_bus
-                            : (iqentry_a1_s[n] == alu1_id) ? alu1_bus
-                            : (iqentry_a1_s[n] == fpu1_id && `NUM_FPU > 0) ? fpu1_bus
+                            : (iqentry_a1_s[n] == alu0_id) ? ralu0_bus
+                            : (iqentry_a1_s[n] == alu1_id) ? ralu1_bus
+                            : (iqentry_a1_s[n] == fpu1_id && `NUM_FPU > 0) ? rfpu1_bus
                             : 64'hDEADDEADDEADDEAD;
 `else
 														iqentry_a1[n];                            
@@ -6901,9 +6954,9 @@ end
                             ? iqentry_a0[n]
 `ifdef FU_BYPASS                            
                             : (iqentry_a2_v[n] ? iqentry_a2[n]
-                            : (iqentry_a2_s[n] == alu0_id) ? alu0_bus 
-                            : (iqentry_a2_s[n] == alu1_id) ? alu1_bus 
-                            : (iqentry_a2_s[n] == fpu1_id && `NUM_FPU > 0) ? fpu1_bus
+                            : (iqentry_a2_s[n] == alu0_id) ? ralu0_bus 
+                            : (iqentry_a2_s[n] == alu1_id) ? ralu1_bus 
+                            : (iqentry_a2_s[n] == fpu1_id && `NUM_FPU > 0) ? rfpu1_bus
                             : 64'hDEADDEADDEADDEAD);
 `else
 														: iqentry_a2[n];                         
@@ -6911,7 +6964,7 @@ end
                  alu0_argC	<=
 `ifdef FU_BYPASS                  
                  							iqentry_a3_v[n] ? iqentry_a3[n]
-                            : (iqentry_a3_s[n] == alu0_id) ? alu0_bus : alu1_bus;
+                            : (iqentry_a3_s[n] == alu0_id) ? ralu0_bus : ralu1_bus;
 `else
 															iqentry_a3[n];                            
 `endif                            
@@ -6919,8 +6972,8 @@ end
                  alu0_tgt    <= IsVeins(iqentry_instr[n]) ?
                                 {6'h0,1'b1,iqentry_tgt[n][4:0]} | ((
                                 							iqentry_a2_v[n] ? iqentry_a2[n][5:0]
-                                            : (iqentry_a2_s[n] == alu0_id) ? alu0_bus[5:0]
-                                            : (iqentry_a2_s[n] == alu1_id) ? alu1_bus[5:0]
+                                            : (iqentry_a2_s[n] == alu0_id) ? ralu0_bus[5:0]
+                                            : (iqentry_a2_s[n] == alu1_id) ? ralu1_bus[5:0]
                                             : {4{16'h0000}})) << 6 : 
                                 iqentry_tgt[n];
                  alu0_ven    <= iqentry_ven[n];
@@ -6947,9 +7000,9 @@ end
                  alu1_argA	<=
 `ifdef FU_BYPASS                  
                  							iqentry_a1_v[n] ? iqentry_a1[n]
-                            : (iqentry_a1_s[n] == alu0_id) ? alu0_bus
-                            : (iqentry_a1_s[n] == alu1_id) ? alu1_bus
-                            : (iqentry_a1_s[n] == fpu1_id && `NUM_FPU > 0) ? fpu1_bus
+                            : (iqentry_a1_s[n] == alu0_id) ? ralu0_bus
+                            : (iqentry_a1_s[n] == alu1_id) ? ralu1_bus
+                            : (iqentry_a1_s[n] == fpu1_id && `NUM_FPU > 0) ? rfpu1_bus
                             : 64'hDEADDEADDEADDEAD;
 `else
 															iqentry_a1[n];                            
@@ -6958,9 +7011,9 @@ end
                             ? iqentry_a0[n]
 `ifdef FU_BYPASS                           
                             : (iqentry_a2_v[n] ? iqentry_a2[n]
-                            : (iqentry_a2_s[n] == alu0_id) ? alu0_bus 
-                            : (iqentry_a2_s[n] == alu1_id) ? alu1_bus 
-                            : (iqentry_a2_s[n] == fpu1_id && `NUM_FPU > 0) ? fpu1_bus
+                            : (iqentry_a2_s[n] == alu0_id) ? ralu0_bus 
+                            : (iqentry_a2_s[n] == alu1_id) ? ralu1_bus 
+                            : (iqentry_a2_s[n] == fpu1_id && `NUM_FPU > 0) ? rfpu1_bus
                             : 64'hDEADDEADDEADDEAD);
 `else
 														: iqentry_a2[n];
@@ -6968,15 +7021,15 @@ end
                  alu1_argC	<=
 `ifdef FU_BYPASS                 	
                  							iqentry_a3_v[n] ? iqentry_a3[n]
-                            : (iqentry_a3_s[n] == alu0_id) ? alu0_bus : alu1_bus;
+                            : (iqentry_a3_s[n] == alu0_id) ? ralu0_bus : ralu1_bus;
 `else                            
 															iqentry_a3[n];
 `endif                            
                  alu1_argI	<= iqentry_a0[n];
                  alu1_tgt    <= IsVeins(iqentry_instr[n]) ?
                                 {6'h0,1'b1,iqentry_tgt[n][4:0]} | ((iqentry_a2_v[n] ? iqentry_a2[n][5:0]
-                                            : (iqentry_a2_s[n] == alu0_id) ? alu0_bus[5:0]
-                                            : (iqentry_a2_s[n] == alu1_id) ? alu1_bus[5:0]
+                                            : (iqentry_a2_s[n] == alu0_id) ? ralu0_bus[5:0]
+                                            : (iqentry_a2_s[n] == alu1_id) ? ralu1_bus[5:0]
                                             : {4{16'h0000}})) << 6 : 
                                 iqentry_tgt[n];
                  alu1_ven    <= iqentry_ven[n];
@@ -6996,9 +7049,9 @@ end
                  fpu1_argA	<=
 `ifdef FU_BYPASS                  
                  							iqentry_a1_v[n] ? iqentry_a1[n]
-                            : (iqentry_a1_s[n] == alu0_id) ? alu0_bus 
-                            : (iqentry_a1_s[n] == alu1_id) ? alu1_bus 
-                            : (iqentry_a1_s[n] == fpu1_id && `NUM_FPU > 0) ? fpu1_bus
+                            : (iqentry_a1_s[n] == alu0_id) ? ralu0_bus 
+                            : (iqentry_a1_s[n] == alu1_id) ? ralu1_bus 
+                            : (iqentry_a1_s[n] == fpu1_id && `NUM_FPU > 0) ? rfpu1_bus
                             : 64'hDEADDEADDEADDEAD;
 `else
 															iqentry_a1[n];                          
@@ -7006,9 +7059,9 @@ end
                  fpu1_argB	<=
 `ifdef FU_BYPASS                  
                  							(iqentry_a2_v[n] ? iqentry_a2[n]
-                            : (iqentry_a2_s[n] == alu0_id) ? alu0_bus 
-                            : (iqentry_a2_s[n] == alu1_id) ? alu1_bus 
-                            : (iqentry_a2_s[n] == fpu1_id && `NUM_FPU > 0) ? fpu1_bus
+                            : (iqentry_a2_s[n] == alu0_id) ? ralu0_bus 
+                            : (iqentry_a2_s[n] == alu1_id) ? ralu1_bus 
+                            : (iqentry_a2_s[n] == fpu1_id && `NUM_FPU > 0) ? rfpu1_bus
                             : 64'hDEADDEADDEADDEAD);
 `else
 															iqentry_a2[n];
@@ -7016,7 +7069,7 @@ end
                  fpu1_argC	<=
 `ifdef FU_BYPASS                 
                  							 iqentry_a3_v[n] ? iqentry_a3[n]
-                            : (iqentry_a3_s[n] == alu0_id) ? alu0_bus : alu1_bus;
+                            : (iqentry_a3_s[n] == alu0_id) ? ralu0_bus : ralu1_bus;
 `else
 															iqentry_a3[n];                           
 `endif                            
@@ -7036,9 +7089,9 @@ end
                  fpu2_argA	<=
 `ifdef FU_BYPASS                  
                  							iqentry_a1_v[n] ? iqentry_a1[n]
-                            : (iqentry_a1_s[n] == alu0_id) ? alu0_bus 
-                            : (iqentry_a1_s[n] == alu1_id) ? alu1_bus 
-                            : (iqentry_a1_s[n] == fpu1_id && `NUM_FPU > 0) ? fpu1_bus
+                            : (iqentry_a1_s[n] == alu0_id) ? ralu0_bus 
+                            : (iqentry_a1_s[n] == alu1_id) ? ralu1_bus 
+                            : (iqentry_a1_s[n] == fpu1_id && `NUM_FPU > 0) ? rfpu1_bus
                             : 64'hDEADDEADDEADDEAD;
 `else
 															iqentry_a1[n];                          
@@ -7046,9 +7099,9 @@ end
                  fpu2_argB	<=
 `ifdef FU_BYPASS                  
                  							(iqentry_a2_v[n] ? iqentry_a2[n]
-                            : (iqentry_a2_s[n] == alu0_id) ? alu0_bus 
-                            : (iqentry_a2_s[n] == alu1_id) ? alu1_bus 
-                            : (iqentry_a2_s[n] == fpu1_id && `NUM_FPU > 0) ? fpu1_bus
+                            : (iqentry_a2_s[n] == alu0_id) ? ralu0_bus 
+                            : (iqentry_a2_s[n] == alu1_id) ? ralu1_bus 
+                            : (iqentry_a2_s[n] == fpu1_id && `NUM_FPU > 0) ? rfpu1_bus
                             : 64'hDEADDEADDEADDEAD);
 `else
 															iqentry_a2[n];
@@ -7056,7 +7109,7 @@ end
                  fpu2_argC	<=
 `ifdef FU_BYPASS                 
                  							 iqentry_a3_v[n] ? iqentry_a3[n]
-                            : (iqentry_a3_s[n] == alu0_id) ? alu0_bus : alu1_bus;
+                            : (iqentry_a3_s[n] == alu0_id) ? ralu0_bus : ralu1_bus;
 `else
 															iqentry_a3[n];                           
 `endif                            
@@ -7085,25 +7138,25 @@ end
                  fcu_rti  <= iqentry_rti[n];
                  fcu_pc		<= iqentry_pc[n];
                  fcu_argA	<= iqentry_a1_v[n] ? iqentry_a1[n]
-                            : (iqentry_a1_s[n] == alu0_id) ? alu0_bus
-                            : (iqentry_a1_s[n] == fpu1_id && `NUM_FPU > 0) ? fpu1_bus
-                            : alu1_bus;
+                            : (iqentry_a1_s[n] == alu0_id) ? ralu0_bus
+                            : (iqentry_a1_s[n] == fpu1_id && `NUM_FPU > 0) ? rfpu1_bus
+                            : ralu1_bus;
 `ifdef SUPPORT_SMT                            
                  fcu_argB	<= iqentry_rti[n] ? epc0[iqentry_thrd[n]]
 `else
                  fcu_argB	<= iqentry_rti[n] ? epc0
 `endif                 
                  			: (iqentry_a2_v[n] ? iqentry_a2[n]
-                            : (iqentry_a2_s[n] == alu0_id) ? alu0_bus 
-                            : (iqentry_a2_s[n] == fpu1_id && `NUM_FPU > 0) ? fpu1_bus
-                            : alu1_bus);
+                            : (iqentry_a2_s[n] == alu0_id) ? ralu0_bus 
+                            : (iqentry_a2_s[n] == fpu1_id && `NUM_FPU > 0) ? rfpu1_bus
+                            : ralu1_bus);
                  // argB
                  waitctr  <=  (iqentry_a2_v[n] ? iqentry_a2[n][47:0]
-                            : (iqentry_a2_s[n] == alu0_id) ? alu0_bus[47:0]
-                            : (iqentry_a2_s[n] == fpu1_id && `NUM_FPU > 0) ? fpu1_bus[47:0]
-                            : alu1_bus[47:0]);
+                            : (iqentry_a2_s[n] == alu0_id) ? ralu0_bus[47:0]
+                            : (iqentry_a2_s[n] == fpu1_id && `NUM_FPU > 0) ? rfpu1_bus[47:0]
+                            : ralu1_bus[47:0]);
                  fcu_argC	<= iqentry_a3_v[n] ? iqentry_a3[n]
-                            : (iqentry_a3_s[n] == alu0_id) ? alu0_bus : alu1_bus;
+                            : (iqentry_a3_s[n] == alu0_id) ? ralu0_bus : ralu1_bus;
                  fcu_argI	<= iqentry_a0[n];
                  fcu_thrd   <= iqentry_thrd[n];
                  fcu_dataready <= !IsWait(iqentry_instr[n]);
@@ -7443,10 +7496,10 @@ case(icstate)
 IDLE:
 	// If the bus unit is busy doing an update involving L1_adr or L2_adr
 	// we have to wait.
-	if (bstate != B_ICacheAck && bstate != B_ICacheNack) begin
+	if (bstate != B_ICacheAck && bstate != B_ICacheNack && bstate != B_ICacheNack2) begin
 		if (!ihit0) begin
-			L1_adr <= {pcr[5:0],pc0[31:5],5'h0};
-			L2_adr <= {pcr[5:0],pc0[31:5],5'h0};
+			L1_adr <= {pcr[5:0],pc0[AMSB:5],5'h0};
+			L2_adr <= {pcr[5:0],pc0[AMSB:5],5'h0};
 			L1_invline <= TRUE;
 			icwhich <= 2'b00;
 			iccnt <= 3'b00;
@@ -7454,12 +7507,12 @@ IDLE:
 		end
 		else if (!ihit1 && `WAYS > 1) begin
 			if (thread_en) begin
-				L1_adr <= {pcr[5:0],pc1[31:5],5'h0};
-				L2_adr <= {pcr[5:0],pc1[31:5],5'h0};
+				L1_adr <= {pcr[5:0],pc1[AMSB:5],5'h0};
+				L2_adr <= {pcr[5:0],pc1[AMSB:5],5'h0};
 			end
 			else begin
-				L1_adr <= {pcr[5:0],pc0plus6[31:5],5'h0};
-				L2_adr <= {pcr[5:0],pc0plus6[31:5],5'h0};
+				L1_adr <= {pcr[5:0],pc0plus6[AMSB:5],5'h0};
+				L2_adr <= {pcr[5:0],pc0plus6[AMSB:5],5'h0};
 			end
 			L1_invline <= TRUE;
 			icwhich <= 2'b01;
@@ -7468,12 +7521,12 @@ IDLE:
 		end
 		else if (!ihit2 && `WAYS > 2) begin
 			if (thread_en) begin
-				L1_adr <= {pcr[5:0],pc2[31:5],5'h0};
-				L2_adr <= {pcr[5:0],pc2[31:5],5'h0};
+				L1_adr <= {pcr[5:0],pc2[AMSB:5],5'h0};
+				L2_adr <= {pcr[5:0],pc2[AMSB:5],5'h0};
 			end
 			else begin
-				L1_adr <= {pcr[5:0],pc0plus12[31:5],5'h0};
-				L2_adr <= {pcr[5:0],pc0plus12[31:5],5'h0};
+				L1_adr <= {pcr[5:0],pc0plus12[AMSB:5],5'h0};
+				L2_adr <= {pcr[5:0],pc0plus12[AMSB:5],5'h0};
 			end
 			L1_invline <= TRUE;
 			icwhich <= 2'b10;
