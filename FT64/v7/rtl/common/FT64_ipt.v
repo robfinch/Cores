@@ -182,8 +182,16 @@ S_IDLE:
 				goto(S_ACK);
 			end
 			else begin
-				pt_ad <= Hash1({vadr_i[63:56],vadr_i});
-				goto(S_CMP1);
+				if (vadr_i[31:24]==8'hFF) begin
+					cyc_o <= 1'b1;
+					we_o <= we_i;
+					padr_o <= vadr_i;
+					goto(S_ACK);
+				end
+				else begin
+					pt_ad <= Hash1({vadr_i[63:56],vadr_i});
+					goto(S_CMP1);
+				end
 			end
 		end
 	end
