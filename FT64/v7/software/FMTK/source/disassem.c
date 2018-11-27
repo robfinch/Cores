@@ -1,11 +1,19 @@
+#define I_AUIPC	3
 #define I_ADDI	4
 #define I_ANDI	8
 #define I_ORI		9
 #define I_XORI	10
 #define I_XNORI	14
 #define I_CALL	25
+#define I_LUI		39
 #define I_JMP		40
 #define I_RET		41
+#define I_MODI		46
+#define I_MULUI		56
+#define I_MULI		58
+#define I_DIVUI		60
+#define I_NOP			61
+#define I_DIVI		62
 
 char *op_major[64] = {
 	"BRK","?","?","AUIPC","ADD","CSR","SLT","SLTU",
@@ -77,8 +85,29 @@ int disassem(unsigned __int16 *ad)
 	// Compressed instruction
 	if (i0 & 0x80) {
 		if (i0 & 0x40) {
-			switch(i0 >> 12) {
-				
+			op = i0 >> 12;
+			switch(op) {
+			case 3:	// PUSH
+				r = i0 & 0x1f;
+				dbg_printf("PUSH r%d", r);				
+				break;
+			case 4,6,8,10:
+				imm = ((i0 & 0x20) >> 2);
+				imm |= (((i0 >> 8) & 15) << 4);
+				if ((imm >> 7) & 1)
+					imm |= 0xffffffffffffff00L;
+				r = i0 & 0x1f;
+				dbg_printf("%cH r%d,%d[%cp]", (op==9||op==11) ? 'S' : 'L',r, imm, (op==7||op==11) ? 'f' : 's');
+				break;			
+			}
+			case 5,7,9,11:
+				imm = ((i0 & 0x20) >> 2);
+				imm |= (((i0 >> 8) & 15) << 4);
+				if ((imm >> 7) & 1)
+					imm |= 0xffffffffffffff00L;
+				r = i0 & 0x1f;
+				dbg_printf("%cW r%d,%d[%cp]", (op==9||op==11) ? 'S' : 'L',r, imm, (op==7||op==11) ? 'f' : 's');
+				break;			
 			}
 		}
 		else {
@@ -120,7 +149,7 @@ int disassem(unsigned __int16 *ad)
 		op = i0 & 0x3f;
 		str = op_major[op];
 		switch(op) {
-		case I_ADDI, I_ANDI, I_ORI, I_XORI, I_XNORI:
+		case I_ADDI, I_ANDI, I_ORI, I_XORI, I_XNORI, I_MULUI, I_MULI, I_MODI, I_DIVI, I_DIVUI:
 			dbg_printf("%s r%d,r%d,#%d", str, (insn >> 13) & 0x1f, (insn >> 8) & 0x1f, imm);
 			break;
 		case I_CALL, I_JMP:	dbg_printf("%s $%X", str, ((insn >> 8) << 1)); break;

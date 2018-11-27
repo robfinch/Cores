@@ -1,5 +1,7 @@
 
 #include <stdlib.h>
+#include <ctype.h>
+
 extern int *inptr;
 extern char cmdbuf[48];
 extern int ndx;
@@ -14,10 +16,12 @@ extern __int8 RTCBuf[96];
 extern __int8 msgTestString[64];
 extern int int64(int port);
 extern void out64(int port, int val);
+extern int FT64TinyBasic();
 
 void help()
 {
 	DBGDisplayStringCRLF("Commands");
+	DBGDisplayStringCRLF("B Tiny BASIC");
 	DBGDisplayStringCRLF("C <address> - call subroutine");
 	DBGDisplayStringCRLF("D start debugger");
 	DBGDisplayStringCRLF("M <address> <length> - dump memory");
@@ -52,19 +56,21 @@ pascal void DispHalf(int n)
 
 static int GetNum(int *ln)
 {
-	__int8 buf[20];
+	char buf[20];
 	int count;
 	int num;
 	int radix = 16;
 	int ch;
 
 	SkipSpaces();
-	ch = in64(&inptr[ndx]);
-	if (ch=='$')
+	ch = in64(&inptr[ndx]) & 0xff;
+	if (ch=='$') {
 		radix = 16;
+		ndx++;
+	}
 	else
 		radix = 10;
-	for (count = 0; count < 20; count++) {
+	for (count = 0; count < 19; count++) {
 		ch = in64(&inptr[ndx]) & 0xff;
 		if (radix==10) {
 			if (isdigit(ch))
@@ -166,11 +172,12 @@ static void CallCode()
 
 static void ProcessR()
 {
-	char ch;
+	int ch;
 	
 	ch = in64(&inptr[ndx]);
+	ch &= 0xff;
 	switch(ch) {
-	case 'C':
+	case 'C','c':
 		ndx++;
 		rtc_read();
 		break;
@@ -207,20 +214,20 @@ static void DisplayTime()
 
 static void ProcessT()
 {
-	char ch;
+	int ch;
 
 	ch = in64(&inptr[ndx]);
 	ch &= 0xff;
 	switch(ch) {
-	case 'I':
+	case 'I','i':
 		ndx++;
 		ch = in64(&inptr[ndx]);
 		ch &= 0xff;
-		if (ch=='M') {
+		if (ch=='M' || ch=='m') {
 			DisplayTime();
 		}
 		break;
-	case 'R':
+	case 'R','r':
 		ramtest();
 		break;
 	}
@@ -228,9 +235,10 @@ static void ProcessT()
 
 void ProcessW()
 {
-	char ch;
+	int ch;
 
 	ch = in64(&inptr[ndx]);
+	ch &= 0xff;
 	switch(ch) {
 	case 'T':
 		rtc_write();
@@ -318,7 +326,7 @@ void TestDCache()
 	for (errcount = n = 0; n < 10000; n++) {
 		if ((n & 0xff)==0)
 			DBGDisplayChar('.');
-		addr = (__int8 *)(0xFFFFFFFFFF401000L + (GetRand(0) & 0x3fff));
+		addr = (__int8 *)(0x0401000L + (GetRand(0) & 0x3fff));
 		for (j = 0; j < 65; j++)
 			addr[j] = msgTestString[j];
 		for (j = 0; j < 65; j++) {
@@ -334,7 +342,7 @@ void TestDCache()
 j1:;
 }
 
-int ProcessCmd()
+static int ProcessCmd()
 {
 	int row;
 	int ch;
@@ -355,6 +363,7 @@ int ProcessCmd()
 	//	DispByte(ch);
 	switch(ch) {
 	case ':': EditMem(); break;
+	case 'b','B':	FT64TinyBasic(); break;
 	case 'C': CallCode(); break;
 	case 'D','d': dbg_init(); debugger(0xfffffffffffc0000,0); break;
 	case 'H', 'h': HexLoader(); break;

@@ -21,8 +21,9 @@
 //                                                                          
 // ============================================================================
 //
-#include ".\kernel\const.h"
-#include ".\kernel\config.h"
+#include <fmtk/const.h>
+#include <fmtk/config.h>
+#include <errno.h>
 #include ".\kernel\types.h"
 
 // There are 1024 pages in each map. In the normal 8k page size that means a max of
@@ -38,6 +39,7 @@
 
 extern byte *os_brk;
 
+extern __int8 *osmem;
 extern int highest_data_word;
 extern __int16 mmu_freelist;		// head of list of free pages
 extern int syspages;
@@ -134,9 +136,9 @@ void ramtest()
 
 private pascal unsigned int round8k(register unsigned int amt)
 {
-    amt += 8191;
-    amt &= 0xFFFFFFFFFFFFE000L;
-    return (amt);
+  amt += 8191;
+  amt &= 0xFFFFFFFFFFFFE000L;
+  return (amt);
 }
 
 // ----------------------------------------------------------------------------
@@ -149,16 +151,17 @@ private pascal unsigned int round8k(register unsigned int amt)
 void init_memory_management()
 {
 	// System break positions.
-	// All breaks start out at address 8192 to allow a failed memory allocation
-	// to return 0 as the page address.
+	// All breaks start out at address 16777216. Addresses before this are
+	// reserved for the video frame buffer. This also allows a failed
+	// allocation to return 0.
 	DBGDisplayChar('A');
 	mmu_key = RTCBuf[0];	
-	memsetW(brks,8192,256);
+	memsetW(brks,16777216,256);
 	sys_pages_available = NPAGES;
-	DBGDisplayChar('a');
   
   // Allocate 4MB to the OS
-  ipt_alloc(0,4194303,7);
+  osmem = ipt_alloc(0,4194303,7);
+	DBGDisplayChar('a');
 }
 
 // ----------------------------------------------------------------------------
@@ -168,12 +171,9 @@ void init_memory_management()
 
 private pascal void ipt_alloc_page(int asid, byte *vadr, int acr, int last_page)
 {
-	DBGDisplayChar('F');
 	out64(IPT_MMU+0x10,(asid<<24)|(acr&7)|(last_page<<22));
-	DBGDisplayChar('G');
-	out64(IPT_MMU+0x18,vadr ^ mmu_key);
+	out64(IPT_MMU+0x18,vadr);// ^ (mmu_key & 0xffffff));
 	out64(IPT_MMU+0x00,1);	// trigger translation update
-	DBGDisplayChar('H');
 }
 
 // ----------------------------------------------------------------------------
@@ -187,7 +187,7 @@ void *ipt_alloc(int asid, int amt, int acr)
 
 	if (asid < 0 || asid > 255)
 		throw (E_BadASID);
-	p = 0;
+	p = -1;
 	DBGDisplayChar('B');
 	amt = round8k(amt);
 	npages = amt >> 13;
@@ -199,7 +199,6 @@ void *ipt_alloc(int asid, int amt, int acr)
 		p = brks[asid];
 		brks[asid] += amt;
 		for (nn = 0; nn < npages-1; nn++) {
-			DBGDisplayChar('D');
 			ipt_alloc_page(asid,p+(nn << 13),acr,0);
 		}
 		ipt_alloc_page(asid,p+(nn << 13),acr,1);
@@ -251,16 +250,19 @@ int mmu_AllocateMap()
 		if (hSearchMap >= NR_MAPS)
 			hSearchMap = 0;
 	}
-	throw (E_NoMoreACBs);
+	throw (errno = E_NoMoreACBs);
 }
 
 pascal void mmu_FreeMap(register int mapno)
 {
 	if (mapno < 0 || mapno >= NR_MAPS)
-		throw (E_BadMapno);
+		throw (errno = E_BadMapno);
 	mmu_FreeMaps &= ~(1 << mapno);	
 }
 
+// Returns:
+//	-1 on error, otherwise previous program break.
+//
 void *sbrk(int size)
 {
 	byte *p, *q, *r;
@@ -273,12 +275,16 @@ void *sbrk(int size)
 		SetASID(0);
 		p = ipt_alloc(as,size,7);
 		SetASID(as);
+		if (p==-1)
+			errno = E_NoMem;
 		return (p);
 	}
 	else if (size < 0) {
 		as = GetASID();
-		if (size > brks[as])
-			return (p);
+		if (size > brks[as]) {
+			errno = E_NoMem;
+			return (-1);
+		}
 		SetASID(0);
 		r = p = brks[as] - size;
 		p |= as << 56;
@@ -286,8 +292,12 @@ void *sbrk(int size)
 			q = ipt_free(q);
 		brks[as] = r;
 		if (r > 0)
-			ipt_alloc_page(as, r-8192, 7, 1);
+			ipt_alloc_page(as, r, 7, 1);
 		SetASID(as);
-	}	
+	}
+	else {	// size==0
+		as = GetASID();
+		p = brks[as];	
+	}
 	return (p);
 }
