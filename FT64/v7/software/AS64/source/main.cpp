@@ -2151,6 +2151,8 @@ int main(int argc, char *argv[])
   int nn,qq,kk;
   static char fname[500];
   static char hexbuf[500];
+	static char nm[100];
+	SYM *sym;
   char *p;
   uint64_t lsa;      // last start address
   double bpi;
@@ -2595,6 +2597,13 @@ int main(int argc, char *argv[])
                     fprintf(vfp, hexbuf);
                 }
             }
+						strcpy_s(nm, sizeof(nm), "start");
+						sym = find_symbol(nm);
+						if (sym) {
+							sprintf_s(hexbuf, sizeof(hexbuf), ":02000005%08X00", (int)(sym->value.low & 0xffffffffLL));
+							IHChecksum(hexbuf, 4);
+							fprintf(vfp, hexbuf);
+						}
             fprintf(vfp, ":00000001FF\n%c",26);        // end of file record
             fclose(vfp);
         }

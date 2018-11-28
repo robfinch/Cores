@@ -1156,6 +1156,7 @@ void LoadConstant(int64_t val, int rg)
 		((val >> 35LL) << 18LL) |
 		(((val >> 30LL) & 0x1fLL) << 8LL) |
 		(rg << 13) |
+		(1 << 6) |
 		0x27, !expand_flag, 6);	// LUI
 	emit_insn(
 		(val << 18LL) |
@@ -3052,20 +3053,22 @@ static void process_brk()
 	if (Ra == -1) {
 		NextToken();
 		val = expr();
-		NextToken();
+		//NextToken();
 		if (token == ',') {
-			inc = (int)expr();
 			NextToken();
-			if (token == ',')
-				user = (int)expr;
+			inc = (int)expr();
+			if (token == ',') {
+				NextToken();
+				user = (int)expr();
+			}
 			else
 				prevToken();
 		}
 		else
 			prevToken();
 		emit_insn(
-			(user << 24) |
-			((inc & 0x7) << 21) |
+			(user << 26) |
+			((inc & 31) << 21) |
 			((val & 0xFFLL) << 8) |
 			0x00, !expand_flag, 4
 		);
@@ -3083,8 +3086,8 @@ static void process_brk()
 	else
 		prevToken();
 	emit_insn(
-		(user << 24) |
-		((inc & 0x7) << 21) |
+		(user << 26) |
+		((inc & 31) << 21) |
 		(1 << 16) |
 		((Ra & 0x1fLL) << 8) |
 		0x00, !expand_flag, 4
@@ -4497,8 +4500,8 @@ static void process_com()
 
 static void process_neg()
 {
-    int Ra;
-    int Rt;
+  int Ra;
+  int Rt;
 	char *p;
 	int sz = 3;
 
@@ -4506,16 +4509,17 @@ static void process_neg()
 	if (p[0] == '.')
 		getSz(&sz);
 
-    Rt = getRegisterX();
-    need(',');
-    Ra = getRegisterX();
+  Rt = getRegisterX();
+  need(',');
+  Ra = getRegisterX();
 	emit_insn(
-		(0x05LL << 34LL) |
-		(sz << 24) |
-		(Rt << 18) |
-		(Ra << 12) |
+		(1 << 26) |
+		(sz << 23) |
+		(7 << 18) |
+		(Rt << 13) |
+		(Ra << 8) |
 		(0 << 6) |
-		0x02,!expand_flag,5
+		0x02,!expand_flag,4
 		);
 	prevToken();
 }
@@ -4987,7 +4991,7 @@ void FT64_processMaster()
 		case tk_mulu: process_rrop(0x38,0x38); break;
 		//case tk_muluh: process_rrop(0x24, 0x38); break;
 		case tk_neg: process_neg(); break;
-        case tk_nop: emit_insn(0x1C,!expand_flag,4); break;
+    case tk_nop: emit_insn(0x0080,!expand_flag,2); break;
 		case tk_not: process_rop(0x05); break;
 //        case tk_not: process_rop(0x07); break;
         case tk_or:  process_rrop(0x09,0x09); break;
