@@ -205,6 +205,8 @@ reg [AMSB:0] branch_pcA;
 reg [AMSB:0] branch_pcB;
 
 always @*
+begin
+	branch_csA <= xcs;
 case(fetchbufA_instr[`INSTRUCTION_OP])
 `RET:		branch_pcA = retpc0;
 `JMP,`CALL:
@@ -222,8 +224,11 @@ default:
 	branch_pcA[63:32] = fetchbufA_pc[63:32];
 	end
 endcase
+end
 
 always @*
+begin
+	branch_csb <= xcs;
 case(fetchbufB_instr[`INSTRUCTION_OP])
 `RET:		branch_pcB = retpc0;
 `JMP,`CALL: 
@@ -241,6 +246,7 @@ default:
 	branch_pcB[63:32] = fetchbufB_pc[63:32];
 	end
 endcase
+end
 
 wire take_branchA = ({fetchbufA_v, IsBranch(fetchbufA_instr), predict_takenA}  == {`VAL, `TRUE, `TRUE}) || ((
 `ifdef FCU_ENH
@@ -347,11 +353,12 @@ else begin
 				  fetchbuf <= (queued1|queuedNop);
     		end
     	2'b11:
-  			if (did_branch) begin
-				  fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
-				  fetchbuf <= (queued1|queuedNop);
-  			end
-  			else begin
+//  			if (did_branch) begin
+//				  fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
+//				  fetchbuf <= (queued1|queuedNop);
+//  			end
+//  			else
+  			begin
 					pc0 <= branch_pcA;
 				  fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
 					fetchbufB_v <= `INV;
@@ -371,11 +378,12 @@ else begin
 				  fetchbuf <= ~(queued1|queuedNop);
 				end
 			2'b11:
-				if (did_branch) begin
-				  fetchbufB_v <= !(queued1|queuedNop);
-				  fetchbuf <= ~(queued1|queuedNop);
-				end
-				else begin
+//				if (did_branch) begin
+//				  fetchbufB_v <= !(queued1|queuedNop);
+//				  fetchbuf <= ~(queued1|queuedNop);
+//				end
+//				else
+				begin
 					pc0 <= branch_pcB;
 				  fetchbufB_v <= !(queued1|queuedNop);
 					fetchbufA_v <= `INV;

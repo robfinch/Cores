@@ -28,7 +28,7 @@
 module FT64_alu(rst, clk, ld, abort, instr, sz, tlb, a, b, c, pc, tgt, tgt2, ven, vm, sbl, sbu,
     csr, o, ob, done, idle, excen, exc, thrd, ptrmask, state, mem, shift,
     ol, ASID, icl_i, cyc_i, we_i, vadr_i, cyc_o, we_o, padr_o, uncached, tlb_miss,
-    exv_o, rdv_o, wrv_o);
+    exv_o, rdv_o, wrv_o, seg);
 parameter DBW = 64;
 parameter ABW = 64;
 parameter BIG = 1'b1;
@@ -79,6 +79,7 @@ output tlb_miss;
 output wrv_o;
 output rdv_o;
 output exv_o;
+input [63:0] seg;
 
 parameter byt = 3'd0;
 parameter char = 3'd1;
@@ -1178,7 +1179,7 @@ case(instr[`INSTRUCTION_OP])
 	if (instr[7:6]==2'b10) begin
 		if (instr[31])
 			case({instr[31:28],instr[17:16]})
-			`PUSH:	o = a - 4'd8;
+			`PUSH:	o = {seg[50:0],13'd0} + a - 4'd8;
 	    default:	o = 64'hDEADDEADDEADDEAD;
 			endcase
 		else
@@ -1192,18 +1193,18 @@ case(instr[`INSTRUCTION_OP])
 	    `LVBX,`LVBUX,`LVCX,`LVCUX,`LVHX,`LVHUX,`LVWX,
 	    `LHX,`LHUX,`LWX,`LWRX:
 					if (BIG) begin
-						o = a + (c << instr[19:18]);
+						o = {seg[50:0],13'd0} + a + (c << instr[19:18]);
 					end
 					else
 						o = 64'hCCCCCCCCEEEEEEEE;
 	    `LVX,`SVX:  if (BIG) begin
-	    				o = a + (c << 2'd3);
+	    				o = {seg[50:0],13'd0} + a + (c << 2'd3);
 	    			end
 	    			else
 	    				o = 64'hCCCCCCCCCCCCCCCC;
 	    `LVWS,`SVWS:
 	    			if (BIG) begin    
-	    				o = a + ({c * ven,3'b000});
+	    				o = {seg[50:0],13'd0} + a + ({c * ven,3'b000});
 	    			end
 	    			else
 	    				o = 64'hCCCCCCCCCCCCCCCC;
@@ -1211,21 +1212,21 @@ case(instr[`INSTRUCTION_OP])
 			endcase
 		else
 			case({instr[31:28],instr[17:16]})
-			`PUSH:	o = a - 4'd8;
+			`PUSH:	o = {seg[50:0],13'd0} + a - 4'd8;
 	    `SBX,`SCX,`SHX,`SWX,`SWCX:
 					if (BIG) begin
-						o = a + (c << instr[14:13]);
+						o = {seg[50:0],13'd0} + a + (c << instr[14:13]);
 					end
 					else
 						o = 64'hCCCCCCCCEEEEEEEE;
 	    `SVX:  if (BIG) begin
-	    				o = a + (c << 2'd3);
+	    				o = {seg[50:0],13'd0} + a + (c << 2'd3);
 	    			end
 	    			else
 	    				o = 64'hCCCCCCCCCCCCCCCC;
 	    `SVWS:
 	    			if (BIG) begin    
-	    				o = a + ({c * ven,3'b000});
+	    				o = {seg[50:0],13'd0} + a + ({c * ven,3'b000});
 	    			end
 	    			else
 	    				o = 64'hCCCCCCCCCCCCCCCC;
@@ -1265,21 +1266,21 @@ case(instr[`INSTRUCTION_OP])
 `DIVUI:		o = BIG ? divq : 64'hCCCCCCCCCCCCCCCC;
 `DIVI:		o = BIG ? divq : 64'hCCCCCCCCCCCCCCCC;
 `MODI:		o = BIG ? rem : 64'hCCCCCCCCCCCCCCCC;
-`LB,`LBU,`SB:	o = a + b;
+`LB,`LBU,`SB:	o = {seg[50:0],13'd0} + a + b;
 `Lx,`LxU,`Sx,`LVx,`LVxU:
 			begin
 				casez(b[2:0])
-				3'b100:		o = a + {b[63:3],3'b0};	// LW / SW
-				3'b?10: 	o = a + {b[63:2],2'b0};	// LH / LHU / SH
-				default:	o = a + {b[63:1],1'b0};	// LC / LCU / SC
+				3'b100:		o = {seg[50:0],13'd0} + a + {b[63:3],3'b0};	// LW / SW
+				3'b?10: 	o = {seg[50:0],13'd0} + a + {b[63:2],2'b0};	// LH / LHU / SH
+				default:	o = {seg[50:0],13'd0} + a + {b[63:1],1'b0};	// LC / LCU / SC
 				endcase
 			end
 `LWR,`SWC,`CAS,`CACHE:
 			begin
-				o = a + b;
+				o = {seg[50:0],13'd0} + a + b;
 			end
 `LV,`SV:    begin
-				o = a + b + {ven,3'b0};
+				o = {seg[50:0],13'd0} + a + b + {ven,3'b0};
 			end
 `CSRRW:     
 			case(instr[27:18])
@@ -1442,6 +1443,7 @@ case(instr[`INSTRUCTION_OP])
                                     (prod[127:64] != 64'd0 & excen[3] ? `FLT_OFL : `FLT_NONE);
 `DIVI: exc <= BIG & excen[4] & divByZero & instr[27] ? `FLT_DBZ : `FLT_NONE;
 `MODI: exc <= BIG & excen[4] & divByZero & instr[27] ? `FLT_DBZ : `FLT_NONE;
+`CSRRW:	exc <= (instr[27:21]==7'b0011011) ? `FLT_SEG : `FLT_NONE;
 `MEMNDX:
 	if (instr[7:6]==2'b10) begin
 		if (instr[31])

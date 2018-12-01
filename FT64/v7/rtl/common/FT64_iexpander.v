@@ -257,7 +257,16 @@ casez({cinstr[15:12],cinstr[6]})
 			expand[5:0] = `JAL;
 		end
 5'b00111:
-		if ({cinstr[11:8],cinstr[5]}==5'b0) begin	// PUSH
+		if ({cinstr[11:8]==4'h1}) begin
+			expand[47:32] = 16'h0000;
+			expand[31:26] = 6'h36;		// SEG instructions
+			expand[22:18] = {2'b0,cinstr[2:0]};
+			expand[17:13] = 5'd0;			// no target
+			expand[12:8] = 5'd0;
+			expand[7:6] = 2'b10;
+			expand[5:0] = 6'h02;			
+		end
+		else if ({cinstr[11:8],cinstr[5]}==5'b0) begin	// PUSH
 			expand[47:32] = 16'h0000;
 			expand[31:28] = 4'hC;
 			expand[27:23] = 5'd0;

@@ -191,6 +191,7 @@
 `define REX     6'h0D
 `define XNORI		6'h0E
 `define FLOAT   6'h0F
+`define CS			6'h10
 `define LVxU		6'h11
 `define LB      6'h13
 `define SB      6'h15
@@ -356,6 +357,20 @@
 `define CSR_GOLEX3	10'h053
 `define CSR_GOLEXVP	10'h054
 `define CSR_CODEBUF 10'b00010??????
+`define CSR_CS			10'h0D8
+`define CSR_DS			10'h0D9
+`define CSR_ES			10'h0DA
+`define CSR_SS			10'h0DB
+`define CSR_FS			10'h0DC
+`define CSR_GS			10'h0DD
+`define CSR_LDT			10'h0DE
+`define CSR_CS_BASE	10'h0C0
+`define CSR_DS_BASE	10'h0C1
+`define CSR_ES_BASE	10'h0C2
+`define CSR_SS_BASE	10'h0C3
+`define CSR_FS_BASE	10'h0C4
+`define CSR_GS_BASE	10'h0C5
+`define CSR_GDT_BASE	10'h0C7
 `define CSR_Q_CTR		10'h3C0
 `define CSR_BM_CTR	10'h3C1
 `define CSR_ICL_CTR	10'h3C2
@@ -401,6 +416,7 @@
 `define FLT_CHK     8'd39
 `define FLT_DBZ     8'd40
 `define FLT_OFL     8'd41
+`define FLT_SEG			8'd47
 `define FLT_ALN			8'd48
 `define FLT_DWF     8'd50
 `define FLT_DRF     8'd51
@@ -409,6 +425,14 @@
 `define FLT_BD		8'd55
 `define FLT_STK     8'd56
 `define FLT_DBE     8'd60
+`define FLT_CS_LD		8'd232
+`define FLT_DS_LD		8'd233
+`define FLT_ES_LD		8'd234
+`define FLT_SS_LD		8'd235
+`define FLT_FS_LD		8'd236
+`define FLT_GS_LD		8'd237
+`define FLT_RET			8'd238
+`deifne FLT_CS			8'd239
 
 `define INSTRUCTION_OP  5:0
 `define INSTRUCTION_L2	7:6
@@ -459,6 +483,7 @@
 `define IB_RC		  70:66
 `define IB_RB			65:61
 `define IB_RA			60:56
+`define IB_SEG		50:48
 `define IB_PUSH		47
 `define IB_TLB		46
 `define IB_SZ			45:43

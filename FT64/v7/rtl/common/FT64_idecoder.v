@@ -25,7 +25,7 @@
 `include ".\FT64_config.vh"
 `include ".\FT64_defines.vh"
 
-module FT64_idecoder(clk,idv_i,id_i,instr,vl,ven,thrd,predict_taken,Rt,bus,id_o,idv_o,debug_on);
+module FT64_idecoder(clk,idv_i,id_i,instr,vl,ven,thrd,predict_taken,Rt,bus,id_o,idv_o,debug_on,pred_on);
 input clk;
 input idv_i;
 input [4:0] id_i;
@@ -39,6 +39,7 @@ output reg [143:0] bus;
 output reg [4:0] id_o;
 output reg idv_o;
 input debug_on;
+input pred_on;
 
 parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
@@ -510,11 +511,6 @@ default:    IsInc = FALSE;
 endcase
 endfunction
 
-function IsSync;
-input [47:0] isn;
-IsSync = (isn[`INSTRUCTION_OP]==`R2 && isn[`INSTRUCTION_L2]==2'b00 && isn[`INSTRUCTION_S2]==`R1 && isn[22:18]==`SYNC); 
-endfunction
-
 function IsFSync;
 input [47:0] isn;
 IsFSync = (isn[`INSTRUCTION_OP]==`FLOAT && isn[`INSTRUCTION_L2]==2'b00 && isn[`INSTRUCTION_S2]==`FSYNC); 
@@ -628,7 +624,7 @@ endfunction
 
 function IsIrq;
 input [47:0] isn;
-IsIrq = isn[`INSTRUCTION_OP]==`BRK && isn[23:20]==4'h0;
+IsIrq = isn[`INSTRUCTION_OP]==`BRK && isn[25:21]==5'h0;
 endfunction
 
 function IsBrk;
@@ -639,6 +635,11 @@ endfunction
 function IsRti;
 input [47:0] isn;
 IsRti = isn[`INSTRUCTION_OP]==`RR && isn[`INSTRUCTION_S2]==`RTI;
+endfunction
+
+function IsSync;
+input [47:0] isn;
+IsSync = (isn[`INSTRUCTION_OP]==`R2 && isn[`INSTRUCTION_L2]==2'b00 && isn[`INSTRUCTION_S2]==`R1 && isn[22:18]==`SYNC) || IsRti(isn);
 endfunction
 
 // Has an extendable 14-bit constant
@@ -1071,21 +1072,32 @@ always @*
 `endif
 begin
 	bus <= 144'h0;
+	if (IsMem(instr)) begin
+		if (instr[6]==1'b1)
+		  bus[`IB_SEG] <= instr[47:45];
+		else if (instr[`INSTRUCTION_RA] >= 5'd30)
+			bus[`IB_SEG] <= 3'd3;
+		else
+			bus[`IB_SEG] <= 3'd1;
+	end
 	if (IsStore(instr))
-		bus[`IB_CONST] <= instr[6]==1'b1 ? {{34{instr[47]}},instr[47:23],instr[17:13]} :
+		bus[`IB_CONST] <= instr[6]==1'b1 ? {{37{instr[44]}},instr[44:23],instr[17:13]} :
 																				{{50{instr[31]}},instr[31:23],instr[17:13]};
+	else if (IsLoad(instr))
+		bus[`IB_CONST] <= instr[6]==1'b1 ? {{37{instr[44]}},instr[44:18]} :
+																				{{50{instr[31]}},instr[31:18]};
 	else
 		bus[`IB_CONST] <= instr[6]==1'b1 ? {{34{instr[47]}},instr[47:18]} :
 																				{{50{instr[31]}},instr[31:18]};
 `ifdef SUPPORT_DCI																			
 	if (instr[`INSTRUCTION_OP]==`CMPRSSD)
-		bus[`IB_LN] <= 3'd2;
+		bus[`IB_LN] <= 3'd2 | pred_on;
 	else
 `endif
 		case(instr[7:6])
-		2'b00:	bus[`IB_LN] <= 3'd4;
-		2'b01:	bus[`IB_LN] <= 3'd6;
-		default: bus[`IB_LN] <= 3'd2;
+		2'b00:	bus[`IB_LN] <= 3'd4 | pred_on;
+		2'b01:	bus[`IB_LN] <= 3'd6 | pred_on;
+		default: bus[`IB_LN] <= 3'd2 | pred_on;
 		endcase
 //	bus[`IB_RT]		 <= fnRt(instr,ven,vl,thrd) | {thrd,7'b0};
 //	bus[`IB_RC]		 <= fnRc(instr,ven,thrd) | {thrd,7'b0};

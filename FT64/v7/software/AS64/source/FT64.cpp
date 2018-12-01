@@ -27,7 +27,7 @@
 
 static void ProcessEOL(int opt);
 extern void process_message();
-static void mem_operand(int64_t *disp, int *regA, int *regB, int *Sc);
+static void mem_operand(int64_t *disp, int *regA, int *regB, int *Sc, int *seg);
 
 extern char *pif1;
 extern int first_rodata;
@@ -2969,6 +2969,7 @@ static void process_inc(int64_t oc)
     int Ra;
     int Rb;
 	int Sc;
+	int seg;
     int64_t incamt;
     int64_t disp;
     char *p;
@@ -2978,7 +2979,7 @@ static void process_inc(int64_t oc)
 	if (oc == 0x25) neg = 1;
 	NextToken();
     p = inptr;
-    mem_operand(&disp, &Ra, &Rb, &Sc);
+    mem_operand(&disp, &Ra, &Rb, &Sc, &seg);
     incamt = 1;
 	if (token==']')
        NextToken();
@@ -3122,25 +3123,68 @@ static void GetIndexScale(int *sc)
 // [Reg+Reg]
 // ---------------------------------------------------------------------------
 
-static void mem_operand(int64_t *disp, int *regA, int *regB, int *Sc)
+static void mem_operand(int64_t *disp, int *regA, int *regB, int *Sc, int *seg)
 {
-     int64_t val;
+  int64_t val;
 
-     // chech params
-     if (disp == (int64_t *)NULL)
-         return;
-     if (regA == (int *)NULL)
-         return;
+  // chech params
+  if (disp == (int64_t *)NULL)
+      return;
+  if (regA == (int *)NULL)
+      return;
 	 if (regB == (int *)NULL)
 		 return;
 	 if (Sc == (int *)NULL)
+		 return;
+	 if (seg == (int *)NULL)
 		 return;
 
      *disp = 0;
      *regA = -1;
 	 *regB = -1;
 	 *Sc = 0;
-     if (token!='[') {;
+	 *seg = -1;
+j1:
+     if (token!='[') {
+			 if (inptr[2] == ':') {
+				 if (inptr[1] == 's' || inptr[1] == 'S') {
+					 switch (inptr[0]) {
+					 case 'C':
+					 case 'c':
+						 *seg = 0; inptr += 3; NextToken(); goto j1;
+					 case 'D':
+					 case 'd':
+						 *seg = 1;
+						 inptr += 3;
+						 NextToken();
+						 goto j1;
+					 case 'E':
+					 case 'e':
+						 *seg = 2;
+						 inptr += 3;
+						 NextToken();
+						 goto j1;
+					 case 'S':
+					 case 's':
+						 *seg = 3;
+						 inptr += 3;
+						 NextToken();
+						 goto j1;
+					 case 'F':
+					 case 'f':
+						 *seg = 4;
+						 inptr += 3;
+						 NextToken();
+						 goto j1;
+					 case 'G':
+					 case 'g':
+						 *seg = 5;
+						 inptr += 3;
+						 NextToken();
+						 goto j1;
+					 }
+				 }
+			 }
           val = expr();
           *disp = val;
      }
@@ -3213,6 +3257,7 @@ static void process_store(int64_t opcode6, int funct6, int sz)
   int Ra,Rb,Rc;
   int Rs;
 	int Sc;
+	int seg;
   int64_t disp,val;
 	int64_t aq = 0, rl = 0;
 	int ar;
@@ -3227,16 +3272,17 @@ static void process_store(int64_t opcode6, int funct6, int sz)
       return;
   }
   expect(',');
-  mem_operand(&disp, &Ra, &Rc, &Sc);
+  mem_operand(&disp, &Ra, &Rc, &Sc, &seg);
 	if (Ra >= 0 && Rc >= 0) {
 		emit_insn(
+			((int64_t)seg << 45LL) |
 			((funct6 >> 2) << 28) |
 			((funct6 & 3) << 16) |
 			(Sc << 13) |
 			(Rc << 23) |
 			(Rs << 18) |
 			(Ra << 8) |
-			0x16,!expand_flag,4);
+			0x16,!expand_flag,seg==-1 ? 4 : 6);
 		return;
 	}
   if (Ra < 0) Ra = 0;
@@ -3273,17 +3319,18 @@ static void process_store(int64_t opcode6, int funct6, int sz)
 			}
 		}
 	}
-	if (!IsNBit(val,30) && !gpu) {
+	if (!IsNBit(val,27) && !gpu) {
 		LoadConstant(val,23);
 		// Change to indexed addressing
 		emit_insn(
+			((int64_t)seg << 45LL) |
 			((funct6 >> 2) << 28) |
 			((funct6 & 3) << 16) |
 			(23 << 23) |
 			(0 << 13) |		// Sc
 			(Rs << 18) |
 			(Ra << 8) |
-			0x16,!expand_flag,4);
+			0x16,!expand_flag,seg==-1 ? 4 : 6);
 		ScanToEOL();
 		return;
 	}
@@ -3311,8 +3358,15 @@ static void process_store(int64_t opcode6, int funct6, int sz)
 			return;
 		}
 		else {
+			if (seg == -1) {
+				if (Ra >= 30)
+					seg = 3;
+				else
+					seg = 1;
+			}
 			emit_insn(
-				(((val | abs(sz)) >> 5LL) << 23LL) |
+				((int64_t)seg << 45LL) |
+				((((val | abs(sz)) >> 5LL) & 0x3fffffLL) << 23LL) |
 				(Rs << 18) |
 				(((val | abs(sz)) & 0x1fLL) << 13LL) |
 				(Ra << 8) |
@@ -3546,6 +3600,7 @@ static void process_load(int64_t opcode6, int64_t funct6, int sz)
   int Ra,Rc;
   int Rt;
 	int Sc;
+	int seg;
   char *p;
   int64_t disp;
   int64_t val;
@@ -3568,19 +3623,20 @@ static void process_load(int64_t opcode6, int64_t funct6, int sz)
       return;
   }
   expect(',');
-  mem_operand(&disp, &Ra, &Rc, &Sc);
+  mem_operand(&disp, &Ra, &Rc, &Sc, &seg);
 	if (Ra >= 0 && Rc >= 0) {
 		//if (gpu)
 		//	error("Indexed addressing not supported on GPU");
 		// Trap LEA, convert to LEAX opcode
 		emit_insn(
+			((int64_t)seg << 45LL) |
 			((funct6 >> 2) << 28LL) |
 			(Rc << 23) |
 			((funct6 & 3) << 21) |
 			(Sc << 18) |
 			(Rt << 13) |
 			(Ra << 8) |
-			0x16,!expand_flag,4);
+			0x16,!expand_flag,seg != -1 ? 6 : 4);
 		return;
 	}
   if (Ra < 0) Ra = 0;
@@ -3617,17 +3673,18 @@ static void process_load(int64_t opcode6, int64_t funct6, int sz)
 			}
 		}
 	}
-	if (!IsNBit(val, 30) && !gpu) {
+	if (!IsNBit(val, 27) && !gpu) {
 		LoadConstant(val, 23);
 		// Change to indexed addressing
 		emit_insn(
+			((int64_t)seg << 45LL) |
 			((funct6 >>2) << 28LL) |
 			(23 << 23) |
 			((funct6 & 3) << 21) |
 			(0 << 18) |		// Sc = 0
 			(Rt << 13) |
 			(Ra << 8) |
-			0x16,!expand_flag,4);
+			0x16,!expand_flag,seg==-1 ? 4 : 6);
 		ScanToEOL();
 		return;
 	}
@@ -3655,8 +3712,15 @@ static void process_load(int64_t opcode6, int64_t funct6, int sz)
 			return;
 		}
 		else {
+			if (seg == -1) {
+				if (Ra >= 30)
+					seg = 3;
+				else
+					seg = 1;
+			}
 			emit_insn(
-				((val | abs(sz)) << 18LL) |
+				((int64_t)seg << 45LL) |
+				(((val | abs(sz)) & 0x7ffffffLL) << 18LL) |
 				(Rt << 13) |
 				(Ra << 8) |
 				(1 << 6) |
@@ -3677,6 +3741,7 @@ static void process_cache(int opcode6)
 {
   int Ra,Rc;
 	int Sc;
+	int seg;
   char *p;
   int64_t disp;
   int64_t val;
@@ -3687,36 +3752,45 @@ static void process_cache(int opcode6)
 	NextToken();
 	cmd = (int)expr() & 0x1f;
   expect(',');
-  mem_operand(&disp, &Ra, &Rc, &Sc);
+  mem_operand(&disp, &Ra, &Rc, &Sc, &seg);
 	if (Ra > 0 && Rc > 0) {
 		emit_insn(
+			(((int64_t)seg) << 45LL) |
 			((opcode6 >> 2) << 28) |
 			(Rc << 23) |
 			((opcode6 & 3) << 21) |
 			(Sc << 18) |
 			(cmd << 13) |
 			(Ra << 8) |
-			0x16,!expand_flag,4);
+			0x16,!expand_flag,seg==-1?4:6);
 		return;
 	}
     if (Ra < 0) Ra = 0;
     val = disp;
-	if (!IsNBit(val,30)) {
+	if (!IsNBit(val,27)) {
 		LoadConstant(val,23);
 		// Change to indexed addressing
 		emit_insn(
+			(((int64_t)seg) << 45LL) |
 			((opcode6 >> 2) << 26) |
 			(23 << 23) |
 			((opcode6 & 3) << 21) |
 			(Sc << 18) |
 			(cmd << 13) |
 			(Ra << 8) |
-			0x16,!expand_flag,4);
+			0x16,!expand_flag,seg==-1?4:6);
 		ScanToEOL();
 		return;
 	}
 	if (!IsNBit(val, 14)) {
+		if (seg == -1) {
+			if (Ra >= 30)
+				seg = 3;
+			else
+				seg = 1;
+		}
 		emit_insn(
+			(((int64_t)seg) << 45LL) |
 			(val << 18LL) |
 			(cmd << 13) |
 			(Ra << 8) |
@@ -3800,6 +3874,7 @@ static void process_lsfloat(int64_t opcode6, int64_t opcode3)
     int Ra,Rb;
     int Rt;
 	int Sc;
+	int seg;
     char *p;
     int64_t disp;
     int64_t val;
@@ -3807,7 +3882,7 @@ static void process_lsfloat(int64_t opcode6, int64_t opcode3)
 
     int  sz;
     int rm;
-
+		printf("Fix segment prefix\r\n");
     rm = 0;
     sz = GetFPSize();
     p = inptr;
@@ -3820,7 +3895,7 @@ static void process_lsfloat(int64_t opcode6, int64_t opcode3)
         return;
     }
     expect(',');
-    mem_operand(&disp, &Ra, &Rb, &Sc);
+    mem_operand(&disp, &Ra, &Rb, &Sc, &seg);
 	if (Ra > 0 && Rb > 0) {
 		emit_insn(
 			((opcode6+sz) << 26) |

@@ -29,6 +29,7 @@
 //`define SUPPORT_SMT		1'b1
 //`define SUPPORT_VECTOR	1'b1
 //`define SUPPORT_DCI			1'b1	// dynamically compressed instructions
+`define SUPPORT_SEGMENTATION	1'b1
 //`define DEBUG_LOGIC 1'b1
 `define L1_ICACHE_SIZE	2				// 2 or 4 for 2 or 4 kB
 
@@ -43,6 +44,7 @@
 // bitfield representing a queue entry index. The field must be large
 // enough to accomodate a queue entry number, determined by the number
 // of queue entries below.
+`define QBIT			4
 `define QBITS			3:0
 `define QBITSP1		4:0
 
@@ -81,11 +83,11 @@
 // Note that even with just a single commit bus, multiple instructions may
 // commit if they do not target any registers. Up to three instruction may
 // commit even with just a single bus.
-`define NUM_CMT		1				// number of commit busses (1-2)
+`define NUM_CMT		1				// number of commit busses (1-3)
 // Comment out the following to remove FCU enhancements (branch predictor, BTB, RSB)
-`define FCU_ENH		1
+//`define FCU_ENH		1
 // Comment out the following to remove bypassing logic on the functional units
-`define FU_BYPASS	1
+//`define FU_BYPASS	1
 
 //`define SUPPORT_TLB		1
 

@@ -182,7 +182,9 @@ S_IDLE:
 				goto(S_ACK);
 			end
 			else begin
-				if (vadr_i[31:24]==8'hFF) begin
+				// Video frame buffer ($00xxxxxx) and ROM / IO ($FFxxxxxx) regions are
+				// not mapped.
+				if (vadr_i[31:24]==8'hFF || vadr_i[31:24]==8'h00) begin
 					cyc_o <= 1'b1;
 					we_o <= we_i;
 					padr_o <= vadr_i;
