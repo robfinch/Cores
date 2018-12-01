@@ -30,6 +30,7 @@
 //`define SUPPORT_VECTOR	1'b1
 //`define SUPPORT_DCI			1'b1	// dynamically compressed instructions
 `define SUPPORT_SEGMENTATION	1'b1
+`define SUPPORT_PREDICATION	1'b1
 //`define DEBUG_LOGIC 1'b1
 `define L1_ICACHE_SIZE	2				// 2 or 4 for 2 or 4 kB
 

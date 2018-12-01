@@ -563,6 +563,22 @@ default: IsShift = FALSE;
 endcase
 endfunction
 
+function IsCmp;
+input [47:0] isn;
+case(isn[`INSTRUCTION_OP])
+`R2:
+	if (isn[`INSTRUCTION_L2]==2'b00)
+    case(isn[31:26])
+    `CMP: IsCmp = TRUE;
+    default: IsCmp = FALSE;
+    endcase
+  else
+  	IsCmp = FALSE;
+`CMPI:	IsCmp = TRUE;
+default: IsCmp = FALSE;
+endcase
+endfunction
+
 function IsLWRX;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
@@ -860,7 +876,15 @@ endfunction
 // Determines which lanes of the target register get updated.
 function [7:0] fnWe;
 input [47:0] isn;
-fnWe = 8'hFF;
+casez(isn[`INSTRUCTION_OP])
+`R2:
+	case(isn[`INSTRUCTION_S2])
+	`CMP:	fnWe = 8'h00;			// CMP sets predicate registers so doesn't update general register file.
+	default: fnWe = 8'hFF;	
+	endcase
+`CMPI:	fnWe = 8'h00;
+default: fnWe = 8'hFF;
+endcase
 /*
 casez(isn[`INSTRUCTION_OP])
 `R2:
@@ -1072,6 +1096,7 @@ always @*
 `endif
 begin
 	bus <= 144'h0;
+	bus[`IB_CMP] <= IsCmp(instr);
 	if (IsMem(instr)) begin
 		if (instr[6]==1'b1)
 		  bus[`IB_SEG] <= instr[47:45];

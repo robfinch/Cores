@@ -146,6 +146,7 @@
 `define NOR         6'h0D
 `define XNOR        6'h0E
 `define SHIFT31     6'h0F
+`define CMP					6'h12
 `define MODU				6'h14
 `define MODSU				6'h15
 `define MOD					6'h16
@@ -193,6 +194,7 @@
 `define FLOAT   6'h0F
 `define CS			6'h10
 `define LVxU		6'h11
+`define CMPI		6'h12
 `define LB      6'h13
 `define SB      6'h15
 `define MEMNDX	6'h16
@@ -483,6 +485,7 @@
 `define IB_RC		  70:66
 `define IB_RB			65:61
 `define IB_RA			60:56
+`define IB_CMP		51
 `define IB_SEG		50:48
 `define IB_PUSH		47
 `define IB_TLB		46

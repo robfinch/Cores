@@ -34,7 +34,7 @@
 module FT64_fetchbuf_x1(rst, clk4x, clk, fcu_clk,
 	cs_i, cyc_i, stb_i, ack_o, we_i, adr_i, dat_i,
 	cmpgrp,
-	freezePC, thread_en,
+	freezePC, thread_en, pred_on,
 	regLR,
     insn0, phit,
     threadx,
@@ -42,12 +42,13 @@ module FT64_fetchbuf_x1(rst, clk4x, clk, fcu_clk,
     predict_takenA, predict_takenB,
     queued1, queuedNop,
     pc0, fetchbuf, fetchbufA_v, fetchbufB_v,
-    fetchbufA_instr, fetchbufA_pc,
-    fetchbufB_instr, fetchbufB_pc,
+    fetchbufA_instr, fetchbufA_pc, fetchbufA_pbyte,
+    fetchbufB_instr, fetchbufB_pc, fetchbufB_pbyte,
     fetchbuf0_instr, fetchbuf0_insln,
     fetchbuf0_thrd,
     fetchbuf0_pc,
     fetchbuf0_v,
+    fetchbuf0_pbyte,
     codebuf0,
     btgtA, btgtB,
     nop_fetchbuf,
@@ -73,6 +74,7 @@ input [47:0] dat_i;
 input [2:0] cmpgrp;
 input freezePC;
 input thread_en;
+input pred_on;
 input [4:0] regLR;
 input [47:0] insn0;
 input phit;
@@ -91,13 +93,16 @@ output reg fetchbufA_v;
 output reg fetchbufB_v;
 output fetchbuf0_thrd;
 output reg [47:0] fetchbufA_instr;
+output reg [7:0] fetchbufA_pbyte;
 output reg [47:0] fetchbufB_instr;
+output reg [7:0] fetchbufB_pbyte;
 output reg [AMSB:0] fetchbufA_pc;
 output reg [AMSB:0] fetchbufB_pc;
 output [47:0] fetchbuf0_instr;
 output [AMSB:0] fetchbuf0_pc;
 output [2:0] fetchbuf0_insln;
 output fetchbuf0_v;
+output [7:0] fetchbuf0_pbyte;
 input [47:0] codebuf0;
 input [AMSB:0] btgtA;
 input [AMSB:0] btgtB;
@@ -154,26 +159,26 @@ function [2:0] fnInsLength;
 input [47:0] ins;
 `ifdef SUPPORT_DCI
 if (ins[`INSTRUCTION_OP]==`CMPRSSD)
-	fnInsLength = 3'd2;
+	fnInsLength = 3'd2 | pred_on;
 else
 `endif
 	case(ins[7:6])
-	2'd0:	fnInsLength = 3'd4;
-	2'd1:	fnInsLength = 3'd6;
-	default:	fnInsLength = 3'd2;
+	2'd0:	fnInsLength = 3'd4 | pred_on;
+	2'd1:	fnInsLength = 3'd6 | pred_on;
+	default:	fnInsLength = 3'd2 | pred_on;
 	endcase
 endfunction
 
 wire [2:0] fetchbufA_inslen;
 wire [2:0] fetchbufB_inslen;
-FT64_InsLength uilA (fetchbufA_instr, fetchbufA_inslen);
-FT64_InsLength uilB (fetchbufB_instr, fetchbufB_inslen);
+FT64_InsLength uilA (fetchbufA_instr, fetchbufA_inslen, pred_on);
+FT64_InsLength uilB (fetchbufB_instr, fetchbufB_inslen, pred_on);
 
 wire [47:0] xinsn0;
 
 FT64_iexpander ux1
 (
-	.cinstr(insn0[15:0]),
+	.cinstr(pred_on ? insn0[23:8] : insn0[15:0]),
 	.expand(xinsn0)
 );
 
@@ -187,7 +192,7 @@ reg [47:0] DecompressTable [0:2047];
 always @(posedge clk)
 	if (cs_i & cyc_i & stb_i & we_i)
 		DecompressTable[adr_i[12:3]] <= dat_i[47:0];
-wire [47:0] expand0 = DecompressTable[{cmpgrp,insn0[15:8]}];
+wire [47:0] expand0 = DecompressTable[{cmpgrp,pred_on ? insn0[23:16]:insn0[15:8]}];
 `endif
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
@@ -446,13 +451,14 @@ assign fetchbuf0_insln = (fetchbuf == 1'b0) ? fetchbufA_inslen: fetchbufB_inslen
 assign fetchbuf0_v     = (fetchbuf == 1'b0) ? fetchbufA_v     : fetchbufB_v    ;
 assign fetchbuf0_pc    = (fetchbuf == 1'b0) ? fetchbufA_pc    : fetchbufB_pc   ;
 assign fetchbuf0_thrd  = 1'b0;
+assign fetchbuf0_pbyte = (fetchbuf == 1'b0) ? fetchbufA_pbyte : fetchbufB_pbyte;
 
 reg [2:0] insln0;
 always @*
 begin
 `ifdef SUPPORT_DCI
 	if (insn0[5:0]==`CMPRSSD)
-		insln0 <= 3'd2;
+		insln0 <= 3'd2 | pred_on;
 	else
 `endif
 	if (insn0[7:6]==2'b00 && insn0[`INSTRUCTION_OP]==`EXEC)
@@ -461,18 +467,24 @@ begin
 		insln0 <= fnInsLength(insn0);
 end
 
-reg [47:0] cinsn0;
+reg [55:0] cinsn0;
 
 always @*
 begin
 `ifdef SUPPORT_DCI
-	if (insn0[5:0]==`CMPRSSD)
+	if (insn0[13:8]==`CMPRSSD && pred_on)
+		cinsn0 <= expand0;
+	else if (insn0[5:0]==`CMPRSSD && !pred_on)
 		cinsn0 <= expand0;
 	else
 `endif
-	if (insn0[7:6]==2'b00 && insn0[`INSTRUCTION_OP]==`EXEC)
+	if (insn0[7:6]==2'b00 && insn0[`INSTRUCTION_OP]==`EXEC && ~pred_on)
 		cinsn0 <= codebuf0;
-	else if (insn0[7])
+	else if (insn0[15:14]==2'b00 && insn0[`INSTRUCTION_OP]==`EXEC && pred_on)
+		cinsn0 <= codebuf0;
+	else if (insn0[15] & pred_on)
+		cinsn0 <= {xinsn0,insn0[7:0]};
+	else if (insn0[7] & ~pred_on)
 		cinsn0 <= xinsn0;
 	else
 		cinsn0 <= insn0;
@@ -480,7 +492,8 @@ end
 
 task FetchA;
 begin
-	fetchbufA_instr <= cinsn0;
+	fetchbufA_instr <= pred_on ? cinsn0[55:8] : cinsn0[47:0];
+	fetchbufA_pbyte = cinsn0[7:0];
 	fetchbufA_v <= `VAL;
 	fetchbufA_pc <= pc0;
 	if (phit && ~freezePC)
@@ -492,7 +505,8 @@ endtask
 
 task FetchB;
 begin
-	fetchbufB_instr <= cinsn0;
+	fetchbufB_instr <= pred_on ? cinsn0[55:8] : cinsn0[47:0];
+	fetchbufB_pbyte = cinsn0[7:0];
 	fetchbufB_v <= `VAL;
 	fetchbufB_pc <= pc0;
 	if (phit && ~freezePC)
@@ -503,4 +517,3 @@ end
 endtask
 
 endmodule
-
