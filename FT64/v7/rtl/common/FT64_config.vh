@@ -29,8 +29,8 @@
 //`define SUPPORT_SMT		1'b1
 //`define SUPPORT_VECTOR	1'b1
 //`define SUPPORT_DCI			1'b1	// dynamically compressed instructions
-`define SUPPORT_SEGMENTATION	1'b1
-`define SUPPORT_PREDICATION	1'b1
+//`define SUPPORT_SEGMENTATION	1'b1
+//`define SUPPORT_PREDICATION	1'b1
 //`define DEBUG_LOGIC 1'b1
 `define L1_ICACHE_SIZE	2				// 2 or 4 for 2 or 4 kB
 
@@ -56,7 +56,7 @@
 
 // If set greater than 10, then memory instructions won't
 // issue until they are within 10 of the head of the queue.
-`define QENTRIES	4
+`define QENTRIES	6
 
 // Bitfield for representing exception codes
 `define XBITS			7:0

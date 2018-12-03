@@ -373,6 +373,7 @@
 `define CSR_FS_BASE	10'h0C4
 `define CSR_GS_BASE	10'h0C5
 `define CSR_GDT_BASE	10'h0C7
+`define CSR_PREGS		10'h0F0
 `define CSR_Q_CTR		10'h3C0
 `define CSR_BM_CTR	10'h3C1
 `define CSR_ICL_CTR	10'h3C2
@@ -434,7 +435,7 @@
 `define FLT_FS_LD		8'd236
 `define FLT_GS_LD		8'd237
 `define FLT_RET			8'd238
-`deifne FLT_CS			8'd239
+`define FLT_CS			8'd239
 
 `define INSTRUCTION_OP  5:0
 `define INSTRUCTION_L2	7:6

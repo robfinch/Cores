@@ -34,7 +34,7 @@
 
 module FT64_L1_icache_mem(rst, clk, wr, en, lineno, i, o, ov, invall, invline);
 parameter pLines = 64;
-parameter pLineWidth = 290;
+parameter pLineWidth = 298;
 localparam pLNMSB = pLines==128 ? 6 : 5;
 input rst;
 input clk;
@@ -83,7 +83,7 @@ always  @(posedge clk)
 always  @(posedge clk)
     if (wr & en[7])  mem[lineno][255:224] <= i[255:224];
 always  @(posedge clk)
-    if (wr & en[8])  mem[lineno][289:256] <= i[289:256];
+    if (wr & en[8])  mem[lineno][297:256] <= i[297:256];
 always  @(posedge clk)
 if (rst) begin
      valid0 <= 64'd0;
@@ -324,15 +324,15 @@ output wr_ack;
 input [8:0] en;
 input [37:0] adr;
 input [37:0] wadr;
-input [289:0] i;
-output reg [47:0] o;
+input [297:0] i;
+output reg [55:0] o;
 output reg [1:0] fault;
 output hit;
 input invall;
 input invline;
 
-wire [289:0] ic;
-reg [289:0] i1, i2;
+wire [297:0] ic;
+reg [297:0] i1, i2;
 wire [8:0] lv;				// line valid
 wire [pLNMSB:0] lineno;
 wire [pLNMSB:0] wlineno;
@@ -348,7 +348,7 @@ always @(posedge clk)
 always @(posedge clk)
 	wr2 <= wr1;
 always @(posedge clk)
-	i1 <= i[289:0];
+	i1 <= i[297:0];
 always @(posedge clk)
 	i2 <= i1;
 always @(posedge clk)
@@ -425,9 +425,9 @@ assign hit = taghit & lv[adr[4:2]] & lv[adr[4:2]+4'd1];
 
 //always @(radr or ic0 or ic1)
 always @(adr or ic)
-	o <= ic >> {adr[4:1],4'h0};
+	o <= ic >> {adr[4:0],3'h0};
 always @*
-	fault <= ic[289:288];
+	fault <= ic[297:296];
 
 assign wr_ack = wr2;
 
@@ -443,7 +443,7 @@ input [8:0] lineno;
 input [2:0] sel;
 input [63:0] i;
 input [1:0] fault;
-output [289:0] o;
+output [297:0] o;
 output reg ov;
 input invall;
 input invline;
@@ -453,7 +453,7 @@ reg [63:0] mem0 [0:511];
 reg [63:0] mem1 [0:511];
 reg [63:0] mem2 [0:511];
 reg [63:0] mem3 [0:511];
-reg [31:0] mem4 [0:511];
+reg [39:0] mem4 [0:511];
 reg [1:0] memf [0:511];
 reg [511:0] valid;
 reg [8:0] rrcl;
@@ -481,7 +481,7 @@ begin
         3'd1:    begin mem1[lineno] <= i; memf[lineno] <= memf[lineno] | fault; end
         3'd2:    begin mem2[lineno] <= i; memf[lineno] <= memf[lineno] | fault; end
         3'd3:    begin mem3[lineno] <= i; memf[lineno] <= memf[lineno] | fault; end
-        3'd4:    begin mem4[lineno] <= i[31:0]; memf[lineno] <= memf[lineno] | fault; end
+        3'd4:    begin mem4[lineno] <= i[39:0]; memf[lineno] <= memf[lineno] | fault; end
         endcase
     end
 end
@@ -519,7 +519,7 @@ input [2:0] cnt;
 input exv_i;
 input [63:0] i;
 input err_i;
-output [289:0] o;
+output [297:0] o;
 output hit;
 input invall;
 input invline;
