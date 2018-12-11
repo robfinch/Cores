@@ -197,22 +197,23 @@ endmodule
 
 module FT64_L1_icache_cmptag4way(rst, clk, nxt, wr, adr, lineno, hit);
 parameter pLines = 64;
+parameter AMSB = 63;
 localparam pLNMSB = pLines==128 ? 6 : 5;
 localparam pMSB = pLines==128 ? 9 : 8;
 input rst;
 input clk;
 input nxt;
 input wr;
-input [37:0] adr;
+input [AMSB+8:0] adr;
 output reg [pLNMSB:0] lineno;
 output hit;
 
 (* ram_style="distributed" *)
-reg [32:0] mem0 [0:pLines/4-1];
-reg [32:0] mem1 [0:pLines/4-1];
-reg [32:0] mem2 [0:pLines/4-1];
-reg [32:0] mem3 [0:pLines/4-1];
-reg [37:0] rradr;
+reg [AMSB+8-5:0] mem0 [0:pLines/4-1];
+reg [AMSB+8-5:0] mem1 [0:pLines/4-1];
+reg [AMSB+8-5:0] mem2 [0:pLines/4-1];
+reg [AMSB+8-5:0] mem3 [0:pLines/4-1];
+reg [AMSB+8:0] rradr;
 integer n;
 initial begin
   for (n = 0; n < pLines/4; n = n + 1)
@@ -233,18 +234,18 @@ if (rst)
 else begin
 	if (wr) begin
 		case(lfsro[1:0])
-		2'b00:	begin  mem0[adr[pMSB:5]] <= adr[37:5];  wlineno <= {2'b00,adr[pMSB:5]}; end
-		2'b01:	begin  mem1[adr[pMSB:5]] <= adr[37:5];  wlineno <= {2'b01,adr[pMSB:5]}; end
-		2'b10:	begin  mem2[adr[pMSB:5]] <= adr[37:5];  wlineno <= {2'b10,adr[pMSB:5]}; end
-		2'b11:	begin  mem3[adr[pMSB:5]] <= adr[37:5];  wlineno <= {2'b11,adr[pMSB:5]}; end
+		2'b00:	begin  mem0[adr[pMSB:5]] <= adr[AMSB+8:5];  wlineno <= {2'b00,adr[pMSB:5]}; end
+		2'b01:	begin  mem1[adr[pMSB:5]] <= adr[AMSB+8:5];  wlineno <= {2'b01,adr[pMSB:5]}; end
+		2'b10:	begin  mem2[adr[pMSB:5]] <= adr[AMSB+8:5];  wlineno <= {2'b10,adr[pMSB:5]}; end
+		2'b11:	begin  mem3[adr[pMSB:5]] <= adr[AMSB+8:5];  wlineno <= {2'b11,adr[pMSB:5]}; end
 		endcase
 	end
 end
 
-wire hit0 = mem0[adr[pMSB:5]]==adr[37:5];
-wire hit1 = mem1[adr[pMSB:5]]==adr[37:5];
-wire hit2 = mem2[adr[pMSB:5]]==adr[37:5];
-wire hit3 = mem3[adr[pMSB:5]]==adr[37:5];
+wire hit0 = mem0[adr[pMSB:5]]==adr[AMSB+8:5];
+wire hit1 = mem1[adr[pMSB:5]]==adr[AMSB+8:5];
+wire hit2 = mem2[adr[pMSB:5]]==adr[AMSB+8:5];
+wire hit3 = mem3[adr[pMSB:5]]==adr[AMSB+8:5];
 always @*
     //if (wr2) lineno = wlineno;
     if (hit0)  lineno = {2'b00,adr[pMSB:5]};
@@ -260,15 +261,16 @@ endmodule
 // -----------------------------------------------------------------------------
 
 module FT64_L2_icache_camtag(rst, clk, wr, adr, hit, lineno);
+parameter AMSB=63;
 input rst;
 input clk;
 input wr;
-input [37:0] adr;
+input [AMSB+8:0] adr;
 output hit;
 output [8:0] lineno;
 
 wire [3:0] set = adr[13:10];
-wire [35:0] tagi = {7'd0,adr[37:14],adr[9:5]};
+wire [AMSB+8-5:0] tagi = {7'd0,adr[AMSB+8:14],adr[9:5]};
 reg [4:0] encadr;
 assign lineno[4:0] = encadr;
 assign lineno[8:5] = adr[13:10];
@@ -314,6 +316,7 @@ module FT64_L1_icache(rst, clk, nxt, wr, wr_ack, en, wadr, adr, i, o, fault, hit
 parameter pSize = 2;
 parameter CAMTAGS = 1'b0;   // 32 way
 parameter FOURWAY = 1'b1;
+parameter AMSB = 63;
 localparam pLines = pSize==4 ? 128 : 64;
 localparam pLNMSB = pSize==4 ? 6 : 5;
 input rst;
@@ -322,8 +325,8 @@ input nxt;
 input wr;
 output wr_ack;
 input [8:0] en;
-input [37:0] adr;
-input [37:0] wadr;
+input [AMSB+8:0] adr;
+input [AMSB+8:0] wadr;
 input [297:0] i;
 output reg [55:0] o;
 output reg [1:0] fault;
@@ -507,6 +510,7 @@ endmodule
 module FT64_L2_icache(rst, clk, nxt, wr, wr_ack, rd_ack, xsel, adr, cnt, exv_i, i, err_i, o, hit, invall, invline);
 parameter CAMTAGS = 1'b0;   // 32 way
 parameter FOURWAY = 1'b1;
+parameter AMSB = 63;
 input rst;
 input clk;
 input nxt;
@@ -514,7 +518,7 @@ input wr;
 output wr_ack;
 output rd_ack;
 input xsel;
-input [37:0] adr;
+input [AMSB+8:0] adr;
 input [2:0] cnt;
 input exv_i;
 input [63:0] i;
@@ -531,7 +535,7 @@ reg wr1,wr2;
 reg [2:0] sel1,sel2;
 reg [63:0] i1,i2;
 reg [1:0] f1, f2;
-reg [37:0] last_adr;
+reg [AMSB+8:0] last_adr;
 
 // Must update the cache memory on the cycle after a write to the tag memmory.
 // Otherwise lineno won't be valid. camTag memory takes two clock cycles to update.
@@ -628,29 +632,30 @@ endmodule
 
 // Four way set associative tag memory
 module FT64_L2_icache_cmptag4way(rst, clk, nxt, wr, adr, lineno, hit);
+parameter AMSB = 63;
 input rst;
 input clk;
 input nxt;
 input wr;
-input [37:0] adr;
+input [AMSB+8:0] adr;
 output reg [8:0] lineno;
 output hit;
 
 (* ram_style="block" *)
-reg [32:0] mem0 [0:127];
-reg [32:0] mem1 [0:127];
-reg [32:0] mem2 [0:127];
-reg [32:0] mem3 [0:127];
-reg [37:0] rradr;
+reg [AMSB+8-5:0] mem0 [0:127];
+reg [AMSB+8-5:0] mem1 [0:127];
+reg [AMSB+8-5:0] mem2 [0:127];
+reg [AMSB+8-5:0] mem3 [0:127];
+reg [AMSB+8:0] rradr;
 integer n;
 initial begin
-    for (n = 0; n < 128; n = n + 1)
-    begin
-        mem0[n] = 0;
-        mem1[n] = 0;
-        mem2[n] = 0;
-        mem3[n] = 0;
-    end
+  for (n = 0; n < 128; n = n + 1)
+  begin
+    mem0[n] = 0;
+    mem1[n] = 0;
+    mem2[n] = 0;
+    mem3[n] = 0;
+  end
 end
 
 reg wr2;
@@ -664,19 +669,19 @@ else begin
      wr2 <= wr;
 	if (wr) begin
 		case(lfsro[1:0])
-		2'b00:	begin  mem0[adr[11:5]] <= adr[37:5];  wlineno <= {2'b00,adr[11:5]}; end
-		2'b01:	begin  mem1[adr[11:5]] <= adr[37:5];  wlineno <= {2'b01,adr[11:5]}; end
-		2'b10:	begin  mem2[adr[11:5]] <= adr[37:5];  wlineno <= {2'b10,adr[11:5]}; end
-		2'b11:	begin  mem3[adr[11:5]] <= adr[37:5];  wlineno <= {2'b11,adr[11:5]}; end
+		2'b00:	begin  mem0[adr[11:5]] <= adr[AMSB+8:5];  wlineno <= {2'b00,adr[11:5]}; end
+		2'b01:	begin  mem1[adr[11:5]] <= adr[AMSB+8:5];  wlineno <= {2'b01,adr[11:5]}; end
+		2'b10:	begin  mem2[adr[11:5]] <= adr[AMSB+8:5];  wlineno <= {2'b10,adr[11:5]}; end
+		2'b11:	begin  mem3[adr[11:5]] <= adr[AMSB+8:5];  wlineno <= {2'b11,adr[11:5]}; end
 		endcase
 	end
      rradr <= adr;
 end
 
-wire hit0 = mem0[rradr[11:5]]==rradr[37:5];
-wire hit1 = mem1[rradr[11:5]]==rradr[37:5];
-wire hit2 = mem2[rradr[11:5]]==rradr[37:5];
-wire hit3 = mem3[rradr[11:5]]==rradr[37:5];
+wire hit0 = mem0[rradr[11:5]]==rradr[AMSB+8:5];
+wire hit1 = mem1[rradr[11:5]]==rradr[AMSB+8:5];
+wire hit2 = mem2[rradr[11:5]]==rradr[AMSB+8:5];
+wire hit3 = mem3[rradr[11:5]]==rradr[AMSB+8:5];
 always @*
     if (wr2) lineno = wlineno;
     else if (hit0)  lineno = {2'b00,rradr[11:5]};
@@ -688,15 +693,16 @@ endmodule
 
 // Simple tag array, 1-way direct mapped
 module FT64_L2_icache_cmptag(rst, clk, wr, adr, lineno, hit);
+parameter AMSB = 63;
 input rst;
 input clk;
 input wr;
-input [37:0] adr;
+input [AMSB+8:0] adr;
 output reg [8:0] lineno;
 output hit;
 
-reg [23:0] mem [0:511];
-reg [37:0] rradr;
+reg [AMSB+8-14:0] mem [0:511];
+reg [AMSB+8:0] rradr;
 integer n;
 initial begin
     for (n = 0; n < 512; n = n + 1)
@@ -711,11 +717,11 @@ always @(posedge clk)
 reg [8:0] wlineno;
 always @(posedge clk)
 begin
-    if (wr) begin  mem[adr[13:5]] <= adr[37:14];  wlineno <= adr[13:5]; end
+    if (wr) begin  mem[adr[13:5]] <= adr[AMSB+8:14];  wlineno <= adr[13:5]; end
 end
 always @(posedge clk)
      rradr <= adr;
-wire hit = mem[rradr[13:5]]==rradr[37:14];
+wire hit = mem[rradr[13:5]]==rradr[AMSB+8:14];
 always @*
     if (wr2)  lineno = wlineno;
     else  lineno = rradr[13:5];

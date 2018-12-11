@@ -25,10 +25,19 @@
 `include "FT64_defines.vh"
 `include "FT64_config.vh"
 
-module FT64_alu(rst, clk, ld, abort, instr, sz, tlb, a, b, c, pc, tgt, tgt2, ven, vm, sbl, sbu,
+module FT64_alu(rst, clk, ld, abort, instr, sz, tlb, store, a, b, c, pc, Ra, tgt, tgt2, ven, vm,
     csr, o, ob, done, idle, excen, exc, thrd, ptrmask, state, mem, shift,
-    ol, ASID, icl_i, cyc_i, we_i, vadr_i, cyc_o, we_o, padr_o, uncached, tlb_miss,
-    exv_o, rdv_o, wrv_o, seg);
+    ol, dl, ASID, icl_i, cyc_i, we_i, vadr_i, cyc_o, we_o, padr_o, uncached, tlb_miss,
+    exv_o, rdv_o, wrv_o
+`ifdef SUPPORT_SEGMENTATION
+		, zs_base, ds_base, es_base, fs_base, gs_base, hs_base, ss_base, cs_base,
+		zsub, dsub, esub, fsub, gsub, hsub, ssub, csub,
+		zslb, dslb, eslb, fslb, gslb, hslb, sslb, cslb
+`endif
+`ifdef SUPPORT_BBMS 
+    , pb, cbl, cbu, ro, dbl, dbu, sbl, sbu, en
+`endif
+    );
 parameter DBW = 64;
 parameter ABW = 64;
 parameter BIG = 1'b1;
@@ -43,16 +52,16 @@ input abort;
 input [47:0] instr;
 input [2:0] sz;
 input tlb;
+input store;
 input [63:0] a;
 input [63:0] b;
 input [63:0] c;
 input [31:0] pc;
+input [11:0] Ra;
 input [11:0] tgt;
 input [7:0] tgt2;
 input [5:0] ven;
 input [15:0] vm;
-input [31:0] sbl;
-input [31:0] sbu;
 input [63:0] csr;
 output reg [63:0] o;
 output reg [63:0] ob;
@@ -66,6 +75,7 @@ input [1:0] state;
 input mem;
 input shift;
 input [1:0] ol;
+input [1:0] dl;
 input [7:0] ASID;
 input icl_i;
 input cyc_i;
@@ -79,7 +89,43 @@ output tlb_miss;
 output wrv_o;
 output rdv_o;
 output exv_o;
-input [63:0] seg;
+`ifdef SUPPORT_SEGMENTATION
+input [63:0] zs_base;
+input [63:0] ds_base;
+input [63:0] es_base;
+input [63:0] fs_base;
+input [63:0] gs_base;
+input [63:0] hs_base;
+input [63:0] ss_base;
+input [63:0] cs_base;
+input [63:0] zslb;
+input [63:0] dslb;
+input [63:0] eslb;
+input [63:0] fslb;
+input [63:0] gslb;
+input [63:0] hslb;
+input [63:0] sslb;
+input [63:0] cslb;
+input [63:0] zsub;
+input [63:0] dsub;
+input [63:0] esub;
+input [63:0] fsub;
+input [63:0] gsub;
+input [63:0] hsub;
+input [63:0] ssub;
+input [63:0] csub;
+`endif
+`ifdef SUPPORT_BBMS
+input [63:0] pb;
+input [63:0] cbl;
+input [63:0] cbu;
+input [63:0] ro;
+input [63:0] dbl;
+input [63:0] dbu;
+input [63:0] sbl;
+input [63:0] sbu;
+input [63:0] en;
+`endif
 
 parameter byt = 3'd0;
 parameter char = 3'd1;
@@ -93,6 +139,49 @@ parameter word_para = 3'd7;
 integer n;
 
 reg adrDone, adrIdle;
+reg [63:0] usa;			// unsegmented address
+`ifdef SUPPORT_SEGMENTATION
+reg [63:0] pb;
+reg [63:0] ub;
+reg [63:0] lb;
+always @*
+case(usa[63:61])
+3'd0:	pb <= zs_base;
+3'd1: pb <= ds_base;
+3'd2: pb <= es_base;
+3'd3: pb <= fs_base;
+3'd4: pb <= gs_base;
+3'd5: pb <= hs_base;
+3'd6: pb <= ss_base;
+3'd7: pb <= cs_base;
+endcase
+always @*
+case(usa[63:61])
+3'd0:	ub <= zsub;
+3'd1: ub <= dsub;
+3'd2: ub <= esub;
+3'd3: ub <= fsub;
+3'd4: ub <= gsub;
+3'd5: ub <= hsub;
+3'd6: ub <= ssub;
+3'd7: ub <= csub;
+endcase
+always @*
+case(usa[63:61])
+3'd0:	lb <= zslb;
+3'd1: lb <= dslb;
+3'd2: lb <= eslb;
+3'd3: lb <= fslb;
+3'd4: lb <= gslb;
+3'd5: lb <= hslb;
+3'd6: lb <= sslb;
+3'd7: lb <= cslb;
+endcase
+`else
+`ifndef SUPPORT_BBMS
+reg [63:0] pb = 64'h0;
+`endif
+`endif
 reg [63:0] addro;
 reg [63:0] adr;			// load / store address
 reg [63:0] shift8;
@@ -1179,7 +1268,11 @@ case(instr[`INSTRUCTION_OP])
 	if (instr[7:6]==2'b10) begin
 		if (instr[31])
 			case({instr[31:28],instr[17:16]})
-			`PUSH:	o = {seg[50:0],13'd0} + a - 4'd8;
+			`PUSH:	
+				begin
+					usa = a - 4'd8;
+					o = {pb[50:0],13'd0} + usa;
+				end
 	    default:	o = 64'hDEADDEADDEADDEAD;
 			endcase
 		else
@@ -1193,18 +1286,22 @@ case(instr[`INSTRUCTION_OP])
 	    `LVBX,`LVBUX,`LVCX,`LVCUX,`LVHX,`LVHUX,`LVWX,
 	    `LHX,`LHUX,`LWX,`LWRX:
 					if (BIG) begin
-						o = {seg[50:0],13'd0} + a + (c << instr[19:18]);
+						usa = a + (c << instr[19:18]);
+						o = {pb[50:0],13'd0} + usa;
 					end
 					else
 						o = 64'hCCCCCCCCEEEEEEEE;
-	    `LVX,`SVX:  if (BIG) begin
-	    				o = {seg[50:0],13'd0} + a + (c << 2'd3);
-	    			end
-	    			else
-	    				o = 64'hCCCCCCCCCCCCCCCC;
+	    `LVX,`SVX:
+	    	if (BIG) begin
+	    		usa = a + (c << 2'd3);
+	    		o = {pb[50:0],13'd0} + usa;
+	    	end
+	    	else
+	    		o = 64'hCCCCCCCCCCCCCCCC;
 	    `LVWS,`SVWS:
 	    			if (BIG) begin    
-	    				o = {seg[50:0],13'd0} + a + ({c * ven,3'b000});
+	    				usa = a + ({c * ven,3'b000});
+	    				o = {pb[50:0],13'd0} + usa;
 	    			end
 	    			else
 	    				o = 64'hCCCCCCCCCCCCCCCC;
@@ -1212,21 +1309,28 @@ case(instr[`INSTRUCTION_OP])
 			endcase
 		else
 			case({instr[31:28],instr[17:16]})
-			`PUSH:	o = {seg[50:0],13'd0} + a - 4'd8;
+			`PUSH:	
+				begin
+					usa = a - 4'd8;
+					o = {pb[50:0],13'd0} + usa;
+				end
 	    `SBX,`SCX,`SHX,`SWX,`SWCX:
 					if (BIG) begin
-						o = {seg[50:0],13'd0} + a + (c << instr[14:13]);
+						usa = a + (c << instr[14:13]);
+						o = {pb[50:0],13'd0} + usa;
 					end
 					else
 						o = 64'hCCCCCCCCEEEEEEEE;
 	    `SVX:  if (BIG) begin
-	    				o = {seg[50:0],13'd0} + a + (c << 2'd3);
+	    				usa = a + (c << 2'd3);
+	    				o = {pb[50:0],13'd0} + usa;
 	    			end
 	    			else
 	    				o = 64'hCCCCCCCCCCCCCCCC;
 	    `SVWS:
 	    			if (BIG) begin    
-	    				o = {seg[50:0],13'd0} + a + ({c * ven,3'b000});
+	    				usa = a + ({c * ven,3'b000});
+	    				o = {pb[50:0],13'd0} + usa;
 	    			end
 	    			else
 	    				o = 64'hCCCCCCCCCCCCCCCC;
@@ -1266,21 +1370,40 @@ case(instr[`INSTRUCTION_OP])
 `DIVUI:		o = BIG ? divq : 64'hCCCCCCCCCCCCCCCC;
 `DIVI:		o = BIG ? divq : 64'hCCCCCCCCCCCCCCCC;
 `MODI:		o = BIG ? rem : 64'hCCCCCCCCCCCCCCCC;
-`LB,`LBU,`SB:	o = {seg[50:0],13'd0} + a + b;
+`LB,`LBU,`SB:	
+	begin
+		usa = a + b;
+		o = {pb[50:0],13'd0} + usa;
+	end
 `Lx,`LxU,`Sx,`LVx,`LVxU:
 			begin
 				casez(b[2:0])
-				3'b100:		o = {seg[50:0],13'd0} + a + {b[63:3],3'b0};	// LW / SW
-				3'b?10: 	o = {seg[50:0],13'd0} + a + {b[63:2],2'b0};	// LH / LHU / SH
-				default:	o = {seg[50:0],13'd0} + a + {b[63:1],1'b0};	// LC / LCU / SC
+				3'b100:		
+					begin
+						usa = a + {b[63:3],3'b0};	// LW / SW
+						o = {pb[50:0],13'd0} + usa;
+					end
+				3'b?10:
+					begin
+						usa = a + {b[63:2],2'b0};	// LH / LHU / SH
+					 	o = {pb[50:0],13'd0} + usa;
+					end
+				default:
+					begin
+						usa = a + {b[63:1],1'b0};	// LC / LCU / SC
+						o = {pb[50:0],13'd0} + usa;
+					end
 				endcase
 			end
 `LWR,`SWC,`CAS,`CACHE:
 			begin
-				o = {seg[50:0],13'd0} + a + b;
+				usa = a + b;
+				o = {pb[50:0],13'd0} + usa;
 			end
-`LV,`SV:    begin
-				o = {seg[50:0],13'd0} + a + b + {ven,3'b0};
+`LV,`SV:  
+			begin
+				usa = a + b + {ven,3'b0};
+				o = {pb[50:0],13'd0} + usa;
 			end
 `CSRRW:     
 			case(instr[27:18])
@@ -1421,9 +1544,9 @@ endfunction
 
 always @*
 begin
-if ((tgt[4:0]==5'd31 || tgt[4:0]==5'd30) && (o[31:0] < sbl || o[31:0] > sbu))
-    exc <= `FLT_STK;
-else
+//if ((tgt[4:0]==5'd31 || tgt[4:0]==5'd30) && (o[ABW-1:0] < {sbl[50:13],13'd0} || o[ABW-1:0] > {pl[50:0],13'h1FFF}))
+//    exc <= `FLT_STK;
+//else
 case(instr[`INSTRUCTION_OP])
 `R2:
     case(instr[`INSTRUCTION_S2])
@@ -1445,60 +1568,138 @@ case(instr[`INSTRUCTION_OP])
 `MODI: exc <= BIG & excen[4] & divByZero & instr[27] ? `FLT_DBZ : `FLT_NONE;
 `CSRRW:	exc <= (instr[27:21]==7'b0011011) ? `FLT_SEG : `FLT_NONE;
 `MEMNDX:
-	if (instr[7:6]==2'b10) begin
-		if (instr[31])
-			case({instr[31:28],instr[17:16]})
-			`PUSH:	exc <= |o[2:0] ? `FLT_ALN : `FLT_NONE;
-	    default:	exc <= `FLT_UNIMP;
-			endcase
+	begin
+`ifdef SUPPORT_SEGMENTATION
+		if (usa < {lb[50:0],13'h0000} && usa > {ub[50:0],13'h1fff} && dl!=2'b00)
+			exc <= (Ra[4:0]==5'd30 || Ra[4:0]==5'd31) ? `FLT_STK : `FLT_SGB;
 		else
-			exc <= `FLT_UNIMP;
-	end
-	else if (instr[7:6]==2'b00) begin
-		if (!instr[31]) begin
-			if (BIG) begin
-				case({instr[31:28],instr[22:21]})
-				`LBX,`LBUX,`LVBX,`LVBUX:	exc <= `FLT_NONE;
-		    `LCX,`LCUX,`LVCX,`LVCUX:	exc <= |o[  0] ? `FLT_ALN : `FLT_NONE;
-		    `LVHX,`LVHUX,`LHX,`LHUX:	exc <= |o[1:0] ? `FLT_ALN : `FLT_NONE;
-		    `LWX,`LVWX,`LWRX,
-				`CACHEX,`LVX:							exc <= |o[2:0] ? `FLT_ALN : `FLT_NONE;
-		    `LVX,`SVX,`LVWS,`SVWS:		exc <= |o[2:0] ? `FLT_ALN : `FLT_NONE;
-		    default:	exc <= `FLT_UNIMP;
-				endcase
+`endif
+`ifdef SUPPORT_BBMS
+		if ((Ra[4:0]==5'd30 || Ra[4:0]==5'd31) && (usa < {sbl[50:0],13'd0} || usa > {sbu[50:0],13'h1FF8}) && dl!=2'b00)
+			exc <= `FLT_STK;
+		else if (usa > {sbu[50:0],13'h1FFF} && dl!=2'b00)
+			exc <= `FLT_SGB;
+		else if (usa < {sbl[50:0],13'h0000} && usa > {dbu[50:0],13'h1fff} && dl!=2'b00)
+			exc <= `FLT_SGB;
+		else if (usa > {en[50:0],13'h1fff} && usa < {dbl[50:0],13'd0} && dl!=2'b00)
+			exc <= `FLT_SGB;
+		else if (usa < {ro[50:0],13'd0} && store && dl!=2'b00)
+			exc <= `FLT_WRV;
+		else
+`endif
+		begin
+			if (instr[7:6]==2'b10) begin
+				if (instr[31])
+					case({instr[31:28],instr[17:16]})
+					`PUSH:		exc <= |o[2:0] ? `FLT_ALN : `FLT_NONE;
+			    default:	exc <= `FLT_UNIMP;
+					endcase
+				else
+					exc <= `FLT_UNIMP;
+			end
+			else if (instr[7:6]==2'b00) begin
+				if (!instr[31]) begin
+					if (BIG) begin
+						case({instr[31:28],instr[22:21]})
+						`LBX,`LBUX,`LVBX,`LVBUX:	exc <= `FLT_NONE;
+				    `LCX,`LCUX,`LVCX,`LVCUX:	exc <= |o[  0] ? `FLT_ALN : `FLT_NONE;
+				    `LVHX,`LVHUX,`LHX,`LHUX:	exc <= |o[1:0] ? `FLT_ALN : `FLT_NONE;
+				    `LWX,`LVWX,`LWRX,
+						`CACHEX,`LVX:							exc <= |o[2:0] ? `FLT_ALN : `FLT_NONE;
+				    `LVX,`SVX,`LVWS,`SVWS:		exc <= |o[2:0] ? `FLT_ALN : `FLT_NONE;
+				    default:	exc <= `FLT_UNIMP;
+						endcase
+					end
+					else
+						exc <= `FLT_UNIMP;
+				end
+				else begin
+					if (BIG) begin
+						case({instr[31:28],instr[17:16]})
+						`PUSH:	exc <= |o[2:0] ? `FLT_ALN : `FLT_NONE;
+						`SBX:		exc <= `FLT_NONE;
+				    `SCX:		exc <= |o[  0] ? `FLT_ALN : `FLT_NONE;
+				    `SHX:		exc <= |o[1:0] ? `FLT_ALN : `FLT_NONE;
+				    `SWX,`SWCX:	exc <= |o[2:0] ? `FLT_ALN : `FLT_NONE;
+				    `SVX:  	exc <= |o[2:0] ? `FLT_ALN : `FLT_NONE;
+				    `SVWS:	exc <= |o[2:0] ? `FLT_ALN : `FLT_NONE;
+				    default:	exc <= `FLT_UNIMP;
+						endcase
+					end
+					else
+						exc <= `FLT_UNIMP;
+				end
 			end
 			else
 				exc <= `FLT_UNIMP;
 		end
-		else begin
-			if (BIG) begin
-				case({instr[31:28],instr[17:16]})
-				`PUSH:	exc <= |o[2:0] ? `FLT_ALN : `FLT_NONE;
-				`SBX:		exc <= `FLT_NONE;
-		    `SCX:		exc <= |o[  0] ? `FLT_ALN : `FLT_NONE;
-		    `SHX:		exc <= |o[1:0] ? `FLT_ALN : `FLT_NONE;
-		    `SWX,`SWCX:	exc <= |o[2:0] ? `FLT_ALN : `FLT_NONE;
-		    `SVX:  	exc <= |o[2:0] ? `FLT_ALN : `FLT_NONE;
-		    `SVWS:	exc <= |o[2:0] ? `FLT_ALN : `FLT_NONE;
-		    default:	exc <= `FLT_UNIMP;
-				endcase
-			end
-			else
-				exc <= `FLT_UNIMP;
-		end
 	end
-	else
-		exc <= `FLT_UNIMP;
+`ifdef SUPPORT_SEGMENTATION
+`LB,`LBU,`SB:
+		if (usa < {lb[50:0],13'h0000} && usa > {ub[50:0],13'h1fff} && dl!=2'b00)
+			exc <= (Ra[4:0]==5'd30 || Ra[4:0]==5'd31) ? `FLT_STK : `FLT_SGB;
+`endif
+`ifdef SUPPORT_BBMS
+`LB,`LBU,`SB:
+		if ((Ra[4:0]==5'd30 || Ra[4:0]==5'd31) && (usa < {sbl[50:0],13'd0} || usa > {sbu[50:0],13'h1FF8}) && dl!=2'b00)
+			exc <= `FLT_STK;
+		else if (usa > {sbu[50:0],13'h1FFF} && dl!=2'b00)
+			exc <= `FLT_SGB;
+		else if (usa < {sbl[50:0],13'h0000} && usa > {dbu[50:0],13'h1fff} && dl!=2'b00)
+			exc <= `FLT_SGB;
+		else if (usa > {en[50:0],13'h1fff} && usa < {dbl[50:0],13'd0} && dl!=2'b00)
+			exc <= `FLT_SGB;
+		else if (usa < {ro[50:0],13'd0} && store && dl!=2'b00)
+			exc <= `FLT_WRV;
+`endif
 `Lx,`Sx,`LxU,`LVx,`LVxU:
-			begin
-				casez(b[2:0])
-				3'b100:		exc <= |o[2:0] ? `FLT_ALN : `FLT_NONE;	// LW / SW
-				3'b?10: 	exc <= |o[1:0] ? `FLT_ALN : `FLT_NONE;	// LH / LHU / SH
-				default:	exc <= |o[  0] ? `FLT_ALN : `FLT_NONE;	// LC / LCU / SC
-				endcase
-			end
+	begin
+`ifdef SUPPORT_SEGMENTATION
+		if (usa < {lb[50:0],13'h0000} && usa > {ub[50:0],13'h1fff} && dl!=2'b00)
+			exc <= (Ra[4:0]==5'd30 || Ra[4:0]==5'd31) ? `FLT_STK : `FLT_SGB;
+		else
+`endif
+`ifdef SUPPORT_BBMS
+		if ((Ra[4:0]==5'd30 || Ra[4:0]==5'd31) && (usa < {sbl[50:0],13'd0} || usa > {sbu[50:0],13'h1FF8}) && dl!=2'b00)
+			exc <= `FLT_STK;
+		else if (usa > {sbu[50:0],13'h1FFF} && dl!=2'b00)
+			exc <= `FLT_SGB;
+		else if (usa < {sbl[50:0],13'h0000} && usa > {dbu[50:0],13'h1fff} && dl!=2'b00)
+			exc <= `FLT_SGB;
+		else if (usa > {en[50:0],13'h1fff} && usa < {dbl[50:0],13'd0} && dl!=2'b00)
+			exc <= `FLT_SGB;
+		else if (usa < {ro[50:0],13'd0} && store && dl!=2'b00)
+			exc <= `FLT_WRV;
+		else
+`endif
+			casez(b[2:0])
+			3'b100:		exc <= |o[2:0] ? `FLT_ALN : `FLT_NONE;	// LW / SW
+			3'b?10: 	exc <= |o[1:0] ? `FLT_ALN : `FLT_NONE;	// LH / LHU / SH
+			default:	exc <= |o[  0] ? `FLT_ALN : `FLT_NONE;	// LC / LCU / SC
+			endcase
+	end
 `LWR,`SWC,`CAS,`CACHE:
-	exc <= |o[2:0] ? `FLT_ALN : `FLT_NONE;
+	begin
+`ifdef SUPPORT_SEGMENTATION
+		if (usa < {lb[50:0],13'h0000} && usa > {ub[50:0],13'h1fff} && dl!=2'b00)
+			exc <= (Ra[4:0]==5'd30 || Ra[4:0]==5'd31) ? `FLT_STK : `FLT_SGB;
+		else
+`endif
+`ifdef SUPPORT_BBMS
+		if ((Ra[4:0]==5'd30 || Ra[4:0]==5'd31) && (usa < {sbl[50:0],13'd0} || usa > {sbu[50:0],13'h1FF8}) && dl!=2'b00)
+			exc <= `FLT_STK;
+		else if (usa > {sbu[50:0],13'h1FFF} && dl!=2'b00)
+			exc <= `FLT_SGB;
+		else if (usa < {sbl[50:0],13'h0000} && usa > {dbu[50:0],13'h1fff} && dl!=2'b00)
+			exc <= `FLT_SGB;
+		else if (usa > {en[50:0],13'h1fff} && usa < {dbl[50:0],13'd0} && dl!=2'b00)
+			exc <= `FLT_SGB;
+		else if (usa < {ro[50:0],13'd0} && store && dl!=2'b00)
+			exc <= `FLT_WRV;
+		else
+`endif
+			exc <= |o[2:0] ? `FLT_ALN : `FLT_NONE;
+	end
 default:    exc <= `FLT_NONE;
 endcase
 end

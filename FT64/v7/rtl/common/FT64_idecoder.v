@@ -1097,20 +1097,9 @@ always @*
 begin
 	bus <= 144'h0;
 	bus[`IB_CMP] <= IsCmp(instr);
-	if (IsMem(instr)) begin
-		if (instr[6]==1'b1)
-		  bus[`IB_SEG] <= instr[47:45];
-		else if (instr[`INSTRUCTION_RA] >= 5'd30)
-			bus[`IB_SEG] <= 3'd3;
-		else
-			bus[`IB_SEG] <= 3'd1;
-	end
 	if (IsStore(instr))
-		bus[`IB_CONST] <= instr[6]==1'b1 ? {{37{instr[44]}},instr[44:23],instr[17:13]} :
+		bus[`IB_CONST] <= instr[6]==1'b1 ? {{34{instr[47]}},instr[47:23],instr[17:13]} :
 																				{{50{instr[31]}},instr[31:23],instr[17:13]};
-	else if (IsLoad(instr))
-		bus[`IB_CONST] <= instr[6]==1'b1 ? {{37{instr[44]}},instr[44:18]} :
-																				{{50{instr[31]}},instr[31:18]};
 	else
 		bus[`IB_CONST] <= instr[6]==1'b1 ? {{34{instr[47]}},instr[47:18]} :
 																				{{50{instr[31]}},instr[31:18]};
@@ -1167,7 +1156,8 @@ begin
 	bus[`IB_BR]			<= IsBranch(instr);
 	bus[`IB_SYNC]		<= IsSync(instr)||IsBrk(instr)||IsRti(instr);
 	bus[`IB_FSYNC]	<= IsFSync(instr);
-	bus[`IB_RFW]		<= Rt==5'd0 ? 1'b0 : IsRFW(instr);
+	bus[`IB_RFW]		<= (Rt==5'd0) ? 1'b0 : IsRFW(instr) && !IsCmp(instr);
+	bus[`IB_PRFW]   <= IsCmp(instr);
 	bus[`IB_WE]			<= fnWe(instr);
 	id_o <= id_i;
 	idv_o <= idv_i;

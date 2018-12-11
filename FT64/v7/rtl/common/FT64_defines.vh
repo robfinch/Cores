@@ -192,7 +192,7 @@
 `define REX     6'h0D
 `define XNORI		6'h0E
 `define FLOAT   6'h0F
-`define CS			6'h10
+`define LDCS		6'h10
 `define LVxU		6'h11
 `define CMPI		6'h12
 `define LB      6'h13
@@ -327,9 +327,8 @@
 `define CSR_PCR2    10'h008
 `define CSR_SCRATCH 10'h009
 `define CSR_WBRCD	10'h00A
+`define CSR_BADINSTR	10'h00B
 `define CSR_SEMA    10'h00C
-`define CSR_SBL     10'h00E
-`define CSR_SBU     10'h00F
 `define CSR_TCB		10'h010
 `define CSR_FSTAT   10'h014
 `define CSR_DBAD0   10'h018
@@ -345,6 +344,7 @@
 `define CSR_PL_STACK	10'h042
 `define CSR_RS_STACK	10'h043
 `define CSR_STATUS 	10'h044
+`define CSR_BRS_STACK	10'h046
 `define CSR_EPC0    10'h048
 `define CSR_EPC1    10'h049
 `define CSR_EPC2    10'h04A
@@ -359,20 +359,15 @@
 `define CSR_GOLEX3	10'h053
 `define CSR_GOLEXVP	10'h054
 `define CSR_CODEBUF 10'b00010??????
-`define CSR_CS			10'h0D8
-`define CSR_DS			10'h0D9
-`define CSR_ES			10'h0DA
-`define CSR_SS			10'h0DB
-`define CSR_FS			10'h0DC
-`define CSR_GS			10'h0DD
-`define CSR_LDT			10'h0DE
-`define CSR_CS_BASE	10'h0C0
-`define CSR_DS_BASE	10'h0C1
-`define CSR_ES_BASE	10'h0C2
-`define CSR_SS_BASE	10'h0C3
-`define CSR_FS_BASE	10'h0C4
-`define CSR_GS_BASE	10'h0C5
-`define CSR_GDT_BASE	10'h0C7
+`define CSR_TB			10'h0C0
+`define CSR_CBL			10'h0C1
+`define CSR_CBU			10'h0C2
+`define CSR_RO			10'h0C3
+`define CSR_DBL			10'h0C4
+`define CSR_DBU			10'h0C5
+`define CSR_SBL			10'h0C6
+`define CSR_SBU			10'h0C7
+`define CSR_ENU			10'h0C8
 `define CSR_PREGS		10'h0F0
 `define CSR_Q_CTR		10'h3C0
 `define CSR_BM_CTR	10'h3C1
@@ -423,19 +418,22 @@
 `define FLT_ALN			8'd48
 `define FLT_DWF     8'd50
 `define FLT_DRF     8'd51
+`define FLT_SGB			8'd52
 `define FLT_PRIV    8'd53
 `define FLT_CMT			8'd54
-`define FLT_BD		8'd55
+`define FLT_BD			8'd55
 `define FLT_STK     8'd56
 `define FLT_DBE     8'd60
-`define FLT_CS_LD		8'd232
+`define FLT_RET			8'd230
+`define FLT_CS			8'd231
+`define FLT_ZS_LD		8'd232
 `define FLT_DS_LD		8'd233
 `define FLT_ES_LD		8'd234
-`define FLT_SS_LD		8'd235
-`define FLT_FS_LD		8'd236
-`define FLT_GS_LD		8'd237
-`define FLT_RET			8'd238
-`define FLT_CS			8'd239
+`define FLT_FS_LD		8'd235
+`define FLT_GS_LD		8'd236
+`define FLT_HS_LD		8'd237
+`define FLT_SS_LD		8'd238
+`define FLT_CS_LD		8'd239
 
 `define INSTRUCTION_OP  5:0
 `define INSTRUCTION_L2	7:6
@@ -455,10 +453,10 @@
 `define BACK_BRANCH	1'b1
 
 `define DRAMSLOT_AVAIL	3'b000
-`define DRAMSLOT_BUSY	3'b001
+`define DRAMSLOT_BUSY		3'b001
 `define DRAMSLOT_REQBUS	3'b101
 `define DRAMSLOT_HASBUS	3'b110
-`define DRAMREQ_READY	3'b111
+`define DRAMREQ_READY		3'b111
 
 `define INV	1'b0
 `define VAL	1'b1
@@ -486,8 +484,8 @@
 `define IB_RC		  70:66
 `define IB_RB			65:61
 `define IB_RA			60:56
+`define IB_PRFW		52
 `define IB_CMP		51
-`define IB_SEG		50:48
 `define IB_PUSH		47
 `define IB_TLB		46
 `define IB_SZ			45:43
@@ -552,3 +550,5 @@
 `define TLBAFC				4'd12
 `define TLBPageCount	4'd13
 
+`define EXC_RGS		6'h00
+`define BRK_RGS		6'h10

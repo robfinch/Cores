@@ -73,8 +73,8 @@ input [31:0] signal_i;
 
 parameter TM_CLKFREQ = 20000000;
 parameter QENTRIES = `QENTRIES;
-parameter RSTPC = 64'hFFFC0100;
-parameter BRKPC = 64'hFFFC0000;
+parameter RSTPC = 64'hFFFFFFFFFFFC0100;
+parameter BRKPC = 64'hFFFFFFFFFFFC0000;
 `ifdef SUPPORT_SMT
 parameter PREGS = 256;   // number of physical registers - 1
 parameter AREGS = 256;   // number of architectural registers
@@ -194,30 +194,233 @@ wire [5:0] Rt1s = {Rt1[5:0]};
 reg [3:0] pregs [0:1023];
 `endif
 
+reg [63:0] wbrcd;
+wire [5:0] brgs;
 `ifdef SUPPORT_SEGMENTATION
-reg [23:0] cs_selector [0:63];
-reg [23:0] ds_selector [0:63];
-reg [23:0] es_selector [0:63];
-reg [23:0] fs_selector [0:63];
-reg [23:0] gs_selector [0:63];
-reg [23:0] ss_selector [0:63];
-reg [23:0] ldt_selector [0:63];
-reg [63:0] cs_base [0:63];
+reg [23:0] currentCSSelector;
+reg [63:0] zs_base [0:63];
 reg [63:0] ds_base [0:63];
 reg [63:0] es_base [0:63];
 reg [63:0] fs_base [0:63];
 reg [63:0] gs_base [0:63];
+reg [63:0] hs_base [0:63];
 reg [63:0] ss_base [0:63];
-wire [63:0] xcs = cs_base[rgs];
-wire [63:0] xds = ds_base[rgs];
-wire [63:0] xes = es_base[rgs];
-wire [63:0] xss = ss_base[rgs];
-wire [63:0] xfs = fs_base[rgs];
-wire [63:0] xgs = gs_base[rgs];
-wire [23:0] currentCSSelector = cs_selector[rgs];
-wire [7:0] cpl = currentCSSelector[23:16];
+reg [63:0] cs_base [0:63];
+reg [63:0] zsx_base;
+reg [63:0] dsx_base;
+reg [63:0] esx_base;
+reg [63:0] fsx_base;
+reg [63:0] gsx_base;
+reg [63:0] hsx_base;
+reg [63:0] ssx_base;
+reg [63:0] csx_base;
+reg [63:0] zs_lb [0:63];
+reg [63:0] ds_lb [0:63];
+reg [63:0] es_lb [0:63];
+reg [63:0] fs_lb [0:63];
+reg [63:0] gs_lb [0:63];
+reg [63:0] hs_lb [0:63];
+reg [63:0] ss_lb [0:63];
+reg [63:0] cs_lb [0:63];
+reg [63:0] zslb;
+reg [63:0] dslb;
+reg [63:0] eslb;
+reg [63:0] fslb;
+reg [63:0] gslb;
+reg [63:0] hslb;
+reg [63:0] sslb;
+reg [63:0] cslb;
+reg [63:0] zs_ub [0:63];
+reg [63:0] ds_ub [0:63];
+reg [63:0] es_ub [0:63];
+reg [63:0] fs_ub [0:63];
+reg [63:0] gs_ub [0:63];
+reg [63:0] hs_ub [0:63];
+reg [63:0] ss_ub [0:63];
+reg [63:0] cs_ub [0:63];
+reg [63:0] zsub;
+reg [63:0] dsub;
+reg [63:0] esub;
+reg [63:0] fsub;
+reg [63:0] gsub;
+reg [63:0] hsub;
+reg [63:0] ssub;
+reg [63:0] csub;
+reg [23:0] zs_sel [0:63];
+reg [23:0] ds_sel [0:63];
+reg [23:0] es_sel [0:63];
+reg [23:0] fs_sel [0:63];
+reg [23:0] gs_sel [0:63];
+reg [23:0] hs_sel [0:63];
+reg [23:0] ss_sel [0:63];
+reg [23:0] cs_sel [0:63];
+reg [15:0] zs_acr [0:63];
+reg [15:0] ds_acr [0:63];
+reg [15:0] es_acr [0:63];
+reg [15:0] fs_acr [0:63];
+reg [15:0] gs_acr [0:63];
+reg [15:0] hs_acr [0:63];
+reg [15:0] ss_acr [0:63];
+reg [15:0] cs_acr [0:63];
+initial begin
+	for (n = 0; n < 64; n = n + 1) begin
+		zs_base[n] <= 64'h0;
+		ds_base[n] <= 64'h0;
+		es_base[n] <= 64'h0;
+		fs_base[n] <= 64'h0;
+		gs_base[n] <= 64'h0;
+		hs_base[n] <= 64'h0;
+		ss_base[n] <= 64'h0;
+		cs_base[n] <= 64'h0;
+		zs_lb[n] <= 64'h0;
+		ds_lb[n] <= 64'h0;
+		es_lb[n] <= 64'h0;
+		fs_lb[n] <= 64'h0;
+		gs_lb[n] <= 64'h0;
+		hs_lb[n] <= 64'h0;
+		ss_lb[n] <= 64'h0;
+		cs_lb[n] <= 64'h0;
+		zs_ub[n] <= 64'hFFFFFFFFFFFFFFFF;
+		ds_ub[n] <= 64'hFFFFFFFFFFFFFFFF;
+		es_ub[n] <= 64'hFFFFFFFFFFFFFFFF;
+		fs_ub[n] <= 64'hFFFFFFFFFFFFFFFF;
+		gs_ub[n] <= 64'hFFFFFFFFFFFFFFFF;
+		hs_ub[n] <= 64'hFFFFFFFFFFFFFFFF;
+		ss_ub[n] <= 64'hFFFFFFFFFFFFFFFF;
+		cs_ub[n] <= 64'hFFFFFFFFFFFFFFFF;
+		zs_sel[n] <= 24'h0;
+		ds_sel[n] <= 24'h0;
+		es_sel[n] <= 24'h0;
+		fs_sel[n] <= 24'h0;
+		gs_sel[n] <= 24'h0;
+		hs_sel[n] <= 24'h0;
+		ss_sel[n] <= 24'h0;
+		cs_sel[n] <= 24'h0;
+		zs_acr[n] <= 16'h8000;
+		ds_acr[n] <= 16'h9200;
+		es_acr[n] <= 16'h8000;
+		fs_acr[n] <= 16'h8000;
+		gs_acr[n] <= 16'h8000;
+		hs_acr[n] <= 16'h8000;
+		ss_acr[n] <= 16'h9600;
+		cs_acr[n] <= 16'h9A00;
+	end
+end
+always @(posedge clk_i)
+begin
+	zsx_base <= zs_base[brgs];
+	dsx_base <= ds_base[brgs];
+	esx_base <= es_base[brgs];
+	fsx_base <= fs_base[brgs];
+	gsx_base <= gs_base[brgs];
+	hsx_base <= hs_base[brgs];
+	ssx_base <= ss_base[brgs];
+	csx_base <= cs_base[brgs];
+	zsub <= zs_ub[brgs];
+	dsub <= ds_ub[brgs];
+	esub <= es_ub[brgs];
+	fsub <= fs_ub[brgs];
+	gsub <= gs_ub[brgs];
+	hsub <= hs_ub[brgs];
+	ssub <= ss_ub[brgs];
+	csub <= cs_ub[brgs];
+	zslb <= zs_lb[brgs];
+	dslb <= ds_lb[brgs];
+	eslb <= es_lb[brgs];
+	fslb <= fs_lb[brgs];
+	gslb <= gs_lb[brgs];
+	hslb <= hs_lb[brgs];
+	sslb <= ss_lb[brgs];
+	cslb <= cs_lb[brgs];
+	currentCSSelector <= cs_sel[brgs];
+end
 `endif
-reg [63:0] wbrcd;
+`ifdef SUPPORT_BBMS
+reg [15:0] thrd_handle [0:63];
+reg [63:0] prg_base [0:63];
+reg [63:0] prg_limit [0:63];
+reg [63:0] en_barrier [0:63];					// environment bound
+reg [63:0] cl_barrier [0:63];
+reg [63:0] cu_barrier [0:63];
+reg [63:0] ro_barrier [0:63];
+reg [63:0] dl_barrier [0:63];
+reg [63:0] du_barrier [0:63];
+reg [63:0] sl_barrier [0:63];
+reg [63:0] su_barrier [0:63];
+reg [7:0] env_priv [0:63];
+reg [7:0] cod_priv [0:63];
+reg [7:0] rdo_priv [0:63];
+reg [7:0] dat_priv [0:63];
+reg [7:0] stk_priv [0:63];
+reg [15:0] th;
+reg [63:0] pb;
+reg [63:0] cbl;
+reg [63:0] cbu;
+reg [63:0] ro;
+reg [63:0] dbl;
+reg [63:0] dbu;
+reg [63:0] sbl;
+reg [63:0] sbu;
+reg [63:0] en;
+reg [7:0] env_pl;
+reg [7:0] cod_pl;
+reg [7:0] rdo_pl;
+reg [7:0] dat_pl;
+reg [7:0] stk_pl;
+initial begin
+	for (n = 0; n < 64; n = n + 1)
+	begin
+		thrd_handle[n] <= 1'd0;
+		prg_base[n] <= 1'd0;
+		cl_barrier[n] <= 1'd0;
+		cu_barrier[n] <= 64'hFFFFFFFFFFFFFFFF;
+		ro_barrier[n] <= 1'd0;
+		dl_barrier[n] <= 1'd0;
+		du_barrier[n] <= 64'hFFFFFFFFFFFFFFFF;
+		sl_barrier[n] <= 1'd0;
+		su_barrier[n] <= 64'hFFFFFFFFFFFFFFFF;
+		env_priv[n] <= 8'h00;
+		cod_priv[n] <= 8'h00;
+		rdo_priv[n] <= 8'h00;
+		dat_priv[n] <= 8'h00;
+		stk_priv[n] <= 8'h00;
+	end
+end
+always @(posedge clk_i)
+begin
+	th <= thrd_handle[brgs];
+	pb <= prg_base[brgs];
+	cbl <= cl_barrier[brgs];
+	cbu <= cu_barrier[brgs];
+	ro <= ro_barrier[brgs];
+	dbl <= dl_barrier[brgs];
+	dbu <= du_barrier[brgs];
+	sbl <= sl_barrier[brgs];
+	sbu <= su_barrier[brgs];
+	en <= en_barrier[brgs];
+	env_pl <= env_priv[brgs];
+	cod_pl <= cod_priv[brgs];
+	rdo_pl <= rdo_priv[brgs];
+	dat_pl <= dat_priv[brgs];
+	stk_pl <= stk_priv[brgs];
+end
+//wire [23:0] currentPrgSelector = prg_selector[brgs];
+`else
+wire [63:0] pb = 1'd0;
+wire [63:0] cbl = 1'd0;
+wire [63:0] cbu = 64'hFFFFFFFFFFFFFFFF;
+wire [63:0] ro = 1'd0;
+wire [63:0] dbl = 1'd0;
+wire [63:0] dbu = 64'hFFFFFFFFFFFFFFFF;
+wire [63:0] sbl = 1'd0;
+wire [63:0] sbu = 64'hFFFFFFFFFFFFFFFF;
+wire [63:0] en = 1'd0;
+wire [7:0] env_pl = 8'h00;
+wire [7:0] cod_pl = 8'h00;
+wire [7:0] rdo_pl = 8'h00;
+wire [7:0] dat_pl = 8'h00;
+wire [7:0] stk_pl = 8'h00;
+`endif
 
 reg  [PREGS-1:0] rf_v;
 reg  [`QBITSP1] rf_source[0:AREGS-1];
@@ -233,13 +436,19 @@ wire [`ABITS] pc0a;
 wire [`ABITS] pc1a;
 wire [`ABITS] pc2a;
 `ifdef SUPPORT_SEGMENTATION
-wire [`ABITS] pc0 = pc0a[39:32]==8'hFF ? pc0a : {xcs[50:0],13'd0} + pc0a[39:0];
-wire [`ABITS] pc1 = pc1a[39:32]==8'hFF ? pc1a : {xcs[50:0],13'd0} + pc1a[39:0];
-wire [`ABITS] pc2 = pc2a[39:32]==8'hFF ? pc2a : {xcs[50:0],13'd0} + pc2a[39:0];
+wire [`ABITS] pc0 = (pc0a[47:40]==8'hFF||ol==2'b00) ? pc0a : {csx_base[50:0],13'd0} + pc0a[47:0];
+wire [`ABITS] pc1 = (pc1a[47:40]==8'hFF||ol==2'b00) ? pc1a : {csx_base[50:0],13'd0} + pc1a[47:0];
+wire [`ABITS] pc2 = (pc2a[47:40]==8'hFF||ol==2'b00) ? pc2a : {csx_base[50:0],13'd0} + pc2a[47:0];
+`else
+`ifdef SUPPORT_BBMS
+wire [`ABITS] pc0 = (pc0a[47:40]==8'hFF||ol==2'b00) ? pc0a : {pb[50:0],13'd0} + pc0a[47:0];
+wire [`ABITS] pc1 = (pc1a[47:40]==8'hFF||ol==2'b00) ? pc1a : {pb[50:0],13'd0} + pc1a[47:0];
+wire [`ABITS] pc2 = (pc2a[47:40]==8'hFF||ol==2'b00) ? pc2a : {pb[50:0],13'd0} + pc2a[47:0];
 `else
 wire [`ABITS] pc0 = pc0a;
 wire [`ABITS] pc1 = pc1a;
 wire [`ABITS] pc2 = pc2a;
+`endif
 `endif
 
 reg excmiss;
@@ -325,17 +534,19 @@ assign dl[0] = mstatus[0][21:20];
 wire [7:0] cpl [0:NTHREAD];
 assign cpl[0] = mstatus[0][13:6];	// current privilege level
 wire [5:0] rgs [0:NTHREAD];
-assign rgs[0] = mstatus[0][19:14];
 assign ol[1] = mstatus[1][5:4];	// operating level
 assign cpl[1] = mstatus[1][13:6];	// current privilege level
-assign rgs[1] = mstatus[1][19:14];
 assign dl[1] = mstatus[1][21:20];
 wire [7:0] ASID = mstatus[0][47:40];
 reg [15:0] ol_stack [0:NTHREAD];
+reg [15:0] dl_stack [0:NTHREAD];
 reg [31:0] im_stack [0:NTHREAD];
 reg [63:0] pl_stack [0:NTHREAD];
 reg [63:0] rs_stack [0:NTHREAD];
+reg [63:0] brs_stack [0:NTHREAD];
 reg [63:0] fr_stack [0:NTHREAD];
+assign rgs[0] = rs_stack[0][5:0];
+assign rgs[1] = rs_stack[1][5:0];
 wire mprv = mstatus[0][55];
 wire [5:0] fprgs = mstatus[0][25:20];
 //assign ol_o = mprv ? ol_stack[0][2:0] : ol[0];
@@ -360,12 +571,15 @@ assign dl = mstatus[21:20];
 wire [7:0] cpl ;
 assign cpl = mstatus[13:6];	// current privilege level
 wire [5:0] rgs ;
-assign rgs = mstatus[19:14];
 reg [15:0] ol_stack ;
+reg [15:0] dl_stack ;
 reg [31:0] im_stack ;
 reg [63:0] pl_stack ;
 reg [63:0] rs_stack ;
+reg [63:0] brs_stack ;
 reg [63:0] fr_stack ;
+assign rgs = rs_stack[5:0];
+assign brgs = brs_stack[5:0];
 wire mprv = mstatus[55];
 wire [7:0] ASID = mstatus[47:40];
 wire [5:0] fprgs = mstatus[25:20];
@@ -373,6 +587,7 @@ wire [5:0] fprgs = mstatus[25:20];
 wire vca = mstatus[32];		// vector chaining active
 `endif
 reg [63:0] tcb;
+reg [47:0] bad_instr[0:15];
 reg [`ABITS] badaddr[0:15];
 reg [`ABITS] tvec[0:7];
 reg [63:0] sema;
@@ -381,8 +596,8 @@ reg [63:0] cas;         // compare and swap
 reg [63:0] ve_hold;
 reg isCAS, isAMO, isInc, isSpt, isRMW;
 reg [`QBITS] casid;
-reg [`ABITS] sbl, sbu;
 reg [4:0] regLR = 5'd29;
+
 
 reg [2:0] fp_rm;
 reg fp_inexe;
@@ -465,6 +680,7 @@ reg [128:0] message [0:15];	// indexed by panic
 
 wire int_commit;
 reg StatusHWI;
+(* mark_debug = "true" *)
 reg [55:0] insn0, insn1, insn2;
 wire [55:0] insn0a, insn1b, insn2b;
 reg [55:0] insn1a, insn2a;
@@ -537,8 +753,8 @@ reg [QENTRIES-1:0] iqentry_sync;  // sync instruction
 reg [QENTRIES-1:0] iqentry_fsync;
 reg [QENTRIES-1:0] iqentry_tlb;
 reg [QENTRIES-1:0] iqentry_cmp;
-reg [2:0] iqentry_seg [0:QENTRIES-1];
-reg [QENTRIES-1:0] iqentry_rfw = 8'h00;	// writes to register file
+reg [QENTRIES-1:0] iqentry_rfw = 1'b0;	// writes to register file
+reg [QENTRIES-1:0] iqentry_prfw = 1'b0;
 reg  [7:0] iqentry_we   [0:QENTRIES-1];	// enable strobe
 reg [63:0] iqentry_res	[0:QENTRIES-1];	// instruction result
 reg [63:0] iqentry_ares	[0:QENTRIES-1];	// alternate instruction result
@@ -587,9 +803,9 @@ for (n = 0; n < QENTRIES; n = n + 1)
 end
 
 reg [QENTRIES-1:0] iqentry_source = {QENTRIES{1'b0}};
-reg   [QENTRIES-1:0] iqentry_imm;
-reg  [QENTRIES-1:0] iqentry_memready;
-reg  [QENTRIES-1:0] iqentry_memopsvalid;
+reg [QENTRIES-1:0] iqentry_imm;
+reg [QENTRIES-1:0] iqentry_memready;
+reg [QENTRIES-1:0] iqentry_memopsvalid;
 
 reg  [QENTRIES-1:0] memissue = {QENTRIES{1'b0}};
 reg [1:0] missued;
@@ -736,8 +952,10 @@ reg [47:0] alu0_instr;
 reg				 alu0_tlb;
 reg        alu0_mem;
 reg        alu0_load;
+reg        alu0_store;
 reg 			 alu0_push;
 reg        alu0_shft;
+reg [RBIT:0] alu0_Ra;
 reg [63:0] alu0_argA;
 reg [63:0] alu0_argB;
 reg [63:0] alu0_argC;
@@ -756,7 +974,6 @@ wire  [`XBITS] alu0_exc;
 wire        alu0_v;
 wire        alu0_branchmiss;
 wire [`ABITS] alu0_misspc;
-reg [2:0] alu0_seg;
 
 reg [3:0]  alu1_pred;
 reg 				alu1_cmt;
@@ -769,8 +986,10 @@ reg  [`QBITSP1] alu1_sourceid;
 reg [47:0] alu1_instr;
 reg        alu1_mem;
 reg        alu1_load;
+reg        alu1_store;
 reg 			 alu1_push;
 reg        alu1_shft;
+reg [RBIT:0] alu1_Ra;
 reg [63:0] alu1_argA;
 reg [63:0] alu1_argB;
 reg [63:0] alu1_argC;
@@ -789,7 +1008,6 @@ wire  [`XBITS] alu1_exc;
 wire        alu1_v;
 wire        alu1_branchmiss;
 wire [`ABITS] alu1_misspc;
-reg [2:0] alu1_seg;
 
 wire [`XBITS] fpu_exc;
 reg [3:0] fpu1_pred;
@@ -892,7 +1110,6 @@ reg [7:0] wb_sel [0:`WB_DEPTH-1];
 reg wb_en;
 reg wb_shift;
 
-(* mark_debug="true" *)
 reg branchmiss = 1'b0;
 reg branchmiss_thrd = 1'b0;
 reg [`ABITS] misspc;
@@ -949,15 +1166,15 @@ reg        dram2_store;
 reg  [1:0] dram2_ol;
 
 reg        dramA_v;
-reg  [3:0] dramA_id;
+reg  [`QBITSP1] dramA_id;
 reg [63:0] dramA_bus;
 reg  [`XBITS] dramA_exc;
 reg        dramB_v;
-reg  [3:0] dramB_id;
+reg  [`QBITSP1] dramB_id;
 reg [63:0] dramB_bus;
 reg  [`XBITS] dramB_exc;
 reg        dramC_v;
-reg  [3:0] dramC_id;
+reg  [`QBITSP1] dramC_id;
 reg [63:0] dramC_bus;
 reg  [`XBITS] dramC_exc;
 
@@ -1177,7 +1394,7 @@ FT64_L1_icache #(.pSize(`L1_ICACHE_SIZE)) uic0
   .wr(L1_wr0),
   .wr_ack(),
   .en(L1_en),
-  .adr((icstate==IDLE||icstate==IC_Next) ? {pcr[5:0],pc0} : L1_adr),
+  .adr((icstate==IDLE||icstate==IC_Next) ? {pcr[7:0],pc0} : L1_adr),
   .wadr(L1_adr),
   .i(L2_rdat),
   .o(insn0a),
@@ -1196,7 +1413,7 @@ FT64_L1_icache #(.pSize(`L1_ICACHE_SIZE)) uic1
   .wr(L1_wr1),
   .wr_ack(),
   .en(L1_en),
-  .adr((icstate==IDLE||icstate==IC_Next) ? (thread_en ? {pcr[5:0],pc1}: {pcr[5:0],pc0plus6} ): L1_adr),
+  .adr((icstate==IDLE||icstate==IC_Next) ? (thread_en ? {pcr[7:0],pc1}: {pcr[7:0],pc0plus6} ): L1_adr),
   .wadr(L1_adr),
   .i(L2_rdat),
   .o(insn1b),
@@ -1218,7 +1435,7 @@ FT64_L1_icache #(.pSize(`L1_ICACHE_SIZE)) uic2
   .wr(L1_wr2),
   .wr_ack(),
   .en(L1_en),
-  .adr((icstate==IDLE||icstate==IC_Next) ? (thread_en ? {pcr[5:0],pc2} : {pcr[5:0],pc0plus12}) : L1_adr),
+  .adr((icstate==IDLE||icstate==IC_Next) ? (thread_en ? {pcr[7:0],pc2} : {pcr[7:0],pc0plus12}) : L1_adr),
   .wadr(L1_adr),
   .i(L2_rdat),
   .o(insn2b),
@@ -1776,31 +1993,55 @@ end
 // If there is a segment prefix present then defer the freezing of the pc.
 // If a hardware interrupt instruction is encountered in the instruction stream
 // flag it as a privilege violation.
-wire freezePC = (irq_i > im) && ~int_commit;
+wire freezePC = (irq_i > im) && !int_commit;
 always @*
-if (freezePC)
-	insn0 <= {6'd0,5'd0,irq_i,1'b0,vec_i,2'b00,`BRK};
+if (freezePC) begin
+`ifdef SUPPORT_PREDICATION
+	if (pred_on)
+		insn0 <= {6'd0,5'd0,irq_i,1'b0,vec_i,2'b00,`BRK,8'h01};
+	else
+`endif
+		insn0 <= {8'h00,6'd0,5'd0,irq_i,1'b0,vec_i,2'b00,`BRK};
+end
 else if (phit) begin
 //	if (insn0a[`INSTRUCTION_OP]==`BRK && insn0a[25:21]==5'd0 && insn0a[`INSTRUCTION_L2]==2'b00)
 //		insn0 <= {6'd1,5'd0,4'b0,1'b0,`FLT_PRIV,2'b00,`BRK};
 //	else
 		insn0 <= insn0a;
 end
-else
-	insn0 <= `NOP_INSN;
+else begin
+`ifdef SUPPORT_PREDICATION
+	if (pred_on)
+		insn0 <= {`NOP_INSN,8'h01};
+	else
+`endif
+		insn0 <= {8'h00,`NOP_INSN};
+end
 generate begin : gInsnMux
 if (`WAYS > 1) begin
 always @*
-if (freezePC && !thread_en)
-	insn1 <= {6'd0,5'd0,irq_i,1'b0,vec_i,2'b00,`BRK};
+if (freezePC && !thread_en) begin
+`ifdef SUPPORT_PREDICATION
+	if (pred_on)
+		insn1 <= {6'd0,5'd0,irq_i,1'b0,vec_i,2'b00,`BRK,8'h01};
+	else
+`endif
+		insn1 <= {8'h00,6'd0,5'd0,irq_i,1'b0,vec_i,2'b00,`BRK};
+end
 else if (phit) begin
 //	if (insn1a[`INSTRUCTION_OP]==`BRK && insn1a[25:21]==5'd0 && insn1a[`INSTRUCTION_L2]==2'b00)
 //		insn1 <= {6'd1,5'd0,4'b0,1'b0,`FLT_PRIV,2'b00,`BRK};
 //	else
 		insn1 <= insn1a;
 end
-else
-	insn1 <= `NOP_INSN;
+else begin
+`ifdef SUPPORT_PREDICATION
+	if (pred_on)
+		insn1 <= {`NOP_INSN,8'h01};
+	else
+`endif
+		insn1 <= {8'h00,`NOP_INSN};
+end
 end
 if (`WAYS > 2) begin
 always @*
@@ -1867,12 +2108,12 @@ FT64_dcache udc0
   .dce(dce),
   .wr(wr_dcache0),
   .sel(sel_o),
-  .wadr({pcr[5:0],vadr}),
+  .wadr({pcr[7:0],vadr}),
   .whit(whit0),
   .i((bstate==B_DCacheLoadAck) ? dat_i : dat_o),
   .rclk(clk),
   .rdsize(dram0_memsize),
-  .radr({pcr[5:0],dram0_addr}),
+  .radr({pcr[7:0],dram0_addr}),
   .o(dc0_out),
   .rhit(dhit0a)
 );
@@ -1885,12 +2126,12 @@ FT64_dcache udc1
   .dce(dce),
   .wr(wr_dcache1),
   .sel(sel_o),
-  .wadr({pcr[5:0],vadr}),
+  .wadr({pcr[7:0],vadr}),
   .whit(whit1),
   .i((bstate==B_DCacheLoadAck) ? dat_i : dat_o),
   .rclk(clk),
   .rdsize(dram1_memsize),
-  .radr({pcr[5:0],dram1_addr}),
+  .radr({pcr[7:0],dram1_addr}),
   .o(dc1_out),
   .rhit(dhit1a)
 );
@@ -1903,12 +2144,12 @@ FT64_dcache udc2
   .dce(dce),
   .wr(wr_dcache2),
   .sel(sel_o),
-  .wadr({pcr[5:0],vadr}),
+  .wadr({pcr[7:0],vadr}),
   .whit(whit2),
   .i((bstate==B_DCacheLoadAck) ? dat_i : dat_o),
   .rclk(clk),
   .rdsize(dram2_memsize),
-  .radr({pcr[5:0],dram2_addr}),
+  .radr({pcr[7:0],dram2_addr}),
   .o(dc2_out),
   .rhit(dhit2a)
 );
@@ -3869,6 +4110,14 @@ wire [3:0] Pn0 = fetchbuf0_pbyte[7:4];
 wire [3:0] Pn1 = fetchbuf1_pbyte[7:4];
 `endif
 
+`ifdef SUPPORT_PREDICATION
+wire cmt_head1 = (!iqentry_rfw[heads[1]] && !iqentry_prfw[heads[1]] && !iqentry_oddball[heads[1]] && ~|iqentry_exc[heads[1]]);
+wire cmt_head2 = (!iqentry_rfw[heads[2]] && !iqentry_prfw[heads[2]] && !iqentry_oddball[heads[2]] && ~|iqentry_exc[heads[2]]);
+`else
+wire cmt_head1 = (!iqentry_rfw[heads[1]] && !iqentry_oddball[heads[1]] && ~|iqentry_exc[heads[1]]);
+wire cmt_head2 = (!iqentry_rfw[heads[2]] && !iqentry_oddball[heads[2]] && ~|iqentry_exc[heads[2]]);
+`endif
+
 // Determine the head increment amount, this must match code later on.
 reg [2:0] hi_amt;
 always @*
@@ -3889,9 +4138,15 @@ begin
 			hi_amt <= 3'd2;
 		else if (heads[0] != tail0)
 			hi_amt <= 3'd1;
-	6'b0?_0?_10:	;
+	6'b0?_0?_10:
+		if (heads[0] != tail0 && heads[1] != tail0)
+			hi_amt <= 3'd2;
+		else if (heads[0] != tail0)
+			hi_amt <= 3'd1;
+		else
+			hi_amt <= 3'd0;
 	6'b0?_0?_11:
-		if (`NUM_CMT > 2 || (!iqentry_rfw[heads[2]] && !iqentry_prfw[heads[2]] && !iqentry_oddball[heads[2]] && ~|iqentry_exc[heads[2]]))
+		if (`NUM_CMT > 2 || cmt_head2)
 			hi_amt <= 3'd3;
 		else
 			hi_amt <= 3'd2;
@@ -3903,14 +4158,14 @@ begin
 	// retire 2
 	6'b0?_11_0?,
 	6'b0?_11_10:
-    if (`NUM_CMT > 1 || (!iqentry_rfw[heads[1]] && !iqentry_prfw[heads[1]] && !iqentry_oddball[heads[1]] && ~|iqentry_exc[heads[1]]))
+    if (`NUM_CMT > 1 || cmt_head1)
 			hi_amt <= 3'd2;	
     else
 			hi_amt <= 3'd1;
   6'b0?_11_11:
-    if (`NUM_CMT > 2 || (`NUM_CMT > 1 && !iqentry_rfw[heads[2]] && !iqentry_prfw[heads[2]] && !iqentry_oddball[heads[2]] && ~|iqentry_exc[heads[2]]))
+    if (`NUM_CMT > 2 || (`NUM_CMT > 1 && cmt_head2))
 			hi_amt <= 3'd3;
-  	else if (`NUM_CMT > 1 || (!iqentry_rfw[heads[1]] && !iqentry_prfw[heads[1]] && !iqentry_oddball[heads[1]] && ~|iqentry_exc[heads[1]]))
+  	else if (`NUM_CMT > 1 || cmt_head1)
 			hi_amt <= 3'd2;
   	else
 			hi_amt <= 3'd1;
@@ -3929,36 +4184,33 @@ begin
 			hi_amt <= 3'd1;
   6'b11_0?_11:
   	if (heads[1] != tail0) begin
-  		if (`NUM_CMT > 2 || (!iqentry_rfw[heads[2]] && !iqentry_prfw[heads[2]] && !iqentry_oddball[heads[2]] && ~|iqentry_exc[heads[2]])) begin
+  		if (`NUM_CMT > 2 || cmt_head2)
 				hi_amt <= 3'd3;
-  		end
-  		else begin
+  		else
 				hi_amt <= 3'd2;
-			end
   	end
-  	else begin
+  	else
 			hi_amt <= 3'd1;
-  	end
   6'b11_10_??:
 			hi_amt <= 3'd1;
   6'b11_11_0?:
   	if (`NUM_CMT > 1 && heads[2] != tail0)
 			hi_amt <= 3'd3;
-  	else if ((!iqentry_rfw[heads[1]] && !iqentry_prfw[heads[1]]&& !iqentry_oddball[heads[1]] && ~|iqentry_exc[heads[1]]) && heads[2] != tail0)
+  	else if (cmt_head1 && heads[2] != tail0)
 			hi_amt <= 3'd3;
-		else if (`NUM_CMT > 1 || (!iqentry_rfw[heads[1]] && !iqentry_prfw[heads[1]]&& !iqentry_oddball[heads[1]] && ~|iqentry_exc[heads[1]]))
+		else if (`NUM_CMT > 1 || cmt_head1)
 			hi_amt <= 3'd2;
   	else
 			hi_amt <= 3'd1;
   6'b11_11_10:
-		if (`NUM_CMT > 1 || (!iqentry_rfw[heads[1]] && !iqentry_prfw[heads[1]] && !iqentry_oddball[heads[1]] && ~|iqentry_exc[heads[1]]))
+		if (`NUM_CMT > 1 || cmt_head1)
 			hi_amt <= 3'd2;
   	else
 			hi_amt <= 3'd1;
 	6'b11_11_11:
-		if (`NUM_CMT > 2 || (`NUM_CMT > 1 && !iqentry_rfw[heads[2]] && !iqentry_prfw[heads[2]] && !iqentry_oddball[heads[2]] && ~|iqentry_exc[heads[2]]))
+		if (`NUM_CMT > 2 || (`NUM_CMT > 1 && cmt_head2))
 			hi_amt <= 3'd3;
-		else if (`NUM_CMT > 1 || (!iqentry_rfw[heads[1]] && !iqentry_prfw[heads[1]] && !iqentry_oddball[heads[1]] && ~|iqentry_exc[heads[1]]))
+		else if (`NUM_CMT > 1 || cmt_head1)
 			hi_amt <= 3'd2;
 		else
 			hi_amt <= 3'd1;
@@ -4011,7 +4263,11 @@ end
 
 always @*
 	for (n = 0; n < QENTRIES; n = n + 1)
-		iqentry_livetarget[n] = {PREGS {iqentry_v[n]}} & {PREGS {~iqentry_stomp[n] && iqentry_thrd[n]==branchmiss_thrd}} & iq_out[n] & ~{16{iqentry_cmp[n]}};
+`ifdef SUPPORT_PREDICATION
+		iqentry_livetarget[n] = {PREGS {iqentry_v[n]}} & {PREGS {~iqentry_stomp[n] && iqentry_thrd[n]==branchmiss_thrd}} & iq_out[n] & ~{PREGS{iqentry_cmp[n]}};
+`else
+		iqentry_livetarget[n] = {PREGS {iqentry_v[n]}} & {PREGS {~iqentry_stomp[n] && iqentry_thrd[n]==branchmiss_thrd}} & iq_out[n];
+`endif
 
 `ifdef SUPPORT_PREDICATION
 always @*
@@ -5458,8 +5714,6 @@ begin
     `CSR_PMR:				csr_r <= pmr;
     `CSR_WBRCD:		csr_r <= wbrcd;
     `CSR_SEMA:      csr_r <= sema;
-    `CSR_SBL:       csr_r <= sbl;
-    `CSR_SBU:       csr_r <= sbu;
     `CSR_TCB:		csr_r <= tcb;
     `CSR_FSTAT:     csr_r <= {fp_rgs,fp_status};
 `ifdef SUPPORT_DBG    
@@ -5473,13 +5727,15 @@ begin
     `CSR_CAS:       csr_r <= cas;
     `CSR_TVEC:      csr_r <= tvec[csrno[2:0]];
     `CSR_BADADR:    csr_r <= badaddr[{alu0_thrd,csrno[11:10]}];
+    `CSR_BADINSTR:	csr_r <= bad_instr[{alu0_thrd,csrno[11:10]}];
     `CSR_CAUSE:     csr_r <= {48'd0,cause[{alu0_thrd,csrno[11:10]}]};
 `ifdef SUPPORT_SMT    
     `CSR_IM_STACK:	csr_r <= im_stack[alu0_thrd];
-    `CSR_OL_STACK:	csr_r <= ol_stack[alu0_thrd];
+    `CSR_OL_STACK:	csr_r <= {dl_stack[alu0_thrd],ol_stack[alu0_thrd]};
     `CSR_PL_STACK:	csr_r <= pl_stack[alu0_thrd];
     `CSR_RS_STACK:	csr_r <= rs_stack[alu0_thrd];
     `CSR_STATUS:    csr_r <= mstatus[alu0_thrd][63:0];
+    `CSR_BRS_STACK:	csr_r <= brs_stack[alu0_thrd];
     `CSR_EPC0:      csr_r <= epc0[alu0_thrd];
     `CSR_EPC1:      csr_r <= epc1[alu0_thrd];
     `CSR_EPC2:      csr_r <= epc2[alu0_thrd];
@@ -5490,10 +5746,11 @@ begin
     `CSR_EPC7:      csr_r <= epc7[alu0_thrd];
 `else
     `CSR_IM_STACK:	csr_r <= im_stack;
-    `CSR_OL_STACK:	csr_r <= ol_stack;
+    `CSR_OL_STACK:	csr_r <= {dl_stack,ol_stack};
     `CSR_PL_STACK:	csr_r <= pl_stack;
     `CSR_RS_STACK:	csr_r <= rs_stack;
     `CSR_STATUS:    csr_r <= mstatus[63:0];
+    `CSR_BRS_STACK:	csr_r <= brs_stack;
     `CSR_EPC0:      csr_r <= epc0;
     `CSR_EPC1:      csr_r <= epc1;
     `CSR_EPC2:      csr_r <= epc2;
@@ -5504,6 +5761,20 @@ begin
     `CSR_EPC7:      csr_r <= epc7;
 `endif    
     `CSR_CODEBUF:   csr_r <= codebuf[csrno[5:0]];
+`ifdef SUPPORT_BBMS
+		`CSR_TB:			dat <= tb;
+		`CSR_CBL:			dat <= cbl;
+		`CSR_CBU:			dat <= cbu;
+		`CSR_RO:			dat <= ro;
+		`CSR_DBL:			dat <= dbl;
+		`CSR_DBU:			dat <= dbu;
+		`CSR_SBL:			dat <= sbl;
+		`CSR_SBU:			dat <= sbu;
+		`CSR_ENU:			dat <= en;
+`endif
+`ifdef SUPPORT_PREDICATION
+		`CSR_PREGS:		read_pregs(dat);
+`endif		
     `CSR_Q_CTR:		csr_r <= iq_ctr;
     `CSR_BM_CTR:	csr_r <= bm_ctr;
     `CSR_ICL_CTR:	csr_r <= icl_ctr;
@@ -5532,26 +5803,10 @@ begin
         csr_r <= 64'h0;
 end
 
-`ifdef SUPPORT_SEGMENTATION
-always @*
-case(alu0_seg)
-3'd0:	alu0_xs <= xcs;
-3'd2:	alu0_xs <= xes;
-3'd3: alu0_xs <= xss;
-3'd4:	alu0_xs <= xfs;
-3'd5:	alu0_xs <= xgs;
-default:	alu0_xs <= xds;
-endcase
+reg [63:0] alu0_xu = 1'd0, alu1_xu = 1'd0;
 
-always @*
-case(alu1_seg)
-3'd0:	alu1_xs <= xcs;
-3'd2:	alu1_xs <= xes;
-3'd3: alu1_xs <= xss;
-3'd4:	alu1_xs <= xfs;
-3'd5:	alu1_xs <= xgs;
-default:	alu1_xs <= xds;
-endcase
+`ifdef SUPPORT_BBMS
+
 `else
 // This always block didn't work, it left the signals as X's.
 // So they are set to zero where the reg declaration is.
@@ -5573,6 +5828,7 @@ FT64_alu #(.BIG(1'b1),.SUP_VECTOR(SUP_VECTOR)) ualu0 (
   .instr(alu0_instr),
   .sz(alu0_sz),
   .tlb(alu0_tlb),
+  .store(alu0_store),
   .a(alu0_argA),
   .b(alu0_argB),
   .c(alu0_argC),
@@ -5581,8 +5837,6 @@ FT64_alu #(.BIG(1'b1),.SUP_VECTOR(SUP_VECTOR)) ualu0 (
   .tgt(alu0_tgt),
   .ven(alu0_ven),
   .vm(vm[alu0_instr[25:23]]),
-  .sbl(sbl),
-  .sbu(sbu),
   .csr(csr_r),
   .o(alu0_out),
   .ob(alu0b_bus),
@@ -5606,8 +5860,45 @@ FT64_alu #(.BIG(1'b1),.SUP_VECTOR(SUP_VECTOR)) ualu0 (
   .tlb_miss(tlb_miss),
   .exv_o(exv_i),
   .wrv_o(wrv_i),
-  .rdv_o(rdv_i),
-  .seg(alu0_xs)
+  .rdv_o(rdv_i)
+`ifdef SUPPORT_SEGMENTATION
+	,
+	.zs_base(zsx_base),
+	.ds_base(dsx_base),
+	.es_base(esx_base),
+	.fs_base(fsx_base),
+	.gs_base(gsx_base),
+	.hs_base(hsx_base),
+	.ss_base(ssx_base),
+	.cs_base(csx_base),
+	.zsub(zsub),
+	.dsub(dsub),
+	.esub(esub),
+	.fsub(fsub),
+	.gsub(gsub),
+	.hsub(hsub),
+	.ssub(ssub),
+	.csub(csub),
+	.zslb(zslb),
+	.dslb(dslb),
+	.eslb(eslb),
+	.fslb(fslb),
+	.gslb(gslb),
+	.hslb(hslb),
+	.sslb(sslb),
+	.cslb(cslb)
+`endif
+`ifdef SUPPORT_BBMS
+  .pb(dl==2'b00 ? 64'd0 : pb),
+  .cbl(cbl),
+  .cbu(cbu),
+  .ro(ro),
+  .dbl(dbl),
+  .dbu(dbu),
+  .sbl(sbl),
+  .sbu(sbu),
+  .en(en)
+`endif
 );
 generate begin : gAluInst
 if (`NUM_ALU > 1) begin
@@ -5619,6 +5910,7 @@ FT64_alu #(.BIG(1'b0),.SUP_VECTOR(SUP_VECTOR)) ualu1 (
   .instr(alu1_instr),
   .sz(alu1_sz),
   .tlb(1'b0),
+  .store(alu1_store),
   .a(alu1_argA),
   .b(alu1_argB),
   .c(alu1_argC),
@@ -5627,8 +5919,6 @@ FT64_alu #(.BIG(1'b0),.SUP_VECTOR(SUP_VECTOR)) ualu1 (
   .tgt(alu1_tgt),
   .ven(alu1_ven),
   .vm(vm[alu1_instr[25:23]]),
-  .sbl(sbl),
-  .sbu(sbu),
   .csr(64'd0),
   .o(alu1_out),
   .ob(alu1b_bus),
@@ -5651,8 +5941,45 @@ FT64_alu #(.BIG(1'b0),.SUP_VECTOR(SUP_VECTOR)) ualu1 (
   .tlb_miss(),
   .exv_o(),
   .wrv_o(),
-  .rdv_o(),
-  .seg(alu1_xs)
+  .rdv_o()
+`ifdef SUPPORT_SEGMENTATION
+	,
+	.zs_base(zsx_base),
+	.ds_base(dsx_base),
+	.es_base(esx_base),
+	.fs_base(fsx_base),
+	.gs_base(gsx_base),
+	.hs_base(hsx_base),
+	.ss_base(ssx_base),
+	.cs_base(csx_base),
+	.zsub(zsub),
+	.dsub(dsub),
+	.esub(esub),
+	.fsub(fsub),
+	.gsub(gsub),
+	.hsub(hsub),
+	.ssub(ssub),
+	.csub(csub),
+	.zslb(zslb),
+	.dslb(dslb),
+	.eslb(eslb),
+	.fslb(fslb),
+	.gslb(gslb),
+	.hslb(hslb),
+	.sslb(sslb),
+	.cslb(cslb)
+`endif
+`ifdef SUPPORT_BBMS
+  .pb(dl==2'b00 ? 64'd0 : pb),
+  .cbl(cbl),
+  .cbu(cbu),
+  .ro(ro),
+  .dbl(dbl),
+  .dbu(dbu),
+  .sbl(sbl),
+  .sbu(sbu),
+  .en(en)
+`endif
 );
 end
 end
@@ -5828,7 +6155,11 @@ begin
     fcu_exc <= `FLT_NONE;
     casez(fcu_instr[`INSTRUCTION_OP])
 `ifdef SUPPORT_SEGMENTATION
-    `CS:		fcu_exc <= currentCSSelector != fcu_instr[31:8] ? `FLT_CS : `FLT_NONE;
+    `LDCS:  fcu_exc <= fcu_instr[31:8] != fcu_pc[63:40] ? `FLT_CS : `FLT_NONE;
+    `RET:		fcu_exc <= fcu_argB[63:40] != fcu_pc[63:40] ? `FLT_RET : `FLT_NONE;
+`endif
+`ifdef SUPPORT_BBMS
+    `LFCS:	fcu_exc <= currentCSSelector != fcu_instr[31:8] ? `FLT_CS : `FLT_NONE;
     `RET:		fcu_exc <= fcu_argB[63:40] != currentCSSelector ? `FLT_RET : `FLT_NONE;
 `endif
     `CHK:   begin
@@ -6297,8 +6628,14 @@ if (rst) begin
 `ifdef SUPPORT_SMT
      mstatus[0] <= 64'h4000F;	// select register set #16 for thread 0
      mstatus[1] <= 64'h4800F;	// select register set #18 for thread 1
+     rs_stack[0] <= 64'd16;
+     brs_stack[0] <= 64'd16;
+     rs_stack[1] <= 64'd18;
+     brs_stack[1] <= 64'd18;
 `else
      mstatus <= 64'h4000F;	// select register set #16 for thread 0
+     rs_stack <= 64'd16;
+     brs_stack <= 64'd16;
 `endif
     for (n = 0; n < QENTRIES; n = n + 1) begin
        iqentry_v[n] <= `INV;
@@ -6454,10 +6791,10 @@ if (rst) begin
      fp_rm <= 3'd0;			// round nearest even - default rounding mode
      fpu_csr[37:32] <= 5'd31;	// register set #31
      waitctr <= 48'd0;
-    for (n = 0; n < 16; n = n + 1)
-         badaddr[n] <= 64'd0;
-     sbl <= 32'h0;
-     sbu <= 32'hFFFFFFFF;
+    for (n = 0; n < 16; n = n + 1) begin
+      badaddr[n] <= 64'd0;
+      bad_instr[n] <= `NOP_INSN;
+    end
     // Vector
      vqe0 <= 6'd0;
      vqet0 <= 6'd0;
@@ -6503,23 +6840,24 @@ if (rst) begin
 		irq_ctr <= 40'd0;
 		cmt_timer <= 9'd0;
 		StoreAck1 <= `FALSE;
-`ifdef SUPPORT_SEGMENTATION		
+`ifdef SUPPORT_DBG
+		dbg_ctrl <= 64'h0;
+`endif
+/* Initialized with initial begin above
+`ifdef SUPPORT_BBMS		
 		for (n = 0; n < 64; n = n + 1) begin
-			cs_selector[n] <= 24'd0;
-			ds_selector[n] <= 24'd0;
-			es_selector[n] <= 24'd0;
-			fs_selector[n] <= 24'd0;
-			gs_selector[n] <= 24'd0;
-			ss_selector[n] <= 24'd0;
-			ldt_selector[n] <= 24'd0;
-			cs_base[n] <= 64'h0;
-			ds_base[n] <= 64'h0;
-			es_base[n] <= 64'h0;
-			ss_base[n] <= 64'h0;
-			gs_base[n] <= 64'h0;
-			fs_base[n] <= 64'h0;
+			thrd_handle[n] <= 16'h0;
+			prg_base[n] <= 64'h0;
+			cl_barrier[n] <= 64'h0;
+			cu_barrier[n] <= 64'hFFFFFFFFFFFFFFFF;
+			ro_barrier[n] <= 64'h0;
+			dl_barrier[n] <= 64'h0;
+			du_barrier[n] <= 64'hFFFFFFFFFFFFFFFF;
+			sl_barrier[n] <= 64'h0;
+			su_barrier[n] <= 64'hFFFFFFFFFFFFFFFF;
 		end
 `endif
+*/
 end
 else begin
 	if (|fb_panic)
@@ -6595,9 +6933,6 @@ else begin
      fpu1_ld <= FALSE;
      fpu2_ld <= FALSE;
      fcu_ld <= FALSE;
-     dramA_v <= FALSE;
-     dramB_v <= FALSE;
-     dramC_v <= FALSE;
      cr0[17] <= 1'b0;
     if (waitctr != 48'd0)
          waitctr <= waitctr - 4'd1;
@@ -7142,37 +7477,55 @@ end
 
 if (alu0_v) begin
 	iqentry_tgt [ alu0_id[`QBITS] ] <= alu0_tgt;
-	if (iqentry_mem[ alu0_id[`QBITS] ] && !iqentry_agen[ alu0_id[`QBITS] ])
-		iqentry_ma[ alu0_id[`QBITS] ] <= alu0_bus;
 	iqentry_res	[ alu0_id[`QBITS] ] <= ralu0_bus;
 	iqentry_exc	[ alu0_id[`QBITS] ] <= alu0_exc;
 	iqentry_done[ alu0_id[`QBITS] ] <= (!iqentry_mem[ alu0_id[`QBITS] ] && alu0_done) || !alu0_cmt;
 	iqentry_cmt [ alu0_id[`QBITS] ] <= alu0_done && alu0_cmt;
 	iqentry_out	[ alu0_id[`QBITS] ] <= `INV;
 	iqentry_agen[ alu0_id[`QBITS] ] <= `VAL;//!iqentry_fc[alu0_id[`QBITS]];  // RET
+	if (iqentry_mem[ alu0_id[`QBITS] ] && !iqentry_agen[ alu0_id[`QBITS] ]) begin
+		iqentry_ma[ alu0_id[`QBITS] ] <= alu0_bus;
+	end
+`ifdef SUPPORT_PREDICATION
 	// Commit head advance logic wants to see a cmt for a store. If the instruction doesn't
 	// pass predicate logic indicate not a store so the commit head logic doesn't hang.
-	if (!(alu0_done & alu0_cmt))
-		iqentry_store[alu0_id[`QBITS]] <= `FALSE;	// It's no longer a store because it isn't committing.
+	if (!alu0_cmt & iqentry_store[alu0_id[`QBITS]]) begin
+		iqentry_done[alu0_id[`QBITS]] <= `VAL;
+		iqentry_store[alu0_id[`QBITS]] <= `INV;
+	end
+`endif
+	if (|alu0_exc) begin
+		iqentry_done[alu0_id[`QBITS]] <= `VAL;
+		iqentry_store[alu0_id[`QBITS]] <= `INV;
+	end
 	alu0_dataready <= FALSE;
 end
 
 if (alu1_v && `NUM_ALU > 1) begin
 	iqentry_tgt [ alu1_id[`QBITS] ] <= alu1_tgt;
-	if (iqentry_mem[ alu1_id[`QBITS] ] && !iqentry_agen[ alu1_id[`QBITS] ])
-		iqentry_ma[ alu1_id[`QBITS] ] <= alu1_bus;
 	iqentry_res	[ alu1_id[`QBITS] ] <= ralu1_bus;
 	iqentry_exc	[ alu1_id[`QBITS] ] <= alu1_exc;
 	iqentry_done[ alu1_id[`QBITS] ] <= (!iqentry_mem[ alu1_id[`QBITS] ] && alu1_done) || !alu1_cmt;
 	iqentry_cmt [ alu1_id[`QBITS] ] <= alu1_done && alu1_cmt;
 	iqentry_out	[ alu1_id[`QBITS] ] <= `INV;
 	iqentry_agen[ alu1_id[`QBITS] ] <= `VAL;//!iqentry_fc[alu0_id[`QBITS]];  // RET
-	if (!(alu1_done & alu1_cmt))
-		iqentry_store[alu1_id[`QBITS]] <= `FALSE;
+	if (iqentry_mem[ alu1_id[`QBITS] ] && !iqentry_agen[ alu1_id[`QBITS] ]) begin
+		iqentry_ma[ alu1_id[`QBITS] ] <= alu1_bus;
+	end
+`ifdef SUPPORT_PREDICATION
+	if (!alu1_cmt & iqentry_store[alu1_id[`QBITS]]) begin
+		iqentry_done[alu1_id[`QBITS]] <= `VAL;
+		iqentry_store[alu1_id[`QBITS]] <= `INV;
+	end
+`endif
+	if (|alu1_exc) begin
+		iqentry_done[alu1_id[`QBITS]] <= `VAL;
+		iqentry_store[alu1_id[`QBITS]] <= `INV;
+	end
 	alu1_dataready <= FALSE;
 end
 
-if (fpu1_v) begin
+if (fpu1_v && `NUM_FPU > 0) begin
 	iqentry_res [ fpu1_id[`QBITS] ] <= rfpu1_bus;
 	iqentry_ares[ fpu1_id[`QBITS] ] <= fpu1_status;
 	iqentry_exc [ fpu1_id[`QBITS] ] <= fpu1_exc;
@@ -7212,8 +7565,8 @@ if (fcu_v) begin
 	fcu_dataready <= `INV;
 end
 
-
-if (mem1_available && dramA_v && iqentry_v[ dramA_id[`QBITS] ] && iqentry_load[ dramA_id[`QBITS] ] && !iqentry_stomp[dramA_id[`QBITS]]) begin
+// dramX_v only set on a load
+if (mem1_available && dramA_v && iqentry_v[ dramA_id[`QBITS] ]) begin
 	iqentry_res	[ dramA_id[`QBITS] ] <= rdramA_bus;
 	iqentry_exc	[ dramA_id[`QBITS] ] <= dramA_exc;
 	iqentry_done[ dramA_id[`QBITS] ] <= `VAL;
@@ -7221,7 +7574,7 @@ if (mem1_available && dramA_v && iqentry_v[ dramA_id[`QBITS] ] && iqentry_load[ 
 	iqentry_cmt [ dramA_id[`QBITS] ] <= `VAL;
 	iqentry_aq  [ dramA_id[`QBITS] ] <= `INV;
 end
-if (mem2_available && `NUM_MEM > 1 && dramB_v && iqentry_v[ dramB_id[`QBITS] ] && iqentry_load[ dramB_id[`QBITS] ] && !iqentry_stomp[dramB_id[`QBITS]]) begin
+if (mem2_available && `NUM_MEM > 1 && dramB_v && iqentry_v[ dramB_id[`QBITS] ]) begin
 	iqentry_res	[ dramB_id[`QBITS] ] <= rdramB_bus;
 	iqentry_exc	[ dramB_id[`QBITS] ] <= dramB_exc;
 	iqentry_done[ dramB_id[`QBITS] ] <= `VAL;
@@ -7229,7 +7582,7 @@ if (mem2_available && `NUM_MEM > 1 && dramB_v && iqentry_v[ dramB_id[`QBITS] ] &
 	iqentry_cmt [ dramB_id[`QBITS] ] <= `VAL;
 	iqentry_aq  [ dramB_id[`QBITS] ] <= `INV;
 end
-if (mem3_available && `NUM_MEM > 2 && dramC_v && iqentry_v[ dramC_id[`QBITS] ] && iqentry_load[ dramC_id[`QBITS] ] && !iqentry_stomp[dramC_id[`QBITS]]) begin
+if (mem3_available && `NUM_MEM > 2 && dramC_v && iqentry_v[ dramC_id[`QBITS] ]) begin
 	iqentry_res	[ dramC_id[`QBITS] ] <= rdramC_bus;
 	iqentry_exc	[ dramC_id[`QBITS] ] <= dramC_exc;
 	iqentry_done[ dramC_id[`QBITS] ] <= `VAL;
@@ -7409,8 +7762,8 @@ end
                  alu0_tlb   <= iqentry_tlb[n];
                  alu0_mem   <= iqentry_mem[n];
                  alu0_load  <= iqentry_load[n];
+                 alu0_store <= iqentry_store[n];
                  alu0_push  <= iqentry_push[n];
-                 alu0_seg   <= iqentry_seg[n];
                  alu0_shft <= iqentry_shft[n];
                  alu0_pc		<= iqentry_pc[n];
                  alu0_argA	<=
@@ -7482,8 +7835,8 @@ end
                  alu1_sz    <= iqentry_sz[n];
                  alu1_mem   <= iqentry_mem[n];
                  alu1_load  <= iqentry_load[n];
+                 alu1_store <= iqentry_store[n];
                  alu1_push  <= iqentry_push[n];
-                 alu1_seg   <= iqentry_seg[n];
                  alu1_shft  <= iqentry_shft[n];
                  alu1_pc		<= iqentry_pc[n];
                  alu1_argA	<=
@@ -7726,9 +8079,9 @@ end
 
 //
 // dram0, dram1, dram2 are the "state machines" that keep track
-// of three pipelined DRAM requests.  if any has the value "00", 
-// then it can accept a request (which bumps it up to the value "01"
-// at the end of the cycle).  once it hits the value "11" the request
+// of three pipelined DRAM requests.  if any has the value "000", 
+// then it can accept a request (which bumps it up to the value "001"
+// at the end of the cycle).  once it hits the value "111" the request
 // is finished and the dram_bus takes the value.  if it is a store, the 
 // dram_bus value is not used, but the dram_v value along with the
 // dram_id value signals the waiting memq entry that the store is
@@ -7751,23 +8104,19 @@ if (dram2 == `DRAMREQ_READY && `NUM_MEM > 2)
 // grab requests that have finished and put them on the dram_bus
 
 if (dram0 == `DRAMREQ_READY && dram0_load) begin
-	dramA_v <= !iqentry_stomp[dram0_id[`QBITS]];
+	dramA_v <= `VAL;//!iqentry_stomp[dram0_id[`QBITS]];
 	dramA_id <= dram0_id;
 	dramA_exc <= dram0_exc;
 	dramA_bus <= fnDatiAlign(dram0_instr,dram0_addr,rdat0);
 end
-//    else
-//    	dramA_v <= `INV;
 if (dram1 == `DRAMREQ_READY && dram1_load && `NUM_MEM > 1) begin
-	dramB_v <= !iqentry_stomp[dram1_id[`QBITS]];
+	dramB_v <= `VAL;//!iqentry_stomp[dram1_id[`QBITS]];
 	dramB_id <= dram1_id;
 	dramB_exc <= dram1_exc;
 	dramB_bus <= fnDatiAlign(dram1_instr,dram1_addr,rdat1);
 end
-//    else
-//    	dramB_v <= `INV;
 if (dram2 == `DRAMREQ_READY && dram2_load && `NUM_MEM > 2) begin
-	dramC_v <= !iqentry_stomp[dram2_id[`QBITS]];
+	dramC_v <= `VAL;//!iqentry_stomp[dram2_id[`QBITS]];
 	dramC_id <= dram2_id;
 	dramC_exc <= dram2_exc;
 	dramC_bus <= fnDatiAlign(dram2_instr,dram2_addr,rdat2);
@@ -7795,6 +8144,8 @@ for (n = 0; n < QENTRIES; n = n + 1)
 		iqentry_v[n] <= `INV;
 		iqentry_iv[n] <= `INV;
 		iqentry_mem[n] <= `INV;
+		iqentry_load[n] <= `INV;
+		iqentry_store[n] <= `INV;
 		iqentry_agen[n] <= `INV;
 		iqentry_out[n] <= `INV;
 		iqentry_done[n] <= `INV;
@@ -7843,14 +8194,14 @@ if (ohead[0]==heads[0])
 	cmt_timer <= cmt_timer + 12'd1;
 else
 	cmt_timer <= 12'd0;
-/*
+
 if (cmt_timer==12'd1000) begin
 	iqentry_cmt[heads[0]] <= `VAL;
 	iqentry_done[heads[0]] <= `VAL;
 	iqentry_exc[heads[0]] <= `FLT_CMT;
 	cmt_timer <= 12'd0;
 end
-*/
+
 //
 // COMMIT PHASE (dequeue only ... not register-file update)
 //
@@ -7889,9 +8240,13 @@ if (~|panic)
 	    head_inc(2);
 		else if (heads[0] != tail0)
 	    head_inc(1);
-	6'b0?_0?_10:	;
+	6'b0?_0?_10:
+		if (heads[0] != tail0 && heads[1] != tail0)
+			head_inc(2);
+		else if (heads[0] != tail0)
+			head_inc(1);
 	6'b0?_0?_11:
-		if (`NUM_CMT > 2 || (!iqentry_rfw[heads[2]] && !iqentry_oddball[heads[2]] && ~|iqentry_exc[heads[2]]))	// and it's not an oddball?
+		if (`NUM_CMT > 2 || cmt_head2)	// and it's not an oddball?
       head_inc(3);
 		else
       head_inc(2);
@@ -7903,14 +8258,14 @@ if (~|panic)
 	// retire 2
 	6'b0?_11_0?,
 	6'b0?_11_10:
-    if (`NUM_CMT > 1 || (!iqentry_rfw[heads[1]] && !iqentry_prfw[heads[1]] && !iqentry_oddball[heads[1]] && ~|iqentry_exc[heads[1]]))
+    if (`NUM_CMT > 1 || cmt_head1)
       head_inc(2);
     else
     	head_inc(1);
   6'b0?_11_11:
-    if (`NUM_CMT > 2 || (`NUM_CMT > 1 && !iqentry_rfw[heads[2]] && !iqentry_prfw[heads[2]] && !iqentry_oddball[heads[2]] && ~|iqentry_exc[heads[2]]))
+    if (`NUM_CMT > 2 || (`NUM_CMT > 1 && cmt_head2))
     	head_inc(3);
-  	else if (`NUM_CMT > 1 || (!iqentry_rfw[heads[1]] && !iqentry_prfw[heads[1]] && !iqentry_oddball[heads[1]] && ~|iqentry_exc[heads[1]]))
+  	else if (`NUM_CMT > 1 || cmt_head1)
     	head_inc(2);
   	else
   		head_inc(1);
@@ -7929,7 +8284,7 @@ if (~|panic)
 			head_inc(1);
   6'b11_0?_11:
   	if (heads[1] != tail0) begin
-  		if (`NUM_CMT > 2 || (!iqentry_rfw[heads[2]] && !iqentry_prfw[heads[2]] && !iqentry_oddball[heads[2]] && ~|iqentry_exc[heads[2]]))
+  		if (`NUM_CMT > 2 || cmt_head2)
 				head_inc(3);
   		else
 				head_inc(2);
@@ -7941,21 +8296,21 @@ if (~|panic)
   6'b11_11_0?:
   	if (`NUM_CMT > 1 && heads[2] != tail0)
 			head_inc(3);
-  	else if ((!iqentry_rfw[heads[1]] && !iqentry_prfw[heads[1]] && !iqentry_oddball[heads[1]] && ~|iqentry_exc[heads[1]]) && heads[2] != tail0)
+  	else if (cmt_head1 && heads[2] != tail0)
 			head_inc(3);
-		else if (`NUM_CMT > 1 || (!iqentry_rfw[heads[1]] && !iqentry_prfw[heads[1]] && !iqentry_oddball[heads[1]] && ~|iqentry_exc[heads[1]]))
+		else if (`NUM_CMT > 1 || cmt_head1)
 			head_inc(2);
   	else
 			head_inc(1);
   6'b11_11_10:
-		if (`NUM_CMT > 1 || (!iqentry_rfw[heads[1]] && !iqentry_prfw[heads[1]] && !iqentry_oddball[heads[1]] && ~|iqentry_exc[heads[1]]))
+		if (`NUM_CMT > 1 || cmt_head1)
 			head_inc(2);
   	else
 			head_inc(1);
 	6'b11_11_11:
-		if (`NUM_CMT > 2 || (`NUM_CMT > 1 && !iqentry_rfw[heads[2]] && !iqentry_prfw[heads[2]] && !iqentry_oddball[heads[2]] && ~|iqentry_exc[heads[2]]))
+		if (`NUM_CMT > 2 || (`NUM_CMT > 1 && cmt_head2))
 			head_inc(3);
-		else if (`NUM_CMT > 1 || (!iqentry_rfw[heads[1]] && !iqentry_prfw[heads[1]] && !iqentry_oddball[heads[1]] && ~|iqentry_exc[heads[1]]))
+		else if (`NUM_CMT > 1 || cmt_head1)
 			head_inc(2);
 		else
 			head_inc(1);
@@ -7993,8 +8348,8 @@ IDLE:
 	// we have to wait.
 	if (bstate != B_ICacheAck && bstate != B_ICacheNack && bstate != B_ICacheNack2) begin
 		if (!ihit0) begin
-			L1_adr <= {pcr[5:0],pc0[AMSB:5],5'h0};
-			L2_adr <= {pcr[5:0],pc0[AMSB:5],5'h0};
+			L1_adr <= {pcr[7:0],pc0[AMSB:5],5'h0};
+			L2_adr <= {pcr[7:0],pc0[AMSB:5],5'h0};
 			L1_invline <= TRUE;
 			icwhich <= 2'b00;
 			iccnt <= 3'b00;
@@ -8002,12 +8357,12 @@ IDLE:
 		end
 		else if (!ihit1 && `WAYS > 1) begin
 			if (thread_en) begin
-				L1_adr <= {pcr[5:0],pc1[AMSB:5],5'h0};
-				L2_adr <= {pcr[5:0],pc1[AMSB:5],5'h0};
+				L1_adr <= {pcr[7:0],pc1[AMSB:5],5'h0};
+				L2_adr <= {pcr[7:0],pc1[AMSB:5],5'h0};
 			end
 			else begin
-				L1_adr <= {pcr[5:0],pc0plus6[AMSB:5],5'h0};
-				L2_adr <= {pcr[5:0],pc0plus6[AMSB:5],5'h0};
+				L1_adr <= {pcr[7:0],pc0plus6[AMSB:5],5'h0};
+				L2_adr <= {pcr[7:0],pc0plus6[AMSB:5],5'h0};
 			end
 			L1_invline <= TRUE;
 			icwhich <= 2'b01;
@@ -8016,12 +8371,12 @@ IDLE:
 		end
 		else if (!ihit2 && `WAYS > 2) begin
 			if (thread_en) begin
-				L1_adr <= {pcr[5:0],pc2[AMSB:5],5'h0};
-				L2_adr <= {pcr[5:0],pc2[AMSB:5],5'h0};
+				L1_adr <= {pcr[7:0],pc2[AMSB:5],5'h0};
+				L2_adr <= {pcr[7:0],pc2[AMSB:5],5'h0};
 			end
 			else begin
-				L1_adr <= {pcr[5:0],pc0plus12[AMSB:5],5'h0};
-				L2_adr <= {pcr[5:0],pc0plus12[AMSB:5],5'h0};
+				L1_adr <= {pcr[7:0],pc0plus12[AMSB:5],5'h0};
+				L2_adr <= {pcr[7:0],pc0plus12[AMSB:5],5'h0};
 			end
 			L1_invline <= TRUE;
 			icwhich <= 2'b10;
@@ -8082,26 +8437,26 @@ if (mem1_available && dram0_load)
 case(dram0)
 `DRAMSLOT_AVAIL:	;
 `DRAMSLOT_BUSY:
-	if (iqentry_v[dram0_id[`QBITS]] && !iqentry_stomp[dram0_id[`QBITS]])
-		dram0 <= dram0 + ~dram0_unc;
-	else begin
-		dram0 <= `DRAMSLOT_AVAIL;
-		dram0_load <= `FALSE;
-	end
+//	if (iqentry_v[dram0_id[`QBITS]] && !iqentry_stomp[dram0_id[`QBITS]])
+		dram0 <= dram0 + !dram0_unc;
+//	else begin
+//		dram0 <= `DRAMSLOT_AVAIL;
+//		dram0_load <= `FALSE;
+//	end
 3'd2:
-	if (iqentry_v[dram0_id[`QBITS]] && !iqentry_stomp[dram0_id[`QBITS]])
+//	if (iqentry_v[dram0_id[`QBITS]] && !iqentry_stomp[dram0_id[`QBITS]])
 		dram0 <= dram0 + 3'd1;
-	else begin
-		dram0 <= `DRAMSLOT_AVAIL;
-		dram0_load <= `FALSE;
-	end
+//	else begin
+//		dram0 <= `DRAMSLOT_AVAIL;
+//		dram0_load <= `FALSE;
+//	end
 3'd3:
-	if (iqentry_v[dram0_id[`QBITS]] && !iqentry_stomp[dram0_id[`QBITS]])
+//	if (iqentry_v[dram0_id[`QBITS]] && !iqentry_stomp[dram0_id[`QBITS]])
 		dram0 <= dram0 + 3'd1;
-	else begin
-		dram0 <= `DRAMSLOT_AVAIL;
-		dram0_load <= `FALSE;
-	end
+//	else begin
+//		dram0 <= `DRAMSLOT_AVAIL;
+//		dram0_load <= `FALSE;
+//	end
 3'd4:
 	if (iqentry_v[dram0_id[`QBITS]] && !iqentry_stomp[dram0_id[`QBITS]]) begin
 		if (dhit0)
@@ -8115,7 +8470,7 @@ case(dram0)
 	end
 `DRAMSLOT_REQBUS:	;
 `DRAMSLOT_HASBUS:	;
-`DRAMREQ_READY:		;
+`DRAMREQ_READY:		dram0 <= `DRAMSLOT_AVAIL;
 endcase
 
 if (mem2_available && dram1_load && `NUM_MEM > 1)
@@ -8140,7 +8495,7 @@ case(dram1)
 	end
 `DRAMSLOT_REQBUS:	;
 `DRAMSLOT_HASBUS:	;
-`DRAMREQ_READY:		;
+`DRAMREQ_READY:		dram1 <= `DRAMSLOT_AVAIL;
 endcase
 
 if (mem3_available && dram2_load && `NUM_MEM > 2)
@@ -8165,7 +8520,7 @@ case(dram2)
 	end
 `DRAMSLOT_REQBUS:	;
 `DRAMSLOT_HASBUS:	;
-`DRAMREQ_READY:		;
+`DRAMREQ_READY:		dram2 <= `DRAMSLOT_AVAIL;
 endcase
 
 
@@ -8178,17 +8533,17 @@ endcase
 // set the IQ entry == DONE as soon as the SW is let loose to the memory system
 //
 `ifndef HAS_WB
-if (mem1_available && dram0 == `DRAMSLOT_BUSY && dram0_store && !iqentry_stomp[dram0_id[`QBITS]]) begin
+if (mem1_available && dram0 == `DRAMSLOT_BUSY && dram0_store) begin
 	if ((alu0_v && (dram0_id[`QBITS] == alu0_id[`QBITS])) || (alu1_v && (dram0_id[`QBITS] == alu1_id[`QBITS])))	 panic <= `PANIC_MEMORYRACE;
 	iqentry_done[ dram0_id[`QBITS] ] <= `VAL;
 	iqentry_out[ dram0_id[`QBITS] ] <= `INV;
 end
-if (mem2_available && `NUM_MEM > 1 && dram1 == `DRAMSLOT_BUSY && dram1_store && !iqentry_stomp[dram1_id[`QBITS]]) begin
+if (mem2_available && `NUM_MEM > 1 && dram1 == `DRAMSLOT_BUSY && dram1_store) begin
 	if ((alu0_v && (dram1_id[`QBITS] == alu0_id[`QBITS])) || (alu1_v && (dram1_id[`QBITS] == alu1_id[`QBITS])))	 panic <= `PANIC_MEMORYRACE;
 	iqentry_done[ dram1_id[`QBITS] ] <= `VAL;
 	iqentry_out[ dram1_id[`QBITS] ] <= `INV;
 end
-if (mem3_available && `NUM_MEM > 2 && dram2 == `DRAMSLOT_BUSY && dram2_store && !iqentry_stomp[dram2_id[`QBITS]]) begin
+if (mem3_available && `NUM_MEM > 2 && dram2 == `DRAMSLOT_BUSY && dram2_store) begin
 	if ((alu0_v && (dram2_id[`QBITS] == alu0_id[`QBITS])) || (alu1_v && (dram2_id[`QBITS] == alu1_id[`QBITS])))	 panic <= `PANIC_MEMORYRACE;
 	iqentry_done[ dram2_id[`QBITS] ] <= `VAL;
 	iqentry_out[ dram2_id[`QBITS] ] <= `INV;
@@ -8198,7 +8553,7 @@ end
 `ifdef HAS_WB
   if (mem1_available && dram0==`DRAMSLOT_BUSY && dram0_store && !iqentry_stomp[dram0_id[`QBITS]]) begin
 		if (wbptr<`WB_DEPTH-1) begin
-			dram0 <= `DRAMREQ_READY;
+			dram0 <= `DRAMSLOT_AVAIL;
 			dram0_instr[`INSTRUCTION_OP] <= `NOP;
 			wb_update(
 				dram0_id,
@@ -8214,7 +8569,7 @@ end
   end
   else if (mem2_available && dram1==`DRAMSLOT_BUSY && dram1_store && !iqentry_stomp[dram1_id[`QBITS]] && `NUM_MEM > 1) begin
 		if (wbptr<`WB_DEPTH-1) begin
-			dram1 <= `DRAMREQ_READY;
+			dram1 <= `DRAMSLOT_AVAIL;
       dram1_instr[`INSTRUCTION_OP] <= `NOP;
 			wb_update(
 				dram1_id,
@@ -8230,7 +8585,7 @@ end
   end
   else if (mem3_available && dram2==`DRAMSLOT_BUSY && dram2_store && !iqentry_stomp[dram2_id[`QBITS]] && `NUM_MEM > 2) begin
 		if (wbptr<`WB_DEPTH-1) begin
-			dram2 <= `DRAMREQ_READY;
+			dram2 <= `DRAMSLOT_AVAIL;
       dram2_instr[`INSTRUCTION_OP] <= `NOP;
 			wb_update(
 				dram2_id,
@@ -8593,9 +8948,9 @@ BIDLE:
            iccnt <= 3'd0;
 //            adr_o <= icwhich ? {pc0[31:5],5'b0} : {pc1[31:5],5'b0};
 //            L2_adr <= icwhich ? {pc0[31:5],5'b0} : {pc1[31:5],5'b0};
-           vadr <= {pcr[5:0],L1_adr[AMSB:5],5'h0};
+           vadr <= {pcr[7:0],L1_adr[AMSB:5],5'h0};
            ol_o  <= ol[0];
-           L2_adr <= {pcr[5:0],L1_adr[AMSB:5],5'h0};
+           L2_adr <= {pcr[7:0],L1_adr[AMSB:5],5'h0};
            L2_xsel <= 1'b0;
            bstate <= B_ICacheAck;
         end
@@ -8635,21 +8990,21 @@ B_StoreAck:
 `else
     case(bwhich)
     2'd0:   begin
-             	dram0 <= `DRAMREQ_READY;
+             	dram0 <= `DRAMSLOT_AVAIL;
              	iqentry_exc[dram0_id[`QBITS]] <= (wrv_i|err_i) ? `FLT_DWF : `FLT_NONE;
 							iqentry_cmt[ dram0_id[`QBITS] ] <= `VAL;
 							iqentry_aq[ dram0_id[`QBITS] ] <= `INV;
      		//iqentry_out[ dram0_id[`QBITS] ] <= `INV;
             end
     2'd1:   if (`NUM_MEM > 1) begin
-             	dram1 <= `DRAMREQ_READY;
+             	dram1 <= `DRAMSLOT_AVAIL;
              	iqentry_exc[dram1_id[`QBITS]] <= (wrv_i|err_i) ? `FLT_DWF : `FLT_NONE;
 							iqentry_cmt[ dram1_id[`QBITS] ] <= `VAL;
 							iqentry_aq[ dram1_id[`QBITS] ] <= `INV;
      		//iqentry_out[ dram1_id[`QBITS] ] <= `INV;
             end
     2'd2:   if (`NUM_MEM > 2) begin
-             	dram2 <= `DRAMREQ_READY;
+             	dram2 <= `DRAMSLOT_AVAIL;
              	iqentry_exc[dram2_id[`QBITS]] <= (wrv_i|err_i) ? `FLT_DWF : `FLT_NONE;
 							iqentry_cmt[ dram2_id[`QBITS] ] <= `VAL;
 							iqentry_aq[ dram2_id[`QBITS] ] <= `INV;
@@ -8663,7 +9018,7 @@ B_StoreAck:
 	end
 
 B_DCacheLoadStart:
-    begin
+  if (~acki) begin
     dccnt <= 2'd0;
     bstate <= B_DCacheLoadAck;
 		cti_o <= 3'b001;	// constant address burst
@@ -8698,7 +9053,7 @@ B_DCacheLoadStart:
     		bstate <= BIDLE;
     	end
     endcase
-    end
+  end
 
 // Data cache load terminal state
 B_DCacheLoadAck:
@@ -8746,9 +9101,9 @@ B_DCacheLoadResetBusy: begin
     // of all the machines to retest for a hit because otherwise sequential
     // loading of memory will cause successive machines to miss resulting in 
     // multiple dcache loads that aren't needed.
-    if (dram0 != `DRAMSLOT_AVAIL && dram0_addr[31:5]==vadr[31:5]) dram0 <= `DRAMSLOT_BUSY;  // causes retest of dhit
-    if (dram1 != `DRAMSLOT_AVAIL && dram1_addr[31:5]==vadr[31:5]) dram1 <= `DRAMSLOT_BUSY;
-    if (dram2 != `DRAMSLOT_AVAIL && dram2_addr[31:5]==vadr[31:5]) dram2 <= `DRAMSLOT_BUSY;
+    if (dram0 != `DRAMSLOT_AVAIL && dram0_addr[AMSB:5]==vadr[AMSB:5]) dram0 <= `DRAMSLOT_BUSY;  // causes retest of dhit
+    if (dram1 != `DRAMSLOT_AVAIL && dram1_addr[AMSB:5]==vadr[AMSB:5]) dram1 <= `DRAMSLOT_BUSY;
+    if (dram2 != `DRAMSLOT_AVAIL && dram2_addr[AMSB:5]==vadr[AMSB:5]) dram2 <= `DRAMSLOT_BUSY;
     if (~ack_i)  bstate <= BIDLE;
     end
 
@@ -9495,7 +9850,6 @@ begin
 	end
 `endif
 	iqentry_cmp	 [nn]  <= bus[`IB_CMP];
-	iqentry_seg  [nn]  <= bus[`IB_SEG];
 	iqentry_tlb  [nn]  <= bus[`IB_TLB];
 	iqentry_sz   [nn]  <= bus[`IB_SZ];
 	iqentry_jal	 [nn]  <= bus[`IB_JAL];
@@ -9530,6 +9884,9 @@ begin
 	iqentry_sync [nn]  <= bus[`IB_SYNC];
 	iqentry_fsync[nn]  <= bus[`IB_FSYNC];
 	iqentry_rfw  [nn]  <= bus[`IB_RFW];
+`ifdef SUPPORT_PREDICATION
+	iqentry_prfw [nn]  <= bus[`IB_PRFW];
+`endif
 	iqentry_we   [nn]  <= bus[`IB_WE];
 end
 endtask
@@ -9737,6 +10094,12 @@ begin
 	iqentry_aT_s [tail]    <=    rf_source[Rt0s];
 `endif
 `ifdef INLINE_DECODE
+	id1_Rt <= Rt0[4:0];
+	id1_vl <= vl;
+	id1_ven <= venno;
+	id1_id <= tail;
+	id1_pt <= predict_taken0;
+	id1_thrd <= fetchbuf0_thrd;
 	setinsn1(tail,id1_bus);
 `endif
 end
@@ -9822,6 +10185,12 @@ end
 	iqentry_aT_s [tail]    <= rf_source[Rt1s];
 `endif
 `ifdef INLINE_DECODE
+	id2_Rt <= Rt1[4:0];
+	id2_vl <= vl;
+	id2_ven <= venno;
+	id2_id <= tail;
+	id2_pt <= predict_taken1;
+	id2_thrd <= fetchbuf1_thrd;
 	setinsn1(tail,id2_bus);
 `endif
 end
@@ -9842,6 +10211,7 @@ begin
          	excmisspc <= {tvec[3'd0][AMSB:8],1'b0,ol[thread],5'h00};
           excthrd <= iqentry_thrd[head];
           badaddr[{thread,2'd0}] <= iqentry_ma[head];
+          bad_instr[{thread,2'd0}] <= iqentry_instr[head];
           epc0[thread] <= iqentry_pc[head];
           epc1[thread] <= epc0[thread];
           epc2[thread] <= epc1[thread];
@@ -9853,16 +10223,19 @@ begin
           epc8[thread] <= epc7[thread];
           im_stack[thread] <= {im_stack[thread][27:0],im};
           ol_stack[thread] <= {ol_stack[thread][13:0],ol[thread]};
+          dl_stack[thread] <= {dl_stack[thread][13:0],dl[thread]};
           pl_stack[thread] <= {pl_stack[thread][55:0],cpl[thread]};
-          rs_stack[thread] <= {rs_stack[thread][55:0],rgs[thread]};
+          rs_stack[thread] <= {rs_stack[thread][59:0],`EXC_RGS};
+          brs_stack[thread] <= {brs_stack[thread][59:0],`EXC_RGS};
           cause[{thread,2'd0}] <= {8'd0,iqentry_exc[head]};
           mstatus[thread][5:4] <= 2'd0;
           mstatus[thread][13:6] <= 8'h00;
-          mstatus[thread][19:14] <= 6'd0;
+          mstatus[thread][19:14] <= `EXC_RGS;
 `else
          	excmisspc <= {tvec[3'd0][AMSB:8],1'b0,ol,5'h00};
           excthrd <= 1'b0;
           badaddr[{1'b0,2'd0}] <= iqentry_ma[head];
+          bad_instr[3'd0] <= iqentry_instr[head];
           epc0 <= iqentry_pc[head];
           epc1 <= epc0;
           epc2 <= epc1;
@@ -9874,12 +10247,14 @@ begin
           epc8 <= epc7;
           im_stack <= {im_stack[27:0],im};
           ol_stack <= {ol_stack[13:0],ol};
+          dl_stack <= {dl_stack[13:0],dl};
           pl_stack <= {pl_stack[55:0],cpl};
-          rs_stack <= {rs_stack[55:0],rgs};
+          rs_stack <= {rs_stack[59:0],`EXC_RGS};
+          brs_stack <= {rs_stack[59:0],`EXC_RGS};
           cause[3'd0] <= {8'd0,iqentry_exc[head]};
           mstatus[5:4] <= 2'd0;
           mstatus[13:6] <= 8'h00;
-          mstatus[19:14] <= 6'd0;
+          mstatus[19:14] <= `EXC_RGS;
 `endif           	
 					wb_en <= `TRUE;
           sema[0] <= 1'b0;
@@ -9914,8 +10289,10 @@ begin
               epc8[thread] <= epc7[thread];
               im_stack[thread] <= {im_stack[thread][27:0],im};
               ol_stack[thread] <= {ol_stack[thread][13:0],ol[thread]};
+              dl_stack[thread] <= {dl_stack[thread][13:0],dl[thread]};
               pl_stack[thread] <= {pl_stack[thread][55:0],cpl[thread]};
-              rs_stack[thread] <= {rs_stack[thread][55:0],rgs[thread]};
+              rs_stack[thread] <= {rs_stack[thread][59:0],`BRK_RGS};
+              brs_stack[thread] <= {brs_stack[thread][59:0],`BRK_RGS};
               cause[{thread,2'd0}] <= iqentry_res[head][7:0];
               mstatus[thread][5:4] <= 2'd0;
               mstatus[thread][13:6] <= 8'h00;
@@ -9927,9 +10304,14 @@ begin
                 mstatus[thread][ 3: 0] <= iqentry_instr[head][20:17];
                 mstatus[thread][31:28] <= iqentry_instr[head][20:17];
                 mstatus[thread][19:14] <= {2'b0,iqentry_instr[head][20:17]};
+              	rs_stack[thread][5:0] <= {2'b0,iqentry_instr[head][20:17]};
+              	brs_stack[thread][5:0] <= {2'b0,iqentry_instr[head][20:17]};
               end
-              else
-              	mstatus[thread][19:14] <= 6'd0;
+              else begin
+              	mstatus[thread][19:14] <= `BRK_RGS;
+              	rs_stack[thread][5:0] <= `BRK_RGS;
+              	brs_stack[thread][5:0] <= `BRK_RGS;
+              end
 `else
           		excmisspc <= {tvec[3'd0][AMSB:8],1'b0,ol,5'h00};
           		excthrd <= 1'b0;
@@ -9944,8 +10326,10 @@ begin
               epc8 <= epc7;
               im_stack <= {im_stack[27:0],im};
               ol_stack <= {ol_stack[13:0],ol};
+              dl_stack <= {dl_stack[13:0],dl};
               pl_stack <= {pl_stack[55:0],cpl};
-              rs_stack <= {rs_stack[55:0],rgs};
+              rs_stack <= {rs_stack[59:0],`BRK_RGS};
+              brs_stack <= {brs_stack[59:0],`BRK_RGS};
               cause[3'd0] <= iqentry_res[head][7:0];
               mstatus[5:4] <= 2'd0;
               mstatus[13:6] <= 8'h00;
@@ -9957,9 +10341,14 @@ begin
                 mstatus[ 3: 0] <= iqentry_instr[head][20:17];
                 mstatus[31:28] <= iqentry_instr[head][20:17];
                 mstatus[19:14] <= {2'b0,iqentry_instr[head][20:17]};
+                rs_stack[5:0] <= {2'b0,iqentry_instr[head][20:17]};
+                brs_stack[5:0] <= {2'b0,iqentry_instr[head][20:17]};
               end
-              else
-              	mstatus[19:14] <= 6'd0;
+              else begin
+              	mstatus[19:14] <= `BRK_RGS;
+              	rs_stack[5:0] <= `BRK_RGS;
+              	brs_stack[5:0] <= `BRK_RGS;
+              end
 `endif                    
               sema[0] <= 1'b0;
               ve_hold <= {vqet1,10'd0,vqe1,10'd0,vqet0,10'd0,vqe0};
@@ -10002,12 +10391,15 @@ begin
             		excthrd <= thread;
             		mstatus[thread][3:0] <= im_stack[thread][3:0];
             		mstatus[thread][5:4] <= ol_stack[thread][1:0];
+            		mstatus[thread][21:20] <= dl_stack[thread][1:0];
             		mstatus[thread][13:6] <= pl_stack[thread][7:0];
             		mstatus[thread][19:14] <= rs_stack[thread][5:0];
             		im_stack[thread] <= {4'd15,im_stack[thread][31:4]};
             		ol_stack[thread] <= {2'd0,ol_stack[thread][15:2]};
+            		dl_stack[thread] <= {2'd0,dl_stack[thread][15:2]};
             		pl_stack[thread] <= {8'h00,pl_stack[thread][63:8]};
-            		rs_stack[thread] <= {8'h00,rs_stack[thread][63:8]};
+            		rs_stack[thread] <= {6'h00,rs_stack[thread][59:6]};
+            		brs_stack[thread] <= {6'h00,brs_stack[thread][59:6]};
                 epc0[thread] <= epc1[thread];
                 epc1[thread] <= epc2[thread];
                 epc2[thread] <= epc3[thread];
@@ -10022,12 +10414,15 @@ begin
             		excthrd <= thread;
             		mstatus[3:0] <= im_stack[3:0];
             		mstatus[5:4] <= ol_stack[1:0];
+            		mstatus[21:20] <= dl_stack[1:0];
             		mstatus[13:6] <= pl_stack[7:0];
             		mstatus[19:14] <= rs_stack[5:0];
             		im_stack <= {4'd15,im_stack[31:4]};
             		ol_stack <= {2'd0,ol_stack[15:2]};
+            		dl_stack <= {2'd0,dl_stack[15:2]};
             		pl_stack <= {8'h00,pl_stack[63:8]};
-            		rs_stack <= {8'h00,rs_stack[63:8]};
+            		rs_stack <= {6'h00,rs_stack[59:6]};
+            		brs_stack <= {6'h00,brs_stack[59:6]};
                 epc0 <= epc1;
                 epc1 <= epc2;
                 epc2 <= epc3;
@@ -10072,6 +10467,7 @@ begin
             if (ol[thread] < iqentry_instr[head][14:13]) begin
                 mstatus[thread][5:4] <= iqentry_instr[head][14:13];
                 badaddr[{thread,iqentry_instr[head][14:13]}] <= badaddr[{thread,ol[thread]}];
+                bad_instr[{thread,iqentry_instr[head][14:13]}] <= bad_instr[{thread,ol[thread]}];
                 cause[{thread,iqentry_instr[head][14:13]}] <= cause[{thread,ol[thread]}];
                 mstatus[thread][13:6] <= iqentry_instr[head][25:18] | iqentry_a1[head][7:0];
             end
@@ -10079,6 +10475,7 @@ begin
             if (ol < iqentry_instr[head][14:13]) begin
                 mstatus[5:4] <= iqentry_instr[head][14:13];
                 badaddr[{1'b0,iqentry_instr[head][14:13]}] <= badaddr[{1'b0,ol}];
+                bad_instr[{1'b0,iqentry_instr[head][14:13]}] <= bad_instr[{1'b0,ol}];
                 cause[{1'b0,iqentry_instr[head][14:13]}] <= cause[{1'b0,ol}];
                 mstatus[13:6] <= iqentry_instr[head][25:18] | iqentry_a1[head][7:0];
             end
@@ -10234,8 +10631,6 @@ begin
     `CSR_PMR:				dat <= pmr;
     `CSR_WBRCD:		dat <= wbrcd;
     `CSR_SEMA:      dat <= sema;
-    `CSR_SBL:       dat <= sbl;
-    `CSR_SBU:       dat <= sbu;
     `CSR_TCB:		dat <= tcb;
     `CSR_FSTAT:     dat <= {fp_rgs,fp_status};
 `ifdef SUPPORT_DBG    
@@ -10249,10 +10644,11 @@ begin
     `CSR_CAS:       dat <= cas;
     `CSR_TVEC:      dat <= tvec[csrno[2:0]];
     `CSR_BADADR:    dat <= badaddr[{thread,csrno[11:10]}];
+    `CSR_BADINSTR:	dat <= bad_instr[{thread,csrno[11:10]}];
     `CSR_CAUSE:     dat <= {48'd0,cause[{thread,csrno[11:10]}]};
 `ifdef SUPPORT_SMT    
     `CSR_IM_STACK:	dat <= im_stack[thread];
-    `CSR_OL_STACK:	dat <= ol_stack[thread];
+    `CSR_OL_STACK:	dat <= {dl_stack[thread],ol_stack[thread]};
     `CSR_PL_STACK:	dat <= pl_stack[thread];
     `CSR_RS_STACK:	dat <= rs_stack[thread];
     `CSR_STATUS:    dat <= mstatus[thread][63:0];
@@ -10266,7 +10662,7 @@ begin
     `CSR_EPC7:      dat <= epc7[thread];
 `else
     `CSR_IM_STACK:	dat <= im_stack;
-    `CSR_OL_STACK:	dat <= ol_stack;
+    `CSR_OL_STACK:	dat <= {dl_stack,ol_stack};
     `CSR_PL_STACK:	dat <= pl_stack;
     `CSR_RS_STACK:	dat <= rs_stack;
     `CSR_STATUS:    dat <= mstatus[63:0];
@@ -10280,13 +10676,16 @@ begin
     `CSR_EPC7:      dat <= epc7;
 `endif    
     `CSR_CODEBUF:   dat <= codebuf[csrno[5:0]];
-`ifdef SUPPORT_SEGMENTATION
-    `CSR_CS:			dat <= cs_selector[rgs];
-    `CSR_DS:			dat <= ds_selector[rgs];
-    `CSR_ES:			dat <= es_selector[rgs];
-    `CSR_SS:			dat <= ss_selector[rgs];
-    `CSR_FS:			dat <= fs_selector[rgs];
-    `CSR_GS:			dat <= gs_selector[rgs];
+`ifdef SUPPORT_BBMS
+		`CSR_TB:			dat <= tb;
+		`CSR_CBL:			dat <= cbl;
+		`CSR_CBU:			dat <= cbu;
+		`CSR_RO:			dat <= ro;
+		`CSR_DBL:			dat <= dbl;
+		`CSR_DBU:			dat <= dbu;
+		`CSR_SBL:			dat <= sbl;
+		`CSR_SBU:			dat <= sbu;
+		`CSR_ENU:			dat <= en;
 `endif
 `ifdef SUPPORT_PREDICATION
 		`CSR_PREGS:		read_pregs(dat);
@@ -10358,11 +10757,10 @@ begin
 	        				endcase
         `CSR_WBRCD:		wbrcd <= dat;
         `CSR_SEMA:      sema <= dat;
-        `CSR_SBL:       sbl <= dat[31:0];
-        `CSR_SBU:       sbu <= dat[31:0];
         `CSR_TCB:		tcb <= dat;
         `CSR_FSTAT:		fpu_csr[37:32] <= dat[37:32];
         `CSR_BADADR:    badaddr[{thread,csrno[11:10]}] <= dat;
+        `CSR_BADINSTR:	bad_instr[{thread,csrno[11:10]}] <= dat;
         `CSR_CAUSE:     cause[{thread,csrno[11:10]}] <= dat[15:0];
 `ifdef SUPPORT_DBG        
         `CSR_DBAD0:     dbg_adr0 <= dat[AMSB:0];
@@ -10375,7 +10773,10 @@ begin
         `CSR_TVEC:      tvec[csrno[2:0]] <= dat[31:0];
 `ifdef SUPPORT_SMT        
         `CSR_IM_STACK:	im_stack[thread] <= dat[31:0];
-        `CSR_OL_STACK:	ol_stack[thread] <= dat[15:0];
+        `CSR_OL_STACK:	begin
+        								ol_stack[thread] <= dat[15:0];
+        								dl_stack[thread] <= dat[31:16];
+        								end
         `CSR_PL_STACK:	pl_stack[thread] <= dat;
         `CSR_RS_STACK:	rs_stack[thread] <= dat;
         `CSR_STATUS:    mstatus[thread][63:0] <= dat;
@@ -10389,7 +10790,10 @@ begin
         `CSR_EPC7:      epc7[thread] <= dat;
 `else
         `CSR_IM_STACK:	im_stack <= dat[31:0];
-        `CSR_OL_STACK:	ol_stack <= dat[15:0];
+        `CSR_OL_STACK:	begin
+        								ol_stack <= dat[15:0];
+        								dl_stack <= dat[31:16];
+        								end
         `CSR_PL_STACK:	pl_stack <= dat;
         `CSR_RS_STACK:	rs_stack <= dat;
         `CSR_STATUS:    mstatus[63:0] <= dat;
@@ -10402,20 +10806,16 @@ begin
         `CSR_EPC6:      epc6 <= dat;
         `CSR_EPC7:      epc7 <= dat;
 `endif        
-`ifdef SUPPORT_SEGMENTATION
-        `CSR_CS:				cs_selector[rgs] <= dat[23:0];
-        `CSR_DS:				ds_selector[rgs] <= dat[23:0];
-        `CSR_ES:				es_selector[rgs] <= dat[23:0];
-        `CSR_SS:				ss_selector[rgs] <= dat[23:0];
-        `CSR_FS:				fs_selector[rgs] <= dat[23:0];
-        `CSR_GS:				gs_selector[rgs] <= dat[23:0];
-        `CSR_CS_BASE:		cs_base[rgs] <= dat;
-        `CSR_DS_BASE:		cs_base[rgs] <= dat;
-        `CSR_ES_BASE:		cs_base[rgs] <= dat;
-        `CSR_SS_BASE:		cs_base[rgs] <= dat;
-        `CSR_FS_BASE:		cs_base[rgs] <= dat;
-        `CSR_GS_BASE:		cs_base[rgs] <= dat;
-        `CSR_GDT_BASE:		cs_base[rgs] <= {dat[63:4],4'd0};
+`ifdef SUPPORT_BBMS
+				`CSR_TB:			prg_base[brgs] <= dat;
+				`CSR_CBL:			cl_barrier[brgs] <= dat;
+				`CSR_CBU:			cu_barrier[brgs] <= dat;
+				`CSR_RO:			ro_barrier[brgs] <= dat;
+				`CSR_DBL:			dl_barrier[brgs] <= dat;
+				`CSR_DBU:			du_barrier[brgs] <= dat;
+				`CSR_SBL:			sl_barrier[brgs] <= dat;
+				`CSR_SBU:			su_barrier[brgs] <= dat;
+				`CSR_ENU:			en_barrier[brgs] <= dat;
 `endif
 `ifdef SUPPORT_PREDICATION
 				`CSR_PREGS:			write_pregs(dat);
@@ -10477,7 +10877,7 @@ endtask
 task tDram0Issue;
 input [`QBITSP1] n;
 begin
-	dramA_v <= `INV;
+//	dramA_v <= `INV;
 	dram0 		<= `DRAMSLOT_BUSY;
 	dram0_id 	<= { 1'b1, n[`QBITS] };
 	dram0_instr <= iqentry_instr[n];
@@ -10493,11 +10893,16 @@ begin
 	dram0_memsize <= iqentry_memsz[n];
 	dram0_load <= iqentry_load[n];
 	dram0_store <= iqentry_store[n];
+`ifdef SUPPORT_SMT
 	dram0_ol   <= (iqentry_Ra[n][4:0]==5'd31 || iqentry_Ra[n][4:0]==5'd30) ? ol[iqentry_thrd[n]] : dl[iqentry_thrd[n]];
+`else
+	dram0_ol   <= (iqentry_Ra[n][4:0]==5'd31 || iqentry_Ra[n][4:0]==5'd30) ? ol : dl;
+`endif
 	// Once the memory op is issued reset the a1_v flag.
 	// This will cause the a1 bus to look for new data from memory (a1_s is pointed to a memory bus)
 	// This is used for the load and compare instructions.
-	iqentry_a1_v[n] <= `INV;
+	// must reset the a1 source too.
+	//iqentry_a1_v[n] <= `INV;
 	iqentry_out[n] <= `VAL;
 	iqentry_cmt[n] <= `INV;
 end
@@ -10522,7 +10927,11 @@ begin
 	dram1_memsize <= iqentry_memsz[n];
 	dram1_load <= iqentry_load[n];
 	dram1_store <= iqentry_store[n];
+`ifdef SUPPORT_SMT
 	dram1_ol   <= (iqentry_Ra[n][4:0]==5'd31 || iqentry_Ra[n][4:0]==5'd30) ? ol[iqentry_thrd[n]] : dl[iqentry_thrd[n]];
+`else
+	dram1_ol   <= (iqentry_Ra[n][4:0]==5'd31 || iqentry_Ra[n][4:0]==5'd30) ? ol : dl;
+`endif
 	iqentry_a1_v[n] <= `INV;
 	iqentry_out[n] <= `VAL;
 	iqentry_cmt[n] <= `INV;
@@ -10548,7 +10957,11 @@ begin
 	dram2_memsize <= iqentry_memsz[n];
 	dram2_load <= iqentry_load[n];
 	dram2_store <= iqentry_store[n];
+`ifdef SUPPORT_SMT
 	dram2_ol   <= (iqentry_Ra[n][4:0]==5'd31 || iqentry_Ra[n][4:0]==5'd30) ? ol[iqentry_thrd[n]] : dl[iqentry_thrd[n]];
+`else
+	dram2_ol   <= (iqentry_Ra[n][4:0]==5'd31 || iqentry_Ra[n][4:0]==5'd30) ? ol : dl;
+`endif
 	iqentry_a1_v[n] <= `INV;
 	iqentry_out[n] <= `VAL;
 	iqentry_cmt[n] <= `INV;

@@ -28,6 +28,7 @@
 #include "glo.h"
 #include "TCB.h"
 
+extern int GetRand(register int stream);
 extern int shell();
 MEMORY memoryList[NR_MEMORY];
 
@@ -62,9 +63,38 @@ extern hMBX hKeybdMbx;
 extern hMBX hFocusSwitchMbx;
 extern int im_save;
 
+// This set of nops needed just before the function table so that the cpu may
+// fetch nop instructions after going past the end of the routine linked prior
+// to this one.
+
+naked void FMTK_NopRamp()
+{
+	__asm {
+		nop
+		nop
+		nop
+		nop
+		nop
+		nop
+		nop
+		nop
+		nop
+		nop
+		nop
+		nop
+		nop
+		nop
+		nop
+		nop
+		nop
+		nop
+		nop
+		nop
+	}
+}
+
 // This table needed in case we want to call the OS routines directly.
 // It is also used by the system call interrupt as a vector table.
-
 naked void FMTK_FuncTbl()
 {
   __asm {
@@ -344,6 +374,16 @@ naked inline int GetEpc()
 		csrrd	r1,#$48,r0
 	}
 }
+naked inline int GetTH() {	__asm {	csrrd		$r1,#TH,$r0	} }
+naked inline int GetTB() {	__asm {	csrrd		$r1,#TB,$r0	} }
+naked inline int GetCL() {	__asm {	csrrd		$r1,#CL,$r0	} }
+naked inline int GetCU() {	__asm {	csrrd		$r1,#CU,$r0	} }
+naked inline int GetRO() {	__asm {	csrrd		$r1,#RO,$r0	} }
+naked inline int GetDL() {	__asm {	csrrd		$r1,#DL,$r0	} }
+naked inline int GetDU() {	__asm {	csrrd		$r1,#DU,$r0	} }
+naked inline int GetSL() {	__asm {	csrrd		$r1,#SL,$r0	} }
+naked inline int GetSU() {	__asm {	csrrd		$r1,#SU,$r0	} }
+naked inline int GetWiredRegsets() {	__asm {	csrrd		$r1,#WRS,$r0	} }
 naked inline void SetRegx1(register int v) { __asm {	mov	r1:x,r18	}}
 naked inline void SetRegx2(register int v) { __asm {	mov	r2:x,r18	}}
 naked inline void SetRegx3(register int v) { __asm {	mov	r3:x,r18	}}
@@ -381,7 +421,35 @@ naked inline int SetEpc(register int v)
 		csrrw	r1,#$48,r18
 	}
 }
+naked inline int SetTH(register int v)
+{
+	__asm {
+		csrrw $r1,#TH,$a0
+		sync
+	}
+}
 
+naked inline int SetRegset(register int rs)
+{
+	__asm {
+		csrrd	$r1,#STATUS,$r0
+		and		$r1,$r1,#$FFFFFFFFFFF03FFF
+		and		$r2,$a0,#63
+		shl		$r2,$r2,#$14
+		or		$r1,$r1,$r2
+		csrrw	$r1,#STATUS,$r1
+		sync
+	}
+}
+
+naked inline int SetTB(register int v) { __asm { csrrw $r1,#TB,$a0 }}
+naked inline int SetCU(register int v) { __asm { csrrw $r1,#CL,$a0 }}
+naked inline int SetCL(register int v) { __asm { csrrw $r1,#CU,$a0 }}
+naked inline int SetRO(register int v) { __asm { csrrw $r1,#RO,$a0 }}
+naked inline int SetDL(register int v) { __asm { csrrw $r1,#DL,$a0 }}
+naked inline int SetDU(register int v) { __asm { csrrw $r1,#DU,$a0 }}
+naked inline int SetSL(register int v) { __asm { csrrw $r1,#SL,$a0 }}
+naked inline int SetSU(register int v) { __asm { csrrw $r1,#SU,$a0 }}
 
 // ----------------------------------------------------------------------------
 // Restore the thread's context.
@@ -389,42 +457,30 @@ naked inline int SetEpc(register int v)
 
 naked void SwapContext(register TCB *octx, register TCB *nctx)
 {
-/*
-	__asm {
-		sw		r1,520[r18]
-		sw		r2,528[r18]
-		sw		r3,536[r18]
-		sw		r4,544[r18]
-		sw		r5,552[r18]
-		sw		r6,560[r18]
-		sw		r7,568[r18]
-		sw		r8,576[r18]
-		sw		r9,584[r18]
-		sw		r10,592[r18]
-		sw		r11,600[r18]
-		sw		r12,608[r18]
-		sw		r13,616[r18]
-		sw		r14,624[r18]
-		sw		r15,632[r18]
-		sw		r16,640[r18]
-		sw		r17,648[r18]
-		sw		r18,656[r18]
-		sw		r19,664[r18]
-		sw		r20,672[r18]
-		sw		r21,680[r18]
-		sw		r22,688[r18]
-		sw		r23,696[r18]
-		sw		r24,704[r18]
-		sw		r24,712[r18]
-		sw		r25,720[r18]
-		sw		r26,728[r18]
-		sw		r27,736[r18]
-		sw		r28,744[r18]
-		sw		r29,752[r18]
-		sw		r30,760[r18]
-		sw		r31,768[r18]
+	int n;
+	int th;
+
+	// First search and see if the target register set is already present in the 
+	// processor. If it is, then just switch register sets. Otherwise evict a
+	// register set, and load the register set with the target thread's registers.	
+	for (n = 63; n >= 0; n--) {
+		SetRegset(n);
+		th = GetTH();
+		if (th==nctx->number)
+			goto j1;
 	}
-*/
+	n = GetWiredRegsets();
+	n += GetRand(0);
+	n &= 63;
+	SetRegset(n);
+	octx->tb = GetTB();
+	octx->cl = GetCL();
+	octx->cu = GetCU();
+	octx->ro = GetRO();
+	octx->dl = GetDL();
+	octx->du = GetDU();
+	octx->sl = GetSL();
+	octx->su = GetSU();
 	octx->regs[1] = GetRegx1();
 	octx->regs[2] = GetRegx2();
 	octx->regs[3] = GetRegx3();
@@ -456,7 +512,15 @@ naked void SwapContext(register TCB *octx, register TCB *nctx)
 	octx->regs[29] = GetRegx29();
 	octx->regs[30] = GetRegx30();
 	octx->regs[31] = GetRegx31();
-	octx->epc = SetEpc(nctx->epc);
+	SetTH(nctx->number);
+	SetTB(nctx->tb);
+	SetCL(nctx->cl);
+	SetCU(nctx->cu);
+	SetRO(nctx->ro);
+	SetDL(nctx->dl);
+	SetDU(nctx->du);
+	SetSL(nctx->sl);
+	SetSU(nctx->su);
 	SetRegx1(nctx->regs[1]);
 	SetRegx2(nctx->regs[2]);
 	SetRegx3(nctx->regs[3]);
@@ -488,43 +552,8 @@ naked void SwapContext(register TCB *octx, register TCB *nctx)
 	SetRegx29(nctx->regs[29]);
 	SetRegx30(nctx->regs[30]);
 	SetRegx31(nctx->regs[31]);
-/*
-	__asm {
-		lw		r1,520[r19]
-		lw		r2,528]r19]
-		lw		r3,536[r19]
-		lw		r4,544[r19]
-		lw		r5,552[r19]
-		lw		r6,560[r19]
-		lw		r7,568[r19]
-		lw		r8,576[r19]
-		lw		r9,584[r19]
-		lw		r10,592[r19]
-		lw		r11,600[r19]
-		lw		r12,608[r19]
-		lw		r13,616[r19]
-		lw		r14,624[r19]
-		lw		r15,632[r19]
-		lw		r16,640[r19]
-		lw		r17,648[r19]
-		lw		r18,656[r19]
-		lw		r20,672[r19]
-		lw		r21,680[r19]
-		lw		r22,688[r19]
-		lw		r23,696[r19]
-		lw		r24,704[r19]
-		lw		r24,712[r19]
-		lw		r25,720[r19]
-		lw		r26,728[r19]
-		lw		r27,736[r19]
-		lw		r28,744[r19]
-		lw		r29,752[r19]
-		lw		r30,760[r19]
-		lw		r31,768[r19]
-		lw		r19,664[r19]
-		ret
-	}
-*/
+j1:
+	octx->epc = SetEpc(nctx->epc);
 }
 
 // ----------------------------------------------------------------------------
