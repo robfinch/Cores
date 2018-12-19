@@ -62,7 +62,7 @@
 // Bitfield for representing exception codes
 `define XBITS			7:0
 
-`define SUPPORT_DBG		1'b1
+//`define SUPPORT_DBG		1'b1
 
 // Issue logic is not really required for every possible distance from
 // the head of the queue. Later queue entries tend to depend on prior

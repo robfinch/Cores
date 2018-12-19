@@ -329,7 +329,8 @@
 `define CSR_WBRCD	10'h00A
 `define CSR_BADINSTR	10'h00B
 `define CSR_SEMA    10'h00C
-`define CSR_TCB		10'h010
+`define CSR_KEYS		10'h00E
+`define CSR_TCB			10'h010
 `define CSR_FSTAT   10'h014
 `define CSR_DBAD0   10'h018
 `define CSR_DBAD1   10'h019

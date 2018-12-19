@@ -36,28 +36,28 @@ module FT64_fetchbuf_x1(rst, clk4x, clk, fcu_clk,
 	cmpgrp,
 	freezePC, thread_en, pred_on,
 	regLR,
-    insn0, phit,
-    threadx,
-    branchmiss, misspc, branchmiss_thrd, predict_taken0,
-    predict_takenA, predict_takenB,
-    queued1, queuedNop,
-    pc0, fetchbuf, fetchbufA_v, fetchbufB_v,
-    fetchbufA_instr, fetchbufA_pc, fetchbufA_pbyte,
-    fetchbufB_instr, fetchbufB_pc, fetchbufB_pbyte,
-    fetchbuf0_instr, fetchbuf0_insln,
-    fetchbuf0_thrd,
-    fetchbuf0_pc,
-    fetchbuf0_v,
-    fetchbuf0_pbyte,
-    codebuf0,
-    btgtA, btgtB,
-    nop_fetchbuf,
-    take_branch0,
-    stompedRets,
-    panic
+  insn0, phit,
+  threadx,
+  branchmiss, misspc, branchmiss_thrd, predict_taken0,
+  predict_takenA, predict_takenB,
+  queued1, queuedNop,
+  pc0, fetchbuf, fetchbufA_v, fetchbufB_v,
+  fetchbufA_instr, fetchbufA_pc, fetchbufA_pbyte,
+  fetchbufB_instr, fetchbufB_pc, fetchbufB_pbyte,
+  fetchbuf0_instr, fetchbuf0_insln,
+  fetchbuf0_thrd,
+  fetchbuf0_pc,
+  fetchbuf0_v,
+  fetchbuf0_pbyte,
+  codebuf0,
+  btgtA, btgtB,
+  nop_fetchbuf,
+  take_branch0,
+  stompedRets,
+  panic
 );
 parameter AMSB = `AMSB;
-parameter RSTPC = 64'hFFFC0100;
+parameter RSTPC = 64'hFFFFFFFFFFFC0100;
 parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
 input rst;
@@ -92,13 +92,13 @@ output reg fetchbuf;
 output reg fetchbufA_v;
 output reg fetchbufB_v;
 output fetchbuf0_thrd;
-output reg [55:0] fetchbufA_instr;
+output reg [47:0] fetchbufA_instr;
 output reg [7:0] fetchbufA_pbyte;
-output reg [55:0] fetchbufB_instr;
+output reg [47:0] fetchbufB_instr;
 output reg [7:0] fetchbufB_pbyte;
 output reg [AMSB:0] fetchbufA_pc;
 output reg [AMSB:0] fetchbufB_pc;
-output [55:0] fetchbuf0_instr;
+output [47:0] fetchbuf0_instr;
 output [AMSB:0] fetchbuf0_pc;
 output [2:0] fetchbuf0_insln;
 output fetchbuf0_v;
@@ -111,6 +111,8 @@ output take_branch0;
 input [3:0] stompedRets;
 output reg [3:0] panic;
 integer n;
+
+reg [55:0] cinsn0;
 
 //`include "FT64_decode.vh"
 
@@ -211,21 +213,20 @@ reg [AMSB:0] branch_pcB;
 
 always @*
 begin
-	branch_csA <= xcs;
 case(fetchbufA_instr[`INSTRUCTION_OP])
 `RET:		branch_pcA = retpc0;
 `JMP,`CALL:
 	begin
-	branch_pcA[31:0] = fetchbufA_instr[6] ? {fetchbufA_instr[47:8],1'b0} : {fetchbufA_pc[31:25],fetchbufA_instr[31:8],1'b0};
-	branch_pcA[63:32] = fetchbufA_pc[63:32];
+	branch_pcA[39:0] = fetchbufA_instr[6] ? {fetchbufA_instr[47:8]} : {fetchbufA_pc[39:24],fetchbufA_instr[31:8]};
+	branch_pcA[63:40] = fetchbufA_pc[63:40];
 	end
 `R2:		branch_pcA = btgtA;	// RTI
 `BRK,`JAL:	branch_pcA = btgtA;
 default:
 	begin
 	branch_pcA[31:8] = fetchbufA_pc[31:8] +
-		((fetchbufA_instr[7:6]==2'b01) ? {{4{fetchbufA_instr[47]}},fetchbufA_instr[47:28]} : {{20{fetchbufA_instr[31]}},fetchbufA_instr[31:28]});
-	branch_pcA[7:0] = {fetchbufA_instr[27:23],fetchbufA_instr[17:16],1'b0};
+		((fetchbufA_instr[7:6]==2'b01) ? {{5{fetchbufA_instr[47]}},fetchbufA_instr[47:29]} : {{21{fetchbufA_instr[31]}},fetchbufA_instr[31:29]});
+	branch_pcA[7:0] = {fetchbufA_instr[28:23],fetchbufA_instr[17:16]};
 	branch_pcA[63:32] = fetchbufA_pc[63:32];
 	end
 endcase
@@ -233,21 +234,20 @@ end
 
 always @*
 begin
-	branch_csb <= xcs;
 case(fetchbufB_instr[`INSTRUCTION_OP])
 `RET:		branch_pcB = retpc0;
 `JMP,`CALL: 
 	begin
-		branch_pcB[31:0] = fetchbufB_instr[6] ? {fetchbufB_instr[47:8],1'b0} : {fetchbufB_pc[31:25],fetchbufB_instr[31:8],1'b0};
-		branch_pcB[63:32] = fetchbufB_pc[63:32];
+		branch_pcB[39:0] = fetchbufB_instr[6] ? {fetchbufB_instr[47:8]} : {fetchbufB_pc[39:24],fetchbufB_instr[31:8]};
+		branch_pcB[63:40] = fetchbufB_pc[63:40];
 	end
 `R2:		branch_pcB = btgtB;	// RTI
 `BRK,`JAL:	branch_pcB = btgtB;
 default:
 	begin
 	branch_pcB[31:8] = fetchbufB_pc[31:8] +
-		((fetchbufB_instr[7:6]==2'b01) ? {{4{fetchbufB_instr[47]}},fetchbufB_instr[47:28]} : {{20{fetchbufB_instr[31]}},fetchbufB_instr[31:28]});
-	branch_pcB[7:0] = {fetchbufB_instr[27:23],fetchbufB_instr[17:16],1'b0};
+		((fetchbufB_instr[7:6]==2'b01) ? {{5{fetchbufB_instr[47]}},fetchbufB_instr[47:29]} : {{21{fetchbufB_instr[31]}},fetchbufB_instr[31:29]});
+	branch_pcB[7:0] = {fetchbufB_instr[28:23],fetchbufB_instr[17:16]};
 	branch_pcB[63:32] = fetchbufB_pc[63:32];
 	end
 endcase
@@ -345,24 +345,29 @@ else begin
 		$display("********************");
 		$display("********************");
 	end
+//	else if (cinsn0[`INSTRUCTION_OP]==`CALL || cinsn0[`INSTRUCTION_OP]==`JMP) begin
+//		pc0[31:0] = cinsn0[6] ? {cinsn0[47:8]} : {pc0[31:24],cinsn0[31:8]};
+//		fetchbufA_v <= `INV;
+//		fetchbufB_v <= `INV;
+//		fetchbuf <= 1'b0;
+//	end
 	else if (take_branch) begin
     if (fetchbuf == 1'b0) begin
-    	case({fetchbufA_v, fetchbufB_v})
-    	2'b00:	;
-    	2'b01:	;
-    	2'b10:
+    	// In this case fetchbufA must be valid, or take_branch wouldn't be.
+    	case(fetchbufB_v)
+    	1'b0:
     		begin
 					pc0 <= branch_pcA;
 				  fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
-					fetchbufB_v <= `INV;
 				  fetchbuf <= (queued1|queuedNop);
     		end
-    	2'b11:
-//  			if (did_branch) begin
-//				  fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
-//				  fetchbuf <= (queued1|queuedNop);
-//  			end
-//  			else
+    	1'b1:
+  			if (did_branch) begin
+				  fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
+				  fetchbuf <= (queued1|queuedNop);
+				  FetchB();
+  			end
+  			else
   			begin
 					pc0 <= branch_pcA;
 				  fetchbufA_v <= !(queued1|queuedNop);	// if it can be queued, it will
@@ -372,27 +377,25 @@ else begin
     	endcase
 		end
     else begin
-    	case({fetchbufB_v, fetchbufA_v})
-    	2'b00:	;
-    	2'b01:	;
-    	2'b10:
+    	case(fetchbufA_v)
+    	1'b0:
     		begin
 					pc0 <= branch_pcB;
 				  fetchbufB_v <= !(queued1|queuedNop);
-					fetchbufA_v <= `INV;
-				  fetchbuf <= ~(queued1|queuedNop);
+				  fetchbuf <= !(queued1|queuedNop);
 				end
-			2'b11:
-//				if (did_branch) begin
-//				  fetchbufB_v <= !(queued1|queuedNop);
-//				  fetchbuf <= ~(queued1|queuedNop);
-//				end
-//				else
+			1'b1:
+				if (did_branch) begin
+				  fetchbufB_v <= !(queued1|queuedNop);
+				  fetchbuf <= ~(queued1|queuedNop);
+				  FetchA();
+				end
+				else
 				begin
 					pc0 <= branch_pcB;
 				  fetchbufB_v <= !(queued1|queuedNop);
 					fetchbufA_v <= `INV;
-				  fetchbuf <= ~(queued1|queuedNop);
+				  fetchbuf <= !(queued1|queuedNop);
 				end
 			endcase
 		end
@@ -422,8 +425,9 @@ else begin
         if (fetchbufB_v==`INV && phit)
           fetchbuf <= 1'b0;
     end
-    else if (fetchbufB_v == `INV)
+    else if (fetchbufB_v == `INV) begin
 	    FetchB();
+	  end
 	end
   //
   // get data iff the fetch buffers are empty
@@ -432,6 +436,11 @@ else begin
   	FetchA();
     fetchbuf <= 1'b0;
   end
+//  // Steer fetchbuf to the valid buffer.
+//  else if (fetchbufB_v == `INV)
+//  	fetchbuf <= 1'b0;
+//  else if (fetchbufA_v == `INV)
+//		fetchbuf <= 1'b1;
 //  else if (fetchbufA_v == `INV) begin
 //  	FetchA();
 //	end
@@ -467,7 +476,6 @@ begin
 		insln0 <= fnInsLength(insn0);
 end
 
-reg [55:0] cinsn0;
 
 always @*
 begin
@@ -478,7 +486,7 @@ begin
 		cinsn0 <= expand0;
 	else
 `endif
-	if (insn0[7:6]==2'b00 && insn0[`INSTRUCTION_OP]==`EXEC && ~pred_on)
+	if (insn0[7:6]==2'b00 && insn0[`INSTRUCTION_OP]==`EXEC && !pred_on)
 		cinsn0 <= codebuf0;
 	else if (insn0[15:14]==2'b00 && insn0[`INSTRUCTION_OP]==`EXEC && pred_on)
 		cinsn0 <= codebuf0;

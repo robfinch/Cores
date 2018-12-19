@@ -42,7 +42,7 @@
 `include "FT64_defines.vh"
 
 module FT64(hartid, rst, clk_i, clk4x, tm_clk_i, irq_i, vec_i, bte_o, cti_o, bok_i, cyc_o, stb_o, ack_i, err_i, we_o, sel_o, adr_o, dat_o, dat_i,
-    ol_o, pcr_o, pcr2_o, icl_o, sr_o, cr_o, rbi_i, signal_i);
+    ol_o, pcr_o, pcr2_o, pkeys_o, icl_o, sr_o, cr_o, rbi_i, signal_i);
 input [63:0] hartid;
 input rst;
 input clk_i;
@@ -65,6 +65,7 @@ input [63:0] dat_i;
 output reg [1:0] ol_o;
 output [31:0] pcr_o;
 output [63:0] pcr2_o;
+output [63:0] pkeys_o;
 output reg icl_o;
 output reg cr_o;
 output reg sr_o;
@@ -108,25 +109,13 @@ parameter wyde = 3'd1;
 parameter tetra = 3'd2;
 parameter octa = 3'd3;
 // IQ states
-parameter IQS_IDLE = 2'd0;
-parameter IQS_AGEN = 2'd1;
-parameter IQS_LDDONE = 2'd2;
-parameter IQS_S3 = 2'd3;
-
-`ifdef SUPPORT_PREDICATION
-parameter PF = 4'd0;
-parameter PT = 4'd1;
-parameter PEQ = 4'd2;
-parameter PNE = 4'd3;
-parameter PLE = 4'd4;
-parameter PGT = 4'd5;
-parameter PGE = 4'd6;
-parameter PLT = 4'd7;
-parameter PLEU = 4'd8;
-parameter PGTU = 4'd9;
-parameter PGEU = 4'd10;
-parameter PLTU = 4'd11;
-`endif
+parameter IQS_INVALID = 3'd0;
+parameter IQS_QUEUED = 3'd1;
+parameter IQS_OUT = 3'd2;
+parameter IQS_AGEN = 3'd3;
+parameter IQS_MEM = 3'd4;
+parameter IQS_DONE = 3'd5;
+parameter IQS_CMT = 3'd6;
 
 wire clk;
 //BUFG uclkb1
@@ -586,6 +575,8 @@ wire [5:0] fprgs = mstatus[25:20];
 //assign ol_o = mprv ? ol_stack[2:0] : ol;
 wire vca = mstatus[32];		// vector chaining active
 `endif
+reg [63:0] keys;
+assign pkeys_o = keys;
 reg [63:0] tcb;
 reg [47:0] bad_instr[0:15];
 reg [`ABITS] badaddr[0:15];
@@ -707,18 +698,15 @@ reg [`SNBITS] iqentry_sn [0:QENTRIES-1];  // instruction sequence number
 reg [QENTRIES-1:0] iqentry_v;			// entry valid?  -- this should be the first bit
 reg [QENTRIES-1:0] iqentry_iv;		// instruction is valid
 reg [`QBITSP1] iqentry_is [0:QENTRIES-1];	// source of instruction
-reg [QENTRIES-1:0] iqentry_out;	// instruction has been issued to an ALU ... 
-(* mark_debug = "true" *)
-reg [QENTRIES-1:0] iqentry_done;	// instruction result valid
-(* mark_debug="true" *)
-reg [QENTRIES-1:0] iqentry_cmt;
 reg [QENTRIES-1:0] iqentry_thrd;		// which thread the instruction is in
 reg [QENTRIES-1:0] iqentry_pt;		// predict taken
 reg [QENTRIES-1:0] iqentry_bt;		// update branch target buffer
 reg [QENTRIES-1:0] iqentry_takb;	// take branch record
 reg [QENTRIES-1:0] iqentry_jal;
-reg [QENTRIES-1:0] iqentry_agen;	// address-generate ... signifies that address is ready (only for LW/SW)
-reg  [1:0] iqentry_state [0:QENTRIES-1];
+reg [2:0] iqentry_state [0:QENTRIES-1];
+reg [QENTRIES-1:0] iqentry_done;
+reg [QENTRIES-1:0] iqentry_out;
+reg [QENTRIES-1:0] iqentry_agen;
 reg [2:0] iqentry_sz [0:QENTRIES-1];
 reg [QENTRIES-1:0] iqentry_alu = 8'h00;  // alu type instruction
 reg [QENTRIES-1:0] iqentry_alu0;	 // only valid on alu #0
@@ -767,8 +755,8 @@ reg  [5:0] iqentry_ven  [0:QENTRIES-1];  // vector element number
 reg [AMSB:0] iqentry_ma [0:QENTRIES-1];	// memory address
 reg [63:0] iqentry_a0	[0:QENTRIES-1];	// argument 0 (immediate)
 reg [63:0] iqentry_a1	[0:QENTRIES-1];	// argument 1
-reg        iqentry_a1_v	[0:QENTRIES-1];	// arg1 valid
-reg  [`QBITSP1] iqentry_a1_s	[0:QENTRIES-1];	// arg1 source (iq entry # with top bit representing ALU/DRAM bus)
+reg [QENTRIES-1:0] iqentry_a1_v;	// arg1 valid
+reg [`QBITSP1] iqentry_a1_s	[0:QENTRIES-1];	// arg1 source (iq entry # with top bit representing ALU/DRAM bus)
 reg [63:0] iqentry_a2	[0:QENTRIES-1];	// argument 2
 reg        iqentry_a2_v	[0:QENTRIES-1];	// arg2 valid
 reg  [`QBITSP1] iqentry_a2_s	[0:QENTRIES-1];	// arg2 source (iq entry # with top bit representing ALU/DRAM bus)
@@ -779,15 +767,6 @@ reg [`ABITS] iqentry_pc	[0:QENTRIES-1];	// program counter for this instruction
 reg [RBIT:0] iqentry_Ra [0:QENTRIES-1];
 reg [RBIT:0] iqentry_Rb [0:QENTRIES-1];
 reg [RBIT:0] iqentry_Rc [0:QENTRIES-1];
-`ifdef SUPPORT_PREDICATION
-reg [63:0] iqentry_aT	[0:QENTRIES-1];	// argument T
-reg        iqentry_aT_v	[0:QENTRIES-1];	// argT valid
-reg  [`QBITSP1] iqentry_aT_s	[0:QENTRIES-1];	// argT source (iq entry # with top bit representing ALU/DRAM bus)
-reg  [3:0] iqentry_preg [0:QENTRIES-1];   // predicate regno
-reg  [3:0] iqentry_pred [0:QENTRIES-1];		// predicate value
-reg [QENTRIES-1:0] iqentry_p_v;
-reg  [`QBITSP1] iqentry_p_s	[0:QENTRIES-1];	// pred source (iq entry # with top bit representing ALU/DRAM bus)
-`endif
 
 // debugging
 //reg  [4:0] iqentry_ra   [0:7];  // Ra
@@ -796,10 +775,6 @@ for (n = 0; n < QENTRIES; n = n + 1)
 	iqentry_a1_s[n] <= 5'd0;
 	iqentry_a2_s[n] <= 5'd0;
 	iqentry_a3_s[n] <= 5'd0;
-`ifdef SUPPORT_PREDICATION
-	iqentry_p_s[n] <= 5'd0;
-	iqentry_aT_s[n] <= 5'd0;
-`endif
 end
 
 reg [QENTRIES-1:0] iqentry_source = {QENTRIES{1'b0}};
@@ -1016,7 +991,7 @@ reg        fpu1_ld;
 reg        fpu1_dataready = 1'b1;
 wire       fpu1_done = 1'b1;
 wire       fpu1_idle;
-reg  [3:0] fpu1_sourceid;
+reg [`QBITSP1] fpu1_sourceid;
 reg [47:0] fpu1_instr;
 reg [63:0] fpu1_argA;
 reg [63:0] fpu1_argB;
@@ -1038,7 +1013,7 @@ reg        fpu2_ld;
 reg        fpu2_dataready = 1'b1;
 wire       fpu2_done = 1'b1;
 wire       fpu2_idle;
-reg  [3:0] fpu2_sourceid;
+reg [`QBITSP1] fpu2_sourceid;
 reg [47:0] fpu2_instr;
 reg [63:0] fpu2_argA;
 reg [63:0] fpu2_argB;
@@ -1062,7 +1037,7 @@ reg        fcu_ld;
 reg        fcu_dataready;
 reg        fcu_done;
 reg         fcu_idle = 1'b1;
-reg  [3:0] fcu_sourceid;
+reg [`QBITSP1] fcu_sourceid;
 reg [47:0] fcu_instr;
 reg [47:0] fcu_prevInstr;
 reg  [2:0] fcu_insln;
@@ -1374,14 +1349,14 @@ generate begin : gInsnVar
 			if (thread_en)
 				insn1a <= insn1b;
 			else
-				insn1a = {insn1b,insn0a} >> {fnInsLength(insn0a),3'b0};
+				insn1a <= {insn1b,insn0a} >> {fnInsLength(insn0a),3'b0};
 	end
 	if (`WAYS > 2) begin
 		always @*
 			if (thread_en)
 				insn2a <= insn2b;
 			else
-				insn2a = {insn2b,insn1b,insn0a} >> {fnInsLength(insn0a) + fnInsLength(insn1a),3'b0};
+				insn2a <= {insn2b,insn1b,insn0a} >> {fnInsLength(insn0a) + fnInsLength(insn1a),3'b0};
 	end
 end
 endgenerate
@@ -1484,14 +1459,14 @@ wire predict_takenC1;
 wire predict_takenD1;
 
 wire [`ABITS] btgtA, btgtB, btgtC, btgtD, btgtE, btgtF;
-wire btbwr0 = iqentry_v[heads[0]] && iqentry_done[heads[0]] &&
+wire btbwr0 = iqentry_v[heads[0]] && iqentry_state[heads[0]]==IQS_CMT &&
         (
         iqentry_jal[heads[0]] ||
         iqentry_brk[heads[0]] ||
         iqentry_rti[heads[0]]);
 generate begin: gbtbvar
 if (`WAYS > 1) begin
-wire btbwr1 = iqentry_v[heads[1]] && iqentry_done[heads[1]] &&
+wire btbwr1 = iqentry_v[heads[1]] && iqentry_state[heads[1]]==IQS_CMT &&
         (
         iqentry_jal[heads[1]] ||
         iqentry_brk[heads[1]] ||
@@ -1996,12 +1971,7 @@ end
 wire freezePC = (irq_i > im) && !int_commit;
 always @*
 if (freezePC) begin
-`ifdef SUPPORT_PREDICATION
-	if (pred_on)
-		insn0 <= {6'd0,5'd0,irq_i,1'b0,vec_i,2'b00,`BRK,8'h01};
-	else
-`endif
-		insn0 <= {8'h00,6'd0,5'd0,irq_i,1'b0,vec_i,2'b00,`BRK};
+	insn0 <= {8'h00,6'd0,5'd0,irq_i,1'b0,vec_i,2'b00,`BRK};
 end
 else if (phit) begin
 //	if (insn0a[`INSTRUCTION_OP]==`BRK && insn0a[25:21]==5'd0 && insn0a[`INSTRUCTION_L2]==2'b00)
@@ -2010,23 +1980,13 @@ else if (phit) begin
 		insn0 <= insn0a;
 end
 else begin
-`ifdef SUPPORT_PREDICATION
-	if (pred_on)
-		insn0 <= {`NOP_INSN,8'h01};
-	else
-`endif
-		insn0 <= {8'h00,`NOP_INSN};
+	insn0 <= {8'h00,`NOP_INSN};
 end
 generate begin : gInsnMux
 if (`WAYS > 1) begin
 always @*
 if (freezePC && !thread_en) begin
-`ifdef SUPPORT_PREDICATION
-	if (pred_on)
-		insn1 <= {6'd0,5'd0,irq_i,1'b0,vec_i,2'b00,`BRK,8'h01};
-	else
-`endif
-		insn1 <= {8'h00,6'd0,5'd0,irq_i,1'b0,vec_i,2'b00,`BRK};
+	insn1 <= {8'h00,6'd0,5'd0,irq_i,1'b0,vec_i,2'b00,`BRK};
 end
 else if (phit) begin
 //	if (insn1a[`INSTRUCTION_OP]==`BRK && insn1a[25:21]==5'd0 && insn1a[`INSTRUCTION_L2]==2'b00)
@@ -2035,12 +1995,7 @@ else if (phit) begin
 		insn1 <= insn1a;
 end
 else begin
-`ifdef SUPPORT_PREDICATION
-	if (pred_on)
-		insn1 <= {`NOP_INSN,8'h01};
-	else
-`endif
-		insn1 <= {8'h00,`NOP_INSN};
+	insn1 <= {8'h00,`NOP_INSN};
 end
 end
 if (`WAYS > 2) begin
@@ -2083,18 +2038,18 @@ begin
 	wb_hit1 <= FALSE;
 	wb_hit2 <= FALSE;
 	for (n = 0; n < `WB_DEPTH; n = n + 1) begin
-		if (wb_v[n] && wb_addr[n][31:3]==dram0_addr[31:3])
+		if (wb_v[n] && wb_addr[n][AMSB:3]==dram0_addr[AMSB:3])
 			wb_hit0 <= TRUE;
-		if (`NUM_MEM > 1 && wb_v[n] && wb_addr[n][31:3]==dram1_addr[31:3])
+		if (`NUM_MEM > 1 && wb_v[n] && wb_addr[n][AMSB:3]==dram1_addr[AMSB:3])
 			wb_hit1 <= TRUE;
-		if (`NUM_MEM > 2 && wb_v[n] && wb_addr[n][31:3]==dram2_addr[31:3])
+		if (`NUM_MEM > 2 && wb_v[n] && wb_addr[n][AMSB:3]==dram2_addr[AMSB:3])
 			wb_hit2 <= TRUE;
 	end
 end
 
-assign dhit0 = dhit0a & !wb_hit0;
-assign dhit1 = dhit1a & !wb_hit1;
-assign dhit2 = dhit2a & !wb_hit2;
+assign dhit0 = dhit0a && !wb_hit0;
+assign dhit1 = dhit1a && !wb_hit1;
+assign dhit2 = dhit2a && !wb_hit2;
 wire whit0, whit1, whit2;
 
 wire wr_dcache0 = (bstate==B_DCacheLoadAck && ack_i)||(((bstate==B_StoreAck && StoreAck1) || (bstate==B19 && isStore)) && whit0);
@@ -2170,9 +2125,9 @@ case(isn[`INSTRUCTION_OP])
         `VMxx:
         	case(isn[25:23])
         	`VMAND,`VMOR,`VMXOR,`VMXNOR,`VMPOP,`VMFIRST,`VMLAST:
-                    fnRa = {6'h3F,1'b1,2'b0,isn[8:6]};
+                    fnRa = {6'h3F,1'b1,2'b0,isn[10:8]};
             `VMFILL:fnRa = {6'd0,1'b1,isn[`INSTRUCTION_RA]};
-            default:fnRa = {6'h3F,1'b1,2'b0,isn[8:6]};
+            default:fnRa = {6'h3F,1'b1,2'b0,isn[10:8]};
             endcase
         `VSHLV:     fnRa = (vqei+1+isn[15:11] >= vli) ? 11'h000 : {vli-vqei-isn[15:11]-1,1'b1,isn[`INSTRUCTION_RA]};
         `VSHRV:     fnRa = (vqei+isn[15:11] >= vli) ? 11'h000 : {vqei+isn[15:11],1'b1,isn[`INSTRUCTION_RA]};
@@ -2384,9 +2339,9 @@ case(isn[`INSTRUCTION_OP])
   `VMxx:
   	case(isn[25:23])
   	`VMAND,`VMOR,`VMXOR,`VMXNOR,`VMPOP,`VMFIRST,`VMLAST:
-              fnRa = {6'h3F,1'b1,2'b0,isn[8:6]};
+              fnRa = {6'h3F,1'b1,2'b0,isn[10:8]};
       `VMFILL:fnRa = {6'd0,1'b1,isn[`INSTRUCTION_RA]};
-      default:fnRa = {6'h3F,1'b1,2'b0,isn[8:6]};
+      default:fnRa = {6'h3F,1'b1,2'b0,isn[10:8]};
       endcase
   `VSHLV:     fnRa = (vqei+1+isn[15:11] >= vli) ? 11'h000 : {vli-vqei-isn[15:11]-1,1'b1,isn[`INSTRUCTION_RA]};
   `VSHRV:     fnRa = (vqei+isn[15:11] >= vli) ? 11'h000 : {vqei+isn[15:11],1'b1,isn[`INSTRUCTION_RA]};
@@ -3418,6 +3373,38 @@ default: IsShifti = FALSE;
 endcase
 endfunction
 
+function IsShift;
+input [47:0] isn;
+case(isn[`INSTRUCTION_OP])
+`R2:
+	if (isn[`INSTRUCTION_L2]==2'b00)
+    case(isn[31:26])
+    `SHIFTR: IsShift = TRUE;
+    `SHIFT31: IsShift = TRUE;
+    `SHIFT63: IsShift = TRUE;
+    default: IsShift = FALSE;
+    endcase
+  else
+  	IsShift = FALSE;
+default: IsShift = FALSE;
+endcase
+endfunction
+
+function IsShift48;
+input [47:0] isn;
+case(isn[`INSTRUCTION_OP])
+`R2:
+	if (isn[`INSTRUCTION_L2]==2'b01)
+    case(isn[47:42])
+    `SHIFTR: IsShift48 = TRUE;
+    default: IsShift48 = FALSE;
+    endcase
+  else
+  	IsShift48 = FALSE;
+default: IsShift48 = FALSE;
+endcase
+endfunction
+
 function IsRtop;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
@@ -3815,7 +3802,7 @@ endfunction
 // Indicate if the ALU instruction is valid immediately (single cycle operation)
 function IsSingleCycle;
 input [47:0] isn;
-IsSingleCycle = !(IsMul(isn)|IsDivmod(isn)|IsTLB(isn));
+IsSingleCycle = !(IsMul(isn)|IsDivmod(isn)|IsTLB(isn)|IsShift48(isn));
 endfunction
 
 
@@ -4103,20 +4090,8 @@ end
 end
 endgenerate
 
-`ifdef SUPPORT_PREDICATION
-wire [3:0] cond0 = fetchbuf0_pbyte[3:0];
-wire [3:0] cond1 = fetchbuf1_pbyte[3:0];
-wire [3:0] Pn0 = fetchbuf0_pbyte[7:4];
-wire [3:0] Pn1 = fetchbuf1_pbyte[7:4];
-`endif
-
-`ifdef SUPPORT_PREDICATION
-wire cmt_head1 = (!iqentry_rfw[heads[1]] && !iqentry_prfw[heads[1]] && !iqentry_oddball[heads[1]] && ~|iqentry_exc[heads[1]]);
-wire cmt_head2 = (!iqentry_rfw[heads[2]] && !iqentry_prfw[heads[2]] && !iqentry_oddball[heads[2]] && ~|iqentry_exc[heads[2]]);
-`else
 wire cmt_head1 = (!iqentry_rfw[heads[1]] && !iqentry_oddball[heads[1]] && ~|iqentry_exc[heads[1]]);
 wire cmt_head2 = (!iqentry_rfw[heads[2]] && !iqentry_oddball[heads[2]] && ~|iqentry_exc[heads[2]]);
-`endif
 
 // Determine the head increment amount, this must match code later on.
 reg [2:0] hi_amt;
@@ -4124,11 +4099,11 @@ always @*
 begin
 	hi_amt <= 4'd0;
   casez ({ iqentry_v[heads[0]],
-		iqentry_store[heads[0]] ? iqentry_done[heads[0]] & iqentry_cmt[heads[0]] : iqentry_done[heads[0]],
+		iqentry_state[heads[0]]==IQS_CMT,
 		iqentry_v[heads[1]],
-		iqentry_store[heads[1]] ? iqentry_done[heads[1]] & iqentry_cmt[heads[1]] : iqentry_done[heads[1]],
+		iqentry_state[heads[1]]==IQS_CMT,
 		iqentry_v[heads[2]],
-		iqentry_store[heads[2]] ? iqentry_done[heads[2]] & iqentry_cmt[heads[2]] : iqentry_done[heads[2]]})
+		iqentry_state[heads[2]]==IQS_CMT})
 
 	// retire 3
 	6'b0?_0?_0?:
@@ -4217,12 +4192,12 @@ begin
 	default:
 		begin
 			hi_amt <= 3'd0;
-			$display("hi_amt: Uncoded case %b",{ iqentry_v[heads[0]],
-				iqentry_cmt[heads[0]],
+			$display("hi_amt: Uncoded case %h",{ iqentry_v[heads[0]],
+				iqentry_state[heads[0]],
 				iqentry_v[heads[1]],
-				iqentry_cmt[heads[1]],
+				iqentry_state[heads[1]],
 				iqentry_v[heads[2]],
-				iqentry_cmt[heads[2]]});
+				iqentry_state[heads[2]]});
 		end
   endcase
 end
@@ -4361,17 +4336,6 @@ generate begin : issue_logic
 for (g = 0; g < QENTRIES; g = g + 1)
 begin
 assign args_valid[g] =
-`ifdef SUPPORT_PREDICATION
-			(iqentry_p_v[g]
-`ifdef FU_BYPASS
-				|| (iqentry_p_s[g]==alu0_sourceid && alu0_dataready && (~alu0_mem | alu0_push))
-        || ((iqentry_p_s[g] == alu1_sourceid && alu1_dataready && (~alu1_mem | alu1_push)) && (`NUM_ALU > 1))
-        // Values for predicate registers can't come from fpu
-//        || ((iqentry_p_s[g] == fpu1_sourceid && fpu1_dataready) && (`NUM_FPU > 0))
-`endif        
-      )
-		&&
-`endif
 		  (iqentry_a1_v[g] 
 `ifdef FU_BYPASS
         || (iqentry_a1_s[g] == alu0_sourceid && alu0_dataready && (~alu0_mem | alu0_push))
@@ -4394,21 +4358,12 @@ assign args_valid[g] =
         || ((iqentry_a3_s[g] == alu1_sourceid && alu1_dataready && (~alu1_mem | alu1_push)) && (`NUM_ALU > 1))
 `endif
         )
-`ifdef SUPPORT_PREDICATION
-    && (iqentry_aT_v[g] 
-`ifdef FU_BYPASS
-        || (iqentry_aT_s[g] == alu0_sourceid && alu0_dataready && (~alu0_mem | alu0_push))
-        || ((iqentry_aT_s[g] == alu1_sourceid && alu1_dataready && (~alu1_mem | alu1_push)) && (`NUM_ALU > 1))
-        || ((iqentry_aT_s[g] == fpu1_sourceid && fpu1_dataready) && (`NUM_FPU > 0))
-`endif
-        )
-`endif
     ;
 
-assign could_issue[g] = iqentry_v[g] && !iqentry_done[g] && !iqentry_out[g]
+assign could_issue[g] = iqentry_v[g] && iqentry_state[g]==IQS_QUEUED
 												&& args_valid[g]
-												&& iqentry_iv[g]
-                        && (iqentry_mem[g] ? !iqentry_agen[g] : 1'b1);
+												&& iqentry_iv[g];
+                        //&& (iqentry_mem[g] ? !iqentry_agen[g] : 1'b1);
 
 assign could_issueid[g] = (iqentry_v[g])// || (g==tail0 && canq1))// || (g==tail1 && canq2))
 														&& !iqentry_iv[g];
@@ -4692,6 +4647,15 @@ begin
 		if (iqentry_ma[heads[1]][AMSB:3]==wb_addr[n][AMSB:3] && wb_v[n])
 			inwb1 = TRUE;
 `endif
+end
+
+always @*
+begin
+	for (n = 0; n < QENTRIES; n = n + 1) begin
+		iqentry_done[n] <= iqentry_state[n]==IQS_DONE || iqentry_state[n]==IQS_CMT;
+		iqentry_out[n] <= iqentry_state[n]==IQS_OUT;
+		iqentry_agen[n] <= iqentry_state[n]==IQS_AGEN;
+	end
 end
 
 //
@@ -5491,26 +5455,6 @@ end
 endgenerate
 `endif
 
-`ifdef SUPPORT_PREDICATION
-// Nybble slices for predicate register forwarding
-wire [3:0] alu0nyb[0:15];
-wire [3:0] alu1nyb[0:15];
-wire [3:0] cmt0nyb[0:15];
-wire [3:0] cmt1nyb[0:15];
-
-generate
-begin : nybs
-    for (g = 0; g < DBW/4; g = g + 1)
-    begin : block3
-assign alu0nyb[g] = alu0_bus[g*4+3:g*4];
-assign alu1nyb[g] = alu1_bus[g*4+3:g*4];
-assign cmt0nyb[g] = commit0_bus[g*4+3:g*4];
-assign cmt1nyb[g] = commit1_bus[g*4+3:g*4];
-    end
-end
-endgenerate
-`endif
-
 // Starts search for instructions to issue at the head of the queue and 
 // progresses from there. This ensures that the oldest instructions are
 // selected first for processing.
@@ -5520,13 +5464,13 @@ begin
 	last_issue1 = QENTRIES;
 	last_issue2 = QENTRIES;
 	for (n = 0; n < QENTRIES; n = n + 1)
-    if (~iqentry_stomp[heads[n]] && iqentry_memissue[heads[n]] && iqentry_agen[heads[n]] && ~iqentry_out[heads[n]] && ~iqentry_done[heads[n]] && iqentry_cmt[heads[n]]) begin
+    if (~iqentry_stomp[heads[n]] && iqentry_memissue[heads[n]]) begin
       if (mem1_available && dram0 == `DRAMSLOT_AVAIL) begin
        last_issue0 = heads[n];
       end
     end
 	for (n = 0; n < QENTRIES; n = n + 1)
-    if (~iqentry_stomp[heads[n]] && iqentry_memissue[heads[n]] && iqentry_agen[heads[n]] && ~iqentry_out[heads[n]] && ~iqentry_done[heads[n]] && iqentry_cmt[heads[n]]) begin
+    if (~iqentry_stomp[heads[n]] && iqentry_memissue[heads[n]]) begin
     	if (mem2_available && heads[n] != last_issue0 && `NUM_MEM > 1) begin
         if (dram1 == `DRAMSLOT_AVAIL) begin
 					last_issue1 = heads[n];
@@ -5534,7 +5478,7 @@ begin
     	end
     end
 	for (n = 0; n < QENTRIES; n = n + 1)
-    if (~iqentry_stomp[heads[n]] && iqentry_memissue[heads[n]] && iqentry_agen[heads[n]] && ~iqentry_out[heads[n]] && ~iqentry_done[heads[n]] && iqentry_cmt[heads[n]]) begin
+    if (~iqentry_stomp[heads[n]] && iqentry_memissue[heads[n]]) begin
     	if (mem3_available && heads[n] != last_issue0 && heads[n] != last_issue1 && `NUM_MEM > 2) begin
         if (dram2 == `DRAMSLOT_AVAIL) begin
         	last_issue2 = heads[n];
@@ -5609,21 +5553,35 @@ FT64_idecoder uid1
 	.id_i(id1_id),
 `ifdef INLINE_DECODE
 	.instr(fetchbuf0_instr),
+	.Rt(Rt0[4:0]),
+	.predict_taken(predict_taken0),
+	.thrd(fetchbuf0_thrd),
 `else
 	.instr(id1_instr),
+	.Rt(id1_Rt),
+	.predict_taken(id1_pt),
+	.thrd(id1_thrd),
 `endif
+//ToDo: fix for vectors length and element number
 	.ven(id1_ven),
 	.vl(id1_vl),
-	.thrd(id1_thrd),
-	.predict_taken(id1_pt),
-	.Rt(id1_Rt),
 	.bus(id1_bus),
 	.id_o(id1_ido),
 	.idv_o(id1_vo),
 	.debug_on(debug_on),
 	.pred_on(pred_on)
 );
-
+/*
+`ifdef INLINE_DECODE
+	id1_Rt <= Rt0[4:0];
+	id1_vl <= vl;
+	id1_ven <= venno;
+	id1_id <= tail;
+	id1_pt <= predict_taken0;
+	id1_thrd <= fetchbuf0_thrd;
+	setinsn1(tail,id1_bus);
+`endif
+*/
 generate begin : gIDUInst
 if (`NUM_IDU > 1) begin
 //BUFGCE uclkb3
@@ -5641,14 +5599,17 @@ FT64_idecoder uid2
 	.id_i(id2_id),
 `ifdef INLINE_DECODE
 	.instr(fetchbuf1_instr),
+	.Rt(Rt1[4:0]),
+	.predict_taken(predict_taken1),
+	.thrd(fetchbuf1_thrd),
 `else
 	.instr(id2_instr),
+	.Rt(id2_Rt),
+	.predict_taken(id2_pt),
+	.thrd(id2_thrd),
 `endif
 	.ven(id2_ven),
 	.vl(id2_vl),
-	.thrd(id2_thrd),
-	.predict_taken(id2_pt),
-	.Rt(id2_Rt),
 	.bus(id2_bus),
 	.id_o(id2_ido),
 	.idv_o(id2_vo),
@@ -5714,6 +5675,7 @@ begin
     `CSR_PMR:				csr_r <= pmr;
     `CSR_WBRCD:		csr_r <= wbrcd;
     `CSR_SEMA:      csr_r <= sema;
+    `CSR_KEYS:			csr_r <= keys;
     `CSR_TCB:		csr_r <= tcb;
     `CSR_FSTAT:     csr_r <= {fp_rgs,fp_status};
 `ifdef SUPPORT_DBG    
@@ -5762,18 +5724,18 @@ begin
 `endif    
     `CSR_CODEBUF:   csr_r <= codebuf[csrno[5:0]];
 `ifdef SUPPORT_BBMS
-		`CSR_TB:			dat <= tb;
-		`CSR_CBL:			dat <= cbl;
-		`CSR_CBU:			dat <= cbu;
-		`CSR_RO:			dat <= ro;
-		`CSR_DBL:			dat <= dbl;
-		`CSR_DBU:			dat <= dbu;
-		`CSR_SBL:			dat <= sbl;
-		`CSR_SBU:			dat <= sbu;
-		`CSR_ENU:			dat <= en;
+		`CSR_TB:			csr_r <= tb;
+		`CSR_CBL:			csr_r <= cbl;
+		`CSR_CBU:			csr_r <= cbu;
+		`CSR_RO:			csr_r <= ro;
+		`CSR_DBL:			csr_r <= dbl;
+		`CSR_DBU:			csr_r <= dbu;
+		`CSR_SBL:			csr_r <= sbl;
+		`CSR_SBU:			csr_r <= sbu;
+		`CSR_ENU:			csr_r <= en;
 `endif
 `ifdef SUPPORT_PREDICATION
-		`CSR_PREGS:		read_pregs(dat);
+		`CSR_PREGS:		read_pregs(csr_r);
 `endif		
     `CSR_Q_CTR:		csr_r <= iq_ctr;
     `CSR_BM_CTR:	csr_r <= bm_ctr;
@@ -5846,7 +5808,7 @@ FT64_alu #(.BIG(1'b1),.SUP_VECTOR(SUP_VECTOR)) ualu0 (
   .exc(alu0_exc),
   .thrd(alu0_thrd),
   .mem(alu0_mem),
-  .shift(alu0_shft),
+  .shift(alu0_shft),	// 48 bit shift inst.
   .ol(ol),
   .ASID(ASID),
   .icl_i(icl_o),
@@ -5985,52 +5947,6 @@ end
 end
 endgenerate
 
-`ifdef SUPPORT_PREDICATION
-function fnPredicate;
-input [3:0] pr;
-input [3:0] cond;
-
-case(cond)
-PF:		fnPredicate = 1'b0;
-PT:		fnPredicate = 1'b1;
-PEQ:	fnPredicate =  pr[0];
-PNE:	fnPredicate = !pr[0];
-PLE:	fnPredicate =  pr[0]|pr[1];
-PGT:	fnPredicate = !(pr[0]|pr[1]);
-PLT:	fnPredicate =  pr[1];
-PGE:	fnPredicate = !pr[1];
-PLEU:	fnPredicate =  pr[0]|pr[2];
-PGTU:	fnPredicate = !(pr[0]|pr[2]);
-PLTU:	fnPredicate =  pr[2];
-PGEU:	fnPredicate = !pr[2];
-default:	fnPredicate = 1'b1;
-endcase
-
-endfunction
-
-wire alu0_cmtw = fnPredicate(alu0_pred, alu0_cond) | !pred_on;
-wire alu1_cmtw = fnPredicate(alu1_pred, alu1_cond) | !pred_on;
-wire fpu1_cmtw = fnPredicate(fpu1_pred, fpu1_cond) | !pred_on;
-wire fpu1_cmtw = fnPredicate(fpu1_pred, fpu1_cond) | !pred_on;
-wire fcu_cmtw = fnPredicate(fcu_pred, fcu_cond) | !pred_on;
-
-always @*
-begin
-    alu0_cmt <= alu0_cmtw;
-    alu1_cmt <= alu1_cmtw;
-    fpu1_cmt <= fpu1_cmtw;
-    fpu2_cmt <= fpu2_cmtw;
-    fcu_cmt <= fcu_cmtw;
-
-    alu0_bus <= alu0_cmtw ? alu0_out : alu0_argT;
-    alu1_bus <= alu1_cmtw ? alu1_out : alu1_argT;
-    fpu1_bus <= fpu1_cmtw ? fpu1_out : fpu1_argT;
-    fpu2_bus <= fpu2_cmtw ? fpu2_out : fpu2_argT;
-    fcu_bus <= fcu_cmtw ? fcu_out : fcu_argT;
-end
-assign alu0_abort = !alu0_cmt;
-assign alu1_abort = !alu1_cmt;
-`else
 always @*
 begin
     alu0_cmt <= 1'b1;
@@ -6048,7 +5964,6 @@ end
 
 assign alu0_abort = 1'b0;
 assign alu1_abort = 1'b0;
-`endif
 
 generate begin : gFPUInst
 if (`NUM_FPU > 0) begin
@@ -6267,11 +6182,11 @@ assign dram_avail = (dram0 == `DRAMSLOT_AVAIL || dram1 == `DRAMSLOT_AVAIL || dra
 
 always @*
 for (n = 0; n < QENTRIES; n = n + 1)
-	iqentry_memopsvalid[n] <= (iqentry_mem[n] & (iqentry_store ? iqentry_a2_v[n] : 1'b1) & iqentry_agen[n]);
+	iqentry_memopsvalid[n] <= (iqentry_mem[n] && (iqentry_store[n] ? iqentry_a2_v[n] : 1'b1) && iqentry_state[n]==IQS_AGEN);
 
 always @*
 for (n = 0; n < QENTRIES; n = n + 1)
-	iqentry_memready[n] <= (iqentry_v[n] & iqentry_iv[n] & iqentry_memopsvalid[n] & ~iqentry_memissue[n] & ~iqentry_done[n] & ~iqentry_out[n] & ~iqentry_stomp[n]);
+	iqentry_memready[n] <= (iqentry_v[n] & iqentry_iv[n] & iqentry_memopsvalid[n] & ~iqentry_memissue[n] & ~iqentry_stomp[n]);
 
 assign outstanding_stores = (dram0 && dram0_store) ||
                             (dram1 && dram1_store) ||
@@ -6282,49 +6197,48 @@ assign outstanding_stores = (dram0 && dram0_store) ||
 //
 always @*
 begin
-    commit0_v <= ({iqentry_v[heads[0]], iqentry_store[heads[0]] ? iqentry_cmt[heads[0]] & iqentry_done[heads[0]] : iqentry_done[heads[0]]} == 2'b11 && ~|panic);
+    commit0_v <= ({iqentry_v[heads[0]], iqentry_state[heads[0]] == IQS_CMT} == 2'b11 && ~|panic);
     commit0_id <= {iqentry_mem[heads[0]], heads[0]};	// if a memory op, it has a DRAM-bus id
     commit0_tgt <= iqentry_tgt[heads[0]];
     commit0_we  <= iqentry_we[heads[0]];
     commit0_bus <= iqentry_res[heads[0]];
-`ifdef SUPPORT_PREDICATION
-		commit0_prfw <= iqentry_prfw[heads[0]];
-`endif
     if (`NUM_CMT > 1) begin
-	    commit1_v <= ({iqentry_v[heads[0]],  iqentry_store[heads[0]] ? iqentry_cmt[heads[0]] & iqentry_done[heads[0]] : iqentry_done[heads[0]]} != 2'b10
-	               && {iqentry_v[heads[1]],  iqentry_store[heads[1]] ? iqentry_cmt[heads[1]] & iqentry_done[heads[1]] : iqentry_done[heads[1]]} == 2'b11
+	    commit1_v <= ({iqentry_v[heads[0]],  iqentry_state[heads[0]] == IQS_CMT} != 2'b10
+	               && {iqentry_v[heads[1]],  iqentry_state[heads[1]] == IQS_CMT} == 2'b11
 	               && ~|panic);
 	    commit1_id <= {iqentry_mem[heads[1]], heads[1]};
 	    commit1_tgt <= iqentry_tgt[heads[1]];  
 	    commit1_we  <= iqentry_we[heads[1]];
 	    commit1_bus <= iqentry_res[heads[1]];
-`ifdef SUPPORT_PREDICATION
-			commit1_prfw <= iqentry_prfw[heads[1]];
-`endif
 	    // Need to set commit1, and commit2 valid bits for the branch predictor.
 	    if (`NUM_CMT > 2) begin
 	  	end
 	  	else begin
-	  		commit2_v <= ({iqentry_v[heads[0]], iqentry_store[heads[0]] ? iqentry_cmt[heads[0]] & iqentry_done[heads[0]] : iqentry_done[heads[0]]} != 2'b10
-	  							 && {iqentry_v[heads[1]], iqentry_store[heads[1]] ? iqentry_cmt[heads[1]] & iqentry_done[heads[1]] : iqentry_done[heads[1]]} != 2'b10
-	  							 && {iqentry_v[heads[2]], iqentry_br[heads[2]], iqentry_store[heads[2]] ? iqentry_cmt[heads[2]] & iqentry_done[heads[2]] : iqentry_done[heads[2]]}==3'b111
+	  		commit2_v <= ({iqentry_v[heads[0]], iqentry_state[heads[0]] == IQS_CMT} != 2'b10
+	  							 && {iqentry_v[heads[1]], iqentry_state[heads[1]] == IQS_CMT} != 2'b10
+	  							 && {iqentry_v[heads[2]], iqentry_br[heads[2]], iqentry_state[heads[2]] == IQS_CMT}==3'b111
 		               && iqentry_tgt[heads[2]][4:0]==5'd0 && ~|panic);	// watch out for dbnz and ibne
 	  		commit2_tgt <= 12'h000;
 	  		commit2_we <= 8'h00;
 	  	end
   	end
   	else begin
-  		commit1_v <= ({iqentry_v[heads[0]], iqentry_store[heads[0]] ? iqentry_cmt[heads[0]] & iqentry_done[heads[0]] : iqentry_done[heads[0]]} != 2'b10
-  							 && {iqentry_v[heads[1]], iqentry_store[heads[1]] ? iqentry_cmt[heads[1]] & iqentry_done[heads[1]] : iqentry_done[heads[1]]}==3'b111
-	               && iqentry_tgt[heads[1]][4:0]==5'd0 && ~|panic);	// watch out for dbnz and ibne
+  		commit1_v <= ({iqentry_v[heads[0]], iqentry_state[heads[0]] == IQS_CMT} != 2'b10
+  							 && {iqentry_v[heads[1]], iqentry_state[heads[1]] == IQS_CMT} == 2'b11
+	               && !iqentry_rfw[heads[1]] && ~|panic);	// watch out for dbnz and ibne
+    	commit1_id <= {iqentry_mem[heads[1]], heads[1]};	// if a memory op, it has a DRAM-bus id
   		commit1_tgt <= 12'h000;
   		commit1_we <= 8'h00;
-  		commit2_v <= ({iqentry_v[heads[0]], iqentry_store[heads[0]] ? iqentry_cmt[heads[0]] & iqentry_done[heads[0]] : iqentry_done[heads[0]]} != 2'b10
-  							 && {iqentry_v[heads[1]], iqentry_store[heads[1]] ? iqentry_cmt[heads[1]] & iqentry_done[heads[1]] : iqentry_done[heads[1]]} != 2'b10
-  							 && {iqentry_v[heads[2]], iqentry_br[heads[2]], iqentry_store[heads[2]] ? iqentry_cmt[heads[2]] & iqentry_done[heads[2]] : iqentry_done[heads[2]]}==3'b111
-	               && iqentry_tgt[heads[2]][4:0]==5'd0 && ~|panic);	// watch out for dbnz and ibne
+  		// We don't really need the bus value since nothing is being written.
+	    commit1_bus <= iqentry_res[heads[1]];
+  		commit2_v <= ({iqentry_v[heads[0]], iqentry_state[heads[0]] == IQS_CMT} != 2'b10
+  							 && {iqentry_v[heads[1]], iqentry_state[heads[1]] == IQS_CMT} != 2'b10
+  							 && {iqentry_v[heads[2]], iqentry_br[heads[2]], iqentry_state[heads[2]] == IQS_CMT}==3'b111
+	               && !iqentry_rfw[heads[2]] && ~|panic);	// watch out for dbnz and ibne
+    	commit2_id <= {iqentry_mem[heads[2]], heads[2]};	// if a memory op, it has a DRAM-bus id
   		commit2_tgt <= 12'h000;
   		commit2_we <= 8'h00;
+	    commit2_bus <= iqentry_res[heads[2]];
   	end
 end
     
@@ -6376,30 +6290,6 @@ begin
 	regIsValid[224] = `VAL;
 `endif
 end
-
-`ifdef SUPPORT_PREDICATION
-reg [15:0] pregIsValid;
-always @*
-begin
-	for (n = 0; n < 16; n = n + 1)
-	begin
-		pregIsValid[n] = prf_v[n];
-		if (branchmiss)
-			if (~plivetarget[n]) begin
-	   		pregIsValid[n] = `VAL;
-	   	end
-		if (commit0_v && n=={commit0_tgt[3:0]} && commi0_prfw)
-			pregIsValid[n] = pregIsValid[n] | ((prf_source[ {commit0_tgt[3:0]} ] == commit0_id)
-			|| (branchmiss && branchmiss_thrd == iqentry_thrd[commit0_id[`QBITS]] && iqentry_psource[ commit0_id[`QBITS] ]));
-		if (commit1_v && n=={commit1_tgt[3:0]} && commi1_prfw && `NUM_CMT > 1)
-			pregIsValid[n] = pregIsValid[n] | ((prf_source[ {commit1_tgt[3:0]} ] == commit1_id)
-			|| (branchmiss && branchmiss_thrd == iqentry_thrd[commit1_id[`QBITS]] && iqentry_psource[ commit1_id[`QBITS] ]));
-		if (commit2_v && n=={commit2_tgt[3:0]} && commit2_prfw && `NUM_CMT > 2)
-			pregIsValid[n] = pregIsValid[n] | ((prf_source[ {commit2_tgt[3:0]} ] == commit2_id)
-			|| (branchmiss && branchmiss_thrd == iqentry_thrd[commit2_id[`QBITS]] && iqentry_psource[ commit2_id[`QBITS] ]));
-	end
-end
-`endif
 
 // Wait until the cycle after Ra becomes valid to give time to read
 // the vector element from the register file.
@@ -6641,10 +6531,6 @@ if (rst) begin
        iqentry_v[n] <= `INV;
        iqentry_iv[n] <= `INV;
        iqentry_is[n] <= 3'b00;
-       iqentry_done[n] <= FALSE;
-       iqentry_cmt[n] <= FALSE;
-       iqentry_out[n] <= FALSE;
-       iqentry_agen[n] <= FALSE;
        iqentry_sn[n] <= 4'd0;
        iqentry_pt[n] <= FALSE;
        iqentry_bt[n] <= FALSE;
@@ -6840,6 +6726,7 @@ if (rst) begin
 		irq_ctr <= 40'd0;
 		cmt_timer <= 9'd0;
 		StoreAck1 <= `FALSE;
+		keys <= 64'h0;
 `ifdef SUPPORT_DBG
 		dbg_ctrl <= 64'h0;
 `endif
@@ -6953,95 +6840,27 @@ else begin
                 		rf_v[n] <= `VAL;
             	end
            end
-`ifdef SUPPORT_PREDICATION           
-        for (n = 1; n < 16; n = n + 1)
-           if (~plivetarget[n]) begin
-              prf_v[n] <= `VAL;
-           end
-`endif
 			for (n = 0; n < QENTRIES; n = n + 1)
 	    	if (|iqentry_latestID[n])
 	    		if (iqentry_thrd[n]==branchmiss_thrd) rf_source[ {iqentry_tgt[n][7:0]} ] <= { 1'b0, iqentry_mem[n], n[`QBITS] };
-`ifdef SUPPORT_PREDICATION	    		
-			for (n = 0; n < QENTRIES; n = n + 1)
-	    	if (|iqentry_platestID[n])
-	    		if (iqentry_thrd[n]==branchmiss_thrd) prf_source[ {iqentry_tgt[n][3:0]} ] <= { 1'b0, iqentry_mem[n], n[`QBITS] };
-`endif        
     end
 
     // The source for the register file data might have changed since it was
     // placed on the commit bus. So it's needed to check that the source is
     // still as expected to validate the register.
 		if (commit0_v) begin
-`ifdef SUPPORT_PREDICATION      
-      if (commit0_prfw) begin
-      	if (!prf_v[ {commit0_tgt[3:0]} ]) begin
-//         rf_v[ {commit0_tgt[7:0]} ] <= rf_source[ commit0_tgt[7:0] ] == commit0_id || (branchmiss && iqentry_source[ commit0_id[`QBITS] ]);
-        	prf_v[ {commit0_tgt[3:0]} ] <= pregIsValid[{commit0_tgt[3:0]}];//rf_source[ commit0_tgt[4:0] ] == commit0_id || (branchmiss && iqentry_source[ commit0_id[`QBITS] ]);
-        	if (pregIsValid[{commit0_tgt[3:0]}])
-         		prf_source[{commit0_tgt[3:0]}] <= {`QBIT{1'b1}};
-      	end
-    	end
-    	else begin
-	      if (!rf_v[ {commit0_tgt[7:0]} ]) begin
-//         rf_v[ {commit0_tgt[7:0]} ] <= rf_source[ commit0_tgt[7:0] ] == commit0_id || (branchmiss && iqentry_source[ commit0_id[`QBITS] ]);
-	        rf_v[ {commit0_tgt[7:0]} ] <= regIsValid[{commit0_tgt[7:0]}];//rf_source[ commit0_tgt[4:0] ] == commit0_id || (branchmiss && iqentry_source[ commit0_id[`QBITS] ]);
-	        if (regIsValid[{commit0_tgt[7:0]}])
-	         	rf_source[{commit0_tgt[7:0]}] <= {`QBIT{1'b1}};
-	      end
-    	end
-`else
       if (!rf_v[ {commit0_tgt[7:0]} ]) begin
 //         rf_v[ {commit0_tgt[7:0]} ] <= rf_source[ commit0_tgt[7:0] ] == commit0_id || (branchmiss && iqentry_source[ commit0_id[`QBITS] ]);
         rf_v[ {commit0_tgt[7:0]} ] <= regIsValid[{commit0_tgt[7:0]}];//rf_source[ commit0_tgt[4:0] ] == commit0_id || (branchmiss && iqentry_source[ commit0_id[`QBITS] ]);
         if (regIsValid[{commit0_tgt[7:0]}])
          	rf_source[{commit0_tgt[7:0]}] <= {`QBIT{1'b1}};
       end
-`endif
       if (commit0_tgt[5:0] != 6'd0) $display("r%d <- %h   v[%d]<-%d", commit0_tgt, commit0_bus, regIsValid[commit0_tgt[5:0]],
       rf_source[ {commit0_tgt[7:0]} ] == commit0_id || (branchmiss && iqentry_source[ commit0_id[`QBITS] ]));
       if (commit0_tgt[5:0]==6'd30 && commit0_bus==64'd0)
       	$display("FP <= 0");
     end
     if (commit1_v && `NUM_CMT > 1) begin
-`ifdef SUPPORT_PREDICATION
-      if (commit1_prfw) begin
-	      if (!prf_v[ {commit1_tgt[3:0]} ]) begin
-	      	if ({commit1_tgt[3:0]}=={commit0_tgt[3:0]}) begin
-	      		prf_v[ {commit1_tgt[3:0]} ] <= pregIsValid[{commit0_tgt[3:0]}] | pregIsValid[{commit1_tgt[3:0]}];
-	      		if (pregIsValid[{commit0_tgt[3:0]}] | pregIsValid[{commit1_tgt[3:0]}])
-	           	prf_source[{commit1_tgt[3:0]}] <= {`QBIT{1'b1}};
-	      		/*
-	      			(rf_source[ commit0_tgt[4:0] ] == commit0_id || (branchmiss && iqentry_source[ commit0_id[`QBITS] ])) || 
-	      			(rf_source[ commit1_tgt[4:0] ] == commit1_id || (branchmiss && iqentry_source[ commit1_id[`QBITS] ]));
-	      		*/
-	      	end
-	      	else begin
-						prf_v[ {commit1_tgt[3:0]} ] <= pregIsValid[{commit1_tgt[3:0]}];//rf_source[ commit1_tgt[4:0] ] == commit1_id || (branchmiss && iqentry_source[ commit1_id[`QBITS] ]);
-	          if (pregIsValid[{commit1_tgt[3:0]}])
-	           	prf_source[{commit1_tgt[3:0]}] <= {`QBIT{1'b1}};
-	        end
-	      end
-    	end
-    	else begin
-	      if (!rf_v[ {commit1_tgt[7:0]} ]) begin
-	      	if ({commit1_tgt[7:0]}=={commit0_tgt[7:0]}) begin
-	      		rf_v[ {commit1_tgt[7:0]} ] <= regIsValid[{commit0_tgt[7:0]}] | regIsValid[{commit1_tgt[7:0]}];
-	      		if (regIsValid[{commit0_tgt[7:0]}] | regIsValid[{commit1_tgt[7:0]}])
-	           	rf_source[{commit1_tgt[7:0]}] <= {`QBIT{1'b1}};
-	      		/*
-	      			(rf_source[ commit0_tgt[4:0] ] == commit0_id || (branchmiss && iqentry_source[ commit0_id[`QBITS] ])) || 
-	      			(rf_source[ commit1_tgt[4:0] ] == commit1_id || (branchmiss && iqentry_source[ commit1_id[`QBITS] ]));
-	      		*/
-	      	end
-	      	else begin
-						rf_v[ {commit1_tgt[7:0]} ] <= regIsValid[{commit1_tgt[7:0]}];//rf_source[ commit1_tgt[4:0] ] == commit1_id || (branchmiss && iqentry_source[ commit1_id[`QBITS] ]);
-	          if (regIsValid[{commit1_tgt[7:0]}])
-	           	rf_source[{commit1_tgt[7:0]}] <= {`QBIT{1'b1}};
-	        end
-	      end
-    	end
-`else
       if (!rf_v[ {commit1_tgt[7:0]} ]) begin
       	if ({commit1_tgt[7:0]}=={commit0_tgt[7:0]}) begin
       		rf_v[ {commit1_tgt[7:0]} ] <= regIsValid[{commit0_tgt[7:0]}] | regIsValid[{commit1_tgt[7:0]}];
@@ -7058,7 +6877,6 @@ else begin
            	rf_source[{commit1_tgt[7:0]}] <= {`QBIT{1'b1}};
         end
       end
-`endif	      
       if (commit1_tgt[5:0] != 6'd0) $display("r%d <- %h   v[%d]<-%d", commit1_tgt, commit1_bus, regIsValid[commit1_tgt[5:0]],
       rf_source[ {commit1_tgt[7:0]} ] == commit1_id || (branchmiss && iqentry_source[ commit1_id[`QBITS] ]));
       if (commit1_tgt[5:0]==6'd30 && commit1_bus==64'd0)
@@ -7229,11 +7047,6 @@ else begin
 
 								// SOURCE 3 ...
 								a3_vs();
-`ifdef SUPPORT_PREDICATION
-								p_vs();
-								
-								aT_vs();
-`endif								
 
 								// if the two instructions enqueued target the same register, 
 								// make sure only the second writes to rf_v and rf_source.
@@ -7248,16 +7061,6 @@ else begin
 								     rf_source[ Rt1s ] <= { 1'b0,fetchbuf1_mem, tail1 };
 								     rf_v [ Rt1s ] <= `INV;
 							    end
-`ifdef SUPPORT_PREDICATION							    
-							    if (fetchbuf0_prfw) begin
-								     prf_source[ Rt0s[3:0] ] <= { 1'b0,fetchbuf0_mem, tail0 };
-								     prf_v [ Rt0s[3:0]] <= `INV;
-							    end
-							    if (fetchbuf1_prfw) begin
-								     prf_source[ Rt1s[3:0] ] <= { 1'b0,fetchbuf1_mem, tail1 };
-								     prf_v [ Rt1s[3:0] ] <= `INV;
-							    end
-`endif							    
 					    	end
 					    	// If there was a vector instruction in fetchbuf0, we really
 					    	// want to queue the next vector element, not the next
@@ -7288,13 +7091,6 @@ else begin
 						     iqentry_a3_v [tail1] <= regIsValid[Rc0s];
 						     iqentry_a3_s [tail1] <= rf_source[ Rc0s ];
 						     
-`ifdef SUPPORT_PREDICATION
-						     iqentry_p_v [tail1] <= pregIsValid[Pn0];
-						     iqentry_p_s [tail1] <= prf_source [Pn0];
-
-									iqentry_aT_v [tail1] <= regIsValid[Rt0s];
-						      iqentry_aT_s [tail1] <= rf_source[ Rt0s ];
-`endif						     
 
 									// if the two instructions enqueued target the same register, 
 									// make sure only the second writes to rf_v and rf_source.
@@ -7305,12 +7101,6 @@ else begin
 									     rf_source[ Rt0s ] <= { 1'b0, fetchbuf0_mem, tail1 };
 									     rf_v [ Rt0s ] <= `INV;
 								    end
-`ifdef SUPPORT_PREDICATION								    
-								    if (fetchbuf0_prfw) begin
-									     prf_source[ Rt0s[3:0] ] <= { 1'b0, fetchbuf0_mem, tail1 };
-									     prf_v [ Rt0s[3:0] ] <= `INV;
-								    end
-`endif								    
 								end
 				        	end
 				            else if (IsVector(fetchbuf1_instr) && SUP_VECTOR) begin
@@ -7340,12 +7130,6 @@ else begin
 								// SOURCE 3 ...
 								a3_vs();
 								
-`ifdef SUPPORT_PREDICATION								
-								p_vs();
-
-								// Target ...
-								aT_vs();
-`endif
 								// if the two instructions enqueued target the same register, 
 								// make sure only the second writes to rf_v and rf_source.
 								// first is allowed to update rf_v and rf_source only if the
@@ -7359,16 +7143,6 @@ else begin
 								     rf_source[ Rt1s ] <= { 1'b0,fetchbuf1_mem, tail1 };
 								     rf_v [ Rt1s ] <= `INV;
 							    end
-`ifdef SUPPORT_PREDICATION							    
-							    if (fetchbuf0_prfw) begin
-								     prf_source[ Rt0s[3:0] ] <= { 1'b0,fetchbuf0_mem, tail0 };
-								     prf_v [ Rt0s[3:0]] <= `INV;
-							    end
-							    if (fetchbuf1_prfw) begin
-								     prf_source[ Rt1s[3:0] ] <= { 1'b0,fetchbuf1_mem, tail1 };
-								     prf_v [ Rt1s[3:0] ] <= `INV;
-							    end
-`endif							    
 				            end
 				            else begin
 //					      		enque1(tail1, seq_num + 5'd1, 6'd0);
@@ -7387,12 +7161,6 @@ else begin
 								// SOURCE 3 ...
 								a3_vs();
 
-`ifdef SUPPORT_PREDICATION								
-								p_vs();
-
-								// Target ...
-								aT_vs();
-`endif								
 
 								// if the two instructions enqueued target the same register, 
 								// make sure only the second writes to regIsValid and rf_source.
@@ -7413,18 +7181,6 @@ else begin
 							    end
 							    else
 							    	$display("No rfw");
-`ifdef SUPPORT_PREDICATION							    	
-							    if (fetchbuf0_prfw) begin
-								     prf_source[ Rt0s[3:0] ] <= { 1'b0,fetchbuf0_mem, tail0 };
-								     prf_v [ Rt0s[3:0]] <= `INV;
-								     $display("preg%dx (%d) Invalidated", Rt0s[3:0], Rt0s[3:0]);
-							    end
-							    if (fetchbuf1_prfw) begin
-								     prf_source[ Rt1s[3:0] ] <= { 1'b0,fetchbuf1_mem, tail1 };
-								     $display("preg%dx (%d) Invalidated", Rt1s[3:0], Rt1s[3:0]);
-								     prf_v [ Rt1s[3:0] ] <= `INV;
-							    end
-`endif							    
 							end
 
 					    end	// ends the "if IQ[tail1] is available" clause
@@ -7434,13 +7190,6 @@ else begin
 							     rf_source[ Rt0s ] <= {1'b0,fetchbuf0_mem, tail0};
 							     rf_v [ Rt0s ] <= `INV;
 							end
-`ifdef SUPPORT_PREDICATION							
-							if (fetchbuf0_prfw) begin
-							     $display("r%dx (%d) Invalidated 1", Rt0s, Rt0s[4:0]);
-							     prf_source[ Rt0s[3:0] ] <= {1'b0,fetchbuf0_mem, tail0};
-							     prf_v [ Rt0s[3:0] ] <= `INV;
-							end
-`endif							
 						end
 				    end
 
@@ -7466,12 +7215,12 @@ else begin
 //
 if (IsMul(alu0_instr)|IsDivmod(alu0_instr)|alu0_shft|alu0_tlb) begin
 	if (alu0_done_pe) begin
-		alu0_dataready <= `TRUE;
+		alu0_dataready <= TRUE;
 	end
 end
 if (alu1_shft) begin
 	if (alu1_done_pe) begin
-		alu1_dataready <= `TRUE;
+		alu1_dataready <= TRUE;
 	end
 end
 
@@ -7479,24 +7228,23 @@ if (alu0_v) begin
 	iqentry_tgt [ alu0_id[`QBITS] ] <= alu0_tgt;
 	iqentry_res	[ alu0_id[`QBITS] ] <= ralu0_bus;
 	iqentry_exc	[ alu0_id[`QBITS] ] <= alu0_exc;
-	iqentry_done[ alu0_id[`QBITS] ] <= (!iqentry_mem[ alu0_id[`QBITS] ] && alu0_done) || !alu0_cmt;
-	iqentry_cmt [ alu0_id[`QBITS] ] <= alu0_done && alu0_cmt;
-	iqentry_out	[ alu0_id[`QBITS] ] <= `INV;
-	iqentry_agen[ alu0_id[`QBITS] ] <= `VAL;//!iqentry_fc[alu0_id[`QBITS]];  // RET
+	if (!iqentry_mem[ alu0_id[`QBITS] ] && alu0_done) begin
+//		iqentry_done[ alu0_id[`QBITS] ] <= `TRUE;
+		iqentry_state[alu0_id[`QBITS]] <= IQS_CMT;
+	end
+//	if (alu0_done)
+//		iqentry_cmt [ alu0_id[`QBITS] ] <= `TRUE;
+//	iqentry_out	[ alu0_id[`QBITS] ] <= `INV;
+//	iqentry_agen[ alu0_id[`QBITS] ] <= `VAL;//!iqentry_fc[alu0_id[`QBITS]];  // RET
+	if (iqentry_mem[alu0_id[`QBITS]])
+		iqentry_state[alu0_id[`QBITS]] <= IQS_AGEN;
 	if (iqentry_mem[ alu0_id[`QBITS] ] && !iqentry_agen[ alu0_id[`QBITS] ]) begin
 		iqentry_ma[ alu0_id[`QBITS] ] <= alu0_bus;
 	end
-`ifdef SUPPORT_PREDICATION
-	// Commit head advance logic wants to see a cmt for a store. If the instruction doesn't
-	// pass predicate logic indicate not a store so the commit head logic doesn't hang.
-	if (!alu0_cmt & iqentry_store[alu0_id[`QBITS]]) begin
-		iqentry_done[alu0_id[`QBITS]] <= `VAL;
-		iqentry_store[alu0_id[`QBITS]] <= `INV;
-	end
-`endif
 	if (|alu0_exc) begin
-		iqentry_done[alu0_id[`QBITS]] <= `VAL;
+//		iqentry_done[alu0_id[`QBITS]] <= `VAL;
 		iqentry_store[alu0_id[`QBITS]] <= `INV;
+		iqentry_state[alu0_id[`QBITS]] <= IQS_CMT;
 	end
 	alu0_dataready <= FALSE;
 end
@@ -7505,22 +7253,24 @@ if (alu1_v && `NUM_ALU > 1) begin
 	iqentry_tgt [ alu1_id[`QBITS] ] <= alu1_tgt;
 	iqentry_res	[ alu1_id[`QBITS] ] <= ralu1_bus;
 	iqentry_exc	[ alu1_id[`QBITS] ] <= alu1_exc;
-	iqentry_done[ alu1_id[`QBITS] ] <= (!iqentry_mem[ alu1_id[`QBITS] ] && alu1_done) || !alu1_cmt;
-	iqentry_cmt [ alu1_id[`QBITS] ] <= alu1_done && alu1_cmt;
-	iqentry_out	[ alu1_id[`QBITS] ] <= `INV;
-	iqentry_agen[ alu1_id[`QBITS] ] <= `VAL;//!iqentry_fc[alu0_id[`QBITS]];  // RET
+	if (!iqentry_mem[ alu1_id[`QBITS] ] && alu1_done) begin
+//		iqentry_done[ alu1_id[`QBITS] ] <= `TRUE;
+		iqentry_state[alu1_id[`QBITS]] <= IQS_CMT;
+	end
+//	iqentry_done[ alu1_id[`QBITS] ] <= (!iqentry_mem[ alu1_id[`QBITS] ] && alu1_done);
+//	if (alu1_done)
+//		iqentry_cmt [ alu1_id[`QBITS] ] <= `TRUE;
+//	iqentry_out	[ alu1_id[`QBITS] ] <= `INV;
+	if (iqentry_mem[alu1_id[`QBITS]])
+		iqentry_state[alu1_id[`QBITS]] <= IQS_AGEN;
+//	iqentry_agen[ alu1_id[`QBITS] ] <= `VAL;//!iqentry_fc[alu0_id[`QBITS]];  // RET
 	if (iqentry_mem[ alu1_id[`QBITS] ] && !iqentry_agen[ alu1_id[`QBITS] ]) begin
 		iqentry_ma[ alu1_id[`QBITS] ] <= alu1_bus;
 	end
-`ifdef SUPPORT_PREDICATION
-	if (!alu1_cmt & iqentry_store[alu1_id[`QBITS]]) begin
-		iqentry_done[alu1_id[`QBITS]] <= `VAL;
-		iqentry_store[alu1_id[`QBITS]] <= `INV;
-	end
-`endif
 	if (|alu1_exc) begin
-		iqentry_done[alu1_id[`QBITS]] <= `VAL;
+//		iqentry_done[alu1_id[`QBITS]] <= `VAL;
 		iqentry_store[alu1_id[`QBITS]] <= `INV;
+		iqentry_state[alu1_id[`QBITS]] <= IQS_CMT;
 	end
 	alu1_dataready <= FALSE;
 end
@@ -7529,9 +7279,9 @@ if (fpu1_v && `NUM_FPU > 0) begin
 	iqentry_res [ fpu1_id[`QBITS] ] <= rfpu1_bus;
 	iqentry_ares[ fpu1_id[`QBITS] ] <= fpu1_status;
 	iqentry_exc [ fpu1_id[`QBITS] ] <= fpu1_exc;
-	iqentry_done[ fpu1_id[`QBITS] ] <= fpu1_done || !fpu1_cmt;
-	iqentry_cmt	[ fpu1_id[`QBITS] ] <= fpu1_done && fpu1_cmt;
-	iqentry_out [ fpu1_id[`QBITS] ] <= `INV;
+//	iqentry_done[ fpu1_id[`QBITS] ] <= fpu1_done;
+//	iqentry_out [ fpu1_id[`QBITS] ] <= `INV;
+	iqentry_state[fpu1_id[`QBITS]] <= IQS_CMT;
 	fpu1_dataready <= FALSE;
 end
 
@@ -7539,9 +7289,9 @@ if (fpu2_v && `NUM_FPU > 1) begin
 	iqentry_res [ fpu2_id[`QBITS] ] <= rfpu2_bus;
 	iqentry_ares[ fpu2_id[`QBITS] ] <= fpu2_status;
 	iqentry_exc [ fpu2_id[`QBITS] ] <= fpu2_exc;
-	iqentry_done[ fpu2_id[`QBITS] ] <= fpu2_done || !fpu2_cmt;
-	iqentry_cmt [ fpu2_id[`QBITS] ] <= fpu2_done && fpu2_cmt;
-	iqentry_out [ fpu2_id[`QBITS] ] <= `INV;
+//	iqentry_done[ fpu2_id[`QBITS] ] <= fpu2_done;
+//	iqentry_out [ fpu2_id[`QBITS] ] <= `INV;
+	iqentry_state[fpu2_id[`QBITS]] <= IQS_CMT;
 	//iqentry_agen[ fpu_id[`QBITS] ] <= `VAL;  // RET
 	fpu2_dataready <= FALSE;
 end
@@ -7556,9 +7306,9 @@ if (fcu_v) begin
 	iqentry_ma  [ fcu_id[`QBITS] ] <= fcu_misspc;
   iqentry_res [ fcu_id[`QBITS] ] <= rfcu_bus;
   iqentry_exc [ fcu_id[`QBITS] ] <= fcu_exc;
-	iqentry_done[ fcu_id[`QBITS] ] <= `TRUE;
-	iqentry_cmt [ fcu_id[`QBITS] ] <= fcu_cmt;
-	iqentry_out [ fcu_id[`QBITS] ] <= `INV;
+//	iqentry_done[ fcu_id[`QBITS] ] <= `TRUE;
+//	iqentry_out [ fcu_id[`QBITS] ] <= `INV;
+	iqentry_state[fcu_id[`QBITS] ] <= IQS_CMT;
 	// takb is looked at only for branches to update the predictor. Here it is
 	// unconditionally set, the value will be ignored if it's not a branch.
 	iqentry_takb[ fcu_id[`QBITS] ] <= fcu_takb;
@@ -7569,25 +7319,25 @@ end
 if (mem1_available && dramA_v && iqentry_v[ dramA_id[`QBITS] ]) begin
 	iqentry_res	[ dramA_id[`QBITS] ] <= rdramA_bus;
 	iqentry_exc	[ dramA_id[`QBITS] ] <= dramA_exc;
-	iqentry_done[ dramA_id[`QBITS] ] <= `VAL;
-	iqentry_out [ dramA_id[`QBITS] ] <= `INV;
-	iqentry_cmt [ dramA_id[`QBITS] ] <= `VAL;
+//	iqentry_done[ dramA_id[`QBITS] ] <= `VAL;
+//	iqentry_out [ dramA_id[`QBITS] ] <= `INV;
+	iqentry_state[dramA_id[`QBITS] ] <= IQS_CMT;
 	iqentry_aq  [ dramA_id[`QBITS] ] <= `INV;
 end
 if (mem2_available && `NUM_MEM > 1 && dramB_v && iqentry_v[ dramB_id[`QBITS] ]) begin
 	iqentry_res	[ dramB_id[`QBITS] ] <= rdramB_bus;
 	iqentry_exc	[ dramB_id[`QBITS] ] <= dramB_exc;
-	iqentry_done[ dramB_id[`QBITS] ] <= `VAL;
-	iqentry_out [ dramB_id[`QBITS] ] <= `INV;
-	iqentry_cmt [ dramB_id[`QBITS] ] <= `VAL;
+//	iqentry_done[ dramB_id[`QBITS] ] <= `VAL;
+	iqentry_state[dramB_id[`QBITS] ] <= IQS_CMT;
+//	iqentry_out [ dramB_id[`QBITS] ] <= `INV;
 	iqentry_aq  [ dramB_id[`QBITS] ] <= `INV;
 end
 if (mem3_available && `NUM_MEM > 2 && dramC_v && iqentry_v[ dramC_id[`QBITS] ]) begin
 	iqentry_res	[ dramC_id[`QBITS] ] <= rdramC_bus;
 	iqentry_exc	[ dramC_id[`QBITS] ] <= dramC_exc;
-	iqentry_done[ dramC_id[`QBITS] ] <= `VAL;
-	iqentry_out [ dramC_id[`QBITS] ] <= `INV;
-	iqentry_cmt [ dramC_id[`QBITS] ] <= `VAL;
+//	iqentry_done[ dramC_id[`QBITS] ] <= `VAL;
+	iqentry_state[dramC_id[`QBITS] ] <= IQS_CMT;
+//	iqentry_out [ dramC_id[`QBITS] ] <= `INV;
 	iqentry_aq  [ dramC_id[`QBITS] ] <= `INV;
 //	    if (iqentry_lptr[dram2_id[`QBITS]])
 //	    	wbrcd[pcr[5:0]] <= 1'b1;
@@ -7641,32 +7391,6 @@ begin
 `endif
 end
 
-`ifdef SUPPORT_PREDICATION
-for (n = 0; n < QENTRIES; n = n + 1)
-begin
-	if (iqentry_p_v[n] == `INV && iqentry_p_s[n]==alu0_id && iqentry_v[n] == `VAL && alu0_v == `VAL) begin
-		iqentry_pred[n] <= alu0nyb[iqentry_preg[n]];
-		iqentry_p_v[n] <= `VAL;
-	end
-	if (iqentry_p_v[n] == `INV && iqentry_p_s[n] == alu1_id && iqentry_v[n] == `VAL && alu1_v == `VAL) begin
-		iqentry_pred[n] <= alu1nyb[iqentry_preg[n]];
-		iqentry_p_v[n] <= `VAL;
-	end
-    // For SWCR
-//	if (iqentry_p_v[n] == `INV && iqentry_p_s[n]==dram_id && iqentry_v[n] == `VAL && dram_v == `VAL) begin
-//		iqentry_pred[n] <= dram_bus[3:0];
-//		iqentry_p_v[n] <= `VAL;
-//	end
-	if (iqentry_p_v[n] == `INV && iqentry_p_s[n]==commit0_id && iqentry_v[n] == `VAL && commit0_v == `VAL) begin
-		iqentry_pred[n] <= cmt0nyb[iqentry_preg[n]];
-		iqentry_p_v[n] <= `VAL;
-	end
-	if (iqentry_p_v[n] == `INV && iqentry_p_s[n] == commit1_id && iqentry_v[n] == `VAL && commit1_v == `VAL) begin
-		iqentry_pred[n] <= cmt1nyb[iqentry_preg[n]];
-		iqentry_p_v[n] <= `VAL;
-	end
-end
-`endif
 
 //
 // ISSUE 
@@ -7746,7 +7470,7 @@ end
     for (n = 0; n < QENTRIES; n = n + 1)
         if (iqentry_alu0_issue[n] && !(iqentry_v[n] && iqentry_stomp[n])) begin
             if (alu0_available & alu0_done) begin
-                 alu0_sourceid	<= n[3:0];
+                 alu0_sourceid	<= {iqentry_push[n],n[`QBITS]};
                  alu0_instr	<= iqentry_rtop[n] ? (
 `ifdef FU_BYPASS                 									
                  									iqentry_a3_v[n] ? iqentry_a3[n]
@@ -7794,21 +7518,6 @@ end
 `else
 															iqentry_a3[n];                            
 `endif                            
-`ifdef SUPPORT_PREDICATION
-					 			 alu0_pred   <= iqentry_p_v[n] ? iqentry_pred[n] :
-`ifdef FU_BYPASS					 			 
-																	(iqentry_p_s[n] == alu0_id) ? alu0nyb[iqentry_preg[n]] :
-																	(iqentry_p_s[n] == alu1_id) ? alu1nyb[iqentry_preg[n]] :
-`endif																	
-																	 4'h0;
-                 alu0_argT	<=
-`ifdef FU_BYPASS                  
-                 							iqentry_aT_v[n] ? iqentry_aT[n]
-                            : (iqentry_aT_s[n] == alu0_id) ? ralu0_bus : ralu1_bus;
-`else
-															iqentry_aT[n];
-`endif                    
-`endif        
                  alu0_argI	<= iqentry_a0[n];
                  alu0_tgt    <= IsVeins(iqentry_instr[n]) ?
                                 {6'h0,1'b1,iqentry_tgt[n][4:0]} | ((
@@ -7821,7 +7530,7 @@ end
                  alu0_thrd   <= iqentry_thrd[n];
                  alu0_dataready <= IsSingleCycle(iqentry_instr[n]);
                  alu0_ld <= TRUE;
-                 iqentry_out[n] <= `VAL;
+                 iqentry_state[n] <= IQS_OUT;
             end
         end
 	if (`NUM_ALU > 1) begin
@@ -7830,7 +7539,7 @@ end
             if (alu1_available && alu1_done) begin
             		if (iqentry_alu0[n])
             			panic <= `PANIC_ALU0ONLY;
-                 alu1_sourceid	<= n[3:0];
+                 alu1_sourceid	<= {iqentry_push[n],n[`QBITS]};
                  alu1_instr	<= iqentry_instr[n];
                  alu1_sz    <= iqentry_sz[n];
                  alu1_mem   <= iqentry_mem[n];
@@ -7867,21 +7576,6 @@ end
 `else                            
 															iqentry_a3[n];
 `endif                            
-`ifdef SUPPORT_PREDICATION
-					 			 alu1_pred   <= iqentry_p_v[n] ? iqentry_pred[n] :
-`ifdef FU_BYPASS					 			 
-																	(iqentry_p_s[n] == alu0_id) ? alu0nyb[iqentry_preg[n]] :
-																	(iqentry_p_s[n] == alu1_id) ? alu1nyb[iqentry_preg[n]] :
-`endif																	
-																	 4'h0;
-                 alu1_argT	<=
-`ifdef FU_BYPASS                  
-                 							iqentry_aT_v[n] ? iqentry_aT[n]
-                            : (iqentry_aT_s[n] == alu0_id) ? ralu0_bus : ralu1_bus;
-`else
-															iqentry_aT[n];
-`endif                            
-`endif
                  alu1_argI	<= iqentry_a0[n];
                  alu1_tgt    <= IsVeins(iqentry_instr[n]) ?
                                 {6'h0,1'b1,iqentry_tgt[n][4:0]} | ((iqentry_a2_v[n] ? iqentry_a2[n][5:0]
@@ -7892,7 +7586,7 @@ end
                  alu1_ven    <= iqentry_ven[n];
                  alu1_dataready <= IsSingleCycle(iqentry_instr[n]);
                  alu1_ld <= TRUE;
-                 iqentry_out[n] <= `VAL;
+                 iqentry_state[n] <= IQS_OUT;
             end
         end
   end
@@ -7900,7 +7594,7 @@ end
     for (n = 0; n < QENTRIES; n = n + 1)
         if (iqentry_fpu1_issue[n] && !(iqentry_v[n] && iqentry_stomp[n])) begin
             if (fpu1_available & fpu1_done) begin
-                 fpu1_sourceid	<= n[3:0];
+                 fpu1_sourceid	<= n[`QBITS];
                  fpu1_instr	<= iqentry_instr[n];
                  fpu1_pc		<= iqentry_pc[n];
                  fpu1_argA	<=
@@ -7948,14 +7642,14 @@ end
                  fpu1_argI	<= iqentry_a0[n];
                  fpu1_dataready <= `VAL;
                  fpu1_ld <= TRUE;
-                 iqentry_out[n] <= `VAL;
+                 iqentry_state[n] <= IQS_OUT;
             end
         end
 
     for (n = 0; n < QENTRIES; n = n + 1)
         if (`NUM_FPU > 1 && iqentry_fpu2_issue[n] && !(iqentry_v[n] && iqentry_stomp[n])) begin
             if (fpu2_available & fpu2_done) begin
-                 fpu2_sourceid	<= n[3:0];
+                 fpu2_sourceid	<= n[`QBITS];
                  fpu2_instr	<= iqentry_instr[n];
                  fpu2_pc		<= iqentry_pc[n];
                  fpu2_argA	<=
@@ -8003,14 +7697,14 @@ end
                  fpu2_argI	<= iqentry_a0[n];
                  fpu2_dataready <= `VAL;
                  fpu2_ld <= TRUE;
-                 iqentry_out[n] <= `VAL;
+                 iqentry_state[n] <= IQS_OUT;
             end
         end
 
     for (n = 0; n < QENTRIES; n = n + 1)
         if (iqentry_fcu_issue[n] && !(iqentry_v[n] && iqentry_stomp[n])) begin
             if (fcu_done) begin
-                 fcu_sourceid	<= n[3:0];
+                 fcu_sourceid	<= n[`QBITS];
                  fcu_prevInstr <= fcu_instr;
                  fcu_instr	<= iqentry_instr[n];
                  fcu_insln  <= iqentry_insln[n];
@@ -8067,7 +7761,7 @@ end
                  fcu_clearbm <= `FALSE;
                  fcu_ld <= TRUE;
                  fcu_timeout <= 8'h00;
-                 iqentry_out[n] <= `VAL;
+                 iqentry_state[n] <= IQS_OUT;
                  fcu_done <= `FALSE;
             end
         end
@@ -8146,10 +7840,10 @@ for (n = 0; n < QENTRIES; n = n + 1)
 		iqentry_mem[n] <= `INV;
 		iqentry_load[n] <= `INV;
 		iqentry_store[n] <= `INV;
-		iqentry_agen[n] <= `INV;
-		iqentry_out[n] <= `INV;
-		iqentry_done[n] <= `INV;
-		iqentry_cmt[n] <= `INV;
+//		iqentry_agen[n] <= `INV;
+//		iqentry_out[n] <= `INV;
+//		iqentry_done[n] <= `INV;
+//		iqentry_cmt[n] <= `INV;
 		if (dram0_id[`QBITS] == n[`QBITS])  begin
 			if (dram0==`DRAMSLOT_HASBUS)
 				wb_nack();
@@ -8184,11 +7878,11 @@ if (last_issue2 < QENTRIES)
 	tDram2Issue(last_issue2);
 
 
-for (n = 0; n < QENTRIES; n = n + 1)
-begin
-	if (!iqentry_v[n])
-		iqentry_done[n] <= FALSE;
-end
+//for (n = 0; n < QENTRIES; n = n + 1)
+//begin
+//	if (!iqentry_v[n])
+//		iqentry_done[n] <= FALSE;
+//end
       
 if (ohead[0]==heads[0])
 	cmt_timer <= cmt_timer + 12'd1;
@@ -8196,8 +7890,8 @@ else
 	cmt_timer <= 12'd0;
 
 if (cmt_timer==12'd1000) begin
-	iqentry_cmt[heads[0]] <= `VAL;
-	iqentry_done[heads[0]] <= `VAL;
+	iqentry_state[heads[0]] <= IQS_CMT;
+//	iqentry_done[heads[0]] <= `VAL;
 	iqentry_exc[heads[0]] <= `FLT_CMT;
 	cmt_timer <= 12'd0;
 end
@@ -8226,11 +7920,11 @@ if (`NUM_CMT > 2)
 //
 if (~|panic)
   casez ({ iqentry_v[heads[0]],
-		iqentry_store[heads[0]] ? iqentry_done[heads[0]] & iqentry_cmt[heads[0]] : iqentry_done[heads[0]],
+		iqentry_state[heads[0]] == IQS_CMT,
 		iqentry_v[heads[1]],
-		iqentry_store[heads[1]] ? iqentry_done[heads[1]] & iqentry_cmt[heads[1]] : iqentry_done[heads[1]],
+		iqentry_state[heads[1]] == IQS_CMT,
 		iqentry_v[heads[2]],
-		iqentry_store[heads[2]] ? iqentry_done[heads[2]] & iqentry_cmt[heads[2]] : iqentry_done[heads[2]]})
+		iqentry_state[heads[2]] == IQS_CMT})
 
 	// retire 3
 	6'b0?_0?_0?:
@@ -8316,12 +8010,12 @@ if (~|panic)
 			head_inc(1);
 	default:
 		begin
-			$display("head_inc: Uncoded case %b",{ iqentry_v[heads[0]],
-				iqentry_cmt[heads[0]],
+			$display("head_inc: Uncoded case %h",{ iqentry_v[heads[0]],
+				iqentry_state[heads[0]],
 				iqentry_v[heads[1]],
-				iqentry_cmt[heads[1]],
+				iqentry_state[heads[1]],
 				iqentry_v[heads[2]],
-				iqentry_cmt[heads[2]]});
+				iqentry_state[heads[2]]});
 			$stop;
 		end
   endcase
@@ -8535,18 +8229,21 @@ endcase
 `ifndef HAS_WB
 if (mem1_available && dram0 == `DRAMSLOT_BUSY && dram0_store) begin
 	if ((alu0_v && (dram0_id[`QBITS] == alu0_id[`QBITS])) || (alu1_v && (dram0_id[`QBITS] == alu1_id[`QBITS])))	 panic <= `PANIC_MEMORYRACE;
-	iqentry_done[ dram0_id[`QBITS] ] <= `VAL;
-	iqentry_out[ dram0_id[`QBITS] ] <= `INV;
+//	iqentry_done[ dram0_id[`QBITS] ] <= `VAL;
+//	iqentry_out[ dram0_id[`QBITS] ] <= `INV;
+	iqentry_state[ dram0_id[`QBITS] ] <= IQS_DONE;
 end
 if (mem2_available && `NUM_MEM > 1 && dram1 == `DRAMSLOT_BUSY && dram1_store) begin
 	if ((alu0_v && (dram1_id[`QBITS] == alu0_id[`QBITS])) || (alu1_v && (dram1_id[`QBITS] == alu1_id[`QBITS])))	 panic <= `PANIC_MEMORYRACE;
-	iqentry_done[ dram1_id[`QBITS] ] <= `VAL;
-	iqentry_out[ dram1_id[`QBITS] ] <= `INV;
+//	iqentry_done[ dram1_id[`QBITS] ] <= `VAL;
+//	iqentry_out[ dram1_id[`QBITS] ] <= `INV;
+	iqentry_state[ dram1_id[`QBITS] ] <= IQS_DONE;
 end
 if (mem3_available && `NUM_MEM > 2 && dram2 == `DRAMSLOT_BUSY && dram2_store) begin
 	if ((alu0_v && (dram2_id[`QBITS] == alu0_id[`QBITS])) || (alu1_v && (dram2_id[`QBITS] == alu1_id[`QBITS])))	 panic <= `PANIC_MEMORYRACE;
-	iqentry_done[ dram2_id[`QBITS] ] <= `VAL;
-	iqentry_out[ dram2_id[`QBITS] ] <= `INV;
+//	iqentry_done[ dram2_id[`QBITS] ] <= `VAL;
+//	iqentry_out[ dram2_id[`QBITS] ] <= `INV;
+	iqentry_state[ dram2_id[`QBITS] ] <= IQS_DONE;
 end
 `endif
 
@@ -8563,8 +8260,9 @@ end
 				dram0_addr,
 				fnDato(dram0_instr,dram0_data)
 			);
-			iqentry_done[ dram0_id[`QBITS] ] <= `VAL;
-			iqentry_out[ dram0_id[`QBITS] ] <= `INV;
+//			iqentry_done[ dram0_id[`QBITS] ] <= `VAL;
+//			iqentry_out[ dram0_id[`QBITS] ] <= `INV;
+			iqentry_state[ dram0_id[`QBITS] ] <= IQS_DONE;
 		end
   end
   else if (mem2_available && dram1==`DRAMSLOT_BUSY && dram1_store && !iqentry_stomp[dram1_id[`QBITS]] && `NUM_MEM > 1) begin
@@ -8579,8 +8277,9 @@ end
 				dram1_addr,
 				fnDato(dram1_instr,dram1_data)
 			);
-			iqentry_done[ dram1_id[`QBITS] ] <= `VAL;
-			iqentry_out[ dram1_id[`QBITS] ] <= `INV;
+//			iqentry_done[ dram1_id[`QBITS] ] <= `VAL;
+//			iqentry_out[ dram1_id[`QBITS] ] <= `INV;
+			iqentry_state[ dram1_id[`QBITS] ] <= IQS_DONE;
 		end
   end
   else if (mem3_available && dram2==`DRAMSLOT_BUSY && dram2_store && !iqentry_stomp[dram2_id[`QBITS]] && `NUM_MEM > 2) begin
@@ -8595,8 +8294,9 @@ end
 				dram2_addr,
 				fnDato(dram2_instr,dram2_data)
 			);
-			iqentry_done[ dram2_id[`QBITS] ] <= `VAL;
-			iqentry_out[ dram2_id[`QBITS] ] <= `INV;
+//			iqentry_done[ dram2_id[`QBITS] ] <= `VAL;
+//			iqentry_out[ dram2_id[`QBITS] ] <= `INV;
+			iqentry_state[ dram2_id[`QBITS] ] <= IQS_DONE;
 		end
   end
 `endif
@@ -8982,8 +8682,7 @@ B_StoreAck:
         	wb_v <= 1'b0;			// Invalidate write buffer if there is a problem with the store
         	wb_en <= `FALSE;	// and disable write buffer
         end
-				iqentry_cmt[n] <= `VAL;
-				iqentry_done[n] <= `VAL;	// this flag should already be set.
+        iqentry_state[n] <= IQS_CMT;
 				iqentry_aq[n] <= `INV;
 			end
 		end
@@ -8992,21 +8691,21 @@ B_StoreAck:
     2'd0:   begin
              	dram0 <= `DRAMSLOT_AVAIL;
              	iqentry_exc[dram0_id[`QBITS]] <= (wrv_i|err_i) ? `FLT_DWF : `FLT_NONE;
-							iqentry_cmt[ dram0_id[`QBITS] ] <= `VAL;
+			        iqentry_state[dram0_id[`QBITS]] <= IQS_CMT;
 							iqentry_aq[ dram0_id[`QBITS] ] <= `INV;
      		//iqentry_out[ dram0_id[`QBITS] ] <= `INV;
             end
     2'd1:   if (`NUM_MEM > 1) begin
              	dram1 <= `DRAMSLOT_AVAIL;
              	iqentry_exc[dram1_id[`QBITS]] <= (wrv_i|err_i) ? `FLT_DWF : `FLT_NONE;
-							iqentry_cmt[ dram1_id[`QBITS] ] <= `VAL;
+			        iqentry_state[dram1_id[`QBITS]] <= IQS_CMT;
 							iqentry_aq[ dram1_id[`QBITS] ] <= `INV;
      		//iqentry_out[ dram1_id[`QBITS] ] <= `INV;
             end
     2'd2:   if (`NUM_MEM > 2) begin
              	dram2 <= `DRAMSLOT_AVAIL;
              	iqentry_exc[dram2_id[`QBITS]] <= (wrv_i|err_i) ? `FLT_DWF : `FLT_NONE;
-							iqentry_cmt[ dram2_id[`QBITS] ] <= `VAL;
+			        iqentry_state[dram2_id[`QBITS]] <= IQS_CMT;
 							iqentry_aq[ dram2_id[`QBITS] ] <= `INV;
      		//iqentry_out[ dram2_id[`QBITS] ] <= `INV;
             end
@@ -9018,27 +8717,26 @@ B_StoreAck:
 	end
 
 B_DCacheLoadStart:
-  if (~acki) begin
+  if (~acki & ~cyc) begin	// check for idle bus - it should be
     dccnt <= 2'd0;
     bstate <= B_DCacheLoadAck;
 		cti_o <= 3'b001;	// constant address burst
 		bte_o <= 2'b00;		// linear burst, non-wrapping
 		cyc <= `HIGH;
 		stb_o <= `HIGH;
+		// Select should be selecting all byte lanes for a cache load
+    sel_o <= 8'hFF;
 		// bwhich should always be one of the three channels.
     case(bwhich)
     2'd0:   begin
-             sel_o <= fnSelect(dram0_instr,dram0_addr);
              vadr <= {dram0_addr[AMSB:5],5'b0};
              ol_o  <= dram0_ol;
             end
     2'd1:   if (`NUM_MEM > 1) begin
-             sel_o <= fnSelect(dram1_instr,dram1_addr);
              vadr <= {dram1_addr[AMSB:5],5'b0};
              ol_o  <= dram1_ol;
             end
     2'd2:   if (`NUM_MEM > 2) begin
-             sel_o <= fnSelect(dram2_instr,dram2_addr);
              vadr <= {dram2_addr[AMSB:5],5'b0};
              ol_o  <= dram2_ol;
             end
@@ -9046,10 +8744,7 @@ B_DCacheLoadStart:
       begin
       	$display("Invalid memory channel selection");
       	$stop;
-				cti_o <= 3'b000;
-				bte_o <= 2'b00;
-				cyc <= `LOW;
-				stb_o <= `LOW;
+      	wb_nack();
     		bstate <= BIDLE;
     	end
     endcase
@@ -9187,9 +8882,10 @@ B12:
         if (isCAS) begin
     	     iqentry_res	[ casid[`QBITS] ] <= (dat_i == cas);
              iqentry_exc [ casid[`QBITS] ] <= tlb_miss ? `FLT_TLB : err_i ? `FLT_DRF : rdv_i ? `FLT_DRF : `FLT_NONE;
-             iqentry_done[ casid[`QBITS] ] <= `VAL;
+//             iqentry_done[ casid[`QBITS] ] <= `VAL;
+//    	     iqentry_out [ casid[`QBITS] ] <= `INV;
+    	     iqentry_state [ casid[`QBITS] ] <= IQS_DONE;
     	     iqentry_instr[ casid[`QBITS]] <= `NOP_INSN;
-    	     iqentry_out [ casid[`QBITS] ] <= `INV;
     	    if (err_i | rdv_i) iqentry_ma[casid[`QBITS]] <= vadr;
             if (dat_i == cas) begin
                  stb_o <= `LOW;
@@ -9729,9 +9425,9 @@ begin
 	CC <= CC + amt;
     if (amt==3'd3) begin
     	I = I + iqentry_v[heads[0]] + iqentry_v[heads[1]] + iqentry_v[heads[2]];
-     	iqentry_agen[heads[0]] <= `INV;
-    	iqentry_agen[heads[1]] <= `INV;
-    	iqentry_agen[heads[2]] <= `INV;
+    	iqentry_state[heads[0]] <= IQS_INVALID;
+    	iqentry_state[heads[1]] <= IQS_INVALID;
+    	iqentry_state[heads[2]] <= IQS_INVALID;
     	iqentry_mem[heads[0]] <= `FALSE;
     	iqentry_mem[heads[1]] <= `FALSE;
     	iqentry_mem[heads[2]] <= `FALSE;
@@ -9753,8 +9449,8 @@ begin
    	end 
     else if (amt==3'd2) begin
     	I = I + iqentry_v[heads[0]] + iqentry_v[heads[1]];
-     iqentry_agen[heads[0]] <= `INV;
-     iqentry_agen[heads[1]] <= `INV;
+    	iqentry_state[heads[0]] <= IQS_INVALID;
+    	iqentry_state[heads[1]] <= IQS_INVALID;
      iqentry_mem[heads[0]] <= `FALSE;
      iqentry_mem[heads[1]] <= `FALSE;
     	iqentry_v[heads[0]] <= `INV;
@@ -9770,7 +9466,7 @@ begin
   																			 : 4'b0);
     end else if (amt==3'd1) begin
     	I = I + iqentry_v[heads[0]];
-	    iqentry_agen[heads[0]] <= `INV;
+    	iqentry_state[heads[0]] <= IQS_INVALID;
 	    iqentry_mem[heads[0]] <= `FALSE;
     	iqentry_v[heads[0]] <= `INV;
      	iqentry_iv[heads[0]] <= `INV;
@@ -9799,34 +9495,6 @@ begin
   end
   if (iqentry_a3_v[nn] == `INV && iqentry_a3_s[nn] == id && iqentry_v[nn] == `VAL && v == `VAL) begin
 		iqentry_a3[nn] <= bus;
-		iqentry_a3_v[nn] <= `VAL;
-  end
-`ifdef SUPPORT_PREDICATION
-  if (iqentry_aT_v[nn] == `INV && iqentry_aT_s[nn] == id && iqentry_v[nn] == `VAL && v == `VAL) begin
-		iqentry_aT[nn] <= bus;
-		iqentry_aT_v[nn] <= `VAL;
-  end
-`endif
-end
-endtask
-
-task setregargs;
-input [`QBITS] nn;
-input [`QBITSP1] id;
-input [63:0] busA;
-input [63:0] busB;
-input [63:0] busC;
-begin
-  if (iqentry_a1_v[nn] == `INV && iqentry_a1_s[nn] == {`QBIT{1'b1}} && id[`QBITS]==nn) begin
-		iqentry_a1[nn] <= busA;
-		iqentry_a1_v[nn] <= `VAL;
-  end
-  if (iqentry_a2_v[nn] == `INV && iqentry_a2_s[nn] == {`QBIT{1'b1}} && id[`QBITS]==nn) begin
-		iqentry_a2[nn] <= busB;
-		iqentry_a2_v[nn] <= `VAL;
-  end
-  if (iqentry_a3_v[nn] == `INV && iqentry_a3_s[nn] == {`QBIT{1'b1}} && id[`QBITS]==nn) begin
-		iqentry_a3[nn] <= busC;
 		iqentry_a3_v[nn] <= `VAL;
   end
 end
@@ -9875,7 +9543,7 @@ begin
 	iqentry_rmw  [nn]  <= bus[`IB_RMW];
 	iqentry_memdb[nn]  <= bus[`IB_MEMDB];
 	iqentry_memsb[nn]  <= bus[`IB_MEMSB];
-	iqentry_shft [nn]  <= bus[`IB_SHFT];
+	iqentry_shft [nn]  <= bus[`IB_SHFT];	// 48 bit shift instructions
 	iqentry_sei	 [nn]	 <= bus[`IB_SEI];
 	iqentry_aq   [nn]  <= bus[`IB_AQ];
 	iqentry_rl   [nn]  <= bus[`IB_RL];
@@ -9944,36 +9612,6 @@ begin
 end
 endtask
 
-`ifdef SUPPORT_PREDICATION
-task p_vs;
-begin
-	// if there is not an overlapping write to the register file.
-	if (Pn1 != Rt0s[3:0] || !fetchbuf0_prfw) begin
-		iqentry_p_v [tail1] <= pregIsValid[Pn1];
-		iqentry_p_s [tail1] <= rf_source [Pn1];
-	end
-	else begin
-		iqentry_p_v [tail1] <= `INV;
-		iqentry_p_s [tail1] <= { 1'b0, fetchbuf0_mem, tail0 };
-	end
-end
-endtask
-
-task aT_vs;
-begin
-	// if there is not an overlapping write to the register file.
-	if (Rt1s != Rt0s || !fetchbuf0_rfw) begin
-		iqentry_aT_v [tail1] <= regIsValid[Rt1s];
-		iqentry_aT_s [tail1] <= rf_source [Rt1s];
-	end
-	else begin
-		iqentry_aT_v [tail1] <= `INV;
-		iqentry_aT_s [tail1] <= { 1'b0, fetchbuf0_mem, tail0 };
-	end
-end
-endtask
-`endif
-
 task enque0x;
 begin
 	if (IsVector(fetchbuf0_instr) && SUP_VECTOR) begin
@@ -10017,12 +9655,6 @@ begin
 			rf_source[ Rt0s ] <= { 1'b0, fetchbuf0_mem, tail0 };    // top bit indicates ALU/MEM bus
 			rf_v[Rt0s] <= `INV;
 		end
-`ifdef SUPPORT_PREDICATION
-		if (fetchbuf0_prfw) begin
-			prf_source[ Rt0s[3:0] ] <= { 1'b0, fetchbuf0_mem, tail0 };    // top bit indicates ALU/MEM bus
-			prf_v[Rt0s] <= `INV;
-		end
-`endif
 	end
 end
 endtask
@@ -10040,14 +9672,12 @@ begin
     else if (dbg_ctrl[63])
         iqentry_exc[tail] <= `FLT_SSM;
 `endif
+	iqentry_state[tail]    <= IQS_QUEUED;
 	iqentry_sn   [tail]    <=  seqnum;
 	iqentry_v    [tail]    <=   `VAL;
 	iqentry_iv	 [tail]    <=   `INV;
 	iqentry_is   [tail]    <= tail;
 	iqentry_thrd [tail]    <=   fetchbuf0_thrd;
-	iqentry_done [tail]    <=    `INV;
-	iqentry_cmt  [tail]    <=	`INV;
-	iqentry_out  [tail]    <=    `INV;
 	iqentry_res  [tail]    <=    `ZERO;
 	iqentry_instr[tail]    <=    IsVLS(fetchbuf0_instr) ? (vm[fnM2(fetchbuf0_instr)] ? fetchbuf0_instr : `NOP_INSN) : fetchbuf0_instr;
 	iqentry_insln[tail]		 <=  fetchbuf0_insln;
@@ -10057,8 +9687,6 @@ begin
 	iqentry_fpu	 [tail]		 <=  `INV;
 	iqentry_load [tail]		 <=  `INV;
 	iqentry_pt   [tail]    <=  predict_taken0;
-	iqentry_agen [tail]    <=    `INV;
-	iqentry_state[tail]    <=   IQS_IDLE;
 // If the previous instruction was a hardware interrupt and this instruction is a hardware interrupt
 // inherit the previous pc.
 //if (IsBrk(fetchbuf0_instr) && !fetchbuf0_instr[15] &&
@@ -10074,11 +9702,6 @@ begin
 	iqentry_vl   [tail]    <=  vl;
 	iqentry_ven  [tail]    <=   venno;
 	iqentry_exc  [tail]    <=    `EXC_NONE;
-`ifdef SUPPORT_PREDICATION
-	iqentry_preg [tail]    <= Pn0;
-	iqentry_p_v  [tail]    <=    pregIsValid[Pn0];
-	iqentry_p_s  [tail]    <=    prf_source[Pn0];
-`endif
 	iqentry_a1   [tail]    <=    rfoa0;
 	iqentry_a1_v [tail]    <=    Source1Valid(fetchbuf0_instr) | regIsValid[Ra0s];
 	iqentry_a1_s [tail]    <=    rf_source[Ra0s];
@@ -10088,11 +9711,6 @@ begin
 	iqentry_a3   [tail]    <=    rfoc0;
 	iqentry_a3_v [tail]    <=    Source3Valid(fetchbuf0_instr) | regIsValid[Rc0s];
 	iqentry_a3_s [tail]    <=    rf_source[Rc0s];
-`ifdef SUPPORT_PREDICATION
-	iqentry_aT   [tail]    <= 	 rfot0;
-	iqentry_aT_v [tail]    <=    SourceTValid(fetchbuf0_instr) | regIsValid[Rt0s];
-	iqentry_aT_s [tail]    <=    rf_source[Rt0s];
-`endif
 `ifdef INLINE_DECODE
 	id1_Rt <= Rt0[4:0];
 	id1_vl <= vl;
@@ -10119,14 +9737,12 @@ begin
     else if (dbg_ctrl[63])
         iqentry_exc[tail] <= `FLT_SSM;
 `endif
+	iqentry_state[tail]    <= IQS_QUEUED;
 	iqentry_sn   [tail]    <=   seqnum;
 	iqentry_v    [tail]    <=   `VAL;
 	iqentry_iv	 [tail]    <=   `INV;
 	iqentry_is   [tail]    <= tail;
 	iqentry_thrd [tail]    <=   fetchbuf1_thrd;
-	iqentry_done [tail]    <=   `INV;
-	iqentry_cmt  [tail]    <=	`INV;
-	iqentry_out  [tail]    <=   `INV;
 	iqentry_res  [tail]    <=   `ZERO;
 	iqentry_instr[tail]    <=   IsVLS(fetchbuf1_instr) ? (vm[fnM2(fetchbuf1_instr)] ? fetchbuf1_instr : `NOP_INSN) : fetchbuf1_instr; 
 	iqentry_insln[tail]		 <=  fetchbuf1_insln;
@@ -10136,8 +9752,6 @@ begin
 	iqentry_fpu	 [tail]		 <=  `INV;
 	iqentry_load [tail]		 <=  `INV;
 	iqentry_pt   [tail]    <=  predict_taken1;
-	iqentry_agen [tail]    <=   `INV;
-	iqentry_state[tail]    <=   IQS_IDLE;
 // If queing 2nd instruction must read from first
 if (tail==tail1) begin
     // If the previous instruction was a hardware interrupt and this instruction is a hardware interrupt
@@ -10165,11 +9779,6 @@ end
 	iqentry_vl   [tail]    <=  vl;
 	iqentry_ven  [tail]    <=   venno;
 	iqentry_exc  [tail]    <=   `EXC_NONE;
-`ifdef SUPPORT_PREDICATION
-	iqentry_preg [tail]    <= Pn1;
-	iqentry_p_v  [tail]    <= pregIsValid[Pn1];
-	iqentry_p_s  [tail]    <= prf_source[Pn1];
-`endif
 	iqentry_a1   [tail]    <=	rfoa1;
 	iqentry_a1_v [tail]    <=	Source1Valid(fetchbuf1_instr) | regIsValid[Ra1s];
 	iqentry_a1_s [tail]    <=	rf_source[Ra1s];
@@ -10179,11 +9788,6 @@ end
 	iqentry_a3   [tail]    <=	rfoc1;
 	iqentry_a3_v [tail]    <=	Source3Valid(fetchbuf1_instr) | regIsValid[Rc1s];
 	iqentry_a3_s [tail]    <=	rf_source[Rc1s];
-`ifdef SUPPORT_PREDICATION
-	iqentry_aT   [tail]    <= rfot1;
-	iqentry_aT_v [tail]    <= SourceTValid(fetchbuf1_instr) | regIsValid[Rt1s];
-	iqentry_aT_s [tail]    <= rf_source[Rt1s];
-`endif
 `ifdef INLINE_DECODE
 	id2_Rt <= Rt1[4:0];
 	id2_vl <= vl;
@@ -10565,53 +10169,10 @@ begin
 end
 endtask
 
-`ifdef SUPPORT_PREDICATION
-task read_pregs;
-output [63:0] dat;
-begin
-	dat[3:0] <= pregs[{rgs,4'd0}];
-	dat[7:4] <= pregs[{rgs,4'd1}];
-	dat[11:8] <= pregs[{rgs,4'd2}];
-	dat[15:12] <= pregs[{rgs,4'd3}];
-	dat[19:16] <= pregs[{rgs,4'd4}];
-	dat[23:20] <= pregs[{rgs,4'd5}];
-	dat[27:24] <= pregs[{rgs,4'd6}];
-	dat[31:28] <= pregs[{rgs,4'd7}];
-	dat[35:32] <= pregs[{rgs,4'd8}];
-	dat[39:36] <= pregs[{rgs,4'd9}];
-	dat[43:40] <= pregs[{rgs,4'd10}];
-	dat[47:44] <= pregs[{rgs,4'd11}];
-	dat[51:48] <= pregs[{rgs,4'd12}];
-	dat[55:52] <= pregs[{rgs,4'd13}];
-	dat[59:56] <= pregs[{rgs,4'd14}];
-	dat[63:60] <= pregs[{rgs,4'd15}];
-end
-endtask
-
-task write_pregs;
-input [63:0] dat;
-begin
-	pregs[{rgs,4'd0}] <= dat[3:0];
-	pregs[{rgs,4'd1}] <= dat[7:4];
-	pregs[{rgs,4'd2}] <= dat[11:8];
-	pregs[{rgs,4'd3}] <= dat[15:12];
-	pregs[{rgs,4'd4}] <= dat[19:16];
-	pregs[{rgs,4'd5}] <= dat[23:20];
-	pregs[{rgs,4'd6}] <= dat[27:24];
-	pregs[{rgs,4'd7}] <= dat[31:28];
-	pregs[{rgs,4'd8}] <= dat[35:32];
-	pregs[{rgs,4'd9}] <= dat[39:36];
-	pregs[{rgs,4'd10}] <= dat[43:40];
-	pregs[{rgs,4'd11}] <= dat[47:44];
-	pregs[{rgs,4'd12}] <= dat[51:48];
-	pregs[{rgs,4'd13}] <= dat[55:52];
-	pregs[{rgs,4'd14}] <= dat[59:56];
-	pregs[{rgs,4'd15}] <= dat[63:60];
-end
-endtask
-`endif
-
 // CSR access tasks
+// This task does not work. Possibly because the always block @* doesn't
+// evaluate into the task to see which signals are changing. The following
+// code is simply included as an always block above.
 task read_csr;
 input [11:0] csrno;
 output [63:0] dat;
@@ -10631,6 +10192,7 @@ begin
     `CSR_PMR:				dat <= pmr;
     `CSR_WBRCD:		dat <= wbrcd;
     `CSR_SEMA:      dat <= sema;
+    `CSR_KEYS:			dat <= keys;
     `CSR_TCB:		dat <= tcb;
     `CSR_FSTAT:     dat <= {fp_rgs,fp_status};
 `ifdef SUPPORT_DBG    
@@ -10757,6 +10319,7 @@ begin
 	        				endcase
         `CSR_WBRCD:		wbrcd <= dat;
         `CSR_SEMA:      sema <= dat;
+        `CSR_KEYS:	keys <= dat;
         `CSR_TCB:		tcb <= dat;
         `CSR_FSTAT:		fpu_csr[37:32] <= dat[37:32];
         `CSR_BADADR:    badaddr[{thread,csrno[11:10]}] <= dat;
@@ -10903,8 +10466,7 @@ begin
 	// This is used for the load and compare instructions.
 	// must reset the a1 source too.
 	//iqentry_a1_v[n] <= `INV;
-	iqentry_out[n] <= `VAL;
-	iqentry_cmt[n] <= `INV;
+	iqentry_state[n] <= IQS_MEM;
 end
 endtask
 
@@ -10932,9 +10494,8 @@ begin
 `else
 	dram1_ol   <= (iqentry_Ra[n][4:0]==5'd31 || iqentry_Ra[n][4:0]==5'd30) ? ol : dl;
 `endif
-	iqentry_a1_v[n] <= `INV;
-	iqentry_out[n] <= `VAL;
-	iqentry_cmt[n] <= `INV;
+	//iqentry_a1_v[n] <= `INV;
+	iqentry_state[n] <= IQS_MEM;
 end
 endtask
 
@@ -10962,9 +10523,8 @@ begin
 `else
 	dram2_ol   <= (iqentry_Ra[n][4:0]==5'd31 || iqentry_Ra[n][4:0]==5'd30) ? ol : dl;
 `endif
-	iqentry_a1_v[n] <= `INV;
-	iqentry_out[n] <= `VAL;
-	iqentry_cmt[n] <= `INV;
+	//iqentry_a1_v[n] <= `INV;
+	iqentry_state[n] <= IQS_MEM;
 end
 endtask
 

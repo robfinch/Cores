@@ -1156,7 +1156,7 @@ begin
 	bus[`IB_BR]			<= IsBranch(instr);
 	bus[`IB_SYNC]		<= IsSync(instr)||IsBrk(instr)||IsRti(instr);
 	bus[`IB_FSYNC]	<= IsFSync(instr);
-	bus[`IB_RFW]		<= (Rt==5'd0) ? 1'b0 : IsRFW(instr) && !IsCmp(instr);
+	bus[`IB_RFW]		<= (Rt==5'd0) ? 1'b0 : IsRFW(instr);// && !IsCmp(instr);
 	bus[`IB_PRFW]   <= IsCmp(instr);
 	bus[`IB_WE]			<= fnWe(instr);
 	id_o <= id_i;

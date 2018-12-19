@@ -155,6 +155,7 @@ wire ack_scr;
 (* mark_debug = "true" *)
 wire ack_br;
 wire [63:0] scr_dato, br_dato;
+wire br_bok, scr_bok;
 wire rnd_ack;
 wire [31:0] rnd_dato;
 wire dram_ack;
@@ -406,7 +407,8 @@ wire cs_br = adr[31:16]==16'hFFFC
 					|| adr[31:16]==16'hFFFD
 					|| adr[31:16]==16'hFFFE;
 wire cs_scr = adr[31:20]==12'hFF4;
-wire cs_tc1 = br1_adr[31:16]==16'hFFD0;
+wire cs_tc1 = br1_adr[31:16]==16'hFFD0
+					||  br1_adr[31:16]==16'hFFD1;
 wire cs_spr = br1_adr[31:12]==20'hFFDAD;
 wire cs_bmp = br1_adr[31:12]==20'hFFDC5;
 //wire cs_bmp = 1'b0;
@@ -544,12 +546,13 @@ FT64_TextController2 #(.num(1)) tc1
 	.rst_i(rst),
 	.clk_i(cpu_clk),
 	.cs_i(cs_tc1),
+	.cti_i(cti),
 	.cyc_i(br1_cyc),
 	.stb_i(br1_stb),
 	.ack_o(tc1_ack),
 	.wr_i(br1_we),
 	.sel_i(br1_sel),
-	.adr_i(br1_adr[15:0]),
+	.adr_i(br1_adr[16:0]),
 	.dat_i(br1_dato),
 	.dat_o(tc1_dato),
 	.lp_i(),
@@ -720,10 +723,10 @@ if (rst)
 else
 	ack1 <= ack;
 always @(posedge cpu_clk)
-casez({cs_br,ack_bridge1,cs_scr,ack_bridge2,cs_dram,ack_bridge3})
+casez({ack_br,ack_scr,ack_bridge1,ack_bridge2,cs_dram,ack_bridge3})
 6'b1?????: dati <= br_dato;
-6'b01????: dati <= br1_cdato;
-6'b001???: dati <= scr_dato;
+6'b01????: dati <= scr_dato;
+6'b001???: dati <= br1_cdato;
 6'b0001??: dati <= br2_cdato;
 6'b00001?: dati <= dram_dato;
 6'b000001: dati <= br3_cdato;
@@ -744,7 +747,7 @@ casez({tc1_ack,spr_ack,bmp_ack,avic_ack,gfx00_cack})
 5'b001??:	br1_dati <= bmp_cdato;
 5'b0001?:	br1_dati <= avic_dato;
 5'b00001:	br1_dati <= gfx00_cdato;
-default:	br1_dati <= 64'hDEADDEADDEADDEAD;
+default:	br1_dati <= br1_dati;
 endcase
 
 wire br2_ack1 = rnd_ack|ack_led|kbd_ack|ack_1761|aud_ack|cs_cmdc|cs_grid|cs_imem;
@@ -760,7 +763,7 @@ casez({rnd_ack,cs_led,kbd_ack,aud_ack})
 4'b01??:	br2_dati <= {2{led_dato}};
 4'b001?:	br2_dati <= {8{kbd_dato}};
 4'b0001:	br2_dati <= aud_cdato;
-default:	br2_dati <= 64'hDEADDEADDEADDEAD;
+default:	br2_dati <= br2_dati;
 endcase
 
 wire ack_s2_bridge1;
@@ -1087,12 +1090,13 @@ cs7, cyc7, stb7, ack7, we7, sel7, adr7, dati7, dato7, sr7, cr7, rb7,
 );
 `endif
 
-
+/*
 scratchmem uscr1
 (
   .rst_i(rst),
   .clk_i(cpu_clk),
   .cti_i(cti),
+  .bok_o(scr_bok),
   .cs_i(cs_scr),
   .cyc_i(cyc),
   .stb_i(stb),
@@ -1103,12 +1107,16 @@ scratchmem uscr1
   .dat_i(dato),
   .dat_o(scr_dato)
 );
+*/
+assign ack_scr = 1'b0;
+assign scr_dato = 64'd0;
 
 bootrom #(64) ubr1
 (
   .rst_i(rst),
   .clk_i(cpu_clk),
   .cti_i(cti),
+  .bok_o(br_bok),
   .cs_i(cs_br),
   .cyc_i(cyc),
   .stb_i(stb),
@@ -1117,12 +1125,24 @@ bootrom #(64) ubr1
   .dat_o(br_dato)
 );
 
+wire err;
+BusError ube1
+(
+	.rst_i(rst),
+	.clk_i(cpu_clk),
+	.cyc_i(cyc),
+	.ack_i(ack1),
+	.stb_i(stb),
+	.adr_i(adr),
+	.err_o(err)
+);
+
 FT64_mpu ucpu1
 (
   .hartid_i(64'h1),
   .rst_i(rst),
   .clk_i(cpu_clk),
-  .clk4x_i(clk40),
+  .clk4x_i(clk80),
   .tm_clk_i(clk20),
   .i1(1'b0),
   .i2(1'b0),
@@ -1154,10 +1174,11 @@ FT64_mpu ucpu1
   .i28(kbd_irq),
   .irq_o(),
   .cti_o(cti),
+  .bok_i(br_bok),
   .cyc_o(cyc),
   .stb_o(stb),
   .ack_i(ack1),
-  .err_i(1'b0),
+  .err_i(err),
   .we_o(we),
   .sel_o(sel),
   .adr_o(adr),
@@ -1180,8 +1201,8 @@ ila_0 uila1 (
 	.probe1(ucpu1.ucpu1.insn0[31:0]), // input wire [7:0]  probe1 
 	.probe2(ucpu1.ucpu1.vadr[31:0]),
 	.probe3(ucpu1.ucpu1.ihit), // input wire [0:0]  probe2 
-	.probe4(ucpu1.ucpu1.dram0_addr), // input wire [0:0]  probe3 
-	.probe5({ucpu1.ucpu1.dhit0,ucpu1.ucpu1.branchmiss}) // input wire [0:0]  probe4
+	.probe4({ucpu1.ucpu1.iqentry_state[0],ucpu1.ucpu1.iqentry_state[1],ucpu1.ucpu1.iqentry_state[2],ucpu1.ucpu1.iqentry_state[3]}), // input wire [0:0]  probe3 
+	.probe5({ucpu1.ucpu1.freezePC,ucpu1.ucpu1.phit,ucpu1.ucpu1.queued1,ucpu1.ucpu1.queuedNop}) // input wire [0:0]  probe4
 );
 
 

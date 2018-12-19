@@ -113,6 +113,7 @@ wire icl;           // instruction cache load
 wire exv,rdv,wrv;
 wire pulse60;
 wire sptr_o;
+wire [63:0] pkeys;
 
 always @(posedge clk_i)
 	cti_o <= cti;
@@ -240,6 +241,7 @@ FT64_ipt uipt1
 (
 	.rst(rst_i),
 	.clk(clk_i),
+	.pkeys_i(pkeys),
 	.ol_i(ol),
 	.cti_i(cti),
 	.cs_i(cs_ipt),
@@ -297,6 +299,7 @@ FT64 ucpu1
     .ol_o(ol),
     .pcr_o(pcr),
     .pcr2_o(pcr2),
+    .pkeys_o(pkeys),
     .icl_o(icl),
     .sr_o(sr_o),
     .cr_o(cr_o),
