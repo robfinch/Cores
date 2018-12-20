@@ -693,9 +693,13 @@ reg [47:0] codebuf[0:63];
 reg [QENTRIES-1:0] setpred;
 
 // instruction queue (ROB)
-reg [`SNBITS] iqentry_sn [0:QENTRIES-1];  // instruction sequence number
-(* mark_debug = "true" *)
+// State and stqte decodes
+reg [2:0] iqentry_state [0:QENTRIES-1];
 reg [QENTRIES-1:0] iqentry_v;			// entry valid?  -- this should be the first bit
+reg [QENTRIES-1:0] iqentry_done;
+reg [QENTRIES-1:0] iqentry_out;
+reg [QENTRIES-1:0] iqentry_agen;
+reg [`SNBITS] iqentry_sn [0:QENTRIES-1];  // instruction sequence number
 reg [QENTRIES-1:0] iqentry_iv;		// instruction is valid
 reg [`QBITSP1] iqentry_is [0:QENTRIES-1];	// source of instruction
 reg [QENTRIES-1:0] iqentry_thrd;		// which thread the instruction is in
@@ -703,10 +707,6 @@ reg [QENTRIES-1:0] iqentry_pt;		// predict taken
 reg [QENTRIES-1:0] iqentry_bt;		// update branch target buffer
 reg [QENTRIES-1:0] iqentry_takb;	// take branch record
 reg [QENTRIES-1:0] iqentry_jal;
-reg [2:0] iqentry_state [0:QENTRIES-1];
-reg [QENTRIES-1:0] iqentry_done;
-reg [QENTRIES-1:0] iqentry_out;
-reg [QENTRIES-1:0] iqentry_agen;
 reg [2:0] iqentry_sz [0:QENTRIES-1];
 reg [QENTRIES-1:0] iqentry_alu = 8'h00;  // alu type instruction
 reg [QENTRIES-1:0] iqentry_alu0;	 // only valid on alu #0
@@ -1460,17 +1460,15 @@ wire predict_takenD1;
 
 wire [`ABITS] btgtA, btgtB, btgtC, btgtD, btgtE, btgtF;
 wire btbwr0 = iqentry_v[heads[0]] && iqentry_state[heads[0]]==IQS_CMT &&
-        (
-        iqentry_jal[heads[0]] ||
-        iqentry_brk[heads[0]] ||
-        iqentry_rti[heads[0]]);
+        (iqentry_fc[heads[0]]);
 generate begin: gbtbvar
 if (`WAYS > 1) begin
 wire btbwr1 = iqentry_v[heads[1]] && iqentry_state[heads[1]]==IQS_CMT &&
-        (
-        iqentry_jal[heads[1]] ||
-        iqentry_brk[heads[1]] ||
-        iqentry_rti[heads[1]]);
+        (iqentry_fc[heads[1]]);
+end
+if (`WAYS > 2) begin
+wire btbwr2 = iqentry_v[heads[2]] && iqentry_state[heads[2]]==IQS_CMT &&
+        (iqentry_fc[heads[2]]);
 end
 end
 endgenerate
@@ -1493,10 +1491,18 @@ FT64_BTB #(.AMSB(AMSB)) ubtb1
 (
   .rst(rst),
   .wclk(fcu_clk),
-  .wr(btbwr0 | btbwr1),  
-  .wadr(btbwr0 ? iqentry_pc[heads[0]] : iqentry_pc[heads[1]]),
-  .wdat(btbwr0 ? iqentry_ma[heads[0]] : iqentry_ma[heads[1]]),
-  .valid(btbwr0 ? iqentry_bt[heads[0]] & iqentry_v[heads[0]] : iqentry_bt[heads[1]] & iqentry_v[heads[1]]),
+  .wr0(btbwr0),  
+  .wadr0(iqentry_pc[heads[0]]),
+  .wdat0(iqentry_ma[heads[0]]),
+  .valid0((iqentry_br[heads[0]] ? iqentry_takb[heads[0]] : iqentry_bt[heads[0]]) & iqentry_v[heads[0]]),
+  .wr1(btbwr1),  
+  .wadr1(iqentry_pc[heads[1]]),
+  .wdat1(iqentry_ma[heads[1]]),
+  .valid1((iqentry_br[heads[1]] ? iqentry_takb[heads[1]] : iqentry_bt[heads[1]]) & iqentry_v[heads[1]]),
+  .wr2(btbwr2),  
+  .wadr2(iqentry_pc[heads[2]]),
+  .wdat2(iqentry_ma[heads[2]]),
+  .valid2((iqentry_br[heads[2]] ? iqentry_takb[heads[2]] : iqentry_bt[heads[2]]) & iqentry_v[heads[2]]),
   .rclk(~clk),
   .pcA(fetchbufA_pc),
   .btgtA(btgtA),
@@ -1535,10 +1541,14 @@ FT64_BTB #(.AMSB(AMSB)) ubtb1
 (
   .rst(rst),
   .wclk(fcu_clk),
-  .wr(btbwr0 | btbwr1),  
-  .wadr(btbwr0 ? iqentry_pc[heads[0]] : iqentry_pc[heads[1]]),
-  .wdat(btbwr0 ? iqentry_ma[heads[0]] : iqentry_ma[heads[1]]),
-  .valid(btbwr0 ? iqentry_bt[heads[0]] & iqentry_v[heads[0]] : iqentry_bt[heads[1]] & iqentry_v[heads[1]]),
+  .wr0(btbwr0),  
+  .wadr0(iqentry_pc[heads[0]]),
+  .wdat0(iqentry_ma[heads[0]]),
+  .valid0((iqentry_br[heads[0]] ? iqentry_takb[heads[0]] : iqentry_bt[heads[0]]) & iqentry_v[heads[0]]),
+  .wr1(btbwr1),  
+  .wadr1(iqentry_pc[heads[1]]),
+  .wdat1(iqentry_ma[heads[1]]),
+  .valid1((iqentry_br[heads[1]] ? iqentry_takb[heads[1]] : iqentry_bt[heads[1]]) & iqentry_v[heads[1]]),
   .rclk(~clk),
   .pcA(fetchbufA_pc),
   .btgtA(btgtA),
@@ -1575,10 +1585,18 @@ FT64_BTB #(.AMSB(AMSB)) ubtb1
 (
   .rst(rst),
   .wclk(fcu_clk),
-  .wr(btbwr0),  
-  .wadr(iqentry_pc[heads[0]]),
-  .wdat(iqentry_ma[heads[0]]),
-  .valid(iqentry_bt[heads[0]] & iqentry_v[heads[0]]),
+  .wr0(btbwr0),  
+  .wadr0(iqentry_pc[heads[0]]),
+  .wdat0(iqentry_ma[heads[0]]),
+  .valid0((iqentry_br[heads[0]] ? iqentry_takb[heads[0]] : iqentry_bt[heads[0]]) & iqentry_v[heads[0]]),
+  .wr1(1'b0);
+  .wadr1(RSTPC),
+  .wdat1(RSTPC),
+  .valid1(1'b0),
+  .wr2(1'b0);
+  .wadr2(RSTPC),
+  .wdat2(RSTPC),
+  .valid2(1'b0),
   .rclk(~clk),
   .pcA(fetchbufA_pc),
   .btgtA(btgtA),
@@ -1592,6 +1610,12 @@ FT64_BTB #(.AMSB(AMSB)) ubtb1
   .btgtE(),
   .pcF(32'd0),
   .btgtF(),
+  .hitA(),
+  .hitB(),
+  .hitC(),
+  .hitD(),
+  .hitE(),
+  .hitF(),
   .npcA(BRKPC),
   .npcB(BRKPC),
   .npcC(BRKPC),
@@ -4652,6 +4676,7 @@ end
 always @*
 begin
 	for (n = 0; n < QENTRIES; n = n + 1) begin
+		iqentry_v[n] <= iqentry_state[n] != IQS_INVALID;
 		iqentry_done[n] <= iqentry_state[n]==IQS_DONE || iqentry_state[n]==IQS_CMT;
 		iqentry_out[n] <= iqentry_state[n]==IQS_OUT;
 		iqentry_agen[n] <= iqentry_state[n]==IQS_AGEN;
@@ -5556,15 +5581,16 @@ FT64_idecoder uid1
 	.Rt(Rt0[4:0]),
 	.predict_taken(predict_taken0),
 	.thrd(fetchbuf0_thrd),
+	.vl(vl),
 `else
 	.instr(id1_instr),
 	.Rt(id1_Rt),
 	.predict_taken(id1_pt),
 	.thrd(id1_thrd),
+	.vl(id1_vl),
 `endif
 //ToDo: fix for vectors length and element number
 	.ven(id1_ven),
-	.vl(id1_vl),
 	.bus(id1_bus),
 	.id_o(id1_ido),
 	.idv_o(id1_vo),
@@ -5602,14 +5628,15 @@ FT64_idecoder uid2
 	.Rt(Rt1[4:0]),
 	.predict_taken(predict_taken1),
 	.thrd(fetchbuf1_thrd),
+	.vl(vl),
 `else
 	.instr(id2_instr),
 	.Rt(id2_Rt),
 	.predict_taken(id2_pt),
 	.thrd(id2_thrd),
+	.vl(id2_vl),
 `endif
 	.ven(id2_ven),
-	.vl(id2_vl),
 	.bus(id2_bus),
 	.id_o(id2_ido),
 	.idv_o(id2_vo),
@@ -5633,14 +5660,18 @@ FT64_idecoder uid2
 	.id_i(id3_id),
 `ifdef INLINE_DECODE
 	.instr(fetchbuf2_instr),
+	.Rt(Rt2[4:0]),
+	.predict_taken(predict_taken2),
+	.thrd(fetchbuf2_thrd),
+	.vl(vl),
 `else
 	.instr(id3_instr),
+	.Rt(id3_Rt),
+	.predict_taken(id3_pt),
+	.thrd(id3_thrd),
+	.vl(id3_vl),
 `endif
 	.ven(id3_ven),
-	.vl(id3_vl),
-	.thrd(id3_thrd),
-	.predict_taken(id3_pt),
-	.Rt(id3_Rt),
 	.bus(id3_bus),
 	.id_o(id3_ido),
 	.idv_o(id3_vo),
@@ -6197,14 +6228,14 @@ assign outstanding_stores = (dram0 && dram0_store) ||
 //
 always @*
 begin
-    commit0_v <= ({iqentry_v[heads[0]], iqentry_state[heads[0]] == IQS_CMT} == 2'b11 && ~|panic);
+    commit0_v <= (iqentry_state[heads[0]] == IQS_CMT && ~|panic);
     commit0_id <= {iqentry_mem[heads[0]], heads[0]};	// if a memory op, it has a DRAM-bus id
     commit0_tgt <= iqentry_tgt[heads[0]];
     commit0_we  <= iqentry_we[heads[0]];
     commit0_bus <= iqentry_res[heads[0]];
     if (`NUM_CMT > 1) begin
 	    commit1_v <= ({iqentry_v[heads[0]],  iqentry_state[heads[0]] == IQS_CMT} != 2'b10
-	               && {iqentry_v[heads[1]],  iqentry_state[heads[1]] == IQS_CMT} == 2'b11
+	               && iqentry_state[heads[1]] == IQS_CMT
 	               && ~|panic);
 	    commit1_id <= {iqentry_mem[heads[1]], heads[1]};
 	    commit1_tgt <= iqentry_tgt[heads[1]];  
@@ -6528,7 +6559,7 @@ if (rst) begin
      brs_stack <= 64'd16;
 `endif
     for (n = 0; n < QENTRIES; n = n + 1) begin
-       iqentry_v[n] <= `INV;
+    	iqentry_state[n] <= IQS_INVALID;
        iqentry_iv[n] <= `INV;
        iqentry_is[n] <= 3'b00;
        iqentry_sn[n] <= 4'd0;
@@ -7835,11 +7866,11 @@ if (dram2 == `DRAMSLOT_AVAIL)	 dram2_exc <= `FLT_NONE;
 
 for (n = 0; n < QENTRIES; n = n + 1)
 	if (iqentry_v[n] && iqentry_stomp[n]) begin
-		iqentry_v[n] <= `INV;
 		iqentry_iv[n] <= `INV;
 		iqentry_mem[n] <= `INV;
 		iqentry_load[n] <= `INV;
 		iqentry_store[n] <= `INV;
+		iqentry_state[n] <= IQS_INVALID;
 //		iqentry_agen[n] <= `INV;
 //		iqentry_out[n] <= `INV;
 //		iqentry_done[n] <= `INV;
@@ -7891,7 +7922,6 @@ else
 
 if (cmt_timer==12'd1000) begin
 	iqentry_state[heads[0]] <= IQS_CMT;
-//	iqentry_done[heads[0]] <= `VAL;
 	iqentry_exc[heads[0]] <= `FLT_CMT;
 	cmt_timer <= 12'd0;
 end
@@ -8277,8 +8307,6 @@ end
 				dram1_addr,
 				fnDato(dram1_instr,dram1_data)
 			);
-//			iqentry_done[ dram1_id[`QBITS] ] <= `VAL;
-//			iqentry_out[ dram1_id[`QBITS] ] <= `INV;
 			iqentry_state[ dram1_id[`QBITS] ] <= IQS_DONE;
 		end
   end
@@ -8294,8 +8322,6 @@ end
 				dram2_addr,
 				fnDato(dram2_instr,dram2_data)
 			);
-//			iqentry_done[ dram2_id[`QBITS] ] <= `VAL;
-//			iqentry_out[ dram2_id[`QBITS] ] <= `INV;
 			iqentry_state[ dram2_id[`QBITS] ] <= IQS_DONE;
 		end
   end
@@ -9431,9 +9457,6 @@ begin
     	iqentry_mem[heads[0]] <= `FALSE;
     	iqentry_mem[heads[1]] <= `FALSE;
     	iqentry_mem[heads[2]] <= `FALSE;
-    	iqentry_v[heads[0]] <= `INV;
-    	iqentry_v[heads[1]] <= `INV;
-    	iqentry_v[heads[2]] <= `INV;
     	iqentry_iv[heads[0]] <= `INV;
     	iqentry_iv[heads[1]] <= `INV;
     	iqentry_iv[heads[2]] <= `INV;
@@ -9453,8 +9476,6 @@ begin
     	iqentry_state[heads[1]] <= IQS_INVALID;
      iqentry_mem[heads[0]] <= `FALSE;
      iqentry_mem[heads[1]] <= `FALSE;
-    	iqentry_v[heads[0]] <= `INV;
-    	iqentry_v[heads[1]] <= `INV;
      iqentry_iv[heads[0]] <= `INV;
      iqentry_iv[heads[1]] <= `INV;
     	iqentry_alu[heads[0]] <= `FALSE;
@@ -9468,7 +9489,6 @@ begin
     	I = I + iqentry_v[heads[0]];
     	iqentry_state[heads[0]] <= IQS_INVALID;
 	    iqentry_mem[heads[0]] <= `FALSE;
-    	iqentry_v[heads[0]] <= `INV;
      	iqentry_iv[heads[0]] <= `INV;
     	iqentry_alu[heads[0]] <= `FALSE;
   		for (n = 0; n < QENTRIES; n = n + 1)
@@ -9674,7 +9694,6 @@ begin
 `endif
 	iqentry_state[tail]    <= IQS_QUEUED;
 	iqentry_sn   [tail]    <=  seqnum;
-	iqentry_v    [tail]    <=   `VAL;
 	iqentry_iv	 [tail]    <=   `INV;
 	iqentry_is   [tail]    <= tail;
 	iqentry_thrd [tail]    <=   fetchbuf0_thrd;
@@ -9712,12 +9731,14 @@ begin
 	iqentry_a3_v [tail]    <=    Source3Valid(fetchbuf0_instr) | regIsValid[Rc0s];
 	iqentry_a3_s [tail]    <=    rf_source[Rc0s];
 `ifdef INLINE_DECODE
+/* This decoding cannot be done here because it'll introduce a 1 cycle delay
 	id1_Rt <= Rt0[4:0];
 	id1_vl <= vl;
 	id1_ven <= venno;
 	id1_id <= tail;
 	id1_pt <= predict_taken0;
 	id1_thrd <= fetchbuf0_thrd;
+*/
 	setinsn1(tail,id1_bus);
 `endif
 end
@@ -9739,7 +9760,6 @@ begin
 `endif
 	iqentry_state[tail]    <= IQS_QUEUED;
 	iqentry_sn   [tail]    <=   seqnum;
-	iqentry_v    [tail]    <=   `VAL;
 	iqentry_iv	 [tail]    <=   `INV;
 	iqentry_is   [tail]    <= tail;
 	iqentry_thrd [tail]    <=   fetchbuf1_thrd;
@@ -9789,12 +9809,14 @@ end
 	iqentry_a3_v [tail]    <=	Source3Valid(fetchbuf1_instr) | regIsValid[Rc1s];
 	iqentry_a3_s [tail]    <=	rf_source[Rc1s];
 `ifdef INLINE_DECODE
+/* This decoding cannot be done here because it'll introduce a 1 cycle delay
 	id2_Rt <= Rt1[4:0];
 	id2_vl <= vl;
 	id2_ven <= venno;
 	id2_id <= tail;
 	id2_pt <= predict_taken1;
 	id2_thrd <= fetchbuf1_thrd;
+*/
 	setinsn1(tail,id2_bus);
 `endif
 end
