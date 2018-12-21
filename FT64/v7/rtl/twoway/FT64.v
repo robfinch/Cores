@@ -186,7 +186,18 @@ reg [3:0] pregs [0:1023];
 reg [63:0] wbrcd;
 wire [5:0] brgs;
 `ifdef SUPPORT_SEGMENTATION
+reg [1:0] seg_state;
+
+reg [23:0] desc_selector [0:63];
+reg [255:0] desc_cache [0:63];
+reg [63:0] desc_cache_v;
+reg [5:0] desc_cache_ndx;
+reg [1:0] desc_cnt;
+reg [255:0] desc_in;
+
 reg [23:0] currentCSSelector;
+reg [63:0] ldt_base;
+reg [63:0] gdt_base;
 reg [63:0] zs_base [0:63];
 reg [63:0] ds_base [0:63];
 reg [63:0] es_base [0:63];
@@ -243,6 +254,7 @@ reg [23:0] gs_sel [0:63];
 reg [23:0] hs_sel [0:63];
 reg [23:0] ss_sel [0:63];
 reg [23:0] cs_sel [0:63];
+reg [23:0] xs_sel [0:63];
 reg [15:0] zs_acr [0:63];
 reg [15:0] ds_acr [0:63];
 reg [15:0] es_acr [0:63];
@@ -716,6 +728,7 @@ reg [QENTRIES-1:0] iqentry_canex = 8'h00;	// true if it's an instruction that ca
 reg [QENTRIES-1:0] iqentry_oddball = 8'h00;	// writes to register file
 reg [QENTRIES-1:0] iqentry_load;	// is a memory load instruction
 reg [QENTRIES-1:0] iqentry_loadv;	// is a volatile memory load instruction
+reg [QENTRIES-1:0] iqentry_loadseg;
 reg [QENTRIES-1:0] iqentry_store;	// is a memory store instruction
 reg [QENTRIES-1:0] iqentry_preload;	// is a memory preload instruction
 reg [QENTRIES-1:0] iqentry_ldcmp;
@@ -745,6 +758,9 @@ reg [QENTRIES-1:0] iqentry_rfw = 1'b0;	// writes to register file
 reg [QENTRIES-1:0] iqentry_prfw = 1'b0;
 reg  [7:0] iqentry_we   [0:QENTRIES-1];	// enable strobe
 reg [63:0] iqentry_res	[0:QENTRIES-1];	// instruction result
+reg [63:0] iqentry_res1	[0:QENTRIES-1];	// instruction result
+reg [63:0] iqentry_res2	[0:QENTRIES-1];	// instruction result
+reg [63:0] iqentry_res3	[0:QENTRIES-1];	// instruction result
 reg [63:0] iqentry_ares	[0:QENTRIES-1];	// alternate instruction result
 reg [47:0] iqentry_instr[0:QENTRIES-1];	// instruction opcode
 reg  [2:0] iqentry_insln[0:QENTRIES-1]; // instruction length
@@ -1111,6 +1127,7 @@ reg  [`XBITS] dram0_exc;
 reg        dram0_unc;
 reg [2:0]  dram0_memsize;
 reg        dram0_load;	// is a load operation
+reg 			 dram0_loadseg;
 reg        dram0_store;
 reg  [1:0] dram0_ol;
 reg [63:0] dram1_data;
@@ -1124,6 +1141,7 @@ reg  [`XBITS] dram1_exc;
 reg        dram1_unc;
 reg [2:0]  dram1_memsize;
 reg        dram1_load;
+reg 			 dram1_loadseg;
 reg        dram1_store;
 reg  [1:0] dram1_ol;
 reg [63:0] dram2_data;
@@ -1137,6 +1155,7 @@ reg  [`XBITS] dram2_exc;
 reg        dram2_unc;
 reg [2:0]  dram2_memsize;
 reg        dram2_load;
+reg 			 dram2_loadseg;
 reg        dram2_store;
 reg  [1:0] dram2_ol;
 
@@ -1202,6 +1221,11 @@ parameter B_DCacheLoadAck = 5'd23;
 parameter B20 = 5'd24;
 parameter B21 = 5'd25;
 parameter B_DCacheLoadWait3 = 5'd26;
+parameter B_LoadDesc = 5'd27;
+parameter B_LoadDescStb = 5'd28;
+parameter SEG_IDLE = 2'd0;
+parameter SEG_CHK = 2'd1;
+parameter SEG_UPD = 2'd2;
 reg [1:0] bwhich;
 reg [3:0] icstate,picstate;
 parameter IDLE = 4'd0;
@@ -3228,6 +3252,11 @@ default:    IsLV = FALSE;
 endcase
 endfunction
 
+function IsRet;
+input [47:0] isn;
+IsRet = isn[`INSTRUCTION_OP]==`RET;
+endfunction
+
 function IsRFW;
 input [47:0] isn;
 input [5:0] vqei;
@@ -3867,7 +3896,7 @@ end
 // FETCH
 // ---------------------------------------------------------------------------
 //
-assign fetchbuf0_mem = IsMem(fetchbuf0_instr);// & IsLoad(fetchbuf0_instr);
+assign fetchbuf0_mem = IsMem(fetchbuf0_instr) & ~IsRet(fetchbuf0_instr);// & IsLoad(fetchbuf0_instr);
 assign fetchbuf0_rfw   = IsRFW(fetchbuf0_instr,vqe0,vl,fetchbuf0_thrd);
 `ifdef SUPPORT_PREDICATION
 assign fetchbuf0_prfw = IsCmp(fetchbuf0_instr);
@@ -3875,14 +3904,14 @@ assign fetchbuf0_prfw = IsCmp(fetchbuf0_instr);
 
 generate begin: gFetchbufDec
 if (`WAYS > 1) begin
-assign fetchbuf1_mem = IsMem(fetchbuf1_instr);// & IsLoad(fetchbuf1_instr);
+assign fetchbuf1_mem = IsMem(fetchbuf1_instr) & ~IsRet(fetchbuf1_instr);// & IsLoad(fetchbuf1_instr);
 assign fetchbuf1_rfw   = IsRFW(fetchbuf1_instr,vqe1,vl,fetchbuf1_thrd);
 `ifdef SUPPORT_PREDICATION
 assign fetchbuf1_prfw = IsCmp(fetchbuf1_instr);
 `endif
 end
 if (`WAYS > 2) begin
-assign fetchbuf2_mem = IsMem(fetchbuf2_instr);// & IsLoad(fetchbuf2_instr);
+assign fetchbuf2_mem = IsMem(fetchbuf2_instr) & ~IsRet(fetchbuf2_instr);// & IsLoad(fetchbuf2_instr);
 assign fetchbuf2_rfw   = IsRFW(fetchbuf2_instr,vqe2,vl,fetchbuf2_thrd);
 `ifdef SUPPORT_PREDICATION
 assign fetchbuf2_prfw = IsCmp(fetchbuf2_instr);
@@ -5864,6 +5893,8 @@ FT64_alu #(.BIG(1'b1),.SUP_VECTOR(SUP_VECTOR)) ualu0 (
 	.hs_base(hsx_base),
 	.ss_base(ssx_base),
 	.cs_base(csx_base),
+	.ldt_base(ldt_base),
+	.gdt_base(gdt_base),
 	.zsub(zsub),
 	.dsub(dsub),
 	.esub(esub),
@@ -5945,6 +5976,8 @@ FT64_alu #(.BIG(1'b0),.SUP_VECTOR(SUP_VECTOR)) ualu1 (
 	.hs_base(hsx_base),
 	.ss_base(ssx_base),
 	.cs_base(csx_base),
+	.ldt_base(ldt_base),
+	.gdt_base(gdt_base),
 	.zsub(zsub),
 	.dsub(dsub),
 	.esub(esub),
@@ -6101,8 +6134,8 @@ begin
     fcu_exc <= `FLT_NONE;
     casez(fcu_instr[`INSTRUCTION_OP])
 `ifdef SUPPORT_SEGMENTATION
-    `LDCS:  fcu_exc <= fcu_instr[31:8] != fcu_pc[63:40] ? `FLT_CS : `FLT_NONE;
-    `RET:		fcu_exc <= fcu_argB[63:40] != fcu_pc[63:40] ? `FLT_RET : `FLT_NONE;
+//    `LDCS:  fcu_exc <= fcu_instr[31:8] != fcu_pc[63:40] ? `FLT_CS : `FLT_NONE;
+//    `RET:		fcu_exc <= fcu_argB[63:40] != fcu_pc[63:40] ? `FLT_RET : `FLT_NONE;
 `endif
 `ifdef SUPPORT_BBMS
     `LFCS:	fcu_exc <= currentCSSelector != fcu_instr[31:8] ? `FLT_CS : `FLT_NONE;
@@ -6140,7 +6173,12 @@ FT64_FCU_Calc #(.AMSB(AMSB)) ufcuc1
 	.nextpc(fcu_nextpc),
 	.im(im),
 	.waitctr(waitctr),
-	.bus(fcu_out)
+	.bus(fcu_out),
+`ifdef SUPPORT_SEGMENTATION	
+	.cs_sel(cs_sel[brgs])
+`else
+	.cs_sel(fcu_nextpc[63:40])
+`endif
 );
 
 wire will_clear_branchmiss = branchmiss && ((fetchbuf0_v && fetchbuf0_pc==misspc) || (fetchbuf1_v && fetchbuf1_pc==misspc));
@@ -6761,6 +6799,10 @@ if (rst) begin
 `ifdef SUPPORT_DBG
 		dbg_ctrl <= 64'h0;
 `endif
+`ifdef SUPPORT_SEGMENTATION
+		ldt_base <= 64'h0;
+		gdt_base <= 64'h0;
+`endif
 /* Initialized with initial begin above
 `ifdef SUPPORT_BBMS		
 		for (n = 0; n < 64; n = n + 1) begin
@@ -7332,14 +7374,25 @@ if (IsWait(fcu_instr)) begin
 		fcu_dataready <= `TRUE;
 end
 
+// If the return segment is not the same as the current code segment then a
+// segment load is triggered via the memory unit by setting the iq state to
+// AGEN. Otherwise the state is set to CMT which will cause a bypass of the
+// segment load from memory.
+
 if (fcu_v) begin
 	fcu_done <= `TRUE;
 	iqentry_ma  [ fcu_id[`QBITS] ] <= fcu_misspc;
   iqentry_res [ fcu_id[`QBITS] ] <= rfcu_bus;
   iqentry_exc [ fcu_id[`QBITS] ] <= fcu_exc;
-//	iqentry_done[ fcu_id[`QBITS] ] <= `TRUE;
-//	iqentry_out [ fcu_id[`QBITS] ] <= `INV;
+`ifdef SUPPORT_SEGMENTATION
+	iqentry_res1[ fcu_id[`QBITS] ] <= {(fcu_argB[55] ? ldt_base : gdt_base),5'd0} + {fcu_argB[54:40],5'd0};
+	if ((fcu_ret && fcu_argB[63:40] == cs_sel[brgs]) || !fcu_ret)
+		iqentry_state[fcu_id[`QBITS] ] <= IQS_CMT;
+	else if (fcu_ret && fcu_argB[63:40] != cs_sel[brgs])
+		iqentry_state[fcu_id[`QBITS] ] <= IQS_AGEN;
+`else
 	iqentry_state[fcu_id[`QBITS] ] <= IQS_CMT;
+`endif
 	// takb is looked at only for branches to update the predictor. Here it is
 	// unconditionally set, the value will be ignored if it's not a branch.
 	iqentry_takb[ fcu_id[`QBITS] ] <= fcu_takb;
@@ -8265,14 +8318,10 @@ if (mem1_available && dram0 == `DRAMSLOT_BUSY && dram0_store) begin
 end
 if (mem2_available && `NUM_MEM > 1 && dram1 == `DRAMSLOT_BUSY && dram1_store) begin
 	if ((alu0_v && (dram1_id[`QBITS] == alu0_id[`QBITS])) || (alu1_v && (dram1_id[`QBITS] == alu1_id[`QBITS])))	 panic <= `PANIC_MEMORYRACE;
-//	iqentry_done[ dram1_id[`QBITS] ] <= `VAL;
-//	iqentry_out[ dram1_id[`QBITS] ] <= `INV;
 	iqentry_state[ dram1_id[`QBITS] ] <= IQS_DONE;
 end
 if (mem3_available && `NUM_MEM > 2 && dram2 == `DRAMSLOT_BUSY && dram2_store) begin
 	if ((alu0_v && (dram2_id[`QBITS] == alu0_id[`QBITS])) || (alu1_v && (dram2_id[`QBITS] == alu1_id[`QBITS])))	 panic <= `PANIC_MEMORYRACE;
-//	iqentry_done[ dram2_id[`QBITS] ] <= `VAL;
-//	iqentry_out[ dram2_id[`QBITS] ] <= `INV;
 	iqentry_state[ dram2_id[`QBITS] ] <= IQS_DONE;
 end
 `endif
@@ -8616,7 +8665,12 @@ BIDLE:
                vadr <= {dram0_addr[AMSB:3],3'b0};
                sr_o <=  IsLWR(dram0_instr);
                ol_o  <= dram0_ol;
-               bstate <= B_DLoadAck;
+               if (dram0_loadseg) begin
+               	cti_o <= 3'b001;
+               	bstate <= B_LoadDesc;
+               end
+               else
+               	bstate <= B_DLoadAck;
             end
         end
         else if (~|wb_v && mem2_available && dram1_unc && dram1==`DRAMSLOT_BUSY && dram1_load && `NUM_MEM > 1) begin
@@ -9007,8 +9061,86 @@ B21:
 		stb_o <= `HIGH;
 		bstate <= B12;
 	end
+`ifdef SUPPORT_SEGMENTATION
+B_LoadDesc:
+	begin
+		if (acki) begin
+			if (!bok_i) begin
+				stb_o <= `LOW;
+				bstate <= B_LoadDescStb;
+			end
+			case(desc_cnt)
+			2'b00:	desc_in[63:0] <= dat_i;
+			2'b01:	desc_in[127:64] <= dat_i;
+			2'b10:	desc_in[191:128] <= dat_i;
+			2'b11:	desc_in[255:192] <= dat_i;
+			endcase
+			if (desc_cnt==2'd2)
+				cti_o <= 3'b111;
+			if (desc_cnt==3'd3) begin
+				wb_nack();
+				cti_o <= 3'b000;
+				bstate <= BIDLE;
+				seg_state <= SEG_CHK;
+			end
+			desc_cnt <= desc_cnt + 2'd1;
+		end
+	end
+B_LoadDescStb:
+	begin
+		stb_o <= `HIGH;
+		bstate <= B_LoadDesc;
+	end
+`endif
 default:     bstate <= BIDLE;
 endcase
+
+`ifdef SUPPORT_SEGMENTATION
+case(seg_state)
+SEG_IDLE:	;
+SEG_CHK:
+	begin
+		seg_state <= SEG_UPD;
+		// Is it a zero descriptor?
+		if (desc_in[255:192]==64'd0) begin
+			// Attempting to load the stack segment with a zero selector results in a
+			// fault.
+			if (iqentry_tgt[dram0_id[`QBITS]][2:0]==3'd6)	// SS target?
+				iqentry_exc[dram0_id[`QBITS]] <= `FLT_SSZ;
+		end
+		else begin
+			if (desc_in[255]==1'b0) begin
+				iqentry_exc[dram0_id[`QBITS]] <= `FLT_SNP;			// segment not present
+			end
+			// A code segment must be loaded into a code segment register
+			else if (desc_in[255:248] >= 8'h98 && desc_in[255:248] <= 8'h9F) begin
+				if (seg_tgt != 4'd7 && seg_tgt != 4'd8 && seg_tgt != 4'd9)
+					iqentry_exc[dram0_id[`QBITS]] <= `FLT_STX;			// segment type exception
+				if (cpl != desc_in[247:240])
+					iqentry_exc[dram0_id[`QBITS]] <= `FLT_PRIV;			// privilege violation
+			end
+			// Check for LDT
+			else if (desc_in[255:248]==8'h82 && seg_tgt != 4'd11)
+				iqentry_exc[dram0_id[`QBITS]] <= `FLT_STX;			// segment type exception
+		end
+	end
+SEG_UPD:
+	begin
+		if (~|iqentry_exc[dram0_id[`QBITS]]) begin
+			desc_cache[desc_ndx] <= desc_in;
+			desc_cache_v[desc_ndx] <= `VAL;
+			iqentry_res[dram0_id[`QBITS]] <= desc_in[63:0];
+			iqentry_res1[dram0_id[`QBITS]] <= desc_in[127:64];
+			iqentry_res2[dram0_id[`QBITS]] <= desc_in[191:128];
+			iqentry_res3[dram0_id[`QBITS]] <= desc_in[255:192];
+		end
+		iqentry_state[dram0_id[`QBITS]] <= IQS_CMT;
+		seg_state <= SEG_IDLE;
+	end
+default:
+	seg_state <= SEG_IDLE;
+endcase
+`endif
 
 if (!branchmiss) begin
     case({fetchbuf0_v, fetchbuf1_v})
@@ -9553,6 +9685,7 @@ begin
 	iqentry_canex[nn]  <= bus[`IB_CANEX];
 	iqentry_loadv[nn]  <= bus[`IB_LOADV];
 	iqentry_load [nn]  <= bus[`IB_LOAD];
+	iqentry_loadseg[nn]<= bus[`IB_LOADSEG];
 	iqentry_preload[nn]<= bus[`IB_PRELOAD];
 	iqentry_store[nn]  <= bus[`IB_STORE];
 	iqentry_push [nn]  <= bus[`IB_PUSH];
@@ -9990,7 +10123,122 @@ begin
             default:    ;
             endcase
         `R2:
+`ifdef SUPPORT_SEGMENTATION        		
+        		if (iqentry_instr[head][6])
+        			case(iqentry_instr[head][47:42])
+        			`MOV2SEG:
+        				case(iqentry_instr[head][15:13])
+        				3'd0:	begin
+        								zs_base[brgs] <= iqentry_res[head];
+        								zs_lb[brgs] <=  iqentry_res1[head];
+        								zs_ub[brgs] <=  iqentry_res2[head];
+        								zs_acr[brgs] <=  iqentry_res3[head];
+        							end
+        				3'd1:	begin
+        								ds_base[brgs] <= iqentry_res[head];
+        								ds_lb[brgs] <=  iqentry_res1[head];
+        								ds_ub[brgs] <=  iqentry_res2[head];
+        								ds_acr[brgs] <=  iqentry_res3[head];
+        							end
+        				3'd2:	begin
+        								es_base[brgs] <= iqentry_res[head];
+        								es_lb[brgs] <=  iqentry_res1[head];
+        								es_ub[brgs] <=  iqentry_res2[head];
+        								es_acr[brgs] <=  iqentry_res3[head];
+        							end
+        				3'd3:	begin
+        								fs_base[brgs] <= iqentry_res[head];
+        								fs_lb[brgs] <=  iqentry_res1[head];
+        								fs_ub[brgs] <=  iqentry_res2[head];
+        								fs_acr[brgs] <=  iqentry_res3[head];
+        							end
+        				3'd4:	begin
+        								gs_base[brgs] <= iqentry_res[head];
+        								gs_lb[brgs] <=  iqentry_res1[head];
+        								gs_ub[brgs] <=  iqentry_res2[head];
+        								gs_acr[brgs] <=  iqentry_res3[head];
+        							end
+        				3'd5:	begin
+        								hs_base[brgs] <= iqentry_res[head];
+        								hs_lb[brgs] <=  iqentry_res1[head];
+        								hs_ub[brgs] <=  iqentry_res2[head];
+        								hs_acr[brgs] <=  iqentry_res3[head];
+        							end
+        				3'd6:	begin
+        								ss_base[brgs] <= iqentry_res[head];
+        								ss_lb[brgs] <=  iqentry_res1[head];
+        								ss_ub[brgs] <=  iqentry_res2[head];
+        								ss_acr[brgs] <=  iqentry_res3[head];
+        							end
+        							// ToDo:  The following should cause a fault:
+        				3'd7:	begin
+        								cs_base[brgs] <= iqentry_res[head];
+        								cs_lb[brgs] <=  iqentry_res1[head];
+        								cs_ub[brgs] <=  iqentry_res2[head];
+        								cs_acr[brgs] <=  iqentry_res3[head];
+        							end
+        				endcase
+        			default:	;
+        			endcase
+        		else
+`endif        		
             case(iqentry_instr[head][`INSTRUCTION_S2])
+`ifdef SUPPORT_SEGMENTATION            	
+       			`MOV2SEG:
+        				case(iqentry_instr[head][15:13])
+        				3'd0:	begin
+        								zs_base[brgs] <= iqentry_res[head];
+        								zs_lb[brgs] <=  iqentry_res1[head];
+        								zs_ub[brgs] <=  iqentry_res2[head];
+        								zs_acr[brgs] <=  iqentry_res3[head];
+        							end
+        				3'd1:	begin
+        								ds_base[brgs] <= iqentry_res[head];
+        								ds_lb[brgs] <=  iqentry_res1[head];
+        								ds_ub[brgs] <=  iqentry_res2[head];
+        								ds_acr[brgs] <=  iqentry_res3[head];
+        							end
+        				3'd2:	begin
+        								es_base[brgs] <= iqentry_res[head];
+        								es_lb[brgs] <=  iqentry_res1[head];
+        								es_ub[brgs] <=  iqentry_res2[head];
+        								es_acr[brgs] <=  iqentry_res3[head];
+        							end
+        				3'd3:	begin
+        								fs_base[brgs] <= iqentry_res[head];
+        								fs_lb[brgs] <=  iqentry_res1[head];
+        								fs_ub[brgs] <=  iqentry_res2[head];
+        								fs_acr[brgs] <=  iqentry_res3[head];
+        							end
+        				3'd4:	begin
+        								gs_base[brgs] <= iqentry_res[head];
+        								gs_lb[brgs] <=  iqentry_res1[head];
+        								gs_ub[brgs] <=  iqentry_res2[head];
+        								gs_acr[brgs] <=  iqentry_res3[head];
+        							end
+        				3'd5:	begin
+        								hs_base[brgs] <= iqentry_res[head];
+        								hs_lb[brgs] <=  iqentry_res1[head];
+        								hs_ub[brgs] <=  iqentry_res2[head];
+        								hs_acr[brgs] <=  iqentry_res3[head];
+        							end
+        				3'd6:	begin
+        								ss_base[brgs] <= iqentry_res[head];
+        								ss_lb[brgs] <=  iqentry_res1[head];
+        								ss_ub[brgs] <=  iqentry_res2[head];
+        								ss_acr[brgs] <=  iqentry_res3[head];
+        							end
+        							// ToDo:  The following should cause a fault:
+        				3'd7:	begin
+        								cs_base[brgs] <= iqentry_res[head];
+        								cs_lb[brgs] <=  iqentry_res1[head];
+        								cs_ub[brgs] <=  iqentry_res2[head];
+        								cs_acr[brgs] <=  iqentry_res3[head];
+        							end
+        				endcase
+        			default:	;
+        			endcase
+`endif        			
 `ifdef SUPPORT_PREDICATION            	
 		        `CMP:	pregs[{rgs,iqentry_tgt[head][3:0]}] <= which==2'd1 ? cmt1nyb[iqentry_tgt[head][3:0]] : cmt0nyb[iqentry_tgt[head][3:0]];//commit_bus[3:0];
 `endif		        
@@ -10087,6 +10335,45 @@ begin
         		begin
         		write_csr(iqentry_instr[head][31:18],iqentry_a1[head],thread);
         		end
+`ifdef SUPPORT_SEGMENTATION
+        `CALL:
+        	if (iqentry_instr[6]) begin
+        		case(iqentry_instr[head][47:44])
+        		3'd0:	begin
+        						cs_base[brgs] <= zs_base[brgs];
+        						cs_lb[brgs] <= zs_lb[brgs];
+        						cs_ub[brgs] <= zs_ub[brgs];
+        						cs_acr[brgs] <= zs_acr[brgs];
+        					end
+        		3'd2:	begin
+        						cs_base[brgs] <= es_base[brgs];
+        						cs_lb[brgs] <= es_lb[brgs];
+        						cs_ub[brgs] <= es_ub[brgs];
+        						cs_acr[brgs] <= es_acr[brgs];
+        					end
+        		3'd3:	begin
+        						cs_base[brgs] <= fs_base[brgs];
+        						cs_lb[brgs] <= fs_lb[brgs];
+        						cs_ub[brgs] <= fs_ub[brgs];
+        						cs_acr[brgs] <= fs_acr[brgs];
+        					end
+        		3'd4:	begin
+        						cs_base[brgs] <= gs_base[brgs];
+        						cs_lb[brgs] <= gs_lb[brgs];
+        						cs_ub[brgs] <= gs_ub[brgs];
+        						cs_acr[brgs] <= gs_acr[brgs];
+        					end
+        		3'd5:	begin
+        						cs_base[brgs] <= hs_base[brgs];
+        						cs_lb[brgs] <= hs_lb[brgs];
+        						cs_ub[brgs] <= hs_ub[brgs];
+        						cs_acr[brgs] <= hs_acr[brgs];
+        					end
+        		// Can't load stack or data segment into code segment
+        		// loading code segment to code segment is redundant
+        		endcase
+        	end
+`endif
         `REX:
 `ifdef SUPPORT_SMT        
             // Can only redirect to a lower level
@@ -10470,13 +10757,18 @@ begin
 	dram0_preload <= iqentry_preload[n];
 	dram0_tgt 	<= iqentry_tgt[n];
 	dram0_data	<= iqentry_a2[n];
-	dram0_addr	<= iqentry_ma[n];
+	dram0_addr	<=
+`ifdef SUPPORT_SEGMENTATION	
+		 iqentry_ret[n] ? iqentry_res1[n] :
+`endif
+		 iqentry_ma[n];
 	//             if (ol[iqentry_thrd[n]]==`OL_USER)
 	//             	dram0_seg   <= (iqentry_Ra[n]==5'd30 || iqentry_Ra[n]==5'd31) ? {ss[iqentry_thrd[n]],13'd0} : {ds[iqentry_thrd[n]],13'd0};
 	//             else
 	dram0_unc   <= iqentry_ma[n][31:20]==12'hFFD || !dce || iqentry_loadv[n];
 	dram0_memsize <= iqentry_memsz[n];
 	dram0_load <= iqentry_load[n];
+	dram0_loadseg <= iqentry_loadseg[n];
 	dram0_store <= iqentry_store[n];
 `ifdef SUPPORT_SMT
 	dram0_ol   <= (iqentry_Ra[n][4:0]==5'd31 || iqentry_Ra[n][4:0]==5'd30) ? ol[iqentry_thrd[n]] : dl[iqentry_thrd[n]];
@@ -10510,6 +10802,7 @@ begin
 	dram1_unc   <= iqentry_ma[n][31:20]==12'hFFD || !dce || iqentry_loadv[n];
 	dram1_memsize <= iqentry_memsz[n];
 	dram1_load <= iqentry_load[n];
+	dram1_loadseg <= iqentry_loadseg[n];
 	dram1_store <= iqentry_store[n];
 `ifdef SUPPORT_SMT
 	dram1_ol   <= (iqentry_Ra[n][4:0]==5'd31 || iqentry_Ra[n][4:0]==5'd30) ? ol[iqentry_thrd[n]] : dl[iqentry_thrd[n]];
@@ -10539,6 +10832,7 @@ begin
 	dram2_unc   <= iqentry_ma[n][31:20]==12'hFFD || !dce || iqentry_loadv[n];
 	dram2_memsize <= iqentry_memsz[n];
 	dram2_load <= iqentry_load[n];
+	dram2_loadseg <= iqentry_loadseg[n];
 	dram2_store <= iqentry_store[n];
 `ifdef SUPPORT_SMT
 	dram2_ol   <= (iqentry_Ra[n][4:0]==5'd31 || iqentry_Ra[n][4:0]==5'd30) ? ol[iqentry_thrd[n]] : dl[iqentry_thrd[n]];

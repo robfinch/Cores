@@ -25,7 +25,7 @@
 //
 `include ".\FT64_defines.vh"
 
-module FT64_FCU_Calc(ol, instr, tvec, a, pc, im, waitctr, bus);
+module FT64_FCU_Calc(ol, instr, tvec, a, pc, nextpc, im, waitctr, bus, cs_sel);
 parameter WID = 64;
 parameter AMSB = 31;
 input [1:0] ol;
@@ -33,28 +33,30 @@ input [47:0] instr;
 input [WID-1:0] tvec;
 input [WID-1:0] a;
 input [AMSB:0] pc;
+input [AMSB:0] nextpc;
 input [3:0] im;
 input [WID-1:0] waitctr;
 output reg [WID-1:0] bus;
+input [23:0] cs_sel;
 
 always @*
 begin
   casez(instr[`INSTRUCTION_OP])
-  `BRK:   bus <= {{56{1'b0}},instr[15:8]};
+  `BRK:   bus <= instr[16] ? {56'd0,a[7:0]} : {56'b0,instr[15:8]};
   `BBc:
     case(instr[20:19])
 		`IBNE:	bus <=  a + 64'd1;
 		`DBNZ:	bus <=  a - 64'd1;
 		default:	bus <= 64'hCCCCCCCCCCCCCCCC;
 		endcase
-  `JAL:   bus <= pc + (instr[6] ? 32'd6 : 32'd4);
-  `CALL:	bus <= pc + (instr[6] ? 32'd6 : 32'd4);
+  `JAL:		bus <= {cs_sel,nextpc[39:0]};
+  `CALL:	bus <= {cs_sel,nextpc[39:0]};
   `RET:		bus <= a + (instr[7:6]==2'b01 ? {instr[47:23],3'b0} : {instr[31:23],3'b0});
   `REX:
     case(ol)
     `OL_USER:   bus <= 64'hCCCCCCCCCCCCCCCC;
     // ToDo: fix im test
-    default:    bus <= (im < ~{ol,2'b00}) ? tvec : pc + 32'd4;
+    default:    bus <= (im < ~{ol,2'b00}) ? tvec : nextpc;
     endcase
   `WAIT:  bus = waitctr==64'd1;
   default:    bus <= 64'hCCCCCCCCCCCCCCCC;

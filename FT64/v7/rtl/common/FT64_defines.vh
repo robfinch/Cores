@@ -172,6 +172,7 @@
 `define RTI         6'h32
 `define RTE         6'h32
 `define VMOV        6'h33
+`define MOV2SEG			6'h37
 `define MULU        6'h38
 `define MULSU       6'h39
 `define MUL         6'h3A
@@ -485,6 +486,7 @@
 `define IB_RC		  70:66
 `define IB_RB			65:61
 `define IB_RA			60:56
+`define IB_LOADSEG	53
 `define IB_PRFW		52
 `define IB_CMP		51
 `define IB_PUSH		47

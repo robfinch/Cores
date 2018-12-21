@@ -56,10 +56,11 @@ module FT64_fetchbuf(rst, clk4x, clk, fcu_clk,
     nop_fetchbuf,
     take_branch0, take_branch1,
     stompedRets,
+    pred_on,
     panic
 );
 parameter AMSB = `AMSB;
-parameter RSTPC = 32'hFFFC0100;
+parameter RSTPC = 64'hFFFC0100;
 parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
 input rst;
@@ -128,6 +129,7 @@ input [3:0] nop_fetchbuf;
 output take_branch0;
 output take_branch1;
 input [3:0] stompedRets;
+input pred_on;
 output reg [3:0] panic;
 integer n;
 
@@ -183,9 +185,9 @@ if (ins[`INSTRUCTION_OP]==`CMPRSSD)
 else
 `endif
 	case(ins[7:6])
-	2'd0:	fnInsLength = 3'd4;
-	2'd1:	fnInsLength = 3'd6;
-	default:	fnInsLength = 3'd2;
+	2'd0:	fnInsLength = 3'd4|pred_on;
+	2'd1:	fnInsLength = 3'd6|pred_on;
+	default:	fnInsLength = 3'd2|pred_on;
 	endcase
 endfunction
 
@@ -193,10 +195,10 @@ wire [2:0] fetchbufA_inslen;
 wire [2:0] fetchbufB_inslen;
 wire [2:0] fetchbufC_inslen;
 wire [2:0] fetchbufD_inslen;
-FT64_InsLength uilA (fetchbufA_instr, fetchbufA_inslen);
-FT64_InsLength uilB (fetchbufB_instr, fetchbufB_inslen);
-FT64_InsLength uilC (fetchbufC_instr, fetchbufC_inslen);
-FT64_InsLength uilD (fetchbufD_instr, fetchbufD_inslen);
+FT64_InsLength uilA (fetchbufA_instr, fetchbufA_inslen, pred_on);
+FT64_InsLength uilB (fetchbufB_instr, fetchbufB_inslen, pred_on);
+FT64_InsLength uilC (fetchbufC_instr, fetchbufC_inslen, pred_on);
+FT64_InsLength uilD (fetchbufD_instr, fetchbufD_inslen, pred_on);
 
 wire [47:0] xinsn0;
 wire [47:0] xinsn1;
@@ -256,6 +258,7 @@ default:
 	branch_pcA[31:8] = fetchbufA_pc[31:8] +
 		(fetchbufA_instr[7:6]==2'b01 ? {{4{fetchbufA_instr[47]}},fetchbufA_instr[47:28]} : {{20{fetchbufA_instr[31]}},fetchbufA_instr[31:28]});
 	branch_pcA[7:0] = {fetchbufA_instr[27:23],fetchbufA_instr[17:16],1'b0};
+	branch_pcA[63:32] = fetchbufA_pc[63:32];
 	end
 endcase
 
@@ -270,6 +273,7 @@ default:
 	branch_pcB[31:8] = fetchbufB_pc[31:8] +
 		(fetchbufB_instr[7:6]==2'b01 ? {{4{fetchbufB_instr[47]}},fetchbufB_instr[47:28]} : {{20{fetchbufB_instr[31]}},fetchbufB_instr[31:28]});
 	branch_pcB[7:0] = {fetchbufB_instr[27:23],fetchbufB_instr[17:16],1'b0};
+	branch_pcB[63:32] = fetchbufB_pc[63:32];
 	end
 endcase
 
@@ -284,6 +288,7 @@ default:
 	branch_pcC[31:8] = fetchbufC_pc[31:8] +
 		(fetchbufC_instr[7:6]==2'b01 ? {{4{fetchbufC_instr[47]}},fetchbufC_instr[47:28]} : {{20{fetchbufC_instr[31]}},fetchbufC_instr[31:28]});
 	branch_pcC[7:0] = {fetchbufC_instr[27:23],fetchbufC_instr[17:16],1'b0};
+	branch_pcC[63:32] = fetchbufC_pc[63:32];
 	end
 endcase
 
@@ -298,6 +303,7 @@ default:
 	branch_pcD[31:8] = fetchbufD_pc[31:8] +
 		(fetchbufD_instr[7:6]==2'b01 ? {{4{fetchbufD_instr[47]}},fetchbufD_instr[47:28]} : {{20{fetchbufD_instr[31]}},fetchbufD_instr[31:28]});
 	branch_pcD[7:0] = {fetchbufD_instr[27:23],fetchbufD_instr[17:16],1'b0};
+	branch_pcD[63:32] = fetchbufD_pc[63:32];
 	end
 endcase
 

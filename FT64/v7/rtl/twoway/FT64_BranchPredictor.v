@@ -29,6 +29,7 @@ module FT64_BranchPredictor(rst, clk, en,
     pcA, pcB, pcC, pcD, pcE, pcF, xpc0, xpc1, xpc2, takb0, takb1, takb2,
     predict_takenA, predict_takenB, predict_takenC, predict_takenD,
     predict_takenE, predict_takenF);
+parameter AMSB=63;
 parameter DBW=32;
 input rst;
 input clk;
@@ -36,15 +37,15 @@ input en;
 input xisBranch0;
 input xisBranch1;
 input xisBranch2;
-input [DBW-1:0] pcA;
-input [DBW-1:0] pcB;
-input [DBW-1:0] pcC;
-input [DBW-1:0] pcD;
-input [DBW-1:0] pcE;
-input [DBW-1:0] pcF;
-input [DBW-1:0] xpc0;
-input [DBW-1:0] xpc1;
-input [DBW-1:0] xpc2;
+input [AMSB:0] pcA;
+input [AMSB:0] pcB;
+input [AMSB:0] pcC;
+input [AMSB:0] pcD;
+input [AMSB:0] pcE;
+input [AMSB:0] pcF;
+input [AMSB:0] xpc0;
+input [AMSB:0] xpc1;
+input [AMSB:0] xpc2;
 input takb0;
 input takb1;
 input takb2;
@@ -56,8 +57,8 @@ output predict_takenE;
 output predict_takenF;
 
 integer n;
-reg [31:0] pcs [0:31];
-reg [31:0] pc;
+reg [AMSB:0] pcs [0:31];
+reg [AMSB:0] pc;
 reg takb;
 reg [4:0] pcshead,pcstail;
 reg wrhist;

@@ -281,9 +281,28 @@ default:    IsLoad = FALSE;
 endcase
 endfunction
 
+function IsMov2Seg;
+input [47:0] isn;
+case(isn[`INSTRUCTION_OP])
+`R2:
+	if (isn[6])
+		IsMov2Seg = isn[47:42]==`MOV2SEG;
+	else
+		IsMov2Seg = isn[31:26]==`MOV2SEG;
+`RET:
+	IsMov2Seg = TRUE;
+default:	IsMov2Seg = FALSE;
+endcase
+endfunction
+
 function IsVolatileLoad;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
+`R2:
+	if (isn[6])
+		IsVolatileLoad = isn[47:42]==`MOV2SEG;
+	else
+		IsVolatileLoad = isn[31:26]==`MOV2SEG;
 `MEMNDX:
 	if (isn[`INSTRUCTION_L2]==2'b00)
     case({isn[31:28],isn[22:21]})
@@ -372,6 +391,11 @@ endfunction
 function [0:0] IsMem;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
+`R2:
+	if (isn[6])
+		IsMem = isn[47:42]==`MOV2SEG;
+	else
+		IsMem = isn[31:26]==`MOV2SEG;
 `MEMNDX:	IsMem = TRUE;
 `AMO:		IsMem = TRUE;
 `LB:    IsMem = TRUE;
@@ -387,6 +411,7 @@ case(isn[`INSTRUCTION_OP])
 `CAS:   IsMem = TRUE;
 `LVx:		IsMem = TRUE;
 `LVxU:	IsMem = TRUE;
+`RET:		IsMem = TRUE;
 default:    IsMem = FALSE;
 endcase
 endfunction
@@ -655,7 +680,7 @@ endfunction
 
 function IsSync;
 input [47:0] isn;
-IsSync = (isn[`INSTRUCTION_OP]==`R2 && isn[`INSTRUCTION_L2]==2'b00 && isn[`INSTRUCTION_S2]==`R1 && isn[22:18]==`SYNC) || IsRti(isn);
+IsSync = (isn[`INSTRUCTION_OP]==`R2 && isn[`INSTRUCTION_L2]==2'b00 && isn[`INSTRUCTION_S2]==`R1 && isn[22:18]==`SYNC) || IsRti(isn) || IsMov2Seg(isn);
 endfunction
 
 // Has an extendable 14-bit constant
@@ -1096,6 +1121,7 @@ always @*
 `endif
 begin
 	bus <= 144'h0;
+	bus[`IB_LOADSEG] <= IsMov2Seg(instr);
 	bus[`IB_CMP] <= IsCmp(instr);
 	if (IsStore(instr))
 		bus[`IB_CONST] <= instr[6]==1'b1 ? {{34{instr[47]}},instr[47:23],instr[17:13]} :

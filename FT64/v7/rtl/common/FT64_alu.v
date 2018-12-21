@@ -31,6 +31,7 @@ module FT64_alu(rst, clk, ld, abort, instr, sz, tlb, store, a, b, c, pc, Ra, tgt
     exv_o, rdv_o, wrv_o
 `ifdef SUPPORT_SEGMENTATION
 		, zs_base, ds_base, es_base, fs_base, gs_base, hs_base, ss_base, cs_base,
+		ldt_base, gdt_base,
 		zsub, dsub, esub, fsub, gsub, hsub, ssub, csub,
 		zslb, dslb, eslb, fslb, gslb, hslb, sslb, cslb
 `endif
@@ -1000,10 +1001,14 @@ case(instr[`INSTRUCTION_OP])
     				o = (a!=64'd0) ? b : {{48{instr[38]}},instr[38:23]};
     			else
     				o = (a!=64'd0) ? b : c;
+    `MOV2SEG:
+    	o = {(instr[33] ? ldt_base : gdt_base),5'd0} + {instr[32:18],5'd0};
     default:	o = 64'hDEADDEADDEADDEAD;
 		endcase
 	else
 	    casez(instr[`INSTRUCTION_S2])
+	    `MOV2SEG:
+  	  	o = {(a[15] ? ldt_base : gdt_base),5'd0} + {a[14:0],5'd0};
 	    `BCD:
 	        case(instr[`INSTRUCTION_S1])
 	        `BCDADD:    o[63:0] = BIG ? bcdaddo :  64'hCCCCCCCCCCCCCCCC;
