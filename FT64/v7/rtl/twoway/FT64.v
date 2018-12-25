@@ -108,6 +108,7 @@ parameter byt = 3'd0;
 parameter wyde = 3'd1;
 parameter tetra = 3'd2;
 parameter octa = 3'd3;
+parameter hexi = 3'd4;
 // IQ states
 parameter IQS_INVALID = 3'd0;
 parameter IQS_QUEUED = 3'd1;
@@ -254,7 +255,6 @@ reg [23:0] gs_sel [0:63];
 reg [23:0] hs_sel [0:63];
 reg [23:0] ss_sel [0:63];
 reg [23:0] cs_sel [0:63];
-reg [23:0] xs_sel [0:63];
 reg [15:0] zs_acr [0:63];
 reg [15:0] ds_acr [0:63];
 reg [15:0] es_acr [0:63];
@@ -265,14 +265,14 @@ reg [15:0] ss_acr [0:63];
 reg [15:0] cs_acr [0:63];
 initial begin
 	for (n = 0; n < 64; n = n + 1) begin
-		zs_base[n] <= 64'h0;
-		ds_base[n] <= 64'h0;
-		es_base[n] <= 64'h0;
-		fs_base[n] <= 64'h0;
-		gs_base[n] <= 64'h0;
-		hs_base[n] <= 64'h0;
-		ss_base[n] <= 64'h0;
-		cs_base[n] <= 64'h0;
+		zs_base[n] <= 96'h0;
+		ds_base[n] <= 96'h0;
+		es_base[n] <= 96'h0;
+		fs_base[n] <= 96'h0;
+		gs_base[n] <= 96'h0;
+		hs_base[n] <= 96'h0;
+		ss_base[n] <= 96'h0;
+		cs_base[n] <= 96'h0;
 		zs_lb[n] <= 64'h0;
 		ds_lb[n] <= 64'h0;
 		es_lb[n] <= 64'h0;
@@ -691,7 +691,7 @@ reg [55:0] insn1a, insn2a;
 // the queue plus an extra count for skipping on branch misses. In this case
 // that would be four bits minimum (count 0 to 8). 
 wire [63:0] rdat0,rdat1,rdat2;
-reg [63:0] xdati;
+reg [127:0] xdati;
 
 reg canq1, canq2, canq3;
 (* mark_debug = "true" *)
@@ -758,9 +758,10 @@ reg [QENTRIES-1:0] iqentry_rfw = 1'b0;	// writes to register file
 reg [QENTRIES-1:0] iqentry_prfw = 1'b0;
 reg  [7:0] iqentry_we   [0:QENTRIES-1];	// enable strobe
 reg [63:0] iqentry_res	[0:QENTRIES-1];	// instruction result
-reg [63:0] iqentry_res1	[0:QENTRIES-1];	// instruction result
-reg [63:0] iqentry_res2	[0:QENTRIES-1];	// instruction result
-reg [63:0] iqentry_res3	[0:QENTRIES-1];	// instruction result
+reg [63:0] iqentry_seg_base	[0:QENTRIES-1];	//
+reg [63:0] iqentry_seg_lb	[0:QENTRIES-1];	//
+reg [63:0] iqentry_seg_ub	[0:QENTRIES-1];	//
+reg [63:0] iqentry_seg_acr	[0:QENTRIES-1];	//
 reg [63:0] iqentry_ares	[0:QENTRIES-1];	// alternate instruction result
 reg [47:0] iqentry_instr[0:QENTRIES-1];	// instruction opcode
 reg  [2:0] iqentry_insln[0:QENTRIES-1]; // instruction length
@@ -1223,9 +1224,12 @@ parameter B21 = 5'd25;
 parameter B_DCacheLoadWait3 = 5'd26;
 parameter B_LoadDesc = 5'd27;
 parameter B_LoadDescStb = 5'd28;
+parameter B_WaitSeg = 5'd29;
+parameter B_DLoadNack = 5'd30;
 parameter SEG_IDLE = 2'd0;
 parameter SEG_CHK = 2'd1;
 parameter SEG_UPD = 2'd2;
+parameter SEG_DONE = 2'd3;
 reg [1:0] bwhich;
 reg [3:0] icstate,picstate;
 parameter IDLE = 4'd0;
@@ -2063,9 +2067,9 @@ end
 endgenerate
 
 wire [63:0] dc0_out, dc1_out, dc2_out;
-assign rdat0 = dram0_unc ? xdati : dc0_out;
-assign rdat1 = dram1_unc ? xdati : dc1_out;
-assign rdat2 = dram2_unc ? xdati : dc2_out;
+assign rdat0 = dram0_unc ? xdati[63:0] : dc0_out;
+assign rdat1 = dram1_unc ? xdati[63:0] : dc1_out;
+assign rdat2 = dram2_unc ? xdati[63:0] : dc2_out;
 
 reg preload;
 reg [1:0] dccnt;
@@ -7385,7 +7389,7 @@ if (fcu_v) begin
   iqentry_res [ fcu_id[`QBITS] ] <= rfcu_bus;
   iqentry_exc [ fcu_id[`QBITS] ] <= fcu_exc;
 `ifdef SUPPORT_SEGMENTATION
-	iqentry_res1[ fcu_id[`QBITS] ] <= {(fcu_argB[55] ? ldt_base : gdt_base),5'd0} + {fcu_argB[54:40],5'd0};
+	iqentry_seg_base[ fcu_id[`QBITS] ] <= {(fcu_argB[55] ? ldt_base : gdt_base),5'd0} + {fcu_argB[54:40],5'd0};
 	if ((fcu_ret && fcu_argB[63:40] == cs_sel[brgs]) || !fcu_ret)
 		iqentry_state[fcu_id[`QBITS] ] <= IQS_CMT;
 	else if (fcu_ret && fcu_argB[63:40] != cs_sel[brgs])
@@ -7411,17 +7415,13 @@ end
 if (mem2_available && `NUM_MEM > 1 && dramB_v && iqentry_v[ dramB_id[`QBITS] ]) begin
 	iqentry_res	[ dramB_id[`QBITS] ] <= rdramB_bus;
 	iqentry_exc	[ dramB_id[`QBITS] ] <= dramB_exc;
-//	iqentry_done[ dramB_id[`QBITS] ] <= `VAL;
 	iqentry_state[dramB_id[`QBITS] ] <= IQS_CMT;
-//	iqentry_out [ dramB_id[`QBITS] ] <= `INV;
 	iqentry_aq  [ dramB_id[`QBITS] ] <= `INV;
 end
 if (mem3_available && `NUM_MEM > 2 && dramC_v && iqentry_v[ dramC_id[`QBITS] ]) begin
 	iqentry_res	[ dramC_id[`QBITS] ] <= rdramC_bus;
 	iqentry_exc	[ dramC_id[`QBITS] ] <= dramC_exc;
-//	iqentry_done[ dramC_id[`QBITS] ] <= `VAL;
 	iqentry_state[dramC_id[`QBITS] ] <= IQS_CMT;
-//	iqentry_out [ dramC_id[`QBITS] ] <= `INV;
 	iqentry_aq  [ dramC_id[`QBITS] ] <= `INV;
 //	    if (iqentry_lptr[dram2_id[`QBITS]])
 //	    	wbrcd[pcr[5:0]] <= 1'b1;
@@ -8669,8 +8669,10 @@ BIDLE:
                	cti_o <= 3'b001;
                	bstate <= B_LoadDesc;
                end
-               else
+               else begin
+               	dccnt <= 2'd0;
                	bstate <= B_DLoadAck;
+               end
             end
         end
         else if (~|wb_v && mem2_available && dram1_unc && dram1==`DRAMSLOT_BUSY && dram1_load && `NUM_MEM > 1) begin
@@ -8692,6 +8694,7 @@ BIDLE:
                vadr <= {dram1_addr[AMSB:3],3'b0};
                sr_o <=  IsLWR(dram1_instr);
                ol_o  <= dram1_ol;
+               dccnt <= 2'd0;
                bstate <= B_DLoadAck;
             end
         end
@@ -8714,6 +8717,7 @@ BIDLE:
                vadr <= {dram2_addr[AMSB:3],3'b0};
                sr_o <=  IsLWR(dram2_instr);
                ol_o  <= dram2_ol;
+               dccnt <= 2'd0;
                bstate <= B_DLoadAck;
             end
         end
@@ -9013,10 +9017,28 @@ B_DLoadAck:
   if (ack_i|err_i|tlb_miss|rdv_i) begin
   	wb_nack();
 		sr_o <= `LOW;
-		xdati <= dat_i;
+		case(dccnt)
+		2'd0:	xdati[63:0] <= dat_i;
+		2'd1:	xdati[127:64] <= dat_i;
+		endcase
     case(bwhich)
     2'b00:  begin
-             dram0 <= `DRAMREQ_READY;
+    					if (dram0_memsize==hexi) begin
+    						if (dccnt==2'd1) begin
+			             dram0 <= `DRAMREQ_READY;
+			             iqentry_seg_base[dram0_id[`QBITS]] <= xdati[63:0];
+			             iqentry_seg_acr[dram0_id[`QBITS]] <= dat_i;
+			          end
+			          else begin
+			          	dccnt <= dccnt + 2'd1;
+			          	cyc <= `HIGH;
+			          	sel_o <= 8'hFF;
+			          	vadr_o <= vadr_o + 64'd8;
+			          	bstate <= B_DLoadNack;
+			        	end
+    					end
+    					else
+             		dram0 <= `DRAMREQ_READY;
              iqentry_exc [ dram0_id[`QBITS] ] <= tlb_miss ? `FLT_TLB : err_i ? `FLT_DRF : rdv_i ? `FLT_DRF : `FLT_NONE;
             end
     2'b01:  if (`NUM_MEM > 1) begin
@@ -9030,6 +9052,11 @@ B_DLoadAck:
     default:    ;
     endcase
 		bstate <= B19;
+	end
+B_DLoadNack:
+	if (~acki) begin
+		stb_o <= `HIGH;
+		bstate <= B_DLoackAck;
 	end
 
 // Three cycles to detemrine if there's a cache hit during a store.
@@ -9080,7 +9107,7 @@ B_LoadDesc:
 			if (desc_cnt==3'd3) begin
 				wb_nack();
 				cti_o <= 3'b000;
-				bstate <= BIDLE;
+				bstate <= B_WaitSeg;
 				seg_state <= SEG_CHK;
 			end
 			desc_cnt <= desc_cnt + 2'd1;
@@ -9091,6 +9118,9 @@ B_LoadDescStb:
 		stb_o <= `HIGH;
 		bstate <= B_LoadDesc;
 	end
+B_WaitSeg:
+	if (seg_state==SEG_DONE)
+		bstate <= BIDLE;
 `endif
 default:     bstate <= BIDLE;
 endcase
@@ -9105,8 +9135,8 @@ SEG_CHK:
 		if (desc_in[255:192]==64'd0) begin
 			// Attempting to load the stack segment with a zero selector results in a
 			// fault.
-			if (iqentry_tgt[dram0_id[`QBITS]][2:0]==3'd6)	// SS target?
-				iqentry_exc[dram0_id[`QBITS]] <= `FLT_SSZ;
+			if (iqentry_tgt[dram0_id[`QBITS]][3:0]==4'd6)	// SS target?
+				iqentry_exc[dram0_id[`QBITS]] <= `FLT_STZ;
 		end
 		else begin
 			if (desc_in[255]==1'b0) begin
@@ -9114,14 +9144,38 @@ SEG_CHK:
 			end
 			// A code segment must be loaded into a code segment register
 			else if (desc_in[255:248] >= 8'h98 && desc_in[255:248] <= 8'h9F) begin
-				if (seg_tgt != 4'd7 && seg_tgt != 4'd8 && seg_tgt != 4'd9)
-					iqentry_exc[dram0_id[`QBITS]] <= `FLT_STX;			// segment type exception
+				if (iqentry_tgt[dram0_id[`QBITS]][3:0] != 4'd7)
+					iqentry_exc[dram0_id[`QBITS]] <= `FLT_STP;			// segment type exception
 				if (cpl != desc_in[247:240])
 					iqentry_exc[dram0_id[`QBITS]] <= `FLT_PRIV;			// privilege violation
 			end
-			// Check for LDT
-			else if (desc_in[255:248]==8'h82 && seg_tgt != 4'd11)
-				iqentry_exc[dram0_id[`QBITS]] <= `FLT_STX;			// segment type exception
+			// System descriptor?
+			else if (desc_in[252]==1'b0) begin
+				case(desc_inc[251:248])
+				4'd0:	;	// unused
+				// Check for LDT
+				4'd2:	
+					if (iqentry_tgt[dram0_id[`QBITS]][3:0] != 4'd11)
+						iqentry_exc[dram0_id[`QBITS]] <= `FLT_STP;			// segment type exception
+				// For a call gate the selector in the gate descriptor must be loaded.
+				4'd4:	// call gate
+					begin
+						iqentry_ma[dram0_id[`QBITS]] <= desc_in[63:0];
+           	cti_o <= 3'b001;
+            cyc <= `HIGH;
+            stb_o <= `HIGH;
+            sel_o <= 8'hFF;
+            if (desc_in[79])
+            	vadr <= {ldt_base,5'd0} + {desc_in[78:64],5'd0};
+            else
+            	vadr <= {gdt_base,5'd0} + {desc_in[78:64],5'd0};
+            sr_o <=  1'b0;
+            ol_o  <= dram0_ol;
+           	bstate <= B_LoadDesc;
+           	seg_state <= SEG_IDLE;
+					end
+				endcase
+			end
 		end
 	end
 SEG_UPD:
@@ -9129,14 +9183,16 @@ SEG_UPD:
 		if (~|iqentry_exc[dram0_id[`QBITS]]) begin
 			desc_cache[desc_ndx] <= desc_in;
 			desc_cache_v[desc_ndx] <= `VAL;
-			iqentry_res[dram0_id[`QBITS]] <= desc_in[63:0];
-			iqentry_res1[dram0_id[`QBITS]] <= desc_in[127:64];
-			iqentry_res2[dram0_id[`QBITS]] <= desc_in[191:128];
-			iqentry_res3[dram0_id[`QBITS]] <= desc_in[255:192];
+			iqentry_seg_base[dram0_id[`QBITS]] <= desc_in[63:0];
+			iqentry_seg_lb[dram0_id[`QBITS]] <= desc_in[127:64];
+			iqentry_seg_ub[dram0_id[`QBITS]] <= desc_in[191:128];
+			iqentry_seg_acr[dram0_id[`QBITS]] <= desc_in[255:192];
 		end
 		iqentry_state[dram0_id[`QBITS]] <= IQS_CMT;
-		seg_state <= SEG_IDLE;
+		seg_state <= SEG_DONE;
 	end
+SEG_DONE:
+	seg_state <= SEG_IDLE;
 default:
 	seg_state <= SEG_IDLE;
 endcase
@@ -9955,6 +10011,71 @@ end
 end
 endtask
 
+task exc;
+input [`QBITS] head;
+input thread;
+input [7:0] causecd;
+begin
+  excmiss <= TRUE;
+`ifdef SUPPORT_SMT            
+ 	excmisspc <= {tvec[3'd0][AMSB:8],1'b0,ol[thread],5'h00};
+  excthrd <= iqentry_thrd[head];
+  badaddr[{thread,2'd0}] <= iqentry_ma[head];
+  bad_instr[{thread,2'd0}] <= iqentry_instr[head];
+  epc0[thread] <= iqentry_pc[head];
+  epc1[thread] <= epc0[thread];
+  epc2[thread] <= epc1[thread];
+  epc3[thread] <= epc2[thread];
+  epc4[thread] <= epc3[thread];
+  epc5[thread] <= epc4[thread];
+  epc6[thread] <= epc5[thread];
+  epc7[thread] <= epc6[thread];
+  epc8[thread] <= epc7[thread];
+  im_stack[thread] <= {im_stack[thread][27:0],im};
+  ol_stack[thread] <= {ol_stack[thread][13:0],ol[thread]};
+  dl_stack[thread] <= {dl_stack[thread][13:0],dl[thread]};
+  pl_stack[thread] <= {pl_stack[thread][55:0],cpl[thread]};
+  rs_stack[thread] <= {rs_stack[thread][59:0],`EXC_RGS};
+  brs_stack[thread] <= {brs_stack[thread][59:0],`EXC_RGS};
+  cause[{thread,2'd0}] <= {8'd0,causecd};
+  mstatus[thread][5:4] <= 2'd0;
+  mstatus[thread][13:6] <= 8'h00;
+  mstatus[thread][19:14] <= `EXC_RGS;
+`else
+ 	excmisspc <= {tvec[3'd0][AMSB:8],1'b0,ol,5'h00};
+  excthrd <= 1'b0;
+  badaddr[{1'b0,2'd0}] <= iqentry_ma[head];
+  bad_instr[3'd0] <= iqentry_instr[head];
+  epc0 <= iqentry_pc[head];
+  epc1 <= epc0;
+  epc2 <= epc1;
+  epc3 <= epc2;
+  epc4 <= epc3;
+  epc5 <= epc4;
+  epc6 <= epc5;
+  epc7 <= epc6;
+  epc8 <= epc7;
+  im_stack <= {im_stack[27:0],im};
+  ol_stack <= {ol_stack[13:0],ol};
+  dl_stack <= {dl_stack[13:0],dl};
+  pl_stack <= {pl_stack[55:0],cpl};
+  rs_stack <= {rs_stack[59:0],`EXC_RGS};
+  brs_stack <= {rs_stack[59:0],`EXC_RGS};
+  cause[3'd0] <= {8'd0,causecd};
+  mstatus[5:4] <= 2'd0;
+  mstatus[13:6] <= 8'h00;
+  mstatus[19:14] <= `EXC_RGS;
+`endif           	
+	wb_en <= `TRUE;
+  sema[0] <= 1'b0;
+  ve_hold <= {vqet1,10'd0,vqe1,10'd0,vqet0,10'd0,vqe0};
+`ifdef SUPPORT_DBG            
+  dbg_ctrl[62:55] <= {dbg_ctrl[61:55],dbg_ctrl[63]}; 
+  dbg_ctrl[63] <= FALSE;
+`endif            
+end
+endtask
+
 // This task takes care of commits for things other than the register file.
 task oddball_commit;
 input v;
@@ -9965,63 +10086,7 @@ begin
     thread = iqentry_thrd[head];
     if (v) begin
         if (|iqentry_exc[head]) begin
-          excmiss <= TRUE;
-`ifdef SUPPORT_SMT            
-         	excmisspc <= {tvec[3'd0][AMSB:8],1'b0,ol[thread],5'h00};
-          excthrd <= iqentry_thrd[head];
-          badaddr[{thread,2'd0}] <= iqentry_ma[head];
-          bad_instr[{thread,2'd0}] <= iqentry_instr[head];
-          epc0[thread] <= iqentry_pc[head];
-          epc1[thread] <= epc0[thread];
-          epc2[thread] <= epc1[thread];
-          epc3[thread] <= epc2[thread];
-          epc4[thread] <= epc3[thread];
-          epc5[thread] <= epc4[thread];
-          epc6[thread] <= epc5[thread];
-          epc7[thread] <= epc6[thread];
-          epc8[thread] <= epc7[thread];
-          im_stack[thread] <= {im_stack[thread][27:0],im};
-          ol_stack[thread] <= {ol_stack[thread][13:0],ol[thread]};
-          dl_stack[thread] <= {dl_stack[thread][13:0],dl[thread]};
-          pl_stack[thread] <= {pl_stack[thread][55:0],cpl[thread]};
-          rs_stack[thread] <= {rs_stack[thread][59:0],`EXC_RGS};
-          brs_stack[thread] <= {brs_stack[thread][59:0],`EXC_RGS};
-          cause[{thread,2'd0}] <= {8'd0,iqentry_exc[head]};
-          mstatus[thread][5:4] <= 2'd0;
-          mstatus[thread][13:6] <= 8'h00;
-          mstatus[thread][19:14] <= `EXC_RGS;
-`else
-         	excmisspc <= {tvec[3'd0][AMSB:8],1'b0,ol,5'h00};
-          excthrd <= 1'b0;
-          badaddr[{1'b0,2'd0}] <= iqentry_ma[head];
-          bad_instr[3'd0] <= iqentry_instr[head];
-          epc0 <= iqentry_pc[head];
-          epc1 <= epc0;
-          epc2 <= epc1;
-          epc3 <= epc2;
-          epc4 <= epc3;
-          epc5 <= epc4;
-          epc6 <= epc5;
-          epc7 <= epc6;
-          epc8 <= epc7;
-          im_stack <= {im_stack[27:0],im};
-          ol_stack <= {ol_stack[13:0],ol};
-          dl_stack <= {dl_stack[13:0],dl};
-          pl_stack <= {pl_stack[55:0],cpl};
-          rs_stack <= {rs_stack[59:0],`EXC_RGS};
-          brs_stack <= {rs_stack[59:0],`EXC_RGS};
-          cause[3'd0] <= {8'd0,iqentry_exc[head]};
-          mstatus[5:4] <= 2'd0;
-          mstatus[13:6] <= 8'h00;
-          mstatus[19:14] <= `EXC_RGS;
-`endif           	
-					wb_en <= `TRUE;
-          sema[0] <= 1'b0;
-          ve_hold <= {vqet1,10'd0,vqe1,10'd0,vqet0,10'd0,vqe0};
-`ifdef SUPPORT_DBG            
-          dbg_ctrl[62:55] <= {dbg_ctrl[61:55],dbg_ctrl[63]}; 
-          dbg_ctrl[63] <= FALSE;
-`endif            
+        	exc(head,thread,iqentry_exc[head]);
         end
         else
         case(iqentry_instr[head][`INSTRUCTION_OP])
@@ -10129,53 +10194,65 @@ begin
         			`MOV2SEG:
         				case(iqentry_instr[head][15:13])
         				3'd0:	begin
-        								zs_base[brgs] <= iqentry_res[head];
-        								zs_lb[brgs] <=  iqentry_res1[head];
-        								zs_ub[brgs] <=  iqentry_res2[head];
-        								zs_acr[brgs] <=  iqentry_res3[head];
+        								zs_base[brgs] <= iqentry_seg_base[head];
+        								zs_lb[brgs] <= iqentry_seg_lb[head];
+        								zs_ub[brgs] <= iqentry_seg_ub[head];
+        								zs_acr[brgs] <= iqentry_seg_acr[head];
+        								zs_sel[brgs] <= iqentry_instr[head][41:18];
         							end
         				3'd1:	begin
-        								ds_base[brgs] <= iqentry_res[head];
-        								ds_lb[brgs] <=  iqentry_res1[head];
-        								ds_ub[brgs] <=  iqentry_res2[head];
-        								ds_acr[brgs] <=  iqentry_res3[head];
+        								ds_base[brgs] <= iqentry_seg_base[head];
+        								ds_lb[brgs] <= iqentry_seg_lb[head];
+        								ds_ub[brgs] <= iqentry_seg_ub[head];
+        								ds_acr[brgs] <= iqentry_seg_acr[head];
+        								ds_sel[brgs] <= iqentry_instr[head][41:18];
         							end
         				3'd2:	begin
-        								es_base[brgs] <= iqentry_res[head];
-        								es_lb[brgs] <=  iqentry_res1[head];
-        								es_ub[brgs] <=  iqentry_res2[head];
-        								es_acr[brgs] <=  iqentry_res3[head];
+        								es_base[brgs] <= iqentry_seg_base[head];
+        								es_lb[brgs] <= iqentry_seg_lb[head];
+        								es_ub[brgs] <= iqentry_seg_ub[head];
+        								es_acr[brgs] <= iqentry_seg_acr[head];
+        								es_sel[brgs] <= iqentry_instr[head][41:18];
         							end
         				3'd3:	begin
-        								fs_base[brgs] <= iqentry_res[head];
-        								fs_lb[brgs] <=  iqentry_res1[head];
-        								fs_ub[brgs] <=  iqentry_res2[head];
-        								fs_acr[brgs] <=  iqentry_res3[head];
+        								fs_base[brgs] <= iqentry_seg_base[head];
+        								fs_lb[brgs] <= iqentry_seg_lb[head];
+        								fs_ub[brgs] <= iqentry_seg_ub[head];
+        								fs_acr[brgs] <= iqentry_seg_acr[head];
+        								fs_sel[brgs] <= iqentry_instr[head][41:18];
         							end
         				3'd4:	begin
-        								gs_base[brgs] <= iqentry_res[head];
-        								gs_lb[brgs] <=  iqentry_res1[head];
-        								gs_ub[brgs] <=  iqentry_res2[head];
-        								gs_acr[brgs] <=  iqentry_res3[head];
+        								gs_base[brgs] <= iqentry_seg_base[head];
+        								gs_lb[brgs] <= iqentry_seg_lb[head];
+        								gs_ub[brgs] <= iqentry_seg_ub[head];
+        								gs_acr[brgs] <= iqentry_seg_acr[head];
+        								gs_sel[brgs] <= iqentry_instr[head][41:18];
         							end
         				3'd5:	begin
-        								hs_base[brgs] <= iqentry_res[head];
-        								hs_lb[brgs] <=  iqentry_res1[head];
-        								hs_ub[brgs] <=  iqentry_res2[head];
-        								hs_acr[brgs] <=  iqentry_res3[head];
+        								hs_base[brgs] <= iqentry_seg_base[head];
+        								hs_lb[brgs] <= iqentry_seg_lb[head];
+        								hs_ub[brgs] <= iqentry_seg_ub[head];
+        								hs_acr[brgs] <= iqentry_seg_acr[head];
+        								hs_sel[brgs] <= iqentry_instr[head][41:18];
         							end
         				3'd6:	begin
-        								ss_base[brgs] <= iqentry_res[head];
-        								ss_lb[brgs] <=  iqentry_res1[head];
-        								ss_ub[brgs] <=  iqentry_res2[head];
-        								ss_acr[brgs] <=  iqentry_res3[head];
+        								ss_base[brgs] <= iqentry_seg_base[head];
+        								ss_lb[brgs] <= iqentry_seg_lb[head];
+        								ss_ub[brgs] <= iqentry_seg_ub[head];
+        								ss_acr[brgs] <= iqentry_seg_acr[head];
+        								ss_sel[brgs] <= iqentry_instr[head][41:18];
         							end
-        							// ToDo:  The following should cause a fault:
+        				// ToDo:  The following should cause a fault:
+        				// Assuming the code segment is laoded with a call gate.
         				3'd7:	begin
-        								cs_base[brgs] <= iqentry_res[head];
-        								cs_lb[brgs] <=  iqentry_res1[head];
-        								cs_ub[brgs] <=  iqentry_res2[head];
-        								cs_acr[brgs] <=  iqentry_res3[head];
+        								excmiss <= TRUE;
+        								excthrd <= iqentry_thrd[head];
+        								excmisspc <= iqentry_ma[head];
+        								cs_base[brgs] <= iqentry_seg_base[head];
+        								cs_lb[brgs] <= iqentry_seg_lb[head];
+        								cs_ub[brgs] <= iqentry_seg_ub[head];
+        								cs_acr[brgs] <= iqentry_seg_acr[head];
+        								cs_sel[brgs] <= iqentry_instr[head][41:18];
         							end
         				endcase
         			default:	;
@@ -10187,53 +10264,66 @@ begin
        			`MOV2SEG:
         				case(iqentry_instr[head][15:13])
         				3'd0:	begin
-        								zs_base[brgs] <= iqentry_res[head];
-        								zs_lb[brgs] <=  iqentry_res1[head];
-        								zs_ub[brgs] <=  iqentry_res2[head];
-        								zs_acr[brgs] <=  iqentry_res3[head];
+        								zs_base[brgs] <= iqentry_seg_base[head];
+        								zs_lb[brgs] <= iqentry_seg_lb[head];
+        								zs_ub[brgs] <= iqentry_seg_ub[head];
+        								zs_acr[brgs] <= iqentry_seg_acr[head];
+        								zs_sel[brgs] <= iqentry_a1[head][23:0];
         							end
         				3'd1:	begin
-        								ds_base[brgs] <= iqentry_res[head];
-        								ds_lb[brgs] <=  iqentry_res1[head];
-        								ds_ub[brgs] <=  iqentry_res2[head];
-        								ds_acr[brgs] <=  iqentry_res3[head];
+        								ds_base[brgs] <= iqentry_seg_base[head];
+        								ds_lb[brgs] <= iqentry_seg_lb[head];
+        								ds_ub[brgs] <= iqentry_seg_ub[head];
+        								ds_acr[brgs] <= iqentry_seg_acr[head];
+        								ds_sel[brgs] <= iqentry_a1[head][23:0];
         							end
         				3'd2:	begin
-        								es_base[brgs] <= iqentry_res[head];
-        								es_lb[brgs] <=  iqentry_res1[head];
-        								es_ub[brgs] <=  iqentry_res2[head];
-        								es_acr[brgs] <=  iqentry_res3[head];
+        								es_base[brgs] <= iqentry_seg_base[head];
+        								es_lb[brgs] <= iqentry_seg_lb[head];
+        								es_ub[brgs] <= iqentry_seg_ub[head];
+        								es_acr[brgs] <= iqentry_seg_acr[head];
+        								es_sel[brgs] <= iqentry_a1[head][23:0];
         							end
         				3'd3:	begin
-        								fs_base[brgs] <= iqentry_res[head];
-        								fs_lb[brgs] <=  iqentry_res1[head];
-        								fs_ub[brgs] <=  iqentry_res2[head];
-        								fs_acr[brgs] <=  iqentry_res3[head];
+        								fs_base[brgs] <= iqentry_seg_base[head];
+        								fs_lb[brgs] <= iqentry_seg_lb[head];
+        								fs_ub[brgs] <= iqentry_seg_ub[head];
+        								fs_acr[brgs] <= iqentry_seg_acr[head];
+        								fs_sel[brgs] <= iqentry_a1[head][23:0];
         							end
         				3'd4:	begin
-        								gs_base[brgs] <= iqentry_res[head];
-        								gs_lb[brgs] <=  iqentry_res1[head];
-        								gs_ub[brgs] <=  iqentry_res2[head];
-        								gs_acr[brgs] <=  iqentry_res3[head];
+        								gs_base[brgs] <= iqentry_seg_base[head];
+        								gs_lb[brgs] <= iqentry_seg_lb[head];
+        								gs_ub[brgs] <= iqentry_seg_ub[head];
+        								gs_acr[brgs] <= iqentry_seg_acr[head];
+        								gs_sel[brgs] <= iqentry_a1[head][23:0];
         							end
         				3'd5:	begin
-        								hs_base[brgs] <= iqentry_res[head];
-        								hs_lb[brgs] <=  iqentry_res1[head];
-        								hs_ub[brgs] <=  iqentry_res2[head];
-        								hs_acr[brgs] <=  iqentry_res3[head];
+        								hs_base[brgs] <= iqentry_seg_base[head];
+        								hs_lb[brgs] <= iqentry_seg_lb[head];
+        								hs_ub[brgs] <= iqentry_seg_ub[head];
+        								hs_acr[brgs] <= iqentry_seg_acr[head];
+        								hs_sel[brgs] <= iqentry_a1[head][23:0];
         							end
         				3'd6:	begin
-        								ss_base[brgs] <= iqentry_res[head];
-        								ss_lb[brgs] <=  iqentry_res1[head];
-        								ss_ub[brgs] <=  iqentry_res2[head];
-        								ss_acr[brgs] <=  iqentry_res3[head];
+        								ss_base[brgs] <= iqentry_seg_base[head];
+        								ss_lb[brgs] <= iqentry_seg_lb[head];
+        								ss_ub[brgs] <= iqentry_seg_ub[head];
+        								ss_acr[brgs] <= iqentry_seg_acr[head];
+        								ss_sel[brgs] <= iqentry_a1[head][23:0];
         							end
-        							// ToDo:  The following should cause a fault:
+        				// ToDo:  The following should cause a fault:
+        				// The only time moving to the cs makes sense is if the descriptor
+        				// indicates a gate of some kind (call, trap, or interrupt).
         				3'd7:	begin
-        								cs_base[brgs] <= iqentry_res[head];
-        								cs_lb[brgs] <=  iqentry_res1[head];
-        								cs_ub[brgs] <=  iqentry_res2[head];
-        								cs_acr[brgs] <=  iqentry_res3[head];
+        								excmiss <= TRUE;
+        								excthrd <= iqentry_thrd[head];
+        								excmisspc <= iqentry_ma[head];
+        								cs_base[brgs] <= iqentry_seg_base[head];
+        								cs_lb[brgs] <= iqentry_seg_lb[head];
+        								cs_ub[brgs] <= iqentry_seg_ub[head];
+        								cs_acr[brgs] <= iqentry_seg_acr[head];
+        								cs_sel[brgs] <= iqentry_a1[head][23:0];
         							end
         				endcase
         			default:	;
@@ -10338,41 +10428,50 @@ begin
 `ifdef SUPPORT_SEGMENTATION
         `CALL:
         	if (iqentry_instr[6]) begin
-        		case(iqentry_instr[head][47:44])
-        		3'd0:	begin
+        		excmiss <= `TRUE;
+        		excmisspc <= iqentry_ma[head];
+        		excthrd <= iqentry_thrd[head];
+        		case(iqentry_instr[head][47:46])
+        		2'd0:	begin
         						cs_base[brgs] <= zs_base[brgs];
         						cs_lb[brgs] <= zs_lb[brgs];
         						cs_ub[brgs] <= zs_ub[brgs];
         						cs_acr[brgs] <= zs_acr[brgs];
+        						cs_sel[brgs] <= zs_sel[brgs];
+        						excmisspc[63:40] <= zs_sel[brgs];
         					end
-        		3'd2:	begin
+        		2'd1:	begin
         						cs_base[brgs] <= es_base[brgs];
         						cs_lb[brgs] <= es_lb[brgs];
         						cs_ub[brgs] <= es_ub[brgs];
         						cs_acr[brgs] <= es_acr[brgs];
+        						cs_sel[brgs] <= es_sel[brgs];
+        						excmisspc[63:40] <= es_sel[brgs];
         					end
-        		3'd3:	begin
-        						cs_base[brgs] <= fs_base[brgs];
-        						cs_lb[brgs] <= fs_lb[brgs];
-        						cs_ub[brgs] <= fs_ub[brgs];
-        						cs_acr[brgs] <= fs_acr[brgs];
-        					end
-        		3'd4:	begin
-        						cs_base[brgs] <= gs_base[brgs];
-        						cs_lb[brgs] <= gs_lb[brgs];
-        						cs_ub[brgs] <= gs_ub[brgs];
-        						cs_acr[brgs] <= gs_acr[brgs];
-        					end
-        		3'd5:	begin
+        		2'd2:	begin
         						cs_base[brgs] <= hs_base[brgs];
         						cs_lb[brgs] <= hs_lb[brgs];
         						cs_ub[brgs] <= hs_ub[brgs];
         						cs_acr[brgs] <= hs_acr[brgs];
+        						cs_sel[brgs] <= hs_sel[brgs];
+        						excmisspc[63:40] <= hs_sel[brgs];
         					end
         		// Can't load stack or data segment into code segment
         		// loading code segment to code segment is redundant
+        		default:	;
         		endcase
         	end
+    		`RET:
+    				if (iqentry_a2[head][63:40] != cs_sel[brgs]) begin
+    					excmiss <= `TRUE;
+    					excmisspc <= iqentry_a2[head];
+    					excthrd <= iqentry_thrd[head];
+							cs_base[brgs] <= iqentry_seg_base[head];
+							cs_lb[brgs] <= iqentry_seg_lb[head];
+							cs_ub[brgs] <= iqentry_seg_ub[head];
+							cs_acr[brgs] <= iqentry_seg_acr[head];
+							cs_sel[brgs] <= iqentry_a2[head][63:40];
+						end
 `endif
         `REX:
 `ifdef SUPPORT_SMT        
