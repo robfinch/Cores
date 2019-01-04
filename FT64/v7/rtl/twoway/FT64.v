@@ -7042,7 +7042,6 @@ if (fcu_v) begin
 	iqentry_ma  [ fcu_id[`QBITS] ] <= fcu_misspc;
   iqentry_res [ fcu_id[`QBITS] ] <= rfcu_bus;
   iqentry_exc [ fcu_id[`QBITS] ] <= fcu_exc;
-	end
 	iqentry_state[fcu_id[`QBITS] ] <= IQS_CMT;
 	// takb is looked at only for branches to update the predictor. Here it is
 	// unconditionally set, the value will be ignored if it's not a branch.
@@ -7433,7 +7432,7 @@ end
 //                 fcu_argB	<= iqentry_rti[n] ? epc0
 `endif                 
 									fcu_argB	<=
-                 			: (iqentry_a2_v[n] ? iqentry_a2[n]
+                 			  (iqentry_a2_v[n] ? iqentry_a2[n]
                             : (iqentry_a2_s[n] == alu0_id) ? ralu0_bus 
                             : (iqentry_a2_s[n] == fpu1_id && `NUM_FPU > 0) ? rfpu1_bus
                             : ralu1_bus);
@@ -8638,7 +8637,7 @@ B_DLoadAck:
 			          	dccnt <= dccnt + 2'd1;
 			          	cyc <= `HIGH;
 			          	sel_o <= 8'hFF;
-			          	vadr_o <= vadr_o + 64'd8;
+			          	vadr <= vadr + 64'd8;
 			          	bstate <= B_DLoadNack;
 			        	end
     					end
@@ -8661,7 +8660,7 @@ B_DLoadAck:
 B_DLoadNack:
 	if (~acki) begin
 		stb_o <= `HIGH;
-		bstate <= B_DLoackAck;
+		bstate <= B_DLoadAck;
 	end
 
 // Three cycles to detemrine if there's a cache hit during a store.

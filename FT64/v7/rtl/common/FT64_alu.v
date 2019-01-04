@@ -29,12 +29,6 @@ module FT64_alu(rst, clk, ld, abort, instr, sz, tlb, store, a, b, c, pc, Ra, tgt
     csr, o, ob, done, idle, excen, exc, thrd, ptrmask, state, mem, shift,
     ol, dl, ASID, icl_i, cyc_i, we_i, vadr_i, cyc_o, we_o, padr_o, uncached, tlb_miss,
     exv_o, rdv_o, wrv_o
-`ifdef SUPPORT_SEGMENTATION
-		, zs_base, ds_base, es_base, fs_base, gs_base, hs_base, ss_base, cs_base,
-		ldt_base, gdt_base,
-		zsub, dsub, esub, fsub, gsub, hsub, ssub, csub,
-		zslb, dslb, eslb, fslb, gslb, hslb, sslb, cslb
-`endif
 `ifdef SUPPORT_BBMS 
     , pb, cbl, cbu, ro, dbl, dbu, sbl, sbu, en
 `endif
@@ -90,32 +84,6 @@ output tlb_miss;
 output wrv_o;
 output rdv_o;
 output exv_o;
-`ifdef SUPPORT_SEGMENTATION
-input [63:0] zs_base;
-input [63:0] ds_base;
-input [63:0] es_base;
-input [63:0] fs_base;
-input [63:0] gs_base;
-input [63:0] hs_base;
-input [63:0] ss_base;
-input [63:0] cs_base;
-input [63:0] zslb;
-input [63:0] dslb;
-input [63:0] eslb;
-input [63:0] fslb;
-input [63:0] gslb;
-input [63:0] hslb;
-input [63:0] sslb;
-input [63:0] cslb;
-input [63:0] zsub;
-input [63:0] dsub;
-input [63:0] esub;
-input [63:0] fsub;
-input [63:0] gsub;
-input [63:0] hsub;
-input [63:0] ssub;
-input [63:0] csub;
-`endif
 `ifdef SUPPORT_BBMS
 input [63:0] pb;
 input [63:0] cbl;
@@ -141,47 +109,8 @@ integer n;
 
 reg adrDone, adrIdle;
 reg [63:0] usa;			// unsegmented address
-`ifdef SUPPORT_SEGMENTATION
-reg [63:0] pb;
-reg [63:0] ub;
-reg [63:0] lb;
-always @*
-case(usa[63:61])
-3'd0:	pb <= zs_base;
-3'd1: pb <= ds_base;
-3'd2: pb <= es_base;
-3'd3: pb <= fs_base;
-3'd4: pb <= gs_base;
-3'd5: pb <= hs_base;
-3'd6: pb <= ss_base;
-3'd7: pb <= cs_base;
-endcase
-always @*
-case(usa[63:61])
-3'd0:	ub <= zsub;
-3'd1: ub <= dsub;
-3'd2: ub <= esub;
-3'd3: ub <= fsub;
-3'd4: ub <= gsub;
-3'd5: ub <= hsub;
-3'd6: ub <= ssub;
-3'd7: ub <= csub;
-endcase
-always @*
-case(usa[63:61])
-3'd0:	lb <= zslb;
-3'd1: lb <= dslb;
-3'd2: lb <= eslb;
-3'd3: lb <= fslb;
-3'd4: lb <= gslb;
-3'd5: lb <= hslb;
-3'd6: lb <= sslb;
-3'd7: lb <= cslb;
-endcase
-`else
 `ifndef SUPPORT_BBMS
 reg [63:0] pb = 64'h0;
-`endif
 `endif
 reg [63:0] addro;
 reg [63:0] adr;			// load / store address
@@ -1001,14 +930,10 @@ case(instr[`INSTRUCTION_OP])
     				o = (a!=64'd0) ? b : {{48{instr[38]}},instr[38:23]};
     			else
     				o = (a!=64'd0) ? b : c;
-    `MOV2SEG:
-    	o = {(instr[33] ? ldt_base : gdt_base),5'd0} + {instr[32:18],5'd0};
     default:	o = 64'hDEADDEADDEADDEAD;
 		endcase
 	else
 	    casez(instr[`INSTRUCTION_S2])
-	    `MOV2SEG:
-  	  	o = {(a[15] ? ldt_base : gdt_base),5'd0} + {a[14:0],5'd0};
 	    `BCD:
 	        case(instr[`INSTRUCTION_S1])
 	        `BCDADD:    o[63:0] = BIG ? bcdaddo :  64'hCCCCCCCCCCCCCCCC;
@@ -1574,11 +1499,6 @@ case(instr[`INSTRUCTION_OP])
 `CSRRW:	exc <= (instr[27:21]==7'b0011011) ? `FLT_SEG : `FLT_NONE;
 `MEMNDX:
 	begin
-`ifdef SUPPORT_SEGMENTATION
-		if (usa < {lb[50:0],13'h0000} && usa > {ub[50:0],13'h1fff} && dl!=2'b00)
-			exc <= (Ra[4:0]==5'd30 || Ra[4:0]==5'd31) ? `FLT_STK : `FLT_SGB;
-		else
-`endif
 `ifdef SUPPORT_BBMS
 		if ((Ra[4:0]==5'd30 || Ra[4:0]==5'd31) && (usa < {sbl[50:0],13'd0} || usa > {sbu[50:0],13'h1FF8}) && dl!=2'b00)
 			exc <= `FLT_STK;
@@ -1639,11 +1559,6 @@ case(instr[`INSTRUCTION_OP])
 				exc <= `FLT_UNIMP;
 		end
 	end
-`ifdef SUPPORT_SEGMENTATION
-`LB,`LBU,`SB:
-		if (usa < {lb[50:0],13'h0000} && usa > {ub[50:0],13'h1fff} && dl!=2'b00)
-			exc <= (Ra[4:0]==5'd30 || Ra[4:0]==5'd31) ? `FLT_STK : `FLT_SGB;
-`endif
 `ifdef SUPPORT_BBMS
 `LB,`LBU,`SB:
 		if ((Ra[4:0]==5'd30 || Ra[4:0]==5'd31) && (usa < {sbl[50:0],13'd0} || usa > {sbu[50:0],13'h1FF8}) && dl!=2'b00)
@@ -1659,11 +1574,6 @@ case(instr[`INSTRUCTION_OP])
 `endif
 `Lx,`Sx,`LxU,`LVx,`LVxU:
 	begin
-`ifdef SUPPORT_SEGMENTATION
-		if (usa < {lb[50:0],13'h0000} && usa > {ub[50:0],13'h1fff} && dl!=2'b00)
-			exc <= (Ra[4:0]==5'd30 || Ra[4:0]==5'd31) ? `FLT_STK : `FLT_SGB;
-		else
-`endif
 `ifdef SUPPORT_BBMS
 		if ((Ra[4:0]==5'd30 || Ra[4:0]==5'd31) && (usa < {sbl[50:0],13'd0} || usa > {sbu[50:0],13'h1FF8}) && dl!=2'b00)
 			exc <= `FLT_STK;
@@ -1685,11 +1595,6 @@ case(instr[`INSTRUCTION_OP])
 	end
 `LWR,`SWC,`CAS,`CACHE:
 	begin
-`ifdef SUPPORT_SEGMENTATION
-		if (usa < {lb[50:0],13'h0000} && usa > {ub[50:0],13'h1fff} && dl!=2'b00)
-			exc <= (Ra[4:0]==5'd30 || Ra[4:0]==5'd31) ? `FLT_STK : `FLT_SGB;
-		else
-`endif
 `ifdef SUPPORT_BBMS
 		if ((Ra[4:0]==5'd30 || Ra[4:0]==5'd31) && (usa < {sbl[50:0],13'd0} || usa > {sbu[50:0],13'h1FF8}) && dl!=2'b00)
 			exc <= `FLT_STK;
