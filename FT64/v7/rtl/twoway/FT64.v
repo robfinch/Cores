@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2017-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2017-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -180,162 +180,8 @@ wire [5:0] Rt1s = {Rt1[5:0]};
 */
 `endif
 
-`ifdef SUPPORT_PREDICATION
-reg [3:0] pregs [0:1023];
-`endif
-
 reg [63:0] wbrcd;
 wire [5:0] brgs;
-`ifdef SUPPORT_SEGMENTATION
-reg [1:0] seg_state;
-
-reg [23:0] desc_selector [0:63];
-reg [255:0] desc_cache [0:63];
-reg [63:0] desc_cache_v;
-reg [5:0] desc_cache_ndx;
-reg [1:0] desc_cnt;
-reg [255:0] desc_in;
-
-reg [23:0] currentCSSelector;
-reg [63:0] ldt_base;
-reg [63:0] gdt_base;
-reg [63:0] zs_base [0:63];
-reg [63:0] ds_base [0:63];
-reg [63:0] es_base [0:63];
-reg [63:0] fs_base [0:63];
-reg [63:0] gs_base [0:63];
-reg [63:0] hs_base [0:63];
-reg [63:0] ss_base [0:63];
-reg [63:0] cs_base [0:63];
-reg [63:0] zsx_base;
-reg [63:0] dsx_base;
-reg [63:0] esx_base;
-reg [63:0] fsx_base;
-reg [63:0] gsx_base;
-reg [63:0] hsx_base;
-reg [63:0] ssx_base;
-reg [63:0] csx_base;
-reg [63:0] zs_lb [0:63];
-reg [63:0] ds_lb [0:63];
-reg [63:0] es_lb [0:63];
-reg [63:0] fs_lb [0:63];
-reg [63:0] gs_lb [0:63];
-reg [63:0] hs_lb [0:63];
-reg [63:0] ss_lb [0:63];
-reg [63:0] cs_lb [0:63];
-reg [63:0] zslb;
-reg [63:0] dslb;
-reg [63:0] eslb;
-reg [63:0] fslb;
-reg [63:0] gslb;
-reg [63:0] hslb;
-reg [63:0] sslb;
-reg [63:0] cslb;
-reg [63:0] zs_ub [0:63];
-reg [63:0] ds_ub [0:63];
-reg [63:0] es_ub [0:63];
-reg [63:0] fs_ub [0:63];
-reg [63:0] gs_ub [0:63];
-reg [63:0] hs_ub [0:63];
-reg [63:0] ss_ub [0:63];
-reg [63:0] cs_ub [0:63];
-reg [63:0] zsub;
-reg [63:0] dsub;
-reg [63:0] esub;
-reg [63:0] fsub;
-reg [63:0] gsub;
-reg [63:0] hsub;
-reg [63:0] ssub;
-reg [63:0] csub;
-reg [23:0] zs_sel [0:63];
-reg [23:0] ds_sel [0:63];
-reg [23:0] es_sel [0:63];
-reg [23:0] fs_sel [0:63];
-reg [23:0] gs_sel [0:63];
-reg [23:0] hs_sel [0:63];
-reg [23:0] ss_sel [0:63];
-reg [23:0] cs_sel [0:63];
-reg [15:0] zs_acr [0:63];
-reg [15:0] ds_acr [0:63];
-reg [15:0] es_acr [0:63];
-reg [15:0] fs_acr [0:63];
-reg [15:0] gs_acr [0:63];
-reg [15:0] hs_acr [0:63];
-reg [15:0] ss_acr [0:63];
-reg [15:0] cs_acr [0:63];
-initial begin
-	for (n = 0; n < 64; n = n + 1) begin
-		zs_base[n] <= 96'h0;
-		ds_base[n] <= 96'h0;
-		es_base[n] <= 96'h0;
-		fs_base[n] <= 96'h0;
-		gs_base[n] <= 96'h0;
-		hs_base[n] <= 96'h0;
-		ss_base[n] <= 96'h0;
-		cs_base[n] <= 96'h0;
-		zs_lb[n] <= 64'h0;
-		ds_lb[n] <= 64'h0;
-		es_lb[n] <= 64'h0;
-		fs_lb[n] <= 64'h0;
-		gs_lb[n] <= 64'h0;
-		hs_lb[n] <= 64'h0;
-		ss_lb[n] <= 64'h0;
-		cs_lb[n] <= 64'h0;
-		zs_ub[n] <= 64'hFFFFFFFFFFFFFFFF;
-		ds_ub[n] <= 64'hFFFFFFFFFFFFFFFF;
-		es_ub[n] <= 64'hFFFFFFFFFFFFFFFF;
-		fs_ub[n] <= 64'hFFFFFFFFFFFFFFFF;
-		gs_ub[n] <= 64'hFFFFFFFFFFFFFFFF;
-		hs_ub[n] <= 64'hFFFFFFFFFFFFFFFF;
-		ss_ub[n] <= 64'hFFFFFFFFFFFFFFFF;
-		cs_ub[n] <= 64'hFFFFFFFFFFFFFFFF;
-		zs_sel[n] <= 24'h0;
-		ds_sel[n] <= 24'h0;
-		es_sel[n] <= 24'h0;
-		fs_sel[n] <= 24'h0;
-		gs_sel[n] <= 24'h0;
-		hs_sel[n] <= 24'h0;
-		ss_sel[n] <= 24'h0;
-		cs_sel[n] <= 24'h0;
-		zs_acr[n] <= 16'h8000;
-		ds_acr[n] <= 16'h9200;
-		es_acr[n] <= 16'h8000;
-		fs_acr[n] <= 16'h8000;
-		gs_acr[n] <= 16'h8000;
-		hs_acr[n] <= 16'h8000;
-		ss_acr[n] <= 16'h9600;
-		cs_acr[n] <= 16'h9A00;
-	end
-end
-always @(posedge clk_i)
-begin
-	zsx_base <= zs_base[brgs];
-	dsx_base <= ds_base[brgs];
-	esx_base <= es_base[brgs];
-	fsx_base <= fs_base[brgs];
-	gsx_base <= gs_base[brgs];
-	hsx_base <= hs_base[brgs];
-	ssx_base <= ss_base[brgs];
-	csx_base <= cs_base[brgs];
-	zsub <= zs_ub[brgs];
-	dsub <= ds_ub[brgs];
-	esub <= es_ub[brgs];
-	fsub <= fs_ub[brgs];
-	gsub <= gs_ub[brgs];
-	hsub <= hs_ub[brgs];
-	ssub <= ss_ub[brgs];
-	csub <= cs_ub[brgs];
-	zslb <= zs_lb[brgs];
-	dslb <= ds_lb[brgs];
-	eslb <= es_lb[brgs];
-	fslb <= fs_lb[brgs];
-	gslb <= gs_lb[brgs];
-	hslb <= hs_lb[brgs];
-	sslb <= ss_lb[brgs];
-	cslb <= cs_lb[brgs];
-	currentCSSelector <= cs_sel[brgs];
-end
-`endif
 `ifdef SUPPORT_BBMS
 reg [15:0] thrd_handle [0:63];
 reg [63:0] prg_base [0:63];
@@ -436,11 +282,6 @@ end
 wire [`ABITS] pc0a;
 wire [`ABITS] pc1a;
 wire [`ABITS] pc2a;
-`ifdef SUPPORT_SEGMENTATION
-wire [`ABITS] pc0 = (pc0a[47:40]==8'hFF||ol==2'b00) ? pc0a : {csx_base[50:0],13'd0} + pc0a[47:0];
-wire [`ABITS] pc1 = (pc1a[47:40]==8'hFF||ol==2'b00) ? pc1a : {csx_base[50:0],13'd0} + pc1a[47:0];
-wire [`ABITS] pc2 = (pc2a[47:40]==8'hFF||ol==2'b00) ? pc2a : {csx_base[50:0],13'd0} + pc2a[47:0];
-`else
 `ifdef SUPPORT_BBMS
 wire [`ABITS] pc0 = (pc0a[47:40]==8'hFF||ol==2'b00) ? pc0a : {pb[50:0],13'd0} + pc0a[47:0];
 wire [`ABITS] pc1 = (pc1a[47:40]==8'hFF||ol==2'b00) ? pc1a : {pb[50:0],13'd0} + pc1a[47:0];
@@ -449,7 +290,6 @@ wire [`ABITS] pc2 = (pc2a[47:40]==8'hFF||ol==2'b00) ? pc2a : {pb[50:0],13'd0} + 
 wire [`ABITS] pc0 = pc0a;
 wire [`ABITS] pc1 = pc1a;
 wire [`ABITS] pc2 = pc2a;
-`endif
 `endif
 
 reg excmiss;
@@ -476,11 +316,7 @@ wire bpe = cr0[32];     // branch predictor enable
 wire wbm = cr0[34];
 wire sple = cr0[35];		// speculative load enable
 wire ctgtxe = cr0[33];
-`ifdef SUPPORT_PREDICATION
-wire pred_on = cr0[36];	// predicated execution mode on
-`else
 wire pred_on = 1'b0;
-`endif
 reg [63:0] pmr;
 wire id1_available = pmr[0];
 wire id2_available = pmr[1];
@@ -820,13 +656,6 @@ reg [PREGS-1:1] livetarget;
 reg [PREGS-1:1] iqentry_livetarget [0:QENTRIES-1];
 reg [PREGS-1:1] iqentry_latestID [0:QENTRIES-1];
 reg [PREGS-1:1] iqentry_cumulative [0:QENTRIES-1];
-`ifdef SUPPORT_PREDICATION
-reg [QENTRIES-1:0] iqentry_psource = {QENTRIES{1'b0}};
-reg [15:0] plivetarget;
-reg [15:0] iqentry_plivetarget [0:QENTRIES-1];
-reg [15:0] iqentry_platestID [0:QENTRIES-1];
-reg [15:0] iqentry_pcumulative [0:QENTRIES-1];
-`endif
 wire  [PREGS-1:1] iq_out [0:QENTRIES-1];
 
 reg  [`QBITS] tail0;
@@ -869,14 +698,6 @@ wire        fetchbuf2_v;
 wire		fetchbuf2_thrd;
 wire		fetchbuf2_mem;
 wire        fetchbuf2_rfw;
-`ifdef SUPPORT_PREDICATION
-wire        fetchbuf0_prfw;
-wire [7:0] fetchbuf0_pbyte;
-wire        fetchbuf1_prfw;
-wire [7:0] fetchbuf1_pbyte;
-wire        fetchbuf2_prfw;
-wire [7:0] fetchbuf2_pbyte;
-`endif
 wire [47:0] fetchbufA_instr;	
 wire [`ABITS] fetchbufA_pc;
 wire        fetchbufA_v;
@@ -1071,6 +892,9 @@ reg [63:0] fcu_argC;
 reg [63:0] fcu_argI;	// only used by BEQ
 reg [63:0] fcu_argT;
 reg [63:0] fcu_argT2;
+reg [63:0] fcu_epc;
+reg [23:0] fcu_ecs;		// excepted code segment
+reg [23:0] fcu_rs;		// return selector
 reg [`ABITS] fcu_pc;
 reg [`ABITS] fcu_nextpc;
 reg [`ABITS] fcu_brdisp;
@@ -2849,50 +2673,6 @@ default:    Source3Valid = TRUE;
 endcase
 endfunction
 
-// For predication logic
-function SourceTValid;
-input [47:0] isn;
-case(isn[`INSTRUCTION_OP])
-`BRK:   SourceTValid = TRUE;
-`Bcc:   SourceTValid = TRUE;
-`BBc:   SourceTValid = TRUE;
-`BEQI:  SourceTValid = TRUE;
-`IVECTOR:
-    case(isn[`INSTRUCTION_S2])
-    `VEX:       SourceTValid = TRUE;
-    default:    SourceTValid = TRUE;
-    endcase
-`CHK:   SourceTValid = isn[`INSTRUCTION_RT]==5'd0;
-`R2:
-	if (isn[`INSTRUCTION_L2]==2'b01)
-		case(isn[47:42])
-    `CMOVEZ,`CMOVNZ:  SourceTValid = isn[`INSTRUCTION_RT]==5'd0;
-		default:	SourceTValid = TRUE;
-		endcase
-	else
-    case(isn[`INSTRUCTION_S2])
-    `MAJ:		SourceTValid = isn[`INSTRUCTION_RT]==5'd0;
-    default:    SourceTValid = TRUE;
-    endcase
-`MEMNDX:
-		if (!isn[31])
-			case({isn[31:28],isn[22:21]})
-			`CACHEX,
-			`LVBX,`LVBUX,`LVCX,`LVCUX,`LVHX,`LVHUX,`LVWX,
-			`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,`LWRX:
-				SourceTValid = isn[`INSTRUCTION_RT]==5'd0;
-	    default:    SourceTValid = TRUE;
-			endcase
-		else
-	    SourceTValid = TRUE;
-`SB:    SourceTValid = TRUE;
-`Sx:    SourceTValid = TRUE;
-`SWC:   SourceTValid = TRUE;
-`CAS:   SourceTValid = TRUE;
-`BITFIELD: 	SourceTValid = isn[`INSTRUCTION_RT]==5'd0 || isn[32]==1'b0;
-default:    SourceTValid = isn[`INSTRUCTION_RT]==5'd0;
-endcase
-endfunction
 
 // Used to indicate to the queue logic that the instruction needs to be
 // recycled to the queue VL number of times.
@@ -3902,24 +3682,15 @@ end
 //
 assign fetchbuf0_mem = IsMem(fetchbuf0_instr) & ~IsRet(fetchbuf0_instr);// & IsLoad(fetchbuf0_instr);
 assign fetchbuf0_rfw   = IsRFW(fetchbuf0_instr,vqe0,vl,fetchbuf0_thrd);
-`ifdef SUPPORT_PREDICATION
-assign fetchbuf0_prfw = IsCmp(fetchbuf0_instr);
-`endif
 
 generate begin: gFetchbufDec
 if (`WAYS > 1) begin
 assign fetchbuf1_mem = IsMem(fetchbuf1_instr) & ~IsRet(fetchbuf1_instr);// & IsLoad(fetchbuf1_instr);
 assign fetchbuf1_rfw   = IsRFW(fetchbuf1_instr,vqe1,vl,fetchbuf1_thrd);
-`ifdef SUPPORT_PREDICATION
-assign fetchbuf1_prfw = IsCmp(fetchbuf1_instr);
-`endif
 end
 if (`WAYS > 2) begin
 assign fetchbuf2_mem = IsMem(fetchbuf2_instr) & ~IsRet(fetchbuf2_instr);// & IsLoad(fetchbuf2_instr);
 assign fetchbuf2_rfw   = IsRFW(fetchbuf2_instr,vqe2,vl,fetchbuf2_thrd);
-`ifdef SUPPORT_PREDICATION
-assign fetchbuf2_prfw = IsCmp(fetchbuf2_instr);
-`endif
 end
 end
 endgenerate
@@ -4295,24 +4066,7 @@ end
 
 always @*
 	for (n = 0; n < QENTRIES; n = n + 1)
-`ifdef SUPPORT_PREDICATION
-		iqentry_livetarget[n] = {PREGS {iqentry_v[n]}} & {PREGS {~iqentry_stomp[n] && iqentry_thrd[n]==branchmiss_thrd}} & iq_out[n] & ~{PREGS{iqentry_cmp[n]}};
-`else
 		iqentry_livetarget[n] = {PREGS {iqentry_v[n]}} & {PREGS {~iqentry_stomp[n] && iqentry_thrd[n]==branchmiss_thrd}} & iq_out[n];
-`endif
-
-`ifdef SUPPORT_PREDICATION
-always @*
-for (j = 1; j < 16; j = j + 1) begin
-	plivetarget[j] = 1'b0;
-	for (n = 0; n < QENTRIES; n = n + 1)
-		plivetarget[j] = plivetarget[j] | iqentry_plivetarget[n][j];
-end
-
-always @*
-	for (n = 0; n < QENTRIES; n = n + 1)
-		iqentry_plivetarget[n] = {16 {iqentry_v[n]}} & {16 {~iqentry_stomp[n] && iqentry_thrd[n]==branchmiss_thrd}} & iq_out[n] & {16{iqentry_cmp[n]}};
-`endif
 
 //
 // BRANCH-MISS LOGIC: latestID
@@ -4339,29 +4093,6 @@ always @*
 always @*
 	for (n = 0; n < QENTRIES; n = n + 1)
 	  iqentry_source[n] = | iqentry_latestID[n];
-
-`ifdef SUPPORT_PREDICATION
-always @*
-	for (n = 0; n < QENTRIES; n = n + 1) begin
-		iqentry_pcumulative[n] = 1'b0;
-		for (j = n; j < n + QENTRIES; j = j + 1) begin
-			if (missid==(j % QENTRIES))
-				for (k = n; k <= j; k = k + 1)
-					iqentry_pcumulative[n] = iqentry_pcumulative[n] | iqentry_plivetarget[k % QENTRIES];
-		end
-	end
-
-always @*
-	for (n = 0; n < QENTRIES; n = n + 1)
-    iqentry_platestID[n] = (missid == n || ((iqentry_plivetarget[n] & iqentry_pcumulative[(n+1)%QENTRIES]) == {16{1'b0}}))
-				    ? iqentry_plivetarget[n]
-				    : {16{1'b0}};
-
-always @*
-	for (n = 0; n < QENTRIES; n = n + 1)
-	  iqentry_psource[n] = | iqentry_platestID[n];
-
-`endif
 
 reg vqueued2;
 assign Ra0 = fnRa(fetchbuf0_instr,vqe0,vl,fetchbuf0_thrd) | {fetchbuf0_thrd,7'b0};
@@ -5798,9 +5529,6 @@ begin
 		`CSR_SBU:			csr_r <= sbu;
 		`CSR_ENU:			csr_r <= en;
 `endif
-`ifdef SUPPORT_PREDICATION
-		`CSR_PREGS:		read_pregs(csr_r);
-`endif		
     `CSR_Q_CTR:		csr_r <= iq_ctr;
     `CSR_BM_CTR:	csr_r <= bm_ctr;
     `CSR_ICL_CTR:	csr_r <= icl_ctr;
@@ -5887,35 +5615,6 @@ FT64_alu #(.BIG(1'b1),.SUP_VECTOR(SUP_VECTOR)) ualu0 (
   .exv_o(exv_i),
   .wrv_o(wrv_i),
   .rdv_o(rdv_i)
-`ifdef SUPPORT_SEGMENTATION
-	,
-	.zs_base(zsx_base),
-	.ds_base(dsx_base),
-	.es_base(esx_base),
-	.fs_base(fsx_base),
-	.gs_base(gsx_base),
-	.hs_base(hsx_base),
-	.ss_base(ssx_base),
-	.cs_base(csx_base),
-	.ldt_base(ldt_base),
-	.gdt_base(gdt_base),
-	.zsub(zsub),
-	.dsub(dsub),
-	.esub(esub),
-	.fsub(fsub),
-	.gsub(gsub),
-	.hsub(hsub),
-	.ssub(ssub),
-	.csub(csub),
-	.zslb(zslb),
-	.dslb(dslb),
-	.eslb(eslb),
-	.fslb(fslb),
-	.gslb(gslb),
-	.hslb(hslb),
-	.sslb(sslb),
-	.cslb(cslb)
-`endif
 `ifdef SUPPORT_BBMS
   .pb(dl==2'b00 ? 64'd0 : pb),
   .cbl(cbl),
@@ -5970,35 +5669,6 @@ FT64_alu #(.BIG(1'b0),.SUP_VECTOR(SUP_VECTOR)) ualu1 (
   .exv_o(),
   .wrv_o(),
   .rdv_o()
-`ifdef SUPPORT_SEGMENTATION
-	,
-	.zs_base(zsx_base),
-	.ds_base(dsx_base),
-	.es_base(esx_base),
-	.fs_base(fsx_base),
-	.gs_base(gsx_base),
-	.hs_base(hsx_base),
-	.ss_base(ssx_base),
-	.cs_base(csx_base),
-	.ldt_base(ldt_base),
-	.gdt_base(gdt_base),
-	.zsub(zsub),
-	.dsub(dsub),
-	.esub(esub),
-	.fsub(fsub),
-	.gsub(gsub),
-	.hsub(hsub),
-	.ssub(ssub),
-	.csub(csub),
-	.zslb(zslb),
-	.dslb(dslb),
-	.eslb(eslb),
-	.fslb(fslb),
-	.gslb(gslb),
-	.hslb(hslb),
-	.sslb(sslb),
-	.cslb(cslb)
-`endif
 `ifdef SUPPORT_BBMS
   .pb(dl==2'b00 ? 64'd0 : pb),
   .cbl(cbl),
@@ -6137,10 +5807,6 @@ always @*
 begin
     fcu_exc <= `FLT_NONE;
     casez(fcu_instr[`INSTRUCTION_OP])
-`ifdef SUPPORT_SEGMENTATION
-//    `LDCS:  fcu_exc <= fcu_instr[31:8] != fcu_pc[63:40] ? `FLT_CS : `FLT_NONE;
-//    `RET:		fcu_exc <= fcu_argB[63:40] != fcu_pc[63:40] ? `FLT_RET : `FLT_NONE;
-`endif
 `ifdef SUPPORT_BBMS
     `LFCS:	fcu_exc <= currentCSSelector != fcu_instr[31:8] ? `FLT_CS : `FLT_NONE;
     `RET:		fcu_exc <= fcu_argB[63:40] != currentCSSelector ? `FLT_RET : `FLT_NONE;
@@ -6178,11 +5844,7 @@ FT64_FCU_Calc #(.AMSB(AMSB)) ufcuc1
 	.im(im),
 	.waitctr(waitctr),
 	.bus(fcu_out),
-`ifdef SUPPORT_SEGMENTATION	
-	.cs_sel(cs_sel[brgs])
-`else
 	.cs_sel(fcu_nextpc[63:40])
-`endif
 );
 
 wire will_clear_branchmiss = branchmiss && ((fetchbuf0_v && fetchbuf0_pc==misspc) || (fetchbuf1_v && fetchbuf1_pc==misspc));
@@ -6190,14 +5852,14 @@ wire will_clear_branchmiss = branchmiss && ((fetchbuf0_v && fetchbuf0_pc==misspc
 always @*
 begin
 case(fcu_instr[`INSTRUCTION_OP])
-`R2:	fcu_misspc = fcu_argB;	// RTI (we don't bother fully decoding this as it's the only R2)
+`R2:	fcu_misspc = fcu_epc;		// RTI (we don't bother fully decoding this as it's the only R2)
 `RET:	fcu_misspc = fcu_argB;
 `REX:	fcu_misspc = fcu_bus;
 `BRK:	fcu_misspc = {tvec[0][AMSB:8], 1'b0, olm, 5'h0};
 `JAL:	fcu_misspc = fcu_argA + fcu_argI;
 //`CHK:	fcu_misspc = fcu_nextpc + fcu_argI;	// Handled as an instruction exception
 // Default: branch
-default:	fcu_misspc = fcu_takb ? {fcu_pc[31:8] + fcu_brdisp[31:8],fcu_brdisp[7:0]} : fcu_nextpc;
+default:	fcu_misspc = fcu_takb ? {fcu_pc[AMSB:32],fcu_pc[31:0] + fcu_brdisp[31:0]} : fcu_nextpc;
 endcase
 fcu_misspc[0] = 1'b0;
 end
@@ -6656,10 +6318,6 @@ if (rst) begin
        iqentry_a1_s[n] <= 5'd0;
        iqentry_a2_s[n] <= 5'd0;
        iqentry_a3_s[n] <= 5'd0;
-`ifdef SUPPORT_PREDICATION
-       iqentry_aT[n] <= 64'd0;
-       iqentry_aT_s[n] <= 1'd0;
-`endif
        iqentry_canex[n] <= FALSE;
     end
      bwhich <= 2'b00;
@@ -6802,10 +6460,6 @@ if (rst) begin
 		keys <= 64'h0;
 `ifdef SUPPORT_DBG
 		dbg_ctrl <= 64'h0;
-`endif
-`ifdef SUPPORT_SEGMENTATION
-		ldt_base <= 64'h0;
-		gdt_base <= 64'h0;
 `endif
 /* Initialized with initial begin above
 `ifdef SUPPORT_BBMS		
@@ -7388,15 +7042,8 @@ if (fcu_v) begin
 	iqentry_ma  [ fcu_id[`QBITS] ] <= fcu_misspc;
   iqentry_res [ fcu_id[`QBITS] ] <= rfcu_bus;
   iqentry_exc [ fcu_id[`QBITS] ] <= fcu_exc;
-`ifdef SUPPORT_SEGMENTATION
-	iqentry_seg_base[ fcu_id[`QBITS] ] <= {(fcu_argB[55] ? ldt_base : gdt_base),5'd0} + {fcu_argB[54:40],5'd0};
-	if ((fcu_ret && fcu_argB[63:40] == cs_sel[brgs]) || !fcu_ret)
-		iqentry_state[fcu_id[`QBITS] ] <= IQS_CMT;
-	else if (fcu_ret && fcu_argB[63:40] != cs_sel[brgs])
-		iqentry_state[fcu_id[`QBITS] ] <= IQS_AGEN;
-`else
+	end
 	iqentry_state[fcu_id[`QBITS] ] <= IQS_CMT;
-`endif
 	// takb is looked at only for branches to update the predictor. Here it is
 	// unconditionally set, the value will be ignored if it's not a branch.
 	iqentry_takb[ fcu_id[`QBITS] ] <= fcu_takb;
@@ -7708,21 +7355,6 @@ end
 `else
 															iqentry_a3[n];                           
 `endif                            
-`ifdef SUPPORT_PREDICATION
-								 fpu1_pred   <= iqentry_p_v[n] ? iqentry_pred[n] :
-`ifdef FU_BYPASS								 
-																(iqentry_p_s[n] == alu0_id) ? alu0nyb[iqentry_preg[n]] :
-																(iqentry_p_s[n] == alu1_id) ? alu1nyb[iqentry_preg[n]] :
-`endif																
-																4'h0;
-                 fpu1_argT	<=
-`ifdef FU_BYPASS                  
-                 							iqentry_aT_v[n] ? iqentry_aT[n]
-                            : (iqentry_aT_s[n] == alu0_id) ? ralu0_bus : ralu1_bus;
-`else
-															iqentry_aT[n];
-`endif                            
-`endif
                  fpu1_argI	<= iqentry_a0[n];
                  fpu1_dataready <= `VAL;
                  fpu1_ld <= TRUE;
@@ -7763,21 +7395,6 @@ end
 `else
 															iqentry_a3[n];                           
 `endif                            
-`ifdef SUPPORT_PREDICATION
-								 fpu2_pred   <= iqentry_p_v[n] ? iqentry_pred[n] :
-`ifdef FU_BYPASS								 
-																(iqentry_p_s[n] == alu0_id) ? alu0nyb[iqentry_preg[n]] :
-																(iqentry_p_s[n] == alu1_id) ? alu1nyb[iqentry_preg[n]] :
-`endif																
-																4'h0;
-                 fpu2_argT	<=
-`ifdef FU_BYPASS                  
-                 							iqentry_aT_v[n] ? iqentry_aT[n]
-                            : (iqentry_aT_s[n] == alu0_id) ? ralu0_bus : ralu1_bus;
-`else
-															iqentry_aT[n];
-`endif                            
-`endif
                  fpu2_argI	<= iqentry_a0[n];
                  fpu2_dataready <= `VAL;
                  fpu2_ld <= TRUE;
@@ -7809,10 +7426,13 @@ end
                             : (iqentry_a1_s[n] == fpu1_id && `NUM_FPU > 0) ? rfpu1_bus
                             : ralu1_bus;
 `ifdef SUPPORT_SMT                            
-                 fcu_argB	<= iqentry_rti[n] ? epc0[iqentry_thrd[n]]
+//                 fcu_argB	<= iqentry_rti[n] ? epc0[iqentry_thrd[n]]
+                 fcu_epc  <= epc0[iqentry_thrd[n]];
 `else
-                 fcu_argB	<= iqentry_rti[n] ? epc0
+								 fcu_epc  <= epc0;
+//                 fcu_argB	<= iqentry_rti[n] ? epc0
 `endif                 
+									fcu_argB	<=
                  			: (iqentry_a2_v[n] ? iqentry_a2[n]
                             : (iqentry_a2_s[n] == alu0_id) ? ralu0_bus 
                             : (iqentry_a2_s[n] == fpu1_id && `NUM_FPU > 0) ? rfpu1_bus
@@ -7824,21 +7444,6 @@ end
                             : ralu1_bus[47:0]);
                  fcu_argC	<= iqentry_a3_v[n] ? iqentry_a3[n]
                             : (iqentry_a3_s[n] == alu0_id) ? ralu0_bus : ralu1_bus;
-`ifdef SUPPORT_PREDICATION
-								 fcu_pred   <= iqentry_p_v[n] ? iqentry_pred[n] :
-`ifdef FU_BYPASS								 
-																(iqentry_p_s[n] == alu0_id) ? alu0nyb[iqentry_preg[n]] :
-																(iqentry_p_s[n] == alu1_id) ? alu1nyb[iqentry_preg[n]] :
-`endif																
-																4'h0;
-                 fcu_argT	<=
-`ifdef FU_BYPASS                  
-                 							iqentry_aT_v[n] ? iqentry_aT[n]
-                            : (iqentry_aT_s[n] == alu0_id) ? ralu0_bus : ralu1_bus;
-`else
-															iqentry_aT[n];
-`endif                            
-`endif
                  fcu_argI	<= iqentry_a0[n];
                  fcu_thrd   <= iqentry_thrd[n];
                  fcu_dataready <= !IsWait(iqentry_instr[n]);
@@ -9088,115 +8693,9 @@ B21:
 		stb_o <= `HIGH;
 		bstate <= B12;
 	end
-`ifdef SUPPORT_SEGMENTATION
-B_LoadDesc:
-	begin
-		if (acki) begin
-			if (!bok_i) begin
-				stb_o <= `LOW;
-				bstate <= B_LoadDescStb;
-			end
-			case(desc_cnt)
-			2'b00:	desc_in[63:0] <= dat_i;
-			2'b01:	desc_in[127:64] <= dat_i;
-			2'b10:	desc_in[191:128] <= dat_i;
-			2'b11:	desc_in[255:192] <= dat_i;
-			endcase
-			if (desc_cnt==2'd2)
-				cti_o <= 3'b111;
-			if (desc_cnt==3'd3) begin
-				wb_nack();
-				cti_o <= 3'b000;
-				bstate <= B_WaitSeg;
-				seg_state <= SEG_CHK;
-			end
-			desc_cnt <= desc_cnt + 2'd1;
-		end
-	end
-B_LoadDescStb:
-	begin
-		stb_o <= `HIGH;
-		bstate <= B_LoadDesc;
-	end
-B_WaitSeg:
-	if (seg_state==SEG_DONE)
-		bstate <= BIDLE;
-`endif
 default:     bstate <= BIDLE;
 endcase
 
-`ifdef SUPPORT_SEGMENTATION
-case(seg_state)
-SEG_IDLE:	;
-SEG_CHK:
-	begin
-		seg_state <= SEG_UPD;
-		// Is it a zero descriptor?
-		if (desc_in[255:192]==64'd0) begin
-			// Attempting to load the stack segment with a zero selector results in a
-			// fault.
-			if (iqentry_tgt[dram0_id[`QBITS]][3:0]==4'd6)	// SS target?
-				iqentry_exc[dram0_id[`QBITS]] <= `FLT_STZ;
-		end
-		else begin
-			if (desc_in[255]==1'b0) begin
-				iqentry_exc[dram0_id[`QBITS]] <= `FLT_SNP;			// segment not present
-			end
-			// A code segment must be loaded into a code segment register
-			else if (desc_in[255:248] >= 8'h98 && desc_in[255:248] <= 8'h9F) begin
-				if (iqentry_tgt[dram0_id[`QBITS]][3:0] != 4'd7)
-					iqentry_exc[dram0_id[`QBITS]] <= `FLT_STP;			// segment type exception
-				if (cpl != desc_in[247:240])
-					iqentry_exc[dram0_id[`QBITS]] <= `FLT_PRIV;			// privilege violation
-			end
-			// System descriptor?
-			else if (desc_in[252]==1'b0) begin
-				case(desc_inc[251:248])
-				4'd0:	;	// unused
-				// Check for LDT
-				4'd2:	
-					if (iqentry_tgt[dram0_id[`QBITS]][3:0] != 4'd11)
-						iqentry_exc[dram0_id[`QBITS]] <= `FLT_STP;			// segment type exception
-				// For a call gate the selector in the gate descriptor must be loaded.
-				4'd4:	// call gate
-					begin
-						iqentry_ma[dram0_id[`QBITS]] <= desc_in[63:0];
-           	cti_o <= 3'b001;
-            cyc <= `HIGH;
-            stb_o <= `HIGH;
-            sel_o <= 8'hFF;
-            if (desc_in[79])
-            	vadr <= {ldt_base,5'd0} + {desc_in[78:64],5'd0};
-            else
-            	vadr <= {gdt_base,5'd0} + {desc_in[78:64],5'd0};
-            sr_o <=  1'b0;
-            ol_o  <= dram0_ol;
-           	bstate <= B_LoadDesc;
-           	seg_state <= SEG_IDLE;
-					end
-				endcase
-			end
-		end
-	end
-SEG_UPD:
-	begin
-		if (~|iqentry_exc[dram0_id[`QBITS]]) begin
-			desc_cache[desc_ndx] <= desc_in;
-			desc_cache_v[desc_ndx] <= `VAL;
-			iqentry_seg_base[dram0_id[`QBITS]] <= desc_in[63:0];
-			iqentry_seg_lb[dram0_id[`QBITS]] <= desc_in[127:64];
-			iqentry_seg_ub[dram0_id[`QBITS]] <= desc_in[191:128];
-			iqentry_seg_acr[dram0_id[`QBITS]] <= desc_in[255:192];
-		end
-		iqentry_state[dram0_id[`QBITS]] <= IQS_CMT;
-		seg_state <= SEG_DONE;
-	end
-SEG_DONE:
-	seg_state <= SEG_IDLE;
-default:
-	seg_state <= SEG_IDLE;
-endcase
-`endif
 
 if (!branchmiss) begin
     case({fetchbuf0_v, fetchbuf1_v})
@@ -9761,9 +9260,6 @@ begin
 	iqentry_sync [nn]  <= bus[`IB_SYNC];
 	iqentry_fsync[nn]  <= bus[`IB_FSYNC];
 	iqentry_rfw  [nn]  <= bus[`IB_RFW];
-`ifdef SUPPORT_PREDICATION
-	iqentry_prfw [nn]  <= bus[`IB_PRFW];
-`endif
 	iqentry_we   [nn]  <= bus[`IB_WE];
 end
 endtask
@@ -10090,10 +9586,6 @@ begin
         end
         else
         case(iqentry_instr[head][`INSTRUCTION_OP])
-`ifdef SUPPORT_PREDICATION        	
-        `CMPI:	pregs[{rgs,iqentry_tgt[head][3:0]}] <= which==2'd1 ? cmt1nyb[iqentry_tgt[head][3:0]] : cmt0nyb[iqentry_tgt[head][3:0]];//commit_bus[3:0];
-`endif        
-
         `BRK:   
         		// BRK is treated as a nop unless it's a software interrupt or a
         		// hardware interrupt at a higher priority than the current priority.
@@ -10188,150 +9680,7 @@ begin
             default:    ;
             endcase
         `R2:
-`ifdef SUPPORT_SEGMENTATION        		
-        		if (iqentry_instr[head][6])
-        			case(iqentry_instr[head][47:42])
-        			`MOV2SEG:
-        				case(iqentry_instr[head][15:13])
-        				3'd0:	begin
-        								zs_base[brgs] <= iqentry_seg_base[head];
-        								zs_lb[brgs] <= iqentry_seg_lb[head];
-        								zs_ub[brgs] <= iqentry_seg_ub[head];
-        								zs_acr[brgs] <= iqentry_seg_acr[head];
-        								zs_sel[brgs] <= iqentry_instr[head][41:18];
-        							end
-        				3'd1:	begin
-        								ds_base[brgs] <= iqentry_seg_base[head];
-        								ds_lb[brgs] <= iqentry_seg_lb[head];
-        								ds_ub[brgs] <= iqentry_seg_ub[head];
-        								ds_acr[brgs] <= iqentry_seg_acr[head];
-        								ds_sel[brgs] <= iqentry_instr[head][41:18];
-        							end
-        				3'd2:	begin
-        								es_base[brgs] <= iqentry_seg_base[head];
-        								es_lb[brgs] <= iqentry_seg_lb[head];
-        								es_ub[brgs] <= iqentry_seg_ub[head];
-        								es_acr[brgs] <= iqentry_seg_acr[head];
-        								es_sel[brgs] <= iqentry_instr[head][41:18];
-        							end
-        				3'd3:	begin
-        								fs_base[brgs] <= iqentry_seg_base[head];
-        								fs_lb[brgs] <= iqentry_seg_lb[head];
-        								fs_ub[brgs] <= iqentry_seg_ub[head];
-        								fs_acr[brgs] <= iqentry_seg_acr[head];
-        								fs_sel[brgs] <= iqentry_instr[head][41:18];
-        							end
-        				3'd4:	begin
-        								gs_base[brgs] <= iqentry_seg_base[head];
-        								gs_lb[brgs] <= iqentry_seg_lb[head];
-        								gs_ub[brgs] <= iqentry_seg_ub[head];
-        								gs_acr[brgs] <= iqentry_seg_acr[head];
-        								gs_sel[brgs] <= iqentry_instr[head][41:18];
-        							end
-        				3'd5:	begin
-        								hs_base[brgs] <= iqentry_seg_base[head];
-        								hs_lb[brgs] <= iqentry_seg_lb[head];
-        								hs_ub[brgs] <= iqentry_seg_ub[head];
-        								hs_acr[brgs] <= iqentry_seg_acr[head];
-        								hs_sel[brgs] <= iqentry_instr[head][41:18];
-        							end
-        				3'd6:	begin
-        								ss_base[brgs] <= iqentry_seg_base[head];
-        								ss_lb[brgs] <= iqentry_seg_lb[head];
-        								ss_ub[brgs] <= iqentry_seg_ub[head];
-        								ss_acr[brgs] <= iqentry_seg_acr[head];
-        								ss_sel[brgs] <= iqentry_instr[head][41:18];
-        							end
-        				// ToDo:  The following should cause a fault:
-        				// Assuming the code segment is laoded with a call gate.
-        				3'd7:	begin
-        								excmiss <= TRUE;
-        								excthrd <= iqentry_thrd[head];
-        								excmisspc <= iqentry_ma[head];
-        								cs_base[brgs] <= iqentry_seg_base[head];
-        								cs_lb[brgs] <= iqentry_seg_lb[head];
-        								cs_ub[brgs] <= iqentry_seg_ub[head];
-        								cs_acr[brgs] <= iqentry_seg_acr[head];
-        								cs_sel[brgs] <= iqentry_instr[head][41:18];
-        							end
-        				endcase
-        			default:	;
-        			endcase
-        		else
-`endif        		
             case(iqentry_instr[head][`INSTRUCTION_S2])
-`ifdef SUPPORT_SEGMENTATION            	
-       			`MOV2SEG:
-        				case(iqentry_instr[head][15:13])
-        				3'd0:	begin
-        								zs_base[brgs] <= iqentry_seg_base[head];
-        								zs_lb[brgs] <= iqentry_seg_lb[head];
-        								zs_ub[brgs] <= iqentry_seg_ub[head];
-        								zs_acr[brgs] <= iqentry_seg_acr[head];
-        								zs_sel[brgs] <= iqentry_a1[head][23:0];
-        							end
-        				3'd1:	begin
-        								ds_base[brgs] <= iqentry_seg_base[head];
-        								ds_lb[brgs] <= iqentry_seg_lb[head];
-        								ds_ub[brgs] <= iqentry_seg_ub[head];
-        								ds_acr[brgs] <= iqentry_seg_acr[head];
-        								ds_sel[brgs] <= iqentry_a1[head][23:0];
-        							end
-        				3'd2:	begin
-        								es_base[brgs] <= iqentry_seg_base[head];
-        								es_lb[brgs] <= iqentry_seg_lb[head];
-        								es_ub[brgs] <= iqentry_seg_ub[head];
-        								es_acr[brgs] <= iqentry_seg_acr[head];
-        								es_sel[brgs] <= iqentry_a1[head][23:0];
-        							end
-        				3'd3:	begin
-        								fs_base[brgs] <= iqentry_seg_base[head];
-        								fs_lb[brgs] <= iqentry_seg_lb[head];
-        								fs_ub[brgs] <= iqentry_seg_ub[head];
-        								fs_acr[brgs] <= iqentry_seg_acr[head];
-        								fs_sel[brgs] <= iqentry_a1[head][23:0];
-        							end
-        				3'd4:	begin
-        								gs_base[brgs] <= iqentry_seg_base[head];
-        								gs_lb[brgs] <= iqentry_seg_lb[head];
-        								gs_ub[brgs] <= iqentry_seg_ub[head];
-        								gs_acr[brgs] <= iqentry_seg_acr[head];
-        								gs_sel[brgs] <= iqentry_a1[head][23:0];
-        							end
-        				3'd5:	begin
-        								hs_base[brgs] <= iqentry_seg_base[head];
-        								hs_lb[brgs] <= iqentry_seg_lb[head];
-        								hs_ub[brgs] <= iqentry_seg_ub[head];
-        								hs_acr[brgs] <= iqentry_seg_acr[head];
-        								hs_sel[brgs] <= iqentry_a1[head][23:0];
-        							end
-        				3'd6:	begin
-        								ss_base[brgs] <= iqentry_seg_base[head];
-        								ss_lb[brgs] <= iqentry_seg_lb[head];
-        								ss_ub[brgs] <= iqentry_seg_ub[head];
-        								ss_acr[brgs] <= iqentry_seg_acr[head];
-        								ss_sel[brgs] <= iqentry_a1[head][23:0];
-        							end
-        				// ToDo:  The following should cause a fault:
-        				// The only time moving to the cs makes sense is if the descriptor
-        				// indicates a gate of some kind (call, trap, or interrupt).
-        				3'd7:	begin
-        								excmiss <= TRUE;
-        								excthrd <= iqentry_thrd[head];
-        								excmisspc <= iqentry_ma[head];
-        								cs_base[brgs] <= iqentry_seg_base[head];
-        								cs_lb[brgs] <= iqentry_seg_lb[head];
-        								cs_ub[brgs] <= iqentry_seg_ub[head];
-        								cs_acr[brgs] <= iqentry_seg_acr[head];
-        								cs_sel[brgs] <= iqentry_a1[head][23:0];
-        							end
-        				endcase
-        			default:	;
-        			endcase
-`endif        			
-`ifdef SUPPORT_PREDICATION            	
-		        `CMP:	pregs[{rgs,iqentry_tgt[head][3:0]}] <= which==2'd1 ? cmt1nyb[iqentry_tgt[head][3:0]] : cmt0nyb[iqentry_tgt[head][3:0]];//commit_bus[3:0];
-`endif		        
             `R1:	case(iqentry_instr[head][20:16])
             		`CHAIN_OFF:	cr0[18] <= 1'b0;
             		`CHAIN_ON:	cr0[18] <= 1'b1;
@@ -10350,9 +9699,10 @@ begin
 `endif          
             `RTI:   begin
 		            excmiss <= TRUE;
-`ifdef SUPPORT_SMT		            
-            		excmisspc <= epc0[thread];
             		excthrd <= thread;
+	    					excmisspc <= iqentry_ma[head];
+`ifdef SUPPORT_SMT		            
+//            		excmisspc <= epc0[thread];
             		mstatus[thread][3:0] <= im_stack[thread][3:0];
             		mstatus[thread][5:4] <= ol_stack[thread][1:0];
             		mstatus[thread][21:20] <= dl_stack[thread][1:0];
@@ -10374,8 +9724,7 @@ begin
                 epc7[thread] <= epc8[thread];
                 epc8[thread] <= {tvec[0][AMSB:8], 1'b0, ol[thread], 5'h0};
 `else
-            		excmisspc <= epc0;
-            		excthrd <= thread;
+//            		excmisspc <= epc0;
             		mstatus[3:0] <= im_stack[3:0];
             		mstatus[5:4] <= ol_stack[1:0];
             		mstatus[21:20] <= dl_stack[1:0];
@@ -10425,54 +9774,6 @@ begin
         		begin
         		write_csr(iqentry_instr[head][31:18],iqentry_a1[head],thread);
         		end
-`ifdef SUPPORT_SEGMENTATION
-        `CALL:
-        	if (iqentry_instr[6]) begin
-        		excmiss <= `TRUE;
-        		excmisspc <= iqentry_ma[head];
-        		excthrd <= iqentry_thrd[head];
-        		case(iqentry_instr[head][47:46])
-        		2'd0:	begin
-        						cs_base[brgs] <= zs_base[brgs];
-        						cs_lb[brgs] <= zs_lb[brgs];
-        						cs_ub[brgs] <= zs_ub[brgs];
-        						cs_acr[brgs] <= zs_acr[brgs];
-        						cs_sel[brgs] <= zs_sel[brgs];
-        						excmisspc[63:40] <= zs_sel[brgs];
-        					end
-        		2'd1:	begin
-        						cs_base[brgs] <= es_base[brgs];
-        						cs_lb[brgs] <= es_lb[brgs];
-        						cs_ub[brgs] <= es_ub[brgs];
-        						cs_acr[brgs] <= es_acr[brgs];
-        						cs_sel[brgs] <= es_sel[brgs];
-        						excmisspc[63:40] <= es_sel[brgs];
-        					end
-        		2'd2:	begin
-        						cs_base[brgs] <= hs_base[brgs];
-        						cs_lb[brgs] <= hs_lb[brgs];
-        						cs_ub[brgs] <= hs_ub[brgs];
-        						cs_acr[brgs] <= hs_acr[brgs];
-        						cs_sel[brgs] <= hs_sel[brgs];
-        						excmisspc[63:40] <= hs_sel[brgs];
-        					end
-        		// Can't load stack or data segment into code segment
-        		// loading code segment to code segment is redundant
-        		default:	;
-        		endcase
-        	end
-    		`RET:
-    				if (iqentry_a2[head][63:40] != cs_sel[brgs]) begin
-    					excmiss <= `TRUE;
-    					excmisspc <= iqentry_a2[head];
-    					excthrd <= iqentry_thrd[head];
-							cs_base[brgs] <= iqentry_seg_base[head];
-							cs_lb[brgs] <= iqentry_seg_lb[head];
-							cs_ub[brgs] <= iqentry_seg_ub[head];
-							cs_acr[brgs] <= iqentry_seg_acr[head];
-							cs_sel[brgs] <= iqentry_a2[head][63:40];
-						end
-`endif
         `REX:
 `ifdef SUPPORT_SMT        
             // Can only redirect to a lower level
@@ -10657,9 +9958,6 @@ begin
 		`CSR_SBU:			dat <= sbu;
 		`CSR_ENU:			dat <= en;
 `endif
-`ifdef SUPPORT_PREDICATION
-		`CSR_PREGS:		read_pregs(dat);
-`endif		
     `CSR_Q_CTR:		dat <= iq_ctr;
     `CSR_BM_CTR:	dat <= bm_ctr;
     `CSR_ICL_CTR:	dat <= icl_ctr;
@@ -10788,9 +10086,6 @@ begin
 				`CSR_SBU:			su_barrier[brgs] <= dat;
 				`CSR_ENU:			en_barrier[brgs] <= dat;
 `endif
-`ifdef SUPPORT_PREDICATION
-				`CSR_PREGS:			write_pregs(dat);
-`endif				
 				`CSR_TIME:		begin
 						ld_time <= 6'h3f;
 						wc_time_dat <= dat;
@@ -10857,9 +10152,6 @@ begin
 	dram0_tgt 	<= iqentry_tgt[n];
 	dram0_data	<= iqentry_a2[n];
 	dram0_addr	<=
-`ifdef SUPPORT_SEGMENTATION	
-		 iqentry_ret[n] ? iqentry_res1[n] :
-`endif
 		 iqentry_ma[n];
 	//             if (ol[iqentry_thrd[n]]==`OL_USER)
 	//             	dram0_seg   <= (iqentry_Ra[n]==5'd30 || iqentry_Ra[n]==5'd31) ? {ss[iqentry_thrd[n]],13'd0} : {ds[iqentry_thrd[n]],13'd0};

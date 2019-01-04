@@ -2289,7 +2289,7 @@ static void process_beqi(int64_t opcode6, int64_t opcode3)
 {
   int Ra, pred = 0;
   int64_t val, imm;
-  int64_t disp, offset;
+  int64_t disp;
 	int sz = 3;
 	int ins48 = 0;
 	char *p;
@@ -2308,21 +2308,18 @@ static void process_beqi(int64_t opcode6, int64_t opcode3)
 	if (!IsNBit(imm,8LL)) {
 		//printf("Branch immediate too large: %d %I64d", lineno, imm);
 		LoadConstant(imm, 23LL);
-		disp = (val >> 8LL) - ((code_address) >> 8LL);
-		offset = val & 0xffLL;
-		if (!IsNBit(disp, 4LL)) {
+		disp = (val - code_address) >> 1LL;
+		if (!IsNBit(disp, 11LL)) {
 			ins48 = !gpu;
-			disp = (val >> 8LL) - ((code_address) >> 8LL);
-			if (!IsNBit(disp, 20LL) || gpu) {
+			if (!IsNBit(disp, 27LL) || gpu) {
 				if (pass > 4)
 					error("BEQI Branch target too far away");
 			}
 			return;
 		}
 		emit_insn(
-			(disp << 28LL) |
-			((offset >> 3LL) << 23LL) |
-			(((offset >> 1LL) & 3LL) << 16LL) |
+			((disp >> 2) << 23LL) |
+			((disp & 3LL) << 16LL) |
 			(23 << 18) |
 			(Ra << 8) |
 			(ins48 << 6) |
@@ -2330,22 +2327,18 @@ static void process_beqi(int64_t opcode6, int64_t opcode3)
 		);
 		return;
 	}
-	disp = val - (code_address);
-	disp = (val >> 8LL) - ((code_address) >> 8LL);
-	offset = val & 0xffLL;
-	if (!IsNBit(disp, 4LL)) {
+	disp = (val - code_address) >> 1LL;
+	if (!IsNBit(disp, 11LL)) {
 		ins48 = !gpu;
-		disp = (val >> 8LL) - ((code_address) >> 8LL);
-		if (!IsNBit(disp, 20LL) || gpu) {
+		if (!IsNBit(disp, 27LL) || gpu) {
 			if (pass > 4)
 				error("BEQI Branch target too far away");
 		}
 		return;
 	}
 	emit_insn(
-		(disp << 28LL) |
-		((offset >> 3LL) << 23LL) |
-		(((offset >> 1LL) & 3LL) << 16LL) |
+		((disp >> 2) << 23LL) |
+		((disp & 3LL) << 16LL) |
 		(((imm >> 3LL) & 0x1FLL) << 18LL) |
 		((imm & 7LL) << 13LL) |
 		(Ra << 8) |
@@ -2379,7 +2372,7 @@ static void process_bcc(int opcode6, int opcode4)
   int Ra, Rb, pred;
 	int fmt;
   int64_t val, ca4, ca2;
-  int64_t disp, cdisp, offset;
+  int64_t disp;
 	char *p1, *p2;
 	int encode;
 	int ins48 = 0;
@@ -2402,26 +2395,24 @@ static void process_bcc(int opcode6, int opcode4)
 	val = expr();
 	ca4 = (code_address + 4LL);
 	ca2 = (code_address + 2LL);
-	disp = (val >> 8LL) - ((code_address) >> 8LL);
-	offset = val & 0xffLL;
-	if (!IsNBit(disp, 4LL)) {
+	disp = (val - code_address) >> 1LL;
+	if (!IsNBit(disp, 11LL)) {
 		ins48 = !gpu;
-		disp = (val >> 8LL) - ((code_address) >> 8LL);
-		if (!IsNBit(disp, 20LL) || gpu) {
+		if (!IsNBit(disp, 27LL) || gpu) {
 			if (pass > 4)
 				error("Branch target too far away");
 		}
 	}
 	encode = (val >> 7LL) == (ca2 >> 7LL);
 	encode = 0;	// for now no compressed branches
-	encode = false;
+	encode = IsNBit(disp, 7);
 	// Check for compressed bnez
 	if (opcode4 == 1 && Rb == 0 && encode && !gpu) {
 		emit_insn(
 			(3 << 14) |
-			(((val >> 2) & 0x3f) << 8) |
+			(((disp >> 1) & 0x3f) << 8) |
 			(2 << 6) |
-			(((val >> 1) & 1) << 5) |
+			((disp & 1) << 5) |
 			Ra,0,2
 		);
 		return;
@@ -2430,9 +2421,9 @@ static void process_bcc(int opcode6, int opcode4)
 	if (opcode4 == 0 && Rb == 0 && encode && !gpu) {
 		emit_insn(
 			(2 << 14) |
-			(((val >> 2) & 0x3f) << 8) |
+			(((disp >> 1) & 0x3f) << 8) |
 			(2 << 6) |
-			(((val >> 1) & 1) << 5) |
+			((disp & 1) << 5) |
 			Ra, 0, 2
 		);
 		return;
@@ -2440,10 +2431,9 @@ static void process_bcc(int opcode6, int opcode4)
 	if (opcode4 < 0) {
 		opcode4 = -opcode4;
 		emit_insn(
-			(disp << 28LL) |
-			((offset >> 3LL) << 23LL) |
+			((disp >> 2) << 23LL) |
 			(Ra << 18) |
-			(((offset >> 1LL) & 3LL) << 16LL) |
+			((disp & 3LL) << 16LL) |
 			(opcode4 << 13) |
 			(Rb << 8) |
 			(ins48 << 6) |
@@ -2452,10 +2442,9 @@ static void process_bcc(int opcode6, int opcode4)
 		return;
 	}
 	emit_insn(
-		(disp << 28LL) |
-		((offset >> 3LL) << 23LL) |
+		((disp >> 2) << 23LL) |
 		(Rb << 18) |
-		(((offset >> 1LL) & 3LL) << 16LL) |
+		((disp & 3LL) << 16LL) |
 		(opcode4 << 13) |
 		(Ra << 8) |
 		(ins48 << 6) |
@@ -2531,7 +2520,7 @@ static void process_bbc(int opcode6, int opcode3)
   int Ra, Rc, pred;
 	int64_t bitno;
   int64_t val;
-  int64_t disp,offset;
+  int64_t disp;
 	char *p1;
 	int sz = 3;
 	char *p;
@@ -2554,20 +2543,17 @@ static void process_bbc(int opcode6, int opcode3)
 		inptr = p;
     NextToken();
 		val = expr();
-		disp = (val >> 8) - ((code_address) >> 8);
-		offset = val & 0xff;
-		if (!IsNBit(disp, 4LL)) {
-			disp = (val >> 8) - ((code_address) >> 8);
+		disp = (val - code_address) >> 1;
+		if (!IsNBit(disp, 11LL)) {
 			isn48 = !gpu;
-			if (!IsNBit(disp, 20LL) || gpu) {
+			if (!IsNBit(disp, 27LL) || gpu) {
 				if (pass > 4)
 					error("BBC/BBS Branch target too far away");
 			}
 		}
 	  emit_insn(
-			(disp << 28LL) |
-			((offset >> 3LL) << 23LL) |
-			(((offset >> 1LL) & 3LL) << 16LL) |
+			((disp >> 2) << 23LL) |
+			((disp & 3LL) << 16LL) |
 			((bitno >> 1) << 18) |
 			((bitno & 1) << 15) |
 			((opcode3 & 3) << 13) |
@@ -2669,38 +2655,31 @@ static void process_bra(int oc)
 {
   int Ra = 0, Rb = 0;
   int64_t val;
-  int64_t disp, cdisp, offset;
+	int64_t disp;
 	int ins48 = 0;
 
   NextToken();
   val = expr();
-  disp = val - (code_address + 4LL);
-	cdisp = val - (code_address + 2LL);
-	disp >>= 1;
-	cdisp >>= 1;
-	if (cdisp > -512 && cdisp < 512 && !gpu && false) {	// disp+1 accounts for instruction size of 2 not 4
+  disp = (val - code_address) >> 1LL;
+	if (disp > -512 && disp < 512 && !gpu) {	// disp+1 accounts for instruction size of 2 not 4
 		emit_insn(
 			(7 << 12) |
-			(((cdisp >> 6) & 0xf) << 8) |
+			(((disp >> 6) & 0xf) << 8) |
 			(2 << 6) |
-			(cdisp & 0x3f), 0, 2
+			(disp & 0x3f), 0, 2
 		);
 		return;
 	}
-	disp = (val >> 8LL) - ((code_address) >> 8LL);
-	offset = val & 0xff;
-	if (!IsNBit(disp, 4LL)) {
+	if (!IsNBit(disp, 11LL)) {
 		ins48 = !gpu;
-		disp = (val >> 8LL) - ((code_address) >> 8LL);
-		if (!IsNBit(disp, 20LL) || gpu) {
+		if (!IsNBit(disp, 27LL) || gpu) {
 			if (pass > 4)
 				error("Bra target too far away");
 		}
 	}
 	emit_insn(
-		(disp << 28LL) |
-		((offset >> 3LL) << 23LL) |
-		(((offset >> 1LL) & 3LL) << 16LL) |
+		((disp >> 2) << 23LL) |
+		((disp & 3LL) << 16LL) |
 		(ins48 << 6) |
     0x30,!expand_flag,ins48 ? 6 : 4
     );
@@ -2778,16 +2757,15 @@ static void process_fbcc(int64_t opcode3)
     NextToken();
 
     val = expr();
-	disp = val - (code_address + 4);
-	if (!IsNBit(disp, 12)) {
-		disp = val - (code_address + 6);
+	disp = (val - code_address) >> 1LL;
+	if (!IsNBit(disp, 11)) {
 		ins48 = true;
 	}
-	disp >>= 1;
 	emit_insn(
-		(disp << 21LL) |
-		(opcode3 << 18) |
-		(Rb << 13) |
+		((disp >> 2) << 23LL) |
+		((disp & 3LL) << 16LL) |
+		(opcode3 << 13) |
+		(Rb << 18) |
 		(Ra << 8) |
 		((ins48 ? 1 : 0) << 6) |
 		0x05, !expand_flag, ins48 ? 6 : 4
@@ -2874,16 +2852,16 @@ static void process_call(int opcode)
 				);
 		return;
 	}
-	if (!IsNBit(val, 24) & !gpu) {
+	if (!IsNBit(val, 23) & !gpu) {
 		emit_insn(
-			((((val >> 1) & 0xFFFFFFFFFFLL)) << 8) |
+			(((val & 0xFFFFFFFFFFLL)) << 8) |
 			(1 << 6) |
 			opcode, !expand_flag, 6
 		);
 		return;
 	}
 	emit_insn(
-		((((val >> 1) & 0xFFFFFFLL)) << 8) |
+		(((val & 0xFFFFFFLL)) << 8) |
 		opcode,!expand_flag,4
 		);
 }
@@ -3275,14 +3253,14 @@ static void process_store(int64_t opcode6, int funct6, int sz)
   mem_operand(&disp, &Ra, &Rc, &Sc, &seg);
 	if (Ra >= 0 && Rc >= 0) {
 		emit_insn(
-			((int64_t)seg << 45LL) |
+//			((int64_t)seg << 45LL) |
 			((funct6 >> 2) << 28) |
 			((funct6 & 3) << 16) |
 			(Sc << 13) |
 			(Rc << 23) |
 			(Rs << 18) |
 			(Ra << 8) |
-			0x16,!expand_flag,seg==-1 ? 4 : 6);
+			0x16, !expand_flag, 4);// seg == -1 ? 4 : 6);
 		return;
 	}
   if (Ra < 0) Ra = 0;
@@ -3319,18 +3297,18 @@ static void process_store(int64_t opcode6, int funct6, int sz)
 			}
 		}
 	}
-	if (!IsNBit(val,27) && !gpu) {
+	if (!IsNBit(val,30) && !gpu) {
 		LoadConstant(val,23);
 		// Change to indexed addressing
 		emit_insn(
-			((int64_t)seg << 45LL) |
+//			((int64_t)seg << 45LL) |
 			((funct6 >> 2) << 28) |
 			((funct6 & 3) << 16) |
 			(23 << 23) |
 			(0 << 13) |		// Sc
 			(Rs << 18) |
 			(Ra << 8) |
-			0x16,!expand_flag,seg==-1 ? 4 : 6);
+			0x16, !expand_flag, 4);// seg == -1 ? 4 : 6);
 		ScanToEOL();
 		return;
 	}
@@ -3365,8 +3343,8 @@ static void process_store(int64_t opcode6, int funct6, int sz)
 					seg = 1;
 			}
 			emit_insn(
-				((int64_t)seg << 45LL) |
-				((((val | abs(sz)) >> 5LL) & 0x3fffffLL) << 23LL) |
+//				((int64_t)seg << 45LL) |
+				((((val | abs(sz)) >> 5LL)) << 23LL) |
 				(Rs << 18) |
 				(((val | abs(sz)) & 0x1fLL) << 13LL) |
 				(Ra << 8) |
@@ -3629,14 +3607,14 @@ static void process_load(int64_t opcode6, int64_t funct6, int sz)
 		//	error("Indexed addressing not supported on GPU");
 		// Trap LEA, convert to LEAX opcode
 		emit_insn(
-			((int64_t)seg << 45LL) |
+//			((int64_t)seg << 45LL) |
 			((funct6 >> 2) << 28LL) |
 			(Rc << 23) |
 			((funct6 & 3) << 21) |
 			(Sc << 18) |
 			(Rt << 13) |
 			(Ra << 8) |
-			0x16,!expand_flag,seg != -1 ? 6 : 4);
+			0x16, !expand_flag, 4);// seg != -1 ? 6 : 4);
 		return;
 	}
   if (Ra < 0) Ra = 0;
@@ -3673,18 +3651,18 @@ static void process_load(int64_t opcode6, int64_t funct6, int sz)
 			}
 		}
 	}
-	if (!IsNBit(val, 27) && !gpu) {
+	if (!IsNBit(val, 30) && !gpu) {
 		LoadConstant(val, 23);
 		// Change to indexed addressing
 		emit_insn(
-			((int64_t)seg << 45LL) |
+//			((int64_t)seg << 45LL) |
 			((funct6 >>2) << 28LL) |
 			(23 << 23) |
 			((funct6 & 3) << 21) |
 			(0 << 18) |		// Sc = 0
 			(Rt << 13) |
 			(Ra << 8) |
-			0x16,!expand_flag,seg==-1 ? 4 : 6);
+			0x16, !expand_flag, 4);// seg == -1 ? 4 : 6);
 		ScanToEOL();
 		return;
 	}
@@ -3719,8 +3697,8 @@ static void process_load(int64_t opcode6, int64_t funct6, int sz)
 					seg = 1;
 			}
 			emit_insn(
-				((int64_t)seg << 45LL) |
-				(((val | abs(sz)) & 0x7ffffffLL) << 18LL) |
+//				((int64_t)seg << 45LL) |
+				((val | abs(sz)) << 18LL) |
 				(Rt << 13) |
 				(Ra << 8) |
 				(1 << 6) |
@@ -3755,30 +3733,30 @@ static void process_cache(int opcode6)
   mem_operand(&disp, &Ra, &Rc, &Sc, &seg);
 	if (Ra > 0 && Rc > 0) {
 		emit_insn(
-			(((int64_t)seg) << 45LL) |
+//			(((int64_t)seg) << 45LL) |
 			((opcode6 >> 2) << 28) |
 			(Rc << 23) |
 			((opcode6 & 3) << 21) |
 			(Sc << 18) |
 			(cmd << 13) |
 			(Ra << 8) |
-			0x16,!expand_flag,seg==-1?4:6);
+			0x16, !expand_flag, 4);// seg == -1 ? 4 : 6);
 		return;
 	}
     if (Ra < 0) Ra = 0;
     val = disp;
-	if (!IsNBit(val,27)) {
+	if (!IsNBit(val,30)) {
 		LoadConstant(val,23);
 		// Change to indexed addressing
 		emit_insn(
-			(((int64_t)seg) << 45LL) |
+//			(((int64_t)seg) << 45LL) |
 			((opcode6 >> 2) << 26) |
 			(23 << 23) |
 			((opcode6 & 3) << 21) |
 			(Sc << 18) |
 			(cmd << 13) |
 			(Ra << 8) |
-			0x16,!expand_flag,seg==-1?4:6);
+			0x16, !expand_flag, 4);// seg == -1 ? 4 : 6);
 		ScanToEOL();
 		return;
 	}
@@ -3790,7 +3768,7 @@ static void process_cache(int opcode6)
 				seg = 1;
 		}
 		emit_insn(
-			(((int64_t)seg) << 45LL) |
+//			(((int64_t)seg) << 45LL) |
 			(val << 18LL) |
 			(cmd << 13) |
 			(Ra << 8) |
