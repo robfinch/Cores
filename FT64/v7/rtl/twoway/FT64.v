@@ -7411,8 +7411,8 @@ end
                  fcu_pc		<= iqentry_pc[n];
                  fcu_nextpc <= iqentry_pc[n] + iqentry_insln[n];
                  fcu_pt     <= iqentry_pt[n];
-                 fcu_brdisp <= iqentry_instr[n][6] ? {{37{iqentry_instr[n][47]}},iqentry_instr[n][47:23],iqentry_instr[n][17:16]}
-                 							 : {{53{iqentry_instr[n][31]}},iqentry_instr[n][31:23],iqentry_instr[n][17:16]};
+                 fcu_brdisp <= iqentry_instr[n][6] ? {{36{iqentry_instr[n][47]}},iqentry_instr[n][47:23],iqentry_instr[n][17:16],1'b0}
+                 							 : {{52{iqentry_instr[n][31]}},iqentry_instr[n][31:23],iqentry_instr[n][17:16],1'b0};
                  fcu_branch <= iqentry_br[n];
                  fcu_call    <= IsCall(iqentry_instr[n])|iqentry_jal[n];
                  fcu_jal     <= iqentry_jal[n];

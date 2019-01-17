@@ -225,7 +225,7 @@ case(fetchbufA_instr[`INSTRUCTION_OP])
 default:
 	begin
 	branch_pcA[31:0] = fetchbufA_pc[31:0] +
-		((fetchbufA_instr[7:6]==2'b01) ? {{5{fetchbufA_instr[47]}},fetchbufA_instr[47:23],fetchbufA_instr[17:16]} : {{21{fetchbufA_instr[31]}},fetchbufA_instr[31:23],fetchbufA_instr[17:16]});
+		((fetchbufA_instr[7:6]==2'b01) ? {{4{fetchbufA_instr[47]}},fetchbufA_instr[47:23],fetchbufA_instr[17:16],1'b0} : {{20{fetchbufA_instr[31]}},fetchbufA_instr[31:23],fetchbufA_instr[17:16],1'b0});
 	branch_pcA[63:32] = fetchbufA_pc[63:32];
 	end
 endcase
@@ -245,7 +245,7 @@ case(fetchbufB_instr[`INSTRUCTION_OP])
 default:
 	begin
 	branch_pcB[31:0] = fetchbufB_pc[31:0] +
-		((fetchbufB_instr[7:6]==2'b01) ? {{5{fetchbufB_instr[47]}},fetchbufB_instr[47:23],fetchbufB_instr[17:16]} : {{21{fetchbufB_instr[31]}},fetchbufB_instr[31:23],fetchbufB_instr[17:16]});
+		((fetchbufB_instr[7:6]==2'b01) ? {{4{fetchbufB_instr[47]}},fetchbufB_instr[47:23],fetchbufB_instr[17:16],1'b0} : {{20{fetchbufB_instr[31]}},fetchbufB_instr[31:23],fetchbufB_instr[17:16],1'b0});
 	branch_pcB[63:32] = fetchbufB_pc[63:32];
 	end
 endcase

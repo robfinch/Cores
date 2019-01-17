@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2017-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2017-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -1178,7 +1178,7 @@ FT64_mpu ucpu1
   .cyc_o(cyc),
   .stb_o(stb),
   .ack_i(ack1),
-  .err_i(err),
+  .err_i(1'b0),		// err),
   .we_o(we),
   .sel_o(sel),
   .adr_o(adr),

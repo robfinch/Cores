@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2017-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2017-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -48,6 +48,7 @@ parameter byt = 3'd0;
 parameter wyde = 3'd1;
 parameter tetra = 3'd2;
 parameter octa = 3'd3;
+parameter hexi = 3'd4;
 
 // Really IsPredictableBranch
 // Does not include BccR's
@@ -257,9 +258,9 @@ default:
 // stores to be issued by ignoring the fact they can exception because the stores
 // can be undone by invalidating the write buffer.
 `ifdef HAS_WB
-    fnCanException = IsMem(isn) && !IsStore(isn);
+    fnCanException = IsMem && !IsStore(isn);
 `else
-    fnCanException = IsMem(isn);
+    fnCanException = IsMem;
 `endif
 endcase
 end
@@ -288,7 +289,11 @@ case(isn[`INSTRUCTION_OP])
 	if (isn[6])
 		IsMov2Seg = isn[47:42]==`MOV2SEG;
 	else
-		IsMov2Seg = isn[31:26]==`MOV2SEG;
+    case(isn[`INSTRUCTION_S2])
+		`MOV2SEG:	IsMov2Seg = TRUE;
+		`RTI:			IsMov2Seg = TRUE;
+		default:	IsMov2Seg = FALSE;
+		endcase
 `RET:
 	IsMov2Seg = TRUE;
 default:	IsMov2Seg = FALSE;
@@ -388,14 +393,20 @@ default:    IsPush = FALSE;
 endcase
 endfunction
 
-function [0:0] IsMem;
-input [47:0] isn;
-case(isn[`INSTRUCTION_OP])
+//function [0:0] IsMem;
+reg IsMem;
+always @*
+//input [47:0] isn;
+case(instr[`INSTRUCTION_OP])
 `R2:
-	if (isn[6])
-		IsMem = isn[47:42]==`MOV2SEG;
+	if (instr[6])
+		IsMem = instr[47:42]==`MOV2SEG;
 	else
-		IsMem = isn[31:26]==`MOV2SEG;
+    case(instr[`INSTRUCTION_S2])
+		`MOV2SEG:	IsMem = TRUE;
+		`RTI:			IsMem = TRUE;
+		default:	IsMem = FALSE;
+		endcase
 `MEMNDX:	IsMem = TRUE;
 `AMO:		IsMem = TRUE;
 `LB:    IsMem = TRUE;
@@ -414,7 +425,7 @@ case(isn[`INSTRUCTION_OP])
 `RET:		IsMem = TRUE;
 default:    IsMem = FALSE;
 endcase
-endfunction
+//endfunction
 
 function IsMemNdx;
 input [47:0] isn;
@@ -466,10 +477,11 @@ case(isn[`INSTRUCTION_OP])
 		MemSize = octa;
 `LB,`LBU:    MemSize = byt;
 `Lx,`LxU,`LVx,`LVxU:
-	casez(isn[20:18])
-	3'b100:	MemSize = octa;
-	3'b?10:	MemSize = tetra;
-	3'b??1:	MemSize = wyde;
+	casez(isn[21:18])
+	4'b1000:	MemSize = hexi;
+	4'b?100:	MemSize = octa;
+	4'b??10:	MemSize = tetra;
+	4'b???1:	MemSize = wyde;
 	default:	MemSize = octa;
 	endcase
 `LWR:  MemSize = octa;
@@ -484,10 +496,11 @@ case(isn[`INSTRUCTION_OP])
 	endcase
 `SB:    MemSize = byt;
 `Sx:
-	casez(isn[15:13])
-	3'b100:	MemSize = octa;
-	3'b?10:	MemSize = tetra;
-	3'b??1:	MemSize = wyde;
+	casez(isn[16:13])
+	4'b1000:	MemSize = hexi;
+	4'b?100:	MemSize = octa;
+	4'b??10:	MemSize = tetra;
+	4'b???1:	MemSize = wyde;
 	default:	MemSize = octa;
 	endcase
 `SWC:  MemSize = octa;
@@ -1169,7 +1182,7 @@ begin
 	bus[`IB_PUSH]   <= IsPush(instr);
 	bus[`IB_ODDBALL] <= IsOddball(instr);
 	bus[`IB_MEMSZ]  <= MemSize(instr);
-	bus[`IB_MEM]		<= IsMem(instr);
+	bus[`IB_MEM]		<= IsMem;
 	bus[`IB_MEMNDX]	<= IsMemNdx(instr);
 	bus[`IB_RMW]		<= IsCAS(instr) || IsAMO(instr) || IsInc(instr);
 	bus[`IB_MEMDB]	<= IsMemdb(instr);

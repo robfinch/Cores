@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2017-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2017-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -426,16 +426,9 @@
 `define FLT_BD			8'd55
 `define FLT_STK     8'd56
 `define FLT_DBE     8'd60
-`define FLT_RET			8'd230
-`define FLT_CS			8'd231
-`define FLT_ZS_LD		8'd232
-`define FLT_DS_LD		8'd233
-`define FLT_ES_LD		8'd234
-`define FLT_FS_LD		8'd235
-`define FLT_GS_LD		8'd236
-`define FLT_HS_LD		8'd237
-`define FLT_SS_LD		8'd238
-`define FLT_CS_LD		8'd239
+`define FLT_STP			8'd232		// segment type
+`define FLT_STZ			8'd233		// stack segment zero
+`define FLT_SNP			8'd234		// segment not present
 
 `define INSTRUCTION_OP  5:0
 `define INSTRUCTION_L2	7:6
