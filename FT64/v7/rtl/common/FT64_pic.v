@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2013-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2013-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -55,6 +55,10 @@
 //			This register resets the edge sense circuitry
 //			indicated by the low order five bits of the input data.
 //
+//  0x18  - write only
+//      This register triggers the interrupt indicated by the low
+//      order five bits of the input data.
+//
 //  0x80    - irq control for irq #0
 //  0x84    - irq control for irq #1
 //            bits 0 to 7  = cause code to issue
@@ -82,10 +86,11 @@ module FT64_pic
 	output [3:0] irqo,	// normally connected to the processor irq
 	input nmii,		// nmi input connected to nmi requester
 	output nmio,	// normally connected to the nmi of cpu
-	output [6:0] causeo
+	output [7:0] causeo
 );
 parameter pIOAddress = 32'hFFDC_0F00;
 
+reg [31:0] trig;
 reg [31:0] ie;		// interrupt enable register
 reg rdy1;
 reg [4:0] irqenc;
@@ -121,9 +126,11 @@ always @(posedge clk_i)
 	if (rst_i) begin
 		ie <= 32'h0;
 		rste <= 32'h0;
+		trig <= 32'h0;
 	end
 	else begin
 		rste <= 32'h0;
+		trig <= 32'h0;
 		if (cs & wr_i) begin
 			casez (adr_i[7:2])
 			6'd0: ;
@@ -135,6 +142,7 @@ always @(posedge clk_i)
 				ie[dat_i[4:0]] <= adr_i[2];
 			6'd4:	es <= dat_i[31:0];
 			6'd5:	rste[dat_i[4:0]] <= 1'b1;
+			6'd6:	trig[dat_i[4:0]] <= 1'b1;
 			6'b1?????:
 			     begin
 			     	 cause[adr_i[6:2]] <= dat_i[7:0];
@@ -161,7 +169,7 @@ begin
 		dat_o <= 32'h0000;
 end
 
-assign irqo = (irqenc == 5'h0) ? 4'd0 : irq[irqenc];
+assign irqo = (irqenc == 5'h0) ? 4'd0 : irq[irqenc] & {4{ie[irqenc]}};
 assign causeo = (irqenc == 5'h0) ? 8'd0 : cause[irqenc];
 assign nmio = nmii & ie[0];
 
@@ -171,6 +179,7 @@ begin
 	for (n = 1; n < 32; n = n + 1)
 	begin
 		ib[n] <= i[n];
+		if (trig[n]) iedge[n] <= 1'b1;
 		if (i[n] & !ib[n]) iedge[n] <= 1'b1;
 		if (rste[n]) iedge[n] <= 1'b0;
 	end
@@ -183,7 +192,7 @@ always @(posedge clk_i)
 begin
 	irqenc <= 5'd0;
 	for (n = 31; n > 0; n = n - 1)
-		if (ie[n] & (es[n] ? iedge[n] : i[n])) irqenc <= n;
+		if ((es[n] ? iedge[n] : i[n])) irqenc <= n;
 end
 
 endmodule

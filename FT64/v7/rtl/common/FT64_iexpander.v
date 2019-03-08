@@ -198,7 +198,7 @@ casez({cinstr[15:12],cinstr[6]})
 			expand[22:18] = 5'd0;		// Rb = 0
 			expand[17:16] = cinstr[1:0];
 			expand[15:13] = 3'd0;		// BEQ
-			expand[12:8] = 5'd0;		// r0==r0
+			expand[12:8] = 5'd0;		// Ra = r0
 			expand[7:6] = 2'b10;
 			expand[5:0] = `Bcc;		// 0x38
 		end

@@ -1854,6 +1854,12 @@ else if (phit) begin
 //		insn0 <= {6'd1,5'd0,4'b0,1'b0,`FLT_PRIV,2'b00,`BRK};
 //	else
 		insn0 <= insn0a;
+		if (insn0a[15:0]==16'hFF00) begin	// BRK #255
+			if (~|irq_i)
+				insn0 <= {8'h00,`NOP_INSN};
+			else
+				insn0[20:0] <= {irq_i,1'b0,vec_i,2'b00,`BRK};
+		end
 end
 else begin
 	insn0 <= {8'h00,`NOP_INSN};
@@ -1869,6 +1875,12 @@ else if (phit) begin
 //		insn1 <= {6'd1,5'd0,4'b0,1'b0,`FLT_PRIV,2'b00,`BRK};
 //	else
 		insn1 <= insn1a;
+		if (insn1a[15:0]==16'hFF00) begin
+			if (~|irq_i)
+				insn1 <= {8'h00,`NOP_INSN};
+			else
+				insn1[20:0] <= {irq_i,1'b0,vec_i,2'b00,`BRK};
+		end
 end
 else begin
 	insn1 <= {8'h00,`NOP_INSN};
@@ -1883,6 +1895,12 @@ else if (phit) begin
 //		insn2 <= {6'd1,5'd0,4'b0,1'b0,`FLT_PRIV,2'b00,`BRK};
 //	else
 		insn2 <= insn2a;
+		if (insn2a[15:0]==16'hFF00) begin
+			if (~|irq_i)
+				insn2 <= {8'h00,`NOP_INSN};
+			else
+				insn2[20:0] <= {irq_i,1'b0,vec_i,2'b00,`BRK};
+		end
 end
 else
 	insn2 <= `NOP_INSN;
@@ -5843,8 +5861,7 @@ FT64_FCU_Calc #(.AMSB(AMSB)) ufcuc1
 	.nextpc(fcu_nextpc),
 	.im(im),
 	.waitctr(waitctr),
-	.bus(fcu_out),
-	.cs_sel(fcu_nextpc[63:40])
+	.bus(fcu_out)
 );
 
 wire will_clear_branchmiss = branchmiss && ((fetchbuf0_v && fetchbuf0_pc==misspc) || (fetchbuf1_v && fetchbuf1_pc==misspc));
@@ -5859,7 +5876,7 @@ case(fcu_instr[`INSTRUCTION_OP])
 `JAL:	fcu_misspc = fcu_argA + fcu_argI;
 //`CHK:	fcu_misspc = fcu_nextpc + fcu_argI;	// Handled as an instruction exception
 // Default: branch
-default:	fcu_misspc = fcu_takb ? {fcu_pc[AMSB:32],fcu_pc[31:0] + fcu_brdisp[31:0]} : fcu_nextpc;
+default:	fcu_misspc = !(fcu_takb ^ fcu_pt) ? {fcu_pc[AMSB:32],fcu_pc[31:0] + fcu_brdisp[31:0]} : fcu_nextpc;
 endcase
 fcu_misspc[0] = 1'b0;
 end
@@ -6168,7 +6185,7 @@ begin
         	end
         end
         else
-            queuedNop <= TRUE;
+          queuedNop <= TRUE;
     end
     else if (fetchbuf1_v && fetchbuf1_thrd != branchmiss_thrd) begin
         if (fetchbuf1_instr[`INSTRUCTION_OP]!=`NOP) begin

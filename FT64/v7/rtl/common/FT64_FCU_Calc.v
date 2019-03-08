@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2017-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2017-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -25,7 +25,7 @@
 //
 `include ".\FT64_defines.vh"
 
-module FT64_FCU_Calc(ol, instr, tvec, a, pc, nextpc, im, waitctr, bus, cs_sel);
+module FT64_FCU_Calc(ol, instr, tvec, a, pc, nextpc, im, waitctr, bus);
 parameter WID = 64;
 parameter AMSB = 31;
 input [1:0] ol;
@@ -37,7 +37,6 @@ input [AMSB:0] nextpc;
 input [3:0] im;
 input [WID-1:0] waitctr;
 output reg [WID-1:0] bus;
-input [23:0] cs_sel;
 
 always @*
 begin
@@ -49,8 +48,8 @@ begin
 		`DBNZ:	bus <=  a - 64'd1;
 		default:	bus <= 64'hCCCCCCCCCCCCCCCC;
 		endcase
-  `JAL:		bus <= {cs_sel,nextpc[39:0]};
-  `CALL:	bus <= {cs_sel,nextpc[39:0]};
+  `JAL:		bus <= nextpc;
+  `CALL:	bus <= nextpc;
   `RET:		bus <= a + (instr[7:6]==2'b01 ? {instr[47:23],3'b0} : {instr[31:23],3'b0});
   `REX:
     case(ol)

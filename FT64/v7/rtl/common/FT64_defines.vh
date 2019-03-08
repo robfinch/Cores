@@ -314,6 +314,7 @@
 `define EXR			8'h7F
 
 `define NOP_INSN    {42'd0,`NOP}
+`define PFI						16'h1F80	// reserved for PFI
 `define INSN_FLT_EXF  16'h1180
 `define INSN_FLT_IBE	16'h10A0
 `define INSN_FLT_TLB	16'h1280
