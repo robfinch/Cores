@@ -5,7 +5,7 @@
 //
 //
 //        __
-//   \\__/ o\    (C) 2008-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2008-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -46,7 +46,7 @@ module rtfBitmapController5(
 	m_clk_i, m_cyc_o, m_stb_o, m_ack_i, m_we_o, m_sel_o, m_adr_o, m_dat_i, m_dat_o,
 	dot_clk_i, zrgb_o, xonoff_i
 `ifdef INTERNAL_SYNC_GEN
-	, hsync_o, vsync_o, blank_o, border_o
+	, hsync_o, vsync_o, blank_o, border_o, hctr_o, vctr_o, fctr_o
 `else
 	, hsync_i, vsync_i, blank_i
 `endif
@@ -141,6 +141,9 @@ output hsync_o;
 output vsync_o;
 output blank_o;
 output border_o;
+output [11:0] hctr_o;
+output [11:0] vctr_o;
+output [5:0] fctr_o;
 `else
 input hsync_i;			// start/end of scan line
 input vsync_i;			// start/end of frame
@@ -159,14 +162,35 @@ reg [31:0] m_adr_o;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-wire cs = s_cyc_i & s_stb_i & s_cs_i;
-reg ack,ack1;
+reg cs;
+reg we;
+reg [7:0] sel;
+reg [11:0] adri;
+reg [63:0] dat;
+
 always @(posedge s_clk_i)
-begin
-	ack1 <= cs;
-	ack <= ack1 & cs;
-end
-assign s_ack_o = cs ? (s_we_i ? 1'b1 : ack) : 1'b0;
+	cs <= s_cyc_i & s_stb_i & s_cs_i;
+always @(posedge s_clk_i)
+	we <= s_we_i;
+always @(posedge s_clk_i)
+	sel <= s_sel_i;
+always @(posedge s_clk_i)
+	adri <= s_adr_i;
+always @(posedge s_clk_i)
+	dat <= s_dat_i;
+
+ack_gen #(
+	.READ_STAGES(2),
+	.WRITE_STAGES(0),
+	.REGISTER_OUTPUT(1)
+) uag1
+(
+	.clk_i(s_clk_i),
+	.ce_i(1'b1),
+	.i(cs),
+	.we_i(s_cyc_i & s_stb_i & s_cs_i & s_we_i),
+	.o(s_ack_o)
+);
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -186,7 +210,7 @@ reg [11:0] vrefdelay;
 reg [11:0] map;     // memory access period
 reg [11:0] mapctr;
 reg [`ABITS] baseAddr;	// base address register
-wire [127:0] rgbo1;
+wire [63:0] rgbo1;
 reg [11:0] pixelRow;
 reg [11:0] pixelCol;
 wire [31:0] pal_wo;
@@ -208,6 +232,8 @@ reg [11:0] vBlankOn = pvBlankOn, vBlankOff = pvBlankOff;
 reg [11:0] hBorderOn = phBorderOn, hBorderOff = phBorderOff;
 reg [11:0] vBorderOn = pvBorderOn, vBorderOff = pvBorderOff;
 reg sgLock;
+wire pe_hsync, pe_hsync2;
+wire pe_vsync;
 
 `ifdef INTERNAL_SYNC_GEN
 wire hsync_i, vsync_i, blank_i;
@@ -220,8 +246,8 @@ VGASyncGen usg1
 	.eof(),
 	.hSync(hsync_o),
 	.vSync(vsync_o),
-	.hCtr(),
-	.vCtr(),
+	.hCtr(hctr_o),
+	.vCtr(vctr_o),
   .blank(blank_o),
   .vblank(vblank),
   .vbl_int(),
@@ -257,6 +283,21 @@ edge_det edcs1
 	.ee()
 );
 
+// Frame counter
+//
+VT163 #(6) ub1
+(
+	.clk(vclk),
+	.clr_n(!rst_i),
+	.ent(pe_vsync),
+	.enp(1'b1),
+	.ld_n(1'b1),
+	.d(6'd0),
+	.q(fctr_o),
+	.rco()
+);
+
+
 
 always @(page or bm_base_addr1 or bm_base_addr2)
 	baseAddr = page ? bm_base_addr2 : bm_base_addr1;
@@ -266,10 +307,10 @@ syncRam512x32_1rw1r upal1
 (
 	.wrst(1'b0),
 	.wclk(s_clk_i),
-	.wce(cs & s_adr_i[11]),
-	.we(s_we_i),
-	.wadr({2'b0,s_adr_i[9:3]}),
-	.i(s_dat_i[31:0]),
+	.wce(cs & adri[11]),
+	.we(we),
+	.wadr({2'b0,adri[9:3]}),
+	.i(dat[31:0]),
 	.wo(pal_wo),
 	.rrst(1'b0),
 	.rclk(vclk),
@@ -293,7 +334,7 @@ if (rst_i) begin
 	greyscale <= 1'b0;
 	bm_base_addr1 <= BM_BASE_ADDR1;
 	bm_base_addr2 <= BM_BASE_ADDR2;
-	hrefdelay <= 12'd109;//12'd218;
+	hrefdelay <= 12'd103;//12'd218;
 	vrefdelay <= 12'd13;//12'd27;
 	map <= 12'd0;
 	pcmd <= 2'b00;
@@ -304,87 +345,87 @@ else begin
   if (rstcmd & ~rstcmd1)
     pcmd <= 2'b00;
 	if (cs_edge) begin
-		if (s_we_i) begin
-			case(s_adr_i[11:3])
+		if (we) begin
+			case(adri[11:3])
 			REG_CTRL:
 				begin
-					if (s_sel_i[0]) onoff <= s_dat_i[0];
-					if (s_sel_i[1]) begin
-					color_depth <= s_dat_i[10:8];
-					greyscale <= s_dat_i[11];
+					if (sel[0]) onoff <= dat[0];
+					if (sel[1]) begin
+					color_depth <= dat[10:8];
+					greyscale <= dat[11];
 					end
-					if (s_sel_i[2]) begin
-					hres <= s_dat_i[18:16];
-					vres <= s_dat_i[21:19];
+					if (sel[2]) begin
+					hres <= dat[18:16];
+					vres <= dat[21:19];
 					end
-					if (s_sel_i[3]) begin
-					page <= s_dat_i[24];
-					pals <= s_dat_i[25];
+					if (sel[3]) begin
+					page <= dat[24];
+					pals <= dat[25];
 					end
-					if (|s_sel_i[7:6]) map <= s_dat_i[59:48];
+					if (|sel[7:6]) map <= dat[59:48];
 				end
 			REG_DISPLAYED:
 				begin
-					if (|s_sel_i[1:0])	hDisplayed <= s_dat_i[11:0];
-					if (|s_sel_i[3:2])  vDisplayed <= s_dat_i[27:16];
-					if (|s_sel_i[5:4])	hrefdelay <= s_dat_i[43:32];
-					if (|s_sel_i[7:6])  vrefdelay <= s_dat_i[59:48];
+					if (|sel[1:0])	hDisplayed <= dat[11:0];
+					if (|sel[3:2])  vDisplayed <= dat[27:16];
+					if (|sel[5:4])	hrefdelay <= dat[43:32];
+					if (|sel[7:6])  vrefdelay <= dat[59:48];
 				end
-			REG_PAGE1ADDR:	bm_base_addr1 <= s_dat_i;
-			REG_PAGE2ADDR:	bm_base_addr2 <= s_dat_i;
+			REG_PAGE1ADDR:	bm_base_addr1 <= dat;
+			REG_PAGE2ADDR:	bm_base_addr2 <= dat;
 			REG_PXYZ:
 				begin
-					if (|s_sel_i[1:0])	px <= s_dat_i[11:0];
-					if (|s_sel_i[3:2])	py <= s_dat_i[27:16];
-					if (|s_sel_i[  4])	pz <= s_dat_i[39:32];
+					if (|sel[1:0])	px <= dat[11:0];
+					if (|sel[3:2])	py <= dat[27:16];
+					if (|sel[  4])	pz <= dat[39:32];
 				end
 			REG_PCOLCMD:
 				begin
-					if (s_sel_i[0]) pcmd <= s_dat_i[1:0];
-			    if (s_sel_i[2]) raster_op <= s_dat_i[19:16];
-			    if (|s_sel_i[7:4]) color <= s_dat_i[63:32];
+					if (sel[0]) pcmd <= dat[1:0];
+			    if (sel[2]) raster_op <= dat[19:16];
+			    if (|sel[7:4]) color <= dat[63:32];
 			  end
 `ifdef INTERNAL_SYNC_GEN
 			REG_TOTAL:
 				begin
 					if (!sgLock) begin
-						if (|s_sel_i[1:0]) hTotal <= s_dat_i[11:0];
-						if (|s_sel_i[3:2]) vTotal <= s_dat_i[27:16];
+						if (|sel[1:0]) hTotal <= dat[11:0];
+						if (|sel[3:2]) vTotal <= dat[27:16];
 					end
-					if (|s_sel_i[7:4]) begin
-						if (s_dat_i[63:32]==32'hA1234567)
+					if (|sel[7:4]) begin
+						if (dat[63:32]==32'hA1234567)
 							sgLock <= 1'b0;
-						else if (s_dat_i[63:32]==32'h7654321A)
+						else if (dat[63:32]==32'h7654321A)
 							sgLock <= 1'b1;
 					end
 				end
 			REG_SYNC_ONOFF:
 				if (!sgLock) begin
-					if (|s_sel_i[1:0]) hSyncOff <= s_dat_i[11:0];
-					if (|s_sel_i[3:2]) hSyncOn <= s_dat_i[27:16];
-					if (|s_sel_i[5:4]) vSyncOff <= s_dat_i[43:32];
-					if (|s_sel_i[7:6]) vSyncOn <= s_dat_i[59:48];
+					if (|sel[1:0]) hSyncOff <= dat[11:0];
+					if (|sel[3:2]) hSyncOn <= dat[27:16];
+					if (|sel[5:4]) vSyncOff <= dat[43:32];
+					if (|sel[7:6]) vSyncOn <= dat[59:48];
 				end
 			REG_BLANK_ONOFF:
 				if (!sgLock) begin
-					if (|s_sel_i[1:0]) hBlankOff <= s_dat_i[11:0];
-					if (|s_sel_i[3:2]) hBlankOn <= s_dat_i[27:16];
-					if (|s_sel_i[5:4]) vBlankOff <= s_dat_i[43:32];
-					if (|s_sel_i[7:6]) vBlankOn <= s_dat_i[59:48];
+					if (|sel[1:0]) hBlankOff <= dat[11:0];
+					if (|sel[3:2]) hBlankOn <= dat[27:16];
+					if (|sel[5:4]) vBlankOff <= dat[43:32];
+					if (|sel[7:6]) vBlankOn <= dat[59:48];
 				end
 			REG_BORDER_ONOFF:
 				begin
-					if (|s_sel_i[1:0]) hBorderOff <= s_dat_i[11:0];
-					if (|s_sel_i[3:2]) hBorderOn <= s_dat_i[27:16];
-					if (|s_sel_i[5:4]) vBorderOff <= s_dat_i[43:32];
-					if (|s_sel_i[7:6]) vBorderOn <= s_dat_i[59:48];
+					if (|sel[1:0]) hBorderOff <= dat[11:0];
+					if (|sel[3:2]) hBorderOn <= dat[27:16];
+					if (|sel[5:4]) vBorderOff <= dat[43:32];
+					if (|sel[7:6]) vBorderOn <= dat[59:48];
 				end
 `endif
       default:  ;
 			endcase
 		end
 	end
-  casez(s_adr_i[11:3])
+  casez(adri[11:3])
   REG_CTRL:
       begin
           s_dat_o[0] <= onoff;
@@ -424,8 +465,6 @@ assign vclk = dot_clk_i;
 // Horizontal and Vertical timing reference counters
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-wire pe_hsync, pe_hsync2;
-wire pe_vsync;
 edge_det edh1
 (
 	.rst(rst_i),
@@ -504,6 +543,7 @@ BPP12: bpp = 11;
 BPP16:	bpp = 15;
 BPP20:	bpp = 19;
 BPP32:	bpp = 31;
+default:	bpp = 15;
 endcase
 
 reg [5:0] shifts;
@@ -639,6 +679,7 @@ OPNOR:   rastop = ~(a | b);
 OPXNOR:  rastop = ~(a ^ b);
 OPORN:   rastop = a | ~b;
 OPWHITE: rastop = 1'b1;
+default:	rastop = 1'b0;
 endcase
 endfunction
 
@@ -837,6 +878,7 @@ always @(posedge vclk)
 		BPP16:	rgbo3 <= {16'h0,rgbo3[63:16]};
 		BPP20:	rgbo3 <= {20'h0,rgbo3[63:20]};
 		BPP32:	rgbo3 <= {32'h0,rgbo3[63:32]};
+		default: rgbo3 <= {16'h0,rgbo3[63:16]};
 		endcase
 	end
 
