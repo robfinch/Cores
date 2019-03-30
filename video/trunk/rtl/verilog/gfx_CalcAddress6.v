@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2015-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2015-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -27,6 +27,8 @@
 //
 module gfx_CalcAddress6(clk, base_address_i, color_depth_i, hdisplayed_i, x_coord_i, y_coord_i,
 	address_o, mb_o, me_o, ce_o);
+parameter SW = 128;		// strip width in bits
+parameter BN = SW==128 ? 6 : SW==64 ? 5 : 4;
 input clk;
 input [31:0] base_address_i;
 input [2:0] color_depth_i;
@@ -34,9 +36,9 @@ input [11:0] hdisplayed_i;	// pixel per line
 input [11:0] x_coord_i;
 input [11:0] y_coord_i;
 output [31:0] address_o;
-output [5:0] mb_o;					// mask begin
-output [5:0] me_o;					// mask end
-output [5:0] ce_o;					// color bits end
+output [BN:0] mb_o;					// mask begin
+output [BN:0] me_o;					// mask end
+output [BN:0] ce_o;					// color bits end
 
 parameter BPP4 = 3'd0;
 parameter BPP8 = 3'd1;
@@ -50,14 +52,47 @@ parameter BPP32 = 3'd5;
 // speed divide operation.
 reg [15:0] coeff;
 always @(color_depth_i)
-case(color_depth_i)
-BPP4: coeff = 4096; // 1/16 * 65536
-BPP8:	coeff = 8192;	// 1/8 * 65536
-BPP12: coeff = 13107;	// 1/5 * 65536
-BPP16:	coeff = 16384;	// 1/4 * 65536
-BPP20:	coeff = 21845;	// 1/3 * 65536
-BPP32:	coeff = 32768;	// 1/2 * 65536
-default: coeff = 16384;
+case(SW)
+128:
+	case(color_depth_i)
+	BPP4: coeff = 2048; // 1/32 * 65536
+	BPP8:	coeff = 4096;	// 1/16 * 65536
+	BPP12:	coeff = 6554;	// 1/10 * 65536
+	BPP16:	coeff = 8192;	// 1/8 * 65536
+	BPP20:	coeff = 10923;	// 1/6 * 65536
+	BPP32:	coeff = 16384;	// 1/4 * 65536
+	default:	coeff = 8192;
+	endcase
+64:
+	case(color_depth_i)
+	BPP4: coeff = 4096; // 1/16 * 65536
+	BPP8:	coeff = 8192;	// 1/8 * 65536
+	BPP12: coeff = 13107;	// 1/5 * 65536
+	BPP16:	coeff = 16384;	// 1/4 * 65536
+	BPP20:	coeff = 21845;	// 1/3 * 65536
+	BPP32:	coeff = 32767;	// 1/2 * 65536
+	default: coeff = 16384;
+	endcase
+32:
+	case(color_depth_i)
+	BPP4: coeff = 8192; // 1/8 * 65536
+	BPP8:	coeff = 16384;	// 1/4 * 65536
+	BPP12: coeff = 32767;	// 1/2 * 65536
+	BPP16:	coeff = 32767;	// 1/2 * 65536
+	BPP20:	coeff = 65535;	// 1/1 * 65536
+	BPP32:	coeff = 65535;	// 1/1 * 65536
+	default: coeff = 32767;
+	endcase
+default:	// 128
+	case(color_depth_i)
+	BPP4: coeff = 2048; // 1/32 * 65536
+	BPP8:	coeff = 4096;	// 1/16 * 65536
+	BPP12:	coeff = 6554;	// 1/10 * 65536
+	BPP16:	coeff = 8192;	// 1/8 * 65536
+	BPP20:	coeff = 10923;	// 1/6 * 65536
+	BPP32:	coeff = 16384;	// 1/4 * 65536
+	default:	coeff = 8192;
+	endcase
 endcase
 
 // Bits per pixel minus one.
@@ -88,16 +123,16 @@ endcase
 
 // This coefficient is the number of bits used by all pixels in the strip. 
 // Used to determine pixel placement in the strip.
-reg [6:0] coeff2;
+reg [7:0] coeff2;
 always @(color_depth_i)
 case(color_depth_i)
-BPP4: coeff2 = 64;
-BPP8:	coeff2 = 64;
-BPP12: coeff2 = 60;
-BPP16:	coeff2 = 64;
-BPP20:	coeff2 = 60;
-BPP32:	coeff2 = 64;
-default:	coeff2 = 64;
+BPP4: coeff2 = SW;
+BPP8:	coeff2 = SW;
+BPP12: coeff2 = SW==128 ? 120 : SW==64 ? 60 : 24;
+BPP16:	coeff2 = SW;
+BPP20:	coeff2 = SW==128 ? 120 : SW==64 ? 60 : 20;
+BPP32:	coeff2 = SW;
+default:	coeff2 = SW;
 endcase
 
 // Compute the fixed point horizonal strip number value. This has 16 binary
@@ -110,8 +145,8 @@ wire [13:0] strip_num = strip_num65k[27:16];
 // horizontal strip number.
 wire [15:0] strip_fract = strip_num65k[15:0]+16'h7F;  // +7F to round
 // Pixel beginning bit is ratio of pixel # into all bits used by pixels
-wire [14:0] ndx = strip_fract[15:7] * coeff2;
-assign mb_o = ndx[12:7];  // Get whole pixel position (discard fraction)
+wire [15:0] ndx = strip_fract[15:7] * coeff2;
+assign mb_o = ndx[15:9];  // Get whole pixel position (discard fraction)
 assign me_o = mb_o + bpp; // Set high order position for mask
 assign ce_o = mb_o + cbpp;
 // num_strips is essentially a constant value unless the screen resolution changes.
@@ -122,7 +157,7 @@ always @(posedge clk)
 	num_strips65k <= hdisplayed_i * coeff;
 wire [11:0] num_strips = num_strips65k[27:16];
 
-wire [31:0] offset = {(({4'b0,num_strips} * y_coord_i) + strip_num),3'h0};
+wire [31:0] offset = {(({4'b0,num_strips} * y_coord_i) + strip_num),SW==128 ? 4'h0 : SW==64 ? 3'h0 : 2'd0};
 assign address_o = base_address_i + offset;
 
 endmodule

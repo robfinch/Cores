@@ -26,7 +26,7 @@
 //                                                                          
 //
 //  The default base screen address is:
-//		$0200000 - the second 4MiB of RAM
+//		$0200000 - the third meg of RAM
 //
 //
 //	Verilog 1995
@@ -39,10 +39,12 @@
 `define ABITS	31:0
 `define HIGH	1'b1
 `define LOW		1'b0
+`define TRUE	1'b1
+`define FALSE	1'b0
 
 module rtfBitmapController5(
-	rst_i,
-	s_clk_i, s_cs_i, s_cyc_i, s_stb_i, s_ack_o, s_we_i, s_sel_i, s_adr_i, s_dat_i, s_dat_o, irq_o,
+	rst_i, irq_o,
+	s_clk_i, s_cs_i, s_cyc_i, s_stb_i, s_ack_o, s_we_i, s_sel_i, s_adr_i, s_dat_i, s_dat_o,
 	m_clk_i, m_cyc_o, m_stb_o, m_ack_i, m_we_o, m_sel_o, m_adr_o, m_dat_i, m_dat_o,
 	dot_clk_i, zrgb_o, xonoff_i
 `ifdef INTERNAL_SYNC_GEN
@@ -51,6 +53,7 @@ module rtfBitmapController5(
 	, hsync_i, vsync_i, blank_i
 `endif
 );
+parameter MDW = 128;		// Bus master data width
 parameter BM_BASE_ADDR1 = 32'h0020_0000;
 parameter BM_BASE_ADDR2 = 32'h0028_0000;
 parameter REG_CTRL = 9'd0;
@@ -63,6 +66,7 @@ parameter REG_TOTAL = 9'd8;
 parameter REG_SYNC_ONOFF = 9'd9;
 parameter REG_BLANK_ONOFF = 9'd10;
 parameter REG_BORDER_ONOFF = 9'd11;
+parameter REG_RASTCMP = 9'd12;
 
 parameter BPP4 = 3'd0;
 parameter BPP8 = 3'd1;
@@ -107,6 +111,7 @@ parameter pvTotal = 628;		//  628 total scan lines
 
 // SYSCON
 input rst_i;				// system reset
+output irq_o;
 
 // Peripheral IO slave port
 input s_clk_i;
@@ -120,7 +125,6 @@ input [11:0] s_adr_i;
 input [63:0] s_dat_i;
 output [63:0] s_dat_o;
 reg [63:0] s_dat_o;
-output irq_o;
 
 // Video Memory Master Port
 // Used to read memory via burst access
@@ -128,11 +132,11 @@ input m_clk_i;				// system bus interface clock
 output m_cyc_o;			// video burst request
 output m_stb_o;
 output reg m_we_o;
-output [7:0] m_sel_o;
+output [MDW/8-1:0] m_sel_o;
 input  m_ack_i;			// vid_acknowledge from memory
 output [`ABITS] m_adr_o;	// address for memory access
-input  [63:0] m_dat_i;	// memory data input
-output reg [63:0] m_dat_o;
+input  [MDW-1:0] m_dat_i;	// memory data input
+output reg [MDW-1:0] m_dat_o;
 
 // Video
 input dot_clk_i;		// Video clock 80 MHz
@@ -157,11 +161,13 @@ input xonoff_i;
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // IO registers
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+reg irq_o;
 reg m_cyc_o;
 reg [31:0] m_adr_o;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+wire vclk;
 reg cs;
 reg we;
 reg [7:0] sel;
@@ -195,8 +201,8 @@ ack_gen #(
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 integer n;
-wire vclk;
 reg [11:0] hDisplayed,vDisplayed;
+reg [11:0] rastcmp;
 reg [`ABITS] bm_base_addr1,bm_base_addr2;
 reg [2:0] color_depth;
 wire [7:0] fifo_cnt;
@@ -297,7 +303,16 @@ VT163 #(6) ub1
 	.rco()
 );
 
-
+reg rst_irq;
+always @(posedge vclk)
+if (rst_i)
+	irq_o <= `LOW;
+else begin
+	if (hctr_o==12'd02 && rastcmp==vctr_o)
+		irq_o <= `HIGH;
+	else if (rst_irq)
+		irq_o <= `LOW;
+end
 
 always @(page or bm_base_addr1 or bm_base_addr2)
 	baseAddr = page ? bm_base_addr2 : bm_base_addr1;
@@ -339,14 +354,17 @@ if (rst_i) begin
 	map <= 12'd0;
 	pcmd <= 2'b00;
 	rstcmd1 <= 1'b0;
+	rst_irq <= 1'b0;
+	rastcmp <= 12'hFFF;
 end
 else begin
 	rstcmd1 <= rstcmd;
+	rst_irq <= 1'b0;
   if (rstcmd & ~rstcmd1)
     pcmd <= 2'b00;
 	if (cs_edge) begin
 		if (we) begin
-			case(adri[11:3])
+			casez(adri[11:3])
 			REG_CTRL:
 				begin
 					if (sel[0]) onoff <= dat[0];
@@ -385,6 +403,12 @@ else begin
 			    if (sel[2]) raster_op <= dat[19:16];
 			    if (|sel[7:4]) color <= dat[63:32];
 			  end
+			REG_RASTCMP:	
+				begin
+					if (sel[0]) rastcmp[7:0] <= dat[7:0];
+					if (sel[1]) rastcmp[11:8] <= dat[11:8];
+					if (sel[7]) rst_irq <= dat[63];
+				end
 `ifdef INTERNAL_SYNC_GEN
 			REG_TOTAL:
 				begin
@@ -446,8 +470,6 @@ else begin
   default:        s_dat_o <= 64'd0;
   endcase
 end
-
-assign irq_o = 1'b0;
 
 `ifdef USE_CLOCK_GATE
 BUFHCE ucb1
@@ -548,14 +570,42 @@ endcase
 
 reg [5:0] shifts;
 always @(color_depth)
-case(color_depth)
-BPP4:   shifts = 6'd16;
-BPP8: 	shifts = 6'd8;
-BPP12:	shifts = 6'd5;
-BPP16:	shifts = 6'd4;
-BPP20:	shifts = 6'd3;
-BPP32:	shifts = 6'd2;
-default:  shifts = 6'd4;
+case(MDW)
+128:
+	case(color_depth)
+	BPP4:   shifts = 6'd32;
+	BPP8: 	shifts = 6'd16;
+	BPP12:	shifts = 6'd10;
+	BPP16:	shifts = 6'd8;
+	BPP20:	shifts = 6'd6;
+	BPP32:	shifts = 6'd4;
+	default:  shifts = 6'd8;
+	endcase
+64:
+	case(color_depth)
+	BPP4:   shifts = 6'd16;
+	BPP8: 	shifts = 6'd8;
+	BPP12:	shifts = 6'd5;
+	BPP16:	shifts = 6'd4;
+	BPP20:	shifts = 6'd3;
+	BPP32:	shifts = 6'd2;
+	default:  shifts = 6'd4;
+	endcase
+32:
+	case(color_depth)
+	BPP4:   shifts = 6'd8;
+	BPP8: 	shifts = 6'd4;
+	BPP12:	shifts = 6'd2;
+	BPP16:	shifts = 6'd2;
+	BPP20:	shifts = 6'd1;
+	BPP32:	shifts = 6'd1;
+	default:  shifts = 6'd2;
+	endcase
+default:
+	begin
+	$display("rtfBitmapController5: Bad master bus width");
+	$finish;
+	end
 endcase
 
 wire vFetch = pixelRow < vDisplayed;
@@ -564,12 +614,13 @@ wire fifo_wrst = pe_hsync2;
 
 wire[31:0] grAddr,xyAddr;
 reg [11:0] fetchCol;
-wire [5:0] mb,me,ce;
-reg [63:0] mem_strip;
-wire [63:0] mem_strip_o;
+localparam CMS = MDW==128 ? 6 : MDW==64 ? 5 : 4;
+wire [CMS:0] mb,me,ce;
+reg [MDW-1:0] mem_strip;
+wire [MDW-1:0] mem_strip_o;
 wire [31:0] mem_color;
 
-gfx_CalcAddress6 u1
+gfx_CalcAddress6 #(MDW) u1
 (
   .clk(m_clk_i),
 	.base_address_i(baseAddr),
@@ -583,7 +634,7 @@ gfx_CalcAddress6 u1
 	.ce_o()
 );
 
-gfx_CalcAddress6 u2
+gfx_CalcAddress6 #(MDW) u2
 (
   .clk(m_clk_i),
 	.base_address_i(baseAddr),
@@ -644,7 +695,7 @@ always @(posedge m_clk_i)
 		do_loads <= 1'b0;
 
 assign m_stb_o = m_cyc_o;
-assign m_sel_o = 8'hFF;
+assign m_sel_o = MDW==128 ? 16'hFFFF : MDW==64 ? 8'hFF : 4'hF;
 
 reg [31:0] adr;
 reg [3:0] state;
@@ -715,7 +766,7 @@ else begin
     else
       rstcmd <= 1'b1;
   IDLE:
-    if (load_fifo) begin
+    if (load_fifo & ~m_ack_i) begin
       m_cyc_o <= `HIGH;
       m_we_o <= `LOW;
       m_adr_o <= adr;
@@ -737,7 +788,7 @@ else begin
     if (m_ack_i) begin
       wb_nack();
       mem_strip <= m_dat_i;
-      icolor1 <= {32'b0,color} << mb;
+      icolor1 <= {96'b0,color} << mb;
       rstcmd <= 1'b1;
       if (pcmd==2'b01)
         state <= ICOLOR3;
@@ -764,7 +815,7 @@ else begin
   // Registered inline color2mem
   ICOLOR2:
     begin
-      for (n = 0; n < 64; n = n + 1)
+      for (n = 0; n < MDW; n = n + 1)
         m_dat_o[n] <= (n >= mb && n <= me)
         	? ((n <= ce) ?	rastop(raster_op, mem_strip[n], icolor1[n]) : icolor1[n])
         	: mem_strip[n];
@@ -779,14 +830,15 @@ else begin
   ACKSTRIP:
     if (m_ack_i) begin
       wb_nack();
-      state <= pcmd == 2'b0 ? WAIT_NACK : WAITRST;
+      state <= pcmd == 2'b0 ? IDLE : WAITRST;
       if (pcmd==2'b00)
         rstcmd <= 1'b0;
     end
   WAITLOAD:
     if (m_ack_i) begin
       wb_nack();
-      state <= WAIT_NACK;
+      state <= IDLE;
+//      state <= WAIT_NACK;
     end
   WAIT_NACK:
   	if (~m_ack_i)
@@ -804,7 +856,7 @@ endtask
 
 reg [11:0] pixelColD1;
 reg [31:0] rgbo2,rgbo4;
-reg [63:0] rgbo3;
+reg [MDW-1:0] rgbo3;
 always @(posedge vclk)
 case(color_depth)
 BPP4:	rgbo4 <= {rgbo3[3],7'h00,21'd0,rgbo3[2:0]};	// feeds into palette
@@ -840,7 +892,7 @@ always @(posedge vclk)
 // than hDisplayed as the value is unsigned. That means that fifo reading is
 // active only during the display area 0 to hDisplayed.
 wire shift1 = hc==hres;
-reg [4:0] shift_cnt;
+reg [5:0] shift_cnt;
 always @(posedge vclk)
 if (pe_hsync)
 	shift_cnt <= 5'd1;
@@ -872,13 +924,13 @@ always @(posedge vclk)
 		rgbo3 <= rgbo1;
 	else if (shift) begin
 		case(color_depth)
-		BPP4:	rgbo3 <= {4'h0,rgbo3[63:4]};
-		BPP8:	rgbo3 <= {8'h0,rgbo3[63:8]};
-		BPP12: rgbo3 <= {12'h0,rgbo3[63:12]};
-		BPP16:	rgbo3 <= {16'h0,rgbo3[63:16]};
-		BPP20:	rgbo3 <= {20'h0,rgbo3[63:20]};
-		BPP32:	rgbo3 <= {32'h0,rgbo3[63:32]};
-		default: rgbo3 <= {16'h0,rgbo3[63:16]};
+		BPP4:	rgbo3 <= {4'h0,rgbo3[MDW-1:4]};
+		BPP8:	rgbo3 <= {8'h0,rgbo3[MDW-1:8]};
+		BPP12: rgbo3 <= {12'h0,rgbo3[MDW-1:12]};
+		BPP16:	rgbo3 <= {16'h0,rgbo3[MDW-1:16]};
+		BPP20:	rgbo3 <= {20'h0,rgbo3[MDW-1:20]};
+		BPP32:	rgbo3 <= {32'h0,rgbo3[MDW-1:32]};
+		default: rgbo3 <= {16'h0,rgbo3[MDW-1:16]};
 		endcase
 	end
 
@@ -897,7 +949,7 @@ assign dat[107:96] = pixelRow[8] ? 12'hEA4 : 12'h000;
 assign dat[119:108] = pixelRow[9] ? 12'hEA4 : 12'h000;
 */
 
-rtfVideoFifo3 #(64) uf1
+rtfVideoFifo3 #(MDW) uf1
 (
 	.wrst(fifo_wrst),
 	.wclk(m_clk_i),
