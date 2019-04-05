@@ -134,12 +134,12 @@ endfunction
 
 function IsJmp;
 input [47:0] isn;
-IsJmp = isn[`INSTRUCTION_OP]==`JMP;
+IsJmp = isn[`INSTRUCTION_OP]==`JMP && isn[7]==1'b0;
 endfunction
 
 function IsCall;
 input [47:0] isn;
-IsCall = isn[`INSTRUCTION_OP]==`CALL;
+IsCall = isn[`INSTRUCTION_OP]==`CALL && isn[7]==1'b0;
 endfunction
 
 function IsRet;

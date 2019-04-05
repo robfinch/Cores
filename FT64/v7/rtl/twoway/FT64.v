@@ -1847,7 +1847,7 @@ end
 wire freezePC = (irq_i > im) && !int_commit;
 always @*
 if (freezePC) begin
-	insn0 <= {8'h00,6'd0,5'd0,irq_i,1'b0,vec_i,2'b00,`BRK};
+ 	insn0 <= {8'h00,6'd0,5'd0,irq_i,1'b0,vec_i,2'b00,`BRK};
 end
 else if (phit) begin
 //	if (insn0a[`INSTRUCTION_OP]==`BRK && insn0a[25:21]==5'd0 && insn0a[`INSTRUCTION_L2]==2'b00)
@@ -6232,9 +6232,9 @@ begin
 end
 
 wire writing_wb =
-	 		(mem1_available && dram0==`DRAMSLOT_BUSY && dram0_store && !iqentry_stomp[dram0_id[`QBITS]] && wbptr<`WB_DEPTH-1)
-	 || (mem2_available && dram1==`DRAMSLOT_BUSY && dram1_store && !iqentry_stomp[dram1_id[`QBITS]] && `NUM_MEM > 1 && wbptr<`WB_DEPTH-1)
-	 || (mem3_available && dram2==`DRAMSLOT_BUSY && dram2_store && !iqentry_stomp[dram2_id[`QBITS]] && `NUM_MEM > 2 && wbptr<`WB_DEPTH-1)
+	 		(mem1_available && dram0==`DRAMSLOT_BUSY && dram0_store && wbptr<`WB_DEPTH-1)
+	 || (mem2_available && dram1==`DRAMSLOT_BUSY && dram1_store && `NUM_MEM > 1 && wbptr<`WB_DEPTH-1)
+	 || (mem3_available && dram2==`DRAMSLOT_BUSY && dram2_store && `NUM_MEM > 2 && wbptr<`WB_DEPTH-1)
 	 ;
 
 // Monster clock domain.
@@ -6260,7 +6260,7 @@ wire [63:0] ralu0_bus = |alu0_exc ? {4{lfsro}} : alu0_bus;
 wire [63:0] ralu1_bus = |alu1_exc ? {4{lfsro}} : alu1_bus;
 wire [63:0] rfpu1_bus = |fpu1_exc ? {4{lfsro}} : fpu1_bus;
 wire [63:0] rfpu2_bus = |fpu2_exc ? {4{lfsro}} : fpu2_bus;
-wire [63:0] rfcu_bus = |fcu_exc ? {4{lfsro}} : fcu_bus;
+wire [63:0] rfcu_bus  = |fcu_exc  ? {4{lfsro}} : fcu_bus;
 wire [63:0] rdramA_bus = |dramA_exc ? {4{lfsro}} : dramA_bus;
 wire [63:0] rdramB_bus = |dramB_exc ? {4{lfsro}} : dramB_bus;
 wire [63:0] rdramC_bus = |dramC_exc ? {4{lfsro}} : dramC_bus;
@@ -7067,7 +7067,7 @@ if (fcu_v) begin
 end
 
 // dramX_v only set on a load
-if (mem1_available && dramA_v && iqentry_v[ dramA_id[`QBITS] ]) begin
+if (dramA_v && iqentry_v[ dramA_id[`QBITS] ]) begin
 	iqentry_res	[ dramA_id[`QBITS] ] <= rdramA_bus;
 	iqentry_exc	[ dramA_id[`QBITS] ] <= dramA_exc;
 //	iqentry_done[ dramA_id[`QBITS] ] <= `VAL;
@@ -7075,13 +7075,13 @@ if (mem1_available && dramA_v && iqentry_v[ dramA_id[`QBITS] ]) begin
 	iqentry_state[dramA_id[`QBITS] ] <= IQS_CMT;
 	iqentry_aq  [ dramA_id[`QBITS] ] <= `INV;
 end
-if (mem2_available && `NUM_MEM > 1 && dramB_v && iqentry_v[ dramB_id[`QBITS] ]) begin
+if (`NUM_MEM > 1 && dramB_v && iqentry_v[ dramB_id[`QBITS] ]) begin
 	iqentry_res	[ dramB_id[`QBITS] ] <= rdramB_bus;
 	iqentry_exc	[ dramB_id[`QBITS] ] <= dramB_exc;
 	iqentry_state[dramB_id[`QBITS] ] <= IQS_CMT;
 	iqentry_aq  [ dramB_id[`QBITS] ] <= `INV;
 end
-if (mem3_available && `NUM_MEM > 2 && dramC_v && iqentry_v[ dramC_id[`QBITS] ]) begin
+if (`NUM_MEM > 2 && dramC_v && iqentry_v[ dramC_id[`QBITS] ]) begin
 	iqentry_res	[ dramC_id[`QBITS] ] <= rdramC_bus;
 	iqentry_exc	[ dramC_id[`QBITS] ] <= dramC_exc;
 	iqentry_state[dramC_id[`QBITS] ] <= IQS_CMT;
@@ -7501,21 +7501,22 @@ if (dram2 == `DRAMREQ_READY && `NUM_MEM > 2)
 	dram2 <= `DRAMSLOT_AVAIL;
 
 // grab requests that have finished and put them on the dram_bus
-
+// If stomping on the instruction don't place the value on the argument
+// bus to be loaded.
 if (dram0 == `DRAMREQ_READY && dram0_load) begin
-	dramA_v <= `VAL;//!iqentry_stomp[dram0_id[`QBITS]];
+	dramA_v <= !iqentry_stomp[dram0_id[`QBITS]];
 	dramA_id <= dram0_id;
 	dramA_exc <= dram0_exc;
 	dramA_bus <= fnDatiAlign(dram0_instr,dram0_addr,rdat0);
 end
 if (dram1 == `DRAMREQ_READY && dram1_load && `NUM_MEM > 1) begin
-	dramB_v <= `VAL;//!iqentry_stomp[dram1_id[`QBITS]];
+	dramB_v <= !iqentry_stomp[dram1_id[`QBITS]];
 	dramB_id <= dram1_id;
 	dramB_exc <= dram1_exc;
 	dramB_bus <= fnDatiAlign(dram1_instr,dram1_addr,rdat1);
 end
 if (dram2 == `DRAMREQ_READY && dram2_load && `NUM_MEM > 2) begin
-	dramC_v <= `VAL;//!iqentry_stomp[dram2_id[`QBITS]];
+	dramC_v <= !iqentry_stomp[dram2_id[`QBITS]];
 	dramC_id <= dram2_id;
 	dramC_exc <= dram2_exc;
 	dramC_bus <= fnDatiAlign(dram2_instr,dram2_addr,rdat2);
@@ -7549,31 +7550,39 @@ for (n = 0; n < QENTRIES; n = n + 1)
 //		iqentry_out[n] <= `INV;
 //		iqentry_done[n] <= `INV;
 //		iqentry_cmt[n] <= `INV;
-		if (dram0_id[`QBITS] == n[`QBITS])  begin
-			if (dram0==`DRAMSLOT_HASBUS)
-				wb_nack();
-			dram0_load <= `FALSE;
-			dram0_store <= `FALSE;
-			dram0_rmw <= `FALSE;
-			dram0 <= `DRAMSLOT_AVAIL;
-		end
-		if (dram1_id[`QBITS] == n[`QBITS])  begin
-			if (dram1==`DRAMSLOT_HASBUS)
-				wb_nack();
-			dram1_load <= `FALSE;
-			dram1_store <= `FALSE;
-			dram1_rmw <= `FALSE;
-			dram1 <= `DRAMSLOT_AVAIL;
-		end
-		if (dram2_id[`QBITS] == n[`QBITS])  begin
-			if (dram2==`DRAMSLOT_HASBUS)
-				wb_nack();
-			dram2_load <= `FALSE;
-			dram2_store <= `FALSE;
-			dram2_rmw <= `FALSE;
-			dram2 <= `DRAMSLOT_AVAIL;
-		end
 	end
+
+// A store can't be stomped on, because a store won't issue unless there are
+// no instructions that could change the flow of execution before it. Meaning
+// stomp would never be true for a store.
+// A load could be stomped on, but the memory access is allowed to complete
+// to ensure the bus acknowledge doesn't get out of sync.
+/*
+if (iqentry_stomp[dram0_id[`QBITS]])  begin
+	if (dram0==`DRAMSLOT_HASBUS)
+		wb_nack();
+	dram0_load <= `FALSE;
+	dram0_store <= `FALSE;
+	dram0_rmw <= `FALSE;
+	dram0 <= `DRAMSLOT_AVAIL;
+end
+if (iqentry_stomp[dram1_id[`QBITS]])  begin
+	if (dram1==`DRAMSLOT_HASBUS)
+		wb_nack();
+	dram1_load <= `FALSE;
+	dram1_store <= `FALSE;
+	dram1_rmw <= `FALSE;
+	dram1 <= `DRAMSLOT_AVAIL;
+end
+if (iqentry_stomp[dram2_id[`QBITS]])  begin
+	if (dram2==`DRAMSLOT_HASBUS)
+		wb_nack();
+	dram2_load <= `FALSE;
+	dram2_store <= `FALSE;
+	dram2_rmw <= `FALSE;
+	dram2 <= `DRAMSLOT_AVAIL;
+end
+*/
 
 if (last_issue0 < QENTRIES)
 	tDram0Issue(last_issue0);
@@ -7856,16 +7865,16 @@ case(dram0)
 //		dram0_load <= `FALSE;
 //	end
 3'd4:
-	if (iqentry_v[dram0_id[`QBITS]] && !iqentry_stomp[dram0_id[`QBITS]]) begin
+//	if (iqentry_v[dram0_id[`QBITS]] && !iqentry_stomp[dram0_id[`QBITS]]) begin
 		if (dhit0)
 			dram0 <= `DRAMREQ_READY;
 		else
 			dram0 <= `DRAMSLOT_REQBUS;
-	end
-	else begin
-		dram0 <= `DRAMSLOT_AVAIL;
-		dram0_load <= `FALSE;
-	end
+//	end
+//	else begin
+//		dram0 <= `DRAMSLOT_AVAIL;
+//		dram0_load <= `FALSE;
+//	end
 `DRAMSLOT_REQBUS:	;
 `DRAMSLOT_HASBUS:	;
 `DRAMREQ_READY:		dram0 <= `DRAMSLOT_AVAIL;
@@ -7881,16 +7890,16 @@ case(dram1)
 3'd3:
 	dram1 <= dram1 + 3'd1;
 3'd4:
-	if (iqentry_v[dram1_id[`QBITS]] && !iqentry_stomp[dram1_id[`QBITS]]) begin
+//	if (iqentry_v[dram1_id[`QBITS]] && !iqentry_stomp[dram1_id[`QBITS]]) begin
 		if (dhit1)
 			dram1 <= `DRAMREQ_READY;
 		else
 			dram1 <= `DRAMSLOT_REQBUS;
-	end
-	else begin
+//	end
+/*	else begin
 		dram1 <= `DRAMSLOT_AVAIL;
 		dram1_load <= `FALSE;
-	end
+	end*/
 `DRAMSLOT_REQBUS:	;
 `DRAMSLOT_HASBUS:	;
 `DRAMREQ_READY:		dram1 <= `DRAMSLOT_AVAIL;
@@ -7906,16 +7915,16 @@ case(dram2)
 3'd3:
 	dram2 <= dram2 + 3'd1;
 3'd4:
-	if (iqentry_v[dram2_id[`QBITS]] && !iqentry_stomp[dram2_id[`QBITS]]) begin
+//	if (iqentry_v[dram2_id[`QBITS]] && !iqentry_stomp[dram2_id[`QBITS]]) begin
 		if (dhit2)
 			dram2 <= `DRAMREQ_READY;
 		else
 			dram2 <= `DRAMSLOT_REQBUS;
-	end
-	else begin
+//	end
+/*	else begin
 		dram2 <= `DRAMSLOT_AVAIL;
 		dram2_load <= `FALSE;
-	end
+	end*/
 `DRAMSLOT_REQBUS:	;
 `DRAMSLOT_HASBUS:	;
 `DRAMREQ_READY:		dram2 <= `DRAMSLOT_AVAIL;
@@ -7948,7 +7957,7 @@ end
 `endif
 
 `ifdef HAS_WB
-  if (mem1_available && dram0==`DRAMSLOT_BUSY && dram0_store && !iqentry_stomp[dram0_id[`QBITS]]) begin
+  if (mem1_available && dram0==`DRAMSLOT_BUSY && dram0_store) begin
 		if (wbptr<`WB_DEPTH-1) begin
 			dram0 <= `DRAMSLOT_AVAIL;
 			dram0_instr[`INSTRUCTION_OP] <= `NOP;
@@ -7965,7 +7974,7 @@ end
 			iqentry_state[ dram0_id[`QBITS] ] <= IQS_DONE;
 		end
   end
-  else if (mem2_available && dram1==`DRAMSLOT_BUSY && dram1_store && !iqentry_stomp[dram1_id[`QBITS]] && `NUM_MEM > 1) begin
+  else if (mem2_available && dram1==`DRAMSLOT_BUSY && dram1_store && `NUM_MEM > 1) begin
 		if (wbptr<`WB_DEPTH-1) begin
 			dram1 <= `DRAMSLOT_AVAIL;
       dram1_instr[`INSTRUCTION_OP] <= `NOP;
@@ -7980,7 +7989,7 @@ end
 			iqentry_state[ dram1_id[`QBITS] ] <= IQS_DONE;
 		end
   end
-  else if (mem3_available && dram2==`DRAMSLOT_BUSY && dram2_store && !iqentry_stomp[dram2_id[`QBITS]] && `NUM_MEM > 2) begin
+  else if (mem3_available && dram2==`DRAMSLOT_BUSY && dram2_store && `NUM_MEM > 2) begin
 		if (wbptr<`WB_DEPTH-1) begin
 			dram2 <= `DRAMSLOT_AVAIL;
       dram2_instr[`INSTRUCTION_OP] <= `NOP;
@@ -8286,14 +8295,8 @@ BIDLE:
                vadr <= {dram0_addr[AMSB:3],3'b0};
                sr_o <=  IsLWR(dram0_instr);
                ol_o  <= dram0_ol;
-               if (dram0_loadseg) begin
-               	cti_o <= 3'b001;
-               	bstate <= B_LoadDesc;
-               end
-               else begin
-               	dccnt <= 2'd0;
-               	bstate <= B_DLoadAck;
-               end
+               dccnt <= 2'd0;
+               bstate <= B_DLoadAck;
             end
         end
         else if (~|wb_v && mem2_available && dram1_unc && dram1==`DRAMSLOT_BUSY && dram1_load && `NUM_MEM > 1) begin
@@ -8635,7 +8638,7 @@ B12:
 
 // Regular load
 B_DLoadAck:
-  if (ack_i|err_i|tlb_miss|rdv_i) begin
+  if (acki|err_i|tlb_miss|rdv_i) begin
   	wb_nack();
 		sr_o <= `LOW;
 		case(dccnt)
@@ -8714,38 +8717,38 @@ endcase
 
 
 if (!branchmiss) begin
-    case({fetchbuf0_v, fetchbuf1_v})
-    2'b00:  ;
-    2'b01:
-        if (canq1) begin
-           	tail0 <= (tail0+2'd1) % QENTRIES;
-           	tail1 <= (tail1+2'd1) % QENTRIES;
-        end
-    2'b10:
-        if (canq1) begin
-           	tail0 <= (tail0+2'd1) % QENTRIES;
-           	tail1 <= (tail1+2'd1) % QENTRIES;
-        end
-    2'b11:
-        if (canq1) begin
-            if (IsBranch(fetchbuf0_instr) && predict_taken0 && fetchbuf0_thrd==fetchbuf1_thrd) begin
-	           	tail0 <= (tail0+2'd1) % QENTRIES;
-  	         	tail1 <= (tail1+2'd1) % QENTRIES;
-            end
-            else begin
+  case({fetchbuf0_v, fetchbuf1_v})
+  2'b00:  ;
+  2'b01:
+    if (canq1) begin
+     	tail0 <= (tail0+2'd1) % QENTRIES;
+     	tail1 <= (tail1+2'd1) % QENTRIES;
+    end
+  2'b10:
+    if (canq1) begin
+     	tail0 <= (tail0+2'd1) % QENTRIES;
+     	tail1 <= (tail1+2'd1) % QENTRIES;
+    end
+  2'b11:
+    if (canq1) begin
+      if (IsBranch(fetchbuf0_instr) && predict_taken0 && fetchbuf0_thrd==fetchbuf1_thrd) begin
+       	tail0 <= (tail0+2'd1) % QENTRIES;
+       	tail1 <= (tail1+2'd1) % QENTRIES;
+      end
+      else begin
 				if (vqe0 < vl || !IsVector(fetchbuf0_instr)) begin
-	                if (canq2) begin
-	                  tail0 <= (tail0 + 3'd2) % QENTRIES;
-	                  tail1 <= (tail1 + 3'd2) % QENTRIES;
-	                end
-	                else begin    // queued1 will be true
-				           	tail0 <= (tail0+2'd1) % QENTRIES;
-        				   	tail1 <= (tail1+2'd1) % QENTRIES;
-	                end
-            	end
-            end
-        end
-    endcase
+          if (canq2) begin
+            tail0 <= (tail0 + 3'd2) % QENTRIES;
+            tail1 <= (tail1 + 3'd2) % QENTRIES;
+          end
+          else begin    // queued1 will be true
+           	tail0 <= (tail0+2'd1) % QENTRIES;
+				   	tail1 <= (tail1+2'd1) % QENTRIES;
+          end
+      	end
+      end
+    end
+  endcase
 end
 else if (!thread_en) begin	// if branchmiss
 	for (n = QENTRIES-1; n >= 0; n = n - 1)
@@ -9386,7 +9389,7 @@ input [`QBITS] tail;
 input [`SNBITS] seqnum;
 input [5:0] venno;
 begin
-	iqentry_exc[tail] <= `FLT_NONE;
+ 	iqentry_exc[tail] <= `FLT_NONE;
 `ifdef SUPPORT_DBG
     if (dbg_imatchA)
         iqentry_exc[tail] <= `FLT_DBG;
@@ -10167,11 +10170,7 @@ begin
 	dram0_preload <= iqentry_preload[n];
 	dram0_tgt 	<= iqentry_tgt[n];
 	dram0_data	<= iqentry_a2[n];
-	dram0_addr	<=
-		 iqentry_ma[n];
-	//             if (ol[iqentry_thrd[n]]==`OL_USER)
-	//             	dram0_seg   <= (iqentry_Ra[n]==5'd30 || iqentry_Ra[n]==5'd31) ? {ss[iqentry_thrd[n]],13'd0} : {ds[iqentry_thrd[n]],13'd0};
-	//             else
+	dram0_addr	<= iqentry_ma[n];
 	dram0_unc   <= iqentry_ma[n][31:20]==12'hFFD || !dce || iqentry_loadv[n];
 	dram0_memsize <= iqentry_memsz[n];
 	dram0_load <= iqentry_load[n];
@@ -10194,7 +10193,7 @@ endtask
 task tDram1Issue;
 input [`QBITSP1] n;
 begin
-	dramB_v <= `INV;
+//	dramB_v <= `INV;
 	dram1 		<= `DRAMSLOT_BUSY;
 	dram1_id 	<= { 1'b1, n[`QBITS] };
 	dram1_instr <= iqentry_instr[n];
@@ -10224,7 +10223,7 @@ endtask
 task tDram2Issue;
 input [`QBITSP1] n;
 begin
-	dramC_v <= `INV;
+//	dramC_v <= `INV;
 	dram2 		<= `DRAMSLOT_BUSY;
 	dram2_id 	<= { 1'b1, n[`QBITS] };
 	dram2_instr	<= iqentry_instr[n];
