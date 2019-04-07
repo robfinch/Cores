@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2017-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2017-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -40,6 +40,7 @@ parameter SUP_VECTOR = 1;
 parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
 parameter PTR = 20'hFFF01;
+parameter BASE_SHIFT = 13'd0;
 input rst;
 input clk;
 input ld;
@@ -1217,21 +1218,21 @@ case(instr[`INSTRUCTION_OP])
 	    `LHX,`LHUX,`LWX,`LWRX:
 					if (BIG) begin
 						usa = a + (c << instr[19:18]);
-						o = {pb[50:0],13'd0} + usa;
+						o = {pb[50:0],BASE_SHIFT} + usa;
 					end
 					else
 						o = 64'hCCCCCCCCEEEEEEEE;
 	    `LVX,`SVX:
 	    	if (BIG) begin
 	    		usa = a + (c << 2'd3);
-	    		o = {pb[50:0],13'd0} + usa;
+	    		o = {pb[50:0],BASE_SHIFT} + usa;
 	    	end
 	    	else
 	    		o = 64'hCCCCCCCCCCCCCCCC;
 	    `LVWS,`SVWS:
 	    			if (BIG) begin    
 	    				usa = a + ({c * ven,3'b000});
-	    				o = {pb[50:0],13'd0} + usa;
+	    				o = {pb[50:0],BASE_SHIFT} + usa;
 	    			end
 	    			else
 	    				o = 64'hCCCCCCCCCCCCCCCC;
@@ -1242,25 +1243,25 @@ case(instr[`INSTRUCTION_OP])
 			`PUSH:	
 				begin
 					usa = a - 4'd8;
-					o = {pb[50:0],13'd0} + usa;
+					o = {pb[50:0],BASE_SHIFT} + usa;
 				end
 	    `SBX,`SCX,`SHX,`SWX,`SWCX:
 					if (BIG) begin
 						usa = a + (c << instr[14:13]);
-						o = {pb[50:0],13'd0} + usa;
+						o = {pb[50:0],BASE_SHIFT} + usa;
 					end
 					else
 						o = 64'hCCCCCCCCEEEEEEEE;
 	    `SVX:  if (BIG) begin
 	    				usa = a + (c << 2'd3);
-	    				o = {pb[50:0],13'd0} + usa;
+	    				o = {pb[50:0],BASE_SHIFT} + usa;
 	    			end
 	    			else
 	    				o = 64'hCCCCCCCCCCCCCCCC;
 	    `SVWS:
 	    			if (BIG) begin    
 	    				usa = a + ({c * ven,3'b000});
-	    				o = {pb[50:0],13'd0} + usa;
+	    				o = {pb[50:0],BASE_SHIFT} + usa;
 	    			end
 	    			else
 	    				o = 64'hCCCCCCCCCCCCCCCC;
@@ -1303,37 +1304,35 @@ case(instr[`INSTRUCTION_OP])
 `LB,`LBU,`SB:	
 	begin
 		usa = a + b;
-		o = {pb[50:0],13'd0} + usa;
+		o = {pb[50:0],BASE_SHIFT} + usa;
 	end
 `Lx,`LxU,`Sx,`LVx,`LVxU:
-			begin
-				casez(b[2:0])
-				3'b100:		
-					begin
-						usa = a + {b[63:3],3'b0};	// LW / SW
-						o = {pb[50:0],13'd0} + usa;
-					end
-				3'b?10:
-					begin
-						usa = a + {b[63:2],2'b0};	// LH / LHU / SH
-					 	o = {pb[50:0],13'd0} + usa;
-					end
-				default:
-					begin
-						usa = a + {b[63:1],1'b0};	// LC / LCU / SC
-						o = {pb[50:0],13'd0} + usa;
-					end
-				endcase
-			end
+			casez(b[2:0])
+			3'b100:		
+				begin
+					usa = a + {b[63:3],3'b0};	// LW / SW
+					o = {pb[50:0],BASE_SHIFT} + usa;
+				end
+			3'b?10:
+				begin
+					usa = a + {b[63:2],2'b0};	// LH / LHU / SH
+				 	o = {pb[50:0],BASE_SHIFT} + usa;
+				end
+			default:
+				begin
+					usa = a + {b[63:1],1'b0};	// LC / LCU / SC
+					o = {pb[50:0],BASE_SHIFT} + usa;
+				end
+			endcase
 `LWR,`SWC,`CAS,`CACHE:
 			begin
 				usa = a + b;
-				o = {pb[50:0],13'd0} + usa;
+				o = {pb[50:0],BASE_SHIFT} + usa;
 			end
 `LV,`SV:  
 			begin
 				usa = a + b + {ven,3'b0};
-				o = {pb[50:0],13'd0} + usa;
+				o = {pb[50:0],BASE_SHIFT} + usa;
 			end
 `CSRRW:     
 			case(instr[27:18])
@@ -1527,7 +1526,7 @@ case(instr[`INSTRUCTION_OP])
 					if (BIG) begin
 						case({instr[31:28],instr[22:21]})
 						`LBX,`LBUX,`LVBX,`LVBUX:	exc <= `FLT_NONE;
-				    `LCX,`LCUX,`LVCX,`LVCUX:	exc <= |o[  0] ? `FLT_ALN : `FLT_NONE;
+				    `LCX,`LCUX,`LVCX,`LVCUX:	exc <=  o[  0] ? `FLT_ALN : `FLT_NONE;
 				    `LVHX,`LVHUX,`LHX,`LHUX:	exc <= |o[1:0] ? `FLT_ALN : `FLT_NONE;
 				    `LWX,`LVWX,`LWRX,
 						`CACHEX,`LVX:							exc <= |o[2:0] ? `FLT_ALN : `FLT_NONE;
@@ -1543,7 +1542,7 @@ case(instr[`INSTRUCTION_OP])
 						case({instr[31:28],instr[17:16]})
 						`PUSH:	exc <= |o[2:0] ? `FLT_ALN : `FLT_NONE;
 						`SBX:		exc <= `FLT_NONE;
-				    `SCX:		exc <= |o[  0] ? `FLT_ALN : `FLT_NONE;
+				    `SCX:		exc <=  o[  0] ? `FLT_ALN : `FLT_NONE;
 				    `SHX:		exc <= |o[1:0] ? `FLT_ALN : `FLT_NONE;
 				    `SWX,`SWCX:	exc <= |o[2:0] ? `FLT_ALN : `FLT_NONE;
 				    `SVX:  	exc <= |o[2:0] ? `FLT_ALN : `FLT_NONE;
@@ -1588,9 +1587,9 @@ case(instr[`INSTRUCTION_OP])
 		else
 `endif
 			casez(b[2:0])
-			3'b100:		exc <= |o[2:0] ? `FLT_ALN : `FLT_NONE;	// LW / SW
-			3'b?10: 	exc <= |o[1:0] ? `FLT_ALN : `FLT_NONE;	// LH / LHU / SH
-			default:	exc <= |o[  0] ? `FLT_ALN : `FLT_NONE;	// LC / LCU / SC
+			3'b100:		exc <= o[2:0]!=3'b0 ? `FLT_NONE : `FLT_NONE;	// LW / SW
+			3'b?10: 	exc <= o[1:0]!=2'b0 ? `FLT_ALN : `FLT_NONE;	// LH / LHU / SH
+			default:	exc <= o[  0] ? `FLT_ALN : `FLT_NONE;	// LC / LCU / SC
 			endcase
 	end
 `LWR,`SWC,`CAS,`CACHE:
@@ -1608,7 +1607,7 @@ case(instr[`INSTRUCTION_OP])
 			exc <= `FLT_WRV;
 		else
 `endif
-			exc <= |o[2:0] ? `FLT_ALN : `FLT_NONE;
+			exc <= o[2:0]!=3'b0 ? `FLT_ALN : `FLT_NONE;
 	end
 default:    exc <= `FLT_NONE;
 endcase
