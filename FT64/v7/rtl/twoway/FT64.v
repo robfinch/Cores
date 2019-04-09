@@ -1035,7 +1035,7 @@ parameter B15 = 5'd15;
 parameter B16 = 5'd16;
 parameter B17 = 5'd17;
 parameter B18 = 5'd18;
-parameter B19 = 5'd19;
+parameter B_LSNAck = 5'd19;
 parameter B2a = 5'd20;
 parameter B2b = 5'd21;
 parameter B2c = 5'd22;
@@ -1078,10 +1078,10 @@ reg [2:0] iccnt;
 reg L1_wr0,L1_wr1,L1_wr2;
 reg L1_invline;
 wire [1:0] ic0_fault,ic1_fault,ic2_fault;
-reg [8:0] L1_en;
+reg [9:0] L1_en;
 reg [71:0] L1_adr, L2_adr;
-reg [297:0] L2_rdat;
-wire [297:0] L2_dato;
+reg [305:0] L1_dati;
+wire [305:0] L2_dato;
 reg L2_xsel;
 
 generate begin : gRegfileInst
@@ -1220,7 +1220,7 @@ FT64_L1_icache #(.pSize(`L1_ICACHE_SIZE)) uic0
   .en(L1_en),
   .adr((icstate==IDLE||icstate==IC_Next) ? {pcr[7:0],pc0} : L1_adr),
   .wadr(L1_adr),
-  .i(L2_rdat),
+  .i(L1_dati),
   .o(insn0a),
   .fault(ic0_fault),
   .hit(ihit0),
@@ -1239,7 +1239,7 @@ FT64_L1_icache #(.pSize(`L1_ICACHE_SIZE)) uic1
   .en(L1_en),
   .adr((icstate==IDLE||icstate==IC_Next) ? (thread_en ? {pcr[7:0],pc1}: {pcr[7:0],pc0plus6} ): L1_adr),
   .wadr(L1_adr),
-  .i(L2_rdat),
+  .i(L1_dati),
   .o(insn1b),
   .fault(ic1_fault),
   .hit(ihit1),
@@ -1261,7 +1261,7 @@ FT64_L1_icache #(.pSize(`L1_ICACHE_SIZE)) uic2
   .en(L1_en),
   .adr((icstate==IDLE||icstate==IC_Next) ? (thread_en ? {pcr[7:0],pc2} : {pcr[7:0],pc0plus12}) : L1_adr),
   .wadr(L1_adr),
-  .i(L2_rdat),
+  .i(L1_dati),
   .o(insn2b),
   .fault(ic2_fault),
   .hit(ihit2),
@@ -1844,7 +1844,7 @@ end
 wire freezePC = (irq_i > im) && !int_commit;
 always @*
 if (freezePC) begin
- 	insn0 <= {8'h00,6'd0,5'd0,irq_i,1'b0,vec_i,2'b00,`BRK};
+ 	insn0 <= {32'h00,6'd0,5'd0,irq_i,1'b0,vec_i,2'b00,`BRK};
 end
 else if (phit) begin
 //	if (insn0a[`INSTRUCTION_OP]==`BRK && insn0a[25:21]==5'd0 && insn0a[`INSTRUCTION_L2]==2'b00)
@@ -1857,10 +1857,15 @@ else if (phit) begin
 			else
 				insn0[20:0] <= {irq_i,1'b0,vec_i,2'b00,`BRK};
 		end
+		else if (ic0_fault[1])
+			insn0 <= {32'h00,6'd0,5'd0,4'h0,1'b0,`FLT_IBE,2'b00,`BRK};
+		else if (ic0_fault[0])
+			insn0 <= {32'h00,6'd0,5'd0,4'h0,1'b0,`FLT_EXF,2'b00,`BRK};
 end
 else begin
 	insn0 <= {8'h00,`NOP_INSN};
 end
+
 generate begin : gInsnMux
 if (`WAYS > 1) begin
 always @*
@@ -1878,6 +1883,10 @@ else if (phit) begin
 			else
 				insn1[20:0] <= {irq_i,1'b0,vec_i,2'b00,`BRK};
 		end
+		else if (ic1_fault[1])
+			insn1 <= {32'h00,6'd0,5'd0,4'h0,1'b0,`FLT_IBE,2'b00,`BRK};
+		else if (ic1_fault[0])
+			insn1 <= {32'h00,6'd0,5'd0,4'h0,1'b0,`FLT_EXF,2'b00,`BRK};
 end
 else begin
 	insn1 <= {8'h00,`NOP_INSN};
@@ -1898,6 +1907,10 @@ else if (phit) begin
 			else
 				insn2[20:0] <= {irq_i,1'b0,vec_i,2'b00,`BRK};
 		end
+		else if (ic2_fault[1])
+			insn2 <= {32'h00,6'd0,5'd0,4'h0,1'b0,`FLT_IBE,2'b00,`BRK};
+		else if (ic2_fault[0])
+			insn2 <= {32'h00,6'd0,5'd0,4'h0,1'b0,`FLT_EXF,2'b00,`BRK};
 end
 else
 	insn2 <= `NOP_INSN;
@@ -1943,9 +1956,9 @@ assign dhit1 = dhit1a && !wb_hit1;
 assign dhit2 = dhit2a && !wb_hit2;
 wire whit0, whit1, whit2;
 
-wire wr_dcache0 = (bstate==B_DCacheLoadAck && ack_i)||(((bstate==B_StoreAck && StoreAck1) || (bstate==B19 && isStore)) && whit0);
-wire wr_dcache1 = (bstate==B_DCacheLoadAck && ack_i)||(((bstate==B_StoreAck && StoreAck1) || (bstate==B19 && isStore)) && whit1);
-wire wr_dcache2 = (bstate==B_DCacheLoadAck && ack_i)||(((bstate==B_StoreAck && StoreAck1) || (bstate==B19 && isStore)) && whit2);
+wire wr_dcache0 = (bstate==B_DCacheLoadAck && ack_i)||(((bstate==B_StoreAck && StoreAck1) || (bstate==B_LSNAck && isStore)) && whit0);
+wire wr_dcache1 = (bstate==B_DCacheLoadAck && ack_i)||(((bstate==B_StoreAck && StoreAck1) || (bstate==B_LSNAck && isStore)) && whit1);
+wire wr_dcache2 = (bstate==B_DCacheLoadAck && ack_i)||(((bstate==B_StoreAck && StoreAck1) || (bstate==B_LSNAck && isStore)) && whit2);
 
 FT64_dcache udc0
 (
@@ -3935,8 +3948,8 @@ endgenerate
 
 // Stores might exception so we don't want the heads to advance if a subsequent
 // instruction is store even though there's no target register.
-wire cmt_head1 = (!iqentry_rfw[heads[1]] && !iqentry_store[heads[1]] && !iqentry_oddball[heads[1]] && ~|iqentry_exc[heads[1]]);
-wire cmt_head2 = (!iqentry_rfw[heads[2]] && !iqentry_store[heads[2]] && !iqentry_oddball[heads[2]] && ~|iqentry_exc[heads[2]]);
+wire cmt_head1 = (!iqentry_rfw[heads[1]] && !iqentry_oddball[heads[1]] && ~|iqentry_exc[heads[1]]);
+wire cmt_head2 = (!iqentry_rfw[heads[2]] && !iqentry_oddball[heads[2]] && ~|iqentry_exc[heads[2]]);
 
 // Determine the head increment amount, this must match code later on.
 reg [2:0] hi_amt;
@@ -5875,7 +5888,7 @@ case(fcu_instr[`INSTRUCTION_OP])
 `JAL:	fcu_misspc = fcu_argA + fcu_argI;
 //`CHK:	fcu_misspc = fcu_nextpc + fcu_argI;	// Handled as an instruction exception
 // Default: branch
-default:	fcu_misspc = !(fcu_takb ^ fcu_pt) ? {fcu_pc[AMSB:32],fcu_pc[31:0] + fcu_brdisp[31:0]} : fcu_nextpc;
+default:	fcu_misspc = fcu_pt ? fcu_nextpc : {fcu_pc[AMSB:32],fcu_pc[31:0] + fcu_brdisp[31:0]};
 endcase
 fcu_misspc[0] = 1'b0;
 end
@@ -6350,6 +6363,7 @@ if (rst) begin
      dram1_id <= 1'b0;
      dram2_id <= 1'b0;
      L1_adr <= RSTPC;
+     L2_adr <= RSTPC;
      invic <= FALSE;
      tail0 <= 3'd0;
      tail1 <= 3'd1;
@@ -6408,6 +6422,7 @@ if (rst) begin
      cr_o <= `LOW;
      vadr <= RSTPC;
      icl_o <= `LOW;      	// instruction cache load
+     L1_dati <= 306'd0;
      cr0 <= 64'd0;
      cr0[13:8] <= 6'd0;		// select compressed instruction group #0
      cr0[30] <= TRUE;    	// enable data caching
@@ -7731,6 +7746,7 @@ rf_source[0] <= 0;
 L1_wr0 <= FALSE;
 L1_wr1 <= FALSE;
 L1_wr2 <= FALSE;
+L1_en <= 10'h000;
 L1_invline <= FALSE;
 icnxt <= FALSE;
 L2_nxt <= FALSE;
@@ -7794,36 +7810,31 @@ IC3a:     icstate <= IC_WaitL2;
 // The IC machine will stall in this state until the BIU has loaded the
 // L2 cache. 
 IC_WaitL2: 
-	if (ihitL2) begin
-		L1_en <= 9'h1FF;
+	if (ihitL2 && picstate==IC3a) begin
+		L1_en <= 10'h3FF;
 		L1_wr0 <= TRUE;
 		L1_wr1 <= TRUE && `WAYS > 1;
 		L1_wr2 <= TRUE && `WAYS > 2;
-		L1_adr <= L2_adr;
-		// L2_rdat is loaded dring an L2 icache load operation
-		if (picstate==IC3a)
-			L2_rdat <= L2_dato;
+//		L1_adr <= L2_adr;
+		// L1_dati is loaded dring an L2 icache load operation
+//		if (picstate==IC3a)
+		L1_dati <= L2_dato;
 		icstate <= IC5;
 	end
-/*
 	else if (bstate!=B_ICacheNack)
 		;
 	else begin
-		L1_en <= 9'h1FF;
+		L1_en <= 10'h3FF;
 		L1_wr0 <= TRUE;
 		L1_wr1 <= TRUE && `WAYS > 1;
 		L1_wr2 <= TRUE && `WAYS > 2;
-		L1_adr <= L2_adr;
-		// L2_rdat set below while loading cache line
-		//L2_rdat <= L2_dato;
+//		L1_adr <= L2_adr;
+		// L1_dati set below while loading cache line
+		//L1_dati <= L2_dato;
 		icstate <= IC5;
 	end
-*/
-IC5: 
-	begin
-		L1_en <= 9'h000;
-		icstate <= IC6;
-	end
+
+IC5: 	icstate <= IC6;
 IC6:  icstate <= IC7;
 IC7:	icstate <= IC_Next;
 IC_Next:
@@ -8044,7 +8055,7 @@ BIDLE:
     end
 
 `endif
-      if (~|wb_v && mem1_available && dram0==`DRAMSLOT_BUSY && dram0_rmw) begin
+      if (~|wb_v && dram0==`DRAMSLOT_BUSY && dram0_rmw) begin
 `ifdef SUPPORT_DBG      
             if (dbg_smatch0|dbg_lmatch0) begin
                  dramA_v <= `TRUE;
@@ -8072,7 +8083,7 @@ BIDLE:
                  bstate <= B12;
             end
         end
-        else if (~|wb_v && mem2_available && dram1==`DRAMSLOT_BUSY && dram1_rmw && `NUM_MEM > 1) begin
+        else if (~|wb_v && dram1==`DRAMSLOT_BUSY && dram1_rmw && `NUM_MEM > 1) begin
 `ifdef SUPPORT_DBG        	
             if (dbg_smatch1|dbg_lmatch1) begin
                  dramB_v <= `TRUE;
@@ -8100,7 +8111,7 @@ BIDLE:
                  bstate <= B12;
             end
         end
-        else if (~|wb_v && mem3_available && dram2==`DRAMSLOT_BUSY && dram2_rmw && `NUM_MEM > 2) begin
+        else if (~|wb_v && dram2==`DRAMSLOT_BUSY && dram2_rmw && `NUM_MEM > 2) begin
 `ifdef SUPPORT_DBG        	
             if (dbg_smatch2|dbg_lmatch2) begin
                  dramC_v <= `TRUE;
@@ -8130,7 +8141,7 @@ BIDLE:
         end
 `ifndef HAS_WB
 				// Check write buffer enable ?
-        else if (mem1_available && dram0==`DRAMSLOT_BUSY && dram0_store) begin
+        else if (dram0==`DRAMSLOT_BUSY && dram0_store) begin
 `ifdef SUPPORT_DBG        	
             if (dbg_smatch0) begin
                  dramA_v <= `TRUE;
@@ -8159,7 +8170,7 @@ BIDLE:
 //                 cr_o <= IsSWC(dram0_instr);
             end
         end
-        else if (mem2_available && dram1==`DRAMSLOT_BUSY && dram1_store && `NUM_MEM > 1) begin
+        else if (dram1==`DRAMSLOT_BUSY && dram1_store && `NUM_MEM > 1) begin
 `ifdef SUPPORT_DBG        	
             if (dbg_smatch1) begin
                  dramB_v <= `TRUE;
@@ -8188,7 +8199,7 @@ BIDLE:
 //                 cr_o <= IsSWC(dram0_instr);
             end
         end
-        else if (mem3_available && dram2==`DRAMSLOT_BUSY && dram2_store && `NUM_MEM > 2) begin
+        else if (dram2==`DRAMSLOT_BUSY && dram2_store && `NUM_MEM > 2) begin
 `ifdef SUPPORT_DBG        	
             if (dbg_smatch2) begin
                  dramC_v <= `TRUE;
@@ -8219,7 +8230,7 @@ BIDLE:
         end
 `endif
         // Check for read misses on the data cache
-        else if (~|wb_v && mem1_available && !dram0_unc && dram0==`DRAMSLOT_REQBUS && dram0_load) begin
+        else if (~|wb_v && !dram0_unc && dram0==`DRAMSLOT_REQBUS && dram0_load) begin
 `ifdef SUPPORT_DBG        	
             if (dbg_lmatch0) begin
                dramA_v <= `TRUE;
@@ -8237,7 +8248,7 @@ BIDLE:
                bstate <= B_DCacheLoadStart; 
             end
         end
-        else if (~|wb_v && mem2_available && !dram1_unc && dram1==`DRAMSLOT_REQBUS && dram1_load && `NUM_MEM > 1) begin
+        else if (~|wb_v && !dram1_unc && dram1==`DRAMSLOT_REQBUS && dram1_load && `NUM_MEM > 1) begin
 `ifdef SUPPORT_DBG        	
             if (dbg_lmatch1) begin
                dramB_v <= `TRUE;
@@ -8255,7 +8266,7 @@ BIDLE:
                bstate <= B_DCacheLoadStart;
             end 
         end
-        else if (~|wb_v && mem3_available && !dram2_unc && dram2==`DRAMSLOT_REQBUS && dram2_load && `NUM_MEM > 2) begin
+        else if (~|wb_v && !dram2_unc && dram2==`DRAMSLOT_REQBUS && dram2_load && `NUM_MEM > 2) begin
 `ifdef SUPPORT_DBG        	
             if (dbg_lmatch2) begin
                dramC_v <= `TRUE;
@@ -8273,7 +8284,7 @@ BIDLE:
                bstate <= B_DCacheLoadStart;
             end 
         end
-        else if (~|wb_v && mem1_available && dram0_unc && dram0==`DRAMSLOT_BUSY && dram0_load) begin
+        else if (~|wb_v && dram0_unc && dram0==`DRAMSLOT_BUSY && dram0_load) begin
 `ifdef SUPPORT_DBG        	
             if (dbg_lmatch0) begin
                dramA_v <= `TRUE;
@@ -8296,7 +8307,7 @@ BIDLE:
                bstate <= B_DLoadAck;
             end
         end
-        else if (~|wb_v && mem2_available && dram1_unc && dram1==`DRAMSLOT_BUSY && dram1_load && `NUM_MEM > 1) begin
+        else if (~|wb_v && dram1_unc && dram1==`DRAMSLOT_BUSY && dram1_load && `NUM_MEM > 1) begin
 `ifdef SUPPORT_DBG        	
             if (dbg_lmatch1) begin
                dramB_v <= `TRUE;
@@ -8319,7 +8330,7 @@ BIDLE:
                bstate <= B_DLoadAck;
             end
         end
-        else if (~|wb_v && mem3_available && dram2_unc && dram2==`DRAMSLOT_BUSY && dram2_load && `NUM_MEM > 2) begin
+        else if (~|wb_v && dram2_unc && dram2==`DRAMSLOT_BUSY && dram2_load && `NUM_MEM > 2) begin
 `ifdef SUPPORT_DBG        	
             if (dbg_lmatch2) begin
                dramC_v <= `TRUE;
@@ -8343,7 +8354,8 @@ BIDLE:
             end
         end
         // Check for L2 cache miss
-        else if (~|wb_v && !ihitL2 && !acki) begin
+        else if (~|wb_v && !ihitL2 && !acki)
+        begin
            cti_o <= 3'b001;
            bte_o <= 2'b00;//2'b01;	// 4 beat burst wrap
            cyc <= `HIGH;
@@ -8417,7 +8429,7 @@ B_StoreAck:
     default:    ;
     endcase
 `endif
-		bstate <= B19;
+		bstate <= B_LSNAck;
   end
 	end
 
@@ -8457,7 +8469,7 @@ B_DCacheLoadStart:
 
 // Data cache load terminal state
 B_DCacheLoadAck:
-  if (ack_i|err_i|tlb_miss|rdv_i) begin
+  if (acki|err_i|tlb_miss|rdv_i) begin
   	if (!bok_i) begin
   		stb_o <= `LOW;
   		bstate <= B_DCacheLoadStb;
@@ -8466,20 +8478,13 @@ B_DCacheLoadAck:
     rdvq <= rdvq | rdv_i;
     if (!preload)	// A preload instruction ignores any error
     case(bwhich)
-    2'd0:   if (err_i|rdv_i|tlb_miss) begin
-               iqentry_exc[dram0_id[`QBITS]] <= tlb_miss ? `FLT_TLB : err_i ? `FLT_DBE : `FLT_DRF;
-            end
-    2'd1:   if ((err_i|rdv_i|tlb_miss) && `NUM_MEM > 1) begin
-               iqentry_exc[dram1_id[`QBITS]] <= tlb_miss ? `FLT_TLB : err_i ? `FLT_DBE : `FLT_DRF;
-            end
-    2'd2:   if ((err_i|rdv_i|tlb_miss) && `NUM_MEM > 2) begin
-               iqentry_exc[dram2_id[`QBITS]] <= tlb_miss ? `FLT_TLB : err_i ? `FLT_DBE : `FLT_DRF;
-            end
+    2'd0: 	iqentry_exc[dram0_id[`QBITS]] <= tlb_miss ? `FLT_TLB : err_i ? `FLT_DBE : rdv_i ? `FLT_DRF : `FLT_NONE;
+    2'd1:   iqentry_exc[dram1_id[`QBITS]] <= tlb_miss ? `FLT_TLB : err_i ? `FLT_DBE : rdv_i ? `FLT_DRF : `FLT_NONE;
+    2'd2:   iqentry_exc[dram2_id[`QBITS]] <= tlb_miss ? `FLT_TLB : err_i ? `FLT_DBE : rdv_i ? `FLT_DRF : `FLT_NONE;
     default:    ;
     endcase
     dccnt <= dccnt + 2'd1;
     vadr[4:3] <= vadr[4:3] + 2'd1;
-    bstate <= B_DCacheLoadAck;
     if (dccnt==2'd2)
 			cti_o <= 3'b111;
     if (dccnt==2'd3) begin
@@ -8487,7 +8492,6 @@ B_DCacheLoadAck:
 			bstate <= B_DCacheLoadWait1;
     end
   end
-
 B_DCacheLoadStb:
 	begin
 		stb_o <= `HIGH;
@@ -8496,16 +8500,17 @@ B_DCacheLoadStb:
 B_DCacheLoadWait1: bstate <= B_DCacheLoadWait2;
 B_DCacheLoadWait2: bstate <= B_DCacheLoadResetBusy;
 //B_DCacheLoadWait3: bstate <= B_DCacheLoadResetBusy;
-B_DCacheLoadResetBusy: begin
-    // There could be more than one memory cycle active. We reset the state
-    // of all the machines to retest for a hit because otherwise sequential
-    // loading of memory will cause successive machines to miss resulting in 
-    // multiple dcache loads that aren't needed.
+// There could be more than one memory cycle active. We reset the state
+// of all the machines to retest for a hit because otherwise sequential
+// loading of memory will cause successive machines to miss resulting in 
+// multiple dcache loads that aren't needed.
+B_DCacheLoadResetBusy:
+	begin
     if (dram0 != `DRAMSLOT_AVAIL && dram0_addr[AMSB:5]==vadr[AMSB:5]) dram0 <= `DRAMSLOT_BUSY;  // causes retest of dhit
     if (dram1 != `DRAMSLOT_AVAIL && dram1_addr[AMSB:5]==vadr[AMSB:5]) dram1 <= `DRAMSLOT_BUSY;
     if (dram2 != `DRAMSLOT_AVAIL && dram2_addr[AMSB:5]==vadr[AMSB:5]) dram2 <= `DRAMSLOT_BUSY;
-    if (~ack_i)  bstate <= BIDLE;
-    end
+    bstate <= BIDLE;
+  end
 
 // Ack state for instruction cache load
 B_ICacheAck:
@@ -8516,40 +8521,34 @@ B_ICacheAck:
   	end
     errq <= errq | err_i;
     exvq <= exvq | exv_i;
-//        L1_en <= 9'h3 << {L2_xsel,L2_adr[4:3],1'b0};
-//        L1_wr0 <= `TRUE;
-//        L1_wr1 <= `TRUE;
-//        L1_adr <= L2_adr;
 		if (tlb_miss) begin
-			L2_rdat <= {18{`INSN_FLT_TLB}};
+			L1_dati <= {19{`INSN_FLT_TLB}};
 			wb_nack();
       icl_o <= `LOW;
       bstate <= B_ICacheNack;
     end
 		else if (exv_i) begin
-			L2_rdat <= {18{`INSN_FLT_EXF}};
+			L1_dati <= {19{`INSN_FLT_EXF}};
 			wb_nack();
       icl_o <= `LOW;
       bstate <= B_ICacheNack;
 		end
     else if (err_i) begin
-    	L2_rdat <= {18{`INSN_FLT_IBE}};
+			L1_dati <= {19{`INSN_FLT_IBE}};
 			wb_nack();
       icl_o <= `LOW;
       bstate <= B_ICacheNack;
     end
     else
     	case(iccnt)
-    	3'd0:	L2_rdat[63:0] <= dat_i;
-    	3'd1:	L2_rdat[127:64] <= dat_i;
-    	3'd2:	L2_rdat[191:128] <= dat_i;
-    	3'd3:	L2_rdat[255:192] <= dat_i;
-    	3'd4:	L2_rdat[297:256] <= {2'b00,dat_i[39:0]};
-    	default:	;
+    	3'd0:	L1_dati[63:0] <= dat_i;
+    	3'd1:	L1_dati[127:64] <= dat_i;
+    	3'd2:	L1_dati[191:128] <= dat_i;
+    	3'd3:	L1_dati[255:192] <= dat_i;
+    	3'd4:	L1_dati[305:256] <= {2'b00,dat_i[47:0]};
+    	default:	L1_dati <= L1_dati;
     	endcase
-    	//L2_rdat <= {dat_i[31:0],{4{dat_i}}};
     iccnt <= iccnt + 3'd1;
-    //stb_o <= `LOW;
     if (iccnt==3'd3)
       cti_o <= 3'b111;
     if (iccnt==3'd4) begin
@@ -8571,10 +8570,6 @@ B_ICacheNack2:
 	end
 B_ICacheNack:
  	begin
-		L1_wr0 <= `FALSE;
-		L1_wr1 <= `FALSE;
-		L1_wr2 <= `FALSE;
-		L1_en <= 9'h1FF;
 		L2_xsel <= 1'b0;
 		if (~acki) begin
 			icl_ctr <= icl_ctr + 40'd1;
@@ -8582,8 +8577,9 @@ B_ICacheNack:
 			L2_nxt <= TRUE;
 		end
 	end
+
 B12:
-    if (ack_i|err_i|tlb_miss|rdv_i) begin
+    if (acki|err_i|tlb_miss|rdv_i) begin
         if (isCAS) begin
     	     iqentry_res	[ casid[`QBITS] ] <= (dat_i == cas);
              iqentry_exc [ casid[`QBITS] ] <= tlb_miss ? `FLT_TLB : err_i ? `FLT_DRF : rdv_i ? `FLT_DRF : `FLT_NONE;
@@ -8607,7 +8603,7 @@ B12:
                 2'b10:   dram2 <= `DRAMREQ_READY;
                 default:    ;
                 endcase
-                 bstate <= B19;
+                 bstate <= B_LSNAck;
             end
         end
         else if (isRMW) begin
@@ -8672,7 +8668,7 @@ B_DLoadAck:
             end
     default:    ;
     endcase
-		bstate <= B19;
+		bstate <= B_LSNAck;
 	end
 B_DLoadNack:
 	if (~acki) begin
@@ -8690,22 +8686,22 @@ B16:    begin
             endcase
             end
 B17:     bstate <= B18;
-B18:     bstate <= B19;
-B19:    if (~acki)  begin
-					sel_o <= 8'h00;
-					bstate <= BIDLE;
-					StoreAck1 <= `FALSE;
-					isStore <= `FALSE;
-				end
+B18:     bstate <= B_LSNAck;
+B_LSNAck:
+   begin
+			bstate <= BIDLE;
+			StoreAck1 <= `FALSE;
+			isStore <= `FALSE;
+		end
 B20:
-	if (~ack_i) begin
+	if (~acki) begin
 		stb_o <= `HIGH;
 		we  <= `HIGH;
 		dat_o <= fnDato(rmw_instr,rmw_res);
 		bstate <= B_StoreAck;
 	end
 B21:
-	if (~ack_i) begin
+	if (~acki) begin
 		stb_o <= `HIGH;
 		bstate <= B12;
 	end

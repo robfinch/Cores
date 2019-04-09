@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2017-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2017-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -34,16 +34,16 @@
 
 module FT64_L1_icache_mem(rst, clk, wr, en, lineno, i, o, ov, invall, invline);
 parameter pLines = 64;
-parameter pLineWidth = 298;
+parameter pLineWidth = 306;
 localparam pLNMSB = pLines==128 ? 6 : 5;
 input rst;
 input clk;
 input wr;
-input [8:0] en;
+input [9:0] en;
 input [pLNMSB:0] lineno;
 input [pLineWidth-1:0] i;
 output [pLineWidth-1:0] o;
-output [8:0] ov;
+output [9:0] ov;
 input invall;
 input invline;
 
@@ -60,6 +60,7 @@ reg [pLines-1:0] valid5;
 reg [pLines-1:0] valid6;
 reg [pLines-1:0] valid7;
 reg [pLines-1:0] valid8;
+reg [pLines-1:0] valid9;
 
 initial begin
 	for (n = 0; n < pLines; n = n + 1)
@@ -83,7 +84,9 @@ always  @(posedge clk)
 always  @(posedge clk)
     if (wr & en[7])  mem[lineno][255:224] <= i[255:224];
 always  @(posedge clk)
-    if (wr & en[8])  mem[lineno][297:256] <= i[297:256];
+    if (wr & en[8])  mem[lineno][287:256] <= i[287:256];
+always  @(posedge clk)
+    if (wr & en[9])  mem[lineno][305:288] <= i[305:288];
 always  @(posedge clk)
 if (rst) begin
      valid0 <= 64'd0;
@@ -95,6 +98,7 @@ if (rst) begin
      valid6 <= 64'd0;
      valid7 <= 64'd0;
      valid8 <= 64'd0;
+     valid9 <= 64'd0;
 end
 else begin
     if (invall) begin
@@ -107,6 +111,7 @@ else begin
     	valid6 <= 64'd0;
     	valid7 <= 64'd0;
 			valid8 <= 64'd0;
+			valid9 <= 64'd0;
     end
     else if (invline) begin
     	valid0[lineno] <= 1'b0;
@@ -118,6 +123,7 @@ else begin
     	valid6[lineno] <= 1'b0;
     	valid7[lineno] <= 1'b0;
     	valid8[lineno] <= 1'b0;
+    	valid9[lineno] <= 1'b0;
 	end
     else if (wr) begin
     	if (en[0]) valid0[lineno] <= 1'b1;
@@ -129,6 +135,7 @@ else begin
     	if (en[6]) valid6[lineno] <= 1'b1;
     	if (en[7]) valid7[lineno] <= 1'b1;
     	if (en[8]) valid8[lineno] <= 1'b1;
+    	if (en[9]) valid9[lineno] <= 1'b1;
     end
 end
 
@@ -142,6 +149,7 @@ assign ov[5] = valid5[lineno];
 assign ov[6] = valid6[lineno];
 assign ov[7] = valid7[lineno];
 assign ov[8] = valid8[lineno];
+assign ov[9] = valid9[lineno];
 
 endmodule
 
@@ -214,6 +222,10 @@ reg [AMSB+8-5:0] mem1 [0:pLines/4-1];
 reg [AMSB+8-5:0] mem2 [0:pLines/4-1];
 reg [AMSB+8-5:0] mem3 [0:pLines/4-1];
 reg [AMSB+8:0] rradr;
+reg [pLines/4-1:0] mem0v;
+reg [pLines/4-1:0] mem1v;
+reg [pLines/4-1:0] mem2v;
+reg [pLines/4-1:0] mem3v;
 integer n;
 initial begin
   for (n = 0; n < pLines/4; n = n + 1)
@@ -242,10 +254,29 @@ else begin
 	end
 end
 
-wire hit0 = mem0[adr[pMSB:5]]==adr[AMSB+8:5];
-wire hit1 = mem1[adr[pMSB:5]]==adr[AMSB+8:5];
-wire hit2 = mem2[adr[pMSB:5]]==adr[AMSB+8:5];
-wire hit3 = mem3[adr[pMSB:5]]==adr[AMSB+8:5];
+always @(posedge clk)
+if (rst) begin
+	mem0v <= 1'd0;
+	mem1v <= 1'd0;
+	mem2v <= 1'd0;
+	mem3v <= 1'd0;
+end
+else begin
+	if (wr) begin
+		case(lfsro[1:0])
+		2'b00:	begin  mem0v[adr[pMSB:5]] <= 1'b1; end
+		2'b01:	begin  mem1v[adr[pMSB:5]] <= 1'b1; end
+		2'b10:	begin  mem2v[adr[pMSB:5]] <= 1'b1; end
+		2'b11:	begin  mem3v[adr[pMSB:5]] <= 1'b1; end
+		endcase
+	end	
+end
+
+
+wire hit0 = mem0[adr[pMSB:5]]==adr[AMSB+8:5] & mem0v[adr[pMSB:5]];
+wire hit1 = mem1[adr[pMSB:5]]==adr[AMSB+8:5] & mem1v[adr[pMSB:5]];
+wire hit2 = mem2[adr[pMSB:5]]==adr[AMSB+8:5] & mem2v[adr[pMSB:5]];
+wire hit3 = mem3[adr[pMSB:5]]==adr[AMSB+8:5] & mem3v[adr[pMSB:5]];
 always @*
     //if (wr2) lineno = wlineno;
     if (hit0)  lineno = {2'b00,adr[pMSB:5]};
@@ -324,24 +355,24 @@ input clk;
 input nxt;
 input wr;
 output wr_ack;
-input [8:0] en;
+input [9:0] en;
 input [AMSB+8:0] adr;
 input [AMSB+8:0] wadr;
-input [297:0] i;
+input [305:0] i;
 output reg [55:0] o;
 output reg [1:0] fault;
 output hit;
 input invall;
 input invline;
 
-wire [297:0] ic;
-reg [297:0] i1, i2;
-wire [8:0] lv;				// line valid
+wire [305:0] ic;
+reg [305:0] i1, i2;
+wire [9:0] lv;				// line valid
 wire [pLNMSB:0] lineno;
 wire [pLNMSB:0] wlineno;
 wire taghit;
 reg wr1,wr2;
-reg [8:0] en1, en2;
+reg [9:0] en1, en2;
 reg invline1, invline2;
 
 // Must update the cache memory on the cycle after a write to the tag memmory.
@@ -351,7 +382,7 @@ always @(posedge clk)
 always @(posedge clk)
 	wr2 <= wr1;
 always @(posedge clk)
-	i1 <= i[297:0];
+	i1 <= i[305:0];
 always @(posedge clk)
 	i2 <= i1;
 always @(posedge clk)
@@ -424,13 +455,13 @@ end
 endgenerate
 
 // Valid if a 64-bit area encompassing a potential 48-bit instruction is valid.
-assign hit = taghit & lv[adr[4:2]] & lv[adr[4:2]+4'd1];
+assign hit = taghit & |lv;//[adr[4:2]];// & lv[adr[4:2]+4'd1];
 
 //always @(radr or ic0 or ic1)
 always @(adr or ic)
 	o <= ic >> {adr[4:0],3'h0};
 always @*
-	fault <= ic[297:296];
+	fault <= ic[305:304];
 
 assign wr_ack = wr2;
 
@@ -446,7 +477,7 @@ input [8:0] lineno;
 input [2:0] sel;
 input [63:0] i;
 input [1:0] fault;
-output [297:0] o;
+output [305:0] o;
 output reg ov;
 input invall;
 input invline;
@@ -456,7 +487,7 @@ reg [63:0] mem0 [0:511];
 reg [63:0] mem1 [0:511];
 reg [63:0] mem2 [0:511];
 reg [63:0] mem3 [0:511];
-reg [39:0] mem4 [0:511];
+reg [47:0] mem4 [0:511];
 reg [1:0] memf [0:511];
 reg [511:0] valid;
 reg [8:0] rrcl;
@@ -484,7 +515,7 @@ begin
         3'd1:    begin mem1[lineno] <= i; memf[lineno] <= memf[lineno] | fault; end
         3'd2:    begin mem2[lineno] <= i; memf[lineno] <= memf[lineno] | fault; end
         3'd3:    begin mem3[lineno] <= i; memf[lineno] <= memf[lineno] | fault; end
-        3'd4:    begin mem4[lineno] <= i[39:0]; memf[lineno] <= memf[lineno] | fault; end
+        3'd4:    begin mem4[lineno] <= i[47:0]; memf[lineno] <= memf[lineno] | fault; end
         endcase
     end
 end
@@ -523,7 +554,7 @@ input [2:0] cnt;
 input exv_i;
 input [63:0] i;
 input err_i;
-output [297:0] o;
+output [305:0] o;
 output hit;
 input invall;
 input invline;

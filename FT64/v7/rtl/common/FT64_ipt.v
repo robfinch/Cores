@@ -28,12 +28,13 @@
 `define FALSE   1'b0
 `endif
 
-module FT64_ipt(rst, clk, pkeys_i, ol_i, cti_i, cs_i, icl_i, cyc_i, stb_i, ack_o, we_i, sel_i, vadr_i, dat_i, dat_o,
-	cyc_o, ack_i, we_o, padr_o, exv_o, rdv_o, wrv_o, prv_o, page_fault);
+module FT64_ipt(rst, clk, pkeys_i, ol_i, bte_i, cti_i, cs_i, icl_i, cyc_i, stb_i, ack_o, we_i, sel_i, vadr_i, dat_i, dat_o,
+	bte_o, cti_o, cyc_o, ack_i, we_o, sel_o, padr_o, exv_o, rdv_o, wrv_o, prv_o, page_fault);
 input rst;
 input clk;
 input [63:0] pkeys_i;
 input [1:0] ol_i;
+input [1:0] bte_i;
 input [2:0] cti_i;
 input cs_i;
 input icl_i;
@@ -45,9 +46,12 @@ input [7:0] sel_i;
 input [63:0] vadr_i;
 input [63:0] dat_i;
 output reg [63:0] dat_o;
+output reg [1:0] bte_o;
+output reg [2:0] cti_o;
 output reg cyc_o;
 input ack_i;
 output reg we_o;
+output reg [7:0] sel_o;
 output reg [31:0] padr_o;
 output reg exv_o;
 output reg rdv_o;
@@ -141,6 +145,13 @@ always @(posedge clk)
 		dat_o <= pte_vadr;
 	default:	dat_o <= 1'b0;
 	endcase
+
+always @(posedge clk)
+	bte_o <= bte_i;
+always @(posedge clk)
+	cti_o <= cti_i;
+always @(posedge clk)
+	sel_o <= sel_i;
 
 always @(posedge clk)
 if (rst) begin

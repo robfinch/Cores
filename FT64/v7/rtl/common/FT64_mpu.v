@@ -71,15 +71,15 @@ input i25;
 input i26;
 input i27;
 input i28;
-output reg [2:0] cti_o;
-output reg [1:0] bte_o;
+output [2:0] cti_o;
+output [1:0] bte_o;
 input bok_i;
 output cyc_o;
 output reg stb_o;
 input ack_i;
 input err_i;
 output we_o;
-output reg [7:0] sel_o;
+output [7:0] sel_o;
 output [31:0] adr_o;
 output reg [63:0] dat_o;
 input [63:0] dat_i;
@@ -115,18 +115,12 @@ wire pulse60;
 wire sptr_o;
 wire [63:0] pkeys;
 
-always @(posedge clk_i)
-	cti_o <= cti;
-always @(posedge clk_i)
-	bte_o <= bte;
 //always @(posedge clk_i)
 //	cyc_o <= cyc;
 always @(posedge clk_i)
 	stb_o <= stb;
 //always @(posedge clk_i)
 //	we_o <= we;
-always @(posedge clk_i)
-	sel_o <= sel;
 //always @(posedge clk_i)
 //	adr_o <= adr;
 always @(posedge clk_i)
@@ -243,6 +237,7 @@ FT64_ipt uipt1
 	.clk(clk_i),
 	.pkeys_i(pkeys),
 	.ol_i(ol),
+	.bte_i(bte),
 	.cti_i(cti),
 	.cs_i(cs_ipt),
 	.icl_i(icl),
@@ -254,9 +249,12 @@ FT64_ipt uipt1
 	.vadr_i(adr),
 	.dat_i(dato),
 	.dat_o(ipt_dato),
+	.bte_o(bte_o),
+	.cti_o(cti_o),
 	.cyc_o(cyc_o),
 	.ack_i(ack),
 	.we_o(we_o),
+	.sel_o(sel_o),
 	.padr_o(adr_o),
 	.exv_o(exv),
 	.rdv_o(rdv),
@@ -264,12 +262,13 @@ FT64_ipt uipt1
 );
 
 always @(posedge clk_i)
-casez({pic_ack,pit_ack,crd_ack,cs_ipt})
-4'b1???:	dati <= {2{pic_dato}};
-4'b01??:	dati <= {2{pit_dato}};
-4'b001?:	dati <= crd_dato;
-4'b0001:	dati <= ipt_dato;
-default:  dati <= dat_i;
+casez({pic_ack,pit_ack,crd_ack,cs_ipt,ack_i})
+5'b1????:	dati <= {2{pic_dato}};
+5'b01???:	dati <= {2{pit_dato}};
+5'b001??:	dati <= crd_dato;
+5'b0001?:	dati <= ipt_dato;
+5'b00001:	dati <= dat_i;
+default:  dati <= dati;
 endcase
 
 always @(posedge clk_i)

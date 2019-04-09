@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2013-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2013-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@opencores.org
 //       ||
@@ -31,14 +31,18 @@
 // devices which are low-speed it doesn't matter much.              
 // ============================================================================
 //
+//`define ACK_WR	1'b1
+
 module IOBridge(rst_i, clk_i,
 	s1_cyc_i, s1_stb_i, s1_ack_o, s1_sel_i, s1_we_i, s1_adr_i, s1_dat_i, s1_dat_o,
 	s2_cyc_i, s2_stb_i, s2_ack_o, s2_sel_i, s2_we_i, s2_adr_i, s2_dat_i, s2_dat_o,
 	m_cyc_o, m_stb_o, m_ack_i, m_we_o, m_sel_o, m_adr_o, m_dat_i, m_dat_o,
 	m_sel32_o, m_adr32_o, m_dat32_o, m_dat8_o);
-parameter IDLE = 2'd0;
-parameter WAIT_ACK = 2'd1;
-parameter WAIT_NACK = 2'd2;
+parameter IDLE = 3'd0;
+parameter WAIT_ACK = 3'd1;
+parameter WAIT_NACK = 3'd2;
+parameter WR_ACK = 3'd3;
+parameter WR_ACK2 = 3'd4;
 
 input rst_i;
 input clk_i;
@@ -74,7 +78,7 @@ output reg [31:0] m_dat32_o;
 output reg [7:0] m_dat8_o;
 
 reg which;
-reg [1:0] state;
+reg [2:0] state;
 reg s_ack;
 always @(posedge clk_i)
 if (rst_i)
@@ -117,14 +121,25 @@ IDLE:
     	which <= 1'b0;
       m_cyc_o <= 1'b1;
       m_stb_o <= 1'b1;
-      state <= WAIT_ACK;
+`ifdef ACK_WR
+      if (s1_we_i) begin
+      	s_ack <= 1'b1;
+		    m_we_o <= 1'b1;
+		    state <= WR_ACK;
+    	end
+    	else
+`endif    	
+    	begin
+      	s_ack <= 1'b0;
+		    m_we_o <= s1_we_i;
+      	state <= WAIT_ACK;
+    	end
 	    m_sel_o <= s1_sel_i;
-	    m_we_o <= s1_we_i;
 	    m_adr_o <= {12'hFFD,s1_adr_i[19:0]};	// fix the upper 12 bits of the address to help trim cores
 	    m_dat_o <= s1_dat_i;
 	    m_sel32_o <= s1_sel_i[7:4]|s1_sel_i[3:0];
 	    m_adr32_o <= {s1_adr_i[31:3],a12,a11,a10};
-	    m_dat32_o <= a12 ? s1_dat_i[63:0] : s1_dat_i[31:0];
+	    m_dat32_o <= a12 ? s1_dat_i[63:32] : s1_dat_i[31:0];
 			case(s1_sel_i)
 			8'b00000001:	m_dat8_o <= s1_dat_i[7:0];
 			8'b00000010:	m_dat8_o <= s1_dat_i[15:8];
@@ -148,14 +163,25 @@ IDLE:
     	which <= 1'b1;
       m_cyc_o <= 1'b1;
       m_stb_o <= 1'b1;
-      state <= WAIT_ACK;
+ `ifdef ACK_WR
+      if (s2_we_i) begin
+      	s_ack <= 1'b1;
+		    m_we_o <= 1'b1;
+		    state <= WR_ACK;
+    	end
+    	else 
+`endif    	
+    	begin
+      	s_ack <= 1'b0;
+		    m_we_o <= s2_we_i;
+      	state <= WAIT_ACK;
+    	end
 	    m_sel_o <= s2_sel_i;
-	    m_we_o <= s2_we_i;
 	    m_adr_o <= {12'hFFD,s2_adr_i[19:0]};	// fix the upper 12 bits of the address to help trim cores
 	    m_dat_o <= s2_dat_i;
 	    m_sel32_o <= s2_sel_i[7:4]|s2_sel_i[3:0];
 	    m_adr32_o <= {s2_adr_i[31:3],a22,a21,a20};
-	    m_dat32_o <= a22 ? s1_dat_i[63:0] : s2_dat_i[31:0];
+	    m_dat32_o <= a22 ? s2_dat_i[63:32] : s2_dat_i[31:0];
 			case(s2_sel_i)
 			8'b00000001:	m_dat8_o <= s2_dat_i[7:0];
 			8'b00000010:	m_dat8_o <= s2_dat_i[15:8];
@@ -175,29 +201,86 @@ IDLE:
 			default:		m_dat8_o <= s2_dat_i[7:0];
 			endcase
     end
+    else begin
+    	m_cyc_o <= 1'b0;
+    	m_stb_o <= 1'b0;
+    	m_we_o <= 1'b0;
+    	m_sel_o <= 8'h00;
+    	m_adr_o <= 20'hFFFFF;
+  	end
 	end
+WR_ACK:
+	begin
+		if (!s2_stb_i && !s1_stb_i)
+			s_ack <= 1'b0;
+		if ( which & !s2_stb_i)
+			s_ack <= 1'b0;
+		if (!which & !s1_stb_i)
+			s_ack <= 1'b0;
+		if (m_ack_i) begin
+			m_cyc_o <= 1'b0;
+			m_stb_o <= 1'b0;
+			m_we_o <= 1'b0;
+//			m_sel_o <= 8'h00;
+			if (!s_ack)
+				state <= IDLE;
+			else
+				state <= WR_ACK2;
+		end
+	end
+WR_ACK2:
+	begin
+		if (!s2_stb_i && !s1_stb_i) begin
+			s_ack <= 1'b0;
+			state <= IDLE;
+		end
+		if ( which & !s2_stb_i) begin
+			s_ack <= 1'b0;
+			state <= IDLE;
+		end
+		if (!which & !s1_stb_i) begin
+			s_ack <= 1'b0;
+			state <= IDLE;
+		end
+	end
+
+// Wait for rising edge on m_ack_i or cycle abort
 WAIT_ACK:
 	if (m_ack_i) begin
 //		m_sel_o <= 4'h0;
 //		m_adr_o <= 32'h0;
 //		m_dat_o <= 32'd0;
 		s_ack <= 1'b1;
-		s1_dat_o <= m_dat_i;
-		s2_dat_o <= m_dat_i;
+		if (!which) s1_dat_o <= m_dat_i;
+		if ( which) s2_dat_o <= m_dat_i;
 		state <= WAIT_NACK;
+	end
+	else if (!s2_cyc_i && !s1_cyc_i) begin
+		m_cyc_o <= 1'b0;
+		m_stb_o <= 1'b0;
+		m_we_o <= 1'b0;
+		state <= IDLE;
 	end
 	else if (which ? !s2_cyc_i : !s1_cyc_i) begin
 		m_cyc_o <= 1'b0;
 		m_stb_o <= 1'b0;
 		m_we_o <= 1'b0;
-//		m_sel_o <= 4'h0;
+//			m_sel_o <= 8'h00;
 //		m_adr_o <= 32'h0;
 //		m_dat_o <= 32'd0;
+		state <= IDLE;
+	end
+
+// Wait for falling edge on strobe or strobe low.
+WAIT_NACK:
+	if (!s2_stb_i && !s1_stb_i) begin
+		m_cyc_o <= 1'b0;
+		m_stb_o <= 1'b0;
+		m_we_o <= 1'b0;
 		s_ack <= 1'b0;
 		state <= IDLE;
 	end
-WAIT_NACK:
-	if (which ? !s2_stb_i : !s1_stb_i) begin
+	else if (which ? !s2_stb_i : !s1_stb_i) begin
 		m_cyc_o <= 1'b0;
 		m_stb_o <= 1'b0;
 		m_we_o <= 1'b0;
