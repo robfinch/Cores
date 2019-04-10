@@ -339,9 +339,11 @@ wire thread_en = cr0[16];
 wire thread_en = 1'b0;
 `endif
 wire vechain = cr0[18];
+// Performance CSR's
 reg [39:0] iq_ctr;
 reg [39:0] irq_ctr;					// count of number of interrupts
 reg [39:0] bm_ctr;					// branch miss counter
+reg [39:0] br_ctr;					// branch counter
 reg [39:0] icl_ctr;					// instruction cache load counter
 
 reg [7:0] fcu_timeout;
@@ -6486,6 +6488,7 @@ if (rst) begin
 		iq_ctr <= 40'd0;
 		icl_ctr <= 40'd0;
 		bm_ctr <= 40'd0;
+		br_ctr <= 40'd0;
 		irq_ctr <= 40'd0;
 		cmt_timer <= 9'd0;
 		StoreAck1 <= `FALSE;
@@ -7078,6 +7081,7 @@ if (fcu_v) begin
 	// takb is looked at only for branches to update the predictor. Here it is
 	// unconditionally set, the value will be ignored if it's not a branch.
 	iqentry_takb[ fcu_id[`QBITS] ] <= fcu_takb;
+	br_ctr <= br_ctr + fcu_branch;
 	fcu_dataready <= `INV;
 end
 

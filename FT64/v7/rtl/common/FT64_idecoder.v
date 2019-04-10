@@ -422,7 +422,7 @@ case(instr[`INSTRUCTION_OP])
 `CAS:   IsMem = TRUE;
 `LVx:		IsMem = TRUE;
 `LVxU:	IsMem = TRUE;
-`RET:		IsMem = TRUE;
+//`RET:		IsMem = TRUE;???
 default:    IsMem = FALSE;
 endcase
 //endfunction

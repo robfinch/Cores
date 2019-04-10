@@ -376,6 +376,7 @@
 `define CSR_BM_CTR	10'h3C1
 `define CSR_ICL_CTR	10'h3C2
 `define CSR_IRQ_CTR	10'h3C3
+`define CSR_BR_CTR	10'h3C4
 `define CSR_TIME		10'h3E0
 `define CSR_INFO    10'b11_1111_????
 
