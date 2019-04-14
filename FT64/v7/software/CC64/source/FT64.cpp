@@ -947,7 +947,10 @@ static int GenerateStoreArgumentList(Function *sym, ENODE *plist)
 	maxnn = nn;
 	for(--nn, i = 0; nn >= 0; --nn,i++ )
   {
-//		sum += GeneratePushParameter(pl[nn],ta ? ta->preg[ta->length - i - 1] : 0,sum*8);
+		if (pl[nn]->etype == bt_pointer)
+			if (pl[nn]->tp->GetBtp()->type == bt_ichar || pl[nn]->tp->GetBtp()->type == bt_iuchar)
+				continue;
+				//		sum += GeneratePushParameter(pl[nn],ta ? ta->preg[ta->length - i - 1] : 0,sum*8);
 		// Variable argument list functions may cause the type array values to be
 		// exhausted before all the parameters are pushed. So, we check the parm number.
 		sum += GeneratePushParameter(pl[nn],ta ? (i < ta->length ? ta->preg[i] : 0) : 0,sum*8, &isFloat);
@@ -962,13 +965,61 @@ static int GenerateStoreArgumentList(Function *sym, ENODE *plist)
 		cpu.SupportsPush = true;
 		peep_tail = ip;
 		peep_tail->fwd = nullptr;
-		for (nn = i = 0; nn < maxnn; nn++, i++)
+		i = maxnn-1;
+		for (nn = 0; nn < maxnn; nn++, i--) {
+			if (pl[nn]->etype == bt_pointer)
+				if (pl[nn]->tp->GetBtp()->type == bt_ichar || pl[nn]->tp->GetBtp()->type == bt_iuchar)
+					continue;
 			GeneratePushParameter(pl[nn], ta ? (i < ta->length ? ta->preg[i] : 0) : 0, sum * 8, &isFloat);
+		}
 		cpu.SupportsPush = false;
 	}
 	if (ta)
 		delete ta;
     return (sum);
+}
+
+// Store entire argument list onto stack
+//
+static int GenerateInlineArgumentList(Function *sym, ENODE *plist)
+{
+	Operand *ap;
+	TypeArray *ta = nullptr;
+	int i, sum;
+	OCODE *ip;
+	ENODE *p;
+	ENODE *pl[100];
+	int nn, maxnn;
+	struct slit *st;
+	char *cp;
+
+	sum = 0;
+	if (sym)
+		ta = sym->GetProtoTypes();
+
+	// Capture the parameter list. It is needed in the reverse order.
+	for (nn = 0, p = plist; p != NULL; p = p->p[1], nn++) {
+		pl[nn] = p->p[0];
+	}
+	maxnn = nn;
+	for (--nn, i = 0; nn >= 0; --nn, i++)
+	{
+		if (pl[nn]->etype==bt_pointer) {
+			if (pl[nn]->tp->GetBtp()->type == bt_ichar || pl[nn]->tp->GetBtp()->type == bt_iuchar) {
+				for (st = strtab; st; st = st->next) {
+					if (st->label == pl[nn]->i) {
+						cp = st->str;
+						break;
+					}
+				}
+				ap = make_string2(cp);
+				GenerateMonadic(op_string, 0, ap);
+			}
+		}
+	}
+	if (ta)
+		delete ta;
+	return (sum);
 }
 
 Operand *GenerateFunctionCall(ENODE *node, int flags)
@@ -1020,6 +1071,7 @@ Operand *GenerateFunctionCall(ENODE *node, int flags)
 			GenerateMonadic(op_call,0,make_offset(node->p[0]));
 			GenerateMonadic(op_bex,0,make_label(throwlab));
 		}
+		GenerateInlineArgumentList(sym, node->p[1]);
 	}
     else
     {
@@ -1060,6 +1112,7 @@ Operand *GenerateFunctionCall(ENODE *node, int flags)
 			GenerateMonadic(op_call,0,ap);
 			GenerateMonadic(op_bex,0,make_label(throwlab));
 		}
+		GenerateInlineArgumentList(sym, node->p[1]);
 		ReleaseTempRegister(ap);
     }
 	// Pop parameters off the stack

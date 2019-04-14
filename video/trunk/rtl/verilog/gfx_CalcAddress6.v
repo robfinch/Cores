@@ -25,16 +25,16 @@
 //
 // Compute the graphics address
 //
-module gfx_CalcAddress6(clk, base_address_i, color_depth_i, hdisplayed_i, x_coord_i, y_coord_i,
+module gfx_CalcAddress6(clk, base_address_i, color_depth_i, bmp_width_i, x_coord_i, y_coord_i,
 	address_o, mb_o, me_o, ce_o);
 parameter SW = 128;		// strip width in bits
 parameter BN = SW==128 ? 6 : SW==64 ? 5 : 4;
 input clk;
 input [31:0] base_address_i;
 input [2:0] color_depth_i;
-input [11:0] hdisplayed_i;	// pixel per line
-input [11:0] x_coord_i;
-input [11:0] y_coord_i;
+input [15:0] bmp_width_i;	// pixel per line
+input [15:0] x_coord_i;
+input [15:0] y_coord_i;
 output [31:0] address_o;
 output [BN:0] mb_o;					// mask begin
 output [BN:0] me_o;					// mask end
@@ -137,10 +137,10 @@ endcase
 
 // Compute the fixed point horizonal strip number value. This has 16 binary
 // point places.
-wire [27:0] strip_num65k = x_coord_i * coeff;
+wire [31:0] strip_num65k = x_coord_i * coeff;
 // Truncate off the binary fraction to get the strip number. The strip
 // number will be used to form part of the address.
-wire [13:0] strip_num = strip_num65k[27:16];
+wire [17:0] strip_num = strip_num65k[31:16];
 // Calculate pixel position within strip using the fractional part of the
 // horizontal strip number.
 wire [15:0] strip_fract = strip_num65k[15:0]+16'h7F;  // +7F to round
@@ -152,12 +152,13 @@ assign ce_o = mb_o + cbpp;
 // num_strips is essentially a constant value unless the screen resolution changes.
 // Gain performance here by regstering the multiply so that there aren't two
 // cascaded multiplies when calculating the offset.
-reg [27:0] num_strips65k;
+reg [31:0] num_strips65k;
 always @(posedge clk)
-	num_strips65k <= hdisplayed_i * coeff;
-wire [11:0] num_strips = num_strips65k[27:16];
+	num_strips65k <= bmp_width_i * coeff;
+wire [15:0] num_strips = num_strips65k[31:16];
 
 wire [31:0] offset = {(({4'b0,num_strips} * y_coord_i) + strip_num),SW==128 ? 4'h0 : SW==64 ? 3'h0 : 2'd0};
+
 assign address_o = base_address_i + offset;
 
 endmodule

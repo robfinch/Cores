@@ -51,7 +51,6 @@ output reg                  valid_o;
 input                       deq_i;
 
 
-
 reg   [fifo_width-1:0] fifo_data [2**(fifo_bit_depth)-1:0];
 reg [fifo_bit_depth:0] fifo_head, fifo_tail;
 reg [fifo_bit_depth:0] next_tail;
@@ -86,7 +85,7 @@ always @(posedge clk_i or posedge rst_i)
 
 // provide output
 wire is_empty = (fifo_head == fifo_tail);
-always @(posedge clk_i or posedge rst_i)
+always @(posedge clk_i)
   if (rst_i) begin
     valid_o <= 1'b0;
     fifo_head <= 1'b0;

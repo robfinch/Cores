@@ -54,5 +54,6 @@ extern void push_typ(TYP *tp);
 extern TYP *pop_typ();
 
 extern void opt_const_unchecked(ENODE **node);
+extern Operand *make_string2(char *s);
 
 #endif

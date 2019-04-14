@@ -120,7 +120,21 @@ Operand *make_string(char *s)
 	ap = allocOperand();
 	ap->mode = am_direct;
 	ap->offset = lnode;
-	return ap;
+	return (ap);
+}
+
+Operand *make_string2(char *s)
+{
+	ENODE *lnode;
+	Operand *ap;
+
+	lnode = allocEnode();
+	lnode->nodetype = en_scon;
+	lnode->sp = new std::string(s);
+	ap = allocOperand();
+	ap->mode = am_direct;
+	ap->offset = lnode;
+	return (ap);
 }
 
 /*
@@ -1015,7 +1029,7 @@ Operand *GenerateAggregateAssign(ENODE *node1, ENODE *node2)
 	GenerateDiadic(op_mov, 0, makereg(regFirstArg), base);
 	GenerateDiadic(op_mov, 0, makereg(regFirstArg+1), base2);
 	GenerateDiadic(op_ldi, 0, makereg(regFirstArg+2), make_immed(node2->tp->size));
-	GenerateMonadic(op_call, 0, make_string("memcpy"));
+	GenerateMonadic(op_call, 0, make_string("_memcpy"));
 	ReleaseTempReg(base2);
 	return (base);
 	//base = GenerateDereference(node1,F_MEM,sizeOfWord,0);
@@ -1105,8 +1119,8 @@ Operand *GenerateAssign(ENODE *node, int flags, int size)
 				GenerateDiadic(op_mov,0,ap1,ap2);
 			break;
 		case am_imm:
-			if (ap2->isPtr)
-				GenerateZeradic(op_setwb);
+			//if (ap2->isPtr)
+			//	GenerateZeradic(op_setwb);
 			GenerateDiadic(op_ldi,0,ap1,ap2);
 			ap1->isPtr = ap2->isPtr;
 			break;
@@ -1355,12 +1369,12 @@ Operand *GenerateExpression(ENODE *node, int flags, int size)
 				ap1->segment = dataseg;
 			}
 			*/
-            ap1->mode = am_imm;
-            ap1->offset = node;
-			ap1->isUnsigned = node->isUnsigned;
-            ap1->MakeLegal(flags,size);
-         Leave("GenExperssion",5); 
-            return ap1;
+					ap1->mode = am_imm;
+          ap1->offset = node;
+					ap1->isUnsigned = node->isUnsigned;
+          ap1->MakeLegal(flags,size);
+					Leave("GenExperssion",5); 
+          return (ap1);
 
     case en_nacon:
             if (use_gp) {

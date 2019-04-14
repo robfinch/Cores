@@ -81,10 +81,15 @@ void put_ty(TYP *tp)
 				case bt_ubyte:
                         lfs.printf("Unsigned Byte");
                         break;
+				case bt_ichar:
                 case bt_char:
                         lfs.printf("Char");
                         break;
-                case bt_short:
+								case bt_iuchar:
+								case bt_uchar:
+									lfs.printf("Char");
+									break;
+								case bt_short:
                         lfs.printf("Short");
                         break;
                 case bt_enum:

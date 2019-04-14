@@ -57,10 +57,12 @@ bool TYP::IsScalar()
 {
 	return
 		type == bt_byte ||
+		type == bt_ichar ||
 		type == bt_char ||
 		type == bt_short ||
 		type == bt_long ||
 		type == bt_ubyte ||
+		type == bt_iuchar ||
 		type == bt_uchar ||
 		type == bt_ushort ||
 		type == bt_ulong ||
@@ -183,6 +185,8 @@ int TYP::GetElementSize()
 	case bt_byte:
 	case bt_ubyte:
 		return 1;
+	case bt_ichar:
+	case bt_iuchar:
 	case bt_char:
 	case bt_uchar:
 		return 2;
@@ -217,6 +221,9 @@ void TYP::put_ty()
 	case bt_ubyte:
             lfs.printf("Unsigned Byte");
             break;
+	case bt_uchar:
+	case bt_ichar:
+	case bt_iuchar:
     case bt_char:
             lfs.printf("Char");
             break;
@@ -301,6 +308,10 @@ bool TYP::IsSameType(TYP *a, TYP *b, bool exact)
 				return (true);
 			if (b->type == bt_uchar)
 				return (true);
+			if (b->type == bt_ichar)
+				return (true);
+			if (b->type == bt_iuchar)
+				return (true);
 			if (b->type == bt_byte)
 				return (true);
 			if (b->type == bt_ubyte)
@@ -323,6 +334,10 @@ bool TYP::IsSameType(TYP *a, TYP *b, bool exact)
 			if (b->type == bt_char)
 				return (true);
 			if (b->type == bt_uchar)
+				return (true);
+			if (b->type == bt_ichar)
+				return (true);
+			if (b->type == bt_iuchar)
 				return (true);
 			if (b->type == bt_byte)
 				return (true);
@@ -347,6 +362,10 @@ bool TYP::IsSameType(TYP *a, TYP *b, bool exact)
 				return (true);
 			if (b->type == bt_uchar)
 				return (true);
+			if (b->type == bt_ichar)
+				return (true);
+			if (b->type == bt_iuchar)
+				return (true);
 			if (b->type == bt_byte)
 				return (true);
 			if (b->type == bt_ubyte)
@@ -369,6 +388,10 @@ bool TYP::IsSameType(TYP *a, TYP *b, bool exact)
 			if (b->type == bt_char)
 				return (true);
 			if (b->type == bt_uchar)
+				return (true);
+			if (b->type == bt_ichar)
+				return (true);
+			if (b->type == bt_iuchar)
 				return (true);
 			if (b->type == bt_byte)
 				return (true);
@@ -393,6 +416,37 @@ bool TYP::IsSameType(TYP *a, TYP *b, bool exact)
 				return (true);
 			if (b->type == bt_char)
 				return (true);
+			if (b->type == bt_ichar)
+				return (true);
+			if (b->type == bt_iuchar)
+				return (true);
+			if (b->type == bt_byte)
+				return (true);
+			if (b->type == bt_ubyte)
+				return (true);
+			if (b->type == bt_enum)
+				return (true);
+		}
+		return (false);
+
+	case bt_iuchar:
+		if (b->type == bt_iuchar)
+			return (true);
+		if (!exact) {
+			if (b->type == bt_long)
+				return (true);
+			if (b->type == bt_ulong)
+				return (true);
+			if (b->type == bt_short)
+				return (true);
+			if (b->type == bt_ushort)
+				return (true);
+			if (b->type == bt_uchar)
+				return (true);
+			if (b->type == bt_char)
+				return (true);
+			if (b->type == bt_ichar)
+				return (true);
 			if (b->type == bt_byte)
 				return (true);
 			if (b->type == bt_ubyte)
@@ -415,6 +469,35 @@ bool TYP::IsSameType(TYP *a, TYP *b, bool exact)
 			if (b->type == bt_ushort)
 				return (true);
 			if (b->type == bt_uchar)
+				return (true);
+			if (b->type == bt_iuchar)
+				return (true);
+			if (b->type == bt_byte)
+				return (true);
+			if (b->type == bt_ubyte)
+				return (true);
+			if (b->type == bt_enum)
+				return (true);
+		}
+		return (false);
+
+	case bt_ichar:
+		if (b->type == bt_ichar)
+			return (true);
+		if (!exact) {
+			if (b->type == bt_long)
+				return (true);
+			if (b->type == bt_ulong)
+				return (true);
+			if (b->type == bt_short)
+				return (true);
+			if (b->type == bt_ushort)
+				return (true);
+			if (b->type == bt_char)
+				return (true);
+			if (b->type == bt_uchar)
+				return (true);
+			if (b->type == bt_iuchar)
 				return (true);
 			if (b->type == bt_byte)
 				return (true);
@@ -441,6 +524,10 @@ bool TYP::IsSameType(TYP *a, TYP *b, bool exact)
 				return (true);
 			if (b->type == bt_char)
 				return (true);
+			if (b->type == bt_iuchar)
+				return (true);
+			if (b->type == bt_ichar)
+				return (true);
 			if (b->type == bt_ubyte)
 				return (true);
 			if (b->type == bt_enum)
@@ -463,6 +550,10 @@ bool TYP::IsSameType(TYP *a, TYP *b, bool exact)
 			if (b->type == bt_uchar)
 				return (true);
 			if (b->type == bt_char)
+				return (true);
+			if (b->type == bt_iuchar)
+				return (true);
+			if (b->type == bt_ichar)
 				return (true);
 			if (b->type == bt_byte)
 				return (true);
@@ -504,6 +595,8 @@ bool TYP::IsSameType(TYP *a, TYP *b, bool exact)
 				|| b->type == bt_ushort
 				|| b->type == bt_char
 				|| b->type == bt_uchar
+				|| b->type == bt_ichar
+				|| b->type == bt_iuchar
 				|| b->type == bt_enum
 				)
 				return (true);
@@ -630,7 +723,8 @@ int64_t TYP::InitializeArray(int64_t maxsz)
 //		NextToken();               /* skip past the brace */
 		while (lastst != end) {
 			// Allow char array initialization like { "something", "somethingelse" }
-			if (lastst == sconst && (GetBtp()->type == bt_char || GetBtp()->type == bt_uchar)) {
+			if (lastst == sconst && (GetBtp()->type == bt_char || GetBtp()->type == bt_uchar
+				|| GetBtp()->type == bt_ichar || GetBtp()->type == bt_iuchar)) {
 				str = GetStrConst();
 				nbytes = strlen(str) * 2 + 2;
 				p = str;
@@ -732,9 +826,11 @@ int64_t TYP::GenerateT(TYP *tp, ENODE *node)
 		nbytes = 1;
 		GenerateByte(val);
 		break;
+	case bt_ichar:
 	case bt_char:
 		val = node->i;
 		nbytes = 2; GenerateChar(val); break;
+	case bt_iuchar:
 	case bt_uchar:
 		val = node->i;
 		nbytes = 2; GenerateChar(val); break;
@@ -922,6 +1018,7 @@ int TYP::Alignment()
 	switch (type) {
 	case bt_byte:	case bt_ubyte:	return AL_BYTE;
 	case bt_char:   case bt_uchar:  return AL_CHAR;
+	case bt_ichar:   case bt_iuchar:  return AL_CHAR;
 	case bt_short:  case bt_ushort: return AL_SHORT;
 	case bt_long:   case bt_ulong:  return AL_LONG;
 	case bt_enum:           return AL_CHAR;
@@ -954,6 +1051,7 @@ int TYP::walignment()
 	switch (type) {
 	case bt_byte:	case bt_ubyte:		return imax(AL_BYTE, worstAlignment);
 	case bt_char:   case bt_uchar:     return imax(AL_CHAR, worstAlignment);
+	case bt_ichar:   case bt_iuchar:     return imax(AL_CHAR, worstAlignment);
 	case bt_short:  case bt_ushort:    return imax(AL_SHORT, worstAlignment);
 	case bt_long:   case bt_ulong:     return imax(AL_LONG, worstAlignment);
 	case bt_enum:           return imax(AL_CHAR, worstAlignment);

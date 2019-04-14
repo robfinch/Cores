@@ -1092,7 +1092,7 @@ void Function::BuildParameterList(int *num, int *numa)
 			else
 				sp1->IsRegister = false;
 		}
-		if (!sp1->IsRegister)
+		if (!sp1->IsRegister)// && !sp1->IsInline)
 			*numa += 1;
 		// Check for aggregate types passed as parameters. Structs
 		// and unions use the type size. There could also be arrays

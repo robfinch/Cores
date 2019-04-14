@@ -2,16 +2,17 @@
 #define _CONST_H
 
 enum e_bt {
-		bt_none,
-		bt_byte, bt_ubyte,
-        bt_char, bt_short, bt_long, bt_float, bt_double, bt_triple, bt_quad, bt_pointer,
-		bt_uchar, bt_ushort, bt_ulong,
-        bt_unsigned, bt_vector, bt_vector_mask,
-        bt_struct, bt_union, bt_class, bt_enum, bt_void,
-        bt_func, bt_ifunc, bt_label,
-		bt_interrupt, bt_oscall, bt_pascal, bt_kernel, bt_bitfield, bt_ubitfield,
-		bt_exception, bt_ellipsis,
-        bt_last};
+	bt_none,
+	bt_byte, bt_ubyte,
+	bt_char, bt_short, bt_long, bt_float, bt_double, bt_triple, bt_quad, bt_pointer,
+	bt_ichar, bt_iuchar,
+	bt_uchar, bt_ushort, bt_ulong,
+  bt_unsigned, bt_vector, bt_vector_mask,
+  bt_struct, bt_union, bt_class, bt_enum, bt_void,
+  bt_func, bt_ifunc, bt_label,
+	bt_interrupt, bt_oscall, bt_pascal, bt_kernel, bt_bitfield, bt_ubitfield,
+	bt_exception, bt_ellipsis,
+  bt_last};
 
 enum e_node {
         en_void,        /* used for parameter lists */
@@ -27,7 +28,7 @@ enum e_node {
 		en_cwl, en_cld, en_cfd,
 		en_sxb, en_sxc, en_sxh,
 		en_zxb, en_zxc, en_zxh,
-        en_icon, en_fcon, en_fqcon, en_dcon, en_tcon, en_labcon, en_nacon, en_autocon, en_autofcon, en_classcon,
+        en_icon, en_fcon, en_fqcon, en_dcon, en_tcon, en_scon, en_labcon, en_nacon, en_autocon, en_autofcon, en_classcon,
 		en_clabcon, en_cnacon,
 		en_dlabcon, en_dnacon, // 30<-
 		
@@ -107,7 +108,7 @@ enum e_am {
 
 enum e_sym {
 	tk_nop,
-	id, cconst, iconst, lconst, sconst, rconst, plus, minus,
+	id, cconst, iconst, lconst, sconst, isconst, rconst, plus, minus,
 	star, divide, lshift, rshift, lrot, rrot,
 	modop, eq, neq, lt, leq, gt,
 	geq, assign, asplus, asminus, astimes, asdivide, asmodop,
@@ -228,6 +229,7 @@ enum e_op {
 	op_andq1, op_andq2, op_andq3,
 	op_orq1, op_orq2, op_orq3,
 	op_swp,
+	op_string,
 	// Built in functions
 	op_abs, op_mulf,
 	op_phi,

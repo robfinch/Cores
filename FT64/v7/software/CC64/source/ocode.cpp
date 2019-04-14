@@ -272,8 +272,13 @@ void OCODE::store(txtoStream& ofs)
 		else {
 			ofs.printf("\t");
 			ofs.printf("%6.6s\t", "");
-			if (insn)
-				nn = insn->store(ofs);
+			if (insn) {
+				if (opcode == op_string) {
+					ofs.printf("dc");
+				}
+				else
+					nn = insn->store(ofs);
+			}
 			buf[0] = '\0';
 			if (length) {
 				if (length <= 16) {

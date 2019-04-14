@@ -19,8 +19,6 @@ PER-PIXEL COLORING MODULE
  You should have received a copy of the GNU Lesser General Public License
  along with orgfx.  If not, see <http://www.gnu.org/licenses/>.
 
- Robert Finch
- Modified to support greater number of color depths.
 */
 
 /*
@@ -31,7 +29,7 @@ module gfx_fragment_processor(clk_i, rst_i,
   pixel_alpha_i,
   x_counter_i, y_counter_i, z_i, u_i, v_i, bezier_factor0_i, bezier_factor1_i, bezier_inside_i, write_i, curve_write_i, ack_o, // from raster
   pixel_x_o, pixel_y_o, pixel_z_o, pixel_color_i, pixel_color_o, pixel_alpha_o, write_o, ack_i,  // to blender
-  texture_ack_i, texture_data_i, texture_addr_o, texture_request_o, nack_o,// to/from wishbone master read
+  texture_ack_i, texture_data_i, texture_addr_o, texture_sel_o, texture_request_o, // to/from wishbone master read
   texture_enable_i, tex0_base_i, tex0_size_x_i, tex0_size_y_i, color_depth_i, colorkey_enable_i, colorkey_i // from wishbone slave
   );
 
@@ -67,73 +65,47 @@ input                        ack_i;
 
 // to/from wishbone master read
 input              texture_ack_i;
-input      [127:0] texture_data_i;
-output      [31:0] texture_addr_o;
+input       [31:0] texture_data_i;
+output      [31:2] texture_addr_o;
+output reg  [ 3:0] texture_sel_o;
 output reg         texture_request_o;
-output reg         nack_o;
 
 // from wishbone slave
 input                   texture_enable_i;
-input            [31:0] tex0_base_i;
+input            [31:2] tex0_base_i;
 input [point_width-1:0] tex0_size_x_i;
 input [point_width-1:0] tex0_size_y_i;
-input            [ 2:0] color_depth_i;
+input            [ 1:0] color_depth_i;
 input                   colorkey_enable_i;
 input            [31:0] colorkey_i;
 
 wire             [31:0] pixel_offset;
 
 // Calculate the memory address of the texel to read 
-wire [6:0] mb, me;
-
-gfx_CalcAddress u1
-(
-	.base_address_i(tex0_base_i),
-	.color_depth_i(color_depth_i),
-	.hdisplayed_i(tex0_size_x_i),
-	.x_coord_i(u_i),
-	.y_coord_i(v_i),
-	.address_o(texture_addr_o),
-	.mb_o(mb),
-	.me_o(me)
-);
+assign pixel_offset = (color_depth_i == 2'b00) ? (tex0_size_x_i*v_i + {16'h0, u_i})      : // 8  bit
+                      (color_depth_i == 2'b01) ? (tex0_size_x_i*v_i + {16'h0, u_i}) << 1 : // 16 bit
+                      (tex0_size_x_i*v_i + {16'h0, u_i})                            << 2 ; // 32 bit
+assign texture_addr_o = tex0_base_i + pixel_offset[31:2];
 
 // State machine
 reg [1:0] state;
 parameter wait_state = 2'b00, texture_read_state = 2'b01, write_pixel_state = 2'b10;
 
-parameter BPP6 = 3'd0;
-parameter BPP8 = 3'd1;
-parameter BPP9 = 3'd2;
-parameter BPP12 = 3'd3;
-parameter BPP15 = 3'd4;
-parameter BPP16 = 3'd5;
-parameter BPP24 = 3'd6;
-parameter BPP32 = 3'd7;
-
 wire [31:0] mem_conv_color_o;
 
 // Color converter
-memory_to_color memory_proc(
-.mem_i (texture_data_i),
-.mb_i (mb),
-.me_i (me),
-.color_o (mem_conv_color_o)
+memory_to_color color_proc(
+.color_depth_i (color_depth_i),
+.mem_i         (texture_data_i),
+.mem_lsb_i     (u_i[1:0]),
+.color_o       (mem_conv_color_o),
+.sel_o         ()
 );
 
 // Does the fetched texel match the colorkey?
-reg transparent_pixel;
-always @(color_depth_i or mem_conv_color_o or colorkey_i)
-case(color_depth_i)
-BPP6:	transparent_pixel = mem_conv_color_o[5:0] == colorkey_i[5:0];
-BPP8:	transparent_pixel = mem_conv_color_o[7:0] == colorkey_i[7:0];
-BPP9:	transparent_pixel = mem_conv_color_o[8:0] == colorkey_i[8:0];
-BPP12:	transparent_pixel = mem_conv_color_o[11:0] == colorkey_i[11:0];
-BPP15:	transparent_pixel = mem_conv_color_o[14:0] == colorkey_i[14:0];
-BPP16:	transparent_pixel = mem_conv_color_o[15:0] == colorkey_i[15:0];
-BPP24:	transparent_pixel = mem_conv_color_o[23:0] == colorkey_i[23:0];
-BPP32:	transparent_pixel = mem_conv_color_o[23:0] == colorkey_i[23:0];
-endcase
+wire transparent_pixel = (color_depth_i == 2'b00) ? (mem_conv_color_o[7:0]  == colorkey_i[7:0])  : // 8  bit
+                         (color_depth_i == 2'b01) ? (mem_conv_color_o[15:0] == colorkey_i[15:0]) : // 16 bit
+                         (mem_conv_color_o == colorkey_i);                                         // 32 bit
 
 // These variables are used when rendering bezier shapes. If bezier_draw is true, pixel is drawn, if it is false, pixel is discarded.
 // These variables are only used if curve_write_i is high
@@ -144,11 +116,8 @@ wire [2*point_width-1:0] bezier_factor0_squared = bezier_factor0_i*bezier_factor
 wire bezier_eval = bezier_factor0_squared[2*point_width-1:point_width] > bezier_factor1_i;
 wire bezier_draw = bezier_inside_i ^ bezier_eval; // inside xor eval
 
-wire pe_ack;
-edge_det ued1 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(texture_ack_i), .pe(pe_ack), .ne(), .ee() );
-
 // Acknowledge when a command has completed
-always @(posedge clk_i)
+always @(posedge clk_i or posedge rst_i)
 begin
   // reset, init component
   if(rst_i)
@@ -161,14 +130,11 @@ begin
     pixel_color_o     <= 1'b0;
     pixel_alpha_o     <= 1'b0;
     texture_request_o <= 1'b0;
-	nack_o <= 1'b0;
+    texture_sel_o     <= 4'b1111;
   end
   // Else, set outputs for next cycle
   else
   begin
-	if (!texture_ack_i)
-		nack_o <= 1'b0;
-  
     case (state)
 
       wait_state:
@@ -190,9 +156,8 @@ begin
 
 
       texture_read_state:
-        if(pe_ack)
+        if(texture_ack_i)
         begin
-		  nack_o <= 1'b1;
           pixel_x_o         <= x_counter_i;
           pixel_y_o         <= y_counter_i;
           pixel_z_o         <= z_i;
@@ -217,7 +182,7 @@ begin
 end
 
 // State machine
-always @(posedge clk_i)
+always @(posedge clk_i or posedge rst_i)
 begin
   // reset, init component
   if(rst_i)
@@ -234,9 +199,9 @@ begin
 
       texture_read_state:
         // Check for texture ack. If we have colorkeying enabled, only goto the write state if the texture doesn't match the colorkey
-        if(pe_ack & colorkey_enable_i)
+        if(texture_ack_i & colorkey_enable_i)
           state <= transparent_pixel ? wait_state : write_pixel_state;
-        else if(pe_ack)
+        else if(texture_ack_i)
           state <= write_pixel_state;
 
       write_pixel_state:

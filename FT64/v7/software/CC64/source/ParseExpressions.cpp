@@ -55,9 +55,12 @@ TYP             stdshort;
 TYP             stdushort;
 TYP             stdchar;
 TYP             stduchar;
+TYP             stdichar;
+TYP             stdiuchar;
 TYP             stdbyte;
 TYP             stdubyte;
 TYP             stdstring;
+TYP             stdistring;
 TYP				stddbl;
 TYP				stdtriple;
 TYP				stdflt;
@@ -267,7 +270,7 @@ char *GetStrConst()
 	strcpy_s(str, len, laststr);
 	do {
 		NextToken();
-		if (lastst == sconst) {
+		if (lastst == sconst || lastst==isconst) {
 			len = strlen(str) + MAX_STLP1 + 1;
 			nstr = (char *)malloc(len);
 			if (nstr == nullptr) {
@@ -279,7 +282,7 @@ char *GetStrConst()
 			free(str);
 			str = nstr;
 		}
-	} while (lastst == sconst);
+	} while (lastst == sconst || lastst == isconst);
 	laststrlen = strlen(str);
 	return (str);
 }
@@ -375,6 +378,22 @@ TYP *deref(ENODE **node, TYP *tp)
             tp = &stdubyte;//&stduint;
 						(*node)->sym = sp;
 						break;
+		case bt_ichar:
+		case bt_iuchar:
+			if (tp->isUnsigned) {
+				*node = makenode(en_uc_ref, *node, (ENODE *)NULL);
+				(*node)->isUnsigned = TRUE;
+			}
+			else
+				*node = makenode(en_c_ref, *node, (ENODE *)NULL);
+			(*node)->esize = tp->size;
+			(*node)->etype = (enum e_bt)tp->type;
+			if (tp->isUnsigned)
+				tp = &stdiuchar;
+			else
+				tp = &stdichar;
+			(*node)->sym = sp;
+			break;
 		case bt_uchar:
 		case bt_char:
         case bt_enum:
@@ -1249,7 +1268,7 @@ j2:
 		if (sizeof_flag) {
 			tptr = (TYP *)TYP::Make(bt_pointer, 0);
 			tptr->size = strlen(str) + 1;
-			tptr->btp = stdchar.GetIndex();
+			tptr->btp = TYP::Make(bt_char, 2)->GetIndex();// stdchar.GetIndex();
 			tptr->GetBtp()->isConst = TRUE;
 			tptr->val_flag = 1;
 			tptr->isConst = TRUE;
@@ -1270,6 +1289,35 @@ j2:
 		tptr->isConst = TRUE;
 	}
   break;
+	case isconst:
+	{
+		char *str;
+
+		str = GetStrConst();
+		if (sizeof_flag) {
+			tptr = (TYP *)TYP::Make(bt_pointer, 0);
+			tptr->size = strlen(str) + 1;
+			tptr->btp = TYP::Make(bt_ichar, 2)->GetIndex();// stdchar.GetIndex();
+			tptr->GetBtp()->isConst = TRUE;
+			tptr->val_flag = 1;
+			tptr->isConst = TRUE;
+			tptr->isUnsigned = TRUE;
+		}
+		else {
+			tptr = &stdistring;
+		}
+		pnode = makenodei(en_labcon, (ENODE *)NULL, 0);
+		if (sizeof_flag == 0)
+			pnode->i = stringlit(str);
+		free(str);
+		pnode->etype = bt_pointer;
+		pnode->esize = 2;
+		pnode->constflag = TRUE;
+		pnode->segment = rodataseg;
+		pnode->SetType(tptr);
+		tptr->isConst = TRUE;
+	}
+	break;
 
     case openpa:
         NextToken();

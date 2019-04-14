@@ -266,6 +266,7 @@ public:
 	char *realname;
 	char *stkname;
     __int8 storage_class;
+	unsigned int IsInline : 1;
 	unsigned int pos : 4;			// position of the symbol (param, auto or return type)
 	// Function attributes
 	Function *fi;

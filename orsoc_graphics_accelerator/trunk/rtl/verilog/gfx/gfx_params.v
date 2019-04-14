@@ -75,21 +75,29 @@ Parameter file
 
   parameter GFX_ZBUFFER_BASE   = 8'ha8;
 
- 
+  parameter GFX_TARGET_X0			 = 8'hb0;
+  parameter GFX_TARGET_Y0			 = 8'hb4;
+  parameter GFX_TARGET_X1			 = 8'hb8;
+  parameter GFX_TARGET_Y1			 = 8'hbc;
+  parameter GFX_FONT_TABLE_BASE= 8'hc0;
+  parameter GFX_FONT_ID				 = 8'hc8;
+  parameter GFX_CHAR_CODE			 = 8'hcc;
+
   // Declare control register bits
-  parameter GFX_CTRL_TEXTURE  = 2;
+  parameter GFX_CTRL_CHAR		  = 0;
+	parameter GFX_CTRL_TEXTURE  = 2;
   parameter GFX_CTRL_BLENDING = 3;
   parameter GFX_CTRL_COLORKEY = 4;
   parameter GFX_CTRL_CLIPPING = 5;
   parameter GFX_CTRL_ZBUFFER  = 6;
-  parameter GFX_CTRL_POINT    = 7;
+  
   parameter GFX_CTRL_RECT     = 8;
   parameter GFX_CTRL_LINE     = 9;
   parameter GFX_CTRL_TRI      = 10;
   parameter GFX_CTRL_CURVE    = 11;
   parameter GFX_CTRL_INTERP   = 12;
   parameter GFX_CTRL_INSIDE   = 13;
-
+  
   parameter GFX_CTRL_ACTIVE_POINT    = 16;
   parameter GFX_CTRL_FORWARD_POINT   = 18;
   parameter GFX_CTRL_TRANSFORM_POINT = 19;

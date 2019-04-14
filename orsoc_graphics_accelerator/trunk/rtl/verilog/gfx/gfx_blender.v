@@ -20,8 +20,6 @@ PER-PIXEL COLORING MODULE, alpha blending
  You should have received a copy of the GNU Lesser General Public License
  along with orgfx.  If not, see <http://www.gnu.org/licenses/>.
 
-  Robert Finch
-  Modified to support a larger number of color depths.
 */
 
 /*
@@ -38,8 +36,8 @@ If alpha blending is disabled (blending_enable_i == 1'b0) the module just passes
 module gfx_blender(clk_i, rst_i,
   blending_enable_i, target_base_i, target_size_x_i, target_size_y_i, color_depth_i,
   x_counter_i, y_counter_i, z_i, alpha_i, global_alpha_i, write_i, ack_o,                      // from fragment
-  target_ack_i, target_addr_o, target_data_i, target_request_o, wbm_busy_i, // from/to wbm reader
-  pixel_x_o, pixel_y_o, pixel_z_o, pixel_color_i, pixel_color_o, write_o, ack_i, nack_o        // to render
+  target_ack_i, target_addr_o, target_data_i, target_sel_o, target_request_o, wbm_busy_i, // from/to wbm reader
+  pixel_x_o, pixel_y_o, pixel_z_o, pixel_color_i, pixel_color_o, write_o, ack_i                      // to render
   );
 
 parameter point_width = 16;
@@ -48,10 +46,10 @@ input                   clk_i;
 input                   rst_i;
 
 input                   blending_enable_i;
-input            [31:0] target_base_i;
+input            [31:2] target_base_i;
 input [point_width-1:0] target_size_x_i;
 input [point_width-1:0] target_size_y_i;
-input             [2:0] color_depth_i;
+input             [1:0] color_depth_i;
 
 // from fragment
 input [point_width-1:0] x_counter_i;
@@ -65,11 +63,11 @@ output reg              ack_o;
 
 // Interface against wishbone master (reader)
 input             target_ack_i;
-output     [31:0] target_addr_o;
-input     [127:0] target_data_i;
+output     [31:2] target_addr_o;
+input      [31:0] target_data_i;
+output reg  [3:0] target_sel_o;
 output reg        target_request_o;
 input             wbm_busy_i;
-output reg nack_o;
 
 //to render
 output reg [point_width-1:0] pixel_x_o;
@@ -85,47 +83,40 @@ parameter wait_state = 2'b00,
           target_read_state = 2'b01,
           write_pixel_state = 2'b10;
 
-parameter BPP6 = 3'd0;
-parameter BPP8 = 3'd1;
-parameter BPP9 = 3'd2;
-parameter BPP12 = 3'd3;
-parameter BPP15 = 3'd4;
-parameter BPP16 = 3'd5;
-parameter BPP24 = 3'd6;
-parameter BPP32 = 3'd7;
-
 // Calculate alpha
 reg [15:0] combined_alpha_reg;
 wire [7:0] alpha = combined_alpha_reg[15:8];
 
 // Calculate address of target pixel
 // Addr[31:2] = Base + (Y*width + X) * ppb
-wire [6:0] mb, me;
+wire [31:0] pixel_offset;
+assign pixel_offset = (color_depth_i == 2'b00) ? (target_size_x_i*y_counter_i + {16'h0, x_counter_i})      : // 8  bit
+                      (color_depth_i == 2'b01) ? (target_size_x_i*y_counter_i + {16'h0, x_counter_i}) << 1 : // 16 bit
+                      (target_size_x_i*y_counter_i + {16'h0, x_counter_i})                            << 2 ; // 32 bit
 
-gfx_CalcAddress u1
-(
-	.base_address_i(target_base_i),
-	.color_depth_i(color_depth_i),
-	.hdisplayed_i(target_size_x_i),
-	.x_coord_i(x_counter_i),
-	.y_coord_i(y_counter_i),
-	.address_o(target_addr_o),
-	.mb_o(mb),
-	.me_o(me)
-);
+assign target_addr_o = target_base_i + pixel_offset[31:2];
 
 // Split colors for alpha blending (render color)
-wire [7:0] blend_color_r,blend_color_g,blend_color_b;
-wire [7:0] target_color_r,target_color_g,target_color_b;
-wire [31:0] dest_color;
+wire [7:0] blend_color_r = (color_depth_i == 2'b00) ? pixel_color_i[7:0] :
+                           (color_depth_i == 2'b01) ? pixel_color_i[15:11] :
+                           pixel_color_i[23:16];
+wire [7:0] blend_color_g = (color_depth_i == 2'b00) ? pixel_color_i[7:0] :
+                           (color_depth_i == 2'b01) ? pixel_color_i[10:5] :
+                           pixel_color_i[15:8];
+wire [7:0] blend_color_b = (color_depth_i == 2'b00) ? pixel_color_i[7:0] :
+                           (color_depth_i == 2'b01) ? pixel_color_i[4:0] :
+                           pixel_color_i[7:0];
 
-gfx_SplitColorR u2 (color_depth_i, pixel_color_i, blend_color_r);
-gfx_SplitColorG u3 (color_depth_i, pixel_color_i, blend_color_g);
-gfx_SplitColorB u4 (color_depth_i, pixel_color_i, blend_color_b);
-
-gfx_SplitColorR u5 (color_depth_i, dest_color, target_color_r);
-gfx_SplitColorG u6 (color_depth_i, dest_color, target_color_g);
-gfx_SplitColorB u7 (color_depth_i, dest_color, target_color_b);
+// Split colors for alpha blending (from target surface)
+wire [7:0] target_color_r = (color_depth_i == 2'b00) ? dest_color[7:0] :
+                            (color_depth_i == 2'b01) ? dest_color[15:11] :
+                            target_data_i[23:16];
+wire [7:0] target_color_g = (color_depth_i == 2'b00) ? dest_color[7:0] :
+                            (color_depth_i == 2'b01) ? dest_color[10:5] :
+                            target_data_i[15:8];
+wire [7:0] target_color_b = (color_depth_i == 2'b00) ? dest_color[7:0] :
+                            (color_depth_i == 2'b01) ? dest_color[4:0] :
+                            target_data_i[7:0];
 
 // Alpha blending (per color channel):
 // rgb = (alpha1)(rgb1) + (1-alpha1)(rgb2)
@@ -133,20 +124,18 @@ wire [15:0] alpha_color_r = blend_color_r * alpha + target_color_r * (8'hff - al
 wire [15:0] alpha_color_g = blend_color_g * alpha + target_color_g * (8'hff - alpha);
 wire [15:0] alpha_color_b = blend_color_b * alpha + target_color_b * (8'hff - alpha);
 
-
+wire [31:0] dest_color;
 // Memory to color converter
 memory_to_color memory_proc(
+.color_depth_i (color_depth_i),
 .mem_i (target_data_i),
-.mb_i (mb),
-.me_i (me),
-.color_o (dest_color)
+.mem_lsb_i (x_counter_i[1:0]),
+.color_o (dest_color),
+.sel_o ()
 );
 
-wire pe_ack;
-edge_det ued1 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(target_ack_i), .pe(pe_ack), .ne(), .ee() );
-
 // Acknowledge when a command has completed
-always @(posedge clk_i)
+always @(posedge clk_i or posedge rst_i)
 begin
   // reset, init component
   if(rst_i)
@@ -158,13 +147,11 @@ begin
     pixel_z_o        <= 1'b0;
     pixel_color_o    <= 1'b0;
     target_request_o <= 1'b0;
-	nack_o <= 1'b0;
+    target_sel_o     <= 4'b1111;
   end
   // Else, set outputs for next cycle
   else
   begin
-    if (!target_ack_i)
-		nack_o <= 1'b0;
     case (state)
 
       wait_state:
@@ -191,9 +178,8 @@ begin
 
       // Read pixel color at target (request is sent through the wbm reader arbiter).
       target_read_state:
-        if(pe_ack)
+        if(target_ack_i)
         begin
-		  nack_o <= 1'b1;
           // When we receive an ack from memory, calculate the combined color and send the pixel forward in the pipeline (go to write state)
           write_o          <= 1'b1;
           pixel_x_o        <= x_counter_i;
@@ -201,16 +187,10 @@ begin
           pixel_z_o        <= z_i;
           target_request_o <= 1'b0;
 
-		  case(color_depth_i)
-		  BPP6:	pixel_color_o <= {alpha_color_r[9:8],alpha_color_g[9:8],alpha_color_b[9:8]};
-		  BPP8: pixel_color_o <= {alpha_color_r[10:8],alpha_color_g[10:8],alpha_color_b[9:8]};
-		  BPP9: pixel_color_o <= {alpha_color_r[10:8],alpha_color_g[10:8],alpha_color_b[10:8]};
-		  BPP12:pixel_color_o <= {alpha_color_r[11:8],alpha_color_g[11:8],alpha_color_b[11:8]};
-		  BPP15:pixel_color_o <= {alpha_color_r[12:8],alpha_color_g[12:8],alpha_color_b[12:8]};
-		  BPP16:pixel_color_o <= {alpha_color_r[12:8],alpha_color_g[13:8],alpha_color_b[12:8]};
-		  BPP24:pixel_color_o <= {alpha_color_r[15:8],alpha_color_g[15:8],alpha_color_b[15:8]};
-		  BPP32:pixel_color_o <= {alpha_color_r[15:8],alpha_color_g[15:8],alpha_color_b[15:8]};
-		  endcase
+      	  // Recombine colors
+          pixel_color_o    <= (color_depth_i == 2'b00) ? {alpha_color_r[15:8]} : // 8 bit grayscale
+                              (color_depth_i == 2'b01) ? {alpha_color_r[12:8], alpha_color_g[13:8], alpha_color_b[12:8]} : // 16 bit
+                              {alpha_color_r[15:8], alpha_color_g[15:8], alpha_color_b[15:8]}; // 32 bit
         end
         else
           target_request_o <= !wbm_busy_i | target_request_o;
@@ -228,7 +208,7 @@ begin
 end
 
 // State machine
-always @(posedge clk_i)
+always @(posedge clk_i or posedge rst_i)
 begin
   // reset, init component
   if(rst_i)
@@ -244,7 +224,7 @@ begin
           state <= write_pixel_state;
 
       target_read_state:
-        if(pe_ack)
+        if(target_ack_i)
           state <= write_pixel_state;
 
       write_pixel_state:

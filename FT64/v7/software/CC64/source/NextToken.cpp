@@ -515,18 +515,37 @@ restart:        /* we come back here after comments */
     getnum();
   }
   else if(isidch(lastch)) {
-    getid();
-
-		if( (sp = defsyms.Find(lastid,false)) != NULL) {
-			tch = lastch;
-			if (!(lastch==')' && sp->value.s[0]=='(')) {
-				if (lstackptr < 19) {
-					linstack[lstackptr] = lptr;
-					chstack[lstackptr++] = tch;
-					lptr = sp->value.s;
-  			}
+		getid();
+		if (lastch == '"' && lastid[0]=='_' && lastid[1]=='I' && lastid[2]=='\0') {
+			getch();
+			for (i = 0; i < MAX_STRLEN; ++i) {
+				if (lastch == '\"')
+					break;
+				if ((j = getsch()) == -1)
+					break;
+				else
+					laststr[i] = j;
+			}
+			laststr[i] = 0;
+			lastst = isconst;
+			if (lastch != '\"')
+				error(ERR_SYNTAX);
+			else
 				getch();
-				goto restart;
+		}
+		else {
+
+			if ((sp = defsyms.Find(lastid, false)) != NULL) {
+				tch = lastch;
+				if (!(lastch == ')' && sp->value.s[0] == '(')) {
+					if (lstackptr < 19) {
+						linstack[lstackptr] = lptr;
+						chstack[lstackptr++] = tch;
+						lptr = sp->value.s;
+					}
+					getch();
+					goto restart;
+				}
 			}
 		}
   }

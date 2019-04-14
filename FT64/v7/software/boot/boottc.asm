@@ -62,9 +62,11 @@ TEXTSCR		equ		$FFFFFFFFFFD00000
 KEYBD		equ		$FFFFFFFFFFDC0000
 LEDS		equ			$FFFFFFFFFFDC0600
 BUTTONS		equ		$FFFFFFFFFFDC0600
-SCRATCHPAD	equ		$FFFFFFFFFF400000
+SYSDATA		equ			$FFFFFFFFFFD10000
+SCRATCHPAD	equ		$FFFFFFFFFFD10000
+SCRATCHMEM	equ		$FFFFFFFFFF400000
 AVIC		equ		$FFFFFFFFFFDCC000
-TC1			equ		$FFFFFFFFFFD0DF00
+TC1			equ		$FFFFFFFFFFD1DF00
 I2C			equ		$FFFFFFFFFFDC0200
 PIT			equ		$FFFFFFFFFFDC1100
 PIC			equ		$FFFFFFFFFFDC0F00
@@ -78,6 +80,10 @@ MEDBLUE		equ		$000F
 TS_IRQ		equ		$9F
 GC_EXEC		equ		$9E
 GC_STOP		equ		$9D
+
+macro pfi
+		brk		255,2,0
+endm
 
 macro mGfxCmd (cmd, dat)
 		lh		r3,dat
@@ -93,7 +99,25 @@ macro mGfxCmd (cmd, dat)
 endm
 
 			bss
-			org		SCRATCHPAD
+			org		SCRATCHPAD + $4000
+_inptr				dw		0
+_bsptr				dw		0		; BASIC storage pointer
+_linendx			dw		0
+_dbg_dbctrl		dw		0
+_ssm					dw		0
+_repcount			dw		0
+_curaddr			dw		0
+_cursz				dw		0
+_curfill			dw		0
+_currep				dw		0
+_muol					dw		0		; max units on line
+_bmem					dw		0		; pointers to memory
+_cmem					dw		0
+_hmem					dw		0
+_wmem					dw		0
+_ndx					dw		0
+_col					dw		0
+_osmem				dw		0
 __GCExecPtr		dw		0
 __GCStopPtr		dw		0
 fgcolor				dw		0
@@ -106,6 +130,7 @@ _HexChecksum	dw		0
 _DBGCursorCol	db		0
 _DBGCursorRow	db		0
 _spinner			dc		0
+_cmdbuf				fill.c	48,0
 _KeybdID			dc		0
 _KeyState1		db		0
 _KeyState2		db		0
@@ -113,9 +138,10 @@ _KeyLED				db		0
 _S19Abort			db		0
 _S19Reclen		db		0
 _pti_onoff		db		0
+_curfmt				db		0				; debugger format
 			align		8
-_mmu_key			dw		0
 _RTCBuf				fill.b	96,0
+_linebuf			fill.b	96,0	; debugger line buffer
 			align		8
 _DBGAttr			dw		0
 _milliseconds	dw		0
@@ -124,11 +150,20 @@ _pti_wbuf			dw		0
 _pti_rcnt			dw		0
 _pti_wcnt			dw		0
 ___garbage_list	dw	0
+_mmu_key			dw		0
+; The following is a C Standard library var for malloc/free
+__Aldata			fill.w	2,0
+_errno				dw		0
+_sys_pages_available		dw	0
+_brks					fill.w	256,0
 _regfile			fill.w	32,0
 _DeviceTable	fill.b	32*104,0
 
-			org		SCRATCHPAD + 32752
+			org		SCRATCHPAD + $BFF8
 __brk_stack		dw		0
+
+		data
+		org		SYSDATA
 
 ; Help the assembler out by telling it how many bits are required for code
 ; addresses
@@ -136,12 +171,16 @@ __brk_stack		dw		0
 		code	18 bits
 		org		ROMBASE			; start of ROM memory space
 		jmp		__BrkHandler	; jump to the exception handler
+		nop
 		org		ROMBASE + $020
 		jmp		__BrkHandlerOL01
+		nop
 		org		ROMBASE + $040
 		jmp		__BrkHandlerOL02
+		nop
 		org		ROMBASE + $060
 		jmp		__BrkHandlerOL03
+		nop
 		org		ROMBASE + $100	; The PC is set here on reset
 start2:
 	; First thing to do, LED status indicates core at least hit the reset
@@ -150,6 +189,21 @@ start2:
 		sb		r1,LEDS
 		jmp		start			; Comment out this jump to test i-cache
 ;		jmp		_SieveOfEratosthenes	
+
+		; Built in programs
+		org		ROMBASE + $200
+		jmp		_monitor
+		jmp		_HexLoader
+		jmp		_ramtest
+		jmp		_SpriteDemo
+
+		; Jump table
+		org		ROMBASE + $300
+		jmp		_DBGClearScreen
+		jmp		_DBGDisplayChar
+		jmp		_DBGDisplayString
+		jmp		_DBGDisplayStringCRLF
+		jmp		_DBGGetKey
 
 ifdef SUPPORT_SMT		
 		ldi		r1,#$10000		; turn on SMT use $10000
@@ -261,16 +315,30 @@ start:
 	; on. At power on the reg should be zero, but let's not assume that and
 	; write a zero to it.
 		and		r0,r0,#0		; cannot use LDI which does an or operation
-		ldi		$sp,#SCRATCHPAD+$7BF8	; set stack pointer
-	
+		ldi		$sp,#SCRATCHPAD+$CDF8	; set stack pointer
+		ldi		$xlr,#st_except
+		
+		call	_SetTrapVector
 		call	_Delay2s
+		ldi		$r1,#$FFFF003F0041
+		sw		$r1,TEXTSCR
+		sw		$r1,TEXTSCR+8
+		sw		$r1,TEXTSCR+16
+ifdef TEST_TCRAM
+		call  _TestTCRam
+endif
+;		call	_CopyPreinitData
 ifdef SUPPORT_DCI
 		call	_InitCompressedInsns
 endif
 +}
+start4:
 		ldi		r1,#$FFFF000F0000
 		sw		r1,_DBGAttr
 		call	_DBGClearScreen
+start2b:
+		ldi		$r1,#$2B
+		sb		$r1,LEDS
 		call	_DBGHomeCursor
 		ldi		$r1,#MsgBoot
 		push	$r1
@@ -278,23 +346,27 @@ endif
 		add		sp,sp,#8
 		ldi		$r1,#7
 		sb		$r1,LEDS
+
+		call	_SetupDevices
 		call	_InitPRNG
 ;		call  _RandomizeSpritePositions2
 		call	_i2c_init
 ;		call	_KeybdInit
-		call	_SetTrapVector
 		sw		r0,_milliseconds
+		call	_SetGCHandlers
 		call	_InitPIC
 		call	_InitPIT
-;		call	_SetGCHandlers
+		brk		240,2,0
 		; Enable interrupts
 ;		sei		#0
-		call	_HexLoader
-;		call	_S19Loader
-		call	_monitor
 
+		call	_rtc_read
 		; The following must be after the RTC is read
 		call	_init_memory_management
+		ldi		r1,#$10				; set operating level 01 (bits 4,5)
+		csrrs	r0,#$044,r1
+		call	_gfx_demo
+		call	_monitor
 		call	_FMTK_Initialize
 		ldi		$r1,#8
 		sb		$r1,LEDS
@@ -302,6 +374,8 @@ endif
 		ldi		r2,#$AA
 		sb		r2,LEDS			; write to LEDs
 		bra		.st2
+start5:
+		bra		start5
 
 ;		ldi		r1,#16
 ;		vmov	vl,r1
@@ -319,6 +393,9 @@ endif
 
 start3:
 		bra		start3
+
+st_except:
+		bra		st_except
 
 brkrout:
 ;		sub		sp,sp,#16
@@ -393,12 +470,28 @@ endif
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
+_CopyPreinitData:
+		ldi		$r1,#begin_init_data
+		ldi		$r2,#end_init_data
+		ldi		$r3,#SYSDATA
+.0001:
+		lw		$r4,[$r1]
+		sw		$r4,[$r3]
+		shr		$r5,$r1,#12
+		sb		$r5,LEDS
+		add		$r1,$r1,#8
+		add		$r3,$r3,#8
+		bltu	$r1,$r2,.0001
+		ret
+
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
 
 _SetTrapVector:
 		ldi		r1,#$FFFFFFFFFFFC0000
 		csrrw	r0,#$30,r1
-		ldi		r1,#__BrkHandlerL3
-		csrrw	r0,#$33,r1			// tvec[3]
+		ldi		r1,#__BrkHandlerOL03
+		csrrw	r0,#$33,r1			; tvec[3]
 		ret
 
 ;------------------------------------------------------------------------------
@@ -424,6 +517,51 @@ _Delay2s:
 		bne			$r1,$r0,.0001
 		ret
 
+;------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
+
+ifdef TEST_TCRAM
+_TestTCRam:
+		ldi			$r1,#$28
+		sb			$r1,LEDS
+		ldi			$r6,#TEXTSCR
+		ldi			$r1,#2048
+		ldi			$r7,#ROMBASE
+.0001:
+		lw			$r2,[$r7]
+		add			$r7,$r7,#8
+		sw			$r2,[$r6]
+		add			$r6,$r6,#8
+		sb			$r1,LEDS
+		sub			$r1,$r1,#1
+		bne			$r1,$r0,.0001
+
+		ldi			$r1,#$29
+		sb			$r1,LEDS
+		ldi			$r6,#TEXTSCR
+		ldi			$r7,#ROMBASE
+		ldi			$r8,#TEXTSCR
+		ldi			$r1,#2048
+.0004:
+		lw			$r2,[$r6]
+		add			$r6,$r6,#8
+		lw			$r3,[$r7]
+		add			$r7,$r7,#8
+		beq			$r2,$r3,.0002
+		ldi			$r4,#$FFFFF80F0020	; Red background, white text
+		bra			.0003
+.0002:
+		ldi			$r4,#$FFFF07CF0020	; Green background, white text
+.0003:
+		sw			$r4,[$r8]
+		add			$r8,$r8,#8
+		sub			$r1,$r1,#1
+		bne			$r1,$r0,.0004
+		ldi			$r1,#$2A
+		sb			$r1,LEDS
+		ret
+endif
+		
 ;------------------------------------------------------------------------------
 ; Initialize the TLB with entries for the BIOS rom and variables.
 ;------------------------------------------------------------------------------
@@ -535,6 +673,30 @@ _InitPRNG:
 		ret
 
 ;------------------------------------------------------------------------------
+; Seed random number generator.
+;
+; Parameters:
+;		a0 - stream to seed
+;		a1 - value to use as seed
+; Returns:
+;		none
+;------------------------------------------------------------------------------
+
+_SeedRand:
+		push	r6
+		ldi		r6,#$FFFFFFFFFFDC0000
+		sh		a0,$0C04[r6]			; select stream #
+		memdb
+		sh		a1,$0C08[r6]			; set initial m_z
+		memdb
+		ror		a1,a1,#32
+		sh		a1,$0C0C[r6]			; set initial m_w
+		rol		a1,a1,#32
+		memdb
+		lw		r6,[sp]
+		ret		#8
+
+;------------------------------------------------------------------------------
 ; Get a random number, and generate the next number.
 ;
 ; Parameters:
@@ -542,6 +704,13 @@ _InitPRNG:
 ; Returns:
 ;	r1 = random 32 bit number.
 ;------------------------------------------------------------------------------
+
+_PeekRand:
+		sh		r18,$FFFFFFFFFFDC0C04	; set the stream
+		memdb
+		lvhu	r1,$FFFFFFFFFFDC0C00	; get a number
+		memdb
+		ret
 
 _GetRand:
 		sh		r18,$FFFFFFFFFFDC0C04	; set the stream
@@ -564,7 +733,7 @@ _ColorBandMemory2:
 		sw		lr,24[sp]
 		ldi		r2,#7
 		sb		r2,LEDS			; write to LEDs
-		ldi		r6,#$40000
+		ldi		r6,#$200000
 		mov		r18,r0
 		call	_GetRand
 .0002:
@@ -576,7 +745,7 @@ _ColorBandMemory2:
 		mov		r18,r0
 		call	_GetRand
 .0001:
-		sltu	r2,r6,#$C0000
+		sltu	r2,r6,#$240000
 		bne		r2,r0,.0002
 		ldi		r2,#8
 		sb		r2,LEDS			; write to LEDs
@@ -865,6 +1034,14 @@ _SetCursorImage:
 		lw		r8,48[$sp]
 		lw		r9,56[$sp]
 		ret		#64
+		nop
+		nop
+		nop
+		nop
+		nop
+		nop
+		nop
+		nop
 
 	align	8
 _CursorBoxImage:
@@ -1505,14 +1682,17 @@ i2c_wait_rx_nack:
 
 _rtc_read:
 		push		lr
+		nop
 		push		$r3
-		push		$a0
-		push		$a1
-		push		$a2
-		push		$a3
-		ldi			$a0,#I2C
-		ldi			$a3,#_RTCBuf
 		ldi			$r1,#$80
+		push		$a0
+		ldi			$a0,#I2C
+		push		$a1
+		nop
+		push		$a2
+		nop
+		push		$a3
+		ldi			$a3,#_RTCBuf
 		sb			$r1,I2C_CTRL[$a0]	; enable I2C
 		ldi			$a2,#$DE			; read address, write op
 		ldi			$a1,#$90			; STA + wr bit
@@ -1617,6 +1797,14 @@ _rtc_write:
 		lw			$r3,32[sp]
 		lw			lr,40[sp]
 		ret			#48
+		nop
+		nop
+		nop
+		nop
+		nop
+		nop
+		nop
+		nop
 
 ;===============================================================================
 ; String literals
@@ -1810,16 +1998,17 @@ vec2data:
 .include "d:\Cores5\FT64\v7\software\cc64libc\source\gc.s"
 .include "d:\Cores5\FT64\v7\software\cc64libc\source\cc64rt.s"
 .include "d:\Cores5\FT64\v7\software\boot\brkrout.asm"
-.include "d:\Cores5\FT64\v7\software\boot\pti_driver.s"
 .include "d:\Cores5\FT64\v7\software\boot\HexLoader.s"
 .include "d:\Cores5\FT64\v7\software\boot\S19Loader.s"
 .include "d:\Cores5\FT64\v7\software\boot\BIOSMain.s"
 .include "d:\Cores5\FT64\v7\software\boot\FloatTest.s"
+.include "d:\Cores5\FT64\v7\software\boot\FT64TinyBasic.s"
 ;.include "d:\Cores5\FT64\v7\software\boot\ramtest.s"
 	align	4096
+.include "d:\Cores5\FT64\v7\software\cc64libc\source\dbg_stdio.s"
 ;.include "d:\Cores5\FT64\v7\software\cc64libc\source\stdio.s"
 ;.include "d:\Cores5\FT64\v7\software\cc64libc\source\ctype.s"
-;.include "d:\Cores5\FT64\v7\software\cc64libc\source\string.s"
+.include "d:\Cores5\FT64\v7\software\cc64libc\source\string.s"
 ;.include "d:\Cores5\FT64\v7\software\cc64libc\source\malloc.s"
 .include "d:\Cores5\FT64\v7\software\cc64libc\source\putch.s"
 .include "d:\Cores5\FT64\v7\software\cc64libc\source\putnum.s"
@@ -1827,6 +2016,8 @@ vec2data:
 .include "d:\Cores5\FT64\v7\software\cc64libc\source\prtflt.s"
 .include "d:\Cores5\FT64\v7\software\cc64libc\source\FT64\io.s"
 .include "d:\Cores5\FT64\v7\software\cc64libc\source\FT64\getCPU.s"
+.include "d:\Cores5\FT64\v7\software\cc64libc\source\gfx.s"
+.include "d:\Cores5\FT64\v7\software\cc64libc\source\gfx_demo.s"
 	align	4096
 .include "d:\Cores5\FT64\v7\software\c64libc\source\libquadmath\log10q.s"
 .include "d:\Cores5\FT64\v7\software\FMTK\source\kernel\LockSemaphore.s"
@@ -1840,8 +2031,9 @@ vec2data:
 .include "d:\Cores5\FT64\v7\software\FMTK\source\kernel\FMTKmsg.s"
 .include "d:\Cores5\FT64\v7\software\FMTK\source\kernel\TCB.s"
 .include "d:\Cores5\FT64\v7\software\FMTK\source\kernel\IOFocusc.s"
-
 .include "d:\Cores5\FT64\v7\software\FMTK\source\kernel\keybd.s"
+.include "d:\Cores5\FT64\v7\software\FMTK\source\kernel\debugger.s"
+
 .include "d:\Cores5\FT64\v7\software\FMTK\source\open.s"
 .include "d:\Cores5\FT64\v7\software\FMTK\source\read.s"
 .include "d:\Cores5\FT64\v7\software\FMTK\source\write.s"
@@ -1851,8 +2043,13 @@ vec2data:
 .include "d:\Cores5\FT64\v7\software\FMTK\source\shell.s"
 .include "d:\Cores5\FT64\v7\software\FMTK\source\misc.s"
 .include "d:\Cores5\FT64\v7\software\FMTK\source\monitor.s"
+.include "d:\Cores5\FT64\v7\software\FMTK\source\disassem.s"
+.include "d:\Cores5\FT64\v7\software\FMTK\source\OSCall.s"
+.include "d:\Cores5\FT64\v7\software\FMTK\source\drivers\null_driver.s"
+.include "d:\Cores5\FT64\v7\software\FMTK\source\drivers\prng_driver.s"
+.include "d:\Cores5\FT64\v7\software\FMTK\source\drivers\pti_driver.s"
+.include "d:\Cores5\FT64\v7\software\FMTK\source\drivers\sdc_driver.s"
 .include "d:\Cores5\FT64\v7\software\bootrom\source\video.asm"
-.include "d:\Cores5\FT64\v7\software\bootrom\source\TinyBasicDSD9.asm"
 
 	align	4096
 .include "d:\Cores5\FT64\v7\software\FMTK\source\kernel\scancodes.asm"

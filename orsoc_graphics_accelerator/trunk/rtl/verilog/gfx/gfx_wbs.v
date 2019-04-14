@@ -38,7 +38,6 @@ In the busy state all incoming wishbone writes are queued up in a 64 item fifo. 
 The module leaves the busy state and enters wait state when it receives an ack from the pipeline.
 */
 module gfx_wbs(
-  pclk_i,
   clk_i, rst_i, adr_i, dat_i, dat_o, sel_i, we_i, stb_i, cyc_i, ack_o, rty_o, err_o, inta_o,
   //src pixels
   src_pixel0_x_o, src_pixel0_y_o, src_pixel1_x_o, src_pixel1_y_o,
@@ -58,7 +57,6 @@ module gfx_wbs(
   a0_o, a1_o, a2_o,
   target_base_o, target_size_x_o, target_size_y_o, tex0_base_o, tex0_size_x_o, tex0_size_y_o,
   color_depth_o,
-  point_write_o,
   rect_write_o, line_write_o, triangle_write_o, curve_write_o, interpolate_o,
   writer_sint_i, reader_sint_i,
 
@@ -73,15 +71,14 @@ module gfx_wbs(
   clipping_enable_o,
   inside_o,
   zbuffer_enable_o,
-  zbuffer_base_o,
-  cs
+  zbuffer_base_o
   );
 
   // Load register addresses from gfx_params.v file
   `include "gfx_params.v"
 
   // Adjust these parameters in gfx_top!
-  parameter REG_ADR_HIBIT = 7;
+  parameter REG_ADR_HIBIT = 9;
   parameter point_width = 16;
   parameter subpixel_width = 16;
   parameter fifo_depth = 10;
@@ -89,18 +86,18 @@ module gfx_wbs(
   //
   // inputs & outputs
   //
-  input  pclk_i;		// pipeline clock input
+
   // wishbone slave interface
   input                    clk_i;
   input                    rst_i;
-  input  [31:0] adr_i;
+  input  [REG_ADR_HIBIT:0] adr_i;
   input             [31:0] dat_i;
   output reg        [31:0] dat_o;
   input             [ 3:0] sel_i;
   input                    we_i;
   input                    stb_i;
   input                    cyc_i;
-  output                   ack_o;
+  output reg               ack_o;
   output reg               rty_o;
   output reg               err_o;
   output reg               inta_o;
@@ -150,16 +147,15 @@ module gfx_wbs(
   output [7:0] a1_o;
   output [7:0] a2_o;
 
-  output            [31:0] target_base_o;
+  output            [31:2] target_base_o;
   output [point_width-1:0] target_size_x_o;
   output [point_width-1:0] target_size_y_o;
-  output            [31:0] tex0_base_o;
+  output            [31:2] tex0_base_o;
   output [point_width-1:0] tex0_size_x_o;
   output [point_width-1:0] tex0_size_y_o;
 
-  output [2:0]  color_depth_o;
-
-  output        point_write_o;	
+  output [1:0]  color_depth_o;
+	
   output        rect_write_o;
   output        line_write_o;
   output        triangle_write_o;
@@ -186,13 +182,11 @@ module gfx_wbs(
   output        inside_o;
   output        zbuffer_enable_o;
 
-  output [31:0] zbuffer_base_o;
-  output cs;
+  output [31:2] zbuffer_base_o;
 
   //
   // variable declarations
   //
-reg [31:0] reg_shadow [63:0];
 
   wire [REG_ADR_HIBIT:0] REG_ADR  = {adr_i[REG_ADR_HIBIT : 2], 2'b00};
 
@@ -210,6 +204,7 @@ reg [31:0] reg_shadow [63:0];
   reg        [31:0] alpha_reg;
   reg        [31:0] colorkey_reg;
   reg        [31:0] zbuffer_base_reg;
+
   wire        [1:0] active_point;
 
   // Wishbone access wires
@@ -224,44 +219,41 @@ reg [31:0] reg_shadow [63:0];
   //
 
   // wishbone access signals
-  assign cs = cyc_i && stb_i && (adr_i[31:16]==16'hFFD4);
-  assign acc      = cyc_i & stb_i & cs;
+  assign acc      = cyc_i & stb_i;
   assign acc32    = (sel_i == 4'b1111);
   assign reg_acc  = acc & acc32;
   assign reg_wacc = reg_acc & we_i;
 
   // Generate wishbone ack
-  reg ack1;
-  always @(posedge clk_i)
+  always @(posedge clk_i or posedge rst_i)
   if(rst_i)
-    ack1 <= 1'b0;
+    ack_o <= 1'b0;
   else
-    ack1 <= reg_acc & acc32 ;
-	assign ack_o = ack1 & cyc_i & stb_i;
+    ack_o <= reg_acc & acc32 & ~ack_o ;
 
   // Generate wishbone rty
-  always @(posedge clk_i)
+  always @(posedge clk_i or posedge rst_i)
   if(rst_i)
     rty_o <= 1'b0;
   else
     rty_o <= 1'b0; //reg_acc & acc32 & ~rty_o ;
 
   // Generate wishbone err
-  always @(posedge clk_i)
+  always @(posedge clk_i or posedge rst_i)
   if(rst_i)
     err_o <= 1'b0;
   else
     err_o <= acc & ~acc32 & ~err_o;
 
   // generate interrupt request signal
-  always @(posedge clk_i)
+  always @(posedge clk_i or posedge rst_i)
   if(rst_i)
     inta_o <= 1'b0;
   else
     inta_o <= writer_sint_i | reader_sint_i; // | other_int | (int_enable & int) | ...
 
   // generate registers
-  always @(posedge clk_i)
+  always @(posedge clk_i or posedge rst_i)
   begin : gen_regs
     if (rst_i)
       begin
@@ -312,17 +304,6 @@ reg [31:0] reg_shadow [63:0];
     else if (instruction_fifo_rreq)
     begin
       case (instruction_fifo_q_adr) // synopsis full_case parallel_case
-        GFX_DEST_PIXEL_X,
-        GFX_DEST_PIXEL_Y,
-        GFX_DEST_PIXEL_Z,
-        GFX_AA,GFX_AB,GFX_AC,GFX_TX,
-        GFX_BA,GFX_BB,GFX_BC,GFX_TY,
-        GFX_CA,GFX_CB,GFX_CC,GFX_TZ:
-		reg_shadow[instruction_fifo_q_adr[7:2]] <= $signed(instruction_fifo_q_data);
-	  default:
-		reg_shadow[instruction_fifo_q_adr[7:2]] <= instruction_fifo_q_data;
-	  endcase
-      case (instruction_fifo_q_adr) // synopsis full_case parallel_case
         GFX_CONTROL          : control_reg            <= instruction_fifo_q_data;
         GFX_TARGET_BASE      : target_base_reg        <= instruction_fifo_q_data;
         GFX_TARGET_SIZE_X    : target_size_x_reg      <= instruction_fifo_q_data;
@@ -370,7 +351,6 @@ reg [31:0] reg_shadow [63:0];
     else
     begin
       /* To prevent entering an infinite write cycle, the bits that start pipeline operations are cleared here */
-	  control_reg[GFX_CTRL_POINT] <= 1'b0;
       control_reg[GFX_CTRL_RECT]  <= 1'b0; // Reset rect write
       control_reg[GFX_CTRL_LINE]  <= 1'b0; // Reset line write
       control_reg[GFX_CTRL_TRI]   <= 1'b0; // Reset triangle write
@@ -381,7 +361,7 @@ reg [31:0] reg_shadow [63:0];
   end
 
   // generate status register
-  always @(posedge clk_i)
+  always @(posedge clk_i or posedge rst_i)
   if (rst_i)
     status_reg <= 32'h00000000;
   else
@@ -391,10 +371,10 @@ reg [31:0] reg_shadow [63:0];
   end
 
   // Assign target and texture signals
-  assign target_base_o   = target_base_reg[31:0];
+  assign target_base_o   = target_base_reg[31:2];
   assign target_size_x_o = target_size_x_reg[point_width-1:0];
   assign target_size_y_o = target_size_y_reg[point_width-1:0];
-  assign tex0_base_o     = tex0_base_reg[31:0];
+  assign tex0_base_o     = tex0_base_reg[31:2];
   assign tex0_size_x_o   = tex0_size_x_reg[point_width-1:0];
   assign tex0_size_y_o   = tex0_size_y_reg[point_width-1:0];
 
@@ -445,11 +425,12 @@ reg [31:0] reg_shadow [63:0];
   assign a2_o                = alpha_reg[15:8];
   assign global_alpha_o      = alpha_reg[7:0];
   assign colorkey_o          = colorkey_reg;
-  assign zbuffer_base_o      = zbuffer_base_reg[31:0];
+  assign zbuffer_base_o      = zbuffer_base_reg[31:2];
+
 
 
   // decode control register
-  assign color_depth_o      = control_reg[GFX_CTRL_COLOR_DEPTH+2:GFX_CTRL_COLOR_DEPTH];
+  assign color_depth_o      = control_reg[GFX_CTRL_COLOR_DEPTH+1:GFX_CTRL_COLOR_DEPTH];
 
   assign texture_enable_o   = control_reg[GFX_CTRL_TEXTURE ];
   assign blending_enable_o  = control_reg[GFX_CTRL_BLENDING];
@@ -457,7 +438,6 @@ reg [31:0] reg_shadow [63:0];
   assign clipping_enable_o  = control_reg[GFX_CTRL_CLIPPING];
   assign zbuffer_enable_o   = control_reg[GFX_CTRL_ZBUFFER ];
 
-  assign point_write_o      = control_reg[GFX_CTRL_POINT   ];
   assign rect_write_o       = control_reg[GFX_CTRL_RECT    ];
   assign line_write_o       = control_reg[GFX_CTRL_LINE    ];
   assign triangle_write_o   = control_reg[GFX_CTRL_TRI     ];
@@ -472,29 +452,66 @@ reg [31:0] reg_shadow [63:0];
   // decode status register TODO
 
   // assign output from wishbone reads. Note that this does not account for pending writes in the fifo!
-  always @(posedge clk_i)
+  always @(posedge clk_i or posedge rst_i)
     if(rst_i)
       dat_o <= 32'h0000_0000;
-    else begin
-		if (cs)
-			case(adr_i[7:0])
-			GFX_CONTROL:	dat_o <= control_reg;
-			GFX_STATUS:		dat_o <= status_reg;
-			default:   		dat_o <= reg_shadow[adr_i[7:2]];
-			endcase
-		 else
-			dat_o <= 32'd0;
-	end
+    else
+      case (REG_ADR) // synopsis full_case parallel_case
+        GFX_CONTROL       : dat_o <= control_reg;
+        GFX_STATUS        : dat_o <= status_reg;
+        GFX_TARGET_BASE   : dat_o <= target_base_reg;
+        GFX_TARGET_SIZE_X : dat_o <= target_size_x_reg;
+        GFX_TARGET_SIZE_Y : dat_o <= target_size_y_reg;
+        GFX_TEX0_BASE     : dat_o <= tex0_base_reg;
+        GFX_TEX0_SIZE_X   : dat_o <= tex0_size_x_reg;
+        GFX_TEX0_SIZE_Y   : dat_o <= tex0_size_y_reg;
+        GFX_SRC_PIXEL0_X  : dat_o <= src_pixel_pos_0_x_reg;
+        GFX_SRC_PIXEL0_Y  : dat_o <= src_pixel_pos_0_y_reg;
+        GFX_SRC_PIXEL1_X  : dat_o <= src_pixel_pos_1_x_reg;
+        GFX_SRC_PIXEL1_Y  : dat_o <= src_pixel_pos_1_y_reg;
+        GFX_DEST_PIXEL_X  : dat_o <= dest_pixel_pos_x_reg;
+        GFX_DEST_PIXEL_Y  : dat_o <= dest_pixel_pos_y_reg;
+        GFX_DEST_PIXEL_Z  : dat_o <= dest_pixel_pos_z_reg;
+        GFX_AA            : dat_o <= aa_reg;
+        GFX_AB            : dat_o <= ab_reg;
+        GFX_AC            : dat_o <= ac_reg;
+        GFX_TX            : dat_o <= tx_reg;
+        GFX_BA            : dat_o <= ba_reg;
+        GFX_BB            : dat_o <= bb_reg;
+        GFX_BC            : dat_o <= bc_reg;
+        GFX_TY            : dat_o <= ty_reg;
+        GFX_CA            : dat_o <= ca_reg;
+        GFX_CB            : dat_o <= cb_reg;
+        GFX_CC            : dat_o <= cc_reg;
+        GFX_TZ            : dat_o <= tz_reg;
+        GFX_CLIP_PIXEL0_X : dat_o <= clip_pixel_pos_0_x_reg;
+        GFX_CLIP_PIXEL0_Y : dat_o <= clip_pixel_pos_0_y_reg;
+        GFX_CLIP_PIXEL1_X : dat_o <= clip_pixel_pos_1_x_reg;
+        GFX_CLIP_PIXEL1_Y : dat_o <= clip_pixel_pos_1_y_reg;
+        GFX_COLOR0        : dat_o <= color0_reg;
+        GFX_COLOR1        : dat_o <= color1_reg;
+        GFX_COLOR2        : dat_o <= color2_reg;
+        GFX_U0            : dat_o <= u0_reg;
+        GFX_V0            : dat_o <= v0_reg;
+        GFX_U1            : dat_o <= u1_reg;
+        GFX_V1            : dat_o <= v1_reg;
+        GFX_U2            : dat_o <= u2_reg;
+        GFX_V2            : dat_o <= v2_reg;
+        GFX_ALPHA         : dat_o <= alpha_reg;
+        GFX_COLORKEY      : dat_o <= colorkey_reg;
+        GFX_ZBUFFER_BASE  : dat_o <= zbuffer_base_reg;
+        default           : dat_o <= 32'h0000_0000;
+      endcase
 
   // State machine
-  always @(posedge pclk_i)
+  always @(posedge clk_i or posedge rst_i)
   if(rst_i)
     state <= wait_state;
   else
     case (state)
       wait_state:
         // Signals that trigger pipeline operations 
-        if(point_write_o | rect_write_o | line_write_o | triangle_write_o |
+        if(rect_write_o | line_write_o | triangle_write_o |
            forward_point_o | transform_point_o)
           state <= busy_state;
 
@@ -514,7 +531,7 @@ reg [31:0] reg_shadow [63:0];
   wire [REG_ADR_HIBIT:0] instruction_fifo_q_adr;
   wire    [fifo_depth:0] instruction_fifo_count;
 
-  always @(posedge clk_i)
+  always @(posedge clk_i or posedge rst_i)
     if(rst_i)
       fifo_read_ack <= 1'b0;
     else
@@ -523,25 +540,14 @@ reg [31:0] reg_shadow [63:0];
   wire ready_next_cycle = (state == wait_state) & ~rect_write_o & ~line_write_o & ~triangle_write_o & ~forward_point_o & ~transform_point_o;
   assign instruction_fifo_rreq = instruction_fifo_valid_out & ~fifo_read_ack & ready_next_cycle;
 
-  always @(posedge clk_i)
+  always @(posedge clk_i or posedge rst_i)
     if(rst_i)
       fifo_write_ack <= 1'b0;
     else
       fifo_write_ack <= instruction_fifo_wreq ? !fifo_write_ack : reg_wacc;
 
   assign instruction_fifo_wreq = reg_wacc & ~fifo_write_ack;
- /*
-edge_det u1
-(
-	.rst(rst_i),
-	.clk(clk_i),
-	.ce(1'b1),
-	.i(reg_wacc),
-	.pe(instruction_fifo_wreq),
-	.ne(),
-	.ee()
-);
-*/
+
   // TODO: 1024 places large enough?
   basic_fifo instruction_fifo(
   .clk_i     ( clk_i ),

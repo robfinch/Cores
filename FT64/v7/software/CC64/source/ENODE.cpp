@@ -1318,6 +1318,10 @@ void ENODE::PutConstant(txtoStream& ofs, unsigned int lowhigh, unsigned int rshi
 			ofs.write(buf);
 		}
 		break;
+	case en_scon:
+		sprintf_s(buf, sizeof(buf), "\"%s\",0", (char *)sp->c_str());
+		ofs.write(buf);
+		break;
 	case en_cnacon:
 		sprintf_s(buf, sizeof(buf), "%s", (char *)msp->c_str());
 		ofs.write(buf);

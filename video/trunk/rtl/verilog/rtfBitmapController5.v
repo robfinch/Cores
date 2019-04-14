@@ -57,7 +57,7 @@ parameter MDW = 128;		// Bus master data width
 parameter BM_BASE_ADDR1 = 32'h0020_0000;
 parameter BM_BASE_ADDR2 = 32'h0028_0000;
 parameter REG_CTRL = 9'd0;
-parameter REG_DISPLAYED = 9'd1;
+parameter REG_WINDOW = 9'd1;
 parameter REG_PAGE1ADDR = 9'd2;
 parameter REG_PAGE2ADDR = 9'd3;
 parameter REG_PXYZ = 9'd4;
@@ -67,13 +67,15 @@ parameter REG_SYNC_ONOFF = 9'd9;
 parameter REG_BLANK_ONOFF = 9'd10;
 parameter REG_BORDER_ONOFF = 9'd11;
 parameter REG_RASTCMP = 9'd12;
+parameter REG_BMPSIZE = 9'd13;
+parameter REG_OOB_COLOR = 9'd14;
 
 parameter BPP4 = 3'd0;
 parameter BPP8 = 3'd1;
 parameter BPP12 = 3'd2;
 parameter BPP16 = 3'd3;
 parameter BPP20 = 3'd4;
-parameter BPP32 = 3'd5;
+parameter BPP32 = 3'd7;
 
 parameter OPBLACK = 4'd0;
 parameter OPCOPY = 4'd1;
@@ -201,7 +203,6 @@ ack_gen #(
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 integer n;
-reg [11:0] hDisplayed,vDisplayed;
 reg [11:0] rastcmp;
 reg [`ABITS] bm_base_addr1,bm_base_addr2;
 reg [2:0] color_depth;
@@ -211,21 +212,25 @@ reg [2:0] hres,vres;
 reg greyscale;
 reg page;
 reg pals;				// palette select
-reg [11:0] hrefdelay;
-reg [11:0] vrefdelay;
+reg [15:0] windowLeft;
+reg [15:0] windowTop;
+reg [11:0] windowWidth,windowHeight;
 reg [11:0] map;     // memory access period
 reg [11:0] mapctr;
+reg [15:0] bmpWidth;		// scan line increment (pixels)
+reg [15:0] bmpHeight;
 reg [`ABITS] baseAddr;	// base address register
-wire [63:0] rgbo1;
-reg [11:0] pixelRow;
-reg [11:0] pixelCol;
+wire [MDW-1:0] rgbo1, rgbo1e, rgbo1o, rgbo1m;
+reg [15:0] pixelRow;
+reg [15:0] pixelCol;
 wire [31:0] pal_wo;
 wire [31:0] pal_o;
-reg [11:0] px;
-reg [11:0] py;
+reg [15:0] px;
+reg [15:0] py;
 reg [7:0] pz;
 reg [1:0] pcmd,pcmd_o;
 reg [3:0] raster_op;
+reg [31:0] oob_color;
 reg [31:0] color;
 reg [31:0] color_o;
 reg rstcmd,rstcmd1;
@@ -342,20 +347,25 @@ if (rst_i) begin
 	pals <= 1'b0;
 	hres <= 3'd2;
 	vres <= 3'd2;
-	hDisplayed <= 12'd400;
-	vDisplayed <= 12'd300;
+	windowWidth <= 12'd400;
+	windowHeight <= 12'd300;
 	onoff <= 1'b1;
 	color_depth <= BPP16;
 	greyscale <= 1'b0;
 	bm_base_addr1 <= BM_BASE_ADDR1;
 	bm_base_addr2 <= BM_BASE_ADDR2;
-	hrefdelay <= 12'd103;//12'd218;
-	vrefdelay <= 12'd13;//12'd27;
+	windowLeft <= 16'hFF99;//12'd103;
+	windowTop <= 16'hFFF3;//12'd13;
+	windowWidth = 16'd400;
+	windowHeight = 16'd300;
+	bmpWidth = 16'd400;
+	bmpHeight = 16'd300;
 	map <= 12'd0;
 	pcmd <= 2'b00;
 	rstcmd1 <= 1'b0;
 	rst_irq <= 1'b0;
 	rastcmp <= 12'hFFF;
+	oob_color <= 32'h00003C00;
 end
 else begin
 	rstcmd1 <= rstcmd;
@@ -370,11 +380,11 @@ else begin
 					if (sel[0]) onoff <= dat[0];
 					if (sel[1]) begin
 					color_depth <= dat[10:8];
-					greyscale <= dat[11];
+					greyscale <= dat[12];
 					end
 					if (sel[2]) begin
 					hres <= dat[18:16];
-					vres <= dat[21:19];
+					vres <= dat[22:20];
 					end
 					if (sel[3]) begin
 					page <= dat[24];
@@ -382,19 +392,19 @@ else begin
 					end
 					if (|sel[7:6]) map <= dat[59:48];
 				end
-			REG_DISPLAYED:
+			REG_WINDOW:
 				begin
-					if (|sel[1:0])	hDisplayed <= dat[11:0];
-					if (|sel[3:2])  vDisplayed <= dat[27:16];
-					if (|sel[5:4])	hrefdelay <= dat[43:32];
-					if (|sel[7:6])  vrefdelay <= dat[59:48];
+					if (|sel[1:0])	windowWidth <= dat[11:0];
+					if (|sel[3:2])  windowHeight <= dat[27:16];
+					if (|sel[5:4])	windowLeft <= dat[47:32];
+					if (|sel[7:6])  windowTop <= dat[63:48];
 				end
 			REG_PAGE1ADDR:	bm_base_addr1 <= dat;
 			REG_PAGE2ADDR:	bm_base_addr2 <= dat;
 			REG_PXYZ:
 				begin
-					if (|sel[1:0])	px <= dat[11:0];
-					if (|sel[3:2])	py <= dat[27:16];
+					if (|sel[1:0])	px <= dat[15:0];
+					if (|sel[3:2])	py <= dat[31:16];
 					if (|sel[  4])	pz <= dat[39:32];
 				end
 			REG_PCOLCMD:
@@ -409,6 +419,14 @@ else begin
 					if (sel[1]) rastcmp[11:8] <= dat[11:8];
 					if (sel[7]) rst_irq <= dat[63];
 				end
+			REG_BMPSIZE:
+				begin
+					if (|sel[1:0]) bmpWidth <= dat[15:0];
+					if (|sel[5:4]) bmpHeight <= dat[47:32];
+				end
+			REG_OOB_COLOR:
+				if (|sel[3:0]) oob_color <= dat[31:0];
+
 `ifdef INTERNAL_SYNC_GEN
 			REG_TOTAL:
 				begin
@@ -454,18 +472,20 @@ else begin
       begin
           s_dat_o[0] <= onoff;
           s_dat_o[10:8] <= color_depth;
-          s_dat_o[11] <= greyscale;
+          s_dat_o[12] <= greyscale;
           s_dat_o[18:16] <= hres;
-          s_dat_o[21:19] <= vres;
+          s_dat_o[22:20] <= vres;
           s_dat_o[24] <= page;
           s_dat_o[25] <= pals;
+          s_dat_o[47:32] <= bmpWidth;
           s_dat_o[59:48] <= map;
       end
-  REG_DISPLAYED:	s_dat_o <= {4'h0,vrefdelay,4'h0,hrefdelay,4'h0,vDisplayed,4'h0,hDisplayed};
+  REG_WINDOW:			s_dat_o <= {windowTop,windowLeft,4'h0,windowHeight,4'h0,windowWidth};
   REG_PAGE1ADDR:	s_dat_o <= bm_base_addr1;
   REG_PAGE2ADDR:	s_dat_o <= bm_base_addr2;
-  REG_PXYZ:		    s_dat_o <= {20'h0,pz,4'h0,py,4'h0,px};
+  REG_PXYZ:		    s_dat_o <= {20'h0,pz,py,px};
   REG_PCOLCMD:    s_dat_o <= {color_o,12'd0,raster_op,14'd0,pcmd};
+  REG_OOB_COLOR:	s_dat_o <= {32'h0,oob_color};
   9'b10??_????_?:	s_dat_o <= {32'h0,pal_wo};
   default:        s_dat_o <= 64'd0;
   endcase
@@ -487,6 +507,9 @@ assign vclk = dot_clk_i;
 // Horizontal and Vertical timing reference counters
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
+wire lef;	// load even fifo
+wire lof;	// load odd fifo
+
 edge_det edh1
 (
 	.rst(rst_i),
@@ -500,7 +523,7 @@ edge_det edh1
 
 edge_det edh2
 (
-	.rst(rst_i),
+	.rst(1'b0),
 	.clk(m_clk_i),
 	.ce(1'b1),
 	.i(hsync_i),
@@ -520,40 +543,38 @@ edge_det edv1
 	.ee()
 );
 
-reg [3:0] hc;
+reg [3:0] hc = 4'd1;
 always @(posedge vclk)
-if (rst_i)
+if (pe_hsync) begin
 	hc <= 4'd1;
-else if (pe_hsync) begin
-	hc <= 4'd1;
-	pixelCol <= -hrefdelay;
+	pixelCol <= windowLeft;
 end
 else begin
 	if (hc==hres) begin
 		hc <= 4'd1;
-		pixelCol <= pixelCol + 1;
+		pixelCol <= pixelCol + 16'd1;
 	end
 	else
 		hc <= hc + 4'd1;
 end
 
-reg [3:0] vc;
+reg [3:0] vc = 4'd1;
 always @(posedge vclk)
-if (rst_i)
+if (pe_vsync) begin
 	vc <= 4'd1;
-else if (pe_vsync) begin
-	vc <= 4'd1;
-	pixelRow <= -vrefdelay;
+	pixelRow <= windowTop;
 end
 else begin
 	if (pe_hsync) begin
 		vc <= vc + 4'd1;
 		if (vc==vres) begin
 			vc <= 4'd1;
-			pixelRow <= pixelRow + 1;
+			pixelRow <= pixelRow + 16'd1;
 		end
 	end
 end
+assign lef = ~pixelRow[0];
+assign lof =  pixelRow[0];
 
 // Bits per pixel minus one.
 reg [4:0] bpp;
@@ -608,9 +629,9 @@ default:
 	end
 endcase
 
-wire vFetch = pixelRow < vDisplayed;
-wire fifo_rrst = pixelCol==12'hFFF;
-wire fifo_wrst = pe_hsync2;
+wire vFetch = !vblank;//pixelRow < windowHeight;
+wire fifo_rrst = pixelCol==16'hFFFF;
+wire fifo_wrst = pe_hsync2 && vc==4'd1;
 
 wire[31:0] grAddr,xyAddr;
 reg [11:0] fetchCol;
@@ -620,13 +641,14 @@ reg [MDW-1:0] mem_strip;
 wire [MDW-1:0] mem_strip_o;
 wire [31:0] mem_color;
 
+// Compute fetch address
 gfx_CalcAddress6 #(MDW) u1
 (
   .clk(m_clk_i),
 	.base_address_i(baseAddr),
 	.color_depth_i(color_depth),
-	.hdisplayed_i(hDisplayed),
-	.x_coord_i(12'b0),
+	.bmp_width_i(bmpWidth),
+	.x_coord_i(windowLeft + fetchCol),
 	.y_coord_i(pixelRow),
 	.address_o(grAddr),
 	.mb_o(),
@@ -634,12 +656,13 @@ gfx_CalcAddress6 #(MDW) u1
 	.ce_o()
 );
 
+// Compute address for get/set pixel
 gfx_CalcAddress6 #(MDW) u2
 (
   .clk(m_clk_i),
 	.base_address_i(baseAddr),
 	.color_depth_i(color_depth),
-	.hdisplayed_i(hDisplayed),
+	.bmp_width_i(bmpWidth),
 	.x_coord_i(px),
 	.y_coord_i(py),
 	.address_o(xyAddr),
@@ -666,11 +689,10 @@ wire memreq = mapctr==12'd0;
 wire blankEdge;
 edge_det ed2(.rst(rst_i), .clk(m_clk_i), .ce(1'b1), .i(blank_i), .pe(blankEdge), .ne(), .ee() );
 reg do_loads;
-reg [11:0] opixelRow;
-reg load_fifo;
+reg load_fifo = 1'b0;
 always @(posedge m_clk_i)
 	//load_fifo <= fifo_cnt < 10'd1000 && vFetch && onoff && xonoff && !m_cyc_o && do_loads;
-	load_fifo <= /*fifo_cnt < 8'd224 &&*/ vFetch && onoff && xonoff_i && fetchCol < hDisplayed && !m_cyc_o && do_loads && memreq;
+	load_fifo <= /*fifo_cnt < 8'd224 &&*/ vFetch && onoff && xonoff_i && (fetchCol < windowWidth) && memreq;
 // The following table indicates the number of pixel that will fit into the
 // video fifo. 
 reg [11:0] hCmp;
@@ -684,16 +706,17 @@ BPP20:	hCmp = 12'd768;
 BPP32:	hCmp = 12'd512;
 default:	hCmp = 12'd1024;
 endcase
+/*
 always @(posedge m_clk_i)
-	// if hDisplayed > hCmp we always load because the fifo isn't large enough to act as a cache.
-	if (!(hDisplayed < hCmp))
+	// if windowWidth > hCmp we always load because the fifo isn't large enough to act as a cache.
+	if (!(windowWidth < hCmp))
 		do_loads <= 1'b1;
 	// otherwise load the fifo only when the row changes to conserve memory bandwidth
 	else if (vc==4'd1)//pixelRow != opixelRow)
 		do_loads <= 1'b1;
 	else if (blankEdge)
 		do_loads <= 1'b0;
-
+*/
 assign m_stb_o = m_cyc_o;
 assign m_sel_o = MDW==128 ? 16'hFFFF : MDW==64 ? 8'hFF : 4'hF;
 
@@ -712,6 +735,7 @@ parameter ICOLOR2 = 4'd9;
 parameter ICOLOR3 = 4'd10;
 parameter ICOLOR4 = 4'd11;
 parameter WAIT_NACK = 4'd12;
+parameter LOAD_OOB = 4'd13;
 
 function rastop;
 input [3:0] op;
@@ -733,22 +757,40 @@ OPWHITE: rastop = 1'b1;
 default:	rastop = 1'b0;
 endcase
 endfunction
-
+/*
 always @(posedge m_clk_i)
 	if (fifo_wrst)
 		adr <= grAddr;
   else begin
-    if (state==WAITLOAD && m_ack_i)
-      adr <= adr + 32'd8;
+    if ((state==WAITLOAD && m_ack_i) || state==LOAD_OOB)
+    	case(MDW)
+    	32:		adr <= adr + 32'd4;
+    	64:		adr <= adr + 32'd8;
+    	default:	adr <= adr + 32'd16;
+    	endcase
   end
-
+*/
 always @(posedge m_clk_i)
 	if (fifo_wrst)
 		fetchCol <= 12'd0;
   else begin
-    if (state==WAITLOAD && m_ack_i)
+    if ((state==WAITLOAD && m_ack_i) || state==LOAD_OOB)
       fetchCol <= fetchCol + shifts;
   end
+
+// Check for legal (positive) coordinates
+// Illegal coordinates result in a red display
+wire [15:0] xcol = windowLeft + fetchCol;
+wire legal_x = ~&xcol[15:12] && xcol < bmpWidth;
+wire legal_y = ~&pixelRow[15:12] && pixelRow < bmpHeight;
+
+reg modd;
+always @*
+	case(MDW)
+	32:	modd <= m_adr_o[5:2]==4'hF;
+	64:	modd <= m_adr_o[5:3]==3'h7;
+	default:	modd <= m_adr_o[5:4]==2'h3;
+	endcase
 
 always @(posedge m_clk_i)
 if (rst_i) begin
@@ -766,10 +808,12 @@ else begin
     else
       rstcmd <= 1'b1;
   IDLE:
-    if (load_fifo & ~m_ack_i) begin
+  	if (load_fifo && !(legal_x && legal_y))
+ 			state <= LOAD_OOB;
+    else if (load_fifo & ~m_ack_i) begin
       m_cyc_o <= `HIGH;
       m_we_o <= `LOW;
-      m_adr_o <= adr;
+      m_adr_o <= grAddr;
       state <= WAITLOAD;
     end
     // The adr_o[5:3]==3'b111 causes the controller to wait until all eight
@@ -778,7 +822,7 @@ else begin
     // bandwidth available would be greatly reduced. However fetches are also
     // allowed when loads are not active or all strips for the current scan-
     // line have been fetched.
-    else if (pcmd!=2'b00 && (m_adr_o[5:3]==3'b111 || !(vFetch && onoff && xonoff_i && fetchCol < hDisplayed) || !do_loads)) begin
+    else if (pcmd!=2'b00 && (modd || !(vFetch && onoff && xonoff_i && fetchCol < windowWidth))) begin
       m_cyc_o <= `HIGH;
       m_we_o <= `LOW;
       m_adr_o <= xyAddr;
@@ -838,8 +882,9 @@ else begin
     if (m_ack_i) begin
       wb_nack();
       state <= IDLE;
-//      state <= WAIT_NACK;
     end
+  LOAD_OOB:
+  	state <= IDLE;
   WAIT_NACK:
   	if (~m_ack_i)
   		state <= IDLE;
@@ -854,7 +899,6 @@ begin
 end
 endtask
 
-reg [11:0] pixelColD1;
 reg [31:0] rgbo2,rgbo4;
 reg [MDW-1:0] rgbo3;
 always @(posedge vclk)
@@ -889,8 +933,8 @@ always @(posedge vclk)
 		zrgb_o <= 32'd0;
 
 // Before the hrefdelay expires, pixelCol will be negative, which is greater
-// than hDisplayed as the value is unsigned. That means that fifo reading is
-// active only during the display area 0 to hDisplayed.
+// than windowWidth as the value is unsigned. That means that fifo reading is
+// active only during the display area 0 to windowWidth.
 wire shift1 = hc==hres;
 reg [5:0] shift_cnt;
 always @(posedge vclk)
@@ -898,9 +942,9 @@ if (pe_hsync)
 	shift_cnt <= 5'd1;
 else begin
 	if (shift1) begin
-		if (pixelCol==12'hFFF)
+		if (pixelCol==16'hFFFF)
 			shift_cnt <= shifts;
-		else if (!pixelCol[11]) begin
+		else if (!pixelCol[15]) begin
 			shift_cnt <= shift_cnt + 5'd1;
 			if (shift_cnt==shifts)
 				shift_cnt <= 5'd1;
@@ -913,7 +957,6 @@ end
 wire next_strip = (shift_cnt==shifts) && (hc==hres);
 
 wire vrd;
-always @(posedge vclk) pixelColD1 <= pixelCol;
 reg shift,shift2;
 always @(posedge vclk) shift2 <= shift1;
 always @(posedge vclk) shift <= shift2;
@@ -921,7 +964,7 @@ always @(posedge vclk) rd_fifo2 <= next_strip;
 always @(posedge vclk) rd_fifo <= rd_fifo2;
 always @(posedge vclk)
 	if (rd_fifo)
-		rgbo3 <= rgbo1;
+		rgbo3 <= lef ? rgbo1o : rgbo1e;
 	else if (shift) begin
 		case(color_depth)
 		BPP4:	rgbo3 <= {4'h0,rgbo3[MDW-1:4]};
@@ -949,17 +992,42 @@ assign dat[107:96] = pixelRow[8] ? 12'hEA4 : 12'h000;
 assign dat[119:108] = pixelRow[9] ? 12'hEA4 : 12'h000;
 */
 
+reg [MDW-1:0] oob_dat;
+always @*
+case(color_depth)
+BPP4:	oob_dat <= {MDW/4{oob_color[3:0]}};
+BPP8:	oob_dat <= {MDW/8{oob_color[7:0]}};
+BPP12:	oob_dat <= {MDW/12{oob_color[11:0]}};
+BPP16:	oob_dat <= {MDW/16{oob_color[15:0]}};
+BPP20:	oob_dat <= {MDW/20{oob_color[19:0]}};
+BPP32:	oob_dat <= {MDW/32{oob_color[31:0]}};
+default:	oob_dat <= {MDW/16{oob_color[15:0]}};
+endcase
+
 rtfVideoFifo3 #(MDW) uf1
 (
 	.wrst(fifo_wrst),
 	.wclk(m_clk_i),
-	.wr(m_ack_i && state==WAITLOAD),
-	.di(m_dat_i),
+	.wr(((m_ack_i && state==WAITLOAD) || state==LOAD_OOB) && lef),
+	.di((state==LOAD_OOB) ? oob_dat : m_dat_i),
 	.rrst(fifo_rrst),
 	.rclk(vclk),
-	.rd(rd_fifo),
-	.dout(rgbo1),
-	.cnt(fifo_cnt)
+	.rd(rd_fifo & lof),
+	.dout(rgbo1e),
+	.cnt()
+);
+
+rtfVideoFifo3 #(MDW) uf2
+(
+	.wrst(fifo_wrst),
+	.wclk(m_clk_i),
+	.wr(((m_ack_i && state==WAITLOAD) || state==LOAD_OOB) && lof),
+	.di((state==LOAD_OOB) ? oob_dat : m_dat_i),
+	.rrst(fifo_rrst),
+	.rclk(vclk),
+	.rd(rd_fifo & lef),
+	.dout(rgbo1o),
+	.cnt()
 );
 
 endmodule

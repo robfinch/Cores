@@ -456,11 +456,11 @@ void Declaration::ParseInt64()
 void Declaration::ParseInt16()
 {
 	if (isUnsigned) {
-		head = (TYP *)TYP::Make(bt_uchar,2);
+		head = (TYP *)TYP::Make(isInline ? bt_iuchar : bt_uchar,2);
 		tail = head;
 	}
 	else {
-		head =(TYP *)TYP::Make(bt_char,2);
+		head =(TYP *)TYP::Make(isInline ? bt_ichar : bt_char,2);
 		tail = head;
 	}
 	head->isUnsigned = isUnsigned;
@@ -1356,6 +1356,8 @@ int Declaration::declare(SYM *parent,TABLE *table,int al,int ilc,int ztype)
 				sp->fi->IsPascal = isPascal;
 				sp->fi->IsInline = isInline;
 			}
+			else
+				sp->IsInline = isInline;
 			sp->IsRegister = isRegister;
 			isRegister = false;
 			sp->IsAuto = isAuto;
@@ -1856,10 +1858,12 @@ int ParameterDeclaration::Parse(int fd)
 {
 	int ofd;
   int opascal;
+	int oisInline;
 
 	dfs.puts("<ParseParmDecls>\n");
 	ofd = funcdecl;
 	opascal = isPascal;
+	oisInline = isInline;
 	isPascal = FALSE;
 	funcdecl = fd;
 	parsingParameterList++;
@@ -1869,6 +1873,7 @@ int ParameterDeclaration::Parse(int fd)
 		isFuncPtr = false;
 		isAuto = false;
 		isRegister = false;
+		isInline = false;
 		missingArgumentName = FALSE;
 		dfs.printf("A(%d)",lastst);
 j1:
@@ -1894,6 +1899,7 @@ dfs.printf("B");
 			isAuto = false;
 			break;
 		case ellipsis:
+		case kw_inline:
 		case kw_volatile: case kw_const:
         case kw_exception:
 		case kw_int8: case kw_int16: case kw_int32: case kw_int64: case kw_int40: case kw_int80:
@@ -1950,6 +1956,7 @@ xit:
 	parsingParameterList--;
 	funcdecl = ofd;
 	isPascal = opascal;
+	isInline = oisInline;
 	dfs.printf("</ParseParmDecls>\n");
 	return (nparms);
 }

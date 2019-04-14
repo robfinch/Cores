@@ -154,7 +154,9 @@ void doinit(SYM *sp)
 		sp->tp->Initialize(nullptr);
 		if (sp->tp->numele == 0) {
 			if (sp->tp->GetBtp()) {
-				if (sp->tp->GetBtp()->type == bt_char || sp->tp->GetBtp()->type == bt_uchar) {
+				if (sp->tp->GetBtp()->type == bt_char || sp->tp->GetBtp()->type == bt_uchar
+					|| sp->tp->GetBtp()->type == bt_ichar || sp->tp->GetBtp()->type == bt_iuchar
+					) {
 					sp->tp->numele = laststrlen;
 					sp->tp->size = laststrlen;
 				}

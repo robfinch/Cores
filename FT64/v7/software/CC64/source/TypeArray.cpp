@@ -79,7 +79,7 @@ bool TypeArray::IsByte(int typ)
 
 bool TypeArray::IsChar(int typ)
 {
-	return (typ==bt_char || typ==bt_uchar);
+	return (typ==bt_char || typ==bt_uchar || typ==bt_ichar || typ==bt_iuchar);
 }
 bool TypeArray::IsShort(int typ)
 {
@@ -130,9 +130,7 @@ bool TypeArray::IsEqual(TypeArray *ta)
         continue;
       if (t==bt_ushort && tat==bt_short)
         continue;
-      if (t==bt_char && tat==bt_uchar)
-        continue;
-      if (t==bt_uchar && tat==bt_char)
+      if (IsChar(t) && IsChar(tat))
         continue;
 	  // Loose type matching
 	  if (IsInt(t) && IsInt(tat))

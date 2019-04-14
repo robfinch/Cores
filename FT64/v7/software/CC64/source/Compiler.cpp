@@ -149,6 +149,7 @@ void Compiler::CloseFiles()
 void Compiler::AddStandardTypes()
 {
 	TYP *p, *pchar, *pint;
+	TYP *pichar;
 
 	p = TYP::Make(bt_long,8);
 	stdint = *p;
@@ -188,10 +189,20 @@ void Compiler::AddStandardTypes()
 	p->precision = 16;
 	stduchar = *p;
   
+	p = TYP::Make(bt_ichar, 2);
+	stdichar = *p;
+	p->precision = 16;
+	pichar = p;
+
+	p = TYP::Make(bt_iuchar, 2);
+	stdiuchar = *p;
+	p->precision = 16;
+//	pchar = p;
+
 	p = TYP::Make(bt_byte,1);
 	stdbyte = *p;
 	p->precision = 8;
-	pchar = p;
+//	pchar = p;
   
 	p = TYP::Make(bt_ubyte,1);
 	p->isUnsigned = true;
@@ -209,6 +220,17 @@ void Compiler::AddStandardTypes()
 	p->isUnsigned = true;
 	stdstring = *p;
   
+	p = allocTYP();
+	p->type = bt_pointer;
+	p->typeno = bt_pointer;
+	p->val_flag = 1;
+	p->size = 8;
+	p->btp = pichar->GetIndex();
+	p->bit_width = -1;
+	p->precision = 64;
+	p->isUnsigned = true;
+	stdistring = *p;
+
 	p = allocTYP();
 	p->type = bt_double;
 	p->typeno = bt_double;

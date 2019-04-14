@@ -51,14 +51,6 @@ module gfx_cuvz(
   );
 
 parameter point_width = 16;
-parameter BPP6 = 3'd0;
-parameter BPP8 = 3'd1;
-parameter BPP9 = 3'd2;
-parameter BPP12 = 3'd3;
-parameter BPP15 = 3'd4;
-parameter BPP16 = 3'd5;
-parameter BPP24 = 3'd6;
-parameter BPP32 = 3'd7;
 
 input                        clk_i;
 input                        rst_i;
@@ -76,7 +68,7 @@ input      [point_width-1:0] factor1_i;
 input                 [31:0] color0_i;
 input                 [31:0] color1_i;
 input                 [31:0] color2_i;
-input                  [2:0] color_depth_i;
+input                  [1:0] color_depth_i;
 // Interpolated color
 output reg            [31:0] color_o;
 
@@ -130,7 +122,7 @@ parameter wait_state   = 2'b00,
           write_state  = 2'b10;
 
 // Manage states
-always @(posedge clk_i)
+always @(posedge clk_i or posedge rst_i)
 if(rst_i)
   state <= wait_state;
 else
@@ -166,28 +158,44 @@ wire [point_width-1:0] bezier_factor1 = factor2;
 // ***************** //
 
 // Split colors
-wire [7:0] color0_r,color0_g,color0_b;
-wire [7:0] color1_r,color1_g,color1_b;
-wire [7:0] color2_r,color2_g,color2_b;
+wire [7:0] color0_r = (color_depth_i == 2'b00) ? color0_i[7:0] :
+                      (color_depth_i == 2'b01) ? color0_i[15:11] :
+                      color0_i[23:16];
+wire [7:0] color0_g = (color_depth_i == 2'b00) ? color0_i[7:0] :
+                      (color_depth_i == 2'b01) ? color0_i[10:5] :
+                      color0_i[15:8];
+wire [7:0] color0_b = (color_depth_i == 2'b00) ? color0_i[7:0] :
+                      (color_depth_i == 2'b01) ? color0_i[4:0] :
+                      color0_i[7:0];
 
-gfx_SplitColorR u2 (color_depth_i, color0_i, color0_r);
-gfx_SplitColorG u3 (color_depth_i, color0_i, color0_g);
-gfx_SplitColorB u4 (color_depth_i, color0_i, color0_b);
+// Split colors
+wire [7:0] color1_r = (color_depth_i == 2'b00) ? color1_i[7:0] :
+                      (color_depth_i == 2'b01) ? color1_i[15:11] :
+                      color1_i[23:16];
+wire [7:0] color1_g = (color_depth_i == 2'b00) ? color1_i[7:0] :
+                      (color_depth_i == 2'b01) ? color1_i[10:5] :
+                      color1_i[15:8];
+wire [7:0] color1_b = (color_depth_i == 2'b00) ? color1_i[7:0] :
+                      (color_depth_i == 2'b01) ? color1_i[4:0] :
+                      color1_i[7:0];
 
-gfx_SplitColorR u5 (color_depth_i, color1_i, color1_r);
-gfx_SplitColorG u6 (color_depth_i, color1_i, color1_g);
-gfx_SplitColorB u7 (color_depth_i, color1_i, color1_b);
-
-gfx_SplitColorR u8 (color_depth_i, color2_i, color2_r);
-gfx_SplitColorG u9 (color_depth_i, color2_i, color2_g);
-gfx_SplitColorB u10 (color_depth_i, color2_i, color2_b);
+// Split colors
+wire [7:0] color2_r = (color_depth_i == 2'b00) ? color2_i[7:0] :
+                      (color_depth_i == 2'b01) ? color2_i[15:11] :
+                      color2_i[23:16];
+wire [7:0] color2_g = (color_depth_i == 2'b00) ? color2_i[7:0] :
+                      (color_depth_i == 2'b01) ? color2_i[10:5] :
+                      color2_i[15:8];
+wire [7:0] color2_b = (color_depth_i == 2'b00) ? color2_i[7:0] :
+                      (color_depth_i == 2'b01) ? color2_i[4:0] :
+                      color2_i[7:0];
 
 // Interpolation
 wire [8+point_width-1:0] color_r = factor0*color0_r +  factor1*color1_r +  factor2*color2_r;
 wire [8+point_width-1:0] color_g = factor0*color0_g +  factor1*color1_g +  factor2*color2_g;
 wire [8+point_width-1:0] color_b = factor0*color0_b +  factor1*color1_b +  factor2*color2_b;
 
-always @(posedge clk_i)
+always @(posedge clk_i or posedge rst_i)
 begin
   // Reset
   if(rst_i)
@@ -237,16 +245,9 @@ begin
         // Alpha
         a_o     <= a[point_width+8-1:point_width];
         // Color
-		case(color_depth_i)
-		BPP6: color_o <= {color_r[6+point_width-1:point_width]}; // 6 bit greyscale
-		BPP8: color_o <= {color_r[8+point_width-1:point_width]}; // 8 bit greyscale
-		BPP9: color_o <= {color_r[3+point_width-1:point_width],color_g[3+point_width-1:point_width],color_b[3+point_width-1:point_width]};
-		BPP12:color_o <= {color_r[4+point_width-1:point_width],color_g[4+point_width-1:point_width],color_b[4+point_width-1:point_width]};
-		BPP15:color_o <= {color_r[5+point_width-1:point_width],color_g[5+point_width-1:point_width],color_b[5+point_width-1:point_width]};
-		BPP16:color_o <= {color_r[5+point_width-1:point_width],color_g[6+point_width-1:point_width],color_b[5+point_width-1:point_width]};
-		BPP24:color_o <= {color_r[8+point_width-1:point_width],color_g[8+point_width-1:point_width],color_b[8+point_width-1:point_width]};
-		BPP32:color_o <= {color_r[8+point_width-1:point_width],color_g[8+point_width-1:point_width],color_b[8+point_width-1:point_width]};
-		endcase
+        color_o <= (color_depth_i == 2'b00) ? {color_r[8+point_width-1:point_width]} : // 8 bit grayscale
+                   (color_depth_i == 2'b01) ? {color_r[5+point_width-1:point_width], color_g[6+point_width-1:point_width], color_b[5+point_width-1:point_width]} : // 16 bit
+                   {color_r[8+point_width-1:point_width], color_g[8+point_width-1:point_width], color_b[8+point_width-1:point_width]}; // 32 bit
       end
 
       write_state:

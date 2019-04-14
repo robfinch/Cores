@@ -19,17 +19,15 @@ TOP MODULE
  You should have received a copy of the GNU Lesser General Public License
  along with orgfx.  If not, see <http://www.gnu.org/licenses/>.
 
- Robert Finch:
- Modified for 128 bit wide read / write busses, and more color depths.
 */
 
-module gfx_top (clk_i, wb_rst_i, wb_inta_o,
+module gfx_top (wb_clk_i, wb_rst_i, wb_inta_o,
   // Wishbone master signals (interfaces with video memory, write)
-  wbm_write_clk_i, wbm_write_cyc_o, wbm_write_stb_o, wbm_write_cti_o, wbm_write_bte_o, wbm_write_we_o, wbm_write_adr_o, wbm_write_sel_o, wbm_write_ack_i, wbm_write_err_i, wbm_write_dat_i, wbm_write_dat_o,
+  wbm_write_cyc_o, wbm_write_stb_o, wbm_write_cti_o, wbm_write_bte_o, wbm_write_we_o, wbm_write_adr_o, wbm_write_sel_o, wbm_write_ack_i, wbm_write_err_i, wbm_write_dat_o,
   // Wishbone master signals (interfaces with video memory, read)
-  wbm_read_clk_i, wbm_read_cyc_o, wbm_read_stb_o, wbm_read_cti_o, wbm_read_bte_o, wbm_read_we_o, wbm_read_sel_o, wbm_read_adr_o, wbm_read_ack_i, wbm_read_err_i, wbm_read_dat_i,
+  wbm_read_cyc_o, wbm_read_stb_o, wbm_read_cti_o, wbm_read_bte_o, wbm_read_we_o, wbm_read_adr_o, wbm_read_sel_o, wbm_read_ack_i, wbm_read_err_i, wbm_read_dat_i,
   // Wishbone slave signals (interfaces with main bus/CPU)
-  wbs_clk_i, wbs_cyc_i, wbs_stb_i, wbs_cti_i, wbs_bte_i, wbs_we_i, wbs_adr_i, wbs_sel_i, wbs_ack_o, wbs_err_o, wbs_dat_i, wbs_dat_o
+  wbs_cyc_i, wbs_stb_i, wbs_cti_i, wbs_bte_i, wbs_we_i, wbs_adr_i, wbs_sel_i, wbs_ack_o, wbs_err_o, wbs_dat_i, wbs_dat_o
 );
 
 // Set default parameters
@@ -37,42 +35,38 @@ parameter point_width    = 16;
 parameter subpixel_width = 16;
 parameter fifo_depth     = 10;
 
-parameter REG_ADR_HIBIT = 7;
+parameter REG_ADR_HIBIT = 9;
 
 // Common wishbone signals
-input         clk_i;    // master clock input
+input         wb_clk_i;    // master clock input
 input         wb_rst_i;    // Asynchronous active high reset
 output        wb_inta_o;   // interrupt
 
 // Wishbone master signals (write)
-input         wbm_write_clk_i;
 output        wbm_write_cyc_o;    // cycle output
 output        wbm_write_stb_o;    // strobe output
 output [ 2:0] wbm_write_cti_o;    // cycle type id
 output [ 1:0] wbm_write_bte_o;    // burst type extension
 output        wbm_write_we_o;     // write enable output
 output [31:0] wbm_write_adr_o;    // address output
-output [15:0] wbm_write_sel_o;    // byte select outputs (only 32bits accesses are supported)
+output [ 3:0] wbm_write_sel_o;    // byte select outputs (only 32bits accesses are supported)
 input         wbm_write_ack_i;    // wishbone cycle acknowledge
 input         wbm_write_err_i;    // wishbone cycle error
-input [127:0] wbm_write_dat_i;    // wishbone data in
-output [127:0] wbm_write_dat_o;    // wishbone data out
+output [31:0] wbm_write_dat_o;    // wishbone data out
 
 // Wishbone master signals (read)
-input         wbm_read_clk_i;
 output        wbm_read_cyc_o;    // cycle output
 output        wbm_read_stb_o;    // strobe output
 output [ 2:0] wbm_read_cti_o;    // cycle type id
 output [ 1:0] wbm_read_bte_o;    // burst type extension
 output        wbm_read_we_o;     // write enable output
-output [15:0] wbm_read_sel_o;
 output [31:0] wbm_read_adr_o;    // address output
+output [ 3:0] wbm_read_sel_o;    // byte select outputs (only 32bits accesses are supported)
 input         wbm_read_ack_i;    // wishbone cycle acknowledge
 input         wbm_read_err_i;    // wishbone cycle error
-input [127:0] wbm_read_dat_i;    // wishbone data in
+input  [31:0] wbm_read_dat_i;    // wishbone data in
 
 // Wishbone slave signals
-input         wbs_clk_i;
 input         wbs_cyc_i;    // cycle input
 input         wbs_stb_i;    // strobe input
 input  [ 2:0] wbs_cti_i;    // cycle type id
@@ -93,25 +87,21 @@ wire wbmreader_sint;
 wire vector_wbs_ack;
 wire transform_wbs_ack;
 
-wire            [31:0] target_base_reg;
+wire            [31:2] target_base_reg;
 wire [point_width-1:0] target_size_x_reg;
 wire [point_width-1:0] target_size_y_reg;
 
-wire            [31:0] wbs_fragment_tex0_base;
+wire            [31:2] wbs_fragment_tex0_base;
 wire [point_width-1:0] wbs_fragment_tex0_size_x;
 wire [point_width-1:0] wbs_fragment_tex0_size_y;
 
-wire [31:0] render_wbmwriter_addr;
+wire [31:2] render_wbmwriter_addr;
+wire  [3:0] render_wbmwriter_sel;
 wire [31:0] render_wbmwriter_dat;
 
-wire [6:0] mb;
-wire [6:0] me;
-
-wire [2:0] color_depth_reg;
+wire [1:0] color_depth_reg;
 
 wire render_wbmwriter_memory_pixel_write;
-wire render_wbmwriter_memory_zpixel_write;
-wire wbs_raster_point_write;
 wire wbs_raster_rect_write;
 wire wbs_raster_line_write;
 wire wbs_raster_triangle_write;
@@ -177,20 +167,18 @@ wire [31:0] colorkey_reg;
 wire        clipping_enable_reg;
 wire        inside_reg;
 wire        zbuffer_enable_reg;
-wire [31:0] zbuffer_base_reg;
+wire [31:2] zbuffer_base_reg;
 
 wire        wbs_transform_transform;
 wire        wbs_transform_forward;
 
 wire        raster_wbs_ack;
-wire cs;
 
 // Slave wishbone interface. Reads wishbone bus and fills registers
 gfx_wbs wb_databus(
-  .pclk_i		     (clk_i),
+  .clk_i             (wb_clk_i),
   .rst_i             (wb_rst_i),
-  .clk_i             (wbs_clk_i),
-  .adr_i             (wbs_adr_i),
+  .adr_i             (wbs_adr_i[REG_ADR_HIBIT:0]),
   .dat_i             (wbs_dat_i),
   .dat_o             (wbs_dat_o),
   .sel_i             (wbs_sel_i),
@@ -258,7 +246,6 @@ gfx_wbs wb_databus(
 
   .color_depth_o     (color_depth_reg),
 
-  .point_write_o     (wbs_raster_point_write),
   .rect_write_o      (wbs_raster_rect_write),
   .line_write_o      (wbs_raster_line_write),
   .triangle_write_o  (wbs_raster_triangle_write),
@@ -278,8 +265,7 @@ gfx_wbs wb_databus(
   .clipping_enable_o (clipping_enable_reg),
   .inside_o          (inside_reg),
   .zbuffer_enable_o  (zbuffer_enable_reg),
-  .zbuffer_base_o    (zbuffer_base_reg),
-  .cs(cs)
+  .zbuffer_base_o    (zbuffer_base_reg)
   );
 
 defparam wb_databus.point_width    = point_width;
@@ -300,7 +286,7 @@ wire signed [point_width-1:0] transform_cuvz_dest_pixel2_z;
 
 // Apply transforms to points
 gfx_transform transform(
-.clk_i           (clk_i),
+.clk_i           (wb_clk_i),
 .rst_i           (wb_rst_i),
 .x_i             (wbs_transform_dest_pixel_x),
 .y_i             (wbs_transform_dest_pixel_y),
@@ -352,14 +338,13 @@ wire [2*point_width-1:0] raster_interp_area;
 
 // Rasterizer generates pixels to calculate
 gfx_rasterizer rasterizer0 (
-  .clk_i            (clk_i),
+  .clk_i            (wb_clk_i),
   .rst_i            (wb_rst_i),
 
   .clip_ack_i       (clip_ack),
   .interp_ack_i     (interp_raster_ack),
   .ack_o            (raster_wbs_ack),
 
-  .point_write_i    (wbs_raster_point_write),
   .rect_write_i	    (wbs_raster_rect_write),
   .line_write_i     (wbs_raster_line_write),
   .triangle_write_i (wbs_raster_triangle_write),
@@ -419,7 +404,7 @@ wire                   interp_cuvz_write;
 wire                   cuvz_interp_ack;
 
 gfx_interp interp(
-.clk_i     (clk_i),
+.clk_i     (wb_clk_i),
 .rst_i     (wb_rst_i),
 .ack_i     (cuvz_interp_ack),
 .ack_o     (interp_raster_ack),
@@ -453,7 +438,7 @@ wire                   cuvz_clip_write;
 wire            [31:0] cuvz_clip_color;
 
 gfx_cuvz cuvz(
-.clk_i     (clk_i),
+.clk_i     (wb_clk_i),
 .rst_i     (wb_rst_i),
 .ack_i     (clip_ack),
 .ack_o     (cuvz_interp_ack),
@@ -517,14 +502,14 @@ wire                   wbmreader_busy;
 
 // Connected through arbiter
 wire        wbmreader_clip_z_ack;
-wire [31:0] clip_wbmreader_z_addr;
-wire [127:0] wbmreader_clip_z_data;
+wire [31:2] clip_wbmreader_z_addr;
+wire [31:0] wbmreader_clip_z_data;
+wire  [3:0] clip_wbmreader_z_sel;
 wire        clip_wbmreader_z_request;
-wire wbmreader_clip_z_nack;
 
 // Apply clipping
 gfx_clip clip(
-.clk_i            (clk_i),
+.clk_i            (wb_clk_i),
 .rst_i            (wb_rst_i),
 .clipping_enable_i(clipping_enable_reg),
 .zbuffer_enable_i (zbuffer_enable_reg),
@@ -553,6 +538,7 @@ gfx_clip clip(
 .z_ack_i          (wbmreader_clip_z_ack),
 .z_addr_o         (clip_wbmreader_z_addr),
 .z_data_i         (wbmreader_clip_z_data),
+.z_sel_o          (clip_wbmreader_z_sel),
 .z_request_o      (clip_wbmreader_z_request),
 .wbm_busy_i       (wbmreader_busy),
 .pixel_x_o        (clip_fragment_x_pixel),
@@ -567,8 +553,7 @@ gfx_clip clip(
 .bezier_factor1_o (clip_fragment_bezier_factor1),
 .color_o          (clip_fragment_color),
 .write_o          (clip_fragment_write_enable),
-.ack_i            (fragment_clip_ack),
-.nack_o           (wbmreader_clip_z_nack)
+.ack_i            (fragment_clip_ack)
 );
 
 defparam clip.point_width = point_width;
@@ -582,14 +567,15 @@ wire            [31:0] fragment_blender_color;
 wire             [7:0] fragment_blender_alpha;
 
 wire        wbmreader_fragment_texture_ack;
-wire [127:0] wbmreader_fragment_texture_data;
-wire [31:0] fragment_wbmreader_texture_addr;
+wire [31:0] wbmreader_fragment_texture_data;
+wire [31:2] fragment_wbmreader_texture_addr;
+wire  [3:0] fragment_wbmreader_texture_sel;
 wire        fragment_wbmreader_texture_request;
-wire wbmreader_fragment_texture_nack;
+
 
 // Fragment processor generates color of pixel (requires RAM read for textures)
 gfx_fragment_processor fp0 (
-  .clk_i             (clk_i),
+  .clk_i             (wb_clk_i),
   .rst_i             (wb_rst_i),
   .pixel_alpha_i     (clip_fragment_a),
   .x_counter_i       (clip_fragment_x_pixel),
@@ -614,9 +600,9 @@ gfx_fragment_processor fp0 (
   .texture_ack_i     (wbmreader_fragment_texture_ack), 
   .texture_data_i    (wbmreader_fragment_texture_data), 
   .texture_addr_o    (fragment_wbmreader_texture_addr), 
+  .texture_sel_o     (fragment_wbmreader_texture_sel), 
   .texture_request_o (fragment_wbmreader_texture_request),
   .texture_enable_i  (texture_enable_reg),
-  .nack_o            (wbmreader_fragment_texture_nack),
   .tex0_base_i       (wbs_fragment_tex0_base), 
   .tex0_size_x_i     (wbs_fragment_tex0_size_x), 
   .tex0_size_y_i     (wbs_fragment_tex0_size_y),
@@ -636,14 +622,15 @@ wire            [31:0] blender_render_color;
 
 // Connected through arbiter
 wire        wbmreader_blender_target_ack;
-wire [31:0] blender_wbmreader_target_addr;
-wire [127:0] wbmreader_blender_target_data;
+wire [31:2] blender_wbmreader_target_addr;
+wire [31:0] wbmreader_blender_target_data;
+wire  [3:0] blender_wbmreader_target_sel;
 wire        blender_wbmreader_target_request;
-wire wbmreader_blender_target_nack;
+
 // Applies alpha blending if enabled (requires RAM read to get target pixel color)
 // Fragment processor generates color of pixel (requires RAM read for textures)
 gfx_blender blender0 (
-  .clk_i            (clk_i),
+  .clk_i            (wb_clk_i),
   .rst_i            (wb_rst_i),
   .blending_enable_i (blending_enable_reg),
   // Render target information
@@ -657,10 +644,10 @@ gfx_blender blender0 (
   .alpha_i          (fragment_blender_alpha),
   .global_alpha_i   (global_alpha_reg),
   .ack_i            (render_blender_ack),
-  .nack_o           (wbmreader_blender_target_nack),
   .target_ack_i     (wbmreader_blender_target_ack),
   .target_addr_o    (blender_wbmreader_target_addr),
   .target_data_i    (wbmreader_blender_target_data),
+  .target_sel_o     (blender_wbmreader_target_sel),
   .target_request_o (blender_wbmreader_target_request),
   .wbm_busy_i       (wbmreader_busy),
   .write_i          (fragment_blender_write_enable),
@@ -675,11 +662,9 @@ gfx_blender blender0 (
 
 defparam blender0.point_width = point_width;
 
-wire render_nack_o;
-
 // Write pixel to target (check for out of bounds)
 gfx_renderer renderer (
-  .clk_i           (clk_i),
+  .clk_i           (wb_clk_i),
   .rst_i           (wb_rst_i),
   // Render target information
   .target_base_i   (target_base_reg),
@@ -695,94 +680,99 @@ gfx_renderer renderer (
   .color_i         (blender_render_color),
 
   .render_addr_o   (render_wbmwriter_addr),
+  .render_sel_o    (render_wbmwriter_sel),
   .render_dat_o    (render_wbmwriter_dat),
   .ack_o           (render_blender_ack),
   .ack_i           (wbmwriter_render_ack),
-  .nack_o          (render_nack_o),
   .write_i         (blender_render_write_enable),
-  .write_o         (render_wbmwriter_memory_pixel_write),
-  .writez_o        (render_wbmwriter_memory_zpixel_write),
-  .mb_o(mb),
-  .me_o(me)
+  .write_o         (render_wbmwriter_memory_pixel_write)
   );
 
 defparam renderer.point_width = point_width;
-wire         wbmreader_arbiter_ack;
-wire  [31:0] arbiter_wbmreader_addr;
-wire [127:0] wbmreader_arbiter_data;
-wire         arbiter_wbmreader_request;
-wire writer_match_o;
-wire [127:0] writer_dat_o;
 
-// Instansiate wishbone master interface
+// Instansiate wishbone master interface (write only)
 gfx_wbm_write wbm_writer (
+  .clk_i           (wb_clk_i),
   .rst_i           (wb_rst_i),
-  .clk_i           (wbm_write_clk_i),
   .cyc_o           (wbm_write_cyc_o),
   .stb_o           (wbm_write_stb_o),
-  .sel_o	       (wbm_write_sel_o),
   .cti_o           (wbm_write_cti_o),
   .bte_o           (wbm_write_bte_o),
   .we_o            (wbm_write_we_o),
   .adr_o           (wbm_write_adr_o),
+  .sel_o           (wbm_write_sel_o),
   .ack_i           (wbm_write_ack_i),
   .err_i           (wbm_write_err_i),
-  .dat_i           (wbm_write_dat_i),
   .dat_o           (wbm_write_dat_o),
   .sint_o          (wbmwriter_sint),
 
   .write_i         (render_wbmwriter_memory_pixel_write),
-  .writez_i        (render_wbmwriter_memory_zpixel_write),
   .ack_o           (wbmwriter_render_ack),
-  .nack_i          (render_nack_o),
 
   // send ack to renderer when done writing to memory.
   .render_addr_i   (render_wbmwriter_addr),
-  .render_dat_i    (render_wbmwriter_dat),
-  .mb_i(mb),
-  .me_i(me),
-
-  .reader_match_o  (writer_match_o),
-  .reader_addr_i   (wbm_read_adr_o),
-  .reader_dat_o    (writer_dat_o)
+  .render_sel_i    (render_wbmwriter_sel),
+  .render_dat_i    (render_wbmwriter_dat)
   );
 
-gfx_wbm_read ureader
-(
-	.rst_i(wb_rst_i),
-	.clk_i(wbm_read_clk_i),
-	.cyc_o(wbm_read_cyc_o),
-	.stb_o(wbm_read_stb_o),
-	.cti_o(wbm_read_cti_o),
-	.bte_o(wbm_read_bte_o),
-	.we_o (wbm_read_we_o),
-	.sel_o(wbm_read_sel_o),
-	.adr_o(wbm_read_adr_o),
-	.ack_i(wbm_read_ack_i),
-	.err_i(wbm_read_err_i),
-	.dat_i(wbm_read_dat_i),
-	// Interface against masters (clip)
-	.m0_read_request_i(clip_wbmreader_z_request),
-    .m0_adr_i(clip_wbmreader_z_addr),
-	.m0_dat_o(wbmreader_clip_z_data),
-	.m0_ack_o(wbmreader_clip_z_ack),
-	.m0_nack_i(wbmreader_clip_z_nack),
-	// Interface against masters (fragment processor)
-	.m1_read_request_i (fragment_wbmreader_texture_request),
-	.m1_adr_i         (fragment_wbmreader_texture_addr),
-	.m1_dat_o          (wbmreader_fragment_texture_data),
-	.m1_ack_o          (wbmreader_fragment_texture_ack),
-	.m1_nack_i	       (wbmreader_fragment_texture_nack),
-	// Interface against masters (blender)
-	.m2_read_request_i (blender_wbmreader_target_request),
-	.m2_adr_i         (blender_wbmreader_target_addr),
-	.m2_dat_o          (wbmreader_blender_target_data),
-	.m2_ack_o          (wbmreader_blender_target_ack),
-	.m2_nack_i         (wbmreader_blender_target_nack),
+wire        wbmreader_arbiter_ack;
+wire [31:2] arbiter_wbmreader_addr;
+wire [31:0] wbmreader_arbiter_data;
+wire  [3:0] arbiter_wbmreader_sel;
+wire        arbiter_wbmreader_request;
 
-	.writer_match_i   (writer_match_o),
-	.writer_dat_i     (writer_dat_o)
-);
+// Instansiate wbm reader arbiter
+gfx_wbm_read_arbiter wbm_arbiter (
+  .master_busy_o     (wbmreader_busy),
+  // Interface against the wbm read module
+  .read_request_o    (arbiter_wbmreader_request),
+  .addr_o            (arbiter_wbmreader_addr),
+  .sel_o             (arbiter_wbmreader_sel),
+  .dat_i             (wbmreader_arbiter_data),
+  .ack_i             (wbmreader_arbiter_ack),
+  // Interface against masters (clip)
+  .m0_read_request_i (clip_wbmreader_z_request),
+  .m0_addr_i         (clip_wbmreader_z_addr),
+  .m0_sel_i          (clip_wbmreader_z_sel),
+  .m0_dat_o          (wbmreader_clip_z_data),
+  .m0_ack_o          (wbmreader_clip_z_ack),
+  // Interface against masters (fragment processor)
+  .m1_read_request_i (fragment_wbmreader_texture_request),
+  .m1_addr_i         (fragment_wbmreader_texture_addr),
+  .m1_sel_i          (fragment_wbmreader_texture_sel),
+  .m1_dat_o          (wbmreader_fragment_texture_data),
+  .m1_ack_o          (wbmreader_fragment_texture_ack),
+  // Interface against masters (blender)
+  .m2_read_request_i (blender_wbmreader_target_request),
+  .m2_addr_i         (blender_wbmreader_target_addr),
+  .m2_sel_i          (blender_wbmreader_target_sel),
+  .m2_dat_o          (wbmreader_blender_target_data),
+  .m2_ack_o          (wbmreader_blender_target_ack)
+  );
+
+// Instansiate wishbone master interface (read only for textures)
+gfx_wbm_read wbm_reader (
+  .clk_i            (wb_clk_i),
+  .rst_i            (wb_rst_i),
+  .cyc_o            (wbm_read_cyc_o),
+  .stb_o            (wbm_read_stb_o),
+  .cti_o            (wbm_read_cti_o),
+  .bte_o            (wbm_read_bte_o),
+  .we_o             (wbm_read_we_o),
+  .adr_o            (wbm_read_adr_o),
+  .sel_o            (wbm_read_sel_o),
+  .ack_i            (wbm_read_ack_i),
+  .err_i            (wbm_read_err_i),
+  .dat_i            (wbm_read_dat_i),
+  .sint_o           (wbmreader_sint),
+
+  // send ack to renderer when done writing to memory.
+  .read_request_i   (arbiter_wbmreader_request),
+  .texture_addr_i   (arbiter_wbmreader_addr),
+  .texture_sel_i    (arbiter_wbmreader_sel),
+  .texture_dat_o    (wbmreader_arbiter_data),
+  .texture_data_ack (wbmreader_arbiter_ack)
+  );
 
 endmodule
 
