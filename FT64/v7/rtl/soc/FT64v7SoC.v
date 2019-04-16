@@ -24,7 +24,7 @@
 //
 //`define SIM
 //`define AVIC	1'b1
-//`define ORSOC_GRAPHICS	1'b1
+`define ORSOC_GFX	1'b1
 `define TEXT_CONTROLLER	1'b1
 `define BMP_CONTROLLER 1'b1		// needed for sync generation
 //`define GPU_GRID	1'b1
@@ -158,6 +158,7 @@ wire [63:0] scr_dato, br_dato;
 wire br_bok, scr_bok;
 wire rnd_ack;
 wire [31:0] rnd_dato;
+(* mark_debug="true" *)
 wire dram_ack;
 wire [63:0] dram_dato;
 wire avic_ack;
@@ -170,8 +171,10 @@ wire kbd_irq;
 
 wire spr_ack;
 wire [63:0] spr_dato;
+(* mark_debug = "true" *)
 wire spr_cyc;
 wire spr_stb;
+(* mark_debug = "true" *)
 wire spr_acki;
 wire spr_we;
 wire [7:0] spr_sel;
@@ -247,8 +250,10 @@ reg [63:0] br3_dati;
 wire gpio_ack;
 wire [15:0] aud0, aud1, aud2, aud3;
 wire [15:0] audi;
+(* mark_debug = "true" *)
 wire aud_cyc;
 wire aud_stb;
+(* mark_debug = "true" *)
 wire aud_acki;
 wire aud_we;
 wire [1:0] aud_sel;
@@ -267,8 +272,10 @@ wire [7:0] pti_cdato;
 
 wire sdc_ack;
 wire [31:0] sdc_cdato;
+(* mark_debug = "true" *)
 wire sdc_cyc;
 wire sdc_stb;
+(* mark_debug = "true" *)
 wire sdc_acki;
 wire sdc_we;
 wire [3:0] sdc_sel;
@@ -403,6 +410,7 @@ OLED uoled1
 // -----------------------------------------------------------------------------
 // Address Decoding
 // -----------------------------------------------------------------------------
+(* mark_debug="true" *)
 wire cs_dram = adr[31:29]==3'h0;		// Main memory 512MB
 wire cs_br = adr[31:16]==16'hFFFC		// Boot rom 192k
 					|| adr[31:16]==16'hFFFD
@@ -418,17 +426,17 @@ wire cs_bmp = br1_adr[19:12]==8'hC5;	//          Bitmap Controller
 //wire cs_avic = br1_adr[31:13]==19'b1111_1111_1101_1100_110;	// FFDCC000-FFDCDFFF
 wire cs_avic = 1'b0;									// defunct: audio / video controller
 wire cs_gfx00 = br1_adr[19:12]==8'hD8;		// orsoc graphics accelerator
-wire cs_rnd = br2_adr[19:4]==28'hC0C0;		// PRNG random number generator
+wire cs_rnd = br2_adr[19:4]==16'hC0C0;		// PRNG random number generator
 wire cs_led = br2_cyc && br2_stb && (br2_adr[19:4]==16'hC060);	// LEDS,buttons,switches
 wire cs_kbd  = br2_adr[19:4]==16'hC000;		// keyboard controller
 wire cs_aud  = br2_adr[19:8]==12'h510;		// audio controller
 wire cs_1761 = br2_adr[19:4]==16'hC070;		// AC97 controller
 wire cs_cmdc = br2_adr[19:4]==16'hC080;
 wire cs_grid = br2_adr[19:8]==12'h520;		// graphics grid computer
-wire cs_imem = br2_adr[19:12]==20'hC8 		// instruction memory for grid computer
-						|| br2_adr[19:12]==20'hC9
-						|| br2_adr[19:12]==20'hCA
-						|| br2_adr[19:12]==20'hCB
+wire cs_imem = br2_adr[19:12]==8'hC8 		// instruction memory for grid computer
+						|| br2_adr[19:12]==8'hC9
+						|| br2_adr[19:12]==8'hCA
+						|| br2_adr[19:12]==8'hCB
 						;
 wire cs_rtc = br3_adr[19:4]==16'hC020;		// real-time clock chip
 wire cs_spi = br3_adr[19:8]==12'hC05;			// spi controller
@@ -507,6 +515,19 @@ gfx_top64 ugfx00
 	.wb_clk_i(cpu_clk),
 	.wb_rst_i(rst),
 	.wb_inta_o(),
+  // Wishbone slave signals (interfaces with main bus/CPU)
+  .wbs_cs_i(cs_gfx00),
+  .wbs_cyc_i(br1_cyc),
+  .wbs_stb_i(br1_stb),
+  .wbs_cti_i(3'b0),
+  .wbs_bte_i(2'b0),
+  .wbs_we_i(br1_we),
+  .wbs_adr_i(br1_adr),
+  .wbs_sel_i(br1_sel),
+  .wbs_ack_o(gfx00_cack),
+  .wbs_err_o(),
+  .wbs_dat_i(br1_dato),
+  .wbs_dat_o(gfx00_cdato),
   // Wishbone master signals (interfaces with video memory, write)
   .wbm_cyc_o(gfx00_cyc),
   .wbm_stb_o(gfx00_stb),
@@ -518,20 +539,7 @@ gfx_top64 ugfx00
   .wbm_ack_i(gfx00_ack),
   .wbm_err_i(),
   .wbm_dat_i(gfx00_dati),
-  .wbm_dat_o(gfx00_dato),
-  // Wishbone slave signals (interfaces with main bus/CPU)
-  .wbs_cs_i(cs_gfx00),
-  .wbs_cyc_i(br1_cyc),
-  .wbs_stb_i(br1_stb),
-  .wbs_cti_i(),
-  .wbs_bte_i(),
-  .wbs_we_i(br1_we),
-  .wbs_adr_i(br1_adr),
-  .wbs_sel_i(br1_sel),
-  .wbs_ack_o(gfx00_cack),
-  .wbs_err_o(),
-  .wbs_dat_i(br1_dato),
-  .wbs_dat_o(gfx00_cdato)
+  .wbm_dat_o(gfx00_dato)
 );
 `else
 assign gfx00_cyc = 1'b0;
@@ -974,13 +982,73 @@ mainmem_sim umm1
 `endif
 
 `ifndef SIM
-mpmc6 #(.C0W(BMPW)) umc1
+wire mem_ui_rst;
+wire mem_ui_clk;
+wire calib_complete;
+wire rstn;
+wire [28:0] mem_addr;
+wire [2:0] mem_cmd;
+wire mem_en;
+wire [127:0] mem_wdf_data;
+wire [15:0] mem_wdf_mask;
+wire mem_wdf_end;
+wire mem_wdf_wren;
+wire [127:0] mem_rd_data;
+wire mem_rd_data_valid;
+wire mem_rd_data_end;
+wire mem_rdy;
+wire mem_wdf_rdy;
+wire [3:0] dram_state;
+
+mig_7series_1 uddr3
+(
+	.ddr3_dq(ddr3_dq),
+	.ddr3_dqs_p(ddr3_dqs_p),
+	.ddr3_dqs_n(ddr3_dqs_n),
+	.ddr3_addr(ddr3_addr),
+	.ddr3_ba(ddr3_ba),
+	.ddr3_ras_n(ddr3_ras_n),
+	.ddr3_cas_n(ddr3_cas_n),
+	.ddr3_we_n(ddr3_we_n),
+	.ddr3_ck_p(ddr3_ck_p),
+	.ddr3_ck_n(ddr3_ck_n),
+	.ddr3_cke(ddr3_cke),
+	.ddr3_dm(ddr3_dm),
+	.ddr3_odt(ddr3_odt),
+	.ddr3_reset_n(ddr3_reset_n),
+	// Inputs
+	.sys_clk_i(clk100),
+    .clk_ref_i(clk200),
+	.sys_rst(rstn),
+	// user interface signals
+	.app_addr(mem_addr),
+	.app_cmd(mem_cmd),
+	.app_en(mem_en),
+	.app_wdf_data(mem_wdf_data),
+	.app_wdf_end(mem_wdf_end),
+	.app_wdf_mask(mem_wdf_mask),
+	.app_wdf_wren(mem_wdf_wren),
+	.app_rd_data(mem_rd_data),
+	.app_rd_data_end(mem_rd_data_end),
+	.app_rd_data_valid(mem_rd_data_valid),
+	.app_rdy(mem_rdy),
+	.app_wdf_rdy(mem_wdf_rdy),
+	.app_sr_req(1'b0),
+	.app_sr_active(),
+	.app_ref_req(1'b0),
+	.app_ref_ack(),
+	.app_zq_req(1'b0),
+	.app_zq_ack(),
+	.ui_clk(mem_ui_clk),
+	.ui_clk_sync_rst(mem_ui_rst),
+	.init_calib_complete(calib_complete)
+);
+
+mpmc7 #(.C0W(BMPW)) umc1
 (
 	.rst_i(rst),
 	.clk40MHz(clk40),
 	.clk100MHz(clk100),
-	.clk200MHz(clk200),
-	.mem_ui_clk(mem_ui_clk),
 /*
 	.cyc0(vm_cyc),
 	.stb0(vm_stb),
@@ -991,6 +1059,7 @@ mpmc6 #(.C0W(BMPW)) umc1
 	.dati0(vm_dat_o),
 	.dato0(vm_dat_i),
 */
+	.clk0(clk40),
 	.cyc0(bmp_cyc),
 	.stb0(bmp_stb),
 	.ack0(bmp_acki),
@@ -1017,7 +1086,7 @@ cs7, cyc7, stb7, ack7, we7, sel7, adr7, dati7, dato7, sr7, cr7, rb7,
 	.adr3(aud_adr),
 	.dati3(aud_dato),
 	.dato3(aud_dati),
-/*
+`ifdef ORSOC_GFX
 	.cyc4(gfx00_cyc),
 	.stb4(gfx00_stb),
 	.ack4(gfx00_ack),
@@ -1026,7 +1095,8 @@ cs7, cyc7, stb7, ack7, we7, sel7, adr7, dati7, dato7, sr7, cr7, rb7,
 	.adr4(gfx00_adr),
 	.dati4(gfx00_dato),
 	.dato4(gfx00_dati),
-*/
+`endif
+`ifdef GRID_GFX
 	.cyc4(grid_cyc),
 	.stb4(grid_stb),
 	.ack4(grid_dram_ack),
@@ -1035,7 +1105,7 @@ cs7, cyc7, stb7, ack7, we7, sel7, adr7, dati7, dato7, sr7, cr7, rb7,
 	.adr4(grid_adr),
 	.dati4({2{grid_dato}}),
 	.dato4(grid_dram_dati1),
-
+`endif
 	.cyc5(spr_cyc),
 	.stb5(spr_stb),
 	.ack5(spr_acki),
@@ -1065,23 +1135,26 @@ cs7, cyc7, stb7, ack7, we7, sel7, adr7, dati7, dato7, sr7, cr7, rb7,
 	.cr7(cr),
 	.rb7(rb),
 
-	// DDR3 interface
-	.ddr3_dq(ddr3_dq),
-	.ddr3_dqs_n(ddr3_dqs_n),
-	.ddr3_dqs_p(ddr3_dqs_p),
-	.ddr3_addr(ddr3_addr),
-	.ddr3_ba(ddr3_ba),
-	.ddr3_ras_n(ddr3_ras_n),
-	.ddr3_cas_n(ddr3_cas_n),
-	.ddr3_we_n(ddr3_we_n),
-	.ddr3_ck_p(ddr3_ck_p),
-	.ddr3_ck_n(ddr3_ck_n),
-	.ddr3_cke(ddr3_cke),
-	.ddr3_reset_n(ddr3_reset_n),
-	.ddr3_dm(ddr3_dm),
-	.ddr3_odt(ddr3_odt),
+	// MIG memory interface
+	.rstn(rstn),
+	.mem_ui_clk(mem_ui_clk),
+	.mem_ui_rst(mem_ui_rst),
+	.calib_complete(calib_complete),
+	.mem_addr(mem_addr),
+	.mem_cmd(mem_cmd),
+	.mem_en(mem_en),
+	.mem_wdf_data(mem_wdf_data),
+	.mem_wdf_end(mem_wdf_end),
+	.mem_wdf_mask(mem_wdf_mask),
+	.mem_wdf_wren(mem_wdf_wren),
+	.mem_rd_data(mem_rd_data),
+	.mem_rd_data_end(mem_rd_data_end),
+	.mem_rd_data_valid(mem_rd_data_valid),
+	.mem_rdy(mem_rdy),
+	.mem_wdf_rdy(mem_wdf_rdy),
+
 	// Debugging	
-	.state(),
+	.state(dram_state),
 	.ch()
 );
 `endif
@@ -1109,7 +1182,6 @@ scratchmem uscr1
 
 bootrom #(64) ubr1
 (
-  .rst_i(rst),
   .clk_i(cpu_clk),
   .cti_i(cti),
   .bok_o(br_bok),
@@ -1121,6 +1193,7 @@ bootrom #(64) ubr1
   .dat_o(br_dato)
 );
 
+(* mark_debug="true" *)
 wire err;
 BusError ube1
 (
@@ -1197,7 +1270,12 @@ ila_0 uila1 (
 	.probe1(ucpu1.ucpu1.insn0[31:0]), // input wire [7:0]  probe1 
 	.probe2(ucpu1.ucpu1.vadr),
 	.probe3(ucpu1.ucpu1.ihit), // input wire [0:0]  probe2 
-	.probe4({ucpu1.ucpu1.iqentry_state[0],ucpu1.ucpu1.iqentry_state[1],ucpu1.ucpu1.iqentry_state[2],ucpu1.ucpu1.iqentry_state[3]}), // input wire [0:0]  probe3 
+	.probe4({err,
+		dram_state,
+		aud_cyc,aud_acki,
+		spr_cyc,spr_acki,
+		sdc_cyc,sdc_acki,
+		bmp_cyc,bmp_acki,cyc,cs_dram,dram_ack,ucpu1.ucpu1.iqentry_state[0],ucpu1.ucpu1.iqentry_state[1],ucpu1.ucpu1.iqentry_state[2],ucpu1.ucpu1.iqentry_state[3]}), // input wire [0:0]  probe3 
 	.probe5({ucpu1.ucpu1.freezePC,ucpu1.ucpu1.phit,ucpu1.ucpu1.queued1,ucpu1.ucpu1.queuedNop,ucpu1.ucpu1.icstate,ucpu1.ucpu1.bstate}), // input wire [0:0]  probe4
 	.probe6({ucpu1.ucpu1.L1_adr})
 );

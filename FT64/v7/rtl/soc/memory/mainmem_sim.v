@@ -79,7 +79,7 @@ assign ack_o = cs ? (we_i ? 1'b1 : rdy) : 1'b0;
 
 always @(posedge clk_i)
 	if (cs & we_i) begin
-		$display ("wrote to scratchmem: %h=%h:%h", adr_i, dat_i, sel_i);
+		$display ("wrote to mainmem: %h=%h:%h", adr_i, dat_i, sel_i);
 		/*
 		if (adr_i[14:3]==15'h3e9 && dat_i==64'h00) begin
 		  $display("3e9=00");
@@ -138,8 +138,8 @@ always @(posedge clk_i)
 always @(posedge clk_i)
 begin
 	dat_o <= {smemH[radr],smemG[radr],smemF[radr],smemE[radr],smemD[radr],smemC[radr],smemB[radr],smemA[radr]};
-	if (!we_i)
-		$display("read from scratchmem: %h=%h", radr, {smemB[radr],smemA[radr]});
+	if (!we_i & cs)
+		$display("read from mainmem: %h=%h", radr, {smemB[radr],smemA[radr]});
 end
 
 endmodule
