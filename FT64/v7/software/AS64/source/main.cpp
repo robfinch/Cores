@@ -29,6 +29,8 @@
 
 FilenameStack fns;
 
+InsnStats insnStats;
+
 int gCpu = 888;
 bool gpu = false;
 int verbose = 1;
@@ -179,6 +181,35 @@ void DumphTable()
     for (nn = 0; nn < htblmax && nn < 1024; nn++) {
         fprintf(ofp, " %03X %08X %d\n", nn, hTable[nn].opcode, hTable[nn].count);
     }
+}
+
+// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+
+void DumpInsnStats()
+{
+	double bpi, nc2;
+
+	fprintf(ofp, "\nInstruction Statistics\n");
+	fprintf(ofp, "Loads:    %d (%f%%)\n", insnStats.loads, ((double)insnStats.loads / (double)insnStats.total) * 100.0f);
+	fprintf(ofp, "Stores:   %d (%f%%)\n", insnStats.stores, ((double)insnStats.stores/(double)insnStats.total) * 100.0f);
+	fprintf(ofp, "Branches: %d (%f%%)\n", insnStats.branches, ((double)insnStats.branches / (double)insnStats.total) * 100.0f);
+	fprintf(ofp, "Calls:		%d (%f%%)\n", insnStats.calls, ((double)insnStats.calls / (double)insnStats.total) * 100.0f);
+	fprintf(ofp, "Returns:	%d (%f%%)\n", insnStats.rets, ((double)insnStats.rets / (double)insnStats.total) * 100.0f);
+	fprintf(ofp, "Adds:	    %d (%f%%)\n", insnStats.adds, ((double)insnStats.adds / (double)insnStats.total) * 100.0f);
+	fprintf(ofp, "Luis:	    %d (%f%%)\n", insnStats.luis, ((double)insnStats.luis / (double)insnStats.total) * 100.0f);
+	fprintf(ofp, "Moves:	  %d (%f%%)\n", insnStats.moves, ((double)insnStats.moves / (double)insnStats.total) * 100.0f);
+	fprintf(ofp, "CMoves:	  %d (%f%%)\n", insnStats.cmoves, ((double)insnStats.cmoves / (double)insnStats.total) * 100.0f);
+	fprintf(ofp, "Sets:	  %d (%f%%)\n", insnStats.sets, ((double)insnStats.sets / (double)insnStats.total) * 100.0f);
+	fprintf(ofp, "Total:    %d\n", insnStats.total);
+	fprintf(ofp, "\nnumber of bytes: %f\n", num_bytes);
+	fprintf(ofp, "number of instructions: %d\n", num_insns);
+	fprintf(ofp, "number of compressed instructions: %d\n", num_cinsns);
+	bpi = (double)num_bytes / (double)num_insns;
+	fprintf(ofp, "%0.6f bytes (%d bits) per instruction\n", bpi, (int)(bpi * 8));
+	nc2 = (float)num_cinsns * 2.0;
+	fprintf(ofp, "Compression ratio: %f%%\n", (nc2 / (num_bytes + nc2)) * 100.0);
+	fprintf(ofp, "Number of long branches: %d\n", num_lbranch);
 }
 
 // ---------------------------------------------------------------------------
@@ -611,14 +642,17 @@ void process_org()
 void process_align()
 {
 	int64_t v;
+	char *p;
 
 	NextToken();
 	if (token == tk_code && gCpu=='F')
 		v = 5;
-	else
+	else {
 		v = expr();
-	if (v == 0) {
-		printf("Bad align directive. (%d)\r\n", lineno);
+		p = inptr;
+	}
+	if (v <= 0 || v > 1100000) {
+//		printf("Bad align directive. (%d)\r\n", lineno);
 		return;
 	}
     if (segment == codeseg || segment == rodataseg || segment == dataseg || segment==bssseg || segment==tlsseg) {
@@ -1266,8 +1300,8 @@ void process_label()
         }
         else {
 					if ((sym->value.low != ca && gCpu!='G') || (sym->value.low != (ca & -4LL) && gCpu=='G')) {
-						if (verbose)
-							printf("Phase error %s=%06llx, Address=%06llX\n", nmTable.GetName(sym->name), sym->value.low, ca);
+						//if (verbose)
+						//	printf("Phase error %s=%06llx, Address=%06llX\n", nmTable.GetName(sym->name), sym->value.low, ca);
             phasing_errors++;
             sym->phaserr = '*';
             //if (bGen) printf("%s=%06llx ca=%06llx\r\n", nmTable.GetName(sym->name),  sym->value, code_address);
@@ -1441,10 +1475,12 @@ j1:
 	str += "\r\n\trodata\r\n";
 	str += "\talign 8\r\n";
 	str += "begin_init_data:\r\n";
+	str += "_begin_init_data:\r\n";
 	str += databuf;
 	str += "\r\n\trodata\r\n";
 	str += "\talign 8\r\n";
 	str += "end_init_data:\r\n";
+	str += "_end_init_data:\r\n";
 	str += databuf;
 	str += bssbuf;
 	str += tlsbuf;
@@ -1462,9 +1498,9 @@ j1:
   }
 	if (masterFileLength < str.length()) {
 		delete masterFile;
-		masterFile = new char[str.length() + 10000];
+		masterFile = new char[str.length() + 1000000];
 	}
-	strcpy_s(masterFile, str.length() + 10000, str.c_str());
+	strcpy_s(masterFile, str.length() + 1000000, str.c_str());
 }
 
 void ProcessSegments2()
@@ -1552,12 +1588,14 @@ void ProcessSegments2()
 	ofs << "\nrodata\n";
 	ofs << "\talign 8\n";
 	ofs << "begin_init_data:\n";
+	ofs << "_begin_init_data:\n";
 	ofs.close();
 	system("type as64-data.asm >> as64-segments.asm");
 	ofs.open("as64-segments.asm", std::ofstream::out | std::ofstream::app);
 	ofs << "\nrodata\n";
 	ofs << "\talign 8\n";
 	ofs << "end_init_data:\n";
+	ofs << "_end_init_data:\n";
 	ofs.close();
 	system("type as64-data.asm >> as64-segments.asm");
 	system("type as64-bss.asm >> as64-segments.asm");
@@ -1736,6 +1774,7 @@ void processFile(char *fname, int searchincl)
 	std::ifstream ifs;
   char *pathname;
 	char buf[700];
+	char *ep;
 
 	fns.Push(mname, lineno);
 	mname = std::string(fname);
@@ -1760,6 +1799,12 @@ void processFile(char *fname, int searchincl)
   }
 j1:
 	while (ifs.getline(buf, sizeof(buf))) {
+		// This nonsense to trim any control characters at the end of a line.
+		ep = buf + strlen(buf) - 1;
+		while (*ep < 0x20 && ep > buf)
+			ep--;
+		if (ep >= buf && *ep < 0x20)
+			*ep = '\0';
 		strcat(buf,"\n");
 		processLine(buf);
 	}
@@ -1805,8 +1850,8 @@ int checksum64(int64_t *val)
 
 void processMaster()
 {
-  expandedBlock = 0;
-	switch(gCpu) {
+	expandedBlock = 0;
+	switch (gCpu) {
 	case 888:	Table888_processMaster();	break;
 	case 889:	Table888mmu_processMaster();	break;
 	case 64:	FISA64_processMaster();	break;
@@ -2273,14 +2318,7 @@ int main(int argc, char *argv[])
 	bGenListing = false;
     DumpSymbols();
     DumphTable();
-    fprintf(ofp, "\nnumber of bytes: %f\n", num_bytes);
-    fprintf(ofp, "number of instructions: %d\n", num_insns);
-	fprintf(ofp, "number of compressed instructions: %d\n", num_cinsns);
-	bpi = (double)num_bytes/(double)num_insns;
-    fprintf(ofp, "%0.6f bytes (%d bits) per instruction\n", bpi, (int)(bpi*8));
-	nc2 = (float)num_cinsns * 2.0;
-	fprintf(ofp, "Compression ratio: %f%%\n", (nc2 / (num_bytes + nc2)) * 100.0);
-	fprintf(ofp, "Number of long branches: %d\n", num_lbranch);
+		DumpInsnStats();
 
 /*
     chksum = 0;

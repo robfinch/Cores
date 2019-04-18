@@ -258,11 +258,13 @@ void CSETable::InitializeTempRegs()
 							GenerateDiadic(op_mov, 0, ap2, ap3);
 							ReleaseTempReg(ap3);
 						}
-						else
+						else {
 							GenLdi(ap2, ap);
+						}
 					}
-					else if (ap->mode == am_reg)
+					else if (ap->mode == am_reg) {
 						GenerateDiadic(op_mov, 0, ap2, ap);
+					}
 					else {
 						size = GetNaturalSize(exptr);
 						ap->isUnsigned = exptr->isUnsigned;

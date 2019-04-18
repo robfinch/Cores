@@ -619,11 +619,16 @@ Operand *ENODE::GenIndex()
 	ap1 = GenerateExpression(p[0], F_REG | F_IMMED, 8);
 	if (ap1->mode == am_imm)
 	{
-		ap2 = GenerateExpression(p[1], F_REG | F_IMM0, 8);
-		if (ap2->mode == am_imm) {	// value is zero
+		ap2 = GenerateExpression(p[1], F_REG | F_IMMED, 8);
+		if (ap2->mode == am_reg && ap2->preg==0) {	// value is zero
 			ap1->mode = am_direct;
 			return (ap1);
 		}
+		ap2->isConst = ap2->mode==am_imm;
+		if (ap2->mode == am_imm && ap2->offset->i != 0)
+			ap2->offset2 = ap2->offset;
+		else
+			ap2->offset2 = nullptr;
 		GenerateHint(9);
 		ap2->mode = am_indx;
 		ap2->offset = ap1->offset;
@@ -690,6 +695,10 @@ Operand *ENODE::GenHook(int flags, int size)
 		ap1 = GenerateExpression(p[0], F_REG, size);
 		ap2 = GenerateExpression(p[1]->p[0], F_REG, size);
 		ap3 = GenerateExpression(p[1]->p[1], F_REG | F_IMMED, size);
+		if (ap3->mode == am_imm && ap3->offset->i == 0) {
+			ap3->mode = am_reg;
+			ap3->preg = 0;
+		}
 		n1 = PeepCount(ip1);
 		if (n1 < 20) {
 			Generate4adic(op_cmovenz, 0, ap4, ap1, ap2, ap3);
@@ -848,13 +857,19 @@ Operand *ENODE::GenShift(int flags, int size, int op)
 
 Operand *ENODE::GenAssignShift(int flags, int size, int op)
 {
-	Operand    *ap1, *ap2, *ap3;
+	Operand *ap1, *ap2, *ap3;
+	MachineReg *mr;
 
 	//size = GetNaturalSize(node->p[0]);
 	ap3 = GenerateExpression(p[0], F_ALL & ~F_IMMED, size);
 	ap2 = GenerateExpression(p[1], F_REG | F_IMM6, size);
 	if (ap3->mode == am_reg) {
 		GenerateTriadic(op, size, ap3, ap3, ap2);
+		mr = &regs[ap3->preg];
+		if (mr->assigned)
+			mr->modified = true;
+		mr->assigned = true;
+		mr->isConst = ap3->isConst && ap2->isConst;
 		ReleaseTempRegister(ap2);
 		ap3->MakeLegal(flags, size);
 		return (ap3);
@@ -1125,6 +1140,8 @@ Operand *ENODE::GenAssignAdd(int flags, int size, int op)
 	Operand *ap1, *ap2, *ap3;
 	int ssize;
 	bool negf = false;
+	bool intreg = false;
+	MachineReg *mr;
 
 	ssize = GetNaturalSize(p[0]);
 	if (ssize > size)
@@ -1162,9 +1179,17 @@ Operand *ENODE::GenAssignAdd(int flags, int size, int op)
 	else {
 		ap1 = GenerateExpression(p[0], F_ALL, ssize);
 		ap2 = GenerateExpression(p[1], F_REG | F_IMMED, size);
+		intreg = true;
 	}
 	if (ap1->mode == am_reg) {
 		GenerateTriadic(op, 0, ap1, ap1, ap2);
+		if (intreg) {
+			mr = &regs[ap1->preg];
+			if (mr->assigned)
+				mr->modified = true;
+			mr->assigned = true;
+			mr->isConst = ap1->isConst && ap2->isConst;
+		}
 	}
 	else if (ap1->mode == am_fpreg) {
 		GenerateTriadic(op, ap1->fpsize(), ap1, ap1, ap2);
@@ -1186,6 +1211,7 @@ Operand *ENODE::GenAssignLogic(int flags, int size, int op)
 {
 	Operand *ap1, *ap2, *ap3;
 	int ssize;
+	MachineReg *mr;
 
 	ssize = GetNaturalSize(p[0]);
 	if (ssize > size)
@@ -1208,6 +1234,11 @@ Operand *ENODE::GenAssignLogic(int flags, int size, int op)
 	ap2 = GenerateExpression(p[1], F_REG | F_IMMED, size);
 	if (ap1->mode == am_reg) {
 		GenerateTriadic(op, 0, ap1, ap1, ap2);
+		mr = &regs[ap1->preg];
+		if (mr->assigned)
+			mr->modified = true;
+		mr->assigned = true;
+		mr->isConst = ap1->isConst && ap2->isConst;
 	}
 	else {
 		GenMemop(op, ap1, ap2, ssize);

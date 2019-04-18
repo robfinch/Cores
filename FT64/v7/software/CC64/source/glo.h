@@ -102,6 +102,7 @@ extern int sizeOfFPT;
 extern int sizeOfFPD;
 extern int sizeOfFPQ;
 extern int maxVL;
+extern MachineReg regs[31];
 
 /*
 extern FILE             *input,

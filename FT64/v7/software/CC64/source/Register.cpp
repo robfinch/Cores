@@ -38,6 +38,8 @@ int bregstack[6];
 int brsp=5;
 int bregmask = 0;
 */
+MachineReg regs[31];
+
 static unsigned short int next_reg;
 static unsigned short int next_fpreg;
 static unsigned short int next_vreg;

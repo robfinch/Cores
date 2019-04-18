@@ -963,7 +963,8 @@ always @*
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-wire [15:0] pixel_i = (m_dat_i >> {ma[3:1],4'b0}) & 16'hFFFF;
+wire [31:0] pixel_i = bpp ? (m_dat_i >> {ma[3:2],5'b0}) & 32'hFFFFFFFF :
+													  (m_dat_i >> {ma[3:1],4'b0}) & 16'hFFFF;
 
 `ifdef FLOOD_FILL
 reg [31:0] pointToPush;

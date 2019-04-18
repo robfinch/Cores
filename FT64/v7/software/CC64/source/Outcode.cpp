@@ -846,7 +846,7 @@ void cseg()
 	if( curseg != codeseg) {
 		nl();
 		ofs.printf("\tcode\n");
-		ofs.printf("\talign\t16\n");
+		ofs.printf("\talign\t2\n");
 		curseg = codeseg;
     }
 }

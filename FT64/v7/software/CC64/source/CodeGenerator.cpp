@@ -700,10 +700,12 @@ void GenMemop(int op, Operand *ap1, Operand *ap2, int ssize)
 Operand *GenerateAssignMultiply(ENODE *node,int flags, int size, int op)
 {
 	Operand *ap1, *ap2, *ap3;
-    int             ssize;
-    ssize = GetNaturalSize(node->p[0]);
-    if( ssize > size )
-            size = ssize;
+  int ssize;
+	MachineReg *mr;
+
+  ssize = GetNaturalSize(node->p[0]);
+  if( ssize > size )
+    size = ssize;
 	if (node->p[0]->IsBitfield()) {
 		ap3 = GetTempRegister();
 		ap1 = GenerateBitfieldDereference(node->p[0], F_REG | F_MEM, size);
@@ -719,21 +721,28 @@ Operand *GenerateAssignMultiply(ENODE *node,int flags, int size, int op)
 		return (ap3);
 	}
 	if (node->etype==bt_double || node->etype==bt_quad || node->etype==bt_float || node->etype==bt_triple) {
-        ap1 = GenerateExpression(node->p[0],F_FPREG | F_MEM,ssize);
-        ap2 = GenerateExpression(node->p[1],F_FPREG,size);
-        op = op_fmul;
+      ap1 = GenerateExpression(node->p[0],F_FPREG | F_MEM,ssize);
+      ap2 = GenerateExpression(node->p[1],F_FPREG,size);
+      op = op_fmul;
     }
     else if (node->etype==bt_vector) {
-        ap1 = GenerateExpression(node->p[0],F_REG | F_MEM,ssize);
-        ap2 = GenerateExpression(node->p[1],F_REG,size);
-		op = ap2->type==stdvector.GetIndex() ? op_vmul : op_vmuls;
+      ap1 = GenerateExpression(node->p[0],F_REG | F_MEM,ssize);
+      ap2 = GenerateExpression(node->p[1],F_REG,size);
+			op = ap2->type==stdvector.GetIndex() ? op_vmul : op_vmuls;
     }
     else {
-        ap1 = GenerateExpression(node->p[0],F_ALL & ~F_IMMED,ssize);
-        ap2 = GenerateExpression(node->p[1],F_REG | F_IMMED,size);
+      ap1 = GenerateExpression(node->p[0],F_ALL & ~F_IMMED,ssize);
+      ap2 = GenerateExpression(node->p[1],F_REG | F_IMMED,size);
     }
 	if (ap1->mode==am_reg) {
 	    GenerateTriadic(op,0,ap1,ap1,ap2);
+			if (op == op_mulu || op == op_mul) {
+				mr = &regs[ap1->preg];
+				if (mr->assigned)
+					mr->modified = true;
+				mr->assigned = true;
+				mr->isConst = ap1->isConst && ap2->isConst;
+			}
 	}
 	else if (ap1->mode==am_fpreg) {
 	    GenerateTriadic(op,ssize==4?'s':ssize==8?'d':ssize==12?'t':ssize==16 ? 'q' : 'd',ap1,ap1,ap2);
@@ -758,6 +767,8 @@ Operand *GenerateAssignModiv(ENODE *node,int flags,int size,int op)
 	Operand *ap1, *ap2, *ap3;
     int             siz1;
     int isFP;
+		MachineReg *mr;
+		bool cnst = false;
  
     siz1 = GetNaturalSize(node->p[0]);
 	if (node->p[0]->IsBitfield()) {
@@ -807,12 +818,25 @@ Operand *GenerateAssignModiv(ENODE *node,int flags,int size,int op)
 	if (op==op_fdiv) {
 		GenerateTriadic(op,siz1==4?'s':siz1==8?'d':siz1==12?'t':siz1==16?'q':'d',ap1,ap1,ap3);
 	}
-	else
-		GenerateTriadic(op,0,ap1,ap1,ap3);
-    ReleaseTempReg(ap3);
-    //GenerateDiadic(op_ext,0,ap1,0);
-	if (ap2->mode==am_reg)
-		GenerateDiadic(op_mov,0,ap2,ap1);
+	else {
+		GenerateTriadic(op, 0, ap1, ap1, ap3);
+		cnst = ap1->isConst && ap3->isConst;
+		mr = &regs[ap1->preg];
+		if (mr->assigned)
+			mr->modified = true;
+		mr->assigned = true;
+		mr->isConst = cnst;
+	}
+  ReleaseTempReg(ap3);
+  //GenerateDiadic(op_ext,0,ap1,0);
+	if (ap2->mode == am_reg) {
+		GenerateDiadic(op_mov, 0, ap2, ap1);
+		mr = &regs[ap2->preg];
+		if (mr->assigned)
+			mr->modified = true;
+		mr->assigned = true;
+		mr->isConst = cnst;
+	}
 	else if (ap2->mode==am_fpreg)
 		GenerateDiadic(op_mov,0,ap2,ap1);
 	else
@@ -1062,6 +1086,7 @@ Operand *GenerateAssign(ENODE *node, int flags, int size)
 	Operand *ap1, *ap2 ,*ap3;
 	TYP *tp;
     int ssize;
+		MachineReg *mr;
 
     Enter("GenAssign");
 
@@ -1102,6 +1127,10 @@ Operand *GenerateAssign(ENODE *node, int flags, int size)
 		    ap2->GenZeroExtend(size,ssize);
 //	}
 	if (ap1->mode == am_reg || ap1->mode==am_fpreg) {
+		mr = &regs[ap1->preg];
+		if (mr->assigned)
+			mr->modified = true;
+		mr->assigned = true;
 		switch(ap2->mode) {
 		case am_reg:
 			GenerateHint(2);
@@ -1110,6 +1139,8 @@ Operand *GenerateAssign(ENODE *node, int flags, int size)
 				ap1->isPtr = TRUE;
 			}
 			GenerateDiadic(op_mov, 0, ap1, ap2);
+			mr->val = regs[ap2->preg].val;
+			mr->isConst = ap2->isConst;
 			break;
 		case am_fpreg:
 			GenerateHint(2);
@@ -1117,16 +1148,21 @@ Operand *GenerateAssign(ENODE *node, int flags, int size)
 				GenerateDiadic(op_mov,0,ap1,ap2);
 			else
 				GenerateDiadic(op_mov,0,ap1,ap2);
+			mr->modified = true;
 			break;
 		case am_imm:
 			//if (ap2->isPtr)
 			//	GenerateZeradic(op_setwb);
 			GenerateDiadic(op_ldi,0,ap1,ap2);
 			ap1->isPtr = ap2->isPtr;
+			mr->val = ap2->offset->i;
+			mr->offset = ap2->offset;
+			mr->isConst = true;
 			break;
 		default:
 			GenLoad(ap1,ap2,ssize,size);
 			ap1->isPtr = ap2->isPtr;
+			mr->modified = true;
 			break;
 		}
 	}

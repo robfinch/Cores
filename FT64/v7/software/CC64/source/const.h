@@ -103,7 +103,8 @@ enum e_am {
 	am_adec = 32768,
 	am_brind = 65536,
 	am_breg = 131072,
-	am_sreg = 262144
+	am_sreg = 262144,
+	am_direct2 = 524288
 };
 
 enum e_sym {
@@ -272,6 +273,15 @@ enum e_seg {
 	op_seg13 = 13 << 8,
 	op_ss = 14 << 8,
 	op_cs = 15 << 8
+};
+
+enum e_hint {
+	start_funcbody = 20,
+	end_funcbody,
+	begin_return_block,
+	end_return_block,
+	begin_stack_unlink,
+	end_stack_unlink
 };
 
 #define LR		1

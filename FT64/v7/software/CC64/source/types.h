@@ -99,6 +99,17 @@ public:
   std::string *name;
 };
 
+class MachineReg
+{
+public:
+	bool isConst;
+	bool assigned;
+	bool modified;
+	bool sub;
+	ENODE *offset;
+	int val;
+};
+
 // Class for representing tables. Small footprint.
 
 class TABLE {
@@ -174,6 +185,9 @@ public:
 	unsigned int IsInline : 1;
 	unsigned int UsesTemps : 1;		// uses temporary registers
 	unsigned int UsesStackParms : 1;
+	unsigned int hasSPReferences : 1;
+	unsigned int hasBPReferences : 1;
+	unsigned int didRemoveReturnBlock : 1;
 	uint8_t NumRegisterVars;
 	unsigned __int8 NumParms;
 	unsigned __int8 numa;			// number of stack parameters (autos)
@@ -232,8 +246,8 @@ public:
 	void SaveFPRegisterVars();
 	void SaveRegisterVars();
 	void SaveRegisterArguments();
-	void RestoreGPRegisterVars();
-	void RestoreFPRegisterVars();
+	int RestoreGPRegisterVars();
+	int RestoreFPRegisterVars();
 	void RestoreRegisterVars();
 	void RestoreRegisterArguments();
 	void SaveTemporaries(int *sp, int *fsp);
@@ -500,10 +514,12 @@ public:
 	unsigned int isPascal : 1;
 	unsigned int rshift : 8;
 	unsigned int isPtr : 1;
+	unsigned int isConst : 1;
 	short int pdeep;		// previous stack depth on allocation
 	short int deep;           /* stack depth on allocation */
 	short int deep2;
 	ENODE *offset;
+	ENODE *offset2;
 	int8_t scale;
 	Operand *next;			// For extended sizes (long)
 public:

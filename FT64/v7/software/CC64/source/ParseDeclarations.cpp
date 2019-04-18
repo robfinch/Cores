@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -1645,12 +1645,12 @@ bool declbegin(int st)
 void GlobalDeclaration::Parse()
 {
 	dfs.puts("<ParseGlobalDecl>\n");
+	isPascal = FALSE;
+	isInline = false;
 	for(;;) {
 		lc_auto = 0;
 		bool notVal = false;
 		isFuncPtr = false;
-		isPascal = FALSE;
-		isInline = false;
 		currentClass = nullptr;
 		currentFn = nullptr;
 		currentStmt = nullptr;

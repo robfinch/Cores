@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2017-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2017-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -24,7 +24,38 @@
 // ============================================================================
 //
 #include "stdafx.h"
+#define I_RR	0x02
+#define I_MOVE	0x12
+#define I_MOVO	0x13
+#define I_ADD	0x04
+#define I_SLT		0x06
+#define I_SLTU	0x07
+#define I_SLTI	0x06
+#define I_SLTUI	0x07
+#define I_SEQ		0x0B
+#define I_SEQI	0x0B
+#define I_LB	0x13
+#define I_SB	0x15
+#define I_MEMNDX	0x16
+#define I_JAL		0x18
+#define I_CALL	0x19
+#define I_SGTUI	0x1C
+#define I_SGTI	0x2C
+#define I_SLE		0x28
+#define I_SLEU	0x29
+#define I_Lx	0x20
+#define I_LxU	0x21
+#define I_LBU	0x23
+#define I_Sx	0x24
+#define I_BBc	0x26
+#define I_LUI	0x27
+#define I_CMOVEZ	0x28
+#define I_CMOVNZ	0x29
+#define I_RET	0x29
+#define I_Bcc	0x30
+#define I_BEQI	0x32
 
+extern InsnStats insnStats;
 static void ProcessEOL(int opt);
 extern void process_message();
 static void mem_operand(int64_t *disp, int *regA, int *regB, int *Sc, int *seg);
@@ -1048,6 +1079,56 @@ static int GetFPSize()
 	return (sz);
 }
 
+// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+
+static bool iexpand(int64_t oc)
+{
+	if ((oc >> 7) & 1) {
+		switch ((((oc >> 12) & 0x0F) << 1) | ((oc >> 6) & 1)) {
+		case 0:
+			insnStats.adds++;
+			break;
+		case 1:
+			insnStats.moves++;
+			break;
+		case 4:
+			if ((oc & 0x1f) == 0)
+				insnStats.rets++;
+			break;
+		case 5:	insnStats.calls++; break;
+		case 9:
+		case 11:
+		case 13:
+		case 15:
+		case 25:
+		case 27:
+			insnStats.loads++;
+			break;
+		case 17:
+		case 19:
+		case 21:
+		case 23:
+		case 29:
+		case 31:
+			insnStats.stores++;
+			break;
+		case 14:
+		case 16:
+		case 18:
+		case 20:
+		case 22:
+		case 24:
+		case 26:
+		case 28:
+		case 30:
+			insnStats.branches++;
+			break;
+		}
+		return true;
+	}
+	return false;
+}
 
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
@@ -1055,6 +1136,77 @@ static int GetFPSize()
 static void emit_insn(int64_t oc, int can_compress, int sz)
 {
 	int ndx;
+	int opmajor = oc & 0x3f;
+	int ls;
+
+	if (!iexpand(oc)) {
+		switch (opmajor) {
+		case I_RR:
+			if ((oc >> 6) & 1) {
+				switch ((oc >> 42LL) & 0x3fLL) {
+				case I_CMOVNZ:
+				case I_CMOVEZ:
+					insnStats.cmoves++;
+					break;
+				}
+			}
+			switch ((oc >> 26LL) & 0x3fLL) {
+			case I_MOVE:
+			case I_MOVO:
+				insnStats.moves++;
+				break;
+			case I_SLT:
+			case I_SLTU:
+			case I_SLE:
+			case I_SLEU:
+				insnStats.sets++;
+				break;
+			}
+			break;
+		case I_ADD:
+			insnStats.adds++;
+			break;
+		case I_LUI:
+			insnStats.luis++;
+			break;
+		case I_Sx:
+		case I_SB:
+			insnStats.stores++;
+			break;
+		case I_Lx:
+		case I_LxU:
+		case I_LBU:
+		case I_LB:
+			insnStats.loads++;
+			break;
+		case I_MEMNDX:
+			ls = oc & 0x80000000LL;
+			if (ls)
+				insnStats.stores++;
+			else
+				insnStats.loads++;
+			break;
+		case I_BBc:
+		case I_Bcc:
+		case I_BEQI:
+			insnStats.branches++;
+			break;
+		case I_CALL:
+		case I_JAL:
+			insnStats.calls++;
+			break;
+		case I_RET:
+			insnStats.rets++;
+			break;
+		case I_SLTI:
+		case I_SLTUI:
+		case I_SGTI:
+		case I_SGTUI:
+		case I_SEQI:
+			insnStats.sets++;
+			break;
+		}
+	}
 
 	switch (sz) {
 	case 6:	oc = oc & 0xffffffffffffLL;	break;// 48-bits max
@@ -1088,6 +1240,7 @@ static void emit_insn(int64_t oc, int can_compress, int sz)
 					num_bytes += 2;
 					num_insns += 1;
 					num_cinsns += 1;
+					insnStats.total++;
 					return;
 				}
 			}
@@ -1098,6 +1251,7 @@ static void emit_insn(int64_t oc, int can_compress, int sz)
 			num_bytes += 2;
 			num_insns += 1;
 			num_cinsns += 1;
+			insnStats.total++;
 			return;
 		}
 		if (sz == 4) {
@@ -1107,6 +1261,7 @@ static void emit_insn(int64_t oc, int can_compress, int sz)
 			emitCode((oc >> 24) & 255);
 			num_bytes += 4;
 			num_insns += 1;
+			insnStats.total++;
 			return;
 		}
 		emitCode(oc & 255);
@@ -1117,7 +1272,8 @@ static void emit_insn(int64_t oc, int can_compress, int sz)
 		emitCode((oc >> 40LL) & 255);
 		num_bytes += 6;
 		num_insns += 1;
-  }
+		insnStats.total++;
+	}
 }
  
 void LoadConstant(int64_t val, int rg)
@@ -1665,6 +1821,8 @@ static void process_setop(int64_t funct6, int64_t opcode6)
 		(0 << 6) |
 		0x02, !expand_flag, 4
 	);
+	prevToken();
+	ScanToEOL();
 }
 
 // ---------------------------------------------------------------------------
@@ -1887,6 +2045,8 @@ static void process_cmove(int64_t funct6)
 		(Ra << 8) |
 		(1 << 6) |
 		0x02, !expand_flag, 6);
+	prevToken();
+	ScanToEOL();
 }
 
 static void process_cmovf(int64_t funct6)
@@ -3017,8 +3177,8 @@ static void process_inc(int64_t oc)
 }
        
 // ---------------------------------------------------------------------------
-// brk r1,1,0
-// brk 240,1,0
+// brk r1,2,0
+// brk 240,2,0
 // ---------------------------------------------------------------------------
 
 static void process_brk()
@@ -3860,7 +4020,7 @@ static void process_lsfloat(int64_t opcode6, int64_t opcode3)
 
     int  sz;
     int rm;
-		printf("Fix segment prefix\r\n");
+		//printf("Fix segment prefix\r\n");
     rm = 0;
     sz = GetFPSize();
     p = inptr;
@@ -4149,12 +4309,12 @@ static void process_shifti(int64_t op4)
 
 	 if (p[0]=='.')
 		 getSz(&sz);
-     Rt = getRegisterX();
-     need(',');
-     Ra = getRegisterX();
-     need(',');
-     NextToken();
-     val = expr();
+	Rt = getRegisterX();
+	need(',');
+	Ra = getRegisterX();
+	need(',');
+	NextToken();
+	val = expr();
 	 val &= 63;
 	 if (val < 32 && op4 == 0 && Rt==Ra && !gpu) {
 		 emit_insn(
@@ -4723,11 +4883,13 @@ static void ProcessEOL(int opt)
 		static char *wtcrsr = "|/-\\|/-\\";
 		static int wtndx = 0;
 
-		printf("%c\r", wtcrsr[wtndx]);
-		wtndx++;
-		wtndx &= 7;
+		if ((lineno % 100) == 0) {
+			printf("%c\r", wtcrsr[wtndx]);
+			wtndx++;
+			wtndx &= 7;
+		}
 
-     //printf("Line: %d\r", lineno);
+     //printf("Line: %d: %.80s\r", lineno, inptr);
      expand_flag = 0;
      compress_flag = 0;
      segprefix = -1;
@@ -4875,6 +5037,7 @@ void FT64_processMaster()
     ca = code_address;
     segment = codeseg;
     memset(current_label,0,sizeof(current_label));
+		ZeroMemory(&insnStats, sizeof(insnStats));
     NextToken();
     while (token != tk_eof) {
 //        printf("\t%.*s\n", inptr-stptr-1, stptr);
@@ -5072,9 +5235,10 @@ void FT64_processMaster()
 		case tk_ror: process_shift(0x5); break;
 		case tk_rori: process_shifti(0x5); break;
 		case tk_rti: process_iret(0xC8000002); break;
-        case tk_sb:  process_store(0x15,0x20,0); break;
-        case tk_sc:  process_store(0x24,0x24,1); break;
-        case tk_sei: process_sei(); break;
+    case tk_sb:  process_store(0x15,0x20,0); break;
+    case tk_sc:  process_store(0x24,0x24,1); break;
+    case tk_sei: process_sei(); break;
+		case tk_seq:	process_setop(0x0B,0x0B); break;
 				case tk_setwb: emit_insn(0x04580002,!expand_flag,4); break;
 		//case tk_seq:	process_riop(0x1B,2); break;
 		case tk_sf:		process_lsfloat(0x2B,0x00); break;
@@ -5096,7 +5260,7 @@ void FT64_processMaster()
 		case tk_sle:	process_setop(0x28,-1); break;
 		case tk_sleu:	process_setop(0x29,-1); break;
 		case tk_slt:	process_setop(0x06,0x06); break;
-		case tk_sltu:	process_setop(0x07,0x06); break;
+		case tk_sltu:	process_setop(0x07,0x07); break;
 		//case tk_sne:	process_setiop(0x1B,3); break;
         case tk_slli: process_shifti(0x8); break;
 		case tk_srai: process_shifti(0xB); break;

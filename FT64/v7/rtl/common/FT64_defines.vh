@@ -129,6 +129,7 @@
 `define CHAIN_OFF		5'h14
 `define CHAIN_ON		5'h15
 `define SETWB				5'h16
+`define REDAND			5'h17
 `define SXH					5'h18
 `define SXC					5'h19
 `define SXB					5'h1A
@@ -142,6 +143,7 @@
 `define AND         6'h08
 `define OR          6'h09
 `define XOR         6'h0A
+`define SEQ					6'h0B
 `define NAND        6'h0C
 `define NOR         6'h0D
 `define XNOR        6'h0E
@@ -189,7 +191,7 @@
 `define ANDI    6'h08
 `define ORI     6'h09
 `define XORI    6'h0A
-`define EXEC    6'h0B
+`define SEQI    6'h0B
 `define REX     6'h0D
 `define XNORI		6'h0E
 `define FLOAT   6'h0F

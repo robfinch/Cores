@@ -701,6 +701,7 @@ function HasConst;
 input [47:0] isn;
 casez(isn[`INSTRUCTION_OP])
 `ADDI:  HasConst = TRUE;
+`SEQI:  HasConst = TRUE;
 `SLTI:  HasConst = TRUE;
 `SLTUI: HasConst = TRUE;
 `SGTI:  HasConst = TRUE;
@@ -780,6 +781,7 @@ casez(isn[`INSTRUCTION_OP])
 	    	endcase
     `ADD:   IsRFW = TRUE;
     `SUB:   IsRFW = TRUE;
+    `SEQ:   IsRFW = TRUE;
     `SLT:   IsRFW = TRUE;
     `SLTU:  IsRFW = TRUE;
     `SLE:   IsRFW = TRUE;
@@ -877,6 +879,7 @@ casez(isn[`INSTRUCTION_OP])
 `BBc:	IsRFW = FALSE;
 `BITFIELD:  IsRFW = TRUE;
 `ADDI:      IsRFW = TRUE;
+`SEQI:      IsRFW = TRUE;
 `SLTI:      IsRFW = TRUE;
 `SLTUI:     IsRFW = TRUE;
 `SGTI:      IsRFW = TRUE;
@@ -981,6 +984,7 @@ casez(isn[`INSTRUCTION_OP])
         endcase
 `MEMNDX:	Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `ADDI:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`SEQI:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `SLTI:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `SLTUI: Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `SGTI:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
@@ -1027,9 +1031,8 @@ casez(isn[`INSTRUCTION_OP])
 `CHK:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
 `R2:    case(isn[`INSTRUCTION_S2])
         `R1:       Source2Valid = TRUE;
-        `SHIFTR:   Source2Valid = isn[25] ? 1'b1 : isn[`INSTRUCTION_RB]==5'd0;
-        `SHIFT31:  Source2Valid = isn[25] ? 1'b1 : isn[`INSTRUCTION_RB]==5'd0;
-        `SHIFT63:  Source2Valid = isn[25] ? 1'b1 : isn[`INSTRUCTION_RB]==5'd0;
+        `SHIFT31:  Source2Valid = TRUE;
+        `SHIFT63:  Source2Valid = TRUE;
         default:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
         endcase
 `MEMNDX:
@@ -1044,6 +1047,7 @@ casez(isn[`INSTRUCTION_OP])
         	default:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
         	endcase
 `ADDI:  Source2Valid = TRUE;
+`SEQI:  Source2Valid = TRUE;
 `SLTI:  Source2Valid = TRUE;
 `SLTUI: Source2Valid = TRUE;
 `SGTI:  Source2Valid = TRUE;

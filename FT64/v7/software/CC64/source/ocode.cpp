@@ -248,9 +248,11 @@ void OCODE::store(txtoStream& ofs)
 	ap4 = oper4;
 
 	if (bb != b) {
-		ofs.printf(";====================================================\n");
-		ofs.printf("; Basic Block %d\n", bb->num);
-		ofs.printf(";====================================================\n");
+		if (bb->num == 0) {
+			ofs.printf(";====================================================\n");
+			ofs.printf("; Basic Block %d\n", bb->num);
+			ofs.printf(";====================================================\n");
+		}
 		b = bb;
 	}
 	if (comment) {

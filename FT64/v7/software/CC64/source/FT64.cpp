@@ -140,20 +140,19 @@ Operand *GenExpr(ENODE *node)
 		ap3 = GetTempRegister();
 		ap1 = GenerateExpression(node->p[0], F_REG, size);
 		ap2 = GenerateExpression(node->p[1], F_REG | F_IMMED, size);
-		GenerateTriadic(op_xnor, 0, ap3, ap1, ap2);
+		GenerateTriadic(op_seq, 0, ap3, ap1, ap2);
 		ReleaseTempRegister(ap2);
 		ReleaseTempRegister(ap1);
-		GenerateDiadic(op_redor, 0, ap3, ap3);
 		return (ap3);
 	case en_ne:
 		size = GetNaturalSize(node);
 		ap3 = GetTempRegister();
 		ap1 = GenerateExpression(node->p[0], F_REG, size);
 		ap2 = GenerateExpression(node->p[1], F_REG | F_IMMED, size);
-		GenerateTriadic(op_xor, 0, ap3, ap1, ap2);
+		GenerateTriadic(op_seq, 0, ap3, ap1, ap2);
 		ReleaseTempRegister(ap2);
 		ReleaseTempRegister(ap1);
-		GenerateDiadic(op_redor, 0, ap3, ap3);
+		GenerateDiadic(op_not, 0, ap3, ap3);
 		return (ap3);
 	case en_lt:
 		size = GetNaturalSize(node);

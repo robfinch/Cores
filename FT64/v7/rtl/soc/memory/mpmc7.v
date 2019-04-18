@@ -31,7 +31,7 @@ cs1, cyc1, stb1, ack1, we1, sel1, adr1, dati1, dato1, sr1, cr1, rb1,
 cyc2, stb2, ack2, we2, sel2, adr2, dati2, dato2,
 cyc3, stb3, ack3, we3, sel3, adr3, dati3, dato3,
 cyc4, stb4, ack4, we4, sel4, adr4, dati4, dato4,
-cyc5, stb5, ack5, adr5, dato5, spriteno,
+cyc5, stb5, ack5, sel5, adr5, dato5, spriteno,
 cyc6, stb6, ack6, we6, sel6, adr6, dati6, dato6,
 cs7, cyc7, stb7, ack7, we7, sel7, adr7, dati7, dato7, sr7, cr7, rb7,
 mem_ui_rst, mem_ui_clk, calib_complete,
@@ -117,12 +117,14 @@ input [63:0] dati4;
 output reg [63:0] dato4;
 
 // Channel 5 is reserved for sprite DMA, which is read-only
+parameter C5W = 64;
 input cyc5;
 input stb5;
 output ack5;
+input [C5W/8-1:0] sel5;
 input [4:0] spriteno;
 input [31:0] adr5;
-output reg [63:0] dato5;
+output reg [C5W-1:0] dato5;
 
 // Channel 6 is reserved for the SD/MMC controller
 input cyc6;
@@ -559,7 +561,9 @@ always @(posedge mem_ui_clk)
 				2'd3: wmask0 <= {~sel0xx,12'hFFF};
 				endcase
 		end
-		if (we1xx) wmask1 <= ~sel1xx;
+		else
+			wmask0 <= 16'h0000;
+		if (we1xx) wmask1 <= ~sel1xx; else wmask1 <= 16'h0000;
 		if (we2)
       case(adr2[3:2])
       2'd0:  wmask2 <= {12'hFFF,~sel2[3:0]};
@@ -567,9 +571,13 @@ always @(posedge mem_ui_clk)
       2'd2:  wmask2 <= {4'hF,~sel2[3:0],8'hFF};
       2'd3:  wmask2 <= {~sel2[3:0],12'hFFF};
       endcase
+    else
+    	wmask2 <= 16'h0000;
 		if (we3)
 			wmask3 <= ~(sel3 << {adr3[3:1],1'b0});
-		if (we4) wmask4 <= ~sel4;
+		else
+			wmask3 <= 16'h0000;
+		if (we4) wmask4 <= ~sel4; else wmask4 <= 16'h0000;
 		wmask5 <= 16'h0000;
 		if (we6)
       case(adr6[3:2])
@@ -578,7 +586,9 @@ always @(posedge mem_ui_clk)
       2'd2:  wmask6 <= {4'hF,~sel6[3:0],8'hFF};
       2'd3:  wmask6 <= {~sel6[3:0],12'hFFF};
       endcase
-		if (we7xx)
+    else
+    	wmask6 <= 16'h0000;
+		if (we7xx) begin
 			if (C7W==128)
 				wmask7 <= ~sel7xx;
 			else
@@ -586,6 +596,9 @@ always @(posedge mem_ui_clk)
 				1'd0:	wmask7 <= {8'hFF,~sel7xx};
 				1'd1:	wmask7 <= {~sel7xx,8'hFF};
 				endcase
+		end
+		else
+			wmask7 <= 16'h0000;
 	end
 
 // Setting the write data

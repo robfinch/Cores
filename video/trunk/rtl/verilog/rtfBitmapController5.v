@@ -54,10 +54,11 @@ module rtfBitmapController5(
 `endif
 );
 parameter MDW = 128;		// Bus master data width
+parameter MAP = 12'd0;
 parameter BM_BASE_ADDR1 = 32'h0020_0000;
 parameter BM_BASE_ADDR2 = 32'h0028_0000;
 parameter REG_CTRL = 9'd0;
-parameter REG_WINDOW = 9'd1;
+parameter REG_REFDELAY = 9'd1;
 parameter REG_PAGE1ADDR = 9'd2;
 parameter REG_PAGE2ADDR = 9'd3;
 parameter REG_PXYZ = 9'd4;
@@ -69,6 +70,7 @@ parameter REG_BORDER_ONOFF = 9'd11;
 parameter REG_RASTCMP = 9'd12;
 parameter REG_BMPSIZE = 9'd13;
 parameter REG_OOB_COLOR = 9'd14;
+parameter REG_WINDOW = 9'd15;
 
 parameter BPP4 = 3'd0;
 parameter BPP8 = 3'd1;
@@ -212,6 +214,8 @@ reg [2:0] hres,vres;
 reg greyscale;
 reg page;
 reg pals;				// palette select
+reg [15:0] hrefdelay;
+reg [15:0] vrefdelay;
 reg [15:0] windowLeft;
 reg [15:0] windowTop;
 reg [11:0] windowWidth,windowHeight;
@@ -354,13 +358,15 @@ if (rst_i) begin
 	greyscale <= 1'b0;
 	bm_base_addr1 <= BM_BASE_ADDR1;
 	bm_base_addr2 <= BM_BASE_ADDR2;
-	windowLeft <= 16'hFF99;//12'd103;
-	windowTop <= 16'hFFF3;//12'd13;
+	hrefdelay = 16'hFF99;//12'd103;
+	vrefdelay = 16'hFFF3;//12'd13;
+	windowLeft <= 16'h0;
+	windowTop <= 16'h0;
 	windowWidth = 16'd400;
 	windowHeight = 16'd300;
 	bmpWidth = 16'd400;
 	bmpHeight = 16'd300;
-	map <= 12'd0;
+	map <= MAP;
 	pcmd <= 2'b00;
 	rstcmd1 <= 1'b0;
 	rst_irq <= 1'b0;
@@ -392,12 +398,10 @@ else begin
 					end
 					if (|sel[7:6]) map <= dat[59:48];
 				end
-			REG_WINDOW:
+			REG_REFDELAY:
 				begin
-					if (|sel[1:0])	windowWidth <= dat[11:0];
-					if (|sel[3:2])  windowHeight <= dat[27:16];
-					if (|sel[5:4])	windowLeft <= dat[47:32];
-					if (|sel[7:6])  windowTop <= dat[63:48];
+					if (|sel[1:0])	hrefdelay <= dat[15:0];
+					if (|sel[3:2])  vrefdelay <= dat[32:16];
 				end
 			REG_PAGE1ADDR:	bm_base_addr1 <= dat;
 			REG_PAGE2ADDR:	bm_base_addr2 <= dat;
@@ -426,6 +430,13 @@ else begin
 				end
 			REG_OOB_COLOR:
 				if (|sel[3:0]) oob_color <= dat[31:0];
+			REG_WINDOW:
+				begin
+					if (|sel[1:0])	windowWidth <= dat[11:0];
+					if (|sel[3:2])  windowHeight <= dat[27:16];
+					if (|sel[5:4])	windowLeft <= dat[47:32];
+					if (|sel[7:6])  windowTop <= dat[63:48];
+				end
 
 `ifdef INTERNAL_SYNC_GEN
 			REG_TOTAL:
@@ -480,12 +491,13 @@ else begin
           s_dat_o[47:32] <= bmpWidth;
           s_dat_o[59:48] <= map;
       end
-  REG_WINDOW:			s_dat_o <= {windowTop,windowLeft,4'h0,windowHeight,4'h0,windowWidth};
+  REG_REFDELAY:		s_dat_o <= {32'h0,vrefdelay,hrefdelay};
   REG_PAGE1ADDR:	s_dat_o <= bm_base_addr1;
   REG_PAGE2ADDR:	s_dat_o <= bm_base_addr2;
   REG_PXYZ:		    s_dat_o <= {20'h0,pz,py,px};
   REG_PCOLCMD:    s_dat_o <= {color_o,12'd0,raster_op,14'd0,pcmd};
   REG_OOB_COLOR:	s_dat_o <= {32'h0,oob_color};
+  REG_WINDOW:			s_dat_o <= {windowTop,windowLeft,4'h0,windowHeight,4'h0,windowWidth};
   9'b10??_????_?:	s_dat_o <= {32'h0,pal_wo};
   default:        s_dat_o <= 64'd0;
   endcase
@@ -547,7 +559,7 @@ reg [3:0] hc = 4'd1;
 always @(posedge vclk)
 if (pe_hsync) begin
 	hc <= 4'd1;
-	pixelCol <= windowLeft;
+	pixelCol <= hrefdelay;
 end
 else begin
 	if (hc==hres) begin
@@ -562,7 +574,7 @@ reg [3:0] vc = 4'd1;
 always @(posedge vclk)
 if (pe_vsync) begin
 	vc <= 4'd1;
-	pixelRow <= windowTop;
+	pixelRow <= vrefdelay;
 end
 else begin
 	if (pe_hsync) begin
@@ -648,8 +660,8 @@ gfx_CalcAddress6 #(MDW) u1
 	.base_address_i(baseAddr),
 	.color_depth_i(color_depth),
 	.bmp_width_i(bmpWidth),
-	.x_coord_i(windowLeft + fetchCol),
-	.y_coord_i(pixelRow),
+	.x_coord_i(windowLeft),
+	.y_coord_i(windowTop + pixelRow),
 	.address_o(grAddr),
 	.mb_o(),
 	.me_o(),
@@ -757,7 +769,7 @@ OPWHITE: rastop = 1'b1;
 default:	rastop = 1'b0;
 endcase
 endfunction
-/*
+
 always @(posedge m_clk_i)
 	if (fifo_wrst)
 		adr <= grAddr;
@@ -769,7 +781,7 @@ always @(posedge m_clk_i)
     	default:	adr <= adr + 32'd16;
     	endcase
   end
-*/
+
 always @(posedge m_clk_i)
 	if (fifo_wrst)
 		fetchCol <= 12'd0;
@@ -780,7 +792,7 @@ always @(posedge m_clk_i)
 
 // Check for legal (positive) coordinates
 // Illegal coordinates result in a red display
-wire [15:0] xcol = windowLeft + fetchCol;
+wire [15:0] xcol = fetchCol;
 wire legal_x = ~&xcol[15:12] && xcol < bmpWidth;
 wire legal_y = ~&pixelRow[15:12] && pixelRow < bmpHeight;
 
@@ -813,7 +825,7 @@ else begin
     else if (load_fifo & ~m_ack_i) begin
       m_cyc_o <= `HIGH;
       m_we_o <= `LOW;
-      m_adr_o <= grAddr;
+      m_adr_o <= adr;
       state <= WAITLOAD;
     end
     // The adr_o[5:3]==3'b111 causes the controller to wait until all eight

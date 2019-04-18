@@ -193,6 +193,12 @@ char *Macro::GetBody()
 				else
 					inptr = p1;    // reset inptr if no identifier found
 			}
+			// Parms.count <= 0
+			else {
+				p1 = inptr;
+				NextToken();
+				p2 = inptr;
+			}
 			if (token == tk_endm)
 				break;
 			if (token != tk_id) {

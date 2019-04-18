@@ -25,7 +25,7 @@
 `include "FT64_defines.vh"
 `include "FT64_config.vh"
 
-module FT64_alu(rst, clk, ld, abort, instr, sz, tlb, store, a, b, c, pc, Ra, tgt, tgt2, ven, vm,
+module FT64_alu(rst, clk, ld, abort, instr, sz, tlb, store, a, b, c, t, pc, Ra, tgt, tgt2, ven, vm,
     csr, o, ob, done, idle, excen, exc, thrd, ptrmask, state, mem, shift,
     ol, dl, ASID, icl_i, cyc_i, we_i, vadr_i, cyc_o, we_o, padr_o, uncached, tlb_miss,
     exv_o, rdv_o, wrv_o
@@ -52,6 +52,7 @@ input store;
 input [63:0] a;
 input [63:0] b;
 input [63:0] c;
+input [63:0] t;			// target register value
 input [31:0] pc;
 input [11:0] Ra;
 input [11:0] tgt;
@@ -731,6 +732,11 @@ wire [63:0] redor32 = {31'd0,|a[63:32],31'd0,|a[31:0]};
 wire [63:0] redor16 = {15'd0,|a[63:48],15'd0,|a[47:32],15'd0,|a[31:16],15'd0,|a[15:0]};
 wire [63:0] redor8 = {7'b0,|a[63:56],6'b0,|a[55:48],7'd0,|a[47:40],7'd0,|a[39:32],7'd0,
 													 |a[31:24],7'd0,|a[23:16],7'd0,|a[15:8],7'd0,|a[7:0]};
+wire [63:0] redand64 = {63'd0,&a};
+wire [63:0] redand32 = {31'd0,&a[63:32],31'd0,&a[31:0]};
+wire [63:0] redand16 = {15'd0,&a[63:48],15'd0,&a[47:32],15'd0,&a[31:16],15'd0,&a[15:0]};
+wire [63:0] redand8 = {7'b0,&a[63:56],6'b0,&a[55:48],7'd0,&a[47:40],7'd0,&a[39:32],7'd0,
+													 &a[31:24],7'd0,&a[23:16],7'd0,&a[15:8],7'd0,&a[7:0]};
 wire [63:0] zxb10 = {54'd0,b[9:0]};
 wire [63:0] sxb10 = {{54{b[9]}},b[9:0]};
 wire [63:0] zxb26 = {38'd0,instr[47:32],instr[27:18]};
@@ -970,6 +976,13 @@ case(instr[`INSTRUCTION_OP])
 	        				2'd2:	o = {-a[63:32],-a[31:0]};
 	        				2'd3:	o = -a;
 	        				endcase
+	        `REDAND:
+        				 	case(sz[1:0])
+	                2'd0:   o = redand8;
+	                2'd1:   o = redand16;
+	                2'd2:   o = redand32;
+	                2'd3:   o = redand64;
+	                endcase
 	        `REDOR: case(sz[1:0])
 	                2'd0:   o = redor8;
 	                2'd1:   o = redor16;
@@ -991,9 +1004,9 @@ case(instr[`INSTRUCTION_OP])
 	    `SHIFTR:
 	    	begin
 	    		if (instr[25:23]==`SHL || instr[25:23]==`ASL)
-	    			o[63:0] = shfto;
+	    			o = shfto;
 	    		else
-	    			o[63:0] = BIG ? shfto : 64'hCCCCCCCCCCCCCCCC;
+	    			o = BIG ? shfto : 64'hCCCCCCCCCCCCCCCC;
 	    		$display("BIG=%d",BIG);
 	    		if(!BIG)
 	    			$stop;
@@ -1032,10 +1045,16 @@ case(instr[`INSTRUCTION_OP])
 `else
 			o = a + b;	            
 `endif
+// If the operation is SIMD the target register must be passed in arg T.
 	    `SUB:   
 `ifdef SIMD	    
 	    	case(sz)
-	    		3'd0,3'd4:
+	    		3'd0:
+	    			begin
+	    				o[7:0] = a[7:0] - b[7:0];
+	    				o[63:8] = t[63:8];
+	    			end
+	    		3'd4:
 	    			begin
 	    				o[7:0] = a[7:0] - b[7:0];
 	    				o[15:8] = a[15:8] - b[15:8];
@@ -1066,6 +1085,7 @@ case(instr[`INSTRUCTION_OP])
 `else
 			o = a - b;	            
 `endif
+			`SEQ:		tskSeq(instr,instr[25:23],a,b,o);
 	    `SLT:   tskSlt(instr,instr[25:23],a,b,o);
 	    `SLTU:  tskSltu(instr,instr[25:23],a,b,o);
 	    `SLE:   tskSle(instr,instr[25:23],a,b,o);
@@ -1106,37 +1126,56 @@ case(instr[`INSTRUCTION_OP])
 					end
 	    `MIN: 
 `ifdef SIMD
-	          case(sz)
-	    			3'd0,3'd4:
-		    			begin
-		    			o[7:0] = BIG ? ($signed(a[7:0]) < $signed(b[7:0]) ? a[7:0] : b[7:0]) : 8'hCC;
-		    			o[15:8] = BIG ? ($signed(a[15:8]) < $signed(b[15:8]) ? a[15:8] : b[15:8]) : 64'hCCCCCCCCCCCCCCCC;
-		    			o[23:16] = BIG ? ($signed(a[23:16]) < $signed(b[23:16]) ? a[23:16] : b[23:16]) : 64'hCCCCCCCCCCCCCCCC;
-		    			o[31:24] = BIG ? ($signed(a[31:24]) < $signed(b[31:24]) ? a[31:24] : b[31:24]) : 64'hCCCCCCCCCCCCCCCC;
-		    			o[39:32] = BIG ? ($signed(a[39:32]) < $signed(b[39:32]) ? a[39:32] : b[39:32]) : 64'hCCCCCCCCCCCCCCCC;
-		    			o[47:40] = BIG ? ($signed(a[47:40]) < $signed(b[47:40]) ? a[47:40] : b[47:40]) : 64'hCCCCCCCCCCCCCCCC;
-		    			o[55:48] = BIG ? ($signed(a[55:48]) < $signed(b[55:48]) ? a[55:48] : b[55:48]) : 64'hCCCCCCCCCCCCCCCC;
-		    			o[63:56] = BIG ? ($signed(a[63:56]) < $signed(b[63:56]) ? a[63:56] : b[63:56]) : 64'hCCCCCCCCCCCCCCCC;
-		    			end
-		    		3'd1,3'd5:
-		    			begin
-		    			o[15:0] = BIG ? ($signed(a[15:0]) < $signed(b[15:0]) ? a[15:0] : b[15:0]) : 64'hCCCCCCCCCCCCCCCC;
-		    			o[32:16] = BIG ? ($signed(a[32:16]) < $signed(b[32:16]) ? a[32:16] : b[32:16]) : 64'hCCCCCCCCCCCCCCCC;
-		    			o[47:32] = BIG ? ($signed(a[47:32]) < $signed(b[47:32]) ? a[47:32] : b[47:32]) : 64'hCCCCCCCCCCCCCCCC;
-		    			o[63:48] = BIG ? ($signed(a[63:48]) < $signed(b[63:48]) ? a[63:48] : b[63:48]) : 64'hCCCCCCCCCCCCCCCC;
-		    			end
-		    		3'd2,3'd6:
-		    			begin
-		    			o[31:0] = BIG ? ($signed(a[31:0]) < $signed(b[31:0]) ? a[31:0] : b[31:0]) : 64'hCCCCCCCCCCCCCCCC;
-		    			o[63:32] = BIG ? ($signed(a[63:32]) < $signed(b[63:32]) ? a[63:32] : b[63:32]) : 64'hCCCCCCCCCCCCCCCC;
-		    			end
-					3'd3,3'd7:
+          case(sz)
+    			3'd0:
+	    			begin
+	    			o[7:0] = BIG ? ($signed(a[7:0]) < $signed(b[7:0]) ? a[7:0] : b[7:0]) : 8'hCC;
+	    			o[63:8] = BIG ? t[63:8] : 56'hCCCCCCCCCCCCCC;
+	    			end
+	    		3'd1:
+	    			begin
+	    			o[15:0] = BIG ? ($signed(a[15:0]) < $signed(b[15:0]) ? a[15:0] : b[15:0]) : 16'hCCCC;
+	    			o[63:16] = BIG ? t[63:16] : 48'hCCCCCCCCCCCC;
+	    			end
+	    		3'd2:
+	    			begin
+	    			o[31:0] = BIG ? ($signed(a[31:0]) < $signed(b[31:0]) ? a[31:0] : b[31:0]) : 32'hCCCCCCCC;
+	    			o[63:32] = BIG ? t[63:32] : 32'hCCCCCCCC;
+	    			end
+					3'd3:
 						begin    			
-	    				o[63:0] = BIG ? ($signed(a) < $signed(b) ? a : b) : 64'hCCCCCCCCCCCCCCCC;
-	    				end
-	    			endcase
+    				o = BIG ? ($signed(a) < $signed(b) ? a : b) : 64'hCCCCCCCCCCCCCCCC;
+    				end
+    			3'd4:
+	    			begin
+	    			o[7:0] = BIG ? ($signed(a[7:0]) < $signed(b[7:0]) ? a[7:0] : b[7:0]) : 8'hCC;
+	    			o[15:8] = BIG ? ($signed(a[15:8]) < $signed(b[15:8]) ? a[15:8] : b[15:8]) : 64'hCCCCCCCCCCCCCCCC;
+	    			o[23:16] = BIG ? ($signed(a[23:16]) < $signed(b[23:16]) ? a[23:16] : b[23:16]) : 64'hCCCCCCCCCCCCCCCC;
+	    			o[31:24] = BIG ? ($signed(a[31:24]) < $signed(b[31:24]) ? a[31:24] : b[31:24]) : 64'hCCCCCCCCCCCCCCCC;
+	    			o[39:32] = BIG ? ($signed(a[39:32]) < $signed(b[39:32]) ? a[39:32] : b[39:32]) : 64'hCCCCCCCCCCCCCCCC;
+	    			o[47:40] = BIG ? ($signed(a[47:40]) < $signed(b[47:40]) ? a[47:40] : b[47:40]) : 64'hCCCCCCCCCCCCCCCC;
+	    			o[55:48] = BIG ? ($signed(a[55:48]) < $signed(b[55:48]) ? a[55:48] : b[55:48]) : 64'hCCCCCCCCCCCCCCCC;
+	    			o[63:56] = BIG ? ($signed(a[63:56]) < $signed(b[63:56]) ? a[63:56] : b[63:56]) : 64'hCCCCCCCCCCCCCCCC;
+	    			end
+	    		3'd5:
+	    			begin
+	    			o[15:0] = BIG ? ($signed(a[15:0]) < $signed(b[15:0]) ? a[15:0] : b[15:0]) : 64'hCCCCCCCCCCCCCCCC;
+	    			o[32:16] = BIG ? ($signed(a[32:16]) < $signed(b[32:16]) ? a[32:16] : b[32:16]) : 64'hCCCCCCCCCCCCCCCC;
+	    			o[47:32] = BIG ? ($signed(a[47:32]) < $signed(b[47:32]) ? a[47:32] : b[47:32]) : 64'hCCCCCCCCCCCCCCCC;
+	    			o[63:48] = BIG ? ($signed(a[63:48]) < $signed(b[63:48]) ? a[63:48] : b[63:48]) : 64'hCCCCCCCCCCCCCCCC;
+	    			end
+	    		3'd6:
+	    			begin
+	    			o[31:0] = BIG ? ($signed(a[31:0]) < $signed(b[31:0]) ? a[31:0] : b[31:0]) : 64'hCCCCCCCCCCCCCCCC;
+	    			o[63:32] = BIG ? ($signed(a[63:32]) < $signed(b[63:32]) ? a[63:32] : b[63:32]) : 64'hCCCCCCCCCCCCCCCC;
+	    			end
+					3'd7:
+						begin
+    				o = BIG ? ($signed(a) < $signed(b) ? a : b) : 64'hCCCCCCCCCCCCCCCC;
+    				end
+    			endcase
 `else
-			o[63:0] = BIG ? ($signed(a) < $signed(b) ? a : b) : 64'hCCCCCCCCCCCCCCCC;
+				o = BIG ? ($signed(a) < $signed(b) ? a : b) : 64'hCCCCCCCCCCCCCCCC;
 `endif	    			
 	    `MAX: 
 `ifdef SIMD     
@@ -1287,6 +1326,7 @@ case(instr[`INSTRUCTION_OP])
  			o = {{15{instr[31]}},instr[31:18],instr[12:8],30'd0};
 	end
 `ADDI:	o = a + b;
+`SEQI:	o = a == b;
 `SLTI:	o = $signed(a) < $signed(b);
 `SLTUI: o = a < b;
 `SGTI:	o = $signed(a) > $signed(b);
@@ -1621,6 +1661,47 @@ begin
 	bb <= c;
 end
 
+task tskSeq;
+input [47:0] instr;
+input [2:0] sz;
+input [63:0] a;
+input [63:0] b;
+output [63:0] o;
+begin
+`ifdef SIMD
+	case(sz[2:0])
+  3'd0:   o[63:0] = $signed(a[7:0]) == $signed(b[7:0]);
+  3'd1:   o[63:0] = $signed(a[15:0]) == $signed(b[15:0]);
+  3'd2:   o[63:0] = $signed(a[31:0]) == $signed(b[31:0]);
+  3'd3:   o[63:0] = $signed(a) == $signed(b);
+  3'd4:		o[63:0] = {
+					        	7'h0,$signed(a[7:0]) == $signed(b[7:0]),
+					        	7'h0,$signed(a[15:8]) == $signed(b[15:8]),
+					        	7'h0,$signed(a[23:16]) == $signed(b[23:16]),
+					        	7'h0,$signed(a[31:24]) == $signed(b[31:24]),
+					        	7'h0,$signed(a[39:32]) == $signed(b[39:32]),
+					        	7'h0,$signed(a[47:40]) == $signed(b[47:40]),
+					        	7'h0,$signed(a[55:48]) == $signed(b[55:48]),
+					        	7'h0,$signed(a[63:56]) == $signed(b[63:56])
+						        };
+  3'd5:		o[63:0] = {
+					        	15'h0,$signed(a[15:0]) == $signed(b[15:0]),
+					        	15'h0,$signed(a[31:16]) == $signed(b[31:16]),
+					        	15'h0,$signed(a[47:32]) == $signed(b[47:32]),
+					        	15'h0,$signed(a[63:48]) == $signed(b[63:48])
+						        };
+  3'd6:		o[63:0] = {
+					        	31'h0,$signed(a[31:0]) == $signed(b[31:0]),
+					        	31'h0,$signed(a[63:32]) == $signed(b[63:32])
+						        };
+	3'd7:		o[63:0] = $signed(a[63:0]) == $signed(b[63:0]);
+  endcase
+`else
+	o = $signed(a) == $signed(b);
+`endif
+end
+endtask
+
 task tskSlt;
 input [47:0] instr;
 input [2:0] sz;
@@ -1698,7 +1779,7 @@ begin
 	3'd7:		o[63:0] = $signed(a[63:0]) <= $signed(b[63:0]);
   endcase
 `else
-	o[63:0] = $signed(a[63:0]) <= $signed(b[63:0]);
+	o = $signed(a) <= $signed(b);
 `endif
 end
 endtask

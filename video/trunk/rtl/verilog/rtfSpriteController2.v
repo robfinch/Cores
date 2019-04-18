@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2018-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -35,12 +35,11 @@
 // display resolution.
 `define SPR_WCA	12'd638
 
-module rtfSpriteController2(rst_i, clk_i, cs_i, cyc_i, stb_i, ack_o, we_i, sel_i, adr_i, dat_i, dat_o,
-	m_clk_i, m_cyc_o, m_stb_o, m_ack_i, m_sel_o, m_adr_o, m_dat_i,
-	dot_clk_i, hsync_i, vsync_i, zrgb_i, zrgb_o, test
+module rtfSpriteController2(clk_i, cs_i, cyc_i, stb_i, ack_o, we_i, sel_i, adr_i, dat_i, dat_o,
+	m_clk_i, m_cyc_o, m_stb_o, m_ack_i, m_sel_o, m_adr_o, m_dat_i, m_spriteno_o,
+	dot_clk_i, hsync_i, vsync_i, border_i, zrgb_i, zrgb_o, test
 );
 // Bus slave port
-input rst_i;
 input clk_i;
 input cs_i;
 input cyc_i;
@@ -59,33 +58,33 @@ input m_ack_i;
 output [7:0] m_sel_o;
 output reg [`ABITS] m_adr_o;
 input [63:0] m_dat_i;
+output reg [4:0] m_spriteno_o;
 // Video port
 input dot_clk_i;
 input vsync_i;
 input hsync_i;
+input border_i;
 input [31:0] zrgb_i;
 output reg [31:0] zrgb_o;
 input test;
 
 parameter NSPR = 32;
-parameter IDLE = 3'd0;
-parameter DATA_FETCH = 3'd1;
-parameter MEM_ACCESS = 3'd2;
-parameter WAIT_NACK = 3'd3;
-parameter NEXT_SPRITE = 3'd4;
+parameter IDLE = 2'd0;
+parameter DATA_FETCH = 2'd1;
+parameter MEM_ACCESS = 2'd2;
 
 integer n;
 
-reg controller_enable;
+reg controller_enable = 1'b1;
 wire vclk;
-reg [2:0] state;
+reg [1:0] state = IDLE;
 reg [1:0] lowres;
 wire [5:0] flashcnt;
-reg rst_collision;
+reg rst_collision = 1'b0;
 reg [31:0] collision, c_collision;
-reg [4:0] spriteno;
+reg [4:0] spriteno = 5'd0;
 reg sprite;
-reg [31:0] spriteEnable;
+reg [31:0] spriteEnable = 32'hFFFFFFFF;
 reg [31:0] spriteActive;
 reg [11:0] sprite_pv [0:31];
 reg [11:0] sprite_ph [0:31];
@@ -103,18 +102,25 @@ reg [15:0] spriteMcnt [0:31];
 reg [15:0] spriteWcnt [0:31];
 reg [63:0] m_spriteBmp [0:31];
 reg [63:0] spriteBmp [0:31];
-reg [31:0] spriteLink1;
+reg [31:0] spriteLink1 = 32'h0;
 reg [7:0] spriteColorNdx [0:31];
 
 initial begin
 	for (n = 0; n < 256; n = n + 1) begin
-		sprite_color[n][31:0] <= {8'h00,n[7:5],5'd0,n[4:3],6'd0,n[2:0],5'd0};
+		sprite_color[n] <= {6'h00,8'h00,n[7:5],5'd0,n[4:3],6'd0,n[2:0],5'd0};
+//		sprite_color[n][31:0] <= {8'h00,n[7:5],5'd0,n[4:3],6'd0,n[2:0],5'd0};	// <- doesn't work
 	end
 	for (n = 0; n < 32; n = n + 1) begin
-		sprite_ph[n] <= 260 + n * 40;
-		sprite_pv[n] <= 41 + n * 20;
+		if (n < 16) begin
+			sprite_ph[n] <= 400 + n * 32;
+			sprite_pv[n] <= 100 + n * 8;
+		end
+		else begin
+			sprite_ph[n] <= 400 + (n - 16) * 32;
+			sprite_pv[n] <= 200 + n * 8;
+		end
 		sprite_pz[n] <= 8'h00;
-		spriteMcnt[n] <= 60 * 32;
+		spriteMcnt[n] <= 80 * 32;
 		spriteBmp[n] <= 64'hFFFFFFFFFFFFFFFF;
 		spriteAddr[n] <= 32'h40000 + (n << 12);
 	end
@@ -124,72 +130,80 @@ wire pe_hsync, pe_vsync;
 wire [11:0] hctr, vctr;
 reg [11:0] m_hctr, m_vctr;
 
-// Generate acknowledge signal
-wire cs = cs_i & cyc_i & stb_i;
-reg rdy1,rdy2,rdy3,rdy4;
+reg cs;
+reg we;
+reg [7:0] sel;
+reg [11:0] adr;
+reg [63:0] dat;
+
 always @(posedge clk_i)
-	rdy1 <= cs;
+	cs <= cs_i & cyc_i & stb_i;
 always @(posedge clk_i)
-	rdy2 <= rdy1 & cs;
+	we <= we_i;
 always @(posedge clk_i)
-	rdy3 <= rdy2 & cs;
+	sel <= sel_i;
 always @(posedge clk_i)
-	rdy4 <= rdy3 & cs;
-assign ack_o = (cs & we_i) ? 1'b1 : rdy4;
+	adr <= adr_i;
+always @(posedge clk_i)
+	dat <= dat_i;
+
+ack_gen #(
+	.READ_STAGES(4),
+	.WRITE_STAGES(0),
+	.REGISTER_OUTPUT(1)
+) uag1
+(
+	.clk_i(clk_i),
+	.ce_i(1'b1),
+	.i(cs),
+	.we_i(cs & we),
+	.o(ack_o)
+);
 
 (* ram_style="block" *)
 reg [63:0] shadow_ram [0:511];
 reg [63:0] shadow_ramo;
 reg [8:0] sradr;
 always @(posedge clk_i)
-	if (cs & we_i) begin
-		if (sel_i[0]) shadow_ram[adr_i[11:3]][ 7: 0] <= dat_i;
-		if (sel_i[1]) shadow_ram[adr_i[11:3]][15: 8] <= dat_i;
-		if (sel_i[2]) shadow_ram[adr_i[11:3]][23:16] <= dat_i;
-		if (sel_i[3]) shadow_ram[adr_i[11:3]][31:24] <= dat_i;
-		if (sel_i[4]) shadow_ram[adr_i[11:3]][39:32] <= dat_i;
-		if (sel_i[5]) shadow_ram[adr_i[11:3]][47:40] <= dat_i;
-		if (sel_i[6]) shadow_ram[adr_i[11:3]][55:48] <= dat_i;
-		if (sel_i[7]) shadow_ram[adr_i[11:3]][63:56] <= dat_i;
+	if (cs & we) begin
+		if (|sel[1:0]) shadow_ram[adr[11:3]][15: 0] <= dat[15: 0];
+		if (|sel[3:2]) shadow_ram[adr[11:3]][31:16] <= dat[31:16];
+		if (|sel[5:4]) shadow_ram[adr[11:3]][47:32] <= dat[47:32];
+		if (|sel[7:6]) shadow_ram[adr[11:3]][63:48] <= dat[63:48];
 	end
 always @(posedge clk_i)
-	sradr <= adr_i[11:3];
+	sradr <= adr[11:3];
 always @(posedge clk_i)
 	shadow_ramo <= shadow_ram[sradr];
 always @(posedge clk_i)
-case(adr_i[11:3])
+case(adr[11:3])
 9'b1010_0001_0:	dat_o <= c_collision;
 default:	dat_o <= shadow_ramo;
 endcase
 
 always @(posedge clk_i)
-if (rst_i) begin
+begin
 	rst_collision <= `FALSE;
-	controller_enable <= `TRUE;
-	spriteEnable <= 32'hFFFFFFFF;
-	spriteLink1 <= 32'h0;
-end
-else begin
-	rst_collision <= `FALSE;
-	if (cs & we_i) begin
-		casez(adr_i[11:3])
-		9'b0???_????_?:	sprite_color[adr_i[10:3]] <= dat_i[37:0];
-		9'b100?_????_0:	spriteAddr[adr_i[8:4]] <= dat_i[`ABITS];
+	if (cs & we) begin
+		casez(adr[11:3])
+		9'b0???_????_?:	sprite_color[adr[10:3]] <= dat[37:0];
+		9'b100?_????_0:	spriteAddr[adr[8:4]] <= dat[`ABITS];
 		9'b100?_????_1:
 			begin
-				if (|sel_i[1:0]) sprite_ph[adr_i[8:4]] <= dat_i[11: 0];
-				if (|sel_i[3:2]) sprite_pv[adr_i[8:4]] <= dat_i[27:16];
-				if ( sel_i[  4]) sprite_pz[adr_i[8:4]] <= dat_i[39:32];
-				if (|sel_i[7:6]) spriteMcnt[adr_i[8:4]] <= dat_i[63:48];
+				if (|sel[1:0]) sprite_ph[adr[8:4]] <= dat[11: 0];
+				if (|sel[3:2]) sprite_pv[adr[8:4]] <= dat[27:16];
+				if (|sel[5:4]) sprite_pz[adr[8:4]] <= dat[39:32];
+				if (|sel[7:6]) spriteMcnt[adr[8:4]] <= dat[63:48];
 			end
-		9'b1010_0000_0:	spriteEnable <= dat_i[31:0];
-		9'b1010_0000_1:	spriteLink1 <= dat_i[31:0];
+		9'b1010_0000_0:	spriteEnable <= dat[31:0];
+		9'b1010_0000_1:	spriteLink1 <= dat[31:0];
 		9'b1010_0001_0:	rst_collision <= `TRUE;
 		9'b1010_0001_1:
 			begin
-				lowres <= dat_i[1:0];
-				controller_enable <= dat_i[8];
+				lowres <= dat[1:0];
+				controller_enable <= dat[8];
 			end
+		default:	;
 		endcase
 	end
 end
@@ -203,58 +217,61 @@ always @(posedge m_clk_i)
 
 // State machine
 always @(posedge m_clk_i)
-if (rst_i)
-	state <= IDLE;
-else begin
-	case(state)
-	IDLE:
-		// dot_clk_i is likely faster than m_clk_i, so check for a trigger zone.
-		if (m_hctr < 12'd10 && controller_enable)
-			state <= DATA_FETCH;
-	DATA_FETCH:
-		if (spriteActive[spriteno])
-			state <= MEM_ACCESS;
-		else
-			state <= NEXT_SPRITE;
-	MEM_ACCESS:
-		if (m_ack_i)
-			state <= WAIT_NACK;
-	WAIT_NACK:
+case(state)
+IDLE:
+	// dot_clk_i is likely faster than m_clk_i, so check for a trigger zone.
+	if (m_hctr < 12'd10 && controller_enable)
+		state <= DATA_FETCH;
+DATA_FETCH:
+	if (spriteActive[spriteno]) begin
 		if (~m_ack_i)
-			state <= NEXT_SPRITE;
-	NEXT_SPRITE:
+			state <= MEM_ACCESS;
+	end
+	else if (spriteno==5'd31)
+		state <= IDLE;
+MEM_ACCESS:
+	if (m_ack_i) begin
 		if (spriteno==5'd31)
 			state <= IDLE;
 		else
 			state <= DATA_FETCH;
-	endcase
-end
+	end
+default:	state <= IDLE;
+endcase
 
 always @(posedge m_clk_i)
-if (rst_i) begin
+case(state)
+IDLE:
 	m_cyc_o <= `LOW;
+DATA_FETCH:
+	if (!m_ack_i && spriteActive[spriteno]) begin
+		m_cyc_o <= `HIGH;
+		m_adr_o <= spriteWaddr[spriteno];
+		m_spriteno_o <= spriteno;
+	end
+MEM_ACCESS:
+	if (m_ack_i) begin
+		m_cyc_o <= `LOW;
+		m_spriteBmp[spriteno] <= m_dat_i;
+		if (test)
+			m_spriteBmp[spriteno] <= 64'h00005555AAAAFFFF;
+	end
+default:	;
+endcase
+
+always @(posedge m_clk_i)
+case(state)
+IDLE:
 	spriteno <= 5'd0;
-end
-else begin
-	case(state)
-	IDLE:
-		spriteno <= 5'd0;
-	DATA_FETCH:
-		if (spriteActive[spriteno]) begin
-			m_cyc_o <= `HIGH;
-			m_adr_o <= spriteWaddr[spriteno];
-		end
-	MEM_ACCESS:
-		if (m_ack_i) begin
-			m_cyc_o <= `LOW;
-			m_spriteBmp[spriteno] <= dat_i;
-			if (test)
-				m_spriteBmp[spriteno] <= 64'h00005555AAAAFFFF;
-		end
-	NEXT_SPRITE:
+DATA_FETCH:
+	if (!spriteActive[spriteno])
 		spriteno <= spriteno + 5'd1;
-	endcase
-end
+MEM_ACCESS:
+	if (m_ack_i)
+		spriteno <= spriteno + 5'd1;
+default:	;
+endcase
+
 
 // Register collision onto clk_i domain.
 always @(posedge clk_i)
@@ -274,9 +291,9 @@ assign vclk = dot_clk_i;
 edge_det ued1 (.clk(vclk), .ce(1'b1), .i(hsync_i), .pe(pe_hsync), .ne(), .ee());
 edge_det ued2 (.clk(vclk), .ce(1'b1), .i(vsync_i), .pe(pe_vsync), .ne(), .ee());
 
-VT163 #(12) uhctr (.clk(vclk), .clr_n(!rst_i), .ent(1'b1),     .enp(1'b1), .ld_n(!pe_hsync), .d(12'd0), .q(hctr), .rco());
-VT163 #(12) uvctr (.clk(vclk), .clr_n(!rst_i), .ent(pe_hsync), .enp(1'b1), .ld_n(!pe_vsync), .d(12'd0), .q(vctr), .rco());
-VT163 # (6) ufctr (.clk(vclk), .clr_n(!rst_i), .ent(pe_vsync), .enp(1'b1), .ld_n(1'b1),  .d( 6'd0), .q(flashcnt), .rco());
+VT163 #(12) uhctr (.clk(vclk), .clr_n(1'b1), .ent(1'b1),     .enp(1'b1), .ld_n(!pe_hsync), .d(12'd0), .q(hctr), .rco());
+VT163 #(12) uvctr (.clk(vclk), .clr_n(1'b1), .ent(pe_hsync), .enp(1'b1), .ld_n(!pe_vsync), .d(12'd0), .q(vctr), .rco());
+VT163 # (6) ufctr (.clk(vclk), .clr_n(1'b1), .ent(pe_vsync), .enp(1'b1), .ld_n(1'b1),  .d( 6'd0), .q(flashcnt), .rco());
 
 always @(posedge vclk)
 begin
@@ -429,8 +446,7 @@ else
 // If the sprites are linked once the colors are available in groups.
 // If the sprites are linked twice they all share the same set of colors.
 // Pipelining register
-reg blank1, blank2, blank3, blank4;
-reg border1, border2, border3, border4;
+reg border3, border4;
 reg any_sprite_on2, any_sprite_on3, any_sprite_on4;
 reg [31:0] zrgb_i3, zrgb_i4;
 reg [7:0] zb_i3, zb_i4;
@@ -450,7 +466,7 @@ reg [7:0] spriteClrNdx;
 // Fetch sprite Z order
 
 always @(posedge vclk)
-    sprite_on_d1 <= sprite_on;
+  sprite_on_d1 <= sprite_on;
 
 always @(posedge vclk)
 begin
@@ -478,10 +494,6 @@ always @(posedge vclk)
 always @(posedge vclk)
     any_sprite_on2 <= |sprite_on_d1;
 always @(posedge vclk)
-    blank2 <= blank1;
-always @(posedge vclk)
-    border2 <= border1;
-always @(posedge vclk)
     spriteColorOut2 <= sprite_color[spriteClrNdx];
 always @(posedge vclk)
     sprite_z2 <= sprite_z1;
@@ -507,9 +519,7 @@ always @(posedge vclk)
 always @(posedge vclk)
     zb_i3 <= zrgb_i[31:24];
 always @(posedge vclk)
-    blank3 <= blank2;
-always @(posedge vclk)
-    border3 <= border2;
+    border3 <= border_i;
 always @(posedge vclk)
     spriteColorOut3 <= spriteColorOut2;
 
@@ -532,8 +542,6 @@ always @(posedge vclk)
 always @(posedge vclk)
     zb_i4 <= zb_i3;
 always @(posedge vclk)
-    blank4 <= blank3;
-always @(posedge vclk)
     border4 <= border3;
 
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
@@ -542,9 +550,10 @@ always @(posedge vclk)
 // final output registration
 
 always @(posedge dot_clk_i)
-	case(any_sprite_on4 & controller_enable)
-	1'b1:		zrgb_o <= (zb_i4 < sprite_z4) ? zrgb_i4 : {sprite_z4,flashOut};
-	1'b0:		zrgb_o <= zrgb_i4;
+	casez({border4,any_sprite_on4 & controller_enable})
+	2'b01:	zrgb_o <= (zb_i4 < sprite_z4) ? zrgb_i4 : {sprite_z4,flashOut};
+	2'b00:	zrgb_o <= zrgb_i4;
+	2'b1?:	zrgb_o <= zrgb_i4;
 	endcase
 
 endmodule

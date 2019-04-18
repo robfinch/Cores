@@ -1077,6 +1077,8 @@ wire threadx;
 always @*
 	phit <= ihit&&icstate==IDLE;
 reg [2:0] iccnt;
+(* mark_debug="true" *)
+reg icack;
 reg L1_wr0,L1_wr1,L1_wr2;
 reg L1_invline;
 wire [1:0] ic0_fault,ic1_fault,ic2_fault;
@@ -2537,6 +2539,7 @@ casez(isn[`INSTRUCTION_OP])
         endcase
 `MEMNDX:Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `ADDI:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`SEQI:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `SLTI:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `SLTUI: Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `SGTI:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
@@ -2591,9 +2594,8 @@ casez(isn[`INSTRUCTION_OP])
 				`TLB:				Source2Valid = TRUE;
         `R1:       	Source2Valid = TRUE;
         `MOV:				Source2Valid = TRUE;
-        `SHIFTR:   	Source2Valid = isn[25] ? 1'b1 : isn[`INSTRUCTION_RB]==5'd0;
-        `SHIFT31:  	Source2Valid = isn[25] ? 1'b1 : isn[`INSTRUCTION_RB]==5'd0;
-        `SHIFT63:  	Source2Valid = isn[25] ? 1'b1 : isn[`INSTRUCTION_RB]==5'd0;
+        `SHIFT31:  	Source2Valid = TRUE;
+        `SHIFT63:  	Source2Valid = TRUE;
         `LVX,`SVX: 	Source2Valid = FALSE;
         default:   	Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
         endcase
@@ -2614,6 +2616,7 @@ casez(isn[`INSTRUCTION_OP])
 			endcase
 	end
 `ADDI:  Source2Valid = TRUE;
+`SEQI:  Source2Valid = TRUE;
 `SLTI:  Source2Valid = TRUE;
 `SLTUI: Source2Valid = TRUE;
 `SGTI:  Source2Valid = TRUE;
@@ -3093,6 +3096,7 @@ casez(isn[`INSTRUCTION_OP])
 	    	endcase
 	    `ADD:   IsRFW = TRUE;
 	    `SUB:   IsRFW = TRUE;
+	    `SEQ:   IsRFW = TRUE;
 	    `SLT:   IsRFW = TRUE;
 	    `SLTU:  IsRFW = TRUE;
 	    `SLE:   IsRFW = TRUE;
@@ -3190,6 +3194,7 @@ casez(isn[`INSTRUCTION_OP])
 `BBc:	IsRFW = FALSE;
 `BITFIELD:  IsRFW = TRUE;
 `ADDI:      IsRFW = TRUE;
+`SEQI:      IsRFW = TRUE;
 `SLTI:      IsRFW = TRUE;
 `SLTUI:     IsRFW = TRUE;
 `SGTI:      IsRFW = TRUE;
@@ -7849,7 +7854,7 @@ IC_Next:
 default:     icstate <= IDLE;
 endcase
 
-if (mem1_available && dram0_load)
+if (dram0_load)
 case(dram0)
 `DRAMSLOT_AVAIL:	;
 `DRAMSLOT_BUSY:
@@ -7889,7 +7894,7 @@ case(dram0)
 `DRAMREQ_READY:		dram0 <= `DRAMSLOT_AVAIL;
 endcase
 
-if (mem2_available && dram1_load && `NUM_MEM > 1)
+if (dram1_load && `NUM_MEM > 1)
 case(dram1)
 `DRAMSLOT_AVAIL:	;
 `DRAMSLOT_BUSY:
@@ -7914,7 +7919,7 @@ case(dram1)
 `DRAMREQ_READY:		dram1 <= `DRAMSLOT_AVAIL;
 endcase
 
-if (mem3_available && dram2_load && `NUM_MEM > 2)
+if (dram2_load && `NUM_MEM > 2)
 case(dram2)
 `DRAMSLOT_AVAIL:	;
 `DRAMSLOT_BUSY:
@@ -8367,10 +8372,14 @@ BIDLE:
            sel_o <= 8'hFF;
            icl_o <= `HIGH;
            iccnt <= 3'd0;
+           icack <= 1'b0;
 //            adr_o <= icwhich ? {pc0[31:5],5'b0} : {pc1[31:5],5'b0};
 //            L2_adr <= icwhich ? {pc0[31:5],5'b0} : {pc1[31:5],5'b0};
            vadr <= {pcr[7:0],L1_adr[AMSB:5],5'h0};
-           ol_o  <= ol[0];
+`ifdef SUPPORT_SMT          
+`else 
+           ol_o  <= ol;//???
+`endif
            L2_adr <= {pcr[7:0],L1_adr[AMSB:5],5'h0};
            L2_xsel <= 1'b0;
            bstate <= B_ICacheAck;
@@ -8517,12 +8526,17 @@ B_DCacheLoadResetBusy:
   end
 
 // Ack state for instruction cache load
+// Once the first ack is received in burst mode, further acks are not necessary
+// as the core counts the number of data items. Occasionally missing acks were
+// causing a problem.
 B_ICacheAck:
-  if (acki|err_i|tlb_miss|exv_i) begin
+  if (acki|err_i|tlb_miss|exv_i|icack) begin
   	if (!bok_i) begin
   		stb_o <= `LOW;
   		bstate <= B_ICacheNack2;
   	end
+  	else
+  		icack <= 1'b1;
     errq <= errq | err_i;
     exvq <= exvq | exv_i;
 		if (tlb_miss) begin

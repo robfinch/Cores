@@ -395,9 +395,9 @@ void Function::RestoreRegisterArguments()
 }
 
 
-void Function::RestoreGPRegisterVars()
+int Function::RestoreGPRegisterVars()
 {
-	int cnt2, cnt;
+	int cnt2 = 0, cnt;
 	int nn;
 
 	if (save_mask != 0) {
@@ -409,13 +409,13 @@ void Function::RestoreGPRegisterVars()
 				cnt += sizeOfWord;
 			}
 		}
-		GenerateTriadic(op_add, 0, makereg(regSP), makereg(regSP), make_immed(cnt2));
 	}
+	return (cnt2);
 }
 
-void Function::RestoreFPRegisterVars()
+int Function::RestoreFPRegisterVars()
 {
-	int cnt2, cnt;
+	int cnt2 = 0, cnt;
 	int nn;
 
 	if (fpsave_mask != 0) {
@@ -427,13 +427,18 @@ void Function::RestoreFPRegisterVars()
 				cnt += sizeOfWord;
 			}
 		}
-		GenerateTriadic(op_add, 0, makereg(regSP), makereg(regSP), make_immed(cnt2));
+//		GenerateTriadic(op_add, 0, makereg(regSP), makereg(regSP), make_immed(cnt2));
 	}
+	return (cnt2);
 }
 
 void Function::RestoreRegisterVars()
 {
-	RestoreGPRegisterVars();
+	int cnt2;
+
+	cnt2 = RestoreGPRegisterVars();
+	if (fpsave_mask != 0)
+		GenerateTriadic(op_add, 0, makereg(regSP), makereg(regSP), make_immed(cnt2));
 	RestoreFPRegisterVars();
 }
 
@@ -470,6 +475,7 @@ void Function::RestoreTemporaries(int sp, int fsp)
 
 void Function::UnlinkStack()
 {
+	GenerateMonadic(op_hint, 0, make_immed(begin_stack_unlink));
 	GenerateDiadic(op_mov, 0, makereg(regSP), makereg(regFP));
 	GenerateDiadic(op_lw, 0, makereg(regFP), make_indirect(regSP));
 	if (exceptions) {
@@ -479,6 +485,7 @@ void Function::UnlinkStack()
 	if (!IsLeaf)
 		GenerateDiadic(op_lw, 0, makereg(regLR), make_indexed(3 * sizeOfWord, regSP));
 	//	GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),make_immed(3*sizeOfWord));
+	GenerateMonadic(op_hint, 0, make_immed(end_stack_unlink));
 }
 
 bool Function::GenDefaultCatch()
@@ -510,6 +517,7 @@ void Function::SetupReturnBlock()
 	Operand *ap;
 	int n;
 
+	GenerateMonadic(op_hint,0,make_immed(begin_return_block));
 	GenerateTriadic(op_sub, 0, makereg(regSP), makereg(regSP), make_immed(4 * sizeOfWord));
 	GenerateDiadic(op_sw, 0, makereg(regFP), make_indirect(regSP));
 	GenerateDiadic(op_sw, 0, makereg(regZero), make_indexed(sizeOfWord, regSP));
@@ -540,6 +548,7 @@ void Function::SetupReturnBlock()
 	GenerateDiadic(op_mov, 0, makereg(regFP), makereg(regSP));
 	GenerateTriadic(op_sub, 0, makereg(regSP), makereg(regSP), make_immed(stkspace));
 	spAdjust = peep_tail;
+	GenerateMonadic(op_hint, 0, make_immed(end_return_block));
 }
 
 // Generate a return statement.
@@ -731,7 +740,14 @@ void Function::Gen()
 	int o_throwlab, o_retlab, o_contlab, o_breaklab;
 	OCODE *ip;
 	bool doCatch = true;
+	int n;
 
+	for (n = 0; n < 32; n++) {
+		regs[n].assigned = false;
+		regs[n].isConst = false;
+		regs[n].modified = false;
+		regs[n].offset = nullptr;
+	}
 	o_throwlab = throwlab;
 	o_retlab = retlab;
 	o_contlab = contlab;
@@ -763,6 +779,8 @@ void Function::Gen()
 	// Setup the return block.
 	if (!IsNocall)
 		SetupReturnBlock();
+	GenerateMonadic(op_hint, 0, make_immed(start_funcbody));
+
 	if (optimize) {
 		if (currentFn->csetbl == nullptr)
 			currentFn->csetbl = new CSETable;
@@ -793,6 +811,15 @@ void Function::Gen()
 	if (exceptions && sym->IsInline)
 	GenerateLabel(lab0);
 	*/
+	dfs.puts("<StaticRegs>");
+	dfs.puts("====== Statically Assigned Registers =======\n");
+	for (n = 0; n < 32; n++) {
+		if (regs[n].assigned && !regs[n].modified) {
+			dfs.printf("r%d %c ", n, regs[n].isConst ? 'C' : 'V');
+			dfs.printf("=%d\n", regs[n].val);
+		}
+	}
+	dfs.puts("</StaticRegs>");
 	throwlab = o_throwlab;
 	retlab = o_retlab;
 	contlab = o_contlab;

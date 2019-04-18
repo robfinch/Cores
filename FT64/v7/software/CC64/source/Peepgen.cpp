@@ -32,6 +32,7 @@ void peep_add(OCODE *ip);
 static void PeepoptSub(OCODE *ip);
 void peep_cmp(OCODE *ip);
 static void opt_peep();
+void PeepConstReg();
 void put_ocode(OCODE *p);
 void CreateControlFlowGraph();
 extern void ComputeLiveVars();
@@ -41,6 +42,9 @@ void CreateVars();
 void ComputeLiveRanges();
 void DumpLiveRanges();
 void RemoveMoves();
+void RemoveStackAlloc();
+void RemoveStackCode();
+void RemoveReturnBlock();
 void DumpVarForests();
 void DumpLiveRegs();
 void CreateVarForests();
@@ -357,10 +361,16 @@ static bool IsSubiSP(OCODE *ip)
 //
 static void PeepoptSub(OCODE *ip)
 {  
-	if (IsSubiSP(ip) && ip->fwd)
-		if (IsSubiSP(ip->fwd)) {
-			ip->oper3->offset->i += ip->fwd->oper3->offset->i;
-			MarkRemove(ip->fwd);
+	OCODE *ip2;
+
+	if (ip->fwd->opcode == op_hint)
+		ip2 = ip->fwd;
+	else
+		ip2 = ip;
+	if (IsSubiSP(ip) && ip2->fwd)
+		if (IsSubiSP(ip2->fwd)) {
+			ip->oper3->offset->i += ip2->fwd->oper3->offset->i;
+			MarkRemove(ip2->fwd);
 	}
 	if (IsSubiSP(ip) && ip->oper3->offset->i == 0)
 		MarkRemove(ip);
@@ -1168,9 +1178,24 @@ static int CountBPReferences()
 {
 	int refBP = 0;
 	OCODE *ip;
+	bool inFuncBody = false;
 
 	for (ip = peep_head; ip != NULL; ip = ip->fwd)
 	{
+		if (ip->opcode == op_hint && ip->oper1->offset->i == start_funcbody) {
+			inFuncBody = true;
+			continue;
+		}
+		if (ip->opcode == op_hint && ip->oper1->offset->i == begin_stack_unlink) {
+			inFuncBody = false;
+			continue;
+		}
+		if (ip->opcode == op_hint && ip->oper1->offset->i == end_stack_unlink) {
+			inFuncBody = true;
+			continue;
+		}
+		if (!inFuncBody)
+			continue;
 		if (ip->opcode != op_label && ip->opcode!=op_nop
 			&& ip->opcode != op_link && ip->opcode != op_unlk) {
 			if (ip->oper1) {
@@ -1192,6 +1217,53 @@ static int CountBPReferences()
 		}
 	}
 	return (refBP);
+}
+
+static int CountSPReferences()
+{
+	int refSP = 0;
+	OCODE *ip;
+	bool inFuncBody = false;
+
+	for (ip = peep_head; ip != NULL; ip = ip->fwd)
+	{
+		if (ip->opcode == op_hint && ip->oper1->offset->i == start_funcbody) {
+			inFuncBody = true;
+			continue;
+		}
+		if (ip->opcode == op_hint && ip->oper1->offset->i == begin_stack_unlink) {
+			inFuncBody = false;
+			continue;
+		}
+		if (ip->opcode == op_hint && ip->oper1->offset->i == end_stack_unlink) {
+			inFuncBody = true;
+			continue;
+		}
+		if (!inFuncBody)
+			continue;
+		if (ip->opcode != op_label && ip->opcode != op_nop
+			&& ip->opcode != op_link && ip->opcode != op_unlk) {
+			if (ip->insn->opcode != op_add && ip->insn->opcode != op_sub && ip->insn->opcode != op_mov) {
+				if (ip->oper1) {
+					if (ip->oper1->preg == regSP || ip->oper1->sreg == regSP)
+						refSP++;
+				}
+				if (ip->oper2) {
+					if (ip->oper2->preg == regSP || ip->oper2->sreg == regSP)
+						refSP++;
+				}
+				if (ip->oper3) {
+					if (ip->oper3->preg == regSP || ip->oper3->sreg == regSP)
+						refSP++;
+				}
+				if (ip->oper4) {
+					if (ip->oper4->preg == regSP || ip->oper4->sreg == regSP)
+						refSP++;
+				}
+			}
+		}
+	}
+	return (refSP);
 }
 
 void MarkRemove(OCODE *ip)
@@ -1229,6 +1301,8 @@ void Remove()
 				ip2->fwd = ip1;
 			if (ip1)
 				ip1->back = ip2;
+			if (ip == peep_head)
+				peep_head = ip->fwd;
 		}
 	}
 }
@@ -1253,6 +1327,8 @@ static void Remove2()
 				ip2->fwd = ip1;
 			if (ip1)
 				ip1->back = ip2;
+			if (ip == peep_head)
+				peep_head = ip->fwd;
 		}
 	}
 }
@@ -1273,15 +1349,16 @@ static void RemoveDoubleTargets(OCODE *ip)
 	ip->GetTargetReg(&rg3, &rg4);
 	// Should look at this more carefully sometime. Generally however target 
 	// register classes won't match between integer and float instructions.
-	if (ip->insn->regclass1 != ip2->insn->regclass1)
+	if ((ip->insn->regclass1 ^ ip2->insn->regclass1)==0)
 		return;
 	if (rg1 != rg3)
 		return;
 	if (ip2->HasSourceReg(rg3))
 		return;
+	// push has an implicit target, but we don't want to remove it.
 	if (rg3==regSP)
 		return;
-	MarkRemove(ip);
+	ip->MarkRemove();
 	optimized++;
 }
 
@@ -1466,10 +1543,21 @@ static void opt_peep()
 		}
 		//PeepoptSubSP();
 
+		PeepConstReg();
+		Remove();
+		//PrintPeepList();
 		// Remove the link and unlink instructions if no references
 		// to BP.
-		if (CountBPReferences()==0)
+		currentFn->hasSPReferences = (CountSPReferences() != 0);
+		currentFn->hasBPReferences = (CountBPReferences() != 0);
+		
+		if (!currentFn->hasBPReferences)
 			RemoveLinkUnlink();
+		if (!currentFn->hasSPReferences && !currentFn->hasBPReferences)
+			RemoveStackCode();
+		if ((currentFn->IsLeaf && !currentFn->hasSPReferences)
+			|| (!currentFn->hasSPReferences && !currentFn->hasBPReferences))
+			RemoveReturnBlock();
 		Remove();
 	}
 
@@ -1532,6 +1620,93 @@ static void opt_peep()
 	dfs.printf("<PeepList:2>\n");
 	PrintPeepList();
 	dfs.printf("</PeepList:2>\n");
+}
+
+void RemoveStackCode()
+{
+	OCODE *ip;
+	bool do_remove;
+
+	do_remove = true;
+	for (ip = peep_head; ip; ip = ip->fwd) {
+		if (ip->opcode == op_hint && ip->oper1->offset->i == start_funcbody) {
+			do_remove = false;
+			continue;
+		}
+		if (ip->opcode == op_hint && ip->oper1->offset->i == begin_stack_unlink) {
+			do_remove = true;
+			continue;
+		}
+		if (ip->opcode == op_hint && ip->oper1->offset->i == end_stack_unlink) {
+			do_remove = false;
+			continue;
+		}
+		if (ip->opcode == op_label || ip->opcode == op_fnname)
+			continue;
+		if (do_remove)
+			ip->MarkRemove();
+		if (ip->insn) {
+			if (ip->insn->opcode == op_add || ip->insn->opcode == op_sub) {
+				if (ip->oper1->preg == regSP)
+					ip->MarkRemove();
+			}
+		}
+		if (ip->opcode == op_ret)
+			if (ip->oper1)
+				ip->oper1->offset->i = 0;
+	}
+}
+
+void RemoveReturnBlock()
+{
+	OCODE *ip;
+	bool do_remove = false;
+
+	for (ip = peep_head; ip; ip = ip->fwd) {
+		if (ip->opcode == op_hint && ip->oper1->offset->i == begin_return_block) {
+			do_remove = true;
+			continue;
+		}
+		if (ip->opcode == op_hint && ip->oper1->offset->i == end_return_block) {
+			do_remove = false;
+			continue;
+		}
+		if (ip->opcode == op_hint && ip->oper1->offset->i == begin_stack_unlink) {
+			do_remove = true;
+			continue;
+		}
+		if (ip->opcode == op_hint && ip->oper1->offset->i == end_stack_unlink) {
+			do_remove = false;
+			continue;
+		}
+		if (ip->opcode == op_label || ip->opcode == op_fnname)
+			continue;
+		if (do_remove)
+			ip->MarkRemove();
+		if (ip->oper1 && ip->oper1->mode == am_indx && ip->oper1->preg == regFP) {
+			ip->oper1->preg = regSP;
+		}
+		if (ip->oper2 && ip->oper2->mode == am_indx && ip->oper2->preg == regFP) {
+			ip->oper2->preg = regSP;
+		}
+		if (ip->opcode == op_ret)
+			if (ip->oper1)
+				ip->oper1->offset->i = 0;
+	}
+	currentFn->didRemoveReturnBlock = true;
+}
+
+void RemoveStackAlloc()
+{
+	OCODE *ip;
+
+	for (ip = peep_head; ip; ip = ip->fwd) {
+		if (ip->insn) {
+			if ((ip->opcode == op_add || ip->opcode == op_sub) && ip->oper1->mode == am_reg && ip->oper1->preg == regSP) {
+				ip->MarkRemove();
+			}
+		}
+	}
 }
 
 // Remove move instructions which will create false interferences.
@@ -1621,10 +1796,10 @@ void PrintPeepList()
 		if (ip == currentFn->rcode)
 			dfs.printf("***rcode***");
 		insn = GetInsn(ip->opcode);
-		if (insn)
-			dfs.printf("%s ", insn->mnem);
-		else if (ip->opcode == op_label)
+		if (ip->opcode == op_label)
 			dfs.printf("%s%d:", (char *)ip->oper2, (int)ip->oper1);
+		else if (insn)
+			dfs.printf("   %s ", insn->mnem);
 		else
 			dfs.printf("op(%d)", ip->opcode);
 		if (ip->bb)
@@ -1634,3 +1809,73 @@ void PrintPeepList()
 	}
 }
 
+void PeepConstReg()
+{
+	OCODE *ip;
+	Instruction *insn;
+	MachineReg *mr;
+	Operand *top;
+	int n;
+
+	for (n = 0; n < 32; n++)
+		regs[n].sub = false;
+
+	for (ip = peep_head; ip; ip = ip->fwd) {
+		if (ip->insn) {
+			if (ip->insn->opcode == op_add || ip->insn->opcode==op_mul || ip->insn->opcode==op_mulu) {
+				if (ip->oper2->mode == am_reg) {
+					mr = &regs[ip->oper2->preg];
+					if (mr->assigned && !mr->modified && mr->isConst && mr->offset != nullptr) {
+						top = ip->oper2;
+						ip->oper2 = ip->oper3;
+						ip->oper3 = top;
+					}
+				}
+			}
+			if (ip->oper2) {
+				if ((ip->insn->regclass2 & am_imm) && (ip->oper2->mode == am_reg)) {
+					mr = &regs[ip->oper2->preg];
+					if (mr->assigned && !mr->modified && mr->isConst && mr->offset != nullptr) {
+						ip->oper2->mode = am_imm;
+						ip->oper2->offset = mr->offset;
+						mr->sub = true;
+					}
+				}
+			}
+			if (ip->oper3) {
+				if ((ip->insn->regclass3 & am_imm) && (ip->oper3->mode == am_reg)) {
+					mr = &regs[ip->oper3->preg];
+					if (mr->assigned && !mr->modified && mr->isConst && mr->offset != nullptr) {
+						ip->oper3->mode = am_imm;
+						ip->oper3->offset = mr->offset;
+						mr->sub = true;
+					}
+				}
+			}
+			if (ip->oper4) {
+				if ((ip->insn->regclass4 & am_imm) && (ip->oper4->mode == am_reg)) {
+					mr = &regs[ip->oper4->preg];
+					if (mr->assigned && !mr->modified && mr->isConst && mr->offset != nullptr) {
+						ip->oper4->mode = am_imm;
+						ip->oper4->offset = mr->offset;
+						mr->sub = true;
+					}
+				}
+			}
+		}
+	}
+
+	for (ip = peep_head; ip; ip = ip->fwd) {
+		if (ip->insn) {
+			if (ip->oper1) {
+				for (n = 0; n < 32; n++) {
+					if (ip->oper1->mode == am_reg && ip->oper1->preg == n) {
+						if (regs[n].sub) {
+							ip->MarkRemove();
+						}
+					}
+				}
+			}
+		}
+	}
+}

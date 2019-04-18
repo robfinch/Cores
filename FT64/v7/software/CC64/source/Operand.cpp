@@ -177,8 +177,22 @@ void Operand::MakeLegal(int flags, int size)
 				if (i == 0)
 					return;
 			}
-			else if (flags & F_IMMED)
+			else if (flags & F_IMMED) {
+				if (flags & F_REG) {
+					if (offset->i == 0) {
+						mode = am_reg;
+						preg = 0;
+					}
+				}
 				return;         /* mode ok */
+			}
+			else if (flags & F_REG) {
+				if (offset->i == 0) {
+					mode = am_reg;
+					preg = 0;
+					return;
+				}
+			}
 			break;
 		case am_reg:
 			if (flags & F_REG)
@@ -349,6 +363,10 @@ void Operand::store(txtoStream& ofs)
 	case am_direct:
 		offset->PutConstant(ofs, lowhigh, rshift);
 		break;
+	case am_direct2:
+		offset->PutConstant(ofs, lowhigh, rshift);
+		ofs.printf("+%d", (int)preg);
+		break;
 	case am_reg:
 		if (type == stdvector.GetIndex())
 			ofs.printf("v%d", (int)preg);
@@ -394,7 +412,14 @@ void Operand::store(txtoStream& ofs)
 				}
 			}
 		}
-		ofs.printf("[%s]", RegMoniker(preg));
+		if (offset2) {
+			if (offset2->i < 0)
+				ofs.printf("%d", (int)offset2->i);
+			else
+				ofs.printf("+%d", (int)offset2->i);
+		}
+		else
+			ofs.printf("[%s]", RegMoniker(preg));
 		break;
 
 	case am_indx2:

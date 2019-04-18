@@ -89,7 +89,7 @@
 // Comment out the following to remove FCU enhancements (branch predictor, BTB, RSB)
 //`define FCU_ENH		1
 // Comment out the following to remove bypassing logic on the functional units
-//`define FU_BYPASS	1
+`define FU_BYPASS	1
 
 //`define SUPPORT_TLB		1
 

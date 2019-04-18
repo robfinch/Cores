@@ -157,7 +157,7 @@ casez({cinstr[15:12],cinstr[6]})
 						expand[17:13] = fnRp(cinstr[2:0]);
 						expand[12:8] = fnRp(cinstr[2:0]);
 						expand[7:6] = 2'b10;
-						expand[5:0] = 8'h02;		// R2 instruction
+						expand[5:0] = 6'h02;		// R2 instruction
 						end
 				2'd1:	begin
 						expand[47:32] = 16'h0000;
@@ -167,7 +167,7 @@ casez({cinstr[15:12],cinstr[6]})
 						expand[17:13] = fnRp(cinstr[2:0]);
 						expand[12:8] = fnRp(cinstr[2:0]);
 						expand[7:6] = 2'b10;
-						expand[5:0] = 8'h02;		// R2 instruction
+						expand[5:0] = 6'h02;		// R2 instruction
 						end
 				2'd2:	begin
 						expand[47:32] = 16'h0000;
@@ -177,7 +177,7 @@ casez({cinstr[15:12],cinstr[6]})
 						expand[17:13] = fnRp(cinstr[2:0]);
 						expand[12:8] = fnRp(cinstr[2:0]);
 						expand[7:6] = 2'b10;
-						expand[5:0] = 8'h02;		// R2 instruction
+						expand[5:0] = 6'h02;		// R2 instruction
 						end
 				2'd3:	begin
 						expand[47:32] = 16'h0000;
@@ -187,7 +187,7 @@ casez({cinstr[15:12],cinstr[6]})
 						expand[17:13] = fnRp(cinstr[2:0]);
 						expand[12:8] = fnRp(cinstr[2:0]);
 						expand[7:6] = 2'b10;
-						expand[5:0] = 8'h02;		// R2 instruction
+						expand[5:0] = 6'h02;		// R2 instruction
 						end
 				endcase
 			endcase

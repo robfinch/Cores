@@ -78,4 +78,18 @@ public:
 	}
 };
 
+typedef struct _tagInsnStats {
+	int loads;
+	int stores;
+	int branches;
+	int calls;
+	int rets;
+	int adds;
+	int luis;
+	int moves;
+	int cmoves;
+	int sets;
+	int total;
+} InsnStats;
+
 #endif
