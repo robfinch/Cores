@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -25,13 +25,14 @@
 //
 #include "stdafx.h"
 
+extern char irfile[256];
 static void AddToPeepList(OCODE *newc);
 void PrintPeepList();
 static void Remove();
 void peep_add(OCODE *ip);
 static void PeepoptSub(OCODE *ip);
 void peep_cmp(OCODE *ip);
-static void opt_peep();
+void opt_peep();
 void PeepConstReg();
 void put_ocode(OCODE *p);
 void CreateControlFlowGraph();
@@ -89,6 +90,7 @@ void GenerateZeradic(int op)
 	dfs.printf("D");
 	cd->loop_depth = looplevel;
 	AddToPeepList(cd);
+	//currentFn->pl.Add(cd);
 	dfs.printf("</GenerateZeradic>\r\n");
 }
 
@@ -110,6 +112,7 @@ void GenerateMonadic(int op, int len, Operand *ap1)
 	dfs.printf("D");
 	cd->loop_depth = looplevel;
 	AddToPeepList(cd);
+	//currentFn->pl.Add(cd);
 	dfs.printf("</GenerateMonadic>\n");
 }
 
@@ -132,6 +135,7 @@ void GenerateDiadic(int op, int len, Operand *ap1, Operand *ap2)
 	cd->oper4 = NULL;
 	cd->loop_depth = looplevel;
 	AddToPeepList(cd);
+	currentFn->pl.Add(cd);
 }
 
 void GenerateTriadic(int op, int len, Operand *ap1, Operand *ap2, Operand *ap3)
@@ -147,6 +151,7 @@ void GenerateTriadic(int op, int len, Operand *ap1, Operand *ap2, Operand *ap3)
 	cd->oper4 = NULL;
 	cd->loop_depth = looplevel;
 	AddToPeepList(cd);
+	//currentFn->pl.Add(cd);
 }
 
 void Generate4adic(int op, int len, Operand *ap1, Operand *ap2, Operand *ap3, Operand *ap4)
@@ -162,6 +167,7 @@ void Generate4adic(int op, int len, Operand *ap1, Operand *ap2, Operand *ap3, Op
 	cd->oper4 = ap4->Clone();
 	cd->loop_depth = looplevel;
 	AddToPeepList(cd);
+	//currentFn->pl.Add(cd);
 }
 
 static void AddToPeepList(OCODE *cd)
@@ -172,7 +178,7 @@ static void AddToPeepList(OCODE *cd)
 	if( peep_head == NULL )
 	{
 		ArgRegCount = regFirstArg;
-		peep_head = peep_tail = cd;
+		currentFn->pl.head = currentFn->pl.tail = peep_head = peep_tail = cd;
 		cd->fwd = nullptr;
 		cd->back = nullptr;
 	}
@@ -181,7 +187,7 @@ static void AddToPeepList(OCODE *cd)
 		cd->fwd = nullptr;
 		cd->back = peep_tail;
 		peep_tail->fwd = cd;
-		peep_tail = cd;
+		currentFn->pl.tail = peep_tail = cd;
 	}
 	if (cd->opcode!=op_label) {
 		if (cd->oper1 && IsArgumentReg(cd->oper1->preg))
@@ -220,6 +226,7 @@ void GenerateLabel(int labno)
 	newl->oper1 = (Operand *)labno;
 	newl->oper2 = (Operand *)my_strdup((char *)currentFn->sym->name->c_str());
 	AddToPeepList(newl);
+	//currentFn->pl.Add(newl);
 }
 
 
@@ -290,14 +297,30 @@ void PeepOpt::EliminateUnreferencedLabels()
 //
 void flush_peep()
 {
+	static bool first = true;
+	txtoStream* oofs;
+
 	opt_peep();         /* do the peephole optimizations */
+/*
+	if (pass == 2) {
+		if (first) {
+			compiler.storeTables();
+			first = false;
+		}
+		oofs = new txtoStream();
+		oofs->open(irfile, std::ios::out | std::ios::app);
+		currentFn->pl.storeHex(*oofs);
+		oofs->close();
+		delete oofs;
+	}
+*/
 	while( peep_head != NULL )
 	{
 		if( peep_head->opcode == op_label )
 			put_label((int)peep_head->oper1,"",GetNamespace(),'C');
 		else
 			peep_head->store(ofs);
-		peep_head = peep_head->fwd;
+		currentFn->pl.head = peep_head = peep_head->fwd;
 	}
 }
 
@@ -1243,22 +1266,24 @@ static int CountSPReferences()
 			continue;
 		if (ip->opcode != op_label && ip->opcode != op_nop
 			&& ip->opcode != op_link && ip->opcode != op_unlk) {
-			if (ip->insn->opcode != op_add && ip->insn->opcode != op_sub && ip->insn->opcode != op_mov) {
-				if (ip->oper1) {
-					if (ip->oper1->preg == regSP || ip->oper1->sreg == regSP)
-						refSP++;
-				}
-				if (ip->oper2) {
-					if (ip->oper2->preg == regSP || ip->oper2->sreg == regSP)
-						refSP++;
-				}
-				if (ip->oper3) {
-					if (ip->oper3->preg == regSP || ip->oper3->sreg == regSP)
-						refSP++;
-				}
-				if (ip->oper4) {
-					if (ip->oper4->preg == regSP || ip->oper4->sreg == regSP)
-						refSP++;
+			if (ip->insn) {
+				if (ip->insn->opcode != op_add && ip->insn->opcode != op_sub && ip->insn->opcode != op_mov) {
+					if (ip->oper1) {
+						if (ip->oper1->preg == regSP || ip->oper1->sreg == regSP)
+							refSP++;
+					}
+					if (ip->oper2) {
+						if (ip->oper2->preg == regSP || ip->oper2->sreg == regSP)
+							refSP++;
+					}
+					if (ip->oper3) {
+						if (ip->oper3->preg == regSP || ip->oper3->sreg == regSP)
+							refSP++;
+					}
+					if (ip->oper4) {
+						if (ip->oper4->preg == regSP || ip->oper4->sreg == regSP)
+							refSP++;
+					}
 				}
 			}
 		}
@@ -1301,8 +1326,9 @@ void Remove()
 				ip2->fwd = ip1;
 			if (ip1)
 				ip1->back = ip2;
-			if (ip == peep_head)
-				peep_head = ip->fwd;
+			if (ip == peep_head) {
+				currentFn->pl.head = peep_head = ip->fwd;
+			}
 		}
 	}
 }
@@ -1328,7 +1354,7 @@ static void Remove2()
 			if (ip1)
 				ip1->back = ip2;
 			if (ip == peep_head)
-				peep_head = ip->fwd;
+				currentFn->pl.head = peep_head = ip->fwd;
 		}
 	}
 }
@@ -1419,7 +1445,7 @@ static void RemoveCompilerHints2()
 //      specific optimization routines above for each instruction
 //      in the peep list.
 //
-static void opt_peep()
+void opt_peep()
 {  
 	OCODE *ip;
 	int rep;

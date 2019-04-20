@@ -33,6 +33,7 @@ public:
        std::ofstream::write(buf, 1);
        }};
 	void puts(const char *);
+	void writeAsHex(const void *, int);
 };
 
 // Make it easy to disable debugging output
@@ -50,3 +51,8 @@ public:
   void puts(const char *) {} ;
 };
 
+class txtiStream : public std::ifstream
+{
+public:
+	void readAsHex(const void *, int);
+};

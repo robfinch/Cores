@@ -49,6 +49,36 @@ char ENODE::fsize()
 	}
 }
 
+bool ENODE::HasAssignop()
+{
+	if (this == nullptr)
+		return (false);
+	if (nodetype == en_asadd
+		|| nodetype == en_asadd
+		|| nodetype == en_asdiv
+		|| nodetype == en_asdivu
+		|| nodetype == en_asmod
+		|| nodetype == en_asmodu
+		|| nodetype == en_asmul
+		|| nodetype == en_asmulu
+		|| nodetype == en_asor
+		|| nodetype == en_asand
+		|| nodetype == en_asxor
+		|| nodetype == en_assub
+		|| nodetype == en_assign
+		|| nodetype == en_fcall
+		|| nodetype == en_ifcall
+		)
+		return (true);
+	if (p[0]->HasAssignop())
+		return (true);
+	if (p[1]->HasAssignop())
+		return(true);
+	if (p[2]->HasAssignop())
+		return (true);
+	return(false);
+}
+
 long ENODE::GetReferenceSize()
 {
 	switch (nodetype)        /* get load size */
@@ -690,7 +720,7 @@ Operand *ENODE::GenHook(int flags, int size)
 	*/
 	ip1 = peep_tail;
 	// cmovenz integer only
-	if (!opt_nocgo & !(flags & F_FPREG)) {
+	if (false && !opt_nocgo && !(flags & F_FPREG)) {
 		ap4 = GetTempRegister();
 		ap1 = GenerateExpression(p[0], F_REG, size);
 		ap2 = GenerateExpression(p[1]->p[0], F_REG, size);
@@ -700,7 +730,7 @@ Operand *ENODE::GenHook(int flags, int size)
 			ap3->preg = 0;
 		}
 		n1 = PeepCount(ip1);
-		if (n1 < 20) {
+		if (n1 < 20 && !currentFn->pl.HasCall(ip1)) {
 			Generate4adic(op_cmovenz, 0, ap4, ap1, ap2, ap3);
 			ReleaseTempReg(ap3);
 			ReleaseTempReg(ap2);
@@ -712,16 +742,17 @@ Operand *ENODE::GenHook(int flags, int size)
 		ReleaseTempReg(ap2);
 		ReleaseTempReg(ap1);
 		ReleaseTempReg(ap4);
-		peep_tail = ip1;
+		currentFn->pl.tail = peep_tail = ip1;
 		peep_tail->fwd = nullptr;
 	}
 	ap2 = GenerateExpression(p[1]->p[1], flags, size);
 	n1 = PeepCount(ip1);
 	if (opt_nocgo)
 		n1 = 9999;
-	if (n1 > 4) {
+//	if (n1 > 4 || currentFn->pl.HasCall(ip1))
+	{
 		ReleaseTempReg(ap2);
-		peep_tail = ip1;
+		currentFn->pl.tail = peep_tail = ip1;
 		peep_tail->fwd = nullptr;
 		GenerateFalseJump(p[0], false_label, 0);
 		node = p[1];
@@ -1265,11 +1296,27 @@ Operand *ENODE::GenAssignLogic(int flags, int size, int op)
 
 Operand *ENODE::GenLand(int flags, int op)
 {
-	Operand *ap1, *ap2, *ap3, *ap4, *ap5;
+	Operand *ap1;
+	int lab0, lab1;
 
+	lab0 = nextlabel++;
+	lab1 = nextlabel++;
+	ap1 = GetTempRegister();
+	GenerateDiadic(op_ldi, 0, ap1, make_immed(1));
+	GenerateFalseJump(this, lab0, 0);
+	GenerateDiadic(op_ldi, 0, ap1, make_immed(0));
+	GenerateLabel(lab0);
+	ap1->MakeLegal(flags, 8);
+	return (ap1);
+/*
+	lab0 = nextlabel++;
 	ap3 = GetTempRegister();
 	ap1 = GenerateExpression(p[0], F_REG, 8);
 	ap4 = GetTempRegister();
+	if (op == op_and) {
+		GenerateTriadic(op_beq, 0, ap1, makereg(0), make_label(lab0));
+		ap2 = GenerateExpression(p[1], F_REG, 8);
+	}
 	GenerateDiadic(op_redor, 0, ap4, ap1);
 	ap2 = GenerateExpression(p[1], F_REG, 8);
 	ap5 = GetTempRegister();
@@ -1281,6 +1328,7 @@ Operand *ENODE::GenLand(int flags, int op)
 	ReleaseTempReg(ap1);
 	ap3->MakeLegal( flags, 8);
 	return (ap3);
+*/
 }
 
 void ENODE::PutConstant(txtoStream& ofs, unsigned int lowhigh, unsigned int rshift)
@@ -1465,4 +1513,91 @@ void ENODE::PutConstantHex(txtoStream& ofs, unsigned int lowhigh, unsigned int r
 		printf("DIAG - illegal constant node.\n");
 		break;
 	}
+}
+
+void ENODE::storeHex(txtoStream& ofs)
+{
+	if (this == nullptr) {
+		ofs.puts("x");
+		return;
+	}
+	ofs.puts("X");
+	ofs.writeAsHex((char *)this, sizeof(ENODE));
+	if (tp)
+		ofs.printf("%05X:", tp->typeno);
+	else
+		ofs.printf("FFFFF:");
+	if (sym)
+		ofs.printf("%05X:", sym->number);
+	else
+		ofs.printf("FFFFF:");
+	vmask->store(ofs);
+	if (sp) {
+		ofs.printf("%03X:", (int)sp->length());
+		ofs.writeAsHex((char *)sp, sp->length());
+	}
+	else
+		ofs.printf("000:");
+	if (msp) {
+		ofs.printf("%03X:", (int)msp->length());
+		ofs.writeAsHex((char *)msp, msp->length());
+	}
+	else
+		ofs.printf("000:");
+	if (udnm) {
+		ofs.printf("%03X:", (int)udnm->length());
+		ofs.writeAsHex((char *)udnm, udnm->length());
+	}
+	else
+		ofs.printf("000:");
+	p[0]->store(ofs);
+	p[1]->store(ofs);
+	p[2]->store(ofs);
+}
+
+void ENODE::loadHex(txtiStream& ifs)
+{
+	int len, nn;
+	static char buf[8000];
+
+	ifs.readAsHex(this, sizeof(ENODE));
+	ifs.read(buf, 6);
+	nn = strtoul(buf, nullptr, 16);
+	if (nn < 65535)
+		tp = &compiler.typeTable[nn];
+	ifs.read(buf, 6);
+	nn = strtoul(buf, nullptr, 16);
+	if (nn < 65535)
+		sym = &compiler.symbolTable[nn];
+	vmask = allocEnode();
+	vmask->load(ifs);
+	ifs.read(buf, 4);
+	nn = strtoul(buf, nullptr, 16);
+	ifs.readAsHex(buf, nn * 2);
+	sp = new std::string(buf);
+	ifs.read(buf, 4);
+	nn = strtoul(buf, nullptr, 16);
+	ifs.readAsHex(buf, nn * 2);
+	msp = new std::string(buf);
+	ifs.read(buf, 4);
+	nn = strtoul(buf, nullptr, 16);
+	ifs.readAsHex(buf, nn * 2);
+	udnm = new std::string(buf);
+	ifs.read(buf, 1);	// should be 'X'
+	if (buf[0]=='X')
+		p[0]->load(ifs);
+	ifs.read(buf, 1);
+	if (buf[0] == 'X')
+		p[1]->load(ifs);
+	ifs.read(buf, 1);
+	if (buf[0] == 'X')
+		p[2]->load(ifs);
+}
+
+void ENODE::store(txtoStream& ofs)
+{
+}
+
+void ENODE::load(txtiStream& ifs)
+{
 }

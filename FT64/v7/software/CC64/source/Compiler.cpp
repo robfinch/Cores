@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -340,13 +340,43 @@ void Compiler::AddBuiltinFunctions()
 	gsyms->insert(sp);
 }
 
-void Compiler::storeSymbols(std::ostream& ofs)
+void Compiler::storeHex(txtoStream& ofs)
 {
-	int nn;
+	int nn, mm;
 	char buf[20];
 
 	nn = compiler.symnum;
-	sprintf_s(buf, sizeof(buf), "SYM%05d", nn);
-	ofs.write(buf,8);
-	ofs.write((char *)symbolTable, nn * sizeof(SYM));
+	sprintf_s(buf, sizeof(buf), "SYMTBL%05d\n", nn);
+	ofs.write(buf);
+	for (mm = 0; mm < nn; mm++)
+		symbolTable[mm].storeHex(ofs);
+	nn = compiler.funcnum;
+	sprintf_s(buf, sizeof(buf), "FNCTBL%05d\n", nn);
+	ofs.write(buf);
+	for (mm = 0; mm < nn; mm++)
+		functionTable[mm].storeHex(ofs);
+	nn = typenum;
+	sprintf_s(buf, sizeof(buf), "TYPTBL%05d\n", nn);
+	ofs.write(buf);
+	for (mm = 0; mm < nn; mm++)
+		typeTable[mm].storeHex(ofs);
+}
+
+void Compiler::loadHex(txtiStream& ifs)
+{
+
+}
+
+void Compiler::storeTables()
+{
+	txtoStream* oofs;
+	extern char irfile[256];
+
+	oofs = new txtoStream();
+	oofs->open(irfile, std::ios::out);
+	oofs->printf("; CC64 Hex Intermediate Representation File\n");
+	oofs->printf("; This is an automatically generated file.\n");
+	storeHex(*oofs);
+	oofs->close();
+	delete oofs;
 }

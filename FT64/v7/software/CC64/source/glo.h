@@ -3,7 +3,7 @@
 
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -417,7 +417,7 @@ extern BasicBlock *basicBlocks[10000];
 extern BasicBlock *sortedBlocks[10000];
 extern Forest forest;
 extern IGraph iGraph;
-extern Instruction opl[228];
+extern Instruction opl[229];
 extern BasicBlock *RootBlock;
 extern BasicBlock *LastBlock;
 extern Instruction *GetInsn(int);

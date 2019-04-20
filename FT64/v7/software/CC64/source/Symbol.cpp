@@ -138,10 +138,10 @@ SYM *gsearch2(std::string na, __int16 rettype, TypeArray *typearray, bool exact)
 			sp = TABLE::match[TABLE::matchno-1];
 			dfs.printf("Found in global symbol table\n");
 			dfs.puts("</gsearch2>\n");
-			return sp;
+			return (sp);
 		}
 		dfs.puts("</gsearch2>\n");
-		return nullptr;
+		return (nullptr);
 	}
 	else {
     dfs.printf("Looking in statement table\n");
@@ -149,7 +149,7 @@ SYM *gsearch2(std::string na, __int16 rettype, TypeArray *typearray, bool exact)
 			sp = TABLE::match[TABLE::matchno-1];
      	dfs.printf("Found as an auto var\n");
 			dfs.puts("</gsearch2>\n");
-			return sp;
+			return (sp);
 		}
 		st = currentStmt->outer;
 		while (st) {
@@ -515,3 +515,8 @@ int SYM::AdjustNbytes(int nbytes, int al, int ztype)
 	return (nbytes);
 }
 
+void SYM::storeHex(txtoStream& ofs)
+{
+	ofs.write("SYM:");
+	ofs.writeAsHex((char *)this, sizeof(SYM));
+}

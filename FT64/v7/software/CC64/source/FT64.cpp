@@ -962,7 +962,7 @@ static int GenerateStoreArgumentList(Function *sym, ENODE *plist)
 		ip->fwd->oper3 = make_immed(sum*sizeOfWord);
 	if (!sumFloat) {
 		cpu.SupportsPush = true;
-		peep_tail = ip;
+		currentFn->pl.tail = peep_tail = ip;
 		peep_tail->fwd = nullptr;
 		i = maxnn-1;
 		for (nn = 0; nn < maxnn; nn++, i--) {

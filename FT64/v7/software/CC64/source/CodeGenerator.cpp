@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -1327,8 +1327,9 @@ Operand *GenAutocon(ENODE *node, int flags, int size, int type)
 //
 Operand *GenerateExpression(ENODE *node, int flags, int size)
 {   
-	Operand *ap1, *ap2;
-  int natsize;
+	Operand *ap1, *ap2, *ap3;
+  int natsize, siz1;
+	int lab0, lab1;
 	static char buf[4][20];
 	static int ndx;
 	static int numDiags = 0;
@@ -1671,8 +1672,23 @@ Operand *GenerateExpression(ENODE *node, int flags, int size)
     case en_ftmul:    return node->GenMultiply(flags,size,op_ftmul);
     case en_ftdiv:    return node->GenMultiply(flags,size,op_ftdiv);
 
-	case en_land:	return (node->GenLand(flags,op_and));
-	case en_lor:	return (node->GenLand(flags, op_or));
+	case en_land:
+		/*
+		lab0 = nextlabel++;
+		lab1 = nextlabel++;
+		GenerateFalseJump(node, lab0, 0);
+		ap1 = GetTempRegister();
+		GenerateDiadic(op_ld, 0, ap1, make_immed(1));
+		GenerateMonadic(op_bra, 0, make_label(lab1));
+		GenerateLabel(lab0);
+		GenerateDiadic(op_ld, 0, ap1, make_immed(0));
+		GenerateLabel(lab1);
+		return (ap1);
+		*/
+		return (node->GenLand(flags,op_and));
+	case en_lor:
+		return (node->GenLand(flags, op_or));
+
 	case en_and:    return node->GenBinary(flags,size,op_and);
     case en_or:     return node->GenBinary(flags,size,op_or);
 	case en_xor:	return node->GenBinary(flags,size,op_xor);
@@ -1983,8 +1999,9 @@ static void GenerateCmp(ENODE *node, int op, int label, unsigned int prediction)
 //
 void GenerateTrueJump(ENODE *node, int label, unsigned int prediction)
 { 
-	Operand  *ap1;
-	int    siz1;
+	Operand  *ap1, *ap2, *ap3;
+	int lab0;
+	int siz1;
 
 	if( node == 0 )
 		return;
@@ -2014,8 +2031,15 @@ void GenerateTrueJump(ENODE *node, int label, unsigned int prediction)
 	case en_vgt: GenerateCmp(node, op_vsgt, label, prediction); break;
 	case en_vge: GenerateCmp(node, op_vsge, label, prediction); break;
 	case en_lor:
-		GenerateTrueJump(node->p[0],label,prediction);
-		GenerateTrueJump(node->p[1],label,prediction);
+		GenerateTrueJump(node->p[0], label, prediction);
+		GenerateTrueJump(node->p[1], label, prediction);
+		break;
+	case en_land:
+		lab0 = nextlabel++;
+		GenerateFalseJump(node->p[0], lab0, prediction);
+		GenerateTrueJump(node->p[1], label, prediction ^ 1);
+		GenerateLabel(lab0);
+		break;
 		break;
 	default:
 		siz1 = GetNaturalSize(node);
@@ -2036,7 +2060,7 @@ void GenerateTrueJump(ENODE *node, int label, unsigned int prediction)
 //
 void GenerateFalseJump(ENODE *node,int label, unsigned int prediction)
 {
-	Operand *ap;
+	Operand *ap, *ap1, *ap2, *ap3;
 	int siz1;
 	int lab0;
 

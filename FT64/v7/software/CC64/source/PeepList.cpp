@@ -1,7 +1,7 @@
 // ============================================================================
 // Currently under construction (not used yet).
 //        __
-//   \\__/ o\    (C) 2017-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2017-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -27,6 +27,7 @@
 #include "stdafx.h"
 extern int optimized;
 extern OCODE *LabelTable[50000];
+extern void opt_peep();
 
 OCODE *PeepList::FindLabel(int64_t i)
 {
@@ -47,6 +48,21 @@ int PeepList::Count(OCODE *ip)
 		ip = ip->fwd;
 	return (cnt);
 }
+
+bool PeepList::HasCall(OCODE *ip)
+{
+	int cnt;
+
+	for (cnt = 0; ip; ip = ip->fwd) {
+		if (ip->opcode == op_call || ip->opcode == op_jal) {
+			return (true);
+		}
+		if (ip == tail)
+			break;
+	}
+	return (false);
+}
+
 
 void PeepList::InsertBefore(OCODE *an, OCODE *cd)
 {
@@ -144,8 +160,6 @@ void PeepList::storeHex(txtoStream& ofs)
 {
 	OCODE *ip;
 
-	ofs.printf("; CC64 Hex Intermediate Representation File\n");
-	ofs.printf("; This is an automatically generated file.\n");
 	for (ip = head; ip != NULL; ip = ip->fwd)
 	{
 		ip->storeHex(ofs);
@@ -153,7 +167,7 @@ void PeepList::storeHex(txtoStream& ofs)
 	ofs.printf("%c", 26);
 }
 
-void PeepList::loadHex(std::ifstream& ifs)
+void PeepList::loadHex(txtiStream& ifs)
 {
 	char buf[50];
 	OCODE *cd;
@@ -174,3 +188,36 @@ void PeepList::loadHex(std::ifstream& ifs)
 		}
 	}
 }
+
+//
+// Output all code and labels in the peep list.
+//
+void PeepList::flush()
+{
+	static bool first = true;
+	txtoStream* oofs;
+	OCODE *ip;
+
+	opt_peep();         /* do the peephole optimizations */
+/*
+	if (pass == 2) {
+		if (first) {
+			compiler.storeTables();
+			first = false;
+		}
+		oofs = new txtoStream();
+		oofs->open(irfile, std::ios::out | std::ios::app);
+		currentFn->pl.storeHex(*oofs);
+		oofs->close();
+		delete oofs;
+	}
+*/
+	for (ip = head; ip; ip = ip->fwd)
+	{
+		if (ip->opcode == op_label)
+			put_label((int)ip->oper1, "", GetNamespace(), 'C');
+		else
+			ip->store(ofs);
+	}
+}
+

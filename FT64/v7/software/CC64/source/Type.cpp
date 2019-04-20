@@ -1117,4 +1117,7 @@ int TYP::roundSize()
 	return (size);
 }
 
+void TYP::storeHex(txtoStream& ofs)
+{
 
+}

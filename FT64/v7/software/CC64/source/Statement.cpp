@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -1200,8 +1200,8 @@ void Statement::GenerateIf()
 {
 	int lab1, lab2, oldbreak;
 	ENODE *ep, *node;
-	int size;
-	Operand *ap1;
+	int size, siz1;
+	Operand *ap1, *ap2, *ap3;
 
 	lab1 = nextlabel++;     // else label
 	lab2 = nextlabel++;     // exit label
@@ -1256,8 +1256,69 @@ void Statement::GenerateIf()
 		GenerateTriadic(op_bbc, 0, ap1, make_immed(pwrof2(ep->p[1]->i)), make_label(lab1));
 		ReleaseTempRegister(ap1);
 	}
+/*
+	else if (!opt_nocgo && ep->nodetype == en_lor) {
+		if (!node->p[0]->HasAssignop() && !node->p[1]->HasAssignop()) {
+			OCODE *ip1 = currentFn->pl.tail;
+			OCODE *ip2;
+			int len;
+			ap3 = GetTempRegister();
+			siz1 = GetNaturalSize(node);
+			ap1 = GenerateExpression(node->p[0], F_REG, siz1);
+			len = currentFn->pl.Count(ip1);
+			if (len < 6) {
+				ip2 = currentFn->pl.tail;
+				ap2 = GenerateExpression(node->p[1], F_REG, siz1);
+				len = currentFn->pl.Count(ip2);
+				if (len < 6) {
+					GenerateTriadic(op_or, 0, ap3, ap1, ap2);
+					GenerateTriadic(op_beq, 0, ap3, makereg(0), make_label(lab1));
+					ReleaseTempReg(ap2);
+					ReleaseTempReg(ap1);
+					ReleaseTempReg(ap3);
+					goto j1;
+				}
+				ReleaseTempReg(ap2);
+			}
+			ReleaseTempReg(ap1);
+			ReleaseTempReg(ap3);
+			currentFn->pl.tail = peep_tail = ip1;
+			currentFn->pl.tail->fwd = nullptr;
+		}
+	}
+	else if (!opt_nocgo && ep->nodetype == en_land) {
+		if (!node->p[0]->HasAssignop() && !node->p[1]->HasAssignop()) {
+			OCODE *ip1 = currentFn->pl.tail;
+			OCODE *ip2;
+			int len;
+			ap3 = GetTempRegister();
+			siz1 = GetNaturalSize(node);
+			ap1 = GenerateExpression(node->p[0], F_REG, siz1);
+			len = currentFn->pl.Count(ip1);
+			if (len < 6) {
+				ip2 = currentFn->pl.tail;
+				ap2 = GenerateExpression(node->p[1], F_REG, siz1);
+				len = currentFn->pl.Count(ip2);
+				if (len < 6) {
+					GenerateTriadic(op_and, 0, ap3, ap1, ap2);
+					GenerateTriadic(op_beq, 0, ap3, makereg(0), make_label(lab1));
+					ReleaseTempReg(ap2);
+					ReleaseTempReg(ap1);
+					ReleaseTempReg(ap3);
+					goto j1;
+				}
+				ReleaseTempReg(ap2);
+			}
+			ReleaseTempReg(ap1);
+			ReleaseTempReg(ap3);
+			currentFn->pl.tail = peep_tail = ip1;
+			currentFn->pl.tail->fwd = nullptr;
+		}
+	}
+*/
 	else
 		GenerateFalseJump(exp, lab1, prediction);
+j1:
 	s1->Generate();
 	if (s2 != 0)             /* else part exists */
 	{

@@ -151,13 +151,15 @@ public:
 public:
 	void Add(OCODE *cd);
 	int Count(OCODE *pos);
+	bool HasCall(OCODE *pos);
 	static OCODE *FindLabel(int64_t i);
 	static void InsertBefore(OCODE *an, OCODE *cd);
 	static void InsertAfter(OCODE *an, OCODE *cd);
 	void RemoveCompilerHints2();
 	void Remove();
+	void flush();
 
-	void loadHex(std::ifstream& ifs);
+	void loadHex(txtiStream& ifs);
 	void storeHex(txtoStream& ofs);
 };
 
@@ -171,6 +173,7 @@ public:
 class Function
 {
 public:
+	unsigned short int number;
 	unsigned int valid : 1;
 	unsigned int IsPrototype : 1;
 	unsigned int IsTask : 1;
@@ -264,10 +267,13 @@ public:
 	void CreateVars();
 	void ComputeLiveVars();
 	void DumpLiveVars();
+
+	void storeHex(txtoStream& ofs);
 };
 
 class SYM {
 public:
+	int number;
 	int id;
 	int parent;
 	int next;
@@ -337,6 +343,8 @@ public:
 } ;
 	void SetStorageOffset(TYP *head, int nbytes, int al, int ilc, int ztype);
 	int AdjustNbytes(int nbytes, int al, int ztype);
+
+	void storeHex(txtoStream& ofs);
 };
 
 class TYP {
@@ -360,6 +368,7 @@ public:
 	int numele;					// number of elements in array / vector length
 	TABLE lst;
 	int btp;
+
 	TYP *GetBtp();
 	static TYP *GetPtr(int n);
 	int GetIndex();
@@ -395,6 +404,9 @@ public:
 	int64_t Initialize(int64_t val);
 	int64_t Initialize(TYP *);
 
+	// Serialization
+	void storeHex(txtoStream& ofs);
+
 	// GC support
 	bool FindPointer();
 	bool FindPointerInStruct();
@@ -426,6 +438,7 @@ public:
 
 class ENODE {
 public:
+	int number;
 	enum e_node nodetype;
 	enum e_bt etype;
 	long      esize;
@@ -470,6 +483,7 @@ public:
 	long GetReferenceSize();
 
 	static bool IsEqual(ENODE *a, ENODE *b);
+	bool HasAssignop();
 
 	// Optimization
 	void scanexpr(int duse);
@@ -487,6 +501,11 @@ public:
 	Operand *GenAssignAdd(int flags, int size, int op);
 	Operand *GenAssignLogic(int flags, int size, int op);
 	Operand *GenLand(int flags, int op);
+
+	void store(txtoStream& ofs);
+	void load(txtiStream& ifs);
+	void storeHex(txtoStream& ofs);
+	void loadHex(txtiStream& ifs);
 
 	void PutConstant(txtoStream& ofs, unsigned int lowhigh, unsigned int rshift);
 	void PutConstantHex(txtoStream& ofs, unsigned int lowhigh, unsigned int rshift);
@@ -535,8 +554,8 @@ public:
 	void PutAddressMode(txtoStream& ofs);
 	void store(txtoStream& fp);
 	void storeHex(txtoStream& fp);
-	static Operand *loadHex(std::ifstream& fp);
-	void load(std::ifstream fp);
+	static Operand *loadHex(txtiStream& fp);
+	void load(txtiStream& fp);
 };
 
 // Output code structure
@@ -574,7 +593,7 @@ public:
 	void OptMove();
 	void OptRedor();
 
-	static OCODE *loadHex(std::ifstream& ifs);
+	static OCODE *loadHex(txtiStream& ifs);
 	void store(txtoStream& ofs);
 	void storeHex(txtoStream& ofs);
 };
@@ -1124,7 +1143,9 @@ public:
 	void AddBuiltinFunctions();
 	static int GetReturnBlockSize() { return (4 * 8); };
 	int main2(int c, char **argv);
-	void storeSymbols(std::ostream& ofs);
+	void storeHex(txtoStream& ofs);
+	void loadHex(txtiStream& ifs);
+	void storeTables();
 };
 
 class CPU

@@ -76,3 +76,31 @@ void txtoStream::puts(const char *str)
   }
 }
 
+void txtoStream::writeAsHex(const void *buf, int len)
+{
+	int n;
+	char *cbuf = (char *)buf;
+
+	printf("%04X:", len);
+	for (n = 0; n < len; n++) {
+		printf("%02X", (int)cbuf[n]);
+	}
+	printf("\n");
+}
+
+void txtiStream::readAsHex(const void *buf, int len)
+{
+	char cbuf[8];
+	char *p;
+	int n;
+	int val;
+
+	p = (char *)buf;
+	read(cbuf, 5);
+	for (n = 0; n < len; n++) {
+		read(cbuf, 2);
+		cbuf[2] = '\0';
+		val = strtoul(cbuf, nullptr, 16);
+		p[n] = val;
+	}
+}

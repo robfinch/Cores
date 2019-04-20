@@ -190,7 +190,7 @@ void OCODE::storeHex(txtoStream& ofs)
 	}
 }
 
-OCODE *OCODE::loadHex(std::ifstream& ifs)
+OCODE *OCODE::loadHex(txtiStream& ifs)
 {
 	OCODE *cd;
 	char buf[20];

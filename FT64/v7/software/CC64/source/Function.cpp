@@ -24,6 +24,7 @@
 // ============================================================================
 //
 #include "stdafx.h"
+extern char irfile[256];
 
 Statement *Function::ParseBody()
 {
@@ -88,12 +89,13 @@ Statement *Function::ParseBody()
 		stkspace += GetTempMemSpace();
 		tempbot = -stkspace;
 		pass = 2;
-		peep_tail = ip;
+		currentFn->pl.tail = peep_tail = ip;
 		peep_tail->fwd = nullptr;
 		looplevel = 0;
 		Gen();
 		dfs.putch('E');
 
+		//pl.flush();
 		flush_peep();
 		if (sym->storage_class == sc_global) {
 			ofs.printf("endpublic\r\n\r\n");
@@ -794,7 +796,7 @@ void Function::Gen()
 		doCatch = GenDefaultCatch();
 		GenerateLabel(lab0);
 		if (!doCatch) {
-			peep_tail = ip;
+			currentFn->pl.tail = peep_tail = ip;
 			peep_tail->fwd = nullptr;
 		}
 	}
@@ -1392,7 +1394,10 @@ void Function::DumpLiveVars()
 	dfs.printf("</table>\n");
 }
 
+void Function::storeHex(txtoStream& ofs)
+{
 
+}
 
 
 

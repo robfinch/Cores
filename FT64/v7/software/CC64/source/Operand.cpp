@@ -49,7 +49,7 @@ bool Operand::IsEqual(Operand *ap1, Operand *ap2)
 	switch (ap1->mode)
 	{
 	case am_imm:
-		return (ap1->offset->i == ap2->offset->i);
+		return (ENODE::IsEqual(ap1->offset, ap2->offset));
 	case am_fpreg:
 	case am_reg:
 		return (ap1->preg == ap2->preg);
@@ -57,11 +57,7 @@ bool Operand::IsEqual(Operand *ap1, Operand *ap2)
 	case am_indx:
 		if (ap1->preg != ap2->preg)
 			return (false);
-		if (ap1->offset == ap2->offset)
-			return (true);
-		if (ap1->offset == nullptr || ap2->offset == nullptr)
-			return (false);
-		if (ap1->offset->i != ap2->offset->i)
+		if (!ENODE::IsEqual(ap1->offset, ap2->offset) || !ENODE::IsEqual(ap1->offset2, ap2->offset2))
 			return (false);
 		return (true);
 	}
@@ -177,6 +173,7 @@ void Operand::MakeLegal(int flags, int size)
 				if (i == 0)
 					return;
 			}
+			// If there is a choice between r0 and #0 choose r0.
 			else if (flags & F_IMMED) {
 				if (flags & F_REG) {
 					if (offset->i == 0) {
@@ -184,19 +181,20 @@ void Operand::MakeLegal(int flags, int size)
 						preg = 0;
 					}
 				}
-				return;         /* mode ok */
-			}
-			else if (flags & F_REG) {
-				if (offset->i == 0) {
-					mode = am_reg;
-					preg = 0;
-					return;
-				}
+				return;
 			}
 			break;
 		case am_reg:
 			if (flags & F_REG)
 				return;
+			// Allow r0 to substitute for #0
+			if (flags & F_IMMED) {
+				if (preg == 0) {
+					offset = allocEnode();
+					offset->i = 0;
+					return;
+				}
+			}
 			break;
 		case am_fpreg:
 			if (flags & F_FPREG)
@@ -337,16 +335,51 @@ void Operand::storeHex(txtoStream& ofs)
 {
 	ofs.printf("O");
 	switch (mode) {
+	case am_reg:
+		ofs.printf("R%02X", (int)preg);
+		break;
+	case am_fpreg:
+		ofs.printf("FP%02X", (int)preg);
+		break;
 	case am_imm:
 		ofs.printf("#");
+		offset->storeHex(ofs);
+		offset2->storeHex(ofs);
+		break;
 	}
 }
 
-Operand *Operand::loadHex(std::ifstream& ifs)
+Operand *Operand::loadHex(txtiStream& ifs)
 {
 	Operand *oper;
+	char ch;
+	char buf[100];
 
 	oper = allocOperand();
+	ifs.read(&ch,1);
+	switch (ch) {
+	case '#':
+		oper->mode = am_imm;
+		oper->offset->loadHex(ifs);
+		oper->offset2->loadHex(ifs);
+		break;
+	case 'R':
+		oper->mode = am_reg;
+		ifs.read(buf, 2);
+		buf[2] = '\0';
+		oper->preg = strtoul(buf, nullptr, 16);
+		break;
+	case 'F':
+		ifs.read(buf, 1);
+		switch (buf[0]) {
+		case 'P':
+			oper->mode = am_fpreg;
+			ifs.read(buf, 2);
+			buf[2] = '\0';
+			oper->preg = strtoul(buf, nullptr, 16);
+			break;
+		}
+	}
 	return (oper);
 }
 
@@ -438,3 +471,16 @@ void Operand::store(txtoStream& ofs)
 	}
 }
 
+void Operand::load(txtiStream& ifp)
+{
+	char ch;
+
+	//ifp.get(&ch);
+	switch (ch)
+	{
+	case '$':
+		break;
+	case '#':
+		break;
+	}
+}

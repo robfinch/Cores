@@ -43,7 +43,7 @@ int        outcol = 0;
 // Please keep table in alphabetical order.
 // Instruction.cpp has the number of table elements hard-coded in it.
 //
-Instruction opl[228] =
+Instruction opl[229] =
 {   
 { ";", op_rem },
 { ";asm",op_asm,300 },
@@ -128,6 +128,7 @@ Instruction opl[228] =
 { "fmul.s", op_fsmul,10,1,false },
 { "fneg", op_fneg,2,1,false,am_fpreg,am_fpreg,0,0 },
 { "fs2d", op_fs2d,2,1,false,am_fpreg,am_fpreg,0,0 },
+{ "fsle", op_fsle, 1, 1, false, am_reg, am_fpreg, am_fpreg, 0 },
 { "fslt", op_fslt, 1, 1, false, am_reg, am_fpreg, am_fpreg, 0 },
 { "fsub", op_fdsub,6,1,false,am_fpreg,am_fpreg,am_fpreg,0 },
 { "fsub", op_fsub, 6, 1, false, am_fpreg, am_fpreg, am_fpreg, 0 },

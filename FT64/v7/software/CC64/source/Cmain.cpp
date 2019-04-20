@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -49,7 +49,8 @@ int openfiles(char *);
 void closefiles();
 int PreProcessFile(char *);
 
-char            infile[256],
+char irfile[256],
+	infile[256],
                 listfile[256],
                 outfile[256],
 				outfileG[256];
@@ -208,7 +209,8 @@ int PreProcessFile(char *nm)
 int openfiles(char *s)
 {
 	char *p;
-        strcpy_s(infile,sizeof(infile),s);
+	strcpy_s(irfile, sizeof(irfile), s);
+	strcpy_s(infile,sizeof(infile),s);
         strcpy_s(listfile,sizeof(listfile),s);
         strcpy_s(outfile,sizeof(outfile),s);
   dbgfile = s;
@@ -219,6 +221,7 @@ int openfiles(char *s)
 		p = strrchr(nmspace[0],'.');
 		if (p)
 			*p = '\0';
+		makename(irfile, ".hir");
 		makename(infile,".fpp");
         makename(listfile,".lis");
         makename(outfile,".s");
