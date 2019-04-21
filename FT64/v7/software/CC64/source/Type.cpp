@@ -733,6 +733,15 @@ int64_t TYP::InitializeArray(int64_t maxsz)
 				GenerateChar(0);
 				free(str);
 			}
+			else if (lastst == asconst && GetBtp()->type == bt_byte) {
+				str = GetStrConst();
+				nbytes = strlen(str) * 1 + 1;
+				p = str;
+				while (*p)
+					GenerateByte(*p++);
+				GenerateByte(0);
+				free(str);
+			}
 			else
 				nbytes += GetBtp()->Initialize(GetBtp());
 			if (lastst == comma)

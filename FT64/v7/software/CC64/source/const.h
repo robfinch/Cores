@@ -46,14 +46,14 @@ enum e_node {
 		en_d2t, en_d2q, en_t2q,
 		en_i2d, en_i2t, en_i2q, en_d2i, en_q2i, en_s2q, en_t2i, // 63<-
         en_div, en_asl, en_shl, en_shlu, en_shr, en_shru, en_asr, en_rol, en_ror,
-		en_cond, en_assign, 
+		en_cond, en_safe_cond, en_assign, 
         en_asadd, en_assub, en_asmul, en_asdiv, en_asdivu, en_asmod, en_asmodu,
 		en_asrsh, en_asrshu, en_asmulu, //81
         en_aslsh, en_asand, en_asor, en_asxor, en_uminus, en_not, en_compl,
         en_eq, en_ne, en_lt, en_le, en_gt, en_ge,
         en_feq, en_fne, en_flt, en_fle, en_fgt, en_fge,
         en_veq, en_vne, en_vlt, en_vle, en_vgt, en_vge,
-		en_and, en_or, en_land, en_lor, //104
+		en_and, en_or, en_land, en_lor, en_land_safe, en_lor_safe, //104
         en_xor, en_mulu, en_udiv, en_umod, en_ugt,
         en_uge, en_ule, en_ult,
 		en_ref, en_ursh,
@@ -109,14 +109,14 @@ enum e_am {
 
 enum e_sym {
 	tk_nop,
-	id, cconst, iconst, lconst, sconst, isconst, rconst, plus, minus,
+	id, cconst, iconst, lconst, sconst, isconst, asconst, rconst, plus, minus,
 	star, divide, lshift, rshift, lrot, rrot,
 	modop, eq, neq, lt, leq, gt,
 	geq, assign, asplus, asminus, astimes, asdivide, asmodop,
 	aslshift, asrshift, aslrot, asrrot,
-	asand, asor, asxor, autoinc, autodec, hook, cmpl,
+	asand, asor, asxor, autoinc, autodec, hook, safe_hook, cmpl,
 	comma, colon, semicolon, double_colon, uparrow, openbr, closebr, begin, end,
-	openpa, closepa, pointsto, dot, lor, land, nott, bitorr, bitandd,
+	openpa, closepa, pointsto, dot, lor, land, nott, bitorr, bitandd, lor_safe, land_safe,
 	ellipsis,
 	// functions
 	kw_abs, kw_max, kw_min,

@@ -492,6 +492,7 @@ public:
 	// Code generation
 	Operand *GenIndex();
 	Operand *GenHook(int flags, int size);
+	Operand *GenSafeHook(int flags, int size);
 	Operand *GenShift(int flags, int size, int op);
 	Operand *GenMultiply(int flags, int size, int op);
 	Operand *GenDivMod(int flags, int size, int op);
@@ -500,7 +501,7 @@ public:
 	Operand *GenAssignShift(int flags, int size, int op);
 	Operand *GenAssignAdd(int flags, int size, int op);
 	Operand *GenAssignLogic(int flags, int size, int op);
-	Operand *GenLand(int flags, int op);
+	Operand *GenLand(int flags, int op, bool safe);
 
 	void store(txtoStream& ofs);
 	void load(txtiStream& ifs);
@@ -534,6 +535,7 @@ public:
 	unsigned int rshift : 8;
 	unsigned int isPtr : 1;
 	unsigned int isConst : 1;
+	unsigned int isBool : 1;
 	short int pdeep;		// previous stack depth on allocation
 	short int deep;           /* stack depth on allocation */
 	short int deep2;

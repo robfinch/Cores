@@ -119,6 +119,30 @@ Operand *GenExpr(ENODE *node)
 		ReleaseTempReg(ap2);
 		ReleaseTempReg(ap1);
 		return (ap3);
+	case en_land_safe:
+		ap3 = GetTempRegister();
+		ap1 = GenerateExpression(node->p[0], F_REG, size);
+		ap2 = GenerateExpression(node->p[1], F_REG, size);
+		GenerateTriadic(op_and, 0, ap3, ap1, ap2);
+		ap3->isBool = ap1->isBool && ap2->isBool;
+		if (!ap3->isBool)
+			GenerateDiadic(op_redor,0,ap3,ap3);
+		ReleaseTempReg(ap2);
+		ReleaseTempReg(ap1);
+		ap3->isBool = true;
+		return(ap3);
+	case en_lor_safe:
+		ap3 = GetTempRegister();
+		ap1 = GenerateExpression(node->p[0], F_REG, size);
+		ap2 = GenerateExpression(node->p[1], F_REG, size);
+		GenerateTriadic(op_or, 0, ap3, ap1, ap2);
+		ap3->isBool = ap1->isBool && ap2->isBool;
+		if (!ap3->isBool)
+			GenerateDiadic(op_redor,0,ap3,ap3);
+		ReleaseTempReg(ap2);
+		ReleaseTempReg(ap1);
+		ap3->isBool = true;
+		return(ap3);
 	default:	// en_land, en_lor
 		//ap1 = GetTempRegister();
 		//ap2 = GenerateExpression(node,F_REG,8);
@@ -131,7 +155,8 @@ Operand *GenExpr(ENODE *node)
 		GenerateLabel(lab0);
 		GenerateDiadic(op_ldi,0,ap1,make_immed(0));
 		GenerateLabel(lab1);
-		return ap1;
+		ap1->isBool = true;
+		return (ap1);
 	}
 
 	switch (node->nodetype) {
@@ -143,6 +168,7 @@ Operand *GenExpr(ENODE *node)
 		GenerateTriadic(op_seq, 0, ap3, ap1, ap2);
 		ReleaseTempRegister(ap2);
 		ReleaseTempRegister(ap1);
+		ap3->isBool = true;
 		return (ap3);
 	case en_ne:
 		size = GetNaturalSize(node);
@@ -153,6 +179,7 @@ Operand *GenExpr(ENODE *node)
 		ReleaseTempRegister(ap2);
 		ReleaseTempRegister(ap1);
 		GenerateDiadic(op_not, 0, ap3, ap3);
+		ap3->isBool = true;
 		return (ap3);
 	case en_lt:
 		size = GetNaturalSize(node);
@@ -163,6 +190,7 @@ Operand *GenExpr(ENODE *node)
 		ReleaseTempRegister(ap2);
 		ReleaseTempRegister(ap1);
 		//		GenerateDiadic(op_slt,0,ap3,ap3);
+		ap3->isBool = true;
 		return (ap3);
 	case en_le:
 		size = GetNaturalSize(node);
@@ -173,6 +201,7 @@ Operand *GenExpr(ENODE *node)
 		ReleaseTempRegister(ap2);
 		ReleaseTempRegister(ap1);
 		//		GenerateDiadic(op_sle,0,ap3,ap3);
+		ap3->isBool = true;
 		return (ap3);
 	case en_gt:
 		size = GetNaturalSize(node);
@@ -186,6 +215,7 @@ Operand *GenExpr(ENODE *node)
 		ReleaseTempRegister(ap2);
 		ReleaseTempRegister(ap1);
 		//		GenerateDiadic(op_sgt,0,ap3,ap3);
+		ap3->isBool = true;
 		return (ap3);
 	case en_ge:
 		size = GetNaturalSize(node);
@@ -197,6 +227,7 @@ Operand *GenExpr(ENODE *node)
 		ReleaseTempRegister(ap2);
 		ReleaseTempRegister(ap1);
 		//		GenerateDiadic(op_sge,0,ap3,ap3);
+		ap3->isBool = true;
 		return (ap3);
 	case en_ult:
 		size = GetNaturalSize(node);
@@ -207,6 +238,7 @@ Operand *GenExpr(ENODE *node)
 		ReleaseTempRegister(ap2);
 		ReleaseTempRegister(ap1);
 		//		GenerateDiadic(op_slt,0,ap3,ap3);
+		ap3->isBool = true;
 		return (ap3);
 	case en_ule:
 		size = GetNaturalSize(node);
@@ -222,6 +254,7 @@ Operand *GenExpr(ENODE *node)
 		ReleaseTempRegister(ap2);
 		ReleaseTempRegister(ap1);
 		//		GenerateDiadic(op_sle,0,ap3,ap3);
+		ap3->isBool = true;
 		return (ap3);
 	case en_ugt:
 		size = GetNaturalSize(node);
@@ -235,6 +268,7 @@ Operand *GenExpr(ENODE *node)
 		ReleaseTempRegister(ap2);
 		ReleaseTempRegister(ap1);
 		//		GenerateDiadic(op_sgt,0,ap3,ap3);
+		ap3->isBool = true;
 		return (ap3);
 	case en_uge:
 		size = GetNaturalSize(node);
@@ -250,6 +284,7 @@ Operand *GenExpr(ENODE *node)
 		ReleaseTempRegister(ap2);
 		ReleaseTempRegister(ap1);
 //		GenerateDiadic(op_sge,0,ap3,ap3);
+		ap3->isBool = true;
 		return (ap3);
 	case en_flt:
 	case en_fle:
@@ -264,6 +299,7 @@ Operand *GenExpr(ENODE *node)
 		GenerateTriadic(op, ap1->fpsize(), ap3, ap1, ap2);
 		ReleaseTempRegister(ap2);
 		ReleaseTempRegister(ap1);
+		ap3->isBool = true;
 		return (ap3);
 		/*
 	case en_ne:
@@ -305,7 +341,8 @@ Operand *GenExpr(ENODE *node)
 	GenerateTriadic(op,0,ap3,ap1,ap2);
     ReleaseTempRegister(ap2);
     ReleaseTempRegister(ap1);
-    return ap3;
+		ap3->isBool = true;
+		return (ap3);
 	/*
     GenerateFalseJump(node,lab0,0);
     ap1 = GetTempRegister();

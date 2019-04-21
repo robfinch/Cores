@@ -199,6 +199,17 @@ start2:
 
 		; Jump table
 		org		ROMBASE + $300
+		jmp		_in8
+		jmp		_in8u
+		jmp		_in16
+		jmp		_in16u
+		jmp		_in32
+		jmp		_in32u
+		jmp		_in64
+		jmp		_out8
+		jmp		_out16
+		jmp		_out32
+		jmp		_out64
 		jmp		_DBGClearScreen
 		jmp		_DBGDisplayChar
 		jmp		_DBGDisplayString
@@ -365,7 +376,11 @@ start2b:
 		call	_init_memory_management
 		ldi		r1,#$10				; set operating level 01 (bits 4,5)
 		csrrs	r0,#$044,r1
-		call	_gfx_demo
+		call	_SetSpritePalette
+		call  _SetSpriteImage
+		ldi		$a0,#-1				; enable all sprites
+		call	_EnableSprites
+		call	_RandomizeSpritePositions2
 		call	_monitor
 		call	_FMTK_Initialize
 		ldi		$r1,#8
@@ -815,7 +830,7 @@ _TxtDispChar:
 		or		$r1,$r1,$r2
 		or		$r1,$r1,$r18
 		lcu		$r3,_DBGCursorRow
-		mul		$r3,$r3,#48*8
+		mulf	$r3,$r3,#48*8
 		lcu		$r4,_DBGCursorCol
 		shl		$r4,$r4,#3
 		add		$r3,$r3,$r4
@@ -920,78 +935,81 @@ _DispChar:
 ;----------------------------------------------------------------------------
 ;----------------------------------------------------------------------------
 _SyncCursorPos:
-		sub		$sp,$sp,#24
-		sw		$r2,[$sp]
-		sw		$r3,8[$sp]
-		sw		$r6,16[$sp]
-		ldi		r6,#SPRCTRL
-		lhu		r2,_DBGCursorCol
-		lhu		r3,_DBGCursorRow
-		shl		r3,r3,#3
-		add		r3,r3,#28
-		shl		r3,r3,#16
-		shl		r2,r2,#3
-		add		r2,r2,#256
-		or		r2,r2,r3
-		sh		r2,$810[r6]			;
-		lw		$r2,[$sp]
-		lw		$r3,8[$sp]
-		lw		$r6,16[$sp]
-		ret		#24
+		ldi		$t2,#SPRCTRL
+		lhu		$t0,_DBGCursorCol
+		lhu		$t1,_DBGCursorRow
+		shl		$t1,$t1,#3
+		add		$t1,$t1,#28
+		shl		$t1,$t1,#16
+		shl		$t0,$t0,#3
+		add		$t0,$t0,#256
+		or		$t0,$t0,$t1
+		sh		$t0,$810[$t2]			;
+		ret		#0
 
 ;----------------------------------------------------------------------------
-; *
+; Parameters:
+;		a0 = bitmap of sprites to enable
+; Returns:
+;		none
 ;----------------------------------------------------------------------------
-_EnableCursor:
-		sub		sp,sp,#24
-		sw		r2,[$sp]
-		sw		r3,8[$sp]
-		sw		r6,16[$sp]
-		ldi		r6,#SPRCTRL
-		ldi		r2,#$FFFFFFFF
-		sh		r2,$A00[a6]		; enable sprite #0
-		lw		r2,[$sp]
-		lw		r3,8[$sp]
-		lw		r6,16[$sp]
-		ret		#24
+_EnableSprites:
+		lvw		$t0,SPRCTRL+$A00
+		or		$t0,$t0,$a0
+		sh		$t0,SPRCTRL+$A00		; enable sprites
+		ret		#0
+
+;----------------------------------------------------------------------------
+; Parameters:
+;		a0 = bitmap of sprites to disable
+; Returns:
+;		none
+;----------------------------------------------------------------------------
+_DisableSprites:
+		lvw		$t0,SPRCTRL+$A00
+		not		$a0,$a0
+		and		$t0,$t0,$a0
+		sh		$t0,SPRCTRL+$A00		; enable sprites
+		ret		#0
 
 ;----------------------------------------------------------------------------
 ; Setup the sprite color palette. The palette is loaded with random colors.
-; *
+;
+; Parameters: none
+; Modifies: t0,t1,t2,v0
+; Returns: none
 ;----------------------------------------------------------------------------
 
-_SetCursorPalette:
-		sub		sp,sp,#32
-		sw		r2,[sp]
-		sw		r6,8[sp]
-		sw		r7,16[sp]
-		sw		lr,24[sp]
-		ldi		r6,#SPRCTRL
-		ldi		r2,#WHITE
-		sh		r2,8[r6]				; palette entry #1
-		ldi		r2,#%111110000000000	; RED
-		sh		r2,$10[r6]				; palette entry #2
-		ldi		r7,#12
+_SetSpritePalette:
+		push	$lr
+		ldi		$t2,#SPRCTRL
+		sw		$r0,[$t2]				; palette entry #0 (never used)
+		ldi		$t0,#WHITE
+		sw		$t0,8[$t2]			; palette entry #1
+		ldi		$t0,#%111110000000000	; RED
+		sw		$t0,$10[$t2]			; palette entry #2
+		ldi		$t0,#16
 .0001:
-		mov		r18,r0
+		push	$t0
+		push	$t2
+		mov		$a0,$r0
 		call	_GetRand
-		and		r1,r1,#$7FFF
-		sh		r1,[r6+r7]
-		add		r7,r7,#8
-		slt		r2,r7,#$800
-		bne		r2,r0,.0001
-		lw		r2,[sp]
-		lw		r6,8[sp]
-		lw		r7,16[sp]
-		lw		lr,24[sp]
-		add		sp,sp,#32
-		ret
-		
+		lw		$t2,[$sp]
+		lw		$t0,8[$sp]
+		add		$sp,$sp,#16
+		and		$v0,$v0,#$7FFF
+		sw		$v0,[$t2+$t0]
+		add		$t0,$t0,#8
+		slt		$t1,$t0,#$800
+		bne		$t1,$r0,.0001
+		lw		$lr,[$sp]
+		ret		#8
+
 ;----------------------------------------------------------------------------
 ; Establish a default image for all the sprites.
 ;----------------------------------------------------------------------------
 
-_SetCursorImage:
+_SetSpriteImage:
 		sub		$sp,$sp,#64
 		sw		r2,[$sp]
 		sw		r3,8[$sp]
@@ -1009,7 +1027,7 @@ _SetCursorImage:
 .0002:
 		sw		r8,[r6+r7]		; sprite image address
 		add		r7,r7,#8			; advance to pos/size field
-		sh		r9,[r6+r7]		; 
+		sw		r9,[r6+r7]		; 
 		add		r7,r7,#8			; next sprite
 		xor		r2,r7,#$A00
 		bne		r2,r0,.0002
@@ -1017,6 +1035,9 @@ _SetCursorImage:
 		ldi		r2,#$1FFEE000
 		ldi		r3,#_XImage
 		ldi		r5,#30
+		ldi		r1,#$300030		; set operating/data level 00 (bits 4,5; 20,21)
+		csrrc	r6,#$044,r1
+		sync
 .0001:
 		lw		r4,[r3]				; swap the order of the words around
 		sw		r4,[r2]
@@ -1024,6 +1045,8 @@ _SetCursorImage:
 		add		r2,r2,#8
 		sub		r5,r5,#1
 		bne		r5,r0,.0001
+		csrrw	r0,#$044,r6		; restore operating level
+		sync
 
 		lw		r2,[$sp]
 		lw		r3,8[$sp]
@@ -1536,8 +1559,8 @@ _KeybdWaitTx:
 
 _KeybdGetStatus:
 		memsb
-		ldi		$r1,#KEYBD+1
-		lvb		$r1,[$r1+$r0]
+		ldi		$v0,#KEYBD+1
+		lvb		$v0,[$v0+$r0]
 		memdb
 		ret
 
@@ -1551,8 +1574,8 @@ _KeybdGetStatus:
 
 _KeybdGetScancode:
 		memsb
-		ldi		$r1,#KEYBD
-		lvbu	$r1,[$r1+$r0]		; get the scan code
+		ldi		$v0,#KEYBD
+		lvbu	$v0,[$v0+$r0]		; get the scan code
 		memdb									; need the following store in order
 		sb		$r0,KEYBD+1			; clear receive register
 		memdb

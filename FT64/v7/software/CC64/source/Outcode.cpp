@@ -670,7 +670,7 @@ int stringlit(char *s)
 	lp->nmspace = my_strdup(GetNamespace());
 	lp->next = strtab;
 	strtab = lp;
-	return lp->label;
+	return (lp->label);
 }
 
 int caselit(struct scase *cases, int64_t num)
@@ -817,11 +817,34 @@ void dumplits()
 	while( strtab != NULL) {
 		dfs.printf(".");
 		nl();
-		put_label(strtab->label,strip_crlf(strtab->str),strtab->nmspace,'D');
+		put_label(strtab->label,strip_crlf(&strtab->str[1]),strtab->nmspace,'D');
 		cp = strtab->str;
-		while(*cp)
-			GenerateChar(*cp++);
-		GenerateChar(0);
+		switch (*cp) {
+		case 'B':
+			cp++;
+			while (*cp)
+				GenerateByte(*cp++);
+			GenerateByte(0);
+			break;
+		case 'C':
+			cp++;
+			while (*cp)
+				GenerateChar(*cp++);
+			GenerateChar(0);
+			break;
+		case 'H':
+			cp++;
+			while (*cp)
+				GenerateHalf(*cp++);
+			GenerateHalf(0);
+			break;
+		case 'W':
+			cp++;
+			while (*cp)
+				GenerateWord(*cp++);
+			GenerateWord(0);
+			break;
+		}
 		strtab = strtab->next;
 	}
 	nl();

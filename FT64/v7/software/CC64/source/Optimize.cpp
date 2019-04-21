@@ -117,10 +117,12 @@ void dooper(ENODE *node)
             ep->nodetype = en_icon;
             ep->i = ep->p[0]->i ^ ep->p[1]->i;
             break;
+		case en_land_safe:
 	case en_land:
 		ep->nodetype = en_icon;
 		ep->i = ep->p[0]->i && ep->p[1]->i;
 		break;
+	case en_lor_safe:
 	case en_lor:
 		ep->nodetype = en_icon;
 		ep->i = ep->p[0]->i || ep->p[1]->i;
@@ -165,6 +167,7 @@ void dooper(ENODE *node)
 		ep->nodetype = en_icon;
 		ep->i = (signed)ep->p[0]->i != (signed)ep->p[1]->i;
 		break;
+	case en_safe_cond:
 	case en_cond:
 		ep->nodetype = ep->p[1]->p[0]->nodetype;
 		ep->i = ep->p[0]->i ? ep->p[1]->p[0]->i : ep->p[1]->p[1]->i;
@@ -568,7 +571,7 @@ static void opt0(ENODE **node)
                         }
                     }
                     break;
-
+			case en_land_safe:
             case en_land:   
                     opt0(&(ep->p[0]));
                     opt0(&(ep->p[1]));
@@ -577,6 +580,7 @@ static void opt0(ENODE **node)
 						break;
                     }
                     break;
+						case en_lor_safe:
             case en_lor:
                     opt0(&(ep->p[0]));
                     opt0(&(ep->p[1]));
@@ -604,6 +608,7 @@ static void opt0(ENODE **node)
                     opt0(&(ep->p[0]));
                     opt0(&(ep->p[1]));
                     break;
+								case en_safe_cond:
 			case en_cond:
                     opt0(&(ep->p[0]));
 					opt0(&(ep->p[1]->p[0]));
@@ -689,8 +694,8 @@ static int64_t xfold(ENODE *node)
                 case en_mod:    case en_asadd:
                 case en_assub:  case en_asmul:
                 case en_asdiv:  case en_asmod:
-                case en_and:    case en_land:
-				case en_or:		case en_lor:
+								case en_and:    case en_land:	case en_land_safe:
+								case en_or:		case en_lor:	case en_lor_safe:
                 case en_xor:    case en_asand:
                 case en_asor:   case en_void:
                 case en_fcall:  case en_assign:

@@ -516,9 +516,29 @@ restart:        /* we come back here after comments */
   }
   else if(isidch(lastch)) {
 		getid();
-		if (lastch == '"' && lastid[0]=='_' && lastid[1]=='I' && lastid[2]=='\0') {
+		if (lastch == '"' && lastid[0] == '_' && (lastid[1]=='B' || lastid[1]=='C' || lastid[1]=='H' || lastid[1]=='W'
+			|| lastid[1] == 'b' || lastid[1] == 'c' || lastid[1] == 'h' || lastid[1] == 'w')) {
 			getch();
-			for (i = 0; i < MAX_STRLEN; ++i) {
+			laststr[0] = toupper(lastid[1]);
+			for (i = 1; i < MAX_STRLEN; ++i) {
+				if (lastch == '\"')
+					break;
+				if ((j = getsch()) == -1)
+					break;
+				else
+					laststr[i] = j;
+			}
+			laststr[i] = 0;
+			lastst = asconst;
+			if (lastch != '\"')
+				error(ERR_SYNTAX);
+			else
+				getch();
+		}
+		else if (lastch == '"' && lastid[0]=='_' && lastid[1]=='I' && lastid[2]=='\0') {
+			getch();
+			laststr[0] = 'C';
+			for (i = 1; i < MAX_STRLEN; ++i) {
 				if (lastch == '\"')
 					break;
 				if ((j = getsch()) == -1)
@@ -722,7 +742,8 @@ restart:        /* we come back here after comments */
                         break;
                 case '\"':
                         getch();
-                        for(i = 0;i < MAX_STRLEN;++i) {
+												laststr[0] = 'C';
+                        for(i = 1;i < MAX_STRLEN;++i) {
                                 if(lastch == '\"')
                                         break;
                                 if((j = getsch()) == -1)
@@ -778,6 +799,10 @@ restart:        /* we come back here after comments */
                         if( lastch == '&') {
                                 lastst = land;
                                 getch();
+																if (lastch == '&') {
+																	lastst = land_safe;
+																	getch();
+																}
                                 }
                         else if( lastch == '=') {
                                 lastst = asand;
@@ -791,6 +816,10 @@ restart:        /* we come back here after comments */
                         if(lastch == '|') {
                                 lastst = lor;
                                 getch();
+																if (lastch == '|') {
+																	lastst = lor_safe;
+																	getch();
+																}
                                 }
                         else if( lastch == '=') {
                                 lastst = asor;
@@ -826,6 +855,10 @@ restart:        /* we come back here after comments */
                 case '?':
                         getch();
                         lastst = hook;
+												if (lastch == '?') {
+													getch();
+													lastst = safe_hook;
+												}
                         break;
                 case '\\':
                         getch();

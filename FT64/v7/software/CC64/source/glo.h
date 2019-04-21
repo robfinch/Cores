@@ -188,6 +188,7 @@ extern TYP stdbyte;
 extern TYP stdubyte;
 extern TYP stdstring;
 extern TYP stdistring;
+extern TYP stdastring;
 extern TYP stddbl;
 extern TYP stdtriple;
 extern TYP stdflt;

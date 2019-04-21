@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -61,6 +61,7 @@ TYP             stdbyte;
 TYP             stdubyte;
 TYP             stdstring;
 TYP             stdistring;
+TYP             stdastring;
 TYP				stddbl;
 TYP				stdtriple;
 TYP				stdflt;
@@ -270,15 +271,15 @@ char *GetStrConst()
 	strcpy_s(str, len, laststr);
 	do {
 		NextToken();
-		if (lastst == sconst || lastst==isconst) {
+		if (lastst == sconst || lastst==isconst || lastst==asconst) {
 			len = strlen(str) + MAX_STLP1 + 1;
-			nstr = (char *)malloc(len);
+			nstr = (char *)malloc(len+1);
 			if (nstr == nullptr) {
 				error(ERR_OUT_OF_MEMORY);
 				break;
 			}
 			strcpy_s(nstr, len, str);
-			strcat_s(nstr, len, laststr);
+			strcat_s(&nstr[1], len, laststr);
 			free(str);
 			str = nstr;
 		}
@@ -1289,6 +1290,53 @@ j2:
 		tptr->isConst = TRUE;
 	}
   break;
+	case asconst:
+	{
+		char *str;
+
+		str = GetStrConst();
+		if (sizeof_flag) {
+			tptr = (TYP *)TYP::Make(bt_pointer, 0);
+			tptr->size = strlen(str) + 1;
+			switch (str[0]) {
+			case 'B':
+				tptr->btp = TYP::Make(bt_byte, 1)->GetIndex();
+				break;
+			case 'C':
+				tptr->btp = TYP::Make(bt_char, 2)->GetIndex();
+				break;
+			case 'H':
+				tptr->btp = TYP::Make(bt_short, 4)->GetIndex();
+				break;
+			case 'W':
+				tptr->btp = TYP::Make(bt_long, 8)->GetIndex();
+				break;
+			}
+			tptr->GetBtp()->isConst = TRUE;
+			tptr->val_flag = 1;
+			tptr->isConst = TRUE;
+			tptr->isUnsigned = TRUE;
+		}
+		else {
+			tptr = &stdastring;
+		}
+		pnode = makenodei(en_labcon, (ENODE *)NULL, 0);
+		if (sizeof_flag == 0)
+			pnode->i = stringlit(str);
+		switch (str[0]) {
+		case 'B': pnode->esize = 1; break;
+		case 'C': pnode->esize = 2; break;
+		case 'H': pnode->esize = 4; break;
+		case 'W': pnode->esize = 8; break;
+		}
+		free(str);
+		pnode->etype = bt_pointer;
+		pnode->constflag = TRUE;
+		pnode->segment = rodataseg;
+		pnode->SetType(tptr);
+		tptr->isConst = TRUE;
+	}
+	break;
 	case isconst:
 	{
 		char *str;
@@ -2938,9 +2986,19 @@ TYP     *andop(ENODE **node)
 {       return binop(node,bitwiseor,en_land,land);
 }
 
+TYP     *safe_andop(ENODE **node)
+{
+	return binop(node, andop, en_land_safe, land_safe);
+}
+
 TYP *orop(ENODE **node)
 {
-	return binop(node,andop,en_lor,lor);
+	return binop(node,safe_andop,en_lor,lor);
+}
+
+TYP *safe_orop(ENODE **node)
+{
+	return binop(node, orop, en_lor_safe, lor_safe);
 }
 
 /*
@@ -2950,12 +3008,15 @@ TYP *conditional(ENODE **node)
 {
 	TYP *tp1, *tp2, *tp3;
   ENODE *ep1, *ep2, *ep3;
+	bool sh;
+
   Enter("Conditional");
   *node = (ENODE *)NULL;
-  tp1 = orop(&ep1);       /* get condition */
+  tp1 = safe_orop(&ep1);       /* get condition */
   if(tp1 == (TYP *)NULL )
     goto xit;
-  if( lastst == hook ) {
+	sh = lastst == safe_hook;
+  if( lastst == hook || lastst == safe_hook) {
 		iflevel++;
 		NextToken();
 		if((tp2 = conditional(&ep2)) == NULL) {
@@ -2970,7 +3031,7 @@ TYP *conditional(ENODE **node)
 		tp1 = forcefit(&ep3,tp3,&ep2,tp2,true,false);
 		ep2 = makenode(en_void,ep2,ep3);
 		ep2->esize = tp1->size;
-		ep1 = makenode(en_cond,ep1,ep2);
+		ep1 = makenode(sh ? en_safe_cond:en_cond,ep1,ep2);
 		ep1->esize = tp1->size;
 		iflevel--;
   }

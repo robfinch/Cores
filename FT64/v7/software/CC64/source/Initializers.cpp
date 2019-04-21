@@ -322,14 +322,14 @@ int64_t InitializePointer(TYP *tp2)
         }
 				*/
     }
-    else if(lastst == sconst) {
+    else if(lastst == sconst || lastst == asconst) {
 			char *str;
 
 			str = GetStrConst();
       GenerateLabelReference(stringlit(str),0);
 			free(str);
     }
-	else if (lastst == rconst) {
+		else if (lastst == rconst) {
         GenerateLabelReference(quadlit(&rval128),0);
         NextToken();
 	}

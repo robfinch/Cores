@@ -347,6 +347,7 @@ void ENODE::repexpr()
 	case en_and:
 	case en_or:     case en_xor:
 	case en_land:   case en_lor:
+	case en_land_safe:   case en_lor_safe:
 	case en_eq:     case en_ne:
 	case en_lt:     case en_le:
 	case en_gt:     case en_ge:
@@ -369,7 +370,7 @@ void ENODE::repexpr()
 	case en_vadds: case en_vsubs:
 	case en_vmuls: case en_vdivs:
 
-	case en_cond:   case en_void:
+	case en_cond:   case en_void:	case en_safe_cond:
 	case en_asadd:  case en_assub:
 	case en_asmul:  case en_asmulu:
 	case en_asdiv:  case en_asdivu:
@@ -567,6 +568,7 @@ void ENODE::scanexpr(int duse)
 	case en_mod:    case en_umod:   case en_and:
 	case en_or:     case en_xor:
 	case en_lor:    case en_land:
+	case en_lor_safe:    case en_land_safe:
 	case en_eq:     case en_ne:
 	case en_gt:     case en_ge:
 	case en_lt:     case en_le:
@@ -593,7 +595,7 @@ void ENODE::scanexpr(int duse)
 	case en_asmod:  case en_aslsh:
 	case en_asrsh:
 	case en_asand:	case en_asxor: case en_asor:
-	case en_cond:
+	case en_cond:	case en_safe_cond:
 	case en_void:
 	case en_list:
 	case en_aggregate:
@@ -698,9 +700,9 @@ Operand *ENODE::GenIndex()
 
 
 //
-// Generate code to evaluate a condition operator node (?:)
+// Generate code to evaluate a condition operator node (??:)
 //
-Operand *ENODE::GenHook(int flags, int size)
+Operand *ENODE::GenSafeHook(int flags, int size)
 {
 	Operand *ap1, *ap2, *ap3, *ap4;
 	int false_label, end_label;
@@ -720,15 +722,13 @@ Operand *ENODE::GenHook(int flags, int size)
 	*/
 	ip1 = peep_tail;
 	// cmovenz integer only
-	if (false && !opt_nocgo && !(flags & F_FPREG)) {
+	if (!opt_nocgo) {
 		ap4 = GetTempRegister();
 		ap1 = GenerateExpression(p[0], F_REG, size);
-		ap2 = GenerateExpression(p[1]->p[0], F_REG, size);
-		ap3 = GenerateExpression(p[1]->p[1], F_REG | F_IMMED, size);
-		if (ap3->mode == am_imm && ap3->offset->i == 0) {
-			ap3->mode = am_reg;
-			ap3->preg = 0;
-		}
+		ap2 = GenerateExpression(p[1]->p[0], F_REG | F_FPREG, size);
+		ap3 = GenerateExpression(p[1]->p[1], F_REG | F_FPREG | F_IMMED, size);
+		if (ap2->mode == am_fpreg || ap3->mode == am_fpreg)
+			goto j1;
 		n1 = PeepCount(ip1);
 		if (n1 < 20 && !currentFn->pl.HasCall(ip1)) {
 			Generate4adic(op_cmovenz, 0, ap4, ap1, ap2, ap3);
@@ -738,6 +738,7 @@ Operand *ENODE::GenHook(int flags, int size)
 			ap4->MakeLegal(flags,size);
 			return (ap4);
 		}
+j1:
 		ReleaseTempReg(ap3);
 		ReleaseTempReg(ap2);
 		ReleaseTempReg(ap1);
@@ -749,7 +750,7 @@ Operand *ENODE::GenHook(int flags, int size)
 	n1 = PeepCount(ip1);
 	if (opt_nocgo)
 		n1 = 9999;
-//	if (n1 > 4 || currentFn->pl.HasCall(ip1))
+	if (n1 > 4 || currentFn->pl.HasCall(ip1))
 	{
 		ReleaseTempReg(ap2);
 		currentFn->pl.tail = peep_tail = ip1;
@@ -814,6 +815,90 @@ Operand *ENODE::GenHook(int flags, int size)
 	ap1 = GenerateExpression(node->p[0], flags, size);
 	GenerateDiadic(op_bra, 0, make_clabel(end_label), 0);
 	GenerateLabel(false_label);
+	if (!IsEqualOperand(ap1, ap2))
+	{
+		GenerateMonadic(op_hint, 0, make_immed(2));
+		switch (ap1->mode)
+		{
+		case am_reg:
+			switch (ap2->mode) {
+			case am_reg:
+				GenerateDiadic(op_mov, 0, ap1, ap2);
+				break;
+			case am_imm:
+				GenerateDiadic(op_ldi, 0, ap1, ap2);
+				if (ap2->isPtr)
+					ap1->isPtr = true;
+				break;
+			default:
+				GenLoad(ap1, ap2, size, size);
+				break;
+			}
+			break;
+		case am_fpreg:
+			switch (ap2->mode) {
+			case am_fpreg:
+				GenerateDiadic(op_mov, 0, ap1, ap2);
+				break;
+			case am_imm:
+				ap4 = GetTempRegister();
+				GenerateDiadic(op_ldi, 0, ap4, ap2);
+				GenerateDiadic(op_mov, 0, ap1, ap4);
+				if (ap2->isPtr)
+					ap1->isPtr = true;
+				break;
+			default:
+				GenLoad(ap1, ap2, size, size);
+				break;
+			}
+			break;
+		case am_imm:
+			break;
+		default:
+			GenStore(ap2, ap1, size);
+			break;
+		}
+	}
+	GenerateLabel(end_label);
+	ap1->MakeLegal(flags, size);
+	return (ap1);
+}
+
+//
+// Generate code to evaluate a condition operator node (?:)
+//
+Operand *ENODE::GenHook(int flags, int size)
+{
+	Operand *ap1, *ap2, *ap3, *ap4;
+	int false_label, end_label;
+	OCODE *ip1;
+	int n1;
+	ENODE *node;
+
+	false_label = nextlabel++;
+	end_label = nextlabel++;
+	//flags = (flags & F_REG) | F_VOL;
+	flags |= F_VOL;
+	/*
+	if (p[0]->constflag && p[1]->constflag) {
+	GeneratePredicateMonadic(hook_predreg,op_op_ldi,make_immed(p[0]->i));
+	GeneratePredicateMonadic(hook_predreg,op_ldi,make_immed(p[0]->i));
+	}
+	*/
+	ip1 = peep_tail;
+	ap2 = GenerateExpression(p[1]->p[1], flags, size);
+	n1 = PeepCount(ip1);
+	if (opt_nocgo)
+		n1 = 9999;
+	ReleaseTempReg(ap2);
+	currentFn->pl.tail = peep_tail = ip1;
+	peep_tail->fwd = nullptr;
+	GenerateFalseJump(p[0], false_label, 0);
+	node = p[1];
+	ap1 = GenerateExpression(node->p[0], flags, size);
+	GenerateDiadic(op_bra, 0, make_clabel(end_label), 0);
+	GenerateLabel(false_label);
+	ap2 = GenerateExpression(node->p[1], flags, size);
 	if (!IsEqualOperand(ap1, ap2))
 	{
 		GenerateMonadic(op_hint, 0, make_immed(2));
@@ -1294,11 +1379,45 @@ Operand *ENODE::GenAssignLogic(int flags, int size, int op)
 	return (ap1);
 }
 
-Operand *ENODE::GenLand(int flags, int op)
+Operand *ENODE::GenLand(int flags, int op, bool safe)
 {
-	Operand *ap1;
+	Operand *ap1, *ap2, *ap3, *ap4, *ap5;
 	int lab0, lab1;
 
+	if (safe) {
+		lab0 = nextlabel++;
+		ap3 = GetTempRegister();
+		ap1 = GenerateExpression(p[0], F_REG, 8);
+		ap4 = GetTempRegister();
+		//if (op == op_and) {
+		//	GenerateTriadic(op_beq, 0, ap1, makereg(0), make_label(lab0));
+		//	ap2 = GenerateExpression(p[1], F_REG, 8);
+		//}
+		if (!ap1->isBool)
+			GenerateDiadic(op_redor, 0, ap4, ap1);
+		else {
+			ReleaseTempReg(ap4);
+			ap4 = ap1;
+		}
+		ap2 = GenerateExpression(p[1], F_REG, 8);
+		ap5 = GetTempRegister();
+		if (!ap2->isBool)
+			GenerateDiadic(op_redor, 0, ap5, ap2);
+		else {
+			ReleaseTempReg(ap5);
+			ap5 = ap2;
+		}
+		GenerateTriadic(op, 0, ap3, ap4, ap5);
+		ReleaseTempReg(ap5);
+		if (ap5 != ap2)
+			ReleaseTempReg(ap2);
+		if (ap4 != ap1)
+			ReleaseTempReg(ap4);
+		ReleaseTempReg(ap1);
+		ap3->MakeLegal(flags, 8);
+		ap3->isBool = true;
+		return (ap3);
+	}
 	lab0 = nextlabel++;
 	lab1 = nextlabel++;
 	ap1 = GetTempRegister();
@@ -1307,28 +1426,8 @@ Operand *ENODE::GenLand(int flags, int op)
 	GenerateDiadic(op_ldi, 0, ap1, make_immed(0));
 	GenerateLabel(lab0);
 	ap1->MakeLegal(flags, 8);
+	ap1->isBool = true;
 	return (ap1);
-/*
-	lab0 = nextlabel++;
-	ap3 = GetTempRegister();
-	ap1 = GenerateExpression(p[0], F_REG, 8);
-	ap4 = GetTempRegister();
-	if (op == op_and) {
-		GenerateTriadic(op_beq, 0, ap1, makereg(0), make_label(lab0));
-		ap2 = GenerateExpression(p[1], F_REG, 8);
-	}
-	GenerateDiadic(op_redor, 0, ap4, ap1);
-	ap2 = GenerateExpression(p[1], F_REG, 8);
-	ap5 = GetTempRegister();
-	GenerateDiadic(op_redor, 0, ap5, ap2);
-	GenerateTriadic(op, 0, ap3, ap4, ap5);
-	ReleaseTempReg(ap5);
-	ReleaseTempReg(ap2);
-	ReleaseTempReg(ap4);
-	ReleaseTempReg(ap1);
-	ap3->MakeLegal( flags, 8);
-	return (ap3);
-*/
 }
 
 void ENODE::PutConstant(txtoStream& ofs, unsigned int lowhigh, unsigned int rshift)
