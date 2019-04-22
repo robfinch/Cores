@@ -31,6 +31,7 @@ Statement *Function::ParseBody()
 	std::string lbl;
 	char *p;
 	OCODE *ip;
+	int oc;
 
 	dfs.printf("<Parse function body>:%s|\n", (char *)sym->name->c_str());
 
@@ -80,7 +81,8 @@ Statement *Function::ParseBody()
 	stkspace = lc_auto;
 	if (!IsInline) {
 		pass = 1;
-		ip = peep_tail;
+		oc = pl.tail->opcode;
+		ip = pl.tail;
 		looplevel = 0;
 		max_reg_alloc_ptr = 0;
 		Gen();
@@ -89,14 +91,15 @@ Statement *Function::ParseBody()
 		stkspace += GetTempMemSpace();
 		tempbot = -stkspace;
 		pass = 2;
-		currentFn->pl.tail = peep_tail = ip;
-		peep_tail->fwd = nullptr;
+		pl.tail = ip;
+		if (pl.tail)
+			pl.tail->fwd = nullptr;
 		looplevel = 0;
 		Gen();
 		dfs.putch('E');
 
-		//pl.flush();
-		flush_peep();
+		PeepOpt();
+		FlushPeep();
 		if (sym->storage_class == sc_global) {
 			ofs.printf("endpublic\r\n\r\n");
 		}
@@ -108,15 +111,15 @@ Statement *Function::ParseBody()
 	return (sym->stmt);
 }
 
-void Function::Init(int nump, int numarg)
+void Function::Init()
 {
 	IsNocall = isNocall;
 	IsPascal = isPascal;
 	sym->IsKernel = isKernel;
 	IsInterrupt = isInterrupt;
 	IsTask = isTask;
-	NumParms = nump;
-	numa = numarg;
+//	NumParms = nump;
+//	numa = numarg;
 	IsVirtual = isVirtual;
 	IsInline = isInline;
 
@@ -140,6 +143,7 @@ int Function::Parse()
 	int nump, numar;
 	std::string nme;
 
+	currentFn = this;
 	sp = this;
 	dfs.puts("<ParseFunction>\n");
 	isFuncBody = true;
@@ -168,7 +172,8 @@ int Function::Parse()
 	// declarations. the original 'C' style is parsed here. Originally the
 	// parameter types appeared as list after the parenthesis and before the
 	// function body.
-	BuildParameterList(&nump, &numar);
+	//if (NumParms==-1)
+	sp->BuildParameterList(&nump, &numar);
 	dfs.printf("B");
 	sym->mangledName = BuildSignature(1);  // build against parameters
 
@@ -217,7 +222,7 @@ int Function::Parse()
 		if (lastst == assign) {
 			doinit(sp->sym);	// was doinit(sym);
 		}
-		sp->Init(nump, numar);
+		sp->Init();
 		return (1);
 	}
 j2:
@@ -225,7 +230,7 @@ j2:
 	if (lastst == semicolon || lastst == comma) {	// Function prototype
 		dfs.printf("e");
 		sp->IsPrototype = 1;
-		sp->Init(nump, numar);
+		sp->Init();
 		sp->params.MoveTo(&sp->proto);
 		goto j1;
 	}
@@ -244,14 +249,16 @@ j2:
 		//needpunc(closepa);
 		if (lastst == semicolon) {
 			sp->IsPrototype = 1;
-			sp->Init(nump, numar);
+			sp->Init();
 		}
 		// Check for end of function parameter list.
 		else if (funcdecl == 2 && lastst == closepa) {
 			;
 		}
 		else {
-			sp->Init(nump, numar);
+			sp->numa = numa;
+			sp->NumParms = nump;
+			sp->Init();
 			sp->sym->stmt = ParseBody();
 			Summary(sp->sym->stmt);
 		}
@@ -259,7 +266,7 @@ j2:
 	//                error(ERR_BLOCK);
 	else {
 		dfs.printf("G");
-		sp->Init(nump, numar);
+		sp->Init();
 		// Parsing declarations sets the storage class to extern when it really
 		// should be global if there is a function body.
 		if (sp->sym->storage_class == sc_external)
@@ -549,7 +556,7 @@ void Function::SetupReturnBlock()
 		GenerateDiadic(op_ldi, 0, makereg(regXLR), ap);
 	GenerateDiadic(op_mov, 0, makereg(regFP), makereg(regSP));
 	GenerateTriadic(op_sub, 0, makereg(regSP), makereg(regSP), make_immed(stkspace));
-	spAdjust = peep_tail;
+	spAdjust = pl.tail;
 	GenerateMonadic(op_hint, 0, make_immed(end_return_block));
 }
 
@@ -635,7 +642,7 @@ void Function::GenReturn(Statement *stmt)
 	}
 	retlab = nextlabel++;
 	GenerateLabel(retlab);
-	rcode = peep_tail;
+	rcode = pl.tail;
 
 	if (currentFn->UsesNew) {
 		GenerateTriadic(op_sub, 0, makereg(regSP), makereg(regSP), make_immed(8));
@@ -791,13 +798,14 @@ void Function::Gen()
 	stmt->Generate();
 
 	if (exceptions) {
-		ip = peep_tail;
+		ip = pl.tail;
 		GenerateMonadic(op_bra, 0, make_label(lab0));
 		doCatch = GenDefaultCatch();
 		GenerateLabel(lab0);
 		if (!doCatch) {
-			currentFn->pl.tail = peep_tail = ip;
-			peep_tail->fwd = nullptr;
+			pl.tail = ip;
+			if (pl.tail)
+				pl.tail->fwd = nullptr;
 		}
 	}
 
@@ -1077,6 +1085,8 @@ void Function::BuildParameterList(int *num, int *numa)
 	fpreg = regFirstArg;
 	// Parameters will be inserted into the symbol's parameter list when
 	// declarations are processed.
+	//if (strcmp(sym->name->c_str(), "__Skip") == 0)
+	//	printf("hello");
 	np = ParameterDeclaration::Parse(1);
 	*num += np;
 	*numa = 0;
@@ -1394,11 +1404,23 @@ void Function::DumpLiveVars()
 	dfs.printf("</table>\n");
 }
 
+
 void Function::storeHex(txtoStream& ofs)
 {
 
 }
 
+void Function::RemoveDuplicates()
+{
+	int n;
+
+	n = compiler.funcnum - 1;
+	if (n < 1)
+		return;
+	//if (compiler.functionTable[n].sym->name.compare(compiler.functionTable[n - 1].sym->name) == 0) {
+
+	//}
+}
 
 
 

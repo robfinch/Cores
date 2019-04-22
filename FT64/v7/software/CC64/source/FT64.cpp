@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -974,7 +974,7 @@ static int GenerateStoreArgumentList(Function *sym, ENODE *plist)
 		ta = sym->GetProtoTypes();
 
 	sumFloat = false;
-	ip = peep_tail;
+	ip = currentFn->pl.tail;
 	GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(0));
 	// Capture the parameter list. It is needed in the reverse order.
 	for (nn = 0, p = plist; p != NULL; p = p->p[1], nn++) {
@@ -994,13 +994,13 @@ static int GenerateStoreArgumentList(Function *sym, ENODE *plist)
 //		plist = plist->p[1];
   }
 	if (sum==0)
-		MarkRemove(ip->fwd);
+		ip->fwd->MarkRemove();
 	else
 		ip->fwd->oper3 = make_immed(sum*sizeOfWord);
 	if (!sumFloat) {
 		cpu.SupportsPush = true;
-		currentFn->pl.tail = peep_tail = ip;
-		peep_tail->fwd = nullptr;
+		currentFn->pl.tail = ip;
+		currentFn->pl.tail->fwd = nullptr;
 		i = maxnn-1;
 		for (nn = 0; nn < maxnn; nn++, i--) {
 			if (pl[nn]->etype == bt_pointer)

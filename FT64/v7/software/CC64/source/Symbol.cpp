@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -519,4 +519,6 @@ void SYM::storeHex(txtoStream& ofs)
 {
 	ofs.write("SYM:");
 	ofs.writeAsHex((char *)this, sizeof(SYM));
+	ofs.printf(":%05d", fi->number);
+	ofs.printf(":%05d", tp->typeno);
 }

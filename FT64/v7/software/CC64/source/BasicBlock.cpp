@@ -693,7 +693,7 @@ bool BasicBlock::Coalesce()
 						if (father != son)
 							Unite(father, son);
 						improved = true;
-						MarkRemove(ip);
+						ip->MarkRemove();
 					}
 				}
 			}

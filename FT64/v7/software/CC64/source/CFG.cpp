@@ -25,7 +25,6 @@
 //
 #include "stdafx.h"
 
-extern OCODE *peep_head;
 extern BasicBlock *basicBlocks[10000];
 extern Instruction *GetInsn(int);
 
@@ -35,7 +34,7 @@ void CFG::Create()
 	int nn;
 	struct scase *cs;
 
-	for (ip = peep_head; ip; ip = ip->fwd) {
+	for (ip = currentFn->pl.head; ip; ip = ip->fwd) {
 		if (ip->leader) {
 		if (ip->back) {
 		// if not unconditional control transfer

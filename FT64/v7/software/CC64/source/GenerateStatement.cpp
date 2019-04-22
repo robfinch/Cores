@@ -107,16 +107,17 @@ Operand *make_direct(int i)
 Operand *make_indexed2(int lab, int i)
 {
 	Operand *ap;
-    ENODE *ep;
-    ep = allocEnode();
-    ep->nodetype = en_clabcon;
-    ep->i = lab;
-    ap = allocOperand();
+  ENODE *ep;
+
+	ep = allocEnode();
+  ep->nodetype = en_clabcon;
+  ep->i = lab;
+  ap = allocOperand();
 	ap->mode = am_indx;
 	ap->preg = i;
-    ap->offset = ep;
+  ap->offset = ep;
 	ap->isUnsigned = TRUE;
-    return (ap);
+  return (ap);
 }
 
 //

@@ -170,8 +170,6 @@ extern int regmask;
 extern int bregmask;
 extern Statement *currentStmt;
 extern bool dogen;
-extern OCODE *peep_head;
-extern OCODE *peep_tail;
 
 extern TYP stdvoid;
 extern TYP stdint;

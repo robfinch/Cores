@@ -167,7 +167,7 @@ void Forest::Renumber()
 		t = trees[tt];
 		t->var = ::map.newnums[t->var];
 	}
-	for (ip = peep_head; ip; ip = ip->fwd) {
+	for (ip = currentFn->pl.head; ip; ip = ip->fwd) {
 		if (ip->opcode == op_label)
 			continue;
 		if (ip->oper1) {

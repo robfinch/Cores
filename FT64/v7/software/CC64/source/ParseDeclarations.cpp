@@ -1079,7 +1079,9 @@ void Declaration::ParseSuffixOpenpa(Function *sp)
 	  if(lastst == begin) {
 		  temp1->type = bt_ifunc;
 		  needParseFunction = 2;
-	  }
+			sp->NumParms = 0;
+			sp->numa = 0;
+		}
 	  else {
 		  if (lastst != semicolon) {
 				goto j2;
@@ -1088,11 +1090,11 @@ void Declaration::ParseSuffixOpenpa(Function *sp)
 				nump = 0;
 				sp->BuildParameterList(&nump, &numa);
 				currentFn = cf;
+				sp->NumParms = nump;
+				sp->numa = numa;
 				if (lastst==begin) {
 					temp1->type = bt_ifunc;
 					currentFn = sp;
-					sp->NumParms = nump;
-					sp->numa = numa;
 					needParseFunction = 2;
 					goto j1;
 				}
@@ -1109,8 +1111,8 @@ j1: ;
   else {
 j2:
     dfs.printf("r");
-		cf = currentFn;
-	  currentFn = sp;
+		//cf = currentFn;
+	 // currentFn = sp;
     dfs.printf("s");
     temp1->type = bt_func;
   	// Parse the parameter list for a function pointer passed as a
@@ -1132,8 +1134,8 @@ j2:
   		//ParseParameterDeclarations(10);	// parse and discard
   		funcdecl = 10;
   //				SetType(sp);
-			//cf = currentFn;
-			//currentFn = sp;
+			cf = currentFn;
+			currentFn = sp;
   		sp->BuildParameterList(&nump, &numa);
 			currentFn = cf;
   		needParseFunction = 0;
@@ -1146,10 +1148,10 @@ j2:
   		if (declid) delete declid;
   		declid = new std::string(odecl);
   		funcdecl = fd;
-		// There may be more parameters in the list.
-		if (lastst==comma) {
-			return;
-		}
+			// There may be more parameters in the list.
+			if (lastst==comma) {
+				return;
+			}
   		needpunc(closepa,23);
   
 			if (lastst == begin) {
@@ -1188,6 +1190,22 @@ j2:
 //					ParseFunction(sp);
 //				}
     }
+		/*
+		else {
+			int ppl = parsingParameterList;
+			parsingParameterList = false;
+			sp->BuildParameterList(&nump, &numa);
+			parsingParameterList = ppl;
+			currentFn = cf;
+			sp->NumParms = nump;
+			sp->numa = numa;
+			//needpunc(closepa,23);
+			if (lastst == semicolon) {
+				sp->params.CopyTo(&sp->proto);
+				needParseFunction = false;
+			}
+		}
+		*/
     dfs.printf("Y");
 	  sp->PrintParameterTypes();
     dfs.printf("X");
@@ -1313,11 +1331,13 @@ int Declaration::declare(SYM *parent,TABLE *table,int al,int ilc,int ztype)
   int nbytes;
 	static int decl_level = 0;
 	int itdef;
+	int insState = 0;
 
 	itdef = isTypedef;
 	decl_level++;
 	dfs.printf("<declare>\n");
 	nbytes = 0;
+	insState = 0;
 	dfs.printf("A");
 	classname = new std::string("");
 	sp1 = nullptr;
@@ -1351,6 +1371,7 @@ int Declaration::declare(SYM *parent,TABLE *table,int al,int ilc,int ztype)
 			}
 			SetType(sp);
 			if (funcdecl > 0) {
+				//sp->fi = newFunction(sp->id);
 				sp->fi = allocFunction(sp->id);
 				sp->fi->sym = sp;
 				sp->fi->IsPascal = isPascal;
@@ -1421,6 +1442,8 @@ int Declaration::declare(SYM *parent,TABLE *table,int al,int ilc,int ztype)
 			// part of the declaration. In that case the symbol name is an empty
 			// string. There's nothing to insert in the symbol table.
 			name = *sp->name;
+			//if (strcmp(name.c_str(), "__Skip") == 0)
+			//	printf("hl");
 			if (sp->name->length() > 0) {
 				//dfs.printf("Table:%p, sp:%p Fn:%p\r\n", table, sp, currentFn);
 				if (sp->parent) {
@@ -1481,6 +1504,7 @@ int Declaration::declare(SYM *parent,TABLE *table,int al,int ilc,int ztype)
 					sp1->value.i = sp->value.i;
 					if (!sp1->fi) {
 						sp1->fi = allocFunction(sp1->id);
+						//sp1->fi = newFunction(sp1->id);
 						sp1->fi->sym = sp1;
 					}
 	        sp1->fi->IsPascal = sp->fi->IsPascal;
@@ -1514,9 +1538,11 @@ int Declaration::declare(SYM *parent,TABLE *table,int al,int ilc,int ztype)
    					  if (sp->parent && ((sp->tp->type==bt_func || sp->tp->type==bt_ifunc)
    					  || (sp->tp->type==bt_pointer && (sp->tp->GetBtp()->type==bt_func || sp->tp->GetBtp()->type==bt_ifunc))))
               {
-						  sp->fi->InsertMethod();
+								//insState = 1;
+								sp->fi->InsertMethod();
   			      }
   			      else {
+								//insState = 2;
                 table->insert(sp);
   					  }
   				  }
@@ -1525,10 +1551,58 @@ int Declaration::declare(SYM *parent,TABLE *table,int al,int ilc,int ztype)
   dfs.printf("J");
   			if (needParseFunction) {
   				needParseFunction = FALSE;
+					currentFn = sp->fi;
   				fn_doneinit = sp->fi->Parse();
+					/*
+					fn = sp->fi->FindExactMatch(TABLE::matchno);
+					if (fn) {
+						if (!sp->fi->alloced)
+							delete sp->fi;
+						sp->fi = fn;
+						insState = 0;
+					}
+					else {
+						fn = allocFunction(sp->id);
+						memcpy(fn, sp->fi, sizeof(Function));
+						if (!sp->fi->alloced)
+							delete sp->fi;
+						sp->fi = fn;
+						switch (insState) {
+						case 1:	sp->fi->InsertMethod(); break;
+						case 2: table->insert(sp); break;
+						}
+						insState = 3;
+					}
+					*/
   				if (sp->tp->type != bt_pointer)
   					return (nbytes);
   			}
+				/*
+				if (insState == 1 || insState == 2) {
+					if (sp->tp->type == bt_ifunc || sp->tp->type == bt_func) {
+						fn = sp->fi->FindExactMatch(TABLE::matchno);
+						if (fn) {
+							if (!sp->fi->alloced)
+								delete sp->fi;
+							sp->fi = fn;
+						}
+						else {
+							fn = allocFunction(sp->id);
+							memcpy(fn, sp->fi, sizeof(Function));
+							if (!sp->fi->alloced)
+								delete sp->fi;
+							sp->fi = fn;
+							switch (insState) {
+							case 1:	sp->fi->InsertMethod(); break;
+							case 2: table->insert(sp); break;
+							}
+							insState = 3;
+						}
+					}
+					else if (insState==2)
+						table->insert(sp);
+				}
+						*/
      //         if(sp->tp->type == bt_ifunc) { /* function body follows */
      //             ParseFunction(sp);
      //             return nbytes;
@@ -1898,9 +1972,10 @@ dfs.printf("B");
       declare(NULL,&currentFn->params,sc_auto,0,bt_struct);
 			isAuto = false;
 			break;
+		case kw_const:
 		case ellipsis:
 		case kw_inline:
-		case kw_volatile: case kw_const:
+		case kw_volatile:
         case kw_exception:
 		case kw_int8: case kw_int16: case kw_int32: case kw_int64: case kw_int40: case kw_int80:
 		case kw_byte: case kw_char: case kw_int: case kw_short: case kw_unsigned: case kw_signed:

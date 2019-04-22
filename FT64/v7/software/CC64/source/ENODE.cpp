@@ -674,7 +674,7 @@ Operand *ENODE::GenIndex()
 		ap2->mode = am_indx;
 		ap2->preg = ap1->preg;
 		ap2->deep = ap1->deep;
-		return ap2;
+		return (ap2);
 	}
 	if (ap2->mode == am_ind && ap1->mode == am_reg) {
 		ap2->mode = am_indx2;
@@ -720,7 +720,7 @@ Operand *ENODE::GenSafeHook(int flags, int size)
 	GeneratePredicateMonadic(hook_predreg,op_ldi,make_immed(p[0]->i));
 	}
 	*/
-	ip1 = peep_tail;
+	ip1 = currentFn->pl.tail;
 	// cmovenz integer only
 	if (!opt_nocgo) {
 		ap4 = GetTempRegister();
@@ -729,7 +729,7 @@ Operand *ENODE::GenSafeHook(int flags, int size)
 		ap3 = GenerateExpression(p[1]->p[1], F_REG | F_FPREG | F_IMMED, size);
 		if (ap2->mode == am_fpreg || ap3->mode == am_fpreg)
 			goto j1;
-		n1 = PeepCount(ip1);
+		n1 = currentFn->pl.Count(ip1);
 		if (n1 < 20 && !currentFn->pl.HasCall(ip1)) {
 			Generate4adic(op_cmovenz, 0, ap4, ap1, ap2, ap3);
 			ReleaseTempReg(ap3);
@@ -743,18 +743,18 @@ j1:
 		ReleaseTempReg(ap2);
 		ReleaseTempReg(ap1);
 		ReleaseTempReg(ap4);
-		currentFn->pl.tail = peep_tail = ip1;
-		peep_tail->fwd = nullptr;
+		currentFn->pl.tail = ip1;
+		currentFn->pl.tail->fwd = nullptr;
 	}
 	ap2 = GenerateExpression(p[1]->p[1], flags, size);
-	n1 = PeepCount(ip1);
+	n1 = currentFn->pl.Count(ip1);
 	if (opt_nocgo)
 		n1 = 9999;
 	if (n1 > 4 || currentFn->pl.HasCall(ip1))
 	{
 		ReleaseTempReg(ap2);
-		currentFn->pl.tail = peep_tail = ip1;
-		peep_tail->fwd = nullptr;
+		currentFn->pl.tail = ip1;
+		currentFn->pl.tail->fwd = nullptr;
 		GenerateFalseJump(p[0], false_label, 0);
 		node = p[1];
 		ap1 = GenerateExpression(node->p[0], flags, size);
@@ -885,14 +885,14 @@ Operand *ENODE::GenHook(int flags, int size)
 	GeneratePredicateMonadic(hook_predreg,op_ldi,make_immed(p[0]->i));
 	}
 	*/
-	ip1 = peep_tail;
+	ip1 = currentFn->pl.tail;
 	ap2 = GenerateExpression(p[1]->p[1], flags, size);
-	n1 = PeepCount(ip1);
+	n1 = currentFn->pl.Count(ip1);
 	if (opt_nocgo)
 		n1 = 9999;
 	ReleaseTempReg(ap2);
-	currentFn->pl.tail = peep_tail = ip1;
-	peep_tail->fwd = nullptr;
+	currentFn->pl.tail = ip1;
+	currentFn->pl.tail->fwd = nullptr;
 	GenerateFalseJump(p[0], false_label, 0);
 	node = p[1];
 	ap1 = GenerateExpression(node->p[0], flags, size);
@@ -1633,19 +1633,19 @@ void ENODE::storeHex(txtoStream& ofs)
 	vmask->store(ofs);
 	if (sp) {
 		ofs.printf("%03X:", (int)sp->length());
-		ofs.writeAsHex((char *)sp, sp->length());
+		ofs.writeAsHex(sp->c_str(), sp->length());
 	}
 	else
 		ofs.printf("000:");
 	if (msp) {
 		ofs.printf("%03X:", (int)msp->length());
-		ofs.writeAsHex((char *)msp, msp->length());
+		ofs.writeAsHex(msp->c_str(), msp->length());
 	}
 	else
 		ofs.printf("000:");
 	if (udnm) {
 		ofs.printf("%03X:", (int)udnm->length());
-		ofs.writeAsHex((char *)udnm, udnm->length());
+		ofs.writeAsHex(udnm->c_str(), udnm->length());
 	}
 	else
 		ofs.printf("000:");
@@ -1673,14 +1673,17 @@ void ENODE::loadHex(txtiStream& ifs)
 	ifs.read(buf, 4);
 	nn = strtoul(buf, nullptr, 16);
 	ifs.readAsHex(buf, nn * 2);
+	buf[nn * 2] = '\0';
 	sp = new std::string(buf);
 	ifs.read(buf, 4);
 	nn = strtoul(buf, nullptr, 16);
 	ifs.readAsHex(buf, nn * 2);
+	buf[nn * 2] = '\0';
 	msp = new std::string(buf);
 	ifs.read(buf, 4);
 	nn = strtoul(buf, nullptr, 16);
 	ifs.readAsHex(buf, nn * 2);
+	buf[nn * 2] = '\0';
 	udnm = new std::string(buf);
 	ifs.read(buf, 1);	// should be 'X'
 	if (buf[0]=='X')

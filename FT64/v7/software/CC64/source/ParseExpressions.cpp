@@ -690,8 +690,30 @@ TYP *nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeArray *typear
 	// If we didn't have an exact match and no (parameter) types are known
 	// return the match if there is only a single one.
 	if (fn==nullptr) {
-		if (TABLE::matchno==1 && typearray==nullptr)
+		TypeArray *ta, *tb;
+		int n;
+		if (TABLE::matchno == 1 && typearray == nullptr)
 			sp = TABLE::match[0];
+		// Declarations can generate multiple copies of the function
+		// information if there are prototypes. If all the function
+		// information is the same then it may match.
+		else if (TABLE::matchno > 1) {
+			bool isSame = true;
+			ta = tb = nullptr;
+			for (n = 0; n < TABLE::matchno; n++) {
+				sp = TABLE::match[n];
+				ta = sp->fi->GetProtoTypes();
+				if (n > 0) {
+					if (!ta->IsEqual(tb))
+						isSame = false;
+				}
+				tb = ta;
+			}
+			if (!isSame)
+				sp = nullptr;
+		}
+		else
+			sp = nullptr;
 	}
 	else
 		sp = fn->sym;

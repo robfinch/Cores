@@ -155,19 +155,35 @@ public:
 	static OCODE *FindLabel(int64_t i);
 	static void InsertBefore(OCODE *an, OCODE *cd);
 	static void InsertAfter(OCODE *an, OCODE *cd);
+	void MarkAllKeep();
+	void RemoveCompilerHints();
 	void RemoveCompilerHints2();
 	void Remove();
+	void Remove2();
+	void RemoveLinkUnlink();
 	void flush();
+	void SetLabelReference();
+	void EliminateUnreferencedLabels();
+
+	void Dump(char *msg);
+	BasicBlock *Blockize();
+	int CountSPReferences();
+	int CountBPReferences();
+	void RemoveStackAlloc();
+	void RemoveStackCode();
+	void RemoveReturnBlock();
+
+	// Optimizations
+	void OptInstructions();
+	void OptBranchToNext();
+	void OptDoubleTargetRemoval();
+	void OptConstReg();
+
+	// Color Graphing
+	void RemoveMoves();
 
 	void loadHex(txtiStream& ifs);
 	void storeHex(txtoStream& ofs);
-};
-
-class PeepOpt
-{
-public:
-	static void SetLabelReference();
-	static void EliminateUnreferencedLabels();
 };
 
 class Function
@@ -191,6 +207,7 @@ public:
 	unsigned int hasSPReferences : 1;
 	unsigned int hasBPReferences : 1;
 	unsigned int didRemoveReturnBlock : 1;
+	unsigned int alloced : 1;
 	uint8_t NumRegisterVars;
 	unsigned __int8 NumParms;
 	unsigned __int8 numa;			// number of stack parameters (autos)
@@ -218,6 +235,7 @@ public:
 	OCODE *spAdjust;				// place where sp adjustment takes place
 	OCODE *rcode;
 public:
+	void RemoveDuplicates();
 	int GetTempBot() { return (tempbot); };
 	void CheckParameterListMatch(Function *s1, Function *s2);
 	bool CheckSignatureMatch(Function *a, Function *b) const;
@@ -241,7 +259,7 @@ public:
 	void CheckForUndefinedLabels();
 	void Summary(Statement *);
 	Statement *ParseBody();
-	void Init(int nump, int numa);
+	void Init();
 	int Parse();
 	void InsertMethod();
 
@@ -257,6 +275,10 @@ public:
 	void RestoreTemporaries(int sp, int fsp);
 
 	void UnlinkStack();
+
+	// Optimization
+	void PeepOpt();
+	void FlushPeep() { pl.flush(); };
 
 	// Code generation
 	void SetupReturnBlock();
@@ -585,6 +607,7 @@ public:
 	static OCODE *MakeNew();
 	static OCODE *Clone(OCODE *p);
 	static bool IsEqualOperand(Operand *a, Operand *b) { return (Operand::IsEqual(a, b)); };
+	static void Swap(OCODE *ip1, OCODE *ip2);
 	void MarkRemove() { remove = true; };
 	void MarkRemove2() { remove2 = true; };
 	bool HasTargetReg() const;
@@ -592,8 +615,27 @@ public:
 	bool HasSourceReg(int) const;
 	//Edge *MakeEdge(OCODE *ip1, OCODE *ip2);
 	// Optimizations
+	bool IsSubiSP();
+	void OptMul();
+	void OptMulu();
+	void OptDiv();
+	void OptAnd();
 	void OptMove();
 	void OptRedor();
+	void OptSubtract();
+	void OptLoad();
+	void OptLoadByte();
+	void OptLoadChar();
+	void OptLoadHalf();
+	void OptStoreHalf();
+	void OptStore();
+	void OptSxb();
+	void OptBra();
+	void OptJAL();
+	void OptUctran();
+	void OptDoubleTargetRemoval();
+	void OptHint();
+	void OptLabel();
 
 	static OCODE *loadHex(txtiStream& ifs);
 	void store(txtoStream& ofs);

@@ -18,6 +18,7 @@ void SaveRegisterVars(int64_t mask, int64_t rmask);
 void SaveFPRegisterVars(int64_t mask, int64_t rmask);
 void funcbottom(Statement *stmt);
 Function *allocFunction(int id);
+Function *newFunction(int id);
 SYM *makeint2(std::string na);
 int round8(int n);
 int pwrof2(int64_t);
