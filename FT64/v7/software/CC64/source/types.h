@@ -493,9 +493,9 @@ public:
 	ENODE *Clone();
 
 	void SetType(TYP *t) { tp = t; if (t) etype = t->type; };
-	bool IsPtr() { return (etype == bt_pointer || etype == bt_struct || etype == bt_union || etype == bt_class); };
-	bool IsFloatType() { return (etype == bt_double || etype == bt_quad || etype == bt_float || etype == bt_triple); };
-	bool IsUnsignedType() { return (etype == bt_ubyte || etype == bt_uchar || etype == bt_ushort || etype == bt_ulong || etype == bt_pointer); };
+	bool IsPtr() { return (etype == bt_pointer || etype == bt_struct || etype == bt_union || etype == bt_class || nodetype==en_addrof); };
+	bool IsFloatType() { return (nodetype==en_addrof || nodetype==en_autofcon) ? false : (etype == bt_double || etype == bt_quad || etype == bt_float || etype == bt_triple); };
+	bool IsUnsignedType() { return (etype == bt_ubyte || etype == bt_uchar || etype == bt_ushort || etype == bt_ulong || etype == bt_pointer || nodetype==en_addrof || nodetype==en_autofcon || nodetype==en_autocon); };
 	bool IsRefType() {
 		return (nodetype == en_w_ref || nodetype == en_uw_ref || nodetype == en_h_ref || nodetype == en_uh_ref
 			|| nodetype == en_c_ref || nodetype == en_uc_ref || nodetype == en_b_ref || nodetype == en_ub_ref);	}
@@ -503,6 +503,7 @@ public:
 	static bool IsEqualOperand(Operand *a, Operand *b);
 	char fsize();
 	long GetReferenceSize();
+	int GetNaturalSize();
 
 	static bool IsEqual(ENODE *a, ENODE *b);
 	bool HasAssignop();
@@ -640,6 +641,44 @@ public:
 	static OCODE *loadHex(txtiStream& ifs);
 	void store(txtoStream& ofs);
 	void storeHex(txtoStream& ofs);
+};
+
+class CodeGenerator
+{
+public:
+	Operand *GenerateBitfieldAssign(ENODE *node, int flags, int size);
+	void GenerateBitfieldInsert(Operand *ap1, Operand *ap2, int offset, int width);
+	Operand *GenerateBitfieldDereference(ENODE *node, int flags, int size);
+	Operand *GenerateDereference(ENODE *node, int flags, int size, int su);
+	Operand *GenerateAssignMultiply(ENODE *node, int flags, int size, int op);
+	Operand *GenerateAssignModiv(ENODE *node, int flags, int size, int op);
+	void GenerateStructAssign(TYP *tp, int64_t offset, ENODE *ep, Operand *base);
+	void GenerateArrayAssign(TYP *tp, ENODE *node1, ENODE *node2, Operand *base);
+	Operand *GenerateAggregateAssign(ENODE *node1, ENODE *node2);
+	Operand *GenAutocon(ENODE *node, int flags, int size, int type);
+	Operand *GenerateAssign(ENODE *node, int flags, int size);
+	Operand *GenerateExpression(ENODE *node, int flags, int size);
+	void GenerateTrueJump(ENODE *node, int label, unsigned int prediction);
+	void GenerateFalseJump(ENODE *node, int label, unsigned int prediction);
+	virtual Operand *GenExpr(ENODE *node) { return (nullptr); };
+	void SaveTemporaries(Function *sym, int *sp, int *fsp);
+	void RestoreTemporaries(Function *sym, int sp, int fsp);
+	int GenerateInlineArgumentList(Function *func, ENODE *plist);
+	virtual int PushArgument(ENODE *ep, int regno, int stkoffs, bool *isFloat) { return(0); };
+	virtual int PushArguments(Function *func, ENODE *plist) { return (0); };
+	virtual void PopArguments(Function *func, int howMany) {};
+	virtual Operand *GenerateFunctionCall(ENODE *node, int flags) { return (nullptr); };
+	void GenerateFunction(Function *fn) { fn->Gen(); };
+};
+
+class FT64CodeGenerator : public CodeGenerator
+{
+public:
+	Operand *GenExpr(ENODE *node);
+	int PushArgument(ENODE *ep, int regno, int stkoffs, bool *isFloat);
+	int PushArguments(Function *func, ENODE *plist);
+	void PopArguments(Function *func, int howMany);
+	Operand *GenerateFunctionCall(ENODE *node, int flags);
 };
 
 // Control Flow Graph

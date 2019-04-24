@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2017-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2017-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -577,9 +577,9 @@ void Function::GenReturn(Statement *stmt)
 		initstack();
 		isFloat = sym->tp->GetBtp() && sym->tp->GetBtp()->IsFloatType();
 		if (isFloat)
-			ap = GenerateExpression(stmt->exp, F_FPREG, sizeOfFP);
+			ap = cg.GenerateExpression(stmt->exp, F_FPREG, sizeOfFP);
 		else
-			ap = GenerateExpression(stmt->exp, F_REG | F_IMMED, sizeOfWord);
+			ap = cg.GenerateExpression(stmt->exp, F_REG | F_IMMED, sizeOfWord);
 		GenerateMonadic(op_hint, 0, make_immed(2));
 		if (ap->mode == am_imm)
 			GenLdi(makereg(1), ap);

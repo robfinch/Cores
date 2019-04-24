@@ -43,7 +43,7 @@ int        outcol = 0;
 // Please keep table in alphabetical order.
 // Instruction.cpp has the number of table elements hard-coded in it.
 //
-Instruction opl[229] =
+Instruction opl[230] =
 {   
 { ";", op_rem },
 { ";asm",op_asm,300 },
@@ -79,6 +79,7 @@ Instruction opl[229] =
 { "bltu", op_bltu,3,0,false,am_reg,am_reg,0,0 },
 { "bmi", op_bmi,2,0,false,am_reg,am_reg,0,0 },
 { "bne", op_bne,3,0,false,am_reg,am_reg,0,0 },
+{ "bnei", op_bnei,3,0,false,am_reg,am_imm,0,0 },
 { "bor", op_bor,3,0 },
 { "br",op_br,3,0,false,0,0,0,0 },
 { "bra",op_bra,3,0,false,0,0,0,0 },

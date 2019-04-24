@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -644,6 +644,9 @@ static void opt0(ENODE **node)
 								(*node)->nodetype = ep->p[1]->nodetype;
 								*node = ep->p[1];
 							}
+							break;
+						case en_addrof:
+							opt0(&(ep->p[0]));
 							break;
 						}
 }

@@ -44,6 +44,7 @@ bool Instruction::IsFlowControl()
 		opcode == op_bgtu ||
 		opcode == op_bgeu ||
 		opcode == op_beqi ||
+		opcode == op_bnei ||
 		opcode == op_bbs ||
 		opcode == op_bbc ||
 		//opcode == op_ibne ||

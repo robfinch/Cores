@@ -1093,7 +1093,7 @@ void Statement::GenerateWhile()
 	{
 		breaklab = nextlabel++;
 		initstack();
-		GenerateFalseJump(exp, breaklab, 2);
+		cg.GenerateFalseJump(exp, breaklab, 2);
 		looplevel++;
 		s1->Generate();
 		looplevel--;
@@ -1104,7 +1104,7 @@ void Statement::GenerateWhile()
 	else
 	{
 		initstack();
-		GenerateTrueJump(exp, contlab, prediction);
+		cg.GenerateTrueJump(exp, contlab, prediction);
 	}
 	contlab = lab1;
 }
@@ -1122,7 +1122,7 @@ void Statement::GenerateUntil()
 	{
 		breaklab = nextlabel++;
 		initstack();
-		GenerateTrueJump(exp, breaklab, 2);
+		cg.GenerateTrueJump(exp, breaklab, 2);
 		looplevel++;
 		s1->Generate();
 		looplevel--;
@@ -1133,7 +1133,7 @@ void Statement::GenerateUntil()
 	else
 	{
 		initstack();
-		GenerateFalseJump(exp, contlab, prediction);
+		cg.GenerateFalseJump(exp, contlab, prediction);
 	}
 	contlab = lab1;
 }
@@ -1150,12 +1150,12 @@ void Statement::GenerateFor()
 	contlab = nextlabel++;
 	initstack();
 	if (initExpr != NULL)
-		ReleaseTempRegister(GenerateExpression(initExpr, F_ALL | F_NOVALUE
-			, GetNaturalSize(initExpr)));
+		ReleaseTempRegister(cg.GenerateExpression(initExpr, F_ALL | F_NOVALUE
+			, initExpr->GetNaturalSize()));
 	GenerateLabel(loop_label);
 	initstack();
 	if (exp != NULL)
-		GenerateFalseJump(exp, exit_label, 2);
+		cg.GenerateFalseJump(exp, exit_label, 2);
 	if (s1 != NULL)
 	{
 		breaklab = exit_label;
@@ -1166,7 +1166,7 @@ void Statement::GenerateFor()
 	GenerateLabel(contlab);
 	initstack();
 	if (incrExpr != NULL)
-		ReleaseTempRegister(GenerateExpression(incrExpr, F_ALL | F_NOVALUE, GetNaturalSize(incrExpr)));
+		ReleaseTempRegister(cg.GenerateExpression(incrExpr, F_ALL | F_NOVALUE, incrExpr->GetNaturalSize()));
 	GenerateMonadic(op_bra, 0, make_clabel(loop_label));
 	breaklab = old_break;
 	contlab = old_cont;
@@ -1251,8 +1251,8 @@ void Statement::GenerateIf()
 	*/
 	// Check for bbc optimization
 	if (!opt_nocgo && ep->nodetype == en_and && ep->p[1]->nodetype == en_icon && pwrof2(ep->p[1]->i) >= 0) {
-		size = GetNaturalSize(node);
-		ap1 = GenerateExpression(node->p[0], F_REG, size);
+		size = node->GetNaturalSize();
+		ap1 = cg.GenerateExpression(node->p[0], F_REG, size);
 		GenerateTriadic(op_bbc, 0, ap1, make_immed(pwrof2(ep->p[1]->i)), make_label(lab1));
 		ReleaseTempRegister(ap1);
 	}
@@ -1261,12 +1261,12 @@ void Statement::GenerateIf()
 		OCODE *ip2;
 		int len;
 		ap3 = GetTempRegister();
-		siz1 = GetNaturalSize(node);
-		ap1 = GenerateExpression(node->p[0], F_REG, siz1);
+		siz1 = node->GetNaturalSize();
+		ap1 = cg.GenerateExpression(node->p[0], F_REG, siz1);
 		len = currentFn->pl.Count(ip1);
 		if (len < 6) {
 			ip2 = currentFn->pl.tail;
-			ap2 = GenerateExpression(node->p[1], F_REG, siz1);
+			ap2 = cg.GenerateExpression(node->p[1], F_REG, siz1);
 			len = currentFn->pl.Count(ip2);
 			if (len < 6) {
 				GenerateTriadic(op_or, 0, ap3, ap1, ap2);
@@ -1283,19 +1283,19 @@ void Statement::GenerateIf()
 		currentFn->pl.tail = ip1;
 		if (ip1)
 			currentFn->pl.tail->fwd = nullptr;
-		GenerateFalseJump(exp, lab1, prediction);
+		cg.GenerateFalseJump(exp, lab1, prediction);
 	}
 	else if (!opt_nocgo && ep->nodetype == en_land_safe) {
 		OCODE *ip1 = currentFn->pl.tail;
 		OCODE *ip2;
 		int len;
 		ap3 = GetTempRegister();
-		siz1 = GetNaturalSize(node);
-		ap1 = GenerateExpression(node->p[0], F_REG, siz1);
+		siz1 = node->GetNaturalSize();
+		ap1 = cg.GenerateExpression(node->p[0], F_REG, siz1);
 		len = currentFn->pl.Count(ip1);
 		if (len < 6) {
 			ip2 = currentFn->pl.tail;
-			ap2 = GenerateExpression(node->p[1], F_REG, siz1);
+			ap2 = cg.GenerateExpression(node->p[1], F_REG, siz1);
 			len = currentFn->pl.Count(ip2);
 			if (len < 6) {
 				if (!ap1->isBool)
@@ -1316,10 +1316,10 @@ void Statement::GenerateIf()
 		currentFn->pl.tail = ip1;
 		if (ip1)
 			currentFn->pl.tail->fwd = nullptr;
-		GenerateFalseJump(exp, lab1, prediction);
+		cg.GenerateFalseJump(exp, lab1, prediction);
 	}
 	else
-		GenerateFalseJump(exp, lab1, prediction);
+		cg.GenerateFalseJump(exp, lab1, prediction);
 j1:
 	s1->Generate();
 	if (s2 != 0)             /* else part exists */
@@ -1364,7 +1364,7 @@ void Statement::GenerateDoWhile()
 	s1->Generate();
 	looplevel--;
 	initstack();
-	GenerateTrueJump(exp, contlab, 3);
+	cg.GenerateTrueJump(exp, contlab, 3);
 	GenerateLabel(breaklab);
 	breaklab = oldbreak;
 	contlab = oldcont;
@@ -1382,7 +1382,7 @@ void Statement::GenerateDoUntil()
 	s1->Generate();
 	looplevel--;
 	initstack();
-	GenerateFalseJump(exp, contlab, 3);
+	cg.GenerateFalseJump(exp, contlab, 3);
 	GenerateLabel(breaklab);
 	breaklab = oldbreak;
 	contlab = oldcont;
@@ -1445,7 +1445,7 @@ void Statement::GenerateLinearSwitch()
 		error(ERR_BAD_SWITCH_EXPR);
 		return;
 	}
-	ap = GenerateExpression(exp, F_REG, GetNaturalSize(exp));
+	ap = cg.GenerateExpression(exp, F_REG, exp->GetNaturalSize());
 	//        if( ap->preg != 0 )
 	//                GenerateDiadic(op_mov,0,makereg(1),ap);
 	//		ReleaseTempRegister(ap);
@@ -1602,7 +1602,7 @@ void Statement::GenerateSwitch()
 		}
 		qsort(&casetab[0], 512, sizeof(struct scase), casevalcmp);
 		tablabel = caselit(casetab, maxv - minv + 1);
-		ap = GenerateExpression(exp, F_REG, GetNaturalSize(exp));
+		ap = cg.GenerateExpression(exp, F_REG, exp->GetNaturalSize());
 		ap1 = GetTempRegister();
 		ap2 = GetTempRegister();
 		if (!nkd) {
@@ -1663,7 +1663,7 @@ void Statement::GenerateTry()
 		}
 		// move the throw expression result in 'r1' into the catch variable.
 		node = stmt->exp;
-		ap2 = GenerateExpression(node, F_REG | F_MEM, GetNaturalSize(node));
+		ap2 = cg.GenerateExpression(node, F_REG | F_MEM, node->GetNaturalSize());
 		if (ap2->mode == am_reg)
 			GenerateDiadic(op_mov, 0, ap2, makereg(1));
 		else
@@ -1687,7 +1687,7 @@ void Statement::GenerateThrow()
 	if (exp != NULL)
 	{
 		initstack();
-		ap = GenerateExpression(exp, F_ALL, 8);
+		ap = cg.GenerateExpression(exp, F_ALL, 8);
 		if (ap->mode == am_imm)
 			GenerateDiadic(op_ldi, 0, makereg(1), ap);
 		else if (ap->mode != am_reg)
@@ -1744,10 +1744,10 @@ void Statement::GenerateCheck()
 		error(ERR_CHECK);
 		return;
 	}
-	size = GetNaturalSize(node);
-	ap1 = GenerateExpression(node->p[0], F_REG, size);
-	ap2 = GenerateExpression(node->p[1], F_REG | F_IMM0, size);
-	ap3 = GenerateExpression(node->p[2], F_REG | F_IMMED, size);
+	size = node->GetNaturalSize();
+	ap1 = cg.GenerateExpression(node->p[0], F_REG, size);
+	ap2 = cg.GenerateExpression(node->p[1], F_REG | F_IMM0, size);
+	ap3 = cg.GenerateExpression(node->p[2], F_REG | F_IMMED, size);
 	if (ap2->mode == am_imm) {
 		ap2->mode = am_reg;
 		ap2->preg = 0;
@@ -1766,7 +1766,7 @@ void Statement::GenerateCompound()
 	while (sp) {
 		if (sp->initexp) {
 			initstack();
-			ReleaseTempRegister(GenerateExpression(sp->initexp, F_ALL, 8));
+			ReleaseTempRegister(cg.GenerateExpression(sp->initexp, F_ALL, 8));
 		}
 		sp = sp->GetNextPtr();
 	}
@@ -1785,7 +1785,7 @@ void Statement::GenerateFuncBody()
 	while (sp) {
 		if (sp->initexp) {
 			initstack();
-			ReleaseTempRegister(GenerateExpression(sp->initexp, F_ALL, 8));
+			ReleaseTempRegister(cg.GenerateExpression(sp->initexp, F_ALL, 8));
 		}
 		sp = sp->GetNextPtr();
 	}
@@ -1836,7 +1836,7 @@ void Statement::Generate()
 			break;
 		case st_expr:
 			initstack();
-			ap = GenerateExpression(stmt->exp, F_ALL | F_NOVALUE,
+			ap = cg.GenerateExpression(stmt->exp, F_ALL | F_NOVALUE,
 				GetNaturalSize(stmt->exp));
 			ReleaseTempRegister(ap);
 			tmpFreeAll();

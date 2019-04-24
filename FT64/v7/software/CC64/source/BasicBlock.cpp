@@ -49,6 +49,7 @@ bool IsBasicBlockSeparater(OCODE *ip)
 	case op_bbs:	return (true);
 	case op_bbc:	return (true);
 	case op_beqi:	return (true);
+	case op_bnei:	return (true);
 	case op_bchk:	return (true);
 	//case op_ibne:	return (true);
 	//case op_dbnz:	return (true);

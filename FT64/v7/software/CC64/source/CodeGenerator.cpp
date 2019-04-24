@@ -304,7 +304,7 @@ void GenStore(Operand *ap1, Operand *ap3, int size)
 //
 //  Return the addressing mode of a dereferenced node.
 //
-Operand *GenerateDereference(ENODE *node,int flags,int size, int su)
+Operand *CodeGenerator::GenerateDereference(ENODE *node,int flags,int size, int su)
 {    
 	Operand *ap1;
   int siz1;
@@ -313,9 +313,10 @@ Operand *GenerateDereference(ENODE *node,int flags,int size, int su)
 	siz1 = node->GetReferenceSize();
 	// When dereferencing a struct or union return a pointer to the struct or
 	// union.
-//	if (node->tp->type==bt_struct || node->tp->type==bt_union) {
-//        return GenerateExpression(node,F_REG|F_MEM,size);
-//    }
+	//if (node->tp)
+	//	if (node->tp->type==bt_struct || node->tp->type==bt_union) {
+	//		return GenerateExpression(node, F_REG | F_MEM, size);
+	//	}
 
     if( node->p[0]->nodetype == en_add )
     {
@@ -697,7 +698,7 @@ void GenMemop(int op, Operand *ap1, Operand *ap2, int ssize)
 //
 //      generate a *= node.
 //
-Operand *GenerateAssignMultiply(ENODE *node,int flags, int size, int op)
+Operand *CodeGenerator::GenerateAssignMultiply(ENODE *node,int flags, int size, int op)
 {
 	Operand *ap1, *ap2, *ap3;
   int ssize;
@@ -762,7 +763,7 @@ Operand *GenerateAssignMultiply(ENODE *node,int flags, int size, int op)
 /*
  *      generate /= and %= nodes.
  */
-Operand *GenerateAssignModiv(ENODE *node,int flags,int size,int op)
+Operand *CodeGenerator::GenerateAssignModiv(ENODE *node,int flags,int size,int op)
 {
 	Operand *ap1, *ap2, *ap3;
     int             siz1;
@@ -876,7 +877,7 @@ Operand *GenerateAssign(ENODE *node, int flags, int size);
 // Generate an assignment to a structure type. The type passed must be a
 // structure type.
 
-void GenerateStructAssign(TYP *tp, int64_t offset, ENODE *ep, Operand *base)
+void CodeGenerator::GenerateStructAssign(TYP *tp, int64_t offset, ENODE *ep, Operand *base)
 {
 	SYM *thead, *first;
 	Operand *ap1, *ap2;
@@ -978,7 +979,7 @@ Operand *GenerateAggregateAssign(ENODE *node1, ENODE *node2);
 
 // Generate an assignment to an array.
 
-void GenerateArrayAssign(TYP *tp, ENODE *node1, ENODE *node2, Operand *base)
+void CodeGenerator::GenerateArrayAssign(TYP *tp, ENODE *node1, ENODE *node2, Operand *base)
 {
 	ENODE *ep1;
 	Operand *ap1, *ap2;
@@ -1039,7 +1040,7 @@ void GenerateArrayAssign(TYP *tp, ENODE *node1, ENODE *node2, Operand *base)
 	}
 }
 
-Operand *GenerateAggregateAssign(ENODE *node1, ENODE *node2)
+Operand *CodeGenerator::GenerateAggregateAssign(ENODE *node1, ENODE *node2)
 {
 	Operand *base, *base2;
 	TYP *tp;
@@ -1081,7 +1082,7 @@ Operand *GenerateAggregateAssign(ENODE *node1, ENODE *node2)
 // destination is larger than the size passed then everything below this node
 // will be evaluated with the assignment size.
 // ----------------------------------------------------------------------------
-Operand *GenerateAssign(ENODE *node, int flags, int size)
+Operand *CodeGenerator::GenerateAssign(ENODE *node, int flags, int size)
 {
 	Operand *ap1, *ap2 ,*ap3;
 	TYP *tp;
@@ -1301,13 +1302,14 @@ Operand *GenerateAssign(ENODE *node, int flags, int size)
 
 // autocon and autofcon nodes
 
-Operand *GenAutocon(ENODE *node, int flags, int size, int type)
+Operand *CodeGenerator::GenAutocon(ENODE *node, int flags, int size, int type)
 {
 	Operand *ap1, *ap2;
 
-	if (type==stddouble.GetIndex() || type==stdflt.GetIndex() || type==stdtriple.GetIndex() || type==stdquad.GetIndex())
-		ap1 = GetTempFPRegister();
-	else
+	// We always want an address register (GPR) for lea
+	//if (type==stddouble.GetIndex() || type==stdflt.GetIndex() || type==stdtriple.GetIndex() || type==stdquad.GetIndex())
+	//	ap1 = GetTempFPRegister();
+	//else
 		ap1 = GetTempRegister();
 	ap2 = allocOperand();
 	ap2->isPtr = node->etype == bt_pointer;
@@ -1315,7 +1317,7 @@ Operand *GenAutocon(ENODE *node, int flags, int size, int type)
 	ap2->preg = regFP;          /* frame pointer */
 	ap2->offset = node;     /* use as constant node */
 	ap2->type = type;
-	ap1->type = type;
+	ap1->type = stdint.GetIndex();
 	GenerateDiadic(op_lea,0,ap1,ap2);
 	ap1->MakeLegal(flags,size);
 	return (ap1);             /* return reg */
@@ -1325,7 +1327,7 @@ Operand *GenAutocon(ENODE *node, int flags, int size, int type)
 // General expression evaluation. returns the addressing mode
 // of the result.
 //
-Operand *GenerateExpression(ENODE *node, int flags, int size)
+Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int size)
 {   
 	Operand *ap1, *ap2, *ap3;
   int natsize, siz1;
@@ -1467,6 +1469,12 @@ Operand *GenerateExpression(ENODE *node, int flags, int size)
             GenerateDiadic(op_lea,0,ap1,ap2);
 			ap1->MakeLegal(flags,size);
             return ap1;             /* return reg */
+		case en_addrof:
+			ap2 = GetTempRegister();
+			ap1 = GenerateExpression(node->p[0], flags & ~F_FPREG, 8);
+			GenerateDiadic(op_lea, 0, ap2, ap1);
+			ReleaseTempReg(ap1);
+			return (ap2);
     case en_ub_ref:
 	case en_uc_ref:
 	case en_uh_ref:
@@ -1841,161 +1849,6 @@ Operand *GenerateExpression(ENODE *node, int flags, int size)
 	return(0);
 }
 
-// return the natural evaluation size of a node.
-
-int GetNaturalSize(ENODE *node)
-{ 
-	int siz0, siz1;
-	if( node == NULL )
-		return 0;
-	switch( node->nodetype )
-	{
-	case en_uwfieldref:
-	case en_wfieldref:
-		return (sizeOfWord);
-	case en_bfieldref:
-	case en_ubfieldref:
-		return (1);
-	case en_cfieldref:
-	case en_ucfieldref:
-		return (2);
-	case en_hfieldref:
-	case en_uhfieldref:
-		return (4);
-	case en_icon:
-		if (node->i >= -128 && node->i < 128)
-			return (1);
-		if( -32768 <= node->i && node->i <= 32767 )
-			return (2);
-		if (-2147483648LL <= node->i && node->i <= 2147483647LL)
-			return (4);
-		return (8);
-	case en_fcon:
-		return (node->tp->precision / 16);
-	case en_tcon: return (6);
-	case en_labcon: case en_clabcon:
-	case en_cnacon: case en_nacon:  case en_autocon: case en_classcon:
-	case en_tempref:
-	case en_cbw: case en_cubw:
-	case en_ccw: case en_cucw:
-	case en_chw: case en_cuhw:
-	case en_cbu: case en_ccu: case en_chu:
-	case en_cubu: case en_cucu: case en_cuhu:
-	case en_ccwp: case en_cucwp:
-	case en_sxb:	case en_sxc:	case en_sxh:
-		return (8);
-	case en_fcall:
-	case en_regvar:
-	case en_fpregvar:
-		if (node->tp)
-			return (node->tp->size);
-		else
-			return (8);
-	case en_autofcon:
-		return (8);
-	case en_ref32: case en_ref32u:
-		return (4);
-	case en_b_ref:
-	case en_ub_ref:
-		return (1);
-	case en_cbc:
-	case en_c_ref:	return (2);
-	case en_uc_ref:	return (2);
-	case en_cbh:	return (4);
-	case en_cch:	return (4);
-	case en_h_ref:	return (4);
-	case en_uh_ref:	return (4);
-	case en_flt_ref: return (sizeOfFPS);
-	case en_w_ref:  case en_uw_ref:
-		return (8);
-	case en_hp_ref:
-		return (4);
-	case en_wp_ref:
-		return (8);
-	case en_autovcon:
-	case en_vector_ref:
-		return (512);
-	case en_dbl_ref:
-		return (sizeOfFPD);
-	case en_quad_ref:
-		return (sizeOfFPQ);
-	case en_triple_ref:
-		return (sizeOfFPT);
-	case en_tempfpref:
-	if (node->tp)
-		return (node->tp->precision/16);
-	else
-		return (8);
-	case en_not:    case en_compl:
-	case en_uminus: case en_assign:
-		return GetNaturalSize(node->p[0]);
-	case en_fadd:	case en_fsub:
-	case en_fmul:	case en_fdiv:
-	case en_fsadd:	case en_fssub:
-	case en_fsmul:	case en_fsdiv:
-	case en_vadd:	case en_vsub:
-	case en_vmul:	case en_vdiv:
-	case en_vadds:	case en_vsubs:
-	case en_vmuls:	case en_vdivs:
-	case en_add:    case en_sub:
-	case en_mul:    case en_mulu:
-	case en_div:	case en_udiv:
-	case en_mod:    case en_umod:
-	case en_and:    case en_or:     case en_xor:
-	case en_asl:
-	case en_shl:    case en_shlu:
-	case en_shr:	case en_shru:
-	case en_asr:	case en_asrshu:
-	case en_feq:    case en_fne:
-	case en_flt:    case en_fle:
-	case en_fgt:    case en_fge:
-	case en_eq:     case en_ne:
-	case en_lt:     case en_le:
-	case en_gt:     case en_ge:
-	case en_ult:	case en_ule:
-	case en_ugt:	case en_uge:
-	case en_land:   case en_lor:
-	case en_land_safe:   case en_lor_safe:
-	case en_asadd:  case en_assub:
-	case en_asmul:  case en_asmulu:
-	case en_asdiv:	case en_asdivu:
-	case en_asmod:  case en_asmodu: case en_asand:
-	case en_asor:   case en_asxor:	case en_aslsh:
-	case en_asrsh:
-		siz0 = GetNaturalSize(node->p[0]);
-		siz1 = GetNaturalSize(node->p[1]);
-		if( siz1 > siz0 )
-			return (siz1);
-		else
-			return (siz0);
-	case en_void:   case en_cond:	case en_safe_cond:
-		return (GetNaturalSize(node->p[1]));
-	case en_bchk:
-		return (GetNaturalSize(node->p[0]));
-	case en_chk:
-		return 8;
-	case en_q2i:
-	case en_t2i:
-		return (sizeOfWord);
-	case en_i2d:
-		return (sizeOfWord);
-	case en_i2t:
-	case en_d2t:
-		return (sizeOfFPT);
-	case en_i2q:
-	case en_d2q:
-	case en_t2q:
-		return (sizeOfFPQ);
-	case en_object_list:
-		return (GetNaturalSize(node->p[0]));
-	default:
-		printf("DIAG - natural size error %d.\n", node->nodetype);
-		break;
-	}
-	return (0);
-}
-
-
 static void GenerateCmp(ENODE *node, int op, int label, unsigned int prediction)
 {
 	Enter("GenCmp");
@@ -2007,7 +1860,7 @@ static void GenerateCmp(ENODE *node, int op, int label, unsigned int prediction)
 // Generate a jump to label if the node passed evaluates to
 // a true condition.
 //
-void GenerateTrueJump(ENODE *node, int label, unsigned int prediction)
+void CodeGenerator::GenerateTrueJump(ENODE *node, int label, unsigned int prediction)
 { 
 	Operand  *ap1, *ap2, *ap3;
 	int lab0;
@@ -2069,7 +1922,7 @@ void GenerateTrueJump(ENODE *node, int label, unsigned int prediction)
 // Generate code to execute a jump to label if the expression
 // passed is false.
 //
-void GenerateFalseJump(ENODE *node,int label, unsigned int prediction)
+void CodeGenerator::GenerateFalseJump(ENODE *node,int label, unsigned int prediction)
 {
 	Operand *ap, *ap1, *ap2, *ap3;
 	int siz1;
@@ -2128,4 +1981,76 @@ void GenerateFalseJump(ENODE *node,int label, unsigned int prediction)
 			GenerateTriadic(op_beq,0,ap,makereg(0),make_label(label));
 		break;
 	}
+}
+
+void CodeGenerator::SaveTemporaries(Function *sym, int *sp, int *fsp)
+{
+	if (sym) {
+		if (sym->UsesTemps) {
+			*sp = TempInvalidate(fsp);
+			//*fsp = TempFPInvalidate();
+		}
+	}
+	else {
+		*sp = TempInvalidate(fsp);
+		//*fsp = TempFPInvalidate();
+	}
+}
+
+void CodeGenerator::RestoreTemporaries(Function *sym, int sp, int fsp)
+{
+	if (sym) {
+		if (sym->UsesTemps) {
+			//TempFPRevalidate(fsp);
+			TempRevalidate(sp, fsp);
+		}
+	}
+	else {
+		//TempFPRevalidate(fsp);
+		TempRevalidate(sp, fsp);
+	}
+}
+
+
+// Store entire argument list onto stack
+//
+int CodeGenerator::GenerateInlineArgumentList(Function *sym, ENODE *plist)
+{
+	Operand *ap;
+	TypeArray *ta = nullptr;
+	int i, sum;
+	OCODE *ip;
+	ENODE *p;
+	ENODE *pl[100];
+	int nn, maxnn;
+	struct slit *st;
+	char *cp;
+
+	sum = 0;
+	if (sym)
+		ta = sym->GetProtoTypes();
+
+	// Capture the parameter list. It is needed in the reverse order.
+	for (nn = 0, p = plist; p != NULL; p = p->p[1], nn++) {
+		pl[nn] = p->p[0];
+	}
+	maxnn = nn;
+	for (--nn, i = 0; nn >= 0; --nn, i++)
+	{
+		if (pl[nn]->etype == bt_pointer) {
+			if (pl[nn]->tp->GetBtp()->type == bt_ichar || pl[nn]->tp->GetBtp()->type == bt_iuchar) {
+				for (st = strtab; st; st = st->next) {
+					if (st->label == pl[nn]->i) {
+						cp = st->str;
+						break;
+					}
+				}
+				ap = make_string2(cp);
+				GenerateMonadic(op_string, 0, ap);
+			}
+		}
+	}
+	if (ta)
+		delete ta;
+	return (sum);
 }

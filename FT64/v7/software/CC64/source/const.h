@@ -61,7 +61,7 @@ enum e_node {
 		en_uhfieldref,en_hfieldref,en_ucfieldref,en_cfieldref,
 		en_dbl_ref, en_flt_ref, en_triple_ref, en_quad_ref,
 		en_bchk, en_chk,
-		en_abs, en_max, en_min,
+		en_abs, en_max, en_min, en_addrof,
 		// Vector
 		en_autovcon, en_autovmcon, en_vector_ref, en_vex, en_veins,
 		en_vadd, en_vsub, en_vmul, en_vdiv,

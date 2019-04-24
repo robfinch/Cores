@@ -232,6 +232,7 @@ extern int worstAlignment;
 extern Map map;
 extern int optimized;
 extern short int typ_sp;
+extern FT64CodeGenerator cg;
 
 // Analyze.c
 extern short int csendx;
@@ -416,7 +417,7 @@ extern BasicBlock *basicBlocks[10000];
 extern BasicBlock *sortedBlocks[10000];
 extern Forest forest;
 extern IGraph iGraph;
-extern Instruction opl[229];
+extern Instruction opl[230];
 extern BasicBlock *RootBlock;
 extern BasicBlock *LastBlock;
 extern Instruction *GetInsn(int);

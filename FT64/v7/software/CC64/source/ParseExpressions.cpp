@@ -694,6 +694,7 @@ TYP *nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeArray *typear
 		int n;
 		if (TABLE::matchno == 1 && typearray == nullptr)
 			sp = TABLE::match[0];
+		// This is a hack in lieu of better declaration processing.
 		// Declarations can generate multiple copies of the function
 		// information if there are prototypes. If all the function
 		// information is the same then it may match.
@@ -1527,7 +1528,7 @@ int IsLValue(ENODE *node)
 	// the same as an *_ref node. It's an LValue.
 	case en_add:
 		if (node->tp)
-			return (node->tp->type == bt_pointer) || node->tp->type == bt_struct;
+			return (node->tp->type == bt_pointer || node->tp->type == bt_struct);
 //			return (node->tp->type==bt_pointer && node->tp->isArray) || node->tp->type==bt_struct;
 		else
 			return (FALSE);
@@ -1539,6 +1540,8 @@ int IsLValue(ENODE *node)
 		return (node->etype == bt_pointer || node->etype == bt_struct || node->etype == bt_union || node->etype == bt_class);
 	//case en_fcall:
 	//	return (node->etype == bt_pointer);
+	case en_addrof:
+		return (TRUE);
 	}
 	return (FALSE);
 }
@@ -1869,7 +1872,12 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 					error(ERR_UNDEFINED);
 					goto j1;
 				}
-				if( tp1->type != bt_pointer ) {
+				if (tp1->type == bt_struct) {
+					//printf("hello");
+					//ep1 = makenode(reftype, ep1, (ENODE *)NULL);
+				}
+				else
+				if( tp1->type != bt_pointer) {
 					error(ERR_NOPOINTER);
 				}
 				else {
@@ -2164,17 +2172,22 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
 			if (ep1) {
 				t = ep1->tp->type;
 //				if (IsLValue(ep1) && !(t == bt_pointer || t == bt_struct || t == bt_union || t == bt_class)) {
-				if (IsLValue(ep1) && !(t == bt_struct || t == bt_union || t == bt_class)) {
-				ep1 = ep1->p[0];
+				if (t == bt_struct || t == bt_union || t == bt_class) {
+					//ep1 = ep1->p[0];
 					if (ep1) {
+						ep1 = makenode(en_addrof, ep1, nullptr);
 						ep1->esize = 8;     // converted to a pointer so size is now 8
-						tp1 = TYP::Make(bt_pointer, 8);
-						tp1->btp = tp->GetIndex();
-						tp1->val_flag = FALSE;
-						tp1->isUnsigned = TRUE;
-						tp = tp1;
 					}
 				}
+				else 
+				if (IsLValue(ep1))
+					ep1 = ep1->p[0];
+				ep1->esize = 8;     // converted to a pointer so size is now 8
+				tp1 = TYP::Make(bt_pointer, 8);
+				tp1->btp = tp->GetIndex();
+				tp1->val_flag = FALSE;
+				tp1->isUnsigned = TRUE;
+				tp = tp1;
 			}
 		}
     break;

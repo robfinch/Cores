@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -39,7 +39,7 @@ static void SignExtendBitfield(ENODE *node, Operand *ap3, uint64_t mask)
 	ReleaseTempRegister(ap2);
 }
 
-Operand *GenerateBitfieldDereference(ENODE *node, int flags, int size)
+Operand *CodeGenerator::GenerateBitfieldDereference(ENODE *node, int flags, int size)
 {
     Operand *ap, *ap3;
     int width = node->bit_width + 1;
@@ -79,7 +79,7 @@ Operand *GenerateBitfieldDereference(ENODE *node, int flags, int size)
     return (ap3);
 }
 
-void GenerateBitfieldInsert(Operand *ap1, Operand *ap2, int offset, int width)
+void CodeGenerator::GenerateBitfieldInsert(Operand *ap1, Operand *ap2, int offset, int width)
 {
 	int nn;
 	uint64_t mask;
@@ -103,7 +103,7 @@ void GenerateBitfieldInsert(Operand *ap1, Operand *ap2, int offset, int width)
 	}
 }
 
-Operand *GenerateBitfieldAssign(ENODE *node, int flags, int size)
+Operand *CodeGenerator::GenerateBitfieldAssign(ENODE *node, int flags, int size)
 {
 	Operand *ap1, *ap2 ,*ap3;
 

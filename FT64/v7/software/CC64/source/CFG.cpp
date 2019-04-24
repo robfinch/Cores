@@ -69,6 +69,7 @@ void CFG::Create()
 		case op_bbs:
 		case op_bbc:
 		case op_beqi:
+		case op_bnei:
 		//case op_ibne:
 			if (0) {
 				if (ip->oper1->mode==am_reg && ip->back && ip->back->oper3) {
