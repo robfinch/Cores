@@ -170,10 +170,10 @@ enum e_op {
 	op_sfd, op_lfd,
 	op_call, op_jal, op_beqi, op_bnei, op_tst,
 
-	op_beq, op_bne, op_blt, op_ble, op_bgt, op_bge,
+	op_beq, op_bne, op_blt, op_ble, op_bgt, op_bge, op_band, op_bor, op_bnand, op_bnor,
 	op_bltu, op_bleu, op_bgtu, op_bgeu,
 	op_bltui, op_bleui, op_blti, op_blei, op_bgti, op_bgtui, op_bgei, op_bgeui,
-	op_bbs, op_bbc, op_bor,
+	op_bbs, op_bbc,
 
 	op_brz, op_brnz, op_br,
 	op_lft, op_sft,

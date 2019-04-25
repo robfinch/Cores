@@ -176,9 +176,9 @@ Operand *FT64CodeGenerator::GenExpr(ENODE *node)
 		ap1 = cg.GenerateExpression(node->p[0], F_REG, size);
 		ap2 = cg.GenerateExpression(node->p[1], F_REG | F_IMMED, size);
 		GenerateTriadic(op_seq, 0, ap3, ap1, ap2);
+		GenerateDiadic(op_not, 0, ap3, ap3);
 		ReleaseTempRegister(ap2);
 		ReleaseTempRegister(ap1);
-		GenerateDiadic(op_not, 0, ap3, ap3);
 		ap3->isBool = true;
 		return (ap3);
 	case en_lt:
@@ -209,7 +209,7 @@ Operand *FT64CodeGenerator::GenExpr(ENODE *node)
 		ap1 = cg.GenerateExpression(node->p[0], F_REG, size);
 		ap2 = cg.GenerateExpression(node->p[1], F_REG | F_IMMED, size);
 		if (ap2->mode == am_reg)
-			GenerateTriadic(op_slt, 0, ap3, ap2, ap1);
+			GenerateTriadic(op_sle, 0, ap3, ap2, ap1);
 		else
 			GenerateTriadic(op_sgt, 0, ap3, ap1, ap2);
 		ReleaseTempRegister(ap2);
@@ -335,14 +335,14 @@ Operand *FT64CodeGenerator::GenExpr(ENODE *node)
         return ap4;
 	}
 	size = GetNaturalSize(node);
-    ap3 = GetTempRegister();         
+  ap3 = GetTempRegister();         
 	ap1 = cg.GenerateExpression(node->p[0],F_REG,size);
 	ap2 = cg.GenerateExpression(node->p[1],F_REG|F_IMMED,size);
 	GenerateTriadic(op,0,ap3,ap1,ap2);
-    ReleaseTempRegister(ap2);
-    ReleaseTempRegister(ap1);
-		ap3->isBool = true;
-		return (ap3);
+  ReleaseTempRegister(ap2);
+  ReleaseTempRegister(ap1);
+	ap3->isBool = true;
+	return (ap3);
 	/*
     GenerateFalseJump(node,lab0,0);
     ap1 = GetTempRegister();
@@ -355,12 +355,16 @@ Operand *FT64CodeGenerator::GenExpr(ENODE *node)
 	*/
 }
 
-void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int prediction)
+bool FT64CodeGenerator::GenerateBranch(ENODE *node, int op, int label, int predreg, unsigned int prediction)
 {
 	int size, sz;
 	Operand *ap1, *ap2, *ap3;
+	OCODE *ip;
 
+	if ((op == op_nand || op == op_nor || op == op_and || op == op_or) && (node->p[0]->HasCall() || node->p[1]->HasCall()))
+		return (false);
 	size = GetNaturalSize(node);
+	ip = currentFn->pl.tail;
   if (op==op_flt || op==op_fle || op==op_fgt || op==op_fge || op==op_feq || op==op_fne) {
     ap1 = cg.GenerateExpression(node->p[0],F_FPREG,size);
 	  ap2 = cg.GenerateExpression(node->p[1],F_FPREG,size);
@@ -369,6 +373,12 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int predi
     ap1 = cg.GenerateExpression(node->p[0],F_REG, size);
 	  ap2 = cg.GenerateExpression(node->p[1],F_REG|F_IMMED,size);
   }
+	if (currentFn->pl.Count(ip) > 10) {
+		currentFn->pl.tail = ip;
+		currentFn->pl.tail->fwd = nullptr;
+		return (false);
+	}
+
 	/*
 	// Optimize CMP to zero and branch into plain branch, this works only for
 	// signed relational compares.
@@ -401,6 +411,8 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int predi
 	switch(op)
 	{
 	case op_bchk:	break;
+	case op_nand:	op = op_bnand; break;
+	case op_nor:	op = op_bnor; break;
 	case op_eq:	op = op_beq; break;
 	case op_ne:	op = op_bne; break;
 	case op_lt: op = op_blt; break;
@@ -509,6 +521,76 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int predi
 	}
 	else {
 		switch(op) {
+		case op_band:
+			if (ap2->mode == am_imm) {
+				ap3 = GetTempRegister();
+				if (!ap1->isBool)
+					GenerateDiadic(op_redor, 0, ap1, ap1);
+				if (ap2->offset->i < 0 || ap2->offset->i > 1) {
+					GenerateDiadic(op_redor, 0, ap3, ap2);
+					GenerateTriadic(op_and, 0, ap3, ap1, ap3);
+				}
+				else
+					GenerateTriadic(op_and, 0, ap3, ap1, ap2);
+				ReleaseTempRegister(ap3);
+				GenerateTriadic(op_bne, 0, ap3, makereg(0), make_clabel(label));
+			}
+			else {
+				GenerateTriadic(op_band, 0, ap1, ap2, make_clabel(label));
+			}
+			break;
+		case op_bor:
+			if (ap2->mode == am_imm) {
+				ap3 = GetTempRegister();
+				if (!ap1->isBool)
+					GenerateDiadic(op_redor, 0, ap1, ap1);
+				if (ap2->offset->i < 0 || ap2->offset->i > 1) {
+					GenerateDiadic(op_redor, 0, ap3, ap2);
+					GenerateTriadic(op_or, 0, ap3, ap1, ap3);
+				}
+				else
+					GenerateTriadic(op_or, 0, ap3, ap1, ap2);
+				ReleaseTempRegister(ap3);
+				GenerateTriadic(op_bne, 0, ap3, makereg(0), make_clabel(label));
+			}
+			else
+				GenerateTriadic(op_bor, 0, ap1, ap2, make_clabel(label));
+			break;
+		case op_bnand:
+			if (ap2->mode == am_imm) {
+				ap3 = GetTempRegister();
+				if (!ap1->isBool)
+					GenerateDiadic(op_redor, 0, ap1, ap1);
+				if (ap2->offset->i < 0 || ap2->offset->i > 1) {
+					GenerateDiadic(op_redor, 0, ap3, ap2);
+					GenerateTriadic(op_nand, 0, ap3, ap1, ap3);
+				}
+				else
+					GenerateTriadic(op_nand, 0, ap3, ap1, ap2);
+				ReleaseTempRegister(ap3);
+				GenerateTriadic(op_bne, 0, ap3, makereg(0), make_clabel(label));
+			}
+			else {
+				GenerateTriadic(op_bnand, 0, ap1, ap2, make_clabel(label));
+			}
+			break;
+		case op_bnor:
+			if (ap2->mode == am_imm) {
+				ap3 = GetTempRegister();
+				if (!ap1->isBool)
+					GenerateDiadic(op_redor, 0, ap1, ap1);
+				if (ap2->offset->i < 0 || ap2->offset->i > 1) {
+					GenerateDiadic(op_redor, 0, ap3, ap2);
+					GenerateTriadic(op_nor, 0, ap3, ap1, ap3);
+				}
+				else
+					GenerateTriadic(op_nor, 0, ap3, ap1, ap2);
+				ReleaseTempRegister(ap3);
+				GenerateTriadic(op_bne, 0, ap3, makereg(0), make_clabel(label));
+			}
+			else
+				GenerateTriadic(op_bnor, 0, ap1, ap2, make_clabel(label));
+			break;
 		case op_beq:
 			if (ap2->mode==am_imm && ap2->offset->nodetype==en_icon && ap2->offset->i >= -128 && ap2->offset->i <=128) {
 				GenerateTriadic(op_beqi,0,ap1,ap2,make_clabel(label));
@@ -519,12 +601,8 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int predi
 				ReleaseTempRegister(ap3);
 				GenerateTriadic(op_beq,0,ap3,makereg(0),make_clabel(label));
 			}
-			else {
-				ReleaseTempReg(ap2);
-				ReleaseTempReg(ap1);
+			else
 				GenerateTriadic(op_beq, 0, ap1, ap2, make_clabel(label));
-				return;
-			}
 			break;
 		case op_bne:
 			if (ap2->mode == am_imm && ap2->offset->nodetype == en_icon && ap2->offset->i >= -128 && ap2->offset->i <= 128) {
@@ -562,7 +640,7 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int predi
 					ap3 = GetTempRegister();
 					GenerateTriadic(op_sle , 0, ap3, ap1, ap2);
 					ReleaseTempRegister(ap3);
-					GenerateTriadic(op_bne,0,makereg(0),ap3,make_clabel(label));
+					GenerateTriadic(op_bne,0,ap3,makereg(0),make_clabel(label));
 				}
 			}
 			else
@@ -576,7 +654,7 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int predi
 					ap3 = GetTempRegister();
 					GenerateTriadic(op_sle, 0, ap3, ap1, ap2);
 					ReleaseTempRegister(ap3);
-					GenerateTriadic(op_beq,0,makereg(0),ap3,make_clabel(label));
+					GenerateTriadic(op_beq,0,ap3,makereg(0),make_clabel(label));
 				}
 			}
 			else
@@ -636,7 +714,7 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int predi
 					ap3 = GetTempRegister();
 					GenerateTriadic(op_sleu, 0, ap3, ap1, ap2);
 					ReleaseTempRegister(ap3);
-					GenerateTriadic(op_beq,0,makereg(0),ap3,make_clabel(label));
+					GenerateTriadic(op_beq,0,ap3,makereg(0),make_clabel(label));
 				}
 			}
 			else
@@ -662,8 +740,9 @@ void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int predi
 		}
 		//GenerateTriadic(op,sz,ap1,ap2,make_clabel(label));
 	}
-   	ReleaseTempReg(ap2);
-   	ReleaseTempReg(ap1);
+  ReleaseTempReg(ap2);
+  ReleaseTempReg(ap1);
+	return (true);
 }
 
 

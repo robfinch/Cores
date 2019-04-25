@@ -81,14 +81,26 @@ public:
 typedef struct _tagInsnStats {
 	int loads;
 	int stores;
+	int pushes;
+	int indexed;
 	int branches;
+	int beqi;
+	int bnei;
+	int bbc;
+	int logbr;
 	int calls;
 	int rets;
 	int adds;
+	int ands;
+	int ors;
+	int xors;
+	int shls;
+	int shifts;
 	int luis;
 	int moves;
 	int cmoves;
 	int sets;
+	int floatops;
 	int total;
 } InsnStats;
 

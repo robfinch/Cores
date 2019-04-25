@@ -1257,6 +1257,7 @@ void Statement::GenerateIf()
 		ReleaseTempRegister(ap1);
 	}
 	else if (!opt_nocgo && ep->nodetype == en_lor_safe) {
+		/*
 		OCODE *ip1 = currentFn->pl.tail;
 		OCODE *ip2;
 		int len;
@@ -1283,9 +1284,11 @@ void Statement::GenerateIf()
 		currentFn->pl.tail = ip1;
 		if (ip1)
 			currentFn->pl.tail->fwd = nullptr;
+			*/
 		cg.GenerateFalseJump(exp, lab1, prediction);
 	}
 	else if (!opt_nocgo && ep->nodetype == en_land_safe) {
+		/*
 		OCODE *ip1 = currentFn->pl.tail;
 		OCODE *ip2;
 		int len;
@@ -1316,6 +1319,7 @@ void Statement::GenerateIf()
 		currentFn->pl.tail = ip1;
 		if (ip1)
 			currentFn->pl.tail->fwd = nullptr;
+			*/
 		cg.GenerateFalseJump(exp, lab1, prediction);
 	}
 	else

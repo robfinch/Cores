@@ -189,19 +189,52 @@ void DumphTable()
 void DumpInsnStats()
 {
 	double bpi, nc2;
+	int tot, rem;
 
 	fprintf(ofp, "\nInstruction Statistics\n");
-	fprintf(ofp, "Loads:    %d (%f%%)\n", insnStats.loads, ((double)insnStats.loads / (double)insnStats.total) * 100.0f);
-	fprintf(ofp, "Stores:   %d (%f%%)\n", insnStats.stores, ((double)insnStats.stores/(double)insnStats.total) * 100.0f);
-	fprintf(ofp, "Branches: %d (%f%%)\n", insnStats.branches, ((double)insnStats.branches / (double)insnStats.total) * 100.0f);
-	fprintf(ofp, "Calls:		%d (%f%%)\n", insnStats.calls, ((double)insnStats.calls / (double)insnStats.total) * 100.0f);
-	fprintf(ofp, "Returns:	%d (%f%%)\n", insnStats.rets, ((double)insnStats.rets / (double)insnStats.total) * 100.0f);
-	fprintf(ofp, "Adds:	    %d (%f%%)\n", insnStats.adds, ((double)insnStats.adds / (double)insnStats.total) * 100.0f);
-	fprintf(ofp, "Luis:	    %d (%f%%)\n", insnStats.luis, ((double)insnStats.luis / (double)insnStats.total) * 100.0f);
-	fprintf(ofp, "Moves:	  %d (%f%%)\n", insnStats.moves, ((double)insnStats.moves / (double)insnStats.total) * 100.0f);
-	fprintf(ofp, "CMoves:	  %d (%f%%)\n", insnStats.cmoves, ((double)insnStats.cmoves / (double)insnStats.total) * 100.0f);
-	fprintf(ofp, "Sets:	  %d (%f%%)\n", insnStats.sets, ((double)insnStats.sets / (double)insnStats.total) * 100.0f);
-	fprintf(ofp, "Total:    %d\n", insnStats.total);
+	fprintf(ofp, "Loads:    %6d (%3.6f%%)\n", insnStats.loads, ((double)insnStats.loads / (double)insnStats.total) * 100.0f);
+	fprintf(ofp, "Stores:   %6d (%3.6f%%)\n", insnStats.stores, ((double)insnStats.stores/(double)insnStats.total) * 100.0f);
+	fprintf(ofp, "  Indexed:%6d (%3.6f%%)\n", insnStats.indexed, ((double)insnStats.indexed / (double)insnStats.total) * 100.0f);
+	fprintf(ofp, "Pushes:   %6d (%3.6f%%)\n", insnStats.pushes, ((double)insnStats.pushes / (double)insnStats.total) * 100.0f);
+	fprintf(ofp, "Branches: %6d (%3.6f%%)\n", insnStats.branches, ((double)insnStats.branches / (double)insnStats.total) * 100.0f);
+	fprintf(ofp, "  BEQI:		%6d (%3.6f%%)\n", insnStats.beqi, ((double)insnStats.beqi / (double)insnStats.total) * 100.0f);
+	fprintf(ofp, "  BNEI:		%6d (%3.6f%%)\n", insnStats.bnei, ((double)insnStats.bnei / (double)insnStats.total) * 100.0f);
+	fprintf(ofp, "  BBc:		%6d (%3.6f%%)\n", insnStats.bbc, ((double)insnStats.bbc / (double)insnStats.total) * 100.0f);
+	fprintf(ofp, "  BLcc:		%6d (%3.6f%%)\n", insnStats.logbr, ((double)insnStats.logbr / (double)insnStats.total) * 100.0f);
+	fprintf(ofp, "Calls:		%6d (%3.6f%%)\n", insnStats.calls, ((double)insnStats.calls / (double)insnStats.total) * 100.0f);
+	fprintf(ofp, "Returns:	%6d (%3.6f%%)\n", insnStats.rets, ((double)insnStats.rets / (double)insnStats.total) * 100.0f);
+	fprintf(ofp, "Adds:	    %6d (%3.6f%%)\n", insnStats.adds, ((double)insnStats.adds / (double)insnStats.total) * 100.0f);
+	fprintf(ofp, "Ands:	    %6d (%3.6f%%)\n", insnStats.ands, ((double)insnStats.ands / (double)insnStats.total) * 100.0f);
+	fprintf(ofp, "Ors:	    %6d (%3.6f%%)\n", insnStats.ors, ((double)insnStats.ors / (double)insnStats.total) * 100.0f);
+	fprintf(ofp, "Xors:	    %6d (%3.6f%%)\n", insnStats.xors, ((double)insnStats.xors / (double)insnStats.total) * 100.0f);
+	fprintf(ofp, "Lshifts:  %6d (%3.6f%%)\n", insnStats.shls, ((double)insnStats.shls / (double)insnStats.total) * 100.0f);
+	fprintf(ofp, "shifts:	  %6d (%3.6f%%)\n", insnStats.shifts, ((double)insnStats.shifts / (double)insnStats.total) * 100.0f);
+	fprintf(ofp, "Luis:	    %6d (%3.6f%%)\n", insnStats.luis, ((double)insnStats.luis / (double)insnStats.total) * 100.0f);
+	fprintf(ofp, "Moves:	  %6d (%3.6f%%)\n", insnStats.moves, ((double)insnStats.moves / (double)insnStats.total) * 100.0f);
+	fprintf(ofp, "CMoves:	  %6d (%3.6f%%)\n", insnStats.cmoves, ((double)insnStats.cmoves / (double)insnStats.total) * 100.0f);
+	fprintf(ofp, "Sets:	    %6d (%3.6f%%)\n", insnStats.sets, ((double)insnStats.sets / (double)insnStats.total) * 100.0f);
+	fprintf(ofp, "Floatops: %6d (%3.6f%%)\n", insnStats.floatops, ((double)insnStats.floatops / (double)insnStats.total) * 100.0f);
+	tot = insnStats.loads
+		+ insnStats.stores
+		+ insnStats.pushes
+		+ insnStats.branches
+		+ insnStats.calls
+		+ insnStats.rets
+		+ insnStats.adds
+		+ insnStats.ands
+		+ insnStats.ors
+		+ insnStats.xors
+		+ insnStats.shls
+		+ insnStats.shifts
+		+ insnStats.luis
+		+ insnStats.moves
+		+ insnStats.cmoves
+		+ insnStats.sets
+		+ insnStats.floatops
+		;
+	rem = insnStats.total - tot;
+	fprintf(ofp, "others:   %6d (%3.6f%%)\n", rem, ((double)rem / (double)insnStats.total) * 100.0f);
+	fprintf(ofp, "Total:    %6d\n", insnStats.total);
 	fprintf(ofp, "\nnumber of bytes: %f\n", num_bytes);
 	fprintf(ofp, "number of instructions: %d\n", num_insns);
 	fprintf(ofp, "number of compressed instructions: %d\n", num_cinsns);
@@ -645,9 +678,10 @@ void process_align()
 	char *p;
 
 	NextToken();
-	if (token == tk_code && gCpu=='F')
-		v = 5;
-	else {
+//	if (token == tk_code && gCpu=='F')
+//		v = 5;
+//	else
+ {
 		v = expr();
 		p = inptr;
 	}
@@ -655,7 +689,13 @@ void process_align()
 //		printf("Bad align directive. (%d)\r\n", lineno);
 		return;
 	}
-    if (segment == codeseg || segment == rodataseg || segment == dataseg || segment==bssseg || segment==tlsseg) {
+	// FT64 - code may only be aligned on even addresses
+	if (gCpu == 'F' && segment == codeseg) {
+		while (sections[segment].address % v) {
+			emitByte(0x3D);	// NOP opcode
+		}
+	}
+	else if (segment == codeseg || segment == rodataseg || segment == dataseg || segment==bssseg || segment==tlsseg) {
         while (sections[segment].address % v)
             emitByte(0x00);
     }

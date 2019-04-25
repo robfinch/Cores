@@ -28,21 +28,39 @@
 #define I_MOVE	0x12
 #define I_MOVO	0x13
 #define I_ADD	0x04
+#define I_OR	0x09
+#define I_ORI	0x09
+#define I_XOR		0x0A
+#define I_XORI	0x0A
+#define I_SHL		0x0
+#define I_SHLI	0x8
+#define I_ASL		0x2
+#define I_ASLI	0xA
 #define I_SLT		0x06
 #define I_SLTU	0x07
 #define I_SLTI	0x06
 #define I_SLTUI	0x07
+#define I_AND		0x08
+#define I_ANDI	0x08
 #define I_SEQ		0x0B
 #define I_SEQI	0x0B
+#define I_FLOAT	0x0F
+#define I_BLcc	0x10
+#define I_SHIFT31	0x0F
+#define I_SHIFT63	0x1F
+#define I_SHIFTR	0x2F
+#define I_BNEI	0x12
 #define I_LB	0x13
 #define I_SB	0x15
 #define I_MEMNDX	0x16
 #define I_JAL		0x18
 #define I_CALL	0x19
+#define I_LFx		0x1B
 #define I_SGTUI	0x1C
 #define I_SGTI	0x2C
 #define I_SLE		0x28
 #define I_SLEU	0x29
+#define I_SFx	0x2B
 #define I_Lx	0x20
 #define I_LxU	0x21
 #define I_LBU	0x23
@@ -1092,11 +1110,44 @@ static bool iexpand(int64_t oc)
 		case 1:
 			insnStats.moves++;
 			break;
+		case 2:
+			if ((oc & 0x01f) != 0)
+				insnStats.adds++;
+			break;
 		case 4:
 			if ((oc & 0x1f) == 0)
 				insnStats.rets++;
+			else
+				insnStats.ands++;
 			break;
 		case 5:	insnStats.calls++; break;
+		case 6: insnStats.shls++; break;
+		case 7:
+			if (((oc >> 8) & 0xF) == 0)
+				insnStats.pushes++;
+			break;
+		case 8:
+			switch ((oc >> 4) & 3) {
+			case 0:
+			case 1:
+				insnStats.shifts++;
+				break;
+			case 2:
+				insnStats.ors++;
+				break;
+			case 3:
+				switch ((oc >> 10) & 3) {
+				case 1:
+					insnStats.ands++;
+					break;
+				case 2:
+					insnStats.ors++;
+					break;
+				case 3:
+					insnStats.xors++;
+					break;
+				}
+			}
 		case 9:
 		case 11:
 		case 13:
@@ -1151,6 +1202,18 @@ static void emit_insn(int64_t oc, int can_compress, int sz)
 				}
 			}
 			switch ((oc >> 26LL) & 0x3fLL) {
+			case I_ADD:
+				insnStats.adds++;
+				break;
+			case I_AND:
+				insnStats.ands++;
+				break;
+			case I_OR:
+				insnStats.ors++;
+				break;
+			case I_XOR:
+				insnStats.xors++;
+				break;
 			case I_MOVE:
 			case I_MOVO:
 				insnStats.moves++;
@@ -1161,35 +1224,85 @@ static void emit_insn(int64_t oc, int can_compress, int sz)
 			case I_SLEU:
 				insnStats.sets++;
 				break;
+			case I_SHIFT31:
+			case I_SHIFT63:
+			case I_SHIFTR:
+				switch ((oc >> 23LL) & 7L) {
+				case I_SHL:
+				case I_SHLI:
+				case I_ASL:
+				case I_ASLI:
+					insnStats.shls++;
+					break;
+				default:
+					insnStats.shifts++;
+					break;
+				}
 			}
 			break;
 		case I_ADD:
 			insnStats.adds++;
+			break;
+		case I_ANDI:
+			insnStats.ands++;
+			break;
+		case I_ORI:
+			insnStats.ors++;
+			break;
+		case I_XORI:
+			insnStats.xors++;
 			break;
 		case I_LUI:
 			insnStats.luis++;
 			break;
 		case I_Sx:
 		case I_SB:
+		case I_SFx:
 			insnStats.stores++;
 			break;
 		case I_Lx:
 		case I_LxU:
 		case I_LBU:
 		case I_LB:
+		case I_LFx:
 			insnStats.loads++;
 			break;
 		case I_MEMNDX:
 			ls = oc & 0x80000000LL;
+			insnStats.indexed++;
 			if (ls)
 				insnStats.stores++;
 			else
 				insnStats.loads++;
 			break;
-		case I_BBc:
-		case I_Bcc:
 		case I_BEQI:
+			insnStats.beqi++;
 			insnStats.branches++;
+			if (sz == 6)
+				num_lbranch++;
+			break;
+		case I_BBc:
+			insnStats.bbc++;
+			insnStats.branches++;
+			if (sz == 6)
+				num_lbranch++;
+			break;
+		case I_Bcc:
+			insnStats.branches++;
+			if (sz == 6)
+				num_lbranch++;
+			break;
+		case I_BLcc:
+			insnStats.logbr++;
+			insnStats.branches++;
+			if (sz == 6)
+				num_lbranch++;
+			break;
+		case I_BNEI:
+			insnStats.bnei++;
+			insnStats.branches++;
+			if (sz == 6)
+				num_lbranch++;
 			break;
 		case I_CALL:
 		case I_JAL:
@@ -1204,6 +1317,9 @@ static void emit_insn(int64_t oc, int can_compress, int sz)
 		case I_SGTUI:
 		case I_SEQI:
 			insnStats.sets++;
+			break;
+		case I_FLOAT:
+			insnStats.floatops++;
 			break;
 		}
 	}
@@ -2481,6 +2597,7 @@ static void process_beqi(int64_t opcode6, int64_t opcode3)
 			((disp >> 2) << 23LL) |
 			((disp & 3LL) << 16LL) |
 			(23 << 18) |
+			(opcode3 << 14) |
 			(Ra << 8) |
 			(ins48 << 6) |
 			0x30, !expand_flag, ins48 ? 6 : 4
@@ -5038,6 +5155,10 @@ void FT64_processMaster()
     segment = codeseg;
     memset(current_label,0,sizeof(current_label));
 		ZeroMemory(&insnStats, sizeof(insnStats));
+		num_lbranch = 0;
+		num_insns = 0;
+		num_cinsns = 0;
+		num_bytes = 0;
     NextToken();
     while (token != tk_eof) {
 //        printf("\t%.*s\n", inptr-stptr-1, stptr);
@@ -5056,10 +5177,11 @@ void FT64_processMaster()
       case tk_andi:  process_riop(0x08); break;
       case tk_asl: process_shift(0x2); break;
       case tk_asr: process_shift(0x3); break;
-      case tk_bbc: process_bbc(0x26,1); break;
+			case tk_band: process_bcc(0x10, 0); break;
+			case tk_bbc: process_bbc(0x26,1); break;
       case tk_bbs: process_bbc(0x26,0); break;
       case tk_begin_expand: expandedBlock = 1; break;
-      case tk_beq: process_bcc(0x30,0); break;
+			case tk_beq: process_bcc(0x30,0); break;
       case tk_beqi: process_beqi(0x32,0); break;
 			case tk_bfchg: process_bitfield(2); break;
 			case tk_bfclr: process_bitfield(1); break;
@@ -5076,8 +5198,12 @@ void FT64_processMaster()
       case tk_bleu: process_bcc(0x30,-7); break;
       case tk_blt: process_bcc(0x30,2); break;
       case tk_bltu: process_bcc(0x30,6); break;
-      case tk_bne: process_bcc(0x30,1); break;
-      case tk_bra: process_bra(0x01); break;
+			case tk_bnand: process_bcc(0x10, 2); break;
+			case tk_bne: process_bcc(0x30,1); break;
+			case tk_bnei: process_beqi(0x12,1); break;
+			case tk_bnor: process_bcc(0x10, 3); break;
+			case tk_bor: process_bcc(0x10, 1); break;
+			case tk_bra: process_bra(0x01); break;
 			case tk_brk: process_brk(); break;
         //case tk_bsr: process_bra(0x56); break;
         case tk_bss:
@@ -5301,7 +5427,7 @@ void FT64_processMaster()
 		case tk_vsubs: process_vsrrop(0x15); break;
 		case tk_vxor: process_vrrop(0x0A); break;
 		case tk_vxors: process_vsrrop(0x1A); break;
-		case tk_xnor: process_rrop(0x0E,0x0E); break;
+		case tk_xnor: process_rrop(0x0E,-1); break;
 		case tk_xor: process_rrop(0x0A,0x0A); break;
         case tk_xori: process_riop(0x0A); break;
 		case tk_zxb: process_rop(0x0A); break;

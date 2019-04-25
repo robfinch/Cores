@@ -507,6 +507,7 @@ public:
 
 	static bool IsEqual(ENODE *a, ENODE *b);
 	bool HasAssignop();
+	bool HasCall();
 
 	// Optimization
 	void scanexpr(int duse);
@@ -646,6 +647,7 @@ public:
 class CodeGenerator
 {
 public:
+	virtual bool GenerateBranch(ENODE *node, int op, int label, int predreg, unsigned int prediction) { return (false); };
 	Operand *GenerateBitfieldAssign(ENODE *node, int flags, int size);
 	void GenerateBitfieldInsert(Operand *ap1, Operand *ap2, int offset, int width);
 	Operand *GenerateBitfieldDereference(ENODE *node, int flags, int size);
@@ -674,6 +676,7 @@ public:
 class FT64CodeGenerator : public CodeGenerator
 {
 public:
+	bool GenerateBranch(ENODE *node, int op, int label, int predreg, unsigned int prediction);
 	Operand *GenExpr(ENODE *node);
 	int PushArgument(ENODE *ep, int regno, int stkoffs, bool *isFloat);
 	int PushArguments(Function *func, ENODE *plist);

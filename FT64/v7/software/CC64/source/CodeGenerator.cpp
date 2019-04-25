@@ -1849,13 +1849,6 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int size)
 	return(0);
 }
 
-static void GenerateCmp(ENODE *node, int op, int label, unsigned int prediction)
-{
-	Enter("GenCmp");
-	GenerateCmp(node, op, label, 0, prediction);
-	Leave("GenCmp",0);
-}
-
 //
 // Generate a jump to label if the node passed evaluates to
 // a true condition.
@@ -1871,35 +1864,39 @@ void CodeGenerator::GenerateTrueJump(ENODE *node, int label, unsigned int predic
 	switch( node->nodetype )
 	{
 	case en_bchk:	break;
-	case en_eq:	GenerateCmp(node, op_eq, label, prediction); break;
-	case en_ne: GenerateCmp(node, op_ne, label, prediction); break;
-	case en_lt: GenerateCmp(node, op_lt, label, prediction); break;
-	case en_le:	GenerateCmp(node, op_le, label, prediction); break;
-	case en_gt: GenerateCmp(node, op_gt, label, prediction); break;
-	case en_ge: GenerateCmp(node, op_ge, label, prediction); break;
-	case en_ult: GenerateCmp(node, op_ltu, label, prediction); break;
-	case en_ule: GenerateCmp(node, op_leu, label, prediction); break;
-	case en_ugt: GenerateCmp(node, op_gtu, label, prediction); break;
-	case en_uge: GenerateCmp(node, op_geu, label, prediction); break;
-	case en_feq: GenerateCmp(node, op_feq, label, prediction); break;
-	case en_fne: GenerateCmp(node, op_fne, label, prediction); break;
-	case en_flt: GenerateCmp(node, op_flt, label, prediction); break;
-	case en_fle: GenerateCmp(node, op_fle, label, prediction); break;
-	case en_fgt: GenerateCmp(node, op_fgt, label, prediction); break;
-	case en_fge: GenerateCmp(node, op_fge, label, prediction); break;
-	case en_veq: GenerateCmp(node, op_vseq, label, prediction); break;
-	case en_vne: GenerateCmp(node, op_vsne, label, prediction); break;
-	case en_vlt: GenerateCmp(node, op_vslt, label, prediction); break;
-	case en_vle: GenerateCmp(node, op_vsle, label, prediction); break;
-	case en_vgt: GenerateCmp(node, op_vsgt, label, prediction); break;
-	case en_vge: GenerateCmp(node, op_vsge, label, prediction); break;
+	case en_eq:	GenerateBranch(node, op_eq, label, 0, prediction); break;
+	case en_ne: GenerateBranch(node, op_ne, label, 0, prediction); break;
+	case en_lt: GenerateBranch(node, op_lt, label, 0, prediction); break;
+	case en_le:	GenerateBranch(node, op_le, label, 0, prediction); break;
+	case en_gt: GenerateBranch(node, op_gt, label, 0, prediction); break;
+	case en_ge: GenerateBranch(node, op_ge, label, 0, prediction); break;
+	case en_ult: GenerateBranch(node, op_ltu, label, 0, prediction); break;
+	case en_ule: GenerateBranch(node, op_leu, label, 0, prediction); break;
+	case en_ugt: GenerateBranch(node, op_gtu, label, 0, prediction); break;
+	case en_uge: GenerateBranch(node, op_geu, label, 0, prediction); break;
+	case en_feq: GenerateBranch(node, op_feq, label, 0, prediction); break;
+	case en_fne: GenerateBranch(node, op_fne, label, 0, prediction); break;
+	case en_flt: GenerateBranch(node, op_flt, label, 0, prediction); break;
+	case en_fle: GenerateBranch(node, op_fle, label, 0, prediction); break;
+	case en_fgt: GenerateBranch(node, op_fgt, label, 0, prediction); break;
+	case en_fge: GenerateBranch(node, op_fge, label, 0, prediction); break;
+	case en_veq: GenerateBranch(node, op_vseq, label, 0, prediction); break;
+	case en_vne: GenerateBranch(node, op_vsne, label, 0, prediction); break;
+	case en_vlt: GenerateBranch(node, op_vslt, label, 0, prediction); break;
+	case en_vle: GenerateBranch(node, op_vsle, label, 0, prediction); break;
+	case en_vgt: GenerateBranch(node, op_vsgt, label, 0, prediction); break;
+	case en_vge: GenerateBranch(node, op_vsge, label, 0, prediction); break;
 	case en_lor_safe:
+		if (GenerateBranch(node, op_or, label, 0, prediction))
+			break;
 	case en_lor:
 		GenerateTrueJump(node->p[0], label, prediction);
 		GenerateTrueJump(node->p[1], label, prediction);
 		break;
-	case en_land:
 	case en_land_safe:
+		if (GenerateBranch(node, op_and, label, 0, prediction))
+			break;
+	case en_land:
 		lab0 = nextlabel++;
 		GenerateFalseJump(node->p[0], lab0, prediction);
 		GenerateTrueJump(node->p[1], label, prediction ^ 1);
@@ -1933,34 +1930,38 @@ void CodeGenerator::GenerateFalseJump(ENODE *node,int label, unsigned int predic
 	switch( node->nodetype )
 	{
 	case en_bchk:	break;
-	case en_eq:	GenerateCmp(node, op_ne, label, prediction); break;
-	case en_ne: GenerateCmp(node, op_eq, label, prediction); break;
-	case en_lt: GenerateCmp(node, op_ge, label, prediction); break;
-	case en_le: GenerateCmp(node, op_gt, label, prediction); break;
-	case en_gt: GenerateCmp(node, op_le, label, prediction); break;
-	case en_ge: GenerateCmp(node, op_lt, label, prediction); break;
-	case en_ult: GenerateCmp(node, op_geu, label, prediction); break;
-	case en_ule: GenerateCmp(node, op_gtu, label, prediction); break;
-	case en_ugt: GenerateCmp(node, op_leu, label, prediction); break;
-	case en_uge: GenerateCmp(node, op_ltu, label, prediction); break;
-	case en_feq: GenerateCmp(node, op_fne, label, prediction); break;
-	case en_fne: GenerateCmp(node, op_feq, label, prediction); break;
-	case en_flt: GenerateCmp(node, op_fge, label, prediction); break;
-	case en_fle: GenerateCmp(node, op_fgt, label, prediction); break;
-	case en_fgt: GenerateCmp(node, op_fle, label, prediction); break;
-	case en_fge: GenerateCmp(node, op_flt, label, prediction); break;
-	case en_veq: GenerateCmp(node, op_vsne, label, prediction); break;
-	case en_vne: GenerateCmp(node, op_vseq, label, prediction); break;
-	case en_vlt: GenerateCmp(node, op_vsge, label, prediction); break;
-	case en_vle: GenerateCmp(node, op_vsgt, label, prediction); break;
-	case en_vgt: GenerateCmp(node, op_vsle, label, prediction); break;
-	case en_vge: GenerateCmp(node, op_vslt, label, prediction); break;
+	case en_eq:	GenerateBranch(node, op_ne, label, 0, prediction); break;
+	case en_ne: GenerateBranch(node, op_eq, label, 0, prediction); break;
+	case en_lt: GenerateBranch(node, op_ge, label, 0, prediction); break;
+	case en_le: GenerateBranch(node, op_gt, label, 0, prediction); break;
+	case en_gt: GenerateBranch(node, op_le, label, 0, prediction); break;
+	case en_ge: GenerateBranch(node, op_lt, label, 0, prediction); break;
+	case en_ult: GenerateBranch(node, op_geu, label, 0, prediction); break;
+	case en_ule: GenerateBranch(node, op_gtu, label, 0, prediction); break;
+	case en_ugt: GenerateBranch(node, op_leu, label, 0, prediction); break;
+	case en_uge: GenerateBranch(node, op_ltu, label, 0, prediction); break;
+	case en_feq: GenerateBranch(node, op_fne, label, 0, prediction); break;
+	case en_fne: GenerateBranch(node, op_feq, label, 0, prediction); break;
+	case en_flt: GenerateBranch(node, op_fge, label, 0, prediction); break;
+	case en_fle: GenerateBranch(node, op_fgt, label, 0, prediction); break;
+	case en_fgt: GenerateBranch(node, op_fle, label, 0, prediction); break;
+	case en_fge: GenerateBranch(node, op_flt, label, 0, prediction); break;
+	case en_veq: GenerateBranch(node, op_vsne, label, 0, prediction); break;
+	case en_vne: GenerateBranch(node, op_vseq, label, 0, prediction); break;
+	case en_vlt: GenerateBranch(node, op_vsge, label, 0, prediction); break;
+	case en_vle: GenerateBranch(node, op_vsgt, label, 0, prediction); break;
+	case en_vgt: GenerateBranch(node, op_vsle, label, 0, prediction); break;
+	case en_vge: GenerateBranch(node, op_vslt, label, 0, prediction); break;
 	case en_land_safe:
+		if (GenerateBranch(node, op_nand, label, 0, prediction))
+			break;
 	case en_land:
 		GenerateFalseJump(node->p[0],label,prediction^1);
 		GenerateFalseJump(node->p[1],label,prediction^1);
 		break;
 	case en_lor_safe:
+		if (GenerateBranch(node, op_nor, label, 0, prediction))
+			break;
 	case en_lor:
 		lab0 = nextlabel++;
 		GenerateTrueJump(node->p[0],lab0,prediction);

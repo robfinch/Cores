@@ -79,6 +79,21 @@ bool ENODE::HasAssignop()
 	return(false);
 }
 
+bool ENODE::HasCall()
+{
+	if (this == nullptr)
+		return (false);
+	if (nodetype == en_fcall)
+		return (true);
+	if (p[0]->HasCall())
+		return (true);
+	if (p[1]->HasCall())
+		return (true);
+	if (p[1]->HasCall())
+		return (true);
+	return (false);
+}
+
 long ENODE::GetReferenceSize()
 {
 	switch (nodetype)        /* get load size */

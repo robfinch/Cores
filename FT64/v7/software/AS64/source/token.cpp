@@ -598,10 +598,40 @@ int NextToken()
             }
             break;
 
-        // beq bne bit
+        // band beq bor bne bit
         case 'b':
         case 'B':
-            if ((inptr[1]=='e' || inptr[1]=='E') && 
+					if (gCpu == 'F') {
+						if ((inptr[1] == 'a' || inptr[1] == 'A') &&
+							(inptr[2] == 'n' || inptr[2] == 'N') &&
+							(inptr[3] == 'd' || inptr[3] == 'D') &&
+							isspace(inptr[4])) {
+							inptr += 4;
+							return (token = tk_band);
+						}
+						if ((inptr[1] == 'o' || inptr[1] == 'O') &&
+							(inptr[2] == 'r' || inptr[2] == 'R') &&
+							isspace(inptr[3])) {
+							inptr += 3;
+							return (token = tk_bor);
+						}
+						if ((inptr[1] == 'n' || inptr[1] == 'N') &&
+							(inptr[2] == 'a' || inptr[2] == 'A') &&
+							(inptr[3] == 'n' || inptr[3] == 'N') &&
+							(inptr[4] == 'd' || inptr[4] == 'D') &&
+							isspace(inptr[5])) {
+							inptr += 5;
+							return (token = tk_bnand);
+						}
+						if ((inptr[1] == 'n' || inptr[1] == 'N') &&
+							(inptr[2] == 'o' || inptr[2] == 'O') &&
+							(inptr[3] == 'r' || inptr[3] == 'R') &&
+							isspace(inptr[4])) {
+							inptr += 4;
+							return (token = tk_bnor);
+						}
+					}
+					if ((inptr[1]=='e' || inptr[1]=='E') &&
                 (inptr[2]=='q' || inptr[2]=='Q') &&
                  isspace(inptr[3])) {
                 inptr += 3;
@@ -627,7 +657,7 @@ int NextToken()
                 inptr += 4;
                 return token = tk_bnei;
             }
-            if ((inptr[1]=='r' || inptr[1]=='R') && 
+						if ((inptr[1]=='r' || inptr[1]=='R') &&
                 (inptr[2]=='a' || inptr[2]=='A') &&
                  isspace(inptr[3])) {
                 inptr += 3;
