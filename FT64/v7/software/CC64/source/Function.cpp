@@ -788,7 +788,8 @@ void Function::Gen()
 	// Setup the return block.
 	if (!IsNocall)
 		SetupReturnBlock();
-	GenerateMonadic(op_hint, 0, make_immed(start_funcbody));
+	if (!IsInline)
+		GenerateMonadic(op_hint, 0, make_immed(start_funcbody));
 
 	if (optimize) {
 		if (currentFn->csetbl == nullptr)

@@ -496,35 +496,35 @@ static void opt0(ENODE **node)
           break;
       case en_div:
 			case en_udiv:
-                    opt0(&(ep->p[0]));
-                    opt0(&(ep->p[1]));
-                    if( ep->p[0]->nodetype == en_icon ) {
-                            if( ep->p[1]->nodetype == en_icon ) {
-                                    dooper(*node);
-                                    return;
-                                    }
-                            if( ep->p[0]->i == 0 ) {    /* 0/x */
-                                    *node = ep->p[0];
-                                    return;
-                                    }
-                            }
-                    else if( ep->p[1]->nodetype == en_icon ) {
-                            val = ep->p[1]->i;
-                            if( val == 1 ) {        /* x/1 */
-                                    *node = ep->p[0];
-                                    return;
-                                    }
-                            sc = pwrof2(val);
-                            if( sc != -1 )
-                                    {
-                                    ep->p[1]->i = sc;
-									if ((*node)->nodetype == en_udiv)
-										ep->nodetype = en_shru;
-									else
-										ep->nodetype = ep->p[0]->isUnsigned ? en_shru : en_shr;
-                                    }
-                            }
-                    break;
+        opt0(&(ep->p[0]));
+        opt0(&(ep->p[1]));
+        if( ep->p[0]->nodetype == en_icon ) {
+          if( ep->p[1]->nodetype == en_icon ) {
+            dooper(*node);
+            return;
+          }
+          if( ep->p[0]->i == 0 ) {    /* 0/x */
+						*node = ep->p[0];
+						return;
+          }
+        }
+        else if( ep->p[1]->nodetype == en_icon ) {
+          val = ep->p[1]->i;
+          if( val == 1 ) {        /* x/1 */
+            *node = ep->p[0];
+            return;
+          }
+          sc = pwrof2(val);
+          if( sc != -1 )
+          {
+            ep->p[1]->i = sc;
+						if ((*node)->nodetype == en_udiv)
+							ep->nodetype = en_shru;
+						else
+							ep->nodetype = ep->p[0]->isUnsigned ? en_shru : en_shr;
+          }
+        }
+        break;
             case en_mod:
                     opt0(&(ep->p[0]));
                     opt0(&(ep->p[1]));

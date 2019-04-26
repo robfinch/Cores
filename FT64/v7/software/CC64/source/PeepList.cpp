@@ -392,12 +392,16 @@ void PeepList::OptConstReg()
 {
 	OCODE *ip;
 	Instruction *insn;
-	MachineReg *mr;
+	MachineReg *mr, *mr2;
 	Operand *top;
 	int n;
-
-	for (n = 0; n < 32; n++)
-		regs[n].sub = false;
+	
+	for (n = 0; n < 32; n++) {
+		if (regs[n].assigned && !regs[n].modified && regs[n].isConst && regs[n].offset != nullptr)
+			regs[n].sub = true;
+		else
+			regs[n].sub = false;
+	}
 
 	for (ip = head; ip; ip = ip->fwd) {
 		if (ip->insn) {
@@ -413,36 +417,9 @@ void PeepList::OptConstReg()
 					}
 				}
 			}
-			if (ip->oper2) {
-				if ((ip->insn->regclass2 & am_imm) && (ip->oper2->mode == am_reg)) {
-					mr = &regs[ip->oper2->preg];
-					if (mr->assigned && !mr->modified && mr->isConst && mr->offset != nullptr) {
-						ip->oper2->mode = am_imm;
-						ip->oper2->offset = mr->offset;
-						mr->sub = true;
-					}
-				}
-			}
-			if (ip->oper3) {
-				if ((ip->insn->regclass3 & am_imm) && (ip->oper3->mode == am_reg)) {
-					mr = &regs[ip->oper3->preg];
-					if (mr->assigned && !mr->modified && mr->isConst && mr->offset != nullptr) {
-						ip->oper3->mode = am_imm;
-						ip->oper3->offset = mr->offset;
-						mr->sub = true;
-					}
-				}
-			}
-			if (ip->oper4) {
-				if ((ip->insn->regclass4 & am_imm) && (ip->oper4->mode == am_reg)) {
-					mr = &regs[ip->oper4->preg];
-					if (mr->assigned && !mr->modified && mr->isConst && mr->offset != nullptr) {
-						ip->oper4->mode = am_imm;
-						ip->oper4->offset = mr->offset;
-						mr->sub = true;
-					}
-				}
-			}
+			ip->oper2->OptRegConst(ip->insn->regclass2);
+			ip->oper3->OptRegConst(ip->insn->regclass3);
+			ip->oper4->OptRegConst(ip->insn->regclass4);
 		}
 	}
 

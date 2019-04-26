@@ -331,6 +331,58 @@ void Operand::MakeLegal(int flags, int size)
 	//     Leave("MkLegalOperand",0);
 }
 
+void Operand::OptRegConst(int regclass)
+{
+	MachineReg *mr, *mr2;
+
+	if (this == nullptr)
+		return;
+
+	mr = &regs[preg];
+	if (regclass & am_imm) {
+		if (mode == am_reg) {
+			if (mr->sub) {
+				mode = am_imm;
+				offset = mr->offset;
+			}
+		}
+	}
+	else {
+		if (mode == am_reg)
+			mr->sub = false;
+		else if (mode == am_ind) {
+			if (mr->sub) {
+				mode = am_direct;
+				offset = mr->offset;
+			}
+		}
+		else if (mode == am_indx) {
+			if (mr->sub) {
+				mode = am_direct;
+				offset2 = mr->offset;
+			}
+		}
+		else if (mode == am_indx2) {
+			if (mr->sub) {
+				mode = am_indx;
+				preg = sreg;
+				offset = mr->offset;
+			}
+			mr2 = &regs[sreg];
+			if (mr2->sub) {
+				if (mode == am_indx) {
+					mode = am_direct;
+					offset2 = mr2->offset;
+				}
+				else {	// indx
+					mode = am_indx;
+					offset = mr2->offset;
+				}
+			}
+		}
+	}
+}
+
 void Operand::storeHex(txtoStream& ofs)
 {
 	ofs.printf("O");

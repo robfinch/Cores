@@ -355,7 +355,7 @@ Operand *FT64CodeGenerator::GenExpr(ENODE *node)
 	*/
 }
 
-bool FT64CodeGenerator::GenerateBranch(ENODE *node, int op, int label, int predreg, unsigned int prediction)
+bool FT64CodeGenerator::GenerateBranch(ENODE *node, int op, int label, int predreg, unsigned int prediction, bool limit)
 {
 	int size, sz;
 	Operand *ap1, *ap2, *ap3;
@@ -373,7 +373,7 @@ bool FT64CodeGenerator::GenerateBranch(ENODE *node, int op, int label, int predr
     ap1 = cg.GenerateExpression(node->p[0],F_REG, size);
 	  ap2 = cg.GenerateExpression(node->p[1],F_REG|F_IMMED,size);
   }
-	if (currentFn->pl.Count(ip) > 10) {
+	if (limit && currentFn->pl.Count(ip) > 10) {
 		currentFn->pl.tail = ip;
 		currentFn->pl.tail->fwd = nullptr;
 		return (false);
@@ -1118,9 +1118,15 @@ Operand *FT64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 			fmask = fpsave_mask;
 			currentFn = sym;
 			ps = pass;
+			// Each function has it's own peeplist. The generated peeplist for an
+			// inline function must be appended onto the peeplist of the current
+			// function.
+			sym->pl.head = sym->pl.tail = nullptr;
 			sym->Gen();
 			pass = ps;
 			currentFn = o_fn;
+			currentFn->pl.tail->fwd = sym->pl.head;
+			currentFn->pl.tail = sym->pl.tail;
 			fpsave_mask = fmask;
 			save_mask = mask;
 		}
@@ -1165,9 +1171,12 @@ Operand *FT64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 			fmask = fpsave_mask;
 			currentFn = sym;
 			ps = pass;
+			sym->pl.head = sym->pl.tail = nullptr;
 			sym->Gen();
 			pass = ps;
 			currentFn = o_fn;
+			currentFn->pl.tail->fwd = sym->pl.head;
+			currentFn->pl.tail = sym->pl.tail;
 			fpsave_mask = fmask;
 			save_mask = mask;
 		}

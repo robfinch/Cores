@@ -575,6 +575,7 @@ public:
 	void GenZeroExtend(int isize, int osize);
 	Operand *GenSignExtend(int isize, int osize, int flags);
 	void MakeLegal(int flags, int size);
+	void OptRegConst(int);
 
 	// Storage
 	void PutAddressMode(txtoStream& ofs);
@@ -647,7 +648,7 @@ public:
 class CodeGenerator
 {
 public:
-	virtual bool GenerateBranch(ENODE *node, int op, int label, int predreg, unsigned int prediction) { return (false); };
+	virtual bool GenerateBranch(ENODE *node, int op, int label, int predreg, unsigned int prediction, bool limit) { return (false); };
 	Operand *GenerateBitfieldAssign(ENODE *node, int flags, int size);
 	void GenerateBitfieldInsert(Operand *ap1, Operand *ap2, int offset, int width);
 	Operand *GenerateBitfieldDereference(ENODE *node, int flags, int size);
@@ -676,7 +677,7 @@ public:
 class FT64CodeGenerator : public CodeGenerator
 {
 public:
-	bool GenerateBranch(ENODE *node, int op, int label, int predreg, unsigned int prediction);
+	bool GenerateBranch(ENODE *node, int op, int label, int predreg, unsigned int prediction, bool limit);
 	Operand *GenExpr(ENODE *node);
 	int PushArgument(ENODE *ep, int regno, int stkoffs, bool *isFloat);
 	int PushArguments(Function *func, ENODE *plist);

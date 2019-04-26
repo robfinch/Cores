@@ -154,7 +154,7 @@ ENODE *makenode(int nt, ENODE *v1, ENODE *v2)
 	ep->p[0] = v1;
 	ep->p[1] = v2;
 	ep->p[2] = 0;
-    return (ep);
+  return (ep);
 }
 
 ENODE *makefcnode(int nt, ENODE *v1, ENODE *v2, SYM *sp)
@@ -2656,123 +2656,124 @@ TYP *multops(ENODE **node)
 static TYP *addops(ENODE **node)
 {
 	ENODE *ep1, *ep2, *ep3, *ep4;
-    TYP *tp1, *tp2;
-    int oper;
+  TYP *tp1, *tp2;
+  int oper;
 	int sz1, sz2;
 	bool isScalar = true;
 
-    Enter("Addops");
-    ep1 = (ENODE *)NULL;
-    *node = (ENODE *)NULL;
+  Enter("Addops");
+  ep1 = (ENODE *)NULL;
+  *node = (ENODE *)NULL;
 	sz1 = sz2 = 0;
 	tp1 = multops(&ep1);
-    if( tp1 == (TYP *)NULL )
-        goto xit;
+  if( tp1 == (TYP *)NULL )
+      goto xit;
 	if (tp1->type == bt_pointer) {
-        if (tp1->GetBtp()==NULL) {
-            printf("DIAG: pointer to NULL type.\r\n");
-            goto xit;    
-        }
-        else
-		    sz1 = tp1->GetBtp()->size;
+    if (tp1->GetBtp()==NULL) {
+      printf("DIAG: pointer to NULL type.\r\n");
+      goto xit;    
     }
-    while( lastst == plus || lastst == minus ) {
-            oper = (lastst == plus);
-            NextToken();
-            tp2 = multops(&ep2);
-			if (tp2==nullptr)
-				throw new C64PException(ERR_NULLPOINTER,1);
-			isScalar = !tp2->IsVectorType();
-            if( tp2 == 0 ) {
-                    error(ERR_IDEXPECT);
-                    *node = ep1;
-                    goto xit;
-                    }
-			if (tp2->type == bt_pointer)
-				sz2 = tp2->GetBtp()->size;
-			// Difference of two pointers to the same type of object...
-			// Divide the result by the size of the pointed to object.
-			if (!oper && (tp1->type == bt_pointer) && (tp2->type == bt_pointer) && (sz1==sz2))
-			{
-  				ep1 = makenode( en_sub,ep1,ep2);
-				ep4 = makeinode(en_icon, sz1);
-				ep1 = makenode(en_udiv,ep1,ep4);
-			}
-			else {
-                if( tp1->type == bt_pointer ) {
-                        tp2 = forcefit(&ep2,tp2,0,&stdint,true,false);
-                        ep3 = makeinode(en_icon,tp1->GetBtp()->size);
-                        ep3->constflag = TRUE;
-    										ep3->esize = tp2->size;
-												//if (ep2->nodetype == en_icon) {
-												//	ep2 = makeinode(en_icon, ep3->i * ep2->i);
-												//	ep2->constflag = TRUE;
-												//}
-												//else
-												{
-													ep2 = makenode(en_mulu, ep3, ep2);
-													ep2->constflag = ep2->p[1]->constflag;
-													ep2->esize = tp2->size;
-												}
-                        }
-                else if( tp2->type == bt_pointer ) {
-                        tp1 = forcefit(&ep1,tp1,0,&stdint,true,false);
-                        ep3 = makeinode(en_icon,tp2->GetBtp()->size);
-                        ep3->constflag = TRUE;
-    					ep3->esize = tp2->size;
-                        ep1 = makenode(en_mulu,ep3,ep1);
-                        ep1->constflag = ep1->p[1]->constflag;
-    					ep2->esize = tp2->size;
-                        }
-                tp1 = forcefit(&ep2,tp2,&ep1,tp1,true,false);
-				switch (tp1->type) {
-				case bt_triple:
-    				ep1 = makenode( oper ? en_fadd : en_fsub,ep1,ep2);
-					ep1->esize = sizeOfFPT;
-					break;
-				case bt_double:
-    				ep1 = makenode( oper ? en_fadd : en_fsub,ep1,ep2);
-					ep1->esize = sizeOfFPD;
-					break;
-				case bt_quad:
-                    //tp1 = forcefit(&ep1,tp1,&ep2,tp2,true,false);
-    				ep1 = makenode( oper ? en_fadd : en_fsub,ep1,ep2);
-					ep1->esize = sizeOfFPQ;
-					break;
-				case bt_float:
-    				ep1 = makenode( oper ? en_fadd : en_fsub,ep1,ep2);
-					ep1->esize = sizeOfFPS;
-					break;
-				case bt_vector:
-					if (isScalar)
-    					ep1 = makenode( oper ? en_vadds : en_vsubs,ep1,ep2);
-					else
-    					ep1 = makenode( oper ? en_vadd : en_vsub,ep1,ep2);
-					ep1->esize = 8;
-					break;
-				// In the case of a pointer place any constant to be added
-				// as the second operand. This will allow the use of immediate
-				// mode addressing rather than having to load into a register.
-				case bt_pointer:
-					if (ep1->nodetype==en_icon && oper)
-						ep1 = makenode(en_add, ep2, ep1);
-					else
-						ep1 = makenode(oper ? en_add : en_sub, ep1, ep2);
-					break;
-				default:
-    				ep1 = makenode( oper ? en_add : en_sub,ep1,ep2);
+    else
+			sz1 = tp1->GetBtp()->size;
+  }
+  while( lastst == plus || lastst == minus ) {
+    oper = (lastst == plus);
+    NextToken();
+    tp2 = multops(&ep2);
+		if (tp2==nullptr)
+			throw new C64PException(ERR_NULLPOINTER,1);
+		isScalar = !tp2->IsVectorType();
+    if( tp2 == 0 ) {
+      error(ERR_IDEXPECT);
+      *node = ep1;
+      goto xit;
+    }
+		if (tp2->type == bt_pointer)
+			sz2 = tp2->GetBtp()->size;
+		// Difference of two pointers to the same type of object...
+		// Divide the result by the size of the pointed to object.
+		if (!oper && (tp1->type == bt_pointer) && (tp2->type == bt_pointer) && (sz1==sz2))
+		{
+  		ep1 = makenode( en_sub,ep1,ep2);
+			ep4 = makeinode(en_icon, sz1);
+			ep1 = makenode(en_div,ep1,ep4);
+			tp1 = &stduint;
+		}
+		else {
+			if( tp1->type == bt_pointer ) {
+				tp2 = forcefit(&ep2,tp2,0,&stdint,true,false);
+				ep3 = makeinode(en_icon,tp1->GetBtp()->size);
+				ep3->constflag = TRUE;
+    		ep3->esize = tp2->size;
+				//if (ep2->nodetype == en_icon) {
+				//	ep2 = makeinode(en_icon, ep3->i * ep2->i);
+				//	ep2->constflag = TRUE;
+				//}
+				//else
+				{
+					ep2 = makenode(en_mulu, ep3, ep2);
+					ep2->constflag = ep2->p[1]->constflag;
+					ep2->esize = tp2->size;
 				}
-            }
-            PromoteConstFlag(ep1);
-			ep1->esize = tp1->size;
-			ep1->etype = tp1->type;
-            }
-    *node = ep1;
+			}
+      else if( tp2->type == bt_pointer ) {
+        tp1 = forcefit(&ep1,tp1,0,&stdint,true,false);
+        ep3 = makeinode(en_icon,tp2->GetBtp()->size);
+        ep3->constflag = TRUE;
+		    ep3->esize = tp2->size;
+        ep1 = makenode(en_mulu,ep3,ep1);
+        ep1->constflag = ep1->p[1]->constflag;
+				ep2->esize = tp2->size;
+      }
+      tp1 = forcefit(&ep2,tp2,&ep1,tp1,true,false);
+			switch (tp1->type) {
+			case bt_triple:
+    		ep1 = makenode( oper ? en_fadd : en_fsub,ep1,ep2);
+				ep1->esize = sizeOfFPT;
+				break;
+			case bt_double:
+    		ep1 = makenode( oper ? en_fadd : en_fsub,ep1,ep2);
+				ep1->esize = sizeOfFPD;
+				break;
+			case bt_quad:
+        //tp1 = forcefit(&ep1,tp1,&ep2,tp2,true,false);
+    		ep1 = makenode( oper ? en_fadd : en_fsub,ep1,ep2);
+				ep1->esize = sizeOfFPQ;
+				break;
+			case bt_float:
+    		ep1 = makenode( oper ? en_fadd : en_fsub,ep1,ep2);
+				ep1->esize = sizeOfFPS;
+				break;
+			case bt_vector:
+				if (isScalar)
+    			ep1 = makenode( oper ? en_vadds : en_vsubs,ep1,ep2);
+				else
+    			ep1 = makenode( oper ? en_vadd : en_vsub,ep1,ep2);
+				ep1->esize = 8;
+				break;
+			// In the case of a pointer place any constant to be added
+			// as the second operand. This will allow the use of immediate
+			// mode addressing rather than having to load into a register.
+			case bt_pointer:
+				if (ep1->nodetype==en_icon && oper)
+					ep1 = makenode(en_add, ep2, ep1);
+				else
+					ep1 = makenode(oper ? en_add : en_sub, ep1, ep2);
+				break;
+			default:
+    			ep1 = makenode( oper ? en_add : en_sub,ep1,ep2);
+			}
+		}
+		PromoteConstFlag(ep1);
+		ep1->esize = tp1->size;
+		ep1->etype = tp1->type;
+	}
+  *node = ep1;
 xit:
-    if (*node)
-    	(*node)->SetType(tp1);
-    Leave("Addops",0);
-    return tp1;
+  if (*node)
+    (*node)->SetType(tp1);
+  Leave("Addops",0);
+  return tp1;
 }
 
 // ----------------------------------------------------------------------------
@@ -2926,46 +2927,46 @@ xit:
 TYP *equalops(ENODE **node)
 {
 	ENODE *ep1, *ep2;
-    TYP *tp1, *tp2;
-    int oper;
+  TYP *tp1, *tp2;
+  int oper;
 	bool isVector = false;
 
-    Enter("EqualOps");
-    *node = (ENODE *)NULL;
-    tp1 = relation(&ep1);
-    if( tp1 == (TYP *)NULL )
-        goto xit;
+  Enter("EqualOps");
+  *node = (ENODE *)NULL;
+  tp1 = relation(&ep1);
+  if( tp1 == (TYP *)NULL )
+    goto xit;
 	if (tp1->IsVectorType())
 		isVector = true;
-    while( lastst == eq || lastst == neq ) {
-        oper = (lastst == eq);
-        NextToken();
-        tp2 = relation(&ep2);
-        if( tp2 == NULL )
-                error(ERR_IDEXPECT);
-        else {
+  while( lastst == eq || lastst == neq ) {
+    oper = (lastst == eq);
+    NextToken();
+    tp2 = relation(&ep2);
+    if( tp2 == NULL )
+      error(ERR_IDEXPECT);
+    else {
 			if (tp2->IsVectorType())
 				isVector = true;
-            tp1 = forcefit(&ep2,tp2,&ep1,tp1,true,false);
+      tp1 = forcefit(&ep2,tp2,&ep1,tp1,true,false);
 			if (tp1->IsVectorType())
 				ep1 = makenode( oper ? en_veq : en_vne,ep1,ep2);
-            else if (tp1->IsFloatType())
-                ep1 = makenode( oper ? en_feq : en_fne,ep1,ep2);
-            else
-                ep1 = makenode( oper ? en_eq : en_ne,ep1,ep2);
+      else if (tp1->IsFloatType())
+        ep1 = makenode( oper ? en_feq : en_fne,ep1,ep2);
+      else
+        ep1 = makenode( oper ? en_eq : en_ne,ep1,ep2);
 			ep1->esize = 2;
 			if (isVector)
 				tp1 = TYP::Make(bt_vector_mask,sizeOfWord);
 			ep1->etype = tp1->type;
-            PromoteConstFlag(ep1);
-        }
+      PromoteConstFlag(ep1);
+    }
 	}
-    *node = ep1;
+  *node = ep1;
  xit:
-     if (*node)
-     	(*node)->SetType(tp1);
-    Leave("EqualOps",0);
-    return tp1;
+  if (*node)
+    (*node)->SetType(tp1);
+  Leave("EqualOps",0);
+  return tp1;
 }
 
 /*

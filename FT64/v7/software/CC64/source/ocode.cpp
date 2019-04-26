@@ -836,7 +836,6 @@ void OCODE::OptHint()
 	}
 }
 
-
 // Remove extra labels at end of subroutines
 
 void OCODE::OptLabel()
