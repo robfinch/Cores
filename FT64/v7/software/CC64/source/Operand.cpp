@@ -362,8 +362,9 @@ void Operand::OptRegConst(int regclass)
 				offset2 = mr->offset;
 			}
 		}
+		/*
 		else if (mode == am_indx2) {
-			if (mr->sub) {
+			if (mr->sub && scale == 1) {
 				mode = am_indx;
 				preg = sreg;
 				offset = mr->offset;
@@ -380,6 +381,7 @@ void Operand::OptRegConst(int regclass)
 				}
 			}
 		}
+		*/
 	}
 }
 

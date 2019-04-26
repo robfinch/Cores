@@ -1083,11 +1083,13 @@ void Statement::GenMixedSource()
 void Statement::GenerateWhile()
 {
 	int lab1, lab2;
+	OCODE *loophead;
 
 	initstack();
 	lab1 = contlab;
 	lab2 = breaklab;
 	contlab = nextlabel++;
+	loophead = currentFn->pl.tail;
 	GenerateLabel(contlab);
 	if (s1 != NULL)
 	{
@@ -1096,6 +1098,7 @@ void Statement::GenerateWhile()
 		cg.GenerateFalseJump(exp, breaklab, 2);
 		looplevel++;
 		s1->Generate();
+		currentFn->pl.OptLoopInvariants(loophead);
 		looplevel--;
 		GenerateMonadic(op_bra, 0, make_clabel(contlab));
 		GenerateLabel(breaklab);
@@ -1112,11 +1115,13 @@ void Statement::GenerateWhile()
 void Statement::GenerateUntil()
 {
 	int lab1, lab2;
+	OCODE *loophead;
 
 	initstack();
 	lab1 = contlab;
 	lab2 = breaklab;
 	contlab = nextlabel++;
+	loophead = currentFn->pl.tail;
 	GenerateLabel(contlab);
 	if (s1 != NULL)
 	{
@@ -1125,6 +1130,7 @@ void Statement::GenerateUntil()
 		cg.GenerateTrueJump(exp, breaklab, 2);
 		looplevel++;
 		s1->Generate();
+		currentFn->pl.OptLoopInvariants(loophead);
 		looplevel--;
 		GenerateMonadic(op_bra, 0, make_clabel(contlab));
 		GenerateLabel(breaklab);
@@ -1142,6 +1148,7 @@ void Statement::GenerateUntil()
 void Statement::GenerateFor()
 {
 	int old_break, old_cont, exit_label, loop_label;
+	OCODE *loophead;
 
 	old_break = breaklab;
 	old_cont = contlab;
@@ -1152,6 +1159,7 @@ void Statement::GenerateFor()
 	if (initExpr != NULL)
 		ReleaseTempRegister(cg.GenerateExpression(initExpr, F_ALL | F_NOVALUE
 			, initExpr->GetNaturalSize()));
+	loophead = currentFn->pl.tail;
 	GenerateLabel(loop_label);
 	initstack();
 	if (exp != NULL)
@@ -1161,6 +1169,7 @@ void Statement::GenerateFor()
 		breaklab = exit_label;
 		looplevel++;
 		s1->Generate();
+		currentFn->pl.OptLoopInvariants(loophead);
 		looplevel--;
 	}
 	GenerateLabel(contlab);
@@ -1177,17 +1186,21 @@ void Statement::GenerateFor()
 void Statement::GenerateForever()
 {
 	int old_break, old_cont, exit_label, loop_label;
+	OCODE *loophead;
+
 	old_break = breaklab;
 	old_cont = contlab;
 	loop_label = nextlabel++;
 	exit_label = nextlabel++;
 	contlab = loop_label;
+	loophead = currentFn->pl.tail;
 	GenerateLabel(loop_label);
 	if (s1 != NULL)
 	{
 		breaklab = exit_label;
 		looplevel++;
 		s1->Generate();
+		currentFn->pl.OptLoopInvariants(loophead);
 		looplevel--;
 	}
 	GenerateMonadic(op_bra, 0, make_clabel(loop_label));
@@ -1343,13 +1356,17 @@ j1:
 void Statement::GenerateDoOnce()
 {
 	int oldcont, oldbreak;
+	OCODE *loophead;
+
 	oldcont = contlab;
 	oldbreak = breaklab;
 	contlab = nextlabel++;
+	loophead = currentFn->pl.tail;
 	GenerateLabel(contlab);
 	breaklab = nextlabel++;
 	looplevel++;
 	s1->Generate();
+	currentFn->pl.OptLoopInvariants(loophead);
 	looplevel--;
 	GenerateLabel(breaklab);
 	breaklab = oldbreak;
@@ -1359,13 +1376,17 @@ void Statement::GenerateDoOnce()
 void Statement::GenerateDoWhile()
 {
 	int oldcont, oldbreak;
+	OCODE *loophead;
+
 	oldcont = contlab;
 	oldbreak = breaklab;
 	contlab = nextlabel++;
+	loophead = currentFn->pl.tail;
 	GenerateLabel(contlab);
 	breaklab = nextlabel++;
 	looplevel++;
 	s1->Generate();
+	currentFn->pl.OptLoopInvariants(loophead);
 	looplevel--;
 	initstack();
 	cg.GenerateTrueJump(exp, contlab, 3);
@@ -1377,13 +1398,17 @@ void Statement::GenerateDoWhile()
 void Statement::GenerateDoUntil()
 {
 	int oldcont, oldbreak;
+	OCODE *loophead;
+
 	oldcont = contlab;
 	oldbreak = breaklab;
 	contlab = nextlabel++;
+	loophead = currentFn->pl.tail;
 	GenerateLabel(contlab);
 	breaklab = nextlabel++;
 	looplevel++;
 	s1->Generate();
+	currentFn->pl.OptLoopInvariants(loophead);
 	looplevel--;
 	initstack();
 	cg.GenerateFalseJump(exp, contlab, 3);
@@ -1395,13 +1420,17 @@ void Statement::GenerateDoUntil()
 void Statement::GenerateDoLoop()
 {
 	int oldcont, oldbreak;
+	OCODE *loophead;
+
 	oldcont = contlab;
 	oldbreak = breaklab;
 	contlab = nextlabel++;
+	loophead = currentFn->pl.tail;
 	GenerateLabel(contlab);
 	breaklab = nextlabel++;
 	looplevel++;
 	s1->Generate();
+	currentFn->pl.OptLoopInvariants(loophead);
 	looplevel--;
 	GenerateMonadic(op_bra, 0, make_clabel(contlab));
 	GenerateLabel(breaklab);

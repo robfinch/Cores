@@ -37,6 +37,8 @@ bool OCODE::HasTargetReg() const
 
 bool OCODE::HasSourceReg(int regno) const
 {
+	if (insn == nullptr)
+		return (false);
 	if (oper1 && !insn->HasTarget()) {
 		if (oper1->preg==regno)
 			return (true);
@@ -628,7 +630,7 @@ void OCODE::OptDoubleTargetRemoval()
 	GetTargetReg(&rg3, &rg4);
 	// Should look at this more carefully sometime. Generally however target 
 	// register classes won't match between integer and float instructions.
-	if ((insn->regclass1 ^ ip2->insn->regclass1) == 0)
+	if ((insn->regclass1 ^ ip2->insn->regclass1) != 0)
 		return;
 	if (rg1 != rg3)
 		return;
@@ -641,6 +643,110 @@ void OCODE::OptDoubleTargetRemoval()
 	optimized++;
 }
 
+void OCODE::OptIndexScale()
+{
+	OCODE *frwd;
+
+	if (fwd == nullptr || back == nullptr)
+		return;
+	// Make sure we have the right kind of a shift left.
+	if (back->opcode != op_shl || back->oper3 == nullptr || back->oper3->offset == nullptr)
+		return;
+	if (back->oper3->offset->i < 1 || back->oper3->offset->i > 3)
+		return;
+	// Now search for double indexed operation. There could be multiple matches.
+	for (frwd = fwd; frwd; frwd = frwd->fwd) {
+		// If there's an intervening flow control, can't optimize.
+		if (frwd->insn) {
+			if (frwd->insn->IsFlowControl()) {
+				frwd = nullptr;
+				break;
+			}
+		}
+		// If there's a intervening flow control target, can't optimize.
+		if (frwd->opcode == op_label) {
+			frwd = nullptr;
+			break;
+		}
+		if (frwd->oper2) {
+			// Found a double index.
+			if (frwd->oper2->mode == am_indx2) {
+				// Is it the right one?
+				if (frwd->oper2->preg == back->oper1->preg) {
+					frwd->oper2->preg = back->oper2->preg;
+					frwd->oper2->scale = 1 << back->oper3->offset->i;
+					back->MarkRemove();
+					optimized++;
+				}
+			}
+		}
+		// If the target register is assigned to something else
+		// abort optimization.
+		// If the scaling register is assigned to something else
+		// abort optimization.
+		else if (frwd->oper1) {
+			if (frwd->HasTargetReg()) {
+				if (frwd->oper1->preg == back->oper1->preg) {
+					frwd = nullptr;
+					break;
+				}
+				if (frwd->oper1->preg == back->oper2->preg) {
+					frwd = nullptr;
+					break;
+				}
+			}
+		}
+	}
+}
+
+void OCODE::OptCom()
+{
+	if (back == nullptr || fwd == nullptr)
+		return;
+	if (fwd->remove || back->remove)
+		return;
+	// If not all in registers
+	if (back->oper1->mode != am_reg
+		|| back->oper2->mode != am_reg
+		|| (back->oper3 && back->oper3->mode != am_reg))
+		return;
+	if (back->opcode != op_and
+		&& back->opcode != op_or
+		&& back->opcode != op_xor
+		)
+		return;
+	if (fwd->opcode != op_com)
+		return;
+	if (fwd->oper2->mode != am_reg)
+		return;
+	if (back->oper1->preg != fwd->oper2->preg)
+		return;
+	if (fwd->opcode != op_com)
+		return;
+	switch (back->opcode) {
+	case op_and:
+		back->opcode = op_nand;
+		back->insn = GetInsn(op_nand);
+		back->oper1->preg = fwd->oper1->preg;
+		fwd->MarkRemove();
+		optimized++;
+		break;
+	case op_or:
+		back->opcode = op_nor;
+		back->insn = GetInsn(op_nor);
+		back->oper1->preg = fwd->oper1->preg;
+		fwd->MarkRemove();
+		optimized++;
+		break;
+	case op_xor:
+		back->opcode = op_xnor;
+		back->insn = GetInsn(op_xnor);
+		back->oper1->preg = fwd->oper1->preg;
+		fwd->MarkRemove();
+		optimized++;
+		break;
+	}
+}
 
 // Process compiler hint opcodes
 
@@ -648,6 +754,7 @@ void OCODE::OptHint()
 {
 	OCODE *frwd, *bck;
 	Operand *am;
+	int rg1, rg2;
 
 	if ((back && back->opcode == op_label) || (fwd && fwd->opcode == op_label))
 		return;
@@ -710,7 +817,6 @@ void OCODE::OptHint()
 		// Translated to:
 		//     MOV r1,arg
 	case 2:
-		return;
 		if (fwd == nullptr || back == nullptr)
 			break;
 		if (fwd->remove || back->remove)
@@ -718,6 +824,20 @@ void OCODE::OptHint()
 		if (IsEqualOperand(fwd->oper2, back->oper1)) {
 			if (back->HasTargetReg()) {
 				if (!(fwd->oper1->mode == am_fpreg && back->opcode == op_ldi)) {
+					// Search forward to see if the target register is used anywhere.
+					for (frwd = fwd->fwd; frwd; frwd = frwd->fwd) {
+						// If the register has been targeted again, it is okay to opt.
+						if (frwd->HasTargetReg()) {
+							frwd->GetTargetReg(&rg1, &rg2);
+							if (back->oper1) {
+								if (rg1 == back->oper1->preg)
+									break;
+							}
+						}
+						if (frwd->HasSourceReg(back->oper1->preg)) {
+							return;
+						}
+					}
 					back->oper1 = fwd->oper1;
 					fwd->MarkRemove();
 					optimized++;
@@ -736,51 +856,7 @@ void OCODE::OptHint()
 		// Translates to:
 		//     nand r5,r2,r3
 	case 3:
-		if (back == nullptr || fwd == nullptr)
-			break;
-		if (fwd->remove || back->remove)
-			break;
-		// If not all in registers
-		if (back->oper1->mode != am_reg
-			|| back->oper2->mode != am_reg
-			|| (back->oper3 && back->oper3->mode != am_reg))
-			break;
-		if (back->opcode != op_and
-			&& back->opcode != op_or
-			&& back->opcode != op_xor
-			)
-			break;
-		if (fwd->opcode != op_com)
-			break;
-		if (fwd->oper2->mode != am_reg)
-			break;
-		if (back->oper1->preg != fwd->oper2->preg)
-			break;
-		if (fwd->opcode != op_com)
-			break;
-		switch (back->opcode) {
-		case op_and:
-			back->opcode = op_nand;
-			back->insn = GetInsn(op_nand);
-			back->oper1->preg = fwd->oper1->preg;
-			fwd->MarkRemove();
-			optimized++;
-			break;
-		case op_or:
-			back->opcode = op_nor;
-			back->insn = GetInsn(op_nor);
-			back->oper1->preg = fwd->oper1->preg;
-			fwd->MarkRemove();
-			optimized++;
-			break;
-		case op_xor:
-			back->opcode = op_xnor;
-			back->insn = GetInsn(op_xnor);
-			back->oper1->preg = fwd->oper1->preg;
-			fwd->MarkRemove();
-			optimized++;
-			break;
-		}
+		OptCom();
 		break;
 
 		// hint #9
@@ -790,12 +866,11 @@ void OCODE::OptHint()
 		// Becomes:
 		//		sw r4,[r11+r3*8]
 	case 9:
-		if (fwd == nullptr || back == nullptr)
-			break;
-		if (fwd->oper2 == nullptr || back->oper3 == nullptr)
-			break;
-		if (fwd->oper2->mode != am_indx2)
-			break;
+		OptIndexScale();
+		break;
+		// Following is dead code
+		//if (fwd->oper2->mode != am_indx2)
+		//	break;
 		if (fwd->oper2->preg == back->oper1->preg) {
 			if ((back->opcode == op_shl) && back->oper3->offset &&
 				(back->oper3->offset->i == 1

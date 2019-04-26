@@ -251,6 +251,7 @@ void Function::PeepOpt()
 		// Performing peephole optimizations may lead to further optimizations so do
 		// the optimization step a few times.
 		optimized = 0;
+		pl.OptConstReg();
 		for (rep = 0; (rep < 5) || (optimized && rep < 10); rep++)
 		{
 			// Peephole optimizations might lead to unreferenced labels, which may make
@@ -262,8 +263,6 @@ void Function::PeepOpt()
 			pl.Remove();
 			pl.OptDoubleTargetRemoval();
 		}
-
-		pl.OptConstReg();
 
 		//currentFn->pl.Dump();
 		// Remove the link and unlink instructions if no references

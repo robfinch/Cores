@@ -182,7 +182,7 @@ Instruction opl[232] =
 { "mffp",op_mffp },
 { "mod", op_mod,68,1, false,am_reg,am_reg,am_reg|am_imm,0 },
 { "modu", op_modu,68,1,false,am_reg,am_reg,am_reg,0 },
-{ "mov", op_mov,1,1,false,am_reg|am_fpreg,am_reg|am_fpreg,0,0 },
+{ "mov", op_mov,1,1,false,am_reg,am_reg,0,0 },
 { "move",op_move,1,1,false,am_reg | am_fpreg,am_reg | am_fpreg,0,0 },
 { "movs", op_movs },
 { "mtfp", op_mtfp },

@@ -607,7 +607,7 @@ void Function::GenReturn(Statement *stmt)
 			}
 			else {
 				if (sym->tp->GetBtp()->IsFloatType())
-					GenerateDiadic(op_mov, 0, makefpreg(1), ap);
+					GenerateDiadic(op_fmov, 0, makefpreg(1), ap);
 				else if (sym->tp->GetBtp()->IsVectorType())
 					GenerateDiadic(op_mov, 0, makevreg(1), ap);
 				else
@@ -616,7 +616,7 @@ void Function::GenReturn(Statement *stmt)
 		}
 		else if (ap->mode == am_fpreg) {
 			if (isFloat)
-				GenerateDiadic(op_mov, 0, makefpreg(1), ap);
+				GenerateDiadic(op_fmov, 0, makefpreg(1), ap);
 			else
 				GenerateDiadic(op_mov, 0, makereg(1), ap);
 		}

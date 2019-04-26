@@ -64,6 +64,16 @@ bool PeepList::HasCall(OCODE *ip)
 	return (false);
 }
 
+bool PeepList::FindTarget(OCODE *ip, int reg)
+{
+	for (; ip; ip = ip->fwd) {
+		if (ip->HasTargetReg()) {
+			if (ip->oper1->preg == reg)
+				return (true);
+		}
+	}
+	return (false);
+}
 
 void PeepList::InsertBefore(OCODE *an, OCODE *cd)
 {
@@ -125,24 +135,31 @@ void PeepList::MarkAllKeep()
 	}
 }
 
+void PeepList::Remove(OCODE *ip)
+{
+	OCODE *ip1, *ip2;
+
+	ip1 = ip->fwd;
+	ip2 = ip->back;
+	if (ip1 && ip1->comment == nullptr)
+		ip1->comment = ip->comment;
+	if (ip2)
+		ip2->fwd = ip1;
+	if (ip1)
+		ip1->back = ip2;
+	if (ip == head)
+		head = ip->fwd;
+}
+
 void PeepList::Remove()
 {
-	OCODE *ip, *ip1, *ip2;
+	OCODE *ip, *ip1;
 
 	if (1)//(RemoveEnabled)
 		for (ip = head; ip; ip = ip1) {
 			ip1 = ip->fwd;
-			ip2 = ip->back;
-			if (ip->remove) {
-				if (ip1 && ip1->comment == nullptr)
-					ip1->comment = ip->comment;
-				if (ip2)
-					ip2->fwd = ip1;
-				if (ip1)
-					ip1->back = ip2;
-				if (ip == head)
-					head = ip->fwd;
-			}
+			if (ip->remove)
+				Remove(ip);
 		}
 }
 
@@ -551,6 +568,100 @@ void PeepList::OptInstructions()
 			case op_mulu:	ip->OptMulu(); break;
 			case op_div:	ip->OptDiv(); break;
 			}
+		}
+	}
+}
+
+void PeepList::OptLoopInvariants(OCODE *loophead)
+{
+	OCODE *ip2, *ip3, *ip4;
+	bool canHoist;
+
+	if (loophead == nullptr)
+		return;
+	ip3 = ip4 = loophead;
+	for (ip2 = currentFn->pl.tail; ip2 && ip2 != ip4; ip2 = ip2->back) {
+		canHoist = true;
+		if (ip2->opcode == op_label || ip2->opcode == op_rem || ip2->opcode == op_hint)
+			continue;
+		if (!ip2->HasTargetReg()) {
+			if (ip2->oper1) {
+				switch (ip2->oper1->mode) {
+				case am_imm:
+				case am_direct:
+					break;
+				case am_indx2:
+					if (currentFn->pl.FindTarget(ip4, ip2->oper1->preg))
+						canHoist = false;
+					if (currentFn->pl.FindTarget(ip4, ip2->oper1->sreg))
+						canHoist = false;
+					break;
+				default:
+					if (currentFn->pl.FindTarget(ip4, ip2->oper1->preg))
+						canHoist = false;
+					break;
+				}
+			}
+		}
+		if (ip2->oper2) {
+			switch (ip2->oper2->mode) {
+			case am_imm:
+			case am_direct:
+				break;
+			case am_indx2:
+				if (currentFn->pl.FindTarget(ip4, ip2->oper2->preg))
+					canHoist = false;
+				if (currentFn->pl.FindTarget(ip4, ip2->oper2->sreg))
+					canHoist = false;
+				break;
+			default:
+				if (currentFn->pl.FindTarget(ip4, ip2->oper2->preg))
+					canHoist = false;
+				break;
+			}
+		}
+		if (ip2->oper3) {
+			switch (ip2->oper3->mode) {
+			case am_imm:
+			case am_direct:
+				break;
+			case am_indx2:
+				if (currentFn->pl.FindTarget(ip4, ip2->oper3->preg))
+					canHoist = false;
+				if (currentFn->pl.FindTarget(ip4, ip2->oper3->sreg))
+					canHoist = false;
+				break;
+			default:
+				if (currentFn->pl.FindTarget(ip4, ip2->oper3->preg))
+					canHoist = false;
+				break;
+			}
+		}
+		if (ip2->oper4) {
+			switch (ip2->oper4->mode) {
+			case am_imm:
+			case am_direct:
+				break;
+			case am_indx2:
+				if (currentFn->pl.FindTarget(ip4, ip2->oper4->preg))
+					canHoist = false;
+				if (currentFn->pl.FindTarget(ip4, ip2->oper4->sreg))
+					canHoist = false;
+				break;
+			default:
+				if (currentFn->pl.FindTarget(ip4, ip2->oper4->preg))
+					canHoist = false;
+				break;
+			}
+		}
+		// Move the code outside of the loop.
+		if (canHoist) {
+			if (ip2 == currentFn->pl.tail)
+				currentFn->pl.tail = ip2->back;
+			currentFn->pl.Remove(ip2);
+			currentFn->pl.InsertAfter(loophead, ip2);
+			ip4 = ip3;
+			ip3 = ip2;
 		}
 	}
 }

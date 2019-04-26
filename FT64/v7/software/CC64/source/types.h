@@ -158,12 +158,14 @@ public:
 	void MarkAllKeep();
 	void RemoveCompilerHints();
 	void RemoveCompilerHints2();
+	void Remove(OCODE *ip);
 	void Remove();
 	void Remove2();
 	void RemoveLinkUnlink();
 	void flush();
 	void SetLabelReference();
 	void EliminateUnreferencedLabels();
+	bool FindTarget(OCODE *ip, int reg);
 
 	void Dump(char *msg);
 	BasicBlock *Blockize();
@@ -178,6 +180,7 @@ public:
 	void OptBranchToNext();
 	void OptDoubleTargetRemoval();
 	void OptConstReg();
+	void OptLoopInvariants(OCODE *loophead);
 
 	// Color Graphing
 	void RemoveMoves();
@@ -619,6 +622,7 @@ public:
 	//Edge *MakeEdge(OCODE *ip1, OCODE *ip2);
 	// Optimizations
 	bool IsSubiSP();
+	void OptCom();
 	void OptMul();
 	void OptMulu();
 	void OptDiv();
@@ -639,6 +643,7 @@ public:
 	void OptDoubleTargetRemoval();
 	void OptHint();
 	void OptLabel();
+	void OptIndexScale();
 
 	static OCODE *loadHex(txtiStream& ifs);
 	void store(txtoStream& ofs);

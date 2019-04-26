@@ -1135,18 +1135,18 @@ Operand *CodeGenerator::GenerateAssign(ENODE *node, int flags, int size)
 		switch(ap2->mode) {
 		case am_reg:
 			GenerateHint(2);
+			GenerateDiadic(op_mov, 0, ap1, ap2);
 			if (ap2->isPtr) {
 				GenerateZeradic(op_setwb);
 				ap1->isPtr = TRUE;
 			}
-			GenerateDiadic(op_mov, 0, ap1, ap2);
 			mr->val = regs[ap2->preg].val;
 			mr->isConst = ap2->isConst;
 			break;
 		case am_fpreg:
 			GenerateHint(2);
 			if (ap1->mode==am_fpreg)
-				GenerateDiadic(op_mov,0,ap1,ap2);
+				GenerateDiadic(op_fmov,0,ap1,ap2);
 			else
 				GenerateDiadic(op_mov,0,ap1,ap2);
 			mr->modified = true;
