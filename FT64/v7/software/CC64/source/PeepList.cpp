@@ -72,6 +72,7 @@ bool PeepList::FindTarget(OCODE *ip, int reg)
 				return (true);
 		}
 	}
+	//Dump("=====PeepList=====\n");
 	return (false);
 }
 
@@ -586,6 +587,15 @@ void PeepList::OptLoopInvariants(OCODE *loophead)
 		canHoist = true;
 		if (ip2->opcode == op_label || ip2->opcode == op_rem || ip2->opcode == op_hint)
 			continue;
+		// We don't want to move these outside the loop.
+		if (ip2->insn->IsFlowControl())
+			canHoist = false;
+		// A store operation might be invariant, but stores can have side effects
+		// eg. I/O updates.
+		//if (ip2->insn) {
+		//	if (ip2->insn->IsStore())
+		//		canHoist = false;
+		//}
 		if (!ip2->HasTargetReg()) {
 			if (ip2->oper1) {
 				switch (ip2->oper1->mode) {

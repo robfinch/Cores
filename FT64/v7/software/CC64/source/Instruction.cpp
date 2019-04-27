@@ -55,6 +55,22 @@ bool Instruction::IsFlowControl()
 	return (false);
 }
 
+bool Instruction::IsStore()
+{
+	if (opcode == op_sb
+		|| opcode == op_sc
+		|| opcode == op_sh
+		|| opcode == op_sw
+		|| opcode == op_swc
+		|| opcode == op_sf
+		|| opcode == op_sfd
+		|| opcode == op_sft
+		|| opcode == op_push
+		)
+		return (true);
+	return (false);
+}
+
 static int fbmcmp(const void *a, const void *b)
 {
 	Instruction *ib;

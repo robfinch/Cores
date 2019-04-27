@@ -1003,6 +1003,7 @@ public:
 	unsigned int regclass4;	// register class 1=integer,2=floating point,4=vector
 public:
 	bool IsFlowControl();
+	bool IsStore();
 	bool IsSetInsn() {
 		return (opcode == op_seq || opcode == op_sne
 			|| opcode == op_slt || opcode == op_sle || opcode == op_sgt || opcode == op_sge

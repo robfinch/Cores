@@ -1098,7 +1098,6 @@ void Statement::GenerateWhile()
 		cg.GenerateFalseJump(exp, breaklab, 2);
 		looplevel++;
 		s1->Generate();
-		currentFn->pl.OptLoopInvariants(loophead);
 		looplevel--;
 		GenerateMonadic(op_bra, 0, make_clabel(contlab));
 		GenerateLabel(breaklab);
@@ -1109,6 +1108,7 @@ void Statement::GenerateWhile()
 		initstack();
 		cg.GenerateTrueJump(exp, contlab, prediction);
 	}
+	currentFn->pl.OptLoopInvariants(loophead);
 	contlab = lab1;
 }
 
@@ -1130,7 +1130,6 @@ void Statement::GenerateUntil()
 		cg.GenerateTrueJump(exp, breaklab, 2);
 		looplevel++;
 		s1->Generate();
-		currentFn->pl.OptLoopInvariants(loophead);
 		looplevel--;
 		GenerateMonadic(op_bra, 0, make_clabel(contlab));
 		GenerateLabel(breaklab);
@@ -1141,6 +1140,7 @@ void Statement::GenerateUntil()
 		initstack();
 		cg.GenerateFalseJump(exp, contlab, prediction);
 	}
+	currentFn->pl.OptLoopInvariants(loophead);
 	contlab = lab1;
 }
 
@@ -1169,7 +1169,6 @@ void Statement::GenerateFor()
 		breaklab = exit_label;
 		looplevel++;
 		s1->Generate();
-		currentFn->pl.OptLoopInvariants(loophead);
 		looplevel--;
 	}
 	GenerateLabel(contlab);
@@ -1177,6 +1176,7 @@ void Statement::GenerateFor()
 	if (incrExpr != NULL)
 		ReleaseTempRegister(cg.GenerateExpression(incrExpr, F_ALL | F_NOVALUE, incrExpr->GetNaturalSize()));
 	GenerateMonadic(op_bra, 0, make_clabel(loop_label));
+	currentFn->pl.OptLoopInvariants(loophead);
 	breaklab = old_break;
 	contlab = old_cont;
 	GenerateLabel(exit_label);
@@ -1200,10 +1200,10 @@ void Statement::GenerateForever()
 		breaklab = exit_label;
 		looplevel++;
 		s1->Generate();
-		currentFn->pl.OptLoopInvariants(loophead);
 		looplevel--;
 	}
 	GenerateMonadic(op_bra, 0, make_clabel(loop_label));
+	currentFn->pl.OptLoopInvariants(loophead);
 	breaklab = old_break;
 	contlab = old_cont;
 	GenerateLabel(exit_label);
@@ -1366,9 +1366,9 @@ void Statement::GenerateDoOnce()
 	breaklab = nextlabel++;
 	looplevel++;
 	s1->Generate();
-	currentFn->pl.OptLoopInvariants(loophead);
 	looplevel--;
 	GenerateLabel(breaklab);
+	currentFn->pl.OptLoopInvariants(loophead);
 	breaklab = oldbreak;
 	contlab = oldcont;
 }
@@ -1386,11 +1386,11 @@ void Statement::GenerateDoWhile()
 	breaklab = nextlabel++;
 	looplevel++;
 	s1->Generate();
-	currentFn->pl.OptLoopInvariants(loophead);
 	looplevel--;
 	initstack();
 	cg.GenerateTrueJump(exp, contlab, 3);
 	GenerateLabel(breaklab);
+	currentFn->pl.OptLoopInvariants(loophead);
 	breaklab = oldbreak;
 	contlab = oldcont;
 }
@@ -1408,11 +1408,11 @@ void Statement::GenerateDoUntil()
 	breaklab = nextlabel++;
 	looplevel++;
 	s1->Generate();
-	currentFn->pl.OptLoopInvariants(loophead);
 	looplevel--;
 	initstack();
 	cg.GenerateFalseJump(exp, contlab, 3);
 	GenerateLabel(breaklab);
+	currentFn->pl.OptLoopInvariants(loophead);
 	breaklab = oldbreak;
 	contlab = oldcont;
 }
@@ -1430,10 +1430,10 @@ void Statement::GenerateDoLoop()
 	breaklab = nextlabel++;
 	looplevel++;
 	s1->Generate();
-	currentFn->pl.OptLoopInvariants(loophead);
 	looplevel--;
 	GenerateMonadic(op_bra, 0, make_clabel(contlab));
 	GenerateLabel(breaklab);
+	currentFn->pl.OptLoopInvariants(loophead);
 	breaklab = oldbreak;
 	contlab = oldcont;
 }
