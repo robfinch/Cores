@@ -1596,6 +1596,7 @@ void Statement::GenerateSwitch()
 		if (st->s2) {
 			defcase = st->s2;
 			deflbl = curlab;
+			st->label = (int64_t *)deflbl;
 			curlab = nextlabel++;
 		}
 		else {

@@ -35,94 +35,99 @@ void dooper(ENODE *node)
 {
 	ENODE *ep;
 
-    ep = node;
-    switch( ep->nodetype ) {
+  ep = node;
+  switch( ep->nodetype ) {
 	case en_abs:
-            ep->nodetype = en_icon;
-            ep->i = (ep->p[0]->i >= 0) ? ep->p[0]->i : -ep->p[0]->i;
-			break;
-    case en_add:
-            ep->nodetype = en_icon;
-            ep->i = ep->p[0]->i + ep->p[1]->i;
-            break;
-    case en_sub:
-            ep->nodetype = en_icon;
-            ep->i = ep->p[0]->i - ep->p[1]->i;
-            break;
-		case en_i2d:
-			ep->nodetype = en_fcon;
-			ep->f = (double)ep->p[0]->i;
-			ep->tp = &stddouble;// ep->p[0]->tp;
-			Float128::IntToFloat(&ep->f128, ep->p[0]->i);
-			ep->i = quadlit(&ep->f128);
-			break;
-		case en_fadd:
-			ep->nodetype = en_fcon;
-			ep->f = ep->p[0]->f + ep->p[1]->f;
-			ep->tp = ep->p[0]->tp;
-			Float128::Add(&ep->f128, &ep->p[0]->f128, &ep->p[1]->f128);
-			ep->p[0]->i = quadlit(&ep->f128);
-			break;
-		case en_fsub:
-			ep->nodetype = en_fcon;
-			ep->f = ep->p[0]->f - ep->p[1]->f;
-			ep->tp = ep->p[0]->tp;
-			Float128::Sub(&ep->f128, &ep->p[0]->f128, &ep->p[1]->f128);
-			ep->p[0]->i = quadlit(&ep->f128);
-			break;
-		case en_fmul:
-			ep->nodetype = en_fcon;
-			ep->f = ep->p[0]->f * ep->p[1]->f;
-			ep->tp = ep->p[0]->tp;
-			Float128::Mul(&ep->f128, &ep->p[0]->f128, &ep->p[1]->f128);
-			ep->p[0]->i = quadlit(&ep->f128);
-			break;
-		case en_fdiv:
-			ep->nodetype = en_fcon;
-			ep->f = ep->p[0]->f / ep->p[1]->f;
-			ep->tp = ep->p[0]->tp;
-			Float128::Div(&ep->f128, &ep->p[0]->f128, &ep->p[1]->f128);
-			ep->p[0]->i = quadlit(&ep->f128);
-			break;
-
-    case en_mul:
+    ep->nodetype = en_icon;
+    ep->i = (ep->p[0]->i >= 0) ? ep->p[0]->i : -ep->p[0]->i;
+		break;
+  case en_add:
+    ep->nodetype = en_icon;
+    ep->i = ep->p[0]->i + ep->p[1]->i;
+    break;
+  case en_sub:
+    ep->nodetype = en_icon;
+    ep->i = ep->p[0]->i - ep->p[1]->i;
+    break;
+	case en_mul:
 	case en_mulu:
-            ep->nodetype = en_icon;
-            ep->i = ep->p[0]->i * ep->p[1]->i;
-            break;
-    case en_div:
+		ep->nodetype = en_icon;
+		ep->i = ep->p[0]->i * ep->p[1]->i;
+		break;
+	case en_div:
 	case en_udiv:
-            ep->nodetype = en_icon;
-            ep->i = ep->p[0]->i / ep->p[1]->i;
-            break;
+		ep->nodetype = en_icon;
+		ep->i = ep->p[0]->i / ep->p[1]->i;
+		break;
+
+	case en_i2d:
+		ep->nodetype = en_fcon;
+		ep->f = (double)ep->p[0]->i;
+		ep->tp = &stddouble;// ep->p[0]->tp;
+		Float128::IntToFloat(&ep->f128, ep->p[0]->i);
+		ep->i = quadlit(&ep->f128);
+		break;
+	case en_fadd:
+		ep->nodetype = en_fcon;
+		ep->f = ep->p[0]->f + ep->p[1]->f;
+		ep->tp = ep->p[0]->tp;
+		Float128::Add(&ep->f128, &ep->p[0]->f128, &ep->p[1]->f128);
+		ep->i = quadlit(&ep->f128);
+		break;
+	case en_fsub:
+		ep->nodetype = en_fcon;
+		ep->f = ep->p[0]->f - ep->p[1]->f;
+		ep->tp = ep->p[0]->tp;
+		Float128::Sub(&ep->f128, &ep->p[0]->f128, &ep->p[1]->f128);
+		ep->i = quadlit(&ep->f128);
+		break;
+	case en_fmul:
+		ep->nodetype = en_fcon;
+		ep->f = ep->p[0]->f * ep->p[1]->f;
+		ep->tp = ep->p[0]->tp;
+		Float128::Mul(&ep->f128, &ep->p[0]->f128, &ep->p[1]->f128);
+		ep->i = quadlit(&ep->f128);
+		break;
+	case en_fdiv:
+		ep->nodetype = en_fcon;
+		ep->f = ep->p[0]->f / ep->p[1]->f;
+		ep->tp = ep->p[0]->tp;
+		Float128::Div(&ep->f128, &ep->p[0]->f128, &ep->p[1]->f128);
+		ep->i = quadlit(&ep->f128);
+		break;
+
 	case en_asl:
-    case en_shl:
+  case en_shl:
 	case en_shlu:
-            ep->nodetype = en_icon;
-            ep->i = ep->p[0]->i << ep->p[1]->i;
-            break;
+    ep->nodetype = en_icon;
+    ep->i = ep->p[0]->i << ep->p[1]->i;
+    break;
 	case en_asr:
-    case en_shr:
-            ep->nodetype = en_icon;
-            ep->i = ep->p[0]->i >> ep->p[1]->i;
-            break;
-    case en_shru:
-            ep->nodetype = en_icon;
-            ep->i = (unsigned)ep->p[0]->i >> ep->p[1]->i;
-            break;
-    case en_and:
-            ep->nodetype = en_icon;
-            ep->i = ep->p[0]->i & ep->p[1]->i;
-            break;
-    case en_or:
-            ep->nodetype = en_icon;
-            ep->i = ep->p[0]->i | ep->p[1]->i;
-            break;
-    case en_xor:
-            ep->nodetype = en_icon;
-            ep->i = ep->p[0]->i ^ ep->p[1]->i;
-            break;
-		case en_land_safe:
+		ep->nodetype = en_icon;
+		ep->i = ep->p[0]->i >> ep->p[1]->i;
+		break;
+	case en_shr:
+    ep->nodetype = en_icon;
+    ep->i = (unsigned)ep->p[0]->i >> (unsigned)ep->p[1]->i;
+    break;
+  case en_shru:
+    ep->nodetype = en_icon;
+    ep->i = (unsigned)ep->p[0]->i >> (unsigned)ep->p[1]->i;
+    break;
+
+  case en_and:
+    ep->nodetype = en_icon;
+    ep->i = ep->p[0]->i & ep->p[1]->i;
+    break;
+  case en_or:
+    ep->nodetype = en_icon;
+    ep->i = ep->p[0]->i | ep->p[1]->i;
+    break;
+  case en_xor:
+    ep->nodetype = en_icon;
+    ep->i = ep->p[0]->i ^ ep->p[1]->i;
+    break;
+	case en_land_safe:
 	case en_land:
 		ep->nodetype = en_icon;
 		ep->i = ep->p[0]->i && ep->p[1]->i;
@@ -132,6 +137,7 @@ void dooper(ENODE *node)
 		ep->nodetype = en_icon;
 		ep->i = ep->p[0]->i || ep->p[1]->i;
 		break;
+
 	case en_ult:
 		ep->nodetype = en_icon;
 		ep->i = (unsigned)ep->p[0]->i < (unsigned)ep->p[1]->i;
@@ -172,11 +178,35 @@ void dooper(ENODE *node)
 		ep->nodetype = en_icon;
 		ep->i = (signed)ep->p[0]->i != (signed)ep->p[1]->i;
 		break;
+
+	case en_feq:
+		ep->nodetype = en_icon;
+		ep->i = Float128::IsEqual(&ep->p[0]->f128, &ep->p[1]->f128);
+		break;
+	case en_fne:
+		ep->nodetype = en_icon;
+		ep->i = !Float128::IsEqual(&ep->p[0]->f128, &ep->p[1]->f128);
+		break;
 	case en_flt:
-		ep->nodetype = en_fcon;
+		ep->nodetype = en_icon;
 //		ep->i = ep->p[0]->f < ep->p[1]->f;
 		ep->i = Float128::IsLessThan(&ep->p[0]->f128, &ep->p[1]->f128);
 		break;
+	case en_fle:
+		ep->nodetype = en_icon;
+		ep->i = Float128::IsLessThan(&ep->p[0]->f128, &ep->p[1]->f128)
+						|| Float128::IsEqual(&ep->p[0]->f128, &ep->p[1]->f128);
+		break;
+	case en_fgt:
+		ep->nodetype = en_icon;
+		ep->i = Float128::IsLessThan(&ep->p[1]->f128, &ep->p[0]->f128);
+		break;
+	case en_fge:
+		ep->nodetype = en_icon;
+		ep->i = Float128::IsLessThan(&ep->p[1]->f128, &ep->p[0]->f128)
+						|| Float128::IsEqual(&ep->p[0]->f128, &ep->p[1]->f128);
+		break;
+
 	case en_safe_cond:
 	case en_cond:
 		ep->nodetype = ep->p[1]->p[0]->nodetype;
@@ -254,64 +284,64 @@ int mod_mask(int i)
 static void opt0(ENODE **node)
 {
 	ENODE *ep;
-    int sc;
+  int sc;
 	int64_t val;
 
-    ep = *node;
-    if( ep == (ENODE *)NULL )
-        return;
-    switch( (*node)->nodetype ) {
+  ep = *node;
+  if( ep == (ENODE *)NULL )
+    return;
+  switch( (*node)->nodetype ) {
 	case en_vector_ref:
 	case en_ref32: case en_ref32u:
-            case en_b_ref:
-			case en_c_ref:
-			case en_h_ref:
-            case en_w_ref:          /* optimize unary node */
-            case en_ub_ref:
-			case en_uc_ref:
-			case en_uh_ref:
-            case en_uw_ref:          /* optimize unary node */
-			case en_flt_ref:
-			case en_dbl_ref:
-			case en_quad_ref:
-			case en_wp_ref:
-			case en_hp_ref:
-			case en_cubw:
-			case en_cucw:
-			case en_cuhw:
-			case en_cubu:
-			case en_cucu:
-			case en_cuhu:
-			case en_cbu:
-			case en_ccu:
-			case en_chu:
-			case en_cbc:
-			case en_cbh:
-			case en_cbw:
-			case en_cch:
-			case en_ccw:
-			case en_chw:
-			case en_ccwp:
-			case en_cucwp:
-                    opt0( &((*node)->p[0]));
-                    return;
-			case en_sxb:
-			case en_sxc:
-			case en_sxh:
-			case en_zxb: case en_zxc: case en_zxh:
-			case en_abs:
-                    opt0( &(ep->p[0]));
-                    if( ep->p[0]->nodetype == en_icon )
-						dooper(*node);
-                    return;
-			case en_compl:
-                    opt0( &(ep->p[0]));
-                    if( ep->p[0]->nodetype == en_icon )
-                    {
-                        ep->nodetype = en_icon;
-                        ep->i = ~ep->p[0]->i;
-                    }
-                    return;
+  case en_b_ref:
+	case en_c_ref:
+	case en_h_ref:
+  case en_w_ref:          /* optimize unary node */
+  case en_ub_ref:
+	case en_uc_ref:
+	case en_uh_ref:
+  case en_uw_ref:          /* optimize unary node */
+	case en_flt_ref:
+	case en_dbl_ref:
+	case en_quad_ref:
+	case en_wp_ref:
+	case en_hp_ref:
+	case en_cubw:
+	case en_cucw:
+	case en_cuhw:
+	case en_cubu:
+	case en_cucu:
+	case en_cuhu:
+	case en_cbu:
+	case en_ccu:
+	case en_chu:
+	case en_cbc:
+	case en_cbh:
+	case en_cbw:
+	case en_cch:
+	case en_ccw:
+	case en_chw:
+	case en_ccwp:
+	case en_cucwp:
+    opt0( &((*node)->p[0]));
+    return;
+	case en_sxb:
+	case en_sxc:
+	case en_sxh:
+	case en_zxb: case en_zxc: case en_zxh:
+	case en_abs:
+    opt0( &(ep->p[0]));
+    if( ep->p[0]->nodetype == en_icon )
+			dooper(*node);
+		return;
+	case en_compl:
+    opt0( &(ep->p[0]));
+    if( ep->p[0]->nodetype == en_icon )
+    {
+      ep->nodetype = en_icon;
+      ep->i = ~ep->p[0]->i;
+    }
+    return;
 			case en_not:
                     opt0( &(ep->p[0]));
                     if( ep->p[0]->nodetype == en_icon )
@@ -554,70 +584,71 @@ static void opt0(ENODE **node)
                             }
                     break;
 
-			case en_and: 
-            case en_or:
-			case en_xor:    
-                    opt0(&(ep->p[0]));
-                    opt0(&(ep->p[1]));
-					if (ep->p[0]->nodetype == en_icon &&
-						ep->p[1]->nodetype == en_icon)
-						dooper(*node);
-					else if (ep->p[0]->nodetype == en_icon)
-						swap_nodes(ep);
-					break;
+	case en_and: 
+  case en_or:
+	case en_xor:    
+    opt0(&(ep->p[0]));
+    opt0(&(ep->p[1]));
+		if (ep->p[0]->nodetype == en_icon &&
+			ep->p[1]->nodetype == en_icon)
+			dooper(*node);
+		else if (ep->p[0]->nodetype == en_icon)
+			swap_nodes(ep);
+		break;
 
-			case en_shr:	case en_shru:	case en_asr:
-			case en_asl:	case en_shl:	case en_shlu:
-                    opt0(&(ep->p[0]));
-                    opt0(&(ep->p[1]));
-                    if( ep->p[0]->nodetype == en_icon &&
-                            ep->p[1]->nodetype == en_icon )
-                            dooper(*node);
-					// Shift by zero....
-                    else if( ep->p[1]->nodetype == en_icon ) {
-                        if( ep->p[1]->i == 0 ) {
-                            *node = ep->p[0];
-                            return;
-                        }
-                    }
-                    break;
-			case en_land_safe:
-            case en_land:   
-                    opt0(&(ep->p[0]));
-                    opt0(&(ep->p[1]));
-					if (ep->p[0]->nodetype==en_icon && ep->p[1]->nodetype==en_icon) {
-						dooper(*node);
-						break;
-                    }
-                    break;
-						case en_lor_safe:
-            case en_lor:
-                    opt0(&(ep->p[0]));
-                    opt0(&(ep->p[1]));
-					if (ep->p[0]->nodetype==en_icon && ep->p[1]->nodetype==en_icon) {
-						dooper(*node);
-						break;
-                    }
-                    break;
-			case en_ult:	case en_ule:
-			case en_ugt:	case en_uge:
-			case en_lt:		case en_le:
-			case en_gt:		case en_ge:
-			case en_eq:		case en_ne:
-                    opt0(&(ep->p[0]));
-                    opt0(&(ep->p[1]));
-					if (ep->p[0]->nodetype==en_icon && ep->p[1]->nodetype==en_icon)
-						dooper(*node);
-                    break;
-					case en_flt:
-						opt0(&(ep->p[0]));
-						opt0(&(ep->p[1]));
-						if (ep->p[0]->nodetype == en_fcon && ep->p[1]->nodetype == en_fcon)
-							dooper(*node);
-						break;
-                case en_feq:    case en_fne:
-                case en_fle:
-                case en_fgt:    case en_fge:
+	case en_shr:	case en_shru:	case en_asr:
+	case en_asl:	case en_shl:	case en_shlu:
+    opt0(&(ep->p[0]));
+    opt0(&(ep->p[1]));
+    if( ep->p[0]->nodetype == en_icon &&
+      ep->p[1]->nodetype == en_icon )
+      dooper(*node);
+// Shift by zero....
+    else if( ep->p[1]->nodetype == en_icon ) {
+      if( ep->p[1]->i == 0 ) {
+        *node = ep->p[0];
+        return;
+      }
+    }
+    break;
+
+	case en_land_safe:
+  case en_land:   
+    opt0(&(ep->p[0]));
+    opt0(&(ep->p[1]));
+		if (ep->p[0]->nodetype==en_icon && ep->p[1]->nodetype==en_icon)
+			dooper(*node);
+    break;
+	case en_lor_safe:
+  case en_lor:
+    opt0(&(ep->p[0]));
+    opt0(&(ep->p[1]));
+		if (ep->p[0]->nodetype==en_icon && ep->p[1]->nodetype==en_icon)
+			dooper(*node);
+    break;
+
+	case en_ult:	case en_ule:
+	case en_ugt:	case en_uge:
+	case en_lt:		case en_le:
+	case en_gt:		case en_ge:
+	case en_eq:		case en_ne:
+    opt0(&(ep->p[0]));
+    opt0(&(ep->p[1]));
+		if (ep->p[0]->nodetype==en_icon && ep->p[1]->nodetype==en_icon)
+			dooper(*node);
+    break;
+
+	case en_feq:
+	case en_fne:
+	case en_flt:
+	case en_fle:
+	case en_fgt:
+	case en_fge:
+		opt0(&(ep->p[0]));
+		opt0(&(ep->p[1]));
+		if (ep->p[0]->nodetype == en_fcon && ep->p[1]->nodetype == en_fcon)
+			dooper(*node);
+		break;
                 case en_veq:    case en_vne:
                 case en_vlt:    case en_vle:
                 case en_vgt:    case en_vge:
