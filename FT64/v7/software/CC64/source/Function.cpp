@@ -32,6 +32,7 @@ Statement *Function::ParseBody()
 	char *p;
 	OCODE *ip;
 	int oc;
+	int label;
 
 	dfs.printf("<Parse function body>:%s|\n", (char *)sym->name->c_str());
 
@@ -85,16 +86,19 @@ Statement *Function::ParseBody()
 		ip = pl.tail;
 		looplevel = 0;
 		max_reg_alloc_ptr = 0;
+		max_stack_use = 0;
+		label = nextlabel;
 		Gen();
 		stkspace += (ArgRegCount - regFirstArg) * sizeOfWord;
 		argbot = -stkspace;
-		stkspace += GetTempMemSpace();
+		stkspace += max_stack_use;// GetTempMemSpace();
 		tempbot = -stkspace;
 		pass = 2;
 		pl.tail = ip;
 		if (pl.tail)
 			pl.tail->fwd = nullptr;
 		looplevel = 0;
+		//nextlabel = label;
 		Gen();
 		dfs.putch('E');
 
@@ -752,10 +756,12 @@ void Function::Gen()
 	int n;
 
 	for (n = 0; n < 32; n++) {
+		regs[n].number = n;
 		regs[n].assigned = false;
 		regs[n].isConst = false;
 		regs[n].modified = false;
 		regs[n].offset = nullptr;
+		regs[n].IsArg = false;
 	}
 	o_throwlab = throwlab;
 	o_retlab = retlab;

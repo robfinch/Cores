@@ -89,24 +89,24 @@ Operand *make_label(int lab)
 	ap->mode = am_direct;
 	ap->offset = lnode;
 	ap->isUnsigned = TRUE;
-	return ap;
+	return (ap);
 }
 
 Operand *make_clabel(int lab)
 {
 	ENODE *lnode;
-    Operand *ap;
+  Operand *ap;
 
-    lnode = allocEnode();
-    lnode->nodetype = en_clabcon;
-    lnode->i = lab;
+  lnode = allocEnode();
+  lnode->nodetype = en_clabcon;
+  lnode->i = lab;
 	if (lab==-1)
 		printf("-1\r\n");
-    ap = allocOperand();
-    ap->mode = am_direct;
-    ap->offset = lnode;
+  ap = allocOperand();
+  ap->mode = am_direct;
+  ap->offset = lnode;
 	ap->isUnsigned = TRUE;
-    return ap;
+  return (ap);
 }
 
 Operand *make_string(char *s)
@@ -216,7 +216,10 @@ void GenerateComment(char *cm)
 
 void GenLoad(Operand *ap3, Operand *ap1, int ssize, int size)
 {
-	if (ap3->type==stdvector.GetIndex()) {
+	if (ap3->mode == am_fpreg) {
+		GenerateDiadic(op_lf, 'd', ap3, ap1);
+	}
+	else if (ap3->type==stdvector.GetIndex()) {
         GenerateDiadic(op_lv,0,ap3,ap1);
 	}
 	else if (ap3->type == stdflt.GetIndex()) {
@@ -308,6 +311,7 @@ Operand *CodeGenerator::GenerateDereference(ENODE *node,int flags,int size, int 
 {    
 	Operand *ap1;
   int siz1;
+	int typ;
 
   Enter("<Genderef>");
 	siz1 = node->GetReferenceSize();
@@ -537,9 +541,9 @@ Operand *CodeGenerator::GenerateDereference(ENODE *node,int flags,int size, int 
 		// For parameters we want Rn, for others [Rn]
 		// This seems like an error earlier in the compiler
 		// See setting val_flag in ParseExpressions
-		ap1->mode = node->p[0]->i < regFirstArg ? am_ind : am_reg;
+		ap1->mode = node->p[0]->rg < regFirstArg ? am_ind : am_reg;
 //		ap1->mode = node->p[0]->tp->val_flag ? am_reg : am_ind;
-		ap1->preg = node->p[0]->i;
+		ap1->preg = node->p[0]->rg;
 		ap1->MakeLegal(flags,size);
 	    Leave("Genderef",3);
         return ap1;
@@ -548,8 +552,8 @@ Operand *CodeGenerator::GenerateDereference(ENODE *node,int flags,int size, int 
 		/*error(ERR_DEREF)*/;
 		ap1 = allocOperand();
 		ap1->isPtr = node->nodetype == en_wp_ref || node->nodetype == en_hp_ref;
-		ap1->mode = node->p[0]->i < regFirstArg ? am_ind : am_fpreg;
-		ap1->preg = node->p[0]->i;
+		ap1->mode = node->p[0]->rg < regFirstArg ? am_ind : am_fpreg;
+		ap1->preg = node->p[0]->rg;
 		switch (node->p[0]->tp->type) {
 		case bt_float:	ap1->type = stdflt.GetIndex(); break;
 		case bt_double:	ap1->type = stddouble.GetIndex(); break;
@@ -576,7 +580,7 @@ Operand *CodeGenerator::GenerateDereference(ENODE *node,int flags,int size, int 
 			return (ap1);
 		}
 	}
-  ap1 = GenerateExpression(node->p[0],F_REG | F_IMMED,8); /* generate address */
+	ap1 = GenerateExpression(node->p[0], F_REG | F_IMMED, 8); // generate address
 	ap1->isPtr = node->nodetype == en_wp_ref || node->nodetype == en_hp_ref;
 	if( ap1->mode == am_reg)
     {
@@ -1088,6 +1092,7 @@ Operand *CodeGenerator::GenerateAssign(ENODE *node, int flags, int size)
 	TYP *tp;
     int ssize;
 		MachineReg *mr;
+		int flg;
 
     Enter("GenAssign");
 
@@ -1123,7 +1128,10 @@ Operand *CodeGenerator::GenerateAssign(ENODE *node, int flags, int size)
 	//}
 	//else {
 		ap1 = GenerateExpression(node->p[0], F_REG | F_FPREG | F_MEM | F_VREG | F_VMREG, ssize);
-		ap2 = GenerateExpression(node->p[1],F_ALL,size);
+		flg = F_ALL;
+		if (ap1->type == stddouble.GetIndex())
+			flg = F_FPREG;
+		ap2 = GenerateExpression(node->p[1],flg,size);
 		if (node->p[0]->isUnsigned && !node->p[1]->isUnsigned)
 		    ap2->GenZeroExtend(size,ssize);
 //	}
@@ -1533,7 +1541,7 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int size)
     ap1 = allocOperand();
 		ap1->isPtr = node->IsPtr();
     ap1->mode = am_reg;
-    ap1->preg = node->i;
+    ap1->preg = node->rg;
     ap1->tempflag = 0;      /* not a temporary */
     ap1->MakeLegal(flags,size);
     return (ap1);
@@ -1542,7 +1550,7 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int size)
 		ap1 = allocOperand();
 		ap1->isPtr = node->IsPtr();
 		ap1->mode = node->IsPtr() ? am_reg : am_fpreg;
-		ap1->preg = node->i;
+		ap1->preg = node->rg;
 		ap1->tempflag = 0;      /* not a temporary */
 		if (node->tp)
 			switch (node->tp->type) {
@@ -1562,7 +1570,7 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int size)
     ap1 = allocOperand();
 		ap1->isPtr = node->IsPtr();
 		ap1->mode = node->IsPtr() ? am_reg : am_fpreg;
-    ap1->preg = node->i;
+    ap1->preg = node->rg;
     ap1->tempflag = 0;      /* not a temporary */
 		if (node->tp)
 			switch (node->tp->type) {

@@ -3,7 +3,7 @@
 
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -65,13 +65,15 @@ struct slit {
 struct scase {
 	int label;
 	int64_t val;
+	int8_t pass;
 };
 
 struct clit {
-    struct clit *next;
-    int     label;
+  struct clit *next;
+  int     label;
 	int		num;
-    scase   *cases;
+	int8_t pass;
+  scase   *cases;
 	char	*nmspace;
 };
 
@@ -102,12 +104,16 @@ public:
 class MachineReg
 {
 public:
+	int number;
 	bool isConst;
 	bool assigned;
 	bool modified;
 	bool sub;
+	bool IsArg;
 	ENODE *offset;
 	int val;
+public:
+	bool IsArgReg();
 };
 
 // Class for representing tables. Small footprint.
@@ -481,6 +487,7 @@ public:
 	__int8 bit_width;
 	__int8 bit_offset;
 	__int8 scale;
+	short int rg;
 	// The following could be in a value union
 	int64_t i;
 	double f;

@@ -1,7 +1,7 @@
 #pragma once
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2016-2017  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2016-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -74,8 +74,12 @@ public:
 	};
 	static Float128 *Zero() {
 		static Float128 p;
-		p.Zeroman();
-		p.exp = 0x0000;
+		static bool first = true;
+
+		if (first) {
+			p.Zeroman();
+			p.exp = 0x0000;
+		}
 		return (&p);
 	};
 	static Float128 *One() {
@@ -103,15 +107,19 @@ public:
 	static Float128 *FloatMax() {
 		int nn;
 		static Float128 p;
-		for (nn = 0; nn < FLT128_WORDS; nn++)
-			p.man[nn] = 0xFFFFFFFF;
-		for (nn = 0; nn < FLT128_WORDS/2; nn++)
-			p.man[nn] = 0;
-		for (; nn < FLT128_WORDS-1; nn++)
-			p.man[nn] = 0xFFFFFFFF;
-		p.man[FLT128_WORDS/2-1] = 0x80000000;
-		p.man[FLT128_WORDS-1] = 0x7FFFFFFF;
-		p.exp = 0x7FFE;
+		static bool first = true;
+
+		if (first) {
+			for (nn = 0; nn < FLT128_WORDS; nn++)
+				p.man[nn] = 0xFFFFFFFF;
+			for (nn = 0; nn < FLT128_WORDS / 2; nn++)
+				p.man[nn] = 0;
+			for (; nn < FLT128_WORDS - 1; nn++)
+				p.man[nn] = 0xFFFFFFFF;
+			p.man[FLT128_WORDS / 2 - 1] = 0x80000000;
+			p.man[FLT128_WORDS - 1] = 0x7FFFFFFF;
+			p.exp = 0x7FFE;
+		}
 		return (&p);
 	};
 	static Float128 *Neg(Float128 *p) {
@@ -147,5 +155,6 @@ public:
 	static bool IsEqual(Float128 *a, Float128 *b);
 	static bool IsEqualNZ(Float128 *a, Float128 *b);
 	static bool IsNaN(Float128 *a);
+	static bool IsLessThan(Float128 *, Float128 *);
 	bool IsNaN() { return (IsNaN(this)); };
 };

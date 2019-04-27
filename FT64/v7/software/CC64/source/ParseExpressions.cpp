@@ -506,7 +506,7 @@ TYP *deref(ENODE **node, TYP *tp)
             *node = makenode(en_dbl_ref,*node,(ENODE *)NULL);
 			(*node)->esize = tp->size;
 			(*node)->etype = (enum e_bt)tp->type;
-            tp = &stddbl;
+            tp = &stddouble;
 						(*node)->sym = sp;
 						break;
         case bt_float:
@@ -671,6 +671,7 @@ TYP *nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeArray *typear
 	SYM *sp = nullptr;
 	Function *fn;
 	TYP *tp;
+	int typ;
 	std::string stnm;
 
 	dfs.puts("<nameref2>\n");
@@ -2038,6 +2039,7 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
 	TYP *tp, *tp1, *tp2;
   ENODE *ep1, *ep2, *ep3;
   int flag2;
+	int typ;
 
 	Enter("<ParseUnary>");
     ep1 = NULL;
@@ -2155,6 +2157,8 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
 				//}
       }
 	    tp1 = tp;
+			if (tp->type == bt_pointer)
+				typ = tp->GetBtp()->type;
 		//Autoincdec(tp,&ep1);
 	    tp = CondDeref(&ep1,tp);
       break;
@@ -3064,11 +3068,12 @@ TYP *conditional(ENODE **node)
 			error(ERR_IDEXPECT);
 			goto cexit;
 		}
-		tp1 = forcefit(&ep3,tp3,&ep2,tp2,true,false);
+		forcefit(&ep3,tp3,&ep2,tp2,true,false);
 		ep2 = makenode(en_void,ep2,ep3);
-		ep2->esize = tp1->size;
 		ep1 = makenode(sh ? en_safe_cond:en_cond,ep1,ep2);
-		ep1->esize = tp1->size;
+		tp1 = tp2;
+		ep1->tp = tp2;
+		ep1->esize = ep1->tp->size;
 		iflevel--;
   }
 cexit:  *node = ep1;
@@ -3076,7 +3081,7 @@ xit:
   if (*node)
     (*node)->SetType(tp1);
   Leave("Conditional",0);
-  return tp1;
+  return (tp1);
 }
 
 // ----------------------------------------------------------------------------

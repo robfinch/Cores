@@ -52,32 +52,37 @@ void dooper(ENODE *node)
 		case en_i2d:
 			ep->nodetype = en_fcon;
 			ep->f = (double)ep->p[0]->i;
-			ep->tp = ep->p[0]->tp;
+			ep->tp = &stddouble;// ep->p[0]->tp;
 			Float128::IntToFloat(&ep->f128, ep->p[0]->i);
+			ep->i = quadlit(&ep->f128);
 			break;
 		case en_fadd:
 			ep->nodetype = en_fcon;
 			ep->f = ep->p[0]->f + ep->p[1]->f;
 			ep->tp = ep->p[0]->tp;
 			Float128::Add(&ep->f128, &ep->p[0]->f128, &ep->p[1]->f128);
+			ep->p[0]->i = quadlit(&ep->f128);
 			break;
 		case en_fsub:
 			ep->nodetype = en_fcon;
 			ep->f = ep->p[0]->f - ep->p[1]->f;
 			ep->tp = ep->p[0]->tp;
 			Float128::Sub(&ep->f128, &ep->p[0]->f128, &ep->p[1]->f128);
+			ep->p[0]->i = quadlit(&ep->f128);
 			break;
 		case en_fmul:
 			ep->nodetype = en_fcon;
 			ep->f = ep->p[0]->f * ep->p[1]->f;
 			ep->tp = ep->p[0]->tp;
 			Float128::Mul(&ep->f128, &ep->p[0]->f128, &ep->p[1]->f128);
+			ep->p[0]->i = quadlit(&ep->f128);
 			break;
 		case en_fdiv:
 			ep->nodetype = en_fcon;
 			ep->f = ep->p[0]->f / ep->p[1]->f;
 			ep->tp = ep->p[0]->tp;
 			Float128::Div(&ep->f128, &ep->p[0]->f128, &ep->p[1]->f128);
+			ep->p[0]->i = quadlit(&ep->f128);
 			break;
 
     case en_mul:
@@ -166,6 +171,11 @@ void dooper(ENODE *node)
 	case en_ne:
 		ep->nodetype = en_icon;
 		ep->i = (signed)ep->p[0]->i != (signed)ep->p[1]->i;
+		break;
+	case en_flt:
+		ep->nodetype = en_fcon;
+//		ep->i = ep->p[0]->f < ep->p[1]->f;
+		ep->i = Float128::IsLessThan(&ep->p[0]->f128, &ep->p[1]->f128);
 		break;
 	case en_safe_cond:
 	case en_cond:
@@ -599,8 +609,14 @@ static void opt0(ENODE **node)
 					if (ep->p[0]->nodetype==en_icon && ep->p[1]->nodetype==en_icon)
 						dooper(*node);
                     break;
+					case en_flt:
+						opt0(&(ep->p[0]));
+						opt0(&(ep->p[1]));
+						if (ep->p[0]->nodetype == en_fcon && ep->p[1]->nodetype == en_fcon)
+							dooper(*node);
+						break;
                 case en_feq:    case en_fne:
-                case en_flt:    case en_fle:
+                case en_fle:
                 case en_fgt:    case en_fge:
                 case en_veq:    case en_vne:
                 case en_vlt:    case en_vle:

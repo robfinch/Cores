@@ -830,7 +830,7 @@ void OCODE::OptHint()
 						if (frwd->HasTargetReg()) {
 							frwd->GetTargetReg(&rg1, &rg2);
 							if (back->oper1) {
-								if (rg1 == back->oper1->preg)
+								if (rg1 == back->oper1->preg && back->insn->regclass1 == frwd->insn->regclass1)
 									break;
 							}
 						}

@@ -441,13 +441,15 @@ void PeepList::OptConstReg()
 	}
 
 	// Remove all def's of registers containing a constant
-	for (ip = head; ip; ip = ip->fwd) {
-		if (ip->insn) {
-			if (ip->oper1) {
-				for (n = 0; n < 32; n++) {
-					if (ip->oper1->mode == am_reg && ip->oper1->preg == n) {
-						if (regs[n].sub) {
-							ip->MarkRemove();
+	if (1) {
+		for (ip = head; ip; ip = ip->fwd) {
+			if (ip->insn) {
+				if (ip->oper1) {
+					for (n = 0; n < 32; n++) {
+						if (ip->oper1->mode == am_reg && ip->oper1->preg == n) {
+							if (regs[n].sub && !regs[n].IsArg) {
+								ip->MarkRemove();
+							}
 						}
 					}
 				}

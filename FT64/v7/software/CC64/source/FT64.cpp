@@ -953,10 +953,7 @@ int FT64CodeGenerator::PushArgument(ENODE *ep, int regno, int stkoffs, bool *isF
 						if (ap->offset->i==0)
          					GenerateMonadic(op_push,0,makereg(0));
 						else {
-							ap3 = GetTempRegister();
-							GenerateDiadic(op_ldi,0,ap3,ap);
-							GenerateMonadic(op_push,0,ap3);
-							ReleaseTempReg(ap3);
+							GenerateMonadic(op_push,0,ap);
 						}
 						nn = 1;
 					}
@@ -968,7 +965,8 @@ int FT64CodeGenerator::PushArgument(ENODE *ep, int regno, int stkoffs, bool *isF
 							nn = sz/sizeOfWord;
 						}
 						else {
-          					GenerateMonadic(op_push,0,ap);
+							regs[ap->preg].IsArg = true;
+							GenerateMonadic(op_push,0,ap);
 							nn = 1;
 						}
 					}
@@ -978,12 +976,14 @@ int FT64CodeGenerator::PushArgument(ENODE *ep, int regno, int stkoffs, bool *isF
 						ap3 = nullptr;
 						if (ap->offset->i!=0) {
 							ap3 = GetTempRegister();
+							regs[ap3->preg].IsArg = true;
 							GenerateDiadic(op_ldi,0,ap3,ap);
 	         				GenerateDiadic(op_sw,0,ap3,make_indexed(stkoffs,regSP));
 							ReleaseTempReg(ap3);
 						}
-						else
-         					GenerateDiadic(op_sw,0,makereg(0),make_indexed(stkoffs,regSP));
+						else {
+							GenerateDiadic(op_sw, 0, makereg(0), make_indexed(stkoffs, regSP));
+						}
 						nn = 1;
 					}
 					else {
@@ -993,7 +993,8 @@ int FT64CodeGenerator::PushArgument(ENODE *ep, int regno, int stkoffs, bool *isF
 							nn = sz/sizeOfWord;
 						}
 						else {
-          					GenerateDiadic(op_sw,0,ap,make_indexed(stkoffs,regSP));
+							regs[ap->preg].IsArg = true;
+							GenerateDiadic(op_sw,0,ap,make_indexed(stkoffs,regSP));
 							nn = 1;
 						}
 					}

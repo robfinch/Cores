@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -37,7 +37,7 @@
 TYP *forcefit(ENODE **srcnode, TYP *srctp, ENODE **dstnode, TYP *dsttp, bool promote, bool typecast)
 {
 	ENODE *n2;
-	int nt;
+	int nt, typ;
 
 	if (dstnode)
 		n2 = *dstnode;
@@ -45,25 +45,81 @@ TYP *forcefit(ENODE **srcnode, TYP *srctp, ENODE **dstnode, TYP *dsttp, bool pro
 		n2 = (ENODE *)NULL;
 	if (typecast) {
 		switch (dsttp->type) {
+		case bt_void:
+			return (srctp);
 		case bt_byte:
 		case bt_ubyte:
+			switch (srctp->type) {
+			case bt_ubyte: return (dsttp);
+			case bt_byte:	 return (dsttp);
+			case bt_iuchar:
+			case bt_uchar: return (dsttp);
+			case bt_ichar:
+			case bt_char:  return (dsttp);
+				// value will be truncated
+			case bt_short:
+			case bt_ushort:	return (dsttp);
+			case bt_exception:
+			case bt_long:
+			case bt_ulong:	return (dsttp);
+			case bt_ubitfield:
+			case bt_bitfield: goto j1;
+			case bt_float:	nt = en_d2i; break;
+			case bt_double: nt = en_d2i; break;
+			default: goto j1;
+			}
+			*srcnode = makenode(nt, *srcnode, nullptr);
+			(*srcnode)->esize = 8;
 			return (dsttp);
+
 		case bt_ichar:
 		case bt_char:
 			switch (srctp->type) {
 			case bt_ubyte: nt = en_cubw; break;
 			case bt_byte:	nt = en_cbw; break;
-			default:	return(dsttp);
+			case bt_iuchar:
+			case bt_uchar: return (dsttp);
+			case bt_ichar:
+			case bt_char:  return (dsttp);
+				// value will be truncated
+			case bt_short:
+			case bt_ushort:	return (dsttp);
+			case bt_exception:
+			case bt_long:
+			case bt_ulong:	return (dsttp);
+			case bt_ubitfield:
+			case bt_bitfield: goto j1;
+			case bt_float:	nt = en_d2i; break;
+			case bt_double: nt = en_d2i; break;
+			default: goto j1;
 			}
 			*srcnode = makenode(nt, *srcnode, nullptr);
 			(*srcnode)->esize = 8;
 			return (dsttp);
+
 		case bt_iuchar:
 		case bt_uchar:
 			switch (srctp->type) {
-			default:	return(dsttp);
+			case bt_ubyte: nt = en_cubw; break;
+			case bt_byte:	nt = en_cbw; break;
+			case bt_iuchar:
+			case bt_uchar: return (dsttp);
+			case bt_ichar:
+			case bt_char:  return (dsttp);
+			// value will be truncated
+			case bt_short:
+			case bt_ushort:	return (dsttp);
+			case bt_exception:
+			case bt_long:
+			case bt_ulong:	return (dsttp);
+			case bt_ubitfield:
+			case bt_bitfield: goto j1;
+			case bt_float:	nt = en_d2i; break;
+			case bt_double: nt = en_d2i; break;
+			default: goto j1;
 			}
 			return (dsttp);
+
 		case bt_short:
 			switch (srctp->type) {
 			case bt_ubyte: nt = en_cubw; break;
@@ -72,14 +128,41 @@ TYP *forcefit(ENODE **srcnode, TYP *srctp, ENODE **dstnode, TYP *dsttp, bool pro
 			case bt_uchar: nt = en_cucw; break;
 			case bt_ichar:
 			case bt_char: nt = en_ccw; break;
-			default:	return(dsttp);
+			case bt_short:
+			case bt_ushort:	return (dsttp);
+			case bt_exception:
+			// value will be truncated
+			case bt_long:
+			case bt_ulong :	return (dsttp);
+			case bt_ubitfield:
+			case bt_bitfield: goto j1;
+			case bt_float:	nt = en_d2i; break;
+			case bt_double: nt = en_d2i; break;
+			default: goto j1;
 			}
 			*srcnode = makenode(nt, *srcnode, nullptr);
 			(*srcnode)->esize = 8;
 			return (dsttp);
+
 		case bt_ushort:
 			switch (srctp->type) {
-			default:	return(dsttp);
+			case bt_ubyte: nt = en_cubw; break;
+			case bt_byte:	nt = en_cbw; break;
+			case bt_iuchar:
+			case bt_uchar: nt = en_cucw; break;
+			case bt_ichar:
+			case bt_char: nt = en_ccw; break;
+			case bt_short:
+			case bt_ushort:	return (dsttp);
+			case bt_exception:
+				// value will be truncated
+			case bt_long:
+			case bt_ulong:	return (dsttp);
+			case bt_ubitfield:
+			case bt_bitfield: goto j1;
+			case bt_float:	nt = en_d2i; break;
+			case bt_double: nt = en_d2i; break;
+			default: goto j1;
 			}
 			return (dsttp);
 
@@ -103,9 +186,10 @@ TYP *forcefit(ENODE **srcnode, TYP *srctp, ENODE **dstnode, TYP *dsttp, bool pro
 			case bt_double: nt = en_d2i; break;
 			default:	goto j1;
 			}
-			*srcnode = makenode(nt, *srcnode, nullptr);
-			(*srcnode)->esize = 8;
+			*dstnode = makenode(nt, *srcnode, *dstnode);
+			(*dstnode)->esize = 8;
 			return (dsttp);
+
 		case bt_pointer:
 			switch (srctp->type) {
 			case bt_byte:	nt = en_cbw; break;
@@ -119,15 +203,22 @@ TYP *forcefit(ENODE **srcnode, TYP *srctp, ENODE **dstnode, TYP *dsttp, bool pro
 			case bt_exception:
 			case bt_long: return (dsttp);
 			case bt_ulong: return (dsttp);
+			case bt_pointer:
+				typ = dsttp->GetBtp()->type;
+				return (dsttp);
 			case bt_ubitfield:
 			case bt_bitfield: goto j1;
 			case bt_float:	nt = en_d2i; break;
 			case bt_double: nt = en_d2i; break;
 			default:	goto j1;
 			}
-			*srcnode = makenode(nt, *srcnode, nullptr);
-			(*srcnode)->esize = 8;
+			*dstnode = makenode(nt, *srcnode, *dstnode);
+			(*dstnode)->esize = 8;
 			return (dsttp);
+
+		//case bt_float:
+		//case bt_double:
+		//	return (dsttp);
 		}
 	}
 j1:
@@ -250,7 +341,10 @@ j1:
 		case bt_ushort:
 		case bt_long:
 		case bt_ulong:
-		case bt_pointer: return (srctp);
+			return (srctp);
+		case bt_pointer:
+			typ = dsttp->GetBtp()->type;
+			return (srctp);
 			// pointer to function was really desired.
 		case bt_func:
 		case bt_ifunc:

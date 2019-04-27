@@ -622,3 +622,17 @@ bool Float128::IsInfinite() const
 	return (exp==infxp && IsManZero());
 }
 
+bool Float128::IsLessThan(Float128 *a, Float128 *b)
+{
+	if (a->IsZero() && b->IsZero())
+		return (false);
+	if (a->sign && !b->sign)
+		return (true);
+	if (!a->sign & b->sign)
+		return (false);
+	if (a->exp < b->exp)
+		return (true);
+	if (a->exp > b->exp)
+		return (false);
+	return (ManGT(b, a));
+}

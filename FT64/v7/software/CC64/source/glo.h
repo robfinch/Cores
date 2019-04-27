@@ -103,6 +103,7 @@ extern int sizeOfFPD;
 extern int sizeOfFPQ;
 extern int maxVL;
 extern MachineReg regs[31];
+extern int max_reg_in_use;
 
 /*
 extern FILE             *input,
@@ -413,6 +414,7 @@ extern void tmpReset();
 extern int tmpAlloc(int);
 extern void tmpFree(int);
 extern int max_reg_alloc_ptr;
+extern int max_stack_use;
 extern BasicBlock *basicBlocks[10000];
 extern BasicBlock *sortedBlocks[10000];
 extern Forest forest;

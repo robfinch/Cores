@@ -1606,6 +1606,7 @@ void Statement::GenerateSwitch()
 				st->label = (int64_t *)curlab;
 				casetab[mm].label = curlab;
 				casetab[mm].val = bf[nn];
+				casetab[mm].pass = pass;
 				mm++;
 			}
 			curlab = nextlabel++;
@@ -1621,6 +1622,7 @@ void Statement::GenerateSwitch()
 		for (nn = mm; nn < 512; nn++) {
 			casetab[nn].label = deflbl;
 			casetab[nn].val = maxv + 1;
+			casetab[nn].pass = pass;
 		}
 		for (kk = minv; kk < maxv; kk++) {
 			for (nn = 0; nn < mm; nn++) {
@@ -1630,6 +1632,7 @@ void Statement::GenerateSwitch()
 			// value not found
 			casetab[mm].val = kk;
 			casetab[mm].label = defcase ? deflbl : breaklab;
+			casetab[mm].pass = pass;
 			mm++;
 		j1:;
 		}

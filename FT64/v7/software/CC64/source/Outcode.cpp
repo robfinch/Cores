@@ -203,7 +203,7 @@ Instruction opl[232] =
 { "phi", op_phi },
 { "pop", op_pop,4,2,true,am_reg,am_reg,0,0 },
 { "popf", op_popf,4,2,true,am_fpreg,am_reg,0,0 },
-{ "push",op_push,4,1,true,am_reg,0,0,0 },
+{ "push",op_push,4,1,true,am_reg|am_imm,0,0,0 },
 { "pushf",op_pushf,4,0,true,am_fpreg,0,0,0 },
 { "redor", op_redor,2,1,false,am_reg,am_reg,am_reg,0 },
 { "ret", op_ret,1,0,am_imm,0,0,0 },
@@ -528,8 +528,8 @@ void GenerateFloat(Float128 *val)
 		return;
 	ofs.printf("\r\n\talign 8\r\n");
 	ofs.printf("\tdh\t%s",val->ToString(64));
-    gentype = longgen;
-    outcol = 65;
+  gentype = longgen;
+  outcol = 65;
 	genst_cumulative += 8;
 }
 
@@ -539,8 +539,8 @@ void GenerateQuad(Float128 *val)
 		return;
 	ofs.printf("\r\n\talign 8\r\n");
 	ofs.printf("\tdh\t%s",val->ToString(128));
-    gentype = longgen;
-    outcol = 65;
+  gentype = longgen;
+  outcol = 65;
 	genst_cumulative += 16;
 }
 
@@ -676,15 +676,26 @@ int stringlit(char *s)
 	return (lp->label);
 }
 
+
+// Since there are two passes to the compiler the cases might already be
+// recorded.
+
 int caselit(struct scase *cases, int64_t num)
 {
 	struct clit *lp;
 
+	lp = casetab;
+	while (lp) {
+		if (memcmp(lp->cases, cases, num * sizeof(struct scase)) == 0)
+			return (lp->label);
+		lp = lp->next;
+	}
 	lp = (struct clit *)allocx(sizeof(struct clit));
 	lp->label = nextlabel++;
 	lp->nmspace = my_strdup(GetNamespace());
 	lp->cases = (struct scase *)allocx(sizeof(struct scase)*(int)num);
 	lp->num = (int)num;
+	lp->pass = pass;
 	memcpy(lp->cases, cases, (int)num * sizeof(struct scase));
 	lp->next = casetab;
 	casetab = lp;
@@ -697,12 +708,12 @@ int quadlit(Float128 *f128)
 	lp = quadtab;
 	// First search for the same literal constant and it's label if found.
 	while(lp) {
-		if (Float128::IsEqual(lp,Float128::Zero())) {
+		if (Float128::IsEqual(f128,Float128::Zero())) {
 			if (Float128::IsEqualNZ(lp,f128))
-				return lp->label;
+				return (lp->label);
 		}
 		else if (Float128::IsEqual(lp,f128))
-			return lp->label;
+			return (lp->label);
 		lp = lp->next;
 	}
 	lp = (Float128 *)allocx(sizeof(Float128));
@@ -776,11 +787,14 @@ void dumplits()
 		align(8);
 		nl();
 	}
-	while(casetab != nullptr) {
+	while (casetab != nullptr) {
 		nl();
-		put_label(casetab->label,"",casetab->nmspace,'D');
-		for (nn = 0; nn < casetab->num; nn++)
-			GenerateLabelReference(casetab->cases[nn].label,0);
+		if (casetab->pass == 2)
+			put_label(casetab->label, "", casetab->nmspace, 'D');
+		for (nn = 0; nn < casetab->num; nn++) {
+			if (casetab->cases[nn].pass==2)
+				GenerateLabelReference(casetab->cases[nn].label, 0);
+		}
 		casetab = casetab->next;
 	}
 	if (quadtab) {

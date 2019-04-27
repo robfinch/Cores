@@ -398,7 +398,7 @@ void ENODE::repexpr()
 			csp->isfp = TRUE; //**** a kludge
 			if (csp->reg > 0) {
 				nodetype = en_fpregvar;
-				i = csp->reg;
+				rg = csp->reg;
 			}
 		}
 		break;
@@ -408,7 +408,7 @@ void ENODE::repexpr()
 			csp->isfp = FALSE; //**** a kludge
 			if (csp->reg > 0) {
 				nodetype = en_fpregvar;
-				i = csp->reg;
+				rg = csp->reg;
 			}
 		}
 		break;
@@ -433,7 +433,7 @@ void ENODE::repexpr()
 		if ((csp = currentFn->csetbl->Search(this)) != NULL) {
 			if (csp->reg > 0) {
 				nodetype = en_regvar;
-				i = csp->reg;
+				rg = csp->reg;
 			}
 		}
 		break;
@@ -460,7 +460,7 @@ void ENODE::repexpr()
 		if ((csp = currentFn->csetbl->Search(this)) != NULL) {
 			if (csp->reg > 0) {
 				nodetype = en_regvar;
-				i = csp->reg;
+				rg = csp->reg;
 			}
 			else
 				p[0]->repexpr();
@@ -474,7 +474,7 @@ void ENODE::repexpr()
 		if ((csp = currentFn->csetbl->Search(this)) != NULL) {
 			if (csp->reg > 0) {
 				nodetype = en_fpregvar;
-				i = csp->reg;
+				rg = csp->reg;
 			}
 			else
 				p[0]->repexpr();
@@ -1907,7 +1907,9 @@ void ENODE::PutConstantHex(txtoStream& ofs, unsigned int lowhigh, unsigned int r
 		ofs.write(buf);
 		break;
 	case en_fcon:
-		goto j1;
+		sprintf_s(buf, sizeof(buf), "%s_%lld:", GetNamespace(), i);
+		ofs.write(buf);
+		break;
 	case en_autovcon:
 	case en_autocon:
 	case en_icon:
@@ -1915,7 +1917,6 @@ void ENODE::PutConstantHex(txtoStream& ofs, unsigned int lowhigh, unsigned int r
 		ofs.write(buf);
 		break;
 	case en_labcon:
-	j1:
 		sprintf_s(buf, sizeof(buf), "%s_%lld:", GetNamespace(), i);
 		ofs.write(buf);
 		break;

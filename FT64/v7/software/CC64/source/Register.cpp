@@ -46,6 +46,7 @@ static unsigned short int next_vreg;
 static unsigned short int next_vmreg;
 static short int next_breg;
 int max_reg_alloc_ptr;
+int max_stack_use;
 #define MAX_REG 4			/* max. scratch data	register (D2) */
 #define	MAX_REG_STACK	30
 
@@ -184,6 +185,7 @@ void initRegStack()
 void SpillRegister(Operand *ap, int number)
 {
 	GenerateDiadic(op_sw,0,ap,make_indexed(currentFn->GetTempBot()-ap->deep*sizeOfWord,regFP));
+	max_stack_use = max(max_stack_use, (ap->deep+1) * sizeOfWord);
     //reg_stack[reg_stack_ptr].Operand = ap;
     //reg_stack[reg_stack_ptr].f.allocnum = number;
     if (reg_alloc[number].f.isPushed=='T')
@@ -194,7 +196,8 @@ void SpillRegister(Operand *ap, int number)
 void SpillFPRegister(Operand *ap, int number)
 {
 	GenerateDiadic(op_sf,'d',ap,make_indexed(currentFn->GetTempBot()-ap->deep*sizeOfWord,regFP));
-    fpreg_stack[fpreg_stack_ptr].Operand = ap;
+	max_stack_use = max(max_stack_use, (ap->deep+1) * sizeOfWord);
+	fpreg_stack[fpreg_stack_ptr].Operand = ap;
     fpreg_stack[fpreg_stack_ptr].f.allocnum = number;
     if (fpreg_alloc[number].f.isPushed=='T')
 		fatal("SpillRegister(): register already spilled");

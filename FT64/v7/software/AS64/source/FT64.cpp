@@ -51,6 +51,7 @@
 #define I_SHIFTR	0x2F
 #define I_BNEI	0x12
 #define I_LB	0x13
+#define I_PUSHC	0x14
 #define I_SB	0x15
 #define I_MEMNDX	0x16
 #define I_JAL		0x18
@@ -1266,6 +1267,9 @@ static void emit_insn(int64_t oc, int can_compress, int sz)
 		case I_LB:
 		case I_LFx:
 			insnStats.loads++;
+			break;
+		case I_PUSHC:
+			insnStats.pushes++;
 			break;
 		case I_MEMNDX:
 			ls = oc & 0x80000000LL;
@@ -3509,7 +3513,7 @@ static void mem_voperand(int64_t *disp, int *regA, int *regB)
 
 static void process_store(int64_t opcode6, int funct6, int sz)
 {
-  int Ra,Rb,Rc;
+  int Ra,Rc;
   int Rs;
 	int Sc;
 	int seg;
@@ -4411,40 +4415,88 @@ static void process_vmov(int opcode, int func)
 }
 
 
+static int64_t process_op2()
+{
+	int64_t op2 = 0;
+
+	inptr++;
+	NextToken();
+	switch (token) {
+	case tk_add:	op2 = 0x04LL;	break;
+	case tk_sub:	op2 = 0x05LL;	break;
+	case tk_and:	op2 = 0x08LL; break;
+	case tk_or:		op2 = 0x09LL; break;
+	case tk_xor:	op2 = 0x0ALL; break;
+	case tk_nop:	op2 = 0x3DLL; break;
+	default:	op2 = 0x3DLL; break;
+	}
+	return (op2);
+}
+
 // ----------------------------------------------------------------------------
 // shr r1,r2,#5
+// shr:sub r1,r2,#5,r3
 // ----------------------------------------------------------------------------
 
 static void process_shifti(int64_t op4)
 {
-	int Ra;
+	int Ra, Rc = 0;
 	int Rt;
 	int sz = 3;
 	int64_t func6 = 0x0F;
 	int64_t val;
-	char *p = inptr;
+	int64_t op2 = 0;
+	char *p, *q;
 
-	 if (p[0]=='.')
-		 getSz(&sz);
+	q = p = inptr;
+	SkipSpaces();
+	if (p[0] == ':') {
+		inptr++;
+		op2 = process_op2();
+		q = inptr;
+	}
+	if (q[0]=='.')
+		getSz(&sz);
 	Rt = getRegisterX();
 	need(',');
 	Ra = getRegisterX();
 	need(',');
 	NextToken();
 	val = expr();
-	 val &= 63;
-	 if (val < 32 && op4 == 0 && Rt==Ra && !gpu) {
-		 emit_insn(
-			 (3 << 12) |
-			 (((val >> 1) & 0x0f) << 8) |
-			 (2 << 6) |
-			 ((val & 1) << 5) |
-			 Rt,0,2
-		 );
-		 return;
-	 }
-	 if (val > 31)
-		 func6 += 0x10;
+	val &= 63;
+	if (val < 32 && op4 == 0 && Rt==Ra && !gpu && op2==0 && sz==3) {
+		emit_insn(
+			(3 << 12) |
+			(((val >> 1) & 0x0f) << 8) |
+			(2 << 6) |
+			((val & 1) << 5) |
+			Rt,0,2
+		);
+		return;
+	}
+	if (val > 31)
+		func6 += 0x10;
+	if (sz != 3 || op2 != 0) {
+		if (op2 != 0) {
+			need(',');
+			Rc = getRegisterX();
+		}
+		emit_insn(
+			(0x2FLL << 42LL) |
+			(op2 << 36LL) |
+			(op4 << 33LL) |
+			((int64_t)sz << 30LL) |
+			(1LL << 29LL) |	// immediate
+			(((val >> 5) & 1) << 28LL) |
+			(Rc << 23LL) |
+			((val & 0x1f) << 18LL) |
+			(Rt << 13LL) |
+			(Ra << 8LL) |
+			(1LL << 6LL) |
+			0x02, !expand_flag, 6
+		);
+		return;
+	}
 	emit_insn(
 		(func6 << 26LL) |
 		(op4 << 23LL) |
@@ -4526,31 +4578,60 @@ static void process_rex()
 
 // ----------------------------------------------------------------------------
 // shl r1,r2,r3
+// shl:add r1,r2,r3,r4
 // ----------------------------------------------------------------------------
 
-static void process_shift(int op4)
+static void process_shift(int64_t op4)
 {
-	int Ra, Rb;
+	int64_t Ra, Rb, Rc = 0;
 	int Rt;
-	char *p;
+	char *p, *q;
 	int sz = 3;
 	int func6 = 0x2f;
+	int64_t op2 = 0x00LL;	// NOP
 
-	 p = inptr;
-	 if (p[0]=='.')
-		 getSz(&sz);
-     Rt = getRegisterX();
-     need(',');
-     Ra = getRegisterX();
-     need(',');
-     NextToken();
-	 if (token=='#') {
-		 inptr = p;
-		 process_shifti(op4);
-	 }
-	 else {
+	q = p = inptr;
+	SkipSpaces();
+	if (p[0] == ':') {
+		inptr++;
+		op2 = process_op2();
+		q = inptr;
+	}
+	if (q[0]=='.')
+		getSz(&sz);
+	Rt = getRegisterX();
+	need(',');
+	Ra = getRegisterX();
+	need(',');
+	NextToken();
+	if (token=='#') {
+		inptr = p;
+		process_shifti(op4);
+	}
+	else {
 		prevToken();
 		Rb = getRegisterX();
+		if (sz != 3 || op2 != 0x00) {
+			if (op2 != 0x00) {
+				need(',');
+				Rc = getRegisterX();
+			}
+			emit_insn(
+				(0x2FLL << 42LL) |
+				(op2 << 36LL) |
+				(op4 << 33LL) |
+				((int64_t)sz << 30LL) |
+				(0LL << 29LL) |	// register
+				(0LL << 28LL) |
+				(Rc << 23LL) |
+				(Rb << 18LL) |
+				(Rt << 13LL) |
+				(Ra << 8LL) |
+				(1LL << 6LL) |
+				0x02, !expand_flag, 6
+			);
+			return;
+		}
 		emit_insn((func6 << 26) | (op4 << 23) | (Rt << 18)| (Rb << 12) | (Ra << 8) | 0x02,!expand_flag,4);
 	 }
 }
@@ -4857,10 +4938,53 @@ static void process_neg()
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
 
-static void process_push(int64_t fn4)
+static void process_push(int64_t fn4, int64_t op6)
 {
 	int Ra;
+	int64_t val;
 
+	SkipSpaces();
+	if (*inptr == '#') {
+		inptr++;
+		NextToken();
+		val = expr();
+		if (!IsNBit(val, 14)) {
+			if (!IsNBit(val, 30)) {
+				Lui34(val, 23);
+				emit_insn(
+					(val << 18LL) |
+					(23 << 13) |
+					(23 << 8) |
+					(1 << 6) |
+					0x09, !expand_flag, 6	// ORI
+				);
+				emit_insn(
+					(fn4 << 28LL) |
+					(23 << 18) |
+					(31 << 13) |
+					(31 << 8) |
+					0x16, !expand_flag, 4
+				);
+				return;
+			}
+			emit_insn(
+				(val << 18LL) |
+				(31 << 13) |
+				(31 << 8) |
+				(1 << 6) |
+				op6, !expand_flag, 6
+			);
+			return;
+		}
+		emit_insn(
+			(val << 18LL) |
+			(31 << 13) |
+			(31 << 8) |
+			(0 << 6) |
+			op6, !expand_flag, 4
+		);
+		return;
+	}
 	Ra = getRegisterX();
 	if (gpu) {
 		emit_insn(
@@ -5341,7 +5465,7 @@ void FT64_processMaster()
         case tk_org: process_org(); break;
 				case tk_plus: compress_flag = 0;  expand_flag = 1; break;
         case tk_public: process_public(); break;
-		case tk_push: process_push(0x0c); break;
+		case tk_push: process_push(0x0c,0x14); break;
         case tk_rodata:
             if (first_rodata) {
                 while(sections[segment].address & 4095)
