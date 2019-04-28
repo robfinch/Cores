@@ -1080,6 +1080,20 @@ void Statement::GenMixedSource()
 	}
 }
 
+// For loops the loop inversion optimization is applied.
+// Basically:
+// while(x) {
+// ...code
+// }
+// Gets translated to:
+// if (x) {
+//   do {
+//   ...code
+//   } while(x);
+// }
+// Placing the conditional test at the end of the loop
+// removes a branch instruction from every iteration.
+
 void Statement::GenerateWhile()
 {
 	int lab1, lab2;
@@ -1089,26 +1103,36 @@ void Statement::GenerateWhile()
 	lab1 = contlab;
 	lab2 = breaklab;
 	contlab = nextlabel++;
+	breaklab = nextlabel++;
 	loophead = currentFn->pl.tail;
+	if (!opt_nocgo)
+		cg.GenerateFalseJump(exp, breaklab, 2);
 	GenerateLabel(contlab);
 	if (s1 != NULL)
 	{
 		breaklab = nextlabel++;
-		initstack();
-		cg.GenerateFalseJump(exp, breaklab, 2);
 		looplevel++;
+		if (opt_nocgo) {
+			initstack();
+			cg.GenerateFalseJump(exp, breaklab, 2);
+		}
 		s1->Generate();
 		looplevel--;
-		GenerateMonadic(op_bra, 0, make_clabel(contlab));
-		GenerateLabel(breaklab);
-		breaklab = lab2;
+		if (!opt_nocgo) {
+			initstack();
+			cg.GenerateTrueJump(exp, contlab, 2);
+		}
+		else
+			GenerateMonadic(op_bra, 0, make_clabel(contlab));
 	}
 	else
 	{
 		initstack();
 		cg.GenerateTrueJump(exp, contlab, prediction);
 	}
+	GenerateLabel(breaklab);
 	currentFn->pl.OptLoopInvariants(loophead);
+	breaklab = lab2;
 	contlab = lab1;
 }
 
@@ -1121,19 +1145,27 @@ void Statement::GenerateUntil()
 	lab1 = contlab;
 	lab2 = breaklab;
 	contlab = nextlabel++;
+	breaklab = nextlabel++;
 	loophead = currentFn->pl.tail;
+	if (!opt_nocgo)
+		cg.GenerateTrueJump(exp, breaklab, 2);
 	GenerateLabel(contlab);
 	if (s1 != NULL)
 	{
 		breaklab = nextlabel++;
-		initstack();
-		cg.GenerateTrueJump(exp, breaklab, 2);
 		looplevel++;
+		if (opt_nocgo) {
+			initstack();
+			cg.GenerateTrueJump(exp, breaklab, 2);
+		}
 		s1->Generate();
 		looplevel--;
-		GenerateMonadic(op_bra, 0, make_clabel(contlab));
-		GenerateLabel(breaklab);
-		breaklab = lab2;
+		if (!opt_nocgo) {
+			initstack();
+			cg.GenerateFalseJump(exp, contlab, 2);
+		}
+		else
+			GenerateMonadic(op_bra, 0, make_clabel(contlab));
 	}
 	else
 	{
@@ -1141,6 +1173,8 @@ void Statement::GenerateUntil()
 		cg.GenerateFalseJump(exp, contlab, prediction);
 	}
 	currentFn->pl.OptLoopInvariants(loophead);
+	GenerateLabel(breaklab);
+	breaklab = lab2;
 	contlab = lab1;
 }
 
@@ -1160,10 +1194,19 @@ void Statement::GenerateFor()
 		ReleaseTempRegister(cg.GenerateExpression(initExpr, F_ALL | F_NOVALUE
 			, initExpr->GetNaturalSize()));
 	loophead = currentFn->pl.tail;
+	if (!opt_nocgo) {
+		if (exp != NULL) {
+			initstack();
+			cg.GenerateFalseJump(exp, exit_label, 2);
+		}
+	}
 	GenerateLabel(loop_label);
-	initstack();
-	if (exp != NULL)
-		cg.GenerateFalseJump(exp, exit_label, 2);
+	if (opt_nocgo) {
+		if (exp != NULL) {
+			initstack();
+			cg.GenerateFalseJump(exp, exit_label, 2);
+		}
+	}
 	if (s1 != NULL)
 	{
 		breaklab = exit_label;
@@ -1172,10 +1215,16 @@ void Statement::GenerateFor()
 		looplevel--;
 	}
 	GenerateLabel(contlab);
-	initstack();
-	if (incrExpr != NULL)
+	if (incrExpr != NULL) {
+		initstack();
 		ReleaseTempRegister(cg.GenerateExpression(incrExpr, F_ALL | F_NOVALUE, incrExpr->GetNaturalSize()));
-	GenerateMonadic(op_bra, 0, make_clabel(loop_label));
+	}
+	if (opt_nocgo)
+		GenerateMonadic(op_bra, 0, make_clabel(loop_label));
+	else {
+		initstack();
+		cg.GenerateTrueJump(exp, loop_label, 2);
+	}
 	currentFn->pl.OptLoopInvariants(loophead);
 	breaklab = old_break;
 	contlab = old_cont;

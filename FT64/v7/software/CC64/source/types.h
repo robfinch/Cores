@@ -623,6 +623,7 @@ public:
 	static void Swap(OCODE *ip1, OCODE *ip2);
 	void MarkRemove() { remove = true; };
 	void MarkRemove2() { remove2 = true; };
+	void Remove();
 	bool HasTargetReg() const;
 	int GetTargetReg(int *rg1, int *rg2) const;
 	bool HasSourceReg(int) const;

@@ -68,8 +68,8 @@ TYP *forcefit(ENODE **srcnode, TYP *srctp, ENODE **dstnode, TYP *dsttp, bool pro
 			case bt_double: nt = en_d2i; break;
 			default: goto j1;
 			}
-			*srcnode = makenode(nt, *srcnode, nullptr);
-			(*srcnode)->esize = 8;
+			*dstnode = makenode(nt, *srcnode, *dstnode);
+			(*dstnode)->esize = 8;
 			return (dsttp);
 
 		case bt_ichar:
@@ -93,8 +93,8 @@ TYP *forcefit(ENODE **srcnode, TYP *srctp, ENODE **dstnode, TYP *dsttp, bool pro
 			case bt_double: nt = en_d2i; break;
 			default: goto j1;
 			}
-			*srcnode = makenode(nt, *srcnode, nullptr);
-			(*srcnode)->esize = 8;
+			*dstnode = makenode(nt, *srcnode, *dstnode);
+			(*dstnode)->esize = 8;
 			return (dsttp);
 
 		case bt_iuchar:
@@ -118,6 +118,8 @@ TYP *forcefit(ENODE **srcnode, TYP *srctp, ENODE **dstnode, TYP *dsttp, bool pro
 			case bt_double: nt = en_d2i; break;
 			default: goto j1;
 			}
+			*dstnode = makenode(nt, *srcnode, *dstnode);
+			(*dstnode)->esize = 8;
 			return (dsttp);
 
 		case bt_short:
@@ -140,8 +142,8 @@ TYP *forcefit(ENODE **srcnode, TYP *srctp, ENODE **dstnode, TYP *dsttp, bool pro
 			case bt_double: nt = en_d2i; break;
 			default: goto j1;
 			}
-			*srcnode = makenode(nt, *srcnode, nullptr);
-			(*srcnode)->esize = 8;
+			*dstnode = makenode(nt, *srcnode, *dstnode);
+			(*dstnode)->esize = 8;
 			return (dsttp);
 
 		case bt_ushort:
@@ -164,6 +166,8 @@ TYP *forcefit(ENODE **srcnode, TYP *srctp, ENODE **dstnode, TYP *dsttp, bool pro
 			case bt_double: nt = en_d2i; break;
 			default: goto j1;
 			}
+			*dstnode = makenode(nt, *srcnode, *dstnode);
+			(*dstnode)->esize = 8;
 			return (dsttp);
 
 		case bt_ulong:

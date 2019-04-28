@@ -100,8 +100,9 @@ Operand *make_clabel(int lab)
   lnode = allocEnode();
   lnode->nodetype = en_clabcon;
   lnode->i = lab;
-	if (lab==-1)
+	if (lab == -1) {
 		printf("-1\r\n");
+	}
   ap = allocOperand();
   ap->mode = am_direct;
   ap->offset = lnode;

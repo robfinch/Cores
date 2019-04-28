@@ -378,6 +378,9 @@ ENODE *ENODE::Clone()
 		return (ENODE *)nullptr;
 	temp = allocEnode();
 	memcpy(temp, this, sizeof(ENODE));	// copy all the fields
+	p[0] = p[0]->Clone();
+	p[1] = p[1]->Clone();
+	p[2] = p[2]->Clone();
 	return (temp);
 }
 

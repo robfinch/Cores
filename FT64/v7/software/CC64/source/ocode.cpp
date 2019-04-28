@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2018-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -24,6 +24,11 @@
 // ============================================================================
 //
 #include "stdafx.h"
+
+void OCODE::Remove()
+{
+	currentFn->pl.Remove(this);
+};
 
 // Return true if the instruction has a target register.
 
@@ -760,6 +765,8 @@ void OCODE::OptHint()
 		return;
 	if (remove)
 		return;
+	if (remove)
+		return;
 
 	switch (oper1->offset->i) {
 
@@ -772,7 +779,7 @@ void OCODE::OptHint()
 		//    MOV r18,#constant
 	case 1:
 		if (fwd && fwd->opcode != op_mov) {
-			MarkRemove();	// remove the hint
+			Remove();	// remove the hint
 			optimized++;
 			return;
 		}
@@ -819,8 +826,10 @@ void OCODE::OptHint()
 	case 2:
 		if (fwd == nullptr || back == nullptr)
 			break;
-		if (fwd->remove || back->remove)
+		if (fwd->opcode != op_mov) {
+			MarkRemove();
 			break;
+		}
 		if (IsEqualOperand(fwd->oper2, back->oper1)) {
 			if (back->HasTargetReg()) {
 				if (!(fwd->oper1->mode == am_fpreg && back->opcode == op_ldi)) {
@@ -838,8 +847,9 @@ void OCODE::OptHint()
 							return;
 						}
 					}
-					back->oper1 = fwd->oper1;
+					back->oper1 = fwd->oper1->Clone();
 					fwd->MarkRemove();
+					MarkRemove();
 					optimized++;
 				}
 			}

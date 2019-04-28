@@ -413,7 +413,7 @@ void PeepList::OptConstReg()
 	MachineReg *mr, *mr2;
 	Operand *top;
 	int n;
-	
+
 	for (n = 0; n < 32; n++) {
 		if (regs[n].assigned && !regs[n].modified && regs[n].isConst && regs[n].offset != nullptr)
 			regs[n].sub = true;
