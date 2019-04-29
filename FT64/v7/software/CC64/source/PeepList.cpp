@@ -1,5 +1,4 @@
 // ============================================================================
-// Currently under construction (not used yet).
 //        __
 //   \\__/ o\    (C) 2017-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
@@ -68,6 +67,10 @@ bool PeepList::FindTarget(OCODE *ip, int reg)
 {
 	for (; ip; ip = ip->fwd) {
 		if (ip->HasTargetReg()) {
+			if (ip->opcode == op_call || ip->opcode == op_jal) {
+				if (reg == 1 || reg == 2)
+					return (true);
+			}
 			if (ip->oper1->preg == reg)
 				return (true);
 		}
@@ -546,6 +549,7 @@ void PeepList::OptInstructions()
 				}
 				break;
 			case op_ld:		ip->OptLoad();	break;
+			case op_ldi:	ip->OptLdi();	break;
 			case op_mov:	ip->OptMove();	break;
 			case op_sub:	ip->OptSubtract(); break;
 			case op_lb:		ip->OptLoadByte(); break;
@@ -575,10 +579,15 @@ void PeepList::OptInstructions()
 	}
 }
 
+// Hoist expressions that remain constant to the outside of the loop.
+// But don't hoist expressions containing r1 as that is the return
+// value from a function call.
+
 void PeepList::OptLoopInvariants(OCODE *loophead)
 {
-	OCODE *ip2, *ip3, *ip4;
+	OCODE *ip2, *ip3, *ip4, *ip5;
 	bool canHoist;
+	bool hsx;
 
 	if (loophead == nullptr)
 		return;
@@ -670,10 +679,24 @@ void PeepList::OptLoopInvariants(OCODE *loophead)
 		if (canHoist) {
 			if (ip2 == currentFn->pl.tail)
 				currentFn->pl.tail = ip2->back;
+			hsx = false;
+			ip5 = ip2->fwd;
+			if (ip5) {
+				if (ip2->insn->IsIntegerLoad() && ip5->insn->IsExt()) {
+					if (ip2->oper1->preg == ip5->oper1->preg)
+						hsx = true;
+				}
+			}
+			else
+				ip5 = ip2;
 			currentFn->pl.Remove(ip2);
 			currentFn->pl.InsertAfter(loophead, ip2);
+			if (hsx) {
+				currentFn->pl.Remove(ip5);
+				currentFn->pl.InsertAfter(loophead, ip5);
+			}
 			ip4 = ip3;
-			ip3 = ip2;
+			ip3 = ip5;
 		}
 	}
 }

@@ -39,6 +39,7 @@ enum e_gt { nogen, bytegen, chargen, halfgen, wordgen, longgen };
 int	       gentype = nogen;
 int	       curseg = noseg;
 int        outcol = 0;
+static ENODE *agr;
 
 // Please keep table in alphabetical order.
 // Instruction.cpp has the number of table elements hard-coded in it.
@@ -671,11 +672,50 @@ int stringlit(char *s)
 	lp->label = nextlabel++;
 	lp->str = my_strdup(s);
 	lp->nmspace = my_strdup(GetNamespace());
-	lp->next = strtab;
-	strtab = lp;
+	if (strtab == nullptr) {
+		strtab = lp;
+		strtab->tail = lp;
+	}
+	else {
+		strtab->tail->next = lp;
+		strtab->tail = lp;
+	}
+	lp->isString = true;
+	lp->pass = pass;
 	return (lp->label);
 }
 
+int litlist(ENODE *node)
+{
+	struct slit *lp;
+	ENODE *ep;
+
+	lp = strtab;
+	while (lp) {
+		if (lp->isString)
+			continue;
+		ep = (ENODE *)lp->str;
+		if (node->IsEqual(node, ep)) {
+			return (lp->label);
+		}
+		lp = lp->next;
+	}
+	lp = (struct slit *)allocx(sizeof(struct slit));
+	lp->label = nextlabel++;
+	lp->str = (char *)node;
+	lp->nmspace = my_strdup(GetNamespace());
+	if (strtab == nullptr) {
+		strtab = lp;
+		strtab->tail = lp;
+	}
+	else {
+		strtab->tail->next = lp;
+		strtab->tail = lp;
+	}
+	lp->isString = false;
+	lp->pass = pass;
+	return (lp->label);
+}
 
 // Since there are two passes to the compiler the cases might already be
 // recorded.
@@ -749,12 +789,14 @@ int64_t GetStrtabLen()
 
 	len = 0;
 	for (p = strtab; p; p = p->next) {
-		cp = p->str;
-		while (*cp) {
-			len++;
-			cp++;
+		if (p->isString) {
+			cp = p->str;
+			while (*cp) {
+				len++;
+				cp++;
+			}
+			len++;	// for null char
 		}
-		len++;	// for null char
 	}
 	len += 7;
 	len >>= 3;
@@ -773,12 +815,51 @@ int64_t GetQuadtabLen()
 	return (len);
 }
 
+int putStructConst(ENODE *ep)
+{
+	int n,m,k;
+	std::streampos ptr;
+	ENODE *ep1;
+
+	if (ep == nullptr)
+		return (0);
+	if (ep->nodetype != en_aggregate)
+		return (0);
+	
+	for (n = 0, ep1 = ep->p[0]->p[2]; ep1; ep1 = ep1->p[2]) {
+		if (ep1->nodetype == en_aggregate) {
+			k = putStructConst(ep1);
+		}
+		else {
+			switch (ep1->esize) {
+			case 1:	ofs.printf("db\t");	ep1->PutConstant(ofs, 0, 0); ofs.printf("\n"); break;
+			case 2:	ofs.printf("dc\t");	ep1->PutConstant(ofs, 0, 0); ofs.printf("\n"); break;
+			case 4:	ofs.printf("dh\t");	ep1->PutConstant(ofs, 0, 0); ofs.printf("\n"); break;
+			case 8:	ofs.printf("dw\t");	ep1->PutConstant(ofs, 0, 0); ofs.printf("\n"); break;
+			default:
+				ofs.printf("fill.b %ld,0x00\n", ep1->esize - 1);
+				ofs.printf("db\t");
+				ep->PutConstant(ofs, 0, 0);
+				ofs.printf("\n");
+				break;
+			}
+			k = ep1->esize;
+		}
+		n = n + k;
+	}
+	if (n < ep->esize) {
+		ofs.printf("fill.b %ld,0x00\n", ep->esize - n);
+	}
+	return (n);
+}
+
 // Dump the literal pools.
 
 void dumplits()
 {
 	char *cp;
 	int64_t nn;
+	slit *lit;
 
 	dfs.printf("<Dumplits>\n");
 	roseg();
@@ -831,39 +912,46 @@ void dumplits()
 	//	sprintf_s(buf, sizeof(buf), "\tdw\t$%I64X ; GC_skip\n", nn | 0xFFF0200000000000LL);
 	//	ofs.printf("%s", buf);
 	//}
-	while( strtab != NULL) {
+	for (lit = strtab; lit; lit = lit->next) {
 		dfs.printf(".");
 		nl();
-		put_label(strtab->label,strip_crlf(&strtab->str[1]),strtab->nmspace,'D');
-		cp = strtab->str;
-		switch (*cp) {
-		case 'B':
-			cp++;
-			while (*cp)
-				GenerateByte(*cp++);
-			GenerateByte(0);
-			break;
-		case 'C':
-			cp++;
-			while (*cp)
-				GenerateChar(*cp++);
-			GenerateChar(0);
-			break;
-		case 'H':
-			cp++;
-			while (*cp)
-				GenerateHalf(*cp++);
-			GenerateHalf(0);
-			break;
-		case 'W':
-			cp++;
-			while (*cp)
-				GenerateWord(*cp++);
-			GenerateWord(0);
-			break;
+		put_label(lit->label,strip_crlf(&lit->str[1]),lit->nmspace,'D');
+		if (lit->isString) {
+			cp = lit->str;
+			switch (*cp) {
+			case 'B':
+				cp++;
+				while (*cp)
+					GenerateByte(*cp++);
+				GenerateByte(0);
+				break;
+			case 'C':
+				cp++;
+				while (*cp)
+					GenerateChar(*cp++);
+				GenerateChar(0);
+				break;
+			case 'H':
+				cp++;
+				while (*cp)
+					GenerateHalf(*cp++);
+				GenerateHalf(0);
+				break;
+			case 'W':
+				cp++;
+				while (*cp)
+					GenerateWord(*cp++);
+				GenerateWord(0);
+				break;
+			}
 		}
-		strtab = strtab->next;
+		else {
+			ENODE *ep;
+			agr = ep = (ENODE *)lit->str;
+			putStructConst(ep);
+		}
 	}
+	strtab = nullptr;
 	nl();
 	dfs.printf("</Dumplits>\n");
 }

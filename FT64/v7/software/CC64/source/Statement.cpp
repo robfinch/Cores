@@ -1110,7 +1110,6 @@ void Statement::GenerateWhile()
 	GenerateLabel(contlab);
 	if (s1 != NULL)
 	{
-		breaklab = nextlabel++;
 		looplevel++;
 		if (opt_nocgo) {
 			initstack();
@@ -1152,7 +1151,6 @@ void Statement::GenerateUntil()
 	GenerateLabel(contlab);
 	if (s1 != NULL)
 	{
-		breaklab = nextlabel++;
 		looplevel++;
 		if (opt_nocgo) {
 			initstack();
@@ -1260,14 +1258,13 @@ void Statement::GenerateForever()
 
 void Statement::GenerateIf()
 {
-	int lab1, lab2, oldbreak;
+	int lab1, lab2;
 	ENODE *ep, *node;
 	int size, siz1;
 	Operand *ap1, *ap2, *ap3;
 
 	lab1 = nextlabel++;     // else label
 	lab2 = nextlabel++;     // exit label
-	oldbreak = breaklab;    // save break label
 	initstack();            // clear temps
 	ep = node = exp;
 
@@ -1399,7 +1396,6 @@ j1:
 	}
 	else
 		GenerateLabel(lab1);
-	breaklab = oldbreak;
 }
 
 void Statement::GenerateDoOnce()
@@ -1410,9 +1406,9 @@ void Statement::GenerateDoOnce()
 	oldcont = contlab;
 	oldbreak = breaklab;
 	contlab = nextlabel++;
+	breaklab = nextlabel++;
 	loophead = currentFn->pl.tail;
 	GenerateLabel(contlab);
-	breaklab = nextlabel++;
 	looplevel++;
 	s1->Generate();
 	looplevel--;
@@ -1430,9 +1426,9 @@ void Statement::GenerateDoWhile()
 	oldcont = contlab;
 	oldbreak = breaklab;
 	contlab = nextlabel++;
+	breaklab = nextlabel++;
 	loophead = currentFn->pl.tail;
 	GenerateLabel(contlab);
-	breaklab = nextlabel++;
 	looplevel++;
 	s1->Generate();
 	looplevel--;
@@ -1452,9 +1448,9 @@ void Statement::GenerateDoUntil()
 	oldcont = contlab;
 	oldbreak = breaklab;
 	contlab = nextlabel++;
+	breaklab = nextlabel++;
 	loophead = currentFn->pl.tail;
 	GenerateLabel(contlab);
-	breaklab = nextlabel++;
 	looplevel++;
 	s1->Generate();
 	looplevel--;
@@ -1474,9 +1470,9 @@ void Statement::GenerateDoLoop()
 	oldcont = contlab;
 	oldbreak = breaklab;
 	contlab = nextlabel++;
+	breaklab = nextlabel++;
 	loophead = currentFn->pl.tail;
 	GenerateLabel(contlab);
-	breaklab = nextlabel++;
 	looplevel++;
 	s1->Generate();
 	looplevel--;
@@ -1516,7 +1512,7 @@ void Statement::GenerateLinearSwitch()
 {
 	int curlab;
 	int64_t *bf;
-	int nn, jj;
+	int nn;
 	Statement *defcase, *stmt;
 	Operand *ap, *ap1;
 
@@ -1582,11 +1578,11 @@ void Statement::GenerateCase()
 	for (stmt = this; stmt != (Statement *)NULL; stmt = stmt->next)
 	{
 		stmt->GenMixedSource();
+		// Still need to generate the label for the benefit of a tabular switch
+		// even if there is no code.
+		GenerateLabel((int)stmt->label);
 		if (stmt->s1 != (Statement *)NULL)
-		{
-			GenerateLabel((int)stmt->label);
 			stmt->s1->Generate();
-		}
 		else if (stmt->next == (Statement *)NULL)
 			GenerateLabel((int)stmt->label);
 	}
@@ -1674,7 +1670,7 @@ void Statement::GenerateSwitch()
 			casetab[nn].val = maxv + 1;
 			casetab[nn].pass = pass;
 		}
-		for (kk = minv; kk < maxv; kk++) {
+		for (kk = minv; kk <= maxv; kk++) {
 			for (nn = 0; nn < mm; nn++) {
 				if (casetab[nn].val == kk)
 					goto j1;
@@ -1686,8 +1682,8 @@ void Statement::GenerateSwitch()
 			mm++;
 		j1:;
 		}
-		qsort(&casetab[0], 512, sizeof(struct scase), casevalcmp);
-		tablabel = caselit(casetab, maxv - minv + 1);
+		qsort(&casetab[0], mm, sizeof(struct scase), casevalcmp);
+		tablabel = caselit(casetab, mm);
 		ap = cg.GenerateExpression(exp, F_REG, exp->GetNaturalSize());
 		ap1 = GetTempRegister();
 		ap2 = GetTempRegister();

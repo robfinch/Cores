@@ -56,9 +56,12 @@ public:
 };
 
 struct slit {
-    struct slit     *next;
+    struct slit *next;
+		struct slit *tail;
     int             label;
     char            *str;
+		bool		isString;
+		int8_t pass;
 	char			*nmspace;
 };
 
@@ -515,9 +518,12 @@ public:
 	long GetReferenceSize();
 	int GetNaturalSize();
 
-	static bool IsEqual(ENODE *a, ENODE *b);
+	static bool IsEqual(ENODE *a, ENODE *b, bool lit = false);
 	bool HasAssignop();
 	bool HasCall();
+
+	// Parsing
+	bool AssignTypeToList(TYP *);
 
 	// Optimization
 	void scanexpr(int duse);
@@ -621,7 +627,9 @@ public:
 	static OCODE *Clone(OCODE *p);
 	static bool IsEqualOperand(Operand *a, Operand *b) { return (Operand::IsEqual(a, b)); };
 	static void Swap(OCODE *ip1, OCODE *ip2);
-	void MarkRemove() { remove = true; };
+	void MarkRemove() { 
+		remove = true;
+	};
 	void MarkRemove2() { remove2 = true; };
 	void Remove();
 	bool HasTargetReg() const;
@@ -652,6 +660,7 @@ public:
 	void OptHint();
 	void OptLabel();
 	void OptIndexScale();
+	void OptLdi();
 
 	static OCODE *loadHex(txtiStream& ifs);
 	void store(txtoStream& ofs);
@@ -1004,7 +1013,10 @@ public:
 	unsigned int regclass4;	// register class 1=integer,2=floating point,4=vector
 public:
 	bool IsFlowControl();
+	bool IsLoad();
+	bool IsIntegerLoad();
 	bool IsStore();
+	bool IsExt();
 	bool IsSetInsn() {
 		return (opcode == op_seq || opcode == op_sne
 			|| opcode == op_slt || opcode == op_sle || opcode == op_sgt || opcode == op_sge

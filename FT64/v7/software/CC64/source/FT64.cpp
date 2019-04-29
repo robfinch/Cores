@@ -1229,6 +1229,7 @@ Operand *FT64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 		if (sym->sym->tp->GetBtp()->type != bt_void) {
 			ap = GetTempRegister();
 			GenerateDiadic(op_mov, 0, ap, makereg(1));
+			regs[1].modified = true;
 		}
 		else
 			ap = makereg(0);
@@ -1237,6 +1238,7 @@ Operand *FT64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 	else {
 		ap = GetTempRegister();
 		GenerateDiadic(op_mov, 0, ap, makereg(1));
+		regs[1].modified = true;
 	}
 	return (ap);
 	/*

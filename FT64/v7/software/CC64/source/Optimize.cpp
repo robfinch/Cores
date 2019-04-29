@@ -692,10 +692,14 @@ static void opt0(ENODE **node)
 								*node = ep->p[1];
 							}
 							break;
-						case en_addrof:
-							opt0(&(ep->p[0]));
-							break;
-						}
+	case en_addrof:
+		opt0(&(ep->p[0]));
+		break;
+	case en_list:
+		for (ep = ep->p[2]; ep; ep = ep->p[2])
+			opt0(&(ep->p[0]));
+		break;
+	}
 }
 
 /*

@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -96,7 +96,8 @@ static char *errtextstr[] = {
 	"E Compiler limit reached: too many trees.",
 	"E Compiler limit reached: optimization stack full.",
 	"E Compiler: stack empty.",
-	"E Compiler: i-graph nodes in wrong order."
+	"E Compiler: i-graph nodes in wrong order.",
+	"E Cast aggregate should be a constant"
 };
 
 char *errtext(int errnum)

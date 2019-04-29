@@ -488,6 +488,23 @@ j1:
 	case bt_class:
 	case bt_struct:
 	case bt_union:
+		//if (dsttp->isArray) {
+		//	SYM *srcfirst, *srcthead;
+		//	SYM *dstfirst, *dstthead;
+		//	srcfirst = srcthead = SYM::GetPtr(srctp->lst.GetHead());
+		//	dstfirst = dstthead = SYM::GetPtr(dsttp->lst.GetHead());
+		//	while (srcthead && dstthead) {
+		//		if (srcthead->tp->IsAggregateType()) {
+		//			forcefit()
+		//		}
+		//		srcthead = SYM::GetPtr(srcthead->next);
+		//		dstthead = SYM::GetPtr(dstthead->next);
+		//	}
+		//	for (tp = srctp->lst.)
+		//	if (srctp->GetBtp()->IsScalar()) {
+
+		//	}
+		//}
 		if (dsttp->size > srctp->size || typecast)
 			return (dsttp);
 		return (srctp);

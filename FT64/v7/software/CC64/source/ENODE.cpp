@@ -321,12 +321,20 @@ bool ENODE::IsBitfield()
 // equalnode will return 1 if the expressions pointed to by
 // node1 and node2 are equivalent.
 //
-bool ENODE::IsEqual(ENODE *node1, ENODE *node2)
+bool ENODE::IsEqual(ENODE *node1, ENODE *node2, bool lit)
 {
+	ENODE *ep1, *ep2;
+
 	if (node1 == nullptr && node2 == nullptr)
 		return (true);
-	if (node1 == nullptr || node2 == nullptr) {
-		return (false);
+	if (!lit) {
+		if (node1 == nullptr || node2 == nullptr) {
+			return (false);
+		}
+	}
+	else {
+		if (node1 == nullptr || node2 == nullptr)
+			return (true);
 	}
 	if (node1->nodetype != node2->nodetype) {
 		return (false);
@@ -353,12 +361,24 @@ bool ENODE::IsEqual(ENODE *node1, ENODE *node2)
 	}
 	case en_cnacon:
 		return (node1->sp->compare(*node2->sp) == 0);
+	case en_aggregate:
+		return (IsEqual(node1->p[0], node2->p[0], lit));
+	case en_list:
+		for (ep1 = node1->p[2],
+				 ep2 = node2->p[2];
+				 ep1 && ep2; ep1 = ep1->p[2], ep2 = ep2->p[2]) {
+			if (!IsEqual(ep1->p[0], ep2->p[0], lit))
+				return (false);
+			if (!IsEqual(ep1->p[1], ep2->p[1], lit))
+				return (false);
+		}
+		return (true);
 	default:
-		if (!IsEqual(node1->p[0], node2->p[0]))
+		if (!IsEqual(node1->p[0], node2->p[0], lit))
 			return (false);
-		if (!IsEqual(node1->p[1], node2->p[1]))
+		if (!IsEqual(node1->p[1], node2->p[1], lit))
 			return (false);
-		if (!IsEqual(node1->p[2], node2->p[2]))
+		if (!IsEqual(node1->p[2], node2->p[2], lit))
 			return (false);
 		return (true);
 		//if (IsLValue(node1) && IsEqual(node1->p[0], node2->p[0])) {
@@ -384,7 +404,83 @@ ENODE *ENODE::Clone()
 	return (temp);
 }
 
+// ============================================================================
+// ============================================================================
+// Parsing
+// ============================================================================
+// ============================================================================
 
+// Assign a type to a whole list.
+
+bool ENODE::AssignTypeToList(TYP *tp)
+{
+	ENODE *ep;
+	bool isConst = true;
+	TYP *btp;
+	int ne, cnt;
+
+	if (nodetype != en_aggregate)
+		return (false);
+
+	esize = 0;
+	this->tp = tp;
+	this->tp->isConst = isConst;
+	this->esize = tp->size;
+	if (tp->isArray) {
+		ne = tp->numele;
+		cnt = 0;
+		btp = tp->GetBtp();
+		for (ep = p[0]->p[2]; ep; ep = ep->p[2]) {
+			cnt++;
+			ep->tp = btp;
+			ep->tp->isConst = isConst;
+			ep->esize = btp->size;
+			//if (!ep->tp->isConst)
+			//	isConst = false;
+			if (btp->isArray) {
+				if (ep->nodetype == en_aggregate) {
+					if (!ep->AssignTypeToList(btp))
+						isConst = false;
+				}
+			}
+			else if (btp->IsAggregateType()) {
+				if (ep->nodetype == en_aggregate) {
+					if (!ep->AssignTypeToList(btp))
+						isConst = false;
+				}
+			}
+		}
+		//if (cnt < tp->numele) {
+		//	esize += (tp->numele - cnt) * btp->size;
+		//}
+	}
+	else if (tp->IsAggregateType()) {
+		SYM *thead;
+
+		thead = SYM::GetPtr(tp->lst.GetHead());
+		while (thead && ep) {
+			ep->tp = thead->tp;
+			ep->tp->isConst = isConst;
+			ep->esize = thead->tp->size;
+			if (thead->tp->IsAggregateType()) {
+				if (ep->nodetype == en_aggregate) {
+					if (!ep->AssignTypeToList(thead->tp))
+						isConst = false;
+				}
+			}
+			ep = ep->p[2];
+			thead = SYM::GetPtr(thead->next);
+		}
+	}
+	return (isConst);
+}
+
+
+// ============================================================================
+// ============================================================================
+// Optimization
+// ============================================================================
+// ============================================================================
 
 //	repexpr will replace all allocated references within an expression
 //	with tempref nodes.
@@ -392,6 +488,8 @@ ENODE *ENODE::Clone()
 void ENODE::repexpr()
 {
 	CSE *csp;
+	ENODE *ep;
+
 	if (this == nullptr)
 		return;
 	switch (nodetype) {
@@ -551,10 +649,14 @@ void ENODE::repexpr()
 	case en_asor:   case en_asand:    case en_asxor:
 	case en_asmod:  case en_aslsh:
 	case en_asrsh:  case en_fcall:
-	case en_list: case en_aggregate:
+	case en_aggregate:
 	case en_assign:
 		p[0]->repexpr();
 		p[1]->repexpr();
+		break;
+	case en_list:
+		for (ep = p[2]; ep; ep = ep->p[2])
+			ep->repexpr();
 		break;
 	case en_regvar:
 	case en_fpregvar:
@@ -585,6 +687,7 @@ void ENODE::scanexpr(int duse)
 	CSE *csp, *csp1;
 	int first;
 	int nn;
+	ENODE *ep;
 
 	if (this == nullptr)
 		return;
@@ -775,10 +878,13 @@ void ENODE::scanexpr(int duse)
 	case en_asand:	case en_asxor: case en_asor:
 	case en_cond:	case en_safe_cond:
 	case en_void:
-	case en_list:
 	case en_aggregate:
 		p[0]->scanexpr(0);
 		p[1]->scanexpr(0);
+		break;
+	case en_list:
+		for (ep = p[2]; ep; ep = ep->p[2])
+			ep->scanexpr(0);
 		break;
 	case en_assign:
 		p[0]->scanexpr(0);
@@ -799,6 +905,13 @@ void ENODE::scanexpr(int duse)
 	default: dfs.printf("Uncoded node in ENODE::scanexpr():%d\r\n", nodetype);
 	}
 }
+
+
+// ============================================================================
+// ============================================================================
+// Code Generation
+// ============================================================================
+// ============================================================================
 
 
 // ----------------------------------------------------------------------------
@@ -1498,8 +1611,8 @@ Operand *ENODE::GenAssignAdd(int flags, int size, int op)
 		GenMemop(op, ap1, ap2, ssize);
 	}
 	ReleaseTempReg(ap2);
-	if (ap1->type != stddouble.GetIndex() && !ap1->isUnsigned)
-		ap1 = ap1->GenSignExtend(ssize, size, flags);
+	//if (ap1->type != stddouble.GetIndex() && !ap1->isUnsigned)
+	//	ap1 = ap1->GenSignExtend(ssize, size, flags);
 	ap1->MakeLegal( flags, size);
 	return (ap1);
 }

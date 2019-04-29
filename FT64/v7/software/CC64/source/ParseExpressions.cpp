@@ -1443,7 +1443,9 @@ j2:
 			while (lastst != end) {
 				tptr = NonCommaExpression(&pnode);
 				pnode->SetType(tptr);
-				sz = sz + tptr->size;
+				//sz = sz + tptr->size;
+				sz = sz + pnode->esize;
+				list->esize = pnode->esize;
 				AddToList(list, pnode);
 				if (lastst!=comma)
 					break;
@@ -1452,6 +1454,9 @@ j2:
 			needpunc(end,9);
 			pnode = makenode(en_aggregate,list,nullptr);
 			pnode->SetType(tptr = TYP::Make(bt_struct,sz));
+			pnode->esize = sz;
+			pnode->i = litlist(pnode);
+			list->i = pnode->i;
 		}
 		break;
 
@@ -1478,15 +1483,15 @@ int IsLValue(ENODE *node)
 {
 	if (node==nullptr)
 		return FALSE;
-	switch( node->nodetype ) {
-    case en_b_ref:
+	switch (node->nodetype) {
+	case en_b_ref:
 	case en_c_ref:
 	case en_h_ref:
-    case en_w_ref:
+	case en_w_ref:
 	case en_ub_ref:
 	case en_uc_ref:
 	case en_uh_ref:
-    case en_uw_ref:
+	case en_uw_ref:
 	case en_hp_ref:
 	case en_wp_ref:
 	case en_wfieldref:
@@ -1497,14 +1502,25 @@ int IsLValue(ENODE *node)
 	case en_ucfieldref:
 	case en_hfieldref:
 	case en_uhfieldref:
-    case en_triple_ref:
+	case en_triple_ref:
 	case en_dbl_ref:
 	case en_quad_ref:
 	case en_flt_ref:
 	case en_ref32:
 	case en_ref32u:
 	case en_vector_ref:
-    return (TRUE);
+		return (TRUE);
+	// Detect if there's an addition to a pointer happening.
+	// For an array reference there will be an add node at the top of the
+	// expression tree. This evaluates to an address which is essentially
+	// the same as an *_ref node. It's an LValue.
+	case en_add:
+		return (IsLValue(node->p[0]) || IsLValue(node->p[1]));
+	case en_nacon:
+	case en_autocon:
+		return (node->etype == bt_pointer || node->etype == bt_struct || node->etype == bt_union || node->etype == bt_class);
+	}
+/*
 	case en_cbc:
 	case en_cbh:
     case en_cbw:
@@ -1524,12 +1540,14 @@ int IsLValue(ENODE *node)
 	case en_ccwp:
 	case en_cucwp:
     return IsLValue(node->p[0]);
+	// Detect if there's an addition to a pointer happening.
 	// For an array reference there will be an add node at the top of the
 	// expression tree. This evaluates to an address which is essentially
 	// the same as an *_ref node. It's an LValue.
 	case en_add:
+		return (IsLValue(node->p[0]) || IsLValue(node->p[1]));
 		if (node->tp)
-			return (node->tp->type == bt_pointer || node->tp->type == bt_struct);
+			return (node->tp->type == bt_pointer || node->tp->type == bt_struct || node->tp->type == bt_union || node->tp->type == bt_class);
 //			return (node->tp->type==bt_pointer && node->tp->isArray) || node->tp->type==bt_struct;
 		else
 			return (FALSE);
@@ -1544,6 +1562,7 @@ int IsLValue(ENODE *node)
 	case en_addrof:
 		return (TRUE);
 	}
+*/
 	return (FALSE);
 }
 
@@ -2174,18 +2193,22 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
 				return (TYP *)NULL;
 			}
 			if (ep1) {
+/*
 				t = ep1->tp->type;
 //				if (IsLValue(ep1) && !(t == bt_pointer || t == bt_struct || t == bt_union || t == bt_class)) {
 				if (t == bt_struct || t == bt_union || t == bt_class) {
-					//ep1 = ep1->p[0];
-					if (ep1) {
-						ep1 = makenode(en_addrof, ep1, nullptr);
-						ep1->esize = 8;     // converted to a pointer so size is now 8
-					}
+					////ep1 = ep1->p[0];
+					//if (ep1) {
+					//	ep1 = makenode(en_addrof, ep1, nullptr);
+					//	ep1->esize = 8;     // converted to a pointer so size is now 8
+					//}
 				}
-				else 
-				if (IsLValue(ep1))
-					ep1 = ep1->p[0];
+				else */
+				ep2 = ep1;
+				if (IsLValue(ep1)) {
+					//if (ep1->nodetype != en_add)	// array or pointer manipulation
+						ep1 = ep1->p[0];
+				}
 				ep1->esize = 8;     // converted to a pointer so size is now 8
 				tp1 = TYP::Make(bt_pointer, 8);
 				tp1->btp = tp->GetIndex();
@@ -2411,6 +2434,7 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
 // A cast_expression is:
 //		unary_expression
 //		(type name)cast_expression
+//		(type name) { const list }
 // ----------------------------------------------------------------------------
 static TYP *ParseCastExpression(ENODE **node)
 {
@@ -2468,35 +2492,45 @@ static TYP *ParseCastExpression(ENODE **node)
 			opt_const(&ep1);
 			if (tp == nullptr)
 				error(ERR_NULLPOINTER);
-			if (tp && tp->IsFloatType()) {
-				//if (tp2->IsFloatType() && ep1->constflag)
-				//	ep2 = makefnode(en_fcon, ep1->f);
-				//else if (ep1->constflag)
-				//	ep2 = makeinode(en_icon, ep1->i);
-				//else
+			// This is a bad idea
+			if (ep1->nodetype == en_aggregate) {
+				if (!ep1->AssignTypeToList(tp)) {
+					error(ERR_CASTAGGR);
+				}
+				ep2 = ep1;
+			}
+			else
+			{
+				if (tp && tp->IsFloatType()) {
+					//if (tp2->IsFloatType() && ep1->constflag)
+					//	ep2 = makefnode(en_fcon, ep1->f);
+					//else if (ep1->constflag)
+					//	ep2 = makeinode(en_icon, ep1->i);
+					//else
 					ep2 = makenode(en_tempfpref, (ENODE *)NULL, (ENODE *)NULL);
-			}
-			else {
-				//if (tp2->IsFloatType() && ep1->constflag)
-				//	ep2 = makefnode(en_fcon, ep1->f);
-				//else if (ep1->constflag)
-				//	ep2 = makeinode(en_icon, ep1->i);
-				//else
+				}
+				else {
+					//if (tp2->IsFloatType() && ep1->constflag)
+					//	ep2 = makefnode(en_fcon, ep1->f);
+					//else if (ep1->constflag)
+					//	ep2 = makeinode(en_icon, ep1->i);
+					//else
 					ep2 = makenode(en_tempref, (ENODE *)NULL, (ENODE *)NULL);
-				ep2->SetType(tp);
+					ep2->SetType(tp);
+				}
+				ep2 = makenode(en_void, ep2, ep1);
+				if (ep1 == nullptr)
+					error(ERR_NULLPOINTER);
+				else {
+					ep2->constflag = ep1->constflag;
+					ep2->isUnsigned = ep1->isUnsigned;
+					//ep2->etype = ep1->etype;
+					//ep2->esize = ep1->esize;
+	//				forcefit(&ep2,tp,&ep1,tp2,false);
+					forcefit(&ep1, tp2, &ep2, tp, false, true);
+				}
+				//			forcefit(&ep2,tp2,&ep1,tp,false);
 			}
-			ep2 = makenode(en_void,ep2,ep1);
-			if (ep1==nullptr)
-        error(ERR_NULLPOINTER);
-			else {
-				ep2->constflag = ep1->constflag;
-				ep2->isUnsigned = ep1->isUnsigned;
-				//ep2->etype = ep1->etype;
-				//ep2->esize = ep1->esize;
-//				forcefit(&ep2,tp,&ep1,tp2,false);
-				forcefit(&ep1,tp2,&ep2,tp,false,true);
-			}
-//			forcefit(&ep2,tp2,&ep1,tp,false);
 			head = tp;
 			tail = tp1;
 			*node = ep2;
@@ -3110,11 +3144,21 @@ ascomm2:
 		    if( tp2 == 0 || !IsLValue(ep1) )
           error(ERR_LVALUE);
 				else {
-					tp1 = forcefit(&ep2,tp2,&ep1,tp1,false,true);
-					ep1 = makenode(op,ep1,ep2);
-					ep1->esize = tp1->size;
-					ep1->etype = tp1->type;
-					ep1->isUnsigned = tp1->isUnsigned;
+					//if (ep1->tp->IsAggregateType() && ep2->nodetype == en_aggregate) {
+					//	ep2->p[0]->AssignTypeToList(ep1->tp);
+					//	ep1 = makenode(op, ep1, ep2);
+					//	ep1->esize = tp1->size;
+					//	ep1->etype = tp1->type;
+					//	ep1->isUnsigned = tp1->isUnsigned;
+					//}
+					//else
+					{
+						tp1 = forcefit(&ep2, tp2, &ep1, tp1, false, true);
+						ep1 = makenode(op, ep1, ep2);
+						ep1->esize = tp1->size;
+						ep1->etype = tp1->type;
+						ep1->isUnsigned = tp1->isUnsigned;
+					}
 					// Struct assign calls memcpy, so function is no
 					// longer a leaf routine.
 					if (tp1->size > 8)

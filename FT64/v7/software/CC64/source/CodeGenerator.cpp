@@ -647,16 +647,16 @@ j1:
 	    ap1->isUnsigned = !su | ap1->isPtr;
     }
 //    ap1->offset = makeinode(en_icon,node->p[0]->i);
-    ap1->isUnsigned = !su | ap1->isPtr;
+  ap1->isUnsigned = !su | ap1->isPtr;
 	if (!node->isUnsigned)
 	    ap1 = ap1->GenSignExtend(siz1,size,flags);
 	else
 		ap1->MakeLegal(flags,siz1);
-    ap1->isVolatile = node->isVolatile;
-    ap1->MakeLegal(flags,size);
+  ap1->isVolatile = node->isVolatile;
+  ap1->MakeLegal(flags,size);
 xit:
-    Leave("</Genderef>",0);
-    return (ap1);
+  Leave("</Genderef>",0);
+  return (ap1);
 }
 
 
@@ -1058,8 +1058,9 @@ Operand *CodeGenerator::GenerateAggregateAssign(ENODE *node1, ENODE *node2)
 	base2 = GenerateExpression(node2, F_REG, sizeOfWord);
 	GenerateDiadic(op_mov, 0, makereg(regFirstArg), base);
 	GenerateDiadic(op_mov, 0, makereg(regFirstArg+1), base2);
-	GenerateDiadic(op_ldi, 0, makereg(regFirstArg+2), make_immed(node2->tp->size));
-	GenerateMonadic(op_call, 0, make_string("_memcpy"));
+	GenerateDiadic(op_ldi, 0, makereg(regFirstArg+2), make_immed(node2->esize));
+//	GenerateDiadic(op_ldi, 0, makereg(regFirstArg + 2), make_immed(node1->esize));
+	GenerateMonadic(op_call, 0, make_string("__aacpy"));
 	ReleaseTempReg(base2);
 	return (base);
 	//base = GenerateDereference(node1,F_MEM,sizeOfWord,0);
@@ -1233,7 +1234,7 @@ Operand *CodeGenerator::GenerateAssign(ENODE *node, int flags, int size)
 						GenerateMonadic(op_push,0,ap2);
 						GenerateMonadic(op_push,0,ap1);
 					}
-					GenerateDiadic(op_jal,0,makereg(regLR),make_string("memcpy_"));
+					GenerateDiadic(op_jal,0,makereg(regLR),make_string("_memcpy"));
 					GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),make_immed(3*sizeOfWord));
 				}
 			}
@@ -1360,9 +1361,18 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int size)
   switch( node->nodetype )
   {
 	case en_aggregate:
-		ap1 = allocOperand();
-		ap1->offset = node;
-		ap1->type = 9999;
+		ap1 = GenerateExpression(node->p[0], flags, size);
+		ap2 = allocOperand();
+		ap2->mode = am_ind;
+		ap2->preg = ap1->preg;
+		if (node->tp->IsScalar())
+			GenLoad(ap1, ap2, size, size);
+		else
+			ap1->isPtr = true;
+		return (ap1);
+		//ap1 = allocOperand();
+		//ap1->offset = node;
+		//ap1->type = 9999;
 		return (ap1);
 	case en_fcon:
     ap1 = allocOperand();
@@ -1481,7 +1491,13 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int size)
 		case en_addrof:
 			ap2 = GetTempRegister();
 			ap1 = GenerateExpression(node->p[0], flags & ~F_FPREG, 8);
-			GenerateDiadic(op_lea, 0, ap2, ap1);
+			switch (ap1->mode) {
+			case am_reg:
+				GenerateDiadic(op_mov, 0, ap2, ap1);
+				break;
+			default:
+				GenerateDiadic(op_lea, 0, ap2, ap1);
+			}
 			ReleaseTempReg(ap1);
 			return (ap2);
     case en_ub_ref:
@@ -1846,6 +1862,11 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int size)
 			ap1 = GenerateExpression(node->p[0],F_REG,size);
 			GenerateDiadic(op_sxh,0,ap1,ap1);
 			return ap1;
+	case en_list:
+		ap1 = GetTempRegister();
+		GenerateDiadic(op_lea, 0, ap1, make_label(node->i));
+		ap1->isPtr = true;
+		return (ap1);
 	case en_object_list:
 			ap1 = GetTempRegister();
 			GenerateDiadic(op_lea,0,ap1,make_indexed(-8,regFP));

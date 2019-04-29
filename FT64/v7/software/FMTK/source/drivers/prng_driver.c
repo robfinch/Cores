@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2018-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -25,15 +25,16 @@
 #include <fmtk/const.h>
 #include <fmtk/device.h>
 
-extern int PeekRand(register int handle);
-extern int GetRand(register int handle);
-extern void SeedRand(register int handle, register int pos);
-extern void DBGDisplayString(char *);
+#define PRNG	0xFFFFFFFFFFFFDC00L
+#define PRNG_STREAM		0x04
+#define PRNG_MZ				0x08
+#define PRNG_MW				0x0C
 
-static void prng_init()
-{
-	InitPRNG();
-}
+extern pascal int PeekRand(register int handle);
+extern pascal int GetRand(register int handle);
+extern pascal void SeedRand(register int handle, register int pos);
+extern void DBGDisplayAsciiString(char *);
+extern int randStream;
 
 static int prng_stat(int handle)
 {
@@ -61,6 +62,20 @@ static void prng_SetPosition(int handle, int pos)
 
 static void prng_flushi(int handle)
 {
+}
+
+void prng_init()
+{
+	int ch;
+	int n;
+
+	for (ch = 0; ch < 1024; ch++) {
+		out32(PRNG+PRNG_STREAM,ch);
+		out32(PRNG+PRNG_MZ,0x88888888^(ch << 16));
+		out32(PRNG+PRNG_MW,0x01234567);
+		for (n = 0; n < 30; n = n + 1)
+			GetRand(0);
+	}
 }
 
 int prng_CmdProc(int cmd, int cmdParm1, int cmdParm2, int cmdParm3, int cmdParm4)
@@ -96,7 +111,7 @@ int prng_CmdProc(int cmd, int cmdParm1, int cmdParm2, int cmdParm3, int cmdParm4
 	case DVC_Nop:
 		break;
 	case DVC_Setup:
-		DBGDisplayStringCRLF("PRNG setup");
+		DBGDisplayAsciiStringCRLF(B"PRNG setup");
 		break;
 	case DVC_Initialize:
 		prng_init();

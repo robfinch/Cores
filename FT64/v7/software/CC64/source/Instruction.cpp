@@ -55,8 +55,47 @@ bool Instruction::IsFlowControl()
 	return (false);
 }
 
+bool Instruction::IsLoad()
+{
+	if (this == nullptr)
+		return (false);
+	if (opcode == op_lb
+		|| opcode == op_lc
+		|| opcode == op_lh
+		|| opcode == op_lw
+		|| opcode == op_lbu
+		|| opcode == op_lcu
+		|| opcode == op_lhu
+		|| opcode == op_lwr
+		|| opcode == op_lf
+		|| opcode == op_lfd
+		|| opcode == op_lft
+		)
+		return (true);
+	return (false);
+}
+
+bool Instruction::IsIntegerLoad()
+{
+	if (this == nullptr)
+		return (false);
+	if (opcode == op_lb
+		|| opcode == op_lc
+		|| opcode == op_lh
+		|| opcode == op_lw
+		|| opcode == op_lbu
+		|| opcode == op_lcu
+		|| opcode == op_lhu
+		|| opcode == op_lwr
+		)
+		return (true);
+	return (false);
+}
+
 bool Instruction::IsStore()
 {
+	if (this == nullptr)
+		return (false);
 	if (opcode == op_sb
 		|| opcode == op_sc
 		|| opcode == op_sh
@@ -66,6 +105,21 @@ bool Instruction::IsStore()
 		|| opcode == op_sfd
 		|| opcode == op_sft
 		|| opcode == op_push
+		)
+		return (true);
+	return (false);
+}
+
+bool Instruction::IsExt()
+{
+	if (this == nullptr)
+		return (false);
+	if (opcode == op_sxb
+		|| opcode == op_sxc
+		|| opcode == op_sxh
+		|| opcode == op_zxb
+		|| opcode == op_zxc
+		|| opcode == op_zxh
 		)
 		return (true);
 	return (false);

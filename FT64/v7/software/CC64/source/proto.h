@@ -29,6 +29,7 @@ void IRemove();
 int roundSize(TYP *tp);
 extern char *rtrim(char *);
 extern int caselit(scase *casetab, int64_t);
+extern int litlist(ENODE *);
 Operand *make_indexed2(int lab, int i);
 
 // MemoryManagement.cpp

@@ -34,8 +34,11 @@ void OCODE::Remove()
 
 bool OCODE::HasTargetReg() const
 {
-	if (insn)
+	if (insn) {
+		if (insn->opcode == op_call || insn->opcode == op_jal)
+			return (oper1->type != bt_void);
 		return (insn->HasTarget());
+	}
 	else
 		return (false);
 }
@@ -336,10 +339,11 @@ void OCODE::OptLoadChar()
 		if (fwd->opcode == op_sext16 || fwd->opcode == op_sxc ||
 			(fwd->opcode == op_bfext && fwd->oper3->offset->i == 0 && fwd->oper4->offset->i == 15)) {
 			if (fwd->oper1->preg == oper1->preg) {
-				if (fwd->fwd) {
-					fwd->fwd->back = this;
-				}
-				fwd = fwd->fwd;
+				fwd->MarkRemove();
+				//if (fwd->fwd) {
+				//	fwd->fwd->back = this;
+				//}
+				//fwd = fwd->fwd;
 			}
 		}
 	}
@@ -351,10 +355,11 @@ void OCODE::OptLoadByte()
 		if (fwd->opcode == op_sext8 || fwd->opcode == op_sxb ||
 			(fwd->opcode == op_bfext && fwd->oper3->offset->i == 0 && fwd->oper4->offset->i == 7)) {
 			if (fwd->oper1->preg == oper1->preg) {
-				if (fwd->fwd) {
-					fwd->fwd->back = this;
-				}
-				fwd = fwd->fwd;
+				fwd->MarkRemove();
+				//if (fwd->fwd) {
+				//	fwd->fwd->back = this;
+				//}
+				//fwd = fwd->fwd;
 			}
 		}
 	}
@@ -367,10 +372,11 @@ void OCODE::OptLoadHalf()
 		if (fwd->opcode == op_sext32 || fwd->opcode == op_sxh ||
 			(fwd->opcode == op_bfext && fwd->oper3->offset->i == 0 && fwd->oper4->offset->i == 31)) {
 			if (fwd->oper1->preg == oper1->preg) {
-				if (fwd->fwd) {
-					fwd->fwd->back = this;
-				}
-				fwd = fwd->fwd;
+				fwd->MarkRemove();
+				//if (fwd->fwd) {
+				//	fwd->fwd->back = this;
+				//}
+				//fwd = fwd->fwd;
 			}
 		}
 	}
@@ -457,6 +463,7 @@ void OCODE::OptBra()
 void OCODE::OptUctran()
 {
 	if (uctran_off) return;
+
 	while (fwd != nullptr && fwd->opcode != op_label)
 	{
 		fwd = fwd->fwd;
@@ -932,6 +939,32 @@ void OCODE::OptLabel()
 	if (back)
 		back->fwd = nullptr;
 	optimized++;
+}
+
+
+// Search ahead for additional LDI instructions loading the same constant
+// and remove them.
+
+void OCODE::OptLdi()
+{
+	OCODE *ip;
+
+	for (ip = fwd; ip; ip = ip->fwd) {
+		if (ip->HasTargetReg()) {
+			if (ip->oper1->preg == oper1->preg) {
+				if (ip->opcode == op_ldi) {
+					if (ip->oper2->offset->i == oper2->offset->i) {
+						ip->MarkRemove();
+						optimized++;
+					}
+					else
+						return;
+				}
+				else
+					return;
+			}
+		}
+	}
 }
 
 
