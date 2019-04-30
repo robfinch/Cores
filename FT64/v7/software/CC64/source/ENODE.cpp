@@ -372,7 +372,9 @@ bool ENODE::IsEqual(ENODE *node1, ENODE *node2, bool lit)
 			if (!IsEqual(ep1->p[1], ep2->p[1], lit))
 				return (false);
 		}
-		return (true);
+		if (ep1 != nullptr && ep2 != nullptr)
+			return (true);
+		return(false);
 	default:
 		if (!IsEqual(node1->p[0], node2->p[0], lit))
 			return (false);

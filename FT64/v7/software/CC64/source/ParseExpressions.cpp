@@ -1643,6 +1643,7 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 	int sz1, cnt, cnt2, totsz;
 	int sa[20];
 	bool firstBr = true;
+	int64_t elesize;
 
   ep1 = (ENODE *)NULL;
   Enter("<ParsePostfix>");
@@ -1701,8 +1702,10 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 						break;
 					}
 				}
-				if (tp1->type==bt_pointer)
-					sa[numdimen+1] = tp1->GetBtp()->size;
+				if (tp1->type == bt_pointer) {
+					sa[numdimen + 1] = tp1->GetBtp()->size;
+					sa[numdimen + 1] = ep1->esize;
+				}
 				else
 					sa[numdimen+1] = tp1->size;
 			}
@@ -1745,8 +1748,13 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 			//}
 			//else
 			{
-				sz1 = sa[numdimen+1];	// could be a void = 0
-				for (cnt2 = 1; cnt2 < numdimen-cnt; cnt2++)
+				sz1 = 1;
+				for (cnt2 = 1; cnt2 <= numdimen; cnt2++)
+					sz1 = sz1 * sa[cnt2];
+				elesize = sa[numdimen + 1] / sz1;
+				sa[0] = elesize;
+				sz1 = 1;// sa[numdimen + 1];	// could be a void = 0
+				for (cnt2 = 0; cnt2 < numdimen - cnt; cnt2++)
 					sz1 = sz1 * sa[cnt2];
 			}
 			qnode = makeinode(en_icon,sz1);
@@ -2206,7 +2214,7 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
 				else */
 				ep2 = ep1;
 				if (IsLValue(ep1)) {
-					//if (ep1->nodetype != en_add)	// array or pointer manipulation
+					if (ep1->nodetype != en_add)	// array or pointer manipulation
 						ep1 = ep1->p[0];
 				}
 				ep1->esize = 8;     // converted to a pointer so size is now 8
