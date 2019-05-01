@@ -413,6 +413,8 @@ bool FT64CodeGenerator::GenerateBranch(ENODE *node, int op, int label, int predr
 	case op_bchk:	break;
 	case op_nand:	op = op_bnand; break;
 	case op_nor:	op = op_bnor; break;
+	case op_and:	op = op_band; break;
+	case op_or:	op = op_bor; break;
 	case op_eq:	op = op_beq; break;
 	case op_ne:	op = op_bne; break;
 	case op_lt: op = op_blt; break;

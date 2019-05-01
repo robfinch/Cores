@@ -5322,10 +5322,10 @@ void FT64_processMaster()
       case tk_bleu: process_bcc(0x30,-7); break;
       case tk_blt: process_bcc(0x30,2); break;
       case tk_bltu: process_bcc(0x30,6); break;
-			case tk_bnand: process_bcc(0x10, 2); break;
+			case tk_bnand: process_bcc(0x10, 4); break;
 			case tk_bne: process_bcc(0x30,1); break;
 			case tk_bnei: process_beqi(0x12,1); break;
-			case tk_bnor: process_bcc(0x10, 3); break;
+			case tk_bnor: process_bcc(0x10, 5); break;
 			case tk_bor: process_bcc(0x10, 1); break;
 			case tk_bra: process_bra(0x01); break;
 			case tk_brk: process_brk(); break;

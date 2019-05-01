@@ -44,7 +44,7 @@ static ENODE *agr;
 // Please keep table in alphabetical order.
 // Instruction.cpp has the number of table elements hard-coded in it.
 //
-Instruction opl[232] =
+Instruction opl[233] =
 {   
 { ";", op_rem },
 { ";asm",op_asm,300 },
@@ -57,6 +57,7 @@ Instruction opl[232] =
 { "and",op_and,1,1,false,am_reg,am_reg,am_reg|am_imm,0 },
 { "asl", op_asl,2,1,false,am_reg,am_reg,am_reg|am_ui6,0 },
 { "asr",op_asr,2,1,false,am_reg,am_reg,am_reg|am_ui6,0 },
+{ "band", op_band,2,0,false,am_reg,am_reg,0,0 },
 { "bbc", op_bbc,3,0,false,am_reg,am_ui6,0,0 },
 { "bbs", op_bbs,3,0,false,am_reg,am_ui6,0,0 },
 { "bchk", op_bchk,3,0 },
@@ -815,44 +816,6 @@ int64_t GetQuadtabLen()
 	return (len);
 }
 
-int putStructConst(ENODE *ep)
-{
-	int n,m,k;
-	std::streampos ptr;
-	ENODE *ep1;
-
-	if (ep == nullptr)
-		return (0);
-	if (ep->nodetype != en_aggregate)
-		return (0);
-	
-	for (n = 0, ep1 = ep->p[0]->p[2]; ep1; ep1 = ep1->p[2]) {
-		if (ep1->nodetype == en_aggregate) {
-			k = putStructConst(ep1);
-		}
-		else {
-			switch (ep1->esize) {
-			case 1:	ofs.printf("db\t");	ep1->PutConstant(ofs, 0, 0); ofs.printf("\n"); break;
-			case 2:	ofs.printf("dc\t");	ep1->PutConstant(ofs, 0, 0); ofs.printf("\n"); break;
-			case 4:	ofs.printf("dh\t");	ep1->PutConstant(ofs, 0, 0); ofs.printf("\n"); break;
-			case 8:	ofs.printf("dw\t");	ep1->PutConstant(ofs, 0, 0); ofs.printf("\n"); break;
-			default:
-				ofs.printf("fill.b %ld,0x00\n", ep1->esize - 1);
-				ofs.printf("db\t");
-				ep->PutConstant(ofs, 0, 0);
-				ofs.printf("\n");
-				break;
-			}
-			k = ep1->esize;
-		}
-		n = n + k;
-	}
-	if (n < ep->esize) {
-		ofs.printf("fill.b %ld,0x00\n", ep->esize - n);
-	}
-	return (n);
-}
-
 // Dump the literal pools.
 
 void dumplits()
@@ -894,11 +857,13 @@ void dumplits()
 	*/
 	while(quadtab != nullptr) {
 		nl();
-		put_label(quadtab->label,"",quadtab->nmspace,'D');
-		ofs.printf("\tdh\t");
-		quadtab->Pack(64);
-		ofs.printf("%s",quadtab->ToString(64));
-		outcol += 35;
+		if (DataLabels[quadtab->label]) {
+			put_label(quadtab->label, "", quadtab->nmspace, 'D');
+			ofs.printf("\tdh\t");
+			quadtab->Pack(64);
+			ofs.printf("%s", quadtab->ToString(64));
+			outcol += 35;
+		}
 		quadtab = quadtab->next;
 	}
 	if (strtab) {
@@ -913,9 +878,16 @@ void dumplits()
 	//	ofs.printf("%s", buf);
 	//}
 	for (lit = strtab; lit; lit = lit->next) {
+		ENODE *ep;
+		agr = ep = (ENODE *)lit->str;
 		dfs.printf(".");
 		nl();
-		put_label(lit->label,strip_crlf(&lit->str[1]),lit->nmspace,'D');
+		if (!lit->isString) {
+			if (DataLabels[lit->label])
+				put_label(lit->label, strip_crlf(&lit->str[1]), lit->nmspace, 'D');
+		}
+		else
+			put_label(lit->label,strip_crlf(&lit->str[1]),lit->nmspace,'D');
 		if (lit->isString) {
 			cp = lit->str;
 			switch (*cp) {
@@ -946,9 +918,9 @@ void dumplits()
 			}
 		}
 		else {
-			ENODE *ep;
-			agr = ep = (ENODE *)lit->str;
-			putStructConst(ep);
+			if (DataLabels[lit->label]) {
+				ep->PutStructConst(ofs);
+			}
 		}
 	}
 	strtab = nullptr;

@@ -234,6 +234,7 @@ extern Map map;
 extern int optimized;
 extern short int typ_sp;
 extern FT64CodeGenerator cg;
+extern bool DataLabels[65535];
 
 // Analyze.c
 extern short int csendx;
@@ -419,7 +420,7 @@ extern BasicBlock *basicBlocks[10000];
 extern BasicBlock *sortedBlocks[10000];
 extern Forest forest;
 extern IGraph iGraph;
-extern Instruction opl[232];
+extern Instruction opl[233];
 extern BasicBlock *RootBlock;
 extern BasicBlock *LastBlock;
 extern Instruction *GetInsn(int);

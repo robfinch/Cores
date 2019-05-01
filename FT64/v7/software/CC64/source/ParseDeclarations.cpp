@@ -1687,12 +1687,15 @@ int Declaration::declare(SYM *parent,TABLE *table,int al,int ilc,int ztype)
 			tp1 = nameref(&ep1,TRUE);
       op = en_assign;
       tp2 = asnop(&ep2);
-      if(tp2 == nullptr || !IsLValue(ep1))
+      if (tp2 == nullptr || !IsLValue(ep1))
         error(ERR_LVALUE);
       else {
         tp1 = forcefit(&ep2,tp2,&ep1,tp1,false,true);
         ep1 = makenode(op,ep1,ep2);
       }
+			// Move vars with initialization data over to the data segment.
+			if (ep1->segment == bssseg)
+				ep1->segment = dataseg;
 			sp->initexp = ep1;
 			if (lastst==semicolon)
 				break;

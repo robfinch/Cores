@@ -398,6 +398,7 @@ public:
 	int8_t		bit_offset;
 	int8_t		ven;			// vector element number
 	int64_t   size;
+	int64_t struct_offset;
 	int8_t dimen;
 	int numele;					// number of elements in array / vector length
 	TABLE lst;
@@ -548,7 +549,8 @@ public:
 	void storeHex(txtoStream& ofs);
 	void loadHex(txtiStream& ifs);
 
-	void PutConstant(txtoStream& ofs, unsigned int lowhigh, unsigned int rshift);
+	int PutStructConst(txtoStream& ofs);
+	void PutConstant(txtoStream& ofs, unsigned int lowhigh, unsigned int rshift, bool opt = false);
 	void PutConstantHex(txtoStream& ofs, unsigned int lowhigh, unsigned int rshift);
 	static ENODE *GetConstantHex(std::ifstream& ifs);
 };

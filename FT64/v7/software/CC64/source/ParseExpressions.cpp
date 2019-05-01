@@ -1474,11 +1474,17 @@ j2:
     return tptr;
 }
 
-/*
- *      this function returns true if the node passed is an IsLValue.
- *      this can be qualified by the fact that an IsLValue must have
- *      one of the dereference operators as it's top node.
- */
+//
+// This function returns true if the node passed is an IsLValue.
+// this can be qualified by the fact that an IsLValue must have
+// one of the dereference operators as it's top node.
+// OR
+// It's a simple add to an LValue (arrays), the result would still be an LValue
+// We want arrays and structure types to be treated as LValues although they
+// aren't really. This is because they are manipulated as pointers to RValues
+// not RValues. And we don't want to have to test everywhere for struct types,
+// so we just say it's an LValue.
+//
 int IsLValue(ENODE *node)
 {
 	if (node==nullptr)
@@ -2214,8 +2220,10 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
 				else */
 				ep2 = ep1;
 				if (IsLValue(ep1)) {
-					if (ep1->nodetype != en_add)	// array or pointer manipulation
-						ep1 = ep1->p[0];
+					if (ep1->nodetype != en_add) {	// array or pointer manipulation
+						if (ep1->p[0])	// Cheesy hack
+							ep1 = ep1->p[0];
+					}
 				}
 				ep1->esize = 8;     // converted to a pointer so size is now 8
 				tp1 = TYP::Make(bt_pointer, 8);
@@ -2386,24 +2394,24 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
 		}
 		break;
 
-    case kw_delete:
+  case kw_delete:
 		currentFn->IsLeaf = FALSE;
 		NextToken();
 		{
 			std::string *name = new std::string("__delete");
         
-  			if (lastst==openbr) {
+  		if (lastst==openbr) {
 				NextToken();
-    			needpunc(closebr,50);
-		    }
+    		needpunc(closebr,50);
+		  }
 			tp1 = ParseCastExpression(&ep1);
 			tp1 = deref(&ep1, tp1);
-  			ep2 = makesnode(en_cnacon, name, name, 0);
-  			ep1 = makefcnode(en_fcall, ep2, ep1, nullptr);
-      }
-      break;
+  		ep2 = makesnode(en_cnacon, name, name, 0);
+  		ep1 = makefcnode(en_fcall, ep2, ep1, nullptr);
+    }
+    break;
 
-    case kw_typenum:
+  case kw_typenum:
 		NextToken();
 		needpunc(openpa,3);
 		tp = head;
@@ -2424,18 +2432,18 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
 		needpunc(closepa,4);
 		break;
 
-    default:
-        tp = ParsePostfixExpression(&ep1, got_pa);
-        break;
-    }
-    *node = ep1;
-    if (ep1)
-	    (*node)->SetType(tp);
-    if (tp)
-    Leave("</ParseUnary>", tp->type);
-    else
-    Leave("</ParseUnary>", 0);
-    return tp;
+  default:
+    tp = ParsePostfixExpression(&ep1, got_pa);
+    break;
+  }
+  *node = ep1;
+  if (ep1)
+	  (*node)->SetType(tp);
+  if (tp)
+  Leave("</ParseUnary>", tp->type);
+  else
+  Leave("</ParseUnary>", 0);
+  return tp;
 }
 
 // ----------------------------------------------------------------------------
@@ -3149,7 +3157,7 @@ ascomm:
 				NextToken();
         tp2 = asnop(&ep2);
 ascomm2:
-		    if( tp2 == 0 || !IsLValue(ep1) )
+		    if ( tp2 == 0 || !IsLValue(ep1) )
           error(ERR_LVALUE);
 				else {
 					//if (ep1->tp->IsAggregateType() && ep2->nodetype == en_aggregate) {

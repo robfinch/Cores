@@ -489,6 +489,7 @@ void SYM::SetStorageOffset(TYP *head, int nbytes, int al, int ilc, int ztype)
 	else {
 		value.i = -(ilc + nbytes + head->roundSize());// + parentBytes);
 	}
+	head->struct_offset = value.i;
 }
 
 

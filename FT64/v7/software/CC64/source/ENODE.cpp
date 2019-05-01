@@ -460,7 +460,7 @@ bool ENODE::AssignTypeToList(TYP *tp)
 		SYM *thead;
 
 		thead = SYM::GetPtr(tp->lst.GetHead());
-		while (thead && ep) {
+		for (ep = p[0]->p[2]; thead && ep; ) {
 			ep->tp = thead->tp;
 			ep->tp->isConst = isConst;
 			ep->esize = thead->tp->size;
@@ -1884,7 +1884,7 @@ int GetNaturalSize(ENODE *node)
 
 
 
-void ENODE::PutConstant(txtoStream& ofs, unsigned int lowhigh, unsigned int rshift)
+void ENODE::PutConstant(txtoStream& ofs, unsigned int lowhigh, unsigned int rshift, bool opt)
 {
 	// ASM statment text (up to 3500 chars) may be placed in the following buffer.
 	static char buf[4000];
@@ -1896,7 +1896,8 @@ void ENODE::PutConstant(txtoStream& ofs, unsigned int lowhigh, unsigned int rshi
 		ofs.write(buf);
 		break;
 	case en_fcon:
-		goto j1;
+		if (!opt)
+			goto j1;
 		// The following spits out a warning, but is okay.
 		sprintf_s(buf, sizeof(buf), "0x%llx", f);
 		ofs.write(buf);
@@ -2159,3 +2160,55 @@ void ENODE::store(txtoStream& ofs)
 void ENODE::load(txtiStream& ifs)
 {
 }
+
+int ENODE::PutStructConst(txtoStream& ofs)
+{
+	int n, m, k;
+	ENODE *ep1;
+	ENODE *ep = this;
+	bool isStruct;
+
+	if (ep == nullptr)
+		return (0);
+	if (ep->nodetype != en_aggregate)
+		return (0);
+
+	for (n = 0, ep1 = ep->p[0]->p[2]; ep1; ep1 = ep1->p[2]) {
+		if (ep1->nodetype == en_aggregate) {
+			k = ep1->PutStructConst(ofs);
+		}
+		else {
+			isStruct = ep->tp->IsStructType();
+			if (isStruct) {
+				switch (ep1->tp->walignment()) {
+				case 1:	break;
+				default: ofs.printf("align %ld\t", (int)ep1->tp->walignment()); break;
+				}
+				k = ep1->tp->struct_offset + ep1->esize;
+			}
+			else
+				k = ep1->esize;
+			switch (ep1->esize) {
+			case 1:	ofs.printf("db\t");	ep1->PutConstant(ofs, 0, 0); ofs.printf("\n"); break;
+			case 2:	ofs.printf("dc\t");	ep1->PutConstant(ofs, 0, 0); ofs.printf("\n"); break;
+			case 4:	ofs.printf("dh\t");	ep1->PutConstant(ofs, 0, 0); ofs.printf("\n"); break;
+			case 8:	ofs.printf("dw\t");	ep1->PutConstant(ofs, 0, 0, true); ofs.printf("\n"); break;
+			default:
+				ofs.printf("fill.b %ld,0x00\n", ep1->esize - 1);
+				ofs.printf("db\t");
+				ep1->PutConstant(ofs, 0, 0, true);
+				ofs.printf("\n");
+				break;
+			}
+		}
+		if (isStruct)
+			n = k;
+		else
+			n = n + k;
+	}
+	if (n < ep->esize) {
+		ofs.printf("fill.b %ld,0x00\n", ep->esize - n);
+	}
+	return (n);
+}
+

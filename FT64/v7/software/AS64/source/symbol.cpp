@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2014-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2014-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -146,6 +146,7 @@ SYM *new_symbol(char *name)
   ts.isExtern = 0;
 	ts.isMacro = false;
 	ts.phaserr = ' ';
+	ts.bits = 32;
   p = insert_symbol(&ts);
   numsym++;
   return p;
@@ -187,6 +188,12 @@ void DumpSymbols()
         if (dp->name && !dp->isMacro)
         fprintf(ofp, "%c %-40s %6s  %06llx %d\n", dp->phaserr, nmTable.GetName(dp->name), segname(dp->segment), dp->value.low, dp->bits);
     }
+		fprintf(ofp, "\nUndefined Symbols\n");
+		for (nn = 0; nn < ii; nn++) {
+			dp = &pt[nn];
+			if (dp->name && !dp->isMacro && dp->defined == false)
+				fprintf(ofp, "%c %-40s %6s  %06llx %d\n", dp->phaserr, nmTable.GetName(dp->name), segname(dp->segment), dp->value.low, dp->bits);
+		}
 		fprintf(ofp, "\n  Macro Name\n");
 		for (nn = 0; nn < ii; nn++) {
 			dp = &pt[nn];

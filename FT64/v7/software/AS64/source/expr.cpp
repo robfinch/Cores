@@ -34,73 +34,73 @@ int nsym;
 // >expr
 int64_t primary()
 {
-    int64_t val;
-    SYM *sym;
-    static char buf[500];
+  int64_t val;
+  SYM *sym;
+  static char buf[500];
 
 	ZeroMemory(buf,sizeof(buf));
-    switch(token) {
-    case tk_id:
-         if (lastid[0]=='.')  // local label
-            sprintf(buf, "%s%s", current_label, lastid);
-         else
-             strcpy(buf, lastid);
-         sym = find_symbol(buf);
-         if (!sym)
-             sym = new_symbol(buf);
-         val = sym->value.low;
-         if (sym->segment < 5)
-             nsym++;
-         lastsym = sym;
-         NextToken();
-         if (token==tk_eol)
-            prevToken();
-         break;
-    case tk_icon:
-         val = ival.low;
-         NextToken();
-         if (token==tk_eol)
-            prevToken();
-         break;
-    case '\'':
-         inptr++;
-		 if (*inptr=='\\') {
-			 inptr++;
-			 switch(*inptr) {
-			 case '\r':	val = '\r'; NextToken(); expect('\''); return (val);
-			 case '\n':	val = '\n'; NextToken(); expect('\''); return (val);
-			 case '\t':	val = '\t'; NextToken(); expect('\''); return (val);
-			 case '\f':	val = '\f'; NextToken(); expect('\''); return (val);
-			 case '\b':	val = '\b'; NextToken(); expect('\''); return (val);
-			 }
-		 }
-         val = *inptr;
-         NextToken();
-         expect('\'');
-         break;
-    case '(':
-         NextToken();
-         val = expr();
-         expect(')');
-         break;
-    default:
-      if (token=='>' && gCpu==5) {
-        val = expr();
-        val >>= 12;
-      }
-      else if (token=='<' && gCpu==5) {
-        val = expr();
-        val &= 0xFFF;
-      }
-      else {
-       //printf("Syntax error.\r\n");
-       val = 0;
-       if (token != tk_eol)
-           NextToken();
-      }
-      break;
-    }    
-    return val;
+  switch(token) {
+  case tk_id:
+    if (lastid[0]=='.')  // local label
+      sprintf(buf, "%s%s", current_label, lastid);
+    else
+      strcpy(buf, lastid);
+    sym = find_symbol(buf);
+    if (!sym)
+      sym = new_symbol(buf);
+    val = sym->value.low;
+    if (sym->segment < 5)
+      nsym++;
+    lastsym = sym;
+    NextToken();
+    if (token==tk_eol)
+      prevToken();
+    break;
+  case tk_icon:
+    val = ival.low;
+    NextToken();
+    if (token==tk_eol)
+      prevToken();
+    break;
+  case '\'':
+    inptr++;
+		if (*inptr=='\\') {
+			inptr++;
+			switch(*inptr) {
+			case '\r':	val = '\r'; NextToken(); expect('\''); return (val);
+			case '\n':	val = '\n'; NextToken(); expect('\''); return (val);
+			case '\t':	val = '\t'; NextToken(); expect('\''); return (val);
+			case '\f':	val = '\f'; NextToken(); expect('\''); return (val);
+			case '\b':	val = '\b'; NextToken(); expect('\''); return (val);
+			}
+		}
+    val = *inptr;
+    NextToken();
+    expect('\'');
+    break;
+  case '(':
+    NextToken();
+    val = expr();
+    expect(')');
+    break;
+  default:
+    if (token=='>' && gCpu==5) {
+      val = expr();
+      val >>= 12;
+    }
+    else if (token=='<' && gCpu==5) {
+      val = expr();
+      val &= 0xFFF;
+    }
+    else {
+      //printf("Syntax error.\r\n");
+      val = 0;
+      if (token != tk_eol)
+        NextToken();
+    }
+    break;
+  }    
+  return val;
 }
  
 // !unary

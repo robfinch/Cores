@@ -102,6 +102,7 @@ char float_precision = 'd';
 int parseEsc = TRUE;
 
 TABLE           gsyms[257];// = {0,0},
+bool DataLabels[65535];
 	           
 SYM             *lasthead = (SYM *)NULL;
 Float128		*quadtab = nullptr;

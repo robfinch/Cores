@@ -85,6 +85,7 @@ Operand *make_label(int lab)
 	lnode = allocEnode();
 	lnode->nodetype = en_labcon;
 	lnode->i = lab;
+	DataLabels[lab] = true;
 	ap = allocOperand();
 	ap->mode = am_direct;
 	ap->offset = lnode;

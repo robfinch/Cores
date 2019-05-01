@@ -100,7 +100,7 @@ void doinit(SYM *sp)
            algn = imax(sp->tp->GetBtp()->alignment,8);
         else
             algn = 2;
-		seg(oseg==noseg ? bssseg : oseg,algn);            /* initialize into data segment */
+		seg(oseg==noseg ? (lastst==assign ? dataseg : bssseg) : oseg,algn);            /* initialize into data segment */
 		nl();                   /* start a new line in object */
 	}
 	

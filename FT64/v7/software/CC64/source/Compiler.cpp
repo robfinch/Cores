@@ -89,6 +89,7 @@ void Compiler::compile()
 	ZeroMemory(&symbolTable,sizeof(symbolTable));
 	ZeroMemory(&typeTable,sizeof(typeTable));
 	ZeroMemory(&functionTable, sizeof(functionTable));
+	ZeroMemory(&DataLabels, sizeof(DataLabels));
 	AddStandardTypes();
 
 	RTFClasses::Random::srand((RANDOM_TYPE)time(NULL));

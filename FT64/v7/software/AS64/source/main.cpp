@@ -1223,141 +1223,141 @@ void process_label()
 		shft = 1;
 
 //    printf("<process_label>");
-    isEquate = 0;
-    // Bump up the address to align it with a valid code address if needed.
-    bump_address();
-    switch(segment) {
-    case codeseg:
-         ca = code_address >> shft;
-         ca = sections[0].address >> shft;
-         break;
-    case rodataseg:
-         ca = sections[1].address >> shft;
-         break;
-    case dataseg:
-         ca = sections[2].address >> shft;
-         break;
-    case bssseg:
-         ca = sections[3].address >> shft;
-         break;
-    case tlsseg:
-         ca = sections[4].address >> shft;
-         break;
+  isEquate = 0;
+  // Bump up the address to align it with a valid code address if needed.
+  bump_address();
+  switch(segment) {
+  case codeseg:
+    ca = code_address >> shft;
+    ca = sections[0].address >> shft;
+    break;
+  case rodataseg:
+    ca = sections[1].address >> shft;
+    break;
+  case dataseg:
+    ca = sections[2].address >> shft;
+    break;
+  case bssseg:
+    ca = sections[3].address >> shft;
+    break;
+  case tlsseg:
+    ca = sections[4].address >> shft;
+    break;
 	default:
-		 ca = code_address >> shft;
-		 ca = sections[0].address >> shft;
-		 break;
+		ca = code_address >> shft;
+		ca = sections[0].address >> shft;
+		break;
 	}
 //    if (segment==bssseg)
 //       ca = bss_address;
 //    else
 //        ca = code_address;
-    if (lastid[0]=='.') {
-        sprintf_s(nm, sizeof(nm), "%s%s", current_label, lastid);
-    }
-    else { 
-        strcpy_s(current_label, sizeof(current_label), lastid);
-        strcpy_s(nm, sizeof(nm), lastid);
-    }
-    if (strcmp("end_init_data", nm)==0)
-       isInitializationData = 0;
-    NextToken();
+  if (lastid[0]=='.') {
+    sprintf_s(nm, sizeof(nm), "%s%s", current_label, lastid);
+  }
+  else { 
+    strcpy_s(current_label, sizeof(current_label), lastid);
+    strcpy_s(nm, sizeof(nm), lastid);
+  }
+  if (strcmp("end_init_data", nm)==0)
+    isInitializationData = 0;
+  NextToken();
 //    SkipSpaces();
-    if (token==tk_equ || token==tk_eq) {
-        NextToken();
-        val = expr128();
-        isEquate = 1;
-    }
-    else {
+  if (token==tk_equ || token==tk_eq) {
+    NextToken();
+    val = expr128();
+    isEquate = 1;
+  }
+  else {
 		prevToken();
 		val.low = ca;
 		val.high = 0;
 	}
 //    if (token==tk_eol)
 //       prevToken();
-    //else if (token==':') inptr++;
-    // ignore the labels in initialization data
-    if (isInitializationData)
-       return;
-    sym = find_symbol(nm);
-    if (pass==4 || pass==3) {
-        if (sym) {
-            if (sym->defined) {
-                //if (!Int128::IsEqual(&sym->value, &val)) {
-                //    printf("Label %s already defined %ld vs %ld.\r\n", nm, sym->value.low, val.low);
-                //    printf("Line %d: %.60s\r\n", lineno, stptr);
-                //}
-            }
-            sym->defined = 1;
-            if (isEquate) {
-                sym->value = val;
-                sym->segment = constseg;
-                sym->bits = (int)ceil(log(fabs((double)val.low)+1) / log(2.0))+1;
-            }
-            else {
-							if (gCpu=='G')
-								sym->value.low = ca & -4LL;
-							else
-								sym->value.low = ca;
-							sym->value.high = 0;
-              sym->segment = segment;
-              if (segment==codeseg)
-                sym->bits = code_bits;
-              else
-                sym->bits = data_bits;
-            }
-        }
-        else {
-            sym = new_symbol(nm);    
-            sym->defined = 1;
-            if (isEquate) {
-                sym->value = val;
-                sym->segment = constseg;
-                sym->bits = (int)ceil(log(fabs((double)val.low)+1) / log(2.0))+1;
-            }
-            else {
-							if (gCpu=='G')
-								sym->value.low = ca & -4LL;
-							else
-								sym->value.low = ca;
-							sym->value.high = 0;
-							sym->segment = segment;
-              if (segment==codeseg)
-                sym->bits = code_bits;
-              else
-                sym->bits = data_bits;
-            }
-        }
-    }
-    else if (pass>4) {
-      if (!sym) {
-        printf("Internal error: SYM is NULL.\r\n");
-        printf("Couldn't find <%s>\r\n", nm);
+  //else if (token==':') inptr++;
+  // ignore the labels in initialization data
+  if (isInitializationData)
+    return;
+  sym = find_symbol(nm);
+  if (pass==4 || pass==3) {
+    if (sym) {
+      if (sym->defined) {
+        //if (!Int128::IsEqual(&sym->value, &val)) {
+        //    printf("Label %s already defined %ld vs %ld.\r\n", nm, sym->value.low, val.low);
+        //    printf("Line %d: %.60s\r\n", lineno, stptr);
+        //}
+      }
+      sym->defined = 1;
+      if (isEquate) {
+        sym->value = val;
+        sym->segment = constseg;
+        sym->bits = (int)ceil(log(fabs((double)val.low)+1) / log(2.0))+1;
       }
       else {
-        if (isEquate) {
-            sym->value = val;
-        }
-        else {
-					if ((sym->value.low != ca && gCpu!='G') || (sym->value.low != (ca & -4LL) && gCpu=='G')) {
-						//if (verbose)
-						//	printf("Phase error %s=%06llx, Address=%06llX\n", nmTable.GetName(sym->name), sym->value.low, ca);
-            phasing_errors++;
-            sym->phaserr = '*';
-            //if (bGen) printf("%s=%06llx ca=%06llx\r\n", nmTable.GetName(sym->name),  sym->value, code_address);
-          }
-          else
-            sym->phaserr = ' ';
-					if (gCpu=='G')
-						sym->value.low = ca & -4LL;
-					else
-						sym->value.low = ca;
-					sym->value.high = 0;
-				}
+				if (gCpu=='G')
+					sym->value.low = ca & -4LL;
+				else
+					sym->value.low = ca;
+				sym->value.high = 0;
+        sym->segment = segment;
+        if (segment==codeseg)
+          sym->bits = code_bits;
+        else
+          sym->bits = data_bits;
       }
     }
-    if (strcmp("begin_init_data", nm)==0)
-       isInitializationData = 1;
+    else {
+      sym = new_symbol(nm);    
+      sym->defined = 1;
+      if (isEquate) {
+        sym->value = val;
+        sym->segment = constseg;
+        sym->bits = (int)ceil(log(fabs((double)val.low)+1) / log(2.0))+1;
+      }
+      else {
+				if (gCpu=='G')
+					sym->value.low = ca & -4LL;
+				else
+					sym->value.low = ca;
+				sym->value.high = 0;
+				sym->segment = segment;
+        if (segment==codeseg)
+          sym->bits = code_bits;
+        else
+          sym->bits = data_bits;
+      }
+    }
+  }
+  else if (pass>4) {
+    if (!sym) {
+      printf("Internal error: SYM is NULL.\r\n");
+      printf("Couldn't find <%s>\r\n", nm);
+    }
+    else {
+      if (isEquate) {
+        sym->value = val;
+      }
+      else {
+				if ((sym->value.low != ca && gCpu!='G') || (sym->value.low != (ca & -4LL) && gCpu=='G')) {
+					//if (verbose)
+					//	printf("Phase error %s=%06llx, Address=%06llX\n", nmTable.GetName(sym->name), sym->value.low, ca);
+          phasing_errors++;
+          sym->phaserr = '*';
+          //if (bGen) printf("%s=%06llx ca=%06llx\r\n", nmTable.GetName(sym->name),  sym->value, code_address);
+        }
+        else
+          sym->phaserr = ' ';
+				if (gCpu=='G')
+					sym->value.low = ca & -4LL;
+				else
+					sym->value.low = ca;
+				sym->value.high = 0;
+			}
+    }
+  }
+  if (strcmp("begin_init_data", nm)==0)
+    isInitializationData = 1;
 //    printf("</process_ label>\r\n");
 }
 
