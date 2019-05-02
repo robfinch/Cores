@@ -249,15 +249,38 @@ endfunction
 
 function IsShiftAndOp;
 input [47:0] isn;
-IsShiftAndOp = FALSE;
+if (isn[`INSTRUCTION_L2]==2'b01) begin
+	case(isn[`INSTRUCTION_OP])
+	`R2:
+		case(isn[47:42])
+		`SHIFTR:	IsShiftAndOp = TRUE;
+		default:	IsShiftAndOp = FALSE;
+		endcase
+	default:	IsShiftAndOp = FALSE;
+	endcase
+end
+else
+	IsShiftAndOp = FALSE;
 endfunction
 
 wire [63:0] bfout,shfto;
 wire [63:0] shftob;
 wire [63:0] shftco;
+reg [63:0] shift10;
 
 always @(posedge clk)
 	shift9 <= shift8;
+always @*
+case (instr[41:36])
+`ADD:	shift10 <= shift9 + c;
+`SUB:	shift10 <= shift9 - c;
+`AND:	shift10 <= shift9 & c;
+`OR:	shift10 <= shift9 | c;
+`XOR:	shift10 <= shift9 ^ c;
+6'h20:	shift10 <= ~shift9;		// COM
+6'h21:	shift10 <= !shift9;		// NOT
+default:	shift10 <= shift9;
+endcase
 
 wire tlb_done, tlb_idle;
 wire [DBW-1:0] tlbo;
@@ -555,7 +578,8 @@ FT64_divider #(DBW) udiv1
 	.idle(div_idle)
 );
 
-wire [5:0] bshift = instr[31:26]==`SHIFTR ? b[5:0] : {instr[30],instr[22:18]};
+wire [5:0] bshift = IsShiftAndOp(instr) ? ( instr[29] ? {instr[28],instr[22:18]} : b[5:0])
+																			 : (instr[31:26]==`SHIFTR ? b[5:0] : {instr[30],instr[22:18]});
 
 FT64_shift ushft1
 (
@@ -915,7 +939,7 @@ case(instr[`INSTRUCTION_OP])
 			endcase
 			case(instr[35:33])
 			`ASL,`ASR,`SHL,`SHR,`ROL,`ROR:
-				o[63:0] = shift9;
+				o[63:0] = shift10;
 			default:	o[63:0] = 64'hDCDCDCDCDCDCDCDC;
 			endcase
 			end
@@ -1000,7 +1024,16 @@ case(instr[`INSTRUCTION_OP])
 	        endcase
 	    `BMM:		o[63:0] = BIG ? bmmo : 64'hCCCCCCCCCCCCCCCC;
 	    `SHIFT31,
-	    `SHIFT63,
+	    `SHIFT63:
+	    	begin
+	    		if (instr[25:23]==`SHL || instr[25:23]==`ASL)
+	    			o = shfto;
+	    		else
+	    			o = BIG ? shfto : 64'hCCCCCCCCCCCCCCCC;
+	    		$display("BIG=%d",BIG);
+	    		if(!BIG)
+	    			$stop;
+	    	end
 	    `SHIFTR:
 	    	begin
 	    		if (instr[25:23]==`SHL || instr[25:23]==`ASL)
@@ -1014,7 +1047,22 @@ case(instr[`INSTRUCTION_OP])
 	    `ADD:
 `ifdef SIMD	    		
 	    	case(sz)
-	    		3'd0,3'd4:
+	    		3'd0:
+	    			begin
+	    				o[7:0] = a[7:0] + b[7:0];
+	    				o[63:8] = {56{o[7]}};
+	    			end
+	    		3'd1:
+	    			begin
+	    				o[15:0] = a[15:0] + b[15:0];
+	    				o[63:16] = {48{o[15]}};
+	    			end
+	    		3'd2:
+	    			begin
+	    				o[31:0] = a[31:0] + b[31:0];
+	    				o[63:32] = {32{o[31]}};
+	    			end
+	    		3'd4:
 	    			begin
 	    				o[7:0] = a[7:0] + b[7:0];
 	    				o[15:8] = a[15:8] + b[15:8];
@@ -1025,14 +1073,14 @@ case(instr[`INSTRUCTION_OP])
 	    				o[55:48] = a[55:48] + b[55:48];
 	    				o[63:56] = a[63:56] + b[63:56];
 	    			end
-	    		3'd1,3'd5:
+	    		3'd5:
 	    			begin
 	    				o[15:0] = a[15:0] + b[15:0];
 	    				o[31:16] = a[31:16] + b[31:16];
 	    				o[47:32] = a[47:32] + b[47:32];
 	    				o[63:48] = a[63:48] + b[63:48];
 	    			end
-	    		3'd2,3'd6:
+	    		3'd6:
 	    			begin
 	    				o[31:0] = a[31:0] + b[31:0];
 	    				o[63:32] = a[63:32] + b[63:32];
@@ -1045,14 +1093,23 @@ case(instr[`INSTRUCTION_OP])
 `else
 			o = a + b;	            
 `endif
-// If the operation is SIMD the target register must be passed in arg T.
 	    `SUB:   
 `ifdef SIMD	    
 	    	case(sz)
 	    		3'd0:
 	    			begin
 	    				o[7:0] = a[7:0] - b[7:0];
-	    				o[63:8] = t[63:8];
+	    				o[63:8] = {56{o[7]}};
+	    			end
+	    		3'd1:
+	    			begin
+	    				o[15:0] = a[15:0] - b[15:0];
+	    				o[63:16] = {48{o[15]}};
+	    			end
+	    		3'd2:
+	    			begin
+	    				o[31:0] = a[31:0] - b[31:0];
+	    				o[63:32] = {31{o[31]}};
 	    			end
 	    		3'd4:
 	    			begin
@@ -1065,21 +1122,21 @@ case(instr[`INSTRUCTION_OP])
 	    				o[55:48] = a[55:48] - b[55:48];
 	    				o[63:56] = a[63:56] - b[63:56];
 	    			end
-	    		3'd1,3'd5:
+	    		3'd5:
 	    			begin
 	    				o[15:0] = a[15:0] - b[15:0];
 	    				o[31:16] = a[31:16] - b[31:16];
 	    				o[47:32] = a[47:32] - b[47:32];
 	    				o[63:48] = a[63:48] - b[63:48];
 	    			end
-	    		3'd2,3'd6:
+	    		3'd6:
 	    			begin
 	    				o[31:0] = a[31:0] - b[31:0];
 	    				o[63:32] = a[63:32] - b[63:32];
 	    			end
-	            default:
+	        default:
 	            	begin
-	            		o[63:0] = a - b;
+	            		o = a - b;
 	            	end
 	            endcase
 `else
@@ -1127,25 +1184,10 @@ case(instr[`INSTRUCTION_OP])
 	    `MIN: 
 `ifdef SIMD
           case(sz)
-    			3'd0:
-	    			begin
-	    			o[7:0] = BIG ? ($signed(a[7:0]) < $signed(b[7:0]) ? a[7:0] : b[7:0]) : 8'hCC;
-	    			o[63:8] = BIG ? t[63:8] : 56'hCCCCCCCCCCCCCC;
-	    			end
-	    		3'd1:
-	    			begin
-	    			o[15:0] = BIG ? ($signed(a[15:0]) < $signed(b[15:0]) ? a[15:0] : b[15:0]) : 16'hCCCC;
-	    			o[63:16] = BIG ? t[63:16] : 48'hCCCCCCCCCCCC;
-	    			end
-	    		3'd2:
-	    			begin
-	    			o[31:0] = BIG ? ($signed(a[31:0]) < $signed(b[31:0]) ? a[31:0] : b[31:0]) : 32'hCCCCCCCC;
-	    			o[63:32] = BIG ? t[63:32] : 32'hCCCCCCCC;
-	    			end
-					3'd3:
-						begin    			
-    				o = BIG ? ($signed(a) < $signed(b) ? a : b) : 64'hCCCCCCCCCCCCCCCC;
-    				end
+    			3'd0:	o = BIG ? ($signed(a[7:0]) < $signed(b[7:0]) ? {{56{a[7]}},a[7:0]} : {{56{b[7]}},b[7:0]}) : 64'hCCCCCCCCCCCCCCCC;
+	    		3'd1:	o = BIG ? ($signed(a[15:0]) < $signed(b[15:0]) ? {{48{a[15]}},a[15:0]} : {{48{b[15]}},b[15:0]}) : 64'hCCCCCCCCCCCCCCCC;
+	    		3'd2:	o = BIG ? ($signed(a[31:0]) < $signed(b[31:0]) ? {{32{a[31]}},a[31:0]} : {{32{b[31]}},b[31:0]}) : 64'hCCCCCCCCCCCCCCCC;
+					3'd3:	o = BIG ? ($signed(a) < $signed(b) ? a : b) : 64'hCCCCCCCCCCCCCCCC;
     			3'd4:
 	    			begin
 	    			o[7:0] = BIG ? ($signed(a[7:0]) < $signed(b[7:0]) ? a[7:0] : b[7:0]) : 8'hCC;
@@ -1180,7 +1222,11 @@ case(instr[`INSTRUCTION_OP])
 	    `MAX: 
 `ifdef SIMD     
 	    			case(sz)
-	    			3'd0,3'd4:
+	    			3'd0:	o = BIG ? ($signed(a[7:0]) > $signed(b[7:0]) ? {{56{a[7]}},a[7:0]} : {{56{b[7]}},b[7:0]}) : 64'hCCCCCCCCCCCCCCCC;			
+	    			3'd1:	o = BIG ? ($signed(a[15:0]) > $signed(b[15:0]) ? {{48{a[15]}},a[15:0]} : {{48{b[15]}},b[15:0]}) : 64'hCCCCCCCCCCCCCCCC;
+	    			3'd2:	o = BIG ? ($signed(a[31:0]) > $signed(b[31:0]) ? {{32{a[31]}},a[31:0]} : {{32{b[31]}},b[31:0]}) : 64'hCCCCCCCCCCCCCCCC;
+	    			3'd3:	o = BIG ? ($signed(a) > $signed(b) ? a : b) : 64'hCCCCCCCCCCCCCCCC;
+	    			3'd4:
 		    			begin
 		    			o[7:0] = BIG ? ($signed(a[7:0]) > $signed(b[7:0]) ? a[7:0] : b[7:0]) : 64'hCCCCCCCCCCCCCCCC;
 		    			o[15:8] = BIG ? ($signed(a[15:8]) > $signed(b[15:8]) ? a[15:8] : b[15:8]) : 64'hCCCCCCCCCCCCCCCC;
@@ -1191,20 +1237,20 @@ case(instr[`INSTRUCTION_OP])
 		    			o[55:48] = BIG ? ($signed(a[55:48]) > $signed(b[55:48]) ? a[55:48] : b[55:48]) : 64'hCCCCCCCCCCCCCCCC;
 		    			o[63:56] = BIG ? ($signed(a[63:56]) > $signed(b[63:56]) ? a[63:56] : b[63:56]) : 64'hCCCCCCCCCCCCCCCC;
 		    			end
-		    		3'd1,3'd5:
+		    		3'd5:
 		    			begin
 		    			o[15:0] = BIG ? ($signed(a[15:0]) > $signed(b[15:0]) ? a[15:0] : b[15:0]) : 64'hCCCCCCCCCCCCCCCC;
 		    			o[32:16] = BIG ? ($signed(a[32:16]) > $signed(b[32:16]) ? a[32:16] : b[32:16]) : 64'hCCCCCCCCCCCCCCCC;
 		    			o[47:32] = BIG ? ($signed(a[47:32]) > $signed(b[47:32]) ? a[47:32] : b[47:32]) : 64'hCCCCCCCCCCCCCCCC;
 		    			o[63:48] = BIG ? ($signed(a[63:48]) > $signed(b[63:48]) ? a[63:48] : b[63:48]) : 64'hCCCCCCCCCCCCCCCC;
 		    			end
-		    		3'd2,3'd6:
+		    		3'd6:
 		    			begin
 		    			o[31:0] = BIG ? ($signed(a[31:0]) > $signed(b[31:0]) ? a[31:0] : b[31:0]) : 64'hCCCCCCCCCCCCCCCC;
 		    			o[63:32] = BIG ? ($signed(a[63:32]) > $signed(b[63:32]) ? a[63:32] : b[63:32]) : 64'hCCCCCCCCCCCCCCCC;
 		    			end
-					3'd3,3'd7: 
-						begin   			
+						3'd7: 
+							begin
 	    				o[63:0] = BIG ? ($signed(a) > $signed(b) ? a : b) : 64'hCCCCCCCCCCCCCCCC;
 	    				end
 	    			endcase
@@ -1364,6 +1410,11 @@ case(instr[`INSTRUCTION_OP])
 					o = {pb[50:0],BASE_SHIFT} + usa;
 				end
 			endcase
+`PUSHC:
+			begin
+				usa = a - 4'd8;
+				o = {pb[50:0],BASE_SHIFT} + usa;
+			end
 `LWR,`SWC,`CAS,`CACHE:
 			begin
 				usa = a + b;
@@ -1626,11 +1677,11 @@ case(instr[`INSTRUCTION_OP])
 			exc <= `FLT_WRV;
 		else
 `endif
-			casez(b[2:0])
-			3'b100:		exc <= o[2:0]!=3'b0 ? `FLT_NONE : `FLT_NONE;	// LW / SW
-			3'b?10: 	exc <= o[1:0]!=2'b0 ? `FLT_ALN : `FLT_NONE;	// LH / LHU / SH
-			default:	exc <= o[  0] ? `FLT_ALN : `FLT_NONE;	// LC / LCU / SC
-			endcase
+		casez(b[2:0])
+		3'b100:		exc <= (o[2:0]!=3'b0) ? `FLT_NONE : `FLT_NONE;	// LW / SW
+		3'b?10: 	exc <= (o[1:0]!=2'b0) ? `FLT_NONE : `FLT_NONE;	// LH / LHU / SH
+		default:	exc <= o[  0] ? `FLT_NONE : `FLT_NONE;	// LC / LCU / SC
+		endcase
 	end
 `LWR,`SWC,`CAS,`CACHE:
 	begin
@@ -1675,24 +1726,24 @@ begin
   3'd2:   o[63:0] = $signed(a[31:0]) == $signed(b[31:0]);
   3'd3:   o[63:0] = $signed(a) == $signed(b);
   3'd4:		o[63:0] = {
-					        	7'h0,$signed(a[7:0]) == $signed(b[7:0]),
-					        	7'h0,$signed(a[15:8]) == $signed(b[15:8]),
-					        	7'h0,$signed(a[23:16]) == $signed(b[23:16]),
-					        	7'h0,$signed(a[31:24]) == $signed(b[31:24]),
-					        	7'h0,$signed(a[39:32]) == $signed(b[39:32]),
-					        	7'h0,$signed(a[47:40]) == $signed(b[47:40]),
+					        	7'h0,$signed(a[63:56]) == $signed(b[63:56]),
 					        	7'h0,$signed(a[55:48]) == $signed(b[55:48]),
-					        	7'h0,$signed(a[63:56]) == $signed(b[63:56])
+					        	7'h0,$signed(a[47:40]) == $signed(b[47:40]),
+					        	7'h0,$signed(a[39:32]) == $signed(b[39:32]),
+					        	7'h0,$signed(a[31:24]) == $signed(b[31:24]),
+					        	7'h0,$signed(a[23:16]) == $signed(b[23:16]),
+					        	7'h0,$signed(a[15:8]) == $signed(b[15:8]),
+					        	7'h0,$signed(a[7:0]) == $signed(b[7:0])
 						        };
   3'd5:		o[63:0] = {
-					        	15'h0,$signed(a[15:0]) == $signed(b[15:0]),
-					        	15'h0,$signed(a[31:16]) == $signed(b[31:16]),
+					        	15'h0,$signed(a[63:48]) == $signed(b[63:48]),
 					        	15'h0,$signed(a[47:32]) == $signed(b[47:32]),
-					        	15'h0,$signed(a[63:48]) == $signed(b[63:48])
+					        	15'h0,$signed(a[31:16]) == $signed(b[31:16]),
+					        	15'h0,$signed(a[15:0]) == $signed(b[15:0])
 						        };
   3'd6:		o[63:0] = {
-					        	31'h0,$signed(a[31:0]) == $signed(b[31:0]),
-					        	31'h0,$signed(a[63:32]) == $signed(b[63:32])
+					        	31'h0,$signed(a[63:32]) == $signed(b[63:32]),
+					        	31'h0,$signed(a[31:0]) == $signed(b[31:0])
 						        };
 	3'd7:		o[63:0] = $signed(a[63:0]) == $signed(b[63:0]);
   endcase
@@ -1716,24 +1767,24 @@ begin
   3'd2:   o[63:0] = $signed(a[31:0]) < $signed(b[31:0]);
   3'd3:   o[63:0] = $signed(a) < $signed(b);
   3'd4:		o[63:0] = {
-					        	7'h0,$signed(a[7:0]) < $signed(b[7:0]),
-					        	7'h0,$signed(a[15:8]) < $signed(b[15:8]),
-					        	7'h0,$signed(a[23:16]) < $signed(b[23:16]),
-					        	7'h0,$signed(a[31:24]) < $signed(b[31:24]),
-					        	7'h0,$signed(a[39:32]) < $signed(b[39:32]),
-					        	7'h0,$signed(a[47:40]) < $signed(b[47:40]),
+					        	7'h0,$signed(a[63:56]) < $signed(b[63:56]),
 					        	7'h0,$signed(a[55:48]) < $signed(b[55:48]),
-					        	7'h0,$signed(a[63:56]) < $signed(b[63:56])
+					        	7'h0,$signed(a[47:40]) < $signed(b[47:40]),
+					        	7'h0,$signed(a[39:32]) < $signed(b[39:32]),
+					        	7'h0,$signed(a[31:24]) < $signed(b[31:24]),
+					        	7'h0,$signed(a[23:16]) < $signed(b[23:16]),
+					        	7'h0,$signed(a[15:8]) < $signed(b[15:8]),
+					        	7'h0,$signed(a[7:0]) < $signed(b[7:0])
 						        };
   3'd5:		o[63:0] = {
-					        	15'h0,$signed(a[15:0]) < $signed(b[15:0]),
-					        	15'h0,$signed(a[31:16]) < $signed(b[31:16]),
+					        	15'h0,$signed(a[63:48]) < $signed(b[63:48]),
 					        	15'h0,$signed(a[47:32]) < $signed(b[47:32]),
-					        	15'h0,$signed(a[63:48]) < $signed(b[63:48])
+					        	15'h0,$signed(a[31:16]) < $signed(b[31:16]),
+					        	15'h0,$signed(a[15:0]) < $signed(b[15:0])
 						        };
   3'd6:		o[63:0] = {
-					        	31'h0,$signed(a[31:0]) < $signed(b[31:0]),
-					        	31'h0,$signed(a[63:32]) < $signed(b[63:32])
+					        	31'h0,$signed(a[63:32]) < $signed(b[63:32]),
+					        	31'h0,$signed(a[31:0]) < $signed(b[31:0])
 						        };
 	3'd7:		o[63:0] = $signed(a[63:0]) < $signed(b[63:0]);
   endcase
@@ -1757,24 +1808,24 @@ begin
   3'd2:   o[63:0] = $signed(a[31:0]) <= $signed(b[31:0]);
   3'd3:   o[63:0] = $signed(a) <= $signed(b);
   3'd4:		o[63:0] = {
-					        	7'h0,$signed(a[7:0]) <= $signed(b[7:0]),
-					        	7'h0,$signed(a[15:8]) <= $signed(b[15:8]),
-					        	7'h0,$signed(a[23:16]) <= $signed(b[23:16]),
-					        	7'h0,$signed(a[31:24]) <= $signed(b[31:24]),
-					        	7'h0,$signed(a[39:32]) <= $signed(b[39:32]),
-					        	7'h0,$signed(a[47:40]) <= $signed(b[47:40]),
+					        	7'h0,$signed(a[63:56]) <= $signed(b[63:56]),
 					        	7'h0,$signed(a[55:48]) <= $signed(b[55:48]),
-					        	7'h0,$signed(a[63:56]) <= $signed(b[63:56])
+					        	7'h0,$signed(a[47:40]) <= $signed(b[47:40]),
+					        	7'h0,$signed(a[39:32]) <= $signed(b[39:32]),
+					        	7'h0,$signed(a[31:24]) <= $signed(b[31:24]),
+					        	7'h0,$signed(a[23:16]) <= $signed(b[23:16]),
+					        	7'h0,$signed(a[15:8]) <= $signed(b[15:8]),
+					        	7'h0,$signed(a[7:0]) <= $signed(b[7:0])
 						        };
   3'd5:		o[63:0] = {
-					        	15'h0,$signed(a[15:0]) <= $signed(b[15:0]),
-					        	15'h0,$signed(a[31:16]) <= $signed(b[31:16]),
+					        	15'h0,$signed(a[63:48]) <= $signed(b[63:48]),
 					        	15'h0,$signed(a[47:32]) <= $signed(b[47:32]),
-					        	15'h0,$signed(a[63:48]) <= $signed(b[63:48])
+					        	15'h0,$signed(a[31:16]) <= $signed(b[31:16]),
+					        	15'h0,$signed(a[15:0]) <= $signed(b[15:0])
 						        };
   3'd6:		o[63:0] = {
-					        	31'h0,$signed(a[31:0]) <= $signed(b[31:0]),
-					        	31'h0,$signed(a[63:32]) <= $signed(b[63:32])
+					        	31'h0,$signed(a[63:32]) <= $signed(b[63:32]),
+					        	31'h0,$signed(a[31:0]) <= $signed(b[31:0])
 						        };
 	3'd7:		o[63:0] = $signed(a[63:0]) <= $signed(b[63:0]);
   endcase
@@ -1793,26 +1844,29 @@ output [63:0] o;
 begin
 `ifdef SIMD
 	case(sz[2:0])
-  3'd4,3'd0:		o = {
-					        	7'h0,(a[7:0]) < (b[7:0]),
-					        	7'h0,(a[15:8]) < (b[15:8]),
-					        	7'h0,(a[23:16]) < (b[23:16]),
-					        	7'h0,(a[31:24]) < (b[31:24]),
-					        	7'h0,(a[39:32]) < (b[39:32]),
-					        	7'h0,(a[47:40]) < (b[47:40]),
-					        	7'h0,(a[55:48]) < (b[55:48]),
-					        	7'h0,(a[63:56]) < (b[63:56])
-						        };
-  3'd5,3'd1:		o = {
-					        	15'h0,(a[15:0]) < (b[15:0]),
-					        	15'h0,(a[31:16]) < (b[31:16]),
-					        	15'h0,(a[47:32]) < (b[47:32]),
-					        	15'h0,(a[63:48]) < (b[63:48])
-						        };
-  3'd6,3'd2:		o = {
-					        	31'h0,(a[31:0]) < (b[31:0]),
-					        	31'h0,(a[63:32]) < (b[63:32])
-						        };
+	3'd0:		o = (a[7:0]) < (b[7:0]);
+	3'd1:		o = (a[15:0]) < (b[15:0]);
+	3'd2:		o = (a[31:0]) < (b[31:0]);
+  3'd4:		o = {
+			        	7'h0,(a[63:56]) < (b[63:56]),
+			        	7'h0,(a[55:48]) < (b[55:48]),
+			        	7'h0,(a[47:40]) < (b[47:40]),
+			        	7'h0,(a[39:32]) < (b[39:32]),
+			        	7'h0,(a[31:24]) < (b[31:24]),
+			        	7'h0,(a[23:16]) < (b[23:16]),
+			        	7'h0,(a[15:8]) < (b[15:8]),
+			        	7'h0,(a[7:0]) < (b[7:0])
+				        };
+  3'd5:		o = {
+		        	15'h0,(a[63:48]) < (b[63:48]),
+		        	15'h0,(a[47:32]) < (b[47:32]),
+		        	15'h0,(a[31:16]) < (b[31:16]),
+		        	15'h0,(a[15:0]) < (b[15:0])
+			        };
+  3'd6:		o = {
+		        	31'h0,(a[63:32]) < (b[63:32]),
+		        	31'h0,(a[31:0]) < (b[31:0])
+			        };
 	3'd7,3'd3:		o = (a[63:0]) < (b[63:0]);
   endcase
 `else
@@ -1830,31 +1884,30 @@ output [63:0] o;
 begin
 `ifdef SIMD
 	case(sz[2:0])
-  3'd0:   o[63:0] = (a[7:0]) <= (b[7:0]);
-  3'd1:   o[63:0] = (a[15:0]) <= (b[15:0]);
-  3'd2:   o[63:0] = (a[31:0]) <= (b[31:0]);
-  3'd3:   o[63:0] = (a) <= (b);
-  3'd4:		o[63:0] = {
-					        	7'h0,(a[7:0]) <= (b[7:0]),
-					        	7'h0,(a[15:8]) <= (b[15:8]),
-					        	7'h0,(a[23:16]) <= (b[23:16]),
-					        	7'h0,(a[31:24]) <= (b[31:24]),
-					        	7'h0,(a[39:32]) <= (b[39:32]),
-					        	7'h0,(a[47:40]) <= (b[47:40]),
-					        	7'h0,(a[55:48]) <= (b[55:48]),
-					        	7'h0,(a[63:56]) <= (b[63:56])
-						        };
-  3'd5:		o[63:0] = {
-					        	15'h0,(a[15:0]) <= (b[15:0]),
-					        	15'h0,(a[31:16]) <= (b[31:16]),
-					        	15'h0,(a[47:32]) <= (b[47:32]),
-					        	15'h0,(a[63:48]) <= (b[63:48])
-						        };
-  3'd6:		o[63:0] = {
-					        	31'h0,(a[31:0]) <= (b[31:0]),
-					        	31'h0,(a[63:32]) <= (b[63:32])
-						        };
-	3'd7:		o[63:0] = (a[63:0]) <= (b[63:0]);
+	3'd0:		o = (a[7:0]) <= (b[7:0]);
+	3'd1:		o = (a[15:0]) <= (b[15:0]);
+	3'd2:		o = (a[31:0]) <= (b[31:0]);
+  3'd4:		o = {
+			        	7'h0,(a[63:56]) <= (b[63:56]),
+			        	7'h0,(a[55:48]) <= (b[55:48]),
+			        	7'h0,(a[47:40]) <= (b[47:40]),
+			        	7'h0,(a[39:32]) <= (b[39:32]),
+			        	7'h0,(a[31:24]) <= (b[31:24]),
+			        	7'h0,(a[23:16]) <= (b[23:16]),
+			        	7'h0,(a[15:8]) <= (b[15:8]),
+			        	7'h0,(a[7:0]) <= (b[7:0])
+				        };
+  3'd5:		o = {
+		        	15'h0,(a[63:48]) <= (b[63:48]),
+		        	15'h0,(a[47:32]) <= (b[47:32]),
+		        	15'h0,(a[31:16]) <= (b[31:16]),
+		        	15'h0,(a[15:0]) <= (b[15:0])
+			        };
+  3'd6:		o = {
+		        	31'h0,(a[63:32]) <= (b[63:32]),
+		        	31'h0,(a[31:0]) <= (b[31:0])
+			        };
+	3'd7,3'd3:		o = (a[63:0]) <= (b[63:0]);
   endcase
 `else
 	o[63:0] = (a[63:0]) <= (b[63:0]);

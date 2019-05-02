@@ -27,6 +27,7 @@
 `define TRUE    1'b1
 `define FALSE   1'b0
 `endif
+`define BYPASS	1'b1
 
 module FT64_ipt(rst, clk, pkeys_i, ol_i, bte_i, cti_i, cs_i, icl_i, cyc_i, stb_i, ack_o, we_i, sel_i, vadr_i, dat_i, dat_o,
 	bte_o, cti_o, cyc_o, ack_i, we_o, sel_o, padr_o, exv_o, rdv_o, wrv_o, prv_o, page_fault);
@@ -68,6 +69,7 @@ parameter S_CMP5 = 4'd5;
 parameter S_CMP6 = 4'd6;
 parameter S_WAIT1 = 4'd7;
 parameter S_ACK = 4'd8;
+parameter S_RESET = 4'd9;
 
 integer n;
 wire [9:0] pkey [0:5];
@@ -109,7 +111,7 @@ wire [9:0] pt_key = pt_dat[41:32];
 reg keymatch;
 always @*
 begin
-keymatch = 1'b0;
+keymatch = ol_i==2'b00;
 for (n = 0; n < 6; n = n + 1)
 	if (pt_key==pkey[n] || pt_key==10'h0)
 		keymatch = 1'b1;
@@ -152,7 +154,24 @@ always @(posedge clk)
 	cti_o <= cti_i;
 always @(posedge clk)
 	sel_o <= sel_i;
-
+`ifdef BYPASS
+always @(posedge clk)
+	cyc_o <= cyc_i;
+always @(posedge clk)
+	we_o <= we_i;
+always @(posedge clk)
+	padr_o <= vadr_i[31:0];
+always @(posedge clk)
+	exv_o <= 1'b0;
+always @(posedge clk)
+	rdv_o <= 1'b0;
+always @(posedge clk)
+	wrv_o <= 1'b0;
+always @(posedge clk)
+	prv_o <= 1'b0;
+always @(posedge clk)
+	page_fault <= 1'b0;
+`else
 always @(posedge clk)
 if (rst) begin
 	cyc_o <= 1'b0;
@@ -162,7 +181,9 @@ if (rst) begin
 	rdv_o <= 1'b0;
 	wrv_o <= 1'b0;
 	prv_o <= 1'b0;
-	pt_wr <= 1'b0;
+	pt_wr <= 1'b1;
+	pt_ad <= 1'b0;
+	pt_dati <= 1'b0;
 	upd <= 1'b0;
 	probe <= 1'b0;
 	upd_done <= 1'b0;
@@ -174,9 +195,18 @@ else begin
 	page_fault <= 1'b0;
 	ack_o <= 1'b0;
 case(state)
+// Clear page table ram on reset.
+S_RESET:
+	begin
+		pt_ad <= pt_ad + 2'd1;
+		if (&pt_ad) begin
+			pt_wr <= 1'b0;
+			state <= S_IDLE;
+		end
+	end
 S_IDLE:
 	if (cyc_i) begin
-		if (cs_i) begin
+		if (cs_i & stb_i) begin
 			ack_o <= 1'b1;
 			case(vadr_i[5:3])
 			3'd0:
@@ -213,7 +243,7 @@ S_IDLE:
 			if (ol_i==2'b0) begin
 				cyc_o <= 1'b1;
 				we_o <= we_i;
-				padr_o <= vadr_i;
+				padr_o <= vadr_i[31:0];
 				goto(S_ACK);
 			end
 			else begin
@@ -222,7 +252,7 @@ S_IDLE:
 				if (vadr_i[31:24]==8'hFF || vadr_i[31:24]==8'h00) begin
 					cyc_o <= 1'b1;
 					we_o <= we_i;
-					padr_o <= vadr_i;
+					padr_o <= vadr_i[31:0];
 					goto(S_ACK);
 				end
 				else begin
@@ -305,7 +335,7 @@ S_CMP3:
 			else begin
 				cyc_o <= 1'b1;
 				we_o <= 1'b0;
-				padr_o <= 64'hFFFFFFFFFFFFFFF8;
+				padr_o <= 32'hFFFFFFF8;
 				prv_o <= 1'b1;
 			end
 			goto(S_ACK);
@@ -385,7 +415,7 @@ S_CMP6:
 			else begin
 				cyc_o <= 1'b1;
 				we_o <= 1'b0;
-				padr_o <= 64'hFFFFFFFFFFFFFFF8;
+				padr_o <= 32'hFFFFFFF8;
 				prv_o <= 1'b1;
 			end
 			goto(S_ACK);
@@ -398,7 +428,8 @@ S_CMP6:
 
 // Wait a clock cycle for a page fault to register.
 S_WAIT1:
-	goto(S_IDLE);
+	if (!ack_i)
+		goto(S_IDLE);
 	
 S_ACK:
 	if (ack_i) begin
@@ -411,6 +442,7 @@ S_ACK:
 
 endcase	
 end
+`endif
 
 task goto;
 input [3:0] nst;

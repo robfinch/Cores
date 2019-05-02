@@ -24,6 +24,7 @@
 //
 #include <fmtk/const.h>
 #include <fmtk/device.h>
+#include <ft64/io.h>
 
 #define PRNG	0xFFFFFFFFFFFFDC00L
 #define PRNG_STREAM		0x04
@@ -36,35 +37,35 @@ extern pascal void SeedRand(register int handle, register int pos);
 extern void DBGDisplayAsciiString(char *);
 extern int randStream;
 
-static int prng_stat(int handle)
+private pascal int prng_stat(int handle)
 {
 	return (0);
 }
 
-static int prng_peek(int handle)
+private pascal int prng_peek(int handle)
 {
 	return (PeekRand(handle));
 }
 
-static int prng_get(int handle)
+private pascal int prng_get(int handle)
 {
 	return (GetRand(handle));
 }
 
-static void prng_put(int handle, int val)
+private pascal void prng_put(int handle, int val)
 {
 }
 
-static void prng_SetPosition(int handle, int pos)
+private pascal void prng_SetPosition(int handle, int pos)
 {
 	SeedRand(handle,pos);	
 }
 
-static void prng_flushi(int handle)
+private pascal void prng_flushi(int handle)
 {
 }
 
-void prng_init()
+pascal void prng_init()
 {
 	int ch;
 	int n;
@@ -78,7 +79,7 @@ void prng_init()
 	}
 }
 
-int prng_CmdProc(int cmd, int cmdParm1, int cmdParm2, int cmdParm3, int cmdParm4)
+pascal int prng_CmdProc(int cmd, int cmdParm1, int cmdParm2, int cmdParm3, int cmdParm4)
 {
 	int val;
 	int err = E_Ok;

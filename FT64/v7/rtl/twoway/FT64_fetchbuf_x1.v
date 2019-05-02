@@ -114,14 +114,19 @@ integer n;
 
 reg [55:0] cinsn0;
 
+wire iclk;
+BUFH ucb1 (.I(clk), .O(iclk));
+
 //`include "FT64_decode.vh"
 
 function IsBranch;
 input [47:0] isn;
 casex(isn[`INSTRUCTION_OP])
 `Bcc:   IsBranch = TRUE;
+`BLcc:  IsBranch = TRUE;
 `BBc:   IsBranch = TRUE;
 `BEQI:  IsBranch = TRUE;
+`BNEI:  IsBranch = TRUE;
 `BCHK:	IsBranch = TRUE;
 default: IsBranch = FALSE;
 endcase
@@ -155,6 +160,25 @@ endfunction
 function IsRTI;
 input [47:0] isn;
 IsRTI = isn[`INSTRUCTION_OP]==`R2 && isn[`INSTRUCTION_S2]==`RTI;
+endfunction
+
+function IsExec;
+input [47:0] isn;
+if (isn[7:6]==2'b00)
+	case(isn[`INSTRUCTION_OP])
+	`R2:
+		case(isn[`INSTRUCTION_S2])
+		`R1:
+			case(isn[22:18])
+			`EXEC:	IsExec = TRUE;
+			default:	IsExec = FALSE;
+			endcase
+		default:	IsExec = FALSE;
+		endcase
+	default:	IsExec = FALSE;
+	endcase
+else
+	IsExec = FALSE;
 endfunction
 
 function [2:0] fnInsLength;
@@ -217,7 +241,11 @@ case(fetchbufA_instr[`INSTRUCTION_OP])
 `RET:		branch_pcA = retpc0;
 `JMP,`CALL:
 	begin
+`ifdef JMP40
 	branch_pcA[39:0] = fetchbufA_instr[6] ? {fetchbufA_instr[47:8]} : {fetchbufA_pc[39:24],fetchbufA_instr[31:8]};
+`else
+	branch_pcA[39:0] = {fetchbufA_pc[39:24],fetchbufA_instr[31:8]};
+`endif
 	branch_pcA[63:40] = fetchbufA_pc[63:40];
 	end
 `R2:		branch_pcA = btgtA;	// RTI
@@ -237,7 +265,11 @@ case(fetchbufB_instr[`INSTRUCTION_OP])
 `RET:		branch_pcB = retpc0;
 `JMP,`CALL: 
 	begin
+`ifdef JMP40
 		branch_pcB[39:0] = fetchbufB_instr[6] ? {fetchbufB_instr[47:8]} : {fetchbufB_pc[39:24],fetchbufB_instr[31:8]};
+`else
+		branch_pcB[39:0] = {fetchbufB_pc[39:24],fetchbufB_instr[31:8]};
+`endif
 		branch_pcB[63:40] = fetchbufB_pc[63:40];
 	end
 `R2:		branch_pcB = btgtB;	// RTI
@@ -307,7 +339,7 @@ edge_det ued1 (.rst(rst), .clk(clk4x), .ce(1'b1), .i(clk), .pe(peclk), .ne(neclk
 
 reg did_branch;
 
-always @(posedge clk)
+always @(posedge iclk)
 if (rst) begin
 	pc0 <= RSTPC;
 	fetchbufA_v <= 1'b0;
@@ -468,8 +500,8 @@ begin
 		insln0 <= 3'd2 | pred_on;
 	else
 `endif
-	if (insn0[7:6]==2'b00 && insn0[`INSTRUCTION_OP]==`EXEC)
-		insln0 <= fnInsLength(codebuf0);
+	if (IsExec(insn0))
+		insln0 <= fnInsLength(codebuf0);	//???? should be 4?
 	else
 		insln0 <= fnInsLength(insn0);
 end
@@ -484,9 +516,9 @@ begin
 		cinsn0 <= expand0;
 	else
 `endif
-	if (insn0[7:6]==2'b00 && insn0[`INSTRUCTION_OP]==`EXEC && !pred_on)
+	if (IsExec(insn0) && !pred_on)
 		cinsn0 <= codebuf0;
-	else if (insn0[15:14]==2'b00 && insn0[`INSTRUCTION_OP]==`EXEC && pred_on)
+	else if (IsExec(insn0[55:8]) && pred_on)
 		cinsn0 <= codebuf0;
 	else if (insn0[15] & pred_on)
 		cinsn0 <= {xinsn0,insn0[7:0]};

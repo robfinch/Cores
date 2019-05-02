@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2018-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -24,6 +24,7 @@
 //
 #include <fmtk/const.h>
 #include <fmtk/device.h>
+#include <ft64/io.h>
 
 #define PTI				0xFFFFFFFFFFDC1200L
 #define PTI_DAT		0x0
@@ -36,15 +37,12 @@
 #define XON				0x11
 #define XOFF			0x13
 
-extern int in8u(int port);
-extern void out8(int port, int val);
-
-void pti_init()
+pascal void pti_init()
 {
 	out8(PTI|PTI_RST,0);	// Trigger fifo reset, turn off loopback
 }
 
-int pti_stat(int handle)
+pascal int pti_stat(int handle)
 {
 	int stat;
 
@@ -58,7 +56,7 @@ int pti_stat(int handle)
 	return (stat);
 }
 
-int pti_peek(int handle)
+pascal int pti_peek(int handle)
 {
 	int val;
 
@@ -67,7 +65,7 @@ int pti_peek(int handle)
 }
 
 
-int pti_get(int handle)
+pascal int pti_get(int handle)
 {
 	int val;
 
@@ -76,14 +74,14 @@ int pti_get(int handle)
 	return (val);
 }
 
-void pti_put(int handle,int val)
+pascal void pti_put(int handle,int val)
 {
 	out8(PTI|PTI_DAT,val);
 }
 
 // The fifo is 4kB in size. Potentially it could be full.
 
-void pti_flushi(int handle)
+pascal void pti_flushi(int handle)
 {
 	int stat;
 
@@ -94,7 +92,7 @@ void pti_flushi(int handle)
 	}
 }
 
-int pti_CmdProc(int cmd, int cmdParm1, int cmdParm2, int cmdParm3, int cmdParm4)
+pascal int pti_CmdProc(int cmd, int cmdParm1, int cmdParm2, int cmdParm3, int cmdParm4)
 {
 	int val;
 	int err = E_Ok;
@@ -127,7 +125,7 @@ int pti_CmdProc(int cmd, int cmdParm1, int cmdParm2, int cmdParm3, int cmdParm4)
 	case DVC_Nop:
 		break;
 	case DVC_Setup:
-		DBGDisplayStringCRLF("PTI setup");
+		DBGDisplayAsciiStringCRLF(B"PTI setup");
 		break;
 	case DVC_Initialize:
 		pti_init();

@@ -1,5 +1,6 @@
 #include <fmtk/const.h>
 #include <fmtk/device.h>
+#include <ft64/io.h>
 
 #define SDC		0xFFFFFFFFFFDC0B00L
 #define SDC_ARG		0x00
@@ -15,7 +16,7 @@
 
 extern void DBGDisplayString(char *);
 
-void sdc_init()
+pascal void sdc_init()
 {
 	out32(SDC|SDC_TO,0x9c4);
 	out32(SDC|SDC_RST,1);
@@ -23,7 +24,7 @@ void sdc_init()
 	out32(SDC|SDC_RST,0);
 }
 
-int sdc_SendCmd(int cmd, int arg)
+pascal int sdc_SendCmd(int cmd, int arg)
 {
 	int stat;
 	int resp;
@@ -41,12 +42,12 @@ int sdc_SendCmd(int cmd, int arg)
 	return (resp);
 }
 
-int sdc_SendCMD8()
+pascal int sdc_SendCMD8()
 {
 	return (sdc_SendCmd(0x81a,0x1aa));
 }
 
-void sdc_WriteBlock(int handle, void *p, int blockno)
+pascal void sdc_WriteBlock(int handle, void *p, int blockno)
 {
 	int bds;
 
@@ -57,7 +58,7 @@ void sdc_WriteBlock(int handle, void *p, int blockno)
 	out32(SDC|SDC_TX,blockno);
 }
 
-void sdc_ReadBlock(int handle, void *p, int blockno)
+pascal void sdc_ReadBlock(int handle, void *p, int blockno)
 {
 	int bds;
 
@@ -68,7 +69,7 @@ void sdc_ReadBlock(int handle, void *p, int blockno)
 	out32(SDC|SDC_RX,blockno);
 }
 
-int sdc_status(int handle)
+pascal int sdc_status(int handle)
 {
 	int bds, nis;
 
@@ -77,7 +78,7 @@ int sdc_status(int handle)
 	return(nis | (bds << 16));	
 }
 
-int sdc_CmdProc(int cmd, int cmdParm1, int cmdParm2, int cmdParm3, int cmdParm4)
+pascal int sdc_CmdProc(int cmd, int cmdParm1, int cmdParm2, int cmdParm3, int cmdParm4)
 {
 	int val;
 	int err = E_Ok;
@@ -103,7 +104,7 @@ int sdc_CmdProc(int cmd, int cmdParm1, int cmdParm2, int cmdParm3, int cmdParm4)
 	case DVC_Nop:
 		break;
 	case DVC_Setup:
-		DBGDisplayStringCRLF("SDC setup");
+		DBGDisplayAsciiStringCRLF(B"SDC setup");
 		break;
 	case DVC_Initialize:
 		sdc_init();

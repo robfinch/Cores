@@ -98,8 +98,10 @@ case(instr[`INSTRUCTION_OP])
   	IsALU = TRUE;
 `BRK:   IsALU = FALSE;
 `Bcc:   IsALU = FALSE;
+`BLcc:  IsALU = FALSE;
 `BBc:   IsALU = FALSE;
 `BEQI:  IsALU = FALSE;
+`BNEI:  IsALU = FALSE;
 `CHK:   IsALU = FALSE;
 `JAL:   IsALU = FALSE;
 `JMP:	IsALU = FALSE;
@@ -179,8 +181,10 @@ case(instr[`INSTRUCTION_OP])
         default:    IsFlowCtrl <= FALSE;
         endcase
 `Bcc:   IsFlowCtrl <= TRUE;
+`BLcc:  IsFlowCtrl <= TRUE;
 `BBc:		IsFlowCtrl <= TRUE;
 `BEQI:  IsFlowCtrl <= TRUE;
+`BNEI:  IsFlowCtrl <= TRUE;
 `CHK:   IsFlowCtrl <= TRUE;
 `JAL:   IsFlowCtrl <= TRUE;
 `JMP:		IsFlowCtrl <= TRUE;
@@ -251,7 +255,7 @@ case(isn[`INSTRUCTION_OP])
 // Had branches that could exception if looping to self. But in a tight loop
 // it affects store performance.
 // -> A branch may only exception if it loops back to itself.
-`Bcc,`BBc,`BEQI:	fnCanException = isn[7] ? brdisp == 11'h7FF : brdisp == 11'h7FE;
+`Bcc,`BLcc,`BBc,`BEQI,`BNEI:	fnCanException = isn[7] ? brdisp == 11'h7FF : brdisp == 11'h7FE;
 `CHK:	fnCanException = TRUE;
 default:
 // Stores can stil exception if there is a write buffer, but we allow following
@@ -358,6 +362,7 @@ case(isn[`INSTRUCTION_OP])
     endcase
 	else
 		IsStore = FALSE;
+`PUSHC:	IsStore = TRUE;
 `SB:    IsStore = TRUE;
 `Sx:    IsStore = TRUE;
 `SWC:   IsStore = TRUE;
@@ -389,7 +394,16 @@ case(isn[`INSTRUCTION_OP])
     endcase
 	else
 		IsPush = FALSE;
+`PUSHC:	IsPush = TRUE;
 default:    IsPush = FALSE;
+endcase
+endfunction
+
+function IsPushc;
+input [47:0] isn;
+case(isn[`INSTRUCTION_OP])
+`PUSHC:	IsPushc = TRUE;
+default:    IsPushc = FALSE;
 endcase
 endfunction
 
@@ -416,6 +430,7 @@ case(instr[`INSTRUCTION_OP])
 `LWR:   IsMem = TRUE;
 `LV,`SV:    IsMem = TRUE;
 `INC:		IsMem = TRUE;
+`PUSHC:	IsMem = TRUE;
 `SB:    IsMem = TRUE;
 `Sx:    IsMem = TRUE;
 `SWC:   IsMem = TRUE;
@@ -505,6 +520,7 @@ case(isn[`INSTRUCTION_OP])
 	endcase
 `SWC:  MemSize = octa;
 `SV:    MemSize = octa;
+`PUSHC:	MemSize = octa;
 default:    MemSize = octa;
 endcase
 endfunction
@@ -601,22 +617,6 @@ default: IsShift = FALSE;
 endcase
 endfunction
 
-function IsCmp;
-input [47:0] isn;
-case(isn[`INSTRUCTION_OP])
-`R2:
-	if (isn[`INSTRUCTION_L2]==2'b00)
-    case(isn[31:26])
-    `CMP: IsCmp = TRUE;
-    default: IsCmp = FALSE;
-    endcase
-  else
-  	IsCmp = FALSE;
-`CMPI:	IsCmp = TRUE;
-default: IsCmp = FALSE;
-endcase
-endfunction
-
 function IsLWRX;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
@@ -659,8 +659,10 @@ function IsBranch;
 input [47:0] isn;
 casez(isn[`INSTRUCTION_OP])
 `Bcc:   IsBranch = TRUE;
+`BLcc:  IsBranch = TRUE;
 `BBc:   IsBranch = TRUE;
 `BEQI:  IsBranch = TRUE;
+`BNEI:  IsBranch = TRUE;
 `CHK:   IsBranch = TRUE;
 default:    IsBranch = FALSE;
 endcase
@@ -733,6 +735,7 @@ casez(isn[`INSTRUCTION_OP])
 `RET:   HasConst = TRUE;
 `LVx:		HasConst = TRUE;
 `LVxU:	HasConst = TRUE;
+`PUSHC:	HasConst = TRUE;
 default:    HasConst = FALSE;
 endcase
 endfunction
@@ -905,6 +908,7 @@ casez(isn[`INSTRUCTION_OP])
 `LV:        IsRFW = TRUE;
 `LVx:				IsRFW = TRUE;
 `LVxU:			IsRFW = TRUE;
+`PUSHC:			IsRFW = TRUE;
 `CAS:       IsRFW = TRUE;
 `AMO:				IsRFW = TRUE;
 `CSRRW:			IsRFW = TRUE;
@@ -923,7 +927,6 @@ casez(isn[`INSTRUCTION_OP])
 	`CMP:	fnWe = 8'h00;			// CMP sets predicate registers so doesn't update general register file.
 	default: fnWe = 8'hFF;	
 	endcase
-`CMPI:	fnWe = 8'h00;
 default: fnWe = 8'hFF;
 endcase
 /*
@@ -973,8 +976,10 @@ input [47:0] isn;
 casez(isn[`INSTRUCTION_OP])
 `BRK:   Source1Valid = TRUE;
 `Bcc:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`BLcc:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `BBc:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `BEQI:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`BNEI:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `CHK:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `R2:    case(isn[`INSTRUCTION_S2])
         `SHIFT31:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
@@ -1006,6 +1011,7 @@ casez(isn[`INSTRUCTION_OP])
 `Sx:    Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `SWC:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `SV:    Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`PUSHC: Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `INC:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `CAS:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `JAL:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
@@ -1026,8 +1032,10 @@ input [47:0] isn;
 casez(isn[`INSTRUCTION_OP])
 `BRK:   Source2Valid = TRUE;
 `Bcc:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
+`BLcc:  Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
 `BBc:   Source2Valid = TRUE;
 `BEQI:  Source2Valid = TRUE;
+`BNEI:  Source2Valid = TRUE;
 `CHK:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
 `R2:    case(isn[`INSTRUCTION_S2])
         `R1:       Source2Valid = TRUE;
@@ -1067,6 +1075,7 @@ casez(isn[`INSTRUCTION_OP])
 `SB:    Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
 `Sx:    Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
 `SWC:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
+`PUSHC: Source2Valid = TRUE;
 `CAS:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
 `JAL:   Source2Valid = TRUE;
 `RET:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
@@ -1139,8 +1148,8 @@ always @*
 begin
 	bus <= 144'h0;
 	bus[`IB_LOADSEG] <= IsMov2Seg(instr);
-	bus[`IB_CMP] <= IsCmp(instr);
-	if (IsStore(instr))
+	bus[`IB_CMP] <= 1'b0;//IsCmp(instr);
+	if (IsStore(instr) & !IsPushc(instr))
 		bus[`IB_CONST] <= instr[6]==1'b1 ? {{34{instr[47]}},instr[47:23],instr[17:13]} :
 																				{{50{instr[31]}},instr[31:23],instr[17:13]};
 	else
@@ -1200,7 +1209,7 @@ begin
 	bus[`IB_SYNC]		<= IsSync(instr)||IsBrk(instr)||IsRti(instr);
 	bus[`IB_FSYNC]	<= IsFSync(instr);
 	bus[`IB_RFW]		<= (Rt==5'd0) ? 1'b0 : IsRFW(instr);// && !IsCmp(instr);
-	bus[`IB_PRFW]   <= IsCmp(instr);
+	bus[`IB_PRFW]   <= 1'b0;//IsCmp(instr);
 	bus[`IB_WE]			<= fnWe(instr);
 	id_o <= id_i;
 	idv_o <= idv_i;
@@ -1227,8 +1236,10 @@ casez(instr[`INSTRUCTION_OP])
     	IsALU = TRUE;
 `BRK:   IsALU = FALSE;
 `Bcc:   IsALU = FALSE;
+`BLcc:  IsALU = FALSE;
 `BBc:   IsALU = FALSE;
 `BEQI:  IsALU = FALSE;
+`BNEI:  IsALU = FALSE;
 `CHK:   IsALU = FALSE;
 `JAL:   IsALU = FALSE;
 `JMP:	IsALU = FALSE;

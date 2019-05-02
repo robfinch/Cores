@@ -375,23 +375,26 @@ reg wr1,wr2;
 reg [9:0] en1, en2;
 reg invline1, invline2;
 
+wire iclk;
+BUFH ucb1 (.I(clk), .O(iclk));
+
 // Must update the cache memory on the cycle after a write to the tag memmory.
 // Otherwise lineno won't be valid. Tag memory takes two clock cycles to update.
-always @(posedge clk)
+always @(posedge iclk)
 	wr1 <= wr;
-always @(posedge clk)
+always @(posedge iclk)
 	wr2 <= wr1;
-always @(posedge clk)
+always @(posedge iclk)
 	i1 <= i[305:0];
-always @(posedge clk)
+always @(posedge iclk)
 	i2 <= i1;
-always @(posedge clk)
+always @(posedge iclk)
 	en1 <= en;
-always @(posedge clk)
+always @(posedge iclk)
 	en2 <= en1;
-always @(posedge clk)
+always @(posedge iclk)
 	invline1 <= invline;
-always @(posedge clk)
+always @(posedge iclk)
 	invline2 <= invline1;
 
 generate begin : tags
@@ -400,7 +403,7 @@ if (FOURWAY) begin
 FT64_L1_icache_mem #(.pLines(pLines)) u1
 (
     .rst(rst),
-    .clk(clk),
+    .clk(iclk),
     .wr(wr1),
     .en(en1),
     .i(i1),
@@ -414,7 +417,7 @@ FT64_L1_icache_mem #(.pLines(pLines)) u1
 FT64_L1_icache_cmptag4way #(.pLines(pLines)) u3
 (
 	.rst(rst),
-	.clk(clk),
+	.clk(iclk),
 	.nxt(nxt),
 	.wr(wr),
 	.adr(adr),
@@ -427,7 +430,7 @@ else if (CAMTAGS) begin
 FT64_L1_icache_mem u1
 (
     .rst(rst),
-    .clk(clk),
+    .clk(iclk),
     .wr(wr2),
     .en(en2),
     .i(i2),
@@ -441,7 +444,7 @@ FT64_L1_icache_mem u1
 FT64_L1_icache_camtag u2
 (
     .rst(rst),
-    .clk(clk),
+    .clk(iclk),
     .nxt(nxt),
     .wlineno(wlineno),
     .wadr(wadr),

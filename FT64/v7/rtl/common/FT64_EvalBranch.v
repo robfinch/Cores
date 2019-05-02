@@ -24,6 +24,7 @@
 // ============================================================================
 //
 `define TRUE    1'b1
+`define BNEI	6'h12
 `define BBc		6'h26
 `define Bcc		6'h30
 `define BEQI	6'h32
@@ -36,6 +37,12 @@
 `define BGE		3'h3
 `define BLTU	3'h6
 `define BGEU	3'h7
+`define BAND	3'h0
+`define BOR		3'h1
+`define BXOR	3'd2
+`define BNAND	3'h4
+`define BNOR	3'h5
+`define BXNOR	3'd6
 
 `define IBNE	2'd2
 `define DBNZ	2'd3
@@ -63,7 +70,18 @@ case(opcode)
 	`BGEU:	takb <= a >= b;
 	default:	takb <= `TRUE;
 	endcase
+`BLcc:
+	case(instr[15:13])
+	`BAND:	takb <= a != 0 && b != 0;
+	`BOR:		takb <= a != 0 || b != 0;
+ 	`BXOR:	takb <= (a != 0) ^ (b != 0);
+	`BNAND:	takb <= !(a != 0 && b != 0);
+	`BNOR:	takb <= !(a != 0 || b != 0);
+	`BXNOR:	takb <= !((a != 0) ^ (b != 0));
+	default:	takb <= `TRUE;
+	endcase
 `BEQI:	takb <= a=={{56{instr[22]}},instr[22:18],instr[15:13]};
+`BNEI:	takb <= a!={{56{instr[22]}},instr[22:18],instr[15:13]};
 `BBc:
 	case(instr[14:13])
 	2'd0:	takb <=  a[{instr[22:18],instr[15]}];	// BBS

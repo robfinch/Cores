@@ -126,6 +126,7 @@
 `define MEMDB				5'h10
 `define MEMSB				5'h11
 `define SYNC        5'h12
+`define EXEC				5'h13
 `define CHAIN_OFF		5'h14
 `define CHAIN_ON		5'h15
 `define SETWB				5'h16
@@ -195,10 +196,17 @@
 `define REX     6'h0D
 `define XNORI		6'h0E
 `define FLOAT   6'h0F
-`define LDCS		6'h10
+`define BLcc		6'h10
+`define BAND				3'd0
+`define BOR					3'd1
+`define BXOR				3'd2
+`define BNAND				3'd4
+`define BNOR				3'd5
+`define BXOR				3'd6
 `define LVxU		6'h11
-`define CMPI		6'h12
+`define BNEI		6'h12
 `define LB      6'h13
+`define PUSHC		6'h14
 `define SB      6'h15
 `define MEMNDX	6'h16
 `define LVBX				6'h00

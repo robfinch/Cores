@@ -33,6 +33,10 @@
 //`define SUPPORT_SEGMENTATION	1'b1
 //`define SUPPORT_PREDICATION	1'b1
 //`define DEBUG_LOGIC 1'b1
+
+// The following define generates rtl to support 40-bit jumps and calls,
+// otherwise only 24-bit jumps and calls are supported.
+//`define JMP40	1'b1
 `define L1_ICACHE_SIZE	2				// 2 or 4 for 2 or 4 kB
 
 // One way to tweak the size of the core a little bit is to limit the number

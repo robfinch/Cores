@@ -90,6 +90,7 @@ module FT64_pic
 );
 parameter pIOAddress = 32'hFFDC_0F00;
 
+wire clk;
 reg [31:0] trig;
 reg [31:0] ie;		// interrupt enable register
 reg rdy1;
@@ -117,12 +118,14 @@ end
 wire cs = cyc_i && stb_i && adr_i[31:8]==pIOAddress[31:8];
 assign vol_o = cs;
 
-always @(posedge clk_i)
+BUFH ucb1 (.I(clk_i), .O(clk));
+
+always @(posedge clk)
 	rdy1 <= cs;
 assign ack_o = cs ? (wr_i ? 1'b1 : rdy1) : 1'b0;
 
 // write registers	
-always @(posedge clk_i)
+always @(posedge clk)
 	if (rst_i) begin
 		ie <= 32'h0;
 		rste <= 32'h0;
@@ -155,7 +158,7 @@ always @(posedge clk_i)
 	end
 
 // read registers
-always @(posedge clk_i)
+always @(posedge clk)
 begin
 	if (irqenc!=5'd0)
 		$display("PIC: %d",irqenc);
@@ -174,7 +177,7 @@ assign causeo = (irqenc == 5'h0) ? 8'd0 : cause[irqenc];
 assign nmio = nmii & ie[0];
 
 // Edge detect circuit
-always @(posedge clk_i)
+always @(posedge clk)
 begin
 	for (n = 1; n < 32; n = n + 1)
 	begin
@@ -188,7 +191,7 @@ end
 // irq requests are latched on every rising clock edge to prevent
 // misreads
 // nmi is not encoded
-always @(posedge clk_i)
+always @(posedge clk)
 begin
 	irqenc <= 5'd0;
 	for (n = 31; n > 0; n = n - 1)

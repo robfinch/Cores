@@ -91,6 +91,7 @@ wire [3:0] cti;
 wire [2:0] bte;
 wire cyc,stb,we;
 wire [7:0] sel;
+(* mark_debug="true" *)
 wire [63:0] adr;
 reg [63:0] dati;
 wire [63:0] dato;

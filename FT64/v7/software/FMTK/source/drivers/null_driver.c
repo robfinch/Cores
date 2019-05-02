@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2018-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -25,34 +25,34 @@
 #include <fmtk/const.h>
 #include <fmtk/device.h>
 
-static void null_init()
+private pascal void null_init()
 {
 }
 
-static int null_stat(int handle)
-{
-	return (0);
-}
-
-static int null_peek(int handle)
+private pascal int null_stat(int handle)
 {
 	return (0);
 }
 
-static int null_get(int handle)
+private pascal int null_peek(int handle)
 {
 	return (0);
 }
 
-static void null_put(int handle,int val)
+private pascal int null_get(int handle)
+{
+	return (0);
+}
+
+private pascal void null_put(int handle,int val)
 {
 }
 
-static void null_flushi(int handle)
+private pascal void null_flushi(int handle)
 {
 }
 
-int null_CmdProc(int cmd, int cmdParm1, int cmdParm2, int cmdParm3, int cmdParm4)
+pascal int null_CmdProc(int cmd, int cmdParm1, int cmdParm2, int cmdParm3, int cmdParm4)
 {
 	int val;
 	int err = E_Ok;
