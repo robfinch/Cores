@@ -433,14 +433,14 @@ void Macro::Substitute(char *what, int slen)
 	mlen = strlen(what);          // macro length
 	dif = mlen - slen;
 	nchars = inptr - masterFile;         // calculate number of characters that could be remaining
-	if (dif > 10000) {
-		p = new char[masterFileLength + dif + 10000];
-		memcpy(p, masterFile, masterFileLength);
-		masterFile = p;
-		masterFileLength = masterFileLength + dif + 10000;
-		inptr = &masterFile[nchars];
-	}
-	memmove(inptr+dif, inptr, masterFileLength-500-nchars-dif);  // shift open space in input buffer
+	//if (dif > 10000) {
+	//	p = new char[masterFileLength + dif + 10000];
+	//	memcpy(p, masterFile, masterFileLength);
+	//	masterFile = p;
+	//	masterFileLength = masterFileLength + dif + 10000;
+	//	inptr = &masterFile[nchars];
+	//}
+	memmove(inptr+dif, inptr, sizeof(masterFile)-500-nchars-dif);  // shift open space in input buffer
 	inptr -= slen;                // reset input pointer to start of replaced text
 	memcpy(inptr, what, mlen);    // copy macro body in place over identifier
 	inst++;

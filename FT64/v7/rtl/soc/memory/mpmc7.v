@@ -73,28 +73,30 @@ output reg [C0W-1:0] dato0;
 reg [C0W-1:0] dato0n;
 
 // Channel 1 is reserved for cpu1
+parameter C1W = 128;
 input cs1;
 input cyc1;
 input stb1;
 output ack1;
 input we1;
-input [15:0] sel1;
+input [C1W/8-1:0] sel1;
 input [31:0] adr1;
-input [127:0] dati1;
-output reg [127:0] dato1;
+input [C1W-1:0] dati1;
+output reg [C1W-1:0] dato1;
 input sr1;
 input cr1;
 output reg rb1;
 
 // Channel 2 is reserved for the ethernet controller
+parameter C2W = 32;
 input cyc2;
 input stb2;
 output ack2;
 input we2;
-input [3:0] sel2;
+input [C2W/8-1:0] sel2;
 input [31:0] adr2;
-input [31:0] dati2;
-output reg [31:0] dato2;
+input [C2W-1:0] dati2;
+output reg [C2W-1:0] dato2;
 
 // Channel 3 is reserved for the audio controller
 input cyc3;
@@ -193,6 +195,7 @@ reg read4,read5,read6,read7;
 reg elevate = 1'b0;
 reg [5:0] elevate_cnt = 6'h00;
 reg [5:0] nack_to = 6'd0;
+reg [4:0] spriteno_r;
 
 wire cs0 = cyc0 && stb0 && adr0[31:29]==3'h0;
 wire ics1 = cyc1 & stb1 & cs1;
@@ -212,7 +215,7 @@ reg [31:0] ch1_addr;
 reg [31:0] ch2_addr;
 reg [31:0] ch3_addr;
 reg [31:0] ch4_addr;
-reg [31:0] ch5_addr;
+reg [31:0] ch5_addr [0:31];	// separate address for each sprite
 reg [31:0] ch6_addr;
 reg [31:0] ch7_addr;
 reg ch5_flag;
@@ -243,21 +246,7 @@ reg [AMSB:0] mem_addr4;
 reg [AMSB:0] mem_addr5;
 reg [AMSB:0] mem_addr6;
 reg [AMSB:0] mem_addr7;
-wire [2:0] mem_cmd;
-wire mem_en;
-reg [127:0] mem_wdf_data;
-reg [15:0] mem_wdf_mask;
-wire mem_wdf_end;
-wire mem_wdf_wren;
 
-wire [127:0] mem_rd_data;
-wire mem_rd_data_end;
-wire mem_rd_data_valid;
-wire mem_rdy;
-wire mem_wdf_rdy;
-wire mem_ui_clk;
-wire mem_ui_rst;
-wire calib_complete;
 reg [15:0] refcnt;
 reg refreq;
 wire refack;
@@ -408,7 +397,7 @@ end
 // than one sprite and sprite accesses are essentially random.
 always @*
 begin
-	fast_read5 = (cs5 && ch5_addr[5:3]!=3'b0);
+	fast_read5 = (cs5 && adr5[31:6] == ch5_addr[spriteno][31:6]);
 end
 always @*
 begin
@@ -563,16 +552,42 @@ always @(posedge mem_ui_clk)
 		end
 		else
 			wmask0 <= 16'h0000;
-		if (we1xx) wmask1 <= ~sel1xx; else wmask1 <= 16'h0000;
-		if (we2)
-      case(adr2[3:2])
-      2'd0:  wmask2 <= {12'hFFF,~sel2[3:0]};
-      2'd1:  wmask2 <= {8'hFF,~sel2[3:0],4'hF};
-      2'd2:  wmask2 <= {4'hF,~sel2[3:0],8'hFF};
-      2'd3:  wmask2 <= {~sel2[3:0],12'hFFF};
-      endcase
-    else
-    	wmask2 <= 16'h0000;
+		if (we1xx) begin
+			if (C1W==128)
+				wmask1 <= ~sel1xx;
+			else if (C1W==64)
+				case(adr1xx[3])
+				1'd0:	wmask1 <= {8'hFF,~sel1xx};
+				1'd1: wmask1 <= {~sel1xx,8'hFF};
+				endcase
+			else
+				case(adr1xx[3:2])
+				2'd0:	wmask1 <= {12'hFFF,~sel1xx};
+				2'd1:	wmask1 <= {8'hFF,~sel1xx,4'hF};
+				2'd2:	wmask1 <= {4'hF,~sel1xx,8'hFF};
+				2'd3: wmask1 <= {~sel1xx,12'hFFF};
+				endcase
+		end
+		else
+			wmask1 <= 16'h0000;
+		if (we2) begin
+			if (C2W==128)
+				wmask2 <= ~sel2;
+			else if (C2W==64)
+				case(adr2[3])
+				1'd0:	wmask2 <= {8'hFF,~sel2};
+				1'd1: wmask2 <= {~sel2,8'hFF};
+				endcase
+			else
+				case(adr2[3:2])
+				2'd0:	wmask2 <= {12'hFFF,~sel2};
+				2'd1:	wmask2 <= {8'hFF,~sel2,4'hF};
+				2'd2:	wmask2 <= {4'hF,~sel2,8'hFF};
+				2'd3: wmask2 <= {~sel2,12'hFFF};
+				endcase
+		end
+		else
+			wmask2 <= 16'h0000;
 		if (we3)
 			wmask3 <= ~(sel3 << {adr3[3:1],1'b0});
 		else
@@ -606,8 +621,8 @@ always @(posedge mem_ui_clk)
 	if (state==IDLE) begin
 		case(nch)
 		3'd0:	dat128 <= C0W==128 ? dati0xx : C0W==64 ? {2{dati0xx}} : {4{dati0xx}};
-		3'd1:	dat128 <= dati1xx;
-		3'd2:	dat128 <= {4{dati2}};
+		3'd1:	dat128 <= C1W==128 ? dati1xx : C0W==64 ? {2{dati1xx}} : {4{dati1xx}};
+		3'd2:	dat128 <= C2W==128 ? dati2 : C2W==64 ? {2{dati2}} : {4{dati2}};
 		3'd3:	dat128 <= {8{dati3}};
 		3'd4:	dat128 <= {2{dati4}};
 		3'd5:	;
@@ -638,10 +653,10 @@ if (mem_ui_rst) begin
 	ch2_addr <= 32'hFFFFFFFF;
 	ch3_addr <= 32'hFFFFFFFF;
 	ch4_addr <= 32'hFFFFFFFF;
-	ch5_addr <= 32'hFFFFFFFF;
+	for (n = 0; n < 32; n = n + 1)
+		ch5_addr[n] <= 32'hFFFFFFFF;
 	ch6_addr <= 32'hFFFFFFFF;
 	ch7_addr <= 32'hFFFFFFFF;
-	ch5_flag <= FALSE;
 end
 else begin
 	if (cc0) clear_cache(adr0xx);
@@ -659,13 +674,17 @@ else begin
 		3'd2: ch2_addr <= adr2;
 		3'd3: ch3_addr <= adr3;
 		3'd4: ch4_addr <= adr4;
-		3'd5: ch5_flag <= TRUE;
+		3'd5: ch5_addr[spriteno] <= adr5;
 		3'd6: ch6_addr <= adr6;
 		3'd7: ch7_addr <= {adr7xx[31:5],5'h0};
 		default:	;
 		endcase
 	end
 end
+
+always @(posedge mem_ui_clk)
+	if (state==IDLE)
+		spriteno_r <= spriteno;
 
 // Setting burst length
 always @(posedge mem_ui_clk)
@@ -738,9 +757,30 @@ always @(posedge clk40MHz)
 		endcase
 `endif
 always @(posedge clk40MHz)
-    dato1 <= adr1xx[4] ? ch1_rd_data[1] : ch1_rd_data[0];
+	if (C1W==128)
+		dato1 <= ch1_rd_data[adr1xx[4]];
+	else if (C1W==64)
+		case(adr1xx[3])
+		1'd0:	dato1 <= ch1_rd_data[adr1xx[4]][63:0];
+		1'd1:	dato1 <= ch1_rd_data[adr1xx[4]][127:64];
+		endcase
+	else
+		case(adr1xx[3:2])
+		2'd0:	dato1 <= ch1_rd_data[adr1xx[4]][31:0];
+		2'd1:	dato1 <= ch1_rd_data[adr1xx[4]][63:32];
+		2'd2:	dato1 <= ch1_rd_data[adr1xx[4]][95:64];
+		2'd3:	dato1 <= ch1_rd_data[adr1xx[4]][127:96];
+		endcase
 always @(posedge clk40MHz)
-	case(adr2[3:2])
+	if (C2W==128)
+		dato2 <= ch2_rd_data;
+	else if (C2W==64)
+		case(adr2[3])
+    1'd0:    dato2 <= ch2_rd_data[ 63:0];
+    1'd1:    dato2 <= ch2_rd_data[127:64];
+    endcase
+	else
+		case(adr2[3:2])
     2'd0:    dato2 <= ch2_rd_data[31:0];
     2'd1:    dato2 <= ch2_rd_data[63:32];
     2'd2:    dato2 <= ch2_rd_data[95:64];
@@ -754,10 +794,21 @@ always @(posedge clk40MHz)
 	1'b1:	dato4 <= ch4_rd_data[127:64];
 	endcase
 always @(posedge clk40MHz)
-	case(adr5[3])
-	1'b0:	dato5 <= ch5_rd_data[{spriteno,adr5[5:4]}][ 63: 0];
-	1'b1:	dato5 <= ch5_rd_data[{spriteno,adr5[5:4]}][127:64];
-  endcase
+	if (C5W==128)
+		dato5 <= ch5_rd_data[{spriteno_r,adr5[5:4]}][127: 0];
+	else if (C5W==64)
+		case(adr5[3])
+		1'b0:	dato5 <= ch5_rd_data[{spriteno_r,adr5[5:4]}][ 63: 0];
+		1'b1:	dato5 <= ch5_rd_data[{spriteno_r,adr5[5:4]}][127:64];
+	  endcase
+	else if (C5W==32)
+		case(adr5[3:2])
+		2'd0:	dato5 <= ch5_rd_data[{spriteno_r,adr5[5:4]}][ 31: 0];
+		2'd1:	dato5 <= ch5_rd_data[{spriteno_r,adr5[5:4]}][ 63:32];
+		2'd2:	dato5 <= ch5_rd_data[{spriteno_r,adr5[5:4]}][ 95:64];
+		2'd3:	dato5 <= ch5_rd_data[{spriteno_r,adr5[5:4]}][127:96];
+	  endcase
+	
 always @(posedge clk40MHz)
 	case(adr6[3:2])
   2'd0:    dato6 <= ch6_rd_data[31:0];
@@ -799,7 +850,7 @@ else begin
 		acki3 <= TRUE;
 	if (!we4 && cs4 && adr4[31:4]==ch4_addr[31:4])
 		acki4 <= TRUE;
-	if (cs5 && (ch5_flag || ch5_addr[5:3]!=3'b0))
+	if (cs5 && adr5[31:6]==ch5_addr[spriteno][31:6])
     acki5 <= TRUE;
 	if (!we6 && cs6 && adr6[31:4]==ch6_addr[31:4])
 		acki6 <= TRUE;
@@ -995,7 +1046,7 @@ begin
 	    3'd2:	ch2_rd_data <= mem_rd_data;
 	    3'd3:	ch3_rd_data <= mem_rd_data;
 	    3'd4:	ch4_rd_data <= mem_rd_data;
-	    3'd5:	ch5_rd_data[{spriteno,strip_cnt2[1:0]}] <= mem_rd_data;
+	    3'd5:	ch5_rd_data[{spriteno_r,strip_cnt2[1:0]}] <= mem_rd_data;
 	    3'd6:	ch6_rd_data <= mem_rd_data;
 	    3'd7:	ch7_rd_data[strip_cnt2[0]] <= mem_rd_data;
 	    default:	;
@@ -1142,8 +1193,9 @@ begin
 		ch3_addr <= 32'hFFFFFFFF;
 	if (ch4_addr[31:4]==adr[31:4])
 		ch4_addr <= 32'hFFFFFFFF;
-	if (ch5_addr[31:4]==adr[31:4])
-		ch5_addr <= 32'hFFFFFFFF;
+	// For channel5 we don't care.
+	// It's possible that stale data would be read, but it's only for one video
+	// frame. It's a lot of extra hardware to clear channel5 so we don't do it.
 	if (ch6_addr[31:4]==adr[31:4])
 		ch6_addr <= 32'hFFFFFFFF;
 	if (ch7_addr[31:5]==adr[31:5])

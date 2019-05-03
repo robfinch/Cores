@@ -1021,6 +1021,7 @@ reg [63:0] commit2_bus;
 
 reg StoreAck1;
 reg [4:0] bstate;
+wire [3:0] icstate;
 parameter SEG_IDLE = 2'd0;
 parameter SEG_CHK = 2'd1;
 parameter SEG_UPD = 2'd2;
@@ -1189,6 +1190,7 @@ FT64_ICController uL1ctrl
 	.hit1(ihit1),
 	.hit2(ihit2),
 	.bstate(bstate),
+	.state(icstate),
 	.thread_en(thread_en),
 	.ihitL2(ihitL2),
 	.L1_adr(L1_adr),

@@ -171,6 +171,8 @@ always @(posedge clk)
 	prv_o <= 1'b0;
 always @(posedge clk)
 	page_fault <= 1'b0;
+always @(posedge clk)
+	ack_o <= 1'b0;
 `else
 always @(posedge clk)
 if (rst) begin

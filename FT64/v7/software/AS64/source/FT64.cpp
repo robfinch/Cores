@@ -74,6 +74,11 @@
 #define I_Bcc	0x30
 #define I_BEQI	0x32
 
+static void (*jumptbl[tk_last_token])();
+static int64_t parm1[tk_last_token];
+static int64_t parm2[tk_last_token];
+static int64_t parm3[tk_last_token];
+
 extern InsnStats insnStats;
 static void ProcessEOL(int opt);
 extern void process_message();
@@ -1949,12 +1954,14 @@ static void process_setop(int64_t funct6, int64_t opcode6)
 // add r1,r2,r3
 // ---------------------------------------------------------------------------
 
-static void process_rrop(int64_t funct6, int64_t iop)
+static void process_rrop()
 {
   int Ra,Rb,Rt,Rbp,Rtp;
   char *p;
 	int sz = 3;
 	int64_t instr;
+	int64_t funct6 = parm1[token];
+	int64_t iop = parm2[token];
 
 	instr = 0LL;
   p = inptr;
@@ -5235,6 +5242,262 @@ static void ProcessEOL(int opt)
     ca = sections[segment].address;
 }
 
+void process_default()
+{
+	switch (token) {
+	case tk_eol: ProcessEOL(1); break;
+		//        case tk_add:  process_add(); break;
+		//		case tk_abs:  process_rop(0x04); break;
+	case tk_abs: process_rop(0x01); break;
+	case tk_addi: process_riop(0x04); break;
+	case tk_align: process_align(); break;
+	case tk_andi:  process_riop(0x08); break;
+	case tk_asl: process_shift(0x2); break;
+	case tk_asr: process_shift(0x3); break;
+	case tk_band: process_bcc(0x10, 0); break;
+	case tk_bbc: process_bbc(0x26, 1); break;
+	case tk_bbs: process_bbc(0x26, 0); break;
+	case tk_begin_expand: expandedBlock = 1; break;
+	case tk_beq: process_bcc(0x30, 0); break;
+	case tk_beqi: process_beqi(0x32, 0); break;
+	case tk_bfchg: process_bitfield(2); break;
+	case tk_bfclr: process_bitfield(1); break;
+	case tk_bfext: process_bitfield(5); break;
+	case tk_bfextu: process_bitfield(6); break;
+	case tk_bfins: process_bitfield(3); break;
+	case tk_bfinsi: process_bitfield(4); break;
+	case tk_bfset: process_bitfield(0); break;
+	case tk_bge: process_bcc(0x30, 3); break;
+	case tk_bgeu: process_bcc(0x30, 7); break;
+	case tk_bgt: process_bcc(0x30, -2); break;
+	case tk_bgtu: process_bcc(0x30, -6); break;
+	case tk_ble: process_bcc(0x30, -3); break;
+	case tk_bleu: process_bcc(0x30, -7); break;
+	case tk_blt: process_bcc(0x30, 2); break;
+	case tk_bltu: process_bcc(0x30, 6); break;
+	case tk_bnand: process_bcc(0x10, 4); break;
+	case tk_bne: process_bcc(0x30, 1); break;
+	case tk_bnei: process_beqi(0x12, 1); break;
+	case tk_bnor: process_bcc(0x10, 5); break;
+	case tk_bor: process_bcc(0x10, 1); break;
+	case tk_bra: process_bra(0x01); break;
+	case tk_brk: process_brk(); break;
+		//case tk_bsr: process_bra(0x56); break;
+	case tk_bss:
+		if (first_bss) {
+			while (sections[segment].address & 4095)
+				emitByte(0x00);
+			sections[3].address = sections[segment].address;
+			first_bss = 0;
+			binstart = sections[3].index;
+			ca = sections[3].address;
+		}
+		segment = bssseg;
+		break;
+	case tk_cache: process_cache(0x1E); break;
+	case tk_call:  process_call(0x19); break;
+	case tk_cli: emit_insn(0xC0000002, !expand_flag, 4); break;
+	case tk_chk:  process_chk(0x34); break;
+	case tk_cmovenz: process_cmove(0x29); break;
+	case tk_cmovfnz: process_cmovf(0x27); break;
+		//case tk_cmp:  process_rrop(0x06); break;
+	//case tk_cmpi:  process_riop(0x06); break;
+	//case tk_cmpu:  process_rrop(0x07); break;
+	//case tk_cmpui:  process_riop(0x07); break;
+	case tk_code: process_code(); break;
+	case tk_com: process_com(); break;
+	case tk_csrrc: process_csrrw(0x3); break;
+	case tk_csrrs: process_csrrw(0x2); break;
+	case tk_csrrw: process_csrrw(0x1); break;
+	case tk_csrrd: process_csrrw(0x0); break;
+	case tk_data:
+		if (first_data) {
+			while (sections[segment].address & 4095)
+				emitByte(0x00);
+			sections[2].address = sections[segment].address;   // set starting address
+			first_data = 0;
+			binstart = sections[2].index;
+			ca = sections[2].address;
+		}
+		process_data(dataseg);
+		break;
+	case tk_db:  process_db(); break;
+		//case tk_dbnz: process_dbnz(0x26,3); break;
+	case tk_dc:  process_dc(); break;
+	case tk_dec:	process_inc(0x25); break;
+	case tk_dh:  process_dh(); break;
+	case tk_dh_htbl:  process_dh_htbl(); break;
+		//case tk_divsu:	process_rrop(0x3D, -1); break;
+	case tk_divwait: process_rop(0x13); break;
+	case tk_dw:  process_dw(); break;
+//	case tk_end: goto j1;
+	case tk_end_expand: expandedBlock = 0; break;
+	case tk_endpublic: break;
+	case tk_eori: process_riop(0x0A); break;
+	case tk_extern: process_extern(); break;
+	case tk_file:
+		NextToken();
+		if (token == tk_strconst)
+			mname = std::string(laststr);
+		//NextToken();
+		//if (token == ',') {
+		//	NextToken();
+		//	lineno = expr();
+		//}
+		break;
+	case tk_ftoi:	process_ftoi(0x12); break;
+	case tk_fadd:	process_fprrop(0x04); break;
+	case tk_fbeq:	process_fbcc(0); break;
+	case tk_fbge:	process_fbcc(3); break;
+	case tk_fblt:	process_fbcc(2); break;
+	case tk_fbne:	process_fbcc(1); break;
+	case tk_fdiv:	process_fprrop(0x09); break;
+	case tk_fill: process_fill(); break;
+	case tk_fmov:	process_fprop(0x10); break;
+	case tk_fmul:	process_fprrop(0x08); break;
+	case tk_fneg:	process_fprop(0x14); break;
+	case tk_fsub:	process_fprrop(0x05); break;
+	case tk_fslt:	process_fprrop(0x38); break;
+	case tk_hint:	process_hint(); break;
+		//case tk_ibne: process_ibne(0x26,2); break;
+	case tk_inc:	process_inc(0x1A); break;
+	case tk_if:		pif1 = inptr - 2; doif(); break;
+	case tk_ifdef:		pif1 = inptr - 5; doifdef(); break;
+	case tk_itof: process_itof(0x15); break;
+	case tk_iret:	process_iret(0xC8000002); break;
+	case tk_isnull:  process_rop(0x0C); break;
+	case tk_isptr:  process_rop(0x0D); break;
+	case tk_jal: process_jal(0x18); break;
+	case tk_jmp: process_call(0x28); break;
+	case tk_lb:  process_load(0x13, 0x13, 0); break;
+	case tk_lbu:  process_load(0x23, 0x0A, 0); break;
+	case tk_lc:  process_load(0x20, 0x08, 1); break;
+	case tk_lcu:  process_load(0x20, 0x09, -1); break;
+	case tk_ld:	process_ld(); break;
+	case tk_ldi: process_ldi(); break;
+	case tk_lea: process_load(0x04, 0x18, 0); break;	// ToDo change this opcode
+	case tk_lf:	 process_lsfloat(0x1b, 0x00); break;
+	case tk_lh:  process_load(0x20, 0x10, 2); break;
+	case tk_lhu: process_load(0x20, 0x11, -2); break;
+		//case tk_lui: process_lui(0x27); break;
+	case tk_lv:  process_lv(0x36); break;
+	case tk_lvb: process_load(-1, 0x00, 0); break;
+	case tk_lvbu: process_load(-1, 0x01, 0); break;
+	case tk_lvc: process_load(0x3B, 0x02, 1); break;
+	case tk_lvcu: process_load(0x11, 0x03, -1); break;
+	case tk_lvh: process_load(0x3B, 0x04, 2); break;
+	case tk_lvhu: process_load(0x11, 0x05, -2); break;
+	case tk_lvw: process_load(0x3B, 0x06, 4); break;
+	case tk_lw:  process_load(0x20, 0x12, 4); break;
+	case tk_lwr:  process_load(0x1D, 0x14, 0); break;
+	case tk_macro:	process_macro(); break;
+	case tk_memdb: emit_insn(0x04400002, !expand_flag, 4); break;
+	case tk_memsb: emit_insn(0x04440002, !expand_flag, 4); break;
+	case tk_message: process_message(); break;
+	case tk_mov: process_mov(0x02, 0x22); break;
+		//case tk_mulh: process_rrop(0x26, 0x3A); break;
+		//case tk_muluh: process_rrop(0x24, 0x38); break;
+	case tk_neg: process_neg(); break;
+	case tk_nop: emit_insn(0x0080, !expand_flag, 2); break;
+	case tk_not: process_rop(0x05); break;
+		//        case tk_not: process_rop(0x07); break;
+	case tk_ori: process_riop(0x09); break;
+	case tk_org: process_org(); break;
+	case tk_plus: compress_flag = 0;  expand_flag = 1; break;
+	case tk_public: process_public(); break;
+	case tk_push: process_push(0x0c, 0x14); break;
+	case tk_rodata:
+		if (first_rodata) {
+			while (sections[segment].address & 4095)
+				emitByte(0x00);
+			sections[1].address = sections[segment].address;
+			first_rodata = 0;
+			binstart = sections[1].index;
+			ca = sections[1].address;
+		}
+		segment = rodataseg;
+		break;
+	case tk_redor: process_rop(0x06); break;
+	case tk_ret: process_ret(); break;
+	case tk_rex: process_rex(); break;
+	case tk_rol: process_shift(0x4); break;
+	case tk_roli: process_shifti(0x4); break;
+	case tk_ror: process_shift(0x5); break;
+	case tk_rori: process_shifti(0x5); break;
+	case tk_rti: process_iret(0xC8000002); break;
+	case tk_sb:  process_store(0x15, 0x20, 0); break;
+	case tk_sc:  process_store(0x24, 0x24, 1); break;
+	case tk_sei: process_sei(); break;
+	case tk_seq:	process_setop(0x0B, 0x0B); break;
+	case tk_setwb: emit_insn(0x04580002, !expand_flag, 4); break;
+		//case tk_seq:	process_riop(0x1B,2); break;
+	case tk_sf:		process_lsfloat(0x2B, 0x00); break;
+	case tk_sge:	process_setop(-6, -1); break;
+	case tk_sgeu:	process_setiop(-7); break;
+	case tk_sgt:	process_setiop(-0x2C); break;
+	case tk_sgtu:	process_setiop(-0x1C); break;
+		//case tk_slt:  process_rrop(0x33,0x02,0x00); break;
+		//case tk_sltu:  process_rrop(0x33,0x03,0x00); break;
+		//case tk_slti:  process_riop(0x13,0x02); break;
+		//case tk_sltui:  process_riop(0x13,0x03); break;
+	case tk_sh:  process_store(0x24, 0x21, 2); break;
+	case tk_shl: process_shift(0x0); break;
+	case tk_shli: process_shifti(0x0); break;
+	case tk_shr: process_shift(0x1); break;
+	case tk_shri: process_shifti(0x1); break;
+	case tk_shru: process_shift(0x1); break;
+	case tk_shrui: process_shifti(0x1); break;
+	case tk_sle:	process_setop(0x28, -1); break;
+	case tk_sleu:	process_setop(0x29, -1); break;
+	case tk_slt:	process_setop(0x06, 0x06); break;
+	case tk_sltu:	process_setop(0x07, 0x07); break;
+		//case tk_sne:	process_setiop(0x1B,3); break;
+	case tk_slli: process_shifti(0x8); break;
+	case tk_srai: process_shifti(0xB); break;
+	case tk_srli: process_shifti(0x9); break;
+	case tk_subi:  process_riop(0x05); break;
+	case tk_sv:  process_sv(0x37); break;
+	case tk_sw:  process_store(0x24, 0x22, 4); break;
+	case tk_swc:  process_store(0x17, 0x23, 0); break;
+	case tk_swap: process_rop(0x03); break;
+		//case tk_swp:  process_storepair(0x27); break;
+	case tk_sxb: process_rop(0x1A); break;
+	case tk_sxc: process_rop(0x19); break;
+	case tk_sxh: process_rop(0x18); break;
+	case tk_sync: emit_insn(0x04480002, !expand_flag, 4); break;
+	case tk_tlbdis:  process_tlb(6); break;
+	case tk_tlben:   process_tlb(5); break;
+	case tk_tlbpb:   process_tlb(1); break;
+	case tk_tlbrd:   process_tlb(2); break;
+	case tk_tlbrdreg:   process_tlb(7); break;
+	case tk_tlbwi:   process_tlb(4); break;
+	case tk_tlbwr:   process_tlb(3); break;
+	case tk_tlbwrreg:   process_tlb(8); break;
+		//case tk_unlink: emit_insn((0x1B << 26) | (0x1F << 16) | (30 << 11) | (0x1F << 6) | 0x02,0,4); break;
+	case tk_vadd: process_vrrop(0x04); break;
+	case tk_vadds: process_vsrrop(0x14); break;
+	case tk_vand: process_vrrop(0x08); break;
+	case tk_vands: process_vsrrop(0x18); break;
+	case tk_vdiv: process_vrrop(0x3E); break;
+	case tk_vdivs: process_vsrrop(0x2E); break;
+	case tk_vmov: process_vmov(0x02, 0x33); break;
+	case tk_vmul: process_vrrop(0x3A); break;
+	case tk_vmuls: process_vsrrop(0x2A); break;
+	case tk_vor: process_vrrop(0x09); break;
+	case tk_vors: process_vsrrop(0x19); break;
+	case tk_vsub: process_vrrop(0x05); break;
+	case tk_vsubs: process_vsrrop(0x15); break;
+	case tk_vxor: process_vrrop(0x0A); break;
+	case tk_vxors: process_vsrrop(0x1A); break;
+	case tk_xori: process_riop(0x0A); break;
+	case tk_zxb: process_rop(0x0A); break;
+	case tk_zxc: process_rop(0x09); break;
+	case tk_zxh: process_rop(0x08); break;
+	case tk_id:  process_label(); break;
+	case '-': compress_flag = 1; expand_flag = 0; break;
+	}
+}
+
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
 
@@ -5259,7 +5522,71 @@ void FT64_processMaster()
     first_data = 1;
     first_bss = 1;
 	expandedBlock = 0;
-    if (pass==3) {
+	//if (pass == 1) 
+	{
+		for (nn = 0; nn < tk_last_token; nn++)
+			jumptbl[nn] = &process_default;
+		jumptbl[tk_add] = &process_rrop;
+		parm1[tk_add] = 0x04LL;
+		parm2[tk_add] = 0x04LL;
+		jumptbl[tk_and] = &process_rrop;
+		parm1[tk_and] = 0x08LL;
+		parm2[tk_and] = 0x08LL;
+		jumptbl[tk_or] = &process_rrop;
+		parm1[tk_or] = 0x09LL;
+		parm2[tk_or] = 0x09LL;
+		jumptbl[tk_xor] = &process_rrop;
+		parm1[tk_xor] = 0x0ALL;
+		parm2[tk_xor] = 0x0ALL;
+		jumptbl[tk_eor] = &process_rrop;
+		parm1[tk_eor] = 0x0ALL;
+		parm2[tk_eor] = 0x0ALL;
+		jumptbl[tk_div] = &process_rrop;
+		parm1[tk_div] = 0x3ELL;
+		parm2[tk_div] = 0x3ELL;
+		jumptbl[tk_divu] = &process_rrop;
+		parm1[tk_divu] = 0x3CLL;
+		parm2[tk_divu] = 0x3CLL;
+		jumptbl[tk_fxdiv] = &process_rrop;
+		parm1[tk_fxdiv] = 0x2BLL;
+		parm2[tk_fxdiv] = -1LL;
+		jumptbl[tk_fxmul] = &process_rrop;
+		parm1[tk_fxmul] = 0x3BLL;
+		parm2[tk_fxmul] = -1LL;
+		jumptbl[tk_max] = &process_rrop;
+		parm1[tk_max] = 0x2DLL;
+		parm2[tk_max] = -1LL;
+		jumptbl[tk_min] = &process_rrop;
+		parm1[tk_min] = 0x2CLL;
+		parm2[tk_min] = -1LL;
+		jumptbl[tk_mod] = &process_rrop;
+		parm1[tk_mod] = 0x16LL;
+		parm2[tk_mod] = 0x2ELL;
+		jumptbl[tk_modu] = &process_rrop;
+		parm1[tk_modu] = 0x14LL;
+		parm2[tk_modu] = -1LL;
+		jumptbl[tk_mul] = &process_rrop;
+		parm1[tk_mul] = 0x3ALL;
+		parm2[tk_mul] = 0x3ALL;
+		jumptbl[tk_mulf] = &process_rrop;
+		parm1[tk_mulf] = 0x2ALL;
+		parm2[tk_mulf] = 0x2ALL;
+		jumptbl[tk_mulu] = &process_rrop;
+		parm1[tk_mulu] = 0x38LL;
+		parm2[tk_mulu] = 0x38LL;
+		jumptbl[tk_sub] = &process_rrop;
+		parm1[tk_sub] = 0x05LL;
+		parm2[tk_sub] = -0x04LL;
+		jumptbl[tk_transform] = &process_rrop;
+		parm1[tk_transform] = 0x11LL;
+		parm2[tk_transform] = -1LL;
+		jumptbl[tk_xnor] = &process_rrop;
+		parm1[tk_xnor] = 0x0ELL;
+		parm2[tk_xnor] = -1LL;
+	}
+	tbndx = 0;
+
+	if (pass==3) {
     htblmax = 0;
     for (nn = 0; nn < 100000; nn++) {
       hTable[nn].count = 0;
@@ -5284,12 +5611,14 @@ void FT64_processMaster()
 		num_cinsns = 0;
 		num_bytes = 0;
     NextToken();
-    while (token != tk_eof) {
+    while (token != tk_eof && token != tk_end) {
 //        printf("\t%.*s\n", inptr-stptr-1, stptr);
 //        printf("token=%d\r", token);
-          if (expandedBlock)
-             expand_flag = 1;
-      switch(token) {
+      if (expandedBlock)
+          expand_flag = 1;
+			(*jumptbl[token])();
+/*
+			switch(token) {
       case tk_eol: ProcessEOL(1); break;
 //        case tk_add:  process_add(); break;
 //		case tk_abs:  process_rop(0x04); break;
@@ -5559,7 +5888,7 @@ void FT64_processMaster()
 		case tk_zxh: process_rop(0x08); break;
 		case tk_id:  process_label(); break;
         case '-': compress_flag = 1; expand_flag = 0; break;
-        }
+        }*/
         NextToken();
     }
 j1:

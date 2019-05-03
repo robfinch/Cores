@@ -28,6 +28,7 @@
 extern FILE *ofp;
 extern int pass;
 int numsym = 0;
+char nametext[1000000];
 
 void ShellSort(void *, int, int, int (*)());   // Does a shellsort - like bsort()
 SHashVal HashFnc(void *def);
@@ -35,10 +36,15 @@ int icmp (const void *n1, const void *n2);
 int ncmp (char *n1, const void *n2);
 SHashTbl HashInfo = { HashFnc, icmp, ncmp, 0, sizeof(SYM), NULL };
 
+char *GetName(int ndx)
+{
+	return (&nametext[ndx]);
+}
+
 SHashVal HashFnc(void *d)
 {
    SYM *def = (SYM *)d;
-   return htSymHash(&HashInfo, nmTable.GetName(def->name));
+   return htSymHash(&HashInfo, &nametext[def->name]);
 }
 
 int icmp (const void *m1, const void *m2)
@@ -48,21 +54,21 @@ int icmp (const void *m1, const void *m2)
     n2 = (SYM *)m2;
 	if (n1->name==NULL) return 1;
 	if (n2->name==NULL) return -1;
-  return (strcmp(nmTable.GetName(n1->name), nmTable.GetName(n2->name)));
+  return (strcmp(GetName(n1->name), &nametext[n2->name]));
 }
 
 int ncmp (char *m1, const void *m2)
 {
     SYM *n2;
     n2 = (SYM *)m2;
-	if (m1==NULL) return 1;
-	if (n2->name==NULL) return -1;
-  return (strcmp(m1, nmTable.GetName(n2->name)));
+	//if (m1==NULL) return 1;
+	//if (n2->name==NULL) return -1;
+  return (strcmp(m1, &nametext[n2->name]));
 }
 
 void SymbolInit()
 {
-   HashInfo.size = 65536;
+   HashInfo.size = 100000;
    HashInfo.width = sizeof(SYM);
    if ((HashInfo.table = calloc(HashInfo.size, sizeof(SYM))) == NULL) {
       exit (1);
@@ -152,6 +158,18 @@ SYM *new_symbol(char *name)
   return p;
 }
 
+
+int GetSymNdx(SYM *sp)
+{
+	return (sp - (SYM*)HashInfo.table);
+}
+
+SYM *GetSymByIndex(int n)
+{
+	SYM *pt;
+	pt = (SYM *)HashInfo.table;
+	return (&pt[n]);
+}
 
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------

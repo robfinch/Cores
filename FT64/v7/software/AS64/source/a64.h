@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2018  Robert Finch, Stratford
+//   \\__/ o\    (C) 2018-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -74,7 +74,7 @@ extern int64_t bss_address;
 extern int64_t data_address;
 extern int segprefix;
 extern int masterFileLength;
-extern char *masterFile;
+extern char masterFile[10000000];
 extern uint8_t binfile[10000000];
 extern int binndx;
 extern int64_t binstart;
@@ -84,6 +84,8 @@ extern float num_bytes;
 extern int num_insns;
 extern int num_cinsns;
 extern int num_lbranch;
+extern int tbndx;
+extern int pass;
 
 extern void doif();
 extern int64_t expr();
@@ -112,12 +114,15 @@ extern void process_hint();
 extern void bump_address();
 extern int getIdentifier();
 extern bool IsNBit(int64_t val, int64_t n);
+extern int GetSymNdx(SYM *sp);
+extern SYM *GetSymByIndex(int n);
 
 extern int NumSections;
 extern clsElf64Section sections[12];
 extern SYM *lastsym;
 
 extern HTBLE hTable[100000];
+extern char nametext[1000000];
 extern int processOpt;
 extern int expandedBlock;
 extern int gCanCompress;

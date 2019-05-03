@@ -1,4 +1,4 @@
-; N4V128Sys bootrom - (C) 2017-2018 Robert Finch, Waterloo
+; N4V128Sys bootrom - (C) 2017-2019 Robert Finch, Waterloo
 ;
 ; This file is part of FT64v7SoC
 ;
@@ -344,7 +344,7 @@ ifdef SUPPORT_DCI
 endif
 +}
 start4:
-		ldi		r1,#$FFFF000F0000
+		ldi		r1,#$0040FFFF000F0000		; set zorder $40
 		sw		r1,_DBGAttr
 		call	_DBGClearScreen
 start2b:
@@ -354,29 +354,29 @@ start2b:
 		ldi		$r1,#MsgBoot
 		push	$r1
 		call	_DBGDisplayAsciiStringCRLF
-		add		sp,sp,#8
+		call	_ROMChecksum
 		ldi		$r1,#7
 		sb		$r1,LEDS
 
 		call	_SetupDevices
-		call	_InitPRNG
+		call	_prng_init
 ;		call  _RandomizeSpritePositions2
 		call	_i2c_init
-;		call	_KeybdInit
+		call	_KeybdInit
 		sw		r0,_milliseconds
 		call	_SetGCHandlers
 		call	_InitPIC
 		call	_InitPIT
 		brk		240,2,0
 		; Enable interrupts
-;		sei		#0
+		sei		#0
 
 		call	_rtc_read
 		; The following must be after the RTC is read
-		call	_init_memory_management
+;		call	_init_memory_management
 		ldi		r1,#$10				; set operating level 01 (bits 4,5)
-		csrrs	r0,#$044,r1
-		call	_SetSpritePalette
+;		csrrs	r0,#$044,r1
+;		call	_SetSpritePalette
 		call  _SetSpriteImage
 		ldi		$a0,#-1				; enable all sprites
 		call	_EnableSprites
@@ -482,6 +482,30 @@ _InitCompressedInsns:
 		ret
 +}
 endif
+
+;----------------------------------------------------------------------------
+;----------------------------------------------------------------------------
+_ROMChecksum:
+		lh		$r1,ROMBASE+196600
+		ldi		$r2,#ROMBASE
+		ldi		$r4,#0
+.0001:
+		lw		$r3,[$r2+$r1]
+		add		$r4,$r4,$r3
+		sub		$r1,$r1,#8
+		bge		$r1,$r0,.0001
+		lh		$r1,ROMBASE+196604
+		beq		$r1,$r4,.0002
+		push	#msgBadChecksum
+		call	_DBGDisplayAsciiStringCRLF
+.0002:
+		push	#' '
+		push	#1
+		push	#8
+		push	$r1
+		call	_puthexnum
+		call	_DBGCRLF
+		ret
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------
@@ -688,55 +712,6 @@ _InitPRNG:
 		ret
 
 ;------------------------------------------------------------------------------
-; Seed random number generator.
-;
-; Parameters:
-;		a0 - stream to seed
-;		a1 - value to use as seed
-; Returns:
-;		none
-;------------------------------------------------------------------------------
-
-_SeedRand:
-		push	r6
-		ldi		r6,#$FFFFFFFFFFDC0000
-		sh		a0,$0C04[r6]			; select stream #
-		memdb
-		sh		a1,$0C08[r6]			; set initial m_z
-		memdb
-		ror		a1,a1,#32
-		sh		a1,$0C0C[r6]			; set initial m_w
-		rol		a1,a1,#32
-		memdb
-		lw		r6,[sp]
-		ret		#8
-
-;------------------------------------------------------------------------------
-; Get a random number, and generate the next number.
-;
-; Parameters:
-;	r18 = random stream number.
-; Returns:
-;	r1 = random 32 bit number.
-;------------------------------------------------------------------------------
-
-_PeekRand:
-		sh		r18,$FFFFFFFFFFDC0C04	; set the stream
-		memdb
-		lvhu	r1,$FFFFFFFFFFDC0C00	; get a number
-		memdb
-		ret
-
-_GetRand:
-		sh		r18,$FFFFFFFFFFDC0C04	; set the stream
-		memdb
-		lvhu	r1,$FFFFFFFFFFDC0C00	; get a number
-		memdb
-		sh		r0,$FFFFFFFFFFDC0C00	; generate next number
-		memdb
-		ret
-
-;------------------------------------------------------------------------------
 ; Fill the display memory with bands of color.
 ;------------------------------------------------------------------------------
 
@@ -809,47 +784,6 @@ _BootCopyFont:
 		lw		$r6,16[$sp]
 		ret		#24
 
-;------------------------------------------------------------------------------
-; Display character at cursor position. The current foreground color and
-; background color are used.
-;
-; Parameters:
-;	r18			character to display
-; Returns:
-;	<none>
-; Registers Affected:
-;	<none>
-;------------------------------------------------------------------------------
-
-_TxtDispChar:
-		beqi	$r18,#CR,.doCr
-		lcu		$r1,bkcolor
-		lcu		$r2,fgcolor
-		shl		$r1,$r1,#32
-		shl		$r2,$r2,#16
-		or		$r1,$r1,$r2
-		or		$r1,$r1,$r18
-		lcu		$r3,_DBGCursorRow
-		mulf	$r3,$r3,#48*8
-		lcu		$r4,_DBGCursorCol
-		shl		$r4,$r4,#3
-		add		$r3,$r3,$r4
-		add		$r3,$r3,#TXTSCREEN
-		sw		$r1,[$r3]
-.doCr:
-		lhu		$r1,_DBGCursorCol
-		add		$r1,$r1,#1
-		sh		$r1,_DBGCursorCol
-		slt		$r2,$r1,#48
-		bne		$r2,$r0,.xit
-		sh		$r0,_DBGCursorCol
-		lhu		$r1,_DBGCursorRow
-		add		$r1,$r1,#1
-		sh		$r1,_DBGCursorRow
-		
-.xit:
-		ret
-		
 ;------------------------------------------------------------------------------
 ; DispChar:
 ;
@@ -956,7 +890,7 @@ _SyncCursorPos:
 _EnableSprites:
 		lvw		$t0,SPRCTRL+$A00
 		or		$t0,$t0,$a0
-		sh		$t0,SPRCTRL+$A00		; enable sprites
+		sw		$t0,SPRCTRL+$A00		; enable sprites
 		ret		#0
 
 ;----------------------------------------------------------------------------
@@ -967,9 +901,9 @@ _EnableSprites:
 ;----------------------------------------------------------------------------
 _DisableSprites:
 		lvw		$t0,SPRCTRL+$A00
-		not		$a0,$a0
+		com		$a0,$a0
 		and		$t0,$t0,$a0
-		sh		$t0,SPRCTRL+$A00		; enable sprites
+		sw		$t0,SPRCTRL+$A00		; enable sprites
 		ret		#0
 
 ;----------------------------------------------------------------------------
@@ -986,7 +920,7 @@ _SetSpritePalette:
 		sw		$r0,[$t2]				; palette entry #0 (never used)
 		ldi		$t0,#WHITE
 		sw		$t0,8[$t2]			; palette entry #1
-		ldi		$t0,#%111110000000000	; RED
+		ldi		$t0,#%010000000111110000000000	; RED
 		sw		$t0,$10[$t2]			; palette entry #2
 		ldi		$t0,#16
 .0001:
@@ -1023,7 +957,7 @@ _SetSpriteImage:
 		ldi		r6,#SPRCTRL
 		ldi		r7,#$800
 		ldi		r8,#$1FFEE000	; sprite image address
-		ldi		r9,#$03C0000000000000			; size 30vx32h = 960 pixels, x = y = 0
+		ldi		r9,#$0780000000000000			; size 60vx32h = 1920 pixels, z = x = y = 0
 .0002:
 		sw		r8,[r6+r7]		; sprite image address
 		add		r7,r7,#8			; advance to pos/size field
@@ -1116,51 +1050,35 @@ _XImage:
 	dw		%1111111111111111111111111111111100000000000000000000000000000000
 
 ;----------------------------------------------------------------------------
-; *
+; Randomize the sprites position.
+;
+; Parameters:
+;		none
+; Modifies:
+;		$t0 to $t2, $v0
+; Stack Space:
+;		1 word
 ;----------------------------------------------------------------------------
-_RandomizeSpritePositions2:
-		sub		$sp,$sp,#32
-		sw		$r1,[$sp]
-		sw		$r6,8[$sp]
-		sw		$r7,16[$sp]
-		sw		lr,24[$sp]
-		ldi		r6,#SPRCTRL
-		ldi		r7,#$808
-.0001:
-		mov		r18,r0
-		call	_GetRand
-		shr		r2,r1,#10
-		mod		r1,r1,#800
-		mod		r2,r2,#600
-;		and		r1,r1,#$01FF01FF	; 512,512
-;		add		r1,r1,#$000E0080	; add +28 to y and +256 to x
-		shl		r2,r2,#16
-		or		r1,r1,r2
-		add		r1,r1,#$000E0080	; add +28 to y and +256 to x
-		sh		r1,[r6+r7]
-		add		r7,r7,#$10			; advance to next sprite
-		slt		r1,r7,#$9F0
-		bne		r1,r0,.0001
-		lw		$r1,[$sp]
-		lw		$r6,8[$sp]
-		lw		$r7,16[$sp]
-		lw		lr,24[$sp]
-		ret		#32
 
-;----------------------------------------------------------------------------
-;----------------------------------------------------------------------------
-ClearTxtScreen:
-		ldi		r4,#$0024
-		sb		r4,LEDS
-		ldi		r1,#$FFFFFFFFFFD00000	; text screen address
-		ldi		r2,#2480							; number of chars 2480 (48x35)
-		ldi		r3,#$00000080FFFF0020
-.cts1:
-		sw		r3,[r1]
-		add		r1,r1,#8
-		sub		$r2,$r2,#1
-		bne		$r2,$r0,.cts1
-		ret
+_RandomizeSpritePositions2:
+		push	$lr
+		ldi		$t1,#SPRCTRL
+		ldi		$t2,#$808
+.0001:
+		mov		$a0,$r0
+		call	_GetRand
+		shr		$t0,$v0,#10				; $t0 = vertical pos
+		mod		$v0,$v0,#800			; $v0 = horizontal pos
+		mod		$t0,$t0,#600
+		shl		$t0,$t0,#16
+		or		$v0,$v0,$t0
+		add		$v0,$v0,#$000E0080	; add +28 to y and +256 to x
+		sh		$v0,[$t1+$t2]
+		add		$t2,$t2,#$10			; advance to next sprite
+		slt		$v0,$t2,#$9F0
+		bne		$v0,r0,.0001
+		lw		$lr,[$sp]
+		ret		#8
 
 ;----------------------------------------------------------------------------
 ; The GC needs an interrupt level all to itself.
@@ -1297,291 +1215,6 @@ __GCStop:
 		rti
 		
 ;===============================================================================
-; Keyboard routines
-;===============================================================================
-
-; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-; Initialize the keyboard.
-; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-_KeybdInit:
-	  push  lr
-	  push	r3
-		ldi		r3,#5
-.0002:
-		call	_Wait10ms
-		ldi		$a0,#-1			; send reset code to keyboard
-		sb		$a0,KEYBD+1	; write $FF to status reg to clear TX state
-		memdb
-		call	_KeybdSendByte	; now write to transmit register
-		call	_KeybdWaitTx		; wait until no longer busy
-		call	_KeybdRecvByte	; look for an ACK ($FA)
-		xor		r2,r1,#$FA
-		bne		r2,r0,.tryAgain
-		call	_KeybdRecvByte	; look for BAT completion code ($AA)
-		xor		r2,r1,#$FC	; reset error ?
-		beq		r2,r0,.tryAgain
-		xor		r1,r1,#$AA	; reset complete okay ?
-		bne		r2,r0,.tryAgain
-
-		; After a reset, scan code set #2 should be active
-.config:
-		ldi		$a0,#$F0			; send scan code select
-		sb		$a0,LEDS
-		call	_KeybdSendByte
-		call	_KeybdWaitTx
-		bbs		r1,#7,.tryAgain
-		call	_KeybdRecvByte	; wait for response from keyboard
-		bbs		r1,#7,.tryAgain
-		xor		r2,r1,#$FA
-		beq		r2,r0,.0004
-.tryAgain:
-    sub   r3,r3,#1
-		bne	  r3,r0,.0002
-.keybdErr:
-		ldi		r1,#msgBadKeybd
-		push	$r1
-		call	_DBGDisplayAsciiStringCRLF
-		add		sp,sp,#8
-		bra		ledxit
-.0004:
-		ldi		$a0,#2			; select scan code set #2
-		call	_KeybdSendByte
-		call	_KeybdWaitTx
-		bbs		r1,#7,.tryAgain
-		call	_KeybdRecvByte	; wait for response from keyboard
-		bbs		r1,#7,.tryAgain
-		xor		r2,r1,#$FA
-		bne		r2,r0,.tryAgain
-		call	_KeybdGetID
-ledxit:
-		ldi		$a0,#$07
-		call	_KeybdSetLED
-		call	_Wait300ms
-		ldi		$a0,#$00
-		call	_KeybdSetLED
-		lw		r3,[sp]
-		lw		lr,8[sp]
-		ret		#16
-
-; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-; Set the LEDs on the keyboard.
-;
-; Parameters: $a0 LED status to set
-; Returns: none
-; Modifies: none
-; Stack Space: 2 words
-; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-_KeybdSetLED:
-		push	lr
-		push	$r1
-		mov		$r1,$a0
-		ldi		$a0,#$ED
-		call	_KeybdSendByte
-		call	_KeybdWaitTx
-		call	_KeybdRecvByte	; should be an ack
-		mov		$a0,$r1
-		call	_KeybdSendByte
-		call	_KeybdWaitTx
-		call	_KeybdRecvByte	; should be an ack
-		lw		$r1,[sp]
-		lw		lr,8[sp]
-		ret		#16
-
-; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-; Get ID - get the keyboards identifier code.
-;
-; Parameters: none
-; Returns: r1 = $AB83, $00 on fail
-; Modifies: r1, KeybdID updated
-; Stack Space: 2 words
-; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-_KeybdGetID:
-		push	lr
-		push	$a0
-		ldi		$a0,#$F2
-		call	_KeybdSendByte
-		call	_KeybdWaitTx
-		call	_KeybdRecvByte
-		bbs		r1,#7,.notKbd
-		xor		r2,r1,#$AB
-		bne		r2,r0,.notKbd
-		call	_KeybdRecvByte
-		bbs		r1,#7,.notKbd
-		xor		r2,r1,#$83
-		bne		r2,r0,.notKbd
-		ldi		r1,#$AB83
-.0001:
-		sc		r1,_KeybdID
-		lw		$a0,[sp]
-		lw		lr,8[sp]
-		ret		#16
-.notKbd:
-		ldi		r1,#$00
-		bra		.0001
-
-; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-; Recieve a byte from the keyboard, used after a command is sent to the
-; keyboard in order to wait for a response.
-;
-; Parameters: none
-; Returns: r1 = recieved byte ($00 to $FF), -1 on timeout
-; Modifies: r1
-; Stack Space: 2 words
-; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-_KeybdRecvByte:
-  	push  lr
-		push	r3
-		ldi		r3,#100			; wait up to 1s
-.0003:
-		call	_KeybdGetStatus	; wait for response from keyboard
-		bbs		r1,#7,.0004			; is input buffer full ? yes, branch
-		call	_Wait10ms				; wait a bit
-		sub   r3,r3,#1
-		bne   r3,r0,.0003			; go back and try again
-		lw		r3,[sp]					; timeout
-		lw		lr,8[sp]
-		ldi		r1,#-1				; return -1
-		ret		#16
-.0004:
-		call	_KeybdGetScancode
-		lw		r3,[sp]
-		lw		lr,8[sp]
-		ret		#16
-
-; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-; Send a byte to the keyboard.
-;
-; Parameters: $a0 byte to send
-; Returns: none
-; Modifies: none
-; Stack Space: 0 words
-; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-_KeybdSendByte:
-		sb		$a0,KEYBD
-		memdb
-		ret
-	
-; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-; Wait for 10 ms
-;
-; Parameters: none
-; Returns: none
-; Modifies: none
-; Stack Space: 2 words
-; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-_Wait10ms:
-		push	r3
-    push  r4
-    csrrd	r3,#$002,r0		; get orginal count
-.0001:
-		csrrd	r4,#$002,r0
-		sub		r4,r4,r3
-		blt  	r4,r0,.0002			; shouldn't be -ve unless counter overflowed
-		slt		r4,r4,#100000		; about 10ms at 10 MHz
-		bne		r4,r0,.0001
-.0002:
-		lw		r4,[sp]
-		lw		r3,8[sp]
-		ret		#16
-
-
-; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-; Wait for 300 ms
-;
-; Parameters: none
-; Returns: none
-; Modifies: none
-; Stack Space: 2 words
-; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-_Wait300ms:
-		push	r3
-    push  r4
-    csrrd	r3,#$002,r0		; get orginal count
-.0001:
-		csrrd	r4,#$002,r0
-		sub		r4,r4,r3
-		blt  	r4,r0,.0002			; shouldn't be -ve unless counter overflowed
-		slt		r4,r4,#3000000	; about 300ms at 10 MHz
-		bne		r4,r0,.0001
-.0002:
-		lw		r4,[sp]
-		lw		r3,8[sp]
-		ret		#16
-
-
-; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-; Wait until the keyboard transmit is complete
-;
-; Parameters: none
-; Returns: r1 = 0 if successful, r1 = -1 timeout
-; Modifies: r1
-; Stack Space: 3 words
-; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-_KeybdWaitTx:
-		push  lr
-		push	r2
-    push  r3
-		ldi		r3,#100			; wait a max of 1s
-.0001:
-		call	_KeybdGetStatus
-		bbs	  r1,#6,.0002	; check for transmit complete bit; branch if bit set
-		call	_Wait10ms		; delay a little bit
-		sub   r3,r3,#1
-		bne	  r3,r0,.0001	; go back and try again
-		lw		r3,[sp]
-		lw		r2,8[sp]		; timed out
-		lw		lr,16[sp]
-		ldi		r1,#-1			; return -1
-		ret		#24
-.0002:
-		lw		r3,[sp]
-		lw		r2,8[sp]		; wait complete, return 
-		lw		lr,16[sp]
-		ldi		r1,#0				; return 0
-		ret		#24
-
-
-; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-; Get the keyboard status
-;
-; Parameters: none
-; Returns: r1 = status
-; Modifies: r1
-; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-_KeybdGetStatus:
-		memsb
-		ldi		$v0,#KEYBD+1
-		lvb		$v0,[$v0+$r0]
-		memdb
-		ret
-
-; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-; Get the scancode from the keyboard port
-;
-; Parameters: none
-; Returns: r1 = scancode
-; Modifies: r1
-; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-_KeybdGetScancode:
-		memsb
-		ldi		$v0,#KEYBD
-		lvbu	$v0,[$v0+$r0]		; get the scan code
-		memdb									; need the following store in order
-		sb		$r0,KEYBD+1			; clear receive register
-		memdb
-		ret
-
-;===============================================================================
 ; Generic I2C routines
 ;===============================================================================
 
@@ -1601,13 +1234,11 @@ I2C_STAT	EQU		$4
 ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 _i2c_init:
-		push	r6
-		ldi		r6,#I2C
-		ldi		r1,#4								; setup prescale for 400kHz clock
-		sb		r1,I2C_PREL[r6]
-		sb		r0,I2C_PREH[r6]
-		lw		r6,[sp]
-		ret		#8
+		ldi		$t0,#I2C
+		ldi		$v0,#4								; setup prescale for 400kHz clock
+		sb		$v0,I2C_PREL[$t0]
+		sb		$r0,I2C_PREH[$t0]
+		ret		#0
 
 ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ; Wait for I2C transfer to complete
@@ -1617,13 +1248,12 @@ _i2c_init:
 ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 i2c_wait_tip:
-		push		r1
 .0001:
 		memsb
-		lb			r1,I2C_STAT[$a0]
-		bbs			r1,#1,.0001				; wait for tip to clear
-		lw			r1,[sp]
-		ret			#8
+		lb			$v0,I2C_STAT[$a0]		; would use lvb, but lb is okay since its the I/O area
+		memdb
+		bbs			$v0,#1,.0001				; wait for tip to clear
+		ret			#0
 
 ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ; Write command to i2c
@@ -1642,7 +1272,7 @@ i2c_wr_cmd:
 		memdb
 		call		i2c_wait_tip
 		memsb
-		lb			$r1,I2C_STAT[$a0]
+		lb			$v0,I2C_STAT[$a0]
 		lw			lr,[sp]
 		ret			#8
 
@@ -1683,6 +1313,7 @@ i2c_wait_rx_nack:
 .0001:
 		memsb
 		lb			$a1,I2C_STAT[$a0]	; wait for RXack = 0
+		memdb
 		bbs			$a1,#7,.0001
 		lw			$a1,[sp]
 		ret			#8
@@ -1705,18 +1336,15 @@ i2c_wait_rx_nack:
 
 _rtc_read:
 		push		lr
-		nop
 		push		$r3
-		ldi			$r1,#$80
+		ldi			$v0,#$80
 		push		$a0
 		ldi			$a0,#I2C
 		push		$a1
-		nop
 		push		$a2
-		nop
 		push		$a3
 		ldi			$a3,#_RTCBuf
-		sb			$r1,I2C_CTRL[$a0]	; enable I2C
+		sb			$v0,I2C_CTRL[$a0]	; enable I2C
 		ldi			$a2,#$DE			; read address, write op
 		ldi			$a1,#$90			; STA + wr bit
 		call		i2c_wr_cmd
@@ -1743,8 +1371,8 @@ _rtc_read:
 		lb			$r1,I2C_RXR[$a0]
 		sb			$r1,[$a3+$r2]
 		add			$r2,$r2,#1
-		slt			$r1,$r2,#$5F
-		bne			$r1,$r0,.0001
+		slt			$v0,$r2,#$5F
+		bne			$v0,$r0,.0001
 		ldi			$r1,#$68
 		sb			$r1,I2C_CMD[$a0]	; STO, rd bit + nack
 		call		i2c_wait_tip
@@ -1754,7 +1382,7 @@ _rtc_read:
 		memsb
 		lb			$r1,I2C_RXR[$a0]
 		sb			$r1,[$a3+$r2]
-		mov			$r1,$r0						; return 0
+		mov			$v0,$r0						; return 0
 .rxerr:
 		sb			$r0,I2C_CTRL[$a0]	; disable I2C and return status
 		lw			$a3,[sp]
@@ -1835,6 +1463,8 @@ _rtc_write:
 
 MsgBoot:
 		db		"FT64 ROM BIOS v1.0",0
+msgBadChecksum:
+		db		"ROM Checksum bad",0
 msgBadKeybd:
 		db		"Keyboard not responding.",0
 msgRtcReadFail:
@@ -2027,7 +1657,8 @@ vec2data:
 .include "d:\Cores5\FT64\v7\software\boot\FloatTest.s"
 .include "d:\Cores5\FT64\v7\software\boot\FT64TinyBasic.s"
 ;.include "d:\Cores5\FT64\v7\software\boot\ramtest.s"
-	align	4096
+	align	256
+.include "d:\Cores5\FT64\v7\software\cc64libc\source\_aacpy.s"
 .include "d:\Cores5\FT64\v7\software\cc64libc\source\dbg_stdio.s"
 ;.include "d:\Cores5\FT64\v7\software\cc64libc\source\stdio.s"
 ;.include "d:\Cores5\FT64\v7\software\cc64libc\source\ctype.s"
@@ -2041,14 +1672,15 @@ vec2data:
 .include "d:\Cores5\FT64\v7\software\cc64libc\source\FT64\getCPU.s"
 .include "d:\Cores5\FT64\v7\software\cc64libc\source\gfx.s"
 .include "d:\Cores5\FT64\v7\software\cc64libc\source\gfx_demo.s"
-	align	4096
+	align	256
 .include "d:\Cores5\FT64\v7\software\c64libc\source\libquadmath\log10q.s"
 .include "d:\Cores5\FT64\v7\software\FMTK\source\kernel\LockSemaphore.s"
 .include "d:\Cores5\FT64\v7\software\FMTK\source\kernel\UnlockSemaphore.s"
+.include "d:\Cores5\FT64\v7\software\FMTK\source\kernel\DBGkeybd.s"
+.include "d:\Cores5\FT64\v7\software\FMTK\source\kernel\DBGConsole.s"
 .include "d:\Cores5\FT64\v7\software\FMTK\source\kernel\console.s"
 .include "d:\Cores5\FT64\v7\software\FMTK\source\kernel\PIT.s"
 .include "d:\Cores5\FT64\v7\software\FMTK\source\kernel\PIC.s"
-	align	4096
 .include "d:\Cores5\FT64\v7\software\FMTK\source\kernel\SetupDevices.s"
 .include "d:\Cores5\FT64\v7\software\FMTK\source\kernel\FMTKc.s"
 .include "d:\Cores5\FT64\v7\software\FMTK\source\kernel\FMTKmsg.s"
@@ -2056,8 +1688,9 @@ vec2data:
 .include "d:\Cores5\FT64\v7\software\FMTK\source\kernel\IOFocusc.s"
 .include "d:\Cores5\FT64\v7\software\FMTK\source\kernel\keybd.s"
 .include "d:\Cores5\FT64\v7\software\FMTK\source\kernel\debugger.s"
-
+	align	256
 .include "d:\Cores5\FT64\v7\software\FMTK\source\open.s"
+.include "d:\Cores5\FT64\v7\software\FMTK\source\close.s"
 .include "d:\Cores5\FT64\v7\software\FMTK\source\read.s"
 .include "d:\Cores5\FT64\v7\software\FMTK\source\write.s"
 .include "d:\Cores5\FT64\v7\software\FMTK\source\sleep.s"
@@ -2068,12 +1701,16 @@ vec2data:
 .include "d:\Cores5\FT64\v7\software\FMTK\source\monitor.s"
 .include "d:\Cores5\FT64\v7\software\FMTK\source\disassem.s"
 .include "d:\Cores5\FT64\v7\software\FMTK\source\OSCall.s"
+	align	256
 .include "d:\Cores5\FT64\v7\software\FMTK\source\drivers\null_driver.s"
+.include "d:\Cores5\FT64\v7\software\FMTK\source\drivers\keybd_driver_asm.asm"
+.include "d:\Cores5\FT64\v7\software\FMTK\source\drivers\keybd_driver.s"
+.include "d:\Cores5\FT64\v7\software\FMTK\source\drivers\prng_driver_asm.asm"
 .include "d:\Cores5\FT64\v7\software\FMTK\source\drivers\prng_driver.s"
 .include "d:\Cores5\FT64\v7\software\FMTK\source\drivers\pti_driver.s"
 .include "d:\Cores5\FT64\v7\software\FMTK\source\drivers\sdc_driver.s"
 .include "d:\Cores5\FT64\v7\software\bootrom\source\video.asm"
 
-	align	4096
+	align	256
 .include "d:\Cores5\FT64\v7\software\FMTK\source\kernel\scancodes.asm"
 .include "d:\Cores5\FT64\v7\software\FMTK\source\kernel\fmtk_vars.asm"

@@ -72,7 +72,7 @@ char current_label[500];
 std::string mname;
 char buf[10000];
 int masterFileLength = 0;
-char *masterFile;
+char masterFile[10000000];
 char segmentFile[10000000];
 int NumSections = 12;
 clsElf64Section sections[12];
@@ -1378,11 +1378,12 @@ void processSegments()
 	std::string fname;
 	bool setname = false;
 	std::string str;
-	std::string codebuf;
+//	std::string codebuf;
 	std::ofstream ofs;
 	std::string newstr;
 	int fndx;
 	char *p1, *p2;
+	int n,m;
    
   if (verbose)
     printf("Processing segments.\r\n");
@@ -1393,8 +1394,8 @@ void processSegments()
   rodatandx = 0;
   tlsndx = 0;
   bssndx = 0;
-//  ZeroMemory(codebuf,sizeof(codebuf));
-	codebuf = "";
+  ZeroMemory(codebuf,sizeof(codebuf));
+//	codebuf = "";
   ZeroMemory(databuf,sizeof(databuf));
   ZeroMemory(rodatabuf,sizeof(rodatabuf));
   ZeroMemory(tlsbuf,sizeof(tlsbuf));
@@ -1461,22 +1462,22 @@ j1:
 			if (setname) {
 				setname = false;
 				if (fname.length() > 0) {
-					codebuf += ".file \"";
-					codebuf += fname;
-					codebuf += "\",";
-					codebuf += std::to_string(lineno);
-					codebuf += "\n";
-					//sprintf(&codebuf[codendx], ".file \x22%s\x22,%d\n", fname.c_str(), lineno);
-					//codendx += strlen(&codebuf[codendx]);
+					//codebuf += ".file \"";
+					//codebuf += fname;
+					//codebuf += "\",";
+					//codebuf += std::to_string(lineno);
+					//codebuf += "\n";
+					sprintf(&codebuf[codendx], ".file \x22%s\x22,%d\n", fname.c_str(), lineno);
+					codendx += strlen(&codebuf[codendx]);
 				}
 			}
-			savech = *inptr;
-			*inptr = '\0';
-			newstr = std::string(pinptr);
-			codebuf += newstr;
-			*inptr = savech;
-      //strncpy(&codebuf[codendx], pinptr, inptr-pinptr);
-      //codendx += inptr-pinptr;
+			//savech = *inptr;
+			//*inptr = '\0';
+			//newstr = std::string(pinptr);
+			//codebuf += newstr;
+			//*inptr = savech;
+      strncpy(&codebuf[codendx], pinptr, inptr-pinptr);
+      codendx += inptr-pinptr;
       break;
 	  case dataseg:
           strncpy(&databuf[datandx], pinptr, inptr-pinptr);
@@ -1510,25 +1511,45 @@ j1:
 	//strcat_s(masterFile, masterFileLength, databuf);
 	//strcat_s(masterFile, masterFileLength, bssbuf);
 //  strcat_s(masterFile, masterFileLength, tlsbuf);
-	str = codebuf;
-	str += rodatabuf;
-	str += "\r\n\trodata\r\n";
-	str += "\talign 8\r\n";
-	str += "begin_init_data:\r\n";
-	str += "_begin_init_data:\r\n";
-	str += databuf;
-	str += "\r\n\trodata\r\n";
-	str += "\talign 8\r\n";
-	str += "end_init_data:\r\n";
-	str += "_end_init_data:\r\n";
-	str += databuf;
-	str += bssbuf;
-	str += tlsbuf;
+	for (n = 0; n < codendx; n++)
+		masterFile[n] = codebuf[n];
+	for (m = 0; m < rodatandx; m++, n++)
+		masterFile[n] = rodatabuf[m];
+	sprintf_s(&masterFile[n], sizeof(masterFile)-n-1, "\r\n\trodata\r\n\talign 8\r\nbegin_init_data:\r\n_begin_init_data:\r\n");
+	n += strlen(&masterFile[n]);
+	for (m = 0; m < datandx; m++, n++)
+		masterFile[n] = databuf[m];
+	sprintf_s(&masterFile[n], sizeof(masterFile)-n-1, "\r\n\trodata\r\n\talign 8\r\nend_init_data:\r\n_end_init_data:\r\n");
+	n += strlen(&masterFile[n]);
+	for (m = 0; m < datandx; m++, n++)
+		masterFile[n] = databuf[m];
+	for (m = 0; m < bssndx; m++, n++)
+		masterFile[n] = bssbuf[m];
+	for (m = 0; m < tlsndx; m++, n++)
+		masterFile[n] = tlsbuf[m];
+	masterFile[n] = '\x1A'; n++;
+	masterFile[n] = '\0'; n++;
+	masterFile[n] = '\0'; n++;
+	//str = codebuf;
+	//str += rodatabuf;
+	//str += "\r\n\trodata\r\n";
+	//str += "\talign 8\r\n";
+	//str += "begin_init_data:\r\n";
+	//str += "_begin_init_data:\r\n";
+	//str += databuf;
+	//str += "\r\n\trodata\r\n";
+	//str += "\talign 8\r\n";
+	//str += "end_init_data:\r\n";
+	//str += "_end_init_data:\r\n";
+	//str += databuf;
+	//str += bssbuf;
+	//str += tlsbuf;
   if (debug) {
       //FILE *fp;
       //fp = fopen("as64-segments.asm", "w");
 			ofs.open("as64-segments.asm");
-			ofs.write(str.c_str(), str.length());
+			//ofs.write(str.c_str(), str.length());
+			ofs.write(&masterFile[0], n);
 			ofs.close();
     //   if (fp) {
     //           //fwrite(masterFile, 1, strlen(masterFile), fp);
@@ -1536,11 +1557,11 @@ j1:
 				//fclose(fp);
     //   }
   }
-	if (masterFileLength < str.length()) {
-		delete masterFile;
-		masterFile = new char[str.length() + 1000000];
-	}
-	strcpy_s(masterFile, str.length() + 1000000, str.c_str());
+	//if (masterFileLength < str.length()) {
+	//	delete masterFile;
+	//	masterFile = new char[str.length() + 1000000];
+	//}
+	//strcpy_s(masterFile, str.length() + 1000000, str.c_str());
 }
 
 void ProcessSegments2()
@@ -2006,7 +2027,7 @@ void WriteELFFile(FILE *fp)
     sections[5].hdr.sh_info = 0;
     sections[5].hdr.sh_addralign = 1;
     sections[5].hdr.sh_entsize = 0;
-    memcpy(sections[5].bytes, nmTable.text, nmTable.length);
+    memcpy(sections[5].bytes, nametext, nmTable.length);
 
     sections[6].hdr.sh_type = clsElf64Shdr::SHT_SYMTAB;
     sections[6].hdr.sh_flags = 0;
@@ -2278,7 +2299,7 @@ int main(int argc, char *argv[])
   processFile(fname,0);   // Pass 1, collect all include files
 	masterFileLength = mofs.tellp();
 	mofs.close();
-	masterFile = new char[masterFileLength + 1000000];
+	//masterFile = new char[masterFileLength + 1000000];
   //if (debug) {
   //  FILE *fp;
   //  fopen_s(&fp, "a64-master.asm", "w");
@@ -2287,11 +2308,11 @@ int main(int argc, char *argv[])
   //    fclose(fp);
   //  }
   //}
-	ZeroMemory(masterFile, masterFileLength + 1000000);
+	ZeroMemory(masterFile, sizeof(masterFile));
 	ifs.open("as64-master.asm", std::ios::in|std::ios::binary);
 	if (ifs.fail())
 		exit(0);
-	ifs.read(masterFile, masterFileLength);
+	ifs.read(masterFile, sizeof(masterFile));
 	ifs.close();
 	p1 = strstr(masterFile, "GetOperatingLevel:");
 	if (p1) {
@@ -2690,7 +2711,6 @@ int main(int argc, char *argv[])
         }
         else
             printf("Can't create .hex file.\r\n");
-	delete[] masterFile;
   return (0);
 }
 

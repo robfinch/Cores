@@ -143,7 +143,8 @@ void *htFind2(SHashTbl *hi, char *name)
    // still be valid data somewhere in the table, after the deleted entry.
    for (count = 0; count < hi->size; count++)
    {
-      rr = (*hi->IsEqualName)(name, &htbl[TableIndex * hi->width]);
+//      rr = (*hi->IsEqualName)(name, &htbl[TableIndex * hi->width]);
+		 rr = strcmp(name, &nametext[((SYM*)&htbl[TableIndex * hi->width])->name]);
       if (rr == 0)
          break;
       TableIndex = (TableIndex + hash.delta) % hi->size;

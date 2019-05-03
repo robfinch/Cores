@@ -469,7 +469,8 @@ enum {
 	 tk_zsz,
      tk_zxb,
      tk_zxc,
-     tk_zxh
+     tk_zxh,
+		tk_last_token
 };
 
 extern int token;

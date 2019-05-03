@@ -29,3 +29,16 @@ parameter B_LoadDesc = 5'd27;
 parameter B_LoadDescStb = 5'd28;
 parameter B_WaitSeg = 5'd29;
 parameter B_DLoadNack = 5'd30;
+
+parameter IDLE = 4'd0;
+parameter IC1 = 4'd1;
+parameter IC2 = 4'd2;
+parameter IC3 = 4'd3;
+parameter IC_WaitL2 = 4'd4;
+parameter IC5 = 4'd5;
+parameter IC6 = 4'd6;
+parameter IC7 = 4'd7;
+parameter IC_Next = 4'd8;
+parameter IC9 = 4'd9;
+parameter IC10 = 4'd10;
+parameter IC3a = 4'd11;

@@ -139,6 +139,7 @@ wire [7:0] red, blue, green;
 wire [2:0] cti;
 (* mark_debug = "true" *)
 wire cyc;
+(* mark_debug = "true" *)
 wire stb, ack;
 wire we;
 wire [7:0] sel;
@@ -412,9 +413,11 @@ OLED uoled1
 // -----------------------------------------------------------------------------
 (* mark_debug="true" *)
 wire cs_dram = adr[31:29]==3'h0;		// Main memory 512MB
-wire cs_br = adr[31:16]==16'hFFFC		// Boot rom 192k
-					|| adr[31:16]==16'hFFFD
-					|| adr[31:16]==16'hFFFE;
+reg cs_br;
+always @(posedge cpu_clk)
+	cs_br <= adr[31:16]==16'hFFFC		// Boot rom 192k
+				|| adr[31:16]==16'hFFFD
+				|| adr[31:16]==16'hFFFE;
 wire cs_scr = adr[31:20]==12'hFF4;	// Scratchpad memory 32k
 // No need to check for the $FFD in the top 12 address bits as these are 
 // detected in the I/O bridges.
@@ -630,7 +633,6 @@ assign bmp_dato = 64'h0;
 
 rtfSpriteController2 usc2
 (
-	.rst_i(rst),
 	.clk_i(cpu_clk),
 	.cs_i(cs_spr),
 	.cyc_i(br1_cyc),
@@ -641,7 +643,7 @@ rtfSpriteController2 usc2
 	.adr_i(br1_adr[11:0]),
 	.dat_i(br1_dato),
 	.dat_o(spr_dato),
-	.m_clk_i(cpu_clk),
+	.m_clk_i(clk40),
 	.m_cyc_o(spr_cyc),
 	.m_stb_o(spr_stb),
 	.m_ack_i(spr_acki),
@@ -983,7 +985,6 @@ mainmem_sim umm1
 
 `ifndef SIM
 wire mem_ui_rst;
-wire mem_ui_clk;
 wire calib_complete;
 wire rstn;
 wire [28:0] mem_addr;
@@ -1270,14 +1271,11 @@ ila_0 uila1 (
 	.probe1(ucpu1.ucpu1.insn0[31:0]), // input wire [7:0]  probe1 
 	.probe2(ucpu1.ucpu1.vadr),
 	.probe3(ucpu1.ucpu1.ihit), // input wire [0:0]  probe2 
-	.probe4({err,
-		dram_state,
-		aud_cyc,aud_acki,
-		spr_cyc,spr_acki,
-		sdc_cyc,sdc_acki,
+	.probe4({err,ack_br,
+		ucpu1.ucpu1.alu0_exc,
 		bmp_cyc,bmp_acki,cyc,cs_dram,dram_ack,ucpu1.ucpu1.iqentry_state[0],ucpu1.ucpu1.iqentry_state[1],ucpu1.ucpu1.iqentry_state[2],ucpu1.ucpu1.iqentry_state[3]}), // input wire [0:0]  probe3 
-	.probe5({ucpu1.ucpu1.freezePC,ucpu1.ucpu1.phit,ucpu1.ucpu1.queued1,ucpu1.ucpu1.queuedNop,ucpu1.ucpu1.icstate,ucpu1.ucpu1.bstate}), // input wire [0:0]  probe4
-	.probe6({ucpu1.ucpu1.L1_adr})
+	.probe5({ucpu1.ucpu1.freezePC,ucpu1.ucpu1.phit,ucpu1.ucpu1.queued1,ucpu1.ucpu1.queuedNop,ucpu1.ucpu1.bstate}), // input wire [0:0]  probe4
+	.probe6(adr)
 );
 
 
