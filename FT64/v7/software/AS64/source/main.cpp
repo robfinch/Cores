@@ -1674,7 +1674,7 @@ void skipif(int64_t val)
 
 	// Cut out the if statement
 	p1 = pif1;
-	memmove(pif1,pif2,masterFileLength-(pif2-masterFile));
+	memmove(pif1,pif2,sizeof(masterFile)-(pif2-masterFile));
 
 	p1 = inptr = pif1;
 	while(*inptr) {
@@ -2271,6 +2271,9 @@ int main(int argc, char *argv[])
 	std::ifstream ifs;
 	char *p1, *p2;
 	int count;
+	int checksum = 0;
+	int n;
+	int binlen = 0;
 
   processOpt = 1;
 	sections[bssseg].storebyte = 0;
@@ -2419,7 +2422,12 @@ int main(int argc, char *argv[])
         }
         else
             printf("Can't create .bin file.\r\n");
-    }
+				checksum = 0;
+				for (n = 0; n < binndx; n++)
+					checksum += binfile[n];
+				printf("Checksum: %d", checksum);
+				binlen = binndx;
+		}
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // Output ELF file.
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -2496,6 +2504,7 @@ int main(int argc, char *argv[])
 							binfile[kk+7], binfile[kk+6], binfile[kk+5], binfile[kk+4], 
 							binfile[kk+3], binfile[kk+2], binfile[kk+1], binfile[kk]);
 					}
+					fprintf(vfp, "\trommem[12287] = 128'h0000000000000000%08X0%08X;\n", binlen, checksum);
 				}
 				else if (vebits==64) {
 					for (kk = 0; kk < binndx; kk+=8) {
@@ -2504,6 +2513,7 @@ int main(int argc, char *argv[])
 							binfile[kk+7], binfile[kk+6], binfile[kk+5], binfile[kk+4], 
 							binfile[kk+3], binfile[kk+2], binfile[kk+1], binfile[kk]);
 					}
+					fprintf(vfp, "\trommem[24575] = 64'h%08X%08X;\n", binlen, checksum);
 				}
 				else if (vebits == 32) {
 					for (kk = 0; kk < binndx; kk += 4) {
@@ -2511,6 +2521,8 @@ int main(int argc, char *argv[])
 							((((unsigned int)start_address + kk) / 4) % 32768), //checksum64((int64_t *)&binfile[kk]),
 							binfile[kk + 3], binfile[kk + 2], binfile[kk + 1], binfile[kk]);
 					}
+					fprintf(vfp, "\trommem[49150] = 32'h%08X;\n", binlen);
+					fprintf(vfp, "\trommem[49151] = 32'h%08X;\n", checksum);
 				}
 			}
 			/*

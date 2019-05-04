@@ -116,7 +116,7 @@ extern int getIdentifier();
 extern bool IsNBit(int64_t val, int64_t n);
 extern int GetSymNdx(SYM *sp);
 extern SYM *GetSymByIndex(int n);
-
+extern void getbase(int base);
 extern int NumSections;
 extern clsElf64Section sections[12];
 extern SYM *lastsym;
@@ -128,4 +128,7 @@ extern int expandedBlock;
 extern int gCanCompress;
 extern int expand_flag;
 extern int compress_flag;
+extern int16_t token2;
+extern int32_t reg;
+
 #endif

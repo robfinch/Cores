@@ -114,8 +114,8 @@ integer n;
 
 reg [55:0] cinsn0;
 
-wire iclk;
-BUFH ucb1 (.I(clk), .O(iclk));
+wire iclk = clk;
+//BUFH ucb1 (.I(clk), .O(iclk));
 
 //`include "FT64_decode.vh"
 

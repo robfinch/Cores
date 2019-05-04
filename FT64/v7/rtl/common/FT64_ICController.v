@@ -65,8 +65,8 @@ wire [AMSB:0] pc0plus12 = pc0 + 8'd14;
 assign ziccnt = state==IDLE;
 assign ld_L1_dati = state==IC_WaitL2 && ihitL2 && picstate==IC3a;
 
-wire clk;
-BUFH uclkb (.I(clk_i), .O(clk));
+wire clk = clk_i;
+//BUFH uclkb (.I(clk_i), .O(clk));
 
 always @(posedge clk)
 begin

@@ -3634,16 +3634,16 @@ static void process_lv(int opcode6)
 
 static void process_lsfloat(int64_t opcode6, int64_t opcode3)
 {
-    int Ra,Rb;
-    int Rt;
+  int Ra,Rb;
+  int Rt;
 	int Sc;
-    char *p;
-    int64_t disp;
-    int64_t val;
-    int fixup = 5;
+  char *p;
+  int64_t disp;
+  int64_t val;
+  int fixup = 5;
 
-    int  sz;
-    int rm;
+  int  sz;
+  int rm;
 
     rm = 0;
     sz = GetFPSize();

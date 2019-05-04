@@ -261,87 +261,93 @@ static void error(char *msg)
 //}
 static int getRegisterX()
 {
-    int reg;
+  int reg;
+	char *p;
 
-    while(isspace(*inptr)) inptr++;
+  while(isspace(*inptr))
+		inptr++;
 	if (*inptr == '$')
 		inptr++;
-    switch(*inptr) {
-    case 'r': case 'R':
-        if ((inptr[1]=='a' || inptr[1]=='A') && !isIdentChar(inptr[2])) {
-            inptr += 2;
-            NextToken();
-            return regLR;
+  switch(*inptr) {
+  case 'r': case 'R':
+    if ((inptr[1]=='a' || inptr[1]=='A') && !isIdentChar(inptr[2])) {
+      inptr += 2;
+      NextToken();
+      return (regLR);
+    }
+    if (isdigit(inptr[1])) {
+      reg = inptr[1]-'0';
+      if (isdigit(inptr[2])) {
+        reg = 10 * reg + (inptr[2]-'0');
+        if (isdigit(inptr[3])) {
+          reg = 10 * reg + (inptr[3]-'0');
+          if (isIdentChar(inptr[4]))
+            return (-1);
+          inptr += 4;
+          NextToken();
+          return (reg);
         }
-         if (isdigit(inptr[1])) {
-             reg = inptr[1]-'0';
-             if (isdigit(inptr[2])) {
-                 reg = 10 * reg + (inptr[2]-'0');
-                 if (isdigit(inptr[3])) {
-                     reg = 10 * reg + (inptr[3]-'0');
-                     if (isIdentChar(inptr[4]))
-                         return -1;
-                     inptr += 4;
-                     NextToken();
-                     return reg;
-                 }
-                 else if (isIdentChar(inptr[3]))
-                     return -1;
-                 else {
-                     inptr += 3;
-                     NextToken();
-                     return reg;
-                 }
-             }
-             else if (isIdentChar(inptr[2]))
-                 return -1;
-             else {
-                 inptr += 2;
-                 NextToken();
-                 return reg;
-             }
-         }
-         else return -1;
-    case 'a': case 'A':
-         if (isdigit(inptr[1])) {
-             reg = inptr[1]-'0' + 18;
-             if (isIdentChar(inptr[2]))
-                 return -1;
-             else {
-                 inptr += 2;
-                 NextToken();
-                 return reg;
-             }
-         }
-         else return -1;
-    case 'f': case 'F':
-        if ((inptr[1]=='P' || inptr[1]=='p') && !isIdentChar(inptr[2])) {
-            inptr += 2;
-            NextToken();
-            return regFP;
+        else if (isIdentChar(inptr[3]))
+          return (-1);
+        else {
+          inptr += 3;
+          NextToken();
+          return (reg);
         }
-        break;
-    case 'g': case 'G':
-        if ((inptr[1]=='P' || inptr[1]=='p') && !isIdentChar(inptr[2])) {
-            inptr += 2;
-            NextToken();
-            return regGP;
-        }
-        break;
-    case 'p': case 'P':
+      }
+      else if (isIdentChar(inptr[2]))
+        return (-1);
+      else {
+        inptr += 2;
+        NextToken();
+        return (reg);
+      }
+    }
+		return (-1);
+
+  case 'a': case 'A':
+    if (isdigit(inptr[1])) {
+      reg = inptr[1]-'0' + 18;
+      if (isIdentChar(inptr[2]))
+        return (-1);
+      inptr += 2;
+      NextToken();
+      return (reg);
+    }
+		return (-1);
+
+  case 'f': case 'F':
+		if ((inptr[1]=='P' || inptr[1]=='p') && !isIdentChar(inptr[2])) {
+			inptr += 2;
+			NextToken();
+			return (regFP);
+		}
+		break;
+
+  case 'g': case 'G':
+    if ((inptr[1]=='P' || inptr[1]=='p') && !isIdentChar(inptr[2])) {
+      inptr += 2;
+      NextToken();
+      return (regGP);
+    }
+    break;
+
+	case 'p': case 'P':
         if ((inptr[1]=='C' || inptr[1]=='c') && !isIdentChar(inptr[2])) {
             inptr += 2;
             NextToken();
             return 31;
         }
         break;
-    case 's': case 'S':
-        if ((inptr[1]=='P' || inptr[1]=='p') && !isIdentChar(inptr[2])) {
-            inptr += 2;
-            NextToken();
-            return (regSP);
-        }
-        break;
+
+  case 's': case 'S':
+    if ((inptr[1]=='P' || inptr[1]=='p') && !isIdentChar(inptr[2])) {
+      inptr += 2;
+      NextToken();
+      return (regSP);
+    }
+    break;
+
     case 't': case 'T':
          if (isdigit(inptr[1])) {
              reg = inptr[1]-'0' + 5;
@@ -418,6 +424,7 @@ static int getRegisterX()
     }
     return -1;
 }
+
 static int isdelim(char ch)
 {
     return ch==',' || ch=='[' || ch=='(' || ch==']' || ch==')' || ch=='.';

@@ -118,7 +118,8 @@ end
 wire cs = cyc_i && stb_i && adr_i[31:8]==pIOAddress[31:8];
 assign vol_o = cs;
 
-BUFH ucb1 (.I(clk_i), .O(clk));
+assign clk = clk_i;
+//BUFH ucb1 (.I(clk_i), .O(clk));
 
 always @(posedge clk)
 	rdy1 <= cs;

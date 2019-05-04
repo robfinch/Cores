@@ -335,6 +335,7 @@ enum {
      tk_push,
      tk_rconst,//320
 	 tk_redor,
+			 tk_reg,
 	 tk_ret,
 	 tk_rex,
      tk_rodata,
