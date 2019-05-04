@@ -474,6 +474,8 @@ void Operand::store(txtoStream& ofs)
 		ofs.printf("$fp%d", (int)preg);
 		break;
 	case am_ind:
+		if (preg == 0)
+			printf("hello");
 		ofs.printf("[%s]", RegMoniker(preg));
 		break;
 	case am_indx:

@@ -1725,7 +1725,7 @@ void Statement::GenerateTry()
 	a->mode = am_imm;
 	GenerateDiadic(op_ldi, 0, makereg(regXLR), a);
 	s1->Generate();
-	GenerateMonadic(op_bra, 0, make_clabel(lab1));
+	GenerateMonadic(op_bra, 0, make_clabel(lab1));	// branch around catch statements
 	GenerateLabel(throwlab);
 	// Generate catch statements
 	// r1 holds the value to be assigned to the catch variable
@@ -1733,15 +1733,11 @@ void Statement::GenerateTry()
 	for (stmt = s2; stmt; stmt = stmt->next) {
 		stmt->GenMixedSource();
 		throwlab = oldthrow;
-		curlab = nextlabel++;
-		GenerateLabel(curlab);
 		if (stmt->num == 99999)
 			;
 		else {
-			ap2 = GetTempRegister();
-			GenerateDiadic(op_ldi, 0, ap2, make_immed(stmt->num));
-			ReleaseTempReg(ap2);
-			GenerateTriadic(op_bne, 0, makereg(2), ap2, make_clabel(nextlabel));
+			curlab = nextlabel++;
+			GenerateTriadic(op_bnei, 0, makereg(2), make_immed(stmt->num), make_clabel(curlab));
 		}
 		// move the throw expression result in 'r1' into the catch variable.
 		node = stmt->exp;
@@ -1752,12 +1748,13 @@ void Statement::GenerateTry()
 			GenStore(makereg(1), ap2, GetNaturalSize(node));
 		ReleaseTempRegister(ap2);
 		//            GenStore(makereg(1),make_indexed(sym->value.i,regFP),sym->tp->size);
+		GenerateDiadic(op_ldi, 0, makereg(regXoffs), make_immed(24));
 		stmt->s1->Generate();
+		GenerateLabel(curlab);
 	}
-	GenerateLabel(nextlabel);
-	nextlabel++;
 	GenerateLabel(lab1);
-	a = make_clabel(oldthrow);
+	throwlab = oldthrow;
+	a = make_clabel(throwlab);
 	a->mode = am_imm;
 	GenerateDiadic(op_ldi, 0, makereg(regXLR), a);
 }
@@ -1783,6 +1780,7 @@ void Statement::GenerateThrow()
 			return;
 		}
 		GenerateDiadic(op_ldi, 0, makereg(2), make_immed(num));
+		GenerateDiadic(op_ldi, 0, makereg(regXoffs), make_immed(16));
 	}
 	GenerateMonadic(op_bra, 0, make_clabel(throwlab));
 }

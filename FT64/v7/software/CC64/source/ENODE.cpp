@@ -344,7 +344,9 @@ bool ENODE::IsEqual(ENODE *node1, ENODE *node2, bool lit)
 		return (Float128::IsEqual(&node1->f128, &node2->f128));
 		//			return (node1->f == node2->f);
 	case en_regvar:
+		return (node1->rg == node2->rg);
 	case en_fpregvar:
+		return (node1->rg == node2->rg);
 	case en_tempref:
 	case en_tempfpref:
 	case en_icon:
@@ -950,6 +952,8 @@ Operand *ENODE::GenIndex()
 		ap2 = cg.GenerateExpression(p[1], F_REG | F_IMMED, 8);
 		if (ap2->mode == am_reg && ap2->preg==0) {	// value is zero
 			ap1->mode = am_direct;
+			if (ap1->offset)
+				DataLabels[ap1->offset->i] = true;
 			return (ap1);
 		}
 		ap2->isConst = ap2->mode==am_imm;
@@ -1925,6 +1929,7 @@ void ENODE::PutConstant(txtoStream& ofs, unsigned int lowhigh, unsigned int rshi
 	case en_labcon:
 	j1:
 		sprintf_s(buf, sizeof(buf), "%s_%lld", GetNamespace(), i);
+		DataLabels[i] = true;
 		ofs.write(buf);
 		if (rshift > 0) {
 			sprintf_s(buf, sizeof(buf), ">>%d", rshift);
@@ -1933,6 +1938,7 @@ void ENODE::PutConstant(txtoStream& ofs, unsigned int lowhigh, unsigned int rshi
 		break;
 	case en_clabcon:
 		sprintf_s(buf, sizeof(buf), "%s_%lld", GetNamespace(), i);
+		DataLabels[i] = true;
 		ofs.write(buf);
 		if (rshift > 0) {
 			sprintf_s(buf, sizeof(buf), ">>%d", rshift);
@@ -2173,12 +2179,12 @@ int ENODE::PutStructConst(txtoStream& ofs)
 	if (ep->nodetype != en_aggregate)
 		return (0);
 
+	isStruct = ep->tp->IsStructType();
 	for (n = 0, ep1 = ep->p[0]->p[2]; ep1; ep1 = ep1->p[2]) {
 		if (ep1->nodetype == en_aggregate) {
 			k = ep1->PutStructConst(ofs);
 		}
 		else {
-			isStruct = ep->tp->IsStructType();
 			if (isStruct) {
 				switch (ep1->tp->walignment()) {
 				case 1:	break;

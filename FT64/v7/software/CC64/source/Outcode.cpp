@@ -435,6 +435,10 @@ char *put_label(int lab, char *nm, char *ns, char d)
 {
   static char buf[500];
 
+	if (lab < 0) {
+		buf[0] = '\0';
+		return buf;
+	}
   sprintf_s(buf, sizeof(buf), "%.400s_%d", ns, lab);
 	if (nm==NULL)
 		ofs.printf("%s:\n",buf);

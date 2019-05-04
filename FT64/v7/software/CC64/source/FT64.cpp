@@ -1070,16 +1070,33 @@ int FT64CodeGenerator::PushArguments(Function *sym, ENODE *plist)
 
 // Pop parameters off the stack
 
-void FT64CodeGenerator::PopArguments(Function *fnc, int howMany)
+void FT64CodeGenerator::PopArguments(Function *fnc, int howMany, bool isPascal)
 {
 	if (howMany != 0) {
 		if (fnc) {
 			if (!fnc->IsPascal)
 				GenerateTriadic(op_add, 0, makereg(regSP), makereg(regSP), make_immed(howMany * sizeOfWord));
 		}
-		else
-			GenerateTriadic(op_add, 0, makereg(regSP), makereg(regSP), make_immed(howMany * sizeOfWord));
+		else {
+			if (!isPascal)
+				GenerateTriadic(op_add, 0, makereg(regSP), makereg(regSP), make_immed(howMany * sizeOfWord));
+		}
 	}
+}
+
+
+// Return true if the expression tree has isPascal set anywhere.
+// Only needed for indirect function calls.
+extern int defaultcc;
+bool FT64CodeGenerator::IsPascal(ENODE *ep)
+{
+	if (ep == nullptr)
+		return (defaultcc==1);
+	if (ep->isPascal)
+		return (true);
+	if (IsPascal(ep->p[0]) || IsPascal(ep->p[1]) || IsPascal(ep->p[2]))
+		return (true);
+	return (false);
 }
 
 Operand *FT64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
@@ -1188,7 +1205,7 @@ Operand *FT64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 			GenerateMonadic(op_bex,0,make_label(throwlab));
 		}
 		GenerateInlineArgumentList(sym, node->p[1]);
-		PopArguments(sym, i);
+		PopArguments(sym, i, IsPascal(node));
 		if (currentFn->HasRegisterParameters())
 			if (sym)
 				sym->RestoreRegisterArguments();
@@ -1215,32 +1232,47 @@ Operand *FT64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 		&& sym->sym->tp 
 		&& sym->sym->tp->GetBtp()
 		&& sym->sym->tp->GetBtp()->IsFloatType()) {
-		return (makefpreg(1));
+		if (!(flags & F_NOVALUE))
+			return (makefpreg(1));
+		else
+			return (makefpreg(0));
 	}
-	if (sym 
+	if (sym
 		&& sym->sym
 		&& sym->sym->tp
 		&& sym->sym->tp->GetBtp()
-		&& sym->sym->tp->GetBtp()->IsVectorType())
-		return (makevreg(1));
+		&& sym->sym->tp->GetBtp()->IsVectorType()) {
+		if (!(flags & F_NOVALUE))
+			return (makevreg(1));
+		else
+			return (makevreg(0));
+	}
 	if (sym
 		&& sym->sym
 		&& sym->sym->tp
 		&& sym->sym->tp->GetBtp()
 		) {
-		if (sym->sym->tp->GetBtp()->type != bt_void) {
+		if (!(flags & F_NOVALUE)) {
+			if (sym->sym->tp->GetBtp()->type != bt_void) {
+				ap = GetTempRegister();
+				GenerateDiadic(op_mov, 0, ap, makereg(1));
+				regs[1].modified = true;
+			}
+			else
+				ap = makereg(0);
+			ap->isPtr = sym->sym->tp->GetBtp()->type == bt_pointer;
+		}
+		else
+			return(makereg(0));
+	}
+	else {
+		if (!(flags & F_NOVALUE)) {
 			ap = GetTempRegister();
 			GenerateDiadic(op_mov, 0, ap, makereg(1));
 			regs[1].modified = true;
 		}
 		else
-			ap = makereg(0);
-		ap->isPtr = sym->sym->tp->GetBtp()->type == bt_pointer;
-	}
-	else {
-		ap = GetTempRegister();
-		GenerateDiadic(op_mov, 0, ap, makereg(1));
-		regs[1].modified = true;
+			return(makereg(0));
 	}
 	return (ap);
 	/*
@@ -1267,10 +1299,3 @@ Operand *FT64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
     return result;
 	*/
 }
-
-void GenLdi(Operand *ap1, Operand *ap2)
-{
-	GenerateDiadic(op_ldi,0,ap1,ap2);
-  return;
-}
-

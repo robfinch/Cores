@@ -100,10 +100,19 @@ static char *errtextstr[] = {
 	"E Cast aggregate should be a constant"
 };
 
+static char *errtext1000[] =
+{
+	"E Compiler: null pointer encountered",
+	"E Compiler: circular list",
+	"E Compiler: missing hidden structure pointer"
+};
+
 char *errtext(int errnum)
 {
 	if (errnum < 1000)
 		return errtextstr[errnum];
+	else
+		return (errtext1000[errnum]);
 	return "";
 }
 

@@ -253,12 +253,12 @@ void CSETable::InitializeTempRegs()
 				if (ap->mode == am_imm) {
 					if (ap2->mode == am_fpreg) {
 						ap3 = GetTempRegister();
-						GenLdi(ap3, ap);
+						GenerateDiadic(op_ldi, 0, ap3, ap);
 						GenerateDiadic(op_mov, 0, ap2, ap3);
 						ReleaseTempReg(ap3);
 					}
 					else {
-						GenLdi(ap2, ap);
+						GenerateDiadic(op_ldi, 0, ap2, ap);
 					}
 				}
 				else if (ap->mode == am_reg) {

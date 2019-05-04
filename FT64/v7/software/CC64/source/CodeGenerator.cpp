@@ -37,7 +37,6 @@ Operand *GenerateExpression();            /* forward ParseSpecifieraration */
 extern Operand *copy_addr(Operand *);
 extern Operand *GenExpr(ENODE *node);
 extern Operand *GenerateFunctionCall(ENODE *node, int flags);
-extern void GenLdi(Operand*,Operand *);
 extern void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int prediction);
 
 void GenerateRaptor64Cmp(ENODE *node, int op, int label, int predreg);
@@ -181,6 +180,17 @@ Operand *make_indexed(int64_t o, int i)
 	ap->preg = i;
     ap->offset = ep;
     return ap;
+}
+
+Operand *make_double_indexed(int i, int j, int scale)
+{
+	Operand *ap;
+	ap = allocOperand();
+	ap->mode = am_indx2;
+	ap->preg = i;
+	ap->sreg = j;
+	ap->scale = scale;
+	return ap;
 }
 
 /*
@@ -948,7 +958,7 @@ void CodeGenerator::GenerateStructAssign(TYP *tp, int64_t offset, ENODE *ep, Ope
 			ap1 = GenerateExpression(ep->p[2],F_REG,thead->tp->size);
 			if (ap1->mode==am_imm) {
 				ap2 = GetTempRegister();
-				GenLdi(ap2,ap1);
+				GenerateDiadic(op_ldi, 0, ap2, ap1);
 			}
 			else {
 				ap2 = ap1;
@@ -1022,7 +1032,7 @@ void CodeGenerator::GenerateArrayAssign(TYP *tp, ENODE *node1, ENODE *node2, Ope
 			ap1 = GenerateExpression(ep1,F_REG|F_IMMED,sizeOfWord);
 			ap2 = GetTempRegister();
 			if (ap1->mode==am_imm)
-				GenLdi(ap2,ap1);
+				GenerateDiadic(op_ldi, 0, ap2, ap1);
 			else {
 				if (ap1->offset)
 					offset2 = ap1->offset->i;
@@ -1380,6 +1390,8 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int size)
 		ap1->isPtr = node->IsPtr();
 		ap1->mode = am_direct;
     ap1->offset = node;
+		if (node)
+			DataLabels[node->i] = true;
 		ap1->type = stddouble.GetIndex();
 		// Don't allow the constant to be loaded into an integer register.
     ap1->MakeLegal(flags & ~F_REG,size);
@@ -1442,6 +1454,8 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int size)
                 ap2->mode = am_indx;
                 ap2->preg = regGP;      // global pointer
                 ap2->offset = node;     // use as constant node
+								if (node)
+									DataLabels[node->i] = true;
                 GenerateDiadic(op_lea,0,ap1,ap2);
 				ap1->MakeLegal(flags,size);
 				Leave("GenExpression",6); 

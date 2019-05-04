@@ -272,7 +272,7 @@ void Function::PeepOpt()
 
 		if (!hasBPReferences)
 			pl.RemoveLinkUnlink();
-		if (!hasSPReferences && !hasBPReferences)
+		if (IsLeaf && !hasSPReferences && !hasBPReferences)
 			pl.RemoveStackCode();
 		if ((IsLeaf && !hasSPReferences)
 			|| (!hasSPReferences && !hasBPReferences))

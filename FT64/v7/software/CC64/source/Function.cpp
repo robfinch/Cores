@@ -25,6 +25,7 @@
 //
 #include "stdafx.h"
 extern char irfile[256];
+extern int defaultcc;
 
 Statement *Function::ParseBody()
 {
@@ -127,7 +128,7 @@ void Function::Init()
 	IsVirtual = isVirtual;
 	IsInline = isInline;
 
-	isPascal = FALSE;
+	isPascal = defaultcc==1;
 	isKernel = FALSE;
 	isOscall = FALSE;
 	isInterrupt = FALSE;
@@ -496,13 +497,14 @@ void Function::UnlinkStack()
 			GenerateDiadic(op_lw, 0, makereg(regXLR), make_indexed(2 * sizeOfWord, regSP));
 	}
 	if (!IsLeaf)
-		GenerateDiadic(op_lw, 0, makereg(regLR), make_indexed(3 * sizeOfWord, regSP));
+		GenerateDiadic(op_lw, 0, makereg(regLR), make_double_indexed(regXoffs, regSP, 1));
 	//	GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),make_immed(3*sizeOfWord));
 	GenerateMonadic(op_hint, 0, make_immed(end_stack_unlink));
 }
 
 bool Function::GenDefaultCatch()
 {
+/*
 	GenerateLabel(throwlab);
 	if (IsLeaf) {
 		if (DoesThrow) {
@@ -520,6 +522,7 @@ bool Function::GenDefaultCatch()
 																								//		GenerateDiadic(op_bra,0,make_label(retlab),NULL);				// goto regular return cleanup code
 		return (true);
 	}
+*/
 	return (false);
 }
 
@@ -546,6 +549,7 @@ void Function::SetupReturnBlock()
 		n |= 2;
 		GenerateDiadic(op_sw, 0, makereg(regLR), make_indexed(3 * sizeOfWord, regSP));
 	}
+	GenerateDiadic(op_ldi, 0, makereg(regXoffs), make_immed(24));
 	/*
 	switch (n) {
 	case 0:	break;
@@ -554,7 +558,8 @@ void Function::SetupReturnBlock()
 	case 3:	GenerateTriadic(op_swp, 0, makereg(regXLR), makereg(regLR), make_indexed(2 * sizeOfWord, regSP)); break;
 	}
 	*/
-	ap = make_label(throwlab);
+	retlab = nextlabel++;
+	ap = make_label(retlab);
 	ap->mode = am_imm;
 	if (exceptions && (!IsLeaf || DoesThrow))
 		GenerateDiadic(op_ldi, 0, makereg(regXLR), ap);
@@ -586,27 +591,35 @@ void Function::GenReturn(Statement *stmt)
 			ap = cg.GenerateExpression(stmt->exp, F_REG | F_IMMED, sizeOfWord);
 		GenerateMonadic(op_hint, 0, make_immed(2));
 		if (ap->mode == am_imm)
-			GenLdi(makereg(1), ap);
+			GenerateDiadic(op_ldi, 0, makereg(1), ap);
 		else if (ap->mode == am_reg) {
-			if (sym->tp->GetBtp() && (sym->tp->GetBtp()->type == bt_struct || sym->tp->GetBtp()->type == bt_union)) {
+			if (sym->tp->GetBtp() && (sym->tp->GetBtp()->type == bt_struct || sym->tp->GetBtp()->type == bt_union || sym->tp->GetBtp()->type == bt_class)) {
 				p = params.Find("_pHiddenStructPtr", false);
 				if (p) {
 					if (p->IsRegister)
 						GenerateDiadic(op_mov, 0, makereg(1), makereg(p->reg));
 					else
 						GenerateDiadic(op_lw, 0, makereg(1), make_indexed(p->value.i, regFP));
-					GenerateTriadic(op_sub, 0, makereg(regSP), makereg(regSP), make_immed(sizeOfWord * 3));
 					ap2 = GetTempRegister();
 					GenerateDiadic(op_ldi, 0, ap2, make_immed(sym->tp->GetBtp()->size));
-					GenerateDiadic(op_sw, 0, makereg(1), make_indirect(regSP));
-					GenerateDiadic(op_sw, 0, ap, make_indexed(sizeOfWord,regSP));
-					GenerateDiadic(op_sw, 0, ap2, make_indexed(sizeOfWord * 2, regSP));
+					if (cpu.SupportsPush) {
+						GenerateMonadic(op_push, 0, ap2);
+						GenerateMonadic(op_push, 0, ap);
+						GenerateMonadic(op_push, 0, makereg(1));
+					}
+					else {
+						GenerateTriadic(op_sub, 0, makereg(regSP), makereg(regSP), make_immed(sizeOfWord * 3));
+						GenerateDiadic(op_sw, 0, makereg(1), make_indirect(regSP));
+						GenerateDiadic(op_sw, 0, ap, make_indexed(sizeOfWord, regSP));
+						GenerateDiadic(op_sw, 0, ap2, make_indexed(sizeOfWord * 2, regSP));
+					}
 					ReleaseTempReg(ap2);
-					GenerateMonadic(op_call, 0, make_string("_memcpy"));
-					GenerateTriadic(op_add, 0, makereg(regSP), makereg(regSP), make_immed(sizeOfWord * 3));
+					GenerateMonadic(op_call, 0, make_string("__aacpy"));
+					if (!IsPascal)
+						GenerateTriadic(op_add, 0, makereg(regSP), makereg(regSP), make_immed(sizeOfWord * 3));
 				}
 				else {
-					// ToDo compiler error
+					error(ERR_MISSING_HIDDEN_STRUCTPTR);
 				}
 			}
 			else {
@@ -640,17 +653,22 @@ void Function::GenReturn(Statement *stmt)
 	}
 
 	// Generate the return code only once. Branch to the return code for all returns.
-	if (retlab != -1) {
+	if (retGenerated) {
 		GenerateMonadic(op_bra, 0, make_label(retlab));
 		return;
 	}
-	retlab = nextlabel++;
+	retGenerated = true;
+	GenerateLabel(throwlab);
 	GenerateLabel(retlab);
 	rcode = pl.tail;
 
 	if (currentFn->UsesNew) {
-		GenerateTriadic(op_sub, 0, makereg(regSP), makereg(regSP), make_immed(8));
-		GenerateDiadic(op_sw, 0, makereg(regFirstArg), make_indirect(regSP));
+		if (cpu.SupportsPush)
+			GenerateMonadic(op_push, 0, makereg(regFirstArg));
+		else {
+			GenerateTriadic(op_sub, 0, makereg(regSP), makereg(regSP), make_immed(8));
+			GenerateDiadic(op_sw, 0, makereg(regFirstArg), make_indirect(regSP));
+		}
 		GenerateDiadic(op_lea, 0, makereg(regFirstArg), make_indexed(-sizeOfWord, regFP));
 		GenerateMonadic(op_call, 0, make_string("__AddGarbage"));
 		GenerateDiadic(op_lw, 0, makereg(regFirstArg), make_indirect(regSP));
@@ -734,10 +752,8 @@ void Function::GenReturn(Statement *stmt)
 		return;
 	}
 
-	if (!IsInline) {
+	if (!IsInline)
 		GenerateMonadic(op_ret, 0, make_immed(toAdd));
-		//GenerateMonadic(op_jal,0,make_indirect(regLR));
-	}
 	else
 		GenerateTriadic(op_add, 0, makereg(regSP), makereg(regSP), make_immed(toAdd));
 }
@@ -754,6 +770,7 @@ void Function::Gen()
 	OCODE *ip;
 	bool doCatch = true;
 	int n;
+	bool o_retgen;
 
 	for (n = 0; n < 32; n++) {
 		regs[n].number = n;
@@ -767,7 +784,9 @@ void Function::Gen()
 	o_retlab = retlab;
 	o_contlab = contlab;
 	o_breaklab = breaklab;
+	o_retgen = retGenerated;
 
+	retGenerated = false;
 	throwlab = retlab = contlab = breaklab = -1;
 	lastsph = 0;
 	memset(semaphores, 0, sizeof(semaphores));
@@ -816,8 +835,9 @@ void Function::Gen()
 		}
 	}
 
-	if (!IsInline)
+//	if (!IsInline)
 		GenReturn(nullptr);
+
 	/*
 	// Inline code needs to branch around the default exception handler.
 	if (exceptions && sym->IsInline)
@@ -837,6 +857,7 @@ void Function::Gen()
 		}
 	}
 	dfs.puts("</StaticRegs>");
+	retGenerated = o_retgen;
 	throwlab = o_throwlab;
 	retlab = o_retlab;
 	contlab = o_contlab;
@@ -1301,7 +1322,7 @@ void Function::Summary(Statement *stmt)
 	}
 	lfs.printf("\n\n\n");
 	//    ReleaseLocalMemory();        // release local symbols
-	isPascal = FALSE;
+	isPascal = defaultcc==1;
 	isKernel = FALSE;
 	isOscall = FALSE;
 	isInterrupt = FALSE;

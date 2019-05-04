@@ -219,6 +219,7 @@ public:
 	unsigned int hasSPReferences : 1;
 	unsigned int hasBPReferences : 1;
 	unsigned int didRemoveReturnBlock : 1;
+	unsigned int retGenerated : 1;
 	unsigned int alloced : 1;
 	uint8_t NumRegisterVars;
 	unsigned __int8 NumParms;
@@ -653,6 +654,7 @@ public:
 	void OptLoadChar();
 	void OptLoadHalf();
 	void OptStoreHalf();
+	void OptLoadWord();
 	void OptStore();
 	void OptSxb();
 	void OptBra();
@@ -703,9 +705,10 @@ class FT64CodeGenerator : public CodeGenerator
 public:
 	bool GenerateBranch(ENODE *node, int op, int label, int predreg, unsigned int prediction, bool limit);
 	Operand *GenExpr(ENODE *node);
+	bool IsPascal(ENODE *ep);
 	int PushArgument(ENODE *ep, int regno, int stkoffs, bool *isFloat);
 	int PushArguments(Function *func, ENODE *plist);
-	void PopArguments(Function *func, int howMany);
+	void PopArguments(Function *func, int howMany, bool isPascal = true);
 	Operand *GenerateFunctionCall(ENODE *node, int flags);
 };
 

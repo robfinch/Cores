@@ -54,6 +54,10 @@ void dooper(ENODE *node)
 		ep->nodetype = en_icon;
 		ep->i = ep->p[0]->i * ep->p[1]->i;
 		break;
+	case en_mulf:
+		ep->nodetype = en_icon;
+		ep->i = ep->p[0]->i * ep->p[1]->i;
+		break;
 	case en_div:
 	case en_udiv:
 		ep->nodetype = en_icon;
@@ -478,6 +482,8 @@ static void opt0(ENODE **node)
 			case en_mulf:
 				opt0(&(ep->p[0]));
 				opt0(&(ep->p[1]));
+				if (ep->p[0]->nodetype == en_icon && ep->p[1]->nodetype == en_icon)
+					dooper(*node);
 				return;
 			case en_vmul:
 			case en_vmuls:
@@ -730,6 +736,7 @@ static int64_t xfold(ENODE *node)
 								case en_mulf:
                 case en_mul:
 				case en_mulu:
+					return (0);
                         if( node->p[0]->nodetype == en_icon )
                                 return xfold(node->p[1]) * node->p[0]->i;
                         else if( node->p[1]->nodetype == en_icon )
@@ -804,7 +811,7 @@ static void fold_const(ENODE **node)
                         }
                 else if( ep->p[1]->nodetype == en_icon )
                         {
-                        ep->p[1]->i -= xfold(ep->p[0]);
+                        ep->p[1]->i -= xfold(ep->p[0]);	// ??? other order ??? xfold - p[1]
                         return;
                         }
                 }

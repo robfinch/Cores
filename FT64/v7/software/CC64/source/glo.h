@@ -63,6 +63,7 @@ extern int regPP;
 extern int regZero;
 extern int regFirstTemp;
 extern int regLastTemp;
+extern int regXoffs;
 extern int regFirstRegvar;
 extern int regLastRegvar;
 extern int regFirstArg;

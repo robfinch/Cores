@@ -368,6 +368,7 @@ enum e_hint {
 #define ERR_CASTAGGR		66
 #define ERR_NULLPOINTER		1000
 #define ERR_CIRCULAR_LIST 1001
+#define ERR_MISSING_HIDDEN_STRUCTPTR	1002
 
 /*      alignment sizes         */
 

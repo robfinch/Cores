@@ -202,7 +202,7 @@ void PeepList::SetLabelReference()
 	for (p = head; p; p = p->fwd) {
 		if (p->opcode == op_label) {
 			LabelTable[(int)p->oper1] = p;
-			p->isReferenced = false;
+			p->isReferenced = DataLabels[(int)p->oper1];
 		}
 	}
 	for (q = head; q; q = q->fwd) {
@@ -241,7 +241,7 @@ void PeepList::SetLabelReference()
 void PeepList::EliminateUnreferencedLabels()
 {
 	OCODE *p;
-
+	return;
 	for (p = head; p; p = p->fwd) {
 		if (p->opcode == op_label)
 			p->remove = false;
@@ -281,6 +281,10 @@ int PeepList::CountSPReferences()
 		}
 		if (!inFuncBody)
 			continue;
+		if (ip->opcode == op_call || ip->opcode == op_jal) {
+			refSP++;
+			continue;
+		}
 		if (ip->opcode != op_label && ip->opcode != op_nop
 			&& ip->opcode != op_link && ip->opcode != op_unlk) {
 			if (ip->insn) {
@@ -555,6 +559,7 @@ void PeepList::OptInstructions()
 			case op_lb:		ip->OptLoadByte(); break;
 			case op_lc:		ip->OptLoadChar(); break;
 			case op_lh:		ip->OptLoadHalf(); break;
+			case op_lw:		ip->OptLoadWord(); break;
 			case op_sxb:	ip->OptSxb();	break;
 			case op_br:
 			case op_bra:	ip->OptBra(); break;

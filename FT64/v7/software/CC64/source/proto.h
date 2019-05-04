@@ -13,7 +13,6 @@ void GenerateHint(int num);
 
 void SaveRegisterVars(int64_t mask, int64_t rmask);
 void SaveFPRegisterVars(int64_t fpmask, int64_t fprmask);
-void GenLdi(Operand *, Operand *);
 void SaveRegisterVars(int64_t mask, int64_t rmask);
 void SaveFPRegisterVars(int64_t mask, int64_t rmask);
 void funcbottom(Statement *stmt);
@@ -57,5 +56,6 @@ extern TYP *pop_typ();
 
 extern void opt_const_unchecked(ENODE **node);
 extern Operand *make_string2(char *s);
+extern Operand *make_double_indexed(int i, int j, int scale);
 
 #endif

@@ -12,6 +12,7 @@ public:
 public:
   txtoStream() : std::ofstream() {};
 	void write(char *buf) { if (level) {
+		if (buf)
 	   std::ofstream::write(buf, strlen(buf));
        flush(); }};
 	void printf(char *str) { if (level) write(str); };

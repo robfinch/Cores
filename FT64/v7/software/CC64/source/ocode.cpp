@@ -382,6 +382,30 @@ void OCODE::OptLoadHalf()
 	}
 }
 
+// Search ahead and remove this load if the register is def'd again without a use.
+void OCODE::OptLoadWord()
+{
+	OCODE *ip;
+
+	for (ip = fwd; ip; ip = ip->fwd) {
+		if (ip->opcode == op_label)
+			break;
+		if (ip->opcode == op_call || ip->opcode == op_jal)
+			break;
+		if (ip->opcode == op_hint || ip->opcode == op_rem)
+			continue;
+		if (ip->HasSourceReg(oper1->preg))
+			break;
+		if (ip->HasTargetReg()) {
+			if (ip->oper1->preg == oper1->preg) {
+				MarkRemove();
+				optimized++;
+				break;
+			}
+		}
+	}
+}
+
 void OCODE::OptSxb()
 {
 	if (fwd == nullptr)
@@ -422,21 +446,26 @@ void OCODE::OptStoreHalf()
 
 void OCODE::OptStore()
 {
+	OCODE *ip;
+
 	if (opcode == op_sh)
 		OptStoreHalf();
-	if (opcode == op_label || fwd->opcode == op_label)
+	for (ip = fwd; ip; ip = ip->fwd)
+		if (ip->opcode != op_rem && ip->opcode != op_hint)
+			break;
+	if (opcode == op_label || ip->opcode == op_label)
 		return;
-	if (!OCODE::IsEqualOperand(oper1, fwd->oper1))
+	if (!OCODE::IsEqualOperand(oper1, ip->oper1))
 		return;
-	if (!OCODE::IsEqualOperand(oper2, fwd->oper2))
+	if (!OCODE::IsEqualOperand(oper2, ip->oper2))
 		return;
-	if (opcode == op_sh && fwd->opcode != op_lh)
+	if (opcode == op_sh && ip->opcode != op_lh)
 		return;
-	if (opcode == op_sw && fwd->opcode != op_lw)
+	if (opcode == op_sw && ip->opcode != op_lw)
 		return;
-	if (fwd->isVolatile)
+	if (ip->isVolatile)
 		return;
-	fwd->MarkRemove();
+	ip->MarkRemove();
 	optimized++;
 }
 

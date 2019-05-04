@@ -28,6 +28,7 @@
 #define EXPR_DEBUG
 #define NUM_DIMEN	20
 extern SYM *currentClass;
+extern int defaultcc;
 static unsigned char sizeof_flag = 0;
 static TYP *ParseCastExpression(ENODE **node);
 static TYP *NonAssignExpression(ENODE **node);
@@ -735,6 +736,7 @@ TYP *nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeArray *typear
 			sp = allocSYM();
 			sp->fi = allocFunction(sp->id);
 			sp->fi->sym = sp;
+			sp->fi->IsPascal = defaultcc == 1;
 			sp->tp = &stdfunc;
 			sp->SetName(*(new std::string(lastid)));
 			sp->storage_class = sc_external;
@@ -868,7 +870,8 @@ TYP *nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeArray *typear
 						(*node)->nodetype = en_fpregvar;
 					else
 						(*node)->nodetype = en_regvar;
-					(*node)->i = sp->reg;
+					//(*node)->i = sp->reg;
+					(*node)->rg = sp->reg;
 					(*node)->tp = sp->tp;
 					//(*node)->tp->val_flag = TRUE;
 				}
@@ -893,10 +896,15 @@ TYP *nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeArray *typear
 	if (nt)
 		NextToken();
 xit:
+	(*node)->sym = sp;
+	if (sp) {
+		if (sp->fi)
+			(*node)->isPascal = sp->fi->IsPascal;
+	}
 	if (!tp)
 		dfs.printf("returning nullptr2");
 	dfs.puts("</nameref2>\n");
-	return tp;
+	return (tp);
 }
 
 TYP *nameref(ENODE **node,int nt)
@@ -1525,6 +1533,9 @@ int IsLValue(ENODE *node)
 	case en_nacon:
 	case en_autocon:
 		return (node->etype == bt_pointer || node->etype == bt_struct || node->etype == bt_union || node->etype == bt_class);
+	// A typecast will connect the types with a void node
+	case en_void:
+		return (IsLValue(node->p[1]));
 	}
 /*
 	case en_cbc:
@@ -1557,9 +1568,6 @@ int IsLValue(ENODE *node)
 //			return (node->tp->type==bt_pointer && node->tp->isArray) || node->tp->type==bt_struct;
 		else
 			return (FALSE);
-	// A typecast will connect the types with a void node
-	case en_void:
-		return (node->etype == bt_pointer);
 	case en_nacon:
 	case en_autocon:
 		return (node->etype == bt_pointer || node->etype == bt_struct || node->etype == bt_union || node->etype == bt_class);
@@ -1754,13 +1762,17 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 			//}
 			//else
 			{
-				sz1 = 1;
-				for (cnt2 = 1; cnt2 <= numdimen; cnt2++)
-					sz1 = sz1 * sa[cnt2];
-				elesize = sa[numdimen + 1] / sz1;
+				if (numdimen) {
+					sz1 = 1;
+					for (cnt2 = 1; cnt2 <= numdimen; cnt2++)
+						sz1 = sz1 * sa[cnt2];
+					elesize = sa[numdimen + 1] / sz1;
+				}
+				else
+					elesize = tp1->size;
 				sa[0] = elesize;
-				sz1 = 1;// sa[numdimen + 1];	// could be a void = 0
-				for (cnt2 = 0; cnt2 < numdimen - cnt; cnt2++)
+				sz1 = sa[0];// sa[numdimen + 1];	// could be a void = 0
+				for (cnt2 = 1; cnt2 < numdimen - cnt; cnt2++)
 					sz1 = sz1 * sa[cnt2];
 			}
 			qnode = makeinode(en_icon,sz1);
@@ -1919,6 +1931,7 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 				}
 				if( tp1->val_flag == FALSE ) {
 					ep1 = makenode(reftype,ep1,(ENODE *)NULL);
+					ep1->isPascal = ep1->p[0]->isPascal;
 				}
 			}
 
@@ -1982,7 +1995,9 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 					if (sp) {
 //						sp = TABLE::match[TABLE::matchno-1];
 						ep3 = makesnode(en_cnacon,sp->name,sp->mangledName,sp->value.i);
+						ep3->isPascal == sp->fi->IsPascal;
 						ep1 = makenode(en_fcall,ep3,ep2);
+						ep1->isPascal = ep3->isPascal;
 						tp1 = sp->tp->GetBtp();
 						currentFn->IsLeaf = FALSE;
 					}
@@ -2005,6 +2020,7 @@ j2:
 				qnode->constflag = TRUE;
 				iu = ep1->isUnsigned;
 				ep1 = makenode(en_add,ep1,qnode);
+				ep1->isPascal = ep1->p[0]->isPascal;
 				ep1->constflag = ep1->p[0]->constflag;
 				ep1->isUnsigned = iu;
 				ep1->esize = 8;
