@@ -23,10 +23,13 @@
 // ============================================================================
 //
 `include ".\FT64_config.vh"
+`define HIGH	1'b1
+`define LOW		1'b0;
 
 module FT64_ICController(clk_i, asid, pc0, pc1, pc2, hit0, hit1, hit2, bstate, state,
-	thread_en, ihitL2,
-	L1_adr, L1_wr0, L1_wr1, L1_wr2, L1_en, L1_invline, icnxt, icwhich, ziccnt, ld_L1_dati);
+	thread_en, ihitL2, selL2, L2_ld, L2_cnt, L2_adr, L2_xsel, L2_dato, L2_nxt,
+	L1_selpc, L1_adr, L1_dat, L1_wr0, L1_wr1, L1_wr2, L1_en, L1_invline, icnxt, icwhich,
+	icl_o, cti_o, bte_o, bok_i, cyc_o, stb_o, ack_i, err_i, tlbmiss_i, exv_i, sel_o, adr_o, dat_i);
 parameter ABW = 64;
 parameter AMSB = ABW-1;
 parameter RSTPC = 64'hFFFFFFFFFFFC0100;
@@ -39,10 +42,19 @@ input hit0;
 input hit1;
 input hit2;
 input [4:0] bstate;
-output reg [3:0] state = 4'd0;
+output reg [3:0] state = IDLE;
 input thread_en;
 input ihitL2;
+output reg selL2 = 1'b0;
+output L2_ld;
+output [2:0] L2_cnt;
+output reg [71:0] L2_adr = RSTPC;
+output reg L2_xsel = 1'b0;
+input [305:0] L2_dato;
+output reg L2_nxt;
+output L1_selpc;
 output reg [71:0] L1_adr = RSTPC;
+output reg [305:0] L1_dat = {2'b0,{38{8'h3D}}};	// NOP
 output reg L1_wr0;
 output reg L1_wr1;
 output reg L1_wr2;
@@ -50,8 +62,19 @@ output reg [9:0] L1_en;
 output reg L1_invline;
 output reg icnxt;
 output reg [1:0] icwhich;
-output ziccnt;
-output ld_L1_dati;
+output reg icl_o;
+output reg [2:0] cti_o = 3'b000;
+output reg [1:0] bte_o = 2'b00;
+input bok_i;
+output reg cyc_o = 1'b0;
+output reg stb_o;
+input ack_i;
+input err_i;
+input tlbmiss_i;
+input exv_i;
+output reg [7:0] sel_o;
+output reg [71:0] adr_o;
+input [63:0] dat_i;
 
 parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
@@ -62,10 +85,13 @@ reg [3:0] picstate;
 wire [AMSB:0] pc0plus6 = pc0 + 8'd7;
 wire [AMSB:0] pc0plus12 = pc0 + 8'd14;
 
-assign ziccnt = state==IDLE;
-assign ld_L1_dati = state==IC_WaitL2 && ihitL2 && picstate==IC3a;
+assign L2_ld = (state==IC_Ack) && (ack_i|err_i|tlbmiss_i|exv_i);
+assign L1_selpc = state==IDLE||state==IC_Next;
 
 wire clk = clk_i;
+reg [2:0] iccnt;
+assign L2_cnt = iccnt;
+
 //BUFH uclkb (.I(clk_i), .O(clk));
 
 always @(posedge clk)
@@ -76,6 +102,7 @@ L1_wr2 <= FALSE;
 L1_en <= 10'h000;
 L1_invline <= FALSE;
 icnxt <= FALSE;
+L2_nxt <= FALSE;
 // Instruction cache state machine.
 // On a miss first see if the instruction is in the L2 cache. No need to go to
 // the BIU on an L1 miss.
@@ -87,9 +114,10 @@ picstate <= state;
 case(state)
 IDLE:
 	begin
+		iccnt <= 3'd0;
 		// If the bus unit is busy doing an update involving L1_adr or L2_adr
 		// we have to wait.
-		if (bstate != B_ICacheAck && bstate != B_ICacheNack && bstate != B_ICacheNack2) begin
+		begin
 			if (!hit0) begin
 				L1_adr <= {asid,pc0[AMSB:5],5'h0};
 				L1_invline <= TRUE;
@@ -120,6 +148,7 @@ IDLE:
 			end
 		end
 	end
+	
 IC2:     state <= IC3;
 IC3:     state <= IC3a;
 IC3a:     state <= IC_WaitL2;
@@ -138,10 +167,15 @@ IC_WaitL2:
 //		L1_adr <= L2_adr;
 		// L1_dati is loaded dring an L2 icache load operation
 //		if (picstate==IC3a)
-//		L1_dati <= L2_dato;
+		L1_dat <= L2_dato;
 		state <= IC5;
 	end
-	else if (bstate!=B_ICacheNack)
+	else begin
+		if (bstate == B_WaitIC)
+			state <= IC_Access;
+	end
+/*
+	else if (state!=IC_Nack)
 		;
 	else begin
 		L1_en <= 10'h3FF;
@@ -153,7 +187,7 @@ IC_WaitL2:
 		//L1_dati <= L2_dato;
 		state <= IC5;
 	end
-
+*/
 IC5: 	state <= IC6;
 IC6:  state <= IC7;
 IC7:	state <= IC_Next;
@@ -162,11 +196,96 @@ IC_Next:
    state <= IDLE;
    icnxt <= TRUE;
 	end
+IC_Access:
+	begin
+		icl_o <= `HIGH;
+		cti_o <= 3'b001;
+		bte_o <= 2'b00;
+		cyc_o <= `HIGH;
+		stb_o <= `HIGH;
+		sel_o <= 8'hFF;
+		adr_o <= {L1_adr[AMSB:5],5'b0};
+		L2_adr <= L1_adr;
+		L2_adr[4:0] <= 5'd0;
+		L2_xsel <= 1'b0;
+		selL2 <= TRUE;
+		state <= IC_Ack;
+	end
+IC_Ack:
+  if (ack_i|err_i|tlbmiss_i|exv_i) begin
+  	if (!bok_i) begin
+  		stb_o <= `LOW;
+			adr_o[AMSB:3] <= adr_o[AMSB:3] + 2'd1;
+  		state <= IC_Nack2;
+  	end
+		if (tlbmiss_i) begin
+			L1_dat[305:304] <= 2'd1;
+			L1_dat[303:0] <= {38{8'h3D}};	// NOP
+			nack();
+	  end
+		else if (exv_i) begin
+			L1_dat[305:304] <= 2'd2;
+			L1_dat[303:0] <= {38{8'h3D}};	// NOP
+			nack();
+		end
+	  else if (err_i) begin
+			L1_dat[305:304] <= 2'd3;
+			L1_dat[303:0] <= {38{8'h3D}};	// NOP
+			nack();
+	  end
+	  else
+	  	case(iccnt)
+	  	3'd0:	L1_dat[63:0] <= dat_i;
+	  	3'd1:	L1_dat[127:64] <= dat_i;
+	  	3'd2:	L1_dat[191:128] <= dat_i;
+	  	3'd3:	L1_dat[255:192] <= dat_i;
+	  	3'd4:	L1_dat[305:256] <= {2'b00,dat_i[47:0]};
+	  	default:	L1_dat <= L1_dat;
+	  	endcase
+    iccnt <= iccnt + 3'd1;
+    if (iccnt==3'd3)
+      cti_o <= 3'b111;
+    if (iccnt==3'd4)
+    	nack();
+    else begin
+      L2_adr[4:3] <= L2_adr[4:3] + 2'd1;
+      if (L2_adr[4:3]==2'b11)
+      	L2_xsel <= 1'b1;
+    end
+  end
+IC_Nack2:
+	if (~ack_i) begin
+		stb_o <= `HIGH;
+		state <= IC_Ack;
+	end
+IC_Nack:
+ 	begin
+		selL2 <= FALSE;
+		if (~ack_i) begin
+			//icl_ctr <= icl_ctr + 40'd1;
+			state <= IDLE;
+			L2_nxt <= TRUE;
+		end
+	end
 default:
 	begin
    	state <= IDLE;
   end
 endcase
 end
+
+task nack;
+begin
+	icl_o <= `LOW;
+	cti_o <= 3'b000;
+	cyc_o <= `LOW;
+	stb_o <= `LOW;
+	L1_en <= 10'h3FF;
+	L1_wr0 <= TRUE;
+	L1_wr1 <= TRUE && `WAYS > 1;
+	L1_wr2 <= TRUE && `WAYS > 2;
+	state <= IC_Nack;
+end
+endtask
 
 endmodule

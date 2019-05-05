@@ -66,7 +66,7 @@ output reg [1:0] ol_o;
 output [31:0] pcr_o;
 output [63:0] pcr2_o;
 output [63:0] pkeys_o;
-output reg icl_o;
+output icl_o;
 output reg cr_o;
 output reg sr_o;
 input rbi_i;
@@ -1030,28 +1030,24 @@ reg [1:0] bwhich;
 reg invic, invdc;
 wire [1:0] icwhich;
 wire icnxt;
-reg L2_nxt;
+wire L2_nxt;
 wire ihit0,ihit1,ihit2,ihitL2;
 wire ihit = ihit0&ihit1&ihit2;
 reg phit;
 wire threadx;
 always @*
 	phit <= ihit&&icstate==IDLE;
-reg [2:0] iccnt;
 (* mark_debug="true" *)
 reg icack;
 wire L1_wr0,L1_wr1,L1_wr2;
 wire L1_invline;
-wire ld_L1_dati;
-wire ziccnt;
 wire [1:0] ic0_fault,ic1_fault,ic2_fault;
 wire [9:0] L1_en;
 wire [71:0] L1_adr;
-reg [71:0] L2_adr;
-reg [305:0] L1_dati;
+wire [71:0] L2_adr;
 wire [305:0] L2_dato;
-reg L2_xsel;
-reg selL2;
+wire L2_xsel;
+wire selL2;
 
 wire icclk;
 BUFH ucb1 (.I(clk), .O(icclk));
@@ -1179,6 +1175,17 @@ generate begin : gInsnVar
 end
 endgenerate
 
+wire L1_selpc;
+wire [2:0] icti;
+wire [1:0] ibte;
+wire icyc;
+wire istb;
+wire [7:0] isel;
+wire [71:0] iadr;
+wire L2_ld;
+wire [305:0] L1_dat;
+wire [2:0] L2_cnt;
+
 FT64_ICController uL1ctrl
 (
 	.clk_i(clk),
@@ -1192,17 +1199,37 @@ FT64_ICController uL1ctrl
 	.bstate(bstate),
 	.state(icstate),
 	.thread_en(thread_en),
-	.ihitL2(ihitL2),
+	.L1_selpc(L1_selpc),
 	.L1_adr(L1_adr),
+	.L1_dat(L1_dat),
 	.L1_wr0(L1_wr0),
 	.L1_wr1(L1_wr1),
 	.L1_wr2(L1_wr2),
 	.L1_en(L1_en),
 	.L1_invline(L1_invline),
+	.ihitL2(ihitL2),
+	.selL2(selL2),
+	.L2_ld(L2_ld),
+	.L2_cnt(L2_cnt),
+	.L2_adr(L2_adr),
+	.L2_xsel(L2_xsel),
+	.L2_dato(L2_dato),
+	.L2_nxt(L2_nxt),
 	.icnxt(icnxt),
 	.icwhich(icwhich),
-	.ziccnt(ziccnt),
-	.ld_L1_dati(ld_L1_dati)
+	.icl_o(icl_o),
+	.cti_o(icti),
+	.bte_o(ibte),
+	.bok_i(bok_i),
+	.cyc_o(icyc),
+	.stb_o(istb),
+	.ack_i(acki),
+	.err_i(err_i),
+	.tlbmiss_i(tlbmiss_i),
+	.exv_i(exv_i),
+	.sel_o(isel),
+	.adr_o(iadr),
+	.dat_i(dat_i)		
 );
 
 FT64_L1_icache #(.pSize(`L1_ICACHE_SIZE)) uic0
@@ -1213,9 +1240,9 @@ FT64_L1_icache #(.pSize(`L1_ICACHE_SIZE)) uic0
   .wr(L1_wr0),
   .wr_ack(),
   .en(L1_en),
-  .adr((icstate==IDLE||icstate==IC_Next) ? {ASID,pc0} : L1_adr),
+  .adr(L1_selpc ? {ASID,pc0} : L1_adr),
   .wadr(L1_adr),
-  .i(L1_dati),
+  .i(L1_dat),
   .o(insn0a),
   .fault(ic0_fault),
   .hit(ihit0),
@@ -1232,9 +1259,9 @@ FT64_L1_icache #(.pSize(`L1_ICACHE_SIZE)) uic1
   .wr(L1_wr1),
   .wr_ack(),
   .en(L1_en),
-  .adr((icstate==IDLE||icstate==IC_Next) ? (thread_en ? {ASID,pc1}: {ASID,pc0plus6} ): L1_adr),
+  .adr(L1_selpc ? (thread_en ? {ASID,pc1}: {ASID,pc0plus6} ): L1_adr),
   .wadr(L1_adr),
-  .i(L1_dati),
+  .i(L1_dat),
   .o(insn1b),
   .fault(ic1_fault),
   .hit(ihit1),
@@ -1254,9 +1281,9 @@ FT64_L1_icache #(.pSize(`L1_ICACHE_SIZE)) uic2
   .wr(L1_wr2),
   .wr_ack(),
   .en(L1_en),
-  .adr((icstate==IDLE||icstate==IC_Next) ? (thread_en ? {ASID,pc2} : {ASID,pc0plus12}) : L1_adr),
+  .adr(L1_selpc ? (thread_en ? {ASID,pc2} : {ASID,pc0plus12}) : L1_adr),
   .wadr(L1_adr),
-  .i(L1_dati),
+  .i(L1_dat),
   .o(insn2b),
   .fault(ic2_fault),
   .hit(ihit2),
@@ -1274,10 +1301,10 @@ FT64_L2_icache uic2
   .rst(rst),
   .clk(clk),
   .nxt(L2_nxt),
-  .wr(bstate==B_ICacheAck && (ack_i|err_i)),
+  .wr(L2_ld),
   .xsel(L2_xsel),
   .adr(selL2 ? L2_adr: L1_adr),
-  .cnt(iccnt),
+  .cnt(L2_cnt),
   .exv_i(exvq),
   .i(dat_i),
   .err_i(errq),
@@ -5306,7 +5333,7 @@ begin
     end
 end
 
-reg [2:0] wbptr;
+reg [2:0] wbptr = 2'd0;
 // Stomp logic for branch miss.
 /*
 FT64_stomp #(QENTRIES) ustmp1
@@ -6371,7 +6398,6 @@ if (rst) begin
      dram0_store <= 1'b0;
      dram1_store <= 1'b0;
      dram2_store <= 1'b0;
-     L2_adr <= RSTPC;
      invic <= FALSE;
      tail0 <= 3'd0;
      tail1 <= 3'd1;
@@ -6428,9 +6454,6 @@ if (rst) begin
      sr_o <= `LOW;
      cr_o <= `LOW;
      vadr <= RSTPC;
-     icl_o <= `LOW;      	// instruction cache load
-     L1_dati <= 306'd0;
-     selL2 <= FALSE;
      cr0 <= 64'd0;
      cr0[13:8] <= 6'd0;		// select compressed instruction group #0
      cr0[30] <= TRUE;    	// enable data caching
@@ -7753,11 +7776,6 @@ if (~|panic)
 
 
 rf_source[0] <= 0;
-if (ziccnt)
-	iccnt <= 3'd0;
-if (ld_L1_dati)
-	L1_dati <= L2_dato;
-L2_nxt <= FALSE;
 
 // A store will never be stomped on because they aren't issued until it's
 // guarenteed there will be no change of flow.
@@ -7897,9 +7915,9 @@ end
 				dram0_ol,
 				dram0_addr,
 				fnDato(dram0_instr,dram0_data),
-				wbptr,
 				wbptr
 			);
+			wbptr <= wbptr + 2'd1;
 			iqentry_state[ dram0_id[`QBITS] ] <= IQS_DONE;
 		end
   end
@@ -7914,9 +7932,9 @@ end
 				dram1_ol,
 				dram1_addr,
 				fnDato(dram1_instr,dram1_data),
-				wbptr,
 				wbptr
 			);
+			wbptr <= wbptr + 2'd1;
 			iqentry_state[ dram1_id[`QBITS] ] <= IQS_DONE;
 		end
   end
@@ -7931,9 +7949,9 @@ end
 				dram2_ol,
 				dram2_addr,
 				fnDato(dram2_instr,dram2_data),
-				wbptr,
 				wbptr
 			);
+			wbptr <= wbptr + 2'd1;
 			iqentry_state[ dram2_id[`QBITS] ] <= IQS_DONE;
 		end
   end
@@ -8310,6 +8328,8 @@ BIDLE:
         // Check for L2 cache miss
         else if (~|wb_v && !ihitL2 && !acki)
         begin
+        	bstate <= B_WaitIC;
+        	/*
            cti_o <= 3'b001;
            bte_o <= 2'b00;//2'b01;	// 4 beat burst wrap
            cyc <= `HIGH;
@@ -8329,8 +8349,21 @@ BIDLE:
            L2_xsel <= 1'b0;
            selL2 <= TRUE;
            bstate <= B_ICacheAck;
+           */
         end
     end
+B_WaitIC:
+	begin
+		cti_o <= icti;
+		bte_o <= ibte;
+		cyc <= icyc;
+		stb_o <= istb;
+		sel_o <= isel;
+		vadr <= iadr;
+		we <= 1'b0;
+		if (ihitL2)
+			bstate <= BIDLE;
+	end
 
 // Terminal state for a store operation.
 // Note that if only a single memory channel is selected, bwhich will be a
@@ -8610,7 +8643,7 @@ B_DCacheLoadResetBusy:
 			dram0 <= `DRAMREQ_READY;
     bstate <= BIDLE;
   end
-
+/*
 // Ack state for instruction cache load
 // Once the first ack is received in burst mode, further acks are not necessary
 // as the core counts the number of data items. Occasionally missing acks were
@@ -8685,7 +8718,7 @@ B_ICacheNack:
 			L2_nxt <= TRUE;
 		end
 	end
-
+*/
 B_RMWAck:
     if (acki|err_i|tlb_miss|rdv_i) begin
         if (isCAS) begin
@@ -9255,7 +9288,6 @@ input [1:0] ol;
 input [`ABITS] addr;
 input [63:0] data;
 input [2:0] wbptr;
-output [2:0] wbptr_o;
 begin
 	if (wbm && wbptr > 1 && wb_addr[wbptr-1][AMSB:3]==addr[AMSB:3]
 	 && wb_ol[wbptr-1]==ol && wb_rmw[wbptr-1]==rmw && wb_v[wbptr-1]) begin
@@ -9288,7 +9320,6 @@ begin
 		wb_sel[wbptr] <= sel;
 		wb_addr[wbptr] <= {addr[AMSB:3],3'b0};
 		wb_data[wbptr] <= data;
-		wbptr_o <= wbptr + 2'd1;
 	end
 end
 endtask

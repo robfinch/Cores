@@ -607,7 +607,7 @@ always @(posedge clk)
      i2 <= i1;
 
 wire pe_wr;
-edge_det u3 (.rst(rst), .clk(clk), .ce(1'b1), .i(wr && cnt==3'd0), .pe(pe_wr), .ne(), .ee() );
+edge_det u3 (.rst(rst), .clk(clk), .ce(1'b1), .i(wr && cnt==3'd4), .pe(pe_wr), .ne(), .ee() );
 
 FT64_L2_icache_mem u1
 (
