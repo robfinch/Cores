@@ -8618,6 +8618,10 @@ B_DCacheLoadWait2:
 	end
 B_DCacheLoadWait3: 
 	begin
+ 		bstate <= B_DCacheLoadWait4;
+	end
+B_DCacheLoadWait4: 
+	begin
 		bstate <= B_DCacheLoadResetBusy;
 	end
 // There could be more than one memory cycle active. We reset the state

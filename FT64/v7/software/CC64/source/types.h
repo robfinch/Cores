@@ -513,7 +513,9 @@ public:
 	bool IsUnsignedType() { return (etype == bt_ubyte || etype == bt_uchar || etype == bt_ushort || etype == bt_ulong || etype == bt_pointer || nodetype==en_addrof || nodetype==en_autofcon || nodetype==en_autocon); };
 	bool IsRefType() {
 		return (nodetype == en_w_ref || nodetype == en_uw_ref || nodetype == en_h_ref || nodetype == en_uh_ref
-			|| nodetype == en_c_ref || nodetype == en_uc_ref || nodetype == en_b_ref || nodetype == en_ub_ref);	}
+			|| nodetype == en_c_ref || nodetype == en_uc_ref || nodetype == en_b_ref || nodetype == en_ub_ref
+			|| nodetype == en_dbl_ref);
+	};
 	bool IsBitfield();
 	static bool IsEqualOperand(Operand *a, Operand *b);
 	char fsize();
@@ -1098,7 +1100,8 @@ public:
 	int64_t *casevals;	// case values
 	TABLE ssyms;		// local symbols associated with statement
 	char *fcname;       // firstcall block var name
-	char *lptr;
+	char *lptr;			// pointer to source code
+	char *lptr2;			// pointer to source code
 	unsigned int prediction : 2;	// static prediction for if statements
 	int depth;
 	
@@ -1135,6 +1138,7 @@ public:
 
 	// Code generation
 	void GenMixedSource();
+	void GenMixedSource2();
 	void GenerateStop();
 	void GenerateAsm();
 	void GenerateFirstcall();

@@ -311,7 +311,8 @@ void GenStore(Operand *ap1, Operand *ap3, int size)
 		case 2: GenerateDiadic(op_sc, 0, ap1, ap3); break;
 		case 4: GenerateDiadic(op_sh, 0, ap1, ap3); break;
 		case 8: GenerateDiadic(op_sw, 0, ap1, ap3); break;
-		default:;
+		default:
+			;
 		}
 	}
 }
@@ -321,7 +322,7 @@ void GenStore(Operand *ap1, Operand *ap3, int size)
 //
 Operand *CodeGenerator::GenerateDereference(ENODE *node,int flags,int size, int su)
 {    
-	Operand *ap1;
+	Operand *ap1, *ap2;
   int siz1;
 	int typ;
 
@@ -593,14 +594,23 @@ Operand *CodeGenerator::GenerateDereference(ENODE *node,int flags,int size, int 
 		}
 	}
 	ap1 = GenerateExpression(node->p[0], F_REG | F_IMMED, 8); // generate address
-	ap1->isPtr = node->nodetype == en_wp_ref || node->nodetype == en_hp_ref;
+	ap1->isPtr = node->IsRefType();
 	if( ap1->mode == am_reg)
     {
 			// This seems a bit of a kludge. If we are dereferencing and there's a
 			// pointer in the register, then we want the value at the pointer location.
 			if (ap1->isPtr) {
-				GenLoad(ap1, make_indirect(ap1->preg), size, size);
-				ap1->mode = am_reg;
+				if (node->nodetype == en_dbl_ref) {
+					int rg = ap1->preg;
+					ReleaseTempRegister(ap1);
+					ap1 = GetTempFPRegister();
+					GenLoad(ap1, make_indirect(rg), size, size);
+					ap1->mode = am_fpreg;
+				}
+				else {
+					GenLoad(ap1, make_indirect(ap1->preg), size, size);
+					ap1->mode = am_reg;
+				}
 			}
 			else
 			{
@@ -1245,13 +1255,12 @@ Operand *CodeGenerator::GenerateAssign(ENODE *node, int flags, int size)
 						GenerateMonadic(op_push,0,ap2);
 						GenerateMonadic(op_push,0,ap1);
 					}
-					GenerateDiadic(op_jal,0,makereg(regLR),make_string("_memcpy"));
-					GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),make_immed(3*sizeOfWord));
+					GenerateDiadic(op_jal,0,makereg(regLR),make_string("_aacpy"));
 				}
 			}
 			else {
 				ap3->isPtr = ap2->isPtr;
-                GenLoad(ap3,ap2,ssize,size);
+        GenLoad(ap3,ap2,ssize,size);
 /*                
 				if (ap1->isUnsigned) {
 					switch(size) {

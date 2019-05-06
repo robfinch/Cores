@@ -163,6 +163,7 @@ Statement *Statement::ParseDo()
 	iflevel++;
 	looplevel++;
 	snp->s1 = Statement::Parse();
+	snp->lptr2 = my_strdup(inpline);
 	// Empty statements return NULL
 	if (snp->s1)
 		snp->s1->outer = snp;
@@ -1080,6 +1081,18 @@ void Statement::GenMixedSource()
 	}
 }
 
+void Statement::GenMixedSource2()
+{
+	if (mixedSource) {
+		rtrim(lptr2);
+		if (strcmp(lptr2, last_rem) != 0) {
+			GenerateMonadic(op_rem, 0, make_string(lptr2));
+			strncpy_s(last_rem, 131, lptr2, 130);
+			last_rem[131] = '\0';
+		}
+	}
+}
+
 // For loops the loop inversion optimization is applied.
 // Basically:
 // while(x) {
@@ -1433,6 +1446,7 @@ void Statement::GenerateDoWhile()
 	s1->Generate();
 	looplevel--;
 	initstack();
+	GenMixedSource2();
 	cg.GenerateTrueJump(exp, contlab, 3);
 	GenerateLabel(breaklab);
 	currentFn->pl.OptLoopInvariants(loophead);
@@ -1455,6 +1469,7 @@ void Statement::GenerateDoUntil()
 	s1->Generate();
 	looplevel--;
 	initstack();
+	GenMixedSource2();
 	cg.GenerateFalseJump(exp, contlab, 3);
 	GenerateLabel(breaklab);
 	currentFn->pl.OptLoopInvariants(loophead);
@@ -1476,6 +1491,7 @@ void Statement::GenerateDoLoop()
 	looplevel++;
 	s1->Generate();
 	looplevel--;
+	GenMixedSource2();
 	GenerateMonadic(op_bra, 0, make_clabel(contlab));
 	GenerateLabel(breaklab);
 	currentFn->pl.OptLoopInvariants(loophead);

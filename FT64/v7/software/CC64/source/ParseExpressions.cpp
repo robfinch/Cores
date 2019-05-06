@@ -3185,7 +3185,7 @@ ascomm2:
 					//}
 					//else
 					{
-						tp1 = forcefit(&ep2, tp2, &ep1, tp1, false, true);
+						tp1 = forcefit(&ep2, tp2, &ep1, tp1, false, false);
 						ep1 = makenode(op, ep1, ep2);
 						ep1->esize = tp1->size;
 						ep1->etype = tp1->type;

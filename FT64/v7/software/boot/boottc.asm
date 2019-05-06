@@ -344,17 +344,17 @@ ifdef SUPPORT_DCI
 endif
 +}
 start4:
-		ldi		r1,#$0040FFFF000F0000		; set zorder $40
+		ldi		r1,#$0040FFFF000F0000		; set zorder $40, white text, blue background
 		sw		r1,_DBGAttr
 		call	_DBGClearScreen
 start2b:
 		ldi		$r1,#$2B
 		sb		$r1,LEDS
 		call	_DBGHomeCursor
+;		call	_ROMChecksum
 		ldi		$r1,#MsgBoot
 		push	$r1
 		call	_DBGDisplayAsciiStringCRLF
-		call	_ROMChecksum
 		ldi		$r1,#7
 		sb		$r1,LEDS
 
@@ -376,7 +376,7 @@ start2b:
 ;		call	_init_memory_management
 		ldi		r1,#$10				; set operating level 01 (bits 4,5)
 ;		csrrs	r0,#$044,r1
-;		call	_SetSpritePalette
+		call	_SetSpritePalette
 		call  _SetSpriteImage
 		ldi		$a0,#-1				; enable all sprites
 		call	_EnableSprites
@@ -486,26 +486,45 @@ endif
 ;----------------------------------------------------------------------------
 ;----------------------------------------------------------------------------
 _ROMChecksum:
-		lh		$r1,ROMBASE+196600
+		push	$lr
 		ldi		$r2,#ROMBASE
-		ldi		$r4,#0
+		lh		$r1,196604[$r2]
+		ldi		$r4,#0					; r4 = checksum total
+		bra		.0004
 .0001:
-		lw		$r3,[$r2+$r1]
+		sub		$r1,$r1,#1
+		and		$r5,$r1,#$ff
+		bne		$r5,$r0,.0003
+		push	$r1							; push temps
+		push	$r2
+		push	$r4
+		push	#'*'
+		call	_DBGDisplayChar
+		lw		$r4,[$sp]
+		lw		$r2,8[$sp]
+		lw		$r1,16[$sp]
+		add		$sp,$sp,#24
+.0003:
+		lb		$r3,[$r2+$r1]
 		add		$r4,$r4,$r3
-		sub		$r1,$r1,#8
-		bge		$r1,$r0,.0001
-		lh		$r1,ROMBASE+196604
+.0004:
+		bgt		$r1,$r0,.0001
+		lh		$r1,196600[$r2]
 		beq		$r1,$r4,.0002
+		push	$r4
 		push	#msgBadChecksum
 		call	_DBGDisplayAsciiStringCRLF
+		lw		$r1,[$sp]
+		add		$sp,$sp,#8
 .0002:
 		push	#' '
-		push	#1
+		push	#0
 		push	#8
 		push	$r1
 		call	_puthexnum
 		call	_DBGCRLF
-		ret
+		lw		$lr,[$sp]
+		ret		#8
 
 ;------------------------------------------------------------------------------
 ;------------------------------------------------------------------------------

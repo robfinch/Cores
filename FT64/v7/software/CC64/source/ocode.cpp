@@ -47,7 +47,8 @@ bool OCODE::HasSourceReg(int regno) const
 {
 	if (insn == nullptr)
 		return (false);
-	if (oper1 && !insn->HasTarget()) {
+	// Push has an implied target, so oper1 is actually a source.
+	if (oper1 && !insn->HasTarget() || opcode==op_push) {
 		if (oper1->preg==regno)
 			return (true);
 		if (oper1->sreg==regno)
@@ -973,11 +974,52 @@ void OCODE::OptLabel()
 
 // Search ahead for additional LDI instructions loading the same constant
 // and remove them.
+// Remove sign / zero extension when not needed.
 
 void OCODE::OptLdi()
 {
 	OCODE *ip;
 
+	if (fwd) {
+		if (oper2->offset->constflag) {
+			if (fwd->opcode == op_sxh) {
+				if (oper2->offset->i >= -2147483648L && oper2->offset->i <= 2147483647L) {
+					fwd->MarkRemove();
+					optimized++;
+				}
+			}
+			if (fwd->opcode == op_sxc) {
+				if (oper2->offset->i >= -32768 && oper2->offset->i <= 32767) {
+					fwd->MarkRemove();
+					optimized++;
+				}
+			}
+			if (fwd->opcode == op_sxb) {
+				if (oper2->offset->i >= -128 && oper2->offset->i <= 127) {
+					fwd->MarkRemove();
+					optimized++;
+				}
+			}
+			if (fwd->opcode == op_zxh) {
+				if (oper2->offset->i >= 0 && oper2->offset->i <= 4294967295L) {
+					fwd->MarkRemove();
+					optimized++;
+				}
+			}
+			if (fwd->opcode == op_zxc) {
+				if (oper2->offset->i >= 0 && oper2->offset->i <= 65535) {
+					fwd->MarkRemove();
+					optimized++;
+				}
+			}
+			if (fwd->opcode == op_zxb) {
+				if (oper2->offset->i >= 0 && oper2->offset->i <= 255) {
+					fwd->MarkRemove();
+					optimized++;
+				}
+			}
+		}
+	}
 	for (ip = fwd; ip; ip = ip->fwd) {
 		if (ip->HasTargetReg()) {
 			if (ip->oper1->preg == oper1->preg) {

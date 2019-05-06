@@ -2425,7 +2425,7 @@ int main(int argc, char *argv[])
 				checksum = 0;
 				for (n = 0; n < binndx; n++)
 					checksum += binfile[n];
-				printf("Checksum: %d", checksum);
+				printf("Checksum: %08X\r\n", checksum);
 				binlen = binndx;
 		}
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -2504,6 +2504,7 @@ int main(int argc, char *argv[])
 							binfile[kk+7], binfile[kk+6], binfile[kk+5], binfile[kk+4], 
 							binfile[kk+3], binfile[kk+2], binfile[kk+1], binfile[kk]);
 					}
+					fprintf(vfp, "\trommem[12286] = 128'h00000000000000000000000000000000;\n");
 					fprintf(vfp, "\trommem[12287] = 128'h0000000000000000%08X0%08X;\n", binlen, checksum);
 				}
 				else if (vebits==64) {
@@ -2513,6 +2514,9 @@ int main(int argc, char *argv[])
 							binfile[kk+7], binfile[kk+6], binfile[kk+5], binfile[kk+4], 
 							binfile[kk+3], binfile[kk+2], binfile[kk+1], binfile[kk]);
 					}
+					fprintf(vfp, "\trommem[24572] = 64'h0000000000000000;\n");
+					fprintf(vfp, "\trommem[24573] = 64'h0000000000000000;\n");
+					fprintf(vfp, "\trommem[24574] = 64'h0000000000000000;\n");
 					fprintf(vfp, "\trommem[24575] = 64'h%08X%08X;\n", binlen, checksum);
 				}
 				else if (vebits == 32) {
@@ -2521,6 +2525,12 @@ int main(int argc, char *argv[])
 							((((unsigned int)start_address + kk) / 4) % 32768), //checksum64((int64_t *)&binfile[kk]),
 							binfile[kk + 3], binfile[kk + 2], binfile[kk + 1], binfile[kk]);
 					}
+					fprintf(vfp, "\trommem[49144] = 32'h00000000;\n");
+					fprintf(vfp, "\trommem[49145] = 32'h00000000;\n");
+					fprintf(vfp, "\trommem[49146] = 32'h00000000;\n");
+					fprintf(vfp, "\trommem[49147] = 32'h00000000;\n");
+					fprintf(vfp, "\trommem[49148] = 32'h00000000;\n");
+					fprintf(vfp, "\trommem[49149] = 32'h00000000;\n");
 					fprintf(vfp, "\trommem[49150] = 32'h%08X;\n", binlen);
 					fprintf(vfp, "\trommem[49151] = 32'h%08X;\n", checksum);
 				}
