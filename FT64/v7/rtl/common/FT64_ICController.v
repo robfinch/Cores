@@ -27,7 +27,8 @@
 `define LOW		1'b0;
 
 module FT64_ICController(clk_i, asid, pc0, pc1, pc2, hit0, hit1, hit2, bstate, state,
-	thread_en, ihitL2, selL2, L2_ld, L2_cnt, L2_adr, L2_xsel, L2_dato, L2_nxt,
+	invline, invlineAddr,
+	thread_en, ihitL2, selL2, L2_ld, L2_cnt, L2_adr, L2_dato, L2_nxt,
 	L1_selpc, L1_adr, L1_dat, L1_wr0, L1_wr1, L1_wr2, L1_en, L1_invline, icnxt, icwhich,
 	icl_o, cti_o, bte_o, bok_i, cyc_o, stb_o, ack_i, err_i, tlbmiss_i, exv_i, sel_o, adr_o, dat_i);
 parameter ABW = 64;
@@ -42,14 +43,16 @@ input hit0;
 input hit1;
 input hit2;
 input [4:0] bstate;
+(* mark_debug="true" *)
 output reg [3:0] state = IDLE;
+input invline;
+input [71:0] invlineAddr;
 input thread_en;
 input ihitL2;
 output reg selL2 = 1'b0;
-output L2_ld;
+output reg L2_ld;
 output [2:0] L2_cnt;
 output reg [71:0] L2_adr = RSTPC;
-output reg L2_xsel = 1'b0;
 input [305:0] L2_dato;
 output reg L2_nxt;
 output L1_selpc;
@@ -81,12 +84,14 @@ parameter FALSE = 1'b0;
 
 reg [3:0] picstate;
 `include ".\FT64_busStates.vh"
+reg invline_r = 1'b0;
+reg [71:0] invlineAddr_r = 72'd0;
 
 wire [AMSB:0] pc0plus6 = pc0 + 8'd7;
 wire [AMSB:0] pc0plus12 = pc0 + 8'd14;
 
-assign L2_ld = (state==IC_Ack) && (ack_i|err_i|tlbmiss_i|exv_i);
-assign L1_selpc = state==IDLE||state==IC_Next;
+//assign L2_ld = (state==IC_Ack) && (ack_i|err_i|tlbmiss_i|exv_i);
+assign L1_selpc = (state==IDLE||state==IC_Next) && !invline_r;
 
 wire clk = clk_i;
 reg [2:0] iccnt;
@@ -103,6 +108,11 @@ L1_en <= 10'h000;
 L1_invline <= FALSE;
 icnxt <= FALSE;
 L2_nxt <= FALSE;
+if (invline) begin
+	invline_r <= 1'b1;
+	invlineAddr_r <= invlineAddr;
+end
+
 // Instruction cache state machine.
 // On a miss first see if the instruction is in the L2 cache. No need to go to
 // the BIU on an L1 miss.
@@ -115,9 +125,14 @@ case(state)
 IDLE:
 	begin
 		iccnt <= 3'd0;
+		if (invline_r) begin
+			L1_adr <= {invlineAddr_r[71:5],5'b0};
+			L1_invline <= TRUE;
+			invline_r <= 1'b0;
+		end
 		// If the bus unit is busy doing an update involving L1_adr or L2_adr
 		// we have to wait.
-		begin
+		else begin
 			if (!hit0) begin
 				L1_adr <= {asid,pc0[AMSB:5],5'h0};
 				L1_invline <= TRUE;
@@ -198,6 +213,7 @@ IC_Next:
 	end
 IC_Access:
 	begin
+		iccnt <= 3'd0;
 		icl_o <= `HIGH;
 		cti_o <= 3'b001;
 		bte_o <= 2'b00;
@@ -207,12 +223,13 @@ IC_Access:
 		adr_o <= {L1_adr[AMSB:5],5'b0};
 		L2_adr <= L1_adr;
 		L2_adr[4:0] <= 5'd0;
-		L2_xsel <= 1'b0;
 		selL2 <= TRUE;
+		L2_ld <= TRUE;
 		state <= IC_Ack;
 	end
 IC_Ack:
   if (ack_i|err_i|tlbmiss_i|exv_i) begin
+  	L2_ld <= TRUE;
   	if (!bok_i) begin
   		stb_o <= `LOW;
 			adr_o[AMSB:3] <= adr_o[AMSB:3] + 2'd1;
@@ -245,13 +262,8 @@ IC_Ack:
     iccnt <= iccnt + 3'd1;
     if (iccnt==3'd3)
       cti_o <= 3'b111;
-    if (iccnt==3'd4)
+    if (iccnt>=3'd4)
     	nack();
-    else begin
-      L2_adr[4:3] <= L2_adr[4:3] + 2'd1;
-      if (L2_adr[4:3]==2'b11)
-      	L2_xsel <= 1'b1;
-    end
   end
 IC_Nack2:
 	if (~ack_i) begin
@@ -260,6 +272,8 @@ IC_Nack2:
 	end
 IC_Nack:
  	begin
+    iccnt <= iccnt + 3'd1;
+		L2_ld <= FALSE;
 		selL2 <= FALSE;
 		if (~ack_i) begin
 			//icl_ctr <= icl_ctr + 40'd1;

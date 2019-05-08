@@ -2,7 +2,7 @@
 `include "FT64_config.vh"
 //=============================================================================
 //        __
-//   \\__/ o\    (C) 2011-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2011-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -27,12 +27,13 @@
 // TLB
 // The TLB contains 256 entries, that are 16 way set associative.
 // The TLB is shared between the instruction and data streams.
+// The code is carefully constructed to not require reset signals.
 //
 //=============================================================================
 //
 `define TLBMissPage		{DBW-13{1'b1}}
 
-module FT64_TLB(rst, clk, ld, done, idle, ol,
+module FT64_TLB(clk, ld, done, idle, ol,
 	ASID, op, regno, dati, dato,
 	uncached,
 	icl_i, cyc_i, we_i, vadr_i, cyc_o, we_o, padr_o,
@@ -50,14 +51,13 @@ parameter INC2 = 4'd3;
 parameter INC3 = 4'd4;
 parameter AGE1 = 4'd5;
 parameter AGE2 = 4'd6;
-input rst;
 input clk;
 input ld;
 output done;
 output idle;
 input [1:0] ol;					// operating level
 input [ABW-1:0] vadr_i;
-output reg [ABW-1:0] padr_o;
+output reg [ABW-1:0] padr_o = 64'hFFFFFFFFFFFC0100;
 output uncached;
 
 input icl_i;
@@ -78,7 +78,7 @@ output [DBW-1:0] HTLBVirtPageo;
 
 integer n;
 
-reg [3:0] state;
+reg [1:0] state = IDLE;
 assign done = state==(IDLE && !ld) || state==TWO;
 assign idle = state==IDLE && !ld;
 
@@ -97,11 +97,11 @@ reg [2:0] HTLBPageSize;
 reg HTLBValid;
 reg [ABW-1:0] miss_addr;
 
-reg TLBenabled;
-reg [7:0] i;
+reg TLBenabled = 1'b0;
+reg [7:0] i = 8'h00;
 reg [DBW-1:0] Index;
-reg [3:0] Random;
-reg [3:0] Wired;
+reg [3:0] Random = 4'hF;
+reg [3:0] Wired = 4'd0;
 reg [2:0] PageSize;
 reg [15:0] Match;
 
@@ -120,22 +120,22 @@ reg [2:0] TLBPageSize [255:0];
 reg [ENTRIES-1:0] TLBValid;
 reg [DBW-1:0] imiss_addr;
 reg [DBW-1:0] dmiss_addr;
-reg [DBW-1:0] PageTblAddr;
-reg [DBW-1:0] PageTblCtrl;
+reg [DBW-1:0] PageTblAddr = {DBW{1'b0}};
+reg [DBW-1:0] PageTblCtrl = {DBW{1'b0}};
 
-reg [23:0] age_lmt;
-reg [23:0] age_ctr;
+reg [23:0] age_lmt = 24'd20000;
+reg [23:0] age_ctr = 24'd0;
 wire age_tick = age_ctr < 24'd5;
-reg cyc_en, age_en;
-reg [3:0] ar_state;
-reg ar_wr;
-reg [7:0] age_adr, ar_adr;
+reg cyc_en = 1'b1, age_en = 1'b1;
+reg [3:0] ar_state = IDLE;
+reg ar_wr = 1'b0;
+reg [7:0] age_adr = 8'h00, ar_adr = 8'h00;
 reg [32:0] count;
 reg [31:0] ar_dati;
 wire [31:0] ar_dato;
 reg [31:0] ar_cdato;
 reg getset_age;
-reg doLoad;
+reg doLoad = 1'b0;
 
 /*
 initial begin
@@ -225,11 +225,9 @@ TLBRam #(1) uX
 );
 
 always @(posedge clk)
-if (rst) begin
-	age_ctr <= 24'd0;
-end
-else begin
-	if (age_ctr==24'd0)
+begin
+	// age_ctr > age_lmt when counter hits -1, saves comparing to zero as well
+	if (age_ctr > age_lmt)
 		age_ctr <= age_lmt;
 	else
 		age_ctr <= age_ctr - 4'd1;
@@ -237,10 +235,7 @@ end
 
 // Handle Random register
 always @(posedge clk)
-if (rst) begin
-	Random <= 4'hF;
-end
-else begin
+begin
 	if (Random==Wired)
     Random <= 4'hF;
   else
@@ -254,10 +249,7 @@ else begin
 end
 
 always @(posedge clk)
-if (rst) begin
-	state <= IDLE;
-end
-else begin
+begin
 case(state)
 IDLE:
 	if (ld)
@@ -278,29 +270,17 @@ end
 
 // Set index to page table
 always @(posedge clk)
-if (rst) begin
-  i <= 8'd0;
-end
-else begin
-	if (state==ONE) begin
-    case(op)
-    `TLB_RD,`TLB_WI:
-      i <= {Index[7:4],(HTLBVirtPage >> {HTLBPageSize,1'b0}) & 4'hF};
-    `TLB_WR:
-      i <= {Random,(HTLBVirtPage >> {HTLBPageSize,1'b0}) & 4'hF};
-    endcase
-  end
+if (state==ONE) begin
+  case(op)
+  `TLB_RD,`TLB_WI:
+    i <= {Index[7:4],(HTLBVirtPage >> {HTLBPageSize,1'b0}) & 4'hF};
+  `TLB_WR:
+    i <= {Random,(HTLBVirtPage >> {HTLBPageSize,1'b0}) & 4'hF};
+  endcase
 end
 
 always @(posedge clk)
-if (rst) begin
-	TLBenabled <= 1'b0;
-	Wired <= 4'd0;
-	PageTblAddr <= {DBW{1'b0}};
-	PageTblCtrl <= {DBW{1'b0}};
-	age_lmt <= 24'd20000;
-end
-else begin
+begin
 	if (miss_addr == {DBW{1'b0}} && TLBMiss)
 		miss_addr <= vadr_i;
 
@@ -427,16 +407,7 @@ always @(posedge clk)
 TLBAgeRam uar1(clk,ar_wr,ar_adr,ar_dati,ar_dato);
 
 always @(posedge clk)
-if (rst) begin
-	age_adr <= 4'd0;
-	ar_wr <= 1'b0;
-	ar_adr <= 4'd0;
-	ar_state <= IDLE;
-	cyc_en <= 1'b1;
-	age_en <= 1'b1;
-	doLoad <= 1'b0;
-end
-else begin
+begin
 ar_wr <= 1'b0;
 getset_age <= 1'b0;
 if (ld)
@@ -518,28 +489,25 @@ end
 
 assign uncached = TLBC[{q[3:0],vadrs[3:0]}]==3'd1;// || unmappedDataArea;
 
-assign TLBMiss = TLBenabled & (!unmappedArea & (q[4] | ~TLBValid[{q[3:0],vadrs[3:0]}]) ||
+assign TLBMiss = (ol!=2'b00) && TLBenabled && (!unmappedArea & (q[4] | ~TLBValid[{q[3:0],vadrs[3:0]}]) ||
 					(ol!=2'b00 && hitIOPage));
 
 always @(posedge clk)
-	cyc_o <= cyc_i & (~TLBMiss | ~TLBenabled);
+	cyc_o <= cyc_i && (!TLBMiss || !TLBenabled || (ol == 2'b00));
 
 always @(posedge clk)
-	we_o <= we_i & ((~TLBMiss & tlbWo1) | ~TLBenabled);
+	we_o <= we_i & ((~TLBMiss & tlbWo1) | ~TLBenabled || (ol==2'b00));
 
 always @(posedge clk)
-	wrv_o <= we_i & ~TLBMiss & ~tlbWo1 & TLBenabled;
+	wrv_o <= we_i & ~TLBMiss & ~tlbWo1 & TLBenabled && (ol != 2'b00);
 
 always @(posedge clk)
-	rdv_o <= ~we_i & ~TLBMiss & ~tlbRo1 & TLBenabled;
+	rdv_o <= ~we_i & ~TLBMiss & ~tlbRo1 & TLBenabled && (ol != 2'b00);
 
 always @(posedge clk)
-	exv_o <= icl_i & ~TLBMiss & ~tlbXo1 & TLBenabled;
+	exv_o <= icl_i & ~TLBMiss & ~tlbXo1 & TLBenabled && (ol != 2'b00);
 
 always @(posedge clk)
-if (rst)
-	padr_o <= 32'hFFFC0100;
-else begin
 if (TLBenabled && ol != 2'b00) begin
 	case(PageSize)
 	3'd0:	padr_o[ABW-1:13] <=  unmappedArea ? vadr_i[ABW-1:13] : TLBMiss ? `TLBMissPage: PFN;
@@ -554,7 +522,6 @@ if (TLBenabled && ol != 2'b00) begin
 end
 else
 	padr_o <= vadr_i;
-end
 
 endmodule
 

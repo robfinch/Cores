@@ -25,10 +25,9 @@
 `include "FT64_defines.vh"
 `include "FT64_config.vh"
 
-module FT64_alu(rst, clk, ld, abort, instr, sz, tlb, store, a, b, c, t, pc, Ra, tgt, tgt2, ven, vm,
+module FT64_alu(rst, clk, ld, abort, instr, sz, store, a, b, c, t, pc, Ra, tgt, tgt2, ven, vm,
     csr, o, ob, done, idle, excen, exc, thrd, ptrmask, state, mem, shift,
-    ol, dl, ASID, icl_i, cyc_i, we_i, vadr_i, cyc_o, we_o, padr_o, uncached, tlb_miss,
-    exv_o, rdv_o, wrv_o
+    ol, dl
 `ifdef SUPPORT_BBMS 
     , pb, cbl, cbu, ro, dbl, dbu, sbl, sbu, en
 `endif
@@ -47,7 +46,6 @@ input ld;
 input abort;
 input [47:0] instr;
 input [2:0] sz;
-input tlb;
 input store;
 input [63:0] a;
 input [63:0] b;
@@ -73,19 +71,6 @@ input mem;
 input shift;
 input [1:0] ol;
 input [1:0] dl;
-input [7:0] ASID;
-input icl_i;
-input cyc_i;
-input we_i;
-input [ABW-1:0] vadr_i;
-output cyc_o;
-output we_o;
-output [ABW-1:0] padr_o;
-output uncached;
-output tlb_miss;
-output wrv_o;
-output rdv_o;
-output exv_o;
 `ifdef SUPPORT_BBMS
 input [63:0] pb;
 input [63:0] cbl;
@@ -281,48 +266,6 @@ case (instr[41:36])
 6'h21:	shift10 <= !shift9;		// NOT
 default:	shift10 <= shift9;
 endcase
-
-wire tlb_done, tlb_idle;
-wire [DBW-1:0] tlbo;
-
-`ifdef SUPPORT_TLB
-FT64_TLB utlb1 (
-	.rst(rst),
-	.clk(clk),
-	.ld(ld & tlb),
-	.done(tlb_done),
-	.idle(tlb_idle),
-	.ol(ol),
-	.ASID(ASID),
-	.op(instr[25:22]),
-	.regno(instr[21:18]),
-	.dati(a),
-	.dato(tlbo),
-	.uncached(uncached),
-	.icl_i(icl_i),
-	.cyc_i(cyc_i),
-	.we_i(we_i),
-	.vadr_i(vadr_i),
-	.cyc_o(cyc_o),
-	.we_o(we_o),
-	.padr_o(padr_o),
-	.TLBMiss(tlb_miss),
-	.wrv_o(wrv_o),
-	.rdv_o(rdv_o),
-	.exv_o(exv_o),
-	.HTLBVirtPageo()
-);
-`else
-assign tlbo = 64'hDEADDEADDEADDEAD;
-assign uncached = 1'b0;
-assign padr_o = vadr_i;
-assign cyc_o = cyc_i;
-assign we_o = we_i;
-assign tlb_miss = 1'b0;
-assign wrv_o = 1'b0;
-assign rdv_o = 1'b0;
-assign exv_o = 1'b0;
-`endif
 
 FT64_bitfield #(DBW) ubf1
 (
@@ -1277,7 +1220,6 @@ case(instr[`INSTRUCTION_OP])
 	    			`RTSNE:	o = as!=bs;
 	    			endcase
 	    */
-	    `TLB:		o = BIG ? tlbo : 64'hDEADDEADDEADDEAD;
 	    default:    o[63:0] = 64'hDEADDEADDEADDEAD;
 	    endcase
 `MEMNDX:
@@ -1411,25 +1353,25 @@ case(instr[`INSTRUCTION_OP])
 				end
 			endcase
 `PUSHC:
-			begin
-				usa = a - 4'd8;
-				o = {pb[50:0],BASE_SHIFT} + usa;
-			end
+	begin
+		usa = a - 4'd8;
+		o = {pb[50:0],BASE_SHIFT} + usa;
+	end
 `LWR,`SWC,`CAS,`CACHE:
-			begin
-				usa = a + b;
-				o = {pb[50:0],BASE_SHIFT} + usa;
-			end
+	begin
+		usa = a + b;
+		o = {pb[50:0],BASE_SHIFT} + usa;
+	end
 `LV,`SV:  
-			begin
-				usa = a + b + {ven,3'b0};
-				o = {pb[50:0],BASE_SHIFT} + usa;
-			end
+	begin
+		usa = a + b + {ven,3'b0};
+		o = {pb[50:0],BASE_SHIFT} + usa;
+	end
 `CSRRW:     
-			case(instr[27:18])
-			10'h044:	o = BIG ? (csr | {39'd0,thrd,24'h0}) : 64'hDDDDDDDDDDDDDDDD;
-			default:	o = BIG ? csr : 64'hDDDDDDDDDDDDDDDD;
-			endcase
+	case(instr[27:18])
+	10'h044:	o = BIG ? (csr | {39'd0,thrd,24'h0}) : 64'hDDDDDDDDDDDDDDDD;
+	default:	o = BIG ? csr : 64'hDDDDDDDDDDDDDDDD;
+	endcase
 `BITFIELD:  o = BIG ? bfout : 64'hCCCCCCCCCCCCCCCC;
 default:    o = 64'hDEADDEADDEADDEAD;
 endcase  
@@ -1523,8 +1465,6 @@ else begin
 		done <= sao_done;
 	else if (shift)
 		done <= adrDone;
-	else if (tlb & BIG)
-		done <= tlb_done;
 	else
 		done <= TRUE;
 end
@@ -1548,8 +1488,6 @@ else begin
 		idle <= sao_idle;
 	else if (shift)
 		idle <= adrIdle;
-	else if (tlb & BIG)
-		idle <= tlb_idle;
 	else
 		idle <= TRUE;
 end

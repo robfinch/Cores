@@ -353,7 +353,7 @@
 `define CSR_CAS     10'h02C
 `define CSR_TVEC    10'b00000110???
 `define CSR_IM_STACK	10'h040
-`define CSR_OL_STACK	10'h041
+`define CSR_ODL_STACK	10'h041
 `define CSR_PL_STACK	10'h042
 `define CSR_RS_STACK	10'h043
 `define CSR_STATUS 	10'h044

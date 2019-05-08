@@ -541,7 +541,7 @@ endmodule
 // address bit 4).
 // -----------------------------------------------------------------------------
 
-module FT64_L2_icache(rst, clk, nxt, wr, wr_ack, rd_ack, xsel, adr, cnt, exv_i, i, err_i, o, hit, invall, invline);
+module FT64_L2_icache(rst, clk, nxt, wr, adr, cnt, exv_i, i, err_i, o, hit, invall, invline);
 parameter CAMTAGS = 1'b0;   // 32 way
 parameter FOURWAY = 1'b1;
 parameter AMSB = 63;
@@ -549,9 +549,6 @@ input rst;
 input clk;
 input nxt;
 input wr;
-output wr_ack;
-output rd_ack;
-input xsel;
 input [AMSB+8:0] adr;
 input [2:0] cnt;
 input exv_i;
@@ -578,7 +575,7 @@ always @(posedge clk)
 always @(posedge clk)
 	wr2 <= wr1;
 always @(posedge clk)
-	sel1 <= {xsel,adr[4:3]};
+	sel1 <= cnt;
 always @(posedge clk)
 	sel2 <= sel1;
 always @(posedge clk)
@@ -588,26 +585,13 @@ always @(posedge clk)
 always @(posedge clk)
 	f2 <= f1;
 	
-reg [3:0] rdackx;
-always @(posedge clk)
-if (rst)
-	rdackx <= 4'b0;
-else begin
-	if (last_adr != adr || wr || wr1 || wr2)
-		rdackx <= 4'b0;
-	else
-		rdackx <= {rdackx,~(wr|wr1|wr2)};
-end
-
-assign rd_ack = rdackx[3] & ~(last_adr!=adr || wr || wr1 || wr2);
-
 always @(posedge clk)
      i1 <= i;
 always @(posedge clk)
      i2 <= i1;
 
 wire pe_wr;
-edge_det u3 (.rst(rst), .clk(clk), .ce(1'b1), .i(wr && cnt==3'd4), .pe(pe_wr), .ne(), .ee() );
+edge_det u3 (.rst(rst), .clk(clk), .ce(1'b1), .i(wr && cnt==3'd0), .pe(pe_wr), .ne(), .ee() );
 
 FT64_L2_icache_mem u1
 (
@@ -660,7 +644,6 @@ end
 endgenerate
 
 assign hit = taghit & lv;
-assign wr_ack = wr2;
 
 endmodule
 

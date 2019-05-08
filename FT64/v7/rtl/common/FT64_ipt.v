@@ -156,6 +156,12 @@ always @(posedge clk)
 	sel_o <= sel_i;
 `ifdef BYPASS
 always @(posedge clk)
+	pt_wr <= 1'b0;
+always @(posedge clk)
+	pt_ad <= 16'h0;
+always @(posedge clk)
+	pt_dati <= 42'h0;
+always @(posedge clk)
 	cyc_o <= cyc_i;
 always @(posedge clk)
 	we_o <= we_i;
