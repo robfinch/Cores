@@ -56,6 +56,11 @@ void CSETable::Sort(int(*cmp)(const void *a, const void *b))
 // InsertNode will enter a reference to an expression node into the
 // common expression table. duse is a flag indicating whether or not
 // this reference will be dereferenced.
+// A given expression in only added once to the table. Other
+// instances of the same expression simply increment the usage
+// count of the expression in the table.
+// The first addition of an expression is flagged and the flag
+// returned. This was needed at one point.
 
 CSE *CSETable::InsertNode(ENODE *node, int duse, bool *first)
 {
@@ -97,6 +102,8 @@ CSE *CSETable::InsertNode(ENODE *node, int duse, bool *first)
 //
 // SearchCSEList will search the common expression table for an entry
 // that matches the node passed and return a pointer to it.
+// There should only ever be a single match because of the way nodes
+// are inserted into the table.
 //
 CSE *CSETable::Search(ENODE *node)
 {
@@ -110,6 +117,8 @@ CSE *CSETable::Search(ENODE *node)
 	}
 	return ((CSE *)nullptr);
 }
+
+// This method present for debugging.
 
 CSE *CSETable::SearchNext(ENODE *node)
 {
@@ -408,7 +417,7 @@ int CSETable::Optimize(Statement *block)
 		nn = AllocateRegisterVars();
 		if (pass == 2) {
 			block->repcse();          /* replace allocated expressions */
-			block->update();
+			block->update();					// available for debugging
 			dfs.printf("===== After Update =====");
 			block->Dump();
 		}

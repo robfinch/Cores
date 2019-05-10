@@ -508,7 +508,7 @@ static void opt0(ENODE **node)
 							return;
 						}
             val = ep->p[0]->i;
-            if( val == 0 ) {
+						if( val == 0 ) {
                 *node = ep->p[0];
                 return;
             }

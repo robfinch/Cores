@@ -2779,6 +2779,7 @@ static TYP *addops(ENODE **node)
   int oper;
 	int sz1, sz2;
 	bool isScalar = true;
+	bool onePtr = false;
 
   Enter("Addops");
   ep1 = (ENODE *)NULL;
@@ -2820,10 +2821,12 @@ static TYP *addops(ENODE **node)
 		}
 		else {
 			if( tp1->type == bt_pointer ) {
+				onePtr = true;
 				tp2 = forcefit(&ep2,tp2,0,&stdint,true,false);
-				ep3 = makeinode(en_icon,tp1->GetBtp()->size);
+				ep3 = makeinode(en_icon, tp1->GetBtp()->size);
 				ep3->constflag = TRUE;
-    		ep3->esize = tp2->size;
+				ep3->esize = sizeOfWord;
+    		//ep3->esize = tp2->size;
 				//if (ep2->nodetype == en_icon) {
 				//	ep2 = makeinode(en_icon, ep3->i * ep2->i);
 				//	ep2->constflag = TRUE;
@@ -2832,19 +2835,22 @@ static TYP *addops(ENODE **node)
 				{
 					ep2 = makenode(en_mulu, ep3, ep2);
 					ep2->constflag = ep2->p[1]->constflag;
-					ep2->esize = tp2->size;
+					ep2->esize = sizeOfWord;
 				}
 			}
       else if( tp2->type == bt_pointer ) {
+				onePtr = true;
         tp1 = forcefit(&ep1,tp1,0,&stdint,true,false);
-        ep3 = makeinode(en_icon,tp2->GetBtp()->size);
+				ep3 = makeinode(en_icon, sizeOfWord);// tp2->GetBtp()->size);
         ep3->constflag = TRUE;
 		    ep3->esize = tp2->size;
         ep1 = makenode(en_mulu,ep3,ep1);
         ep1->constflag = ep1->p[1]->constflag;
-				ep2->esize = tp2->size;
+				ep2->esize = sizeOfWord;
+				tp1 = tp2;
       }
-      tp1 = forcefit(&ep2,tp2,&ep1,tp1,true,false);
+			if (!onePtr)
+				tp1 = forcefit(&ep2,tp2,&ep1,tp1,true,false);
 			switch (tp1->type) {
 			case bt_triple:
     		ep1 = makenode( oper ? en_fadd : en_fsub,ep1,ep2);
@@ -3265,10 +3271,11 @@ ascomm3:
 				NextToken();
 				tp2 = asnop(&ep2);
 				if(tp1->type == bt_pointer) {
-					ep3 = makeinode(en_icon,tp1->GetBtp()->size);
+					ep3 = makeinode(en_icon, tp1->GetBtp()->size);
 					ep3->esize = sizeOfPtr;
-					ep2 = makenode(en_mul,ep2,ep3);
+					ep2 = makenode(en_mul, ep2, ep3);
 					ep2->esize = sizeOfPtr;
+					ep2->isUnsigned = true;
 				}
 				goto ascomm2;
 			case asminus:

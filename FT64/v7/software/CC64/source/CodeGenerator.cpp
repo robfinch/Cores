@@ -600,7 +600,7 @@ Operand *CodeGenerator::GenerateDereference(ENODE *node,int flags,int size, int 
     {
 			// This seems a bit of a kludge. If we are dereferencing and there's a
 			// pointer in the register, then we want the value at the pointer location.
-			if (ap1->isPtr) {
+			if (ap1->isPtr && !IsLValue(node)) {
 				int sz = node->GetReferenceSize();
 				if (node->nodetype == en_dbl_ref) {
 					int rg = ap1->preg;
@@ -1558,16 +1558,32 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int size)
 			ReleaseTempReg(ap2);
 			goto retpt;
   case en_ub_ref:
+		ap1 = GenerateDereference(node, flags, 1, 0);
+		ap1->isPtr = TRUE;
+		ap1->isUnsigned = TRUE;
+		goto retpt;
 	case en_uc_ref:
+		ap1 = GenerateDereference(node, flags, 2, 0);
+		ap1->isPtr = TRUE;
+		ap1->isUnsigned = TRUE;
+		goto retpt;
 	case en_uh_ref:
+		ap1 = GenerateDereference(node, flags, 4, 0);
+		ap1->isPtr = TRUE;
+		ap1->isUnsigned = TRUE;
+		goto retpt;
 	case en_uw_ref:
-		ap1 = GenerateDereference(node, flags, size, 0);
+		ap1 = GenerateDereference(node, flags, 8, 0);
 		ap1->isPtr = TRUE;
 		ap1->isUnsigned = TRUE;
 		goto retpt;
 	case en_hp_ref:
+		ap1 = GenerateDereference(node, flags, 4, 0);
+		ap1->isPtr = TRUE;
+		ap1->isUnsigned = TRUE;
+		goto retpt;
 	case en_wp_ref:
-		ap1 = GenerateDereference(node,flags,size,0);
+		ap1 = GenerateDereference(node,flags,8,0);
 		ap1->isPtr = TRUE;
 		ap1->isUnsigned = TRUE;
 		goto retpt;
@@ -1575,14 +1591,22 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int size)
 	case en_ref32:	return GenerateDereference(node,flags,size,1);
 	case en_ref32u:	return GenerateDereference(node,flags,size,0);
   case en_b_ref:
+		ap1 = GenerateDereference(node, flags, 1, 1);
+		ap1->isPtr = TRUE;
+		ap1->isUnsigned = TRUE;
+		goto retpt;
 	case en_c_ref:
-		ap1 = GenerateDereference(node, flags, size, 1);
+		ap1 = GenerateDereference(node, flags, 2, 1);
 		ap1->isPtr = TRUE;
 		ap1->isUnsigned = TRUE;
 		goto retpt;
 	case en_h_ref:
-  case en_w_ref:
-		ap1 = GenerateDereference(node, flags, size, 1);
+		ap1 = GenerateDereference(node, flags, 4, 1);
+		ap1->isPtr = TRUE;
+		ap1->isUnsigned = TRUE;
+		goto retpt;
+	case en_w_ref:
+		ap1 = GenerateDereference(node, flags, 8, 1);
 		ap1->isPtr = TRUE;
 		ap1->isUnsigned = TRUE;
 		goto retpt;
@@ -1883,21 +1907,21 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int size)
 
 	case en_sxb:
 		ap1 = GetTempRegister();
-		ap2 = GenerateExpression(node->p[0], F_REG, 8);
+		ap2 = GenerateExpression(node->p[0], F_REG, 1);
 		GenerateDiadic(op_sxb, 0, ap1, ap2);
 		ReleaseTempReg(ap2);
 		ap1->MakeLegal( flags, 8);
 		goto retpt;
 	case en_sxc:
 		ap1 = GetTempRegister();
-		ap2 = GenerateExpression(node->p[0], F_REG, 8);
+		ap2 = GenerateExpression(node->p[0], F_REG, 2);
 		GenerateDiadic(op_sxc, 0, ap1, ap2);
 		ReleaseTempReg(ap2);
 		ap1->MakeLegal(flags, 8);
 		goto retpt;
 	case en_sxh:
 		ap1 = GetTempRegister();
-		ap2 = GenerateExpression(node->p[0], F_REG, 8);
+		ap2 = GenerateExpression(node->p[0], F_REG, 4);
 		GenerateDiadic(op_sxh, 0, ap1, ap2);
 		ReleaseTempReg(ap2);
 		ap1->MakeLegal(flags, 8);
@@ -1905,42 +1929,42 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int size)
 	case en_cubw:
 	case en_cubu:
 	case en_cbu:
-			ap1 = GenerateExpression(node->p[0],F_REG,size);
+			ap1 = GenerateExpression(node->p[0],F_REG,1);
 			GenerateTriadic(op_and,0,ap1,ap1,make_immed(0xff));
 			goto retpt;
 	case en_cucw:
 	case en_cucu:
 	case en_ccu:
-			ap1 = GenerateExpression(node->p[0],F_REG,size);
+			ap1 = GenerateExpression(node->p[0],F_REG,2);
 			GenerateDiadic(op_zxc,0,ap1,ap1);
 			goto retpt;
 	case en_ccwp:
-		ap1 = GenerateExpression(node->p[0], F_REG, size);
+		ap1 = GenerateExpression(node->p[0], F_REG, 2);
 		ap1->isPtr = TRUE;
 		GenerateDiadic(op_sxc, 0, ap1, ap1);
 		goto retpt;
 	case en_cucwp:
-		ap1 = GenerateExpression(node->p[0], F_REG, size);
+		ap1 = GenerateExpression(node->p[0], F_REG, 2);
 		ap1->isPtr = TRUE;
 		GenerateDiadic(op_zxc, 0, ap1, ap1);
 		goto retpt;
 	case en_cuhw:
 	case en_cuhu:
 	case en_chu:
-			ap1 = GenerateExpression(node->p[0],F_REG,size);
+			ap1 = GenerateExpression(node->p[0],F_REG,4);
 			GenerateDiadic(op_zxh,0,ap1,ap1);
 			goto retpt;
 	case en_cbw:
-			ap1 = GenerateExpression(node->p[0],F_REG,size);
+			ap1 = GenerateExpression(node->p[0],F_REG,1);
 			//GenerateDiadic(op_sxb,0,ap1,ap1);
 			GenerateDiadic(op_sxb,0,ap1,ap1);
 			goto retpt;
 	case en_ccw:
-			ap1 = GenerateExpression(node->p[0],F_REG,size);
+			ap1 = GenerateExpression(node->p[0],F_REG,2);
 			GenerateDiadic(op_sxc,0,ap1,ap1);
 			goto retpt;
 	case en_chw:
-			ap1 = GenerateExpression(node->p[0],F_REG,size);
+			ap1 = GenerateExpression(node->p[0],F_REG,4);
 			GenerateDiadic(op_sxh,0,ap1,ap1);
 			goto retpt;
 	case en_list:

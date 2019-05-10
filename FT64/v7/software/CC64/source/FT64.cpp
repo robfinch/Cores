@@ -1021,6 +1021,7 @@ int FT64CodeGenerator::PushArguments(Function *sym, ENODE *plist)
 	int nn, maxnn;
 	bool isFloat;
 	bool sumFloat;
+	bool o_supportsPush;
 
 	sum = 0;
 	if (sym)
@@ -1051,6 +1052,7 @@ int FT64CodeGenerator::PushArguments(Function *sym, ENODE *plist)
 	else
 		ip->fwd->oper3 = make_immed(sum*sizeOfWord);
 	if (!sumFloat) {
+		o_supportsPush = cpu.SupportsPush;
 		cpu.SupportsPush = true;
 		currentFn->pl.tail = ip;
 		currentFn->pl.tail->fwd = nullptr;
@@ -1061,7 +1063,7 @@ int FT64CodeGenerator::PushArguments(Function *sym, ENODE *plist)
 					continue;
 			PushArgument(pl[nn], ta ? (i < ta->length ? ta->preg[i] : 0) : 0, sum * 8, &isFloat);
 		}
-		cpu.SupportsPush = false;
+		cpu.SupportsPush = o_supportsPush;
 	}
 	if (ta)
 		delete ta;
