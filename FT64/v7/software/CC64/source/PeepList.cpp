@@ -421,6 +421,7 @@ void PeepList::OptConstReg()
 	MachineReg *mr, *mr2;
 	Operand *top;
 	int n;
+	int count = 0;
 
 	for (n = 0; n < 32; n++) {
 		if (regs[n].assigned && !regs[n].modified && regs[n].isConst && regs[n].offset != nullptr)
@@ -443,14 +444,21 @@ void PeepList::OptConstReg()
 					}
 				}
 			}
-			ip->oper2->OptRegConst(ip->insn->regclass2);
-			ip->oper3->OptRegConst(ip->insn->regclass3);
-			ip->oper4->OptRegConst(ip->insn->regclass4);
+			count += ip->oper2->OptRegConst(ip->insn->regclass2, true);
+			count += ip->oper3->OptRegConst(ip->insn->regclass3, true);
+			count += ip->oper4->OptRegConst(ip->insn->regclass4, true);
 		}
 	}
 
-	// Remove all def's of registers containing a constant
-	if (1) {
+	if (count < 4) {
+		for (ip = head; ip; ip = ip->fwd) {
+			if (ip->insn) {
+				ip->oper2->OptRegConst(ip->insn->regclass2, false);
+				ip->oper3->OptRegConst(ip->insn->regclass3, false);
+				ip->oper4->OptRegConst(ip->insn->regclass4, false);
+			}
+		}
+		// Remove all def's of registers containing a constant
 		for (ip = head; ip; ip = ip->fwd) {
 			if (ip->insn) {
 				if (ip->oper1) {

@@ -274,7 +274,6 @@ int ENODE::GetNaturalSize()
 			return (siz1);
 		else
 			return (siz0);
-	case en_postfix_list:
 	case en_void:   case en_cond:	case en_safe_cond:
 		return (p[1]->GetNaturalSize());
 	case en_bchk:
@@ -539,12 +538,13 @@ void ENODE::repexpr()
 		if ((csp = currentFn->csetbl->Search(this)) != NULL) {
 			if (!csp->voidf) {
 				if (csp->reg > 0) {
-					new_nodetype = en_regvar;
+					nodetype = en_regvar;
 					rg = csp->reg;
 				}
 			}
 		}
 		break;
+	/*
 	case en_c_ref:
 	case en_uc_ref:
 	case en_w_ref:
@@ -580,6 +580,11 @@ void ENODE::repexpr()
 		p[0]->repexpr();
 		p[1]->repexpr();
 		break;
+	*/
+	case en_c_ref:
+	case en_uc_ref:
+	case en_w_ref:
+	case en_wp_ref:
 	case en_ref32: case en_ref32u:
 	case en_b_ref:
 	case en_h_ref:
@@ -598,7 +603,7 @@ void ENODE::repexpr()
 	case en_vector_ref:
 		if ((csp = currentFn->csetbl->Search(this)) != NULL) {
 			if (csp->reg > 0) {
-				new_nodetype = en_regvar;
+				nodetype = en_regvar;
 				rg = csp->reg;
 			}
 			else
@@ -729,6 +734,8 @@ void ENODE::repexpr()
 	default:
 		dfs.printf("Uncoded node in repexr():%d\r\n", nodetype);
 	}
+	if (pfl)
+		pfl->repexpr();
 }
 
 
@@ -751,30 +758,31 @@ CSE *ENODE::InsertAutocon(int duse)
 
 CSE *ENODE::OptInsertRef(int duse)
 {
-	CSE *csp;
+	CSE *csp, *cse;
 	bool first;
-	static int depth = 0;
+	ENODE *ep;
 
 	csp = nullptr;
-	//There is something wrong with the following code that causes
-	//it to remove zero extension conversion from a byte to a word.
-	if (p[0]->IsAutocon()) {
-		if (depth == 0) {
-			p[0]->InsertAutocon(duse);
-			return (csp);
-		}
+	// Search the chain of refs.
+	for (ep = p[0]; ep->IsRefType(); ep = ep->p[0])
+		;
+	ep = p[0];
+	if (ep->IsAutocon()) {
 		csp = currentFn->csetbl->InsertNode(this, duse, &first);
-		//if (csp->voidf)
-		//	p[0]->scanexpr(1);
 		// take care: the non-derereferenced use of the autocon node may
 		// already be in the list. In this case, set voidf to 1
 		if (currentFn->csetbl->Search(p[0]) != NULL) {
 			csp->voidf = 1;
 			p[0]->scanexpr(1);
+			if (pfl)
+				pfl->scanexpr(1);
 		}
 		else {
-			if (csp->voidf)
+			if (csp->voidf) {
 				p[0]->scanexpr(1);
+				if (pfl)
+					pfl->scanexpr(1);
+			}
 			if (first) {
 				///* look for register nodes */
 				//int i = 0;
@@ -812,12 +820,12 @@ CSE *ENODE::OptInsertRef(int duse)
 	}
 	else
 	{
-		//			csp = currentFn->csetbl->InsertNode(this, duse);
-		depth++;
+	//	//			csp = currentFn->csetbl->InsertNode(this, duse);
 		p[0]->scanexpr(1);
 		p[1]->scanexpr(1);
 		p[2]->scanexpr(1);
-		depth--;
+		if (pfl)
+			pfl->scanexpr(1);
 	}
 	return (csp);
 }
@@ -919,7 +927,8 @@ void ENODE::scanexpr(int duse)
 	case en_t2q:
 		p[0]->scanexpr(duse);
 		break;
-	case en_asadd:  case en_assub:
+	case en_asadd:  
+	case en_assub:
 	case en_add:    case en_sub:
 		p[0]->scanexpr(duse);
 		p[1]->scanexpr(duse);
@@ -987,6 +996,8 @@ void ENODE::scanexpr(int duse)
 		break;
 	default: dfs.printf("Uncoded node in ENODE::scanexpr():%d\r\n", nodetype);
 	}
+	if (pfl)
+		pfl->scanexpr(0);
 }
 
 void ENODE::update()
@@ -1001,6 +1012,8 @@ void ENODE::update()
 	p[0]->update();
 	p[1]->update();
 	p[2]->update();
+	if (pfl)
+		pfl->update();
 }
 
 // ============================================================================
@@ -1954,7 +1967,6 @@ int GetNaturalSize(ENODE *node)
 			return (siz1);
 		else
 			return (siz0);
-	case en_postfix_list:
 	case en_void:   case en_cond:	case en_safe_cond:
 		return (GetNaturalSize(node->p[1]));
 	case en_bchk:
@@ -2347,7 +2359,7 @@ void ENODE::Dump()
 	int nn;
 	static int level = 0;
 
-	return;
+	//return;
 	if (this == nullptr)
 		return;
 	for (nn = 0; nn < level * 2; nn++)

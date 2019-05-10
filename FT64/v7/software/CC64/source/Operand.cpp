@@ -331,19 +331,24 @@ void Operand::MakeLegal(int flags, int size)
 	//     Leave("MkLegalOperand",0);
 }
 
-void Operand::OptRegConst(int regclass)
+int Operand::OptRegConst(int regclass, bool tally)
 {
 	MachineReg *mr, *mr2;
+	int count = 0;
 
 	if (this == nullptr)
-		return;
+		return (0);
 
 	mr = &regs[preg];
 	if (regclass & am_imm) {
 		if (mode == am_reg) {
 			if (mr->sub) {
-				mode = am_imm;
-				offset = mr->offset;
+				if (tally)
+					count++;
+				else {
+					mode = am_imm;
+					offset = mr->offset;
+				}
 			}
 		}
 	}
@@ -352,14 +357,22 @@ void Operand::OptRegConst(int regclass)
 			mr->sub = false;
 		else if (mode == am_ind) {
 			if (mr->sub) {
-				mode = am_direct;
-				offset = mr->offset;
+				if (tally)
+					count++;
+				else {
+					mode = am_direct;
+					offset = mr->offset;
+				}
 			}
 		}
 		else if (mode == am_indx) {
 			if (mr->sub) {
-				mode = am_direct;
-				offset2 = mr->offset;
+				if (tally)
+					count++;
+				else {
+					mode = am_direct;
+					offset2 = mr->offset;
+				}
 			}
 		}
 		/*
@@ -383,6 +396,7 @@ void Operand::OptRegConst(int regclass)
 		}
 		*/
 	}
+	return (count);
 }
 
 void Operand::storeHex(txtoStream& ofs)
@@ -448,6 +462,10 @@ void Operand::store(txtoStream& ofs)
 		ofs.write("#");
 		// Fall through
 	case am_direct:
+		if (offset2) {
+			offset2->PutConstant(ofs, lowhigh, rshift);
+			ofs.printf("+");
+		}
 		offset->PutConstant(ofs, lowhigh, rshift);
 		break;
 	case am_direct2:

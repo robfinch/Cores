@@ -3182,7 +3182,8 @@ TYP *conditional(ENODE **node)
 			goto cexit;
 		}
 		if (postfixList) {
-			ep2 = makenode(en_void, ep2, postfixList);
+//			ep2 = makenode(en_void, ep2, postfixList);
+			ep2->pfl = postfixList;
 		}
 		postfixList = nullptr;
 		needpunc(colon,6);
@@ -3191,7 +3192,8 @@ TYP *conditional(ENODE **node)
 			goto cexit;
 		}
 		if (postfixList) {
-			ep3 = makenode(en_void, ep3, postfixList);
+			//ep3 = makenode(en_void, ep3, postfixList);
+			ep3->pfl = postfixList;
 		}
 		postfixList = o_pfl;
 		forcefit(&ep3,tp3,&ep2,tp2,true,false);
@@ -3358,7 +3360,7 @@ TYP *NonCommaExpression(ENODE **node)
         *node =(ENODE *)NULL;
     Leave("NonCommaExpression",tp ? tp->type : 0);
 		if (postfixList)
-			*node = makenode(en_void, *node, postfixList);
+			(*node)->pfl = postfixList;
 		postfixList = o_pfl;
 		if (*node)
      	(*node)->SetType(tp);

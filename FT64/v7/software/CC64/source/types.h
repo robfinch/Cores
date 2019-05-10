@@ -507,6 +507,7 @@ public:
 	void *ctor;
 	void *dtor;
 	ENODE *p[3];
+	ENODE *pfl;			// postfix list
 
 	ENODE *Clone();
 
@@ -607,7 +608,7 @@ public:
 	void GenZeroExtend(int isize, int osize);
 	Operand *GenSignExtend(int isize, int osize, int flags);
 	void MakeLegal(int flags, int size);
-	void OptRegConst(int);
+	int OptRegConst(int regclass, bool tally=false);
 
 	// Storage
 	void PutAddressMode(txtoStream& ofs);
