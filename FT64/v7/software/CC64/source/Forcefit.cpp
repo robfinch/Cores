@@ -228,7 +228,8 @@ TYP *forcefit(ENODE **srcnode, TYP *srctp, ENODE **dstnode, TYP *dsttp, bool pro
 j1:
 	switch (srctp->type) {
 	case bt_short:
-		*srcnode = makenode(en_ccw, *srcnode, nullptr);
+		if (!(*srcnode)->IsRefType())
+			*srcnode = makenode(en_chw, *srcnode, nullptr);
 		if (dsttp->IsFloatType()) {
 			*srcnode = makenode(en_i2d, *srcnode, *dstnode);
 			(*srcnode)->esize = 8;
@@ -236,7 +237,8 @@ j1:
 		}
 		return &stdlong;
 	case bt_ushort:
-		*srcnode = makenode(en_cucw, *srcnode, nullptr);
+		if (!(*srcnode)->IsRefType())
+			*srcnode = makenode(en_cuhw, *srcnode, nullptr);
 		if (dsttp->IsFloatType()) {
 			*srcnode = makenode(en_i2d, *srcnode, *dstnode);
 			(*srcnode)->esize = 8;
@@ -244,7 +246,8 @@ j1:
 		}
 		return &stdlong;
 	case bt_byte:
-		*srcnode = makenode(en_cbw, *srcnode, nullptr);
+		if (!(*srcnode)->IsRefType())
+			*srcnode = makenode(en_cbw, *srcnode, nullptr);
 		if (dsttp->IsFloatType()) {
 			*srcnode = makenode(en_i2d, *srcnode, *dstnode);
 			(*srcnode)->esize = 8;
@@ -252,7 +255,8 @@ j1:
 		}
 		return &stdlong;
 	case bt_ubyte:
-		*srcnode = makenode(en_cubw, *srcnode, nullptr);
+		if (!(*srcnode)->IsRefType())
+			*srcnode = makenode(en_cubw, *srcnode, nullptr);
 		if (dsttp->IsFloatType()) {
 			*srcnode = makenode(en_i2d, *srcnode, *dstnode);
 			(*srcnode)->esize = 8;
@@ -260,7 +264,8 @@ j1:
 		}
 		return &stdlong;
 	case bt_ichar:
-		*srcnode = makenode(en_ccw, *srcnode, nullptr);
+		if (!(*srcnode)->IsRefType())
+			*srcnode = makenode(en_ccw, *srcnode, nullptr);
 		if (dsttp->IsFloatType()) {
 			*srcnode = makenode(en_i2d, *srcnode, *dstnode);
 			(*srcnode)->esize = 8;
@@ -268,7 +273,8 @@ j1:
 		}
 		return &stdlong;
 	case bt_iuchar:
-		*srcnode = makenode(en_cucw, *srcnode, nullptr);
+		if (!(*srcnode)->IsRefType())
+			*srcnode = makenode(en_cucw, *srcnode, nullptr);
 		if (dsttp->IsFloatType()) {
 			*srcnode = makenode(en_i2d, *srcnode, *dstnode);
 			(*srcnode)->esize = 8;
@@ -276,7 +282,8 @@ j1:
 		}
 		return &stdlong;
 	case bt_char:
-		*srcnode = makenode(en_ccw, *srcnode, nullptr);
+		if (!(*srcnode)->IsRefType())
+			*srcnode = makenode(en_ccw, *srcnode, nullptr);
 		if (dsttp->IsFloatType()) {
 			*srcnode = makenode(en_i2d, *srcnode, *dstnode);
 			(*srcnode)->esize = 8;
@@ -284,7 +291,8 @@ j1:
 		}
 		return &stdlong;
 	case bt_uchar:
-		*srcnode = makenode(en_cucw, *srcnode, nullptr);
+		if (!(*srcnode)->IsRefType())
+			*srcnode = makenode(en_cucw, *srcnode, nullptr);
 		if (dsttp->IsFloatType()) {
 			*srcnode = makenode(en_i2d, *srcnode, *dstnode);
 			(*srcnode)->esize = 8;

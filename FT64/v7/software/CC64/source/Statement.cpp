@@ -1062,6 +1062,79 @@ void Statement::scan()
 	dfs.printf("</Statement__Scan>");
 }
 
+void Statement::update()
+{
+	Statement *block = this;
+
+	while (block != NULL) {
+		switch (block->stype) {
+		case st_compound:
+			block->prolog->update();
+			block->update_compound();
+			block->epilog->update();
+			break;
+		case st_return:
+		case st_throw:
+			block->exp->update();
+			break;
+		case st_check:
+			block->exp->update();
+			break;
+		case st_expr:
+			block->exp->update();
+			break;
+		case st_while:
+		case st_until:
+		case st_dowhile:
+		case st_dountil:
+			block->exp->update();
+		case st_do:
+		case st_doloop:
+		case st_forever:
+			block->s1->update();
+			block->s2->update();
+			break;
+		case st_for:
+			block->initExpr->update();
+			block->exp->update();
+			block->s1->update();
+			block->incrExpr->update();
+			break;
+		case st_if:
+			block->exp->update();
+			block->s1->update();
+			block->s2->update();
+			break;
+		case st_switch:
+			block->exp->update();
+			block->s1->update();
+			break;
+		case st_try:
+		case st_catch:
+		case st_case:
+		case st_default:
+		case st_firstcall:
+			block->s1->update();
+			break;
+		}
+		block = block->next;
+	}
+}
+
+void Statement::update_compound()
+{
+	SYM *sp;
+
+	sp = sp->GetPtr(ssyms.GetHead());
+	while (sp) {
+		if (sp->initexp) {
+			sp->initexp->update();
+		}
+		sp = sp->GetNextPtr();
+	}
+	s1->update();
+}
+
 
 //=============================================================================
 //=============================================================================
@@ -1236,7 +1309,8 @@ void Statement::GenerateFor()
 		initstack();
 		cg.GenerateTrueJump(exp, loop_label, 2);
 	}
-	currentFn->pl.OptLoopInvariants(loophead);
+	if (!opt_nocgo)
+		currentFn->pl.OptLoopInvariants(loophead);
 	breaklab = old_break;
 	contlab = old_cont;
 	GenerateLabel(exit_label);
@@ -2026,3 +2100,80 @@ void Statement::GenerateFirstcall()
 	}
 	contlab = lab1;
 }
+
+void Statement::Dump()
+{
+	Statement *block = this;
+
+	dfs.printf("Statement\n");
+	while (block != NULL) {
+		switch (block->stype) {
+		case st_compound:
+			block->prolog->Dump();
+			block->DumpCompound();
+			block->epilog->Dump();
+			break;
+		case st_return:
+		case st_throw:
+			block->exp->Dump();
+			break;
+		case st_check:
+			block->exp->Dump();
+			break;
+		case st_expr:
+			dfs.printf("st_expr\n");
+			block->exp->Dump();
+			break;
+		case st_while:
+		case st_until:
+		case st_dowhile:
+		case st_dountil:
+			block->exp->Dump();
+		case st_do:
+		case st_doloop:
+		case st_forever:
+			block->s1->Dump();
+			block->s2->Dump();
+			break;
+		case st_for:
+			block->initExpr->Dump();
+			block->exp->Dump();
+			block->s1->Dump();
+			block->incrExpr->Dump();
+			break;
+		case st_if:
+			block->exp->Dump();
+			block->s1->Dump();
+			block->s2->Dump();
+			break;
+		case st_switch:
+			block->exp->Dump();
+			block->s1->Dump();
+			break;
+		case st_try:
+		case st_catch:
+		case st_case:
+		case st_default:
+		case st_firstcall:
+			block->s1->Dump();
+			break;
+		}
+		block = block->next;
+	}
+}
+
+void Statement::DumpCompound()
+{
+	SYM *sp;
+
+	sp = sp->GetPtr(ssyms.GetHead());
+	while (sp) {
+		if (sp->initexp) {
+			sp->initexp->Dump();
+		}
+		sp = sp->GetNextPtr();
+	}
+	s1->Dump();
+}
+
+

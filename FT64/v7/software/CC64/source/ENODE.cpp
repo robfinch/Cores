@@ -274,6 +274,7 @@ int ENODE::GetNaturalSize()
 			return (siz1);
 		else
 			return (siz0);
+	case en_postfix_list:
 	case en_void:   case en_cond:	case en_safe_cond:
 		return (p[1]->GetNaturalSize());
 	case en_bchk:
@@ -402,9 +403,9 @@ ENODE *ENODE::Clone()
 		return (ENODE *)nullptr;
 	temp = allocEnode();
 	memcpy(temp, this, sizeof(ENODE));	// copy all the fields
-	p[0] = p[0]->Clone();
-	p[1] = p[1]->Clone();
-	p[2] = p[2]->Clone();
+//	temp->p[0] = p[0]->Clone();
+//	temp->p[1] = p[1]->Clone();
+//	temp->p[2] = p[2]->Clone();
 	return (temp);
 }
 
@@ -536,22 +537,55 @@ void ENODE::repexpr()
 	case en_clabcon:
 	case en_tempref:
 		if ((csp = currentFn->csetbl->Search(this)) != NULL) {
-			if (csp->reg > 0) {
-				nodetype = en_regvar;
-				rg = csp->reg;
+			if (!csp->voidf) {
+				if (csp->reg > 0) {
+					new_nodetype = en_regvar;
+					rg = csp->reg;
+				}
 			}
 		}
 		break;
+	case en_c_ref:
+	case en_uc_ref:
+	case en_w_ref:
+	case en_wp_ref:
+		if (p[0]->IsAutocon()) {
+			if ((csp = currentFn->csetbl->Search(this)) != NULL) {
+				if (!csp->voidf) {
+					if (csp->reg > 0) {
+						new_nodetype = en_regvar;
+						rg = csp->reg;
+						p[0]->repexpr();
+					}
+					else
+						p[0]->repexpr();
+				}
+				else
+					p[0]->repexpr();
+				//while (csp = currentFn->csetbl->SearchNext(this)) {
+				//	if (!csp->voidf) {
+				//		if (csp->reg > 0) {
+				//			new_nodetype = en_regvar;
+				//			rg = csp->reg;
+				//		}
+				//		else
+				//			p[0]->repexpr();
+				//	}
+				//}
+			}
+			else
+				p[0]->repexpr();
+			break;
+		}
+		p[0]->repexpr();
+		p[1]->repexpr();
+		break;
 	case en_ref32: case en_ref32u:
 	case en_b_ref:
-	case en_c_ref:
 	case en_h_ref:
-	case en_w_ref:
 	case en_ub_ref:
-	case en_uc_ref:
 	case en_uh_ref:
 	case en_uw_ref:
-	case en_wp_ref:
 	case en_hp_ref:
 	case en_bfieldref:
 	case en_ubfieldref:
@@ -564,7 +598,7 @@ void ENODE::repexpr()
 	case en_vector_ref:
 		if ((csp = currentFn->csetbl->Search(this)) != NULL) {
 			if (csp->reg > 0) {
-				nodetype = en_regvar;
+				new_nodetype = en_regvar;
 				rg = csp->reg;
 			}
 			else
@@ -602,9 +636,11 @@ void ENODE::repexpr()
 	case en_not:    case en_compl:
 	case en_chk:
 		p[0]->repexpr();
+		p[1]->repexpr();
 		break;
 	case en_i2d:
 		p[0]->repexpr();
+		p[1]->repexpr();
 		break;
 	case en_i2q:
 	case en_d2i:
@@ -614,7 +650,12 @@ void ENODE::repexpr()
 	case en_t2q:
 		p[0]->repexpr();
 		break;
-	case en_add:    case en_sub:
+	case en_asadd:
+	case en_add:    
+		p[0]->repexpr();
+		p[1]->repexpr();
+		break;
+	case en_sub:
 	case en_mulf:   case en_mul:    case en_mulu:   case en_div:	case en_udiv:
 	case en_mod:    case en_umod:
 	case en_shl:	case en_asl:
@@ -646,24 +687,36 @@ void ENODE::repexpr()
 	case en_vadds: case en_vsubs:
 	case en_vmuls: case en_vdivs:
 
-	case en_cond:   case en_void:	case en_safe_cond:
-	case en_asadd:  case en_assub:
+	case en_safe_cond:
+	case en_assub:
 	case en_asmul:  case en_asmulu:
 	case en_asdiv:  case en_asdivu:
 	case en_asor:   case en_asand:    case en_asxor:
 	case en_asmod:  case en_aslsh:
 	case en_asrsh:  case en_fcall:
 	case en_aggregate:
+	case en_void:
+		p[0]->repexpr();
+		p[1]->repexpr();
+		break;
 	case en_assign:
 		p[0]->repexpr();
 		p[1]->repexpr();
 		break;
+	case en_cond:
+		p[0]->repexpr();
+		p[1]->repexpr();
+		break;
 	case en_list:
-		for (ep = p[2]; ep; ep = ep->p[2])
-			ep->repexpr();
+		for (ep = p[2]; ep; ep = ep->p[2]) {
+			ep->p[0]->repexpr();
+			ep->p[1]->repexpr();
+		}
 		break;
 	case en_regvar:
 	case en_fpregvar:
+		p[0]->repexpr();
+		p[1]->repexpr();
 		break;
 	case en_bchk:
 		p[0]->repexpr();
@@ -679,6 +732,96 @@ void ENODE::repexpr()
 }
 
 
+CSE *ENODE::InsertAutocon(int duse)
+{
+	int nn;
+	CSE *csp;
+	bool first;
+
+	if (this == nullptr)
+		return (nullptr);
+	nn = currentFn->csetbl->voidauto2(this);
+	csp = currentFn->csetbl->InsertNode(this, duse, &first);
+	if (nn >= 0) {
+		csp->duses += loop_active + nn;
+		csp->uses = csp->duses - loop_active;
+	}
+	return (csp);
+}
+
+CSE *ENODE::OptInsertRef(int duse)
+{
+	CSE *csp;
+	bool first;
+	static int depth = 0;
+
+	csp = nullptr;
+	//There is something wrong with the following code that causes
+	//it to remove zero extension conversion from a byte to a word.
+	if (p[0]->IsAutocon()) {
+		if (depth == 0) {
+			p[0]->InsertAutocon(duse);
+			return (csp);
+		}
+		csp = currentFn->csetbl->InsertNode(this, duse, &first);
+		//if (csp->voidf)
+		//	p[0]->scanexpr(1);
+		// take care: the non-derereferenced use of the autocon node may
+		// already be in the list. In this case, set voidf to 1
+		if (currentFn->csetbl->Search(p[0]) != NULL) {
+			csp->voidf = 1;
+			p[0]->scanexpr(1);
+		}
+		else {
+			if (csp->voidf)
+				p[0]->scanexpr(1);
+			if (first) {
+				///* look for register nodes */
+				//int i = 0;
+				//long j = node->p[0]->i;
+				//if ((node->p[0]->nodetype== en_regvar || node->p[0]->nodetype==en_bregvar) &&
+				//	(j >= 11 && j < 18))
+				//{
+				//	csp->voidf--;	/* this is not in auto_lst */
+				//	//csp->uses += 90 * (100 - i);
+				//	//csp->duses += 30 * (100 - i);
+				//	break;
+				//}
+				///* set voidf if the node is not in autolst */
+				//csp->voidf++;
+				//i = 0;
+				//while (i < autoptr) {
+				//	if (autolst[i] == j) {
+				//		csp->voidf--;
+				//		break;
+				//	}
+				//	++i;
+				//}
+				/*
+				* even if that item must not be put in a register,
+				* it is legal to put its address therein
+				*/
+				//if (csp->voidf)
+				//	scanexpr(node->p[0], 1);
+				//}
+
+				//if( csp->voidf )
+				//    scanexpr(node->p[0],1);
+			}
+		}
+	}
+	else
+	{
+		//			csp = currentFn->csetbl->InsertNode(this, duse);
+		depth++;
+		p[0]->scanexpr(1);
+		p[1]->scanexpr(1);
+		p[2]->scanexpr(1);
+		depth--;
+	}
+	return (csp);
+}
+
 /*
 *      scanexpr will scan the expression pointed to by node for optimizable
 *      subexpressions. when an optimizable expression is found it is entered
@@ -689,7 +832,7 @@ void ENODE::repexpr()
 void ENODE::scanexpr(int duse)
 {
 	CSE *csp, *csp1;
-	int first;
+	bool first;
 	int nn;
 	ENODE *ep;
 
@@ -699,6 +842,7 @@ void ENODE::scanexpr(int duse)
 	switch (nodetype) {
 	case en_fpregvar:
 	case en_regvar:
+		currentFn->csetbl->InsertNode(this, duse, &first);
 		break;
 	case en_cnacon:
 	case en_clabcon:
@@ -706,33 +850,29 @@ void ENODE::scanexpr(int duse)
 	case en_icon:
 	case en_labcon:
 	case en_nacon:
-		currentFn->csetbl->InsertNode(this, duse);
+		currentFn->csetbl->InsertNode(this, duse, &first);
 		break;
 	case en_autofcon:
-		csp1 = currentFn->csetbl->InsertNode(this, duse);
-		csp1->isfp = FALSE;
-		if ((nn = currentFn->csetbl->voidauto2(this)) > 0) {
-			csp1->duses += loop_active;
-			csp1->uses = csp1->duses + nn - loop_active;
-		}
-		break;
 	case en_tempfpref:
-		csp1 = currentFn->csetbl->InsertNode(this, duse);
-		csp1->isfp = TRUE;
-		if ((nn = currentFn->csetbl->voidauto2(this)) > 0) {
-			csp1->duses += loop_active;
-			csp1->uses = csp1->duses + nn - loop_active;
-		}
+		csp = InsertAutocon(duse);
+		csp->isfp = FALSE;
 		break;
 	case en_autovcon:
 	case en_autocon:
 	case en_classcon:
 	case en_tempref:
-		csp1 = currentFn->csetbl->InsertNode(this, duse);
-		if ((nn = currentFn->csetbl->voidauto2(this)) > 0) {
-			csp1->duses += loop_active;
-			csp1->uses = csp1->duses + nn - loop_active;
-		}
+		InsertAutocon(duse);
+		break;
+	case en_cbc: case en_cubw:
+	case en_cbh: case en_cucw:
+	case en_cbw: case en_cuhw:
+	case en_cbu: case en_ccu: case en_chu:
+	case en_cubu: case en_cucu: case en_cuhu:
+	case en_ccwp: case en_cucwp:
+	case en_cch:
+	case en_ccw:
+	case en_chw:
+		p[0]->scanexpr(duse);
 		break;
 	case en_ref32: case en_ref32u:
 	case en_b_ref:
@@ -757,71 +897,8 @@ void ENODE::scanexpr(int duse)
 	case en_wp_ref:
 	case en_hp_ref:
 	case en_vector_ref:
-		//if (p[0] == nullptr) break;
-		// There is something wrong with the following code that causes
-		// it to remove zero extension conversion from a byte to a word.
-		if (p[0]->nodetype == en_autocon || p[0]->nodetype == en_autofcon
-			|| p[0]->nodetype == en_classcon || p[0]->nodetype == en_autovcon) {
-			first = (currentFn->csetbl->Search(this) == nullptr);	// Detect if this is the first insert
-			csp = currentFn->csetbl->InsertNode(this, duse);
-			if (csp->voidf)
-				p[0]->scanexpr(1);
-			// take care: the non-derereferenced use of the autocon node may
-			// already be in the list. In this case, set voidf to 1
-			if (currentFn->csetbl->Search(p[0]) != NULL) {
-				csp->voidf = 1;
-				p[0]->scanexpr(1);
-			}
-			else {
-				//                        if( csp->voidf )
-				//                             scanexpr(node->p[0],1);
-				if (first) {
-					///* look for register nodes */
-					//int i = 0;
-					//long j = node->p[0]->i;
-					//if ((node->p[0]->nodetype== en_regvar || node->p[0]->nodetype==en_bregvar) &&
-					//	(j >= 11 && j < 18))
-					//{
-					//	csp->voidf--;	/* this is not in auto_lst */
-					//	//csp->uses += 90 * (100 - i);
-					//	//csp->duses += 30 * (100 - i);
-					//	break;
-					//}
-					///* set voidf if the node is not in autolst */
-					//csp->voidf++;
-					//i = 0;
-					//while (i < autoptr) {
-					//	if (autolst[i] == j) {
-					//		csp->voidf--;
-					//		break;
-					//	}
-					//	++i;
-					//}
-					/*
-					* even if that item must not be put in a register,
-					* it is legal to put its address therein
-					*/
-					//if (csp->voidf)
-					//	scanexpr(node->p[0], 1);
-					//}
-
-					//if( csp->voidf )
-					//    scanexpr(node->p[0],1);
-				}
-			}
-		}
-		else
-			p[0]->scanexpr(1);
+		OptInsertRef(duse);
 		break;
-	case en_cbc: case en_cubw:
-	case en_cbh: case en_cucw:
-	case en_cbw: case en_cuhw:
-	case en_cbu: case en_ccu: case en_chu:
-	case en_cubu: case en_cucu: case en_cuhu:
-	case en_ccwp: case en_cucwp:
-	case en_cch:
-	case en_ccw:
-	case en_chw:
 	case en_uminus:
 	case en_abs:
 	case en_sxb: case en_sxc: case en_sxh:
@@ -887,8 +964,10 @@ void ENODE::scanexpr(int duse)
 		p[1]->scanexpr(0);
 		break;
 	case en_list:
-		for (ep = p[2]; ep; ep = ep->p[2])
-			ep->scanexpr(0);
+		for (ep = p[2]; ep; ep = ep->p[2]) {
+			ep->p[0]->scanexpr(0);
+			ep->p[1]->scanexpr(0);
+		}
 		break;
 	case en_assign:
 		p[0]->scanexpr(0);
@@ -910,6 +989,19 @@ void ENODE::scanexpr(int duse)
 	}
 }
 
+void ENODE::update()
+{
+	if (this == nullptr)
+		return;
+	if (IsAutocon() || IsRefType())
+	{
+		if (new_nodetype != en_unknown)
+			nodetype = new_nodetype;
+	}
+	p[0]->update();
+	p[1]->update();
+	p[2]->update();
+}
 
 // ============================================================================
 // ============================================================================
@@ -1174,6 +1266,7 @@ Operand *ENODE::GenHook(int flags, int size)
 	OCODE *ip1;
 	int n1;
 	ENODE *node;
+	bool voidResult;
 
 	false_label = nextlabel++;
 	end_label = nextlabel++;
@@ -1185,67 +1278,71 @@ Operand *ENODE::GenHook(int flags, int size)
 	GeneratePredicateMonadic(hook_predreg,op_ldi,make_immed(p[0]->i));
 	}
 	*/
-	ip1 = currentFn->pl.tail;
-	ap2 = cg.GenerateExpression(p[1]->p[1], flags, size);
-	n1 = currentFn->pl.Count(ip1);
-	if (opt_nocgo)
-		n1 = 9999;
-	ReleaseTempReg(ap2);
-	currentFn->pl.tail = ip1;
-	currentFn->pl.tail->fwd = nullptr;
+	//ip1 = currentFn->pl.tail;
+	//ap2 = cg.GenerateExpression(p[1]->p[1], flags, size);
+	//n1 = currentFn->pl.Count(ip1);
+	//if (opt_nocgo)
+	//	n1 = 9999;
+	//ReleaseTempReg(ap2);
+	//currentFn->pl.tail = ip1;
+	//currentFn->pl.tail->fwd = nullptr;
+	voidResult = p[0]->etype == bt_void;
 	cg.GenerateFalseJump(p[0], false_label, 0);
 	node = p[1];
+	ap3 = GetTempRegister();
 	ap1 = cg.GenerateExpression(node->p[0], flags, size);
+	ReleaseTempRegister(ap1);
 	GenerateDiadic(op_bra, 0, make_clabel(end_label), 0);
 	GenerateLabel(false_label);
 	ap2 = cg.GenerateExpression(node->p[1], flags, size);
-	if (!IsEqualOperand(ap1, ap2))
-	{
-		GenerateMonadic(op_hint, 0, make_immed(2));
-		switch (ap1->mode)
-		{
-		case am_reg:
-			switch (ap2->mode) {
-			case am_reg:
-				GenerateDiadic(op_mov, 0, ap1, ap2);
-				break;
-			case am_imm:
-				GenerateDiadic(op_ldi, 0, ap1, ap2);
-				if (ap2->isPtr)
-					ap1->isPtr = true;
-				break;
-			default:
-				GenLoad(ap1, ap2, size, size);
-				break;
-			}
-			break;
-		case am_fpreg:
-			switch (ap2->mode) {
-			case am_fpreg:
-				GenerateDiadic(op_mov, 0, ap1, ap2);
-				break;
-			case am_imm:
-				ap4 = GetTempRegister();
-				GenerateDiadic(op_ldi, 0, ap4, ap2);
-				GenerateDiadic(op_mov, 0, ap1, ap4);
-				if (ap2->isPtr)
-					ap1->isPtr = true;
-				break;
-			default:
-				GenLoad(ap1, ap2, size, size);
-				break;
-			}
-			break;
-		case am_imm:
-			break;
-		default:
-			GenStore(ap2, ap1, size);
-			break;
-		}
-	}
+	if (!IsEqualOperand(ap1, ap2) && !voidResult)
+		error(ERR_MISMATCH);
+	//{
+	//	GenerateMonadic(op_hint, 0, make_immed(2));
+	//	switch (ap1->mode)
+	//	{
+	//	case am_reg:
+	//		switch (ap2->mode) {
+	//		case am_reg:
+	//			GenerateDiadic(op_mov, 0, ap1, ap2);
+	//			break;
+	//		case am_imm:
+	//			GenerateDiadic(op_ldi, 0, ap1, ap2);
+	//			if (ap2->isPtr)
+	//				ap1->isPtr = true;
+	//			break;
+	//		default:
+	//			GenLoad(ap1, ap2, size, size);
+	//			break;
+	//		}
+	//		break;
+	//	case am_fpreg:
+	//		switch (ap2->mode) {
+	//		case am_fpreg:
+	//			GenerateDiadic(op_mov, 0, ap1, ap2);
+	//			break;
+	//		case am_imm:
+	//			ap4 = GetTempRegister();
+	//			GenerateDiadic(op_ldi, 0, ap4, ap2);
+	//			GenerateDiadic(op_mov, 0, ap1, ap4);
+	//			if (ap2->isPtr)
+	//				ap1->isPtr = true;
+	//			break;
+	//		default:
+	//			GenLoad(ap1, ap2, size, size);
+	//			break;
+	//		}
+	//		break;
+	//	case am_imm:
+	//		break;
+	//	default:
+	//		GenStore(ap2, ap1, size);
+	//		break;
+	//	}
+	//}
 	GenerateLabel(end_label);
-	ap1->MakeLegal(flags, size);
-	return (ap1);
+	ap2->MakeLegal(flags, size);
+	return (ap2);
 }
 
 Operand *ENODE::GenShift(int flags, int size, int op)
@@ -1687,7 +1784,7 @@ Operand *ENODE::GenLand(int flags, int op, bool safe)
 	if (safe) {
 		lab0 = nextlabel++;
 		ap3 = GetTempRegister();
-		ap1 = cg.GenerateExpression(p[0], F_REG, 8);
+		ap1 = cg.GenerateExpression(p[0], F_REG, p[0]->GetNaturalSize());
 		ap4 = GetTempRegister();
 		//if (op == op_and) {
 		//	GenerateTriadic(op_beq, 0, ap1, makereg(0), make_label(lab0));
@@ -1699,7 +1796,7 @@ Operand *ENODE::GenLand(int flags, int op, bool safe)
 			ReleaseTempReg(ap4);
 			ap4 = ap1;
 		}
-		ap2 = cg.GenerateExpression(p[1], F_REG, 8);
+		ap2 = cg.GenerateExpression(p[1], F_REG, p[1]->GetNaturalSize());
 		ap5 = GetTempRegister();
 		if (!ap2->isBool)
 			GenerateDiadic(op_redor, 0, ap5, ap2);
@@ -1857,6 +1954,7 @@ int GetNaturalSize(ENODE *node)
 			return (siz1);
 		else
 			return (siz0);
+	case en_postfix_list:
 	case en_void:   case en_cond:	case en_safe_cond:
 		return (GetNaturalSize(node->p[1]));
 	case en_bchk:
@@ -2218,3 +2316,53 @@ int ENODE::PutStructConst(txtoStream& ofs)
 	return (n);
 }
 
+// ============================================================================
+// ============================================================================
+// Debugging
+// ============================================================================
+// ============================================================================
+
+std::string ENODE::nodetypeStr()
+{
+	switch (nodetype) {
+	case en_regvar:	return "en_regvar";
+	case en_autocon: return "en_autocon";
+	case en_cond:	return "en_cond";
+	case en_void: return "en_void";
+	case en_asadd: return "en_asadd";
+	case en_icon: return "en_icon";
+	case en_assign: return "en_assign";
+	case en_eq: return "en_eq";
+	default:
+		if (IsRefType()) {
+			return "en_ref";
+		}
+		break;
+	}
+	return "???";
+}
+
+void ENODE::Dump()
+{
+	int nn;
+	static int level = 0;
+
+	return;
+	if (this == nullptr)
+		return;
+	for (nn = 0; nn < level * 2; nn++)
+		dfs.printf(" ");
+	dfs.printf("Node:%d\n", number);
+	for (nn = 0; nn < level * 2; nn++)
+		dfs.printf(" ");
+	dfs.printf("nodetype: %d: ", nodetype);
+	dfs.printf("%s\n", (char *)nodetypeStr().c_str());
+	for (nn = 0; nn < level * 2; nn++)
+		dfs.printf(" ");
+	dfs.printf("rg: %d\n", rg);
+	level++;
+	p[0]->Dump();
+	p[1]->Dump();
+	p[2]->Dump();
+	level--;
+}

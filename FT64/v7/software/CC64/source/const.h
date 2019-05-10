@@ -15,6 +15,7 @@ enum e_bt {
   bt_last};
 
 enum e_node {
+		en_unknown,
         en_void,        /* used for parameter lists */
 		en_list, en_aggregate,
 		en_cbu, en_ccu, en_chu,
@@ -67,7 +68,7 @@ enum e_node {
 		en_vadd, en_vsub, en_vmul, en_vdiv,
 		en_vadds, en_vsubs, en_vmuls, en_vdivs,
 		en_mulf,
-
+		en_postfix_list,
 		en_object_list
 		};
 

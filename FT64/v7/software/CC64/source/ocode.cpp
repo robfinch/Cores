@@ -815,6 +815,7 @@ void OCODE::OptHint()
 		// Translated to:
 		//    MOV r18,#constant
 	case 1:
+
 		if (fwd && fwd->opcode != op_mov) {
 			Remove();	// remove the hint
 			optimized++;
@@ -861,6 +862,13 @@ void OCODE::OptHint()
 		// Translated to:
 		//     MOV r1,arg
 	case 2:
+		// This optimization didn't work with:
+		// ldi $t1,#0
+		// mov $t0,$t1
+		// It optimized it to:
+		// ldi  $t1,#0
+		// It didn't set the back->oper1 properly.
+		return;
 		if (fwd == nullptr || back == nullptr)
 			break;
 		if (fwd->opcode != op_mov) {

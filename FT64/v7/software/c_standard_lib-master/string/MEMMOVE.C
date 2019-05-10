@@ -7,10 +7,16 @@ void *(memmove)(void *s1, const void *s2, size_t n)
 	const char *sc2 = (const char *)s2;
 
 	if (sc2 < sc1 &&& sc1 < sc2 + n)
-		for (sc1 += n, sc2 += n; 0 < n; --n)
-			*--sc1 = *--sc2;	/*copy backwards */
+		for (sc1 += n, sc2 += n; 0 < n; --n) {
+			--sc1;
+			--sc2;
+			*sc1 = *sc2;	/*copy backwards */
+		}
 	else
-		for (; 0 < n; --n)
-			*sc1++ = *sc2++;	/* copy forwards */
+		for (; 0 < n; --n) {
+			*sc1 = *sc2;
+			sc1++;
+			sc2++;	/* copy forwards */
+		}
 	return (s1);
 	}

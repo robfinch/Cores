@@ -72,6 +72,7 @@ TYP             stdfunc;
 TYP             stdexception;
 extern TYP      *head;          /* shared with ParseSpecifier */
 extern TYP	*tail;
+ENODE *postfixList = nullptr;
 
 /*
  *      expression evaluation
@@ -405,12 +406,19 @@ TYP *deref(ENODE **node, TYP *tp)
 			}
 			else
 				*node = makenode(en_c_ref,*node,(ENODE *)NULL);
+			//(*node)->esize = sizeOfPtr;
+			//(*node)->etype = bt_pointer;
+			//(*node)->tp = TYP::Make(bt_pointer, sizeOfPtr);
+			//if (tp->isUnsigned)
+			//	(*node)->tp->btp = stduchar.GetIndex();
+			//else
+			//	(*node)->tp->btp = stdchar.GetIndex();
 			(*node)->esize = tp->size;
 			(*node)->etype = (enum e_bt)tp->type;
 			if (tp->isUnsigned)
-	            tp = &stduchar;
+	      tp = &stduchar;
 			else
-	            tp = &stdchar;
+	      tp = &stdchar;
 			(*node)->sym = sp;
 			break;
 
@@ -1524,7 +1532,26 @@ int IsLValue(ENODE *node)
 	case en_ref32u:
 	case en_vector_ref:
 		return (TRUE);
-	// Detect if there's an addition to a pointer happening.
+	case en_cbc:
+	case en_cbh:
+	case en_cbw:
+	case en_cch:
+	case en_ccw:
+	case en_chw:
+	case en_cfd:
+	case en_cubw:
+	case en_cucw:
+	case en_cuhw:
+	case en_cbu:
+	case en_ccu:
+	case en_chu:
+	case en_cubu:
+	case en_cucu:
+	case en_cuhu:
+	case en_ccwp:
+	case en_cucwp:
+		return IsLValue(node->p[0]);
+		// Detect if there's an addition to a pointer happening.
 	// For an array reference there will be an add node at the top of the
 	// expression tree. This evaluates to an address which is essentially
 	// the same as an *_ref node. It's an LValue.
@@ -1582,13 +1609,16 @@ int IsLValue(ENODE *node)
 
 // ----------------------------------------------------------------------------
 // ----------------------------------------------------------------------------
-TYP *Autoincdec(TYP *tp, ENODE **node, int flag)
+TYP *Autoincdec(TYP *tp, ENODE **node, int flag, bool isPostfix)
 {
-	ENODE *ep1, *ep2;
+	ENODE *ep1, *ep2, *ep3;
 	TYP *typ;
 	int su;
 
-	ep1 = *node;
+	if (isPostfix)
+		ep1 = (*node)->Clone();
+	else
+		ep1 = *node;
 	if( IsLValue(ep1) ) {
 		if (tp->type == bt_pointer) {
 			typ = tp->GetBtp();
@@ -1605,12 +1635,23 @@ TYP *Autoincdec(TYP *tp, ENODE **node, int flag)
 		ep1 = makenode(flag ? en_assub : en_asadd,ep1,ep2);
 		ep1->isUnsigned = tp->isUnsigned;
 		ep1->esize = tp->size;
+		if (isPostfix) {
+			if (postfixList == nullptr)
+				postfixList = ep1;
+			else {
+				for (ep2 = postfixList; ep2->p[1]; ep2 = ep2->p[1])
+					;
+				ep2->p[1] = makenode(en_void, ep2, ep1);
+			}
+		}
 	}
     else
         error(ERR_LVALUE);
-	*node = ep1;
-	if (*node)
-    	(*node)->SetType(tp);
+	if (!isPostfix) {
+		*node = ep1;
+		if (*node)
+		    (*node)->SetType(tp);
+	}
 	return tp;
 }
 
@@ -2041,12 +2082,12 @@ j2:
 		case autodec:
 			cnt = 0;
 			NextToken();
-			Autoincdec(tp1,&ep1,1);
+			Autoincdec(tp1,&ep1,1,true);
 			break;
 		case autoinc:
 			cnt = 0;
 			NextToken();
-			Autoincdec(tp1,&ep1,0);
+			Autoincdec(tp1,&ep1,0,true);
 			break;
 		default:	goto j1;
 		}
@@ -2089,6 +2130,7 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
   ENODE *ep1, *ep2, *ep3;
   int flag2;
 	int typ;
+	bool autonew = false;
 
 	Enter("<ParseUnary>");
     ep1 = NULL;
@@ -2109,12 +2151,12 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
   case autodec:
 		NextToken();
 		tp = ParseUnaryExpression(&ep1, got_pa);
-		Autoincdec(tp,&ep1,1);
+		Autoincdec(tp,&ep1,1,false);
 		break;
   case autoinc:
 		NextToken();
 		tp = ParseUnaryExpression(&ep1, got_pa);
-		Autoincdec(tp,&ep1,0);
+		Autoincdec(tp,&ep1,0,false);
 		break;
 	case plus:
     NextToken();
@@ -2360,10 +2402,16 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
 			tp = &stdint;
       break;
 
+		case kw_auto:
+			NextToken();
+			if (lastst != kw_new)
+				break;
+			autonew = true;
+
     case kw_new:
 		{
 			ENODE *ep4, *ep5;
-			std::string *name = new std::string("__new");
+			std::string *name = new std::string(autonew ? "__autonew" : "__new");
 
 			currentFn->UsesNew = TRUE;
 			currentFn->IsLeaf = FALSE;
@@ -2384,13 +2432,14 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
 				ep2 = makeinode(en_icon,head->GetHash());
 				ep3 = makenode(en_object_list,nullptr,nullptr);
 				ep4 = makeinode(en_icon, head->typeno);
-				//ep5 = makenode(en_void,ep1,nullptr);
-				ep5 = nullptr;
-				ep5 = makenode(en_void,ep2,ep5);
-				ep5 = makenode(en_void,ep3,ep5);
-				ep5 = makenode(en_void, ep4, ep5);
+				ep5 = makenode(en_void,ep1,nullptr);
+				//ep5 = nullptr;
+				//ep5 = makenode(en_void,ep2,ep5);
+				//ep5 = makenode(en_void,ep3,ep5);
+				//ep5 = makenode(en_void, ep4, ep5);
 				ep2 = makesnode(en_cnacon, name, name, 0);
   				ep1 = makefcnode(en_fcall, ep2, ep5, nullptr);
+					ep1->isAutonew = autonew;
   				head = tp;
   				tail = tp1;
 			}
@@ -2420,8 +2469,8 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
 				NextToken();
     		needpunc(closebr,50);
 		  }
-			tp1 = ParseCastExpression(&ep1);
-			tp1 = deref(&ep1, tp1);
+			tp = ParseCastExpression(&ep1);
+			tp = deref(&ep1, tp);
   		ep2 = makesnode(en_cnacon, name, name, 0);
   		ep1 = makefcnode(en_fcall, ep2, ep1, nullptr);
     }
@@ -3107,13 +3156,13 @@ TYP *safe_orop(ENODE **node)
 	return binop(node, orop, en_lor_safe, lor_safe);
 }
 
-/*
- *      this routine processes the hook operator.
- */
+//
+//      this routine processes the hook operator.
+//
 TYP *conditional(ENODE **node)
 {
 	TYP *tp1, *tp2, *tp3;
-  ENODE *ep1, *ep2, *ep3;
+  ENODE *ep1, *ep2, *ep3, *ep4;
 	bool sh;
 
   Enter("Conditional");
@@ -3123,17 +3172,28 @@ TYP *conditional(ENODE **node)
     goto xit;
 	sh = lastst == safe_hook;
   if( lastst == hook || lastst == safe_hook) {
+		ENODE *o_pfl = postfixList;
+
+		postfixList = nullptr;
 		iflevel++;
 		NextToken();
 		if((tp2 = conditional(&ep2)) == NULL) {
 			error(ERR_IDEXPECT);
 			goto cexit;
 		}
+		if (postfixList) {
+			ep2 = makenode(en_void, ep2, postfixList);
+		}
+		postfixList = nullptr;
 		needpunc(colon,6);
 		if((tp3 = conditional(&ep3)) == NULL) {
 			error(ERR_IDEXPECT);
 			goto cexit;
 		}
+		if (postfixList) {
+			ep3 = makenode(en_void, ep3, postfixList);
+		}
+		postfixList = o_pfl;
 		forcefit(&ep3,tp3,&ep2,tp2,true,false);
 		ep2 = makenode(en_void,ep2,ep3);
 		ep1 = makenode(sh ? en_safe_cond:en_cond,ep1,ep2);
@@ -3286,6 +3346,10 @@ static TYP *NonAssignExpression(ENODE **node)
 TYP *NonCommaExpression(ENODE **node)
 {
 	TYP *tp;
+	ENODE *ep1;
+	ENODE *o_pfl = postfixList;
+
+	postfixList = nullptr;
 	pep1 = nullptr;
 	Enter("NonCommaExpression");
     *node = (ENODE *)NULL;
@@ -3293,7 +3357,10 @@ TYP *NonCommaExpression(ENODE **node)
     if( tp == (TYP *)NULL )
         *node =(ENODE *)NULL;
     Leave("NonCommaExpression",tp ? tp->type : 0);
-     if (*node)
+		if (postfixList)
+			*node = makenode(en_void, *node, postfixList);
+		postfixList = o_pfl;
+		if (*node)
      	(*node)->SetType(tp);
     return tp;
 }

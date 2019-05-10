@@ -163,8 +163,8 @@ Operand *FT64CodeGenerator::GenExpr(ENODE *node)
 	case en_eq:
 		size = GetNaturalSize(node);
 		ap3 = GetTempRegister();
-		ap1 = cg.GenerateExpression(node->p[0], F_REG, size);
-		ap2 = cg.GenerateExpression(node->p[1], F_REG | F_IMMED, size);
+		ap1 = cg.GenerateExpression(node->p[0], F_REG, node->p[0]->GetNaturalSize());
+		ap2 = cg.GenerateExpression(node->p[1], F_REG | F_IMMED, node->p[1]->GetNaturalSize());
 		GenerateTriadic(op_seq, 0, ap3, ap1, ap2);
 		ReleaseTempRegister(ap2);
 		ReleaseTempRegister(ap1);
@@ -173,8 +173,8 @@ Operand *FT64CodeGenerator::GenExpr(ENODE *node)
 	case en_ne:
 		size = GetNaturalSize(node);
 		ap3 = GetTempRegister();
-		ap1 = cg.GenerateExpression(node->p[0], F_REG, size);
-		ap2 = cg.GenerateExpression(node->p[1], F_REG | F_IMMED, size);
+		ap1 = cg.GenerateExpression(node->p[0], F_REG, node->p[0]->GetNaturalSize());
+		ap2 = cg.GenerateExpression(node->p[1], F_REG | F_IMMED, node->p[1]->GetNaturalSize());
 		GenerateTriadic(op_seq, 0, ap3, ap1, ap2);
 		GenerateDiadic(op_not, 0, ap3, ap3);
 		ReleaseTempRegister(ap2);
@@ -1099,6 +1099,15 @@ bool FT64CodeGenerator::IsPascal(ENODE *ep)
 	return (false);
 }
 
+void FT64CodeGenerator::LinkAutonew(ENODE *node)
+{
+	Operand *ap;
+
+	if (node->isAutonew) {
+		currentFn->hasAutonew = true;
+	}
+}
+
 Operand *FT64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 { 
 	Operand *ap;
@@ -1131,6 +1140,13 @@ Operand *FT64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 		sym->SaveTemporaries(&sp, &fsp);
 		if (currentFn->HasRegisterParameters())
 			sym->SaveRegisterArguments();
+		// If the symbol is unknown, assume a throw is present
+		if (sym) {
+			if (sym->DoesThrow)
+				currentFn->DoesThrow = true;
+		}
+		else
+			currentFn->DoesThrow = true;
 		i = i + PushArguments(sym, node->p[1]);
 		if (sym && sym->IsInline) {
 			o_fn = currentFn;
@@ -1147,12 +1163,14 @@ Operand *FT64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 			currentFn = o_fn;
 			currentFn->pl.tail->fwd = sym->pl.head;
 			currentFn->pl.tail = sym->pl.tail;
+			LinkAutonew(node);
 			fpsave_mask = fmask;
 			save_mask = mask;
 		}
 		else {
 			GenerateMonadic(op_call,0,make_offset(node->p[0]));
 			GenerateMonadic(op_bex,0,make_label(throwlab));
+			LinkAutonew(node);
 		}
 		GenerateInlineArgumentList(sym, node->p[1]);
 		PopArguments(sym, i);
@@ -1183,6 +1201,13 @@ Operand *FT64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 			if (sym)
 				sym->SaveRegisterArguments();
 		i = i + PushArguments(sym, node->p[1]);
+		// If the symbol is unknown, assume a throw is present
+		if (sym) {
+			if (sym->DoesThrow)
+				currentFn->DoesThrow = true;
+		}
+		else
+			currentFn->DoesThrow = true;
 		ap->mode = am_ind;
 		ap->offset = 0;
 		if (sym && sym->IsInline) {
@@ -1197,12 +1222,14 @@ Operand *FT64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 			currentFn = o_fn;
 			currentFn->pl.tail->fwd = sym->pl.head;
 			currentFn->pl.tail = sym->pl.tail;
+			LinkAutonew(node);
 			fpsave_mask = fmask;
 			save_mask = mask;
 		}
 		else {
 			GenerateMonadic(op_call,0,ap);
 			GenerateMonadic(op_bex,0,make_label(throwlab));
+			LinkAutonew(node);
 		}
 		GenerateInlineArgumentList(sym, node->p[1]);
 		PopArguments(sym, i, IsPascal(node));

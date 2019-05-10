@@ -286,10 +286,11 @@ void GenLoad(Operand *ap3, Operand *ap1, int ssize, int size)
 
 void GenStore(Operand *ap1, Operand *ap3, int size)
 {
-	if (ap1->isPtr) {
-		GenerateDiadic(op_sw, 0, ap1, ap3);
-	}
-	else if (ap1->type==stdvector.GetIndex())
+	//if (ap1->isPtr) {
+	//	GenerateDiadic(op_sw, 0, ap1, ap3);
+	//}
+	//else
+	if (ap1->type==stdvector.GetIndex())
 	    GenerateDiadic(op_sv,0,ap1,ap3);
 	else if (ap1->type == stdflt.GetIndex()) {
 		GenerateDiadic(op_sf, 'd', ap1, ap3);
@@ -322,7 +323,7 @@ void GenStore(Operand *ap1, Operand *ap3, int size)
 //
 Operand *CodeGenerator::GenerateDereference(ENODE *node,int flags,int size, int su)
 {    
-	Operand *ap1, *ap2;
+	Operand *ap1, *ap2, *ap3;
   int siz1;
 	int typ;
 
@@ -358,7 +359,7 @@ Operand *CodeGenerator::GenerateDereference(ENODE *node,int flags,int size, int 
   if(node->p[0]->nodetype == en_autocon)
   {
     ap1 = allocOperand();
-		ap1->isPtr = node->nodetype == en_wp_ref || node->nodetype == en_hp_ref;
+		ap1->isPtr = node->IsRefType();
 		ap1->mode = am_indx;
 		ap1->preg = regFP;
 		ap1->segment = stackseg;
@@ -600,16 +601,21 @@ Operand *CodeGenerator::GenerateDereference(ENODE *node,int flags,int size, int 
 			// This seems a bit of a kludge. If we are dereferencing and there's a
 			// pointer in the register, then we want the value at the pointer location.
 			if (ap1->isPtr) {
+				int sz = node->GetReferenceSize();
 				if (node->nodetype == en_dbl_ref) {
 					int rg = ap1->preg;
 					ReleaseTempRegister(ap1);
 					ap1 = GetTempFPRegister();
-					GenLoad(ap1, make_indirect(rg), size, size);
+					GenLoad(ap1, make_indirect(rg), sz, sz);
 					ap1->mode = am_fpreg;
 				}
 				else {
-					GenLoad(ap1, make_indirect(ap1->preg), size, size);
+					int rg = ap1->preg;
+					ReleaseTempRegister(ap1);
+					ap1 = GetTempRegister();
+					GenLoad(ap1, make_indirect(rg), sz, sz);
 					ap1->mode = am_reg;
+					ap1->isPtr = node->p[0]->IsRefType();
 				}
 			}
 			else
@@ -657,16 +663,24 @@ j1:
 	//	ap1->segment = codeseg;
 	//else
 	//	ap1->segment = dataseg;
-	ap1->isPtr = node->nodetype == en_wp_ref || node->nodetype == en_hp_ref;
 	if (use_gp) {
-        ap1->mode = am_indx;
-        ap1->preg = regGP;
-    	ap1->segment = dataseg;
-    }
-    else {
-        ap1->mode = am_direct;
-	    ap1->isUnsigned = !su | ap1->isPtr;
-    }
+    ap1->mode = am_indx;
+    ap1->preg = regGP;
+    ap1->segment = dataseg;
+  }
+  else {
+//    ap1->mode = am_direct;
+	  ap1->isUnsigned = !su | ap1->isPtr;
+  }
+	if (ap1->isPtr) {
+//		ap3 = GetTempRegister();
+		ap2 = GetTempRegister();
+		GenerateDiadic(op_lw, 0, ap2, ap1);
+//		GenLoad(ap3, make_indirect(ap2->preg), size, size);
+//		ReleaseTempRegister(ap2);
+		ap2->MakeLegal(flags, 8);
+		return (ap2);
+	}
 //    ap1->offset = makeinode(en_icon,node->p[0]->i);
   ap1->isUnsigned = !su | ap1->isPtr;
 	if (!node->isUnsigned)
@@ -1111,7 +1125,7 @@ Operand *CodeGenerator::GenerateAggregateAssign(ENODE *node1, ENODE *node2)
 // ----------------------------------------------------------------------------
 Operand *CodeGenerator::GenerateAssign(ENODE *node, int flags, int size)
 {
-	Operand *ap1, *ap2 ,*ap3;
+	Operand *ap1, *ap2 ,*ap3, *ap4, *ap5;
 	TYP *tp;
     int ssize;
 		MachineReg *mr;
@@ -1166,11 +1180,25 @@ Operand *CodeGenerator::GenerateAssign(ENODE *node, int flags, int size)
 		switch(ap2->mode) {
 		case am_reg:
 			GenerateHint(2);
-			GenerateDiadic(op_mov, 0, ap1, ap2);
-			if (ap2->isPtr) {
+			if (node->p[0]->IsRefType() && node->p[1]->IsRefType()) {
+				ap3 = GetTempRegister();
+				GenLoad(ap3, make_indirect(ap2->preg),ssize,node->p[1]->GetReferenceSize());
+				GenStore(ap3, make_indirect(ap1->preg),ssize);
+				ReleaseTempRegister(ap3);
+			}
+			else if (node->p[1]->IsRefType()) {
+				ap3 = GetTempRegister();
+				GenLoad(ap3, make_indirect(ap2->preg), ssize, node->p[1]->GetReferenceSize());
+				GenerateDiadic(op_mov, 0, ap1, ap3);
+				ReleaseTempRegister(ap3);
 				GenerateZeradic(op_setwb);
 				ap1->isPtr = TRUE;
 			}
+			else if (node->p[0]->IsRefType()) {
+				GenStore(ap2, make_indirect(ap1->preg), ssize);
+			}
+			else
+				GenerateDiadic(op_mov, 0, ap1, ap2);
 			mr->val = regs[ap2->preg].val;
 			mr->isConst = ap2->isConst;
 			break;
@@ -1192,7 +1220,7 @@ Operand *CodeGenerator::GenerateAssign(ENODE *node, int flags, int size)
 			mr->isConst = true;
 			break;
 		default:
-			GenLoad(ap1,ap2,ssize,size);
+			GenLoad(ap1,ap2,ssize, node->p[1]->GetReferenceSize());
 			ap1->isPtr = ap2->isPtr;
 			mr->modified = true;
 			break;
@@ -1260,7 +1288,7 @@ Operand *CodeGenerator::GenerateAssign(ENODE *node, int flags, int size)
 			}
 			else {
 				ap3->isPtr = ap2->isPtr;
-        GenLoad(ap3,ap2,ssize,size);
+        GenLoad(ap3,ap2, node->p[0]->GetReferenceSize(),node->p[1]->GetReferenceSize());
 /*                
 				if (ap1->isUnsigned) {
 					switch(size) {
@@ -1337,14 +1365,11 @@ Operand *CodeGenerator::GenAutocon(ENODE *node, int flags, int size, int type)
 	Operand *ap1, *ap2;
 
 	// We always want an address register (GPR) for lea
-	//if (type==stddouble.GetIndex() || type==stdflt.GetIndex() || type==stdtriple.GetIndex() || type==stdquad.GetIndex())
-	//	ap1 = GetTempFPRegister();
-	//else
-		ap1 = GetTempRegister();
+	ap1 = GetTempRegister();
 	ap2 = allocOperand();
 	ap2->isPtr = node->etype == bt_pointer;
 	ap2->mode = am_indx;
-	ap2->preg = regFP;          /* frame pointer */
+	ap2->preg = regFP;          // frame pointer
 	ap2->offset = node;     /* use as constant node */
 	ap2->type = type;
 	ap1->type = stdint.GetIndex();
@@ -1524,26 +1549,35 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int size)
 			}
 			ReleaseTempReg(ap1);
 			return (ap2);
-    case en_ub_ref:
+  case en_ub_ref:
 	case en_uc_ref:
 	case en_uh_ref:
 	case en_uw_ref:
 		ap1 = GenerateDereference(node, flags, size, 0);
+		ap1->isPtr = TRUE;
 		ap1->isUnsigned = TRUE;
-		return ap1;
+		return (ap1);
 	case en_hp_ref:
 	case en_wp_ref:
 		ap1 = GenerateDereference(node,flags,size,0);
 		ap1->isPtr = TRUE;
 		ap1->isUnsigned = TRUE;
-    return ap1;
+    return (ap1);
 	case en_vector_ref:	return GenerateDereference(node,flags,size,0);
 	case en_ref32:	return GenerateDereference(node,flags,size,1);
 	case en_ref32u:	return GenerateDereference(node,flags,size,0);
-  case en_b_ref:	return GenerateDereference(node,flags,size,1);
-	case en_c_ref:	return GenerateDereference(node,flags,size,1);
-	case en_h_ref:	return GenerateDereference(node,flags,size,1);
-  case en_w_ref:	return GenerateDereference(node,flags,size,1);
+  case en_b_ref:
+	case en_c_ref:
+		ap1 = GenerateDereference(node, flags, size, 1);
+		ap1->isPtr = TRUE;
+		ap1->isUnsigned = TRUE;
+		return (ap1);
+	case en_h_ref:
+  case en_w_ref:
+		ap1 = GenerateDereference(node, flags, size, 1);
+		ap1->isPtr = TRUE;
+		ap1->isUnsigned = TRUE;
+		return (ap1);
 	case en_flt_ref:
 		ap1 = GenerateDereference(node, flags, size, 1);
 		ap1->type = stdflt.GetIndex();
@@ -1578,7 +1612,7 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int size)
 			ap1 = (flags & BF_ASSIGN) ? GenerateDereference(node,flags & ~BF_ASSIGN,size,1) : GenerateBitfieldDereference(node,flags,size);
 			return ap1;
 	case en_regvar:
-  case en_tempref:
+	case en_tempref:
     ap1 = allocOperand();
 		ap1->isPtr = node->IsPtr();
     ap1->mode = am_reg;
@@ -1816,8 +1850,8 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int size)
 		return (node->GenSafeHook(flags, size));
 	case en_void:
     natsize = GetNaturalSize(node->p[0]);
-    ReleaseTempRegister(GenerateExpression(node->p[0],F_ALL | F_NOVALUE,natsize));
-		ap1 = GenerateExpression(node->p[1], flags, size);
+		ap1 = GenerateExpression(node->p[0], F_ALL | F_NOVALUE, natsize);
+		ReleaseTempRegister(GenerateExpression(node->p[1], flags, size));
 		ap1->isPtr = node->IsPtr();
     return (ap1);
 

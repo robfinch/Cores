@@ -114,7 +114,8 @@ void PeepList::Add(OCODE *cd)
 	{
 		cd->fwd = nullptr;
 		cd->back = tail;
-		tail->fwd = cd;
+		if (tail)
+			tail->fwd = cd;
 		tail = cd;
 	}
 	if (cd->opcode != op_label) {
@@ -241,7 +242,7 @@ void PeepList::SetLabelReference()
 void PeepList::EliminateUnreferencedLabels()
 {
 	OCODE *p;
-	return;
+
 	for (p = head; p; p = p->fwd) {
 		if (p->opcode == op_label)
 			p->remove = false;
@@ -587,6 +588,11 @@ void PeepList::OptInstructions()
 // Hoist expressions that remain constant to the outside of the loop.
 // But don't hoist expressions containing r1 as that is the return
 // value from a function call.
+// This needs more work:
+// An incrementing expression incorrectly hoisted the load word
+//		lw       	$v0,48[$fp]
+//		sub      	$v0, $v0, #1
+//		sw       	$v0, 48[$fp]
 
 void PeepList::OptLoopInvariants(OCODE *loophead)
 {
@@ -594,6 +600,7 @@ void PeepList::OptLoopInvariants(OCODE *loophead)
 	bool canHoist;
 	bool hsx;
 
+	return;
 	if (loophead == nullptr)
 		return;
 	ip3 = ip4 = loophead;

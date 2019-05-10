@@ -310,6 +310,10 @@ static void opt0(ENODE **node)
 	case en_quad_ref:
 	case en_wp_ref:
 	case en_hp_ref:
+	case en_ccwp:
+	case en_cucwp:
+		opt0(&((*node)->p[0]));
+		return;
 	case en_cubw:
 	case en_cucw:
 	case en_cuhw:
@@ -325,9 +329,11 @@ static void opt0(ENODE **node)
 	case en_cch:
 	case en_ccw:
 	case en_chw:
-	case en_ccwp:
-	case en_cucwp:
-    opt0( &((*node)->p[0]));
+    opt0( &(ep->p[0]));
+		if (ep->p[0]->nodetype == en_icon) {
+			ep->nodetype = en_icon;
+			ep->i = ep->p[0]->i;
+		}
     return;
 	case en_sxb:
 	case en_sxc:
@@ -690,6 +696,7 @@ static void opt0(ENODE **node)
                     opt0(&(ep->p[1]));
                     break;
 						// en_tempref comes from typecasting
+						case en_postfix_list:
 						case en_void:
 							opt0(&(ep->p[0]));
 							opt0(&(ep->p[1]));
@@ -758,7 +765,7 @@ static int64_t xfold(ENODE *node)
 								case en_and:    case en_land:	case en_land_safe:
 								case en_or:		case en_lor:	case en_lor_safe:
                 case en_xor:    case en_asand:
-                case en_asor:   case en_void:
+								case en_asor:   case en_void:	case en_postfix_list:
                 case en_fcall:  case en_assign:
                         fold_const(&node->p[0]);
                         fold_const(&node->p[1]);

@@ -221,6 +221,7 @@ public:
 	unsigned int didRemoveReturnBlock : 1;
 	unsigned int retGenerated : 1;
 	unsigned int alloced : 1;
+	unsigned int hasAutonew : 1;
 	uint8_t NumRegisterVars;
 	unsigned __int8 NumParms;
 	unsigned __int8 numa;			// number of stack parameters (autos)
@@ -476,6 +477,7 @@ class ENODE {
 public:
 	int number;
 	enum e_node nodetype;
+	enum e_node new_nodetype;			// nodetype replaced by optimization
 	enum e_bt etype;
 	long      esize;
 	TYP *tp;
@@ -488,6 +490,7 @@ public:
 	unsigned int isUnsigned : 1;
 	unsigned int isCheckExpr : 1;
 	unsigned int isPascal : 1;
+	unsigned int isAutonew : 1;
 	ENODE *vmask;
 	__int8 bit_width;
 	__int8 bit_offset;
@@ -510,11 +513,12 @@ public:
 	void SetType(TYP *t) { tp = t; if (t) etype = t->type; };
 	bool IsPtr() { return (etype == bt_pointer || etype == bt_struct || etype == bt_union || etype == bt_class || nodetype==en_addrof); };
 	bool IsFloatType() { return (nodetype==en_addrof || nodetype==en_autofcon) ? false : (etype == bt_double || etype == bt_quad || etype == bt_float || etype == bt_triple); };
+	bool IsAutocon() { return (nodetype == en_autocon || nodetype == en_autocon || nodetype == en_autovcon || nodetype == en_classcon); };
 	bool IsUnsignedType() { return (etype == bt_ubyte || etype == bt_uchar || etype == bt_ushort || etype == bt_ulong || etype == bt_pointer || nodetype==en_addrof || nodetype==en_autofcon || nodetype==en_autocon); };
 	bool IsRefType() {
 		return (nodetype == en_w_ref || nodetype == en_uw_ref || nodetype == en_h_ref || nodetype == en_uh_ref
 			|| nodetype == en_c_ref || nodetype == en_uc_ref || nodetype == en_b_ref || nodetype == en_ub_ref
-			|| nodetype == en_dbl_ref);
+			|| nodetype == en_dbl_ref || nodetype == en_wp_ref || nodetype == en_hp_ref);
 	};
 	bool IsBitfield();
 	static bool IsEqualOperand(Operand *a, Operand *b);
@@ -530,8 +534,11 @@ public:
 	bool AssignTypeToList(TYP *);
 
 	// Optimization
+	CSE *InsertAutocon(int duse);
+	CSE *OptInsertRef(int duse);
 	void scanexpr(int duse);
 	void repexpr();
+	void update();
 
 	// Code generation
 	Operand *GenIndex();
@@ -556,6 +563,10 @@ public:
 	void PutConstant(txtoStream& ofs, unsigned int lowhigh, unsigned int rshift, bool opt = false);
 	void PutConstantHex(txtoStream& ofs, unsigned int lowhigh, unsigned int rshift);
 	static ENODE *GetConstantHex(std::ifstream& ifs);
+
+	// Debugging
+	std::string nodetypeStr();
+	void Dump();
 };
 
 
@@ -708,6 +719,7 @@ public:
 	bool GenerateBranch(ENODE *node, int op, int label, int predreg, unsigned int prediction, bool limit);
 	Operand *GenExpr(ENODE *node);
 	bool IsPascal(ENODE *ep);
+	void LinkAutonew(ENODE *node);
 	int PushArgument(ENODE *ep, int regno, int stkoffs, bool *isFloat);
 	int PushArguments(Function *func, ENODE *plist);
 	void PopArguments(Function *func, int howMany, bool isPascal = true);
@@ -1059,6 +1071,7 @@ public:
 	CSE table[500];
 	short int csendx;
 	short int cseiter;
+	short int searchpos;
 public:
 	CSE *First() { cseiter = 0; return &table[0]; };
 	CSE *Next() { cseiter++; return (cseiter < csendx ? &table[cseiter] : nullptr); };
@@ -1066,8 +1079,10 @@ public:
 	void Sort(int (*)(const void *a, const void *b));
 	void Assign(CSETable *);
 	int voidauto2(ENODE *node);
-	CSE *InsertNode(ENODE *node, int duse);
+	CSE *InsertNode(ENODE *node, int duse, bool *first);
 	CSE *Search(ENODE *node);
+	CSE *SearchNext(ENODE *node);
+	CSE *SearchByNumber(ENODE *node);
 
 	void GenerateRegMask(CSE *csp, uint64_t *mask, uint64_t *rmask);
 	int AllocateGPRegisters();
@@ -1135,6 +1150,8 @@ public:
 	void scan_compound();
 	void repcse();
 	void repcse_compound();
+	void update();
+	void update_compound();
 
 	// Code generation
 	void GenMixedSource();
@@ -1162,6 +1179,9 @@ public:
 	void GenerateTabularSwitch();
 	void Generate();
 
+	// Debugging
+	void Dump();
+	void DumpCompound();
 };
 
 class Stringx

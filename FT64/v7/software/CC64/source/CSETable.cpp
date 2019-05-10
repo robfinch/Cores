@@ -53,18 +53,20 @@ void CSETable::Sort(int(*cmp)(const void *a, const void *b))
 	qsort(table, (size_t)csendx, sizeof(CSE), cmp);
 }
 
-// InsertNodeIntoCSEList will enter a reference to an expression node into the
+// InsertNode will enter a reference to an expression node into the
 // common expression table. duse is a flag indicating whether or not
 // this reference will be dereferenced.
 
-CSE *CSETable::InsertNode(ENODE *node, int duse)
+CSE *CSETable::InsertNode(ENODE *node, int duse, bool *first)
 {
 	CSE *csp;
 
 	if ((csp = Search(node)) == nullptr) {   /* add to tree */
+		*first = true;
 		if (csendx > 499)
 			throw new C64PException(ERR_CSETABLE, 0x01);
 		csp = &table[csendx];
+		ZeroMemory(csp, sizeof(CSE));
 		csendx++;
 		if (loop_active > 1) {
 			csp->uses = (loop_active - 1) * 5;
@@ -75,11 +77,10 @@ CSE *CSETable::InsertNode(ENODE *node, int duse)
 			csp->duses = (duse != 0);
 		}
 		csp->exp = node->Clone();
-		csp->voidf = 0;
-		csp->reg = 0;
 		csp->isfp = csp->exp->IsFloatType();
 		return (csp);
 	}
+	*first = false;
 	if (loop_active < 2) {
 		(csp->uses)++;
 		if (duse)
@@ -102,7 +103,33 @@ CSE *CSETable::Search(ENODE *node)
 	int cnt;
 
 	for (cnt = 0; cnt < csendx; cnt++) {
-		if (ENODE::IsEqual(node, table[cnt].exp))
+		if (ENODE::IsEqual(node, table[cnt].exp)) {
+			searchpos = cnt;
+			return (&table[cnt]);
+		}
+	}
+	return ((CSE *)nullptr);
+}
+
+CSE *CSETable::SearchNext(ENODE *node)
+{
+	int cnt;
+
+	for (cnt = searchpos+1; cnt < csendx; cnt++) {
+		if (ENODE::IsEqual(node, table[cnt].exp)) {
+			searchpos = cnt;
+			return (&table[cnt]);
+		}
+	}
+	return ((CSE *)nullptr);
+}
+
+CSE *CSETable::SearchByNumber(ENODE *node)
+{
+	int cnt;
+
+	for (cnt = 0; cnt < csendx; cnt++) {
+		if (node->number == table[cnt].exp->number)
 			return (&table[cnt]);
 	}
 	return ((CSE *)nullptr);
@@ -122,10 +149,12 @@ int CSETable::voidauto2(ENODE *node)
 	uses = 0;
 	voided = false;
 	for (cnt = 0; cnt < csendx; cnt++) {
-		if (IsLValue(table[cnt].exp) && ENODE::IsEqual(node, table[cnt].exp->p[0])) {
-			table[cnt].voidf = 1;
-			voided = true;
-			uses += table[cnt].uses;
+		if (IsLValue(table[cnt].exp)) {
+			if (ENODE::IsEqual(node, table[cnt].exp->p[0])) {
+				table[cnt].voidf = 1;
+				voided = true;
+				uses += table[cnt].uses;
+			}
 		}
 	}
 	return (voided ? uses : -1);
@@ -152,8 +181,8 @@ int CSETable::AllocateGPRegisters()
 						{
 						case 0:
 						case 1:
-						case 2:	alloc = (csp->OptimizationDesireability() >= 4) && reg < regLastRegvar; break;
-						case 3: alloc = (csp->OptimizationDesireability() >= 4) && reg < regLastRegvar; break;
+						case 2:	alloc = (csp->OptimizationDesireability() >= 3) && reg < regLastRegvar; break;
+						case 3: alloc = (csp->OptimizationDesireability() >= 3) && reg < regLastRegvar; break;
 						}
 						if (alloc)
 							csp->reg = reg++;
@@ -352,6 +381,8 @@ int CSETable::AllocateRegisterVars()
 int CSETable::Optimize(Statement *block)
 {
 	int nn;
+	int cnt;
+	CSE *cse;
 
 	//csendx = 0;
 	dfs.printf("<CSETable__Optimize>");
@@ -367,11 +398,20 @@ int CSETable::Optimize(Statement *block)
 	}
 	dfs.printf("Pass:%d ", pass);
 	if (opt_noregs == FALSE) {
+		dfs.printf("===== Before Scan =====");
+		block->Dump();
 		if (pass == 1)
 			block->scan();            /* collect expressions */
+		for (cse = First(); cse; cse = Next()) {
+			cse->reg = -1;
+		}
 		nn = AllocateRegisterVars();
-		if (pass == 2)
+		if (pass == 2) {
 			block->repcse();          /* replace allocated expressions */
+			block->update();
+			dfs.printf("===== After Update =====");
+			block->Dump();
+		}
 	}
 	if (pass == 1)
 		;// currentFn->csetbl->Assign(pCSETable);
