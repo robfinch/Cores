@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -24,6 +24,21 @@
 // ============================================================================
 //
 #include "stdafx.h"
+
+static short int opmap[op_last+1];
+
+void Instruction::SetMap()
+{
+	int nn;
+	Instruction *p;
+
+	for (nn = 0; nn <= op_last; nn++) {
+		opmap[nn] = 2;	// op_empty
+		if (p = GetMapping(nn)) {
+			opmap[nn] = p - &opl[0];
+		}
+	}
+}
 
 // brk and rti ???
 bool Instruction::IsFlowControl()
@@ -140,7 +155,22 @@ Instruction *Instruction::FindByMnem(std::string& mn)
 	return ((Instruction *)bsearch(mn.c_str(), &opl[1], sizeof(opl) / sizeof(Instruction) - sizeof(Instruction), sizeof(Instruction), fbmcmp));
 }
 
+// It would be slow to get a pointer to the instruction information by
+// searching the list. So a map is setup when the compiler initializes.
+// Searching for all the opcodes is done only once at compiler startup.
+
 Instruction *Instruction::Get(int op)
+{
+	// This test really not needed in a properly working compiler.
+	// It could be assumed that the ops passed are only valid ones.
+	if (op >= op_last || op < 0)
+		return (nullptr);	// Should throw an exception here.
+	return (&opl[opmap[op]]);
+}
+
+// For initializing the mapping table.
+
+Instruction *Instruction::GetMapping(int op)
 {
 	int i;
 

@@ -97,7 +97,8 @@ static char *errtextstr[] = {
 	"E Compiler limit reached: optimization stack full.",
 	"E Compiler: stack empty.",
 	"E Compiler: i-graph nodes in wrong order.",
-	"E Cast aggregate should be a constant"
+	"E Cast aggregate should be a constant",
+	"E Unsupported precision."
 };
 
 static char *errtext1000[] =

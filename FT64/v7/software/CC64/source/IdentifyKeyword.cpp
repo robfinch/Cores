@@ -244,7 +244,7 @@ int IdentifyKeyword()
 		if (p[1]=='r' && p[2]=='o' && p[3]=='l' && p[4]=='o' && p[5]=='g' && p[6]=='\0')
 			return lastst = kw_prolog;
 	}
-	if (p[0]=='n') {	// nocall,null,naked,new,namespace,not
+	if (p[0]=='n') {	// nocall,null,nullptr,naked,new,namespace,not
 		if (p[1]=='e' && p[2]=='w' && p[3]=='\0') {
 			return lastst = kw_new;
 		}
@@ -259,6 +259,9 @@ int IdentifyKeyword()
 			ival = 0;
 			return lastst = iconst;
 		}
+		//if (p[1] == 'u' && p[2] == 'l' && p[3] == 'l' && p[4] == 'p' && p[5] == 't' && p[6]=='r' && p[7] == '\0') {
+		//	return (lastst = kw_nullptr);
+		//}
 		if (p[1]=='a' && p[2]=='m' && p[3]=='e' && p[4]=='s' && p[5]=='p' && p[6]=='a' && p[7]=='c' && p[8]=='e' && p[9]=='\0')
 			return lastst = kw_namespace;
 	}
@@ -331,6 +334,8 @@ int IdentifyKeyword()
 			return lastst = kw_floatmax;
 		if (p[2] == 'f' && p[3] == 'l' && p[4] == 'o' && p[5] == 'a' && p[6] == 't' && p[7] == '1' && p[8] == '2' && p[9] == '8' && p[10] == '\0')
 			return lastst = kw_float128;
+		//if (p[2] == 'i' && p[3] == 's' && p[4] == '_' && p[5] == 'n' && p[6] == 'u' && p[7] == 'l' && p[8] == 'l' && p[9] == 'p' && p[10] == 't' && p[11] == 'r' && p[12] == '\0')
+		//	return lastst = kw_is_nullptr;
 	}
 
 	return 0;

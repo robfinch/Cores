@@ -54,6 +54,7 @@ extern char *GetStrConst();
 extern void push_typ(TYP *tp);
 extern TYP *pop_typ();
 
+extern TYP *nameref2(std::string name, ENODE **node, int nt, bool alloc, TypeArray*, TABLE* tbl);
 extern void opt_const_unchecked(ENODE **node);
 extern Operand *make_string2(char *s);
 extern Operand *make_double_indexed(int i, int j, int scale);

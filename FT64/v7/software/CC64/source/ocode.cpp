@@ -207,7 +207,27 @@ void OCODE::OptSubtract()
 {
 	OCODE *ip2;
 
-	ip2 = this->fwd;
+	ip2 = fwd;
+	//if (oper2->isPtr && oper3->isPtr && oper2->mode == am_reg && oper3->mode == am_reg) {
+	//	opcode = op_ptrdif;
+	//	insn = GetInsn(op_ptrdif);
+	//	oper4 = make_immed(1);
+	//}
+	//if (ip2->opcode == op_asr || ip2->opcode == op_shru) {
+	//	if (Operand::IsEqual(ip2->oper2,oper1)) {
+	//		if (oper2->isPtr && oper3->isPtr && oper2->mode == am_reg && oper3->mode == am_reg) {
+	//			if (ip2->oper3->mode == am_imm) {
+	//				if (ip2->oper3->offset->i < 8) {
+	//					opcode = op_ptrdif;
+	//					insn = GetInsn(op_ptrdif);
+	//					oper4 = make_immed(ip2->oper3->offset->i);
+	//					ip2->MarkRemove();
+	//					optimized++;
+	//				}
+	//			}
+	//		}
+	//	}
+	//}
 	while (ip2->opcode == op_hint)
 		ip2 = ip2->fwd;
 	if (IsSubiSP() && ip2->fwd)
@@ -672,7 +692,7 @@ void OCODE::OptDoubleTargetRemoval()
 	GetTargetReg(&rg3, &rg4);
 	// Should look at this more carefully sometime. Generally however target 
 	// register classes won't match between integer and float instructions.
-	if ((insn->regclass1 ^ ip2->insn->regclass1) != 0)
+	if ((insn->amclass1 ^ ip2->insn->amclass1) != 0)
 		return;
 	if (rg1 != rg3)
 		return;
@@ -884,7 +904,7 @@ void OCODE::OptHint()
 						if (frwd->HasTargetReg()) {
 							frwd->GetTargetReg(&rg1, &rg2);
 							if (back->oper1) {
-								if (rg1 == back->oper1->preg && back->insn->regclass1 == frwd->insn->regclass1)
+								if (rg1 == back->oper1->preg && back->insn->amclass1 == frwd->insn->amclass1)
 									break;
 							}
 						}
@@ -1028,6 +1048,29 @@ void OCODE::OptLdi()
 			}
 		}
 	}
+	for (ip = fwd; ip; ip = ip->fwd) {
+		if (ip->HasTargetReg()) {
+			if (ip->oper1->preg == oper1->preg) {
+				if (ip->opcode == op_ldi) {
+					if (ip->oper2->offset->i == oper2->offset->i) {
+						ip->MarkRemove();
+						optimized++;
+					}
+					else
+						return;
+				}
+				else
+					return;
+			}
+		}
+	}
+}
+
+
+void OCODE::OptLea()
+{
+	OCODE *ip;
+
 	for (ip = fwd; ip; ip = ip->fwd) {
 		if (ip->HasTargetReg()) {
 			if (ip->oper1->preg == oper1->preg) {

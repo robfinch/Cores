@@ -73,29 +73,15 @@ CSE *CSETable::InsertNode(ENODE *node, int duse, bool *first)
 		csp = &table[csendx];
 		ZeroMemory(csp, sizeof(CSE));
 		csendx++;
-		if (loop_active > 1) {
-			csp->uses = (loop_active - 1) * 5;
-			csp->duses = (duse != 0) * ((loop_active - 1) * 5);
-		}
-		else {
-			csp->uses = 1;
-			csp->duses = (duse != 0);
-		}
+		csp->AccUses(1);
+		csp->AccDuses(duse != 0);
 		csp->exp = node->Clone();
 		csp->isfp = csp->exp->IsFloatType();
 		return (csp);
 	}
 	*first = false;
-	if (loop_active < 2) {
-		(csp->uses)++;
-		if (duse)
-			(csp->duses)++;
-	}
-	else {
-		(csp->uses) += ((loop_active - 1) * 5);
-		if (duse)
-			(csp->duses) += ((loop_active - 1) * 5);
-	}
+	csp->AccUses(1);
+	csp->AccDuses(1);
 	return (csp);
 }
 
@@ -190,8 +176,8 @@ int CSETable::AllocateGPRegisters()
 						{
 						case 0:
 						case 1:
-						case 2:	alloc = (csp->OptimizationDesireability() >= 3) && reg < regLastRegvar; break;
-						case 3: alloc = (csp->OptimizationDesireability() >= 3) && reg < regLastRegvar; break;
+						case 2:	alloc = (csp->OptimizationDesireability() >= 3) && reg <= regLastRegvar; break;
+						case 3: alloc = (csp->OptimizationDesireability() >= 3) && reg <= regLastRegvar; break;
 						}
 						if (alloc)
 							csp->reg = reg++;
@@ -222,8 +208,8 @@ int CSETable::AllocateFPRegisters()
 						{
 						case 0:
 						case 1:
-						case 2:	alloc = (csp->OptimizationDesireability() >= 4) && reg < regLastRegvar; break;
-						case 3: alloc = (csp->OptimizationDesireability() >= 4) && reg < regLastRegvar; break;
+						case 2:	alloc = (csp->OptimizationDesireability() >= 4) && reg <= regLastRegvar; break;
+						case 3: alloc = (csp->OptimizationDesireability() >= 4) && reg <= regLastRegvar; break;
 							//    					if(( csp->duses > csp->uses / (8 << nn)) && reg < regLastRegvar )	// <- address register assignments
 						}
 						if (alloc)
@@ -248,7 +234,7 @@ int CSETable::AllocateVectorRegisters()
 	for (nn = 0; nn < 4; nn++) {
 		for (csp = First(); csp; csp = Next()) {
 			if (csp->exp) {
-				if (csp->exp->etype == bt_vector && csp->reg == -1 && vreg < regLastRegvar) {
+				if (csp->exp->etype == bt_vector && csp->reg == -1 && vreg <= regLastRegvar) {
 					switch (nn) {
 					case 0:
 					case 1:
@@ -283,7 +269,7 @@ void CSETable::InitializeTempRegs()
 			if (1 || !IsLValue(exptr) || (exptr->p[0]->i > 0))
 			{
 				initstack();
-				ap = cg.GenerateExpression(exptr, F_REG | F_IMMED | F_MEM | F_FPREG, sizeOfWord);
+				ap = cg.GenerateExpression(exptr, am_reg | am_imm | am_mem | am_fpreg, sizeOfWord);
 				ap2 = csp->isfp ? makefpreg(csp->reg) : makereg(csp->reg);
 				if (csp->isfp)
 					ap2->type = ap->type;
@@ -296,7 +282,7 @@ void CSETable::InitializeTempRegs()
 						ReleaseTempReg(ap3);
 					}
 					else {
-						GenerateDiadic(op_ldi, 0, ap2, ap);
+						cg.GenLoadConst(ap, ap2);
 					}
 				}
 				else if (ap->mode == am_reg) {

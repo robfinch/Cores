@@ -34,17 +34,9 @@ int hook_predreg=15;
 
 Operand *GenerateExpression();            /* forward ParseSpecifieraration */
 
-extern Operand *copy_addr(Operand *);
 extern Operand *GenExpr(ENODE *node);
-extern Operand *GenerateFunctionCall(ENODE *node, int flags);
-extern void GenerateCmp(ENODE *node, int op, int label, int predreg, unsigned int prediction);
 
-void GenerateRaptor64Cmp(ENODE *node, int op, int label, int predreg);
-void GenerateTable888Cmp(ENODE *node, int op, int label, int predreg);
-void GenerateThorCmp(ENODE *node, int op, int label, int predreg);
 void GenLoad(Operand *ap3, Operand *ap1, int ssize, int size);
-void GenerateZeroExtend(Operand *ap, int isize, int osize);
-void GenerateSignExtend(Operand *ap, int isize, int osize, int flags);
 
 extern int throwlab;
 static int nest_level = 0;
@@ -333,7 +325,7 @@ Operand *CodeGenerator::GenerateDereference(ENODE *node,int flags,int size, int 
 	// union.
 	//if (node->tp)
 	//	if (node->tp->type==bt_struct || node->tp->type==bt_union) {
-	//		return GenerateExpression(node, F_REG | F_MEM, size);
+	//		return GenerateExpression(node, am_reg | am_mem, size);
 	//	}
 
     if( node->p[0]->nodetype == en_add )
@@ -581,8 +573,8 @@ Operand *CodeGenerator::GenerateDereference(ENODE *node,int flags,int size, int 
 	else if (node->p[0]->nodetype == en_vex) {
 		Operand *ap2;
 		if (node->p[0]->p[0]->nodetype==en_vector_ref) {
-			ap1 = GenerateDereference(node->p[0]->p[0],F_REG,8,0);
-			ap2 = GenerateExpression(node->p[0]->p[1],F_REG,8);
+			ap1 = GenerateDereference(node->p[0]->p[0],am_reg,8,0);
+			ap2 = GenerateExpression(node->p[0]->p[1],am_reg,8);
 			if (ap1->offset && ap2->offset) {
 				GenerateTriadic(op_add,0,ap1,makereg(0),make_immed(ap2->offset->i));
 			}
@@ -594,7 +586,7 @@ Operand *CodeGenerator::GenerateDereference(ENODE *node,int flags,int size, int 
 			return (ap1);
 		}
 	}
-	ap1 = GenerateExpression(node->p[0], F_REG | F_IMMED, 8); // generate address
+	ap1 = GenerateExpression(node->p[0], am_reg | am_imm, 8); // generate address
 	ap1->isPtr = node->IsRefType();
 	if( ap1->mode == am_reg)
     {
@@ -749,9 +741,9 @@ Operand *CodeGenerator::GenerateAssignMultiply(ENODE *node,int flags, int size, 
     size = ssize;
 	if (node->p[0]->IsBitfield()) {
 		ap3 = GetTempRegister();
-		ap1 = GenerateBitfieldDereference(node->p[0], F_REG | F_MEM, size);
+		ap1 = GenerateBitfieldDereference(node->p[0], am_reg | am_mem, size);
 		GenerateDiadic(op_mov, 0, ap3, ap1);
-		ap2 = GenerateExpression(node->p[1], F_REG | F_IMMED, size);
+		ap2 = GenerateExpression(node->p[1], am_reg | am_imm, size);
 		GenerateTriadic(op, 0, ap1, ap1, ap2);
 		GenerateBitfieldInsert(ap3, ap1, ap1->offset->bit_offset, ap1->offset->bit_width);
 		GenStore(ap3, ap1->next, ssize);
@@ -762,18 +754,18 @@ Operand *CodeGenerator::GenerateAssignMultiply(ENODE *node,int flags, int size, 
 		return (ap3);
 	}
 	if (node->etype==bt_double || node->etype==bt_quad || node->etype==bt_float || node->etype==bt_triple) {
-      ap1 = GenerateExpression(node->p[0],F_FPREG | F_MEM,ssize);
-      ap2 = GenerateExpression(node->p[1],F_FPREG,size);
+      ap1 = GenerateExpression(node->p[0],am_fpreg | am_mem,ssize);
+      ap2 = GenerateExpression(node->p[1],am_fpreg,size);
       op = op_fmul;
     }
     else if (node->etype==bt_vector) {
-      ap1 = GenerateExpression(node->p[0],F_REG | F_MEM,ssize);
-      ap2 = GenerateExpression(node->p[1],F_REG,size);
+      ap1 = GenerateExpression(node->p[0],am_reg | am_mem,ssize);
+      ap2 = GenerateExpression(node->p[1],am_reg,size);
 			op = ap2->type==stdvector.GetIndex() ? op_vmul : op_vmuls;
     }
     else {
-      ap1 = GenerateExpression(node->p[0],F_ALL & ~F_IMMED,ssize);
-      ap2 = GenerateExpression(node->p[1],F_REG | F_IMMED,size);
+      ap1 = GenerateExpression(node->p[0],am_all & ~am_imm,ssize);
+      ap2 = GenerateExpression(node->p[1],am_reg | am_imm,size);
     }
 	if (ap1->mode==am_reg) {
 	    GenerateTriadic(op,0,ap1,ap1,ap2);
@@ -814,9 +806,9 @@ Operand *CodeGenerator::GenerateAssignModiv(ENODE *node,int flags,int size,int o
     siz1 = GetNaturalSize(node->p[0]);
 	if (node->p[0]->IsBitfield()) {
 		ap3 = GetTempRegister();
-		ap1 = GenerateBitfieldDereference(node->p[0], F_REG | F_MEM, size);
+		ap1 = GenerateBitfieldDereference(node->p[0], am_reg | am_mem, size);
 		GenerateDiadic(op_mov, 0, ap3, ap1);
-		ap2 = GenerateExpression(node->p[1], F_REG | F_IMMED, size);
+		ap2 = GenerateExpression(node->p[1], am_reg | am_imm, size);
 		GenerateTriadic(op, 0, ap1, ap1, ap2);
 		GenerateBitfieldInsert(ap3, ap1, ap1->offset->bit_offset, ap1->offset->bit_width);
 		GenStore(ap3, ap1->next, siz1);
@@ -830,8 +822,8 @@ Operand *CodeGenerator::GenerateAssignModiv(ENODE *node,int flags,int size,int o
     if (isFP) {
         if (op==op_div || op==op_divu)
            op = op_fdiv;
-        ap1 = GenerateExpression(node->p[0],F_FPREG,siz1);
-        ap2 = GenerateExpression(node->p[1],F_FPREG,size);
+        ap1 = GenerateExpression(node->p[0],am_fpreg,siz1);
+        ap2 = GenerateExpression(node->p[1],am_fpreg,size);
 		GenerateTriadic(op,siz1==4?'s':siz1==8?'d':siz1==12?'t':siz1==16?'q':'d',ap1,ap1,ap2);
 	    ReleaseTempReg(ap2);
 		ap1->MakeLegal(flags,size);
@@ -841,7 +833,7 @@ Operand *CodeGenerator::GenerateAssignModiv(ENODE *node,int flags,int size,int o
     }
     else {
         ap1 = GetTempRegister();
-        ap2 = GenerateExpression(node->p[0],F_ALL & ~F_IMMED,siz1);
+        ap2 = GenerateExpression(node->p[0],am_all & ~am_imm,siz1);
     }
 	if (ap2->mode==am_reg && ap2->preg != ap1->preg)
 		GenerateDiadic(op_mov,0,ap1,ap2);
@@ -851,10 +843,10 @@ Operand *CodeGenerator::GenerateAssignModiv(ENODE *node,int flags,int size,int o
         GenLoad(ap1,ap2,siz1,siz1);
     //GenerateSignExtend(ap1,siz1,2,flags);
     if (isFP)
-        ap3 = GenerateExpression(node->p[1],F_FPREG,8);
+        ap3 = GenerateExpression(node->p[1],am_fpreg,8);
 		else {
 			// modu doesn't support immediate mode
-			ap3 = GenerateExpression(node->p[1], op==op_modu ? F_REG : F_REG | F_IMMED, 8);
+			ap3 = GenerateExpression(node->p[1], op==op_modu ? am_reg : am_reg | am_imm, 8);
 		}
 	if (op==op_fdiv) {
 		GenerateTriadic(op,siz1==4?'s':siz1==8?'d':siz1==12?'t':siz1==16?'q':'d',ap1,ap1,ap3);
@@ -912,7 +904,6 @@ void DumpStructEnodes(ENODE *node)
 	lfs.printf("}");
 }
 
-Operand *GenerateAssign(ENODE *node, int flags, int size);
 
 // Generate an assignment to a structure type. The type passed must be a
 // structure type.
@@ -947,7 +938,7 @@ void CodeGenerator::GenerateStructAssign(TYP *tp, int64_t offset, ENODE *ep, Ope
 			}
 /*
 			else {
-				ap1 = GenerateExpression(ep, F_REG, thead->tp->size);
+				ap1 = GenerateExpression(ep, am_reg, thead->tp->size);
 				if (ap1->mode == am_imm) {
 					ap2 = GetTempRegister();
 					GenLdi(ap2, ap1);
@@ -979,10 +970,10 @@ void CodeGenerator::GenerateStructAssign(TYP *tp, int64_t offset, ENODE *ep, Ope
 			ap2 = nullptr;
 			if (ep->p[2]==nullptr)
 				break;
-			ap1 = GenerateExpression(ep->p[2],F_REG,thead->tp->size);
+			ap1 = GenerateExpression(ep->p[2],am_reg,thead->tp->size);
 			if (ap1->mode==am_imm) {
 				ap2 = GetTempRegister();
-				GenerateDiadic(op_ldi, 0, ap2, ap1);
+				GenLoadConst(ap2, ap1);
 			}
 			else {
 				ap2 = ap1;
@@ -1015,9 +1006,20 @@ void CodeGenerator::GenerateStructAssign(TYP *tp, int64_t offset, ENODE *ep, Ope
 }
 
 
-Operand *GenerateAggregateAssign(ENODE *node1, ENODE *node2);
 
 // Generate an assignment to an array.
+void CodeGenerator::GenLoadConst(Operand *ap1, Operand *ap2)
+{
+	Operand *ap3;
+
+	if (ap1->isPtr) {
+		ap3 = ap1->Clone();
+		ap3->mode = am_direct;
+		GenerateDiadic(op_lea, 0, ap2, ap3);
+	}
+	else
+		GenerateDiadic(op_ldi, 0, ap2, ap1);
+}
 
 void CodeGenerator::GenerateArrayAssign(TYP *tp, ENODE *node1, ENODE *node2, Operand *base)
 {
@@ -1053,10 +1055,10 @@ void CodeGenerator::GenerateArrayAssign(TYP *tp, ENODE *node1, ENODE *node2, Ope
 			offset = base->offset->i;
 		ep1 = ep1->p[2];
 		while (ep1) {
-			ap1 = GenerateExpression(ep1,F_REG|F_IMMED,sizeOfWord);
+			ap1 = GenerateExpression(ep1,am_reg|am_imm,sizeOfWord);
 			ap2 = GetTempRegister();
-			if (ap1->mode==am_imm)
-				GenerateDiadic(op_ldi, 0, ap2, ap1);
+			if (ap1->mode == am_imm)
+				GenLoadConst(ap1, ap2);
 			else {
 				if (ap1->offset)
 					offset2 = ap1->offset->i;
@@ -1089,8 +1091,8 @@ Operand *CodeGenerator::GenerateAggregateAssign(ENODE *node1, ENODE *node2)
 	if (node1==nullptr || node2==nullptr)
 		return nullptr;
 	//DumpStructEnodes(node2);
-	base = GenerateExpression(node1,F_REG,sizeOfWord);
-	base2 = GenerateExpression(node2, F_REG, sizeOfWord);
+	base = GenerateExpression(node1,am_reg,sizeOfWord);
+	base2 = GenerateExpression(node2, am_reg, sizeOfWord);
 	GenerateDiadic(op_mov, 0, makereg(regFirstArg), base);
 	GenerateDiadic(op_mov, 0, makereg(regFirstArg+1), base2);
 	GenerateDiadic(op_ldi, 0, makereg(regFirstArg+2), make_immed(node2->esize));
@@ -1098,7 +1100,7 @@ Operand *CodeGenerator::GenerateAggregateAssign(ENODE *node1, ENODE *node2)
 	GenerateMonadic(op_call, 0, make_string("__aacpy"));
 	ReleaseTempReg(base2);
 	return (base);
-	//base = GenerateDereference(node1,F_MEM,sizeOfWord,0);
+	//base = GenerateDereference(node1,am_mem,sizeOfWord,0);
 	tp = node1->tp;
 	if (tp==nullptr)
 		tp = &stdlong;
@@ -1143,8 +1145,8 @@ Operand *CodeGenerator::GenerateAssign(ENODE *node, int flags, int size)
 //			size = ssize;
 /*
     if (node->tp->type==bt_struct || node->tp->type==bt_union) {
-		ap1 = GenerateExpression(node->p[0],F_REG,ssize);
-		ap2 = GenerateExpression(node->p[1],F_REG,size);
+		ap1 = GenerateExpression(node->p[0],am_reg,ssize);
+		ap2 = GenerateExpression(node->p[1],am_reg,size);
 		GenerateMonadic(op_push,0,make_immed(node->tp->size));
 		GenerateMonadic(op_push,0,ap2);
 		GenerateMonadic(op_push,0,ap1);
@@ -1160,14 +1162,14 @@ Operand *CodeGenerator::GenerateAssign(ENODE *node, int flags, int size)
 			return GenerateAggregateAssign(node->p[0],node->p[1]);
 	}
 	//if (size > 8) {
-	//	ap1 = GenerateExpression(node->p[0],F_MEM,ssize);
-	//	ap2 = GenerateExpression(node->p[1],F_MEM,size);
+	//	ap1 = GenerateExpression(node->p[0],am_mem,ssize);
+	//	ap2 = GenerateExpression(node->p[1],am_mem,size);
 	//}
 	//else {
-		ap1 = GenerateExpression(node->p[0], F_REG | F_FPREG | F_MEM | F_VREG | F_VMREG, ssize);
-		flg = F_ALL;
+		ap1 = GenerateExpression(node->p[0], am_reg | am_fpreg | am_mem | am_vreg | am_vmreg, ssize);
+		flg = am_all;
 		if (ap1->type == stddouble.GetIndex())
-			flg = F_FPREG;
+			flg = am_fpreg;
 		ap2 = GenerateExpression(node->p[1],flg,size);
 		if (node->p[0]->isUnsigned && !node->p[1]->isUnsigned)
 		    ap2->GenZeroExtend(size,ssize);
@@ -1213,7 +1215,8 @@ Operand *CodeGenerator::GenerateAssign(ENODE *node, int flags, int size)
 		case am_imm:
 			//if (ap2->isPtr)
 			//	GenerateZeradic(op_setwb);
-			GenerateDiadic(op_ldi,0,ap1,ap2);
+			GenLoadConst(ap2, ap1);
+			//GenerateDiadic(op_ldi,0,ap1,ap2);
 			ap1->isPtr = ap2->isPtr;
 			mr->val = ap2->offset->i;
 			mr->offset = ap2->offset;
@@ -1244,7 +1247,8 @@ Operand *CodeGenerator::GenerateAssign(ENODE *node, int flags, int size)
             }
             else {
     			ap3 = GetTempRegister();
-				GenerateDiadic(op_ldi,0,ap3,ap2);
+				//GenerateDiadic(op_ldi,0,ap3,ap2);
+				GenLoadConst(ap2, ap3);
 				GenStore(ap3,ap1,ssize);
 		    	ReleaseTempReg(ap3);
           }
@@ -1428,7 +1432,7 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int size)
 			DataLabels[node->i] = true;
 		ap1->type = stddouble.GetIndex();
 		// Don't allow the constant to be loaded into an integer register.
-    ap1->MakeLegal(flags & ~F_REG,size);
+    ap1->MakeLegal(flags & ~am_reg,size);
     Leave("</GenerateExpression>",2); 
 		goto retpt;
 		/*
@@ -1449,15 +1453,15 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int size)
 			goto retpt;
 
 	case en_labcon:
-            if (use_gp) {
-                ap1 = GetTempRegister();
-                ap2 = allocOperand();
-                ap2->mode = am_indx;
-				switch (node->segment) {
-				case tlsseg:	ap2->preg = regTP; break;
-				case dataseg:	ap2->preg = regGP; break;
-				default:	ap2->preg = regPP;
-				}
+    if (use_gp) {
+      ap1 = GetTempRegister();
+    ap2 = allocOperand();
+    ap2->mode = am_indx;
+		switch (node->segment) {
+		case tlsseg:	ap2->preg = regTP; break;
+		case dataseg:	ap2->preg = regGP; break;
+		default:	ap2->preg = regPP;
+		}
                 ap2->offset = node;     // use as constant node
                 GenerateDiadic(op_lea,0,ap1,ap2);
 				ap1->MakeLegal(flags,size);
@@ -1547,7 +1551,7 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int size)
 			goto retpt;
 		case en_addrof:
 			ap1 = GetTempRegister();
-			ap2 = GenerateExpression(node->p[0], flags & ~F_FPREG, 8);
+			ap2 = GenerateExpression(node->p[0], flags & ~am_fpreg, 8);
 			switch (ap2->mode) {
 			case am_reg:
 				GenerateDiadic(op_mov, 0, ap1, ap2);
@@ -1634,14 +1638,14 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int size)
 	case en_ucfieldref:
 	case en_uhfieldref:
 	case en_uwfieldref:
-			ap1 = (flags & BF_ASSIGN) ? GenerateDereference(node,flags & ~BF_ASSIGN,size,0) : GenerateBitfieldDereference(node,flags,size);
+			ap1 = (flags & am_bf_assign) ? GenerateDereference(node,flags & ~am_bf_assign,size,0) : GenerateBitfieldDereference(node,flags,size);
 			ap1->isUnsigned = TRUE;
 			goto retpt;
 	case en_wfieldref:
 	case en_bfieldref:
 	case en_cfieldref:
 	case en_hfieldref:
-			ap1 = (flags & BF_ASSIGN) ? GenerateDereference(node,flags & ~BF_ASSIGN,size,1) : GenerateBitfieldDereference(node,flags,size);
+			ap1 = (flags & am_bf_assign) ? GenerateDereference(node,flags & ~am_bf_assign,size,1) : GenerateBitfieldDereference(node,flags,size);
 			goto retpt;
 	case en_regvar:
 	case en_tempref:
@@ -1704,15 +1708,16 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int size)
 		goto retpt;
 	case en_add:    ap1 = node->GenBinary(flags, size, op_add); goto retpt;
 	case en_sub:  ap1 = node->GenBinary(flags, size, op_sub); goto retpt;
-    case en_i2d:
+	case en_ptrdif:  ap1 = node->GenBinary(flags, size, op_ptrdif); goto retpt;
+	case en_i2d:
          ap1 = GetTempFPRegister();	
-         ap2=GenerateExpression(node->p[0],F_REG,8);
+         ap2=GenerateExpression(node->p[0],am_reg,8);
          GenerateDiadic(op_itof,'d',ap1,ap2);
          ReleaseTempReg(ap2);
 				 goto retpt;
     case en_i2q:
          ap1 = GetTempFPRegister();	
-         ap2 = GenerateExpression(node->p[0],F_REG,8);
+         ap2 = GenerateExpression(node->p[0],am_reg,8);
 		 GenerateTriadic(op_csrrw,0,makereg(0),make_immed(0x18),ap2);
 		 GenerateZeradic(op_nop);
 		 GenerateZeradic(op_nop);
@@ -1721,7 +1726,7 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int size)
 				 goto retpt;
     case en_i2t:
          ap1 = GetTempFPRegister();	
-         ap2 = GenerateExpression(node->p[0],F_REG,8);
+         ap2 = GenerateExpression(node->p[0],am_reg,8);
 		 GenerateTriadic(op_csrrw,0,makereg(0),make_immed(0x18),ap2);
 		 GenerateZeradic(op_nop);
 		 GenerateZeradic(op_nop);
@@ -1730,13 +1735,13 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int size)
 				 goto retpt;
     case en_d2i:
          ap1 = GetTempRegister();	
-         ap2 = GenerateExpression(node->p[0],F_FPREG,8);
+         ap2 = GenerateExpression(node->p[0],am_fpreg,8);
          GenerateDiadic(op_ftoi,'d',ap1,ap2);
          ReleaseTempReg(ap2);
 				 goto retpt;
     case en_q2i:
          ap1 = GetTempRegister();
-         ap2 = GenerateExpression(node->p[0],F_FPREG,8);
+         ap2 = GenerateExpression(node->p[0],am_fpreg,8);
          GenerateDiadic(op_ftoi,'q',makereg(63),ap2);
 		 GenerateZeradic(op_nop);
 		 GenerateZeradic(op_nop);
@@ -1745,7 +1750,7 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int size)
 				 goto retpt;
 		case en_t2i:
          ap1 = GetTempRegister();
-         ap2 = GenerateExpression(node->p[0],F_FPREG,8);
+         ap2 = GenerateExpression(node->p[0],am_fpreg,8);
          GenerateDiadic(op_ftoi,'t',makereg(63),ap2);
 		 GenerateZeradic(op_nop);
 		 GenerateZeradic(op_nop);
@@ -1754,21 +1759,21 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int size)
 				 goto retpt;
 		case en_s2q:
 		ap1 = GetTempFPRegister();
-        ap2 = GenerateExpression(node->p[0],F_FPREG,8);
+        ap2 = GenerateExpression(node->p[0],am_fpreg,8);
         GenerateDiadic(op_fcvtsq,0,ap1,ap2);
 		ap1->type = stdquad.GetIndex();
 		ReleaseTempReg(ap2);
 		goto retpt;
 		case en_d2q:
 		ap1 = GetTempFPRegister();
-		ap2 = GenerateExpression(node->p[0], F_FPREG, 8);
+		ap2 = GenerateExpression(node->p[0], am_fpreg, 8);
 		GenerateDiadic(op_fcvtdq, 0, ap1, ap2);
 		ap1->type = stdquad.GetIndex();
 		ReleaseTempReg(ap2);
 		goto retpt;
 		case en_t2q:
 		ap1 = GetTempFPRegister();
-		ap2 = GenerateExpression(node->p[0], F_FPREG, 8);
+		ap2 = GenerateExpression(node->p[0], am_fpreg, 8);
 		GenerateDiadic(op_fcvttq, 0, ap1, ap2);
 		ap1->type = stdquad.GetIndex();
 		ReleaseTempReg(ap2);
@@ -1826,6 +1831,7 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int size)
 		ap1 = (node->GenLand(flags, op_or, true));
 		goto retpt;
 
+	case en_isnullptr:	ap1 = node->GenUnary(flags, size, op_isnullptr); goto retpt;
 	case en_and:    ap1 = node->GenBinary(flags, size, op_and); goto retpt;
     case en_or:     ap1 = node->GenBinary(flags,size,op_or); goto retpt;
 	case en_xor:	ap1 = node->GenBinary(flags,size,op_xor); goto retpt;
@@ -1896,7 +1902,7 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int size)
 		goto retpt;
 	case en_void:
     natsize = GetNaturalSize(node->p[0]);
-		ap1 = GenerateExpression(node->p[0], F_ALL | F_NOVALUE, natsize);
+		ap1 = GenerateExpression(node->p[0], am_all | am_novalue, natsize);
 		ReleaseTempRegister(GenerateExpression(node->p[1], flags, size));
 		ap1->isPtr = node->IsPtr();
 		goto retpt;
@@ -1907,21 +1913,21 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int size)
 
 	case en_sxb:
 		ap1 = GetTempRegister();
-		ap2 = GenerateExpression(node->p[0], F_REG, 1);
+		ap2 = GenerateExpression(node->p[0], am_reg, 1);
 		GenerateDiadic(op_sxb, 0, ap1, ap2);
 		ReleaseTempReg(ap2);
 		ap1->MakeLegal( flags, 8);
 		goto retpt;
 	case en_sxc:
 		ap1 = GetTempRegister();
-		ap2 = GenerateExpression(node->p[0], F_REG, 2);
+		ap2 = GenerateExpression(node->p[0], am_reg, 2);
 		GenerateDiadic(op_sxc, 0, ap1, ap2);
 		ReleaseTempReg(ap2);
 		ap1->MakeLegal(flags, 8);
 		goto retpt;
 	case en_sxh:
 		ap1 = GetTempRegister();
-		ap2 = GenerateExpression(node->p[0], F_REG, 4);
+		ap2 = GenerateExpression(node->p[0], am_reg, 4);
 		GenerateDiadic(op_sxh, 0, ap1, ap2);
 		ReleaseTempReg(ap2);
 		ap1->MakeLegal(flags, 8);
@@ -1929,42 +1935,42 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int size)
 	case en_cubw:
 	case en_cubu:
 	case en_cbu:
-			ap1 = GenerateExpression(node->p[0],F_REG,1);
+			ap1 = GenerateExpression(node->p[0],am_reg,1);
 			GenerateTriadic(op_and,0,ap1,ap1,make_immed(0xff));
 			goto retpt;
 	case en_cucw:
 	case en_cucu:
 	case en_ccu:
-			ap1 = GenerateExpression(node->p[0],F_REG,2);
+			ap1 = GenerateExpression(node->p[0],am_reg,2);
 			GenerateDiadic(op_zxc,0,ap1,ap1);
 			goto retpt;
 	case en_ccwp:
-		ap1 = GenerateExpression(node->p[0], F_REG, 2);
+		ap1 = GenerateExpression(node->p[0], am_reg, 2);
 		ap1->isPtr = TRUE;
 		GenerateDiadic(op_sxc, 0, ap1, ap1);
 		goto retpt;
 	case en_cucwp:
-		ap1 = GenerateExpression(node->p[0], F_REG, 2);
+		ap1 = GenerateExpression(node->p[0], am_reg, 2);
 		ap1->isPtr = TRUE;
 		GenerateDiadic(op_zxc, 0, ap1, ap1);
 		goto retpt;
 	case en_cuhw:
 	case en_cuhu:
 	case en_chu:
-			ap1 = GenerateExpression(node->p[0],F_REG,4);
+			ap1 = GenerateExpression(node->p[0],am_reg,4);
 			GenerateDiadic(op_zxh,0,ap1,ap1);
 			goto retpt;
 	case en_cbw:
-			ap1 = GenerateExpression(node->p[0],F_REG,1);
+			ap1 = GenerateExpression(node->p[0],am_reg,1);
 			//GenerateDiadic(op_sxb,0,ap1,ap1);
 			GenerateDiadic(op_sxb,0,ap1,ap1);
 			goto retpt;
 	case en_ccw:
-			ap1 = GenerateExpression(node->p[0],F_REG,2);
+			ap1 = GenerateExpression(node->p[0],am_reg,2);
 			GenerateDiadic(op_sxc,0,ap1,ap1);
 			goto retpt;
 	case en_chw:
-			ap1 = GenerateExpression(node->p[0],F_REG,4);
+			ap1 = GenerateExpression(node->p[0],am_reg,4);
 			GenerateDiadic(op_sxh,0,ap1,ap1);
 			goto retpt;
 	case en_list:
@@ -2044,7 +2050,7 @@ void CodeGenerator::GenerateTrueJump(ENODE *node, int label, unsigned int predic
 		break;
 	default:
 		siz1 = GetNaturalSize(node);
-		ap1 = GenerateExpression(node,F_REG|F_FPREG,siz1);
+		ap1 = GenerateExpression(node,am_reg|am_fpreg,siz1);
 		//                        GenerateDiadic(op_tst,siz1,ap1,0);
 		ReleaseTempRegister(ap1);
 		if (ap1->mode == am_fpreg)
@@ -2113,7 +2119,7 @@ void CodeGenerator::GenerateFalseJump(ENODE *node,int label, unsigned int predic
 		break;
 	default:
 		siz1 = GetNaturalSize(node);
-		ap = GenerateExpression(node,F_REG|F_FPREG,siz1);
+		ap = GenerateExpression(node,am_reg|am_fpreg,siz1);
 		//                        GenerateDiadic(op_tst,siz1,ap,0);
 		ReleaseTempRegister(ap);
 		if (ap->mode==am_fpreg)

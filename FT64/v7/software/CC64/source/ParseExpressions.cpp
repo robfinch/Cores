@@ -268,7 +268,7 @@ char *GetStrConst()
 	len = MAX_STLP1 + 1;
 	str = (char *)malloc(len);
 	if (str == nullptr) {
-		error(ERR_OUT_OF_MEMORY);
+		error(ERR_OUT_Oam_memORY);
 	}
 	strcpy_s(str, len, laststr);
 	do {
@@ -277,7 +277,7 @@ char *GetStrConst()
 			len = strlen(str) + MAX_STLP1 + 1;
 			nstr = (char *)malloc(len+1);
 			if (nstr == nullptr) {
-				error(ERR_OUT_OF_MEMORY);
+				error(ERR_OUT_Oam_memORY);
 				break;
 			}
 			strcpy_s(nstr, len, str);
@@ -2814,9 +2814,21 @@ static TYP *addops(ENODE **node)
 		// Divide the result by the size of the pointed to object.
 		if (!oper && (tp1->type == bt_pointer) && (tp2->type == bt_pointer) && (sz1==sz2))
 		{
-  		ep1 = makenode( en_sub,ep1,ep2);
-			ep4 = makeinode(en_icon, sz1);
-			ep1 = makenode(en_div,ep1,ep4);
+			if (sz1 == 1 || sz1 == 2 || sz1 == 4 || sz1 == 8 || sz1 == 16 || sz1 == 32 || sz1 == 64 || sz1 == 128) {
+				ep1 = makenode(en_ptrdif, ep1, ep2);
+				ep1->p[4] = makeinode(en_icon, (int64_t)pwrof2(sz1));
+			}
+			else {
+				ep1 = makenode(en_ptrdif, ep1, ep2);
+				ep1->p[4] = makeinode(en_icon, (int64_t)0);
+				ep4 = makeinode(en_icon, sz1);
+				ep1 = makenode(en_div, ep1, ep4);
+			}
+			//else {
+			//	ep1 = makenode(en_sub, ep1, ep2);
+			//	ep4 = makeinode(en_icon, sz1);
+			//	ep1 = makenode(en_div, ep1, ep4);
+			//}
 			tp1 = &stduint;
 		}
 		else {
@@ -3046,9 +3058,9 @@ xit:
   return (tp1);
 }
 
-/*
- *      equalops handles the equality and inequality operators.
- */
+//
+// equalops handles the equality and inequality operators.
+//
 TYP *equalops(ENODE **node)
 {
 	ENODE *ep1, *ep2;
@@ -3066,25 +3078,34 @@ TYP *equalops(ENODE **node)
   while( lastst == eq || lastst == neq ) {
     oper = (lastst == eq);
     NextToken();
-    tp2 = relation(&ep2);
-    if( tp2 == NULL )
-      error(ERR_IDEXPECT);
-    else {
-			if (tp2->IsVectorType())
-				isVector = true;
-      tp1 = forcefit(&ep2,tp2,&ep1,tp1,true,false);
-			if (tp1->IsVectorType())
-				ep1 = makenode( oper ? en_veq : en_vne,ep1,ep2);
-      else if (tp1->IsFloatType())
-        ep1 = makenode( oper ? en_feq : en_fne,ep1,ep2);
-      else
-        ep1 = makenode( oper ? en_eq : en_ne,ep1,ep2);
-			ep1->esize = 2;
-			if (isVector)
-				tp1 = TYP::Make(bt_vector_mask,sizeOfWord);
-			ep1->etype = tp1->type;
-      PromoteConstFlag(ep1);
-    }
+		//if (lastst == kw_nullptr) {
+		//	NextToken();
+		//	ep1 = makenode(en_isnullptr, ep1, nullptr);
+		//	if (!oper)
+		//		ep1 = makenode(en_not, ep1, nullptr);
+		//}
+		//else
+		{
+			tp2 = relation(&ep2);
+			if (tp2 == NULL)
+				error(ERR_IDEXPECT);
+			else {
+				if (tp2->IsVectorType())
+					isVector = true;
+				tp1 = forcefit(&ep2, tp2, &ep1, tp1, true, false);
+				if (tp1->IsVectorType())
+					ep1 = makenode(oper ? en_veq : en_vne, ep1, ep2);
+				else if (tp1->IsFloatType())
+					ep1 = makenode(oper ? en_feq : en_fne, ep1, ep2);
+				else
+					ep1 = makenode(oper ? en_eq : en_ne, ep1, ep2);
+				ep1->esize = 2;
+				if (isVector)
+					tp1 = TYP::Make(bt_vector_mask, sizeOfWord);
+				ep1->etype = tp1->type;
+				PromoteConstFlag(ep1);
+			}
+		}
 	}
   *node = ep1;
  xit:

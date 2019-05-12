@@ -70,3 +70,18 @@ int CSE::OptimizationDesireability()
     return (uses);
 }
 
+void CSE::AccDuses(int val)
+{
+	if (loop_active > 1)
+		duses += (val != 0) * ((loop_active - 1) * 5);
+	else
+		duses += val;
+}
+
+void CSE::AccUses(int val)
+{
+	if (loop_active > 1)
+		uses += (loop_active - 1) * 5 * val;
+	else
+		uses += val;
+}

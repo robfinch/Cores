@@ -58,10 +58,10 @@ void Forest::CalcRegclass()
 		for (j = t->blocks->nextMember(); j >= 0; j = t->blocks->nextMember()) {
 			b = basicBlocks[j];
 			for (ip = b->code; !ip->leader && ip; ip = ip->fwd) {
-				t->regclass |= ip->insn->regclass1;
-				t->regclass |= ip->insn->regclass2;
-				t->regclass |= ip->insn->regclass3;
-				t->regclass |= ip->insn->regclass4;
+				t->regclass |= ip->insn->amclass1;
+				t->regclass |= ip->insn->amclass2;
+				t->regclass |= ip->insn->amclass3;
+				t->regclass |= ip->insn->amclass4;
 			}
 		}
 	}

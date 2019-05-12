@@ -62,12 +62,12 @@ enum e_node {
 		en_uhfieldref,en_hfieldref,en_ucfieldref,en_cfieldref,
 		en_dbl_ref, en_flt_ref, en_triple_ref, en_quad_ref,
 		en_bchk, en_chk,
-		en_abs, en_max, en_min, en_addrof,
+		en_abs, en_max, en_min, en_addrof, en_ptrdif,
 		// Vector
 		en_autovcon, en_autovmcon, en_vector_ref, en_vex, en_veins,
 		en_vadd, en_vsub, en_vmul, en_vdiv,
 		en_vadds, en_vsubs, en_vmuls, en_vdivs,
-		en_mulf,
+		en_mulf, en_isnullptr, 
 		en_object_list
 		};
 
@@ -81,31 +81,6 @@ enum e_stmt {
 		st_do, st_if, st_switch, st_default,
         st_case, st_goto, st_break, st_continue, st_label,
         st_return, st_vortex, st_intoff, st_inton, st_stop, st_check };
-
-enum e_am {
-	am_none = 0,
-  am_reg = 1,
-	am_fpreg = 2,
-	am_vreg = 4,
-	am_vmreg = 8,
-	am_ind = 16,
-	am_indx = 32,
-	am_indx2 = 64,
-  am_direct = 128,
-	am_mem = 240,
-	am_imm = 256,
-	am_i5 = 512,
-	am_ui6 = 1024,
-	am_i8 = 2048,	// BEQI
-	am_i26 = 4096,
-	am_mask = 8192,
-	am_ainc = 16384,
-	am_adec = 32768,
-	am_brind = 65536,
-	am_breg = 131072,
-	am_sreg = 262144,
-	am_direct2 = 524288
-};
 
 enum e_sym {
 	tk_nop,
@@ -141,7 +116,8 @@ enum e_sym {
 	kw_unordered, kw_inline, kw_kernel, kw_inout, kw_leafs,
 	kw_unique, kw_virtual, kw_this,
 	kw_new, kw_delete, kw_using, kw_namespace, kw_not, kw_attribute,
-	kw_no_temps, kw_no_parms, kw_floatmax, kw_mulf,
+	kw_no_temps, kw_no_parms, kw_floatmax, kw_mulf, kw_is_nullptr,
+	kw_nullptr,
 	my_eof
 };
 
@@ -153,6 +129,7 @@ enum e_sc {
 enum e_sg { noseg, codeseg, dataseg, stackseg, bssseg, idataseg, tlsseg, rodataseg };
 
 enum e_op {
+	op_none,
 	op_move, op_add, op_addu, op_addi, op_sub, op_subi, op_mov, op_mtspr, op_mfspr, op_ldi, op_ld,
 	op_mul, op_muli, op_mulu, op_divi, op_modi, op_modui,
 	op_div, op_divs, op_divsi, op_divu, op_and, op_andi, op_eor, op_eori,
@@ -231,30 +208,62 @@ enum e_op {
 	op_orq1, op_orq2, op_orq3,
 	op_swp,
 	op_string,
+	op_ptrdif, op_isnullptr,
 	// Built in functions
 	op_abs, op_mulf,
 	op_phi,
-    op_empty
+    op_empty,
+		op_last
 };
 
-#define F_REG   1       /* register direct mode allowed */
-#define F_BREG	2		/* branch register */
-#define F_MEM   4       /* memory alterable modes allowed */
-#define F_IMMED 8       /* immediate mode allowed */
-#define F_ALT   7       /* alterable modes */
-#define F_DALT  5       /* data alterable modes */
-#define F_VOL   16      /* need volitile operand */
-#define F_IMMED18	64	// 18-bit immediate constant
-#define F_IMM0	128		/* immediate value 0 */
-#define F_IMM8	256
-#define F_IMMED13  512
-#define F_FPREG 1024
-#define F_IMM6  2048
-#define BF_ASSIGN	4096
-#define F_VREG	8192
-#define F_VMREG	16384
-#define F_ALL   (15|1024|F_VREG|F_VMREG)      /* all modes allowed */
-#define F_NOVALUE 32768		/* dont need result value */
+enum e_am {
+	am_none = 0,
+	am_reg = 1,
+	am_fpreg = 2,
+	am_vreg = 4,
+	am_vmreg = 8,
+	am_ind = 16,
+	am_indx = 32,
+	am_indx2 = 64,
+	am_direct = 128,
+	am_mem = 240,
+	am_imm = 256,
+	am_i5 = 512,
+	am_ui6 = 1024,
+	am_i8 = 2048,	// BEQI
+	am_i26 = 4096,
+	am_mask = 8192,
+	am_ainc = 16384,
+	am_adec = 32768,
+	am_brind = 65536,
+	am_breg = 131072,
+	am_sreg = 262144,
+	am_direct2 = 524288,
+	am_volatile = 1 << 20,
+	am_bf_assign = 1 << 21,
+	am_imm0 = 1 << 22,
+	am_novalue = 1 << 23,
+	am_all = 0x1FF,
+};
+
+//#define am_reg   1       /* register direct mode allowed */
+//#define F_BREG	2		/* branch register */
+//#define am_mem   4       /* memory alterable modes allowed */
+//#define am_imm 8       /* immediate mode allowed */
+//#define F_ALT   7       /* alterable modes */
+//#define F_DALT  5       /* data alterable modes */
+//#define am_volatile   16      /* need volitile operand */
+//#define am_imm18	64	// 18-bit immediate constant
+//#define am_imm0	128		/* immediate value 0 */
+//#define am_i8	256
+//#define am_imm13  512
+//#define am_fpreg 1024
+//#define am_iu6  2048
+//#define am_bf_assign	4096
+//#define am_vreg	8192
+//#define am_vmreg	16384
+//#define am_all   (15|1024|am_vreg|am_vmreg)      /* all modes allowed */
+//#define am_novalue 32768		/* dont need result value */
 
 enum e_seg {
 	op_ns = 0,
@@ -348,7 +357,7 @@ enum e_hint {
 #define ERR_PRIVATE		46
 #define ERR_CALLSIG2	47
 #define ERR_METHOD_NOTFOUND	48
-#define ERR_OUT_OF_MEMORY   49
+#define ERR_OUT_Oam_memORY   49
 #define ERR_TOOMANY_SYMBOLS 50
 #define ERR_TOOMANY_PARAMS  51
 #define ERR_THIS            52
@@ -366,6 +375,7 @@ enum e_hint {
 #define ERR_STACKEMPTY		64
 #define ERR_IGNODES			65
 #define ERR_CASTAGGR		66
+#define ERR_PRECISION		67
 #define ERR_NULLPOINTER		1000
 #define ERR_CIRCULAR_LIST 1001
 #define ERR_MISSING_HIDDEN_STRUCTPTR	1002

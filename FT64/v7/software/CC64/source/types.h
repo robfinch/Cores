@@ -506,7 +506,7 @@ public:
 	std::string *udnm;			// undecorated name
 	void *ctor;
 	void *dtor;
-	ENODE *p[3];
+	ENODE *p[4];
 	ENODE *pfl;			// postfix list
 
 	ENODE *Clone();
@@ -514,6 +514,7 @@ public:
 	void SetType(TYP *t) { tp = t; if (t) etype = t->type; };
 	bool IsPtr() { return (etype == bt_pointer || etype == bt_struct || etype == bt_union || etype == bt_class || nodetype==en_addrof); };
 	bool IsFloatType() { return (nodetype==en_addrof || nodetype==en_autofcon) ? false : (etype == bt_double || etype == bt_quad || etype == bt_float || etype == bt_triple); };
+	bool IsVectorType() { return (etype == bt_vector); };
 	bool IsAutocon() { return (nodetype == en_autocon || nodetype == en_autocon || nodetype == en_autovcon || nodetype == en_classcon); };
 	bool IsUnsignedType() { return (etype == bt_ubyte || etype == bt_uchar || etype == bt_ushort || etype == bt_ulong || etype == bt_pointer || nodetype==en_addrof || nodetype==en_autofcon || nodetype==en_autocon); };
 	bool IsRefType() {
@@ -535,7 +536,7 @@ public:
 	bool AssignTypeToList(TYP *);
 
 	// Optimization
-	CSE *InsertAutocon(int duse);
+	CSE *OptInsertAutocon(int duse);
 	CSE *OptInsertRef(int duse);
 	void scanexpr(int duse);
 	void repexpr();
@@ -679,6 +680,7 @@ public:
 	void OptLabel();
 	void OptIndexScale();
 	void OptLdi();
+	void OptLea();
 
 	static OCODE *loadHex(txtiStream& ifs);
 	void store(txtoStream& ofs);
@@ -704,6 +706,7 @@ public:
 	void GenerateTrueJump(ENODE *node, int label, unsigned int prediction);
 	void GenerateFalseJump(ENODE *node, int label, unsigned int prediction);
 	virtual Operand *GenExpr(ENODE *node) { return (nullptr); };
+	void GenLoadConst(Operand *ap1, Operand *ap2);
 	void SaveTemporaries(Function *sym, int *sp, int *fsp);
 	void RestoreTemporaries(Function *sym, int sp, int fsp);
 	int GenerateInlineArgumentList(Function *func, ENODE *plist);
@@ -1025,13 +1028,15 @@ public:
 	char *mnem;		// mnemonic
 	short opcode;	// matches OCODE opcode
 	short extime;	// execution time, divide may take hundreds of cycles
-	unsigned int targetCount : 2;
+	unsigned int targetCount : 2;	// number of target operands
 	bool memacc;	// instruction accesses memory
-	unsigned int regclass1;	// register class 1=integer,2=floating point,4=vector
-	unsigned int regclass2;	// register class 1=integer,2=floating point,4=vector
-	unsigned int regclass3;	// register class 1=integer,2=floating point,4=vector
-	unsigned int regclass4;	// register class 1=integer,2=floating point,4=vector
+	unsigned int amclass1;	// address mode class, one for each possible operand
+	unsigned int amclass2;
+	unsigned int amclass3;
+	unsigned int amclass4;
 public:
+	static void SetMap();
+	static Instruction *GetMapping(int op);
 	bool IsFlowControl();
 	bool IsLoad();
 	bool IsIntegerLoad();
@@ -1056,13 +1061,15 @@ public:
 class CSE {
 public:
 	short int nxt;
-    ENODE *exp;           /* optimizable expression */
-    short int       uses;           /* number of uses */
-    short int       duses;          /* number of dereferenced uses */
-    short int       reg;            /* AllocateRegisterVarsd register */
-    unsigned int    voidf : 1;      /* cannot optimize flag */
-    unsigned int    isfp : 1;
+  ENODE *exp;           /* optimizable expression */
+  short int       uses;           /* number of uses */
+  short int       duses;          /* number of dereferenced uses */
+  short int       reg;            /* AllocateRegisterVarsd register */
+  unsigned int    voidf : 1;      /* cannot optimize flag */
+  unsigned int    isfp : 1;
 public:
+	void AccUses(int val);					// accumulate uses
+	void AccDuses(int val);					// accumulate duses
 	int OptimizationDesireability();
 };
 
@@ -1198,6 +1205,8 @@ public:
 	Declaration *next;
 	static void AssignParameterName();
 	static int declare(SYM *parent,TABLE *table,int al,int ilc,int ztype);
+	static void ParseEnumerationList(TABLE *table, int amt, SYM *parent);
+	static void ParseEnum(TABLE *table);
 	static void ParseVoid();
 	static void ParseConst();
 	static void ParseTypedef();
@@ -1209,7 +1218,7 @@ public:
 	static void ParseInt64();
 	static void ParseInt40();
 	static void ParseInt32();
-	static void ParseInt16();
+	static void ParseChar();
 	static void ParseInt8();
 	static void ParseByte();
 	static void ParseFloat();
@@ -1229,6 +1238,11 @@ public:
 	static void ParseSuffixOpenpa(Function *);
 	static SYM *ParseSuffix(SYM *sp);
 	static void ParseFunctionAttribute(Function *sym);
+	static void ParseAssign(SYM *sp);
+	static void DoDeclarationEnd(SYM *sp, SYM *sp1);
+	static void DoInsert(SYM *sp, TABLE *table);
+	static void AllocFunc(SYM *sp, SYM *sp1);
+	static SYM *FindSymbol(SYM *sp, TABLE *table);
 
 	static int GenStorage(int nbytes, int al, int ilc);
 };

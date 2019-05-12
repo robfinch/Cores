@@ -64,6 +64,7 @@ std::string *classname;
 bool isPrivate = true;
 SYM *currentClass;
 int mangledNames = FALSE;
+int defaultcc = 1;
 
 /* variable for bit fields */
 static int		bit_max;	// largest bitnumber
@@ -71,24 +72,13 @@ int bit_offset;	/* the actual offset */
 int      bit_width;	/* the actual width */
 int bit_next;	/* offset for next variable */
 
-bool declbegin(int st);
-void dodecl(int defclass);
-SYM *ParseDeclarationSuffix(SYM *);
-void declstruct(int ztype);
-void structbody(TYP *tp, int ztype);
-void ParseEnumDeclaration(TABLE *table);
-void enumbody(TABLE *table);
-extern int ParseClassDeclaration(int ztype);
-extern ENODE *ArgumentList(ENODE *hidden,int*,int);
-TYP *nameref2(std::string name, ENODE **node,int nt,bool alloc,TypeArray*, TABLE* tbl);
-SYM *search2(std::string na,TABLE *tbl,int *typearray);
-SYM *gsearch2(std::string na, __int16, int *typearray, bool exact);
-extern ENODE *makesnode(int,std::string *,std::string *,__int64);
-
-extern TYP *CopyType(TYP *src);
+bool IsDeclBegin(int st)
+{
+	return (st == star || st == id || st == openpa || st == openbr);
+}
 
 int     imax(int i, int j)
-{       return (i > j) ? i : j;
+{       return ((i > j) ? i : j);
 }
 
 
@@ -100,7 +90,7 @@ char *my_strdup(char *s)
 	p = (char *)allocx(sizeof(char)*(n+1));
 	memcpy(p,s,sizeof(char)*(n));
 	p[n] = '\0';
-	return p;
+	return (p);
 }
 
 void Declaration::SetType(SYM *sp)
@@ -279,6 +269,19 @@ void Declaration::ParseInt()
 	head->isIO = isIO;
 	head->isConst = isConst;
 	NextToken();
+	if (lastst == colon) {
+		NextToken();
+		head->precision = (__int16)GetIntegerExpression(nullptr);
+		if (head->precision != 8
+			&& head->precision != 16
+			&& head->precision != 32
+			&& head->precision != 64
+			&& head->precision != 128) {
+			error(ERR_PRECISION);
+			head->precision = 64;
+		}
+	}
+	bit_max = head->precision;
 	if (lastst==kw_vector) {
 		int btp = head->GetIndex();
 		head = TYP::Make(bt_vector,512);
@@ -310,6 +313,16 @@ void Declaration::ParseFloat()
 	head->isIO = isIO;
 	head->isConst = isConst;
 	NextToken();
+	if (lastst == colon) {
+		NextToken();
+		head->precision = (__int16)GetIntegerExpression(nullptr);
+		if ((head->precision & 7) != 0
+			|| head->precision < 16
+			|| head->precision > 128) {
+			error(ERR_PRECISION);
+			head->precision = 64;
+		}
+	}
 	if (lastst==kw_vector) {
 		int btp = head->GetIndex();
 		head = TYP::Make(bt_vector,512);
@@ -453,7 +466,7 @@ void Declaration::ParseInt64()
 	head->isShort = TRUE;
 }
 
-void Declaration::ParseInt16()
+void Declaration::ParseChar()
 {
 	if (isUnsigned) {
 		head = (TYP *)TYP::Make(isInline ? bt_iuchar : bt_uchar,2);
@@ -468,6 +481,15 @@ void Declaration::ParseInt16()
 	head->isIO = isIO;
 	head->isConst = isConst;
 	NextToken();
+	if (lastst == colon) {
+		NextToken();
+		head->precision = (__int16)GetIntegerExpression(nullptr);
+		if ((head->precision & 7) != 0
+			|| head->precision > 32) {
+			error(ERR_PRECISION);
+			head->precision = 16;
+		}
+	}
 	if (lastst==kw_oscall) {
 		isOscall = TRUE;
 		NextToken();
@@ -476,7 +498,7 @@ void Declaration::ParseInt16()
 		isNocall = TRUE;
 		NextToken();
 	}
-	bit_max = 16;
+	bit_max = head->precision;
 }
 
 void Declaration::ParseInt8()
@@ -626,9 +648,9 @@ int Declaration::ParseSpecifier(TABLE *table)
 			// the 'signed' keyword
 			//
 			case kw_byte:   ParseByte(); goto lxit;
-			case kw_char:	ParseInt16(); goto lxit;
+			case kw_char:	ParseChar(); goto lxit;
 			case kw_int8:	ParseInt8(); goto lxit;
-			case kw_int16:	ParseInt16(); goto lxit;
+			case kw_int16:	ParseChar(); goto lxit;
 			case kw_int32:	ParseInt32(); goto lxit;
 			case kw_int64:	ParseInt64(); goto lxit;
 			case kw_short:	ParseShort();	goto lxit;
@@ -692,7 +714,7 @@ int Declaration::ParseSpecifier(TABLE *table)
 
 			case kw_enum:
 				NextToken();
-				ParseEnumDeclaration(table);
+				ParseEnum(table);
 				bit_max = 16;
 				goto lxit;
 
@@ -1302,6 +1324,179 @@ int Declaration::GenStorage(int nbytes, int al, int ilc)
 	return (nbytes);
 }
 
+void Declaration::ParseAssign(SYM *sp)
+{
+	TYP *tp1, *tp2;
+	enum e_node op;
+	ENODE *ep1, *ep2;
+
+	tp1 = nameref(&ep1, TRUE);
+	op = en_assign;
+	tp2 = asnop(&ep2);
+	if (tp2 == nullptr || !IsLValue(ep1))
+		error(ERR_LVALUE);
+	else {
+		tp1 = forcefit(&ep2, tp2, &ep1, tp1, false, true);
+		ep1 = makenode(op, ep1, ep2);
+	}
+	// Move vars with initialization data over to the data segment.
+	if (ep1->segment == bssseg)
+		ep1->segment = dataseg;
+	sp->initexp = ep1;
+}
+
+
+// Processing done when the end of a declaration (;) is reached.
+
+void Declaration::DoDeclarationEnd(SYM *sp, SYM *sp1)
+{
+	int nn;
+	TYP *tp1;
+	ENODE *ep1, *ep2;
+
+	if (sp == nullptr)
+		return;
+	if (sp->tp == nullptr)
+		return;
+	if (sp->tp->type == bt_class && (sp->storage_class != sc_type
+		&& sp->storage_class != sc_typedef)) {
+		nn = sp->tp->lst.FindRising(*sp->tp->sname);
+		if (nn > 0) {
+			if (sp1) {
+				ep1 = nullptr;
+				// Build an expression that references the ctor.
+				tp1 = nameref2(*sp->tp->sname, &ep1, TRUE, false, nullptr, nullptr);
+				// Create a function call node for the ctor.
+				if (tp1 != nullptr) {
+					// Make an expresison that references the var name as the
+					// argument to the ctor.
+					ep2 = makesnode(en_nacon, sp->name, sp->mangledName, sp->value.i);
+					ep1 = makenode(en_fcall, ep1, ep2);
+				}
+				sp->initexp = ep1;
+			}
+		}
+		/*
+			// First see if there is a ctor. If there are no ctors there's
+			// nothing to do.
+			memset(typearray,0,sizeof(typearray));
+			sp1 = search2(sp->tp->sname,&sp->tp->lst,typearray);
+			if (sp1) {
+				// Build an expression that references the ctor.
+				tp1 = nameref2(sp->tp->sname,&ep1,TRUE,false,typearray);
+				// Create a function call node for the ctor.
+				if (tp1!=nullptr) {
+					memcpy(typearray,GetParameterTypes(sp),sizeof(typearray));
+					ep1 = makenode(en_fcall, ep1, nullptr);
+				}
+				sp->initexp = ep1;
+			}
+		*/
+	}
+}
+
+void Declaration::DoInsert(SYM *sp, TABLE *table)
+{
+	dfs.printf("<DoInsert>");
+	if ((sp->tp->type == bt_class)
+		&& (sp->storage_class == sc_type || sp->storage_class == sc_typedef))
+		; // Do nothing. The class was already entered in the tag table.
+	else if ((sp->tp->type == bt_struct || sp->tp->type == bt_union)
+		&& (sp->storage_class == sc_type && sp->storage_class != sc_typedef)
+		&& sp->tp->sname->length() > 0)
+		; // If there was no struct tag and this is a typedef, then it
+			// still needs to be inserted into the table.
+	else {
+		dfs.printf("insert type: %d\n", sp->tp->type);
+		dfs.printf("***Inserting:%s into %p\n", (char *)sp->name->c_str(), (char *)table);
+		// Need to know the type before a name can be generated.
+		if (sp->tp->type == bt_func || sp->tp->type == bt_ifunc)
+			sp->mangledName = sp->BuildSignature(!sp->fi->IsPrototype);
+		if (sp->parent && ((sp->tp->type == bt_func || sp->tp->type == bt_ifunc)
+			|| (sp->tp->type == bt_pointer && (sp->tp->GetBtp()->type == bt_func || sp->tp->GetBtp()->type == bt_ifunc))))
+		{
+			//insState = 1;
+			sp->fi->InsertMethod();
+		}
+		else {
+			//insState = 2;
+			table->insert(sp);
+		}
+	}
+	dfs.printf("</DoInsert>\n");
+}
+
+void Declaration::AllocFunc(SYM *sp, SYM *sp1)
+{
+	dfs.printf("<AllocFunc>");
+	sp1->SetType(sp->tp);
+	sp1->storage_class = sp->storage_class;
+	sp1->value.i = sp->value.i;
+	if (!sp1->fi) {
+		sp1->fi = allocFunction(sp1->id);
+		//sp1->fi = newFunction(sp1->id);
+		sp1->fi->sym = sp1;
+	}
+	sp1->fi->IsPascal = sp->fi->IsPascal;
+	sp1->fi->IsPrototype = sp->fi->IsPrototype;
+	sp1->fi->IsVirtual = sp->fi->IsVirtual;
+	sp1->parent = sp->parent;
+	sp->fi->params.CopyTo(&sp1->fi->params);
+	sp->fi->proto.CopyTo(&sp1->fi->proto);
+	sp1->lsyms = sp->lsyms;
+	sp = sp1;
+	dfs.printf("</AllocFunc>\n");
+}
+
+SYM *Declaration::FindSymbol(SYM *sp, TABLE *table)
+{
+	SYM *sp1;
+	Function *fn;
+
+	dfs.printf("<FindSymbol>");
+	//dfs.printf("Table:%p, sp:%p Fn:%p\r\n", table, sp, currentFn);
+	if (sp->parent) {
+		int nn;
+		// If a function body is being processed we want to look for
+		// symbols by rising through the hierarchy. Otherwise we want a
+		// lower level defined symbol to shadow one at a hight level.
+		if (isFuncBody) {
+			nn = sp->GetParentPtr()->tp->lst.FindRising(*sp->name);
+			if (nn)
+				sp1 = sp->FindRisingMatch(false);
+		}
+		else {
+			nn = sp->GetParentPtr()->tp->lst.Find(*sp->name);
+			if (nn) {
+				sp1 = sp->fi->FindExactMatch(TABLE::matchno)->sym;
+			}
+		}
+	}
+	else
+		sp1 = table->Find(*sp->name, false);
+	dfs.printf("h");
+	if (sp->tp) {
+		dfs.printf("h1");
+		if (sp->tp->type == bt_ifunc || sp->tp->type == bt_func) {
+			dfs.printf("h2");
+			fn = sp->fi->FindExactMatch(TABLE::matchno);
+			if (fn)
+				sp1 = fn->sym;
+			else
+				sp1 = nullptr;
+			dfs.printf("i");
+		}
+	}
+	else {
+		dfs.printf("j");
+		if (TABLE::matchno)
+			sp1 = TABLE::match[TABLE::matchno - 1];
+		else
+			sp1 = nullptr;
+	}
+	dfs.printf("</FindSymbol>\n");
+	return (sp1);
+}
 
 /*
  *      process declarations of the form:
@@ -1445,108 +1640,23 @@ int Declaration::declare(SYM *parent,TABLE *table,int al,int ilc,int ztype)
 			//if (strcmp(name.c_str(), "__Skip") == 0)
 			//	printf("hl");
 			if (sp->name->length() > 0) {
-				//dfs.printf("Table:%p, sp:%p Fn:%p\r\n", table, sp, currentFn);
-				if (sp->parent) {
-					int nn;
-					// If a function body is being processed we want to look for
-					// symbols by rising through the hierarchy. Otherwise we want a
-					// lower level defined symbol to shadow one at a hight level.
-					if (isFuncBody) {
-						nn = sp->GetParentPtr()->tp->lst.FindRising(*sp->name);
-						if (nn)
-							sp1 = sp->FindRisingMatch(false);
-					}
-					else {
-						nn = sp->GetParentPtr()->tp->lst.Find(*sp->name);
-						if (nn) {
-							sp1 = sp->fi->FindExactMatch(TABLE::matchno)->sym;
-						}
-					}
-				}
-				else
-  					sp1 = table->Find(*sp->name,false);
-
-				dfs.printf("h");
-				if (sp->tp) {
-					dfs.printf("h1");
-					if (sp->tp->type == bt_ifunc || sp->tp->type==bt_func) {
-						dfs.printf("h2");
-						fn = sp->fi->FindExactMatch(TABLE::matchno);
-						if (fn)
-							sp1 = fn->sym;
-						else
-							sp1 = nullptr;
-						dfs.printf("i");
-					}
-				}
-				else {
-  dfs.printf("j");
-					if (TABLE::matchno)
-						sp1 = TABLE::match[TABLE::matchno-1];
-					else
-						sp1 = nullptr;
-				}
+				sp1 = FindSymbol(sp, table);
   dfs.printf("k");
-  				flag = false;
-	  			if (sp1) {
-  					if (sp1->tp) {
+  			flag = false;
+	  		if (sp1) {
+  				if (sp1->tp) {
   dfs.printf("l");
-  						flag = sp1->tp->type == bt_func;
-  					}
+  					flag = sp1->tp->type == bt_func;
   				}
-  dfs.printf("I");
-  			if (sp->tp->type == bt_ifunc && flag)
-  			{
-  dfs.printf("Ia");
-  				dfs.printf("bt_ifunc\r\n");
-  				sp1->SetType(sp->tp);
-  				sp1->storage_class = sp->storage_class;
-					sp1->value.i = sp->value.i;
-					if (!sp1->fi) {
-						sp1->fi = allocFunction(sp1->id);
-						//sp1->fi = newFunction(sp1->id);
-						sp1->fi->sym = sp1;
-					}
-	        sp1->fi->IsPascal = sp->fi->IsPascal;
-  				sp1->fi->IsPrototype = sp->fi->IsPrototype;
-  				sp1->fi->IsVirtual = sp->fi->IsVirtual;
-  				sp1->parent = sp->parent;
-  				sp->fi->params.CopyTo(&sp1->fi->params);
-  				sp->fi->proto.CopyTo(&sp1->fi->proto);
-  				sp1->lsyms = sp->lsyms;
+  			}
+  			if (sp->tp->type == bt_ifunc && flag) {
+					AllocFunc(sp, sp1);
   				sp = sp1;
         }
   			else {
-  dfs.printf("Ib");
   				// Here the symbol wasn't found in the table.
-  				if (sp1 == nullptr) {
-  dfs.printf("Ic");
-            if ((sp->tp->type==bt_class)
-               && (sp->storage_class == sc_type || sp->storage_class==sc_typedef))
-              ; // Do nothing. The class was already entered in the tag table.
-            else if ((sp->tp->type == bt_struct || sp->tp->type==bt_union)
-               && (sp->storage_class == sc_type && sp->storage_class!=sc_typedef)
-               && sp->tp->sname->length() > 0)
-              ; // If there was no struct tag and this is a typedef, then it
-                // still needs to be inserted into the table.
-            else {
-              dfs.printf("insert type: %d\n", sp->tp->type);
-  					  dfs.printf("***Inserting:%s into %p\n",(char *)sp->name->c_str(), (char *) table);
-  					   // Need to know the type before a name can be generated.
-					  if (sp->tp->type == bt_func || sp->tp->type == bt_ifunc)
-						sp->mangledName = sp->BuildSignature(!sp->fi->IsPrototype);
-   					  if (sp->parent && ((sp->tp->type==bt_func || sp->tp->type==bt_ifunc)
-   					  || (sp->tp->type==bt_pointer && (sp->tp->GetBtp()->type==bt_func || sp->tp->GetBtp()->type==bt_ifunc))))
-              {
-								//insState = 1;
-								sp->fi->InsertMethod();
-  			      }
-  			      else {
-								//insState = 2;
-                table->insert(sp);
-  					  }
-  				  }
-  				}
+  				if (sp1 == nullptr)
+						DoInsert(sp, table);
   			}
   dfs.printf("J");
   			if (needParseFunction) {
@@ -1621,7 +1731,7 @@ int Declaration::declare(SYM *parent,TABLE *table,int al,int ilc,int ztype)
 			if (lastst == comma) {
 				break;
 				NextToken();
-				if (declbegin(lastst) == false)
+				if (IsDeclBegin(lastst) == false)
 					goto xit1;
 				head = dhead;
 				continue;
@@ -1638,71 +1748,19 @@ int Declaration::declare(SYM *parent,TABLE *table,int al,int ilc,int ztype)
 
 		// If semi-colon is encountered we are at the end of the declaration.
 		else if (lastst == semicolon) {
-			if (sp) {
-				if (sp->tp) {
-					if (sp->tp->type==bt_class && (sp->storage_class != sc_type
-						&& sp->storage_class != sc_typedef)) {
-						int nn;
-						nn = sp->tp->lst.FindRising(*sp->tp->sname);
-						if (nn > 0) {
-							if (sp1) {
-								ENODE *ep1,*ep2;
-								ep1 = nullptr;
-  								// Build an expression that references the ctor.
-  								tp1 = nameref2(*sp->tp->sname,&ep1,TRUE,false,nullptr,nullptr);
-  								// Create a function call node for the ctor.
-  								if (tp1!=nullptr) {
-  									// Make an expresison that references the var name as the
-  									// argument to the ctor.
-  									ep2 = makesnode(en_nacon,sp->name,sp->mangledName,sp->value.i);
-  									ep1 = makenode(en_fcall, ep1, ep2);
-  								}
-  								sp->initexp = ep1;
-							}
-						}
-		/*
-						// First see if there is a ctor. If there are no ctors there's
-						// nothing to do.
-						memset(typearray,0,sizeof(typearray));
-						sp1 = search2(sp->tp->sname,&sp->tp->lst,typearray);
-						if (sp1) {
-							// Build an expression that references the ctor.
-							tp1 = nameref2(sp->tp->sname,&ep1,TRUE,false,typearray);
-							// Create a function call node for the ctor.
-							if (tp1!=nullptr) {
-								memcpy(typearray,GetParameterTypes(sp),sizeof(typearray));
-								ep1 = makenode(en_fcall, ep1, nullptr);
-							}
-							sp->initexp = ep1;
-						}
-		*/
-					}
-				}
-			}
+			DoDeclarationEnd(sp, sp1);
 			break;	// semicolon
 		}
 
 		// Handle an assignment
 		else if (lastst == assign) {
-			tp1 = nameref(&ep1,TRUE);
-      op = en_assign;
-      tp2 = asnop(&ep2);
-      if (tp2 == nullptr || !IsLValue(ep1))
-        error(ERR_LVALUE);
-      else {
-        tp1 = forcefit(&ep2,tp2,&ep1,tp1,false,true);
-        ep1 = makenode(op,ep1,ep2);
-      }
-			// Move vars with initialization data over to the data segment.
-			if (ep1->segment == bssseg)
-				ep1->segment = dataseg;
-			sp->initexp = ep1;
+			ParseAssign(sp);
 			if (lastst==semicolon)
 				break;
 		}
 		// See if there is a list of variable declarations
     needpunc(comma,24);
-    if(declbegin(lastst) == false)
+    if(IsDeclBegin(lastst) == false)
       break;
     head = dhead;
   }
@@ -1714,15 +1772,10 @@ xit1:
   return (nbytes);
 }
 
-bool declbegin(int st)
-{
-	return st == star || st == id || st == openpa || st == openbr; 
-}
-
 void GlobalDeclaration::Parse()
 {
 	dfs.puts("<ParseGlobalDecl>\n");
-	isPascal = FALSE;
+	isPascal = defaultcc==1;
 	isInline = false;
 	for(;;) {
 		lc_auto = 0;
@@ -1740,6 +1793,10 @@ void GlobalDeclaration::Parse()
 		  NextToken();
 		  isPascal = TRUE;
 		  break;
+		case kw_cdecl:
+			NextToken();
+			isPascal = FALSE;
+			break;
 		case kw_inline:
 		  NextToken();
 		  isInline = true;
@@ -1752,7 +1809,6 @@ void GlobalDeclaration::Parse()
 		case kw_kernel:
 		case kw_interrupt:
         case kw_task:
-		case kw_cdecl:
 		case kw_naked:
 		case kw_nocall:
 		case kw_oscall:
@@ -1830,6 +1886,14 @@ void GlobalDeclaration::Parse()
             }
           }
         }
+				else if (strcmp(lastid, "___cdecl") == 0) {
+					NextToken();
+					defaultcc = 0;
+				}
+				else if (strcmp(lastid, "_pascal") == 0) {
+					NextToken();
+					defaultcc = 1;
+				}
       }
 	  else if (lastst==kw_short) {
 		  NextToken();
@@ -1941,7 +2005,7 @@ int ParameterDeclaration::Parse(int fd)
 	ofd = funcdecl;
 	opascal = isPascal;
 	oisInline = isInline;
-	isPascal = FALSE;
+	isPascal = defaultcc==1;
 	funcdecl = fd;
 	parsingParameterList++;
 	nparms = 0;

@@ -287,7 +287,7 @@ int64_t InitializePointer(TYP *tp2)
 							else
 								error(ERR_ILLINIT);
 						}
-						else if (n->p[0]->nodetype == en_sub) {
+						else if (n->p[0]->nodetype == en_sub || n->p[0]->nodetype == en_ptrdif) {
 							if (n->p[0]->p[0]->nodetype == en_labcon) {
 								sp = n->p[0]->p[0]->sym;
 								GenerateReference(n->p[0]->p[0]->sym, -n->p[0]->p[1]->i);

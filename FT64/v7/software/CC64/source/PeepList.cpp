@@ -444,18 +444,18 @@ void PeepList::OptConstReg()
 					}
 				}
 			}
-			count += ip->oper2->OptRegConst(ip->insn->regclass2, true);
-			count += ip->oper3->OptRegConst(ip->insn->regclass3, true);
-			count += ip->oper4->OptRegConst(ip->insn->regclass4, true);
+			count += ip->oper2->OptRegConst(ip->insn->amclass2, true);
+			count += ip->oper3->OptRegConst(ip->insn->amclass3, true);
+			count += ip->oper4->OptRegConst(ip->insn->amclass4, true);
 		}
 	}
 
 	if (count < 4) {
 		for (ip = head; ip; ip = ip->fwd) {
 			if (ip->insn) {
-				ip->oper2->OptRegConst(ip->insn->regclass2, false);
-				ip->oper3->OptRegConst(ip->insn->regclass3, false);
-				ip->oper4->OptRegConst(ip->insn->regclass4, false);
+				ip->oper2->OptRegConst(ip->insn->amclass2, false);
+				ip->oper3->OptRegConst(ip->insn->amclass3, false);
+				ip->oper4->OptRegConst(ip->insn->amclass4, false);
 			}
 		}
 		// Remove all def's of registers containing a constant
@@ -563,6 +563,7 @@ void PeepList::OptInstructions()
 				break;
 			case op_ld:		ip->OptLoad();	break;
 			case op_ldi:	ip->OptLdi();	break;
+			case op_lea:	ip->OptLea();	break;
 			case op_mov:	ip->OptMove();	break;
 			case op_sub:	ip->OptSubtract(); break;
 			case op_lb:		ip->OptLoadByte(); break;

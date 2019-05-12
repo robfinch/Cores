@@ -109,8 +109,8 @@ Operand *CodeGenerator::GenerateBitfieldAssign(ENODE *node, int flags, int size)
 
 	// we don't want a bitfield dereference operation here.
 	// We want all the bits.
-	ap1 = GenerateExpression(node->p[0],F_REG|F_MEM|BF_ASSIGN,size);
-	ap2 = GenerateExpression(node->p[1],F_REG,size);
+	ap1 = GenerateExpression(node->p[0],am_reg|am_mem|am_bf_assign,size);
+	ap2 = GenerateExpression(node->p[1],am_reg,size);
 	if (ap1->mode == am_reg) {
 		GenerateBitfieldInsert(ap1, ap2, node->p[0]->bit_offset, node->p[0]->bit_width);
 	}

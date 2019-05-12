@@ -94,7 +94,7 @@ void Operand::GenZeroExtend(int isize, int osize)
 {
 	if (isize == osize)
 		return;
-	MakeLegal(F_REG, isize);
+	MakeLegal(am_reg, isize);
 	switch (osize)
 	{
 	case 1:	GenerateDiadic(op_zxb, 0, this, this); break;
@@ -125,7 +125,7 @@ Operand *Operand::GenSignExtend(int isize, int osize, int flags)
 		//GenStore(ap1, ap, osize);
 		//ReleaseTempRegister(ap1);
 		return (ap1);
-		//MakeLegalOperand(ap,flags & (F_REG|F_FPREG),isize);
+		//MakeLegalOperand(ap,flags & (am_reg|am_fpreg),isize);
 	}
 	if (ap->type == stddouble.GetIndex()) {
 		switch (isize) {
@@ -155,27 +155,27 @@ void Operand::MakeLegal(int flags, int size)
 	if (this == nullptr)
 		return;
 
-	//	if (flags & F_NOVALUE) return;
-	if (((flags & F_VOL) == 0) || tempflag)
+	//	if (flags & am_novalue) return;
+	if (((flags & am_volatile) == 0) || tempflag)
 	{
 		switch (mode) {
 		case am_imm:
 			i = ((ENODE *)(offset))->i;
-			if (flags & F_IMM8) {
+			if (flags & am_i8) {
 				if (i < 256 && i >= 0)
 					return;
 			}
-			else if (flags & F_IMM6) {
+			else if (flags & am_ui6) {
 				if (i < 64 && i >= 0)
 					return;
 			}
-			else if (flags & F_IMM0) {
+			else if (flags & am_imm0) {
 				if (i == 0)
 					return;
 			}
 			// If there is a choice between r0 and #0 choose r0.
-			else if (flags & F_IMMED) {
-				if (flags & F_REG) {
+			else if (flags & am_imm) {
+				if (flags & am_reg) {
 					if (offset->i == 0) {
 						mode = am_reg;
 						preg = 0;
@@ -185,10 +185,10 @@ void Operand::MakeLegal(int flags, int size)
 			}
 			break;
 		case am_reg:
-			if (flags & F_REG)
+			if (flags & am_reg)
 				return;
 			// Allow r0 to substitute for #0
-			if (flags & F_IMMED) {
+			if (flags & am_imm) {
 				if (preg == 0) {
 					offset = allocEnode();
 					offset->i = 0;
@@ -197,22 +197,22 @@ void Operand::MakeLegal(int flags, int size)
 			}
 			break;
 		case am_fpreg:
-			if (flags & F_FPREG)
+			if (flags & am_fpreg)
 				return;
 			break;
 		case am_ind:
 		case am_indx:
 		case am_indx2:
 		case am_direct:
-			if (flags & F_MEM)
+			if (flags & am_mem)
 				return;
 			break;
 		}
 	}
 
-	if (flags & F_REG)
+	if (flags & am_reg)
 	{
-		if (mode == am_reg)	// Might get this if F_VOL specified
+		if (mode == am_reg)	// Might get this if am_volatile specified
 			return;
 		ReleaseTempRegister(this);      // maybe we can use it...
 		if (this)
@@ -225,7 +225,8 @@ void Operand::MakeLegal(int flags, int size)
 			GenLoad(ap2, this, size, size);
 			break;
 		case am_imm:
-			GenerateDiadic(op_ldi, 0, ap2, this);
+			cg.GenLoadConst(this, ap2);
+			//GenerateDiadic(op_ldi, 0, ap2, this);
 			break;
 		case am_reg:
 			GenerateDiadic(op_mov, 0, ap2, this);
@@ -251,7 +252,7 @@ void Operand::MakeLegal(int flags, int size)
 		tempflag = 1;
 		return;
 	}
-	if (flags & F_FPREG)
+	if (flags & am_fpreg)
 	{
 		if (mode == am_fpreg)
 			return;
@@ -315,7 +316,8 @@ void Operand::MakeLegal(int flags, int size)
 		GenLoad(ap2, this, size, size);
 		break;
 	case am_imm:
-		GenerateDiadic(op_ldi, 0, ap2, this);
+		cg.GenLoadConst(this, ap2);
+		//GenerateDiadic(op_ldi, 0, ap2, this);
 		break;
 	case am_reg:
 		GenerateDiadic(op_mov, 0, ap2, this);

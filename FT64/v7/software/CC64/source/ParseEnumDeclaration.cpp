@@ -29,10 +29,7 @@ extern TABLE tagtable;
 extern TYP *head;
 extern TYP stdconst;
 
-void enumbody(TABLE *table);
-void ParseEnumerationList(TABLE *table, int amt, SYM *parent);
-
-void ParseEnumDeclaration(TABLE *table)
+void Declaration::ParseEnum(TABLE *table)
 {   
 	SYM *sp;
   TYP *tp;
@@ -77,7 +74,7 @@ void ParseEnumDeclaration(TABLE *table)
   }
 }
 
-void ParseEnumerationList(TABLE *table, int amt, SYM *parent)
+void Declaration::ParseEnumerationList(TABLE *table, int amt, SYM *parent)
 {
 	int evalue;
   SYM *sp;

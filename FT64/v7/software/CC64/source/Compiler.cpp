@@ -99,6 +99,7 @@ void Compiler::compile()
 
 	funcnum = 0;
 	AddBuiltinFunctions();
+	Instruction::SetMap();
 
 	getch();
 	lstackptr = 0;
