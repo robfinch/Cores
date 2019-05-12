@@ -150,10 +150,10 @@ Operand *FT64CodeGenerator::GenExpr(ENODE *node)
 		//ReleaseTempReg(ap2);
 		GenerateFalseJump(node,lab0,0);
 		ap1 = GetTempRegister();
-		GenerateDiadic(op_ldi,0,ap1,make_immed(1));
-		GenerateMonadic(op_bra,0,make_label(lab1));
+		GenerateDiadic(op_ldi,0,ap1,MakeImmediate(1));
+		GenerateMonadic(op_bra,0,MakeDataLabel(lab1));
 		GenerateLabel(lab0);
-		GenerateDiadic(op_ldi,0,ap1,make_immed(0));
+		GenerateDiadic(op_ldi,0,ap1,MakeImmediate(0));
 		GenerateLabel(lab1);
 		ap1->isBool = true;
 		return (ap1);
@@ -346,10 +346,10 @@ Operand *FT64CodeGenerator::GenExpr(ENODE *node)
 	/*
     GenerateFalseJump(node,lab0,0);
     ap1 = GetTempRegister();
-    GenerateDiadic(op_ld,0,ap1,make_immed(1));
-    GenerateMonadic(op_bra,0,make_label(lab1));
+    GenerateDiadic(op_ld,0,ap1,MakeImmediate(1));
+    GenerateMonadic(op_bra,0,MakeDataLabel(lab1));
     GenerateLabel(lab0);
-    GenerateDiadic(op_ld,0,ap1,make_immed(0));
+    GenerateDiadic(op_ld,0,ap1,MakeImmediate(0));
     GenerateLabel(lab1);
     return ap1;
 	*/
@@ -395,7 +395,7 @@ bool FT64CodeGenerator::GenerateBranch(ENODE *node, int op, int label, int predr
     	ReleaseTempReg(ap3);
 		ReleaseTempReg(ap2);
 		ReleaseTempReg(ap1);
-		GenerateDiadic(op,0,ap1,make_clabel(label));
+		GenerateDiadic(op,0,ap1,MakeCodeLabel(label));
 		return;
 	}
 	*/
@@ -433,27 +433,27 @@ bool FT64CodeGenerator::GenerateBranch(ENODE *node, int op, int label, int predr
 	case op_fge:	op = op_fbge; sz = 'd'; break;
 	/*
 		GenerateTriadic(op_fcmp,'q',ap3,ap1,ap2);
-		GenerateTriadic(op_bbs,0,ap3,make_immed(0),make_clabel(label));
+		GenerateTriadic(op_bbs,0,ap3,MakeImmediate(0),MakeCodeLabel(label));
 		goto xit;
 	case op_fne:
 		GenerateTriadic(op_fcmp,'q',ap3,ap1,ap2);
-		GenerateTriadic(op_bbc,0,ap3,make_immed(0),make_clabel(label));
+		GenerateTriadic(op_bbc,0,ap3,MakeImmediate(0),MakeCodeLabel(label));
 		goto xit;
 	case op_flt:
 		GenerateTriadic(op_fcmp,'q',ap3,ap1,ap2);
-		GenerateTriadic(op_bbs,0,ap3,make_immed(1),make_clabel(label));
+		GenerateTriadic(op_bbs,0,ap3,MakeImmediate(1),MakeCodeLabel(label));
 		goto xit;
 	case op_fle:
 		GenerateTriadic(op_fcmp,'q',ap3,ap1,ap2);
-		GenerateTriadic(op_bbs,0,ap3,make_immed(2),make_clabel(label));
+		GenerateTriadic(op_bbs,0,ap3,MakeImmediate(2),MakeCodeLabel(label));
 		goto xit;
 	case op_fgt:
 		GenerateTriadic(op_fcmp,'q',ap3,ap1,ap2);
-		GenerateTriadic(op_bbc,0,ap3,make_immed(2),make_clabel(label));
+		GenerateTriadic(op_bbc,0,ap3,MakeImmediate(2),MakeCodeLabel(label));
 		goto xit;
 	case op_fge:
 		GenerateTriadic(op_fcmp,'q',ap3,ap1,ap2);
-		GenerateTriadic(op_bbc,0,ap3,make_immed(1),make_clabel(label));
+		GenerateTriadic(op_bbc,0,ap3,MakeImmediate(1),MakeCodeLabel(label));
 		goto xit;
 	*/
 	}
@@ -464,60 +464,60 @@ bool FT64CodeGenerator::GenerateBranch(ENODE *node, int op, int label, int predr
 				ap3 = GetTempFPRegister();
 				GenerateDiadic(op_ldi,0,ap3,ap2);
 				ReleaseTempRegister(ap3);
-				GenerateTriadic(op_fbne,sz,ap1,ap3,make_clabel(label));
+				GenerateTriadic(op_fbne,sz,ap1,ap3,MakeCodeLabel(label));
 			}
 			else
-				GenerateTriadic(op_fbne,sz,ap1,ap2,make_clabel(label));
+				GenerateTriadic(op_fbne,sz,ap1,ap2,MakeCodeLabel(label));
 			break;
 		case op_fbeq:
 			if (ap2->mode==am_imm) {
 				ap3 = GetTempRegister();
 				GenerateDiadic(op_ldi,0,ap3,ap2);
 				ReleaseTempRegister(ap3);
-				GenerateTriadic(op_fbeq,sz,ap1,ap3,make_clabel(label));
+				GenerateTriadic(op_fbeq,sz,ap1,ap3,MakeCodeLabel(label));
 			}
 			else
-				GenerateTriadic(op_fbeq,sz,ap1,ap2,make_clabel(label));
+				GenerateTriadic(op_fbeq,sz,ap1,ap2,MakeCodeLabel(label));
 			break;
 		case op_fblt:
 			if (ap2->mode==am_imm) {
 				ap3 = GetTempRegister();
 				GenerateDiadic(op_ldi,0,ap3,ap2);
 				ReleaseTempRegister(ap3);
-				GenerateTriadic(op_fblt,sz,ap1,ap3,make_clabel(label));
+				GenerateTriadic(op_fblt,sz,ap1,ap3,MakeCodeLabel(label));
 			}
 			else
-				GenerateTriadic(op_fblt,sz,ap1,ap2,make_clabel(label));
+				GenerateTriadic(op_fblt,sz,ap1,ap2,MakeCodeLabel(label));
 			break;
 		case op_fble:
 			if (ap2->mode==am_imm) {
 				ap3 = GetTempRegister();
 				GenerateDiadic(op_ldi,0,ap3,ap2);
 				ReleaseTempRegister(ap3);
-				GenerateTriadic(op_fbge,sz,ap3,ap1,make_clabel(label));
+				GenerateTriadic(op_fbge,sz,ap3,ap1,MakeCodeLabel(label));
 			}
 			else
-				GenerateTriadic(op_fbge,sz,ap2,ap1,make_clabel(label));
+				GenerateTriadic(op_fbge,sz,ap2,ap1,MakeCodeLabel(label));
 			break;
 		case op_fbgt:
 			if (ap2->mode==am_imm) {
 				ap3 = GetTempRegister();
 				GenerateDiadic(op_ldi,0,ap3,ap2);
 				ReleaseTempRegister(ap3);
-				GenerateTriadic(op_fblt,sz,ap3,ap1,make_clabel(label));
+				GenerateTriadic(op_fblt,sz,ap3,ap1,MakeCodeLabel(label));
 			}
 			else
-				GenerateTriadic(op_fblt,sz,ap2,ap1,make_clabel(label));
+				GenerateTriadic(op_fblt,sz,ap2,ap1,MakeCodeLabel(label));
 			break;
 		case op_fbge:
 			if (ap2->mode==am_imm) {
 				ap3 = GetTempRegister();
 				GenerateDiadic(op_ldi,0,ap3,ap2);
 				ReleaseTempRegister(ap3);
-				GenerateTriadic(op_fbge,sz,ap1,ap3,make_clabel(label));
+				GenerateTriadic(op_fbge,sz,ap1,ap3,MakeCodeLabel(label));
 			}
 			else
-				GenerateTriadic(op_fbge,sz,ap1,ap2,make_clabel(label));
+				GenerateTriadic(op_fbge,sz,ap1,ap2,MakeCodeLabel(label));
 			break;
 		}
 	}
@@ -535,10 +535,10 @@ bool FT64CodeGenerator::GenerateBranch(ENODE *node, int op, int label, int predr
 				else
 					GenerateTriadic(op_and, 0, ap3, ap1, ap2);
 				ReleaseTempRegister(ap3);
-				GenerateTriadic(op_bne, 0, ap3, makereg(0), make_clabel(label));
+				GenerateTriadic(op_bne, 0, ap3, makereg(0), MakeCodeLabel(label));
 			}
 			else {
-				GenerateTriadic(op_band, 0, ap1, ap2, make_clabel(label));
+				GenerateTriadic(op_band, 0, ap1, ap2, MakeCodeLabel(label));
 			}
 			break;
 		case op_bor:
@@ -553,10 +553,10 @@ bool FT64CodeGenerator::GenerateBranch(ENODE *node, int op, int label, int predr
 				else
 					GenerateTriadic(op_or, 0, ap3, ap1, ap2);
 				ReleaseTempRegister(ap3);
-				GenerateTriadic(op_bne, 0, ap3, makereg(0), make_clabel(label));
+				GenerateTriadic(op_bne, 0, ap3, makereg(0), MakeCodeLabel(label));
 			}
 			else
-				GenerateTriadic(op_bor, 0, ap1, ap2, make_clabel(label));
+				GenerateTriadic(op_bor, 0, ap1, ap2, MakeCodeLabel(label));
 			break;
 		case op_bnand:
 			if (ap2->mode == am_imm) {
@@ -570,10 +570,10 @@ bool FT64CodeGenerator::GenerateBranch(ENODE *node, int op, int label, int predr
 				else
 					GenerateTriadic(op_nand, 0, ap3, ap1, ap2);
 				ReleaseTempRegister(ap3);
-				GenerateTriadic(op_bne, 0, ap3, makereg(0), make_clabel(label));
+				GenerateTriadic(op_bne, 0, ap3, makereg(0), MakeCodeLabel(label));
 			}
 			else {
-				GenerateTriadic(op_bnand, 0, ap1, ap2, make_clabel(label));
+				GenerateTriadic(op_bnand, 0, ap1, ap2, MakeCodeLabel(label));
 			}
 			break;
 		case op_bnor:
@@ -588,94 +588,94 @@ bool FT64CodeGenerator::GenerateBranch(ENODE *node, int op, int label, int predr
 				else
 					GenerateTriadic(op_nor, 0, ap3, ap1, ap2);
 				ReleaseTempRegister(ap3);
-				GenerateTriadic(op_bne, 0, ap3, makereg(0), make_clabel(label));
+				GenerateTriadic(op_bne, 0, ap3, makereg(0), MakeCodeLabel(label));
 			}
 			else
-				GenerateTriadic(op_bnor, 0, ap1, ap2, make_clabel(label));
+				GenerateTriadic(op_bnor, 0, ap1, ap2, MakeCodeLabel(label));
 			break;
 		case op_beq:
 			if (ap2->mode==am_imm && ap2->offset->nodetype==en_icon && ap2->offset->i >= -128 && ap2->offset->i <=128) {
-				GenerateTriadic(op_beqi,0,ap1,ap2,make_clabel(label));
+				GenerateTriadic(op_beqi,0,ap1,ap2,MakeCodeLabel(label));
 			}
 			else if (ap2->mode==am_imm) {
 				ap3 = GetTempRegister();
 				GenerateTriadic(op_xor, 0, ap3, ap1, ap2);
 				ReleaseTempRegister(ap3);
-				GenerateTriadic(op_beq,0,ap3,makereg(0),make_clabel(label));
+				GenerateTriadic(op_beq,0,ap3,makereg(0),MakeCodeLabel(label));
 			}
 			else
-				GenerateTriadic(op_beq, 0, ap1, ap2, make_clabel(label));
+				GenerateTriadic(op_beq, 0, ap1, ap2, MakeCodeLabel(label));
 			break;
 		case op_bne:
 			if (ap2->mode == am_imm && ap2->offset->nodetype == en_icon && ap2->offset->i >= -128 && ap2->offset->i <= 128) {
-				GenerateTriadic(op_bnei, 0, ap1, ap2, make_clabel(label));
+				GenerateTriadic(op_bnei, 0, ap1, ap2, MakeCodeLabel(label));
 			}
 			else if (ap2->mode==am_imm) {
 				ap3 = GetTempRegister();
 				GenerateTriadic(op_xor, 0, ap3, ap1, ap2);
 				ReleaseTempRegister(ap3);
-				GenerateTriadic(op_bne,0,ap3,makereg(0),make_clabel(label));
+				GenerateTriadic(op_bne,0,ap3,makereg(0),MakeCodeLabel(label));
 			}
 			else {
-				GenerateTriadic(op_bne,0,ap1,ap2,make_clabel(label));
+				GenerateTriadic(op_bne,0,ap1,ap2,MakeCodeLabel(label));
 			}
 			break;
 		case op_blt:
 			if (ap2->mode==am_imm) {
 				if (ap2->offset->i == 0)
-					GenerateTriadic(op_blt,0,ap1,makereg(0),make_clabel(label));
+					GenerateTriadic(op_blt,0,ap1,makereg(0),MakeCodeLabel(label));
 				else {
 					ap3 = GetTempRegister();
 					GenerateTriadic(op_slt, 0, ap3, ap1, ap2);
 					ReleaseTempRegister(ap3);
-					GenerateTriadic(op_bne,0,ap3,makereg(0),make_clabel(label));
+					GenerateTriadic(op_bne,0,ap3,makereg(0),MakeCodeLabel(label));
 				}
 			}
 			else
-				GenerateTriadic(op_blt,0,ap1,ap2,make_clabel(label));
+				GenerateTriadic(op_blt,0,ap1,ap2,MakeCodeLabel(label));
 			break;
 		case op_ble:
 			if (ap2->mode==am_imm) {
 				if (ap2->offset->i == 0)
-					GenerateTriadic(op_bge,0,makereg(0),ap1,make_clabel(label));
+					GenerateTriadic(op_bge,0,makereg(0),ap1,MakeCodeLabel(label));
 				else {
 					ap3 = GetTempRegister();
 					GenerateTriadic(op_sle , 0, ap3, ap1, ap2);
 					ReleaseTempRegister(ap3);
-					GenerateTriadic(op_bne,0,ap3,makereg(0),make_clabel(label));
+					GenerateTriadic(op_bne,0,ap3,makereg(0),MakeCodeLabel(label));
 				}
 			}
 			else
-				GenerateTriadic(op_bge,0,ap2,ap1,make_clabel(label));
+				GenerateTriadic(op_bge,0,ap2,ap1,MakeCodeLabel(label));
 			break;
 		case op_bgt:
 			if (ap2->mode==am_imm) {
 				if (ap2->offset->i == 0)
-					GenerateTriadic(op_blt,0,makereg(0),ap1,make_clabel(label));
+					GenerateTriadic(op_blt,0,makereg(0),ap1,MakeCodeLabel(label));
 				else {
 					ap3 = GetTempRegister();
 					GenerateTriadic(op_sle, 0, ap3, ap1, ap2);
 					ReleaseTempRegister(ap3);
-					GenerateTriadic(op_beq,0,ap3,makereg(0),make_clabel(label));
+					GenerateTriadic(op_beq,0,ap3,makereg(0),MakeCodeLabel(label));
 				}
 			}
 			else
-				GenerateTriadic(op_blt,0,ap2,ap1,make_clabel(label));
+				GenerateTriadic(op_blt,0,ap2,ap1,MakeCodeLabel(label));
 			break;
 		case op_bge:
 			if (ap2->mode==am_imm) {
 				if (ap2->offset->i==0) {
-					GenerateTriadic(op_bge,0,ap1,makereg(0),make_clabel(label));
+					GenerateTriadic(op_bge,0,ap1,makereg(0),MakeCodeLabel(label));
 				}
 				else {
 					ap3 = GetTempRegister();
 					GenerateTriadic(op_slt, 0, ap3, ap1, ap2);
 					ReleaseTempRegister(ap3);
-					GenerateTriadic(op_beq,0,ap3,makereg(0),make_clabel(label));
+					GenerateTriadic(op_beq,0,ap3,makereg(0),MakeCodeLabel(label));
 				}
 			}
 			else
-				GenerateTriadic(op_bge,0,ap1,ap2,make_clabel(label));
+				GenerateTriadic(op_bge,0,ap1,ap2,MakeCodeLabel(label));
 			break;
 		case op_bltu:
 			if (ap2->mode==am_imm) {
@@ -683,64 +683,64 @@ bool FT64CodeGenerator::GenerateBranch(ENODE *node, int op, int label, int predr
 				// An unsigned number can't be less than zero so the branch will
 				// always be false. Spit out a warning, its probably coded wrong.
 				if (ap2->offset->i == 0)
-					error(ERR_UBLTZ);	//GenerateTriadic(op_bltu,0,ap1,makereg(0),make_clabel(label));
+					error(ERR_UBLTZ);	//GenerateTriadic(op_bltu,0,ap1,makereg(0),MakeCodeLabel(label));
 				else {
 					ap3 = GetTempRegister();
 					GenerateTriadic(op_sltu, 0, ap3, ap1, ap2);
 					ReleaseTempRegister(ap3);
-					GenerateTriadic(op_bne,0,ap3,makereg(0),make_clabel(label));
+					GenerateTriadic(op_bne,0,ap3,makereg(0),MakeCodeLabel(label));
 				}
 			}
 			else
-				GenerateTriadic(op_bltu,0,ap1,ap2,make_clabel(label));
+				GenerateTriadic(op_bltu,0,ap1,ap2,MakeCodeLabel(label));
 			break;
 		case op_bleu:
 			if (ap2->mode==am_imm) {
 				if (ap2->offset->i == 0)
-					GenerateTriadic(op_bgeu,0,makereg(0),ap1,make_clabel(label));
+					GenerateTriadic(op_bgeu,0,makereg(0),ap1,MakeCodeLabel(label));
 				else {
 					ap3 = GetTempRegister();
 					GenerateTriadic(op_sleu, 0, ap3, ap1, ap2);
 					ReleaseTempRegister(ap3);
-					GenerateTriadic(op_bne,0,makereg(0),ap3,make_clabel(label));
+					GenerateTriadic(op_bne,0,makereg(0),ap3,MakeCodeLabel(label));
 				}
 			}
 			else
-				GenerateTriadic(op_bgeu,0,ap2,ap1,make_clabel(label));
+				GenerateTriadic(op_bgeu,0,ap2,ap1,MakeCodeLabel(label));
 			break;
 		case op_bgtu:
 			if (ap2->mode==am_imm) {
 				if (ap2->offset->i == 0)
-					GenerateTriadic(op_bltu,0,makereg(0),ap1,make_clabel(label));
+					GenerateTriadic(op_bltu,0,makereg(0),ap1,MakeCodeLabel(label));
 				else {
 					ap3 = GetTempRegister();
 					GenerateTriadic(op_sleu, 0, ap3, ap1, ap2);
 					ReleaseTempRegister(ap3);
-					GenerateTriadic(op_beq,0,ap3,makereg(0),make_clabel(label));
+					GenerateTriadic(op_beq,0,ap3,makereg(0),MakeCodeLabel(label));
 				}
 			}
 			else
-				GenerateTriadic(op_bltu,0,ap2,ap1,make_clabel(label));
+				GenerateTriadic(op_bltu,0,ap2,ap1,MakeCodeLabel(label));
 			break;
 		case op_bgeu:
 			if (ap2->mode==am_imm) {
 				if (ap2->offset->i == 0) {
 					// This branch is always true
 					error(ERR_UBGEQ);
-					GenerateTriadic(op_bgeu,0,ap1,makereg(0),make_clabel(label));
+					GenerateTriadic(op_bgeu,0,ap1,makereg(0),MakeCodeLabel(label));
 				}
 				else {
 					ap3 = GetTempRegister();
 					GenerateTriadic(op_sltu, 0, ap3, ap1, ap2);
 					ReleaseTempRegister(ap3);
-					GenerateTriadic(op_beq,0,ap3,makereg(0),make_clabel(label));
+					GenerateTriadic(op_beq,0,ap3,makereg(0),MakeCodeLabel(label));
 				}
 			}
 			else
-				GenerateTriadic(op_bgeu,0,ap1,ap2,make_clabel(label));
+				GenerateTriadic(op_bgeu,0,ap1,ap2,MakeCodeLabel(label));
 			break;
 		}
-		//GenerateTriadic(op,sz,ap1,ap2,make_clabel(label));
+		//GenerateTriadic(op,sz,ap1,ap2,MakeCodeLabel(label));
 	}
   ReleaseTempReg(ap2);
   ReleaseTempReg(ap1);
@@ -754,10 +754,10 @@ static void SaveRegisterSet(SYM *sym)
 
 	if (!cpu.SupportsPush) {
 		mm = sym->tp->GetBtp()->type!=bt_void ? 29 : 30;
-		GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(mm*sizeOfWord));
+		GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),cg.MakeImmediate(mm*sizeOfWord));
 		mm = 0;
 		for (nn = 1 + (sym->tp->GetBtp()->type!=bt_void ? 1 : 0); nn < 31; nn++) {
-			GenerateDiadic(op_sw,0,makereg(nn),make_indexed(mm,regSP));
+			GenerateDiadic(op_sw,0,makereg(nn),cg.MakeIndexed(mm,regSP));
 			mm += sizeOfWord;
 		}
 	}
@@ -773,11 +773,11 @@ static void RestoreRegisterSet(SYM * sym)
 	if (!cpu.SupportsPop) {
 		mm = 0;
 		for (nn = 1 + (sym->tp->GetBtp()->type!=bt_void ? 1 : 0); nn < 31; nn++) {
-			GenerateDiadic(op_lw,0,makereg(nn),make_indexed(mm,regSP));
+			GenerateDiadic(op_lw,0,makereg(nn),cg.MakeIndexed(mm,regSP));
 			mm += sizeOfWord;
 		}
 		mm = sym->tp->GetBtp()->type!=bt_void ? 29 : 30;
-		GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),make_immed(mm*sizeOfWord));
+		GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),cg.MakeImmediate(mm*sizeOfWord));
 	}
 	else
 		for (nn = 1 + (sym->tp->GetBtp()->type!=bt_void ? 1 : 0); nn < 31; nn++)
@@ -794,10 +794,10 @@ void SaveRegisterVars(int64_t mask, int64_t rmask)
 
 	if( mask != 0 ) {
 		cnt = 0;
-		GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(popcnt(mask)*8));
+		GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),cg.MakeImmediate(popcnt(mask)*8));
 		for (nn = 0; nn < 64; nn++) {
 			if (rmask & (0x8000000000000000ULL >> nn)) {
-				GenerateDiadic(op_sw,0,makereg(nn),make_indexed(cnt,regSP));
+				GenerateDiadic(op_sw,0,makereg(nn),cg.MakeIndexed(cnt,regSP));
 				cnt+=sizeOfWord;
 			}
 		}
@@ -811,10 +811,10 @@ void SaveFPRegisterVars(int64_t mask, int64_t rmask)
 
 	if( mask != 0 ) {
 		cnt = 0;
-		GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(popcnt(mask)*8));
+		GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),cg.MakeImmediate(popcnt(mask)*8));
 		for (nn = 0; nn < 64; nn++) {
 			if (rmask & (0x8000000000000000ULL >> nn)) {
-				GenerateDiadic(op_sf,'d',makefpreg(nn),make_indexed(cnt,regSP));
+				GenerateDiadic(op_sf,'d',makefpreg(nn),cg.MakeIndexed(cnt,regSP));
 				cnt+=sizeOfWord;
 			}
 		}
@@ -833,11 +833,11 @@ static void RestoreRegisterVars()
 		cnt = 0;
 		for (nn = 0; nn < 64; nn++) {
 			if (save_mask & (1LL << nn)) {
-				GenerateDiadic(op_lw,0,makereg(nn),make_indexed(cnt,regSP));
+				GenerateDiadic(op_lw,0,makereg(nn),cg.MakeIndexed(cnt,regSP));
 				cnt += sizeOfWord;
 			}
 		}
-		GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),make_immed(cnt2));
+		GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),cg.MakeImmediate(cnt2));
 	}
 }
 
@@ -851,11 +851,11 @@ static void RestoreFPRegisterVars()
 		cnt = 0;
 		for (nn = 0; nn < 64; nn++) {
 			if (fpsave_mask & (1LL << nn)) {
-				GenerateDiadic(op_lf,'d',makefpreg(nn),make_indexed(cnt,regSP));
+				GenerateDiadic(op_lf,'d',makefpreg(nn),cg.MakeIndexed(cnt,regSP));
 				cnt += sizeOfWord;
 			}
 		}
-		GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),make_immed(cnt2));
+		GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),cg.MakeImmediate(cnt2));
 	}
 }
 
@@ -910,13 +910,13 @@ int FT64CodeGenerator::PushArgument(ENODE *ep, int regno, int stkoffs, bool *isF
         nn = round8(ep->esize); 
         if (nn > 8) {// && (ep->tp->type==bt_struct || ep->tp->type==bt_union)) {           // structure or array ?
             ap2 = GetTempRegister();
-            GenerateTriadic(op_subui,0,makereg(regSP),makereg(regSP),make_immed(nn));
+            GenerateTriadic(op_subui,0,makereg(regSP),makereg(regSP),MakeImmediate(nn));
             GenerateDiadic(op_mov, 0, ap2, makereg(regSP));
-            GenerateMonadic(op_push,0,make_immed(ep->esize));
+            GenerateMonadic(op_push,0,MakeImmediate(ep->esize));
             GenerateMonadic(op_push,0,ap);
             GenerateMonadic(op_push,0,ap2);
-            GenerateMonadic(op_bsr,0,make_string("memcpy_"));
-            GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(24));
+            GenerateMonadic(op_bsr,0,MakeStringAsNameConst("memcpy_"));
+            GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),MakeImmediate(24));
           	GenerateMonadic(op_push,0,ap2);
             ReleaseTempReg(ap2);
             nn = nn >> 3;
@@ -924,11 +924,11 @@ int FT64CodeGenerator::PushArgument(ENODE *ep, int regno, int stkoffs, bool *isF
         else {
 */
 			if (regno) {
-				GenerateMonadic(op_hint,0,make_immed(1));
+				GenerateMonadic(op_hint,0,MakeImmediate(1));
 				if (ap->mode==am_imm) {
 					GenerateDiadic(op_ldi,0,makereg(regno & 0x7fff), ap);
 					if (regno & 0x8000) {
-						GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(sizeOfWord));
+						GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),MakeImmediate(sizeOfWord));
 						nn = 1;
 					}
 				}
@@ -936,7 +936,7 @@ int FT64CodeGenerator::PushArgument(ENODE *ep, int regno, int stkoffs, bool *isF
 					*isFloat = true;
 					GenerateDiadic(op_mov,0,makefpreg(regno & 0x7fff), ap);
 					if (regno & 0x8000) {
-						GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(sz));
+						GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),MakeImmediate(sz));
 						nn = sz/sizeOfWord;
 					}
 				}
@@ -944,7 +944,7 @@ int FT64CodeGenerator::PushArgument(ENODE *ep, int regno, int stkoffs, bool *isF
 					//ap->preg = regno & 0x7fff;
 					GenerateDiadic(op_mov,0,makereg(regno & 0x7fff), ap);
 					if (regno & 0x8000) {
-						GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(sizeOfWord));
+						GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),MakeImmediate(sizeOfWord));
 						nn = 1;
 					}
 				}
@@ -980,23 +980,23 @@ int FT64CodeGenerator::PushArgument(ENODE *ep, int regno, int stkoffs, bool *isF
 							ap3 = GetTempRegister();
 							regs[ap3->preg].IsArg = true;
 							GenLoadConst(ap, ap3);
-	         				GenerateDiadic(op_sw,0,ap3,make_indexed(stkoffs,regSP));
+	         				GenerateDiadic(op_sw,0,ap3,MakeIndexed(stkoffs,regSP));
 							ReleaseTempReg(ap3);
 						}
 						else {
-							GenerateDiadic(op_sw, 0, makereg(0), make_indexed(stkoffs, regSP));
+							GenerateDiadic(op_sw, 0, makereg(0), MakeIndexed(stkoffs, regSP));
 						}
 						nn = 1;
 					}
 					else {
 						if (ap->type==stddouble.GetIndex() || ap->mode==am_fpreg) {
 							*isFloat = true;
-							GenerateDiadic(op_sf,'d',ap,make_indexed(stkoffs,regSP));
+							GenerateDiadic(op_sf,'d',ap,MakeIndexed(stkoffs,regSP));
 							nn = sz/sizeOfWord;
 						}
 						else {
 							regs[ap->preg].IsArg = true;
-							GenerateDiadic(op_sw,0,ap,make_indexed(stkoffs,regSP));
+							GenerateDiadic(op_sw,0,ap,MakeIndexed(stkoffs,regSP));
 							nn = 1;
 						}
 					}
@@ -1029,7 +1029,7 @@ int FT64CodeGenerator::PushArguments(Function *sym, ENODE *plist)
 
 	sumFloat = false;
 	ip = currentFn->pl.tail;
-	GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),make_immed(0));
+	GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),MakeImmediate(0));
 	// Capture the parameter list. It is needed in the reverse order.
 	for (nn = 0, p = plist; p != NULL; p = p->p[1], nn++) {
 		pl[nn] = p->p[0];
@@ -1050,7 +1050,7 @@ int FT64CodeGenerator::PushArguments(Function *sym, ENODE *plist)
 	if (sum==0)
 		ip->fwd->MarkRemove();
 	else
-		ip->fwd->oper3 = make_immed(sum*sizeOfWord);
+		ip->fwd->oper3 = MakeImmediate(sum*sizeOfWord);
 	if (!sumFloat) {
 		o_supportsPush = cpu.SupportsPush;
 		cpu.SupportsPush = true;
@@ -1077,11 +1077,11 @@ void FT64CodeGenerator::PopArguments(Function *fnc, int howMany, bool isPascal)
 	if (howMany != 0) {
 		if (fnc) {
 			if (!fnc->IsPascal)
-				GenerateTriadic(op_add, 0, makereg(regSP), makereg(regSP), make_immed(howMany * sizeOfWord));
+				GenerateTriadic(op_add, 0, makereg(regSP), makereg(regSP), MakeImmediate(howMany * sizeOfWord));
 		}
 		else {
 			if (!isPascal)
-				GenerateTriadic(op_add, 0, makereg(regSP), makereg(regSP), make_immed(howMany * sizeOfWord));
+				GenerateTriadic(op_add, 0, makereg(regSP), makereg(regSP), MakeImmediate(howMany * sizeOfWord));
 		}
 	}
 }
@@ -1134,7 +1134,7 @@ Operand *FT64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
   /*
     	if ((sym->tp->GetBtp()->type==bt_struct || sym->tp->GetBtp()->type==bt_union) && sym->tp->GetBtp()->size > 8) {
             nn = tmpAlloc(sym->tp->GetBtp()->size) + lc_auto + round8(sym->tp->GetBtp()->size);
-            GenerateMonadic(op_pea,0,make_indexed(-nn,regFP));
+            GenerateMonadic(op_pea,0,MakeIndexed(-nn,regFP));
             i = 1;
         }
 */
@@ -1170,8 +1170,8 @@ Operand *FT64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 			save_mask = mask;
 		}
 		else {
-			GenerateMonadic(op_call,0,make_offset(node->p[0]));
-			GenerateMonadic(op_bex,0,make_label(throwlab));
+			GenerateMonadic(op_call,0,MakeDirect(node->p[0]));
+			GenerateMonadic(op_bex,0,MakeDataLabel(throwlab));
 			LinkAutonew(node);
 		}
 		GenerateInlineArgumentList(sym, node->p[1]);
@@ -1188,7 +1188,7 @@ Operand *FT64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
     /*
     	if ((node->p[0]->tp->GetBtp()->type==bt_struct || node->p[0]->tp->GetBtp()->type==bt_union) && node->p[0]->tp->GetBtp()->size > 8) {
             nn = tmpAlloc(node->p[0]->tp->GetBtp()->size) + lc_auto + round8(node->p[0]->tp->GetBtp()->size);
-            GenerateMonadic(op_pea,0,make_indexed(-nn,regFP));
+            GenerateMonadic(op_pea,0,MakeIndexed(-nn,regFP));
             i = 1;
         }
      */
@@ -1230,7 +1230,7 @@ Operand *FT64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 		}
 		else {
 			GenerateMonadic(op_call,0,ap);
-			GenerateMonadic(op_bex,0,make_label(throwlab));
+			GenerateMonadic(op_bex,0,MakeDataLabel(throwlab));
 			LinkAutonew(node);
 		}
 		GenerateInlineArgumentList(sym, node->p[1]);

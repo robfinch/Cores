@@ -295,6 +295,18 @@ public:
 	void FlushPeep() { pl.flush(); };
 
 	// Code generation
+	Operand *MakeDataLabel(int lab);
+	Operand *MakeCodeLabel(int lab);
+	Operand *MakeStringAsNameConst(char *s);
+	Operand *MakeString(char *s);
+	Operand *MakeImmediate(int64_t i);
+	Operand *MakeIndirect(int i);
+	Operand *MakeIndexed(int64_t o, int i);
+	Operand *MakeDoubleIndexed(int i, int j, int scale);
+	Operand *MakeDirect(ENODE *node);
+	Operand *MakeIndexed(ENODE *node, int rg);
+
+	void GenLoad(Operand *ap3, Operand *ap1, int ssize, int size);
 	void SetupReturnBlock();
 	bool GenDefaultCatch();
 	void GenReturn(Statement *stmt);
@@ -491,6 +503,7 @@ public:
 	unsigned int isCheckExpr : 1;
 	unsigned int isPascal : 1;
 	unsigned int isAutonew : 1;
+	unsigned int isNeg : 1;
 	ENODE *vmask;
 	__int8 bit_width;
 	__int8 bit_offset;
@@ -543,6 +556,21 @@ public:
 	void update();
 
 	// Code generation
+	Operand *MakeDataLabel(int lab);
+	Operand *MakeCodeLabel(int lab);
+	Operand *MakeStringAsNameConst(char *s);
+	Operand *MakeString(char *s);
+	Operand *MakeImmediate(int64_t i);
+	Operand *MakeIndirect(int i);
+	Operand *MakeIndexed(int64_t o, int i);
+	Operand *MakeDoubleIndexed(int i, int j, int scale);
+	Operand *MakeDirect(ENODE *node);
+	Operand *MakeIndexed(ENODE *node, int rg);
+
+	void GenerateHint(int num);
+	void GenMemop(int op, Operand *ap1, Operand *ap2, int ssize);
+	void GenLoad(Operand *ap3, Operand *ap1, int ssize, int size);
+	void GenStore(Operand *ap1, Operand *ap3, int size);
 	Operand *GenIndex();
 	Operand *GenHook(int flags, int size);
 	Operand *GenSafeHook(int flags, int size);
@@ -651,6 +679,7 @@ public:
 	void MarkRemove2() { remove2 = true; };
 	void Remove();
 	bool HasTargetReg() const;
+	bool HasTargetReg(int regno) const;
 	int GetTargetReg(int *rg1, int *rg2) const;
 	bool HasSourceReg(int) const;
 	//Edge *MakeEdge(OCODE *ip1, OCODE *ip2);
@@ -687,9 +716,48 @@ public:
 	void storeHex(txtoStream& ofs);
 };
 
+class OperandFactory
+{
+public:
+	Operand *MakeDataLabel(int labno);
+	Operand *MakeCodeLabel(int lab);
+	Operand *MakeStrlab(std::string s);
+	Operand *MakeString(char *s);
+	Operand *MakeStringAsNameConst(char *s);
+	Operand *makereg(int r);
+	Operand *makevreg(int r);
+	Operand *makevmreg(int r);
+	Operand *makefpreg(int r);
+	Operand *MakeMask(int mask);
+	Operand *MakeImmediate(int64_t i);
+	Operand *MakeIndirect(short int regno);
+	Operand *MakeIndexedCodeLabel(int lab, int i);
+	Operand *MakeIndexed(int64_t offset, int regno);
+	Operand *MakeIndexed(ENODE *node, int regno);
+	Operand *MakeNegIndexed(ENODE *node, int regno);
+	Operand *MakeDoubleIndexed(int regi, int regj, int scale);
+	Operand *MakeDirect(ENODE *node);
+};
+
 class CodeGenerator
 {
 public:
+	Operand *MakeDataLabel(int lab);
+	Operand *MakeCodeLabel(int lab);
+	Operand *MakeStringAsNameConst(char *s);
+	Operand *MakeString(char *s);
+	Operand *MakeImmediate(int64_t i);
+	Operand *MakeIndirect(int i);
+	Operand *MakeIndexed(int64_t o, int i);
+	Operand *MakeDoubleIndexed(int i, int j, int scale);
+	Operand *MakeDirect(ENODE *node);
+	Operand *MakeIndexed(ENODE *node, int rg);
+
+	void GenerateHint(int num);
+	void GenerateComment(char *cm);
+	void GenMemop(int op, Operand *ap1, Operand *ap2, int ssize);
+	void GenLoad(Operand *ap3, Operand *ap1, int ssize, int size);
+	void GenStore(Operand *ap1, Operand *ap3, int size);
 	virtual bool GenerateBranch(ENODE *node, int op, int label, int predreg, unsigned int prediction, bool limit) { return (false); };
 	Operand *GenerateBitfieldAssign(ENODE *node, int flags, int size);
 	void GenerateBitfieldInsert(Operand *ap1, Operand *ap2, int offset, int width);
@@ -1162,6 +1230,18 @@ public:
 	void update_compound();
 
 	// Code generation
+	Operand *MakeDataLabel(int lab);
+	Operand *MakeCodeLabel(int lab);
+	Operand *MakeStringAsNameConst(char *s);
+	Operand *MakeString(char *s);
+	Operand *MakeImmediate(int64_t i);
+	Operand *MakeIndirect(int i);
+	Operand *MakeIndexed(int64_t o, int i);
+	Operand *MakeDoubleIndexed(int i, int j, int scale);
+	Operand *MakeDirect(ENODE *node);
+	Operand *MakeIndexed(ENODE *node, int rg);
+	void GenStore(Operand *ap1, Operand *ap3, int size);
+
 	void GenMixedSource();
 	void GenMixedSource2();
 	void GenerateStop();
@@ -1289,6 +1369,7 @@ public:
 	SYM symbolTable[32768];
 	Function functionTable[3000];
 	TYP typeTable[32768];
+	OperandFactory of;
 	short int pass;
 public:
 	GlobalDeclaration *decls;

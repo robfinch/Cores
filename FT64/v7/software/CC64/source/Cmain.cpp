@@ -62,8 +62,6 @@ extern int      total_errors;
 int uctran_off;
 extern int lstackptr;
 
-Compiler compiler;
-
 int main(int argc, char **argv)
 {
 	opt_nopeep = FALSE;

@@ -291,7 +291,7 @@ void CSETable::InitializeTempRegs()
 				else {
 					size = GetNaturalSize(exptr);
 					ap->isUnsigned = exptr->isUnsigned;
-					GenLoad(ap2, ap, size, size);
+					cg.GenLoad(ap2, ap, size, size);
 				}
 				ReleaseTempReg(ap);
 			}

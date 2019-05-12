@@ -482,7 +482,7 @@ TYP *deref(ENODE **node, TYP *tp)
 
 		// Pointers (addresses) are always unsigned
 		case bt_pointer:
-			(*node)->esize = tp->size;
+			(*node)->esize = sizeOfPtr;// tp->size;
 			(*node)->etype = (enum e_bt)tp->type;
 			*node = makenode(sizeOfPtr == 4 ? en_hp_ref : en_wp_ref, *node, (ENODE *)NULL);
 			(*node)->isUnsigned = TRUE;

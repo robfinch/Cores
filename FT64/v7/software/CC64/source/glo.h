@@ -46,6 +46,7 @@
 #define TRACE(x)
 #endif
 
+extern Compiler compiler;
 extern CPU cpu;
 extern int pass;
 extern int maxPn;
@@ -358,11 +359,11 @@ extern void GenerateDiadicNT(int op, int len, Operand *ap1, Operand *ap2);
 extern void GenerateTriadic(int op, int len, Operand *ap1, Operand *ap2, Operand *ap3);
 extern void Generate4adic(int op, int len, Operand *ap1, Operand *ap2, Operand *ap3, Operand *ap4);
 // Gencode.c
-extern Operand *make_label(int lab);
-extern Operand *make_clabel(int lab);
-extern Operand *make_immed(int64_t i);
-extern Operand *make_indirect(int i);
-extern Operand *make_offset(ENODE *node);
+extern Operand *MakeDataLabel(int lab);
+extern Operand *MakeCodeLabel(int lab);
+extern Operand *MakeImmediate(int64_t i);
+extern Operand *MakeIndirect(int i);
+extern Operand *MakeDirect(ENODE *node);
 extern void swap_nodes(ENODE *node);
 
 // IdentifyKeyword.c
@@ -370,18 +371,9 @@ extern int IdentifyKeyword();
 // Preproc.c
 extern int preprocess();
 // CodeGenerator.c
-extern Operand *make_indirect(int i);
-extern Operand *make_indexed(int64_t o, int i);
-extern Operand *make_indx(ENODE *node, int reg);
-extern Operand *make_string(char *s);
-extern void GenerateFalseJump(ENODE *node,int label, unsigned int);
-extern void GenerateTrueJump(ENODE *node,int label, unsigned int);
 extern char *GetNamespace();
 extern char nmspace[20][100];
-extern Operand *GenerateDereference(ENODE *, int, int, int);
 extern void MakeLegalOperand(Operand *ap,int flags, int size);
-extern void GenLoad(Operand *, Operand *, int size, int);
-extern void GenStore(Operand *, Operand *, int size);
 // List.c
 extern void ListTable(TABLE *t, int i);
 // Register.c

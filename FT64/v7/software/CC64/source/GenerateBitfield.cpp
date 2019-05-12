@@ -33,7 +33,7 @@ static void SignExtendBitfield(ENODE *node, Operand *ap3, uint64_t mask)
 
 	umask = 0x8000000000000000LL | ~(mask >> 1);
 	ap2 = GetTempRegister();
-	GenerateDiadic(op_ldi,0,ap2,make_immed(umask));
+	GenerateDiadic(op_ldi,0,ap2,cg.MakeImmediate((int64_t)umask));
 	GenerateTriadic(op_add,0,ap3,ap3,ap2);
 	GenerateTriadic(op_xor,0,ap3,ap3,ap2);
 	ReleaseTempRegister(ap2);
@@ -62,14 +62,14 @@ Operand *CodeGenerator::GenerateBitfieldDereference(ENODE *node, int flags, int 
 //	ReleaseTempRegister(ap);
 	if (SUPPORT_BITFIELD) {
 		if (isSigned)
-			Generate4adic(op_bfext,0,ap3, ap3, make_immed((int) node->bit_offset), make_immed((int)(node->bit_width-1)));
+			Generate4adic(op_bfext,0,ap3, ap3, MakeImmediate((int64_t) node->bit_offset), MakeImmediate((int64_t)(node->bit_width-1)));
 		else
-			Generate4adic(op_bfextu,0,ap3, ap3, make_immed((int) node->bit_offset), make_immed((int)(node->bit_width-1)));
+			Generate4adic(op_bfextu,0,ap3, ap3, MakeImmediate((int64_t) node->bit_offset), MakeImmediate((int64_t)(node->bit_width-1)));
 	}
 	else {
 		if (node->bit_offset > 0)
-			GenerateTriadic(op_shru, 0, ap3, ap3, make_immed((int) node->bit_offset));
-		GenerateTriadic(op_and, 0, ap3, ap3, make_immed(mask));
+			GenerateTriadic(op_shru, 0, ap3, ap3, MakeImmediate((int64_t) node->bit_offset));
+		GenerateTriadic(op_and, 0, ap3, ap3, MakeImmediate((int64_t)mask));
 		if (isSigned)
 			SignExtendBitfield(node, ap3, mask);
 	}
@@ -86,20 +86,20 @@ void CodeGenerator::GenerateBitfieldInsert(Operand *ap1, Operand *ap2, int offse
 
 	/* Processor doesn't support bitfield insert except for immediates
 	if (SUPPORT_BITFIELD)
-		Generate4adic(op_bfins,0,ap1,ap2,make_immed(offset), make_immed(width-1));
+		Generate4adic(op_bfins,0,ap1,ap2,MakeImmediate(offset), MakeImmediate(width-1));
 	else
 	*/
 	{
 		for (mask = nn = 0; nn < width; nn++)
 			mask = (mask << 1) | 1;
 		mask = ~mask;
-		GenerateDiadic(op_and,0,ap2,make_immed(~mask));		// clear unwanted bits in source
+		GenerateDiadic(op_and,0,ap2,MakeImmediate((int64_t)~mask));		// clear unwanted bits in source
 		if (offset > 0)
-			GenerateTriadic(op_ror,0,ap1,ap1,make_immed(offset));
-		GenerateTriadic(op_and,0,ap1,ap1,make_immed(mask));		// clear bits in target field
+			GenerateTriadic(op_ror,0,ap1,ap1,MakeImmediate((int64_t)offset));
+		GenerateTriadic(op_and,0,ap1,ap1,MakeImmediate(mask));		// clear bits in target field
 		GenerateTriadic(op_or,0,ap1,ap1,ap2);
 		if (offset > 0)
-			GenerateTriadic(op_rol,0,ap1,ap1,make_immed(offset));
+			GenerateTriadic(op_rol,0,ap1,ap1,MakeImmediate((int64_t)offset));
 	}
 }
 

@@ -43,6 +43,17 @@ bool OCODE::HasTargetReg() const
 		return (false);
 }
 
+bool OCODE::HasTargetReg(int regno) const
+{
+	int rg1, rg2;
+	if (HasTargetReg()) {
+		GetTargetReg(&rg1, &rg2);
+		if (rg1 == regno || rg2 == regno)
+			return (true);
+	}
+	return (false);
+}
+
 bool OCODE::HasSourceReg(int regno) const
 {
 	if (insn == nullptr)
@@ -211,7 +222,7 @@ void OCODE::OptSubtract()
 	//if (oper2->isPtr && oper3->isPtr && oper2->mode == am_reg && oper3->mode == am_reg) {
 	//	opcode = op_ptrdif;
 	//	insn = GetInsn(op_ptrdif);
-	//	oper4 = make_immed(1);
+	//	oper4 = MakeImmediate(1);
 	//}
 	//if (ip2->opcode == op_asr || ip2->opcode == op_shru) {
 	//	if (Operand::IsEqual(ip2->oper2,oper1)) {
@@ -220,7 +231,7 @@ void OCODE::OptSubtract()
 	//				if (ip2->oper3->offset->i < 8) {
 	//					opcode = op_ptrdif;
 	//					insn = GetInsn(op_ptrdif);
-	//					oper4 = make_immed(ip2->oper3->offset->i);
+	//					oper4 = MakeImmediate(ip2->oper3->offset->i);
 	//					ip2->MarkRemove();
 	//					optimized++;
 	//				}
@@ -1069,8 +1080,35 @@ void OCODE::OptLdi()
 
 void OCODE::OptLea()
 {
-	OCODE *ip;
+	OCODE *ip, *ip2;
+	bool opt = true;
 
+	// Remove a move following a LEA
+	ip = fwd;
+	if (ip) {
+		if (ip->opcode == op_mov) {
+			if (ip->oper2->preg == oper1->preg) {
+				for (ip2 = ip->fwd; ip2; ip2 = ip2->fwd)
+				{
+					if (ip2->opcode == op_label) {
+						opt = false;
+						break;
+					}
+					if (ip2->HasTargetReg(oper1->preg))
+						break;
+					if (ip2->HasSourceReg(oper1->preg)) {
+						opt = false;
+						break;
+					}
+				}
+				if (opt) {
+					oper1->preg = ip->oper1->preg;
+					ip->MarkRemove();
+					optimized++;
+				}
+			}
+		}
+	}
 	for (ip = fwd; ip; ip = ip->fwd) {
 		if (ip->HasTargetReg()) {
 			if (ip->oper1->preg == oper1->preg) {

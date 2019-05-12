@@ -114,7 +114,7 @@ Operand *Operand::GenSignExtend(int isize, int osize, int flags)
 		return (ap);
 	if (ap->mode != am_reg && ap->mode != am_fpreg) {
 		ap1 = GetTempRegister();
-		GenLoad(ap1, ap, isize, isize);
+		cg.GenLoad(ap1, ap, isize, isize);
 		ReleaseTempRegister(ap);
 		switch (isize)
 		{
@@ -222,7 +222,7 @@ void Operand::MakeLegal(int flags, int size)
 		switch (mode) {
 		case am_ind:
 		case am_indx:
-			GenLoad(ap2, this, size, size);
+			cg.GenLoad(ap2, this, size, size);
 			break;
 		case am_imm:
 			cg.GenLoadConst(this, ap2);
@@ -235,7 +235,7 @@ void Operand::MakeLegal(int flags, int size)
 			GenerateDiadic(op_ftoi, fpsize(), ap2, this);
 			break;
 		default:
-			GenLoad(ap2, this, size, size);
+			cg.GenLoad(ap2, this, size, size);
 			break;
 		}
 		mode = am_reg;
@@ -261,7 +261,7 @@ void Operand::MakeLegal(int flags, int size)
 		switch (mode) {
 		case am_ind:
 		case am_indx:
-			GenLoad(ap2, this, size, size);
+			cg.GenLoad(ap2, this, size, size);
 			break;
 		case am_imm:
 			ap1 = GetTempRegister();
@@ -273,7 +273,7 @@ void Operand::MakeLegal(int flags, int size)
 			GenerateDiadic(op_itof, ap2->fpsize(), ap2, this);
 			break;
 		default:
-			GenLoad(ap2, this, size, size);
+			cg.GenLoad(ap2, this, size, size);
 			break;
 		}
 		mode = am_fpreg;
@@ -299,7 +299,7 @@ void Operand::MakeLegal(int flags, int size)
 		ap2 = GetTempRegister();
 		GenerateDiadic(op_mov, 0, ap2, this);
 		if (isUnsigned)
-			GenerateTriadic(op_and, 0, ap2, ap2, make_immed(255));
+			GenerateTriadic(op_and, 0, ap2, ap2, cg.MakeImmediate(255));
 		else {
 			GenerateDiadic(op_sext8, 0, ap2, ap2);
 		}
@@ -313,7 +313,7 @@ void Operand::MakeLegal(int flags, int size)
 	switch (mode) {
 	case am_ind:
 	case am_indx:
-		GenLoad(ap2, this, size, size);
+		cg.GenLoad(ap2, this, size, size);
 		break;
 	case am_imm:
 		cg.GenLoadConst(this, ap2);
@@ -323,7 +323,7 @@ void Operand::MakeLegal(int flags, int size)
 		GenerateDiadic(op_mov, 0, ap2, this);
 		break;
 	default:
-		GenLoad(ap2, this, size, size);
+		cg.GenLoad(ap2, this, size, size);
 	}
 	mode = am_reg;
 	preg = ap2->preg;

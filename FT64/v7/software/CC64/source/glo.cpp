@@ -26,6 +26,7 @@
 #include "stdafx.h"
 /*      global definitions      */
 
+Compiler compiler;
 CPU cpu;
 int pass;
 int maxPn = 15;

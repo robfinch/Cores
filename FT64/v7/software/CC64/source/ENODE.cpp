@@ -1019,6 +1019,74 @@ void ENODE::update()
 // ============================================================================
 // ============================================================================
 
+Operand *ENODE::MakeDataLabel(int lab)
+{
+	return (compiler.of.MakeDataLabel(lab));
+}
+
+Operand *ENODE::MakeCodeLabel(int lab)
+{
+	return (compiler.of.MakeCodeLabel(lab));
+}
+
+Operand *ENODE::MakeStringAsNameConst(char *s)
+{
+	return (compiler.of.MakeStringAsNameConst(s));
+}
+
+Operand *ENODE::MakeString(char *s)
+{
+	return (compiler.of.MakeString(s));
+}
+
+Operand *ENODE::MakeImmediate(int64_t i)
+{
+	return (compiler.of.MakeImmediate(i));
+}
+
+Operand *ENODE::MakeIndirect(int i)
+{
+	return (compiler.of.MakeIndirect(i));
+}
+
+Operand *ENODE::MakeIndexed(int64_t o, int i)
+{
+	return (compiler.of.MakeIndexed(o, i));
+}
+
+Operand *ENODE::MakeDoubleIndexed(int i, int j, int scale)
+{
+	return (compiler.of.MakeDoubleIndexed(i, j, scale));
+}
+
+Operand *ENODE::MakeDirect(ENODE *node)
+{
+	return (compiler.of.MakeDirect(node));
+}
+
+Operand *ENODE::MakeIndexed(ENODE *node, int rg)
+{
+	return (compiler.of.MakeIndexed(node, rg));
+}
+
+void ENODE::GenerateHint(int num)
+{
+	GenerateMonadic(op_hint, 0, MakeImmediate(num));
+}
+
+void ENODE::GenLoad(Operand *ap3, Operand *ap1, int ssize, int size)
+{
+	cg.GenLoad(ap3, ap1, ssize, size);
+}
+void ENODE::GenStore(Operand *ap1, Operand *ap3, int size)
+{
+	cg.GenStore(ap1, ap3, size);
+}
+
+void ENODE::GenMemop(int op, Operand *ap1, Operand *ap2, int ssize)
+{
+	cg.GenMemop(op, ap1, ap2, ssize);
+}
 
 // ----------------------------------------------------------------------------
 // Generate code to evaluate an index node (^+) and return the addressing mode
@@ -1118,8 +1186,8 @@ Operand *ENODE::GenSafeHook(int flags, int size)
 	flags |= am_volatile;
 	/*
 	if (p[0]->constflag && p[1]->constflag) {
-	GeneratePredicateMonadic(hook_predreg,op_op_ldi,make_immed(p[0]->i));
-	GeneratePredicateMonadic(hook_predreg,op_ldi,make_immed(p[0]->i));
+	GeneratePredicateMonadic(hook_predreg,op_op_ldi,MakeImmediate(p[0]->i));
+	GeneratePredicateMonadic(hook_predreg,op_ldi,MakeImmediate(p[0]->i));
 	}
 	*/
 	ip1 = currentFn->pl.tail;
@@ -1160,12 +1228,12 @@ j1:
 		cg.GenerateFalseJump(p[0], false_label, 0);
 		node = p[1];
 		ap1 = cg.GenerateExpression(node->p[0], flags, size);
-		GenerateDiadic(op_bra, 0, make_clabel(end_label), 0);
+		GenerateDiadic(op_bra, 0, MakeCodeLabel(end_label), 0);
 		GenerateLabel(false_label);
 		ap2 = cg.GenerateExpression(node->p[1], flags, size);
 		if (!IsEqualOperand(ap1, ap2))
 		{
-			GenerateMonadic(op_hint, 0, make_immed(2));
+			GenerateMonadic(op_hint, 0, MakeImmediate(2));
 			switch (ap1->mode)
 			{
 			case am_reg:
@@ -1215,11 +1283,11 @@ j1:
 	cg.GenerateFalseJump(p[0], false_label, 0);
 	node = p[1];
 	ap1 = cg.GenerateExpression(node->p[0], flags, size);
-	GenerateDiadic(op_bra, 0, make_clabel(end_label), 0);
+	GenerateDiadic(op_bra, 0, MakeCodeLabel(end_label), 0);
 	GenerateLabel(false_label);
 	if (!IsEqualOperand(ap1, ap2))
 	{
-		GenerateMonadic(op_hint, 0, make_immed(2));
+		GenerateMonadic(op_hint, 0, MakeImmediate(2));
 		switch (ap1->mode)
 		{
 		case am_reg:
@@ -1282,8 +1350,8 @@ Operand *ENODE::GenHook(int flags, int size)
 	flags |= am_volatile;
 	/*
 	if (p[0]->constflag && p[1]->constflag) {
-	GeneratePredicateMonadic(hook_predreg,op_op_ldi,make_immed(p[0]->i));
-	GeneratePredicateMonadic(hook_predreg,op_ldi,make_immed(p[0]->i));
+	GeneratePredicateMonadic(hook_predreg,op_op_ldi,MakeImmediate(p[0]->i));
+	GeneratePredicateMonadic(hook_predreg,op_ldi,MakeImmediate(p[0]->i));
 	}
 	*/
 	//ip1 = currentFn->pl.tail;
@@ -1300,13 +1368,13 @@ Operand *ENODE::GenHook(int flags, int size)
 	ap3 = GetTempRegister();
 	ap1 = cg.GenerateExpression(node->p[0], flags, size);
 	ReleaseTempRegister(ap1);
-	GenerateDiadic(op_bra, 0, make_clabel(end_label), 0);
+	GenerateDiadic(op_bra, 0, MakeCodeLabel(end_label), 0);
 	GenerateLabel(false_label);
 	ap2 = cg.GenerateExpression(node->p[1], flags, size);
 	if (!IsEqualOperand(ap1, ap2) && !voidResult)
 		error(ERR_MISMATCH);
 	//{
-	//	GenerateMonadic(op_hint, 0, make_immed(2));
+	//	GenerateMonadic(op_hint, 0, MakeImmediate(2));
 	//	switch (ap1->mode)
 	//	{
 	//	case am_reg:
@@ -1605,40 +1673,50 @@ Operand *ENODE::GenBinary(int flags, int size, int op)
 				if (ap2->mode == am_imm) {
 					switch (op) {
 					case op_and:
-						GenerateTriadic(op, 0, ap3, ap1, make_immed(ap2->offset->i));
+						GenerateTriadic(op, 0, ap3, ap1, MakeImmediate(ap2->offset->i));
 						/*
 						if (ap2->offset->i & 0xFFFF0000LL)
-						GenerateDiadic(op_andq1,0,ap3,make_immed((ap2->offset->i >> 16) & 0xFFFFLL));
+						GenerateDiadic(op_andq1,0,ap3,MakeImmediate((ap2->offset->i >> 16) & 0xFFFFLL));
 						if (ap2->offset->i & 0xFFFF00000000LL)
-						GenerateDiadic(op_andq2,0,ap3,make_immed((ap2->offset->i >> 32) & 0xFFFFLL));
+						GenerateDiadic(op_andq2,0,ap3,MakeImmediate((ap2->offset->i >> 32) & 0xFFFFLL));
 						if (ap2->offset->i & 0xFFFF000000000000LL)
-						GenerateDiadic(op_andq3,0,ap3,make_immed((ap2->offset->i >> 48) & 0xFFFFLL));
+						GenerateDiadic(op_andq3,0,ap3,MakeImmediate((ap2->offset->i >> 48) & 0xFFFFLL));
 						*/
 						break;
 					case op_or:
-						GenerateTriadic(op, 0, ap3, ap1, make_immed(ap2->offset->i));
+						GenerateTriadic(op, 0, ap3, ap1, MakeImmediate(ap2->offset->i));
 						/*
 						if (ap2->offset->i & 0xFFFF0000LL)
-						GenerateDiadic(op_orq1,0,ap3,make_immed((ap2->offset->i >> 16) & 0xFFFFLL));
+						GenerateDiadic(op_orq1,0,ap3,MakeImmediate((ap2->offset->i >> 16) & 0xFFFFLL));
 						if (ap2->offset->i & 0xFFFF00000000LL)
-						GenerateDiadic(op_orq2,0,ap3,make_immed((ap2->offset->i >> 32) & 0xFFFFLL));
+						GenerateDiadic(op_orq2,0,ap3,MakeImmediate((ap2->offset->i >> 32) & 0xFFFFLL));
 						if (ap2->offset->i & 0xFFFF000000000000LL)
-						GenerateDiadic(op_orq3,0,ap3,make_immed((ap2->offset->i >> 48) & 0xFFFFLL));
+						GenerateDiadic(op_orq3,0,ap3,MakeImmediate((ap2->offset->i >> 48) & 0xFFFFLL));
 						*/
+						break;
+					// If there is a pointer plus a constant we really wanted an address calc.
+					case op_add:
+					case op_sub:
+						if (ap1->isPtr && ap2->isPtr)
+							GenerateTriadic(op, 0, ap3, ap1, ap2);
+						else if (ap2->isPtr)
+							GenerateDiadic(op_lea, 0, ap3, op==op_sub ? compiler.of.MakeNegIndexed(ap2->offset, ap1->preg) : MakeIndexed(ap2->offset, ap1->preg));
+						else
+							GenerateTriadic(op, 0, ap3, ap1, ap2);
 						break;
 						// Most ops handle a max 16 bit immediate operand. If the operand is over 16 bits
 						// it has to be loaded into a register.
 					default:
 						//if (ap2->offset->i < -32768LL || ap2->offset->i > 32767LL) {
 							//ap4 = GetTempRegister();
-							//GenerateTriadic(op_or, 0, ap4, makereg(regZero), make_immed(ap2->offset->i));
+							//GenerateTriadic(op_or, 0, ap4, makereg(regZero), MakeImmediate(ap2->offset->i));
 							/*
 							if (ap2->offset->i & 0xFFFF0000LL)
-							GenerateDiadic(op_orq1,0,ap4,make_immed((ap2->offset->i >> 16) & 0xFFFFLL));
+							GenerateDiadic(op_orq1,0,ap4,MakeImmediate((ap2->offset->i >> 16) & 0xFFFFLL));
 							if (ap2->offset->i & 0xFFFF00000000LL)
-							GenerateDiadic(op_orq2,0,ap4,make_immed((ap2->offset->i >> 32) & 0xFFFFLL));
+							GenerateDiadic(op_orq2,0,ap4,MakeImmediate((ap2->offset->i >> 32) & 0xFFFFLL));
 							if (ap2->offset->i & 0xFFFF000000000000LL)
-							GenerateDiadic(op_orq3,0,ap4,make_immed((ap2->offset->i >> 48) & 0xFFFFLL));
+							GenerateDiadic(op_orq3,0,ap4,MakeImmediate((ap2->offset->i >> 48) & 0xFFFFLL));
 							*/
 							//GenerateTriadic(op, 0, ap3, ap1, ap4);
 							//ReleaseTempReg(ap4);
@@ -1801,7 +1879,7 @@ Operand *ENODE::GenLand(int flags, int op, bool safe)
 		ap1 = cg.GenerateExpression(p[0], am_reg, p[0]->GetNaturalSize());
 		ap4 = GetTempRegister();
 		//if (op == op_and) {
-		//	GenerateTriadic(op_beq, 0, ap1, makereg(0), make_label(lab0));
+		//	GenerateTriadic(op_beq, 0, ap1, makereg(0), MakeDataLabel(lab0));
 		//	ap2 = cg.GenerateExpression(p[1], am_reg, 8);
 		//}
 		if (!ap1->isBool)
@@ -1832,9 +1910,9 @@ Operand *ENODE::GenLand(int flags, int op, bool safe)
 	lab0 = nextlabel++;
 	lab1 = nextlabel++;
 	ap1 = GetTempRegister();
-	GenerateDiadic(op_ldi, 0, ap1, make_immed(1));
+	GenerateDiadic(op_ldi, 0, ap1, MakeImmediate(1));
 	cg.GenerateFalseJump(this, lab0, 0);
-	GenerateDiadic(op_ldi, 0, ap1, make_immed(0));
+	GenerateDiadic(op_ldi, 0, ap1, MakeImmediate(0));
 	GenerateLabel(lab0);
 	ap1->MakeLegal(flags, 8);
 	ap1->isBool = true;
@@ -2004,6 +2082,9 @@ void ENODE::PutConstant(txtoStream& ofs, unsigned int lowhigh, unsigned int rshi
 	// ASM statment text (up to 3500 chars) may be placed in the following buffer.
 	static char buf[4000];
 
+	// Used only by lea for subtract
+	if (isNeg)
+		ofs.write("-");
 	switch (nodetype)
 	{
 	case en_autofcon:

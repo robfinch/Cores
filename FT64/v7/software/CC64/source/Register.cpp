@@ -184,7 +184,7 @@ void initRegStack()
 
 void SpillRegister(Operand *ap, int number)
 {
-	GenerateDiadic(op_sw,0,ap,make_indexed(currentFn->GetTempBot()-ap->deep*sizeOfWord,regFP));
+	GenerateDiadic(op_sw,0,ap,cg.MakeIndexed(currentFn->GetTempBot()-ap->deep*sizeOfWord,regFP));
 	max_stack_use = max(max_stack_use, (ap->deep+1) * sizeOfWord);
     //reg_stack[reg_stack_ptr].Operand = ap;
     //reg_stack[reg_stack_ptr].f.allocnum = number;
@@ -195,7 +195,7 @@ void SpillRegister(Operand *ap, int number)
 
 void SpillFPRegister(Operand *ap, int number)
 {
-	GenerateDiadic(op_sf,'d',ap,make_indexed(currentFn->GetTempBot()-ap->deep*sizeOfWord,regFP));
+	GenerateDiadic(op_sf,'d',ap,cg.MakeIndexed(currentFn->GetTempBot()-ap->deep*sizeOfWord,regFP));
 	max_stack_use = max(max_stack_use, (ap->deep+1) * sizeOfWord);
 	fpreg_stack[fpreg_stack_ptr].Operand = ap;
     fpreg_stack[fpreg_stack_ptr].f.allocnum = number;
@@ -211,7 +211,7 @@ void LoadRegister(int regno, int number)
 	if (reg_in_use[regno] >= 0)
 		fatal("LoadRegister():register still in use");
 	reg_in_use[regno] = number;
-	GenerateDiadic(op_lw,0,makereg(regno),make_indexed(currentFn->GetTempBot()-number*sizeOfWord,regFP));
+	GenerateDiadic(op_lw,0,makereg(regno),cg.MakeIndexed(currentFn->GetTempBot()-number*sizeOfWord,regFP));
     reg_alloc[number].f.isPushed = 'F';
 }
 
@@ -220,7 +220,7 @@ void LoadFPRegister(int regno, int number)
 	if (fpreg_in_use[regno] >= 0)
 		fatal("LoadRegister():register still in use");
 	fpreg_in_use[regno] = number;
-	GenerateDiadic(op_lf,'d',makefpreg(regno),make_indexed(currentFn->GetTempBot()-number*sizeOfWord,regFP));
+	GenerateDiadic(op_lf,'d',makefpreg(regno),cg.MakeIndexed(currentFn->GetTempBot()-number*sizeOfWord,regFP));
     fpreg_alloc[number].f.isPushed = 'F';
 }
 
@@ -326,7 +326,7 @@ Operand *GetTempVectorRegister()
 
 	if (vreg_in_use[next_vreg] >= 0) {
 //		if (isThor)	
-//			GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),make_immed(-8));
+//			GenerateTriadic(op_addui,0,makereg(regSP),makereg(regSP),MakeImmediate(-8));
 		GenerateTempVectorRegPush(next_vreg, am_reg, vreg_in_use[next_vreg],0);
 	}
 	TRACE(printf("GetTempRegister:r%d\r\n", next_vreg);)

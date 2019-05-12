@@ -29,7 +29,6 @@ int roundSize(TYP *tp);
 extern char *rtrim(char *);
 extern int caselit(scase *casetab, int64_t);
 extern int litlist(ENODE *);
-Operand *make_indexed2(int lab, int i);
 
 // MemoryManagement.cpp
 void FreeFunction(Function *fn);
@@ -56,7 +55,7 @@ extern TYP *pop_typ();
 
 extern TYP *nameref2(std::string name, ENODE **node, int nt, bool alloc, TypeArray*, TABLE* tbl);
 extern void opt_const_unchecked(ENODE **node);
-extern Operand *make_string2(char *s);
-extern Operand *make_double_indexed(int i, int j, int scale);
+extern Operand *MakeString(char *s);
+extern Operand *MakeDoubleIndexed(int i, int j, int scale);
 
 #endif
