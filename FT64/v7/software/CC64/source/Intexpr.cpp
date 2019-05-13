@@ -30,7 +30,7 @@ int64_t GetIntegerExpression(ENODE **pnode)       /* simple integer value */
 	TYP *tp;
 	ENODE *node;
 
-	tp = NonCommaExpression(&node);
+	tp = Expression::ParseNonCommaExpression(&node);
 	if (node==NULL) {
 		error(ERR_SYNTAX);
 		return (0);
@@ -71,7 +71,7 @@ Float128 *GetFloatExpression(ENODE **pnode)       /* simple integer value */
 	Float128 *flt;
 
 	flt = (Float128 *)allocx(sizeof(Float128));
-	tp = NonCommaExpression(&node);
+	tp = Expression::ParseNonCommaExpression(&node);
 	if (node==NULL) {
 		error(ERR_SYNTAX);
 		return 0;
@@ -106,7 +106,7 @@ int64_t GetConstExpression(ENODE **pnode)       /* simple integer value */
 	ENODE *node;
 	Float128 *flt;
 
-	tp = NonCommaExpression(&node);
+	tp = Expression::ParseNonCommaExpression(&node);
 	if (node == NULL) {
 		error(ERR_SYNTAX);
 		return (0);

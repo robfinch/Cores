@@ -397,7 +397,7 @@ public:
 
 class TYP {
 public:
-    e_bt type;
+  int type;
 	__int16 typeno;			// number of the type
 	unsigned int val_flag : 1;       /* is it a value type */
 	unsigned int isArray : 1;
@@ -422,12 +422,12 @@ public:
 	static TYP *GetPtr(int n);
 	int GetIndex();
 	int GetHash();
-	static int GetSize(int num);
-	int GetElementSize();
+	static int64_t GetSize(int num);
+	int64_t GetElementSize();
 	static int GetBasicType(int num);
 	std::string *sname;
 	unsigned int alignment;
-	static TYP *Make(int bt, int siz);
+	static TYP *Make(int bt, int64_t siz);
 	static TYP *Copy(TYP *src);
 	bool IsScalar();
 	bool IsFloatType() const { return (type==bt_quad || type==bt_float || type==bt_double || type==bt_triple); };
@@ -441,7 +441,7 @@ public:
 	int Alignment();
 	int walignment();
 	int roundAlignment();
-	int roundSize();
+	int64_t roundSize();
 
 	ENODE *BuildEnodeTree();
 
@@ -490,8 +490,8 @@ public:
 	int number;
 	enum e_node nodetype;
 	enum e_node new_nodetype;			// nodetype replaced by optimization
-	enum e_bt etype;
-	long      esize;
+	int etype;
+	int64_t esize;
 	TYP *tp;
 	SYM *sym;
 	__int8 constflag;
@@ -538,7 +538,7 @@ public:
 	bool IsBitfield();
 	static bool IsEqualOperand(Operand *a, Operand *b);
 	char fsize();
-	long GetReferenceSize();
+	int64_t GetReferenceSize();
 	int GetNaturalSize();
 
 	static bool IsEqual(ENODE *a, ENODE *b, bool lit = false);
@@ -599,6 +599,36 @@ public:
 	void Dump();
 };
 
+class Expression : public CompilerType
+{
+private:
+	static ENODE *ParseArgumentList(ENODE *hidden, TypeArray *typearray);
+	static TYP *ParsePrimaryExpression(ENODE **node, int got_pa);
+	static TYP *ParseUnaryExpression(ENODE **node, int got_pa);
+	static TYP *ParsePostfixExpression(ENODE **node, int got_pa);
+	static TYP *ParseCastExpression(ENODE **node);
+	static TYP *ParseMultOps(ENODE **node);
+	static TYP *ParseAddOps(ENODE **node);
+	static TYP *ParseShiftOps(ENODE **node);
+	static TYP *ParseRelationalOps(ENODE **node);
+	static TYP *ParseEqualOps(ENODE **node);
+	static TYP *ParseBitwiseAndOps(ENODE **node);
+	static TYP *ParseBitwiseXorOps(ENODE **node);
+	static TYP *ParseBitwiseOrOps(ENODE **node);
+	static TYP *ParseAndOps(ENODE **node);
+	static TYP *ParseSafeAndOps(ENODE **node);
+	static TYP *ParseOrOps(ENODE **node);
+	static TYP *ParseSafeOrOps(ENODE **node);
+	static TYP *ParseConditionalOps(ENODE **node);
+	static TYP *ParseNonAssignExpression(ENODE **node);
+	static TYP *ParseCommaOp(ENODE **node);
+public:
+	// The following is called from declaration processing, so is made public
+	static TYP *ParseAssignOps(ENODE **node);
+	static TYP *ParseNonCommaExpression(ENODE **node);
+	//static TYP *ParseBinaryOps(ENODE **node, TYP *(*xfunc)(ENODE **), int nt, int sy);
+	static TYP *ParseExpression(ENODE **node);
+};
 
 class Operand : public CompilerType
 {

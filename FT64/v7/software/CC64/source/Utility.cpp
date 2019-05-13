@@ -31,9 +31,9 @@ int round2(int n)
 	return (n);
 }
 
-int round8(int n)
+int64_t round8(int64_t n)
 {
-	while (n & 7) n++;
+	while (n & 7LL) n++;
 	return (n);
 }
 

@@ -30,8 +30,6 @@
 extern SYM *currentClass;
 extern int defaultcc;
 static unsigned char sizeof_flag = 0;
-static TYP *ParseCastExpression(ENODE **node);
-static TYP *NonAssignExpression(ENODE **node);
 extern void backup();
 extern char *inpline;
 extern int parsingParameterList;
@@ -94,8 +92,6 @@ ENODE *postfixList = nullptr;
  */
 
 TYP     *expression();  /* forward ParseSpecifieraration */
-TYP     *NonCommaExpression();      /* forward ParseSpecifieraration */
-TYP     *ParseUnaryExpression();       /* forward ParseSpecifieraration */
 
 int nest_level = 0;
 bool isMember;
@@ -268,7 +264,7 @@ char *GetStrConst()
 	len = MAX_STLP1 + 1;
 	str = (char *)malloc(len);
 	if (str == nullptr) {
-		error(ERR_OUT_Oam_memORY);
+		error(ERR_OUT_OF_MEMORY);
 	}
 	strcpy_s(str, len, laststr);
 	do {
@@ -277,7 +273,7 @@ char *GetStrConst()
 			len = strlen(str) + MAX_STLP1 + 1;
 			nstr = (char *)malloc(len+1);
 			if (nstr == nullptr) {
-				error(ERR_OUT_Oam_memORY);
+				error(ERR_OUT_OF_MEMORY);
 				break;
 			}
 			strcpy_s(nstr, len, str);
@@ -482,7 +478,7 @@ TYP *deref(ENODE **node, TYP *tp)
 
 		// Pointers (addresses) are always unsigned
 		case bt_pointer:
-			(*node)->esize = sizeOfPtr;// tp->size;
+			(*node)->esize = tp->size;
 			(*node)->etype = (enum e_bt)tp->type;
 			*node = makenode(sizeOfPtr == 4 ? en_hp_ref : en_wp_ref, *node, (ENODE *)NULL);
 			(*node)->isUnsigned = TRUE;
@@ -954,7 +950,7 @@ TYP *nameref(ENODE **node,int nt)
 // parsed. since parameters are generally pushed from right
 // to left we get just what we asked for...
 //
-ENODE *ArgumentList(ENODE *hidden, TypeArray *typearray)
+ENODE *Expression::ParseArgumentList(ENODE *hidden, TypeArray *typearray)
 {
 	ENODE *ep1, *ep2;
 	TYP *typ;
@@ -969,7 +965,7 @@ ENODE *ArgumentList(ENODE *hidden, TypeArray *typearray)
 	typearray->Clear();
 	while( lastst != closepa)
 	{
-		typ = NonCommaExpression(&ep2);          // evaluate a parameter
+		typ = ParseNonCommaExpression(&ep2);          // evaluate a parameter
 		if (typ)
 			dfs.printf("%03d ", typ->typeno);
 		else
@@ -1153,7 +1149,7 @@ ENODE *Sub1(TYP *tptr, int64_t val)
 //                      ( expression )
 //                      this
 // ----------------------------------------------------------------------------
-TYP *ParsePrimaryExpression(ENODE **node, int got_pa)
+TYP *Expression::ParsePrimaryExpression(ENODE **node, int got_pa)
 {
 	ENODE *pnode, *qnode1, *qnode2;
   TYP *tptr;
@@ -1457,7 +1453,7 @@ j2:
 			head = tail = nullptr;
 			list = makenode(en_list,nullptr,nullptr);
 			while (lastst != end) {
-				tptr = NonCommaExpression(&pnode);
+				tptr = ParseNonCommaExpression(&pnode);
 				pnode->SetType(tptr);
 				//sz = sz + tptr->size;
 				sz = sz + pnode->esize;
@@ -1683,7 +1679,7 @@ void ApplyVMask(ENODE *node, ENODE *mask)
 //		postfix_expression--
 // ----------------------------------------------------------------------------
 
-TYP *ParsePostfixExpression(ENODE **node, int got_pa)
+TYP *Expression::ParsePostfixExpression(ENODE **node, int got_pa)
 {
 	TYP *tp1, *tp2, *tp3, *tp4;
 	ENODE *ep1, *ep2, *ep3, *ep4;
@@ -1884,7 +1880,7 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 					ep4 = makenode(en_regvar,NULL,NULL);
 			}
 			//ep2 = ArgumentList(ep1->p[2],&typearray);
-			ep2 = ArgumentList(ep4,&typearray);
+			ep2 = ParseArgumentList(ep4,&typearray);
 			typearray.Print();
 			dfs.printf("Got Type: %d",tp1->type);
 			if (tp1->type==bt_pointer) {
@@ -1985,7 +1981,7 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 			}
 			NextToken();       /* past -> or . */
 			if (tp1->IsVectorType()) {
-				NonAssignExpression(&qnode);
+				ParseNonAssignExpression(&qnode);
 				ep2 = makenode(en_shl,qnode,makeinode(en_icon,3));
 				// The dot operation will deference the result below so the
 				// old dereference operation isn't needed. It is stripped 
@@ -2030,7 +2026,7 @@ TYP *ParsePostfixExpression(ENODE **node, int got_pa)
 				NextToken();
 				if (lastst==openpa) {
 					NextToken();
-					ep2 = ArgumentList(pep1,&typearray);
+					ep2 = ParseArgumentList(pep1,&typearray);
 					typearray.Print();
 					sp = Function::FindExactMatch(ii,name,bt_long,&typearray)->sym;
 					if (sp) {
@@ -2124,7 +2120,7 @@ j1:
  //                     new 
  *
  */
-TYP *ParseUnaryExpression(ENODE **node, int got_pa)
+TYP *Expression::ParseUnaryExpression(ENODE **node, int got_pa)
 {
 	TYP *tp, *tp1, *tp2;
   ENODE *ep1, *ep2, *ep3;
@@ -2296,9 +2292,9 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
 	case kw_mulf:
 		NextToken();
 		needpunc(openpa,46);
-		tp1 = NonCommaExpression(&ep1);
+		tp1 = ParseNonCommaExpression(&ep1);
 		needpunc(comma, 47);
-		tp2 = NonCommaExpression(&ep2);
+		tp2 = ParseNonCommaExpression(&ep2);
 		needpunc(closepa, 48);
 		ep1 = makenode(en_mulf, ep1, ep2);
 		ep1->isUnsigned = TRUE;
@@ -2517,7 +2513,7 @@ TYP *ParseUnaryExpression(ENODE **node, int got_pa)
 //		(type name)cast_expression
 //		(type name) { const list }
 // ----------------------------------------------------------------------------
-static TYP *ParseCastExpression(ENODE **node)
+TYP *Expression::ParseCastExpression(ENODE **node)
 {
 	TYP *tp, *tp1, *tp2;
 	ENODE *ep1, *ep2;
@@ -2646,7 +2642,7 @@ static TYP *ParseCastExpression(ENODE **node)
  *              unary / unary
  *              unary % unary
  */
-TYP *multops(ENODE **node)
+TYP *Expression::ParseMultOps(ENODE **node)
 {
 	ENODE *ep1, *ep2;
 	TYP *tp1, *tp2;
@@ -2772,7 +2768,7 @@ TYP *multops(ENODE **node)
 // Addops handles the addition and subtraction operators.
 // ----------------------------------------------------------------------------
 
-static TYP *addops(ENODE **node)
+TYP *Expression::ParseAddOps(ENODE **node)
 {
 	ENODE *ep1, *ep2, *ep3, *ep4;
   TYP *tp1, *tp2;
@@ -2785,7 +2781,7 @@ static TYP *addops(ENODE **node)
   ep1 = (ENODE *)NULL;
   *node = (ENODE *)NULL;
 	sz1 = sz2 = 0;
-	tp1 = multops(&ep1);
+	tp1 = ParseMultOps(&ep1);
   if( tp1 == (TYP *)NULL )
       goto xit;
 	if (tp1->type == bt_pointer) {
@@ -2799,7 +2795,7 @@ static TYP *addops(ENODE **node)
   while( lastst == plus || lastst == minus ) {
     oper = (lastst == plus);
     NextToken();
-    tp2 = multops(&ep2);
+    tp2 = ParseMultOps(&ep2);
 		if (tp2==nullptr)
 			throw new C64PException(ERR_NULLPOINTER,1);
 		isScalar = !tp2->IsVectorType();
@@ -2916,23 +2912,23 @@ xit:
 // ----------------------------------------------------------------------------
 // Shiftop handles the shift operators << and >>.
 // ----------------------------------------------------------------------------
-TYP *shiftop(ENODE **node)
+TYP *Expression::ParseShiftOps(ENODE **node)
 {
 	ENODE *ep1, *ep2;
-    TYP *tp1, *tp2;
-    int oper;
+  TYP *tp1, *tp2;
+  int oper;
 
-    Enter("Shiftop");
-    *node = NULL;
-	tp1 = addops(&ep1);
+  Enter("Shiftop");
+  *node = NULL;
+	tp1 = ParseAddOps(&ep1);
 	if( tp1 == 0)
-        goto xit;
+    goto xit;
     while( lastst == lshift || lastst == rshift || lastst==lrot || lastst==rrot) {
             oper = (lastst == lshift);
 			if (lastst==lrot || lastst==rrot)
 				oper=2 + (lastst==lrot);
             NextToken();
-            tp2 = addops(&ep2);
+            tp2 = ParseAddOps(&ep2);
             if( tp2 == 0 )
                     error(ERR_IDEXPECT);
             else    {
@@ -2972,7 +2968,7 @@ TYP *shiftop(ENODE **node)
 //
 // relation handles the relational operators < <= > and >=.
 //
-TYP *relation(ENODE **node)
+TYP *Expression::ParseRelationalOps(ENODE **node)
 {
 	ENODE *ep1, *ep2;
   TYP *tp1, *tp2;
@@ -2982,7 +2978,7 @@ TYP *relation(ENODE **node)
   int nt;
   Enter("Relation");
   *node = (ENODE *)NULL;
-  tp1 = shiftop(&ep1);
+  tp1 = ParseShiftOps(&ep1);
   if( tp1 == 0 )
     goto xit;
   for(;;) {
@@ -2992,7 +2988,7 @@ TYP *relation(ENODE **node)
 		if (st != lt && st != leq && st != gt && st != geq)
 			goto fini;
 		NextToken();
-		tp2 = shiftop(&ep2);
+		tp2 = ParseShiftOps(&ep2);
 		if (tp2 == 0)
 			error(ERR_IDEXPECT);
 		else {
@@ -3061,7 +3057,7 @@ xit:
 //
 // equalops handles the equality and inequality operators.
 //
-TYP *equalops(ENODE **node)
+TYP *Expression::ParseEqualOps(ENODE **node)
 {
 	ENODE *ep1, *ep2;
   TYP *tp1, *tp2;
@@ -3070,7 +3066,7 @@ TYP *equalops(ENODE **node)
 
   Enter("EqualOps");
   *node = (ENODE *)NULL;
-  tp1 = relation(&ep1);
+  tp1 = ParseRelationalOps(&ep1);
   if( tp1 == (TYP *)NULL )
     goto xit;
 	if (tp1->IsVectorType())
@@ -3086,7 +3082,7 @@ TYP *equalops(ENODE **node)
 		//}
 		//else
 		{
-			tp2 = relation(&ep2);
+			tp2 = ParseRelationalOps(&ep2);
 			if (tp2 == NULL)
 				error(ERR_IDEXPECT);
 			else {
@@ -3119,41 +3115,258 @@ TYP *equalops(ENODE **node)
  *      binop is a common routine to handle all of the legwork and
  *      error checking for bitand, bitor, bitxor, andop, and orop.
  */
-TYP *binop(ENODE **node, TYP *(*xfunc)(ENODE **),int nt, int sy)
+/*
+TYP *Expression::ParseBinaryOps(ENODE **node, TYP *(*xfunc)(ENODE **),int nt, int sy)
 {
-	ENODE    *ep1, *ep2;
-        TYP             *tp1, *tp2;
-        Enter("Binop");
-        *node = (ENODE *)NULL;
-        tp1 = (*xfunc)(&ep1);
-        if( tp1 == 0 )
-            goto xit;
-        while( lastst == sy ) {
-                NextToken();
-                tp2 = (*xfunc)(&ep2);
-                if( tp2 == 0 )
-                        error(ERR_IDEXPECT);
-                else    {
-                        tp1 = forcefit(&ep2,tp2,&ep1,tp1,true,false);
-                        ep1 = makenode(nt,ep1,ep2);
-						ep1->esize = tp1->size;
-						ep1->etype = tp1->type;
-		                PromoteConstFlag(ep1);
-                        }
-                }
-        *node = ep1;
+	ENODE *ep1, *ep2;
+	TYP *tp1, *tp2;
+      
+	Enter("Binop");
+  *node = (ENODE *)NULL;
+  tp1 = (*xfunc)(&ep1);
+  if( tp1 == 0 )
+    goto xit;
+  while( lastst == sy ) {
+    NextToken();
+    tp2 = (*xfunc)(&ep2);
+    if( tp2 == 0 )
+      error(ERR_IDEXPECT);
+    else {
+      tp1 = forcefit(&ep2,tp2,&ep1,tp1,true,false);
+      ep1 = makenode(nt,ep1,ep2);
+			ep1->esize = tp1->size;
+			ep1->etype = tp1->type;
+		  PromoteConstFlag(ep1);
+    }
+  }
+  *node = ep1;
 xit:
-     if (*node)
+  if (*node)
+	(*node)->SetType(tp1);
+  Leave("Binop",0);
+  return (tp1);
+}
+*/
+TYP *Expression::ParseBitwiseAndOps(ENODE **node)
+{
+	ENODE *ep1, *ep2;
+	TYP *tp1, *tp2;
+
+	Enter("Binop");
+	*node = (ENODE *)NULL;
+	tp1 = ParseEqualOps(&ep1);
+	if (tp1 == 0)
+		goto xit;
+	while (lastst == bitandd) {
+		NextToken();
+		tp2 = ParseEqualOps(&ep2);
+		if (tp2 == 0)
+			error(ERR_IDEXPECT);
+		else {
+			tp1 = forcefit(&ep2, tp2, &ep1, tp1, true, false);
+			ep1 = makenode(en_and, ep1, ep2);
+			ep1->esize = tp1->size;
+			ep1->etype = tp1->type;
+			PromoteConstFlag(ep1);
+		}
+	}
+	*node = ep1;
+xit:
+	if (*node)
 		(*node)->SetType(tp1);
-        Leave("Binop",0);
-        return tp1;
+	Leave("Binop", 0);
+	return (tp1);
 }
 
-TYP *bitwiseand(ENODE **node)
+TYP *Expression::ParseBitwiseXorOps(ENODE **node)
+{
+	ENODE *ep1, *ep2;
+	TYP *tp1, *tp2;
+
+	Enter("Binop");
+	*node = (ENODE *)NULL;
+	tp1 = ParseBitwiseAndOps(&ep1);
+	if (tp1 == 0)
+		goto xit;
+	while (lastst == uparrow) {
+		NextToken();
+		tp2 = ParseBitwiseAndOps(&ep2);
+		if (tp2 == 0)
+			error(ERR_IDEXPECT);
+		else {
+			tp1 = forcefit(&ep2, tp2, &ep1, tp1, true, false);
+			ep1 = makenode(en_xor, ep1, ep2);
+			ep1->esize = tp1->size;
+			ep1->etype = tp1->type;
+			PromoteConstFlag(ep1);
+		}
+	}
+	*node = ep1;
+xit:
+	if (*node)
+		(*node)->SetType(tp1);
+	Leave("Binop", 0);
+	return (tp1);
+}
+
+TYP *Expression::ParseBitwiseOrOps(ENODE **node)
+{
+	ENODE *ep1, *ep2;
+	TYP *tp1, *tp2;
+
+	Enter("Binop");
+	*node = (ENODE *)NULL;
+	tp1 = ParseBitwiseXorOps(&ep1);
+	if (tp1 == 0)
+		goto xit;
+	while (lastst == bitorr) {
+		NextToken();
+		tp2 = ParseBitwiseXorOps(&ep2);
+		if (tp2 == 0)
+			error(ERR_IDEXPECT);
+		else {
+			tp1 = forcefit(&ep2, tp2, &ep1, tp1, true, false);
+			ep1 = makenode(en_or, ep1, ep2);
+			ep1->esize = tp1->size;
+			ep1->etype = tp1->type;
+			PromoteConstFlag(ep1);
+		}
+	}
+	*node = ep1;
+xit:
+	if (*node)
+		(*node)->SetType(tp1);
+	Leave("Binop", 0);
+	return (tp1);
+}
+
+TYP *Expression::ParseAndOps(ENODE **node)
+{
+	ENODE *ep1, *ep2;
+	TYP *tp1, *tp2;
+
+	Enter("Binop");
+	*node = (ENODE *)NULL;
+	tp1 = ParseBitwiseOrOps(&ep1);
+	if (tp1 == 0)
+		goto xit;
+	while (lastst == land) {
+		NextToken();
+		tp2 = ParseBitwiseOrOps(&ep2);
+		if (tp2 == 0)
+			error(ERR_IDEXPECT);
+		else {
+			tp1 = forcefit(&ep2, tp2, &ep1, tp1, true, false);
+			ep1 = makenode(en_land, ep1, ep2);
+			ep1->esize = tp1->size;
+			ep1->etype = tp1->type;
+			PromoteConstFlag(ep1);
+		}
+	}
+	*node = ep1;
+xit:
+	if (*node)
+		(*node)->SetType(tp1);
+	Leave("Binop", 0);
+	return (tp1);
+}
+
+TYP *Expression::ParseSafeAndOps(ENODE **node)
+{
+	ENODE *ep1, *ep2;
+	TYP *tp1, *tp2;
+
+	Enter("Binop");
+	*node = (ENODE *)NULL;
+	tp1 = ParseAndOps(&ep1);
+	if (tp1 == 0)
+		goto xit;
+	while (lastst == land_safe) {
+		NextToken();
+		tp2 = ParseAndOps(&ep2);
+		if (tp2 == 0)
+			error(ERR_IDEXPECT);
+		else {
+			tp1 = forcefit(&ep2, tp2, &ep1, tp1, true, false);
+			ep1 = makenode(en_land_safe, ep1, ep2);
+			ep1->esize = tp1->size;
+			ep1->etype = tp1->type;
+			PromoteConstFlag(ep1);
+		}
+	}
+	*node = ep1;
+xit:
+	if (*node)
+		(*node)->SetType(tp1);
+	Leave("Binop", 0);
+	return (tp1);
+}
+
+TYP *Expression::ParseOrOps(ENODE **node)
+{
+	ENODE *ep1, *ep2;
+	TYP *tp1, *tp2;
+
+	Enter("Binop");
+	*node = (ENODE *)NULL;
+	tp1 = ParseSafeAndOps(&ep1);
+	if (tp1 == 0)
+		goto xit;
+	while (lastst == lor) {
+		NextToken();
+		tp2 = ParseSafeAndOps(&ep2);
+		if (tp2 == 0)
+			error(ERR_IDEXPECT);
+		else {
+			tp1 = forcefit(&ep2, tp2, &ep1, tp1, true, false);
+			ep1 = makenode(en_lor, ep1, ep2);
+			ep1->esize = tp1->size;
+			ep1->etype = tp1->type;
+			PromoteConstFlag(ep1);
+		}
+	}
+	*node = ep1;
+xit:
+	if (*node)
+		(*node)->SetType(tp1);
+	Leave("Binop", 0);
+	return (tp1);
+}
+
+TYP *Expression::ParseSafeOrOps(ENODE **node)
+{
+	ENODE *ep1, *ep2;
+	TYP *tp1, *tp2;
+
+	Enter("Binop");
+	*node = (ENODE *)NULL;
+	tp1 = ParseOrOps(&ep1);
+	if (tp1 == 0)
+		goto xit;
+	while (lastst == lor_safe) {
+		NextToken();
+		tp2 = ParseOrOps(&ep2);
+		if (tp2 == 0)
+			error(ERR_IDEXPECT);
+		else {
+			tp1 = forcefit(&ep2, tp2, &ep1, tp1, true, false);
+			ep1 = makenode(en_lor_safe, ep1, ep2);
+			ep1->esize = tp1->size;
+			ep1->etype = tp1->type;
+			PromoteConstFlag(ep1);
+		}
+	}
+	*node = ep1;
+xit:
+	if (*node)
+		(*node)->SetType(tp1);
+	Leave("Binop", 0);
+	return (tp1);
+}
+
 /*
- *      the bitwise and operator...
- */
-{       return binop(node,equalops,en_and,bitandd);
+TYP *bitwiseand(ENODE **node)
+{       return binop(node,Expression::ParseEqualOps,en_and,bitandd);
 }
 
 TYP     *bitwisexor(ENODE **node)
@@ -3182,11 +3395,11 @@ TYP *safe_orop(ENODE **node)
 {
 	return binop(node, orop, en_lor_safe, lor_safe);
 }
-
+*/
 //
 //      this routine processes the hook operator.
 //
-TYP *conditional(ENODE **node)
+TYP *Expression::ParseConditionalOps(ENODE **node)
 {
 	TYP *tp1, *tp2, *tp3;
   ENODE *ep1, *ep2, *ep3, *ep4;
@@ -3194,7 +3407,7 @@ TYP *conditional(ENODE **node)
 
   Enter("Conditional");
   *node = (ENODE *)NULL;
-  tp1 = safe_orop(&ep1);       /* get condition */
+  tp1 = ParseSafeOrOps(&ep1);       // get condition
   if(tp1 == (TYP *)NULL )
     goto xit;
 	sh = lastst == safe_hook;
@@ -3204,7 +3417,7 @@ TYP *conditional(ENODE **node)
 		postfixList = nullptr;
 		iflevel++;
 		NextToken();
-		if((tp2 = conditional(&ep2)) == NULL) {
+		if((tp2 = ParseConditionalOps(&ep2)) == NULL) {
 			error(ERR_IDEXPECT);
 			goto cexit;
 		}
@@ -3214,7 +3427,7 @@ TYP *conditional(ENODE **node)
 		}
 		postfixList = nullptr;
 		needpunc(colon,6);
-		if((tp3 = conditional(&ep3)) == NULL) {
+		if((tp3 = ParseConditionalOps(&ep3)) == NULL) {
 			error(ERR_IDEXPECT);
 			goto cexit;
 		}
@@ -3243,7 +3456,7 @@ xit:
 //      asnop handles the assignment operators. currently only the
 //      simple assignment is implemented.
 // ----------------------------------------------------------------------------
-TYP *asnop(ENODE **node)
+TYP *Expression::ParseAssignOps(ENODE **node)
 {      
 	ENODE *ep1, *ep2, *ep3;
   TYP *tp1, *tp2;
@@ -3251,7 +3464,7 @@ TYP *asnop(ENODE **node)
 
   Enter("Assignop");
   *node = (ENODE *)NULL;
-  tp1 = conditional(&ep1);
+  tp1 = ParseConditionalOps(&ep1);
   if (tp1 == 0)
     goto xit;
   for(;;) {
@@ -3260,7 +3473,7 @@ TYP *asnop(ENODE **node)
         op = en_assign;
 ascomm:
 				NextToken();
-        tp2 = asnop(&ep2);
+        tp2 = ParseAssignOps(&ep2);
 ascomm2:
 		    if ( tp2 == 0 || !IsLValue(ep1) )
           error(ERR_LVALUE);
@@ -3290,7 +3503,7 @@ ascomm2:
 				op = en_asadd;
 ascomm3:        
 				NextToken();
-				tp2 = asnop(&ep2);
+				tp2 = ParseAssignOps(&ep2);
 				if(tp1->type == bt_pointer) {
 					ep3 = makeinode(en_icon, tp1->GetBtp()->size);
 					ep3->esize = sizeOfPtr;
@@ -3353,13 +3566,13 @@ xit:
 // ----------------------------------------------------------------------------
 // Evaluate an expression where the assignment operator is not legal.
 // ----------------------------------------------------------------------------
-static TYP *NonAssignExpression(ENODE **node)
+TYP *Expression::ParseNonAssignExpression(ENODE **node)
 {
 	TYP *tp;
 	pep1 = nullptr;
 	Enter("NonAssignExpression");
     *node = (ENODE *)NULL;
-    tp = conditional(node);
+    tp = ParseConditionalOps(node);
     if( tp == (TYP *)NULL )
         *node =(ENODE *)NULL;
     Leave("NonAssignExpression",tp ? tp->type : 0);
@@ -3373,7 +3586,7 @@ static TYP *NonAssignExpression(ENODE **node)
 // Externally visible entry point for GetIntegerExpression() and
 // ArgumentList().
 // ----------------------------------------------------------------------------
-TYP *NonCommaExpression(ENODE **node)
+TYP *Expression::ParseNonCommaExpression(ENODE **node)
 {
 	TYP *tp;
 	ENODE *ep1;
@@ -3383,7 +3596,7 @@ TYP *NonCommaExpression(ENODE **node)
 	pep1 = nullptr;
 	Enter("NonCommaExpression");
     *node = (ENODE *)NULL;
-    tp = asnop(node);
+    tp = ParseAssignOps(node);
     if( tp == (TYP *)NULL )
         *node =(ENODE *)NULL;
     Leave("NonCommaExpression",tp ? tp->type : 0);
@@ -3399,19 +3612,19 @@ TYP *NonCommaExpression(ENODE **node)
  *      evaluate the comma operator. comma operators are kept as
  *      void nodes.
  */
-TYP *commaop(ENODE **node)
+TYP *Expression::ParseCommaOp(ENODE **node)
 {
 	TYP *tp1,*tp2;
 	ENODE *ep1,*ep2;
 
   *node = (ENODE *)NULL;
-	tp1 = NonCommaExpression(&ep1);
+	tp1 = ParseNonCommaExpression(&ep1);
 	if (tp1==(TYP *)NULL)
 		return (TYP *)NULL;
 	while(1) {
 		if (lastst==comma) {
 			NextToken();
-			tp2 = NonCommaExpression(&ep2);
+			tp2 = ParseNonCommaExpression(&ep2);
       ep1 = makenode(en_void,ep1,ep2);
 			ep1->esize = tp1->size;
 		}
@@ -3447,13 +3660,14 @@ TYP *commaop(ENODE **node)
 // ----------------------------------------------------------------------------
 // Evaluate an expression where all operators are legal.
 // ----------------------------------------------------------------------------
-TYP *expression(ENODE **node)
+
+TYP *Expression::ParseExpression(ENODE **node)
 {
 	TYP *tp;
 	Enter("<expression>");
 	pep1 = nullptr;
   *node = (ENODE *)NULL;
-  tp = commaop(node);
+  tp = ParseCommaOp(node);
   if( tp == (TYP *)NULL )
       *node = (ENODE *)NULL;
   TRACE(printf("leave exp\r\n"));
@@ -3465,4 +3679,9 @@ TYP *expression(ENODE **node)
   else
   Leave("</Expression>",0);
   return tp;
+}
+
+TYP *expression(ENODE **node)
+{
+	return (Expression::ParseExpression(node));
 }

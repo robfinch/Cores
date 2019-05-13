@@ -1106,7 +1106,8 @@ Function *Function::FindExactMatch(int mm, std::string name, int rettype, TypeAr
 
 void Function::BuildParameterList(int *num, int *numa)
 {
-	int i, poffset, preg, fpreg;
+	int64_t poffset;
+	int i, preg, fpreg;
 	SYM *sp1;
 	int onp;
 	int np;

@@ -19,7 +19,7 @@ void funcbottom(Statement *stmt);
 Function *allocFunction(int id);
 Function *newFunction(int id);
 SYM *makeint2(std::string na);
-int round8(int n);
+int64_t round8(int64_t n);
 int pwrof2(int64_t);
 void ListCompound(Statement *stmt);
 std::string TraceName(SYM *sp);

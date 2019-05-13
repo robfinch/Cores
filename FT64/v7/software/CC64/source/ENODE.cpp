@@ -94,7 +94,7 @@ bool ENODE::HasCall()
 	return (false);
 }
 
-long ENODE::GetReferenceSize()
+int64_t ENODE::GetReferenceSize()
 {
 	switch (nodetype)        /* get load size */
 	{
@@ -2369,7 +2369,7 @@ void ENODE::load(txtiStream& ifs)
 
 int ENODE::PutStructConst(txtoStream& ofs)
 {
-	int n, k;
+	int64_t n, k;
 	ENODE *ep1;
 	ENODE *ep = this;
 	bool isStruct;

@@ -669,7 +669,7 @@ Statement *Statement::ParseExpression()
 
 	dfs.printf("<ParseExpression>\n");
 	snp = NewStatement(st_expr, FALSE);
-	if (expression(&(snp->exp)) == NULL) {
+	if (Expression::ParseExpression(&(snp->exp)) == NULL) {
 		error(ERR_EXPREXPECT);
 		NextToken();
 	}

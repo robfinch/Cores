@@ -357,7 +357,7 @@ enum e_hint {
 #define ERR_PRIVATE		46
 #define ERR_CALLSIG2	47
 #define ERR_METHOD_NOTFOUND	48
-#define ERR_OUT_Oam_memORY   49
+#define ERR_OUT_OF_MEMORY   49
 #define ERR_TOOMANY_SYMBOLS 50
 #define ERR_TOOMANY_PARAMS  51
 #define ERR_THIS            52

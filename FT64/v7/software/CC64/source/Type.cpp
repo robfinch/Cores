@@ -111,7 +111,7 @@ TYP *TYP::Copy(TYP *src)
 	return dst;
 }
 
-TYP *TYP::Make(int bt, int siz)
+TYP *TYP::Make(int bt, int64_t siz)
 {
 	TYP *tp;
 	dfs.puts("<TYP__Make>\n");
@@ -121,7 +121,7 @@ TYP *TYP::Make(int bt, int siz)
 	tp->val_flag = 0;
 	tp->isArray = FALSE;
 	tp->size = siz;
-	tp->type = (e_bt)bt;
+	tp->type = bt;
 	tp->typeno = bt;
 	tp->precision = siz * 8;
 	if (bt == bt_pointer)
@@ -132,7 +132,7 @@ TYP *TYP::Make(int bt, int siz)
 
 // Given just a type number return the size
 
-int TYP::GetSize(int num)
+int64_t TYP::GetSize(int num)
 {
   if (num == 0)
     return (0);
@@ -170,7 +170,7 @@ int TYP::GetHash()
 	return n;
 }
 
-int TYP::GetElementSize()
+int64_t TYP::GetElementSize()
 {
 	int n;
 	TYP *p, *p1;
@@ -715,7 +715,6 @@ int64_t TYP::InitializeArray(int64_t maxsz)
 	int64_t nbytes;
 	char *p;
 	char *str;
-	int64_t sz;
 
 	nbytes = 0;
 //	if (lastst == begin)
@@ -819,9 +818,8 @@ int64_t TYP::InitializeStruct()
 
 int64_t TYP::GenerateT(TYP *tp, ENODE *node)
 {
-	int nbytes;
+	int64_t nbytes;
 	int64_t val;
-	TYP *tp2;
 	int64_t n, nele;
 	ENODE *nd;
 
@@ -1105,10 +1103,10 @@ int TYP::roundAlignment()
 
 // Round the size of the type up according to the worst alignment.
 
-int TYP::roundSize()
+int64_t TYP::roundSize()
 {
-	int sz;
-	int wa;
+	int64_t sz;
+	int64_t wa;
 
 	worstAlignment = 0;
 	if (type == bt_struct || type == bt_union || type == bt_class) {

@@ -1103,8 +1103,6 @@ bool FT64CodeGenerator::IsPascal(ENODE *ep)
 
 void FT64CodeGenerator::LinkAutonew(ENODE *node)
 {
-	Operand *ap;
-
 	if (node->isAutonew) {
 		currentFn->hasAutonew = true;
 	}
@@ -1122,7 +1120,6 @@ Operand *FT64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 	int ps;
 	TypeArray *ta = nullptr;
 	int64_t mask,fmask;
-	CSETable *csetbl;
 
 	sym = nullptr;
 

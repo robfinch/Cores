@@ -1332,7 +1332,7 @@ void Declaration::ParseAssign(SYM *sp)
 
 	tp1 = nameref(&ep1, TRUE);
 	op = en_assign;
-	tp2 = asnop(&ep2);
+	tp2 = Expression::ParseAssignOps(&ep2);
 	if (tp2 == nullptr || !IsLValue(ep1))
 		error(ERR_LVALUE);
 	else {
