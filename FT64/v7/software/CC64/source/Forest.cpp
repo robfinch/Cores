@@ -26,6 +26,7 @@
 #include "stdafx.h"
 
 Forest forest;
+int Forest::k = 32;
 
 Tree *Forest::PlantTree(Tree *t)
 {
@@ -114,7 +115,9 @@ void Forest::Renumber()
 
 	for (tt = 0; tt < treecount; tt++) {
 		t = trees[tt];
-		::map.newnums[t->var] = t->num;
+		if (t->var > 31 || regs[t->var].IsColorable)
+			::map.newnums[t->var] = t->num+32;
+
 		t->blocks->resetPtr();
 		for (bb = t->blocks->nextMember(); bb >= 0; bb = t->blocks->nextMember()) {
 			b = basicBlocks[bb];
@@ -123,39 +126,55 @@ void Forest::Renumber()
 				if (ip->opcode == op_label)
 					continue;
 				if (ip->oper1 && ip->oper1->preg == t->var) {// && IsRenumberable(t->var))
-					Var::Renumber(ip->oper1->preg, t->num);
-					ip->oper1->preg = t->num;
+					if (t->var > 31 || regs[t->var].IsColorable) {
+						Var::Renumber(ip->oper1->preg, t->num+32);
+						ip->oper1->preg = t->num+32;
+					}
 				}
 				if (ip->oper1 && ip->oper1->sreg == t->var) {// && IsRenumberable(t->var))
-					Var::Renumber(ip->oper1->sreg, t->num);
-					ip->oper1->sreg = t->num;
+					if (t->var > 31 || regs[t->var].IsColorable) {
+						Var::Renumber(ip->oper1->sreg, t->num+32);
+						ip->oper1->sreg = t->num+32;
+					}
 				}
 
 				if (ip->oper2 && ip->oper2->preg == t->var) {// && IsRenumberable(t->var))
-					Var::Renumber(ip->oper2->preg, t->num);
-					ip->oper2->preg = t->num;
+					if (t->var > 31 || regs[t->var].IsColorable) {
+						Var::Renumber(ip->oper2->preg, t->num+32);
+						ip->oper2->preg = t->num+32;
+					}
 				}
 				if (ip->oper2 && ip->oper2->sreg == t->var) {// && IsRenumberable(t->var))
-					Var::Renumber(ip->oper2->sreg, t->num);
-					ip->oper2->sreg = t->num;
+					if (t->var > 31 || regs[t->var].IsColorable) {
+						Var::Renumber(ip->oper2->sreg, t->num+32);
+						ip->oper2->sreg = t->num+32;
+					}
 				}
 
 				if (ip->oper3 && ip->oper3->preg == t->var) {// && IsRenumberable(t->var))
-					Var::Renumber(ip->oper3->preg, t->num);
-					ip->oper3->preg = t->num;
+					if (t->var > 31 || regs[t->var].IsColorable) {
+						Var::Renumber(ip->oper3->preg, t->num+32);
+						ip->oper3->preg = t->num+32;
+					}
 				}
 				if (ip->oper3 && ip->oper3->sreg == t->var) {// && IsRenumberable(t->var))
-					ip->oper3->sreg = t->num;
-					Var::Renumber(ip->oper3->sreg, t->num);
+					if (t->var > 31 || regs[t->var].IsColorable) {
+						ip->oper3->sreg = t->num+32;
+						Var::Renumber(ip->oper3->sreg, t->num+32);
+					}
 				}
 
 				if (ip->oper4 && ip->oper4->preg == t->var) {// && IsRenumberable(t->var))
-					Var::Renumber(ip->oper4->preg, t->num);
-					ip->oper4->preg = t->num;
+					if (t->var > 31 || regs[t->var].IsColorable) {
+						Var::Renumber(ip->oper4->preg, t->num+32);
+						ip->oper4->preg = t->num+32;
+					}
 				}
 				if (ip->oper4 && ip->oper4->sreg == t->var) {// && IsRenumberable(t->var))
-					Var::Renumber(ip->oper4->sreg, t->num);
-					ip->oper4->sreg = t->num;
+					if (t->var > 31 || regs[t->var].IsColorable) {
+						Var::Renumber(ip->oper4->sreg, t->num+32);
+						ip->oper4->sreg = t->num+32;
+					}
 				}
 
 				if (ip == b->lcode)
@@ -163,6 +182,7 @@ void Forest::Renumber()
 			}
 		}
 	}
+
 	for (tt = 0; tt < treecount; tt++) {
 		t = trees[tt];
 		t->var = ::map.newnums[t->var];
@@ -219,19 +239,57 @@ int Forest::SelectSpillCandidate()
 	return (s);
 }
 
+void Forest::PreColor()
+{
+	int c;
+
+	for (c = 0; c < treecount; c++) {
+		if (trees[c]->var < 32 && !regs[trees[c]->var].IsColorable)
+			trees[c]->color = trees[c]->var;
+		else
+			trees[c]->color = k;
+		trees[c]->spill = false;
+	}
+}
+
 void Forest::Simplify()
 {
-	int m;
-	int K = 17;
+	int m, nn;
+	bool addedLow = false;
+	Tree *t;
+	int bb;
+	int degree;
 
 	iGraph.frst = this;
 	low.clear();
 	high.clear();
+	//for (nn = 0; nn < BasicBlock::nBasicBlocks; nn++) {
+	//	addedLow = false;
+	//	for (m = 0; m < treecount; m++) {
+	//		if (trees[m]->blocks->isMember(nn));
+	//			break;
+	//	}
+	//	if (m < treecount) {
+	//		if (iGraph.degrees[nn] < K) {
+	//			low.add(nn);
+	//			addedLow = true;
+	//		}
+	//		if (!addedLow && !trees[m]->infinite)
+	//			high.add(nn);
+	//	}
+	//}
 	for (m = 0; m < treecount; m++) {
-		if (trees[m]->color == K) {
-			if (iGraph.degrees[m] < K)
+		if (trees[m]->color == k) {
+			trees[m]->blocks->resetPtr();
+			degree = 0;
+			for (bb = trees[m]->blocks->nextMember(); bb >= 0; bb = trees[m]->blocks->nextMember())
+				degree = max(degree, iGraph.degrees[bb]);
+			addedLow = false;
+			if (degree < k) {
 				low.add(m);
-			else if (!trees[m]->infinite)
+				addedLow = true;
+			}
+			if (!addedLow && !trees[m]->infinite)
 				high.add(m);
 		}
 	}
@@ -240,9 +298,11 @@ void Forest::Simplify()
 		low.resetPtr();
 		while ((m = low.nextMember()) >= 0) {
 			low.remove(m);
-			high.remove(m);
+//			high.remove(m);
 			// remove m from the graph updating low and high
-			iGraph.Remove(m);
+			trees[m]->blocks->resetPtr();
+			for (bb = trees[m]->blocks->nextMember(); bb >= 0; bb = trees[m]->blocks->nextMember())
+				iGraph.Remove(bb);
 			push(m);
 		}
 		if (high.NumMember() == 0)
@@ -259,54 +319,91 @@ void Forest::Simplify()
 
 void Forest::Color()
 {
-	int nn, m;
+	int nn, m, num;
 	int c;
-	int j, k = 17;
-	int *p;
+	int j;
+	__int16 *p;
 	CSet used;
 	Tree *t;
 
-	if (pass == 1) {
-		for (c = 0; c < treecount; c++) {
-			trees[c]->spill = false;
-			trees[c]->color = k;
-			if (trees[c]->var < 3)
-				trees[c]->color = trees[c]->var;
-			if (trees[c]->var >= regFirstArg && trees[c]->var <= regLastArg) {
-				trees[c]->color = trees[c]->var - regFirstArg + 18;
-			}
-			if (trees[c]->var == regFP
-				|| trees[c]->var == regLR
-				|| trees[c]->var == regXLR
-				|| trees[c]->var == regSP) {
-				trees[c]->color = trees[c]->var - regXLR + 28;
-			}
-		}
-	}
 	used.clear();
-	used.add(0);	// reg0 is a constant 0
-	used.add(1);	// these two are return value
-	used.add(2);
+	for (nn = 0; nn < 32; nn++)
+		if (!regs[nn].IsColorable)
+			used.add(nn);
 	while (!stk->IsEmpty()) {
-		t = trees[m=pop()];
-		if (pass == 1 && !t->infinite && t->cost < 0.0f) {	// was <= 0.0f
-			t->spill = true;
-		}
-		else {
-			p = iGraph.GetNeighbours(m, &nn);
-			for (j = 0; j < nn; j++)
-				used.add(trees[p[j]]->color);
-			for (c = 0; used.isMember(c) && c < k; c++);
-			if (c < k && t->color == k) {	// The tree may have been colored already
-				t->color = c;
-				used.add(c);
-			}
-			else if (t->color <= k)		// Don't need to spill args
+		m = pop();
+		if (m < treecount) {
+			t = trees[m];
+			if (pass == 1 && !t->infinite && t->cost < 0.0f) {	// was <= 0.0f
 				t->spill = true;
+			}
+			else {
+				t->blocks->resetPtr();
+				for (m = t->blocks->nextMember(); m >= 0; m = t->blocks->nextMember()) {
+					p = iGraph.GetNeighbours(m, &nn);
+					for (j = 0; j < nn; j++)
+						used.add(basicBlocks[p[j]]->color);
+				}
+				for (c = 0; used.isMember(c) && c < k; c++);
+				if (c < k && t->color == k) {	// The tree may have been colored already
+					t->color = c;
+					used.add(c);
+					t->blocks->resetPtr();
+					for (m = t->blocks->nextMember(); m >= 0; m = t->blocks->nextMember())
+						basicBlocks[m]->color->add(c);
+				}
+				else if (t->color < k)		// Don't need to spill args
+					t->spill = true;
+			}
 		}
 	}
 }
 
+void Forest::ColorBlocks()
+{
+	int m, n;
+	Tree *t;
+	BasicBlock *b;
+	OCODE *ip;
+	bool eol = false;
+
+	for (m = 0; m < treecount; m++) {
+		t = trees[m];
+		t->blocks->resetPtr();
+		for (n = t->blocks->nextMember(); n >= 0; n = t->blocks->nextMember()) {
+			b = basicBlocks[n];
+			for (ip = b->code; ip && !eol; ip = ip->fwd) {
+				if (ip->insn) {
+					if (ip->oper1) {
+						if (ip->oper1->preg == t->var)
+							ip->oper1->preg = t->color;
+						if (ip->oper1->sreg == t->var)
+							ip->oper1->sreg = t->color;
+					}
+					if (ip->oper2) {
+						if (ip->oper2->preg == t->var)
+							ip->oper2->preg = t->color;
+						if (ip->oper2->sreg == t->var)
+							ip->oper2->sreg = t->color;
+					}
+					if (ip->oper3) {
+						if (ip->oper3->preg == t->var)
+							ip->oper3->preg = t->color;
+						if (ip->oper3->sreg == t->var)
+							ip->oper3->sreg = t->color;
+					}
+					if (ip->oper4) {
+						if (ip->oper4->preg == t->var)
+							ip->oper4->preg = t->color;
+						if (ip->oper4->sreg == t->var)
+							ip->oper4->sreg = t->color;
+					}
+					eol = ip == b->lcode;
+				}
+			}
+		}
+	}
+}
 
 // Count the number of trees requiring spills.
 
@@ -397,11 +494,10 @@ bool Forest::IsAllTreesColored()
 {
 	int c;
 	Tree *t;
-	int K = 17;
 
 	for (c = 0; c < treecount; c++) {
 		t = trees[c];	// convenience
-		if (t->color == K)
+		if (t->color == k)
 			return (false);
 	}
 	return (true);

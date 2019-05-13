@@ -308,6 +308,7 @@ void Function::PeepOpt()
 	CFG::Rename();
 	count = 0;
 	forest.pass = 0;
+	forest.PreColor();
 	do {
 		forest.pass++;
 		if (!opt_vreg)
@@ -315,8 +316,18 @@ void Function::PeepOpt()
 		forest.Renumber();
 		BasicBlock::ComputeSpillCosts();
 		RemoveCode();
+		iGraph.workingMoveop = op_mov;
+		iGraph.workingRegclass = am_reg;
 		iGraph.frst = &forest;
 		iGraph.BuildAndCoalesce();
+		//iGraph.workingMoveop = op_fmov;
+		//iGraph.workingRegclass = am_fpreg;
+		//iGraph.frst = &forest;
+		//iGraph.BuildAndCoalesce();
+		//iGraph.workingMoveop = op_vmov;
+		//iGraph.workingRegclass = am_vreg;
+		//iGraph.frst = &forest;
+		//iGraph.BuildAndCoalesce();
 		iGraph.Print(3);
 		forest.Simplify();
 		iGraph.Print(4);
@@ -327,7 +338,10 @@ void Function::PeepOpt()
 	dfs.printf("Loops for color graphing allocator: %d\n", forest.pass);
 
 	// Substitute real registers for virtual ones.
-	BasicBlock::ColorAll();
+	forest.ColorBlocks();
+	pl.MarkAllKeep();
+	pl.MarkAllKeep2();
+	//BasicBlock::ColorAll();
 	if (count == 2) {
 		dfs.printf("Register allocator max loops.\n");
 	}

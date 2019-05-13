@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -35,13 +35,13 @@ void IGraph::MakeNew(int n)
 {
 	int bms;
 
-	K = 17;
+	K = 32;
 	size = n;
 	bms = n * n / sizeof(int);
 	bitmatrix = new int[bms];
-	degrees = new short int[n];
-	vecs = new int *[n];
-	ZeroMemory(vecs, n * sizeof(int *));
+	degrees = new __int16[n];
+	vecs = new __int16 *[n];
+	ZeroMemory(vecs, n * sizeof(__int16 *));
 	Clear();
 }
 
@@ -74,7 +74,7 @@ void IGraph::ClearBitmatrix()
 void IGraph::Clear()
 {
 	ClearBitmatrix();
-	ZeroMemory(degrees, size * sizeof(short int));
+	ZeroMemory(degrees, size * sizeof(__int16));
 }
 
 
@@ -85,7 +85,7 @@ void IGraph::AllocVecs()
 	int x;
 
 	for (x = 0; x < size; x++) {
-		vecs[x] = new int[degrees[x]];
+		vecs[x] = new __int16[degrees[x]];
 	}
 }
 
@@ -151,11 +151,12 @@ void IGraph::Add2(int x, int y)
 
 	if (x == y)
 		return;
-	x1 = min(x, y);
-	y1 = max(x, y);
+	//x1 = min(x, y);
+	//y1 = max(x, y);
 	BitIndex(x1, y1, &intndx, &bitndx);
 	bitmatrix[intndx] |= (1 << bitndx);
 	AddToVec(x1, y1);
+	AddToVec(y1, x1);
 }
 
 bool IGraph::Remove(int n)
@@ -166,6 +167,8 @@ bool IGraph::Remove(int n)
 	bool updated = false;
 
 	for (j = 0; j < degrees[n]; j++) {
+		if (vecs[n] == nullptr)
+			continue;
 		m = vecs[n][j];
 		if (degrees[m] > 0) {
 			for (mm = nn = 0; nn < degrees[m]; nn++) {
@@ -196,7 +199,8 @@ bool IGraph::DoesInterfere(int x, int y)
 
 	if (x == y) return (true);
 	//return !(frst->trees[x]->blocks->isDisjoint(*frst->trees[y]->blocks));
-	bitndx = BitIndex(x, y, &intndx, &bitndx);
+	/*bitndx = */
+	BitIndex(x, y, &intndx, &bitndx);
 	return (((bitmatrix[intndx] >> bitndx) & 1)==1);
 }
 
@@ -206,24 +210,24 @@ bool IGraph::DoesInterfere(int x, int y)
 void IGraph::Unite(int father, int son)
 {
 	int j;
-	int *tmp;
+	__int16 *tmp;
 
 	if (father > son)
 		throw new C64PException(ERR_IGNODES, 2);
 
 	// Increase the size of the adjacency vector allocation for the father as
 	// the son's vectors will be added to them.
-	tmp = new int [degrees[father] + degrees[son] + 1];
-	ZeroMemory(tmp, (degrees[father] + degrees[son] + 1) * sizeof(int));
+	tmp = new __int16 [degrees[father] + degrees[son] + 1];
+	ZeroMemory(tmp, (degrees[father] + degrees[son] + 1) * sizeof(__int16));
 	if (vecs[father]) {
-		memcpy(tmp, vecs[father], degrees[father] * sizeof(int));
+		memcpy(tmp, vecs[father], degrees[father] * sizeof(__int16));
 		//delete[] vecs[father];
 	}
 	vecs[father] = tmp;
 
 	if (vecs[son]) {
 		for (j = 0; j < degrees[son]; j++) {
-			Add2(father, vecs[son][j]);
+			Add(father, vecs[son][j]);
 		}
 		degrees[son] = 0;
 	}
@@ -251,11 +255,12 @@ void IGraph::AddToLive(BasicBlock *b, Operand *ap, OCODE *ip)
 
 void IGraph::Fill()
 {
-	int n, n1;
+	int n, n1, rg1, rg2;
 	BasicBlock *b;
 	int v, v1;
 	OCODE *ip;
 	bool eol;
+	bool isFP;
 	int K = 17;
 
 	// For each block 
@@ -271,17 +276,42 @@ void IGraph::Fill()
 						b->live->remove(v);
 					}
 				}
+				else if (ip->opcode == op_fmov) {
+					v = FindTreeno(ip->oper1->preg+0x10000, ip->bb->num);
+					if (v >= 0 && frst->trees[v]->color == K) {
+						b->live->remove(v);
+					}
+				}
+				// For now we assume only one target register.
+				// pop has two targets.
 				if (ip->insn->HasTarget()) {
-					v = FindTreeno(ip->oper1->preg, ip->bb->num);
+					isFP = ip->GetTargetReg(&rg1, &rg2);
+					v = FindTreeno(isFP ? rg1 + 0x10000 : rg1, ip->bb->num);
 					if (v >= 0 && frst->trees[v]->color==K) {
 						b->live->resetPtr();
 						for (n = b->live->nextMember(); n >= 0; n = b->live->nextMember()) {
-							n1 = min(n, v);
-							v1 = max(n, v);
-							iGraph.Add(n1, v1);
+							//n1 = min(n, v); ??? Not sure what I was thinking here
+							//v1 = max(n, v);
+							n1 = n;
+							v1 = ip->bb->num;
+							// If n1 >= v1 it's from a loop
+							if (n1 <= v1)
+								iGraph.Add(n1, v1);
 						}
 						b->live->remove(v);
 					}
+					//if (rg2 != 0) {
+					//	v = FindTreeno(rg2, ip->bb->num);
+					//	if (v >= 0 && frst->trees[v]->color == K) {
+					//		b->live->resetPtr();
+					//		for (n = b->live->nextMember(); n >= 0; n = b->live->nextMember()) {
+					//			n1 = min(n, v);
+					//			v1 = max(n, v);
+					//			iGraph.Add(n1, v1);
+					//		}
+					//		b->live->remove(v);
+					//	}
+					//}
 				}
 				// Unrolled loop
 				// while (p < ik->uses)
@@ -326,7 +356,8 @@ void IGraph::BuildAndCoalesce()
 {
 	bool improved = false;
 
-	MakeNew(frst->treecount);
+	//MakeNew(frst->treecount);
+	MakeNew(BasicBlock::nBasicBlocks);
 	frst->CalcRegclass();
 
 	// Insert move operations to handle register parameters. We want to do this

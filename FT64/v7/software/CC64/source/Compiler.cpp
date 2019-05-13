@@ -74,6 +74,7 @@ int Compiler::main2(int argc, char **argv)
 void Compiler::compile()
 {
 	GlobalDeclaration *gd;
+	int nn;
 
 	dfs.printf("<compile>\n");
 	genst_cumulative = 0;
@@ -100,6 +101,20 @@ void Compiler::compile()
 	funcnum = 0;
 	AddBuiltinFunctions();
 	Instruction::SetMap();
+
+	for (nn = 0; nn < 32; nn++) {
+		regs[nn].IsColorable = true;
+		if (nn >= regFirstArg && nn <= regLastArg)
+			regs[nn].IsColorable = false;
+	}
+	regs[0].IsColorable = false;
+	regs[1].IsColorable = false;
+	regs[2].IsColorable = false;
+	regs[23].IsColorable = false;
+	regs[regLR].IsColorable = false;
+	regs[regXLR].IsColorable = false;
+	regs[regFP].IsColorable = false;
+	regs[regSP].IsColorable = false;
 
 	getch();
 	lstackptr = 0;

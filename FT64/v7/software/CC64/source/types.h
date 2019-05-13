@@ -39,6 +39,7 @@ class SYM;
 class Function;
 class OCODE;
 class PeepList;
+class Var;
 
 class CompilerType
 {
@@ -113,6 +114,7 @@ public:
 	bool modified;
 	bool sub;
 	bool IsArg;
+	bool IsColorable;
 	ENODE *offset;
 	int val;
 public:
@@ -165,6 +167,7 @@ public:
 	static void InsertBefore(OCODE *an, OCODE *cd);
 	static void InsertAfter(OCODE *an, OCODE *cd);
 	void MarkAllKeep();
+	void MarkAllKeep2();
 	void RemoveCompilerHints();
 	void RemoveCompilerHints2();
 	void Remove(OCODE *ip);
@@ -935,6 +938,7 @@ public:
 	CSet *MustSpill;
 	CSet *NeedLoad;
 	CSet *DF;		// dominance frontier
+	CSet *trees;
 	int HasAlready;
 	int Work;
 	static CSet *livo;
@@ -942,6 +946,9 @@ public:
 	BasicBlock *prev;
 	OCODE *code;
 	OCODE *lcode;
+	static BasicBlock *RootBlock;
+	static int nBasicBlocks;
+	CSet *color;
 public:
 	static BasicBlock *MakeNew();
 	static BasicBlock *Blockize(OCODE *start);
@@ -1004,11 +1011,12 @@ class Forest
 {
 public:
 	short int treecount;
-	Tree *trees[520];
+	Tree *trees[1032];
 	Function *func;
 	CSet low, high;
 	IntStack *stk;
-	short int map[512];
+	static int k;
+	short int map[1024];
 	short int pass;
 	// Cost accounting
 	float loads;
@@ -1017,6 +1025,7 @@ public:
 	float others;
 	bool infinite;
 	float cost;
+	Var *var;
 public:
 	Forest() { stk = IntStack::MakeNew(100000); };
 	Tree *MakeNewTree();
@@ -1039,12 +1048,14 @@ public:
 	void push(int n) { stk->push(n); };
 	int pop() { return (stk->pop()); };
 	void Simplify();
+	void PreColor();
 	void Color();
 	void Select() { Color(); };
 	int SelectSpillCandidate();
 	int GetSpillCount();
 	int GetRegisterToSpill(int tree);
 	bool SpillCode();
+	void ColorBlocks();
 	bool IsAllTreesColored();
 };
 
@@ -1089,12 +1100,14 @@ class IGraph
 {
 public:
 	int *bitmatrix;
-	short int *degrees;
-	int **vecs;
+	__int16 *degrees;
+	__int16 **vecs;
 	int size;
 	int K;
 	Forest *frst;
 	int pass;
+	enum e_am workingRegclass;
+	enum e_op workingMoveop;
 public:
 	~IGraph();
 	void Destroy();
@@ -1111,7 +1124,7 @@ public:
 	static int FindTreeno(int reg, int blocknum) { return (Var::FindTreeno(reg, blocknum)); };
 	bool DoesInterfere(int x, int y);
 	int Degree(int n) { return ((int)degrees[n]); };
-	int *GetNeighbours(int n, int *count) { if (count) *count = degrees[n]; return (vecs[n]); };
+	__int16 *GetNeighbours(int n, int *count) { if (count) *count = degrees[n]; return (vecs[n]); };
 	void Unite(int father, int son);
 	void Fill();
 	void AllocVecs();

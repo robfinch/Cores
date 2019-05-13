@@ -1,9 +1,10 @@
 #include "stdafx.h"
 
 extern bool HasTargetReg(OCODE *);
-int nBasicBlocks;
 BasicBlock *basicBlocks[10000];
 BasicBlock *sortedBlocks[10000];
+int BasicBlock::nBasicBlocks = 0;
+BasicBlock *BasicBlock::RootBlock = nullptr;
 
 BasicBlock *BasicBlock::MakeNew()
 {
@@ -17,6 +18,7 @@ BasicBlock *BasicBlock::MakeNew()
 	bb->LiveOut = CSet::MakeNew();
 	bb->MustSpill = CSet::MakeNew();
 	bb->NeedLoad = CSet::MakeNew();
+	bb->color = CSet::MakeNew();
 	bb->ihead = nullptr;
 	bb->ohead = nullptr;
 	bb->itail = nullptr;
@@ -51,7 +53,11 @@ bool IsBasicBlockSeparater(OCODE *ip)
 	case op_beqi:	return (true);
 	case op_bnei:	return (true);
 	case op_bchk:	return (true);
-	//case op_ibne:	return (true);
+	case op_band:	return (true);
+	case op_bor:	return (true);
+	case op_bnand:	return (true);
+	case op_bnor:	return (true);
+		//case op_ibne:	return (true);
 	//case op_dbnz:	return (true);
 	default:	return (false);
 	}
@@ -215,6 +221,17 @@ void BasicBlock::ComputeLiveVars()
 			continue;
 		if (ip->opcode == op_label)
 			continue;
+		// Call and jal may return a value in $v0.
+		if (ip->opcode == op_call || ip->opcode == op_jal) {
+			tr = 1;
+			if ((tr & 0xFFF) >= 0x800) {
+				kill->add((tr & 0xfff) - 0x780);
+			}
+			else {
+				kill->add(tr);
+			}
+			gen->add(tr);
+		}
 		if (ip->HasTargetReg()) {
 			// Should check the register classes here.
 			ip->GetTargetReg(&rg1, &rg2);
@@ -584,7 +601,7 @@ void BasicBlock::BuildLivesetFromLiveout()
 	int m;
 	int v;
 	Var *vr;
-	int K = 17;
+	int K = 32;
 
 	live->clear();
 	LiveOut->resetPtr();
@@ -680,7 +697,7 @@ bool BasicBlock::Coalesce()
 					// For iGraph we just want the tree number not the bb number.
 					ft = min(stree, dtree);
 					st = max(stree, dtree);
-					if (stree < dtree) {
+					if (src <= dst) {
 						father = src;
 						son = dst;
 					}
@@ -688,8 +705,8 @@ bool BasicBlock::Coalesce()
 						father = dst;
 						son = src;
 					}
-					if (!iGraph.DoesInterfere(ft, st)) {
-						iGraph.Unite(ft, st);
+					if (!iGraph.DoesInterfere(father, son)) {
+						iGraph.Unite(father, son);
 						// update graph so father contains all edges from son
 						if (father != son)
 							Unite(father, son);
@@ -776,7 +793,7 @@ void BasicBlock::Color()
 	int r;
 	OCODE *ip;
 
-	for (ip = code; ip && ip != lcode; ip = ip->fwd) {
+	for (ip = code; ip; ip = ip->fwd) {
 		if (ip->remove)
 			continue;
 		if (ip->insn == nullptr)
@@ -813,6 +830,8 @@ void BasicBlock::Color()
 			r = forest.map[r];
 			ip->oper4->sreg = forest.trees[r]->color;
 		}
+		if (ip == lcode)
+			break;
 	}
 }
 

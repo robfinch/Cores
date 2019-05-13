@@ -140,6 +140,16 @@ void PeepList::MarkAllKeep()
 	}
 }
 
+void PeepList::MarkAllKeep2()
+{
+	OCODE *ip;
+
+	for (ip = head; ip != NULL; ip = ip->fwd)
+	{
+		ip->remove2 = false;
+	}
+}
+
 void PeepList::Remove(OCODE *ip)
 {
 	OCODE *ip1, *ip2;

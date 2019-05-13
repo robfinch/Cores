@@ -414,7 +414,6 @@ extern BasicBlock *sortedBlocks[10000];
 extern Forest forest;
 extern IGraph iGraph;
 extern Instruction opl[235];
-extern BasicBlock *RootBlock;
 extern BasicBlock *LastBlock;
 extern Instruction *GetInsn(int);
 

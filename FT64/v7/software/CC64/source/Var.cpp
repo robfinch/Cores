@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2017-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2017-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -310,6 +310,7 @@ void Var::CreateForest()
 			}
 		}
 	}
+	trees.var = this;
 	dfs.printf("Visited r%d: ", num);
 	visited->sprint(buf, sizeof(buf));
 	dfs.printf(buf);
@@ -412,7 +413,8 @@ void Var::RenumberNeg()
 	Var *vp;
 
 	for (vp = currentFn->varlist; vp; vp = vp->next) {
-		vp->num = -vp->num;
+		if (vp->num < 0)
+			vp->num = -vp->num;
 	}
 }
 
