@@ -787,36 +787,36 @@ static void RestoreRegisterSet(SYM * sym)
 
 // Push temporaries on the stack.
 
-void SaveRegisterVars(int64_t mask, int64_t rmask)
+void SaveRegisterVars(CSet *rmask)
 {
 	int cnt;
 	int nn;
 
-	if( mask != 0 ) {
+	if( rmask->NumMember() ) {
 		cnt = 0;
-		GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),cg.MakeImmediate(popcnt(mask)*8));
-		for (nn = 0; nn < 64; nn++) {
-			if (rmask & (0x8000000000000000ULL >> nn)) {
-				GenerateDiadic(op_sw,0,makereg(nn),cg.MakeIndexed(cnt,regSP));
-				cnt+=sizeOfWord;
-			}
+		GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),cg.MakeImmediate(rmask->NumMember()*8));
+		rmask->resetPtr();
+		for (nn = rmask->lastMember(); nn >= 0; nn = rmask->prevMember()) {
+			// nn = nregs - 1 - regno
+			// regno = -(nn - nregs + 1);
+			// regno = nregs - 1 - nn
+			GenerateDiadic(op_sw,0,makereg(nregs-1-nn),cg.MakeIndexed(cnt,regSP));
+			cnt+=sizeOfWord;
 		}
 	}
 }
 
-void SaveFPRegisterVars(int64_t mask, int64_t rmask)
+void SaveFPRegisterVars(CSet *rmask)
 {
 	int cnt;
 	int nn;
 
-	if( mask != 0 ) {
+	if( rmask->NumMember() ) {
 		cnt = 0;
-		GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),cg.MakeImmediate(popcnt(mask)*8));
-		for (nn = 0; nn < 64; nn++) {
-			if (rmask & (0x8000000000000000ULL >> nn)) {
-				GenerateDiadic(op_sf,'d',makefpreg(nn),cg.MakeIndexed(cnt,regSP));
-				cnt+=sizeOfWord;
-			}
+		GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),cg.MakeImmediate(rmask->NumMember()*8));
+		for (nn = rmask->lastMember(); nn >= 0; nn = rmask->prevMember()) {
+			GenerateDiadic(op_sf, 'd', makefpreg(nregs - 1 - nn), cg.MakeIndexed(cnt, regSP));
+			cnt += sizeOfWord;
 		}
 	}
 }
@@ -828,14 +828,13 @@ static void RestoreRegisterVars()
 	int cnt2, cnt;
 	int nn;
 
-	if( save_mask != 0 ) {
-		cnt2 = cnt = popcnt(save_mask)*sizeOfWord;
+	if( save_mask->NumMember()) {
+		cnt2 = cnt = save_mask->NumMember()*sizeOfWord;
 		cnt = 0;
-		for (nn = 0; nn < 64; nn++) {
-			if (save_mask & (1LL << nn)) {
-				GenerateDiadic(op_lw,0,makereg(nn),cg.MakeIndexed(cnt,regSP));
-				cnt += sizeOfWord;
-			}
+		save_mask->resetPtr();
+		for (nn = save_mask->nextMember(); nn >= 0; nn = save_mask->nextMember()) {
+			GenerateDiadic(op_lw,0,makereg(nn),cg.MakeIndexed(cnt,regSP));
+			cnt += sizeOfWord;
 		}
 		GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),cg.MakeImmediate(cnt2));
 	}
@@ -846,14 +845,13 @@ static void RestoreFPRegisterVars()
 	int cnt2, cnt;
 	int nn;
 
-	if( fpsave_mask != 0 ) {
-		cnt2 = cnt = popcnt(fpsave_mask)*sizeOfWord;
+	if( fpsave_mask->NumMember()) {
+		cnt2 = cnt = fpsave_mask->NumMember()*sizeOfWord;
 		cnt = 0;
-		for (nn = 0; nn < 64; nn++) {
-			if (fpsave_mask & (1LL << nn)) {
-				GenerateDiadic(op_lf,'d',makefpreg(nn),cg.MakeIndexed(cnt,regSP));
-				cnt += sizeOfWord;
-			}
+		fpsave_mask->resetPtr();
+		for (nn = fpsave_mask->nextMember(); nn >= 0; nn = fpsave_mask->nextMember()) {
+			GenerateDiadic(op_lf, 'd', makefpreg(nn), cg.MakeIndexed(cnt, regSP));
+			cnt += sizeOfWord;
 		}
 		GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),cg.MakeImmediate(cnt2));
 	}
@@ -1119,7 +1117,7 @@ Operand *FT64CodeGenerator::GenerateFunctionCall(ENODE *node, int flags)
 	int fsp = 0;
 	int ps;
 	TypeArray *ta = nullptr;
-	int64_t mask,fmask;
+	CSet *mask, *fmask;
 
 	sym = nullptr;
 

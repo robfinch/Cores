@@ -62,6 +62,7 @@ extern int regPC;
 extern int regCLP;
 extern int regPP;
 extern int regZero;
+extern int regAsm;
 extern int regFirstTemp;
 extern int regLastTemp;
 extern int regXoffs;
@@ -104,7 +105,8 @@ extern int sizeOfFPT;
 extern int sizeOfFPD;
 extern int sizeOfFPQ;
 extern int maxVL;
-extern MachineReg regs[31];
+extern MachineReg regs[1024];
+extern int nregs;
 extern int max_reg_in_use;
 
 /*
@@ -142,8 +144,8 @@ extern int				lc_thread;
 extern Statement     *bodyptr;       /* parse tree for function */
 extern int              global_flag;
 extern TABLE            defsyms;
-extern int64_t          save_mask;      /* register save mask */
-extern int64_t          fpsave_mask;
+extern CSet *save_mask;      /* register save mask */
+extern CSet *fpsave_mask;
 extern int				bsave_mask;
 extern int uctran_off;
 extern int isKernel;

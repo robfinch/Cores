@@ -341,7 +341,7 @@ void Function::PeepOpt()
 	forest.ColorBlocks();
 	pl.MarkAllKeep();
 	pl.MarkAllKeep2();
-	//BasicBlock::ColorAll();
+	cpu.SetRealRegisters();
 	if (count == 2) {
 		dfs.printf("Register allocator max loops.\n");
 	}
@@ -362,12 +362,13 @@ void RemoveCode()
 	OCODE *p;
 	int count;
 	int rg1, rg2;
+	bool eol;
 
 	count = 0;
 	//printf((char *)currentFn->name->c_str());
 	//printf("\r\n");
 	for (v = currentFn->varlist; v; v = v->next) {
-		if (IsCalleeSave(v->num))
+		if (MachineReg::IsCalleeSave(v->num))
 			continue;
 		if (v->num < 5 || v->num==regLR || v->num==regXLR)
 			continue;
@@ -375,25 +376,29 @@ void RemoveCode()
 			t = v->trees.trees[mm];
 			nn = t->blocks->lastMember();
 			do {
-				for (p = basicBlocks[nn]->lcode; p && !p->leader; p = p->back) {
-					if (p->opcode==op_label)
-						continue;
-					if (p->opcode==op_ret)
-						continue;
-					p->GetTargetReg(&rg1, &rg2);
-					if (rg1 == v->num && rg2==0) {
-						if (p->bb->ohead==nullptr) {
-							MarkRemove2(p);
-							count++;
+				eol = false;
+				if (!basicBlocks[nn]->isRetBlock) {
+					for (p = basicBlocks[nn]->lcode; p && !eol; p = p->back) {
+						if (p->opcode == op_label)
+							continue;
+						if (p->opcode == op_ret)
+							continue;
+						p->GetTargetReg(&rg1, &rg2);
+						if (rg1 == v->num && rg2 == 0) {
+							if (p->bb->ohead == nullptr) {
+								MarkRemove2(p);
+								count++;
+							}
 						}
+						if (!p->remove && p->HasSourceReg(v->num))
+							goto j1;
+						eol = p == basicBlocks[nn]->code;
 					}
-					if (!p->remove && p->HasSourceReg(v->num))
-						goto j1;
 				}
 			} while((nn = t->blocks->prevMember()) >= 0);
 j1:	;
 		}
-		//Remove2();
+		currentFn->pl.Remove2();
 	}
 	dfs.printf("<CodeRemove>%d</CodeRemove>\n", count);
 }

@@ -11,10 +11,8 @@ int64_t GetConstExpression(ENODE **pnode);
 void GenMemop(int op, Operand *ap1, Operand *ap2, int ssize);
 void GenerateHint(int num);
 
-void SaveRegisterVars(int64_t mask, int64_t rmask);
-void SaveFPRegisterVars(int64_t fpmask, int64_t fprmask);
-void SaveRegisterVars(int64_t mask, int64_t rmask);
-void SaveFPRegisterVars(int64_t mask, int64_t rmask);
+void SaveRegisterVars(CSet *rmask);
+void SaveFPRegisterVars(CSet *fprmask);
 void funcbottom(Statement *stmt);
 Function *allocFunction(int id);
 Function *newFunction(int id);

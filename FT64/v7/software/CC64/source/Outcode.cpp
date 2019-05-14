@@ -319,25 +319,25 @@ char *RegMoniker(int regno)
 	static int n;
 
 	n = (n + 1) & 3;
-    if (regno==30)
+    if (regno==regFP)
 		sprintf_s(&buf[n][0], 20, "$fp");
-    else if (regno==27)
+    else if (regno==regGP)
 		sprintf_s(&buf[n][0], 20, "$gp");
-	else if (regno==28)
+	else if (regno==regXLR)
 		sprintf_s(&buf[n][0], 20, "$xlr");
 	else if (regno==regPC)
 		sprintf_s(&buf[n][0], 20, "$pc");
-	else if (regno==31)
+	else if (regno==regSP)
 		sprintf_s(&buf[n][0], 20, "$sp");
-	else if (regno==29)
+	else if (regno==regLR)
 		sprintf_s(&buf[n][0], 20, "$lr");
 	else if (regno>=1 && regno<=2)
 		sprintf_s(&buf[n][0], 20, "$v%d", regno-1);
-	else if (regno >= 18 && regno <= 24)
+	else if (regno >= regFirstArg && regno <= regLastArg)
 		sprintf_s(&buf[n][0], 20, "$a%d", regno-regFirstArg);
-	else if (regno >= 3 && regno <= 10)
+	else if (regno >= regFirstTemp && regno <= regLastTemp)
 		sprintf_s(&buf[n][0], 20, "$t%d", regno-regFirstTemp);
-	else if (regno >= 11 && regno <= 17)
+	else if (regno >= regFirstRegvar && regno <= regLastRegvar)
 		sprintf_s(&buf[n][0], 20, "$r%d", regno);
 	else {
 		sprintf_s(&buf[n][0], 20, "$r%d", regno);

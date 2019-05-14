@@ -153,40 +153,12 @@ int	options(char *s)
 	else if (s[1] == 'r') {
 		if (s[2] == 'v') {
 			opt_vreg = TRUE;
-		//	regSP = 1023;
-		//	regFP = 1022;
-		//	regLR = 1021;
-		//	regXLR = 1020;
-		//	regGP = 1019;
-		//	regTP = 1018;
-		//	regCLP = 1017;              // class pointer
-		//	regPP = 1016;				// program pointer
-		//	regZero = 0;
-		//	regFirstTemp = 3;
-		//	regLastTemp = 511;
-		//	regFirstRegvar = 512;
-		//	regLastRegvar = 979;
-		//	regFirstArg = 980;
-		//	regLastArg = 1011;
+			cpu.SetVirtualRegisters();
+			nregs = 1024;
 		}
 		else
 		{
-			regSP = 31;
-			regFP = 30;
-			regLR = 29;
-			regXLR = 28;
-			regGP = 27;
-			regTP = 26;
-			regCLP = 25;                // class pointer
-			regPP = 24;					// program pointer
-			regZero = 0;
-			regFirstTemp = 3;
-			regLastTemp = 9;
-			regXoffs = 10;
-			regFirstRegvar = 11;
-			regLastRegvar = 17;
-			regFirstArg = 18;
-			regLastArg = 22;
+			cpu.SetRealRegisters();
 		}
 	}
     else if (s[1]=='S')

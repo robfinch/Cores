@@ -853,7 +853,7 @@ void OCODE::OptHint()
 			return;
 		}
 
-		if (fwd && fwd->oper1->preg >= 18 && fwd->oper1->preg < 24) {
+		if (fwd && fwd->oper1->preg >= regFirstArg && fwd->oper1->preg < regLastArg) {
 			if (OCODE::IsEqualOperand(fwd->oper2, back->oper1)) {
 				back->oper1 = fwd->oper1;
 				MarkRemove();

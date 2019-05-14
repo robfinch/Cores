@@ -82,12 +82,15 @@ BasicBlock *BasicBlock::Blockize(OCODE *start)
 	start->leader = true;
 	for (ip = start; ip; ip = ip2) {
 		ip->bb = pb;
+		pb->isRetBlock = false;
 		pb->depth = ip->loop_depth + 1;
 		ip2 = ip->fwd;
 		if (ip->opcode != op_label && ip->opcode != op_rem && ip->opcode != op_rem2 && ip->opcode != op_hint && ip->opcode != op_hint2)
 			pb->length++;
-		if (ip->opcode == op_ret || ip->opcode==op_rti)
+		if (ip->opcode == op_ret || ip->opcode == op_rti) {
+			pb->isRetBlock = true;
 			currentFn->ReturnBlock = pb;
+		}
 		if (IsBasicBlockSeparater(ip)) {
 			pb->lcode = ip;
 			if (ip->fwd)
@@ -204,54 +207,57 @@ CSet *BasicBlock::livo;
 
 void BasicBlock::ComputeLiveVars()
 {
-	OCODE *ip;
-	int tr;
+	OCODE *ip, *ip2;
+	int tr, nn;
 	static CSet OldLiveIn, OldLiveOut;
 	int rg1, rg2;
-//	char buf [4000];
+	bool eol;
+	char buf [4000];
 
+	dfs.printf("----- Compute Live Vars -----\n");
 	if (livo==nullptr)
 		livo = CSet::MakeNew();
 	livo->clear();
 	changed = false;
 	gen->clear();
 	kill->clear();
-	for (ip = code; ip && (!ip->leader || ip == code); ip = ip->fwd) {
+	eol = false;
+	for (ip = code; ip && !eol; ip = ip->fwd) {
 		if (ip->remove || ip->remove2)
 			continue;
 		if (ip->opcode == op_label)
 			continue;
-		// Call and jal may return a value in $v0.
+		// Call and jal may return a value in $v0,$v1.
 		if (ip->opcode == op_call || ip->opcode == op_jal) {
-			tr = 1;
-			if ((tr & 0xFFF) >= 0x800) {
-				kill->add((tr & 0xfff) - 0x780);
-			}
-			else {
-				kill->add(tr);
-			}
-			gen->add(tr);
+			kill->add(1);
+			gen->add(1);
+			kill->add(2);
+			gen->add(2);
 		}
 		if (ip->HasTargetReg()) {
-			// Should check the register classes here.
 			ip->GetTargetReg(&rg1, &rg2);
 			tr = rg1;
-			if ((tr & 0xFFF) >= 0x800) {
-				kill->add((tr & 0xfff)-0x780);
-			}
-			else {
-				kill->add(tr);
+			if (!isRetBlock) {
+				// Should check the register classes here.
+				if ((tr & 0xFFF) >= 0x800) {
+					kill->add((tr & 0xfff) - 0x780);
+				}
+				else {
+					kill->add(tr);
+				}
 			}
 			if (tr >= regFirstArg && tr <= regLastArg)
 				gen->add(tr);
 			// There could be a second target
 			tr = rg2;
 			if (tr) {
-				if ((tr & 0xFFF) >= 0x800) {
-					kill->add((tr & 0xfff)-0x780);
-				}
-				else {
-					kill->add(tr);
+				if (!isRetBlock) {
+					if ((tr & 0xFFF) >= 0x800) {
+						kill->add((tr & 0xfff) - 0x780);
+					}
+					else {
+						kill->add(tr);
+					}
 				}
 				if (tr >= regFirstArg && tr <= regLastArg)
 					gen->add(tr);
@@ -266,7 +272,8 @@ void BasicBlock::ComputeLiveVars()
 				gen->add((ip->oper1->preg & 0xfff)-0x780);
 			}
 			else {
-				gen->add(ip->oper1->preg);
+				if (ip->oper1->preg)
+					gen->add(ip->oper1->preg);
 			}
 		}
 		// Stack operations implicitly read SP. It doesn't appear in the operx operands.
@@ -279,33 +286,34 @@ void BasicBlock::ComputeLiveVars()
 				gen->add((ip->oper2->preg & 0xfff)-0x780);
 			}
 			else {
-				gen->add(ip->oper2->preg);
+				if (ip->oper2->preg)
+					gen->add(ip->oper2->preg);
 			}
 			if (ip->oper2->mode == am_indx2) {
-				gen->add(ip->oper2->sreg);
+				if (ip->oper1->sreg)
+					gen->add(ip->oper2->sreg);
 			}
 //				}
 		}
 		if (ip->oper3) {
-//				if (ip->oper3->mode == am_reg) {
 			if ((ip->oper3->preg & 0xfff) >= 0x800) {
 				gen->add((ip->oper3->preg & 0xfff)-0x780);
 			}
 			else {
-				gen->add(ip->oper3->preg);
+				if (ip->oper3->preg)
+					gen->add(ip->oper3->preg);
 			}
-//				}
 		}
 		if (ip->oper4) {
-//				if (ip->oper4->mode == am_reg) {
 			if ((ip->oper4->preg & 0xfff) >= 0x800) {
 				gen->add((ip->oper4->preg & 0xfff)-0x780);
 			}
 			else {
-				gen->add(ip->oper4->preg);
+				if (ip->oper4->preg)
+					gen->add(ip->oper4->preg);
 			}
-//				}
 		}
+		eol = ip == lcode;
 	}
 	OldLiveIn.clear();
 	OldLiveOut.clear();
@@ -314,20 +322,34 @@ void BasicBlock::ComputeLiveVars()
 	LiveIn->copy(*LiveOut);
 	LiveIn->remove(*kill);
 	LiveIn->add(gen);
-	//gen->resetPtr();
-	//kill->resetPtr();
-	//dfs.printf("%d: ", num);
-	//for (nn = 0; nn < gen->NumMember(); nn++)
-	//	dfs.printf("g%d ", gen->nextMember());
-	//dfs.printf(" || ");
-	//for (nn = 0; nn < kill->NumMember(); nn++)
-	//	dfs.printf("k%d ", kill->nextMember());
-	//dfs.printf("\n");
-	//dfs.printf("Edges to: ");
-	if (ohead==nullptr)
-		LiveOut->copy(*LiveIn);
-	else
+	//if (isRetBlock) {
+	//	eol = false;
+	//	for (ip = code; ip && !eol; ip = ip->fwd) {
+	//		if (ip->HasTargetReg()) {
+	//			ip->GetTargetReg(&rg1, &rg2);
+	//			if (!LiveOut->isMember(rg1) && !LiveIn->isMember(rg1)) {
+	//				ip->Remove();
+	//			}
+	//		}
+	//		eol = ip == lcode;
+	//	}
+	//}
+	gen->resetPtr();
+	kill->resetPtr();
+	dfs.printf("%d: ", num);
+	for (nn = 0; nn < gen->NumMember(); nn++)
+		dfs.printf("g%d ", gen->nextMember());
+	dfs.printf(" || ");
+	for (nn = 0; nn < kill->NumMember(); nn++)
+		dfs.printf("k%d ", kill->nextMember());
+	dfs.printf("\n");
+	dfs.printf("Edges to: ");
+	LiveOut->copy(*LiveIn);
+	if (ohead!=nullptr)
 		AddLiveOut(this);
+	dfs.printf("- - - - Live Out - - - -");
+	LiveOut->sprint(buf, sizeof(buf));
+	dfs.printf(buf);
 	/*
 	for (ep = ohead; ep; ep = ep->next) {
 		if (ep->dst) {
@@ -601,7 +623,7 @@ void BasicBlock::BuildLivesetFromLiveout()
 	int m;
 	int v;
 	Var *vr;
-	int K = 32;
+	int K = nregs;
 
 	live->clear();
 	LiveOut->resetPtr();
@@ -727,7 +749,7 @@ void DumpLiveRegs()
 	BasicBlock *b;
 
 	dfs.printf("<LiveRegisters>\n");
-	for (regno = 1; regno < 32; regno++) {
+	for (regno = 1; regno < nregs; regno++) {
 		dfs.printf("Reg:%d ", regno);
 		for (b = currentFn->RootBlock; b; b = b->next) {
 			if (/*b->LiveOut->isMember(regno) || */b->LiveIn->isMember(regno))
@@ -788,11 +810,20 @@ void BasicBlock::InsertFillCode(int reg, int64_t offs)
 		PeepList::InsertBefore(lcode, cd);
 }
 
+void BasicBlock::SetAllUncolored()
+{
+	int n;
+
+	for (n = 0; n < BasicBlock::nBasicBlocks; n++)
+		basicBlocks[n]->isColored = false;
+}
+
 void BasicBlock::Color()
 {
 	int r;
 	OCODE *ip;
 
+	return;
 	for (ip = code; ip; ip = ip->fwd) {
 		if (ip->remove)
 			continue;

@@ -102,19 +102,7 @@ void Compiler::compile()
 	AddBuiltinFunctions();
 	Instruction::SetMap();
 
-	for (nn = 0; nn < 32; nn++) {
-		regs[nn].IsColorable = true;
-		if (nn >= regFirstArg && nn <= regLastArg)
-			regs[nn].IsColorable = false;
-	}
-	regs[0].IsColorable = false;
-	regs[1].IsColorable = false;
-	regs[2].IsColorable = false;
-	regs[23].IsColorable = false;
-	regs[regLR].IsColorable = false;
-	regs[regXLR].IsColorable = false;
-	regs[regFP].IsColorable = false;
-	regs[regSP].IsColorable = false;
+	MachineReg::MarkColorable();
 
 	getch();
 	lstackptr = 0;

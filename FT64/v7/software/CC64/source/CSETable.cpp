@@ -25,6 +25,14 @@
 //
 #include "stdafx.h"
 
+CSETable::CSETable()
+{
+}
+
+CSETable::~CSETable()
+{
+}
+
 void CSETable::Assign(CSETable *t)
 {
 	memcpy(this, t, sizeof(CSETable));
@@ -300,12 +308,14 @@ void CSETable::InitializeTempRegs()
 
 }
 
-void CSETable::GenerateRegMask(CSE *csp, uint64_t *mask, uint64_t *rmask)
+void CSETable::GenerateRegMask(CSE *csp, CSet *mask, CSet *rmask)
 {
 	if (csp->reg != -1)
 	{
-		*rmask = *rmask | (1LL << (63 - csp->reg));
-		*mask = *mask | (1LL << csp->reg);
+		rmask->add(nregs - 1 - csp->reg);
+		mask->add(csp->reg);
+		//*rmask = *rmask | (1LL << (63 - csp->reg));
+		//*mask = *mask | (1LL << csp->reg);
 	}
 }
 
@@ -317,16 +327,26 @@ void CSETable::GenerateRegMask(CSE *csp, uint64_t *mask, uint64_t *rmask)
 int CSETable::AllocateRegisterVars()
 {
 	CSE *csp;
-	uint64_t mask, rmask;
-	uint64_t fpmask, fprmask;
-	uint64_t vmask, vrmask;
+	CSet *mask;
+	CSet *rmask;
+	CSet *fpmask;
+	CSet *fprmask;
+	CSet *vmask;
+	CSet *vrmask;
 
-	mask = 0;
-	rmask = 0;
-	fpmask = 0;
-	fprmask = 0;
-	vmask = 0;
-	vrmask = 0;
+	mask = CSet::MakeNew();
+	rmask = CSet::MakeNew();
+	fpmask = CSet::MakeNew();
+	fprmask = CSet::MakeNew();
+	vmask = CSet::MakeNew();
+	vrmask = CSet::MakeNew();
+
+	mask->clear();
+	rmask->clear();
+	fpmask->clear();
+	fprmask->clear();
+	vmask->clear();
+	vrmask->clear();
 
 	// Sort the CSE table according to desirability of allocating
 	// a register.
@@ -345,27 +365,27 @@ int CSETable::AllocateRegisterVars()
 	for (csp = First(); csp; csp = Next()) {
 		if (csp->exp) {
 			if (csp->exp->IsFloatType())
-				GenerateRegMask(csp, &fpmask, &fprmask);
+				GenerateRegMask(csp, fpmask, fprmask);
 			else if (csp->exp->etype == bt_vector)
-				GenerateRegMask(csp, &vrmask, &vmask);
+				GenerateRegMask(csp, vrmask, vmask);
 			else
-				GenerateRegMask(csp, &mask, &rmask);
+				GenerateRegMask(csp, mask, rmask);
 		}
 		else
-			GenerateRegMask(csp, &mask, &rmask);
+			GenerateRegMask(csp, mask, rmask);
 	}
 
 	Dump();
 
 	// Push temporaries on the stack.
-	SaveRegisterVars(mask, rmask);
-	SaveFPRegisterVars(fpmask, fprmask);
+	SaveRegisterVars(rmask);
+	SaveFPRegisterVars(fprmask);
 
 	save_mask = mask;
 	fpsave_mask = fpmask;
 
 	InitializeTempRegs();
-	return (popcnt(mask));
+	return (mask->NumMember());
 }
 
 /*

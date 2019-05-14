@@ -292,14 +292,13 @@ void Function::SaveGPRegisterVars()
 	int cnt;
 	int nn;
 
-	if (mask != 0) {
+	if (rmask->NumMember()) {
 		cnt = 0;
-		GenerateTriadic(op_sub, 0, makereg(regSP), makereg(regSP), cg.MakeImmediate(popcnt(mask) * 8));
-		for (nn = 0; nn < 64; nn++) {
-			if (rmask & (0x8000000000000000ULL >> nn)) {
-				GenerateDiadic(op_sw, 0, makereg(nn), MakeIndexed(cnt, regSP));
-				cnt += sizeOfWord;
-			}
+		GenerateTriadic(op_sub, 0, makereg(regSP), makereg(regSP), cg.MakeImmediate(rmask->NumMember() * 8));
+		rmask->resetPtr();
+		for (nn = rmask->lastMember(); nn >= 0; nn = rmask->prevMember()) {
+			GenerateDiadic(op_sw, 0, makereg(nregs - 1 - nn), MakeIndexed(cnt, regSP));
+			cnt += sizeOfWord;
 		}
 	}
 }
@@ -309,14 +308,13 @@ void Function::SaveFPRegisterVars()
 	int cnt;
 	int nn;
 
-	if (fpmask != 0) {
+	if (fprmask->NumMember()) {
 		cnt = 0;
-		GenerateTriadic(op_sub, 0, makereg(regSP), makereg(regSP), cg.MakeImmediate(popcnt(fpmask) * 8));
-		for (nn = 0; nn < 64; nn++) {
-			if (fprmask & (0x8000000000000000ULL >> nn)) {
-				GenerateDiadic(op_sf, 'd', makefpreg(nn), MakeIndexed(cnt, regSP));
-				cnt += sizeOfWord;
-			}
+		GenerateTriadic(op_sub, 0, makereg(regSP), makereg(regSP), cg.MakeImmediate(fprmask->NumMember() * 8));
+		rmask->resetPtr();
+		for (nn = rmask->lastMember(); nn >= 0; nn = rmask->prevMember()) {
+			GenerateDiadic(op_sf, 'd', makefpreg(nregs - 1 - nn), MakeIndexed(cnt, regSP));
+			cnt += sizeOfWord;
 		}
 	}
 }
@@ -414,14 +412,13 @@ int Function::RestoreGPRegisterVars()
 	int cnt2 = 0, cnt;
 	int nn;
 
-	if (save_mask != 0) {
-		cnt2 = cnt = popcnt(save_mask)*sizeOfWord;
+	if (save_mask->NumMember()) {
+		cnt2 = cnt = save_mask->NumMember()*sizeOfWord;
 		cnt = 0;
-		for (nn = 0; nn < 64; nn++) {
-			if (save_mask & (1LL << nn)) {
-				GenerateDiadic(op_lw, 0, makereg(nn), MakeIndexed(cnt, regSP));
-				cnt += sizeOfWord;
-			}
+		save_mask->resetPtr();
+		for (nn = save_mask->nextMember(); nn >= 0; nn = save_mask->nextMember()) {
+			GenerateDiadic(op_lw, 0, makereg(nn), MakeIndexed(cnt, regSP));
+			cnt += sizeOfWord;
 		}
 	}
 	return (cnt2);
@@ -432,14 +429,13 @@ int Function::RestoreFPRegisterVars()
 	int cnt2 = 0, cnt;
 	int nn;
 
-	if (fpsave_mask != 0) {
-		cnt2 = cnt = popcnt(fpsave_mask)*sizeOfWord;
+	if (fpsave_mask->NumMember()) {
+		cnt2 = cnt = fpsave_mask->NumMember()*sizeOfWord;
 		cnt = 0;
-		for (nn = 0; nn < 64; nn++) {
-			if (fpsave_mask & (1LL << nn)) {
-				GenerateDiadic(op_lf, 'd', makefpreg(nn), MakeIndexed(cnt, regSP));
-				cnt += sizeOfWord;
-			}
+		fpsave_mask->resetPtr();
+		for (nn = fpsave_mask->nextMember(); nn >= 0; nn = fpsave_mask->nextMember()) {
+			GenerateDiadic(op_lf, 'd', makefpreg(nn), MakeIndexed(cnt, regSP));
+			cnt += sizeOfWord;
 		}
 //		GenerateTriadic(op_add, 0, makereg(regSP), makereg(regSP), MakeImmediate(cnt2));
 	}
@@ -692,13 +688,12 @@ void Function::GenReturn(Statement *stmt)
 		GenerateDiadic(op_sb, 0, makereg(0), MakeStringAsNameConst(semaphores[nn]));
 
 	// Restore fp registers used as register variables.
-	if (fpsave_mask != 0) {
-		cnt2 = cnt = (popcnt(fpsave_mask) - 1)*sizeOfFP;
-		for (nn = 31; nn >= 1; nn--) {
-			if (fpsave_mask & (1LL << nn)) {
-				GenerateDiadic(op_lw, 0, makereg(nn), MakeIndexed(cnt2 - cnt, regSP));
-				cnt -= sizeOfWord;
-			}
+	if (fpsave_mask->NumMember()) {
+		cnt2 = cnt = (fpsave_mask->NumMember() - 1)*sizeOfFP;
+		fpsave_mask->resetPtr();
+		for (nn = fpsave_mask->lastMember(); nn >= 1; nn = fpsave_mask->prevMember()) {
+			GenerateDiadic(op_lf, 'd', makereg(nregs - 1 - nn), MakeIndexed(cnt2 - cnt, regSP));
+			cnt -= sizeOfWord;
 		}
 		GenerateTriadic(op_add, 0, makereg(regSP), makereg(regSP), MakeImmediate(cnt2 + sizeOfFP));
 	}
@@ -784,14 +779,9 @@ void Function::Gen()
 	int n;
 	bool o_retgen;
 
-	for (n = 0; n < 32; n++) {
-		regs[n].number = n;
-		regs[n].assigned = false;
-		regs[n].isConst = false;
-		regs[n].modified = false;
-		regs[n].offset = nullptr;
-		regs[n].IsArg = false;
-	}
+	stkspace = 0;
+	if (opt_vreg)
+		cpu.SetVirtualRegisters();
 	o_throwlab = throwlab;
 	o_retlab = retlab;
 	o_contlab = contlab;
@@ -862,7 +852,7 @@ void Function::Gen()
 	*/
 	dfs.puts("<StaticRegs>");
 	dfs.puts("====== Statically Assigned Registers =======\n");
-	for (n = 0; n < 32; n++) {
+	for (n = 0; n < nregs; n++) {
 		if (regs[n].assigned && !regs[n].modified) {
 			dfs.printf("r%d %c ", n, regs[n].isConst ? 'C' : 'V');
 			dfs.printf("=%d\n", regs[n].val);
@@ -1116,6 +1106,8 @@ void Function::BuildParameterList(int *num, int *numa)
 	int old_nparms;
 
 	dfs.printf("<BuildParameterList\n>");
+	if (opt_vreg)
+		cpu.SetVirtualRegisters();
 	poffset = 0;//GetReturnBlockSize();
 				//	sp->parms = (SYM *)NULL;
 	old_nparms = nparms;

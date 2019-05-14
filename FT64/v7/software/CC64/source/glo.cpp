@@ -48,6 +48,7 @@ int regFirstRegvar = 11;
 int regLastRegvar = 17;
 int regFirstArg = 18;
 int regLastArg = 22;
+int regAsm = 23;
 int pregSP = 31;
 int pregFP = 30;
 int pregLR = 29;
@@ -69,6 +70,7 @@ int verbose = 0;
 int use_gp = 0;
 int address_bits = 32;
 int maxVL = 64;
+int nregs = 32;
 
 int sizeOfWord = 8;
 int sizeOfFP = 8;
@@ -116,8 +118,8 @@ int				lc_thread = 0;
 Statement    *bodyptr = 0;
 int             global_flag = 1;
 TABLE           defsyms;
-int64_t         save_mask = 0;          /* register save mask */
-int64_t         fpsave_mask = 0;
+CSet *save_mask = nullptr;          /* register save mask */
+CSet *fpsave_mask = nullptr;
 TYP             tp_int, tp_econst;
 bool dogen = true;
 int isKernel = FALSE;

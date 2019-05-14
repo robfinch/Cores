@@ -35,7 +35,7 @@ void IGraph::MakeNew(int n)
 {
 	int bms;
 
-	K = 32;
+	K = nregs;
 	size = n;
 	bms = n * n / sizeof(int);
 	bitmatrix = new int[bms];
@@ -261,7 +261,6 @@ void IGraph::Fill()
 	OCODE *ip;
 	bool eol;
 	bool isFP;
-	int K = 17;
 
 	// For each block 
 	for (b = currentFn->RootBlock; b; b = b->next) {

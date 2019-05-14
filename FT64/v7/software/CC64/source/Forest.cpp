@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2018-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -26,7 +26,13 @@
 #include "stdafx.h"
 
 Forest forest;
-int Forest::k = 32;
+int Forest::k = 1024;	// this is reinitialized in the constructor.
+
+Forest::Forest()
+{
+	stk = IntStack::MakeNew(100000);
+	k = nregs;
+}
 
 Tree *Forest::PlantTree(Tree *t)
 {
@@ -108,7 +114,7 @@ void Forest::Renumber()
 	bool eol;
 	 
 	memset(::map.newnums, -1, sizeof(::map.newnums));
-	for (bb = 0; bb < 512; bb++)
+	for (bb = 0; bb < 1024; bb++)
 		::map.newnums[bb] = bb;
 
 	return;
@@ -244,7 +250,7 @@ void Forest::PreColor()
 	int c;
 
 	for (c = 0; c < treecount; c++) {
-		if (trees[c]->var < 32 && !regs[trees[c]->var].IsColorable)
+		if (!regs[trees[c]->var].IsColorable)
 			trees[c]->color = trees[c]->var;
 		else
 			trees[c]->color = k;
@@ -327,36 +333,73 @@ void Forest::Color()
 	Tree *t;
 
 	used.clear();
-	for (nn = 0; nn < 32; nn++)
-		if (!regs[nn].IsColorable)
-			used.add(nn);
+	for (nn = 0; nn < 32; nn++) {
+//		if (!regs[nn].IsColorable)
+//			used.add(nn);
+		used.add(0);
+		used.add(1);
+		used.add(2);
+		used.add(18);
+		used.add(19);
+		used.add(20);
+		used.add(21);
+		used.add(22);
+		used.add(23);
+		used.add(24);
+		used.add(25);
+		used.add(26);
+		used.add(27);
+		used.add(28);
+		used.add(29);
+		used.add(30);
+		used.add(31);
+	}
 	while (!stk->IsEmpty()) {
 		m = pop();
-		if (m < treecount) {
-			t = trees[m];
-			if (pass == 1 && !t->infinite && t->cost < 0.0f) {	// was <= 0.0f
-				t->spill = true;
+		t = trees[m];
+		if (pass == 1 && !t->infinite && t->cost < 0.0f) {	// was <= 0.0f
+			t->spill = true;
+		}
+		else {
+			t->blocks->resetPtr();
+			for (m = t->blocks->nextMember(); m >= 0; m = t->blocks->nextMember()) {
+				p = iGraph.GetNeighbours(m, &nn);
+				for (j = 0; j < nn; j++)
+					used.add(basicBlocks[p[j]]->color);
 			}
-			else {
+			for (c = 0; used.isMember(c) && c < k; c++);
+			if (c < k && t->color == k) {	// The tree may have been colored already
+				t->color = c;
+				used.add(c);
 				t->blocks->resetPtr();
-				for (m = t->blocks->nextMember(); m >= 0; m = t->blocks->nextMember()) {
-					p = iGraph.GetNeighbours(m, &nn);
-					for (j = 0; j < nn; j++)
-						used.add(basicBlocks[p[j]]->color);
-				}
-				for (c = 0; used.isMember(c) && c < k; c++);
-				if (c < k && t->color == k) {	// The tree may have been colored already
-					t->color = c;
-					used.add(c);
-					t->blocks->resetPtr();
-					for (m = t->blocks->nextMember(); m >= 0; m = t->blocks->nextMember())
-						basicBlocks[m]->color->add(c);
-				}
-				else if (t->color < k)		// Don't need to spill args
-					t->spill = true;
+				for (m = t->blocks->nextMember(); m >= 0; m = t->blocks->nextMember())
+					basicBlocks[m]->color->add(c);
 			}
+			else if (t->color < k)		// Don't need to spill args
+				t->spill = true;
 		}
 	}
+}
+
+unsigned int Forest::ColorUncolorable(unsigned int rg)
+{
+	if (rg < 3)
+		return (rg);
+	if (rg == regXLR)
+		return (28);
+	if (rg == regLR)
+		return (29);
+	if (rg == regFP)
+		return (30);
+	if (rg == regSP)
+		return (31);
+	if (rg >= regFirstArg && rg <= regLastArg)
+		return (rg - regFirstArg + 18);
+	if (rg == regAsm)
+		return (23);
+	if (rg == regXoffs)
+		return (10);
+	return (rg);
 }
 
 void Forest::ColorBlocks()
@@ -367,39 +410,68 @@ void Forest::ColorBlocks()
 	OCODE *ip;
 	bool eol = false;
 
+	BasicBlock::SetAllUncolored();
+	currentFn->pl.SetAllUncolored();
 	for (m = 0; m < treecount; m++) {
 		t = trees[m];
 		t->blocks->resetPtr();
+		if (t->var == 512)
+			printf("hello");
 		for (n = t->blocks->nextMember(); n >= 0; n = t->blocks->nextMember()) {
 			b = basicBlocks[n];
+			eol = false;
 			for (ip = b->code; ip && !eol; ip = ip->fwd) {
 				if (ip->insn) {
 					if (ip->oper1) {
-						if (ip->oper1->preg == t->var)
+						if (ip->oper1->preg == t->var && !ip->oper1->pcolored) {
 							ip->oper1->preg = t->color;
-						if (ip->oper1->sreg == t->var)
+							ip->oper1->pcolored = true;
+							ip->oper1->preg = ColorUncolorable(ip->oper1->preg);
+						}
+						if (ip->oper1->sreg == t->var && !ip->oper1->scolored) {
 							ip->oper1->sreg = t->color;
+							ip->oper1->scolored = true;
+							ip->oper1->sreg = ColorUncolorable(ip->oper1->sreg);
+						}
 					}
 					if (ip->oper2) {
-						if (ip->oper2->preg == t->var)
+						if (ip->oper2->preg == t->var && !ip->oper2->pcolored) {
 							ip->oper2->preg = t->color;
-						if (ip->oper2->sreg == t->var)
+							ip->oper2->pcolored = true;
+							ip->oper2->preg = ColorUncolorable(ip->oper2->preg);
+						}
+						if (ip->oper2->sreg == t->var && !ip->oper2->scolored) {
 							ip->oper2->sreg = t->color;
+							ip->oper2->scolored = true;
+							ip->oper2->sreg = ColorUncolorable(ip->oper2->sreg);
+						}
 					}
 					if (ip->oper3) {
-						if (ip->oper3->preg == t->var)
+						if (ip->oper3->preg == t->var && !ip->oper3->pcolored) {
 							ip->oper3->preg = t->color;
-						if (ip->oper3->sreg == t->var)
+							ip->oper3->pcolored = true;
+							ip->oper3->preg = ColorUncolorable(ip->oper3->preg);
+						}
+						if (ip->oper3->sreg == t->var && !ip->oper3->scolored) {
 							ip->oper3->sreg = t->color;
+							ip->oper3->scolored = true;
+							ip->oper3->sreg = ColorUncolorable(ip->oper3->sreg);
+						}
 					}
 					if (ip->oper4) {
-						if (ip->oper4->preg == t->var)
+						if (ip->oper4->preg == t->var && !ip->oper4->pcolored) {
 							ip->oper4->preg = t->color;
-						if (ip->oper4->sreg == t->var)
+							ip->oper4->pcolored = true;
+							ip->oper4->preg = ColorUncolorable(ip->oper4->preg);
+						}
+						if (ip->oper4->sreg == t->var && !ip->oper4->scolored) {
 							ip->oper4->sreg = t->color;
+							ip->oper4->scolored = true;
+							ip->oper4->sreg = ColorUncolorable(ip->oper4->sreg);
+						}
 					}
-					eol = ip == b->lcode;
 				}
+				eol = ip == b->lcode;
 			}
 		}
 	}

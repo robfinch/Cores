@@ -118,7 +118,9 @@ public:
 	ENODE *offset;
 	int val;
 public:
+	static bool IsCalleeSave(int regno);
 	bool IsArgReg();
+	static void MarkColorable();
 };
 
 // Class for representing tables. Small footprint.
@@ -195,6 +197,7 @@ public:
 	void OptLoopInvariants(OCODE *loophead);
 
 	// Color Graphing
+	void SetAllUncolored();
 	void RemoveMoves();
 
 	void loadHex(txtiStream& ifs);
@@ -241,9 +244,9 @@ public:
 	SYM *parms;					      // List of parameters associated with symbol
 	SYM *nextparm;
 	DerivedMethod *derivitives;
-	uint64_t mask, rmask;
-	uint64_t fpmask, fprmask;
-	uint64_t vmask, vrmask;
+	CSet *mask, *rmask;
+	CSet *fpmask, *fprmask;
+	CSet *vmask, *vrmask;
 	BasicBlock *RootBlock;
 	BasicBlock *LastBlock;
 	BasicBlock *ReturnBlock;
@@ -640,6 +643,8 @@ public:
 	unsigned int mode;
 	unsigned int preg : 12;		// primary virtual register number
 	unsigned int sreg : 12;		// secondary virtual register number (indexed addressing modes)
+	unsigned int pcolored : 1;
+	unsigned int scolored : 1;
 	unsigned short int pregs;	// subscripted register number
 	unsigned short int sregs;
 	unsigned int segment : 4;
@@ -929,6 +934,8 @@ public:
 public:
 	int length;		// number of instructions
 	unsigned int changed : 1;
+	unsigned int isColored : 1;
+	unsigned int isRetBlock : 1;
 	int depth;
 	CSet *gen;		// use
 	CSet *kill;		// def
@@ -970,6 +977,7 @@ public:
 	static bool Coalesce();
 	void InsertSpillCode(int reg, int64_t offs);
 	void InsertFillCode(int reg, int64_t offs);
+	static void SetAllUncolored();
 	void Color();
 	static void ColorAll();
 };
@@ -977,7 +985,7 @@ public:
 class Map
 {
 public:
-	int newnums[512];
+	int newnums[1024];
 };
 
 // A "tree" is a "range" in Briggs terminology
@@ -990,8 +998,8 @@ public:
 	int degree;
 	int lattice;
 	bool spill;
-	__int8 color;
-	__int8 regclass;		// 1 = integer, 2 = floating point, 4 = vector
+	__int16 color;
+	int regclass;		// 1 = integer, 2 = floating point, 4 = vector
 	// Cost accounting
 	float loads;
 	float stores;
@@ -1027,7 +1035,7 @@ public:
 	float cost;
 	Var *var;
 public:
-	Forest() { stk = IntStack::MakeNew(100000); };
+	Forest();
 	Tree *MakeNewTree();
 	Tree *PlantTree(Tree *t);
 	void ClearCosts() {
@@ -1057,6 +1065,7 @@ public:
 	bool SpillCode();
 	void ColorBlocks();
 	bool IsAllTreesColored();
+	unsigned int ColorUncolorable(unsigned int);
 };
 
 
@@ -1192,6 +1201,8 @@ public:
 	short int cseiter;
 	short int searchpos;
 public:
+	CSETable();
+	~CSETable();
 	CSE *First() { cseiter = 0; return &table[0]; };
 	CSE *Next() { cseiter++; return (cseiter < csendx ? &table[cseiter] : nullptr); };
 	void Clear() { ZeroMemory(table, sizeof(table)); csendx = 0; };
@@ -1203,7 +1214,7 @@ public:
 	CSE *SearchNext(ENODE *node);
 	CSE *SearchByNumber(ENODE *node);
 
-	void GenerateRegMask(CSE *csp, uint64_t *mask, uint64_t *rmask);
+	void GenerateRegMask(CSE *csp, CSet *mask, CSet *rmask);
 	int AllocateGPRegisters();
 	int AllocateFPRegisters();
 	int AllocateVectorRegisters();
@@ -1432,10 +1443,13 @@ public:
 class CPU
 {
 public:
+	int nregs;
 	bool SupportsPush;
 	bool SupportsPop;
 	bool SupportsLink;
 	bool SupportsUnlink;
+	void SetRealRegisters();
+	void SetVirtualRegisters();
 };
 
 //#define SYM     struct sym

@@ -433,7 +433,7 @@ void PeepList::OptConstReg()
 	int n;
 	int count = 0;
 
-	for (n = 0; n < 32; n++) {
+	for (n = 0; n < nregs; n++) {
 		if (regs[n].assigned && !regs[n].modified && regs[n].isConst && regs[n].offset != nullptr)
 			regs[n].sub = true;
 		else
@@ -472,7 +472,7 @@ void PeepList::OptConstReg()
 		for (ip = head; ip; ip = ip->fwd) {
 			if (ip->insn) {
 				if (ip->oper1) {
-					for (n = 0; n < 32; n++) {
+					for (n = 0; n < nregs; n++) {
 						if (ip->oper1->mode == am_reg && ip->oper1->preg == n) {
 							if (regs[n].sub && !regs[n].IsArg) {
 								ip->MarkRemove();
@@ -528,6 +528,11 @@ void PeepList::RemoveCompilerHints2()
 // considered during live variable computation. They are unmarked
 // later, but may be subsequently removed if ranges are coalesced.
 
+// A reg might be used after returning from the function. For
+// example the stack / frame pointer. So, we just assume there is
+// a use without a def. This means moves in the return block are
+// excluded from deletion.
+
 void PeepList::RemoveMoves()
 {
 	OCODE *ip;
@@ -536,6 +541,8 @@ void PeepList::RemoveMoves()
 	foundMove = false;
 
 	for (ip = head; ip; ip = ip->fwd) {
+		if (ip->bb->isRetBlock)
+			continue;
 		if (ip->opcode == op_mov) {
 			foundMove = true;
 			if (ip->oper1 && ip->oper2) {
@@ -819,6 +826,23 @@ void PeepList::RemoveStackAlloc()
 	}
 }
 
+void PeepList::SetAllUncolored()
+{
+	OCODE *ip;
+
+	for (ip = head; ip; ip = ip->fwd) {
+		if (ip->insn) {
+			if (ip->oper1)
+				ip->oper1->scolored = ip->oper1->pcolored = false;
+			if (ip->oper2)
+				ip->oper2->scolored = ip->oper2->pcolored = false;
+			if (ip->oper3)
+				ip->oper3->scolored = ip->oper3->pcolored = false;
+			if (ip->oper4)
+				ip->oper4->scolored = ip->oper4->pcolored = false;
+		}
+	}
+}
 
 void PeepList::storeHex(txtoStream& ofs)
 {
