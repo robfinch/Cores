@@ -277,6 +277,12 @@ bool TYP::IsSameType(TYP *a, TYP *b, bool exact)
 {
 	if (a == b)
 		return (true);
+	if (a == nullptr || b == nullptr) {
+		if (!exact)
+			return (true);
+		else
+			return (false);
+	}
 
 	switch (a->type) {
 

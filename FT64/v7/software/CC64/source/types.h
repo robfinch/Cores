@@ -547,6 +547,7 @@ public:
 	int64_t GetReferenceSize();
 	int GetNaturalSize();
 
+	static bool IsSameType(ENODE *ep1, ENODE *ep2);
 	static bool IsEqual(ENODE *a, ENODE *b, bool lit = false);
 	bool HasAssignop();
 	bool HasCall();
@@ -669,6 +670,7 @@ public:
 	Operand *next;			// For extended sizes (long)
 public:
 	Operand *Clone();
+	static bool IsSameType(Operand *ap1, Operand *ap2);
 	static bool IsEqual(Operand *ap1, Operand *ap2);
 	char fpsize();
 
@@ -730,6 +732,7 @@ public:
 	void OptAnd();
 	void OptMove();
 	void OptRedor();
+	void OptAdd();
 	void OptSubtract();
 	void OptLoad();
 	void OptLoadByte();

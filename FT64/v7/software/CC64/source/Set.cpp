@@ -555,6 +555,7 @@ int CSet::lastMember()
 {
 	int nn = nbits-1;
 	while(!test(nn) && nn > 0) nn--;
+	MemberPtr = nn;
 	return(nn);
 }
 

@@ -424,32 +424,28 @@ int Function::RestoreGPRegisterVars()
 	return (cnt2);
 }
 
+// Restore fp registers used as register variables.
 int Function::RestoreFPRegisterVars()
 {
 	int cnt2 = 0, cnt;
 	int nn;
 
 	if (fpsave_mask->NumMember()) {
-		cnt2 = cnt = fpsave_mask->NumMember()*sizeOfWord;
-		cnt = 0;
+		cnt2 = cnt = (fpsave_mask->NumMember() - 1)*sizeOfWord;
 		fpsave_mask->resetPtr();
-		for (nn = fpsave_mask->nextMember(); nn >= 0; nn = fpsave_mask->nextMember()) {
-			GenerateDiadic(op_lf, 'd', makefpreg(nn), MakeIndexed(cnt, regSP));
-			cnt += sizeOfWord;
+		for (nn = fpsave_mask->nextMember(); nn >= 1; nn = fpsave_mask->nextMember()) {
+			GenerateDiadic(op_lf, 'd', makefpreg(nn), MakeIndexed(cnt2 - cnt, regSP));
+			cnt -= sizeOfWord;
 		}
-//		GenerateTriadic(op_add, 0, makereg(regSP), makereg(regSP), MakeImmediate(cnt2));
+		GenerateTriadic(op_add, 0, makereg(regSP), makereg(regSP), MakeImmediate(cnt2 + sizeOfFP));
 	}
 	return (cnt2);
 }
 
 void Function::RestoreRegisterVars()
 {
-	int cnt2;
-
-	cnt2 = RestoreGPRegisterVars();
-	if (fpsave_mask != 0)
-		GenerateTriadic(op_add, 0, makereg(regSP), makereg(regSP), MakeImmediate(cnt2));
 	RestoreFPRegisterVars();
+	RestoreGPRegisterVars();
 }
 
 void Function::SaveTemporaries(int *sp, int *fsp)
@@ -688,15 +684,15 @@ void Function::GenReturn(Statement *stmt)
 		GenerateDiadic(op_sb, 0, makereg(0), MakeStringAsNameConst(semaphores[nn]));
 
 	// Restore fp registers used as register variables.
-	if (fpsave_mask->NumMember()) {
-		cnt2 = cnt = (fpsave_mask->NumMember() - 1)*sizeOfFP;
-		fpsave_mask->resetPtr();
-		for (nn = fpsave_mask->lastMember(); nn >= 1; nn = fpsave_mask->prevMember()) {
-			GenerateDiadic(op_lf, 'd', makereg(nregs - 1 - nn), MakeIndexed(cnt2 - cnt, regSP));
-			cnt -= sizeOfWord;
-		}
-		GenerateTriadic(op_add, 0, makereg(regSP), makereg(regSP), MakeImmediate(cnt2 + sizeOfFP));
-	}
+	//if (fpsave_mask->NumMember()) {
+	//	cnt2 = cnt = (fpsave_mask->NumMember() - 1)*sizeOfFP;
+	//	fpsave_mask->resetPtr();
+	//	for (nn = fpsave_mask->lastMember(); nn >= 1; nn = fpsave_mask->prevMember()) {
+	//		GenerateDiadic(op_lf, 'd', makefpreg(nregs - 1 - nn), MakeIndexed(cnt2 - cnt, regSP));
+	//		cnt -= sizeOfWord;
+	//	}
+	//	GenerateTriadic(op_add, 0, makereg(regSP), makereg(regSP), MakeImmediate(cnt2 + sizeOfFP));
+	//}
 	RestoreRegisterVars();
 	if (IsNocall) {
 		if (epilog) {
@@ -779,7 +775,6 @@ void Function::Gen()
 	int n;
 	bool o_retgen;
 
-	stkspace = 0;
 	if (opt_vreg)
 		cpu.SetVirtualRegisters();
 	o_throwlab = throwlab;

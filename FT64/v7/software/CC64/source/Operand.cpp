@@ -64,6 +64,13 @@ bool Operand::IsEqual(Operand *ap1, Operand *ap2)
 	return (false);
 }
 
+bool Operand::IsSameType(Operand *ap1, Operand *ap2)
+{
+	if (ap1 == nullptr || ap2 == nullptr)
+		return (false);
+	return (ENODE::IsSameType(ap1->offset, ap2->offset));
+}
+
 char Operand::fpsize()
 {
 	if (type == stddouble.GetIndex())

@@ -317,6 +317,19 @@ bool ENODE::IsBitfield()
 		);
 }
 
+bool ENODE::IsSameType(ENODE *node1, ENODE *node2)
+{
+	if (node1 == nullptr && node2 == nullptr)
+		return (true);
+	// If we have a null pointer for the expression it may be a
+	// void pointer.
+	if (node1 == nullptr || node2 == nullptr)
+		return (true);
+	if (node1->nodetype == en_icon && node2->nodetype == en_icon)
+		return (true);
+	return (TYP::IsSameType(node1->tp, node2->tp, false));
+}
+
 //
 // equalnode will return 1 if the expressions pointed to by
 // node1 and node2 are equivalent.
@@ -1371,7 +1384,7 @@ Operand *ENODE::GenHook(int flags, int size)
 	GenerateDiadic(op_bra, 0, MakeCodeLabel(end_label), 0);
 	GenerateLabel(false_label);
 	ap2 = cg.GenerateExpression(node->p[1], flags, size);
-	if (!IsEqualOperand(ap1, ap2) && !voidResult)
+	if (!Operand::IsSameType(ap1, ap2) && !voidResult)
 		error(ERR_MISMATCH);
 	//{
 	//	GenerateMonadic(op_hint, 0, MakeImmediate(2));

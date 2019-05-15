@@ -582,6 +582,7 @@ void PeepList::OptInstructions()
 			case op_ldi:	ip->OptLdi();	break;
 			case op_lea:	ip->OptLea();	break;
 			case op_mov:	ip->OptMove();	break;
+			case op_add:	ip->OptAdd(); break;
 			case op_sub:	ip->OptSubtract(); break;
 			case op_lb:		ip->OptLoadByte(); break;
 			case op_lc:		ip->OptLoadChar(); break;

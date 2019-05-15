@@ -212,6 +212,20 @@ bool OCODE::IsSubiSP()
 }
 
 
+void OCODE::OptAdd()
+{
+	// Add zero to self.
+	if (IsEqualOperand(oper1, oper2)) {
+		if (oper3->mode == am_imm) {
+			if (oper3->offset->nodetype == en_icon) {
+				if (oper3->offset->i == 0) {
+					MarkRemove();
+					optimized++;
+				}
+			}
+		}
+	}
+}
 // 'subui' followed by a 'bne' gets turned into 'loop'
 //
 void OCODE::OptSubtract()
@@ -219,6 +233,18 @@ void OCODE::OptSubtract()
 	OCODE *ip2;
 
 	ip2 = fwd;
+	// Subtract zero from self.
+	if (IsEqualOperand(oper1, oper2)) {
+		if (oper3->mode == am_imm) {
+			if (oper3->offset->nodetype == en_icon) {
+				if (oper3->offset->i == 0) {
+					MarkRemove();
+					optimized++;
+					return;
+				}
+			}
+		}
+	}
 	//if (oper2->isPtr && oper3->isPtr && oper2->mode == am_reg && oper3->mode == am_reg) {
 	//	opcode = op_ptrdif;
 	//	insn = GetInsn(op_ptrdif);
@@ -710,8 +736,10 @@ void OCODE::OptDoubleTargetRemoval()
 	if (ip2->HasSourceReg(rg3))
 		return;
 	// push has an implicit target, but we don't want to remove it.
-	if (rg3 == regSP)
+	if (opcode == op_push)
 		return;
+	//if (rg3 == regSP)
+	//	return;
 	MarkRemove();
 	optimized++;
 }
