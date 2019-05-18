@@ -110,6 +110,7 @@ void Declaration::SetType(SYM *sp)
 			}
 			else {
 				sp->tp = TYP::Make(bt_bitfield,head->size);
+				sp->tp->isUnsigned = head->isUnsigned;
 				//  		*(sp->tp) = *head;
 				sp->tp->bit_width = bit_width;
 				sp->tp->bit_offset = bit_offset;

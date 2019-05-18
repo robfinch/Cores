@@ -1765,7 +1765,7 @@ void Statement::GenerateSwitch()
 	// check case density
 	// If there are enough cases
 	// and if the case is dense enough use a computed jump
-	if (mm * 100 / max((maxv - minv), 1) > 50 && (maxv - minv) > (nkd ? 7 : 12)) {
+	if (mm * 100 / max((maxv - minv), 1) > 50 && (maxv - minv) > (nkd ? 6 : 10)) {
 		if (deflbl == 0)
 			deflbl = nextlabel++;
 		for (nn = mm; nn < 512; nn++) {
@@ -1787,14 +1787,29 @@ void Statement::GenerateSwitch()
 		}
 		qsort(&casetab[0], mm, sizeof(struct scase), casevalcmp);
 		tablabel = caselit(casetab, mm);
+		initstack();
 		ap = cg.GenerateExpression(exp, am_reg, exp->GetNaturalSize());
-		ap1 = GetTempRegister();
-		ap2 = GetTempRegister();
 		if (!nkd) {
-			GenerateDiadic(op_ldi, 0, ap1, MakeImmediate(minv));
-			GenerateTriadic(op_blt, 0, ap, ap1, MakeCodeLabel(defcase ? deflbl : breaklab));
-			GenerateDiadic(op_ldi, 0, ap2, MakeImmediate(maxv + 1));
-			GenerateTriadic(op_bge, 0, ap, ap2, MakeCodeLabel(defcase ? deflbl : breaklab));
+			ap1 = GetTempRegister();
+			ap2 = GetTempRegister();
+			//GenerateDiadic(op_ldi, 0, ap1, MakeImmediate(minv));
+			//GenerateTriadic(op_blt, 0, ap, ap1, MakeCodeLabel(defcase ? deflbl : breaklab));
+			//GenerateDiadic(op_ldi, 0, ap2, MakeImmediate(maxv + 1));
+			//GenerateTriadic(op_bge, 0, ap, ap2, MakeCodeLabel(defcase ? deflbl : breaklab));
+			GenerateTriadic(op_sge, 0, ap1, ap, MakeImmediate(minv));
+			GenerateTriadic(op_sle, 0, ap2, ap, MakeImmediate(maxv));
+			if (minv != 0)
+				GenerateTriadic(op_sub, 0, ap, ap, MakeImmediate(minv));
+			GenerateTriadic(op_shl, 0, ap, ap, MakeImmediate(3));
+			GenerateDiadic(op_lw, 0, ap, compiler.of.MakeIndexedCodeLabel(tablabel, ap->preg));
+			GenerateTriadic(op_band, 0, ap1, ap2, ap);
+			GenerateMonadic(op_bra, 0, MakeCodeLabel(defcase ? deflbl : breaklab));
+			ReleaseTempRegister(ap2);
+			ReleaseTempRegister(ap1);
+			ReleaseTempRegister(ap);
+			s1->GenerateCase();
+			GenerateLabel(breaklab);
+			return;
 			//Generate4adic(op_chk,0,ap,ap1,ap2,MakeCodeLabel(defcase ? (int)defcase->label : breaklab));
 		}
 		if (minv != 0)
@@ -1804,6 +1819,7 @@ void Statement::GenerateSwitch()
 		GenerateDiadic(op_jal, 0, makereg(0), MakeIndexed((int64_t)0, ap->preg));
 		s1->GenerateCase();
 		GenerateLabel(breaklab);
+		ReleaseTempRegister(ap);
 		return;
 	}
 	GenerateLinearSwitch();
@@ -1885,6 +1901,9 @@ void Statement::GenerateThrow()
 		GenerateDiadic(op_ldi, 0, makereg(2), MakeImmediate(num));
 		GenerateDiadic(op_ldi, 0, makereg(regXoffs), MakeImmediate(16));
 	}
+	// If there is no catch handler, get lr for return.
+	if (throwlab == retlab)
+		GenerateDiadic(op_lw, 0, makereg(regLR), MakeIndexed(16,regFP));
 	GenerateMonadic(op_bra, 0, MakeCodeLabel(throwlab));
 }
 

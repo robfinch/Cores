@@ -175,8 +175,7 @@ Operand *FT64CodeGenerator::GenExpr(ENODE *node)
 		ap3 = GetTempRegister();
 		ap1 = cg.GenerateExpression(node->p[0], am_reg, node->p[0]->GetNaturalSize());
 		ap2 = cg.GenerateExpression(node->p[1], am_reg | am_imm, node->p[1]->GetNaturalSize());
-		GenerateTriadic(op_seq, 0, ap3, ap1, ap2);
-		GenerateDiadic(op_not, 0, ap3, ap3);
+		GenerateTriadic(op_sne, 0, ap3, ap1, ap2);
 		ReleaseTempRegister(ap2);
 		ReleaseTempRegister(ap1);
 		ap3->isBool = true;
@@ -209,7 +208,7 @@ Operand *FT64CodeGenerator::GenExpr(ENODE *node)
 		ap1 = cg.GenerateExpression(node->p[0], am_reg, size);
 		ap2 = cg.GenerateExpression(node->p[1], am_reg | am_imm, size);
 		if (ap2->mode == am_reg)
-			GenerateTriadic(op_sle, 0, ap3, ap2, ap1);
+			GenerateTriadic(op_slt, 0, ap3, ap2, ap1);
 		else
 			GenerateTriadic(op_sgt, 0, ap3, ap1, ap2);
 		ReleaseTempRegister(ap2);
@@ -222,8 +221,10 @@ Operand *FT64CodeGenerator::GenExpr(ENODE *node)
 		ap3 = GetTempRegister();
 		ap1 = cg.GenerateExpression(node->p[0], am_reg, size);
 		ap2 = cg.GenerateExpression(node->p[1], am_reg | am_imm, size);
-		GenerateTriadic(op_slt, 0, ap3, ap1, ap2);
-		GenerateDiadic(op_not, 0, ap3, ap3);
+		if (ap2->mode == am_reg)
+			GenerateTriadic(op_sle, 0, ap3, ap2, ap1);
+		else
+			GenerateTriadic(op_sge, 0, ap3, ap1, ap2);
 		ReleaseTempRegister(ap2);
 		ReleaseTempRegister(ap1);
 		//		GenerateDiadic(op_sge,0,ap3,ap3);
@@ -245,12 +246,7 @@ Operand *FT64CodeGenerator::GenExpr(ENODE *node)
 		ap3 = GetTempRegister();
 		ap1 = cg.GenerateExpression(node->p[0], am_reg, size);
 		ap2 = cg.GenerateExpression(node->p[1], am_reg | am_imm, size);
-		if (ap2->mode == am_imm) {
-			GenerateTriadic(op_sgt, 0, ap3, ap1, ap2);
-			GenerateDiadic(op_not, 0, ap3, ap3);
-		}
-		else
-			GenerateTriadic(op_sleu, 0, ap3, ap1, ap2);
+		GenerateTriadic(op_sleu, 0, ap3, ap1, ap2);
 		ReleaseTempRegister(ap2);
 		ReleaseTempRegister(ap1);
 		//		GenerateDiadic(op_sle,0,ap3,ap3);
@@ -262,7 +258,7 @@ Operand *FT64CodeGenerator::GenExpr(ENODE *node)
 		ap1 = cg.GenerateExpression(node->p[0], am_reg, size);
 		ap2 = cg.GenerateExpression(node->p[1], am_reg | am_imm, size);
 		if (ap2->mode == am_reg)
-			GenerateTriadic(op_sleu, 0, ap3, ap2, ap1);
+			GenerateTriadic(op_sltu, 0, ap3, ap2, ap1);
 		else
 			GenerateTriadic(op_sgtu, 0, ap3, ap1, ap2);
 		ReleaseTempRegister(ap2);
@@ -278,8 +274,7 @@ Operand *FT64CodeGenerator::GenExpr(ENODE *node)
 		if (ap2->mode == am_reg)
 			GenerateTriadic(op_sleu, 0, ap3, ap2, ap1);
 		else {
-			GenerateTriadic(op_sltu, 0, ap3, ap1, ap2);
-			GenerateDiadic(op_not, 0, ap3, ap3);
+			GenerateTriadic(op_sgeu, 0, ap3, ap1, ap2);
 		}
 		ReleaseTempRegister(ap2);
 		ReleaseTempRegister(ap1);

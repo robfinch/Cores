@@ -72,6 +72,7 @@ int main(int argc, char **argv)
 	cpu.SupportsPush = false;
 	cpu.SupportsLink = false;
 	cpu.SupportsUnlink = false;
+	cpu.SupportsBitfield = true;
 
 //	printf("c64 starting...\r\n");
 	while(--argc) {

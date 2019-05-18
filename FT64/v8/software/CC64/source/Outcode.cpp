@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2012-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2012-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -44,7 +44,7 @@ static ENODE *agr;
 // Please keep table in alphabetical order.
 // Instruction.cpp has the number of table elements hard-coded in it.
 //
-Instruction opl[235] =
+Instruction opl[237] =
 {   
 { ";", op_rem },
 { ";asm",op_asm,300 },
@@ -64,9 +64,11 @@ Instruction opl[235] =
 { "beq", op_beq,3,0,false,am_reg,am_reg|am_imm,0,0 },
 { "beqi", op_beqi,3,0,false,am_reg,am_imm,0,0 },
 { "bex", op_bex,0,0,false,0,0,0,0 },
+{ "bfclr", op_bfclr,2,1,false,am_reg,am_reg|am_ui6,am_reg|am_ui6,0 },
 { "bfext", op_bfext,2,1,false,am_reg },
 { "bfextu", op_bfextu,2,1,false,am_reg, },
 { "bfins", op_bfins,2,1,false,am_reg },
+{ "bfset", op_bfset,2,1,false,am_reg,am_reg | am_ui6,am_reg | am_ui6,0 },
 { "bge", op_bge,3,0,false,am_reg,am_reg,0,0 },
 { "bgeu", op_bgeu,3,0,false,am_reg,am_reg,0,0 },
 { "bgt", op_bgt,3,0,false,am_reg,am_reg,0,0 },

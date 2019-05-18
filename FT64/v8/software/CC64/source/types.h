@@ -803,7 +803,7 @@ public:
 	virtual bool GenerateBranch(ENODE *node, int op, int label, int predreg, unsigned int prediction, bool limit) { return (false); };
 	Operand *GenerateBitfieldAssign(ENODE *node, int flags, int size);
 	void GenerateBitfieldInsert(Operand *ap1, Operand *ap2, int offset, int width);
-	Operand *GenerateBitfieldDereference(ENODE *node, int flags, int size);
+	Operand *GenerateBitfieldDereference(ENODE *node, int flags, int size, int opt);
 	Operand *GenerateDereference(ENODE *node, int flags, int size, int su);
 	Operand *GenerateAssignMultiply(ENODE *node, int flags, int size, int op);
 	Operand *GenerateAssignModiv(ENODE *node, int flags, int size, int op);
@@ -1452,6 +1452,7 @@ public:
 	bool SupportsPop;
 	bool SupportsLink;
 	bool SupportsUnlink;
+	bool SupportsBitfield;
 	void SetRealRegisters();
 	void SetVirtualRegisters();
 };

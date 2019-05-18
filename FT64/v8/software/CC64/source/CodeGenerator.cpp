@@ -649,7 +649,7 @@ Operand *CodeGenerator::GenerateAssignMultiply(ENODE *node,int flags, int size, 
     size = ssize;
 	if (node->p[0]->IsBitfield()) {
 		ap3 = GetTempRegister();
-		ap1 = GenerateBitfieldDereference(node->p[0], am_reg | am_mem, size);
+		ap1 = GenerateBitfieldDereference(node->p[0], am_reg | am_mem, size, 1);
 		GenerateDiadic(op_mov, 0, ap3, ap1);
 		ap2 = GenerateExpression(node->p[1], am_reg | am_imm, size);
 		GenerateTriadic(op, 0, ap1, ap1, ap2);
@@ -714,7 +714,7 @@ Operand *CodeGenerator::GenerateAssignModiv(ENODE *node,int flags,int size,int o
     siz1 = GetNaturalSize(node->p[0]);
 	if (node->p[0]->IsBitfield()) {
 		ap3 = GetTempRegister();
-		ap1 = GenerateBitfieldDereference(node->p[0], am_reg | am_mem, size);
+		ap1 = GenerateBitfieldDereference(node->p[0], am_reg | am_mem, size, 1);
 		GenerateDiadic(op_mov, 0, ap3, ap1);
 		ap2 = GenerateExpression(node->p[1], am_reg | am_imm, size);
 		GenerateTriadic(op, 0, ap1, ap1, ap2);
@@ -1546,14 +1546,14 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int size)
 	case en_ucfieldref:
 	case en_uhfieldref:
 	case en_uwfieldref:
-			ap1 = (flags & am_bf_assign) ? GenerateDereference(node,flags & ~am_bf_assign,size,0) : GenerateBitfieldDereference(node,flags,size);
+			ap1 = (flags & am_bf_assign) ? GenerateDereference(node,flags & ~am_bf_assign,size,0) : GenerateBitfieldDereference(node,flags,size,0);
 			ap1->isUnsigned = TRUE;
 			goto retpt;
 	case en_wfieldref:
 	case en_bfieldref:
 	case en_cfieldref:
 	case en_hfieldref:
-			ap1 = (flags & am_bf_assign) ? GenerateDereference(node,flags & ~am_bf_assign,size,1) : GenerateBitfieldDereference(node,flags,size);
+			ap1 = (flags & am_bf_assign) ? GenerateDereference(node,flags & ~am_bf_assign,size,1) : GenerateBitfieldDereference(node,flags,size,0);
 			goto retpt;
 	case en_regvar:
 	case en_tempref:

@@ -39,7 +39,7 @@ static void SignExtendBitfield(ENODE *node, Operand *ap3, uint64_t mask)
 	ReleaseTempRegister(ap2);
 }
 
-Operand *CodeGenerator::GenerateBitfieldDereference(ENODE *node, int flags, int size)
+Operand *CodeGenerator::GenerateBitfieldDereference(ENODE *node, int flags, int size, int opt)
 {
     Operand *ap, *ap3;
     int width = node->bit_width + 1;
@@ -51,8 +51,12 @@ Operand *CodeGenerator::GenerateBitfieldDereference(ENODE *node, int flags, int 
 	while (--width)	mask = mask + mask + 1;
 	ap3 = GetTempRegister();
 	ap3->tempflag = TRUE;
-    ap = GenerateDereference(node, flags, node->esize, isSigned);
-    ap->MakeLegal(flags, node->esize);
+  ap = GenerateDereference(node, flags, node->esize, isSigned);
+  ap->MakeLegal(flags, node->esize);
+	ap->offset->bit_offset = node->bit_offset;
+	ap->offset->bit_width = node->bit_width;
+	if (opt)
+		return (ap);
 	if (ap->mode == am_reg)
 		GenerateDiadic(op_mov, 0, ap3, ap);
 	else if (ap->mode == am_imm)
@@ -60,7 +64,7 @@ Operand *CodeGenerator::GenerateBitfieldDereference(ENODE *node, int flags, int 
 	else	// memory
 		GenLoad(ap3, ap, node->esize, node->esize);
 //	ReleaseTempRegister(ap);
-	if (SUPPORT_BITFIELD) {
+	if (cpu.SupportsBitfield) {
 		if (isSigned)
 			Generate4adic(op_bfext,0,ap3, ap3, MakeImmediate((int64_t) node->bit_offset), MakeImmediate((int64_t)(node->bit_width-1)));
 		else
@@ -90,13 +94,30 @@ void CodeGenerator::GenerateBitfieldInsert(Operand *ap1, Operand *ap2, int offse
 	else
 	*/
 	{
+		if (cpu.SupportsBitfield) {
+			if (ap2->isConst) {
+				if (ap2->offset->nodetype == en_icon) {
+					if (ap2->offset->i == 0) {
+						Generate4adic(op_bfclr, 0, ap1, ap1, MakeImmediate(offset), MakeImmediate(width - 1));
+						return;
+					}
+					else if (ap2->offset->i == -1) {
+						Generate4adic(op_bfset, 0, ap1, ap1, MakeImmediate(offset), MakeImmediate(width - 1));
+						return;
+					}
+				}
+			}
+		}
 		for (mask = nn = 0; nn < width; nn++)
 			mask = (mask << 1) | 1;
 		mask = ~mask;
-		GenerateDiadic(op_and,0,ap2,MakeImmediate((int64_t)~mask));		// clear unwanted bits in source
+		GenerateTriadic(op_and,0,ap2,ap2,MakeImmediate((int64_t)~mask));		// clear unwanted bits in source
+		if (cpu.SupportsBitfield)
+			Generate4adic(op_bfclr, 0, ap1, ap1, MakeImmediate(offset), MakeImmediate(width - 1));
 		if (offset > 0)
 			GenerateTriadic(op_ror,0,ap1,ap1,MakeImmediate((int64_t)offset));
-		GenerateTriadic(op_and,0,ap1,ap1,MakeImmediate(mask));		// clear bits in target field
+		if (!cpu.SupportsBitfield)
+			GenerateTriadic(op_and,0,ap1,ap1,MakeImmediate(mask));		// clear bits in target field
 		GenerateTriadic(op_or,0,ap1,ap1,ap2);
 		if (offset > 0)
 			GenerateTriadic(op_rol,0,ap1,ap1,MakeImmediate((int64_t)offset));
@@ -123,6 +144,6 @@ Operand *CodeGenerator::GenerateBitfieldAssign(ENODE *node, int flags, int size)
 	}
 	ReleaseTempRegister(ap2);
 	ap1->MakeLegal( flags, size);
-	return ap1;
+	return (ap1);
 }
 

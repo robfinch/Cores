@@ -1503,7 +1503,7 @@ static void Lui34(int64_t val, int rg)
 			(((val >> 29LL) & 0x1fLL) << 8LL) |
 			(rg << 13) |
 			(0 << 6) |
-			0x27, !expand_flag, 4
+			I_LUI, !expand_flag, 4
 		);
 		return;
 	}
@@ -1512,7 +1512,7 @@ static void Lui34(int64_t val, int rg)
 		(((val >> 29LL) & 0x1fLL) << 8LL) |
 		(rg << 13) |
 		(1 << 6) |
-		0x27, !expand_flag, 6
+		I_LUI, !expand_flag, 6
 	);
 }
 		
@@ -2774,90 +2774,117 @@ int InvertBranchOpcode(int opcode4)
 
 static void process_bcc()
 {
-  int Ra, Rb, pred;
+	int Ra, Rb, Rc, pred;
 	int fmt;
-  int64_t val, ca4, ca2;
-  int64_t disp;
+	int64_t val, ca4, ca2;
+	int64_t disp;
 	char *p1, *p2;
 	int encode;
 	int ins48 = 0;
 	int64_t opcode6 = parm1[token];
 	int64_t opcode4 = parm2[token];
+	int64_t op4 = parm3[token];
 
-  fmt = GetFPSize();
+	fmt = GetFPSize();
 	pred = 0;
 	p1 = inptr;
-  Ra = getRegisterX();
-  need(',');
-  Rb = getRegisterX();
-  need(',');
+	Ra = getRegisterX();
+	need(',');
+	Rb = getRegisterX();
+	need(',');
 	p2 = inptr;
 	NextToken();
-	if (token=='#' && opcode4==0) {
+	if (token == '#' && opcode4 == 0) {
 		inptr = p1;
-		process_beqi(0x32,0);
+		process_beqi(0x32, 0);
 		return;
 	}
 	inptr = p2;
-	val = expr();
-	ca4 = (code_address + 4LL);
-	ca2 = (code_address + 2LL);
-	disp = (val - code_address) >> 1LL;
-	if (!IsNBit(disp, 11LL)) {
-		ins48 = !gpu;
-		if (!IsNBit(disp, 27LL) || gpu) {
-			if (pass > 4)
-				error("Branch target too far away");
+	Rc = getRegisterX();
+	if (Rc == -1) {
+		inptr = p2;
+		val = expr();
+	}
+	else
+		val = 0;
+	if (Rc == -1) {
+		ca4 = (code_address + 4LL);
+		ca2 = (code_address + 2LL);
+		disp = (val - code_address) >> 1LL;
+		if (!IsNBit(disp, 11LL)) {
+			ins48 = !gpu;
+			if (!IsNBit(disp, 27LL) || gpu) {
+				if (pass > 4)
+					error("Branch target too far away");
+			}
 		}
-	}
-	encode = (val >> 7LL) == (ca2 >> 7LL);
-	encode = 0;	// for now no compressed branches
-	encode = IsNBit(disp, 7);
-	// Check for compressed bnez
-	if (opcode4 == 1 && Rb == 0 && encode && !gpu) {
-		emit_insn(
-			(3 << 14) |
-			(((disp >> 1) & 0x3f) << 8) |
-			(2 << 6) |
-			((disp & 1) << 5) |
-			Ra,0,2
-		);
-		return;
-	}
-	// compressed beqz
-	if (opcode4 == 0 && Rb == 0 && encode && !gpu) {
-		emit_insn(
-			(2 << 14) |
-			(((disp >> 1) & 0x3f) << 8) |
-			(2 << 6) |
-			((disp & 1) << 5) |
-			Ra, 0, 2
-		);
-		return;
+		encode = (val >> 7LL) == (ca2 >> 7LL);
+		encode = 0;	// for now no compressed branches
+		encode = IsNBit(disp, 7);
+		// Check for compressed bnez
+		if (opcode4 == 1 && Rb == 0 && encode && !gpu) {
+			emit_insn(
+				(3 << 14) |
+				(((disp >> 1) & 0x3f) << 8) |
+				(2 << 6) |
+				((disp & 1) << 5) |
+				Ra, 0, 2
+			);
+			return;
+		}
+		// compressed beqz
+		if (opcode4 == 0 && Rb == 0 && encode && !gpu) {
+			emit_insn(
+				(2 << 14) |
+				(((disp >> 1) & 0x3f) << 8) |
+				(2 << 6) |
+				((disp & 1) << 5) |
+				Ra, 0, 2
+			);
+			return;
+		}
 	}
 	// Negative opcode indicates to swap operands.
 	if (opcode4 < 0) {
 		opcode4 = -opcode4;
+		if (Rc == -1) {
+			emit_insn(
+				((disp >> 2) << 23LL) |
+				(Ra << 18) |
+				((disp & 3LL) << 16LL) |
+				(opcode4 << 13) |
+				(Rb << 8) |
+				(ins48 << 6) |
+				opcode6, !expand_flag, ins48 ? 6 : 4
+			);
+			return;
+		}
+		emit_insn(
+			(Rc << 23) |
+			(Rb << 18) |
+			(op4 << 13) |
+			(Ra << 8) |
+			0x11, !expand_flag, 4);
+		return;
+	}
+	if (Rc < 0) {
 		emit_insn(
 			((disp >> 2) << 23LL) |
-			(Ra << 18) |
+			(Rb << 18) |
 			((disp & 3LL) << 16LL) |
 			(opcode4 << 13) |
-			(Rb << 8) |
+			(Ra << 8) |
 			(ins48 << 6) |
-			opcode6,!expand_flag, ins48 ? 6 : 4
+			opcode6, !expand_flag, ins48 ? 6 : 4
 		);
 		return;
 	}
 	emit_insn(
-		((disp >> 2) << 23LL) |
+		(Rc << 23) |
 		(Rb << 18) |
-		((disp & 3LL) << 16LL) |
-		(opcode4 << 13) |
+		(op4 << 13) |
 		(Ra << 8) |
-		(ins48 << 6) |
-		opcode6, !expand_flag, ins48 ? 6 : 4
-	);
+		0x11, !expand_flag, 4);
 	return;
 }
 
@@ -3011,6 +3038,8 @@ static void process_bitfield(int64_t oc)
 		mb = expr();
 		gmb = true;
 	}
+	else if (oc == 3)
+		printf("Bitfield offset must be a constant for BFINS (%d)\r\n", lineno);
 	need(',');
 	p = inptr;
 	Rb = getRegisterX();
@@ -3029,26 +3058,44 @@ static void process_bitfield(int64_t oc)
 		val = expr();
 		gval = true;
 	}
+	if (op == 4) {
+		need(',');
+		NextToken();
+		val = expr();
+		gval = true;
+	}
+	if (op == 3) {
+		need(',');
+		Ra = getRegisterX();
+	}
 	op =
 		(oc << 44LL) |
-		((gval?1LL:0LL) << 32LL) |
-		((gme?1LL:0LL) << 31LL) |
-		((gmb?1:0) << 30) |
-		(Rt << 23) |
+		((gval?1LL:0LL) << 43LL) |
+		((gme?1LL:0LL) << 42LL) |
+		((gmb?1:0) << 41LL) |
+		(Rt << 18LL) |
 		(1 << 6) |
 		0x22;
-	if (gmb)
-		op |= ((mb & 31) << 8) | (((mb >> 5) & 1) << 28);
+	if (oc == 3) {
+		op |= ((mb & 63LL) << 34LL);
+		op |= (Ra << 8);
+	}
+	else if (gmb)
+		op |= ((mb & 31LL) << 8LL) | (((mb >> 5LL) & 1LL) << 39LL);
 	else
 		op |= (Ra << 8);
 	if (gme)
-		op |= ((me & 31) << 13) | (((me >> 5) & 1) << 29);
+		op |= ((me & 31LL) << 18LL) | (((me >> 5LL) & 1LL) << 40LL);
 	else
-		op |= (Rb << 13);
-	if (gval)
-		op |= ((val & 31) << 18) | (((val >> 5) & 0x7ff) << 33LL);
+		op |= (Rb << 18);
+	if (gval) {
+		if (oc==4)
+			op |= ((val & 0x7ffLL) << 28LL) | (Rc << 23LL);
+		else
+			op |= ((val & 0xffffLL) << 23LL);
+	}
 	else
-		op |= (Rc << 18);
+		op |= (Rc << 23);
 
 	emit_insn(op, 0, 6);
 	ScanToEOL();
@@ -3151,33 +3198,47 @@ static void process_chki(int opcode6)
 
 static void process_fbcc(int64_t opcode3)
 {
-    int Ra, Rb;
-    int64_t val;
-    int64_t disp;
+	int Ra, Rb, Rc;
+	int64_t val;
+	int64_t disp;
 	int sz;
 	bool ins48 = false;
+	char *p;
 
-    sz = GetFPSize();
-    Ra = getFPRegister();
-    need(',');
-    Rb = getFPRegister();
-    need(',');
-    NextToken();
-
-    val = expr();
-	disp = (val - code_address) >> 1LL;
-	if (!IsNBit(disp, 11)) {
-		ins48 = true;
+	sz = GetFPSize();
+	Ra = getFPRegister();
+	need(',');
+	Rb = getFPRegister();
+	need(',');
+	p = inptr;
+	Rc = getRegisterX();
+	if (Rc == -1) {
+		inptr = p;
+		NextToken();
+		val = expr();
+	}
+	if (Rc == -1) {
+		disp = (val - code_address) >> 1LL;
+		if (!IsNBit(disp, 11)) {
+			ins48 = true;
+		}
+		emit_insn(
+			((disp >> 2) << 23LL) |
+			((disp & 3LL) << 16LL) |
+			(opcode3 << 13) |
+			(Rb << 18) |
+			(Ra << 8) |
+			((ins48 ? 1 : 0) << 6) |
+			0x05, !expand_flag, ins48 ? 6 : 4
+		);
+		return;
 	}
 	emit_insn(
-		((disp >> 2) << 23LL) |
-		((disp & 3LL) << 16LL) |
-		(opcode3 << 13) |
+		(Rc << 23) |
 		(Rb << 18) |
+		((opcode3 + 8) << 13) |
 		(Ra << 8) |
-		((ins48 ? 1 : 0) << 6) |
-		0x05, !expand_flag, ins48 ? 6 : 4
-    );
+	0x11,!expand_flag, 4);
 }
 
 // ---------------------------------------------------------------------------
@@ -3926,7 +3987,7 @@ static void process_ldi()
 			((val & 0x1fLL) << 18LL) |
 			(Rt << 13) |
 			(0 << 8) |		// ADDI
-			0x04, !expand_flag, 4);
+			I_ADD, !expand_flag, 4);
 		return;
 	}
 	else if (gpu) {
@@ -3955,8 +4016,8 @@ static void process_ldi()
 	}
 	if (IsNBit(val, 48)) {
 		emit_insn(
-			((val >> 35LL) << 18LL) |
-			(((val >> 30LL) & 0x1fLL) << 8LL) |
+			((val >> 34LL) << 18LL) |
+			(((val >> 29LL) & 0x1fLL) << 8LL) |
 			(Rt << 13) |
 			(0 << 6) |
 			I_LUI, !expand_flag, 4
@@ -3972,8 +4033,8 @@ static void process_ldi()
 	}
 	// 64 bit constant
 	emit_insn(
-		((val >> 35LL) << 18LL) |
-		(((val >> 30LL) & 0x1fLL) << 8LL) |
+		((val >> 34LL) << 18LL) |
+		(((val >> 29LL) & 0x1fLL) << 8LL) |
 		(Rt << 13) |
 		(1 << 6) |
 		I_LUI, !expand_flag, 6
@@ -4179,7 +4240,7 @@ static void process_cache(int opcode6)
 	}
     if (Ra < 0) Ra = 0;
     val = disp;
-	if (!IsNBit(val,30)) {
+	if (!IsNBit(val,29)) {
 		LoadConstant(val,23);
 		// Change to indexed addressing
 		emit_insn(
@@ -4194,7 +4255,7 @@ static void process_cache(int opcode6)
 		ScanToEOL();
 		return;
 	}
-	if (!IsNBit(val, 14)) {
+	if (!IsNBit(val, 13)) {
 		if (seg == -1) {
 			if (Ra >= 30)
 				seg = 3;
@@ -4203,7 +4264,8 @@ static void process_cache(int opcode6)
 		}
 		emit_insn(
 //			(((int64_t)seg) << 45LL) |
-			(val << 18LL) |
+			((val >> 5LL) << 24LL) |
+			((val & 0x1fLL) << 18LL) |
 			(cmd << 13) |
 			(Ra << 8) |
 			(1 << 6) |
@@ -4211,7 +4273,8 @@ static void process_cache(int opcode6)
 		return;
 	}
 	emit_insn(
-		(val << 18) |
+		((val >> 5LL) << 24LL) |
+		((val & 0x1fLL) << 18LL) |
 		(cmd << 13) |
 		(Ra << 8) |
 		opcode6,!expand_flag,4);
@@ -5780,45 +5843,59 @@ void FT64_processMaster()
 		jumptbl[tk_band] = &process_bcc;
 		parm1[tk_band] = 0x10;
 		parm2[tk_band] = 4;
+		parm3[tk_band] = 12;
 		jumptbl[tk_beq] = &process_bcc;
 		parm1[tk_beq] = 0x30;
 		parm2[tk_beq] = 0;
+		parm3[tk_beq] = 0;
 		jumptbl[tk_bge] = &process_bcc;
 		parm1[tk_bge] = 0x30;
 		parm2[tk_bge] = 3;
+		parm3[tk_bge] = 3;
 		jumptbl[tk_bgeu] = &process_bcc;
 		parm1[tk_bgeu] = 0x30;
 		parm2[tk_bgeu] = 7;
+		parm3[tk_bgeu] = 7;
 		jumptbl[tk_bgt] = &process_bcc;
 		parm1[tk_bgt] = 0x30;
 		parm2[tk_bgt] = -2;
+		parm3[tk_bgt] = -2;
 		jumptbl[tk_bgtu] = &process_bcc;
 		parm1[tk_bgtu] = 0x30;
 		parm2[tk_bgtu] = -6;
+		parm3[tk_bgtu] = -6;
 		jumptbl[tk_ble] = &process_bcc;
 		parm1[tk_ble] = 0x30;
 		parm2[tk_ble] = -3;
+		parm3[tk_ble] = -3;
 		jumptbl[tk_bleu] = &process_bcc;
 		parm1[tk_bleu] = 0x30;
 		parm2[tk_bleu] = -7;
+		parm3[tk_bleu] = -7;
 		jumptbl[tk_blt] = &process_bcc;
 		parm1[tk_blt] = 0x30;
 		parm2[tk_blt] = 2;
+		parm3[tk_blt] = 2;
 		jumptbl[tk_bltu] = &process_bcc;
 		parm1[tk_bltu] = 0x30;
 		parm2[tk_bltu] = 6;
+		parm3[tk_bltu] = 6;
 		jumptbl[tk_bnand] = &process_bcc;
 		parm1[tk_bnand] = 0x30;
 		parm2[tk_bnand] = 4;
+		parm3[tk_bnand] = 4;
 		jumptbl[tk_bne] = &process_bcc;
 		parm1[tk_bne] = 0x30;
 		parm2[tk_bne] = 1;
+		parm3[tk_bne] = 1;
 		jumptbl[tk_bnor] = &process_bcc;
 		parm1[tk_bnor] = 0x30;
 		parm2[tk_bnor] = 5;
+		parm3[tk_bnor] = 5;
 		jumptbl[tk_bor] = &process_bcc;
 		parm1[tk_bor] = 0x10;
 		parm2[tk_bor] = 5;
+		parm3[tk_bor] = 13;
 		jumptbl[tk_ldi] = &process_ldi;
 		parm1[tk_ldi] = 0;
 		parm2[tk_ldi] = 0;

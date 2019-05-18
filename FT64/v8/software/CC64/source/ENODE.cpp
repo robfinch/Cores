@@ -1760,7 +1760,7 @@ Operand *ENODE::GenBinary(int flags, int size, int op)
 
 Operand *ENODE::GenAssignAdd(int flags, int size, int op)
 {
-	Operand *ap1, *ap2, *ap3;
+	Operand *ap1, *ap2, *ap3, *ap4;
 	int ssize;
 	bool negf = false;
 	bool intreg = false;
@@ -1771,15 +1771,25 @@ Operand *ENODE::GenAssignAdd(int flags, int size, int op)
 		size = ssize;
 	if (p[0]->IsBitfield()) {
 		ap3 = GetTempRegister();
-		ap1 = cg.GenerateBitfieldDereference(p[0], am_reg | am_mem, size);
-		GenerateDiadic(op_mov, 0, ap3, ap1);
+		ap4 = GetTempRegister();
+		ap1 = cg.GenerateBitfieldDereference(p[0], am_reg | am_mem, size, 1);
+		//		GenerateDiadic(op_mov, 0, ap3, ap1);
+		//ap1 = cg.GenerateExpression(p[0], am_reg | am_mem, size);
 		ap2 = cg.GenerateExpression(p[1], am_reg | am_imm, size);
-		GenerateTriadic(op, 0, ap1, ap1, ap2);
-		cg.GenerateBitfieldInsert(ap3, ap1, ap1->offset->bit_offset, ap1->offset->bit_width);
-		GenStore(ap3, ap1->next, ssize);
+		if (ap1->mode == am_reg) {
+			GenerateTriadic(op, 0, ap1, ap1, ap2);
+			cg.GenerateBitfieldInsert(ap3, ap1, ap1->offset->bit_offset, ap1->offset->bit_width);
+		}
+		else {
+			GenLoad(ap3, ap1, size, size);
+			Generate4adic(op_bfext, 0, ap4, ap3, MakeImmediate(ap1->offset->bit_offset), MakeImmediate(ap1->offset->bit_width-1));
+			GenerateTriadic(op, 0, ap4, ap4, ap2);
+			cg.GenerateBitfieldInsert(ap3, ap4, ap1->offset->bit_offset, ap1->offset->bit_width);
+			GenStore(ap3, ap1, ssize);
+		}
 		ReleaseTempReg(ap2);
-		ReleaseTempReg(ap1->next);
 		ReleaseTempReg(ap1);
+		ReleaseTempReg(ap4);
 		ap3->MakeLegal( flags, size);
 		return (ap3);
 	}
@@ -1841,7 +1851,7 @@ Operand *ENODE::GenAssignLogic(int flags, int size, int op)
 		size = ssize;
 	if (p[0]->IsBitfield()) {
 		ap3 = GetTempRegister();
-		ap1 = cg.GenerateBitfieldDereference(p[0], am_reg | am_mem, size);
+		ap1 = cg.GenerateBitfieldDereference(p[0], am_reg | am_mem, size, 1);
 		GenerateDiadic(op_mov, 0, ap3, ap1);
 		ap2 = cg.GenerateExpression(p[1], am_reg | am_imm, size);
 		GenerateTriadic(op, 0, ap1, ap1, ap2);
