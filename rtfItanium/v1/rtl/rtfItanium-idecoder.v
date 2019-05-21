@@ -60,7 +60,7 @@ wire [10:0] brdisp = instr[31:21];
 function IsTLB;
 input [2:0] unit;
 input [47:0] isn;
-IsTLB = unit==`MUnit && opcode==4'd2 && funct5==5'h1f;
+IsTLB = unit==`MStUnit && opcode==`TLB;
 endfunction
 
 // fnCanException
@@ -86,39 +86,41 @@ else
 case(unit)
 `FUnit:
 	case({isn[9:6]})
-	endcase
-case(isn[`INSTRUCTION_OP])
-`FLOAT:
-    case(isn[`INSTRUCTION_S2])
+	4'h2:
+		case({isn[27:22]})
     `FDIV,`FMUL,`FADD,`FSUB,`FTX:
         fnCanException = `TRUE;
-    default:    fnCanException = `FALSE;
-    endcase
-`DIVI,`MODI,`MULI:
-    fnCanException = `TRUE;
-`R2:
-    case(isn[`INSTRUCTION_S2])
-    `MUL,
-    `DIV,`MULSU,`DIVSU,
-    `MOD,`MODSU:
-       fnCanException = TRUE;
-    `RTI:   fnCanException = TRUE;
     default:    fnCanException = FALSE;
-    endcase
-// Had branches that could exception if looping to self. But in a tight loop
-// it affects store performance.
-// -> A branch may only exception if it loops back to itself.
-`Bcc,`FBcc,`BBc,`BEQI,`BNEI:	fnCanException = isn[7] ? brdisp == 11'h7FF : brdisp == 11'h7FE;
-`CHK:	fnCanException = TRUE;
-default:
+		endcase
+	4'h4,4'h5,4'h6,4'h7:
+        fnCanException = `TRUE;
+  default:    fnCanException = FALSE;
+	endcase
+`IUnit:
+	case({isn[32:31],isn[9:6]})
+	`DIVI,`MODI,`MULI:
+    fnCanException = `TRUE;
+  `R3:
+		case({isn[39:35],isn[6]})
+    `MUL,`DIV,`MOD:
+       fnCanException = TRUE;
+	  default:    fnCanException = FALSE;
+		endcase
+	endcase
+`BUnit:
+	case(isn[9:6])
+	`BRK:	fnCanException = TRUE;
+	`CHK:	fnCanException = TRUE;
+	`CHKI:		fnCanException = TRUE;
+  default:    fnCanException = FALSE;
+	endcase
 // Stores can stil exception if there is a write buffer, but we allow following
 // stores to be issued by ignoring the fact they can exception because the stores
 // can be undone by invalidating the write buffer.
-`ifdef HAS_WB
-    fnCanException = IsMem && !IsStore(isn);
-`else
-    fnCanException = IsMem;
-`endif
+`MLdUnit:
+	fnCanException = TRUE;
+default:
+	fnCanException = FALSE;
 endcase
 end
 endfunction
@@ -126,105 +128,146 @@ endfunction
 function IsPush;
 input [2:0] unit;
 input [39:0] isn;
-IsPush = unit==3'd5 && (isn[9:6]==4'hD || isn[9:6]==4'hB);
+IsPush = unit==`MStUnit && (isn[9:6]==`PUSH || isn[9:6]==`PUSHC);
 endfunction
 
 function IsPushc;
-input [47:0] isn;
-IsPushc = unit==3'd5 && isn[9:6]==4'hB;
+input [2:0] unit;
+input [39:0] isn;
+IsPushc = unit==`MStUnit && isn[9:6]==`PUSHC;
 endfunction
 
 function IsMemNdx;
 input [2:0] unit;
 input [39:0] isn;
-IsMemNdx = (unit==3'd4 || unit==3'd5) && ins[9:6]==4'hF;
+IsMemNdx = (unit==`MLdUnit && ins[9:6]==`MLX) || (unit==`MStUnit && ins[9:6]==`MSX);
 endfunction
 
 function [2:0] MemSize;
+input [2:0] unit;
 input [39:0] isn;
-case(isn[9:6])
-4'h0:	MemSize = byt;
-4'h1:	MemSize = wyde;
-4'h2:	MemSize = penta;
-4'h3:	MemSize = deci;
-4'h4:	MemSize = byt;
-4'h5:	MemSize = wyde;
-4'h6:	MemSize = penta;
-4'h7:	MemSize = deci;
-4'h8:	MemSize = tetra;
-4'h9:	MemSize = octa;
-4'hB:	MemSize = deci;
-4'hD:	MemSize = deci;
+case(unit)
+`MLdUnit:
+	case(isn[9:6])
+	`LDB:	MemSize = byt;
+	`LDC:	MemSize = wyde;
+	`LDP:	MemSize = penta;
+	`LDD:	MemSize = deci;
+	`LDBU:	MemSize = byt;
+	`LDCU:	MemSize = wyde;
+	`LDPU:	MemSize = penta;
+	`LDDR:	MemSize = deci;
+	`LDT:	MemSize = tetra;
+	`LDO:	MemSize = octa;
+	`LDTU:	MemSize = tetra;
+	`LDOU:	MemSize = octa;
+	`LEA:	MemSize = deci;
+	`MLX:
+		case(isn[39:35])
+		`LDB:	MemSize = byt;
+		`LDC:	MemSize = wyde;
+		`LDP:	MemSize = penta;
+		`LDD:	MemSize = deci;
+		`LDBU:	MemSize = byt;
+		`LDCU:	MemSize = wyde;
+		`LDPU:	MemSize = penta;
+		`LDDR:	MemSize = deci;
+		`LDT:	MemSize = tetra;
+		`LDO:	MemSize = octa;
+		`LDTU:	MemSize = tetra;
+		`LDOU:	MemSize = octa;
+		default:	MemSize = deci;
+		endcase
+	default:	MemSize = deci;
+	endcase
+	endfunction
+`MStUnit:
+	case(isn[9:6])
+	`STB:	MemSize = byt;
+	`STC:	MemSize = wyde;
+	`STP:	MemSize = penta;
+	`STD:	MemSize = deci;
+	`STT:	MemSize = tetra;
+	`STO:	MemSize = octa;
+	`STDC:	MemSize = deci;
+	`PUSH:	MemSize = deci;
+	`PUSHC:	MemSize = deci;
+	`MSX:
+		case(isn[39:35])
+		`STB:	MemSize = byt;
+		`STC:	MemSize = wyde;
+		`STP:	MemSize = penta;
+		`STD:	MemSize = deci;
+		`STT:	MemSize = tetra;
+		`STO:	MemSize = octa;
+		`STDC:	MemSize = deci;
+		default:	MemSize = deci;
+		endcase
+	default:	MemSize = deci;
+	endcase
+	endfunction
+default:	MemSize = deci;
 endcase
-endfunction
 
 function IsCAS;
 input [2:0] unit;
-input [47:0] isn;
-IsCAS = unit==3'd5 && (isn[9:6]==4'hA || (isn[9:6]==4'hF && isn[39:36]==4'hA))
+input [39:0] isn;
+IsCAS = unit==`MStUnit && (isn[9:6]==`CAS || (isn[9:6]==`MSX && isn[39:36]==`CAS))
 endfunction
 
-function IsInc;
-input [47:0] isn;
-case(isn[`INSTRUCTION_OP])
-`MEMNDX:
-   	if (isn[`INSTRUCTION_L2]==2'b00)
-		case({isn[31:28],isn[17:16]})
-    `INCX:   IsInc = TRUE;
-    default:    IsInc = FALSE;
-    endcase
-	else
-		IsInc = FALSE;
-`INC:    IsInc = TRUE;
-default:    IsInc = FALSE;
-endcase
+function IsChk;
+input [2:0] unit;
+input [39:0] isn;
+IsChk = unit==`BUnit && (isn[9:6]==`CHK || isn[9:6]==`CHKI);
 endfunction
 
 function IsFSync;
-input [47:0] isn;
-IsFSync = (isn[`INSTRUCTION_OP]==`FLOAT && isn[`INSTRUCTION_L2]==2'b00 && isn[`INSTRUCTION_S2]==`FSYNC); 
+input [2:0] unit;
+input [39:0] isn;
+IsFSync = unit==`FUnit && isn[9:6]==`FLT2 && isn[27:22]==`FSYNC; 
 endfunction
 
 function IsMemdb;
-input [47:0] isn;
-IsMemdb = (isn[`INSTRUCTION_OP]==`R2 && isn[`INSTRUCTION_L2]==2'b00 && isn[`INSTRUCTION_S2]==`R1 && isn[22:18]==`MEMDB); 
+input [2:0] unit;
+input [39:0] isn;
+IsMemdb = unit==`MStUnit && isn[9:6]==`MSX && isn[39:35]==`MEMDB;
 endfunction
 
 function IsMemsb;
-input [47:0] isn;
-IsMemsb = (isn[`INSTRUCTION_OP]==`RR && isn[`INSTRUCTION_L2]==2'b00 && isn[`INSTRUCTION_S2]==`R1 && isn[22:18]==`MEMSB); 
+input [2:0] unit;
+input [39:0] isn;
+IsMemsb = unit==`MStUnit && isn[9:6]==`MSX && isn[39:35]==`MEMSB;
 endfunction
 
 function IsSEI;
-input [47:0] isn;
-IsSEI = (isn[`INSTRUCTION_OP]==`R2 && isn[`INSTRUCTION_L2]==2'b00 && isn[`INSTRUCTION_S2]==`SEI); 
+input [2:0] unit;
+input [39:0] isn;
+IsSEI = unit==`BUnit && isn[9:6]==`RTI && isn[39:35]==`SEI;
 endfunction
 
 function IsLWRX;
 input [2:0] unit;
 input [47:0] isn;
-IsLWRX = unit==3'd4 && (isn[9:6]==4'hF && isn[39:36]==4'h7);
+IsLWRX = unit==`MLdUnit && (isn[9:6]==`MSL && isn[39:36]==`LDDR);
 endfunction
 
 // Aquire / release bits are only available on indexed SWC / LWR
 function IsSWCX;
-input [47:0] isn;
-case(isn[`INSTRUCTION_OP])
-`MEMNDX:
-	if (isn[`INSTRUCTION_L2]==2'b00)
-		case({isn[31:28],isn[17:16]})
-    `SWCX:   IsSWCX = TRUE;
-    default:    IsSWCX = FALSE;
-    endcase
-	else
-		IsSWCX = FALSE;
-default:    IsSWCX = FALSE;
-endcase
+input [2:0] unit;
+input [39:0] isn;
+IsSWCX = unit==`MStUnit && (isn[9:6]==`MSX && isn[39:36]==`STDC);
 endfunction
 
 function IsJmp;
-input [47:0] isn;
-IsJmp = isn[`INSTRUCTION_OP]==`JMP;
+input [2:0] unit;
+input [39:0] isn;
+IsJmp = unit=`BUnit && isn[9:6]==`JMP;
+endfunction
+
+function IsCSR;
+input [2:0] unit;
+input [39:0] ins;
+IsCSR = unit==`IUnit && {isn[32:31],isn[9:6]}==`CSR;
 endfunction
 
 // Really IsPredictableBranch
@@ -245,106 +288,50 @@ else
 function IsJAL;
 input [2:0] unit;
 input [39:0] isn;
-IsJal = unit==3'd1 && isn[9:6]==4'd8;
+IsJal = unit==`BUnit && isn[9:6]==`JAL;
 endfunction
 
 function IsRet;
 input [2:0] unit
 input [39:0] isn;
-IsRet = unit==3'd1 && isn[9:6]==4'd11;
+IsRet = unit==`BUnit && isn[9:6]==`RET;
 endfunction
 
 function IsIrq;
 input [2:0] unit;
 input [39:0] isn;
-IsIrq = unit==`BUnit && isn[9:6]==4'hF && isn[39];
+IsIrq = unit==`BUnit && isn[9:6]==`BRK && isn[39];
 endfunction
 
 function IsBrk;
 input [2:0] unit;
 input [39:0] isn;
-IsBrk = unit==`BUnit && isn[9:6]==4'hF;
+IsBrk = unit==`BUnit && isn[9:6]==`BRK;
 endfunction
 
 function IsRti;
-input [47:0] isn;
-IsRti = unit==`BUnit && isn[9:6]==4'hE;
+input [2:0] unit;
+input [39:0] isn;
+IsRti = unit==`BUnit && isn[9:6]==`RTI && isn[39:34]==5'd0;
 endfunction
 
 function IsSync;
-input [47:0] isn;
-IsSync = (isn[`INSTRUCTION_OP]==`R2 && isn[`INSTRUCTION_L2]==2'b00 && isn[`INSTRUCTION_S2]==`R1 && isn[22:18]==`SYNC) || IsRti(isn) || IsMov2Seg(isn);
-endfunction
-
-// Has an extendable 14-bit constant
-function HasConst;
 input [2:0] unit;
 input [39:0] isn;
-case(unit)
-3'd1:		
-endcase
-casez(isn[`INSTRUCTION_OP])
-`ADDI:  HasConst = TRUE;
-`SEQI:  HasConst = TRUE;
-`SLTI:  HasConst = TRUE;
-`SLTUI: HasConst = TRUE;
-`SGTI:  HasConst = TRUE;
-`SGTUI: HasConst = TRUE;
-`ANDI:  HasConst = TRUE;
-`ORI:   HasConst = TRUE;
-`XORI:  HasConst = TRUE;
-`MULUI: HasConst = TRUE;
-`MULI:  HasConst = TRUE;
-`MULFI:	HasConst = TRUE;
-`DIVUI: HasConst = TRUE;
-`DIVI:  HasConst = TRUE;
-`MODI:  HasConst = TRUE;
-`LEA:   HasConst = TRUE;
-`LB:    HasConst = TRUE;
-`LC:    HasConst = TRUE;
-`LH:    HasConst = TRUE;
-`LW:    HasConst = TRUE;
-`LV:    HasConst = TRUE;
-`SB:  	HasConst = TRUE;
-`SH:  	HasConst = TRUE;
-`SWC:   HasConst = TRUE;
-`INC:		HasConst = TRUE;
-`SV:    HasConst = TRUE;
-`CAS:   HasConst = TRUE;
-`JAL:   HasConst = TRUE;
-`CALL:  HasConst = TRUE;
-`RET:   HasConst = TRUE;
-`PUSHC:	HasConst = TRUE;
-default:    HasConst = FALSE;
-endcase
+IsSync = (unit=`BUnit && isn[9:6]==`RTI && isn[39:34]==`SYNC) || IsRti(unit,isn);
+endfunction
+
+function IsRex;
+input [2:0] unit;
+input [39:0] isn;
+IsRex = (unit=`BUnit && isn[9:6]==`RTI && isn[39:34]==`REX);
 endfunction
 
 function IsOddball;
-input [47:0] instr;
-//if (|iqentry_exc[head])
-//    IsOddball = TRUE;
-//else
-case(instr[`INSTRUCTION_OP])
-`BRK:   IsOddball = TRUE;
-`IVECTOR:
-    case(instr[`INSTRUCTION_S2])
-    `VSxx:  IsOddball = TRUE;
-    default:    IsOddball = FALSE;
-    endcase
-`RR:
-    case(instr[`INSTRUCTION_S2])
-    `VMOV:  IsOddball = TRUE;
-    `SEI,`RTI: IsOddball = TRUE;
-    default:    IsOddball = FALSE;
-    endcase
-`MEMNDX:
-		case({instr[31:28],instr[17:16]})
-    `CACHEX:  IsOddball = TRUE;
-    default:    IsOddball = FALSE;
-    endcase
-`CSRRW,`REX,`CACHE,`FLOAT:  IsOddball = TRUE;
-default:    IsOddball = FALSE;
-endcase
+input [2:0] unit;
+input [39:0] instr;
+IsOddball = IsRti(unit,instr) || IsSei(unit,instr) || IsCache(unit,instr)
+						|| IsCSR(unit,instr) || IsRex(unit,instr) || unit==`FUnit;
 endfunction
     
 function IsRFW;
@@ -494,17 +481,6 @@ default:    IsRFW = FALSE;
 endcase
 endfunction
 
-// Determines which lanes of the target register get updated.
-function [7:0] fnWe;
-input [47:0] isn;
-casez(isn[`INSTRUCTION_OP])
-`R2:
-	case(isn[`INSTRUCTION_S2])
-	`CMP:	fnWe = 8'h00;			// CMP sets predicate registers so doesn't update general register file.
-	default: fnWe = 8'hFF;	
-	endcase
-default: fnWe = 8'hFF;
-endcase
 /*
 casez(isn[`INSTRUCTION_OP])
 `R2:
@@ -754,6 +730,8 @@ begin
 	bus[`IB_RTI]	 <= isRti;
 	bus[`IB_RET]	 <= isRet;
 	bus[`IB_JAL]	 <= isJal;
+	bus[`IB_REX]	 <= IsRex(unit,instr);
+	bus[`IB_CHK]	 <= IsChk(unit,instr);
 	// IB_BT is now used to indicate when to update the branch target buffer.
 	// This occurs when one of the instructions with an unknown or calculated
 	// target is present.

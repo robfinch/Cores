@@ -22,15 +22,17 @@
 // ============================================================================
 //
 module write_buffer(rst_i, clk_i, bstate, cyc_pending, wb_has_bus, update_iq, uid, fault,
-	p0_ol_i, p0_wr_i, p0_ack_o, p0_sel_i, p0_adr_i, p0_dat_i,
-	p1_ol_i, p1_wr_i, p1_ack_o, p1_sel_i, p1_adr_i, p1_dat_i,
+	p0_id_i, p0_ol_i, p0_wr_i, p0_ack_o, p0_sel_i, p0_adr_i, p0_dat_i, p0_hit,
+	p1_id_i, p1_ol_i, p1_wr_i, p1_ack_o, p1_sel_i, p1_adr_i, p1_dat_i, p1_hit,
 	ol_o, cyc_o, stb_o, ack_i, err_i, tlbmiss_i, wrv_i, we_o, sel_o, adr_o, dat_o, cr_o);
 parameter WB_DEPTH = 7;
 parameter QENTRIES = 5;
 parameter INV = 1'b0;
+parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
 parameter HIGH = 1'b1;
 parameter LOW = 1'b0;
+parameter AMSB = 79;
 input rst_i;
 input clk_i;
 input [4:0] bstate;
@@ -40,21 +42,23 @@ output reg update_iq;
 output reg [7:0] fault;
 output reg [QENTRIES-1:0] uid;
 
-input [3:0] p0_id;
+input [3:0] p0_id_i;
 input p0_ol_i;
 input p0_wr_i;
 input [9:0] p0_sel_i;
 input [79:0] p0_adr_i;
 input [79:0] p0_dat_i;
 output reg p0_ack_o;
+output reg p0_hit;
 
-input [3:0] p1_id;
+input [3:0] p1_id_i;
 input p1_ol_i;
 input p1_wr_i;
 input [9:0] p1_sel_i;
 input [79:0] p1_adr_i;
 input [79:0] p1_dat_i;
 output reg p1_ack_o;
+output reg p1_hit;
 
 output reg [1:0] ol_o;
 output reg cyc_o;
@@ -90,6 +94,20 @@ parameter IDLE = 3'd0;
 parameter StoreAck1 = 3'd1;
 parameter Store2 = 3'd2;
 parameter StoreAck2 = 3'd3;
+
+// If the data is in the write buffer, give the buffer a chance to
+// write out the data before trying to load from the cache.
+always @*
+begin
+	p0_hit <= FALSE;
+	p1_hit <= FALSE;
+	for (n = 0; n < WB_DEPTH; n = n + 1) begin
+		if (wb_v[n] && wb_addr[n][AMSB:4]==p0_adr_i[AMSB:4])
+			p0_hit <= TRUE;
+		if (wb_v[n] && wb_addr[n][AMSB:4]==p1_adr_i[AMSB:4])
+			p1_hit <= TRUE;
+	end
+end
 
 reg [2:0] state;
 always @(posedge clk_i)
@@ -138,12 +156,12 @@ else begin
 			wb_sel[wb_ptr-1] <= p0_sel_i;
 			wb_addr[wb_ptr-1] <= p0_adr_i;
 			wb_data[wb_ptr-1] <= p0_dat_i;
-			wb_id[wb_ptr-1] <= 16'd1 <<= p0_id;
+			wb_id[wb_ptr-1] <= 16'd1 <<= p0_id_i;
 			wb_ol[wb_ptr] <= p0_ol_i;
 			wb_sel[wb_ptr] <= p0_sel_i;
 			wb_addr[wb_ptr] <= p0_adr_i;
 			wb_data[wb_ptr] <= p0_dat_i;
-			wb_id[wb_ptr] <= 16'd1 <<= p1_id;
+			wb_id[wb_ptr] <= 16'd1 <<= p1_id_i;
 			wb_ptr = wb_ptr + 3'd2;
 			p0_ack_o <= TRUE;
 			p1_ack_o <= TRUE;
@@ -153,7 +171,7 @@ else begin
 			wb_sel[wb_ptr] <= p0_sel_i;
 			wb_addr[wb_ptr] <= p0_adr_i;
 			wb_data[wb_ptr] <= p0_dat_i;
-			wb_id[wb_ptr] <= 16'd1 << p0_id;
+			wb_id[wb_ptr] <= 16'd1 << p0_id_i;
 			wb_ptr = wb_ptr + 3'd1;
 			p0_ack_o <= TRUE;
 		end
@@ -164,7 +182,7 @@ else begin
 			wb_sel[wb_ptr] <= p0_sel_i;
 			wb_addr[wb_ptr] <= p0_adr_i;
 			wb_data[wb_ptr] <= p0_dat_i;
-			wb_id[wb_ptr] <= 16'd1 << p0_id;
+			wb_id[wb_ptr] <= 16'd1 << p0_id_i;
 			wb_ptr = wb_ptr + 3'd1;
 			p0_ack_o <= TRUE;
 		end
@@ -175,7 +193,7 @@ else begin
 			wb_sel[wb_ptr] <= p1_sel_i;
 			wb_addr[wb_ptr] <= p1_adr_i;
 			wb_data[wb_ptr] <= p1_dat_i;
-			wb_id[wb_ptr] <= 16'd1 <<= p1_id;
+			wb_id[wb_ptr] <= 16'd1 <<= p1_id_i;
 			wb_ptr = wb_ptr + 3'd1;
 			p1_ack_o <= TRUE;
 		end
