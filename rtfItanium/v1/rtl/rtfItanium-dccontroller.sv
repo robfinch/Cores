@@ -22,9 +22,9 @@
 //
 // ============================================================================
 //
-`include ".\rtfItanium-config.v"
+`include ".\rtfItanium-config.sv"
 `define HIGH	1'b1
-`define LOW		1'b0;
+`define LOW		1'b0
 
 module DCController(rst_i, clk_i, dadr, rd, wr, wsel, wdat, bstate, state,
 	invline, invlineAddr, icl_ctr,
@@ -44,19 +44,19 @@ input [9:0] wsel;
 input [79:0] wdat;
 input [4:0] bstate;
 (* mark_debug="true" *)
-output reg [3:0] state = IDLE;
+output reg [3:0] state;
 input invline;
 input [71:0] invlineAddr;
 output reg [39:0] icl_ctr;
 
 input dL2_hit;
 output reg dL2_ld;
-output [40:0] dL2_sel;
+output reg [40:0] dL2_sel;
 output reg [79:0] dL2_adr;
 input [329:0] dL2_dat;
 output reg dL2_nxt;
 
-input d_L1hit;
+input dL1_hit;
 output dL1_selpc;
 output reg [79:0] dL1_adr;
 output reg [329:0] dL1_dat = 330'd0;	// NOP
@@ -84,7 +84,7 @@ parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
 
 reg [3:0] picstate;
-`include ".\rtfItanium-bus_states.v"
+`include ".\rtfItanium-bus_states.sv"
 reg invline_r = 1'b0;
 reg [79:0] invlineAddr_r = 72'd0;
 
@@ -99,13 +99,13 @@ reg [2:0] dccnt;
 always @(posedge clk)
 if (rst_i) begin
 	icl_ctr <= 40'd0;
-	icl_o <= `LOW;
+	dcl_o <= `LOW;
 	cti_o <= 3'b000;
 	bte_o <= 2'b00;
 	cyc_o <= `LOW;
 	stb_o <= `LOW;
 	sel_o <= 8'h00;
-	adr_o <= {pc[AMSB:5],5'h0};
+	adr_o <= {dadr[AMSB:5],5'h0};
 	state <= IDLE;
 	dL2_ld <= FALSE;
 end
@@ -183,7 +183,7 @@ IC_WaitL2:
 	else begin
 		if (bstate == B_WaitIC) begin
 			dccnt <= 3'd0;
-			icl_o <= `HIGH;
+			dcl_o <= `HIGH;
 			cti_o <= 3'b001;
 			bte_o <= 2'b00;
 			cyc_o <= `HIGH;
@@ -201,7 +201,7 @@ IC_WaitL2:
 // random number generator associated with choosing a way.
 IC5: 	
 	begin
-		dccnt <= iccnt + 3'd1;
+		dccnt <= dccnt + 3'd1;
 		if (dccnt==L1_WriteLatency) begin
 			dcnxt <= TRUE;
 			dL2_nxt <= TRUE;	// Dont really need to advance if L2 hit.
@@ -216,18 +216,18 @@ IC_Ack:
   		state <= IC_Nack2;
   	end
 		if (wrv_i) begin
-			L1_dat[257:256] <= 2'd1;
-			L1_dat[255:0] <= {2{8'h1F,120'h0}};
+			dL1_dat[257:256] <= 2'd1;
+			dL1_dat[255:0] <= {2{8'h1F,120'h0}};
 			nack();
 	  end
 		else if (rdv_i) begin
-			L1_dat[257:256] <= 2'd2;
-			L1_dat[255:0] <= {2{8'h1F,120'h0}};
+			dL1_dat[257:256] <= 2'd2;
+			dL1_dat[255:0] <= {2{8'h1F,120'h0}};
 			nack();
 		end
 	  else if (err_i) begin
-			L1_dat[257:256] <= 2'd3;
-			L1_dat[255:0] <= {2{8'h1F,120'h0}};
+			dL1_dat[257:256] <= 2'd3;
+			dL1_dat[255:0] <= {2{8'h1F,120'h0}};
 			nack();
 	  end
 	  else
@@ -237,10 +237,10 @@ IC_Ack:
 	  	3'd2:	dL1_dat[329:256] <= {2'b00,dat_i[71:0]};
 	  	default:	dL1_dat <= dL1_dat;
 	  	endcase
-    dccnt <= dcnt + 3'd1;
-    if (iccnt==3'd1)
+    dccnt <= dccnt + 3'd1;
+    if (dccnt==3'd1)
       cti_o <= 3'b111;
-    if (iccnt==3'd2)
+    if (dccnt==3'd2)
     	nack();
   end
 // This state only used when burst mode is not allowed.
@@ -269,7 +269,7 @@ end
 
 task nack;
 begin
-	icl_o <= `LOW;
+	dcl_o <= `LOW;
 	cti_o <= 3'b000;
 	cyc_o <= `LOW;
 	stb_o <= `LOW;

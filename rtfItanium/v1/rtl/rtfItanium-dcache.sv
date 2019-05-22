@@ -50,7 +50,7 @@ reg [pLineWidth-1:0] mem [0:pLines-1];
 
 initial begin
 	for (n = 0; n < pLines; n = n + 1)
-		mem[n] <= pLineWidth'b0;
+		mem[n] <= {pLineWidth{1'b0}};
 end
 
 genvar v;
@@ -190,7 +190,7 @@ input [40:0] sel;
 input [AMSB:0] adr;
 input [AMSB:0] wadr;
 input [330:0] i;
-output reg [79:0] o;
+output reg [199:0] o;
 output reg [1:0] fault;
 output hit;
 input invall;
@@ -243,7 +243,7 @@ assign hit = taghit;
 
 //always @(radr or ic0 or ic1)
 always @(adr or ic)
-	o <= ic >> {adr[4:0],3'b0};
+	o <= ic >> {adr[4],7'b0};
 always @*
 	fault <= ic[329:328];
 

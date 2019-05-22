@@ -190,7 +190,7 @@
 `define LDTU		4'hC
 `define LDOU		4'hD
 `define LEA			4'hE
-`define MSL			4'hF
+`define MLX			4'hF
 
 // Store Operations
 `define STB			4'h0
@@ -379,6 +379,8 @@
 `define NOP     6'h3D
 `define DIVI    6'h3E
 
+`define NOP_INSN	40'h00000000C0
+
 // Floating Point
 
 
@@ -518,9 +520,7 @@
 `define IB_CONST	143:80
 `define IB_LN			78:76
 `define IB_RD			75:71
-`define IB_RS3	  70:66
-`define IB_RS2		65:61
-`define IB_RS1		60:56
+`define IB_RS1		61:56
 `define IB_CMP		51
 `define IB_PUSH		47
 `define IB_TLB		46
@@ -554,6 +554,7 @@
 `define IB_SYNC		10
 `define IB_FSYNC	9
 `define IB_RFW		8
+`define IB_WAIT		5
 `define IB_REX		4
 `define IB_CHK		3
 `define IB_UNIT		2:0

@@ -21,7 +21,8 @@
 //
 // ============================================================================
 //
-module write_buffer(rst_i, clk_i, bstate, cyc_pending, wb_has_bus, wb_v, update_iq, uid, fault,
+module write_buffer(rst_i, clk_i, bstate, cyc_pending, wb_has_bus, update_iq, uid, fault,
+	wb_v, wb_addr, csel_o, cdat_o,
 	p0_id_i, p0_ol_i, p0_wr_i, p0_ack_o, p0_sel_i, p0_adr_i, p0_dat_i, p0_hit,
 	p1_id_i, p1_ol_i, p1_wr_i, p1_ack_o, p1_sel_i, p1_adr_i, p1_dat_i, p1_hit,
 	ol_o, cyc_o, stb_o, ack_i, err_i, tlbmiss_i, wrv_i, we_o, sel_o, adr_o, dat_o, cr_o);
@@ -33,15 +34,17 @@ parameter FALSE = 1'b0;
 parameter HIGH = 1'b1;
 parameter LOW = 1'b0;
 parameter AMSB = 79;
+parameter BIDLE = 5'd0;
 input rst_i;
 input clk_i;
 input [4:0] bstate;
 input cyc_pending;
 output reg wb_has_bus;
-output reg [WB_DEPTH-1:0] wb_v;
 output reg update_iq;
 output reg [7:0] fault;
 output reg [QENTRIES-1:0] uid;
+output reg [WB_DEPTH-1:0] wb_v;
+output reg [79:0] wb_addr [0:WB_DEPTH-1];
 
 input [3:0] p0_id_i;
 input p0_ol_i;
@@ -76,14 +79,15 @@ output reg cr_o;
 output reg [9:0] csel_o;
 output reg [79:0] cdat_o;
 
+integer n, j;
+reg wb_en;
 reg [3:0] wb_ptr;
 reg [ 1:0] wb_ol	 [0:WB_DEPTH-1];
 reg [ 9:0] wb_sel  [0:WB_DEPTH-1];
-reg [79:0] wb_addr [0:WB_DEPTH-1];
 reg [79:0] wb_data [0:WB_DEPTH-1];
-reg [QENTRIES-1:0] wb_id;
+reg [QENTRIES-1:0] wb_id [0:WB_DEPTH-1];
 reg [WB_DEPTH-1:0] wb_rmw;
-
+reg [QENTRIES-1:0] wbo_id;
 
 wire writing_wb = (p0_wr_i && p1_wr_i && wb_ptr < WB_DEPTH-2) 
 									|| (p0_wr_i && wb_ptr < WB_DEPTH)
@@ -121,8 +125,8 @@ IDLE:
 	if (bstate==IDLE && (wb_v[0] & ~ack_i & ~cyc_o & ~cyc_pending))
 		state <= StoreAck1;
 StoreAck1:
-	if (ack_i|err_i|tlbmiss_i|wrv_i)
-		if (sel_shift[31:16]==16'h0) begin
+	if (ack_i|err_i|tlbmiss_i|wrv_i) begin
+		if (sel_shift[31:16]==16'h0)
 			state <= IDLE;
 		else
 			state <= Store2;
@@ -131,7 +135,7 @@ Store2:
 	if (~ack_i)
 		state <= StoreAck2;
 StoreAck2:
-	if (ack_i|err_i|tlbmiss_i|wrv_i) begin
+	if (ack_i|err_i|tlbmiss_i|wrv_i)
 		state <= IDLE;
 default:
 	state <= IDLE;
@@ -158,12 +162,12 @@ else begin
 			wb_sel[wb_ptr-1] <= p0_sel_i;
 			wb_addr[wb_ptr-1] <= p0_adr_i;
 			wb_data[wb_ptr-1] <= p0_dat_i;
-			wb_id[wb_ptr-1] <= 16'd1 <<= p0_id_i;
+			wb_id[wb_ptr-1] <= 16'd1 <= p0_id_i;
 			wb_ol[wb_ptr] <= p0_ol_i;
 			wb_sel[wb_ptr] <= p0_sel_i;
 			wb_addr[wb_ptr] <= p0_adr_i;
 			wb_data[wb_ptr] <= p0_dat_i;
-			wb_id[wb_ptr] <= 16'd1 <<= p1_id_i;
+			wb_id[wb_ptr] <= 16'd1 <= p1_id_i;
 			wb_ptr = wb_ptr + 3'd2;
 			p0_ack_o <= TRUE;
 			p1_ack_o <= TRUE;
@@ -195,7 +199,7 @@ else begin
 			wb_sel[wb_ptr] <= p1_sel_i;
 			wb_addr[wb_ptr] <= p1_adr_i;
 			wb_data[wb_ptr] <= p1_dat_i;
-			wb_id[wb_ptr] <= 16'd1 <<= p1_id_i;
+			wb_id[wb_ptr] <= 16'd1 <= p1_id_i;
 			wb_ptr = wb_ptr + 3'd1;
 			p1_ack_o <= TRUE;
 		end
@@ -208,7 +212,7 @@ IDLE:
 			cyc_o <= HIGH;
 			stb_o <= HIGH;
 			we_o <= HIGH;
-			sel_o <= wb_sel << wb_addr[0][2:0];
+			sel_o <= wb_sel[0] << wb_addr[0][2:0];
 			adr_o <= wb_addr[0];
 			dat_o <= wb_data[0] << {wb_addr[0][2:0],4'h0};
 			ol_o  <= wb_ol[0];
@@ -226,8 +230,8 @@ IDLE:
 		   	wb_addr[j-1] <= wb_addr[j];
 		   	wb_data[j-1] <= wb_data[j];
 		   	wb_ol[j-1] <= wb_ol[j];
-		   	if (wbptr > 1'd0)
-		   		wbptr <= wbptr - 2'd1;
+		   	if (wb_ptr > 1'd0)
+		   		wb_ptr <= wb_ptr - 2'd1;
 			end
 			wb_v[WB_DEPTH-1] <= INV;
 			wb_rmw[WB_DEPTH-1] <= FALSE;
@@ -254,7 +258,7 @@ StoreAck1:
 			wb_v[0] <= 1'b0;
 			update_iq <= TRUE;
 			uid <= wbo_id;
-	    if (err_i|tlmiss_i|wrv_i) begin
+	    if (err_i|tlbmiss_i|wrv_i) begin
 	    	wb_v <= 1'b0;			// Invalidate write buffer if there is a problem with the store
 	    	wb_en <= FALSE;	// and disable write buffer
 	    end
@@ -265,12 +269,12 @@ Store2:
 	if (~ack_i) begin
 		stb_o <= HIGH;
 		sel_o <= sel_shift[31:16];
-		adr_o[WID-1:4] <= adr_o[WID-1:4] + 2'd1;
+		adr_o[79:4] <= adr_o[79:4] + 2'd1;
 		adr_o[3:0] <= 4'b0;
-		dat_o <= wb_dat[0] >> {(5'd16 - wb_addr[0][3:0]),3'b0};
+		dat_o <= wb_data[0] >> {(5'd16 - wb_addr[0][3:0]),3'b0};
 	end
 StoreAck2:
-	if (acki|err_i|tlbmiss_i|wrv_i) begin
+	if (ack_i|err_i|tlbmiss_i|wrv_i) begin
 		cyc_o <= LOW;
 		stb_o <= LOW;
 		we_o <= LOW;

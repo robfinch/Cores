@@ -49,7 +49,7 @@ reg [pLineWidth-1:0] mem [0:pLines-1];
 
 initial begin
 	for (n = 0; n < pLines; n = n + 1)
-		mem[n] <= pLineWidth'b0;
+		mem[n] <= {pLineWidth{1'b0}};
 end
 
 always  @(posedge clk)
@@ -202,7 +202,7 @@ always @(posedge iclk)
 always @(posedge iclk)
 	wr2 <= wr1;
 always @(posedge iclk)
-	i1 <= i[289:0];
+	i1 <= i[257:0];
 always @(posedge iclk)
 	i2 <= i1;
 

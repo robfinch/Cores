@@ -22,9 +22,9 @@
 //
 // ============================================================================
 //
-`include ".\rtfItanium-config.v"
+`include ".\rtfItanium-config.sv"
 `define HIGH	1'b1
-`define LOW		1'b0;
+`define LOW		1'b0
 
 module ICController(rst_i, clk_i, pc, hit, bstate, state,
 	invline, invlineAddr, icl_ctr,
@@ -42,7 +42,7 @@ input [AMSB:0] pc;
 input hit;
 input [4:0] bstate;
 (* mark_debug="true" *)
-output reg [3:0] state = IDLE;
+output reg [3:0] state;
 input invline;
 input [71:0] invlineAddr;
 output reg [39:0] icl_ctr;
@@ -78,7 +78,7 @@ parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
 
 reg [3:0] picstate;
-`include ".\rtfItanium-bus_states.v"
+`include ".\rtfItanium-bus_states.sv"
 reg invline_r = 1'b0;
 reg [79:0] invlineAddr_r = 72'd0;
 
@@ -106,7 +106,6 @@ if (rst_i) begin
 end
 else begin
 L1_wr <= FALSE;
-L1_en <= 10'h000;
 L1_invline <= FALSE;
 icnxt <= FALSE;
 L2_nxt <= FALSE;

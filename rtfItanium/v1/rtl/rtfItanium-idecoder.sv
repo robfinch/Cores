@@ -21,8 +21,8 @@
 //
 // ============================================================================
 //
-`include ".\rtfItanium-config.v"
-`include ".\rtfItanium-defines.v"
+`include ".\rtfItanium-config.sv"
+`include ".\rtfItanium-defines.sv"
 
 module idecoder(unit,instr,predict_taken,Rt,bus,debug_on);
 input [2:0] unit;
@@ -55,12 +55,62 @@ parameter deci = 3'd5;
 //endcase
 //endfunction
 
-wire [10:0] brdisp = instr[31:21];
+function [5:0] fnRt;
+input [2:0] unit;
+input [39:0] ins;
+case(unit)
+`BUnit:
+	case(ins[`OPCODE4])
+	`JAL:		fnRt = ins[`RD];
+	`RET:		fnRt = ins[`RD];
+	`RTI:		fnRt = ins[39:35]==`SEI ? ins[`RD] : 6'd0;
+	default:	fnRt = 6'd0;
+	endcase
+`IUnit:	fnRt = ins[`RD];
+`FUnit:	fnRt = ins[`RD];
+`MLdUnit:	fnRt = ins[`RD];
+`MStUnit: 
+	case(ins[`OPCODE4])
+	`PUSH:	fnRt = ins[`RD];
+	`PUSHC:	fnRt = ins[`RD];
+	`TLB:		fnRt = ins[`RD];
+	default:	fnRt = 6'd0;
+	endcase
+default:	fnRt = 0;
+endcase
+endfunction
+
+
+function IsAndi;
+input [2:0] unit;
+input [39:0] isn;
+IsAndi = unit==`IUnit && ({isn[32:31],isn[`OPCODE4]}==`ANDI
+												|| {isn[32:31],isn[`OPCODE4]}==`ANDS1
+												|| {isn[32:31],isn[`OPCODE4]}==`ANDS2
+												|| {isn[32:31],isn[`OPCODE4]}==`ANDS3
+												);
+endfunction
+
+function IsOri;
+input [2:0] unit;
+input [39:0] isn;
+IsOri = unit==`IUnit && ({isn[32:31],isn[`OPCODE4]}==`ORI
+												|| {isn[32:31],isn[`OPCODE4]}==`ORS1
+												|| {isn[32:31],isn[`OPCODE4]}==`ORS2
+												|| {isn[32:31],isn[`OPCODE4]}==`ORS3
+												);
+endfunction
+
+function IsXori;
+input [2:0] unit;
+input [39:0] isn;
+IsXori = unit==`IUnit && ({isn[32:31],isn[`OPCODE4]}==`XORI);
+endfunction
 
 function IsTLB;
 input [2:0] unit;
-input [47:0] isn;
-IsTLB = unit==`MStUnit && opcode==`TLB;
+input [39:0] isn;
+IsTLB = unit==`MStUnit && isn[`OPCODE4]==`TLB;
 endfunction
 
 // fnCanException
@@ -140,7 +190,7 @@ endfunction
 function IsMemNdx;
 input [2:0] unit;
 input [39:0] isn;
-IsMemNdx = (unit==`MLdUnit && ins[9:6]==`MLX) || (unit==`MStUnit && ins[9:6]==`MSX);
+IsMemNdx = (unit==`MLdUnit && isn[`OPCODE4]==`MLX) || (unit==`MStUnit && isn[`OPCODE4]==`MSX);
 endfunction
 
 function [2:0] MemSize;
@@ -180,9 +230,8 @@ case(unit)
 		endcase
 	default:	MemSize = deci;
 	endcase
-	endfunction
 `MStUnit:
-	case(isn[9:6])
+	case(isn[`OPCODE4])
 	`STB:	MemSize = byt;
 	`STC:	MemSize = wyde;
 	`STP:	MemSize = penta;
@@ -193,7 +242,7 @@ case(unit)
 	`PUSH:	MemSize = deci;
 	`PUSHC:	MemSize = deci;
 	`MSX:
-		case(isn[39:35])
+		case(isn[`FUNCT5])
 		`STB:	MemSize = byt;
 		`STC:	MemSize = wyde;
 		`STP:	MemSize = penta;
@@ -205,14 +254,26 @@ case(unit)
 		endcase
 	default:	MemSize = deci;
 	endcase
-	endfunction
 default:	MemSize = deci;
 endcase
+endfunction
+
+function IsCache;
+input [2:0] unit;
+input [39:0] isn;
+IsCache = unit==`MStUnit && (isn[9:6]==`CACHE || (isn[9:6]==`MSX && isn[`FUNCT5]==`CACHE));
+endfunction
 
 function IsCAS;
 input [2:0] unit;
 input [39:0] isn;
-IsCAS = unit==`MStUnit && (isn[9:6]==`CAS || (isn[9:6]==`MSX && isn[39:36]==`CAS))
+IsCAS = unit==`MStUnit && (isn[9:6]==`CAS || (isn[9:6]==`MSX && isn[`FUNCT5]==`CAS));
+endfunction
+
+function IsChki;
+input [2:0] unit;
+input [39:0] isn;
+IsChki = unit==`BUnit && isn[`OPCODE4]==`CHKI;
 endfunction
 
 function IsChk;
@@ -245,10 +306,16 @@ input [39:0] isn;
 IsSEI = unit==`BUnit && isn[9:6]==`RTI && isn[39:35]==`SEI;
 endfunction
 
+function IsWait;
+input [2:0] unit;
+input [39:0] isn;
+IsWait = unit==`BUnit && isn[`OPCODE4]==`RTI && isn[39:35]==`WAIT;
+endfunction
+
 function IsLWRX;
 input [2:0] unit;
 input [47:0] isn;
-IsLWRX = unit==`MLdUnit && (isn[9:6]==`MSL && isn[39:36]==`LDDR);
+IsLWRX = unit==`MLdUnit && (isn[`OPCODE4]==`MLX && isn[39:36]==`LDDR);
 endfunction
 
 // Aquire / release bits are only available on indexed SWC / LWR
@@ -261,12 +328,12 @@ endfunction
 function IsJmp;
 input [2:0] unit;
 input [39:0] isn;
-IsJmp = unit=`BUnit && isn[9:6]==`JMP;
+IsJmp = unit==`BUnit && isn[`OPCODE4]==`JMP;
 endfunction
 
 function IsCSR;
 input [2:0] unit;
-input [39:0] ins;
+input [39:0] isn;
 IsCSR = unit==`IUnit && {isn[32:31],isn[9:6]}==`CSR;
 endfunction
 
@@ -284,35 +351,43 @@ if (unit==3'd1)
 		IsBranch = FALSE;
 	endcase
 else
+	IsBranch = FALSE;
+endfunction
 
 function IsJAL;
 input [2:0] unit;
 input [39:0] isn;
-IsJal = unit==`BUnit && isn[9:6]==`JAL;
+IsJAL = unit==`BUnit && isn[`OPCODE4]==`JAL;
 endfunction
 
 function IsRet;
-input [2:0] unit
+input [2:0] unit;
 input [39:0] isn;
-IsRet = unit==`BUnit && isn[9:6]==`RET;
+IsRet = unit==`BUnit && isn[`OPCODE4]==`RET;
 endfunction
 
 function IsIrq;
 input [2:0] unit;
 input [39:0] isn;
-IsIrq = unit==`BUnit && isn[9:6]==`BRK && isn[39];
+IsIrq = unit==`BUnit && isn[`OPCODE4]==`BRK && isn[39];
 endfunction
 
 function IsBrk;
 input [2:0] unit;
 input [39:0] isn;
-IsBrk = unit==`BUnit && isn[9:6]==`BRK;
+IsBrk = unit==`BUnit && isn[`OPCODE4]==`BRK;
 endfunction
 
 function IsRti;
 input [2:0] unit;
 input [39:0] isn;
-IsRti = unit==`BUnit && isn[9:6]==`RTI && isn[39:34]==5'd0;
+IsRti = unit==`BUnit && isn[`OPCODE4]==`RTI && isn[39:34]==5'd0;
+endfunction
+
+function IsSei;
+input [2:0] unit;
+input [39:0] isn;
+IsSei = unit==`BUnit && isn[`OPCODE4]==`RTI && isn[39:34]==`SEI;
 endfunction
 
 function IsSync;
@@ -382,216 +457,72 @@ default: IsRFW = FALSE;
 endcase
 endfunction
 
-
-// Detect if a source is automatically valid
-function Source1Valid;
-input [47:0] isn;
-casez(isn[`INSTRUCTION_OP])
-`BRK:   Source1Valid = TRUE;
-`Bcc:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`BRcc:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`FBcc:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`BBc:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`BEQI:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`BNEI:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`CHK:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`R2:    case(isn[`INSTRUCTION_S2])
-        `SHIFT31:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-        `SHIFT63:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-        `SHIFTR:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-        default:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-        endcase
-`MEMNDX:	Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`ADDI:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`SEQI:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`SLTI:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`SLTUI: Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`SGTI:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`SGTUI: Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`ANDI:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`ORI:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`XORI:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`MULUI: Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`AMO: 	Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`LEA:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`LB:    Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`LC:    Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`LH:    Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`LW:    Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`LWR:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`LV:    Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`SB:    Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`SH:    Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`SWC:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`SV:    Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`PUSHC: Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`INC:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`CAS:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`JAL:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`RET:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`CSRRW: Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-`BITFIELD: 	case(isn[31:28])
-			`BFINSI:	Source1Valid = TRUE;
-			default:	Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
-			endcase
-`IVECTOR:
-			Source1Valid = FALSE;
-default:    Source1Valid = TRUE;
-endcase
-endfunction
-  
-function Source2Valid;
-input [47:0] isn;
-casez(isn[`INSTRUCTION_OP])
-`BRK:   Source2Valid = TRUE;
-`Bcc:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
-`BRcc:  Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
-`FBcc:  Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
-`BBc:   Source2Valid = TRUE;
-`BEQI:  Source2Valid = TRUE;
-`BNEI:  Source2Valid = TRUE;
-`CHK:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
-`R2:    case(isn[`INSTRUCTION_S2])
-        `R1:       Source2Valid = TRUE;
-        `SHIFT31:  Source2Valid = TRUE;
-        `SHIFT63:  Source2Valid = TRUE;
-        default:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
-        endcase
-`MEMNDX:
-				if (IsLoad(isn)) 
-					case({isn[31:28],isn[22:21]})
-        	`LVX: Source2Valid = FALSE;
-        	default:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
-        	endcase
-        else
-					case({isn[31:28],isn[17:16]})
-        	`SVX: Source2Valid = FALSE;
-        	default:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
-        	endcase
-`ADDI:  Source2Valid = TRUE;
-`SEQI:  Source2Valid = TRUE;
-`SLTI:  Source2Valid = TRUE;
-`SLTUI: Source2Valid = TRUE;
-`SGTI:  Source2Valid = TRUE;
-`SGTUI: Source2Valid = TRUE;
-`ANDI:  Source2Valid = TRUE;
-`ORI:   Source2Valid = TRUE;
-`XORI:  Source2Valid = TRUE;
-`MULUI: Source2Valid = TRUE;
-`LEA:   Source2Valid = TRUE;
-`LB:    Source2Valid = TRUE;
-`LC:    Source2Valid = TRUE;
-`LH:    Source2Valid = TRUE;
-`LW:    Source2Valid = TRUE;
-`INC:		Source2Valid = TRUE;
-`SB:    Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
-`SH:    Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
-`SWC:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
-`PUSHC: Source2Valid = TRUE;
-`CAS:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
-`JAL:   Source2Valid = TRUE;
-`RET:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
-`IVECTOR:
-		    case(isn[`INSTRUCTION_S2])
-            `VABS:  Source2Valid = TRUE;
-            `VMAND,`VMOR,`VMXOR,`VMXNOR,`VMPOP:
-                Source2Valid = FALSE;
-            `VADDS,`VSUBS,`VANDS,`VORS,`VXORS:
-                Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
-            `VBITS2V:   Source2Valid = TRUE;
-            `V2BITS:    Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
-            `VSHL,`VSHR,`VASR:  Source2Valid = isn[22:21]==2'd2;
-            default:    Source2Valid = FALSE;
-            endcase
-`LV:        Source2Valid = TRUE;
-`SV:        Source2Valid = FALSE;
-`AMO:		Source2Valid = isn[31] || isn[`INSTRUCTION_RB]==5'd0;
-default:    Source2Valid = TRUE;
+function HasConst;
+input [2:0] unit;
+input [39:0] ins;
+case(unit)
+`BUnit:
+	case(ins[`OPCODE4])
+	`CHKI:	HasConst = TRUE;
+	`JAL:		HasConst = TRUE;
+	default:	HasConst = FALSE;
+	endcase
+`IUnit:
+	case({ins[32:31],ins[`OPCODE4]})
+	`R3:	HasConst = FALSE;
+	`R1:	HasConst = FALSE;
+	default:	HasConst = TRUE;
+	endcase
+`MLdUnit:
+	case(ins[`OPCODE4])
+	`MLX:	HasConst = FALSE;
+	default:	HasConst = TRUE;
+	endcase
+`MStUnit:
+	case(ins[`OPCODE4])
+	`MSX:	HasConst = FALSE;
+	`PUSH:	HasConst = FALSE;
+	`TLB:	HasConst = FALSE;
+	default:	HasConst = TRUE;
+	endcase
+default:	HasConst = FALSE;
 endcase
 endfunction
 
-function Source3Valid;
-input [47:0] isn;
-case(isn[`INSTRUCTION_OP])
-`IVECTOR:
-    case(isn[`INSTRUCTION_S2])
-    `VEX:       Source3Valid = TRUE;
-    default:    Source3Valid = TRUE;
-    endcase
-`BRcc:  Source3Valid = isn[`INSTRUCTION_RB]==5'd0;
-`CHK:   Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
-`R2:
-	if (isn[`INSTRUCTION_L2]==2'b01)
-		case(isn[47:42])
-    `CMOVEZ,`CMOVNZ:  Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
-		default:	Source3Valid = TRUE;
-		endcase
-	else
-    case(isn[`INSTRUCTION_S2])
-    `MAJ:		Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
-    default:    Source3Valid = TRUE;
-    endcase
-`MEMNDX:
-	if (isn[`INSTRUCTION_L2]==2'b00)
-		case({isn[31:28],isn[17:16]})
-    `SBX:   Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
-    `SCX:   Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
-    `SHX:   Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
-    `SWX:   Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
-    `SWCX:  Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
-    `CASX:  Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
-    default:    Source3Valid = TRUE;
-    endcase
-  else
-  	Source3Valid = TRUE;
-default:    Source3Valid = TRUE;
-endcase
-endfunction
+wire isRet = IsRet(unit,instr);
+wire isJal = IsJAL(unit,instr);
+wire isBrk = IsBrk(unit,instr);
+wire isRti = IsRti(unit,instr);
 
-wire isRet = IsRet(instr);
-wire isJal = IsJAL(instr);
-wire isBrk = IsBrk(instr);
-wire isRti = IsRti(instr);
-
-`ifdef REGISTER_DECODE
-always @(posedge clk)
-`else
 always @*
-`endif
 begin
 	bus <= 144'h0;
 	bus[`IB_CMP] <= 1'b0;//IsCmp(instr);
-	if (IsStore(instr) & !IsPushc(instr))
-		bus[`IB_CONST] <= instr[6]==1'b1 ? {{35{instr[47]}},instr[47:24],instr[17:13]} :
-																				{{51{instr[31]}},instr[31:24],instr[17:13]};
+	if (((unit==`MStUnit)|IsChki(unit,instr)) & !IsPushc(unit,instr))
+		bus[`IB_CONST] <= {{58{instr[39]}},instr[39:33],instr[30:22],instr[5:0]};
+	else if (IsOri(unit,instr) || IsXori(unit,instr))
+		bus[`IB_CONST] <= {58'd0,instr[39:33],instr[30:16]};
+	else if (IsAndi(unit,instr))
+		bus[`IB_CONST] <= {{58{1'b1}},instr[39:33],instr[30:16]};
 	else
-		bus[`IB_CONST] <= instr[6]==1'b1 ? {{35{instr[47]}},instr[47:24],instr[22:18]} :
-																				{{51{instr[31]}},instr[31:24],instr[22:18]};
-`ifdef SUPPORT_DCI																			
-	if (instr[`INSTRUCTION_OP]==`CMPRSSD)
-		bus[`IB_LN] <= 3'd2 | pred_on;
-	else
-`endif
-		case(instr[7:6])
-		2'b00:	bus[`IB_LN] <= 3'd4 | pred_on;
-		2'b01:	bus[`IB_LN] <= 3'd6 | pred_on;
-		default: bus[`IB_LN] <= 3'd2 | pred_on;
-		endcase
+		bus[`IB_CONST] <= {{58{instr[39]}},instr[39:33],instr[30:16]};
 //	bus[`IB_RT]		 <= fnRt(instr,ven,vl,thrd) | {thrd,7'b0};
 //	bus[`IB_RC]		 <= fnRc(instr,ven,thrd) | {thrd,7'b0};
 //	bus[`IB_RA]		 <= fnRa(instr,ven,vl,thrd) | {thrd,7'b0};
-	bus[`IB_IMM]	 <= HasConst(instr);
+	bus[`IB_RS1]		 <= instr[`RS1];
+	bus[`IB_IMM]	 <= HasConst(unit,instr);
 //	bus[`IB_A3V]   <= Source3Valid(instr);
 //	bus[`IB_A2V]   <= Source2Valid(instr);
 //	bus[`IB_A1V]   <= Source1Valid(instr);
 	bus[`IB_TLB]	 <= IsTLB(unit,instr);
-	bus[`IB_SZ]    <= instr[`INSTRUCTION_OP]==`R2 ? instr[25:23] : 3'd3;	// 3'd3=word size
+	bus[`IB_SZ]    <= {instr[32:31],instr[`OPCODE4]}==`R3 ? instr[30:28] : 3'd3;	// 3'd3=word size
 	bus[`IB_IRQ]	 <= IsIrq(unit,instr);
 	bus[`IB_BRK]	 <= isBrk;
 	bus[`IB_RTI]	 <= isRti;
 	bus[`IB_RET]	 <= isRet;
 	bus[`IB_JAL]	 <= isJal;
 	bus[`IB_REX]	 <= IsRex(unit,instr);
+	bus[`IB_WAIT]	 <= IsWait(unit,instr);
 	bus[`IB_CHK]	 <= IsChk(unit,instr);
 	// IB_BT is now used to indicate when to update the branch target buffer.
 	// This occurs when one of the instructions with an unknown or calculated
@@ -605,13 +536,13 @@ begin
 	bus[`IB_PRELOAD] <= unit==3'd4 && Rt==6'd0;
 	bus[`IB_STORE]	<= unit==3'd5;
 	bus[`IB_PUSH]   <= IsPush(unit,instr);
-	bus[`IB_ODDBALL] <= IsOddball(instr);
-	bus[`IB_MEMSZ]  <= MemSize(instr);
+	bus[`IB_ODDBALL] <= IsOddball(unit,instr);
+	bus[`IB_MEMSZ]  <= MemSize(unit,instr);
 	bus[`IB_MEM]		<= unit==3'd4 || unit==3'd5;
 	bus[`IB_MEMNDX]	<= IsMemNdx(unit,instr);
-	bus[`IB_RMW]		<= IsCAS(unit,instr) || IsAMO(unit,instr) || IsInc(unit,instr);
-	bus[`IB_MEMDB]	<= IsMemdb(instr);
-	bus[`IB_MEMSB]	<= IsMemsb(instr);
+	bus[`IB_RMW]		<= IsCAS(unit,instr);// || IsInc(unit,instr);
+	bus[`IB_MEMDB]	<= IsMemdb(unit,instr);
+	bus[`IB_MEMSB]	<= IsMemsb(unit,instr);
 	bus[`IB_SEI]		<= IsSEI(unit,instr);
 	bus[`IB_AQ]			<= instr[40];
 	bus[`IB_RL]			<= instr[39];
