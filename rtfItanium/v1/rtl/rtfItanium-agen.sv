@@ -1,12 +1,10 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2017-2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-// FT64_FCU_Calc.v
-// - FT64 flow control calcs
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -20,45 +18,48 @@
 //                                                                          
 // You should have received a copy of the GNU General Public License        
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.    
-//
+//                                                                          
 // ============================================================================
 //
-`include ".\rtfItanium-defines.sv"
+`include "rtfItanium-defines.sv"
 
-module FCU_Calc(ol, instr, tvec, a, pc, nextpc, im, waitctr, bus);
-parameter WID = 64;
-parameter AMSB = 31;
-input [1:0] ol;
-input [47:0] instr;
-input [WID-1:0] tvec;
-input [WID-1:0] a;
-input [AMSB:0] pc;
-input [AMSB:0] nextpc;
-input [3:0] im;
-input [WID-1:0] waitctr;
-output reg [WID-1:0] bus;
+module agen(unit, inst, a, b, c, ma, idle);
+input [2:0] unit;
+input [39:0] inst;
+input [79:0] a;
+input [79:0] b;
+input [79:0] c;
+output reg [79:0] ma;
+output idle;
+
+assign idle = 1'b1;
+reg [80:0] cx;
 
 always @*
-begin
-  case(instr[`OPCODE4])
-  `BRK:   bus <= instr[16] ? {56'd0,a[7:0]} : {56'b0,instr[15:8]};
-  `JAL:		bus <= nextpc;
-  `CALL:	bus <= nextpc;
-  `RET:		bus <= a + (instr[7:6]==2'b01 ? {instr[47:23],3'b0} : {instr[31:23],3'b0});
-  `REX:
-    case(ol)
-    `OL_USER:   bus <= 64'hCCCCCCCCCCCCCCCC;
-    // ToDo: fix im test
-    default:    bus <= (im < ~{ol,2'b00}) ? tvec : nextpc;
-    endcase
-  `RTI:
-  	case(instr[`FUNCT5])
-  	`WAIT:  bus = waitctr==64'd1;
-  	default:	bus <= 64'hCCCCCCCCCCCCCCCC;
-  	endcase
-  default:    bus <= 64'hCCCCCCCCCCCCCCCC;
-  endcase
-end
+case(inst[30:28])
+3'd0:	cx <= c;
+3'd1:	cx <= c << 1;
+3'd2:	cx <= c << 2;
+3'd3:	cx <= c << 3;
+3'd4:	cx <= c << 4;
+3'd5:	cx <= (c << 2) + c;					// * 5
+3'd6: cx <= (c << 3) + (c << 1);	// * 10
+3'd7:	cx <= (c << 4) - c;					// * 15
+endcase
+
+always @*
+case(unit)
+`MLdUnit:
+	case(inst[`OPCODE4])
+	`MLX:	ma <= a + cx + {inst[34:33],inst[21:16]};
+	default:	ma <= a + {{58{inst[39]}},inst[39:33],inst[30:16]};
+	endcase
+`MStUnit:
+	case(inst[`OPCODE4])
+	`PUSH,`PUSHC:	ma <= a - 8'd10;
+	`MSX:	ma <= a + cx + {inst[34:33],inst[21:16]};
+	default:	ma <= a + {{58{inst[39]}},inst[39:33],inst[30:16]};
+	endcase
+endcase
 
 endmodule
-

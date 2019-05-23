@@ -367,6 +367,7 @@ reg [QENTRIES-1:0] iq_fpu;  // floating point instruction
 reg [QENTRIES-1:0] iq_fc;   // flow control instruction
 reg [QENTRIES-1:0] iq_canex = 8'h00;	// true if it's an instruction that can exception
 reg [QENTRIES-1:0] iq_oddball = 8'h00;	// writes to register file
+reg [QENTRIES-1:0] iq_lea;
 reg [QENTRIES-1:0] iq_load;	// is a memory load instruction
 reg [QENTRIES-1:0] iq_store;	// is a memory store instruction
 reg [QENTRIES-1:0] iq_preload;	// is a memory preload instruction
@@ -439,6 +440,8 @@ reg [3:0] stompedOnRets;
 reg  [QENTRIES-1:0] iq_alu0_issue;
 reg  [QENTRIES-1:0] iq_alu1_issue;
 reg  [QENTRIES-1:0] iq_alu2_issue;
+reg  [QENTRIES-1:0] iq_agen0_issue;
+reg  [QENTRIES-1:0] iq_agen1_issue;
 reg  [QENTRIES-1:0] iq_id1issue;
 reg  [QENTRIES-1:0] iq_id2issue;
 reg  [QENTRIES-1:0] iq_id3issue;
@@ -560,6 +563,28 @@ wire  [`XBITS] alu1_exc;
 wire        alu1_v;
 wire        alu1_branchmiss;
 wire [`ABITS] alu1_misspc;
+
+reg agen0_v;
+wire agen0_idle;
+reg [`QBITSP1] agen0_sourceid, agen0_id;
+reg [RBIT:0] agen0_tgt;
+reg agen0_dataready;
+reg [2:0] agen0_unit;
+reg [39:0] agen0_instr;
+reg agen0_lea;
+reg [AMSB:0] agen0_ma;
+reg [79:0] agen0_argA, agen0_argB, agen0_argC;
+
+reg agen1_v;
+wire agen1_idle;
+reg [`QBITSP1] agen1_sourceid, agen1_id;
+reg [RBIT:0] agen1_tgt;
+reg agen1_dataready;
+reg [2:0] agen1_unit;
+reg [39:0] agen1_instr;
+reg agen1_lea;
+reg [AMSB:0] agen1_ma;
+reg [79:0] agen1_argA, agen1_argB, agen1_argC;
 
 wire [`XBITS] fpu_exc;
 reg 				fpu1_cmt;
@@ -1180,7 +1205,7 @@ BranchPredictor ubp1
   .xisBranch0(iq_br[heads[0]] & commit0_v),
   .xisBranch1(iq_br[heads[1]] & commit1_v),
   .xisBranch2(iq_br[heads[2]] & commit2_v),
-  .pcA(ip),
+  .pcA({ip[79:4],4'h0}),
   .pcB({ip[79:4],4'h5}),
   .pcC({ip[79:4],4'hA}),
   .xpc0(iq_ip[heads[0]]),
@@ -1888,7 +1913,7 @@ case(unit)
 	case({isn[32:31],isn[9:6]})
 	`R3:	Source3Valid = isn[`RS3]==6'd0;
 	`BITFIELD:	Source3Valid = isn[`RS3]==6'd0;
-	`CSR:	Source3Valid = TRUE;
+	`CSRRW:	Source3Valid = TRUE;
 	default:	Source3Valid = TRUE;
 	endcase
 `FUnit:
@@ -2640,6 +2665,38 @@ begin
 //		end
 	end
 end
+
+always @*
+begin
+	iq_agen0_issue = {QENTRIES{1'b0}};
+	iq_agen1_issue = {QENTRIES{1'b0}};
+	
+	if (agen0_idle) begin
+		for (n = 0; n < QENTRIES; n = n + 1) begin
+			if (could_issue[heads[n]] && iq_mem[heads[n]]
+			&& iq_agen0_issue == {QENTRIES{1'b0}}
+			// If there are no valid queue entries prior it doesn't matter if there is
+			// a sync.
+			&& (!prior_sync[heads[n]] || !prior_valid[heads[n]])
+			)
+			  iq_agen0_issue[heads[n]] = `TRUE;
+		end
+	end
+
+	if (agen1_idle) begin
+//		if ((could_issue & ~iq_alu0_issue & ~iq_alu0) != {QENTRIES{1'b0}}) begin
+			for (n = 0; n < QENTRIES; n = n + 1) begin
+				if (could_issue[heads[n]] && iq_mem[heads[n]]
+					&& !iq_agen0_issue[heads[n]]
+					&& iq_agen1_issue == {QENTRIES{1'b0}}
+					&& (!prior_sync[heads[n]] || !prior_valid[heads[n]])
+				)
+				  iq_agen1_issue[heads[n]] = `TRUE;
+			end
+//		end
+	end
+end
+
 
 // Start search for instructions to process at head of queue (oldest instruction).
 always @*
@@ -3804,6 +3861,9 @@ end
 end
 endgenerate
 
+agen uag1(agen0_unit, agen0_instr, agen0_argA, agen0_argB, agen0_argC, agen0_ma, agen0_idle);
+agen uag2(agen1_unit, agen1_instr, agen1_argA, agen1_argB, agen1_argC, agen1_ma, agen1_idle);
+
 wire tlb_done;
 wire tlb_idle;
 wire [63:0] tlbo;
@@ -4696,7 +4756,12 @@ else begin
 				slot0v <= VAL;
 				slot1v <= VAL;
 				slot2v <= VAL;
-				ip <= {ip[79:4] + 76'd1,4'h0};
+				if (IsBranch(Unit2(ibundle[127:120]),insn2) && predict_taken2) begin
+					ip[12:0] <= {insn2[29:22],insn2[5:3],insn2[4:3]};
+					ip[79:13] <= ip[79:13] + {{57{insn2[39]}},insn2[39:30]};
+				end
+				else
+					ip <= {ip[79:4] + 76'd1,4'h0};
 				if (slot2_rfw) begin
 					rf_source[Rd2] <= { 1'b0, slot2_mem, tail0 };	// top bit indicates ALU/MEM bus
 					rf_v [Rd2] <= `INV;
@@ -4708,7 +4773,12 @@ else begin
 				slot0v <= VAL;
 				slot1v <= VAL;
 				slot2v <= VAL;
-				ip <= {ip[79:4] + 76'd1,4'h0};
+				if (IsBranch(Unit1(ibundle[127:120]),insn1) && predict_taken1) begin
+					ip[12:0] <= {insn1[29:22],insn1[5:3],insn1[4:3]};
+					ip[79:13] <= ip[79:13] + {{57{insn1[39]}},insn1[39:30]};
+				end
+				else
+					ip <= {ip[79:4] + 76'd1,4'h0};
 				if (slot1_rfw) begin
 					rf_source[Rd1] <= { 1'b0, slot1_mem, tail0 };	// top bit indicates ALU/MEM bus
 					rf_v [Rd1] <= `INV;
@@ -4717,19 +4787,43 @@ else begin
 		3'b011:
 			if (canq2) begin
 				queue_slot1(tail0,maxsn+2'd1);
-				queue_slot2(tail1,maxsn+2'd2);
 				slot1v <= INV;
 				slot2v <= INV;
-				ip <= {ip[79:4] + 76'd1,4'h0};
-				if (slot1_rfw) begin
-					rf_source[Rd1] <= { 1'b0, slot1_mem, tail0 };	// top bit indicates ALU/MEM bus
-					rf_v [Rd1] <= `INV;
+				if (IsBranch(Unit1(ibundle[127:120]),insn1) && predict_taken1) begin
+					ip[12:0] <= {insn1[29:22],insn1[5:3],insn1[4:3]};
+					ip[79:13] <= ip[79:13] + {{57{insn1[39]}},insn1[39:30]};
+					if (slot1_rfw) begin
+						rf_source[Rd1] <= { 1'b0, slot1_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_v [Rd1] <= `INV;
+					end
 				end
-				if (slot2_rfw) begin
-					rf_source[Rd2] <= { 1'b0, slot2_mem, tail1 };	// top bit indicates ALU/MEM bus
-					rf_v [Rd2] <= `INV;
+				else if (IsBranch(Unit2(ibundle[127:120]),insn2) && predict_taken2) begin
+					queue_slot2(tail1,maxsn+2'd2);
+					ip[12:0] <= {insn2[29:22],insn2[5:3],insn2[4:3]};
+					ip[79:13] <= ip[79:13] + {{57{insn2[39]}},insn2[39:30]};
+					if (slot1_rfw) begin
+						rf_source[Rd1] <= { 1'b0, slot1_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_v [Rd1] <= `INV;
+					end
+					if (slot2_rfw) begin
+						rf_source[Rd2] <= { 1'b0, slot2_mem, tail1 };	// top bit indicates ALU/MEM bus
+						rf_v [Rd2] <= `INV;
+					end
+					arg_vs_011();
 				end
-				arg_vs_011();
+				else begin
+					queue_slot2(tail1,maxsn+2'd2);
+					ip <= {ip[79:4] + 76'd1,4'h0};
+					if (slot1_rfw) begin
+						rf_source[Rd1] <= { 1'b0, slot1_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_v [Rd1] <= `INV;
+					end
+					if (slot2_rfw) begin
+						rf_source[Rd2] <= { 1'b0, slot2_mem, tail1 };	// top bit indicates ALU/MEM bus
+						rf_v [Rd2] <= `INV;
+					end
+					arg_vs_011();
+				end
 			end
 			else if (canq1) begin
 				queue_slot1(tail0,maxsn+2'd1);
@@ -4745,7 +4839,12 @@ else begin
 				slot0v <= VAL;
 				slot1v <= VAL;
 				slot2v <= VAL;
-				ip <= {ip[79:4] + 76'd1,4'h0};
+				if (IsBranch(Unit0(ibundle[127:120]),insn0) && predict_taken0) begin
+					ip[12:0] <= {insn0[29:22],insn0[5:3],insn0[4:3]};
+					ip[79:13] <= ip[79:13] + {{57{insn0[39]}},insn0[39:30]};
+				end
+				else
+					ip <= {ip[79:4] + 76'd1,4'h0};
 				if (slot0_rfw) begin
 					rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
 					rf_v [Rd0] <= `INV;
@@ -4754,20 +4853,44 @@ else begin
 		3'b101:
 			if (canq2) begin
 				queue_slot0(tail0,maxsn+2'd1);
-				queue_slot2(tail1,maxsn+2'd2);
 				slot0v <= VAL;
 				slot1v <= VAL;
 				slot2v <= VAL;
-				ip <= {ip[79:4] + 76'd1,4'h0};
-				if (slot0_rfw) begin
-					rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
-					rf_v [Rd0] <= `INV;
+				if (IsBranch(Unit0(ibundle[127:120]),insn0) && predict_taken0) begin
+					ip[12:0] <= {insn0[29:22],insn0[5:3],insn0[4:3]};
+					ip[79:13] <= ip[79:13] + {{57{insn0[39]}},insn0[39:30]};
+					if (slot0_rfw) begin
+						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_v [Rd0] <= `INV;
+					end
 				end
-				if (slot2_rfw) begin
-					rf_source[Rd2] <= { 1'b0, slot2_mem, tail1 };	// top bit indicates ALU/MEM bus
-					rf_v [Rd2] <= `INV;
+				else if (IsBranch(Unit2(ibundle[127:120]),insn2) && predict_taken2) begin
+					queue_slot2(tail1,maxsn+2'd2);
+					ip[12:0] <= {insn2[29:22],insn2[5:3],insn2[4:3]};
+					ip[79:13] <= ip[79:13] + {{57{insn2[39]}},insn2[39:30]};
+					if (slot0_rfw) begin
+						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_v [Rd0] <= `INV;
+					end
+					if (slot2_rfw) begin
+						rf_source[Rd2] <= { 1'b0, slot2_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_v [Rd2] <= `INV;
+					end
+					arg_vs_101();
 				end
-				arg_vs_101();
+				else begin
+					queue_slot2(tail1,maxsn+2'd2);
+					ip <= {ip[79:4] + 76'd1,4'h0};
+					if (slot0_rfw) begin
+						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_v [Rd0] <= `INV;
+					end
+					if (slot2_rfw) begin
+						rf_source[Rd2] <= { 1'b0, slot2_mem, tail1 };	// top bit indicates ALU/MEM bus
+						rf_v [Rd2] <= `INV;
+					end
+					arg_vs_101();
+				end
 			end
 			else if (canq1) begin
 				queue_slot0(tail0,maxsn+2'd1);
@@ -4780,20 +4903,44 @@ else begin
 		3'b110:
 			if (canq2) begin
 				queue_slot0(tail0,maxsn+2'd1);
-				queue_slot1(tail1,maxsn+2'd2);
 				slot0v <= VAL;
 				slot1v <= VAL;
 				slot2v <= VAL;
-				ip <= {ip[79:4] + 76'd1,4'h0};
-				if (slot0_rfw) begin
-					rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
-					rf_v [Rd0] <= `INV;
+				if (IsBranch(Unit0(ibundle[127:120]),insn0) && predict_taken0) begin
+					ip[12:0] <= {insn0[29:22],insn0[5:3],insn0[4:3]};
+					ip[79:13] <= ip[79:13] + {{57{insn0[39]}},insn0[39:30]};
+					if (slot0_rfw) begin
+						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_v [Rd0] <= `INV;
+					end
 				end
-				if (slot1_rfw) begin
-					rf_source[Rd1] <= { 1'b0, slot1_mem, tail1 };	// top bit indicates ALU/MEM bus
-					rf_v [Rd1] <= `INV;
+				else if (IsBranch(Unit1(ibundle[127:120]),insn1) && predict_taken1) begin
+					queue_slot1(tail1,maxsn+2'd2);
+					ip[12:0] <= {insn1[29:22],insn1[5:3],insn1[4:3]};
+					ip[79:13] <= ip[79:13] + {{57{insn1[39]}},insn1[39:30]};
+					if (slot0_rfw) begin
+						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_v [Rd0] <= `INV;
+					end
+					if (slot1_rfw) begin
+						rf_source[Rd1] <= { 1'b0, slot1_mem, tail1 };	// top bit indicates ALU/MEM bus
+						rf_v [Rd1] <= `INV;
+					end
+					arg_vs_110();
 				end
-				arg_vs_110();
+				else begin
+					queue_slot1(tail1,maxsn+2'd2);
+					ip <= {ip[79:4] + 76'd1,4'h0};
+					if (slot0_rfw) begin
+						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_v [Rd0] <= `INV;
+					end
+					if (slot1_rfw) begin
+						rf_source[Rd1] <= { 1'b0, slot1_mem, tail1 };	// top bit indicates ALU/MEM bus
+						rf_v [Rd1] <= `INV;
+					end
+					arg_vs_110();
+				end
 			end
 			else if (canq1) begin
 				queue_slot0(tail0,maxsn+2'd1);
@@ -4806,47 +4953,124 @@ else begin
 		3'b111:
 			if (canq3) begin
 				queue_slot0(tail0,maxsn+2'd1);
-				queue_slot1(tail1,maxsn+2'd2);
-				queue_slot2(tail2,maxsn+2'd3);
 				slot0v <= VAL;
 				slot1v <= VAL;
 				slot2v <= VAL;
-				ip <= {ip[79:4] + 76'd1,4'h0};
-				if (slot0_rfw) begin
-					rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
-					rf_v [Rd0] <= `INV;
+				if (IsBranch(Unit0(ibundle[127:120]),insn0) && predict_taken0) begin
+					ip[12:0] <= {insn0[29:22],insn0[5:3],insn0[4:3]};
+					ip[79:13] <= ip[79:13] + {{57{insn0[39]}},insn0[39:30]};
+					if (slot0_rfw) begin
+						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_v [Rd0] <= `INV;
+					end
 				end
-				if (slot1_rfw) begin
-					rf_source[Rd1] <= { 1'b0, slot1_mem, tail1 };	// top bit indicates ALU/MEM bus
-					rf_v [Rd1] <= `INV;
+				else if (IsBranch(Unit1(ibundle[127:120]),insn1) && predict_taken1) begin
+					queue_slot1(tail1,maxsn+2'd2);
+					ip[12:0] <= {insn1[29:22],insn1[5:3],insn1[4:3]};
+					ip[79:13] <= ip[79:13] + {{57{insn1[39]}},insn1[39:30]};
+					if (slot0_rfw) begin
+						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_v [Rd0] <= `INV;
+					end
+					if (slot1_rfw) begin
+						rf_source[Rd1] <= { 1'b0, slot1_mem, tail1 };	// top bit indicates ALU/MEM bus
+						rf_v [Rd1] <= `INV;
+					end
+					arg_vs_110();
 				end
-				if (slot2_rfw) begin
-					rf_source[Rd2] <= { 1'b0, slot2_mem, tail2 };	// top bit indicates ALU/MEM bus
-					rf_v [Rd2] <= `INV;
+				else if (IsBranch(Unit2(ibundle[127:120]),insn2) && predict_taken2) begin
+					queue_slot1(tail1,maxsn+2'd2);
+					queue_slot2(tail2,maxsn+2'd3);
+					ip[12:0] <= {insn2[29:22],insn2[5:3],insn2[4:3]};
+					ip[79:13] <= ip[79:13] + {{57{insn2[39]}},insn2[39:30]};
+					if (slot0_rfw) begin
+						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_v [Rd0] <= `INV;
+					end
+					if (slot1_rfw) begin
+						rf_source[Rd1] <= { 1'b0, slot1_mem, tail1 };	// top bit indicates ALU/MEM bus
+						rf_v [Rd1] <= `INV;
+					end
+					if (slot2_rfw) begin
+						rf_source[Rd2] <= { 1'b0, slot2_mem, tail2 };	// top bit indicates ALU/MEM bus
+						rf_v [Rd2] <= `INV;
+					end
+					arg_vs_111();
 				end
-				arg_vs_111();
+				else begin
+					queue_slot1(tail1,maxsn+2'd2);
+					queue_slot2(tail2,maxsn+2'd3);
+					ip <= {ip[79:4] + 76'd1,4'h0};
+					if (slot0_rfw) begin
+						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_v [Rd0] <= `INV;
+					end
+					if (slot1_rfw) begin
+						rf_source[Rd1] <= { 1'b0, slot1_mem, tail1 };	// top bit indicates ALU/MEM bus
+						rf_v [Rd1] <= `INV;
+					end
+					if (slot2_rfw) begin
+						rf_source[Rd2] <= { 1'b0, slot2_mem, tail2 };	// top bit indicates ALU/MEM bus
+						rf_v [Rd2] <= `INV;
+					end
+					arg_vs_111();
+				end
 			end
 			else if (canq2) begin
 				queue_slot0(tail0,maxsn+2'd1);
-				queue_slot1(tail1,maxsn+2'd2);
 				slot0v <= INV;
 				slot1v <= INV;
-				if (slot0_rfw) begin
-					rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
-					rf_v [Rd0] <= `INV;
+				if (IsBranch(Unit0(ibundle[127:120]),insn0) && predict_taken0) begin
+					ip[12:0] <= {insn0[29:22],insn0[5:3],insn0[4:3]};
+					ip[79:13] <= ip[79:13] + {{57{insn0[39]}},insn0[39:30]};
+					if (slot0_rfw) begin
+						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_v [Rd0] <= `INV;
+					end
 				end
-				if (slot1_rfw) begin
-					rf_source[Rd1] <= { 1'b0, slot1_mem, tail1 };	// top bit indicates ALU/MEM bus
-					rf_v [Rd1] <= `INV;
+				else if (IsBranch(Unit1(ibundle[127:120]),insn1) && predict_taken1) begin
+					queue_slot1(tail1,maxsn+2'd2);
+					ip[12:0] <= {insn1[29:22],insn1[5:3],insn1[4:3]};
+					ip[79:13] <= ip[79:13] + {{57{insn1[39]}},insn1[39:30]};
+					if (slot0_rfw) begin
+						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_v [Rd0] <= `INV;
+					end
+					if (slot1_rfw) begin
+						rf_source[Rd1] <= { 1'b0, slot1_mem, tail1 };	// top bit indicates ALU/MEM bus
+						rf_v [Rd1] <= `INV;
+					end
+					arg_vs_110();
 				end
-				arg_vs_110();
+				else begin
+					queue_slot1(tail1,maxsn+2'd2);
+					if (slot0_rfw) begin
+						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_v [Rd0] <= `INV;
+					end
+					if (slot1_rfw) begin
+						rf_source[Rd1] <= { 1'b0, slot1_mem, tail1 };	// top bit indicates ALU/MEM bus
+						rf_v [Rd1] <= `INV;
+					end
+					arg_vs_110();
+				end
 			end
 			else if (canq1) begin
 				queue_slot0(tail0,maxsn+2'd1);
 				slot0v <= INV;
-				if (slot0_rfw) begin
-					rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
-					rf_v [Rd0] <= `INV;
+				if (IsBranch(Unit0(ibundle[127:120]),insn0) && predict_taken0) begin
+					ip[12:0] <= {insn0[29:22],insn0[5:3],insn0[4:3]};
+					ip[79:13] <= ip[79:13] + {{57{insn0[39]}},insn0[39:30]};
+					if (slot0_rfw) begin
+						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_v [Rd0] <= `INV;
+					end
+				end
+				else begin
+					if (slot0_rfw) begin
+						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_v [Rd0] <= `INV;
+					end
 				end
 			end
 		endcase
@@ -4925,6 +5149,27 @@ if (alu1_v && `NUM_ALU > 1) begin
 	end
 	alu1_dataready <= FALSE;
 end
+
+if (agen0_v) begin
+	iq_tgt[agen0_id[`QBITS]] <= agen0_tgt;
+	iq_state[agen0_id[`QBITS]] <= agen0_lea ? IQS_CMT : IQS_AGEN;
+	iq_res[agen0_id[`QBITS]] <= agen0_ma;		// LEA needs this result
+	iq_exc[agen0_id[`QBITS]] <= `FLT_NONE;
+	if (iq_state[agen0_id[`QBITS]]!=IQS_AGEN)
+		iq_ma[agen0_id[`QBITS]] <= agen0_ma;
+	agen0_dataready <= FALSE;
+end
+
+if (agen1_v) begin
+	iq_tgt[agen1_id[`QBITS]] <= agen1_tgt;
+	iq_state[agen1_id[`QBITS]] <= agen1_lea ? IQS_CMT : IQS_AGEN;
+	iq_res[agen1_id[`QBITS]] <= agen1_ma;		// LEA needs this result
+	iq_exc[agen1_id[`QBITS]] <= `FLT_NONE;
+	if (iq_state[agen1_id[`QBITS]]!=IQS_AGEN)
+		iq_ma[agen1_id[`QBITS]] <= agen1_ma;
+	agen1_dataready <= FALSE;
+end
+
 
 if (fpu1_v && `NUM_FPU > 0) begin
 	iq_res [ fpu1_id[`QBITS] ] <= rfpu1_bus;
@@ -5144,6 +5389,68 @@ end
             end
         end
   end
+
+    for (n = 0; n < QENTRIES; n = n + 1)
+        if (iq_agen0_issue[n] && !(iq_v[n] && iq_stomp[n])) begin
+            if (1'b1) begin
+                 agen0_sourceid	<= {iq_push[n],n[`QBITS]};
+                 agen0_unit <= iq_unit[n];
+                 agen0_instr	<= iq_instr[n];
+                 agen0_lea  <= iq_lea[n];
+                 agen0_argA	<=
+`ifdef FU_BYPASS                  
+                 							iq_argA_v[n] ? iq_argA[n]
+                            : (iq_argA_s[n] == agen0_id) ? ralu0_bus
+                            : (iq_argA_s[n] == alu1_id) ? ralu1_bus
+                            : (iq_argA_s[n] == fpu1_id && `NUM_FPU > 0) ? rfpu1_bus
+                            : 64'hDEADDEADDEADDEAD;
+`else
+														iq_argA[n];                            
+`endif                            
+                 agen0_argB	<= iq_argB[n];	// ArgB not used by agen
+                 agen0_argC	<=
+`ifdef FU_BYPASS                  
+                 							iq_argC_v[n] ? iq_argC[n]
+                            : (iq_argC_s[n] == agen0_id) ? ralu0_bus : ralu1_bus;
+`else
+															iq_argC[n];                            
+`endif                            
+                 agen0_tgt    <= iq_tgt[n];
+                 agen0_dataready <= 1'b1;
+                 iq_state[n] <= IQS_OUT;
+            end
+        end
+
+    for (n = 0; n < QENTRIES; n = n + 1)
+        if (iq_agen1_issue[n] && !(iq_v[n] && iq_stomp[n])) begin
+            if (1'b1) begin
+                 agen1_sourceid	<= {iq_push[n],n[`QBITS]};
+                 agen1_unit <= iq_unit[n];
+                 agen1_instr	<= iq_instr[n];
+                 agen1_lea  <= iq_lea[n];
+                 agen1_argA	<=
+`ifdef FU_BYPASS                  
+                 							iq_argA_v[n] ? iq_argA[n]
+                            : (iq_argA_s[n] == agen1_id) ? ralu1_bus
+                            : (iq_argA_s[n] == alu1_id) ? ralu1_bus
+                            : (iq_argA_s[n] == fpu1_id && `NUM_FPU > 0) ? rfpu1_bus
+                            : 64'hDEADDEADDEADDEAD;
+`else
+														iq_argA[n];                            
+`endif                            
+                 agen1_argB	<= iq_argB[n];	// ArgB not used by agen
+                 agen1_argC	<=
+`ifdef FU_BYPASS                  
+                 							iq_argC_v[n] ? iq_argC[n]
+                            : (iq_argC_s[n] == agen1_id) ? ralu1_bus : ralu1_bus;
+`else
+															iq_argC[n];                            
+`endif                            
+                 agen1_tgt    <= iq_tgt[n];
+                 agen1_dataready <= 1'b1;
+                 iq_state[n] <= IQS_OUT;
+            end
+        end
 
     for (n = 0; n < QENTRIES; n = n + 1)
         if (iq_fpu1_issue[n] && !(iq_v[n] && iq_stomp[n])) begin
@@ -6752,6 +7059,7 @@ begin
 	iq_fpu  [nn]  <= bus[`IB_FPU];
 	iq_fc   [nn]  <= bus[`IB_FC];
 	iq_canex[nn]  <= bus[`IB_CANEX];
+	iq_lea  [nn]  <= bus[`IB_LEA];
 	iq_load [nn]  <= bus[`IB_LOAD];
 	iq_preload[nn]<= bus[`IB_PRELOAD];
 	iq_store[nn]  <= bus[`IB_STORE];

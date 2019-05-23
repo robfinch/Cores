@@ -37,7 +37,7 @@
 
 module bitfield(inst, a, b, c, o, masko);
 parameter DWIDTH=80;
-input [47:0] inst;
+input [39:0] inst;
 input [DWIDTH-1:0] a;
 input [DWIDTH-1:0] b;
 input [DWIDTH-1:0] c;
@@ -52,36 +52,36 @@ wire [6:0] ffoo;
 // generate mask
 reg [DWIDTH-1:0] mask;
 assign masko = mask;
-wire [3:0] op = inst[47:44];
-reg [5:0] mb;
-wire [5:0] mw = inst[42] ? b[5:0] : {inst[40],inst[22:18]};
-reg [63:0] da;
+wire [3:0] op = inst[39:36];
+reg [6:0] mb = inst[34] ? a[6:0] : {inst[32],inst[15:10]};
+reg [6:0] mw;
+reg [79:0] da;
 wire [5:0] me = mb + mw;
 wire [5:0] ml = mw;		// mask length-1
-wire [63:0] imm = {53'd0,inst[38:28]};
+wire [79:0] imm = {74'd0,inst[33:28]};
 
 always @*
 if (op==`BFINS)
-	mb <= inst[39:34];
-else if (inst[41])
-	mb <= a[5:0];
+	mw <= {2'b00,inst[31:28]};
+else if (inst[33])
+	mw <= b[6:0];
 else
-	mb <= {inst[39],inst[12:8]};
+	mw <= {inst[31],inst[21:16]};
 always @*
 
 if (op==`BFINS)
-	da <= {53'd0,inst[33:23]};
-else if (inst[43])
+	da <= {74'd0,inst[27:22]};
+else if (inst[35])
 	da <= c;
 else
-	da <= {48'd0,inst[43:23]};
+	da <= {71'd0,inst[30:22]};
 
 integer nn,n;
 always @(mb or me or nn)
 	for (nn = 0; nn < DWIDTH; nn = nn + 1)
 		mask[nn] <= (nn >= mb) ^ (nn <= me) ^ (me >= mb);
 
-ffo96 u1 ({32'h0,o1},ffoo);
+ffo96 u1 ({16'h0,o1},ffoo);
 
 always @*
 case (op)

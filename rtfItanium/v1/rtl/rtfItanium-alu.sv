@@ -81,7 +81,7 @@ input [63:0] en;
 `endif
 
 parameter byt = 3'd0;
-parameter char = 3'd1;
+parameter schar = 3'd1;
 parameter half = 3'd2;
 parameter word = 3'd3;
 parameter byt_para = 3'd4;
@@ -257,7 +257,7 @@ multiplier #(16) umultc0
 (
 	.rst(rst),
 	.clk(clk),
-	.ld(ld && IsMul(instr) && (sz==char || sz==char_para)),
+	.ld(ld && IsMul(instr) && (sz==schar || sz==char_para)),
 	.abort(abort),
 	.sgn(IsSgn(instr)),
 	.sgnus(IsSgnus(instr)),
@@ -1078,26 +1078,27 @@ end
 
 always @(posedge clk)
 casez({instr[32:31],instr[`OPCODE4]})
+`R1:
+	case(instr[22:18])
+	`COM:	addro[63:0] = ~shift8;
+	`NOT:	addro[63:0] = ~|shift8;
+	`NEG:	addro[63:0] = -shift8;
+	default:	addro[63:0] = 64'hDCDCDCDCDCDCDCDC;
+	endcase
 `R3:
 		case({instr[`FUNCT5],instr[6]})
 		`ADD,`SUB,
 		`AND,`OR,`XOR,`NAND,`NOR,`XNOR,
 		`SHL,`ASL,`SHR,`ASR,`ROL,`ROR:
-			case(instr[41:36])
-			`R1:
-				case(instr[22:18])
-				`COM:	addro[63:0] = ~shift8;
-				`NOT:	addro[63:0] = ~|shift8;
-				`NEG:	addro[63:0] = -shift8;
-				default:	addro[63:0] = 64'hDCDCDCDCDCDCDCDC;
-				endcase
-			`ADD:	addro[63:0] = shift8 + c;
-			`SUB:	addro[63:0] = shift8 - c;
-			`AND:	addro[63:0] = shift8 & c;
-			`OR:	addro[63:0] = shift8 | c;
-			`XOR:	addro[63:0] = shift8 ^ c;
-			default:	addro[63:0] = 64'hDCDCDCDCDCDCDCDC;
-			endcase
+			addro = shift8;
+//			case(instr[41:36])
+//			`ADD:	addro[63:0] = shift8 + c;
+//			`SUB:	addro[63:0] = shift8 - c;
+//			`AND:	addro[63:0] = shift8 & c;
+//			`OR:	addro[63:0] = shift8 | c;
+//			`XOR:	addro[63:0] = shift8 ^ c;
+//			default:	addro[63:0] = 64'hDCDCDCDCDCDCDCDC;
+//			endcase
 		default:	addro[63:0] = 64'hDCDCDCDCDCDCDCDC;
 		endcase
 default:	addro = 64'hCCCCCCCCCCCCCCCE;
@@ -1130,7 +1131,7 @@ else begin
 	if (IsMul(instr)) begin
 		case(sz)
 		byt,byt_para:	done <= mult_done80;
-		char,char_para:	done <= mult_done160;
+		schar,char_para:	done <= mult_done160;
 		half,half_para:	done <= mult_done320;
 		default:	done <= mult_done;
 		endcase
@@ -1153,7 +1154,7 @@ else begin
 	if (IsMul(instr)) begin
 		case(sz)
 		byt,byt_para:	idle <= mult_idle80;
-		char,char_para:	idle <= mult_idle160;
+		schar,char_para:	idle <= mult_idle160;
 		half,half_para:	idle <= mult_idle320;
 		default:	idle <= mult_idle;
 		endcase

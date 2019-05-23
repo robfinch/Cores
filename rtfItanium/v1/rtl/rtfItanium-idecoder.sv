@@ -285,44 +285,50 @@ endfunction
 function IsFSync;
 input [2:0] unit;
 input [39:0] isn;
-IsFSync = unit==`FUnit && isn[9:6]==`FLT2 && isn[27:22]==`FSYNC; 
+IsFSync = unit==`FUnit && isn[`OPCODE4]==`FLT2 && isn[27:22]==`FSYNC; 
 endfunction
 
 function IsMemdb;
 input [2:0] unit;
 input [39:0] isn;
-IsMemdb = unit==`MStUnit && isn[9:6]==`MSX && isn[39:35]==`MEMDB;
+IsMemdb = unit==`MStUnit && isn[`OPCODE4]==`MSX && isn[`FUNCT5]==`MEMDB;
 endfunction
 
 function IsMemsb;
 input [2:0] unit;
 input [39:0] isn;
-IsMemsb = unit==`MStUnit && isn[9:6]==`MSX && isn[39:35]==`MEMSB;
+IsMemsb = unit==`MStUnit && isn[`OPCODE4]==`MSX && isn[`FUNCT5]==`MEMSB;
 endfunction
 
 function IsSEI;
 input [2:0] unit;
 input [39:0] isn;
-IsSEI = unit==`BUnit && isn[9:6]==`RTI && isn[39:35]==`SEI;
+IsSEI = unit==`BUnit && isn[`OPCODE4]==`RTI && isn[`FUNCT5]==`SEI;
 endfunction
 
 function IsWait;
 input [2:0] unit;
 input [39:0] isn;
-IsWait = unit==`BUnit && isn[`OPCODE4]==`RTI && isn[39:35]==`WAIT;
+IsWait = unit==`BUnit && isn[`OPCODE4]==`RTI && isn[`FUNCT5]==`WAIT;
+endfunction
+
+function IsLea;
+input [2:0] unit;
+input [39:0] isn;
+IsLea = unit==`MLdUnit && (isn[`OPCODE4]==`LEA || (isn[`OPCODE4]==`MLX && isn[`FUNCT5]==`LEA));
 endfunction
 
 function IsLWRX;
 input [2:0] unit;
-input [47:0] isn;
-IsLWRX = unit==`MLdUnit && (isn[`OPCODE4]==`MLX && isn[39:36]==`LDDR);
+input [39:0] isn;
+IsLWRX = unit==`MLdUnit && (isn[`OPCODE4]==`MLX && isn[`FUNCT5]==`LDDR);
 endfunction
 
 // Aquire / release bits are only available on indexed SWC / LWR
 function IsSWCX;
 input [2:0] unit;
 input [39:0] isn;
-IsSWCX = unit==`MStUnit && (isn[9:6]==`MSX && isn[39:36]==`STDC);
+IsSWCX = unit==`MStUnit && (isn[`OPCODE4]==`MSX && isn[`FUNCT5]==`STDC);
 endfunction
 
 function IsJmp;
@@ -334,7 +340,7 @@ endfunction
 function IsCSR;
 input [2:0] unit;
 input [39:0] isn;
-IsCSR = unit==`IUnit && {isn[32:31],isn[9:6]}==`CSR;
+IsCSR = unit==`IUnit && {isn[32:31],isn[9:6]}==`CSRRW;
 endfunction
 
 // Really IsPredictableBranch
@@ -532,6 +538,7 @@ begin
 	bus[`IB_FPU]   <= unit==3'd3;
 	bus[`IB_FC]		 <= unit==3'd1;
 	bus[`IB_CANEX] <= fnCanException(unit,instr);
+	bus[`IB_LEA]	 <= IsLea(unit,instr);
 	bus[`IB_LOAD]	 <= unit==3'd4;
 	bus[`IB_PRELOAD] <= unit==3'd4 && Rt==6'd0;
 	bus[`IB_STORE]	<= unit==3'd5;
