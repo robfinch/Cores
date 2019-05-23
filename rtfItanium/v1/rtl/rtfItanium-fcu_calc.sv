@@ -25,14 +25,13 @@
 //
 `include ".\rtfItanium-defines.sv"
 
-module FCU_Calc(ol, instr, tvec, a, pc, nextpc, im, waitctr, bus);
-parameter WID = 64;
-parameter AMSB = 31;
+module FCU_Calc(ol, instr, tvec, a, nextpc, im, waitctr, bus);
+parameter WID = 80;
+parameter AMSB = 79;
 input [1:0] ol;
-input [47:0] instr;
+input [39:0] instr;
 input [WID-1:0] tvec;
 input [WID-1:0] a;
-input [AMSB:0] pc;
 input [AMSB:0] nextpc;
 input [3:0] im;
 input [WID-1:0] waitctr;
@@ -41,10 +40,10 @@ output reg [WID-1:0] bus;
 always @*
 begin
   case(instr[`OPCODE4])
-  `BRK:   bus <= instr[16] ? {56'd0,a[7:0]} : {56'b0,instr[15:8]};
+  `BRK:   bus <= {72'd0,a[7:0]} | {72'b0,instr[29:22]};
   `JAL:		bus <= nextpc;
   `CALL:	bus <= nextpc;
-  `RET:		bus <= a + (instr[7:6]==2'b01 ? {instr[47:23],3'b0} : {instr[31:23],3'b0});
+  `RET:		bus <= a + {instr[39:22],3'b0};
   `REX:
     case(ol)
     `OL_USER:   bus <= 64'hCCCCCCCCCCCCCCCC;

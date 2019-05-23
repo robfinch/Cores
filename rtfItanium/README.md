@@ -18,12 +18,13 @@ rtfItanium is a superscalar core with the following features:
 - instruction (L1, L2) and data (L1, L2) caches
 - write buffering
 - Functional Units:
-	- dual ALU's,
 	- one flow control unit
-	- one floating point unit
+	- dual ALU's,
+	- dual floating point units
+	- dual address generation units
 	- one memory unit (handles 2 load / stores)
 
-The rftItanium fetches three instructions at once and can issue up to six instructions in a single cycle (2 alu, 1 flow control, 1 floating point, 2 memory) and is capable of committing up to three instructions in a single cycle.
+The rftItanium fetches three instructions at once and can issue up to seven instructions in a single cycle (2 alu, 1 flow control, 2 floating point, 2 memory) and is capable of committing up to three instructions in a single cycle.
 
 # History
 rtfItanium is a work-in-progress beginning in May 2019. rtfItanium originated from FT64 which originated from RiSC-16 by Dr. Bruce Jacob. RiSC-16 evolved from the Little Computer (LC-896) developed by Peter Chen at the University of Michigan. See the comment in FT64.v. FT64 is the author's fourth attempt at a 64 bit ISA. Other attempts including Raptor64, FISA64, and DSD9. The author has tried to be innovative with this design borrowing ideas from a number of other processing cores.

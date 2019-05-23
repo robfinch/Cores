@@ -25,37 +25,14 @@
 //
 // ============================================================================
 //
-//`ifndef SHL
-`define IVECTOR  6'h01
-`define VSHL        6'h0C
-`define VSHR        6'h0D
-`define VASR        6'h0E
-`define RR      6'h02
-`define SHIFTR  6'h2F
-`define SHIFT31	6'h0F
-`define SHIFT63	6'h1F
-`define AMO		6'h2F
-`define AMOSHL		6'h0C
-`define AMOSHR		6'h0D
-`define AMOASR		6'h0E
-`define AMOROL		6'h0F
-`define AMOSHLI		6'h2C
-`define AMOSHRI		6'h2D
-`define AMOASRI		6'h2E
-`define AMOROLI		6'h2F
-`define SHL     3'h0
-`define SHR     3'h1
-`define ASL     3'h2
-`define ASR     3'h3
-`define ROL     3'h4
-`define ROR     3'h5
-//`endif
-`define HIGHWORD    127:64
+`include "rtfItanium-defines.sv"
+
+`define HIGHWORD    159:80
 
 module shift(instr, a, b, res, ov);
 parameter DMSB=79;
 parameter SUP_VECTOR = 1;
-input [47:0] instr;
+input [39:0] instr;
 input [DMSB:0] a;
 input [DMSB:0] b;
 output [DMSB:0] res;
@@ -63,9 +40,8 @@ reg [DMSB:0] res;
 output ov;
 parameter ROTATE_INSN = 1;
 
-wire [5:0] opcode = instr[5:0];
-wire [5:0] func = instr[31:26];
-wire [2:0] shiftop = instr[25:23];
+wire [5:0] opcode = {instr[32:31],instr[`OPCODE4]};
+wire [5:0] func = instr[`FUNCT5];
 
 wire [159:0] shl = {80'd0,a} << b[6:0];
 wire [159:0] shr = {a,80'd0} >> b[6:0];
@@ -73,62 +49,20 @@ wire [159:0] shr = {a,80'd0} >> b[6:0];
 assign ov = shl[159:80] != {80{a[79]}};
 
 always @*
-case(opcode)
-`IVECTOR:
-    if (SUP_VECTOR)
-        case(func)
-        `VSHL:      res <= shl[DMSB:0];
-        `VSHR:      res <= shr[`HIGHWORD]; 
-        `VASR:	    if (a[DMSB])
-                        res <= (shr[`HIGHWORD]) | ~({64{1'b1}} >> b[5:0]);
-                    else
-                        res <= shr[`HIGHWORD];
-        default:    res <= 64'd0;
-        endcase
-    else
-        res <= 64'd0;
-`RR:
+casez(opcode)
+`R1:
     case(func)
-    `SHIFTR:
-        case(shiftop)
-        `SHL,`ASL:	res <= shl[DMSB:0];
-        `SHR:	res <= shr[`HIGHWORD];
-        `ASR:	if (a[DMSB])
-                    res <= (shr[`HIGHWORD]) | ~({64{1'b1}} >> b[5:0]);
-                else
-                    res <= shr[`HIGHWORD];
-        `ROL:	res <= ROTATE_INSN ? shl[63:0]|shl[`HIGHWORD] : 64'hDEADDEADDEAD;
-        `ROR:	res <= ROTATE_INSN ? shr[63:0]|shr[`HIGHWORD] : 64'hDEADDEADDEAD;
-        default: res <= 64'd0;
-        endcase
-    `SHIFT31,
-    `SHIFT63:
-        case(shiftop)
-        `SHL,`ASL:res <= shl[DMSB:0];
-        `SHR:	res <= shr[`HIGHWORD];
-        `ASR:	if (a[DMSB])
-                    res <= (shr[`HIGHWORD]) | ~({64{1'b1}} >> b[5:0]);
-                else
-                    res <= shr[`HIGHWORD];
-        `ROL:	res <= ROTATE_INSN ? shl[63:0]|shl[`HIGHWORD] : 64'hDEADDEADDEAD;
-        `ROR:	res <= ROTATE_INSN ? shr[63:0]|shr[`HIGHWORD] : 64'hDEADDEADDEAD;
-        default: res <= 64'd0;
-        endcase
-    default:    res <= 64'd0;
+    `SHL,`ASL,`SHLI,`ASLI:	res <= shl[DMSB:0];
+    `SHR,`SHRI:	res <= shr[`HIGHWORD];
+    `ASR,`ASRI:	if (a[DMSB])
+                res <= (shr[`HIGHWORD]) | ~({80{1'b1}} >> b[6:0]);
+            else
+                res <= shr[`HIGHWORD];
+    `ROL,`ROLI:	res <= ROTATE_INSN ? shl[79:0]|shl[`HIGHWORD] : 80'hDEADDEADDEADDEAD;
+    `ROR,`RORI:	res <= ROTATE_INSN ? shr[79:0]|shr[`HIGHWORD] : 80'hDEADDEADDEADDEAD;
+    default:    res <= 80'd0;
     endcase
-`AMO:
-	case(func)
-	`AMOSHL,`AMOSHLI:	res <= shl[DMSB:0];
-	`AMOSHR,`AMOSHRI:	res <= shr[`HIGHWORD];
-	`AMOASR,`AMOASRI:	if (a[DMSB])
-                    		res <= (shr[`HIGHWORD]) | ~({64{1'b1}} >> b[5:0]);
-                		else
-                    		res <= shr[`HIGHWORD];
-    `AMOROL:	res <= ROTATE_INSN ? shl[63:0]|shl[`HIGHWORD] : 64'hDEADDEADDEAD;
-    `AMOROLI:	res <= ROTATE_INSN ? shl[63:0]|shl[`HIGHWORD] : 64'hDEADDEADDEAD;
-	default:	res <= 64'd0;
-	endcase
-default:	res <= 64'd0;
+default:	res <= 80'd0;
 endcase
 
 endmodule

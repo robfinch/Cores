@@ -1,7 +1,7 @@
 /* ===============================================================
-	(C) 2006  Robert Finch
+	(C) 2006-2019  Robert Finch
 	All rights reserved.
-	rob@birdcomputer.ca
+	robfinch<remove>@finitron.ca
 
 	cntlz.v
 		- count number of leading zeros in a byte
@@ -610,4 +610,12 @@ module cntlo64(
 
 endmodule
 
+module cntlo80(
+	input [79:0] i,
+	output [6:0] o
+);
+
+	cntlz80 u1 (~i,o);
+
+endmodule
 

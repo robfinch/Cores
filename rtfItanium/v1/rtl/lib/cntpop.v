@@ -1,5 +1,5 @@
 /* ===============================================================
-	(C) 2006  Robert Finch
+	(C) 2006-2019  Robert Finch
 	All rights reserved.
 	rob@birdcomputer.ca
 
@@ -375,6 +375,23 @@ module cntpop64(
 	cntpop16 u4 (i[63:48],cnt4);
 
 	assign o = cnt1+cnt2+cnt3+cnt4;
+
+endmodule
+
+module cntpop80(
+	input [79:0] i,
+	output [6:0] o
+);
+
+	wire [4:0] cnt1, cnt2, cnt3, cnt4, cnt5;
+
+	cntpop16 u1 (i[15: 0],cnt1);
+	cntpop16 u2 (i[31:16],cnt2);
+	cntpop16 u3 (i[47:32],cnt3);
+	cntpop16 u4 (i[63:48],cnt4);
+	cntpop16 u5 (i[79:64],cnt5);
+
+	assign o = cnt1+cnt2+cnt3+cnt4+cnt5;
 
 endmodule
 

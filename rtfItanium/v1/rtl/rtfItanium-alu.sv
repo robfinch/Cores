@@ -60,7 +60,7 @@ output reg [79:0] ob;
 output reg done;
 output reg idle;
 input [4:0] excen;
-output reg [8:0] exc;
+output reg [7:0] exc;
 input thrd;
 input [79:0] ptrmask;
 input [1:0] state;
@@ -612,21 +612,21 @@ shiftb ushftb7
     .ov()
 );
 
-cntlz64 uclz1
+cntlz80 uclz1
 (
-	.i(sz==2'd0 ? {56'hFFFFFFFFFFFFFF,a[7:0]} :
-	   sz==2'd1 ? {48'hFFFFFFFFFFFF,a[15:0]} :
-	   sz==2'd2 ? {32'hFFFFFFFF,a[31:0]} : a),
+	.i(sz==2'd0 ? {72'hFFFFFFFFFFFFFFFFFF,a[7:0]} :
+	   sz==2'd1 ? {64'hFFFFFFFFFFFFFFFF,a[15:0]} :
+	   sz==2'd2 ? {48'hFFFFFFFFFFFF,a[31:0]} : a),
 	.o(clzo)
 );
 
-cntlo64 uclo1
+cntlo80 uclo1
 (
 	.i(sz==2'd0 ? a[7:0] : sz==2'd1 ? a[15:0] : sz==2'd2 ? a[31:0] : a),
 	.o(cloo)
 );
 
-cntpop64 ucpop1
+cntpop80 ucpop1
 (
 	.i(sz==2'd0 ? a[7:0] : sz==2'd1 ? a[15:0] : sz==2'd2 ? a[31:0] : a),
 	.o(cpopo)
@@ -667,25 +667,6 @@ wire signed [DBW-1:0] as = a;
 wire signed [DBW-1:0] bs = b;
 wire signed [DBW-1:0] cs = c;
 
-cntpop16 ucpop2
-(
-	.i(vm & mask),
-	.o(cpopom)
-);
-
-wire [5:0] lsto, fsto;
-ffz24 uffo1
-(
-    .i(~{8'h00,a[15:0]}),
-    .o(lsto)
-);
-
-flz24 uflo1
-(
-    .i(~{8'h00,a[15:0]}),
-    .o(fsto)
-);
-
 wire [DBW-1:0] bmmo;
 BMM ubmm1
 (
@@ -699,7 +680,7 @@ always @*
 begin
 casez({instr[32:31],instr[`OPCODE4]})
 `R1:
-		case(instr[`INSTRUCTION_S1])
+		case(instr[`FUNCT5])
 		`CNTLZ:     o = BIG ? {57'd0,clzo} : 64'hCCCCCCCCCCCCCCCC;
 		`CNTLO:     o = BIG ? {57'd0,cloo} : 64'hCCCCCCCCCCCCCCCC;
 		`CNTPOP:    o = BIG ? {57'd0,cpopo} : 64'hCCCCCCCCCCCCCCCC;
@@ -734,10 +715,14 @@ casez({instr[32:31],instr[`OPCODE4]})
 //	                2'd2:   o = redor32;
 //	                2'd3:   o = redor64;
 //	                endcase
-		`ZXH:		o = {32'd0,a[31:0]};
-		`ZXC:		o = {48'd0,a[15:0]};
+		`ZXO:		o = {16'd0,a[63:0]};
+		`ZXP:		o = {40'd0,a[39:0]};
+		`ZXT:		o = {48'd0,a[31:0]};
+		`ZXC:		o = {64'd0,a[15:0]};
 		`ZXB:		o = {72'd0,a[7:0]};
-		`SXH:		o = {{40{a[31]}},a[31:0]};
+		`SXO:		o = {{16{a[63]}},a[63:0]};
+		`SXP:		o = {{40{a[39]}},a[39:0]};
+		`SXT:		o = {{48{a[31]}},a[31:0]};
 		`SXC:		o = {{64{a[15]}},a[15:0]};
 		`SXB:		o = {{72{a[7]}},a[7:0]};
 //	        5'h1C:		o[63:0] = tmem[a[9:0]];
@@ -756,17 +741,7 @@ casez({instr[32:31],instr[`OPCODE4]})
 	    		o = a;
 	    		end
 	    `BMM:		o = BIG ? bmmo : 64'hCCCCCCCCCCCCCCCC;
-	    `SHIFT31,
-	    `SHIFT63:
-	    	begin
-	    		if (instr[25:23]==`SHL || instr[25:23]==`ASL)
-	    			o = shfto;
-	    		else
-	    			o = BIG ? shfto : 64'hCCCCCCCCCCCCCCCC;
-	    		$display("BIG=%d",BIG);
-	    		if(!BIG)
-	    			$stop;
-	    	end
+	    `SHLI,`ASLI,`SHRI,`ASRI,`ROLI,`RORI,
 	    `SHL,`ASL,`SHR,`ASR,`ROL,`ROR:
 	    	begin
 	    			o = shfto;
@@ -814,7 +789,7 @@ casez({instr[32:31],instr[`OPCODE4]})
 	    			end
 	            default:
 	            	begin
-	            		o[63:0] = a + b;
+	            		o = a + b;
 	            	end
 	            endcase
 `else
@@ -869,11 +844,11 @@ casez({instr[32:31],instr[`OPCODE4]})
 `else
 			o = a - b;	            
 `endif
-			`SEQ:		tskSeq(instr,instr[25:23],a,b,o);
-	    `SLT:   tskSlt(instr,instr[25:23],a,b,o);
-	    `SLTU:  tskSltu(instr,instr[25:23],a,b,o);
-	    `SLE:   tskSle(instr,instr[25:23],a,b,o);
-	    `SLEU:  tskSleu(instr,instr[25:23],a,b,o);
+			`SEQ:		tskSeq(instr,instr[30:28],a,b,o);
+	    `SLT:   tskSlt(instr,instr[30:28],a,b,o);
+	    `SLTU:  tskSltu(instr,instr[30:28],a,b,o);
+	    `SLE:   tskSle(instr,instr[30:28],a,b,o);
+	    `SLEU:  tskSleu(instr,instr[30:28],a,b,o);
 	    `AND:   o = and64;
 	    `OR:    o = or64;
 	    `XOR:   o = xor64;
@@ -882,13 +857,13 @@ casez({instr[32:31],instr[`OPCODE4]})
 	    `XNOR:  o = ~xor64;
 	    `SEI:   o = a | instr[21:16];
 	    `RTI:   o = a | instr[21:16];
-	    `MUX:       for (n = 0; n < 64; n = n + 1)
+	    `MUX:       for (n = 0; n < DBW; n = n + 1)
 	                    o[n] <= a[n] ? b[n] : c[n];
 	    `MULU,`MUL:
         case(sz)
-        byt_para:		o[63:0] = {prod87[7:0],prod86[7:0],prod85[7:0],prod84[7:0],prod83[7:0],prod82[7:0],prod81[7:0],prod80[7:0]};
-        char_para:	o[63:0] = {prod163[15:0],prod162[15:0],prod161[15:0],prod160[15:0]};
-				half_para:	o[63:0] = {prod321[31:0],prod320[31:0]};
+        byt_para:		o = {prod87[7:0],prod86[7:0],prod85[7:0],prod84[7:0],prod83[7:0],prod82[7:0],prod81[7:0],prod80[7:0]};
+        char_para:	o = {prod163[15:0],prod162[15:0],prod161[15:0],prod160[15:0]};
+				half_para:	o = {prod321[31:0],prod320[31:0]};
 				default:		o = prod[DBW-1:0];
 				endcase
 			`FXMUL:
@@ -975,10 +950,9 @@ casez({instr[32:31],instr[`OPCODE4]})
 	    				end
 	    			endcase
 `else
-			o[63:0] = BIG ? ($signed(a) > $signed(b) ? a : b) : 64'hCCCCCCCCCCCCCCCC;
+			o = BIG ? ($signed(a) > $signed(b) ? a : b) : 64'hCCCCCCCCCCCCCCCC;
 `endif	    			
 	    `MAJ:		o = (a & b) | (a & c) | (b & c);
-	    `CHK:       o[63:0] = (a >= b && a < c);
 	    /*
 	    `RTOP:		case(c[5:0])
 	    			`RTADD:	o = a + b;
@@ -1011,41 +985,26 @@ casez({instr[32:31],instr[`OPCODE4]})
 	    default:    o = 64'hDEADDEADDEADDEAD;
 	    endcase
 `ADDI:	o = a + b;
-`SEQI:	o = instr[23] ? a != b : a == b;
-`SLTI:	
-	begin
-		o1 = $signed(a) < $signed(b);
-		o = instr[23] ? (o1 || a==b) : o1;
-	end
-`SLTUI:
-	begin
-	 o1 = a < b;
-	 o = instr[23] ? (o1 || a==b) : o1;
-	end
-`SGTI:
-	begin
-		o1 = $signed(a) > $signed(b);
-		o = instr[23] ? (o1 || a==b) : o1;
-	end
-`SGTUI: 
-	begin
-		o1 = a > b;
-		o = instr[23] ? (o1 || a==b) : o1;
-	end
+`SEQI:	o = a == b;
+`SNEI:	o = a != b;
+`SLTI:	o = $signed(a) < $signed(b);
+`SLEI:	o = $signed(a) <= $signed(b);
+`SLTUI: o = a < b;
+`SLEUI: o = a <= b;
+`SGTI:	o = $signed(a) > $signed(b);
+`SGEI:	o = $signed(a) >= $signed(b);
+`SGTUI:	o = a > b;
+`SGEUI:	o = a >= b;
 `ANDI:	o = a & andb;
 `ORI:		o = a | orb;
 `XORI:	o = a ^ orb;
 `MULUI:	o = prod[DBW-1:0];
 `MULI:	o = prod[DBW-1:0];
 `MULFI:	o = a[23:0] * b[15:0];
-`DIVUI:		o = BIG ? (instr[23] ? rem : divq) : 64'hCCCCCCCCCCCCCCCC;
-`DIVI:		o = BIG ? (instr[23] ? rem : divq) : 64'hCCCCCCCCCCCCCCCC;
-`MODI:		o = BIG ? rem : 64'hCCCCCCCCCCCCCCCC;
-`LEA:
-	begin
-		o1 = a[59:0] + b[59:0];
-		o = {PTR,o1[59:0]};
-	end
+`DIVUI:		o = divq;
+`MODUI:		o = rem;
+`DIVI:		o = divq;
+`MODI:		o = rem;
 `CSRRW:     
 	case(instr[27:16])
 	12'h044:	o = BIG ? (csr | {39'd0,1'b0,24'h0}) : 64'hDDDDDDDDDDDDDDDD;
@@ -1079,11 +1038,11 @@ end
 always @(posedge clk)
 casez({instr[32:31],instr[`OPCODE4]})
 `R1:
-	case(instr[22:18])
-	`COM:	addro[63:0] = ~shift8;
-	`NOT:	addro[63:0] = ~|shift8;
-	`NEG:	addro[63:0] = -shift8;
-	default:	addro[63:0] = 64'hDCDCDCDCDCDCDCDC;
+	case(instr[21:16])
+	`COM:	addro = ~shift8;
+	`NOT:	addro = ~|shift8;
+	`NEG:	addro = -shift8;
+	default:	addro = 64'hDCDCDCDCDCDCDCDC;
 	endcase
 `R3:
 		case({instr[`FUNCT5],instr[6]})
@@ -1207,7 +1166,7 @@ default:    exc <= `FLT_NONE;
 endcase
 end
 
-reg [63:0] aa, bb;
+reg [DBW:0] aa, bb;
 
 always @(posedge clk)
 begin
@@ -1218,9 +1177,9 @@ end
 task tskSeq;
 input [39:0] instr;
 input [2:0] sz;
-input [79:0] a;
-input [79:0] b;
-output [79:0] o;
+input [DBW:0] a;
+input [DBW:0] b;
+output [DBW:0] o;
 begin
 `ifdef SIMD
 	case(sz[2:0])

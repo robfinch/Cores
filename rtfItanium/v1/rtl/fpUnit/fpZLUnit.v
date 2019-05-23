@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2007-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2007-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -37,20 +37,9 @@
 //
 // ============================================================================
 
-`define FVECTOR 6'h01
-`define VFABS   6'h03
-`define VFSxx   6'h06
-`define VFSxxS  6'h07
-`define VFNEG   6'h16
-`define VSEQ        3'd0
-`define VSNE        3'd1
-`define VSLT        3'd2
-`define VSGE        3'd3
-`define VSLE        3'd4
-`define VSGT        3'd5
-`define VSUN        3'd7
-`define VFSIGN  6'h26
-`define FLOAT   6'h0F
+`define FLOAT   4'h1
+`define FANDI		4'h2
+`define FORI		4'h3
 `define FCMP    6'h06
 `define FMOV    6'h10
 `define FNEG    6'h14
@@ -72,7 +61,7 @@
 module fpZLUnit
 #(parameter WID=32)
 (
-    input [31:0] ir,
+    input [39:0] ir,
 	input [WID-1:0] a,
 	input [WID-1:0] b,	// for fcmp
 	output reg [WID-1:0] o,
@@ -102,62 +91,57 @@ localparam FMSB = WID==128 ? 111 :
 				  WID==32 ? 22 :
 				  WID==24 ? 15 : 9;
 
-wire [5:0] op = ir[5:0];
+wire [3:0] op = ir[9:6];
 //wire [1:0] prec = ir[25:24];
-wire [5:0] fn = ir[31:26];
-wire [2:0] sxx = {ir[25],ir[20:19]};
+wire [5:0] fn = ir[27:22];
 
 wire [4:0] cmp_o;
 
 fp_cmp_unit #(WID) u1 (.a(a), .b(b), .o(cmp_o), .nanx(nanx) );
 wire [127:0] sq_o;
 //fcvtsq u2 (a[31:0], sq_o);
-wire [63:0] sdo;
-fs2d u3 (a[31:0], sdo);
-wire [31:0] dso;
+wire [79:0] sdo;
+fs2d u3 (a[39:0], sdo);
+wire [39:0] dso;
 fd2s u4 (a, dso);
 
 always @*
-    case(op)
-    `FLOAT:
-        case(fn)
-        `FABS:   o <= {1'b0,a[WID-2:0]};        // fabs
-        `FNABS:  o <= {1'b1,a[WID-2:0]};        // fnabs
-        `FNEG:   o <= {~a[WID-1],a[WID-2:0]};   // fneg
-        `FMOV:   o <= a;                        // fmov
-        `FSIGN:  o <= (a[WID-2:0]==0) ? 0 : {a[WID-1],1'b0,{EMSB{1'b1}},{FMSB+1{1'b0}}};    // fsign
-        `FMAN:   o <= {a[WID-1],1'b0,{EMSB{1'b1}},a[FMSB:0]};    // fman
-        //`FCVTSQ:    o <= sq_o;
-        `FCVTSD: o <= sdo;
-        `FCVTDS: o <= {{32{dso[31]}},dso};
-        `FCMP:   o <= cmp_o;
-        `FSLT:	 o <=  cmp_o[1];
-        `FSGE:	 o <= ~cmp_o[1];
-        `FSLE:	 o <=  cmp_o[2];
-        `FSGT:	 o <= ~cmp_o[2];
-        `FSEQ:	 o <=  cmp_o[0];
-        `FSNE:	 o <= ~cmp_o[0];
-        `FSUN:	 o <=  cmp_o[4];
-        default: o <= 0;
-        endcase
-    `FVECTOR:
-        case(fn)
-        `VFABS:  o <= {1'b0,a[WID-2:0]};        // fabs
-        `VFSIGN: o <= (a[WID-2:0]==0) ? 0 : {a[WID-1],1'b0,{EMSB{1'b1}},{FMSB+1{1'b0}}};    // fsign
-        `VFNEG:  o <= {~a[WID-1],a[WID-2:0]};   // fneg
-        `VFSxx,`VFSxxS:
-            case(sxx)
-            `VSEQ:  o <=  cmp_o[0];
-            `VSNE:  o <= ~cmp_o[0];
-            `VSLT:  o <=  cmp_o[1];
-            `VSGE:  o <= ~cmp_o[1];
-            `VSLE:  o <=  cmp_o[2];
-            `VSGT:  o <= ~cmp_o[2];
-            `VSUN:  o <=  cmp_o[4];
-            default:    o <= cmp_o[2];  
-            endcase
-        default:    o <= 0;
-        endcase
+  case(op)
+  `FLOAT:
+    case(fn)
+    `FABS:   o <= {1'b0,a[WID-2:0]};        // fabs
+    `FNABS:  o <= {1'b1,a[WID-2:0]};        // fnabs
+    `FNEG:   o <= {~a[WID-1],a[WID-2:0]};   // fneg
+    `FMOV:   o <= a;                        // fmov
+    `FSIGN:  o <= (a[WID-2:0]==0) ? 0 : {a[WID-1],1'b0,{EMSB{1'b1}},{FMSB+1{1'b0}}};    // fsign
+    `FMAN:   o <= {a[WID-1],1'b0,{EMSB{1'b1}},a[FMSB:0]};    // fman
+    //`FCVTSQ:    o <= sq_o;
+    `FCVTSD: o <= sdo;
+    `FCVTDS: o <= {{32{dso[31]}},dso};
+    `FCMP:   o <= cmp_o;
+    `FSLT:	 o <=  cmp_o[1];
+    `FSGE:	 o <= ~cmp_o[1];
+    `FSLE:	 o <=  cmp_o[2];
+    `FSGT:	 o <= ~cmp_o[2];
+    `FSEQ:	 o <=  cmp_o[0];
+    `FSNE:	 o <= ~cmp_o[0];
+    `FSUN:	 o <=  cmp_o[4];
+    default: o <= 0;
+    endcase
+  `FANDI:
+  	case(ir[32:31])
+  	2'd0:		o <= a & {{58{1'b1}},ir[39:33],ir[30:16]};
+  	2'd1:		o <= a & {{36{1'b1}},ir[39:33],ir[30:16],{22{1'b1}}};
+  	2'd2:		o <= a & {{14{1'b1}},ir[39:33],ir[30:16],{44{1'b1}}};
+  	2'd3:		o <= a & {ir[39:33],ir[30:16],{66{1'b1}}};
+  	endcase
+  `FORI:
+  	case(ir[32:31])
+  	2'd0:		o <= a & {{58{1'b0}},ir[39:33],ir[30:16]};
+  	2'd1:		o <= a & {{36{1'b0}},ir[39:33],ir[30:16],{22{1'b0}}};
+  	2'd2:		o <= a & {{14{1'b0}},ir[39:33],ir[30:16],{44{1'b0}}};
+  	2'd3:		o <= a & {ir[39:33],ir[30:16],{66{1'b0}}};
+  	endcase
 	default:	o <= 0;
 	endcase
 

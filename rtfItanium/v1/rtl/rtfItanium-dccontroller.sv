@@ -26,9 +26,9 @@
 `define HIGH	1'b1
 `define LOW		1'b0
 
-module DCController(rst_i, clk_i, dadr, rd, wr, wsel, wdat, bstate, state,
+module DCController(rst_i, clk_i, dadr, rd, wr, wsel, wadr, wdat, bstate, state,
 	invline, invlineAddr, icl_ctr,
-	dL2_hit, dL2_ld, dL2_sel, dL2_adr, dL2_dat, dL2_nxt,
+	dL2_rhit, dL2_rdat, dL2_whit, dL2_ld, dL2_wsel, dL2_wadr, dL2_wdat, dL2_nxt,
 	dL1_hit, dL1_selpc, dL1_sel, dL1_adr, dL1_dat, dL1_wr, dL1_invline, dcnxt, dcwhich,
 	dcl_o, cti_o, bte_o, bok_i, cyc_o, stb_o, ack_i, err_i, wrv_i, rdv_i, sel_o, adr_o, dat_i);
 parameter ABW = 80;
@@ -41,6 +41,7 @@ input [AMSB:0] dadr;
 input rd;
 input wr;
 input [9:0] wsel;
+input [AMSB:0] wadr;
 input [79:0] wdat;
 input [4:0] bstate;
 (* mark_debug="true" *)
@@ -49,11 +50,13 @@ input invline;
 input [71:0] invlineAddr;
 output reg [39:0] icl_ctr;
 
-input dL2_hit;
+input dL2_rhit;
+input [329:0] dL2_rdat;
+input dL2_whit;
 output reg dL2_ld;
-output reg [40:0] dL2_sel;
-output reg [79:0] dL2_adr;
-input [329:0] dL2_dat;
+output reg [40:0] dL2_wsel;
+output reg [79:0] dL2_wadr;
+output reg [329:0] dL2_wdat;
 output reg dL2_nxt;
 
 input dL1_hit;
@@ -113,6 +116,7 @@ else begin
 dL1_wr <= FALSE;
 dL1_invline <= FALSE;
 dcnxt <= FALSE;
+dL2_ld <= FALSE;
 dL2_nxt <= FALSE;
 if (invline) begin
 	invline_r <= 1'b1;
@@ -131,6 +135,9 @@ case(state)
 IDLE:
 	begin
 		dL2_ld <= FALSE;
+		dL2_wsel <= wsel << wadr[4:0];
+		dL2_wadr <= {wadr[AMSB:5],5'h0};
+		dL2_wdat <= wdat << {wadr[4:0],3'b0};
 		dccnt <= 3'd0;
 		if (invline_r) begin
 			dL1_adr <= {invlineAddr_r[79:5],5'b0};
@@ -149,12 +156,13 @@ IDLE:
 			// as well.
 			if (dL1_hit && wr) begin
 				dL1_wr <= 1'b1;
-				dL1_sel <= wsel << dadr[4:0];
-				dL1_adr <= {dadr[AMSB:5],5'h0};
-				dL1_dat <= wdat << {dadr[4:0],3'b0};
+				dL1_sel <= wsel << wadr[4:0];
+				dL1_adr <= {wadr[AMSB:5],5'h0};
+				dL1_dat <= wdat << {wadr[4:0],3'b0};
 				dL2_ld <= 1'b1;
-				dL2_sel <= wsel << dadr[4:0];
-				dL2_adr <= {dadr[AMSB:5],5'h0};
+			end
+			else if (dL2_whit && wr) begin
+				dL2_ld <= 1'b1;
 			end
 		end
 	end
@@ -173,10 +181,10 @@ IC2:
 // The IC machine will stall in this state until the BIU is ready for
 // data transfers. 
 IC_WaitL2: 
-	if (dL2_hit && picstate==IC2) begin
+	if (dL2_rhit && picstate==IC2) begin
 		dL1_wr <= TRUE;
 		dL1_sel <= {41{1'b1}};
-		dL1_dat <= dL2_dat;
+		dL1_dat <= dL2_rdat;
 		dccnt <= 3'd0;
 		state <= IC5;
 	end
@@ -190,8 +198,8 @@ IC_WaitL2:
 			stb_o <= `HIGH;
 			sel_o <= 8'hFF;
 			adr_o <= {dL1_adr[AMSB:5],5'b0};
-			dL2_adr <= dL1_adr;
-			dL2_adr[4:0] <= 5'd0;
+			dL2_wadr <= dL1_adr;
+			dL2_wadr[4:0] <= 5'd0;
 			dL2_ld <= TRUE;
 			state <= IC_Ack;
 		end
@@ -230,13 +238,20 @@ IC_Ack:
 			dL1_dat[255:0] <= {2{8'h1F,120'h0}};
 			nack();
 	  end
-	  else
+	  else begin
 	  	case(dccnt)
 	  	3'd0:	dL1_dat[127:0] <= dat_i;
 	  	3'd1:	dL1_dat[257:128] <= dat_i;
 	  	3'd2:	dL1_dat[329:256] <= {2'b00,dat_i[71:0]};
 	  	default:	dL1_dat <= dL1_dat;
 	  	endcase
+	  	case(dccnt)
+	  	3'd0:	dL2_wdat[127:0] <= dat_i;
+	  	3'd1:	dL2_wdat[257:128] <= dat_i;
+	  	3'd2:	dL2_wdat[329:256] <= {2'b00,dat_i[71:0]};
+	  	default:	dL2_wdat <= dL2_wdat;
+	  	endcase
+	  end
     dccnt <= dccnt + 3'd1;
     if (dccnt==3'd1)
       cti_o <= 3'b111;
@@ -253,7 +268,7 @@ IC_Nack2:
 // cache.
 IC_Nack:
 	begin
-		dL2_ld <= FALSE;
+		dL2_ld <= TRUE;
     dccnt <= 3'd0;
 		dL1_wr <= TRUE;
 		dL1_sel <= {41{1'b1}};

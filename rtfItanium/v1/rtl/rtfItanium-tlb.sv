@@ -39,8 +39,8 @@ module TLB(clk, ld, done, idle, ol,
 	icl_i, cyc_i, we_i, vadr_i, cyc_o, we_o, padr_o,
 	wrv_o, rdv_o, exv_o,
 	TLBMiss, HTLBVirtPageo);
-parameter DBW=64;
-parameter ABW=32;
+parameter DBW=80;
+parameter ABW=80;
 parameter ENTRIES=256;
 parameter IDLE = 4'd0;
 parameter ONE = 4'd1;
@@ -57,7 +57,7 @@ output done;
 output idle;
 input [1:0] ol;					// operating level
 input [ABW-1:0] vadr_i;
-output reg [ABW-1:0] padr_o = 64'hFFFFFFFFFFFC0100;
+output reg [ABW-1:0] padr_o = 80'hFFFFFFFFFFFFFFFC0100;
 output uncached;
 
 input icl_i;
@@ -276,6 +276,7 @@ if (state==ONE) begin
     i <= {Index[7:4],(HTLBVirtPage >> {HTLBPageSize,1'b0}) & 4'hF};
   `TLB_WR:
     i <= {Random,(HTLBVirtPage >> {HTLBPageSize,1'b0}) & 4'hF};
+  default:	i <= i;
   endcase
 end
 

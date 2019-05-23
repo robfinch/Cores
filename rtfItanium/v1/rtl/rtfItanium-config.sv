@@ -26,12 +26,8 @@
 // Comment out for synthesis.
 //`define SIM		1'b1
 
-//`define SUPPORT_SMT		1'b1
 //`define SUPPORT_VECTOR	1'b1
-//`define SUPPORT_DCI			1'b1	// dynamically compressed instructions
 //`define SUPPORT_BBMS	1'b1
-//`define SUPPORT_SEGMENTATION	1'b1
-//`define SUPPORT_PREDICATION	1'b1
 //`define DEBUG_LOGIC 1'b1
 
 // The following define generates rtl to support 40-bit jumps and calls,
@@ -89,7 +85,7 @@
 // Note that even with just a single commit bus, multiple instructions may
 // commit if they do not target any registers. Up to three instruction may
 // commit even with just a single bus.
-`define NUM_CMT		1				// number of commit busses (1-3)
+`define NUM_CMT		2				// number of commit busses (1-3)
 // Comment out the following to remove FCU enhancements (branch predictor, BTB, RSB)
 //`define FCU_ENH		1
 // Comment out the following to remove bypassing logic on the functional units

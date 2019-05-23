@@ -84,6 +84,8 @@ always @(mb or me or nn)
 ffo96 u1 ({16'h0,o1},ffoo);
 
 always @*
+begin
+o1 = 80'd0;	// prevent inferred latch
 case (op)
 `BFINS: 
 	begin
@@ -121,6 +123,7 @@ case (op)
 `endif
 default:	o = {DWIDTH{1'b0}};
 endcase
+end
 
 endmodule
 

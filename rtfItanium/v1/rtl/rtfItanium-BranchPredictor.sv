@@ -1,6 +1,6 @@
 //=============================================================================
 //        __
-//   \\__/ o\    (C) 2013-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2013-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -28,8 +28,8 @@ module BranchPredictor(rst, clk, en,
     xisBranch0, xisBranch1, xisBranch2,
     pcA, pcB, pcC, xpc0, xpc1, xpc2, takb0, takb1, takb2,
     predict_takenA, predict_takenB, predict_takenC);
-parameter AMSB=63;
-parameter DBW=32;
+parameter AMSB=79;
+parameter DBW=80;
 input rst;
 input clk;
 input en;

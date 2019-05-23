@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2006-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2006-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -83,6 +83,7 @@
 `define VFMUL       6'h3A
 `define VFDIV       6'h3E
 `define FLOAT   6'h0F
+`define FLOAT2	4'h1
 `define FMOV    6'h10
 `define FTOI    6'h12
 `define ITOF    6'h13
@@ -148,7 +149,7 @@ input rst;
 input clk;
 input clk4x;
 input ce;
-input [31:0] ir;
+input [39:0] ir;
 input ld;
 input [MSB:0] a;
 input [MSB:0] b;
@@ -181,23 +182,24 @@ wire isNan,isNans;
 wire nanx,nanxs;
 
 // Decode fp operation
+wire [3:0] op4 = ir[9:6];
 wire [5:0] op = ir[5:0];
-wire [5:0] func6b = ir[31:26];
+wire [5:0] func6b = ir[27:22];
 wire [2:0] prec = 3'd4;//ir[25:24];
 
-wire fstat 	= {op,func6b} == {`FLOAT,`FSTAT};	// get status
-wire fdiv	= {op,func6b} == {`FLOAT,`FDIV};
-wire ftx   	= {op,func6b} == {`FLOAT,`FTX};		// trigger exception
-wire fcx   	= {op,func6b} == {`FLOAT,`FCX};		// clear exception
-wire fex   	= {op,func6b} == {`FLOAT,`FEX};		// enable exception
-wire fdx   	= {op,func6b} == {`FLOAT,`FDX};		// disable exception
-wire fcmp	= {op,func6b} == {`FLOAT,`FCMP};
-wire frm	= {op,func6b} == {`FLOAT,`FRM};  // set rounding mode
+wire fstat 	= {op4,func6b} == {`FLOAT2,`FSTAT};	// get status
+wire fdiv	= {op4,func6b} == {`FLOAT2,`FDIV};
+wire ftx   	= {op4,func6b} == {`FLOAT2,`FTX};		// trigger exception
+wire fcx   	= {op4,func6b} == {`FLOAT2,`FCX};		// clear exception
+wire fex   	= {op4,func6b} == {`FLOAT2,`FEX};		// enable exception
+wire fdx   	= {op4,func6b} == {`FLOAT2,`FDX};		// disable exception
+wire fcmp	= {op4,func6b} == {`FLOAT2,`FCMP};
+wire frm	= {op4,func6b} == {`FLOAT2,`FRM};  // set rounding mode
 
-wire zl_op =  (op==`FLOAT && (
+wire zl_op =  (op4==`FLOAT2 && (
                     (func6b==`FABS || func6b==`FNABS || func6b==`FMOV || func6b==`FNEG || func6b==`FSIGN || func6b==`FMAN || func6b==`FCVTSQ)) ||
                     func6b==`FCMP);
-wire loo_op = (op==`FLOAT && (func6b==`ITOF || func6b==`FTOI));
+wire loo_op = (op4==`FLOAT2 && (func6b==`ITOF || func6b==`FTOI));
 wire loo_done;
 
 wire subinf;
@@ -339,7 +341,8 @@ wire aInf, bInf, aInfs, bInfs;
 wire aNan, bNan, aNans, bNans;
 wire az, bz, azs, bzs;
 wire [2:0] rmd4;	// 1st stage delayed
-wire [5:0] op1, op2;
+wire [3:0] op2;
+wire [5:0] op1;
 wire [5:0] fn2;
 
 wire [MSB:0] zld_o,lood_o;
@@ -357,7 +360,7 @@ fp_decomp #(WID) u2 (.i(b), .sgn(sb), .man(mb), .vz(bz), .inf(bInf), .nan(bNan) 
 wire [2:0] rmd = ir[26:24]==3'b111 ? rm : ir[26:24];
 delay4 #(3) u3 (.clk(clk), .ce(pipe_ce), .i(rmd), .o(rmd4) );
 delay1 #(6) u4 (.clk(clk), .ce(pipe_ce), .i(func6b), .o(op1) );
-delay2 #(6) u5 (.clk(clk), .ce(pipe_ce), .i(func6b), .o(op2) );
+delay2 #(4) u5 (.clk(clk), .ce(pipe_ce), .i(op4), .o(op2) );
 delay2 #(6) u5b (.clk(clk), .ce(pipe_ce), .i(func6b), .o(fn2) );
 
 delay5 delay5_3(.clk(clk), .ce(pipe_ce), .i((bz & !aNan & fdiv)|(bzs & !aNans & fdivs)), .o(divByZero) );
@@ -409,24 +412,18 @@ fpMul    #(32) u12s(.clk(clk), .ce(pipe_ce),          .a(a[31:0]), .b(b[31:0]), 
 */
 always @*
 case(op2)
-`FLOAT:
+`FLOAT2:
     case (fn2)
     `FMUL:	under = mulUnder;
     `FDIV:	under = divUnder;
     default: begin under = 0; unders = 0; end
 	endcase
-`VECTOR:
-    case (fn2)
-    `VFMUL:    under = mulUnder;
-    `VFDIV:    under = divUnder;
-    default: begin under = 0; unders = 0; end
-    endcase
 default: begin under = 0; unders = 0; end
 endcase
 
 always @*
 case(op2)
-`FLOAT:
+`FLOAT2:
     case(fn2)
     `FADD:	fres <= fas_o;
     `FSUB:	fres <= fas_o;
@@ -434,14 +431,6 @@ case(op2)
     `FDIV:	fres <= fdiv_o;
     `FSQRT:	fres <= fsqrt_o;
     default:	begin fres <= fas_o; fress <= fass_o; end
-    endcase
-`VECTOR:
-    case(fn2)
-    `VFADD:   fres <= fas_o;
-    `VFSUB:   fres <= fas_o;
-    `VFMUL:   fres <= fmul_o;
-    `VFDIV:   fres <= fdiv_o;
-    default:    begin fres <= fas_o; fress <= fass_o; end
     endcase
 default:    begin fres <= fas_o; fress <= fass_o; end
 endcase
@@ -545,42 +534,30 @@ assign exception = gx;
 // Generate a done signal. Latency varys depending on the instruction.
 always @(posedge clk)
 begin
-    if (rst)
-        fpcnt <= 8'h00;
-    else begin
-    if (ld)
-        case(ir[5:0])
-        `FLOAT: 
-            case(func6b)
-            `FABS,`FNABS,`FNEG,`FMAN,`FMOV,`FSIGN,
-            `FCVTSD,`FCVTSQ,`FCVTDS:  begin fpcnt <= 8'd0; end
-            `FTOI:  begin fpcnt <= 8'd1; end
-            `ITOF:  begin fpcnt <= 8'd1; end
-            `FCMP:  begin fpcnt <= 8'd0; end
-            `FADD:  begin fpcnt <= 8'd6; end
-            `FSUB:  begin fpcnt <= 8'd6; end
-            `FMUL:  begin fpcnt <= 8'd6; end
-            `FDIV:  begin fpcnt <= maxdivcnt; end
-            `FSQRT: begin fpcnt <= maxdivcnt; end
-            default:    fpcnt <= 8'h00;
-            endcase
-        `VECTOR:
-            case(func6b)
-            `VFNEG:  begin fpcnt <= 8'd0; end
-            `VFADD:  begin fpcnt <= 8'd6; end
-            `VFSUB:  begin fpcnt <= 8'd6; end
-            `VFSxx:  begin fpcnt <= 8'd0; end
-            `VFMUL:  begin fpcnt <= 8'd6; end
-            `VFDIV:  begin fpcnt <= maxdivcnt; end
-            `VFTOI:  begin fpcnt <= 8'd1; end
-            `VITOF:  begin fpcnt <= 8'd1; end
-            default:    fpcnt <= 8'h00;
-            endcase
-        default:    fpcnt <= 8'h00;
-        endcase
-    else if (!done)
-        fpcnt <= fpcnt - 1;
-    end
+  if (rst)
+    fpcnt <= 8'h00;
+  else begin
+  if (ld)
+    case(ir[9:6])
+    `FLOAT2: 
+      case(func6b)
+      `FABS,`FNABS,`FNEG,`FMAN,`FMOV,`FSIGN,
+      `FCVTSD,`FCVTSQ,`FCVTDS:  begin fpcnt <= 8'd0; end
+      `FTOI:  begin fpcnt <= 8'd1; end
+      `ITOF:  begin fpcnt <= 8'd1; end
+      `FCMP:  begin fpcnt <= 8'd0; end
+      `FADD:  begin fpcnt <= 8'd6; end
+      `FSUB:  begin fpcnt <= 8'd6; end
+      `FMUL:  begin fpcnt <= 8'd6; end
+      `FDIV:  begin fpcnt <= maxdivcnt; end
+      `FSQRT: begin fpcnt <= maxdivcnt; end
+      default:    fpcnt <= 8'h00;
+      endcase
+    default:    fpcnt <= 8'h00;
+    endcase
+  else if (!done)
+    fpcnt <= fpcnt - 1;
+  end
 end
 endmodule
 

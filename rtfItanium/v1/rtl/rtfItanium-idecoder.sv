@@ -147,7 +147,7 @@ case(unit)
   default:    fnCanException = FALSE;
 	endcase
 `IUnit:
-	case({isn[32:31],isn[9:6]})
+	casez({isn[32:31],isn[9:6]})
 	`DIVI,`MODI,`MULI:
     fnCanException = `TRUE;
   `R3:
@@ -399,13 +399,13 @@ endfunction
 function IsSync;
 input [2:0] unit;
 input [39:0] isn;
-IsSync = (unit=`BUnit && isn[9:6]==`RTI && isn[39:34]==`SYNC) || IsRti(unit,isn);
+IsSync = (unit==`BUnit && isn[9:6]==`RTI && isn[39:34]==`SYNC) || IsRti(unit,isn);
 endfunction
 
 function IsRex;
 input [2:0] unit;
 input [39:0] isn;
-IsRex = (unit=`BUnit && isn[9:6]==`RTI && isn[39:34]==`REX);
+IsRex = (unit==`BUnit && isn[9:6]==`RTI && isn[39:34]==`REX);
 endfunction
 
 function IsOddball;
@@ -474,7 +474,7 @@ case(unit)
 	default:	HasConst = FALSE;
 	endcase
 `IUnit:
-	case({ins[32:31],ins[`OPCODE4]})
+	casez({ins[32:31],ins[`OPCODE4]})
 	`R3:	HasConst = FALSE;
 	`R1:	HasConst = FALSE;
 	default:	HasConst = TRUE;
@@ -551,8 +551,8 @@ begin
 	bus[`IB_MEMDB]	<= IsMemdb(unit,instr);
 	bus[`IB_MEMSB]	<= IsMemsb(unit,instr);
 	bus[`IB_SEI]		<= IsSEI(unit,instr);
-	bus[`IB_AQ]			<= instr[40];
-	bus[`IB_RL]			<= instr[39];
+	bus[`IB_AQ]			<= instr[32];
+	bus[`IB_RL]			<= instr[31];
 	bus[`IB_JMP]		<= IsJmp(unit,instr);
 	bus[`IB_BR]			<= IsBranch(unit,instr);
 	bus[`IB_SYNC]		<= IsSync(unit,instr)|| isBrk || isRti;

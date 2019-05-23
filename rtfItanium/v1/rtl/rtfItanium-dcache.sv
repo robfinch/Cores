@@ -252,11 +252,12 @@ endmodule
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
 
-module L2_dcache_mem(clk, wr, sel, lineno, i, fault, o);
+module L2_dcache_mem(clk, wr, sel, wlineno, rlineno, i, fault, o);
 input clk;
 input wr;
 input [40:0] sel;
-input [8:0] lineno;
+input [8:0] wlineno;
+input [8:0] rlineno;
 input [330:0] i;
 input [2:0] fault;
 output [330:0] o;
@@ -279,15 +280,15 @@ for (v = 0; v < 41; v = v + 1)
 always @(posedge clk)
 begin
 	if (wr & sel[v])
-		mem[lineno][v*8+7:v*8] <= i[v*8+7:v*8];
+		mem[wlineno][v*8+7:v*8] <= i[v*8+7:v*8];
 	if (wr)
-		mem[lineno][330:328] <= fault;
+		mem[wlineno][330:328] <= fault;
 end
 end
 endgenerate
 
 always @(posedge clk)
-	rrcl <= lineno;        
+	rrcl <= rlineno;        
     
 assign o = mem[rrcl];
 
@@ -301,24 +302,26 @@ endmodule
 // address bit 4).
 // -----------------------------------------------------------------------------
 
-module L2_dcache(rst, clk, nxt, wr, sel, adr, rdv_i, wrv_i, i, err_i, o, hit, invall, invline);
+module L2_dcache(rst, clk, nxt, wr, sel, wadr, radr, rdv_i, wrv_i, i, err_i, o, whit, rhit, invall, invline);
 parameter AMSB = 79;
 input rst;
 input clk;
 input nxt;
 input wr;
 input [40:0] sel;
-input [AMSB:0] adr;
+input [AMSB:0] wadr;
+input [AMSB:0] radr;
 input rdv_i;
 input wrv_i;
 input [330:0] i;
 input err_i;
-output [330:0] o;
-output hit;
+output [335:0] o;
+output whit;
+output rhit;
 input invall;
 input invline;
 
-wire [8:0] lineno;
+wire [8:0] wlineno,rlineno;
 wire taghit;
 reg wr1 = 1'b0,wr2 = 1'b0;
 reg [40:0] sel1 = 3'd0,sel2= 3'd0;
@@ -348,18 +351,31 @@ always @(posedge clk)
 wire pe_wr;
 edge_det u3 (.rst(rst), .clk(clk), .ce(1'b1), .i(wr && cnt==3'd0), .pe(pe_wr), .ne(), .ee() );
 
-L2_icache_mem u1
+L2_dcache_ram u1 (
+  .clka(clk),    // input wire clka
+  .ena(1'b1),      // input wire ena
+  .wea(wr2),      // input wire [41 : 0] wea
+  .addra(wlineno),  // input wire [8 : 0] addra
+  .dina(i2),    // input wire [335 : 0] dina
+  .clkb(clk),    // input wire clkb
+  .enb(1'b1),      // input wire enb
+  .addrb(rlineno),  // input wire [8 : 0] addrb
+  .doutb(o)  // output wire [335 : 0] doutb
+);
+/*
+L2_dcache_mem u1
 (
 	.clk(clk),
 	.wr(wr2),
-	.lineno(lineno),
+	.wlineno(wlineno),
+	.rlineno(rlineno),
 	.sel(sel2),
 	.i(i2),
 	.fault(f2),
 	.o(o)
 );
-
-L2_icache_cmptag4way u2
+*/
+L2_dcache_cmptag4way u2
 (
 	.rst(rst),
 	.clk(clk),
@@ -368,17 +384,20 @@ L2_icache_cmptag4way u2
 	.wr2(wr2),
 	.inv(invline),
 	.invall(invall),
-	.adr(adr),
-	.lineno(lineno),
-	.hit(taghit)
+	.wadr(wadr),
+	.radr(radr),
+	.wlineno(wlineno),
+	.rlineno(rlineno),
+	.whit(wtaghit),
+	.rhit(rtaghit)
 );
 
-assign hit = taghit;
+assign whit = wtaghit;
 
 endmodule
 
 // Four way set associative tag memory
-module L2_dcache_cmptag4way(rst, clk, nxt, wr, wr2, inv, invall, adr, lineno, hit);
+module L2_dcache_cmptag4way(rst, clk, nxt, wr, wr2, inv, invall, wadr, radr, wlineno, rlineno, whit, rhit);
 parameter AMSB = 63;
 input rst;
 input clk;
@@ -387,9 +406,12 @@ input wr;
 input wr2;
 input inv;
 input invall;
-input [AMSB+8:0] adr;
-output reg [8:0] lineno;
-output hit;
+input [AMSB+8:0] wadr;
+output reg [8:0] wlineno;
+input [AMSB+8:0] radr;
+output reg [8:0] rlineno;
+output whit;
+output rhit;
 
 (* ram_style="block" *)
 reg [AMSB+8-5:0] mem0 [0:127];
@@ -401,7 +423,7 @@ reg [AMSB+8-5:0] mem2 [0:127];
 reg [AMSB+8-5:0] mem3 [0:127];
 (* ram_style="distributed" *)
 reg [511:0] valid;
-reg [AMSB+8:0] rradr;
+reg [AMSB+8:0] rradr, rwadr;
 
 integer n;
 initial begin
@@ -417,7 +439,8 @@ end
 
 wire [21:0] lfsro;
 lfsr #(22,22'h0ACE3) u1 (rst, clk, nxt, 1'b0, lfsro);
-wire hit0, hit1, hit2, hit3;
+wire whit0, whit1, whit2, whit3;
+wire rhit0, rhit1, rhit2, rhit3;
 reg inv2;
 
 always @(posedge clk)
@@ -426,33 +449,45 @@ always @(posedge clk)
 	if (invall)
 		valid <= 512'b0;
 	else if (inv2) begin
-		if (hit0) valid[{2'b00,adr[11:5]}] <= 1'b0;
-		if (hit1) valid[{2'b01,adr[11:5]}] <= 1'b0;
-		if (hit2) valid[{2'b10,adr[11:5]}] <= 1'b0;
-		if (hit3) valid[{2'b11,adr[11:5]}] <= 1'b0;
+		if (whit0) valid[{2'b00,wadr[11:5]}] <= 1'b0;
+		if (whit1) valid[{2'b01,wadr[11:5]}] <= 1'b0;
+		if (whit2) valid[{2'b10,wadr[11:5]}] <= 1'b0;
+		if (whit3) valid[{2'b11,wadr[11:5]}] <= 1'b0;
 	end
 	else if (wr)
-		valid[{lfsro[1:0],adr[11:5]}] <= 1'b1;
+		valid[{lfsro[1:0],wadr[11:5]}] <= 1'b1;
 always @(posedge clk)
 	if (wr)
 		case(lfsro[1:0])
-		2'b00:	mem0[adr[11:5]] <= adr[AMSB+8:5];
-		2'b01:	mem1[adr[11:5]] <= adr[AMSB+8:5];
-		2'b10:	mem2[adr[11:5]] <= adr[AMSB+8:5];
-		2'b11:	mem3[adr[11:5]] <= adr[AMSB+8:5];
+		2'b00:	mem0[wadr[11:5]] <= wadr[AMSB+8:5];
+		2'b01:	mem1[wadr[11:5]] <= wadr[AMSB+8:5];
+		2'b10:	mem2[wadr[11:5]] <= wadr[AMSB+8:5];
+		2'b11:	mem3[wadr[11:5]] <= wadr[AMSB+8:5];
 		endcase
 always @(posedge clk)
-	rradr <= adr;
+	rradr <= radr;
+always @(posedge clk)
+	rwadr <= wadr;
 
-assign hit0 = mem0[rradr[11:5]]==rradr[AMSB+8:5] && valid[{2'b00,adr[11:5]}];
-assign hit1 = mem1[rradr[11:5]]==rradr[AMSB+8:5] && valid[{2'b01,adr[11:5]}];
-assign hit2 = mem2[rradr[11:5]]==rradr[AMSB+8:5] && valid[{2'b10,adr[11:5]}];
-assign hit3 = mem3[rradr[11:5]]==rradr[AMSB+8:5] && valid[{2'b11,adr[11:5]}];
+assign whit0 = mem0[rwadr[11:5]]==rwadr[AMSB+8:5] && valid[{2'b00,wadr[11:5]}];
+assign whit1 = mem1[rwadr[11:5]]==rwadr[AMSB+8:5] && valid[{2'b01,wadr[11:5]}];
+assign whit2 = mem2[rwadr[11:5]]==rwadr[AMSB+8:5] && valid[{2'b10,wadr[11:5]}];
+assign whit3 = mem3[rwadr[11:5]]==rwadr[AMSB+8:5] && valid[{2'b11,wadr[11:5]}];
+assign rhit0 = mem0[rradr[11:5]]==rradr[AMSB+8:5] && valid[{2'b00,radr[11:5]}];
+assign rhit1 = mem1[rradr[11:5]]==rradr[AMSB+8:5] && valid[{2'b01,radr[11:5]}];
+assign rhit2 = mem2[rradr[11:5]]==rradr[AMSB+8:5] && valid[{2'b10,radr[11:5]}];
+assign rhit3 = mem3[rradr[11:5]]==rradr[AMSB+8:5] && valid[{2'b11,radr[11:5]}];
 always @*
-	if (wr|wr2) lineno = {lfsro[1:0],adr[11:5]};
-  else if (hit0)  lineno = {2'b00,adr[11:5]};
-  else if (hit1)  lineno = {2'b01,adr[11:5]};
-  else if (hit2)  lineno = {2'b10,adr[11:5]};
-  else  lineno = {2'b11,adr[11:5]};
-assign hit = hit0|hit1|hit2|hit3;
+	if (wr|wr2) wlineno = {lfsro[1:0],wadr[11:5]};
+  else if (whit0)  wlineno = {2'b00,wadr[11:5]};
+  else if (whit1)  wlineno = {2'b01,wadr[11:5]};
+  else if (whit2)  wlineno = {2'b10,wadr[11:5]};
+  else  wlineno = {2'b11,wadr[11:5]};
+always @*
+  if (rhit0)  rlineno = {2'b00,radr[11:5]};
+  else if (rhit1)  rlineno = {2'b01,radr[11:5]};
+  else if (rhit2)  rlineno = {2'b10,radr[11:5]};
+  else  rlineno = {2'b11,radr[11:5]};
+assign whit = whit0|whit1|whit2|whit3;
+assign rhit = rhit0|rhit1|rhit2|rhit3;
 endmodule

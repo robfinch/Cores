@@ -251,23 +251,26 @@
 //`define REDOR       5'h06
 `define PTR					5'h06
 `define NEG         5'h07
-`define ZXH					5'h08
+`define ZXT					5'h08
 `define ZXC					5'h09
 `define ZXB					5'h0A
+`define ZXP					5'h0B
+`define ZXO					5'h0C
 `define EXEC				5'h13
 `define SETWB				5'h16
 //`define REDAND			5'h17
-`define SXH					5'h18
+`define SXT					5'h18
 `define SXC					5'h19
 `define SXB					5'h1A
+`define SXP					5'h1B
+`define SXO					5'h1C
 // Register-Register (02) Ops
 `define RTOP				6'h00
-`define BMM					6'h03
+`define BMM					6'h3E
 `define ADD	        6'h04
 `define SUB         6'h05
-`define SHIFT31     6'h0F
-`define SHIFT63     6'h1F
 
+`define PFI_INSN	40'h083FC003C0
 `define NOP_INSN	40'h00000000C0
 
 // Floating Point
@@ -449,7 +452,6 @@
 `define IB_CHK		3
 `define IB_UNIT		2:0
 
-`define TLB			6'h3F
 `define TLB_NOP			4'd0
 `define TLB_P				4'd1
 `define TLB_RD			4'd2

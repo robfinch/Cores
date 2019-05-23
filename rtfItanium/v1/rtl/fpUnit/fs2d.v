@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2006-2017  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2006-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -26,57 +26,57 @@
 // ============================================================================
 
 module fs2d(a, o);
-input [31:0] a;
-output [63:0] o;
+input [39:0] a;
+output [79:0] o;
 
 reg signo;
-reg [10:0] expo;
-reg [51:0] mano;
+reg [14:0] expo;
+reg [63:0] mano;
 
 assign o = {signo,expo,mano};
 
 wire signi;
-wire [7:0] expi;
-wire [22:0] mani;
+wire [9:0] expi;
+wire [28:0] mani;
 wire xinf;	// exponent infinite
 wire vz;	// value zero
 wire xz;	// exponent zero
 
-fpDecomp #(32) u1 (.i(a), .sgn(signi), .exp(expi), .man(mani), .xinf(xinf), .xz(xz), .vz(vz) );
-wire [4:0] lz;
-cntlz24 u2 ({mani,1'b1}, lz);	// '1' bit already unhidden due to denormalized number
+fpDecomp #(40) u1 (.i(a), .sgn(signi), .exp(expi), .man(mani), .xinf(xinf), .xz(xz), .vz(vz) );
+wire [5:0] lz;
+cntlz32 u2 ({mani,3'b111}, lz);	// '1' bit already unhidden due to denormalized number
 
-always @(a)
+always @*
 begin
-    // sign out always just = sign in
-    signo = signi;
+  // sign out always just = sign in
+  signo = signi;
 
-    // special check for zero
-    if (vz) begin
-        expo <= 0;
-        mano <= 0;
-    end
-    // convert infinity / nan
-    // infinity in = infinity out
-    else if (xinf) begin
-        expo <= 11'h7ff;
-        mano <= {mani,29'b0};
-    end
-    // convert denormal
-    // a denormal was really a number with an exponent of -126
-    // this value is easily represented in the double format
-    // it may be possible to normalize the value if it isn't
-    // zero
-    else if (xz) begin
-        expo <= 11'd897 - lz;	// 1023 "zero" -126 - lz
-        mano <= {mani << (lz + 1), 29'd0};	// shift one more to hide leading '1'
-    end
-    // convert typical number
-    // adjust exponent, copy mantissa
-    else begin
-        expo <= expi + 11'd896;		// 1023-127
-        mano <= {mani,29'd0};
-    end
+  // special check for zero
+  if (vz) begin
+    expo <= 0;
+    mano <= 0;
+  end
+  // convert infinity / nan
+  // infinity in = infinity out
+  else if (xinf) begin
+    expo <= 15'h7fff;
+    mano <= {mani,35'b0};
+  end
+  // convert denormal
+  // a denormal was really a number with an exponent of -126
+  // this value is easily represented in the double format
+  // it may be possible to normalize the value if it isn't
+  // zero
+  else if (xz) begin
+    expo <= 15'd31745 - lz;	// 32767 "zero" -1022 - lz
+    mano <= {mani << (lz + 1), 35'd0};	// shift one more to hide leading '1'
+  end
+  // convert typical number
+  // adjust exponent, copy mantissa
+  else begin
+    expo <= expi + 15'd31744;		// 32767-1023  1023-127
+    mano <= {mani,35'd0};
+  end
 end
 
 endmodule

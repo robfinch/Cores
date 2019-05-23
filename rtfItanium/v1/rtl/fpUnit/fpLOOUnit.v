@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2006-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2006-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -30,10 +30,7 @@
 //
 // ============================================================================
 
-`define FVECTOR 6'h01
-`define VFTOI   6'h24
-`define VITOF   6'h25
-`define FLOAT   6'h0F
+`define FLOAT   4'h1
 `define FTOI    6'h12
 `define ITOF    6'h13
 
@@ -73,15 +70,15 @@ localparam FMSB = WID==128 ? 111 :
 
 wire [WID-1:0] i2f_o;
 wire [WID-1:0] f2i_o;
-wire [7:0] op = ir[7:0];
-wire [5:0] fn = ir[25:20];
-wire [2:0] rm = ir[34:32];
-wire [1:0] prec = ir[37:35];
+wire [3:0] op = ir[9:6];
+wire [5:0] fn = ir[27:22];
+wire [2:0] rm = ir[30:28];
+wire [1:0] prec = ir[34:31];
 
 delay1 u1 (
     .clk(clk),
     .ce(ce),
-    .i((op==`FLOAT && (fn==`ITOF||fn==`FTOI)) || (op==`FVECTOR && (fn==`VFTOI || fn==`VITOF))),
+    .i((op==`FLOAT && (fn==`ITOF||fn==`FTOI))),
     .o(done) );
 i2f #(WID)  ui2fs (.clk(clk), .ce(ce), .rm(rm), .i(a), .o(i2f_o) );
 f2i #(WID)  uf2is (.clk(clk), .ce(ce), .i(a), .o(f2i_o) );
@@ -89,18 +86,12 @@ f2i #(WID)  uf2is (.clk(clk), .ce(ce), .i(a), .o(f2i_o) );
 always @*
 	case (op)
 	`FLOAT:
-       case(fn)
-       `ITOF:   o <= i2f_o;
-       `FTOI:   o <= f2i_o;
-       default: o <= 0;
-       endcase
-    `FVECTOR:
-        case(fn)
-        `VITOF:  o <= i2f_o;
-        `VFTOI:  o <= f2i_o;
-        default: o <= 0;
-        endcase
-    default:   o <= 0;
-    endcase
+		case(fn)
+		`ITOF:   o <= i2f_o;
+		`FTOI:   o <= f2i_o;
+		default: o <= 0;
+		endcase
+	default:   o <= 0;
+	endcase
 
 endmodule
