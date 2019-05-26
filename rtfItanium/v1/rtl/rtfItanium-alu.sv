@@ -1005,6 +1005,12 @@ casez({instr[32:31],instr[`OPCODE4]})
 `MODUI:		o = rem;
 `DIVI:		o = divq;
 `MODI:		o = rem;
+`ORS1:		o = a | (b[21:0] << 22);
+`ORS2:		o = a | (b[21:0] << 44);
+`ORS3:		o = a | (b[21:0] << 66);
+`ADDS1:		o = a + (b << 22);
+`ADDS2:		o = a + (b << 44);
+`ADDS3:		o = a + (b << 66);
 `CSRRW:     
 	case(instr[27:16])
 	12'h044:	o = BIG ? (csr | {39'd0,1'b0,24'h0}) : 64'hDDDDDDDDDDDDDDDD;

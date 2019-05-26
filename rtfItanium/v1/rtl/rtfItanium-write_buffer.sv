@@ -115,7 +115,7 @@ begin
 	end
 end
 
-reg [31:0] sel_shift = wb_sel[0] << wb_addr[0][3:0];
+wire [31:0] sel_shift = wb_sel[0] << wb_addr[0][3:0];
 
 reg [2:0] state;
 always @(posedge clk_i)
@@ -152,6 +152,7 @@ if (rst_i) begin
 	sel_o <= 16'h0000;
 	wb_has_bus <= FALSE;
 	wb_v <= 1'b0;
+	wb_ptr <= 1'd0;
 	update_iq <= FALSE;
 end
 else begin
@@ -160,8 +161,9 @@ else begin
 	p0_ack_o <= FALSE;
 	p1_ack_o <= FALSE;
 
-	if (p0_wr_i & p1_wr_i) begin
+	if ((p0_wr_i & ~p0_ack_o) & (p1_wr_i & ~p1_ack_o)) begin
 		if (wb_ptr < WB_DEPTH-2) begin
+			wb_v[wb_ptr-1] <= 1'b1;
 			wb_ol[wb_ptr-1] <= p0_ol_i;
 			wb_sel[wb_ptr-1] <= p0_sel_i;
 			wb_addr[wb_ptr-1] <= p0_adr_i;
@@ -177,6 +179,7 @@ else begin
 			p1_ack_o <= TRUE;
 		end
 		else if (wb_ptr < WB_DEPTH-1) begin
+			wb_v[wb_ptr] <= 1'b1;
 			wb_ol[wb_ptr] <= p0_ol_i;
 			wb_sel[wb_ptr] <= p0_sel_i;
 			wb_addr[wb_ptr] <= p0_adr_i;
@@ -186,8 +189,9 @@ else begin
 			p0_ack_o <= TRUE;
 		end
 	end
-	else if (p0_wr_i) begin
+	else if (p0_wr_i & ~p0_ack_o) begin
 		if (wb_ptr < WB_DEPTH-1) begin
+			wb_v[wb_ptr] <= 1'b1;
 			wb_ol[wb_ptr] <= p0_ol_i;
 			wb_sel[wb_ptr] <= p0_sel_i;
 			wb_addr[wb_ptr] <= p0_adr_i;
@@ -197,8 +201,9 @@ else begin
 			p0_ack_o <= TRUE;
 		end
 	end
-	else if (p1_wr_i) begin
+	else if (p1_wr_i & ~p1_ack_o) begin
 		if (wb_ptr < WB_DEPTH-1) begin
+			wb_v[wb_ptr] <= 1'b1;
 			wb_ol[wb_ptr] <= p1_ol_i;
 			wb_sel[wb_ptr] <= p1_sel_i;
 			wb_addr[wb_ptr] <= p1_adr_i;
@@ -236,6 +241,7 @@ IDLE:
 		   		wb_ptr <= wb_ptr - 2'd1;
 			end
 			wb_v[WB_DEPTH-1] <= INV;
+			wb_sel[WB_DEPTH-1] <= 1'd0;
 			wb_rmw[WB_DEPTH-1] <= FALSE;
 		end
 	end
