@@ -752,7 +752,7 @@ static void SaveRegisterSet(SYM *sym)
 		GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),cg.MakeImmediate(mm*sizeOfWord));
 		mm = 0;
 		for (nn = 1 + (sym->tp->GetBtp()->type!=bt_void ? 1 : 0); nn < 31; nn++) {
-			GenerateDiadic(op_sw,0,makereg(nn),cg.MakeIndexed(mm,regSP));
+			GenerateDiadic(op_std,0,makereg(nn),cg.MakeIndexed(mm,regSP));
 			mm += sizeOfWord;
 		}
 	}
@@ -768,7 +768,7 @@ static void RestoreRegisterSet(SYM * sym)
 	if (!cpu.SupportsPop) {
 		mm = 0;
 		for (nn = 1 + (sym->tp->GetBtp()->type!=bt_void ? 1 : 0); nn < 31; nn++) {
-			GenerateDiadic(op_lw,0,makereg(nn),cg.MakeIndexed(mm,regSP));
+			GenerateDiadic(op_ldd,0,makereg(nn),cg.MakeIndexed(mm,regSP));
 			mm += sizeOfWord;
 		}
 		mm = sym->tp->GetBtp()->type!=bt_void ? 29 : 30;
@@ -795,7 +795,7 @@ void SaveRegisterVars(CSet *rmask)
 			// nn = nregs - 1 - regno
 			// regno = -(nn - nregs + 1);
 			// regno = nregs - 1 - nn
-			GenerateDiadic(op_sw,0,makereg(nregs-1-nn),cg.MakeIndexed(cnt,regSP));
+			GenerateDiadic(op_std,0,makereg(nregs-1-nn),cg.MakeIndexed(cnt,regSP));
 			cnt+=sizeOfWord;
 		}
 	}
@@ -828,7 +828,7 @@ static void RestoreRegisterVars()
 		cnt = 0;
 		save_mask->resetPtr();
 		for (nn = save_mask->nextMember(); nn >= 0; nn = save_mask->nextMember()) {
-			GenerateDiadic(op_lw,0,makereg(nn),cg.MakeIndexed(cnt,regSP));
+			GenerateDiadic(op_ldd,0,makereg(nn),cg.MakeIndexed(cnt,regSP));
 			cnt += sizeOfWord;
 		}
 		GenerateTriadic(op_add,0,makereg(regSP),makereg(regSP),cg.MakeImmediate(cnt2));
@@ -973,11 +973,11 @@ int FT64CodeGenerator::PushArgument(ENODE *ep, int regno, int stkoffs, bool *isF
 							ap3 = GetTempRegister();
 							regs[ap3->preg].IsArg = true;
 							GenLoadConst(ap, ap3);
-	         				GenerateDiadic(op_sw,0,ap3,MakeIndexed(stkoffs,regSP));
+	         				GenerateDiadic(op_std,0,ap3,MakeIndexed(stkoffs,regSP));
 							ReleaseTempReg(ap3);
 						}
 						else {
-							GenerateDiadic(op_sw, 0, makereg(0), MakeIndexed(stkoffs, regSP));
+							GenerateDiadic(op_std, 0, makereg(0), MakeIndexed(stkoffs, regSP));
 						}
 						nn = 1;
 					}
@@ -989,7 +989,7 @@ int FT64CodeGenerator::PushArgument(ENODE *ep, int regno, int stkoffs, bool *isF
 						}
 						else {
 							regs[ap->preg].IsArg = true;
-							GenerateDiadic(op_sw,0,ap,MakeIndexed(stkoffs,regSP));
+							GenerateDiadic(op_std,0,ap,MakeIndexed(stkoffs,regSP));
 							nn = 1;
 						}
 					}

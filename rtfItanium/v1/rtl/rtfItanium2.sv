@@ -67,8 +67,8 @@ parameter HIGH = 1'b1;
 parameter LOW = 1'b0;
 parameter VAL = 1'b1;
 parameter INV = 1'b0;
-parameter RSTPC = 80'hFFFFFFFFFFFFFFFC0100;
-parameter BRKPC = 80'hFFFFFFFFFFFFFFFC0000;
+parameter RSTIP = 80'hFFFFFFFFFFFFFFFC0100;
+parameter BRKIP = 80'hFFFFFFFFFFFFFFFC0000;
 parameter DEBUG = 1'b0;
 parameter DBW = 80;
 parameter ABW = 80;
@@ -109,19 +109,12 @@ wire clk;
 //);
 assign clk = clk_i;
 
-wire exv_i;
 wire rdv_i;
 wire wrv_i;
 reg [AMSB:0] vadr;
 reg cyc;
 reg cyc_pending;	// An i-cache load is about to happen
 reg we;
-
-(* ram_style="block" *)
-reg [127:0] rommem [0:12287];
-initial begin
-`include "d:/cores6/rtfItanium/v1/software/boot/boot.ve0"
-end
 
 reg [7:0] i;
 integer n;
@@ -131,10 +124,11 @@ genvar g, h;
 reg [AMSB:0] ip, rip;
 reg [AMSB:0] misspc, excmisspc;
 reg [1:0] slot;
-wire [63:0] slot0ip = {ip[63:4],4'h0};
-wire [63:0] slot1ip = {ip[63:4],4'h5};
-wire [63:0] slot2ip = {ip[63:4],4'hA};
+wire [AMSB:0] slot0ip = {ip[AMSB:4],4'h0};
+wire [AMSB:0] slot1ip = {ip[AMSB:4],4'h5};
+wire [AMSB:0] slot2ip = {ip[AMSB:4],4'hA};
 reg slot0v, slot1v, slot2v;
+reg [2:0] slot0u, slot1u, slot2u;
 reg [3:0] fb_panic;
 
 reg [127:0] ibundle;
@@ -153,6 +147,7 @@ reg  [`QBITS] tail2;
 reg  [`QBITS] heads[0:QENTRIES-1];
 
 wire tlb_miss;
+wire exv;
 
 wire [RBIT:0] Ra0, Rb0, Rc0, Rd0;
 wire [RBIT:0] Ra1, Rb1, Rc1, Rd1;
@@ -356,7 +351,6 @@ reg [QENTRIES-1:0] iq_done;
 reg [QENTRIES-1:0] iq_out;
 reg [QENTRIES-1:0] iq_agen;
 reg [`SNBITS] iq_sn [0:QENTRIES-1];  // instruction sequence number
-reg [QENTRIES-1:0] iq_iv;		// instruction is valid
 reg [`QBITSP1] iq_is [0:QENTRIES-1];	// source of instruction
 reg [QENTRIES-1:0] iq_pt;		// predict taken
 reg [QENTRIES-1:0] iq_bt;		// update branch target buffer
@@ -759,12 +753,12 @@ reg [5:0] ld_time;
 reg [63:0] wc_time_dat;
 reg [63:0] wc_times;
 
-wire slot0_rfw = IsRFW(Unit0(ibundle[127:120]),ibundle[39:0]);
-wire slot1_rfw = IsRFW(Unit1(ibundle[127:120]),ibundle[79:40]);
-wire slot2_rfw = IsRFW(Unit2(ibundle[127:120]),ibundle[119:80]);
-wire slot0_mem = IsMem(Unit0(ibundle[127:120])) && !IsLea(Unit0(ibundle[127:120]),ibundle[39:0]);
-wire slot1_mem = IsMem(Unit1(ibundle[127:120])) && !IsLea(Unit1(ibundle[127:120]),ibundle[79:40]);
-wire slot2_mem = IsMem(Unit2(ibundle[127:120])) && !IsLea(Unit2(ibundle[127:120]),ibundle[119:80]);
+wire slot0_rfw = IsRFW(slot0u,ibundle[39:0]);
+wire slot1_rfw = IsRFW(slot1u,ibundle[79:40]);
+wire slot2_rfw = IsRFW(slot2u,ibundle[119:80]);
+wire slot0_mem = IsMem(slot0u) && !IsLea(slot0u,ibundle[39:0]);
+wire slot1_mem = IsMem(slot1u) && !IsLea(slot1u,ibundle[79:40]);
+wire slot2_mem = IsMem(slot2u) && !IsLea(slot2u,ibundle[119:80]);
 
 wire [1:0] ic_fault;
 wire [127:0] ic_out;
@@ -779,7 +773,7 @@ always @*
 	phit <= (ihit&&icstate==IDLE) && !invicl;
 
 reg [AMSB:0] invlineAddr;
-reg L1_invline;
+wire L1_invline;
 wire [79:0] L1_adr, L2_adr;
 wire [257:0] L1_dat, L2_dat;
 wire L1_wr, L2_wr;
@@ -806,6 +800,7 @@ wire d0L1_hit, d0L2_hit;
 wire d1L1_hit, d1L2_hit;
 wire d0L1_selpc, d0L2_selpc;
 wire d1L1_selpc, d1L2_selpc;
+wire d0L1_invline,d1L1_invline;
 reg [40:0] dcsel;
 reg [255:0] dcbuf;
 
@@ -888,6 +883,132 @@ reg [127:0] ddat;
 function [8:0] fnUnits;
 input [6:0] tmp;
 case(tmp)
+7'h00: fnUnits = {`BUnit,`BUnit,`BUnit};
+7'h01: fnUnits = {`IUnit,`BUnit,`BUnit};
+7'h02: fnUnits = {`FUnit,`BUnit,`BUnit};
+7'h03: fnUnits = {`MLdUnit,`IUnit,`BUnit};
+7'h04: fnUnits = {`MStUnit,`IUnit,`BUnit};
+7'h05: fnUnits = {`BUnit,`IUnit,`BUnit};
+7'h06: fnUnits = {`IUnit,`IUnit,`BUnit};
+7'h07: fnUnits = {`FUnit,`IUnit,`BUnit};
+7'h08: fnUnits = {`MLdUnit,`FUnit,`BUnit};
+7'h09: fnUnits = {`MStUnit,`FUnit,`BUnit};
+7'h0A: fnUnits = {`BUnit,`FUnit,`BUnit};
+7'h0B: fnUnits = {`IUnit,`FUnit,`BUnit};
+7'h0C: fnUnits = {`FUnit,`FUnit,`BUnit};
+7'h0D: fnUnits = {`MLdUnit,`MLdUnit,`IUnit};
+7'h0E: fnUnits = {`MStUnit,`MLdUnit,`IUnit};
+7'h0F: fnUnits = {`BUnit,`MLdUnit,`IUnit};
+7'h10: fnUnits = {`IUnit,`MLdUnit,`IUnit};
+7'h11: fnUnits = {`FUnit,`MLdUnit,`IUnit};
+7'h12: fnUnits = {`MLdUnit,`MStUnit,`IUnit};
+7'h13: fnUnits = {`MStUnit,`MStUnit,`IUnit};
+7'h14: fnUnits = {`BUnit,`MStUnit,`IUnit};
+7'h15: fnUnits = {`IUnit,`MStUnit,`IUnit};
+7'h16: fnUnits = {`FUnit,`MStUnit,`IUnit};
+7'h17: fnUnits = {`MLdUnit,`BUnit,`IUnit};
+7'h18: fnUnits = {`MStUnit,`BUnit,`IUnit};
+7'h19: fnUnits = {`BUnit,`BUnit,`IUnit};
+7'h1A: fnUnits = {`IUnit,`BUnit,`IUnit};
+7'h1B: fnUnits = {`FUnit,`BUnit,`IUnit};
+7'h1C: fnUnits = {`MLdUnit,`IUnit,`IUnit};
+7'h1D: fnUnits = {`MStUnit,`IUnit,`IUnit};
+7'h1E: fnUnits = {`BUnit,`IUnit,`IUnit};
+7'h1F: fnUnits = {`IUnit,`IUnit,`IUnit};
+7'h20: fnUnits = {`FUnit,`IUnit,`IUnit};
+7'h21: fnUnits = {`MLdUnit,`FUnit,`IUnit};
+7'h22: fnUnits = {`MStUnit,`FUnit,`IUnit};
+7'h23: fnUnits = {`BUnit,`FUnit,`IUnit};
+7'h24: fnUnits = {`IUnit,`FUnit,`IUnit};
+7'h25: fnUnits = {`FUnit,`FUnit,`IUnit};
+7'h26: fnUnits = {`MLdUnit,`MLdUnit,`FUnit};
+7'h27: fnUnits = {`MStUnit,`MLdUnit,`FUnit};
+7'h28: fnUnits = {`BUnit,`MLdUnit,`FUnit};
+7'h29: fnUnits = {`IUnit,`MLdUnit,`FUnit};
+7'h2A: fnUnits = {`FUnit,`MLdUnit,`FUnit};
+7'h2B: fnUnits = {`MLdUnit,`MStUnit,`FUnit};
+7'h2C: fnUnits = {`MStUnit,`MStUnit,`FUnit};
+7'h2D: fnUnits = {`BUnit,`MStUnit,`FUnit};
+7'h2E: fnUnits = {`IUnit,`MStUnit,`FUnit};
+7'h2F: fnUnits = {`FUnit,`MStUnit,`FUnit};
+7'h30: fnUnits = {`MLdUnit,`BUnit,`FUnit};
+7'h31: fnUnits = {`MStUnit,`BUnit,`FUnit};
+7'h32: fnUnits = {`BUnit,`BUnit,`FUnit};
+7'h33: fnUnits = {`IUnit,`BUnit,`FUnit};
+7'h34: fnUnits = {`FUnit,`BUnit,`FUnit};
+7'h35: fnUnits = {`MLdUnit,`IUnit,`FUnit};
+7'h36: fnUnits = {`MStUnit,`IUnit,`FUnit};
+7'h37: fnUnits = {`BUnit,`IUnit,`FUnit};
+7'h38: fnUnits = {`IUnit,`IUnit,`FUnit};
+7'h39: fnUnits = {`FUnit,`IUnit,`FUnit};
+7'h3A: fnUnits = {`MLdUnit,`FUnit,`FUnit};
+7'h3B: fnUnits = {`MStUnit,`FUnit,`FUnit};
+7'h3C: fnUnits = {`BUnit,`FUnit,`FUnit};
+7'h3D: fnUnits = {`IUnit,`FUnit,`FUnit};
+7'h3E: fnUnits = {`FUnit,`FUnit,`FUnit};
+7'h3F: fnUnits = {`MLdUnit,`MLdUnit,`MLdUnit};
+7'h40: fnUnits = {`MStUnit,`MLdUnit,`MLdUnit};
+7'h41: fnUnits = {`BUnit,`MLdUnit,`MLdUnit};
+7'h42: fnUnits = {`IUnit,`MLdUnit,`MLdUnit};
+7'h43: fnUnits = {`FUnit,`MLdUnit,`MLdUnit};
+7'h44: fnUnits = {`MLdUnit,`MStUnit,`MLdUnit};
+7'h45: fnUnits = {`MStUnit,`MStUnit,`MLdUnit};
+7'h46: fnUnits = {`BUnit,`MStUnit,`MLdUnit};
+7'h47: fnUnits = {`IUnit,`MStUnit,`MLdUnit};
+7'h48: fnUnits = {`FUnit,`MStUnit,`MLdUnit};
+7'h49: fnUnits = {`MLdUnit,`BUnit,`MLdUnit};
+7'h4A: fnUnits = {`MStUnit,`BUnit,`MLdUnit};
+7'h4B: fnUnits = {`BUnit,`BUnit,`MLdUnit};
+7'h4C: fnUnits = {`IUnit,`BUnit,`MLdUnit};
+7'h4D: fnUnits = {`FUnit,`BUnit,`MLdUnit};
+7'h4E: fnUnits = {`MLdUnit,`IUnit,`MLdUnit};
+7'h4F: fnUnits = {`MStUnit,`IUnit,`MLdUnit};
+7'h50: fnUnits = {`BUnit,`IUnit,`MLdUnit};
+7'h51: fnUnits = {`IUnit,`IUnit,`MLdUnit};
+7'h52: fnUnits = {`FUnit,`IUnit,`MLdUnit};
+7'h53: fnUnits = {`MLdUnit,`FUnit,`MLdUnit};
+7'h54: fnUnits = {`MStUnit,`FUnit,`MLdUnit};
+7'h55: fnUnits = {`BUnit,`FUnit,`MLdUnit};
+7'h56: fnUnits = {`IUnit,`FUnit,`MLdUnit};
+7'h57: fnUnits = {`FUnit,`FUnit,`MLdUnit};
+7'h58: fnUnits = {`MLdUnit,`MLdUnit,`MStUnit};
+7'h59: fnUnits = {`MStUnit,`MLdUnit,`MStUnit};
+7'h5A: fnUnits = {`BUnit,`MLdUnit,`MStUnit};
+7'h5B: fnUnits = {`IUnit,`MLdUnit,`MStUnit};
+7'h5C: fnUnits = {`FUnit,`MLdUnit,`MStUnit};
+7'h5D: fnUnits = {`MLdUnit,`MStUnit,`MStUnit};
+7'h5E: fnUnits = {`MStUnit,`MStUnit,`MStUnit};
+7'h5F: fnUnits = {`BUnit,`MStUnit,`MStUnit};
+7'h60: fnUnits = {`IUnit,`MStUnit,`MStUnit};
+7'h61: fnUnits = {`FUnit,`MStUnit,`MStUnit};
+7'h62: fnUnits = {`MLdUnit,`BUnit,`MStUnit};
+7'h63: fnUnits = {`MStUnit,`BUnit,`MStUnit};
+7'h64: fnUnits = {`BUnit,`BUnit,`MStUnit};
+7'h65: fnUnits = {`IUnit,`BUnit,`MStUnit};
+7'h66: fnUnits = {`FUnit,`BUnit,`MStUnit};
+7'h67: fnUnits = {`MLdUnit,`IUnit,`MStUnit};
+7'h68: fnUnits = {`MStUnit,`IUnit,`MStUnit};
+7'h69: fnUnits = {`BUnit,`IUnit,`MStUnit};
+7'h6A: fnUnits = {`IUnit,`IUnit,`MStUnit};
+7'h6B: fnUnits = {`FUnit,`IUnit,`MStUnit};
+7'h6C: fnUnits = {`MLdUnit,`FUnit,`MStUnit};
+7'h6D: fnUnits = {`MStUnit,`FUnit,`MStUnit};
+7'h6E: fnUnits = {`BUnit,`FUnit,`MStUnit};
+7'h6F: fnUnits = {`IUnit,`FUnit,`MStUnit};
+7'h70: fnUnits = {`FUnit,`FUnit,`MStUnit};
+7'h71: fnUnits = {`MLdUnit,`MLdUnit,`BUnit};
+7'h72: fnUnits = {`MStUnit,`MLdUnit,`BUnit};
+7'h73: fnUnits = {`BUnit,`MLdUnit,`BUnit};
+7'h74: fnUnits = {`IUnit,`MLdUnit,`BUnit};
+7'h75: fnUnits = {`FUnit,`MLdUnit,`BUnit};
+7'h76: fnUnits = {`MLdUnit,`MStUnit,`BUnit};
+7'h77: fnUnits = {`MStUnit,`MStUnit,`BUnit};
+7'h78: fnUnits = {`BUnit,`MStUnit,`BUnit};
+7'h79: fnUnits = {`IUnit,`MStUnit,`BUnit};
+7'h7A: fnUnits = {`FUnit,`MStUnit,`BUnit};
+7'h7B: fnUnits = {`MLdUnit,`BUnit,`BUnit};
+7'h7C: fnUnits = {`MStUnit,`BUnit,`BUnit};
+/*
 7'h00:	fnUnits = {`IUnit,`IUnit,`IUnit};
 7'h01:	fnUnits = {`MLdUnit,`IUnit,`IUnit};
 7'h02:	fnUnits = {`IUnit,`MLdUnit,`IUnit};
@@ -971,12 +1092,42 @@ case(tmp)
 7'h4F:	fnUnits = {`BUnit,`IUnit,`MStUnit};
 7'h50:	fnUnits = {`BUnit,`IUnit,`FUnit};
 7'h51:	fnUnits = {`FUnit,`IUnit,`BUnit};
+7'h52:	fnUnits = {`BUnit,`MLdUnit,`IUnit};
+7'h53:	fnUnits = {`MLdUnit,`BUnit,`IUnit};
+7'h54:	fnUnits = {`IUnit,`BUnit,`MLdUnit};
+7'h55:	fnUnits = {`IUnit,`MLdUnit,`BUnit};
 7'h56:	fnUnits = {`BUnit,`MStUnit,`MStUnit};
 7'h57:	fnUnits = {`MStUnit,`BUnit,`MStUnit};
 7'h58:	fnUnits = {`BUnit,`BUnit,`MStUnit};
 7'h59:	fnUnits = {`MStUnit,`MStUnit,`BUnit};
 7'h5A:	fnUnits = {`BUnit,`MStUnit,`BUnit};
 7'h5B:	fnUnits = {`MStUnit,`BUnit,`BUnit};
+7'h5C:	fnUnits = {`BUnit,`MStUnit,`IUnit};
+7'h5D:	fnUnits = {`IUnit,`BUnit,`MStUnit};
+7'h5E:	fnUnits = {`MStUnit,`BUnit,`IUnit};
+7'h5F:	fnUnits = {`MStUnit,`IUnit,`BUnit};
+
+7'h60:	fnUnits = {`IUnit,`MStUnit,`BUnit};
+7'h61:	fnUnits = {`MLdUnit,`IUnit,`BUnit};
+7'h62:	fnUnits = {`FUnit,`MStUnit,`IUnit};
+7'h63:	fnUnits = {`MLdUnit,`FUnit,`IUnit};
+7'h64:	fnUnits = {`FUnit,`IUnit,`MLdUnit};
+7'h65:	fnUnits = {`IUnit,`MLdUnit,`FUnit};
+7'h66:	fnUnits = {`FUnit,`BUnit,`IUnit};
+7'h67:	fnUnits = {`IUnit,`FUnit,`BUnit};
+7'h68:	fnUnits = {`BUnit,`MLdUnit,`FUnit};
+7'h69:	fnUnits = {`MLdUnit,`FUnit,`BUnit};
+7'h6A:	fnUnits = {`FUnit,`MStUnit,`BUnit};
+7'h6B:	fnUnits = {`FUnit,`BUnit,`MLdUnit};
+7'h6C:	fnUnits = {`MStUnit,`FUnit,`IUnit};
+7'h6D:	fnUnits = {`MStUnit,`BUnit,`FUnit};
+6'h6E:	fnUnits = {`BUnit,`FUnit,`IUnit};
+7'h6F:	fnUnits = {`IUnit,`FUnit,`MLdUnit};
+7'h70:	fnUnits = {`FUnit,`MLdUnit,`BUnit};
+7'h71:	fnUnits = {`FUnit,`IUnit,`MStUnit};
+7'h72:	fnUnits = {`IUnit,`BUnit,`FUnit};
+7'h73:	fnUnits = {`BUnit,`FUnit,`MLdUnit};
+*/
 default:	fnUnits = {`NUnit,`NUnit,`NUnit};
 endcase
 endfunction
@@ -997,7 +1148,7 @@ function [2:0] Unit0;
 input [6:0] tmp;
 reg [8:0] units;
 units = fnUnits(tmp);
-Unit0 = units[2:0];
+Unit0 = units[8:6];
 endfunction
 
 function [2:0] Unit1;
@@ -1011,29 +1162,7 @@ function [2:0] Unit2;
 input [6:0] tmp;
 reg [8:0] units;
 units = fnUnits(tmp);
-Unit2 = units[8:6];
-endfunction
-
-
-function IsMUnit;
-input [4:0] tmp;
-input [1:0] slt;
-case(tmp)
-5'h0A,5'h0B:
-	IsMUnit = slt==2'd0 || slt==2'd1;
-5'h0C,5'h0D:
-	IsMUnit = slt==2'd0;
-5'h0E,5'h0F:
-	IsMUnit = slt==2'd0 || slt==2'd1;
-5'h10,5'h11,5'h12,5'h13:
-	IsMUnit = slt==2'd0;
-5'h18,5'h19:
-	IsMUnit = slt==2'd0 || slt==2'd1;
-5'h1C,5'h1D:
-	IsMUnit = slt==2'd0;
-default:
-	IsMUnit = FALSE;
-endcase
+Unit2 = units[12:0];
 endfunction
 
 function IsNop;
@@ -1041,6 +1170,10 @@ input [2:0] unit;
 input [39:0] ins;
 IsNop = unit==`BUnit && ins[`OPCODE4]==`NOP;
 endfunction
+
+assign slot0u = Unit0(ibundle[127:120]);
+assign slot1u = Unit1(ibundle[127:120]);
+assign slot2u = Unit2(ibundle[127:120]);
 
 Regfile urf1
 (
@@ -1077,12 +1210,12 @@ ICController uicc1
 (
 	.rst_i(rst_i),
 	.clk_i(clk_i),
-	.pc(ip),
+	.ip(ip),
 	.hit(L1_ihit),
 	.bstate(bstate),
 	.state(icstate),
-	.invline(1'b0),
-	.invlineAddr(80'h0),
+	.invline(invicl),
+	.invlineAddr(invlineAddr),
 	.icl_ctr(),
 	.ihitL2(L2_ihit),
 	.L2_ld(L2_ld),
@@ -1094,7 +1227,7 @@ ICController uicc1
 	.L1_adr(L1_adr),
 	.L1_dat(L1_dat),
 	.L1_wr(L1_wr),
-	.L1_invline(),
+	.L1_invline(L1_invline),
 	.icnxt(L1_nxt),
 	.icwhich(),
 	.icl_o(icl_o),
@@ -1124,8 +1257,8 @@ L1_icache uic1
 	.o(ic_out),
 	.fault(),
 	.hit(L1_ihit),
-	.invall(1'b0),
-	.invline(1'b0)
+	.invall(invic),
+	.invline(L1_invline)
 );
 
 L2_icache uic2
@@ -1133,7 +1266,7 @@ L2_icache uic2
 	.rst(rst_i),
 	.clk(clk_i),
 	.nxt(L2_nxt),
-	.wr(L2_wr),
+	.wr(L2_ld),
 	.adr(L2_ld ? L2_adr : L1_adr),
 	.cnt(L2_cnt),
 	.exv_i(1'b0),
@@ -1141,8 +1274,8 @@ L2_icache uic2
 	.err_i(1'b0),
 	.o(L2_dat),
 	.hit(L2_ihit),
-	.invall(1'b0),
-	.invline(1'b0)
+	.invall(invic),
+	.invline(L1_invline)
 );
 
 wire predict_taken;
@@ -1160,7 +1293,7 @@ wire predict_takenB1;
 wire predict_takenC1;
 wire predict_takenD1;
 
-wire [`ABITS] btgtA, btgtB, btgtC, btgtD, btgtE, btgtF;
+wire [`ABITS] btgtA, btgtB, btgtC;
 wire btbwr0 = iq_v[heads[0]] && iq_state[heads[0]]==IQS_CMT && iq_fc[heads[0]];
 wire btbwr1 = iq_v[heads[1]] && iq_state[heads[1]]==IQS_CMT && iq_fc[heads[1]];
 wire btbwr2 = iq_v[heads[2]] && iq_state[heads[2]]==IQS_CMT && iq_fc[heads[2]];
@@ -1199,9 +1332,9 @@ BTB #(.AMSB(AMSB)) ubtb1
   .btgtB(btgtB),
   .pcC({ip[79:4],4'hA}),
   .btgtC(btgtC),
-  .npcA(BRKPC),
-  .npcB(BRKPC),
-  .npcC(BRKPC)
+  .npcA({ip[79:4]+5'd16,4'h0}),
+  .npcB({ip[79:4]+5'd16,4'h5}),
+  .npcC({ip[79:4]+5'd16,4'hA})
 );
 
 BranchPredictor ubp1
@@ -1245,8 +1378,8 @@ DCController udcc1
 	.wdat(dcdat),
 	.bstate(bstate),
 	.state(),
-	.invline(1'b0),
-	.invlineAddr(80'h0),
+	.invline(invdcl),
+	.invlineAddr(invlineAddr),
 	.icl_ctr(),
 	.dL2_rhit(d0L2_rhit),
 	.dL2_rdat(d0L2_rdat),
@@ -1262,7 +1395,7 @@ DCController udcc1
 	.dL1_adr(d0L1_adr),
 	.dL1_dat(d0L1_dat),
 	.dL1_wr(d0L1_wr),
-	.dL1_invline(1'b0),
+	.dL1_invline(d0L1_invline),
 	.dcnxt(),
 	.dcwhich(),
 	.dcl_o(),
@@ -1292,8 +1425,8 @@ L1_dcache udc1
 	.o(dc0_out),
 	.fault(),
 	.hit(d0L1_dhit),
-	.invall(1'b0),
-	.invline(1'b0)
+	.invall(invdc),
+	.invline(d0L1_invline)
 );
 
 L2_dcache udc2
@@ -1312,8 +1445,8 @@ L2_dcache udc2
 	.o(d0L2_rdat),
 	.rhit(d0L2_rhit),
 	.whit(d0L2_whit),
-	.invall(1'b0),
-	.invline(1'b0)
+	.invall(invdc),
+	.invline(d0L1_invline)
 );
 
 
@@ -1346,7 +1479,7 @@ DCController udcc2
 	.dL1_adr(d1L1_adr),
 	.dL1_dat(d1L1_dat),
 	.dL1_wr(d1L1_wr),
-	.dL1_invline(1'b0),
+	.dL1_invline(d1L1_invline),
 	.dcnxt(),
 	.dcwhich(),
 	.dcl_o(),
@@ -1376,8 +1509,8 @@ L1_dcache udc3
 	.o(dc1_out),
 	.fault(),
 	.hit(d1L1_dhit),
-	.invall(1'b0),
-	.invline(1'b0)
+	.invall(invdc),
+	.invline(d1L1_invline)
 );
 
 L2_dcache udc4
@@ -1396,8 +1529,8 @@ L2_dcache udc4
 	.o(d1L2_rdat),
 	.rhit(d1L2_rhit),
 	.whit(d1L2_whit),
-	.invall(1'b0),
-	.invline(1'b0)
+	.invall(invdc),
+	.invline(d1L1_invline)
 );
 
 wire [199:0] rdat0, rdat1;
@@ -1419,6 +1552,7 @@ write_buffer uwb1
 	.bstate(bstate),
 	.cyc_pending(cyc_pending),
 	.wb_has_bus(wb_has_bus),
+	.wb_v(wb_v),
 	.wb_addr(wb_addr),
 	.update_iq(update_iq),
 	.uid(uid),
@@ -1691,6 +1825,8 @@ begin
     if (dbg_imatchB0|dbg_imatchB1|dbg_imatchB2|dbg_imatchB3)
         dbg_imatchB = `TRUE;
 end
+`else
+assign debug_on = FALSE;
 `endif
 
 //-----------------------------------------------------------------------------
@@ -2214,7 +2350,7 @@ function IsDivmod;
 input [2:0] unit;
 input [39:0] isn;
 if (unit==`IUnit)
-	case({isn[32:31],isn[`OPCODE4]})
+	casez({isn[32:31],isn[`OPCODE4]})
 	`DIV,`DIVU,`MOD,`MODU:	IsDivmod = TRUE;
 	`R3:
 		case(isn[`FUNCT5])
@@ -2889,8 +3025,8 @@ begin
 					&& !(iq_load[heads[2]] && (wb_v!=1'b0
 						|| iq_store[heads[0]] || iq_store[heads[1]]))
 					// ... and there isn't a barrier, or everything before the barrier is done or invalid
-            && (!(iq_iv[heads[1]] && iq_memsb[heads[1]]) || (iq_done[heads[0]] || !iq_v[heads[0]]))
-    				&& (!(iq_iv[heads[1]] && iq_memdb[heads[1]]) || (!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]]))
+            && (!(iq_memsb[heads[1]]) || (iq_done[heads[0]] || !iq_v[heads[0]]))
+    				&& (!(iq_memdb[heads[1]]) || (!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]]))
 					// ... and, if it is a SW, there is no chance of it being undone
 					&& ((iq_load[heads[2]] && sple) ||
 					      !(iq_fc[heads[0]]||iq_canex[heads[0]])
@@ -2924,13 +3060,13 @@ begin
 					&& !(iq_load[heads[3]] && (wb_v!=1'b0
 						|| iq_store[heads[0]] || iq_store[heads[1]] || iq_store[heads[2]]))
 					// ... and there isn't a barrier, or everything before the barrier is done or invalid
-                    && (!(iq_iv[heads[1]] && iq_memsb[heads[1]]) || (iq_done[heads[0]] || !iq_v[heads[0]]))
-                    && (!(iq_iv[heads[2]] && iq_memsb[heads[2]]) ||
+                    && (!(iq_memsb[heads[1]]) || (iq_done[heads[0]] || !iq_v[heads[0]]))
+                    && (!(iq_memsb[heads[2]]) ||
                     			((iq_done[heads[0]] || !iq_v[heads[0]])
                     		&&   (iq_done[heads[1]] || !iq_v[heads[1]]))
                     		)
-    				&& (!(iq_iv[heads[1]] && iq_memdb[heads[1]]) || (!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]]))
-                    && (!(iq_iv[heads[2]] && iq_memdb[heads[2]]) ||
+    				&& (!(iq_memdb[heads[1]]) || (!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]]))
+                    && (!(iq_memdb[heads[2]]) ||
                      		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
                      		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]]))
                      		)
@@ -2974,22 +3110,22 @@ begin
 					&& !(iq_load[heads[4]] && (wb_v!=1'b0
 						|| iq_store[heads[0]] || iq_store[heads[1]] || iq_store[heads[2]] || iq_store[heads[3]]))
 					// ... and there isn't a barrier, or everything before the barrier is done or invalid
-                    && (!(iq_iv[heads[1]] && iq_memsb[heads[1]]) || (iq_done[heads[0]] || !iq_v[heads[0]]))
-                    && (!(iq_iv[heads[2]] && iq_memsb[heads[2]]) ||
+                    && (!(iq_memsb[heads[1]]) || (iq_done[heads[0]] || !iq_v[heads[0]]))
+                    && (!(iq_memsb[heads[2]]) ||
                     			((iq_done[heads[0]] || !iq_v[heads[0]])
                     		&&   (iq_done[heads[1]] || !iq_v[heads[1]]))
                     		)
-                    && (!(iq_iv[heads[3]] && iq_memsb[heads[3]]) ||
+                    && (!(iq_memsb[heads[3]]) ||
                     			((iq_done[heads[0]] || !iq_v[heads[0]])
                     		&&   (iq_done[heads[1]] || !iq_v[heads[1]])
                     		&&   (iq_done[heads[2]] || !iq_v[heads[2]]))
                     		)
     				&& (!(iq_v[heads[1]] && iq_memdb[heads[1]]) || (!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]]))
-                    && (!(iq_iv[heads[2]] && iq_memdb[heads[2]]) ||
+                    && (!(iq_memdb[heads[2]]) ||
                      		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
                      		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]]))
                      		)
-                    && (!(iq_iv[heads[3]] && iq_memdb[heads[3]]) ||
+                    && (!(iq_memdb[heads[3]]) ||
                      		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
                      		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]])
                      		&& (!iq_mem[heads[2]] || iq_done[heads[2]] || !iq_v[heads[2]]))
@@ -3042,33 +3178,33 @@ begin
 						|| iq_store[heads[0]] || iq_store[heads[1]] || iq_store[heads[2]] || iq_store[heads[3]]
 						|| iq_store[heads[4]]))
 					// ... and there isn't a barrier, or everything before the barrier is done or invalid
-                    && (!(iq_iv[heads[1]] && iq_memsb[heads[1]]) || (iq_done[heads[0]] || !iq_v[heads[0]]))
-                    && (!(iq_iv[heads[2]] && iq_memsb[heads[2]]) ||
+                    && (!(iq_memsb[heads[1]]) || (iq_done[heads[0]] || !iq_v[heads[0]]))
+                    && (!(iq_memsb[heads[2]]) ||
                     			((iq_done[heads[0]] || !iq_v[heads[0]])
                     		&&   (iq_done[heads[1]] || !iq_v[heads[1]]))
                     		)
-                    && (!(iq_iv[heads[3]] && iq_memsb[heads[3]]) ||
+                    && (!(iq_memsb[heads[3]]) ||
                     			((iq_done[heads[0]] || !iq_v[heads[0]])
                     		&&   (iq_done[heads[1]] || !iq_v[heads[1]])
                     		&&   (iq_done[heads[2]] || !iq_v[heads[2]]))
                     		)
-                    && (!(iq_iv[heads[4]] && iq_memsb[heads[4]]) ||
+                    && (!(iq_memsb[heads[4]]) ||
                     			((iq_done[heads[0]] || !iq_v[heads[0]])
                     		&&   (iq_done[heads[1]] || !iq_v[heads[1]])
                     		&&   (iq_done[heads[2]] || !iq_v[heads[2]])
                     		&&   (iq_done[heads[3]] || !iq_v[heads[3]]))
                     		)
-    				&& (!(iq_iv[heads[1]] && iq_memdb[heads[1]]) || (!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]]))
-                    && (!(iq_iv[heads[2]] && iq_memdb[heads[2]]) ||
+    				&& (!(iq_memdb[heads[1]]) || (!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]]))
+                    && (!(iq_memdb[heads[2]]) ||
                      		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
                      		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]]))
                      		)
-                    && (!(iq_iv[heads[3]] && iq_memdb[heads[3]]) ||
+                    && (!(iq_memdb[heads[3]]) ||
                      		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
                      		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]])
                      		&& (!iq_mem[heads[2]] || iq_done[heads[2]] || !iq_v[heads[2]]))
                      		)
-                    && (!(iq_iv[heads[4]] && iq_memdb[heads[4]]) ||
+                    && (!(iq_memdb[heads[4]]) ||
                      		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
                      		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]])
                      		&& (!iq_mem[heads[2]] || iq_done[heads[2]] || !iq_v[heads[2]])
@@ -3128,46 +3264,46 @@ if (QENTRIES > 6) begin
 						|| iq_store[heads[0]] || iq_store[heads[1]] || iq_store[heads[2]] || iq_store[heads[3]]
 						|| iq_store[heads[4]] || iq_store[heads[5]]))
 					// ... and there isn't a barrier, or everything before the barrier is done or invalid
-                    && (!(iq_iv[heads[1]] && iq_memsb[heads[1]]) || (iq_done[heads[0]] || !iq_v[heads[0]]))
-                    && (!(iq_iv[heads[2]] && iq_memsb[heads[2]]) ||
+                    && (!(iq_memsb[heads[1]]) || (iq_done[heads[0]] || !iq_v[heads[0]]))
+                    && (!(iq_memsb[heads[2]]) ||
                     			((iq_done[heads[0]] || !iq_v[heads[0]])
                     		&&   (iq_done[heads[1]] || !iq_v[heads[1]]))
                     		)
-                    && (!(iq_iv[heads[3]] && iq_memsb[heads[3]]) ||
+                    && (!(iq_memsb[heads[3]]) ||
                     			((iq_done[heads[0]] || !iq_v[heads[0]])
                     		&&   (iq_done[heads[1]] || !iq_v[heads[1]])
                     		&&   (iq_done[heads[2]] || !iq_v[heads[2]]))
                     		)
-                    && (!(iq_iv[heads[4]] && iq_memsb[heads[4]]) ||
+                    && (!(iq_memsb[heads[4]]) ||
                     			((iq_done[heads[0]] || !iq_v[heads[0]])
                     		&&   (iq_done[heads[1]] || !iq_v[heads[1]])
                     		&&   (iq_done[heads[2]] || !iq_v[heads[2]])
                     		&&   (iq_done[heads[3]] || !iq_v[heads[3]]))
                     		)
-                    && (!(iq_iv[heads[5]] && iq_memsb[heads[5]]) ||
+                    && (!(iq_memsb[heads[5]]) ||
                     			((iq_done[heads[0]] || !iq_v[heads[0]])
                     		&&   (iq_done[heads[1]] || !iq_v[heads[1]])
                     		&&   (iq_done[heads[2]] || !iq_v[heads[2]])
                     		&&   (iq_done[heads[3]] || !iq_v[heads[3]])
                     		&&   (iq_done[heads[4]] || !iq_v[heads[4]]))
                     		)
-    				&& (!(iq_iv[heads[1]] && iq_memdb[heads[1]]) || (!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]]))
-                    && (!(iq_iv[heads[2]] && iq_memdb[heads[2]]) ||
+    				&& (!(iq_memdb[heads[1]]) || (!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]]))
+                    && (!(iq_memdb[heads[2]]) ||
                      		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
                      		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]]))
                      		)
-                    && (!(iq_iv[heads[3]] && iq_memdb[heads[3]]) ||
+                    && (!(iq_memdb[heads[3]]) ||
                      		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
                      		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]])
                      		&& (!iq_mem[heads[2]] || iq_done[heads[2]] || !iq_v[heads[2]]))
                      		)
-                    && (!(iq_iv[heads[4]] && iq_memdb[heads[4]]) ||
+                    && (!(iq_memdb[heads[4]]) ||
                      		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
                      		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]])
                      		&& (!iq_mem[heads[2]] || iq_done[heads[2]] || !iq_v[heads[2]])
                      		&& (!iq_mem[heads[3]] || iq_done[heads[3]] || !iq_v[heads[3]]))
                      		)
-                    && (!(iq_iv[heads[5]] && iq_memdb[heads[5]]) ||
+                    && (!(iq_memdb[heads[5]]) ||
                      		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
                      		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]])
                      		&& (!iq_mem[heads[2]] || iq_done[heads[2]] || !iq_v[heads[2]])
@@ -3233,30 +3369,30 @@ if (QENTRIES > 6) begin
 						|| iq_store[heads[0]] || iq_store[heads[1]] || iq_store[heads[2]] || iq_store[heads[3]]
 						|| iq_store[heads[4]] || iq_store[heads[5]] || iq_store[heads[6]]))
 					// ... and there isn't a barrier, or everything before the barrier is done or invalid
-                    && (!(iq_iv[heads[1]] && iq_memsb[heads[1]]) || (iq_done[heads[0]] || !iq_v[heads[0]]))
-                    && (!(iq_iv[heads[2]] && iq_memsb[heads[2]]) ||
+                    && (!(iq_memsb[heads[1]]) || (iq_done[heads[0]] || !iq_v[heads[0]]))
+                    && (!(iq_memsb[heads[2]]) ||
                     			((iq_done[heads[0]] || !iq_v[heads[0]])
                     		&&   (iq_done[heads[1]] || !iq_v[heads[1]]))
                     		)
-                    && (!(iq_iv[heads[3]] && iq_memsb[heads[3]]) ||
+                    && (!(iq_memsb[heads[3]]) ||
                     			((iq_done[heads[0]] || !iq_v[heads[0]])
                     		&&   (iq_done[heads[1]] || !iq_v[heads[1]])
                     		&&   (iq_done[heads[2]] || !iq_v[heads[2]]))
                     		)
-                    && (!(iq_iv[heads[4]] && iq_memsb[heads[4]]) ||
+                    && (!(iq_memsb[heads[4]]) ||
                     			((iq_done[heads[0]] || !iq_v[heads[0]])
                     		&&   (iq_done[heads[1]] || !iq_v[heads[1]])
                     		&&   (iq_done[heads[2]] || !iq_v[heads[2]])
                     		&&   (iq_done[heads[3]] || !iq_v[heads[3]]))
                     		)
-                    && (!(iq_iv[heads[5]] && iq_memsb[heads[5]]) ||
+                    && (!(iq_memsb[heads[5]]) ||
                     			((iq_done[heads[0]] || !iq_v[heads[0]])
                     		&&   (iq_done[heads[1]] || !iq_v[heads[1]])
                     		&&   (iq_done[heads[2]] || !iq_v[heads[2]])
                     		&&   (iq_done[heads[3]] || !iq_v[heads[3]])
                     		&&   (iq_done[heads[4]] || !iq_v[heads[4]]))
                     		)
-                    && (!(iq_iv[heads[6]] && iq_memsb[heads[6]]) ||
+                    && (!(iq_memsb[heads[6]]) ||
                     			((iq_done[heads[0]] || !iq_v[heads[0]])
                     		&&   (iq_done[heads[1]] || !iq_v[heads[1]])
                     		&&   (iq_done[heads[2]] || !iq_v[heads[2]])
@@ -3264,30 +3400,30 @@ if (QENTRIES > 6) begin
                     		&&   (iq_done[heads[4]] || !iq_v[heads[4]])
                     		&&   (iq_done[heads[5]] || !iq_v[heads[5]]))
                     		)
-    				&& (!(iq_iv[heads[1]] && iq_memdb[heads[1]]) || (!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]]))
-                    && (!(iq_iv[heads[2]] && iq_memdb[heads[2]]) ||
+    				&& (!(iq_memdb[heads[1]]) || (!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]]))
+                    && (!(iq_memdb[heads[2]]) ||
                      		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
                      		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]]))
                      		)
-                    && (!(iq_iv[heads[3]] && iq_memdb[heads[3]]) ||
+                    && (!(iq_memdb[heads[3]]) ||
                      		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
                      		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]])
                      		&& (!iq_mem[heads[2]] || iq_done[heads[2]] || !iq_v[heads[2]]))
                      		)
-                    && (!(iq_iv[heads[4]] && iq_memdb[heads[4]]) ||
+                    && (!(iq_memdb[heads[4]]) ||
                      		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
                      		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]])
                      		&& (!iq_mem[heads[2]] || iq_done[heads[2]] || !iq_v[heads[2]])
                      		&& (!iq_mem[heads[3]] || iq_done[heads[3]] || !iq_v[heads[3]]))
                      		)
-                    && (!(iq_iv[heads[5]] && iq_memdb[heads[5]]) ||
+                    && (!(iq_memdb[heads[5]]) ||
                      		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
                      		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]])
                      		&& (!iq_mem[heads[2]] || iq_done[heads[2]] || !iq_v[heads[2]])
                      		&& (!iq_mem[heads[3]] || iq_done[heads[3]] || !iq_v[heads[3]])
                      		&& (!iq_mem[heads[4]] || iq_done[heads[4]] || !iq_v[heads[4]]))
                      		)
-                    && (!(iq_iv[heads[6]] && iq_memdb[heads[6]]) ||
+                    && (!(iq_memdb[heads[6]]) ||
                      		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
                      		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]])
                      		&& (!iq_mem[heads[2]] || iq_done[heads[2]] || !iq_v[heads[2]])
@@ -3359,30 +3495,30 @@ if (QENTRIES > 6) begin
 						|| iq_store[heads[0]] || iq_store[heads[1]] || iq_store[heads[2]] || iq_store[heads[3]]
 						|| iq_store[heads[4]] || iq_store[heads[5]] || iq_store[heads[6]] || iq_store[heads[7]]))
 					// ... and there isn't a barrier, or everything before the barrier is done or invalid
-                    && (!(iq_iv[heads[1]] && iq_memsb[heads[1]]) || (iq_done[heads[0]] || !iq_v[heads[0]]))
-                    && (!(iq_iv[heads[2]] && iq_memsb[heads[2]]) ||
+                    && (!(iq_memsb[heads[1]]) || (iq_done[heads[0]] || !iq_v[heads[0]]))
+                    && (!(iq_memsb[heads[2]]) ||
                     			((iq_done[heads[0]] || !iq_v[heads[0]])
                     		&&   (iq_done[heads[1]] || !iq_v[heads[1]]))
                     		)
-                    && (!(iq_iv[heads[3]] && iq_memsb[heads[3]]) ||
+                    && (!(iq_memsb[heads[3]]) ||
                     			((iq_done[heads[0]] || !iq_v[heads[0]])
                     		&&   (iq_done[heads[1]] || !iq_v[heads[1]])
                     		&&   (iq_done[heads[2]] || !iq_v[heads[2]]))
                     		)
-                    && (!(iq_iv[heads[4]] && iq_memsb[heads[4]]) ||
+                    && (!(iq_memsb[heads[4]]) ||
                     			((iq_done[heads[0]] || !iq_v[heads[0]])
                     		&&   (iq_done[heads[1]] || !iq_v[heads[1]])
                     		&&   (iq_done[heads[2]] || !iq_v[heads[2]])
                     		&&   (iq_done[heads[3]] || !iq_v[heads[3]]))
                     		)
-                    && (!(iq_iv[heads[5]] && iq_memsb[heads[5]]) ||
+                    && (!(iq_memsb[heads[5]]) ||
                     			((iq_done[heads[0]] || !iq_v[heads[0]])
                     		&&   (iq_done[heads[1]] || !iq_v[heads[1]])
                     		&&   (iq_done[heads[2]] || !iq_v[heads[2]])
                     		&&   (iq_done[heads[3]] || !iq_v[heads[3]])
                     		&&   (iq_done[heads[4]] || !iq_v[heads[4]]))
                     		)
-                    && (!(iq_iv[heads[6]] && iq_memsb[heads[6]]) ||
+                    && (!(iq_memsb[heads[6]]) ||
                     			((iq_done[heads[0]] || !iq_v[heads[0]])
                     		&&   (iq_done[heads[1]] || !iq_v[heads[1]])
                     		&&   (iq_done[heads[2]] || !iq_v[heads[2]])
@@ -3390,7 +3526,7 @@ if (QENTRIES > 6) begin
                     		&&   (iq_done[heads[4]] || !iq_v[heads[4]])
                     		&&   (iq_done[heads[5]] || !iq_v[heads[5]]))
                     		)
-                    && (!(iq_iv[heads[7]] && iq_memsb[heads[7]]) ||
+                    && (!(iq_memsb[heads[7]]) ||
                     			((iq_done[heads[0]] || !iq_v[heads[0]])
                     		&&   (iq_done[heads[1]] || !iq_v[heads[1]])
                     		&&   (iq_done[heads[2]] || !iq_v[heads[2]])
@@ -3400,30 +3536,30 @@ if (QENTRIES > 6) begin
                     		&&   (iq_done[heads[6]] || !iq_v[heads[6]])
                     		)
                     		)
-    				&& (!(iq_iv[heads[1]] && iq_memdb[heads[1]]) || (!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]]))
-                    && (!(iq_iv[heads[2]] && iq_memdb[heads[2]]) ||
+    				&& (!(iq_memdb[heads[1]]) || (!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]]))
+                    && (!(iq_memdb[heads[2]]) ||
                      		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
                      		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]]))
                      		)
-                    && (!(iq_iv[heads[3]] && iq_memdb[heads[3]]) ||
+                    && (!(iq_memdb[heads[3]]) ||
                      		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
                      		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]])
                      		&& (!iq_mem[heads[2]] || iq_done[heads[2]] || !iq_v[heads[2]]))
                      		)
-                    && (!(iq_iv[heads[4]] && iq_memdb[heads[4]]) ||
+                    && (!(iq_memdb[heads[4]]) ||
                      		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
                      		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]])
                      		&& (!iq_mem[heads[2]] || iq_done[heads[2]] || !iq_v[heads[2]])
                      		&& (!iq_mem[heads[3]] || iq_done[heads[3]] || !iq_v[heads[3]]))
                      		)
-                    && (!(iq_iv[heads[5]] && iq_memdb[heads[5]]) ||
+                    && (!(iq_memdb[heads[5]]) ||
                      		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
                      		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]])
                      		&& (!iq_mem[heads[2]] || iq_done[heads[2]] || !iq_v[heads[2]])
                      		&& (!iq_mem[heads[3]] || iq_done[heads[3]] || !iq_v[heads[3]])
                      		&& (!iq_mem[heads[4]] || iq_done[heads[4]] || !iq_v[heads[4]]))
                      		)
-                    && (!(iq_iv[heads[6]] && iq_memdb[heads[6]]) ||
+                    && (!(iq_memdb[heads[6]]) ||
                      		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
                      		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]])
                      		&& (!iq_mem[heads[2]] || iq_done[heads[2]] || !iq_v[heads[2]])
@@ -3431,7 +3567,7 @@ if (QENTRIES > 6) begin
                      		&& (!iq_mem[heads[4]] || iq_done[heads[4]] || !iq_v[heads[4]])
                      		&& (!iq_mem[heads[5]] || iq_done[heads[5]] || !iq_v[heads[5]]))
                      		)
-                    && (!(iq_iv[heads[7]] && iq_memdb[heads[7]]) ||
+                    && (!(iq_memdb[heads[7]]) ||
                      		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
                      		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]])
                      		&& (!iq_mem[heads[2]] || iq_done[heads[2]] || !iq_v[heads[2]])
@@ -3512,30 +3648,30 @@ if (QENTRIES > 6) begin
 						|| iq_store[heads[4]] || iq_store[heads[5]] || iq_store[heads[6]] || iq_store[heads[7]]
 						|| iq_store[heads[8]]))
 					// ... and there isn't a barrier, or everything before the barrier is done or invalid
-                    && (!(iq_iv[heads[1]] && iq_memsb[heads[1]]) || (iq_done[heads[0]] || !iq_v[heads[0]]))
-                    && (!(iq_iv[heads[2]] && iq_memsb[heads[2]]) ||
+                    && (!(iq_memsb[heads[1]]) || (iq_done[heads[0]] || !iq_v[heads[0]]))
+                    && (!(iq_memsb[heads[2]]) ||
                     			((iq_done[heads[0]] || !iq_v[heads[0]])
                     		&&   (iq_done[heads[1]] || !iq_v[heads[1]]))
                     		)
-                    && (!(iq_iv[heads[3]] && iq_memsb[heads[3]]) ||
+                    && (!(iq_memsb[heads[3]]) ||
                     			((iq_done[heads[0]] || !iq_v[heads[0]])
                     		&&   (iq_done[heads[1]] || !iq_v[heads[1]])
                     		&&   (iq_done[heads[2]] || !iq_v[heads[2]]))
                     		)
-                    && (!(iq_iv[heads[4]] && iq_memsb[heads[4]]) ||
+                    && (!(iq_memsb[heads[4]]) ||
                     			((iq_done[heads[0]] || !iq_v[heads[0]])
                     		&&   (iq_done[heads[1]] || !iq_v[heads[1]])
                     		&&   (iq_done[heads[2]] || !iq_v[heads[2]])
                     		&&   (iq_done[heads[3]] || !iq_v[heads[3]]))
                     		)
-                    && (!(iq_iv[heads[5]] && iq_memsb[heads[5]]) ||
+                    && (!(iq_memsb[heads[5]]) ||
                     			((iq_done[heads[0]] || !iq_v[heads[0]])
                     		&&   (iq_done[heads[1]] || !iq_v[heads[1]])
                     		&&   (iq_done[heads[2]] || !iq_v[heads[2]])
                     		&&   (iq_done[heads[3]] || !iq_v[heads[3]])
                     		&&   (iq_done[heads[4]] || !iq_v[heads[4]]))
                     		)
-                    && (!(iq_iv[heads[6]] && iq_memsb[heads[6]]) ||
+                    && (!(iq_memsb[heads[6]]) ||
                     			((iq_done[heads[0]] || !iq_v[heads[0]])
                     		&&   (iq_done[heads[1]] || !iq_v[heads[1]])
                     		&&   (iq_done[heads[2]] || !iq_v[heads[2]])
@@ -3543,7 +3679,7 @@ if (QENTRIES > 6) begin
                     		&&   (iq_done[heads[4]] || !iq_v[heads[4]])
                     		&&   (iq_done[heads[5]] || !iq_v[heads[5]]))
                     		)
-                    && (!(iq_iv[heads[7]] && iq_memsb[heads[7]]) ||
+                    && (!(iq_memsb[heads[7]]) ||
                     			((iq_done[heads[0]] || !iq_v[heads[0]])
                     		&&   (iq_done[heads[1]] || !iq_v[heads[1]])
                     		&&   (iq_done[heads[2]] || !iq_v[heads[2]])
@@ -3552,7 +3688,7 @@ if (QENTRIES > 6) begin
                     		&&   (iq_done[heads[5]] || !iq_v[heads[5]])
                     		&&   (iq_done[heads[6]] || !iq_v[heads[6]]))
                     		)
-                    && (!(iq_iv[heads[8]] && iq_memsb[heads[8]]) ||
+                    && (!(iq_memsb[heads[8]]) ||
                     			((iq_done[heads[0]] || !iq_v[heads[0]])
                     		&&   (iq_done[heads[1]] || !iq_v[heads[1]])
                     		&&   (iq_done[heads[2]] || !iq_v[heads[2]])
@@ -3563,30 +3699,30 @@ if (QENTRIES > 6) begin
                     		&&   (iq_done[heads[7]] || !iq_v[heads[7]])
                     		)
                     		)
-    				&& (!(iq_iv[heads[1]] && iq_memdb[heads[1]]) || (!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]]))
-                    && (!(iq_iv[heads[2]] && iq_memdb[heads[2]]) ||
+    				&& (!(iq_memdb[heads[1]]) || (!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]]))
+                    && (!(iq_memdb[heads[2]]) ||
                      		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
                      		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]]))
                      		)
-                    && (!(iq_iv[heads[3]] && iq_memdb[heads[3]]) ||
+                    && (!(iq_memdb[heads[3]]) ||
                      		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
                      		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]])
                      		&& (!iq_mem[heads[2]] || iq_done[heads[2]] || !iq_v[heads[2]]))
                      		)
-                    && (!(iq_iv[heads[4]] && iq_memdb[heads[4]]) ||
+                    && (!(iq_memdb[heads[4]]) ||
                      		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
                      		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]])
                      		&& (!iq_mem[heads[2]] || iq_done[heads[2]] || !iq_v[heads[2]])
                      		&& (!iq_mem[heads[3]] || iq_done[heads[3]] || !iq_v[heads[3]]))
                      		)
-                    && (!(iq_iv[heads[5]] && iq_memdb[heads[5]]) ||
+                    && (!(iq_memdb[heads[5]]) ||
                      		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
                      		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]])
                      		&& (!iq_mem[heads[2]] || iq_done[heads[2]] || !iq_v[heads[2]])
                      		&& (!iq_mem[heads[3]] || iq_done[heads[3]] || !iq_v[heads[3]])
                      		&& (!iq_mem[heads[4]] || iq_done[heads[4]] || !iq_v[heads[4]]))
                      		)
-                    && (!(iq_iv[heads[6]] && iq_memdb[heads[6]]) ||
+                    && (!(iq_memdb[heads[6]]) ||
                      		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
                      		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]])
                      		&& (!iq_mem[heads[2]] || iq_done[heads[2]] || !iq_v[heads[2]])
@@ -3594,7 +3730,7 @@ if (QENTRIES > 6) begin
                      		&& (!iq_mem[heads[4]] || iq_done[heads[4]] || !iq_v[heads[4]])
                      		&& (!iq_mem[heads[5]] || iq_done[heads[5]] || !iq_v[heads[5]]))
                      		)
-                    && (!(iq_iv[heads[7]] && iq_memdb[heads[7]]) ||
+                    && (!(iq_memdb[heads[7]]) ||
                      		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
                      		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]])
                      		&& (!iq_mem[heads[2]] || iq_done[heads[2]] || !iq_v[heads[2]])
@@ -3603,7 +3739,7 @@ if (QENTRIES > 6) begin
                      		&& (!iq_mem[heads[5]] || iq_done[heads[5]] || !iq_v[heads[5]])
                      		&& (!iq_mem[heads[6]] || iq_done[heads[6]] || !iq_v[heads[6]]))
                      		)
-                    && (!(iq_iv[heads[8]] && iq_memdb[heads[8]]) ||
+                    && (!(iq_memdb[heads[8]]) ||
                      		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
                      		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]])
                      		&& (!iq_mem[heads[2]] || iq_done[heads[2]] || !iq_v[heads[2]])
@@ -3682,6 +3818,7 @@ end
 
 idecoder uid1
 (
+	.unit(slot0u),
 	.instr(insn0),
 	.Rt(Rd0[5:0]),
 	.predict_taken(predict_taken0),
@@ -3691,6 +3828,7 @@ idecoder uid1
 
 idecoder uid2
 (
+	.unit(slot1u),
 	.instr(insn1),
 	.Rt(Rd1[5:0]),
 	.predict_taken(predict_taken1),
@@ -3700,6 +3838,7 @@ idecoder uid2
 
 idecoder uid3
 (
+	.unit(slot2u),
 	.instr(insn2),
 	.Rt(Rd2[5:0]),
 	.predict_taken(predict_taken2),
@@ -3930,7 +4069,7 @@ TLB utlb1 (
 	.TLBMiss(tlb_miss),
 	.wrv_o(wrv_o),
 	.rdv_o(rdv_o),
-	.exv_o(exv_o),
+	.exv_o(exv),
 	.HTLBVirtPageo()
 );
 `else
@@ -4305,10 +4444,13 @@ begin
           canq1 <= TRUE;
           queued1 <= TRUE;
         end
-        if (!take_branch1) begin
+        if (IsCall(slot1u,insn1) || IsJmp(slot1u,insn1)) begin
+        	;
+      	end
+        else if (!take_branch1) begin
           if (iq_v[tail1]==`INV) begin
             canq2 <= TRUE;
-            queued2 <= TRUE;
+            queued2 <= TRUE && !debug_on;
           end
       	end
 	    end
@@ -4318,10 +4460,13 @@ begin
           canq1 <= TRUE;
           queued1 <= TRUE;
         end
-        if (!take_branch0) begin
+        if (IsCall(slot0u,insn0) || IsJmp(slot0u,insn0)) begin
+        	;
+      	end
+        else if (!take_branch0) begin
           if (iq_v[tail1]==`INV) begin
             canq2 <= TRUE;
-            queued2 <= TRUE;
+            queued2 <= TRUE && !debug_on;
           end
       	end
 	    end
@@ -4331,33 +4476,42 @@ begin
           canq1 <= TRUE;
           queued1 <= TRUE;
         end
-        if (!take_branch0) begin
+        if (IsCall(slot0u,insn0) || IsJmp(slot0u,insn0)) begin
+        	;
+        end
+        else if (!take_branch0) begin
           if (iq_v[tail1]==`INV) begin
             canq2 <= TRUE;
-            queued2 <= TRUE;
+            queued2 <= TRUE && !debug_on;
           end
       	end
 	    end
 		3'b111:
 			begin
-				if (IsNop(Unit0(ibundle[127:120]),ibundle[119:80])
-					&& IsNop(Unit1(ibundle[127:120]),ibundle[79:40])
-					&& IsNop(Unit2(ibundle[127:120]),ibundle[79:40]))
+				if (IsNop(slot0u,ibundle[119:80])
+					&& IsNop(slot1u,ibundle[79:40])
+					&& IsNop(slot2u,ibundle[79:40]))
 					queuedNop <= TRUE;
 				else begin
 	        if (iq_v[tail0]==`INV) begin
 	          canq1 <= TRUE;
 	          queued1 <= TRUE;
 	        end
-					if (!take_branch0) begin
+	        if (IsCall(slot0u,insn0) || IsJmp(slot0u,insn0)) begin
+	        	;
+	        end
+					else if (!take_branch0) begin
 	          if (iq_v[tail1]==`INV) begin
 	            canq2 <= TRUE;
-	            queued2 <= TRUE;
+	            queued2 <= TRUE && !debug_on;
 	          end
-	          if (!take_branch1) begin
+	          if (IsCall(slot1u,insn1) || IsJmp(slot1u,insn1)) begin
+	          	;
+	          end
+	          else if (!take_branch1) begin
 	            if (iq_v[tail2]==`INV) begin
 	              canq3 <= TRUE;
-	              queued3 <= TRUE;
+	              queued3 <= TRUE && !debug_on;
 	            end
 		        end
 					end
@@ -4422,7 +4576,16 @@ wire [WID-1:0] rdramB_bus = dramB_bus;
 
 reg [2:0] mwhich;
 always @(posedge clk)
-begin
+if (rst_i) begin
+	cti_o <= 3'b000;
+	bte_o <= 2'b00;
+	cyc <= `LOW;
+	stb_o <= `LOW;
+	we <= `LOW;
+	sel_o <= 16'h0000;
+	vadr <= RSTIP;
+end
+else begin
 	if (icyc) begin
 		cti_o <= icti;
 		bte_o <= ibte;
@@ -4483,7 +4646,7 @@ case(mwhich)
 	begin
 		iack_i <= ack_i;
 		ierr_i <= err_i;
-		iexv_i <= exv_i;
+		iexv_i <= exv;
 	end
 3'd1:
 	begin
@@ -4507,6 +4670,25 @@ case(mwhich)
 		d1wrv_i <= wrv_i;
 		d1rdv_i <= rdv_i;
 	end
+default:
+	begin
+		iack_i <= `LOW;
+		ierr_i <= `LOW;
+		iexv_i <= `LOW;
+		wack_i <= `LOW;
+		werr_i <= `LOW;
+		wwrv_i <= `LOW;
+		wrdv_i <= `LOW;
+		wtlbmiss_i <= `LOW;
+		d0ack_i <= `LOW;
+		d0err_i <= `LOW;
+		d0wrv_i <= `LOW;
+		d0rdv_i <= `LOW;
+		d1ack_i <= `LOW;
+		d1err_i <= `LOW;
+		d1wrv_i <= `LOW;
+		d1rdv_i <= `LOW;
+	end
 endcase
 
 // Hold reset for five seconds
@@ -4520,7 +4702,8 @@ else begin
 end
 
 always @(posedge clk)
-if (rst_i|(rst_ctr < 32'd10)) begin
+if (rst_i|(rst_ctr < 32'd2)) begin
+	ip <= RSTIP;
 	im_stack <= 32'hFFFFFFFF;
 	mstatus <= 64'h4000F;	// select register set #16 for thread 0
 	rs_stack <= 64'd16;
@@ -4555,7 +4738,7 @@ if (rst_i|(rst_ctr < 32'd10)) begin
        iq_sync[n] <= FALSE;
        iq_rfw[n] <= FALSE;
        iq_rmw[n] <= FALSE;
-       iq_ip[n] <= RSTPC;
+       iq_ip[n] <= RSTIP;
     	 iq_instr[n] <= `NOP_INSN;
     	 iq_preload[n] <= FALSE;
     	 iq_mem[n] <= FALSE;
@@ -4588,6 +4771,12 @@ if (rst_i|(rst_ctr < 32'd10)) begin
      dram1_addr <= 32'h0;
      dram0_id <= 1'b0;
      dram1_id <= 1'b0;
+     dram0_rmw <= 1'b0;
+     dram1_rmw <= 1'b0;
+     dram0_load <= 1'b0;
+     dram1_load <= 1'b0;
+     dram0_unc <= 1'b0;
+     dram1_unc <= 1'b0;
      dram0_store <= 1'b0;
      dram1_store <= 1'b0;
      invic <= FALSE;
@@ -4604,7 +4793,7 @@ if (rst_i|(rst_ctr < 32'd10)) begin
      alu1_sourceid <= 5'd0;
 `define SIM_
 `ifdef SIM_
-		alu0_ip <= RSTPC;
+		alu0_ip <= RSTIP;
 		alu0_instr <= `NOP_INSN;
 		alu0_argA <= 64'h0;
 		alu0_argB <= 64'h0;
@@ -4613,7 +4802,7 @@ if (rst_i|(rst_ctr < 32'd10)) begin
 		alu0_mem <= 1'b0;
 		alu0_shft <= 1'b0;
 		alu0_tgt <= 6'h00;
-		alu1_ip <= RSTPC;
+		alu1_ip <= RSTIP;
 		alu1_instr <= `NOP_INSN;
 		alu1_argA <= 64'h0;
 		alu1_argB <= 64'h0;
@@ -4633,9 +4822,7 @@ if (rst_i|(rst_ctr < 32'd10)) begin
      bstate <= BIDLE;
      tick <= 64'd0;
      ol_o <= 2'b0;
-     cyc <= `LOW;
      cyc_pending <= `LOW;
-     we <= `LOW;
      sr_o <= `LOW;
      cr_o <= `LOW;
      cr0 <= 64'd0;
@@ -4661,7 +4848,7 @@ if (rst_i|(rst_ctr < 32'd10)) begin
     end
      fcu_done <= `TRUE;
      sema <= 64'h0;
-     tvec[0] <= RSTPC;
+     tvec[0] <= RSTIP;
      pmr <= 64'hFFFFFFFFFFFFFFFF;
      pmr[0] <= `ID1_AVAIL;
      pmr[1] <= `ID2_AVAIL;
@@ -4681,7 +4868,16 @@ if (rst_i|(rst_ctr < 32'd10)) begin
 		cmt_timer <= 9'd0;
 		StoreAck1 <= `FALSE;
 		keys <= 64'h0;
-`ifdef SUPPORT_DBG
+		dcyc <= `LOW;
+		dstb <= `LOW;
+		dwe <= `LOW;
+		dsel <= 16'h0000;
+		dadr <= RSTIP;
+		ddat <= 128'h0;
+		slot0v <= `VAL;
+		slot1v <= `VAL;
+		slot2v <= `VAL;
+`ifdef SUPPORT_DEBUG
 		dbg_ctrl <= 64'h0;
 `endif
 /* Initialized with initial begin above
@@ -4847,12 +5043,10 @@ else begin
 				slot0v <= VAL;
 				slot1v <= VAL;
 				slot2v <= VAL;
-				if (IsBranch(Unit2(ibundle[127:120]),insn2) && predict_taken2) begin
-					ip[12:0] <= {insn2[29:22],insn2[5:3],insn2[4:3]};
-					ip[79:13] <= ip[79:13] + {{57{insn2[39]}},insn2[39:30]};
-				end
-				else if (IsCall(Unit2(ibundle[127:120]),insn2) || IsJmp(Unit2(ibundle[127:120]),insn2))
-					ip[35:0] <= {insn2[39:10],insn2[5:0]};
+				if (IsBranch(slot2u,insn2) && predict_taken2)
+					ip[22:0] <= {insn1[39:22],insn1[5:3],insn1[4:3]};
+				else if (IsCall(slot2u,insn2) || IsJmp(slot2u,insn2))
+					ip[37:0] <= {insn2[39:10],insn2[5:0],insn2[1:0]};
 				else
 					ip <= {ip[79:4] + 76'd1,4'h0};
 				if (slot2_rfw) begin
@@ -4866,12 +5060,10 @@ else begin
 				slot0v <= VAL;
 				slot1v <= VAL;
 				slot2v <= VAL;
-				if (IsBranch(Unit1(ibundle[127:120]),insn1) && predict_taken1) begin
-					ip[12:0] <= {insn1[29:22],insn1[5:3],insn1[4:3]};
-					ip[79:13] <= ip[79:13] + {{57{insn1[39]}},insn1[39:30]};
-				end
-				else if (IsCall(Unit1(ibundle[127:120]),insn1) || IsJmp(Unit1(ibundle[127:120]),insn1))
-					ip[35:0] <= {insn1[39:10],insn1[5:0]};
+				if (IsBranch(slot1u,insn1) && predict_taken1)
+					ip[22:0] <= {insn1[39:22],insn1[5:3],insn1[4:3]};
+				else if (IsCall(slot1u,insn1) || IsJmp(slot1u,insn1))
+					ip[37:0] <= {insn1[39:10],insn1[5:0],insn1[1:0]};
 				else
 					ip <= {ip[79:4] + 76'd1,4'h0};
 				if (slot1_rfw) begin
@@ -4880,28 +5072,36 @@ else begin
 				end
 			end
 		3'b011:
-			if (canq2) begin
+			if (canq2 & !debug_on) begin
 				queue_slot1(tail0,maxsn+2'd1,id1_bus);
 				slot1v <= INV;
 				slot2v <= INV;
-				if (IsCall(Unit1(ibundle[127:120]),insn1) || IsJmp(Unit1(ibundle[127:120]),insn1)) begin
-					ip[35:0] <= {insn1[39:10],insn1[5:0]};
+				if (IsCall(slot1u,insn1) || IsJmp(slot1u,insn1)) begin
+					slot0v <= VAL;
+					slot1v <= VAL;
+					slot2v <= VAL;
+					ip[37:0] <= {insn1[39:10],insn1[5:0],insn1[1:0]};
 					if (slot1_rfw) begin
 						rf_source[Rd1] <= { 1'b0, slot1_mem, tail0 };	// top bit indicates ALU/MEM bus
 						rf_v [Rd1] <= `INV;
 					end
 				end
-				else if (IsBranch(Unit1(ibundle[127:120]),insn1) && predict_taken1) begin
-					ip[12:0] <= {insn1[29:22],insn1[5:3],insn1[4:3]};
-					ip[79:13] <= ip[79:13] + {{57{insn1[39]}},insn1[39:30]};
+				else if (IsBranch(slot1u,insn1) && predict_taken1) begin
+					slot0v <= VAL;
+					slot1v <= VAL;
+					slot2v <= VAL;
+					ip[22:0] <= {insn1[39:22],insn1[5:3],insn1[4:3]};
 					if (slot1_rfw) begin
 						rf_source[Rd1] <= { 1'b0, slot1_mem, tail0 };	// top bit indicates ALU/MEM bus
 						rf_v [Rd1] <= `INV;
 					end
 				end
-				else if (IsCall(Unit2(ibundle[127:120]),insn2) || IsJmp(Unit2(ibundle[127:120]),insn2)) begin
+				else if (IsCall(slot2u,insn2) || IsJmp(slot2u,insn2)) begin
+					slot0v <= VAL;
+					slot1v <= VAL;
+					slot2v <= VAL;
 					queue_slot2(tail1,maxsn+2'd2,id2_bus);
-					ip[35:0] <= {insn2[39:10],insn2[5:0]};
+					ip[37:0] <= {insn2[39:10],insn2[5:0],insn2[1:0]};
 					if (slot1_rfw) begin
 						rf_source[Rd1] <= { 1'b0, slot1_mem, tail0 };	// top bit indicates ALU/MEM bus
 						rf_v [Rd1] <= `INV;
@@ -4912,10 +5112,12 @@ else begin
 					end
 					arg_vs_011();
 				end
-				else if (IsBranch(Unit2(ibundle[127:120]),insn2) && predict_taken2) begin
+				else if (IsBranch(slot2u,insn2) && predict_taken2) begin
+					slot0v <= VAL;
+					slot1v <= VAL;
+					slot2v <= VAL;
 					queue_slot2(tail1,maxsn+2'd2,id2_bus);
-					ip[12:0] <= {insn2[29:22],insn2[5:3],insn2[4:3]};
-					ip[79:13] <= ip[79:13] + {{57{insn2[39]}},insn2[39:30]};
+					ip[22:0] <= {insn2[39:22],insn2[5:3],insn2[4:3]};
 					if (slot1_rfw) begin
 						rf_source[Rd1] <= { 1'b0, slot1_mem, tail0 };	// top bit indicates ALU/MEM bus
 						rf_v [Rd1] <= `INV;
@@ -4943,12 +5145,17 @@ else begin
 			else if (canq1) begin
 				queue_slot1(tail0,maxsn+2'd1,id1_bus);
 				slot1v <= INV;
-				if (IsCall(Unit1(ibundle[127:120]),insn1) || IsJmp(Unit1(ibundle[127:120]),insn1)) begin
-					ip[35:0] <= {insn1[39:10],insn1[5:0]};
+				if (IsCall(slot1u,insn1) || IsJmp(slot1u,insn1)) begin
+					slot0v <= VAL;
+					slot1v <= VAL;
+					slot2v <= VAL;
+					ip[37:0] <= {insn1[39:10],insn1[5:0],insn1[1:0]};
 				end
-				else if (IsBranch(Unit1(ibundle[127:120]),insn1) && predict_taken1) begin
-					ip[12:0] <= {insn1[29:22],insn1[5:3],insn1[4:3]};
-					ip[79:13] <= ip[79:13] + {{57{insn1[39]}},insn1[39:30]};
+				else if (IsBranch(slot1u,insn1) && predict_taken1) begin
+					ip[22:0] <= {insn1[39:22],insn1[5:3],insn1[4:3]};
+					slot0v <= VAL;
+					slot1v <= VAL;
+					slot2v <= VAL;
 				end
 				else
 					ip[3:0] <= 4'hA;
@@ -4963,12 +5170,10 @@ else begin
 				slot0v <= VAL;
 				slot1v <= VAL;
 				slot2v <= VAL;
-				if (IsCall(Unit0(ibundle[127:120]),insn0) || IsJmp(Unit0(ibundle[127:120]),insn0))
-					ip[35:0] <= {insn0[39:10],insn0[5:0]};
-				else if (IsBranch(Unit0(ibundle[127:120]),insn0) && predict_taken0) begin
-					ip[12:0] <= {insn0[29:22],insn0[5:3],insn0[4:3]};
-					ip[79:13] <= ip[79:13] + {{57{insn0[39]}},insn0[39:30]};
-				end
+				if (IsCall(slot0u,insn0) || IsJmp(slot0u,insn0))
+					ip[37:0] <= {insn0[39:10],insn0[5:0],insn0[1:0]};
+				else if (IsBranch(slot0u,insn0) && predict_taken0)
+					ip[22:0] <= {insn0[39:22],insn0[5:3],insn0[4:3]};
 				else
 					ip <= {ip[79:4] + 76'd1,4'h0};
 				if (slot0_rfw) begin
@@ -4977,29 +5182,28 @@ else begin
 				end
 			end
 		3'b101:
-			if (canq2) begin
+			if (canq2 & !debug_on) begin
 				queue_slot0(tail0,maxsn+2'd1,id0_bus);
 				slot0v <= VAL;
 				slot1v <= VAL;
 				slot2v <= VAL;
-				if (IsCall(Unit0(ibundle[127:120]),insn0) || IsJmp(Unit0(ibundle[127:120]),insn0)) begin
-					ip[35:0] <= {insn0[39:10],insn0[5:0]};
+				if (IsCall(slot0u,insn0) || IsJmp(slot0u,insn0)) begin
+					ip[37:0] <= {insn0[39:10],insn0[5:0],insn0[1:0]};
 					if (slot0_rfw) begin
 						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
 						rf_v [Rd0] <= `INV;
 					end
 				end
-				else if (IsBranch(Unit0(ibundle[127:120]),insn0) && predict_taken0) begin
-					ip[12:0] <= {insn0[29:22],insn0[5:3],insn0[4:3]};
-					ip[79:13] <= ip[79:13] + {{57{insn0[39]}},insn0[39:30]};
+				else if (IsBranch(slot0u,insn0) && predict_taken0) begin
+					ip[22:0] <= {insn0[39:22],insn0[5:3],insn0[4:3]};
 					if (slot0_rfw) begin
 						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
 						rf_v [Rd0] <= `INV;
 					end
 				end
-				else if (IsCall(Unit2(ibundle[127:120]),insn2) || IsJmp(Unit2(ibundle[127:120]),insn2)) begin
+				else if (IsCall(slot2u,insn2) || IsJmp(slot2u,insn2)) begin
 					queue_slot2(tail1,maxsn+2'd2,id2_bus);
-					ip[35:0] <= {insn2[39:10],insn2[5:0]};
+					ip[37:0] <= {insn2[39:10],insn2[5:0],insn2[1:0]};
 					if (slot0_rfw) begin
 						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
 						rf_v [Rd0] <= `INV;
@@ -5010,10 +5214,9 @@ else begin
 					end
 					arg_vs_101();
 				end
-				else if (IsBranch(Unit2(ibundle[127:120]),insn2) && predict_taken2) begin
+				else if (IsBranch(slot2u,insn2) && predict_taken2) begin
 					queue_slot2(tail1,maxsn+2'd2,id2_bus);
-					ip[12:0] <= {insn2[29:22],insn2[5:3],insn2[4:3]};
-					ip[79:13] <= ip[79:13] + {{57{insn2[39]}},insn2[39:30]};
+					ip[22:0] <= {insn2[39:22],insn2[5:3],insn2[4:3]};
 					if (slot0_rfw) begin
 						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
 						rf_v [Rd0] <= `INV;
@@ -5041,12 +5244,17 @@ else begin
 			else if (canq1) begin
 				queue_slot0(tail0,maxsn+2'd1,id0_bus);
 				slot0v <= INV;
-				if (IsCall(Unit0(ibundle[127:120]),insn0) || IsJmp(Unit0(ibundle[127:120]),insn0)) begin
-					ip[35:0] <= {insn0[39:10],insn0[5:0]};
+				if (IsCall(slot0u,insn0) || IsJmp(slot0u,insn0)) begin
+					slot0v <= VAL;
+					slot1v <= VAL;
+					slot2v <= VAL;
+					ip[37:0] <= {insn0[39:10],insn0[5:0],insn0[1:0]};
 				end
-				else if (IsBranch(Unit0(ibundle[127:120]),insn0) && predict_taken0) begin
-					ip[12:0] <= {insn0[29:22],insn0[5:3],insn0[4:3]};
-					ip[79:13] <= ip[79:13] + {{57{insn0[39]}},insn0[39:30]};
+				else if (IsBranch(slot0u,insn0) && predict_taken0) begin
+					slot0v <= VAL;
+					slot1v <= VAL;
+					slot2v <= VAL;
+					ip[22:0] <= {insn0[39:22],insn0[5:3],insn0[4:3]};
 				end
 				else
 					ip[3:0] <= 4'hA;
@@ -5056,29 +5264,28 @@ else begin
 				end
 			end
 		3'b110:
-			if (canq2) begin
+			if (canq2 & !debug_on) begin
 				queue_slot0(tail0,maxsn+2'd1,id0_bus);
 				slot0v <= VAL;
 				slot1v <= VAL;
 				slot2v <= VAL;
-				if (IsCall(Unit0(ibundle[127:120]),insn0) || IsJmp(Unit0(ibundle[127:120]),insn0)) begin
-					ip[35:0] <= {insn0[39:10],insn0[5:0]};
+				if (IsCall(slot0u,insn0) || IsJmp(slot0u,insn0)) begin
+					ip[37:0] <= {insn0[39:10],insn0[5:0],insn0[1:0]};
 					if (slot0_rfw) begin
 						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
 						rf_v [Rd0] <= `INV;
 					end
 				end
-				else if (IsBranch(Unit0(ibundle[127:120]),insn0) && predict_taken0) begin
-					ip[12:0] <= {insn0[29:22],insn0[5:3],insn0[4:3]};
-					ip[79:13] <= ip[79:13] + {{57{insn0[39]}},insn0[39:30]};
+				else if (IsBranch(slot0u,insn0) && predict_taken0) begin
+					ip[22:0] <= {insn0[39:22],insn0[5:3],insn0[4:3]};
 					if (slot0_rfw) begin
 						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
 						rf_v [Rd0] <= `INV;
 					end
 				end
-				else if (IsCall(Unit1(ibundle[127:120]),insn1) || IsJmp(Unit1(ibundle[127:120]),insn1)) begin
+				else if (IsCall(slot1u,insn1) || IsJmp(slot1u,insn1)) begin
 					queue_slot1(tail1,maxsn+2'd2,id1_bus);
-					ip[35:0] <= {insn1[39:10],insn1[5:0]};
+					ip[37:0] <= {insn1[39:10],insn1[5:0],insn1[1:0]};
 					if (slot0_rfw) begin
 						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
 						rf_v [Rd0] <= `INV;
@@ -5089,10 +5296,9 @@ else begin
 					end
 					arg_vs_110();
 				end
-				else if (IsBranch(Unit1(ibundle[127:120]),insn1) && predict_taken1) begin
+				else if (IsBranch(slot1u,insn1) && predict_taken1) begin
 					queue_slot1(tail1,maxsn+2'd2,id1_bus);
-					ip[12:0] <= {insn1[29:22],insn1[5:3],insn1[4:3]};
-					ip[79:13] <= ip[79:13] + {{57{insn1[39]}},insn1[39:30]};
+					ip[22:0] <= {insn1[39:22],insn1[5:3],insn1[4:3]};
 					if (slot0_rfw) begin
 						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
 						rf_v [Rd0] <= `INV;
@@ -5120,12 +5326,17 @@ else begin
 			else if (canq1) begin
 				queue_slot0(tail0,maxsn+2'd1,id0_bus);
 				slot0v <= INV;
-				if (IsCall(Unit0(ibundle[127:120]),insn0) || IsJmp(Unit0(ibundle[127:120]),insn0)) begin
-					ip[35:0] <= {insn0[39:10],insn0[5:0]};
+				if (IsCall(slot0u,insn0) || IsJmp(slot0u,insn0)) begin
+					slot0v <= VAL;
+					slot1v <= VAL;
+					slot2v <= VAL;
+					ip[37:0] <= {insn0[39:10],insn0[5:0],insn0[1:0]};
 				end
-				else if (IsBranch(Unit0(ibundle[127:120]),insn0) && predict_taken0) begin
-					ip[12:0] <= {insn0[29:22],insn0[5:3],insn0[4:3]};
-					ip[79:13] <= ip[79:13] + {{57{insn0[39]}},insn0[39:30]};
+				else if (IsBranch(slot0u,insn0) && predict_taken0) begin
+					slot0v <= VAL;
+					slot1v <= VAL;
+					slot2v <= VAL;
+					ip[22:0] <= {insn0[39:22],insn0[5:3],insn0[4:3]};
 				end
 				else
 					ip[3:0] <= 4'h5;
@@ -5135,29 +5346,28 @@ else begin
 				end
 			end
 		3'b111:
-			if (canq3) begin
+			if (canq3 & !debug_on) begin
 				queue_slot0(tail0,maxsn+2'd1,id0_bus);
 				slot0v <= VAL;
 				slot1v <= VAL;
 				slot2v <= VAL;
-				if (IsCall(Unit0(ibundle[127:120]),insn0) || IsJmp(Unit0(ibundle[127:120]),insn0)) begin
-					ip[35:0] <= {insn0[39:10],insn0[5:0]};
+				if (IsCall(slot0u,insn0) || IsJmp(slot0u,insn0)) begin
+					ip[37:0] <= {insn0[39:10],insn0[5:0],insn0[1:0]};
 					if (slot0_rfw) begin
 						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
 						rf_v [Rd0] <= `INV;
 					end
 				end
-				else if (IsBranch(Unit0(ibundle[127:120]),insn0) && predict_taken0) begin
-					ip[12:0] <= {insn0[29:22],insn0[5:3],insn0[4:3]};
-					ip[79:13] <= ip[79:13] + {{57{insn0[39]}},insn0[39:30]};
+				else if (IsBranch(slot0u,insn0) && predict_taken0) begin
+					ip[22:0] <= {insn0[39:22],insn0[5:3],insn0[4:3]};
 					if (slot0_rfw) begin
 						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
 						rf_v [Rd0] <= `INV;
 					end
 				end
-				else if (IsCall(Unit1(ibundle[127:120]),insn1) || IsJmp(Unit1(ibundle[127:120]),insn1)) begin
+				else if (IsCall(slot1u,insn1) || IsJmp(slot1u,insn1)) begin
 					queue_slot1(tail1,maxsn+2'd2,id1_bus);
-					ip[35:0] <= {insn1[39:10],insn1[5:0]};
+					ip[37:0] <= {insn1[39:10],insn1[5:0],insn1[1:0]};
 					if (slot0_rfw) begin
 						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
 						rf_v [Rd0] <= `INV;
@@ -5168,10 +5378,9 @@ else begin
 					end
 					arg_vs_110();
 				end
-				else if (IsBranch(Unit1(ibundle[127:120]),insn1) && predict_taken1) begin
+				else if (IsBranch(slot1u,insn1) && predict_taken1) begin
 					queue_slot1(tail1,maxsn+2'd2,id1_bus);
-					ip[12:0] <= {insn1[29:22],insn1[5:3],insn1[4:3]};
-					ip[79:13] <= ip[79:13] + {{57{insn1[39]}},insn1[39:30]};
+					ip[22:0] <= {insn1[39:22],insn1[5:3],insn1[4:3]};
 					if (slot0_rfw) begin
 						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
 						rf_v [Rd0] <= `INV;
@@ -5182,10 +5391,10 @@ else begin
 					end
 					arg_vs_110();
 				end
-				else if (IsCall(Unit2(ibundle[127:120]),insn2) || IsJmp(Unit2(ibundle[127:120]),insn2)) begin
+				else if (IsCall(slot2u,insn2) || IsJmp(slot2u,insn2)) begin
 					queue_slot1(tail1,maxsn+2'd2,id1_bus);
 					queue_slot2(tail2,maxsn+2'd3,id2_bus);
-					ip[35:0] <= {insn2[39:10],insn2[5:0]};
+					ip[37:0] <= {insn2[39:10],insn2[5:0],insn2[1:0]};
 					if (slot0_rfw) begin
 						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
 						rf_v [Rd0] <= `INV;
@@ -5200,11 +5409,10 @@ else begin
 					end
 					arg_vs_111();
 				end
-				else if (IsBranch(Unit2(ibundle[127:120]),insn2) && predict_taken2) begin
+				else if (IsBranch(slot2u,insn2) && predict_taken2) begin
 					queue_slot1(tail1,maxsn+2'd2,id1_bus);
 					queue_slot2(tail2,maxsn+2'd3,id2_bus);
-					ip[12:0] <= {insn2[29:22],insn2[5:3],insn2[4:3]};
-					ip[79:13] <= ip[79:13] + {{57{insn2[39]}},insn2[39:30]};
+					ip[22:0] <= {insn2[39:22],insn2[5:3],insn2[4:3]};
 					if (slot0_rfw) begin
 						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
 						rf_v [Rd0] <= `INV;
@@ -5238,28 +5446,36 @@ else begin
 					arg_vs_111();
 				end
 			end
-			else if (canq2) begin
+			else if (canq2 & !debug_on) begin
 				queue_slot0(tail0,maxsn+2'd1,id0_bus);
 				slot0v <= INV;
 				slot1v <= INV;
-				if (IsCall(Unit0(ibundle[127:120]),insn0) || IsJmp(Unit0(ibundle[127:120]),insn0)) begin
-					ip[35:0] <= {insn0[39:10],insn0[5:0]};
+				if (IsCall(slot0u,insn0) || IsJmp(slot0u,insn0)) begin
+					slot0v <= VAL;
+					slot1v <= VAL;
+					slot2v <= VAL;
+					ip[37:0] <= {insn0[39:10],insn0[5:0],insn0[1:0]};
 					if (slot0_rfw) begin
 						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
 						rf_v [Rd0] <= `INV;
 					end
 				end
-				else if (IsBranch(Unit0(ibundle[127:120]),insn0) && predict_taken0) begin
-					ip[12:0] <= {insn0[29:22],insn0[5:3],insn0[4:3]};
-					ip[79:13] <= ip[79:13] + {{57{insn0[39]}},insn0[39:30]};
+				else if (IsBranch(slot0u,insn0) && predict_taken0) begin
+					slot0v <= VAL;
+					slot1v <= VAL;
+					slot2v <= VAL;
+					ip[22:0] <= {insn0[39:22],insn0[5:3],insn0[4:3]};
 					if (slot0_rfw) begin
 						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
 						rf_v [Rd0] <= `INV;
 					end
 				end
-				else if (IsCall(Unit1(ibundle[127:120]),insn1) || IsJmp(Unit1(ibundle[127:120]),insn1)) begin
+				else if (IsCall(slot1u,insn1) || IsJmp(slot1u,insn1)) begin
+					slot0v <= VAL;
+					slot1v <= VAL;
+					slot2v <= VAL;
 					queue_slot1(tail1,maxsn+2'd2,id1_bus);
-					ip[35:0] <= {insn1[39:10],insn1[5:0]};
+					ip[37:0] <= {insn1[39:10],insn1[5:0],insn1[1:0]};
 					if (slot0_rfw) begin
 						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
 						rf_v [Rd0] <= `INV;
@@ -5270,10 +5486,12 @@ else begin
 					end
 					arg_vs_110();
 				end
-				else if (IsBranch(Unit1(ibundle[127:120]),insn1) && predict_taken1) begin
+				else if (IsBranch(slot1u,insn1) && predict_taken1) begin
+					slot0v <= VAL;
+					slot1v <= VAL;
+					slot2v <= VAL;
 					queue_slot1(tail1,maxsn+2'd2,id1_bus);
-					ip[12:0] <= {insn1[29:22],insn1[5:3],insn1[4:3]};
-					ip[79:13] <= ip[79:13] + {{57{insn1[39]}},insn1[39:30]};
+					ip[22:0] <= {insn1[39:22],insn1[5:3],insn1[4:3]};
 					if (slot0_rfw) begin
 						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
 						rf_v [Rd0] <= `INV;
@@ -5301,16 +5519,21 @@ else begin
 			else if (canq1) begin
 				queue_slot0(tail0,maxsn+2'd1,id0_bus);
 				slot0v <= INV;
-				if (IsCall(Unit0(ibundle[127:120]),insn0) || IsJmp(Unit0(ibundle[127:120]),insn0)) begin
-					ip[35:0] <= {insn0[39:10],insn0[5:0]};
+				if (IsCall(slot0u,insn0) || IsJmp(slot0u,insn0)) begin
+					slot0v <= VAL;
+					slot1v <= VAL;
+					slot2v <= VAL;
+					ip[37:0] <= {insn0[39:10],insn0[5:0],insn0[1:0]};
 					if (slot0_rfw) begin
 						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
 						rf_v [Rd0] <= `INV;
 					end
 				end
-				else if (IsBranch(Unit0(ibundle[127:120]),insn0) && predict_taken0) begin
-					ip[12:0] <= {insn0[29:22],insn0[5:3],insn0[4:3]};
-					ip[79:13] <= ip[79:13] + {{57{insn0[39]}},insn0[39:30]};
+				else if (IsBranch(slot0u,insn0) && predict_taken0) begin
+					slot0v <= VAL;
+					slot1v <= VAL;
+					slot2v <= VAL;
+					ip[22:0] <= {insn0[39:22],insn0[5:3],insn0[4:3]};
 					if (slot0_rfw) begin
 						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
 						rf_v [Rd0] <= `INV;
@@ -5794,7 +6017,7 @@ end
 				4'h0:	fcu_nextip <= {iq_ip[n][79:4],4'h5};
 				4'h5:	fcu_nextip <= {iq_ip[n][79:4],4'hA};
 				4'hA:	fcu_nextip <= {iq_ip[n][79:4],4'h0} + 8'd16;
-				default:	begin fcu_nextip <= iq_ip[n]; fcu_exc <= `FLT_ALN; end
+				default:	begin fcu_nextip <= iq_ip[n]; end
 				endcase
 				fcu_pt     <= iq_pt[n];
 				fcu_brdisp <= {{57{iq_instr[n][39]}},iq_instr[n][39:22],iq_instr[n][5:3],iq_instr[n][4:3]};
@@ -6424,7 +6647,7 @@ B_DCacheLoadAck:
 				dcti <= 3'b111;
 	    if (dccnt==2'd3) begin
 	    	wb_nack();
-				dcwr <= 1'b1;
+				//dcwr <= 1'b1;
 				dcwait_ctr <= dcwait;
 				bstate <= B_DCacheLoadWait;
 	    end
@@ -6619,8 +6842,8 @@ B_LSNAck:
 // write hit.
 B_RMWCvt:
 	if (~ack_i) begin
-		stb_o <= `HIGH;
-		we  <= `HIGH;
+		//stb_o <= `HIGH;
+		//we  <= `HIGH;
 		if (bwhich==2'b01) begin
 			dram1 <= `DRAMSLOT_BUSY;
 			dram1_store <= TRUE;
@@ -6664,7 +6887,7 @@ if (!branchmiss) begin
     end
   3'b011:
     if (canq1) begin
-      if (IsBranch(Unit1(ibundle[127:120]),insn1) && predict_taken1) begin
+      if (IsBranch(slot1u,insn1) && predict_taken1) begin
        	tail0 <= (tail0+2'd1) % QENTRIES;
        	tail1 <= (tail1+2'd1) % QENTRIES;
 	     	tail2 <= (tail2+2'd1) % QENTRIES;
@@ -6690,7 +6913,7 @@ if (!branchmiss) begin
     end
   3'b101:
     if (canq1) begin
-      if (IsBranch(Unit0(ibundle[127:120]),insn0) && predict_taken0) begin
+      if (IsBranch(slot0u,insn0) && predict_taken0) begin
        	tail0 <= (tail0+2'd1) % QENTRIES;
        	tail1 <= (tail1+2'd1) % QENTRIES;
 	     	tail2 <= (tail2+2'd1) % QENTRIES;
@@ -6710,7 +6933,7 @@ if (!branchmiss) begin
     end
   3'b110:
     if (canq1) begin
-      if (IsBranch(Unit0(ibundle[127:120]),insn0) && predict_taken0) begin
+      if (IsBranch(slot0u,insn0) && predict_taken0) begin
        	tail0 <= (tail0+2'd1) % QENTRIES;
        	tail1 <= (tail1+2'd1) % QENTRIES;
 	     	tail2 <= (tail2+2'd1) % QENTRIES;
@@ -6730,14 +6953,14 @@ if (!branchmiss) begin
     end
   3'b111:
     if (canq1) begin
-      if (IsBranch(Unit0(ibundle[127:120]),insn0) && predict_taken0) begin
+      if (IsBranch(slot0u,insn0) && predict_taken0) begin
        	tail0 <= (tail0+2'd1) % QENTRIES;
        	tail1 <= (tail1+2'd1) % QENTRIES;
 	     	tail2 <= (tail2+2'd1) % QENTRIES;
       end
       else begin
       	if (canq2) begin
-		      if (IsBranch(Unit1(ibundle[127:120]),insn1) && predict_taken1) begin
+		      if (IsBranch(slot1u,insn1) && predict_taken1) begin
 		       	tail0 <= (tail0+2'd2) % QENTRIES;
 		       	tail1 <= (tail1+2'd2) % QENTRIES;
 			     	tail2 <= (tail2+2'd2) % QENTRIES;
@@ -6784,37 +7007,16 @@ end
 `ifdef SIM
 	$display("\n\n\n\n\n\n\n\n");
 	$display("TIME %0d", $time);
-	$display("%h #", pc0);
-`ifdef SUPPORT_SMT
-    $display ("Regfile: %d", rgs[0]);
-	for (n=0; n < 32; n=n+4) begin
-	    $display("%d: %h %d %o   %d: %h %d %o   %d: %h %d %o   %d: %h %d %o#",
-	       n[4:0]+0, urf1.urf10.mem[{rgs[0],1'b0,n[4:2],2'b00}], regIsValid[n+0], rf_source[n+0],
-	       n[4:0]+1, urf1.urf10.mem[{rgs[0],1'b0,n[4:2],2'b01}], regIsValid[n+1], rf_source[n+1],
-	       n[4:0]+2, urf1.urf10.mem[{rgs[0],1'b0,n[4:2],2'b10}], regIsValid[n+2], rf_source[n+2],
-	       n[4:0]+3, urf1.urf10.mem[{rgs[0],1'b0,n[4:2],2'b11}], regIsValid[n+3], rf_source[n+3]
-	       );
-	end
-    $display ("Regfile: %d", rgs[1]);
-	for (n=128; n < 160; n=n+4) begin
-	    $display("%d: %h %d %o   %d: %h %d %o   %d: %h %d %o   %d: %h %d %o#",
-	       n[4:0]+0, urf1.urf10.mem[{rgs[1],1'b0,n[4:2],2'b00}], regIsValid[n+0], rf_source[n+0],
-	       n[4:0]+1, urf1.urf10.mem[{rgs[1],1'b0,n[4:2],2'b01}], regIsValid[n+1], rf_source[n+1],
-	       n[4:0]+2, urf1.urf10.mem[{rgs[1],1'b0,n[4:2],2'b10}], regIsValid[n+2], rf_source[n+2],
-	       n[4:0]+3, urf1.urf10.mem[{rgs[1],1'b0,n[4:2],2'b11}], regIsValid[n+3], rf_source[n+3]
-	       );
-	end
-`else
+	$display("%h #", ip);
     $display ("Regfile: %d", rgs);
-	for (n=0; n < 32; n=n+4) begin
+	for (n=0; n < 64; n=n+4) begin
 	    $display("%d: %h %d %o   %d: %h %d %o   %d: %h %d %o   %d: %h %d %o#",
-	       n[4:0]+0, gRegfileInst.gb1.urf1.urf10.mem[{rgs,1'b0,n[4:2],2'b00}], regIsValid[n+0], rf_source[n+0],
-	       n[4:0]+1, gRegfileInst.gb1.urf1.urf10.mem[{rgs,1'b0,n[4:2],2'b01}], regIsValid[n+1], rf_source[n+1],
-	       n[4:0]+2, gRegfileInst.gb1.urf1.urf10.mem[{rgs,1'b0,n[4:2],2'b10}], regIsValid[n+2], rf_source[n+2],
-	       n[4:0]+3, gRegfileInst.gb1.urf1.urf10.mem[{rgs,1'b0,n[4:2],2'b11}], regIsValid[n+3], rf_source[n+3]
+	       n[5:0]+0, urf1.mem[{n[5:2],2'b00}], regIsValid[n+0], rf_source[n+0],
+	       n[5:0]+1, urf1.mem[{n[5:2],2'b01}], regIsValid[n+1], rf_source[n+1],
+	       n[5:0]+2, urf1.mem[{n[5:2],2'b10}], regIsValid[n+2], rf_source[n+2],
+	       n[5:0]+3, urf1.mem[{n[5:2],2'b11}], regIsValid[n+3], rf_source[n+3]
 	       );
 	end
-`endif
 `ifdef FCU_ENH
 	$display("Call Stack:");
 	for (n = 0; n < 16; n = n + 4)
@@ -6832,7 +7034,7 @@ end
 	$display("TakeBr:%d #", take_branch);//, backpc);
 	$display("Insn%d: %h", 0, insn0);
 	for (i=0; i<QENTRIES; i=i+1) 
-	    $display("%c%c %d: %c%c%c%c %d %d %c%c %c %c%h %d %o %h %h %h %d %o %h %d %o %h %d %o %d:%h %h %d#",
+	    $display("%c%c %d: %c%c%c %d %d %c%c %c %c%h %d %o %h %h %h %d %o %h %d %o %h %d %o %h %h#",
 		 (i[`QBITS]==heads[0])?"C":".",
 		 (i[`QBITS]==tail0)?"Q":".",
 		  i[`QBITS],
@@ -6844,7 +7046,6 @@ end
 		  iq_state[i]==IQS_DONE ? "D"  :
 		  iq_state[i]==IQS_CMT ? "C"  : "?",
 //		 iq_v[i] ? "v" : "-",
-		 iq_iv[i] ? "I" : "-",
 		 iq_done[i]?"d":"-",
 		 iq_out[i]?"o":"-",
 		 iq_bt[i],
@@ -6852,15 +7053,14 @@ end
 		 iq_agen[i] ? "a": "-",
 		 iq_alu0_issue[i]?"0":iq_alu1_issue[i]?"1":"-",
 		 iq_stomp[i]?"s":"-",
-		iq_fc[i] ? "F" : iq_mem[i] ? "M" : (iq_alu[i]==1'b1) ? "a" : (iq_alu[i]==1'bx) ? "X" : iq_fpu[i] ? "f" : "O", 
+		iq_fc[i] ? "F" : iq_mem[i] ? "M" : (iq_alu[i]==1'b1) ? "a" : iq_fpu[i] ? "f" : "O", 
 		iq_instr[i], iq_tgt[i][4:0],
-		iq_exc[i], iq_res[i], iq_a0[i], iq_a1[i], iq_a1_v[i],
-		iq_a1_s[i],
-		iq_a2[i], iq_a2_v[i], iq_a2_s[i],
-		iq_a3[i], iq_a3_v[i], iq_a3_s[i],
-		iq_thrd[i],
-		iq_pc[i],
-		iq_sn[i], iq_ven[i]
+		iq_exc[i], iq_res[i], iq_argI[i], iq_argA[i], iq_argA_v[i],
+		iq_argA_s[i],
+		iq_argB[i], iq_argB_v[i], iq_argB_s[i],
+		iq_argC[i], iq_argC_v[i], iq_argC_s[i],
+		iq_ip[i],
+		iq_sn[i]
 		);
     $display("DRAM");
 	$display("%d %h %h %c%h %o #",
@@ -6870,26 +7070,20 @@ end
 	$display("%d %h %h %c%h %o #",
 	    dram1, dram1_addr, dram1_data, (IsFlowCtrl(dram1_instr) ? 98 : (IsMem(dram1_instr)) ? 109 : 97), 
 	    dram1_instr, dram1_id);
-	  if (`NUM_MEM > 2)
-	$display("%d %h %h %c%h %o #",
-	    dram2, dram2_addr, dram2_data, (IsFlowCtrl(dram2_instr) ? 98 : (IsMem(dram2_instr)) ? 109 : 97), 
-	    dram2_instr, dram2_id);
 	$display("%d %h %o #", dramA_v, dramA_bus, dramA_id);
 	if (`NUM_MEM > 1)
 	$display("%d %h %o #", dramB_v, dramB_bus, dramB_id);
-	if (`NUM_MEM > 2)
-	$display("%d %h %o #", dramC_v, dramC_bus, dramC_id);
     $display("ALU");
 	$display("%d %h %h %h %c%h %o %h #",
 		alu0_dataready, alu0_argI, alu0_argA, alu0_argB, 
 		 (IsFlowCtrl(alu0_instr) ? 98 : IsMem(alu0_instr) ? 109 : 97),
-		alu0_instr, alu0_sourceid, alu0_pc);
+		alu0_instr, alu0_sourceid, alu0_ip);
 	$display("%d %h %o 0 #", alu0_v, alu0_bus, alu0_id);
 	if (`NUM_ALU > 1) begin
 		$display("%d %h %h %h %c%h %o %h #",
 			alu1_dataready, alu1_argI, alu1_argA, alu1_argB, 
 		 	(IsFlowCtrl(alu1_instr) ? 98 : IsMem(alu1_instr) ? 109 : 97),
-			alu1_instr, alu1_sourceid, alu1_pc);
+			alu1_instr, alu1_sourceid, alu1_ip);
 		$display("%d %h %o 0 #", alu1_v, alu1_bus, alu1_id);
 	end
 	$display("FCU");
@@ -6902,7 +7096,7 @@ end
   $display("Write Buffer:");
   for (n = `WB_DEPTH-1; n >= 0; n = n - 1)
   	$display("%c adr: %h dat: %h", wb_v[n]?" ":"*", wb_addr[n], wb_data[n]);
-    $display("Write merges: %d", wb_merges);
+    //$display("Write merges: %d", wb_merges);
 `endif	// SIM
 
 	$display("");
@@ -6972,9 +7166,6 @@ begin
     	iq_mem[heads[0]] <= `FALSE;
     	iq_mem[heads[1]] <= `FALSE;
     	iq_mem[heads[2]] <= `FALSE;
-    	iq_iv[heads[0]] <= `INV;
-    	iq_iv[heads[1]] <= `INV;
-    	iq_iv[heads[2]] <= `INV;
     	iq_alu[heads[0]] <= `FALSE;
     	iq_alu[heads[1]] <= `FALSE;
     	iq_alu[heads[2]] <= `FALSE;
@@ -6991,8 +7182,6 @@ begin
     	iq_state[heads[1]] <= IQS_INVALID;
      iq_mem[heads[0]] <= `FALSE;
      iq_mem[heads[1]] <= `FALSE;
-     iq_iv[heads[0]] <= `INV;
-     iq_iv[heads[1]] <= `INV;
     	iq_alu[heads[0]] <= `FALSE;
      iq_alu[heads[1]] <= `FALSE;
   		for (n = 0; n < QENTRIES; n = n + 1)
@@ -7004,7 +7193,6 @@ begin
     	I = I + iq_v[heads[0]];
     	iq_state[heads[0]] <= IQS_INVALID;
 	    iq_mem[heads[0]] <= `FALSE;
-     	iq_iv[heads[0]] <= `INV;
     	iq_alu[heads[0]] <= `FALSE;
   		for (n = 0; n < QENTRIES; n = n + 1)
    			if (iq_v[n])
@@ -7254,20 +7442,19 @@ endtask
 task queue_slot0;
 input [`QBITS] ndx;
 input [`SNBITS] seqnum;
-input [143:0] id0_bus;
+input [143:0] id_bus;
 begin
-	iq_v[ndx] <= VAL;
 	iq_sn[ndx] <= seqnum;
 	iq_state[ndx] <= IQS_QUEUED;
 	iq_ip[ndx] <= ip;
-	iq_unit[ndx] <= Unit0(ibundle[124:120]);
+	iq_unit[ndx] <= slot0u;
 	iq_instr[ndx] <= ibundle[39:0];
 	iq_argA[ndx] <= rfoa0;
 	iq_argB[ndx] <= rfob0;
 	iq_argC[ndx] <= rfoc0;
-	iq_argA_v[ndx] <= regIsValid[Ra0] || Source1Valid(Unit0(ibundle[124:120]),ibundle[39:0]);
-	iq_argB_v[ndx] <= regIsValid[Rb0] || Source2Valid(Unit0(ibundle[124:120]),ibundle[39:0]);
-	iq_argC_v[ndx] <= regIsValid[Rc0] || Source2Valid(Unit0(ibundle[124:120]),ibundle[39:0]);
+	iq_argA_v[ndx] <= regIsValid[Ra0] || Source1Valid(slot0u,ibundle[39:0]);
+	iq_argB_v[ndx] <= regIsValid[Rb0] || Source2Valid(slot0u,ibundle[39:0]);
+	iq_argC_v[ndx] <= regIsValid[Rc0] || Source2Valid(slot0u,ibundle[39:0]);
 	iq_argA_s[ndx] <= rf_source[Ra0];
 	iq_argB_s[ndx] <= rf_source[Rb0];
 	iq_argC_s[ndx] <= rf_source[Rc0];
@@ -7275,27 +7462,26 @@ begin
 	iq_tgt[ndx] <= Rd0;
 	iq_res[ndx] <= 80'd0;
 	iq_exc[ndx] <= `FLT_NONE;
-	set_insn(ndx,id0_bus);
+	set_insn(ndx,id_bus);
 end
 endtask
 
 task queue_slot1;
 input [`QBITS] ndx;
 input [`SNBITS] seqnum;
-input [143:0] id1_bus;
+input [143:0] id_bus;
 begin
-	iq_v[ndx] <= VAL;
 	iq_sn[ndx] <= seqnum;
 	iq_state[ndx] <= IQS_QUEUED;
 	iq_ip[ndx] <= ip;
-	iq_unit[ndx] <= Unit1(ibundle[124:120]);
+	iq_unit[ndx] <= slot1u;
 	iq_instr[ndx] <= ibundle[79:40];
 	iq_argA[ndx] <= rfoa1;
 	iq_argB[ndx] <= rfob1;
 	iq_argC[ndx] <= rfoc1;
-	iq_argA_v[ndx] <= regIsValid[Ra1] || Source1Valid(Unit1(ibundle[124:120]),ibundle[79:40]);
-	iq_argB_v[ndx] <= regIsValid[Rb1] || Source2Valid(Unit1(ibundle[124:120]),ibundle[79:40]);
-	iq_argC_v[ndx] <= regIsValid[Rc1] || Source2Valid(Unit1(ibundle[124:120]),ibundle[79:40]);
+	iq_argA_v[ndx] <= regIsValid[Ra1] || Source1Valid(slot1u,ibundle[79:40]);
+	iq_argB_v[ndx] <= regIsValid[Rb1] || Source2Valid(slot1u,ibundle[79:40]);
+	iq_argC_v[ndx] <= regIsValid[Rc1] || Source2Valid(slot1u,ibundle[79:40]);
 	iq_argA_s[ndx] <= rf_source[Ra1];
 	iq_argB_s[ndx] <= rf_source[Rb1];
 	iq_argC_s[ndx] <= rf_source[Rc1];
@@ -7303,27 +7489,26 @@ begin
 	iq_tgt[ndx] <= Rd1;
 	iq_res[ndx] <= 80'd0;
 	iq_exc[ndx] <= `FLT_NONE;
-	set_insn(ndx,id1_bus);
+	set_insn(ndx,id_bus);
 end
 endtask
 
 task queue_slot2;
 input [`QBITS] ndx;
 input [`SNBITS] seqnum;
-input [143:0] id2_bus;
+input [143:0] id_bus;
 begin
-	iq_v[ndx] <= VAL;
 	iq_sn[ndx] <= seqnum;
 	iq_state[ndx] <= IQS_QUEUED;
 	iq_ip[ndx] <= ip;
-	iq_unit[ndx] <= Unit2(ibundle[124:120]);
+	iq_unit[ndx] <= slot2u;
 	iq_instr[ndx] <= ibundle[119:80];
 	iq_argA[ndx] <= rfoa2;
 	iq_argB[ndx] <= rfob2;
 	iq_argC[ndx] <= rfoc2;
-	iq_argA_v[ndx] <= regIsValid[Ra2] || Source1Valid(Unit2(ibundle[124:120]),ibundle[119:80]);
-	iq_argB_v[ndx] <= regIsValid[Rb2] || Source2Valid(Unit2(ibundle[124:120]),ibundle[119:80]);
-	iq_argC_v[ndx] <= regIsValid[Rc2] || Source2Valid(Unit2(ibundle[124:120]),ibundle[119:80]);
+	iq_argA_v[ndx] <= regIsValid[Ra2] || Source1Valid(slot2u,ibundle[119:80]);
+	iq_argB_v[ndx] <= regIsValid[Rb2] || Source2Valid(slot2u,ibundle[119:80]);
+	iq_argC_v[ndx] <= regIsValid[Rc2] || Source2Valid(slot2u,ibundle[119:80]);
 	iq_argA_s[ndx] <= rf_source[Ra2];
 	iq_argB_s[ndx] <= rf_source[Rb2];
 	iq_argC_s[ndx] <= rf_source[Rc2];
@@ -7331,7 +7516,7 @@ begin
 	iq_tgt[ndx] <= Rd2;
 	iq_res[ndx] <= 80'd0;
 	iq_exc[ndx] <= `FLT_NONE;
-	set_insn(ndx,id2_bus);
+	set_insn(ndx,id_bus);
 end
 endtask
 
@@ -7484,23 +7669,35 @@ begin
         	`MSX:
             case(iq_instr[head][`FUNCT5])
             `CACHE:
-                    case(iq_instr[head][22:18])
-				            5'h02:	begin invicl <= TRUE; invlineAddr <= {ASID,iq_res[head]}; end
-                    5'h03:  invic <= TRUE;
-                    5'h10:  cr0[30] <= FALSE;
-                    5'h11:  cr0[30] <= TRUE;
-                    default:    ;
-                    endcase
+            	begin
+                case(iq_instr[head][18:16])
+		            3'h3:	begin invicl <= TRUE; invlineAddr <= {iq_res[head]}; end
+                3'h4:  	invic <= TRUE;
+                default:	;
+              	endcase
+                case(iq_instr[head][21:19])
+                3'h1:  cr0[30] <= TRUE;
+                3'h2:  cr0[30] <= FALSE;
+                3'h4:		invdc <= TRUE;
+                default:    ;
+                endcase
+              end
             default: ;
             endcase
         `CACHE:
-            case(iq_instr[head][17:13])
-            5'h02:	begin invicl <= TRUE; invlineAddr <= {iq_res[head]}; end
-            5'h03:  invic <= TRUE;
-            5'h10:  cr0[30] <= FALSE;
-            5'h11:  cr0[30] <= TRUE;
-            default:    ;
-            endcase
+        		begin
+	            case(iq_instr[head][18:16])
+	            3'h3:	begin invicl <= TRUE; invlineAddr <= {iq_res[head]}; end
+	            3'h4:  	invic <= TRUE;
+	            default:	;
+	          	endcase
+	            case(iq_instr[head][21:19])
+	            3'h1:  cr0[30] <= TRUE;
+	            3'h2:  cr0[30] <= FALSE;
+	            3'h4:		invdc <= TRUE;
+	            default:    ;
+	            endcase
+		          end
           default:	;
           endcase
         `IUnit:

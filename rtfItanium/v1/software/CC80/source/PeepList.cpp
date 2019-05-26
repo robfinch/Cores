@@ -584,10 +584,10 @@ void PeepList::OptInstructions()
 			case op_mov:	ip->OptMove();	break;
 			case op_add:	ip->OptAdd(); break;
 			case op_sub:	ip->OptSubtract(); break;
-			case op_lb:		ip->OptLoadByte(); break;
-			case op_lc:		ip->OptLoadChar(); break;
-			case op_lh:		ip->OptLoadHalf(); break;
-			case op_lw:		ip->OptLoadWord(); break;
+			case op_ldb:		ip->OptLoadByte(); break;
+			case op_ldw:		ip->OptLoadChar(); break;
+			case op_ldp:		ip->OptLoadHalf(); break;
+			case op_ldd:		ip->OptLoadWord(); break;
 			case op_sxb:	ip->OptSxb();	break;
 			case op_br:
 			case op_bra:	ip->OptBra(); break;
@@ -600,8 +600,8 @@ void PeepList::OptInstructions()
 			case op_rtd:	ip->OptUctran(); break;
 			case op_label:	ip->OptLabel(); break;
 			case op_hint:	ip->OptHint(); break;
-			case op_sh:
-			case op_sw:		ip->OptStore();	break;
+			case op_stp:
+			case op_std:		ip->OptStore();	break;
 			case op_and:	ip->OptAnd(); break;
 			case op_redor:	ip->OptRedor();	break;
 			case op_mul:	ip->OptMul(); break;

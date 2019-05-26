@@ -64,7 +64,7 @@ endmodule
 
 module L1_icache_cmptag4way(rst, clk, nxt, wr, invline, invall, adr, lineno, hit);
 parameter pLines = 128;
-parameter AMSB = 47;
+parameter AMSB = 79;
 localparam pLNMSB = pLines==128 ? 6 : 5;
 localparam pMSB = pLines==128 ? 9 : 8;
 input rst;
@@ -169,7 +169,7 @@ endmodule
 
 module L1_icache(rst, clk, nxt, wr, wadr, adr, i, o, fault, hit, invall, invline);
 parameter pSize = 2;
-parameter AMSB = 47;
+parameter AMSB = 79;
 localparam pLines = pSize==4 ? 128 : 64;
 localparam pLNMSB = pSize==4 ? 6 : 5;
 input rst;
@@ -296,7 +296,7 @@ endmodule
 module L2_icache(rst, clk, nxt, wr, adr, cnt, exv_i, i, err_i, o, hit, invall, invline);
 parameter CAMTAGS = 1'b0;   // 32 way
 parameter FOURWAY = 1'b1;
-parameter AMSB = 47;
+parameter AMSB = 79;
 input rst;
 input clk;
 input nxt;
@@ -372,7 +372,7 @@ endmodule
 
 // Four way set associative tag memory
 module L2_icache_cmptag4way(rst, clk, nxt, wr, wr2, inv, invall, adr, lineno, hit);
-parameter AMSB = 63;
+parameter AMSB = 79;
 input rst;
 input clk;
 input nxt;
@@ -380,21 +380,21 @@ input wr;
 input wr2;
 input inv;
 input invall;
-input [AMSB+8:0] adr;
+input [AMSB:0] adr;
 output reg [8:0] lineno;
 output hit;
 
 (* ram_style="block" *)
-reg [AMSB+8-5:0] mem0 [0:127];
+reg [AMSB-5:0] mem0 [0:127];
 (* ram_style="block" *)
-reg [AMSB+8-5:0] mem1 [0:127];
+reg [AMSB-5:0] mem1 [0:127];
 (* ram_style="block" *)
-reg [AMSB+8-5:0] mem2 [0:127];
+reg [AMSB-5:0] mem2 [0:127];
 (* ram_style="block" *)
-reg [AMSB+8-5:0] mem3 [0:127];
+reg [AMSB-5:0] mem3 [0:127];
 (* ram_style="distributed" *)
 reg [511:0] valid;
-reg [AMSB+8:0] rradr;
+reg [AMSB:0] rradr;
 
 integer n;
 initial begin
@@ -429,18 +429,18 @@ always @(posedge clk)
 always @(posedge clk)
 	if (wr)
 		case(lfsro[1:0])
-		2'b00:	mem0[adr[11:5]] <= adr[AMSB+8:5];
-		2'b01:	mem1[adr[11:5]] <= adr[AMSB+8:5];
-		2'b10:	mem2[adr[11:5]] <= adr[AMSB+8:5];
-		2'b11:	mem3[adr[11:5]] <= adr[AMSB+8:5];
+		2'b00:	mem0[adr[11:5]] <= adr[AMSB:5];
+		2'b01:	mem1[adr[11:5]] <= adr[AMSB:5];
+		2'b10:	mem2[adr[11:5]] <= adr[AMSB:5];
+		2'b11:	mem3[adr[11:5]] <= adr[AMSB:5];
 		endcase
 always @(posedge clk)
 	rradr <= adr;
 
-assign hit0 = mem0[rradr[11:5]]==rradr[AMSB+8:5] && valid[{2'b00,adr[11:5]}];
-assign hit1 = mem1[rradr[11:5]]==rradr[AMSB+8:5] && valid[{2'b01,adr[11:5]}];
-assign hit2 = mem2[rradr[11:5]]==rradr[AMSB+8:5] && valid[{2'b10,adr[11:5]}];
-assign hit3 = mem3[rradr[11:5]]==rradr[AMSB+8:5] && valid[{2'b11,adr[11:5]}];
+assign hit0 = mem0[rradr[11:5]]==rradr[AMSB:5] && valid[{2'b00,adr[11:5]}];
+assign hit1 = mem1[rradr[11:5]]==rradr[AMSB:5] && valid[{2'b01,adr[11:5]}];
+assign hit2 = mem2[rradr[11:5]]==rradr[AMSB:5] && valid[{2'b10,adr[11:5]}];
+assign hit3 = mem3[rradr[11:5]]==rradr[AMSB:5] && valid[{2'b11,adr[11:5]}];
 always @*
 	if (wr|wr2) lineno = {lfsro[1:0],adr[11:5]};
   else if (hit0)  lineno = {2'b00,adr[11:5]};

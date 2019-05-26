@@ -182,7 +182,7 @@ void initRegStack()
 
 void SpillRegister(Operand *ap, int number)
 {
-	GenerateDiadic(op_sw,0,ap,cg.MakeIndexed(currentFn->GetTempBot()-ap->deep*sizeOfWord,regFP));
+	GenerateDiadic(op_std,0,ap,cg.MakeIndexed(currentFn->GetTempBot()-ap->deep*sizeOfWord,regFP));
 	max_stack_use = max(max_stack_use, (ap->deep+1) * sizeOfWord);
     //reg_stack[reg_stack_ptr].Operand = ap;
     //reg_stack[reg_stack_ptr].f.allocnum = number;
@@ -209,7 +209,7 @@ void LoadRegister(int regno, int number)
 	if (reg_in_use[regno] >= 0)
 		fatal("LoadRegister():register still in use");
 	reg_in_use[regno] = number;
-	GenerateDiadic(op_lw,0,makereg(regno),cg.MakeIndexed(currentFn->GetTempBot()-number*sizeOfWord,regFP));
+	GenerateDiadic(op_ldd,0,makereg(regno),cg.MakeIndexed(currentFn->GetTempBot()-number*sizeOfWord,regFP));
     reg_alloc[number].f.isPushed = 'F';
 }
 

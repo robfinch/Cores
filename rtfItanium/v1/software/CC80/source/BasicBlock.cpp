@@ -767,8 +767,8 @@ void BasicBlock::InsertSpillCode(int reg, int64_t offs)
 	if (this == nullptr)
 		return;
 	cd = (OCODE *)xalloc(sizeof(OCODE));
-	cd->insn = GetInsn(op_sw);
-	cd->opcode = op_sw;
+	cd->insn = GetInsn(op_std);
+	cd->opcode = op_std;
 	cd->oper1 = allocOperand();
 	cd->oper2 = allocOperand();
 	cd->oper1->mode = am_reg;
@@ -792,8 +792,8 @@ void BasicBlock::InsertFillCode(int reg, int64_t offs)
 	if (this == nullptr)
 		return;
 	cd = (OCODE *)xalloc(sizeof(OCODE));
-	cd->insn = GetInsn(op_lw);
-	cd->opcode = op_lw;
+	cd->insn = GetInsn(op_ldd);
+	cd->opcode = op_ldd;
 	cd->oper1 = allocOperand();
 	cd->oper2 = allocOperand();
 	cd->oper1->mode = am_reg;

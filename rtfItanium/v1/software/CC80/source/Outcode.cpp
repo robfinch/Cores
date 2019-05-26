@@ -158,19 +158,21 @@ Instruction opl[237] =
 { "itof", op_itof, 2, 1, false, am_fpreg, am_reg, 0, 0 },
 { "jal", op_jal,1,1,false },
 { "jmp",op_jmp,1,0,false,am_mem,0,0,0 },
-{ "lb", op_lb,4,1,true,am_reg,am_mem,0,0 },
-{ "lbu", op_lbu,4,1,true,am_reg,am_mem,0,0 },
-{ "lc", op_lc,4,1,true,am_reg,am_mem,0,0 },
-{ "lcu", op_lcu,4,1,true,am_reg,am_mem,0,0 },
+{ "ldb", op_ldb,4,1,true,am_reg,am_mem,0,0 },
+{ "ldbu", op_ldbu,4,1,true,am_reg,am_mem,0,0 },
+{ "ldd", op_ldd,4,1,true,am_reg,am_mem,0,0 },
+{ "lddr", op_lddr,4,1,true,am_reg,am_mem,0,0 },
 { "ldi",op_ldi,1,1,false,am_reg,am_imm,0,0 },
+{ "ldp", op_ldp,4,1,true,am_reg,am_mem,0,0 },
+{ "ldpu", op_ldpu,4,1,true,am_reg,am_mem,0,0 },
+{ "ldw", op_ldw,4,1,true,am_reg,am_mem,0,0 },
+{ "ldwu", op_ldwu,4,1,true,am_reg,am_mem,0,0 },
 { "le",op_le },
 { "lea",op_lea,1,1,false,am_reg,am_mem,0,0 },
 { "leu",op_leu },
 { "lf", op_lf, 4, 1, true, am_fpreg, am_mem, 0, 0 },
 { "lfd", op_lfd,4,1,true, am_fpreg, am_mem,0,0 },
 { "lft", op_lft,4,1,true, am_fpreg, am_mem,0,0 },
-{ "lh", op_lh,4,1,true,am_reg,am_mem,0,0 },
-{ "lhu", op_lhu,4,1,true,am_reg,am_mem,0,0 },
 { "link",op_link,4,1,true },
 { "lm", op_lm },
 { "loop", op_loop,1,0 },
@@ -181,9 +183,7 @@ Instruction opl[237] =
 { "lvbu", op_lvbu,4,1,true ,am_reg,am_mem,0,0 },
 { "lvcu", op_lvcu,4,1,true ,am_reg,am_mem,0,0 },
 { "lvhu", op_lvhu,4,1,true ,am_reg,am_mem,0,0 },
-{ "lw", op_lw,4,1,true,am_reg,am_mem,0,0 },
-{ "lwr", op_lwr,4,1,true,am_reg,am_mem,0,0 },
-{ "lws", op_lws,4,1,true },
+{ "lws", op_ldds,4,1,true },
 { "mffp",op_mffp },
 { "mod", op_mod,68,1, false,am_reg,am_reg,am_reg|am_imm,0 },
 { "modu", op_modu,68,1,false,am_reg,am_reg,am_reg,0 },
@@ -218,8 +218,6 @@ Instruction opl[237] =
 { "rtd", op_rtd },
 { "rte", op_rte,2,0 },
 { "rti", op_rti,2,0 },
-{ "sb",op_sb,4,0,true,am_reg,am_mem,0,0 },
-{ "sc",op_sc,4,0,true,am_reg,am_mem,0,0 },
 { "sei", op_sei,1,0,false,am_reg,0,0,0 },
 { "seq", op_seq,1,1,false,am_reg,am_reg,am_reg|am_i26,0 },
 { "setwb", op_setwb, 1, 0 },
@@ -230,11 +228,10 @@ Instruction opl[237] =
 { "sgeu",op_sgeu,1,1,false,am_reg,am_reg,am_reg | am_i26,0 },
 { "sgt",op_sgt,1,1,false,am_reg,am_reg,am_reg | am_i26,0 },
 { "sgtu",op_sgtu,1,1,false,am_reg,am_reg,am_reg | am_i26,0 },
-{ "sh",op_sh,4,0,true,am_reg,am_mem,0,0 },
-{ "shl", op_shl,2,1,false,am_reg,am_reg,am_reg|am_ui6,0 },
-{ "shlu", op_shlu,2,1,false,am_reg,am_reg,am_reg|am_ui6,0 },
-{ "shr", op_shr,2,1,false,am_reg,am_reg,am_reg|am_ui6,0 },
-{ "shru", op_shru,2,1,false,am_reg,am_reg,am_reg|am_ui6,0 },
+{ "shl", op_stpl,2,1,false,am_reg,am_reg,am_reg|am_ui6,0 },
+{ "shlu", op_stplu,2,1,false,am_reg,am_reg,am_reg|am_ui6,0 },
+{ "shr", op_stpr,2,1,false,am_reg,am_reg,am_reg|am_ui6,0 },
+{ "shru", op_stpru,2,1,false,am_reg,am_reg,am_reg|am_ui6,0 },
 { "sle",op_sle,1,1,false,am_reg,am_reg,am_reg | am_i26,0 },
 { "sleu",op_sleu,1,1,false,am_reg,am_reg,am_reg | am_i26,0 },
 { "sll", op_sll,2,1,false,am_reg,am_reg,am_reg,0 },
@@ -246,16 +243,19 @@ Instruction opl[237] =
 { "sptr", op_sptr,4,0,true,am_reg,am_mem,0,0 },
 { "sra", op_sra,2,1,false,am_reg,am_reg,am_reg|am_ui6,0 },
 { "srl", op_srl,2,1,false,am_reg,am_reg,am_reg|am_ui6,0 },
+{ "stb",op_stb,4,0,true,am_reg,am_mem,0,0 },
+{ "std", op_std,4,0,true,am_reg,am_mem,0,0 },
+{ "stdcr", op_stdc,4,0,true, am_reg, am_mem,0,0 },
 { "sti", op_sti,1,0 },
 { "stop", op_stop },
+{ "stp",op_stp,4,0,true,am_reg,am_mem,0,0 },
+{ "stw",op_stw,4,0,true,am_reg,am_mem,0,0 },
 { "sub",op_sub,1,1,false,am_reg,am_reg,am_reg|am_imm,0 },
 { "subu", op_subu,1,1 },
 { "sv", op_sv,256,0 },
-{ "sw", op_sw,4,0,true,am_reg,am_mem,0,0 },
-{ "swap",op_swap,1,1,false },
-{ "swc", op_swc,4,0,true, am_reg, am_mem,0,0 },
-{ "swp", op_swp, 8, false },
-{ "sws", op_sws,4,0 },
+{ "swap",op_stdap,1,1,false },
+{ "swp", op_stdp, 8, false },
+{ "sws", op_stds,4,0 },
 { "sxb",op_sxb,1,1,false,am_reg,am_reg,0,0 },
 { "sxc",op_sxc,1,1,false,am_reg,am_reg,0,0 },
 { "sxh",op_sxh,1,1,false,am_reg,am_reg,0,0 },
@@ -465,7 +465,7 @@ void GenerateByte(int64_t val)
     }
     else {
         nl();
-        ofs.printf("\tdb\t%d",(int)val & 0x00ff);
+        ofs.printf("\tdcb\t%d",(int)val & 0x00ff);
         gentype = bytegen;
         outcol = 19;
     }
@@ -480,7 +480,7 @@ void GenerateChar(int64_t val)
     }
     else {
         nl();
-        ofs.printf("\tdc\t%d",(int)val & 0xffff);
+        ofs.printf("\tdcw\t%d",(int)val & 0xffff);
         gentype = chargen;
         outcol = 21;
     }
@@ -490,12 +490,12 @@ void GenerateChar(int64_t val)
 void GenerateHalf(int64_t val)
 {
 	if( gentype == halfgen && outcol < 60) {
-        ofs.printf(",%ld",(long)(val & 0xffffffff));
+        ofs.printf(",%ld",(long)(val & 0xffffFFffff));
         outcol += 10;
     }
     else {
         nl();
-        ofs.printf("\tdh\t%ld",(long)(val & 0xffffffff));
+        ofs.printf("\tdcp\t%ld",(long)(val & 0xffffFFffff));
         gentype = halfgen;
         outcol = 25;
     }
@@ -510,7 +510,7 @@ void GenerateWord(int64_t val)
     }
     else {
         nl();
-        ofs.printf("\tdw\t%lld",val);
+        ofs.printf("\tdcd\t%lld",val);
         gentype = wordgen;
         outcol = 33;
     }
@@ -525,7 +525,7 @@ void GenerateLong(int64_t val)
                 }
         else    {
                 nl();
-                ofs.printf("\tdw\t%lld",val);
+                ofs.printf("\tdcd\t%lld",val);
                 gentype = longgen;
                 outcol = 25;
                 }
@@ -536,8 +536,8 @@ void GenerateFloat(Float128 *val)
 { 
 	if (val==nullptr)
 		return;
-	ofs.printf("\r\n\talign 8\r\n");
-	ofs.printf("\tdh\t%s",val->ToString(64));
+	ofs.printf("\r\n\talign 2\r\n");
+	ofs.printf("\tdct\t%s",val->ToString(64));
   gentype = longgen;
   outcol = 65;
 	genst_cumulative += 8;
@@ -547,8 +547,8 @@ void GenerateQuad(Float128 *val)
 { 
 	if (val==nullptr)
 		return;
-	ofs.printf("\r\n\talign 8\r\n");
-	ofs.printf("\tdh\t%s",val->ToString(128));
+	ofs.printf("\r\n\talign 2\r\n");
+	ofs.printf("\tdct\t%s",val->ToString(128));
   gentype = longgen;
   outcol = 65;
 	genst_cumulative += 16;
@@ -595,7 +595,7 @@ void GenerateReference(SYM *sp,int64_t offset)
     else {
         nl();
         if(sp->storage_class == sc_static) {
-			ofs.printf("\tdw\t%s",GetNamespace());
+			ofs.printf("\tdcd\t%s",GetNamespace());
 			ofs.printf("_%lld",sp->value.i);
 			ofs.putch(sign);
 			ofs.printf("%lld",offset);
@@ -603,17 +603,17 @@ void GenerateReference(SYM *sp,int64_t offset)
 		}
         else if(sp->storage_class == sc_thread) {
 //            fprintf(output,"\tdw\t%s_%ld%c%d",GetNamespace(),sp->value.i,sign,offset);
-			ofs.printf("\tdw\t%s",GetNamespace());
+			ofs.printf("\tdcd\t%s",GetNamespace());
 			ofs.printf("_%lld",sp->value.i);
 			ofs.putch(sign);
 			ofs.printf("%lld",offset);
 		}
 		else {
 			if (offset==0) {
-				ofs.printf("\tdw\t%s",(char *)sp->name->c_str());
+				ofs.printf("\tdcd\t%s",(char *)sp->name->c_str());
 			}
 			else {
-				ofs.printf("\tdw\t%s",(char *)sp->name->c_str());
+				ofs.printf("\tdcd\t%s",(char *)sp->name->c_str());
 				ofs.putch(sign);
 				ofs.printf("%lld", offset);
 //				fprintf(output,"\tdw\t%s%c%d",sp->name,sign,offset);
@@ -632,7 +632,7 @@ void genstorageskip(int nbytes)
 	nl();
 	nn = (nbytes + 7) >> 3;
 	if (nn) {
-		sprintf_s(buf, sizeof(buf), "\talign\t8\r\n\tdw\t0x%I64X\r\n", nn | 0xFFF0200000000000LL);
+		sprintf_s(buf, sizeof(buf), "\talign\t8\r\n\tdd\t0x%I64X\r\n", nn | 0xFFF0200000000000LL);
 		ofs.printf("%s", buf);
 	}
 }
@@ -955,7 +955,7 @@ void cseg()
 	if( curseg != codeseg) {
 		nl();
 		ofs.printf("\tcode\n");
-		ofs.printf("\talign\t2\n");
+		ofs.printf("\talign\t16\n");
 		curseg = codeseg;
     }
 }

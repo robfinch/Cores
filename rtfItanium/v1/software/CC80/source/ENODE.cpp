@@ -1160,10 +1160,12 @@ Operand *ENODE::GenIndex()
 	GenerateHint(9);
 	if (ap2->mode == am_imm && ap1->mode == am_reg) /* make am_indx */
 	{
-		ap2->mode = am_indx;
-		ap2->preg = ap1->preg;
-		ap2->deep = ap1->deep;
-		return (ap2);
+		ap1->mode = am_indx;
+		//ap2->preg = ap1->preg;
+		//ap2->deep = ap1->deep;
+		ap1->offset = ap2->offset;
+		ap1->offset2 = ap2->offset2;
+		return (ap1);
 	}
 	if (ap2->mode == am_ind && ap1->mode == am_reg) {
 		ap2->mode = am_indx2;

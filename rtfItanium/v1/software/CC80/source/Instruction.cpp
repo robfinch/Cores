@@ -76,14 +76,14 @@ bool Instruction::IsLoad()
 {
 	if (this == nullptr)
 		return (false);
-	if (opcode == op_lb
-		|| opcode == op_lc
-		|| opcode == op_lh
-		|| opcode == op_lw
-		|| opcode == op_lbu
-		|| opcode == op_lcu
-		|| opcode == op_lhu
-		|| opcode == op_lwr
+	if (opcode == op_ldb
+		|| opcode == op_ldw
+		|| opcode == op_ldp
+		|| opcode == op_ldd
+		|| opcode == op_ldbu
+		|| opcode == op_ldwu
+		|| opcode == op_ldpu
+		|| opcode == op_lddr
 		|| opcode == op_lf
 		|| opcode == op_lfd
 		|| opcode == op_lft
@@ -96,14 +96,14 @@ bool Instruction::IsIntegerLoad()
 {
 	if (this == nullptr)
 		return (false);
-	if (opcode == op_lb
-		|| opcode == op_lc
-		|| opcode == op_lh
-		|| opcode == op_lw
-		|| opcode == op_lbu
-		|| opcode == op_lcu
-		|| opcode == op_lhu
-		|| opcode == op_lwr
+	if (opcode == op_ldb
+		|| opcode == op_ldw
+		|| opcode == op_ldp
+		|| opcode == op_ldd
+		|| opcode == op_ldbu
+		|| opcode == op_ldwu
+		|| opcode == op_ldpu
+		|| opcode == op_lddr
 		)
 		return (true);
 	return (false);
@@ -113,11 +113,11 @@ bool Instruction::IsStore()
 {
 	if (this == nullptr)
 		return (false);
-	if (opcode == op_sb
-		|| opcode == op_sc
-		|| opcode == op_sh
-		|| opcode == op_sw
-		|| opcode == op_swc
+	if (opcode == op_stb
+		|| opcode == op_stw
+		|| opcode == op_stp
+		|| opcode == op_std
+		|| opcode == op_stdc
 		|| opcode == op_sf
 		|| opcode == op_sfd
 		|| opcode == op_sft

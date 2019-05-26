@@ -250,7 +250,7 @@ void OCODE::OptSubtract()
 	//	insn = GetInsn(op_ptrdif);
 	//	oper4 = MakeImmediate(1);
 	//}
-	//if (ip2->opcode == op_asr || ip2->opcode == op_shru) {
+	//if (ip2->opcode == op_asr || ip2->opcode == op_stpru) {
 	//	if (Operand::IsEqual(ip2->oper2,oper1)) {
 	//		if (oper2->isPtr && oper3->isPtr && oper2->mode == am_reg && oper3->mode == am_reg) {
 	//			if (ip2->oper3->mode == am_imm) {
@@ -506,7 +506,7 @@ void OCODE::OptStore()
 {
 	OCODE *ip;
 
-	if (opcode == op_sh)
+	if (opcode == op_stp)
 		OptStoreHalf();
 	for (ip = fwd; ip; ip = ip->fwd)
 		if (ip->opcode != op_rem && ip->opcode != op_hint)
@@ -517,9 +517,9 @@ void OCODE::OptStore()
 		return;
 	if (!OCODE::IsEqualOperand(oper2, ip->oper2))
 		return;
-	if (opcode == op_sh && ip->opcode != op_lh)
+	if (opcode == op_stp && ip->opcode != op_ldp)
 		return;
-	if (opcode == op_sw && ip->opcode != op_lw)
+	if (opcode == op_std && ip->opcode != op_ldd)
 		return;
 	if (ip->isVolatile)
 		return;
@@ -634,7 +634,7 @@ void OCODE::OptMulu()
 	if (shcnt == 64)
 		return;
 	oper3->offset->i = shcnt;
-	opcode = op_shl;
+	opcode = op_stpl;
 	optimized++;
 }
 
@@ -751,7 +751,7 @@ void OCODE::OptIndexScale()
 	if (fwd == nullptr || back == nullptr)
 		return;
 	// Make sure we have the right kind of a shift left.
-	if (back->opcode != op_shl || back->oper3 == nullptr || back->oper3->offset == nullptr)
+	if (back->opcode != op_stpl || back->oper3 == nullptr || back->oper3->offset == nullptr)
 		return;
 	if (back->oper3->offset->i < 1 || back->oper3->offset->i > 3)
 		return;
@@ -986,7 +986,7 @@ void OCODE::OptHint()
 		//if (fwd->oper2->mode != am_indx2)
 		//	break;
 		if (fwd->oper2->preg == back->oper1->preg) {
-			if ((back->opcode == op_shl) && back->oper3->offset &&
+			if ((back->opcode == op_stpl) && back->oper3->offset &&
 				(back->oper3->offset->i == 1
 					|| back->oper3->offset->i == 2
 					|| back->oper3->offset->i == 3)) {
@@ -1007,7 +1007,7 @@ void OCODE::OptHint()
 				//    load source
 				//    store target
 				if (frwd->oper2) {
-					if ((bck->opcode == op_shl) && bck->oper3->offset &&
+					if ((bck->opcode == op_stpl) && bck->oper3->offset &&
 						(am->preg != frwd->oper2->preg && am->preg != frwd->oper2->sreg) &&
 						(bck->oper3->offset->i == 1
 							|| bck->oper3->offset->i == 2

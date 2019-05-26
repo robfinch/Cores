@@ -151,6 +151,7 @@ if (rst_i) begin
 	we_o <= LOW;
 	sel_o <= 16'h0000;
 	wb_has_bus <= FALSE;
+	wb_v <= 1'b0;
 	update_iq <= FALSE;
 end
 else begin

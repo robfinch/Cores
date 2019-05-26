@@ -1490,6 +1490,7 @@ void Statement::GenerateIf()
 	else
 		cg.GenerateFalseJump(exp, lab1, prediction);
 j1:
+	initstack();
 	s1->Generate();
 	if (s2 != 0)             /* else part exists */
 	{
@@ -1806,8 +1807,8 @@ void Statement::GenerateSwitch()
 			GenerateTriadic(op_sle, 0, ap2, ap, MakeImmediate(maxv));
 			if (minv != 0)
 				GenerateTriadic(op_sub, 0, ap, ap, MakeImmediate(minv));
-			GenerateTriadic(op_shl, 0, ap, ap, MakeImmediate(3));
-			GenerateDiadic(op_lw, 0, ap, compiler.of.MakeIndexedCodeLabel(tablabel, ap->preg));
+			GenerateTriadic(op_stpl, 0, ap, ap, MakeImmediate(3));
+			GenerateDiadic(op_ldd, 0, ap, compiler.of.MakeIndexedCodeLabel(tablabel, ap->preg));
 			GenerateTriadic(op_band, 0, ap1, ap2, ap);
 			GenerateMonadic(op_bra, 0, MakeCodeLabel(defcase ? deflbl : breaklab));
 			ReleaseTempRegister(ap2);
@@ -1820,8 +1821,8 @@ void Statement::GenerateSwitch()
 		}
 		if (minv != 0)
 			GenerateTriadic(op_sub, 0, ap, ap, MakeImmediate(minv));
-		GenerateTriadic(op_shl, 0, ap, ap, MakeImmediate(3));
-		GenerateDiadic(op_lw, 0, ap, compiler.of.MakeIndexedCodeLabel(tablabel, ap->preg));
+		GenerateTriadic(op_stpl, 0, ap, ap, MakeImmediate(3));
+		GenerateDiadic(op_ldd, 0, ap, compiler.of.MakeIndexedCodeLabel(tablabel, ap->preg));
 		GenerateDiadic(op_jal, 0, makereg(0), MakeIndexed((int64_t)0, ap->preg));
 		s1->GenerateCase();
 		GenerateLabel(breaklab);
@@ -1895,7 +1896,7 @@ void Statement::GenerateThrow()
 		if (ap->mode == am_imm)
 			GenerateDiadic(op_ldi, 0, makereg(1), ap);
 		else if (ap->mode != am_reg)
-			GenerateDiadic(op_lw, 0, makereg(1), ap);
+			GenerateDiadic(op_ldd, 0, makereg(1), ap);
 		else if (ap->preg != 1)
 			GenerateDiadic(op_mov, 0, makereg(1), ap);
 		ReleaseTempRegister(ap);
@@ -1909,7 +1910,7 @@ void Statement::GenerateThrow()
 	}
 	// If there is no catch handler, get lr for return.
 	if (throwlab == retlab)
-		GenerateDiadic(op_lw, 0, makereg(regLR), MakeIndexed(16,regFP));
+		GenerateDiadic(op_ldd, 0, makereg(regLR), MakeIndexed(16,regFP));
 	GenerateMonadic(op_bra, 0, MakeCodeLabel(throwlab));
 }
 
@@ -2128,10 +2129,10 @@ void Statement::GenerateFirstcall()
 		initstack();
 		breaklab = nextlabel++;
 		ap1 = GetTempRegister();
-		GenerateDiadic(op_lh, 0, ap1, MakeStringAsNameConst(fcname));
+		GenerateDiadic(op_ldp, 0, ap1, MakeStringAsNameConst(fcname));
 		GenerateTriadic(op_beq, 0, ap1, makereg(0), MakeCodeLabel(breaklab));
 		ReleaseTempRegister(ap1);
-		GenerateDiadic(op_sh, 0, makereg(0), MakeStringAsNameConst(fcname));
+		GenerateDiadic(op_stp, 0, makereg(0), MakeStringAsNameConst(fcname));
 		s1->Generate();
 		GenerateLabel(breaklab);
 		breaklab = lab2;

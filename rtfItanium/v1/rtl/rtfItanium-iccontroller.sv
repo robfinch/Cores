@@ -26,7 +26,7 @@
 `define HIGH	1'b1
 `define LOW		1'b0
 
-module ICController(rst_i, clk_i, pc, hit, bstate, state,
+module ICController(rst_i, clk_i, ip, hit, bstate, state,
 	invline, invlineAddr, icl_ctr,
 	thread_en, ihitL2, L2_ld, L2_cnt, L2_adr, L2_dat, L2_nxt,
 	L1_selpc, L1_adr, L1_dat, L1_wr, L1_invline, icnxt, icwhich,
@@ -38,7 +38,7 @@ parameter L2_ReadLatency = 3'd3;
 parameter L1_WriteLatency = 3'd3;
 input rst_i;
 input clk_i;
-input [AMSB:0] pc;
+input [AMSB:0] ip;
 input hit;
 input [4:0] bstate;
 (* mark_debug="true" *)
@@ -99,8 +99,8 @@ if (rst_i) begin
 	bte_o <= 2'b00;
 	cyc_o <= `LOW;
 	stb_o <= `LOW;
-	sel_o <= 8'h00;
-	adr_o <= {pc[AMSB:5],5'h0};
+	sel_o <= 16'h00;
+	adr_o <= {ip[AMSB:5],5'h0};
 	state <= IDLE;
 	L2_ld <= FALSE;
 end
@@ -135,7 +135,7 @@ IDLE:
 		// we have to wait.
 		else begin
 			if (!hit) begin
-				L1_adr <= {pc[AMSB:5],5'h0};
+				L1_adr <= {ip[AMSB:5],5'h0};
 				icwhich <= 2'b00;
 				state <= IC2;
 			end
@@ -170,7 +170,7 @@ IC_WaitL2:
 			bte_o <= 2'b00;
 			cyc_o <= `HIGH;
 			stb_o <= `HIGH;
-			sel_o <= 8'hFF;
+			sel_o <= 16'hFFFF;
 			adr_o <= {L1_adr[AMSB:5],5'b0};
 			L2_adr <= L1_adr;
 			L2_adr[4:0] <= 5'd0;
@@ -194,7 +194,7 @@ IC_Ack:
   if (ack_i|err_i|tlbmiss_i|exv_i) begin
   	if (!bok_i) begin
   		stb_o <= `LOW;
-			adr_o[AMSB:3] <= adr_o[AMSB:3] + 2'd1;
+			adr_o[AMSB:4] <= adr_o[AMSB:4] + 2'd1;
   		state <= IC_Nack2;
   	end
 		if (tlbmiss_i) begin

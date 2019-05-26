@@ -157,10 +157,10 @@ void CodeGenerator::GenLoad(Operand *ap3, Operand *ap1, int ssize, int size)
 		}
 		else {
 			switch (size) {
-			case 1:	GenerateDiadic(op_lbu, 0, ap3, ap1); break;
-			case 2:	GenerateDiadic(op_lcu, 0, ap3, ap1); break;
-			case 4:	GenerateDiadic(op_lhu, 0, ap3, ap1); break;
-			case 8: GenerateDiadic(op_lw, 0, ap3, ap1); break;
+			case 1:	GenerateDiadic(op_ldbu, 0, ap3, ap1); break;
+			case 2:	GenerateDiadic(op_ldwu, 0, ap3, ap1); break;
+			case 4:	GenerateDiadic(op_ldpu, 0, ap3, ap1); break;
+			case 8: GenerateDiadic(op_ldd, 0, ap3, ap1); break;
 			}
 		}
     }
@@ -175,10 +175,10 @@ void CodeGenerator::GenLoad(Operand *ap3, Operand *ap1, int ssize, int size)
 		}
 		else {
 			switch (size) {
-			case 1:	GenerateDiadic(op_lb, 0, ap3, ap1); break;
-			case 2:	GenerateDiadic(op_lc, 0, ap3, ap1); break;
-			case 4:	GenerateDiadic(op_lh, 0, ap3, ap1); break;
-			case 8:	GenerateDiadic(op_lw, 0, ap3, ap1); break;
+			case 1:	GenerateDiadic(op_ldb, 0, ap3, ap1); break;
+			case 2:	GenerateDiadic(op_ldw, 0, ap3, ap1); break;
+			case 4:	GenerateDiadic(op_ldp, 0, ap3, ap1); break;
+			case 8:	GenerateDiadic(op_ldd, 0, ap3, ap1); break;
 			}
 		}
     }
@@ -187,7 +187,7 @@ void CodeGenerator::GenLoad(Operand *ap3, Operand *ap1, int ssize, int size)
 void CodeGenerator::GenStore(Operand *ap1, Operand *ap3, int size)
 {
 	//if (ap1->isPtr) {
-	//	GenerateDiadic(op_sw, 0, ap1, ap3);
+	//	GenerateDiadic(op_std, 0, ap1, ap3);
 	//}
 	//else
 	if (ap1->type==stdvector.GetIndex())
@@ -208,10 +208,10 @@ void CodeGenerator::GenStore(Operand *ap1, Operand *ap3, int size)
 		GenerateDiadic(op_sf,'d',ap1,ap3);
 	else {
 		switch (size) {
-		case 1: GenerateDiadic(op_sb, 0, ap1, ap3); break;
-		case 2: GenerateDiadic(op_sc, 0, ap1, ap3); break;
-		case 4: GenerateDiadic(op_sh, 0, ap1, ap3); break;
-		case 8: GenerateDiadic(op_sw, 0, ap1, ap3); break;
+		case 1: GenerateDiadic(op_stb, 0, ap1, ap3); break;
+		case 2: GenerateDiadic(op_stw, 0, ap1, ap3); break;
+		case 4: GenerateDiadic(op_stp, 0, ap1, ap3); break;
+		case 8: GenerateDiadic(op_std, 0, ap1, ap3); break;
 		default:
 			;
 		}
@@ -575,7 +575,7 @@ j1:
 	if (ap1->isPtr) {
 //		ap3 = GetTempRegister();
 		ap2 = GetTempRegister();
-		GenerateDiadic(op_lw, 0, ap2, ap1);
+		GenerateDiadic(op_ldd, 0, ap2, ap1);
 //		GenLoad(ap3, MakeIndirect(ap2->preg), size, size);
 //		ReleaseTempRegister(ap2);
 		ap2->MakeLegal(flags, 8);
@@ -861,11 +861,11 @@ void CodeGenerator::GenerateStructAssign(TYP *tp, int64_t offset, ENODE *ep, Ope
 					offset2 = offset;
 				switch (thead->tp->size)
 				{
-				case 1:	GenerateDiadic(op_sb, 0, ap2, MakeIndexed(offset, base->preg)); break;
-				case 2:	GenerateDiadic(op_sc, 0, ap2, MakeIndexed(offset, base->preg)); break;
-				case 4:	GenerateDiadic(op_sh, 0, ap2, MakeIndexed(offset, base->preg)); break;
+				case 1:	GenerateDiadic(op_stb, 0, ap2, MakeIndexed(offset, base->preg)); break;
+				case 2:	GenerateDiadic(op_stw, 0, ap2, MakeIndexed(offset, base->preg)); break;
+				case 4:	GenerateDiadic(op_stp, 0, ap2, MakeIndexed(offset, base->preg)); break;
 				case 512:	GenerateDiadic(op_sv, 0, ap2, MakeIndexed(offset, base->preg)); break;
-				default:	GenerateDiadic(op_sw, 0, ap2, MakeIndexed(offset, base->preg)); break;
+				default:	GenerateDiadic(op_std, 0, ap2, MakeIndexed(offset, base->preg)); break;
 				}
 				if (ap2)
 					ReleaseTempReg(ap2);
@@ -893,11 +893,11 @@ void CodeGenerator::GenerateStructAssign(TYP *tp, int64_t offset, ENODE *ep, Ope
 				offset2 = offset;
 			switch(thead->tp->size)
 			{
-			case 1:	GenerateDiadic(op_sb,0,ap2,MakeIndexed(offset,base->preg)); break;
-			case 2:	GenerateDiadic(op_sc,0,ap2,MakeIndexed(offset,base->preg)); break;
-			case 4:	GenerateDiadic(op_sh,0,ap2,MakeIndexed(offset,base->preg)); break;
+			case 1:	GenerateDiadic(op_stb,0,ap2,MakeIndexed(offset,base->preg)); break;
+			case 2:	GenerateDiadic(op_stw,0,ap2,MakeIndexed(offset,base->preg)); break;
+			case 4:	GenerateDiadic(op_stp,0,ap2,MakeIndexed(offset,base->preg)); break;
 			case 512:	GenerateDiadic(op_sv,0,ap2,MakeIndexed(offset,base->preg)); break;
-			default:	GenerateDiadic(op_sw,0,ap2,MakeIndexed(offset,base->preg)); break;
+			default:	GenerateDiadic(op_std,0,ap2,MakeIndexed(offset,base->preg)); break;
 			}
 			if (ap2)
 				ReleaseTempReg(ap2);
@@ -976,11 +976,11 @@ void CodeGenerator::GenerateArrayAssign(TYP *tp, ENODE *node1, ENODE *node2, Ope
 			}
 			switch(tp->GetElementSize())
 			{
-			case 1:	GenerateDiadic(op_sb,0,ap2,MakeIndexed(offset,base->preg)); break;
-			case 2:	GenerateDiadic(op_sc,0,ap2,MakeIndexed(offset,base->preg)); break;
-			case 4:	GenerateDiadic(op_sh,0,ap2,MakeIndexed(offset,base->preg)); break;
+			case 1:	GenerateDiadic(op_stb,0,ap2,MakeIndexed(offset,base->preg)); break;
+			case 2:	GenerateDiadic(op_stw,0,ap2,MakeIndexed(offset,base->preg)); break;
+			case 4:	GenerateDiadic(op_stp,0,ap2,MakeIndexed(offset,base->preg)); break;
 			case 512:	GenerateDiadic(op_sv,0,ap2,MakeIndexed(offset,base->preg)); break;
-			default:	GenerateDiadic(op_sw,0,ap2,MakeIndexed(offset,base->preg)); break;
+			default:	GenerateDiadic(op_std,0,ap2,MakeIndexed(offset,base->preg)); break;
 			}
 			offset += tp->GetElementSize();
 			ReleaseTempReg(ap2);
@@ -1184,11 +1184,11 @@ Operand *CodeGenerator::GenerateAssign(ENODE *node, int flags, int size)
 						GenerateTriadic(op_sub,0,makereg(regSP),makereg(regSP),MakeImmediate(3 * sizeOfWord));
 						ap3 = GetTempRegister();
 						GenerateDiadic(op_ldi,0,ap3,MakeImmediate(size));
-						GenerateDiadic(op_sw,0,ap3,MakeIndexed(2 * sizeOfWord,regSP));
+						GenerateDiadic(op_std,0,ap3,MakeIndexed(2 * sizeOfWord,regSP));
 						GenerateDiadic(op_mov,0,ap3,ap2);
-						GenerateDiadic(op_sw,0,ap3,MakeIndexed(1 * sizeOfWord,regSP));
+						GenerateDiadic(op_std,0,ap3,MakeIndexed(1 * sizeOfWord,regSP));
 						GenerateDiadic(op_mov,0,ap3,ap1);
-						GenerateDiadic(op_sw,0,ap3,MakeIndirect(regSP));
+						GenerateDiadic(op_std,0,ap3,MakeIndirect(regSP));
 					}
 					else {
 						GenerateMonadic(op_push,0,MakeImmediate(size));
@@ -1204,18 +1204,18 @@ Operand *CodeGenerator::GenerateAssign(ENODE *node, int flags, int size)
 /*                
 				if (ap1->isUnsigned) {
 					switch(size) {
-					case 1:	GenerateDiadic(op_lbu,0,ap3,ap2); break;
-					case 2:	GenerateDiadic(op_lcu,0,ap3,ap2); break;
-					case 4: GenerateDiadic(op_lhu,0,ap3,ap2); break;
-					case 8:	GenerateDiadic(op_lw,0,ap3,ap2); break;
+					case 1:	GenerateDiadic(op_ldbu,0,ap3,ap2); break;
+					case 2:	GenerateDiadic(op_ldwu,0,ap3,ap2); break;
+					case 4: GenerateDiadic(op_ldpu,0,ap3,ap2); break;
+					case 8:	GenerateDiadic(op_ldd,0,ap3,ap2); break;
 					}
 				}
 				else {
 					switch(size) {
-					case 1:	GenerateDiadic(op_lb,0,ap3,ap2); break;
-					case 2:	GenerateDiadic(op_lc,0,ap3,ap2); break;
-					case 4: GenerateDiadic(op_lh,0,ap3,ap2); break;
-					case 8:	GenerateDiadic(op_lw,0,ap3,ap2); break;
+					case 1:	GenerateDiadic(op_ldb,0,ap3,ap2); break;
+					case 2:	GenerateDiadic(op_ldw,0,ap3,ap2); break;
+					case 4: GenerateDiadic(op_ldp,0,ap3,ap2); break;
+					case 8:	GenerateDiadic(op_ldd,0,ap3,ap2); break;
 					}
 					if (ssize > size) {
 						switch(size) {
@@ -1241,17 +1241,17 @@ Operand *CodeGenerator::GenerateAssign(ENODE *node, int flags, int size)
 	else {
 		if (ap2->mode==am_imm)
 		switch(size) {
-		case 1:	GenerateDiadic(op_sb,0,makereg(0),ap1); break;
-		case 2:	GenerateDiadic(op_sc,0,makereg(0),ap1); break;
-		case 4: GenerateDiadic(op_sh,0,makereg(0),ap1); break;
-		case 8:	GenerateDiadic(op_sw,0,makereg(0),ap1); break;
+		case 1:	GenerateDiadic(op_stb,0,makereg(0),ap1); break;
+		case 2:	GenerateDiadic(op_stw,0,makereg(0),ap1); break;
+		case 4: GenerateDiadic(op_stp,0,makereg(0),ap1); break;
+		case 8:	GenerateDiadic(op_std,0,makereg(0),ap1); break;
 		}
 		else
 		switch(size) {
-		case 1:	GenerateDiadic(op_sb,0,ap2,ap1); break;
-		case 2:	GenerateDiadic(op_sc,0,ap2,ap1); break;
-		case 4: GenerateDiadic(op_sh,0,ap2,ap1); break;
-		case 8:	GenerateDiadic(op_sw,0,ap2,ap1); break;
+		case 1:	GenerateDiadic(op_stb,0,ap2,ap1); break;
+		case 2:	GenerateDiadic(op_stw,0,ap2,ap1); break;
+		case 4: GenerateDiadic(op_stp,0,ap2,ap1); break;
+		case 8:	GenerateDiadic(op_std,0,ap2,ap1); break;
 		// Do structure assignment
 		default: {
 			ap3 = GetTempRegister();
@@ -1480,12 +1480,12 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int size)
 		ap1->isUnsigned = TRUE;
 		goto retpt;
 	case en_uh_ref:
-		ap1 = GenerateDereference(node, flags, 4, 0);
+		ap1 = GenerateDereference(node, flags, sizeOfWord/2, 0);
 		ap1->isPtr = TRUE;
 		ap1->isUnsigned = TRUE;
 		goto retpt;
 	case en_uw_ref:
-		ap1 = GenerateDereference(node, flags, 8, 0);
+		ap1 = GenerateDereference(node, flags, sizeOfWord, 0);
 		ap1->isPtr = TRUE;
 		ap1->isUnsigned = TRUE;
 		goto retpt;
@@ -1513,12 +1513,12 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int size)
 		ap1->isUnsigned = TRUE;
 		goto retpt;
 	case en_h_ref:
-		ap1 = GenerateDereference(node, flags, 4, 1);
+		ap1 = GenerateDereference(node, flags, sizeOfWord/2, 1);
 		ap1->isPtr = TRUE;
 		ap1->isUnsigned = TRUE;
 		goto retpt;
 	case en_w_ref:
-		ap1 = GenerateDereference(node, flags, 8, 1);
+		ap1 = GenerateDereference(node, flags, sizeOfWord, 1);
 		ap1->isPtr = TRUE;
 		ap1->isUnsigned = TRUE;
 		goto retpt;
@@ -1751,11 +1751,11 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int size)
     case en_mod:    ap1 = node->GenDivMod(flags,size,op_mod); goto retpt;
     case en_umod:   ap1 = node->GenDivMod(flags,size,op_modu); goto retpt;
     case en_asl:    ap1 = node->GenShift(flags,size,op_asl); goto retpt;
-    case en_shl:    ap1 = node->GenShift(flags,size,op_shl); goto retpt;
-    case en_shlu:   ap1 = node->GenShift(flags,size,op_shl); goto retpt;
+    case en_shl:    ap1 = node->GenShift(flags,size,op_stpl); goto retpt;
+    case en_shlu:   ap1 = node->GenShift(flags,size,op_stpl); goto retpt;
     case en_asr:	ap1 = node->GenShift(flags,size,op_asr); goto retpt;
     case en_shr:	ap1 = node->GenShift(flags,size,op_asr); goto retpt;
-    case en_shru:   ap1 = node->GenShift(flags,size,op_shru); goto retpt;
+    case en_shru:   ap1 = node->GenShift(flags,size,op_stpru); goto retpt;
 	case en_rol:   ap1 = node->GenShift(flags,size,op_rol); goto retpt;
 	case en_ror:   ap1 = node->GenShift(flags,size,op_ror); goto retpt;
 	/*	
@@ -1771,9 +1771,9 @@ Operand *CodeGenerator::GenerateExpression(ENODE *node, int flags, int size)
     case en_asand:  ap1 = node->GenAssignLogic(flags,size,op_and); goto retpt;
     case en_asor:   ap1 = node->GenAssignLogic(flags,size,op_or); goto retpt;
 	case en_asxor:  ap1 = node->GenAssignLogic(flags,size,op_xor); goto retpt;
-    case en_aslsh:  ap1 = (node->GenAssignShift(flags,size,op_shl)); goto retpt;
+    case en_aslsh:  ap1 = (node->GenAssignShift(flags,size,op_stpl)); goto retpt;
     case en_asrsh:  ap1 = (node->GenAssignShift(flags,size,op_asr)); goto retpt;
-	case en_asrshu: ap1 = (node->GenAssignShift(flags,size,op_shru)); goto retpt;
+	case en_asrshu: ap1 = (node->GenAssignShift(flags,size,op_stpru)); goto retpt;
     case en_asmul: ap1 = GenerateAssignMultiply(node,flags,size,op_mul); goto retpt;
     case en_asmulu: ap1 = GenerateAssignMultiply(node,flags,size,op_mulu); goto retpt;
     case en_asdiv: ap1 = GenerateAssignModiv(node,flags,size,op_div); goto retpt;

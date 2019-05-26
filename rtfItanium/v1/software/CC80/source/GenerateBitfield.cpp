@@ -72,7 +72,7 @@ Operand *CodeGenerator::GenerateBitfieldDereference(ENODE *node, int flags, int 
 	}
 	else {
 		if (node->bit_offset > 0)
-			GenerateTriadic(op_shru, 0, ap3, ap3, MakeImmediate((int64_t) node->bit_offset));
+			GenerateTriadic(op_stpru, 0, ap3, ap3, MakeImmediate((int64_t) node->bit_offset));
 		GenerateTriadic(op_and, 0, ap3, ap3, MakeImmediate((int64_t)mask));
 		if (isSigned)
 			SignExtendBitfield(node, ap3, mask);

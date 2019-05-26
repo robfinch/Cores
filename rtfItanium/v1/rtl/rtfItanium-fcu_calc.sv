@@ -43,19 +43,19 @@ begin
   `BRK:   bus <= {72'd0,a[7:0]} | {72'b0,instr[29:22]};
   `JAL:		bus <= nextpc;
   `CALL:	bus <= nextpc;
-  `RET:		bus <= a + {instr[39:22],3'b0};
+  `RET:		bus <= a + {instr[39:22],1'b0};
   `REX:
     case(ol)
-    `OL_USER:   bus <= 64'hCCCCCCCCCCCCCCCC;
+    `OL_USER:   bus <= 80'hCCCCCCCCCCCCCCCCCCCC;
     // ToDo: fix im test
     default:    bus <= (im < ~{ol,2'b00}) ? tvec : nextpc;
     endcase
   `RTI:
   	case(instr[`FUNCT5])
   	`WAIT:  bus = waitctr==64'd1;
-  	default:	bus <= 64'hCCCCCCCCCCCCCCCC;
+  	default:	bus <= 80'hCCCCCCCCCCCCCCCCCCCC;
   	endcase
-  default:    bus <= 64'hCCCCCCCCCCCCCCCC;
+  default:    bus <= 80'hCCCCCCCCCCCCCCCCCCCC;
   endcase
 end
 
