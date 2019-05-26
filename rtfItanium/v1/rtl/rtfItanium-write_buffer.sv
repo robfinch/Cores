@@ -22,7 +22,7 @@
 // ============================================================================
 //
 module write_buffer(rst_i, clk_i, bstate, cyc_pending, wb_has_bus, update_iq, uid, fault,
-	wb_v, wb_addr, wbo_id, cwr_o, csel_o, cadr_o, cdat_o,
+	wb_v, wb_addr, cwr_o, csel_o, cadr_o, cdat_o,
 	p0_id_i, p0_ol_i, p0_wr_i, p0_ack_o, p0_sel_i, p0_adr_i, p0_dat_i, p0_hit,
 	p1_id_i, p1_ol_i, p1_wr_i, p1_ack_o, p1_sel_i, p1_adr_i, p1_dat_i, p1_hit,
 	ol_o, cyc_o, stb_o, ack_i, err_i, tlbmiss_i, wrv_i, we_o, sel_o, adr_o, dat_o, cr_o);
@@ -45,7 +45,6 @@ output reg [7:0] fault;
 output reg [QENTRIES-1:0] uid;
 output reg [WB_DEPTH-1:0] wb_v;
 output reg [79:0] wb_addr [0:WB_DEPTH-1];
-output reg [QENTRIES-1:0] wbo_id;
 
 input [3:0] p0_id_i;
 input p0_ol_i;
@@ -90,6 +89,7 @@ reg [ 9:0] wb_sel  [0:WB_DEPTH-1];
 reg [79:0] wb_data [0:WB_DEPTH-1];
 reg [QENTRIES-1:0] wb_id [0:WB_DEPTH-1];
 reg [WB_DEPTH-1:0] wb_rmw;
+reg [QENTRIES-1:0] wbo_id;
 
 wire writing_wb = (p0_wr_i && p1_wr_i && wb_ptr < WB_DEPTH-2) 
 									|| (p0_wr_i && wb_ptr < WB_DEPTH)
@@ -168,12 +168,12 @@ else begin
 			wb_sel[wb_ptr-1] <= p0_sel_i;
 			wb_addr[wb_ptr-1] <= p0_adr_i;
 			wb_data[wb_ptr-1] <= p0_dat_i;
-			wb_id[wb_ptr-1] <= 16'd1 <= p0_id_i;
+			wb_id[wb_ptr-1] <= 16'd1 << p0_id_i;
 			wb_ol[wb_ptr] <= p0_ol_i;
 			wb_sel[wb_ptr] <= p0_sel_i;
 			wb_addr[wb_ptr] <= p0_adr_i;
 			wb_data[wb_ptr] <= p0_dat_i;
-			wb_id[wb_ptr] <= 16'd1 <= p1_id_i;
+			wb_id[wb_ptr] <= 16'd1 << p1_id_i;
 			wb_ptr <= wb_ptr + 3'd2;
 			p0_ack_o <= TRUE;
 			p1_ack_o <= TRUE;
@@ -208,7 +208,7 @@ else begin
 			wb_sel[wb_ptr] <= p1_sel_i;
 			wb_addr[wb_ptr] <= p1_adr_i;
 			wb_data[wb_ptr] <= p1_dat_i;
-			wb_id[wb_ptr] <= 16'd1 <= p1_id_i;
+			wb_id[wb_ptr] <= 16'd1 << p1_id_i;
 			wb_ptr <= wb_ptr + 3'd1;
 			p1_ack_o <= TRUE;
 		end

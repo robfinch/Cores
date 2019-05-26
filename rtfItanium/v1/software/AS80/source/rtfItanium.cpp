@@ -25,7 +25,7 @@
 //
 #include "stdafx.h"
 #define I_RR	0x02
-#define I_MOV		0x1A
+#define I_MOV		0x10
 #define I_ADDI	0x04
 #define I_ADD		0x04
 #define I_SUB		0x05
@@ -39,10 +39,20 @@
 #define I_ORS3	0x3E
 #define I_XOR		0x0A
 #define I_XORI	0x0A
-#define I_SHL		0x0
-#define I_SHLI	0x8
-#define I_ASL		0x2
-#define I_ASLI	0xA
+#define I_DIV		0x22
+#define I_DIVI	0x22
+#define I_SHL		0x32
+#define I_SHLI	0x38
+#define I_SHR		0x33
+#define I_SHRI	0x39
+#define I_ASL		0x34
+#define I_ASLI	0x3A
+#define I_ASR		0x35
+#define I_ASRI	0x3B
+#define I_ROL		0x36
+#define I_ROLI	0x3C
+#define I_ROR		0x37
+#define I_RORI	0x3D
 
 #define I_SLT		0x10
 #define I_SLTU	0x14
@@ -162,12 +172,14 @@ static int regCnst;
 #define OP6(x)	(OP4(x)|OP2((x) >> 4LL))
 #define FN5(x)	(((x) & 0x1fLL) << 35LL)
 #define FN6(x)	((FN5((x) >> 1)|(((x) & 1LL) << 6LL))|0x80LL)
-#define RT(x)		((x) << 0)
-#define RA(x)		((x) << 10LL)
-#define RB(x)		((x) << 16LL)
-#define RC(x)		((x) << 22LL)
-#define RII(x)	((((x) & 0x7fffLL) << 16) | ((((x) >> 15LL) & 0x7fLL) << 33LL))
-#define MLI(x)	((((x) & 0x7fffLL) << 16) | ((((x) >> 15LL) & 0x7fLL) << 33LL))
+#define FN2(x)	(((x) & 3LL)<<33LL)
+#define SC(x)		(((x) & 7LL) << 28LL)
+#define RT(x)		((x) & 63LL)
+#define RA(x)		(((x) & 63LL) << 10LL)
+#define RB(x)		(((x) & 63LL) << 16LL)
+#define RC(x)		(((x) & 63LL) << 22LL)
+#define RII(x)	((((x) & 0x7fffLL) << 16LL) | ((((x) >> 15LL) & 0x7fLL) << 33LL))
+#define MLI(x)	((((x) & 0x7fffLL) << 16LL) | ((((x) >> 15LL) & 0x7fLL) << 33LL))
 #define MSI(x)	(((x) & 0x3fLL) | ((((x) >> 6LL) & 0x1ffLL) << 22LL) | ((((x) >> 15LL) & 0x7fLL) << 33LL))
 #define FMT(x)	(((x) & 15LL)<<31LL)
 #define RM(x)		(((x) & 7LL) << 28LL)
@@ -1597,14 +1609,16 @@ static void LoadConstant(Int128& val, int rg)
 		emit_insn(
 			RII(val.low) |
 			RT(rg) |
+			RA(0) |
 			OP6(I_ADDI), I);	// ADDI (sign extends)
 		return;
 	}
 	if (IsNBit128(val, *Int128::MakeInt128(44LL))) {
 		emit_insn(
-			RII(val.low >> 22) |
+			RII(Int128::Shr(nullptr, &val, 22LL)) |
 			RT(rg) |
-			OP6(I_ADDS1), I);
+			RA(0) |
+			OP6(I_ADDS1), I);	// ADDDS (sign extends)
 		emit_insn(
 			RII(val.low) |
 			RA(rg) |
@@ -1614,11 +1628,11 @@ static void LoadConstant(Int128& val, int rg)
 	}
 	if (IsNBit128(val, *Int128::MakeInt128(66LL))) {
 		emit_insn(
-			RII(Int128::Shr(nullptr,&val,44)) |
+			RII(Int128::Shr(nullptr,&val,44LL)) |
 			RT(rg) |
 			OP6(I_ADDS2), I);
 		emit_insn(
-			RII(Int128::Shr(nullptr, &val, 22)) |
+			RII(Int128::Shr(nullptr, &val, 22LL)) |
 			RA(rg) |
 			RT(rg) |
 			OP6(I_ORS1), I);	// ORI (zero extends)
@@ -1631,16 +1645,16 @@ static void LoadConstant(Int128& val, int rg)
 	}
 	// Won't fit into 66 bits, assume 80 bit constant
 	emit_insn(
-		RII(Int128::Shr(nullptr, &val, 66)) |
+		RII(Int128::Shr(nullptr, &val, 66LL)) |
 		RT(rg) |
 		OP6(I_ADDS3), I);
 	emit_insn(
-		RII(Int128::Shr(nullptr, &val, 44)) |
+		RII(Int128::Shr(nullptr, &val, 44LL)) |
 		RA(rg) |
 		RT(rg) |
 		OP6(I_ORS2), I);	// ORI (zero extends)
 	emit_insn(
-		RII(Int128::Shr(nullptr, &val, 22)) |
+		RII(Int128::Shr(nullptr, &val, 22LL)) |
 		RA(rg) |
 		RT(rg) |
 		OP6(I_ORS1), I);	// ORI (zero extends)
@@ -1740,7 +1754,7 @@ static void process_riop(int64_t opcode6, int64_t func6, int64_t bit23)
   char *p;
   Int128 val;
 	int sz = 3;
-  
+
   p = inptr;
 	if (*p == '.')
 		getSz(&sz);
@@ -1750,6 +1764,14 @@ static void process_riop(int64_t opcode6, int64_t func6, int64_t bit23)
   need(',');
   NextToken();
   val = expr128();
+	if (opcode6 < 0) {
+		if (opcode6 == -4LL) {	// subtract is an add
+			opcode6 = 4LL;
+			Int128::Sub(&val, Int128::Zero(), &val);	// make val -
+		}
+		else
+			error("Immediate mode not supported.");
+	}
 	if (!IsNBit128(val, *Int128::MakeInt128(22LL))) {
 		LoadConstant(val, 54);
 		emit_insn(
@@ -1866,7 +1888,7 @@ static void process_rrop()
   need(',');
   NextToken();
   if (token=='#') {
-	if (iop < 0 && iop!=-4)
+	if (iop < 0 && iop!=-4LL)
 		error("Immediate mode not supported");
 		//printf("Insn:%d\n", token);
     inptr = p;
@@ -2777,8 +2799,9 @@ static void process_ret()
 	bool ins48 = false;
 
   NextToken();
+	Int128::Assign(&val, Int128::Zero());
 	if (token=='#') {
-		val = expr();
+		val = expr128();
 	}
 	// If too large a constant, do the SP adjustment directly.
 	if (!IsNBit128(val, *Int128::MakeInt128(21LL))) {
@@ -2865,19 +2888,23 @@ static void process_brk()
 
 static void GetIndexScale(int *sc)
 {
-      int64_t val;
+  int64_t val;
 
-      NextToken();
-      val = expr();
-      prevToken();
-      switch(val) {
-      case 0: *sc = 0; break;
-      case 1: *sc = 0; break;
-      case 2: *sc = 1; break;
-      case 4: *sc = 2; break;
-      case 8: *sc = 3; break;
-      default: printf("Illegal scaling factor.\r\n");
-      }
+  NextToken();
+  val = expr();
+  prevToken();
+  switch(val) {
+  case 0: *sc = 0; break;
+  case 1: *sc = 0; break;
+  case 2: *sc = 1; break;
+  case 4: *sc = 2; break;
+  case 8: *sc = 3; break;
+	case 16:	*sc = 4; break;
+	case 5:	*sc = 5; break;
+	case 10:	*sc = 6; break;
+	case 15:	*sc = 7; break;
+  default: printf("Illegal scaling factor.\r\n");
+  }
 }
 
 
@@ -3051,10 +3078,11 @@ static void process_store()
 	if (Ra >= 0 && Rc >= 0) {
 		emit_insn(
 			FN5(funct6) |
+			SC((int64_t)Sc) |
 			RC(Rc) |
 			RB(Rs) |
 			RA(Ra) |
-			OP4(15), S);
+			OP4(I_MSX), S);
 		return;
 	}
   if (Ra < 0) Ra = 0;
@@ -3064,6 +3092,7 @@ static void process_store()
 		// Change to indexed addressing
 		emit_insn(
 			FN5(funct6) |
+			SC(0LL) |
 			RC(54) |
 			RB(Rs) |
 			RA(Ra) |
@@ -3422,7 +3451,8 @@ static void process_mov(int64_t oc, int64_t fn)
 		}
 	}
 	 emit_insn(
-		 FN6(I_MOV) |
+		 FN5(I_MOV) |
+		 OP4(1) |
 		 RT(Rt) |
 		 RA(Ra)
 		 , I
@@ -3453,6 +3483,21 @@ static int64_t process_op2()
 	return (op2);
 }
 
+static int64_t process_shop2()
+{
+	int64_t op2 = 0;
+
+	inptr++;
+	NextToken();
+	switch (token) {
+	case tk_nop:	op2 = 0x0LL; break;
+	case tk_add:	op2 = 0x1LL;	break;
+	case tk_and:	op2 = 0x2LL; break;
+	default:	op2 = 0x0LL; break;
+	}
+	return (op2);
+}
+
 // ----------------------------------------------------------------------------
 // shr r1,r2,#5
 // shr:sub r1,r2,#5,r3
@@ -3472,7 +3517,7 @@ static void process_shifti(int64_t op4)
 	SkipSpaces();
 	if (p[0] == ':') {
 		inptr++;
-		op2 = process_op2();
+		op2 = process_shop2();
 		q = inptr;
 	}
 	if (q[0]=='.')
@@ -3484,8 +3529,13 @@ static void process_shifti(int64_t op4)
 	NextToken();
 	val = expr();
 	val &= 63;
+	if (op2) {
+		need(',');
+		Rc = getRegisterX();
+	}
 	emit_insn(
-		FN6(func6) |
+		FN6(op4) |
+		RC(Rc) |
 		RB(val & 0x3fLL) |
 		RT(Rt) |
 		RA(Ra)
@@ -3597,7 +3647,7 @@ static void process_shift(int64_t op4)
 	NextToken();
 	if (token=='#') {
 		inptr = p;
-		process_shifti(op4);
+		process_shifti(op4+6);
 	}
 	else {
 		prevToken();
@@ -4116,8 +4166,8 @@ static void process_default()
 	case tk_addi: process_riop(0x04,0x04,0); break;
 	case tk_align: process_align(); break;
 	case tk_andi:  process_riop(0x08,0x08,0); break;
-	case tk_asl: process_shift(0x2); break;
-	case tk_asr: process_shift(0x3); break;
+	case tk_asl: process_shift(I_ASL); break;
+	case tk_asr: process_shift(I_ASR); break;
 //	case tk_bbc: process_bbc(0x26, 1); break;
 //	case tk_bbs: process_bbc(0x26, 0); break;
 	case tk_begin_expand: expandedBlock = 1; break;
@@ -4262,10 +4312,10 @@ static void process_default()
 	//case tk_redor: process_rop(0x06); break;
 	case tk_ret: process_ret(); break;
 	case tk_rex: process_rex(); break;
-	case tk_rol: process_shift(0x4); break;
-	case tk_roli: process_shifti(0x4); break;
-	case tk_ror: process_shift(0x5); break;
-	case tk_rori: process_shifti(0x5); break;
+	case tk_rol: process_shift(I_ROL); break;
+	case tk_roli: process_shifti(I_ROLI); break;
+	case tk_ror: process_shift(I_ROR); break;
+	case tk_rori: process_shifti(I_RORI); break;
 	case tk_rti: process_iret(0xC8000002); break;
 	case tk_sei: process_sei(); break;
 	case tk_seq:	process_setop(I_SEQ, I_SEQ, 0x00); break;
@@ -4275,20 +4325,20 @@ static void process_default()
 	case tk_sgeu:	process_setop(-I_SLTU, I_SGTUI, 0x01); break;
 	case tk_sgt:	process_setop(-I_SLE, I_SGTI, 0x00); break;
 	case tk_sgtu:	process_setop(-I_SLEU, I_SGTUI, 0x00); break;
-	case tk_shl: process_shift(0x0); break;
-	case tk_shli: process_shifti(0x0); break;
-	case tk_shr: process_shift(0x1); break;
-	case tk_shri: process_shifti(0x1); break;
-	case tk_shru: process_shift(0x1); break;
-	case tk_shrui: process_shifti(0x1); break;
+	case tk_shl: process_shift(I_SHL); break;
+	case tk_shli: process_shifti(I_SHLI); break;
+	case tk_shr: process_shift(I_SHR); break;
+	case tk_shri: process_shifti(I_SHRI); break;
+	case tk_shru: process_shift(I_SHR); break;
+	case tk_shrui: process_shifti(I_SHRI); break;
 	case tk_sle:	process_setop(I_SLE, I_SLTI, 0x01); break;
 	case tk_sleu:	process_setop(I_SLEU, I_SLTUI, 0x01); break;
 	case tk_slt:	process_setop(I_SLT, I_SLTI, 0x00); break;
 	case tk_sltu:	process_setop(I_SLTU, I_SLTUI, 0x00); break;
 	case tk_sne:	process_setop(I_SNE, I_SNEI, 0x01); break;
-	case tk_slli: process_shifti(0x8); break;
-	case tk_srai: process_shifti(0xB); break;
-	case tk_srli: process_shifti(0x9); break;
+	case tk_slli: process_shifti(I_SHLI); break;
+	case tk_srai: process_shifti(I_ASRI); break;
+	case tk_srli: process_shifti(I_SHRI); break;
 	case tk_subi:  process_riop(0x05,0x05,0x00); break;
 //	case tk_sv:  process_sv(0x37); break;
 	case tk_swap: process_rop(0x03); break;
@@ -4367,23 +4417,23 @@ void Itanium_processMaster()
 		jumptbl[tk_jmp] = &process_call;
 		parm1[tk_jmp] = I_JMP;
 		jumptbl[tk_add] = &process_rrop;
-		parm1[tk_add] = 0x04LL;
-		parm2[tk_add] = 0x04LL;
+		parm1[tk_add] = I_ADD;
+		parm2[tk_add] = I_ADDI;
 		jumptbl[tk_and] = &process_rrop;
-		parm1[tk_and] = 0x08LL;
-		parm2[tk_and] = 0x08LL;
+		parm1[tk_and] = I_AND;
+		parm2[tk_and] = I_ANDI;
 		jumptbl[tk_or] = &process_rrop;
-		parm1[tk_or] = 0x09LL;
-		parm2[tk_or] = 0x09LL;
+		parm1[tk_or] = I_OR;
+		parm2[tk_or] = I_ORI;
 		jumptbl[tk_xor] = &process_rrop;
-		parm1[tk_xor] = 0x0ALL;
-		parm2[tk_xor] = 0x0ALL;
+		parm1[tk_xor] = I_XOR;
+		parm2[tk_xor] = I_XORI;
 		jumptbl[tk_eor] = &process_rrop;
-		parm1[tk_eor] = 0x0ALL;
-		parm2[tk_eor] = 0x0ALL;
+		parm1[tk_eor] = I_XOR;
+		parm2[tk_eor] = I_XORI;
 		jumptbl[tk_div] = &process_rrop;
-		parm1[tk_div] = 0x3ELL;
-		parm2[tk_div] = 0x3ELL;
+		parm1[tk_div] = I_DIV;
+		parm2[tk_div] = I_DIVI;
 		parm3[tk_div] = 0x00;
 		jumptbl[tk_divu] = &process_rrop;
 		parm1[tk_divu] = 0x3CLL;
@@ -4410,17 +4460,20 @@ void Itanium_processMaster()
 		parm2[tk_modu] = 0x3CLL;
 		parm3[tk_modu] = 0x01LL;
 		jumptbl[tk_mul] = &process_rrop;
-		parm1[tk_mul] = 0x3ALL;
-		parm2[tk_mul] = 0x3ALL;
+		parm1[tk_mul] = 0x20LL;
+		parm2[tk_mul] = 0x20LL;
 		jumptbl[tk_mulf] = &process_rrop;
-		parm1[tk_mulf] = 0x2ALL;
-		parm2[tk_mulf] = 0x2ALL;
+		parm1[tk_mulf] = 0x0FLL;
+		parm2[tk_mulf] = 0x0FLL;
 		jumptbl[tk_mulu] = &process_rrop;
-		parm1[tk_mulu] = 0x38LL;
-		parm2[tk_mulu] = 0x38LL;
+		parm1[tk_mulu] = 0x21LL;
+		parm2[tk_mulu] = 0x21LL;
+		jumptbl[tk_mulh] = &process_rrop;
+		parm1[tk_mulh] = 0x00LL;
+		parm2[tk_mulh] = -1LL;
 		jumptbl[tk_sub] = &process_rrop;
-		parm1[tk_sub] = 0x05LL;
-		parm2[tk_sub] = -0x04LL;
+		parm1[tk_sub] = I_SUB;
+		parm2[tk_sub] = -I_ADDI;
 		jumptbl[tk_ptrdif] = &process_ptrdif;
 		parm1[tk_ptrdif] = 0x1ELL;
 		parm2[tk_ptrdif] = -1LL;

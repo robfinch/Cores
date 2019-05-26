@@ -59,7 +59,7 @@ input rbi_i;
 input [31:0] signal_i;
 output [7:0] exc_o;
 parameter TM_CLKFREQ = 20000000;
-parameter QENTRIES = 5;
+parameter QENTRIES = `QENTRIES;
 parameter AREGS = 64;
 parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
@@ -141,9 +141,9 @@ reg [4:0] state;
 reg [7:0] cnt;
 reg r1IsFp,r2IsFp,r3IsFp;
 
-reg  [`QBITS] tail0;
-reg  [`QBITS] tail1;
-reg  [`QBITS] tail2;
+wire  [`QBITS] tail0;
+wire  [`QBITS] tail1;
+wire  [`QBITS] tail2;
 reg  [`QBITS] heads[0:QENTRIES-1];
 
 wire tlb_miss;
@@ -156,7 +156,7 @@ wire [79:0] rfoa0, rfob0, rfoc0;
 wire [79:0] rfoa1, rfob1, rfoc1;
 wire [79:0] rfoa2, rfob2, rfoc2;
 reg  [AREGS-1:0] rf_v;
-reg  [`QBITSP1] rf_source[0:AREGS-1];
+reg  [`QBITS] rf_source[0:AREGS-1];
 initial begin
 for (n = 0; n < AREGS; n = n + 1)
 	rf_source[n] = 1'b0;
@@ -350,7 +350,7 @@ reg [QENTRIES-1:0] iq_done;
 reg [QENTRIES-1:0] iq_out;
 reg [QENTRIES-1:0] iq_agen;
 reg [`SNBITS] iq_sn [0:QENTRIES-1];  // instruction sequence number
-reg [`QBITSP1] iq_is [0:QENTRIES-1];	// source of instruction
+reg [`QBITS] iq_is [0:QENTRIES-1];	// source of instruction
 reg [QENTRIES-1:0] iq_pt;		// predict taken
 reg [QENTRIES-1:0] iq_bt;		// update branch target buffer
 reg [QENTRIES-1:0] iq_takb;	// take branch record
@@ -403,13 +403,13 @@ reg [AMSB:0] iq_ma [0:QENTRIES-1];	// memory address
 reg [WID-1:0] iq_argI	[0:QENTRIES-1];	// argument 0 (immediate)
 reg [WID-1:0] iq_argA	[0:QENTRIES-1];	// argument 1
 reg [QENTRIES-1:0] iq_argA_v;	// arg1 valid
-reg [`QBITSP1] iq_argA_s	[0:QENTRIES-1];	// arg1 source (iq entry # with top bit representing ALU/DRAM bus)
+reg [`QBITS] iq_argA_s	[0:QENTRIES-1];	// arg1 source (iq entry # with top bit representing ALU/DRAM bus)
 reg [WID-1:0] iq_argB	[0:QENTRIES-1];	// argument 2
 reg        iq_argB_v	[0:QENTRIES-1];	// arg2 valid
-reg  [`QBITSP1] iq_argB_s	[0:QENTRIES-1];	// arg2 source (iq entry # with top bit representing ALU/DRAM bus)
+reg  [`QBITS] iq_argB_s	[0:QENTRIES-1];	// arg2 source (iq entry # with top bit representing ALU/DRAM bus)
 reg [WID-1:0] iq_argC	[0:QENTRIES-1];	// argument 3
 reg        iq_argC_v	[0:QENTRIES-1];	// arg3 valid
-reg  [`QBITSP1] iq_argC_s	[0:QENTRIES-1];	// arg3 source (iq entry # with top bit representing ALU/DRAM bus)
+reg  [`QBITS] iq_argC_s	[0:QENTRIES-1];	// arg3 source (iq entry # with top bit representing ALU/DRAM bus)
 reg [`ABITS] iq_ip	[0:QENTRIES-1];	// program counter for this instruction
 
 // debugging
@@ -460,7 +460,7 @@ wire take_branch0;
 wire take_branch1;
 
 reg         id1_v;
-reg   [`QBITSP1] id1_id;
+reg   [`QBITS] id1_id;
 reg   [2:0] id1_unit;
 reg  [39:0] id1_instr;
 reg   [5:0] id1_ven;
@@ -472,7 +472,7 @@ wire [143:0] id1_bus;
 wire [143:0] id0_bus;
 
 reg         id2_v;
-reg   [`QBITSP1] id2_id;
+reg   [`QBITS] id2_id;
 reg   [2:0] id2_unit;
 reg  [39:0] id2_instr;
 reg   [5:0] id2_ven;
@@ -483,7 +483,7 @@ reg   [4:0] id2_Rt;
 wire [143:0] id2_bus;
 
 reg         id3_v;
-reg   [`QBITSP1] id3_id;
+reg   [`QBITS] id3_id;
 reg   [2:0] id3_unit;
 reg  [39:0] id3_instr;
 reg   [5:0] id3_ven;
@@ -502,7 +502,7 @@ reg        alu0_ld;
 reg        alu0_dataready;
 wire       alu0_done;
 wire       alu0_idle;
-reg  [`QBITSP1] alu0_sourceid;
+reg  [`QBITS] alu0_sourceid;
 reg [39:0] alu0_instr;
 reg				 alu0_tlb;
 reg        alu0_mem;
@@ -521,7 +521,7 @@ reg [`ABITS] alu0_ip;
 reg [WID-1:0] alu0_bus;
 wire [WID-1:0] alu0b_bus;
 wire [WID-1:0] alu0_out;
-wire  [`QBITSP1] alu0_id;
+wire  [`QBITS] alu0_id;
 (* mark_debug="true" *)
 wire  [`XBITS] alu0_exc;
 wire        alu0_v;
@@ -534,7 +534,7 @@ reg        alu1_ld;
 reg        alu1_dataready;
 wire       alu1_done;
 wire       alu1_idle;
-reg  [`QBITSP1] alu1_sourceid;
+reg  [`QBITS] alu1_sourceid;
 reg [39:0] alu1_instr;
 reg        alu1_mem;
 reg        alu1_load;
@@ -553,7 +553,7 @@ reg [`ABITS] alu1_ip;
 reg [WID-1:0] alu1_bus;
 wire [WID-1:0] alu1b_bus;
 wire [WID-1:0] alu1_out;
-wire  [`QBITSP1] alu1_id;
+wire  [`QBITS] alu1_id;
 wire  [`XBITS] alu1_exc;
 wire        alu1_v;
 wire        alu1_branchmiss;
@@ -561,25 +561,27 @@ wire [`ABITS] alu1_missip;
 
 wire agen0_v;
 wire agen0_idle;
-reg [`QBITSP1] agen0_sourceid;
-wire [`QBITSP1] agen0_id;
+reg [`QBITS] agen0_sourceid;
+wire [`QBITS] agen0_id;
 reg [RBIT:0] agen0_tgt;
 reg agen0_dataready;
 reg [2:0] agen0_unit;
 reg [39:0] agen0_instr;
 reg agen0_lea;
+reg agen0_push;
 reg [AMSB:0] agen0_ma;
 reg [79:0] agen0_argA, agen0_argB, agen0_argC;
 
 wire agen1_v;
 wire agen1_idle;
-reg [`QBITSP1] agen1_sourceid;
-wire [`QBITSP1] agen1_id;
+reg [`QBITS] agen1_sourceid;
+wire [`QBITS] agen1_id;
 reg [RBIT:0] agen1_tgt;
 reg agen1_dataready;
 reg [2:0] agen1_unit;
 reg [39:0] agen1_instr;
 reg agen1_lea;
+reg agen1_push;
 reg [AMSB:0] agen1_ma;
 reg [79:0] agen1_argA, agen1_argB, agen1_argC;
 
@@ -589,7 +591,7 @@ reg        fpu1_ld;
 reg        fpu1_dataready = 1'b1;
 wire       fpu1_done = 1'b1;
 wire       fpu1_idle;
-reg [`QBITSP1] fpu1_sourceid;
+reg [`QBITS] fpu1_sourceid;
 reg [39:0] fpu1_instr;
 reg [WID-1:0] fpu1_argA;
 reg [WID-1:0] fpu1_argB;
@@ -600,7 +602,7 @@ reg [RBIT:0] fpu1_tgt;
 reg [`ABITS] fpu1_ip;
 wire [WID-1:0] fpu1_out = 64'h0;
 reg [WID-1:0] fpu1_bus = 64'h0;
-wire  [`QBITSP1] fpu1_id;
+wire  [`QBITS] fpu1_id;
 wire  [`XBITS] fpu1_exc;
 wire        fpu1_v;
 wire [31:0] fpu1_status;
@@ -610,7 +612,7 @@ reg        fpu2_ld;
 reg        fpu2_dataready = 1'b1;
 wire       fpu2_done = 1'b1;
 wire       fpu2_idle;
-reg [`QBITSP1] fpu2_sourceid;
+reg [`QBITS] fpu2_sourceid;
 reg [39:0] fpu2_instr;
 reg [WID-1:0] fpu2_argA;
 reg [WID-1:0] fpu2_argB;
@@ -621,7 +623,7 @@ reg [RBIT:0] fpu2_tgt;
 reg [`ABITS] fpu2_ip;
 wire [WID-1:0] fpu2_out = 64'h0;
 reg [WID-1:0] fpu2_bus = 64'h0;
-wire  [`QBITSP1] fpu2_id;
+wire  [`QBITS] fpu2_id;
 wire  [`XBITS] fpu2_exc;
 wire        fpu2_v;
 wire [31:0] fpu2_status;
@@ -633,7 +635,7 @@ reg        fcu_ld;
 reg        fcu_dataready;
 reg        fcu_done;
 reg         fcu_idle = 1'b1;
-reg [`QBITSP1] fcu_sourceid;
+reg [`QBITS] fcu_sourceid;
 reg [39:0] fcu_instr;
 reg [39:0] fcu_prevInstr;
 reg  [2:0] fcu_insln;
@@ -658,7 +660,7 @@ reg [`ABITS] fcu_nextip;
 reg [`ABITS] fcu_brdisp;
 wire [WID-1:0] fcu_out;
 reg [WID-1:0] fcu_bus;
-wire  [`QBITSP1] fcu_id;
+wire  [`QBITS] fcu_id;
 reg   [`XBITS] fcu_exc;
 wire        fcu_v;
 reg        fcu_branchmiss;
@@ -703,7 +705,7 @@ reg [39:0] dram0_instr;
 reg        dram0_rmw;
 reg		   dram0_preload;
 reg [RBIT:0] dram0_tgt;
-reg  [`QBITSP1] dram0_id;
+reg  [`QBITS] dram0_id;
 reg        dram0_unc;
 reg [2:0]  dram0_memsize;
 reg        dram0_load;	// is a load operation
@@ -715,7 +717,7 @@ reg [39:0] dram1_instr;
 reg        dram1_rmw;
 reg		   dram1_preload;
 reg [RBIT:0] dram1_tgt;
-reg  [`QBITSP1] dram1_id;
+reg  [`QBITS] dram1_id;
 reg        dram1_unc;
 reg [2:0]  dram1_memsize;
 reg        dram1_load;
@@ -723,10 +725,10 @@ reg        dram1_store;
 reg  [1:0] dram1_ol;
 
 reg        dramA_v;
-reg  [`QBITSP1] dramA_id;
+reg  [`QBITS] dramA_id;
 reg [WID-1:0] dramA_bus;
 reg        dramB_v;
-reg  [`QBITSP1] dramB_id;
+reg  [`QBITS] dramB_id;
 reg [WID-1:0] dramB_bus;
 
 wire        outstanding_stores;
@@ -1173,6 +1175,9 @@ endfunction
 assign slot0u = Unit0(ibundle[127:120]);
 assign slot1u = Unit1(ibundle[127:120]);
 assign slot2u = Unit2(ibundle[127:120]);
+wire slot0_jc = IsCall(slot0u,insn0) || IsJmp(slot0u,insn0);
+wire slot1_jc = IsCall(slot1u,insn1) || IsJmp(slot1u,insn1);
+
 
 Regfile urf1
 (
@@ -1544,7 +1549,7 @@ wire wb_has_bus;
 assign dhit0 = dhit0a && !wb_hit0;
 assign dhit1 = dhit1a && !wb_hit1;
 
-write_buffer uwb1
+write_buffer #(.QENTRIES(QENTRIES)) uwb1
 (
 	.rst_i(rst_i),
 	.clk_i(clk),
@@ -1588,6 +1593,29 @@ write_buffer uwb1
 	.csel_o(dcsel),
 	.cadr_o(dcadr),
 	.cdat_o(dcdat)
+);
+
+tailptrs utp1
+(
+	.rst_i(rst_i),
+	.clk_i(clk_i),
+	.phit(phit),
+	.ip_mask(ip_mask),
+	.branchmiss(branchmiss),
+	.take_branch0(take_branch0),
+	.take_branch1(take_branch1),
+	.iq_stomp(iq_stomp),
+	.canq1(canq1),
+	.canq2(canq2),
+	.canq3(canq3),
+	.slot0v(slot0v),
+	.slot1v(slot1v),
+	.slot2v(slot2v),
+	.slot0_jc(slot0_jc),
+	.slot1_jc(slot1_jc),
+	.tail0(tail0),
+	.tail1(tail1),
+	.tail2(tail2)
 );
 
 //-----------------------------------------------------------------------------
@@ -1905,15 +1933,15 @@ endfunction
 assign Ra0 = insn0[`RS1];
 assign Rb0 = insn0[`RS2];
 assign Rc0 = insn0[`RS3];
-assign Rd0 = fnRt(Unit0(ibundle[124:120]),insn0);
+assign Rd0 = fnRt(slot0u,insn0);
 assign Ra1 = insn1[`RS1];
 assign Rb1 = insn1[`RS2];
 assign Rc1 = insn1[`RS3];
-assign Rd1 = fnRt(Unit1(ibundle[124:120]),insn1);
+assign Rd1 = fnRt(slot1u,insn1);
 assign Ra2 = insn2[`RS1];
 assign Rb2 = insn2[`RS2];
 assign Rc2 = insn2[`RS3];
-assign Rd2 = fnRt(Unit2(ibundle[124:120]),insn2);
+assign Rd2 = fnRt(slot2u,insn2);
 
 // Detect if a source is automatically valid
 function Source1Valid;
@@ -4444,7 +4472,7 @@ begin
           canq1 <= TRUE;
           queued1 <= TRUE;
         end
-        if (IsCall(slot1u,insn1) || IsJmp(slot1u,insn1)) begin
+        if (slot1_jc) begin
         	;
       	end
         else if (!take_branch1) begin
@@ -4460,7 +4488,7 @@ begin
           canq1 <= TRUE;
           queued1 <= TRUE;
         end
-        if (IsCall(slot0u,insn0) || IsJmp(slot0u,insn0)) begin
+        if (slot0_jc) begin
         	;
       	end
         else if (!take_branch0) begin
@@ -4476,7 +4504,7 @@ begin
           canq1 <= TRUE;
           queued1 <= TRUE;
         end
-        if (IsCall(slot0u,insn0) || IsJmp(slot0u,insn0)) begin
+        if (slot0_jc) begin
         	;
         end
         else if (!take_branch0) begin
@@ -4497,7 +4525,7 @@ begin
 	          canq1 <= TRUE;
 	          queued1 <= TRUE;
 	        end
-	        if (IsCall(slot0u,insn0) || IsJmp(slot0u,insn0)) begin
+	        if (slot0_jc) begin
 	        	;
 	        end
 					else if (!take_branch0) begin
@@ -4505,7 +4533,7 @@ begin
 	            canq2 <= TRUE;
 	            queued2 <= TRUE && !debug_on;
 	          end
-	          if (IsCall(slot1u,insn1) || IsJmp(slot1u,insn1)) begin
+	          if (slot1_jc) begin
 	          	;
 	          end
 	          else if (!take_branch1) begin
@@ -5113,7 +5141,7 @@ else begin
 				else
 					ip <= {ip[79:4] + 76'd1,4'h0};
 				if (slot2_rfw) begin
-					rf_source[Rd2] <= { 1'b0, slot2_mem, tail0 };	// top bit indicates ALU/MEM bus
+					rf_source[Rd2] <= tail0;	// top bit indicates ALU/MEM bus
 					rf_v [Rd2] <= `INV;
 				end
 			end
@@ -5123,14 +5151,14 @@ else begin
 				slot0v <= VAL;
 				slot1v <= VAL;
 				slot2v <= VAL;
-				if (IsBranch(slot1u,insn1) && predict_taken1)
+				if (take_branch1)
 					ip[22:0] <= {insn1[39:22],insn1[5:3],insn1[4:3]};
-				else if (IsCall(slot1u,insn1) || IsJmp(slot1u,insn1))
+				else if (slot1_jc)
 					ip[37:0] <= {insn1[39:10],insn1[5:0],insn1[1:0]};
 				else
 					ip <= {ip[79:4] + 76'd1,4'h0};
 				if (slot1_rfw) begin
-					rf_source[Rd1] <= { 1'b0, slot1_mem, tail0 };	// top bit indicates ALU/MEM bus
+					rf_source[Rd1] <= tail0;	// top bit indicates ALU/MEM bus
 					rf_v [Rd1] <= `INV;
 				end
 			end
@@ -5139,13 +5167,13 @@ else begin
 				queue_slot1(tail0,maxsn+2'd1,id1_bus);
 				slot1v <= INV;
 				slot2v <= INV;
-				if (IsCall(slot1u,insn1) || IsJmp(slot1u,insn1)) begin
+				if (slot1_jc) begin
 					slot0v <= VAL;
 					slot1v <= VAL;
 					slot2v <= VAL;
 					ip[37:0] <= {insn1[39:10],insn1[5:0],insn1[1:0]};
 					if (slot1_rfw) begin
-						rf_source[Rd1] <= { 1'b0, slot1_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd1] <= tail0;	// top bit indicates ALU/MEM bus
 						rf_v [Rd1] <= `INV;
 					end
 				end
@@ -5155,7 +5183,7 @@ else begin
 					slot2v <= VAL;
 					ip[22:0] <= {insn1[39:22],insn1[5:3],insn1[4:3]};
 					if (slot1_rfw) begin
-						rf_source[Rd1] <= { 1'b0, slot1_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd1] <= tail0;	// top bit indicates ALU/MEM bus
 						rf_v [Rd1] <= `INV;
 					end
 				end
@@ -5166,11 +5194,11 @@ else begin
 					queue_slot2(tail1,maxsn+2'd2,id2_bus);
 					ip[37:0] <= {insn2[39:10],insn2[5:0],insn2[1:0]};
 					if (slot1_rfw) begin
-						rf_source[Rd1] <= { 1'b0, slot1_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd1] <= tail0;	// top bit indicates ALU/MEM bus
 						rf_v [Rd1] <= `INV;
 					end
 					if (slot2_rfw) begin
-						rf_source[Rd2] <= { 1'b0, slot2_mem, tail1 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd2] <= tail1;	// top bit indicates ALU/MEM bus
 						rf_v [Rd2] <= `INV;
 					end
 					arg_vs_011();
@@ -5182,11 +5210,11 @@ else begin
 					queue_slot2(tail1,maxsn+2'd2,id2_bus);
 					ip[22:0] <= {insn2[39:22],insn2[5:3],insn2[4:3]};
 					if (slot1_rfw) begin
-						rf_source[Rd1] <= { 1'b0, slot1_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd1] <= tail0;	// top bit indicates ALU/MEM bus
 						rf_v [Rd1] <= `INV;
 					end
 					if (slot2_rfw) begin
-						rf_source[Rd2] <= { 1'b0, slot2_mem, tail1 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd2] <= tail1;	// top bit indicates ALU/MEM bus
 						rf_v [Rd2] <= `INV;
 					end
 					arg_vs_011();
@@ -5195,11 +5223,11 @@ else begin
 					queue_slot2(tail1,maxsn+2'd2,id2_bus);
 					ip <= {ip[79:4] + 76'd1,4'h0};
 					if (slot1_rfw) begin
-						rf_source[Rd1] <= { 1'b0, slot1_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd1] <= tail0;	// top bit indicates ALU/MEM bus
 						rf_v [Rd1] <= `INV;
 					end
 					if (slot2_rfw) begin
-						rf_source[Rd2] <= { 1'b0, slot2_mem, tail1 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd2] <= tail1;	// top bit indicates ALU/MEM bus
 						rf_v [Rd2] <= `INV;
 					end
 					arg_vs_011();
@@ -5208,13 +5236,13 @@ else begin
 			else if (canq1) begin
 				queue_slot1(tail0,maxsn+2'd1,id1_bus);
 				slot1v <= INV;
-				if (IsCall(slot1u,insn1) || IsJmp(slot1u,insn1)) begin
+				if (slot1_jc) begin
 					slot0v <= VAL;
 					slot1v <= VAL;
 					slot2v <= VAL;
 					ip[37:0] <= {insn1[39:10],insn1[5:0],insn1[1:0]};
 				end
-				else if (IsBranch(slot1u,insn1) && predict_taken1) begin
+				else if (take_branch1) begin
 					ip[22:0] <= {insn1[39:22],insn1[5:3],insn1[4:3]};
 					slot0v <= VAL;
 					slot1v <= VAL;
@@ -5223,7 +5251,7 @@ else begin
 				else
 					ip[3:0] <= 4'hA;
 				if (slot1_rfw) begin
-					rf_source[Rd1] <= { 1'b0, slot1_mem, tail0 };	// top bit indicates ALU/MEM bus
+					rf_source[Rd1] <= tail0;	// top bit indicates ALU/MEM bus
 					rf_v [Rd1] <= `INV;
 				end
 			end
@@ -5233,14 +5261,14 @@ else begin
 				slot0v <= VAL;
 				slot1v <= VAL;
 				slot2v <= VAL;
-				if (IsCall(slot0u,insn0) || IsJmp(slot0u,insn0))
+				if (slot0_jc)
 					ip[37:0] <= {insn0[39:10],insn0[5:0],insn0[1:0]};
-				else if (IsBranch(slot0u,insn0) && predict_taken0)
+				else if (take_branch0)
 					ip[22:0] <= {insn0[39:22],insn0[5:3],insn0[4:3]};
 				else
 					ip <= {ip[79:4] + 76'd1,4'h0};
 				if (slot0_rfw) begin
-					rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
+					rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
 					rf_v [Rd0] <= `INV;
 				end
 			end
@@ -5250,17 +5278,17 @@ else begin
 				slot0v <= VAL;
 				slot1v <= VAL;
 				slot2v <= VAL;
-				if (IsCall(slot0u,insn0) || IsJmp(slot0u,insn0)) begin
+				if (slot0_jc) begin
 					ip[37:0] <= {insn0[39:10],insn0[5:0],insn0[1:0]};
 					if (slot0_rfw) begin
-						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
 						rf_v [Rd0] <= `INV;
 					end
 				end
-				else if (IsBranch(slot0u,insn0) && predict_taken0) begin
+				else if (take_branch0) begin
 					ip[22:0] <= {insn0[39:22],insn0[5:3],insn0[4:3]};
 					if (slot0_rfw) begin
-						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
 						rf_v [Rd0] <= `INV;
 					end
 				end
@@ -5268,11 +5296,11 @@ else begin
 					queue_slot2(tail1,maxsn+2'd2,id2_bus);
 					ip[37:0] <= {insn2[39:10],insn2[5:0],insn2[1:0]};
 					if (slot0_rfw) begin
-						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
 						rf_v [Rd0] <= `INV;
 					end
 					if (slot2_rfw) begin
-						rf_source[Rd2] <= { 1'b0, slot2_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd2] <= tail1;	// top bit indicates ALU/MEM bus
 						rf_v [Rd2] <= `INV;
 					end
 					arg_vs_101();
@@ -5281,11 +5309,11 @@ else begin
 					queue_slot2(tail1,maxsn+2'd2,id2_bus);
 					ip[22:0] <= {insn2[39:22],insn2[5:3],insn2[4:3]};
 					if (slot0_rfw) begin
-						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
 						rf_v [Rd0] <= `INV;
 					end
 					if (slot2_rfw) begin
-						rf_source[Rd2] <= { 1'b0, slot2_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd2] <= tail1;	// top bit indicates ALU/MEM bus
 						rf_v [Rd2] <= `INV;
 					end
 					arg_vs_101();
@@ -5294,11 +5322,11 @@ else begin
 					queue_slot2(tail1,maxsn+2'd2,id2_bus);
 					ip <= {ip[79:4] + 76'd1,4'h0};
 					if (slot0_rfw) begin
-						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
 						rf_v [Rd0] <= `INV;
 					end
 					if (slot2_rfw) begin
-						rf_source[Rd2] <= { 1'b0, slot2_mem, tail1 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd2] <= tail1;	// top bit indicates ALU/MEM bus
 						rf_v [Rd2] <= `INV;
 					end
 					arg_vs_101();
@@ -5307,13 +5335,13 @@ else begin
 			else if (canq1) begin
 				queue_slot0(tail0,maxsn+2'd1,id0_bus);
 				slot0v <= INV;
-				if (IsCall(slot0u,insn0) || IsJmp(slot0u,insn0)) begin
+				if (slot0_jc) begin
 					slot0v <= VAL;
 					slot1v <= VAL;
 					slot2v <= VAL;
 					ip[37:0] <= {insn0[39:10],insn0[5:0],insn0[1:0]};
 				end
-				else if (IsBranch(slot0u,insn0) && predict_taken0) begin
+				else if (take_branch0) begin
 					slot0v <= VAL;
 					slot1v <= VAL;
 					slot2v <= VAL;
@@ -5322,7 +5350,7 @@ else begin
 				else
 					ip[3:0] <= 4'hA;
 				if (slot0_rfw) begin
-					rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
+					rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
 					rf_v [Rd0] <= `INV;
 				end
 			end
@@ -5332,42 +5360,42 @@ else begin
 				slot0v <= VAL;
 				slot1v <= VAL;
 				slot2v <= VAL;
-				if (IsCall(slot0u,insn0) || IsJmp(slot0u,insn0)) begin
+				if (slot0_jc) begin
 					ip[37:0] <= {insn0[39:10],insn0[5:0],insn0[1:0]};
 					if (slot0_rfw) begin
-						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
 						rf_v [Rd0] <= `INV;
 					end
 				end
-				else if (IsBranch(slot0u,insn0) && predict_taken0) begin
+				else if (take_branch0) begin
 					ip[22:0] <= {insn0[39:22],insn0[5:3],insn0[4:3]};
 					if (slot0_rfw) begin
-						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
 						rf_v [Rd0] <= `INV;
 					end
 				end
-				else if (IsCall(slot1u,insn1) || IsJmp(slot1u,insn1)) begin
+				else if (slot1_jc) begin
 					queue_slot1(tail1,maxsn+2'd2,id1_bus);
 					ip[37:0] <= {insn1[39:10],insn1[5:0],insn1[1:0]};
 					if (slot0_rfw) begin
-						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
 						rf_v [Rd0] <= `INV;
 					end
 					if (slot1_rfw) begin
-						rf_source[Rd1] <= { 1'b0, slot1_mem, tail1 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd1] <= tail1;	// top bit indicates ALU/MEM bus
 						rf_v [Rd1] <= `INV;
 					end
 					arg_vs_110();
 				end
-				else if (IsBranch(slot1u,insn1) && predict_taken1) begin
+				else if (take_branch1) begin
 					queue_slot1(tail1,maxsn+2'd2,id1_bus);
 					ip[22:0] <= {insn1[39:22],insn1[5:3],insn1[4:3]};
 					if (slot0_rfw) begin
-						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
 						rf_v [Rd0] <= `INV;
 					end
 					if (slot1_rfw) begin
-						rf_source[Rd1] <= { 1'b0, slot1_mem, tail1 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd1] <= tail1;	// top bit indicates ALU/MEM bus
 						rf_v [Rd1] <= `INV;
 					end
 					arg_vs_110();
@@ -5376,11 +5404,11 @@ else begin
 					queue_slot1(tail1,maxsn+2'd2,id1_bus);
 					ip <= {ip[79:4] + 76'd1,4'h0};
 					if (slot0_rfw) begin
-						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
 						rf_v [Rd0] <= `INV;
 					end
 					if (slot1_rfw) begin
-						rf_source[Rd1] <= { 1'b0, slot1_mem, tail1 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd1] <= tail1;	// top bit indicates ALU/MEM bus
 						rf_v [Rd1] <= `INV;
 					end
 					arg_vs_110();
@@ -5389,13 +5417,13 @@ else begin
 			else if (canq1) begin
 				queue_slot0(tail0,maxsn+2'd1,id0_bus);
 				slot0v <= INV;
-				if (IsCall(slot0u,insn0) || IsJmp(slot0u,insn0)) begin
+				if (slot0_jc) begin
 					slot0v <= VAL;
 					slot1v <= VAL;
 					slot2v <= VAL;
 					ip[37:0] <= {insn0[39:10],insn0[5:0],insn0[1:0]};
 				end
-				else if (IsBranch(slot0u,insn0) && predict_taken0) begin
+				else if (take_branch0) begin
 					slot0v <= VAL;
 					slot1v <= VAL;
 					slot2v <= VAL;
@@ -5404,7 +5432,7 @@ else begin
 				else
 					ip[3:0] <= 4'h5;
 				if (slot0_rfw) begin
-					rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
+					rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
 					rf_v [Rd0] <= `INV;
 				end
 			end
@@ -5414,42 +5442,42 @@ else begin
 				slot0v <= VAL;
 				slot1v <= VAL;
 				slot2v <= VAL;
-				if (IsCall(slot0u,insn0) || IsJmp(slot0u,insn0)) begin
+				if (slot0_jc) begin
 					ip[37:0] <= {insn0[39:10],insn0[5:0],insn0[1:0]};
 					if (slot0_rfw) begin
-						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
 						rf_v [Rd0] <= `INV;
 					end
 				end
-				else if (IsBranch(slot0u,insn0) && predict_taken0) begin
+				else if (take_branch0) begin
 					ip[22:0] <= {insn0[39:22],insn0[5:3],insn0[4:3]};
 					if (slot0_rfw) begin
-						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
 						rf_v [Rd0] <= `INV;
 					end
 				end
-				else if (IsCall(slot1u,insn1) || IsJmp(slot1u,insn1)) begin
+				else if (slot1_jc) begin
 					queue_slot1(tail1,maxsn+2'd2,id1_bus);
 					ip[37:0] <= {insn1[39:10],insn1[5:0],insn1[1:0]};
 					if (slot0_rfw) begin
-						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
 						rf_v [Rd0] <= `INV;
 					end
 					if (slot1_rfw) begin
-						rf_source[Rd1] <= { 1'b0, slot1_mem, tail1 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd1] <= tail1;	// top bit indicates ALU/MEM bus
 						rf_v [Rd1] <= `INV;
 					end
 					arg_vs_110();
 				end
-				else if (IsBranch(slot1u,insn1) && predict_taken1) begin
+				else if (take_branch1) begin
 					queue_slot1(tail1,maxsn+2'd2,id1_bus);
 					ip[22:0] <= {insn1[39:22],insn1[5:3],insn1[4:3]};
 					if (slot0_rfw) begin
-						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
 						rf_v [Rd0] <= `INV;
 					end
 					if (slot1_rfw) begin
-						rf_source[Rd1] <= { 1'b0, slot1_mem, tail1 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd1] <= tail1;	// top bit indicates ALU/MEM bus
 						rf_v [Rd1] <= `INV;
 					end
 					arg_vs_110();
@@ -5459,15 +5487,15 @@ else begin
 					queue_slot2(tail2,maxsn+2'd3,id2_bus);
 					ip[37:0] <= {insn2[39:10],insn2[5:0],insn2[1:0]};
 					if (slot0_rfw) begin
-						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
 						rf_v [Rd0] <= `INV;
 					end
 					if (slot1_rfw) begin
-						rf_source[Rd1] <= { 1'b0, slot1_mem, tail1 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd1] <= tail1;	// top bit indicates ALU/MEM bus
 						rf_v [Rd1] <= `INV;
 					end
 					if (slot2_rfw) begin
-						rf_source[Rd2] <= { 1'b0, slot2_mem, tail2 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd2] <=  tail2;	// top bit indicates ALU/MEM bus
 						rf_v [Rd2] <= `INV;
 					end
 					arg_vs_111();
@@ -5477,15 +5505,15 @@ else begin
 					queue_slot2(tail2,maxsn+2'd3,id2_bus);
 					ip[22:0] <= {insn2[39:22],insn2[5:3],insn2[4:3]};
 					if (slot0_rfw) begin
-						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
 						rf_v [Rd0] <= `INV;
 					end
 					if (slot1_rfw) begin
-						rf_source[Rd1] <= { 1'b0, slot1_mem, tail1 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd1] <= tail1;	// top bit indicates ALU/MEM bus
 						rf_v [Rd1] <= `INV;
 					end
 					if (slot2_rfw) begin
-						rf_source[Rd2] <= { 1'b0, slot2_mem, tail2 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd2] <= tail2;	// top bit indicates ALU/MEM bus
 						rf_v [Rd2] <= `INV;
 					end
 					arg_vs_111();
@@ -5495,15 +5523,15 @@ else begin
 					queue_slot2(tail2,maxsn+2'd3,id2_bus);
 					ip <= {ip[79:4] + 76'd1,4'h0};
 					if (slot0_rfw) begin
-						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
 						rf_v [Rd0] <= `INV;
 					end
 					if (slot1_rfw) begin
-						rf_source[Rd1] <= { 1'b0, slot1_mem, tail1 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd1] <= tail1;	// top bit indicates ALU/MEM bus
 						rf_v [Rd1] <= `INV;
 					end
 					if (slot2_rfw) begin
-						rf_source[Rd2] <= { 1'b0, slot2_mem, tail2 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd2] <= tail2;	// top bit indicates ALU/MEM bus
 						rf_v [Rd2] <= `INV;
 					end
 					arg_vs_111();
@@ -5513,54 +5541,54 @@ else begin
 				queue_slot0(tail0,maxsn+2'd1,id0_bus);
 				slot0v <= INV;
 				slot1v <= INV;
-				if (IsCall(slot0u,insn0) || IsJmp(slot0u,insn0)) begin
+				if (slot0_jc) begin
 					slot0v <= VAL;
 					slot1v <= VAL;
 					slot2v <= VAL;
 					ip[37:0] <= {insn0[39:10],insn0[5:0],insn0[1:0]};
 					if (slot0_rfw) begin
-						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
 						rf_v [Rd0] <= `INV;
 					end
 				end
-				else if (IsBranch(slot0u,insn0) && predict_taken0) begin
+				else if (take_branch0) begin
 					slot0v <= VAL;
 					slot1v <= VAL;
 					slot2v <= VAL;
 					ip[22:0] <= {insn0[39:22],insn0[5:3],insn0[4:3]};
 					if (slot0_rfw) begin
-						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
 						rf_v [Rd0] <= `INV;
 					end
 				end
-				else if (IsCall(slot1u,insn1) || IsJmp(slot1u,insn1)) begin
+				else if (slot1_jc) begin
 					slot0v <= VAL;
 					slot1v <= VAL;
 					slot2v <= VAL;
 					queue_slot1(tail1,maxsn+2'd2,id1_bus);
 					ip[37:0] <= {insn1[39:10],insn1[5:0],insn1[1:0]};
 					if (slot0_rfw) begin
-						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
 						rf_v [Rd0] <= `INV;
 					end
 					if (slot1_rfw) begin
-						rf_source[Rd1] <= { 1'b0, slot1_mem, tail1 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd1] <= tail1;	// top bit indicates ALU/MEM bus
 						rf_v [Rd1] <= `INV;
 					end
 					arg_vs_110();
 				end
-				else if (IsBranch(slot1u,insn1) && predict_taken1) begin
+				else if (take_branch1) begin
 					slot0v <= VAL;
 					slot1v <= VAL;
 					slot2v <= VAL;
 					queue_slot1(tail1,maxsn+2'd2,id1_bus);
 					ip[22:0] <= {insn1[39:22],insn1[5:3],insn1[4:3]};
 					if (slot0_rfw) begin
-						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
 						rf_v [Rd0] <= `INV;
 					end
 					if (slot1_rfw) begin
-						rf_source[Rd1] <= { 1'b0, slot1_mem, tail1 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd1] <= tail1;	// top bit indicates ALU/MEM bus
 						rf_v [Rd1] <= `INV;
 					end
 					arg_vs_110();
@@ -5569,11 +5597,11 @@ else begin
 					queue_slot1(tail1,maxsn+2'd2,id1_bus);
 					ip[3:0] <= 4'hA;
 					if (slot0_rfw) begin
-						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
 						rf_v [Rd0] <= `INV;
 					end
 					if (slot1_rfw) begin
-						rf_source[Rd1] <= { 1'b0, slot1_mem, tail1 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd1] <= tail1;	// top bit indicates ALU/MEM bus
 						rf_v [Rd1] <= `INV;
 					end
 					arg_vs_110();
@@ -5582,30 +5610,30 @@ else begin
 			else if (canq1) begin
 				queue_slot0(tail0,maxsn+2'd1,id0_bus);
 				slot0v <= INV;
-				if (IsCall(slot0u,insn0) || IsJmp(slot0u,insn0)) begin
+				if (slot0_jc) begin
 					slot0v <= VAL;
 					slot1v <= VAL;
 					slot2v <= VAL;
 					ip[37:0] <= {insn0[39:10],insn0[5:0],insn0[1:0]};
 					if (slot0_rfw) begin
-						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
 						rf_v [Rd0] <= `INV;
 					end
 				end
-				else if (IsBranch(slot0u,insn0) && predict_taken0) begin
+				else if (take_branch0) begin
 					slot0v <= VAL;
 					slot1v <= VAL;
 					slot2v <= VAL;
 					ip[22:0] <= {insn0[39:22],insn0[5:3],insn0[4:3]};
 					if (slot0_rfw) begin
-						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
 						rf_v [Rd0] <= `INV;
 					end
 				end
 				else begin
 					ip[3:0] <= 4'h5;
 					if (slot0_rfw) begin
-						rf_source[Rd0] <= { 1'b0, slot0_mem, tail0 };	// top bit indicates ALU/MEM bus
+						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
 						rf_v [Rd0] <= `INV;
 					end
 				end
@@ -5786,19 +5814,19 @@ begin
 	// recieved into waiting argument registers. The arguments will be waiting
 	// for the result of the memory load, picked up from the dram busses. The
 	// only mem operation requiring the alu result bus is the push operation.
-	setargs(n,{1'b0,alu0_id},alu0_v & (~alu0_mem | alu0_push),ralu0_bus);
-	if (`NUM_ALU > 1)
-		setargs(n,{1'b0,alu1_id},alu1_v & (~alu1_mem | alu1_push),ralu1_bus);
+	setargs(n,alu0_id,alu0_v,ralu0_bus);
+	setargs(n,alu1_id,alu1_v,ralu1_bus);
 
-	setargs(n,{1'b0,fcu_id},fcu_v,rfcu_bus);
+	setargs(n,agen0_id,agen0_v & (agen0_push|agen0_lea),agen0_ma);
+	setargs(n,agen1_id,agen1_v & (agen1_push|agen1_lea),agen1_ma);
 
-	setargs(n,{1'b0,dramA_id},dramA_v,rdramA_bus);
-	if (`NUM_MEM > 1)
-		setargs(n,{1'b0,dramB_id},dramB_v,rdramB_bus);
+	setargs(n,fcu_id,fcu_v,rfcu_bus);
+
+	setargs(n,dramA_id,dramA_v,rdramA_bus);
+	setargs(n,dramB_id,dramB_v,rdramB_bus);
 
 	setargs(n,commit0_id,commit0_v,commit0_bus);
-	if (`NUM_CMT > 1)
-		setargs(n,commit1_id,commit1_v,commit1_bus);
+	setargs(n,commit1_id,commit1_v,commit1_bus);
 	if (`NUM_CMT > 2)
 		setargs(n,commit2_id,commit2_v,commit2_bus);
 end
@@ -5826,7 +5854,7 @@ end
     for (n = 0; n < QENTRIES; n = n + 1)
         if (iq_alu0_issue[n] && !(iq_v[n] && iq_stomp[n])) begin
             if (alu0_available & alu0_done) begin
-                 alu0_sourceid	<= {iq_push[n],n[`QBITS]};
+                 alu0_sourceid	<= n[`QBITS];
                  alu0_instr	<= iq_rtop[n] ? (
 `ifdef FU_BYPASS                 									
                  									iq_argC_v[n] ? iq_argC[n]
@@ -5885,7 +5913,7 @@ end
     for (n = 0; n < QENTRIES; n = n + 1)
         if (iq_alu1_issue[n] && !(iq_v[n] && iq_stomp[n])) begin
             if (alu1_available && alu1_done) begin
-                 alu1_sourceid	<= {iq_push[n],n[`QBITS]};
+                 alu1_sourceid	<= n[`QBITS];
                  alu1_instr	<= iq_instr[n];
                  alu1_sz    <= iq_sz[n];
                  alu1_mem   <= iq_mem[n];
@@ -5934,10 +5962,11 @@ end
     for (n = 0; n < QENTRIES; n = n + 1)
         if (iq_agen0_issue[n] && !(iq_v[n] && iq_stomp[n])) begin
             if (1'b1) begin
-                 agen0_sourceid	<= {iq_push[n],n[`QBITS]};
+                 agen0_sourceid	<= n[`QBITS];
                  agen0_unit <= iq_unit[n];
                  agen0_instr	<= iq_instr[n];
                  agen0_lea  <= iq_lea[n];
+                 agen0_push <= iq_push[n];
                  agen0_argA	<=
 `ifdef FU_BYPASS                  
                  							iq_argA_v[n] ? iq_argA[n]
@@ -5965,10 +5994,11 @@ end
     for (n = 0; n < QENTRIES; n = n + 1)
         if (iq_agen1_issue[n] && !(iq_v[n] && iq_stomp[n])) begin
             if (1'b1) begin
-                 agen1_sourceid	<= {iq_push[n],n[`QBITS]};
+                 agen1_sourceid	<= n[`QBITS];
                  agen1_unit <= iq_unit[n];
                  agen1_instr	<= iq_instr[n];
                  agen1_lea  <= iq_lea[n];
+                 agen1_push <= iq_push[n];
                  agen1_argA	<=
 `ifdef FU_BYPASS                  
                  							iq_argA_v[n] ? iq_argA[n]
@@ -6937,139 +6967,6 @@ B21:
 default:     bstate <= BIDLE;
 endcase
 
-if (!branchmiss) begin
-  case({slot0v, slot1v, slot2v})
-  3'b000:	;
-  3'b001:
-    if (canq1) begin
-     	tail0 <= (tail0+2'd1) % QENTRIES;
-     	tail1 <= (tail1+2'd1) % QENTRIES;
-     	tail2 <= (tail2+2'd1) % QENTRIES;
-    end
-  3'b010:
-    if (canq1) begin
-     	tail0 <= (tail0+2'd1) % QENTRIES;
-     	tail1 <= (tail1+2'd1) % QENTRIES;
-     	tail2 <= (tail2+2'd1) % QENTRIES;
-    end
-  3'b011:
-    if (canq1) begin
-      if (IsBranch(slot1u,insn1) && predict_taken1) begin
-       	tail0 <= (tail0+2'd1) % QENTRIES;
-       	tail1 <= (tail1+2'd1) % QENTRIES;
-	     	tail2 <= (tail2+2'd1) % QENTRIES;
-      end
-      else begin
-        if (canq2) begin
-          tail0 <= (tail0 + 3'd2) % QENTRIES;
-          tail1 <= (tail1 + 3'd2) % QENTRIES;
-		     	tail2 <= (tail2 + 3'd2) % QENTRIES;
-        end
-        else begin    // queued1 will be true
-         	tail0 <= (tail0+2'd1) % QENTRIES;
-			   	tail1 <= (tail1+2'd1) % QENTRIES;
-		     	tail2 <= (tail2+2'd1) % QENTRIES;
-        end
-      end
-    end
-  3'b100:
-    if (canq1) begin
-     	tail0 <= (tail0+2'd1) % QENTRIES;
-     	tail1 <= (tail1+2'd1) % QENTRIES;
-     	tail2 <= (tail2+2'd1) % QENTRIES;
-    end
-  3'b101:
-    if (canq1) begin
-      if (IsBranch(slot0u,insn0) && predict_taken0) begin
-       	tail0 <= (tail0+2'd1) % QENTRIES;
-       	tail1 <= (tail1+2'd1) % QENTRIES;
-	     	tail2 <= (tail2+2'd1) % QENTRIES;
-      end
-      else begin
-        if (canq2) begin
-          tail0 <= (tail0 + 3'd2) % QENTRIES;
-          tail1 <= (tail1 + 3'd2) % QENTRIES;
-		     	tail2 <= (tail2 + 3'd2) % QENTRIES;
-        end
-        else begin    // queued1 will be true
-         	tail0 <= (tail0+2'd1) % QENTRIES;
-			   	tail1 <= (tail1+2'd1) % QENTRIES;
-		     	tail2 <= (tail2+2'd1) % QENTRIES;
-        end
-      end
-    end
-  3'b110:
-    if (canq1) begin
-      if (IsBranch(slot0u,insn0) && predict_taken0) begin
-       	tail0 <= (tail0+2'd1) % QENTRIES;
-       	tail1 <= (tail1+2'd1) % QENTRIES;
-	     	tail2 <= (tail2+2'd1) % QENTRIES;
-      end
-      else begin
-        if (canq2) begin
-          tail0 <= (tail0 + 3'd2) % QENTRIES;
-          tail1 <= (tail1 + 3'd2) % QENTRIES;
-		     	tail2 <= (tail2 + 3'd2) % QENTRIES;
-        end
-        else begin    // queued1 will be true
-         	tail0 <= (tail0+2'd1) % QENTRIES;
-			   	tail1 <= (tail1+2'd1) % QENTRIES;
-		     	tail2 <= (tail2+2'd1) % QENTRIES;
-        end
-      end
-    end
-  3'b111:
-    if (canq1) begin
-      if (IsBranch(slot0u,insn0) && predict_taken0) begin
-       	tail0 <= (tail0+2'd1) % QENTRIES;
-       	tail1 <= (tail1+2'd1) % QENTRIES;
-	     	tail2 <= (tail2+2'd1) % QENTRIES;
-      end
-      else begin
-      	if (canq2) begin
-		      if (IsBranch(slot1u,insn1) && predict_taken1) begin
-		       	tail0 <= (tail0+2'd2) % QENTRIES;
-		       	tail1 <= (tail1+2'd2) % QENTRIES;
-			     	tail2 <= (tail2+2'd2) % QENTRIES;
-		      end
-		      else begin
-		      	if (canq3) begin
-		          tail0 <= (tail0 + 3'd3) % QENTRIES;
-		          tail1 <= (tail1 + 3'd3) % QENTRIES;
-				     	tail2 <= (tail2 + 3'd3) % QENTRIES;
-		      	end
-		        else if (canq2) begin
-		          tail0 <= (tail0 + 3'd2) % QENTRIES;
-		          tail1 <= (tail1 + 3'd2) % QENTRIES;
-				     	tail2 <= (tail2 + 3'd2) % QENTRIES;
-		        end
-		        else begin    // queued1 will be true
-		         	tail0 <= (tail0+2'd1) % QENTRIES;
-					   	tail1 <= (tail1+2'd1) % QENTRIES;
-				     	tail2 <= (tail2+2'd1) % QENTRIES;
-		        end
-	      	end
-      	end
-      	else begin
-	       	tail0 <= (tail0+2'd1) % QENTRIES;
-	       	tail1 <= (tail1+2'd1) % QENTRIES;
-		     	tail2 <= (tail2+2'd1) % QENTRIES;
-      	end
-      end
-    end
-  endcase
-end
-else begin	// if branchmiss
-	for (n = QENTRIES-1; n >= 0; n = n - 1)
-		// (QENTRIES-1) is needed to ensure that n increments forwards so that the modulus is
-		// a positive number.
-		if (iq_stomp[n] & ~iq_stomp[(n+(QENTRIES-1))%QENTRIES]) begin
-			tail0 <= n;
-			tail1 <= (n + 1) % QENTRIES;	
-			tail2 <= (n + 2) % QENTRIES;
-		end
-    // otherwise, it is the last instruction in the queue that has been mispredicted ... do nothing
-end
 
 `ifdef SIM
 	$display("\n\n\n\n\n\n\n\n");
@@ -7271,19 +7168,19 @@ endtask
 
 task setargs;
 input [`QBITS] nn;
-input [`QBITSP1] id;
+input [`QBITS] id;
 input v;
 input [79:0] bus;
 begin
-  if (iq_argA_v[nn] == `INV && iq_argA_s[nn] == id && iq_v[nn] == `VAL && v == `VAL) begin
+  if (iq_argA_v[nn] == `INV && iq_argA_s[nn][`QBITS] == id[`QBITS] && iq_v[nn] == `VAL && v == `VAL) begin
 		iq_argA[nn] <= bus;
 		iq_argA_v[nn] <= `VAL;
   end
-  if (iq_argB_v[nn] == `INV && iq_argB_s[nn] == id && iq_v[nn] == `VAL && v == `VAL) begin
+  if (iq_argB_v[nn] == `INV && iq_argB_s[nn][`QBITS] == id[`QBITS] && iq_v[nn] == `VAL && v == `VAL) begin
 		iq_argB[nn] <= bus;
 		iq_argB_v[nn] <= `VAL;
   end
-  if (iq_argC_v[nn] == `INV && iq_argC_s[nn] == id && iq_v[nn] == `VAL && v == `VAL) begin
+  if (iq_argC_v[nn] == `INV && iq_argC_s[nn][`QBITS] == id[`QBITS] && iq_v[nn] == `VAL && v == `VAL) begin
 		iq_argC[nn] <= bus;
 		iq_argC_v[nn] <= `VAL;
   end
@@ -7982,7 +7879,7 @@ end
 endtask
 
 task tDram0Issue;
-input [`QBITSP1] n;
+input [`QBITS] n;
 begin
 	if (iq_state[n]==IQS_AGEN) begin
 //	dramA_v <= `INV;
@@ -8008,12 +7905,13 @@ begin
 	// must reset the a1 source too.
 	//iq_a1_v[n] <= `INV;
 		iq_state[n] <= IQS_MEM;
+		iq_memissue[n] <= `INV;
 	end
 end
 endtask
 
 task tDram1Issue;
-input [`QBITSP1] n;
+input [`QBITS] n;
 begin
 	if (iq_state[n]==IQS_AGEN) begin
 //	dramB_v <= `INV;
@@ -8038,6 +7936,7 @@ begin
 	dram1_ol   <= (iq_rs1[n][RBIT:0]==6'd63 || iq_rs1[n][RBIT:0]==6'd62) ? ol : dl;
 	//iq_a1_v[n] <= `INV;
 	iq_state[n] <= IQS_MEM;
+	iq_memissue[n] <= `INV;
 	end
 end
 endtask

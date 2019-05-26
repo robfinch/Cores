@@ -506,10 +506,6 @@ begin
 	bus[`IB_CMP] <= 1'b0;//IsCmp(instr);
 	if (((unit==`MStUnit)|IsChki(unit,instr)) & !IsPushc(unit,instr))
 		bus[`IB_CONST] <= {{58{instr[39]}},instr[39:33],instr[30:22],instr[5:0]};
-	else if (IsOri(unit,instr) || IsXori(unit,instr))
-		bus[`IB_CONST] <= {58'd0,instr[39:33],instr[30:16]};
-	else if (IsAndi(unit,instr))
-		bus[`IB_CONST] <= {{58{1'b1}},instr[39:33],instr[30:16]};
 	else
 		bus[`IB_CONST] <= {{58{instr[39]}},instr[39:33],instr[30:16]};
 //	bus[`IB_RT]		 <= fnRt(instr,ven,vl,thrd) | {thrd,7'b0};

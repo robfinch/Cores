@@ -30,11 +30,12 @@
 `define HIGHWORD    159:80
 
 module shift(instr, a, b, res, ov);
-parameter DMSB=79;
+parameter WID=80;
 parameter SUP_VECTOR = 1;
+localparam DMSB=WID-1;
 input [39:0] instr;
 input [DMSB:0] a;
-input [DMSB:0] b;
+input [6:0] b;
 output [DMSB:0] res;
 reg [DMSB:0] res;
 output ov;
@@ -44,9 +45,9 @@ wire [5:0] opcode = {instr[32:31],instr[`OPCODE4]};
 wire [5:0] func = instr[`FUNCT5];
 
 wire [159:0] shl = {80'd0,a} << b[6:0];
-wire [159:0] shr = {a,80'd0} >> b[6:0];
+wire [159:0] shr = {a,{WID{1'b0}}} >> b[6:0];
 
-assign ov = shl[159:80] != {80{a[79]}};
+assign ov = shl[159:80] != {WID{a[DMSB]}};
 
 always @*
 casez(opcode)

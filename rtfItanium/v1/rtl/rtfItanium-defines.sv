@@ -122,6 +122,31 @@
 `define ORS2		6'h3D
 `define ORS3		6'h3E
 
+// R1 Format
+`define CNTLZ       5'h00
+`define CNTLO       5'h01
+`define CNTPOP      5'h02
+`define COM         5'h03
+`define ABS         5'h04
+`define NOT         5'h05
+//`define REDOR       5'h06
+`define PTR					5'h06
+`define NEG         5'h07
+`define ZXT					5'h08
+`define ZXC					5'h09
+`define ZXB					5'h0A
+`define ZXP					5'h0B
+`define ZXO					5'h0C
+`define MOV					5'h10
+`define EXEC				5'h13
+`define SETWB				5'h16
+//`define REDAND			5'h17
+`define SXT					5'h18
+`define SXC					5'h19
+`define SXB					5'h1A
+`define SXP					5'h1B
+`define SXO					5'h1C
+
 // R3 Format
 `define MULH		6'h00
 `define MULUH		6'h01
@@ -131,7 +156,6 @@
 `define NAND		6'h0C
 `define NOR			6'h0D
 `define XNOR		6'h0E
-`define MOV			6'h1A
 `define CMOVNZ	6'h1B
 `define MIN			6'h1C
 `define MAX			6'h1D
@@ -242,28 +266,6 @@
 `define AUIPC	6'h03
 // Register / Miscellaneous (01) Ops
 `define R1      	6'h01
-`define CNTLZ       5'h00
-`define CNTLO       5'h01
-`define CNTPOP      5'h02
-`define COM         5'h03
-`define ABS         5'h04
-`define NOT         5'h05
-//`define REDOR       5'h06
-`define PTR					5'h06
-`define NEG         5'h07
-`define ZXT					5'h08
-`define ZXC					5'h09
-`define ZXB					5'h0A
-`define ZXP					5'h0B
-`define ZXO					5'h0C
-`define EXEC				5'h13
-`define SETWB				5'h16
-//`define REDAND			5'h17
-`define SXT					5'h18
-`define SXC					5'h19
-`define SXB					5'h1A
-`define SXP					5'h1B
-`define SXO					5'h1C
 // Register-Register (02) Ops
 `define RTOP				6'h00
 `define BMM					6'h3E
@@ -373,6 +375,8 @@
 
 `define OPCODE4			9:6
 `define FUNCT5			39:35
+`define FUNCT2			34:33
+`define SZ3					30:28
 `define RD					5:0
 `define RS1					15:10
 `define RS2					21:16

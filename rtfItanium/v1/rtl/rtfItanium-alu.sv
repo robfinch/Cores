@@ -107,8 +107,8 @@ wire [31:0] a32 = a[31:0];
 wire [7:0] b8 = b[7:0];
 wire [15:0] b16 = b[15:0];
 wire [31:0] b32 = b[31:0];
-wire [DBW-1:0] orb = instr[6] ? {34'd0,b[29:0]} : {50'd0,b[13:0]};
-wire [DBW-1:0] andb = b;//((instr[6]==1'b1) ? {34'h3FFFFFFFF,b[29:0]} : {50'h3FFFFFFFFFFFF,b[13:0]});
+wire [DBW-1:0] orb = b[21:0];
+wire [DBW-1:0] andb = {{58{1'b1}},b[21:0]};
 
 wire [21:0] qimm = instr[39:18];
 wire [DBW-1:0] imm = {{58{instr[39]}},instr[39:33],instr[30:16]};
@@ -703,6 +703,7 @@ casez({instr[32:31],instr[`OPCODE4]})
 						2'd2:	o = {-a[63:32],-a[31:0]};
 						2'd3:	o = -a;
 						endcase
+    `MOV:		o = a;
 		`PTR:		case (instr[25:23])
 						3'd0:	o = a==64'hFFF0100000000000 || a==64'h0;
 						3'd1:	o = a[63:44]==20'hFFF01;
@@ -737,15 +738,15 @@ casez({instr[32:31],instr[`OPCODE4]})
 	        `BCDMUL:    o = BIG ? bcdmulo :  64'hCCCCCCCCCCCCCCCC;
 	        default:    o = 64'hDEADDEADDEADDEAD;
 	        endcase
-	    `MOV:	begin	
-	    		o = a;
-	    		end
 	    `BMM:		o = BIG ? bmmo : 64'hCCCCCCCCCCCCCCCC;
 	    `SHLI,`ASLI,`SHRI,`ASRI,`ROLI,`RORI,
 	    `SHL,`ASL,`SHR,`ASR,`ROL,`ROR:
-	    	begin
-	    			o = shfto;
-	    	end
+	    		case(instr[`FUNCT2])
+	    		2'd0:	o = shfto;
+	    		2'd1:	o = shfto + c;
+	    		2'd2:	o = shfto & c;
+	    		2'd3:	o = shfto;
+	    		endcase
 	    `ADD:
 `ifdef SIMD	    		
 	    	case(sz)
@@ -1005,12 +1006,12 @@ casez({instr[32:31],instr[`OPCODE4]})
 `MODUI:		o = rem;
 `DIVI:		o = divq;
 `MODI:		o = rem;
-`ORS1:		o = a | (b[21:0] << 22);
-`ORS2:		o = a | (b[21:0] << 44);
-`ORS3:		o = a | (b[21:0] << 66);
-`ADDS1:		o = a + (b << 22);
-`ADDS2:		o = a + (b << 44);
-`ADDS3:		o = a + (b << 66);
+`ORS1:		o = a | (b[21:0] << 6'd22);
+`ORS2:		o = a | (b[21:0] << 6'd44);
+`ORS3:		o = a | (b[21:0] << 7'd66);
+`ADDS1:		o = a + (b << 6'd22);
+`ADDS2:		o = a + (b << 6'd44);
+`ADDS3:		o = a + (b << 7'd66);
 `CSRRW:     
 	case(instr[27:16])
 	12'h044:	o = BIG ? (csr | {39'd0,1'b0,24'h0}) : 64'hDDDDDDDDDDDDDDDD;
