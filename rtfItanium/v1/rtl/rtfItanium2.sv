@@ -122,6 +122,7 @@ integer j, k;
 genvar g, h;
 
 reg [AMSB:0] ip, rip;
+reg [2:0] ip_mask;
 reg [AMSB:0] missip, excmissip;
 reg [1:0] slot;
 wire [AMSB:0] slot0ip = {ip[AMSB:4],4'h0};
@@ -4276,7 +4277,7 @@ case(fcu_instr[`OPCODE4])
 `BRcc:	fcu_missip = fcu_argC;
 //`CHK:	fcu_missip = fcu_nextip + fcu_argI;	// Handled as an instruction exception
 // Default: branch
-default:	fcu_missip = fcu_pt ? fcu_nextip : {fcu_ip[AMSB:32],fcu_ip[31:13] + fcu_brdisp[31:13],fcu_brdisp[12:0]};
+default:	fcu_missip = fcu_pt ? fcu_nextip : {fcu_ip[AMSB:23],fcu_brdisp[22:0]};
 endcase
 fcu_missip[0] = 1'b0;
 end
@@ -4324,7 +4325,6 @@ else
 // Normally the ip is aligned at a bundle address, but a branch may branch into
 // the middle of a bundle. We don't want earlier instructions in the bundle to
 // execute if they are before the branch target.
-reg [2:0] ip_mask;
 always @*
 case(ip[1:0])
 2'b00:	ip_mask = 3'b111;
@@ -4860,9 +4860,6 @@ if (rst_i|(rst_ctr < 32'd2)) begin
      dram1_store <= 1'b0;
      invic <= FALSE;
      invicl <= FALSE;
-     tail0 <= 3'd0;
-     tail1 <= 3'd1;
-     tail2 <= 3'd2;
      for (n = 0; n < QENTRIES; n = n + 1)
      	heads[n] <= n;
      panic = `PANIC_NONE;
@@ -5135,7 +5132,7 @@ else begin
 				slot1v <= VAL;
 				slot2v <= VAL;
 				if (IsBranch(slot2u,insn2) && predict_taken2)
-					ip[22:0] <= {insn1[39:22],insn1[5:3],insn1[4:3]};
+					ip[22:0] <= {insn2[39:22],insn2[5:3],insn2[4:3]};
 				else if (IsCall(slot2u,insn2) || IsJmp(slot2u,insn2))
 					ip[37:0] <= {insn2[39:10],insn2[5:0],insn2[1:0]};
 				else
@@ -6002,7 +5999,7 @@ end
                  agen1_argA	<=
 `ifdef FU_BYPASS                  
                  							iq_argA_v[n] ? iq_argA[n]
-                            : (iq_argA_s[n] == alu1_id) ? ralu1_bus
+                            : (iq_argA_s[n] == alu0_id) ? ralu0_bus
                             : (iq_argA_s[n] == alu1_id) ? ralu1_bus
                             : (iq_argA_s[n] == fpu1_id && `NUM_FPU > 0) ? rfpu1_bus
                             : 64'hDEADDEADDEADDEAD;

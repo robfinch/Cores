@@ -26,6 +26,7 @@
 
 module tailptrs(rst_i, clk_i, phit, ip_mask, branchmiss, take_branch0, take_branch1,
 	iq_stomp, canq1, canq2, canq3, slot0v, slot1v, slot2v,slot0_jc, slot1_jc, tail0, tail1, tail2);
+parameter QENTRIES = `QENTRIES;
 input rst_i;
 input clk_i;
 input phit;
