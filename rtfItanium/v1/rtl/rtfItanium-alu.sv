@@ -676,6 +676,41 @@ BMM ubmm1
 	.o(bmmo)
 );
 
+genvar g;
+
+wire [9:0] bmatch;
+wire [4:0] wmatch;
+
+generate begin : bmtch
+for (g = 0; g < 10; g = g + 1)
+assign bmatch[g] = a[g*8+7:g*8] == b[7:0];
+end
+endgenerate
+
+generate begin : wmtch
+for (g = 0; g < 5; g = g + 1)
+assign wmatch[g] = a[g*16+15:g*16] == b[15:0];
+end
+endgenerate
+
+reg [79:0] bndxo,wndxo;
+
+always @*
+begin
+	bndxo = 80'hFFFFFFFFFFFFFFFFFFFF;
+	for (n = 9; n >= 0; n = n - 1)
+		if (bmatch[n])
+			bndxo = n;
+end
+
+always @*
+begin
+	wndxo = 80'hFFFFFFFFFFFFFFFFFFFF;
+	for (n = 4; n >= 0; n = n - 1)
+		if (wmatch[n])
+			wndxo = n;
+end
+
 always @*
 begin
 casez({instr[32:31],instr[`OPCODE4]})
@@ -861,12 +896,20 @@ casez({instr[32:31],instr[`OPCODE4]})
 	    `MUX:       for (n = 0; n < DBW; n = n + 1)
 	                    o[n] <= a[n] ? b[n] : c[n];
 	    `MULU,`MUL:
-        case(sz)
-        byt_para:		o = {prod87[7:0],prod86[7:0],prod85[7:0],prod84[7:0],prod83[7:0],prod82[7:0],prod81[7:0],prod80[7:0]};
-        char_para:	o = {prod163[15:0],prod162[15:0],prod161[15:0],prod160[15:0]};
-				half_para:	o = {prod321[31:0],prod320[31:0]};
-				default:		o = prod[DBW-1:0];
-				endcase
+	    	begin
+	        case(sz)
+	        byt_para:		o1 = {prod87[7:0],prod86[7:0],prod85[7:0],prod84[7:0],prod83[7:0],prod82[7:0],prod81[7:0],prod80[7:0]};
+	        char_para:	o1 = {prod163[15:0],prod162[15:0],prod161[15:0],prod160[15:0]};
+					half_para:	o1 = {prod321[31:0],prod320[31:0]};
+					default:		o1 = prod[DBW-1:0];
+					endcase
+	    		case(instr[`FUNCT2])
+	    		2'd0:	o = o1;
+	    		2'd1:	o = o1 + c;
+	    		2'd2:	o = o1 & c;
+	    		2'd3:	o = o1;
+	    		endcase
+	    	end
 			`FXMUL:
 				case(sz)
 				half_para:	o = {prod321[47:16] + prod321[15],prod320[47:16] + prod320[15]};
@@ -877,6 +920,13 @@ casez({instr[32:31],instr[`OPCODE4]})
 	    `DIV:    o = BIG ? divq : 64'hCCCCCCCCCCCCCCCC;
 	    `MODU:   o = BIG ? rem : 64'hCCCCCCCCCCCCCCCC;
 	    `MOD:    o = BIG ? rem : 64'hCCCCCCCCCCCCCCCC;
+	    `AVG:
+	    	begin
+	    		o1 = a + b + 2'd1;
+	    		o = o1[79] ? {1'b1,o1[79:1]} : {1'b0,o1[79:1]};
+	    	end
+	    `BYTNDX:	o = bndxo;
+	    `WYDNDX:	o = wndxo;
 	    `MIN: 
 `ifdef SIMD
           case(sz)
@@ -1018,6 +1068,8 @@ casez({instr[32:31],instr[`OPCODE4]})
 	default:	o = BIG ? csr : 64'hDDDDDDDDDDDDDDDD;
 	endcase
 `BITFIELD:  o = BIG ? bfout : 64'hCCCCCCCCCCCCCCCC;
+`BYTNDXI:	o = bndxo;
+`WYDNDXI:	o = wndxo;
 default:    o = 64'hDEADDEADDEADDEAD;
 endcase  
 end

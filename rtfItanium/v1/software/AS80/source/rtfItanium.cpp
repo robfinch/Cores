@@ -91,7 +91,39 @@
 #define I_CHK		0xD
 #define I_BMISC	0xE
 #define I_BRK		0xF
+
 #define I_BEQ		0x0
+#define I_BNE		0x1
+#define I_BLT		0x2
+#define I_BGE		0x3
+#define I_BLTU	0x6
+#define I_BGEU	0x7
+#define I_BEQR	0x0
+#define I_BNER	0x1
+#define I_BLTR	0x2
+#define I_BGER	0x3
+#define I_BNANDR	0x4
+#define I_BNORR		0x5
+#define I_BLTUR	0x6
+#define I_BGEUR	0x7
+#define I_FBEQR	0x8
+#define I_FBNER	0x9
+#define I_FBLTR	0xA
+#define I_FBLER	0xB
+#define I_BANDR	0xC
+#define I_BORR	0xD
+#define I_FBUN	0xE
+#define I_FBEQ	0x0
+#define I_FBNE	0x1
+#define I_FBLT	0x2
+#define I_FBLE	0x3
+#define I_FBUN	0x6
+
+#define I_BNAND	0x0
+#define I_BNOR	0x1
+#define I_BAND	0x4
+#define I_BOR		0x5
+
 #define I_SEI		0x3
 
 #define I_MSX		0xF
@@ -2436,6 +2468,7 @@ static int InvertBranchOpcode(int opcode4)
 static void process_bcc()
 {
 	int Ra, Rb, Rc, pred;
+	int swp;
 	int fmt;
 	Int128 val, ca4, ca2;
 	Int128 disp;
@@ -2477,11 +2510,17 @@ static void process_bcc()
 				error("Branch target too far away");
 		}
 	}
+	if (opcode4 < 0) {
+		opcode4 = -opcode4;
+		swp = Ra;
+		Ra = Rb;
+		Rb = swp;
+	}
 	if (Rc < 0) {
 		emit_insn(
 			BT(disp.low) |
 			RB(Rb) |
-			RA(Ra) | OP4(I_Bcc) | (opcode6 & 7)
+			RA(Ra) | opcode6
 			, B
 		);
 		return;
@@ -2490,8 +2529,9 @@ static void process_bcc()
 		RC(Rc) |
 		RB(Rb) |
 		RA(Ra) |
-		(opcode4 & 15) |
-		OP4(I_BRcc), B);
+		OP4(I_BRcc) |
+		opcode4 
+		, B);
 	return;
 }
 
@@ -4484,60 +4524,60 @@ void Itanium_processMaster()
 		parm1[tk_xnor] = 0x0ELL;
 		parm2[tk_xnor] = -1LL;
 		jumptbl[tk_band] = &process_bcc;
-		parm1[tk_band] = 0x10;
-		parm2[tk_band] = 4;
+		parm1[tk_band] = OP4(I_BLcc) | I_BAND;
+		parm2[tk_band] = I_BANDR;
 		parm3[tk_band] = 12;
 		jumptbl[tk_beq] = &process_bcc;
-		parm1[tk_beq] = 0x30;
-		parm2[tk_beq] = 0;
+		parm1[tk_beq] = OP4(I_Bcc) | I_BEQ;
+		parm2[tk_beq] = I_BEQR;
 		parm3[tk_beq] = 0;
 		jumptbl[tk_bge] = &process_bcc;
-		parm1[tk_bge] = 0x30;
-		parm2[tk_bge] = 3;
+		parm1[tk_bge] = OP4(I_Bcc) | I_BGE;
+		parm2[tk_bge] = I_BGER;
 		parm3[tk_bge] = 3;
 		jumptbl[tk_bgeu] = &process_bcc;
-		parm1[tk_bgeu] = 0x30;
-		parm2[tk_bgeu] = 7;
+		parm1[tk_bgeu] = OP4(I_Bcc) | I_BGEU;
+		parm2[tk_bgeu] = I_BGEUR;
 		parm3[tk_bgeu] = 7;
 		jumptbl[tk_bgt] = &process_bcc;
-		parm1[tk_bgt] = 0x30;
-		parm2[tk_bgt] = -2;
+		parm1[tk_bgt] = OP4(I_Bcc) | I_BLT;
+		parm2[tk_bgt] = -I_BLTR;
 		parm3[tk_bgt] = -2;
 		jumptbl[tk_bgtu] = &process_bcc;
-		parm1[tk_bgtu] = 0x30;
-		parm2[tk_bgtu] = -6;
+		parm1[tk_bgtu] = OP4(I_Bcc) | I_BLTU;
+		parm2[tk_bgtu] = -I_BLTUR;
 		parm3[tk_bgtu] = -6;
 		jumptbl[tk_ble] = &process_bcc;
-		parm1[tk_ble] = 0x30;
-		parm2[tk_ble] = -3;
+		parm1[tk_ble] = OP4(I_Bcc) | I_BGE;
+		parm2[tk_ble] = -I_BGER;
 		parm3[tk_ble] = -3;
 		jumptbl[tk_bleu] = &process_bcc;
-		parm1[tk_bleu] = 0x30;
-		parm2[tk_bleu] = -7;
+		parm1[tk_bleu] = OP4(I_Bcc) | I_BGEU;
+		parm2[tk_bleu] = -I_BGEUR;
 		parm3[tk_bleu] = -7;
 		jumptbl[tk_blt] = &process_bcc;
-		parm1[tk_blt] = 0x30;
-		parm2[tk_blt] = 2;
+		parm1[tk_blt] = OP4(I_Bcc) | I_BLT;
+		parm2[tk_blt] = I_BLTR;
 		parm3[tk_blt] = 2;
 		jumptbl[tk_bltu] = &process_bcc;
-		parm1[tk_bltu] = 0x30;
-		parm2[tk_bltu] = 6;
+		parm1[tk_bltu] = OP4(I_Bcc) | I_BLTU;
+		parm2[tk_bltu] = I_BLTUR;
 		parm3[tk_bltu] = 6;
 		jumptbl[tk_bnand] = &process_bcc;
-		parm1[tk_bnand] = 0x30;
-		parm2[tk_bnand] = 4;
+		parm1[tk_bnand] = OP4(I_BLcc) | I_BNAND;
+		parm2[tk_bnand] = I_BNANDR;
 		parm3[tk_bnand] = 4;
 		jumptbl[tk_bne] = &process_bcc;
-		parm1[tk_bne] = 0x30;
-		parm2[tk_bne] = 1;
+		parm1[tk_bne] = OP4(I_Bcc)|I_BNE;
+		parm2[tk_bne] = I_BNER;
 		parm3[tk_bne] = 1;
 		jumptbl[tk_bnor] = &process_bcc;
-		parm1[tk_bnor] = 0x30;
-		parm2[tk_bnor] = 5;
+		parm1[tk_bnor] = OP4(I_BLcc) | I_BNOR;
+		parm2[tk_bnor] = I_BNORR;
 		parm3[tk_bnor] = 5;
 		jumptbl[tk_bor] = &process_bcc;
-		parm1[tk_bor] = 0x10;
-		parm2[tk_bor] = 5;
+		parm1[tk_bor] = OP4(I_BLcc) | I_BOR;
+		parm2[tk_bor] = I_BORR;
 		parm3[tk_bor] = 13;
 		jumptbl[tk_ldi] = &process_ldi;
 		parm1[tk_ldi] = 0;

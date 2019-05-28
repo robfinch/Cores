@@ -107,7 +107,7 @@ case(opcode)
 	default:	takb <= `TRUE;
 	endcase
 `BRcc:
-	case(instr[16:13])
+	case(instr[3:0])
 	`BEQ:	takb <= a==b;
 	`BNE:	takb <= a!=b;
 	`BLT:	takb <= $signed(a) < $signed(b);
@@ -123,9 +123,10 @@ case(opcode)
 	`BANDR:	takb <= a != 0 && b != 0;
 	`BORR:	takb <= a != 0 || b != 0;
 	`FBUNR:	takb <= fcmpo[4];
+	default:	takb <= `TRUE;
 	endcase
 `FBcc:
-	case(instr[15:13])
+	case(instr[2:0])
 	`FBEQ:	takb <= fcmpo[0];
 	`FBNE:	takb <= !fcmpo[0];
 	`FBLT:	takb <= fcmpo[1];
@@ -138,7 +139,7 @@ case(opcode)
 `BEQI:	takb <= a=={{71{instr[21]}},instr[21:16],instr[2:0]};
 `BNEI:	takb <= a!={{71{instr[21]}},instr[21:16],instr[2:0]};
 `BBc:
-	case(instr[14:13])
+	case(instr[1:0])
 	2'd0:	takb <=  a[{instr[22:18],instr[15]}];	// BBS
 	2'd1:	takb <= ~a[{instr[22:18],instr[15]}];	// BBC
 	default:	takb <= `TRUE;

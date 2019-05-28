@@ -51,14 +51,15 @@ always @*
 case(unit)
 `MLdUnit:
 	case(inst[`OPCODE4])
+	`AMO:	ma <= a;
 	`MLX:	ma <= a + cx + {inst[34:33],inst[21:16]};
 	default:	ma <= a + {{58{inst[39]}},inst[39:33],inst[30:16]};
 	endcase
 `MStUnit:
 	case(inst[`OPCODE4])
 	`PUSH,`PUSHC:	ma <= a - 8'd10;
-	`MSX:	ma <= a + cx + {inst[34:33],inst[21:16]};
-	default:	ma <= a + {{58{inst[39]}},inst[39:33],inst[30:16]};
+	`MSX:	ma <= a + cx + {inst[34:33],inst[5:0]};
+	default:	ma <= a + {{58{inst[39]}},inst[39:33],inst[30:22],inst[5:0]};
 	endcase
 endcase
 

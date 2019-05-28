@@ -96,6 +96,8 @@
 `define SGTUI		6'h17
 `define SEQI		6'h18
 `define SNEI		6'h19
+`define BYTNDXI	6'h1C
+`define WYDNDXI	6'h1D
 `define MUL			6'h20
 `define MULI		6'h20
 `define MULU		6'h21
@@ -160,6 +162,9 @@
 `define MIN			6'h1C
 `define MAX			6'h1D
 `define PTRDIF	6'h1E
+`define BYTNDX	6'h2A
+`define WYDNDX	6'h2B
+`define AVG			6'h2D
 `define MUX			6'h29
 `define FXDIV		6'h31
 `define SHL			6'h32
@@ -233,10 +238,34 @@
 `define LDDR		4'h7
 `define LDT			4'h8
 `define LDO			4'h9
+`define AMO			4'hB
 `define LDTU		4'hC
 `define LDOU		4'hD
 `define LEA			4'hE
 `define MLX			4'hF
+
+`define AMOSWAP		5'h00
+`define AMOSWAPI	5'h01
+`define AMOADD		5'h02
+`define AMOADDI		5'h03
+`define AMOAND		5'h04
+`define AMOANDI		5'h05
+`define AMOOR			5'h06
+`define AMOORI		5'h07
+`define AMOXOR		5'h08
+`define AMOXORI		5'h09
+`define AMOSHL		5'h0A
+`define AMOSHLI		5'h0B
+`define AMOSHR		5'h0C
+`define AMOSHRI		5'h0D
+`define AMOMIN		5'h0E
+`define AMOMINI		5'h0F
+`define AMOMAX		5'h10
+`define AMOMAXI		5'h11
+`define AMOMINU		5'h12
+`define AMOMINUI	5'h13
+`define AMOMAXU		5'h14
+`define AMOMAXUI	5'h15
 
 // Store Operations
 `define STB			4'h0
@@ -392,7 +421,8 @@
 
 `define DRAMSLOT_AVAIL	3'b000
 `define DRAMSLOT_BUSY		3'b001
-`define DRAMSLOT_BUSY2	3'b010
+`define DRAMSLOT_RMW		3'b010
+`define DRAMSLOT_RMW2		3'b011
 `define DRAMSLOT_REQBUS	3'b101
 `define DRAMSLOT_HASBUS	3'b110
 `define DRAMREQ_READY		3'b111
