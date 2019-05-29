@@ -443,7 +443,8 @@
 `define PANIC_BRANCHBACK	4'd11
 `define PANIC_BADTARGETID	4'd12
 
-`define IB_CONST	143:80
+`define IBTOP			159
+`define IB_CONST	159:80
 `define IB_LN			78:76
 `define IB_RD			75:71
 `define IB_RS1		61:56

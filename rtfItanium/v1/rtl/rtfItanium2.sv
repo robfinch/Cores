@@ -153,9 +153,9 @@ wire exv;
 wire [RBIT:0] Ra0, Rb0, Rc0, Rd0;
 wire [RBIT:0] Ra1, Rb1, Rc1, Rd1;
 wire [RBIT:0] Ra2, Rb2, Rc2, Rd2;
-wire [79:0] rfoa0, rfob0, rfoc0;
-wire [79:0] rfoa1, rfob1, rfoc1;
-wire [79:0] rfoa2, rfob2, rfoc2;
+wire [WID-1:0] rfoa0, rfob0, rfoc0;
+wire [WID-1:0] rfoa1, rfob1, rfoc1;
+wire [WID-1:0] rfoa2, rfob2, rfoc2;
 reg  [AREGS-1:0] rf_v;
 reg  [`QBITS] rf_source[0:AREGS-1];
 initial begin
@@ -229,14 +229,14 @@ assign ol = ol_stack[1:0];	// operating level
 assign dl = dl_stack[1:0];
 wire [7:0] cpl ;
 assign cpl = mstatus[13:6];	// current privilege level
-wire [5:0] rgs ;
 reg [79:0] pl_stack ;
 reg [79:0] rs_stack ;
 reg [79:0] brs_stack ;
 reg [79:0] fr_stack ;
+wire [3:0] rgs = rs_stack[3:0];
 wire mprv = mstatus[55];
 wire [7:0] ASID = mstatus[47:40];
-wire [5:0] fprgs = mstatus[25:20];
+wire [3:0] fprgs = mstatus[23:20];
 //assign ol_o = mprv ? ol_stack[2:0] : ol;
 wire vca = mstatus[32];		// vector chaining active
 reg [63:0] keys;
@@ -325,7 +325,7 @@ wire [31:0] fp_status = {
 	};
 
 reg [63:0] fpu_csr;
-wire [5:0] fp_rgs = fpu_csr[37:32];
+wire [3:0] fp_rgs = fpu_csr[35:32];
 
 reg  [3:0] panic;		// indexes the message structure
 reg [127:0] message [0:15];	// indexed by panic
@@ -406,10 +406,10 @@ reg [WID-1:0] iq_argA	[0:QENTRIES-1];	// argument 1
 reg [QENTRIES-1:0] iq_argA_v;	// arg1 valid
 reg [`QBITS] iq_argA_s	[0:QENTRIES-1];	// arg1 source (iq entry # with top bit representing ALU/DRAM bus)
 reg [WID-1:0] iq_argB	[0:QENTRIES-1];	// argument 2
-reg        iq_argB_v	[0:QENTRIES-1];	// arg2 valid
+reg [QENTRIES-1:0] iq_argB_v;	// arg2 valid
 reg  [`QBITS] iq_argB_s	[0:QENTRIES-1];	// arg2 source (iq entry # with top bit representing ALU/DRAM bus)
 reg [WID-1:0] iq_argC	[0:QENTRIES-1];	// argument 3
-reg        iq_argC_v	[0:QENTRIES-1];	// arg3 valid
+reg [QENTRIES-1:0] iq_argC_v;	// arg3 valid
 reg  [`QBITS] iq_argC_s	[0:QENTRIES-1];	// arg3 source (iq entry # with top bit representing ALU/DRAM bus)
 reg [`ABITS] iq_ip	[0:QENTRIES-1];	// program counter for this instruction
 
@@ -470,8 +470,8 @@ reg   [7:0] id1_vl;
 reg         id1_thrd;
 reg         id1_pt;
 reg   [4:0] id1_Rt;
-wire [143:0] id1_bus;
-wire [143:0] id0_bus;
+wire [`IBTOP:0] id1_bus;
+wire [`IBTOP:0] id0_bus;
 
 reg         id2_v;
 reg   [`QBITS] id2_id;
@@ -482,7 +482,7 @@ reg   [7:0] id2_vl;
 reg         id2_thrd;
 reg         id2_pt;
 reg   [4:0] id2_Rt;
-wire [143:0] id2_bus;
+wire [`IBTOP:0] id2_bus;
 
 reg         id3_v;
 reg   [`QBITS] id3_id;
@@ -493,7 +493,7 @@ reg   [7:0] id3_vl;
 reg         id3_thrd;
 reg         id3_pt;
 reg   [4:0] id3_Rt;
-wire [143:0] id3_bus;
+wire [`IBTOP:0] id3_bus;
 
 reg [WID-1:0] alu0_xs = 64'd0;
 reg [WID-1:0] alu1_xs = 64'd0;
@@ -1198,20 +1198,21 @@ Regfile urf1
 	.clk(clk_i),
 	.clk2x(clk2x_i),
 	.wr0(commit0_v),
-	.wa0(commit0_tgt),
+	.wa0({rgs,commit0_tgt}),
 	.i0(commit0_bus),
 	.wr1(commit1_v),
-	.wa1(commit1_tgt),
+	.wa1({rgs,commit1_tgt}),
 	.i1(commit1_bus),
-	.ra0(Ra0),
-	.ra1(Rb0),
-	.ra2(Rc0),
-	.ra3(Ra1),
-	.ra4(Rb1),
-	.ra5(Rc1),
-	.ra6(Ra2),
-	.ra7(Rb2),
-	.ra8(Rc2),
+	.rclk(~clk_i),
+	.ra0({rgs,Ra0}),
+	.ra1({rgs,Rb0}),
+	.ra2({rgs,Rc0}),
+	.ra3({rgs,Ra1}),
+	.ra4({rgs,Rb1}),
+	.ra5({rgs,Rc1}),
+	.ra6({rgs,Ra2}),
+	.ra7({rgs,Rb2}),
+	.ra8({rgs,Rc2}),
 	.o0(rfoa0),
 	.o1(rfob0),
 	.o2(rfoc0),
@@ -1327,7 +1328,9 @@ assign fcu_clk = clk_i;
 BTB #(.AMSB(AMSB)) ubtb1
 (
   .rst(rst_i),
-  .wclk(fcu_clk),
+  .clk(clk_i),
+  .clk2x(clk2x_i),
+  .clk4x(clk4x_i),
   .wr0(btbwr0),  
   .wadr0(iq_ip[heads[0]]),
   .wdat0(iq_ma[heads[0]]),
@@ -1387,7 +1390,7 @@ DCController udcc1
 (
 	.rst_i(rst_i),
 	.clk_i(clk_i),
-	.dadr(vadr),
+	.dadr(dram0_addr),
 	.rd(rd_dcache0),
 	.wr(dcwr),
 	.wsel(dcsel),
@@ -1406,7 +1409,7 @@ DCController udcc1
 	.dL2_wadr(d0L2_adr),
 	.dL2_wdat(d0L2_wdat),
 	.dL2_nxt(d0L2_nxt),
-	.dL1_hit(d0L1_hit),
+	.dL1_hit(d0L1_dhit),
 	.dL1_selpc(d0L1_selpc),
 	.dL1_sel(d0L1_sel),
 	.dL1_adr(d0L1_adr),
@@ -1437,7 +1440,7 @@ L1_dcache udc1
 	.nxt(d0L1_nxt),
 	.wr(d0L1_wr),
 	.wadr(d0L1_adr),
-	.adr(d0L1_selpc ? vadr : d0L1_adr),
+	.adr(d0L1_selpc ? dram0_addr : d0L1_adr),
 	.i(d0L1_dat),
 	.o(dc0_out),
 	.fault(),
@@ -1471,7 +1474,7 @@ DCController udcc2
 (
 	.rst_i(rst_i),
 	.clk_i(clk_i),
-	.dadr(vadr),
+	.dadr(dram1_addr),
 	.rd(rd_dcache1),
 	.wr(dcwr),
 	.wsel(dcsel),
@@ -1490,7 +1493,7 @@ DCController udcc2
 	.dL2_wadr(d1L2_adr),
 	.dL2_wdat(d1L2_wdat),
 	.dL2_nxt(d1L2_nxt),
-	.dL1_hit(d1L1_hit),
+	.dL1_hit(d1L1_dhit),
 	.dL1_selpc(d1L1_selpc),
 	.dL1_sel(d1L1_sel),
 	.dL1_adr(d1L1_adr),
@@ -1521,7 +1524,7 @@ L1_dcache udc3
 	.nxt(d1L1_nxt),
 	.wr(d1L1_wr),
 	.wadr(d1L1_adr),
-	.adr(d1L1_selpc ? vadr : d1L1_adr),
+	.adr(d1L1_selpc ? dram1_addr : d1L1_adr),
 	.i(d1L1_dat),
 	.o(dc1_out),
 	.fault(),
@@ -1946,7 +1949,7 @@ case(unit)
 	`TLB:		fnRt = ins[`RD];
 	default:	fnRt = 6'd0;
 	endcase
-default:	fnRt = 0;
+default:	fnRt = 6'd0;
 endcase
 endfunction
 
@@ -3917,7 +3920,7 @@ idecoder uid3
 // EXECUTE
 //
 wire [15:0] lfsro;
-lfsr #(16,16'hACE4) u1 (rst_i, clk_i, 1'b1, 1'b0, lfsro);
+//lfsr #(16,16'hACE4) u1 (rst_i, clk_i, 1'b1, 1'b0, lfsro);
 
 reg [79:0] csr_r;
 wire [13:0] csrno = {alu0_instr[37:36],alu0_instr[27:16]};
@@ -4462,6 +4465,62 @@ begin
 			regIsValid[n] = regIsValid[n] | ((rf_source[ {commit2_tgt[5:0]} ] == commit2_id)
 			|| (branchmiss && iq_source[ commit2_id[`QBITS] ]));
 	end
+/*
+	case({slot0v,slot1v,slot2v}&{3{phit}}&ip_mask)
+	3'b000:	;
+	3'b001: regIsValid[Rd2] = `INV;
+	3'b010:	regIsValid[Rd1] = `INV;
+	3'b011:
+		begin
+			if (canq2) begin
+				regIsValid[Rd1] = `INV;
+				if (~(slot1_jc | take_branch1))
+					regIsValid[Rd2] = `INV;
+			end
+			else if (canq1)
+				regIsValid[Rd1] = `INV;
+		end
+	3'b100:	regIsValid[Rd0] = `INV;
+	3'b101:
+		begin
+			if (canq2) begin
+				regIsValid[Rd0] = `INV;
+				if (~(slot0_jc | take_branch0))
+					regIsValid[Rd2] = `INV;
+			end
+			else if (canq1)
+				regIsValid[Rd0] = `INV;
+		end
+	3'b110:
+		begin
+			if (canq2) begin
+				regIsValid[Rd0] = `INV;
+				if (~(slot0_jc | take_branch0))
+					regIsValid[Rd1] = `INV;
+			end
+			else if (canq1)
+				regIsValid[Rd0] = `INV;
+		end
+	3'b111:
+		begin
+			if (canq3) begin
+				regIsValid[Rd0] = `INV;
+				if (~(slot0_jc | take_branch0)) begin
+					regIsValid[Rd1] = `INV;
+					if (~(slot1_jc | take_branch1))
+						regIsValid[Rd2] = `INV;
+				end
+			end
+			else if (canq2) begin
+				regIsValid[Rd0] = `INV;
+				if (~(slot0_jc | take_branch0))
+					regIsValid[Rd1] = `INV;
+			end
+			else if (canq1)
+				regIsValid[Rd0] = `INV;
+		end
+	endcase
+*/
 	regIsValid[0] = `VAL;
 end
 
@@ -4632,11 +4691,20 @@ edge_det uedalu1d (.clk(clk), .ce(1'b1), .i(alu1_done), .pe(alu1_done_pe), .ne()
 edge_det uedwait1 (.clk(clk), .ce(1'b1), .i((waitctr==48'd1) || signal_i[fcu_argA[4:0]|fcu_argI[4:0]]), .pe(pe_wait), .ne(), .ee());
 
 // Bus randomization to mitigate meltdown attacks
+/*
 wire [WID-1:0] ralu0_bus = |alu0_exc ? {5{lfsro}} : alu0_tlb ? tlbo : alu0_bus;
 wire [WID-1:0] ralu1_bus = |alu1_exc ? {5{lfsro}} : alu1_bus;
 wire [WID-1:0] rfpu1_bus = |fpu1_exc ? {5{lfsro}} : fpu1_bus;
 wire [WID-1:0] rfpu2_bus = |fpu2_exc ? {5{lfsro}} : fpu2_bus;
 wire [WID-1:0] rfcu_bus  = |fcu_exc  ? {5{lfsro}} : fcu_bus;
+wire [WID-1:0] rdramA_bus = dramA_bus;
+wire [WID-1:0] rdramB_bus = dramB_bus;
+*/
+wire [WID-1:0] ralu0_bus = alu0_tlb ? tlbo : alu0_bus;
+wire [WID-1:0] ralu1_bus = alu1_bus;
+wire [WID-1:0] rfpu1_bus = fpu1_bus;
+wire [WID-1:0] rfpu2_bus = fpu2_bus;
+wire [WID-1:0] rfcu_bus  = fcu_bus;
 wire [WID-1:0] rdramA_bus = dramA_bus;
 wire [WID-1:0] rdramB_bus = dramB_bus;
 
@@ -4823,7 +4891,7 @@ if (rst_i|(rst_ctr < 32'd2)) begin
 	ip <= RSTIP;
 	im_stack <= 32'hFFFFFFFF;
 	mstatus <= 64'h4000F;	// select register set #16 for thread 0
-	rs_stack <= 64'd16;
+	rs_stack <= 64'd0;
 	brs_stack <= 64'd16;
     for (n = 0; n < QENTRIES; n = n + 1) begin
     	iq_state[n] <= IQS_INVALID;
@@ -5094,7 +5162,7 @@ else begin
 				 end
 			for (n = 0; n < QENTRIES; n = n + 1)
 	    	if (|iq_latestID[n])
-	    		rf_source[ {iq_tgt[n][5:0]} ] <= { 1'b0, iq_mem[n], n[`QBITS] };
+	    		rf_source[ {iq_tgt[n][5:0]} ] <= n[`QBITS];
 	end
 
     // The source for the register file data might have changed since it was
@@ -5102,10 +5170,10 @@ else begin
     // still as expected to validate the register.
 		if (commit0_v) begin
       if (!rf_v[ {commit0_tgt[RBIT:0]} ]) begin
-//         rf_v[ {commit0_tgt[7:0]} ] <= rf_source[ commit0_tgt[7:0] ] == commit0_id || (branchmiss && iq_source[ commit0_id[`QBITS] ]);
-        rf_v[ {commit0_tgt[RBIT:0]} ] <= regIsValid[{commit0_tgt[RBIT:0]}];//rf_source[ commit0_tgt[4:0] ] == commit0_id || (branchmiss && iq_source[ commit0_id[`QBITS] ]);
-        if (regIsValid[{commit0_tgt[RBIT:0]}])
-         	rf_source[{commit0_tgt[RBIT:0]}] <= {`QBIT{1'b1}};
+        rf_v[ {commit0_tgt[5:0]} ] <= rf_source[ commit0_tgt[5:0] ] == commit0_id || (branchmiss && iq_source[ commit0_id[`QBITS] ]);
+//        rf_v[ {commit0_tgt[RBIT:0]} ] <= regIsValid[{commit0_tgt[RBIT:0]}];//rf_source[ commit0_tgt[4:0] ] == commit0_id || (branchmiss && iq_source[ commit0_id[`QBITS] ]);
+//        if (regIsValid[{commit0_tgt[RBIT:0]}])
+//         	rf_source[{commit0_tgt[RBIT:0]}] <= {`QBIT{1'b1}};
       end
       if (commit0_tgt[RBIT:0] != 6'd0) $display("r%d <- %h   v[%d]<-%d", commit0_tgt, commit0_bus, regIsValid[commit0_tgt[RBIT:0]],
       rf_source[ {commit0_tgt[RBIT:0]} ] == commit0_id || (branchmiss && iq_source[ commit0_id[`QBITS] ]));
@@ -5114,21 +5182,24 @@ else begin
     end
     if (commit1_v && `NUM_CMT > 1) begin
       if (!rf_v[ {commit1_tgt[RBIT:0]} ]) begin
+        rf_v[ {commit1_tgt[5:0]} ] <= rf_source[ commit1_tgt[5:0] ] == commit1_id || (branchmiss && iq_source[ commit1_id[`QBITS] ]);
+      end
+      /*
       	if ({commit1_tgt[RBIT:0]}=={commit0_tgt[RBIT:0]}) begin
       		rf_v[ {commit1_tgt[RBIT:0]} ] <= regIsValid[{commit0_tgt[RBIT:0]}] | regIsValid[{commit1_tgt[RBIT:0]}];
       		if (regIsValid[{commit0_tgt[RBIT:0]}] | regIsValid[{commit1_tgt[RBIT:0]}])
            	rf_source[{commit1_tgt[RBIT:0]}] <= {`QBIT{1'b1}};
-      		/*
-      			(rf_source[ commit0_tgt[4:0] ] == commit0_id || (branchmiss && iq_source[ commit0_id[`QBITS] ])) || 
+      		//
+      		      			(rf_source[ commit0_tgt[4:0] ] == commit0_id || (branchmiss && iq_source[ commit0_id[`QBITS] ])) || 
       			(rf_source[ commit1_tgt[4:0] ] == commit1_id || (branchmiss && iq_source[ commit1_id[`QBITS] ]));
-      		*/
+      		//
       	end
       	else begin
 					rf_v[ {commit1_tgt[RBIT:0]} ] <= regIsValid[{commit1_tgt[RBIT:0]}];//rf_source[ commit1_tgt[4:0] ] == commit1_id || (branchmiss && iq_source[ commit1_id[`QBITS] ]);
           if (regIsValid[{commit1_tgt[RBIT:0]}])
            	rf_source[{commit1_tgt[RBIT:0]}] <= {`QBIT{1'b1}};
         end
-      end
+      end */
       if (commit1_tgt[5:0] != 6'd0) $display("r%d <- %h   v[%d]<-%d", commit1_tgt, commit1_bus, regIsValid[commit1_tgt[5:0]],
       rf_source[ {commit1_tgt[RBIT:0]} ] == commit1_id || (branchmiss && iq_source[ commit1_id[`QBITS] ]));
       if (commit1_tgt[5:0]==6'd30 && commit1_bus==64'd0)
@@ -5224,7 +5295,6 @@ else begin
 			if (canq2 & !debug_on) begin
 				queue_slot1(tail0,maxsn+2'd1,id1_bus);
 				slot1v <= INV;
-				slot2v <= INV;
 				if (slot1_jc) begin
 					slot0v <= VAL;
 					slot1v <= VAL;
@@ -5285,6 +5355,9 @@ else begin
 				end
 				else begin
 					queue_slot2(tail1,maxsn+2'd2,id2_bus);
+					slot0v <= VAL;
+					slot1v <= VAL;
+					slot2v <= VAL;
 					ip <= {ip[79:4] + 76'd1,4'h0};
 					if (slot1_rfw) begin
 						rf_source[Rd1] <= tail0;	// top bit indicates ALU/MEM bus
@@ -5346,10 +5419,11 @@ else begin
 		3'b101:
 			if (canq2 & !debug_on) begin
 				queue_slot0(tail0,maxsn+2'd1,id0_bus);
-				slot0v <= VAL;
-				slot1v <= VAL;
-				slot2v <= VAL;
+				slot0v <= INV;
 				if (slot0_jc) begin
+					slot0v <= VAL;
+					slot1v <= VAL;
+					slot2v <= VAL;
 					ip[37:0] <= {insn0[39:10],insn0[5:0],insn0[1:0]};
 					if (slot0_rfw) begin
 						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
@@ -5357,6 +5431,9 @@ else begin
 					end
 				end
 				else if (take_branch0) begin
+					slot0v <= VAL;
+					slot1v <= VAL;
+					slot2v <= VAL;
 					if (slot0_br)
 						ip <= btgtA;
 					else
@@ -5367,6 +5444,9 @@ else begin
 					end
 				end
 				else if (slot2_jc) begin
+					slot0v <= VAL;
+					slot1v <= VAL;
+					slot2v <= VAL;
 					queue_slot2(tail1,maxsn+2'd2,id2_bus);
 					ip[37:0] <= {insn2[39:10],insn2[5:0],insn2[1:0]};
 					if (slot0_rfw) begin
@@ -5380,6 +5460,9 @@ else begin
 					arg_vs_101();
 				end
 				else if (take_branch2) begin
+					slot0v <= VAL;
+					slot1v <= VAL;
+					slot2v <= VAL;
 					queue_slot2(tail1,maxsn+2'd2,id2_bus);
 					if (slot2_br)
 						ip <= btgtC;
@@ -5396,6 +5479,9 @@ else begin
 					arg_vs_101();
 				end
 				else begin
+					slot0v <= VAL;
+					slot1v <= VAL;
+					slot2v <= VAL;
 					queue_slot2(tail1,maxsn+2'd2,id2_bus);
 					ip <= {ip[79:4] + 76'd1,4'h0};
 					if (slot0_rfw) begin
@@ -5437,10 +5523,11 @@ else begin
 		3'b110:
 			if (canq2 & !debug_on) begin
 				queue_slot0(tail0,maxsn+2'd1,id0_bus);
-				slot0v <= VAL;
-				slot1v <= VAL;
-				slot2v <= VAL;
+				slot0v <= INV;
 				if (slot0_jc) begin
+					slot0v <= VAL;
+					slot1v <= VAL;
+					slot2v <= VAL;
 					ip[37:0] <= {insn0[39:10],insn0[5:0],insn0[1:0]};
 					if (slot0_rfw) begin
 						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
@@ -5448,6 +5535,9 @@ else begin
 					end
 				end
 				else if (take_branch0) begin
+					slot0v <= VAL;
+					slot1v <= VAL;
+					slot2v <= VAL;
 					if (slot0_br)
 						ip <= btgtA;
 					else
@@ -5458,6 +5548,9 @@ else begin
 					end
 				end
 				else if (slot1_jc) begin
+					slot0v <= VAL;
+					slot1v <= VAL;
+					slot2v <= VAL;
 					queue_slot1(tail1,maxsn+2'd2,id1_bus);
 					ip[37:0] <= {insn1[39:10],insn1[5:0],insn1[1:0]};
 					if (slot0_rfw) begin
@@ -5471,6 +5564,9 @@ else begin
 					arg_vs_110();
 				end
 				else if (take_branch1) begin
+					slot0v <= VAL;
+					slot1v <= VAL;
+					slot2v <= VAL;
 					queue_slot1(tail1,maxsn+2'd2,id1_bus);
 					if (slot1_br)
 						ip <= btgtB;
@@ -5487,6 +5583,9 @@ else begin
 					arg_vs_110();
 				end
 				else begin
+					slot0v <= VAL;
+					slot1v <= VAL;
+					slot2v <= VAL;
 					queue_slot1(tail1,maxsn+2'd2,id1_bus);
 					ip <= {ip[79:4] + 76'd1,4'h0};
 					if (slot0_rfw) begin
@@ -5528,10 +5627,11 @@ else begin
 		3'b111:
 			if (canq3 & !debug_on) begin
 				queue_slot0(tail0,maxsn+2'd1,id0_bus);
-				slot0v <= VAL;
-				slot1v <= VAL;
-				slot2v <= VAL;
+				slot0v <= INV;
 				if (slot0_jc) begin
+					slot0v <= VAL;
+					slot1v <= VAL;
+					slot2v <= VAL;
 					ip[37:0] <= {insn0[39:10],insn0[5:0],insn0[1:0]};
 					if (slot0_rfw) begin
 						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
@@ -5539,6 +5639,9 @@ else begin
 					end
 				end
 				else if (take_branch0) begin
+					slot0v <= VAL;
+					slot1v <= VAL;
+					slot2v <= VAL;
 					if (slot0_br)
 						ip <= btgtA;
 					else
@@ -5549,6 +5652,9 @@ else begin
 					end
 				end
 				else if (slot1_jc) begin
+					slot0v <= VAL;
+					slot1v <= VAL;
+					slot2v <= VAL;
 					queue_slot1(tail1,maxsn+2'd2,id1_bus);
 					ip[37:0] <= {insn1[39:10],insn1[5:0],insn1[1:0]};
 					if (slot0_rfw) begin
@@ -5562,6 +5668,9 @@ else begin
 					arg_vs_110();
 				end
 				else if (take_branch1) begin
+					slot0v <= VAL;
+					slot1v <= VAL;
+					slot2v <= VAL;
 					queue_slot1(tail1,maxsn+2'd2,id1_bus);
 					if (slot1_br)
 						ip <= btgtB;
@@ -5578,6 +5687,9 @@ else begin
 					arg_vs_110();
 				end
 				else if (slot2_jc) begin
+					slot0v <= VAL;
+					slot1v <= VAL;
+					slot2v <= VAL;
 					queue_slot1(tail1,maxsn+2'd2,id1_bus);
 					queue_slot2(tail2,maxsn+2'd3,id2_bus);
 					ip[37:0] <= {insn2[39:10],insn2[5:0],insn2[1:0]};
@@ -5596,6 +5708,9 @@ else begin
 					arg_vs_111();
 				end
 				else if (take_branch2) begin
+					slot0v <= VAL;
+					slot1v <= VAL;
+					slot2v <= VAL;
 					queue_slot1(tail1,maxsn+2'd2,id1_bus);
 					queue_slot2(tail2,maxsn+2'd3,id2_bus);
 					if (slot2_br)
@@ -5617,6 +5732,9 @@ else begin
 					arg_vs_111();
 				end
 				else begin
+					slot0v <= VAL;
+					slot1v <= VAL;
+					slot2v <= VAL;
 					queue_slot1(tail1,maxsn+2'd2,id1_bus);
 					queue_slot2(tail2,maxsn+2'd3,id2_bus);
 					ip <= {ip[79:4] + 76'd1,4'h0};
@@ -5638,7 +5756,6 @@ else begin
 			else if (canq2 & !debug_on) begin
 				queue_slot0(tail0,maxsn+2'd1,id0_bus);
 				slot0v <= INV;
-				slot1v <= INV;
 				if (slot0_jc) begin
 					slot0v <= VAL;
 					slot1v <= VAL;
@@ -5699,6 +5816,7 @@ else begin
 				end
 				else begin
 					queue_slot1(tail1,maxsn+2'd2,id1_bus);
+					slot1v <= INV;
 					ip[3:0] <= 4'hA;
 					if (slot0_rfw) begin
 						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
@@ -6225,6 +6343,7 @@ end
 				endcase
 				fcu_pt     <= iq_pt[n];
 				fcu_brdisp <= {{57{iq_instr[n][39]}},iq_instr[n][39:22],iq_instr[n][5:3],iq_instr[n][4:3]};
+				//$display("Branch tgt: %h", {iq_instr[n][39:22],iq_instr[n][5:3],iq_instr[n][4:3]});
 				fcu_branch <= iq_br[n];
 				fcu_call    <= IsCall(`BUnit,iq_instr[n])|iq_jal[n];
 				fcu_jal     <= iq_jal[n];
@@ -6474,7 +6593,7 @@ case(dram0)
 	else begin
 		dram0 <= `DRAMREQ_READY;
 		dram0_load <= `FALSE;
-		xdati <= {13{lfsro}};
+		//xdati <= {13{lfsro}};
 	end
 `DRAMSLOT_RMW:
 	begin
@@ -6515,7 +6634,7 @@ case(dram0)
 	else begin
 		dram0 <= `DRAMREQ_READY;
 		dram0_load <= `FALSE;
-		xdati <= {13{lfsro}};
+		//xdati <= {13{lfsro}};
 	end
 `DRAMSLOT_HASBUS:
 	if (iq_v[dram0_id[`QBITS]] && !iq_stomp[dram0_id[`QBITS]])
@@ -6523,7 +6642,7 @@ case(dram0)
 	else begin
 		dram0 <= `DRAMREQ_READY;
 		dram0_load <= `FALSE;
-		xdati <= {13{lfsro}};
+		//xdati <= {13{lfsro}};
 	end
 `DRAMREQ_READY:		dram0 <= `DRAMSLOT_AVAIL;
 endcase
@@ -6539,7 +6658,7 @@ case(dram1)
 	else begin
 		dram1 <= `DRAMREQ_READY;
 		dram1_load <= `FALSE;
-		xdati <= {13{lfsro}};
+		//xdati <= {13{lfsro}};
 	end
 `DRAMSLOT_RMW:
 	begin
@@ -6581,7 +6700,7 @@ case(dram1)
 	else begin
 		dram1 <= `DRAMREQ_READY;
 		dram1_load <= `FALSE;
-		xdati <= {13{lfsro}};
+		//xdati <= {13{lfsro}};
 	end
 `DRAMSLOT_HASBUS:
 	if (iq_v[dram1_id[`QBITS]] && !iq_stomp[dram1_id[`QBITS]])
@@ -6589,7 +6708,7 @@ case(dram1)
 	else begin
 		dram1 <= `DRAMREQ_READY;
 		dram1_load <= `FALSE;
-		xdati <= {13{lfsro}};
+		//xdati <= {13{lfsro}};
 	end
 `DRAMREQ_READY:		dram1 <= `DRAMSLOT_AVAIL;
 endcase
@@ -6920,10 +7039,10 @@ endcase
     $display ("Regfile: %d", rgs);
 	for (n=0; n < 64; n=n+4) begin
 	    $display("%d: %h %d %o   %d: %h %d %o   %d: %h %d %o   %d: %h %d %o#",
-	       n[5:0]+0, urf1.mem[{n[5:2],2'b00}], regIsValid[n+0], rf_source[n+0],
-	       n[5:0]+1, urf1.mem[{n[5:2],2'b01}], regIsValid[n+1], rf_source[n+1],
-	       n[5:0]+2, urf1.mem[{n[5:2],2'b10}], regIsValid[n+2], rf_source[n+2],
-	       n[5:0]+3, urf1.mem[{n[5:2],2'b11}], regIsValid[n+3], rf_source[n+3]
+	       n[5:0]+0, urf1.mem[{rgs,n[5:2],2'b00}], regIsValid[n+0], rf_source[n+0],
+	       n[5:0]+1, urf1.mem[{rgs,n[5:2],2'b01}], regIsValid[n+1], rf_source[n+1],
+	       n[5:0]+2, urf1.mem[{rgs,n[5:2],2'b10}], regIsValid[n+2], rf_source[n+2],
+	       n[5:0]+3, urf1.mem[{rgs,n[5:2],2'b11}], regIsValid[n+3], rf_source[n+3]
 	       );
 	end
 `ifdef FCU_ENH
@@ -7136,29 +7255,29 @@ task arg_vs_011;
 begin
 	// if there is not an overlapping write to the register file.
 	if ((Ra2 != Rd1) || !slot1_rfw) begin
-		iq_argA_v [tail1] <= regIsValid[Ra2];
+		iq_argA_v [tail1] <= regIsValid[Ra2] | Source1Valid(slot2u,insn2);
 		iq_argA_s [tail1] <= rf_source [Ra2];
 	end
 	else begin
-		iq_argA_v [tail1] <= `INV;
+		iq_argA_v [tail1] <= Source1Valid(slot2u,insn2);
 		iq_argA_s [tail1] <= tail0;
 	end
 
 	if ((Rb2 != Rd1) || !slot1_rfw) begin
-		iq_argB_v [tail1] <= regIsValid[Rb2];
+		iq_argB_v [tail1] <= regIsValid[Rb2] | Source2Valid(slot2u,insn2);
 		iq_argB_s [tail1] <= rf_source [Rb2];
 	end
 	else begin
-		iq_argB_v [tail1] <= `INV;
+		iq_argB_v [tail1] <= Source2Valid(slot2u,insn2);
 		iq_argB_s [tail1] <= tail0;
 	end
 
 	if ((Rc2 != Rd1) || !slot1_rfw) begin
-		iq_argC_v [tail1] <= regIsValid[Rc2];
+		iq_argC_v [tail1] <= regIsValid[Rc2] | Source3Valid(slot2u,insn2);
 		iq_argC_s [tail1] <= rf_source [Rc2];
 	end
 	else begin
-		iq_argC_v [tail1] <= `INV;
+		iq_argC_v [tail1] <= Source3Valid(slot2u,insn2);
 		iq_argC_s [tail1] <= tail0;
 	end
 end
@@ -7168,29 +7287,29 @@ task arg_vs_101;
 begin
 	// if there is not an overlapping write to the register file.
 	if ((Ra2 != Rd0) || !slot0_rfw) begin
-		iq_argA_v [tail1] <= regIsValid[Ra2];
+		iq_argA_v [tail1] <= regIsValid[Ra2] | Source1Valid(slot2u,insn2);
 		iq_argA_s [tail1] <= rf_source [Ra2];
 	end
 	else begin	// Ra1 must be equal to Rt0 then
-		iq_argA_v [tail1] <= `INV;
+		iq_argA_v [tail1] <= Source1Valid(slot2u,insn2);
 		iq_argA_s [tail1] <= tail0;
 	end
 
 	if ((Rb2 != Rd0) || !slot0_rfw) begin
-		iq_argB_v [tail1] <= regIsValid[Rb2];
+		iq_argB_v [tail1] <= regIsValid[Rb2] | Source2Valid(slot2u,insn2);
 		iq_argB_s [tail1] <= rf_source [Rb2];
 	end
 	else begin	// Ra1 must be equal to Rt0 then
-		iq_argB_v [tail1] <= `INV;
+		iq_argB_v [tail1] <= Source2Valid(slot2u,insn2);
 		iq_argB_s [tail1] <= tail0;
 	end
 
 	if ((Rc2 != Rd0) || !slot0_rfw) begin
-		iq_argC_v [tail1] <= regIsValid[Rc2];
+		iq_argC_v [tail1] <= regIsValid[Rc2] | Source3Valid(slot2u,insn2);
 		iq_argC_s [tail1] <= rf_source [Rc2];
 	end
 	else begin	// Ra1 must be equal to Rt0 then
-		iq_argC_v [tail1] <= `INV;
+		iq_argC_v [tail1] <= Source3Valid(slot2u,insn2);
 		iq_argC_s [tail1] <= tail0;
 	end
 end
@@ -7200,29 +7319,29 @@ task arg_vs_110;
 begin
 	// if there is not an overlapping write to the register file.
 	if ((Ra1 != Rd0) || !slot0_rfw) begin
-		iq_argA_v [tail1] <= regIsValid[Ra1];
+		iq_argA_v [tail1] <= regIsValid[Ra1] | Source1Valid(slot1u,insn1);
 		iq_argA_s [tail1] <= rf_source [Ra1];
 	end
 	else begin	// Ra1 must be equal to Rt0 then
-		iq_argA_v [tail1] <= `INV;
+		iq_argA_v [tail1] <= Source1Valid(slot1u,insn1);
 		iq_argA_s [tail1] <= tail0;
 	end
 
 	if ((Rb1 != Rd0) || !slot0_rfw) begin
-		iq_argB_v [tail1] <= regIsValid[Rb1];
+		iq_argB_v [tail1] <= regIsValid[Rb1] | Source2Valid(slot1u,insn1);
 		iq_argB_s [tail1] <= rf_source [Rb1];
 	end
 	else begin	// Ra1 must be equal to Rt0 then
-		iq_argB_v [tail1] <= `INV;
+		iq_argB_v [tail1] <= Source2Valid(slot1u,insn1);
 		iq_argB_s [tail1] <= tail0;
 	end
 
 	if ((Rc1 != Rd0) || !slot0_rfw) begin
-		iq_argC_v [tail1] <= regIsValid[Rc1];
+		iq_argC_v [tail1] <= regIsValid[Rc1] | Source3Valid(slot1u,insn1);
 		iq_argC_s [tail1] <= rf_source [Rc1];
 	end
 	else begin	// Ra1 must be equal to Rt0 then
-		iq_argC_v [tail1] <= `INV;
+		iq_argC_v [tail1] <= Source3Valid(slot1u,insn1);
 		iq_argC_s [tail1] <= tail0;
 	end
 end
@@ -7232,71 +7351,83 @@ task arg_vs_111;
 begin
 	// if there is not an overlapping write to the register file.
 	if ((Ra1 != Rd0) || !slot0_rfw) begin
-		iq_argA_v [tail1] <= regIsValid[Ra1];
+		iq_argA_v [tail1] <= regIsValid[Ra1] | Source1Valid(slot1u,insn1);
 		iq_argA_s [tail1] <= rf_source [Ra1];
 	end
 	else begin	// Ra1 must be equal to Rt0 then
-		iq_argA_v [tail1] <= `INV;
+		iq_argA_v [tail1] <= Source1Valid(slot1u,insn1);
 		iq_argA_s [tail1] <= tail0;
 	end
 	// if there is not an overlapping write to the register file.
 	if (((Ra2 != Rd0) || !slot0_rfw) && ((Ra2 != Rd1) || !slot1_rfw)) begin
-		iq_argA_v [tail2] <= regIsValid[Ra2];
+		iq_argA_v [tail2] <= regIsValid[Ra2] | Source1Valid(slot2u,insn2);
 		iq_argA_s [tail2] <= rf_source [Ra2];
 	end
 	else if ((Ra2 != Rd0) || !slot0_rfw) begin	// Ra2 must be equal to Rt1 then
-		iq_argA_v [tail2] <= `INV;
+		iq_argA_v [tail2] <= Source1Valid(slot2u,insn2);
 		iq_argA_s [tail2] <= tail1;
 	end
 	else if ((Ra2 != Rd1) || !slot1_rfw) begin	// Ra2 must be equal to Rt0 then
-		iq_argA_v [tail2] <= `INV;
+		iq_argA_v [tail2] <= Source1Valid(slot2u,insn2);
 		iq_argA_s [tail2] <= tail0;
+	end
+	else begin	// Ra2==Rd1 && Ra2==Rd0
+		iq_argA_v [tail2] <= Source1Valid(slot2u,insn2);
+		iq_argA_s [tail2] <= tail1;
 	end
 
 	// if there is not an overlapping write to the register file.
 	if ((Rb1 != Rd0) || !slot0_rfw) begin
-		iq_argB_v [tail1] <= regIsValid[Rb1];
+		iq_argB_v [tail1] <= regIsValid[Rb1] | Source2Valid(slot1u,insn1);
 		iq_argB_s [tail1] <= rf_source [Rb1];
 	end
 	else begin	// Ra1 must be equal to Rt0 then
-		iq_argB_v [tail1] <= `INV;
+		iq_argB_v [tail1] <= Source2Valid(slot1u,insn1);
 		iq_argB_s [tail1] <= tail0;
 	end
 	// if there is not an overlapping write to the register file.
 	if (((Rb2 != Rd0) || !slot0_rfw) && ((Rb2 != Rd1) || !slot1_rfw)) begin
-		iq_argB_v [tail2] <= regIsValid[Rb2];
+		iq_argB_v [tail2] <= regIsValid[Rb2] | Source2Valid(slot2u,insn2);
 		iq_argB_s [tail2] <= rf_source [Rb2];
 	end
 	else if ((Rb2 != Rd0) || !slot0_rfw) begin	// Ra2 must be equal to Rt1 then
-		iq_argB_v [tail2] <= `INV;
+		iq_argB_v [tail2] <= Source2Valid(slot2u,insn2);
 		iq_argB_s [tail2] <= tail1;
 	end
 	else if ((Rb2 != Rd1) || !slot1_rfw) begin	// Ra2 must be equal to Rt0 then
-		iq_argB_v [tail2] <= `INV;
+		iq_argB_v [tail2] <= Source2Valid(slot2u,insn2);
 		iq_argB_s [tail2] <= tail0;
+	end
+	else begin
+		iq_argB_v [tail2] <= Source2Valid(slot2u,insn2);
+		iq_argB_s [tail2] <= tail1;
 	end
 
 	// if there is not an overlapping write to the register file.
 	if ((Rc1 != Rd0) || !slot0_rfw) begin
-		iq_argC_v [tail1] <= regIsValid[Rc1];
+		iq_argC_v [tail1] <= regIsValid[Rc1] | Source3Valid(slot1u,insn1);
 		iq_argC_s [tail1] <= rf_source [Rc1];
 	end
 	else begin	// Ra1 must be equal to Rt0 then
-		iq_argC_v [tail1] <= `INV;
+		iq_argC_v [tail1] <= Source3Valid(slot1u,insn1);
 		iq_argC_s [tail1] <= tail0;
 	end
 	// if there is not an overlapping write to the register file.
 	if (((Rc2 != Rd0) || !slot0_rfw) && ((Rc2 != Rd1) || !slot1_rfw)) begin
-		iq_argC_v [tail2] <= regIsValid[Rc2];
+		iq_argC_v [tail2] <= regIsValid[Rc2] | Source3Valid(slot2u,insn2);
 		iq_argC_s [tail2] <= rf_source [Rc2];
 	end
 	else if ((Rc2 != Rd0) || !slot0_rfw) begin	// Ra2 must be equal to Rt1 then
-		iq_argC_v [tail2] <= `INV;
+		iq_argC_v [tail2] <= Source3Valid(slot2u,insn2);
 		iq_argC_s [tail2] <= tail1;
 	end
 	else if ((Rc2 != Rd1) || !slot1_rfw) begin	// Ra2 must be equal to Rt0 then
-		iq_argC_v [tail2] <= `INV;
+		iq_argC_v [tail2] <= Source3Valid(slot2u,insn2);
 		iq_argC_s [tail2] <= tail0;
+	end
+	else begin
+		iq_argC_v [tail2] <= Source3Valid(slot2u,insn2);
+		iq_argC_s [tail2] <= tail1;
 	end
 end
 endtask
@@ -7304,7 +7435,7 @@ endtask
 
 task set_insn;
 input [`QBITS] nn;
-input [143:0] bus;
+input [`IBTOP:0] bus;
 begin
 	iq_argI[nn]  <= bus[`IB_CONST];
 	iq_imm  [nn]  <= bus[`IB_IMM];
@@ -7351,7 +7482,7 @@ endtask
 task queue_slot0;
 input [`QBITS] ndx;
 input [`SNBITS] seqnum;
-input [143:0] id_bus;
+input [`IBTOP:0] id_bus;
 begin
 	iq_sn[ndx] <= seqnum;
 	iq_state[ndx] <= IQS_QUEUED;
@@ -7378,7 +7509,7 @@ endtask
 task queue_slot1;
 input [`QBITS] ndx;
 input [`SNBITS] seqnum;
-input [143:0] id_bus;
+input [`IBTOP:0] id_bus;
 begin
 	iq_sn[ndx] <= seqnum;
 	iq_state[ndx] <= IQS_QUEUED;
@@ -7405,7 +7536,7 @@ endtask
 task queue_slot2;
 input [`QBITS] ndx;
 input [`SNBITS] seqnum;
-input [143:0] id_bus;
+input [`IBTOP:0] id_bus;
 begin
 	iq_sn[ndx] <= seqnum;
 	iq_state[ndx] <= IQS_QUEUED;
@@ -7796,6 +7927,7 @@ begin
 `endif        
         `CSR_SEMA:      sema <= sema | dat;
         `CSR_STATUS:    mstatus[63:0] <= mstatus[63:0] | dat;
+        `CSR_RS_STACK:	rs_stack[63:0] <= rs_stack[63:0] | dat;
         default:    ;
         endcase
     2'd3:   // CSRRC
@@ -7816,6 +7948,7 @@ begin
 `endif        
         `CSR_SEMA:      sema <= sema & ~dat;
         `CSR_STATUS:    mstatus[63:0] <= mstatus[63:0] & ~dat;
+        `CSR_RS_STACK:	rs_stack[63:0] <= rs_stack[63:0] & ~dat;
         default:    ;
         endcase
     default:    ;

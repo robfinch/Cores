@@ -21,7 +21,7 @@
 //
 // ============================================================================
 //
-module BTB(rst, wclk,
+module BTB(rst, clk, clk2x, clk4x,
 		wr0, wadr0, wdat0, valid0,
 		wr1, wadr1, wdat1, valid1,
 		wr2, wadr2, wdat2, valid2,
@@ -29,10 +29,12 @@ module BTB(rst, wclk,
 		pcC, btgtC,
 		hitA, hitB, hitC, 
     npcA, npcB, npcC );
-parameter AMSB = 79;
+parameter AMSB = 31;
 parameter RSTPC = 80'hFFFFFFFFFFFFFFFC0100;
 input rst;
-input wclk;
+input clk;
+input clk2x;
+input clk4x;
 input wr0;
 input [AMSB:0] wadr0;
 input [AMSB:0] wdat0;
@@ -62,98 +64,83 @@ input [AMSB:0] npcC;
 integer n;
 reg [AMSB:0] pcs [0:31];
 reg [AMSB:0] wdats [0:31];
-reg [AMSB:0] wdat;
 reg [4:0] pcstail,pcshead;
 reg [AMSB:0] pc;
 reg takb;
 reg wrhist;
 
+(* ram_style="block" *)
 reg [(AMSB+1)*2+1:0] mem [0:1023];
 reg [9:0] radrA, radrB, radrC, radrD, radrE, radrF;
 initial begin
     for (n = 0; n < 1024; n = n + 1)
         mem[n] <= RSTPC;
 end
+reg wr;
+reg [AMSB:0] wadr;
+reg valid;
+reg [AMSB:0] wdat, wdat1;
 
-always @(posedge wclk)
+always @*
+case({clk,clk2x})
+2'b00:	
+	begin
+		wr <= wr0;
+		wadr <= wadr0;
+		valid <= valid0;
+		wdat <= wdat0;
+	end
+2'b01:
+	begin
+		wr <= wr1;
+		wadr <= wadr1;
+		valid <= valid1;
+		wdat <= wdat1;
+	end
+2'b10:
+	begin
+		wr <= wr2;
+		wadr <= wadr2;
+		valid <= valid2;
+		wdat <= wdat2;
+	end
+2'b11:
+	begin
+		wr <= 1'b0;
+		wadr <= 1'd0;
+		wdat <= 1'b0;
+		valid <= 1'b0;
+	end
+endcase
+
+always @(posedge clk4x)
 if (rst)
 	pcstail <= 5'd0;
 else begin
-	case({wr0,wr1,wr2})
-	3'b000:	;
-	3'b001:
-		begin
-		pcs[pcstail] <= {wadr2[31:1],valid2};
-		wdats[pcstail] <= wdat2;
+	if (wr) begin
+		pcs[pcstail] <= {wadr[AMSB:1],valid};
+		wdats[pcstail] <= wdat;
 		pcstail <= pcstail + 5'd1;
-		end
-	3'b010:
-		begin
-		pcs[pcstail] <= {wadr1[31:1],valid1};
-		wdats[pcstail] <= wdat1;
-		pcstail <= pcstail + 5'd1;
-		end
-	3'b011:
-		begin
-		pcs[pcstail] <= {wadr1[31:1],valid1};
-		pcs[pcstail+1] <= {wadr2[31:1],valid2};
-		wdats[pcstail] <= wdat1;
-		wdats[pcstail+1] <= wdat2;
-		pcstail <= pcstail + 5'd2;
-		end
-	3'b100:
-		begin
-		pcs[pcstail] <= {wadr0[31:1],valid0};
-		wdats[pcstail] <= wdat0;
-		pcstail <= pcstail + 5'd1;
-		end
-	3'b101:
-		begin
-		pcs[pcstail] <= {wadr0[31:1],valid0};
-		pcs[pcstail+1] <= {wadr2[31:1],valid2};
-		wdats[pcstail] <= wdat0;
-		wdats[pcstail+1] <= wdat2;
-		pcstail <= pcstail + 5'd2;
-		end
-	3'b110:
-		begin
-		pcs[pcstail] <= {wadr0[31:1],valid0};
-		pcs[pcstail+1] <= {wadr1[31:1],valid1};
-		wdats[pcstail] <= wdat0;
-		wdats[pcstail+1] <= wdat1;
-		pcstail <= pcstail + 5'd2;
-		end
-	3'b111:
-		begin
-		pcs[pcstail] <= {wadr0[31:1],valid0};
-		pcs[pcstail+1] <= {wadr1[31:1],valid1};
-		pcs[pcstail+2] <= {wadr2[31:1],valid2};
-		wdats[pcstail] <= wdat0;
-		wdats[pcstail+1] <= wdat1;
-		wdats[pcstail+2] <= wdat2;
-		pcstail <= pcstail + 5'd3;
-		end
-	endcase
+	end	
 end
 
-always @(posedge wclk)
+always @(posedge clk)
 if (rst)
 	pcshead <= 5'd0;
 else begin
 	wrhist <= 1'b0;
 	if (pcshead != pcstail) begin
-		pc <= pcs[pcshead];
+		pc <= {pcs[pcshead][AMSB:2],pcs[pcshead][3:2]};
 		takb <= pcs[pcshead][0];
-		wdat <= wdats[pcshead];
+		wdat1 <= wdats[pcshead];
 		wrhist <= 1'b1;
 		pcshead <= pcshead + 5'd1;
 	end
 end
 
-
-always @(posedge wclk)
+always @(posedge clk)
 begin
-    if (wrhist) #1 mem[pc[9:0]][AMSB:0] <= wdat;
+    if (wrhist) #1 mem[pc[9:0]][AMSB:0] <= wdat1;
     if (wrhist) #1 mem[pc[9:0]][(AMSB+1)*2:AMSB+1] <= pc;
     if (wrhist) #1 mem[pc[9:0]][(AMSB+1)*2+1] <= takb;
 end

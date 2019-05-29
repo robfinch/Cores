@@ -110,6 +110,7 @@ if (rst_i) begin
 	sel_o <= 8'h00;
 	adr_o <= {dadr[AMSB:5],5'h0};
 	state <= IDLE;
+	dL1_adr <= 1'd0;
 	dL2_ld <= FALSE;
 end
 else begin
@@ -189,7 +190,7 @@ IC_WaitL2:
 		state <= IC5;
 	end
 	else begin
-		if (bstate == B_WaitIC) begin
+		begin
 			dccnt <= 3'd0;
 			dcl_o <= `HIGH;
 			cti_o <= 3'b001;

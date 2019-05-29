@@ -393,6 +393,7 @@ L2_dcache_cmptag4way u2
 );
 
 assign whit = wtaghit;
+assign rhit = rtaghit;
 
 endmodule
 

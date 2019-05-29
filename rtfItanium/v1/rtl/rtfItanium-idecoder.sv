@@ -29,7 +29,7 @@ input [2:0] unit;
 input [39:0] instr;
 input predict_taken;
 input [5:0] Rt;
-output reg [143:0] bus;
+output reg [`IBTOP:0] bus;
 input debug_on;
 
 parameter TRUE = 1'b1;
@@ -502,7 +502,7 @@ wire isRti = IsRti(unit,instr);
 
 always @*
 begin
-	bus <= 144'h0;
+	bus <= 160'h0;
 	bus[`IB_CMP] <= 1'b0;//IsCmp(instr);
 	if (((unit==`MStUnit)|IsChki(unit,instr)) & !IsPushc(unit,instr))
 		bus[`IB_CONST] <= {{58{instr[39]}},instr[39:33],instr[30:22],instr[5:0]};

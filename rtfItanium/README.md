@@ -18,25 +18,26 @@ rtfItanium is a superscalar core with the following features:
 - instruction (L1, L2) and data (L1, L2) caches
 - write buffering
 - Functional Units:
-	- one flow control unit
 	- dual ALU's,
-	- dual floating point units
-	- dual address generation units
+	- dual address generators
+	- one flow control unit
+	- dual floating point unit
 	- one memory unit (handles 2 load / stores)
 
-The rftItanium fetches three instructions at once and can issue up to seven instructions in a single cycle (2 alu, 1 flow control, 2 floating point, 2 memory) and is capable of committing up to three instructions in a single cycle.
+The rftItanium fetches three instructions at once and can issue up to six instructions in a single cycle (2 alu, 1 flow control, 1 floating point, 2 memory) and is capable of committing up to three instructions in a single cycle.
 
 # History
 rtfItanium is a work-in-progress beginning in May 2019. rtfItanium originated from FT64 which originated from RiSC-16 by Dr. Bruce Jacob. RiSC-16 evolved from the Little Computer (LC-896) developed by Peter Chen at the University of Michigan. See the comment in FT64.v. FT64 is the author's fourth attempt at a 64 bit ISA. Other attempts including Raptor64, FISA64, and DSD9. The author has tried to be innovative with this design borrowing ideas from a number of other processing cores.
 
 # Rationale
 It may seem strange to design an 80-bit cpu. Some of the rationale for doing so is that double-extended floating-point is 80-bits. In order to support the double extended fp internal registers and busses need to be 80 bits in size. Given that a significant portion of the core is 80-bit it was decided just to make the whole core an 80-bit core. Double-extended floating-point offers good precision with which to do business apps. It's approximately 19 digits of precision which amounts to 13 digits plus 6 decimal digits for instance. Ordinary double-precision arithmetic only offers about 16 digits, which isn't quite enough for some business apps once things like rounding are considered. That'd only be 10+6 decimal points. 
-IA64 supports 81-bit floating point. So 80-bits seems reasonable to me.
+IA64 supports 82-bit floating point. So 80-bits seems reasonable to me.
 
 # Software
 none
 
 # Versions
+The current version is version two.
 
 # Status
 Performing an initial code of the architecture along with documentation.
