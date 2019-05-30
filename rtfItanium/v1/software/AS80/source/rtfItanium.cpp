@@ -1592,6 +1592,10 @@ static int GetTemplate(int units)
 {
 	int n;
 
+	if (units == 0200)
+		return (0x7D);
+	if (units == 0300)
+		return (0x7E);
 	for (n = 0; n < 125; n++) {
 		if ((units & 7) == TmpTbl[n][2]) {
 			if (((units >> 3) & 7) == TmpTbl[n][1]) {
@@ -1602,7 +1606,7 @@ static int GetTemplate(int units)
 			}
 		}
 	}
-	printf("Template not found (%9o).\n", units);
+	printf("Template not found (%3o).\n", units);
 	return (255);
 }
 
@@ -1804,6 +1808,18 @@ static void process_riop(int64_t opcode6, int64_t func6, int64_t bit23)
 		else
 			error("Immediate mode not supported.");
 	}
+	if (!IsNBit128(val, *Int128::MakeInt128(44LL)) && ((code_address % 16)==10 || (code_address % 16)==0)) {
+		if ((code_address % 16) == 10)
+				emit_insn(0x00000000C0,B);
+		emit_insn(
+			OP6(opcode6) |
+			RII(0) |
+			RT(Rt) |
+			RA(Ra), I);
+		emit_insn(val.low,0);
+		emit_insn((val.high << 24LL) | ((unsigned int64_t)val.low >> 40LL), 0);
+		goto xit;
+	}
 	if (!IsNBit128(val, *Int128::MakeInt128(22LL))) {
 		LoadConstant(val, 54);
 		emit_insn(
@@ -1884,7 +1900,7 @@ static void process_setop(int64_t funct6, int64_t opcode6, int64_t bit23)
 	Rb = getRegisterX();
 	if (Rb == -1) {
 		inptr = p;
-		process_setiop(opcode6, funct6, bit23);
+		process_riop(opcode6, funct6, bit23);
 		return;
 	}
 	emit_insn(
@@ -2497,15 +2513,13 @@ static void process_bcc()
 	Rc = getRegisterX();
 	if (Rc == -1) {
 		inptr = p2;
-		val = expr();
+		val = expr128();
 	}
 	else
-		val = 0;
+		Int128::Assign(&val, Int128::Zero());
 	if (Rc == -1) {
-		ca4 = (code_address + 4LL);
-		ca2 = (code_address + 2LL);
 		Int128::Assign(&disp, &val);
-		if (!IsNBit128(disp, *Int128::MakeInt128(23LL))) {
+		if (!IsNBit128(val, *Int128::MakeInt128(23LL))) {
 			if (pass > 4)
 				error("Branch target too far away");
 		}
@@ -2518,7 +2532,7 @@ static void process_bcc()
 	}
 	if (Rc < 0) {
 		emit_insn(
-			BT(disp.low) |
+			BT(val.low) |
 			RB(Rb) |
 			RA(Ra) | opcode6
 			, B
@@ -3227,6 +3241,18 @@ static void process_ldi()
   Rt = getRegisterX();
   expect(',');
   val = expr128();
+	if (!IsNBit128(val, *Int128::MakeInt128(44LL)) && ((code_address % 16LL) == 10LL || (code_address % 16LL) == 0LL)) {
+		if ((code_address % 16) == 10)
+			emit_insn(0x00000000C0, B);
+		emit_insn(
+			OP6(I_ADDI) |
+			RII(0) |
+			RT(Rt) |
+			RA(0), I);
+		emit_insn(val.low, 0);
+		emit_insn((val.high << 24LL) | ((unsigned int64_t)val.low >> 40LL), 0);
+		return;
+	}
 	if (!IsNBit128(val, *Int128::MakeInt128(22LL))) {
 		LoadConstant(val, Rt);
 		return;
@@ -4684,6 +4710,10 @@ void Itanium_processMaster()
 		parm1[tk_lddr] = 0x7;
 		parm2[tk_lddr] = 0x7;
 		parm3[tk_lddr] = 0x0;
+		jumptbl[tk_ldo] = &process_load;
+		parm1[tk_ldo] = 0x9;
+		parm2[tk_ldo] = 0x9;
+		parm3[tk_ldo] = 0x0;
 		jumptbl[tk_sf] = &process_store;
 		parm1[tk_sf] = 0x2B;
 		parm2[tk_sf] = 0x2D;

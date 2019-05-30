@@ -79,7 +79,7 @@ output reg stb_o;
 input ack_i;
 input err_i;
 output we_o;
-output [7:0] sel_o;
+output [15:0] sel_o;
 output [31:0] adr_o;
 output reg [127:0] dat_o;
 input [127:0] dat_i;

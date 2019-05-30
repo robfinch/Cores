@@ -47,20 +47,27 @@ case(inst[30:28])
 3'd7:	cx <= (c << 4) - c;					// * 15
 endcase
 
+function [5:0] mopcode;
+input [39:0] ins;
+mopcode = {ins[34:33],ins[9:6]};
+endfunction
+
 always @*
-case(unit)
-`MLdUnit:
-	case(inst[`OPCODE4])
+casez(mopcode(inst))
+`LOAD:
+	case(mopcode(inst))
 	`AMO:	ma <= a;
-	`MLX:	ma <= a + cx + {inst[34:33],inst[21:16]};
-	default:	ma <= a + {{58{inst[39]}},inst[39:33],inst[30:16]};
+	`MLX:	ma <= a + cx + inst[21:16];
+	default:	ma <= a + {{60{inst[39]}},inst[39:35],inst[30:16]};
 	endcase
-`MStUnit:
-	case(inst[`OPCODE4])
-	`PUSH,`PUSHC:	ma <= a - 8'd10;
-	`MSX:	ma <= a + cx + {inst[34:33],inst[5:0]};
-	default:	ma <= a + {{58{inst[39]}},inst[39:33],inst[30:22],inst[5:0]};
+`STORE:
+	casez(mopcode(inst))
+	`PUSH:	ma <= a - inst[`FUNCT5];
+	`PUSHC:	ma <= a - 8'd10;
+	`MSX:	ma <= a + cx + inst[5:0];
+	default:	ma <= a + {{60{inst[39]}},inst[39:35],inst[30:22],inst[5:0]};
 	endcase
+default:	ma <= a + {{60{inst[39]}},inst[39:35],inst[30:16]};
 endcase
 
 endmodule

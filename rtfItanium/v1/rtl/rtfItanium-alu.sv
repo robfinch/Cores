@@ -880,6 +880,11 @@ casez({instr[32:31],instr[`OPCODE4]})
 `else
 			o = a - b;	            
 `endif
+			`DIF:
+				begin
+					o1 = a - b;
+					o = o1[DBW-1] ? -o1 : o1;
+				end
 			`SEQ:		tskSeq(instr,instr[30:28],a,b,o);
 	    `SLT:   tskSlt(instr,instr[30:28],a,b,o);
 	    `SLTU:  tskSltu(instr,instr[30:28],a,b,o);
@@ -1036,6 +1041,11 @@ casez({instr[32:31],instr[`OPCODE4]})
 	    default:    o = 64'hDEADDEADDEADDEAD;
 	    endcase
 `ADDI:	o = a + b;
+`DIFI:
+	begin
+		o1 = a - b;
+		o = o1[DBW-1] ? -o1 : o1;
+	end
 `SEQI:	o = a == b;
 `SNEI:	o = a != b;
 `SLTI:	o = $signed(a) < $signed(b);

@@ -79,7 +79,7 @@ end
 reg wr;
 reg [AMSB:0] wadr;
 reg valid;
-reg [AMSB:0] wdat, wdat1;
+reg [AMSB:0] wdat, wdatx;
 
 always @*
 case({clk,clk2x})
@@ -132,7 +132,7 @@ else begin
 	if (pcshead != pcstail) begin
 		pc <= {pcs[pcshead][AMSB:2],pcs[pcshead][3:2]};
 		takb <= pcs[pcshead][0];
-		wdat1 <= wdats[pcshead];
+		wdatx <= wdats[pcshead];
 		wrhist <= 1'b1;
 		pcshead <= pcshead + 5'd1;
 	end
@@ -140,7 +140,7 @@ end
 
 always @(posedge clk)
 begin
-    if (wrhist) #1 mem[pc[9:0]][AMSB:0] <= wdat1;
+    if (wrhist) #1 mem[pc[9:0]][AMSB:0] <= wdatx;
     if (wrhist) #1 mem[pc[9:0]][(AMSB+1)*2:AMSB+1] <= pc;
     if (wrhist) #1 mem[pc[9:0]][(AMSB+1)*2+1] <= takb;
 end

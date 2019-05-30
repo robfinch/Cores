@@ -139,6 +139,9 @@ void getbase(int b)
                 }
 		if (*inptr=='L' || *inptr=='U')	// ignore a 'L'ong suffix and 'U'nsigned
 			inptr++;
+		// Make an Int80 really negative
+		if ((ival.high >> 15) & 1)
+			ival.high |= 0xFFFFFFFFFFFF0000LL;
     ival = i;
     token = tk_icon;
 }

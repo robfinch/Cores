@@ -83,7 +83,8 @@ reg invline_r = 1'b0;
 reg [79:0] invlineAddr_r = 72'd0;
 
 //assign L2_ld = (state==IC_Ack) && (ack_i|err_i|tlbmiss_i|exv_i);
-assign L1_selpc = (state==IDLE||state==IC5) && !invline_r;
+reg selpc1;
+assign L1_selpc = (state==IDLE||selpc1) && !invline_r;
 
 wire clk = clk_i;
 reg [2:0] iccnt;
@@ -109,6 +110,7 @@ L1_wr <= FALSE;
 L1_invline <= FALSE;
 icnxt <= FALSE;
 L2_nxt <= FALSE;
+selpc1 <= FALSE;
 if (invline) begin
 	invline_r <= 1'b1;
 	invlineAddr_r <= invlineAddr;
@@ -185,6 +187,7 @@ IC5:
 	begin
 		iccnt <= iccnt + 3'd1;
 		if (iccnt==L1_WriteLatency) begin
+			selpc1 <= TRUE;
 			icnxt <= TRUE;
 			L2_nxt <= TRUE;	// Dont really need to advance if L2 hit.
 			state <= IDLE;
@@ -192,24 +195,25 @@ IC5:
 	end
 IC_Ack:
   if (ack_i|err_i|tlbmiss_i|exv_i) begin
+  	L2_adr[4] <= 1'b1;
   	if (!bok_i) begin
   		stb_o <= `LOW;
-			adr_o[AMSB:4] <= adr_o[AMSB:4] + 2'd1;
+			adr_o[4] <= 1'b1;
   		state <= IC_Nack2;
   	end
 		if (tlbmiss_i) begin
 			L1_dat[257:256] <= 2'd1;
-			L1_dat[255:0] <= {2{8'h1F,120'h0}};
+			L1_dat[255:0] <= {2{8'h7F,120'h0}};
 			nack();
 	  end
 		else if (exv_i) begin
 			L1_dat[257:256] <= 2'd2;
-			L1_dat[255:0] <= {2{8'h1F,120'h0}};
+			L1_dat[255:0] <= {2{8'h7F,120'h0}};
 			nack();
 		end
 	  else if (err_i) begin
 			L1_dat[257:256] <= 2'd3;
-			L1_dat[255:0] <= {2{8'h1F,120'h0}};
+			L1_dat[255:0] <= {2{8'h7F,120'h0}};
 			nack();
 	  end
 	  else

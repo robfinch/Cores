@@ -315,7 +315,7 @@ wire [8:0] lineno;
 wire taghit;
 reg wr1 = 1'b0,wr2 = 1'b0;
 reg [2:0] sel1 = 3'd0,sel2= 3'd0;
-reg [63:0] i1 = 64'd0,i2 = 64'd0;
+reg [127:0] i1 = 64'd0,i2 = 64'd0;
 reg [1:0] f1=2'b0, f2=2'b0;
 
 // Must update the cache memory on the cycle after a write to the tag memmory.

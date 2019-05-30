@@ -170,8 +170,11 @@ bool Int128::IsLessThan(Int128 *a, Int128 *b)
 {
 	Int128 d;
 
-	Sub(&d, a, b);
-	if ((d.high >> 63LL) & 1LL)
+	if (a->high < b->high)
 		return (true);
-	return (false);
+	if (a->high > b->high)
+		return (false);
+	if (a->high < 0)
+		return(a->low > b->low);
+	return (a->low < b->low);
 }

@@ -55,28 +55,37 @@ parameter deci = 3'd5;
 //endcase
 //endfunction
 
-function [5:0] fnRt;
+function [5:0] mopcode;
+input [39:0] ins;
+mopcode = {ins[34:33],ins[9:6]};
+endfunction
+
+function [6:0] fnRt;
 input [2:0] unit;
 input [39:0] ins;
 case(unit)
 `BUnit:
 	case(ins[`OPCODE4])
-	`JAL:		fnRt = ins[`RD];
-	`RET:		fnRt = ins[`RD];
-	`RTI:		fnRt = ins[39:35]==`SEI ? ins[`RD] : 6'd0;
-	default:	fnRt = 6'd0;
+	`JAL:		fnRt = {1'b0,ins[`RD]};
+	`RET:		fnRt = {1'b0,ins[`RD]};
+	`RTI:		fnRt = ins[`FUNCT5]==`SEI ? {1'b0,ins[`RD]} : 7'd0;
+	default:	fnRt = 7'd0;
 	endcase
-`IUnit:	fnRt = ins[`RD];
-`FUnit:	fnRt = ins[`RD];
-`MLdUnit:	fnRt = ins[`RD];
-`MStUnit: 
-	case(ins[`OPCODE4])
-	`PUSH:	fnRt = ins[`RD];
-	`PUSHC:	fnRt = ins[`RD];
-	`TLB:		fnRt = ins[`RD];
-	default:	fnRt = 6'd0;
+`IUnit:	fnRt = {1'b0,ins[`RD]};
+`FUnit:	fnRt = {1'b1,ins[`RD]};
+`MUnit: 
+	casez(mopcode(ins))
+	`LOAD:	
+		case(mopcode(ins))
+		`LDFS,`LDFD:	fnRt = {1'b1,ins[`RD]};
+		default:	fnRt = {1'b0,ins[`RD]};
+		endcase
+	`PUSH:	fnRt = {1'b0,ins[`RD]};
+	`PUSHC:	fnRt = {1'b0,ins[`RD]};
+	`TLB:		fnRt = {1'b0,ins[`RD]};
+	default:	fnRt = 7'd0;
 	endcase
-default:	fnRt = 0;
+default:	fnRt = 7'd0;
 endcase
 endfunction
 
@@ -110,7 +119,7 @@ endfunction
 function IsTLB;
 input [2:0] unit;
 input [39:0] isn;
-IsTLB = unit==`MStUnit && isn[`OPCODE4]==`TLB;
+IsTLB = unit==`MUnit && mopcode(isn)==`TLB;
 endfunction
 
 // fnCanException
@@ -167,7 +176,7 @@ case(unit)
 // Stores can stil exception if there is a write buffer, but we allow following
 // stores to be issued by ignoring the fact they can exception because the stores
 // can be undone by invalidating the write buffer.
-`MLdUnit:
+`MUnit:
 	fnCanException = TRUE;
 default:
 	fnCanException = FALSE;
@@ -178,27 +187,27 @@ endfunction
 function IsPush;
 input [2:0] unit;
 input [39:0] isn;
-IsPush = unit==`MStUnit && (isn[9:6]==`PUSH || isn[9:6]==`PUSHC);
+IsPush = unit==`MUnit && (mopcode(isn)==`PUSH || mopcode(isn)==`PUSHC);
 endfunction
 
 function IsPushc;
 input [2:0] unit;
 input [39:0] isn;
-IsPushc = unit==`MStUnit && isn[9:6]==`PUSHC;
+IsPushc = unit==`MUnit && mopcode(isn)==`PUSHC;
 endfunction
 
 function IsMemNdx;
 input [2:0] unit;
 input [39:0] isn;
-IsMemNdx = (unit==`MLdUnit && isn[`OPCODE4]==`MLX) || (unit==`MStUnit && isn[`OPCODE4]==`MSX);
+IsMemNdx = (unit==`MUnit && mopcode(isn)==`MLX) || (unit==`MUnit && mopcode(isn)==`MSX);
 endfunction
 
 function [2:0] MemSize;
 input [2:0] unit;
 input [39:0] isn;
 case(unit)
-`MLdUnit:
-	case(isn[9:6])
+`MUnit:
+	casez(mopcode(isn))
 	`LDB:	MemSize = byt;
 	`LDC:	MemSize = wyde;
 	`LDP:	MemSize = penta;
@@ -213,7 +222,7 @@ case(unit)
 	`LDOU:	MemSize = octa;
 	`LEA:	MemSize = deci;
 	`MLX:
-		case(isn[39:35])
+		case(isn[`FUNCT5])
 		`LDB:	MemSize = byt;
 		`LDC:	MemSize = wyde;
 		`LDP:	MemSize = penta;
@@ -228,10 +237,6 @@ case(unit)
 		`LDOU:	MemSize = octa;
 		default:	MemSize = deci;
 		endcase
-	default:	MemSize = deci;
-	endcase
-`MStUnit:
-	case(isn[`OPCODE4])
 	`STB:	MemSize = byt;
 	`STC:	MemSize = wyde;
 	`STP:	MemSize = penta;
@@ -261,13 +266,13 @@ endfunction
 function IsCache;
 input [2:0] unit;
 input [39:0] isn;
-IsCache = unit==`MStUnit && (isn[9:6]==`CACHE || (isn[9:6]==`MSX && isn[`FUNCT5]==`CACHE));
+IsCache = unit==`MUnit && (mopcode(isn)==`CACHE || (mopcode(isn)==`MSX && isn[`FUNCT5]==`CACHEX));
 endfunction
 
 function IsCAS;
 input [2:0] unit;
 input [39:0] isn;
-IsCAS = unit==`MStUnit && (isn[9:6]==`CAS || (isn[9:6]==`MSX && isn[`FUNCT5]==`CAS));
+IsCAS = unit==`MUnit && (mopcode(isn)==`CAS || (mopcode(isn)==`MSX && isn[`FUNCT5]==`CASX));
 endfunction
 
 function IsChki;
@@ -291,13 +296,13 @@ endfunction
 function IsMemdb;
 input [2:0] unit;
 input [39:0] isn;
-IsMemdb = unit==`MStUnit && isn[`OPCODE4]==`MSX && isn[`FUNCT5]==`MEMDB;
+IsMemdb = unit==`MUnit && mopcode(isn)==`MSX && isn[`FUNCT5]==`MEMDB;
 endfunction
 
 function IsMemsb;
 input [2:0] unit;
 input [39:0] isn;
-IsMemsb = unit==`MStUnit && isn[`OPCODE4]==`MSX && isn[`FUNCT5]==`MEMSB;
+IsMemsb = unit==`MUnit && mopcode(isn)==`MSX && isn[`FUNCT5]==`MEMSB;
 endfunction
 
 function IsSEI;
@@ -315,20 +320,20 @@ endfunction
 function IsLea;
 input [2:0] unit;
 input [39:0] isn;
-IsLea = unit==`MLdUnit && (isn[`OPCODE4]==`LEA || (isn[`OPCODE4]==`MLX && isn[`FUNCT5]==`LEA));
+IsLea = unit==`MUnit && (mopcode(isn)==`LEA || (mopcode(isn)==`MLX && isn[`FUNCT5]==`LEAX));
 endfunction
 
 function IsLWRX;
 input [2:0] unit;
 input [39:0] isn;
-IsLWRX = unit==`MLdUnit && (isn[`OPCODE4]==`MLX && isn[`FUNCT5]==`LDDR);
+IsLWRX = unit==`MUnit && (mopcode(isn)==`MLX && isn[`FUNCT5]==`LDDRX);
 endfunction
 
 // Aquire / release bits are only available on indexed SWC / LWR
 function IsSWCX;
 input [2:0] unit;
 input [39:0] isn;
-IsSWCX = unit==`MStUnit && (isn[`OPCODE4]==`MSX && isn[`FUNCT5]==`STDC);
+IsSWCX = unit==`MUnit && (mopcode(isn)==`MSX && isn[`FUNCT5]==`STDCX);
 endfunction
 
 function IsJmp;
@@ -445,9 +450,9 @@ case(unit)
 		endcase
 	default:	IsRFW = TRUE;
 	endcase
-`MLdUnit:	IsRFW = TRUE;
-`MStUnit:
-	case(isn[`OPCODE4])
+`MUnit:
+	casez(mopcode(isn))
+	`LOAD:	IsRFW = TRUE;
 	`TLB:		IsRFW = TRUE;
 	`PUSH:	IsRFW = TRUE;
 	`PUSHC:	IsRFW = TRUE;
@@ -479,13 +484,9 @@ case(unit)
 	`R1:	HasConst = FALSE;
 	default:	HasConst = TRUE;
 	endcase
-`MLdUnit:
-	case(ins[`OPCODE4])
+`MUnit:
+	case(mopcode(ins))
 	`MLX:	HasConst = FALSE;
-	default:	HasConst = TRUE;
-	endcase
-`MStUnit:
-	case(ins[`OPCODE4])
 	`MSX:	HasConst = FALSE;
 	`PUSH:	HasConst = FALSE;
 	`TLB:	HasConst = FALSE;
@@ -504,7 +505,15 @@ always @*
 begin
 	bus <= 160'h0;
 	bus[`IB_CMP] <= 1'b0;//IsCmp(instr);
-	if (((unit==`MStUnit)|IsChki(unit,instr)) & !IsPushc(unit,instr))
+	if (unit==`MUnit) begin
+		if (IsPushc(unit,instr))
+			bus[`IB_CONST] <= {{58{instr[39]}},instr[39:33],instr[30:16]};
+		else if (instr[34])	// Store?
+			bus[`IB_CONST] <= {{60{instr[39]}},instr[39:35],instr[30:22],instr[5:0]};
+		else
+			bus[`IB_CONST] <= {{60{instr[39]}},instr[39:35],instr[30:16]};
+	end
+	else if (IsChki(unit,instr))
 		bus[`IB_CONST] <= {{58{instr[39]}},instr[39:33],instr[30:22],instr[5:0]};
 	else
 		bus[`IB_CONST] <= {{58{instr[39]}},instr[39:33],instr[30:16]};

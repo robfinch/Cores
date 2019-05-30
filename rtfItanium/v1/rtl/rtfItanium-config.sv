@@ -24,7 +24,7 @@
 //
 // The following line is to enable simulation versions of some modules.
 // Comment out for synthesis.
-//`define SIM		1'b1
+`define SIM		1'b1
 
 //`define SUPPORT_VECTOR	1'b1
 //`define SUPPORT_BBMS	1'b1
@@ -77,11 +77,12 @@
 // register file, the number of ports on the instruction cache, and how
 // many entries are contained in the fetch buffers. It also indirectly
 // affects how many instructions are queued.
-`define WAYS			3				// number of ways parallel (1-3 3 not working yet)
-`define NUM_IDU		3				// number of instruction decode units (1-3)
+`define WAYS			2				// number of ways parallel (1-3)
+`define NUM_IDU		3				// number of instruction decode units (3 only)
 `define NUM_ALU		2				// number of ALU's (1-2)
+`define NUM_AGEN	1				// number of address generators (1-2)
 `define NUM_MEM		2				// number of memory queues (1-3)
-`define NUM_FPU		2				// number of floating-point units (0-2)
+`define NUM_FPU		1				// number of floating-point units (0-2)
 // Note that even with just a single commit bus, multiple instructions may
 // commit if they do not target any registers. Up to three instruction may
 // commit even with just a single bus.

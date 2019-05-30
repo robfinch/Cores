@@ -35,8 +35,8 @@
 `define BUnit		3'd1
 `define IUnit		3'd2
 `define FUnit		3'd3
-`define MLdUnit	3'd4
-`define MStUnit	3'd5
+`define MUnit	3'd4
+`define MUnit	3'd5
 
 // Branch Unit
 `define Bcc			4'h0
@@ -98,6 +98,7 @@
 `define SNEI		6'h19
 `define BYTNDXI	6'h1C
 `define WYDNDXI	6'h1D
+`define DIFI		6'h1F
 `define MUL			6'h20
 `define MULI		6'h20
 `define MULU		6'h21
@@ -162,6 +163,7 @@
 `define MIN			6'h1C
 `define MAX			6'h1D
 `define PTRDIF	6'h1E
+`define DIF			6'h1F
 `define BYTNDX	6'h2A
 `define WYDNDX	6'h2B
 `define AVG			6'h2D
@@ -228,21 +230,28 @@
 `define FSUN		6'h3E
 
 // Load operations
-`define LDB			4'h0
-`define LDC			4'h1
-`define LDP			4'h2
-`define LDD			4'h3
-`define LDBU		4'h4
-`define LDCU		4'h5
-`define LDPU		4'h6
-`define LDDR		4'h7
-`define LDT			4'h8
-`define LDO			4'h9
-`define AMO			4'hB
-`define LDTU		4'hC
-`define LDOU		4'hD
-`define LEA			4'hE
-`define MLX			4'hF
+`define LDB			6'h00
+`define LDC			6'h01
+`define LDP			6'h02
+`define LDD			6'h03
+`define LDBU		6'h04
+`define LDCU		6'h05
+`define LDPU		6'h06
+`define LDDR		6'h07
+`define LDT			6'h08
+`define LDO			6'h09
+`define AMO			6'h0A
+`define LDTU		6'h0C
+`define LDOU		6'h0D
+`define LEA			6'h0E
+`define MLX			6'h0F
+`define LDFS		6'h10
+`define LDFD		6'h11
+`define LDFDP		6'h12
+`define LDDP		6'h13
+`define LOAD		6'b0?????
+`define LDDRX		5'h07
+`define LEAX		5'h0E
 
 `define AMOSWAP		5'h00
 `define AMOSWAPI	5'h01
@@ -268,22 +277,29 @@
 `define AMOMAXUI	5'h15
 
 // Store Operations
-`define STB			4'h0
-`define STC			4'h1
-`define STP			4'h2
-`define STD			4'h3
-`define STDC		4'h7
-`define STT			4'h8
-`define STO			4'h9
-`define CAS			4'hA
-`define PUSHC		4'hB
-`define TLB			4'hC
-`define PUSH		4'hD
-`define CACHE		4'hE
-`define MSX			4'hF
+`define STB			6'h20
+`define STC			6'h21
+`define STP			6'h22
+`define STD			6'h23
+`define STDC		6'h27
+`define STT			6'h28
+`define STO			6'h29
+`define CAS			6'h2A
+`define PUSHC		6'h?B
+`define TLB			6'h2C
+`define PUSH		6'h2D
+`define CACHE		6'h2E
+`define MSX			6'h2F
+`define STFS		6'h30
+`define STFD		6'h31
+`define STFDP		6'h32
+`define STDP		6'h33
+`define STDCX		5'd07
+`define CASX		5'h0A
+`define CACHEX	5'h0E
 `define MEMSB		5'd24
 `define MEMDB		5'd25
-
+`define STORE		6'b1?????
 
 `define R2		6'h02
 `define RR      6'h02
