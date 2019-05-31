@@ -1965,7 +1965,7 @@ assign Rb2 = fnRs2(slot2u,insn2);
 assign Rc2 = fnRs3(slot2u,insn2);
 assign Rd2 = fnRt(slot2u,insn2);
 
-function mopcode;
+function [5:0] mopcode;
 input [39:0] isn;
 mopcode = {isn[34:33],isn[`OPCODE4]};
 endfunction
@@ -4445,8 +4445,6 @@ assign int_commit = (commit0_v && iq_irq[heads[0]])
 // placed under the same always block, it's a bad practice and may not work.
 // So a signal is created here with it's own always block.
 reg [AREGS-1:0] regIsValid;
-reg [AREGS-1:0] regIsValid1;
-reg [AREGS-1:0] regIsValid2;
 always @*
 begin
 	for (n = 1; n < AREGS; n = n + 1)
@@ -4465,49 +4463,7 @@ begin
 		if (commit2_v && n=={commit2_tgt[RBIT:0]} && `NUM_CMT > 2)
 			regIsValid[n] = regIsValid[n] | ((rf_source[ {commit2_tgt[RBIT:0]} ] == commit2_id)
 			|| (branchmiss && iq_source[ commit2_id[`QBITS] ]));
-		regIsValid1 = regIsValid;
-		regIsValid2 = regIsValid;
 	end
-
-	case({slot0v,slot1v,slot2v}&{3{phit}}&ip_mask)
-	3'b000:	;
-	3'b011:
-		begin
-			if (canq2) begin
-				if (~(slot1_jc | take_branch1))
-					regIsValid1[Rd1] = `INV;
-			end
-		end
-	3'b101:
-		begin
-			if (canq2) begin
-				if (~(slot0_jc | take_branch0))
-					regIsValid1[Rd0] = `INV;
-			end
-		end
-	3'b110:
-		begin
-			if (canq2) begin
-				if (~(slot0_jc | take_branch0))
-					regIsValid1[Rd0] = `INV;
-			end
-		end
-	3'b111:
-		begin
-			if (canq3) begin
-				if (~(slot0_jc | take_branch0)) begin
-					regIsValid1[Rd0] = `INV;
-					if (~(slot1_jc | take_branch1))
-						regIsValid2[Rd1] = `INV;
-				end
-			end
-			else if (canq2) begin
-				if (~(slot0_jc | take_branch0))
-					regIsValid[Rd0] = `INV;
-			end
-		end
-	endcase
-
 	regIsValid[0] = `VAL;
 end
 
@@ -5149,7 +5105,7 @@ else begin
 				 end
 			for (n = 0; n < QENTRIES; n = n + 1)
 	    	if (|iq_latestID[n])
-	    		rf_source[ {iq_tgt[n][5:0]} ] <= n[`QBITS];
+	    		rf_source[ {iq_tgt[n][RBIT:0]} ] <= n[`QBITS];
 	end
 
     // The source for the register file data might have changed since it was
@@ -5253,7 +5209,7 @@ else begin
 				else
 					ip <= {ip[79:4] + 76'd1,4'h0};
 				if (slot2_rfw) begin
-					rf_source[Rd2] <= tail0;	// top bit indicates ALU/MEM bus
+					rf_source[Rd2] <= tail0;
 					rf_v [Rd2] <= `INV;
 				end
 			end
@@ -5274,7 +5230,7 @@ else begin
 				else
 					ip <= {ip[79:4] + 76'd1,4'h0};
 				if (slot1_rfw) begin
-					rf_source[Rd1] <= tail0;	// top bit indicates ALU/MEM bus
+					rf_source[Rd1] <= tail0;
 					rf_v [Rd1] <= `INV;
 				end
 			end
@@ -5288,7 +5244,7 @@ else begin
 					slot2v <= VAL;
 					ip[37:0] <= {insn1[39:10],insn1[5:0],insn1[1:0]};
 					if (slot1_rfw) begin
-						rf_source[Rd1] <= tail0;	// top bit indicates ALU/MEM bus
+						rf_source[Rd1] <= tail0;
 						rf_v [Rd1] <= `INV;
 					end
 				end
@@ -5301,7 +5257,7 @@ else begin
 					else
 						ip[22:0] <= {insn1[39:22],insn1[5:3],insn1[4:3]};
 					if (slot1_rfw) begin
-						rf_source[Rd1] <= tail0;	// top bit indicates ALU/MEM bus
+						rf_source[Rd1] <= tail0;
 						rf_v [Rd1] <= `INV;
 					end
 				end
@@ -5331,11 +5287,11 @@ else begin
 					else
 						ip[22:0] <= {insn2[39:22],insn2[5:3],insn2[4:3]};
 					if (slot1_rfw) begin
-						rf_source[Rd1] <= tail0;	// top bit indicates ALU/MEM bus
+						rf_source[Rd1] <= tail0;
 						rf_v [Rd1] <= `INV;
 					end
 					if (slot2_rfw) begin
-						rf_source[Rd2] <= tail1;	// top bit indicates ALU/MEM bus
+						rf_source[Rd2] <= tail1;
 						rf_v [Rd2] <= `INV;
 					end
 					arg_vs_011();
@@ -5399,7 +5355,7 @@ else begin
 				else
 					ip <= {ip[79:4] + 76'd1,4'h0};
 				if (slot0_rfw) begin
-					rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
+					rf_source[Rd0] <= tail0;
 					rf_v [Rd0] <= `INV;
 				end
 			end
@@ -5413,7 +5369,7 @@ else begin
 					slot2v <= VAL;
 					ip[37:0] <= {insn0[39:10],insn0[5:0],insn0[1:0]};
 					if (slot0_rfw) begin
-						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
+						rf_source[Rd0] <= tail0;
 						rf_v [Rd0] <= `INV;
 					end
 				end
@@ -5426,7 +5382,7 @@ else begin
 					else
 						ip[22:0] <= {insn0[39:22],insn0[5:3],insn0[4:3]};
 					if (slot0_rfw) begin
-						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
+						rf_source[Rd0] <= tail0;
 						rf_v [Rd0] <= `INV;
 					end
 				end
@@ -5437,11 +5393,11 @@ else begin
 					queue_slot2(tail1,maxsn+2'd2,id2_bus);
 					ip[37:0] <= {insn2[39:10],insn2[5:0],insn2[1:0]};
 					if (slot0_rfw) begin
-						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
+						rf_source[Rd0] <= tail0;
 						rf_v [Rd0] <= `INV;
 					end
 					if (slot2_rfw) begin
-						rf_source[Rd2] <= tail1;	// top bit indicates ALU/MEM bus
+						rf_source[Rd2] <= tail1;
 						rf_v [Rd2] <= `INV;
 					end
 					arg_vs_101();
@@ -5456,11 +5412,11 @@ else begin
 					else
 						ip[22:0] <= {insn2[39:22],insn2[5:3],insn2[4:3]};
 					if (slot0_rfw) begin
-						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
+						rf_source[Rd0] <= tail0;
 						rf_v [Rd0] <= `INV;
 					end
 					if (slot2_rfw) begin
-						rf_source[Rd2] <= tail1;	// top bit indicates ALU/MEM bus
+						rf_source[Rd2] <= tail1;
 						rf_v [Rd2] <= `INV;
 					end
 					arg_vs_101();
@@ -5472,11 +5428,11 @@ else begin
 					queue_slot2(tail1,maxsn+2'd2,id2_bus);
 					ip <= {ip[79:4] + 76'd1,4'h0};
 					if (slot0_rfw) begin
-						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
+						rf_source[Rd0] <= tail0;
 						rf_v [Rd0] <= `INV;
 					end
 					if (slot2_rfw) begin
-						rf_source[Rd2] <= tail1;	// top bit indicates ALU/MEM bus
+						rf_source[Rd2] <= tail1;
 						rf_v [Rd2] <= `INV;
 					end
 					arg_vs_101();
@@ -5503,7 +5459,7 @@ else begin
 				else
 					ip[3:0] <= 4'hA;
 				if (slot0_rfw) begin
-					rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
+					rf_source[Rd0] <= tail0;
 					rf_v [Rd0] <= `INV;
 				end
 			end
@@ -5511,15 +5467,15 @@ else begin
 			if (canq2 & !debug_on & `WAYS > 1) begin
 				queue_slot0(tail0,maxsn+2'd1,id0_bus);
 				slot0v <= INV;
+				if (slot0_rfw) begin
+					rf_source[Rd0] <= tail0;
+					rf_v [Rd0] <= `INV;
+				end
 				if (slot0_jc) begin
 					slot0v <= VAL;
 					slot1v <= VAL;
 					slot2v <= VAL;
 					ip[37:0] <= {insn0[39:10],insn0[5:0],insn0[1:0]};
-					if (slot0_rfw) begin
-						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
-						rf_v [Rd0] <= `INV;
-					end
 				end
 				else if (take_branch0) begin
 					slot0v <= VAL;
@@ -5529,10 +5485,6 @@ else begin
 						ip <= btgtA;
 					else
 						ip[22:0] <= {insn0[39:22],insn0[5:3],insn0[4:3]};
-					if (slot0_rfw) begin
-						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
-						rf_v [Rd0] <= `INV;
-					end
 				end
 				else if (slot1_jc) begin
 					slot0v <= VAL;
@@ -5540,12 +5492,8 @@ else begin
 					slot2v <= VAL;
 					queue_slot1(tail1,maxsn+2'd2,id1_bus);
 					ip[37:0] <= {insn1[39:10],insn1[5:0],insn1[1:0]};
-					if (slot0_rfw) begin
-						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
-						rf_v [Rd0] <= `INV;
-					end
 					if (slot1_rfw) begin
-						rf_source[Rd1] <= tail1;	// top bit indicates ALU/MEM bus
+						rf_source[Rd1] <= tail1;
 						rf_v [Rd1] <= `INV;
 					end
 					arg_vs_110();
@@ -5559,12 +5507,8 @@ else begin
 						ip <= btgtB;
 					else
 						ip[22:0] <= {insn1[39:22],insn1[5:3],insn1[4:3]};
-					if (slot0_rfw) begin
-						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
-						rf_v [Rd0] <= `INV;
-					end
 					if (slot1_rfw) begin
-						rf_source[Rd1] <= tail1;	// top bit indicates ALU/MEM bus
+						rf_source[Rd1] <= tail1;
 						rf_v [Rd1] <= `INV;
 					end
 					arg_vs_110();
@@ -5575,12 +5519,8 @@ else begin
 					slot2v <= VAL;
 					queue_slot1(tail1,maxsn+2'd2,id1_bus);
 					ip <= {ip[79:4] + 76'd1,4'h0};
-					if (slot0_rfw) begin
-						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
-						rf_v [Rd0] <= `INV;
-					end
 					if (slot1_rfw) begin
-						rf_source[Rd1] <= tail1;	// top bit indicates ALU/MEM bus
+						rf_source[Rd1] <= tail1;
 						rf_v [Rd1] <= `INV;
 					end
 					arg_vs_110();
@@ -5607,7 +5547,7 @@ else begin
 				else
 					ip[3:0] <= 4'h5;
 				if (slot0_rfw) begin
-					rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
+					rf_source[Rd0] <= tail0;
 					rf_v [Rd0] <= `INV;
 				end
 			end
@@ -5621,7 +5561,7 @@ else begin
 					slot2v <= VAL;
 					ip[37:0] <= {insn0[39:10],insn0[5:0],insn0[1:0]};
 					if (slot0_rfw) begin
-						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
+						rf_source[Rd0] <= tail0;
 						rf_v [Rd0] <= `INV;
 					end
 				end
@@ -5634,7 +5574,7 @@ else begin
 					else
 						ip[22:0] <= {insn0[39:22],insn0[5:3],insn0[4:3]};
 					if (slot0_rfw) begin
-						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
+						rf_source[Rd0] <= tail0;
 						rf_v [Rd0] <= `INV;
 					end
 				end
@@ -5645,11 +5585,11 @@ else begin
 					queue_slot1(tail1,maxsn+2'd2,id1_bus);
 					ip[37:0] <= {insn1[39:10],insn1[5:0],insn1[1:0]};
 					if (slot0_rfw) begin
-						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
+						rf_source[Rd0] <= tail0;
 						rf_v [Rd0] <= `INV;
 					end
 					if (slot1_rfw) begin
-						rf_source[Rd1] <= tail1;	// top bit indicates ALU/MEM bus
+						rf_source[Rd1] <= tail1;
 						rf_v [Rd1] <= `INV;
 					end
 					arg_vs_110();
@@ -5664,11 +5604,11 @@ else begin
 					else
 						ip[22:0] <= {insn1[39:22],insn1[5:3],insn1[4:3]};
 					if (slot0_rfw) begin
-						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
+						rf_source[Rd0] <= tail0;
 						rf_v [Rd0] <= `INV;
 					end
 					if (slot1_rfw) begin
-						rf_source[Rd1] <= tail1;	// top bit indicates ALU/MEM bus
+						rf_source[Rd1] <= tail1;
 						rf_v [Rd1] <= `INV;
 					end
 					arg_vs_110();
@@ -5681,15 +5621,15 @@ else begin
 					queue_slot2(tail2,maxsn+2'd3,id2_bus);
 					ip[37:0] <= {insn2[39:10],insn2[5:0],insn2[1:0]};
 					if (slot0_rfw) begin
-						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
+						rf_source[Rd0] <= tail0;
 						rf_v [Rd0] <= `INV;
 					end
 					if (slot1_rfw) begin
-						rf_source[Rd1] <= tail1;	// top bit indicates ALU/MEM bus
+						rf_source[Rd1] <= tail1;
 						rf_v [Rd1] <= `INV;
 					end
 					if (slot2_rfw) begin
-						rf_source[Rd2] <=  tail2;	// top bit indicates ALU/MEM bus
+						rf_source[Rd2] <=  tail2;
 						rf_v [Rd2] <= `INV;
 					end
 					arg_vs_111();
@@ -5705,15 +5645,15 @@ else begin
 					else
 						ip[22:0] <= {insn2[39:22],insn2[5:3],insn2[4:3]};
 					if (slot0_rfw) begin
-						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
+						rf_source[Rd0] <= tail0;
 						rf_v [Rd0] <= `INV;
 					end
 					if (slot1_rfw) begin
-						rf_source[Rd1] <= tail1;	// top bit indicates ALU/MEM bus
+						rf_source[Rd1] <= tail1;
 						rf_v [Rd1] <= `INV;
 					end
 					if (slot2_rfw) begin
-						rf_source[Rd2] <= tail2;	// top bit indicates ALU/MEM bus
+						rf_source[Rd2] <= tail2;
 						rf_v [Rd2] <= `INV;
 					end
 					arg_vs_111();
@@ -5726,15 +5666,15 @@ else begin
 					queue_slot2(tail2,maxsn+2'd3,id2_bus);
 					ip <= {ip[79:4] + 76'd1,4'h0};
 					if (slot0_rfw) begin
-						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
+						rf_source[Rd0] <= tail0;
 						rf_v [Rd0] <= `INV;
 					end
 					if (slot1_rfw) begin
-						rf_source[Rd1] <= tail1;	// top bit indicates ALU/MEM bus
+						rf_source[Rd1] <= tail1;
 						rf_v [Rd1] <= `INV;
 					end
 					if (slot2_rfw) begin
-						rf_source[Rd2] <= tail2;	// top bit indicates ALU/MEM bus
+						rf_source[Rd2] <= tail2;
 						rf_v [Rd2] <= `INV;
 					end
 					arg_vs_111();
@@ -5743,15 +5683,15 @@ else begin
 			else if (canq2 & !debug_on && `WAYS > 1) begin
 				queue_slot0(tail0,maxsn+2'd1,id0_bus);
 				slot0v <= INV;
+				if (slot0_rfw) begin
+					rf_source[Rd0] <= tail0;
+					rf_v [Rd0] <= `INV;
+				end
 				if (slot0_jc) begin
 					slot0v <= VAL;
 					slot1v <= VAL;
 					slot2v <= VAL;
 					ip[37:0] <= {insn0[39:10],insn0[5:0],insn0[1:0]};
-					if (slot0_rfw) begin
-						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
-						rf_v [Rd0] <= `INV;
-					end
 				end
 				else if (take_branch0) begin
 					slot0v <= VAL;
@@ -5761,10 +5701,6 @@ else begin
 						ip <= btgtA;
 					else
 						ip[22:0] <= {insn0[39:22],insn0[5:3],insn0[4:3]};
-					if (slot0_rfw) begin
-						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
-						rf_v [Rd0] <= `INV;
-					end
 				end
 				else if (slot1_jc) begin
 					slot0v <= VAL;
@@ -5772,12 +5708,8 @@ else begin
 					slot2v <= VAL;
 					queue_slot1(tail1,maxsn+2'd2,id1_bus);
 					ip[37:0] <= {insn1[39:10],insn1[5:0],insn1[1:0]};
-					if (slot0_rfw) begin
-						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
-						rf_v [Rd0] <= `INV;
-					end
 					if (slot1_rfw) begin
-						rf_source[Rd1] <= tail1;	// top bit indicates ALU/MEM bus
+						rf_source[Rd1] <= tail1;
 						rf_v [Rd1] <= `INV;
 					end
 					arg_vs_110();
@@ -5791,12 +5723,8 @@ else begin
 						ip <= btgtB;
 					else
 						ip[22:0] <= {insn1[39:22],insn1[5:3],insn1[4:3]};
-					if (slot0_rfw) begin
-						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
-						rf_v [Rd0] <= `INV;
-					end
 					if (slot1_rfw) begin
-						rf_source[Rd1] <= tail1;	// top bit indicates ALU/MEM bus
+						rf_source[Rd1] <= tail1;
 						rf_v [Rd1] <= `INV;
 					end
 					arg_vs_110();
@@ -5805,12 +5733,8 @@ else begin
 					queue_slot1(tail1,maxsn+2'd2,id1_bus);
 					slot1v <= INV;
 					ip[3:0] <= 4'hA;
-					if (slot0_rfw) begin
-						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
-						rf_v [Rd0] <= `INV;
-					end
 					if (slot1_rfw) begin
-						rf_source[Rd1] <= tail1;	// top bit indicates ALU/MEM bus
+						rf_source[Rd1] <= tail1;
 						rf_v [Rd1] <= `INV;
 					end
 					arg_vs_110();
@@ -5819,15 +5743,15 @@ else begin
 			else if (canq1) begin
 				queue_slot0(tail0,maxsn+2'd1,id0_bus);
 				slot0v <= INV;
+				if (slot0_rfw) begin
+					rf_source[Rd0] <= tail0;
+					rf_v [Rd0] <= `INV;
+				end
 				if (slot0_jc) begin
 					slot0v <= VAL;
 					slot1v <= VAL;
 					slot2v <= VAL;
 					ip[37:0] <= {insn0[39:10],insn0[5:0],insn0[1:0]};
-					if (slot0_rfw) begin
-						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
-						rf_v [Rd0] <= `INV;
-					end
 				end
 				else if (take_branch0) begin
 					slot0v <= VAL;
@@ -5837,17 +5761,9 @@ else begin
 						ip <= btgtA;
 					else
 						ip[22:0] <= {insn0[39:22],insn0[5:3],insn0[4:3]};
-					if (slot0_rfw) begin
-						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
-						rf_v [Rd0] <= `INV;
-					end
 				end
 				else begin
 					ip[3:0] <= 4'h5;
-					if (slot0_rfw) begin
-						rf_source[Rd0] <= tail0;	// top bit indicates ALU/MEM bus
-						rf_v [Rd0] <= `INV;
-					end
 				end
 			end
 		endcase
@@ -7246,7 +7162,7 @@ task arg_vs_011;
 begin
 	// if there is not an overlapping write to the register file.
 	if ((Ra2 != Rd1) || !slot1_rfw) begin
-		iq_argA_v [tail1] <= regIsValid1[Ra2] | Source1Valid(slot2u,insn2);
+		iq_argA_v [tail1] <= regIsValid[Ra2] | Source1Valid(slot2u,insn2);
 		iq_argA_s [tail1] <= rf_source [Ra2];
 	end
 	else begin
@@ -7255,7 +7171,7 @@ begin
 	end
 
 	if ((Rb2 != Rd1) || !slot1_rfw) begin
-		iq_argB_v [tail1] <= regIsValid1[Rb2] | Source2Valid(slot2u,insn2);
+		iq_argB_v [tail1] <= regIsValid[Rb2] | Source2Valid(slot2u,insn2);
 		iq_argB_s [tail1] <= rf_source [Rb2];
 	end
 	else begin
@@ -7264,7 +7180,7 @@ begin
 	end
 
 	if ((Rc2 != Rd1) || !slot1_rfw) begin
-		iq_argC_v [tail1] <= regIsValid1[Rc2] | Source3Valid(slot2u,insn2);
+		iq_argC_v [tail1] <= regIsValid[Rc2] | Source3Valid(slot2u,insn2);
 		iq_argC_s [tail1] <= rf_source [Rc2];
 	end
 	else begin
@@ -7278,7 +7194,7 @@ task arg_vs_101;
 begin
 	// if there is not an overlapping write to the register file.
 	if ((Ra2 != Rd0) || !slot0_rfw) begin
-		iq_argA_v [tail1] <= regIsValid1[Ra2] | Source1Valid(slot2u,insn2);
+		iq_argA_v [tail1] <= regIsValid[Ra2] | Source1Valid(slot2u,insn2);
 		iq_argA_s [tail1] <= rf_source [Ra2];
 	end
 	else begin	// Ra1 must be equal to Rt0 then
@@ -7287,7 +7203,7 @@ begin
 	end
 
 	if ((Rb2 != Rd0) || !slot0_rfw) begin
-		iq_argB_v [tail1] <= regIsValid1[Rb2] | Source2Valid(slot2u,insn2);
+		iq_argB_v [tail1] <= regIsValid[Rb2] | Source2Valid(slot2u,insn2);
 		iq_argB_s [tail1] <= rf_source [Rb2];
 	end
 	else begin	// Ra1 must be equal to Rt0 then
@@ -7296,7 +7212,7 @@ begin
 	end
 
 	if ((Rc2 != Rd0) || !slot0_rfw) begin
-		iq_argC_v [tail1] <= regIsValid1[Rc2] | Source3Valid(slot2u,insn2);
+		iq_argC_v [tail1] <= regIsValid[Rc2] | Source3Valid(slot2u,insn2);
 		iq_argC_s [tail1] <= rf_source [Rc2];
 	end
 	else begin	// Ra1 must be equal to Rt0 then
@@ -7310,7 +7226,7 @@ task arg_vs_110;
 begin
 	// if there is not an overlapping write to the register file.
 	if ((Ra1 != Rd0) || !slot0_rfw) begin
-		iq_argA_v [tail1] <= regIsValid1[Ra1] | Source1Valid(slot1u,insn1);
+		iq_argA_v [tail1] <= regIsValid[Ra1] | Source1Valid(slot1u,insn1);
 		iq_argA_s [tail1] <= rf_source [Ra1];
 	end
 	else begin	// Ra1 must be equal to Rt0 then
@@ -7319,7 +7235,7 @@ begin
 	end
 
 	if ((Rb1 != Rd0) || !slot0_rfw) begin
-		iq_argB_v [tail1] <= regIsValid1[Rb1] | Source2Valid(slot1u,insn1);
+		iq_argB_v [tail1] <= regIsValid[Rb1] | Source2Valid(slot1u,insn1);
 		iq_argB_s [tail1] <= rf_source [Rb1];
 	end
 	else begin	// Ra1 must be equal to Rt0 then
@@ -7328,7 +7244,7 @@ begin
 	end
 
 	if ((Rc1 != Rd0) || !slot0_rfw) begin
-		iq_argC_v [tail1] <= regIsValid1[Rc1] | Source3Valid(slot1u,insn1);
+		iq_argC_v [tail1] <= regIsValid[Rc1] | Source3Valid(slot1u,insn1);
 		iq_argC_s [tail1] <= rf_source [Rc1];
 	end
 	else begin	// Ra1 must be equal to Rt0 then
@@ -7342,7 +7258,7 @@ task arg_vs_111;
 begin
 	// if there is not an overlapping write to the register file.
 	if ((Ra1 != Rd0) || !slot0_rfw) begin
-		iq_argA_v [tail1] <= regIsValid1[Ra1] | Source1Valid(slot1u,insn1);
+		iq_argA_v [tail1] <= regIsValid[Ra1] | Source1Valid(slot1u,insn1);
 		iq_argA_s [tail1] <= rf_source [Ra1];
 	end
 	else begin	// Ra1 must be equal to Rt0 then
@@ -7351,7 +7267,7 @@ begin
 	end
 	// if there is not an overlapping write to the register file.
 	if (((Ra2 != Rd0) || !slot0_rfw) && ((Ra2 != Rd1) || !slot1_rfw)) begin
-		iq_argA_v [tail2] <= regIsValid2[Ra2] | Source1Valid(slot2u,insn2);
+		iq_argA_v [tail2] <= regIsValid[Ra2] | Source1Valid(slot2u,insn2);
 		iq_argA_s [tail2] <= rf_source [Ra2];
 	end
 	else if ((Ra2 != Rd0) || !slot0_rfw) begin	// Ra2 must be equal to Rt1 then
@@ -7369,7 +7285,7 @@ begin
 
 	// if there is not an overlapping write to the register file.
 	if ((Rb1 != Rd0) || !slot0_rfw) begin
-		iq_argB_v [tail1] <= regIsValid1[Rb1] | Source2Valid(slot1u,insn1);
+		iq_argB_v [tail1] <= regIsValid[Rb1] | Source2Valid(slot1u,insn1);
 		iq_argB_s [tail1] <= rf_source [Rb1];
 	end
 	else begin	// Ra1 must be equal to Rt0 then
@@ -7378,7 +7294,7 @@ begin
 	end
 	// if there is not an overlapping write to the register file.
 	if (((Rb2 != Rd0) || !slot0_rfw) && ((Rb2 != Rd1) || !slot1_rfw)) begin
-		iq_argB_v [tail2] <= regIsValid2[Rb2] | Source2Valid(slot2u,insn2);
+		iq_argB_v [tail2] <= regIsValid[Rb2] | Source2Valid(slot2u,insn2);
 		iq_argB_s [tail2] <= rf_source [Rb2];
 	end
 	else if ((Rb2 != Rd0) || !slot0_rfw) begin	// Ra2 must be equal to Rt1 then
@@ -7396,7 +7312,7 @@ begin
 
 	// if there is not an overlapping write to the register file.
 	if ((Rc1 != Rd0) || !slot0_rfw) begin
-		iq_argC_v [tail1] <= regIsValid1[Rc1] | Source3Valid(slot1u,insn1);
+		iq_argC_v [tail1] <= regIsValid[Rc1] | Source3Valid(slot1u,insn1);
 		iq_argC_s [tail1] <= rf_source [Rc1];
 	end
 	else begin	// Ra1 must be equal to Rt0 then
@@ -7405,7 +7321,7 @@ begin
 	end
 	// if there is not an overlapping write to the register file.
 	if (((Rc2 != Rd0) || !slot0_rfw) && ((Rc2 != Rd1) || !slot1_rfw)) begin
-		iq_argC_v [tail2] <= regIsValid2[Rc2] | Source3Valid(slot2u,insn2);
+		iq_argC_v [tail2] <= regIsValid[Rc2] | Source3Valid(slot2u,insn2);
 		iq_argC_s [tail2] <= rf_source [Rc2];
 	end
 	else if ((Rc2 != Rd0) || !slot0_rfw) begin	// Ra2 must be equal to Rt1 then
@@ -7486,21 +7402,9 @@ begin
 	iq_argA[ndx] <= rfoa0;
 	iq_argB[ndx] <= rfob0;
 	iq_argC[ndx] <= rfoc0;
-	if (ndx==tail1) begin
-		iq_argA_v[ndx] <= regIsValid1[Ra0] || Source1Valid(slot0u,insn0);
-		iq_argB_v[ndx] <= regIsValid1[Rb0] || Source2Valid(slot0u,insn0);
-		iq_argC_v[ndx] <= regIsValid1[Rc0] || Source3Valid(slot0u,insn0);
-	end
-	else if (ndx==tail2) begin
-		iq_argA_v[ndx] <= regIsValid2[Ra0] || Source1Valid(slot0u,insn0);
-		iq_argB_v[ndx] <= regIsValid2[Rb0] || Source2Valid(slot0u,insn0);
-		iq_argC_v[ndx] <= regIsValid2[Rc0] || Source3Valid(slot0u,insn0);
-	end
-	else begin
-		iq_argA_v[ndx] <= regIsValid[Ra0] || Source1Valid(slot0u,insn0);
-		iq_argB_v[ndx] <= regIsValid[Rb0] || Source2Valid(slot0u,insn0);
-		iq_argC_v[ndx] <= regIsValid[Rc0] || Source3Valid(slot0u,insn0);
-	end
+	iq_argA_v[ndx] <= regIsValid[Ra0] || Source1Valid(slot0u,insn0);
+	iq_argB_v[ndx] <= regIsValid[Rb0] || Source2Valid(slot0u,insn0);
+	iq_argC_v[ndx] <= regIsValid[Rc0] || Source3Valid(slot0u,insn0);
 	iq_argA_s[ndx] <= rf_source[Ra0];
 	iq_argB_s[ndx] <= rf_source[Rb0];
 	iq_argC_s[ndx] <= rf_source[Rc0];
@@ -7525,21 +7429,9 @@ begin
 	iq_argA[ndx] <= rfoa1;
 	iq_argB[ndx] <= rfob1;
 	iq_argC[ndx] <= rfoc1;
-	if (ndx==tail1) begin
-		iq_argA_v[ndx] <= regIsValid1[Ra1] || Source1Valid(slot1u,insn1);
-		iq_argB_v[ndx] <= regIsValid1[Rb1] || Source2Valid(slot1u,insn1);
-		iq_argC_v[ndx] <= regIsValid1[Rc1] || Source3Valid(slot1u,insn1);
-	end
-	else if (ndx==tail2) begin
-		iq_argA_v[ndx] <= regIsValid2[Ra1] || Source1Valid(slot1u,insn1);
-		iq_argB_v[ndx] <= regIsValid2[Rb1] || Source2Valid(slot1u,insn1);
-		iq_argC_v[ndx] <= regIsValid2[Rc1] || Source3Valid(slot1u,insn1);
-	end
-	else begin
-		iq_argA_v[ndx] <= regIsValid[Ra1] || Source1Valid(slot1u,insn1);
-		iq_argB_v[ndx] <= regIsValid[Rb1] || Source2Valid(slot1u,insn1);
-		iq_argC_v[ndx] <= regIsValid[Rc1] || Source3Valid(slot1u,insn1);
-	end
+	iq_argA_v[ndx] <= regIsValid[Ra1] || Source1Valid(slot1u,insn1);
+	iq_argB_v[ndx] <= regIsValid[Rb1] || Source2Valid(slot1u,insn1);
+	iq_argC_v[ndx] <= regIsValid[Rc1] || Source3Valid(slot1u,insn1);
 	iq_argA_s[ndx] <= rf_source[Ra1];
 	iq_argB_s[ndx] <= rf_source[Rb1];
 	iq_argC_s[ndx] <= rf_source[Rc1];
@@ -7564,21 +7456,9 @@ begin
 	iq_argA[ndx] <= rfoa2;
 	iq_argB[ndx] <= rfob2;
 	iq_argC[ndx] <= rfoc2;
-	if (ndx==tail1) begin
-		iq_argA_v[ndx] <= regIsValid1[Ra2] || Source1Valid(slot2u,insn2);
-		iq_argB_v[ndx] <= regIsValid1[Rb2] || Source2Valid(slot2u,insn2);
-		iq_argC_v[ndx] <= regIsValid1[Rc2] || Source3Valid(slot2u,insn2);
-	end
-	else if (ndx==tail2) begin
-		iq_argA_v[ndx] <= regIsValid2[Ra2] || Source1Valid(slot2u,insn2);
-		iq_argB_v[ndx] <= regIsValid2[Rb2] || Source2Valid(slot2u,insn2);
-		iq_argC_v[ndx] <= regIsValid2[Rc2] || Source3Valid(slot2u,insn2);
-	end
-	else begin
-		iq_argA_v[ndx] <= regIsValid[Ra2] || Source1Valid(slot2u,insn2);
-		iq_argB_v[ndx] <= regIsValid[Rb2] || Source2Valid(slot2u,insn2);
-		iq_argC_v[ndx] <= regIsValid[Rc2] || Source3Valid(slot2u,insn2);
-	end
+	iq_argA_v[ndx] <= regIsValid[Ra2] || Source1Valid(slot2u,insn2);
+	iq_argB_v[ndx] <= regIsValid[Rb2] || Source2Valid(slot2u,insn2);
+	iq_argC_v[ndx] <= regIsValid[Rc2] || Source3Valid(slot2u,insn2);
 	iq_argA_s[ndx] <= rf_source[Ra2];
 	iq_argB_s[ndx] <= rf_source[Rb2];
 	iq_argC_s[ndx] <= rf_source[Rc2];

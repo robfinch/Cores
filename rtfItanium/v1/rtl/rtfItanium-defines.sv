@@ -191,6 +191,8 @@
 `define FMS			4'h5
 `define FNMA		4'h6
 `define FNMS		4'h7
+`define FMAX		4'hC
+`define FMIN		4'hD
 
 `define FADD    6'h04
 `define FSUB    6'h05

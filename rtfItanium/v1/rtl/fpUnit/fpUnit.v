@@ -83,31 +83,34 @@
 `define VFMUL       6'h3A
 `define VFDIV       6'h3E
 `define FLOAT   6'h0F
-`define FLOAT2	4'h1
-`define FMOV    6'h10
-`define FTOI    6'h12
-`define ITOF    6'h13
-`define FNEG    6'h14
-`define FABS    6'h15
-`define FSIGN   6'h16
-`define FMAN    6'h17
-`define FNABS   6'h18
-`define FCVTSD  6'h19
-`define FCVTSQ  6'h1B
-`define FSTAT   6'h1C
-`define FSQRT	6'h1D
-`define FTX     6'h20
-`define FCX     6'h21
-`define FEX     6'h22
-`define FDX     6'h23
-`define FRM     6'h24
-`define FCVTDS  6'h29
+`define FLT1		4'h1
+`define FLT2		4'h2
+`define FLT3		4'h3
+`define FLT2LI	4'hA
+`define FMOV    5'h00
+`define FTOI    5'h02
+`define ITOF    5'h03
+`define FNEG    5'h04
+`define FABS    5'h05
+`define FSIGN   5'h06
+`define FMAN    5'h07
+`define FNABS   5'h08
+`define FCVTSD  5'h09
+//`define FCVTSQ  6'h1B
+`define FSTAT   5'h0C
+`define FSQRT		5'h0D
+`define FTX     5'h10
+`define FCX     5'h11
+`define FEX     5'h12
+`define FDX     5'h13
+`define FRM     5'h14
+`define FCVTDS  5'h19
 
-`define FADD    6'h04
-`define FSUB    6'h05
-`define FCMP    6'h06
-`define FMUL    6'h08
-`define FDIV    6'h09
+`define FADD    5'h04
+`define FSUB    5'h05
+`define FCMP    5'h06
+`define FMUL    5'h08
+`define FDIV    5'h09
 
 `include "fp_defines.v"
 
@@ -184,22 +187,22 @@ wire nanx,nanxs;
 // Decode fp operation
 wire [3:0] op4 = ir[9:6];
 wire [5:0] op = ir[5:0];
-wire [5:0] func6b = ir[27:22];
+wire [4:0] func6b = ir[39:35];
 wire [2:0] prec = 3'd4;//ir[25:24];
 
-wire fstat 	= {op4,func6b} == {`FLOAT2,`FSTAT};	// get status
-wire fdiv	= {op4,func6b} == {`FLOAT2,`FDIV};
-wire ftx   	= {op4,func6b} == {`FLOAT2,`FTX};		// trigger exception
-wire fcx   	= {op4,func6b} == {`FLOAT2,`FCX};		// clear exception
-wire fex   	= {op4,func6b} == {`FLOAT2,`FEX};		// enable exception
-wire fdx   	= {op4,func6b} == {`FLOAT2,`FDX};		// disable exception
-wire fcmp	= {op4,func6b} == {`FLOAT2,`FCMP};
-wire frm	= {op4,func6b} == {`FLOAT2,`FRM};  // set rounding mode
+wire fstat 	= {op4,func6b} == {`FLT1,`FSTAT};	// get status
+wire fdiv	= {op4,func6b} == {`FLT2,`FDIV};
+wire ftx   	= {op4,func6b} == {`FLT1,`FTX};		// trigger exception
+wire fcx   	= {op4,func6b} == {`FLT1,`FCX};		// clear exception
+wire fex   	= {op4,func6b} == {`FLT1,`FEX};		// enable exception
+wire fdx   	= {op4,func6b} == {`FLT1,`FDX};		// disable exception
+wire fcmp	= {op4,func6b} == {`FLT2,`FCMP};
+wire frm	= {op4,func6b} == {`FLT1,`FRM};  // set rounding mode
 
-wire zl_op =  (op4==`FLOAT2 && (
+wire zl_op =  (op4==`FLT1 && (
                     (func6b==`FABS || func6b==`FNABS || func6b==`FMOV || func6b==`FNEG || func6b==`FSIGN || func6b==`FMAN || func6b==`FCVTSQ)) ||
                     func6b==`FCMP);
-wire loo_op = (op4==`FLOAT2 && (func6b==`ITOF || func6b==`FTOI));
+wire loo_op = (op4==`FLT1 && (func6b==`ITOF || func6b==`FTOI));
 wire loo_done;
 
 wire subinf;
@@ -348,7 +351,7 @@ wire [5:0] fn2;
 wire [MSB:0] zld_o,lood_o;
 wire [31:0] zls_o,loos_o;
 wire [WID-1:0] zlq_o, looq_o;
-fpZLUnit #(WID) u6 (.ir(ir), .a(a), .b(b), .o(zlq_o), .nanx(nanx) );
+fpZLUnit #(WID) u6 (.ir(ir), .a(a), .b(b), .c(c), .o(zlq_o), .nanx(nanx) );
 fpLOOUnit #(WID) u7 (.clk(clk), .ce(pipe_ce), .ir(ir), .a(a), .o(looq_o), .done() );
 //fpLOOUnit #(32) u7s (.clk(clk), .ce(pipe_ce), .rm(rm), .op(op), .fn(fn), .a(a[31:0]), .o(loos_o), .done() );
 
@@ -412,26 +415,30 @@ fpMul    #(32) u12s(.clk(clk), .ce(pipe_ce),          .a(a[31:0]), .b(b[31:0]), 
 */
 always @*
 case(op2)
-`FLOAT2:
-    case (fn2)
-    `FMUL:	under = mulUnder;
-    `FDIV:	under = divUnder;
-    default: begin under = 0; unders = 0; end
+`FLT2,`FLT2LI:
+  case (fn2)
+  `FMUL:	under = mulUnder;
+  `FDIV:	under = divUnder;
+  default: begin under = 0; unders = 0; end
 	endcase
 default: begin under = 0; unders = 0; end
 endcase
 
 always @*
 case(op2)
-`FLOAT2:
-    case(fn2)
-    `FADD:	fres <= fas_o;
-    `FSUB:	fres <= fas_o;
-    `FMUL:	fres <= fmul_o;
-    `FDIV:	fres <= fdiv_o;
-    `FSQRT:	fres <= fsqrt_o;
-    default:	begin fres <= fas_o; fress <= fass_o; end
-    endcase
+`FLT2,`FLT2LI:
+  case(fn2)
+  `FADD:	fres <= fas_o;
+  `FSUB:	fres <= fas_o;
+  `FMUL:	fres <= fmul_o;
+  `FDIV:	fres <= fdiv_o;
+  default:	begin fres <= fas_o; fress <= fass_o; end
+  endcase
+`FLT1:
+	case(fn2)
+  `FSQRT:	fres <= fsqrt_o;
+  default:	begin fres <= 1'd0; fress <= 1'd0; end
+  endcase
 default:    begin fres <= fas_o; fress <= fass_o; end
 endcase
 
@@ -539,17 +546,21 @@ begin
   else begin
   if (ld)
     case(ir[9:6])
-    `FLOAT2: 
+    `FLT2,`FLT2LI: 
       case(func6b)
-      `FABS,`FNABS,`FNEG,`FMAN,`FMOV,`FSIGN,
-      `FCVTSD,`FCVTSQ,`FCVTDS:  begin fpcnt <= 8'd0; end
-      `FTOI:  begin fpcnt <= 8'd1; end
-      `ITOF:  begin fpcnt <= 8'd1; end
       `FCMP:  begin fpcnt <= 8'd0; end
       `FADD:  begin fpcnt <= 8'd6; end
       `FSUB:  begin fpcnt <= 8'd6; end
       `FMUL:  begin fpcnt <= 8'd6; end
       `FDIV:  begin fpcnt <= maxdivcnt; end
+      default:    fpcnt <= 8'h00;
+      endcase
+    `FLT1:
+      case(func6b)
+      `FABS,`FNABS,`FNEG,`FMAN,`FMOV,`FSIGN,
+      `FCVTSD,`FCVTSQ,`FCVTDS:  begin fpcnt <= 8'd0; end
+      `FTOI:  begin fpcnt <= 8'd1; end
+      `ITOF:  begin fpcnt <= 8'd1; end
       `FSQRT: begin fpcnt <= maxdivcnt; end
       default:    fpcnt <= 8'h00;
       endcase

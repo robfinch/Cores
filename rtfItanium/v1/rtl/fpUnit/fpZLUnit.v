@@ -38,25 +38,32 @@
 // ============================================================================
 
 `define FLOAT   4'h1
-`define FANDI		4'h2
-`define FORI		4'h3
-`define FCMP    6'h06
-`define FMOV    6'h10
-`define FNEG    6'h14
-`define FABS    6'h15
-`define FSIGN   6'h16
-`define FMAN    6'h17
-`define FNABS   6'h18
-`define FCVTSD  6'h19
-`define FCVTSQ  6'h1B
-`define FCVTDS  6'h29
-`define FSLT		6'h38
-`define FSGE		6'h39
-`define FSLE		6'h3A
-`define FSGT		6'h3B
-`define FSEQ		6'h3C
-`define FSNE		6'h3D
-`define FSUN		6'h3E
+`define FLT1		4'h1
+`define FLT2		4'h2
+`define FLT3		4'h3
+`define FANDI		4'hE
+`define FORI		4'hF
+
+`define FMAX		5'h10
+`define FMIN		5'h11
+`define FCMP    5'h06
+`define FMOV    5'h00
+`define FNEG    5'h04
+`define FABS    5'h05
+`define FSIGN   5'h06
+`define FMAN    5'h07
+`define FNABS   5'h08
+`define FCVTSD  5'h09
+`define F32TO80	5'h0A
+//`define FCVTSQ  6'h1B
+`define FCVTDS  5'h19
+`define FSLT		5'h10
+`define FSGE		5'h11
+`define FSLE		5'h12
+`define FSGT		5'h13
+`define FSEQ		5'h14
+`define FSNE		5'h15
+`define FSUN		5'h16
 
 module fpZLUnit
 #(parameter WID=32)
@@ -64,8 +71,9 @@ module fpZLUnit
     input [39:0] ir,
 	input [WID-1:0] a,
 	input [WID-1:0] b,	// for fcmp
+	input [WID-1:0] c,	// for fcmp
 	output reg [WID-1:0] o,
-	output nanx
+	output reg nanx
 );
 localparam MSB = WID-1;
 localparam EMSB = WID==128 ? 14 :
@@ -93,55 +101,87 @@ localparam FMSB = WID==128 ? 111 :
 
 wire [3:0] op = ir[9:6];
 //wire [1:0] prec = ir[25:24];
-wire [5:0] fn = ir[27:22];
+wire [4:0] fn = ir[39:35];
 
-wire [4:0] cmp_o;
+wire nanxab,nanxac,nanxbc;
+wire [4:0] cmp_o, cmpac_o, cmpbc_o;
 
-fp_cmp_unit #(WID) u1 (.a(a), .b(b), .o(cmp_o), .nanx(nanx) );
+// Zero is being passed for b in some cases so the NaN must come from a if
+// present.
+fp_cmp_unit #(WID) u1 (.a(a), .b(b), .o(cmp_o), .nanx(nanxab) );
+fp_cmp_unit #(WID) u2 (.a(a), .b(c), .o(cmpac_o), .nanx(nanxac) );
+fp_cmp_unit #(WID) u3 (.a(b), .b(c), .o(cmpbc_o), .nanx(nanxbc) );
 wire [127:0] sq_o;
 //fcvtsq u2 (a[31:0], sq_o);
 wire [79:0] sdo;
-fs2d u3 (a[39:0], sdo);
+fs2d u4 (a[39:0], sdo);
 wire [39:0] dso;
-fd2s u4 (a, dso);
+fd2s u5 (a, dso);
+wire [79:0] f32to80o;
+F32TO80 u6 (a[31:0], f32to80o);
 
 always @*
   case(op)
-  `FLOAT:
+  `FLT1:
     case(fn)
-    `FABS:   o <= {1'b0,a[WID-2:0]};        // fabs
-    `FNABS:  o <= {1'b1,a[WID-2:0]};        // fnabs
-    `FNEG:   o <= {~a[WID-1],a[WID-2:0]};   // fneg
-    `FMOV:   o <= a;                        // fmov
-    `FSIGN:  o <= (a[WID-2:0]==0) ? 0 : {a[WID-1],1'b0,{EMSB{1'b1}},{FMSB+1{1'b0}}};    // fsign
-    `FMAN:   o <= {a[WID-1],1'b0,{EMSB{1'b1}},a[FMSB:0]};    // fman
+    `FABS:   begin o <= {1'b0,a[WID-2:0]}; nanx <= nanxab; end
+    `FNABS:  begin o <= {1'b1,a[WID-2:0]}; nanx <= nanxab; end
+    `FNEG:   begin o <= {~a[WID-1],a[WID-2:0]};	nanx <= nanxab; end
+    `FMOV:   begin o <= a; nanx <= nanxab; end
+    `FSIGN:  begin o <= (a[WID-2:0]==0) ? 0 : {a[WID-1],1'b0,{EMSB{1'b1}},{FMSB+1{1'b0}}}; nanx <= 1'b0; end
+    `FMAN:   begin o <= {a[WID-1],1'b0,{EMSB{1'b1}},a[FMSB:0]}; nanx <= 1'b0; end
     //`FCVTSQ:    o <= sq_o;
-    `FCVTSD: o <= sdo;
-    `FCVTDS: o <= {{32{dso[31]}},dso};
-    `FCMP:   o <= cmp_o;
-    `FSLT:	 o <=  cmp_o[1];
-    `FSGE:	 o <= ~cmp_o[1];
-    `FSLE:	 o <=  cmp_o[2];
-    `FSGT:	 o <= ~cmp_o[2];
-    `FSEQ:	 o <=  cmp_o[0];
-    `FSNE:	 o <= ~cmp_o[0];
-    `FSUN:	 o <=  cmp_o[4];
+    `FCVTSD: begin o <= sdo; nanx <= nanxab; end
+    `FCVTDS: begin o <= {{32{dso[31]}},dso}; nanx <= nanxab; end
+    `F32TO80: begin o <= f32to80o; nanx <= nanxab; end
     default: o <= 0;
     endcase
+  `FLT2:
+    case(fn)
+    `FCMP:   begin o <= cmp_o; nanx <= nanxab; end
+    `FSLT:	 begin o <=  cmp_o[1]; nanx <= nanxab; end
+    `FSGE:	 begin o <= ~cmp_o[1]; nanx <= nanxab; end
+    `FSLE:	 begin o <=  cmp_o[2]; nanx <= nanxab; end
+    `FSGT:	 begin o <= ~cmp_o[2]; nanx <= nanxab; end
+    `FSEQ:	 begin o <=  cmp_o[0]; nanx <= nanxab; end
+    `FSNE:	 begin o <= ~cmp_o[0]; nanx <= nanxab; end
+    `FSUN:	 begin o <=  cmp_o[4]; nanx <= nanxab; end
+    default: o <= 0;
+    endcase
+  `FLT3:
+  	case(fn)
+	  `FMAX:	
+	  	begin
+	  	  o <= ~cmp_o[2] & ~cmpac_o[2] ? a : ~cmpbc_o[2] ? b : c;
+				nanx <= nanxab|nanxac|nanxbc;
+	  	end
+	  `FMIN:
+	  	begin
+	  	 	o <=  cmp_o[1] & cmpac_o[1] ? a : cmpbc_o[2] ? b : c;
+				nanx <= nanxab|nanxac|nanxbc;
+	  	end
+    default: o <= 0;
+  	endcase
   `FANDI:
+  	begin
   	case(ir[32:31])
   	2'd0:		o <= a & {{58{1'b1}},ir[39:33],ir[30:16]};
   	2'd1:		o <= a & {{36{1'b1}},ir[39:33],ir[30:16],{22{1'b1}}};
   	2'd2:		o <= a & {{14{1'b1}},ir[39:33],ir[30:16],{44{1'b1}}};
   	2'd3:		o <= a & {ir[39:33],ir[30:16],{66{1'b1}}};
   	endcase
+  	nanx <= 1'b0;
+  	end
   `FORI:
+  	begin
   	case(ir[32:31])
   	2'd0:		o <= a & {{58{1'b0}},ir[39:33],ir[30:16]};
   	2'd1:		o <= a & {{36{1'b0}},ir[39:33],ir[30:16],{22{1'b0}}};
   	2'd2:		o <= a & {{14{1'b0}},ir[39:33],ir[30:16],{44{1'b0}}};
   	2'd3:		o <= a & {ir[39:33],ir[30:16],{66{1'b0}}};
   	endcase
+  	nanx <= 1'b0;
+  	end
 	default:	o <= 0;
 	endcase
 
