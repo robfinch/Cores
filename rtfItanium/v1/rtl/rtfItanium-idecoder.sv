@@ -496,6 +496,14 @@ default:	HasConst = FALSE;
 endcase
 endfunction
 
+function IsAlu0Only;
+input [39:0] ins;
+casez({ins[32:31],ins[`OPCODE4]})
+`CSRRW:	IsAlu0Only = TRUE;
+default:	IsAlu0Only = FALSE;
+endcase
+endfunction
+
 wire isRet = IsRet(unit,instr);
 wire isJal = IsJAL(unit,instr);
 wire isBrk = IsBrk(unit,instr);
@@ -540,6 +548,7 @@ begin
 	// target is present.
 	bus[`IB_BT]		 <= isJal | isRet | isBrk | isRti;
 	bus[`IB_ALU]   <= unit==3'd2;
+	bus[`IB_ALU0]	 <= IsAlu0Only(instr);
 	bus[`IB_FPU]   <= unit==3'd3;
 	bus[`IB_FC]		 <= unit==3'd1;
 	bus[`IB_CANEX] <= fnCanException(unit,instr);

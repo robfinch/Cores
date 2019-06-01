@@ -58,6 +58,7 @@
 // If set greater than 10, then memory instructions won't
 // issue until they are within 10 of the head of the queue.
 `define QENTRIES	4
+`define QSLOTS		3
 
 // Bitfield for representing exception codes
 `define XBITS			7:0
