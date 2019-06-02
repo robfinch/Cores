@@ -24,35 +24,28 @@
 //
 //=============================================================================
 //
-module BranchPredictor(rst, clk, en,
-    xisBranch0, xisBranch1, xisBranch2,
-    pcA, pcB, pcC, xpc0, xpc1, xpc2, takb0, takb1, takb2,
-    predict_takenA, predict_takenB, predict_takenC);
+`include "rtfItanium-config.sv"
+
+module BranchPredictor(rst, clk, clk2x, clk4x, en, xisBranch, xip, takb, ip, predict_taken);
 parameter AMSB=79;
 parameter DBW=80;
+parameter QSLOTS = `QSLOTS;
 input rst;
 input clk;
+input clk2x;
+input clk4x;
 input en;
-input xisBranch0;
-input xisBranch1;
-input xisBranch2;
-input [AMSB:0] pcA;
-input [AMSB:0] pcB;
-input [AMSB:0] pcC;
-input [AMSB:0] xpc0;
-input [AMSB:0] xpc1;
-input [AMSB:0] xpc2;
-input takb0;
-input takb1;
-input takb2;
-output predict_takenA;
-output predict_takenB;
-output predict_takenC;
+input [3:0] xisBranch;
+input [AMSB:0] xip [0:3];
+input [3:0] takb;
+input [AMSB:0] ip [0:QSLOTS-1];
+output reg [QSLOTS-1:0] predict_taken;
 
 integer n;
+
 reg [AMSB:0] pcs [0:31];
 reg [AMSB:0] pc;
-reg takb;
+reg takbx;
 reg [4:0] pcshead,pcstail;
 reg wrhist;
 reg [2:0] gbl_branch_hist;
@@ -65,64 +58,34 @@ initial begin
 		branch_history_table[n] = 3;
 end
 wire [8:0] bht_wa = {pc[7:1],gbl_branch_hist[2:1]};		// write address
-wire [8:0] bht_raA = {pcA[7:1],gbl_branch_hist[2:1]};	// read address (IF stage)
-wire [8:0] bht_raB = {pcB[7:1],gbl_branch_hist[2:1]};	// read address (IF stage)
-wire [8:0] bht_raC = {pcC[7:1],gbl_branch_hist[2:1]};	// read address (IF stage)
 wire [1:0] bht_xbits = branch_history_table[bht_wa];
-wire [1:0] bht_ibitsA = branch_history_table[bht_raA];
-wire [1:0] bht_ibitsB = branch_history_table[bht_raB];
-wire [1:0] bht_ibitsC = branch_history_table[bht_raC];
-assign predict_takenA = (bht_ibitsA==2'd0 || bht_ibitsA==2'd1) && en;
-assign predict_takenB = (bht_ibitsB==2'd0 || bht_ibitsB==2'd1) && en;
-assign predict_takenC = (bht_ibitsC==2'd0 || bht_ibitsC==2'd1) && en;
+reg [8:0] bht_ra [0:QSLOTS-1];
+reg [1:0] bht_ibits [0:QSLOTS-1];
+always @*
+for (n = 0; n < QSLOTS; n = n + 1) begin
+	bht_ra [n] = {ip[n][7:1],gbl_branch_hist[2:1]};	// read address (IF stage)
+	bht_ibits [n] = branch_history_table[bht_ra[n]];
+	predict_taken[n] = (bht_ibits[n]==2'd0 || bht_ibits[n]==2'd1) && en;
+end
 
-always @(posedge clk)
+reg xisBr;
+reg xtkb;
+reg [AMSB:0] xipx;
+always @*
+begin
+	xisBr <= xisBranch[{clk,clk2x}];
+	xtkb <= takb[{clk,clk2x}];
+	xipx <= xip[{clk,clk2x}];
+end
+
+always @(posedge clk4x)
 if (rst)
 	pcstail <= 5'd0;
 else begin
-	case({xisBranch0,xisBranch1,xisBranch2})
-	3'b000:	;
-	3'b001:
-		begin
-		pcs[pcstail] <= {xpc2[31:1],takb2};
+	if (xisBr) begin
+		pcs[pcstail] <= {xipx[AMSB:1],xtkb};
 		pcstail <= pcstail + 5'd1;
-		end
-	3'b010:
-		begin
-		pcs[pcstail] <= {xpc1[31:1],takb1};
-		pcstail <= pcstail + 5'd1;
-		end
-	3'b011:
-		begin
-		pcs[pcstail] <= {xpc1[31:1],takb1};
-		pcs[pcstail+1] <= {xpc2[31:1],takb2};
-		pcstail <= pcstail + 5'd2;
-		end
-	3'b100:
-		begin
-		pcs[pcstail] <= {xpc0[31:1],takb0};
-		pcstail <= pcstail + 5'd1;
-		end
-	3'b101:
-		begin
-		pcs[pcstail] <= {xpc0[31:1],takb0};
-		pcs[pcstail+1] <= {xpc2[31:1],takb2};
-		pcstail <= pcstail + 5'd2;
-		end
-	3'b110:
-		begin
-		pcs[pcstail] <= {xpc0[31:1],takb0};
-		pcs[pcstail+1] <= {xpc1[31:1],takb1};
-		pcstail <= pcstail + 5'd2;
-		end
-	3'b111:
-		begin
-		pcs[pcstail] <= {xpc0[31:1],takb0};
-		pcs[pcstail+1] <= {xpc1[31:1],takb1};
-		pcs[pcstail+2] <= {xpc2[31:1],takb2};
-		pcstail <= pcstail + 5'd3;
-		end
-	endcase
+	end
 end
 
 always @(posedge clk)
@@ -132,7 +95,7 @@ else begin
 	wrhist <= 1'b0;
 	if (pcshead != pcstail) begin
 		pc <= pcs[pcshead];
-		takb <= pcs[pcshead][0];
+		takbx <= pcs[pcshead][0];
 		wrhist <= 1'b1;
 		pcshead <= pcshead + 5'd1;
 	end
@@ -145,7 +108,7 @@ end
 reg [1:0] xbits_new;
 always @*
 if (wrhist) begin
-	if (takb) begin
+	if (takbx) begin
 		if (bht_xbits != 2'd1)
 			xbits_new <= bht_xbits + 2'd1;
 		else
@@ -167,7 +130,7 @@ if (rst)
 else begin
   if (en) begin
     if (wrhist) begin
-      gbl_branch_hist <= {gbl_branch_hist[1:0],takb};
+      gbl_branch_hist <= {gbl_branch_hist[1:0],takbx};
       branch_history_table[bht_wa] <= xbits_new;
     end
 	end

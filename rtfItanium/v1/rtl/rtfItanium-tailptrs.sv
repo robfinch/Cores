@@ -39,7 +39,7 @@ integer n, j;
 always @(posedge clk_i)
 if (rst_i) begin
 	for (n = 0; n < QSLOTS; n = n + 1)
-		tails[n] <= 1'd0;
+		tails[n] <= n;
 end
 else begin
 	if (!branchmiss) begin

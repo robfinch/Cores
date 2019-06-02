@@ -54,10 +54,12 @@
 `define CHK			4'hD
 `define RTI			4'hE
 `define BRK			4'hF
+`define PFI			5'h01
 `define REX			5'h01
 `define SYNC		5'h02
 `define SEI			5'h03
 `define WAIT		5'h04
+`define EXEC		5'h05
 
 // Integer Operations
 `define R3			6'b0001?
@@ -364,14 +366,14 @@
 `define CSR_RS_STACK	12'h043
 `define CSR_STATUS 	12'h044
 `define CSR_BRS_STACK	12'h046
-`define CSR_EPC0    12'h048
-`define CSR_EPC1    12'h049
-`define CSR_EPC2    12'h04A
-`define CSR_EPC3    12'h04B
-`define CSR_EPC4    12'h04C
-`define CSR_EPC5    12'h04D
-`define CSR_EPC6    12'h04E
-`define CSR_EPC7    12'h04F
+`define CSR_IPC0    12'h048
+`define CSR_IPC1    12'h049
+`define CSR_IPC2    12'h04A
+`define CSR_IPC3    12'h04B
+`define CSR_IPC4    12'h04C
+`define CSR_IPC5    12'h04D
+`define CSR_IPC6    12'h04E
+`define CSR_IPC7    12'h04F
 `define CSR_GOLEX0	12'h050
 `define CSR_GOLEX1	12'h051
 `define CSR_GOLEX2	12'h052

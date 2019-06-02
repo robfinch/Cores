@@ -109,7 +109,7 @@ wire [15:0] b16 = b[15:0];
 wire [31:0] b32 = b[31:0];
 wire [DBW-1:0] orb = b;
 wire [DBW-1:0] andb = b;
-wire [DBW-1:0] bsx20 = {{60{b[19],b[19:0]}}};
+wire [DBW-1:0] bsx20 = {{60{b[19]}},b[19:0]};
 
 wire [21:0] qimm = instr[39:18];
 wire [DBW-1:0] imm = {{58{instr[39]}},instr[39:33],instr[30:16]};
@@ -1074,11 +1074,15 @@ casez({instr[32:31],instr[`OPCODE4]})
 `ORS0:		o = a | b[19:0];
 `ORS1:		o = a | (b[19:0] << 6'd20);
 `ORS2:		o = a | (b[19:0] << 6'd40);
-`ORS3:		o = a | (b[19:0] << 7'd60);
+`ORS3:		o = a | (b[19:0] << 6'd60);
 `ADDS0:		o = a + bsx20;
-`ADDS1:		o = a + (bsx20 << 6'd20);
+`ADDS1:		
+	begin
+		o1 = bsx20 << 6'd20;
+		o = a + o1;
+	end
 `ADDS2:		o = a + (bsx20 << 6'd40);
-`ADDS3:		o = a + (bsx20 << 7'd60);
+`ADDS3:		o = a + (bsx20 << 6'd60);
 `CSRRW:     
 	case(instr[27:16])
 	12'h044:	o = BIG ? (csr | {39'd0,1'b0,24'h0}) : 64'hDDDDDDDDDDDDDDDD;

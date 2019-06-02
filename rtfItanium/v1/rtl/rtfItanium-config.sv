@@ -57,7 +57,15 @@
 
 // If set greater than 10, then memory instructions won't
 // issue until they are within 10 of the head of the queue.
-`define QENTRIES	4
+`define QENTRIES	8
+
+// The following constant controls the maximum number of instructions that will
+// be queued in a single cycle. It can be reduced to reduce the size of the core,
+// however the branch predictor won't be effective as it depends on this
+// configuration constant. Reducing the constant to one for instance will cause
+// the branch predictor to operate only on slot 0.
+// The goal for this constant is to allow for a wider machine in multiples of
+// three queue slots. In otherwords, a value of 6 may be supported in the future.
 `define QSLOTS		3
 
 // Bitfield for representing exception codes
@@ -78,12 +86,12 @@
 // register file, the number of ports on the instruction cache, and how
 // many entries are contained in the fetch buffers. It also indirectly
 // affects how many instructions are queued.
-`define WAYS			2				// number of ways parallel (1-3)
+`define WAYS			3				// number of ways parallel (1-3)
 `define NUM_IDU		3				// number of instruction decode units (3 only)
 `define NUM_ALU		2				// number of ALU's (1-2)
-`define NUM_AGEN	1				// number of address generators (1-2)
+`define NUM_AGEN	2				// number of address generators (1-2)
 `define NUM_MEM		2				// number of memory queues (1-3)
-`define NUM_FPU		1				// number of floating-point units (0-2)
+`define NUM_FPU		2				// number of floating-point units (0-2)
 // Note that even with just a single commit bus, multiple instructions may
 // commit if they do not target any registers. Up to three instruction may
 // commit even with just a single bus.
