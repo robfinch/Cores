@@ -41,8 +41,8 @@ input canq2;
 input canq3;
 input [2:0] hi_amt;
 input [QENTRIES-1:0] iq_v;
-input [`SNBITS] iq_sn [0:QENTRIES-1];
-output reg [`SNBITS] maxsn;
+input [31:0] iq_sn [0:QENTRIES-1];
+output reg [31:0] maxsn;
 output [`SNBITS] tosub;
 input debug_on;
 
@@ -55,7 +55,7 @@ begin
 	sn_dec = 1'd0;
 	for (j = 0; j < QENTRIES; j = j + 1)
 		if (j < amt) begin
-			//if (iq_v[heads[j]])
+			if (iq_v[heads[j]])
 				sn_dec = iq_sn[heads[j]];
 		end
 end
@@ -63,6 +63,20 @@ endfunction
 
 assign tosub = sn_dec(hi_amt);
 
+always @*
+begin
+maxsn = 1'd0;
+for (n = 0; n < QENTRIES; n = n + 1)
+	if (iq_sn[n] > maxsn && iq_v[n])
+		maxsn = iq_sn[n];
+//maxsn = maxsn - tosub;
+end
+
+// The following code doesn't work very well. The idea was to try and reduce
+// the amount of hardware required and improve performance. Searching the queue
+// for maximum sequence number is much simpler to code, but may have a lot of
+// comparators.
+/*
 always @(posedge clk)
 if (rst) begin
 	maxsn <= 1'd0;
@@ -144,6 +158,7 @@ else begin
 		endcase
 	end
 end
+*/
 
 endmodule
 

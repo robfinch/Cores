@@ -2279,6 +2279,26 @@ static void process_itof(int64_t oc)
 		);
 }
 
+static void process_itanium_align()
+{
+	int64_t val;
+
+	NextToken();
+	val = expr();
+	if (segment == codeseg) {
+		if ((code_address % val) != 0LL) {
+			emit_insn(NOP_INSN, B);
+			emit_insn(NOP_INSN, B);
+		}
+		if ((val % 16) != 0)
+			error("Bad code alignment.");
+		while (code_address % val)
+			emitByte(00);
+	}
+	else
+		process_align();
+}
+
 static void process_ftoi(int64_t oc)
 {
 	int Ra;
@@ -2796,7 +2816,7 @@ static void process_call()
 	Int128 val;
 	int Ra = 0;
 
-	opcode = parm1[tk_call];
+	opcode = parm1[token];
   NextToken();
 	if (token == '[')
 		Int128::Assign(&val, Int128::Zero());
@@ -2879,7 +2899,7 @@ static void process_ret()
 		Int128::Assign(&val, Int128::Zero());
 	}
 	emit_insn(
-		((val.low >> 3) << 22LL) |
+		((val.low >> 1LL) << 22LL) |
 		RB(regLR) |
 		RT(regSP) |
 		RA(regSP) |
@@ -4242,7 +4262,7 @@ static void process_default()
 		//		case tk_abs:  process_rop(0x04); break;
 	case tk_abs: process_rop(0x01); break;
 	case tk_addi: process_riop(0x04,0x04,0); break;
-	case tk_align: process_align(); break;
+	case tk_align: process_itanium_align(); break;
 	case tk_andi:  process_riop(0x08,0x08,0); break;
 	case tk_asl: process_shift(I_ASL); break;
 	case tk_asr: process_shift(I_ASR); break;
@@ -4424,7 +4444,7 @@ static void process_default()
 	case tk_sxb: process_rop(0x1A); break;
 	case tk_sxc: process_rop(0x19); break;
 	case tk_sxh: process_rop(0x18); break;
-	case tk_sync: emit_insn(0x1000000038LL, B); break;
+	case tk_sync: emit_insn(0x1000000380LL, B); break;
 	case tk_tlbdis:  process_tlb(6); break;
 	case tk_tlben:   process_tlb(5); break;
 	case tk_tlbpb:   process_tlb(1); break;

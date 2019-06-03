@@ -88,59 +88,42 @@ else begin
 			end
 		3'b011:
 			if (canq2 & !debug_on && `WAYS > 1) begin
-				if (slot_rfw[1]) begin
+				if (slot_rfw[1])
 					rf_source[Rd[1]] <= tails[0];
-				end
 				if (!(slot_jc[1]|take_branch[1])) begin
-					if (slot_rfw[2]) begin
+					if (slot_rfw[2])
 						rf_source[Rd[2]] <= tails[1];
-					end
 				end
 			end
 			else if (canq1) begin
-				if (slot_rfw[1]) begin
+				if (slot_rfw[1])
 					rf_source[Rd[1]] <= tails[0];
-				end
 			end
 		3'b100:
 			if (canq1) begin
-				if (slot_rfw[0]) begin
+				if (slot_rfw[0])
 					rf_source[Rd[0]] <= tails[0];
-				end
 			end
 		3'b101:
 			if (canq2 & !debug_on && `WAYS > 1) begin
-				if (slot_rfw[0]) begin
+				if (slot_rfw[0])
 					rf_source[Rd[0]] <= tails[0];
-				end
 				if (!(slot_jc[0]|take_branch[0])) begin
-					if (slot_rfw[2]) begin
+					if (slot_rfw[2])
 						rf_source[Rd[2]] <= tails[1];
-					end
 				end
 			end
 			else if (canq1) begin
-				if (slot_rfw[0]) begin
+				if (slot_rfw[0])
 					rf_source[Rd[0]] <= tails[0];
-				end
 			end
 		3'b110:
 			if (canq2 & !debug_on & `WAYS > 1) begin
-				if (slot_rfw[0]) begin
+				if (slot_rfw[0])
 					rf_source[Rd[0]] <= tails[0];
-				end
-				if (slot_jc[0]|take_branch[0]) begin
-					;
-				end
-				else if (slot_jc[1]|take_branch[1]) begin
-					if (slot_rfw[1]) begin
+				if (!(slot_jc[0]|take_branch[0])) begin
+					if (slot_rfw[1])
 						rf_source[Rd[1]] <= tails[1];
-					end
-				end
-				else begin
-					if (slot_rfw[1]) begin
-						rf_source[Rd[1]] <= tails[1];
-					end
 				end
 			end
 			else if (canq1) begin
@@ -150,64 +133,28 @@ else begin
 			end
 		3'b111:
 			if (canq3 & !debug_on && `WAYS > 2) begin
-				if (slot_jc[0]|take_branch[0]) begin
-					if (slot_rfw[0]) begin
-						rf_source[Rd[0]] <= tails[0];
-					end
-				end
-				else if (slot_jc[1]|take_branch[1]) begin
-					if (slot_rfw[0]) begin
-						rf_source[Rd[0]] <= tails[0];
-					end
-					if (slot_rfw[1]) begin
+				if (slot_rfw[0])
+					rf_source[Rd[0]] <= tails[0];
+				if (!(slot_jc[0]|take_branch[0])) begin
+					if (slot_rfw[1])
 						rf_source[Rd[1]] <= tails[1];
-					end
-				end
-				else if (slot_jc[2]|take_branch[2]) begin
-					if (slot_rfw[0]) begin
-						rf_source[Rd[0]] <= tails[0];
-					end
-					if (slot_rfw[1]) begin
-						rf_source[Rd[1]] <= tails[1];
-					end
-					if (slot_rfw[2]) begin
-						rf_source[Rd[2]] <=  tails[2];
-					end
-				end
-				else begin
-					if (slot_rfw[0]) begin
-						rf_source[Rd[0]] <= tails[0];
-					end
-					if (slot_rfw[1]) begin
-						rf_source[Rd[1]] <= tails[1];
-					end
-					if (slot_rfw[2]) begin
-						rf_source[Rd[2]] <= tails[2];
+					if (!(slot_jc[2]|take_branch[2])) begin
+						if (slot_rfw[2])
+							rf_source[Rd[2]] <= tails[2];
 					end
 				end
 			end
 			else if (canq2 & !debug_on && `WAYS > 1) begin
-				if (slot_rfw[0]) begin
+				if (slot_rfw[0])
 					rf_source[Rd[0]] <= tails[0];
-				end
-				if (slot_jc[0]|take_branch[0]) begin
-					;
-				end
-				else if (slot_jc[1]|take_branch[1]) begin
-					if (slot_rfw[1]) begin
+				if (!(slot_jc[0]|take_branch[0])) begin
+					if (slot_rfw[1])
 						rf_source[Rd[1]] <= tails[1];
-					end
-				end
-				else begin
-					if (slot_rfw[1]) begin
-						rf_source[Rd[1]] <= tails[1];
-					end
 				end
 			end
 			else if (canq1) begin
-				if (slot_rfw[0]) begin
+				if (slot_rfw[0])
 					rf_source[Rd[0]] <= tails[0];
-				end
 			end
 		endcase
 	end

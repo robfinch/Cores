@@ -62,6 +62,8 @@ input canq3;
 output reg [AREGS-1:0] rf_v;
 input debug_on;
 
+// The following two functions used to figure out which slot to process.
+// However, the functions when used things seemed not to work.
 // Find first one
 function [2:0] ffo;
 input [2:0] i;
@@ -110,45 +112,77 @@ else begin
       rf_v[ {commit0_tgt[RBIT:0]} ] <= rf_source[ commit0_tgt[RBIT:0] ] == commit0_id || (branchmiss && iq_source[ commit0_id[`QBITS] ]);
   end
   if (commit1_v && `NUM_CMT > 1) begin
-    if (!rf_v[ {commit1_tgt[RBIT:0]} ])
+    if (!rf_v[ {commit1_tgt[RBIT:0]} ] && !(commit0_v && (rf_source[ commit0_tgt[RBIT:0] ] == commit0_id || (branchmiss && iq_source[ commit0_id[`QBITS] ]))))
       rf_v[ {commit1_tgt[RBIT:0]} ] <= rf_source[ commit1_tgt[RBIT:0] ] == commit1_id || (branchmiss && iq_source[ commit1_id[`QBITS] ]);
   end
 
 	if (!branchmiss)
 		case(pat)
 		3'b000:	;
-		3'b001,
-		3'b010,
+		3'b001:
+			if (canq1) begin
+				if (slot_rfw[2])
+					rf_v [Rd[2]] <= `INV;
+			end
+		3'b010:
+			if (canq1) begin
+				if (slot_rfw[1])
+					rf_v [Rd[1]] <= `INV;
+			end
 		3'b100:
 			if (canq1) begin
-				if (slot_rfw[ffo(pat)])
-					rf_v [Rd[ffo(pat)]] <= `INV;
+				if (slot_rfw[0])
+					rf_v [Rd[0]] <= `INV;
 			end
-		3'b011,
-		3'b101,
-		3'b110:
+		3'b011:
 			if (canq2 & !debug_on && `WAYS > 1) begin
-				if (slot_rfw[ffo(pat)])
-					rf_v [Rd[ffo(pat)]] <= `INV;
-				if (!(slot_jc[ffo(pat)]|take_branch[ffo(pat)])) begin
-					if (slot_rfw[fso(pat)])
-						rf_v [Rd[fso(pat)]] <= `INV;
+				if (slot_rfw[1])
+					rf_v [Rd[1]] <= `INV;
+				if (!(slot_jc[1]|take_branch[1])) begin
+					if (slot_rfw[2])
+						rf_v [Rd[2]] <= `INV;
 				end
 			end
 			else if (canq1) begin
-				if (slot_rfw[ffo(pat)])
-					rf_v [Rd[ffo(pat)]] <= `INV;
+				if (slot_rfw[1])
+					rf_v [Rd[1]] <= `INV;
+			end
+		3'b101:
+			if (canq2 & !debug_on && `WAYS > 1) begin
+				if (slot_rfw[0])
+					rf_v [Rd[0]] <= `INV;
+				if (!(slot_jc[0]|take_branch[0])) begin
+					if (slot_rfw[1])
+						rf_v [Rd[1]] <= `INV;
+				end
+			end
+			else if (canq1) begin
+				if (slot_rfw[0])
+					rf_v [Rd[0]] <= `INV;
+			end
+		3'b110:
+			if (canq2 & !debug_on && `WAYS > 1) begin
+				if (slot_rfw[0])
+					rf_v [Rd[0]] <= `INV;
+				if (!(slot_jc[0]|take_branch[0])) begin
+					if (slot_rfw[1])
+						rf_v [Rd[1]] <= `INV;
+				end
+			end
+			else if (canq1) begin
+				if (slot_rfw[0])
+					rf_v [Rd[0]] <= `INV;
 			end
 		3'b111:
 			if (canq3 & !debug_on && `WAYS > 2) begin
-				if (slot_jc[ffo(pat)]|take_branch[ffo(pat)]) begin
-					if (slot_rfw[ffo(pat)])
-						rf_v [Rd[ffo(pat)]] <= `INV;
+				if (slot_jc[0]|take_branch[0]) begin
+					if (slot_rfw[0])
+						rf_v [Rd[0]] <= `INV;
 				end
-				else if (slot_jc[fso(pat)]|take_branch[fso(pat)]) begin
-					if (slot_rfw[ffo(pat)])
-						rf_v [Rd[ffo(pat)]] <= `INV;
-					if (slot_rfw[fso(pat)])
+				else if (slot_jc[1]|take_branch[1]) begin
+					if (slot_rfw[0])
+						rf_v [Rd[0]] <= `INV;
+					if (slot_rfw[1])
 						rf_v [Rd[1]] <= `INV;
 				end
 				else if (slot_jc[2]|take_branch[2]) begin
@@ -184,8 +218,8 @@ else begin
 				end
 			end
 			else if (canq1) begin
-				if (slot_rfw[ffo(pat)])
-					rf_v [Rd[ffo(pat)]] <= `INV;
+				if (slot_rfw[0])
+					rf_v [Rd[0]] <= `INV;
 			end
 		endcase
 	rf_v[0] <= `VAL;
