@@ -52,6 +52,7 @@ begin
     endcase
   `RTI:
   	case(instr[`FUNCT5])
+  	5'd0:	bus <= 80'hCCCCCCCCCCCCCCCCCCCC;	// RTI
   	`WAIT:  bus = waitctr==64'd1;
   	default:	bus <= 80'hCCCCCCCCCCCCCCCCCCCC;
   	endcase

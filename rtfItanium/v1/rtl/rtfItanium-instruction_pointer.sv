@@ -90,18 +90,16 @@ else begin
 		end
 	3'b011:
 		if (canq2 & !debug_on && `WAYS > 1) begin
-			if (slot_jc[1]) begin
+			if (slot_jc[1])
 				ip[37:0] <= {insnx[1][39:10],insnx[1][5:0],insnx[1][1:0]};
-			end
 			else if (take_branch[1]) begin
 				if (slot_br[1])
 					ip <= btgt[1];
 				else
 					ip[22:0] <= {insnx[1][39:22],insnx[1][5:3],insnx[1][4:3]};
 			end
-			else if (slot_jc[2]) begin
+			else if (slot_jc[2])
 				ip[37:0] <= {insnx[2][39:10],insnx[2][5:0],insnx[2][1:0]};
-			end
 			else if (take_branch[2]) begin
 				if (slot_br[2])
 					ip <= btgt[2];
@@ -113,9 +111,8 @@ else begin
 			end
 		end
 		else if (canq1) begin
-			if (slot_jc[1]) begin
+			if (slot_jc[1])
 				ip[37:0] <= {insnx[1][39:10],insnx[1][5:0],insnx[1][1:0]};
-			end
 			else if (take_branch[1]) begin
 				if (slot_br[1])
 					ip <= btgt[1];
@@ -177,18 +174,16 @@ else begin
 		end
 	3'b110:
 		if (canq2 & !debug_on & `WAYS > 1) begin
-			if (slot_jc[0]) begin
+			if (slot_jc[0])
 				ip[37:0] <= {insnx[0][39:10],insnx[0][5:0],insnx[0][1:0]};
-			end
 			else if (take_branch[0]) begin
 				if (slot_br[0])
 					ip <= btgt[0];
 				else
 					ip[22:0] <= {insnx[0][39:22],insnx[0][5:3],insnx[0][4:3]};
 			end
-			else if (slot_jc[1]) begin
+			else if (slot_jc[1])
 				ip[37:0] <= {insnx[1][39:10],insnx[1][5:0],insnx[1][1:0]};
-			end
 			else if (take_branch[1]) begin
 				if (slot_br[1])
 					ip <= btgt[1];
@@ -200,9 +195,8 @@ else begin
 			end
 		end
 		else if (canq1) begin
-			if (slot_jc[0]) begin
+			if (slot_jc[0])
 				ip[37:0] <= {insnx[0][39:10],insnx[0][5:0],insnx[0][1:0]};
-			end
 			else if (take_branch[0]) begin
 				if (slot_br[0])
 					ip <= btgt[0];

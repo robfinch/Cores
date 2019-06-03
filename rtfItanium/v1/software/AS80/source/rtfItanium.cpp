@@ -29,6 +29,7 @@
 #define I_ADDI	0x04
 #define I_ADD		0x04
 #define I_SUB		0x05
+#define I_ADDS0	0x33
 #define I_ADDS1	0x34
 #define I_ADDS2	0x35
 #define I_ADDS3	0x36
@@ -37,6 +38,7 @@
 #define I_ORS1	0x3C
 #define I_ORS2	0x3D
 #define I_ORS3	0x3E
+#define I_ORS0	0x3F
 #define I_XOR		0x0A
 #define I_XORI	0x0A
 #define I_DIV		0x22
@@ -139,7 +141,45 @@
 #define I_PTRDIF	0x1E
 #define I_SHIFT63	0x1F
 #define I_SHIFTR	0x2F
-#define I_LB	0x13
+
+#define I_LDB		0x00
+#define I_LDW		0x01
+#define I_LDP		0x02
+#define I_LDD		0x03
+#define I_LDBU	0x04
+#define I_LDWU	0x05
+#define I_LDPU	0x06
+#define I_LDDR	0x07
+#define I_LDT		0x08
+#define I_LDO		0x09
+#define I_AMO		0x0B
+#define I_LDTU	0x0C
+#define I_LDOU	0x0D
+#define I_LEA		0x0E
+#define I_MLX		0x0F
+#define I_LDFS	0x10
+#define I_LDFD	0x11
+#define I_LDFDP	0x12
+#define I_LDDP	0x13
+
+#define I_STB		0x20
+#define I_STW		0x21
+#define I_STP		0x22
+#define I_STD		0x23
+#define I_STDC	0x27
+#define I_STT		0x28
+#define I_STO		0x29
+#define I_CAS		0x2A
+#define I_PUSHC	0x2B
+#define I_TLB		0x2C
+#define I_PUSH	0x2D
+#define I_CACHE	0x2E
+#define I_MSX		0x2F
+#define I_STFS	0x30
+#define I_STFD	0x31
+#define I_STFDP	0x32
+#define I_STDP	0x33
+
 #define I_SB	0x15
 #define I_MEMNDX	0x16
 #define I_LFx		0x1B
@@ -158,8 +198,7 @@
 #define B		1
 #define I		2
 #define F		3
-#define L		4
-#define S		5
+#define M		4
 
 #define NOP_INSN	0x00000000C0
 
@@ -202,6 +241,7 @@ static int regCnst;
 #define OP2(x)	(((x) & 3LL) << 31LL)
 #define OP4(x)	(((x) & 15LL) << 6LL)
 #define OP6(x)	(OP4(x)|OP2((x) >> 4LL))
+#define MOP(x)	(OP4(x)|(((x)>>4LL) & 3LL) << 33LL)
 #define FN5(x)	(((x) & 0x1fLL) << 35LL)
 #define FN6(x)	((FN5((x) >> 1)|(((x) & 1LL) << 6LL))|0x80LL)
 #define FN2(x)	(((x) & 3LL)<<33LL)
@@ -211,8 +251,8 @@ static int regCnst;
 #define RB(x)		(((x) & 63LL) << 16LL)
 #define RC(x)		(((x) & 63LL) << 22LL)
 #define RII(x)	((((x) & 0x7fffLL) << 16LL) | ((((x) >> 15LL) & 0x7fLL) << 33LL))
-#define MLI(x)	((((x) & 0x7fffLL) << 16LL) | ((((x) >> 15LL) & 0x7fLL) << 33LL))
-#define MSI(x)	(((x) & 0x3fLL) | ((((x) >> 6LL) & 0x1ffLL) << 22LL) | ((((x) >> 15LL) & 0x7fLL) << 33LL))
+#define MLI(x)	((((x) & 0x7fffLL) << 16LL) | ((((x) >> 15LL) & 0x1fLL) << 35LL))
+#define MSI(x)	(((x) & 0x3fLL) | ((((x) >> 6LL) & 0x1ffLL) << 22LL) | ((((x) >> 15LL) & 0x1fLL) << 35LL))
 #define FMT(x)	(((x) & 15LL)<<31LL)
 #define RM(x)		(((x) & 7LL) << 28LL)
 #define FLT3(x)	(((x) & 0x3fLL) << 22LL)
@@ -224,128 +264,67 @@ __int8 TmpTbl[125][3] =
 {B,B,B},
 {I,B,B},
 {F,B,B},
-{L,I,B},
-{S,I,B},
+{M,B,B},
 {B,I,B},
 {I,I,B},
 {F,I,B},
-{L,F,B},
-{S,F,B},
+{M,I,B},
 {B,F,B},
 {I,F,B},
 {F,F,B},
-{L,L,I},
-{S,L,I},
-{B,L,I},
-{I,L,I},
-{F,L,I},
-{L,S,I},
-{S,S,I},
-{B,S,I},
-{I,S,I},
-{F,S,I},
-{L,B,I},
-{S,B,I},
+{M,F,B},
+{B,M,B},
+{I,M,B},
+{F,M,B},
+{M,M,B},
 {B,B,I},
 {I,B,I},
 {F,B,I},
-{L,I,I},
-{S,I,I},
+{M,B,I},
 {B,I,I},
 {I,I,I},
 {F,I,I},
-{L,F,I},
-{S,F,I},
+{M,I,I},
 {B,F,I},
 {I,F,I},
 {F,F,I},
-{L,L,F},
-{S,L,F},
-{B,L,F},
-{I,L,F},
-{F,L,F},
-{L,S,F},
-{S,S,F},
-{B,S,F},
-{I,S,F},
-{F,S,F},
-{L,B,F},
-{S,B,F},
+{M,F,I},
+{B,M,I},
+{I,M,I},
+{F,M,I},
+{M,M,I},
 {B,B,F},
 {I,B,F},
 {F,B,F},
-{L,I,F},
-{S,I,F},
+{M,B,F},
 {B,I,F},
 {I,I,F},
 {F,I,F},
-{L,F,F},
-{S,F,F},
+{M,I,F},
 {B,F,F},
 {I,F,F},
 {F,F,F},
-{L,L,L},
-{S,L,L},
-{B,L,L},
-{I,L,L},
-{F,L,L},
-{L,S,L},
-{S,S,L},
-{B,S,L},
-{I,S,L},
-{F,S,L},
-{L,B,L},
-{S,B,L},
-{B,B,L},
-{I,B,L},
-{F,B,L},
-{L,I,L},
-{S,I,L},
-{B,I,L},
-{I,I,L},
-{F,I,L},
-{L,F,L},
-{S,F,L},
-{B,F,L},
-{I,F,L},
-{F,F,L},
-{L,L,S},
-{S,L,S},
-{B,L,S},
-{I,L,S},
-{F,L,S},
-{L,S,S},
-{S,S,S},
-{B,S,S},
-{I,S,S},
-{F,S,S},
-{L,B,S},
-{S,B,S},
-{B,B,S},
-{I,B,S},
-{F,B,S},
-{L,I,S},
-{S,I,S},
-{B,I,S},
-{I,I,S},
-{F,I,S},
-{L,F,S},
-{S,F,S},
-{B,F,S},
-{I,F,S},
-{F,F,S},
-{L,L,B},
-{S,L,B},
-{B,L,B},
-{I,L,B},
-{F,L,B},
-{L,S,B},
-{S,S,B},
-{B,S,B},
-{I,S,B},
-{F,S,B},
-{L,B,B},
-{S,B,B},
+{M,F,F},
+{B,M,F},
+{I,M,F},
+{F,M,F},
+{M,M,F},
+{B,B,M},
+{I,B,M},
+{F,B,M},
+{M,B,M},
+{B,I,M},
+{I,I,M},
+{F,I,M},
+{M,I,M},
+{B,F,M},
+{I,F,M},
+{F,F,M},
+{M,F,M},
+{B,M,M},
+{I,M,M},
+{F,M,M},
+{M,M,M},
 
 /*
 	// *****
@@ -1596,7 +1575,7 @@ static int GetTemplate(int units)
 		return (0x7D);
 	if (units == 0300)
 		return (0x7E);
-	for (n = 0; n < 125; n++) {
+	for (n = 0; n < 64; n++) {
 		if ((units & 7) == TmpTbl[n][2]) {
 			if (((units >> 3) & 7) == TmpTbl[n][1]) {
 				if (((units >> 6) & 7) == TmpTbl[n][0]) {
@@ -1641,6 +1620,8 @@ static void emit_insn(int64_t oc, int unit)
  
 static void LoadConstant(Int128& val, int rg)
 {
+	Int128 tmp;
+
 	if (IsNBit128(val, *Int128::MakeInt128(22LL))) {
 		emit_insn(
 			RII(val.low) |
@@ -1649,56 +1630,83 @@ static void LoadConstant(Int128& val, int rg)
 			OP6(I_ADDI), I);	// ADDI (sign extends)
 		return;
 	}
-	if (IsNBit128(val, *Int128::MakeInt128(44LL))) {
+	if (IsNBit128(val, *Int128::MakeInt128(40LL))) {
+		Int128::Shr(&tmp, &val, 20LL);
 		emit_insn(
-			RII(Int128::Shr(nullptr, &val, 22LL)) |
+			RII(tmp.low) |
 			RT(rg) |
 			RA(0) |
 			OP6(I_ADDS1), I);	// ADDDS (sign extends)
 		emit_insn(
-			RII(val.low) |
+			RII(val.low & 0xfffffLL) |
 			RA(rg) |
 			RT(rg) |
-			OP6(I_ORI), I);	// ORI (zero extends)
+			OP6(I_ORS0), I);	// ORS0 (zero extends)
 		return;
 	}
-	if (IsNBit128(val, *Int128::MakeInt128(66LL))) {
+	if (IsNBit128(val, *Int128::MakeInt128(60LL))) {
+		Int128::Shr(&tmp, &val, 40LL);
 		emit_insn(
-			RII(Int128::Shr(nullptr,&val,44LL)) |
+			RII(tmp.low) |
 			RT(rg) |
 			OP6(I_ADDS2), I);
+		Int128::Shr(&tmp, &val, 20LL);
 		emit_insn(
-			RII(Int128::Shr(nullptr, &val, 22LL)) |
+			RII(tmp.low & 0xfffffLL) |
 			RA(rg) |
 			RT(rg) |
-			OP6(I_ORS1), I);	// ORI (zero extends)
+			OP6(I_ORS1), I);	// ORS1 (zero extends)
 		emit_insn(
-			RII(val.low) |
+			RII(val.low & 0xfffffLL) |
 			RA(rg) |
+			RT(rg) |
+			OP6(I_ORS0), I);	// ORS0 (zero extends)
+		return;
+	}
+	if ((code_address % 16) == 0x0A) {
+		emit_insn(0x00C0, B);
+		emit_insn(
+			RII(0) |
+			RA(0) |
+			RT(rg) |
+			OP6(I_ORI), I);	// ORI
+		emit_insn(val.low, 0);
+		emit_insn((val.high << 24LL) | ((unsigned int64_t)val.low >> 40LL), 0);
+		return;
+	}
+	if ((code_address % 16) == 0x00) {
+		emit_insn(
+			RII(0) |
+			RA(0) |
 			RT(rg) |
 			OP6(I_ORI), I);	// ORI (zero extends)
+		emit_insn(val.low, 0);
+		emit_insn((val.high << 24LL) | ((unsigned int64_t)val.low >> 40LL), 0);
 		return;
 	}
 	// Won't fit into 66 bits, assume 80 bit constant
+	Int128::Shr(&tmp, &val, 60LL);
 	emit_insn(
-		RII(Int128::Shr(nullptr, &val, 66LL)) |
+		RII(tmp.low) |
 		RT(rg) |
 		OP6(I_ADDS3), I);
+	Int128::Shr(&tmp, &val, 40LL);
 	emit_insn(
-		RII(Int128::Shr(nullptr, &val, 44LL)) |
+		RII(tmp.low & 0xfffffLL) |
 		RA(rg) |
 		RT(rg) |
-		OP6(I_ORS2), I);	// ORI (zero extends)
+		OP6(I_ORS2), I);
+	Int128::Shr(&tmp, &val, 20LL);
 	emit_insn(
-		RII(Int128::Shr(nullptr, &val, 22LL)) |
+		RII(tmp.low & 0xfffffLL) |
 		RA(rg) |
 		RT(rg) |
-		OP6(I_ORS1), I);	// ORI (zero extends)
+		OP6(I_ORS1), I);
 	emit_insn(
-		RII(val.low) |
+		RII(val.low & 0xfffffLL) |
 		RA(rg) |
 		RT(rg) |
-		OP6(I_ORI), I);	// ORI (zero extends)
+		OP6(I_ORS0), I);
 	return;
 }
 
@@ -1820,7 +1828,7 @@ static void process_riop(int64_t opcode6, int64_t func6, int64_t bit23)
 		emit_insn((val.high << 24LL) | ((unsigned int64_t)val.low >> 40LL), 0);
 		goto xit;
 	}
-	if (!IsNBit128(val, *Int128::MakeInt128(22LL))) {
+	if (!IsNBit128(val, *Int128::MakeInt128(21LL))) {
 		LoadConstant(val, 54);
 		emit_insn(
 			FN6(func6) |
@@ -3117,7 +3125,7 @@ static void process_store()
 	ar = (int)((aq << 1LL) | rl);
 	if (opcode6 == I_SV)
 		Rs = getVecRegister();
-	else if (opcode6 == I_SFx)
+	else if (opcode6 == I_STFD || opcode6==I_STFS)
 		Rs = getFPRegister();
 	else
 		Rs = getRegisterX();
@@ -3136,12 +3144,13 @@ static void process_store()
 			RC(Rc) |
 			RB(Rs) |
 			RA(Ra) |
-			OP4(I_MSX), S);
+			RT(disp & 0x3f)|
+			MOP(I_MSX), M);
 		return;
 	}
   if (Ra < 0) Ra = 0;
   Int128::Assign(&val, Int128::MakeInt128(disp));
-	if (!IsNBit128(val,*Int128::MakeInt128(22LL))) {
+	if (!IsNBit128(val,*Int128::MakeInt128(20LL))) {
 		LoadConstant(val,54);
 		// Change to indexed addressing
 		emit_insn(
@@ -3150,7 +3159,7 @@ static void process_store()
 			RC(54) |
 			RB(Rs) |
 			RA(Ra) |
-			OP4(I_MSX), S);
+			MOP(I_MSX), M);
 		ScanToEOL();
 		return;
 	}
@@ -3158,7 +3167,7 @@ static void process_store()
 		MSI(val.low) |
 		RB(Rs) |
 		RA(Ra) |
-		OP4(opcode6), S);
+		MOP(opcode6), M);
     ScanToEOL();
 }
 /*
@@ -3253,7 +3262,7 @@ static void process_ldi()
 		emit_insn((val.high << 24LL) | ((unsigned int64_t)val.low >> 40LL), 0);
 		return;
 	}
-	if (!IsNBit128(val, *Int128::MakeInt128(22LL))) {
+	if (!IsNBit128(val, *Int128::MakeInt128(21LL))) {
 		LoadConstant(val, Rt);
 		return;
 	}
@@ -3297,7 +3306,7 @@ static void process_load()
 	p = inptr;
 	if (opcode6 == I_LV)
 		Rt = getVecRegister();
-	else if (opcode6 == I_LFx)
+	else if (opcode6 == I_LDFD || opcode6==I_LDFS)
 		Rt = getFPRegister();
 	else
 		Rt = getRegisterX();
@@ -3315,17 +3324,18 @@ static void process_load()
 		//	error("Indexed addressing not supported on GPU");
 		// Trap LEA, convert to LEAX opcode
 		emit_insn(
+			RB(disp & 0x3fLL) |
 			RC(Rc) |
 			RT(Rt) |
 			RA(Ra) |
-			OP4(funct6)
-			,L
+			MOP(funct6)
+			,M
 		);
 		return;
 	}
   if (Ra < 0) Ra = 0;
     val = disp;
-	if (!IsNBit128(val, *Int128::MakeInt128(22LL))) {
+	if (!IsNBit128(val, *Int128::MakeInt128(20LL))) {
 		LoadConstant(val, 54);
 		// Change to indexed addressing
 		emit_insn(
@@ -3333,8 +3343,8 @@ static void process_load()
 			RC(54) |
 			RT(Rt) |
 			RA(Ra) |
-			OP4(I_MSX)
-			, L);
+			MOP(I_MLX)
+			, M);
 		ScanToEOL();
 		return;
 	}
@@ -3342,8 +3352,8 @@ static void process_load()
 		MLI(val.low) |
 		RT(Rt) |
 		RA(Ra) |
-		OP4(opcode6)
-		, L);
+		MOP(opcode6)
+		, M);
     ScanToEOL();
 }
 
@@ -3369,13 +3379,13 @@ static void process_cache(int opcode6)
 			RC(Rc) |
 			(cmd << 16) |
 			RA(Ra) |
-			OP4(I_MSX)
-			,S);
+			MOP(I_MSX)
+			,M);
 		return;
 	}
     if (Ra < 0) Ra = 0;
 		Int128::Assign(&val, Int128::MakeInt128(disp));
-	if (!IsNBit128(val,*Int128::MakeInt128(22LL))) {
+	if (!IsNBit128(val,*Int128::MakeInt128(20LL))) {
 		LoadConstant(val,54);
 		// Change to indexed addressing
 		emit_insn(
@@ -3383,8 +3393,8 @@ static void process_cache(int opcode6)
 			RC(54) |
 			(cmd << 16) |
 			RA(Ra) |
-			OP4(I_MSX)
-			, S);
+			MOP(I_MSX)
+			, M);
 		ScanToEOL();
 		return;
 	}
@@ -3392,7 +3402,7 @@ static void process_cache(int opcode6)
 		MSI(val.low) |
 		(cmd << 16) |
 		RA(Ra) |
-		OP4(opcode6), S);
+		MOP(opcode6), M);
     ScanToEOL();
 }
 
@@ -3473,7 +3483,7 @@ static void process_mov(int64_t oc, int64_t fn)
 			fp = 1;
 		}
 	}
-	Rt &= 31;
+	Rt &= 63;
 	if (inptr[-1]==':') {
 		if (*inptr=='x' || *inptr=='X') {
 			d3 = 2;
@@ -3504,7 +3514,7 @@ static void process_mov(int64_t oc, int64_t fn)
 			fp |= 2;
 		}
 	}
-	Ra &= 31;
+	Ra &= 63;
 	if (inptr[-1]==':') {
 		if (*inptr=='x' || *inptr=='X') {
 			inptr++;
@@ -3518,7 +3528,7 @@ static void process_mov(int64_t oc, int64_t fn)
 	}
 	 emit_insn(
 		 FN5(I_MOV) |
-		 OP4(1) |
+		 OP6(1) |
 		 RT(Rt) |
 		 RA(Ra)
 		 , I
@@ -4011,11 +4021,12 @@ static void process_push(int64_t fn4, int64_t op6)
 		if (!IsNBit128(val, *Int128::MakeInt128(22LL))) {
 			LoadConstant(val, 54);
 			emit_insn(
+				FN5(10) |
 				RB(54) |
 				RT(regSP) |
 				RA(regSP) |
-				OP4(I_PUSHC)
-				, S
+				MOP(I_PUSH)
+				, M
 			);
 			return;
 		}
@@ -4024,17 +4035,18 @@ static void process_push(int64_t fn4, int64_t op6)
 			RT(regSP) |
 			RA(regSP) |
 			OP4(I_PUSHC)
-			,S
+			,M
 		);
 		return;
 	}
 	Ra = getRegisterX();
 	emit_insn(
+		FN5(10) |
 		RB(Ra) |
 		RT(regSP) |
 		RA(regSP) |
-		OP4(I_PUSH)
-		, S
+		MOP(I_PUSH)
+		, M
 	);
 	prevToken();
 }
@@ -4343,8 +4355,8 @@ static void process_default()
 		//case tk_lui: process_lui(0x27); break;
 	case tk_lv:  process_lv(0x36); break;
 	case tk_macro:	process_macro(); break;
-	case tk_memdb: emit_insn(0, S); break;
-	case tk_memsb: emit_insn(0, S); break;
+	case tk_memdb: emit_insn(0xCC000003C0LL, M); break;
+	case tk_memsb: emit_insn(0xCA000003C0LL, M); break;
 	case tk_message: process_message(); break;
 	case tk_mov: process_mov(0x02, 0x22); break;
 		//case tk_mulh: process_rrop(0x26, 0x3A); break;
@@ -4412,7 +4424,7 @@ static void process_default()
 	case tk_sxb: process_rop(0x1A); break;
 	case tk_sxc: process_rop(0x19); break;
 	case tk_sxh: process_rop(0x18); break;
-//	case tk_sync: emit_insn(0x04480002, !expand_flag, 4); break;
+	case tk_sync: emit_insn(0x1000000038LL, B); break;
 	case tk_tlbdis:  process_tlb(6); break;
 	case tk_tlben:   process_tlb(5); break;
 	case tk_tlbpb:   process_tlb(1); break;
@@ -4609,68 +4621,68 @@ void Itanium_processMaster()
 		parm1[tk_ldi] = 0;
 		parm2[tk_ldi] = 0;
 		jumptbl[tk_stb] = &process_store;
-		parm1[tk_stb] = 0x0;
-		parm2[tk_stb] = 0x0;
+		parm1[tk_stb] = I_STB;
+		parm2[tk_stb] = I_STB;
 		parm3[tk_stb] = 0x0;
 		jumptbl[tk_stw] = &process_store;
-		parm1[tk_stw] = 0x1;
-		parm2[tk_stw] = 0x1;
+		parm1[tk_stw] = I_STW;
+		parm2[tk_stw] = I_STW;
 		parm3[tk_stw] = 0x0;
 		jumptbl[tk_stp] = &process_store;
-		parm1[tk_stp] = 0x2;
-		parm2[tk_stp] = 0x2;
+		parm1[tk_stp] = I_STP;
+		parm2[tk_stp] = I_STP;
 		parm3[tk_stp] = 0x0;
 		jumptbl[tk_std] = &process_store;
-		parm1[tk_std] = 0x3;
-		parm2[tk_std] = 0x3;
+		parm1[tk_std] = I_STD;
+		parm2[tk_std] = I_STD;
 		parm3[tk_std] = 0x0;
 		jumptbl[tk_stt] = &process_store;
-		parm1[tk_stt] = 0x8;
-		parm2[tk_stt] = 0x8;
+		parm1[tk_stt] = I_STT;
+		parm2[tk_stt] = I_STT;
 		parm3[tk_stt] = 0x0;
 		jumptbl[tk_sto] = &process_store;
-		parm1[tk_sto] = 0x9;
-		parm2[tk_sto] = 0x9;
+		parm1[tk_sto] = I_STO;
+		parm2[tk_sto] = I_STO;
 		parm3[tk_sto] = 0x0;
 		//jumptbl[tk_stdc] = &process_store;
 		//parm1[tk_stdc] = 0x17;
 		//parm2[tk_stdc] = 0x23;
 		//parm3[tk_stdc] = 0x00;
 		jumptbl[tk_ldb] = &process_load;
-		parm1[tk_ldb] = 0x0;
-		parm2[tk_ldb] = 0x0;
+		parm1[tk_ldb] = I_LDB;
+		parm2[tk_ldb] = I_LDB;
 		parm3[tk_ldb] = 0x0;
 		jumptbl[tk_ldbu] = &process_load;
-		parm1[tk_ldbu] = 0x4;
-		parm2[tk_ldbu] = 0x4;
+		parm1[tk_ldbu] = I_LDBU;
+		parm2[tk_ldbu] = I_LDBU;
 		parm3[tk_ldbu] = 0x0;
 		jumptbl[tk_ldw] = &process_load;
-		parm1[tk_ldw] = 0x1;
-		parm2[tk_ldw] = 0x1;
+		parm1[tk_ldw] = I_LDW;
+		parm2[tk_ldw] = I_LDW;
 		parm3[tk_ldw] = 0x0;
 		jumptbl[tk_ldwu] = &process_load;
-		parm1[tk_ldwu] = 0x5;
-		parm2[tk_ldwu] = 0x5;
+		parm1[tk_ldwu] = I_LDWU;
+		parm2[tk_ldwu] = I_LDWU;
 		parm3[tk_ldwu] = 0x0;
 		jumptbl[tk_ldt] = &process_load;
-		parm1[tk_ldt] = 0x8;
-		parm2[tk_ldt] = 0x8;
+		parm1[tk_ldt] = I_LDT;
+		parm2[tk_ldt] = I_LDT;
 		parm3[tk_ldt] = 0x0;
 		jumptbl[tk_ldtu] = &process_load;
-		parm1[tk_ldtu] = 0xC;
-		parm2[tk_ldtu] = 0xC;
+		parm1[tk_ldtu] = I_LDTU;
+		parm2[tk_ldtu] = I_LDTU;
 		parm3[tk_ldtu] = 0x0;
 		jumptbl[tk_lea] = &process_load;
-		parm1[tk_lea] = 0x0E;
-		parm2[tk_lea] = 0x18;
+		parm1[tk_lea] = I_LEA;
+		parm2[tk_lea] = I_LEA;
 		parm3[tk_lea] = 0x00;
 		jumptbl[tk_ldp] = &process_load;
-		parm1[tk_ldp] = 0x2;
-		parm2[tk_ldp] = 0x2;
+		parm1[tk_ldp] = I_LDP;
+		parm2[tk_ldp] = I_LDP;
 		parm3[tk_ldp] = 0x0;
 		jumptbl[tk_ldpu] = &process_load;
-		parm1[tk_ldpu] = 0x6;
-		parm2[tk_ldpu] = 0x6;
+		parm1[tk_ldpu] = I_LDPU;
+		parm2[tk_ldpu] = I_LDPU;
 		parm3[tk_ldpu] = 0x0;
 /*
 		jumptbl[tk_lvb] = &process_load;
@@ -4703,24 +4715,24 @@ void Itanium_processMaster()
 		parm3[tk_lvw] = 0x04;
 */
 		jumptbl[tk_ldd] = &process_load;
-		parm1[tk_ldd] = 0x3;
-		parm2[tk_ldd] = 0x3;
+		parm1[tk_ldd] = I_LDD;
+		parm2[tk_ldd] = I_LDD;
 		parm3[tk_ldd] = 0x0;
 		jumptbl[tk_lddr] = &process_load;
-		parm1[tk_lddr] = 0x7;
-		parm2[tk_lddr] = 0x7;
+		parm1[tk_lddr] = I_LDDR;
+		parm2[tk_lddr] = I_LDDR;
 		parm3[tk_lddr] = 0x0;
 		jumptbl[tk_ldo] = &process_load;
-		parm1[tk_ldo] = 0x9;
-		parm2[tk_ldo] = 0x9;
+		parm1[tk_ldo] = I_LDO;
+		parm2[tk_ldo] = I_LDO;
 		parm3[tk_ldo] = 0x0;
 		jumptbl[tk_sf] = &process_store;
-		parm1[tk_sf] = 0x2B;
-		parm2[tk_sf] = 0x2D;
+		parm1[tk_sf] = I_STFD;
+		parm2[tk_sf] = I_STFD;
 		parm3[tk_sf] = 0x01;
 		jumptbl[tk_lf] = &process_load;
-		parm1[tk_lf] = 0x1B;
-		parm2[tk_lf] = 0x1D;
+		parm1[tk_lf] = I_LDFD;
+		parm2[tk_lf] = I_LDFD;
 		parm3[tk_lf] = 0x01;
 	}
 	tbndx = 0;

@@ -44,6 +44,7 @@
 `define BRcc		4'h2
 `define NOP			4'h3
 `define FBcc		4'h4
+`define BBc			4'h5
 `define BEQI		4'h6
 `define BNEI		4'h7
 `define JAL			4'h8

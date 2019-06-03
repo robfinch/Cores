@@ -2586,8 +2586,8 @@ int main(int argc, char *argv[])
 							binfile[kk+7], binfile[kk+6], binfile[kk+5], binfile[kk+4], 
 							binfile[kk+3], binfile[kk+2], binfile[kk+1], binfile[kk]);
 					}
-					fprintf(vfp, "\trommem[12286] = 128'h00000000000000000000000000000000;\n");
-					fprintf(vfp, "\trommem[12287] = 128'h0000000000000000%08X%08X;\n", binlen, checksum);
+					fprintf(vfp, "\trommem[14334] = 128'h00000000000000000000000000000000;\n");
+					fprintf(vfp, "\trommem[14335] = 128'h%08X%08X0000000000000000;\n", binlen, checksum);
 				}
 				else if (vebits==64) {
 					for (kk = 0; kk < binndx; kk+=8) {

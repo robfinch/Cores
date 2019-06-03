@@ -284,13 +284,13 @@ endfunction
 function IsChk;
 input [2:0] unit;
 input [39:0] isn;
-IsChk = unit==`BUnit && (isn[9:6]==`CHK || isn[9:6]==`CHKI);
+IsChk = unit==`BUnit && (isn[`OPCODE4]==`CHK || isn[`OPCODE4]==`CHKI);
 endfunction
 
 function IsFSync;
 input [2:0] unit;
 input [39:0] isn;
-IsFSync = unit==`FUnit && isn[`OPCODE4]==`FLT2 && isn[27:22]==`FSYNC; 
+IsFSync = unit==`FUnit && isn[`OPCODE4]==`FLT2 && isn[`FUNCT5]==`FSYNC; 
 endfunction
 
 function IsMemdb;
@@ -345,7 +345,7 @@ endfunction
 function IsCSR;
 input [2:0] unit;
 input [39:0] isn;
-IsCSR = unit==`IUnit && {isn[32:31],isn[9:6]}==`CSRRW;
+IsCSR = unit==`IUnit && {isn[32:31],isn[`OPCODE4]}==`CSRRW;
 endfunction
 
 // Really IsPredictableBranch
@@ -392,25 +392,25 @@ endfunction
 function IsRti;
 input [2:0] unit;
 input [39:0] isn;
-IsRti = unit==`BUnit && isn[`OPCODE4]==`RTI && isn[39:34]==5'd0;
+IsRti = unit==`BUnit && isn[`OPCODE4]==`RTI && isn[`FUNCT5]==5'd0;
 endfunction
 
 function IsSei;
 input [2:0] unit;
 input [39:0] isn;
-IsSei = unit==`BUnit && isn[`OPCODE4]==`RTI && isn[39:34]==`SEI;
+IsSei = unit==`BUnit && isn[`OPCODE4]==`RTI && isn[`FUNCT5]==`SEI;
 endfunction
 
 function IsSync;
 input [2:0] unit;
 input [39:0] isn;
-IsSync = (unit==`BUnit && isn[9:6]==`RTI && isn[39:34]==`SYNC) || IsRti(unit,isn);
+IsSync = (unit==`BUnit && isn[`OPCODE4]==`RTI && isn[`FUNCT5]==`SYNC) || IsRti(unit,isn);
 endfunction
 
 function IsRex;
 input [2:0] unit;
 input [39:0] isn;
-IsRex = (unit==`BUnit && isn[9:6]==`RTI && isn[39:34]==`REX);
+IsRex = (unit==`BUnit && isn[`OPCODE4]==`RTI && isn[`FUNCT5]==`REX);
 endfunction
 
 function IsOddball;

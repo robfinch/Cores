@@ -1371,7 +1371,7 @@ int NextToken()
 
         // call cas chk cmp cmpu code cli com cmpi csrrc csrrs csrrw
         case 'c': case 'C':
-			if (gCpu=='F' || gCpu=='G') {
+			if (gCpu=='F' || gCpu=='G' || gCpu=='J') {
 				if ((inptr[1]=='a' || inptr[1]=='A')
 					&& (inptr[2]=='c' || inptr[2]=='C')
 					&& (inptr[3]=='h' || inptr[3]=='H')
@@ -2961,7 +2961,7 @@ int NextToken()
 								tbndx++;
 								return token = tk_mv2fix;
             }
-            if (gCpu==4 || gCpu=='F') {
+            if (gCpu==4 || gCpu=='F' || gCpu=='J') {
                 if ((inptr[1]=='e' || inptr[1]=='E') &&
                     (inptr[2]=='m' || inptr[2]=='M') &&
                     (inptr[3]=='d' || inptr[3]=='D') &&

@@ -62,6 +62,6 @@ public:
 	static void Div(Int128 *q, Int128 *r, Int128 *a, Int128 *b);
 	static bool IsEqual(Int128 *a, Int128 *b);
 	static bool IsLessThan(Int128 *a, Int128 *b);
-	static bool IsLE(Int128 *a, Int128 *b) { return (IsEqual(a, b) |  IsLessThan(a, b)); };
-	static bool IsGE(Int128 *a, Int128 *b) { return (IsEqual(a, b) | !IsLessThan(b, a)); };
+	static bool IsLE(Int128 *a, Int128 *b) { return (IsEqual(a, b) ||  IsLessThan(a, b)); };
+	static bool IsGE(Int128 *a, Int128 *b) { return (IsEqual(a, b) || !IsLessThan(a, b)); };
 };

@@ -137,8 +137,8 @@ reg [2:0] slotu [QSLOTS-1:0];
 reg [3:0] fb_panic;
 
 reg [127:0] ibundle;
-reg [6:0] template [QSLOTS-1:0];
-reg [39:0] insnx [QSLOTS-1:0];
+reg [6:0] template [0:QSLOTS-1];
+reg [39:0] insnx [0:QSLOTS-1];
 assign insnx[0] = ibundle[39:0];
 assign insnx[1] = ibundle[79:40];
 assign insnx[2] = ibundle[119:80];
@@ -148,7 +148,7 @@ reg [7:0] cnt;
 reg r1IsFp,r2IsFp,r3IsFp;
 
 wire  [`QBITS] tails [0:QSLOTS-1];
-reg  [`QBITS] heads [0:QENTRIES-1];
+wire  [`QBITS] heads [0:QENTRIES-1];
 
 wire tlb_miss;
 wire exv;
@@ -337,6 +337,7 @@ reg [199:0] xdati;
 reg canq1, canq2, canq3;
 reg [2:0] queuedCnt;
 reg queuedNop;
+reg [2:0] hi_amt;
 
 reg [47:0] codebuf[0:63];
 reg [QENTRIES-1:0] setpred;
@@ -763,12 +764,12 @@ wire slot2_mem = IsMem(slotu[2]) && !IsLea(slotu[2],insnx[2]);
 assign slot_jc[0] = IsCall(slotu[0],insnx[0]) || IsJmp(slotu[0],insnx[0]);
 assign slot_jc[1] = IsCall(slotu[1],insnx[1]) || IsJmp(slotu[1],insnx[1]);
 assign slot_jc[2] = IsCall(slotu[2],insnx[2]) || IsJmp(slotu[2],insnx[2]);
-assign slot_br[0] = IsBranchReg(slotu[0],insnx[0]) | id_bus[1][`IB_BRK] | id_bus[1][`IB_RTI];
-assign slot_br[1] = IsBranchReg(slotu[1],insnx[1]) | id_bus[2][`IB_BRK] | id_bus[2][`IB_RTI];
-assign slot_br[2] = IsBranchReg(slotu[2],insnx[2]) | id_bus[3][`IB_BRK] | id_bus[3][`IB_RTI];
-assign take_branch[0] = (IsBranch(slotu[0],insnx[0]) && predict_taken[0]) || id_bus[1][`IB_BRK] || id_bus[1][`IB_RTI];
-assign take_branch[1] = (IsBranch(slotu[1],insnx[1]) && predict_taken[1]) || id_bus[2][`IB_BRK] || id_bus[2][`IB_RTI];
-assign take_branch[2] = (IsBranch(slotu[2],insnx[2]) && predict_taken[2]) || id_bus[3][`IB_BRK] || id_bus[3][`IB_RTI];
+assign slot_br[0] = IsBranchReg(slotu[0],insnx[0]) | id_bus[0][`IB_BRK] | id_bus[0][`IB_RTI];
+assign slot_br[1] = IsBranchReg(slotu[1],insnx[1]) | id_bus[1][`IB_BRK] | id_bus[1][`IB_RTI];
+assign slot_br[2] = IsBranchReg(slotu[2],insnx[2]) | id_bus[2][`IB_BRK] | id_bus[2][`IB_RTI];
+assign take_branch[0] = (IsBranch(slotu[0],insnx[0]) && predict_taken[0]) || id_bus[0][`IB_BRK] || id_bus[0][`IB_RTI];
+assign take_branch[1] = (IsBranch(slotu[1],insnx[1]) && predict_taken[1]) || id_bus[1][`IB_BRK] || id_bus[1][`IB_RTI];
+assign take_branch[2] = (IsBranch(slotu[2],insnx[2]) && predict_taken[2]) || id_bus[2][`IB_BRK] || id_bus[2][`IB_RTI];
 
 wire [1:0] ic_fault;
 wire [127:0] ic_out;
@@ -1524,6 +1525,14 @@ write_buffer #(.QENTRIES(QENTRIES)) uwb1
 	.cdat_o(dcdat)
 );
 
+headptrs uhp1
+(
+	.rst(rst_i),
+	.clk(clk),
+	.amt(hi_amt),
+	.heads(heads)
+);
+
 tailptrs utp1
 (
 	.rst_i(rst_i),
@@ -1839,7 +1848,7 @@ else if (phit) begin
 			template[2] <= BBB;
 		end
 		else begin
-			if (IsPfi(ic_out[39:0]))	begin
+			if (IsPfi(Unit0(ic_out[127:120]),ic_out[39:0]))	begin
 				if (~|irq_i) begin
 					ibundle[39:0] <= `NOP_INSN;
 					insnx[0] <= `NOP_INSN;
@@ -1859,7 +1868,7 @@ else if (phit) begin
 				template[0] <= codebuf[ic_out[`RS1]][46:40];
 				insnx[0] <= codebuf[ic_out[`RS1]][39:0];
 			end
-			if (IsPfi(ic_out[79:40])) begin
+			if (IsPfi(Unit1(ic_out[127:120]),ic_out[79:40])) begin
 				if (~|irq_i) begin
 					ibundle[79:40] <= `NOP_INSN;
 					insnx[1] <= `NOP_INSN;
@@ -1878,7 +1887,7 @@ else if (phit) begin
 				template[1] <= codebuf[ic_out[`RS1]][46:40];
 				insnx[1] <= codebuf[ic_out[`RS1]][39:0];
 			end
-			if (IsPfi(ic_out[119:80])) begin
+			if (IsPfi(Unit2(ic_out[127:120]),ic_out[119:80])) begin
 				if (~|irq_i) begin
 					ibundle[119:80] <= `NOP_INSN;
 					insnx[2] <= `NOP_INSN;
@@ -2447,8 +2456,9 @@ IsExec = unit==`BUnit && (isn[`OPCODE4]==`RTI && isn[`FUNCT5]==`EXEC);
 endfunction
 
 function IsPfi;
+input [2:0] unit;
 input [39:0] isn;
-IsPfi = (isn[`OPCODE4]==`BRK && isn[`FUNCT5]==`PFI);
+IsPfi = unit==`BUnit && (isn[`OPCODE4]==`BRK && isn[`FUNCT5]==`PFI);
 endfunction
 
 function IsDivmod;
@@ -2650,7 +2660,6 @@ wire cmt_head1 = (!iq_rfw[heads[1]] && !iq_oddball[heads[1]] && ~|iq_exc[heads[1
 wire cmt_head2 = (!iq_rfw[heads[2]] && !iq_oddball[heads[2]] && ~|iq_exc[heads[2]]);
 
 // Determine the head increment amount, this must match code later on.
-reg [2:0] hi_amt;
 always @*
 begin
 	hi_amt <= 4'd0;
@@ -2759,30 +2768,29 @@ begin
 end
 
 // Amount subtracted from sequence numbers
-reg [`SNBITS] tosub;
-always @*
-case(hi_amt)
-3'd3: tosub <= (iq_v[heads[2]] ? iq_sn[heads[2]]
-							 : iq_v[heads[1]] ? iq_sn[heads[1]]
-							 : iq_v[heads[0]] ? iq_sn[heads[0]]
-							 : 4'b0);
-3'd2: tosub <= (iq_v[heads[1]] ? iq_sn[heads[1]]
-							 : iq_v[heads[0]] ? iq_sn[heads[0]]
-							 : 4'b0);
-3'd1: tosub <= (iq_v[heads[0]] ? iq_sn[heads[0]]
-							 : 4'b0);							 
-default:	tosub <= 4'd0;
-endcase
+wire [`SNBITS] tosub;
+wire [`SNBITS] maxsn;
 
-reg [`SNBITS] maxsn;
-always @*
-begin
-	maxsn = 8'd0;
-	for (n = 0; n < QENTRIES; n = n + 1)
-		if (iq_sn[n] > maxsn && iq_v[n])
-			maxsn = iq_sn[n];
-	maxsn = maxsn - tosub;
-end
+seqnum usn1
+(
+	.rst(rst_i),
+	.clk(clk),
+	.phit(phit),
+	.ip_mask(ip_mask),
+	.branchmiss(branchmiss),
+	.heads(heads),
+	.slotv(slotv),
+	.slot_jc(slot_jc),
+	.take_branch(take_branch),
+	.canq1(canq1),
+	.canq2(canq2),
+	.canq3(canq3),
+	.hi_amt(hi_amt),
+	.iq_sn(iq_sn),
+	.maxsn(maxsn),
+	.tosub(tosub),
+	.debug_on(debug_on)
+);
 
 //
 // BRANCH-MISS LOGIC: livetarget
@@ -4506,6 +4514,7 @@ begin
 			|| (branchmiss && iq_source[ commit2_id[`QBITS] ]));
 	end
 	regIsValid[0] = `VAL;
+	regIsValid[64] = `VAL;
 end
 
 // Wait until the cycle after Ra becomes valid to give time to read
@@ -4989,8 +4998,6 @@ if (rst_i|(rst_ctr < 32'd2)) begin
      dram1_store <= 1'b0;
      invic <= FALSE;
      invicl <= FALSE;
-     for (n = 0; n < QENTRIES; n = n + 1)
-     	heads[n] <= n;
      panic = `PANIC_NONE;
      alu0_dataready <= 1'b0;
      alu1_dataready <= 1'b0;
@@ -5140,6 +5147,12 @@ else begin
 		branchmiss <= `FALSE;
 	end
 
+	// Sequence numbers are adjusted every clock cycle by the number of
+	// instructions comitted.
+	for (n = 0; n < QENTRIES; n = n + 1)
+		if (iq_v[n])  
+			iq_sn[n] <= iq_sn[n] - tosub;
+
 	// The following signals only pulse
 
 	// Instruction decode output should only pulse once for a queue entry. We
@@ -5274,29 +5287,15 @@ else begin
 		3'b111:
 			if (canq3 & !debug_on && `WAYS > 2) begin
 				queue_slot(0,tails[0],maxsn+2'd1,id_bus[0]);
-				if (slot_jc[0]) begin
+				if (slot_jc[0]|take_branch[0]) begin
 					;
 				end
-				else if (take_branch[0]) begin
-					;
-				end
-				else if (slot_jc[1]) begin
+				else if (slot_jc[1]|take_branch[1]) begin
 					queue_slot(1,tails[1],maxsn+2'd2,id_bus[1]);
 					arg_vs(3'b110);
 					//arg_vs_110();
 				end
-				else if (take_branch[1]) begin
-					queue_slot(1,tails[1],maxsn+2'd2,id_bus[1]);
-					arg_vs(3'b110);
-					//arg_vs_110();
-				end
-				else if (slot_jc[2]) begin
-					queue_slot(1,tails[1],maxsn+2'd2,id_bus[1]);
-					queue_slot(2,tails[2],maxsn+2'd3,id_bus[2]);
-					arg_vs(3'b111);
-					//arg_vs_111();
-				end
-				else if (take_branch[2]) begin
+				else if (slot_jc[2]|take_branch[2]) begin
 					queue_slot(1,tails[1],maxsn+2'd2,id_bus[1]);
 					queue_slot(2,tails[2],maxsn+2'd3,id_bus[2]);
 					arg_vs(3'b111);
@@ -5386,7 +5385,7 @@ if (alu0_v) begin
 		iq_store[alu0_id[`QBITS]] <= `INV;
 		iq_state[alu0_id[`QBITS]] <= IQS_CMT;
 	end
-	alu0_dataready <= FALSE;
+//	alu0_dataready <= FALSE;
 end
 
 if (alu1_v && `NUM_ALU > 1) begin
@@ -5514,9 +5513,9 @@ begin
 	if (`NUM_FPU > 1)
 		setargs(n,fpu2_id,fpu2_v,rfpu2_bus);
 
-	setargs(n,alu0_id,alu0_v|alu0_v1,ralu0_bus);
+	setargs(n,alu0_id,alu0_v,ralu0_bus);
 	if (`NUM_ALU > 1)
-		setargs(n,alu1_id,alu1_v|alu1_v1,ralu1_bus);
+		setargs(n,alu1_id,alu1_v,ralu1_bus);
 
 	setargs(n,agen0_id,agen0_v & (agen0_push|agen0_lea),agen0_ma);
 	if (`NUM_AGEN > 1)
@@ -6654,24 +6653,9 @@ endtask
 // Used when instructions are committed.
 // Also clear any outstanding state bits that foul things up.
 //
-// Must not use 'n' for this function since it's used by the caller.
-function [`QBITSP1] sn_dec;
-input [`QBITS] amt;
-begin
-	sn_dec = 1'd0;
-	for (j = QENTRIES-1; j >= 0; j = j - 1)
-		if (j < amt) begin
-			if (iq_v[heads[j]])
-				sn_dec = iq_sn[heads[j]];
-		end
-end
-endfunction
-
 task head_inc;
 input [`QBITS] amt;
 begin
-	for (n = 0; n < QENTRIES; n = n + 1)
-     heads[n] <= (heads[n] + amt) % QENTRIES;
 	for (n = 0; n < QENTRIES; n = n + 1)
 		if (n < amt) begin
 			iq_state[heads[n]] <= IQS_INVALID;
@@ -6681,9 +6665,6 @@ begin
 			iq_agen[heads[n]] <= `FALSE;
 			iq_fpu[heads[n]] <= `FALSE;
 		end
-	for (n = 0; n < QENTRIES; n = n + 1)
-		if (iq_v[n])  
-			iq_sn[n] <= iq_sn[n] - sn_dec(amt);
 
 	CC <= CC + amt;
 end
@@ -6710,31 +6691,51 @@ begin
 end
 endtask
 
+// Patterns do not have all one bits! The tail queue slot depends on which set
+// bit of the pattern is present. For instance patterns 001,010, and 100 all
+// refer to the same tail - tail[0]. Need to count the set bits in the pattern
+// to determine the tail number.
+function [2:0] tails_rc;
+input [0:QSLOTS-1] pat;
+input [QSLOTS-1:0] rc;
+reg [2:0] cnt;
+begin
+	cnt = 0;
+	tails_rc = QSLOTS-1;
+	for (n = 0; n < QSLOTS; n = n + 1) begin
+		if (rc==n)
+			tails_rc = cnt;
+		if (pat[n])
+			cnt = cnt + 1;
+	end
+end
+endfunction
+
 task arg_vs;
-input [QSLOTS-1:0] pat;
+input [0:QSLOTS-1] pat;
 begin
 	for (row = 0; row < QSLOTS; row = row + 1) begin
-		if (pat[QSLOTS-row-1]) begin
+		if (pat[row]) begin
+			iq_argA_v [tails[tails_rc(pat,row)]] <= regIsValid[Ra[row]] | Source1Valid(slotu[row],insnx[row]);
+			iq_argA_s [tails[tails_rc(pat,row)]] <= rf_source[Ra[row]];
+			iq_argB_v [tails[tails_rc(pat,row)]] <= regIsValid[Rb[row]] | Source2Valid(slotu[row],insnx[row]);
+			iq_argB_s [tails[tails_rc(pat,row)]] <= rf_source[Rb[row]];
+			iq_argC_v [tails[tails_rc(pat,row)]] <= regIsValid[Rc[row]] | Source3Valid(slotu[row],insnx[row]);
+			iq_argC_s [tails[tails_rc(pat,row)]] <= rf_source[Rc[row]];
 			for (col = 0; col < QSLOTS; col = col + 1) begin
 				if (col < row) begin
-					if (pat[QSLOTS-col-1]) begin
-						iq_argA_v [tails[row]] <= regIsValid[Ra[row]] | Source1Valid(slotu[row],insnx[row]);
-						iq_argA_s [tails[row]] <= rf_source[Ra[row]];
-						if (Ra[row]==Rd[col] && slot_rfw[col]) begin
-							iq_argA_v [tails[row]] <= Source1Valid(slotu[row],insnx[row]);
-							iq_argA_s [tails[row]] <= tails[col];
+					if (pat[col]) begin
+						if (Ra[row]==Rd[col] && Ra[row][5:0]!=6'd0 && slot_rfw[col]) begin
+							iq_argA_v [tails[tails_rc(pat,row)]] <= Source1Valid(slotu[row],insnx[row]);
+							iq_argA_s [tails[tails_rc(pat,row)]] <= tails[tails_rc(pat,col)];
 						end
-						iq_argB_v [tails[row]] <= regIsValid[Rb[row]] | Source2Valid(slotu[row],insnx[row]);
-						iq_argB_s [tails[row]] <= rf_source[Rb[row]];
-						if (Rb[row]==Rd[col] && slot_rfw[col]) begin
-							iq_argB_v [tails[row]] <= Source2Valid(slotu[row],insnx[row]);
-							iq_argB_s [tails[row]] <= tails[col];
+						if (Rb[row]==Rd[col] && Rb[row][5:0]!=6'd0 && slot_rfw[col]) begin
+							iq_argB_v [tails[tails_rc(pat,row)]] <= Source2Valid(slotu[row],insnx[row]);
+							iq_argB_s [tails[tails_rc(pat,row)]] <= tails[tails_rc(pat,col)];
 						end
-						iq_argC_v [tails[row]] <= regIsValid[Rc[row]] | Source3Valid(slotu[row],insnx[row]);
-						iq_argC_s [tails[row]] <= rf_source[Rc[row]];
-						if (Rc[row]==Rd[col] && slot_rfw[col]) begin
-							iq_argC_v [tails[row]] <= Source3Valid(slotu[row],insnx[row]);
-							iq_argC_s [tails[row]] <= tails[col];
+						if (Rc[row]==Rd[col] && Rc[row][5:0]!=6'd0 && slot_rfw[col]) begin
+							iq_argC_v [tails[tails_rc(pat,row)]] <= Source3Valid(slotu[row],insnx[row]);
+							iq_argC_s [tails[tails_rc(pat,row)]] <= tails[tails_rc(pat,col)];
 						end
 					end
 				end
