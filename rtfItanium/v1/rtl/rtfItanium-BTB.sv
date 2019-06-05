@@ -30,7 +30,7 @@ module BTB(rst, clk, clk2x, clk4x,
 		hitA, hitB, hitC, 
     npcA, npcB, npcC );
 parameter AMSB = 31;
-parameter RSTPC = 80'hFFFFFFFFFFFFFFFC0100;
+parameter RSTIP = 80'hFFFFFFFFFFFFFFFC0100;
 input rst;
 input clk;
 input clk2x;
@@ -73,8 +73,8 @@ reg wrhist;
 reg [(AMSB+1)*2+1:0] mem [0:1023];
 reg [9:0] radrA, radrB, radrC, radrD, radrE, radrF;
 initial begin
-    for (n = 0; n < 1024; n = n + 1)
-        mem[n] <= RSTPC;
+  for (n = 0; n < 1024; n = n + 1)
+    mem[n] <= RSTIP;
 end
 reg wr;
 reg [AMSB:0] wadr;
@@ -140,9 +140,9 @@ end
 
 always @(posedge clk)
 begin
-    if (wrhist) #1 mem[pc[9:0]][AMSB:0] <= wdatx;
-    if (wrhist) #1 mem[pc[9:0]][(AMSB+1)*2:AMSB+1] <= pc;
-    if (wrhist) #1 mem[pc[9:0]][(AMSB+1)*2+1] <= takb;
+    if (wrhist) #1 mem[pc[11:2]][AMSB:0] <= wdatx;
+    if (wrhist) #1 mem[pc[11:2]][(AMSB+1)*2:AMSB+1] <= pc;
+    if (wrhist) #1 mem[pc[11:2]][(AMSB+1)*2+1] <= takb;
 end
 
 always @(posedge rclk)

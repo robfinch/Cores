@@ -12,7 +12,6 @@ namespace EM80
 {
 	public partial class Form1 : Form
 	{
-		rtfItaniumCpu cpu = new rtfItaniumCpu();
 		SoC soc = new SoC();
 		TextBox[] registerBoxes;
 		TextBox ipBox = new TextBox();
@@ -25,10 +24,10 @@ namespace EM80
 
 			for (nn = 0; nn < 64; nn++)
 			{
-				registerBoxes[nn].Text = cpu.regfile[nn].ToString80();
+				registerBoxes[nn].Text = soc.cpu.regfile[nn].ToString80();
 			}
-			ipBox.Text = cpu.ip.ToString80();
-			iBundleBox.Text = cpu.ibundle.ToString80();
+			ipBox.Text = soc.cpu.ip.ToString80();
+			iBundleBox.Text = soc.cpu.ibundle.ToString80();
 			ipBox.Refresh();
 			iBundleBox.Refresh();
 		}
@@ -55,12 +54,14 @@ namespace EM80
 				registerBoxes[nn].Name = "regBox" + Convert.ToString(nn);
 				registerBoxes[nn].Size = new System.Drawing.Size(150, 20);
 				registerBoxes[nn].TabIndex = nn;
+				registerBoxes[nn].Font = new Font("Courier New", 8.0f);
 				registerBoxes[nn].Text = "0";
 				registerBoxes[nn].TextAlign = HorizontalAlignment.Right;
 				ipBox.Name = "ipBox";
 				ipBox.Location = new Point(76, 432);
 				ipBox.Size = new System.Drawing.Size(150, 20);
 				ipBox.TabIndex = 64;
+				ipBox.Font = new Font("Courier New", 8.0f);
 				ipBox.Text = "0";
 				ipBox.TextAlign = HorizontalAlignment.Right;
 				this.Controls.Add(ipBox);
@@ -68,6 +69,7 @@ namespace EM80
 				iBundleBox.Location = new Point(76+180, 432);
 				iBundleBox.Size = new System.Drawing.Size(150, 20);
 				iBundleBox.TabIndex = 65;
+				iBundleBox.Font = new Font("Courier New", 8.0f);
 				iBundleBox.Text = "0";
 				iBundleBox.TextAlign = HorizontalAlignment.Right;
 				this.Controls.Add(iBundleBox);
@@ -92,7 +94,7 @@ namespace EM80
 
 		private void resetToolStripMenuItem_Click(object sender, EventArgs e)
 		{
-			cpu.Reset();
+			soc.Reset();
 			UpdateRegisters();
 		}
 
@@ -106,7 +108,7 @@ namespace EM80
 
 		private void stepToolStripMenuItem_Click(object sender, EventArgs e)
 		{
-			cpu.Step(soc);
+			soc.Step();
 			UpdateRegisters();
 		}
 

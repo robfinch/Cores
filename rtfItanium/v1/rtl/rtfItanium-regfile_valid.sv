@@ -25,10 +25,10 @@
 `define VAL		1'b1
 `define INV		1'b0
 
-module regfile_valid(rst, clk, phit, ip_mask, slotv, slot_rfw, slot_jc, tails,
+module regfile_valid(rst, clk, phit, ip_mask, slotvd, slot_rfw, slot_jc, tails,
 	livetarget, branchmiss,
 	commit0_v, commit1_v, commit0_id, commit1_id, commit0_tgt, commit1_tgt,
-	rf_source, iq_source,
+	rf_source, iq_source, queuedCnt,
 	take_branch, Rd, canq1, canq2, canq3, rf_v, debug_on);
 parameter AREGS = 128;
 parameter RBIT = 6;
@@ -40,7 +40,7 @@ input rst;
 input clk;
 input phit;
 input [QSLOTS-1:0] ip_mask;
-input [QSLOTS-1:0] slotv;
+input [QSLOTS-1:0] slotvd;
 input [QSLOTS-1:0] slot_rfw;
 input [QSLOTS-1:0] slot_jc;
 input [`QBITS] tails [0:QSLOTS-1];
@@ -56,6 +56,7 @@ input [`QBITS] rf_source [0:AREGS-1];
 input [QENTRIES-1:0] iq_source;
 input [QSLOTS-1:0] take_branch;
 input [6:0] Rd [0:QSLOTS-1];
+input [2:0] queuedCnt;
 input canq1;
 input canq2;
 input canq3;
@@ -88,7 +89,7 @@ endcase
 endfunction
 
 integer n;
-wire [2:0] pat = {slotv[0],slotv[1],slotv[2]} & {3{phit}} & ip_mask;
+wire [2:0] pat = {slotvd[0],slotvd[1],slotvd[2]} & {3{phit}} & ip_mask;
 
 always @(posedge clk)
 if (rst) begin
@@ -117,25 +118,25 @@ else begin
   end
 
 	if (!branchmiss)
-		case(pat)
+		case(slotvd)
 		3'b000:	;
-		3'b001:
-			if (canq1) begin
+		3'b100:
+			if (queuedCnt==3'd1) begin
 				if (slot_rfw[2])
 					rf_v [Rd[2]] <= `INV;
 			end
 		3'b010:
-			if (canq1) begin
+			if (queuedCnt==3'd1) begin
 				if (slot_rfw[1])
 					rf_v [Rd[1]] <= `INV;
 			end
-		3'b100:
-			if (canq1) begin
+		3'b001:
+			if (queuedCnt==3'd1) begin
 				if (slot_rfw[0])
 					rf_v [Rd[0]] <= `INV;
 			end
-		3'b011:
-			if (canq2 & !debug_on && `WAYS > 1) begin
+		3'b110:
+			if (queuedCnt==3'd2) begin
 				if (slot_rfw[1])
 					rf_v [Rd[1]] <= `INV;
 				if (!(slot_jc[1]|take_branch[1])) begin
@@ -143,12 +144,12 @@ else begin
 						rf_v [Rd[2]] <= `INV;
 				end
 			end
-			else if (canq1) begin
+			else if (queuedCnt==3'd1) begin
 				if (slot_rfw[1])
 					rf_v [Rd[1]] <= `INV;
 			end
 		3'b101:
-			if (canq2 & !debug_on && `WAYS > 1) begin
+			if (queuedCnt==3'd2) begin
 				if (slot_rfw[0])
 					rf_v [Rd[0]] <= `INV;
 				if (!(slot_jc[0]|take_branch[0])) begin
@@ -156,12 +157,12 @@ else begin
 						rf_v [Rd[1]] <= `INV;
 				end
 			end
-			else if (canq1) begin
+			else if (queuedCnt==3'd1) begin
 				if (slot_rfw[0])
 					rf_v [Rd[0]] <= `INV;
 			end
-		3'b110:
-			if (canq2 & !debug_on && `WAYS > 1) begin
+		3'b011:
+			if (queuedCnt==3'd2) begin
 				if (slot_rfw[0])
 					rf_v [Rd[0]] <= `INV;
 				if (!(slot_jc[0]|take_branch[0])) begin
@@ -169,12 +170,12 @@ else begin
 						rf_v [Rd[1]] <= `INV;
 				end
 			end
-			else if (canq1) begin
+			else if (queuedCnt==3'd1) begin
 				if (slot_rfw[0])
 					rf_v [Rd[0]] <= `INV;
 			end
 		3'b111:
-			if (canq3 & !debug_on && `WAYS > 2) begin
+			if (queuedCnt==3'd3) begin
 				if (slot_jc[0]|take_branch[0]) begin
 					if (slot_rfw[0])
 						rf_v [Rd[0]] <= `INV;
@@ -202,7 +203,7 @@ else begin
 						rf_v [Rd[2]] <= `INV;
 				end
 			end
-			else if (canq2 & !debug_on && `WAYS > 1) begin
+			else if (queuedCnt==3'd2) begin
 				if (slot_rfw[0])
 					rf_v [Rd[0]] <= `INV;
 				if (slot_jc[0]|take_branch[0]) begin
@@ -217,7 +218,7 @@ else begin
 						rf_v [Rd[1]] <= `INV;
 				end
 			end
-			else if (canq1) begin
+			else if (queuedCnt==3'd1) begin
 				if (slot_rfw[0])
 					rf_v [Rd[0]] <= `INV;
 			end

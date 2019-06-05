@@ -23,103 +23,115 @@
 //
 `include "rtfItanium-config.sv"
 
-module slot_valid(rst, clk, branchmiss, phit, ip_mask,
-	canq1, canq2, canq3, 
-	slot_jc, take_branch, slotv, debug_on);
+module slot_valid(rst, clk, branchmiss, phit, nextb, ip_mask, ip_maskd,
+	ip_override, next_ip_mask, queuedCnt, new_ip_mask,
+	slot_jc, take_branch, slotv, slotvd, debug_on);
 parameter VAL = 1'b1;
 parameter INV = 1'b0;
 input rst;
 input clk;
 input branchmiss;
-input canq1;
-input canq2;
-input canq3;
+input nextb;
+input [2:0] queuedCnt;
 input [2:0] slot_jc;
 input [2:0] take_branch;
 input phit;
+input ip_override;
+input [2:0] next_ip_mask;
 input [2:0] ip_mask;
+input [2:0] ip_maskd;
+input new_ip_mask;
 output reg [2:0] slotv;
+output reg [2:0] slotvd;
 input debug_on;
 
 integer n;
 
 wire [2:0] pat;
-assign pat = slotv & {3{phit}} & {ip_mask[0],ip_mask[1],ip_mask[2]};
-
-// Find last one
-function [2:0] flo;
-input [2:0] i;
-case(i)
-3'b001: flo <= 3'd0;
-3'b010: flo <= 3'd1;
-3'b011:	flo <= 3'd0;
-3'b100: flo <= 3'd2;
-3'b101:	flo <= 3'd0;
-3'b110:	flo <= 3'd1;
-3'b111:	flo <= 3'd0;
-default:    flo <= 3'd0;
-endcase
-endfunction
-
-// Find second one bit
-function [2:0] fso;
-input [2:0] i;
-casez(i)
-3'b11?:  fso <= 3'd1;
-3'b011:  fso <= 3'd2;
-3'b001:  fso <= 3'd0;
-3'b101:	 fso <= 3'd2;
-default:    fso <= 3'd0;
-endcase
-endfunction
+assign pat = /*{slotv[0],slotv[1],slotv[2]} &*/ {3{phit}} & ip_maskd;
+reg nextb3;
+delay1 #(1) ud1 (.clk(clk), .ce(1'b1), .i(nextb), .o(nextb3));
 
 always @(posedge clk)
 if (rst)
-	mark_all_valid();
+	slotvd <= 3'b000;
 else begin
-	if (branchmiss)
-		mark_all_valid();
-	else begin
-		// Setting slot valid
-		case(pat)
-		3'b000:	;
-		3'b001,
-		3'b010,
-		3'b100:
-			if (canq1)
-				mark_all_valid();
-		3'b011,
-		3'b101,
-		3'b110:
-			if (canq2 & !debug_on && `WAYS > 1)
-				mark_all_valid();
-			else if (canq1) begin
-				slotv[flo(pat)] <= INV;
-				if (slot_jc[flo(pat)]|take_branch[flo(pat)])
-					mark_all_valid();
-			end
-		3'b111:
-			if (canq3 & !debug_on && `WAYS > 2)
-				mark_all_valid();
-			else if (canq2 & !debug_on && `WAYS > 1) begin
-				slotv[flo(pat)] <= INV;
-				slotv[fso(pat)] <= INV;
-				if (|slot_jc| (|take_branch))
-					mark_all_valid();
-			end
-			else if (canq1) begin
-				slotv[flo(pat)] <= INV;
-				if (slot_jc[flo(pat)]|take_branch[flo(pat)])
-					mark_all_valid();
-			end
-		endcase
-	end
+	if (nextb)
+		slotvd <= ip_mask;
+	else
+		slotvd <= slotv;
+end
+
+always @*
+if (rst)
+	mark_all_invalid();
+else begin
+	slotv <= slotvd;
+	case(ip_maskd)
+	default:
+		mark_all_invalid();
+	3'b001:
+		if (queuedCnt==3'd1)
+			mark_all_invalid();
+	3'b010:
+		if (queuedCnt==3'd1)
+			mark_all_invalid();
+	3'b011:
+		if (queuedCnt==3'd2)
+			mark_all_invalid();
+		else if (queuedCnt==3'd1) begin
+			slotv[0] <= INV;
+			slotv[1] <= VAL;
+			slotv[2] <= INV;
+			if ((slot_jc[0]|take_branch[0]) & ip_override)
+				mark_all_invalid();
+		end
+	3'b100:
+		if (queuedCnt==3'd1)
+			mark_all_invalid();
+	3'b110:
+		if (queuedCnt==3'd2)
+			mark_all_invalid();
+		else if (queuedCnt==3'd1) begin
+			slotv[0] <= INV;
+			slotv[1] <= INV;
+			slotv[2] <= VAL;
+			if ((slot_jc[1]|take_branch[1]) & ip_override)
+				mark_all_invalid();
+		end
+	3'b111:
+		if (queuedCnt==3'd3)
+			mark_all_invalid();
+		else if (queuedCnt==3'd2) begin
+			slotv[0] <= INV;
+			slotv[1] <= INV;
+			slotv[2] <= VAL;
+			if ((slot_jc[0]|take_branch[0]) & ip_override)
+				mark_all_invalid();
+			else if ((slot_jc[1]|take_branch[1]) & ip_override)
+				mark_all_invalid();
+		end
+		else if (queuedCnt==3'd1) begin
+			slotv[0] <= INV;
+			slotv[1] <= VAL;
+			slotv[2] <= VAL;
+			if ((slot_jc[0]|take_branch[0]) & ip_override)
+				mark_all_invalid();
+		end
+	endcase
 end
 
 task mark_all_valid;
 begin
 	for (n = 0; n < 3; n = n + 1)
 		slotv[n] <= VAL;
+end
+endtask
+
+task mark_all_invalid;
+begin
+	for (n = 0; n < 3; n = n + 1)
+		slotv[n] <= INV;
 end
 endtask
 

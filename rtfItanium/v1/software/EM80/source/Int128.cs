@@ -9,12 +9,13 @@ namespace EM80
 	class Int128
 	{
 		public
-				Int64 low;
+				UInt64 low;
 		public Int64 high;
 
 		public Int128()
 		{
-			low = high = 0;
+			high = 0;
+			low = 0;
 		}
 		public Int128(string str)
 		{
@@ -36,7 +37,7 @@ namespace EM80
 
 			sum.low = a.low + b.low;
 			sum.high = a.high + b.high;
-			if (AddCarry(sum.low, a.low, b.low))
+			if (AddCarry((Int64)sum.low, (Int64)a.low, (Int64)b.low))
 				sum.high++;
 			return sum;
 		}
@@ -46,7 +47,7 @@ namespace EM80
 
 			dif.low = a.low - b.low;
 			dif.high = a.high - b.high;
-			if (SubBorrow(dif.low, a.low, b.low))
+			if (SubBorrow((Int64)dif.low, (Int64)a.low, (Int64)b.low))
 				dif.high--;
 			return dif;
 		}
@@ -55,11 +56,42 @@ namespace EM80
 			for (; amt > 0; amt--)
 			{
 				a.high <<= 1;
-				if ((a.low >> 63) == 1)
+				if (((a.low >> 63) & 1L) == 1)
 					a.high |= 1;
 				a.low <<= 1;
 			}
 			return a;
+		}
+		public Int128 Shr(Int128 a, int amt)
+		{
+			for (; amt > 0; amt--)
+			{
+				a.low = a.low >> 1;
+				if ((a.high & 1L)==1)
+					a.low |= (UInt64)1L << 63;
+				a.high >>= 1;
+			}
+			return a;
+		}
+		public Int128 ShrPair(Int128 hi, Int128 lo, int amt)
+		{
+			for (; amt > 0; amt--)
+			{
+				lo.low >>= 1;
+				lo.low &= 0x7fffffffffffffffL;
+				if ((lo.high & 1L) == 1)
+					lo.low |= (UInt64)1L << 63;
+				lo.high >>= 1;
+				lo.high &= 0x7fffffffffffffffL;
+				if ((hi.low & 1L) == 1)
+					lo.high |= 1L << 63;
+				hi.low = hi.low >> 1;
+				hi.low &= 0x7fffffffffffffffL;
+				if ((hi.high & 1L) == 1)
+					hi.low |= (UInt64)1L << 63;
+				hi.high >>= 1;
+			}
+			return lo;
 		}
 		public Int128 FromHexString(string str)
 		{
@@ -69,7 +101,7 @@ namespace EM80
 			for (nn = 0; nn < str.Length; nn++)
 			{
 				a = Shl(a, 4);
-				a.low |= Convert.ToInt64(str.Substring(nn, 1),16);
+				a.low |= Convert.ToUInt64(str.Substring(nn, 1),16);
 			}
 			return a;
 		}
@@ -77,7 +109,7 @@ namespace EM80
 		{
 			string str;
 
-			str = Convert.ToString(high,16).PadLeft(4,'0') + Convert.ToString(low, 16).PadLeft(16,'0');
+			str = Convert.ToString(high,16).PadLeft(4,'0') + Convert.ToString((Int64)low, 16).PadLeft(16,'0');
 			str = str.Substring(str.Length-20, 20);
 			return str;
 		}
@@ -85,7 +117,7 @@ namespace EM80
 		{
 			string str;
 
-			str = Convert.ToString(high, 16).PadLeft(16, '0') + Convert.ToString(low, 16).PadLeft(16, '0');
+			str = Convert.ToString(high, 16).PadLeft(16, '0') + Convert.ToString((Int64)low, 16).PadLeft(16, '0');
 			return str;
 		}
 	}

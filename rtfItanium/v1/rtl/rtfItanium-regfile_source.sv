@@ -25,8 +25,8 @@
 `define VAL		1'b1
 `define INV		1'b0
 
-module regfile_source(rst, clk, branchmiss, slotv, phit, ip_mask, canq1, canq2, canq3,
-	slot_rfw, slot_jc, take_branch,
+module regfile_source(rst, clk, branchmiss, slotvd, phit, ip_mask, canq1, canq2, canq3,
+	queuedCnt, slot_rfw, slot_jc, take_branch,
 	Rd, tails, iq_latestID, iq_tgt, rf_source, debug_on);
 parameter AREGS = 128;
 parameter QENTRIES = `QENTRIES;
@@ -35,9 +35,10 @@ parameter RBIT = 6;
 input rst;
 input clk;
 input branchmiss;
-input [QSLOTS-1:0] slotv;
+input [QSLOTS-1:0] slotvd;
 input phit;
 input [QSLOTS-1:0] ip_mask;
+input [2:0] queuedCnt;
 input canq1;
 input canq2;
 input canq3;
@@ -72,22 +73,21 @@ else begin
 	end
 	else begin
 		// Setting the rf valid and source
-		case({slotv[0],slotv[1],slotv[2]}&{3{phit}}&ip_mask)
+		case(slotvd)
 		3'b000:	;
-		3'b001:
-			if (canq1) begin
-				if (slot_rfw[2]) begin
+		3'b100:
+			if (queuedCnt==3'd1) begin
+				if (slot_rfw[2])
 					rf_source[Rd[2]] <= tails[0];
-				end
 			end
 		3'b010:
-			if (canq1) begin
+			if (queuedCnt==3'd1) begin
 				if (slot_rfw[1]) begin
 					rf_source[Rd[1]] <= tails[0];
 				end
 			end
-		3'b011:
-			if (canq2 & !debug_on && `WAYS > 1) begin
+		3'b110:
+			if (queuedCnt==3'd2) begin
 				if (slot_rfw[1])
 					rf_source[Rd[1]] <= tails[0];
 				if (!(slot_jc[1]|take_branch[1])) begin
@@ -95,17 +95,17 @@ else begin
 						rf_source[Rd[2]] <= tails[1];
 				end
 			end
-			else if (canq1) begin
+			else if (queuedCnt==3'd1) begin
 				if (slot_rfw[1])
 					rf_source[Rd[1]] <= tails[0];
 			end
-		3'b100:
-			if (canq1) begin
+		3'b001:
+			if (queuedCnt==3'd1) begin
 				if (slot_rfw[0])
 					rf_source[Rd[0]] <= tails[0];
 			end
 		3'b101:
-			if (canq2 & !debug_on && `WAYS > 1) begin
+			if (queuedCnt==3'd2) begin
 				if (slot_rfw[0])
 					rf_source[Rd[0]] <= tails[0];
 				if (!(slot_jc[0]|take_branch[0])) begin
@@ -113,12 +113,12 @@ else begin
 						rf_source[Rd[2]] <= tails[1];
 				end
 			end
-			else if (canq1) begin
+			else if (queuedCnt==3'd1) begin
 				if (slot_rfw[0])
 					rf_source[Rd[0]] <= tails[0];
 			end
-		3'b110:
-			if (canq2 & !debug_on & `WAYS > 1) begin
+		3'b011:
+			if (queuedCnt==3'd2) begin
 				if (slot_rfw[0])
 					rf_source[Rd[0]] <= tails[0];
 				if (!(slot_jc[0]|take_branch[0])) begin
@@ -126,13 +126,13 @@ else begin
 						rf_source[Rd[1]] <= tails[1];
 				end
 			end
-			else if (canq1) begin
+			else if (queuedCnt==3'd1) begin
 				if (slot_rfw[0]) begin
 					rf_source[Rd[0]] <= tails[0];
 				end
 			end
 		3'b111:
-			if (canq3 & !debug_on && `WAYS > 2) begin
+			if (queuedCnt==3'd3) begin
 				if (slot_rfw[0])
 					rf_source[Rd[0]] <= tails[0];
 				if (!(slot_jc[0]|take_branch[0])) begin
@@ -144,7 +144,7 @@ else begin
 					end
 				end
 			end
-			else if (canq2 & !debug_on && `WAYS > 1) begin
+			else if (queuedCnt==3'd2) begin
 				if (slot_rfw[0])
 					rf_source[Rd[0]] <= tails[0];
 				if (!(slot_jc[0]|take_branch[0])) begin
@@ -152,7 +152,7 @@ else begin
 						rf_source[Rd[1]] <= tails[1];
 				end
 			end
-			else if (canq1) begin
+			else if (queuedCnt==3'd1) begin
 				if (slot_rfw[0])
 					rf_source[Rd[0]] <= tails[0];
 			end

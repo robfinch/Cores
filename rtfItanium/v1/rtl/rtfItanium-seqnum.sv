@@ -41,8 +41,8 @@ input canq2;
 input canq3;
 input [2:0] hi_amt;
 input [QENTRIES-1:0] iq_v;
-input [31:0] iq_sn [0:QENTRIES-1];
-output reg [31:0] maxsn;
+input [32:0] iq_sn [0:QENTRIES-1];
+output reg [32:0] maxsn;
 output [`SNBITS] tosub;
 input debug_on;
 

@@ -529,6 +529,8 @@ begin
 //	bus[`IB_RC]		 <= fnRc(instr,ven,thrd) | {thrd,7'b0};
 //	bus[`IB_RA]		 <= fnRa(instr,ven,vl,thrd) | {thrd,7'b0};
 	bus[`IB_RS1]		 <= instr[`RS1];
+	bus[`IB_RS2]		 <= instr[`RS2];
+	bus[`IB_RS3]		 <= instr[`RS3];
 	bus[`IB_IMM]	 <= HasConst(unit,instr);
 //	bus[`IB_A3V]   <= Source3Valid(instr);
 //	bus[`IB_A2V]   <= Source2Valid(instr);
