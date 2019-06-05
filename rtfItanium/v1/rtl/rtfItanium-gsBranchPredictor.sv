@@ -19,12 +19,13 @@
 // You should have received a copy of the GNU General Public License        
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.    
 //                                                                          
+// g-share predictor
 //
 //=============================================================================
 //
 `include "rtfItanium-config.sv"
 
-module BranchPredictor(rst, clk, clk2x, clk4x, en, xisBranch, xip, takb, ip, predict_taken);
+module gsBranchPredictor(rst, clk, clk2x, clk4x, en, xisBranch, xip, takb, ip, predict_taken);
 parameter AMSB=79;
 parameter DBW=80;
 parameter QSLOTS = `QSLOTS;
@@ -46,22 +47,22 @@ reg [AMSB:0] pc;
 reg takbx;
 reg [4:0] pcshead,pcstail;
 reg wrhist;
-reg [2:0] gbl_branch_hist;
-reg [1:0] branch_history_table [511:0];
+reg [5:0] gbl_branch_hist;
+reg [1:0] branch_history_table [1023:0];
 // For simulation only, initialize the history table to zeros.
 // In the real world we don't care.
 initial begin
-    gbl_branch_hist = 3'b000;
-	for (n = 0; n < 512; n = n + 1)
+  gbl_branch_hist = 5'b0;
+	for (n = 0; n < 1024; n = n + 1)
 		branch_history_table[n] = 3;
 end
-wire [8:0] bht_wa = {pc[8:2],gbl_branch_hist[2:1]};		// write address
+wire [9:0] bht_wa = {pc[6:2],gbl_branch_hist[5:1]^pc[11:7]};		// write address
 wire [1:0] bht_xbits = branch_history_table[bht_wa];
-reg [8:0] bht_ra [0:QSLOTS-1];
+reg [9:0] bht_ra [0:QSLOTS-1];
 reg [1:0] bht_ibits [0:QSLOTS-1];
 always @*
 for (n = 0; n < QSLOTS; n = n + 1) begin
-	bht_ra [n] = {ip[n][8:2],gbl_branch_hist[2:1]};	// read address (IF stage)
+	bht_ra [n] = {ip[n][6:2],gbl_branch_hist[5:1]^ip[n][11:7]};	// read address (IF stage)
 	bht_ibits [n] = branch_history_table[bht_ra[n]];
 	predict_taken[n] = (bht_ibits[n]==2'd0 || bht_ibits[n]==2'd1) && en;
 end
@@ -124,11 +125,11 @@ else
 
 always @(posedge clk)
 if (rst)
-	gbl_branch_hist <= 3'b000;
+	gbl_branch_hist <= 6'b0;
 else begin
   if (en) begin
     if (wrhist) begin
-      gbl_branch_hist <= {gbl_branch_hist[1:0],takbx};
+      gbl_branch_hist <= {gbl_branch_hist[4:0],takbx};
       branch_history_table[bht_wa] <= xbits_new;
     end
 	end
