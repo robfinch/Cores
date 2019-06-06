@@ -25,24 +25,28 @@
 
 module slot_valid(rst, clk, branchmiss, phit, nextb, ip_mask, ip_maskd,
 	ip_override, next_ip_mask, queuedCnt, new_ip_mask,
-	slot_jc, take_branch, slotv, slotvd, debug_on);
+	slot_jc, slot_ret, take_branch, slotv, slotvd, debug_on);
+parameter QSLOTS = `QSLOTS;
 parameter VAL = 1'b1;
 parameter INV = 1'b0;
+parameter TRUE = 1'b1;
+parameter FALSE = 1'b0;
 input rst;
 input clk;
 input branchmiss;
 input nextb;
 input [2:0] queuedCnt;
-input [2:0] slot_jc;
-input [2:0] take_branch;
+input [QSLOTS-1:0] slot_jc;
+input [QSLOTS-1:0] slot_ret;
+input [QSLOTS-1:0] take_branch;
 input phit;
 input ip_override;
-input [2:0] next_ip_mask;
-input [2:0] ip_mask;
-input [2:0] ip_maskd;
+input [QSLOTS-1:0] next_ip_mask;
+input [QSLOTS-1:0] ip_mask;
+input [QSLOTS-1:0] ip_maskd;
 input new_ip_mask;
-output reg [2:0] slotv;
-output reg [2:0] slotvd;
+output reg [QSLOTS-1:0] slotv;
+output reg [QSLOTS-1:0] slotvd;
 input debug_on;
 
 integer n;
@@ -50,14 +54,22 @@ integer n;
 wire [2:0] pat;
 assign pat = /*{slotv[0],slotv[1],slotv[2]} &*/ {3{phit}} & ip_maskd;
 reg nextb3;
-delay1 #(1) ud1 (.clk(clk), .ce(1'b1), .i(nextb), .o(nextb3));
+reg stomp_next;		// stomp on next bundle
+reg stomp_next2;
+//delay1 #(1) ud1 (.clk(clk), .ce(1'b1), .i(stomp_next), .o(stomp_next));
 
 always @(posedge clk)
-if (rst)
+if (rst) begin
 	slotvd <= 3'b000;
+	stomp_next2 <= FALSE;
+end
 else begin
-	if (nextb)
-		slotvd <= ip_mask;
+	if (nextb) begin
+		slotvd <= stomp_next ? 1'b0 : ip_mask;
+		stomp_next2 <= stomp_next;
+	end
+	else if (branchmiss)
+		slotvd <= 1'b0;
 	else
 		slotvd <= slotv;
 end
@@ -66,57 +78,94 @@ always @*
 if (rst)
 	mark_all_invalid();
 else begin
+	stomp_next <= FALSE;
 	slotv <= slotvd;
-	case(ip_maskd)
+	case(slotvd)
 	default:
 		mark_all_invalid();
 	3'b001:
-		if (queuedCnt==3'd1)
+		if (queuedCnt==3'd1) begin
 			mark_all_invalid();
+			if ((slot_jc[0]|slot_ret[0]|take_branch[0]) & ip_override)
+				stomp_next <= TRUE;
+		end
 	3'b010:
-		if (queuedCnt==3'd1)
+		if (queuedCnt==3'd1) begin
 			mark_all_invalid();
+			if ((slot_jc[1]|slot_ret[1]|take_branch[1]) & ip_override)
+				stomp_next <= TRUE;
+		end
 	3'b011:
-		if (queuedCnt==3'd2)
+		if (queuedCnt==3'd2) begin
 			mark_all_invalid();
+			if ((slot_jc[0]|slot_ret[0]|take_branch[0]) & ip_override)
+				stomp_next <= TRUE;
+			else if ((slot_jc[1]|slot_ret[1]|take_branch[1]) & ip_override)
+				stomp_next <= TRUE;
+		end
 		else if (queuedCnt==3'd1) begin
 			slotv[0] <= INV;
 			slotv[1] <= VAL;
 			slotv[2] <= INV;
-			if ((slot_jc[0]|take_branch[0]) & ip_override)
+			if ((slot_jc[0]|slot_ret[0]|take_branch[0]) & ip_override) begin
 				mark_all_invalid();
+				stomp_next <= TRUE;
+			end
 		end
 	3'b100:
-		if (queuedCnt==3'd1)
+		if (queuedCnt==3'd1) begin
 			mark_all_invalid();
+			if ((slot_jc[2]|slot_ret[2]|take_branch[2]) & ip_override)
+				stomp_next <= TRUE;
+		end
 	3'b110:
-		if (queuedCnt==3'd2)
+		if (queuedCnt==3'd2) begin
 			mark_all_invalid();
+			if ((slot_jc[1]|slot_ret[1]|take_branch[1]) & ip_override)
+				stomp_next <= TRUE;
+			else if ((slot_jc[2]|slot_ret[2]|take_branch[2]) & ip_override)
+				stomp_next <= TRUE;
+		end
 		else if (queuedCnt==3'd1) begin
 			slotv[0] <= INV;
 			slotv[1] <= INV;
 			slotv[2] <= VAL;
-			if ((slot_jc[1]|take_branch[1]) & ip_override)
+			if ((slot_jc[1]|slot_ret[1]|take_branch[1]) & ip_override) begin
 				mark_all_invalid();
+				stomp_next <= TRUE;
+			end
 		end
 	3'b111:
-		if (queuedCnt==3'd3)
+		if (queuedCnt==3'd3) begin
 			mark_all_invalid();
+			if ((slot_jc[0]|slot_ret[0]|take_branch[0]) & ip_override)
+				stomp_next <= TRUE;
+			else if ((slot_jc[1]|slot_ret[1]|take_branch[1]) & ip_override)
+				stomp_next <= TRUE;
+			else if ((slot_jc[2]|slot_ret[2]|take_branch[2]) & ip_override)
+				stomp_next <= TRUE;
+		end
 		else if (queuedCnt==3'd2) begin
 			slotv[0] <= INV;
 			slotv[1] <= INV;
 			slotv[2] <= VAL;
-			if ((slot_jc[0]|take_branch[0]) & ip_override)
+			if ((slot_jc[0]|slot_ret[0]|take_branch[0]) & ip_override) begin
 				mark_all_invalid();
-			else if ((slot_jc[1]|take_branch[1]) & ip_override)
+				stomp_next <= TRUE;
+			end
+			else if ((slot_jc[1]|slot_ret[1]|take_branch[1]) & ip_override) begin
 				mark_all_invalid();
+				stomp_next <= TRUE;
+			end
 		end
 		else if (queuedCnt==3'd1) begin
 			slotv[0] <= INV;
 			slotv[1] <= VAL;
 			slotv[2] <= VAL;
-			if ((slot_jc[0]|take_branch[0]) & ip_override)
+			if ((slot_jc[0]|slot_ret[0]|take_branch[0]) & ip_override) begin
 				mark_all_invalid();
+				stomp_next <= TRUE;
+			end
 		end
 	endcase
 end

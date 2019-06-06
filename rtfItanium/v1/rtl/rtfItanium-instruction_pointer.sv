@@ -22,11 +22,12 @@
 // ============================================================================
 //
 `include "rtfItanium-config.sv"
+`include "rtfItanium-defines.sv"
 
 module instruction_pointer(rst, clk, queuedCnt, insnx, freezeip, 
-	next_bundle, phit, branchmiss, missip, ip_mask, ip_maskd, new_ip_mask,
-	slotv, slotvd, slot_jc, slot_br, take_branch, btgt, ip, ipd, branch_ip, 
-	ip_override,
+	next_bundle, phit, branchmiss, missip, ip_mask, ip_maskd,
+	slotv, slotvd, slot_jc, slot_ret, slot_br, take_branch, btgt, ip, ipd, branch_ip, 
+	ra, ip_override,
 	debug_on);
 parameter AMSB = 79;
 parameter RSTIP = 80'hFFFFFFFFFFFFFFFC0100;
@@ -42,22 +43,23 @@ input branchmiss;
 input [AMSB:0] missip;
 input [QSLOTS-1:0] ip_mask;
 output reg [QSLOTS-1:0] ip_maskd;
-output reg new_ip_mask;
 input [QSLOTS-1:0] slotv;
 input [QSLOTS-1:0] slotvd;
 input [QSLOTS-1:0] slot_jc;
+input [QSLOTS-1:0] slot_ret;
 input [QSLOTS-1:0] slot_br;
 input [QSLOTS-1:0] take_branch;
 input [AMSB:0] btgt [0:QSLOTS-1];
 output reg [AMSB:0] ip;
 output reg [AMSB:0] ipd;
 output reg [AMSB:0] branch_ip;
+input [AMSB:0] ra;
 output ip_override;
 input debug_on;
 
 reg phitd;
 
-assign ip_override = ip != branch_ip;
+assign ip_override = ipd != branch_ip;
 
 always @(posedge clk)
 if (rst) begin
@@ -67,12 +69,10 @@ if (rst) begin
 	phitd <= 1'b1;
 end
 else begin
-	new_ip_mask <= 1'b0;
 	if (next_bundle) begin
 		ipd <= ip;
 		ip_maskd <= ip_mask;
 		phitd <= phit;
-		new_ip_mask <= 1'b1;
 	end
 	if (branchmiss) begin
 		$display("==============================");
@@ -104,99 +104,129 @@ if (rst) begin
 	branch_ip <= RSTIP;
 end
 else begin
-	branch_ip <= ip;
+	branch_ip <= ipd;
 	case(slotvd)
 	3'b001:
 		if (queuedCnt==3'd1) begin
-			if (take_branch[0])
-				branch_ip[22:0] <= {insnx[0][39:22],insnx[0][5:3],insnx[0][4:3]};
+			if (slot_ret[0])
+				branch_ip <= ra;
+			else if (take_branch[0])
+				branch_ip <= {ipd[79:4] + {{60{insnx[0][39]}},insnx[0][39:24]},insnx[0][23:22],insnx[0][23:22]};
 			else if (slot_jc[0])
 				branch_ip[37:0] <= {insnx[0][39:10],insnx[0][5:0],insnx[0][1:0]};
 		end
 	3'b010:
 		if (queuedCnt==3'd1) begin
-			if (take_branch[1])
-				branch_ip[22:0] <= {insnx[1][39:22],insnx[1][5:3],insnx[1][4:3]};
+			if (slot_ret[1])
+				branch_ip <= ra;
+			else if (take_branch[1])
+				branch_ip <= {ipd[79:4] + {{60{insnx[1][39]}},insnx[1][39:24]},insnx[1][23:22],insnx[1][23:22]};
 			else if (slot_jc[1])
 				branch_ip[37:0] <= {insnx[1][39:10],insnx[1][5:0],insnx[1][1:0]};
 		end
 	3'b011:
 		if (queuedCnt==3'd2) begin
-			if (slot_jc[0])
+			if (slot_ret[0])
+				branch_ip <= ra;
+			else if (slot_jc[0])
 				branch_ip[37:0] <= {insnx[0][39:10],insnx[0][5:0],insnx[0][1:0]};
 			else if (take_branch[0])
-				branch_ip[22:0] <= {insnx[0][39:22],insnx[0][5:3],insnx[0][4:3]};
+				branch_ip <= {ipd[79:4] + {{60{insnx[0][39]}},insnx[0][39:24]},insnx[0][23:22],insnx[0][23:22]};
+			else if (slot_ret[1])
+				branch_ip <= ra;
 			else if (slot_jc[1])
 				branch_ip[37:0] <= {insnx[1][39:10],insnx[1][5:0],insnx[1][1:0]};
 			else if (take_branch[1])
-				branch_ip[22:0] <= {insnx[1][39:22],insnx[1][5:3],insnx[1][4:3]};
+				branch_ip <= {ipd[79:4] + {{60{insnx[1][39]}},insnx[1][39:24]},insnx[1][23:22],insnx[1][23:22]};
 		end
 		else if (queuedCnt==3'd1) begin
-			if (slot_jc[0])
+			if (slot_ret[0])
+				branch_ip <= ra;
+			else if (slot_jc[0])
 				branch_ip[37:0] <= {insnx[0][39:10],insnx[0][5:0],insnx[0][1:0]};
 			else if (take_branch[0])
-				branch_ip[22:0] <= {insnx[0][39:22],insnx[0][5:3],insnx[0][4:3]};
+				branch_ip <= {ipd[79:4] + {{60{insnx[0][39]}},insnx[0][39:24]},insnx[0][23:22],insnx[0][23:22]};
 			else
 				branch_ip[3:0] <= 4'h5;
 		end
 	3'b100:
 		if (queuedCnt==3'd1) begin
-			if (take_branch[2])
-				branch_ip[22:0] <= {insnx[2][39:22],insnx[2][5:3],insnx[2][4:3]};
+			if (slot_ret[2])
+				branch_ip <= ra;
+			else if (take_branch[2])
+				branch_ip <= {ipd[79:4] + {{60{insnx[2][39]}},insnx[2][39:24]},insnx[2][23:22],insnx[2][23:22]};
 			else if (slot_jc[2])
 				branch_ip[37:0] <= {insnx[2][39:10],insnx[2][5:0],insnx[2][1:0]};
 		end
 	3'b110:
 		if (queuedCnt==3'd2) begin
-			if (slot_jc[1])
+			if (slot_ret[1])
+				branch_ip <= ra;
+			else if (slot_jc[1])
 				branch_ip[37:0] <= {insnx[1][39:10],insnx[1][5:0],insnx[1][1:0]};
 			else if (take_branch[1])
-				branch_ip[22:0] <= {insnx[1][39:22],insnx[1][5:3],insnx[1][4:3]};
+				branch_ip <= {ipd[79:4] + {{60{insnx[1][39]}},insnx[1][39:24]},insnx[1][23:22],insnx[1][23:22]};
+			else if (slot_ret[2])
+				branch_ip <= ra;
 			else if (slot_jc[2])
 				branch_ip[37:0] <= {insnx[2][39:10],insnx[2][5:0],insnx[2][1:0]};
 			else if (take_branch[2])
-				branch_ip[22:0] <= {insnx[2][39:22],insnx[2][5:3],insnx[2][4:3]};
+				branch_ip <= {ipd[79:4] + {{60{insnx[2][39]}},insnx[2][39:24]},insnx[2][23:22],insnx[2][23:22]};
 		end
 		else if (queuedCnt==3'd1) begin
-			if (slot_jc[1])
+			if (slot_ret[1])
+				branch_ip <= ra;
+			else if (slot_jc[1])
 				branch_ip[37:0] <= {insnx[1][39:10],insnx[1][5:0],insnx[1][1:0]};
 			else if (take_branch[1])
-				branch_ip[22:0] <= {insnx[1][39:22],insnx[1][5:3],insnx[1][4:3]};
+				branch_ip <= {ipd[79:4] + {{60{insnx[1][39]}},insnx[1][39:24]},insnx[1][23:22],insnx[1][23:22]};
 			else
 				branch_ip[3:0] <= 4'hA;
 		end
 	3'b111:
 		if (queuedCnt==3'd3) begin
-			if (slot_jc[0])
+			if (slot_ret[0])
+				branch_ip <= ra;
+			else if (slot_jc[0])
 				branch_ip[37:0] <= {insnx[0][39:10],insnx[0][5:0],insnx[0][1:0]};
 			else if (take_branch[0])
-				branch_ip[22:0] <= {insnx[0][39:22],insnx[0][5:3],insnx[0][4:3]};
+				branch_ip <= {ipd[79:4] + {{60{insnx[0][39]}},insnx[0][39:24]},insnx[0][23:22],insnx[0][23:22]};
+			else if (slot_ret[1])
+				branch_ip <= ra;
 			else if (slot_jc[1])
 				branch_ip[37:0] <= {insnx[1][39:10],insnx[1][5:0],insnx[1][1:0]};
 			else if (take_branch[1])
-				branch_ip[22:0] <= {insnx[1][39:22],insnx[1][5:3],insnx[1][4:3]};
+				branch_ip <= {ipd[79:4] + {{60{insnx[1][39]}},insnx[1][39:24]},insnx[1][23:22],insnx[1][23:22]};
+			else if (slot_ret[2])
+				branch_ip <= ra;
 			else if (slot_jc[2])
 				branch_ip[37:0] <= {insnx[2][39:10],insnx[2][5:0],insnx[2][1:0]};
 			else if (take_branch[2])
-				branch_ip[22:0] <= {insnx[2][39:22],insnx[2][5:3],insnx[2][4:3]};
+				branch_ip <= {ipd[79:4] + {{60{insnx[2][39]}},insnx[2][39:24]},insnx[2][23:22],insnx[2][23:22]};
 		end
 		else if (queuedCnt==3'd2) begin
-			if (slot_jc[0])
+			if (slot_ret[0])
+				branch_ip <= ra;
+			else if (slot_jc[0])
 				branch_ip[37:0] <= {insnx[0][39:10],insnx[0][5:0],insnx[0][1:0]};
 			else if (take_branch[0])
-				branch_ip[22:0] <= {insnx[0][39:22],insnx[0][5:3],insnx[0][4:3]};
+				branch_ip <= {ipd[79:4] + {{60{insnx[0][39]}},insnx[0][39:24]},insnx[0][23:22],insnx[0][23:22]};
+			else if (slot_ret[1])
+				branch_ip <= ra;
 			else if (slot_jc[1])
 				branch_ip[37:0] <= {insnx[1][39:10],insnx[1][5:0],insnx[1][1:0]};
 			else if (take_branch[1])
-				branch_ip[22:0] <= {insnx[1][39:22],insnx[1][5:3],insnx[1][4:3]};
+				branch_ip <= {ipd[79:4] + {{60{insnx[1][39]}},insnx[1][39:24]},insnx[1][23:22],insnx[1][23:22]};
 			else
 				branch_ip[3:0] <= 4'hA;
 		end
 		else if (queuedCnt==3'd1) begin
-			if (slot_jc[0])
+			if (slot_ret[0])
+				branch_ip <= ra;
+			else if (slot_jc[0])
 				branch_ip[37:0] <= {insnx[0][39:10],insnx[0][5:0],insnx[0][1:0]};
 			else if (take_branch[0])
-				branch_ip[22:0] <= {insnx[0][39:22],insnx[0][5:3],insnx[0][4:3]};
+				branch_ip <= {ipd[79:4] + {{60{insnx[0][39]}},insnx[0][39:24]},insnx[0][23:22],insnx[0][23:22]};
 			else
 				branch_ip[3:0] <= 4'h5;
 		end

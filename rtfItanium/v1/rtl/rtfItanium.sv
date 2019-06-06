@@ -125,9 +125,9 @@ integer row, col;
 genvar g, h;
 
 wire [AMSB:0] ip, ipd, next_ip;
-wire new_ip_mask;
 wire ip_override;
 reg [AMSB:0] rip;
+reg [AMSB:0] ra;		// return address - predicted
 reg [2:0] ip_mask, ip_maskd, next_ip_mask;
 reg [AMSB:0] missip, excmissip;
 reg [1:0] slot;
@@ -346,14 +346,12 @@ reg [2:0] hi_amt;
 
 reg [47:0] codebuf[0:63];
 reg [QENTRIES-1:0] setpred;
-reg [QENTRIES-1:0] active_branch;
 
 // instruction queue (ROB)
 // State and stqte decodes
 reg [2:0] iq_state [0:QENTRIES-1];
 reg [QENTRIES-1:0] iq_v;			// entry valid?  -- this should be the first bit
-reg [QENTRIES-1:0] iq_bstmp [0:QENTRIES-1];
-reg [`QBITS] iq_bstmp_ctr [0:QENTRIES-1];
+reg [`QBITS] iq_br_tag [0:QENTRIES-1];
 reg [QENTRIES-1:0] iq_done;
 reg [QENTRIES-1:0] iq_out;
 reg [QENTRIES-1:0] iq_agen;
@@ -389,6 +387,7 @@ reg [QENTRIES-1:0] iq_rl;	// memory release
 reg [QENTRIES-1:0] iq_shft;
 reg [QENTRIES-1:0] iq_jmp;	// changes control flow: 1 if BEQ/JALR
 reg [QENTRIES-1:0] iq_br;  // Bcc (for predictor)
+reg [QENTRIES-1:0] iq_brcc;  // BEcc
 reg [QENTRIES-1:0] iq_ret;
 reg [QENTRIES-1:0] iq_irq;
 reg [QENTRIES-1:0] iq_brk;
@@ -772,13 +771,20 @@ reg [5:0] ld_time;
 reg [79:0] wc_time_dat;
 reg [79:0] wc_times;
 
+reg [`QBITS] active_tag, miss_tag;
+reg [`QBITS] br_tag [0:QENTRIES-1];
+
+reg [QSLOTS-1:0] queuedOn;
+reg [QSLOTS-1:0] queuedOnp;
 wire [QSLOTS-1:0] predict_taken;
 wire predict_taken0;
 wire predict_taken1;
 wire predict_taken2;
 wire [QSLOTS-1:0] slot_rfw;
 wire [QSLOTS-1:0] slot_jc;
+wire [QSLOTS-1:0] slot_jal;
 wire [QSLOTS-1:0] slot_br;
+wire [QSLOTS-1:0] slot_call;
 wire [QSLOTS-1:0] slot_ret;
 
 assign slot_rfw[0] = IsRFW(slotu[0],insnx[0]);
@@ -787,6 +793,15 @@ assign slot_rfw[2] = IsRFW(slotu[2],insnx[2]);
 wire slot0_mem = IsMem(slotu[0]) && !IsLea(slotu[0],insnx[0]);
 wire slot1_mem = IsMem(slotu[1]) && !IsLea(slotu[1],insnx[1]);
 wire slot2_mem = IsMem(slotu[2]) && !IsLea(slotu[2],insnx[2]);
+assign slot_jal[0] = id_bus[0][`IB_JAL];
+assign slot_jal[1] = id_bus[1][`IB_JAL];
+assign slot_jal[2] = id_bus[2][`IB_JAL];
+assign slot_call[0] = id_bus[0][`IB_CALL];
+assign slot_call[1] = id_bus[1][`IB_CALL];
+assign slot_call[2] = id_bus[2][`IB_CALL];
+assign slot_ret[0] = id_bus[0][`IB_RET];
+assign slot_ret[1] = id_bus[1][`IB_RET];
+assign slot_ret[2] = id_bus[2][`IB_RET];
 assign slot_jc[0] = IsCall(slotu[0],insnx[0]) || IsJmp(slotu[0],insnx[0]);
 assign slot_jc[1] = IsCall(slotu[1],insnx[1]) || IsJmp(slotu[1],insnx[1]);
 assign slot_jc[2] = IsCall(slotu[2],insnx[2]) || IsJmp(slotu[2],insnx[2]);
@@ -798,13 +813,13 @@ assign take_branch[1] = (IsBranch(slotu[1],insnx[1]) && predict_taken[1]) || IsB
 assign take_branch[2] = (IsBranch(slotu[2],insnx[2]) && predict_taken[2]) || IsBrk(slotu[2],insnx[2]) || IsRti(slotu[2],insnx[2]);
 // Branching for purposes of the branch shadow.
 wire [QSLOTS-1:0] is_branch;
-assign is_branch[0] = IsBranch(slotu[0],insnx[0]) || id_bus[0][`IB_BRK] || id_bus[0][`IB_RTI] || IsRet(slotu[0],insnx[0]) || IsJal(slotu[0],insnx[0]);
-assign is_branch[1] = IsBranch(slotu[1],insnx[1]) || id_bus[1][`IB_BRK] || id_bus[1][`IB_RTI] || IsRet(slotu[1],insnx[1]) || IsJal(slotu[1],insnx[1]);
-assign is_branch[2] = IsBranch(slotu[2],insnx[2]) || id_bus[2][`IB_BRK] || id_bus[2][`IB_RTI] || IsRet(slotu[2],insnx[2]) || IsJal(slotu[2],insnx[2]);
-assign slot_ret[0] = IsRet(slotu[0],insnx[0]);
-assign slot_ret[1] = IsRet(slotu[1],insnx[1]);
-assign slot_ret[2] = IsRet(slotu[2],insnx[2]);
-
+reg [QENTRIES-1:0] is_qbranch;
+assign is_branch[0] = IsBranch(slotu[0],insnx[0]) || id_bus[0][`IB_BRK] || id_bus[0][`IB_RTI] || id_bus[0][`IB_RET] || id_bus[0][`IB_JAL];
+assign is_branch[1] = IsBranch(slotu[1],insnx[1]) || id_bus[1][`IB_BRK] || id_bus[1][`IB_RTI] || id_bus[1][`IB_RET] || id_bus[1][`IB_JAL];
+assign is_branch[2] = IsBranch(slotu[2],insnx[2]) || id_bus[2][`IB_BRK] || id_bus[2][`IB_RTI] || id_bus[2][`IB_RET] || id_bus[2][`IB_JAL];
+always @*
+for (n = 0; n < QENTRIES; n = n + 1)
+	is_qbranch[n] = iq_br[n] | iq_brk[n] | iq_rti[n] | iq_ret[n] | iq_jal[n] | iq_brcc[n];
 wire [1:0] ic_fault;
 wire [127:0] ic_out;
 reg invic, invdc;
@@ -1164,29 +1179,43 @@ instruction_pointer uip1
 	.slotv(slotv),
 	.slotvd(slotvd),
 	.slot_jc(slot_jc),
+	.slot_ret(slot_ret),
 	.slot_br(slot_br),
 	.take_branch(take_branch),
 	.btgt(btgt),
 	.ip(ip),
 	.ipd(ipd),
 	.branch_ip(next_ip),
-	.new_ip_mask(new_ip_mask),
+	.ra(ra),
 	.ip_override(ip_override),
 	.debug_on(debug_on)
+);
+
+RSB ursb1
+(
+	.rst(rst_i),
+	.clk(clk),
+	.clk2x(clk2x_i),
+	.clk4x(clk4x_i),
+	.regLR(6'd61),
+	.queuedOn(queuedOn),
+	.jal(slot_jal),
+	.Ra(Rs1),
+	.Rd(Rd),
+	.call(slot_call),
+	.ret(slot_ret),
+	.ip(ipd),
+	.ra(ra),
+	.stompedRets(),
+	.stompedRet()
 );
 
 next_bundle unb1
 (
 	.rst(rst_i),
 	.slotv(slotv),
-	.branchmiss(branchmiss),
-	.canq1(canq1),
-	.canq2(canq2),
-	.canq3(canq3),
 	.phit(phit),
-	.ip_mask(ip_mask),
-	.next(nextb),
-	.debug_on(debug_on)
+	.next(nextb)
 );
 
 ICController uicc1
@@ -1630,8 +1659,10 @@ tailptrs utp1
 	.clk_i(clk_i),
 	.branchmiss(branchmiss),
 	.iq_stomp(iq_stomp),
+	.iq_br_tag(iq_br_tag),
 	.queuedCnt(queuedCnt),
-	.tails(tails)
+	.tails(tails),
+	.active_tag(miss_tag)
 );
 
 //-----------------------------------------------------------------------------
@@ -3931,14 +3962,18 @@ always @*
 begin
 	iq_stomp <= 1'b0;
 	if (branchmiss) begin
+		j = missid;
+		k = (missid + 1) % QENTRIES;
 		for (n = 0; n < QENTRIES; n = n + 1) begin
-			if (iq_v[n] && iq_bstmp[n][iq_bstmp_ctr[missid]])
-				iq_stomp[n] <= `TRUE;
-/*			if (iq_v[n]) begin
-				if (iq_sn[n] > iq_sn[missid[`QBITS]])
-					iq_stomp[n] <= `TRUE;
+			if (iq_v[k]) begin
+				if (iq_br_tag[k]==br_tag[j]) begin
+					iq_stomp[k] <= `TRUE;
+					if (is_qbranch[k])
+						j = k;
+				end
 			end
-*/		end
+			k = (k + 1) % QENTRIES;
+		end
 	end
 end
 
@@ -4226,10 +4261,10 @@ end
 
 assign alu0_abort = 1'b0;
 assign alu1_abort = 1'b0;
-assign alu0_vsn = alu0_v && iq_v[alu0_id] && alu0_sn==iq_sn[alu0_id];
-assign alu1_vsn = alu1_v && iq_v[alu1_id] && alu1_sn==iq_sn[alu1_id];
-assign agen0_vsn = agen0_v && iq_v[agen0_id] && agen0_sn==iq_sn[agen0_id] && iq_state[agen0_id] != IQS_MEM;
-assign agen1_vsn = agen1_v && iq_v[agen1_id] && agen1_sn==iq_sn[agen1_id] && iq_state[agen1_id] != IQS_MEM;
+assign alu0_vsn = alu0_v;// && iq_v[alu0_id] && alu0_sn==iq_sn[alu0_id];
+assign alu1_vsn = alu1_v;// && iq_v[alu1_id] && alu1_sn==iq_sn[alu1_id];
+assign agen0_vsn = agen0_v;// && iq_v[agen0_id] && agen0_sn==iq_sn[agen0_id] && iq_state[agen0_id] != IQS_MEM;
+assign agen1_vsn = agen1_v;// && iq_v[agen1_id] && agen1_sn==iq_sn[agen1_id] && iq_state[agen1_id] != IQS_MEM;
 
 generate begin : gFPUInst
 if (`NUM_FPU > 0) begin
@@ -4375,7 +4410,7 @@ case(fcu_instr[`OPCODE4])
 //`JMP,`CALL:	fcu_missip = {fcu_ip[AMSB:38],fcu_instr[39:10],fcu_instr[5:0],fcu_instr[1:0]};
 //`CHK:	fcu_missip = fcu_nextip + fcu_argI;	// Handled as an instruction exception
 // Default: branch
-default:	fcu_missip = fcu_pt ? fcu_nextip : {fcu_ip[AMSB:23],fcu_brdisp[22:0]};
+default:	fcu_missip = fcu_pt ? fcu_nextip : {fcu_ip[AMSB:4]+fcu_brdisp[AMSB:4],fcu_brdisp[3:0]};
 endcase
 fcu_missip[0] = 1'b0;
 end
@@ -4567,6 +4602,7 @@ begin
 	canq3 <= FALSE;
 	queuedCnt <= 3'd0;
 	queuedNop <= FALSE;
+	queuedOnp <= 1'd0;
 	if (!branchmiss) begin
 		// Three available
 		case(slotvd)
@@ -4574,21 +4610,26 @@ begin
       if (iq_v[tails[0]]==`INV) begin
         canq1 <= TRUE;
         queuedCnt <= 3'd1;
+        queuedOnp[0] <= `TRUE;
       end
 		3'b010:
       if (iq_v[tails[0]]==`INV) begin
         canq1 <= TRUE;
         queuedCnt <= 3'd1;
+        queuedOnp[1] <= `TRUE;
       end
 		3'b011:
       if (iq_v[tails[0]]==`INV) begin
         canq1 <= TRUE;
         queuedCnt <= 3'd1;
-        if (!(slot_jc[0]|take_branch[0])) begin
+        queuedOnp[0] <= `TRUE;
+        if (!(slot_jc[0]|slot_ret[0]|take_branch[0])) begin
           if (iq_v[tails[1]]==`INV) begin
             canq2 <= TRUE;
-            if (!debug_on && `WAYS > 1)
+            if (!debug_on && `WAYS > 1) begin
             	queuedCnt <= 3'd2;
+			        queuedOnp[1] <= `TRUE;
+			      end
           end
         end
     	end
@@ -4596,17 +4637,21 @@ begin
       if (iq_v[tails[0]]==`INV) begin
         canq1 <= TRUE;
         queuedCnt <= 3'd1;
+        queuedOnp[2] <= `TRUE;
       end
     3'b101:	; // Illegal
     3'b110:
       if (iq_v[tails[0]]==`INV) begin
         canq1 <= TRUE;
         queuedCnt <= 3'd1;
-        if (!(slot_jc[1]|take_branch[1])) begin
+        queuedOnp[1] <= `TRUE;
+        if (!(slot_jc[1]|slot_ret[1]|take_branch[1])) begin
           if (iq_v[tails[1]]==`INV) begin
             canq2 <= TRUE;
-            if (!debug_on && `WAYS > 1)
+            if (!debug_on && `WAYS > 1) begin
             	queuedCnt <= 3'd2;
+            	queuedOnp[2] <= `TRUE;
+            end
           end
         end
     	end
@@ -4614,16 +4659,21 @@ begin
       if (iq_v[tails[0]]==`INV) begin
         canq1 <= TRUE;
         queuedCnt <= 3'd1;
-				if (!(slot_jc[0]|take_branch[0])) begin
+        queuedOnp[0] <= `TRUE;
+				if (!(slot_jc[0]|slot_ret[0]|take_branch[0])) begin
           if (iq_v[tails[1]]==`INV) begin
             canq2 <= TRUE;
-            if (!debug_on && `WAYS > 1)
+            if (!debug_on && `WAYS > 1) begin
             	queuedCnt <= 3'd2;
-          	if (!(slot_jc[1]|take_branch[1])) begin
+            	queuedOnp[1] <= `TRUE;
+            end
+          	if (!(slot_jc[1]|slot_ret[1]|take_branch[1])) begin
 	            if (iq_v[tails[2]]==`INV) begin
 	              canq3 <= TRUE;
-		            if (!debug_on && `WAYS > 2)
+		            if (!debug_on && `WAYS > 2) begin
 		            	queuedCnt <= 3'd3;
+		            	queuedOnp[2] <= `TRUE;
+		            end
 	            end
 	          end
 	        end
@@ -4887,10 +4937,10 @@ slot_valid usv1
 	.next_ip_mask(next_ip_mask),
 	.queuedCnt(queuedCnt),
 	.slot_jc(slot_jc),
+	.slot_ret(slot_ret),
 	.take_branch(take_branch),
 	.slotv(slotv),
 	.slotvd(slotvd),
-	.new_ip_mask(new_ip_mask),
 	.debug_on(debug_on)
 );
 
@@ -5076,8 +5126,7 @@ if (rst_i|(rst_ctr < 32'd2)) begin
 `ifdef SUPPORT_DEBUG
 		dbg_ctrl <= 64'h0;
 `endif
-		active_branch <= 1'd0;
-		bstmp_ctr <= 3'd0;
+		active_tag <= 1'd0;
 /* Initialized with initial begin above
 `ifdef SUPPORT_BBMS		
 		for (n = 0; n < 64; n = n + 1) begin
@@ -5119,12 +5168,8 @@ else begin
 			missid <= fcu_sourceid;
 		end
 	end
-	if (fcu_branchhit|branchmiss) begin
-		active_branch[iq_bstmp_ctr[fcu_id]] <= `FALSE;
-		for (n = 0; n < QENTRIES; n = n + 1) begin
-			iq_bstmp[n][iq_bstmp_ctr[fcu_id]] <= `FALSE;
-		end
-	end
+	else
+		active_tag <= miss_tag;
 	// Clear a branch miss when target instruction is fetched.
 	if (will_clear_branchmiss) begin
 		branchmiss <= `FALSE;
@@ -5161,6 +5206,7 @@ else begin
 	fpu2_ld <= FALSE;
 	fcu_ld <= FALSE;
 	cr0[17] <= 1'b0;
+	queuedOn <= 1'b0;
 
   if (waitctr != 48'd0)
 		waitctr <= waitctr - 4'd1;
@@ -5169,238 +5215,60 @@ else begin
   	fcu_timeout <= fcu_timeout + 8'd1;
 
 	if (!branchmiss) begin
+		queuedOn <= queuedOnp;
 		case(slotvd)
 		3'b001:
-			if (queuedCnt==3'd1) begin
-				queue_slot(0,tails[0],{tick[29:0],3'h0},id_bus[0]);
-				if (is_branch[0]) begin
-					active_branch[bstmp_ctr] <= TRUE;
-					iq_bstmp_ctr[tails[0]] <= bstmp_ctr;
-					bstmp_ctr <= bstmp_ctr + 2'd1;
-				end
+			if (queuedOnp[0]) begin
+				queue_slot(0,tails[0],{tick[29:0],3'h0},id_bus[0],active_tag);
 			end
 		3'b010:
-			if (queuedCnt==3'd1) begin
-				queue_slot(1,tails[0],{tick[29:0],3'h1},id_bus[1]);
-				if (is_branch[1]) begin
-					active_branch[bstmp_ctr] <= TRUE;
-					iq_bstmp_ctr[tails[0]] <= bstmp_ctr;
-					bstmp_ctr <= bstmp_ctr + 2'd1;
-				end
+			if (queuedOnp[1]) begin
+				queue_slot(1,tails[0],{tick[29:0],3'h1},id_bus[1],active_tag);
 			end
 		3'b011:
-			if (queuedCnt==3'd2) begin
-				queue_slot(0,tails[0],{tick[29:0],3'h0},id_bus[0]);
-				if (is_branch[0]) begin
-					active_branch[bstmp_ctr] <= TRUE;
-					iq_bstmp_ctr[tails[0]] <= bstmp_ctr;
-					bstmp_ctr <= bstmp_ctr + 2'd1;
-				end
-				if (slot_jc[0]|take_branch[0]) begin
-					;
-				end
-				else if (slot_jc[1]) begin
-					queue_slot(1,tails[1],{tick[29:0],3'h1},id_bus[1]);
-					if (is_branch[1]) begin
-						active_branch[bstmp_ctr + 2'd1] <= TRUE;
-						iq_bstmp_ctr[tails[1]] <= bstmp_ctr + 2'd1;
-						bstmp_ctr <= bstmp_ctr + 2'd2;
-					end
+			if (queuedOnp[0]) begin
+				queue_slot(0,tails[0],{tick[29:0],3'h0},id_bus[0],active_tag);
+				if (queuedOnp[1]) begin
+					queue_slot(1,tails[1],{tick[29:0],3'h1},id_bus[1],is_branch[0] ? active_tag+2'd1 : active_tag);
 					arg_vs(3'b011);
-					//arg_vs_011();
-				end
-				else if (take_branch[1]) begin
-					queue_slot(1,tails[1],{tick[29:0],3'h1},id_bus[1]);
-					if (is_branch[1]) begin
-						active_branch[bstmp_ctr + 2'd1] <= TRUE;
-						iq_bstmp_ctr[tails[1]] <= bstmp_ctr + 2'd1;
-						bstmp_ctr <= bstmp_ctr + 2'd2;
-					end
-					arg_vs(3'b011);
-					//arg_vs_011();
-				end
-				else begin
-					queue_slot(1,tails[1],{tick[29:0],3'h1},id_bus[1]);
-					if (is_branch[1]) begin
-						active_branch[bstmp_ctr + 2'd1] <= TRUE;
-						iq_bstmp_ctr[tails[1]] <= bstmp_ctr + 2'd1;
-						bstmp_ctr <= bstmp_ctr + 2'd2;
-					end
-					//arg_vs_011();
-					arg_vs(3'b011);
-				end
-			end
-			else if (queuedCnt==3'd1) begin
-				queue_slot(0,tails[0],{tick[29:0],3'h0},id_bus[0]);
-				if (is_branch[0]) begin
-					iq_bstmp_ctr[tails[0]] <= bstmp_ctr;
-					bstmp_ctr <= bstmp_ctr + 2'd1;
 				end
 			end
 		3'b100:
-			if (queuedCnt==3'd1) begin
-				queue_slot(2,tails[0],{tick[29:0],3'h2},id_bus[2]);
-				if (is_branch[2]) begin
-					active_branch[bstmp_ctr] <= TRUE;
-					iq_bstmp_ctr[tails[0]] <= bstmp_ctr;
-					bstmp_ctr <= bstmp_ctr + 2'd1;
-				end
+			if (queuedOnp[2]) begin
+				queue_slot(2,tails[0],{tick[29:0],3'h2},id_bus[2],active_tag);
 			end
 		3'b101:	;	// illegal
 		3'b110:
-			if (queuedCnt==3'd2) begin
-				queue_slot(1,tails[0],{tick[29:0],3'h1},id_bus[1]);
-				if (is_branch[1]) begin
-					active_branch[bstmp_ctr] <= TRUE;
-					iq_bstmp_ctr[tails[0]] <= bstmp_ctr;
-					bstmp_ctr <= bstmp_ctr + 2'd1;
-				end
-				if (slot_jc[1]|take_branch[1]) begin
-					;
-				end
-				else if (slot_jc[2]) begin
-					queue_slot(2,tails[1],{tick[29:0],3'h2},id_bus[2]);
-					if (is_branch[2]) begin
-						active_branch[bstmp_ctr + 2'd1] <= TRUE;
-						iq_bstmp_ctr[tails[1]] <= bstmp_ctr + 2'd1;
-						bstmp_ctr <= bstmp_ctr + 2'd2;
-					end
+			if (queuedOnp[1]) begin
+				queue_slot(1,tails[0],{tick[29:0],3'h1},id_bus[1],active_tag);
+				if (queuedOnp[2]) begin
+					queue_slot(2,tails[1],{tick[29:0],3'h2},id_bus[2],is_branch[1] ? active_tag + 2'd1 : active_tag);
 					arg_vs(3'b110);
-					//arg_vs_011();
-				end
-				else if (take_branch[2]) begin
-					queue_slot(2,tails[1],{tick[29:0],3'h2},id_bus[2]);
-					if (is_branch[2]) begin
-						active_branch[bstmp_ctr + 2'd1] <= TRUE;
-						iq_bstmp_ctr[tails[1]] <= bstmp_ctr + 2'd1;
-						bstmp_ctr <= bstmp_ctr + 2'd2;
-					end
-					arg_vs(3'b110);
-					//arg_vs_011();
-				end
-				else begin
-					queue_slot(2,tails[1],{tick[29:0],3'h2},id_bus[2]);
-					if (is_branch[2]) begin
-						active_branch[bstmp_ctr + 2'd1] <= TRUE;
-						iq_bstmp_ctr[tails[1]] <= bstmp_ctr + 2'd1;
-						bstmp_ctr <= bstmp_ctr + 2'd2;
-					end
-					//arg_vs_011();
-					arg_vs(3'b110);
-				end
-			end
-			else if (queuedCnt==3'd1) begin
-				queue_slot(1,tails[0],{tick[29:0],3'h1},id_bus[1]);
-				if (is_branch[1]) begin
-					iq_bstmp_ctr[tails[0]] <= bstmp_ctr;
-					bstmp_ctr <= bstmp_ctr + 2'd1;
 				end
 			end
 		3'b111:
-			if (queuedCnt==3'd3) begin
-				queue_slot(0,tails[0],{tick[29:0],3'h1},id_bus[0]);
-				if (is_branch[0]) begin
-					active_branch[bstmp_ctr] <= TRUE;
-					iq_bstmp_ctr[tails[0]] <= bstmp_ctr;
-					bstmp_ctr <= bstmp_ctr + 2'd1;
-				end
-				if (slot_jc[0]|take_branch[0]) begin
-					;
-				end
-				else if (slot_jc[1]|take_branch[1]) begin
-					queue_slot(1,tails[1],{tick[29:0],3'h2},id_bus[1]);
-					if (is_branch[1]) begin
-						active_branch[bstmp_ctr+2'd1] <= TRUE;
-						iq_bstmp_ctr[tails[1]] <= bstmp_ctr + 2'd1;
-						bstmp_ctr <= bstmp_ctr + 2'd2;
-					end
+			if (queuedOnp[0]) begin
+				queue_slot(0,tails[0],{tick[29:0],3'h1},id_bus[0],active_tag);
+				if (queuedOnp[1]) begin
+					queue_slot(1,tails[1],{tick[29:0],3'h2},id_bus[1],is_branch[0] ? active_tag + 2'd1 : active_tag);
 					arg_vs(3'b011);
-					//arg_vs_110();
-				end
-				else if (slot_jc[2]|take_branch[2]) begin
-					queue_slot(1,tails[1],{tick[29:0],3'h2},id_bus[1]);
-					queue_slot(2,tails[2],{tick[29:0],3'h3},id_bus[2]);
-					if (is_branch[1]) begin
-						active_branch[bstmp_ctr+2'd1] <= TRUE;
-						iq_bstmp_ctr[tails[1]] <= bstmp_ctr + 2'd1;
-						bstmp_ctr <= bstmp_ctr + 2'd2;
+					if (queuedOnp[2]) begin
+						queue_slot(2,tails[2],{tick[29:0],3'h3},id_bus[2],
+							is_branch[0] && is_branch[1] ? active_tag + 2'd2 :
+							is_branch[0] ? active_tag + 2'd1 : is_branch[1] ? active_tag + 2'd1 : active_tag);
+						arg_vs(3'b111);
 					end
-					if (is_branch[2]) begin
-						active_branch[bstmp_ctr+2'd2] <= TRUE;
-						iq_bstmp_ctr[tails[2]] <= bstmp_ctr + 2'd2;
-						bstmp_ctr <= bstmp_ctr + 2'd3;
-					end
-					arg_vs(3'b111);
-					//arg_vs_111();
-				end
-				else begin
-					queue_slot(1,tails[1],{tick[29:0],3'h2},id_bus[1]);
-					queue_slot(2,tails[2],{tick[29:0],3'h3},id_bus[2]);
-					if (is_branch[1]) begin
-						active_branch[bstmp_ctr+2'd1] <= TRUE;
-						iq_bstmp_ctr[tails[1]] <= bstmp_ctr + 2'd1;
-						bstmp_ctr <= bstmp_ctr + 2'd2;
-					end
-					if (is_branch[2]) begin
-						active_branch[bstmp_ctr+2'd2] <= TRUE;
-						iq_bstmp_ctr[tails[2]] <= bstmp_ctr + 2'd2;
-						bstmp_ctr <= bstmp_ctr + 2'd3;
-					end
-					arg_vs(3'b111);
-					//arg_vs_111();
-				end
-			end
-			else if (queuedCnt==3'd2) begin
-				if (is_branch[0]) begin
-					active_branch[bstmp_ctr] <= TRUE;
-					iq_bstmp_ctr[tails[0]] <= bstmp_ctr;
-					bstmp_ctr <= bstmp_ctr + 2'd1;
-				end
-				queue_slot(0,tails[0],{tick[29:0],3'h1},id_bus[0]);
-				if (slot_jc[0]|take_branch[0]) begin
-					;
-				end
-				else if (slot_jc[1]) begin
-					queue_slot(1,tails[1],{tick[29:0],3'h2},id_bus[1]);
-					if (is_branch[1]) begin
-						active_branch[bstmp_ctr+2'd1] <= TRUE;
-						iq_bstmp_ctr[tails[1]] <= bstmp_ctr + 2'd1;
-						bstmp_ctr <= bstmp_ctr + 2'd2;
-					end
-					arg_vs(3'b011);
-					//arg_vs_110();
-				end
-				else if (take_branch[1]) begin
-					queue_slot(1,tails[1],{tick[29:0],3'h2},id_bus[1]);
-					if (is_branch[1]) begin
-						active_branch[bstmp_ctr+2'd1] <= TRUE;
-						iq_bstmp_ctr[tails[1]] <= bstmp_ctr + 2'd1;
-						bstmp_ctr <= bstmp_ctr + 2'd2;
-					end
-					arg_vs(3'b011);
-					//arg_vs_110();
-				end
-				else begin
-					queue_slot(1,tails[1],{tick[29:0],3'h2},id_bus[1]);
-					if (is_branch[1]) begin
-						active_branch[bstmp_ctr+2'd1] <= TRUE;
-						iq_bstmp_ctr[tails[1]] <= bstmp_ctr + 2'd1;
-						bstmp_ctr <= bstmp_ctr + 2'd2;
-					end
-					arg_vs(3'b011);
-					//arg_vs_110();
-				end
-			end
-			else if (queuedCnt==3'd1) begin
-				queue_slot(0,tails[0],{tick[29:0],3'h1},id_bus[0]);
-				if (is_branch[0]) begin
-					active_branch[bstmp_ctr] <= TRUE;
-					iq_bstmp_ctr[tails[0]] <= bstmp_ctr;
-					bstmp_ctr <= bstmp_ctr + 2'd1;
 				end
 			end
 		default:	;
 		endcase
+		if (queuedOnp[0])
+			br_tag[tails[0]] <= active_tag + is_branch[0];
+		if (queuedOnp[1])
+			br_tag[tails[1]] <= active_tag + (queuedOnp[0] & is_branch[0]) + is_branch[1];
+		if (queuedOnp[2])
+			br_tag[tails[2]] <= active_tag + (queuedOnp[0] & is_branch[0]) + (queuedOnp[1] & is_branch[1]) + is_branch[2];
+		active_tag <= active_tag + (queuedOnp[0] & is_branch[0]) + (queuedOnp[1] & is_branch[1]) + (queuedOnp[2] & is_branch[2]);
 	end
 
 //
@@ -5438,7 +5306,7 @@ if (alu0_vsn) begin
 		iq_store[alu0_id[`QBITS]] <= `INV;
 		iq_state[alu0_id[`QBITS]] <= IQS_CMT;
 	end
-	//alu0_dataready <= FALSE;
+	alu0_dataready <= FALSE;
 end
 
 if (alu1_vsn && `NUM_ALU > 1) begin
@@ -5452,7 +5320,7 @@ if (alu1_vsn && `NUM_ALU > 1) begin
 		iq_store[alu1_id[`QBITS]] <= `INV;
 		iq_state[alu1_id[`QBITS]] <= IQS_CMT;
 	end
-	//alu1_dataready <= FALSE;
+	alu1_dataready <= FALSE;
 end
 
 if (agen0_v) begin
@@ -5861,7 +5729,7 @@ end
 				default:	begin fcu_nextip <= iq_ip[n]; end
 				endcase
 				fcu_pt     <= iq_pt[n];
-				fcu_brdisp <= {{57{iq_instr[n][39]}},iq_instr[n][39:22],iq_instr[n][5:3],iq_instr[n][4:3]};
+				fcu_brdisp <= {{60{iq_instr[n][39]}},iq_instr[n][39:24],iq_instr[n][23:22],iq_instr[n][23:22]};
 				//$display("Branch tgt: %h", {iq_instr[n][39:22],iq_instr[n][5:3],iq_instr[n][4:3]});
 				fcu_branch <= iq_br[n];
 				fcu_call    <= IsCall(`BUnit,iq_instr[n])|iq_jal[n];
@@ -6580,7 +6448,7 @@ endcase
 	$display("TakeBr:%d #", take_branch);//, backpc);
 	$display("Insn%d: %h", 0, insnx[0]);
 	for (i=0; i<QENTRIES; i=i+1) 
-	    $display("%c%c %d: %c%c%c %d %d %c%c %c %c%h %d %o %h %h %h %d %o %h %d %o %h %d %o %h %o# %b",
+	    $display("%c%c %d: %c%c%c %d %d %c%c %c %c%h %d %o %h %h %h %d %o %h %d %o %h %d %o %h %o %h#",
 		 (i[`QBITS]==heads[0])?"C":".",
 		 (i[`QBITS]==tails[0])?"Q":".",
 		  i[`QBITS],
@@ -6607,7 +6475,7 @@ endcase
 		iq_argC[i], iq_argC_v[i], iq_argC_s[i],
 		iq_ip[i],
 		iq_sn[i],
-		iq_bstmp[i]
+		iq_br_tag[i]
 		);
     $display("DRAM");
 	$display("%d %h %h %c%h %o #",
@@ -7018,6 +6886,7 @@ begin
 	iq_rl   [nn]  <= bus[`IB_RL];
 	iq_jmp  [nn]  <= bus[`IB_JMP];
 	iq_br   [nn]  <= bus[`IB_BR];
+	iq_brcc [nn]  <= bus[`IB_BRCC];
 	iq_sync [nn]  <= bus[`IB_SYNC];
 	iq_fsync[nn]  <= bus[`IB_FSYNC];
 	iq_rs1   [nn]  <= bus[`IB_RS1];
@@ -7032,10 +6901,11 @@ input [2:0] slot;
 input [`QBITS] ndx;
 input [32:0] seqnum;
 input [`IBTOP:0] id_bus;
+input [`QBITS] btag;
 begin
-	iq_bstmp[ndx] <= active_branch;
 	iq_sn[ndx] <= seqnum;
 	iq_state[ndx] <= IQS_QUEUED;
+	iq_br_tag[ndx] <= btag;
 	case(slot)
 	3'd0:	iq_ip[ndx] <= {ipd[AMSB:4],4'h0};
 	3'd1:	iq_ip[ndx] <= {ipd[AMSB:4],4'h5};

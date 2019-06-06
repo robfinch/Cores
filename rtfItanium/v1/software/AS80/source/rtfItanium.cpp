@@ -256,7 +256,7 @@ static int regCnst;
 #define FMT(x)	(((x) & 15LL)<<31LL)
 #define RM(x)		(((x) & 7LL) << 28LL)
 #define FLT3(x)	(((x) & 0x3fLL) << 22LL)
-#define BT(x)		(((((x) >> 2LL) & 7LL) << 3LL) | (((x) >> 5LL) << 22LL))
+#define BT(x)		(((x) >> 2LL) << 22LL)
 
 bool TmpUsed[125];
 __int8 TmpTbl[125][3] =
@@ -2289,6 +2289,7 @@ static void process_itanium_align()
 		if ((code_address % val) != 0LL) {
 			emit_insn(NOP_INSN, B);
 			emit_insn(NOP_INSN, B);
+			emit_insn(NOP_INSN, B);
 		}
 		if ((val % 16) != 0)
 			error("Bad code alignment.");
@@ -2450,6 +2451,7 @@ static void process_beqi(int64_t opcode6, int64_t opcode3)
   int Ra, pred = 0;
   Int128 val, imm;
   Int128 disp;
+	Int128 ca;
 	int sz = 3;
 	int ins48 = 0;
 	char *p;
@@ -2465,6 +2467,7 @@ static void process_beqi(int64_t opcode6, int64_t opcode3)
 	need(',');
 	NextToken();
 	val = expr128();
+	ca = Int128(code_address);
 	if (!IsNBit128(imm, *Int128::MakeInt128(9LL))) {
 		//printf("Branch immediate too large: %d %I64d", lineno, imm);
 		LoadConstant(imm, 54LL);
@@ -2478,9 +2481,9 @@ static void process_beqi(int64_t opcode6, int64_t opcode3)
 		);
 		return;
 	}
-	Int128::Assign(&disp, &val);
+	Int128::Sub(&disp, &val, &ca);
 	emit_insn(
-		BT(disp.low) |
+		BT(((disp.low & 0xfffffffffffffff0L) + (((disp.low & 15L) != 0)<<4L)) | (val.low & 15L)) |
 		(((imm.low >> 3LL) & 0x3FLL) << 16LL) |
 		(imm.low & 7LL) |
 		RA(Ra) |
@@ -2515,7 +2518,7 @@ static void process_bcc()
 	int swp;
 	int fmt;
 	Int128 val, ca4, ca2;
-	Int128 disp;
+	Int128 disp, ca;
 	char *p1, *p2;
 	int encode;
 	int ins48 = 0;
@@ -2545,9 +2548,10 @@ static void process_bcc()
 	}
 	else
 		Int128::Assign(&val, Int128::Zero());
+	ca = Int128(code_address);
+	Int128::Sub(&disp, &val, &ca);
 	if (Rc == -1) {
-		Int128::Assign(&disp, &val);
-		if (!IsNBit128(val, *Int128::MakeInt128(23LL))) {
+		if (!IsNBit128(val, *Int128::MakeInt128(20LL))) {
 			if (pass > 4)
 				error("Branch target too far away");
 		}
@@ -2560,7 +2564,7 @@ static void process_bcc()
 	}
 	if (Rc < 0) {
 		emit_insn(
-			BT(val.low) |
+			BT(((disp.low & 0xfffffffffffffff0L)+(((disp.low & 15L)!=0)<<4L)) | (val.low & 15L)) |
 			RB(Rb) |
 			RA(Ra) | opcode6
 			, B
@@ -2685,12 +2689,13 @@ static void process_bra(int oc)
 
   NextToken();
   val = expr();
-  disp = code_address;
-	if (!IsNBit(disp, 23LL)) {
+  disp = val - code_address;
+	if (!IsNBit(disp, 20LL)) {
 		if (pass > 4)
 			error("Bra target too far away");
 	}
 	emit_insn(
+		BT(((disp & 0xfffffffffffffff0L) + (((disp & 15L) != 0)<<4L)) | (val & 15L)) | 
 		BT(disp) |
 		OP4(I_Bcc)
     ,B

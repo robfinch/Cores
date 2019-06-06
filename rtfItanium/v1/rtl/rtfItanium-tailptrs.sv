@@ -24,15 +24,17 @@
 `include "rtfItanium-config.sv"
 `include "rtfItanium-defines.sv"
 
-module tailptrs(rst_i, clk_i, branchmiss, iq_stomp, queuedCnt, tails);
+module tailptrs(rst_i, clk_i, branchmiss, iq_stomp, iq_br_tag, queuedCnt, tails, active_tag);
 parameter QENTRIES = `QENTRIES;
 parameter QSLOTS = `QSLOTS;
 input rst_i;
 input clk_i;
 input branchmiss;
 input [QENTRIES-1:0] iq_stomp;
+input [`QBITS] iq_br_tag [0:QENTRIES-1];
 input [2:0] queuedCnt;
 output reg [`QBITS] tails [0:QSLOTS-1];
+output reg [`QBITS] active_tag;
 
 integer n, j;
 
@@ -52,9 +54,9 @@ else begin
 			// a positive number.
 			if (iq_stomp[n] & ~iq_stomp[(n+(QENTRIES-1))%QENTRIES]) begin
 				for (j = 0; j < QSLOTS; j = j + 1)
-					tails[j] = (n + j) % QENTRIES;
+					tails[j] <= (n + j) % QENTRIES;
+				active_tag <= iq_br_tag[n];
 			end
-	    // otherwise, it is the last instruction in the queue that has been mispredicted ... do nothing
 	end
 end
 

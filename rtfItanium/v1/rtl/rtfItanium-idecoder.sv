@@ -269,6 +269,12 @@ input [39:0] isn;
 IsCache = unit==`MUnit && (mopcode(isn)==`CACHE || (mopcode(isn)==`MSX && isn[`FUNCT5]==`CACHEX));
 endfunction
 
+function IsCall;
+input [2:0] unit;
+input [39:0] isn;
+IsCall = unit==`BUnit && isn[`OPCODE4]==`CALL;
+endfunction
+
 function IsCAS;
 input [2:0] unit;
 input [39:0] isn;
@@ -363,6 +369,12 @@ if (unit==3'd1)
 	endcase
 else
 	IsBranch = FALSE;
+endfunction
+
+function IsBRcc;
+input [2:0] unit;
+input [39:0] isn;
+IsBRcc = unit==`BUnit && isn[`OPCODE4]==`BRcc;
 endfunction
 
 function IsJAL;
@@ -540,6 +552,7 @@ begin
 	bus[`IB_IRQ]	 <= IsIrq(unit,instr);
 	bus[`IB_BRK]	 <= isBrk;
 	bus[`IB_RTI]	 <= isRti;
+	bus[`IB_CALL]	 <= IsCall(unit,instr);
 	bus[`IB_RET]	 <= isRet;
 	bus[`IB_JAL]	 <= isJal;
 	bus[`IB_REX]	 <= IsRex(unit,instr);
@@ -571,6 +584,7 @@ begin
 	bus[`IB_RL]			<= instr[31];
 	bus[`IB_JMP]		<= IsJmp(unit,instr);
 	bus[`IB_BR]			<= IsBranch(unit,instr);
+	bus[`IB_BRCC]		<= IsBRcc(unit,instr);
 	bus[`IB_SYNC]		<= IsSync(unit,instr)|| isBrk || isRti;
 	bus[`IB_FSYNC]	<= IsFSync(unit,instr);
 	bus[`IB_RFW]		<= (Rt==6'd0) ? 1'b0 : IsRFW(unit,instr);

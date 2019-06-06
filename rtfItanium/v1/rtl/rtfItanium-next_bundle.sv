@@ -23,19 +23,12 @@
 //
 `include "rtfItanium-config.sv"
 
-module next_bundle(rst, slotv, branchmiss, canq1, canq2, canq3, phit, ip_mask, 
-	next, debug_on);
+module next_bundle(rst, slotv, phit, next);
 parameter QSLOTS = `QSLOTS;
 input rst;
 input [QSLOTS-1:0] slotv;
-input branchmiss;
-input canq1;
-input canq2;
-input canq3;
 input phit;
-input [QSLOTS-1:0] ip_mask;
 output reg next;
-input debug_on;
 parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
 

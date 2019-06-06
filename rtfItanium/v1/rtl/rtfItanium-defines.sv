@@ -479,6 +479,7 @@
 `define IB_RD			75:71
 `define IB_RS1		61:56
 `define IB_RS2		55:50
+`define IB_BRCC		49
 `define IB_CMP		48
 `define IB_PUSH		47
 `define IB_TLB		46
@@ -504,6 +505,7 @@
 `define IB_RMW		19
 `define IB_MEMDB	18
 `define IB_MEMSB	17
+`define IB_CALL		16
 `define IB_SEI		15
 `define IB_AQ			14
 `define IB_RL			13
