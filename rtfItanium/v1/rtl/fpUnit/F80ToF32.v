@@ -23,26 +23,24 @@
 //                                                                          
 // ============================================================================
 
-module F32ToF80(a, o);
-input [31:0] a;
-output [79:0] o;
+module F80ToF32(a, o);
+input [79:0] a;
+output [31:0] o;
 
 reg signo;
-reg [14:0] expo;
-reg [63:0] mano;
+reg [7:0] expo;
+reg [22:0] mano;
 
 assign o = {signo,expo,mano};
 
 wire signi;
-wire [7:0] expi;
-wire [22:0] mani;
+wire [14:0] expi;
+wire [63:0] mani;
 wire xinf;	// exponent infinite
 wire vz;	// value zero
 wire xz;	// exponent zero
 
-fpDecomp #(32) u1 (.i(a), .sgn(signi), .exp(expi), .man(mani), .xinf(xinf), .xz(xz), .vz(vz) );
-wire [5:0] lz;
-cntlz32 u2 ({mani,9'b111111111}, lz);	// '1' bit already unhidden due to denormalized number
+fpDecomp #(80) u1 (.i(a), .sgn(signi), .exp(expi), .man(mani), .xinf(xinf), .xz(xz), .vz(vz) );
 
 always @*
 begin
@@ -57,8 +55,8 @@ begin
   // convert infinity / nan
   // infinity in = infinity out
   else if (xinf) begin
-    expo <= 15'h7fff;
-    mano <= {mani,41'b0};
+    expo <= 8'h7f;
+    mano <= mani[63:41];
   end
   // convert denormal
   // a denormal was really a number with an exponent of -126
@@ -66,14 +64,24 @@ begin
   // it may be possible to normalize the value if it isn't
   // zero
   else if (xz) begin
-    expo <= 15'h3fff - 8'h7e - lz;	// 32767 "zero" -1022 - lz
-    mano <= {mani << (lz + 1), 41'd0};	// shift one more to hide leading '1'
+    expo <= 8'h00;
+    mano <= 23'h0;
   end
   // convert typical number
   // adjust exponent, copy mantissa
   else begin
-    expo <= expi + 15'h3fff - 8'h7f;
-    mano <= {mani,41'd0};
+  	if (expi < 15'h3fff - 8'h7f) begin
+  		expo <= 8'h00;	// zero
+  		mano <= 23'h0;
+  	end
+  	else if (expi > 15'h3fff + 8'h7f) begin
+  		expo <= 8'hFF;	// Infinity
+  		mano <= 23'h0;
+  	end
+  	else begin
+    	expo <= expi - 15'h3fff + 8'h7f;
+    	mano <= mani[63:41];
+    end
   end
 end
 

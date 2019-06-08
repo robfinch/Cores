@@ -118,7 +118,7 @@ fs2d u4 (a[39:0], sdo);
 wire [39:0] dso;
 fd2s u5 (a, dso);
 wire [79:0] f32to80o;
-F32TO80 u6 (a[31:0], f32to80o);
+F32ToF80 u6 (a[31:0], f32to80o);
 
 always @*
   case(op)

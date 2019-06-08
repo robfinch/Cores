@@ -86,6 +86,7 @@
 `define FLT1		4'h1
 `define FLT2		4'h2
 `define FLT3		4'h3
+`define FLT1A		4'h5
 `define FLT2LI	4'hA
 `define FMOV    5'h00
 `define FTOI    5'h02
@@ -111,6 +112,8 @@
 `define FCMP    5'h06
 `define FMUL    5'h08
 `define FDIV    5'h09
+// FLT1A
+`define FRES		5'h00
 
 `include "fp_defines.v"
 
@@ -200,7 +203,7 @@ wire fcmp	= {op4,func6b} == {`FLT2,`FCMP};
 wire frm	= {op4,func6b} == {`FLT1,`FRM};  // set rounding mode
 
 wire zl_op =  (op4==`FLT1 && (
-                    (func6b==`FABS || func6b==`FNABS || func6b==`FMOV || func6b==`FNEG || func6b==`FSIGN || func6b==`FMAN || func6b==`FCVTSQ)) ||
+                    (func6b==`FABS || func6b==`FNABS || func6b==`FMOV || func6b==`FNEG || func6b==`FSIGN || func6b==`FMAN)) ||
                     func6b==`FCMP);
 wire loo_op = (op4==`FLT1 && (func6b==`ITOF || func6b==`FTOI));
 wire loo_done;
@@ -408,6 +411,8 @@ fpAddsub #(WID) u10(.clk(clk), .ce(pipe_ce), .rm(rmd), .op(func6b[0]), .a(a), .b
 fpDiv    #(WID) u11(.clk(clk), /*.clk4x(clk4x),*/ .ce(pipe_ce), .ld(ld), .a(a), .b(b), .o(fdiv_o), .sign_exe(), .underflow(divUnder), .done(divDone) );
 fpMul    #(WID) u12(.clk(clk), .ce(pipe_ce),          .a(a), .b(b), .o(fmul_o), .sign_exe(), .inf(), .underflow(mulUnder) );
 fpSqrt	 #(WID) u13(.rst(rst), .clk(clk4x), .ce(pipe_ce), .ld(ld), .a(a), .o(fsqrt_o), .done(), .sqrinf(), .sqrneg(sqrneg) );
+fpRes    #(WID) u14(.clk(clk), .ce(pipe_ce), .a(a), .o(fres_o));
+
 /*
 fpAddsub #(32) u10s(.clk(clk), .ce(pipe_ce), .rm(rm), .op(op[0]), .a(a[31:0]), .b(b[31:0]), .o(fass_o) );
 fpDiv    #(32) u11s(.clk(clk), .ce(pipe_ce), .ld(ld), .a(a[31:0]), .b(b[31:0]), .o(fdivs_o), .sign_exe(), .underflow(divUnders), .done() );
@@ -439,6 +444,11 @@ case(op2)
   `FSQRT:	fres <= fsqrt_o;
   default:	begin fres <= 1'd0; fress <= 1'd0; end
   endcase
+`FLT1A:
+	case(fn2)
+	`FRES:	fres <= fres_o;
+	default:	begin fres <= 1'd0; fress <= 1'd0; end
+	endcase
 default:    begin fres <= fas_o; fress <= fass_o; end
 endcase
 
@@ -558,12 +568,17 @@ begin
     `FLT1:
       case(func6b)
       `FABS,`FNABS,`FNEG,`FMAN,`FMOV,`FSIGN,
-      `FCVTSD,`FCVTSQ,`FCVTDS:  begin fpcnt <= 8'd0; end
+      `FCVTSD,`FCVTDS:  begin fpcnt <= 8'd0; end
       `FTOI:  begin fpcnt <= 8'd1; end
       `ITOF:  begin fpcnt <= 8'd1; end
       `FSQRT: begin fpcnt <= maxdivcnt; end
       default:    fpcnt <= 8'h00;
       endcase
+    `FLT1A:
+    	case(func6b)
+    	`FRES:	fpcnt <= 8'h03;
+    	default:	fpcnt <= 8'h00;
+    	endcase
     default:    fpcnt <= 8'h00;
     endcase
   else if (!done)

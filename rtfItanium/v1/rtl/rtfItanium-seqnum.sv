@@ -23,7 +23,7 @@
 //
 `include "rtfItanium-config.sv"
 
-module seqnum(rst, clk, phit, ip_mask, branchmiss, heads, slotv, slot_jc, take_branch, canq1, canq2, canq3,
+module seqnum(rst, clk, phit, ip_mask, branchmiss, heads, slotv, slot_jc, take_branch, 
 	hi_amt, iq_v, iq_sn, maxsn, tosub, debug_on);
 parameter QENTRIES = `QENTRIES;
 parameter QSLOTS = `QSLOTS;
@@ -36,9 +36,6 @@ input [`QBITS] heads [0:QENTRIES-1];
 input [QSLOTS-1:0] slotv;
 input [QSLOTS-1:0] slot_jc;
 input [QSLOTS-1:0] take_branch;
-input canq1;
-input canq2;
-input canq3;
 input [2:0] hi_amt;
 input [QENTRIES-1:0] iq_v;
 input [32:0] iq_sn [0:QENTRIES-1];

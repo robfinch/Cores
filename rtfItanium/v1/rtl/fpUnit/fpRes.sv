@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2006-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -21,7 +21,7 @@
 //
 // ============================================================================
 //
-module fpRes(clk, a, o);
+module fpRes(clk, ce, a, o);
 parameter WID = 128;
 localparam MSB = WID-1;
 localparam EMSB = WID==128 ? 14 :
@@ -47,6 +47,7 @@ localparam FMSB = WID==128 ? 111 :
 				  WID==32 ? 22 :
 				  WID==24 ? 15 : 9;
 input clk;
+input ce;
 input [WID-1:0] a;
 output [WID-1:0] o;
 
@@ -1095,18 +1096,18 @@ wire [9:0] index = ma[FMSB:FMSB-9];
 reg [9:0] indexr;
 reg [15:0] k0, k1;
 always @(posedge clk)
-	indexr <= index;
+	if(ce) indexr <= index;
 always @(posedge clk)
-	k0 <= k01[indexr][31:16];
+	if(ce) k0 <= k01[indexr][31:16];
 always @(posedge clk)
-	k1 <= k01[indexr][15: 0];
+	if(ce) k1 <= k01[indexr][15: 0];
 delay3 #(1) u2 (.clk(clk), .ce(1'b1), .i(sa), .o(sa3));
 delay3 #(EMSB+1) u3 (.clk(clk), .ce(1'b1), .i(exp), .o(exp3));
 wire [15:0] eps = ma[FMSB-10:FMSB-10-15];
 wire [31:0] p = k1 * eps;
 reg [15:0] r0;
 always @(posedge clk)
-	r0 <= k0 - (p >> 26);
+	if(ce) r0 <= k0 - (p >> 26);
 assign o = {sa3,exp3,r0[14:0],{FMSB+2-16{1'b0}}};
 
 always @*

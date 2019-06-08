@@ -29,7 +29,7 @@ module regfile_valid(rst, clk, phit, ip_mask, slotvd, slot_rfw, slot_jc, tails,
 	livetarget, branchmiss,
 	commit0_v, commit1_v, commit0_id, commit1_id, commit0_tgt, commit1_tgt,
 	rf_source, iq_source, queuedCnt,
-	take_branch, Rd, canq1, canq2, canq3, rf_v, debug_on);
+	take_branch, Rd, rf_v, debug_on);
 parameter AREGS = 128;
 parameter RBIT = 6;
 parameter QENTRIES = `QENTRIES;
@@ -57,9 +57,6 @@ input [QENTRIES-1:0] iq_source;
 input [QSLOTS-1:0] take_branch;
 input [6:0] Rd [0:QSLOTS-1];
 input [2:0] queuedCnt;
-input canq1;
-input canq2;
-input canq3;
 output reg [AREGS-1:0] rf_v;
 input debug_on;
 

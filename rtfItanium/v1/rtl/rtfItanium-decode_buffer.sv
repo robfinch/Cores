@@ -51,6 +51,80 @@ output reg [127:0] ibundle;
 output reg [7:0] template [0:QSLOTS-1];
 output reg [39:0] insnx [0:QSLOTS-1];
 
+function [8:0] fnUnits;
+input [6:0] tmp;
+case(tmp)
+7'h0: fnUnits = {`BUnit,`BUnit,`BUnit};
+7'h1: fnUnits = {`IUnit,`BUnit,`BUnit};
+7'h2: fnUnits = {`FUnit,`BUnit,`BUnit};
+7'h3: fnUnits = {`MUnit,`BUnit,`BUnit};
+7'h4: fnUnits = {`BUnit,`IUnit,`BUnit};
+7'h5: fnUnits = {`IUnit,`IUnit,`BUnit};
+7'h6: fnUnits = {`FUnit,`IUnit,`BUnit};
+7'h7: fnUnits = {`MUnit,`IUnit,`BUnit};
+7'h8: fnUnits = {`BUnit,`FUnit,`BUnit};
+7'h9: fnUnits = {`IUnit,`FUnit,`BUnit};
+7'ha: fnUnits = {`FUnit,`FUnit,`BUnit};
+7'hb: fnUnits = {`MUnit,`FUnit,`BUnit};
+7'hc: fnUnits = {`BUnit,`MUnit,`BUnit};
+7'hd: fnUnits = {`IUnit,`MUnit,`BUnit};
+7'he: fnUnits = {`FUnit,`MUnit,`BUnit};
+7'hf: fnUnits = {`MUnit,`MUnit,`BUnit};
+7'h10: fnUnits = {`BUnit,`BUnit,`IUnit};
+7'h11: fnUnits = {`IUnit,`BUnit,`IUnit};
+7'h12: fnUnits = {`FUnit,`BUnit,`IUnit};
+7'h13: fnUnits = {`MUnit,`BUnit,`IUnit};
+7'h14: fnUnits = {`BUnit,`IUnit,`IUnit};
+7'h15: fnUnits = {`IUnit,`IUnit,`IUnit};
+7'h16: fnUnits = {`FUnit,`IUnit,`IUnit};
+7'h17: fnUnits = {`MUnit,`IUnit,`IUnit};
+7'h18: fnUnits = {`BUnit,`FUnit,`IUnit};
+7'h19: fnUnits = {`IUnit,`FUnit,`IUnit};
+7'h1a: fnUnits = {`FUnit,`FUnit,`IUnit};
+7'h1b: fnUnits = {`MUnit,`FUnit,`IUnit};
+7'h1c: fnUnits = {`BUnit,`MUnit,`IUnit};
+7'h1d: fnUnits = {`IUnit,`MUnit,`IUnit};
+7'h1e: fnUnits = {`FUnit,`MUnit,`IUnit};
+7'h1f: fnUnits = {`MUnit,`MUnit,`IUnit};
+7'h20: fnUnits = {`BUnit,`BUnit,`FUnit};
+7'h21: fnUnits = {`IUnit,`BUnit,`FUnit};
+7'h22: fnUnits = {`FUnit,`BUnit,`FUnit};
+7'h23: fnUnits = {`MUnit,`BUnit,`FUnit};
+7'h24: fnUnits = {`BUnit,`IUnit,`FUnit};
+7'h25: fnUnits = {`IUnit,`IUnit,`FUnit};
+7'h26: fnUnits = {`FUnit,`IUnit,`FUnit};
+7'h27: fnUnits = {`MUnit,`IUnit,`FUnit};
+7'h28: fnUnits = {`BUnit,`FUnit,`FUnit};
+7'h29: fnUnits = {`IUnit,`FUnit,`FUnit};
+7'h2a: fnUnits = {`FUnit,`FUnit,`FUnit};
+7'h2b: fnUnits = {`MUnit,`FUnit,`FUnit};
+7'h2c: fnUnits = {`BUnit,`MUnit,`FUnit};
+7'h2d: fnUnits = {`IUnit,`MUnit,`FUnit};
+7'h2e: fnUnits = {`FUnit,`MUnit,`FUnit};
+7'h2f: fnUnits = {`MUnit,`MUnit,`FUnit};
+7'h30: fnUnits = {`BUnit,`BUnit,`MUnit};
+7'h31: fnUnits = {`IUnit,`BUnit,`MUnit};
+7'h32: fnUnits = {`FUnit,`BUnit,`MUnit};
+7'h33: fnUnits = {`MUnit,`BUnit,`MUnit};
+7'h34: fnUnits = {`BUnit,`IUnit,`MUnit};
+7'h35: fnUnits = {`IUnit,`IUnit,`MUnit};
+7'h36: fnUnits = {`FUnit,`IUnit,`MUnit};
+7'h37: fnUnits = {`MUnit,`IUnit,`MUnit};
+7'h38: fnUnits = {`BUnit,`FUnit,`MUnit};
+7'h39: fnUnits = {`IUnit,`FUnit,`MUnit};
+7'h3a: fnUnits = {`FUnit,`FUnit,`MUnit};
+7'h3b: fnUnits = {`MUnit,`FUnit,`MUnit};
+7'h3c: fnUnits = {`BUnit,`MUnit,`MUnit};
+7'h3d: fnUnits = {`IUnit,`MUnit,`MUnit};
+7'h3e: fnUnits = {`FUnit,`MUnit,`MUnit};
+7'h3f: fnUnits = {`MUnit,`MUnit,`MUnit};
+
+7'h7D: fnUnits = {`IUnit,`NUnit,`NUnit};
+7'h7E: fnUnits = {`FUnit,`NUnit,`NUnit};
+default:	fnUnits = {`NUnit,`NUnit,`NUnit};
+endcase
+endfunction
+
 function [7:0] mxtbl;
 input [2:0] units;
 case(units)
@@ -67,6 +141,20 @@ input [6:0] tmp;
 reg [8:0] units;
 units = fnUnits(tmp);
 Unit0 = units[8:6];
+endfunction
+
+function [2:0] Unit1;
+input [6:0] tmp;
+reg [8:0] units;
+units = fnUnits(tmp);
+Unit1 = units[5:3];
+endfunction
+
+function [2:0] Unit2;
+input [6:0] tmp;
+reg [8:0] units;
+units = fnUnits(tmp);
+Unit2 = units[2:0];
 endfunction
 
 function IsExec;
@@ -181,7 +269,7 @@ else begin
 					templatep[2] <= mxtbl(Unit0(ic_out[127:120]));
 				end
 			end
-			else if (IsExec(Unit0(ic_out[127:120]),ic_out[79:40])) begin
+			else if (IsExec(Unit1(ic_out[127:120]),ic_out[79:40])) begin
 				templatep[1] <= codebuf[ic_out[`RS1]][46:40];
 				insnxp[1] <= codebuf[ic_out[`RS1]][39:0];
 			end
@@ -195,7 +283,7 @@ else begin
 					insnxp[2] <= {1'b1,9'h0,cause_i,2'b00,irq_i,16'h03C0};
 				end
 			end
-			else if (IsExec(Unit0(ic_out[127:120]),ic_out[119:80])) begin
+			else if (IsExec(Unit2(ic_out[127:120]),ic_out[119:80])) begin
 				templatep[2] <= codebuf[ic_out[`RS1]][46:40];
 				insnxp[2] <= codebuf[ic_out[`RS1]][39:0];
 			end

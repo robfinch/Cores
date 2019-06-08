@@ -24,7 +24,7 @@
 `include "rtfItanium-config.sv"
 
 module slot_valid(rst, clk, branchmiss, phit, nextb, ip_mask, ip_maskd,
-	ip_override, next_ip_mask, queuedCnt, new_ip_mask,
+	ip_override, queuedCnt,
 	slot_jc, slot_ret, take_branch, slotv, slotvd, debug_on);
 parameter QSLOTS = `QSLOTS;
 parameter VAL = 1'b1;
@@ -41,10 +41,8 @@ input [QSLOTS-1:0] slot_ret;
 input [QSLOTS-1:0] take_branch;
 input phit;
 input ip_override;
-input [QSLOTS-1:0] next_ip_mask;
 input [QSLOTS-1:0] ip_mask;
 input [QSLOTS-1:0] ip_maskd;
-input new_ip_mask;
 output reg [QSLOTS-1:0] slotv;
 output reg [QSLOTS-1:0] slotvd;
 input debug_on;

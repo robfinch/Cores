@@ -1,3 +1,4 @@
+RngLUT[0] = 32'hc1000000;
 RngLUT[1] = 32'hc0fff000;
 RngLUT[2] = 32'hc0ffe000;
 RngLUT[3] = 32'hc0ffd000;

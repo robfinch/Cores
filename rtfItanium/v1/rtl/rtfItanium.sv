@@ -128,7 +128,7 @@ wire [AMSB:0] ip, ipd, next_ip;
 wire ip_override;
 reg [AMSB:0] rip;
 reg [AMSB:0] ra;		// return address - predicted
-reg [2:0] ip_mask, ip_maskd, next_ip_mask;
+reg [2:0] ip_mask, ip_maskd;
 reg [AMSB:0] missip, excmissip;
 reg [1:0] slot;
 wire [AMSB:0] slot0ip = {ip[AMSB:4],4'h0};
@@ -339,8 +339,7 @@ wire int_commit;
 
 reg [199:0] xdati;
 
-reg canq1, canq2, canq3;
-reg [2:0] queuedCnt;
+wire [2:0] queuedCnt;
 reg queuedNop;
 reg [2:0] hi_amt;
 
@@ -435,7 +434,6 @@ reg [QENTRIES-1:0] iq_imm;
 reg [QENTRIES-1:0] iq_memready;
 reg [QENTRIES-1:0] iq_memopsvalid;
 
-reg  [QENTRIES-1:0] memissue = {QENTRIES{1'b0}};
 reg [1:0] missued;
 reg [7:0] last_issue0, last_issue1, last_issue2;
 reg  [QENTRIES-1:0] iq_memissue;
@@ -713,6 +711,10 @@ reg branchmiss = 1'b0;
 reg branchhit = 1'b0;
 reg  [`QBITS] missid;
 
+wire [1:0] issue_count;
+reg [1:0] missue_count;
+wire [QENTRIES-1:0] memissue;
+
 wire        dram_avail;
 reg	 [2:0] dram0;	// state of the DRAM request (latency = 4; can have three in pipeline)
 reg	 [2:0] dram1;	// state of the DRAM request (latency = 4; can have three in pipeline)
@@ -775,7 +777,7 @@ reg [`QBITS] active_tag, miss_tag;
 reg [`QBITS] br_tag [0:QENTRIES-1];
 
 reg [QSLOTS-1:0] queuedOn;
-reg [QSLOTS-1:0] queuedOnp;
+wire [QSLOTS-1:0] queuedOnp;
 wire [QSLOTS-1:0] predict_taken;
 wire predict_taken0;
 wire predict_taken1;
@@ -1101,9 +1103,6 @@ regfile_valid urfv1
 	.take_branch(take_branch),
 	.Rd(Rd),
 	.queuedCnt(queuedCnt),
-	.canq1(canq1),
-	.canq2(canq2),
-	.canq3(canq3),
 	.rf_v(rf_v),
 	.debug_on(debug_on)
 );
@@ -1117,9 +1116,6 @@ regfile_source urfs1
 	.phit(phit),
 	.ip_mask(ip_mask),
 	.queuedCnt(queuedCnt),
-	.canq1(canq1),
-	.canq2(canq2),
-	.canq3(canq3),
 	.slot_rfw(slot_rfw),
 	.slot_jc(slot_jc),
 	.take_branch(take_branch),
@@ -1377,9 +1373,9 @@ wire [3:0] xisBr;
 wire [AMSB:0] xip [0:3];
 wire [3:0] xtkb;
 
-assign xisBr[0] = iq_br[heads[0]] & commit0_v;
-assign xisBr[1] = iq_br[heads[1]] & commit1_v;
-assign xisBr[2] = iq_br[heads[2]] & commit2_v;
+assign xisBr[0] = iq_br[heads[0]] & commit0_v & ~iq_instr[heads[0]][5];
+assign xisBr[1] = iq_br[heads[1]] & commit1_v & ~iq_instr[heads[1]][5];
+assign xisBr[2] = iq_br[heads[2]] & commit2_v & ~iq_instr[heads[2]][5];
 assign xisBr[3] = 1'b0;
 assign xip[0] = iq_ip[heads[0]];
 assign xip[1] = iq_ip[heads[1]];
@@ -1389,6 +1385,8 @@ assign xtkb[0] = commit0_v & iq_takb[heads[0]];
 assign xtkb[1] = commit1_v & iq_takb[heads[1]];
 assign xtkb[2] = commit2_v & iq_takb[heads[2]];
 assign xtkb[3] = 1'b0;
+
+wire [QSLOTS-1:0] predict_takenx;
 
 BranchPredictor ubp1
 (
@@ -1401,8 +1399,13 @@ BranchPredictor ubp1
   .xip(xip),
   .takb(xtkb),
   .ip(ips),
-  .predict_taken(predict_taken)
+  .predict_taken(predict_takenx)
 );
+
+assign predict_taken[0] = insnx[0][5]==1'b1 ? insnx[0][4] : predict_takenx[0];
+assign predict_taken[1] = insnx[1][5]==1'b1 ? insnx[1][4] : predict_takenx[1];
+assign predict_taken[2] = insnx[2][5]==1'b1 ? insnx[2][4] : predict_takenx[2];
+
 
 reg StoreAck1, isStore;
 wire [199:0] dc0_out, dc1_out;
@@ -2819,9 +2822,6 @@ seqnum usn1
 	.slotv(slotv),
 	.slot_jc(slot_jc),
 	.take_branch(take_branch),
-	.canq1(canq1),
-	.canq2(canq2),
-	.canq3(canq3),
 	.hi_amt(hi_amt),
 	.iq_sn(iq_sn),
 	.maxsn(maxsn),
@@ -3141,799 +3141,33 @@ end
 
 // determine if the instructions ready to issue can, in fact, issue.
 // "ready" means that the instruction has valid operands but has not gone yet
-reg [1:0] issue_count, missue_count;
-generate begin : gMemIssue
-always @*
-begin
-	issue_count = 0;
-	 memissue[ heads[0] ] =	iq_memready[ heads[0] ] && !(iq_load[heads[0]] && inwb0);		// first in line ... go as soon as ready
-	 if (memissue[heads[0]])
-	 	issue_count = issue_count + 1;
+memissueLogic umi1
+(
+	.heads(heads),
+	.iq_v(iq_v),
+	.iq_memready(iq_memready),
+	.iq_out(iq_out),
+	.iq_done(iq_done),
+	.iq_mem(iq_mem),
+	.iq_agen(iq_agen), 
+	.iq_load(iq_load),
+	.iq_store(iq_store),
+	.iq_fc(iq_fc),
+	.iq_aq(iq_aq),
+	.iq_rl(iq_rl),
+	.iq_ma(iq_ma),
+	.iq_memsb(iq_memsb),
+	.iq_memdb(iq_memdb),
+	.iq_stomp(iq_stomp),
+	.iq_canex(iq_canex), 
+	.wb_v(wb_v),
+	.inwb0(inwb0),
+	.inwb1(inwb1),
+	.sple(sple),
+	.memissue(memissue),
+	.issue_count(issue_count)
+);
 
-	 memissue[ heads[1] ] =	~iq_stomp[heads[1]] && iq_memready[ heads[1] ]		// addr and data are valid
-					&& issue_count < `NUM_MEM
-					// ... and no preceding instruction is ready to go
-					//&& ~iq_memready[heads[0]]
-					// ... and there is no address-overlap with any preceding instruction
-					&& (!iq_mem[heads[0]] || (iq_agen[heads[0]] & iq_out[heads[0]]) || iq_done[heads[0]]
-						|| ((iq_ma[heads[1]][AMSB:3] != iq_ma[heads[0]][AMSB:3] || iq_out[heads[0]] || iq_done[heads[0]])))
-					// ... if a release, any prior memory ops must be done before this one
-					&& (iq_rl[heads[1]] ? iq_done[heads[0]] || !iq_v[heads[0]] || !iq_mem[heads[0]] : 1'b1)
-					// ... if a preivous op has the aquire bit set
-					&& !(iq_aq[heads[0]] && iq_v[heads[0]])
-					// ... and there's nothing in the write buffer during a load
-					&& !(iq_load[heads[1]] && (inwb1 || iq_store[heads[0]]))
-					// ... and, if it is a store, there is no chance of it being undone
-					&& ((iq_load[heads[1]] && sple) ||
-					   !(iq_fc[heads[0]]||iq_canex[heads[0]]));
-	 if (memissue[heads[1]])
-	 	issue_count = issue_count + 1;
-
-	 memissue[ heads[2] ] =	~iq_stomp[heads[2]] && iq_memready[ heads[2] ]		// addr and data are valid
-					// ... and no preceding instruction is ready to go
-					&& issue_count < `NUM_MEM
-					//&& ~iq_memready[heads[0]]
-					//&& ~iq_memready[heads[1]] 
-					// ... and there is no address-overlap with any preceding instruction
-					&& (!iq_mem[heads[0]] || (iq_agen[heads[0]] & iq_out[heads[0]])  || iq_done[heads[0]]
-						|| ((iq_ma[heads[2]][AMSB:3] != iq_ma[heads[0]][AMSB:3] || iq_out[heads[0]] || iq_done[heads[0]])))
-					&& (!iq_mem[heads[1]] || (iq_agen[heads[1]] & iq_out[heads[1]])  || iq_done[heads[1]]
-						|| ((iq_ma[heads[2]][AMSB:3] != iq_ma[heads[1]][AMSB:3] || iq_out[heads[1]] || iq_done[heads[1]])))
-					// ... if a release, any prior memory ops must be done before this one
-					&& (iq_rl[heads[2]] ? (iq_done[heads[0]] || !iq_v[heads[0]] || !iq_mem[heads[0]])
-										 && (iq_done[heads[1]] || !iq_v[heads[1]] || !iq_mem[heads[1]])
-											 : 1'b1)
-					// ... if a preivous op has the aquire bit set
-					&& !(iq_aq[heads[0]] && iq_v[heads[0]])
-					&& !(iq_aq[heads[1]] && iq_v[heads[1]])
-					// ... and there's nothing in the write buffer during a load
-					&& !(iq_load[heads[2]] && (wb_v!=1'b0
-						|| iq_store[heads[0]] || iq_store[heads[1]]))
-					// ... and there isn't a barrier, or everything before the barrier is done or invalid
-            && (!(iq_memsb[heads[1]]) || (iq_done[heads[0]] || !iq_v[heads[0]]))
-    				&& (!(iq_memdb[heads[1]]) || (!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]]))
-					// ... and, if it is a SW, there is no chance of it being undone
-					&& ((iq_load[heads[2]] && sple) ||
-					      !(iq_fc[heads[0]]||iq_canex[heads[0]])
-					   && !(iq_fc[heads[1]]||iq_canex[heads[1]]));
-	 if (memissue[heads[2]])
-	 	issue_count = issue_count + 1;
-					        
-	 memissue[ heads[3] ] =	~iq_stomp[heads[3]] && iq_memready[ heads[3] ]		// addr and data are valid
-					// ... and no preceding instruction is ready to go
-					&& issue_count < `NUM_MEM
-					//&& ~iq_memready[heads[0]]
-					//&& ~iq_memready[heads[1]] 
-					//&& ~iq_memready[heads[2]] 
-					// ... and there is no address-overlap with any preceding instruction
-					&& (!iq_mem[heads[0]] || (iq_agen[heads[0]] & iq_out[heads[0]])  || iq_done[heads[0]]
-						|| ((iq_ma[heads[3]][AMSB:3] != iq_ma[heads[0]][AMSB:3] || iq_out[heads[0]] || iq_done[heads[0]])))
-					&& (!iq_mem[heads[1]] || (iq_agen[heads[1]] & iq_out[heads[1]])  || iq_done[heads[1]]
-						|| ((iq_ma[heads[3]][AMSB:3] != iq_ma[heads[1]][AMSB:3] || iq_out[heads[1]] || iq_done[heads[1]])))
-					&& (!iq_mem[heads[2]] || (iq_agen[heads[2]] & iq_out[heads[2]])  || iq_done[heads[2]]
-						|| ((iq_ma[heads[3]][AMSB:3] != iq_ma[heads[2]][AMSB:3] || iq_out[heads[2]] || iq_done[heads[2]])))
-					// ... if a release, any prior memory ops must be done before this one
-					&& (iq_rl[heads[3]] ? (iq_done[heads[0]] || !iq_v[heads[0]] || !iq_mem[heads[0]])
-										 && (iq_done[heads[1]] || !iq_v[heads[1]] || !iq_mem[heads[1]])
-										 && (iq_done[heads[2]] || !iq_v[heads[2]] || !iq_mem[heads[2]])
-											 : 1'b1)
-					// ... if a preivous op has the aquire bit set
-					&& !(iq_aq[heads[0]] && iq_v[heads[0]])
-					&& !(iq_aq[heads[1]] && iq_v[heads[1]])
-					&& !(iq_aq[heads[2]] && iq_v[heads[2]])
-					// ... and there's nothing in the write buffer during a load
-					&& !(iq_load[heads[3]] && (wb_v!=1'b0
-						|| iq_store[heads[0]] || iq_store[heads[1]] || iq_store[heads[2]]))
-					// ... and there isn't a barrier, or everything before the barrier is done or invalid
-                    && (!(iq_memsb[heads[1]]) || (iq_done[heads[0]] || !iq_v[heads[0]]))
-                    && (!(iq_memsb[heads[2]]) ||
-                    			((iq_done[heads[0]] || !iq_v[heads[0]])
-                    		&&   (iq_done[heads[1]] || !iq_v[heads[1]]))
-                    		)
-    				&& (!(iq_memdb[heads[1]]) || (!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]]))
-                    && (!(iq_memdb[heads[2]]) ||
-                     		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
-                     		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]]))
-                     		)
-                    // ... and, if it is a SW, there is no chance of it being undone
-					&& ((iq_load[heads[3]] && sple) ||
-		      		      !(iq_fc[heads[0]]||iq_canex[heads[0]])
-                       && !(iq_fc[heads[1]]||iq_canex[heads[1]])
-                       && !(iq_fc[heads[2]]||iq_canex[heads[2]]));
-	 if (memissue[heads[3]])
-	 	issue_count = issue_count + 1;
-
-	if (QENTRIES > 4) begin
-	 memissue[ heads[4] ] =	~iq_stomp[heads[4]] && iq_memready[ heads[4] ]		// addr and data are valid
-					// ... and no preceding instruction is ready to go
-					&& issue_count < `NUM_MEM
-					//&& ~iq_memready[heads[0]]
-					//&& ~iq_memready[heads[1]] 
-					//&& ~iq_memready[heads[2]] 
-					//&& ~iq_memready[heads[3]] 
-					// ... and there is no address-overlap with any preceding instruction
-					&& (!iq_mem[heads[0]] || (iq_agen[heads[0]] & iq_out[heads[0]])  || iq_done[heads[0]]
-						|| ((iq_ma[heads[4]][AMSB:3] != iq_ma[heads[0]][AMSB:3] || iq_out[heads[0]] || iq_done[heads[0]])))
-					&& (!iq_mem[heads[1]] || (iq_agen[heads[1]] & iq_out[heads[1]])  || iq_done[heads[1]]
-						|| ((iq_ma[heads[4]][AMSB:3] != iq_ma[heads[1]][AMSB:3] || iq_out[heads[1]] || iq_done[heads[1]])))
-					&& (!iq_mem[heads[2]] || (iq_agen[heads[2]] & iq_out[heads[2]])  || iq_done[heads[2]]
-						|| ((iq_ma[heads[4]][AMSB:3] != iq_ma[heads[2]][AMSB:3] || iq_out[heads[2]] || iq_done[heads[2]])))
-					&& (!iq_mem[heads[3]] || (iq_agen[heads[3]] & iq_out[heads[3]])  || iq_done[heads[3]]
-						|| ((iq_ma[heads[4]][AMSB:3] != iq_ma[heads[3]][AMSB:3] || iq_out[heads[3]] || iq_done[heads[3]])))
-					// ... if a release, any prior memory ops must be done before this one
-					&& (iq_rl[heads[4]] ? (iq_done[heads[0]] || !iq_v[heads[0]] || !iq_mem[heads[0]])
-										 && (iq_done[heads[1]] || !iq_v[heads[1]] || !iq_mem[heads[1]])
-										 && (iq_done[heads[2]] || !iq_v[heads[2]] || !iq_mem[heads[2]])
-										 && (iq_done[heads[3]] || !iq_v[heads[3]] || !iq_mem[heads[3]])
-											 : 1'b1)
-					// ... if a preivous op has the aquire bit set
-					&& !(iq_aq[heads[0]] && iq_v[heads[0]])
-					&& !(iq_aq[heads[1]] && iq_v[heads[1]])
-					&& !(iq_aq[heads[2]] && iq_v[heads[2]])
-					&& !(iq_aq[heads[3]] && iq_v[heads[3]])
-					// ... and there's nothing in the write buffer during a load
-					&& !(iq_load[heads[4]] && (wb_v!=1'b0
-						|| iq_store[heads[0]] || iq_store[heads[1]] || iq_store[heads[2]] || iq_store[heads[3]]))
-					// ... and there isn't a barrier, or everything before the barrier is done or invalid
-                    && (!(iq_memsb[heads[1]]) || (iq_done[heads[0]] || !iq_v[heads[0]]))
-                    && (!(iq_memsb[heads[2]]) ||
-                    			((iq_done[heads[0]] || !iq_v[heads[0]])
-                    		&&   (iq_done[heads[1]] || !iq_v[heads[1]]))
-                    		)
-                    && (!(iq_memsb[heads[3]]) ||
-                    			((iq_done[heads[0]] || !iq_v[heads[0]])
-                    		&&   (iq_done[heads[1]] || !iq_v[heads[1]])
-                    		&&   (iq_done[heads[2]] || !iq_v[heads[2]]))
-                    		)
-    				&& (!(iq_v[heads[1]] && iq_memdb[heads[1]]) || (!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]]))
-                    && (!(iq_memdb[heads[2]]) ||
-                     		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
-                     		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]]))
-                     		)
-                    && (!(iq_memdb[heads[3]]) ||
-                     		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
-                     		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]])
-                     		&& (!iq_mem[heads[2]] || iq_done[heads[2]] || !iq_v[heads[2]]))
-                     		)
-					// ... and, if it is a SW, there is no chance of it being undone
-					&& ((iq_load[heads[4]] && sple) ||
-		      		      !(iq_fc[heads[0]]||iq_canex[heads[0]])
-                       && !(iq_fc[heads[1]]||iq_canex[heads[1]])
-                       && !(iq_fc[heads[2]]||iq_canex[heads[2]])
-                       && !(iq_fc[heads[3]]||iq_canex[heads[3]]));
-	 if (memissue[heads[4]])
-	 	issue_count = issue_count + 1;
-	end
-
-	if (QENTRIES > 5) begin
-	 memissue[ heads[5] ] =	~iq_stomp[heads[5]] && iq_memready[ heads[5] ]		// addr and data are valid
-					// ... and no preceding instruction is ready to go
-					&& issue_count < `NUM_MEM
-					//&& ~iq_memready[heads[0]]
-					//&& ~iq_memready[heads[1]] 
-					//&& ~iq_memready[heads[2]] 
-					//&& ~iq_memready[heads[3]] 
-					//&& ~iq_memready[heads[4]] 
-					// ... and there is no address-overlap with any preceding instruction
-					&& (!iq_mem[heads[0]] || (iq_agen[heads[0]] & iq_out[heads[0]]) || iq_done[heads[0]] 
-						|| ((iq_ma[heads[5]][AMSB:3] != iq_ma[heads[0]][AMSB:3] || iq_out[heads[0]] || iq_done[heads[0]])))
-					&& (!iq_mem[heads[1]] || (iq_agen[heads[1]] & iq_out[heads[1]]) || iq_done[heads[1]] 
-						|| ((iq_ma[heads[5]][AMSB:3] != iq_ma[heads[1]][AMSB:3] || iq_out[heads[1]] || iq_done[heads[1]])))
-					&& (!iq_mem[heads[2]] || (iq_agen[heads[2]] & iq_out[heads[2]]) || iq_done[heads[2]] 
-						|| ((iq_ma[heads[5]][AMSB:3] != iq_ma[heads[2]][AMSB:3] || iq_out[heads[2]] || iq_done[heads[2]])))
-					&& (!iq_mem[heads[3]] || (iq_agen[heads[3]] & iq_out[heads[3]]) || iq_done[heads[3]] 
-						|| ((iq_ma[heads[5]][AMSB:3] != iq_ma[heads[3]][AMSB:3] || iq_out[heads[3]] || iq_done[heads[3]])))
-					&& (!iq_mem[heads[4]] || (iq_agen[heads[4]] & iq_out[heads[4]]) || iq_done[heads[4]] 
-						|| ((iq_ma[heads[5]][AMSB:3] != iq_ma[heads[4]][AMSB:3] || iq_out[heads[4]] || iq_done[heads[4]])))
-					// ... if a release, any prior memory ops must be done before this one
-					&& (iq_rl[heads[5]] ? (iq_done[heads[0]] || !iq_v[heads[0]] || !iq_mem[heads[0]])
-										 && (iq_done[heads[1]] || !iq_v[heads[1]] || !iq_mem[heads[1]])
-										 && (iq_done[heads[2]] || !iq_v[heads[2]] || !iq_mem[heads[2]])
-										 && (iq_done[heads[3]] || !iq_v[heads[3]] || !iq_mem[heads[3]])
-										 && (iq_done[heads[4]] || !iq_v[heads[4]] || !iq_mem[heads[4]])
-											 : 1'b1)
-					// ... if a preivous op has the aquire bit set
-					&& !(iq_aq[heads[0]] && iq_v[heads[0]])
-					&& !(iq_aq[heads[1]] && iq_v[heads[1]])
-					&& !(iq_aq[heads[2]] && iq_v[heads[2]])
-					&& !(iq_aq[heads[3]] && iq_v[heads[3]])
-					&& !(iq_aq[heads[4]] && iq_v[heads[4]])
-					// ... and there's nothing in the write buffer during a load
-					&& !(iq_load[heads[5]] && (wb_v!=1'b0
-						|| iq_store[heads[0]] || iq_store[heads[1]] || iq_store[heads[2]] || iq_store[heads[3]]
-						|| iq_store[heads[4]]))
-					// ... and there isn't a barrier, or everything before the barrier is done or invalid
-                    && (!(iq_memsb[heads[1]]) || (iq_done[heads[0]] || !iq_v[heads[0]]))
-                    && (!(iq_memsb[heads[2]]) ||
-                    			((iq_done[heads[0]] || !iq_v[heads[0]])
-                    		&&   (iq_done[heads[1]] || !iq_v[heads[1]]))
-                    		)
-                    && (!(iq_memsb[heads[3]]) ||
-                    			((iq_done[heads[0]] || !iq_v[heads[0]])
-                    		&&   (iq_done[heads[1]] || !iq_v[heads[1]])
-                    		&&   (iq_done[heads[2]] || !iq_v[heads[2]]))
-                    		)
-                    && (!(iq_memsb[heads[4]]) ||
-                    			((iq_done[heads[0]] || !iq_v[heads[0]])
-                    		&&   (iq_done[heads[1]] || !iq_v[heads[1]])
-                    		&&   (iq_done[heads[2]] || !iq_v[heads[2]])
-                    		&&   (iq_done[heads[3]] || !iq_v[heads[3]]))
-                    		)
-    				&& (!(iq_memdb[heads[1]]) || (!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]]))
-                    && (!(iq_memdb[heads[2]]) ||
-                     		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
-                     		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]]))
-                     		)
-                    && (!(iq_memdb[heads[3]]) ||
-                     		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
-                     		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]])
-                     		&& (!iq_mem[heads[2]] || iq_done[heads[2]] || !iq_v[heads[2]]))
-                     		)
-                    && (!(iq_memdb[heads[4]]) ||
-                     		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
-                     		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]])
-                     		&& (!iq_mem[heads[2]] || iq_done[heads[2]] || !iq_v[heads[2]])
-                     		&& (!iq_mem[heads[3]] || iq_done[heads[3]] || !iq_v[heads[3]]))
-                     		)
-					// ... and, if it is a SW, there is no chance of it being undone
-					&& ((iq_load[heads[5]] && sple) ||
-		      		      !(iq_fc[heads[0]]||iq_canex[heads[0]])
-                       && !(iq_fc[heads[1]]||iq_canex[heads[1]])
-                       && !(iq_fc[heads[2]]||iq_canex[heads[2]])
-                       && !(iq_fc[heads[3]]||iq_canex[heads[3]])
-                       && !(iq_fc[heads[4]]||iq_canex[heads[4]]));
-	 if (memissue[heads[5]])
-	 	issue_count = issue_count + 1;
-	end
-
-`ifdef FULL_ISSUE_LOGIC
-if (QENTRIES > 6) begin
- memissue[ heads[6] ] =	~iq_stomp[heads[6]] && iq_memready[ heads[6] ]		// addr and data are valid
-					// ... and no preceding instruction is ready to go
-					&& issue_count < `NUM_MEM
-					//&& ~iq_memready[heads[0]]
-					//&& ~iq_memready[heads[1]] 
-					//&& ~iq_memready[heads[2]] 
-					//&& ~iq_memready[heads[3]] 
-					//&& ~iq_memready[heads[4]] 
-					//&& ~iq_memready[heads[5]] 
-					// ... and there is no address-overlap with any preceding instruction
-					&& (!iq_mem[heads[0]] || (iq_agen[heads[0]] & iq_out[heads[0]]) || iq_done[heads[0]] 
-						|| ((iq_ma[heads[6]][AMSB:3] != iq_ma[heads[0]][AMSB:3])))
-					&& (!iq_mem[heads[1]] || (iq_agen[heads[1]] & iq_out[heads[1]]) || iq_done[heads[1]] 
-						|| ((iq_ma[heads[6]][AMSB:3] != iq_ma[heads[1]][AMSB:3])))
-					&& (!iq_mem[heads[2]] || (iq_agen[heads[2]] & iq_out[heads[2]]) || iq_done[heads[2]] 
-						|| ((iq_ma[heads[6]][AMSB:3] != iq_ma[heads[2]][AMSB:3])))
-					&& (!iq_mem[heads[3]] || (iq_agen[heads[3]] & iq_out[heads[3]]) || iq_done[heads[3]] 
-						|| ((iq_ma[heads[6]][AMSB:3] != iq_ma[heads[3]][AMSB:3])))
-					&& (!iq_mem[heads[4]] || (iq_agen[heads[4]] & iq_out[heads[4]]) || iq_done[heads[4]] 
-						|| ((iq_ma[heads[6]][AMSB:3] != iq_ma[heads[4]][AMSB:3])))
-					&& (!iq_mem[heads[5]] || (iq_agen[heads[5]] & iq_out[heads[5]]) || iq_done[heads[5]] 
-						|| ((iq_ma[heads[6]][AMSB:3] != iq_ma[heads[5]][AMSB:3])))
-					&& (iq_rl[heads[6]] ? (iq_done[heads[0]] || !iq_v[heads[0]] || !iq_mem[heads[0]])
-										 && (iq_done[heads[1]] || !iq_v[heads[1]] || !iq_mem[heads[1]])
-										 && (iq_done[heads[2]] || !iq_v[heads[2]] || !iq_mem[heads[2]])
-										 && (iq_done[heads[3]] || !iq_v[heads[3]] || !iq_mem[heads[3]])
-										 && (iq_done[heads[4]] || !iq_v[heads[4]] || !iq_mem[heads[4]])
-										 && (iq_done[heads[5]] || !iq_v[heads[5]] || !iq_mem[heads[5]])
-											 : 1'b1)
-					// ... if a preivous op has the aquire bit set
-					&& !(iq_aq[heads[0]] && iq_v[heads[0]])
-					&& !(iq_aq[heads[1]] && iq_v[heads[1]])
-					&& !(iq_aq[heads[2]] && iq_v[heads[2]])
-					&& !(iq_aq[heads[3]] && iq_v[heads[3]])
-					&& !(iq_aq[heads[4]] && iq_v[heads[4]])
-					&& !(iq_aq[heads[5]] && iq_v[heads[5]])
-					// ... and there's nothing in the write buffer during a load
-					&& !(iq_load[heads[6]] && (wb_v!=1'b0
-						|| iq_store[heads[0]] || iq_store[heads[1]] || iq_store[heads[2]] || iq_store[heads[3]]
-						|| iq_store[heads[4]] || iq_store[heads[5]]))
-					// ... and there isn't a barrier, or everything before the barrier is done or invalid
-                    && (!(iq_memsb[heads[1]]) || (iq_done[heads[0]] || !iq_v[heads[0]]))
-                    && (!(iq_memsb[heads[2]]) ||
-                    			((iq_done[heads[0]] || !iq_v[heads[0]])
-                    		&&   (iq_done[heads[1]] || !iq_v[heads[1]]))
-                    		)
-                    && (!(iq_memsb[heads[3]]) ||
-                    			((iq_done[heads[0]] || !iq_v[heads[0]])
-                    		&&   (iq_done[heads[1]] || !iq_v[heads[1]])
-                    		&&   (iq_done[heads[2]] || !iq_v[heads[2]]))
-                    		)
-                    && (!(iq_memsb[heads[4]]) ||
-                    			((iq_done[heads[0]] || !iq_v[heads[0]])
-                    		&&   (iq_done[heads[1]] || !iq_v[heads[1]])
-                    		&&   (iq_done[heads[2]] || !iq_v[heads[2]])
-                    		&&   (iq_done[heads[3]] || !iq_v[heads[3]]))
-                    		)
-                    && (!(iq_memsb[heads[5]]) ||
-                    			((iq_done[heads[0]] || !iq_v[heads[0]])
-                    		&&   (iq_done[heads[1]] || !iq_v[heads[1]])
-                    		&&   (iq_done[heads[2]] || !iq_v[heads[2]])
-                    		&&   (iq_done[heads[3]] || !iq_v[heads[3]])
-                    		&&   (iq_done[heads[4]] || !iq_v[heads[4]]))
-                    		)
-    				&& (!(iq_memdb[heads[1]]) || (!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]]))
-                    && (!(iq_memdb[heads[2]]) ||
-                     		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
-                     		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]]))
-                     		)
-                    && (!(iq_memdb[heads[3]]) ||
-                     		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
-                     		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]])
-                     		&& (!iq_mem[heads[2]] || iq_done[heads[2]] || !iq_v[heads[2]]))
-                     		)
-                    && (!(iq_memdb[heads[4]]) ||
-                     		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
-                     		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]])
-                     		&& (!iq_mem[heads[2]] || iq_done[heads[2]] || !iq_v[heads[2]])
-                     		&& (!iq_mem[heads[3]] || iq_done[heads[3]] || !iq_v[heads[3]]))
-                     		)
-                    && (!(iq_memdb[heads[5]]) ||
-                     		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
-                     		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]])
-                     		&& (!iq_mem[heads[2]] || iq_done[heads[2]] || !iq_v[heads[2]])
-                     		&& (!iq_mem[heads[3]] || iq_done[heads[3]] || !iq_v[heads[3]])
-                     		&& (!iq_mem[heads[4]] || iq_done[heads[4]] || !iq_v[heads[4]]))
-                     		)
-					// ... and, if it is a SW, there is no chance of it being undone
-					&& ((iq_load[heads[6]] && sple) ||
-		      		      !(iq_fc[heads[0]]||iq_canex[heads[0]])
-                       && !(iq_fc[heads[1]]||iq_canex[heads[1]])
-                       && !(iq_fc[heads[2]]||iq_canex[heads[2]])
-                       && !(iq_fc[heads[3]]||iq_canex[heads[3]])
-                       && !(iq_fc[heads[4]]||iq_canex[heads[4]])
-                       && !(iq_fc[heads[5]]||iq_canex[heads[5]]));
-	 if (memissue[heads[6]])
-	 	issue_count = issue_count + 1;
-	end
-
-	if (QENTRIES > 7) begin
-	memissue[ heads[7] ] =	~iq_stomp[heads[7]] && iq_memready[ heads[7] ]		// addr and data are valid
-					// ... and no preceding instruction is ready to go
-					&& issue_count < `NUM_MEM
-					//&& ~iq_memready[heads[0]]
-					//&& ~iq_memready[heads[1]] 
-					//&& ~iq_memready[heads[2]] 
-					//&& ~iq_memready[heads[3]] 
-					//&& ~iq_memready[heads[4]] 
-					//&& ~iq_memready[heads[5]] 
-					//&& ~iq_memready[heads[6]] 
-					// ... and there is no address-overlap with any preceding instruction
-					&& (!iq_mem[heads[0]] || (iq_agen[heads[0]] & iq_out[heads[0]]) || iq_done[heads[0]]
-						|| ((iq_ma[heads[7]][AMSB:3] != iq_ma[heads[0]][AMSB:3] || iq_out[heads[0]] || iq_done[heads[0]])))
-					&& (!iq_mem[heads[1]] || (iq_agen[heads[1]] & iq_out[heads[1]]) || iq_done[heads[1]]
-						|| ((iq_ma[heads[7]][AMSB:3] != iq_ma[heads[1]][AMSB:3] || iq_out[heads[1]] || iq_done[heads[1]])))
-					&& (!iq_mem[heads[2]] || (iq_agen[heads[2]] & iq_out[heads[2]]) || iq_done[heads[2]] 
-						|| ((iq_ma[heads[7]][AMSB:3] != iq_ma[heads[2]][AMSB:3] || iq_out[heads[2]] || iq_done[heads[2]])))
-					&& (!iq_mem[heads[3]] || (iq_agen[heads[3]] & iq_out[heads[3]]) || iq_done[heads[3]] 
-						|| ((iq_ma[heads[7]][AMSB:3] != iq_ma[heads[3]][AMSB:3] || iq_out[heads[3]] || iq_done[heads[3]])))
-					&& (!iq_mem[heads[4]] || (iq_agen[heads[4]] & iq_out[heads[4]]) || iq_done[heads[4]] 
-						|| ((iq_ma[heads[7]][AMSB:3] != iq_ma[heads[4]][AMSB:3] || iq_out[heads[4]] || iq_done[heads[4]])))
-					&& (!iq_mem[heads[5]] || (iq_agen[heads[5]] & iq_out[heads[5]]) || iq_done[heads[5]] 
-						|| ((iq_ma[heads[7]][AMSB:3] != iq_ma[heads[5]][AMSB:3] || iq_out[heads[5]] || iq_done[heads[5]])))
-					&& (!iq_mem[heads[6]] || (iq_agen[heads[6]] & iq_out[heads[6]]) || iq_done[heads[6]] 
-						|| ((iq_ma[heads[7]][AMSB:3] != iq_ma[heads[6]][AMSB:3] || iq_out[heads[6]] || iq_done[heads[6]])))
-					&& (iq_rl[heads[7]] ? (iq_done[heads[0]] || !iq_v[heads[0]] || !iq_mem[heads[0]])
-										 && (iq_done[heads[1]] || !iq_v[heads[1]] || !iq_mem[heads[1]])
-										 && (iq_done[heads[2]] || !iq_v[heads[2]] || !iq_mem[heads[2]])
-										 && (iq_done[heads[3]] || !iq_v[heads[3]] || !iq_mem[heads[3]])
-										 && (iq_done[heads[4]] || !iq_v[heads[4]] || !iq_mem[heads[4]])
-										 && (iq_done[heads[5]] || !iq_v[heads[5]] || !iq_mem[heads[5]])
-										 && (iq_done[heads[6]] || !iq_v[heads[6]] || !iq_mem[heads[6]])
-											 : 1'b1)
-					// ... if a preivous op has the aquire bit set
-					&& !(iq_aq[heads[0]] && iq_v[heads[0]])
-					&& !(iq_aq[heads[1]] && iq_v[heads[1]])
-					&& !(iq_aq[heads[2]] && iq_v[heads[2]])
-					&& !(iq_aq[heads[3]] && iq_v[heads[3]])
-					&& !(iq_aq[heads[4]] && iq_v[heads[4]])
-					&& !(iq_aq[heads[5]] && iq_v[heads[5]])
-					&& !(iq_aq[heads[6]] && iq_v[heads[6]])
-					// ... and there's nothing in the write buffer during a load
-					&& !(iq_load[heads[7]] && (wb_v!=1'b0
-						|| iq_store[heads[0]] || iq_store[heads[1]] || iq_store[heads[2]] || iq_store[heads[3]]
-						|| iq_store[heads[4]] || iq_store[heads[5]] || iq_store[heads[6]]))
-					// ... and there isn't a barrier, or everything before the barrier is done or invalid
-                    && (!(iq_memsb[heads[1]]) || (iq_done[heads[0]] || !iq_v[heads[0]]))
-                    && (!(iq_memsb[heads[2]]) ||
-                    			((iq_done[heads[0]] || !iq_v[heads[0]])
-                    		&&   (iq_done[heads[1]] || !iq_v[heads[1]]))
-                    		)
-                    && (!(iq_memsb[heads[3]]) ||
-                    			((iq_done[heads[0]] || !iq_v[heads[0]])
-                    		&&   (iq_done[heads[1]] || !iq_v[heads[1]])
-                    		&&   (iq_done[heads[2]] || !iq_v[heads[2]]))
-                    		)
-                    && (!(iq_memsb[heads[4]]) ||
-                    			((iq_done[heads[0]] || !iq_v[heads[0]])
-                    		&&   (iq_done[heads[1]] || !iq_v[heads[1]])
-                    		&&   (iq_done[heads[2]] || !iq_v[heads[2]])
-                    		&&   (iq_done[heads[3]] || !iq_v[heads[3]]))
-                    		)
-                    && (!(iq_memsb[heads[5]]) ||
-                    			((iq_done[heads[0]] || !iq_v[heads[0]])
-                    		&&   (iq_done[heads[1]] || !iq_v[heads[1]])
-                    		&&   (iq_done[heads[2]] || !iq_v[heads[2]])
-                    		&&   (iq_done[heads[3]] || !iq_v[heads[3]])
-                    		&&   (iq_done[heads[4]] || !iq_v[heads[4]]))
-                    		)
-                    && (!(iq_memsb[heads[6]]) ||
-                    			((iq_done[heads[0]] || !iq_v[heads[0]])
-                    		&&   (iq_done[heads[1]] || !iq_v[heads[1]])
-                    		&&   (iq_done[heads[2]] || !iq_v[heads[2]])
-                    		&&   (iq_done[heads[3]] || !iq_v[heads[3]])
-                    		&&   (iq_done[heads[4]] || !iq_v[heads[4]])
-                    		&&   (iq_done[heads[5]] || !iq_v[heads[5]]))
-                    		)
-    				&& (!(iq_memdb[heads[1]]) || (!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]]))
-                    && (!(iq_memdb[heads[2]]) ||
-                     		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
-                     		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]]))
-                     		)
-                    && (!(iq_memdb[heads[3]]) ||
-                     		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
-                     		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]])
-                     		&& (!iq_mem[heads[2]] || iq_done[heads[2]] || !iq_v[heads[2]]))
-                     		)
-                    && (!(iq_memdb[heads[4]]) ||
-                     		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
-                     		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]])
-                     		&& (!iq_mem[heads[2]] || iq_done[heads[2]] || !iq_v[heads[2]])
-                     		&& (!iq_mem[heads[3]] || iq_done[heads[3]] || !iq_v[heads[3]]))
-                     		)
-                    && (!(iq_memdb[heads[5]]) ||
-                     		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
-                     		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]])
-                     		&& (!iq_mem[heads[2]] || iq_done[heads[2]] || !iq_v[heads[2]])
-                     		&& (!iq_mem[heads[3]] || iq_done[heads[3]] || !iq_v[heads[3]])
-                     		&& (!iq_mem[heads[4]] || iq_done[heads[4]] || !iq_v[heads[4]]))
-                     		)
-                    && (!(iq_memdb[heads[6]]) ||
-                     		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
-                     		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]])
-                     		&& (!iq_mem[heads[2]] || iq_done[heads[2]] || !iq_v[heads[2]])
-                     		&& (!iq_mem[heads[3]] || iq_done[heads[3]] || !iq_v[heads[3]])
-                     		&& (!iq_mem[heads[4]] || iq_done[heads[4]] || !iq_v[heads[4]])
-                     		&& (!iq_mem[heads[5]] || iq_done[heads[5]] || !iq_v[heads[5]]))
-                     		)
-					// ... and, if it is a SW, there is no chance of it being undone
-					&& ((iq_load[heads[7]] && sple) ||
-		      		      !(iq_fc[heads[0]]||iq_canex[heads[0]])
-                       && !(iq_fc[heads[1]]||iq_canex[heads[1]])
-                       && !(iq_fc[heads[2]]||iq_canex[heads[2]])
-                       && !(iq_fc[heads[3]]||iq_canex[heads[3]])
-                       && !(iq_fc[heads[4]]||iq_canex[heads[4]])
-                       && !(iq_fc[heads[5]]||iq_canex[heads[5]])
-                       && !(iq_fc[heads[6]]||iq_canex[heads[6]]));
-	 if (memissue[heads[7]])
-	 	issue_count = issue_count + 1;
-	end
-
-	if (QENTRIES > 8) begin
-	memissue[ heads[8] ] =	~iq_stomp[heads[8]] && iq_memready[ heads[8] ]		// addr and data are valid
-					// ... and no preceding instruction is ready to go
-					&& issue_count < `NUM_MEM
-					//&& ~iq_memready[heads[0]]
-					//&& ~iq_memready[heads[1]] 
-					//&& ~iq_memready[heads[2]] 
-					//&& ~iq_memready[heads[3]] 
-					//&& ~iq_memready[heads[4]] 
-					//&& ~iq_memready[heads[5]] 
-					//&& ~iq_memready[heads[6]] 
-					// ... and there is no address-overlap with any preceding instruction
-					&& (!iq_mem[heads[0]] || (iq_agen[heads[0]] & iq_out[heads[0]]) || iq_done[heads[0]]
-						|| ((iq_ma[heads[8]][AMSB:3] != iq_ma[heads[0]][AMSB:3] || iq_out[heads[0]] || iq_done[heads[0]])))
-					&& (!iq_mem[heads[1]] || (iq_agen[heads[1]] & iq_out[heads[1]]) || iq_done[heads[1]]
-						|| ((iq_ma[heads[8]][AMSB:3] != iq_ma[heads[1]][AMSB:3] || iq_out[heads[1]] || iq_done[heads[1]])))
-					&& (!iq_mem[heads[2]] || (iq_agen[heads[2]] & iq_out[heads[2]]) || iq_done[heads[2]] 
-						|| ((iq_ma[heads[8]][AMSB:3] != iq_ma[heads[2]][AMSB:3] || iq_out[heads[2]] || iq_done[heads[2]])))
-					&& (!iq_mem[heads[3]] || (iq_agen[heads[3]] & iq_out[heads[3]]) || iq_done[heads[3]] 
-						|| ((iq_ma[heads[8]][AMSB:3] != iq_ma[heads[3]][AMSB:3] || iq_out[heads[3]] || iq_done[heads[3]])))
-					&& (!iq_mem[heads[4]] || (iq_agen[heads[4]] & iq_out[heads[4]]) || iq_done[heads[4]] 
-						|| ((iq_ma[heads[8]][AMSB:3] != iq_ma[heads[4]][AMSB:3] || iq_out[heads[4]] || iq_done[heads[4]])))
-					&& (!iq_mem[heads[5]] || (iq_agen[heads[5]] & iq_out[heads[5]]) || iq_done[heads[5]] 
-						|| ((iq_ma[heads[8]][AMSB:3] != iq_ma[heads[5]][AMSB:3] || iq_out[heads[5]] || iq_done[heads[5]])))
-					&& (!iq_mem[heads[6]] || (iq_agen[heads[6]] & iq_out[heads[6]]) || iq_done[heads[6]] 
-						|| ((iq_ma[heads[8]][AMSB:3] != iq_ma[heads[6]][AMSB:3] || iq_out[heads[6]] || iq_done[heads[6]])))
-					&& (!iq_mem[heads[7]] || (iq_agen[heads[7]] & iq_out[heads[7]]) || iq_done[heads[7]] 
-						|| ((iq_ma[heads[8]][AMSB:3] != iq_ma[heads[7]][AMSB:3] || iq_out[heads[7]] || iq_done[heads[7]])))
-					&& (iq_rl[heads[8]] ? (iq_done[heads[0]] || !iq_v[heads[0]] || !iq_mem[heads[0]])
-										 && (iq_done[heads[1]] || !iq_v[heads[1]] || !iq_mem[heads[1]])
-										 && (iq_done[heads[2]] || !iq_v[heads[2]] || !iq_mem[heads[2]])
-										 && (iq_done[heads[3]] || !iq_v[heads[3]] || !iq_mem[heads[3]])
-										 && (iq_done[heads[4]] || !iq_v[heads[4]] || !iq_mem[heads[4]])
-										 && (iq_done[heads[5]] || !iq_v[heads[5]] || !iq_mem[heads[5]])
-										 && (iq_done[heads[6]] || !iq_v[heads[6]] || !iq_mem[heads[6]])
-										 && (iq_done[heads[7]] || !iq_v[heads[7]] || !iq_mem[heads[7]])
-											 : 1'b1)
-					// ... if a preivous op has the aquire bit set
-					&& !(iq_aq[heads[0]] && iq_v[heads[0]])
-					&& !(iq_aq[heads[1]] && iq_v[heads[1]])
-					&& !(iq_aq[heads[2]] && iq_v[heads[2]])
-					&& !(iq_aq[heads[3]] && iq_v[heads[3]])
-					&& !(iq_aq[heads[4]] && iq_v[heads[4]])
-					&& !(iq_aq[heads[5]] && iq_v[heads[5]])
-					&& !(iq_aq[heads[6]] && iq_v[heads[6]])
-					&& !(iq_aq[heads[7]] && iq_v[heads[7]])
-					// ... and there's nothing in the write buffer during a load
-					&& !(iq_load[heads[8]] && (wb_v!=1'b0
-						|| iq_store[heads[0]] || iq_store[heads[1]] || iq_store[heads[2]] || iq_store[heads[3]]
-						|| iq_store[heads[4]] || iq_store[heads[5]] || iq_store[heads[6]] || iq_store[heads[7]]))
-					// ... and there isn't a barrier, or everything before the barrier is done or invalid
-                    && (!(iq_memsb[heads[1]]) || (iq_done[heads[0]] || !iq_v[heads[0]]))
-                    && (!(iq_memsb[heads[2]]) ||
-                    			((iq_done[heads[0]] || !iq_v[heads[0]])
-                    		&&   (iq_done[heads[1]] || !iq_v[heads[1]]))
-                    		)
-                    && (!(iq_memsb[heads[3]]) ||
-                    			((iq_done[heads[0]] || !iq_v[heads[0]])
-                    		&&   (iq_done[heads[1]] || !iq_v[heads[1]])
-                    		&&   (iq_done[heads[2]] || !iq_v[heads[2]]))
-                    		)
-                    && (!(iq_memsb[heads[4]]) ||
-                    			((iq_done[heads[0]] || !iq_v[heads[0]])
-                    		&&   (iq_done[heads[1]] || !iq_v[heads[1]])
-                    		&&   (iq_done[heads[2]] || !iq_v[heads[2]])
-                    		&&   (iq_done[heads[3]] || !iq_v[heads[3]]))
-                    		)
-                    && (!(iq_memsb[heads[5]]) ||
-                    			((iq_done[heads[0]] || !iq_v[heads[0]])
-                    		&&   (iq_done[heads[1]] || !iq_v[heads[1]])
-                    		&&   (iq_done[heads[2]] || !iq_v[heads[2]])
-                    		&&   (iq_done[heads[3]] || !iq_v[heads[3]])
-                    		&&   (iq_done[heads[4]] || !iq_v[heads[4]]))
-                    		)
-                    && (!(iq_memsb[heads[6]]) ||
-                    			((iq_done[heads[0]] || !iq_v[heads[0]])
-                    		&&   (iq_done[heads[1]] || !iq_v[heads[1]])
-                    		&&   (iq_done[heads[2]] || !iq_v[heads[2]])
-                    		&&   (iq_done[heads[3]] || !iq_v[heads[3]])
-                    		&&   (iq_done[heads[4]] || !iq_v[heads[4]])
-                    		&&   (iq_done[heads[5]] || !iq_v[heads[5]]))
-                    		)
-                    && (!(iq_memsb[heads[7]]) ||
-                    			((iq_done[heads[0]] || !iq_v[heads[0]])
-                    		&&   (iq_done[heads[1]] || !iq_v[heads[1]])
-                    		&&   (iq_done[heads[2]] || !iq_v[heads[2]])
-                    		&&   (iq_done[heads[3]] || !iq_v[heads[3]])
-                    		&&   (iq_done[heads[4]] || !iq_v[heads[4]])
-                    		&&   (iq_done[heads[5]] || !iq_v[heads[5]])
-                    		&&   (iq_done[heads[6]] || !iq_v[heads[6]])
-                    		)
-                    		)
-    				&& (!(iq_memdb[heads[1]]) || (!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]]))
-                    && (!(iq_memdb[heads[2]]) ||
-                     		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
-                     		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]]))
-                     		)
-                    && (!(iq_memdb[heads[3]]) ||
-                     		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
-                     		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]])
-                     		&& (!iq_mem[heads[2]] || iq_done[heads[2]] || !iq_v[heads[2]]))
-                     		)
-                    && (!(iq_memdb[heads[4]]) ||
-                     		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
-                     		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]])
-                     		&& (!iq_mem[heads[2]] || iq_done[heads[2]] || !iq_v[heads[2]])
-                     		&& (!iq_mem[heads[3]] || iq_done[heads[3]] || !iq_v[heads[3]]))
-                     		)
-                    && (!(iq_memdb[heads[5]]) ||
-                     		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
-                     		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]])
-                     		&& (!iq_mem[heads[2]] || iq_done[heads[2]] || !iq_v[heads[2]])
-                     		&& (!iq_mem[heads[3]] || iq_done[heads[3]] || !iq_v[heads[3]])
-                     		&& (!iq_mem[heads[4]] || iq_done[heads[4]] || !iq_v[heads[4]]))
-                     		)
-                    && (!(iq_memdb[heads[6]]) ||
-                     		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
-                     		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]])
-                     		&& (!iq_mem[heads[2]] || iq_done[heads[2]] || !iq_v[heads[2]])
-                     		&& (!iq_mem[heads[3]] || iq_done[heads[3]] || !iq_v[heads[3]])
-                     		&& (!iq_mem[heads[4]] || iq_done[heads[4]] || !iq_v[heads[4]])
-                     		&& (!iq_mem[heads[5]] || iq_done[heads[5]] || !iq_v[heads[5]]))
-                     		)
-                    && (!(iq_memdb[heads[7]]) ||
-                     		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
-                     		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]])
-                     		&& (!iq_mem[heads[2]] || iq_done[heads[2]] || !iq_v[heads[2]])
-                     		&& (!iq_mem[heads[3]] || iq_done[heads[3]] || !iq_v[heads[3]])
-                     		&& (!iq_mem[heads[4]] || iq_done[heads[4]] || !iq_v[heads[4]])
-                     		&& (!iq_mem[heads[5]] || iq_done[heads[5]] || !iq_v[heads[5]])
-                     		&& (!iq_mem[heads[6]] || iq_done[heads[6]] || !iq_v[heads[6]])
-                     		)
-                     		)
-					// ... and, if it is a SW, there is no chance of it being undone
-					&& ((iq_load[heads[8]] && sple) ||
-		      		      !(iq_fc[heads[0]]||iq_canex[heads[0]])
-                       && !(iq_fc[heads[1]]||iq_canex[heads[1]])
-                       && !(iq_fc[heads[2]]||iq_canex[heads[2]])
-                       && !(iq_fc[heads[3]]||iq_canex[heads[3]])
-                       && !(iq_fc[heads[4]]||iq_canex[heads[4]])
-                       && !(iq_fc[heads[5]]||iq_canex[heads[5]])
-                       && !(iq_fc[heads[6]]||iq_canex[heads[6]])
-                       && !(iq_fc[heads[7]]||iq_canex[heads[7]])
-                       );
-	 if (memissue[heads[8]])
-	 	issue_count = issue_count + 1;
-	end
-
-	if (QENTRIES > 9) begin
-	memissue[ heads[9] ] =	~iq_stomp[heads[9]] && iq_memready[ heads[9] ]		// addr and data are valid
-					// ... and no preceding instruction is ready to go
-					&& issue_count < `NUM_MEM
-					//&& ~iq_memready[heads[0]]
-					//&& ~iq_memready[heads[1]] 
-					//&& ~iq_memready[heads[2]] 
-					//&& ~iq_memready[heads[3]] 
-					//&& ~iq_memready[heads[4]] 
-					//&& ~iq_memready[heads[5]] 
-					//&& ~iq_memready[heads[6]] 
-					// ... and there is no address-overlap with any preceding instruction
-					&& (!iq_mem[heads[0]] || (iq_agen[heads[0]] & iq_out[heads[0]]) || iq_done[heads[0]]
-						|| ((iq_ma[heads[9]][AMSB:3] != iq_ma[heads[0]][AMSB:3] || iq_out[heads[0]] || iq_done[heads[0]])))
-					&& (!iq_mem[heads[1]] || (iq_agen[heads[1]] & iq_out[heads[1]]) || iq_done[heads[1]]
-						|| ((iq_ma[heads[9]][AMSB:3] != iq_ma[heads[1]][AMSB:3] || iq_out[heads[1]] || iq_done[heads[1]])))
-					&& (!iq_mem[heads[2]] || (iq_agen[heads[2]] & iq_out[heads[2]]) || iq_done[heads[2]] 
-						|| ((iq_ma[heads[9]][AMSB:3] != iq_ma[heads[2]][AMSB:3] || iq_out[heads[2]] || iq_done[heads[2]])))
-					&& (!iq_mem[heads[3]] || (iq_agen[heads[3]] & iq_out[heads[3]]) || iq_done[heads[3]] 
-						|| ((iq_ma[heads[9]][AMSB:3] != iq_ma[heads[3]][AMSB:3] || iq_out[heads[3]] || iq_done[heads[3]])))
-					&& (!iq_mem[heads[4]] || (iq_agen[heads[4]] & iq_out[heads[4]]) || iq_done[heads[4]] 
-						|| ((iq_ma[heads[9]][AMSB:3] != iq_ma[heads[4]][AMSB:3] || iq_out[heads[4]] || iq_done[heads[4]])))
-					&& (!iq_mem[heads[5]] || (iq_agen[heads[5]] & iq_out[heads[5]]) || iq_done[heads[5]] 
-						|| ((iq_ma[heads[9]][AMSB:3] != iq_ma[heads[5]][AMSB:3] || iq_out[heads[5]] || iq_done[heads[5]])))
-					&& (!iq_mem[heads[6]] || (iq_agen[heads[6]] & iq_out[heads[6]]) || iq_done[heads[6]] 
-						|| ((iq_ma[heads[9]][AMSB:3] != iq_ma[heads[6]][AMSB:3] || iq_out[heads[6]] || iq_done[heads[6]])))
-					&& (!iq_mem[heads[7]] || (iq_agen[heads[7]] & iq_out[heads[7]]) || iq_done[heads[7]] 
-						|| ((iq_ma[heads[9]][AMSB:3] != iq_ma[heads[7]][AMSB:3] || iq_out[heads[7]] || iq_done[heads[7]])))
-					&& (!iq_mem[heads[8]] || (iq_agen[heads[8]] & iq_out[heads[8]]) || iq_done[heads[8]] 
-						|| ((iq_ma[heads[9]][AMSB:3] != iq_ma[heads[8]][AMSB:3] || iq_out[heads[8]] || iq_done[heads[8]])))
-					&& (iq_rl[heads[9]] ? (iq_done[heads[0]] || !iq_v[heads[0]] || !iq_mem[heads[0]])
-										 && (iq_done[heads[1]] || !iq_v[heads[1]] || !iq_mem[heads[1]])
-										 && (iq_done[heads[2]] || !iq_v[heads[2]] || !iq_mem[heads[2]])
-										 && (iq_done[heads[3]] || !iq_v[heads[3]] || !iq_mem[heads[3]])
-										 && (iq_done[heads[4]] || !iq_v[heads[4]] || !iq_mem[heads[4]])
-										 && (iq_done[heads[5]] || !iq_v[heads[5]] || !iq_mem[heads[5]])
-										 && (iq_done[heads[6]] || !iq_v[heads[6]] || !iq_mem[heads[6]])
-										 && (iq_done[heads[7]] || !iq_v[heads[7]] || !iq_mem[heads[7]])
-										 && (iq_done[heads[8]] || !iq_v[heads[8]] || !iq_mem[heads[8]])
-											 : 1'b1)
-					// ... if a preivous op has the aquire bit set
-					&& !(iq_aq[heads[0]] && iq_v[heads[0]])
-					&& !(iq_aq[heads[1]] && iq_v[heads[1]])
-					&& !(iq_aq[heads[2]] && iq_v[heads[2]])
-					&& !(iq_aq[heads[3]] && iq_v[heads[3]])
-					&& !(iq_aq[heads[4]] && iq_v[heads[4]])
-					&& !(iq_aq[heads[5]] && iq_v[heads[5]])
-					&& !(iq_aq[heads[6]] && iq_v[heads[6]])
-					&& !(iq_aq[heads[7]] && iq_v[heads[7]])
-					&& !(iq_aq[heads[8]] && iq_v[heads[8]])
-					// ... and there's nothing in the write buffer during a load
-					&& !(iq_load[heads[9]] && (wb_v!=1'b0
-						|| iq_store[heads[0]] || iq_store[heads[1]] || iq_store[heads[2]] || iq_store[heads[3]]
-						|| iq_store[heads[4]] || iq_store[heads[5]] || iq_store[heads[6]] || iq_store[heads[7]]
-						|| iq_store[heads[8]]))
-					// ... and there isn't a barrier, or everything before the barrier is done or invalid
-                    && (!(iq_memsb[heads[1]]) || (iq_done[heads[0]] || !iq_v[heads[0]]))
-                    && (!(iq_memsb[heads[2]]) ||
-                    			((iq_done[heads[0]] || !iq_v[heads[0]])
-                    		&&   (iq_done[heads[1]] || !iq_v[heads[1]]))
-                    		)
-                    && (!(iq_memsb[heads[3]]) ||
-                    			((iq_done[heads[0]] || !iq_v[heads[0]])
-                    		&&   (iq_done[heads[1]] || !iq_v[heads[1]])
-                    		&&   (iq_done[heads[2]] || !iq_v[heads[2]]))
-                    		)
-                    && (!(iq_memsb[heads[4]]) ||
-                    			((iq_done[heads[0]] || !iq_v[heads[0]])
-                    		&&   (iq_done[heads[1]] || !iq_v[heads[1]])
-                    		&&   (iq_done[heads[2]] || !iq_v[heads[2]])
-                    		&&   (iq_done[heads[3]] || !iq_v[heads[3]]))
-                    		)
-                    && (!(iq_memsb[heads[5]]) ||
-                    			((iq_done[heads[0]] || !iq_v[heads[0]])
-                    		&&   (iq_done[heads[1]] || !iq_v[heads[1]])
-                    		&&   (iq_done[heads[2]] || !iq_v[heads[2]])
-                    		&&   (iq_done[heads[3]] || !iq_v[heads[3]])
-                    		&&   (iq_done[heads[4]] || !iq_v[heads[4]]))
-                    		)
-                    && (!(iq_memsb[heads[6]]) ||
-                    			((iq_done[heads[0]] || !iq_v[heads[0]])
-                    		&&   (iq_done[heads[1]] || !iq_v[heads[1]])
-                    		&&   (iq_done[heads[2]] || !iq_v[heads[2]])
-                    		&&   (iq_done[heads[3]] || !iq_v[heads[3]])
-                    		&&   (iq_done[heads[4]] || !iq_v[heads[4]])
-                    		&&   (iq_done[heads[5]] || !iq_v[heads[5]]))
-                    		)
-                    && (!(iq_memsb[heads[7]]) ||
-                    			((iq_done[heads[0]] || !iq_v[heads[0]])
-                    		&&   (iq_done[heads[1]] || !iq_v[heads[1]])
-                    		&&   (iq_done[heads[2]] || !iq_v[heads[2]])
-                    		&&   (iq_done[heads[3]] || !iq_v[heads[3]])
-                    		&&   (iq_done[heads[4]] || !iq_v[heads[4]])
-                    		&&   (iq_done[heads[5]] || !iq_v[heads[5]])
-                    		&&   (iq_done[heads[6]] || !iq_v[heads[6]]))
-                    		)
-                    && (!(iq_memsb[heads[8]]) ||
-                    			((iq_done[heads[0]] || !iq_v[heads[0]])
-                    		&&   (iq_done[heads[1]] || !iq_v[heads[1]])
-                    		&&   (iq_done[heads[2]] || !iq_v[heads[2]])
-                    		&&   (iq_done[heads[3]] || !iq_v[heads[3]])
-                    		&&   (iq_done[heads[4]] || !iq_v[heads[4]])
-                    		&&   (iq_done[heads[5]] || !iq_v[heads[5]])
-                    		&&   (iq_done[heads[6]] || !iq_v[heads[6]])
-                    		&&   (iq_done[heads[7]] || !iq_v[heads[7]])
-                    		)
-                    		)
-    				&& (!(iq_memdb[heads[1]]) || (!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]]))
-                    && (!(iq_memdb[heads[2]]) ||
-                     		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
-                     		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]]))
-                     		)
-                    && (!(iq_memdb[heads[3]]) ||
-                     		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
-                     		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]])
-                     		&& (!iq_mem[heads[2]] || iq_done[heads[2]] || !iq_v[heads[2]]))
-                     		)
-                    && (!(iq_memdb[heads[4]]) ||
-                     		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
-                     		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]])
-                     		&& (!iq_mem[heads[2]] || iq_done[heads[2]] || !iq_v[heads[2]])
-                     		&& (!iq_mem[heads[3]] || iq_done[heads[3]] || !iq_v[heads[3]]))
-                     		)
-                    && (!(iq_memdb[heads[5]]) ||
-                     		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
-                     		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]])
-                     		&& (!iq_mem[heads[2]] || iq_done[heads[2]] || !iq_v[heads[2]])
-                     		&& (!iq_mem[heads[3]] || iq_done[heads[3]] || !iq_v[heads[3]])
-                     		&& (!iq_mem[heads[4]] || iq_done[heads[4]] || !iq_v[heads[4]]))
-                     		)
-                    && (!(iq_memdb[heads[6]]) ||
-                     		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
-                     		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]])
-                     		&& (!iq_mem[heads[2]] || iq_done[heads[2]] || !iq_v[heads[2]])
-                     		&& (!iq_mem[heads[3]] || iq_done[heads[3]] || !iq_v[heads[3]])
-                     		&& (!iq_mem[heads[4]] || iq_done[heads[4]] || !iq_v[heads[4]])
-                     		&& (!iq_mem[heads[5]] || iq_done[heads[5]] || !iq_v[heads[5]]))
-                     		)
-                    && (!(iq_memdb[heads[7]]) ||
-                     		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
-                     		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]])
-                     		&& (!iq_mem[heads[2]] || iq_done[heads[2]] || !iq_v[heads[2]])
-                     		&& (!iq_mem[heads[3]] || iq_done[heads[3]] || !iq_v[heads[3]])
-                     		&& (!iq_mem[heads[4]] || iq_done[heads[4]] || !iq_v[heads[4]])
-                     		&& (!iq_mem[heads[5]] || iq_done[heads[5]] || !iq_v[heads[5]])
-                     		&& (!iq_mem[heads[6]] || iq_done[heads[6]] || !iq_v[heads[6]]))
-                     		)
-                    && (!(iq_memdb[heads[8]]) ||
-                     		  ((!iq_mem[heads[0]] || iq_done[heads[0]] || !iq_v[heads[0]])
-                     		&& (!iq_mem[heads[1]] || iq_done[heads[1]] || !iq_v[heads[1]])
-                     		&& (!iq_mem[heads[2]] || iq_done[heads[2]] || !iq_v[heads[2]])
-                     		&& (!iq_mem[heads[3]] || iq_done[heads[3]] || !iq_v[heads[3]])
-                     		&& (!iq_mem[heads[4]] || iq_done[heads[4]] || !iq_v[heads[4]])
-                     		&& (!iq_mem[heads[5]] || iq_done[heads[5]] || !iq_v[heads[5]])
-                     		&& (!iq_mem[heads[6]] || iq_done[heads[6]] || !iq_v[heads[6]])
-                     		&& (!iq_mem[heads[7]] || iq_done[heads[7]] || !iq_v[heads[7]])
-                     		)
-                     		)
-					// ... and, if it is a store, there is no chance of it being undone
-					&& ((iq_load[heads[9]] && sple) ||
-		      		      !(iq_fc[heads[0]]||iq_canex[heads[0]])
-                       && !(iq_fc[heads[1]]||iq_canex[heads[1]])
-                       && !(iq_fc[heads[2]]||iq_canex[heads[2]])
-                       && !(iq_fc[heads[3]]||iq_canex[heads[3]])
-                       && !(iq_fc[heads[4]]||iq_canex[heads[4]])
-                       && !(iq_fc[heads[5]]||iq_canex[heads[5]])
-                       && !(iq_fc[heads[6]]||iq_canex[heads[6]])
-                       && !(iq_fc[heads[7]]||iq_canex[heads[7]])
-                       && !(iq_fc[heads[8]]||iq_canex[heads[8]])
-                       );
-	 if (memissue[heads[9]])
-	 	issue_count = issue_count + 1;
-	end
-end
-end
-endgenerate
-`endif
 
 // Starts search for instructions to issue at the head of the queue and 
 // progresses from there. This ensures that the oldest instructions are
@@ -4473,13 +3707,6 @@ else
 	2'b10:	ip_mask = 3'b100;
 	default:	ip_mask = 3'b111;
 	endcase
-always @*
-	case(next_ip[3:2])
-	2'b00:	next_ip_mask = 3'b111;
-	2'b01:	next_ip_mask = 3'b110;
-	2'b10:	next_ip_mask = 3'b100;
-	default:	next_ip_mask = 3'b111;
-	endcase
 
 //
 // additional DRAM-enqueue logic
@@ -4582,107 +3809,21 @@ reg rf_vra0, rf_vra1, rf_vra2;
 always @(posedge clk)
     rf_vra1 <= regIsValid[Ra1s];
 */
-// Check how many instructions can be queued. This might be fewer than the
-// number ready to queue from the fetch stage if queue slots aren't
-// available or if there are no more physical registers left for remapping.
-// The fetch stage needs to know how many instructions will queue so this
-// logic is placed here.
-// NOPs are filtered out and do not enter the instruction queue. The core
-// will stream NOPs on a cache miss and they would mess up the queue order
-// if there are immediate prefixes in the queue.
-// For the VEX instruction, the instruction can't queue until register Rs1
-// is valid, because register Rs1 is used to specify the vector element to
-// read.
-wire q2open = iq_v[tails[0]]==`INV && iq_v[tails[1]]==`INV;
-wire q3open = iq_v[tails[0]]==`INV && iq_v[tails[1]]==`INV && iq_v[(tails[1] + 2'd1) % QENTRIES]==`INV;
-always @*
-begin
-	canq1 <= FALSE;
-	canq2 <= FALSE;
-	canq3 <= FALSE;
-	queuedCnt <= 3'd0;
-	queuedNop <= FALSE;
-	queuedOnp <= 1'd0;
-	if (!branchmiss) begin
-		// Three available
-		case(slotvd)
-		3'b001:
-      if (iq_v[tails[0]]==`INV) begin
-        canq1 <= TRUE;
-        queuedCnt <= 3'd1;
-        queuedOnp[0] <= `TRUE;
-      end
-		3'b010:
-      if (iq_v[tails[0]]==`INV) begin
-        canq1 <= TRUE;
-        queuedCnt <= 3'd1;
-        queuedOnp[1] <= `TRUE;
-      end
-		3'b011:
-      if (iq_v[tails[0]]==`INV) begin
-        canq1 <= TRUE;
-        queuedCnt <= 3'd1;
-        queuedOnp[0] <= `TRUE;
-        if (!(slot_jc[0]|slot_ret[0]|take_branch[0])) begin
-          if (iq_v[tails[1]]==`INV) begin
-            canq2 <= TRUE;
-            if (!debug_on && `WAYS > 1) begin
-            	queuedCnt <= 3'd2;
-			        queuedOnp[1] <= `TRUE;
-			      end
-          end
-        end
-    	end
-		3'b100:
-      if (iq_v[tails[0]]==`INV) begin
-        canq1 <= TRUE;
-        queuedCnt <= 3'd1;
-        queuedOnp[2] <= `TRUE;
-      end
-    3'b101:	; // Illegal
-    3'b110:
-      if (iq_v[tails[0]]==`INV) begin
-        canq1 <= TRUE;
-        queuedCnt <= 3'd1;
-        queuedOnp[1] <= `TRUE;
-        if (!(slot_jc[1]|slot_ret[1]|take_branch[1])) begin
-          if (iq_v[tails[1]]==`INV) begin
-            canq2 <= TRUE;
-            if (!debug_on && `WAYS > 1) begin
-            	queuedCnt <= 3'd2;
-            	queuedOnp[2] <= `TRUE;
-            end
-          end
-        end
-    	end
-		3'b111:
-      if (iq_v[tails[0]]==`INV) begin
-        canq1 <= TRUE;
-        queuedCnt <= 3'd1;
-        queuedOnp[0] <= `TRUE;
-				if (!(slot_jc[0]|slot_ret[0]|take_branch[0])) begin
-          if (iq_v[tails[1]]==`INV) begin
-            canq2 <= TRUE;
-            if (!debug_on && `WAYS > 1) begin
-            	queuedCnt <= 3'd2;
-            	queuedOnp[1] <= `TRUE;
-            end
-          	if (!(slot_jc[1]|slot_ret[1]|take_branch[1])) begin
-	            if (iq_v[tails[2]]==`INV) begin
-	              canq3 <= TRUE;
-		            if (!debug_on && `WAYS > 2) begin
-		            	queuedCnt <= 3'd3;
-		            	queuedOnp[2] <= `TRUE;
-		            end
-	            end
-	          end
-	        end
-				end
-			end
-		default:	;
-		endcase
-  end
-end
+
+// Check how many instructions can be queued. 
+getQueuedCount ugqc1
+(
+	.branchmiss(branchmiss),
+	.tails(tails),
+	.slotvd(slotvd),
+	.slot_jc(slot_jc),
+	.slot_ret(slot_ret),
+	.take_branch(take_branch),
+	.iq_v(iq_v),
+	.queuedCnt(queuedCnt),
+	.queuedOnp(queuedOnp),
+	.debug_on(debug_on)
+);
 
 //
 // Branchmiss seems to be sticky sometimes during simulation. For instance branch miss
@@ -4934,7 +4075,6 @@ slot_valid usv1
 	.ip_mask(ip_mask),
 	.ip_maskd(ip_maskd),
 	.ip_override(ip_override),
-	.next_ip_mask(next_ip_mask),
 	.queuedCnt(queuedCnt),
 	.slot_jc(slot_jc),
 	.slot_ret(slot_ret),

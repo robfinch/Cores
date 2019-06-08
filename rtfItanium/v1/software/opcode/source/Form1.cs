@@ -10,6 +10,15 @@ using System.Windows.Forms;
 
 namespace Opcode
 {
+	enum e_memop : long {
+		I_MLX = 0x0f,
+		I_MSX = 0x2f,
+	}
+	enum e_memfn : long
+	{
+		I_STBX = 0x00,
+		I_STWX = 0x01,
+	}
 	public partial class Form1 : Form
 	{
 		public Form1()
@@ -34,6 +43,7 @@ namespace Opcode
 			bt = ((n >> 3) & 7L) | ((n >> 22) << 3);
 			bt = (bt << 2) | (bt & 3L);
 			label13.Text = Convert.ToString(bt, 16);
+			label14.Text = MemOpcode(n);
 		}
 
 		private void button2_Click(object sender, EventArgs e)
@@ -82,6 +92,26 @@ namespace Opcode
 			}
 		}
 
+		private string MemOpcode(long n)
+		{
+			long opcode;
+			long func;
+
+			opcode = (((n >> 33) & 3L) << 4) | ((n >> 6) & 15L);
+			func = ((n >> 35) & 31);
+			switch(opcode)
+			{
+				case (long)e_memop.I_MSX:
+					switch(func)
+					{
+						case (long)e_memfn.I_STBX:	return "stbx";
+						case (long)e_memfn.I_STWX: return "stwx";
+					}
+					break;
+			}
+			return "???";
+		}
+
 		private void button3_Click(object sender, EventArgs e)
 		{
 			long n;
@@ -101,6 +131,12 @@ namespace Opcode
 			}
 			textBox2.Text = str;
 			textBox3.Text = c;
+		}
+
+		private void approximationsToolStripMenuItem_Click(object sender, EventArgs e)
+		{
+			ApproximationsForm form = new ApproximationsForm();
+			form.Show();
 		}
 	}
 }

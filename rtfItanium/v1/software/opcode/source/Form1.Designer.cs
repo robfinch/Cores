@@ -47,6 +47,10 @@
 			this.button3 = new System.Windows.Forms.Button();
 			this.textBox2 = new System.Windows.Forms.TextBox();
 			this.textBox3 = new System.Windows.Forms.TextBox();
+			this.label14 = new System.Windows.Forms.Label();
+			this.menuStrip1 = new System.Windows.Forms.MenuStrip();
+			this.approximationsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+			this.menuStrip1.SuspendLayout();
 			this.SuspendLayout();
 			// 
 			// textBox1
@@ -221,11 +225,38 @@
 			this.textBox3.Size = new System.Drawing.Size(100, 217);
 			this.textBox3.TabIndex = 18;
 			// 
+			// label14
+			// 
+			this.label14.AutoSize = true;
+			this.label14.Location = new System.Drawing.Point(146, 67);
+			this.label14.Name = "label14";
+			this.label14.Size = new System.Drawing.Size(41, 13);
+			this.label14.TabIndex = 19;
+			this.label14.Text = "label14";
+			// 
+			// menuStrip1
+			// 
+			this.menuStrip1.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.approximationsToolStripMenuItem});
+			this.menuStrip1.Location = new System.Drawing.Point(0, 0);
+			this.menuStrip1.Name = "menuStrip1";
+			this.menuStrip1.Size = new System.Drawing.Size(800, 24);
+			this.menuStrip1.TabIndex = 20;
+			this.menuStrip1.Text = "menuStrip1";
+			// 
+			// approximationsToolStripMenuItem
+			// 
+			this.approximationsToolStripMenuItem.Name = "approximationsToolStripMenuItem";
+			this.approximationsToolStripMenuItem.Size = new System.Drawing.Size(103, 20);
+			this.approximationsToolStripMenuItem.Text = "&Approximations";
+			this.approximationsToolStripMenuItem.Click += new System.EventHandler(this.approximationsToolStripMenuItem_Click);
+			// 
 			// Form1
 			// 
 			this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
 			this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
 			this.ClientSize = new System.Drawing.Size(800, 450);
+			this.Controls.Add(this.label14);
 			this.Controls.Add(this.textBox3);
 			this.Controls.Add(this.textBox2);
 			this.Controls.Add(this.button3);
@@ -245,8 +276,12 @@
 			this.Controls.Add(this.label2);
 			this.Controls.Add(this.label1);
 			this.Controls.Add(this.textBox1);
+			this.Controls.Add(this.menuStrip1);
+			this.MainMenuStrip = this.menuStrip1;
 			this.Name = "Form1";
 			this.Text = "Form1";
+			this.menuStrip1.ResumeLayout(false);
+			this.menuStrip1.PerformLayout();
 			this.ResumeLayout(false);
 			this.PerformLayout();
 
@@ -273,6 +308,9 @@
 		private System.Windows.Forms.Button button3;
 		private System.Windows.Forms.TextBox textBox2;
 		private System.Windows.Forms.TextBox textBox3;
+		private System.Windows.Forms.Label label14;
+		private System.Windows.Forms.MenuStrip menuStrip1;
+		private System.Windows.Forms.ToolStripMenuItem approximationsToolStripMenuItem;
 	}
 }
 

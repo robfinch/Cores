@@ -25,7 +25,7 @@
 `define VAL		1'b1
 `define INV		1'b0
 
-module regfile_source(rst, clk, branchmiss, slotvd, phit, ip_mask, canq1, canq2, canq3,
+module regfile_source(rst, clk, branchmiss, slotvd, phit, ip_mask, 
 	queuedCnt, slot_rfw, slot_jc, take_branch,
 	Rd, tails, iq_latestID, iq_tgt, rf_source, debug_on);
 parameter AREGS = 128;
@@ -39,9 +39,6 @@ input [QSLOTS-1:0] slotvd;
 input phit;
 input [QSLOTS-1:0] ip_mask;
 input [2:0] queuedCnt;
-input canq1;
-input canq2;
-input canq3;
 input [QSLOTS-1:0] slot_rfw;
 input [QSLOTS-1:0] slot_jc;
 input [QSLOTS-1:0] take_branch;

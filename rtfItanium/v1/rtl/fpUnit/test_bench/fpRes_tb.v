@@ -6,7 +6,8 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//
+//	fpRes_tb.v
+//		- floating point reciprocal estimate test bench
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -23,58 +24,47 @@
 //                                                                          
 // ============================================================================
 
-module F32ToF80(a, o);
-input [31:0] a;
-output [79:0] o;
+module fpRes_tb();
+reg rst;
+reg clk;
+reg [12:0] adr;
+reg [127:0] mem [0:8191];
+reg [191:0] memo [0:9000];
+reg [63:0] a,a6,o1;
+wire [63:0] a5;
+wire [63:0] o,o5;
 
-reg signo;
-reg [14:0] expo;
-reg [63:0] mano;
-
-assign o = {signo,expo,mano};
-
-wire signi;
-wire [7:0] expi;
-wire [22:0] mani;
-wire xinf;	// exponent infinite
-wire vz;	// value zero
-wire xz;	// exponent zero
-
-fpDecomp #(32) u1 (.i(a), .sgn(signi), .exp(expi), .man(mani), .xinf(xinf), .xz(xz), .vz(vz) );
-wire [5:0] lz;
-cntlz32 u2 ({mani,9'b111111111}, lz);	// '1' bit already unhidden due to denormalized number
-
-always @*
-begin
-  // sign out always just = sign in
-  signo = signi;
-
-  // special check for zero
-  if (vz) begin
-    expo <= 0;
-    mano <= 0;
-  end
-  // convert infinity / nan
-  // infinity in = infinity out
-  else if (xinf) begin
-    expo <= 15'h7fff;
-    mano <= {mani,41'b0};
-  end
-  // convert denormal
-  // a denormal was really a number with an exponent of -126
-  // this value is easily represented in the double format
-  // it may be possible to normalize the value if it isn't
-  // zero
-  else if (xz) begin
-    expo <= 15'h3fff - 8'h7e - lz;	// 32767 "zero" -1022 - lz
-    mano <= {mani << (lz + 1), 41'd0};	// shift one more to hide leading '1'
-  end
-  // convert typical number
-  // adjust exponent, copy mantissa
-  else begin
-    expo <= expi + 15'h3fff - 8'h7f;
-    mano <= {mani,41'd0};
-  end
+initial begin
+	rst = 1'b0;
+	clk = 1'b0;
+	adr = 0;
+	$readmemh("d:/cores6/rtfItanium/v1/rtl/fpUnit/fpRes_tv.txt", mem);
+	#20 rst = 1;
+	#50 rst = 0;
 end
+
+always #5
+	clk = ~clk;
+
+delay3 #(64) u2 (clk, 1'b1, a, a5);
+delay3 #(64) u3 (clk, 1'b1, o1, o5);
+
+always @(posedge clk)
+if (rst)
+	adr = 0;
+else
+begin
+	adr <= adr + 1;
+	a <= mem[adr][63: 0];
+	o1 <= mem[adr][127:64];
+	a6 <= a5;
+	memo[adr] <= {o5,o,a5};
+	if (adr==8191) begin
+		$writememh("d:/cores6/rtfItanium/v1/rtl/fpUnit/fpRes_tvo.txt", memo);
+		$finish;
+	end
+end
+
+fpRes #(64) u1 (clk, 1'b1, a, o);
 
 endmodule

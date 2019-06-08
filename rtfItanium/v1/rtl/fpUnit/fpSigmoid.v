@@ -29,103 +29,181 @@
 //
 // ============================================================================
 
-`define ONE			80'h3FFF0000000000000000
-`define EIGHT		80'h40020000000000000000
-`define FIVETWELVE	80'h40080000000000000000
+`define ONE80					80'h3FFF0000000000000000
+`define EIGHT80				80'h40020000000000000000
+`define FIVETWELVE80	80'h40080000000000000000
+`define ONE64					64'h3FF0000000000000
+`define EIGHT64				64'h4020000000000000
+`define FIVETWELVE64	64'h4080000000000000
+`define ONE40					40'h3FE0000000
+`define EIGHT40				40'h4040000000
+`define ONE32					32'h7F000000
+`define EIGHT32				32'h42000000
+`define FIVETWELVE32	32'h48000000
 
-module fpSigmoid(clk, a, o);
-parameter WID=80;
+module fpSigmoid(clk, ce, a, o);
+parameter WID = 128;
+localparam MSB = WID-1;
+localparam EMSB = WID==128 ? 14 :
+                  WID==96 ? 14 :
+                  WID==80 ? 14 :
+                  WID==64 ? 10 :
+				  WID==52 ? 10 :
+				  WID==48 ? 11 :
+				  WID==44 ? 10 :
+				  WID==42 ? 10 :
+				  WID==40 ?  9 :
+				  WID==32 ?  7 :
+				  WID==24 ?  6 : 4;
+localparam FMSB = WID==128 ? 111 :
+                  WID==96 ? 79 :
+                  WID==80 ? 63 :
+                  WID==64 ? 51 :
+				  WID==52 ? 39 :
+				  WID==48 ? 34 :
+				  WID==44 ? 31 :
+				  WID==42 ? 29 :
+				  WID==40 ? 28 :
+				  WID==32 ? 22 :
+				  WID==24 ? 15 : 9;
 input clk;
+input ce;
 input [WID-1:0] a;
 output reg [WID-1:0] o;
 
 wire [4:0] cmp1_o;
 reg [4:0] cmp2_o;
-wire [31:0] a1,i1;
-(* ram_style="block *)
-reg [31:0] SigmoidLUT [0:4095];
+
+// Just the mantissa is stored in the table to economize on the storate.
+// The exponent is always the same value (0x3ff). Only the top 32 bits of
+// the mantissa are stored.
+(* ram_style="block" *)
+reg [31:0] SigmoidLUT [0:1023];
 
 // Check if the input is in the range (-8 to +8)
-fp_cmp_unit #(WID) u1 (.a(a & 80'h7FFFFFFFFFFFFFFFFFFF), .b(`EIGHT), .o(cmp1_o), .nanx() );
-
+// We take the absolute value by trimming off the sign bit.
+generate begin : ext
+if (WID==80)
+fp_cmp_unit #(WID) u1 (.a(a & 80'h7FFFFFFFFFFFFFFFFFFF), .b(`EIGHT80), .o(cmp1_o), .nanx() );
+else if (WID==64)
+fp_cmp_unit #(WID) u1 (.a(a & 64'h7FFFFFFFFFFFFFFF), .b(`EIGHT64), .o(cmp1_o), .nanx() );
+else if (WID==40)
+fp_cmp_unit #(WID) u1 (.a(a & 40'h7FFFFFFFFF), .b(`EIGHT40), .o(cmp1_o), .nanx() );
+else if (WID==32)
+fp_cmp_unit #(WID) u1 (.a(a & 32'h7FFFFFFF), .b(`EIGHT32), .o(cmp1_o), .nanx() );
+else begin
+	always @*
+	begin
+		$display("Sigmoid: unsupported width.");
+		$stop;
+	end
+end
+end
+endgenerate
 
 initial begin
-`include "D:\Cores6\rtfItanium\v1\rtl\fpUnit\SigmoidTbl.ver"
+`include "D:\Cores6\rtfItanium\v1\rtl\fpUnit\SigTbl.ver"
 end
 
-// Quickly multiply number by 512 (it is in range 0 to 8) then convert to integer to get
-// table index = add 9 to exponent then convert to integer
-assign a1[63:0] = a[63:0];
-assign a1[78:64] = a[78:64] + 8'd9; // we know this won't overflow
-assign a1[79] = a[79];
-wire [31:0] sig32 = SigmoidLUT[lutadr];
+// Quickly multiply number by 64 (it is in range -8 to 8) then convert to integer to get
+// table index = add 6 to exponent then convert to integer
+wire sa;
+wire [EMSB:0] xa;
+wire [FMSB:0] ma;
+fpDecomp #(WID) u1 (.i(a), .sgn(sa), .exp(xa), .man(ma), .fract(), .xz(), .vz(), .xinf(), .inf(), .nan() );
+
+reg [9:0] lutadr;
+wire [5:0] lzcnt;
+wire [WID-1:0] a1;
+wire [WID-1:0] i1, i2;
+wire [EMSB:0] xa1 = xa + 4'd6;
+assign a1 = {sa,xa1,ma};	// we know the exponent won't overflow
+wire [31:0] man32a = SigmoidLUT[lutadr];
+wire [31:0] man32b = lutadr==10'h3ff ? man32a : SigmoidLUT[lutadr+1];
+wire [31:0] man32;
 wire [79:0] sig80;
+generate begin : la
+if (WID >= 40) begin
+wire [15:0] eps = ma[FMSB-10:FMSB-10-15];
+wire [47:0] p = (man32b - man32a) * eps;
+assign man32 = man32a + (p >> 26);
+cntlz32 u3 (man32,lzcnt);
+end
+else if (WID==32) begin
+wire [12:0] eps = ma[FMSB-10:0];
+wire [43:0] p = (man32b - man32a) * eps;
+assign man32 = man32a + (p >> 26);
+cntlz32 u3 (man32,lzcnt);
+end
+end
+endgenerate
 
-F32ToF80 u3 (sig32, sig80);
+wire [31:0] man32s = man32 << (lzcnt + 2'd1);	// +1 to hide leading one
 
+// Convert to integer
 f2i #(WID) u2
 (
   .clk(clk),
   .ce(1'b1),
   .i(a1),
-  .o(i1)
+  .o(i2)
 );
+assign i1 = i2 + 512;
 
 always @(posedge clk)
-  cmp2_o <= cmp1_o;
+  if (ce) cmp2_o <= cmp1_o;
 
-reg [11:0] lutadr;
+// We know the integer is in range 0 to 1023
 always @(posedge clk)
-  lutadr <= i1[11:0];
-
+  if(ce) lutadr <= i1[9:0];
+reg sa1,sa2;
 always @(posedge clk)
-if (cmp2_o[1])  // abs(a) less than 8 ?
-  o <= sig80 | {a[79],79'd0}; 
-else
-  o <= `ONE | {a[79],79'd0};
+if (ce) sa1 <= a[WID-1];
+always @(posedge clk)
+if (ce) sa2 <= sa1;
 
-endmodule
-
-module sigmoid_tb();
-reg clk, rst;
-reg [12:0] ndx;
-wire [31:0] o;
-
-initial begin
-  #0 rst = 1'b0;
-  #0 clk = 1'b0;
-  #10 rst = 1'b1;
-  #40 rst = 1'b0;
+generate begin : ooo
+if (WID==80) begin
+wire [14:0] ex1 = 15'h3ffe - lzcnt;
+always @(posedge clk)
+if (ce) begin
+	if (cmp2_o[1])  // abs(a) less than 8 ?
+	  o <= {1'b0,ex1,man32s[31:0],32'd0}; 
+	else
+	  o <= sa1 ? 80'h0 : `ONE80; 
 end
-
-always #5 clk = ~clk;
-
-reg [31:0] RngLUT [0:8191];
-initial begin
-`include "D:\Cores6\rtfItanium\v1\rtl\fpUnit\RangeTbl.ver"
 end
-
-fpSigmoid u1 (clk, RngLUT[ndx], o);
-
+else if (WID==64) begin
+wire [10:0] ex1 = 11'h3fe - lzcnt;
 always @(posedge clk)
-if (rst)
-  ndx = 0;
-else begin
-  ndx = ndx + 13'd1;
+if (ce) begin
+	if (cmp2_o[1])  // abs(a) less than 8 ?
+	  o <= {1'b0,ex1,man32s[31:0],20'd0}; 
+	else
+	  o <= sa1 ? 64'h0 : `ONE64; 
 end
-
-wire [31:0] o1, o2;
-// Multiply number by 4096 (it is in range -1 to 1) then convert to integer
-assign o1[22:0] = o[22:0];
-assign o1[30:23] = o[30:23] + 8'd12; // we know this won't overflow
-assign o1[31] = o[31];
-
-f2i #(32) u2
-(
-  .clk(clk),
-  .ce(1'b1),
-  .i(o1),
-  .o(o2)
-);
+end
+else if (WID==40) begin
+wire [9:0] ex1 = 10'h1fe - lzcnt;
+always @(posedge clk)
+if (ce) begin
+	if (cmp2_o[1])  // abs(a) less than 8 ?
+	  o <= {1'b0,ex1,man32s[31:3]}; 
+	else
+	  o <= sa1 ? 40'h0 : `ONE40; 
+end
+end
+else if (WID==32) begin
+wire [7:0] ex1 = 8'h7e - lzcnt;
+always @(posedge clk)
+if (ce) begin
+	if (cmp2_o[1])  // abs(a) less than 8 ?
+	  o <= {1'b0,ex1,man32s[31:9]};
+	else
+	  o <= sa1 ? 32'h0 : `ONE32;
+end
+end
+end
+endgenerate
 
 endmodule
