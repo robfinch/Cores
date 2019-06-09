@@ -50,7 +50,7 @@
 // ============================================================================
 
 module fpMul (clk, ce, a, b, o, sign_exe, inf, overflow, underflow);
-parameter WID = 128;
+parameter WID = 32;
 localparam MSB = WID-1;
 localparam EMSB = WID==128 ? 14 :
                   WID==96 ? 14 :

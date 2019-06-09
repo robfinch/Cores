@@ -50,9 +50,9 @@ begin
     // ToDo: fix im test
     default:    bus <= (im < ~{ol,2'b00}) ? tvec : nextpc;
     endcase
-  `RTI:
+  `BMISC:
   	case(instr[`FUNCT5])
-  	5'd0:	bus <= 80'hCCCCCCCCCCCCCCCCCCCC;	// RTI
+  	`RTI:		bus <= 80'hCCCCCCCCCCCCCCCCCCCC;	// RTI
   	`WAIT:  bus = waitctr==64'd1;
   	default:	bus <= 80'hCCCCCCCCCCCCCCCCCCCC;
   	endcase

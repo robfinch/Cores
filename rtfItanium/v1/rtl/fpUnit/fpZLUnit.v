@@ -64,6 +64,7 @@
 `define FSEQ		5'h14
 `define FSNE		5'h15
 `define FSUN		5'h16
+`define F80TO32	5'h1A
 
 module fpZLUnit
 #(parameter WID=32)
@@ -118,7 +119,9 @@ fs2d u4 (a[39:0], sdo);
 wire [39:0] dso;
 fd2s u5 (a, dso);
 wire [79:0] f32to80o;
+wire [31:0] f80to32o;
 F32ToF80 u6 (a[31:0], f32to80o);
+F80ToF32 u7 (a, f32to80o);
 
 always @*
   case(op)
@@ -132,8 +135,9 @@ always @*
     `FMAN:   begin o <= {a[WID-1],1'b0,{EMSB{1'b1}},a[FMSB:0]}; nanx <= 1'b0; end
     //`FCVTSQ:    o <= sq_o;
     `FCVTSD: begin o <= sdo; nanx <= nanxab; end
-    `FCVTDS: begin o <= {{32{dso[31]}},dso}; nanx <= nanxab; end
+    `FCVTDS: begin o <= {{40{dso[39]}},dso}; nanx <= nanxab; end
     `F32TO80: begin o <= f32to80o; nanx <= nanxab; end
+    `F80TO32: begin o <= f80to32o; nanx <= nanxab; end
     default: o <= 0;
     endcase
   `FLT2:

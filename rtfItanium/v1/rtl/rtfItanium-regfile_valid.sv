@@ -25,11 +25,11 @@
 `define VAL		1'b1
 `define INV		1'b0
 
-module regfile_valid(rst, clk, phit, ip_mask, slotvd, slot_rfw, slot_jc, tails,
+module regfile_valid(rst, clk, slotvd, slot_rfw, tails,
 	livetarget, branchmiss,
 	commit0_v, commit1_v, commit0_id, commit1_id, commit0_tgt, commit1_tgt,
-	rf_source, iq_source, queuedCnt,
-	take_branch, Rd, rf_v, debug_on);
+	rf_source, iq_source, queuedOn,
+	take_branch, Rd, rf_v);
 parameter AREGS = 128;
 parameter RBIT = 6;
 parameter QENTRIES = `QENTRIES;
@@ -38,11 +38,8 @@ parameter VAL = 1'b1;
 parameter INV = 1'b0;
 input rst;
 input clk;
-input phit;
-input [QSLOTS-1:0] ip_mask;
 input [QSLOTS-1:0] slotvd;
 input [QSLOTS-1:0] slot_rfw;
-input [QSLOTS-1:0] slot_jc;
 input [`QBITS] tails [0:QSLOTS-1];
 input [AREGS-1:0] livetarget;
 input branchmiss;
@@ -56,9 +53,8 @@ input [`QBITS] rf_source [0:AREGS-1];
 input [QENTRIES-1:0] iq_source;
 input [QSLOTS-1:0] take_branch;
 input [6:0] Rd [0:QSLOTS-1];
-input [2:0] queuedCnt;
+input [QSLOTS-1:0] queuedOn;
 output reg [AREGS-1:0] rf_v;
-input debug_on;
 
 // The following two functions used to figure out which slot to process.
 // However, the functions when used things seemed not to work.
@@ -86,7 +82,6 @@ endcase
 endfunction
 
 integer n;
-wire [2:0] pat = {slotvd[0],slotvd[1],slotvd[2]} & {3{phit}} & ip_mask;
 
 always @(posedge clk)
 if (rst) begin
@@ -110,7 +105,7 @@ else begin
       rf_v[ {commit0_tgt[RBIT:0]} ] <= rf_source[ commit0_tgt[RBIT:0] ] == commit0_id || (branchmiss && iq_source[ commit0_id[`QBITS] ]);
   end
   if (commit1_v && `NUM_CMT > 1) begin
-    if (!rf_v[ {commit1_tgt[RBIT:0]} ] && !(commit0_v && (rf_source[ commit0_tgt[RBIT:0] ] == commit0_id || (branchmiss && iq_source[ commit0_id[`QBITS] ]))))
+    if (!rf_v[ {commit1_tgt[RBIT:0]} ]) //&& !(commit0_v && (rf_source[ commit0_tgt[RBIT:0] ] == commit0_id || (branchmiss && iq_source[ commit0_id[`QBITS] ]))))
       rf_v[ {commit1_tgt[RBIT:0]} ] <= rf_source[ commit1_tgt[RBIT:0] ] == commit1_id || (branchmiss && iq_source[ commit1_id[`QBITS] ]);
   end
 
@@ -118,106 +113,59 @@ else begin
 		case(slotvd)
 		3'b000:	;
 		3'b100:
-			if (queuedCnt==3'd1) begin
+			if (queuedOn[2]) begin
 				if (slot_rfw[2])
 					rf_v [Rd[2]] <= `INV;
 			end
 		3'b010:
-			if (queuedCnt==3'd1) begin
+			if (queuedOn[1]) begin
 				if (slot_rfw[1])
 					rf_v [Rd[1]] <= `INV;
 			end
 		3'b001:
-			if (queuedCnt==3'd1) begin
+			if (queuedOn[0]) begin
 				if (slot_rfw[0])
 					rf_v [Rd[0]] <= `INV;
 			end
 		3'b110:
-			if (queuedCnt==3'd2) begin
+			if (queuedOn[2]) begin
 				if (slot_rfw[1])
 					rf_v [Rd[1]] <= `INV;
-				if (!(slot_jc[1]|take_branch[1])) begin
+				if (queuedOn[2]) begin
 					if (slot_rfw[2])
 						rf_v [Rd[2]] <= `INV;
 				end
-			end
-			else if (queuedCnt==3'd1) begin
-				if (slot_rfw[1])
-					rf_v [Rd[1]] <= `INV;
 			end
 		3'b101:
-			if (queuedCnt==3'd2) begin
+			if (queuedOn[0]) begin
 				if (slot_rfw[0])
 					rf_v [Rd[0]] <= `INV;
-				if (!(slot_jc[0]|take_branch[0])) begin
-					if (slot_rfw[1])
-						rf_v [Rd[1]] <= `INV;
-				end
-			end
-			else if (queuedCnt==3'd1) begin
-				if (slot_rfw[0])
-					rf_v [Rd[0]] <= `INV;
-			end
-		3'b011:
-			if (queuedCnt==3'd2) begin
-				if (slot_rfw[0])
-					rf_v [Rd[0]] <= `INV;
-				if (!(slot_jc[0]|take_branch[0])) begin
+				if (queuedOn[2]) begin
 					if (slot_rfw[1])
 						rf_v [Rd[1]] <= `INV;
 				end
 			end
-			else if (queuedCnt==3'd1) begin
+		3'b011:
+			if (queuedOn[0]) begin
 				if (slot_rfw[0])
 					rf_v [Rd[0]] <= `INV;
-			end
-		3'b111:
-			if (queuedCnt==3'd3) begin
-				if (slot_jc[0]|take_branch[0]) begin
-					if (slot_rfw[0])
-						rf_v [Rd[0]] <= `INV;
-				end
-				else if (slot_jc[1]|take_branch[1]) begin
-					if (slot_rfw[0])
-						rf_v [Rd[0]] <= `INV;
-					if (slot_rfw[1])
-						rf_v [Rd[1]] <= `INV;
-				end
-				else if (slot_jc[2]|take_branch[2]) begin
-					if (slot_rfw[0])
-						rf_v [Rd[0]] <= `INV;
-					if (slot_rfw[1])
-						rf_v [Rd[1]] <= `INV;
-					if (slot_rfw[2])
-						rf_v [Rd[2]] <= `INV;
-				end
-				else begin
-					if (slot_rfw[0])
-						rf_v [Rd[0]] <= `INV;
-					if (slot_rfw[1])
-						rf_v [Rd[1]] <= `INV;
-					if (slot_rfw[2])
-						rf_v [Rd[2]] <= `INV;
-				end
-			end
-			else if (queuedCnt==3'd2) begin
-				if (slot_rfw[0])
-					rf_v [Rd[0]] <= `INV;
-				if (slot_jc[0]|take_branch[0]) begin
-					;
-				end
-				else if (slot_jc[1]|take_branch[1]) begin
-					if (slot_rfw[1])
-						rf_v [Rd[1]] <= `INV;
-				end
-				else begin
+				if (queuedOn[1]) begin
 					if (slot_rfw[1])
 						rf_v [Rd[1]] <= `INV;
 				end
 			end
-			else if (queuedCnt==3'd1) begin
+		3'b111:
+			if (queuedOn[0]) begin
 				if (slot_rfw[0])
 					rf_v [Rd[0]] <= `INV;
+				if (queuedOn[1]) begin
+					if (slot_rfw[1])
+						rf_v [Rd[1]] <= `INV;
+					if (queuedOn[2]) begin
+						if (slot_rfw[1])
+							rf_v [Rd[1]] <= `INV;
+					end
+				end
 			end
 		endcase
 	rf_v[0] <= `VAL;

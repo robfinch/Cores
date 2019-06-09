@@ -8,90 +8,293 @@ namespace EM80
 {
 	class Int128
 	{
-		public
-				UInt64 low;
-		public Int64 high;
+		public UInt64[] digits;
 
 		public Int128()
 		{
-			high = 0;
-			low = 0;
+			digits = new UInt64[4];
+			digits[0] = 0;
+			digits[1] = 0;
+			digits[2] = 0;
+			digits[3] = 0;
+		}
+		public static Int128 Convert(long nn)
+		{
+			Int128 a = new Int128();
+
+			a.digits[0] = (ulong)(nn & 0xffffffffL);
+			a.digits[1] = (ulong)(nn >> 32);
+			a.digits[2] = (ulong)(nn < 0 ? 0xffffffffL : 0L);
+			a.digits[3] = (ulong)(nn < 0 ? 0xffffffffL : 0L);
+			return a;
+		}
+		public static Int128 Convert(ulong nn)
+		{
+			Int128 a = new Int128();
+
+			a.digits[0] = (nn & 0xffffffffL);
+			a.digits[1] = (nn >> 32);
+			a.digits[2] = 0;
+			a.digits[3] = 0;
+			return a;
+		}
+		public void mask()
+		{
+			int nn;
+
+			for (nn = 0; nn < 4; nn++)
+				digits[nn] &= 0xffffffffL;
+		}
+		public UInt64 low()
+		{
+			UInt64 n;
+
+			n = digits[0] | (digits[1] << 32);
+			return n;
+		}
+		public UInt64 high()
+		{
+			UInt64 n;
+
+			n = digits[2] | (digits[3] << 32);
+			return n;
 		}
 		public Int128(string str)
 		{
+			int nn;
 			Int128 a = FromHexString(str);
-			low = a.low;
-			high = a.high;
+			digits = new ulong[4];
+			for (nn = 0; nn < 4; nn++)
+				digits[nn] = a.digits[nn];
+			mask();
 		}
-		bool AddCarry(Int64 s, Int64 a, Int64 b)
+		public Int128 Clone()
+		{
+			int nn;
+			Int128 c;
+			c = new Int128();
+			for (nn = 0; nn < 4; nn++)
+				c.digits[nn] = this.digits[nn];
+			c.mask();
+			return c;
+		}
+		public static bool EQ(Int128 a, Int128 b)
+		{
+			int nn;
+
+			for (nn = 0; nn < 4; nn++)
+				if (a.digits[nn] != b.digits[nn])
+					return false;
+			return true;
+		}
+		static bool AddCarry(Int64 s, Int64 a, Int64 b)
 		{
 			return (((a & b) | (a & ~s) | (b & ~s)) >> 63)==1;
 		}
-		bool SubBorrow(Int64 d, Int64 a, Int64 b)
+		static bool SubBorrow(Int64 d, Int64 a, Int64 b)
 		{
 			return (((~a & b) | (d & ~a) | (d & b)) >> 63)==1;
 		}
-		public Int128 Add(Int128 a, Int128 b)
+		public static Int128 Add(Int128 a, Int128 b)
 		{
+			int nn;
 			Int128 sum = new Int128();
 
-			sum.low = a.low + b.low;
-			sum.high = a.high + b.high;
-			if (AddCarry((Int64)sum.low, (Int64)a.low, (Int64)b.low))
-				sum.high++;
+			for (nn = 0; nn < 4; nn++)
+			{
+				sum.digits[nn] = a.digits[nn] + b.digits[nn];
+			}
+			for (nn = 0; nn < 3; nn++)
+			{
+				if (sum.digits[nn] > 0xffffffffL)
+				{
+					sum.digits[nn] &= 0xffffffffL;
+					sum.digits[nn + 1]++;
+				}
+			}
+			sum.mask();
 			return sum;
 		}
-		public Int128 Sub(Int128 a, Int128 b)
+		public static Int128 Sub(Int128 a, Int128 b)
 		{
+			int nn;
 			Int128 dif = new Int128();
 
-			dif.low = a.low - b.low;
-			dif.high = a.high - b.high;
-			if (SubBorrow((Int64)dif.low, (Int64)a.low, (Int64)b.low))
-				dif.high--;
+			for (nn = 0; nn < 4; nn++)
+			{
+				dif.digits[nn] = a.digits[nn] - b.digits[nn];
+			}
+			for (nn = 0; nn < 3; nn++)
+			{
+				if (dif.digits[nn] < 0L)
+				{
+					dif.digits[nn] &= 0xffffffffL;
+					dif.digits[nn + 1]--;
+				}
+			}
+			dif.mask();
 			return dif;
 		}
-		public Int128 Shl(Int128 a, int amt)
+		public static bool LT(Int128 a, Int128 b)
 		{
-			for (; amt > 0; amt--)
-			{
-				a.high <<= 1;
-				if (((a.low >> 63) & 1L) == 1)
-					a.high |= 1;
-				a.low <<= 1;
-			}
-			return a;
+			Int128 d;
+
+			d = Sub(a, b);
+			if (((d.digits[3] >> 31) & 1) != 0)
+				return true;
+			return false;
 		}
-		public Int128 Shr(Int128 a, int amt)
+		public static Int128 Shl(Int128 a, int amt, int lsb = 0)
 		{
+			int nn;
+			Int128 aa = a.Clone();
+
 			for (; amt > 0; amt--)
 			{
-				a.low = a.low >> 1;
-				if ((a.high & 1L)==1)
-					a.low |= (UInt64)1L << 63;
-				a.high >>= 1;
+				for (nn = 0; nn < 4; nn++)
+				{
+					aa.digits[nn] <<= 1;
+				}
+				for (nn = 0; nn < 3; nn++)
+				{
+					if (aa.digits[nn] > 0xffffffffL)
+					{
+						aa.digits[nn] &= 0xffffffffL;
+						aa.digits[nn+1]++;
+					}
+				}
+				aa.digits[0] |= (ulong)lsb;
+				aa.digits[nn] &= 0xffffffffL;
 			}
-			return a;
+			aa.mask();
+			return aa;
+		}
+		public static Int128 Com(Int128 a)
+		{
+			int nn;
+			Int128 aa = a.Clone();
+
+			for (nn = 0; nn < 4; nn++)
+				aa.digits[nn] = ~aa.digits[nn];
+			return aa;
+		}
+		public static Int128 Rol(Int128 a, int amt)
+		{
+			int nn;
+			Int128 aa = a.Clone();
+
+			for (; amt > 0; amt--)
+			{
+				for (nn = 0; nn < 4; nn++)
+				{
+					aa.digits[nn] <<= 1;
+				}
+				for (nn = 0; nn < 3; nn++)
+				{
+					if (aa.digits[nn] > 0xffffffffL)
+					{
+						aa.digits[nn] &= 0xffffffffL;
+						aa.digits[nn + 1]++;
+					}
+				}
+				if (aa.digits[nn] > 0xffffffffL)
+					aa.digits[0] |= 1;
+				aa.digits[nn] &= 0xffffffffL;
+			}
+			aa.mask();
+			return aa;
+		}
+		public static Int128 Shr(Int128 a, int amt, int fill = 0)
+		{
+			int nn;
+			Int128 aa = a.Clone();
+
+			for (; amt > 0; amt--)
+			{
+				for (nn = 3; nn > 0; nn--)
+				{
+					if ((aa.digits[nn] & 1L) != 0)
+					{
+						aa.digits[nn - 1] |= 0x100000000L;
+					}
+				}
+				for (nn = 0; nn < 4; nn++)
+				{
+					aa.digits[nn] >>= 1;
+				}
+				aa.digits[nn-1] |= (ulong)fill << 31;
+			}
+			aa.mask();
+			return aa;
 		}
 		public Int128 ShrPair(Int128 hi, Int128 lo, int amt)
 		{
+			int nn;
+			UInt64[] digits;
+			Int128 aa = new Int128();
+
+			digits = new ulong[8];
+			Int128 reslo = lo.Clone();
+			Int128 reshi = hi.Clone();
+
+			digits[0] = lo.digits[0];
+			digits[1] = lo.digits[1];
+			digits[2] = lo.digits[2];
+			digits[3] = lo.digits[3];
+			digits[4] = hi.digits[0];
+			digits[5] = hi.digits[1];
+			digits[6] = hi.digits[2];
+			digits[7] = hi.digits[3];
 			for (; amt > 0; amt--)
 			{
-				lo.low >>= 1;
-				lo.low &= 0x7fffffffffffffffL;
-				if ((lo.high & 1L) == 1)
-					lo.low |= (UInt64)1L << 63;
-				lo.high >>= 1;
-				lo.high &= 0x7fffffffffffffffL;
-				if ((hi.low & 1L) == 1)
-					lo.high |= 1L << 63;
-				hi.low = hi.low >> 1;
-				hi.low &= 0x7fffffffffffffffL;
-				if ((hi.high & 1L) == 1)
-					hi.low |= (UInt64)1L << 63;
-				hi.high >>= 1;
+				for (nn = 7; nn > 0; nn--)
+				{
+					if ((digits[nn] & 1L) != 0)
+					{
+						digits[nn - 1] |= 0x100000000L;
+					}
+				}
+				for (nn = 0; nn < 8; nn++)
+				{
+					digits[nn] >>= 1;
+				}
 			}
-			return lo;
+			aa.digits[0] = digits[0];
+			aa.digits[1] = digits[1];
+			aa.digits[2] = digits[2];
+			aa.digits[3] = digits[3];
+			aa.mask();
+			return aa;
+		}
+		public static Int128 Or(Int128 a, Int128 b)
+		{
+			int nn;
+			Int128 sum = new Int128();
+
+			for (nn = 0; nn < 4; nn++)
+				sum.digits[nn] = a.digits[nn] | b.digits[nn];
+			sum.mask();
+			return sum;
+		}
+		public static Int128 And(Int128 a, Int128 b)
+		{
+			int nn;
+			Int128 sum = new Int128();
+
+			for (nn = 0; nn < 4; nn++)
+				sum.digits[nn] = a.digits[nn] & b.digits[nn];
+			sum.mask();
+			return sum;
+		}
+		public static Int128 Xor(Int128 a, Int128 b)
+		{
+			int nn;
+			Int128 sum = new Int128();
+
+			for (nn = 0; nn < 4; nn++)
+				sum.digits[nn] = a.digits[nn] ^ b.digits[nn];
+			sum.mask();
+			return sum;
 		}
 		public Int128 FromHexString(string str)
 		{
@@ -101,23 +304,26 @@ namespace EM80
 			for (nn = 0; nn < str.Length; nn++)
 			{
 				a = Shl(a, 4);
-				a.low |= Convert.ToUInt64(str.Substring(nn, 1),16);
+				a.digits[0] |= System.Convert.ToUInt64(str.Substring(nn, 1),16);
 			}
+			a.mask();
 			return a;
 		}
 		public string ToString80()
 		{
 			string str;
 
-			str = Convert.ToString(high,16).PadLeft(4,'0') + Convert.ToString((Int64)low, 16).PadLeft(16,'0');
-			str = str.Substring(str.Length-20, 20);
+			str = System.Convert.ToString((Int16)digits[2],16).PadLeft(4,'0') + System.Convert.ToString((Int32)digits[1], 16).PadLeft(8, '0') + System.Convert.ToString((Int32)digits[0], 16).PadLeft(8,'0');
 			return str;
 		}
 		public string ToString128()
 		{
+			int nn;
 			string str;
 
-			str = Convert.ToString(high, 16).PadLeft(16, '0') + Convert.ToString((Int64)low, 16).PadLeft(16, '0');
+			str = "";
+			for (nn = 3; nn >= 0; nn--)
+				str = str + System.Convert.ToString((Int64)digits[nn], 16).PadLeft(8, '0');
 			return str;
 		}
 	}

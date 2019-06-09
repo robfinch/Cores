@@ -160,7 +160,7 @@ endfunction
 function IsExec;
 input [2:0] unit;
 input [39:0] isn;
-IsExec = unit==`BUnit && (isn[`OPCODE4]==`RTI && isn[`FUNCT5]==`EXEC);
+IsExec = unit==`BUnit && (isn[`OPCODE4]==`BMISC && isn[`FUNCT5]==`EXEC);
 endfunction
 
 function IsPfi;

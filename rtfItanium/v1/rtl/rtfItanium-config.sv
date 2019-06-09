@@ -24,7 +24,7 @@
 //
 // The following line is to enable simulation versions of some modules.
 // Comment out for synthesis.
-//`define SIM		1'b1
+`define SIM		1'b1
 
 //`define SUPPORT_VECTOR	1'b1
 //`define SUPPORT_BBMS	1'b1
@@ -115,7 +115,7 @@
 `define MEM2_AVAIL	1'b1
 `define FCU_AVAIL 1'b1
 
-// Comment out to remove the write buffer from the core.
+// Write buffer must always be present.
 `define HAS_WB	1'b1
 `define	WB_DEPTH	5			// must be one more than desired depth
 

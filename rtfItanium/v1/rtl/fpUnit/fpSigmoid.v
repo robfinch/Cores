@@ -26,7 +26,7 @@
 // This module returns the sigmoid of a number using a lookup table.
 // -1.0 or +1.0 is returned for entries outside of the range -8.0 to +8.0
 //                                                                          
-//
+// ToTo: check pipelining of values
 // ============================================================================
 
 `define ONE80					80'h3FFF0000000000000000

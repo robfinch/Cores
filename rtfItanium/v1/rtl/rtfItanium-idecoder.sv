@@ -68,7 +68,7 @@ case(unit)
 	case(ins[`OPCODE4])
 	`JAL:		fnRt = {1'b0,ins[`RD]};
 	`RET:		fnRt = {1'b0,ins[`RD]};
-	`RTI:		fnRt = ins[`FUNCT5]==`SEI ? {1'b0,ins[`RD]} : 7'd0;
+	`BMISC:		fnRt = ins[`FUNCT5]==`SEI ? {1'b0,ins[`RD]} : 7'd0;
 	default:	fnRt = 7'd0;
 	endcase
 `IUnit:	fnRt = {1'b0,ins[`RD]};
@@ -314,13 +314,13 @@ endfunction
 function IsSEI;
 input [2:0] unit;
 input [39:0] isn;
-IsSEI = unit==`BUnit && isn[`OPCODE4]==`RTI && isn[`FUNCT5]==`SEI;
+IsSEI = unit==`BUnit && isn[`OPCODE4]==`BMISC && isn[`FUNCT5]==`SEI;
 endfunction
 
 function IsWait;
 input [2:0] unit;
 input [39:0] isn;
-IsWait = unit==`BUnit && isn[`OPCODE4]==`RTI && isn[`FUNCT5]==`WAIT;
+IsWait = unit==`BUnit && isn[`OPCODE4]==`BMISC && isn[`FUNCT5]==`WAIT;
 endfunction
 
 function IsLea;
@@ -404,25 +404,25 @@ endfunction
 function IsRti;
 input [2:0] unit;
 input [39:0] isn;
-IsRti = unit==`BUnit && isn[`OPCODE4]==`RTI && isn[`FUNCT5]==5'd0;
+IsRti = unit==`BUnit && isn[`OPCODE4]==`BMISC && isn[`FUNCT5]==`RTI;
 endfunction
 
 function IsSei;
 input [2:0] unit;
 input [39:0] isn;
-IsSei = unit==`BUnit && isn[`OPCODE4]==`RTI && isn[`FUNCT5]==`SEI;
+IsSei = unit==`BUnit && isn[`OPCODE4]==`BMISC && isn[`FUNCT5]==`SEI;
 endfunction
 
 function IsSync;
 input [2:0] unit;
 input [39:0] isn;
-IsSync = (unit==`BUnit && isn[`OPCODE4]==`RTI && isn[`FUNCT5]==`SYNC) || IsRti(unit,isn);
+IsSync = (unit==`BUnit && isn[`OPCODE4]==`BMISC && isn[`FUNCT5]==`SYNC) || IsRti(unit,isn);
 endfunction
 
 function IsRex;
 input [2:0] unit;
 input [39:0] isn;
-IsRex = (unit==`BUnit && isn[`OPCODE4]==`RTI && isn[`FUNCT5]==`REX);
+IsRex = (unit==`BUnit && isn[`OPCODE4]==`BMISC && isn[`FUNCT5]==`REX);
 endfunction
 
 function IsOddball;
@@ -441,7 +441,7 @@ else
 case(unit)
 `BUnit:
 	case(isn[`OPCODE4])
-	`RTI:			IsRFW = isn[`FUNCT5]==`SEI;
+	`BMISC:		IsRFW = isn[`FUNCT5]==`SEI;
 	`JAL:     IsRFW = TRUE;
 	`CALL:    IsRFW = TRUE;  
 	`RET:     IsRFW = TRUE; 

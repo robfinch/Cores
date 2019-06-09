@@ -25,9 +25,8 @@
 `define VAL		1'b1
 `define INV		1'b0
 
-module regfile_source(rst, clk, branchmiss, slotvd, phit, ip_mask, 
-	queuedCnt, slot_rfw, slot_jc, take_branch,
-	Rd, tails, iq_latestID, iq_tgt, rf_source, debug_on);
+module regfile_source(rst, clk, branchmiss, slotvd, slot_rfw,
+	queuedOn,	Rd, tails, iq_latestID, iq_tgt, rf_source);
 parameter AREGS = 128;
 parameter QENTRIES = `QENTRIES;
 parameter QSLOTS = `QSLOTS;
@@ -36,18 +35,13 @@ input rst;
 input clk;
 input branchmiss;
 input [QSLOTS-1:0] slotvd;
-input phit;
-input [QSLOTS-1:0] ip_mask;
-input [2:0] queuedCnt;
-input [QSLOTS-1:0] slot_rfw;
-input [QSLOTS-1:0] slot_jc;
-input [QSLOTS-1:0] take_branch;
+input [QENTRIES-1:0] slot_rfw;
+input [QSLOTS-1:0] queuedOn;
 input [RBIT:0] Rd [0:QSLOTS-1];
 input [`QBITS] tails [0:QSLOTS-1];
 input [AREGS-1:1] iq_latestID [0:QENTRIES-1];
 input [RBIT:0] iq_tgt [0:QENTRIES-1];
 output reg [`QBITS] rf_source [0:AREGS-1];
-input debug_on;
 
 integer n;
 
@@ -72,86 +66,61 @@ else begin
 		// Setting the rf valid and source
 		case(slotvd)
 		3'b000:	;
-		3'b100:
-			if (queuedCnt==3'd1) begin
-				if (slot_rfw[2])
-					rf_source[Rd[2]] <= tails[0];
+		3'b001:
+			if (queuedOn[0]) begin
+				if (slot_rfw[0])
+					rf_source[Rd[0]] <= tails[0];
 			end
 		3'b010:
-			if (queuedCnt==3'd1) begin
+			if (queuedOn[1]) begin
 				if (slot_rfw[1]) begin
 					rf_source[Rd[1]] <= tails[0];
 				end
 			end
-		3'b110:
-			if (queuedCnt==3'd2) begin
-				if (slot_rfw[1])
-					rf_source[Rd[1]] <= tails[0];
-				if (!(slot_jc[1]|take_branch[1])) begin
-					if (slot_rfw[2])
-						rf_source[Rd[2]] <= tails[1];
-				end
-			end
-			else if (queuedCnt==3'd1) begin
-				if (slot_rfw[1])
-					rf_source[Rd[1]] <= tails[0];
-			end
-		3'b001:
-			if (queuedCnt==3'd1) begin
-				if (slot_rfw[0])
-					rf_source[Rd[0]] <= tails[0];
-			end
-		3'b101:
-			if (queuedCnt==3'd2) begin
-				if (slot_rfw[0])
-					rf_source[Rd[0]] <= tails[0];
-				if (!(slot_jc[0]|take_branch[0])) begin
-					if (slot_rfw[2])
-						rf_source[Rd[2]] <= tails[1];
-				end
-			end
-			else if (queuedCnt==3'd1) begin
-				if (slot_rfw[0])
-					rf_source[Rd[0]] <= tails[0];
-			end
 		3'b011:
-			if (queuedCnt==3'd2) begin
+			if (queuedOn[0]) begin
 				if (slot_rfw[0])
 					rf_source[Rd[0]] <= tails[0];
-				if (!(slot_jc[0]|take_branch[0])) begin
+				if (queuedOn[1]) begin
 					if (slot_rfw[1])
 						rf_source[Rd[1]] <= tails[1];
 				end
 			end
-			else if (queuedCnt==3'd1) begin
-				if (slot_rfw[0]) begin
+		3'b100:
+			if (queuedOn[2]) begin
+				if (slot_rfw[2])
+					rf_source[Rd[2]] <= tails[0];
+			end
+		3'b101:
+			if (queuedOn[0]) begin
+				if (slot_rfw[0])
 					rf_source[Rd[0]] <= tails[0];
+				if (queuedOn[2]) begin
+					if (slot_rfw[2])
+						rf_source[Rd[2]] <= tails[1];
+				end
+			end
+		3'b110:
+			if (queuedOn[1]) begin
+				if (slot_rfw[1])
+					rf_source[Rd[1]] <= tails[0];
+				if (queuedOn[2]) begin
+					if (slot_rfw[2])
+						rf_source[Rd[2]] <= tails[1];
 				end
 			end
 		3'b111:
-			if (queuedCnt==3'd3) begin
+			if (queuedOn[0]) begin
 				if (slot_rfw[0])
 					rf_source[Rd[0]] <= tails[0];
-				if (!(slot_jc[0]|take_branch[0])) begin
+				if (queuedOn[1]) begin
 					if (slot_rfw[1])
 						rf_source[Rd[1]] <= tails[1];
-					if (!(slot_jc[2]|take_branch[2])) begin
+					if (queuedOn[2]) begin
 						if (slot_rfw[2])
 							rf_source[Rd[2]] <= tails[2];
 					end
 				end
-			end
-			else if (queuedCnt==3'd2) begin
-				if (slot_rfw[0])
-					rf_source[Rd[0]] <= tails[0];
-				if (!(slot_jc[0]|take_branch[0])) begin
-					if (slot_rfw[1])
-						rf_source[Rd[1]] <= tails[1];
-				end
-			end
-			else if (queuedCnt==3'd1) begin
-				if (slot_rfw[0])
-					rf_source[Rd[0]] <= tails[0];
 			end
 		endcase
 	end

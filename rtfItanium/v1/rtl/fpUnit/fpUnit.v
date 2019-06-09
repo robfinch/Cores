@@ -30,6 +30,7 @@
 // 31'h7FC00003    - zero / zero
 // 31'h7FC00004    - infinity X zero
 // 31'h7FC00005    - square root of infinity
+// 31'h7FC00006		 - square root of negative number
 //
 // Whenever the fpu encounters a NaN input, the NaN is
 // passed through to the output.

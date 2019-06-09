@@ -898,7 +898,7 @@ casez({instr[32:31],instr[`OPCODE4]})
 	    `NOR:   o = ~or64;
 	    `XNOR:  o = ~xor64;
 	    `SEI:   o = a | instr[21:16];
-	    `RTI:   o = a | instr[21:16];
+	    `BMISC: o = a | instr[21:16];
 	    `MUX:       for (n = 0; n < DBW; n = n + 1)
 	                    o[n] <= a[n] ? b[n] : c[n];
 	    `MULU,`MUL:

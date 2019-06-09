@@ -53,8 +53,9 @@
 `define RET			4'hB
 `define CHKI		4'hC
 `define CHK			4'hD
-`define RTI			4'hE
+`define BMISC		4'hE
 `define BRK			4'hF
+`define RTI			5'h00
 `define PFI			5'h01
 `define REX			5'h01
 `define SYNC		5'h02

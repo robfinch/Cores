@@ -130,6 +130,7 @@ reg [AMSB:0] rip;
 reg [AMSB:0] ra;		// return address - predicted
 reg [2:0] ip_mask, ip_maskd;
 reg [AMSB:0] missip, excmissip;
+wire freezeip;
 reg [1:0] slot;
 wire [AMSB:0] slot0ip = {ip[AMSB:4],4'h0};
 wire [AMSB:0] slot1ip = {ip[AMSB:4],4'h5};
@@ -1084,11 +1085,8 @@ regfile_valid urfv1
 (
 	.rst(rst_i),
 	.clk(clk),
-	.phit(phit),
-	.ip_mask(ip_mask),
 	.slotvd(slotvd),
 	.slot_rfw(slot_rfw),
-	.slot_jc(slot_jc),
 	.tails(tails),
 	.livetarget(livetarget),
 	.branchmiss(branchmiss),
@@ -1102,9 +1100,8 @@ regfile_valid urfv1
 	.iq_source(iq_source),
 	.take_branch(take_branch),
 	.Rd(Rd),
-	.queuedCnt(queuedCnt),
-	.rf_v(rf_v),
-	.debug_on(debug_on)
+	.queuedOn(queuedOnp),
+	.rf_v(rf_v)
 );
 
 regfile_source urfs1
@@ -1113,18 +1110,13 @@ regfile_source urfs1
 	.clk(clk),
 	.branchmiss(branchmiss),
 	.slotvd(slotvd),
-	.phit(phit),
-	.ip_mask(ip_mask),
-	.queuedCnt(queuedCnt),
 	.slot_rfw(slot_rfw),
-	.slot_jc(slot_jc),
-	.take_branch(take_branch),
+	.queuedOn(queuedOnp),
 	.Rd(Rd),
 	.tails(tails),
 	.iq_latestID(iq_latestID),
 	.iq_tgt(iq_tgt),
-	.rf_source(rf_source),
-	.debug_on(debug_on)
+	.rf_source(rf_source)
 );
 
 Regfile urf1
@@ -1941,7 +1933,7 @@ case(unit)
 	`CALL:	fnRd = 7'd61;
 	`JAL:		fnRd = {1'b0,ins[`RD]};
 	`RET:		fnRd = {1'b0,ins[`RD]};
-	`RTI:		fnRd = ins[39:35]==`SEI ? {1'b0,ins[`RD]} : 7'd0;
+	`BMISC:	fnRd = ins[39:35]==`SEI ? {1'b0,ins[`RD]} : 7'd0;
 	default:	fnRd = 7'd0;
 	endcase
 `IUnit:	fnRd = {1'b0,ins[`RD]};
@@ -2053,9 +2045,10 @@ case(unit)
 	`RET:	Source1Valid = isn[`RS1]==6'd0;
 	`JMP:		Source1Valid = TRUE;
 	`CALL:	Source1Valid = TRUE;
-	`RTI:
-		case(isn[39:35])
-		5'd0:	Source1Valid = isn[`RS1]==6'd0;
+	`BMISC:
+		case(isn[`FUNCT5])
+		`RTI:	Source1Valid = isn[`RS1]==6'd0;
+		`SEI:	Source1Valid = isn[`RS1]==6'd0;
 		`REX:	Source1Valid = isn[`RS1]==6'd0;
 		default: Source1Valid = TRUE;
 		endcase
@@ -2119,9 +2112,9 @@ case(unit)
 	`RET:		Source2Valid = isn[`RS2]==6'd0;
 	`JMP:		Source2Valid = TRUE;
 	`CALL:	Source2Valid = TRUE;
-	`RTI:
-		case(isn[39:35])
-		5'd0:	Source2Valid = TRUE;
+	`BMISC:
+		case(isn[`FUNCT5])
+		`RTI:	Source2Valid = TRUE;
 		`REX:	Source2Valid = TRUE;
 		default: Source2Valid = TRUE;
 		endcase
@@ -2130,7 +2123,7 @@ case(unit)
 `IUnit:	
 	casez({isn[32:31],isn[`OPCODE4]})
 	`R3:
-		case(isn[39:35])
+		case(isn[`FUNCT5])
 		`SHLI:	Source2Valid = TRUE;
 		`ASLI:	Source2Valid = TRUE;
 		`SHRI:	Source2Valid = TRUE;
@@ -2321,7 +2314,7 @@ endfunction
 function IsWait;
 input [2:0] unit;
 input [39:0] isn;
-IsWait = unit==`BUnit && isn[`OPCODE4]==`RTI && isn[`FUNCT5]==`WAIT;
+IsWait = unit==`BUnit && isn[`OPCODE4]==`BMISC && isn[`FUNCT5]==`WAIT;
 endfunction
 
 function IsCall;
@@ -2367,7 +2360,7 @@ endfunction
 function IsSEI;
 input [2:0] unit;
 input [39:0] isn;
-IsSEI = unit==`BUnit && isn[`OPCODE4]==`RTI && isn[`FUNCT5]==`SEI; 
+IsSEI = unit==`BUnit && isn[`OPCODE4]==`BMISC && isn[`FUNCT5]==`SEI; 
 endfunction
 
 function IsRet;
@@ -2385,7 +2378,7 @@ else
 case(unit)
 `BUnit:
 	case(isn[`OPCODE4])
-	`RTI:			IsRFW = isn[`FUNCT5]==`SEI;
+	`BMISC:		IsRFW = isn[`FUNCT5]==`SEI;
 	`JAL:     IsRFW = TRUE;
 	`CALL:    IsRFW = TRUE;  
 	`RET:     IsRFW = TRUE; 
@@ -2480,7 +2473,7 @@ endfunction
 function IsExec;
 input [2:0] unit;
 input [39:0] isn;
-IsExec = unit==`BUnit && (isn[`OPCODE4]==`RTI && isn[`FUNCT5]==`EXEC);
+IsExec = unit==`BUnit && (isn[`OPCODE4]==`BMISC && isn[`FUNCT5]==`EXEC);
 endfunction
 
 function IsPfi;
@@ -2498,7 +2491,7 @@ endfunction
 function IsRti;
 input [2:0] unit;
 input [39:0] isn;
-IsRti = unit==`BUnit && (isn[`OPCODE4]==`RTI && isn[`FUNCT5]==5'd0);
+IsRti = unit==`BUnit && (isn[`OPCODE4]==`BMISC && isn[`FUNCT5]==`RTI);
 endfunction
 
 function IsDivmod;
@@ -2896,24 +2889,28 @@ begin
 assign args_valid[g] =
 		  (iq_argA_v[g] 
 `ifdef FU_BYPASS
-        || (iq_argA_s[g] == alu0_sourceid && alu0_vsn && (~alu0_mem | alu0_push))
-        || ((iq_argA_s[g] == alu1_sourceid && alu1_vsn && (~alu1_mem | alu1_push)) && (`NUM_ALU > 1))
+        || (iq_argA_s[g] == alu0_sourceid && alu0_vsn)
+        || ((iq_argA_s[g] == alu1_sourceid && alu1_vsn) && (`NUM_ALU > 1))
         || ((iq_argA_s[g] == fpu1_sourceid && fpu1_dataready) && (`NUM_FPU > 0))
+        || ((iq_argA_s[g] == fpu2_sourceid && fpu2_dataready) && (`NUM_FPU > 1))
 `endif
         )
     && (iq_argB_v[g] || iq_mem[g]	// a2 does not need to be valid immediately for a mem op (agen), it is checked by iq_memready logic
 `ifdef FU_BYPASS
-        || (iq_argB_s[g] == alu0_sourceid && alu0_vsn && (~alu0_mem | alu0_push))
-        || ((iq_argB_s[g] == alu1_sourceid && alu1_vsn && (~alu1_mem | alu1_push)) && (`NUM_ALU > 1))
+        || (iq_argB_s[g] == alu0_sourceid && alu0_vsn)
+        || ((iq_argB_s[g] == alu1_sourceid && alu1_vsn) && (`NUM_ALU > 1))
         || ((iq_argB_s[g] == fpu1_sourceid && fpu1_dataready) && (`NUM_FPU > 0))
+        || ((iq_argB_s[g] == fpu2_sourceid && fpu2_dataready) && (`NUM_FPU > 1))
 `endif
         )
     && (iq_argC_v[g] 
         || (iq_mem[g] & ~iq_agen[g] & ~iq_memndx[g])    // a3 needs to be valid for indexed instruction
 //        || (iq_mem[g] & ~iq_agen[g])
 `ifdef FU_BYPASS
-        || (iq_argC_s[g] == alu0_sourceid && alu0_vsn && (~alu0_mem | alu0_push))
-        || ((iq_argC_s[g] == alu1_sourceid && alu1_vsn && (~alu1_mem | alu1_push)) && (`NUM_ALU > 1))
+        || (iq_argC_s[g] == alu0_sourceid && alu0_vsn)
+        || ((iq_argC_s[g] == alu1_sourceid && alu1_vsn) && (`NUM_ALU > 1))
+        || ((iq_argC_s[g] == fpu1_sourceid && fpu1_dataready) && (`NUM_FPU > 0))
+        || ((iq_argC_s[g] == fpu2_sourceid && fpu2_dataready) && (`NUM_FPU > 1))
 `endif
         )
     ;
@@ -3635,7 +3632,7 @@ wire will_clear_branchmiss = branchmiss && (
 always @*
 begin
 case(fcu_instr[`OPCODE4])
-`RTI:	fcu_missip = fcu_ipc;		// RTI (we don't bother fully decoding this as it's the only R2)
+`BMISC:	fcu_missip = fcu_ipc;		// RTI (we don't bother fully decoding this as it's the only R2)
 `RET:	fcu_missip = fcu_argB;
 `REX:	fcu_missip = fcu_bus;
 `BRK:	fcu_missip = {tvec[0][AMSB:8], 1'b0, olm, 5'h0};
@@ -4540,6 +4537,26 @@ if (`NUM_MEM > 1 && dramB_v && iq_v[ dramB_id[`QBITS] ]) begin
 	iq_aq  [ dramB_id[`QBITS] ] <= `INV;
 end
 
+if (wb_q0_done) begin
+	dram0 <= `DRAMREQ_READY;
+	iq_state[ dram0_id[`QBITS] ] <= IQS_DONE;
+end
+if (wb_q1_done) begin
+	dram1 <= `DRAMREQ_READY;
+	iq_state[ dram1_id[`QBITS] ] <= IQS_DONE;
+end
+
+if (update_iq) begin
+	for (n = 0; n < QENTRIES; n = n + 1) begin
+		if (uid[n]) begin
+      iq_exc[n] <= wb_fault;
+     	iq_state[n] <= IQS_CMT;
+			iq_aq[n] <= `INV;
+		end
+	end
+end
+
+
 //
 // see if anybody else wants the results ... look at lots of buses:
 //  - fpu_bus
@@ -4579,25 +4596,6 @@ begin
 		setargs(n,dramB_id,dramB_v,rdramB_bus);
 end
 
-	if (wb_q0_done) begin
-		dram0 <= `DRAMREQ_READY;
-		iq_state[ dram0_id[`QBITS] ] <= IQS_DONE;
-	end
-	if (wb_q1_done) begin
-		dram1 <= `DRAMREQ_READY;
-		iq_state[ dram1_id[`QBITS] ] <= IQS_DONE;
-	end
-
-	if (update_iq) begin
-		for (n = 0; n < QENTRIES; n = n + 1) begin
-			if (uid[n]) begin
-	      iq_exc[n] <= wb_fault;
-	     	iq_state[n] <= IQS_CMT;
-				iq_aq[n] <= `INV;
-			end
-		end
-	end
-
 // X's on unused busses cause problems in SIM.
     for (n = 0; n < QENTRIES; n = n + 1)
         if (iq_alu0_issue[n] && !(iq_v[n] && iq_stomp[n])) begin
@@ -4623,34 +4621,55 @@ end
                  alu0_push  <= iq_push[n];
                  alu0_shft <= iq_shft[n];
                  alu0_ip		<= iq_ip[n];
-                 alu0_argA	<=
-`ifdef FU_BYPASS                  
-                 							iq_argA_v[n] ? iq_argA[n]
-                            : (iq_argA_s[n] == alu0_id) ? ralu0_bus
-                            : (iq_argA_s[n] == alu1_id) ? ralu1_bus
-                            : (iq_argA_s[n] == fpu1_id && `NUM_FPU > 0) ? rfpu1_bus
-                            : 64'hDEADDEADDEADDEAD;
+                 // Agen output is not bypassed since there's only one
+                 // instruction (LEA) to bypass for.
+`ifdef FU_BYPASS
+								 if (iq_argA_v[n])
+								 	 alu0_argA <= iq_argA[n];
+								 else
+	                 case(iq_argA_s[n])
+	                 alu0_id:	alu0_argA <= ralu0_bus;
+	                 alu1_id:	alu0_argA <= ralu1_bus;
+	                 fpu1_id:	alu0_argA <= rfpu1_bus;
+	                 fpu2_id:	alu0_argA <= rfpu2_bus;
+	                 default:	alu0_argA <= 80'hDEADDEADDEADDEADDEAD;
+	                 endcase
 `else
-														iq_argA[n];                            
-`endif                            
-                 alu0_argB	<= iq_imm[n]
-                            ? iq_argI[n]
-`ifdef FU_BYPASS                            
-                            : (iq_argB_v[n] ? iq_argB[n]
-                            : (iq_argB_s[n] == alu0_id) ? ralu0_bus 
-                            : (iq_argB_s[n] == alu1_id) ? ralu1_bus 
-                            : (iq_argB_s[n] == fpu1_id && `NUM_FPU > 0) ? rfpu1_bus
-                            : 64'hDEADDEADDEADDEAD);
+								alu0_argA <= iq_argA[n];               
+`endif                 
+`ifdef FU_BYPASS
+								if (iq_imm[n])
+									alu0_argB <= iq_argI[n];
+								else if (iq_argB_v[n])
+									alu0_argB <= iq_argB[n];
+								else
+									case(iq_argB_s[n])
+									alu0_id:	alu0_argB <= ralu0_bus;
+									alu1_id:	alu0_argB <= ralu1_bus;
+									fpu1_id:	alu0_argB <= rfpu1_bus;
+									fpu2_id:	alu0_argB <= rfpu2_bus;
+									default:	alu0_argB <= 80'hDEADDEADDEADDEADDEAD;
+									endcase
 `else
-														: iq_argB[n];                         
-`endif                            
-                 alu0_argC	<=
-`ifdef FU_BYPASS                  
-                 							iq_argC_v[n] ? iq_argC[n]
-                            : (iq_argC_s[n] == alu0_id) ? ralu0_bus : ralu1_bus;
+								if (iq_imm[n])
+									alu0_argB <= iq_argI[n];
+								else
+									alu0_argB <= iq_argB[n];
+`endif
+`ifdef FU_BYPASS
+								 if (iq_argC_v[n])
+								 	alu0_argC <= iq_argC[n];
+								 else
+	                 case(iq_argC_s[n])
+	                 alu0_id:	alu0_argC <= ralu0_bus;
+	                 alu1_id:	alu0_argC <= ralu1_bus;
+	                 fpu1_id:	alu0_argC <= rfpu1_bus;
+	                 fpu2_id:	alu0_argC <= rfpu2_bus;
+	                 default:	alu0_argC <= 80'hDEADDEADDEADDEADDEAD;
+	                 endcase
 `else
-															iq_argC[n];                            
-`endif                            
+								alu0_argC <= iq_argC[n];
+`endif                 
                  alu0_argI	<= iq_argI[n];
                  alu0_tgt    <= iq_tgt[n];
                  alu0_dataready <= IsSingleCycle(`IUnit,iq_instr[n]);
@@ -4672,34 +4691,53 @@ end
                  alu1_push  <= iq_push[n];
                  alu1_shft  <= iq_shft[n];
                  alu1_ip		<= iq_ip[n];
-                 alu1_argA	<=
-`ifdef FU_BYPASS                  
-                 							iq_argA_v[n] ? iq_argA[n]
-                            : (iq_argA_s[n] == alu0_id) ? ralu0_bus
-                            : (iq_argA_s[n] == alu1_id) ? ralu1_bus
-                            : (iq_argA_s[n] == fpu1_id && `NUM_FPU > 0) ? rfpu1_bus
-                            : 64'hDEADDEADDEADDEAD;
+`ifdef FU_BYPASS
+								 if (iq_argA_v[n])
+								 	 alu1_argA <= iq_argA[n];
+								 else
+	                 case(iq_argA_s[n])
+	                 alu0_id:	alu1_argA <= ralu0_bus;
+	                 alu1_id:	alu1_argA <= ralu1_bus;
+	                 fpu1_id:	alu1_argA <= rfpu1_bus;
+	                 fpu2_id:	alu1_argA <= rfpu2_bus;
+	                 default:	alu1_argA <= 80'hDEADDEADDEADDEADDEAD;
+	                 endcase
 `else
-															iq_argA[n];                            
-`endif                           
-                 alu1_argB	<= iq_imm[n]
-                            ? iq_argI[n]
-`ifdef FU_BYPASS                           
-                            : (iq_argB_v[n] ? iq_argB[n]
-                            : (iq_argB_s[n] == alu0_id) ? ralu0_bus 
-                            : (iq_argB_s[n] == alu1_id) ? ralu1_bus 
-                            : (iq_argB_s[n] == fpu1_id && `NUM_FPU > 0) ? rfpu1_bus
-                            : 64'hDEADDEADDEADDEAD);
+								alu1_argA <= iq_argA[n];               
+`endif                 
+`ifdef FU_BYPASS
+								if (iq_imm[n])
+									alu1_argB <= iq_argI[n];
+								else if (iq_argB_v[n])
+									alu1_argB <= iq_argB[n];
+								else
+									case(iq_argB_s[n])
+									alu0_id:	alu1_argB <= ralu0_bus;
+									alu1_id:	alu1_argB <= ralu1_bus;
+									fpu1_id:	alu1_argB <= rfpu1_bus;
+									fpu2_id:	alu1_argB <= rfpu2_bus;
+									default:	alu1_argB <= 80'hDEADDEADDEADDEADDEAD;
+									endcase
 `else
-														: iq_argB[n];
-`endif                            
-                 alu1_argC	<=
-`ifdef FU_BYPASS                 	
-                 							iq_argC_v[n] ? iq_argC[n]
-                            : (iq_argC_s[n] == alu0_id) ? ralu0_bus : ralu1_bus;
-`else                            
-															iq_argC[n];
-`endif                            
+								if (iq_imm[n])
+									alu1_argB <= iq_argI[n];
+								else
+									alu1_argB <= iq_argB[n];
+`endif
+`ifdef FU_BYPASS
+								 if (iq_argC_v[n])
+								 	alu1_argC <= iq_argC[n];
+								 else
+	                 case(iq_argC_s[n])
+	                 alu0_id:	alu1_argC <= ralu0_bus;
+	                 alu1_id:	alu1_argC <= ralu1_bus;
+	                 fpu1_id:	alu1_argC <= rfpu1_bus;
+	                 fpu2_id:	alu1_argC <= rfpu2_bus;
+	                 default:	alu1_argC <= 80'hDEADDEADDEADDEADDEAD;
+	                 endcase
+`else
+								alu1_argC <= iq_argC[n];
+`endif                 
                  alu1_argI	<= iq_argI[n];
                  alu1_tgt    <= iq_tgt[n];
                  alu1_dataready <= IsSingleCycle(`IUnit,iq_instr[n]);
@@ -4718,30 +4756,42 @@ end
                  agen0_instr	<= iq_instr[n];
                  agen0_lea  <= iq_lea[n];
                  agen0_push <= iq_push[n];
-                 agen0_argA	<=
-`ifdef FU_BYPASS                  
-                 							iq_argA_v[n] ? iq_argA[n]
-                            : (iq_argA_s[n] == alu0_id) ? ralu0_bus
-                            : (iq_argA_s[n] == alu1_id) ? ralu1_bus
-                            : (iq_argA_s[n] == fpu1_id && `NUM_FPU > 0) ? rfpu1_bus
-                            : 64'hDEADDEADDEADDEAD;
+`ifdef FU_BYPASS
+								 if (iq_argA_v[n])
+								 	 agen0_argA <= iq_argA[n];
+								 else
+	                 case(iq_argA_s[n])
+	                 alu0_id:	agen0_argA <= ralu0_bus;
+	                 alu1_id:	agen0_argA <= ralu1_bus;
+	                 fpu1_id:	agen0_argA <= rfpu1_bus;
+	                 fpu2_id:	agen0_argA <= rfpu2_bus;
+	                 default:	agen0_argA <= 80'hDEADDEADDEADDEADDEAD;
+	                 endcase
 `else
-														iq_argA[n];                            
-`endif                            
-                 agen0_argB	<= iq_argB[n];	// ArgB not used by agen
-                 agen0_argC	<=
-`ifdef FU_BYPASS                  
-                 							iq_argC_v[n] ? iq_argC[n]
-                            : (iq_argC_s[n] == alu0_id) ? ralu0_bus : ralu1_bus;
+								agen0_argA <= iq_argA[n];
+`endif                 
+//                 agen0_argB	<= iq_argB[n];	// ArgB not used by agen
+`ifdef FU_BYPASS
+								 if (iq_argC_v[n])
+								 	agen0_argC <= iq_argC[n];
+								 else
+	                 case(iq_argC_s[n])
+	                 alu0_id:	agen0_argC <= ralu0_bus;
+	                 alu1_id:	agen0_argC <= ralu1_bus;
+	                 fpu1_id:	agen0_argC <= rfpu1_bus;
+	                 fpu2_id:	agen0_argC <= rfpu2_bus;
+	                 default:	agen0_argC <= 80'hDEADDEADDEADDEADDEAD;
+	                 endcase
 `else
-															iq_argC[n];                            
-`endif                            
+								agen0_argC <= iq_argC[n];
+`endif                 
                  agen0_tgt    <= iq_tgt[n];
                  agen0_dataready <= 1'b1;
                  iq_state[n] <= IQS_OUT;
             end
         end
 
+	if (`NUM_AGEN > 1) begin
     for (n = 0; n < QENTRIES; n = n + 1)
         if (iq_agen1_issue[n] && !(iq_v[n] && iq_stomp[n])) begin
             if (1'b1) begin
@@ -4751,69 +4801,103 @@ end
                  agen1_instr	<= iq_instr[n];
                  agen1_lea  <= iq_lea[n];
                  agen1_push <= iq_push[n];
-                 agen1_argA	<=
-`ifdef FU_BYPASS                  
-                 							iq_argA_v[n] ? iq_argA[n]
-                            : (iq_argA_s[n] == alu0_id) ? ralu0_bus
-                            : (iq_argA_s[n] == alu1_id) ? ralu1_bus
-                            : (iq_argA_s[n] == fpu1_id && `NUM_FPU > 0) ? rfpu1_bus
-                            : 64'hDEADDEADDEADDEAD;
+`ifdef FU_BYPASS
+								 if (iq_argA_v[n])
+								 	 agen1_argA <= iq_argA[n];
+								 else
+	                 case(iq_argA_s[n])
+	                 alu0_id:	agen1_argA <= ralu0_bus;
+	                 alu1_id:	agen1_argA <= ralu1_bus;
+	                 fpu1_id:	agen1_argA <= rfpu1_bus;
+	                 fpu2_id:	agen1_argA <= rfpu2_bus;
+	                 default:	agen1_argA <= 80'hDEADDEADDEADDEADDEAD;
+	                 endcase
 `else
-														iq_argA[n];                            
-`endif                            
-                 agen1_argB	<= iq_argB[n];	// ArgB not used by agen
-                 agen1_argC	<=
-`ifdef FU_BYPASS                  
-                 							iq_argC_v[n] ? iq_argC[n]
-                            : (iq_argC_s[n] == alu1_id) ? ralu1_bus : ralu1_bus;
+								agen1_argA <= iq_argA[n];
+`endif                 
+//                 agen1_argB	<= iq_argB[n];	// ArgB not used by agen
+`ifdef FU_BYPASS
+								 if (iq_argC_v[n])
+								 	agen1_argC <= iq_argC[n];
+								 else
+	                 case(iq_argC_s[n])
+	                 alu0_id:	agen1_argC <= ralu0_bus;
+	                 alu1_id:	agen1_argC <= ralu1_bus;
+	                 fpu1_id:	agen1_argC <= rfpu1_bus;
+	                 fpu2_id:	agen1_argC <= rfpu2_bus;
+	                 default:	agen1_argC <= 80'hDEADDEADDEADDEADDEAD;
+	                 endcase
 `else
-															iq_argC[n];                            
-`endif                            
+								agen1_argC <= iq_argC[n];
+`endif                 
                  agen1_tgt    <= iq_tgt[n];
                  agen1_dataready <= 1'b1;
                  iq_state[n] <= IQS_OUT;
             end
         end
+  end
 
+	if (`NUM_FPU > 0) begin
     for (n = 0; n < QENTRIES; n = n + 1)
         if (iq_fpu1_issue[n] && !(iq_v[n] && iq_stomp[n])) begin
             if (fpu1_available & fpu1_done) begin
                  fpu1_sourceid	<= n[`QBITS];
                  fpu1_instr	<= iq_instr[n];
                  fpu1_ip		<= iq_ip[n];
-                 fpu1_argA	<=
-`ifdef FU_BYPASS                  
-                 							iq_argA_v[n] ? iq_argA[n]
-                            : (iq_argA_s[n] == alu0_id) ? ralu0_bus 
-                            : (iq_argA_s[n] == alu1_id) ? ralu1_bus 
-                            : (iq_argA_s[n] == fpu1_id && `NUM_FPU > 0) ? rfpu1_bus
-                            : 64'hDEADDEADDEADDEAD;
+`ifdef FU_BYPASS
+								 if (iq_argA_v[n])
+								 	 fpu1_argA <= iq_argA[n];
+								 else
+	                 case(iq_argA_s[n])
+	                 alu0_id:	fpu1_argA <= ralu0_bus;
+	                 alu1_id:	fpu1_argA <= ralu1_bus;
+	                 fpu1_id:	fpu1_argA <= rfpu1_bus;
+	                 fpu2_id:	fpu1_argA <= rfpu2_bus;
+	                 default:	fpu1_argA <= 80'hDEADDEADDEADDEADDEAD;
+	                 endcase
 `else
-															iq_argA[n];                          
-`endif                            
-                 fpu1_argB	<=
-`ifdef FU_BYPASS                  
-                 							(iq_argB_v[n] ? iq_argB[n]
-                            : (iq_argB_s[n] == alu0_id) ? ralu0_bus 
-                            : (iq_argB_s[n] == alu1_id) ? ralu1_bus 
-                            : (iq_argB_s[n] == fpu1_id && `NUM_FPU > 0) ? rfpu1_bus
-                            : 64'hDEADDEADDEADDEAD);
+								fpu1_argA <= iq_argA[n];               
+`endif                 
+`ifdef FU_BYPASS
+								if (iq_imm[n])
+									fpu1_argB <= iq_argI[n];
+								else if (iq_argB_v[n])
+									fpu1_argB <= iq_argB[n];
+								else
+									case(iq_argB_s[n])
+									alu0_id:	fpu1_argB <= ralu0_bus;
+									alu1_id:	fpu1_argB <= ralu1_bus;
+									fpu1_id:	fpu1_argB <= rfpu1_bus;
+									fpu2_id:	fpu1_argB <= rfpu2_bus;
+									default:	fpu1_argB <= 80'hDEADDEADDEADDEADDEAD;
+									endcase
 `else
-															iq_argB[n];
-`endif                            
-                 fpu1_argC	<=
-`ifdef FU_BYPASS                 
-                 							 iq_argC_v[n] ? iq_argC[n]
-                            : (iq_argC_s[n] == alu0_id) ? ralu0_bus : ralu1_bus;
+								if (iq_imm[n])
+									fpu1_argB <= iq_argI[n];
+								else
+									fpu1_argB <= iq_argB[n];
+`endif
+`ifdef FU_BYPASS
+								 if (iq_argC_v[n])
+								 	fpu1_argC <= iq_argC[n];
+								 else
+	                 case(iq_argC_s[n])
+	                 alu0_id:	fpu1_argC <= ralu0_bus;
+	                 alu1_id:	fpu1_argC <= ralu1_bus;
+	                 fpu1_id:	fpu1_argC <= rfpu1_bus;
+	                 fpu2_id:	fpu1_argC <= rfpu2_bus;
+	                 default:	fpu1_argC <= 80'hDEADDEADDEADDEADDEAD;
+	                 endcase
 `else
-															iq_argC[n];                           
-`endif                            
+								fpu1_argC <= iq_argC[n];
+`endif                 
                  fpu1_argI	<= iq_argI[n];
                  fpu1_dataready <= `VAL;
                  fpu1_ld <= TRUE;
                  iq_state[n] <= IQS_OUT;
             end
         end
+	end
 
     for (n = 0; n < QENTRIES; n = n + 1)
         if (`NUM_FPU > 1 && iq_fpu2_issue[n] && !(iq_v[n] && iq_stomp[n])) begin
@@ -4821,33 +4905,53 @@ end
                  fpu2_sourceid	<= n[`QBITS];
                  fpu2_instr	<= iq_instr[n];
                  fpu2_ip		<= iq_ip[n];
-                 fpu2_argA	<=
-`ifdef FU_BYPASS                  
-                 							iq_argA_v[n] ? iq_argA[n]
-                            : (iq_argA_s[n] == alu0_id) ? ralu0_bus 
-                            : (iq_argA_s[n] == alu1_id) ? ralu1_bus 
-                            : (iq_argA_s[n] == fpu1_id && `NUM_FPU > 0) ? rfpu1_bus
-                            : 64'hDEADDEADDEADDEAD;
+`ifdef FU_BYPASS
+								 if (iq_argA_v[n])
+								 	 fpu2_argA <= iq_argA[n];
+								 else
+	                 case(iq_argA_s[n])
+	                 alu0_id:	fpu2_argA <= ralu0_bus;
+	                 alu1_id:	fpu2_argA <= ralu1_bus;
+	                 fpu1_id:	fpu2_argA <= rfpu1_bus;
+	                 fpu2_id:	fpu2_argA <= rfpu2_bus;
+	                 default:	fpu2_argA <= 80'hDEADDEADDEADDEADDEAD;
+	                 endcase
 `else
-															iq_argA[n];                          
-`endif                            
-                 fpu2_argB	<=
-`ifdef FU_BYPASS                  
-                 							(iq_argB_v[n] ? iq_argB[n]
-                            : (iq_argB_s[n] == alu0_id) ? ralu0_bus 
-                            : (iq_argB_s[n] == alu1_id) ? ralu1_bus 
-                            : (iq_argB_s[n] == fpu1_id && `NUM_FPU > 0) ? rfpu1_bus
-                            : 64'hDEADDEADDEADDEAD);
+								fpu2_argA <= iq_argA[n];               
+`endif                 
+`ifdef FU_BYPASS
+								if (iq_imm[n])
+									fpu2_argB <= iq_argI[n];
+								else if (iq_argB_v[n])
+									fpu2_argB <= iq_argB[n];
+								else
+									case(iq_argB_s[n])
+									alu0_id:	fpu2_argB <= ralu0_bus;
+									alu1_id:	fpu2_argB <= ralu1_bus;
+									fpu1_id:	fpu2_argB <= rfpu1_bus;
+									fpu2_id:	fpu2_argB <= rfpu2_bus;
+									default:	fpu2_argB <= 80'hDEADDEADDEADDEADDEAD;
+									endcase
 `else
-															iq_argB[n];
-`endif                            
-                 fpu2_argC	<=
-`ifdef FU_BYPASS                 
-                 							 iq_argC_v[n] ? iq_argC[n]
-                            : (iq_argC_s[n] == alu0_id) ? ralu0_bus : ralu1_bus;
+								if (iq_imm[n])
+									fpu2_argB <= iq_argI[n];
+								else
+									fpu2_argB <= iq_argB[n];
+`endif
+`ifdef FU_BYPASS
+								 if (iq_argC_v[n])
+								 	fpu2_argC <= iq_argC[n];
+								 else
+	                 case(iq_argC_s[n])
+	                 alu0_id:	fpu2_argC <= ralu0_bus;
+	                 alu1_id:	fpu2_argC <= ralu1_bus;
+	                 fpu1_id:	fpu2_argC <= rfpu1_bus;
+	                 fpu2_id:	fpu2_argC <= rfpu2_bus;
+	                 default:	fpu2_argC <= 80'hDEADDEADDEADDEADDEAD;
+	                 endcase
 `else
-															iq_argC[n];                           
-`endif                            
+								fpu2_argC <= iq_argC[n];
+`endif                 
                  fpu2_argI	<= iq_argI[n];
                  fpu2_dataready <= `VAL;
                  fpu2_ld <= TRUE;
@@ -4880,26 +4984,69 @@ end
 				fcu_rex  <= iq_rex[n];
 				fcu_chk  <= iq_chk[n];
 				fcu_wait <= iq_wait[n];
-				fcu_argA	<= iq_argA_v[n] ? iq_argA[n]
-				          : (iq_argA_s[n] == alu0_id) ? ralu0_bus
-				          : (iq_argA_s[n] == alu1_id) ? ralu1_bus
-				          : (iq_argA_s[n] == fpu1_id && `NUM_FPU > 0) ? rfpu1_bus
-				          : ralu1_bus;
-				fcu_ipc  <= ipc0;
-				fcu_argB	<=
-						  (iq_argB_v[n] ? iq_argB[n]
-				          : (iq_argB_s[n] == alu0_id) ? ralu0_bus 
-				          : (iq_argB_s[n] == alu1_id) ? ralu1_bus 
-				          : (iq_argB_s[n] == fpu1_id && `NUM_FPU > 0) ? rfpu1_bus
-				          : ralu1_bus);
-				// argB
-				waitctr  <=  (iq_argB_v[n] ? iq_argB[n][47:0]
-				          : (iq_argB_s[n] == alu0_id) ? ralu0_bus[47:0]
-				          : (iq_argB_s[n] == fpu1_id && `NUM_FPU > 0) ? rfpu1_bus[47:0]
-				          : ralu1_bus[47:0]);
-				fcu_argC	<= iq_argC_v[n] ? iq_argC[n]
-				          : (iq_argC_s[n] == alu0_id) ? ralu0_bus : ralu1_bus;
+`ifdef FU_BYPASS
+				if (iq_argA_v[n])
+					fcu_argA <= iq_argA[n];
+				else
+					case(iq_argA_s[n])
+					alu0_id:	fcu_argA <= ralu0_bus;
+					alu1_id:	fcu_argA <= ralu1_bus;
+					fpu1_id:	fcu_argA <= rfpu1_bus;
+					fpu2_id:	fcu_argA <= rfpu2_bus;
+					default:	fcu_argA <= 80'hDEADDEADDEADDEADDEAD;
+					endcase
+`else
+				fcu_argA <= iq_argA[n];               
+`endif                 
+`ifdef FU_BYPASS
+				if (iq_imm[n])
+					fcu_argB <= iq_argI[n];
+				else if (iq_argB_v[n])
+					fcu_argB <= iq_argB[n];
+				else
+					case(iq_argB_s[n])
+					alu0_id:	fcu_argB <= ralu0_bus;
+					alu1_id:	fcu_argB <= ralu1_bus;
+					fpu1_id:	fcu_argB <= rfpu1_bus;
+					fpu2_id:	fcu_argB <= rfpu2_bus;
+					default:	fcu_argB <= 80'hDEADDEADDEADDEADDEAD;
+					endcase
+`else
+				if (iq_imm[n])
+					fcu_argB <= iq_argI[n];
+				else
+					fcu_argB <= iq_argB[n];
+`endif
+`ifdef FU_BYPASS
+				if (iq_argC_v[n])
+					fcu_argC <= iq_argC[n];
+				else
+					case(iq_argC_s[n])
+					alu0_id:	fcu_argC <= ralu0_bus;
+					alu1_id:	fcu_argC <= ralu1_bus;
+					fpu1_id:	fcu_argC <= rfpu1_bus;
+					fpu2_id:	fcu_argC <= rfpu2_bus;
+					default:	fcu_argC <= 80'hDEADDEADDEADDEADDEAD;
+					endcase
+`else
+				fcu_argC <= iq_argC[n];
+`endif                 
 				fcu_argI	<= iq_argI[n];
+				fcu_ipc  <= ipc0;
+`ifdef FU_BYPASS
+				if (iq_argB_v[n])
+					waitctr <= iq_argB[n][47:0];
+				else
+					case(iq_argB_s[n])
+					alu0_id:	waitctr <= ralu0_bus[47:0];
+					alu1_id:	waitctr <= ralu1_bus[47:0];
+					fpu1_id:	waitctr <= rfpu1_bus[47:0];
+					fpu2_id:	waitctr <= rfpu2_bus[47:0];
+					default:	waitctr <= 48'hDEADDEADDEAD;
+					endcase
+`else
+				waitctr <= iq_argB[n][47:0];
+`endif
 				fcu_dataready <= !IsWait(`BUnit,iq_instr[n]);
 				fcu_clearbm <= `FALSE;
 				fcu_ld <= TRUE;
@@ -6172,10 +6319,10 @@ begin
               dbg_ctrl[63] <= FALSE;
 `endif                    
             end
-           `RTI:
+           `BMISC:
             case(iq_instr[head][`FUNCT5])
             `SEI:   mstatus[3:0] <= iq_res[head][3:0];   // S1
-            5'd0:   begin
+            `RTI:   begin
 		            excmiss <= TRUE;
 	    					excmissip <= iq_ma[head];
 //            		excmissip <= ipc0;

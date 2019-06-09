@@ -45,10 +45,10 @@
 #define I_DIVI	0x22
 #define I_SHL		0x32
 #define I_SHLI	0x38
-#define I_SHR		0x33
-#define I_SHRI	0x39
-#define I_ASL		0x34
-#define I_ASLI	0x3A
+#define I_ASL		0x33
+#define I_ASLI	0x39
+#define I_SHR		0x34
+#define I_SHRI	0x3A
 #define I_ASR		0x35
 #define I_ASRI	0x3B
 #define I_ROL		0x36
@@ -256,7 +256,7 @@ static int regCnst;
 #define FMT(x)	(((x) & 15LL)<<31LL)
 #define RM(x)		(((x) & 7LL) << 28LL)
 #define FLT3(x)	(((x) & 0x3fLL) << 22LL)
-#define BT(x)		(((x) >> 2LL) << 22LL)
+#define BT(x)		((((x) >> 4LL) << 24LL)|((((x) & 15L)>>2LL)<<22LL))
 
 bool TmpUsed[125];
 __int8 TmpTbl[125][3] =
@@ -2452,6 +2452,7 @@ static void process_beqi(int64_t opcode6, int64_t opcode3)
   Int128 val, imm;
   Int128 disp;
 	Int128 ca;
+	int64_t s2;
 	int sz = 3;
 	int ins48 = 0;
 	char *p;
@@ -2481,9 +2482,12 @@ static void process_beqi(int64_t opcode6, int64_t opcode3)
 		);
 		return;
 	}
+	s2 = val.low & 15L;
+	val.low &= 0xfffffffffffffff0L;
+	ca.low &= 0xfffffffffffffff0L;
 	Int128::Sub(&disp, &val, &ca);
 	emit_insn(
-		BT(((disp.low & 0xfffffffffffffff0L) + (((disp.low & 15L) != 0)<<4L)) | (val.low & 15L)) |
+		BT((disp.low & 0xfffffffffffffff0L) | s2) |
 		(((imm.low >> 3LL) & 0x3FLL) << 16LL) |
 		(imm.low & 7LL) |
 		RA(Ra) |
@@ -2519,6 +2523,7 @@ static void process_bcc()
 	int fmt;
 	Int128 val, ca4, ca2;
 	Int128 disp, ca;
+	int64_t s2;
 	char *p1, *p2;
 	int encode;
 	int ins48 = 0;
@@ -2549,6 +2554,9 @@ static void process_bcc()
 	else
 		Int128::Assign(&val, Int128::Zero());
 	ca = Int128(code_address);
+	s2 = val.low & 15L;
+	val.low &= 0xfffffffffffffff0L;
+	ca.low &= 0xfffffffffffffff0L;
 	Int128::Sub(&disp, &val, &ca);
 	if (Rc == -1) {
 		if (!IsNBit128(val, *Int128::MakeInt128(20LL))) {
@@ -2564,7 +2572,7 @@ static void process_bcc()
 	}
 	if (Rc < 0) {
 		emit_insn(
-			BT(((disp.low & 0xfffffffffffffff0L)+(((disp.low & 15L)!=0)<<4L)) | (val.low & 15L)) |
+			BT((disp.low & 0xfffffffffffffff0L) | s2) |
 			RB(Rb) |
 			RA(Ra) | opcode6
 			, B
@@ -2689,13 +2697,13 @@ static void process_bra(int oc)
 
   NextToken();
   val = expr();
-  disp = val - code_address;
+	disp = (val & 0xfffffffffffffff0L) - (code_address & 0xfffffffffffffff0L);
 	if (!IsNBit(disp, 20LL)) {
 		if (pass > 4)
 			error("Bra target too far away");
 	}
 	emit_insn(
-		BT(((disp & 0xfffffffffffffff0L) + (((disp & 15L) != 0)<<4L)) | (val & 15L)) | 
+		BT((disp & 0xfffffffffffffff0L) | (val & 15L)) | 
 		BT(disp) |
 		OP4(I_Bcc)
     ,B
