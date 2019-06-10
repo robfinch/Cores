@@ -106,6 +106,7 @@
 `define FEX     5'h12
 `define FDX     5'h13
 `define FRM     5'h14
+`define RWHO		5'h15
 `define FCVTDS  5'h19
 
 `define FADD    5'h04
@@ -113,12 +114,13 @@
 `define FCMP    5'h06
 `define FMUL    5'h08
 `define FDIV    5'h09
+`define FREM		5'h0A
 // FLT1A
 `define FRES		5'h00
 
 `include "fp_defines.v"
 
-module fpUnit(rst, clk, clk4x, ce, ir, ld, a, b, imm, o, csr_i, status, exception, done, rm
+module fpUnit(rst, clk, clk4x, ce, ir, ld, a, b, c, imm, o, csr_i, status, exception, done, rm
 );
 
 parameter WID = 64;
@@ -160,6 +162,7 @@ input [39:0] ir;
 input ld;
 input [MSB:0] a;
 input [MSB:0] b;
+input [MSB:0] c;
 input [5:0] imm;
 output tri [MSB:0] o;
 input [31:0] csr_i;
@@ -169,7 +172,10 @@ output done;
 input [2:0] rm;
 
 reg [7:0] fpcnt;
-assign done = fpcnt==8'h00;
+wire rem_done;
+wire rem_ld;
+wire op_done = fpcnt==8'h00;
+assign done = op_done & rem_done;
 
 //------------------------------------------------------------
 // constants
@@ -188,10 +194,38 @@ wire nsos;
 wire isNan,isNans;
 wire nanx,nanxs;
 
-// Decode fp operation
-wire [3:0] op4 = ir[9:6];
+wire latch_res;
+wire [3:0] op4_r;
+wire [5:0] func6b_r;
+wire [2:0] srca;
+wire [2:0] srcb;
+wire [3:0] op4_i = ir[9:6];
 wire [5:0] op = ir[5:0];
-wire [4:0] func6b = ir[39:35];
+wire [4:0] func6b_i = ir[39:35];
+wire fprem = {op4_i,func6b_i} == {`FLT2,`FREM};
+wire [3:0] op4 = fprem ? op4_r : op4_i;
+wire [5:0] func6b = fprem ? func6b_r : func6b_i;
+wire [2:0] insn_rm = ir[30:28];
+reg [WID-1:0] res;
+reg [WID-1:0] aop, bop;
+always @*
+case(srca)
+`RES:	aop <= res;
+default:	aop <= a;
+endcase
+always @*
+case(srcb)
+`RES:			bop <= res;
+`POINT5:
+case(WID)
+32:	bop <= `POINT5S;
+40:	bop <= `POINT5SX;
+64:	bop <= `POINT5D;
+80:	bop <= `POINT5DX;
+endcase
+default:	bop <= b;
+endcase
+
 wire [2:0] prec = 3'd4;//ir[25:24];
 
 wire fstat 	= {op4,func6b} == {`FLT1,`FSTAT};	// get status
@@ -276,6 +310,7 @@ reg infdivx;	// division of infinities
 reg subinfx;	// subtraction of infinities
 reg snanx;		// signalling nan
 
+wire fdivs = 1'b0;
 wire divDone;
 wire pipe_ce = ce;// & divDone;	// divide must be done in order for pipe to clock
 wire precmatch = 1'b0;//WID==32 ? ir[28:27]==2'b00 :
@@ -355,16 +390,16 @@ wire [5:0] fn2;
 wire [MSB:0] zld_o,lood_o;
 wire [31:0] zls_o,loos_o;
 wire [WID-1:0] zlq_o, looq_o;
-fpZLUnit #(WID) u6 (.ir(ir), .a(a), .b(b), .c(c), .o(zlq_o), .nanx(nanx) );
-fpLOOUnit #(WID) u7 (.clk(clk), .ce(pipe_ce), .ir(ir), .a(a), .o(looq_o), .done() );
+fpZLUnit #(WID) u6 (.ir(ir), .op4(op4), .func5(func6b), .a(aop), .b(bop), .c(c), .o(zlq_o), .nanx(nanx) );
+fpLOOUnit #(WID) u7 (.clk(clk), .ce(pipe_ce), .op4(op4), .func5(func6b), .rm(insn_rm==3'b111 ? rm : insn_rm), .a(aop), .o(looq_o), .done() );
 //fpLOOUnit #(32) u7s (.clk(clk), .ce(pipe_ce), .rm(rm), .op(op), .fn(fn), .a(a[31:0]), .o(loos_o), .done() );
 
-fp_decomp #(WID) u1 (.i(a), .sgn(sa), .man(ma), .vz(az), .inf(aInf), .nan(aNan) );
-fp_decomp #(WID) u2 (.i(b), .sgn(sb), .man(mb), .vz(bz), .inf(bInf), .nan(bNan) );
+fp_decomp #(WID) u1 (.i(aop), .sgn(sa), .man(ma), .vz(az), .inf(aInf), .nan(aNan) );
+fp_decomp #(WID) u2 (.i(bop), .sgn(sb), .man(mb), .vz(bz), .inf(bInf), .nan(bNan) );
 //fp_decomp #(32) u1s (.i(a[31:0]), .sgn(sas), .man(mas), .vz(azs), .inf(aInfs), .nan(aNans) );
 //fp_decomp #(32) u2s (.i(b[31:0]), .sgn(sbs), .man(mbs), .vz(bzs), .inf(bInfs), .nan(bNans) );
 
-wire [2:0] rmd = ir[26:24]==3'b111 ? rm : ir[26:24];
+wire [2:0] rmd = ir[30:28]==3'b111 ? rm : ir[30:28];
 delay4 #(3) u3 (.clk(clk), .ce(pipe_ce), .i(rmd), .o(rmd4) );
 delay1 #(6) u4 (.clk(clk), .ce(pipe_ce), .i(func6b), .o(op1) );
 delay2 #(4) u5 (.clk(clk), .ce(pipe_ce), .i(op4), .o(op2) );
@@ -402,18 +437,36 @@ wire [31+3:0] fpns_o;
 wire [EXS:0] fdivs_o;
 wire [EXS:0] fmuls_o;
 wire [EXS:0] fass_o;
+wire [EXS:0] fres_o;
 reg  [EXS:0] fress;
 wire divUnder,divUnders;
 wire mulUnder,mulUnders;
 reg under,unders;
 wire sqrneg;
 
-fpAddsub #(WID) u10(.clk(clk), .ce(pipe_ce), .rm(rmd), .op(func6b[0]), .a(a), .b(b), .o(fas_o) );
-fpDiv    #(WID) u11(.clk(clk), /*.clk4x(clk4x),*/ .ce(pipe_ce), .ld(ld), .a(a), .b(b), .o(fdiv_o), .sign_exe(), .underflow(divUnder), .done(divDone) );
-fpMul    #(WID) u12(.clk(clk), .ce(pipe_ce),          .a(a), .b(b), .o(fmul_o), .sign_exe(), .inf(), .underflow(mulUnder) );
-fpSqrt	 #(WID) u13(.rst(rst), .clk(clk4x), .ce(pipe_ce), .ld(ld), .a(a), .o(fsqrt_o), .done(), .sqrinf(), .sqrneg(sqrneg) );
-fpRes    #(WID) u14(.clk(clk), .ce(pipe_ce), .a(a), .o(fres_o));
+fpAddsub #(WID) u10(.clk(clk), .ce(pipe_ce), .rm(rmd), .op(func6b[0]), .a(aop), .b(bop), .o(fas_o) );
+fpDiv    #(WID) u11(.clk(clk), .clk4x(clk4x), .ce(pipe_ce), .ld(ld|rem_ld), .a(aop), .b(bop), .o(fdiv_o), .sign_exe(), .underflow(divUnder), .done(divDone) );
+fpMul    #(WID) u12(.clk(clk), .ce(pipe_ce),          .a(aop), .b(bop), .o(fmul_o), .sign_exe(), .inf(), .underflow(mulUnder) );
+fpSqrt	 #(WID) u13(.rst(rst), .clk(clk4x), .ce(pipe_ce), .ld(ld), .a(aop), .o(fsqrt_o), .done(), .sqrinf(), .sqrneg(sqrneg) );
+fpRes    #(WID) u14(.clk(clk), .ce(pipe_ce), .a(aop), .o(fres_o));
 
+fpRemainder ufpr1
+(
+	.rst(rst),
+	.clk(clk),
+	.ce(ce),
+	.ld_i(ld),
+	.ld_o(rem_ld),
+	.op4_i(op4_i),
+	.funct6b_i(func6b_i),
+	.op4_o(op4_r),
+	.funct6b_o(func6b_r),
+	.op_done(op_done),
+	.rem_done(rem_done),
+	.srca(srca),
+	.srcb(srcb),
+	.latch_res(latch_res)
+);
 /*
 fpAddsub #(32) u10s(.clk(clk), .ce(pipe_ce), .rm(rm), .op(op[0]), .a(a[31:0]), .b(b[31:0]), .o(fass_o) );
 fpDiv    #(32) u11s(.clk(clk), .ce(pipe_ce), .ld(ld), .a(a[31:0]), .b(b[31:0]), .o(fdivs_o), .sign_exe(), .underflow(divUnders), .done() );
@@ -503,12 +556,15 @@ assign status = {
 	isNan
 	};
 
-assign o = (!fstat) ?
+wire [WID-1:0] o1 = 
     (frm|fcx|fdx|fex) ? (a|imm) :
     zl_op ? zlq_o :
     loo_op ? looq_o : 
-    {so,fpu_o[MSB-1:0]} : 'bz;
+    {so,fpu_o[MSB-1:0]};
 assign zero = fpu_o[MSB-1:0]==0;
+assign o = fprem ? res : o1;
+always @(posedge clk)
+	if (ce & latch_res) res <= o1;
 
 wire [7:0] maxdivcnt;
 generate begin
@@ -518,7 +574,7 @@ if (WID==128) begin
     assign infdiv 	= fpu_o[126:0]==`QINFDIVQ;
     assign zerozero = fpu_o[126:0]==`QZEROZEROQ;
     assign infzero 	= fpu_o[126:0]==`QINFZEROQ;
-    assign maxdivcnt = 8'd64;
+    assign maxdivcnt = 8'd128;
 end
 else if (WID==80) begin
     assign inf = &fpu_o[78:64] && fpu_o[63:0]==0;
@@ -526,7 +582,7 @@ else if (WID==80) begin
     assign infdiv 	= fpu_o[78:0]==`QINFDIVDX;
     assign zerozero = fpu_o[78:0]==`QZEROZERODX;
     assign infzero 	= fpu_o[78:0]==`QINFZERODX;
-    assign maxdivcnt = 8'd40;
+    assign maxdivcnt = 8'd80;
 end
 else if (WID==64) begin
     assign inf      = &fpu_o[62:52] && fpu_o[51:0]==0;
@@ -534,7 +590,7 @@ else if (WID==64) begin
     assign infdiv   = fpu_o[62:0]==`QINFDIVD;
     assign zerozero = fpu_o[62:0]==`QZEROZEROD;
     assign infzero  = fpu_o[62:0]==`QINFZEROD;
-    assign maxdivcnt = 8'd32;
+    assign maxdivcnt = 8'd64;
 end
 else if (WID==32) begin
     assign inf      = &fpu_o[30:23] && fpu_o[22:0]==0;
@@ -542,7 +598,7 @@ else if (WID==32) begin
     assign infdiv   = fpu_o[30:0]==`QINFDIVS;
     assign zerozero = fpu_o[30:0]==`QZEROZEROS;
     assign infzero  = fpu_o[30:0]==`QINFZEROS;
-    assign maxdivcnt = 8'd16;
+    assign maxdivcnt = 8'd32;
 end
 end
 endgenerate
@@ -555,8 +611,8 @@ begin
   if (rst)
     fpcnt <= 8'h00;
   else begin
-  if (ld)
-    case(ir[9:6])
+  if (ld|rem_ld)
+    case(op4)
     `FLT2,`FLT2LI: 
       case(func6b)
       `FCMP:  begin fpcnt <= 8'd0; end
@@ -564,6 +620,7 @@ begin
       `FSUB:  begin fpcnt <= 8'd6; end
       `FMUL:  begin fpcnt <= 8'd6; end
       `FDIV:  begin fpcnt <= maxdivcnt; end
+      `FREM:	fpcnt <= maxdivcnt+8'd23;
       default:    fpcnt <= 8'h00;
       endcase
     `FLT1:
@@ -572,6 +629,7 @@ begin
       `FCVTSD,`FCVTDS:  begin fpcnt <= 8'd0; end
       `FTOI:  begin fpcnt <= 8'd1; end
       `ITOF:  begin fpcnt <= 8'd1; end
+      `RWHO:  begin fpcnt <= 8'd1; end
       `FSQRT: begin fpcnt <= maxdivcnt; end
       default:    fpcnt <= 8'h00;
       endcase
@@ -582,8 +640,12 @@ begin
     	endcase
     default:    fpcnt <= 8'h00;
     endcase
-  else if (!done)
-    fpcnt <= fpcnt - 1;
+  else if (!op_done) begin
+  	if ((op4==`FLT2||op4==`FLT2LI) && func6b==`FDIV && divDone)
+  		fpcnt <= 8'h00;
+  	else
+    	fpcnt <= fpcnt - 1;
+   end
   end
 end
 endmodule

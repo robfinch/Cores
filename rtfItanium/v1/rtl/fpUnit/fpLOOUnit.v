@@ -34,13 +34,16 @@
 `define FLT2		4'h2
 `define FTOI    5'h02
 `define ITOF    5'h03
+`define TRUNC		5'h15
 
 module fpLOOUnit
 #(parameter WID=32)
 (
 	input clk,
 	input ce,
-	input [39:0] ir,
+	input [3:0] op4,
+	input [4:0] func5,
+	input [2:0] rm,
 	input [WID-1:0] a,
 	output reg [WID-1:0] o,
 	output done
@@ -71,25 +74,24 @@ localparam FMSB = WID==128 ? 111 :
 
 wire [WID-1:0] i2f_o;
 wire [WID-1:0] f2i_o;
-wire [3:0] op = ir[9:6];
-wire [4:0] fn = ir[39:35];
-wire [2:0] rm = ir[30:28];
-wire [3:0] prec = ir[34:31];
+wire [WID-1:0] trunc_o;
 
 delay1 u1 (
     .clk(clk),
     .ce(ce),
-    .i((op==`FLT1 && (fn==`ITOF||fn==`FTOI))),
+    .i((op4==`FLT1 && (func5==`ITOF||func5==`FTOI||func5==`TRUNC))),
     .o(done) );
 i2f #(WID)  ui2fs (.clk(clk), .ce(ce), .rm(rm), .i(a), .o(i2f_o) );
 f2i #(WID)  uf2is (.clk(clk), .ce(ce), .i(a), .o(f2i_o) );
+fpTrunc #(WID) urho1 (.clk(clk), .ce(ce), .i(a), .o(trunc_o), .overflow());
 
 always @*
-	case (op)
+	case (op4)
 	`FLT1:
-		case(fn)
+		case(func5)
 		`ITOF:   o <= i2f_o;
 		`FTOI:   o <= f2i_o;
+		`TRUNC:	 o <= trunc_o;
 		default: o <= 0;
 		endcase
 	default:   o <= 0;

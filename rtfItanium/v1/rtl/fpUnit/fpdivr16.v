@@ -33,10 +33,10 @@ input clk;
 input ld;
 input [WID-1:0] a;
 input [WID-1:0] b;
-output reg [WID*2-1:0] q;
-output reg [WID-1:0] r;
-output reg done;
-output reg [7:0] lzcnt = 0;
+output reg [WID*2-1:0] q = 1'd0;
+output reg [WID-1:0] r = 1'd0;
+output reg done = 1'd0;
+output reg [7:0] lzcnt = 1'd0;
 
 initial begin
 	if (WID % 4) begin
@@ -45,24 +45,32 @@ initial begin
 	end
 end
 
-reg [DMSB:0] rxx;
-reg [8:0] cnt;				// iteration count
-reg [DMSB+1:0] ri = 0; 
-wire b0,b1,b2,b3;
-wire [DMSB+1:0] r1,r2,r3,r4;
+wire [7:0] maxcnt;
+reg [DMSB:0] rxx = 1'd0;
+reg [8:0] cnt = 1'd0;				// iteration count
+// Simulation didn't like all the wiring.
+reg [DMSB+1:0] ri = 1'd0; 
+reg b0 = 1'd0,b1 = 1'd0,b2 = 1'd0,b3 = 1'd0;
+reg [DMSB+1:0] r1 = 1'd0,r2 = 1'd0,r3 = 1'd0,r4 = 1'd0;
 reg gotnz = 0;
 
-wire [7:0] maxcnt;
-wire [2:0] n1;
 assign maxcnt = WID*2/4-1;
-assign b0 = b <= {rxx,q[WID*2-1]};
-assign r1 = b0 ? {rxx,q[WID*2-1]} - b : {rxx,q[WID*2-1]};
-assign b1 = b <= {r1,q[WID*2-2]};
-assign r2 = b1 ? {r1,q[WID*2-2]} - b : {r1,q[WID*2-2]};
-assign b2 = b <= {r2,q[WID*2-3]};
-assign r3 = b2 ? {r2,q[WID*2-3]} - b : {r2,q[WID*2-3]};
-assign b3 = b <= {r3,q[WID*2-4]};
-assign r4 = b3 ? {r3,q[WID*2-4]} - b : {r3,q[WID*2-4]};
+always @*
+	b0 = b <= {rxx,q[WID*2-1]};
+always @*
+	r1 = b0 ? {rxx,q[WID*2-1]} - b : {rxx,q[WID*2-1]};
+always @*
+	b1 = b <= {r1,q[WID*2-2]};
+always @*
+	r2 = b1 ? {r1,q[WID*2-2]} - b : {r1,q[WID*2-2]};
+always @*
+	b2 = b <= {r2,q[WID*2-3]};
+always @*
+	r3 = b2 ? {r2,q[WID*2-3]} - b : {r2,q[WID*2-3]};
+always @*
+	b3 = b <= {r3,q[WID*2-4]};
+always @*
+	r4 = b3 ? {r3,q[WID*2-4]} - b : {r3,q[WID*2-4]};
 
 reg [2:0] state = 0;
 
@@ -95,20 +103,20 @@ case(state)
 			4'b0000:	lzcnt <= lzcnt + 8'd4;
 			endcase
 		if ({b0,b1,b2,b3} != 4'h0 && !gotnz) begin
-			gotnz <= 1;
+			gotnz <= 3'd1;
 		end
         rxx <= r4;
-		cnt <= cnt - 1;
+		cnt <= cnt - 3'd1;
 	end
 	else
-		state <= 2;
+		state <= 3'd2;
 3'd2:
 	begin
     	r <= r4;
     	done <= 1'b1;
-    	state <= 0;
+    	state <= 1'd0;
     end
-default:	state <= 0;
+default:	state <= 1'd0;
 endcase
 end
 

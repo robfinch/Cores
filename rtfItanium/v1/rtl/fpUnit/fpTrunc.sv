@@ -1,15 +1,15 @@
-`timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2007-2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	fp_cmp_unit.v
-//    - floating point comparison unit
-//    - parameterized width
-//    - IEEE 754 representation
+//	fpTrunc.v
+//		- convert floating point to integer (chop off fractional bits)
+//		- single cycle latency floating point unit
+//		- parameterized width
+//		- IEEE 754 representation
 //
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -27,10 +27,17 @@
 //                                                                          
 // ============================================================================
 
-module fp_cmp_unit(a, b, o, nanx);
-parameter WID = 32;
+module fpTrunc
+#(	parameter WID = 32)
+(
+	input clk,
+	input ce,
+	input [WID-1:0] i,
+	output reg [WID-1:0] o,
+	output overflow
+);
 localparam MSB = WID-1;
-localparam EMSB = WID==128 ? 14 :
+localparam EMSB = WID==128 ? 14 :  
                   WID==96 ? 14 :
                   WID==80 ? 14 :
                   WID==64 ? 10 :
@@ -53,43 +60,37 @@ localparam FMSB = WID==128 ? 111 :
 				  WID==32 ? 22 :
 				  WID==24 ? 15 : 9;
 
-input [WID-1:0] a, b;
-output [4:0] o;
-reg [4:0] o;
-output nanx;
+integer n;
+wire [MSB:0] maxInt  = {MSB{1'b1}};		// maximum unsigned integer value
+wire [EMSB:0] zeroXp = {EMSB{1'b1}};	// simple constant - value of exp for zero
 
-// Decompose the operands
-wire sa;
-wire sb;
-wire [EMSB:0] xa;
-wire [EMSB:0] xb;
-wire [FMSB:0] ma;
-wire [FMSB:0] mb;
-wire az, bz;
-wire nan_a, nan_b;
+// Decompose fp value
+reg sgn;									// sign
+reg [EMSB:0] exp;
+reg [FMSB:0] man;
+reg [FMSB:0] mask;
 
-fp_decomp #(WID) u1(.i(a), .sgn(sa), .exp(xa), .man(ma), .vz(az), .qnan(), .snan(), .nan(nan_a) );
-fp_decomp #(WID) u2(.i(b), .sgn(sb), .exp(xb), .man(mb), .vz(bz), .qnan(), .snan(), .nan(nan_b) );
+wire [7:0] shamt = FMSB - (exp - zeroXp);
+always @*
+for (n = 0; n <= FMSB; n = n +1)
+	mask[n] = (n > shamt);
 
-wire unordered = nan_a | nan_b;
+always @*	
+	sgn = i[MSB];
+always @*
+	exp = i[MSB-1:FMSB+1];
+always @*
+	if (exp > zeroXp + FMSB)
+		man = i[FMSB:0];
+	else
+		man = i[FMSB:0] & mask;
 
-wire eq = !unordered & ((az & bz) || (a==b));	// special test for zero
-wire gt1 = {xa,ma} > {xb,mb};
-wire lt1 = {xa,ma} < {xb,mb};
-
-wire lt = sa ^ sb ? sa & !(az & bz): sa ? gt1 : lt1;
-
-always @(unordered or eq or lt or lt1)
-begin
-	o[0] = eq;
-	o[1] = lt;
-	o[2] = lt|eq;
-	o[3] = lt1;
-	o[4] = unordered;
-end
-
-// an unorder comparison will signal a nan exception
-//assign nanx = op!=`FCOR && op!=`FCUN && unordered;
-assign nanx = 1'b0;
+always @(posedge clk)
+	if (ce) begin
+		if (exp < zeroXp)
+			o <= 1'd0;
+		else
+			o <= {sgn,exp,man};
+	end
 
 endmodule

@@ -135,12 +135,18 @@ namespace EM80
 		public enum e_munit
 		{
 			LDB = 0x00,
+			LDBU = 0x04,
 			LDO = 0x09,
+			LDOU = 0x0D,
 			LDD = 0x03,
+			LDT = 0x08,
+			LDTU = 0x0C,
 			LDFS = 0x10,
 			LDFD = 0x11,
 			STB = 0x20,
 			STD = 0x23,
+			STT = 0x28,
+			STW = 0x21,
 			STO = 0x29,
 			PUSH = 0x2d,
 			PUSHC0 = 0x0b,
@@ -159,6 +165,7 @@ namespace EM80
 			STOX = 0x09,
 			STDX = 0x03,
 		};
+		public int regset;
 		public Int128[] regfile;
 		public Int128 ip;
 		public Int128 ibundle;
@@ -200,6 +207,7 @@ namespace EM80
 			max = new Int128();
 			brdisp = new Int128();
 			res = new Int128();
+			regset = 0;
 		}
 		public void Reset()
 		{
@@ -529,9 +537,9 @@ namespace EM80
 					break;
 				default: rfw = false; break;
 			}
-			opa = regfile[Rs1].Clone();
-			opb = regfile[Rs2].Clone();
-			opc = regfile[Rs3].Clone();
+			opa = regfile[Rs1+regset].Clone();
+			opb = regfile[Rs2+regset].Clone();
+			opc = regfile[Rs3+regset].Clone();
 			switch (unitn)
 			{
 				case e_unitTypes.N:
@@ -704,45 +712,78 @@ namespace EM80
 					mopcode = (e_munit)(((insnn >> 6) & 15L) | (((insnn >> 33) & 3L) << 4));
 					if (((uint)mopcode & 0x20)!=0)
 					{
-						ma.digits[0] = (insnn & 0x3fL) | (((insnn >> 22) & 0x1ffL) << 6) | (((insnn >> 35) & 0x1fL) << 15);
-						ma.digits[1] = 0;
-						ma.digits[2] = 0;
-						ma.digits[3] = 0;
-						if ((ma.digits[0] & 0x80000000L) != 0)
+						if (mopcode == e_munit.PUSH)
 						{
+							ma.digits[0] = (ulong)(-(long)(insnn >> 35));
+							ma.digits[0] &= 0xffffffffL;
 							ma.digits[1] = 0xffffffffL;
 							ma.digits[2] = 0xffffffffL;
 							ma.digits[3] = 0xffffffffL;
 						}
-						switch((insnn >> 28) & 7L)
+						else
 						{
-							case 0: Sc = 1; break;
-							case 1: Sc = 2; break;
-							case 2: Sc = 4; break;
-							case 3: Sc = 8; break;
-							case 4: Sc = 16; break;
-							case 5: Sc = 5; break;
-							case 6: Sc = 10; break;
-							case 7: Sc = 15; break;
+							ma.digits[0] = (insnn & 0x3fL) | (((insnn >> 22) & 0x1ffL) << 6) | (((insnn >> 35) & 0x1fL) << 15);
+							ma.digits[1] = 0;
+							ma.digits[2] = 0;
+							ma.digits[3] = 0;
 						}
-						max.digits[0] = opa.digits[0] + (opc.digits[0] * Sc) + (insnn & 0x3f);
-						max.digits[1] = 0;
-						max.digits[2] = 0;
-						max.digits[3] = 0;
-						if ((max.digits[0] & 0x80000000L) != 0)
-						{
-							max.digits[1] = 0xffffffffL;
-							max.digits[2] = 0xffffffffL;
-							max.digits[3] = 0xffffffffL;
-						}
+					}
+					// Loads
+					else
+					{
+						ma.digits[0] = ((insnn >> 16) & 0x7ffffL) | (((insnn >> 35) & 0x1fL) << 15);
+						ma.digits[1] = 0;
+						ma.digits[2] = 0;
+						ma.digits[3] = 0;
+					}
+					if ((ma.digits[0] & 0x80000000L) != 0)
+					{
+						ma.digits[1] = 0xffffffffL;
+						ma.digits[2] = 0xffffffffL;
+						ma.digits[3] = 0xffffffffL;
+					}
+					ma = Int128.Add(ma, opa);
+					switch ((insnn >> 28) & 7L)
+					{
+						case 0: Sc = 1; break;
+						case 1: Sc = 2; break;
+						case 2: Sc = 4; break;
+						case 3: Sc = 8; break;
+						case 4: Sc = 16; break;
+						case 5: Sc = 5; break;
+						case 6: Sc = 10; break;
+						case 7: Sc = 15; break;
+					}
+					max.digits[0] = opa.digits[0] + (opc.digits[0] * Sc) + (insnn & 0x3f);
+					max.digits[1] = 0;
+					max.digits[2] = 0;
+					max.digits[3] = 0;
+					if ((max.digits[0] & 0x80000000L) != 0)
+					{
+						max.digits[1] = 0xffffffffL;
+						max.digits[2] = 0xffffffffL;
+						max.digits[3] = 0xffffffffL;
 					}
 					switch (mopcode)
 					{
 						case e_munit.STB:
 							soc.Write(ma, opb, 1);
 							break;
+						case e_munit.STW:
+							soc.Write(ma, opb, 2);
+							break;
+						case e_munit.STT:
+							soc.Write(ma, opb, 4);
+							break;
 						case e_munit.STO:
 							soc.Write(ma, opb, 8);
+							break;
+						case e_munit.STD:
+							soc.Write(ma, opb, 10);
+							break;
+						case e_munit.PUSH:
+							soc.Write(ma, opb, 10);
+							res = ma;
 							break;
 						case e_munit.MSX:
 							switch((e_munit5)funct5)
@@ -755,14 +796,55 @@ namespace EM80
 									break;
 							}
 							break;
+						case e_munit.LDB:
+							res = soc.Read(ma);
+							if ((res.digits[1] & 0x80L) != 0)
+							{
+								res.digits[0] |= 0xffffff00L;
+								res.digits[1] = 0xffffffffL;
+								res.digits[2] = 0xffffffffL;
+								res.digits[3] = 0xffffffffL;
+							}
+							break;
+						case e_munit.LDBU:
+							res = soc.Read(ma);
+							if ((res.digits[1] & 0x80L) != 0)
+							{
+								res.digits[0] &= 0x00ffL;
+								res.digits[1] = 0x00L;
+								res.digits[2] = 0x00L;
+								res.digits[3] = 0x00L;
+							}
+							break;
+						case e_munit.LDD:
+							res = soc.Read(ma);
+							if ((res.digits[2] & 0x8000L) != 0)
+							{
+								res.digits[2] |= 0xffff0000L;
+								res.digits[3] = 0xffffffffL;
+							}
+							break;
+						case e_munit.LDO:
+							res = soc.Read(ma);
+							if ((res.digits[1] & 0x80000000L) != 0)
+							{
+								res.digits[2] = 0xffffffffL;
+								res.digits[3] = 0xffffffffL;
+							}
+							break;
+						case e_munit.LDOU:
+							res = soc.Read(ma);
+							res.digits[2] = 0x00000000L;
+							res.digits[3] = 0x00000000L;
+							break;
 					}
 					IncIp(1);
 					break;
 			}
 			if (rfw)
-				regfile[Rd] = res.Clone();
-			regfile[0] = Int128.Convert(0);
-			regfile[64] = Int128.Convert(0);
+				regfile[Rd+regset] = res.Clone();
+			regfile[0+regset] = Int128.Convert(0);
+			regfile[64+regset] = Int128.Convert(0);
 		}
 	}
 }

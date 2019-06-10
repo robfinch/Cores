@@ -61,3 +61,15 @@
 `define QINFZEROQ	127'h7F_FF00000000_0000000000_0000000004	// - infinity X zero
 `define QSQRTINFQ	127'h7F_FF00000000_0000000000_0000000005	// - square root of infinity
 `define QSQRTNEGQ	127'h7F_FF00000000_0000000000_0000000006	// - square root of negaitve number
+
+`define	POINT5S		32'h3F000000
+`define POINT5SX	40'h3F80000000
+`define POINT5D		64'h3FE0000000000000
+`define POINT5DX	80'h3FFE0000000000000000
+
+`define AIN			3'd0
+`define BIN			3'd1
+`define RES			3'd2
+`define POINT5	3'd3
+
+

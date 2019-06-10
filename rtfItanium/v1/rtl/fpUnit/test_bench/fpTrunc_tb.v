@@ -1,13 +1,13 @@
 `timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2006-2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2006-2018  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	fpDiv_tb.v
-//		- floating point divider test bench
+//	fpTrunc_tb.v
+//		- floating point truncate test bench
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -34,38 +34,35 @@
 //
 // ============================================================================
 
-module fpDiv_tb();
+module fpTrunc_tb();
 reg rst;
-reg clk, clk4x;
+reg clk;
 reg [12:0] adr;
-reg [95:0] mem [0:8191];
-reg [95:0] memo [0:9000];
-reg [191:0] memd [0:8191];
-reg [191:0] memdo [0:9000];
+reg [63:0] mem [0:8191];
+reg [63:0] memo [0:9000];
+reg [127:0] memd [0:8191];
+reg [127:0] memdo [0:9000];
 reg [31:0] a,b,a6,b6;
 reg [63:0] ad,bd;
 wire [31:0] a5,b5;
 wire [31:0] o;
 wire [63:0] od;
 reg ld;
-wire done;
+wire done = 1'b1;
 reg [3:0] state;
 
 initial begin
 	rst = 1'b0;
 	clk = 1'b0;
-	clk4x = 1'b0;
 	adr = 13'd0;
-	$readmemh("d:/cores6/rtfItanium/v1/rtl/fpUnit/test_bench/fpDiv_tv.txt", mem);
-	$readmemh("d:/cores6/rtfItanium/v1/rtl/fpUnit/test_bench/fpDiv_tvd.txt", memd);
+	//$readmemh("d:/cores6/rtfItanium/v1/rtl/fpUnit/test_bench/fpTrunc_tv.txt", mem);
+	$readmemh("d:/cores6/rtfItanium/v1/rtl/fpUnit/test_bench/fpTrunc_tvd.txt", memd);
 	#20 rst = 1'd1;
 	#50 rst = 1'd0;
 end
 
-always #8
+always #10
 	clk = ~clk;
-always #2
-	clk4x = ~clk4x;
 
 always @(posedge clk)
 if (rst) begin
@@ -89,12 +86,12 @@ case(state)
 		state <= 4'd3;
 4'd3:
 	if (done) begin
-		memo[adr] <= {o,b,a};
-		memdo[adr] <= {od,bd,ad};
+		memo[adr] <= {o,a};
+		memdo[adr] <= {od,ad};
 		adr <= adr + 4'd1;
 		if (adr==13'd8191) begin
-			$writememh("d:/cores6/rtfItanium/v1/rtl/fpUnit/test_bench/fpDiv_tvo.txt", memo);
-			$writememh("d:/cores6/rtfItanium/v1/rtl/fpUnit/test_bench/fpDiv_tvdo.txt", memdo);
+//			$writememh("d:/cores6/rtfItanium/v1/rtl/fpUnit/test_bench/fpTrunc_tvo.txt", memo);
+			$writememh("d:/cores6/rtfItanium/v1/rtl/fpUnit/test_bench/fpTrunc_tvdo.txt", memdo);
 			$finish;
 		end
 		state <= 4'd4;
@@ -104,7 +101,6 @@ case(state)
 endcase
 end
 
-fpDivnr #(32) u1 (rst, clk, clk4x, 1'b1, ld, 1'b0, a, b, o, 3'b000);//, sign_exe, inf, overflow, underflow);
-fpDivnr #(64) u2 (rst, clk, clk4x, 1'b1, ld, 1'b0, ad, bd, od, 3'b000, done);//, sign_exe, inf, overflow, underflow);
+fpTrunc #(64) u1 (clk, 1'b1, ad, od);
 
 endmodule

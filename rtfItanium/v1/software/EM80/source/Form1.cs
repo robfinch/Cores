@@ -19,6 +19,7 @@ namespace EM80
 		TextBox dumpBox = new TextBox();
 		TextBox tbAddr = new TextBox();
 		LED[] leds;
+		int regset;
 
 		public void UpdateRegisters()
 		{
@@ -26,7 +27,7 @@ namespace EM80
 
 			for (nn = 0; nn < 64; nn++)
 			{
-				registerBoxes[nn].Text = soc.cpu.regfile[nn].ToString80();
+				registerBoxes[nn].Text = soc.cpu.regfile[nn+regset].ToString80();
 			}
 			ipBox.Text = soc.cpu.ip.ToString80();
 			iBundleBox.Text = soc.cpu.ibundle.ToString80();
@@ -204,6 +205,12 @@ namespace EM80
 		private void textBox1_TextChanged(object sender, EventArgs e)
 		{
 			timer1.Enabled = true;
+		}
+
+		private void numericUpDown1_ValueChanged(object sender, EventArgs e)
+		{
+			regset = Convert.ToInt32(numericUpDown1.Value) * 64;
+			UpdateRegisters();
 		}
 	}
 }

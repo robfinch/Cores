@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2006-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2006-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -34,9 +34,9 @@
 // ============================================================================
 
 `include "fp_defines.v"
-`define GOLDSCHMIDT	1'b1
+//`define GOLDSCHMIDT	1'b1
 
-module fpDiv(rst, clk, ce, ld, op, a, b, o, done, sign_exe, overflow, underflow);
+module fpDiv(rst, clk, clk4x, ce, ld, op, a, b, o, done, sign_exe, overflow, underflow);
 
 parameter WID = 128;
 localparam MSB = WID-1;
@@ -79,6 +79,7 @@ localparam FX = (FMSB+2)*2-1;	// the MSB of the expanded fraction
 localparam EX = FX + 1 + EMSB + 1 + 1 - 1;
 input rst;
 input clk;
+input clk4x;
 input ce;
 input ld;
 input op;
@@ -155,6 +156,7 @@ wire over = (&ex1[EMSB:0] | ex1[EMSB+1]) & !ex1[EMSB+2];
 // Divider width must be a multiple of four
 `ifndef GOLDSCHMIDT
 fpdivr16 #(FMSB+FADD) u2 (.clk(clk), .ld(ld), .a({3'b0,fracta,8'b0}), .b({3'b0,fractb,8'b0}), .q(divo), .r(), .done(done1), .lzcnt(lzcnt));
+//fpdivr2 #(FMSB+FADD) u2 (.clk4x(clk4x), .ld(ld), .a({3'b0,fracta,8'b0}), .b({3'b0,fractb,8'b0}), .q(divo), .r(), .done(done1), .lzcnt(lzcnt));
 wire [(FMSB+FADD)*2-1:0] divo1 = divo[(FMSB+FADD)*2-1:0] << (lzcnt-2);
 `else
 DivGoldschmidt #(.WID(FMSB+6),.WHOLE(1),.POINTS(FMSB+5))
@@ -217,7 +219,7 @@ else if (ce) begin
 
 endmodule
 
-module fpDivnr(rst, clk, ce, ld, op, a, b, o, rm, done, sign_exe, inf, overflow, underflow);
+module fpDivnr(rst, clk, clk4x, ce, ld, op, a, b, o, rm, done, sign_exe, inf, overflow, underflow);
 parameter WID=32;
 localparam MSB = WID-1;
 localparam EMSB = WID==128 ? 14 :
@@ -247,6 +249,7 @@ localparam FX = (FMSB+2)*2-1;	// the MSB of the expanded fraction
 localparam EX = FX + 1 + EMSB + 1 + 1 - 1;
 input rst;
 input clk;
+input clk4x;
 input ce;
 input ld;
 input op;
@@ -264,7 +267,7 @@ wire sign_exe1, inf1, overflow1, underflow1;
 wire [MSB+3:0] fpn0;
 wire done1;
 
-fpDiv       #(WID) u1 (rst, clk, ce, ld, op, a, b, o1, done1, sign_exe1, overflow1, underflow1);
+fpDiv       #(WID) u1 (rst, clk, clk4x, ce, ld, op, a, b, o1, done1, sign_exe1, overflow1, underflow1);
 fpNormalize #(WID) u2(.clk(clk), .ce(ce), .under(underflow1), .i(o1), .o(fpn0) );
 fpRoundReg  #(WID) u3(.clk(clk), .ce(ce), .rm(rm), .i(fpn0), .o(o) );
 delay2      #(1)   u4(.clk(clk), .ce(ce), .i(sign_exe1), .o(sign_exe));
