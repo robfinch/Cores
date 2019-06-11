@@ -208,12 +208,14 @@ wire [FMSB+3:0] ob = xa_gt_xb1 ? md1 : {fractb1,2'b0};
 wire [FMSB+3:0] oaa = a_gt_b1 ? oa : ob;
 wire [FMSB+3:0] obb = a_gt_b1 ? ob : oa;
 wire [FMSB+4:0] mab = realOp1 ? oaa - obb : oaa + obb;
+wire xoinf = &xo;
 
 always @*
-	casez({aInf1&bInf1,aNan1,bNan1})
-	3'b1??:		mo1 = {1'b0,op1,{FMSB-1{1'b0}},op1,{FMSB{1'b0}}};	// inf +/- inf - generate QNaN on subtract, inf on add
-	3'b01?:		mo1 = {1'b0,fracta1[FMSB+1:0],{FMSB{1'b0}}};
-	3'b001: 	mo1 = {1'b0,fractb1[FMSB+1:0],{FMSB{1'b0}}};
+	casez({aInf1&bInf1,aNan1,bNan1,xoinf})
+	4'b1???:	mo1 = {1'b0,op1,{FMSB-1{1'b0}},op1,{FMSB{1'b0}}};	// inf +/- inf - generate QNaN on subtract, inf on add
+	4'b01??:	mo1 = {1'b0,fracta1[FMSB+1:0],{FMSB{1'b0}}};
+	4'b001?: 	mo1 = {1'b0,fractb1[FMSB+1:0],{FMSB{1'b0}}};
+	4'b0001:	mo1 = 1'd0;
 	default:	mo1 = {mab,{FMSB-1{1'b0}}};	// mab has an extra lead bit and two trailing bits
 	endcase
 

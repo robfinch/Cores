@@ -95,6 +95,7 @@ begin
 	begin
 		adr <= adr + 1;
 //		memo[adr] <= {o,c17,b17,a17};
+//		memdo[adr] <= {od,cd17,bd17,ad17};
 		memdo[adr] <= {od,cd,bd,ad};
 		if (adr==8191) begin
 			//$writememh("d:/cores6/rtfItanium/v1/rtl/fpUnit/test_bench/fpFMA_tvo.txt", memo);

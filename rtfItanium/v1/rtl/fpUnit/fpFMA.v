@@ -44,7 +44,7 @@
 //	
 // ============================================================================
 
-module fpFMA (clk, ce, op, rm, a, b, c, o, inf, overflow, underflow);
+module fpFMA (clk, ce, op, rm, a, b, c, o, inf);
 parameter WID = 32;
 localparam MSB = WID-1;
 localparam EMSB = WID==128 ? 14 :
@@ -80,8 +80,6 @@ input [2:0] rm;
 input  [WID:1] a, b, c;
 output [EX:0] o;
 output inf;
-output overflow;
-output underflow;
 
 // constants
 wire [EMSB:0] infXp = {EMSB+1{1'b1}};	// infinite / NaN - all ones
@@ -402,6 +400,8 @@ reg [EMSB:0] xc6;
 reg exinf6;
 wire [FMSB+1:0] fractc6;
 delay5 #(FMSB+2) u61 (.clk(clk), .ce(ce), .i(fractc1), .o(fractc6) );
+delay1 u62 (.clk(clk), .ce(ce), .i(under5), .o(under6));
+
 always @(posedge clk)
 	if (ce) xc6 <= xc5;
 
@@ -455,9 +455,9 @@ always @(posedge clk)
 	if (ce) exinf7 <= exinf6;
 // which has greater magnitude ? Used for sign calc
 always @(posedge clk)
-	if (ce) ex_gt_xc7 <= ex6 > xc6;
+	if (ce) ex_gt_xc7 <= (ex6 > xc6) && !under6;
 always @(posedge clk)
-	if (ce) xeq7 <= ex6==xc6;
+	if (ce) xeq7 <= (ex6==xc6) && !under6;
 always @(posedge clk)
 	if (ce) ma_gt_mc7 <= mo6 > {fractc6,{FMSB+1{1'b0}}};
 always @(posedge clk)
@@ -504,7 +504,7 @@ always @(posedge clk)
 always @(posedge clk)
 	if (ce)
 		resZero8 <= (realOp7 & xeq7 & meq7) ||	// subtract, same magnitude
-			   (az7 | bz7) & cz7;		// a or b zero and c zero
+			   ((az7 | bz7) & cz7);		// a or b zero and c zero
 
 // -----------------------------------------------------------
 // CLock #9
@@ -523,6 +523,7 @@ reg ex_gt_xc9;
 reg [EMSB:0] xc9;
 wire [FX:0] mo9;
 wire [FMSB+1:0] fractc9;
+wire under9;
 
 always @(posedge clk)
 	if (ce) ex_gt_xc9 <= ex_gt_xc8;
@@ -533,6 +534,7 @@ always @(posedge clk)
 
 delay3 #(FX+1) u93 (.clk(clk), .ce(ce), .i(mo6), .o(mo9));
 delay3 #(FMSB+2) u94 (.clk(clk), .ce(ce), .i(fractc6), .o(fractc9));
+delay3 u95 (.clk(clk), .ce(ce), .i(under6), .o(under9));
 
 always @(posedge clk)
 	if (ce) ex9 <= (exinf8&xcInf8) ? ex8 : resZero8 ? 0 : ex_gt_xc8 ? ex8 : xc8;
@@ -566,7 +568,8 @@ reg [EMSB:0] xdiff10;
 reg [FX:0] mfs;
 
 always @(posedge clk)
-	if (ce) xdiff10 <= ex_gt_xc9 ? ex9a - xc9 : xc9 - ex9a;
+	if (ce) xdiff10 <= ex_gt_xc9 ? ex9a - xc9
+																: (under9 ? xc9 + ex9a : xc9 - ex9a);
 
 // determine which fraction to denormalize
 always @(posedge clk)
@@ -623,7 +626,7 @@ delay4 u132 (.clk(clk), .ce(ce), .i(ex_gt_xc9), .o(ex_gt_xc13));
 vtdl #(FMSB+2) u133 (.clk(clk), .ce(ce), .a(4'd3), .d(fractc9), .q(fractc13));
 
 always @(posedge clk)
-	if (ce) mfs13 <= ({mfs12,2'b0} >> xdif12)|sticky12;
+	if (ce) mfs13 <= ({mfs12,2'b0} >> xdif12)|{sticky12,1'b0};
 
 // -----------------------------------------------------------
 // Clock #14
@@ -645,8 +648,10 @@ always @(posedge clk)
 // -----------------------------------------------------------
 reg [FX+2:0] oaa, obb;
 wire realOp15;
+wire [EMSB:0] ex15;
 
 vtdl u151 (.clk(clk), .ce(ce), .a(4'd7), .d(realOp7), .q(realOp15));
+vtdl #(EMSB+1) u152 (.clk(clk), .ce(ce), .a(4'd5), .d(ex9), .q(ex15));
 
 always @(posedge clk)
 	if (ce) oaa <= a_gt_b14 ? oa : ob;
@@ -665,14 +670,16 @@ wire Nan16;
 wire cNan16;
 wire aInf16, cInf16;
 wire op16;
+wire exinf16;
 
-vtdl u161 (.clk(clk), .ce(ce), .a(4'd10), .d(qNanOut5|aNan5|bNan5), .q(Nan16));
+vtdl u161 (.clk(clk), .ce(ce), .a(4'd10), .d(qNaNOut5|aNan5|bNan5), .q(Nan16));
 vtdl u162 (.clk(clk), .ce(ce), .a(4'd14), .d(cNan1), .q(cNan16));
 vtdl u163 (.clk(clk), .ce(ce), .a(4'd9), .d(exinf6), .q(aInf16));
 vtdl u164 (.clk(clk), .ce(ce), .a(4'd14), .d(cInf1), .q(cInf16));
 vtdl u165 (.clk(clk), .ce(ce), .a(4'd14), .d(op1), .q(op16));
 delay3 #(FX+1) u166 (.clk(clk), .ce(ce), .i(mo13), .o(mo16));
 vtdl #(FMSB+2) u167 (.clk(clk), .ce(ce), .a(4'd6), .d(fractc9), .q(fractc16));
+delay1 u169 (.clk(clk), .ce(ce), .i(&ex15), .o(exinf16));
 
 always @(posedge clk)
 	if (ce) mab = realOp15 ? oaa - obb : oaa + obb;
@@ -685,15 +692,16 @@ wire [EMSB:0] ex17;
 reg [FX:0] mo17;
 wire so17;
 
-vtdl           u171 (.clk(clk), .ce(ce), .a(4'd7), .d(so9), .q(so17));
-vtdl #(EMSB+1) u172 (.clk(clk), .ce(ce), .a(4'd7), .d(ex9), .q(ex17));
+vtdl             u171 (.clk(clk), .ce(ce), .a(4'd7), .d(so9), .q(so17));
+delay2 #(EMSB+1) u172 (.clk(clk), .ce(ce), .i(ex15), .o(ex17));
 
-always @*
-	casez({aInf16&cInf16,Nan16,cNan16})
-	3'b1??:		mo17 = {1'b0,op16,{FMSB-1{1'b0}},op16,{FMSB{1'b0}}};	// inf +/- inf - generate QNaN on subtract, inf on add
-	3'b01?:		mo17 = {1'b0,mo16};
-	3'b001: 	mo17 = {1'b0,fractc16[FMSB+1:0],{FMSB{1'b0}}};
-	default:	mo17 = mab[FX+3:2];		// mab has an extra lead bit and two trailing bits
+always @(posedge clk)
+	casez({aInf16&cInf16,Nan16,cNan16,exinf16})
+	4'b1???:	mo17 <= {1'b0,op16,{FMSB-1{1'b0}},op16,{FMSB{1'b0}}};	// inf +/- inf - generate QNaN on subtract, inf on add
+	4'b01??:	mo17 <= {1'b0,mo16};
+	4'b001?: 	mo17 <= {1'b0,fractc16[FMSB+1:0],{FMSB{1'b0}}};
+	4'b0001:	mo17 <= 1'd0;
+	default:	mo17 <= mab[FX+3:2];		// mab has an extra lead bit and two trailing bits
 	endcase
 
 assign o = {so17,ex17,mo17};
@@ -750,12 +758,10 @@ wire [EX:0] o1;
 wire sign_exe1, inf1, overflow1, underflow1;
 wire [MSB+3:0] fpn0;
 
-fpFMA       #(WID) u1 (clk, ce, op, rm, a, b, c, o1, inf1, overflow1, underflow1);
-fpNormalize #(WID) u2(.clk(clk), .ce(ce), .under(underflow1), .i(o1), .o(fpn0) );
+fpFMA       #(WID) u1 (clk, ce, op, rm, a, b, c, o1, inf1);
+fpNormalize #(WID) u2(.clk(clk), .ce(ce), .under(1'b0), .i(o1), .o(fpn0) );
 fpRoundReg  #(WID) u3(.clk(clk), .ce(ce), .rm(rm), .i(fpn0), .o(o) );
 delay2      #(1)   u4(.clk(clk), .ce(ce), .i(sign_exe1), .o(sign_exe));
 delay2      #(1)   u5(.clk(clk), .ce(ce), .i(inf1), .o(inf));
-delay2      #(1)   u6(.clk(clk), .ce(ce), .i(overflow1), .o(overflow));
-delay2      #(1)   u7(.clk(clk), .ce(ce), .i(underflow1), .o(underflow));
 endmodule
 
