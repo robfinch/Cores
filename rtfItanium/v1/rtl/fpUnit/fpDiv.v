@@ -39,32 +39,11 @@
 module fpDiv(rst, clk, clk4x, ce, ld, op, a, b, o, done, sign_exe, overflow, underflow);
 
 parameter WID = 128;
-localparam MSB = WID-1;
-localparam EMSB = WID==128 ? 14 :
-                  WID==96 ? 14 :
-                  WID==80 ? 14 :
-                  WID==64 ? 10 :
-				  WID==52 ? 10 :
-				  WID==48 ? 11 :
-				  WID==44 ? 10 :
-				  WID==42 ? 10 :
-				  WID==40 ?  9 :
-				  WID==32 ?  7 :
-				  WID==24 ?  6 : 4;
-localparam FMSB = WID==128 ? 111 :
-                  WID==96 ? 79 :
-                  WID==80 ? 63 :
-                  WID==64 ? 51 :
-				  WID==52 ? 39 :
-				  WID==48 ? 34 :
-				  WID==44 ? 31 :
-				  WID==42 ? 29 :
-				  WID==40 ? 28 :
-				  WID==32 ? 22 :
-				  WID==24 ? 15 : 9;
+`include "fpSize.sv"
 // FADD is a constant that makes the divider width a multiple of four and includes eight extra bits.			
 localparam FADD = WID==128 ? 9 :
 				  WID==96 ? 9 :
+				  WID==84 ? 9 :
 				  WID==80 ? 9 :
 				  WID==64 ? 13 :
 				  WID==52 ? 9 :
@@ -221,29 +200,7 @@ endmodule
 
 module fpDivnr(rst, clk, clk4x, ce, ld, op, a, b, o, rm, done, sign_exe, inf, overflow, underflow);
 parameter WID=32;
-localparam MSB = WID-1;
-localparam EMSB = WID==128 ? 14 :
-                  WID==96 ? 14 :
-                  WID==80 ? 14 :
-                  WID==64 ? 10 :
-				  WID==52 ? 10 :
-				  WID==48 ? 11 :
-				  WID==44 ? 10 :
-				  WID==42 ? 10 :
-				  WID==40 ?  9 :
-				  WID==32 ?  7 :
-				  WID==24 ?  6 : 4;
-localparam FMSB = WID==128 ? 111 :
-                  WID==96 ? 79 :
-                  WID==80 ? 63 :
-                  WID==64 ? 51 :
-				  WID==52 ? 39 :
-				  WID==48 ? 34 :
-				  WID==44 ? 31 :
-				  WID==42 ? 29 :
-				  WID==40 ? 28 :
-				  WID==32 ? 22 :
-				  WID==24 ? 15 : 9;
+`include "fpSize.sv"
 
 localparam FX = (FMSB+2)*2-1;	// the MSB of the expanded fraction
 localparam EX = FX + 1 + EMSB + 1 + 1 - 1;

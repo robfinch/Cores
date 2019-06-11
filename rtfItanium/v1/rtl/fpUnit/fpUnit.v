@@ -89,6 +89,10 @@
 `define FLT3		4'h3
 `define FLT1A		4'h5
 `define FLT2LI	4'hA
+`define FMA			5'h00
+`define FMS			5'h01
+`define FNMA		5'h02
+`define FNMS		5'h03
 `define FMOV    5'h00
 `define FTOI    5'h02
 `define ITOF    5'h03
@@ -106,15 +110,17 @@
 `define FEX     5'h12
 `define FDX     5'h13
 `define FRM     5'h14
-`define RWHO		5'h15
+`define TRUNC		5'h15
 `define FCVTDS  5'h19
 
+`define FSCALEB	5'h00
 `define FADD    5'h04
 `define FSUB    5'h05
 `define FCMP    5'h06
 `define FMUL    5'h08
 `define FDIV    5'h09
 `define FREM		5'h0A
+`define NXTAFT	5'h0B
 // FLT1A
 `define FRES		5'h00
 
@@ -122,31 +128,8 @@
 
 module fpUnit(rst, clk, clk4x, ce, ir, ld, a, b, c, imm, o, csr_i, status, exception, done, rm
 );
-
 parameter WID = 64;
-localparam MSB = WID-1;
-localparam EMSB = WID==128 ? 14 :
-                  WID==96 ? 14 :
-                  WID==80 ? 14 :
-                  WID==64 ? 10 :
-				  WID==52 ? 10 :
-				  WID==48 ? 10 :
-				  WID==44 ? 10 :
-				  WID==42 ? 10 :
-				  WID==40 ?  9 :
-				  WID==32 ?  7 :
-				  WID==24 ?  6 : 4;
-localparam FMSB = WID==128 ? 111 :
-                  WID==96 ? 79 :
-                  WID==80 ? 63 :
-                  WID==64 ? 51 :
-				  WID==52 ? 39 :
-				  WID==48 ? 35 :
-				  WID==44 ? 31 :
-				  WID==42 ? 29 :
-				  WID==40 ? 28 :
-				  WID==32 ? 22 :
-				  WID==24 ? 15 : 9;
+`include "fpSize.sv"
 localparam EMSBS = 7;
 localparam FMSBS = 22;
 localparam FX = (FMSB+2)*2-1;	// the MSB of the expanded fraction
@@ -390,8 +373,11 @@ wire [5:0] fn2;
 wire [MSB:0] zld_o,lood_o;
 wire [31:0] zls_o,loos_o;
 wire [WID-1:0] zlq_o, looq_o;
+wire [WID-1:0] scaleb_o;
 fpZLUnit #(WID) u6 (.ir(ir), .op4(op4), .func5(func6b), .a(aop), .b(bop), .c(c), .o(zlq_o), .nanx(nanx) );
-fpLOOUnit #(WID) u7 (.clk(clk), .ce(pipe_ce), .op4(op4), .func5(func6b), .rm(insn_rm==3'b111 ? rm : insn_rm), .a(aop), .o(looq_o), .done() );
+fpLOOUnit #(WID) u7 (.clk(clk), .ce(pipe_ce), .op4(op4), .func5(func6b), .rm(insn_rm==3'b111 ? rm : insn_rm), .a(aop), .b(bop), .o(looq_o), .done() );
+fpScaleb u16 (.clk(clk), .ce(pipe_ce), .a(aop), .b(bop), .o(scaleb_o));
+
 //fpLOOUnit #(32) u7s (.clk(clk), .ce(pipe_ce), .rm(rm), .op(op), .fn(fn), .a(a[31:0]), .o(loos_o), .done() );
 
 fp_decomp #(WID) u1 (.i(aop), .sgn(sa), .man(ma), .vz(az), .inf(aInf), .nan(aNan) );
@@ -443,12 +429,16 @@ wire divUnder,divUnders;
 wire mulUnder,mulUnders;
 reg under,unders;
 wire sqrneg;
+wire fms = func6b==`FMS || func6b==`FNMS;
+wire nma = func6b==`FNMA || func6b==`FNMS;
+wire [WID-1:0] ma_aop = aop ^ (nma << WID-1);
 
 fpAddsub #(WID) u10(.clk(clk), .ce(pipe_ce), .rm(rmd), .op(func6b[0]), .a(aop), .b(bop), .o(fas_o) );
 fpDiv    #(WID) u11(.clk(clk), .clk4x(clk4x), .ce(pipe_ce), .ld(ld|rem_ld), .a(aop), .b(bop), .o(fdiv_o), .sign_exe(), .underflow(divUnder), .done(divDone) );
 fpMul    #(WID) u12(.clk(clk), .ce(pipe_ce),          .a(aop), .b(bop), .o(fmul_o), .sign_exe(), .inf(), .underflow(mulUnder) );
 fpSqrt	 #(WID) u13(.rst(rst), .clk(clk4x), .ce(pipe_ce), .ld(ld), .a(aop), .o(fsqrt_o), .done(), .sqrinf(), .sqrneg(sqrneg) );
 fpRes    #(WID) u14(.clk(clk), .ce(pipe_ce), .a(aop), .o(fres_o));
+fpFMA 	 #(WID) u15(.clk(clk), .ce(pipe_ce), .op(fms), .rm(rmd), .a(ma_aop), .b(bop), .c(c), .o(fma_o), .inf());
 
 fpRemainder ufpr1
 (
@@ -485,12 +475,21 @@ endcase
 
 always @*
 case(op2)
+`FLT3:
+	case(fn2)
+	`FMA:		fres <= fma_o;
+	`FMS:		fres <= fma_o;
+	`FNMA:	fres <= fma_o;
+	`FNMS:	fres <= fma_o;
+	default:	fres <= fma_o;
+	endcase
 `FLT2,`FLT2LI:
   case(fn2)
   `FADD:	fres <= fas_o;
   `FSUB:	fres <= fas_o;
   `FMUL:	fres <= fmul_o;
   `FDIV:	fres <= fdiv_o;
+  `FSCALEB:	fres <= scaleb_o;
   default:	begin fres <= fas_o; fress <= fass_o; end
   endcase
 `FLT1:
@@ -613,6 +612,14 @@ begin
   else begin
   if (ld|rem_ld)
     case(op4)
+    `FLT3:
+    	case(func6b)
+    	`FMA:		fpcnt <= 8'd22;
+    	`FMS:		fpcnt <= 8'd22;
+    	`FNMA:	fpcnt <= 8'd22;
+    	`FNMS:	fpcnt <= 8'd22;
+    	default:	fpcnt <= 8'd00;
+    	endcase
     `FLT2,`FLT2LI: 
       case(func6b)
       `FCMP:  begin fpcnt <= 8'd0; end
@@ -621,6 +628,8 @@ begin
       `FMUL:  begin fpcnt <= 8'd6; end
       `FDIV:  begin fpcnt <= maxdivcnt; end
       `FREM:	fpcnt <= maxdivcnt+8'd23;
+      `NXTAFT: fpcnt <= 8'd1;
+      `FSCALEB:	fpcnt <= 8'd2;
       default:    fpcnt <= 8'h00;
       endcase
     `FLT1:
@@ -629,7 +638,7 @@ begin
       `FCVTSD,`FCVTDS:  begin fpcnt <= 8'd0; end
       `FTOI:  begin fpcnt <= 8'd1; end
       `ITOF:  begin fpcnt <= 8'd1; end
-      `RWHO:  begin fpcnt <= 8'd1; end
+      `TRUNC:  begin fpcnt <= 8'd1; end
       `FSQRT: begin fpcnt <= maxdivcnt; end
       default:    fpcnt <= 8'h00;
       endcase

@@ -35,6 +35,7 @@
 `define FTOI    5'h02
 `define ITOF    5'h03
 `define TRUNC		5'h15
+`define NXTAFT	5'h0B
 
 module fpLOOUnit
 #(parameter WID=32)
@@ -45,53 +46,39 @@ module fpLOOUnit
 	input [4:0] func5,
 	input [2:0] rm,
 	input [WID-1:0] a,
+	input [WID-1:0] b,
 	output reg [WID-1:0] o,
 	output done
 );
-localparam MSB = WID-1;
-localparam EMSB = WID==128 ? 14 :
-                  WID==96 ? 14 :
-                  WID==80 ? 14 :
-                  WID==64 ? 10 :
-				  WID==52 ? 10 :
-				  WID==48 ? 11 :
-				  WID==44 ? 10 :
-				  WID==42 ? 10 :
-				  WID==40 ?  9 :
-				  WID==32 ?  7 :
-				  WID==24 ?  6 : 4;
-localparam FMSB = WID==128 ? 111 :
-                  WID==96 ? 79 :
-                  WID==80 ? 63 :
-                  WID==64 ? 51 :
-				  WID==52 ? 39 :
-				  WID==48 ? 34 :
-				  WID==44 ? 31 :
-				  WID==42 ? 29 :
-				  WID==40 ? 28 :
-				  WID==32 ? 22 :
-				  WID==24 ? 15 : 9;
+`include "fpSize.sv"
 
 wire [WID-1:0] i2f_o;
 wire [WID-1:0] f2i_o;
 wire [WID-1:0] trunc_o;
+wire [WID-1:0] nxtaft_o;
 
 delay1 u1 (
     .clk(clk),
     .ce(ce),
-    .i((op4==`FLT1 && (func5==`ITOF||func5==`FTOI||func5==`TRUNC))),
+    .i((op4==`FLT1 && (func5==`ITOF||func5==`FTOI||func5==`TRUNC))||(op4==`FLT2 && (func5==`NXTAFT))),
     .o(done) );
-i2f #(WID)  ui2fs (.clk(clk), .ce(ce), .rm(rm), .i(a), .o(i2f_o) );
-f2i #(WID)  uf2is (.clk(clk), .ce(ce), .i(a), .o(f2i_o) );
+i2f #(WID-4)  ui2fs (.clk(clk), .ce(ce), .rm(rm), .i(a[WID+3:4]), .o(i2f_o) );
+f2i #(WID-4)  uf2is (.clk(clk), .ce(ce), .i(a[WID+3:4]), .o(f2i_o) );
 fpTrunc #(WID) urho1 (.clk(clk), .ce(ce), .i(a), .o(trunc_o), .overflow());
+fpNextAfter #(WID-4) una1 (.clk(clk), .ce(ce), .a(a[WID+3:4]), .b(b[WID+3:4]), .o(nxtaft_o));
 
 always @*
 	case (op4)
 	`FLT1:
 		case(func5)
-		`ITOF:   o <= i2f_o;
-		`FTOI:   o <= f2i_o;
+		`ITOF:   o <= {i2f_o,4'h0};
+		`FTOI:   o <= {f2i_o,4'h0};
 		`TRUNC:	 o <= trunc_o;
+		default: o <= 0;
+		endcase
+	`FLT2:
+		case(func5)
+		`NXTAFT:	o <= {nxtaft_o,4'h0};
 		default: o <= 0;
 		endcase
 	default:   o <= 0;

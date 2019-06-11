@@ -36,29 +36,7 @@ module i2f
 	input [WID-1:0] i,		// integer input
 	output [WID-1:0] o		// float output
 );
-localparam MSB = WID-1;
-localparam EMSB = WID==128 ? 14 :
-                  WID==96 ? 14 :
-                  WID==80 ? 14 :
-                  WID==64 ? 10 :
-				  WID==52 ? 10 :
-				  WID==48 ? 11 :
-				  WID==44 ? 10 :
-				  WID==42 ? 10 :
-				  WID==40 ?  9 :
-				  WID==32 ?  7 :
-				  WID==24 ?  6 : 4;
-localparam FMSB = WID==128 ? 111 :
-                  WID==96 ? 79 :
-                  WID==80 ? 63 :
-                  WID==64 ? 51 :
-				  WID==52 ? 39 :
-				  WID==48 ? 34 :
-				  WID==44 ? 31 :
-				  WID==42 ? 29 :
-				  WID==40 ? 28 :
-				  WID==32 ? 22 :
-				  WID==24 ? 15 : 9;
+`include "fpSize.sv"
 
 wire [EMSB:0] zeroXp = {EMSB{1'b1}};
 
@@ -79,6 +57,9 @@ if (WID==128) begin
 cntlz128Reg    u4 (.clk(clk), .ce(ce), .i(imag1), .o(lz) );
 end else if (WID==96) begin
 cntlz96Reg    u4 (.clk(clk), .ce(ce), .i(imag1), .o(lz[6:0]) );
+assign lz[7]=1'b0;
+end else if (WID==84) begin
+cntlz96Reg    u4 (.clk(clk), .ce(ce), .i({imag1,12'hfff}), .o(lz[6:0]) );
 assign lz[7]=1'b0;
 end else if (WID==80) begin
 cntlz80Reg    u4 (.clk(clk), .ce(ce), .i(imag1), .o(lz[6:0]) );

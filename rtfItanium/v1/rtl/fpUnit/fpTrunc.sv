@@ -36,29 +36,7 @@ module fpTrunc
 	output reg [WID-1:0] o,
 	output overflow
 );
-localparam MSB = WID-1;
-localparam EMSB = WID==128 ? 14 :  
-                  WID==96 ? 14 :
-                  WID==80 ? 14 :
-                  WID==64 ? 10 :
-				  WID==52 ? 10 :
-				  WID==48 ? 11 :
-				  WID==44 ? 10 :
-				  WID==42 ? 10 :
-				  WID==40 ?  9 :
-				  WID==32 ?  7 :
-				  WID==24 ?  6 : 4;
-localparam FMSB = WID==128 ? 111 :
-                  WID==96 ? 79 :
-                  WID==80 ? 63 :
-                  WID==64 ? 51 :
-				  WID==52 ? 39 :
-				  WID==48 ? 34 :
-				  WID==44 ? 31 :
-				  WID==42 ? 29 :
-				  WID==40 ? 28 :
-				  WID==32 ? 22 :
-				  WID==24 ? 15 : 9;
+`include "fpSize.sv"
 
 integer n;
 wire [MSB:0] maxInt  = {MSB{1'b1}};		// maximum unsigned integer value

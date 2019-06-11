@@ -82,29 +82,7 @@ module fpZLUnit
 	output reg [WID-1:0] o,
 	output reg nanx
 );
-localparam MSB = WID-1;
-localparam EMSB = WID==128 ? 14 :
-                  WID==96 ? 14 :
-                  WID==80 ? 14 :
-                  WID==64 ? 10 :
-				  WID==52 ? 10 :
-				  WID==48 ? 11 :
-				  WID==44 ? 10 :
-				  WID==42 ? 10 :
-				  WID==40 ?  9 :
-				  WID==32 ?  7 :
-				  WID==24 ?  6 : 4;
-localparam FMSB = WID==128 ? 111 :
-                  WID==96 ? 79 :
-                  WID==80 ? 63 :
-                  WID==64 ? 51 :
-				  WID==52 ? 39 :
-				  WID==48 ? 34 :
-				  WID==44 ? 31 :
-				  WID==42 ? 29 :
-				  WID==40 ? 28 :
-				  WID==32 ? 22 :
-				  WID==24 ? 15 : 9;
+`include "fpSize.sv"
 
 //wire [1:0] prec = ir[25:24];
 
@@ -143,10 +121,10 @@ always @*
     `FSIGN:  begin o <= (a[WID-2:0]==0) ? 0 : {a[WID-1],1'b0,{EMSB{1'b1}},{FMSB+1{1'b0}}}; nanx <= 1'b0; end
     `FMAN:   begin o <= {a[WID-1],1'b0,{EMSB{1'b1}},a[FMSB:0]}; nanx <= 1'b0; end
     //`FCVTSQ:    o <= sq_o;
-    `FCVTSD: begin o <= sdo; nanx <= nanxab; end
-    `FCVTDS: begin o <= {{40{dso[39]}},dso}; nanx <= nanxab; end
-    `F32TO80: begin o <= f32to80o; nanx <= nanxab; end
-    `F80TO32: begin o <= f80to32o; nanx <= nanxab; end
+    `FCVTSD: begin o <= {sdo,4'h0}; nanx <= nanxab; end
+    `FCVTDS: begin o <= {{40{dso[39]}},dso,4'h0}; nanx <= nanxab; end
+    `F32TO80: begin o <= {f32to80o,4'h0}; nanx <= nanxab; end
+    `F80TO32: begin o <= {f80to32o,4'h0}; nanx <= nanxab; end
     `ISNAN:	 begin o <= nana; end
     `FINITE:	begin o <= !xinfa; end
     `UNORD:		begin o <= nanxab; end
@@ -154,14 +132,14 @@ always @*
     endcase
   `FLT2:
     case(func5)
-    `FCMP:   begin o <= cmp_o; nanx <= nanxab; end
-    `FSLT:	 begin o <=  cmp_o[1]; nanx <= nanxab; end
-    `FSGE:	 begin o <= ~cmp_o[1]; nanx <= nanxab; end
-    `FSLE:	 begin o <=  cmp_o[2]; nanx <= nanxab; end
-    `FSGT:	 begin o <= ~cmp_o[2]; nanx <= nanxab; end
-    `FSEQ:	 begin o <=  cmp_o[0]; nanx <= nanxab; end
-    `FSNE:	 begin o <= ~cmp_o[0]; nanx <= nanxab; end
-    `FSUN:	 begin o <=  cmp_o[4]; nanx <= nanxab; end
+    `FCMP:   begin o <= {cmp_o,4'h0}; nanx <= nanxab; end
+    `FSLT:	 begin o <=  {cmp_o[1],4'h0}; nanx <= nanxab; end
+    `FSGE:	 begin o <= {~cmp_o[1],4'h0}; nanx <= nanxab; end
+    `FSLE:	 begin o <=  {cmp_o[2],4'h0}; nanx <= nanxab; end
+    `FSGT:	 begin o <= ~{cmp_o[2],4'h0}; nanx <= nanxab; end
+    `FSEQ:	 begin o <=  {cmp_o[0],4'h0}; nanx <= nanxab; end
+    `FSNE:	 begin o <= ~{cmp_o[0],4'h0}; nanx <= nanxab; end
+    `FSUN:	 begin o <=  {cmp_o[4],4'h0}; nanx <= nanxab; end
     `CPYSGN:	begin o <= {b[WID-1],a[WID-2:0]}; end
     default: o <= 0;
     endcase
@@ -182,20 +160,20 @@ always @*
   `FANDI:
   	begin
   	case(ir[32:31])
-  	2'd0:		o <= a & {{58{1'b1}},ir[39:33],ir[30:16]};
-  	2'd1:		o <= a & {{36{1'b1}},ir[39:33],ir[30:16],{22{1'b1}}};
-  	2'd2:		o <= a & {{14{1'b1}},ir[39:33],ir[30:16],{44{1'b1}}};
-  	2'd3:		o <= a & {ir[39:33],ir[30:16],{66{1'b1}}};
+  	2'd0:		o <= {a[23: 4] & {{58{1'b1}},ir[39:33],ir[30:16],4'h0}};
+  	2'd1:		o <= a[43:24] & {{36{1'b1}},ir[39:33],ir[30:16],{20{1'b1}}};
+  	2'd2:		o <= a[63:44] & {{14{1'b1}},ir[39:33],ir[30:16],{40{1'b1}}};
+  	2'd3:		o <= a[83:64] & {ir[39:33],ir[30:16],{60{1'b1}}};
   	endcase
   	nanx <= 1'b0;
   	end
   `FORI:
   	begin
   	case(ir[32:31])
-  	2'd0:		o <= a & {{58{1'b0}},ir[39:33],ir[30:16]};
-  	2'd1:		o <= a & {{36{1'b0}},ir[39:33],ir[30:16],{22{1'b0}}};
-  	2'd2:		o <= a & {{14{1'b0}},ir[39:33],ir[30:16],{44{1'b0}}};
-  	2'd3:		o <= a & {ir[39:33],ir[30:16],{66{1'b0}}};
+  	2'd0:		o <= {a[23: 4] & {{58{1'b0}},ir[39:33],ir[30:16],4'h0}};
+  	2'd1:		o <= a[43:24] & {{36{1'b0}},ir[39:33],ir[30:16],{20{1'b0}}};
+  	2'd2:		o <= a[63:44] & {{14{1'b0}},ir[39:33],ir[30:16],{40{1'b0}}};
+  	2'd3:		o <= a[83:64] & {ir[39:33],ir[30:16],{60{1'b0}}};
   	endcase
   	nanx <= 1'b0;
   	end
