@@ -95,11 +95,17 @@ namespace EM80
 		}
 		public enum e_iunit
 		{
+			R1 = 1,
 			R3E = 2,
 			R3O = 3,
 			ADDI = 4,
 			ANDI = 8,
 			ORI = 9,
+			SLTI = 0x10,
+			SGEI = 0x11,
+			SEQI = 0x18,
+			SNEI = 0x19,
+			MUL = 0x20,
 			ADDS0 = 0x33,
 			ADDS1 = 0x34,
 			ADDS2 = 0x35,
@@ -116,6 +122,11 @@ namespace EM80
 			SHLI = 0x38,
 			SHRI = 0x3A,
 		};
+		public enum e_iunitR1
+		{
+			NOT = 0x05,
+			MOV = 0x10,
+		}
 		public enum e_funit
 		{
 			FLT1 = 1,
@@ -141,6 +152,7 @@ namespace EM80
 			LDD = 0x03,
 			LDT = 0x08,
 			LDTU = 0x0C,
+			MLX = 0x0F,
 			LDFS = 0x10,
 			LDFD = 0x11,
 			STB = 0x20,
@@ -164,6 +176,11 @@ namespace EM80
 			STWX = 0x01,
 			STOX = 0x09,
 			STDX = 0x03,
+			LDBX = 0x00,
+			LDBUX = 0x04,
+			LDDX = 0x03,
+			LDOX = 0x09,
+			LDOUX = 0x0D,
 		};
 		public int regset;
 		public Int128[] regfile;
@@ -191,6 +208,7 @@ namespace EM80
 		public Int128 max;
 		public Int128 brdisp;
 		public bool rfw;
+		public bool isLoad;
 		public rtfItaniumCpu()
 		{
 			int nn;
@@ -296,6 +314,9 @@ namespace EM80
 					break;
 				case e_iunit.AND:
 					res = Int128.And(opa, opb);
+					break;
+				case e_iunit.MUL:
+					res = Int128.Mul(opa, opb);
 					break;
 				case e_iunit.SHLI:
 					res = Int128.Shl(opa, (int)((insnn >> 16) & 0x3FL));
@@ -597,11 +618,28 @@ namespace EM80
 					}
 					switch ((e_iunit)aopcode)
 					{
+						case e_iunit.R1:
+							switch((e_iunitR1)funct5)
+							{
+								case e_iunitR1.NOT:
+									if (Int128.EQ(opa, Int128.Convert(0x00)))
+										res = Int128.Convert(0x01);
+									else
+										res = Int128.Convert(0x00);
+									break;
+								case e_iunitR1.MOV:
+									res = opa.Clone() ;
+									break;
+							}
+							break;
 						case e_iunit.R3E:
 							res = ProcessR3(insnn, opa, opb, opc);
 							break;
 						case e_iunit.R3O:
 							res = ProcessR3(insnn, opa, opb, opc);
+							break;
+						case e_iunit.SLTI:
+							res = Int128.Convert(Int128.LT(opa, opb));
 							break;
 						case e_iunit.ADDI:
 							res = Int128.Add(opa, rii);
@@ -710,7 +748,8 @@ namespace EM80
 				case e_unitTypes.M:
 					ulong Sc = 1;
 					mopcode = (e_munit)(((insnn >> 6) & 15L) | (((insnn >> 33) & 3L) << 4));
-					if (((uint)mopcode & 0x20)!=0)
+					isLoad = ((uint)mopcode & 0x20)== 0;
+					if (!isLoad)
 					{
 						if (mopcode == e_munit.PUSH)
 						{
@@ -754,7 +793,10 @@ namespace EM80
 						case 6: Sc = 10; break;
 						case 7: Sc = 15; break;
 					}
-					max.digits[0] = opa.digits[0] + (opc.digits[0] * Sc) + (insnn & 0x3f);
+					if (isLoad)
+						max.digits[0] = opa.digits[0] + (opc.digits[0] * Sc) + ((insnn >> 16) & 0x3f);
+					else
+						max.digits[0] = opa.digits[0] + (opc.digits[0] * Sc) + (insnn & 0x3f);
 					max.digits[1] = 0;
 					max.digits[2] = 0;
 					max.digits[3] = 0;
@@ -798,6 +840,10 @@ namespace EM80
 							break;
 						case e_munit.LDB:
 							res = soc.Read(ma);
+							res.digits[0] &= 0xffL;
+							res.digits[1] = 0;
+							res.digits[2] = 0;
+							res.digits[3] = 0;
 							if ((res.digits[1] & 0x80L) != 0)
 							{
 								res.digits[0] |= 0xffffff00L;
@@ -808,13 +854,10 @@ namespace EM80
 							break;
 						case e_munit.LDBU:
 							res = soc.Read(ma);
-							if ((res.digits[1] & 0x80L) != 0)
-							{
-								res.digits[0] &= 0x00ffL;
-								res.digits[1] = 0x00L;
-								res.digits[2] = 0x00L;
-								res.digits[3] = 0x00L;
-							}
+							res.digits[0] &= 0xffL;
+							res.digits[1] = 0;
+							res.digits[2] = 0;
+							res.digits[3] = 0;
 							break;
 						case e_munit.LDD:
 							res = soc.Read(ma);
@@ -836,6 +879,35 @@ namespace EM80
 							res = soc.Read(ma);
 							res.digits[2] = 0x00000000L;
 							res.digits[3] = 0x00000000L;
+							break;
+						case e_munit.MLX:
+							switch((e_munit5)funct5)
+							{
+								case e_munit5.LDBX:
+									res = soc.Read(max);
+									res.digits[0] &= 0xffL;
+									res.digits[1] = 0;
+									res.digits[2] = 0;
+									res.digits[3] = 0;
+									if ((res.digits[1] & 0x80L) != 0)
+									{
+										res.digits[0] |= 0xffffff00L;
+										res.digits[1] = 0xffffffffL;
+										res.digits[2] = 0xffffffffL;
+										res.digits[3] = 0xffffffffL;
+									}
+									break;
+								case e_munit5.LDDX:
+									res = soc.Read(max);
+									res.digits[2] &= 0xffffL;
+									res.digits[3] = 0;
+									if ((res.digits[2] & 0x8000L) != 0)
+									{
+										res.digits[2] |= 0xffff0000L;
+										res.digits[3] = 0xffffffffL;
+									}
+									break;
+							}
 							break;
 					}
 					IncIp(1);

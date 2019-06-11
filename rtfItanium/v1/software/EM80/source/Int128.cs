@@ -18,6 +18,15 @@ namespace EM80
 			digits[2] = 0;
 			digits[3] = 0;
 		}
+		public static Int128 Convert(bool b)
+		{
+			Int128 a = new Int128();
+			if (b)
+				a.digits[0] = 1;
+			else
+				a.digits[0] = 0;
+			return a;
+		}
 		public static Int128 Convert(long nn)
 		{
 			Int128 a = new Int128();
@@ -134,6 +143,21 @@ namespace EM80
 			}
 			dif.mask();
 			return dif;
+		}
+		public static Int128 Mul(Int128 a, Int128 b)
+		{
+			Int128 aa = a.Clone();
+			Int128 p = new Int128();
+			int nn;
+
+			for (nn = 0; nn < 128; nn++)
+			{
+				if (((aa.digits[3] >> 31) & 1) != 0)
+					p = Add(p, b);
+				p = Shl(p, 1);
+				aa = Shl(aa, 1);
+			}
+			return p;
 		}
 		public static bool LT(Int128 a, Int128 b)
 		{

@@ -43,6 +43,9 @@
 			this.textBox1 = new System.Windows.Forms.TextBox();
 			this.label1 = new System.Windows.Forms.Label();
 			this.numericUpDown1 = new System.Windows.Forms.NumericUpDown();
+			this.runForToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+			this.label2 = new System.Windows.Forms.Label();
+			this.label3 = new System.Windows.Forms.Label();
 			this.menuStrip1.SuspendLayout();
 			((System.ComponentModel.ISupportInitialize)(this.numericUpDown1)).BeginInit();
 			this.SuspendLayout();
@@ -78,7 +81,8 @@
 			// 
 			this.runToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.resetToolStripMenuItem,
-            this.stepToolStripMenuItem});
+            this.stepToolStripMenuItem,
+            this.runForToolStripMenuItem});
 			this.runToolStripMenuItem.Name = "runToolStripMenuItem";
 			this.runToolStripMenuItem.Size = new System.Drawing.Size(40, 20);
 			this.runToolStripMenuItem.Text = "&Run";
@@ -93,8 +97,8 @@
 			// stepToolStripMenuItem
 			// 
 			this.stepToolStripMenuItem.Name = "stepToolStripMenuItem";
-			this.stepToolStripMenuItem.Size = new System.Drawing.Size(102, 22);
-			this.stepToolStripMenuItem.Text = "&Step";
+			this.stepToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
+			this.stepToolStripMenuItem.Text = "&Step (F10)";
 			this.stepToolStripMenuItem.Click += new System.EventHandler(this.stepToolStripMenuItem_Click);
 			// 
 			// dumpToolStripMenuItem
@@ -157,11 +161,38 @@
 			this.numericUpDown1.TextAlign = System.Windows.Forms.HorizontalAlignment.Right;
 			this.numericUpDown1.ValueChanged += new System.EventHandler(this.numericUpDown1_ValueChanged);
 			// 
+			// runForToolStripMenuItem
+			// 
+			this.runForToolStripMenuItem.Name = "runForToolStripMenuItem";
+			this.runForToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
+			this.runForToolStripMenuItem.Text = "Run For";
+			this.runForToolStripMenuItem.Click += new System.EventHandler(this.runForToolStripMenuItem_Click);
+			// 
+			// label2
+			// 
+			this.label2.AutoSize = true;
+			this.label2.Location = new System.Drawing.Point(376, 507);
+			this.label2.Name = "label2";
+			this.label2.Size = new System.Drawing.Size(35, 13);
+			this.label2.TabIndex = 4;
+			this.label2.Text = "label2";
+			// 
+			// label3
+			// 
+			this.label3.AutoSize = true;
+			this.label3.Location = new System.Drawing.Point(438, 507);
+			this.label3.Name = "label3";
+			this.label3.Size = new System.Drawing.Size(35, 13);
+			this.label3.TabIndex = 5;
+			this.label3.Text = "label3";
+			// 
 			// Form1
 			// 
 			this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
 			this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
 			this.ClientSize = new System.Drawing.Size(1248, 529);
+			this.Controls.Add(this.label3);
+			this.Controls.Add(this.label2);
 			this.Controls.Add(this.numericUpDown1);
 			this.Controls.Add(this.label1);
 			this.Controls.Add(this.textBox1);
@@ -169,7 +200,7 @@
 			this.KeyPreview = true;
 			this.MainMenuStrip = this.menuStrip1;
 			this.Name = "Form1";
-			this.Text = "Form1";
+			this.Text = "rtfItanium Emulator";
 			this.Load += new System.EventHandler(this.Form1_Load);
 			this.KeyDown += new System.Windows.Forms.KeyEventHandler(this.Form1_KeyDown);
 			this.menuStrip1.ResumeLayout(false);
@@ -196,6 +227,9 @@
 		private System.Windows.Forms.TextBox textBox1;
 		private System.Windows.Forms.Label label1;
 		private System.Windows.Forms.NumericUpDown numericUpDown1;
+		private System.Windows.Forms.ToolStripMenuItem runForToolStripMenuItem;
+		private System.Windows.Forms.Label label2;
+		private System.Windows.Forms.Label label3;
 	}
 }
 

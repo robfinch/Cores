@@ -53,6 +53,12 @@
     <Compile Include="Form1.Designer.cs">
       <DependentUpon>Form1.cs</DependentUpon>
     </Compile>
+    <Compile Include="frmRunFor.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="frmRunFor.Designer.cs">
+      <DependentUpon>frmRunFor.cs</DependentUpon>
+    </Compile>
     <Compile Include="Int128.cs" />
     <Compile Include="LED.cs">
       <SubType>UserControl</SubType>
@@ -66,6 +72,9 @@
     <Compile Include="SoC.cs" />
     <EmbeddedResource Include="Form1.resx">
       <DependentUpon>Form1.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="frmRunFor.resx">
+      <DependentUpon>frmRunFor.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="LED.resx">
       <DependentUpon>LED.cs</DependentUpon>

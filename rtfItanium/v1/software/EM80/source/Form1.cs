@@ -20,6 +20,8 @@ namespace EM80
 		TextBox tbAddr = new TextBox();
 		LED[] leds;
 		int regset;
+		int count;
+		bool BreakPressed;
 
 		public void UpdateRegisters()
 		{
@@ -53,6 +55,7 @@ namespace EM80
 
 			InitializeComponent();
 
+			BreakPressed = false;
 			leds = new LED[8];
 			for (nn = 0; nn < 8; nn++)
 			{
@@ -188,9 +191,14 @@ namespace EM80
 
 		private void Form1_KeyDown(object sender, KeyEventArgs e)
 		{
-			if (e.KeyCode == Keys.F10)
+			if (e.Control && e.KeyCode == Keys.C)
 			{
-				e.Handled = true;
+				BreakPressed = true;
+				e.SuppressKeyPress = true;
+			}
+			else if (e.KeyCode == Keys.F10)
+			{
+				e.SuppressKeyPress = true;
 				soc.Step();
 				UpdateRegisters();
 				//Application.DoEvents();
@@ -211,6 +219,25 @@ namespace EM80
 		{
 			regset = Convert.ToInt32(numericUpDown1.Value) * 64;
 			UpdateRegisters();
+		}
+
+		private void runForToolStripMenuItem_Click(object sender, EventArgs e)
+		{
+			frmRunFor rf = new frmRunFor();
+			if (rf.ShowDialog() == DialogResult.OK)
+			{
+				count = rf.count;
+				BreakPressed = false;
+				for (; count > 0; count--)
+				{
+					if (BreakPressed)
+						count = 0;
+					soc.Step();
+					UpdateRegisters();
+					if ((count & 63) == 0)
+						Application.DoEvents();
+				}
+			}
 		}
 	}
 }
