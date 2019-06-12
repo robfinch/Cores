@@ -31,7 +31,7 @@ input clk;
 input clk2x;
 input wr0;
 input [9:0] wa0;
-input [WID-1:0] i0;
+input [WID+3:0] i0;
 input wr1;
 input [9:0] wa1;
 input [WID-1:0] i1;
@@ -45,27 +45,27 @@ input [9:0] ra5;
 input [9:0] ra6;
 input [9:0] ra7;
 input [9:0] ra8;
-output [WID-1:0] o0;
-output [WID-1:0] o1;
-output [WID-1:0] o2;
-output [WID-1:0] o3;
-output [WID-1:0] o4;
-output [WID-1:0] o5;
-output [WID-1:0] o6;
-output [WID-1:0] o7;
-output [WID-1:0] o8;
+output [WID+3:0] o0;
+output [WID+3:0] o1;
+output [WID+3:0] o2;
+output [WID+3:0] o3;
+output [WID+3:0] o4;
+output [WID+3:0] o5;
+output [WID+3:0] o6;
+output [WID+3:0] o7;
+output [WID+3:0] o8;
 
 //reg [5:0] rra0, rra1;
 //reg [WID-1:0] mem [0:63];
 integer n;
-wire [WID-1:0] p0o, p1o, p2o, p3o, p4o, p5o, p6o, p7o, p8o;
+wire [WID+3:0] p0o, p1o, p2o, p3o, p4o, p5o, p6o, p7o, p8o;
 
 wire wr = clk ? wr0 : wr1;
 wire [9:0] wa = clk ? wa0 : wa1;
-wire [WID-1:0] i = clk ? i0 : i1;
+wire [WID+3:0] i = clk ? i0 : i1;
 
 `ifdef SIM
-reg [WID-1:0] mem [0:1023];
+reg [WID+3:0] mem [0:1023];
 initial begin
 	for (n = 0; n < 1024; n = n + 1)
 		mem[n] = {WID{1'b0}};
@@ -94,7 +94,7 @@ regfileRam u1 (
   .enb(1'b1),      // input wire enb
   .web(1'b0),      // input wire [0 : 0] web
   .addrb(ra0),  // input wire [9 : 0] addrb
-  .dinb(80'h0),    // input wire [79 : 0] dinb
+  .dinb(84'h0),    // input wire [79 : 0] dinb
   .doutb(p0o)  // output wire [79 : 0] doutb
 );
 
@@ -109,7 +109,7 @@ regfileRam u2 (
   .enb(1'b1),      // input wire enb
   .web(1'b0),      // input wire [0 : 0] web
   .addrb(ra1),  // input wire [9 : 0] addrb
-  .dinb(80'h0),    // input wire [79 : 0] dinb
+  .dinb(84'h0),    // input wire [79 : 0] dinb
   .doutb(p1o)  // output wire [79 : 0] doutb
 );
 
@@ -124,7 +124,7 @@ regfileRam u3 (
   .enb(1'b1),      // input wire enb
   .web(1'b0),      // input wire [0 : 0] web
   .addrb(ra2),  // input wire [9 : 0] addrb
-  .dinb(80'h0),    // input wire [79 : 0] dinb
+  .dinb(84'h0),    // input wire [79 : 0] dinb
   .doutb(p2o)  // output wire [79 : 0] doutb
 );
 
@@ -139,7 +139,7 @@ regfileRam u4 (
   .enb(1'b1),      // input wire enb
   .web(1'b0),      // input wire [0 : 0] web
   .addrb(ra3),  // input wire [9 : 0] addrb
-  .dinb(80'h0),    // input wire [79 : 0] dinb
+  .dinb(84'h0),    // input wire [79 : 0] dinb
   .doutb(p3o)  // output wire [79 : 0] doutb
 );
 
@@ -154,7 +154,7 @@ regfileRam u5 (
   .enb(1'b1),      // input wire enb
   .web(1'b0),      // input wire [0 : 0] web
   .addrb(ra4),  // input wire [9 : 0] addrb
-  .dinb(80'h0),    // input wire [79 : 0] dinb
+  .dinb(84'h0),    // input wire [79 : 0] dinb
   .doutb(p4o)  // output wire [79 : 0] doutb
 );
 
@@ -169,7 +169,7 @@ regfileRam u6 (
   .enb(1'b1),      // input wire enb
   .web(1'b0),      // input wire [0 : 0] web
   .addrb(ra5),  // input wire [9 : 0] addrb
-  .dinb(80'h0),    // input wire [79 : 0] dinb
+  .dinb(84'h0),    // input wire [79 : 0] dinb
   .doutb(p5o)  // output wire [79 : 0] doutb
 );
 
@@ -184,7 +184,7 @@ regfileRam u7 (
   .enb(1'b1),      // input wire enb
   .web(1'b0),      // input wire [0 : 0] web
   .addrb(ra6),  // input wire [9 : 0] addrb
-  .dinb(80'h0),    // input wire [79 : 0] dinb
+  .dinb(84'h0),    // input wire [79 : 0] dinb
   .doutb(p6o)  // output wire [79 : 0] doutb
 );
 
@@ -199,7 +199,7 @@ regfileRam u8 (
   .enb(1'b1),      // input wire enb
   .web(1'b0),      // input wire [0 : 0] web
   .addrb(ra7),  // input wire [9 : 0] addrb
-  .dinb(80'h0),    // input wire [79 : 0] dinb
+  .dinb(84'h0),    // input wire [79 : 0] dinb
   .doutb(p7o)  // output wire [79 : 0] doutb
 );
 
@@ -214,19 +214,19 @@ regfileRam u9 (
   .enb(1'b1),      // input wire enb
   .web(1'b0),      // input wire [0 : 0] web
   .addrb(ra8),  // input wire [9 : 0] addrb
-  .dinb(80'h0),    // input wire [79 : 0] dinb
+  .dinb(84'h0),    // input wire [79 : 0] dinb
   .doutb(p8o)  // output wire [79 : 0] doutb
 );
 `endif
 
-assign o0 = ra0[5:0]==6'd0 ? {WID{1'b0}} : ra0==wa1 && wr1 ? i1 : ra0==wa0 && wr0 ? i0 : p0o;
-assign o1 = ra1[5:0]==6'd0 ? {WID{1'b0}} : ra1==wa1 && wr1 ? i1 : ra1==wa0 && wr0 ? i0 : p1o;
-assign o2 = ra2[5:0]==6'd0 ? {WID{1'b0}} : ra2==wa1 && wr1 ? i1 : ra2==wa0 && wr0 ? i0 : p2o;
-assign o3 = ra3[5:0]==6'd0 ? {WID{1'b0}} : ra3==wa1 && wr1 ? i1 : ra3==wa0 && wr0 ? i0 : p3o;
-assign o4 = ra4[5:0]==6'd0 ? {WID{1'b0}} : ra4==wa1 && wr1 ? i1 : ra4==wa0 && wr0 ? i0 : p4o;
-assign o5 = ra5[5:0]==6'd0 ? {WID{1'b0}} : ra5==wa1 && wr1 ? i1 : ra5==wa0 && wr0 ? i0 : p5o;
-assign o6 = ra6[5:0]==6'd0 ? {WID{1'b0}} : ra6==wa1 && wr1 ? i1 : ra6==wa0 && wr0 ? i0 : p6o;
-assign o7 = ra7[5:0]==6'd0 ? {WID{1'b0}} : ra7==wa1 && wr1 ? i1 : ra7==wa0 && wr0 ? i0 : p7o;
-assign o8 = ra8[5:0]==6'd0 ? {WID{1'b0}} : ra8==wa1 && wr1 ? i1 : ra8==wa0 && wr0 ? i0 : p8o;
+assign o0 = ra0[5:0]==6'd0 ? {WID+4{1'b0}} : ra0==wa1 && wr1 ? i1 : ra0==wa0 && wr0 ? i0 : p0o;
+assign o1 = ra1[5:0]==6'd0 ? {WID+4{1'b0}} : ra1==wa1 && wr1 ? i1 : ra1==wa0 && wr0 ? i0 : p1o;
+assign o2 = ra2[5:0]==6'd0 ? {WID+4{1'b0}} : ra2==wa1 && wr1 ? i1 : ra2==wa0 && wr0 ? i0 : p2o;
+assign o3 = ra3[5:0]==6'd0 ? {WID+4{1'b0}} : ra3==wa1 && wr1 ? i1 : ra3==wa0 && wr0 ? i0 : p3o;
+assign o4 = ra4[5:0]==6'd0 ? {WID+4{1'b0}} : ra4==wa1 && wr1 ? i1 : ra4==wa0 && wr0 ? i0 : p4o;
+assign o5 = ra5[5:0]==6'd0 ? {WID+4{1'b0}} : ra5==wa1 && wr1 ? i1 : ra5==wa0 && wr0 ? i0 : p5o;
+assign o6 = ra6[5:0]==6'd0 ? {WID+4{1'b0}} : ra6==wa1 && wr1 ? i1 : ra6==wa0 && wr0 ? i0 : p6o;
+assign o7 = ra7[5:0]==6'd0 ? {WID+4{1'b0}} : ra7==wa1 && wr1 ? i1 : ra7==wa0 && wr0 ? i0 : p7o;
+assign o8 = ra8[5:0]==6'd0 ? {WID+4{1'b0}} : ra8==wa1 && wr1 ? i1 : ra8==wa0 && wr0 ? i0 : p8o;
 
 endmodule

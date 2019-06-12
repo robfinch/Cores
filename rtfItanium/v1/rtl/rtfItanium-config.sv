@@ -88,7 +88,7 @@
 // affects how many instructions are queued.
 `define WAYS			2				// number of ways parallel (1-3)
 `define NUM_IDU		3				// number of instruction decode units (3 only)
-`define NUM_ALU		2				// number of ALU's (1-2)
+`define NUM_ALU		1				// number of ALU's (1-2)
 `define NUM_AGEN	1				// number of address generators (1-2)
 `define NUM_MEM		1				// number of memory queues (1-2)
 `define NUM_FPU		1				// number of floating-point units (0-2)

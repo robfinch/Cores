@@ -30,12 +30,14 @@ module ICController(rst_i, clk_i, ip, hit, bstate, state,
 	invline, invlineAddr, icl_ctr,
 	thread_en, ihitL2, L2_ld, L2_cnt, L2_adr, L2_dat, L2_nxt,
 	L1_selpc, L1_adr, L1_dat, L1_wr, L1_invline, icnxt, icwhich,
+	ROM_dat, isROM,
 	icl_o, cti_o, bte_o, bok_i, cyc_o, stb_o, ack_i, err_i, tlbmiss_i, exv_i, sel_o, adr_o, dat_i);
 parameter ABW = 80;
 parameter AMSB = ABW-1;
 parameter RSTPC = 80'hFFFFFFFFFFFFFFFC0100;
 parameter L2_ReadLatency = 3'd3;
 parameter L1_WriteLatency = 3'd3;
+parameter ROM_ReadLatency = 3'd1;
 input rst_i;
 input clk_i;
 input [AMSB:0] ip;
@@ -58,6 +60,8 @@ output reg [AMSB:0] L1_adr = RSTPC;
 output reg [257:0] L1_dat = {8'h1F,120'h0};	// NOP
 output reg L1_wr;
 output reg L1_invline;
+input [255:0] ROM_dat;
+output isROM;
 output reg icnxt;
 output reg [1:0] icwhich = 2'b00;
 output reg icl_o;
@@ -85,7 +89,7 @@ reg [79:0] invlineAddr_r = 72'd0;
 //assign L2_ld = (state==IC_Ack) && (ack_i|err_i|tlbmiss_i|exv_i);
 reg selpc1;
 assign L1_selpc = (state==IDLE||selpc1) && !invline_r;
-
+assign isROM = L1_adr[AMSB:20]=={AMSB+1-20{1'b1}};
 wire clk = clk_i;
 reg [2:0] iccnt;
 assign L2_cnt = iccnt;
@@ -146,7 +150,13 @@ IDLE:
 IC2:
 	begin
 		iccnt <= iccnt + 3'd1;
-		if (iccnt==L2_ReadLatency) begin
+		if (isROM && iccnt==ROM_ReadLatency) begin
+			L1_wr <= TRUE;
+			L1_dat <= ROM_dat;
+			iccnt <= 3'd0;
+			state <= IC5;
+		end
+		else if (!isROM && iccnt==L2_ReadLatency) begin
 			iccnt <= 3'd0;
 	    state <= IC_WaitL2;
 	  end

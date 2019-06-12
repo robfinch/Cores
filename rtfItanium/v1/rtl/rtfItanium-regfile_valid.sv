@@ -112,37 +112,16 @@ else begin
 	if (!branchmiss)
 		case(slotvd)
 		3'b000:	;
-		3'b100:
-			if (queuedOn[2]) begin
-				if (slot_rfw[2])
-					rf_v [Rd[2]] <= `INV;
+		3'b001:
+			if (queuedOn[0]) begin
+				if (slot_rfw[0]) begin
+					rf_v [Rd[0]] <= `INV;
+				end
 			end
 		3'b010:
 			if (queuedOn[1]) begin
-				if (slot_rfw[1])
+				if (slot_rfw[1]) begin
 					rf_v [Rd[1]] <= `INV;
-			end
-		3'b001:
-			if (queuedOn[0]) begin
-				if (slot_rfw[0])
-					rf_v [Rd[0]] <= `INV;
-			end
-		3'b110:
-			if (queuedOn[2]) begin
-				if (slot_rfw[1])
-					rf_v [Rd[1]] <= `INV;
-				if (queuedOn[2]) begin
-					if (slot_rfw[2])
-						rf_v [Rd[2]] <= `INV;
-				end
-			end
-		3'b101:
-			if (queuedOn[0]) begin
-				if (slot_rfw[0])
-					rf_v [Rd[0]] <= `INV;
-				if (queuedOn[2]) begin
-					if (slot_rfw[1])
-						rf_v [Rd[1]] <= `INV;
 				end
 			end
 		3'b011:
@@ -154,6 +133,31 @@ else begin
 						rf_v [Rd[1]] <= `INV;
 				end
 			end
+		3'b100:
+			if (queuedOn[2]) begin
+				if (slot_rfw[2]) begin
+					rf_v [Rd[2]] <= `INV;
+				end
+			end
+		3'b101:
+			if (queuedOn[0]) begin
+				if (slot_rfw[0])
+					rf_v [Rd[0]] <= `INV;
+				if (queuedOn[2]) begin
+					if (slot_rfw[2])
+						rf_v [Rd[2]] <= `INV;
+				end
+			end
+		3'b110:
+			if (queuedOn[1]) begin
+				if (slot_rfw[1]) begin
+					rf_v [Rd[1]] <= `INV;
+				end
+				if (queuedOn[2]) begin
+					if (slot_rfw[2])
+						rf_v [Rd[2]] <= `INV;
+				end
+			end
 		3'b111:
 			if (queuedOn[0]) begin
 				if (slot_rfw[0])
@@ -162,8 +166,8 @@ else begin
 					if (slot_rfw[1])
 						rf_v [Rd[1]] <= `INV;
 					if (queuedOn[2]) begin
-						if (slot_rfw[1])
-							rf_v [Rd[1]] <= `INV;
+						if (slot_rfw[2])
+							rf_v [Rd[2]] <= `INV;
 					end
 				end
 			end

@@ -22,7 +22,7 @@
 // ============================================================================
 //
 module write_buffer(rst_i, clk_i, bstate, cyc_pending, wb_has_bus, update_iq, uid, fault,
-	wb_v, wb_addr, cwr_o, csel_o, cadr_o, cdat_o,
+	wb_v, wb_addr, wb_en_i, cwr_o, csel_o, cadr_o, cdat_o,
 	p0_id_i, p0_ol_i, p0_wr_i, p0_ack_o, p0_sel_i, p0_adr_i, p0_dat_i, p0_hit,
 	p1_id_i, p1_ol_i, p1_wr_i, p1_ack_o, p1_sel_i, p1_adr_i, p1_dat_i, p1_hit,
 	ol_o, cyc_o, stb_o, ack_i, err_i, tlbmiss_i, wrv_i, we_o, sel_o, adr_o, dat_o, cr_o);
@@ -45,6 +45,7 @@ output reg [7:0] fault;
 output reg [QENTRIES-1:0] uid;
 output reg [WB_DEPTH-1:0] wb_v;
 output reg [79:0] wb_addr [0:WB_DEPTH-1];
+input wb_en_i;
 
 input [3:0] p0_id_i;
 input p0_ol_i;
@@ -153,9 +154,12 @@ if (rst_i) begin
 	wb_has_bus <= FALSE;
 	wb_v <= 1'b0;
 	wb_ptr <= 1'd0;
+	wb_en <= TRUE;
 	update_iq <= FALSE;
 end
 else begin
+	if (wb_en_i)
+		wb_en <= TRUE;
 	cwr_o <= LOW;
 	update_iq <= FALSE;
 	p0_ack_o <= FALSE;
