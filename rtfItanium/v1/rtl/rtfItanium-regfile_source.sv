@@ -29,6 +29,7 @@ module regfile_source(rst, clk, branchmiss, slotvd, slot_rfw,
 	queuedOn,	Rd, tails, iq_latestID, iq_tgt, rf_source);
 parameter AREGS = 128;
 parameter QENTRIES = `QENTRIES;
+parameter RENTRIES = `RENTRIES;
 parameter QSLOTS = `QSLOTS;
 parameter RBIT = 6;
 input rst;

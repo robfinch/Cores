@@ -102,11 +102,11 @@ else begin
   // still as expected to validate the register.
 	if (commit0_v) begin
     if (!rf_v[ {commit0_tgt[RBIT:0]} ])
-      rf_v[ {commit0_tgt[RBIT:0]} ] <= rf_source[ commit0_tgt[RBIT:0] ] == commit0_id || (branchmiss && iq_source[ commit0_id[`QBITS] ]);
+      rf_v[ {commit0_tgt[RBIT:0]} ] <= rf_source[ commit0_tgt[RBIT:0] ] == commit0_id || (branchmiss && iq_source[ commit0_id ]);
   end
   if (commit1_v && `NUM_CMT > 1) begin
     if (!rf_v[ {commit1_tgt[RBIT:0]} ]) //&& !(commit0_v && (rf_source[ commit0_tgt[RBIT:0] ] == commit0_id || (branchmiss && iq_source[ commit0_id[`QBITS] ]))))
-      rf_v[ {commit1_tgt[RBIT:0]} ] <= rf_source[ commit1_tgt[RBIT:0] ] == commit1_id || (branchmiss && iq_source[ commit1_id[`QBITS] ]);
+      rf_v[ {commit1_tgt[RBIT:0]} ] <= rf_source[ commit1_tgt[RBIT:0] ] == commit1_id || (branchmiss && iq_source[ commit1_id ]);
   end
 
 	if (!branchmiss)

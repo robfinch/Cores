@@ -24,29 +24,34 @@
 `include "rtfItanium-config.sv"
 `include "rtfItanium-defines.sv"
 
-module tailptrs(rst_i, clk_i, branchmiss, iq_stomp, iq_br_tag, queuedCnt, tails, active_tag);
+module tailptrs(rst_i, clk_i, branchmiss, iq_stomp, iq_br_tag, queuedCnt, iq_tails, active_tag,
+	rqueuedCnt, rob_tails);
 parameter QENTRIES = `QENTRIES;
 parameter QSLOTS = `QSLOTS;
+parameter RENTRIES = `RENTRIES;
+parameter RSLOTS = `RSLOTS;
 input rst_i;
 input clk_i;
 input branchmiss;
 input [QENTRIES-1:0] iq_stomp;
 input [`QBITS] iq_br_tag [0:QENTRIES-1];
 input [2:0] queuedCnt;
-output reg [`QBITS] tails [0:QSLOTS-1];
+output reg [`QBITS] iq_tails [0:QSLOTS-1];
 output reg [`QBITS] active_tag;
+input [2:0] rqueuedCnt;
+output reg [`RBITS] rob_tails [0:RSLOTS-1];
 
 integer n, j;
 
 always @(posedge clk_i)
 if (rst_i) begin
 	for (n = 0; n < QSLOTS; n = n + 1)
-		tails[n] <= n;
+		iq_tails[n] <= n;
 end
 else begin
 	if (!branchmiss) begin
 		for (n = 0; n < QSLOTS; n = n + 1)
-   		tails[n] <= (tails[n]+queuedCnt) % QENTRIES;
+   		iq_tails[n] <= (iq_tails[n]+queuedCnt) % QENTRIES;
 	end
 	else begin	// if branchmiss
 		for (n = QENTRIES-1; n >= 0; n = n - 1)
@@ -54,10 +59,20 @@ else begin
 			// a positive number.
 			if (iq_stomp[n] & ~iq_stomp[(n+(QENTRIES-1))%QENTRIES]) begin
 				for (j = 0; j < QSLOTS; j = j + 1)
-					tails[j] <= (n + j) % QENTRIES;
+					iq_tails[j] <= (n + j) % QENTRIES;
 				active_tag <= iq_br_tag[n];
 			end
 	end
+end
+
+always @(posedge clk_i)
+if (rst_i) begin
+	for (n = 0; n < RSLOTS; n = n + 1)
+		rob_tails[n] <= n;
+end
+else begin
+	for (n = 0; n < RSLOTS; n = n + 1)
+		rob_tails[n] <= (rob_tails[n] + rqueuedCnt) % RENTRIES;	
 end
 
 endmodule
