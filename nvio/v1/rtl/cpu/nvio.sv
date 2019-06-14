@@ -172,9 +172,9 @@ wire [RBIT:0] Rs1 [0:QSLOTS-1];
 wire [RBIT:0] Rs2 [0:QSLOTS-1];
 wire [RBIT:0] Rs3 [0:QSLOTS-1];
 wire [RBIT:0] Rd [0:QSLOTS-1];
-wire [WID-1:0] rfoa [0:QSLOTS-1];
-wire [WID-1:0] rfob [0:QSLOTS-1];
-wire [WID-1:0] rfoc [0:QSLOTS-1];
+wire [WID+3:0] rfoa [0:QSLOTS-1];
+wire [WID+3:0] rfob [0:QSLOTS-1];
+wire [WID+3:0] rfoc [0:QSLOTS-1];
 wire  [AREGS-1:0] rf_v;
 reg  [`QBITS] rf_source[0:AREGS-1];
 wire [1:0] ol;
@@ -705,6 +705,7 @@ reg [WID-1:0] fcu_argC;
 reg [WID-1:0] fcu_argI;	// only used by BEQ
 reg [WID-1:0] fcu_argT;
 reg [WID-1:0] fcu_argT2;
+reg [RBIT:0] fcu_tgt;
 reg [WID-1:0] fcu_ipc;
 reg [`ABITS] fcu_ip;
 reg [`ABITS] fcu_nextip;
@@ -4746,14 +4747,10 @@ if (fcu_wait) begin
 		fcu_dataready <= `TRUE;
 end
 
-// If the return segment is not the same as the current code segment then a
-// segment load is triggered via the memory unit by setting the iq state to
-// AGEN. Otherwise the state is set to CMT which will cause a bypass of the
-// segment load from memory.
-
 if (fcu_v) begin
 	fcu_done <= `TRUE;
 	iq_ma  [ fcu_id[`QBITS] ] <= fcu_missip;
+	rob_tgt [ fcu_rid] <= fcu_tgt;
   rob_res [ fcu_rid[`QBITS] ] <= {rfcu_bus,4'd0};
   rob_exc [ fcu_rid[`QBITS] ] <= fcu_exc;
 	if (iq_state[fcu_id]==IQS_OUT)
@@ -5151,6 +5148,7 @@ end
                  fpu1_argI	<= iq_argI[n];
                  fpu1_dataready <= `VAL;
                  fpu1_ld <= TRUE;
+                 fpu1_tgt <= iq_tgt[n];
                  iq_state[n] <= IQS_OUT;
             end
         end
@@ -5213,6 +5211,7 @@ end
                  fpu2_argI	<= iq_argI[n];
                  fpu2_dataready <= `VAL;
                  fpu2_ld <= TRUE;
+                 fpu2_tgt <= iq_tgt[n];
                  iq_state[n] <= IQS_OUT;
             end
         end
@@ -5310,6 +5309,7 @@ end
 				fcu_clearbm <= `FALSE;
 				fcu_ld <= TRUE;
 				fcu_timeout <= 8'h00;
+        fcu_tgt <= iq_tgt[n];
 				iq_state[n] <= IQS_OUT;
 				fcu_done <= `FALSE;
       end
