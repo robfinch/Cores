@@ -6,7 +6,7 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	fpAddsub_L10.v
+//	fpAddsub_r.v
 //    - floating point adder/subtracter
 //    - ten cycle latency
 //    - can issue every clock cycle
@@ -29,9 +29,34 @@
 //                                                                          
 // ============================================================================
 
-module fpAddsub_L10(clk, ce, rm, op, a, b, o);
+module fpAddsub(clk, ce, rm, op, a, b, o);
 parameter WID = 128;
-`include "fpSize.sv"
+localparam MSB = WID-1;
+localparam EMSB = WID==128 ? 14 :
+                  WID==96 ? 14 :
+                  WID==80 ? 14 :
+                  WID==64 ? 10 :
+				  WID==52 ? 10 :
+				  WID==48 ? 11 :
+				  WID==44 ? 10 :
+				  WID==42 ? 10 :
+				  WID==40 ?  9 :
+				  WID==32 ?  7 :
+				  WID==24 ?  6 : 4;
+localparam FMSB = WID==128 ? 111 :
+                  WID==96 ? 79 :
+                  WID==80 ? 63 :
+                  WID==64 ? 51 :
+				  WID==52 ? 39 :
+				  WID==48 ? 34 :
+				  WID==44 ? 31 :
+				  WID==42 ? 29 :
+				  WID==40 ? 28 :
+				  WID==32 ? 22 :
+				  WID==24 ? 15 : 9;
+
+localparam FX = (FMSB+2)*2-1;	// the MSB of the expanded fraction
+localparam EX = FX + 1 + EMSB + 1 + 1 - 1;
 
 input clk;		// system clock
 input ce;		// core clock enable
@@ -43,7 +68,7 @@ output [EX:0] o;	// output
 
 wire so;			// sign output
 wire [EMSB:0] xo;	// de normalized exponent output
-reg [FX:0] mo;	// mantissa output
+wire [FX:0] mo;	// mantissa output
 
 assign o = {so,xo,mo};
 
@@ -62,7 +87,7 @@ wire xaInf1, xbInf1;
 wire aInf1, bInf1;
 wire aNan1, bNan1;
 wire az1, bz1;	// operand a,b is zero
-wire op1;
+reg op1;
 
 fpDecompReg #(WID) u1a (.clk(clk), .ce(ce), .i(a), .o(a1), .sgn(sa1), .exp(xa1), .man(ma1), .fract(fracta1), .xz(adn1), .vz(az1), .xinf(xaInf1), .inf(aInf1), .nan(aNan1) );
 fpDecompReg #(WID) u1b (.clk(clk), .ce(ce), .i(b), .o(b1), .sgn(sb1), .exp(xb1), .man(mb1), .fract(fractb1), .xz(bdn1), .vz(bz1), .xinf(xbInf1), .inf(bInf1), .nan(bNan1) );
@@ -75,7 +100,6 @@ reg xabeq2;
 reg mabeq2;
 reg anbz2;
 reg xabInf2;
-reg anbInf2;
 wire [EMSB:0] xa2, xb2;
 wire [FMSB:0] ma2, mb2;
 // operands sign,exponent,mantissa
@@ -134,9 +158,9 @@ always @(posedge clk)
 // Clock edge #3
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 wire [EMSB:0] xa3, xb3;
-wire xa_gt_xb3;
+reg xa_gt_xb3;
 reg x_gt_b3;
-wire xabInf3;
+reg xabInf3;
 wire sa3,sb3;
 wire op3;
 wire [2:0] rm3;
@@ -179,7 +203,6 @@ always @(posedge clk)
 reg [EMSB:0] xdif4;
 wire [FMSB+1:0] mfs4;
 reg [EMSB:0] xo4;	// de normalized exponent output
-reg so4;
 
 always @(posedge clk)
 	if (ce) xo4 <= xabInf3 ? xa3 : resZero3 ? {EMSB+1{1'b0}} : xa_gt_xb3 ? xa3 : xb3;
@@ -229,14 +252,10 @@ if (WID==128)
     redor128 u1 (.a(xdif4), .b({mfs4,2'b0}), .o(sticky) );
 else if (WID==96)
     redor96 u1 (.a(xdif4), .b({mfs4,2'b0}), .o(sticky) );
-else if (WID==84)
-    redor84 u1 (.a(xdif4), .b({mfs4,2'b0}), .o(sticky) );
 else if (WID==80)
     redor80 u1 (.a(xdif4), .b({mfs4,2'b0}), .o(sticky) );
 else if (WID==64)
     redor64 u1 (.a(xdif4), .b({mfs4,2'b0}), .o(sticky) );
-else if (WID==40)
-    redor40 u1 (.a(xdif4), .b({mfs4,2'b0}), .o(sticky) );
 else if (WID==32)
     redor32 u1 (.a(xdif4), .b({mfs4,2'b0}), .o(sticky) );
 end
@@ -244,7 +263,7 @@ endgenerate
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 // Clock edge #6
-// Shift (denormalize)
+// Shift
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 reg [FMSB+3:0] md6;
 wire xa_gt_xb6;
@@ -278,10 +297,8 @@ always @(posedge clk)
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 reg [FMSB+3:0] oaa8;
 reg [FMSB+3:0] obb8;
-wire [EMSB:0] xo8;
 wire realOp8;
-vtdl #(.WID(1)) drealop7 (.clk(clk), .ce(ce), .a(4'd5), .d(realOp2), .q(realOp8));
-vtdl #(.WID(EMSB+1)) dxo7(.clk(clk), .ce(ce), .a(4'd3), .d(xo4), .q(xo8));
+delay6 #(1) drealop7 (.clk(clk), .ce(ce), .i(realOp2), .o(realOp8) );
 always @(posedge clk)
 	if (ce) oaa8 <= a_gt_b7 ? oa7 : ob7;
 always @(posedge clk)
@@ -296,43 +313,63 @@ wire anbInf9;
 wire aNan9, bNan9;
 wire op9;
 wire [FMSB+1:0] fracta9, fractb9;
-wire xo9;
-reg xinf9;
 
-vtdl #(1) danbInf7(.clk(clk), .ce(ce), .a(4'd6), .d(anbInf2), .q(anbInf9));
-vtdl #(1) danan8(.clk(clk), .ce(ce), .a(4'd7), .d(aNan1), .q(aNan9));
-vtdl #(1) dbnan8(.clk(clk), .ce(ce), .a(4'd7), .d(bNan1), .q(bNan9));
-vtdl #(1) dop6(.clk(clk), .ce(ce), .a(4'd5), .d(op3), .q(op9));
+delay7 #(1) danbInf7(.clk(clk), .ce(ce), .i(anbInf2), .o(anbInf9));
+delay8 #(1) danan8(.clk(clk), .ce(ce), .i(aNan1), .o(aNan9));
+delay8 #(1) dbnan8(.clk(clk), .ce(ce), .i(bNan1), .o(bNan9));
+delay6 #(1) dop6(.clk(clk), .ce(ce), .i(op3), .o(op9));
 delay3 #(FMSB+2)  dfracta8(.clk(clk), .ce(ce), .i(fracta6), .o(fracta9) );
 delay3 #(FMSB+2)  dfractb8(.clk(clk), .ce(ce), .i(fractb6), .o(fractb9) );
 
 always @(posedge clk)
 	if (ce) mab9 <= realOp8 ? oaa8 - obb8 : oaa8 + obb8;
-always @(posedge clk)
-	if (ce) xinf9 <= xo8 == {EMSB+1{1'b1}};
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 // Clock edge #10
 // Final outputs
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-vtdl #(1) dso6(.clk(clk), .ce(ce), .a(4'd5), .d(so4), .q(so));
-vtdl #(.WID(EMSB+1)) dxo6(.clk(clk), .ce(ce), .a(4'd1), .d(xo8), .q(xo));
+delay6 #(1) dso6(.clk(clk), .ce(ce), .i(so4), .o(so));
+delay6 #(EMSB+1) dxo6(.clk(clk), .ce(ce), .i(xo4), .o(xo));
 
 always @(posedge clk)
 if (ce)
-	casez({anbInf9,aNan9,bNan9,xinf9})
-	4'b1???:	mo <= {1'b0,op9,{FMSB-1{1'b0}},op9,{FMSB{1'b0}}};	// inf +/- inf - generate QNaN on subtract, inf on add
-	4'b01??:	mo <= {1'b0,fracta9[FMSB+1:0],{FMSB{1'b0}}};
-	4'b001?: 	mo <= {1'b0,fractb9[FMSB+1:0],{FMSB{1'b0}}};
-	4'b0001:	mo <= 1'd0;		// exponent hit infinity -> force mantissa to zero
+	casez({anbInf9,aNan9,bNan9})
+	3'b1??:		mo <= {1'b0,op9,{FMSB-1{1'b0}},op9,{FMSB{1'b0}}};	// inf +/- inf - generate QNaN on subtract, inf on add
+	3'b01?:		mo <= {1'b0,fracta9[FMSB+1:0],{FMSB{1'b0}}};
+	3'b001: 	mo <= {1'b0,fractb9[FMSB+1:0],{FMSB{1'b0}}};
 	default:	mo <= {mab9,{FMSB-1{1'b0}}};	// mab has an extra lead bit and two trailing bits
 	endcase
 
 endmodule
 
-module fpAddsubnr_L10(clk, ce, rm, op, a, b, o);
+module fpAddsubnr_r(clk, ce, rm, op, a, b, o);
 parameter WID = 128;
-`include "fpSize.sv"
+localparam MSB = WID-1;
+localparam EMSB = WID==128 ? 14 :
+                  WID==96 ? 14 :
+                  WID==80 ? 14 :
+                  WID==64 ? 10 :
+				  WID==52 ? 10 :
+				  WID==48 ? 11 :
+				  WID==44 ? 10 :
+				  WID==42 ? 10 :
+				  WID==40 ?  9 :
+				  WID==32 ?  7 :
+				  WID==24 ?  6 : 4;
+localparam FMSB = WID==128 ? 111 :
+                  WID==96 ? 79 :
+                  WID==80 ? 63 :
+                  WID==64 ? 51 :
+				  WID==52 ? 39 :
+				  WID==48 ? 34 :
+				  WID==44 ? 31 :
+				  WID==42 ? 29 :
+				  WID==40 ? 28 :
+				  WID==32 ? 22 :
+				  WID==24 ? 15 : 9;
+
+localparam FX = (FMSB+2)*2-1;	// the MSB of the expanded fraction
+localparam EX = FX + 1 + EMSB + 1 + 1 - 1;
 
 input clk;		// system clock
 input ce;		// core clock enable
@@ -345,7 +382,7 @@ output [MSB:0] o;	// output
 wire [EX:0] o1;
 wire [MSB+3:0] fpn0;
 
-fpAddsub_L10  #(WID) u1 (clk, ce, rm, op, a, b, o1);
+fpAddsub_r  #(WID) u1 (clk, ce, rm, op, a, b, o1);
 fpNormalize #(WID) u2(.clk(clk), .ce(ce), .under(1'b0), .i(o1), .o(fpn0) );
 fpRoundReg  #(WID) u3(.clk(clk), .ce(ce), .rm(rm), .i(fpn0), .o(o) );
 

@@ -25,15 +25,17 @@
 `define VAL		1'b1
 `define INV		1'b0
 
-module regfile_valid(rst, clk, slotvd, slot_rfw, tails,
-	livetarget, branchmiss,
-	commit0_v, commit1_v, commit0_id, commit1_id, commit0_tgt, commit1_tgt,
+module regfileValid(rst, clk, slotvd, slot_rfw, tails,
+	livetarget, branchmiss, rob_id,
+	commit0_v, commit1_v, commit2_v, commit0_id, commit1_id, commit2_id,
+	commit0_tgt, commit1_tgt, commit2_tgt,
 	rf_source, iq_source, queuedOn,
-	take_branch, Rd, rf_v);
+	take_branch, Rd, rf_v, regIsValid);
 parameter AREGS = 128;
 parameter RBIT = 6;
 parameter QENTRIES = `QENTRIES;
 parameter QSLOTS = `QSLOTS;
+parameter RENTRIES = `RENTRIES;
 parameter VAL = 1'b1;
 parameter INV = 1'b0;
 input rst;
@@ -43,18 +45,23 @@ input [QSLOTS-1:0] slot_rfw;
 input [`QBITS] tails [0:QSLOTS-1];
 input [AREGS-1:0] livetarget;
 input branchmiss;
+input [`QBITS] rob_id [0:RENTRIES-1];
 input commit0_v;
 input commit1_v;
-input [`QBITS] commit0_id;
-input [`QBITS] commit1_id;
+input commit2_v;
+input [`RBITS] commit0_id;
+input [`RBITS] commit1_id;
+input [`RBITS] commit2_id;
 input [RBIT:0] commit0_tgt;
 input [RBIT:0] commit1_tgt;
-input [`QBITS] rf_source [0:AREGS-1];
+input [RBIT:0] commit2_tgt;
+input [`QBITSP1] rf_source [0:AREGS-1];
 input [QENTRIES-1:0] iq_source;
 input [QSLOTS-1:0] take_branch;
 input [6:0] Rd [0:QSLOTS-1];
 input [QSLOTS-1:0] queuedOn;
 output reg [AREGS-1:0] rf_v;
+output reg [AREGS-1:0] regIsValid;	// advanced signal
 
 // The following two functions used to figure out which slot to process.
 // However, the functions when used things seemed not to work.
@@ -83,6 +90,34 @@ endfunction
 
 integer n;
 
+// Detect if a given register will become valid during the current cycle.
+// We want a signal that is active during the current clock cycle for the read
+// through register file, which trims a cycle off register access for every
+// instruction. But two different kinds of assignment statements can't be
+// placed under the same always block, it's a bad practice and may not work.
+// So a signal is created here with it's own always block.
+always @*
+begin
+	for (n = 1; n < AREGS; n = n + 1)
+	begin
+		regIsValid[n] = rf_v[n];
+		if (branchmiss)
+       if (~livetarget[n]) begin
+     			regIsValid[n] = `VAL;
+       end
+
+		if (commit0_v && n=={commit0_tgt[RBIT:0]} && !rf_v[n])
+			regIsValid[n] = ((rf_source[ {commit0_tgt[RBIT:0]} ][`RBITS] == commit0_id && rf_source[ commit0_tgt[RBIT:0] ][`QBIT]) || (branchmiss && iq_source[ rob_id[commit0_id] ]));
+		if (commit1_v && n=={commit1_tgt[RBIT:0]} && !rf_v[n] && `NUM_CMT > 1)
+			regIsValid[n] = ((rf_source[ {commit1_tgt[RBIT:0]} ][`RBITS] == commit1_id && rf_source[ commit1_tgt[RBIT:0] ][`QBIT]) || (branchmiss && iq_source[ rob_id[commit1_id] ]));
+		if (commit2_v && n=={commit2_tgt[RBIT:0]} && !rf_v[n] && `NUM_CMT > 2)
+			regIsValid[n] = ((rf_source[ {commit2_tgt[RBIT:0]} ][`RBITS] == commit2_id && rf_source[ commit2_tgt[RBIT:0] ][`QBIT]) || (branchmiss && iq_source[ rob_id[commit2_id] ]));
+	end
+	regIsValid[0] = `VAL;
+	regIsValid[64] = `VAL;
+end
+
+
 always @(posedge clk)
 if (rst) begin
   for (n = 0; n < AREGS; n = n + 1)
@@ -101,12 +136,18 @@ else begin
   // placed on the commit bus. So it's needed to check that the source is
   // still as expected to validate the register.
 	if (commit0_v) begin
-    if (!rf_v[ {commit0_tgt[RBIT:0]} ])
-      rf_v[ {commit0_tgt[RBIT:0]} ] <= rf_source[ commit0_tgt[RBIT:0] ] == commit0_id || (branchmiss && iq_source[ commit0_id ]);
+		$display("!rfv=%d %d",!rf_v[ commit0_tgt[RBIT:0] ], rf_v[ commit0_tgt[RBIT:0] ] );
+    if (!rf_v[ commit0_tgt[RBIT:0] ]) begin
+      rf_v[ commit0_tgt[RBIT:0] ] <= (rf_source[ commit0_tgt[RBIT:0] ][`RBITS] == commit0_id && rf_source[ commit0_tgt[RBIT:0] ][`QBIT]==1'b1) || (branchmiss && iq_source[ rob_id[commit0_id] ]);
+      $display("rfv 0: %d %d %d", rf_source[ commit0_tgt[RBIT:0]][`RBITS], commit0_id, rf_source[ commit0_tgt[RBIT:0] ][`QBIT]);
+    end
   end
   if (commit1_v && `NUM_CMT > 1) begin
-    if (!rf_v[ {commit1_tgt[RBIT:0]} ]) //&& !(commit0_v && (rf_source[ commit0_tgt[RBIT:0] ] == commit0_id || (branchmiss && iq_source[ commit0_id[`QBITS] ]))))
-      rf_v[ {commit1_tgt[RBIT:0]} ] <= rf_source[ commit1_tgt[RBIT:0] ] == commit1_id || (branchmiss && iq_source[ commit1_id ]);
+		$display("!rfv=%d %d",!rf_v[ commit1_tgt[RBIT:0] ], rf_v[ commit1_tgt[RBIT:0] ] );
+    if (!rf_v[ commit1_tgt[RBIT:0] ]) begin //&& !(commit0_v && (rf_source[ commit0_tgt[RBIT:0] ] == commit0_id || (branchmiss && iq_source[ commit0_id[`QBITS] ]))))
+      rf_v[ commit1_tgt[RBIT:0] ] <= (rf_source[ commit1_tgt[RBIT:0] ][`RBITS] == commit1_id && rf_source[ commit1_tgt[RBIT:0] ][`QBIT]==1'b1)|| (branchmiss && iq_source[ rob_id[commit1_id] ]);
+      $display("rfv 1: %d %d %d", rf_source[ commit0_tgt[RBIT:0]][`RBITS], commit0_id, rf_source[ commit0_tgt[RBIT:0] ][`QBIT]);
+    end
   end
 
 	if (!branchmiss)

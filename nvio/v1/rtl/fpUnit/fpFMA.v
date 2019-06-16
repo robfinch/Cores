@@ -44,12 +44,9 @@
 //	
 // ============================================================================
 
-module fpFMA (clk, ce, op, rm, a, b, c, o, inf);
+module fpFMA (clk, ce, op, rm, a, b, c, o, under, over, inf, zero);
 parameter WID = 32;
 `include "fpSize.sv"
-
-localparam FX = (FMSB+2)*2-1;	// the MSB of the expanded fraction
-localparam EX = FX + 1 + EMSB + 1 + 1 - 1;
 
 input clk;
 input ce;
@@ -57,7 +54,10 @@ input op;		// operation 0 = add, 1 = subtract
 input [2:0] rm;
 input  [WID:1] a, b, c;
 output [EX:0] o;
+output under;
+output over;
 output inf;
+output zero;
 
 // constants
 wire [EMSB:0] infXp = {EMSB+1{1'b1}};	// infinite / NaN - all ones
@@ -81,7 +81,6 @@ wire aNan1, bNan1, cNan1;
 wire az1, bz1, cz1;
 wire aInf1, bInf1, cInf1;
 reg op1;
-wire xcInf1;
 
 fpDecompReg #(WID) u1a (.clk(clk), .ce(ce), .i(a), .sgn(sa1), .exp(xa1), .fract(fracta1), .xz(a_dn1), .vz(az1), .inf(aInf1), .nan(aNan1) );
 fpDecompReg #(WID) u1b (.clk(clk), .ce(ce), .i(b), .sgn(sb1), .exp(xb1), .fract(fractb1), .xz(b_dn1), .vz(bz1), .inf(bInf1), .nan(bNan1) );
@@ -392,7 +391,7 @@ always @(posedge clk)
 // Status
 reg under5;
 reg over5;
-reg [EMSB:0] ex5;
+reg [EMSB+2:0] ex5;
 reg [EMSB:0] xc5;
 wire aInf5, bInf5;
 wire aNan5, bNan5;
@@ -403,7 +402,7 @@ always @(posedge clk)
 always @(posedge clk)
 	if (ce) over5 <= (&ex4[EMSB:0] | ex4[EMSB+1]) & !ex4[EMSB+2];
 always @(posedge clk)
-	if (ce) ex5 <= ex4[EMSB:0];
+	if (ce) ex5 <= ex4;
 always @(posedge clk)
 	if (ce) xc5 <= xc4;
 
@@ -426,9 +425,8 @@ delay5 #(WID) u17 (.clk(clk), .ce(ce), .i(b), .o(b5) );
 // -----------------------------------------------------------
 
 reg [FX:0] mo6;
-reg [EMSB:0] ex6;
+reg [EMSB+2:0] ex6;
 reg [EMSB:0] xc6;
-reg exinf6;
 wire [FMSB+1:0] fractc6;
 delay5 #(FMSB+2) u61 (.clk(clk), .ce(ce), .i(fractc1), .o(fractc6) );
 delay1 u62 (.clk(clk), .ce(ce), .i(under5), .o(under6));
@@ -455,8 +453,8 @@ always @(posedge clk)
 		5'b01???:	ex6 <= infXp;	// 'a' infinite
 		5'b001??:	ex6 <= infXp;	// 'b' infinite
 		5'b0001?:	ex6 <= infXp;	// result overflow
-		5'b00001:	ex6 <= ex5[EMSB:0];//0;		// underflow
-		default:	ex6 <= ex5[EMSB:0];	// situation normal
+		5'b00001:	ex6 <= ex5;		//0;		// underflow
+		default:	ex6 <= ex5;		// situation normal
 		endcase
 
 // -----------------------------------------------------------
@@ -472,9 +470,9 @@ wire realOp7;
 
 // which has greater magnitude ? Used for sign calc
 always @(posedge clk)
-	if (ce) ex_gt_xc7 <= (ex6 > xc6) && !under6;
+	if (ce) ex_gt_xc7 <= $signed(ex6) > $signed({2'b0,xc6});
 always @(posedge clk)
-	if (ce) xeq7 <= (ex6==xc6) && !under6;
+	if (ce) xeq7 <= (ex6=={2'b0,xc6});
 always @(posedge clk)
 	if (ce) ma_gt_mc7 <= mo6 > {fractc6,{FMSB+1{1'b0}}};
 always @(posedge clk)
@@ -493,20 +491,20 @@ vtdl #(1) u74 (.clk(clk), .ce(ce), .a(4'd4), .d(realOp2), .q(realOp7));
 reg a_gt_b8;
 reg resZero8;
 reg ex_gt_xc8;
-wire [EMSB:0] ex8;
+wire [EMSB+2:0] ex8;
 wire [EMSB:0] xc8;
 wire xcInf8;
 wire [2:0] rm8;
 wire op8;
-wire sa8, sb8, sc8;
+wire sa8, sc8;
 
-delay2 #(EMSB+1) u81 (.clk(clk), .ce(ce), .i(ex6), .o(ex8));
+delay2 #(EMSB+3) u81 (.clk(clk), .ce(ce), .i(ex6), .o(ex8));
 delay2 #(EMSB+1) u82 (.clk(clk), .ce(ce), .i(xc6), .o(xc8));
 vtdl #(1) u83 (.clk(clk), .ce(ce), .a(4'd5), .d(xcInf2), .q(xcInf8));
 vtdl #(3) u84 (.clk(clk), .ce(ce), .a(4'd7), .d(rm), .q(rm8));
 vtdl #(1) u85 (.clk(clk), .ce(ce), .a(4'd6), .d(op1), .q(op8));
-vtdl #(1) u86 (.clk(clk), .ce(ce), .a(4'd7), .d(sa1 ^ sb1), .q(sa8));
-vtdl #(1) u87 (.clk(clk), .ce(ce), .a(4'd7), .d(sc1), .q(sc8));
+vtdl #(1) u86 (.clk(clk), .ce(ce), .a(4'd6), .d(sa1 ^ sb1), .q(sa8));
+vtdl #(1) u87 (.clk(clk), .ce(ce), .a(4'd6), .d(sc1), .q(sc8));
 
 always @(posedge clk)
 	if (ce) ex_gt_xc8 <= ex_gt_xc7;
@@ -531,16 +529,20 @@ always @(posedge clk)
 // -----------------------------------------------------------
 
 reg so9;
-reg [EMSB:0] ex9;
-reg [EMSB:0] ex9a;
+reg [EMSB+2:0] ex9;
+reg [EMSB+2:0] ex9a;
 reg ex_gt_xc9;
 reg [EMSB:0] xc9;
+reg a_gt_c9;
 wire [FX:0] mo9;
 wire [FMSB+1:0] fractc9;
 wire under9;
+wire xeq9;
 
 always @(posedge clk)
 	if (ce) ex_gt_xc9 <= ex_gt_xc8;
+always @(posedge clk)
+	if (ce) a_gt_c9 <= a_gt_b8;
 always @(posedge clk)
 	if (ce) xc9 <= xc8;
 always @(posedge clk)
@@ -549,9 +551,10 @@ always @(posedge clk)
 delay3 #(FX+1) u93 (.clk(clk), .ce(ce), .i(mo6), .o(mo9));
 delay3 #(FMSB+2) u94 (.clk(clk), .ce(ce), .i(fractc6), .o(fractc9));
 delay3 u95 (.clk(clk), .ce(ce), .i(under6), .o(under9));
+delay2 u96 (.clk(clk), .ce(ce), .i(xeq7), .o(xeq9));
 
 always @(posedge clk)
-	if (ce) ex9 <= resZero8 ? 0 : ex_gt_xc8 ? ex8 : xc8;
+	if (ce) ex9 <= resZero8 ? 1'd0 : ex_gt_xc8 ? ex8 : {2'b0,xc8};
 
 // Compute output sign
 always @(posedge clk)
@@ -583,17 +586,31 @@ always @(posedge clk)
 // is the same as an add. The underflow is tracked rather than
 // using extra bits in the exponent.
 // -----------------------------------------------------------
-reg [EMSB:0] xdiff10;
+reg [EMSB+2:0] xdiff10;
 reg [FX:0] mfs;
+reg ops10;
+
+// If the multiplier exponent was negative (underflowed) then
+// the mantissa needs to be shifted right even more (until
+// the exponent is zero. The total shift would be xc9-0-
+// amount underflows which is xc9 + -ex9a.
 
 always @(posedge clk)
 	if (ce) xdiff10 <= ex_gt_xc9 ? ex9a - xc9
-																: (under9 ? xc9 + ex9a : xc9 - ex9a);
+										: ex9a[EMSB+2] ? xc9 + (~ex9a+2'd1)
+										: xc9 - ex9a;
 
 // Determine which fraction to denormalize (the one with the
-// smaller exponent is denormalized).
+// smaller exponent is denormalized). If the exponents are equal
+// denormalize the smaller fraction.
 always @(posedge clk)
-	if (ce) mfs <= ex_gt_xc9 ? {4'b0,fractc9,{FMSB+1{1'b0}}} : mo9;
+	if (ce) mfs <= 
+		xeq9 ? (a_gt_c9 ? {4'b0,fractc9,{FMSB+1{1'b0}}} : mo9)
+		 : ex_gt_xc9 ? {4'b0,fractc9,{FMSB+1{1'b0}}} : mo9;
+
+always @(posedge clk)
+	if (ce) ops10 <= xeq9 ? (a_gt_c9 ? 1'b1 : 1'b0)
+												: (ex_gt_xc9 ? 1'b1 : 1'b0);
 
 // -----------------------------------------------------------
 // Clock #11
@@ -643,10 +660,12 @@ reg [FX+2:0] mfs13;
 wire [FX:0] mo13;
 wire ex_gt_xc13;
 wire [FMSB+1:0] fractc13;
+wire ops13;
 
 delay4 #(FX+1) u131 (.clk(clk), .ce(ce), .i(mo9), .o(mo13));
 delay4 u132 (.clk(clk), .ce(ce), .i(ex_gt_xc9), .o(ex_gt_xc13));
 vtdl #(FMSB+2) u133 (.clk(clk), .ce(ce), .a(4'd3), .d(fractc9), .q(fractc13));
+delay3 u134 (.clk(clk), .ce(ce), .i(ops10), .o(ops13));
 
 always @(posedge clk)
 	if (ce) mfs13 <= ({mfs12,2'b0} >> xdif12)|sticky12;
@@ -661,9 +680,9 @@ wire a_gt_b14;
 vtdl #(1) u141 (.clk(clk), .ce(ce), .a(4'd5), .d(a_gt_b8), .q(a_gt_b14));
 
 always @(posedge clk)
-	if (ce) oa <= ex_gt_xc13 ? {mo13,2'b00} : mfs13;
+	if (ce) oa <= ops13 ? {mo13,2'b00} : mfs13;
 always @(posedge clk)
-	if (ce) ob <= ex_gt_xc13 ? mfs13 : {fractc13,{FMSB+1{1'b0}},2'b00};
+	if (ce) ob <= ops13 ? mfs13 : {fractc13,{FMSB+1{1'b0}},2'b00};
 
 // -----------------------------------------------------------
 // Clock #15
@@ -672,9 +691,11 @@ always @(posedge clk)
 reg [FX+2:0] oaa, obb;
 wire realOp15;
 wire [EMSB:0] ex15;
-
+wire [EMSB:0] ex9c = ex9[EMSB+1] ? infXp : ex9[EMSB:0];
+wire overflow15;
 vtdl #(1) u151 (.clk(clk), .ce(ce), .a(4'd7), .d(realOp7), .q(realOp15));
-vtdl #(EMSB+1) u152 (.clk(clk), .ce(ce), .a(4'd5), .d(ex9), .q(ex15));
+vtdl #(EMSB+1) u152 (.clk(clk), .ce(ce), .a(4'd5), .d(ex9c), .q(ex15));
+vtdl #(EMSB+1) u153 (.clk(clk), .ce(ce), .a(4'd5), .d(ex9[EMSB+1]| &ex9[EMSB:0]), .q(overflow15));
 
 always @(posedge clk)
 	if (ce) oaa <= a_gt_b14 ? oa : ob;
@@ -697,7 +718,7 @@ wire exinf16;
 
 vtdl #(1) u161 (.clk(clk), .ce(ce), .a(4'd10), .d(qNaNOut5|aNan5|bNan5), .q(Nan16));
 vtdl #(1) u162 (.clk(clk), .ce(ce), .a(4'd14), .d(cNan1), .q(cNan16));
-vtdl #(1) u163 (.clk(clk), .ce(ce), .a(4'd9), .d(exinf6), .q(aInf16));
+vtdl #(1) u163 (.clk(clk), .ce(ce), .a(4'd9), .d(&ex6), .q(aInf16));
 vtdl #(1) u164 (.clk(clk), .ce(ce), .a(4'd14), .d(cInf1), .q(cInf16));
 vtdl #(1) u165 (.clk(clk), .ce(ce), .a(4'd14), .d(op1), .q(op16));
 delay3 #(FX+1) u166 (.clk(clk), .ce(ce), .i(mo13), .o(mo16));
@@ -714,9 +735,13 @@ always @(posedge clk)
 wire [EMSB:0] ex17;
 reg [FX:0] mo17;
 wire so17;
+wire exinf17;
+wire overflow17;
 
 vtdl #(1)        u171 (.clk(clk), .ce(ce), .a(4'd7), .d(so9), .q(so17));
 delay2 #(EMSB+1) u172 (.clk(clk), .ce(ce), .i(ex15), .o(ex17));
+delay1 #(1) u173 (.clk(clk), .ce(ce), .i(exinf16), .o(exinf17));
+delay2 u174 (.clk(clk), .ce(ce), .i(overflow15), .o(overflow17));
 
 always @(posedge clk)
 	casez({aInf16&cInf16,Nan16,cNan16,exinf16})
@@ -724,46 +749,69 @@ always @(posedge clk)
 	4'b01??:	mo17 <= {1'b0,mo16};
 	4'b001?: 	mo17 <= {1'b0,fractc16[FMSB+1:0],{FMSB{1'b0}}};
 	4'b0001:	mo17 <= 1'd0;
-	default:	mo17 <= mab[FX+3:2];		// mab has an extra lead bit and two trailing bits
+	default:	mo17 <= mab[FX+3:2];		// mab has two extra lead bits and two trailing bits
 	endcase
 
 assign o = {so17,ex17,mo17};
-
-// The following are from the multiplier!!!
-vtdl #(1) u173 (.clk(clk), .ce(ce), .a(4'd11), .d(over5),  .q(overflow) );
-vtdl #(1) u174 (.clk(clk), .ce(ce), .a(4'd11), .d(over5),  .q(inf) );				
-vtdl #(1) u175 (.clk(clk), .ce(ce), .a(4'd11), .d(under5), .q(underflow) );	
+assign zero = {ex17,mo17}==1'd0;
+assign inf = exinf17;
+assign under = ex17==1'd0;
+assign over = overflow17;
 
 endmodule
 
 
 // Multiplier with normalization and rounding.
 
-module fpFMAnr(clk, ce, op, rm, a, b, c, o, sign_exe, inf, overflow, underflow);
-parameter WID=32;
+module fpFMAnr(clk, ce, op, rm, a, b, c, o, inf, overflow, underflow, inexact);
+parameter WID=64;
 `include "fpSize.sv"
 
-localparam FX = (FMSB+2)*2-1;	// the MSB of the expanded fraction
-localparam EX = FX + 1 + EMSB + 1 + 1 - 1;
 input clk;
 input ce;
 input op;
 input [2:0] rm;
 input  [MSB:0] a, b, c;
 output [MSB:0] o;
-output sign_exe;
 output inf;
 output overflow;
 output underflow;
+output inexact;
 
-wire [EX:0] o1;
+wire [EX:0] fma_o;
+wire fma_underflow;
+wire norm_underflow;
+wire norm_inexact;
 wire sign_exe1, inf1, overflow1, underflow1;
 wire [MSB+3:0] fpn0;
 
-fpFMA       #(WID) u1 (clk, ce, op, rm, a, b, c, o1, inf1);
-fpNormalize #(WID) u2(.clk(clk), .ce(ce), .under(1'b0), .i(o1), .o(fpn0) );
+fpFMA #(WID) u1
+(
+	.clk(clk),
+	.ce(ce),
+	.op(op),
+	.rm(rm),
+	.a(a),
+	.b(b),
+	.c(c),
+	.o(fma_o),
+	.under(fma_underflow),
+	.inf()
+);
+fpNormalize #(WID) u2
+(
+	.clk(clk),
+	.ce(ce),
+	.i(fma_o),
+	.o(fpn0),
+	.under_i(fma_underflow),
+	.under_o(norm_underflow),
+	.inexact_o(norm_inexact)
+);
 fpRoundReg  #(WID) u3(.clk(clk), .ce(ce), .rm(rm), .i(fpn0), .o(o) );
-delay2      #(1)   u4(.clk(clk), .ce(ce), .i(sign_exe1), .o(sign_exe));
-delay2      #(1)   u5(.clk(clk), .ce(ce), .i(inf1), .o(inf));
+fpDecomp		#(WID) u4(.i(o), .xz(underflow), .inf(inf));
+delay1			#(1)	u6 (.clk(clk), .ce(ce), .i(norm_inexact), .o(inexact));
+assign overflow = inf;
+
 endmodule
 

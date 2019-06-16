@@ -53,9 +53,6 @@ module fpMul (clk, ce, a, b, o, sign_exe, inf, overflow, underflow);
 parameter WID = 32;
 `include "fpSize.sv"
 
-localparam FX = (FMSB+2)*2-1;	// the MSB of the expanded fraction
-localparam EX = FX + 1 + EMSB + 1 + 1 - 1;
-
 input clk;
 input ce;
 input  [WID:1] a, b;
@@ -254,8 +251,6 @@ module fpMulnr(clk, ce, a, b, o, rm, sign_exe, inf, overflow, underflow);
 parameter WID=32;
 `include "fpSize.sv"
 
-localparam FX = (FMSB+2)*2-1;	// the MSB of the expanded fraction
-localparam EX = FX + 1 + EMSB + 1 + 1 - 1;
 input clk;
 input ce;
 input  [MSB:0] a, b;

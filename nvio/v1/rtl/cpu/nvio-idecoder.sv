@@ -60,32 +60,33 @@ input [39:0] ins;
 mopcode = {ins[34:33],ins[9:6]};
 endfunction
 
-function [6:0] fnRt;
+function [6:0] fnRd;
 input [2:0] unit;
 input [39:0] ins;
 case(unit)
 `BUnit:
 	case(ins[`OPCODE4])
-	`JAL:		fnRt = {1'b0,ins[`RD]};
-	`RET:		fnRt = {1'b0,ins[`RD]};
-	`BMISC:		fnRt = ins[`FUNCT5]==`SEI ? {1'b0,ins[`RD]} : 7'd0;
-	default:	fnRt = 7'd0;
+	`CALL:	fnRd = 7'd61;
+	`JAL:		fnRd = {1'b0,ins[`RD]};
+	`RET:		fnRd = {1'b0,ins[`RD]};
+	`BMISC:		fnRd = ins[`FUNCT5]==`SEI ? {1'b0,ins[`RD]} : 7'd0;
+	default:	fnRd = 7'd0;
 	endcase
-`IUnit:	fnRt = {1'b0,ins[`RD]};
-`FUnit:	fnRt = {1'b1,ins[`RD]};
+`IUnit:	fnRd = {1'b0,ins[`RD]};
+`FUnit:	fnRd = {1'b1,ins[`RD]};
 `MUnit: 
 	casez(mopcode(ins))
 	`LOAD:	
 		case(mopcode(ins))
-		`LDFS,`LDFD:	fnRt = {1'b1,ins[`RD]};
-		default:	fnRt = {1'b0,ins[`RD]};
+		`LDFS,`LDFD:	fnRd = {1'b1,ins[`RD]};
+		default:	fnRd = {1'b0,ins[`RD]};
 		endcase
-	`PUSH:	fnRt = {1'b0,ins[`RD]};
-	`PUSHC:	fnRt = {1'b0,ins[`RD]};
-	`TLB:		fnRt = {1'b0,ins[`RD]};
-	default:	fnRt = 7'd0;
+	`PUSH:	fnRd = {1'b0,ins[`RD]};
+	`PUSHC:	fnRd = {1'b0,ins[`RD]};
+	`TLB:		fnRd = {1'b0,ins[`RD]};
+	default:	fnRd = 7'd0;
 	endcase
-default:	fnRt = 7'd0;
+default:	fnRd = 7'd0;
 endcase
 endfunction
 
@@ -435,7 +436,7 @@ endfunction
 function IsRFW;
 input [2:0] unit;
 input [39:0] isn;
-if (fnRt(unit,isn)==6'd0) 
+if ((fnRd(unit,isn) & 7'h3f)==6'd0) 
     IsRFW = FALSE;
 else
 case(unit)
@@ -537,7 +538,7 @@ begin
 		bus[`IB_CONST] <= {{58{instr[39]}},instr[39:33],instr[30:22],instr[5:0]};
 	else
 		bus[`IB_CONST] <= {{58{instr[39]}},instr[39:33],instr[30:16]};
-//	bus[`IB_RT]		 <= fnRt(instr,ven,vl,thrd) | {thrd,7'b0};
+//	bus[`IB_RT]		 <= fnRd(instr,ven,vl,thrd) | {thrd,7'b0};
 //	bus[`IB_RC]		 <= fnRc(instr,ven,thrd) | {thrd,7'b0};
 //	bus[`IB_RA]		 <= fnRa(instr,ven,vl,thrd) | {thrd,7'b0};
 	bus[`IB_RS1]		 <= instr[`RS1];

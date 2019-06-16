@@ -33,9 +33,6 @@ module fpAddsub(clk, ce, rm, op, a, b, o);
 parameter WID = 128;
 `include "fpSize.sv"
 
-localparam FX = (FMSB+2)*2-1;	// the MSB of the expanded fraction
-localparam EX = FX + 1 + EMSB + 1 + 1 - 1;
-
 input clk;		// system clock
 input ce;		// core clock enable
 input [2:0] rm;	// rounding mode
@@ -206,9 +203,6 @@ endmodule
 module fpAddsubnr(clk, ce, rm, op, a, b, o);
 parameter WID = 128;
 `include "fpSize.sv"
-
-localparam FX = (FMSB+2)*2-1;	// the MSB of the expanded fraction
-localparam EX = FX + 1 + EMSB + 1 + 1 - 1;
 
 input clk;		// system clock
 input ce;		// core clock enable

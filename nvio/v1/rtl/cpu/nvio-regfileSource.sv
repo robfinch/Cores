@@ -25,8 +25,9 @@
 `define VAL		1'b1
 `define INV		1'b0
 
-module regfileSource(rst, clk, branchmiss, slotvd, slot_rfw,
-	queuedOn,	Rd, tails, iq_latestID, iq_tgt, rf_source);
+module regfileSource(rst, clk, branchmiss, heads, slotvd, slot_rfw,
+	queuedOn,	rqueuedOn, iq_state, iq_rfw, iq_Rd, Rd, tails,
+	iq_latestID, iq_tgt, iq_rid, rf_source);
 parameter AREGS = 128;
 parameter QENTRIES = `QENTRIES;
 parameter RENTRIES = `RENTRIES;
@@ -35,14 +36,20 @@ parameter RBIT = 6;
 input rst;
 input clk;
 input branchmiss;
+input [`QBITS] heads [0:QENTRIES-1];
 input [QSLOTS-1:0] slotvd;
 input [QENTRIES-1:0] slot_rfw;
 input [QSLOTS-1:0] queuedOn;
+input [QENTRIES-1:0] rqueuedOn;
+input [2:0] iq_state [0:QENTRIES-1];
+input [QENTRIES-1:0] iq_rfw;
+input [RBIT:0] iq_Rd [0:QENTRIES-1];
 input [RBIT:0] Rd [0:QSLOTS-1];
 input [`QBITS] tails [0:QSLOTS-1];
 input [AREGS-1:1] iq_latestID [0:QENTRIES-1];
 input [RBIT:0] iq_tgt [0:QENTRIES-1];
-output reg [`QBITS] rf_source [0:AREGS-1];
+input [`QBITSP1] iq_rid [0:QENTRIES-1];
+output reg [`QBITSP1] rf_source [0:AREGS-1];
 
 integer n;
 
@@ -61,65 +68,94 @@ else begin
 	if (branchmiss) begin
 		for (n = 0; n < QENTRIES; n = n + 1)
     	if (|iq_latestID[n])
-    		rf_source[ {iq_tgt[n][RBIT:0]} ] <= n[`QBITS];
+    		rf_source[ iq_tgt[n][RBIT:0] ] <= iq_rid[n[`QBITS]];
 	end
 	else begin
+		for (n = 0; n < QENTRIES; n = n + 1) begin
+			if (iq_state[heads[n]]==3'd2) begin	// ROBA
+				if (iq_rfw[heads[n]] && !rf_source[iq_Rd[heads[n]]][`QBIT])
+					rf_source[iq_Rd[heads[n]]] <= iq_rid[heads[n]];
+			end
+		end
 		// Setting the rf valid and source
 		case(slotvd)
 		3'b000:	;
 		3'b001:
 			if (queuedOn[0]) begin
-				if (slot_rfw[0])
-					rf_source[Rd[0]] <= tails[0];
+				if (slot_rfw[0]) begin
+					rf_source[Rd[0]] <= {1'b0,tails[0]};
+					rf_source[Rd[0]][`QBIT] <= 1'b0;
+				end
 			end
 		3'b010:
 			if (queuedOn[1]) begin
 				if (slot_rfw[1]) begin
-					rf_source[Rd[1]] <= tails[0];
+					rf_source[Rd[1]] <= {1'b0,tails[0]};
+					rf_source[Rd[0]][`QBIT] <= 1'b0;
 				end
 			end
 		3'b011:
 			if (queuedOn[0]) begin
-				if (slot_rfw[0])
-					rf_source[Rd[0]] <= tails[0];
+				if (slot_rfw[0]) begin
+					rf_source[Rd[0]] <= {1'b0,tails[0]};
+					rf_source[Rd[0]][`QBIT] <= 1'b0;
+				end
 				if (queuedOn[1]) begin
-					if (slot_rfw[1])
-						rf_source[Rd[1]] <= tails[1];
+					if (slot_rfw[1]) begin
+						rf_source[Rd[1]] <= {1'b0,tails[1]};
+						rf_source[Rd[1]][`QBIT] <= 1'b0;
+					end
 				end
 			end
 		3'b100:
 			if (queuedOn[2]) begin
-				if (slot_rfw[2])
-					rf_source[Rd[2]] <= tails[0];
+				if (slot_rfw[2]) begin
+					rf_source[Rd[2]] <= {1'b0,tails[0]};
+					rf_source[Rd[2]][`QBIT] <= 1'b0;
+				end
 			end
 		3'b101:
 			if (queuedOn[0]) begin
-				if (slot_rfw[0])
-					rf_source[Rd[0]] <= tails[0];
+				if (slot_rfw[0]) begin
+					rf_source[Rd[0]] <= {1'b0,tails[0]};
+					rf_source[Rd[0]][`QBIT] <= 1'b0;
+				end
 				if (queuedOn[2]) begin
-					if (slot_rfw[2])
-						rf_source[Rd[2]] <= tails[1];
+					if (slot_rfw[2]) begin
+						rf_source[Rd[2]] <= {1'b0,tails[1]};
+						rf_source[Rd[2]][`QBIT] <= 1'b0;
+					end
 				end
 			end
 		3'b110:
 			if (queuedOn[1]) begin
-				if (slot_rfw[1])
-					rf_source[Rd[1]] <= tails[0];
+				if (slot_rfw[1]) begin
+					rf_source[Rd[1]] <= {1'b0,tails[0]};
+					rf_source[Rd[1]][`QBIT] <= 1'b0;
+				end
 				if (queuedOn[2]) begin
-					if (slot_rfw[2])
-						rf_source[Rd[2]] <= tails[1];
+					if (slot_rfw[2]) begin
+						rf_source[Rd[2]] <= {1'b0,tails[1]};
+						rf_source[Rd[2]][`QBIT] <= 1'b0;
+					end
 				end
 			end
 		3'b111:
 			if (queuedOn[0]) begin
-				if (slot_rfw[0])
-					rf_source[Rd[0]] <= tails[0];
+				if (slot_rfw[0]) begin
+					rf_source[Rd[0]] <= {1'b0,tails[0]};
+					rf_source[Rd[0]][`QBIT] <= 1'b0;
+				end
 				if (queuedOn[1]) begin
-					if (slot_rfw[1])
-						rf_source[Rd[1]] <= tails[1];
+					if (slot_rfw[1]) begin
+						rf_source[Rd[1]] <= {1'b0,tails[1]};
+						rf_source[Rd[1]][`QBIT] <= 1'b0;
+					end
 					if (queuedOn[2]) begin
-						if (slot_rfw[2])
-							rf_source[Rd[2]] <= tails[2];
+						if (slot_rfw[2]) begin
+							rf_source[Rd[2]] <= {1'b0,tails[2]};
+							rf_source[Rd[2]][`QBIT] <= 1'b0;
+						end
 					end
 				end
 			end

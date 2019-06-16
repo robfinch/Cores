@@ -28,7 +28,6 @@
 
 module fcvtsq(a, o);
 parameter WID = 128;
-localparam MSB = WID-1;
 `include "fpSize.sv"
 input [31:0] a;
 output reg [WID-1:0] o;

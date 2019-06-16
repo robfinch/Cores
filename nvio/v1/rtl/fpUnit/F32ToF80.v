@@ -47,12 +47,12 @@ cntlz32 u2 ({mani,9'b111111111}, lz);	// '1' bit already unhidden due to denorma
 always @*
 begin
   // sign out always just = sign in
-  signo = signi;
+  signo <= signi;
 
   // special check for zero
   if (vz) begin
-    expo <= 0;
-    mano <= 0;
+    expo <= 1'd0;
+    mano <= 1'd0;
   end
   // convert infinity / nan
   // infinity in = infinity out

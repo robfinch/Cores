@@ -62,10 +62,10 @@ delay1 u1 (
     .ce(ce),
     .i((op4==`FLT1 && (func5==`ITOF||func5==`FTOI||func5==`TRUNC))||(op4==`FLT2 && (func5==`NXTAFT))),
     .o(done) );
-i2f #(WID-4)  ui2fs (.clk(clk), .ce(ce), .rm(rm), .i(a[WID+3:4]), .o(i2f_o) );
-f2i #(WID-4)  uf2is (.clk(clk), .ce(ce), .i(a[WID+3:4]), .o(f2i_o) );
+i2f #(WID-4)  ui2fs (.clk(clk), .ce(ce), .rm(rm), .i(a[WID-1:4]), .o(i2f_o) );
+f2i #(WID-4)  uf2is (.clk(clk), .ce(ce), .i(a[WID-1:4]), .o(f2i_o) );
 fpTrunc #(WID) urho1 (.clk(clk), .ce(ce), .i(a), .o(trunc_o), .overflow());
-fpNextAfter #(WID-4) una1 (.clk(clk), .ce(ce), .a(a[WID+3:4]), .b(b[WID+3:4]), .o(nxtaft_o));
+fpNextAfter #(WID-4) una1 (.clk(clk), .ce(ce), .a(a[WID-1:4]), .b(b[WID-1:4]), .o(nxtaft_o));
 
 always @*
 	case (op4)

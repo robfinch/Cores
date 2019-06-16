@@ -432,6 +432,14 @@
 `define FLT_STZ			8'd233		// stack segment zero
 `define FLT_SNP			8'd234		// segment not present
 
+// Floating point exceptions
+`define FPX_IOP			8'd225		// invalid operation
+`define FPX_DBZ			8'd226		// divide by zero
+`define FPX_OVER		8'd227		// result overflowed
+`define FPX_UNDER		8'd228		// result underflowed
+`define FPX_INEXACT	8'd229		// inexact result
+`define FPX_SWT			8'd231		// software triggered
+
 `define OPCODE4			9:6
 `define FUNCT5			39:35
 `define FUNCT2			34:33

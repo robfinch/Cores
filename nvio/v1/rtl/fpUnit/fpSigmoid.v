@@ -80,7 +80,7 @@ end
 endgenerate
 
 initial begin
-`include "D:\Cores6\rtfItanium\v1\rtl\fpUnit\SigTbl.ver"
+`include "D:\Cores6\nvio\v1\rtl\fpUnit\SigTbl.ver"
 end
 
 // Quickly multiply number by 64 (it is in range -8 to 8) then convert to integer to get

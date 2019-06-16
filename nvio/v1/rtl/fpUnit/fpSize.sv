@@ -26,3 +26,5 @@ localparam FMSB = WID==128 ? 111 :
 				  WID==40 ? 28 :
 				  WID==32 ? 22 :
 				  WID==24 ? 15 : 9;
+localparam FX = (FMSB+2)*2;	// the MSB of the expanded fraction
+localparam EX = FX + 1 + EMSB + 1 + 1 - 1;

@@ -35,9 +35,6 @@ module fpSqrt(rst, clk, ce, ld, a, o, done, sqrinf, sqrneg);
 parameter WID = 128;
 `include "fpSize.sv"
 
-localparam FX = (FMSB+2)*2-1;	// the MSB of the expanded fraction
-localparam EX = FX + 1 + EMSB + 1 + 1 - 1;
-
 input rst;
 input clk;
 input ce;
@@ -135,8 +132,6 @@ module fpSqrtnr(rst, clk, ce, ld, a, o, rm, done, inf, sqrinf, sqrneg);
 parameter WID=32;
 `include "fpSize.sv"
 
-localparam FX = (FMSB+2)*2-1;	// the MSB of the expanded fraction
-localparam EX = FX + 1 + EMSB + 1 + 1 - 1;
 input rst;
 input clk;
 input ce;

@@ -71,15 +71,15 @@
 `define UNORD		5'h1F
 
 module fpZLUnit
-#(parameter WID=32)
+#(parameter WID=80)
 (
   input [3:0] op4,
   input [4:0] func5,
   input [39:0] ir,
-	input [WID-1:0] a,
-	input [WID-1:0] b,	// for fcmp
-	input [WID-1:0] c,	// for fcmp
-	output reg [WID-1:0] o,
+	input [WID+3:0] a,
+	input [WID+3:0] b,	// for fcmp
+	input [WID+3:0] c,	// for fcmp
+	output reg [WID+3:0] o,
 	output reg nanx
 );
 `include "fpSize.sv"
@@ -95,20 +95,20 @@ wire [4:0] cmp_o, cmpac_o, cmpbc_o;
 
 // Zero is being passed for b in some cases so the NaN must come from a if
 // present.
-fp_cmp_unit #(WID) u1 (.a(a), .b(b), .o(cmp_o), .nanx(nanxab) );
-fp_cmp_unit #(WID) u2 (.a(a), .b(c), .o(cmpac_o), .nanx(nanxac) );
-fp_cmp_unit #(WID) u3 (.a(b), .b(c), .o(cmpbc_o), .nanx(nanxbc) );
-fpDecomp u4 (.i(a), .sgn(), .exp(expa), .man(ma), .fract(), .xz(), .mz(), .vz(), .inf(), .xinf(xinfa), .qnan(), .snan(), .nan(nana));
+fp_cmp_unit #(WID+4) u1 (.a(a), .b(b), .o(cmp_o), .nanx(nanxab) );
+fp_cmp_unit #(WID+4) u2 (.a(a), .b(c), .o(cmpac_o), .nanx(nanxac) );
+fp_cmp_unit #(WID+4) u3 (.a(b), .b(c), .o(cmpbc_o), .nanx(nanxbc) );
+fpDecomp #(WID+4) u4 (.i(a), .sgn(), .exp(expa), .man(ma), .fract(), .xz(), .mz(), .vz(), .inf(), .xinf(xinfa), .qnan(), .snan(), .nan(nana));
 wire [127:0] sq_o;
 //fcvtsq u2 (a[31:0], sq_o);
 wire [79:0] sdo;
-fs2d u5 (a[39:0], sdo);
+fs2d u5 (a[43:4], sdo);
 wire [39:0] dso;
 fd2s u6 (a, dso);
 wire [79:0] f32to80o;
 wire [31:0] f80to32o;
-F32ToF80 u7 (a[31:0], f32to80o);
-F80ToF32 u8 (a, f32to80o);
+F32ToF80 u7 (a[35:4], f32to80o);
+F80ToF32 u8 (a[WID+3:4], f32to80o);
 
 always @*
   case(op4)
@@ -140,7 +140,7 @@ always @*
     `FSEQ:	 begin o <=  {cmp_o[0],4'h0}; nanx <= nanxab; end
     `FSNE:	 begin o <= ~{cmp_o[0],4'h0}; nanx <= nanxab; end
     `FSUN:	 begin o <=  {cmp_o[4],4'h0}; nanx <= nanxab; end
-    `CPYSGN:	begin o <= {b[WID-1],a[WID-2:0]}; end
+    `CPYSGN:	begin o <= {b[WID+3],a[WID+2:0]}; end
     default: o <= 0;
     endcase
   `FLT3:

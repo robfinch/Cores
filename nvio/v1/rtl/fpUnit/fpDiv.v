@@ -54,8 +54,6 @@ localparam FADD = WID==128 ? 9 :
 				  WID==32 ? 10 :
 				  WID==24 ? 9 : 11;
 				  
-localparam FX = (FMSB+2)*2-1;	// the MSB of the expanded fraction
-localparam EX = FX + 1 + EMSB + 1 + 1 - 1;
 input rst;
 input clk;
 input clk4x;
@@ -202,8 +200,6 @@ module fpDivnr(rst, clk, clk4x, ce, ld, op, a, b, o, rm, done, sign_exe, inf, ov
 parameter WID=32;
 `include "fpSize.sv"
 
-localparam FX = (FMSB+2)*2-1;	// the MSB of the expanded fraction
-localparam EX = FX + 1 + EMSB + 1 + 1 - 1;
 input rst;
 input clk;
 input clk4x;

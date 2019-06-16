@@ -46,8 +46,8 @@ input [`QBITS] heads [0:QENTRIES-1];
 input [RENTRIES-1:0] rob_v_i;
 output reg [RENTRIES-1:0] rob_v_o;
 input [2:0] iq_state [0:QENTRIES-1];
-input [`RBITS] iq_rid_i [0:QENTRIES-1];
-output reg [`RBITS] iq_rid_o [0:QENTRIES-1];
+input [`QBITSP1] iq_rid_i [0:QENTRIES-1];
+output reg [`QBITSP1] iq_rid_o [0:QENTRIES-1];
 output reg [2:0] rqueuedCnt;
 output reg [QENTRIES-1:0] rqueuedOn;
 
@@ -74,7 +74,8 @@ else begin
 			rob_v_o[heads[n]] = VAL;
 			rqueuedCnt = rqueuedCnt + 1;
 			rqueuedOn[heads[n]] = TRUE;
-			iq_rid_o[heads[n]] = j;
+			iq_rid_o[heads[n]] = j[`QBITS];
+			iq_rid_o[heads[n]][`QBIT] = 1'b1;
 			j = (j + 1) % RENTRIES;
 			k = k + 1;
 		end

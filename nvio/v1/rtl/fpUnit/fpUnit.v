@@ -132,8 +132,6 @@ parameter WID = 64;
 `include "fpSize.sv"
 localparam EMSBS = 7;
 localparam FMSBS = 22;
-localparam FX = (FMSB+2)*2-1;	// the MSB of the expanded fraction
-localparam EX = FX + 1 + EMSB + 1 + 1 - 1;
 localparam FXS = (FMSBS+2)*2-1;	// the MSB of the expanded fraction
 localparam EXS = FXS + 1 + EMSBS + 1 + 1 - 1;
 
