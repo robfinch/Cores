@@ -47,6 +47,13 @@ namespace EM80
 			a.digits[3] = 0;
 			return a;
 		}
+		public Int64 ToLong()
+		{
+			Int64 i;
+
+			i = ((Int64)digits[1] << 32) | (Int64)digits[0];
+			return i;
+		}
 		public void mask()
 		{
 			int nn;

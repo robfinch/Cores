@@ -18,10 +18,14 @@ namespace EM80
 		TextBox iBundleBox = new TextBox();
 		TextBox dumpBox = new TextBox();
 		TextBox tbAddr = new TextBox();
+		dump dmp = new dump();
 		LED[] leds;
 		int regset;
 		int count;
 		bool BreakPressed;
+		int dumpStride;
+		int dumpType;
+		bool trackIP;
 
 		public void UpdateRegisters()
 		{
@@ -55,6 +59,7 @@ namespace EM80
 
 			InitializeComponent();
 
+			dumpStride = 16;
 			BreakPressed = false;
 			leds = new LED[8];
 			for (nn = 0; nn < 8; nn++)
@@ -124,17 +129,30 @@ namespace EM80
 				//tbAddr.Text = "0";
 				//tbAddr.TextAlign = HorizontalAlignment.Right;
 				//this.Controls.Add(tbAddr);
-				dumpBox.Name = "dumpBox";
-				dumpBox.Location = new Point(800, 60);
-				dumpBox.Size = new System.Drawing.Size(250, 380);
-				dumpBox.TabIndex = 67;
-				dumpBox.Multiline = true;
-				dumpBox.AcceptsReturn = true;
-				dumpBox.MaxLength = 10000000;
-				dumpBox.Font = new Font("Courier New", 7.0f);
-				dumpBox.Text = "0";
-				dumpBox.ScrollBars = ScrollBars.Vertical;
-				this.Controls.Add(dumpBox);
+				dmp.Name = "dumpBox";
+				dmp.Location = new Point(780, 60);
+				dmp.Size = new System.Drawing.Size(330, 380);
+				dmp.TabIndex = 67;
+				//dmp.Multiline = true;
+				//dmp.AcceptsReturn = true;
+				//dumpBox.MaxLength = 10000000;
+				dmp.Font = new Font("Courier New", 7.0f);
+				dmp.Text = "0";
+				//dumpBox.ScrollBars = ScrollBars.Vertical;
+				this.Controls.Add(dmp);
+				/*
+								dumpBox.Name = "dumpBox";
+								dumpBox.Location = new Point(800, 60);
+								dumpBox.Size = new System.Drawing.Size(250, 380);
+								dumpBox.TabIndex = 67;
+								dumpBox.Multiline = true;
+								dumpBox.AcceptsReturn = true;
+								dumpBox.MaxLength = 10000000;
+								dumpBox.Font = new Font("Courier New", 7.0f);
+								dumpBox.Text = "0";
+								dumpBox.ScrollBars = ScrollBars.Vertical;
+								this.Controls.Add(dumpBox);
+				*/
 			}
 		}
 
@@ -169,6 +187,67 @@ namespace EM80
 			timer1.Enabled = true;
 		}
 
+		private nvioCpu.e_unitTypes GetUnit(Int128 ad)
+		{
+			nvioCpu.e_unitTypes unit0;
+			nvioCpu.e_unitTypes unit1;
+			nvioCpu.e_unitTypes unit2;
+			Int128 bund;
+			int tmp;
+
+			bund = soc.IFetch(ad);
+			tmp = (int)(bund.digits[3] >> 24) & 0x7f;
+			if (tmp == 0x7D)
+			{
+				unit0 = nvioCpu.e_unitTypes.I;
+				unit1 = nvioCpu.e_unitTypes.N;
+				unit2 = nvioCpu.e_unitTypes.N;
+			}
+			else if (tmp == 0x7E)
+			{
+				unit0 = nvioCpu.e_unitTypes.F;
+				unit1 = nvioCpu.e_unitTypes.N;
+				unit2 = nvioCpu.e_unitTypes.N;
+			}
+			else
+			{
+				tmp &= 63;
+				unit0 = nvioCpu.unitx[tmp, 0];
+				unit1 = nvioCpu.unitx[tmp, 1];
+				unit2 = nvioCpu.unitx[tmp, 2];
+			}
+			switch ((ad.digits[0] & 15))
+			{
+				case 0:
+					return unit0;
+				case 5:
+					return unit1;
+				case 10:
+					return unit2;
+				default:
+					return unit0;
+			}
+		}
+		private UInt64 GetInstr(Int128 ad)
+		{
+			Int128 ibundle;
+			UInt64 insn0, insn1, insn2;
+
+			ibundle = soc.IFetch(ad);
+			insn0 = ibundle.digits[0];
+			insn0 |= ((ibundle.digits[1] & 0xffL) << 32);
+			insn1 = ibundle.digits[1] >> 8;
+			insn1 |= (ibundle.digits[2] << 24) & 0xffff000000L;
+			insn2 = ibundle.digits[2] >> 16;
+			insn2 |= (ibundle.digits[3] << 16) & 0xffffff0000L;
+			switch(ad.digits[0] & 15)
+			{
+				case 0: return insn0;
+				case 5: return insn1;
+				case 10: return insn2;
+				default: return insn0;
+			}
+		}
 		private void timer1_Tick(object sender, EventArgs e)
 		{
 			string str;
@@ -176,19 +255,57 @@ namespace EM80
 			Int128 ad = new Int128(textBox1.Text);
 			Int128 dat;
 
-			dumpBox.Clear();
+			trackIP = checkBox1.Checked;
+			if (trackIP)
+				ad = Int128.Sub(soc.cpu.ip, Int128.Convert(0x20));
+			//dumpBox.Clear();
 			str = "";
 			nn = 0;
 			for (nn = 0; nn < 50; nn++)
 			{
 				dat = soc.Read(ad);
-				str = str + Convert.ToString((long)ad.digits[0],16).PadLeft(6,'0') + ": " + dat.ToString128() + "\r\n";
-				ad = Int128.Add(ad, Int128.Convert(0x10));
+				switch (dumpType) {
+					case 0:
+						switch (dumpStride)
+						{
+							case 1:
+								str = str + Convert.ToString((long)ad.digits[0], 16).PadLeft(6, '0') + ": " + dat.ToString80().Substring(18, 2) + "\r\n";
+								break;
+							case 2:
+								str = str + Convert.ToString((long)ad.digits[0], 16).PadLeft(6, '0') + ": " + dat.ToString80().Substring(16, 4) + "\r\n";
+								break;
+							case 4:
+								str = str + Convert.ToString((long)ad.digits[0], 16).PadLeft(6, '0') + ": " + dat.ToString80().Substring(12, 8) + "\r\n";
+								break;
+							case 5:
+								str = str + Convert.ToString((long)ad.digits[0], 16).PadLeft(6, '0') + ": " + dat.ToString80().Substring(10, 10) + "\r\n";
+								break;
+							case 8:
+								str = str + Convert.ToString((long)ad.digits[0], 16).PadLeft(6, '0') + ": " + dat.ToString80().Substring(4, 16) + "\r\n";
+								break;
+							case 10:
+								str = str + Convert.ToString((long)ad.digits[0], 16).PadLeft(6, '0') + ": " + dat.ToString80() + "\r\n";
+								break;
+							case 16:
+								str = str + Convert.ToString((long)ad.digits[0], 16).PadLeft(6, '0') + ": " + dat.ToString128() + "\r\n";
+								break;
+						}
+						break;
+					case 1:
+						str = str + nvioCpu.Disassemble(GetUnit(ad), (Int64)GetInstr(ad), ad) + "\n";
+						break;
+				}
+				ad = Int128.Add(ad, Int128.Convert(dumpStride));
 			}
-			dumpBox.Text = str;
-			timer1.Enabled = false;
+			dmp.SetText(str);
+			dmp.Invalidate();
+			if (trackIP)
+				timer1.Interval = 10;
+			else
+				timer1.Interval = 100;
+			timer1.Enabled = trackIP;
 		}
-
+	
 		private void Form1_KeyDown(object sender, KeyEventArgs e)
 		{
 			if (e.Control && e.KeyCode == Keys.C)
@@ -238,6 +355,60 @@ namespace EM80
 						Application.DoEvents();
 				}
 			}
+		}
+
+		private void checkBox1_CheckedChanged(object sender, EventArgs e)
+		{
+			dumpType = 1;
+			timer1.Enabled = true;
+		}
+
+		private void radioButton4_CheckedChanged(object sender, EventArgs e)
+		{
+			dumpStride = 16;
+			timer1.Enabled = true;
+		}
+
+		private void radioButton1_CheckedChanged(object sender, EventArgs e)
+		{
+			dumpStride = 10;
+			timer1.Enabled = true;
+		}
+
+		private void radioButton3_CheckedChanged(object sender, EventArgs e)
+		{
+			dumpStride = 8;
+			timer1.Enabled = true;
+		}
+
+		private void radioButton2_CheckedChanged(object sender, EventArgs e)
+		{
+			dumpStride = 5;
+			timer1.Enabled = true;
+		}
+
+		private void radioButton5_CheckedChanged(object sender, EventArgs e)
+		{
+			dumpStride = 4;
+			timer1.Enabled = true;
+		}
+
+		private void radioButton7_CheckedChanged(object sender, EventArgs e)
+		{
+			dumpStride = 1;
+			timer1.Enabled = true;
+		}
+
+		private void radioButton6_CheckedChanged(object sender, EventArgs e)
+		{
+			dumpStride = 2;
+			timer1.Enabled = true;
+		}
+
+		private void radioButton9_CheckedChanged(object sender, EventArgs e)
+		{
+			dumpType = 1;
+			timer1.Enabled = true;
 		}
 	}
 }

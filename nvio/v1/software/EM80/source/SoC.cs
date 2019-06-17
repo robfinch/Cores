@@ -8,7 +8,7 @@ namespace EM80
 {
 	class SoC
 	{
-		public rtfItaniumCpu cpu;
+		public nvioCpu cpu;
 		public Int128[] rom;
 		public Int128[] mainmem;
 		public int leds;
@@ -16,7 +16,7 @@ namespace EM80
 		{
 			int nn;
 
-			cpu = new rtfItaniumCpu();
+			cpu = new nvioCpu();
 			rom = new Int128[16384];
 			mainmem = new Int128[4194304];	// 64 MB
 			for (nn = 0; nn < 16384; nn++)
@@ -41,7 +41,7 @@ namespace EM80
 			string[] lines;
 			string s;
 			int nn;
-			int j, k;
+			int j, k, m;
 
 			lines = System.IO.File.ReadAllLines(fname);
 			nn = 0;
@@ -54,10 +54,22 @@ namespace EM80
 					nn = Convert.ToInt32(str.Substring(j + 1, k - j - 1), 10);
 					if (nn > 16383)
 						continue;
-					j = str.IndexOf('h');
-					k = str.IndexOf(';');
-					s = str.Substring(j + 1, k - j - 1);
-					rom[nn] = new Int128(s);
+					m = str.IndexOf("256'h");
+					if (m >= 0)
+					{
+						j = m + 5;
+						s = str.Substring(j, 32);
+						rom[nn*2+1] = new Int128(s);
+						s = str.Substring(j + 32, 32);
+						rom[nn*2] = new Int128(s);
+					}
+					else
+					{
+						j = str.IndexOf('h');
+						k = str.IndexOf(';');
+						s = str.Substring(j + 1, k - j - 1);
+						rom[nn] = new Int128(s);
+					}
 				}
 			}
 		}
@@ -91,7 +103,7 @@ namespace EM80
 			}
 			if (1==1)
 			{
-				nn = ((ad - 0xFFFFFFFFFFC0000L) >> 4) & 0x3ffff;
+				nn = ((ad - 0xFFFFFFFFFFC0000L) >> 4) & 0x3fff;
 				j = rom[nn].Clone();
 				k = rom[nn + 1].Clone();
 				j = j.ShrPair(k, j, (int)((ad & 15L) << 3));

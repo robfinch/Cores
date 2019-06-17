@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace EM80
 {
-	class rtfItaniumCpu
+	class nvioCpu
 	{
 		public enum e_unitTypes { N = 0, B = 1, I = 2, F = 3, M = 4 };
 		static public e_unitTypes[,] unitx = new e_unitTypes[66, 3] {
@@ -209,7 +209,7 @@ namespace EM80
 		public Int128 brdisp;
 		public bool rfw;
 		public bool isLoad;
-		public rtfItaniumCpu()
+		public nvioCpu()
 		{
 			int nn;
 
@@ -249,6 +249,13 @@ namespace EM80
 					ip = Int128.Add(ip, Int128.Convert(0x10));
 					break;
 			}
+		}
+		static string Regstr(int reg)
+		{
+			string str;
+
+			str = "$R" + Convert.ToString(reg, 10);
+			return str;
 		}
 		public void ProcessBcc()
 		{
@@ -332,6 +339,328 @@ namespace EM80
 					break;
 			}
 			return res;
+		}
+		public static string ScaleStr(int Sc)
+		{
+			switch(Sc)
+			{
+				case 0:	return "";
+				case 1: return "*2";
+				case 2: return "*4";
+				case 3: return "*8";
+				case 4: return "*16";
+				case 5: return "*5";
+				case 6: return "*10";
+				case 7: return "*15";
+				default:	return "";
+			}
+		}
+		public static string DisProcessR3(ulong insnn, int Rd, int Rs1, int Rs2, int Rs3)
+		{
+			string str;
+			nvioCpu.e_iunit funct;
+
+			funct = (nvioCpu.e_iunit)(((insnn >> 34) & 0x3eL) | ((insnn >> 6) & 1L));
+			switch (funct)
+			{
+				case e_iunit.ADD:
+					str = "ADD    " + Regstr(Rd) + "," + Regstr(Rs1) + "," + Regstr(Rs2);
+					break;
+				case e_iunit.AND:
+					str = "AND    " + Regstr(Rd) + "," + Regstr(Rs1) + "," + Regstr(Rs2);
+					break;
+				case e_iunit.MUL:
+					str = "MUL    " + Regstr(Rd) + "," + Regstr(Rs1) + "," + Regstr(Rs2);
+					break;
+				case e_iunit.SHLI:
+					str = "SHL    " + Regstr(Rd) + "," + Regstr(Rs1) + ",#" + Convert.ToString(Rs2);
+					break;
+				case e_iunit.SHRI:
+					str = "SHR    " + Regstr(Rd) + "," + Regstr(Rs1) + ",#" + Convert.ToString(Rs2);
+					break;
+				default:
+					str = "???";
+					break;
+			}
+			return str;
+		}
+		static string DisRII(UInt64 instr)
+		{
+			string str;
+
+			Int128 rii = new Int128();
+
+			rii.digits[0] = (instr >> 16) & 0x7fffL;
+			rii.digits[0] |= ((instr >> 33) & 0x7fL) << 15;
+			rii.digits[1] = 0;
+			rii.digits[2] = 0;
+			rii.digits[3] = 0;
+			if ((rii.digits[0] & 0x200000L) != 0)
+			{
+				rii.digits[0] |= 0xffC00000L;
+				rii.digits[1] = 0xffffffffL;
+				rii.digits[2] = 0xffffffffL;
+				rii.digits[3] = 0xffffffffL;
+			}
+			str = rii.ToString80();
+			return str;
+		}
+		static string DisBranchTgt(Int64 instr, Int128 ip)
+		{
+			string str;
+			Int64 tgt;
+
+			tgt = ((instr >> 4) & 3) | (((instr >> 4) & 3) << 2) | ((instr >> 22) << 4);
+			tgt = Int128.Add(ip, Int128.Convert(instr >> 22)).ToLong();
+			tgt &= -16L;
+			tgt |= ((instr >> 4) & 3) | (((instr >> 4) & 3) << 2);
+			str = "$" + Convert.ToString(tgt, 16).PadLeft(10, '0');
+			return str;
+		}
+		static string DisCallTgt(Int64 instr)
+		{
+			string str;
+
+			Int64 tgt = (instr & 3) | ((instr & 63) << 2) | ((instr >> 10) << 8);
+			str = Convert.ToString(tgt, 16).PadLeft(10, '0');
+			return str;
+		}
+		public static string Disassemble(nvioCpu.e_unitTypes unit, Int64 instr, Int128 ip)
+		{
+			string str;
+			UInt16 op4;
+			UInt16 op6;
+			UInt16 func5;
+			Int16 Rd;
+			Int16 Rs1;
+			Int16 Rs2;
+			Int16 Rs3;
+			char[] cha = new char[1];
+
+			cha[0] = '0';
+			op4 = (UInt16)((instr >> 6) & 15L);
+			func5 = (UInt16)((instr >> 35) & 31L);
+			Rd = (Int16)(instr & 63);
+			Rs1 = (Int16)((instr >> 10) & 63);
+			Rs2 = (Int16)((instr >> 16) & 63);
+			Rs3 = (Int16)((instr >> 22) & 63);
+			str = "";
+			str = ip.ToString80().Substring(14, 6) + " ";
+			str = str + Convert.ToString(instr, 16).PadLeft(10, '0') + " ";
+			switch (unit)
+			{
+				case nvioCpu.e_unitTypes.B:
+					switch ((nvioCpu.e_bunit)op4)
+					{
+						case nvioCpu.e_bunit.CALL:
+							str = str + "CALL   ";
+							str = str + DisCallTgt(instr).TrimStart(cha);
+							break;
+						case nvioCpu.e_bunit.RET:
+							str = str + "RET    ";
+							break;
+						case nvioCpu.e_bunit.JMP:
+							str = str + "JMP    ";
+							str = str + DisCallTgt(instr).TrimStart(cha);
+							break;
+						case nvioCpu.e_bunit.Bcc:
+							switch ((nvioCpu.e_bcond)(instr & 7))
+							{
+								case nvioCpu.e_bcond.BEQ:
+									str = str + "BEQ    ";
+									str = str + Regstr(Rs1) + "," + Regstr(Rs2) + "," + DisBranchTgt(instr, ip).TrimStart(cha);
+									break;
+								case nvioCpu.e_bcond.BNE:
+									str = str + "BNE    ";
+									str = str + Regstr(Rs1) + "," + Regstr(Rs2) + "," + DisBranchTgt(instr, ip).TrimStart(cha);
+									break;
+								case nvioCpu.e_bcond.BLT:
+									str = str + "BLT    ";
+									str = str + Regstr(Rs1) + "," + Regstr(Rs2) + "," + DisBranchTgt(instr, ip).TrimStart(cha);
+									break;
+								default:
+									str = str + "B??    ";
+									str = str + Regstr(Rs1) + "," + Regstr(Rs2) + "," + DisBranchTgt(instr, ip).TrimStart(cha);
+									break;
+							}
+							break;
+					}
+					break;
+				case nvioCpu.e_unitTypes.I:
+					op6 = (UInt16)(((instr >> 6) & 15L) | (((instr >> 31) & 3L) << 4));
+					switch ((nvioCpu.e_iunit)op6)
+					{
+						case nvioCpu.e_iunit.R3E:
+							return str + nvioCpu.DisProcessR3((UInt64)instr, Rd, Rs1, Rs2, Rs3);
+
+						case nvioCpu.e_iunit.ADDI:
+							if (Rs1 == 0)
+							{
+								str = str + "LDI    ";
+								str = str + Regstr(Rd) + ",#$" + DisRII((UInt64)instr).TrimStart(cha);
+							}
+							else
+							{
+								str = str + "ADD    ";
+								str = str + Regstr(Rd) + "," + Regstr(Rs1) + ",#$" + DisRII((UInt64)instr).TrimStart(cha);
+							}
+							break;
+						case e_iunit.ADDS1:
+							str = str + "ADDS1  ";
+							str = str + Regstr(Rd) + "," + Regstr(Rs1) + ",#$" + DisRII((UInt64)instr).TrimStart(cha);
+							break;
+						case e_iunit.ADDS2:
+							str = str + "ADDS2  ";
+							str = str + Regstr(Rd) + "," + Regstr(Rs1) + ",#$" + DisRII((UInt64)instr).TrimStart(cha);
+							break;
+						case e_iunit.ADDS3:
+							str = str + "ADDS3  ";
+							str = str + Regstr(Rd) + "," + Regstr(Rs1) + ",#$" + DisRII((UInt64)instr).TrimStart(cha);
+							break;
+						case e_iunit.ORS1:
+							str = str + "ORS1   ";
+							str = str + Regstr(Rd) + "," + Regstr(Rs1) + ",#$" + DisRII((UInt64)instr).TrimStart(cha);
+							break;
+						case e_iunit.ORS2:
+							str = str + "ORS2   ";
+							str = str + Regstr(Rd) + "," + Regstr(Rs1) + ",#$" + DisRII((UInt64)instr).TrimStart(cha);
+							break;
+						case e_iunit.ORS3:
+							str = str + "ORS3   ";
+							str = str + Regstr(Rd) + "," + Regstr(Rs1) + ",#$" + DisRII((UInt64)instr).TrimStart(cha);
+							break;
+					}
+					break;
+				case e_unitTypes.M:
+					int Sc = 1;
+					ulong insnn = (ulong)instr;
+					e_munit mopcode;
+					bool isLoad;
+					Int128 ma = new Int128();
+					mopcode = (e_munit)(((insnn >> 6) & 15L) | (((insnn >> 33) & 3L) << 4));
+					isLoad = ((uint)mopcode & 0x20) == 0;
+					if (!isLoad)
+					{
+						if (mopcode == e_munit.PUSH)
+						{
+							ma.digits[0] = (ulong)(-(long)(insnn >> 35));
+							ma.digits[0] &= 0xffffffffL;
+							ma.digits[1] = 0xffffffffL;
+							ma.digits[2] = 0xffffffffL;
+							ma.digits[3] = 0xffffffffL;
+						}
+						else
+						{
+							ma.digits[0] = (insnn & 0x3fL) | (((insnn >> 22) & 0x1ffL) << 6) | (((insnn >> 35) & 0x1fL) << 15);
+							ma.digits[1] = 0;
+							ma.digits[2] = 0;
+							ma.digits[3] = 0;
+						}
+					}
+					// Loads
+					else
+					{
+						ma.digits[0] = ((insnn >> 16) & 0x7ffffL) | (((insnn >> 35) & 0x1fL) << 15);
+						ma.digits[1] = 0;
+						ma.digits[2] = 0;
+						ma.digits[3] = 0;
+					}
+					if ((ma.digits[0] & 0x80000000L) != 0)
+					{
+						ma.digits[1] = 0xffffffffL;
+						ma.digits[2] = 0xffffffffL;
+						ma.digits[3] = 0xffffffffL;
+					}
+					Sc = (int)((insnn >> 28) & 7L);
+					switch (mopcode)
+					{
+						case e_munit.STB:
+							str = str + "STB    " + Regstr(Rs2) + "," + ma.ToString80().TrimStart(cha);
+							if (Rs1 != 0)
+								str = str + "[" + Regstr(Rs1) + "]";
+							break;
+						case e_munit.STW:
+							str = str + "STW    " + Regstr(Rs2) + "," + ma.ToString80().TrimStart(cha);
+							if (Rs1 != 0)
+								str = str + "[" + Regstr(Rs1) + "]";
+							break;
+						case e_munit.STT:
+							str = str + "STT    " + Regstr(Rs2) + "," + ma.ToString80().TrimStart(cha);
+							if (Rs1 != 0)
+								str = str + "[" + Regstr(Rs1) + "]";
+							break;
+						case e_munit.STO:
+							str = str + "STO    " + Regstr(Rs2) + "," + ma.ToString80().TrimStart(cha);
+							if (Rs1 != 0)
+								str = str + "[" + Regstr(Rs1) + "]";
+							break;
+						case e_munit.STD:
+							str = str + "STD    " + Regstr(Rs2) + "," + ma.ToString80().TrimStart(cha);
+							if (Rs1 != 0)
+								str = str + "[" + Regstr(Rs1) + "]";
+							break;
+						case e_munit.PUSH:
+							str = str + "PUSH   " + Regstr(Rs2);
+							break;
+						case e_munit.MSX:
+							switch ((e_munit5)func5)
+							{
+								case e_munit5.STBX:
+									str = str + "STB    " + Regstr(Rs2) + ",";
+									str = str + "[" + Regstr(Rs1) + "+" + Regstr(Rs3) + ScaleStr(Sc) + "]";
+									break;
+								case e_munit5.STOX:
+									str = str + "STD    " + Regstr(Rs2) + ",";
+									str = str + "[" + Regstr(Rs1) + "+" + Regstr(Rs3) + ScaleStr(Sc) + "]";
+									break;
+							}
+							break;
+						case e_munit.LDB:
+							str = str + "LDB    " + Regstr(Rd) + "," + ma.ToString80().TrimStart(cha);
+							if (Rs1 != 0)
+								str = str + "[" + Regstr(Rs1) + "]";
+							break;
+						case e_munit.LDBU:
+							str = str + "LDBU   " + Regstr(Rd) + "," + ma.ToString80().TrimStart(cha);
+							if (Rs1 != 0)
+								str = str + "[" + Regstr(Rs1) + "]";
+							break;
+						case e_munit.LDD:
+							str = str + "LDD    " + Regstr(Rd) + "," + ma.ToString80().TrimStart(cha);
+							if (Rs1 != 0)
+								str = str + "[" + Regstr(Rs1) + "]";
+							break;
+						case e_munit.LDO:
+							str = str + "LDO    " + Regstr(Rd) + "," + ma.ToString80().TrimStart(cha);
+							if (Rs1 != 0)
+								str = str + "[" + Regstr(Rs1) + "]";
+							break;
+						case e_munit.LDOU:
+							str = str + "LDOU   " + Regstr(Rd) + "," + ma.ToString80().TrimStart(cha);
+							if (Rs1 != 0)
+								str = str + "[" + Regstr(Rs1) + "]";
+							break;
+						case e_munit.MLX:
+							switch ((e_munit5)func5)
+							{
+								case e_munit5.LDBX:
+									str = str + "LDB    " + Regstr(Rd) + ",";
+									str = str + "[" + Regstr(Rs1) + "+" + Regstr(Rs3) + ScaleStr(Sc) + "]";
+									break;
+								case e_munit5.LDDX:
+									str = str + "LDD    " + Regstr(Rd) + ",";
+									str = str + "[" + Regstr(Rs1) + "+" + Regstr(Rs3) + ScaleStr(Sc) + "]";
+									break;
+								case e_munit5.LDOX:
+									str = str + "LDO    " + Regstr(Rd) + ",";
+									str = str + "[" + Regstr(Rs1) + "+" + Regstr(Rs3) + ScaleStr(Sc) + "]";
+									break;
+							}
+							break;
+					}
+					break;
+			}
+			return str;
 		}
 		public void Step(SoC soc)
 		{
