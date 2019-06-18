@@ -35,8 +35,7 @@
 `define BUnit		3'd1
 `define IUnit		3'd2
 `define FUnit		3'd3
-`define MUnit	3'd4
-`define MUnit	3'd5
+`define MUnit		3'd4
 
 // Branch Unit
 `define Bcc			4'h0
@@ -263,9 +262,13 @@
 `define LDFD		6'h11
 `define LDFDP		6'h12
 `define LDDP		6'h13
+`define LDM			6'h1A
+`define POP			6'h1D
+`define UNLK		6'h1F
 `define LOAD		6'b0?????
 `define LDDRX		5'h07
 `define LEAX		5'h0E
+`define LMX			5'h1A
 
 `define AMOSWAP		5'h00
 `define AMOSWAPI	5'h01
@@ -308,9 +311,12 @@
 `define STFD		6'h31
 `define STFDP		6'h32
 `define STDP		6'h33
+`define STM			6'h3A
+`define LINK		6'h3F
 `define STDCX		5'd07
 `define CASX		5'h0A
 `define CACHEX	5'h0E
+`define SMX			5'h1A
 `define MEMSB		5'd24
 `define MEMDB		5'd25
 `define STORE		6'b1?????

@@ -23,7 +23,7 @@
 //
 `include "nvio-config.sv"
 
-module slot_valid(rst, clk, branchmiss, phit, nextb, ip_mask, ip_maskd,
+module slotValid(rst, clk, branchmiss, phit, nextb, ip_mask, ip_maskd,
 	ip_override, queuedCnt,
 	slot_jc, slot_ret, take_branch, slotv, slotvd, debug_on);
 parameter QSLOTS = `QSLOTS;

@@ -107,7 +107,7 @@ if (rst_i) begin
 	bte_o <= 2'b00;
 	cyc_o <= `LOW;
 	stb_o <= `LOW;
-	sel_o <= 8'h00;
+	sel_o <= 16'h00;
 	adr_o <= {dadr[AMSB:5],5'h0};
 	state <= IDLE;
 	dL1_adr <= 1'd0;
@@ -197,7 +197,7 @@ IC_WaitL2:
 			bte_o <= 2'b00;
 			cyc_o <= `HIGH;
 			stb_o <= `HIGH;
-			sel_o <= 8'hFF;
+			sel_o <= 16'hFFFF;
 			adr_o <= {dL1_adr[AMSB:5],5'b0};
 			dL2_wadr <= dL1_adr;
 			dL2_wadr[4:0] <= 5'd0;
@@ -221,7 +221,7 @@ IC_Ack:
   if (ack_i|err_i|wrv_i|rdv_i) begin
   	if (!bok_i) begin
   		stb_o <= `LOW;
-			adr_o[AMSB:3] <= adr_o[AMSB:3] + 2'd1;
+			adr_o[AMSB:4] <= adr_o[AMSB:4] + 2'd1;
   		state <= IC_Nack2;
   	end
 		if (wrv_i) begin
@@ -270,6 +270,7 @@ IC_Nack2:
 IC_Nack:
 	begin
 		dL2_ld <= TRUE;
+		dL2_wsel <= {41{1'b1}};
     dccnt <= 3'd0;
 		dL1_wr <= TRUE;
 		dL1_sel <= {41{1'b1}};

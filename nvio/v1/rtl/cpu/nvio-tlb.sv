@@ -36,7 +36,7 @@
 module TLB(clk, ld, done, idle, ol,
 	ASID, op, regno, dati, dato,
 	uncached,
-	icl_i, cyc_i, we_i, vadr_i, cyc_o, we_o, padr_o,
+	icl_i, cyc_i, stb_i, we_i, vadr_i, cyc_o, stb_o, we_o, padr_o,
 	wrv_o, rdv_o, exv_o,
 	TLBMiss, HTLBVirtPageo);
 parameter DBW=80;
@@ -62,8 +62,10 @@ output uncached;
 
 input icl_i;
 input cyc_i;
+input stb_i;
 input we_i;
 output reg cyc_o;
+output reg stb_o;
 output reg we_o;
 output reg exv_o;
 output reg wrv_o;
@@ -495,6 +497,9 @@ assign TLBMiss = (ol!=2'b00) && TLBenabled && (!unmappedArea & (q[4] | ~TLBValid
 
 always @(posedge clk)
 	cyc_o <= cyc_i && (!TLBMiss || !TLBenabled || (ol == 2'b00));
+
+always @(posedge clk)
+	stb_o <= stb_i;
 
 always @(posedge clk)
 	we_o <= we_i & ((~TLBMiss & tlbWo1) | ~TLBenabled || (ol==2'b00));

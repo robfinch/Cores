@@ -335,7 +335,7 @@ always @(posedge clk)
 always @(posedge clk)
 	wr2 <= wr1;
 always @(posedge clk)
-	sel1 <= cnt;
+	sel1 <= sel;
 always @(posedge clk)
 	sel2 <= sel1;
 always @(posedge clk)
@@ -353,8 +353,8 @@ edge_det u3 (.rst(rst), .clk(clk), .ce(1'b1), .i(wr && cnt==3'd0), .pe(pe_wr), .
 
 L2_dcache_ram u1 (
   .clka(clk),    // input wire clka
-  .ena(1'b1),      // input wire ena
-  .wea(wr2),      // input wire [41 : 0] wea
+  .ena(wr2),      // input wire ena
+  .wea(sel2),      // input wire [41 : 0] wea
   .addra(wlineno),  // input wire [8 : 0] addra
   .dina(i2),    // input wire [335 : 0] dina
   .clkb(clk),    // input wire clkb

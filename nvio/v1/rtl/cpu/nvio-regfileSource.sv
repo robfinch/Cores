@@ -26,8 +26,8 @@
 `define INV		1'b0
 
 module regfileSource(rst, clk, branchmiss, heads, slotvd, slot_rfw,
-	queuedOn,	rqueuedOn, iq_state, iq_rfw, iq_Rd, Rd, tails,
-	iq_latestID, iq_tgt, iq_rid, rf_source);
+	queuedOn,	rqueuedOn, iq_state, iq_rfw, iq_Rd, Rd, Rd2, rob_tails,
+	iq_latestID, iq_tgt, iq_tgt2, iq_rid, rf_source);
 parameter AREGS = 128;
 parameter QENTRIES = `QENTRIES;
 parameter RENTRIES = `RENTRIES;
@@ -45,10 +45,12 @@ input [2:0] iq_state [0:QENTRIES-1];
 input [QENTRIES-1:0] iq_rfw;
 input [RBIT:0] iq_Rd [0:QENTRIES-1];
 input [RBIT:0] Rd [0:QSLOTS-1];
-input [`QBITS] tails [0:QSLOTS-1];
+input [RBIT:0] Rd2 [0:QSLOTS-1];
+input [`RBITS] rob_tails [0:QSLOTS-1];
 input [AREGS-1:1] iq_latestID [0:QENTRIES-1];
 input [RBIT:0] iq_tgt [0:QENTRIES-1];
-input [`QBITSP1] iq_rid [0:QENTRIES-1];
+input [RBIT:0] iq_tgt2 [0:QENTRIES-1];
+input [`RBITS] iq_rid [0:QENTRIES-1];
 output reg [`QBITSP1] rf_source [0:AREGS-1];
 
 integer n;
@@ -67,94 +69,114 @@ end
 else begin
 	if (branchmiss) begin
 		for (n = 0; n < QENTRIES; n = n + 1)
-    	if (|iq_latestID[n])
-    		rf_source[ iq_tgt[n][RBIT:0] ] <= iq_rid[n[`QBITS]];
+    	if (|iq_latestID[n]) begin
+    		rf_source[ iq_tgt[n][RBIT:0] ] <= {{`QBIT{1'b0}},iq_rid[n[`QBITS]]};
+    		rf_source[ iq_tgt2[n][RBIT:0] ] <= {{`QBIT{1'b0}},iq_rid[n[`QBITS]]};
+    	end
 	end
 	else begin
-		for (n = 0; n < QENTRIES; n = n + 1) begin
-			if (iq_state[heads[n]]==3'd2) begin	// ROBA
-				if (iq_rfw[heads[n]] && !rf_source[iq_Rd[heads[n]]][`QBIT])
-					rf_source[iq_Rd[heads[n]]] <= iq_rid[heads[n]];
-			end
-		end
 		// Setting the rf valid and source
 		case(slotvd)
 		3'b000:	;
 		3'b001:
 			if (queuedOn[0]) begin
 				if (slot_rfw[0]) begin
-					rf_source[Rd[0]] <= {1'b0,tails[0]};
+					rf_source[Rd[0]] <= {{`QBIT{1'b0}},rob_tails[0]};
 					rf_source[Rd[0]][`QBIT] <= 1'b0;
+					rf_source[Rd2[0]] <= {{`QBIT{1'b0}},rob_tails[0]};
+					rf_source[Rd2[0]][`QBIT] <= 1'b1;
 				end
 			end
 		3'b010:
 			if (queuedOn[1]) begin
 				if (slot_rfw[1]) begin
-					rf_source[Rd[1]] <= {1'b0,tails[0]};
-					rf_source[Rd[0]][`QBIT] <= 1'b0;
+					rf_source[Rd[1]] <= {{`QBIT{1'b0}},rob_tails[0]};
+					rf_source[Rd[1]][`QBIT] <= 1'b0;
+					rf_source[Rd2[1]] <= {{`QBIT{1'b0}},rob_tails[0]};
+					rf_source[Rd2[1]][`QBIT] <= 1'b1;
 				end
 			end
 		3'b011:
 			if (queuedOn[0]) begin
 				if (slot_rfw[0]) begin
-					rf_source[Rd[0]] <= {1'b0,tails[0]};
+					rf_source[Rd[0]] <= {{`QBIT{1'b0}},rob_tails[0]};
 					rf_source[Rd[0]][`QBIT] <= 1'b0;
+					rf_source[Rd2[0]] <= {{`QBIT{1'b0}},rob_tails[0]};
+					rf_source[Rd2[0]][`QBIT] <= 1'b1;
 				end
 				if (queuedOn[1]) begin
 					if (slot_rfw[1]) begin
-						rf_source[Rd[1]] <= {1'b0,tails[1]};
+						rf_source[Rd[1]] <= {{`QBIT{1'b0}},rob_tails[1]};
 						rf_source[Rd[1]][`QBIT] <= 1'b0;
+						rf_source[Rd2[1]] <= {{`QBIT{1'b0}},rob_tails[1]};
+						rf_source[Rd2[1]][`QBIT] <= 1'b1;
 					end
 				end
 			end
 		3'b100:
 			if (queuedOn[2]) begin
 				if (slot_rfw[2]) begin
-					rf_source[Rd[2]] <= {1'b0,tails[0]};
+					rf_source[Rd[2]] <= {{`QBIT{1'b0}},rob_tails[0]};
 					rf_source[Rd[2]][`QBIT] <= 1'b0;
+					rf_source[Rd2[2]] <= {{`QBIT{1'b0}},rob_tails[0]};
+					rf_source[Rd2[2]][`QBIT] <= 1'b1;
 				end
 			end
 		3'b101:
 			if (queuedOn[0]) begin
 				if (slot_rfw[0]) begin
-					rf_source[Rd[0]] <= {1'b0,tails[0]};
+					rf_source[Rd[0]] <= {{`QBIT{1'b0}},rob_tails[0]};
 					rf_source[Rd[0]][`QBIT] <= 1'b0;
+					rf_source[Rd2[0]] <= {{`QBIT{1'b0}},rob_tails[0]};
+					rf_source[Rd2[0]][`QBIT] <= 1'b1;
 				end
 				if (queuedOn[2]) begin
 					if (slot_rfw[2]) begin
-						rf_source[Rd[2]] <= {1'b0,tails[1]};
+						rf_source[Rd[2]] <= {{`QBIT{1'b0}},rob_tails[1]};
 						rf_source[Rd[2]][`QBIT] <= 1'b0;
+						rf_source[Rd2[2]] <= {{`QBIT{1'b0}},rob_tails[1]};
+						rf_source[Rd2[2]][`QBIT] <= 1'b1;
 					end
 				end
 			end
 		3'b110:
 			if (queuedOn[1]) begin
 				if (slot_rfw[1]) begin
-					rf_source[Rd[1]] <= {1'b0,tails[0]};
+					rf_source[Rd[1]] <= {{`QBIT{1'b0}},rob_tails[0]};
 					rf_source[Rd[1]][`QBIT] <= 1'b0;
+					rf_source[Rd2[1]] <= {{`QBIT{1'b0}},rob_tails[0]};
+					rf_source[Rd2[1]][`QBIT] <= 1'b1;
 				end
 				if (queuedOn[2]) begin
 					if (slot_rfw[2]) begin
-						rf_source[Rd[2]] <= {1'b0,tails[1]};
+						rf_source[Rd[2]] <= {{`QBIT{1'b0}},rob_tails[1]};
 						rf_source[Rd[2]][`QBIT] <= 1'b0;
+						rf_source[Rd2[2]] <= {{`QBIT{1'b0}},rob_tails[1]};
+						rf_source[Rd2[2]][`QBIT] <= 1'b1;
 					end
 				end
 			end
 		3'b111:
 			if (queuedOn[0]) begin
 				if (slot_rfw[0]) begin
-					rf_source[Rd[0]] <= {1'b0,tails[0]};
+					rf_source[Rd[0]] <= {{`QBIT{1'b0}},rob_tails[0]};
 					rf_source[Rd[0]][`QBIT] <= 1'b0;
+					rf_source[Rd2[0]] <= {{`QBIT{1'b0}},rob_tails[0]};
+					rf_source[Rd2[0]][`QBIT] <= 1'b1;
 				end
 				if (queuedOn[1]) begin
 					if (slot_rfw[1]) begin
-						rf_source[Rd[1]] <= {1'b0,tails[1]};
+						rf_source[Rd[1]] <= {{`QBIT{1'b0}},rob_tails[1]};
 						rf_source[Rd[1]][`QBIT] <= 1'b0;
+						rf_source[Rd2[1]] <= {{`QBIT{1'b0}},rob_tails[1]};
+						rf_source[Rd2[1]][`QBIT] <= 1'b1;
 					end
 					if (queuedOn[2]) begin
 						if (slot_rfw[2]) begin
-							rf_source[Rd[2]] <= {1'b0,tails[2]};
+							rf_source[Rd[2]] <= {{`QBIT{1'b0}},rob_tails[2]};
 							rf_source[Rd[2]][`QBIT] <= 1'b0;
+							rf_source[Rd2[2]] <= {{`QBIT{1'b0}},rob_tails[2]};
+							rf_source[Rd2[2]][`QBIT] <= 1'b1;
 						end
 					end
 				end

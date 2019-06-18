@@ -24,11 +24,11 @@
 `include "nvio-config.sv"
 `include "nvio-defines.sv"
 
-module decode_buffer(rst, clk, irq_i, im, cause_i, freezeip, int_commit,
+module decodeBuffer(rst, clk, irq_i, im, cause_i, freezeip, int_commit,
 	ic_fault, ic_out, codebuf,
 	phit, next_bundle,
 	ibundlep, templatep, insnxp,
-	ibundle, template, insnx
+	ibundle, template, insnx, queued, lsmo
 );
 parameter QSLOTS = `QSLOTS;
 parameter BBB = 8'h00;
@@ -50,6 +50,10 @@ output reg [39:0] insnxp [0:QSLOTS-1];
 output reg [127:0] ibundle;
 output reg [7:0] template [0:QSLOTS-1];
 output reg [39:0] insnx [0:QSLOTS-1];
+input queued;
+output reg lsmo;
+
+integer n;
 
 function [8:0] fnUnits;
 input [6:0] tmp;
@@ -121,6 +125,7 @@ case(tmp)
 
 7'h7D: fnUnits = {`IUnit,`NUnit,`NUnit};
 7'h7E: fnUnits = {`FUnit,`NUnit,`NUnit};
+7'h7F: fnUnits = {`MUnit,`NUnit,`NUnit};
 default:	fnUnits = {`NUnit,`NUnit,`NUnit};
 endcase
 endfunction
@@ -169,13 +174,30 @@ input [39:0] isn;
 IsPfi = unit==`BUnit && (isn[`OPCODE4]==`BRK && isn[`FUNCT5]==`PFI);
 endfunction
 
+function IsLSM;
+input [2:0] unit;
+input [39:0] isn;
+IsLSM = unit==`MUnit && ({isn[34:33],isn[`OPCODE4]}==`LDM || {isn[34:33],isn[`OPCODE4]}==`STM);
+endfunction
+
+function IsLM;
+input [2:0] unit;
+input [39:0] isn;
+IsLM = unit==`MUnit && {isn[34:33],isn[`OPCODE4]}==`LDM;
+endfunction
+
+reg lsm;
+reg ldm;
+reg lsmr, lsmc;
+assign lsmo = (lsm|lsmr)&~lsmc;
+
 // freezePC squashes the pc increment if there's an irq.
 // If a hardware interrupt instruction is encountered in the instruction stream
 // flag it as a privilege violation.
 
 assign freezeip = (irq_i > im) && !int_commit;
 always @*
-if (freezeip) begin
+if (freezeip & !lsmr) begin
 	ibundlep <= {BBB,{3{1'b1,9'h0,cause_i,2'b00,irq_i,16'h03C0}}};
 	templatep[0] <= BBB;	// Branch,Branch,Branch
 	templatep[1] <= BBB;
@@ -185,13 +207,24 @@ if (freezeip) begin
 	insnxp[2] <= {1'b1,9'h0,cause_i,2'b00,irq_i,16'h03C0};
 end
 else begin
-	ibundlep <= ic_out;
-	insnxp[0] <= ic_out[39:0];
-	insnxp[1] <= ic_out[79:40];
-	insnxp[2] <= ic_out[119:80];
-	templatep[0] <= ic_out[126:120];
-	templatep[1] <= ic_out[126:120];
-	templatep[2] <= ic_out[126:120];
+	if (lsmr && !lsmc && ibundle[103:40] != 64'd0) begin
+		ibundlep <= ibundle;
+		insnxp[0] <= insnx[0];
+		insnxp[1] <= insnx[1];
+		insnxp[2] <= insnx[2];
+		templatep[0] <= template[0];
+		templatep[1] <= template[1];
+		templatep[2] <= template[2];
+	end
+	else begin
+		ibundlep <= ic_out;
+		insnxp[0] <= ic_out[39:0];
+		insnxp[1] <= ic_out[79:40];
+		insnxp[2] <= ic_out[119:80];
+		templatep[0] <= ic_out[126:120];
+		templatep[1] <= ic_out[126:120];
+		templatep[2] <= ic_out[126:120];
+	end
 	case(ic_fault)
 	2'd1:	
 		begin
@@ -291,6 +324,15 @@ else begin
 	endcase
 end
 
+always @*
+	lsm <= IsLSM(Unit0(templatep[0]),insnxp[0]);
+always @*
+	ldm <= IsLM(Unit0(templatep[0]),insnxp[0]);
+
+reg [11:0] count;
+always @*
+	count <= ibundle[119:108];
+
 always @(posedge clk)
 if (rst) begin
 	ibundle <= {BBB,{3{`NOP_INSN}}};
@@ -300,8 +342,11 @@ if (rst) begin
 	template[0] <= BBB;
 	template[1] <= BBB;
 	template[2] <= BBB;
+	lsmr <= 1'b0;
+	lsmc <= 1'b1;
 end
 else if (phit & next_bundle) begin
+	lsmc <= 1'b0;
 	ibundle <= ibundlep;
 	insnx[0] <= insnxp[0];
 	insnx[1] <= insnxp[1];
@@ -310,6 +355,33 @@ else if (phit & next_bundle) begin
 	template[1] <= templatep[1];
 	template[2] <= templatep[2];
 end
+else if (lsm & ibundlep[103:40]!=64'd0 & queued) begin
+	lsmr <= 1'b1;
+	insnx[0] <= insnxp[0];
+	insnx[1] <= insnxp[1];
+	insnx[2] <= insnxp[2];
+	template[0] <= templatep[0];
+	template[1] <= templatep[1];
+	template[2] <= templatep[2];
+	if (ldm)
+		ibundle[insnx[0][`RD] + 7'd40] <= 1'b0;
+	else
+		ibundle[insnx[0][`RS2] + 7'd40] <= 1'b0;
+	ibundle[119:108] <= ibundle[119:108] + 4'd10;
+	for (n = 63; n >= 0; n = n - 1) begin
+		if (ibundle[n + 7'd40] && n != (ldm ? insnx[0][`RD] : insnx[0][`RS2])) begin
+			if (ldm)
+				insnx[0][`RD] <= n;
+			else
+				insnx[0][`RS2] <= n;
+		end
+	end
+end
+else if (queued) begin
+	lsmr <= 1'b0;
+	lsmc <= 1'b1;
+end
+
 //else begin
 //	ibundle <= {BBB,{3{`NOP_INSN}}};
 //	insnx[0] <= `NOP_INSN;

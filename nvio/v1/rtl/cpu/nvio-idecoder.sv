@@ -24,11 +24,12 @@
 `include ".\nvio-config.sv"
 `include ".\nvio-defines.sv"
 
-module idecoder(unit,instr,predict_taken,Rt,bus,debug_on);
+module idecoder(unit,instr,predict_taken,Rt,Rd2,bus,debug_on);
 input [2:0] unit;
 input [39:0] instr;
 input predict_taken;
 input [5:0] Rt;
+input [5:0] Rd2;
 output reg [`IBTOP:0] bus;
 input debug_on;
 
@@ -188,13 +189,20 @@ endfunction
 function IsPush;
 input [2:0] unit;
 input [39:0] isn;
-IsPush = unit==`MUnit && (mopcode(isn)==`PUSH || mopcode(isn)==`PUSHC);
+casez({unit==`MUnit,mopcode(isn)})
+{7'b1,`PUSH}:	IsPush = TRUE;
+{7'b1,`PUSHC}:	IsPush = TRUE;
+default:	IsPush = FALSE;
+endcase
 endfunction
 
 function IsPushc;
 input [2:0] unit;
 input [39:0] isn;
-IsPushc = unit==`MUnit && mopcode(isn)==`PUSHC;
+casez({unit==`MUnit,mopcode(isn)})
+{7'b1,`PUSHC}:	IsPushc = TRUE;
+default:	IsPushc = FALSE;
+endcase
 endfunction
 
 function IsMemNdx;
@@ -473,7 +481,11 @@ case(unit)
 	`MSX:
 		case(isn[`FUNCT5])
 		`CAS:	IsRFW = TRUE;
-		default:	IsRFW = FALSE;
+		default:
+			if (isn[1:0]!=2'd0)
+				IsRFW = TRUE;
+			else
+				IsRFW = FALSE;
 		endcase
 	default:	IsRFW = FALSE;
 	endcase
@@ -569,13 +581,13 @@ begin
 	bus[`IB_FC]		 <= unit==3'd1;
 	bus[`IB_CANEX] <= fnCanException(unit,instr);
 	bus[`IB_LEA]	 <= IsLea(unit,instr);
-	bus[`IB_LOAD]	 <= unit==3'd4;
-	bus[`IB_PRELOAD] <= unit==3'd4 && Rt==6'd0;
-	bus[`IB_STORE]	<= unit==3'd5;
+	bus[`IB_LOAD]	 <= unit==3'd4 && instr[34]==1'b0;
+	bus[`IB_PRELOAD] <= unit==3'd4 && instr[34]==1'b0 && Rt==6'd0 && Rd2==6'd0;
+	bus[`IB_STORE]	<= unit==3'd4 && instr[34]==1'b1;
 	bus[`IB_PUSH]   <= IsPush(unit,instr);
 	bus[`IB_ODDBALL] <= IsOddball(unit,instr);
 	bus[`IB_MEMSZ]  <= MemSize(unit,instr);
-	bus[`IB_MEM]		<= unit==3'd4 || unit==3'd5;
+	bus[`IB_MEM]		<= unit==3'd4;
 	bus[`IB_MEMNDX]	<= IsMemNdx(unit,instr);
 	bus[`IB_RMW]		<= IsCAS(unit,instr);// || IsInc(unit,instr);
 	bus[`IB_MEMDB]	<= IsMemdb(unit,instr);
@@ -588,7 +600,7 @@ begin
 	bus[`IB_BRCC]		<= IsBRcc(unit,instr);
 	bus[`IB_SYNC]		<= IsSync(unit,instr)|| isBrk || isRti;
 	bus[`IB_FSYNC]	<= IsFSync(unit,instr);
-	bus[`IB_RFW]		<= (Rt==6'd0) ? 1'b0 : IsRFW(unit,instr);
+	bus[`IB_RFW]		<= (Rt==6'd0) && (Rd2==6'd0) ? 1'b0 : IsRFW(unit,instr);
 	bus[`IB_UNIT]		<= unit;
 end
 

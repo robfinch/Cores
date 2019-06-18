@@ -23,7 +23,7 @@
 //
 `include "nvio-config.sv"
 
-module write_buffer(rst_i, clk_i, bstate, cyc_pending, wb_has_bus, update_iq, uid, ruid, fault,
+module writeBuffer(rst_i, clk_i, bstate, cyc_pending, wb_has_bus, update_iq, uid, ruid, fault,
 	wb_v, wb_addr, wb_en_i, cwr_o, csel_o, cadr_o, cdat_o,
 	p0_id_i, p0_rid_i, p0_ol_i, p0_wr_i, p0_ack_o, p0_sel_i, p0_adr_i, p0_dat_i, p0_hit,
 	p1_id_i, p1_rid_i, p1_ol_i, p1_wr_i, p1_ack_o, p1_sel_i, p1_adr_i, p1_dat_i, p1_hit,
@@ -241,7 +241,7 @@ IDLE:
 			stb_o <= HIGH;
 			we_o <= HIGH;
 			sel_o <= wb_sel[0] << wb_addr[0][3:0];
-			adr_o <= wb_addr[0];
+			adr_o <= {wb_addr[0][AMSB:4],4'h0};
 			dat_o <= wb_data[0] << {wb_addr[0][3:0],3'h0};
 			ol_o  <= wb_ol[0];
 			wbo_id <= wb_id[0];
@@ -305,7 +305,7 @@ Store2:
 	if (~ack_i) begin
 		stb_o <= HIGH;
 		sel_o <= sel_shift[31:16];
-		adr_o[79:4] <= adr_o[79:4] + 2'd1;
+		adr_o[AMSB:4] <= adr_o[AMSB:4] + 2'd1;
 		adr_o[3:0] <= 4'b0;
 		dat_o <= wb_data[0] >> {(5'd16 - wb_addr[0][3:0]),3'b0};
 	end
