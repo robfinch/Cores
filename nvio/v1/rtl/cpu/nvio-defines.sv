@@ -266,7 +266,18 @@
 `define POP			6'h1D
 `define UNLK		6'h1F
 `define LOAD		6'b0?????
+`define LDBX		5'h00
+`define LDWX		5'h01
+`define LDPX		5'h02
+`define LDDX		5'h03
+`define LDBUX		5'h04
+`define LDWUX		5'h05
+`define LDPUX		5'h06
 `define LDDRX		5'h07
+`define LDTX		5'h08
+`define LDOX		5'h09
+`define LDTUX		5'h0C
+`define LDOUX		5'h0D
 `define LEAX		5'h0E
 `define LMX			5'h1A
 
@@ -314,12 +325,21 @@
 `define STM			6'h3A
 `define LINK		6'h3F
 `define STDCX		5'd07
+`define STORE		6'b1?????
+
+`define STBX		5'h00
+`define STWX		5'h01
+`define STPX		5'h02
+`define STDX		5'h03
+`define STDCX		5'h07
+`define STTX		5'h08
+`define STOX		5'h09
 `define CASX		5'h0A
 `define CACHEX	5'h0E
+`define MEMSB		5'h18
+`define MEMDB		5'h19
 `define SMX			5'h1A
-`define MEMSB		5'd24
-`define MEMDB		5'd25
-`define STORE		6'b1?????
+
 
 `define R2		6'h02
 `define RR      6'h02

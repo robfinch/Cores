@@ -16,6 +16,8 @@ namespace EM80
 		public Rectangle drawRectangle;
 		public string[] stra;
 		public SolidBrush textbr;
+		public SolidBrush backbr;
+		public SolidBrush texthilite;
 	
 		public dump()
 		{
@@ -27,9 +29,11 @@ namespace EM80
 			| ControlStyles.SupportsTransparentBackColor, true
 			);
 			drawRectangle = new Rectangle(4, 4, 200, 400);
-			textbr = new SolidBrush(Color.White);
+			textbr = new SolidBrush(Color.LightGray);
+			texthilite = new SolidBrush(Color.White);
+			backbr = new SolidBrush(Color.DarkGreen);
 			stra = new string[1];
-			stra[0] = "";
+			stra[0] = " ";
 		}
 		public void SetText(string txt)
 		{
@@ -50,7 +54,10 @@ namespace EM80
 			h = this.FontHeight;
 			foreach (string str in stra)
 			{
-				g.DrawString(str, this.Font, textbr, new Point(x,y));
+				if (str.Substring(0,1)=="h")
+					g.DrawString(str.Substring(1), this.Font, texthilite, new Point(x, y));
+				else
+					g.DrawString(str.Substring(1), this.Font, textbr, new Point(x,y));
 				y += h;
 			}
 		}

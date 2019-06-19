@@ -178,6 +178,7 @@ namespace EM80
 		private void stepToolStripMenuItem_Click(object sender, EventArgs e)
 		{
 			soc.Step();
+			label4.Text = Convert.ToString(soc.cpu.icount, 10);
 			UpdateRegisters();
 			Application.DoEvents();
 		}
@@ -292,10 +293,17 @@ namespace EM80
 						}
 						break;
 					case 1:
-						str = str + nvioCpu.Disassemble(GetUnit(ad), (Int64)GetInstr(ad), ad) + "\n";
+						if (Int128.EQ(ad, soc.cpu.ip))
+							str = str + "h";
+						else
+							str = str + " ";
+						str = str + nvioCpu.Disassemble(soc.cpu.ibundle, GetUnit(ad), (Int64)GetInstr(ad), ad) + "\n";
 						break;
 				}
-				ad = Int128.Add(ad, Int128.Convert(dumpStride));
+				if (trackIP)
+					ad = nvioCpu.IncAd(ad, 5);
+				else
+					ad = Int128.Add(ad, Int128.Convert(dumpStride));
 			}
 			dmp.SetText(str);
 			dmp.Invalidate();
@@ -317,6 +325,7 @@ namespace EM80
 			{
 				e.SuppressKeyPress = true;
 				soc.Step();
+				label4.Text = Convert.ToString(soc.cpu.icount, 10);
 				UpdateRegisters();
 				//Application.DoEvents();
 			}
@@ -408,6 +417,12 @@ namespace EM80
 		private void radioButton9_CheckedChanged(object sender, EventArgs e)
 		{
 			dumpType = 1;
+			timer1.Enabled = true;
+		}
+
+		private void radioButton8_CheckedChanged(object sender, EventArgs e)
+		{
+			dumpType = 0;
 			timer1.Enabled = true;
 		}
 	}

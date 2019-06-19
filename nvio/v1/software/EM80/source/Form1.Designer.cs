@@ -56,6 +56,8 @@
 			this.radioButton7 = new System.Windows.Forms.RadioButton();
 			this.radioButton8 = new System.Windows.Forms.RadioButton();
 			this.radioButton9 = new System.Windows.Forms.RadioButton();
+			this.label4 = new System.Windows.Forms.Label();
+			this.label5 = new System.Windows.Forms.Label();
 			this.menuStrip1.SuspendLayout();
 			((System.ComponentModel.ISupportInitialize)(this.numericUpDown1)).BeginInit();
 			this.SuspendLayout();
@@ -296,6 +298,7 @@
 			this.radioButton8.TabStop = true;
 			this.radioButton8.Text = "Raw";
 			this.radioButton8.UseVisualStyleBackColor = true;
+			this.radioButton8.CheckedChanged += new System.EventHandler(this.radioButton8_CheckedChanged);
 			// 
 			// radioButton9
 			// 
@@ -309,11 +312,31 @@
 			this.radioButton9.UseVisualStyleBackColor = true;
 			this.radioButton9.CheckedChanged += new System.EventHandler(this.radioButton9_CheckedChanged);
 			// 
+			// label4
+			// 
+			this.label4.AutoSize = true;
+			this.label4.Location = new System.Drawing.Point(21, 79);
+			this.label4.Name = "label4";
+			this.label4.Size = new System.Drawing.Size(13, 13);
+			this.label4.TabIndex = 16;
+			this.label4.Text = "0";
+			// 
+			// label5
+			// 
+			this.label5.AutoSize = true;
+			this.label5.Location = new System.Drawing.Point(9, 66);
+			this.label5.Name = "label5";
+			this.label5.Size = new System.Drawing.Size(41, 13);
+			this.label5.TabIndex = 17;
+			this.label5.Text = "I-Count";
+			// 
 			// Form1
 			// 
 			this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
 			this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
 			this.ClientSize = new System.Drawing.Size(1248, 529);
+			this.Controls.Add(this.label5);
+			this.Controls.Add(this.label4);
 			this.Controls.Add(this.radioButton9);
 			this.Controls.Add(this.radioButton8);
 			this.Controls.Add(this.radioButton7);
@@ -333,7 +356,7 @@
 			this.KeyPreview = true;
 			this.MainMenuStrip = this.menuStrip1;
 			this.Name = "Form1";
-			this.Text = "rtfItanium Emulator";
+			this.Text = "NVIO Emulator";
 			this.Load += new System.EventHandler(this.Form1_Load);
 			this.KeyDown += new System.Windows.Forms.KeyEventHandler(this.Form1_KeyDown);
 			this.menuStrip1.ResumeLayout(false);
@@ -373,6 +396,8 @@
 		private System.Windows.Forms.RadioButton radioButton7;
 		private System.Windows.Forms.RadioButton radioButton8;
 		private System.Windows.Forms.RadioButton radioButton9;
+		private System.Windows.Forms.Label label4;
+		private System.Windows.Forms.Label label5;
 	}
 }
 

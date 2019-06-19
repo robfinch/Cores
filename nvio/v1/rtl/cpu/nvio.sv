@@ -1699,7 +1699,7 @@ writeBuffer #(.QENTRIES(QENTRIES)) uwb1
 	.p0_ol_i(dram0_ol),
 	.p0_wr_i(wb_p0_wr),
 	.p0_ack_o(wb_q0_done),
-	.p0_sel_i(fnSelect(dram0_rmw ? `MUnit: `MUnit,dram0_instr)),
+	.p0_sel_i(fnSelect(dram0_instr)),
 	.p0_adr_i(dram0_addr),
 	.p0_dat_i(dram0_data),
 	.p0_hit(wb_hit0),
@@ -1708,7 +1708,7 @@ writeBuffer #(.QENTRIES(QENTRIES)) uwb1
 	.p1_ol_i(dram1_ol),
 	.p1_wr_i(wb_p1_wr),
 	.p1_ack_o(wb_q1_done),
-	.p1_sel_i(fnSelect(dram1_rmw ? `MUnit: `MUnit,dram1_instr)),
+	.p1_sel_i(fnSelect(dram1_instr)),
 	.p1_adr_i(dram1_addr),
 	.p1_dat_i(dram1_data),
 	.p1_hit(wb_hit1),
@@ -2646,81 +2646,76 @@ else
 endfunction
 
 function [9:0] fnSelect;
-input [2:0] unit;
 input [39:0] isn;
-case(unit)
-`MUnit:
-	casez(mopcode(isn))
-	`LDB:		fnSelect = 10'h001;
-	`LDBU:	fnSelect = 10'h001;
-	`LDC:		fnSelect = 10'h003;
-	`LDCU:	fnSelect = 10'h003;
-	`LDT:		fnSelect = 10'h00F;
-	`LDTU:	fnSelect = 10'h00F;
-	`LDP:		fnSelect = 10'h01F;
-	`LDPU:	fnSelect = 10'h01F;
-	`LDO:		fnSelect = 10'h0FF;
-	`LDOU:	fnSelect = 10'h0FF;
-	`LDD:		fnSelect = 10'h3FF;
-	`LDDR:	fnSelect = 10'h3FF;
-	`POP:		fnSelect = 10'h3FF;
-	`MLX:
-		case(isn[`FUNCT5])
-		`LDB:		fnSelect = 10'h001;
-		`LDBU:	fnSelect = 10'h001;
-		`LDC:		fnSelect = 10'h003;
-		`LDCU:	fnSelect = 10'h003;
-		`LDT:		fnSelect = 10'h00F;
-		`LDTU:	fnSelect = 10'h00F;
-		`LDP:		fnSelect = 10'h01F;
-		`LDPU:	fnSelect = 10'h01F;
-		`LDO:		fnSelect = 10'h0FF;
-		`LDOU:	fnSelect = 10'h0FF;
-		`LDD:		fnSelect = 10'h3FF;
-		`LDDR:	fnSelect = 10'h3FF;
-		default:	fnSelect = 10'h000;
-		endcase
-	`AMO:
-		case(isn[`SZ3])
-		3'd0:		fnSelect = 10'h001;
-		3'd1:		fnSelect = 10'h003;
-		3'd2:		fnSelect = 10'h00F;
-		3'd3:		fnSelect = 10'h01F;
-		3'd4:		fnSelect = 10'h0FF;
-		3'd5:		fnSelect = 10'h3FF;
-		default:	fnSelect = 10'h000;
-		endcase
-	`STB:	fnSelect = 10'h001;
-	`STC:	fnSelect = 10'h003;
-	`STT:	fnSelect = 10'h00F;
-	`STP:	fnSelect = 10'h01F;
-	`STO:	fnSelect = 10'h0FF;
-	`STD:	fnSelect = 10'h3FF;
-	`STDC:	fnSelect = 10'h3FF;
-	`CAS:	fnSelect = 10'h3FF;
-	`PUSH:	
-		case(isn[`FUNCT5])
-		5'h01:	fnSelect = 10'h001;
-		5'h02:	fnSelect = 10'h003;
-		5'h04:	fnSelect = 10'h00F;
-		5'h05:	fnSelect = 10'h01F;
-		5'h08:	fnSelect = 10'h0FF;
-		5'h0A:	fnSelect = 10'h3FF;
-		default:	fnSelect = 10'h3FF;
-		endcase
-	`PUSHC:	fnSelect = 10'h3FF;
-	`MSX:
-		case(isn[`FUNCT5])
-		`STB:	fnSelect = 10'h001;
-		`STC:	fnSelect = 10'h003;
-		`STT:	fnSelect = 10'h00F;
-		`STP:	fnSelect = 10'h01F;
-		`STO:	fnSelect = 10'h0FF;
-		`STD:	fnSelect = 10'h3FF;
-		`STDC:	fnSelect = 10'h3FF;
-		`CAS:		fnSelect = 10'h3FF;
-		default:	fnSelect = 10'h000;
-		endcase
+casez(mopcode(isn))
+`LDB:		fnSelect = 10'h001;
+`LDBU:	fnSelect = 10'h001;
+`LDC:		fnSelect = 10'h003;
+`LDCU:	fnSelect = 10'h003;
+`LDT:		fnSelect = 10'h00F;
+`LDTU:	fnSelect = 10'h00F;
+`LDP:		fnSelect = 10'h01F;
+`LDPU:	fnSelect = 10'h01F;
+`LDO:		fnSelect = 10'h0FF;
+`LDOU:	fnSelect = 10'h0FF;
+`LDD:		fnSelect = 10'h3FF;
+`LDDR:	fnSelect = 10'h3FF;
+`POP:		fnSelect = 10'h3FF;
+`MLX:
+	case(isn[`FUNCT5])
+	`LDBX:	fnSelect = 10'h001;
+	`LDBUX:	fnSelect = 10'h001;
+	`LDWX:	fnSelect = 10'h003;
+	`LDWUX:	fnSelect = 10'h003;
+	`LDTX:	fnSelect = 10'h00F;
+	`LDTUX:	fnSelect = 10'h00F;
+	`LDPX:	fnSelect = 10'h01F;
+	`LDPUX:	fnSelect = 10'h01F;
+	`LDOX:	fnSelect = 10'h0FF;
+	`LDOUX:	fnSelect = 10'h0FF;
+	`LDDX:	fnSelect = 10'h3FF;
+	`LDDRX:	fnSelect = 10'h3FF;
+	default:	fnSelect = 10'h000;
+	endcase
+`AMO:
+	case(isn[`SZ3])
+	3'd0:		fnSelect = 10'h001;
+	3'd1:		fnSelect = 10'h003;
+	3'd2:		fnSelect = 10'h00F;
+	3'd3:		fnSelect = 10'h01F;
+	3'd4:		fnSelect = 10'h0FF;
+	3'd5:		fnSelect = 10'h3FF;
+	default:	fnSelect = 10'h000;
+	endcase
+`STB:	fnSelect = 10'h001;
+`STC:	fnSelect = 10'h003;
+`STT:	fnSelect = 10'h00F;
+`STP:	fnSelect = 10'h01F;
+`STO:	fnSelect = 10'h0FF;
+`STD:	fnSelect = 10'h3FF;
+`STDC:	fnSelect = 10'h3FF;
+`CAS:	fnSelect = 10'h3FF;
+`PUSH:	
+	case(isn[`FUNCT5])
+	5'h01:	fnSelect = 10'h001;
+	5'h02:	fnSelect = 10'h003;
+	5'h04:	fnSelect = 10'h00F;
+	5'h05:	fnSelect = 10'h01F;
+	5'h08:	fnSelect = 10'h0FF;
+	5'h0A:	fnSelect = 10'h3FF;
+	default:	fnSelect = 10'h3FF;
+	endcase
+`PUSHC:	fnSelect = 10'h3FF;
+`MSX:
+	case(isn[`FUNCT5])
+	`STBX:	fnSelect = 10'h001;
+	`STWX:	fnSelect = 10'h003;
+	`STTX:	fnSelect = 10'h00F;
+	`STPX:	fnSelect = 10'h01F;
+	`STOX:	fnSelect = 10'h0FF;
+	`STDX:	fnSelect = 10'h3FF;
+	`STDCX:	fnSelect = 10'h3FF;
+	`CASX:		fnSelect = 10'h3FF;
 	default:	fnSelect = 10'h000;
 	endcase
 default:	fnSelect = 10'h000;
@@ -3235,6 +3230,53 @@ for (n = 0; n < QENTRIES; n = n + 1)
 	if (iq_alu1_issue[n] && !(iq_v[n] && iq_stomp[n])
 												&& (alu1_available & alu1_done))
 		issuing_on_alu1 = TRUE;
+end
+
+reg issuing_on_agen0;
+always @*
+begin
+issuing_on_agen0 = FALSE;
+for (n = 0; n < QENTRIES; n = n + 1)
+	if (iq_agen0_issue[n] && !(iq_v[n] && iq_stomp[n]))
+		issuing_on_agen0 = TRUE;
+end
+
+reg issuing_on_agen1;
+always @*
+begin
+issuing_on_agen1 = FALSE;
+for (n = 0; n < QENTRIES; n = n + 1)
+	if (iq_agen1_issue[n] && !(iq_v[n] && iq_stomp[n]))
+		issuing_on_agen1 = TRUE;
+end
+
+reg issuing_on_fpu1;
+always @*
+begin
+issuing_on_fpu1 = FALSE;
+for (n = 0; n < QENTRIES; n = n + 1)
+	if (iq_fpu1_issue[n] && !(iq_v[n] && iq_stomp[n])
+												&& (fpu1_available & fpu1_done))
+		issuing_on_fpu1 = TRUE;
+end
+
+reg issuing_on_fpu2;
+always @*
+begin
+issuing_on_fpu2 = FALSE;
+for (n = 0; n < QENTRIES; n = n + 1)
+	if (iq_fpu2_issue[n] && !(iq_v[n] && iq_stomp[n])
+												&& (fpu2_available & fpu2_done))
+		issuing_on_fpu2 = TRUE;
+end
+
+reg issuing_on_fcu;
+always @*
+begin
+issuing_on_fcu = FALSE;
+for (n = 0; n < QENTRIES; n = n + 1)
+	if (iq_fcu_issue[n] && !(iq_v[n] && iq_stomp[n]) && fcu_done)
+		issuing_on_fcu = TRUE;
 end
 
 always @*
@@ -4425,6 +4467,7 @@ if (rst_i|(rst_ctr < 32'd2)) begin
 		alu0_mem <= 1'b0;
 		alu0_shft <= 1'b0;
 		alu0_tgt <= 6'h00;
+		alu0_rid <= {RBIT{1'b1}};
 		alu1_ip <= RSTIP;
 		alu1_instr <= `NOP_INSN;
 		alu1_argA <= 64'h0;
@@ -4434,12 +4477,15 @@ if (rst_i|(rst_ctr < 32'd2)) begin
 		alu1_mem <= 1'b0;
 		alu1_shft <= 1'b0;
 		alu1_tgt <= 6'h00;  
+		alu1_rid <= {RBIT{1'b1}};
 		agen0_argA <= 1'd0;
 		agen0_argB <= 1'd0;
 		agen0_argC <= 1'd0;
+		agen0_dataready <= FALSE;
 		agen1_argA <= 1'd0;
 		agen1_argB <= 1'd0;
 		agen1_argC <= 1'd0;
+		agen1_dataready <= FALSE;
 `endif
      fcu_dataready <= 0;
      fcu_instr <= `NOP_INSN;
@@ -4691,7 +4737,7 @@ if (alu0_dataready) begin
 		iq_state[alu0_id] <= IQS_CMT;
 		rob_state[alu0_rid] <= RS_CMT;
 	end
-	//alu0_dataready <= FALSE;
+	alu0_dataready <= FALSE;
 end
 
 if (IsMul(`IUnit,alu1_instr)|IsDivmod(`IUnit,alu1_instr)|alu1_shft) begin
@@ -4718,7 +4764,7 @@ if (alu1_dataready && `NUM_ALU > 1) begin
 		iq_state[alu1_id] <= IQS_CMT;
 		rob_state[alu1_rid] <= RS_CMT;
 	end
-	//alu1_dataready <= FALSE;
+	alu1_dataready <= FALSE;
 end
 
 if (agen0_v) begin
@@ -4729,7 +4775,7 @@ if (agen0_v) begin
 	if (agen0_lea)
 		if (rob_state[agen0_rid]==RS_ASSIGNED)
 			rob_state[agen0_rid] <= RS_CMT;
-	rob_res[agen0_rid] <= {agen0_ma,4'd0};		// LEA needs this result
+	rob_res[agen0_rid] <= {agen0_ma,4'd0};		// LEA/PUSH needs this result
 	rob_res2[agen0_rid] <= {agen0_res,4'd0};
 	rob_exc[agen0_rid] <= `FLT_NONE;
 	if (iq_state[agen0_id]!=IQS_AGEN)
@@ -4870,9 +4916,9 @@ begin
 	if (`NUM_FPU > 1)
 		setargs(n,fpu2_rid,fpu2_v,rfpu2_bus);
 
-	setargs(n,alu0_rid,alu0_vsn,{ralu0_bus,4'd0});
+	setargs(n,alu0_rid,alu0_done,{ralu0_bus,4'd0});
 	if (`NUM_ALU > 1)
-		setargs(n,alu1_rid,alu1_vsn,{ralu1_bus,4'd0});
+		setargs(n,alu1_rid,alu1_done,{ralu1_bus,4'd0});
 
 	setargs(n,agen0_rid,agen0_v & (agen0_push|agen0_lea),{agen0_ma,4'd0});
 	if (`NUM_AGEN > 1)
@@ -4888,10 +4934,11 @@ end
 // X's on unused busses cause problems in SIM.
     for (n = 0; n < QENTRIES; n = n + 1)
         if (iq_alu0_issue[n] && !(iq_v[n] && iq_stomp[n])
-												&& (alu0_available & alu0_dataready)) begin
+												&& (alu0_available & alu0_done)) begin
 					iq_fuid[n] <= 3'd0;
 					alu0_sn <= iq_sn[n];
 					alu0_sourceid	<= n[`QBITS];
+					check_unready(n[`QBITS]);
 					// The following line is a hack. The alu is done (tested above) so it
 					// should be setting the state to CMT.
 //					if (iq_state[alu0_id]==IQS_OUT)
@@ -4976,10 +5023,11 @@ end
 	if (`NUM_ALU > 1) begin
     for (n = 0; n < QENTRIES; n = n + 1)
         if ((iq_alu1_issue[n] && !(iq_v[n] && iq_stomp[n])
-												&& (alu1_available & alu1_dataready))) begin
+												&& (alu1_available & alu1_done))) begin
 								iq_fuid[n] <= 3'd1;
             		 alu1_sn <= iq_sn[n];
                  alu1_sourceid	<= n[`QBITS];
+								check_unready(n[`QBITS]);
 								// The following line is a hack. The alu is done (tested above) so it
 								// should be setting the state to CMT.
 	//							if (iq_state[alu1_id]==IQS_OUT)
@@ -5055,6 +5103,7 @@ end
 							iq_fuid[n] <= 3'd2;
             		agen0_sn <= iq_sn[n];
                  agen0_sourceid	<= n[`QBITS];
+								check_unready(n[`QBITS]);
                  agen0_rid <= iq_rid[n];
                  agen0_unit <= iq_unit[n];
                  agen0_instr	<= iq_instr[n];
@@ -5104,6 +5153,7 @@ end
 							iq_fuid[n] <= 3'd3;
             		agen1_sn <= iq_sn[n];
                  agen1_sourceid	<= n[`QBITS];
+								check_unready(n[`QBITS]);
                  agen1_rid <= iq_rid[n];
                  agen1_unit <= iq_unit[n];
                  agen1_instr	<= iq_instr[n];
@@ -5154,6 +5204,7 @@ end
 								iq_fuid[n] <= 3'd4;
                  fpu1_sourceid	<= n[`QBITS];
                  fpu1_rid <= iq_rid[n];
+								check_unready(n[`QBITS]);
                  fpu1_instr	<= iq_instr[n];
                  fpu1_ip		<= iq_ip[n];
 `ifdef FU_BYPASS
@@ -5218,6 +5269,7 @@ end
 							iq_fuid[n] <= 3'd5;
                  fpu2_sourceid	<= n[`QBITS];
                  fpu2_rid <= iq_rid[n];
+								check_unready(n[`QBITS]);
                  fpu2_instr	<= iq_instr[n];
                  fpu2_ip		<= iq_ip[n];
 `ifdef FU_BYPASS
@@ -5281,6 +5333,7 @@ end
 					iq_fuid[n] <= 3'd6;
 				fcu_sourceid	<= n[`QBITS];
         fcu_rid <= iq_rid[n];
+				check_unready(n[`QBITS]);
 				fcu_prevInstr <= fcu_instr;
 				fcu_instr	<= iq_instr[n];
 				fcu_ip		<= iq_ip[n];
@@ -5751,7 +5804,7 @@ BIDLE:
                  dram0 <= `DRAMSLOT_HASBUS;
                  dcyc <= `HIGH;
                  dstb <= `HIGH;
-                 dsel <= fnSelect(dram0_instr,dram0_addr);
+                 dsel <= fnSelect(dram0_instr);
                  //dcbuf <= dram0_data << {dram0_addr[4:0],3'b0};
                  //dcsel <= fnSelect(`MUnit,dram0_instr) << dram0_addr[4:0];
                  dadr <= dram0_addr;
@@ -5784,7 +5837,7 @@ BIDLE:
                  dstb <= `HIGH;
                  //dcbuf <= dram1_data << {dram1_addr[4:0],3'b0};
                  //dcsel <= fnSelect(`MUnit,dram1_instr) << dram1_addr[4:0];
-                 dsel <= fnSelect(dram1_instr,dram1_addr);
+                 dsel <= fnSelect(dram1_instr);
                  dadr <= dram1_addr;
                  ddat <= dram1_data << {dram1_addr[3:0],3'b0};
                  dol  <= dram1_ol;
@@ -5808,7 +5861,7 @@ BIDLE:
                dram0 <= `DRAMSLOT_HASBUS;
                dcyc <= `HIGH;
                dstb <= `HIGH;
-               dsel <= fnSelect(dram0_instr,dram0_addr);
+               dsel <= fnSelect(dram0_instr);
                dadr <= {dram0_addr[AMSB:3],3'b0};
                sr_o <=  IsLWR(`MUnit,dram0_instr);
                ol_o  <= dram0_ol;
@@ -5833,7 +5886,7 @@ BIDLE:
                dram1 <= `DRAMSLOT_HASBUS;
                dcyc <= `HIGH;
                dstb <= `HIGH;
-               dsel <= fnSelect(dram1_instr,dram1_addr);
+               dsel <= fnSelect(dram1_instr);
                dadr <= {dram1_addr[AMSB:3],3'b0};
                sr_o <=  IsLWR(`MUnit,dram1_instr);
                ol_o  <= dram1_ol;
@@ -6039,7 +6092,7 @@ endcase
 	$display("TIME %0d", $time);
 	$display("%b %h %h#", ip_mask, ip, ibundlep);
 	$display("%b %h %h#", ip_mask, ipd, ibundle);
-    $display ("------------------------ Regfile: %d ------------------------", rgs);
+    $display ("---------------------------------- Regfile: %d ----------------------------------", rgs);
 	for (n=0; n < 64; n=n+4) begin
 	    $display("%d: %h %d %o   %d: %h %d %o   %d: %h %d %o   %d: %h %d %o#",
 	       n[5:0]+0, urf1.mem[{rgs,n[5:2],2'b00}], regIsValid[n+0], rf_source[n+0],
@@ -6064,7 +6117,7 @@ endcase
 //        $display("%d %h", rasp+n[3:0], ras[rasp+n[3:0]]);
 	$display("TakeBr:%d #", take_branch);//, backpc);
 	$display("Insn%d: %h", 0, insnx[0]);
-	$display ("---------------------------------------------------------------------- Dispatch Buffer ---------------------------------------------------------------------");
+	$display ("------------------------------------------------------------------------ Dispatch Buffer -----------------------------------------------------------------------");
 	for (i=0; i<QENTRIES; i=i+1) 
 	    $display("%c%c %d: %c%c%c %d %d %c%c %c %c%h %d %h %h %d %o %h %d %o %h %d %o %h %o %h#",
 		 (i[`QBITS]==heads[0])?"C":".",
@@ -6095,7 +6148,7 @@ endcase
 		iq_sn[i],
 		iq_br_tag[i]
 		);
-	$display ("----------- Reorder Buffer ----------");
+	$display ("------------- Reorder Buffer ------------");
 	for (i = 0; i < RENTRIES; i = i + 1)
 	$display("%c%c %d(%d): %c %h %d %h#",
 		 (i[`RBITS]==rob_heads[0])?"C":".",
@@ -6188,6 +6241,31 @@ begin
   2'd1:	if (iq_stomp[dram1_id]) begin bstate <= BIDLE; dram1 <= `DRAMREQ_READY; end
   default:	if (iq_stomp[dram0_id]) begin bstate <= BIDLE; dram0 <= `DRAMREQ_READY; end
   endcase
+end
+endtask
+
+// Check for units that should no longer be ready.
+// If issuing to the same queue slot as a "ready" functional unit make that
+// functional unit unready.
+task check_unready;
+input [`QBITS] id;
+begin
+/*
+	if (id==alu0_id && !issuing_on_alu0)
+		alu0_dataready <= FALSE;
+	if (n==alu1_id && !issuing_on_alu1)
+		alu1_dataready <= FALSE;
+	if (n==agen0_id && !issuing_on_agen0)
+		agen0_dataready <= FALSE;
+	if (id==agen1_id && !issuing_on_agen1)
+		agen1_dataready <= FALSE;
+	if (id==fpu1_id && !issuing_on_fpu1)
+		fpu1_dataready <= FALSE;
+	if (id==fpu2_id && !issuing_on_fpu2)
+		fpu2_dataready <= FALSE;
+	if (id==fcu_id && !issuing_on_fcu)
+		fcu_dataready <= FALSE;
+*/
 end
 endtask
 

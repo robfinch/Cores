@@ -82,7 +82,7 @@ namespace EM80
 			if (1 == 1)
 			{
 				ad &= 0xfffffffffffffff0L;
-				nn = ((ad - 0xFFFFFFFFFFC0000L) >> 4) & 0xffff;
+				nn = ((ad - 0xFFFFFFFFFFC0000L) >> 4) & 0x3fffL;
 				j = rom[nn].Clone();
 				return j;
 			}

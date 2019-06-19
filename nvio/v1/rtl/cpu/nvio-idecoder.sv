@@ -581,10 +581,10 @@ begin
 	bus[`IB_FC]		 <= unit==3'd1;
 	bus[`IB_CANEX] <= fnCanException(unit,instr);
 	bus[`IB_LEA]	 <= IsLea(unit,instr);
-	bus[`IB_LOAD]	 <= unit==3'd4 && instr[34]==1'b0;
+	bus[`IB_LOAD]	 <= unit==3'd4 && instr[34]==1'b0 && !IsPushc(unit,instr);
 	bus[`IB_PRELOAD] <= unit==3'd4 && instr[34]==1'b0 && Rt==6'd0 && Rd2==6'd0;
-	bus[`IB_STORE]	<= unit==3'd4 && instr[34]==1'b1;
-	bus[`IB_PUSH]   <= IsPush(unit,instr);
+	bus[`IB_STORE]	<= (unit==3'd4 && instr[34]==1'b1) || IsPushc(unit,instr);
+	bus[`IB_PUSH]   <= IsPush(unit,instr)|IsPushc(unit,instr);
 	bus[`IB_ODDBALL] <= IsOddball(unit,instr);
 	bus[`IB_MEMSZ]  <= MemSize(unit,instr);
 	bus[`IB_MEM]		<= unit==3'd4;
