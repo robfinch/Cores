@@ -6,10 +6,10 @@ using System.Threading.Tasks;
 
 namespace EM80
 {
-	class nvioCpu
+	public class nvioCpu
 	{
 		public enum e_unitTypes { N = 0, B = 1, I = 2, F = 3, M = 4 };
-		static public e_unitTypes[,] unitx = new e_unitTypes[66, 3] {
+		static public e_unitTypes[,] unitx = new e_unitTypes[67, 3] {
 {e_unitTypes.B,e_unitTypes.B,e_unitTypes.B},
 {e_unitTypes.I,e_unitTypes.B,e_unitTypes.B},
 {e_unitTypes.F,e_unitTypes.B,e_unitTypes.B},
@@ -75,7 +75,8 @@ namespace EM80
 {e_unitTypes.F,e_unitTypes.M,e_unitTypes.M},
 {e_unitTypes.M,e_unitTypes.M,e_unitTypes.M},
 {e_unitTypes.I,e_unitTypes.N,e_unitTypes.N},
-{e_unitTypes.F,e_unitTypes.N,e_unitTypes.N}
+{e_unitTypes.F,e_unitTypes.N,e_unitTypes.N},
+{e_unitTypes.M,e_unitTypes.N,e_unitTypes.N},
 			};
 		public enum e_bunit {
 			Bcc = 0, BLcc = 1, Brcc = 2, NOP = 3,
@@ -182,6 +183,8 @@ namespace EM80
 			LDDX = 0x03,
 			LDOX = 0x09,
 			LDOUX = 0x0D,
+			MEMSB = 0x18,
+			MEMDB = 0x19,
 		};
 		public int regset;
 		public Int128[] regfile;
@@ -708,16 +711,16 @@ namespace EM80
 							str = str + "PUSH   " + Regstr(Rs2);
 							break;
 						case e_munit.PUSHC0:
-							str = str + "PUSH   " + DisRII(insnn);
+							str = str + "PUSH   #$" + DisRII(insnn).TrimStart(cha);
 							break;
 						case e_munit.PUSHC1:
-							str = str + "PUSH   " + DisRII(insnn);
+							str = str + "PUSH   #$" + DisRII(insnn).TrimStart(cha);
 							break;
 						case e_munit.PUSHC2:
-							str = str + "PUSH   " + DisRII(insnn);
+							str = str + "PUSH   #$" + DisRII(insnn).TrimStart(cha);
 							break;
 						case e_munit.PUSHC3:
-							str = str + "PUSH   " + DisRII(insnn);
+							str = str + "PUSH   #$" + DisRII(insnn).TrimStart(cha);
 							break;
 						case e_munit.MSX:
 							switch ((e_munit5)func5)
@@ -729,6 +732,12 @@ namespace EM80
 								case e_munit5.STOX:
 									str = str + "STD    " + Regstr(Rs2) + ",";
 									str = str + "[" + Regstr(Rs1) + "+" + Regstr(Rs3) + ScaleStr(Sc) + "]";
+									break;
+								case e_munit5.MEMSB:
+									str = str + "MEMSB  ";
+									break;
+								case e_munit5.MEMDB:
+									str = str + "MEMDB  ";
 									break;
 							}
 							break;
@@ -978,7 +987,7 @@ namespace EM80
 					}
 					break;
 				case e_unitTypes.M:
-					if (((uint)mopcode & 0x20) != 0)
+					if (((uint)mopcode & 0x20) == 0)
 						rfw = true;
 					else
 					{
@@ -1195,19 +1204,19 @@ namespace EM80
 					ulong Sc = 1;
 					mopcode = (e_munit)(((insnn >> 6) & 15L) | (((insnn >> 33) & 3L) << 4));
 					isLoad = ((uint)mopcode & 0x20)== 0;
-					if (!isLoad)
+					if (mopcode == e_munit.PUSHC0 || mopcode == e_munit.PUSHC1 || mopcode == e_munit.PUSHC2 || mopcode == e_munit.PUSHC3)
+					{
+						ma.digits[0] = 0xfffffff6L; // -10
+						ma.digits[1] = 0xffffffffL;
+						ma.digits[2] = 0xffffffffL;
+						ma.digits[3] = 0xffffffffL;
+					}
+					else if (!isLoad)
 					{
 						if (mopcode == e_munit.PUSH)
 						{
 							ma.digits[0] = (ulong)(-(long)(insnn >> 35));
 							ma.digits[0] &= 0xffffffffL;
-							ma.digits[1] = 0xffffffffL;
-							ma.digits[2] = 0xffffffffL;
-							ma.digits[3] = 0xffffffffL;
-						}
-						else if (mopcode == e_munit.PUSHC0 || mopcode==e_munit.PUSHC1 || mopcode==e_munit.PUSHC2 || mopcode==e_munit.PUSHC3)
-						{
-							ma.digits[0] = 0xfffffff6L;	// -10
 							ma.digits[1] = 0xffffffffL;
 							ma.digits[2] = 0xffffffffL;
 							ma.digits[3] = 0xffffffffL;
@@ -1282,15 +1291,19 @@ namespace EM80
 							break;
 						case e_munit.PUSHC0:
 							soc.Write(ma, rii, 10);
+							res = ma;
 							break;
 						case e_munit.PUSHC1:
 							soc.Write(ma, rii, 10);
+							res = ma;
 							break;
 						case e_munit.PUSHC2:
 							soc.Write(ma, rii, 10);
+							res = ma;
 							break;
 						case e_munit.PUSHC3:
 							soc.Write(ma, rii, 10);
+							res = ma;
 							break;
 						case e_munit.MSX:
 							switch((e_munit5)funct5)

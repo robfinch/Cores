@@ -12,7 +12,7 @@ namespace EM80
 {
 	public partial class Form1 : Form
 	{
-		SoC soc = new SoC();
+		public SoC soc = new SoC();
 		TextBox[] registerBoxes;
 		TextBox ipBox = new TextBox();
 		TextBox iBundleBox = new TextBox();
@@ -207,6 +207,12 @@ namespace EM80
 			else if (tmp == 0x7E)
 			{
 				unit0 = nvioCpu.e_unitTypes.F;
+				unit1 = nvioCpu.e_unitTypes.N;
+				unit2 = nvioCpu.e_unitTypes.N;
+			}
+			else if (tmp == 0x7F)
+			{
+				unit0 = nvioCpu.e_unitTypes.M;
 				unit1 = nvioCpu.e_unitTypes.N;
 				unit2 = nvioCpu.e_unitTypes.N;
 			}
@@ -424,6 +430,13 @@ namespace EM80
 		{
 			dumpType = 0;
 			timer1.Enabled = true;
+		}
+
+		private void textScreenToolStripMenuItem_Click(object sender, EventArgs e)
+		{
+			frmTextController tc = new frmTextController();
+			tc.form1 = this;
+			tc.Show();
 		}
 	}
 }

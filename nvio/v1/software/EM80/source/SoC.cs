@@ -6,11 +6,13 @@ using System.Threading.Tasks;
 
 namespace EM80
 {
-	class SoC
+	public class SoC
 	{
 		public nvioCpu cpu;
 		public Int128[] rom;
 		public Int128[] mainmem;
+		public Int64[] textmem;
+		public Int128[] scratchmem;
 		public int leds;
 		public SoC()
 		{
@@ -18,7 +20,10 @@ namespace EM80
 
 			cpu = new nvioCpu();
 			rom = new Int128[16384];
-			mainmem = new Int128[4194304];	// 64 MB
+			mainmem = new Int128[4194304];  // 64 MB
+			textmem = new long[65536];
+			scratchmem = new Int128[4096];
+
 			for (nn = 0; nn < 16384; nn++)
 			{
 				rom[nn] = new Int128();
@@ -26,6 +31,10 @@ namespace EM80
 			for (nn = 0; nn < 4194304; nn++)
 			{
 				mainmem[nn] = new Int128();
+			}
+			for (nn = 0; nn < 4096; nn++)
+			{
+				scratchmem[nn] = new Int128();
 			}
 		}
 		public void Reset()
@@ -101,11 +110,22 @@ namespace EM80
 				j = j.ShrPair(k, j, (int)((adr.digits[0] & 15L) << 3));
 				return j;
 			}
-			if (1==1)
+			else if ((ad & 0xffffffffL) >= 0xff400000L && ((ad & 0xffffffffL) < 0xff410000L))
+			{
+				nn = (ad >> 4) & 0xfffL;
+				j = scratchmem[nn].Clone();
+				k = scratchmem[(nn + 1) & 0xfffL].Clone();
+				j = j.ShrPair(k, j, (int)((adr.digits[0] & 15L) << 3));
+				return j;
+			}
+			else // ROM
 			{
 				nn = ((ad - 0xFFFFFFFFFFC0000L) >> 4) & 0x3fff;
 				j = rom[nn].Clone();
-				k = rom[nn + 1].Clone();
+				if (nn + 1 > 16383)
+					k = Int128.Convert(0);
+				else
+					k = rom[nn + 1].Clone();
 				j = j.ShrPair(k, j, (int)((ad & 15L) << 3));
 				return j;
 			}
@@ -119,52 +139,52 @@ namespace EM80
 			Int128 v = new Int128();
 			Int128 m;
 
+			switch (size)
+			{
+				case 1:
+					mask.digits[0] = 0xffffff00L;
+					mask.digits[1] = 0xffffffffL;
+					mask.digits[2] = 0xffffffffL;
+					mask.digits[3] = 0xffffffffL;
+					break;
+				case 2:
+					mask.digits[0] = 0xffff0000L;
+					mask.digits[1] = 0xffffffffL;
+					mask.digits[2] = 0xffffffffL;
+					mask.digits[3] = 0xffffffffL;
+					break;
+				case 4:
+					mask.digits[0] = 0x00000000L;
+					mask.digits[1] = 0xffffffffL;
+					mask.digits[2] = 0xffffffffL;
+					mask.digits[3] = 0xffffffffL;
+					break;
+				case 5:
+					mask.digits[0] = 0x00000000L;
+					mask.digits[1] = 0xffffff00L;
+					mask.digits[2] = 0xffffffffL;
+					mask.digits[3] = 0xffffffffL;
+					break;
+				case 8:
+					mask.digits[0] = 0x00000000L;
+					mask.digits[1] = 0x00000000L;
+					mask.digits[2] = 0xffffffffL;
+					mask.digits[3] = 0xffffffffL;
+					break;
+				case 10:
+					mask.digits[0] = 0x00000000L;
+					mask.digits[1] = 0x00000000L;
+					mask.digits[2] = 0xffff0000L;
+					mask.digits[3] = 0xffffffffL;
+					break;
+			}
 			if (ad < 0x20000000L)
 			{
-				switch(size)
-				{
-					case 1:
-						mask.digits[0] = 0xffffff00L;
-						mask.digits[1] = 0xffffffffL;
-						mask.digits[2] = 0xffffffffL;
-						mask.digits[3] = 0xffffffffL;
-						break;
-					case 2:
-						mask.digits[0] = 0xffff0000L;
-						mask.digits[1] = 0xffffffffL;
-						mask.digits[2] = 0xffffffffL;
-						mask.digits[3] = 0xffffffffL;
-						break;
-					case 4:
-						mask.digits[0] = 0x00000000L;
-						mask.digits[1] = 0xffffffffL;
-						mask.digits[2] = 0xffffffffL;
-						mask.digits[3] = 0xffffffffL;
-						break;
-					case 5:
-						mask.digits[0] = 0x00000000L;
-						mask.digits[1] = 0xffffff00L;
-						mask.digits[2] = 0xffffffffL;
-						mask.digits[3] = 0xffffffffL;
-						break;
-					case 8:
-						mask.digits[0] = 0x00000000L;
-						mask.digits[1] = 0x00000000L;
-						mask.digits[2] = 0xffffffffL;
-						mask.digits[3] = 0xffffffffL;
-						break;
-					case 10:
-						mask.digits[0] = 0x00000000L;
-						mask.digits[1] = 0x00000000L;
-						mask.digits[2] = 0xffff0000L;
-						mask.digits[3] = 0xffffffffL;
-						break;
-				}
 				s = Int128.Add(adr, Int128.Convert(size));
 				// Do we need to modify one or two memory bundles?
 				if ((s.digits[0] & 0xfffffff0L) != (adr.digits[0] & 0xfffffff0L))
 				{
-					s = Int128.Shr(s, 4);
+					s = Int128.Shr(adr, 4);
 					j = mainmem[s.digits[0]].Clone();
 					k = mainmem[s.digits[0]+1].Clone();
 					v = val.Clone();
@@ -182,7 +202,7 @@ namespace EM80
 				}
 				else
 				{
-					s = Int128.Shr(s, 4);
+					s = Int128.Shr(adr, 4);
 					j = mainmem[s.digits[0]].Clone();
 					v = val.Clone();
 					v = Int128.Shl(v, (int)((adr.digits[0] & 0xfL) * 8));
@@ -193,7 +213,48 @@ namespace EM80
 				}
 				return;
 			}
-			if (ad == 0xffffffffffdc0600L)
+			else if (ad >=  0xffffffffff400000L && ad < 0xffffffffff410000L)
+			{
+				s = Int128.Add(adr, Int128.Convert(size));
+				// Do we need to modify one or two memory bundles?
+				if ((s.digits[0] & 0xfff0L) != (adr.digits[0] & 0xfff0L))
+				{
+					s = Int128.Shr(adr, 4);
+					s = Int128.And(s, Int128.Convert(0xfffL));
+					j = scratchmem[s.digits[0]].Clone();
+					k = scratchmem[(s.digits[0] + 1) & 0xfffL].Clone();
+					v = val.Clone();
+					v = Int128.Shl(v, (int)((adr.digits[0] & 0xfL) * 8));
+					m = Int128.Shl(mask, (int)((adr.digits[0] & 0xfL) * 8), 1);
+					j = Int128.And(j, m);
+					j = Int128.Or(j, v);
+					m = Int128.Shr(mask, 128 - (int)((adr.digits[0] & 0xfL) * 8), 1);
+					k = Int128.And(k, m);
+					v = val.Clone();
+					v = Int128.Shr(v, 128 - (int)((adr.digits[0] & 0xfL) * 8), 0);
+					k = Int128.Or(k, v);
+					scratchmem[s.digits[0]] = j;
+					scratchmem[s.digits[0] + 1] = k;
+				}
+				else
+				{
+					s = Int128.Shr(adr, 4);
+					s = Int128.And(s, Int128.Convert(0xfffL));
+					j = scratchmem[s.digits[0]].Clone();
+					v = val.Clone();
+					v = Int128.Shl(v, (int)((adr.digits[0] & 0xfL) * 8));
+					m = Int128.Shl(mask, (int)((adr.digits[0] & 0xfL) * 8), 1);
+					j = Int128.And(j, m);
+					j = Int128.Or(j, v);
+					scratchmem[s.digits[0]] = j;
+				}
+				return;
+			}
+			else if (ad >=  0xffffffffffd00000L && ad < 0xffffffffffd10000L)
+			{
+				textmem[(ad >> 3) & 0xffffL] = (long)(val.digits[0] | (val.digits[1] << 32));
+			}
+			else if (ad == 0xffffffffffdc0600L)
 			{
 				leds = (int)val.digits[0];
 			}

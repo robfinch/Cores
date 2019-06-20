@@ -58,6 +58,8 @@
 			this.radioButton9 = new System.Windows.Forms.RadioButton();
 			this.label4 = new System.Windows.Forms.Label();
 			this.label5 = new System.Windows.Forms.Label();
+			this.viewToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+			this.textScreenToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
 			this.menuStrip1.SuspendLayout();
 			((System.ComponentModel.ISupportInitialize)(this.numericUpDown1)).BeginInit();
 			this.SuspendLayout();
@@ -67,7 +69,8 @@
 			this.menuStrip1.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.fileToolStripMenuItem,
             this.runToolStripMenuItem,
-            this.dumpToolStripMenuItem});
+            this.dumpToolStripMenuItem,
+            this.viewToolStripMenuItem});
 			this.menuStrip1.Location = new System.Drawing.Point(0, 0);
 			this.menuStrip1.Name = "menuStrip1";
 			this.menuStrip1.Size = new System.Drawing.Size(1248, 24);
@@ -330,6 +333,21 @@
 			this.label5.TabIndex = 17;
 			this.label5.Text = "I-Count";
 			// 
+			// viewToolStripMenuItem
+			// 
+			this.viewToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.textScreenToolStripMenuItem});
+			this.viewToolStripMenuItem.Name = "viewToolStripMenuItem";
+			this.viewToolStripMenuItem.Size = new System.Drawing.Size(44, 20);
+			this.viewToolStripMenuItem.Text = "View";
+			// 
+			// textScreenToolStripMenuItem
+			// 
+			this.textScreenToolStripMenuItem.Name = "textScreenToolStripMenuItem";
+			this.textScreenToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
+			this.textScreenToolStripMenuItem.Text = "Text Screen";
+			this.textScreenToolStripMenuItem.Click += new System.EventHandler(this.textScreenToolStripMenuItem_Click);
+			// 
 			// Form1
 			// 
 			this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
@@ -398,6 +416,8 @@
 		private System.Windows.Forms.RadioButton radioButton9;
 		private System.Windows.Forms.Label label4;
 		private System.Windows.Forms.Label label5;
+		private System.Windows.Forms.ToolStripMenuItem viewToolStripMenuItem;
+		private System.Windows.Forms.ToolStripMenuItem textScreenToolStripMenuItem;
 	}
 }
 

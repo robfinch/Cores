@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace EM80
 {
-	class Int128
+	public class Int128
 	{
 		public UInt64[] digits;
 
