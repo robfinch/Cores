@@ -33,20 +33,31 @@ nvio is a work-in-progress beginning in May 2019. nvio originated from FT64 whic
 # Rationale
 It may seem strange to design an 80-bit cpu. Some of the rationale for doing so is that double-extended floating-point is 80-bits. In order to support the double extended fp internal registers and busses need to be 80 bits in size. Given that a significant portion of the core is 80-bit it was decided just to make the whole core an 80-bit core. Double-extended floating-point offers good precision with which to do business apps. It's approximately 19 digits of precision which amounts to 13 digits plus 6 decimal digits for instance. Ordinary double-precision arithmetic only offers about 16 digits, which isn't quite enough for some business apps once things like rounding are considered. That'd only be 10+6 decimal points. 
 
-## Why so many registers?
+# Why so many registers?
 For the register usage convention there are about 20 registers assigned statically for specific purposes. These registers include registers for modern software like garbage collectors. A couple of registers are allocated for the assembler to build large constants so that constant building may procesd in parallel. Then there's the usual stack and frame pointers, but also the exception link register which points to exception handlers. The exception offset register, exception type register, class type registers and others. Five registers are dedicated to interfacing to the OS. With so many registers assigned static uses the remaining registers might not be enough for good performance. It was also desirable for implementing a simple compiler, allowing good performance without a complex compiler.
 
 # Implementation Language
 The core has been implemented in the System Verilog language. The core is mostly plain Verilog but makes use of System Verilog's capability to pass arrays of bits to modules.
 
 # Software
-Assembler and compiler, both very buggy at this stage.
+Assembler, compiler and emulator, all very buggy at this stage.
 
 # Versions
 The current version is version one.
 
 # Status
-Initial coding of the architecture complete along with documentation. Synthesis results reveal the core to be around 230,000 logic cells. Simulation runs of over 1000 instructions are being made.
+Initial coding of the architecture complete along with documentation. Simulation runs of over 1,000 instructions are being made.
+
+# Size
+A minimal configuration of the core is approximately 140,000 LC's (86,000 LUTs). A maximal configuration is approximately  480,000 LC's (300,000 LUTs).
+
+|Q Entries| Q Rate | ALU | FPU | Mem | LUTS |  LCs  |
+|:-------:|:------:|:---:|:---:|:---:|:----:|:-----:|
+|    3    |    1   |  1  |  1  |  1  |  86k |  140k |
+
+|Q Entries| Q Rate | ALU | FPU | Mem | LUTS |  LCs  |
+|:-------:|:------:|:---:|:---:|:---:|:----:|:-----:|
+|   15    |    3   |  2  |  2  |  2  | 300k |  480k |
 
 # Primitive Data Types
 The ISA supports more data types than usual due to the 80-bit data path size. The author feels it would be foolish not to support typical sizes found in a 64-bit core which include 1,2,4 and 8 byte data types. So, nvio supports 1,2,4,5,8 and 10 byte data types. The data types are referred to as numbers - byte, wyde, tetra, penta, octa, and deci. Scaled indexed addressing accomodates 5 and 10 byte sized primitives as well as the 1,2,4,8 type sizes.
