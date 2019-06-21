@@ -112,6 +112,10 @@ if (rst_i) begin
 	state <= IDLE;
 	dL1_adr <= 1'd0;
 	dL2_ld <= FALSE;
+`ifdef SIM
+	dL1_dat <= 1'd0;
+	dL2_wdat <= 1'd0;
+`endif
 end
 else begin
 dL1_wr <= FALSE;
@@ -138,7 +142,7 @@ IDLE:
 		dL2_ld <= FALSE;
 		dL2_wsel <= wsel << wadr[4:0];
 		dL2_wadr <= {wadr[AMSB:5],5'h0};
-		dL2_wdat <= wdat << {wadr[4:0],3'b0};
+		dL2_wdat <= {248'd0,wdat} << {wadr[4:0],3'b0};
 		dccnt <= 3'd0;
 		if (invline_r) begin
 			dL1_adr <= {invlineAddr_r[79:5],5'b0};
@@ -148,21 +152,21 @@ IDLE:
 		// If the bus unit is busy doing an update involving L1_adr or L2_adr
 		// we have to wait.
 		else begin
-			if (!dL1_hit && rd) begin
+			if (dL1_hit && wr) begin
+				dL1_wr <= 1'b1;
+				dL1_sel <= wsel << wadr[4:0];
+				dL1_adr <= {wadr[AMSB:5],5'h0};
+				dL1_dat <= {248'd0,wdat} << {wadr[4:0],3'b0};
+				dL2_ld <= 1'b1;
+			end
+			else if (!dL1_hit && rd) begin
 				dL1_adr <= {dadr[AMSB:5],5'h0};
 				dcwhich <= 2'b00;
 				state <= IC2;
 			end
 			// Since everything in L1 is in L2 a hit on L1 must be a hit on L2
 			// as well.
-			if (dL1_hit && wr) begin
-				dL1_wr <= 1'b1;
-				dL1_sel <= wsel << wadr[4:0];
-				dL1_adr <= {wadr[AMSB:5],5'h0};
-				dL1_dat <= wdat << {wadr[4:0],3'b0};
-				dL2_ld <= 1'b1;
-			end
-			else if (dL2_whit && wr) begin
+			if (dL2_whit && wr) begin
 				dL2_ld <= 1'b1;
 			end
 		end
@@ -225,18 +229,24 @@ IC_Ack:
   		state <= IC_Nack2;
   	end
 		if (wrv_i) begin
-			dL1_dat[257:256] <= 2'd1;
-			dL1_dat[255:0] <= {2{8'h1F,120'h0}};
+			dL1_dat[329:328] <= 2'd1;
+			dL1_dat[327:0] <= 328'd0;
+			dL2_wdat[329:328] <= 2'd1;
+			dL2_wdat[327:0] <= 328'd0;
 			nack();
 	  end
 		else if (rdv_i) begin
-			dL1_dat[257:256] <= 2'd2;
-			dL1_dat[255:0] <= {2{8'h1F,120'h0}};
+			dL1_dat[329:328] <= 2'd2;
+			dL1_dat[327:0] <= 328'd0;
+			dL2_wdat[329:328] <= 2'd2;
+			dL2_wdat[327:0] <= 328'd0;
 			nack();
 		end
 	  else if (err_i) begin
-			dL1_dat[257:256] <= 2'd3;
-			dL1_dat[255:0] <= {2{8'h1F,120'h0}};
+			dL1_dat[329:328] <= 2'd3;
+			dL1_dat[327:0] <= 328'd0;
+			dL2_wdat[329:328] <= 2'd3;
+			dL2_wdat[327:0] <= 328'd0;
 			nack();
 	  end
 	  else begin

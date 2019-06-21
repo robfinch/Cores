@@ -574,6 +574,7 @@ reg [`QBITS] alu1_id1;
 reg [WID-1:0] alu0_bus1;
 reg [WID-1:0] alu1_bus1;
 reg issuing_on_alu0;
+reg alu0_dne;
 
 reg [31:0] alu1_sn;
 reg 				alu1_cmt;
@@ -610,6 +611,7 @@ wire        alu1_v;
 reg alu1_v1;
 wire alu1_vsn;
 reg issuing_on_alu1;
+reg alu1_dne;
 
 wire agen0_v;
 wire agen0_vsn;
@@ -628,6 +630,7 @@ reg agen0_push;
 reg [AMSB:0] agen0_ma;
 reg [79:0] agen0_res;
 reg [79:0] agen0_argA, agen0_argB, agen0_argC, agen0_argI;
+reg agen0_dne;
 
 wire agen1_v;
 wire agen1_vsn;
@@ -646,6 +649,7 @@ reg agen1_push;
 reg [AMSB:0] agen1_ma;
 reg [79:0] agen1_res;
 reg [79:0] agen1_argA, agen1_argB, agen1_argC, agen1_argI;
+reg agen1_dne;
 
 wire [`XBITS] fpu_exc;
 reg 				fpu1_cmt;
@@ -669,6 +673,7 @@ wire  [`QBITS] fpu1_id;
 wire  [`XBITS] fpu1_exc;
 wire        fpu1_v;
 wire [31:0] fpu1_status;
+reg fpu1_dne;
 
 reg 				fpu2_cmt;
 reg        fpu2_ld;
@@ -691,6 +696,7 @@ wire  [`QBITS] fpu2_id;
 wire  [`XBITS] fpu2_exc;
 wire        fpu2_v;
 wire [31:0] fpu2_status;
+reg fpu2_dne;
 
 reg [7:0] fccnt;
 reg [47:0] waitctr;
@@ -734,6 +740,7 @@ reg fcu_branchhit;
 reg  fcu_clearbm;
 reg [`ABITS] fcu_missip;
 reg fcu_wait;
+reg fcu_dne;
 
 reg [WID-1:0] rmw_argA;
 reg [WID-1:0] rmw_argB;
@@ -884,7 +891,8 @@ reg [4:0] bstate;
 wire [3:0] icstate;
 reg [1:0] bwhich;
 wire ihit;
-reg phit, phitd;
+reg phit;
+reg phitd;
 // The L1 address might not be equal to the ip if a cache update is taking
 // place. This can lead to a false hit because once the cache is updated
 // it'll match L1, but L1 hasn't switched back to ip yet, and it's a hit
@@ -935,7 +943,7 @@ wire d0L1_dhit, d0L2_hit;
 wire d0L1_selpc, d0L2_selpc;
 wire d1L1_selpc, d1L2_selpc;
 wire d0L1_invline,d1L1_invline;
-reg [255:0] dcbuf;
+//reg [255:0] dcbuf;
 
 reg preload;
 reg [1:0] dccnt;
@@ -1087,6 +1095,7 @@ case(tmp)
 
 7'h7D: fnUnits = {`IUnit,`NUnit,`NUnit};
 7'h7E: fnUnits = {`FUnit,`NUnit,`NUnit};
+7'h7F: fnUnits = {`MUnit,`NUnit,`NUnit};
 default:	fnUnits = {`NUnit,`NUnit,`NUnit};
 endcase
 endfunction
@@ -1223,7 +1232,7 @@ Regfile urf1
 );
 
 
-instruction_pointer uip1
+instructionPointer uip1
 (
 	.rst(rst_i),
 	.clk(clk),
@@ -1485,7 +1494,7 @@ assign predict_taken[2] = insnx[2][5]==1'b1 ? insnx[2][4] : predict_takenx[2];
 
 
 reg StoreAck1, isStore;
-wire [199:0] dc0_out, dc1_out;
+wire [79:0] dc0_out, dc1_out;
 wire whit0, whit1, whit2;
 
 wire wr_dcache0 = (dcwr)||(((bstate==B_StoreAck && StoreAck1) || (bstate==B_LSNAck && isStore)) && whit0);
@@ -1566,6 +1575,7 @@ L2_dcache udc2
 	.wadr(d0L2_adr),
 	.radr(d0L1_adr),
 	.sel(d0L2_sel),
+	.tlbmiss_i(1'b0),
 	.rdv_i(1'b0),
 	.wrv_i(1'b0),
 	.i(d0L2_wdat),
@@ -1651,6 +1661,7 @@ L2_dcache udc4
 	.wadr(d1L2_adr),
 	.radr(d1L1_adr),
 	.sel(d1L2_sel),
+	.tlbmiss_i(1'b0),
 	.rdv_i(1'b0),
 	.wrv_i(1'b0),
 	.i(d1L2_wdat),
@@ -1662,12 +1673,11 @@ L2_dcache udc4
 	.invline(d1L1_invline)
 );
 
-wire [199:0] rdat0, rdat1;
-assign rdat0 = dram0_unc ? xdati[199:0] : dc0_out;
-assign rdat1 = dram1_unc ? xdati[199:0] : dc1_out;
+wire [79:0] aligned_data = fnDatiAlign(dram0_addr,xdati);
+wire [79:0] rdat0, rdat1;
+assign rdat0 = fnDataExtend(dram0_instr,dram0_unc ? aligned_data : dc0_out);
+assign rdat1 = fnDataExtend(dram1_instr,dram1_unc ? aligned_data : dc1_out);
 reg [79:0] rmw_ad0, rmw_ad1;
-wire [79:0] aligned_data0 = fnDatiAlign(dram0_instr,dram0_addr,rdat0);
-wire [79:0] aligned_data1 = fnDatiAlign(dram1_instr,dram1_addr,rdat1);
 assign dhit0a = d0L1_dhit;
 assign dhit1a = d1L1_dhit;
 
@@ -2722,44 +2732,48 @@ default:	fnSelect = 10'h000;
 endcase
 endfunction
 
-function [79:0] fnDatiAlign;
+function [79:0] fnDataExtend;
 input [39:0] ins;
+input [79:0] dat;
+case(mopcode(ins))
+`LDB:	fnDataExtend = {72{dat[7],dat[7:0]}};
+`LDBU:	fnDataExtend = {72'd0,dat[7:0]};
+`LDC:	fnDataExtend = {64{dat[15],dat[15:0]}};
+`LDCU:	fnDataExtend = {64'd0,dat[15:0]};
+`LDT:	fnDataExtend = {48{dat[31],dat[31:0]}};
+`LDTU:	fnDataExtend = {48'd0,dat[31:0]};
+`LDP:	fnDataExtend = {40{dat[39],dat[39:0]}};
+`LDPU:	fnDataExtend = {40'd0,dat[39:0]};
+`LDO:	fnDataExtend = {16{dat[63],dat[63:0]}};
+`LDOU:	fnDataExtend = {16'd0,dat[63:0]};
+`LDD:	fnDataExtend = dat[79:0];
+`LDDR:	fnDataExtend = dat[79:0];
+`MLX:
+	case(ins[`FUNCT5])
+	`LDB:	fnDataExtend = {72{dat[7],dat[7:0]}};
+	`LDBU:	fnDataExtend = {72'd0,dat[7:0]};
+	`LDC:	fnDataExtend = {64{dat[15],dat[15:0]}};
+	`LDCU:	fnDataExtend = {64'd0,dat[15:0]};
+	`LDT:	fnDataExtend = {48{dat[31],dat[31:0]}};
+	`LDTU:	fnDataExtend = {48'd0,dat[31:0]};
+	`LDP:	fnDataExtend = {40{dat[39],dat[39:0]}};
+	`LDPU:	fnDataExtend = {40'd0,dat[39:0]};
+	`LDO:	fnDataExtend = {16{dat[63],dat[63:0]}};
+	`LDOU:	fnDataExtend = {16'd0,dat[63:0]};
+	`LDD:	fnDataExtend = dat[79:0];
+	`LDDR:	fnDataExtend = dat[79:0];
+	endcase
+	// ToDo: add CAS
+default:    fnDataExtend = dat;
+endcase
+endfunction
+
+function [79:0] fnDatiAlign;
 input [`ABITS] adr;
 input [199:0] dat;
 reg [199:0] adat;
 begin
 adat = dat >> {adr[3:0],3'b0};
-case(mopcode(ins))
-`LDB:	fnDatiAlign = {72{adat[7],adat[7:0]}};
-`LDBU:	fnDatiAlign = {72'd0,adat[7:0]};
-`LDC:	fnDatiAlign = {64{adat[15],adat[15:0]}};
-`LDCU:	fnDatiAlign = {64'd0,adat[15:0]};
-`LDT:	fnDatiAlign = {48{adat[31],adat[31:0]}};
-`LDTU:	fnDatiAlign = {48'd0,adat[31:0]};
-`LDP:	fnDatiAlign = {40{adat[39],adat[39:0]}};
-`LDPU:	fnDatiAlign = {40'd0,adat[39:0]};
-`LDO:	fnDatiAlign = {16{adat[63],adat[63:0]}};
-`LDOU:	fnDatiAlign = {16'd0,adat[63:0]};
-`LDD:	fnDatiAlign = adat[79:0];
-`LDDR:	fnDatiAlign = adat[79:0];
-`MLX:
-	case(ins[`FUNCT5])
-	`LDB:	fnDatiAlign = {72{adat[7],adat[7:0]}};
-	`LDBU:	fnDatiAlign = {72'd0,adat[7:0]};
-	`LDC:	fnDatiAlign = {64{adat[15],adat[15:0]}};
-	`LDCU:	fnDatiAlign = {64'd0,adat[15:0]};
-	`LDT:	fnDatiAlign = {48{adat[31],adat[31:0]}};
-	`LDTU:	fnDatiAlign = {48'd0,adat[31:0]};
-	`LDP:	fnDatiAlign = {40{adat[39],adat[39:0]}};
-	`LDPU:	fnDatiAlign = {40'd0,adat[39:0]};
-	`LDO:	fnDatiAlign = {16{adat[63],adat[63:0]}};
-	`LDOU:	fnDatiAlign = {16'd0,adat[63:0]};
-	`LDD:	fnDatiAlign = adat[79:0];
-	`LDDR:	fnDatiAlign = adat[79:0];
-	endcase
-	// ToDo: add CAS
-default:    fnDatiAlign = dat;
-endcase
 end
 endfunction
 
@@ -3521,6 +3535,12 @@ end
 end
 endgenerate
 
+always @*
+begin
+	for (n = 0; n < QENTRIES; n = n + 1)
+		check_done(n);
+end
+
 //
 // EXECUTE
 //
@@ -3985,7 +4005,7 @@ else
 // execute if they are before the branch target.
 // Also, if it's a large immediate bundle, don't try and execute the immediate.
 always @*
-if (templatep[0]==7'h7D || templatep[0]==7'h7E || templatep==7'h7F)
+if (templatep[0]==7'h7D || templatep[0]==7'h7E || templatep[0]==7'h7F)
 	ip_mask = 3'b001;
 else
 	case(ip[3:2])
@@ -4071,6 +4091,7 @@ always @(posedge clk)
 getQueuedCount ugqc1
 (
 	.branchmiss(branchmiss),
+	.phitd(phitd),
 	.tails(tails),
 	.rob_tails(rob_tails),
 	.slotvd(slotvd),
@@ -4916,9 +4937,9 @@ begin
 	if (`NUM_FPU > 1)
 		setargs(n,fpu2_rid,fpu2_v,rfpu2_bus);
 
-	setargs(n,alu0_rid,alu0_done,{ralu0_bus,4'd0});
+	setargs(n,alu0_rid,alu0_done & alu0_dne,{ralu0_bus,4'd0});
 	if (`NUM_ALU > 1)
-		setargs(n,alu1_rid,alu1_done,{ralu1_bus,4'd0});
+		setargs(n,alu1_rid,alu1_done & alu1_dne,{ralu1_bus,4'd0});
 
 	setargs(n,agen0_rid,agen0_v & (agen0_push|agen0_lea),{agen0_ma,4'd0});
 	if (`NUM_AGEN > 1)
@@ -4938,7 +4959,6 @@ end
 					iq_fuid[n] <= 3'd0;
 					alu0_sn <= iq_sn[n];
 					alu0_sourceid	<= n[`QBITS];
-					check_unready(n[`QBITS]);
 					// The following line is a hack. The alu is done (tested above) so it
 					// should be setting the state to CMT.
 //					if (iq_state[alu0_id]==IQS_OUT)
@@ -5027,7 +5047,6 @@ end
 								iq_fuid[n] <= 3'd1;
             		 alu1_sn <= iq_sn[n];
                  alu1_sourceid	<= n[`QBITS];
-								check_unready(n[`QBITS]);
 								// The following line is a hack. The alu is done (tested above) so it
 								// should be setting the state to CMT.
 	//							if (iq_state[alu1_id]==IQS_OUT)
@@ -5103,7 +5122,6 @@ end
 							iq_fuid[n] <= 3'd2;
             		agen0_sn <= iq_sn[n];
                  agen0_sourceid	<= n[`QBITS];
-								check_unready(n[`QBITS]);
                  agen0_rid <= iq_rid[n];
                  agen0_unit <= iq_unit[n];
                  agen0_instr	<= iq_instr[n];
@@ -5153,7 +5171,6 @@ end
 							iq_fuid[n] <= 3'd3;
             		agen1_sn <= iq_sn[n];
                  agen1_sourceid	<= n[`QBITS];
-								check_unready(n[`QBITS]);
                  agen1_rid <= iq_rid[n];
                  agen1_unit <= iq_unit[n];
                  agen1_instr	<= iq_instr[n];
@@ -5204,7 +5221,6 @@ end
 								iq_fuid[n] <= 3'd4;
                  fpu1_sourceid	<= n[`QBITS];
                  fpu1_rid <= iq_rid[n];
-								check_unready(n[`QBITS]);
                  fpu1_instr	<= iq_instr[n];
                  fpu1_ip		<= iq_ip[n];
 `ifdef FU_BYPASS
@@ -5269,7 +5285,6 @@ end
 							iq_fuid[n] <= 3'd5;
                  fpu2_sourceid	<= n[`QBITS];
                  fpu2_rid <= iq_rid[n];
-								check_unready(n[`QBITS]);
                  fpu2_instr	<= iq_instr[n];
                  fpu2_ip		<= iq_ip[n];
 `ifdef FU_BYPASS
@@ -5333,7 +5348,6 @@ end
 					iq_fuid[n] <= 3'd6;
 				fcu_sourceid	<= n[`QBITS];
         fcu_rid <= iq_rid[n];
-				check_unready(n[`QBITS]);
 				fcu_prevInstr <= fcu_instr;
 				fcu_instr	<= iq_instr[n];
 				fcu_ip		<= iq_ip[n];
@@ -5458,13 +5472,13 @@ if (dram0 == `DRAMREQ_READY && dram0_load) begin
 	dramA_v <= !iq_stomp[dram0_id];
 	dramA_id <= dram0_id;
 	dramA_rid <= dram0_rid;
-	dramA_bus <= aligned_data0;
+	dramA_bus <= rdat0;
 end
 if (dram1 == `DRAMREQ_READY && dram1_load && `NUM_MEM > 1) begin
 	dramB_v <= !iq_stomp[dram1_id];
 	dramB_id <= dram1_id;
 	dramB_rid <= dram1_rid;
-	dramB_bus <= aligned_data1;
+	dramB_bus <= rdat1;
 end
 
 //
@@ -5652,7 +5666,7 @@ case(dram0)
 	end
 `DRAMSLOT_RMW:
 	begin
-		rmw_ad0 <= aligned_data0;
+		rmw_ad0 <= rdat0;
 	end
 `DRAMSLOT_RMW2:
 	begin
@@ -5717,7 +5731,7 @@ case(dram1)
 	end
 `DRAMSLOT_RMW:
 	begin
-		rmw_ad1 <= aligned_data1;
+		rmw_ad1 <= rdat1;
 		dram1 <= `DRAMSLOT_RMW2;
 	end
 `DRAMSLOT_RMW2:
@@ -6092,7 +6106,7 @@ endcase
 	$display("TIME %0d", $time);
 	$display("%b %h %h#", ip_mask, ip, ibundlep);
 	$display("%b %h %h#", ip_mask, ipd, ibundle);
-    $display ("---------------------------------- Regfile: %d ----------------------------------", rgs);
+    $display ("--------------------------------------------------------------------- Regfile: %d ---------------------------------------------------------------------", rgs);
 	for (n=0; n < 64; n=n+4) begin
 	    $display("%d: %h %d %o   %d: %h %d %o   %d: %h %d %o   %d: %h %d %o#",
 	       n[5:0]+0, urf1.mem[{rgs,n[5:2],2'b00}], regIsValid[n+0], rf_source[n+0],
@@ -6119,7 +6133,7 @@ endcase
 	$display("Insn%d: %h", 0, insnx[0]);
 	$display ("------------------------------------------------------------------------ Dispatch Buffer -----------------------------------------------------------------------");
 	for (i=0; i<QENTRIES; i=i+1) 
-	    $display("%c%c %d: %c%c%c %d %d %c%c %c %c%h %d %h %h %d %o %h %d %o %h %d %o %h %o %h#",
+	    $display("%c%c %d: %c%c%c %d %d %c%c %c %c%h %d %h %h %d %d %o %h %d %d %o %h %d %d %o %h %o %h#",
 		 (i[`QBITS]==heads[0])?"C":".",
 		 (i[`QBITS]==tails[0])?"Q":".",
 		  i[`QBITS],
@@ -6140,10 +6154,10 @@ endcase
 		 iq_stomp[i]?"s":"-",
 		iq_fc[i] ? "F" : iq_mem[i] ? "M" : (iq_alu[i]==1'b1) ? "a" : iq_fpu[i] ? "f" : "O", 
 		iq_instr[i], iq_tgt[i][5:0],
-		iq_argI[i], iq_argA[i], iq_argA_v[i],
-		iq_argA_s[i],
-		iq_argB[i], iq_argB_v[i], iq_argB_s[i],
-		iq_argC[i], iq_argC_v[i], iq_argC_s[i],
+		iq_argI[i],
+		iq_argA[i], iq_rs1[i], iq_argA_v[i], iq_argA_s[i],
+		iq_argB[i], iq_rs2[i], iq_argB_v[i], iq_argB_s[i],
+		iq_argC[i], iq_rs3[i], iq_argC_v[i], iq_argC_s[i],
 		iq_ip[i],
 		iq_sn[i],
 		iq_br_tag[i]
@@ -6247,25 +6261,30 @@ endtask
 // Check for units that should no longer be ready.
 // If issuing to the same queue slot as a "ready" functional unit make that
 // functional unit unready.
-task check_unready;
+task check_done;
 input [`QBITS] id;
 begin
-/*
+	alu0_dne = TRUE;
+	alu1_dne = TRUE;
+	agen0_dne = TRUE;
+	agen1_dne = TRUE;
+	fpu1_dne = TRUE;
+	fpu2_dne = TRUE;
+	fcu_dne = TRUE;
 	if (id==alu0_id && !issuing_on_alu0)
-		alu0_dataready <= FALSE;
+		alu0_dne = FALSE;
 	if (n==alu1_id && !issuing_on_alu1)
-		alu1_dataready <= FALSE;
+		alu1_dne = FALSE;
 	if (n==agen0_id && !issuing_on_agen0)
-		agen0_dataready <= FALSE;
+		agen0_dne = FALSE;
 	if (id==agen1_id && !issuing_on_agen1)
-		agen1_dataready <= FALSE;
+		agen1_dne = FALSE;
 	if (id==fpu1_id && !issuing_on_fpu1)
-		fpu1_dataready <= FALSE;
+		fpu1_dne = FALSE;
 	if (id==fpu2_id && !issuing_on_fpu2)
-		fpu2_dataready <= FALSE;
+		fpu2_dne = FALSE;
 	if (id==fcu_id && !issuing_on_fcu)
-		fcu_dataready <= FALSE;
-*/
+		fcu_dne = FALSE;
 end
 endtask
 

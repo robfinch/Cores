@@ -70,7 +70,8 @@ endfunction
 always @*
 casez(mopcode(inst))
 `LOAD:
-	case(mopcode(inst))
+	casez(mopcode(inst))
+	`PUSHC:	ma <= a - 8'd10;
 	`POP:		ma <= a;
 	`UNLK:	ma <= b;
 	`AMO:		ma <= a;

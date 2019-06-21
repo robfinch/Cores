@@ -335,6 +335,22 @@ always @*
 
 always @(posedge clk)
 if (rst) begin
+	lsmr <= 1'b0;
+	lsmc <= 1'b1;
+end
+else begin
+	if (lsm && ibundlep[103:40]!=64'd0 && queued)
+		lsmr <= 1'b1;
+	else if (queued) begin
+		lsmr <= 1'b0;
+		lsmc <= 1'b1;
+	end
+	if (phit & next_bundle)
+		lsmc <= 1'b0;
+end
+
+always @(posedge clk)
+if (rst) begin
 	ibundle <= {BBB,{3{`NOP_INSN}}};
 	insnx[0] <= `NOP_INSN;
 	insnx[1] <= `NOP_INSN;
@@ -342,21 +358,8 @@ if (rst) begin
 	template[0] <= BBB;
 	template[1] <= BBB;
 	template[2] <= BBB;
-	lsmr <= 1'b0;
-	lsmc <= 1'b1;
 end
-else if (phit & next_bundle) begin
-	lsmc <= 1'b0;
-	ibundle <= ibundlep;
-	insnx[0] <= insnxp[0];
-	insnx[1] <= insnxp[1];
-	insnx[2] <= insnxp[2];
-	template[0] <= templatep[0];
-	template[1] <= templatep[1];
-	template[2] <= templatep[2];
-end
-else if (lsm & ibundlep[103:40]!=64'd0 & queued) begin
-	lsmr <= 1'b1;
+else if (lsm && ibundlep[103:40]!=64'd0 && queued) begin
 	insnx[0] <= insnxp[0];
 	insnx[1] <= insnxp[1];
 	insnx[2] <= insnxp[2];
@@ -377,11 +380,26 @@ else if (lsm & ibundlep[103:40]!=64'd0 & queued) begin
 		end
 	end
 end
-else if (queued) begin
-	lsmr <= 1'b0;
-	lsmc <= 1'b1;
+else if (phit & next_bundle) begin
+	ibundle <= ibundlep;
+	insnx[0] <= insnxp[0];
+	insnx[1] <= insnxp[1];
+	insnx[2] <= insnxp[2];
+	template[0] <= templatep[0];
+	template[1] <= templatep[1];
+	template[2] <= templatep[2];
 end
-
+// On a cache miss load NOPs
+/*else begin
+	ibundle <= {BBB,`NOP_INSN,`NOP_INSN,`NOP_INSN};
+	insnx[0] <= `NOP_INSN;
+	insnx[1] <= `NOP_INSN;
+	insnx[2] <= `NOP_INSN;
+	template[0] <= BBB;
+	template[1] <= BBB;
+	template[2] <= BBB;
+end
+*/
 //else begin
 //	ibundle <= {BBB,{3{`NOP_INSN}}};
 //	insnx[0] <= `NOP_INSN;

@@ -125,6 +125,7 @@ begin
 end
 
 reg [31:0] sel_shift;
+reg [199:0] dat_shift;
 
 reg [2:0] state;
 always @(posedge clk_i)
@@ -246,7 +247,8 @@ IDLE:
 			ol_o  <= wb_ol[0];
 			wbo_id <= wb_id[0];
 			wbo_rid <= wb_rid[0];
-			sel_shift <= wb_sel[0] << wb_addr[0][3:0];
+			sel_shift <= {22'd0,wb_sel[0]} << wb_addr[0][3:0];
+			dat_shift <= {120'd0,wb_data[0]} << {wb_addr[0][3:0],3'b0};
 			wb_has_bus <= 1'b1;
 		end
 		if (wb_v[0]==INV && !writing_wb) begin
@@ -292,12 +294,12 @@ StoreAck1:
 	    if (err_i|tlbmiss_i|wrv_i) begin	// should abort cycle
 	    	wb_v <= 1'b0;			// Invalidate write buffer if there is a problem with the store
 	    	wb_en <= FALSE;	// and disable write buffer
-	    	cwr_o <= HIGH;
-				csel_o <= wb_sel[0];
-				cadr_o <= wb_addr[0];
-				cdat_o <= wb_data[0];
 				fault <= tlbmiss_i ? `FLT_TLB : wrv_i ? `FLT_DWF : err_i ? `FLT_DBE : `FLT_NONE;
 	    end
+    	cwr_o <= HIGH;
+			csel_o <= wb_sel[0];
+			cadr_o <= wb_addr[0];
+			cdat_o <= wb_data[0];
 	    wb_has_bus <= FALSE;
 		end
 	end
@@ -307,7 +309,7 @@ Store2:
 		sel_o <= sel_shift[31:16];
 		adr_o[AMSB:4] <= adr_o[AMSB:4] + 2'd1;
 		adr_o[3:0] <= 4'b0;
-		dat_o <= wb_data[0] >> {(5'd16 - wb_addr[0][3:0]),3'b0};
+		dat_o <= {56'd0,dat_shift[199:128]};
 	end
 StoreAck2:
 	if (ack_i|err_i|tlbmiss_i|wrv_i) begin
@@ -325,12 +327,12 @@ StoreAck2:
     if (err_i|tlbmiss_i|wrv_i) begin
     	wb_v <= 1'b0;			// Invalidate write buffer if there is a problem with the store
     	wb_en <= FALSE;	// and disable write buffer
-    	cwr_o <= HIGH;
-			csel_o <= wb_sel[0];
-			cadr_o <= wb_addr[0];
-			cdat_o <= wb_data[0];
 			fault <= tlbmiss_i ? `FLT_TLB : wrv_i ? `FLT_DWF : err_i ? `FLT_DBE : `FLT_NONE;
     end
+  	cwr_o <= HIGH;
+		csel_o <= wb_sel[0];
+		cadr_o <= wb_addr[0];
+		cdat_o <= wb_data[0];
     wb_has_bus <= FALSE;
 	end
 endcase

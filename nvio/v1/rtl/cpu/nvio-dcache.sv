@@ -190,7 +190,7 @@ input [40:0] sel;
 input [AMSB:0] adr;
 input [AMSB:0] wadr;
 input [330:0] i;
-output reg [199:0] o;
+output reg [79:0] o;
 output reg [1:0] fault;
 output hit;
 input invall;
@@ -243,7 +243,7 @@ assign hit = taghit;
 
 //always @(radr or ic0 or ic1)
 always @(adr or ic)
-	o <= ic >> {adr[4],7'b0};
+	o <= ic >> {adr[4:0],3'b0};
 always @*
 	fault <= ic[329:328];
 
@@ -259,11 +259,12 @@ input [40:0] sel;
 input [8:0] wlineno;
 input [8:0] rlineno;
 input [330:0] i;
-input [2:0] fault;
+input [3:0] fault;
 output [330:0] o;
 
+// Block ram must be a multiple of eight bits wide to use byte write enables.
 (* ram_style="block" *)
-reg [330:0] mem [0:511];
+reg [335:0] mem [0:511];
 (* ram_style="distributed" *)
 reg [8:0] rrcl;
 
@@ -282,7 +283,7 @@ begin
 	if (wr & sel[v])
 		mem[wlineno][v*8+7:v*8] <= i[v*8+7:v*8];
 	if (wr)
-		mem[wlineno][330:328] <= fault;
+		mem[wlineno][335:328] <= {4'd0,fault};
 end
 end
 endgenerate
@@ -302,7 +303,7 @@ endmodule
 // address bit 4).
 // -----------------------------------------------------------------------------
 
-module L2_dcache(rst, clk, nxt, wr, sel, wadr, radr, rdv_i, wrv_i, i, err_i, o, whit, rhit, invall, invline);
+module L2_dcache(rst, clk, nxt, wr, sel, wadr, radr, tlbmiss_i, rdv_i, wrv_i, i, err_i, o, whit, rhit, invall, invline);
 parameter AMSB = 79;
 input rst;
 input clk;
@@ -311,10 +312,11 @@ input wr;
 input [40:0] sel;
 input [AMSB:0] wadr;
 input [AMSB:0] radr;
+input tlbmiss_i;
 input rdv_i;
 input wrv_i;
-input [330:0] i;
 input err_i;
+input [327:0] i;
 output [335:0] o;
 output whit;
 output rhit;
@@ -324,9 +326,8 @@ input invline;
 wire [8:0] wlineno,rlineno;
 wire taghit;
 reg wr1 = 1'b0,wr2 = 1'b0;
-reg [40:0] sel1 = 3'd0,sel2= 3'd0;
-reg [330:0] i1 = 64'd0,i2 = 64'd0;
-reg [1:0] f1=2'b0, f2=2'b0;
+reg [41:0] sel1 = 3'd0,sel2= 3'd0;
+reg [335:0] i1 = 64'd0,i2 = 64'd0;
 
 // Must update the cache memory on the cycle after a write to the tag memmory.
 // Otherwise lineno won't be valid. camTag memory takes two clock cycles to update.
@@ -335,16 +336,12 @@ always @(posedge clk)
 always @(posedge clk)
 	wr2 <= wr1;
 always @(posedge clk)
-	sel1 <= sel;
+	sel1 <= {wr,sel};
 always @(posedge clk)
 	sel2 <= sel1;
-always @(posedge clk)
-	f1 <= {err_i,rdv_i,wrv_i};
-always @(posedge clk)
-	f2 <= f1;
 	
 always @(posedge clk)
-	i1 <= i;
+	i1 <= {4'h0,tlbmiss_i,err_i,rdv_i,wrv_i,i};
 always @(posedge clk)
 	i2 <= i1;
 

@@ -25,7 +25,7 @@
 `include "nvio-defines.sv"
 
 module tailptrs(rst_i, clk_i, branchmiss, iq_stomp, iq_br_tag, queuedCnt, iq_tails, active_tag,
-	rqueuedCnt, rob_tails);
+	rqueuedCnt, rob_tails, iq_rid);
 parameter QENTRIES = `QENTRIES;
 parameter QSLOTS = `QSLOTS;
 parameter RENTRIES = `RENTRIES;
@@ -40,6 +40,7 @@ output reg [`QBITS] iq_tails [0:QSLOTS-1];
 output reg [`QBITS] active_tag;
 input [2:0] rqueuedCnt;
 output reg [`RBITS] rob_tails [0:RSLOTS-1];
+input [`RBITS] iq_rid [0:QENTRIES-1];
 
 integer n, j;
 
@@ -71,8 +72,19 @@ if (rst_i) begin
 		rob_tails[n] <= n;
 end
 else begin
-	for (n = 0; n < RSLOTS; n = n + 1)
-		rob_tails[n] <= (rob_tails[n] + rqueuedCnt) % RENTRIES;	
+	if (!branchmiss) begin
+		for (n = 0; n < RSLOTS; n = n + 1)
+			rob_tails[n] <= (rob_tails[n] + rqueuedCnt) % RENTRIES;	
+	end
+	else begin
+		for (n = QENTRIES-1; n >= 0; n = n - 1)
+			// (QENTRIES-1) is needed to ensure that n increments forwards so that the modulus is
+			// a positive number.
+			if (iq_stomp[n] & ~iq_stomp[(n+(QENTRIES-1))%QENTRIES]) begin
+				for (j = 0; j < RSLOTS; j = j + 1)
+					rob_tails[j] <= (iq_rid[n] + j) % RENTRIES;
+			end
+	end
 end
 
 endmodule

@@ -24,7 +24,7 @@
 `include "nvio-config.sv"
 `include "nvio-defines.sv"
 
-module instruction_pointer(rst, clk, queuedCnt, insnx, freezeip, 
+module instructionPointer(rst, clk, queuedCnt, insnx, freezeip, 
 	next_bundle, phit, branchmiss, missip, ip_mask, ip_maskd,
 	slotv, slotvd, slot_jc, slot_ret, slot_br, take_branch, btgt, ip, ipd, branch_ip, 
 	ra, ip_override,
@@ -57,9 +57,35 @@ input [AMSB:0] ra;
 output ip_override;
 input debug_on;
 
-reg phitd;
-
 assign ip_override = ipd != branch_ip;
+
+reg phitd;
+reg [AMSB:0] next_ip;
+
+always @*
+if (rst) begin
+	next_ip <= RSTIP;
+end
+else begin
+	if (branchmiss)
+		next_ip <= {missip[AMSB:2],missip[3:2]};
+	else begin
+		if (!freezeip && next_bundle) begin
+			begin
+				next_ip <= {ip[AMSB:4] + 2'd1,4'h0};
+				if (slot_br[0])
+					next_ip <= btgt[0];
+				if (slot_br[1])
+					next_ip <= btgt[1];
+				if (slot_br[2])
+					next_ip <= btgt[2];
+			end
+		end
+		if (ip_override)
+			next_ip <= branch_ip;
+	end
+end
+
 
 always @(posedge clk)
 if (rst) begin
@@ -97,6 +123,7 @@ else begin
 		if (ip_override)
 			ip <= branch_ip;
 	end
+	//ip <= next_ip;
 end
 
 always @*
@@ -146,8 +173,8 @@ else begin
 				branch_ip[37:0] <= {insnx[0][39:10],insnx[0][5:0],insnx[0][1:0]};
 			else if (take_branch[0])
 				branch_ip <= {ipd[79:4] + {{60{insnx[0][39]}},insnx[0][39:24]},insnx[0][23:22],insnx[0][23:22]};
-			else
-				branch_ip[3:0] <= 4'h5;
+//			else
+//				branch_ip[3:0] <= 4'h5;
 		end
 	3'b100:
 		if (queuedCnt==3'd1) begin
@@ -180,8 +207,8 @@ else begin
 				branch_ip[37:0] <= {insnx[1][39:10],insnx[1][5:0],insnx[1][1:0]};
 			else if (take_branch[1])
 				branch_ip <= {ipd[79:4] + {{60{insnx[1][39]}},insnx[1][39:24]},insnx[1][23:22],insnx[1][23:22]};
-			else
-				branch_ip[3:0] <= 4'hA;
+//			else
+//				branch_ip[3:0] <= 4'hA;
 		end
 	3'b111:
 		if (queuedCnt==3'd3) begin
@@ -217,8 +244,8 @@ else begin
 				branch_ip[37:0] <= {insnx[1][39:10],insnx[1][5:0],insnx[1][1:0]};
 			else if (take_branch[1])
 				branch_ip <= {ipd[79:4] + {{60{insnx[1][39]}},insnx[1][39:24]},insnx[1][23:22],insnx[1][23:22]};
-			else
-				branch_ip[3:0] <= 4'hA;
+//			else
+//				branch_ip[3:0] <= 4'hA;
 		end
 		else if (queuedCnt==3'd1) begin
 			if (slot_ret[0])
@@ -227,8 +254,8 @@ else begin
 				branch_ip[37:0] <= {insnx[0][39:10],insnx[0][5:0],insnx[0][1:0]};
 			else if (take_branch[0])
 				branch_ip <= {ipd[79:4] + {{60{insnx[0][39]}},insnx[0][39:24]},insnx[0][23:22],insnx[0][23:22]};
-			else
-				branch_ip[3:0] <= 4'h5;
+//			else
+//				branch_ip[3:0] <= 4'h5;
 		end
 	default:	;
 	endcase

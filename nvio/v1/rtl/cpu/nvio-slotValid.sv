@@ -54,7 +54,14 @@ assign pat = /*{slotv[0],slotv[1],slotv[2]} &*/ {3{phit}} & ip_maskd;
 reg nextb3;
 reg stomp_next;		// stomp on next bundle
 reg stomp_next2;
+reg nextbd;
+
 //delay1 #(1) ud1 (.clk(clk), .ce(1'b1), .i(stomp_next), .o(stomp_next));
+always @(posedge clk)
+if (rst)
+	nextbd <= 1'b0;
+else
+	nextbd <= nextb;
 
 always @(posedge clk)
 if (rst) begin

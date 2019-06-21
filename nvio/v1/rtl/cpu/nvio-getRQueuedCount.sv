@@ -46,8 +46,8 @@ input [`QBITS] heads [0:QENTRIES-1];
 input [RENTRIES-1:0] rob_v_i;
 output reg [RENTRIES-1:0] rob_v_o;
 input [2:0] iq_state [0:QENTRIES-1];
-input [`QBITSP1] iq_rid_i [0:QENTRIES-1];
-output reg [`QBITSP1] iq_rid_o [0:QENTRIES-1];
+input [`RBITS] iq_rid_i [0:QENTRIES-1];
+output reg [`RBITS] iq_rid_o [0:QENTRIES-1];
 output reg [2:0] rqueuedCnt;
 output reg [QENTRIES-1:0] rqueuedOn;
 

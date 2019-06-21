@@ -34,7 +34,7 @@ input [9:0] wa0;
 input [WID+3:0] i0;
 input wr1;
 input [9:0] wa1;
-input [WID-1:0] i1;
+input [WID+3:0] i1;
 input rclk;
 input [9:0] ra0;
 input [9:0] ra1;

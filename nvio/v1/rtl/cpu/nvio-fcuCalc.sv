@@ -43,7 +43,7 @@ begin
   `BRK:   bus <= {72'd0,a[7:0]} | {72'b0,instr[29:22]};
   `JAL:		bus <= nextpc;
   `CALL:	bus <= nextpc;
-  `RET:		bus <= a + {instr[39:22],1'b0};
+  `RET:		bus <= a + instr[39:22];
   `REX:
     case(ol)
     `OL_USER:   bus <= 80'hCCCCCCCCCCCCCCCCCCCC;
