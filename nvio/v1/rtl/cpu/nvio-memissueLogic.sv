@@ -67,7 +67,7 @@ begin
 					//&& ~iq_memready[heads[0]]
 					// ... and there is no address-overlap with any preceding instruction
 					&& (!iq_mem[heads[0]] || (iq_agen[heads[0]] & iq_out[heads[0]]) || iq_done[heads[0]]
-						|| ((iq_ma[heads[1]][AMSB:3] != iq_ma[heads[0]][AMSB:3] || iq_out[heads[0]] || iq_done[heads[0]])))
+						|| ((iq_ma[heads[1]][AMSB:5] != iq_ma[heads[0]][AMSB:5] || iq_out[heads[0]] || iq_done[heads[0]])))
 					// ... if a release, any prior memory ops must be done before this one
 					&& (iq_rl[heads[1]] ? iq_done[heads[0]] || !iq_v[heads[0]] || !iq_mem[heads[0]] : 1'b1)
 					// ... if a preivous op has the aquire bit set
@@ -87,9 +87,9 @@ begin
 					//&& ~iq_memready[heads[1]] 
 					// ... and there is no address-overlap with any preceding instruction
 					&& (!iq_mem[heads[0]] || (iq_agen[heads[0]] & iq_out[heads[0]])  || iq_done[heads[0]]
-						|| ((iq_ma[heads[2]][AMSB:3] != iq_ma[heads[0]][AMSB:3] || iq_out[heads[0]] || iq_done[heads[0]])))
+						|| ((iq_ma[heads[2]][AMSB:5] != iq_ma[heads[0]][AMSB:5] || iq_out[heads[0]] || iq_done[heads[0]])))
 					&& (!iq_mem[heads[1]] || (iq_agen[heads[1]] & iq_out[heads[1]])  || iq_done[heads[1]]
-						|| ((iq_ma[heads[2]][AMSB:3] != iq_ma[heads[1]][AMSB:3] || iq_out[heads[1]] || iq_done[heads[1]])))
+						|| ((iq_ma[heads[2]][AMSB:5] != iq_ma[heads[1]][AMSB:5] || iq_out[heads[1]] || iq_done[heads[1]])))
 					// ... if a release, any prior memory ops must be done before this one
 					&& (iq_rl[heads[2]] ? (iq_done[heads[0]] || !iq_v[heads[0]] || !iq_mem[heads[0]])
 										 && (iq_done[heads[1]] || !iq_v[heads[1]] || !iq_mem[heads[1]])
@@ -118,11 +118,11 @@ begin
 					//&& ~iq_memready[heads[2]] 
 					// ... and there is no address-overlap with any preceding instruction
 					&& (!iq_mem[heads[0]] || (iq_agen[heads[0]] & iq_out[heads[0]])  || iq_done[heads[0]]
-						|| ((iq_ma[heads[3]][AMSB:3] != iq_ma[heads[0]][AMSB:3] || iq_out[heads[0]] || iq_done[heads[0]])))
+						|| ((iq_ma[heads[3]][AMSB:5] != iq_ma[heads[0]][AMSB:5] || iq_out[heads[0]] || iq_done[heads[0]])))
 					&& (!iq_mem[heads[1]] || (iq_agen[heads[1]] & iq_out[heads[1]])  || iq_done[heads[1]]
-						|| ((iq_ma[heads[3]][AMSB:3] != iq_ma[heads[1]][AMSB:3] || iq_out[heads[1]] || iq_done[heads[1]])))
+						|| ((iq_ma[heads[3]][AMSB:5] != iq_ma[heads[1]][AMSB:5] || iq_out[heads[1]] || iq_done[heads[1]])))
 					&& (!iq_mem[heads[2]] || (iq_agen[heads[2]] & iq_out[heads[2]])  || iq_done[heads[2]]
-						|| ((iq_ma[heads[3]][AMSB:3] != iq_ma[heads[2]][AMSB:3] || iq_out[heads[2]] || iq_done[heads[2]])))
+						|| ((iq_ma[heads[3]][AMSB:5] != iq_ma[heads[2]][AMSB:5] || iq_out[heads[2]] || iq_done[heads[2]])))
 					// ... if a release, any prior memory ops must be done before this one
 					&& (iq_rl[heads[3]] ? (iq_done[heads[0]] || !iq_v[heads[0]] || !iq_mem[heads[0]])
 										 && (iq_done[heads[1]] || !iq_v[heads[1]] || !iq_mem[heads[1]])
@@ -164,13 +164,13 @@ begin
 					//&& ~iq_memready[heads[3]] 
 					// ... and there is no address-overlap with any preceding instruction
 					&& (!iq_mem[heads[0]] || (iq_agen[heads[0]] & iq_out[heads[0]])  || iq_done[heads[0]]
-						|| ((iq_ma[heads[4]][AMSB:3] != iq_ma[heads[0]][AMSB:3] || iq_out[heads[0]] || iq_done[heads[0]])))
+						|| ((iq_ma[heads[4]][AMSB:5] != iq_ma[heads[0]][AMSB:5] || iq_out[heads[0]] || iq_done[heads[0]])))
 					&& (!iq_mem[heads[1]] || (iq_agen[heads[1]] & iq_out[heads[1]])  || iq_done[heads[1]]
-						|| ((iq_ma[heads[4]][AMSB:3] != iq_ma[heads[1]][AMSB:3] || iq_out[heads[1]] || iq_done[heads[1]])))
+						|| ((iq_ma[heads[4]][AMSB:5] != iq_ma[heads[1]][AMSB:5] || iq_out[heads[1]] || iq_done[heads[1]])))
 					&& (!iq_mem[heads[2]] || (iq_agen[heads[2]] & iq_out[heads[2]])  || iq_done[heads[2]]
-						|| ((iq_ma[heads[4]][AMSB:3] != iq_ma[heads[2]][AMSB:3] || iq_out[heads[2]] || iq_done[heads[2]])))
+						|| ((iq_ma[heads[4]][AMSB:5] != iq_ma[heads[2]][AMSB:5] || iq_out[heads[2]] || iq_done[heads[2]])))
 					&& (!iq_mem[heads[3]] || (iq_agen[heads[3]] & iq_out[heads[3]])  || iq_done[heads[3]]
-						|| ((iq_ma[heads[4]][AMSB:3] != iq_ma[heads[3]][AMSB:3] || iq_out[heads[3]] || iq_done[heads[3]])))
+						|| ((iq_ma[heads[4]][AMSB:5] != iq_ma[heads[3]][AMSB:5] || iq_out[heads[3]] || iq_done[heads[3]])))
 					// ... if a release, any prior memory ops must be done before this one
 					&& (iq_rl[heads[4]] ? (iq_done[heads[0]] || !iq_v[heads[0]] || !iq_mem[heads[0]])
 										 && (iq_done[heads[1]] || !iq_v[heads[1]] || !iq_mem[heads[1]])
@@ -227,15 +227,15 @@ begin
 					//&& ~iq_memready[heads[4]] 
 					// ... and there is no address-overlap with any preceding instruction
 					&& (!iq_mem[heads[0]] || (iq_agen[heads[0]] & iq_out[heads[0]]) || iq_done[heads[0]] 
-						|| ((iq_ma[heads[5]][AMSB:3] != iq_ma[heads[0]][AMSB:3] || iq_out[heads[0]] || iq_done[heads[0]])))
+						|| ((iq_ma[heads[5]][AMSB:5] != iq_ma[heads[0]][AMSB:5] || iq_out[heads[0]] || iq_done[heads[0]])))
 					&& (!iq_mem[heads[1]] || (iq_agen[heads[1]] & iq_out[heads[1]]) || iq_done[heads[1]] 
-						|| ((iq_ma[heads[5]][AMSB:3] != iq_ma[heads[1]][AMSB:3] || iq_out[heads[1]] || iq_done[heads[1]])))
+						|| ((iq_ma[heads[5]][AMSB:5] != iq_ma[heads[1]][AMSB:5] || iq_out[heads[1]] || iq_done[heads[1]])))
 					&& (!iq_mem[heads[2]] || (iq_agen[heads[2]] & iq_out[heads[2]]) || iq_done[heads[2]] 
-						|| ((iq_ma[heads[5]][AMSB:3] != iq_ma[heads[2]][AMSB:3] || iq_out[heads[2]] || iq_done[heads[2]])))
+						|| ((iq_ma[heads[5]][AMSB:5] != iq_ma[heads[2]][AMSB:5] || iq_out[heads[2]] || iq_done[heads[2]])))
 					&& (!iq_mem[heads[3]] || (iq_agen[heads[3]] & iq_out[heads[3]]) || iq_done[heads[3]] 
-						|| ((iq_ma[heads[5]][AMSB:3] != iq_ma[heads[3]][AMSB:3] || iq_out[heads[3]] || iq_done[heads[3]])))
+						|| ((iq_ma[heads[5]][AMSB:5] != iq_ma[heads[3]][AMSB:5] || iq_out[heads[3]] || iq_done[heads[3]])))
 					&& (!iq_mem[heads[4]] || (iq_agen[heads[4]] & iq_out[heads[4]]) || iq_done[heads[4]] 
-						|| ((iq_ma[heads[5]][AMSB:3] != iq_ma[heads[4]][AMSB:3] || iq_out[heads[4]] || iq_done[heads[4]])))
+						|| ((iq_ma[heads[5]][AMSB:5] != iq_ma[heads[4]][AMSB:5] || iq_out[heads[4]] || iq_done[heads[4]])))
 					// ... if a release, any prior memory ops must be done before this one
 					&& (iq_rl[heads[5]] ? (iq_done[heads[0]] || !iq_v[heads[0]] || !iq_mem[heads[0]])
 										 && (iq_done[heads[1]] || !iq_v[heads[1]] || !iq_mem[heads[1]])
@@ -310,17 +310,17 @@ if (QENTRIES > 6) begin
 					//&& ~iq_memready[heads[5]] 
 					// ... and there is no address-overlap with any preceding instruction
 					&& (!iq_mem[heads[0]] || (iq_agen[heads[0]] & iq_out[heads[0]]) || iq_done[heads[0]] 
-						|| ((iq_ma[heads[6]][AMSB:3] != iq_ma[heads[0]][AMSB:3])))
+						|| ((iq_ma[heads[6]][AMSB:5] != iq_ma[heads[0]][AMSB:5])))
 					&& (!iq_mem[heads[1]] || (iq_agen[heads[1]] & iq_out[heads[1]]) || iq_done[heads[1]] 
-						|| ((iq_ma[heads[6]][AMSB:3] != iq_ma[heads[1]][AMSB:3])))
+						|| ((iq_ma[heads[6]][AMSB:5] != iq_ma[heads[1]][AMSB:5])))
 					&& (!iq_mem[heads[2]] || (iq_agen[heads[2]] & iq_out[heads[2]]) || iq_done[heads[2]] 
-						|| ((iq_ma[heads[6]][AMSB:3] != iq_ma[heads[2]][AMSB:3])))
+						|| ((iq_ma[heads[6]][AMSB:5] != iq_ma[heads[2]][AMSB:5])))
 					&& (!iq_mem[heads[3]] || (iq_agen[heads[3]] & iq_out[heads[3]]) || iq_done[heads[3]] 
-						|| ((iq_ma[heads[6]][AMSB:3] != iq_ma[heads[3]][AMSB:3])))
+						|| ((iq_ma[heads[6]][AMSB:5] != iq_ma[heads[3]][AMSB:5])))
 					&& (!iq_mem[heads[4]] || (iq_agen[heads[4]] & iq_out[heads[4]]) || iq_done[heads[4]] 
-						|| ((iq_ma[heads[6]][AMSB:3] != iq_ma[heads[4]][AMSB:3])))
+						|| ((iq_ma[heads[6]][AMSB:5] != iq_ma[heads[4]][AMSB:5])))
 					&& (!iq_mem[heads[5]] || (iq_agen[heads[5]] & iq_out[heads[5]]) || iq_done[heads[5]] 
-						|| ((iq_ma[heads[6]][AMSB:3] != iq_ma[heads[5]][AMSB:3])))
+						|| ((iq_ma[heads[6]][AMSB:5] != iq_ma[heads[5]][AMSB:5])))
 					&& (iq_rl[heads[6]] ? (iq_done[heads[0]] || !iq_v[heads[0]] || !iq_mem[heads[0]])
 										 && (iq_done[heads[1]] || !iq_v[heads[1]] || !iq_mem[heads[1]])
 										 && (iq_done[heads[2]] || !iq_v[heads[2]] || !iq_mem[heads[2]])
@@ -411,19 +411,19 @@ if (QENTRIES > 6) begin
 					//&& ~iq_memready[heads[6]] 
 					// ... and there is no address-overlap with any preceding instruction
 					&& (!iq_mem[heads[0]] || (iq_agen[heads[0]] & iq_out[heads[0]]) || iq_done[heads[0]]
-						|| ((iq_ma[heads[7]][AMSB:3] != iq_ma[heads[0]][AMSB:3] || iq_out[heads[0]] || iq_done[heads[0]])))
+						|| ((iq_ma[heads[7]][AMSB:5] != iq_ma[heads[0]][AMSB:5] || iq_out[heads[0]] || iq_done[heads[0]])))
 					&& (!iq_mem[heads[1]] || (iq_agen[heads[1]] & iq_out[heads[1]]) || iq_done[heads[1]]
-						|| ((iq_ma[heads[7]][AMSB:3] != iq_ma[heads[1]][AMSB:3] || iq_out[heads[1]] || iq_done[heads[1]])))
+						|| ((iq_ma[heads[7]][AMSB:5] != iq_ma[heads[1]][AMSB:5] || iq_out[heads[1]] || iq_done[heads[1]])))
 					&& (!iq_mem[heads[2]] || (iq_agen[heads[2]] & iq_out[heads[2]]) || iq_done[heads[2]] 
-						|| ((iq_ma[heads[7]][AMSB:3] != iq_ma[heads[2]][AMSB:3] || iq_out[heads[2]] || iq_done[heads[2]])))
+						|| ((iq_ma[heads[7]][AMSB:5] != iq_ma[heads[2]][AMSB:5] || iq_out[heads[2]] || iq_done[heads[2]])))
 					&& (!iq_mem[heads[3]] || (iq_agen[heads[3]] & iq_out[heads[3]]) || iq_done[heads[3]] 
-						|| ((iq_ma[heads[7]][AMSB:3] != iq_ma[heads[3]][AMSB:3] || iq_out[heads[3]] || iq_done[heads[3]])))
+						|| ((iq_ma[heads[7]][AMSB:5] != iq_ma[heads[3]][AMSB:5] || iq_out[heads[3]] || iq_done[heads[3]])))
 					&& (!iq_mem[heads[4]] || (iq_agen[heads[4]] & iq_out[heads[4]]) || iq_done[heads[4]] 
-						|| ((iq_ma[heads[7]][AMSB:3] != iq_ma[heads[4]][AMSB:3] || iq_out[heads[4]] || iq_done[heads[4]])))
+						|| ((iq_ma[heads[7]][AMSB:5] != iq_ma[heads[4]][AMSB:5] || iq_out[heads[4]] || iq_done[heads[4]])))
 					&& (!iq_mem[heads[5]] || (iq_agen[heads[5]] & iq_out[heads[5]]) || iq_done[heads[5]] 
-						|| ((iq_ma[heads[7]][AMSB:3] != iq_ma[heads[5]][AMSB:3] || iq_out[heads[5]] || iq_done[heads[5]])))
+						|| ((iq_ma[heads[7]][AMSB:5] != iq_ma[heads[5]][AMSB:5] || iq_out[heads[5]] || iq_done[heads[5]])))
 					&& (!iq_mem[heads[6]] || (iq_agen[heads[6]] & iq_out[heads[6]]) || iq_done[heads[6]] 
-						|| ((iq_ma[heads[7]][AMSB:3] != iq_ma[heads[6]][AMSB:3] || iq_out[heads[6]] || iq_done[heads[6]])))
+						|| ((iq_ma[heads[7]][AMSB:5] != iq_ma[heads[6]][AMSB:5] || iq_out[heads[6]] || iq_done[heads[6]])))
 					&& (iq_rl[heads[7]] ? (iq_done[heads[0]] || !iq_v[heads[0]] || !iq_mem[heads[0]])
 										 && (iq_done[heads[1]] || !iq_v[heads[1]] || !iq_mem[heads[1]])
 										 && (iq_done[heads[2]] || !iq_v[heads[2]] || !iq_mem[heads[2]])
@@ -533,21 +533,21 @@ if (QENTRIES > 6) begin
 					//&& ~iq_memready[heads[6]] 
 					// ... and there is no address-overlap with any preceding instruction
 					&& (!iq_mem[heads[0]] || (iq_agen[heads[0]] & iq_out[heads[0]]) || iq_done[heads[0]]
-						|| ((iq_ma[heads[8]][AMSB:3] != iq_ma[heads[0]][AMSB:3] || iq_out[heads[0]] || iq_done[heads[0]])))
+						|| ((iq_ma[heads[8]][AMSB:5] != iq_ma[heads[0]][AMSB:5] || iq_out[heads[0]] || iq_done[heads[0]])))
 					&& (!iq_mem[heads[1]] || (iq_agen[heads[1]] & iq_out[heads[1]]) || iq_done[heads[1]]
-						|| ((iq_ma[heads[8]][AMSB:3] != iq_ma[heads[1]][AMSB:3] || iq_out[heads[1]] || iq_done[heads[1]])))
+						|| ((iq_ma[heads[8]][AMSB:5] != iq_ma[heads[1]][AMSB:5] || iq_out[heads[1]] || iq_done[heads[1]])))
 					&& (!iq_mem[heads[2]] || (iq_agen[heads[2]] & iq_out[heads[2]]) || iq_done[heads[2]] 
-						|| ((iq_ma[heads[8]][AMSB:3] != iq_ma[heads[2]][AMSB:3] || iq_out[heads[2]] || iq_done[heads[2]])))
+						|| ((iq_ma[heads[8]][AMSB:5] != iq_ma[heads[2]][AMSB:5] || iq_out[heads[2]] || iq_done[heads[2]])))
 					&& (!iq_mem[heads[3]] || (iq_agen[heads[3]] & iq_out[heads[3]]) || iq_done[heads[3]] 
-						|| ((iq_ma[heads[8]][AMSB:3] != iq_ma[heads[3]][AMSB:3] || iq_out[heads[3]] || iq_done[heads[3]])))
+						|| ((iq_ma[heads[8]][AMSB:5] != iq_ma[heads[3]][AMSB:5] || iq_out[heads[3]] || iq_done[heads[3]])))
 					&& (!iq_mem[heads[4]] || (iq_agen[heads[4]] & iq_out[heads[4]]) || iq_done[heads[4]] 
-						|| ((iq_ma[heads[8]][AMSB:3] != iq_ma[heads[4]][AMSB:3] || iq_out[heads[4]] || iq_done[heads[4]])))
+						|| ((iq_ma[heads[8]][AMSB:5] != iq_ma[heads[4]][AMSB:5] || iq_out[heads[4]] || iq_done[heads[4]])))
 					&& (!iq_mem[heads[5]] || (iq_agen[heads[5]] & iq_out[heads[5]]) || iq_done[heads[5]] 
-						|| ((iq_ma[heads[8]][AMSB:3] != iq_ma[heads[5]][AMSB:3] || iq_out[heads[5]] || iq_done[heads[5]])))
+						|| ((iq_ma[heads[8]][AMSB:5] != iq_ma[heads[5]][AMSB:5] || iq_out[heads[5]] || iq_done[heads[5]])))
 					&& (!iq_mem[heads[6]] || (iq_agen[heads[6]] & iq_out[heads[6]]) || iq_done[heads[6]] 
-						|| ((iq_ma[heads[8]][AMSB:3] != iq_ma[heads[6]][AMSB:3] || iq_out[heads[6]] || iq_done[heads[6]])))
+						|| ((iq_ma[heads[8]][AMSB:5] != iq_ma[heads[6]][AMSB:5] || iq_out[heads[6]] || iq_done[heads[6]])))
 					&& (!iq_mem[heads[7]] || (iq_agen[heads[7]] & iq_out[heads[7]]) || iq_done[heads[7]] 
-						|| ((iq_ma[heads[8]][AMSB:3] != iq_ma[heads[7]][AMSB:3] || iq_out[heads[7]] || iq_done[heads[7]])))
+						|| ((iq_ma[heads[8]][AMSB:5] != iq_ma[heads[7]][AMSB:5] || iq_out[heads[7]] || iq_done[heads[7]])))
 					&& (iq_rl[heads[8]] ? (iq_done[heads[0]] || !iq_v[heads[0]] || !iq_mem[heads[0]])
 										 && (iq_done[heads[1]] || !iq_v[heads[1]] || !iq_mem[heads[1]])
 										 && (iq_done[heads[2]] || !iq_v[heads[2]] || !iq_mem[heads[2]])
@@ -681,23 +681,23 @@ if (QENTRIES > 6) begin
 					//&& ~iq_memready[heads[6]] 
 					// ... and there is no address-overlap with any preceding instruction
 					&& (!iq_mem[heads[0]] || (iq_agen[heads[0]] & iq_out[heads[0]]) || iq_done[heads[0]]
-						|| ((iq_ma[heads[9]][AMSB:3] != iq_ma[heads[0]][AMSB:3] || iq_out[heads[0]] || iq_done[heads[0]])))
+						|| ((iq_ma[heads[9]][AMSB:5] != iq_ma[heads[0]][AMSB:5] || iq_out[heads[0]] || iq_done[heads[0]])))
 					&& (!iq_mem[heads[1]] || (iq_agen[heads[1]] & iq_out[heads[1]]) || iq_done[heads[1]]
-						|| ((iq_ma[heads[9]][AMSB:3] != iq_ma[heads[1]][AMSB:3] || iq_out[heads[1]] || iq_done[heads[1]])))
+						|| ((iq_ma[heads[9]][AMSB:5] != iq_ma[heads[1]][AMSB:5] || iq_out[heads[1]] || iq_done[heads[1]])))
 					&& (!iq_mem[heads[2]] || (iq_agen[heads[2]] & iq_out[heads[2]]) || iq_done[heads[2]] 
-						|| ((iq_ma[heads[9]][AMSB:3] != iq_ma[heads[2]][AMSB:3] || iq_out[heads[2]] || iq_done[heads[2]])))
+						|| ((iq_ma[heads[9]][AMSB:5] != iq_ma[heads[2]][AMSB:5] || iq_out[heads[2]] || iq_done[heads[2]])))
 					&& (!iq_mem[heads[3]] || (iq_agen[heads[3]] & iq_out[heads[3]]) || iq_done[heads[3]] 
-						|| ((iq_ma[heads[9]][AMSB:3] != iq_ma[heads[3]][AMSB:3] || iq_out[heads[3]] || iq_done[heads[3]])))
+						|| ((iq_ma[heads[9]][AMSB:5] != iq_ma[heads[3]][AMSB:5] || iq_out[heads[3]] || iq_done[heads[3]])))
 					&& (!iq_mem[heads[4]] || (iq_agen[heads[4]] & iq_out[heads[4]]) || iq_done[heads[4]] 
-						|| ((iq_ma[heads[9]][AMSB:3] != iq_ma[heads[4]][AMSB:3] || iq_out[heads[4]] || iq_done[heads[4]])))
+						|| ((iq_ma[heads[9]][AMSB:5] != iq_ma[heads[4]][AMSB:5] || iq_out[heads[4]] || iq_done[heads[4]])))
 					&& (!iq_mem[heads[5]] || (iq_agen[heads[5]] & iq_out[heads[5]]) || iq_done[heads[5]] 
-						|| ((iq_ma[heads[9]][AMSB:3] != iq_ma[heads[5]][AMSB:3] || iq_out[heads[5]] || iq_done[heads[5]])))
+						|| ((iq_ma[heads[9]][AMSB:5] != iq_ma[heads[5]][AMSB:5] || iq_out[heads[5]] || iq_done[heads[5]])))
 					&& (!iq_mem[heads[6]] || (iq_agen[heads[6]] & iq_out[heads[6]]) || iq_done[heads[6]] 
-						|| ((iq_ma[heads[9]][AMSB:3] != iq_ma[heads[6]][AMSB:3] || iq_out[heads[6]] || iq_done[heads[6]])))
+						|| ((iq_ma[heads[9]][AMSB:5] != iq_ma[heads[6]][AMSB:5] || iq_out[heads[6]] || iq_done[heads[6]])))
 					&& (!iq_mem[heads[7]] || (iq_agen[heads[7]] & iq_out[heads[7]]) || iq_done[heads[7]] 
-						|| ((iq_ma[heads[9]][AMSB:3] != iq_ma[heads[7]][AMSB:3] || iq_out[heads[7]] || iq_done[heads[7]])))
+						|| ((iq_ma[heads[9]][AMSB:5] != iq_ma[heads[7]][AMSB:5] || iq_out[heads[7]] || iq_done[heads[7]])))
 					&& (!iq_mem[heads[8]] || (iq_agen[heads[8]] & iq_out[heads[8]]) || iq_done[heads[8]] 
-						|| ((iq_ma[heads[9]][AMSB:3] != iq_ma[heads[8]][AMSB:3] || iq_out[heads[8]] || iq_done[heads[8]])))
+						|| ((iq_ma[heads[9]][AMSB:5] != iq_ma[heads[8]][AMSB:5] || iq_out[heads[8]] || iq_done[heads[8]])))
 					&& (iq_rl[heads[9]] ? (iq_done[heads[0]] || !iq_v[heads[0]] || !iq_mem[heads[0]])
 										 && (iq_done[heads[1]] || !iq_v[heads[1]] || !iq_mem[heads[1]])
 										 && (iq_done[heads[2]] || !iq_v[heads[2]] || !iq_mem[heads[2]])

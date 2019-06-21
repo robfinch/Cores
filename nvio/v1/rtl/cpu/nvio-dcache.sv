@@ -97,6 +97,8 @@ reg [pLines/4-1:0] mem0v;
 reg [pLines/4-1:0] mem1v;
 reg [pLines/4-1:0] mem2v;
 reg [pLines/4-1:0] mem3v;
+wire hit0, hit1, hit2, hit3;
+
 integer n;
 initial begin
   for (n = 0; n < pLines/4; n = n + 1)
@@ -149,7 +151,7 @@ else begin
 		if (hit2) mem2v[adr[pMSB:5]] <= 1'b0;
 		if (hit3) mem3v[adr[pMSB:5]] <= 1'b0;
 	end
-	else if (wr) begin
+	else if (wr & ~(hit0|hit1|hit2|hit3)) begin
 		case(lfsro[1:0])
 		2'b00:	begin  mem0v[adr[pMSB:5]] <= 1'b1; end
 		2'b01:	begin  mem1v[adr[pMSB:5]] <= 1'b1; end
@@ -160,12 +162,12 @@ else begin
 end
 
 
-wire hit0 = mem0[adr[pMSB:5]]==adr[AMSB:5] & mem0v[adr[pMSB:5]];
-wire hit1 = mem1[adr[pMSB:5]]==adr[AMSB:5] & mem1v[adr[pMSB:5]];
-wire hit2 = mem2[adr[pMSB:5]]==adr[AMSB:5] & mem2v[adr[pMSB:5]];
-wire hit3 = mem3[adr[pMSB:5]]==adr[AMSB:5] & mem3v[adr[pMSB:5]];
+assign hit0 = mem0[adr[pMSB:5]]==adr[AMSB:5] & mem0v[adr[pMSB:5]];
+assign hit1 = mem1[adr[pMSB:5]]==adr[AMSB:5] & mem1v[adr[pMSB:5]];
+assign hit2 = mem2[adr[pMSB:5]]==adr[AMSB:5] & mem2v[adr[pMSB:5]];
+assign hit3 = mem3[adr[pMSB:5]]==adr[AMSB:5] & mem3v[adr[pMSB:5]];
 always @*
-  if (wr) lineno = {lfsro[1:0],adr[pMSB:5]};
+  if (wr & ~(hit0|hit1|hit2|hit3)) lineno = {lfsro[1:0],adr[pMSB:5]};
   else if (hit0)  lineno = {2'b00,adr[pMSB:5]};
   else if (hit1)  lineno = {2'b01,adr[pMSB:5]};
   else if (hit2)  lineno = {2'b10,adr[pMSB:5]};
@@ -422,6 +424,7 @@ reg [AMSB+8-5:0] mem3 [0:127];
 (* ram_style="distributed" *)
 reg [511:0] valid;
 reg [AMSB+8:0] rradr, rwadr;
+reg rwr;
 
 integer n;
 initial begin
@@ -454,14 +457,19 @@ always @(posedge clk)
 	end
 	else if (wr)
 		valid[{lfsro[1:0],wadr[11:5]}] <= 1'b1;
+// Don't update the tag (select a new line) if there's a write hit.
 always @(posedge clk)
-	if (wr)
+	if (whit0|whit1|whit2|whit3)
+		;
+	else if (rwr)
 		case(lfsro[1:0])
-		2'b00:	mem0[wadr[11:5]] <= wadr[AMSB+8:5];
-		2'b01:	mem1[wadr[11:5]] <= wadr[AMSB+8:5];
-		2'b10:	mem2[wadr[11:5]] <= wadr[AMSB+8:5];
-		2'b11:	mem3[wadr[11:5]] <= wadr[AMSB+8:5];
+		2'b00:	mem0[rwadr[11:5]] <= rwadr[AMSB+8:5];
+		2'b01:	mem1[rwadr[11:5]] <= rwadr[AMSB+8:5];
+		2'b10:	mem2[rwadr[11:5]] <= rwadr[AMSB+8:5];
+		2'b11:	mem3[rwadr[11:5]] <= rwadr[AMSB+8:5];
 		endcase
+always @(posedge clk)
+	rwr <= wr;
 always @(posedge clk)
 	rradr <= radr;
 always @(posedge clk)
@@ -476,7 +484,7 @@ assign rhit1 = mem1[rradr[11:5]]==rradr[AMSB+8:5] && valid[{2'b01,radr[11:5]}];
 assign rhit2 = mem2[rradr[11:5]]==rradr[AMSB+8:5] && valid[{2'b10,radr[11:5]}];
 assign rhit3 = mem3[rradr[11:5]]==rradr[AMSB+8:5] && valid[{2'b11,radr[11:5]}];
 always @*
-	if (wr|wr2) wlineno = {lfsro[1:0],wadr[11:5]};
+	if (rwr|wr2) wlineno = {lfsro[1:0],rwadr[11:5]};
   else if (whit0)  wlineno = {2'b00,wadr[11:5]};
   else if (whit1)  wlineno = {2'b01,wadr[11:5]};
   else if (whit2)  wlineno = {2'b10,wadr[11:5]};

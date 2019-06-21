@@ -148,6 +148,7 @@ wire [QSLOTS-1:0] slotvd;
 reg [2:0] slotu [QSLOTS-1:0];
 reg [2:0] slotup [QSLOTS-1:0];
 reg [3:0] fb_panic;
+wire [32:0] maxsn;
 
 wire [127:0] ibundle;
 wire [7:0] template [0:QSLOTS-1];
@@ -370,7 +371,7 @@ reg [`RBITS] iq_rid [0:QENTRIES-1];
 reg [QENTRIES-1:0] iq_done;
 reg [QENTRIES-1:0] iq_out;
 reg [QENTRIES-1:0] iq_agen;
-reg [2:0] iq_sn [0:QENTRIES-1];  // instruction sequence number
+reg [32:0] iq_sn [0:QENTRIES-1];  // instruction sequence number
 reg [`QBITS] iq_is [0:QENTRIES-1];	// source of instruction
 reg [QENTRIES-1:0] iq_pt;		// predict taken
 reg [QENTRIES-1:0] iq_bt;		// update branch target buffer
@@ -534,7 +535,7 @@ reg   [5:0] id3_Rt;
 reg [WID-1:0] alu0_xs = 64'd0;
 reg [WID-1:0] alu1_xs = 64'd0;
 
-reg [31:0] alu0_sn;
+reg [32:0] alu0_sn;
 reg 				alu0_cmt;
 wire				alu0_abort;
 reg        alu0_ld;
@@ -574,9 +575,9 @@ reg [`QBITS] alu1_id1;
 reg [WID-1:0] alu0_bus1;
 reg [WID-1:0] alu1_bus1;
 reg issuing_on_alu0;
-reg alu0_dne;
+reg alu0_dne = TRUE;
 
-reg [31:0] alu1_sn;
+reg [32:0] alu1_sn;
 reg 				alu1_cmt;
 wire				alu1_abort;
 reg        alu1_ld;
@@ -611,7 +612,7 @@ wire        alu1_v;
 reg alu1_v1;
 wire alu1_vsn;
 reg issuing_on_alu1;
-reg alu1_dne;
+reg alu1_dne = TRUE;
 
 wire agen0_v;
 wire agen0_vsn;
@@ -630,7 +631,7 @@ reg agen0_push;
 reg [AMSB:0] agen0_ma;
 reg [79:0] agen0_res;
 reg [79:0] agen0_argA, agen0_argB, agen0_argC, agen0_argI;
-reg agen0_dne;
+reg agen0_dne = TRUE;
 
 wire agen1_v;
 wire agen1_vsn;
@@ -649,7 +650,7 @@ reg agen1_push;
 reg [AMSB:0] agen1_ma;
 reg [79:0] agen1_res;
 reg [79:0] agen1_argA, agen1_argB, agen1_argC, agen1_argI;
-reg agen1_dne;
+reg agen1_dne = TRUE;
 
 wire [`XBITS] fpu_exc;
 reg 				fpu1_cmt;
@@ -673,7 +674,7 @@ wire  [`QBITS] fpu1_id;
 wire  [`XBITS] fpu1_exc;
 wire        fpu1_v;
 wire [31:0] fpu1_status;
-reg fpu1_dne;
+reg fpu1_dne = TRUE;
 
 reg 				fpu2_cmt;
 reg        fpu2_ld;
@@ -696,7 +697,7 @@ wire  [`QBITS] fpu2_id;
 wire  [`XBITS] fpu2_exc;
 wire        fpu2_v;
 wire [31:0] fpu2_status;
-reg fpu2_dne;
+reg fpu2_dne = TRUE;
 
 reg [7:0] fccnt;
 reg [47:0] waitctr;
@@ -740,7 +741,7 @@ reg fcu_branchhit;
 reg  fcu_clearbm;
 reg [`ABITS] fcu_missip;
 reg fcu_wait;
-reg fcu_dne;
+reg fcu_dne = TRUE;
 
 reg [WID-1:0] rmw_argA;
 reg [WID-1:0] rmw_argB;
@@ -2834,6 +2835,8 @@ end
 // instruction is store even though there's no target register.
 wire cmt_head1 = (!iq_rfw[heads[1]] && !iq_oddball[heads[1]] && ~|iq_exc[heads[1]]);
 wire cmt_head2 = (!iq_rfw[heads[2]] && !iq_oddball[heads[2]] && ~|iq_exc[heads[2]]);
+wire cmt_head1r = (!iq_rfw[rob_heads[1]] && !iq_oddball[rob_heads[1]] && ~|iq_exc[rob_heads[1]]);
+wire cmt_head2r = (!iq_rfw[rob_heads[2]] && !iq_oddball[rob_heads[2]] && ~|iq_exc[rob_heads[2]]);
 
 // Determine the head increment amount, this must match code later on.
 always @*
@@ -2862,7 +2865,7 @@ begin
 		else
 			r_amt <= 3'd0;
 	6'b0?_0?_11:
-		if (`NUM_CMT > 2 || cmt_head2)
+		if (`NUM_CMT > 2 || cmt_head2r)
 			r_amt <= 3'd3;
 		else
 			r_amt <= 3'd2;
@@ -2874,14 +2877,14 @@ begin
 	// retire 2
 	6'b0?_11_0?,
 	6'b0?_11_10:
-    if (`NUM_CMT > 1 || cmt_head1)
+    if (`NUM_CMT > 1 || cmt_head1r)
 			r_amt <= 3'd2;	
     else
 			r_amt <= 3'd1;
   6'b0?_11_11:
-    if (`NUM_CMT > 2 || (`NUM_CMT > 1 && cmt_head2))
+    if (`NUM_CMT > 2 || (`NUM_CMT > 1 && cmt_head2r))
 			r_amt <= 3'd3;
-  	else if (`NUM_CMT > 1 || cmt_head1)
+  	else if (`NUM_CMT > 1 || cmt_head1r)
 			r_amt <= 3'd2;
   	else
 			r_amt <= 3'd1;
@@ -2900,7 +2903,7 @@ begin
 			r_amt <= 3'd1;
   6'b11_0?_11:
   	if (rob_heads[1] != rob_tails[0] && rob_tgt2[rob_heads[1]][5:0] == 6'd0) begin
-  		if (`NUM_CMT > 2 || cmt_head2)
+  		if (`NUM_CMT > 2 || cmt_head2r)
 				r_amt <= 3'd3;
   		else
 				r_amt <= 3'd2;
@@ -2914,19 +2917,19 @@ begin
 			r_amt <= 3'd3;
   	else if (cmt_head1 && rob_heads[2] != rob_tails[0] && rob_tgt2[rob_heads[1]][5:0] == 6'd0)
 			r_amt <= 3'd3;
-		else if ((`NUM_CMT > 1 || cmt_head1) && rob_tgt2[rob_heads[1]][5:0] == 6'd0)
+		else if ((`NUM_CMT > 1 || cmt_head1r) && rob_tgt2[rob_heads[1]][5:0] == 6'd0)
 			r_amt <= 3'd2;
   	else
 			r_amt <= 3'd1;
   6'b11_11_10:
-		if ((`NUM_CMT > 1 || cmt_head1) && rob_tgt2[rob_heads[1]][5:0] == 6'd0)
+		if ((`NUM_CMT > 1 || cmt_head1r) && rob_tgt2[rob_heads[1]][5:0] == 6'd0)
 			r_amt <= 3'd2;
   	else
 			r_amt <= 3'd1;
 	6'b11_11_11:
-		if ((`NUM_CMT > 2 || (`NUM_CMT > 1 && cmt_head2)) && rob_tgt2[rob_heads[1]][5:0] == 6'd0)
+		if ((`NUM_CMT > 2 || (`NUM_CMT > 1 && cmt_head2r)) && rob_tgt2[rob_heads[1]][5:0] == 6'd0)
 			r_amt <= 3'd3;
-		else if ((`NUM_CMT > 1 || cmt_head1) && rob_tgt2[rob_heads[1]][5:0] == 6'd0)
+		else if ((`NUM_CMT > 1 || cmt_head1r) && rob_tgt2[rob_heads[1]][5:0] == 6'd0)
 			r_amt <= 3'd2;
 		else
 			r_amt <= 3'd1;
@@ -3489,6 +3492,7 @@ begin
     end
 end
 
+/*
 always @*
 begin
 	iq_stomp <= 1'b0;
@@ -3498,12 +3502,23 @@ begin
 		for (n = 0; n < QENTRIES; n = n + 1) begin
 			if (iq_v[k]) begin
 				if (iq_br_tag[k]==br_tag[j]) begin
-					iq_stomp[k] <= `TRUE;
+					iq_stomp[k] = `TRUE;
 					if (is_qbranch[k])
 						j = k;
 				end
 			end
 			k = (k + 1) % QENTRIES;
+		end
+	end
+end
+*/
+always @*
+begin
+	iq_stomp = 1'b0;
+	if (branchmiss) begin
+		for (n = 0; n < QENTRIES; n = n + 1) begin
+			if (iq_sn[n] > iq_sn[missid])
+				iq_stomp[n] = TRUE;
 		end
 	end
 end
@@ -3534,12 +3549,6 @@ idecoder uid1
 end
 end
 endgenerate
-
-always @*
-begin
-	for (n = 0; n < QENTRIES; n = n + 1)
-		check_done(n);
-end
 
 //
 // EXECUTE
@@ -4672,38 +4681,38 @@ else begin
 		case(slotvd)
 		3'b001:
 			if (queuedOnp[0])
-				queue_slot(0,tails[0],3'h0,id_bus[0],active_tag,rob_tails[0]);
+				queue_slot(0,rob_tails[0],{tick[29:0],3'h0},id_bus[0],active_tag,rob_tails[0]);
 		3'b010:
 			if (queuedOnp[1])
-				queue_slot(1,tails[0],3'h0,id_bus[1],active_tag,rob_tails[0]);
+				queue_slot(1,rob_tails[0],{tick[29:0],3'h0},id_bus[1],active_tag,rob_tails[0]);
 		3'b011:
 			if (queuedOnp[0]) begin
-				queue_slot(0,tails[0],3'h0,id_bus[0],active_tag,rob_tails[0]);
+				queue_slot(0,rob_tails[0],{tick[29:0],3'h0},id_bus[0],active_tag,rob_tails[0]);
 				if (queuedOnp[1]) begin
-					queue_slot(1,tails[1],3'h1,id_bus[1],is_branch[0] ? active_tag+2'd1 : active_tag,rob_tails[1]);
+					queue_slot(1,rob_tails[1],{tick[29:0],3'h1},id_bus[1],is_branch[0] ? active_tag+2'd1 : active_tag,rob_tails[1]);
 					arg_vs(3'b011);
 				end
 			end
 		3'b100:
 			if (queuedOnp[2])
-				queue_slot(2,tails[0],3'h0,id_bus[2],active_tag,rob_tails[0]);
+				queue_slot(2,rob_tails[0],{tick[29:0],3'h0},id_bus[2],active_tag,rob_tails[0]);
 		3'b101:	;	// illegal
 		3'b110:
 			if (queuedOnp[1]) begin
-				queue_slot(1,tails[0],3'h0,id_bus[1],active_tag,rob_tails[0]);
+				queue_slot(1,rob_tails[0],{tick[29:0],3'h0},id_bus[1],active_tag,rob_tails[0]);
 				if (queuedOnp[2]) begin
-					queue_slot(2,tails[1],3'h1,id_bus[2],is_branch[1] ? active_tag + 2'd1 : active_tag,rob_tails[1]);
+					queue_slot(2,rob_tails[1],{tick[29:0],3'h1},id_bus[2],is_branch[1] ? active_tag + 2'd1 : active_tag,rob_tails[1]);
 					arg_vs(3'b110);
 				end
 			end
 		3'b111:
 			if (queuedOnp[0]) begin
-				queue_slot(0,tails[0],3'h0,id_bus[0],active_tag,rob_tails[0]);
+				queue_slot(0,rob_tails[0],{tick[29:0],3'h0},id_bus[0],active_tag,rob_tails[0]);
 				if (queuedOnp[1]) begin
-					queue_slot(1,tails[1],3'h1,id_bus[1],is_branch[0] ? active_tag + 2'd1 : active_tag,rob_tails[1]);
+					queue_slot(1,rob_tails[1],{tick[29:0],3'h1},id_bus[1],is_branch[0] ? active_tag + 2'd1 : active_tag,rob_tails[1]);
 					arg_vs(3'b011);
 					if (queuedOnp[2]) begin
-						queue_slot(2,tails[2],3'h2,id_bus[2],
+						queue_slot(2,rob_tails[2],{tick[29:0],3'h2},id_bus[2],
 							is_branch[0] && is_branch[1] ? active_tag + 2'd2 :
 							is_branch[0] ? active_tag + 2'd1 : is_branch[1] ? active_tag + 2'd1 : active_tag,rob_tails[2]);
 						arg_vs(3'b111);
@@ -4712,13 +4721,21 @@ else begin
 			end
 		default:	;
 		endcase
-		if (queuedOnp[0])
+		if (queuedOnp[0]) begin
 			br_tag[tails[0]] <= active_tag + is_branch[0];
-		if (queuedOnp[1])
+			iq_br_tag[tails[0]] <= active_tag;
+		end
+		if (queuedOnp[1]) begin
 			br_tag[tails[1]] <= active_tag + (queuedOnp[0] & is_branch[0]) + is_branch[1];
-		if (queuedOnp[2])
+			iq_br_tag[tails[1]] <= active_tag + (queuedOnp[0] & is_branch[0]);
+		end
+		if (queuedOnp[2]) begin
 			br_tag[tails[2]] <= active_tag + (queuedOnp[0] & is_branch[0]) + (queuedOnp[1] & is_branch[1]) + is_branch[2];
-		active_tag <= active_tag + (queuedOnp[0] & is_branch[0]) + (queuedOnp[1] & is_branch[1]) + (queuedOnp[2] & is_branch[2]);
+			iq_br_tag[tails[2]] <= active_tag + (queuedOnp[0] & is_branch[0]) + (queuedOnp[1] & is_branch[1]);
+		end
+		active_tag <= active_tag + (queuedOnp[0] & is_branch[0])
+														+ (queuedOnp[1] & is_branch[1])
+														+ (queuedOnp[2] & is_branch[2]);
 	end
 	
 //
@@ -4740,7 +4757,7 @@ if (IsMul(`IUnit,alu0_instr)|IsDivmod(`IUnit,alu0_instr)|alu0_shft|alu0_tlb) beg
 	end
 end
 
-if (alu0_dataready) begin
+if (alu0_v) begin
 	rob_tgt [ alu0_rid ] <= alu0_tgt;
 	rob_tgt2 [ alu0_rid ] <= alu0_tgt2;
 	rob_res	[ alu0_rid ] <= {ralu0_bus,4'd0};
@@ -4767,7 +4784,7 @@ if (IsMul(`IUnit,alu1_instr)|IsDivmod(`IUnit,alu1_instr)|alu1_shft) begin
 	end
 end
 
-if (alu1_dataready && `NUM_ALU > 1) begin
+if (alu1_v && `NUM_ALU > 1) begin
 	rob_tgt [ alu1_rid ] <= alu1_tgt;
 	rob_tgt2 [ alu1_rid ] <= alu1_tgt2;
 	rob_res	[ alu1_rid ] <= {ralu1_bus,4'd0};
@@ -4926,30 +4943,30 @@ end
 
 for (n = 0; n < QENTRIES; n = n + 1)
 begin
-	setargs(n,commit0_id,commit0_v,commit0_bus);
+	setargs(n,commit0_id,commit0_v,commit0_bus, commit0_bus);
 	if (`NUM_CMT > 1)
-		setargs(n,commit1_id,commit1_v,commit1_bus);
+		setargs(n,commit1_id,commit1_v,commit1_bus, commit1_bus);
 	if (`NUM_CMT > 2)
-		setargs(n,commit2_id,commit2_v,commit2_bus);
+		setargs(n,commit2_id,commit2_v,commit2_bus, commit2_bus);
 
 	if (`NUM_FPU > 0)
-		setargs(n,fpu1_rid,fpu1_v,rfpu1_bus);
+		setargs(n,fpu1_rid,fpu1_v,rfpu1_bus, rfpu1_bus);
 	if (`NUM_FPU > 1)
-		setargs(n,fpu2_rid,fpu2_v,rfpu2_bus);
+		setargs(n,fpu2_rid,fpu2_v,rfpu2_bus, rfpu2_bus);
 
-	setargs(n,alu0_rid,alu0_done & alu0_dne,{ralu0_bus,4'd0});
+	setargs(n,alu0_rid,alu0_v,{ralu0_bus,4'd0}, {ralu0_bus,4'd0});
 	if (`NUM_ALU > 1)
-		setargs(n,alu1_rid,alu1_done & alu1_dne,{ralu1_bus,4'd0});
+		setargs(n,alu1_rid,alu1_v,{ralu1_bus,4'd0}, {ralu1_bus,4'd0});
 
-	setargs(n,agen0_rid,agen0_v & (agen0_push|agen0_lea),{agen0_ma,4'd0});
+	setargs(n,agen0_rid,agen0_v & (agen0_push|agen0_lea),{agen0_ma,4'd0}, {agen0_res,4'd0});
 	if (`NUM_AGEN > 1)
-		setargs(n,agen1_rid,agen1_v & (agen1_push|agen1_lea),{agen1_ma,4'd0});
+		setargs(n,agen1_rid,agen1_v & (agen1_push|agen1_lea),{agen1_ma,4'd0}, {agen1_res,4'd0});
 
-	setargs(n,fcu_rid,fcu_v,{rfcu_bus,4'd0});
+	setargs(n,fcu_rid,fcu_v,{rfcu_bus,4'd0}, {rfcu_bus,4'd0});
 
-	setargs(n,dramA_rid,dramA_v,{rdramA_bus,4'd0});
+	setargs(n,dramA_rid,dramA_v,{rdramA_bus,4'd0},{rdramA_bus,4'd0});
 	if (`NUM_MEM > 1)
-		setargs(n,dramB_rid,dramB_v,{rdramB_bus,4'd0});
+		setargs(n,dramB_rid,dramB_v,{rdramB_bus,4'd0}, {rdramB_bus,4'd0});
 end
 
 // X's on unused busses cause problems in SIM.
@@ -4959,6 +4976,19 @@ end
 					iq_fuid[n] <= 3'd0;
 					alu0_sn <= iq_sn[n];
 					alu0_sourceid	<= n[`QBITS];
+					check_done(n[`QBITS]);
+					if (alu1_rid==n[`QBITS] && !issuing_on_alu1)
+						alu1_rid <= {`QBIT{1'b1}};
+					if (fpu1_rid==n[`QBITS] && !issuing_on_fpu1)
+						fpu1_rid <= {`QBIT{1'b1}};
+					if (fpu2_rid==n[`QBITS] && !issuing_on_fpu2)
+						fpu2_rid <= {`QBIT{1'b1}};
+					if (agen0_rid==n[`QBITS] && !issuing_on_agen0)
+						agen0_rid <= {`QBIT{1'b1}};
+					if (agen1_rid==n[`QBITS] && !issuing_on_agen1)
+						agen1_rid <= {`QBIT{1'b1}};
+					if (fcu_rid==n[`QBITS] && !issuing_on_fcu)
+						fcu_rid <= {`QBIT{1'b1}};
 					// The following line is a hack. The alu is done (tested above) so it
 					// should be setting the state to CMT.
 //					if (iq_state[alu0_id]==IQS_OUT)
@@ -5047,6 +5077,19 @@ end
 								iq_fuid[n] <= 3'd1;
             		 alu1_sn <= iq_sn[n];
                  alu1_sourceid	<= n[`QBITS];
+								check_done(n[`QBITS]);
+					if (alu0_rid==n[`QBITS] && !issuing_on_alu0)
+						alu0_rid <= {`QBIT{1'b1}};
+					if (fpu1_rid==n[`QBITS] && !issuing_on_fpu1)
+						fpu1_rid <= {`QBIT{1'b1}};
+					if (fpu2_rid==n[`QBITS] && !issuing_on_fpu2)
+						fpu2_rid <= {`QBIT{1'b1}};
+					if (agen0_rid==n[`QBITS] && !issuing_on_agen0)
+						agen0_rid <= {`QBIT{1'b1}};
+					if (agen1_rid==n[`QBITS] && !issuing_on_agen1)
+						agen1_rid <= {`QBIT{1'b1}};
+					if (fcu_rid==n[`QBITS] && !issuing_on_fcu)
+						fcu_rid <= {`QBIT{1'b1}};
 								// The following line is a hack. The alu is done (tested above) so it
 								// should be setting the state to CMT.
 	//							if (iq_state[alu1_id]==IQS_OUT)
@@ -5122,6 +5165,19 @@ end
 							iq_fuid[n] <= 3'd2;
             		agen0_sn <= iq_sn[n];
                  agen0_sourceid	<= n[`QBITS];
+								check_done(n[`QBITS]);
+					if (alu0_rid==n[`QBITS] && !issuing_on_alu0)
+						alu0_rid <= {`QBIT{1'b1}};
+					if (alu1_rid==n[`QBITS] && !issuing_on_alu1)
+						alu1_rid <= {`QBIT{1'b1}};
+					if (fpu1_rid==n[`QBITS] && !issuing_on_fpu1)
+						fpu1_rid <= {`QBIT{1'b1}};
+					if (fpu2_rid==n[`QBITS] && !issuing_on_fpu2)
+						fpu2_rid <= {`QBIT{1'b1}};
+					if (agen1_rid==n[`QBITS] && !issuing_on_agen1)
+						agen1_rid <= {`QBIT{1'b1}};
+					if (fcu_rid==n[`QBITS] && !issuing_on_fcu)
+						fcu_rid <= {`QBIT{1'b1}};
                  agen0_rid <= iq_rid[n];
                  agen0_unit <= iq_unit[n];
                  agen0_instr	<= iq_instr[n];
@@ -5171,6 +5227,19 @@ end
 							iq_fuid[n] <= 3'd3;
             		agen1_sn <= iq_sn[n];
                  agen1_sourceid	<= n[`QBITS];
+								check_done(n[`QBITS]);
+					if (alu0_rid==n[`QBITS] && !issuing_on_alu0)
+						alu0_rid <= {`QBIT{1'b1}};
+					if (alu1_rid==n[`QBITS] && !issuing_on_alu1)
+						alu1_rid <= {`QBIT{1'b1}};
+					if (fpu1_rid==n[`QBITS] && !issuing_on_fpu1)
+						fpu1_rid <= {`QBIT{1'b1}};
+					if (fpu2_rid==n[`QBITS] && !issuing_on_fpu2)
+						fpu2_rid <= {`QBIT{1'b1}};
+					if (agen0_rid==n[`QBITS] && !issuing_on_agen0)
+						agen0_rid <= {`QBIT{1'b1}};
+					if (fcu_rid==n[`QBITS] && !issuing_on_fcu)
+						fcu_rid <= {`QBIT{1'b1}};
                  agen1_rid <= iq_rid[n];
                  agen1_unit <= iq_unit[n];
                  agen1_instr	<= iq_instr[n];
@@ -5220,6 +5289,19 @@ end
             if (fpu1_available & fpu1_done) begin
 								iq_fuid[n] <= 3'd4;
                  fpu1_sourceid	<= n[`QBITS];
+								check_done(n[`QBITS]);
+					if (alu0_rid==n[`QBITS] && !issuing_on_alu0)
+						alu0_rid <= {`QBIT{1'b1}};
+					if (alu1_rid==n[`QBITS] && !issuing_on_alu1)
+						alu1_rid <= {`QBIT{1'b1}};
+					if (fpu2_rid==n[`QBITS] && !issuing_on_fpu2)
+						fpu2_rid <= {`QBIT{1'b1}};
+					if (agen0_rid==n[`QBITS] && !issuing_on_agen0)
+						agen0_rid <= {`QBIT{1'b1}};
+					if (agen1_rid==n[`QBITS] && !issuing_on_agen1)
+						agen1_rid <= {`QBIT{1'b1}};
+					if (fcu_rid==n[`QBITS] && !issuing_on_fcu)
+						fcu_rid <= {`QBIT{1'b1}};
                  fpu1_rid <= iq_rid[n];
                  fpu1_instr	<= iq_instr[n];
                  fpu1_ip		<= iq_ip[n];
@@ -5284,6 +5366,19 @@ end
             if (fpu2_available & fpu2_done) begin
 							iq_fuid[n] <= 3'd5;
                  fpu2_sourceid	<= n[`QBITS];
+								check_done(n[`QBITS]);
+					if (alu0_rid==n[`QBITS] && !issuing_on_alu0)
+						alu0_rid <= {`QBIT{1'b1}};
+					if (alu1_rid==n[`QBITS] && !issuing_on_alu1)
+						alu1_rid <= {`QBIT{1'b1}};
+					if (fpu1_rid==n[`QBITS] && !issuing_on_fpu1)
+						fpu1_rid <= {`QBIT{1'b1}};
+					if (agen0_rid==n[`QBITS] && !issuing_on_agen0)
+						agen0_rid <= {`QBIT{1'b1}};
+					if (agen1_rid==n[`QBITS] && !issuing_on_agen1)
+						agen1_rid <= {`QBIT{1'b1}};
+					if (fcu_rid==n[`QBITS] && !issuing_on_fcu)
+						fcu_rid <= {`QBIT{1'b1}};
                  fpu2_rid <= iq_rid[n];
                  fpu2_instr	<= iq_instr[n];
                  fpu2_ip		<= iq_ip[n];
@@ -5347,7 +5442,20 @@ end
       if (fcu_done) begin
 					iq_fuid[n] <= 3'd6;
 				fcu_sourceid	<= n[`QBITS];
+				check_done(n[`QBITS]);
         fcu_rid <= iq_rid[n];
+					if (alu0_rid==n[`QBITS] && !issuing_on_alu0)
+						alu0_rid <= {`QBIT{1'b1}};
+					if (alu1_rid==n[`QBITS] && !issuing_on_alu1)
+						alu1_rid <= {`QBIT{1'b1}};
+					if (fpu1_rid==n[`QBITS] && !issuing_on_fpu1)
+						fpu1_rid <= {`QBIT{1'b1}};
+					if (fpu2_rid==n[`QBITS] && !issuing_on_fpu2)
+						fpu2_rid <= {`QBIT{1'b1}};
+					if (agen0_rid==n[`QBITS] && !issuing_on_agen0)
+						agen0_rid <= {`QBIT{1'b1}};
+					if (agen1_rid==n[`QBITS] && !issuing_on_agen1)
+						agen1_rid <= {`QBIT{1'b1}};
 				fcu_prevInstr <= fcu_instr;
 				fcu_instr	<= iq_instr[n];
 				fcu_ip		<= iq_ip[n];
@@ -5441,6 +5549,7 @@ end
 				fcu_done <= `FALSE;
       end
     end
+    
 //
 // MEMORY
 //
@@ -6119,10 +6228,10 @@ endcase
 	$display("Call Stack:");
 	for (n = 0; n < 16; n = n + 4)
 		$display("%c%d: %h   %c%d: %h   %c%d: %h   %c%d: %h",
-			gFetchbufInst.gb1.ufb1.ursb1.rasp==n+0 ?">" : " ", n[4:0]+0, gFetchbufInst.gb1.ufb1.ursb1.ras[n+0],
-			gFetchbufInst.gb1.ufb1.ursb1.rasp==n+1 ?">" : " ", n[4:0]+1, gFetchbufInst.gb1.ufb1.ursb1.ras[n+1],
-			gFetchbufInst.gb1.ufb1.ursb1.rasp==n+2 ?">" : " ", n[4:0]+2, gFetchbufInst.gb1.ufb1.ursb1.ras[n+2],
-			gFetchbufInst.gb1.ufb1.ursb1.rasp==n+3 ?">" : " ", n[4:0]+3, gFetchbufInst.gb1.ufb1.ursb1.ras[n+3]
+			ursb1.rasp==n+0 ?">" : " ", n[4:0]+0, ursb1.ras[n+0],
+			ursb1.rasp==n+1 ?">" : " ", n[4:0]+1, ursb1.ras[n+1],
+			ursb1.rasp==n+2 ?">" : " ", n[4:0]+2, ursb1.ras[n+2],
+			ursb1.rasp==n+3 ?">" : " ", n[4:0]+3, ursb1.ras[n+3]
 		);
 	$display("\n");
 `endif
@@ -6133,7 +6242,7 @@ endcase
 	$display("Insn%d: %h", 0, insnx[0]);
 	$display ("------------------------------------------------------------------------ Dispatch Buffer -----------------------------------------------------------------------");
 	for (i=0; i<QENTRIES; i=i+1) 
-	    $display("%c%c %d: %c%c%c %d %d %c%c %c %c%h %d %h %h %d %d %o %h %d %d %o %h %d %d %o %h %o %h#",
+	    $display("%c%c %d: %c%c%c %d %d %c%c %c %c%h %d %h %h %d %d %d %h %d %d %d %h %d %d %d %h %o %h#",
 		 (i[`QBITS]==heads[0])?"C":".",
 		 (i[`QBITS]==tails[0])?"Q":".",
 		  i[`QBITS],
@@ -6264,27 +6373,22 @@ endtask
 task check_done;
 input [`QBITS] id;
 begin
-	alu0_dne = TRUE;
-	alu1_dne = TRUE;
-	agen0_dne = TRUE;
-	agen1_dne = TRUE;
-	fpu1_dne = TRUE;
-	fpu2_dne = TRUE;
-	fcu_dne = TRUE;
+/*
 	if (id==alu0_id && !issuing_on_alu0)
-		alu0_dne = FALSE;
-	if (n==alu1_id && !issuing_on_alu1)
-		alu1_dne = FALSE;
+		alu0_dataready = FALSE;
+	if (id==alu1_id && !issuing_on_alu1)
+		alu1_dataready = FALSE;
 	if (n==agen0_id && !issuing_on_agen0)
-		agen0_dne = FALSE;
+		agen0_dataready = FALSE;
 	if (id==agen1_id && !issuing_on_agen1)
-		agen1_dne = FALSE;
+		agen1_dataready = FALSE;
 	if (id==fpu1_id && !issuing_on_fpu1)
-		fpu1_dne = FALSE;
+		fpu1_dataready = FALSE;
 	if (id==fpu2_id && !issuing_on_fpu2)
-		fpu2_dne = FALSE;
+		fpu2_dataready = FALSE;
 	if (id==fcu_id && !issuing_on_fcu)
-		fcu_dne = FALSE;
+		fcu_dataready = FALSE;
+*/
 end
 endtask
 
@@ -6307,7 +6411,6 @@ begin
 				iq_fc[heads[n]] <= `FALSE;
 				iq_agen[heads[n]] <= `FALSE;
 				iq_fpu[heads[n]] <= `FALSE;
-				rob_state[iq_rid[heads[n]]] <= RS_INVALID;
 //				if (alu0_id==heads[n] && iq_state[alu0_id]==IQS_CMT
 //					&& !issuing_on_alu0)
 //					alu0_dataready <= `FALSE;
@@ -6332,6 +6435,7 @@ begin
 //					rob_state[rob_heads[n]] <= RS_INVALID;
 					//iq_state[rob_id[rob_heads[n]]] <= IQS_INVALID;
 					$display("rob_head_inc: IQS_INVALID[%d]",rob_id[rob_heads[n]]);
+				rob_state[rob_heads[n]] <= RS_INVALID;
 			end
 		end
 	CC <= CC + amt;
@@ -6343,17 +6447,30 @@ input [`QBITS] nn;
 input [`RBITS] id;
 input v;
 input [WID+3:0] bus;
+input [WID+3:0] bus2;
 begin
-  if (iq_argA_v[nn] == `INV && iq_argA_s[nn] == id && iq_v[nn] == `VAL && v == `VAL) begin
+  if (iq_argA_v[nn] == `INV && iq_argA_s[nn][`RBITS] == id && iq_argA_s[nn][`RBIT]==1'b0 && iq_v[nn] == `VAL && v == `VAL) begin
 		iq_argA[nn] <= bus;
 		iq_argA_v[nn] <= `VAL;
   end
-  if (iq_argB_v[nn] == `INV && iq_argB_s[nn] == id && iq_v[nn] == `VAL && v == `VAL) begin
+  if (iq_argB_v[nn] == `INV && iq_argB_s[nn][`RBITS] == id  && iq_argB_s[nn][`RBIT]==1'b0 && iq_v[nn] == `VAL && v == `VAL) begin
 		iq_argB[nn] <= bus;
 		iq_argB_v[nn] <= `VAL;
   end
-  if (iq_argC_v[nn] == `INV && iq_argC_s[nn] == id && iq_v[nn] == `VAL && v == `VAL) begin
+  if (iq_argC_v[nn] == `INV && iq_argC_s[nn][`RBITS] == id  && iq_argC_s[nn][`RBIT]==1'b0 && iq_v[nn] == `VAL && v == `VAL) begin
 		iq_argC[nn] <= bus;
+		iq_argC_v[nn] <= `VAL;
+  end
+  if (iq_argA_v[nn] == `INV && iq_argA_s[nn][`RBITS] == id && iq_argA_s[nn][`RBIT]==1'b1 && iq_v[nn] == `VAL && v == `VAL) begin
+		iq_argA[nn] <= bus2;
+		iq_argA_v[nn] <= `VAL;
+  end
+  if (iq_argB_v[nn] == `INV && iq_argB_s[nn][`RBITS] == id  && iq_argB_s[nn][`RBIT]==1'b1 && iq_v[nn] == `VAL && v == `VAL) begin
+		iq_argB[nn] <= bus2;
+		iq_argB_v[nn] <= `VAL;
+  end
+  if (iq_argC_v[nn] == `INV && iq_argC_s[nn][`RBITS] == id  && iq_argC_s[nn][`RBIT]==1'b1 && iq_v[nn] == `VAL && v == `VAL) begin
+		iq_argC[nn] <= bus2;
 		iq_argC_v[nn] <= `VAL;
   end
 end
@@ -6485,7 +6602,7 @@ endtask
 task queue_slot;
 input [2:0] slot;
 input [`QBITS] ndx;
-input [2:0] seqnum;
+input [32:0] seqnum;
 input [`IBTOP:0] id_bus;
 input [`QBITS] btag;
 input [`RBITS] rid;

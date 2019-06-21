@@ -40,13 +40,16 @@
 `define ABITS			`AMSB:0
 
 
+// Queue size should not be an even power of two!
+// Don't use 4,8,16,32,64 etc. As a value of all ones for the qid and rid
+// is used to indicate and invalid value.
 // If set greater than 10, then memory instructions won't
 // issue until they are within 10 of the head of the queue.
-`define QENTRIES	7		// (4 to 16)	// number of entries in dispatch queue
+`define QENTRIES	5		// (3 to 15)	// number of entries in dispatch queue
 // The number of entries in the re-order buffer should not be greater than
 // the number of entries in the dispatch buffer or some of them will sit
 // empty all the time.
-`define RENTRIES	7		// number of entries in re-order buffer
+`define RENTRIES	`QENTRIES		// number of entries in re-order buffer
 
 // bitfield representing a queue entry index. The field must be large
 // enough to accomodate a queue entry number, determined by the number
@@ -94,18 +97,18 @@
 // register file, the number of ports on the instruction cache, and how
 // many entries are contained in the fetch buffers. It also indirectly
 // affects how many instructions are queued.
-`define WAYS			3				// number of ways parallel (1-3)
+`define WAYS			1				// number of ways parallel (1-3)
 `define NUM_IDU		3				// number of instruction decode units (3 only)
-`define NUM_ALU		2				// number of ALU's (1-2)
-`define NUM_AGEN	2				// number of address generators (1-2)
-`define NUM_MEM		2				// number of memory queues (1-2)
-`define NUM_FPU		2				// number of floating-point units (0-2)
+`define NUM_ALU		1				// number of ALU's (1-2)
+`define NUM_AGEN	1				// number of address generators (1-2)
+`define NUM_MEM		1				// number of memory queues (1-2)
+`define NUM_FPU		1				// number of floating-point units (0-2)
 // Note that even with just a single commit bus, multiple instructions may
 // commit if they do not target any registers. Up to three instruction may
 // commit even with just a single bus.
-`define NUM_CMT		2				// number of commit busses (1-3)
+`define NUM_CMT		1				// number of commit busses (1-3)
 // Comment out the following to remove FCU enhancements (branch predictor, BTB, RSB)
-//`define FCU_ENH		1
+`define FCU_ENH		1
 // Comment out the following to remove bypassing logic on the functional units
 `define FU_BYPASS	1
 
