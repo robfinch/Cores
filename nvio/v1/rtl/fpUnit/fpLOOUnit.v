@@ -30,6 +30,8 @@
 //
 // ============================================================================
 
+`include "fpConfig.sv"
+
 `define FLT1   	4'h1
 `define FLT2		4'h2
 `define FTOI    5'h02
@@ -45,16 +47,16 @@ module fpLOOUnit
 	input [3:0] op4,
 	input [4:0] func5,
 	input [2:0] rm,
-	input [WID-1:0] a,
-	input [WID-1:0] b,
-	output reg [WID-1:0] o,
+	input [WID-1+`EXTRA_BITS:0] a,
+	input [WID-1+`EXTRA_BITS:0] b,
+	output reg [WID-1+`EXTRA_BITS:0] o,
 	output done
 );
 `include "fpSize.sv"
 
 wire [WID-1:0] i2f_o;
-wire [WID-1:0] f2i_o;
-wire [WID-1:0] trunc_o;
+wire [WID-1+`EXTRA_BITS:0] f2i_o;
+wire [WID-1+`EXTRA_BITS:0] trunc_o;
 wire [WID-1:0] nxtaft_o;
 
 delay1 u1 (
@@ -62,23 +64,23 @@ delay1 u1 (
     .ce(ce),
     .i((op4==`FLT1 && (func5==`ITOF||func5==`FTOI||func5==`TRUNC))||(op4==`FLT2 && (func5==`NXTAFT))),
     .o(done) );
-i2f #(WID-4)  ui2fs (.clk(clk), .ce(ce), .rm(rm), .i(a[WID-1:4]), .o(i2f_o) );
-f2i #(WID-4)  uf2is (.clk(clk), .ce(ce), .i(a[WID-1:4]), .o(f2i_o) );
-fpTrunc #(WID) urho1 (.clk(clk), .ce(ce), .i(a), .o(trunc_o), .overflow());
-fpNextAfter #(WID-4) una1 (.clk(clk), .ce(ce), .a(a[WID-1:4]), .b(b[WID-1:4]), .o(nxtaft_o));
+i2f #(WID)  ui2fs (.clk(clk), .ce(ce), .rm(rm), .i(a[WID-1+`EXTRA_BITS:`EXTRA_BITS]), .o(i2f_o) );
+f2i #(WID)  uf2is (.clk(clk), .ce(ce), .i(a), .o(f2i_o) );
+fpTrunc #(WID+`EXTRA_BITS) urho1 (.clk(clk), .ce(ce), .i(a), .o(trunc_o), .overflow());
+fpNextAfter #(WID) una1 (.clk(clk), .ce(ce), .a(a[WID-1+`EXTRA_BITS:`EXTRA_BITS]), .b(b[WID-1+`EXTRA_BITS:`EXTRA_BITS]), .o(nxtaft_o));
 
 always @*
 	case (op4)
 	`FLT1:
 		case(func5)
-		`ITOF:   o <= {i2f_o,4'h0};
-		`FTOI:   o <= {f2i_o,4'h0};
+		`ITOF:   o <= {i2f_o,{`EXTRA_BITS{1'b0}}};
+		`FTOI:   o <= {f2i_o[MSB-`EXTRA_BITS:0],{`EXTRA_BITS{1'b0}}};
 		`TRUNC:	 o <= trunc_o;
 		default: o <= 0;
 		endcase
 	`FLT2:
 		case(func5)
-		`NXTAFT:	o <= {nxtaft_o,4'h0};
+		`NXTAFT:	o <= {nxtaft_o,{`EXTRA_BITS{1'b0}}};
 		default: o <= 0;
 		endcase
 	default:   o <= 0;

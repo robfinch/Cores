@@ -27,44 +27,107 @@
 `define TRUE    1'b1
 `define FALSE   1'b0
 
+//`define SIM			1'b1
+
 // -----------------------------------------------------------------------------
-// Small, 64 line cache memory (2kiB) made from distributed RAM. Access is
+// Small, 128 line cache memory (4kiB) made from distributed RAM. Access is
 // within a single clock cycle.
 // -----------------------------------------------------------------------------
 
 module L1_dcache_mem(clk, wr, sel, lineno, i, o);
 parameter pLines = 128;
-parameter pLineWidth = 331;
-localparam pLNMSB = pLines==128 ? 6 : 5;
+parameter pLineWidth = 336;
+localparam pLNMSB = $clog2(pLines)-1;
 input clk;
 input wr;
-input [40:0] sel;
+input [41:0] sel;
 input [pLNMSB:0] lineno;
 input [pLineWidth-1:0] i;
 output [pLineWidth-1:0] o;
 
 integer n;
 
+`ifdef XILINX_SIMULATOR
 (* ram_style="distributed" *)
 reg [pLineWidth-1:0] mem [0:pLines-1];
 
 initial begin
 	for (n = 0; n < pLines; n = n + 1)
-		mem[n] <= {pLineWidth{1'b0}};
+		mem[n] = {pLineWidth{1'b0}};
 end
 
 genvar v;
 
 generate begin : mupd
-for (v = 0; v < 41; v = v + 1)
+for (v = 0; v < 42; v = v + 1)
 begin : mw
-always  @(posedge clk)
+always @(posedge clk)
 	if (wr & sel[v])  mem[lineno][v*8+7:v*8] <= i[v*8+7:v*8];
 end
 end
 endgenerate
 
 assign o = mem[lineno];
+
+`else
+
+genvar g;
+
+generate begin : mem2
+for (g = 0; g < 42; g = g + 1) begin
+// 128 lines (32 x 4 way)
+L1_dcache_mem2 u1
+(
+  .a(lineno),
+  .d(i[g*8+7:g*8]),
+  .clk(clk),
+  .we(wr & sel[g]),
+  .spo(o[g*8+7:g*8])
+);
+end
+end
+endgenerate
+
+`endif
+
+endmodule
+
+// -----------------------------------------------------------------------------
+//
+// -----------------------------------------------------------------------------
+
+module L1_dcache_tagram(clk, wr, lineno, i, o);
+parameter pLines = 32;
+parameter AMSB = 79;
+localparam pLNMSB = $clog2(pLines)-1;
+input clk;
+input wr;
+input [pLNMSB:0] lineno;
+input [AMSB-5:0] i;
+output [AMSB-5:0] o;
+
+`ifdef XILINX_SIMULATOR
+integer n;
+(* ram_style="distributed" *)
+reg [AMSB-5:0] mem [0:pLines-1];
+initial begin
+	for (n = 0; n < pLines; n = n + 1)
+		mem[n] = 1'd0;
+end
+
+always @(posedge clk)
+	if (wr) mem [lineno] <= i;
+assign o = mem[lineno];
+`else
+L1_dcache_tagram2 u1
+(
+  .a(lineno),
+  .d(i),
+  .clk(clk),
+  .we(wr),
+  .spo(o)
+);
+`endif
 
 endmodule
 
@@ -75,8 +138,8 @@ endmodule
 module L1_dcache_cmptag4way(rst, clk, nxt, wr, invline, invall, adr, lineno, hit);
 parameter pLines = 128;
 parameter AMSB = 79;
-localparam pLNMSB = pLines==128 ? 6 : 5;
-localparam pMSB = pLines==128 ? 9 : 8;
+localparam pLNMSB = $clog2(pLines) - 1;
+localparam pMSB = $clog2(pLines) - 1 + 3;
 input rst;
 input clk;
 input nxt;
@@ -87,11 +150,11 @@ input [AMSB:0] adr;
 output reg [pLNMSB:0] lineno;
 output hit;
 
-(* ram_style="distributed" *)
-reg [AMSB-5:0] mem0 [0:pLines/4-1];
-reg [AMSB-5:0] mem1 [0:pLines/4-1];
-reg [AMSB-5:0] mem2 [0:pLines/4-1];
-reg [AMSB-5:0] mem3 [0:pLines/4-1];
+
+wire [AMSB-5:0] memo0;
+wire [AMSB-5:0] memo1;
+wire [AMSB-5:0] memo2;
+wire [AMSB-5:0] memo3;
 reg [AMSB:0] rradr;
 reg [pLines/4-1:0] mem0v;
 reg [pLines/4-1:0] mem1v;
@@ -103,10 +166,6 @@ integer n;
 initial begin
   for (n = 0; n < pLines/4; n = n + 1)
   begin
-    mem0[n] = 0;
-    mem1[n] = 0;
-    mem2[n] = 0;
-    mem3[n] = 0;
     mem0v[n] = 0;
     mem1v[n] = 0;
     mem2v[n] = 0;
@@ -116,20 +175,13 @@ end
 
 wire [21:0] lfsro;
 lfsr #(22,22'h0ACE3) u1 (rst, clk, nxt, 1'b0, lfsro);
-reg [pLNMSB:0] wlineno;
-always @(posedge clk)
-if (rst)
-	wlineno <= 6'h00;
-else begin
-	if (wr) begin
-		case(lfsro[1:0])
-		2'b00:	begin  mem0[adr[pMSB:5]] <= adr[AMSB:5];  wlineno <= {2'b00,adr[pMSB:5]}; end
-		2'b01:	begin  mem1[adr[pMSB:5]] <= adr[AMSB:5];  wlineno <= {2'b01,adr[pMSB:5]}; end
-		2'b10:	begin  mem2[adr[pMSB:5]] <= adr[AMSB:5];  wlineno <= {2'b10,adr[pMSB:5]}; end
-		2'b11:	begin  mem3[adr[pMSB:5]] <= adr[AMSB:5];  wlineno <= {2'b11,adr[pMSB:5]}; end
-		endcase
-	end
-end
+wire [pLNMSB:0] wlineno;
+
+assign wlineno = {lfsro[1:0],adr[pMSB:5]};
+L1_dcache_tagram #(pLines/4) u2 (.clk(clk), .wr(wr && !hit && lfsro[1:0]==2'b00), .lineno(adr[pMSB:5]), .i(adr[AMSB:5]), .o(memo0));
+L1_dcache_tagram #(pLines/4) u3 (.clk(clk), .wr(wr && !hit && lfsro[1:0]==2'b01), .lineno(adr[pMSB:5]), .i(adr[AMSB:5]), .o(memo1));
+L1_dcache_tagram #(pLines/4) u4 (.clk(clk), .wr(wr && !hit && lfsro[1:0]==2'b10), .lineno(adr[pMSB:5]), .i(adr[AMSB:5]), .o(memo2));
+L1_dcache_tagram #(pLines/4) u5 (.clk(clk), .wr(wr && !hit && lfsro[1:0]==2'b11), .lineno(adr[pMSB:5]), .i(adr[AMSB:5]), .o(memo3));
 
 always @(posedge clk)
 if (rst) begin
@@ -151,7 +203,7 @@ else begin
 		if (hit2) mem2v[adr[pMSB:5]] <= 1'b0;
 		if (hit3) mem3v[adr[pMSB:5]] <= 1'b0;
 	end
-	else if (wr & ~(hit0|hit1|hit2|hit3)) begin
+	else if (wr & ~hit) begin
 		case(lfsro[1:0])
 		2'b00:	begin  mem0v[adr[pMSB:5]] <= 1'b1; end
 		2'b01:	begin  mem1v[adr[pMSB:5]] <= 1'b1; end
@@ -162,12 +214,12 @@ else begin
 end
 
 
-assign hit0 = mem0[adr[pMSB:5]]==adr[AMSB:5] & mem0v[adr[pMSB:5]];
-assign hit1 = mem1[adr[pMSB:5]]==adr[AMSB:5] & mem1v[adr[pMSB:5]];
-assign hit2 = mem2[adr[pMSB:5]]==adr[AMSB:5] & mem2v[adr[pMSB:5]];
-assign hit3 = mem3[adr[pMSB:5]]==adr[AMSB:5] & mem3v[adr[pMSB:5]];
+assign hit0 = memo0==adr[AMSB:5] & mem0v[adr[pMSB:5]];
+assign hit1 = memo1==adr[AMSB:5] & mem1v[adr[pMSB:5]];
+assign hit2 = memo2==adr[AMSB:5] & mem2v[adr[pMSB:5]];
+assign hit3 = memo3==adr[AMSB:5] & mem3v[adr[pMSB:5]];
 always @*
-  if (wr & ~(hit0|hit1|hit2|hit3)) lineno = {lfsro[1:0],adr[pMSB:5]};
+  if (wr & ~hit) lineno = wlineno;
   else if (hit0)  lineno = {2'b00,adr[pMSB:5]};
   else if (hit1)  lineno = {2'b01,adr[pMSB:5]};
   else if (hit2)  lineno = {2'b10,adr[pMSB:5]};
@@ -179,31 +231,30 @@ endmodule
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
 
-module L1_dcache(rst, clk, nxt, wr, sel, wadr, adr, i, o, fault, hit, invall, invline);
+module L1_dcache(rst, clk, nxt, wr, sel, adr, i, o, fault, hit, invall, invline);
 parameter pSize = 2;
 parameter AMSB = 79;
 localparam pLines = pSize==4 ? 128 : 64;
-localparam pLNMSB = pSize==4 ? 6 : 5;
+localparam pLNMSB = $clog2(pLines) - 1;
 input rst;
 input clk;
 input nxt;
 input wr;
-input [40:0] sel;
+input [41:0] sel;
 input [AMSB:0] adr;
-input [AMSB:0] wadr;
-input [330:0] i;
+input [335:0] i;
 output reg [79:0] o;
-output reg [1:0] fault;
+output reg [2:0] fault;
 output hit;
 input invall;
 input invline;
 
-wire [330:0] ic;
-reg [330:0] i1;
+wire [335:0] ic;
+reg [335:0] i1;
 wire [pLNMSB:0] lineno;
 wire taghit;
 reg wr1;
-reg [40:0] sel1;
+reg [41:0] sel1;
 
 wire iclk;
 //BUFH ucb1 (.I(clk), .O(iclk));
@@ -247,7 +298,7 @@ assign hit = taghit;
 always @(adr or ic)
 	o <= ic >> {adr[4:0],3'b0};
 always @*
-	fault <= ic[329:328];
+	fault <= ic[330:328];
 
 endmodule
 
@@ -257,12 +308,12 @@ endmodule
 module L2_dcache_mem(clk, wr, sel, wlineno, rlineno, i, fault, o);
 input clk;
 input wr;
-input [40:0] sel;
+input [41:0] sel;
 input [8:0] wlineno;
 input [8:0] rlineno;
-input [330:0] i;
+input [335:0] i;
 input [3:0] fault;
-output [330:0] o;
+output [335:0] o;
 
 // Block ram must be a multiple of eight bits wide to use byte write enables.
 (* ram_style="block" *)
@@ -273,19 +324,17 @@ reg [8:0] rrcl;
 integer n;
 initial begin
   for (n = 0; n < 512; n = n + 1) begin
-    mem[n] <= 1'd0;
+    mem[n] = 1'd0;
   end
 end
 
 genvar v;
 generate begin : memupd
-for (v = 0; v < 41; v = v + 1)
+for (v = 0; v < 42; v = v + 1)
 always @(posedge clk)
 begin
 	if (wr & sel[v])
 		mem[wlineno][v*8+7:v*8] <= i[v*8+7:v*8];
-	if (wr)
-		mem[wlineno][335:328] <= {4'd0,fault};
 end
 end
 endgenerate
@@ -311,7 +360,7 @@ input rst;
 input clk;
 input nxt;
 input wr;
-input [40:0] sel;
+input [41:0] sel;
 input [AMSB:0] wadr;
 input [AMSB:0] radr;
 input tlbmiss_i;
@@ -338,7 +387,7 @@ always @(posedge clk)
 always @(posedge clk)
 	wr2 <= wr1;
 always @(posedge clk)
-	sel1 <= {wr,sel};
+	sel1 <= sel;
 always @(posedge clk)
 	sel2 <= sel1;
 	

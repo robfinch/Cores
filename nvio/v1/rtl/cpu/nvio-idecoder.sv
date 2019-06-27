@@ -91,6 +91,28 @@ default:	fnRd = 7'd0;
 endcase
 endfunction
 
+function [6:0] fnRd2;
+input [2:0] unit;
+input [39:0] ins;
+case(unit)
+`MUnit:
+	casez(mopcode(ins))
+	`POP:			fnRd2 = {1'b0,ins[`RS1]};
+	`MLX:
+		if (ins[17:16]!=2'd0)
+			fnRd2 = {1'b0,ins[`RS1]};
+		else
+			fnRd2 = 7'd0;
+	`MSX:	
+		if (ins[1:0]!=2'd0)
+			fnRd2 = {1'b0,ins[`RS1]};
+		else
+			fnRd2 = 7'd0;
+	default:	fnRd2 = 7'd0;
+	endcase
+default:	fnRd2 = 7'd0;
+endcase
+endfunction
 
 function IsAndi;
 input [2:0] unit;
@@ -167,6 +189,7 @@ case(unit)
        fnCanException = TRUE;
 	  default:    fnCanException = FALSE;
 		endcase
+	default:	fnCanException = FALSE;
 	endcase
 `BUnit:
 	case(isn[9:6])
@@ -205,10 +228,59 @@ default:	IsPushc = FALSE;
 endcase
 endfunction
 
+function IsPop;
+input [2:0] unit;
+input [39:0] isn;
+case({unit==`MUnit,mopcode(isn)})
+{7'b1,`POP}:	IsPop = TRUE;
+default:	IsPop = FALSE;
+endcase
+endfunction
+
 function IsMemNdx;
 input [2:0] unit;
 input [39:0] isn;
 IsMemNdx = (unit==`MUnit && mopcode(isn)==`MLX) || (unit==`MUnit && mopcode(isn)==`MSX);
+endfunction
+
+function HasMemRes2;
+input [2:0] unit;
+input [39:0] inst;
+if (unit==`MUnit)
+casez(mopcode(inst))
+`LOAD:
+	casez(mopcode(inst))
+	`LEA:		HasMemRes2 = TRUE;
+	`PUSHC:	HasMemRes2 = TRUE;
+	`POP:		HasMemRes2 = TRUE;
+	`UNLK:	HasMemRes2 = TRUE;
+	`MLX:
+		case(inst[17:16])
+		2'd0:	HasMemRes2 = FALSE;
+		2'd1:	HasMemRes2 = TRUE;
+ 		2'd2:	HasMemRes2 = TRUE;
+		2'd3:	HasMemRes2 = FALSE;
+		endcase
+	default:	HasMemRes2 = FALSE;
+	endcase
+`STORE:
+	casez(mopcode(inst))
+	`LINK:	HasMemRes2 = TRUE;
+	`PUSH:	HasMemRes2 = TRUE;
+	`PUSHC:	HasMemRes2 = TRUE;
+	`MSX:
+		case(inst[17:16])
+		2'd0:	HasMemRes2 = FALSE;
+		2'd1:	HasMemRes2 = TRUE;
+ 		2'd2:	HasMemRes2 = TRUE;
+		2'd3:	HasMemRes2 = FALSE;
+		endcase
+	default:	HasMemRes2 = FALSE;
+	endcase
+default:	HasMemRes2 = FALSE;
+endcase
+else
+	HasMemRes2 = FALSE;
 endfunction
 
 function [2:0] MemSize;
@@ -218,11 +290,11 @@ case(unit)
 `MUnit:
 	casez(mopcode(isn))
 	`LDB:	MemSize = byt;
-	`LDC:	MemSize = wyde;
+	`LDW:	MemSize = wyde;
 	`LDP:	MemSize = penta;
 	`LDD:	MemSize = deci;
 	`LDBU:	MemSize = byt;
-	`LDCU:	MemSize = wyde;
+	`LDWU:	MemSize = wyde;
 	`LDPU:	MemSize = penta;
 	`LDDR:	MemSize = deci;
 	`LDT:	MemSize = tetra;
@@ -230,20 +302,21 @@ case(unit)
 	`LDTU:	MemSize = tetra;
 	`LDOU:	MemSize = octa;
 	`LEA:	MemSize = deci;
+	`POP:	MemSize = deci;
 	`MLX:
 		case(isn[`FUNCT5])
-		`LDB:	MemSize = byt;
-		`LDC:	MemSize = wyde;
-		`LDP:	MemSize = penta;
-		`LDD:	MemSize = deci;
-		`LDBU:	MemSize = byt;
-		`LDCU:	MemSize = wyde;
-		`LDPU:	MemSize = penta;
-		`LDDR:	MemSize = deci;
-		`LDT:	MemSize = tetra;
-		`LDO:	MemSize = octa;
-		`LDTU:	MemSize = tetra;
-		`LDOU:	MemSize = octa;
+		`LDBX:	MemSize = byt;
+		`LDWX:	MemSize = wyde;
+		`LDPX:	MemSize = penta;
+		`LDDX:	MemSize = deci;
+		`LDBUX:	MemSize = byt;
+		`LDWUX:	MemSize = wyde;
+		`LDPUX:	MemSize = penta;
+		`LDDRX:	MemSize = deci;
+		`LDTX:	MemSize = tetra;
+		`LDOX:	MemSize = octa;
+		`LDTUX:	MemSize = tetra;
+		`LDOUX:	MemSize = octa;
 		default:	MemSize = deci;
 		endcase
 	`STB:	MemSize = byt;
@@ -257,13 +330,13 @@ case(unit)
 	`PUSHC:	MemSize = deci;
 	`MSX:
 		case(isn[`FUNCT5])
-		`STB:	MemSize = byt;
-		`STC:	MemSize = wyde;
-		`STP:	MemSize = penta;
-		`STD:	MemSize = deci;
-		`STT:	MemSize = tetra;
-		`STO:	MemSize = octa;
-		`STDC:	MemSize = deci;
+		`STBX:	MemSize = byt;
+		`STWX:	MemSize = wyde;
+		`STPX:	MemSize = penta;
+		`STDX:	MemSize = deci;
+		`STTX:	MemSize = tetra;
+		`STOX:	MemSize = octa;
+		`STDCX:	MemSize = deci;
 		default:	MemSize = deci;
 		endcase
 	default:	MemSize = deci;
@@ -444,8 +517,8 @@ endfunction
 function IsRFW;
 input [2:0] unit;
 input [39:0] isn;
-if ((fnRd(unit,isn) & 7'h3f)==6'd0) 
-    IsRFW = FALSE;
+if ((fnRd(unit,isn) & 7'h3f)==6'd0 && fnRd2(unit,isn) & 7'h3f==6'd0) 
+  IsRFW = FALSE;
 else
 case(unit)
 `BUnit:
@@ -514,6 +587,7 @@ case(unit)
 	`MLX:	HasConst = FALSE;
 	`MSX:	HasConst = FALSE;
 	`PUSH:	HasConst = FALSE;
+	`POP:		HasConst = FALSE;
 	`TLB:	HasConst = FALSE;
 	default:	HasConst = TRUE;
 	endcase
@@ -585,6 +659,9 @@ begin
 	bus[`IB_PRELOAD] <= unit==3'd4 && instr[34]==1'b0 && Rt==6'd0 && Rd2==6'd0;
 	bus[`IB_STORE]	<= (unit==3'd4 && instr[34]==1'b1) || IsPushc(unit,instr);
 	bus[`IB_PUSH]   <= IsPush(unit,instr)|IsPushc(unit,instr);
+	bus[`IB_PUSHC]   <= IsPushc(unit,instr);
+	bus[`IB_POP]		<= IsPop(unit,instr);
+	bus[`IB_MEM2]		<= HasMemRes2(unit,instr);
 	bus[`IB_ODDBALL] <= IsOddball(unit,instr);
 	bus[`IB_MEMSZ]  <= MemSize(unit,instr);
 	bus[`IB_MEM]		<= unit==3'd4;

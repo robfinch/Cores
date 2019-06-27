@@ -70,6 +70,8 @@
 //
 // ============================================================================
 //
+`include "fpConfig.sv"
+
 `define TRUE    1'b1
 `define FALSE   1'b0
 
@@ -180,6 +182,7 @@ wire [3:0] op4_r;
 wire [5:0] func6b_r;
 wire [2:0] srca;
 wire [2:0] srcb;
+wire [2:0] srcc;
 wire [3:0] op4_i = ir[9:6];
 wire [5:0] op = ir[5:0];
 wire [4:0] func6b_i = ir[39:35];
@@ -187,8 +190,8 @@ wire fprem = {op4_i,func6b_i} == {`FLT2,`FREM};
 wire [3:0] op4 = fprem ? op4_r : op4_i;
 wire [5:0] func6b = fprem ? func6b_r : func6b_i;
 wire [2:0] insn_rm = ir[30:28];
-reg [WID-1:0] res;
-reg [WID-1:0] aop, bop;
+reg [WID-1+`EXTRA_BITS:0] res;
+reg [WID-1+`EXTRA_BITS:0] aop, bop, cop;
 always @*
 case(srca)
 `RES:	aop <= res;
@@ -202,9 +205,22 @@ case(WID)
 32:	bop <= `POINT5S;
 40:	bop <= `POINT5SX;
 64:	bop <= `POINT5D;
-80:	bop <= `POINT5DX;
+80:	bop <= {`POINT5DX,{`EXTRA_BITS{1'b0}}};
 endcase
 default:	bop <= b;
+endcase
+always @*
+case(srcc)
+`AIN:			cop <= a;
+`RES:			cop <= res;
+`ZERO:
+case(WID)
+32:	cop <= `ZEROS;
+40:	cop <= `ZEROSX;
+64:	cop <= `ZEROD;
+80:	cop <= {`ZERODX,{`EXTRA_BITS{1'b0}}};
+endcase
+default:	cop <= c;
 endcase
 
 wire [2:0] prec = 3'd4;//ir[25:24];
@@ -370,16 +386,16 @@ wire [5:0] fn2;
 
 wire [MSB:0] zld_o,lood_o;
 wire [31:0] zls_o,loos_o;
-wire [WID-1:0] zlq_o, looq_o;
-wire [WID-1:0] scaleb_o;
+wire [WID-1+`EXTRA_BITS:0] zlq_o, looq_o;
+wire [WID-1+`EXTRA_BITS:0] scaleb_o;
 fpZLUnit #(WID) u6 (.ir(ir), .op4(op4), .func5(func6b), .a(aop), .b(bop), .c(c), .o(zlq_o), .nanx(nanx) );
 fpLOOUnit #(WID) u7 (.clk(clk), .ce(pipe_ce), .op4(op4), .func5(func6b), .rm(insn_rm==3'b111 ? rm : insn_rm), .a(aop), .b(bop), .o(looq_o), .done() );
 fpScaleb u16 (.clk(clk), .ce(pipe_ce), .a(aop), .b(bop), .o(scaleb_o));
 
 //fpLOOUnit #(32) u7s (.clk(clk), .ce(pipe_ce), .rm(rm), .op(op), .fn(fn), .a(a[31:0]), .o(loos_o), .done() );
 
-fp_decomp #(WID) u1 (.i(aop), .sgn(sa), .man(ma), .vz(az), .inf(aInf), .nan(aNan) );
-fp_decomp #(WID) u2 (.i(bop), .sgn(sb), .man(mb), .vz(bz), .inf(bInf), .nan(bNan) );
+fpDecomp #(WID) u1 (.i(aop), .sgn(sa), .man(ma), .vz(az), .inf(aInf), .nan(aNan) );
+fpDecomp #(WID) u2 (.i(bop), .sgn(sb), .man(mb), .vz(bz), .inf(bInf), .nan(bNan) );
 //fp_decomp #(32) u1s (.i(a[31:0]), .sgn(sas), .man(mas), .vz(azs), .inf(aInfs), .nan(aNans) );
 //fp_decomp #(32) u2s (.i(b[31:0]), .sgn(sbs), .man(mbs), .vz(bzs), .inf(bInfs), .nan(bNans) );
 
@@ -416,6 +432,7 @@ wire [EX:0] fmul_o;
 wire [EX:0] fas_o;
 wire [EX:0] fsqrt_o;
 reg  [EX:0] fres;
+wire [EX:0] fma_o;
 wire [31:0] fpus_o;
 wire [31+3:0] fpns_o;
 wire [EXS:0] fdivs_o;
@@ -432,12 +449,13 @@ wire nma = func6b==`FNMA || func6b==`FNMS;
 wire [WID-1:0] ma_aop = aop ^ (nma << WID-1);
 
 fpAddsub #(WID) u10(.clk(clk), .ce(pipe_ce), .rm(rmd), .op(func6b[0]), .a(aop), .b(bop), .o(fas_o) );
-fpDiv    #(WID) u11(.clk(clk), .clk4x(clk4x), .ce(pipe_ce), .ld(ld|rem_ld), .a(aop), .b(bop), .o(fdiv_o), .sign_exe(), .underflow(divUnder), .done(divDone) );
+fpDiv    #(WID) u11(.rst(rst), .clk(clk), .clk4x(clk4x), .ce(pipe_ce), .ld(ld|rem_ld), .a(aop), .b(bop), .o(fdiv_o), .sign_exe(), .underflow(divUnder), .done(divDone) );
 fpMul    #(WID) u12(.clk(clk), .ce(pipe_ce),          .a(aop), .b(bop), .o(fmul_o), .sign_exe(), .inf(), .underflow(mulUnder) );
 fpSqrt	 #(WID) u13(.rst(rst), .clk(clk4x), .ce(pipe_ce), .ld(ld), .a(aop), .o(fsqrt_o), .done(), .sqrinf(), .sqrneg(sqrneg) );
 fpRes    #(WID) u14(.clk(clk), .ce(pipe_ce), .a(aop), .o(fres_o));
-fpFMA 	 #(WID) u15(.clk(clk), .ce(pipe_ce), .op(fms), .rm(rmd), .a(ma_aop), .b(bop), .c(c), .o(fma_o), .inf());
+fpFMA 	 #(WID) u15(.clk(clk), .ce(pipe_ce), .op(fms), .rm(rmd), .a(ma_aop), .b(bop), .c(cop), .o(fma_o), .inf());
 
+wire [4:0] rem_state;
 fpRemainder ufpr1
 (
 	.rst(rst),
@@ -453,7 +471,9 @@ fpRemainder ufpr1
 	.rem_done(rem_done),
 	.srca(srca),
 	.srcb(srcb),
-	.latch_res(latch_res)
+	.srcc(srcc),
+	.latch_res(latch_res),
+	.state(rem_state)
 );
 /*
 fpAddsub #(32) u10s(.clk(clk), .ce(pipe_ce), .rm(rm), .op(op[0]), .a(a[31:0]), .b(b[31:0]), .o(fass_o) );
@@ -505,12 +525,12 @@ endcase
 
 // pipeline stage
 // one cycle latency
-fpNormalize #(WID) fpn0(.clk(clk), .ce(pipe_ce), .under(under), .i(fres), .o(fpn_o) );
+fpNormalize #(WID) fpn0(.clk(clk), .ce(pipe_ce), .under_i(under), .under_o(), .i(fres), .o(fpn_o) );
 //fpNormalize #(32) fpns(.clk(clk), .ce(pipe_ce), .under(unders), .i(fress), .o(fpns_o) );
 
 // pipeline stage
 // one cycle latency
-fpRoundReg #(WID) fpr0(.clk(clk), .ce(pipe_ce), .rm(rmd4), .i(fpn_o), .o(fpu_o) );
+fpRound #(WID) fpr0(.clk(clk), .ce(pipe_ce), .rm(rmd4), .i(fpn_o), .o(fpu_o) );
 //fpRoundReg #(32) fprs(.clk(clk), .ce(pipe_ce), .rm(rm4), .i(fpns_o), .o(fpus_o) );
 
 wire so = (isNan?nso:fpu_o[WID-1]);
@@ -553,7 +573,7 @@ assign status = {
 	isNan
 	};
 
-wire [WID-1:0] o1 = 
+wire [MSB:0] o1 = 
     (frm|fcx|fdx|fex) ? (a|imm) :
     zl_op ? zlq_o :
     loo_op ? looq_o : 
@@ -561,7 +581,19 @@ wire [WID-1:0] o1 =
 assign zero = fpu_o[MSB-1:0]==0;
 assign o = fprem ? res : o1;
 always @(posedge clk)
-	if (ce & latch_res) res <= o1;
+if (rst)
+	res <= 1'd0;
+else begin
+	if (ce & latch_res) begin
+		res <= o1;
+		case(rem_state)
+		5'd3:	$display("DIV:   %h %h %h", o1, aop, bop);
+		5'd5:	$display("TRUNC: %h %h", o1, aop);
+		5'd7: $display("FNMA:  %h %h %h %h", o1, aop, bop, cop);
+		
+		endcase
+	end
+end
 
 wire [7:0] maxdivcnt;
 generate begin
@@ -612,18 +644,18 @@ begin
     case(op4)
     `FLT3:
     	case(func6b)
-    	`FMA:		fpcnt <= 8'd22;
-    	`FMS:		fpcnt <= 8'd22;
-    	`FNMA:	fpcnt <= 8'd22;
-    	`FNMS:	fpcnt <= 8'd22;
+    	`FMA:		fpcnt <= 8'd30;
+    	`FMS:		fpcnt <= 8'd30;
+    	`FNMA:	fpcnt <= 8'd30;
+    	`FNMS:	fpcnt <= 8'd30;
     	default:	fpcnt <= 8'd00;
     	endcase
     `FLT2,`FLT2LI: 
       case(func6b)
       `FCMP:  begin fpcnt <= 8'd0; end
-      `FADD:  begin fpcnt <= 8'd6; end
-      `FSUB:  begin fpcnt <= 8'd6; end
-      `FMUL:  begin fpcnt <= 8'd6; end
+      `FADD:  begin fpcnt <= 8'd12; end
+      `FSUB:  begin fpcnt <= 8'd12; end
+      `FMUL:  begin fpcnt <= 8'd12; end
       `FDIV:  begin fpcnt <= maxdivcnt; end
       `FREM:	fpcnt <= maxdivcnt+8'd23;
       `NXTAFT: fpcnt <= 8'd1;
@@ -637,7 +669,7 @@ begin
       `FTOI:  begin fpcnt <= 8'd1; end
       `ITOF:  begin fpcnt <= 8'd1; end
       `TRUNC:  begin fpcnt <= 8'd1; end
-      `FSQRT: begin fpcnt <= maxdivcnt; end
+      `FSQRT: begin fpcnt <= maxdivcnt + 8'd8; end
       default:    fpcnt <= 8'h00;
       endcase
     `FLT1A:
@@ -649,7 +681,7 @@ begin
     endcase
   else if (!op_done) begin
   	if ((op4==`FLT2||op4==`FLT2LI) && func6b==`FDIV && divDone)
-  		fpcnt <= 8'h00;
+  		fpcnt <= 8'h12;
   	else
     	fpcnt <= fpcnt - 1;
    end

@@ -29,6 +29,8 @@
 //                                                                          
 // ============================================================================
 
+`include "fpConfig.sv"
+
 module fpAddsub(clk, ce, rm, op, a, b, o);
 parameter WID = 128;
 `include "fpSize.sv"
@@ -37,8 +39,8 @@ input clk;		// system clock
 input ce;		// core clock enable
 input [2:0] rm;	// rounding mode
 input op;		// operation 0 = add, 1 = subtract
-input [WID-1:0] a;	// operand a
-input [WID-1:0] b;	// operand b
+input [MSB:0] a;	// operand a
+input [MSB:0] b;	// operand b
 output [EX:0] o;	// output
 
 
@@ -144,17 +146,17 @@ wire [FMSB+1:0] mfs1;
 wire sticky, sticky1;
 generate
 begin
-if (WID==128)
+if (WID+`EXTRA_BITS==128)
     redor128 u1 (.a(xdif), .b({mfs,2'b0}), .o(sticky) );
-else if (WID==96)
+else if (WID+`EXTRA_BITS==96)
     redor96 u1 (.a(xdif), .b({mfs,2'b0}), .o(sticky) );
-else if (WID==84)
+else if (WID+`EXTRA_BITS==84)
     redor84 u1 (.a(xdif), .b({mfs,2'b0}), .o(sticky) );
-else if (WID==80)
+else if (WID+`EXTRA_BITS==80)
     redor80 u1 (.a(xdif), .b({mfs,2'b0}), .o(sticky) );
-else if (WID==64)
+else if (WID+`EXTRA_BITS==64)
     redor64 u1 (.a(xdif), .b({mfs,2'b0}), .o(sticky) );
-else if (WID==32)
+else if (WID+`EXTRA_BITS==32)
     redor32 u1 (.a(xdif), .b({mfs,2'b0}), .o(sticky) );
 end
 endgenerate
@@ -217,6 +219,6 @@ wire [MSB+3:0] fpn0;
 
 fpAddsub    #(WID) u1 (clk, ce, rm, op, a, b, o1);
 fpNormalize #(WID) u2(.clk(clk), .ce(ce), .under(1'b0), .i(o1), .o(fpn0) );
-fpRoundReg  #(WID) u3(.clk(clk), .ce(ce), .rm(rm), .i(fpn0), .o(o) );
+fpRound  		#(WID) u3(.clk(clk), .ce(ce), .rm(rm), .i(fpn0), .o(o) );
 
 endmodule

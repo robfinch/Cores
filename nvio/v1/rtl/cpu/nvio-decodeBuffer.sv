@@ -359,35 +359,37 @@ if (rst) begin
 	template[1] <= BBB;
 	template[2] <= BBB;
 end
-else if (lsm && ibundlep[103:40]!=64'd0 && queued) begin
-	insnx[0] <= insnxp[0];
-	insnx[1] <= insnxp[1];
-	insnx[2] <= insnxp[2];
-	template[0] <= templatep[0];
-	template[1] <= templatep[1];
-	template[2] <= templatep[2];
-	if (ldm)
-		ibundle[insnx[0][`RD] + 7'd40] <= 1'b0;
-	else
-		ibundle[insnx[0][`RS2] + 7'd40] <= 1'b0;
-	ibundle[119:108] <= ibundle[119:108] + 4'd10;
-	for (n = 63; n >= 0; n = n - 1) begin
-		if (ibundle[n + 7'd40] && n != (ldm ? insnx[0][`RD] : insnx[0][`RS2])) begin
-			if (ldm)
-				insnx[0][`RD] <= n;
-			else
-				insnx[0][`RS2] <= n;
+else begin
+	if (lsm && ibundlep[103:40]!=64'd0 && queued) begin
+		insnx[0] <= insnxp[0];
+		insnx[1] <= insnxp[1];
+		insnx[2] <= insnxp[2];
+		template[0] <= templatep[0];
+		template[1] <= templatep[1];
+		template[2] <= templatep[2];
+		if (ldm)
+			ibundle[insnx[0][`RD] + 7'd40] <= 1'b0;
+		else
+			ibundle[insnx[0][`RS2] + 7'd40] <= 1'b0;
+		ibundle[119:108] <= ibundle[119:108] + 4'd10;
+		for (n = 63; n >= 0; n = n - 1) begin
+			if (ibundle[n + 7'd40] && n != (ldm ? insnx[0][`RD] : insnx[0][`RS2])) begin
+				if (ldm)
+					insnx[0][`RD] <= n;
+				else
+					insnx[0][`RS2] <= n;
+			end
 		end
 	end
-end
-else if (phit & next_bundle) begin
-	ibundle <= ibundlep;
-	insnx[0] <= insnxp[0];
-	insnx[1] <= insnxp[1];
-	insnx[2] <= insnxp[2];
-	template[0] <= templatep[0];
-	template[1] <= templatep[1];
-	template[2] <= templatep[2];
+	else if (phit & next_bundle) begin
+		ibundle <= ibundlep;
+		insnx[0] <= insnxp[0];
+		insnx[1] <= insnxp[1];
+		insnx[2] <= insnxp[2];
+		template[0] <= templatep[0];
+		template[1] <= templatep[1];
+		template[2] <= templatep[2];
+	end
 end
 // On a cache miss load NOPs
 /*else begin

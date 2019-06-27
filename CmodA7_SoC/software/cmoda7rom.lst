@@ -1,0 +1,880 @@
+Finitron FT833 assembler   version 1.5   Sat Jun 22 07:59:58 2019     Page 1
+cmoda7rom.asm
+
+                                        ; ============================================================================
+                                        ; CmodA7rom.asm
+                                        ;        __
+                                        ;   \\__/ o\    (C) 2014-2017  Robert Finch, Waterloo
+                                        ;    \  __ /    All rights reserved.
+                                        ;     \/_//     robfinch<remove>@finitron.ca
+                                        ;       ||
+                                        ;  
+                                        ;
+                                        ; This source file is free software: you can redistribute it and/or modify 
+                                        ; it under the terms of the GNU Lesser General Public License as published 
+                                        ; by the Free Software Foundation, either version 3 of the License, or     
+                                        ; (at your option) any later version.                                      
+                                        ;                                                                          
+                                        ; This source file is distributed in the hope that it will be useful,      
+                                        ; but WITHOUT ANY WARRANTY; without even the implied warranty of           
+                                        ; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+                                        ; GNU General Public License for more details.                             
+                                        ;                                                                          
+                                        ; You should have received a copy of the GNU General Public License        
+                                        ; along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+                                        ;                                                                          
+                                        ; ============================================================================
+                                        ;
+     25 = 000000000000000D                            CR			EQU		13
+     26 = 000000000000000A                            LF			EQU		10
+     27 = 000000000000001B                            ESC			EQU		$1B
+     28 = 0000000000000008                            BS			EQU		8
+     29 = 0000000000000003                            CTRLC		EQU		3
+                                        
+     31 = 0000000000000012                            SC_LSHIFT	EQU		$12
+     32 = 0000000000000059                            SC_RSHIFT	EQU		$59
+     33 = 00000000000000F0                            SC_KEYUP	EQU		$F0
+     34 = 00000000000000E0                            SC_EXTEND	EQU		$E0
+     35 = 0000000000000014                            SC_CTRL		EQU		$14
+     36 = 0000000000000011                            SC_ALT		EQU		$11
+     37 = 0000000000000071                            SC_DEL		EQU		$71		; extend
+     38 = 0000000000000058                            SC_LCTRL	EQU		$58
+     39 = 0000000000000077                            SC_NUMLOCK	EQU		$77
+     40 = 000000000000007E                            SC_SCROLLLOCK	EQU	$7E
+     41 = 0000000000000058                            SC_CAPSLOCK	EQU		$58
+                                        
+                                        ; Zero-page storage
+                                        ;
+     45 = 0000000000000000                            DPL       	equ   $00     ; data pointer (three bytes)
+     46 = 0000000000000001                            DPM					equ		$01
+     47 = 0000000000000002                            DPH       	equ   $02     ; high of data pointer
+     48 = 0000000000000003                            RECLEN    	equ   $03     ; record length in bytes
+     49 = 0000000000000004                            START_LO  	equ   $04
+     50 = 0000000000000005                            START_MID		equ		$05
+     51 = 0000000000000006                            START_HI  	equ   $06
+     52 = 0000000000000007                            RECTYPE   	equ   $07
+     53 = 0000000000000008                            CHKSUM    	equ   $08     ; record checksum accumulator
+     54 = 0000000000000009                            DLFAIL    	equ   $09     ; flag for download failure
+     55 = 000000000000000A                            TEMP      	equ   $0A     ; save hex value
+     56 = 000000000000000B                            ENTRYPT_LO	equ		$0B
+     57 = 000000000000000C                            ENTRYPT_MID	equ		$0C
+     58 = 000000000000000D                            ENTRYPT_HI	equ		$0D
+                                        
+     60 = 0000000000000010                            RXBUFPTR		equ		$10
+     61 = 0000000000000014                            TXBUFPTR		equ		$14
+     62 = 0000000000000018                            RXNDX				equ		$18
+     63 = 000000000000001A                            TXNDX				equ		$1A
+                                        
+     65 = 0000000000F20000                            IRQSRC			equ		$F20000
+     66 = 0000000000F20001                            RXIRQOFF		equ		$F20001	; writing turns off IRQ
+     67 = 0000000000F20002                            TMRIRQOFF		equ		$F20002	; turns off timer IRQ
+                                        
+                                        	code
+                                           	
+                                           	.org	$F000
+                                           
+     73 00F000                             start:
+     74 00F000 78                           	sei						; disable interrupts
+     75 00F001 18                           	clc						; switch to native mode
+     76 00F002 FB                           	xce
+     77 00F003 C2 30                        	rep		#$030		; 16 bit regs
+                                           	NDX 	16
+                                           	MEM		16
+     80 00F005 A2 FF EF                     	ldx		#$EFFF		; set stack pointer
+     81 00F008 9A                           	txs
+                                           	; setup reciever buffer pointer
+     83 00F009 64 10                        	stz		RXBUFPTR
+     84 00F00B 64 14                        	stz		TXBUFPTR
+     85 00F00D A9 F0 00                     	lda		#$00F0
+     86 00F010 85 12                        	sta		RXBUFPTR+2
+     87 00F012 A9 F1 00                     	lda		#$00F1
+     88 00F015 85 16                        	sta		TXBUFPTR+2
+                                           	; Stuff 32 FF's into the start of the xmit buffer. This acts as a sync to the
+                                           	; software on the PC.
+     91 00F017 A0 20 00                     	ldy		#32
+     92 00F01A A9 FF FF                     	lda		#$FFFF
+     93 00F01D                             .0001:
+     94 00F01D 97 14                        	sta		[TXBUFPTR],y
+     95 00F01F 88                           	dey
+     96 00F020 88                           	dey
+     97 00F021 D0 FA                        	bne		.0001
+     98 00F023 A9 20 00                     	lda		#$0020		; reset pointer past preamble
+     99 00F026 85 14                        	sta		TXBUFPTR
+    100 00F028 64 1A                        	stz		TXNDX
+    101 00F02A                             WFIRQ:
+    102 00F02A CB                           	wai
+                                           
+    104 00F02B                             RXIRQ:
+    105 00F02B 08                           	php
+    106 00F02C E2 20                        	sep		#$20
+                                           	MEM		8
+    108 00F02E AF 00 00 F2                  	lda		IRQSRC
+    109 00F032 AA                           	tax
+    110 00F033 29 01                        	and		#1
+    111 00F035 D0 15                        	bne		.rxirq
+    112 00F037 8A                           	txa
+    113 00F038 29 02                        	and		#2
+    114 00F03A D0 02                        	bne		.tmrirq
+    115 00F03C 80 EC                        	bra		WFIRQ
+    116 00F03E                             .tmrirq:
+    117 00F03E 8F 02 00 F2                  	sta		TMRIRQOFF	; writing any value will clear irq
+    118 00F042 28                           	plp
+                                           	MEM		16
+    120 00F043 A9 20 00                     	lda		#$0020		; reset pointer past preamble
+    121 00F046 85 14                        	sta		TXBUFPTR
+    122 00F048 64 1A                        	stz		TXNDX
+    123 00F04A 80 DE                        	bra		WFIRQ
+    124 00F04C                             .rxirq:
+    125 00F04C 8F 01 00 F2                  	sta		RXIRQOFF	; writing any value will clear irq
+    126 00F050 28                           	plp
+                                           	MEM		16
+    128 00F051 4C 00 F8                     	jmp		IntelHexDownload
+                                           
+    130 00F054 FF FF FF FF FF FF FF FF      		org $F800
+    130 00F05C FF FF FF FF FF FF FF FF    
+    130 00F064 FF FF FF FF FF FF FF FF    
+    130 00F06C FF FF FF FF FF FF FF FF    
+    130 00F074 FF FF FF FF FF FF FF FF    
+    130 00F07C FF FF FF FF FF FF FF FF    
+    130 00F084 FF FF FF FF FF FF FF FF    
+    130 00F08C FF FF FF FF FF FF FF FF    
+    130 00F094 FF FF FF FF FF FF FF FF    
+    130 00F09C FF FF FF FF FF FF FF FF    
+    130 00F0A4 FF FF FF FF FF FF FF FF    
+    130 00F0AC FF FF FF FF FF FF FF FF    
+    130 00F0B4 FF FF FF FF FF FF FF FF    
+    130 00F0BC FF FF FF FF FF FF FF FF    
+    130 00F0C4 FF FF FF FF FF FF FF FF    
+    130 00F0CC FF FF FF FF FF FF FF FF    
+    130 00F0D4 FF FF FF FF FF FF FF FF    
+    130 00F0DC FF FF FF FF FF FF FF FF    
+    130 00F0E4 FF FF FF FF FF FF FF FF    
+    130 00F0EC FF FF FF FF FF FF FF FF    
+    130 00F0F4 FF FF FF FF FF FF FF FF    
+    130 00F0FC FF FF FF FF FF FF FF FF    
+    130 00F104 FF FF FF FF FF FF FF FF    
+    130 00F10C FF FF FF FF FF FF FF FF    
+    130 00F114 FF FF FF FF FF FF FF FF    
+    130 00F11C FF FF FF FF FF FF FF FF    
+    130 00F124 FF FF FF FF FF FF FF FF    
+    130 00F12C FF FF FF FF FF FF FF FF    
+    130 00F134 FF FF FF FF FF FF FF FF    
+    130 00F13C FF FF FF FF FF FF FF FF    
+    130 00F144 FF FF FF FF FF FF FF FF    
+    130 00F14C FF FF FF FF FF FF FF FF    
+    130 00F154 FF FF FF FF FF FF FF FF    
+    130 00F15C FF FF FF FF FF FF FF FF    
+    130 00F164 FF FF FF FF FF FF FF FF    
+    130 00F16C FF FF FF FF FF FF FF FF    
+    130 00F174 FF FF FF FF FF FF FF FF    
+    130 00F17C FF FF FF FF FF FF FF FF    
+    130 00F184 FF FF FF FF FF FF FF FF    
+    130 00F18C FF FF FF FF FF FF FF FF    
+    130 00F194 FF FF FF FF FF FF FF FF    
+    130 00F19C FF FF FF FF FF FF FF FF    
+    130 00F1A4 FF FF FF FF FF FF FF FF    
+    130 00F1AC FF FF FF FF FF FF FF FF    
+    130 00F1B4 FF FF FF FF FF FF FF FF    
+    130 00F1BC FF FF FF FF FF FF FF FF    
+    130 00F1C4 FF FF FF FF FF FF FF FF    
+    130 00F1CC FF FF FF FF FF FF FF FF    
+    130 00F1D4 FF FF FF FF FF FF FF FF    
+    130 00F1DC FF FF FF FF FF FF FF FF    
+    130 00F1E4 FF FF FF FF FF FF FF FF    
+    130 00F1EC FF FF FF FF FF FF FF FF    
+    130 00F1F4 FF FF FF FF FF FF FF FF    
+    130 00F1FC FF FF FF FF FF FF FF FF    
+    130 00F204 FF FF FF FF FF FF FF FF    
+    130 00F20C FF FF FF FF FF FF FF FF    
+    130 00F214 FF FF FF FF FF FF FF FF    
+    130 00F21C FF FF FF FF FF FF FF FF    
+    130 00F224 FF FF FF FF FF FF FF FF    
+    130 00F22C FF FF FF FF FF FF FF FF    
+    130 00F234 FF FF FF FF FF FF FF FF    
+    130 00F23C FF FF FF FF FF FF FF FF    
+    130 00F244 FF FF FF FF FF FF FF FF    
+    130 00F24C FF FF FF FF FF FF FF FF    
+    130 00F254 FF FF FF FF FF FF FF FF    
+    130 00F25C FF FF FF FF FF FF FF FF    
+    130 00F264 FF FF FF FF FF FF FF FF    
+    130 00F26C FF FF FF FF FF FF FF FF    
+    130 00F274 FF FF FF FF FF FF FF FF    
+    130 00F27C FF FF FF FF FF FF FF FF    
+    130 00F284 FF FF FF FF FF FF FF FF    
+    130 00F28C FF FF FF FF FF FF FF FF    
+    130 00F294 FF FF FF FF FF FF FF FF    
+    130 00F29C FF FF FF FF FF FF FF FF    
+    130 00F2A4 FF FF FF FF FF FF FF FF    
+    130 00F2AC FF FF FF FF FF FF FF FF    
+    130 00F2B4 FF FF FF FF FF FF FF FF    
+    130 00F2BC FF FF FF FF FF FF FF FF    
+    130 00F2C4 FF FF FF FF FF FF FF FF    
+    130 00F2CC FF FF FF FF FF FF FF FF    
+    130 00F2D4 FF FF FF FF FF FF FF FF    
+    130 00F2DC FF FF FF FF FF FF FF FF    
+    130 00F2E4 FF FF FF FF FF FF FF FF    
+    130 00F2EC FF FF FF FF FF FF FF FF    
+    130 00F2F4 FF FF FF FF FF FF FF FF    
+    130 00F2FC FF FF FF FF FF FF FF FF    
+    130 00F304 FF FF FF FF FF FF FF FF    
+    130 00F30C FF FF FF FF FF FF FF FF    
+    130 00F314 FF FF FF FF FF FF FF FF    
+    130 00F31C FF FF FF FF FF FF FF FF    
+    130 00F324 FF FF FF FF FF FF FF FF    
+    130 00F32C FF FF FF FF FF FF FF FF    
+    130 00F334 FF FF FF FF FF FF FF FF    
+    130 00F33C FF FF FF FF FF FF FF FF    
+    130 00F344 FF FF FF FF FF FF FF FF    
+    130 00F34C FF FF FF FF FF FF FF FF    
+    130 00F354 FF FF FF FF FF FF FF FF    
+    130 00F35C FF FF FF FF FF FF FF FF    
+    130 00F364 FF FF FF FF FF FF FF FF    
+    130 00F36C FF FF FF FF FF FF FF FF    
+    130 00F374 FF FF FF FF FF FF FF FF    
+    130 00F37C FF FF FF FF FF FF FF FF    
+    130 00F384 FF FF FF FF FF FF FF FF    
+    130 00F38C FF FF FF FF FF FF FF FF    
+    130 00F394 FF FF FF FF FF FF FF FF    
+    130 00F39C FF FF FF FF FF FF FF FF    
+    130 00F3A4 FF FF FF FF FF FF FF FF    
+    130 00F3AC FF FF FF FF FF FF FF FF    
+    130 00F3B4 FF FF FF FF FF FF FF FF    
+    130 00F3BC FF FF FF FF FF FF FF FF    
+    130 00F3C4 FF FF FF FF FF FF FF FF    
+    130 00F3CC FF FF FF FF FF FF FF FF    
+    130 00F3D4 FF FF FF FF FF FF FF FF    
+    130 00F3DC FF FF FF FF FF FF FF FF    
+    130 00F3E4 FF FF FF FF FF FF FF FF    
+    130 00F3EC FF FF FF FF FF FF FF FF    
+    130 00F3F4 FF FF FF FF FF FF FF FF    
+    130 00F3FC FF FF FF FF FF FF FF FF    
+    130 00F404 FF FF FF FF FF FF FF FF    
+    130 00F40C FF FF FF FF FF FF FF FF    
+    130 00F414 FF FF FF FF FF FF FF FF    
+    130 00F41C FF FF FF FF FF FF FF FF    
+    130 00F424 FF FF FF FF FF FF FF FF    
+    130 00F42C FF FF FF FF FF FF FF FF    
+    130 00F434 FF FF FF FF FF FF FF FF    
+    130 00F43C FF FF FF FF FF FF FF FF    
+    130 00F444 FF FF FF FF FF FF FF FF    
+    130 00F44C FF FF FF FF FF FF FF FF    
+    130 00F454 FF FF FF FF FF FF FF FF    
+    130 00F45C FF FF FF FF FF FF FF FF    
+    130 00F464 FF FF FF FF FF FF FF FF    
+    130 00F46C FF FF FF FF FF FF FF FF    
+    130 00F474 FF FF FF FF FF FF FF FF    
+    130 00F47C FF FF FF FF FF FF FF FF    
+    130 00F484 FF FF FF FF FF FF FF FF    
+    130 00F48C FF FF FF FF FF FF FF FF    
+    130 00F494 FF FF FF FF FF FF FF FF    
+    130 00F49C FF FF FF FF FF FF FF FF    
+    130 00F4A4 FF FF FF FF FF FF FF FF    
+    130 00F4AC FF FF FF FF FF FF FF FF    
+    130 00F4B4 FF FF FF FF FF FF FF FF    
+    130 00F4BC FF FF FF FF FF FF FF FF    
+    130 00F4C4 FF FF FF FF FF FF FF FF    
+    130 00F4CC FF FF FF FF FF FF FF FF    
+    130 00F4D4 FF FF FF FF FF FF FF FF    
+    130 00F4DC FF FF FF FF FF FF FF FF    
+    130 00F4E4 FF FF FF FF FF FF FF FF    
+    130 00F4EC FF FF FF FF FF FF FF FF    
+    130 00F4F4 FF FF FF FF FF FF FF FF    
+    130 00F4FC FF FF FF FF FF FF FF FF    
+    130 00F504 FF FF FF FF FF FF FF FF    
+    130 00F50C FF FF FF FF FF FF FF FF    
+    130 00F514 FF FF FF FF FF FF FF FF    
+    130 00F51C FF FF FF FF FF FF FF FF    
+    130 00F524 FF FF FF FF FF FF FF FF    
+    130 00F52C FF FF FF FF FF FF FF FF    
+    130 00F534 FF FF FF FF FF FF FF FF    
+    130 00F53C FF FF FF FF FF FF FF FF    
+    130 00F544 FF FF FF FF FF FF FF FF    
+    130 00F54C FF FF FF FF FF FF FF FF    
+    130 00F554 FF FF FF FF FF FF FF FF    
+    130 00F55C FF FF FF FF FF FF FF FF    
+    130 00F564 FF FF FF FF FF FF FF FF    
+    130 00F56C FF FF FF FF FF FF FF FF    
+    130 00F574 FF FF FF FF FF FF FF FF    
+    130 00F57C FF FF FF FF FF FF FF FF    
+    130 00F584 FF FF FF FF FF FF FF FF    
+    130 00F58C FF FF FF FF FF FF FF FF    
+    130 00F594 FF FF FF FF FF FF FF FF    
+    130 00F59C FF FF FF FF FF FF FF FF    
+    130 00F5A4 FF FF FF FF FF FF FF FF    
+    130 00F5AC FF FF FF FF FF FF FF FF    
+    130 00F5B4 FF FF FF FF FF FF FF FF    
+    130 00F5BC FF FF FF FF FF FF FF FF    
+    130 00F5C4 FF FF FF FF FF FF FF FF    
+    130 00F5CC FF FF FF FF FF FF FF FF    
+    130 00F5D4 FF FF FF FF FF FF FF FF    
+    130 00F5DC FF FF FF FF FF FF FF FF    
+    130 00F5E4 FF FF FF FF FF FF FF FF    
+    130 00F5EC FF FF FF FF FF FF FF FF    
+    130 00F5F4 FF FF FF FF FF FF FF FF    
+    130 00F5FC FF FF FF FF FF FF FF FF    
+    130 00F604 FF FF FF FF FF FF FF FF    
+    130 00F60C FF FF FF FF FF FF FF FF    
+    130 00F614 FF FF FF FF FF FF FF FF    
+    130 00F61C FF FF FF FF FF FF FF FF    
+    130 00F624 FF FF FF FF FF FF FF FF    
+    130 00F62C FF FF FF FF FF FF FF FF    
+    130 00F634 FF FF FF FF FF FF FF FF    
+    130 00F63C FF FF FF FF FF FF FF FF    
+    130 00F644 FF FF FF FF FF FF FF FF    
+    130 00F64C FF FF FF FF FF FF FF FF    
+    130 00F654 FF FF FF FF FF FF FF FF    
+    130 00F65C FF FF FF FF FF FF FF FF    
+    130 00F664 FF FF FF FF FF FF FF FF    
+    130 00F66C FF FF FF FF FF FF FF FF    
+    130 00F674 FF FF FF FF FF FF FF FF    
+    130 00F67C FF FF FF FF FF FF FF FF    
+    130 00F684 FF FF FF FF FF FF FF FF    
+    130 00F68C FF FF FF FF FF FF FF FF    
+    130 00F694 FF FF FF FF FF FF FF FF    
+    130 00F69C FF FF FF FF FF FF FF FF    
+    130 00F6A4 FF FF FF FF FF FF FF FF    
+    130 00F6AC FF FF FF FF FF FF FF FF    
+    130 00F6B4 FF FF FF FF FF FF FF FF    
+    130 00F6BC FF FF FF FF FF FF FF FF    
+    130 00F6C4 FF FF FF FF FF FF FF FF    
+    130 00F6CC FF FF FF FF FF FF FF FF    
+    130 00F6D4 FF FF FF FF FF FF FF FF    
+    130 00F6DC FF FF FF FF FF FF FF FF    
+    130 00F6E4 FF FF FF FF FF FF FF FF    
+    130 00F6EC FF FF FF FF FF FF FF FF    
+    130 00F6F4 FF FF FF FF FF FF FF FF    
+    130 00F6FC FF FF FF FF FF FF FF FF    
+    130 00F704 FF FF FF FF FF FF FF FF    
+    130 00F70C FF FF FF FF FF FF FF FF    
+    130 00F714 FF FF FF FF FF FF FF FF    
+    130 00F71C FF FF FF FF FF FF FF FF    
+    130 00F724 FF FF FF FF FF FF FF FF    
+    130 00F72C FF FF FF FF FF FF FF FF    
+    130 00F734 FF FF FF FF FF FF FF FF    
+    130 00F73C FF FF FF FF FF FF FF FF    
+    130 00F744 FF FF FF FF FF FF FF FF    
+    130 00F74C FF FF FF FF FF FF FF FF    
+    130 00F754 FF FF FF FF FF FF FF FF    
+    130 00F75C FF FF FF FF FF FF FF FF    
+    130 00F764 FF FF FF FF FF FF FF FF    
+    130 00F76C FF FF FF FF FF FF FF FF    
+    130 00F774 FF FF FF FF FF FF FF FF    
+    130 00F77C FF FF FF FF FF FF FF FF    
+    130 00F784 FF FF FF FF FF FF FF FF    
+    130 00F78C FF FF FF FF FF FF FF FF    
+    130 00F794 FF FF FF FF FF FF FF FF    
+    130 00F79C FF FF FF FF FF FF FF FF    
+    130 00F7A4 FF FF FF FF FF FF FF FF    
+    130 00F7AC FF FF FF FF FF FF FF FF    
+    130 00F7B4 FF FF FF FF FF FF FF FF    
+    130 00F7BC FF FF FF FF FF FF FF FF    
+    130 00F7C4 FF FF FF FF FF FF FF FF    
+    130 00F7CC FF FF FF FF FF FF FF FF    
+    130 00F7D4 FF FF FF FF FF FF FF FF    
+    130 00F7DC FF FF FF FF FF FF FF FF    
+    130 00F7E4 FF FF FF FF FF FF FF FF    
+    130 00F7EC FF FF FF FF FF FF FF FF    
+    130 00F7F4 FF FF FF FF FF FF FF FF    
+    130 00F7FC FF FF FF FF                
+                                           ;
+                                               ; Download Intel hex.
+    133 00F800                             IntelHexDownload:
+    134 00F800 08                           	php
+    135 00F801 E2 30                        	sep		#$30			; 8 bit index and mem
+                                           	NDX 	8
+                                           	MEM		8
+    138 00F803 64 09                          stz     DLFAIL          ; Start by assuming no D/L failure
+    139 00F805 20 10 FA                       jsr     SerialPutString
+    140 00F808 0D 0A 0D 0A                    .byte   13,10,13,10
+    141 00F80C 53 65 6E 64 20 36 35 38        .byte   "Send 65816 code in"
+    141 00F814 31 36 20 63 6F 64 65 20    
+    141 00F81C 69 6E                      
+    142 00F81E 20 49 6E 74 65 6C 20 48        .byte   " Intel Hex format"
+    142 00F826 65 78 20 66 6F 72 6D 61    
+    142 00F82E 74                         
+    143 00F82F 20 61 74 20 31 39 32 30        .byte  " at 19200,n,8,1 ->"
+    143 00F837 30 2C 6E 2C 38 2C 31 20    
+    143 00F83F 2D 3E                      
+    144 00F841 0D 0A 00                       .byte   13,10,0
+                                             ; Set default program entry point $000400
+    146 00F844 64 0D                          stz			ENTRYPT_HI
+    147 00F846 A9 04                          lda			#$04
+    148 00F848 85 0C                          sta			ENTRYPT_MID
+    149 00F84A 64 0B                          stz			ENTRYPT_LO
+    150 00F84C                             .nextrec:
+    151 00F84C 20 C3 F9                     	jsr     SerialGetChar   ; Wait for start of record mark ':'
+    152 00F84F C9 3A                          cmp     #':'
+    153 00F851 D0 F9                          bne     .nextrec        ; not found yet
+                                             ; Start of record marker has been found
+    155 00F853 20 CF F9                       jsr     SerialGetByte   ; Get the record length
+    156 00F856 85 03                          sta     RECLEN          ; save it
+    157 00F858 85 08                          sta     CHKSUM          ; and save first byte of checksum
+                                             ; Assume a zero for address bits 16 to 23, this may be reset
+                                             ; with a $04 record.
+    160 00F85A 64 06                          stz			START_HI				
+    161 00F85C 20 CF F9                       jsr     SerialGetByte   ; Get address bits 8 to 15
+    162 00F85F 85 05                          sta     START_MID
+    163 00F861 18                             clc
+    164 00F862 65 08                          adc     CHKSUM          ; Add in the checksum
+    165 00F864 85 08                          sta     CHKSUM          ;
+    166 00F866 20 CF F9                       jsr     SerialGetByte   ; Get address bits 0 to 7
+    167 00F869 85 04                          sta     START_LO
+    168 00F86B 18                             clc
+    169 00F86C 65 08                          adc     CHKSUM
+    170 00F86E 85 08                          sta     CHKSUM
+    171 00F870 20 CF F9                       jsr     SerialGetByte   ; Get the record type
+    172 00F873 85 07                          sta     RECTYPE         ; & save it
+    173 00F875 18                             clc
+    174 00F876 65 08                          adc     CHKSUM
+    175 00F878 85 08                          sta     CHKSUM
+    176 00F87A A5 07                          lda     RECTYPE
+    177 00F87C D0 2C                          bne     .nextRecType
+                                           
+                                             ; Process record type #0 - data
+    180 00F87E A6 03                          ldx     RECLEN          ; number of data bytes to write to memory
+    181 00F880 A0 00                          ldy     #0              ; start offset at 0
+    182 00F882                             .0002:
+    183 00F882 20 CF F9                       jsr     SerialGetByte   ; Get the first/next/last data byte
+    184 00F885 97 04                          sta     [START_LO],y    ; Save it to RAM
+    185 00F887 18                             clc
+    186 00F888 65 08                          adc     CHKSUM
+    187 00F88A 85 08                          sta     CHKSUM          ;
+    188 00F88C C8                             iny                     ; update data pointer
+    189 00F88D CA                             dex                     ; decrement count
+    190 00F88E D0 F2                          bne     .0002
+    191 00F890 20 CF F9                       jsr     SerialGetByte   ; get the checksum
+    192 00F893 18                             clc
+    193 00F894 65 08                          adc     CHKSUM
+    194 00F896 D0 08                          bne     .fail           ; If failed, report it
+                                             ; Another successful record has been processed
+    196 00F898 A9 23                          lda     #'#'            ; Character indicating record OK = '#'
+    197 00F89A 20 04 FA                       jsr			SerialPutChar		; write it out but don't wait for output
+    198 00F89D 82 AC FF                       brl     .nextrec        ; get next record
+    199 00F8A0                             .fail:
+    200 00F8A0 A9 46                        	lda     #'F'            ; Character indicating record failure = 'F'
+    201 00F8A2 85 09                          sta     DLFAIL          ; download failed if non-zero
+    202 00F8A4 20 04 FA                       jsr     SerialPutChar   ; write it to transmit buffer register
+    203 00F8A7 82 A2 FF                       brl     .nextrec        ; wait for next record start
+                                           
+    205 00F8AA                             .nextRecType:
+    206 00F8AA C9 01                        	cmp     #1              ; Check for end-of-file type
+    207 00F8AC F0 3B                          beq     .eofRec
+    208 00F8AE C9 04                          cmp			#4
+    209 00F8B0 F0 60                          beq			.extAddrRec
+    210 00F8B2 C9 05                          cmp			#5
+    211 00F8B4 F0 79                          beq			.entryPointRec
+    212 00F8B6 20 10 FA                       jsr     SerialPutString ; Warn user of unknown record type
+    213 00F8B9 0D 0A 0D 0A                    .byte   13,10,13,10
+    214 00F8BD 55 6E 6B 6E 6F 77 6E 20        .byte   "Unknown record type $",0
+    214 00F8C5 72 65 63 6F 72 64 20 74    
+    214 00F8CD 79 70 65 20 24 00          
+    215 00F8D3 A5 07                          lda     RECTYPE         ; Get it
+    216 00F8D5 85 09                        	sta			DLFAIL					; non-zero --> download has failed
+    217 00F8D7 20 F1 F9                       jsr     SerialPutByte   ; print it
+    218 00F8DA A9 0D                        	lda     #13							; but we'll let it finish so as not to
+    219 00F8DC 20 04 FA                       jsr     SerialPutChar		; falsely start a new d/l from existing
+    220 00F8DF A9 0A                          lda     #10							; file that may still be coming in for
+    221 00F8E1 20 04 FA                       jsr     SerialPutChar		; quite some time yet.
+    222 00F8E4 82 65 FF                     	brl 		.nextrec
+    223 00F8E7                             .fail2:
+    224 00F8E7 80 B7                        	bra			.fail
+                                           
+                                           	; We've reached the end-of-file record
+    227 00F8E9                             .eofRec:
+    228 00F8E9 20 CF F9                       jsr     SerialGetByte   ; get the checksum
+    229 00F8EC 18                             clc
+    230 00F8ED 65 08                          adc     CHKSUM          ; Add previous checksum accumulator value
+    231 00F8EF F0 6F                          beq     .0005           ; checksum = 0 means we're OK!
+    232 00F8F1 20 10 FA                       jsr     SerialPutString ; Warn user of bad checksum
+    233 00F8F4 0D 0A 0D 0A                    .byte   13,10,13,10
+    234 00F8F8 42 61 64 20 72 65 63 6F        .byte   "Bad record checksum!",13,10,0
+    234 00F900 72 64 20 63 68 65 63 6B    
+    234 00F908 73 75 6D 21 0D 0A 00       
+    235 00F90F 82 EE FE                       brl     IntelHexDownload
+                                           
+                                             ; rectype #4 - Get address extension - bits 16 to 31
+    238 00F912                             .extAddrRec:
+    239 00F912 20 CF F9                     	jsr			SerialGetByte		; get address bits 24 to 31
+    240 00F915 18                           	clc											; and discard
+    241 00F916 65 08                        	adc			CHKSUM
+    242 00F918 85 08                        	sta			CHKSUM
+    243 00F91A 20 CF F9                     	jsr			SerialGetByte		; get address bits 16 to 23
+    244 00F91D 85 06                        	sta			START_HI
+    245 00F91F 18                           	clc
+    246 00F920 65 08                        	adc			CHKSUM
+    247 00F922 85 08                        	sta			CHKSUM
+    248 00F924 20 CF F9                     	jsr			SerialGetByte
+    249 00F927 18                           	clc
+    250 00F928 65 08                        	adc			CHKSUM
+    251 00F92A                             .fail1:
+    252 00F92A D0 BB                        	bne			.fail2
+    253 00F92C 82 1D FF                     	brl			.nextrec
+                                           
+                                           	; rectype #5 - Get the entry point record
+    256 00F92F                             .entryPointRec:
+    257 00F92F 20 CF F9                     	jsr			SerialGetByte		; get address bits 24 to 31
+    258 00F932 18                           	clc
+    259 00F933 65 08                        	adc			CHKSUM
+    260 00F935 85 08                        	sta			CHKSUM
+    261 00F937 20 CF F9                     	jsr			SerialGetByte		; get address bits 16 to 23
+    262 00F93A 85 0D                        	sta			ENTRYPT_HI
+    263 00F93C 18                           	clc
+    264 00F93D 65 08                        	adc			CHKSUM
+    265 00F93F 85 08                        	sta			CHKSUM
+    266 00F941 20 CF F9                     	jsr			SerialGetByte		; get address bits 8 to 15
+    267 00F944 85 0C                        	sta			ENTRYPT_MID
+    268 00F946 18                           	clc
+    269 00F947 65 08                        	adc			CHKSUM
+    270 00F949 85 08                        	sta			CHKSUM
+    271 00F94B 20 CF F9                     	jsr			SerialGetByte		; get address bits 0 to 7
+    272 00F94E 85 0B                        	sta			ENTRYPT_LO
+    273 00F950 18                           	clc
+    274 00F951 65 08                        	adc			CHKSUM
+    275 00F953 85 08                        	sta			CHKSUM
+    276 00F955 20 CF F9                     	jsr			SerialGetByte		; get checksum byte
+    277 00F958 18                           	clc
+    278 00F959 65 08                        	adc			CHKSUM
+    279 00F95B D0 CD                        	bne			.fail1
+    280 00F95D 82 EC FE                     	brl			.nextrec
+                                           
+    282 00F960                             .0005:
+    283 00F960 A5 09                         	lda     DLFAIL
+    284 00F962 F0 1D                          beq     .downloadOk
+                                             ;A download failure has occurred
+    286 00F964 20 10 FA                       jsr     SerialPutString
+    287 00F967 0D 0A 0D 0A                    .byte   13,10,13,10
+    288 00F96B 44 6F 77 6E 6C 6F 61 64        .byte   "Download Failed.",13,10,0
+    288 00F973 20 46 61 69 6C 65 64 2E    
+    288 00F97B 0D 0A 00                   
+    289 00F97E 82 7F FE                       brl     IntelHexDownload
+                                           
+    291 00F981                             .downloadOk:
+    292 00F981 20 10 FA                     	jsr     SerialPutString
+    293 00F984 0D 0A 0D 0A                    .byte   13,10,13,10
+    294 00F988 44 6F 77 6E 6C 6F 61 64        .byte   "Download Successful!",13,10
+    294 00F990 20 53 75 63 63 65 73 73    
+    294 00F998 66 75 6C 21 0D 0A          
+    295 00F99E 4A 75 6D 70 69 6E 67 20        .byte   "Jumping to $",0
+    295 00F9A6 74 6F 20 24 00             
+    296 00F9AB A5 0D                          lda			ENTRYPT_HI		; Print the entry point in hex
+    297 00F9AD 20 F1 F9                       jsr			SerialPutByte
+    298 00F9B0 A5 0C                          lda			ENTRYPT_MID
+    299 00F9B2 20 F1 F9                       jsr			SerialPutByte
+    300 00F9B5 A5 0B                          lda			ENTRYPT_LO
+    301 00F9B7 20 F1 F9                       jsr			SerialPutByte
+    302 00F9BA 20 10 FA                       jsr			SerialPutString
+    303 00F9BD 0D 0A 00                       .byte   13,10,0
+    304 00F9C0 DC 0B 00                       jmp			[ENTRYPT_LO]	; jump to canonical entry point
+                                           ;
+                                           ;
+                                           ; This routine assumes that serial data is present in the buffer.
+                                           
+    309 00F9C3                             SerialGetChar:
+    310 00F9C3 08                           	php
+    311 00F9C4 C2 10                        	rep		#$010		; 16 bit index
+                                           	MEM		8
+                                           	NDX		16
+    314 00F9C6 A4 18                        	ldy		RXNDX
+    315 00F9C8 B7 10                        	lda		[RXBUFPTR],y
+    316 00F9CA C8                           	iny
+    317 00F9CB 84 18                        	sty		RXNDX
+    318 00F9CD 28                           	plp						; restore register settings
+    319 00F9CE 60                             rts
+                                           
+                                           	MEM		8
+                                           	NDX		8
+                                           ; Busy wait
+                                           
+    325 00F9CF                             SerialGetByte:
+    326 00F9CF 20 C3 F9                     	jsr     SerialGetChar
+    327 00F9D2 20 E6 F9                       jsr     MKNIBL  	; Convert to 0..F numeric
+    328 00F9D5 0A                             asl
+    329 00F9D6 0A                             asl
+    330 00F9D7 0A                             asl
+    331 00F9D8 0A                             asl				       	; This is the upper nibble
+    332 00F9D9 29 F0                          and     #$F0
+    333 00F9DB 85 0A                          sta     TEMP
+    334 00F9DD 20 C3 F9                       jsr     SerialGetChar
+    335 00F9E0 20 E6 F9                       jsr     MKNIBL
+    336 00F9E3 05 0A                          ora     TEMP
+    337 00F9E5 60                             rts             	; return with the nibble received
+                                           
+                                           ; Convert the ASCII nibble to numeric value from 0-F:
+    340 00F9E6 C9 3A                       MKNIBL  cmp     #'9'+1  	; See if it's 0-9 or 'A'..'F' (no lowercase yet)
+    341 00F9E8 90 02                                bcc     MKNNH   	; If we borrowed, we lost the carry so 0..9
+    342 00F9EA E9 08                                sbc     #7+1    	; Subtract off extra 7 (sbc subtracts off one less)
+                                                   ; If we fall through, carry is set unlike direct entry at MKNNH
+    344 00F9EC E9 2F                       MKNNH   sbc     #'0'-1  	; subtract off '0' (if carry clear coming in)
+    345 00F9EE 29 0F                                and     #$0F    	; no upper nibble no matter what
+    346 00F9F0 60                                   rts             	; and return the nibble
+                                           
+                                           ; Put byte in A as hexydecascii
+                                           
+    350 00F9F1                             SerialPutByte:
+    351 00F9F1 48                           	pha             	;
+    352 00F9F2 4A                             lsr
+    353 00F9F3 4A                             lsr
+    354 00F9F4 4A                             lsr
+    355 00F9F5 4A                             lsr
+    356 00F9F6 20 FA F9                       jsr     .0001
+    357 00F9F9 68                             pla
+    358 00F9FA                             .0001:
+    359 00F9FA 29 0F                          and     #$0F    	; strip off the low nibble
+    360 00F9FC C9 0A                          cmp     #$0A
+    361 00F9FE 90 02                          bcc     .0002  	; if it's 0-9, add '0' else also add 7
+    362 00FA00 69 06                          adc     #6      	; Add 7 (6+carry=1), result will be carry clear
+    363 00FA02                             .0002:
+    364 00FA02 69 30                          adc     #'0'    	; If carry clear, we're 0-9
+                                           
+                                           ; Write the character in A as ASCII:
+                                           
+    368 00FA04                             SerialPutChar:
+    369 00FA04 08                           	php
+    370 00FA05 C2 10                        	rep		#$010		; 16 bit index
+                                           	MEM		8
+                                           	NDX		16
+    373 00FA07 A4 1A                        	ldy		TXNDX
+    374 00FA09 97 14                        	sta		[TXBUFPTR],y
+    375 00FA0B C8                           	iny
+    376 00FA0C 84 1A                        	sty		TXNDX
+    377 00FA0E 28                           	plp						; restore register settings
+    378 00FA0F 60                             rts
+                                           
+                                           	MEM		8
+                                           	NDX		8
+                                           
+                                           ; Put the string following in-line until a NULL out to the console
+                                           ;
+    385 00FA10                             SerialPutString:
+    386 00FA10 68                           	pla			; Get the low part of "return" address (data start address)
+    387 00FA11 85 00                          sta     DPL
+    388 00FA13 68                             pla
+    389 00FA14 85 02                          sta     DPH             ; Get the high part of "return" address
+                                                                         ; (data start address)
+                                             ; Note: actually we're pointing one short
+    392 00FA16                             .PSINB:
+    393 00FA16 A0 01                          ldy     #1
+    394 00FA18 B1 00                          lda     (DPL),y         ; Get the next string character
+    395 00FA1A E6 00                          inc     DPL             ; update the pointer
+    396 00FA1C D0 02                          bne     .0001           ; if not, we're pointing to next character
+    397 00FA1E E6 02                          inc     DPH             ; account for page crossing
+    398 00FA20                             .0001:
+    399 00FA20 09 00                          ora     #0              ; Set flags according to contents of Accumulator
+    400 00FA22 F0 05                          beq     .0002           ; don't print the final NULL
+    401 00FA24 20 04 FA                       jsr     SerialPutChar   ; write it out
+    402 00FA27 80 ED                          bra     .PSINB          ; back around
+    403 00FA29                             .0002:
+    404 00FA29 E6 00                        	inc     DPL             ;
+    405 00FA2B D0 02                          bne     .0003           ;
+    406 00FA2D E6 02                          inc     DPH             ; account for page crossing
+    407 00FA2F                             .0003:
+    408 00FA2F 6C 00 00                       jmp     (DPL)           ; return to byte following final NULL
+                                           
+                                           ; ------------------------------------------------------------------------------
+                                           ; ------------------------------------------------------------------------------
+                                           
+    413 00FA32 FF FF FF FF FF FF FF FF      	.org	$FFFC		; reset vector
+    413 00FA3A FF FF FF FF FF FF FF FF    
+    413 00FA42 FF FF FF FF FF FF FF FF    
+    413 00FA4A FF FF FF FF FF FF FF FF    
+    413 00FA52 FF FF FF FF FF FF FF FF    
+    413 00FA5A FF FF FF FF FF FF FF FF    
+    413 00FA62 FF FF FF FF FF FF FF FF    
+    413 00FA6A FF FF FF FF FF FF FF FF    
+    413 00FA72 FF FF FF FF FF FF FF FF    
+    413 00FA7A FF FF FF FF FF FF FF FF    
+    413 00FA82 FF FF FF FF FF FF FF FF    
+    413 00FA8A FF FF FF FF FF FF FF FF    
+    413 00FA92 FF FF FF FF FF FF FF FF    
+    413 00FA9A FF FF FF FF FF FF FF FF    
+    413 00FAA2 FF FF FF FF FF FF FF FF    
+    413 00FAAA FF FF FF FF FF FF FF FF    
+    413 00FAB2 FF FF FF FF FF FF FF FF    
+    413 00FABA FF FF FF FF FF FF FF FF    
+    413 00FAC2 FF FF FF FF FF FF FF FF    
+    413 00FACA FF FF FF FF FF FF FF FF    
+    413 00FAD2 FF FF FF FF FF FF FF FF    
+    413 00FADA FF FF FF FF FF FF FF FF    
+    413 00FAE2 FF FF FF FF FF FF FF FF    
+    413 00FAEA FF FF FF FF FF FF FF FF    
+    413 00FAF2 FF FF FF FF FF FF FF FF    
+    413 00FAFA FF FF FF FF FF FF FF FF    
+    413 00FB02 FF FF FF FF FF FF FF FF    
+    413 00FB0A FF FF FF FF FF FF FF FF    
+    413 00FB12 FF FF FF FF FF FF FF FF    
+    413 00FB1A FF FF FF FF FF FF FF FF    
+    413 00FB22 FF FF FF FF FF FF FF FF    
+    413 00FB2A FF FF FF FF FF FF FF FF    
+    413 00FB32 FF FF FF FF FF FF FF FF    
+    413 00FB3A FF FF FF FF FF FF FF FF    
+    413 00FB42 FF FF FF FF FF FF FF FF    
+    413 00FB4A FF FF FF FF FF FF FF FF    
+    413 00FB52 FF FF FF FF FF FF FF FF    
+    413 00FB5A FF FF FF FF FF FF FF FF    
+    413 00FB62 FF FF FF FF FF FF FF FF    
+    413 00FB6A FF FF FF FF FF FF FF FF    
+    413 00FB72 FF FF FF FF FF FF FF FF    
+    413 00FB7A FF FF FF FF FF FF FF FF    
+    413 00FB82 FF FF FF FF FF FF FF FF    
+    413 00FB8A FF FF FF FF FF FF FF FF    
+    413 00FB92 FF FF FF FF FF FF FF FF    
+    413 00FB9A FF FF FF FF FF FF FF FF    
+    413 00FBA2 FF FF FF FF FF FF FF FF    
+    413 00FBAA FF FF FF FF FF FF FF FF    
+    413 00FBB2 FF FF FF FF FF FF FF FF    
+    413 00FBBA FF FF FF FF FF FF FF FF    
+    413 00FBC2 FF FF FF FF FF FF FF FF    
+    413 00FBCA FF FF FF FF FF FF FF FF    
+    413 00FBD2 FF FF FF FF FF FF FF FF    
+    413 00FBDA FF FF FF FF FF FF FF FF    
+    413 00FBE2 FF FF FF FF FF FF FF FF    
+    413 00FBEA FF FF FF FF FF FF FF FF    
+    413 00FBF2 FF FF FF FF FF FF FF FF    
+    413 00FBFA FF FF FF FF FF FF FF FF    
+    413 00FC02 FF FF FF FF FF FF FF FF    
+    413 00FC0A FF FF FF FF FF FF FF FF    
+    413 00FC12 FF FF FF FF FF FF FF FF    
+    413 00FC1A FF FF FF FF FF FF FF FF    
+    413 00FC22 FF FF FF FF FF FF FF FF    
+    413 00FC2A FF FF FF FF FF FF FF FF    
+    413 00FC32 FF FF FF FF FF FF FF FF    
+    413 00FC3A FF FF FF FF FF FF FF FF    
+    413 00FC42 FF FF FF FF FF FF FF FF    
+    413 00FC4A FF FF FF FF FF FF FF FF    
+    413 00FC52 FF FF FF FF FF FF FF FF    
+    413 00FC5A FF FF FF FF FF FF FF FF    
+    413 00FC62 FF FF FF FF FF FF FF FF    
+    413 00FC6A FF FF FF FF FF FF FF FF    
+    413 00FC72 FF FF FF FF FF FF FF FF    
+    413 00FC7A FF FF FF FF FF FF FF FF    
+    413 00FC82 FF FF FF FF FF FF FF FF    
+    413 00FC8A FF FF FF FF FF FF FF FF    
+    413 00FC92 FF FF FF FF FF FF FF FF    
+    413 00FC9A FF FF FF FF FF FF FF FF    
+    413 00FCA2 FF FF FF FF FF FF FF FF    
+    413 00FCAA FF FF FF FF FF FF FF FF    
+    413 00FCB2 FF FF FF FF FF FF FF FF    
+    413 00FCBA FF FF FF FF FF FF FF FF    
+    413 00FCC2 FF FF FF FF FF FF FF FF    
+    413 00FCCA FF FF FF FF FF FF FF FF    
+    413 00FCD2 FF FF FF FF FF FF FF FF    
+    413 00FCDA FF FF FF FF FF FF FF FF    
+    413 00FCE2 FF FF FF FF FF FF FF FF    
+    413 00FCEA FF FF FF FF FF FF FF FF    
+    413 00FCF2 FF FF FF FF FF FF FF FF    
+    413 00FCFA FF FF FF FF FF FF FF FF    
+    413 00FD02 FF FF FF FF FF FF FF FF    
+    413 00FD0A FF FF FF FF FF FF FF FF    
+    413 00FD12 FF FF FF FF FF FF FF FF    
+    413 00FD1A FF FF FF FF FF FF FF FF    
+    413 00FD22 FF FF FF FF FF FF FF FF    
+    413 00FD2A FF FF FF FF FF FF FF FF    
+    413 00FD32 FF FF FF FF FF FF FF FF    
+    413 00FD3A FF FF FF FF FF FF FF FF    
+    413 00FD42 FF FF FF FF FF FF FF FF    
+    413 00FD4A FF FF FF FF FF FF FF FF    
+    413 00FD52 FF FF FF FF FF FF FF FF    
+    413 00FD5A FF FF FF FF FF FF FF FF    
+    413 00FD62 FF FF FF FF FF FF FF FF    
+    413 00FD6A FF FF FF FF FF FF FF FF    
+    413 00FD72 FF FF FF FF FF FF FF FF    
+    413 00FD7A FF FF FF FF FF FF FF FF    
+    413 00FD82 FF FF FF FF FF FF FF FF    
+    413 00FD8A FF FF FF FF FF FF FF FF    
+    413 00FD92 FF FF FF FF FF FF FF FF    
+    413 00FD9A FF FF FF FF FF FF FF FF    
+    413 00FDA2 FF FF FF FF FF FF FF FF    
+    413 00FDAA FF FF FF FF FF FF FF FF    
+    413 00FDB2 FF FF FF FF FF FF FF FF    
+    413 00FDBA FF FF FF FF FF FF FF FF    
+    413 00FDC2 FF FF FF FF FF FF FF FF    
+    413 00FDCA FF FF FF FF FF FF FF FF    
+    413 00FDD2 FF FF FF FF FF FF FF FF    
+    413 00FDDA FF FF FF FF FF FF FF FF    
+    413 00FDE2 FF FF FF FF FF FF FF FF    
+    413 00FDEA FF FF FF FF FF FF FF FF    
+    413 00FDF2 FF FF FF FF FF FF FF FF    
+    413 00FDFA FF FF FF FF FF FF FF FF    
+    413 00FE02 FF FF FF FF FF FF FF FF    
+    413 00FE0A FF FF FF FF FF FF FF FF    
+    413 00FE12 FF FF FF FF FF FF FF FF    
+    413 00FE1A FF FF FF FF FF FF FF FF    
+    413 00FE22 FF FF FF FF FF FF FF FF    
+    413 00FE2A FF FF FF FF FF FF FF FF    
+    413 00FE32 FF FF FF FF FF FF FF FF    
+    413 00FE3A FF FF FF FF FF FF FF FF    
+    413 00FE42 FF FF FF FF FF FF FF FF    
+    413 00FE4A FF FF FF FF FF FF FF FF    
+    413 00FE52 FF FF FF FF FF FF FF FF    
+    413 00FE5A FF FF FF FF FF FF FF FF    
+    413 00FE62 FF FF FF FF FF FF FF FF    
+    413 00FE6A FF FF FF FF FF FF FF FF    
+    413 00FE72 FF FF FF FF FF FF FF FF    
+    413 00FE7A FF FF FF FF FF FF FF FF    
+    413 00FE82 FF FF FF FF FF FF FF FF    
+    413 00FE8A FF FF FF FF FF FF FF FF    
+    413 00FE92 FF FF FF FF FF FF FF FF    
+    413 00FE9A FF FF FF FF FF FF FF FF    
+    413 00FEA2 FF FF FF FF FF FF FF FF    
+    413 00FEAA FF FF FF FF FF FF FF FF    
+    413 00FEB2 FF FF FF FF FF FF FF FF    
+    413 00FEBA FF FF FF FF FF FF FF FF    
+    413 00FEC2 FF FF FF FF FF FF FF FF    
+    413 00FECA FF FF FF FF FF FF FF FF    
+    413 00FED2 FF FF FF FF FF FF FF FF    
+    413 00FEDA FF FF FF FF FF FF FF FF    
+    413 00FEE2 FF FF FF FF FF FF FF FF    
+    413 00FEEA FF FF FF FF FF FF FF FF    
+    413 00FEF2 FF FF FF FF FF FF FF FF    
+    413 00FEFA FF FF FF FF FF FF FF FF    
+    413 00FF02 FF FF FF FF FF FF FF FF    
+    413 00FF0A FF FF FF FF FF FF FF FF    
+    413 00FF12 FF FF FF FF FF FF FF FF    
+    413 00FF1A FF FF FF FF FF FF FF FF    
+    413 00FF22 FF FF FF FF FF FF FF FF    
+    413 00FF2A FF FF FF FF FF FF FF FF    
+    413 00FF32 FF FF FF FF FF FF FF FF    
+    413 00FF3A FF FF FF FF FF FF FF FF    
+    413 00FF42 FF FF FF FF FF FF FF FF    
+    413 00FF4A FF FF FF FF FF FF FF FF    
+    413 00FF52 FF FF FF FF FF FF FF FF    
+    413 00FF5A FF FF FF FF FF FF FF FF    
+    413 00FF62 FF FF FF FF FF FF FF FF    
+    413 00FF6A FF FF FF FF FF FF FF FF    
+    413 00FF72 FF FF FF FF FF FF FF FF    
+    413 00FF7A FF FF FF FF FF FF FF FF    
+    413 00FF82 FF FF FF FF FF FF FF FF    
+    413 00FF8A FF FF FF FF FF FF FF FF    
+    413 00FF92 FF FF FF FF FF FF FF FF    
+    413 00FF9A FF FF FF FF FF FF FF FF    
+    413 00FFA2 FF FF FF FF FF FF FF FF    
+    413 00FFAA FF FF FF FF FF FF FF FF    
+    413 00FFB2 FF FF FF FF FF FF FF FF    
+    413 00FFBA FF FF FF FF FF FF FF FF    
+    413 00FFC2 FF FF FF FF FF FF FF FF    
+    413 00FFCA FF FF FF FF FF FF FF FF    
+    413 00FFD2 FF FF FF FF FF FF FF FF    
+    413 00FFDA FF FF FF FF FF FF FF FF    
+    413 00FFE2 FF FF FF FF FF FF FF FF    
+    413 00FFEA FF FF FF FF FF FF FF FF    
+    413 00FFF2 FF FF FF FF FF FF FF FF    
+    413 00FFFA FF FF                      
+    414 00FFFC 00 F0                        	dw		$F000
+                                           
+                                           	.org	$FFFE
+    417 00FFFE 2B F0                        	dw		RXIRQ	; IRQRout02
+                                           
+
+Checksum=554B5FA1
+
+Number of instructions processed: 245
+Number of opcode bytes: 468
+Bytes per instruction: 1.910204 (15.281633 bits)
+Clock cycle count: 0
+Clocks per instruction: 0.000000
+
+The above statistics are only estimates.
+
+	The CPI assumes data memory access requires two clock cycles and instruction
+	access is single cycle. The actual CPI may be higher if there are memory wait 
+	states, or lower if data is found in the cache.

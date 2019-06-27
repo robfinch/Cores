@@ -330,7 +330,7 @@ int processOptions(int argc, char **argv)
 							if (argv[nn][2] == 'I') {
 								gCpu = 'J';
 								mm = 3;
-								vebits = 128;
+								vebits = 256;
 							}
               else if (argv[nn][2]=='F') {
                  gCpu = 'F';
@@ -1350,8 +1350,7 @@ void process_label()
   }
   else {
 		prevToken();
-		val.low = ca;
-		val.high = 0;
+		val = Int128::Convert(ca);
 	}
 //    if (token==tk_eol)
 //       prevToken();
@@ -1375,11 +1374,12 @@ void process_label()
         sym->bits = (int)ceil(log(fabs((double)val.low)+1) / log(2.0))+1;
       }
       else {
-				if (gCpu=='G')
+				if (gCpu == 'G') {
 					sym->value.low = ca & -4LL;
+					sym->value.high = 0;
+				}
 				else
-					sym->value.low = ca;
-				sym->value.high = 0;
+					sym->value = Int128::Convert(ca);
         sym->segment = segment;
         if (segment==codeseg)
           sym->bits = code_bits;
@@ -1396,11 +1396,12 @@ void process_label()
         sym->bits = (int)ceil(log(fabs((double)val.low)+1) / log(2.0))+1;
       }
       else {
-				if (gCpu=='G')
+				if (gCpu == 'G') {
 					sym->value.low = ca & -4LL;
+					sym->value.high = 0;
+				}
 				else
-					sym->value.low = ca;
-				sym->value.high = 0;
+					sym->value = Int128::Convert(ca);
 				sym->segment = segment;
         if (segment==codeseg)
           sym->bits = code_bits;
@@ -1428,11 +1429,12 @@ void process_label()
         }
         else
           sym->phaserr = ' ';
-				if (gCpu=='G')
+				if (gCpu == 'G') {
 					sym->value.low = ca & -4LL;
+					sym->value.high = 0;
+				}
 				else
-					sym->value.low = ca;
-				sym->value.high = 0;
+					sym->value = Int128::Convert(ca);
 			}
     }
   }
@@ -2577,7 +2579,23 @@ int main(int argc, char *argv[])
             else
 			*/
 			if (gCpu=='F' || gCpu=='G' || gCpu=='J') {
-				if (vebits==128) {
+				if (vebits == 256) {
+					for (kk = 0; kk < binndx; kk += 32) {
+						fprintf(vfp, "\trommem[%d] = 256'h%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X;\n",
+							((((unsigned int)start_address + kk) / 32) % 8192), //checksum64((int64_t *)&binfile[kk]),
+							binfile[kk + 31], binfile[kk + 30], binfile[kk + 29], binfile[kk + 28],
+							binfile[kk + 27], binfile[kk + 26], binfile[kk + 25], binfile[kk + 24],
+							binfile[kk + 23], binfile[kk + 22], binfile[kk + 21], binfile[kk + 20],
+							binfile[kk + 19], binfile[kk + 18], binfile[kk + 17], binfile[kk + 16],
+							binfile[kk + 15], binfile[kk + 14], binfile[kk + 13], binfile[kk + 12],
+							binfile[kk + 11], binfile[kk + 10], binfile[kk + 9], binfile[kk + 8],
+							binfile[kk + 7], binfile[kk + 6], binfile[kk + 5], binfile[kk + 4],
+							binfile[kk + 3], binfile[kk + 2], binfile[kk + 1], binfile[kk]);
+					}
+					fprintf(vfp, "\trommem[7166] = 256'h0000000000000000000000000000000000000000000000000000000000000000;\n");
+					fprintf(vfp, "\trommem[7167] = 256'h%08X%08X000000000000000000000000000000000000000000000000;\n", binlen, checksum);
+				}
+				else if (vebits==128) {
 					for (kk = 0; kk < binndx; kk+=16) {
 						fprintf(vfp, "\trommem[%d] = 128'h%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X;\n", 
 							((((unsigned int)start_address+kk)/16)%16384), //checksum64((int64_t *)&binfile[kk]),

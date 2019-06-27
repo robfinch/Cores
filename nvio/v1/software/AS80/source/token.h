@@ -298,6 +298,7 @@ enum {
      tk_mffp, //280
      tk_mfspr,
 			tk_min,
+		 tk_minusminus,
      tk_mod,
      tk_modi,
 	tk_modsu,
@@ -334,6 +335,7 @@ enum {
      tk_peor,
      tk_php, //310
      tk_plp,
+		tk_plusplus,
      tk_pnand,
      tk_pnor,
      tk_pop,

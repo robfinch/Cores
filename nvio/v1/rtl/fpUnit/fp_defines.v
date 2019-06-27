@@ -66,10 +66,16 @@
 `define POINT5SX	40'h3F80000000
 `define POINT5D		64'h3FE0000000000000
 `define POINT5DX	80'h3FFE0000000000000000
+`define ZEROS			32'h00000000
+`define ZEROSX		40'h0000000000
+`define ZEROD			64'h0000000000000000
+`define ZERODX		80'h00000000000000000000
 
 `define AIN			3'd0
 `define BIN			3'd1
-`define RES			3'd2
-`define POINT5	3'd3
+`define CIN			3'd2
+`define RES			3'd3
+`define POINT5	3'd4
+`define ZERO		3'd5
 
 

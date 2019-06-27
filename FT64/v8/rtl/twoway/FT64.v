@@ -35,14 +35,18 @@
 // You should have received a copy of the GNU General Public License        
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.    
 //
-// Approx 41,000 LUTs. 66,000 LC's.
 // ============================================================================
 //
 `include "FT64_config.vh"
 `include "FT64_defines.vh"
 
+// The following option not working yet.
+//`define OPT_4xICACHE	1'b1
+
 module FT64(hartid, rst, clk_i, clk4x, tm_clk_i, irq_i, vec_i, bte_o, cti_o, bok_i, cyc_o, stb_o, ack_i, err_i, we_o, sel_o, adr_o, dat_o, dat_i,
     ol_o, pcr_o, pcr2_o, pkeys_o, icl_o, sr_o, cr_o, rbi_i, signal_i, exc_o);
+parameter WID=64;
+parameter INST_WID=48;
 input [63:0] hartid;
 input rst;
 input clk_i;
@@ -135,6 +139,7 @@ wire rdv_i;
 wire wrv_i;
 reg [ABW-1:0] vadr;
 reg cyc;
+reg cyc_pending;	// An i-cache load is about to happen
 reg we;
 
 wire dc_ack;
@@ -144,9 +149,9 @@ wire [RBIT:0] Ra0, Ra1, Ra2;
 wire [RBIT:0] Rb0, Rb1, Rb2;
 wire [RBIT:0] Rc0, Rc1, Rc2;
 wire [RBIT:0] Rt0, Rt1, Rt2;
-wire [63:0] rfoa0,rfob0,rfoc0,rfoc0a,rfot0;
-wire [63:0] rfoa1,rfob1,rfoc1,rfoc1a,rfot1;
-wire [63:0] rfoa2,rfob2,rfoc2,rfoc2a,rfot2;
+wire [WID-1:0] rfoa0,rfob0,rfoc0,rfoc0a,rfot0;
+wire [WID-1:0] rfoa1,rfob1,rfoc1,rfoc1a,rfot1;
+wire [WID-1:0] rfoa2,rfob2,rfoc2,rfoc2a,rfot2;
 `ifdef SUPPORT_SMT
 wire [7:0] Ra0s = {Ra0[7:0]};
 wire [7:0] Ra1s = {Ra1[7:0]};
@@ -354,10 +359,10 @@ reg [39:0] iq_ctr;
 reg [39:0] irq_ctr;					// count of number of interrupts
 reg [39:0] bm_ctr;					// branch miss counter
 reg [39:0] br_ctr;					// branch counter
-reg [39:0] icl_ctr;					// instruction cache load counter
+wire [39:0] icl_ctr;				// instruction cache load counter
 
 reg [7:0] fcu_timeout;
-reg [63:0] tick;
+reg [47:0] tick;
 reg [63:0] wc_time;
 reg [31:0] pcr;
 reg [63:0] pcr2;
@@ -537,13 +542,10 @@ reg [128:0] message [0:15];	// indexed by panic
 wire int_commit;
 reg StatusHWI;
 (* mark_debug = "true" *)
-reg [55:0] insn0, insn1, insn2;
-wire [55:0] insn0a, insn1b, insn2b;
-reg [55:0] insn1a, insn2a;
-// Only need enough bits in the seqnence number to cover the instructions in
-// the queue plus an extra count for skipping on branch misses. In this case
-// that would be four bits minimum (count 0 to 8). 
-wire [63:0] rdat0,rdat1,rdat2;
+reg [47:0] insn0, insn1, insn2;
+wire [47:0] insn0a, insn1b, insn2b;
+reg [47:0] insn1a, insn2a;
+wire [WID-1:0] rdat0,rdat1,rdat2;
 reg [127:0] xdati;
 
 reg canq1, canq2, canq3;
@@ -609,13 +611,8 @@ reg [QENTRIES-1:0] iqentry_tlb;
 reg [QENTRIES-1:0] iqentry_cmp;
 reg [QENTRIES-1:0] iqentry_rfw = 1'b0;	// writes to register file
 reg [QENTRIES-1:0] iqentry_prfw = 1'b0;
-reg  [7:0] iqentry_we   [0:QENTRIES-1];	// enable strobe
-reg [63:0] iqentry_res	[0:QENTRIES-1];	// instruction result
-reg [63:0] iqentry_seg_base	[0:QENTRIES-1];	//
-reg [63:0] iqentry_seg_lb	[0:QENTRIES-1];	//
-reg [63:0] iqentry_seg_ub	[0:QENTRIES-1];	//
-reg [63:0] iqentry_seg_acr	[0:QENTRIES-1];	//
-reg [63:0] iqentry_ares	[0:QENTRIES-1];	// alternate instruction result
+reg [WID-1:0] iqentry_res	[0:QENTRIES-1];	// instruction result
+reg [WID-1:0] iqentry_ares	[0:QENTRIES-1];	// alternate instruction result
 reg [47:0] iqentry_instr[0:QENTRIES-1];	// instruction opcode
 reg  [2:0] iqentry_insln[0:QENTRIES-1]; // instruction length
 reg  [7:0] iqentry_exc	[0:QENTRIES-1];	// only for branches ... indicates a HALT instruction
@@ -623,14 +620,14 @@ reg [RBIT:0] iqentry_tgt[0:QENTRIES-1];	// Rt field or ZERO -- this is the instr
 reg  [7:0] iqentry_vl   [0:QENTRIES-1];
 reg  [5:0] iqentry_ven  [0:QENTRIES-1];  // vector element number
 reg [AMSB:0] iqentry_ma [0:QENTRIES-1];	// memory address
-reg [63:0] iqentry_a0	[0:QENTRIES-1];	// argument 0 (immediate)
-reg [63:0] iqentry_a1	[0:QENTRIES-1];	// argument 1
+reg [WID-1:0] iqentry_a0	[0:QENTRIES-1];	// argument 0 (immediate)
+reg [WID-1:0] iqentry_a1	[0:QENTRIES-1];	// argument 1
 reg [QENTRIES-1:0] iqentry_a1_v;	// arg1 valid
 reg [`QBITSP1] iqentry_a1_s	[0:QENTRIES-1];	// arg1 source (iq entry # with top bit representing ALU/DRAM bus)
-reg [63:0] iqentry_a2	[0:QENTRIES-1];	// argument 2
+reg [WID-1:0] iqentry_a2	[0:QENTRIES-1];	// argument 2
 reg        iqentry_a2_v	[0:QENTRIES-1];	// arg2 valid
 reg  [`QBITSP1] iqentry_a2_s	[0:QENTRIES-1];	// arg2 source (iq entry # with top bit representing ALU/DRAM bus)
-reg [63:0] iqentry_a3	[0:QENTRIES-1];	// argument 3
+reg [WID-1:0] iqentry_a3	[0:QENTRIES-1];	// argument 3
 reg        iqentry_a3_v	[0:QENTRIES-1];	// arg3 valid
 reg  [`QBITSP1] iqentry_a3_s	[0:QENTRIES-1];	// arg3 source (iq entry # with top bit representing ALU/DRAM bus)
 reg [`ABITS] iqentry_pc	[0:QENTRIES-1];	// program counter for this instruction
@@ -767,8 +764,8 @@ reg         id3_pt;
 reg   [4:0] id3_Rt;
 wire [143:0] id3_bus;
 
-reg [63:0] alu0_xs = 64'd0;
-reg [63:0] alu1_xs = 64'd0;
+reg [WID-1:0] alu0_xs = 64'd0;
+reg [WID-1:0] alu1_xs = 64'd0;
 
 reg [3:0]  alu0_pred;
 reg 				alu0_cmt;
@@ -786,19 +783,19 @@ reg        alu0_store;
 reg 			 alu0_push;
 reg        alu0_shft;
 reg [RBIT:0] alu0_Ra;
-reg [63:0] alu0_argA;
-reg [63:0] alu0_argB;
-reg [63:0] alu0_argC;
-reg [63:0] alu0_argT;
-reg [63:0] alu0_argI;	// only used by BEQ
+reg [WID-1:0] alu0_argA;
+reg [WID-1:0] alu0_argB;
+reg [WID-1:0] alu0_argC;
+reg [WID-1:0] alu0_argT;
+reg [WID-1:0] alu0_argI;	// only used by BEQ
 reg [2:0]  alu0_sz;
 reg [RBIT:0] alu0_tgt;
 reg [5:0]  alu0_ven;
 reg        alu0_thrd;
 reg [`ABITS] alu0_pc;
-reg [63:0] alu0_bus;
-wire [63:0] alu0b_bus;
-wire [63:0] alu0_out;
+reg [WID-1:0] alu0_bus;
+wire [WID-1:0] alu0b_bus;
+wire [WID-1:0] alu0_out;
 wire  [`QBITSP1] alu0_id;
 (* mark_debug="true" *)
 wire  [`XBITS] alu0_exc;
@@ -821,19 +818,19 @@ reg        alu1_store;
 reg 			 alu1_push;
 reg        alu1_shft;
 reg [RBIT:0] alu1_Ra;
-reg [63:0] alu1_argA;
-reg [63:0] alu1_argB;
-reg [63:0] alu1_argC;
-reg [63:0] alu1_argT;
-reg [63:0] alu1_argI;	// only used by BEQ
+reg [WID-1:0] alu1_argA;
+reg [WID-1:0] alu1_argB;
+reg [WID-1:0] alu1_argC;
+reg [WID-1:0] alu1_argT;
+reg [WID-1:0] alu1_argI;	// only used by BEQ
 reg [2:0]  alu1_sz;
 reg [RBIT:0] alu1_tgt;
 reg [5:0]  alu1_ven;
 reg [`ABITS] alu1_pc;
 reg        alu1_thrd;
-reg [63:0] alu1_bus;
-wire [63:0] alu1b_bus;
-wire [63:0] alu1_out;
+reg [WID-1:0] alu1_bus;
+wire [WID-1:0] alu1b_bus;
+wire [WID-1:0] alu1_out;
 wire  [`QBITSP1] alu1_id;
 wire  [`XBITS] alu1_exc;
 wire        alu1_v;
@@ -849,15 +846,15 @@ wire       fpu1_done = 1'b1;
 wire       fpu1_idle;
 reg [`QBITSP1] fpu1_sourceid;
 reg [47:0] fpu1_instr;
-reg [63:0] fpu1_argA;
-reg [63:0] fpu1_argB;
-reg [63:0] fpu1_argC;
-reg [63:0] fpu1_argT;
-reg [63:0] fpu1_argI;	// only used by BEQ
+reg [WID-1:0] fpu1_argA;
+reg [WID-1:0] fpu1_argB;
+reg [WID-1:0] fpu1_argC;
+reg [WID-1:0] fpu1_argT;
+reg [WID-1:0] fpu1_argI;	// only used by BEQ
 reg [RBIT:0] fpu1_tgt;
 reg [`ABITS] fpu1_pc;
-wire [63:0] fpu1_out = 64'h0;
-reg [63:0] fpu1_bus = 64'h0;
+wire [WID-1:0] fpu1_out = 64'h0;
+reg [WID-1:0] fpu1_bus = 64'h0;
 wire  [`QBITSP1] fpu1_id;
 wire  [`XBITS] fpu1_exc = 9'h000;
 wire        fpu1_v;
@@ -871,15 +868,15 @@ wire       fpu2_done = 1'b1;
 wire       fpu2_idle;
 reg [`QBITSP1] fpu2_sourceid;
 reg [47:0] fpu2_instr;
-reg [63:0] fpu2_argA;
-reg [63:0] fpu2_argB;
-reg [63:0] fpu2_argC;
-reg [63:0] fpu2_argT;
-reg [63:0] fpu2_argI;	// only used by BEQ
+reg [WID-1:0] fpu2_argA;
+reg [WID-1:0] fpu2_argB;
+reg [WID-1:0] fpu2_argC;
+reg [WID-1:0] fpu2_argT;
+reg [WID-1:0] fpu2_argI;	// only used by BEQ
 reg [RBIT:0] fpu2_tgt;
 reg [`ABITS] fpu2_pc;
-wire [63:0] fpu2_out = 64'h0;
-reg [63:0] fpu2_bus = 64'h0;
+wire [WID-1:0] fpu2_out = 64'h0;
+reg [WID-1:0] fpu2_bus = 64'h0;
 wire  [`QBITSP1] fpu2_id;
 wire  [`XBITS] fpu2_exc = 9'h000;
 wire        fpu2_v;
@@ -904,20 +901,20 @@ reg        fcu_ret;
 reg        fcu_jal;
 reg        fcu_brk;
 reg        fcu_rti;
-reg [63:0] fcu_argA;
-reg [63:0] fcu_argB;
-reg [63:0] fcu_argC;
-reg [63:0] fcu_argI;	// only used by BEQ
-reg [63:0] fcu_argT;
-reg [63:0] fcu_argT2;
-reg [63:0] fcu_epc;
+reg [WID-1:0] fcu_argA;
+reg [WID-1:0] fcu_argB;
+reg [WID-1:0] fcu_argC;
+reg [WID-1:0] fcu_argI;	// only used by BEQ
+reg [WID-1:0] fcu_argT;
+reg [WID-1:0] fcu_argT2;
+reg [WID-1:0] fcu_epc;
 reg [23:0] fcu_ecs;		// excepted code segment
 reg [23:0] fcu_rs;		// return selector
 reg [`ABITS] fcu_pc;
 reg [`ABITS] fcu_nextpc;
 reg [`ABITS] fcu_brdisp;
-wire [63:0] fcu_out;
-reg [63:0] fcu_bus;
+wire [WID-1:0] fcu_out;
+reg [WID-1:0] fcu_bus;
 wire  [`QBITSP1] fcu_id;
 reg   [`XBITS] fcu_exc;
 wire        fcu_v;
@@ -926,14 +923,14 @@ reg        fcu_branchmiss;
 reg  fcu_clearbm;
 reg [`ABITS] fcu_misspc;
 
-reg [63:0] rmw_argA;
-reg [63:0] rmw_argB;
-reg [63:0] rmw_argC;
-wire [63:0] rmw_res;
+reg [WID-1:0] rmw_argA;
+reg [WID-1:0] rmw_argB;
+reg [WID-1:0] rmw_argC;
+wire [WID-1:0] rmw_res;
 reg [47:0] rmw_instr;
 
 // write buffer
-reg [63:0] wb_data [0:`WB_DEPTH-1];
+reg [WID-1:0] wb_data [0:`WB_DEPTH-1];
 reg [`ABITS] wb_addr [0:`WB_DEPTH-1];
 reg [1:0] wb_ol [0:`WB_DEPTH-1];
 reg [`WB_DEPTH-1:0] wb_v;
@@ -959,7 +956,7 @@ wire        dram_avail;
 reg	 [2:0] dram0;	// state of the DRAM request (latency = 4; can have three in pipeline)
 reg	 [2:0] dram1;	// state of the DRAM request (latency = 4; can have three in pipeline)
 reg	 [2:0] dram2;	// state of the DRAM request (latency = 4; can have three in pipeline)
-reg [63:0] dram0_data;
+reg [WID-1:0] dram0_data;
 reg [`ABITS] dram0_addr;
 reg [47:0] dram0_instr;
 reg        dram0_rmw;
@@ -972,7 +969,7 @@ reg        dram0_load;	// is a load operation
 reg 			 dram0_loadseg;
 reg        dram0_store;
 reg  [1:0] dram0_ol;
-reg [63:0] dram1_data;
+reg [WID-1:0] dram1_data;
 reg [`ABITS] dram1_addr;
 reg [47:0] dram1_instr;
 reg        dram1_rmw;
@@ -985,7 +982,7 @@ reg        dram1_load;
 reg 			 dram1_loadseg;
 reg        dram1_store;
 reg  [1:0] dram1_ol;
-reg [63:0] dram2_data;
+reg [WID-1:0] dram2_data;
 reg [`ABITS] dram2_addr;
 reg [47:0] dram2_instr;
 reg        dram2_rmw;
@@ -1001,33 +998,30 @@ reg  [1:0] dram2_ol;
 
 reg        dramA_v;
 reg  [`QBITSP1] dramA_id;
-reg [63:0] dramA_bus;
+reg [WID-1:0] dramA_bus;
 reg        dramB_v;
 reg  [`QBITSP1] dramB_id;
-reg [63:0] dramB_bus;
+reg [WID-1:0] dramB_bus;
 reg        dramC_v;
 reg  [`QBITSP1] dramC_id;
-reg [63:0] dramC_bus;
+reg [WID-1:0] dramC_bus;
 
 wire        outstanding_stores;
-reg [63:0] I;		// instruction count
-reg [63:0] CC;	// commit count
+reg [47:0] I;		// instruction count
+reg [47:0] CC;	// commit count
 
 reg        commit0_v;
 reg  [`QBITSP1] commit0_id;
 reg [RBIT:0] commit0_tgt;
-reg  [7:0] commit0_we = 8'h00;
-reg [63:0] commit0_bus;
+reg [WID-1:0] commit0_bus;
 reg        commit1_v;
 reg  [`QBITSP1] commit1_id;
 reg [RBIT:0] commit1_tgt;
-reg  [7:0] commit1_we = 8'h00;
-reg [63:0] commit1_bus;
+reg [WID-1:0] commit1_bus;
 reg        commit2_v;
 reg  [`QBITSP1] commit2_id;
 reg [RBIT:0] commit2_tgt;
-reg  [7:0] commit2_we = 8'h00;
-reg [63:0] commit2_bus;
+reg [WID-1:0] commit2_bus;
 
 reg StoreAck1;
 reg [4:0] bstate = BIDLE;
@@ -1056,7 +1050,11 @@ wire [1:0] ic0_fault,ic1_fault,ic2_fault;
 wire [9:0] L1_en;
 wire [71:0] L1_adr;
 wire [71:0] L2_adr;
-wire [305:0] L2_dato;
+`ifdef OPT_4xICACHE
+wire [WID-1:0] L2_dato;
+`else
+wire [289:0] L2_dato;
+`endif
 wire selL2;
 
 wire icclk;
@@ -1131,22 +1129,19 @@ assign rfoc0 = Rc0[11:6]==6'h3F ? vm[Rc0[2:0]] : rfoc0a;
 assign rfoc1 = Rc1[11:6]==6'h3F ? vm[Rc1[2:0]] : rfoc1a;
 end
 else begin : gb1
-FT64_regfile1w4r_oc #(.RBIT(RBIT)) urf1
+FT64_regfile1w3r #(.RBIT(RBIT)) urf1
 (
   .clk(clk),
-  .wr0(commit0_v),
-  .wa0(commit0_tgt),
-  .we0(8'hFF),
-  .i0(commit0_bus),
+  .wr(commit0_v),
+  .wa(commit0_tgt),
+  .i(commit0_bus),
   .rclk(~clk),
 	.ra0(Ra0),
 	.ra1(Rb0),
 	.ra2(Rc0),
-	.ra3(Rt0),
 	.o0(rfoa0),
 	.o1(rfob0),
-	.o2(rfoc0a),
-	.o3(rfot0)
+	.o2(rfoc0a)
 );
 end
 assign rfoc0 = Rc0[11:6]==6'h3F ? vm[Rc0[2:0]] : rfoc0a;
@@ -1157,13 +1152,13 @@ function [3:0] fnInsLength;
 input [47:0] ins;
 `ifdef SUPPORT_DCI
 if (ins[`INSTRUCTION_OP]==`CMPRSSD)
-	fnInsLength = 4'd2 | pred_on;
+	fnInsLength = 4'd2;
 else
 `endif
 	case(ins[7:6])
-	2'd0:	fnInsLength = 4'd4 | pred_on;
-	2'd1:	fnInsLength = 4'd6 | pred_on;
-	default:	fnInsLength = 4'd2 | pred_on;
+	2'd0:	fnInsLength = 4'd4;
+	2'd1:	fnInsLength = 4'd6;
+	default:	fnInsLength = 4'd2;
 	endcase
 endfunction
 
@@ -1193,13 +1188,29 @@ wire istb;
 wire [7:0] isel;
 wire [71:0] iadr;
 wire L2_ld;
-wire [305:0] L1_dat;
+`ifdef OPT_4xICACHE
+wire [63:0] L1_dat;
+wire [2:0] L1_rcnt;
+wire [2:0] L2_rcnt;
+`else
+wire [289:0] L1_dat;
+`endif
 wire [2:0] L2_cnt;
 reg [71:0] invlineAddr;
 
+`ifdef OPT_4xICACHE
+FT64_ICController_oc uL1ctrl
+`else
 FT64_ICController uL1ctrl
+`endif
 (
+	.rst_i(rst_i),
 	.clk_i(clk),
+`ifdef OPT_4xICACHE
+	.clk4x_i(clk4x),
+	.L1_rcnt(L1_rcnt),
+	.L2_rcnt(L2_rcnt),
+`endif
 	.asid(ASID),
 	.pc0(pc0),
 	.pc1(pc1),
@@ -1241,17 +1252,26 @@ FT64_ICController uL1ctrl
 	.exv_i(exv_i),
 	.sel_o(isel),
 	.adr_o(iadr),
-	.dat_i(dat_i)		
+	.dat_i(dat_i),
+	.icl_ctr(icl_ctr)		
 );
 
+`ifdef OPT_4xICACHE
+FT64_L1_icache_oc #(.pSize(`L1_ICACHE_SIZE)) uic0
+`else
 FT64_L1_icache #(.pSize(`L1_ICACHE_SIZE)) uic0
+`endif
 (
   .rst(rst),
   .clk(clk),
+`ifdef OPT_4xICACHE
+	.clk4x(clk4x),
+	.rcnt(L1_rcnt),
+`else
+  .en(L1_en),
+`endif
   .nxt(icnxt),
   .wr(L1_wr0),
-  .wr_ack(),
-  .en(L1_en),
   .adr(L1_selpc ? {ASID,pc0} : L1_adr),
   .wadr(L1_adr),
   .i(L1_dat),
@@ -1263,14 +1283,22 @@ FT64_L1_icache #(.pSize(`L1_ICACHE_SIZE)) uic0
 );
 generate begin : gICacheInst
 if (`WAYS > 1) begin
+`ifdef OPT_4xICACHE
+FT64_L1_icache_oc #(.pSize(`L1_ICACHE_SIZE)) uic1
+`else
 FT64_L1_icache #(.pSize(`L1_ICACHE_SIZE)) uic1
+`endif
 (
   .rst(rst),
   .clk(clk),
+`ifdef OPT_4xICACHE
+	.clk4x(clk4x),
+	.rcnt(L1_rcnt),
+`else
+  .en(L1_en),
+`endif
   .nxt(icnxt),
   .wr(L1_wr1),
-  .wr_ack(),
-  .en(L1_en),
   .adr(L1_selpc ? (thread_en ? {ASID,pc1}: {ASID,pc0plus6} ): L1_adr),
   .wadr(L1_adr),
   .i(L1_dat),
@@ -1285,14 +1313,22 @@ else begin
 assign ihit1 = 1'b1;
 end
 if (`WAYS > 2) begin
+`ifdef OPT_4xICACHE
+FT64_L1_icache_oc #(.pSize(`L1_ICACHE_SIZE)) uic2
+`else
 FT64_L1_icache #(.pSize(`L1_ICACHE_SIZE)) uic2
+`endif
 (
   .rst(rst),
   .clk(clk),
+`ifdef OPT_4xICACHE
+	.clk4x(clk4x),
+	.rcnt(L1_rcnt),
+`else
+  .en(L1_en),
+`endif
   .nxt(icnxt),
   .wr(L1_wr2),
-  .wr_ack(),
-  .en(L1_en),
   .adr(L1_selpc ? (thread_en ? {ASID,pc2} : {ASID,pc0plus12}) : L1_adr),
   .wadr(L1_adr),
   .i(L1_dat),
@@ -1308,10 +1344,18 @@ assign ihit2 = 1'b1;
 end
 endgenerate
 
+`ifdef OPT_4xICACHE
+FT64_L2_icache_oc uic2
+`else
 FT64_L2_icache uic2
+`endif
 (
   .rst(rst),
   .clk(clk),
+`ifdef OPT_4xICACHE
+	.clk4x(clk4x),
+	.rcnt(L2_rcnt),
+`endif
   .nxt(L2_nxt),
   .wr(L2_ld),
   .adr(selL2 ? L2_adr: L1_adr),
@@ -1974,10 +2018,10 @@ wire dhit0a, dhit1a, dhit2a;
 wire dhit00, dhit10, dhit20;
 wire dhit01, dhit11, dhit21;
 reg [`ABITS] dc_wadr;
-reg [63:0] dc_wdat;
+reg [WID-1:0] dc_wdat;
 reg isStore;
-reg [31:0] dcsel;
-reg [255:0] dcbuf;
+reg [9:0] dcsel;
+reg [319:0] dcbuf;
 reg dcwr;
 
 // If the data is in the write buffer, give the buffer a chance to
@@ -2264,6 +2308,7 @@ casez(isn[`INSTRUCTION_OP])
 `CHK:	fnRt = 12'd0;
 //`EXEC:	fnRt = 12'd0;
 `Bcc:   fnRt = 12'd0;
+`BRcc:	fnRt = 12'd0;
 `FBcc:  fnRt = 12'd0;
 `BBc:   fnRt = 12'd0;
 `NOP:  fnRt = 12'd0;
@@ -2498,6 +2543,7 @@ casez(isn[`INSTRUCTION_OP])
 `CHK:	fnRt = 12'd0;
 //`EXEC:	fnRt = 12'd0;
 `Bcc:   fnRt = 12'd0;
+`BRcc:	fnRt = 12'd0;
 `FBcc:  fnRt = 12'd0;
 `BBc:	fnRt = 12'd0;
 `NOP:  fnRt = 12'd0;
@@ -2574,6 +2620,7 @@ input [47:0] isn;
 casez(isn[`INSTRUCTION_OP])
 `BRK:   Source1Valid = isn[16] ? isn[`INSTRUCTION_RA]==5'd0 : TRUE;
 `Bcc:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`BRcc:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `FBcc:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `BBc:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `BEQI:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
@@ -2620,7 +2667,7 @@ casez(isn[`INSTRUCTION_OP])
 `CSRRW: Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `BITFIELD: 	case(isn[47:44])
 	`BFINSI:	Source1Valid = TRUE;
-	default:	Source1Valid = isn[`INSTRUCTION_RA]==5'd0 || isn[30]==1'b0;
+	default:	Source1Valid = isn[`INSTRUCTION_RA]==5'd0 || isn[41]==1'b0;
 	endcase
 `IVECTOR:
 	Source1Valid = FALSE;
@@ -2633,6 +2680,7 @@ input [47:0] isn;
 casez(isn[`INSTRUCTION_OP])
 `BRK:   Source2Valid = TRUE;
 `Bcc:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
+`BRcc:  Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
 `FBcc:  Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
 `BBc:   Source2Valid = TRUE;
 `BEQI:  Source2Valid = TRUE;
@@ -2702,7 +2750,7 @@ casez(isn[`INSTRUCTION_OP])
 `LV:        Source2Valid = TRUE;
 `SV:        Source2Valid = FALSE;
 `AMO:		Source2Valid = isn[31] || isn[`INSTRUCTION_RB]==5'd0;
-`BITFIELD: 	Source2Valid = isn[`INSTRUCTION_RB]==5'd0 || isn[31]==1'b0;
+`BITFIELD: 	Source2Valid = isn[`INSTRUCTION_RB]==5'd0 || isn[42]==1'b0;
 default:    Source2Valid = TRUE;
 endcase
 endfunction
@@ -2715,6 +2763,7 @@ case(isn[`INSTRUCTION_OP])
     `VEX:       Source3Valid = TRUE;
     default:    Source3Valid = TRUE;
     endcase
+`BRcc:  Source3Valid = isn[`INSTRUCTION_RB]==5'd0;
 `CHK:   Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
 `R2:
 	if (isn[`INSTRUCTION_L2]==2'b01)
@@ -2747,7 +2796,7 @@ case(isn[`INSTRUCTION_OP])
 	    `CASX:  Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
 	    default:    Source3Valid = TRUE;
 	    endcase
-`BITFIELD: 	Source3Valid = isn[`INSTRUCTION_RC]==5'd0 || isn[32]==1'b0;
+`BITFIELD: 	Source3Valid = isn[`INSTRUCTION_RC]==5'd0 || isn[43]==1'b0;
 default:    Source3Valid = TRUE;
 endcase
 endfunction
@@ -2994,6 +3043,7 @@ function IsBranch;
 input [47:0] isn;
 casez(isn[`INSTRUCTION_OP])
 `Bcc:   IsBranch = TRUE;
+`BRcc:  IsBranch = TRUE;
 `FBcc:  IsBranch = TRUE;
 `BBc:   IsBranch = TRUE;
 `BEQI:  IsBranch = TRUE;
@@ -3027,6 +3077,7 @@ casez(isn[`INSTRUCTION_OP])
         default:    IsFlowCtrl = FALSE;
         endcase
 `Bcc:   IsFlowCtrl = TRUE;
+`BRcc:  IsFlowCtrl = TRUE;
 `FBcc:  IsFlowCtrl = TRUE;
 `BBc:		IsFlowCtrl = TRUE;
 `BEQI:  IsFlowCtrl = TRUE;
@@ -3348,7 +3399,7 @@ case(isn[`INSTRUCTION_OP])
     endcase
 	else
 		IsDivmod = FALSE;
-`DIVUI,`DIVI,`MODI:  IsDivmod = TRUE;
+`DIVUI,`DIVI:  IsDivmod = TRUE;
 default:    IsDivmod = FALSE;
 endcase
 endfunction
@@ -5938,6 +5989,7 @@ case(fcu_instr[`INSTRUCTION_OP])
 `REX:	fcu_misspc = fcu_bus;
 `BRK:	fcu_misspc = {tvec[0][AMSB:8], 1'b0, olm, 5'h0};
 `JAL:	fcu_misspc = fcu_argA + fcu_argI;
+`BRcc:	fcu_misspc = fcu_argC;
 //`CHK:	fcu_misspc = fcu_nextpc + fcu_argI;	// Handled as an instruction exception
 // Default: branch
 default:	fcu_misspc = fcu_pt ? fcu_nextpc : {fcu_pc[AMSB:32],fcu_pc[31:0] + fcu_brdisp[31:0]};
@@ -5967,7 +6019,7 @@ if (fcu_v) begin
 	// BRK and RTI are handled as excmiss types which are processed during the commit stage.
 	if (fcu_brk_miss)
 		fcu_branchmiss = TRUE;
-	else if (fcu_branch && (fcu_takb ^ fcu_pt))
+	else if ((fcu_branch && (fcu_takb ^ fcu_pt)) || fcu_instr[`INSTRUCTION_OP]==`BRcc)
     fcu_branchmiss = TRUE;
 	else
 `ifdef SUPPORT_SMT		
@@ -6016,7 +6068,6 @@ begin
     commit0_v <= (iqentry_state[heads[0]] == IQS_CMT && ~|panic);
     commit0_id <= {iqentry_mem[heads[0]], heads[0]};	// if a memory op, it has a DRAM-bus id
     commit0_tgt <= iqentry_tgt[heads[0]];
-    commit0_we  <= iqentry_we[heads[0]];
     commit0_bus <= iqentry_res[heads[0]];
     if (`NUM_CMT > 1) begin
 	    commit1_v <= ({iqentry_v[heads[0]],  iqentry_state[heads[0]] == IQS_CMT} != 2'b10
@@ -6024,7 +6075,6 @@ begin
 	               && ~|panic);
 	    commit1_id <= {iqentry_mem[heads[1]], heads[1]};
 	    commit1_tgt <= iqentry_tgt[heads[1]];  
-	    commit1_we  <= iqentry_we[heads[1]];
 	    commit1_bus <= iqentry_res[heads[1]];
 	    // Need to set commit1, and commit2 valid bits for the branch predictor.
 	    if (`NUM_CMT > 2) begin
@@ -6035,7 +6085,6 @@ begin
 	  							 && {iqentry_v[heads[2]], iqentry_br[heads[2]], iqentry_state[heads[2]] == IQS_CMT}==3'b111
 		               && iqentry_tgt[heads[2]][4:0]==5'd0 && ~|panic);	// watch out for dbnz and ibne
 	  		commit2_tgt <= 12'h000;
-	  		commit2_we <= 8'h00;
 	  	end
   	end
   	else begin
@@ -6044,7 +6093,6 @@ begin
 	               && !iqentry_rfw[heads[1]] && ~|panic);	// watch out for dbnz and ibne
     	commit1_id <= {iqentry_mem[heads[1]], heads[1]};	// if a memory op, it has a DRAM-bus id
   		commit1_tgt <= 12'h000;
-  		commit1_we <= 8'h00;
   		// We don't really need the bus value since nothing is being written.
 	    commit1_bus <= iqentry_res[heads[1]];
   		commit2_v <= ({iqentry_v[heads[0]], iqentry_state[heads[0]] == IQS_CMT} != 2'b10
@@ -6053,7 +6101,6 @@ begin
 	               && !iqentry_rfw[heads[2]] && ~|panic);	// watch out for dbnz and ibne
     	commit2_id <= {iqentry_mem[heads[2]], heads[2]};	// if a memory op, it has a DRAM-bus id
   		commit2_tgt <= 12'h000;
-  		commit2_we <= 8'h00;
 	    commit2_bus <= iqentry_res[heads[2]];
   	end
 end
@@ -6384,7 +6431,6 @@ if (rst|(rst_ctr < 32'd10)) begin
        iqentry_sync[n] <= FALSE;
        iqentry_ven[n] <= 6'd0;
        iqentry_vl[n] <= 8'd0;
-       iqentry_we[n] <= 8'h00;
        iqentry_rfw[n] <= FALSE;
        iqentry_rmw[n] <= FALSE;
        iqentry_pc[n] <= RSTPC;
@@ -6478,6 +6524,7 @@ if (rst|(rst_ctr < 32'd10)) begin
      bte_o <= 2'b00;
      cti_o <= 3'b000;
      cyc <= `LOW;
+     cyc_pending <= `LOW;
      stb_o <= `LOW;
      we <= `LOW;
      sel_o <= 8'h00;
@@ -6546,7 +6593,6 @@ if (rst|(rst_ctr < 32'd10)) begin
 		wb_merges <= 32'd0;
 `endif
 		iq_ctr <= 40'd0;
-		icl_ctr <= 40'd0;
 		bm_ctr <= 40'd0;
 		br_ctr <= 40'd0;
 		irq_ctr <= 40'd0;
@@ -7514,7 +7560,6 @@ end
                  fcu_ret    <= iqentry_ret[n];
                  fcu_brk  <= iqentry_brk[n];
                  fcu_rti  <= iqentry_rti[n];
-                 fcu_pc		<= iqentry_pc[n];
                  fcu_argA	<= iqentry_a1_v[n] ? iqentry_a1[n]
                             : (iqentry_a1_s[n] == alu0_id) ? ralu0_bus
                             : (iqentry_a1_s[n] == fpu1_id && `NUM_FPU > 0) ? rfpu1_bus
@@ -8004,20 +8049,24 @@ BIDLE:
 		bwhich <= 2'b00;
 		preload <= FALSE;
 `ifdef HAS_WB
-		if (wb_v[0] & wb_en & ~acki & ~cyc) begin
+		if (wb_v[0] & wb_en & ~acki & ~cyc & ~cyc_pending) begin
 			cyc <= `HIGH;
 			stb_o <= `HIGH;
 			we <= `HIGH;
-			sel_o <= wb_sel[0];
+			case(wb_addr[0][2:1])
+			2'b00:	sel_o <= 4'hF;
+			2'b01:	sel_o <= 4'hE;
+			2'b10:	sel_o <= 4'hC;
+			2'b11:	sel_o <= 4'h8;
+			endcase
 			vadr <= wb_addr[0];
-			dat_o <= wb_data[0];
-			dcbuf <= {4{wb_data[0]}};
-			dcsel <= wb_sel[0] << {wb_addr[0][4:3],3'b0};
+			dat_o <= wb_data[0] << {wb_addr[0][2:1],4'h0};
+			dcbuf <= wb_data[0] << {wb_addr[0][4:1],4'h0};
+			dcsel <= 21'h3F << wb_addr[0][4:1];
 			ol_o  <= wb_ol[0];
 			wbo_id <= wb_id[0];
      	isStore <= TRUE;
 			bstate <= wb_rmw[0] ? B_RMWAck : B_StoreAck;
-			wb_v[0] <= `INV;
 		end
 		if (wb_v[0]==`INV && !writing_wb) begin
 			for (j = 1; j < `WB_DEPTH; j = j + 1) begin
@@ -8361,6 +8410,7 @@ BIDLE:
         // Check for L2 cache miss
         else if (~|wb_v && !ihitL2 && !acki)
         begin
+        	cyc_pending <= `HIGH;
         	bstate <= B_WaitIC;
         	/*
            cti_o <= 3'b001;
@@ -8387,6 +8437,7 @@ BIDLE:
     end
 B_WaitIC:
 	begin
+		cyc_pending <= `LOW;
 		cti_o <= icti;
 		bte_o <= ibte;
 		cyc <= icyc;
@@ -8405,7 +8456,153 @@ B_StoreAck:
 	begin
 		StoreAck1 <= `TRUE;
 		isStore <= `TRUE;
+		if (wb_addr[0][2:1]!=2'b11) begin
+			wb_nack();
+			cr_o <= 1'b0;
+	    // This isn't a good way of doing things; the state should be propagated
+	    // to the commit stage, however since this is a store we know there will
+	    // be no change of program flow. So the reservation status bit is set
+	    // here. The author wanted to avoid the complexity of propagating the
+	    // input signal to the commit stage. It does mean that the SWC
+	    // instruction should be surrounded by SYNC's.
+	    if (cr_o)
+				sema[0] <= rbi_i;
+`ifdef HAS_WB
+			wb_v[0] <= 1'b0;
+			for (n = 0; n < QENTRIES; n = n + 1) begin
+				if (wbo_id[n]) begin
+	        iqentry_exc[n] <= tlb_miss ? `FLT_TLB : wrv_i ? `FLT_DWF : err_i ? `FLT_IBE : `FLT_NONE;
+	        if (err_i|wrv_i) begin
+	        	wb_v <= 1'b0;			// Invalidate write buffer if there is a problem with the store
+	        	wb_en <= `FALSE;	// and disable write buffer
+	        end
+	       	iqentry_state[n] <= IQS_CMT;
+					iqentry_aq[n] <= `INV;
+				end
+			end
+`else
+	    case(bwhich)
+	    2'd0:   begin
+	             	dram0 <= `DRAMSLOT_AVAIL;
+	             	iqentry_exc[dram0_id[`QBITS]] <= (wrv_i|err_i) ? `FLT_DWF : `FLT_NONE;
+				        iqentry_state[dram0_id[`QBITS]] <= IQS_CMT;
+								iqentry_aq[ dram0_id[`QBITS] ] <= `INV;
+	     		//iqentry_out[ dram0_id[`QBITS] ] <= `INV;
+	            end
+	    2'd1:   if (`NUM_MEM > 1) begin
+	             	dram1 <= `DRAMSLOT_AVAIL;
+	             	iqentry_exc[dram1_id[`QBITS]] <= (wrv_i|err_i) ? `FLT_DWF : `FLT_NONE;
+				        iqentry_state[dram1_id[`QBITS]] <= IQS_CMT;
+								iqentry_aq[ dram1_id[`QBITS] ] <= `INV;
+	     		//iqentry_out[ dram1_id[`QBITS] ] <= `INV;
+	            end
+	    2'd2:   if (`NUM_MEM > 2) begin
+	             	dram2 <= `DRAMSLOT_AVAIL;
+	             	iqentry_exc[dram2_id[`QBITS]] <= (wrv_i|err_i) ? `FLT_DWF : `FLT_NONE;
+				        iqentry_state[dram2_id[`QBITS]] <= IQS_CMT;
+								iqentry_aq[ dram2_id[`QBITS] ] <= `INV;
+	     		//iqentry_out[ dram2_id[`QBITS] ] <= `INV;
+	            end
+	    default:    ;
+	    endcase
+`endif
+			bstate <= B_LSNAck;
+		end
+		if (acki|err_i|tlb_miss|wrv_i) begin
+			stb_o <= `LOW;
+			bstate <= B_Store2;
+	  end
+	end
+B_Store2:
+	if (~acki) begin
+		stb_o <= `HIGH;
+		case(wb_addr[0][2:1])
+		2'b00:	sel_o <= 4'h3;
+		2'b01:	sel_o <= 4'h7;
+		2'b10:	sel_o <= 4'hF;
+		2'b11:	sel_o <= 4'hF;
+		endcase
+		vadr[WID-1:3] <= vadr[WID-1:3] + 2'd1;
+		vadr[2:0] <= 3'b0;
+		case(wb_addr[0][2:1])
+		2'b00:	;//dat_o <= wb_data[0][95:64];
+		2'b01:	dat_o <= wb_data[0][63:48];
+		2'b10:	dat_o <= wb_data[0][63:32];
+		2'b11:	dat_o <= wb_data[0][63:16];
+		endcase
+		bstate <= B_StoreAck2;
+	end
+B_StoreAck2:
 	if (acki|err_i|tlb_miss|wrv_i) begin
+		if (wb_addr[0][2:1]!=2'b11) begin
+			wb_nack();
+			cr_o <= 1'b0;
+	    // This isn't a good way of doing things; the state should be propagated
+	    // to the commit stage, however since this is a store we know there will
+	    // be no change of program flow. So the reservation status bit is set
+	    // here. The author wanted to avoid the complexity of propagating the
+	    // input signal to the commit stage. It does mean that the SWC
+	    // instruction should be surrounded by SYNC's.
+	    if (cr_o)
+				sema[0] <= rbi_i;
+`ifdef HAS_WB
+			wb_v[0] <= 1'b0;
+			for (n = 0; n < QENTRIES; n = n + 1) begin
+				if (wbo_id[n]) begin
+	        iqentry_exc[n] <= tlb_miss ? `FLT_TLB : wrv_i ? `FLT_DWF : err_i ? `FLT_IBE : `FLT_NONE;
+	        if (err_i|wrv_i) begin
+	        	wb_v <= 1'b0;			// Invalidate write buffer if there is a problem with the store
+	        	wb_en <= `FALSE;	// and disable write buffer
+	        end
+	       	iqentry_state[n] <= IQS_CMT;
+					iqentry_aq[n] <= `INV;
+				end
+			end
+`else
+	    case(bwhich)
+	    2'd0:   begin
+	             	dram0 <= `DRAMSLOT_AVAIL;
+	             	iqentry_exc[dram0_id[`QBITS]] <= (wrv_i|err_i) ? `FLT_DWF : `FLT_NONE;
+				        iqentry_state[dram0_id[`QBITS]] <= IQS_CMT;
+								iqentry_aq[ dram0_id[`QBITS] ] <= `INV;
+	     		//iqentry_out[ dram0_id[`QBITS] ] <= `INV;
+	            end
+	    2'd1:   if (`NUM_MEM > 1) begin
+	             	dram1 <= `DRAMSLOT_AVAIL;
+	             	iqentry_exc[dram1_id[`QBITS]] <= (wrv_i|err_i) ? `FLT_DWF : `FLT_NONE;
+				        iqentry_state[dram1_id[`QBITS]] <= IQS_CMT;
+								iqentry_aq[ dram1_id[`QBITS] ] <= `INV;
+	     		//iqentry_out[ dram1_id[`QBITS] ] <= `INV;
+	            end
+	    2'd2:   if (`NUM_MEM > 2) begin
+	             	dram2 <= `DRAMSLOT_AVAIL;
+	             	iqentry_exc[dram2_id[`QBITS]] <= (wrv_i|err_i) ? `FLT_DWF : `FLT_NONE;
+				        iqentry_state[dram2_id[`QBITS]] <= IQS_CMT;
+								iqentry_aq[ dram2_id[`QBITS] ] <= `INV;
+	     		//iqentry_out[ dram2_id[`QBITS] ] <= `INV;
+	            end
+	    default:    ;
+	    endcase
+`endif
+			bstate <= B_LSNAck;
+		end
+		else begin
+			stb_o <= `LOW;
+			bstate <= B_Store3;
+		end
+	end
+// Store3 is used only if the address has bit [2:1]=2'b11
+B_Store3:
+	if (~acki) begin
+		stb_o <= `HIGH;
+		sel_o <= 4'h1;
+		vadr[WID-1:3] <= vadr[WID-1:3] + 2'd1;
+		vadr[2:0] <= 3'b0;
+		dat_o <= wb_dat[0][95:80];
+		bstate <= B_StoreAck3;
+	end
+B_StoreAck3:
+	begin
 		wb_nack();
 		cr_o <= 1'b0;
     // This isn't a good way of doing things; the state should be propagated
@@ -8417,6 +8614,7 @@ B_StoreAck:
     if (cr_o)
 			sema[0] <= rbi_i;
 `ifdef HAS_WB
+		wb_v[0] <= 1'b0;
 		for (n = 0; n < QENTRIES; n = n + 1) begin
 			if (wbo_id[n]) begin
         iqentry_exc[n] <= tlb_miss ? `FLT_TLB : wrv_i ? `FLT_DWF : err_i ? `FLT_IBE : `FLT_NONE;
@@ -8455,7 +8653,6 @@ B_StoreAck:
     endcase
 `endif
 		bstate <= B_LSNAck;
-  end
 	end
 
 B_DCacheLoadStart:
@@ -9401,7 +9598,6 @@ begin
 	iqentry_sync [nn]  <= bus[`IB_SYNC];
 	iqentry_fsync[nn]  <= bus[`IB_FSYNC];
 	iqentry_rfw  [nn]  <= bus[`IB_RFW];
-	iqentry_we   [nn]  <= bus[`IB_WE];
 end
 endtask
 
@@ -9416,11 +9612,12 @@ begin
 end
 endtask
 
+// Need to check for the source being automatically valid!!!!
 task a1_vs;
 begin
 	// if there is not an overlapping write to the register file.
 	if (Ra1s != Rt0s || !fetchbuf0_rfw) begin
-		iqentry_a1_v [tail1] <= regIsValid[Ra1s];
+		iqentry_a1_v [tail1] <= regIsValid[Ra1s] | Source1Valid(fetchbuf1_instr);
 		iqentry_a1_s [tail1] <= rf_source [Ra1s];
 	end
 	else begin
@@ -9434,7 +9631,7 @@ task a2_vs;
 begin
 	// if there is not an overlapping write to the register file.
 	if (Rb1s != Rt0s || !fetchbuf0_rfw) begin
-		iqentry_a2_v [tail1] <= regIsValid[Rb1s];
+		iqentry_a2_v [tail1] <= regIsValid[Rb1s] | Source2Valid(fetchbuf1_instr);
 		iqentry_a2_s [tail1] <= rf_source [Rb1s];
 	end
 	else begin
@@ -9448,7 +9645,7 @@ task a3_vs;
 begin
 	// if there is not an overlapping write to the register file.
 	if (Rc1s != Rt0s || !fetchbuf0_rfw) begin
-		iqentry_a3_v [tail1] <= regIsValid[Rc1s];
+		iqentry_a3_v [tail1] <= regIsValid[Rc1s] | Source3Valid(fetchbuf1_instr);
 		iqentry_a3_s [tail1] <= rf_source [Rc1s];
 	end
 	else begin
@@ -10312,6 +10509,7 @@ begin
 	// must reset the a1 source too.
 	//iqentry_a1_v[n] <= `INV;
 		iqentry_state[n] <= IQS_MEM;
+		iqentry_memissue[n] <= `INV;
 	end
 end
 endtask
@@ -10347,6 +10545,7 @@ begin
 `endif
 	//iqentry_a1_v[n] <= `INV;
 	iqentry_state[n] <= IQS_MEM;
+	iqentry_memissue[n] <= `INV;
 	end
 end
 endtask
@@ -10382,6 +10581,7 @@ begin
 `endif
 	//iqentry_a1_v[n] <= `INV;
 	iqentry_state[n] <= IQS_MEM;
+	iqentry_memissue[n] <= `INV;
 	end
 end
 endtask

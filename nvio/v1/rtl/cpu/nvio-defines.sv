@@ -244,11 +244,11 @@
 
 // Load operations
 `define LDB			6'h00
-`define LDC			6'h01
+`define LDW			6'h01
 `define LDP			6'h02
 `define LDD			6'h03
 `define LDBU		6'h04
-`define LDCU		6'h05
+`define LDWU		6'h05
 `define LDPU		6'h06
 `define LDDR		6'h07
 `define LDT			6'h08
@@ -527,10 +527,13 @@
 `define IB_ODDBALL	37
 `define IB_STORE	36
 `define IB_MEMSZ	35:33
+`define IB_MEM2		32
 `define IB_IMM		31
 `define IB_MEM    30
+`define IB_POP		29
 `define IB_BT     28
 `define IB_ALU		27
+`define IB_PUSHC	26
 `define IB_FPU		25
 `define IB_FC			24
 `define IB_CANEX	23

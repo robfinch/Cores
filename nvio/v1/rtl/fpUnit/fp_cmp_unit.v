@@ -1,4 +1,3 @@
-`timescale 1ns / 1ps
 // ============================================================================
 //        __
 //   \\__/ o\    (C) 2007-2019  Robert Finch, Waterloo
@@ -27,11 +26,13 @@
 //                                                                          
 // ============================================================================
 
+`include "fpConfig.sv"
+
 module fp_cmp_unit(a, b, o, nanx);
 parameter WID = 32;
 `include "fpSize.sv"
 
-input [WID-1:0] a, b;
+input [WID-1+`EXTRA_BITS:0] a, b;
 output [4:0] o;
 reg [4:0] o;
 output nanx;
@@ -46,8 +47,8 @@ wire [FMSB:0] mb;
 wire az, bz;
 wire nan_a, nan_b;
 
-fp_decomp #(WID) u1(.i(a), .sgn(sa), .exp(xa), .man(ma), .vz(az), .qnan(), .snan(), .nan(nan_a) );
-fp_decomp #(WID) u2(.i(b), .sgn(sb), .exp(xb), .man(mb), .vz(bz), .qnan(), .snan(), .nan(nan_b) );
+fpDecomp #(WID) u1(.i(a), .sgn(sa), .exp(xa), .man(ma), .vz(az), .qnan(), .snan(), .nan(nan_a) );
+fpDecomp #(WID) u2(.i(b), .sgn(sb), .exp(xb), .man(mb), .vz(bz), .qnan(), .snan(), .nan(nan_b) );
 
 wire unordered = nan_a | nan_b;
 

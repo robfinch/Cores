@@ -30,16 +30,16 @@
 //
 // ============================================================================
 
-module f2i
-#(	parameter WID = 32)
-(
-	input clk,
-	input ce,
-	input [WID-1:0] i,
-	output [WID-1:0] o,
-	output overflow
-);
+`include "fpConfig.sv"
+
+module f2i(clk, ce, i, o, overflow);
+parameter WID = 32;
 `include "fpSize.sv"
+input clk;
+input ce;
+input [MSB:0] i;
+output [MSB:0] o;
+output overflow;
 
 wire [MSB:0] maxInt  = {MSB{1'b1}};		// maximum unsigned integer value
 wire [EMSB:0] zeroXp = {EMSB{1'b1}};	// simple constant - value of exp for zero
@@ -53,7 +53,7 @@ wire [FMSB+1:0] man = {exp!=0,i[FMSB:0]};	// mantissa including recreate hidden 
 
 wire iz = i[MSB-1:0]==0;					// zero value (special)
 
-assign overflow  = exp - zeroXp > MSB;		// lots of numbers are too big - don't forget one less bit is available due to signed values
+assign overflow  = exp - zeroXp > MSB - `EXTRA_BITS;		// lots of numbers are too big - don't forget one less bit is available due to signed values
 wire underflow = exp < zeroXp - 1;			// value less than 1/2
 
 wire [7:0] shamt = MSB - (exp - zeroXp);	// exp - zeroXp will be <= MSB

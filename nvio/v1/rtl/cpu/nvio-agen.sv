@@ -94,14 +94,16 @@ endcase
 always @*
 casez(mopcode(inst))
 `LOAD:
-	case(mopcode(inst))
+	casez(mopcode(inst))
+	`LEA:		res2 <= a + {{60{inst[39]}},inst[39:35],inst[30:16]};
+	`PUSHC:	res2 <= a - 8'd10;
 	`POP:		res2 <= a + inst[`FUNCT5];
 	`UNLK:	res2 <= b + inst[`FUNCT5];
 	`MLX:		
 		case(inst[17:16])
 		2'd0:	res2 <= a;
-		2'd1:	res2 <= a + dx;
-		2'd2:	res2 <= a - dx;
+		2'd1:	res2 <= a - dx;
+ 		2'd2:	res2 <= a + dx;
 		2'd3:	res2 <= a + cx + inst[21:18];
 		endcase
 	default:	res2 <= 1'd0;
@@ -109,11 +111,13 @@ casez(mopcode(inst))
 `STORE:
 	casez(mopcode(inst))
 	`LINK:	res2 <= a;
+	`PUSH:	res2 <= a - inst[`FUNCT5];
+	`PUSHC:	res2 <= a - 8'd10;
 	`MSX:
 		case(inst[1:0])
 		2'd0:	res2 <= a;
-		2'd1:	res2 <= a + dx;
-		2'd2:	res2 <= a - dx;
+		2'd1:	res2 <= a - dx;
+		2'd2:	res2 <= a + dx;
 		2'd3:	res2 <= a + cx + inst[5:2];
 		endcase
 	default:	res2 <= 1'd0;

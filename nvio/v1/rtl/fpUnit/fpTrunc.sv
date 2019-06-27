@@ -27,16 +27,17 @@
 //                                                                          
 // ============================================================================
 
-module fpTrunc
-#(	parameter WID = 32)
-(
-	input clk,
-	input ce,
-	input [WID-1:0] i,
-	output reg [WID-1:0] o,
-	output overflow
-);
+`include "fpConfig.sv"
+
+module fpTrunc(clk, ce, i, o, overflow);
+parameter WID = 32;
 `include "fpSize.sv"
+input clk;
+input ce;
+input [MSB:0] i;
+output reg [MSB:0] o;
+output overflow;
+
 
 integer n;
 wire [MSB:0] maxInt  = {MSB{1'b1}};		// maximum unsigned integer value

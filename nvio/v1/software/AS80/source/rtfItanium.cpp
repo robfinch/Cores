@@ -28,6 +28,7 @@
 #define I_MOV		0x10
 #define I_ADDI	0x04
 #define I_ADD		0x04
+#define I_CSR		0x05
 #define I_SUB		0x05
 #define I_ADDS0	0x33
 #define I_ADDS1	0x34
@@ -133,6 +134,7 @@
 #define I_PUSHC	0xB
 #define I_TLB		0xC
 #define I_PUSH	0xD
+#define I_POP		0x1D
 
 #define I_AND		0x08
 #define I_ANDI	0x08
@@ -210,7 +212,7 @@ static int64_t parm3[tk_last_token];
 extern InsnStats insnStats;
 static void ProcessEOL(int opt);
 extern void process_message();
-static void mem_operand(int64_t *disp, int *regA, int *regB, int *Sc, int *seg);
+static void mem_operand(int64_t *disp, int *regA, int *regB, int *Sc, int *seg, int *pp);
 
 extern char *pif1;
 extern int first_rodata;
@@ -271,6 +273,7 @@ __int8 TmpTbl[125][3] =
 {M,I,B},
 {B,F,B},
 {I,F,B},
+
 {F,F,B},
 {M,F,B},
 {B,M,B},
@@ -281,6 +284,7 @@ __int8 TmpTbl[125][3] =
 {I,B,I},
 {F,B,I},
 {M,B,I},
+
 {B,I,I},
 {I,I,I},
 {F,I,I},
@@ -291,6 +295,7 @@ __int8 TmpTbl[125][3] =
 {M,F,I},
 {B,M,I},
 {I,M,I},
+
 {F,M,I},
 {M,M,I},
 {B,B,F},
@@ -301,6 +306,7 @@ __int8 TmpTbl[125][3] =
 {I,I,F},
 {F,I,F},
 {M,I,F},
+
 {B,F,F},
 {I,F,F},
 {F,F,F},
@@ -311,6 +317,7 @@ __int8 TmpTbl[125][3] =
 {M,M,F},
 {B,B,M},
 {I,B,M},
+
 {F,B,M},
 {M,B,M},
 {B,I,M},
@@ -321,6 +328,7 @@ __int8 TmpTbl[125][3] =
 {I,F,M},
 {F,F,M},
 {M,F,M},
+
 {B,M,M},
 {I,M,M},
 {F,M,M},
@@ -1575,6 +1583,8 @@ static int GetTemplate(int units)
 		return (0x7D);
 	if (units == 0300)
 		return (0x7E);
+	if (units == 0400)
+		return (0x7F);
 	for (n = 0; n < 64; n++) {
 		if ((units & 7) == TmpTbl[n][2]) {
 			if (((units >> 3) & 7) == TmpTbl[n][1]) {
@@ -1866,7 +1876,7 @@ static void process_setiop(int64_t opcode6, int64_t func6, int64_t bit23)
 	Ra = getRegisterX();
 	need(',');
 	NextToken();
-	val = expr();
+	val = expr128();
 	if (!IsNBit128(val, *Int128::MakeInt128(22LL))) {
 		LoadConstant(val, 54);
 		emit_insn(
@@ -2899,7 +2909,7 @@ static void process_ret()
 		val = expr128();
 	}
 	// If too large a constant, do the SP adjustment directly.
-	if (!IsNBit128(val, *Int128::MakeInt128(21LL))) {
+	if (!IsNBit128(val, *Int128::MakeInt128(18LL))) {
 		LoadConstant(val,54);
 		// add.w r63,r63,r23
 		emit_insn(
@@ -2912,7 +2922,7 @@ static void process_ret()
 		Int128::Assign(&val, Int128::Zero());
 	}
 	emit_insn(
-		((val.low >> 1LL) << 22LL) |
+		(val.low << 22LL) |
 		RB(regLR) |
 		RT(regSP) |
 		RA(regSP) |
@@ -3010,9 +3020,10 @@ static void GetIndexScale(int *sc)
 // [Reg+Reg]
 // ---------------------------------------------------------------------------
 
-static void mem_operand(int64_t *disp, int *regA, int *regB, int *Sc, int *seg)
+static void mem_operand(int64_t *disp, int *regA, int *regB, int *Sc, int *seg, int *pp)
 {
   int64_t val;
+	char *p;
 
   // chech params
   if (disp == (int64_t *)NULL)
@@ -3025,12 +3036,15 @@ static void mem_operand(int64_t *disp, int *regA, int *regB, int *Sc, int *seg)
 		 return;
 	 if (seg == (int *)NULL)
 		 return;
+	 if (pp == (int *)NULL)
+		 return;
 
      *disp = 0;
      *regA = -1;
 	 *regB = -1;
 	 *Sc = 0;
 	 *seg = -1;
+	 *pp = 0;
 j1:
      if (token!='[') {
 			 if (inptr[2] == ':') {
@@ -3076,11 +3090,21 @@ j1:
           *disp = val;
      }
      if (token=='[') {
+			 p = inptr;
+			 NextToken();
+			 if (token == tk_minusminus)
+				 *pp = 1;
+			 else
+				 inptr = p;
          *regA = getRegisterX();
          if (*regA == -1) {
              printf("expecting a register\r\n");
          }
-		 if (token=='+') {
+				 if (token == tk_plusplus) {
+					 *pp = 2;
+					 NextToken();
+				 }
+				 if (token=='+' || token==',') {
 			 *regB = getRegisterX();
 			 if (*regB == -1) {
 				 printf("expecting a register\r\n");
@@ -3145,6 +3169,7 @@ static void process_store()
   int Rs;
 	int Sc;
 	int seg;
+	int pp;
   Int128 val;
 	int64_t disp;
 	int64_t aq = 0, rl = 0;
@@ -3169,15 +3194,17 @@ static void process_store()
     return;
   }
   expect(',');
-  mem_operand(&disp, &Ra, &Rc, &Sc, &seg);
-	if (Ra >= 0 && Rc >= 0) {
+  mem_operand(&disp, &Ra, &Rc, &Sc, &seg, &pp);
+	if (Ra >= 0 && (Rc >= 0 || pp)) {
+		if (Rc == -1)
+			Rc = 0;
 		emit_insn(
 			FN5(funct6) |
 			SC((int64_t)Sc) |
 			RC(Rc) |
 			RB(Rs) |
 			RA(Ra) |
-			RT(disp & 0x3f)|
+			RT(((disp & 0xf) << 2)|pp)|
 			MOP(I_MSX), M);
 		return;
 	}
@@ -3323,6 +3350,7 @@ static void process_load()
   int Rt;
 	int Sc;
 	int seg;
+	int pp;
   char *p;
   int64_t disp;
   Int128 val;
@@ -3351,23 +3379,26 @@ static void process_load()
       return;
   }
   expect(',');
-  mem_operand(&disp, &Ra, &Rc, &Sc, &seg);
-	if (Ra >= 0 && Rc >= 0) {
+  mem_operand(&disp, &Ra, &Rc, &Sc, &seg, &pp);
+	if (Ra >= 0 && (Rc >= 0 || pp)) {
 		//if (gpu)
 		//	error("Indexed addressing not supported on GPU");
 		// Trap LEA, convert to LEAX opcode
+		if (Rc < 0)
+			Rc = 0;
 		emit_insn(
-			RB(disp & 0x3fLL) |
+			FN5(funct6) |
+			RB(((disp & 0xfLL)<<2L)|pp) |
 			RC(Rc) |
 			RT(Rt) |
 			RA(Ra) |
-			MOP(funct6)
+			MOP(I_MLX)
 			,M
 		);
 		return;
 	}
   if (Ra < 0) Ra = 0;
-    val = disp;
+    val = Int128::Convert(disp);
 	if (!IsNBit128(val, *Int128::MakeInt128(20LL))) {
 		LoadConstant(val, 54);
 		// Change to indexed addressing
@@ -3395,6 +3426,7 @@ static void process_cache(int opcode6)
   int Ra,Rc;
 	int Sc;
 	int seg;
+	int pp;
   char *p;
   int64_t disp;
   Int128 val;
@@ -3405,13 +3437,14 @@ static void process_cache(int opcode6)
 	NextToken();
 	cmd = (int)expr() & 0x3f;
   expect(',');
-  mem_operand(&disp, &Ra, &Rc, &Sc, &seg);
-	if (Ra > 0 && Rc > 0) {
+  mem_operand(&disp, &Ra, &Rc, &Sc, &seg, &pp);
+	if (Ra > 0 && (Rc > 0 || pp)) {
 		emit_insn(
 			FN5(opcode6) |
 			RC(Rc) |
 			(cmd << 16) |
 			RA(Ra) |
+			((disp & 0xfL) << 2) | pp |
 			MOP(I_MSX)
 			,M);
 		return;
@@ -3426,6 +3459,7 @@ static void process_cache(int opcode6)
 			RC(54) |
 			(cmd << 16) |
 			RA(Ra) |
+			((disp & 0xfL) << 2) |
 			MOP(I_MSX)
 			, M);
 		ScanToEOL();
@@ -3972,7 +4006,7 @@ static void process_csrrw(int64_t op)
 		}
 		prevToken();
 		Rs = getRegisterX();
-		emit_insn(((val & 0xFFFLL) << 16LL) | (op << 38LL) | RA(Rs) | RT(Rd),I);
+		emit_insn(((val & 0xFFFLL) << 16LL) | (op << 38LL) | RA(Rs) | RT(Rd) | OP6(I_CSR),I);
 		prevToken();
 		return;
 		}
@@ -4050,7 +4084,19 @@ static void process_push(int64_t fn4, int64_t op6)
 	if (*inptr == '#') {
 		inptr++;
 		NextToken();
-		val = expr();
+		val = expr128();
+		if (!IsNBit128(val, *Int128::MakeInt128(40LL)) && ((code_address % 16LL) == 10LL || (code_address % 16LL) == 0LL)) {
+			if ((code_address % 16) == 10)
+				emit_insn(0x00000000C0, B);
+			emit_insn(
+				OP4(I_PUSHC) |
+				RII(0) |
+				RT(regSP) |
+				RA(regSP), M);
+			emit_insn(val.low, 0);
+			emit_insn((val.high << 24LL) | ((unsigned int64_t)val.low >> 40LL), 0);
+			return;
+		}
 		if (!IsNBit128(val, *Int128::MakeInt128(22LL))) {
 			LoadConstant(val, 54);
 			emit_insn(
@@ -4079,6 +4125,27 @@ static void process_push(int64_t fn4, int64_t op6)
 		RT(regSP) |
 		RA(regSP) |
 		MOP(I_PUSH)
+		, M
+	);
+	prevToken();
+}
+
+// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+
+static void process_pop(int64_t fn4, int64_t op6)
+{
+	int Rd;
+	Int128 val;
+
+	SkipSpaces();
+	Rd = getRegisterX();
+	emit_insn(
+		FN5(10) |
+		RB(regSP) |
+		RT(Rd) |
+		RA(regSP) |
+		MOP(I_POP)
 		, M
 	);
 	prevToken();
@@ -4389,7 +4456,7 @@ static void process_default()
 	case tk_lv:  process_lv(0x36); break;
 	case tk_macro:	process_macro(); break;
 	case tk_memdb: emit_insn(0xCC000003C0LL, M); break;
-	case tk_memsb: emit_insn(0xCA000003C0LL, M); break;
+	case tk_memsb: emit_insn(0xC4000003C0LL, M); break;
 	case tk_message: process_message(); break;
 	case tk_mov: process_mov(0x02, 0x22); break;
 		//case tk_mulh: process_rrop(0x26, 0x3A); break;
@@ -4409,6 +4476,7 @@ static void process_default()
 	case tk_ptrdif: process_rrop(); break;
 	case tk_public: process_public(); break;
 	case tk_push: process_push(0x0c, 0x14); break;
+	case tk_pop: process_pop(0x0c, 0x14); break;
 	case tk_rodata:
 		if (first_rodata) {
 			while (sections[segment].address & 4095)
@@ -4759,6 +4827,10 @@ void Itanium_processMaster()
 		parm1[tk_ldo] = I_LDO;
 		parm2[tk_ldo] = I_LDO;
 		parm3[tk_ldo] = 0x0;
+		jumptbl[tk_ldou] = &process_load;
+		parm1[tk_ldou] = I_LDOU;
+		parm2[tk_ldou] = I_LDOU;
+		parm3[tk_ldou] = 0x0;
 		jumptbl[tk_sf] = &process_store;
 		parm1[tk_sf] = I_STFD;
 		parm2[tk_sf] = I_STFD;

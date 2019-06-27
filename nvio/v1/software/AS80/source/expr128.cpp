@@ -47,7 +47,7 @@ static Int128 primary()
          sym = find_symbol(buf);
          if (!sym)
              sym = new_symbol(buf);
-         val = sym->value;
+         Int128::Assign(&val, &sym->value);
          if (sym->segment < 5)
              nsym++;
          lastsym = sym;

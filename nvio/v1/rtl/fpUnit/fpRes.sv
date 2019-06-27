@@ -21,6 +21,8 @@
 //
 // ============================================================================
 //
+`include "fpConfig.sv"
+
 module fpRes(clk, ce, a, o);
 parameter WID = 128;
 `include "fpSize.sv"

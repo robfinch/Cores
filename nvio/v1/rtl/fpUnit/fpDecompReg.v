@@ -1,4 +1,3 @@
-`timescale 1ns / 1ps
 // ============================================================================
 //        __
 //   \\__/ o\    (C) 2006-2019  Robert Finch, Waterloo
@@ -25,6 +24,8 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.    
 //                                                                          
 // ============================================================================
+
+`include "fpConfig.sv"
 
 module fpDecomp(i, sgn, exp, man, fract, xz, mz, vz, inf, xinf, qnan, snan, nan);
 parameter WID=32;

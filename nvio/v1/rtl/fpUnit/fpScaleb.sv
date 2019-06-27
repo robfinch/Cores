@@ -29,9 +29,9 @@ parameter WID=80;
 `include "fpSize.sv"
 input clk;
 input ce;
-input [WID-1:0] a;
-input [WID-1:0] b;
-output reg [WID-1:0] o;
+input [WID-1+`EXTRA_BITS:0] a;
+input [WID-1+`EXTRA_BITS:0] b;
+output reg [WID-1+`EXTRA_BITS:0] o;
 
 wire [4:0] cmp_o;
 wire nana, nanb;
@@ -50,7 +50,7 @@ reg [FMSB:0] ma1, ma2;
 wire bs = b[WID-1];
 reg bs1;
 
-fpDecomp u1 (.i(a), .sgn(sa), .exp(xa), .man(ma), .fract(), .xz(xza), .mz(), .vz(), .inf(), .xinf(xinfa), .qnan(), .snan(), .nan(anan));
+fpDecomp #(WID) u1 (.i(a), .sgn(sa), .exp(xa), .man(ma), .fract(), .xz(xza), .mz(), .vz(), .inf(), .xinf(xinfa), .qnan(), .snan(), .nan(anan));
 
 // ----------------------------------------------------------------------------
 // Clock cycle 1

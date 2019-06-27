@@ -29,6 +29,8 @@
 // ToTo: check pipelining of values
 // ============================================================================
 
+`include "fpConfig.sv"
+
 `define ONE80					80'h3FFF0000000000000000
 `define EIGHT80				80'h40020000000000000000
 `define FIVETWELVE80	80'h40080000000000000000
@@ -46,8 +48,8 @@ parameter WID = 128;
 `include "fpSize.sv"
 input clk;
 input ce;
-input [WID-1:0] a;
-output reg [WID-1:0] o;
+input [MSB:0] a;
+output reg [MSB:0] o;
 
 wire [4:0] cmp1_o;
 reg [4:0] cmp2_o;
@@ -61,13 +63,13 @@ reg [31:0] SigmoidLUT [0:1023];
 // Check if the input is in the range (-8 to +8)
 // We take the absolute value by trimming off the sign bit.
 generate begin : ext
-if (WID==80)
+if (WID+`EXTRA_BITS==80)
 fp_cmp_unit #(WID) u1 (.a(a & 80'h7FFFFFFFFFFFFFFFFFFF), .b(`EIGHT80), .o(cmp1_o), .nanx() );
-else if (WID==64)
+else if (WID+`EXTRA_BITS==64)
 fp_cmp_unit #(WID) u1 (.a(a & 64'h7FFFFFFFFFFFFFFF), .b(`EIGHT64), .o(cmp1_o), .nanx() );
-else if (WID==40)
+else if (WID+`EXTRA_BITS==40)
 fp_cmp_unit #(WID) u1 (.a(a & 40'h7FFFFFFFFF), .b(`EIGHT40), .o(cmp1_o), .nanx() );
-else if (WID==32)
+else if (WID+`EXTRA_BITS==32)
 fp_cmp_unit #(WID) u1 (.a(a & 32'h7FFFFFFF), .b(`EIGHT32), .o(cmp1_o), .nanx() );
 else begin
 	always @*
@@ -92,8 +94,8 @@ fpDecomp #(WID) u1 (.i(a), .sgn(sa), .exp(xa), .man(ma), .fract(), .xz(), .vz(),
 
 reg [9:0] lutadr;
 wire [5:0] lzcnt;
-wire [WID-1:0] a1;
-wire [WID-1:0] i1, i2;
+wire [MSB:0] a1;
+wire [MSB:0] i1, i2;
 wire [EMSB:0] xa1 = xa + 4'd6;
 assign a1 = {sa,xa1,ma};	// we know the exponent won't overflow
 wire [31:0] man32a = SigmoidLUT[lutadr];

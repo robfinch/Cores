@@ -1,4 +1,3 @@
-`timescale 1ns / 1ps
 // ============================================================================
 //        __
 //   \\__/ o\    (C) 2006-2019  Robert Finch, Waterloo
@@ -33,6 +32,7 @@
 //+-0 / +-0      = QNaN
 // ============================================================================
 
+`include "fpConfig.sv"
 `include "fp_defines.v"
 //`define GOLDSCHMIDT	1'b1
 
@@ -41,18 +41,18 @@ module fpDiv(rst, clk, clk4x, ce, ld, op, a, b, o, done, sign_exe, overflow, und
 parameter WID = 128;
 `include "fpSize.sv"
 // FADD is a constant that makes the divider width a multiple of four and includes eight extra bits.			
-localparam FADD = WID==128 ? 9 :
-				  WID==96 ? 9 :
-				  WID==84 ? 9 :
-				  WID==80 ? 9 :
-				  WID==64 ? 13 :
-				  WID==52 ? 9 :
-				  WID==48 ? 10 :
-				  WID==44 ? 9 :
-				  WID==42 ? 11 :
-				  WID==40 ? 8 :
-				  WID==32 ? 10 :
-				  WID==24 ? 9 : 11;
+localparam FADD = WID+`EXTRA_BITS==128 ? 9 :
+				  WID+`EXTRA_BITS==96 ? 9 :
+				  WID+`EXTRA_BITS==84 ? 9 :
+				  WID+`EXTRA_BITS==80 ? 9 :
+				  WID+`EXTRA_BITS==64 ? 13 :
+				  WID+`EXTRA_BITS==52 ? 9 :
+				  WID+`EXTRA_BITS==48 ? 10 :
+				  WID+`EXTRA_BITS==44 ? 9 :
+				  WID+`EXTRA_BITS==42 ? 11 :
+				  WID+`EXTRA_BITS==40 ? 8 :
+				  WID+`EXTRA_BITS==32 ? 10 :
+				  WID+`EXTRA_BITS==24 ? 9 : 11;
 				  
 input rst;
 input clk;

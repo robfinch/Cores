@@ -96,9 +96,9 @@ assign gate[0] = gate0;
 assign gate[1] = gate1;
 assign gate[2] = gate2;
 
-edge_det ued0 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(clk0), .pe(pulse[0]), .ne());
-edge_det ued1 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(clk1), .pe(pulse[1]), .ne());
-edge_det ued2 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(clk2), .pe(pulse[2]), .ne());
+edge_det ued0 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(clk0), .pe(pulse[0]), .ne(), .ee());
+edge_det ued1 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(clk1), .pe(pulse[1]), .ne(), .ee());
+edge_det ued2 (.rst(rst_i), .clk(clk_i), .ce(1'b1), .i(clk2), .pe(pulse[2]), .ne(), .ee());
 
 initial begin
 	for (n = 0; n < 3; n = n + 1) begin
@@ -154,6 +154,7 @@ else begin
 						ge[2] <= dat_i[20];
 					end
 				end
+		default:	;
 		endcase
 		if (adr_i[5:4]==n)
 			case(adr_i[3:2])

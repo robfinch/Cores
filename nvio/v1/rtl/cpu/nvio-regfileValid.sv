@@ -109,10 +109,8 @@ begin
 
 		if (commit0_v && n=={commit0_tgt[RBIT:0]} && !rf_v[n])
 			regIsValid[n] = ((rf_source[ {commit0_tgt[RBIT:0]} ][`RBITS] == commit0_id) || (branchmiss && iq_source[ rob_id[commit0_id] ]));
-		if (commit1_v && n=={commit1_tgt[RBIT:0]} && !rf_v[n] && `NUM_CMT > 1)
+		if (commit1_v && n=={commit1_tgt[RBIT:0]} && !rf_v[n])
 			regIsValid[n] = ((rf_source[ {commit1_tgt[RBIT:0]} ][`RBITS] == commit1_id) || (branchmiss && iq_source[ rob_id[commit1_id] ]));
-		if (commit2_v && n=={commit2_tgt[RBIT:0]} && !rf_v[n] && `NUM_CMT > 2)
-			regIsValid[n] = ((rf_source[ {commit2_tgt[RBIT:0]} ][`RBITS] == commit2_id) || (branchmiss && iq_source[ rob_id[commit2_id] ]));
 	end
 	regIsValid[0] = `VAL;
 	regIsValid[64] = `VAL;
@@ -143,7 +141,7 @@ else begin
       $display("rfv 0: %d %d %d", rf_source[ commit0_tgt[RBIT:0]][`RBITS], commit0_id, rf_source[ commit0_tgt[RBIT:0] ][`QBIT]);
     end
   end
-  if (commit1_v && `NUM_CMT > 1) begin
+  if (commit1_v) begin
 		$display("!rfv=%d %d",!rf_v[ commit1_tgt[RBIT:0] ], rf_v[ commit1_tgt[RBIT:0] ] );
     if (!rf_v[ commit1_tgt[RBIT:0] ]) begin //&& !(commit0_v && (rf_source[ commit0_tgt[RBIT:0] ] == commit0_id || (branchmiss && iq_source[ commit0_id[`QBITS] ]))))
       rf_v[ commit1_tgt[RBIT:0] ] <= (rf_source[ commit1_tgt[RBIT:0] ][`RBITS] == commit1_id) || (branchmiss && iq_source[ rob_id[commit1_id] ]);

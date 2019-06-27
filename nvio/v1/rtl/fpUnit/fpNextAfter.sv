@@ -1,4 +1,3 @@
-`timescale 1ns / 1ps
 // ============================================================================
 //        __
 //   \\__/ o\    (C) 2019  Robert Finch, Waterloo
@@ -25,14 +24,16 @@
 //                                                                          
 // ============================================================================
 
+`include "fpConfig.sv"
+
 module fpNextAfter(clk, ce, a, b, o);
 parameter WID=80;
 `include "fpSize.sv"
 input clk;
 input ce;
-input [WID-1:0] a;
-input [WID-1:0] b;
-output reg [WID-1:0] o;
+input [MSB:0] a;
+input [MSB:0] b;
+output reg [MSB:0] o;
 
 wire [4:0] cmp_o;
 wire nana, nanb;
@@ -41,18 +42,18 @@ wire xza, mza;
 fp_cmp_unit #(WID) u1 (.a(a), .b(b), .o(cmp_o), .nanx(nanxab) );
 fpDecomp u2 (.i(a), .sgn(), .exp(), .man(), .fract(), .xz(xza), .mz(mza), .vz(), .inf(), .xinf(), .qnan(), .snan(), .nan(nana));
 fpDecomp u3 (.i(b), .sgn(), .exp(), .man(), .fract(), .xz(), .mz(), .vz(), .inf(), .xinf(), .qnan(), .snan(), .nan(nanb));
-wire [WID-1:0] ap1 = a + 2'd1;
-wire [WID-1:0] am1 = a - 2'd1;
+wire [MSB:0] ap1 = a + {2'd1,{`EXTRA_BITS{1'b0}}};
+wire [MSB:0] am1 = a - {2'd1,{`EXTRA_BITS{1'b0}}};
 wire [EMSB:0] infXp = {EMSB+1{1'b1}};
 
 always  @(posedge clk)
 if (ce)
-	casez({a[WID-1],cmp_o})
+	casez({a[MSB],cmp_o})
 	6'b?1????:	o <= nana ? a : b;	// Unordered
 	6'b????1?:	o <= a;							// a,b Equal
 	6'b0????1:
-		if (ap1[WID-2:FMSB+1]==infXp)
-			o <= {a[WID-1:FMSB+1],{FMSB+1{1'b0}}};
+		if (ap1[MSB-1:FMSB+1]==infXp)
+			o <= {a[MSB:FMSB+1],{FMSB+1{1'b0}}};
 		else
 			o <= ap1;
 	6'b0????0:
@@ -61,8 +62,8 @@ if (ce)
 		else
 			o <= am1;
 	6'b1????0:
-		if (ap1[WID-2:FMSB+1]==infXp)
-			o <= {a[WID-1:FMSB+1],{FMSB+1{1'b0}}};
+		if (ap1[MSB-1:FMSB+1]==infXp)
+			o <= {a[MSB:FMSB+1],{FMSB+1{1'b0}}};
 		else
 			o <= ap1;
 	6'b1????1:

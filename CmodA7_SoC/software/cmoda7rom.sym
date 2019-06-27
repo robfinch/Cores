@@ -1,0 +1,78 @@
+Global symbols:
+
+Hash Table:
+ #  Name                            Nargs  Line   File
+  0   BS                               NON  DATA   W   0000000000000008      28   cmoda7rom.asm
+  1   CHKSUM                           NON  DATA   W   0000000000000008      53   cmoda7rom.asm
+  2   CR                               NON  DATA   W   000000000000000D      25   cmoda7rom.asm
+  3   CTRLC                            NON  DATA   W   0000000000000003      29   cmoda7rom.asm
+  4   DLFAIL                           NON  DATA   W   0000000000000009      54   cmoda7rom.asm
+  5   DPH                              NON  DATA   W   0000000000000002      47   cmoda7rom.asm
+  6   DPL                              NON  DATA   W   0000000000000000      45   cmoda7rom.asm
+  7   DPM                              NON  DATA   W   0000000000000001      46   cmoda7rom.asm
+  8   ENTRYPT_HI                       NON  DATA   W   000000000000000D      58   cmoda7rom.asm
+  9   ENTRYPT_LO                       NON  DATA   W   000000000000000B      56   cmoda7rom.asm
+ 10   ENTRYPT_MID                      NON  DATA   W   000000000000000C      57   cmoda7rom.asm
+ 11   ESC                              NON  DATA   W   000000000000001B      27   cmoda7rom.asm
+ 12   IRQSRC                           NON  DATA   W   0000000000F20000      65   cmoda7rom.asm
+ 13   IntelHexDownload                 PRI  CODE   W   000000000000F800     134   cmoda7rom.asm
+ 14   IntelHexDownload.0002            PRI  CODE   W   000000000000F882     183   cmoda7rom.asm
+ 15   IntelHexDownload.0005            PRI  CODE   W   000000000000F960     283   cmoda7rom.asm
+ 16   IntelHexDownload.downloadOk      PRI  CODE   W   000000000000F981     292   cmoda7rom.asm
+ 17   IntelHexDownload.entryPointRec   PRI  CODE   W   000000000000F92F     257   cmoda7rom.asm
+ 18   IntelHexDownload.eofRec          PRI  CODE   W   000000000000F8E9     228   cmoda7rom.asm
+ 19   IntelHexDownload.extAddrRec      PRI  CODE   W   000000000000F912     239   cmoda7rom.asm
+ 20   IntelHexDownload.fail            PRI  CODE   W   000000000000F8A0     200   cmoda7rom.asm
+ 21   IntelHexDownload.fail1           PRI  CODE   W   000000000000F92A     252   cmoda7rom.asm
+ 22   IntelHexDownload.fail2           PRI  CODE   W   000000000000F8E7     224   cmoda7rom.asm
+ 23   IntelHexDownload.nextRecType     PRI  CODE   W   000000000000F8AA     206   cmoda7rom.asm
+ 24   IntelHexDownload.nextrec         PRI  CODE   W   000000000000F84C     151   cmoda7rom.asm
+ 25   LF                               NON  DATA   W   000000000000000A      26   cmoda7rom.asm
+ 26   MKNIBL                           PRI  CODE   W   000000000000F9E6     341   cmoda7rom.asm
+ 27   MKNNH                            PRI  CODE   W   000000000000F9EC     345   cmoda7rom.asm
+ 28   RECLEN                           NON  DATA   W   0000000000000003      48   cmoda7rom.asm
+ 29   RECTYPE                          NON  DATA   W   0000000000000007      52   cmoda7rom.asm
+ 30   RXBUFPTR                         NON  DATA   W   0000000000000010      60   cmoda7rom.asm
+ 31   RXIRQ                            PRI  CODE   W   000000000000F02B     105   cmoda7rom.asm
+ 32   RXIRQ.rxirq                      PRI  CODE   W   000000000000F04C     125   cmoda7rom.asm
+ 33   RXIRQ.tmrirq                     PRI  CODE   W   000000000000F03E     117   cmoda7rom.asm
+ 34   RXIRQOFF                         NON  DATA   W   0000000000F20001      66   cmoda7rom.asm
+ 35   RXNDX                            NON  DATA   W   0000000000000018      62   cmoda7rom.asm
+ 36   SC_ALT                           NON  DATA   W   0000000000000011      36   cmoda7rom.asm
+ 37   SC_CAPSLOCK                      NON  DATA   W   0000000000000058      41   cmoda7rom.asm
+ 38   SC_CTRL                          NON  DATA   W   0000000000000014      35   cmoda7rom.asm
+ 39   SC_DEL                           NON  DATA   W   0000000000000071      37   cmoda7rom.asm
+ 40   SC_EXTEND                        NON  DATA   W   00000000000000E0      34   cmoda7rom.asm
+ 41   SC_KEYUP                         NON  DATA   W   00000000000000F0      33   cmoda7rom.asm
+ 42   SC_LCTRL                         NON  DATA   W   0000000000000058      38   cmoda7rom.asm
+ 43   SC_LSHIFT                        NON  DATA   W   0000000000000012      31   cmoda7rom.asm
+ 44   SC_NUMLOCK                       NON  DATA   W   0000000000000077      39   cmoda7rom.asm
+ 45   SC_RSHIFT                        NON  DATA   W   0000000000000059      32   cmoda7rom.asm
+ 46   SC_SCROLLLOCK                    NON  DATA   W   000000000000007E      40   cmoda7rom.asm
+ 47   START_HI                         NON  DATA   W   0000000000000006      51   cmoda7rom.asm
+ 48   START_LO                         NON  DATA   W   0000000000000004      49   cmoda7rom.asm
+ 49   START_MID                        NON  DATA   W   0000000000000005      50   cmoda7rom.asm
+ 50   SerialGetByte                    PRI  CODE   W   000000000000F9CF     326   cmoda7rom.asm
+ 51   SerialGetChar                    PRI  CODE   W   000000000000F9C3     310   cmoda7rom.asm
+ 52   SerialPutByte                    PRI  CODE   W   000000000000F9F1     351   cmoda7rom.asm
+ 53   SerialPutByte.0001               PRI  CODE   W   000000000000F9FA     359   cmoda7rom.asm
+ 54   SerialPutByte.0002               PRI  CODE   W   000000000000FA02     364   cmoda7rom.asm
+ 55   SerialPutChar                    PRI  CODE   W   000000000000FA04     369   cmoda7rom.asm
+ 56   SerialPutString                  PRI  CODE   W   000000000000FA10     386   cmoda7rom.asm
+ 57   SerialPutString.0001             PRI  CODE   W   000000000000FA20     399   cmoda7rom.asm
+ 58   SerialPutString.0002             PRI  CODE   W   000000000000FA29     404   cmoda7rom.asm
+ 59   SerialPutString.0003             PRI  CODE   W   000000000000FA2F     408   cmoda7rom.asm
+ 60   SerialPutString.PSINB            PRI  CODE   W   000000000000FA16     393   cmoda7rom.asm
+ 61   TEMP                             NON  DATA   W   000000000000000A      55   cmoda7rom.asm
+ 62   TMRIRQOFF                        NON  DATA   W   0000000000F20002      67   cmoda7rom.asm
+ 63   TXBUFPTR                         NON  DATA   W   0000000000000014      61   cmoda7rom.asm
+ 64   TXNDX                            NON  DATA   W   000000000000001A      63   cmoda7rom.asm
+ 65   WFIRQ                            PRI  CODE   W   000000000000F02A     102   cmoda7rom.asm
+ 66   start                            PRI  CODE   W   000000000000F000      74   cmoda7rom.asm
+ 67   start.0001                       PRI  CODE   W   000000000000F01D      94   cmoda7rom.asm
+
+
+Local symbols:
+
+Hash Table:
+ #  Name                            Nargs  Line   File

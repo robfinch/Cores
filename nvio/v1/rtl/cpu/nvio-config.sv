@@ -39,6 +39,10 @@
 `define AMSB			79
 `define ABITS			`AMSB:0
 
+// The following should match the defintion in the fpConfig.sv file.
+// It's the number of extra bits retained in fp calculations and affects the
+// size of the result bus.
+`define EXTRA_BITS	4
 
 // Queue size should not be an even power of two!
 // Don't use 4,8,16,32,64 etc. As a value of all ones for the qid and rid
@@ -103,12 +107,12 @@
 `define NUM_AGEN	1				// number of address generators (1-2)
 `define NUM_MEM		1				// number of memory queues (1-2)
 `define NUM_FPU		1				// number of floating-point units (0-2)
-// Note that even with just a single commit bus, multiple instructions may
-// commit if they do not target any registers. Up to three instruction may
-// commit even with just a single bus.
-`define NUM_CMT		1				// number of commit busses (1-3)
 // Comment out the following to remove FCU enhancements (branch predictor, BTB, RSB)
-`define FCU_ENH		1
+//`define FCU_RSB		1				// return stack buffer
+`define FCU_BP		1				// Branch predictor
+`define FCU_BTB		1				// Branch target buffer
+
+`define FCU_RA		ip			// return address if no RSB
 // Comment out the following to remove bypassing logic on the functional units
 `define FU_BYPASS	1
 

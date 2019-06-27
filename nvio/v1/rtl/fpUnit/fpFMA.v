@@ -1,4 +1,3 @@
-`timescale 1ns / 1ps
 // ============================================================================
 //        __
 //   \\__/ o\    (C) 2019  Robert Finch, Waterloo
@@ -26,23 +25,9 @@
 // You should have received a copy of the GNU General Public License        
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.    
 //                                                                          
-//	Floating Point Multiplier / Divider
-//
-//	This multiplier/divider handles denormalized numbers.
-//	The output format is of an internal expanded representation
-//	in preparation to be fed into a normalization unit, then
-//	rounding. Basically, it's the same as the regular format
-//	except the mantissa is doubled in size, the leading two
-//	bits of which are assumed to be whole bits.
-//
-//
-//	Floating Point Multiplier
-//
-//	Properties:
-//	+-inf * +-inf = -+inf	(this is handled by exOver)
-//	+-inf * 0     = QNaN
-//	
 // ============================================================================
+
+`include "fpConfig.sv"
 
 module fpFMA (clk, ce, op, rm, a, b, c, o, under, over, inf, zero);
 parameter WID = 32;
@@ -52,7 +37,7 @@ input clk;
 input ce;
 input op;		// operation 0 = add, 1 = subtract
 input [2:0] rm;
-input  [WID:1] a, b, c;
+input  [MSB:0] a, b, c;
 output [EX:0] o;
 output under;
 output over;
@@ -428,7 +413,7 @@ reg [FX:0] mo6;
 reg [EMSB+2:0] ex6;
 reg [EMSB:0] xc6;
 wire [FMSB+1:0] fractc6;
-delay5 #(FMSB+2) u61 (.clk(clk), .ce(ce), .i(fractc1), .o(fractc6) );
+vtdl #(FMSB+2) u61 (.clk(clk), .ce(ce), .a(4'd4), .d(fractc1), .q(fractc6) );
 delay1 u62 (.clk(clk), .ce(ce), .i(under5), .o(under6));
 
 always @(posedge clk)
@@ -763,7 +748,7 @@ endmodule
 
 // Multiplier with normalization and rounding.
 
-module fpFMAnr(clk, ce, op, rm, a, b, c, o, inf, overflow, underflow, inexact);
+module fpFMAnr(clk, ce, op, rm, a, b, c, o, inf, zero, overflow, underflow, inexact);
 parameter WID=64;
 `include "fpSize.sv"
 
@@ -773,6 +758,7 @@ input op;
 input [2:0] rm;
 input  [MSB:0] a, b, c;
 output [MSB:0] o;
+output zero;
 output inf;
 output overflow;
 output underflow;
@@ -780,6 +766,7 @@ output inexact;
 
 wire [EX:0] fma_o;
 wire fma_underflow;
+wire fma_overflow;
 wire norm_underflow;
 wire norm_inexact;
 wire sign_exe1, inf1, overflow1, underflow1;
@@ -796,6 +783,8 @@ fpFMA #(WID) u1
 	.c(c),
 	.o(fma_o),
 	.under(fma_underflow),
+	.over(fma_overflow),
+	.zero(),
 	.inf()
 );
 fpNormalize #(WID) u2
@@ -808,9 +797,11 @@ fpNormalize #(WID) u2
 	.under_o(norm_underflow),
 	.inexact_o(norm_inexact)
 );
-fpRoundReg  #(WID) u3(.clk(clk), .ce(ce), .rm(rm), .i(fpn0), .o(o) );
-fpDecomp		#(WID) u4(.i(o), .xz(underflow), .inf(inf));
-delay1			#(1)	u6 (.clk(clk), .ce(ce), .i(norm_inexact), .o(inexact));
+fpRound  	#(WID) u3(.clk(clk), .ce(ce), .rm(rm), .i(fpn0), .o(o) );
+fpDecomp	#(WID) u4(.i(o), .xz(), .vz(zero), .inf(inf));
+vtdl						u5 (.clk(clk), .ce(ce), .a(4'd11), .d(fma_underflow), .q(underflow));
+vtdl						u6 (.clk(clk), .ce(ce), .a(4'd11), .d(fma_overflow), .q(overflow));
+delay3		#(1)	u7 (.clk(clk), .ce(ce), .i(norm_inexact), .o(inexact));
 assign overflow = inf;
 
 endmodule

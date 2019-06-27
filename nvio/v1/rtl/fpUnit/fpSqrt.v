@@ -1,4 +1,3 @@
-`timescale 1ns / 1ps
 // ============================================================================
 //        __
 //   \\__/ o\    (C) 2018-2019  Robert Finch, Waterloo
@@ -29,6 +28,7 @@
 //
 // ============================================================================
 
+`include "fpConfig.sv"
 `include "fp_defines.v"
 
 module fpSqrt(rst, clk, ce, ld, a, o, done, sqrinf, sqrneg);

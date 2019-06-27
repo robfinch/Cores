@@ -64,4 +64,19 @@ public:
 	static bool IsLessThan(Int128 *a, Int128 *b);
 	static bool IsLE(Int128 *a, Int128 *b) { return (IsEqual(a, b) ||  IsLessThan(a, b)); };
 	static bool IsGE(Int128 *a, Int128 *b) { return (IsEqual(a, b) || !IsLessThan(a, b)); };
+	Int128 operator =(Int128&s) {
+		this->high = s.high;
+		this->low = s.low;
+		return s;
+	}
+	static Int128 Convert(long v) {
+		Int128 p;
+
+		p.low = v;
+		if (v < 0)
+			p.high = 0xffffffffffffffffLL;
+		else
+			p.high = 0;
+		return (p);
+	}
 };

@@ -1,4 +1,3 @@
-`timescale 1ns / 1ps
 // ============================================================================
 //        __
 //   \\__/ o\    (C) 2006-2018  Robert Finch, Waterloo
@@ -49,13 +48,15 @@
 //
 // ============================================================================
 
+`include "fpConfig.sv"
+
 module fpMul (clk, ce, a, b, o, sign_exe, inf, overflow, underflow);
 parameter WID = 32;
 `include "fpSize.sv"
 
 input clk;
 input ce;
-input  [WID:1] a, b;
+input  [MSB:0] a, b;
 output [EX:0] o;
 output sign_exe;
 output inf;

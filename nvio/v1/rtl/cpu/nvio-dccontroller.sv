@@ -27,7 +27,7 @@
 `define LOW		1'b0
 
 module DCController(rst_i, clk_i, dadr, rd, wr, wsel, wadr, wdat, bstate, state,
-	invline, invlineAddr, icl_ctr,
+	invline, invlineAddr, icl_ctr, isROM, ROM_dat,
 	dL2_rhit, dL2_rdat, dL2_whit, dL2_ld, dL2_wsel, dL2_wadr, dL2_wdat, dL2_nxt,
 	dL1_hit, dL1_selpc, dL1_sel, dL1_adr, dL1_dat, dL1_wr, dL1_invline, dcnxt, dcwhich,
 	dcl_o, cti_o, bte_o, bok_i, cyc_o, stb_o, ack_i, err_i, wrv_i, rdv_i, sel_o, adr_o, dat_i);
@@ -35,6 +35,7 @@ parameter ABW = 80;
 parameter AMSB = ABW-1;
 parameter L2_ReadLatency = 3'd3;
 parameter L1_WriteLatency = 3'd3;
+parameter ROM_ReadLatency = 3'd1;
 input rst_i;
 input clk_i;
 input [AMSB:0] dadr;
@@ -49,22 +50,23 @@ output reg [3:0] state;
 input invline;
 input [71:0] invlineAddr;
 output reg [39:0] icl_ctr;
-
+output isROM;
+input [255:0] ROM_dat;
 input dL2_rhit;
-input [329:0] dL2_rdat;
+input [330:0] dL2_rdat;
 input dL2_whit;
 output reg dL2_ld;
-output reg [40:0] dL2_wsel;
+output reg [41:0] dL2_wsel;
 output reg [79:0] dL2_wadr;
-output reg [329:0] dL2_wdat;
+output reg [330:0] dL2_wdat;
 output reg dL2_nxt;
 
 input dL1_hit;
 output dL1_selpc;
 output reg [79:0] dL1_adr;
-output reg [329:0] dL1_dat = 330'd0;	// NOP
+output reg [330:0] dL1_dat = 331'd0;	// NOP
 output reg dL1_wr;
-output reg [40:0] dL1_sel;
+output reg [41:0] dL1_sel;
 output reg dL1_invline;
 output reg dcnxt;
 output reg [1:0] dcwhich = 2'b00;
@@ -93,6 +95,7 @@ reg [79:0] invlineAddr_r = 72'd0;
 
 //assign L2_ld = (state==IC_Ack) && (ack_i|err_i|tlbmiss_i|exv_i);
 assign dL1_selpc = (state==IDLE||state==IC5) && !invline_r;
+assign isROM = dL1_adr[AMSB:20]=={AMSB+1-20{1'b1}};
 
 wire clk = clk_i;
 reg [2:0] dccnt;
@@ -141,6 +144,7 @@ IDLE:
 	begin
 		dL2_ld <= FALSE;
 		dL2_wsel <= wsel << wadr[4:0];
+		dL2_wsel[41] <= 1'b1;
 		dL2_wadr <= {wadr[AMSB:5],5'h0};
 		dL2_wdat <= {248'd0,wdat} << {wadr[4:0],3'b0};
 		dccnt <= 3'd0;
@@ -155,6 +159,7 @@ IDLE:
 			if (dL1_hit && wr) begin
 				dL1_wr <= 1'b1;
 				dL1_sel <= wsel << wadr[4:0];
+				dL1_sel[41] <= 1'b1;
 				dL1_adr <= {wadr[AMSB:5],5'h0};
 				dL1_dat <= {248'd0,wdat} << {wadr[4:0],3'b0};
 				dL2_ld <= 1'b1;
@@ -174,11 +179,24 @@ IDLE:
 IC2:
 	begin
 		dccnt <= dccnt + 3'd1;
-		if (dccnt==L2_ReadLatency) begin
-			dccnt <= 3'd0;
-	    state <= IC_WaitL2;
-	  end
+		if (isROM) begin
+			if (dccnt==ROM_ReadLatency) begin
+				state <= IC_WaitROM;
+				dL1_wr <= TRUE;
+				dL1_sel <= {42{1'b1}};
+				dL1_dat <= {80'd0,ROM_dat};
+				dccnt <= 3'd0;
+				state <= IC5;
+			end
+		end
+		else begin
+			if (dccnt==L2_ReadLatency) begin
+				dccnt <= 3'd0;
+		    state <= IC_WaitL2;
+		  end
+		end
 	end
+
 // If data was in the L2 cache already there's no need to wait on the
 // BIU to retrieve data. It can be determined if the hit signal was
 // already active when this state was entered in which case waiting
@@ -188,7 +206,7 @@ IC2:
 IC_WaitL2: 
 	if (dL2_rhit && picstate==IC2) begin
 		dL1_wr <= TRUE;
-		dL1_sel <= {41{1'b1}};
+		dL1_sel <= {42{1'b1}};
 		dL1_dat <= dL2_rdat;
 		dccnt <= 3'd0;
 		state <= IC5;
@@ -280,10 +298,10 @@ IC_Nack2:
 IC_Nack:
 	begin
 		dL2_ld <= TRUE;
-		dL2_wsel <= {41{1'b1}};
+		dL2_wsel <= {42{1'b1}};
     dccnt <= 3'd0;
 		dL1_wr <= TRUE;
-		dL1_sel <= {41{1'b1}};
+		dL1_sel <= {42{1'b1}};
 		icl_ctr <= icl_ctr + 40'd1;
 		state <= IC5;	// Wait for write latency to expire
 	end

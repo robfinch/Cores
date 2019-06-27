@@ -3,4 +3,6 @@
 
 #define MACRO_PARM_MARKER	0x14
 
+#define NVIO	'J'
+
 #endif

@@ -26,18 +26,23 @@
 
 `define FLT1	4'h1
 `define FLT2	4'h2
+`define FLT3	4'h3
 `define FADD  5'h04
 `define FSUB  5'h05
 `define FMUL  5'h08
 `define FDIV  5'h09
 `define FREM	5'h0A
+`define FMA			5'h00
+`define FMS			5'h01
+`define FNMA		5'h02
+`define FNMS		5'h03
 
 `define FTOI  5'h02
 `define ITOF  5'h03
 `define TRUNC	5'h15
 
 module fpRemainder(rst, clk, ce, ld_i, ld_o, op4_i, funct6b_i, op4_o, funct6b_o, op_done,
-	srca, srcb, latch_res, rem_done);
+	srca, srcb, srcc, latch_res, rem_done, state);
 input rst;
 input clk;
 input ce;
@@ -50,10 +55,11 @@ output reg [5:0] funct6b_o;
 input op_done;
 output reg [2:0] srca;
 output reg [2:0] srcb;
+output reg [2:0] srcc;
 output reg latch_res;
 output reg rem_done;
+output reg [4:0] state;
 
-reg [4:0] state;
 parameter IDLE = 4'd0;
 parameter REM1 = 4'd1;
 parameter REM2 = 4'd2;
@@ -87,6 +93,7 @@ if (rst) begin
 	ld_o <= 1'b1;
 	srca <= `AIN;
 	srcb <= `BIN;
+	srcc <= `CIN;
 	cnt <= 3'd0;
 end
 else begin
@@ -109,6 +116,7 @@ REM1:
 		funct6b_o <= `FDIV;
 		srca <= `AIN;
 		srcb <= `BIN;
+		srcc <= `CIN;
 		ld_o <= 1'b1;
 		state <= REM1a;
 	end
@@ -121,10 +129,11 @@ REM1b:
 	end
 REM2:
 	if (op_done) begin
-		op4_o <= `FLT2;
-		funct6b_o <= `FADD;
+		op4_o <= `FLT3;
+		funct6b_o <= `FMA;
 		srca <= `RES;
 		srcb <= `POINT5;
+		srcc <= `ZERO;
 		ld_o <= 1'b1;
 		state <= REM2a;
 	end
@@ -167,12 +176,13 @@ REM4b:
 	end
 REM5:
 	if (op_done) begin
-		op4_o <= `FLT2;
-		funct6b_o <= `FMUL;
+		op4_o <= `FLT3;
+		funct6b_o <= `FNMA;
 		srca <= `RES;
 		srcb <= `BIN;
+		srcc <= `AIN;
 		ld_o <= 1'b1;
-		state <= REM5a;
+		state <= REM6a;
 	end
 REM5a:
 	state <= REM5b;
@@ -200,8 +210,11 @@ REM6b:
 REM7:
 	if (op_done) begin
 		rem_done <= 1'b1;
+		op4_o <= `FLT2;
+		funct6b_o <= `FREM;
 		srca <= `AIN;
 		srcb <= `BIN;
+		srcc <= `CIN;
 		ld_o <= 1'b1;
 		state <= IDLE;
 	end

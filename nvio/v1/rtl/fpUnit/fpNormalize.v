@@ -40,14 +40,16 @@
 // to be negative. A right shift is needed.
 // ============================================================================
 
+`include "fpConfig.sv"
+
 module fpNormalize(clk, ce, i, o, under_i, under_o, inexact_o);
-parameter WID = 84;
+parameter WID = 80;
 `include "fpSize.sv"
 
 input clk;
 input ce;
 input [EX:0] i;		// expanded format input
-output [WID+2:0] o;		// normalized output + guard, sticky and round bits, + 1 whole digit
+output [MSB+3:0] o;		// normalized output + guard, sticky and round bits, + 1 whole digit
 input under_i;
 output under_o;
 output inexact_o;
@@ -164,27 +166,27 @@ delay3 #(1)      u52 (.clk(clk), .ce(ce), .i(xInf2c), .o(xInf5) );
 
 generate
 begin
-if (WID <= 32) begin
+if (WID+`EXTRA_BITS <= 32) begin
 cntlz32Reg clz0 (.clk(clk), .ce(ce), .i({mo4,5'b0}), .o(leadingZeros5) );
 assign leadingZeros5[7:6] = 2'b00;
 end
-else if (WID<=64) begin
+else if (WID+`EXTRA_BITS<=64) begin
 assign leadingZeros5[7] = 1'b0;
 cntlz64Reg clz0 (.clk(clk), .ce(ce), .i({mo4,8'h0}), .o(leadingZeros5) );
 end
-else if (WID<=80) begin
+else if (WID+`EXTRA_BITS<=80) begin
 assign leadingZeros5[7] = 1'b0;
 cntlz80Reg clz0 (.clk(clk), .ce(ce), .i({mo4,12'b0}), .o(leadingZeros5) );
 end
-else if (WID<=84) begin
+else if (WID+`EXTRA_BITS<=84) begin
 assign leadingZeros5[7] = 1'b0;
 cntlz96Reg clz0 (.clk(clk), .ce(ce), .i({mo4,24'b0}), .o(leadingZeros5) );
 end
-else if (WID<=96) begin
+else if (WID+`EXTRA_BITS<=96) begin
 assign leadingZeros5[7] = 1'b0;
 cntlz96Reg clz0 (.clk(clk), .ce(ce), .i({mo4,12'b0}), .o(leadingZeros5) );
 end
-else if (WID<=128)
+else if (WID+`EXTRA_BITS<=128)
 cntlz128Reg clz0 (.clk(clk), .ce(ce), .i({mo4,12'b0}), .o(leadingZeros5) );
 end
 endgenerate
@@ -229,7 +231,7 @@ always @(posedge clk)
 reg [EMSB:0] xo7;
 wire rightOrLeft7;
 reg [FMSB+4:0] mo7l, mo7r;
-delay1 u71 (.clk(clk), .ce(ce), .i(rightOrLeft6), .i(rightOrLeft7));
+delay1 u71 (.clk(clk), .ce(ce), .i(rightOrLeft6), .o(rightOrLeft7));
 
 always @(posedge clk)
 if (ce)
@@ -253,7 +255,7 @@ wire so;
 wire [EMSB:0] xo;
 reg [FMSB+4:0] mo;
 vtdl #(1) u81 (.clk(clk), .ce(ce), .a(4'd7), .d(so0), .q(so) );
-delay1 #(EMSB+1) u82 (.clk(clk), .ce(ce), .i(xo7), .i(xo));
+delay1 #(EMSB+1) u82 (.clk(clk), .ce(ce), .i(xo7), .o(xo));
 vtdl u83 (.clk(clk), .ce(ce), .a(4'd3), .d(inexact4), .q(inexact_o));
 delay1 u84 (.clk(clk), .ce(ce), .i(rightOrLeft7), .o(under_o));
 

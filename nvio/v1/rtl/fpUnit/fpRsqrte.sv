@@ -25,6 +25,7 @@
 //
 // ============================================================================
 
+`include "fpConfig.sv"
 `include "fp_defines.v"
 
 `define POINT5			32'h3F000000
@@ -40,8 +41,8 @@ parameter WID = 80;
 input clk;
 input ce;
 input ld;
-input [WID-1:0] a;
-output reg [WID-1:0] o;
+input [MSB:0] a;
+output reg [MSB:0] o;
 
 // An implementation of the approximation used in the Quake game.
 
@@ -8331,8 +8332,10 @@ end
 wire [31:0] a1;
 reg [31:0] o1;
 reg s1, s2;
-F80ToF32 u1 (a, a1);
-F32ToF80 u2 (o1, o);
+wire [MSB:`EXTRA_BITS] o2;
+F80ToF32 u1 (a[MSB:`EXTRA_BITS], a1);
+F32ToF80 u2 (o1, o2);
+assign o = {o2,{`EXTRA_BITS{1'b0}}};
 
 wire [13:0] index = a1[30:17];
 reg [13:0] indexr;

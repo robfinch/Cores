@@ -1,4 +1,3 @@
-`timescale 1ns / 1ps
 // ============================================================================
 //        __
 //   \\__/ o\    (C) 2007-2019  Robert Finch, Waterloo
@@ -36,6 +35,8 @@
 //  fcmp
 //
 // ============================================================================
+
+`include "fpConfig.sv"
 
 `define FLOAT   4'h1
 `define FLT1		4'h1
@@ -76,10 +77,10 @@ module fpZLUnit
   input [3:0] op4,
   input [4:0] func5,
   input [39:0] ir,
-	input [WID+3:0] a,
-	input [WID+3:0] b,	// for fcmp
-	input [WID+3:0] c,	// for fcmp
-	output reg [WID+3:0] o,
+	input [WID-1+`EXTRA_BITS:0] a,
+	input [WID-1+`EXTRA_BITS:0] b,	// for fcmp
+	input [WID-1+`EXTRA_BITS:0] c,	// for fcmp
+	output reg [WID-1+`EXTRA_BITS:0] o,
 	output reg nanx
 );
 `include "fpSize.sv"
@@ -95,52 +96,52 @@ wire [4:0] cmp_o, cmpac_o, cmpbc_o;
 
 // Zero is being passed for b in some cases so the NaN must come from a if
 // present.
-fp_cmp_unit #(WID+4) u1 (.a(a), .b(b), .o(cmp_o), .nanx(nanxab) );
-fp_cmp_unit #(WID+4) u2 (.a(a), .b(c), .o(cmpac_o), .nanx(nanxac) );
-fp_cmp_unit #(WID+4) u3 (.a(b), .b(c), .o(cmpbc_o), .nanx(nanxbc) );
-fpDecomp #(WID+4) u4 (.i(a), .sgn(), .exp(expa), .man(ma), .fract(), .xz(), .mz(), .vz(), .inf(), .xinf(xinfa), .qnan(), .snan(), .nan(nana));
+fp_cmp_unit #(WID) u1 (.a(a), .b(b), .o(cmp_o), .nanx(nanxab) );
+fp_cmp_unit #(WID) u2 (.a(a), .b(c), .o(cmpac_o), .nanx(nanxac) );
+fp_cmp_unit #(WID) u3 (.a(b), .b(c), .o(cmpbc_o), .nanx(nanxbc) );
+fpDecomp #(WID) u4 (.i(a), .sgn(), .exp(expa), .man(ma), .fract(), .xz(), .mz(), .vz(), .inf(), .xinf(xinfa), .qnan(), .snan(), .nan(nana));
 wire [127:0] sq_o;
 //fcvtsq u2 (a[31:0], sq_o);
 wire [79:0] sdo;
-fs2d u5 (a[43:4], sdo);
+fs2d u5 (a[39+`EXTRA_BITS:`EXTRA_BITS], sdo);
 wire [39:0] dso;
 fd2s u6 (a, dso);
 wire [79:0] f32to80o;
 wire [31:0] f80to32o;
-F32ToF80 u7 (a[35:4], f32to80o);
-F80ToF32 u8 (a[WID+3:4], f32to80o);
+F32ToF80 u7 (a[31+`EXTRA_BITS:`EXTRA_BITS], f32to80o);
+F80ToF32 u8 (a[WID-1+`EXTRA_BITS:`EXTRA_BITS], f32to80o);
 
 always @*
   case(op4)
   `FLT1:
     case(func5)
-    `FABS:   begin o <= {1'b0,a[WID-2:0]}; nanx <= nanxab; end
-    `FNABS:  begin o <= {1'b1,a[WID-2:0]}; nanx <= nanxab; end
-    `FNEG:   begin o <= {~a[WID-1],a[WID-2:0]};	nanx <= nanxab; end
+    `FABS:   begin o <= {1'b0,a[WID-2+`EXTRA_BITS:0]}; nanx <= nanxab; end
+    `FNABS:  begin o <= {1'b1,a[WID-2+`EXTRA_BITS:0]}; nanx <= nanxab; end
+    `FNEG:   begin o <= {~a[WID-1+`EXTRA_BITS],a[WID-2+`EXTRA_BITS:0]};	nanx <= nanxab; end
     `FMOV:   begin o <= a; nanx <= nanxab; end
-    `FSIGN:  begin o <= (a[WID-2:0]==0) ? 0 : {a[WID-1],1'b0,{EMSB{1'b1}},{FMSB+1{1'b0}}}; nanx <= 1'b0; end
-    `FMAN:   begin o <= {a[WID-1],1'b0,{EMSB{1'b1}},a[FMSB:0]}; nanx <= 1'b0; end
+    `FSIGN:  begin o <= (a[WID-2+`EXTRA_BITS:0]==0) ? 0 : {a[WID-1+`EXTRA_BITS],1'b0,{EMSB{1'b1}},{FMSB+1{1'b0}}}; nanx <= 1'b0; end
+    `FMAN:   begin o <= {a[WID-1+`EXTRA_BITS],1'b0,{EMSB{1'b1}},a[FMSB:0]}; nanx <= 1'b0; end
     //`FCVTSQ:    o <= sq_o;
     `FCVTSD: begin o <= {sdo,4'h0}; nanx <= nanxab; end
-    `FCVTDS: begin o <= {{40{dso[39]}},dso,4'h0}; nanx <= nanxab; end
-    `F32TO80: begin o <= {f32to80o,4'h0}; nanx <= nanxab; end
-    `F80TO32: begin o <= {f80to32o,4'h0}; nanx <= nanxab; end
-    `ISNAN:	 begin o <= nana; end
-    `FINITE:	begin o <= !xinfa; end
-    `UNORD:		begin o <= nanxab; end
+    `FCVTDS: begin o <= {{40{dso[39]}},dso,{`EXTRA_BITS{1'b0}}}; nanx <= nanxab; end
+    `F32TO80: begin o <= {f32to80o,{`EXTRA_BITS{1'b0}}}; nanx <= nanxab; end
+    `F80TO32: begin o <= {f80to32o,{`EXTRA_BITS{1'b0}}}; nanx <= nanxab; end
+    `ISNAN:	 begin o <= {nana,{`EXTRA_BITS{1'b0}}}; end
+    `FINITE:	begin o <= {!xinfa,{`EXTRA_BITS{1'b0}}}; end
+    `UNORD:		begin o <= {nanxab,{`EXTRA_BITS{1'b0}}}; end
     default: o <= 0;
     endcase
   `FLT2:
     case(func5)
-    `FCMP:   begin o <= {cmp_o,4'h0}; nanx <= nanxab; end
-    `FSLT:	 begin o <=  {cmp_o[1],4'h0}; nanx <= nanxab; end
-    `FSGE:	 begin o <= {~cmp_o[1],4'h0}; nanx <= nanxab; end
-    `FSLE:	 begin o <=  {cmp_o[2],4'h0}; nanx <= nanxab; end
-    `FSGT:	 begin o <= ~{cmp_o[2],4'h0}; nanx <= nanxab; end
-    `FSEQ:	 begin o <=  {cmp_o[0],4'h0}; nanx <= nanxab; end
-    `FSNE:	 begin o <= ~{cmp_o[0],4'h0}; nanx <= nanxab; end
-    `FSUN:	 begin o <=  {cmp_o[4],4'h0}; nanx <= nanxab; end
-    `CPYSGN:	begin o <= {b[WID+3],a[WID+2:0]}; end
+    `FCMP:   begin o <= {cmp_o,{`EXTRA_BITS{1'b0}}}; nanx <= nanxab; end
+    `FSLT:	 begin o <=  {cmp_o[1],{`EXTRA_BITS{1'b0}}}; nanx <= nanxab; end
+    `FSGE:	 begin o <= {~cmp_o[1],{`EXTRA_BITS{1'b0}}}; nanx <= nanxab; end
+    `FSLE:	 begin o <=  {cmp_o[2],{`EXTRA_BITS{1'b0}}}; nanx <= nanxab; end
+    `FSGT:	 begin o <= ~{cmp_o[2],{`EXTRA_BITS{1'b0}}}; nanx <= nanxab; end
+    `FSEQ:	 begin o <=  {cmp_o[0],{`EXTRA_BITS{1'b0}}}; nanx <= nanxab; end
+    `FSNE:	 begin o <= ~{cmp_o[0],{`EXTRA_BITS{1'b0}}}; nanx <= nanxab; end
+    `FSUN:	 begin o <=  {cmp_o[4],{`EXTRA_BITS{1'b0}}}; nanx <= nanxab; end
+    `CPYSGN:	begin o <= {b[WID-1+`EXTRA_BITS],a[WID-2+`EXTRA_BITS:0]}; end
     default: o <= 0;
     endcase
   `FLT3:
@@ -157,23 +158,24 @@ always @*
 	  	end
     default: o <= 0;
   	endcase
+  // ToDo: add extra bits
   `FANDI:
   	begin
   	case(ir[32:31])
-  	2'd0:		o <= {a[23: 4] & {{58{1'b1}},ir[39:33],ir[30:16],4'h0}};
-  	2'd1:		o <= a[43:24] & {{36{1'b1}},ir[39:33],ir[30:16],{20{1'b1}}};
-  	2'd2:		o <= a[63:44] & {{14{1'b1}},ir[39:33],ir[30:16],{40{1'b1}}};
-  	2'd3:		o <= a[83:64] & {ir[39:33],ir[30:16],{60{1'b1}}};
+  	2'd0:		o <= {a[19+`EXTRA_BITS:`EXTRA_BITS] & {{58{1'b1}},ir[39:33],ir[30:16],{`EXTRA_BITS{1'b0}}}};
+  	2'd1:		o <= a[39+`EXTRA_BITS:20+`EXTRA_BITS] & {{36{1'b1}},ir[39:33],ir[30:16],{20{1'b1}}};
+  	2'd2:		o <= a[59+`EXTRA_BITS:40+`EXTRA_BITS] & {{14{1'b1}},ir[39:33],ir[30:16],{40{1'b1}}};
+  	2'd3:		o <= a[79+`EXTRA_BITS:60+`EXTRA_BITS] & {ir[39:33],ir[30:16],{60{1'b1}}};
   	endcase
   	nanx <= 1'b0;
   	end
   `FORI:
   	begin
   	case(ir[32:31])
-  	2'd0:		o <= {a[23: 4] & {{58{1'b0}},ir[39:33],ir[30:16],4'h0}};
-  	2'd1:		o <= a[43:24] & {{36{1'b0}},ir[39:33],ir[30:16],{20{1'b0}}};
-  	2'd2:		o <= a[63:44] & {{14{1'b0}},ir[39:33],ir[30:16],{40{1'b0}}};
-  	2'd3:		o <= a[83:64] & {ir[39:33],ir[30:16],{60{1'b0}}};
+  	2'd0:		o <= {a[19+`EXTRA_BITS:`EXTRA_BITS] & {{58{1'b0}},ir[39:33],ir[30:16],{`EXTRA_BITS{1'b0}}}};
+  	2'd1:		o <= a[39+`EXTRA_BITS:20+`EXTRA_BITS] & {{36{1'b0}},ir[39:33],ir[30:16],{20{1'b0}}};
+  	2'd2:		o <= a[59+`EXTRA_BITS:40+`EXTRA_BITS] & {{14{1'b0}},ir[39:33],ir[30:16],{40{1'b0}}};
+  	2'd3:		o <= a[79+`EXTRA_BITS:60+`EXTRA_BITS] & {ir[39:33],ir[30:16],{60{1'b0}}};
   	endcase
   	nanx <= 1'b0;
   	end
