@@ -54,6 +54,108 @@ namespace EM80
 			i = ((Int64)digits[1] << 32) | (Int64)digits[0];
 			return i;
 		}
+		public Int128 ZX8()
+		{
+			digits[0] &= 0xffL;
+			digits[1] = 0x0L;
+			digits[2] = 0x0L;
+			digits[3] = 0x0L;
+			return this;
+		}
+		public Int128 ZX16()
+		{
+			digits[0] &= 0xffffL;
+			digits[1] = 0x0L;
+			digits[2] = 0x0L;
+			digits[3] = 0x0L;
+			return this;
+		}
+		public Int128 ZX32()
+		{
+			digits[1] = 0x0L;
+			digits[2] = 0x0L;
+			digits[3] = 0x0L;
+			return this;
+		}
+		public Int128 ZX40()
+		{
+			digits[1] &= 0xffL;
+			digits[2] = 0x0L;
+			digits[3] = 0x0L;
+			return this;
+		}
+		public Int128 ZX64()
+		{
+			digits[2] = 0x0L;
+			digits[3] = 0x0L;
+			return this;
+		}
+		public Int128 ZX80()
+		{
+			digits[2] &= 0xffffL;
+			digits[3] = 0x0L;
+			return this;
+		}
+		public Int128 SX8()
+		{
+			if ((digits[0] & 0x80L) != 0)
+			{
+				digits[0] |= 0xffffff00L;
+				digits[1] = 0xffffffffL;
+				digits[2] = 0xffffffffL;
+				digits[3] = 0xffffffffL;
+			}
+			return this;
+		}
+		public Int128 SX16()
+		{
+			if ((digits[0] & 0x8000L) != 0)
+			{
+				digits[0] |= 0xffff0000L;
+				digits[1] = 0xffffffffL;
+				digits[2] = 0xffffffffL;
+				digits[3] = 0xffffffffL;
+			}
+			return this;
+		}
+		public Int128 SX32()
+		{
+			if ((digits[0] & 0x80000000L) != 0)
+			{
+				digits[1] = 0xffffffffL;
+				digits[2] = 0xffffffffL;
+				digits[3] = 0xffffffffL;
+			}
+			return this;
+		}
+		public Int128 SX40()
+		{
+			if ((digits[1] & 0x80L) != 0)
+			{
+				digits[1] |= 0xffffff00L;
+				digits[2] = 0xffffffffL;
+				digits[3] = 0xffffffffL;
+			}
+			return this;
+		}
+		public Int128 SX64()
+		{
+			if ((digits[1] & 0x80000000L) != 0)
+			{
+				digits[2] = 0xffffffffL;
+				digits[3] = 0xffffffffL;
+			}
+			return this;
+		}
+		public Int128 SX80()
+		{
+			if ((digits[2] & 0x8000L) != 0)
+			{
+				digits[2] |= 0xffff0000L;
+				digits[3] = 0xffffffffL;
+			}
+			return this;
+		}
 		public void mask()
 		{
 			int nn;
@@ -200,6 +302,40 @@ namespace EM80
 			aa.mask();
 			return aa;
 		}
+		public static void ShlPair(Int128 a, ref Int128 aa, ref Int128 bb, int amt, int lsb = 0)
+		{
+			int nn;
+
+			aa = a.Clone();
+//			bb = Int128.Convert(lsb!=0 ? -1 : 0);
+
+			for (; amt > 0; amt--)
+			{
+				for (nn = 0; nn < 4; nn++)
+				{
+					aa.digits[nn] <<= 1;
+					bb.digits[nn] <<= 1;
+				}
+				for (nn = 0; nn < 3; nn++)
+				{
+					if (aa.digits[nn] > 0xffffffffL)
+					{
+						aa.digits[nn] &= 0xffffffffL;
+						aa.digits[nn + 1]++;
+					}
+					if (bb.digits[nn] > 0xffffffffL)
+					{
+						bb.digits[nn] &= 0xffffffffL;
+						bb.digits[nn + 1]++;
+					}
+				}
+				if (aa.digits[nn] > 0xffffffffL)
+					bb.digits[0]++;
+				aa.digits[0] |= (ulong)lsb;
+				aa.mask();
+				bb.mask();
+			}
+		}
 		public static Int128 Com(Int128 a)
 		{
 			int nn;
@@ -254,6 +390,29 @@ namespace EM80
 					aa.digits[nn] >>= 1;
 				}
 				aa.digits[nn-1] |= (ulong)fill << 31;
+			}
+			aa.mask();
+			return aa;
+		}
+		public static Int128 Asr(Int128 a, int amt)
+		{
+			int nn;
+			Int128 aa = a.Clone();
+
+			for (; amt > 0; amt--)
+			{
+				for (nn = 3; nn > 0; nn--)
+				{
+					if ((aa.digits[nn] & 1L) != 0)
+					{
+						aa.digits[nn - 1] |= 0x100000000L;
+					}
+				}
+				for (nn = 0; nn < 4; nn++)
+				{
+					aa.digits[nn] >>= 1;
+				}
+				aa.digits[nn - 1] |= (ulong)((aa.digits[nn-1] >> 30) & 1) << 31;
 			}
 			aa.mask();
 			return aa;

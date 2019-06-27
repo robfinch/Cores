@@ -39,7 +39,7 @@ namespace EM80
 		{
 			char[] cha = new char[1];
 			cha[0] = '\n';
-			stra = txt.Split(cha,50);
+			stra = txt.Split(cha,25);
 		}
 		private void drawControl(Graphics g)
 		{

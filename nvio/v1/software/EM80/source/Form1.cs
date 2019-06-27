@@ -19,6 +19,7 @@ namespace EM80
 		TextBox dumpBox = new TextBox();
 		TextBox tbAddr = new TextBox();
 		dump dmp = new dump();
+		dump stk = new dump();
 		LED[] leds;
 		int regset;
 		int count;
@@ -131,7 +132,7 @@ namespace EM80
 				//this.Controls.Add(tbAddr);
 				dmp.Name = "dumpBox";
 				dmp.Location = new Point(780, 60);
-				dmp.Size = new System.Drawing.Size(330, 380);
+				dmp.Size = new System.Drawing.Size(330, 190);
 				dmp.TabIndex = 67;
 				//dmp.Multiline = true;
 				//dmp.AcceptsReturn = true;
@@ -140,6 +141,17 @@ namespace EM80
 				dmp.Text = "0";
 				//dumpBox.ScrollBars = ScrollBars.Vertical;
 				this.Controls.Add(dmp);
+				stk.Name = "stkBox";
+				stk.Location = new Point(780, 280);
+				stk.Size = new System.Drawing.Size(330, 190);
+				stk.TabIndex = 68;
+				//dmp.Multiline = true;
+				//dmp.AcceptsReturn = true;
+				//dumpBox.MaxLength = 10000000;
+				stk.Font = new Font("Courier New", 7.0f);
+				stk.Text = "0";
+				//dumpBox.ScrollBars = ScrollBars.Vertical;
+				this.Controls.Add(stk);
 				/*
 								dumpBox.Name = "dumpBox";
 								dumpBox.Location = new Point(800, 60);
@@ -313,6 +325,20 @@ namespace EM80
 			}
 			dmp.SetText(str);
 			dmp.Invalidate();
+			ad = Int128.Sub(soc.cpu.regfile[(soc.cpu.regset << 6)|63], Int128.Convert(40));
+			str = "";
+			for (nn = 0; nn < 25; nn++)
+			{
+				dat = soc.Read(ad);
+				if (Int128.EQ(ad, soc.cpu.regfile[(soc.cpu.regset << 6) | 63]))
+					str = str + "h";
+				else
+					str = str + " ";
+				str = str + Convert.ToString((long)ad.digits[0], 16).PadLeft(6, '0') + ": " + dat.ToString80() + "\r\n";
+				ad = Int128.Add(ad, Int128.Convert(10));
+			}
+			stk.SetText(str);
+			stk.Invalidate();
 			if (trackIP)
 				timer1.Interval = 10;
 			else

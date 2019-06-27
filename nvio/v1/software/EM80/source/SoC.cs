@@ -137,8 +137,13 @@ namespace EM80
 			Int128 s;
 			Int128 mask = new Int128();
 			Int128 v = new Int128();
-			Int128 m;
+			Int128 m, mlo, mhi;
+			Int128 vlo, vhi;
 
+			vlo = new Int128();
+			vhi = new Int128();
+			mlo = new Int128();
+			mhi = new Int128();
 			switch (size)
 			{
 				case 1:
@@ -187,16 +192,14 @@ namespace EM80
 					s = Int128.Shr(adr, 4);
 					j = mainmem[s.digits[0]].Clone();
 					k = mainmem[s.digits[0]+1].Clone();
-					v = val.Clone();
-					v = Int128.Shl(v, (int)((adr.digits[0] & 0xfL) * 8));
-					m = Int128.Shl(mask, (int)((adr.digits[0] & 0xfL) * 8),1);
-					j = Int128.And(j, m);
-					j = Int128.Or(j, v);
-					m = Int128.Shr(mask, 128 - (int)((adr.digits[0] & 0xfL) * 8), 1);
-					k = Int128.And(k, m);
-					v = val.Clone();
-					v = Int128.Shr(v, 128 - (int)((adr.digits[0] & 0xfL) * 8),0);
-					k = Int128.Or(k, v);
+					val = val.ZX80();
+					Int128.ShlPair(val, ref vlo, ref vhi, (int)((adr.digits[0] & 0xfL) * 8),0);
+					mhi = Int128.Convert(-1);
+					Int128.ShlPair(mask, ref mlo, ref mhi, (int)((adr.digits[0] & 0xfL) * 8),1);
+					j = Int128.And(j, mlo);
+					j = Int128.Or(j, vlo);
+					k = Int128.And(k, mhi);
+					k = Int128.Or(k, vhi);
 					mainmem[s.digits[0]] = j;
 					mainmem[s.digits[0] + 1] = k;
 				}
@@ -204,49 +207,45 @@ namespace EM80
 				{
 					s = Int128.Shr(adr, 4);
 					j = mainmem[s.digits[0]].Clone();
-					v = val.Clone();
-					v = Int128.Shl(v, (int)((adr.digits[0] & 0xfL) * 8));
-					m = Int128.Shl(mask, (int)((adr.digits[0] & 0xfL) * 8),1);
-					j = Int128.And(j, m);
-					j = Int128.Or(j, v);
+					val = val.ZX80();
+					Int128.ShlPair(val, ref vlo, ref vhi, (int)((adr.digits[0] & 0xfL) * 8));
+					j = Int128.And(j, mlo);
+					j = Int128.Or(j, vlo);
 					mainmem[s.digits[0]] = j;
 				}
 				return;
 			}
-			else if (ad >=  0xffffffffff400000L && ad < 0xffffffffff410000L)
+			else if ((ad & 0xffffffffL) >=  0xff400000L && (ad & 0xffffffffL)< 0xff410000L)
 			{
 				s = Int128.Add(adr, Int128.Convert(size));
 				// Do we need to modify one or two memory bundles?
-				if ((s.digits[0] & 0xfff0L) != (adr.digits[0] & 0xfff0L))
+				if ((s.digits[0] & 0xfffffff0L) != (adr.digits[0] & 0xfffffff0L))
 				{
 					s = Int128.Shr(adr, 4);
-					s = Int128.And(s, Int128.Convert(0xfffL));
-					j = scratchmem[s.digits[0]].Clone();
-					k = scratchmem[(s.digits[0] + 1) & 0xfffL].Clone();
-					v = val.Clone();
-					v = Int128.Shl(v, (int)((adr.digits[0] & 0xfL) * 8));
-					m = Int128.Shl(mask, (int)((adr.digits[0] & 0xfL) * 8), 1);
-					j = Int128.And(j, m);
-					j = Int128.Or(j, v);
-					m = Int128.Shr(mask, 128 - (int)((adr.digits[0] & 0xfL) * 8), 1);
-					k = Int128.And(k, m);
-					v = val.Clone();
-					v = Int128.Shr(v, 128 - (int)((adr.digits[0] & 0xfL) * 8), 0);
-					k = Int128.Or(k, v);
-					scratchmem[s.digits[0]] = j;
-					scratchmem[s.digits[0] + 1] = k;
+					ad = (ad >> 4) &0xfffL;
+					j = scratchmem[ad].Clone();
+					k = scratchmem[(ad + 1) & 0xfffL].Clone();
+					val = val.ZX80();
+					Int128.ShlPair(val, ref vlo, ref vhi, (int)((adr.digits[0] & 0xfL) * 8), 0);
+					mhi = Int128.Convert(-1);
+					Int128.ShlPair(mask, ref mlo, ref mhi, (int)((adr.digits[0] & 0xfL) * 8), 1);
+					j = Int128.And(j, mlo);
+					j = Int128.Or(j, vlo);
+					k = Int128.And(k, mhi);
+					k = Int128.Or(k, vhi);
+					scratchmem[ad] = j;
+					scratchmem[(ad + 1) & 0xfffL] = k;
 				}
 				else
 				{
 					s = Int128.Shr(adr, 4);
-					s = Int128.And(s, Int128.Convert(0xfffL));
-					j = scratchmem[s.digits[0]].Clone();
-					v = val.Clone();
-					v = Int128.Shl(v, (int)((adr.digits[0] & 0xfL) * 8));
-					m = Int128.Shl(mask, (int)((adr.digits[0] & 0xfL) * 8), 1);
-					j = Int128.And(j, m);
-					j = Int128.Or(j, v);
-					scratchmem[s.digits[0]] = j;
+					ad = (ad >> 4) & 0xfffL;
+					j = scratchmem[ad].Clone();
+					val = val.ZX80();
+					Int128.ShlPair(val, ref vlo, ref vhi, (int)((adr.digits[0] & 0xfL) * 8));
+					j = Int128.And(j, mlo);
+					j = Int128.Or(j, vlo);
+					scratchmem[ad] = j;
 				}
 				return;
 			}

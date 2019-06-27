@@ -94,12 +94,22 @@ namespace EM80
 			BLTU = 6,
 			BGEU = 7,
 		}
+		public enum e_bmisc
+		{
+			RTI = 0,
+			REX = 1,
+			SYNC = 2,
+			SEI = 3,
+			WAIT = 4,
+			EXEC = 5,
+		}
 		public enum e_iunit
 		{
 			R1 = 1,
 			R3E = 2,
 			R3O = 3,
 			ADDI = 4,
+			CSR = 5,
 			ANDI = 8,
 			ORI = 9,
 			XORI = 0x0A,
@@ -129,6 +139,14 @@ namespace EM80
 			NOT = 0x05,
 			MOV = 0x10,
 		}
+		public enum e_csrreg
+		{
+			TICK = 0x02,
+			TVEC0 = 0x30,
+			TVEC1 = 0x31,
+			TVEC2 = 0x32,
+			TVEC3 = 0x33,
+		}
 		public enum e_funit
 		{
 			FLT1 = 1,
@@ -149,6 +167,10 @@ namespace EM80
 		{
 			LDB = 0x00,
 			LDBU = 0x04,
+			LDW = 0x01,
+			LDWU = 0x05,
+			LDP = 0x02,
+			LDPU = 0x06,
 			LDO = 0x09,
 			LDOU = 0x0D,
 			LDD = 0x03,
@@ -157,10 +179,12 @@ namespace EM80
 			MLX = 0x0F,
 			LDFS = 0x10,
 			LDFD = 0x11,
+			POP = 0x1D,
 			STB = 0x20,
 			STD = 0x23,
 			STT = 0x28,
 			STW = 0x21,
+			STP = 0x22,
 			STO = 0x29,
 			PUSH = 0x2d,
 			PUSHC0 = 0x0b,
@@ -176,10 +200,18 @@ namespace EM80
 		{
 			STBX = 0x00,
 			STWX = 0x01,
-			STOX = 0x09,
+			STPX = 0x02,
 			STDX = 0x03,
+			STTX = 0x08,
+			STOX = 0x09,
 			LDBX = 0x00,
 			LDBUX = 0x04,
+			LDWX = 0x01,
+			LDWUX = 0x05,
+			LDTX = 0x08,
+			LDTUX = 0x0C,
+			LDPX = 0x02,
+			LDPUX = 0x06,
 			LDDX = 0x03,
 			LDOX = 0x09,
 			LDOUX = 0x0D,
@@ -214,6 +246,10 @@ namespace EM80
 		public bool rfw;
 		public bool isLoad;
 		public int icount;
+		// CSRs
+		public Int64 tick;
+		public Int128[] tvec;
+
 		public nvioCpu()
 		{
 			int nn;
@@ -231,6 +267,11 @@ namespace EM80
 			brdisp = new Int128();
 			res = new Int128();
 			regset = 0;
+			tvec = new Int128[4];
+			for (nn = 0; nn < 4; nn++)
+			{
+				tvec[nn] = new Int128();
+			}
 		}
 		public void Reset()
 		{
@@ -238,6 +279,7 @@ namespace EM80
 			ip.digits[2] = 0xffffffffL;
 			ip.digits[3] = 0xffffffffL;
 			icount = 0;
+			tick = 0;
 		}
 		void IncIp(int amt)
 		{
@@ -336,6 +378,100 @@ namespace EM80
 					break;
 				case e_bcond.BGE:
 					if (Int128.LT(opb, opa) || Int128.EQ(opa, opb))
+					{
+						ip.digits[0] &= 0xfffffff0L;
+						ip = Int128.Add(ip, brdisp);
+						ip.digits[0] |= ((S2 << 2) | S2);
+					}
+					else
+						IncIp(1);
+					break;
+			}
+		}
+		public void ProcessBEQI()
+		{
+			uint S2;
+			ulong imm;
+
+			S2 = (uint)((insnn >> 22) & 3);
+			imm = (ulong)((insnn & 7) | (((insnn >> 16) & 0x3f) << 3));
+			if ((imm & 0x100L) != 0)
+				imm |= 0xfffffffffffffE00L;
+			brdisp.digits[0] = (insnn >> 20) & 0xffff0L;
+			brdisp.digits[1] = 0;
+			brdisp.digits[2] = 0;
+			brdisp.digits[3] = 0;
+			if ((brdisp.digits[0] & 0x80000L) != 0)
+			{
+				brdisp.digits[0] |= 0xfff00000L;
+				brdisp.digits[1] = 0xffffffffL;
+				brdisp.digits[2] = 0xffffffffL;
+				brdisp.digits[3] = 0xffffffffL;
+			}
+			switch ((e_bunit)((insnn >> 6) & 15))
+			{
+				case e_bunit.BEQI:
+					if (Int128.EQ(opa, Int128.Convert(imm)))
+					{
+						ip.digits[0] &= 0xfffffff0L;
+						ip = Int128.Add(ip, brdisp);
+						ip.digits[0] |= ((S2 << 2) | S2);
+					}
+					else
+						IncIp(1);
+					break;
+				case e_bunit.BNEI:
+					if (!Int128.EQ(opa, Int128.Convert(imm)))
+					{
+						ip.digits[0] &= 0xfffffff0L;
+						ip = Int128.Add(ip, brdisp);
+						ip.digits[0] |= ((S2 << 2) | S2);
+					}
+					else
+						IncIp(1);
+					break;
+			}
+		}
+		public void ProcessBBc()
+		{
+			int bcond;
+			uint S2;
+			Int128 tmp;
+			int shamt;
+
+			bcond = (int)(insnn & 1L);
+			S2 = (uint)((insnn >> 22) & 3);
+			brdisp.digits[0] = (insnn >> 20) & 0xffff0L;
+			brdisp.digits[1] = 0;
+			brdisp.digits[2] = 0;
+			brdisp.digits[3] = 0;
+			if ((brdisp.digits[0] & 0x80000L) != 0)
+			{
+				brdisp.digits[0] |= 0xfff00000L;
+				brdisp.digits[1] = 0xffffffffL;
+				brdisp.digits[2] = 0xffffffffL;
+				brdisp.digits[3] = 0xffffffffL;
+			}
+			switch (bcond)
+			{
+				case 0: // BBS
+					tmp = Int128.And(opb, Int128.Convert(0x7fL));
+					shamt = (int)tmp.digits[0];
+					tmp = Int128.Shr(opa, shamt);
+					if ((tmp.digits[0] & 1) != 0)
+					{
+						ip.digits[0] &= 0xfffffff0L;
+						ip = Int128.Add(ip, brdisp);
+						ip.digits[0] |= ((S2 << 2) | S2);
+					}
+					else
+						IncIp(1);
+					break;
+				case 1: // BBC
+					tmp = Int128.And(opb, Int128.Convert(0x7fL));
+					shamt = (int)tmp.digits[0];
+					tmp = Int128.Shr(opa, shamt);
+					if ((tmp.digits[0] & 1) == 0)
 					{
 						ip.digits[0] &= 0xfffffff0L;
 						ip = Int128.Add(ip, brdisp);
@@ -544,6 +680,36 @@ namespace EM80
 									break;
 							}
 							break;
+						case e_bunit.BBc:
+							switch(instr & 3)
+							{
+								case 0:
+									str = str + "BBS    ";
+									str = str + Regstr(Rs1) + ",#$" + Convert.ToString(((int)Rs2 << 1)|(((int)instr >> 2) & 1),16) + "," + DisBranchTgt(instr, ip).TrimStart(cha);
+									break;
+								case 1:
+									str = str + "BBC    ";
+									str = str + Regstr(Rs1) + ",#$" + Convert.ToString(((int)Rs2 << 1) | (((int)instr >> 2) & 1), 16) + "," + DisBranchTgt(instr, ip).TrimStart(cha);
+									break;
+							}
+							break;
+						case e_bunit.BEQI:
+							str = str + "BEQI   " + Regstr(Rs1) + ",#$" + Convert.ToString((Rs2 << 3) | (instr & 7),16) + "," + DisBranchTgt(instr, ip).TrimStart(cha);
+							break;
+						case e_bunit.BNEI:
+							str = str + "BNEI   " + Regstr(Rs1) + ",#$" + Convert.ToString((Rs2 << 3) | (instr & 7), 16) + "," + DisBranchTgt(instr, ip).TrimStart(cha);
+							break;
+						case e_bunit.Misc:
+							switch((e_bmisc)func5)
+							{
+								case e_bmisc.SYNC:
+									str = str + "SYNC   ";
+									break;
+							}
+							break;
+						case e_bunit.NOP:
+							str = str + "NOP    ";
+							break;
 					}
 					break;
 				case nvioCpu.e_unitTypes.I:
@@ -637,6 +803,20 @@ namespace EM80
 							else
 								str = str + Regstr(Rd) + "," + Regstr(Rs1) + ",#$" + DisRII((UInt64)instr).TrimStart(cha);
 							break;
+						case e_iunit.CSR:
+							int csrop = (int)(instr >> 38) & 3;
+							int csrreg = (int)(instr >> 16) & 0xfff;
+							int csrol = (int)(instr >> 36) & 3;
+							str = str + "CSR";
+							switch(csrop)
+							{
+								case 0:	str = str + "RD"; break;
+								case 1: str = str + "RW"; break;
+								case 2: str = str + "RS"; break;
+								case 3: str = str + "RC"; break;
+							}
+							str = str + "  " + Regstr(Rd) + "," + "#$" + Convert.ToString(csrreg) + "," + Regstr(Rs1) + "," + Convert.ToString(csrol);
+							break;
 					}
 					break;
 				case e_unitTypes.M:
@@ -697,6 +877,11 @@ namespace EM80
 							if (Rs1 != 0)
 								str = str + "[" + Regstr(Rs1) + "]";
 							break;
+						case e_munit.STP:
+							str = str + "STP    " + Regstr(Rs2) + "," + ma.ToString80().TrimStart(cha);
+							if (Rs1 != 0)
+								str = str + "[" + Regstr(Rs1) + "]";
+							break;
 						case e_munit.STO:
 							str = str + "STO    " + Regstr(Rs2) + "," + ma.ToString80().TrimStart(cha);
 							if (Rs1 != 0)
@@ -729,7 +914,23 @@ namespace EM80
 									str = str + "STB    " + Regstr(Rs2) + ",";
 									str = str + "[" + Regstr(Rs1) + "+" + Regstr(Rs3) + ScaleStr(Sc) + "]";
 									break;
+								case e_munit5.STWX:
+									str = str + "STW    " + Regstr(Rs2) + ",";
+									str = str + "[" + Regstr(Rs1) + "+" + Regstr(Rs3) + ScaleStr(Sc) + "]";
+									break;
+								case e_munit5.STTX:
+									str = str + "STT    " + Regstr(Rs2) + ",";
+									str = str + "[" + Regstr(Rs1) + "+" + Regstr(Rs3) + ScaleStr(Sc) + "]";
+									break;
+								case e_munit5.STPX:
+									str = str + "STP    " + Regstr(Rs2) + ",";
+									str = str + "[" + Regstr(Rs1) + "+" + Regstr(Rs3) + ScaleStr(Sc) + "]";
+									break;
 								case e_munit5.STOX:
+									str = str + "STD    " + Regstr(Rs2) + ",";
+									str = str + "[" + Regstr(Rs1) + "+" + Regstr(Rs3) + ScaleStr(Sc) + "]";
+									break;
+								case e_munit5.STDX:
 									str = str + "STD    " + Regstr(Rs2) + ",";
 									str = str + "[" + Regstr(Rs1) + "+" + Regstr(Rs3) + ScaleStr(Sc) + "]";
 									break;
@@ -751,6 +952,36 @@ namespace EM80
 							if (Rs1 != 0)
 								str = str + "[" + Regstr(Rs1) + "]";
 							break;
+						case e_munit.LDW:
+							str = str + "LDW    " + Regstr(Rd) + "," + ma.ToString80().TrimStart(cha);
+							if (Rs1 != 0)
+								str = str + "[" + Regstr(Rs1) + "]";
+							break;
+						case e_munit.LDWU:
+							str = str + "LDWU   " + Regstr(Rd) + "," + ma.ToString80().TrimStart(cha);
+							if (Rs1 != 0)
+								str = str + "[" + Regstr(Rs1) + "]";
+							break;
+						case e_munit.LDT:
+							str = str + "LDT    " + Regstr(Rd) + "," + ma.ToString80().TrimStart(cha);
+							if (Rs1 != 0)
+								str = str + "[" + Regstr(Rs1) + "]";
+							break;
+						case e_munit.LDTU:
+							str = str + "LDTU   " + Regstr(Rd) + "," + ma.ToString80().TrimStart(cha);
+							if (Rs1 != 0)
+								str = str + "[" + Regstr(Rs1) + "]";
+							break;
+						case e_munit.LDP:
+							str = str + "LDP    " + Regstr(Rd) + "," + ma.ToString80().TrimStart(cha);
+							if (Rs1 != 0)
+								str = str + "[" + Regstr(Rs1) + "]";
+							break;
+						case e_munit.LDPU:
+							str = str + "LDPU   " + Regstr(Rd) + "," + ma.ToString80().TrimStart(cha);
+							if (Rs1 != 0)
+								str = str + "[" + Regstr(Rs1) + "]";
+							break;
 						case e_munit.LDD:
 							str = str + "LDD    " + Regstr(Rd) + "," + ma.ToString80().TrimStart(cha);
 							if (Rs1 != 0)
@@ -766,11 +997,42 @@ namespace EM80
 							if (Rs1 != 0)
 								str = str + "[" + Regstr(Rs1) + "]";
 							break;
+						case e_munit.POP:
+							str = str + "POP    " + Regstr(Rd);
+							break;
 						case e_munit.MLX:
 							switch ((e_munit5)func5)
 							{
 								case e_munit5.LDBX:
 									str = str + "LDB    " + Regstr(Rd) + ",";
+									str = str + "[" + Regstr(Rs1) + "+" + Regstr(Rs3) + ScaleStr(Sc) + "]";
+									break;
+								case e_munit5.LDBUX:
+									str = str + "LDBU   " + Regstr(Rd) + ",";
+									str = str + "[" + Regstr(Rs1) + "+" + Regstr(Rs3) + ScaleStr(Sc) + "]";
+									break;
+								case e_munit5.LDWX:
+									str = str + "LDW    " + Regstr(Rd) + ",";
+									str = str + "[" + Regstr(Rs1) + "+" + Regstr(Rs3) + ScaleStr(Sc) + "]";
+									break;
+								case e_munit5.LDWUX:
+									str = str + "LDWU   " + Regstr(Rd) + ",";
+									str = str + "[" + Regstr(Rs1) + "+" + Regstr(Rs3) + ScaleStr(Sc) + "]";
+									break;
+								case e_munit5.LDTX:
+									str = str + "LDT    " + Regstr(Rd) + ",";
+									str = str + "[" + Regstr(Rs1) + "+" + Regstr(Rs3) + ScaleStr(Sc) + "]";
+									break;
+								case e_munit5.LDTUX:
+									str = str + "LDTU   " + Regstr(Rd) + ",";
+									str = str + "[" + Regstr(Rs1) + "+" + Regstr(Rs3) + ScaleStr(Sc) + "]";
+									break;
+								case e_munit5.LDPX:
+									str = str + "LDP    " + Regstr(Rd) + ",";
+									str = str + "[" + Regstr(Rs1) + "+" + Regstr(Rs3) + ScaleStr(Sc) + "]";
+									break;
+								case e_munit5.LDPUX:
+									str = str + "LDPU   " + Regstr(Rd) + ",";
 									str = str + "[" + Regstr(Rs1) + "+" + Regstr(Rs3) + ScaleStr(Sc) + "]";
 									break;
 								case e_munit5.LDDX:
@@ -779,6 +1041,10 @@ namespace EM80
 									break;
 								case e_munit5.LDOX:
 									str = str + "LDO    " + Regstr(Rd) + ",";
+									str = str + "[" + Regstr(Rs1) + "+" + Regstr(Rs3) + ScaleStr(Sc) + "]";
+									break;
+								case e_munit5.LDOUX:
+									str = str + "LDOU   " + Regstr(Rd) + ",";
 									str = str + "[" + Regstr(Rs1) + "+" + Regstr(Rs3) + ScaleStr(Sc) + "]";
 									break;
 							}
@@ -790,6 +1056,7 @@ namespace EM80
 		}
 		public void Step(SoC soc)
 		{
+			tick++;
 			ibundle = soc.IFetch(ip);
 			insn0 = ibundle.digits[0];
 			insn0 |= ((ibundle.digits[1] & 0xffL) << 32);
@@ -1026,6 +1293,15 @@ namespace EM80
 						case e_bunit.Bcc:
 							ProcessBcc();
 							break;
+						case e_bunit.BBc:
+							ProcessBBc();
+							break;
+						case e_bunit.BEQI:
+							ProcessBEQI();
+							break;
+						case e_bunit.BNEI:
+							ProcessBEQI();
+							break;
 						case e_bunit.JMP:
 							ip.digits[0] = 0;
 							ip.digits[1] &= 0xffffff00L;
@@ -1060,6 +1336,13 @@ namespace EM80
 						case e_bunit.RET:
 							ip = opb.Clone();
 							res = Int128.Add(opa, Int128.Convert((insnn >> 22)<<1));
+							break;
+						case e_bunit.Misc:
+							switch ((e_bmisc)funct5) {
+								case e_bmisc.SYNC:
+									IncIp(1);
+									break;
+							}
 							break;
 					}
 					break;
@@ -1190,6 +1473,54 @@ namespace EM80
 							rii.digits[3] = 0;
 							res = Int128.Or(opa, Int128.Shl(rii, 60));
 							break;
+						case e_iunit.CSR:
+							e_csrreg csrreg = (e_csrreg)((int)(insnn >> 16) & 0xfff);
+							int csrop = (int)(insnn >> 38) & 3;
+							switch(csrop)
+							{
+								case 0:
+									switch(csrreg)
+									{
+										case e_csrreg.TICK:
+											res = Int128.Convert(tick);
+											break;
+										case e_csrreg.TVEC0:
+											res = tvec[0].Clone();
+											break;
+										case e_csrreg.TVEC1:
+											res = tvec[1].Clone();
+											break;
+										case e_csrreg.TVEC2:
+											res = tvec[2].Clone();
+											break;
+										case e_csrreg.TVEC3:
+											res = tvec[3].Clone();
+											break;
+									}
+									break;
+								case 1:
+									switch (csrreg)
+									{
+										case e_csrreg.TVEC0:
+											res = tvec[0].Clone();
+											tvec[0] = opa.Clone();
+											break;
+										case e_csrreg.TVEC1:
+											res = tvec[1].Clone();
+											tvec[1] = opa.Clone();
+											break;
+										case e_csrreg.TVEC2:
+											res = tvec[2].Clone();
+											tvec[2] = opa.Clone();
+											break;
+										case e_csrreg.TVEC3:
+											res = tvec[3].Clone();
+											tvec[3] = opa.Clone();
+											break;
+									}
+									break;
+							}
+							break;
 					}
 					break;
 				case e_unitTypes.F:
@@ -1232,10 +1563,21 @@ namespace EM80
 					// Loads
 					else
 					{
-						ma.digits[0] = ((insnn >> 16) & 0x7ffffL) | (((insnn >> 35) & 0x1fL) << 15);
-						ma.digits[1] = 0;
-						ma.digits[2] = 0;
-						ma.digits[3] = 0;
+						if (mopcode == e_munit.POP)
+						{
+							ma.digits[0] = (ulong)((long)(insnn >> 35));
+							ma.digits[0] &= 0x1fL;
+							ma.digits[1] = 0x0L;
+							ma.digits[2] = 0x0L;
+							ma.digits[3] = 0x0L;
+						}
+						else
+						{
+							ma.digits[0] = ((insnn >> 16) & 0x7ffffL) | (((insnn >> 35) & 0x1fL) << 15);
+							ma.digits[1] = 0;
+							ma.digits[2] = 0;
+							ma.digits[3] = 0;
+						}
 					}
 					if ((ma.digits[0] & 0x80000000L) != 0)
 					{
@@ -1279,6 +1621,9 @@ namespace EM80
 						case e_munit.STT:
 							soc.Write(ma, opb, 4);
 							break;
+						case e_munit.STP:
+							soc.Write(ma, opb, 5);
+							break;
 						case e_munit.STO:
 							soc.Write(ma, opb, 8);
 							break;
@@ -1311,79 +1656,95 @@ namespace EM80
 								case e_munit5.STBX:
 									soc.Write(max, opb, 1);
 									break;
+								case e_munit5.STWX:
+									soc.Write(max, opb, 2);
+									break;
+								case e_munit5.STTX:
+									soc.Write(max, opb, 4);
+									break;
+								case e_munit5.STPX:
+									soc.Write(max, opb, 5);
+									break;
 								case e_munit5.STOX:
 									soc.Write(max, opb, 8);
+									break;
+								case e_munit5.STDX:
+									soc.Write(max, opb, 10);
 									break;
 							}
 							break;
 						case e_munit.LDB:
-							res = soc.Read(ma);
-							res.digits[0] &= 0xffL;
-							res.digits[1] = 0;
-							res.digits[2] = 0;
-							res.digits[3] = 0;
-							if ((res.digits[1] & 0x80L) != 0)
-							{
-								res.digits[0] |= 0xffffff00L;
-								res.digits[1] = 0xffffffffL;
-								res.digits[2] = 0xffffffffL;
-								res.digits[3] = 0xffffffffL;
-							}
+							res = soc.Read(ma).SX8();
 							break;
 						case e_munit.LDBU:
-							res = soc.Read(ma);
-							res.digits[0] &= 0xffL;
-							res.digits[1] = 0;
-							res.digits[2] = 0;
-							res.digits[3] = 0;
+							res = soc.Read(ma).ZX8();
+							break;
+						case e_munit.LDW:
+							res = soc.Read(ma).SX16();
+							break;
+						case e_munit.LDWU:
+							res = soc.Read(ma).ZX16();
+							break;
+						case e_munit.LDT:
+							res = soc.Read(ma).SX32();
+							break;
+						case e_munit.LDTU:
+							res = soc.Read(ma).ZX32();
+							break;
+						case e_munit.LDP:
+							res = soc.Read(ma).SX40();
+							break;
+						case e_munit.LDPU:
+							res = soc.Read(ma).ZX40();
 							break;
 						case e_munit.LDD:
-							res = soc.Read(ma);
-							if ((res.digits[2] & 0x8000L) != 0)
-							{
-								res.digits[2] |= 0xffff0000L;
-								res.digits[3] = 0xffffffffL;
-							}
+							res = soc.Read(ma).SX80();
 							break;
 						case e_munit.LDO:
-							res = soc.Read(ma);
-							if ((res.digits[1] & 0x80000000L) != 0)
-							{
-								res.digits[2] = 0xffffffffL;
-								res.digits[3] = 0xffffffffL;
-							}
+							res = soc.Read(ma).SX64();
 							break;
 						case e_munit.LDOU:
-							res = soc.Read(ma);
-							res.digits[2] = 0x00000000L;
-							res.digits[3] = 0x00000000L;
+							res = soc.Read(ma).ZX64();
+							break;
+						case e_munit.POP:
+							res = soc.Read(opa).SX80();
+							regfile[Rs1+regset] = ma;
 							break;
 						case e_munit.MLX:
 							switch((e_munit5)funct5)
 							{
 								case e_munit5.LDBX:
-									res = soc.Read(max);
-									res.digits[0] &= 0xffL;
-									res.digits[1] = 0;
-									res.digits[2] = 0;
-									res.digits[3] = 0;
-									if ((res.digits[1] & 0x80L) != 0)
-									{
-										res.digits[0] |= 0xffffff00L;
-										res.digits[1] = 0xffffffffL;
-										res.digits[2] = 0xffffffffL;
-										res.digits[3] = 0xffffffffL;
-									}
+									res = soc.Read(max).SX8();
+									break;
+								case e_munit5.LDBUX:
+									res = soc.Read(max).ZX8();
+									break;
+								case e_munit5.LDWX:
+									res = soc.Read(max).SX16();
+									break;
+								case e_munit5.LDWUX:
+									res = soc.Read(max).ZX16();
+									break;
+								case e_munit5.LDTX:
+									res = soc.Read(max).SX32();
+									break;
+								case e_munit5.LDTUX:
+									res = soc.Read(max).SX32();
+									break;
+								case e_munit5.LDPX:
+									res = soc.Read(max).SX40();
+									break;
+								case e_munit5.LDPUX:
+									res = soc.Read(max).ZX40();
+									break;
+								case e_munit5.LDOX:
+									res = soc.Read(max).SX64();
+									break;
+								case e_munit5.LDOUX:
+									res = soc.Read(max).ZX64();
 									break;
 								case e_munit5.LDDX:
-									res = soc.Read(max);
-									res.digits[2] &= 0xffffL;
-									res.digits[3] = 0;
-									if ((res.digits[2] & 0x8000L) != 0)
-									{
-										res.digits[2] |= 0xffff0000L;
-										res.digits[3] = 0xffffffffL;
-									}
+									res = soc.Read(max).SX80();
 									break;
 							}
 							break;
