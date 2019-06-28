@@ -27,7 +27,7 @@
 
 module regfileSource(rst, clk, branchmiss, heads, slotvd, slot_rfw,
 	queuedOn,	rqueuedOn, iq_state, iq_rfw, iq_Rd, Rd, Rd2, rob_tails,
-	iq_latestID, iq_tgt, iq_tgt2, iq_rid, rf_source);
+	iq_latestID, iq_latestID2, iq_tgt, iq_tgt2, iq_rid, rf_source);
 parameter AREGS = 128;
 parameter QENTRIES = `QENTRIES;
 parameter RENTRIES = `RENTRIES;
@@ -48,6 +48,7 @@ input [RBIT:0] Rd [0:QSLOTS-1];
 input [RBIT:0] Rd2 [0:QSLOTS-1];
 input [`RBITS] rob_tails [0:QSLOTS-1];
 input [AREGS-1:1] iq_latestID [0:QENTRIES-1];
+input [AREGS-1:1] iq_latestID2 [0:QENTRIES-1];
 input [RBIT:0] iq_tgt [0:QENTRIES-1];
 input [RBIT:0] iq_tgt2 [0:QENTRIES-1];
 input [`RBITS] iq_rid [0:QENTRIES-1];
@@ -68,11 +69,12 @@ if (rst) begin
 end
 else begin
 	if (branchmiss) begin
-		for (n = 0; n < QENTRIES; n = n + 1)
-    	if (|iq_latestID[n]) begin
+		for (n = 0; n < QENTRIES; n = n + 1) begin
+    	if (|iq_latestID[n])
     		rf_source[ iq_tgt[n][RBIT:0] ] <= {{`QBIT{1'b0}},iq_rid[n[`QBITS]]};
+    	if (|iq_latestID2[n])
     		rf_source[ iq_tgt2[n][RBIT:0] ] <= {{`QBIT{1'b0}},iq_rid[n[`QBITS]]};
-    	end
+    end
 	end
 	else begin
 		// Setting the rf valid and source

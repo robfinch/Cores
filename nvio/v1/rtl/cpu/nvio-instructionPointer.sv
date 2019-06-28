@@ -32,6 +32,8 @@ module instructionPointer(rst, clk, queuedCnt, insnx, freezeip,
 parameter AMSB = 79;
 parameter RSTIP = 80'hFFFFFFFFFFFFFFFC0100;
 parameter QSLOTS = `QSLOTS;
+parameter TRUE = 1'b1;
+parameter FALSE = 1'b0;
 input rst;
 input clk;
 input [2:0] queuedCnt;
@@ -57,7 +59,7 @@ input [AMSB:0] ra;
 output ip_override;
 input debug_on;
 
-assign ip_override = ipd != branch_ip;
+assign ip_override = ip != branch_ip;
 
 reg phitd;
 reg [AMSB:0] next_ip;
@@ -131,7 +133,7 @@ if (rst) begin
 	branch_ip <= RSTIP;
 end
 else begin
-	branch_ip <= ipd;
+	branch_ip <= ip;
 	case(slotvd)
 	3'b001:
 		if (queuedCnt==3'd1) begin

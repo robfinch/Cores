@@ -464,6 +464,7 @@ for (n = 0; n < QENTRIES; n = n + 1)
 end
 
 reg [QENTRIES-1:0] iq_source = {QENTRIES{1'b0}};
+reg [QENTRIES-1:0] iq_source2 = {QENTRIES{1'b0}};
 reg [QENTRIES-1:0] iq_imm;
 reg [QENTRIES-1:0] iq_memready;
 reg [QENTRIES-1:0] iq_memopsvalid;
@@ -488,10 +489,15 @@ reg [QENTRIES-1:0] iq_fpu1_issue;
 reg [QENTRIES-1:0] iq_fpu2_issue;
 
 reg [AREGS-1:1] livetarget;
+reg [AREGS-1:1] livetarget2;
 reg [AREGS-1:1] iq_livetarget [0:QENTRIES-1];
+reg [AREGS-1:1] iq_livetarget2 [0:QENTRIES-1];
 reg [AREGS-1:1] iq_latestID [0:QENTRIES-1];
+reg [AREGS-1:1] iq_latestID2 [0:QENTRIES-1];
 reg [AREGS-1:1] iq_cumulative [0:QENTRIES-1];
+reg [AREGS-1:1] iq_cumulative2 [0:QENTRIES-1];
 wire  [AREGS-1:1] iq_out2 [0:QENTRIES-1];
+wire  [AREGS-1:1] iq_out2a [0:QENTRIES-1];
 
 // To detect a head change at time of commit. Some values need to pulsed
 // with a single pulse.
@@ -1173,6 +1179,7 @@ regfileValid urfv1
 	.slot_rfw(slot_rfw),
 	.tails(tails),
 	.livetarget(livetarget),
+	.livetarget2(livetarget2),
 	.branchmiss(branchmiss),
 	.rob_id(rob_id),
 	.commit0_v(commit0_v),
@@ -1186,6 +1193,7 @@ regfileValid urfv1
 	.commit2_tgt(commit2_tgt),
 	.rf_source(rf_source),
 	.iq_source(iq_source),
+	.iq_source2(iq_source2),
 	.take_branch(take_branch),
 	.Rd(Rd),
 	.Rd2(Rd),
@@ -1212,6 +1220,7 @@ regfileSource urfs1
 	.Rd2(Rd2),
 	.rob_tails(rob_tails),
 	.iq_latestID(iq_latestID),
+	.iq_latestID2(iq_latestID2),
 	.iq_tgt(iq_tgt),
 	.iq_rid(iq_rid),
 	.rf_source(rf_source)
@@ -2850,6 +2859,10 @@ decoder7 iq0 (
 	.num(iq_tgt[g][6:0]),
 	.out(iq_out2[g])
 );
+decoder7 iq1 (
+	.num(iq_tgt2[g][6:0]),
+	.out(iq_out2a[g])
+);
 end
 end
 endgenerate
@@ -3082,6 +3095,14 @@ end
 // 
 
 always @*
+	for (n = 0; n < QENTRIES; n = n + 1)
+		iq_livetarget[n] = {AREGS {iq_v[n]}} & {AREGS {~iq_stomp[n]}} & iq_out2[n];
+always @*
+	for (n = 0; n < QENTRIES; n = n + 1)
+		iq_livetarget2[n] = {AREGS {iq_v[n]}} & {AREGS {~iq_stomp[n]}} & iq_out2a[n];
+
+
+always @*
 for (j = 1; j < AREGS; j = j + 1) begin
 	livetarget[j] = 1'b0;
 	for (n = 0; n < QENTRIES; n = n + 1)
@@ -3089,8 +3110,11 @@ for (j = 1; j < AREGS; j = j + 1) begin
 end
 
 always @*
+for (j = 1; j < AREGS; j = j + 1) begin
+	livetarget2[j] = 1'b0;
 	for (n = 0; n < QENTRIES; n = n + 1)
-		iq_livetarget[n] = {AREGS {iq_v[n]}} & {AREGS {~iq_stomp[n]}} & iq_out2[n];
+		livetarget2[j] = livetarget2[j] | iq_livetarget2[n][j];
+end
 
 //
 // BRANCH-MISS LOGIC: latestID
@@ -3109,6 +3133,16 @@ always @*
 	end
 
 always @*
+	for (n = 0; n < QENTRIES; n = n + 1) begin
+		iq_cumulative2[n] = 1'b0;
+		for (j = n; j < n + QENTRIES; j = j + 1) begin
+			if (missid==(j % QENTRIES))
+				for (k = n; k <= j; k = k + 1)
+					iq_cumulative2[n] = iq_cumulative2[n] | iq_livetarget2[k % QENTRIES];
+		end
+	end
+
+always @*
 	for (n = 0; n < QENTRIES; n = n + 1)
     iq_latestID[n] = (missid == n || ((iq_livetarget[n] & iq_cumulative[(n+1)%QENTRIES]) == {AREGS{1'b0}}))
 				    ? iq_livetarget[n]
@@ -3116,7 +3150,17 @@ always @*
 
 always @*
 	for (n = 0; n < QENTRIES; n = n + 1)
+    iq_latestID2[n] = (missid == n || ((iq_livetarget2[n] & iq_cumulative2[(n+1)%QENTRIES]) == {AREGS{1'b0}}))
+				    ? iq_livetarget2[n]
+				    : {AREGS{1'b0}};
+
+always @*
+	for (n = 0; n < QENTRIES; n = n + 1)
 	  iq_source[n] = | iq_latestID[n];
+
+always @*
+	for (n = 0; n < QENTRIES; n = n + 1)
+	  iq_source2[n] = | iq_latestID2[n];
 
 
 //

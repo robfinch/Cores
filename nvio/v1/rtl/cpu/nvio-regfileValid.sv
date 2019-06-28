@@ -26,10 +26,10 @@
 `define INV		1'b0
 
 module regfileValid(rst, clk, slotvd, slot_rfw, tails,
-	livetarget, branchmiss, rob_id,
+	livetarget, livetarget2, branchmiss, rob_id,
 	commit0_v, commit1_v, commit2_v, commit0_id, commit1_id, commit2_id,
 	commit0_tgt, commit1_tgt, commit2_tgt,
-	rf_source, iq_source, queuedOn,
+	rf_source, iq_source, iq_source2, queuedOn,
 	take_branch, Rd, Rd2, rf_v, regIsValid);
 parameter AREGS = 128;
 parameter RBIT = 6;
@@ -43,7 +43,8 @@ input clk;
 input [QSLOTS-1:0] slotvd;
 input [QSLOTS-1:0] slot_rfw;
 input [`QBITS] tails [0:QSLOTS-1];
-input [AREGS-1:0] livetarget;
+input [AREGS-1:1] livetarget;
+input [AREGS-1:1] livetarget2;
 input branchmiss;
 input [`QBITS] rob_id [0:RENTRIES-1];
 input commit0_v;
@@ -57,6 +58,7 @@ input [RBIT:0] commit1_tgt;
 input [RBIT:0] commit2_tgt;
 input [`QBITSP1] rf_source [0:AREGS-1];
 input [QENTRIES-1:0] iq_source;
+input [QENTRIES-1:0] iq_source2;
 input [QSLOTS-1:0] take_branch;
 input [6:0] Rd [0:QSLOTS-1];
 input [6:0] Rd2 [0:QSLOTS-1];
@@ -102,15 +104,15 @@ begin
 	for (n = 1; n < AREGS; n = n + 1)
 	begin
 		regIsValid[n] = rf_v[n];
-		if (branchmiss)
-       if (~livetarget[n]) begin
+		if (branchmiss) begin
+       if (~(livetarget[n]|livetarget2[n]))
      			regIsValid[n] = `VAL;
-       end
+    end
 
 		if (commit0_v && n=={commit0_tgt[RBIT:0]} && !rf_v[n])
-			regIsValid[n] = ((rf_source[ {commit0_tgt[RBIT:0]} ][`RBITS] == commit0_id) || (branchmiss && iq_source[ rob_id[commit0_id] ]));
+			regIsValid[n] = ((rf_source[ {commit0_tgt[RBIT:0]} ][`RBITS] == commit0_id) || (branchmiss && (iq_source[ rob_id[commit0_id] ]) | iq_source2[rob_id[commit0_id]]));
 		if (commit1_v && n=={commit1_tgt[RBIT:0]} && !rf_v[n])
-			regIsValid[n] = ((rf_source[ {commit1_tgt[RBIT:0]} ][`RBITS] == commit1_id) || (branchmiss && iq_source[ rob_id[commit1_id] ]));
+			regIsValid[n] = ((rf_source[ {commit1_tgt[RBIT:0]} ][`RBITS] == commit1_id) || (branchmiss && (iq_source[ rob_id[commit1_id] ]) | iq_source2[rob_id[commit1_id]]));
 	end
 	regIsValid[0] = `VAL;
 	regIsValid[64] = `VAL;
@@ -126,7 +128,7 @@ else begin
 
 	if (branchmiss) begin
 		for (n = 1; n < AREGS; n = n + 1)
-			if (~livetarget[n]) begin
+			if (~(livetarget[n]|livetarget2[n])) begin
 				rf_v[n] <= `VAL;
 		end
 	end
@@ -137,14 +139,14 @@ else begin
 	if (commit0_v) begin
 		$display("!rfv=%d %d",!rf_v[ commit0_tgt[RBIT:0] ], rf_v[ commit0_tgt[RBIT:0] ] );
     if (!rf_v[ commit0_tgt[RBIT:0] ]) begin
-      rf_v[ commit0_tgt[RBIT:0] ] <= (rf_source[ commit0_tgt[RBIT:0] ][`RBITS] == commit0_id) || (branchmiss && iq_source[ rob_id[commit0_id] ]);
+      rf_v[ commit0_tgt[RBIT:0] ] <= (rf_source[ commit0_tgt[RBIT:0] ][`RBITS] == commit0_id) || (branchmiss && (iq_source[ rob_id[commit0_id] ] | iq_source2[rob_id[commit0_id]]));
       $display("rfv 0: %d %d %d", rf_source[ commit0_tgt[RBIT:0]][`RBITS], commit0_id, rf_source[ commit0_tgt[RBIT:0] ][`QBIT]);
     end
   end
   if (commit1_v) begin
 		$display("!rfv=%d %d",!rf_v[ commit1_tgt[RBIT:0] ], rf_v[ commit1_tgt[RBIT:0] ] );
     if (!rf_v[ commit1_tgt[RBIT:0] ]) begin //&& !(commit0_v && (rf_source[ commit0_tgt[RBIT:0] ] == commit0_id || (branchmiss && iq_source[ commit0_id[`QBITS] ]))))
-      rf_v[ commit1_tgt[RBIT:0] ] <= (rf_source[ commit1_tgt[RBIT:0] ][`RBITS] == commit1_id) || (branchmiss && iq_source[ rob_id[commit1_id] ]);
+      rf_v[ commit1_tgt[RBIT:0] ] <= (rf_source[ commit1_tgt[RBIT:0] ][`RBITS] == commit1_id) || (branchmiss && (iq_source[ rob_id[commit1_id] ] | iq_source2[rob_id[commit1_id]]));
       $display("rfv 1: %d %d %d", rf_source[ commit0_tgt[RBIT:0]][`RBITS], commit0_id, rf_source[ commit0_tgt[RBIT:0] ][`QBIT]);
     end
   end
