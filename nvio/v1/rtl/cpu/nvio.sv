@@ -148,7 +148,7 @@ wire [QSLOTS-1:0] slotvd;
 reg [2:0] slotu [QSLOTS-1:0];
 reg [2:0] slotup [QSLOTS-1:0];
 reg [3:0] fb_panic;
-wire [32:0] maxsn;
+wire [`SNBITS] maxsn;
 
 wire [127:0] ibundle;
 wire [7:0] template [0:QSLOTS-1];
@@ -355,6 +355,7 @@ wire [2:0] rqueuedCnt;
 reg queuedNop;
 reg [2:0] hi_amt;
 reg [2:0] r_amt, r_amt2;
+wire [`SNBITS] tosub;
 
 reg [47:0] codebuf[0:63];
 reg [QENTRIES-1:0] setpred;
@@ -368,7 +369,7 @@ reg [`RBITS] iq_rid [0:QENTRIES-1];
 reg [QENTRIES-1:0] iq_done;
 reg [QENTRIES-1:0] iq_out;
 reg [QENTRIES-1:0] iq_agen;
-reg [32:0] iq_sn [0:QENTRIES-1];  // instruction sequence number
+reg [`SNBITS] iq_sn [0:QENTRIES-1];  // instruction sequence number
 reg [`QBITS] iq_is [0:QENTRIES-1];	// source of instruction
 reg [QENTRIES-1:0] iq_pt;		// predict taken
 reg [QENTRIES-1:0] iq_bt;		// update branch target buffer
@@ -1196,7 +1197,7 @@ regfileValid urfv1
 	.iq_source2(iq_source2),
 	.take_branch(take_branch),
 	.Rd(Rd),
-	.Rd2(Rd),
+	.Rd2(Rd2),
 	.queuedOn(queuedOnp),
 	.rf_v(rf_v),
 	.regIsValid(regIsValid)
@@ -4441,6 +4442,18 @@ slotValid usv1
 	.debug_on(debug_on)
 );
 
+seqnum usqn1
+(
+	.rst(rst_i),
+	.clk(clk),
+	.heads(heads),
+	.hi_amt(hi_amt),
+	.iq_v(iq_v),
+	.iq_sn(iq_sn),
+	.maxsn(maxsn),
+	.tosub(tosub)
+);
+
 always @(posedge clk)
 if (rst_i|(rst_ctr < 32'd2)) begin
 	im_stack <= 32'hFFFFFFFF;
@@ -4735,38 +4748,38 @@ else begin
 		case(slotvd)
 		3'b001:
 			if (queuedOnp[0])
-				queue_slot(0,rob_tails[0],{tick[29:0],3'h0},id_bus[0],active_tag,rob_tails[0]);
+				queue_slot(0,rob_tails[0],maxsn+1'd1,id_bus[0],active_tag,rob_tails[0]);
 		3'b010:
 			if (queuedOnp[1])
-				queue_slot(1,rob_tails[0],{tick[29:0],3'h0},id_bus[1],active_tag,rob_tails[0]);
+				queue_slot(1,rob_tails[0],maxsn+1'd1,id_bus[1],active_tag,rob_tails[0]);
 		3'b011:
 			if (queuedOnp[0]) begin
-				queue_slot(0,rob_tails[0],{tick[29:0],3'h0},id_bus[0],active_tag,rob_tails[0]);
+				queue_slot(0,rob_tails[0],maxsn+1'd1,id_bus[0],active_tag,rob_tails[0]);
 				if (queuedOnp[1]) begin
-					queue_slot(1,rob_tails[1],{tick[29:0],3'h1},id_bus[1],is_branch[0] ? active_tag+2'd1 : active_tag,rob_tails[1]);
+					queue_slot(1,rob_tails[1],maxsn+2'd2,id_bus[1],is_branch[0] ? active_tag+2'd1 : active_tag,rob_tails[1]);
 					arg_vs(3'b011);
 				end
 			end
 		3'b100:
 			if (queuedOnp[2])
-				queue_slot(2,rob_tails[0],{tick[29:0],3'h0},id_bus[2],active_tag,rob_tails[0]);
+				queue_slot(2,rob_tails[0],maxsn+1'd1,id_bus[2],active_tag,rob_tails[0]);
 		3'b101:	;	// illegal
 		3'b110:
 			if (queuedOnp[1]) begin
-				queue_slot(1,rob_tails[0],{tick[29:0],3'h0},id_bus[1],active_tag,rob_tails[0]);
+				queue_slot(1,rob_tails[0],maxsn+1'd1,id_bus[1],active_tag,rob_tails[0]);
 				if (queuedOnp[2]) begin
-					queue_slot(2,rob_tails[1],{tick[29:0],3'h1},id_bus[2],is_branch[1] ? active_tag + 2'd1 : active_tag,rob_tails[1]);
+					queue_slot(2,rob_tails[1],maxsn+2'd2,id_bus[2],is_branch[1] ? active_tag + 2'd1 : active_tag,rob_tails[1]);
 					arg_vs(3'b110);
 				end
 			end
 		3'b111:
 			if (queuedOnp[0]) begin
-				queue_slot(0,rob_tails[0],{tick[29:0],3'h0},id_bus[0],active_tag,rob_tails[0]);
+				queue_slot(0,rob_tails[0],maxsn+1'd1,id_bus[0],active_tag,rob_tails[0]);
 				if (queuedOnp[1]) begin
-					queue_slot(1,rob_tails[1],{tick[29:0],3'h1},id_bus[1],is_branch[0] ? active_tag + 2'd1 : active_tag,rob_tails[1]);
+					queue_slot(1,rob_tails[1],maxsn+2'd2,id_bus[1],is_branch[0] ? active_tag + 2'd1 : active_tag,rob_tails[1]);
 					arg_vs(3'b011);
 					if (queuedOnp[2]) begin
-						queue_slot(2,rob_tails[2],{tick[29:0],3'h2},id_bus[2],
+						queue_slot(2,rob_tails[2],maxsn+2'd3,id_bus[2],
 							is_branch[0] && is_branch[1] ? active_tag + 2'd2 :
 							is_branch[0] ? active_tag + 2'd1 : is_branch[1] ? active_tag + 2'd1 : active_tag,rob_tails[2]);
 						arg_vs(3'b111);
@@ -6385,7 +6398,9 @@ begin
 //					$display("head_inc: IQS_INVALID[%d]",heads[n]);
 			end
 		end
-
+	for (n = 0; n < QENTRIES; n = n + 1)
+		if (iq_v[n])
+			iq_sn[n] <= iq_sn[n] - tosub;
 end
 endtask
 
@@ -6556,7 +6571,7 @@ endtask
 task queue_slot;
 input [2:0] slot;
 input [`QBITS] ndx;
-input [32:0] seqnum;
+input [`SNBITS] seqnum;
 input [`IBTOP:0] id_bus;
 input [`QBITS] btag;
 input [`RBITS] rid;

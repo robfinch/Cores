@@ -533,11 +533,11 @@ assign rhit1 = mem1[rradr[11:5]]==rradr[AMSB+8:5] && valid[{2'b01,radr[11:5]}];
 assign rhit2 = mem2[rradr[11:5]]==rradr[AMSB+8:5] && valid[{2'b10,radr[11:5]}];
 assign rhit3 = mem3[rradr[11:5]]==rradr[AMSB+8:5] && valid[{2'b11,radr[11:5]}];
 always @*
-	if (rwr|wr2) wlineno = {lfsro[1:0],rwadr[11:5]};
-  else if (whit0)  wlineno = {2'b00,wadr[11:5]};
+       if (whit0)  wlineno = {2'b00,wadr[11:5]};
   else if (whit1)  wlineno = {2'b01,wadr[11:5]};
   else if (whit2)  wlineno = {2'b10,wadr[11:5]};
-  else  wlineno = {2'b11,wadr[11:5]};
+  else if (whit3)  wlineno = {2'b11,wadr[11:5]};
+	else if (rwr|wr2) wlineno = {lfsro[1:0],rwadr[11:5]};
 always @*
   if (rhit0)  rlineno = {2'b00,radr[11:5]};
   else if (rhit1)  rlineno = {2'b01,radr[11:5]};

@@ -70,8 +70,11 @@
 
 // The following bitfield spec is for the instruction sequence number. It
 // must have at least one more bit in it than the QBITS above as the counter
-// can overflow a little bit.
-`define SNBITS		4:0
+// can overflow a little bit. Since queue sizes that are an exact power of two
+// are not allowed, it's just the ceiliing log2 of the queue size. For a
+// fifteen entry queue this works out to a five bit number.
+`define SNBIT			$clog2(QENTRIES)
+`define SNBITS		`SNBIT:0
 
 // The following constant controls the maximum number of instructions that will
 // be queued in a single cycle. It can be reduced to reduce the size of the core,

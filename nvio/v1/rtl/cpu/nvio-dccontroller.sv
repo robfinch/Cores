@@ -164,7 +164,7 @@ IDLE:
 				dL1_dat <= {248'd0,wdat} << {wadr[4:0],3'b0};
 				dL2_ld <= 1'b1;
 			end
-			else if (!dL1_hit && rd) begin
+			else if (!dL1_hit && rd && !(dL2_whit && wr)) begin
 				dL1_adr <= {dadr[AMSB:5],5'h0};
 				dcwhich <= 2'b00;
 				state <= IC2;
