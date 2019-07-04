@@ -196,7 +196,7 @@ endfunction
 
 wire [DBW-1:0] bfout,shfto;
 wire [DBW-1:0] shftob;
-wire [DBW-1:0] shftco;
+wire [DBW-1:0] shftwo;
 reg [DBW-1:0] shift10;
 
 always @(posedge clk)
@@ -474,7 +474,7 @@ case ({instr[`FUNCT5],instr[6]})
 `SHL,`ASL,`SHR,`ASR,`ROL,`ROR:
 	bshift <= b[6:0];
 default:
-	bshift <= {instr[21:16]};
+	bshift <= {instr[`RS2]};
 endcase
 
 
@@ -505,39 +505,48 @@ shifth ushfthH
     .ov()
 );
 
-shiftc ushftc0
+shiftw ushftw0
 (
     .instr(instr),
     .a(a[15:0]),
     .b(bshift),
-    .res(shftco[15:0]),
+    .res(shftwo[15:0]),
     .ov()
 );
 
-shiftc ushftc1
+shiftw ushftw1
 (
     .instr(instr),
     .a(a[31:16]),
     .b(b[31:16]),
-    .res(shftco[31:16]),
+    .res(shftwo[31:16]),
     .ov()
 );
 
-shiftc ushftc2
+shiftw ushftw2
 (
     .instr(instr),
     .a(a[47:32]),
     .b(b[47:32]),
-    .res(shftco[47:32]),
+    .res(shftwo[47:32]),
     .ov()
 );
 
-shiftc ushftc3
+shiftw ushftw3
 (
     .instr(instr),
     .a(a[63:48]),
     .b(b[63:48]),
-    .res(shftco[63:48]),
+    .res(shftwo[63:48]),
+    .ov()
+);
+
+shiftw ushftw4
+(
+    .instr(instr),
+    .a(a[79:64]),
+    .b(b[79:64]),
+    .res(shftwo[79:64]),
     .ov()
 );
 
@@ -777,12 +786,22 @@ casez({instr[32:31],instr[`OPCODE4]})
 	    `BMM:		o = BIG ? bmmo : 64'hCCCCCCCCCCCCCCCC;
 	    `SHLI,`ASLI,`SHRI,`ASRI,`ROLI,`RORI,
 	    `SHL,`ASL,`SHR,`ASR,`ROL,`ROR:
+	    	case(instr[30:28])
+	    	3'd1:
+	    		case(instr[`FUNCT2])
+	    		2'd0:	o = shftwo;
+	    		2'd1:	o = shftwo;
+	    		2'd2:	o = shftwo & c;
+	    		2'd3:	o = shftwo;
+	    		endcase
+	    	default:
 	    		case(instr[`FUNCT2])
 	    		2'd0:	o = shfto;
 	    		2'd1:	o = shfto + c;
 	    		2'd2:	o = shfto & c;
 	    		2'd3:	o = shfto;
 	    		endcase
+	    	endcase
 	    `ADD:
 `ifdef SIMD	    		
 	    	case(sz)

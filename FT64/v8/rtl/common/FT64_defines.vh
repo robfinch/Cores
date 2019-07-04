@@ -199,6 +199,7 @@
 `define LEA			6'h0E
 `define FLOAT   6'h0F
 `define FBcc		6'h10
+`define BRcc		6'h11
 `define BAND				3'd4
 `define BOR					3'd5
 //`define BXOR				3'd2
@@ -210,6 +211,11 @@
 `define SB      6'h15
 `define SC			6'h15
 `define MEMNDX	6'h16
+`define MXL			6'h16
+`define MXS			6'h17
+`define MXLOP			22:18
+`define MSXOP			17:13
+`define NDXOP			31:30
 `define LVBX				6'h00
 `define LVBUX				6'h01
 `define LVCX				6'h02
@@ -238,7 +244,6 @@
 `define INCX				6'h2A
 `define PUSH				6'h33
 `define SVX         6'h37
-`define SWC     6'h17
 `define JAL	    6'h18
 `define CALL    6'h19
 `define INC			6'h1A
@@ -254,6 +259,7 @@
 `define BITFIELD    6'h22
 `define BFINSI			4'h4
 `define LBU     6'h23
+`define SWC     6'h24
 `define CAS     6'h25
 `define BBc     6'h26
 `define IBNE			2'd2

@@ -63,7 +63,7 @@
 `define EXEC		5'h05
 
 // Integer Operations
-`define R3			6'b0001?
+`define R3			6'b00001?
 `define ANDI		6'h08
 `define ORI			6'h09
 `define XORI		6'h0A
@@ -262,6 +262,7 @@
 `define LDFD		6'h11
 `define LDFDP		6'h12
 `define LDDP		6'h13
+`define LDMX		6'h19
 `define LDM			6'h1A
 `define POP			6'h1D
 `define UNLK		6'h1F
@@ -306,7 +307,7 @@
 
 // Store Operations
 `define STB			6'h20
-`define STC			6'h21
+`define STW			6'h21
 `define STP			6'h22
 `define STD			6'h23
 `define STDC		6'h27
@@ -322,6 +323,7 @@
 `define STFD		6'h31
 `define STFDP		6'h32
 `define STDP		6'h33
+`define STMX		6'h39
 `define STM			6'h3A
 `define LINK		6'h3F
 `define STDCX		5'd07

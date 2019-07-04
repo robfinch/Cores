@@ -427,7 +427,8 @@ reg [RBIT:0] iq_rs2 [0:QENTRIES-1];		// debugging
 reg [RBIT:0] iq_rs3 [0:QENTRIES-1];
 reg [RBIT:0] iq_tgt [0:QENTRIES-1];	// Rt field or ZERO -- this is the instruction's target (if any)
 reg [RBIT:0] iq_tgt2 [0:QENTRIES-1];
-//reg [AMSB:0] iq_ma [0:QENTRIES-1];	// memory address
+//reg [3:0] iq_tgtrs [0:QENTRIES-1];
+//reg [3:0] iq_tgt2rs [0:QENTRIES-1];
 reg [WID-1:0] iq_argI	[0:QENTRIES-1];	// argument 0 (immediate)
 reg [WID-1+`EXTRA_BITS:0] iq_argA	[0:QENTRIES-1];	// argument 1
 reg [QENTRIES-1:0] iq_argA_v;	// arg1 valid
@@ -439,7 +440,7 @@ reg [WID-1+`EXTRA_BITS:0] iq_argC	[0:QENTRIES-1];	// argument 3
 reg [QENTRIES-1:0] iq_argC_v;	// arg3 valid
 reg  [`RBITSP1] iq_argC_s	[0:QENTRIES-1];	// arg3 source (iq entry # with top bit representing Rd2))
 reg [`ABITS] iq_ip	[0:QENTRIES-1];	// instruction pointer for this instruction
-reg [AMSB:0] iq_ma [0:QENTRIES-1];
+reg [AMSB:0] iq_ma [0:QENTRIES-1];	// memory address
 
 reg [RENTRIES-1:0] rob_v;
 reg [`QBITS] rob_id [0:RENTRIES-1];	// instruction queue id that owns this entry
@@ -1232,21 +1233,21 @@ Regfile urf1
 	.clk(clk_i),
 	.clk2x(clk2x_i),
 	.wr0(commit0_v),
-	.wa0({rgs,commit0_tgt}),
+	.wa0({commit0_tgt[6] ? fprgs : rgs,commit0_tgt[5:0]}),
 	.i0(commit0_bus),
 	.wr1(commit1_v),
-	.wa1({rgs,commit1_tgt}),
+	.wa1({commit0_tgt[6] ? fprgs : rgs,commit1_tgt[5:0]}),
 	.i1(commit1_bus),
 	.rclk(~clk_i),
-	.ra0({rgs,Rs1[0]}),
-	.ra1({rgs,Rs2[0]}),
-	.ra2({rgs,Rs3[0]}),
-	.ra3({rgs,Rs1[1]}),
-	.ra4({rgs,Rs2[1]}),
-	.ra5({rgs,Rs3[1]}),
-	.ra6({rgs,Rs1[2]}),
-	.ra7({rgs,Rs2[2]}),
-	.ra8({rgs,Rs3[2]}),
+	.ra0({Rs1[0][6]?fprgs:rgs,Rs1[0][5:0]}),
+	.ra1({Rs2[0][6]?fprgs:rgs,Rs2[0][5:0]}),
+	.ra2({Rs3[0][6]?fprgs:rgs,Rs3[0][5:0]}),
+	.ra3({Rs1[1][6]?fprgs:rgs,Rs1[1][5:0]}),
+	.ra4({Rs2[1][6]?fprgs:rgs,Rs2[1][5:0]}),
+	.ra5({Rs3[1][6]?fprgs:rgs,Rs3[1][5:0]}),
+	.ra6({Rs1[2][6]?fprgs:rgs,Rs1[2][5:0]}),
+	.ra7({Rs2[2][6]?fprgs:rgs,Rs2[2][5:0]}),
+	.ra8({Rs3[2][6]?fprgs:rgs,Rs3[2][5:0]}),
 	.o0(rfoa[0]),
 	.o1(rfob[0]),
 	.o2(rfoc[0]),
@@ -2093,7 +2094,7 @@ input [39:0] ins;
 case(unit)
 `BUnit:
 	case(ins[`OPCODE4])
-	`CALL:	fnRd = 7'd61;
+	`CALL:	fnRd = {1'b0,6'd61};
 	`JAL:		fnRd = {1'b0,ins[`RD]};
 	`RET:		fnRd = {1'b0,ins[`RD]};
 	`BMISC:	fnRd = ins[39:35]==`SEI ? {1'b0,ins[`RD]} : 7'd0;
@@ -2116,8 +2117,9 @@ case(unit)
 	`LOAD:
 		case(mopcode(ins))
 		`LDFS,`LDFD:
-					fnRd = {1'b1,ins[`RD]};
-		default:	fnRd = {1'b0,ins[`RD]};
+					fnRd = {fprgs,ins[`RD]};
+		`LDMX:	fnRd = {rs_stack[7:4],ins[`RD]};
+		default:	fnRd = {rgs,ins[`RD]};
 		endcase
 	default:	fnRd = 6'd0;
 	endcase
@@ -2678,7 +2680,13 @@ endfunction
 function IsLSM;
 input [2:0] unit;
 input [39:0] isn;
-IsLSM = unit==`MUnit && ({isn[34:33],isn[`OPCODE4]}==`LDM || {isn[34:33],isn[`OPCODE4]}==`STM);
+if (unit==`MUnit)
+	case({isn[34:33],isn[`OPCODE4]})
+	`LDM,`LDMX,`STM,`STMX:	IsLSM = TRUE;
+	default:	IsLSM = FALSE;
+	endcase
+else
+	IsLSM = FALSE;
 endfunction
 
 function IsBrk;
@@ -2754,7 +2762,7 @@ casez(mopcode(isn))
 	default:	fnSelect = 10'h000;
 	endcase
 `STB:	fnSelect = 10'h001;
-`STC:	fnSelect = 10'h003;
+`STW:	fnSelect = 10'h003;
 `STT:	fnSelect = 10'h00F;
 `STP:	fnSelect = 10'h01F;
 `STO:	fnSelect = 10'h0FF;
@@ -3804,8 +3812,8 @@ end
 end
 endgenerate
 
-agen uag1(agen0_unit, agen0_instr, agen0_argA, agen0_argB, agen0_argC, agen0_argI, agen0_ma, agen0_res, agen0_idle);
-agen uag2(agen1_unit, agen1_instr, agen1_argA, agen1_argB, agen1_argC, agen1_argI, agen1_ma, agen1_res, agen1_idle);
+agen uag1(agen0_unit, agen0_instr, agen0_argA, agen0_argB, agen0_argC, agen0_argI, tcb, agen0_ma, agen0_res, agen0_idle);
+agen uag2(agen1_unit, agen1_instr, agen1_argA, agen1_argB, agen1_argC, agen1_argI, tcb, agen1_ma, agen1_res, agen1_idle);
 assign agen0_id = agen0_sourceid;
 assign agen1_id = agen1_sourceid;
 assign agen0_v = agen0_dataready;
@@ -4168,7 +4176,7 @@ getQueuedCount ugqc1
 
 getRQueuedCount ugrqct1
 (
-	.rst(rst),
+	.rst(rst_i),
 	.rob_tails(rob_tails),
 	.rob_v_i(rob_v),
 	.rob_v_o(next_rob_v),
@@ -4221,11 +4229,11 @@ wire writing_wb =
 //end
 wire alu0_done_pe, alu1_done_pe, pe_wait;
 wire fpu1_done_pe, fpu2_done_pe;
-edge_det uedalu0d (.clk(clk), .ce(1'b1), .i(alu0_done&tlb_done), .pe(alu0_done_pe), .ne(), .ee());
-edge_det uedalu1d (.clk(clk), .ce(1'b1), .i(alu1_done), .pe(alu1_done_pe), .ne(), .ee());
-edge_det uedwait1 (.clk(clk), .ce(1'b1), .i((waitctr==48'd1) || signal_i[fcu_argA[4:0]|fcu_argI[4:0]]), .pe(pe_wait), .ne(), .ee());
-edge_det uedfpu1d (.clk(clk), .ce(1'b1), .i(fpu1_done), .pe(fpu1_done_pe), .ne(), .ee());
-edge_det uedfpu2d (.clk(clk), .ce(1'b1), .i(fpu2_done), .pe(fpu2_done_pe), .ne(), .ee());
+edge_det uedalu0d (.rst(rst_i), .clk(clk), .ce(1'b1), .i(alu0_done&tlb_done), .pe(alu0_done_pe), .ne(), .ee());
+edge_det uedalu1d (.rst(rst_i), .clk(clk), .ce(1'b1), .i(alu1_done), .pe(alu1_done_pe), .ne(), .ee());
+edge_det uedwait1 (.rst(rst_i), .clk(clk), .ce(1'b1), .i((waitctr==48'd1) || signal_i[fcu_argA[4:0]|fcu_argI[4:0]]), .pe(pe_wait), .ne(), .ee());
+edge_det uedfpu1d (.rst(rst_i), .clk(clk), .ce(1'b1), .i(fpu1_done), .pe(fpu1_done_pe), .ne(), .ee());
+edge_det uedfpu2d (.rst(rst_i), .clk(clk), .ce(1'b1), .i(fpu2_done), .pe(fpu2_done_pe), .ne(), .ee());
 
 // Bus randomization to mitigate meltdown attacks
 /*

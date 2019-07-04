@@ -1,12 +1,12 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2016-2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2007-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	FT64_shiftb.v
-//		
+//	vtdl - variable tap delay line
+//		(dynamic shift register)
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -20,50 +20,39 @@
 //                                                                          
 // You should have received a copy of the GNU General Public License        
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.    
-//                                                                          
 //
 // ============================================================================
 //
-`include "nvio-config.sv"
-`include "nvio-defines.sv"
-`define HIGHWORDB    15:8
+//    Notes:
+//
+//	This module acts like a clocked delay line with a variable tap.
+//	Miscellaneous usage in rate control circuitry such as fifo's.
+//	Capable of delaying a signal bus.
+//	Signal bus width is specified with the WID parameter.
+//
+//   	Verilog 1995
+// =============================================================================
+//
+module vtdl(clk, ce, a, d, q);
+parameter WID = 8;
+parameter DEP = 16;
+localparam AMSB = DEP>64?6:DEP>32?5:DEP>16?4:DEP>8?3:DEP>4?2:DEP>2?1:0;
+input clk;
+input ce;
+input [AMSB:0] a;
+input [WID-1:0] d;
+output [WID-1:0] q;
 
-module shiftb(instr, a, b, res, ov);
-parameter DMSB=7;
-input [39:0] instr;
-input [DMSB:0] a;
-input [DMSB:0] b;
-output [DMSB:0] res;
-reg [DMSB:0] res;
-output ov;
-parameter ROTATE_INSN = 1;
+reg [WID-1:0] m [DEP-1:0];
+integer n;
 
-wire [5:0] opcode = {instr[32:31],instr[`OPCODE4]};
-wire [5:0] func = {instr[`FUNCT5],instr[6]};
-wire [2:0] bb = b;
+always @(posedge clk)
+	if (ce) begin
+		for (n = 1; n < DEP; n = n + 1)
+			m[n] <= m[n-1];
+		m[0] <= d;
+	end
 
-wire [15:0] shl = {8'd0,a} << bb[2:0];
-wire [15:0] shr = {a,8'd0} >> bb[2:0];
-
-assign ov = 1'b0;
-
-always @*
-casez(opcode)
-`R3:
-	case(func)
-	`SHL,`ASL,`SHLI,`ASLI:	res <= shl[DMSB:0];
-	`SHR,`SHRI:	res <= shr[`HIGHWORDB];
-	`ASR,`ASRI:
-		if (a[DMSB])
-      res <= (shr[`HIGHWORDB]) | ~({8{1'b1}} >> bb[2:0]);
-    else
-      res <= shr[`HIGHWORDB];
-	`ROL,`ROLI:	res <= ROTATE_INSN ? shl[DMSB:0]|shl[`HIGHWORDB] : 8'hDE;
-	`ROR,`RORI:	res <= ROTATE_INSN ? shr[DMSB:0]|shr[`HIGHWORDB] : 8'hDE;
-	default: res <= 8'd0;
-	endcase
-default: res <= 8'd0;
-endcase
+assign q = m[a];
 
 endmodule
-

@@ -2194,7 +2194,7 @@ input [5:0] vqei;
 input thrd;
 case(isn[`INSTRUCTION_OP])
 `R2:	fnRc = {rgs[thrd],1'b0,isn[`INSTRUCTION_RC]};
-`MEMNDX:	fnRc = {rgs[thrd],1'b0,isn[`INSTRUCTION_RC]};	// SVX not implemented
+`MLX,`MSX:	fnRc = {rgs[thrd],1'b0,isn[`INSTRUCTION_RC]};	// SVX not implemented
 `IVECTOR:
 			case(isn[`INSTRUCTION_S2])
             `VSxx,`VSxxS,`VSxxU,`VSxxSU:    fnRc = {6'h3F,1'b1,2'b0,isn[25:23]};
@@ -2277,24 +2277,25 @@ casez(isn[`INSTRUCTION_OP])
     			fnRt = 12'd0;
     		default:    fnRt = {rgs[thrd],1'b0,isn[`INSTRUCTION_RT]};
         endcase
-`MEMNDX:
+`MLX:
 	begin
-		if (!isn[31])
-			case({isn[31:28],isn[22:21]})
-			`LVX,
-			`CACHEX,
-			`LVBX,`LVBUX,`LVCX,`LVCUX,`LVHX,`LVHUX,`LVWX,
-			`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,`LWRX:
-				fnRt = {rgs[thrd],1'b0,isn[`INSTRUCTION_RT]};
-			default: fnRt = 12'd0;
-			endcase
-		else
-			case({isn[31:28],isn[17:16]})
-			`PUSH:	fnRt = {rgs[thrd],1'b0,isn[`INSTRUCTION_RT]};
-		  `SBX,`SCX,`SHX,`SWX,`SWCX,`CACHEX:
-		  			fnRt = 12'd0;
-		  default:    fnRt = 12'd0;
-		  endcase
+		case(isn[`MLXOP])
+		`LVX,
+		`CACHEX,
+		`LVBX,`LVBUX,`LVCX,`LVCUX,`LVHX,`LVHUX,`LVWX,
+		`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,`LWRX:
+			fnRt = {rgs[thrd],1'b0,isn[`INSTRUCTION_RT]};
+		default: fnRt = 12'd0;
+		endcase
+	end
+`MSX:
+	begin
+		case(isn[`MSXOP])
+		`PUSH:	fnRt = {rgs[thrd],1'b0,isn[`INSTRUCTION_RT]};
+	  `SBX,`SCX,`SHX,`SWX,`SWCX,`CACHEX:
+	  			fnRt = 12'd0;
+	  default:    fnRt = 12'd0;
+	  endcase
 	end
 `FLOAT:
 		case(isn[31:26])
@@ -2413,7 +2414,7 @@ input [5:0] vqei;
 input thrd;
 case(isn[`INSTRUCTION_OP])
 `R2:	fnRc = {rgs,1'b0,isn[`INSTRUCTION_RC]};
-`MEMNDX:	fnRc = {rgs,1'b0,isn[`INSTRUCTION_RC]};	// SVX not implemented
+`MLX,`MSX:	fnRc = {rgs,1'b0,isn[`INSTRUCTION_RC]};	// SVX not implemented
 `IVECTOR:
 			case(isn[`INSTRUCTION_S2])
             `VSxx,`VSxxS,`VSxxU,`VSxxSU:    fnRc = {6'h3F,1'b1,2'b0,isn[25:23]};
@@ -2512,24 +2513,25 @@ casez(isn[`INSTRUCTION_OP])
   			fnRt = 12'd0;
   default:    fnRt = {rgs,1'b0,isn[`INSTRUCTION_RT]};
   endcase
-`MEMNDX:
+`MLX:
 	begin
-		if (!isn[31])
-			case({isn[31:28],isn[22:21]})
-			`LVX,
-			`CACHEX,
-			`LVBX,`LVBUX,`LVCX,`LVCUX,`LVHX,`LVHUX,`LVWX,
-			`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,`LWRX:
-				fnRt = {rgs,1'b0,isn[`INSTRUCTION_RT]};
-			default: fnRt = 12'd0;
-			endcase
-		else
-			case({isn[31:28],isn[17:16]})
-			`PUSH:	fnRt = {rgs,1'b0,isn[`INSTRUCTION_RT]};
-		  `SBX,`SCX,`SHX,`SWX,`SWCX,`CACHEX:
-		  			fnRt = 12'd0;
-		  default:    fnRt = 12'd0;
-		  endcase
+		case(isn[`MLXOP])
+		`LVX,
+		`CACHEX,
+		`LVBX,`LVBUX,`LVCX,`LVCUX,`LVHX,`LVHUX,`LVWX,
+		`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,`LWRX:
+			fnRt = {rgs,1'b0,isn[`INSTRUCTION_RT]};
+		default: fnRt = 12'd0;
+		endcase
+	end
+`MSX:
+	begin
+		case(isn[`MSXOP])
+		`PUSH:	fnRt = {rgs,1'b0,isn[`INSTRUCTION_RT]};
+	  `SBX,`SCX,`SHX,`SWX,`SWCX,`CACHEX:
+	  			fnRt = 12'd0;
+	  default:    fnRt = 12'd0;
+	  endcase
 	end
 `FLOAT:
 		case(isn[31:26])
@@ -2632,7 +2634,7 @@ casez(isn[`INSTRUCTION_OP])
         `SHIFTR:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
         default:   Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
         endcase
-`MEMNDX:Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
+`MLX,`MSX:	Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `ADDI:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `SEQI:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
 `SLTI:  Source1Valid = isn[`INSTRUCTION_RA]==5'd0;
@@ -2695,21 +2697,22 @@ casez(isn[`INSTRUCTION_OP])
         `LVX,`SVX: 	Source2Valid = FALSE;
         default:   	Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
         endcase
-`MEMNDX:
+`MLX:
 	begin
-		if (!isn[31])
-			case({isn[31:28],isn[22:21]})
-			`LVX: Source2Valid = FALSE;
-			`CACHEX,
-			`LVBX,`LVBUX,`LVCX,`LVCUX,`LVHX,`LVHUX,`LVWX,
-			`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,`LWRX:	Source2Valid = TRUE;
-			default:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
-			endcase
-		else
-			case({isn[31:28],isn[17:16]})
-			`SVX: Source2Valid = FALSE;
-			default:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
-			endcase
+		case(isn[`MLXOP])
+		`LVX: Source2Valid = FALSE;
+		`CACHEX,
+		`LVBX,`LVBUX,`LVCX,`LVCUX,`LVHX,`LVHUX,`LVWX,
+		`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,`LWRX:	Source2Valid = TRUE;
+		default:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
+		endcase
+	end
+`MSX:
+	begin
+		case(isn[`MSXOP])
+		`SVX: Source2Valid = FALSE;
+		default:   Source2Valid = isn[`INSTRUCTION_RB]==5'd0;
+		endcase
 	end
 `ADDI:  Source2Valid = TRUE;
 `SEQI:  Source2Valid = TRUE;
@@ -2776,26 +2779,25 @@ case(isn[`INSTRUCTION_OP])
     `MAJ:		Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
     default:    Source3Valid = TRUE;
     endcase
-`MEMNDX:
-		if (!isn[31])
-			case({isn[31:28],isn[22:21]})
-			`CACHEX,
-			`LVBX,`LVBUX,`LVCX,`LVCUX,`LVHX,`LVHUX,`LVWX,
-			`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,`LWRX:
-				Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
-	    default:    Source3Valid = TRUE;
-			endcase
-		else
-	    case({isn[31:28],isn[17:16]})
-	    `PUSH:	Source3Valid = TRUE;
-	    `SBX:   Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
-	    `SCX:   Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
-	    `SHX:   Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
-	    `SWX:   Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
-	    `SWCX:  Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
-	    `CASX:  Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
-	    default:    Source3Valid = TRUE;
-	    endcase
+`MLX:
+	case(isn[`MLXOP])
+	`CACHEX,
+	`LVBX,`LVBUX,`LVCX,`LVCUX,`LVHX,`LVHUX,`LVWX,
+	`LBX,`LBUX,`LCX,`LCUX,`LHX,`LHUX,`LWX,`LWRX:
+		Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
+  default:    Source3Valid = TRUE;
+	endcase
+`MSX:
+  case(isn[`MSXOP])
+  `PUSH:	Source3Valid = TRUE;
+  `SBX:   Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
+  `SCX:   Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
+  `SHX:   Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
+  `SWX:   Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
+  `SWCX:  Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
+  `CASX:  Source3Valid = isn[`INSTRUCTION_RC]==5'd0;
+  default:    Source3Valid = TRUE;
+  endcase
 `BITFIELD: 	Source3Valid = isn[`INSTRUCTION_RC]==5'd0 || isn[43]==1'b0;
 default:    Source3Valid = TRUE;
 endcase
@@ -2807,9 +2809,14 @@ endfunction
 function IsVector;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`MEMNDX:
-  case(isn[`INSTRUCTION_S2])
-  `LVX,`SVX:  IsVector = TRUE;
+`MLX:
+  case(isn[`MLXOP])
+  `LVX:  IsVector = TRUE;
+  default:    IsVector = FALSE;
+  endcase
+`MSX:
+  case(isn[`MSXOP])
+  `SVX:  IsVector = TRUE;
   default:    IsVector = FALSE;
   endcase
 `IVECTOR:
@@ -2869,17 +2876,16 @@ endfunction
 function IsVLS;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`MEMNDX:
-		if (IsLoad(isn))
-	    case({isn[31:28],isn[22:21]})
-	    `LVX,`LVWS:  IsVLS = TRUE;
-	    default:    IsVLS = FALSE;
-	    endcase
-    else
-	    case({isn[31:28],isn[17:16]})
-	    `SVX,`SVWS:  IsVLS = TRUE;
-	    default:    IsVLS = FALSE;
-	    endcase
+`MLX:
+  case(isn[`MLXOP])
+  `LVX,`LVWS:  IsVLS = TRUE;
+  default:    IsVLS = FALSE;
+  endcase
+`MSX:
+  case(isn[`MSXOP])
+  `SVX,`SVWS:  IsVLS = TRUE;
+  default:    IsVLS = FALSE;
+  endcase
 `LV,`SV:    IsVLS = TRUE;
 default:    IsVLS = FALSE;
 endcase
@@ -2896,7 +2902,7 @@ endfunction
 function IsMem;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`MEMNDX:	IsMem = TRUE;
+`MLX,`MSX:	IsMem = TRUE;
 `AMO:	IsMem = TRUE;
 `LB:    IsMem = TRUE;
 `LC:    IsMem = TRUE;
@@ -2916,7 +2922,7 @@ endfunction
 function IsMemNdx;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`MEMNDX:	IsMemNdx = TRUE;
+`MLX,`MSX:	IsMemNdx = TRUE;
 default:    IsMemNdx = FALSE;
 endcase
 endfunction
@@ -2924,7 +2930,7 @@ endfunction
 function IsLoad;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`MEMNDX:	IsLoad = !isn[31];
+`MLX:		IsLoad = TRUE;
 `LB:    IsLoad = TRUE;
 `LC:    IsLoad = TRUE;
 `LH:    IsLoad = TRUE;
@@ -2937,9 +2943,9 @@ endfunction
 function IsInc;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`MEMNDX:
+`MLX:
    	if (isn[`INSTRUCTION_L2]==2'b00)
-		case({isn[31:28],isn[17:16]})
+		case(isn[`MLXOP])
     `INC:   IsInc = TRUE;
     default:    IsInc = FALSE;
     endcase
@@ -2953,9 +2959,9 @@ endfunction
 function IsSWC;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`MEMNDX:
+`MSX:
    	if (isn[`INSTRUCTION_L2]==2'b00)
-		case({isn[31:28],isn[17:16]})
+		case(isn[`MSXOP])
     `SWCX:   IsSWC = TRUE;
     default:    IsSWC = FALSE;
     endcase
@@ -2970,9 +2976,9 @@ endfunction
 function IsSWCX;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`MEMNDX:
+`MSX:
 	if (isn[`INSTRUCTION_L2]==2'b00)
-		case({isn[31:28],isn[17:16]})
+		case(isn[`MSXOP])
     `SWCX:   IsSWCX = TRUE;
     default:    IsSWCX = FALSE;
     endcase
@@ -2985,9 +2991,9 @@ endfunction
 function IsLWR;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`MEMNDX:
+`MLX:
 	if (isn[`INSTRUCTION_L2]==2'b00)
-	    case({isn[31:28],isn[22:21]})
+	    case(isn[`MLXOP])
 	    `LWRX:   IsLWR = TRUE;
 	    default:    IsLWR = FALSE;
 	    endcase
@@ -3001,9 +3007,9 @@ endfunction
 function IsLWRX;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`MEMNDX:
+`MLX:
 	if (isn[`INSTRUCTION_L2]==2'b00)
-	    case({isn[31:28],isn[22:21]})
+	    case(isn[`MLXOP])
 	    `LWRX:   IsLWRX = TRUE;
 	    default:    IsLWRX = FALSE;
 	    endcase
@@ -3016,9 +3022,9 @@ endfunction
 function IsCAS;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`MEMNDX:
+`MSX:
 	if (isn[`INSTRUCTION_L2]==2'b00)
-		case({isn[31:28],isn[17:16]})
+		case(isn[`MSXOP])
     `CASX:   IsCAS = TRUE;
     default:    IsCAS = FALSE;
     endcase
@@ -3094,9 +3100,9 @@ endfunction
 function IsCache;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`MEMNDX:
+`MSX:
 	if (isn[`INSTRUCTION_L2]==2'b00)
-	    case({isn[31:28],isn[22:21]})
+	    case(isn[`MSXOP])
 	    `CACHEX:    IsCache = TRUE;
 	    default:    IsCache = FALSE;
 	    endcase
@@ -3110,15 +3116,15 @@ endfunction
 function [4:0] CacheCmd;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`MEMNDX:
+`MSX:
 	if (isn[`INSTRUCTION_L2]==2'b00)
-	    case({isn[31:28],isn[22:21]})
-	    `CACHEX:    CacheCmd = isn[17:13];
+	    case(isn[`MSXOP])
+	    `CACHEX:    CacheCmd = isn[20:18];
 	    default:    CacheCmd = 5'd0;
 	    endcase
 	else
 		CacheCmd = 5'd0;
-`CACHE: CacheCmd = isn[17:13];
+`CACHE: CacheCmd = isn[20:18];
 default: CacheCmd = 5'd0;
 endcase
 endfunction
@@ -3136,9 +3142,9 @@ endfunction
 function IsLV;
 input [47:0] isn;
 case(isn[`INSTRUCTION_OP])
-`MEMNDX:
+`MLX:
 	if (isn[`INSTRUCTION_L2]==2'b00)
-	    case({isn[31:28],isn[22:21]})
+	    case(isn[`MLXOP])
 	    `LVX:   IsLV = TRUE;
 	    default:    IsLV = FALSE;
 	    endcase
@@ -3230,44 +3236,44 @@ casez(isn[`INSTRUCTION_OP])
 	    endcase
 	else
 		IsRFW = FALSE;
-`MEMNDX:
+`MLX:
+	if (isn[`INSTRUCTION_L2]==2'b00) begin
+    case(isn[`MLXOP])
+    `LBX:   IsRFW = TRUE;
+    `LBUX:  IsRFW = TRUE;
+    `LCX:   IsRFW = TRUE;
+    `LCUX:  IsRFW = TRUE;
+    `LHX:   IsRFW = TRUE;
+    `LHUX:  IsRFW = TRUE;
+    `LWX:   IsRFW = TRUE;
+    `LVBX:  IsRFW = TRUE;
+    `LVBUX: IsRFW = TRUE;
+    `LVCX:  IsRFW = TRUE;
+    `LVCUX: IsRFW = TRUE;
+    `LVHX:  IsRFW = TRUE;
+    `LVHUX: IsRFW = TRUE;
+    `LVWX:  IsRFW = TRUE;
+    `LWRX:  IsRFW = TRUE;
+    `LVX:   IsRFW = TRUE;
+    default:	IsRFW = FALSE;
+    endcase
+	end
+	else
+		IsRFW = FALSE;
+`MSX:
 	if (isn[`INSTRUCTION_L2]==2'b10) begin
-		if (!isn[31])
-			IsRFW = TRUE;
-		else
-			case({isn[31:28],isn[17:16]})
-			`PUSH:	IsRFW = TRUE;
-	    `CASX:  IsRFW = TRUE;
-	    default:    IsRFW = FALSE;
-	    endcase
+		case(isn[`MSXOP])
+		`PUSH:	IsRFW = TRUE;
+    `CASX:  IsRFW = TRUE;
+    default:    IsRFW = FALSE;
+    endcase
 	end
 	else if (isn[`INSTRUCTION_L2]==2'b00) begin
-		if (!isn[31])
-	    case({isn[31:28],isn[22:21]})
-	    `LBX:   IsRFW = TRUE;
-	    `LBUX:  IsRFW = TRUE;
-	    `LCX:   IsRFW = TRUE;
-	    `LCUX:  IsRFW = TRUE;
-	    `LHX:   IsRFW = TRUE;
-	    `LHUX:  IsRFW = TRUE;
-	    `LWX:   IsRFW = TRUE;
-	    `LVBX:  IsRFW = TRUE;
-	    `LVBUX: IsRFW = TRUE;
-	    `LVCX:  IsRFW = TRUE;
-	    `LVCUX: IsRFW = TRUE;
-	    `LVHX:  IsRFW = TRUE;
-	    `LVHUX: IsRFW = TRUE;
-	    `LVWX:  IsRFW = TRUE;
-	    `LWRX:  IsRFW = TRUE;
-	    `LVX:   IsRFW = TRUE;
-	    default:	IsRFW = FALSE;
-	    endcase
-    else
-			case({isn[31:28],isn[17:16]})
-			`PUSH:	IsRFW = TRUE;
-	    `CASX:  IsRFW = TRUE;
-	    default:    IsRFW = FALSE;
-	    endcase
+		case(isn[`MSXOP])
+		`PUSH:	IsRFW = TRUE;
+    `CASX:  IsRFW = TRUE;
+    default:    IsRFW = FALSE;
+    endcase
 	end
 	else
 		IsRFW = FALSE;
@@ -3409,81 +3415,79 @@ input [47:0] ins;
 input [`ABITS] adr;
 begin
 	case(ins[`INSTRUCTION_OP])
-	`MEMNDX:
+	`MLX:
+		if (ins[`INSTRUCTION_L2]==2'b00) begin
+			case(ins[`MLXOP])
+			`LBX,`LBUX,`LVBX,`LVBUX:
+			   case(adr[2:0])
+			   3'd0:    fnSelect = 8'h01;
+			   3'd1:    fnSelect = 8'h02;
+			   3'd2:    fnSelect = 8'h04;
+			   3'd3:    fnSelect = 8'h08;
+			   3'd4:    fnSelect = 8'h10;
+			   3'd5:    fnSelect = 8'h20;
+			   3'd6:    fnSelect = 8'h40;
+			   3'd7:    fnSelect = 8'h80;
+			   endcase
+			`LCX,`LCUX,`LVCX,`LVCUX:
+			    case(adr[2:1])
+			    2'd0:   fnSelect = 8'h03;
+			    2'd1:   fnSelect = 8'h0C;
+			    2'd2:   fnSelect = 8'h30;
+			    2'd3:   fnSelect = 8'hC0;
+			    endcase
+			`LHX,`LHUX,`LVHX,`LVHUX:
+			   case(adr[2])
+			   1'b0:    fnSelect = 8'h0F;
+			   1'b1:    fnSelect = 8'hF0;
+			   endcase
+			`INC,`LVWX,
+			`LWX,`LWRX,`LVX:
+			   fnSelect = 8'hFF;
+			default:fnSelect = 8'hFF;
+     	endcase
+		else
+			fnSelect = 8'h00;
+	`MSX:
 		if (ins[`INSTRUCTION_L2]==2'b10) begin
-			if (ins[31]) begin
-				case({ins[31:28],ins[17:16]})
-				`PUSH:	fnSelect = 8'hFF;
-				default: fnSelect = 8'h00;
-				endcase
-			end
-			else
-				fnSelect = 8'h00;
+			case(ins[`MSXOP])
+			`PUSH:	fnSelect = 8'hFF;
+			default: fnSelect = 8'h00;
+			endcase
 		end
 		else if (ins[`INSTRUCTION_L2]==2'b00) begin
-			if (!ins[31])
-				case({ins[31:28],ins[22:21]})
-				`LBX,`LBUX,`LVBX,`LVBUX:
-				   case(adr[2:0])
-				   3'd0:    fnSelect = 8'h01;
-				   3'd1:    fnSelect = 8'h02;
-				   3'd2:    fnSelect = 8'h04;
-				   3'd3:    fnSelect = 8'h08;
-				   3'd4:    fnSelect = 8'h10;
-				   3'd5:    fnSelect = 8'h20;
-				   3'd6:    fnSelect = 8'h40;
-				   3'd7:    fnSelect = 8'h80;
-				   endcase
-				`LCX,`LCUX,`LVCX,`LVCUX:
-				    case(adr[2:1])
-				    2'd0:   fnSelect = 8'h03;
-				    2'd1:   fnSelect = 8'h0C;
-				    2'd2:   fnSelect = 8'h30;
-				    2'd3:   fnSelect = 8'hC0;
-				    endcase
-				`LHX,`LHUX,`LVHX,`LVHUX:
-				   case(adr[2])
-				   1'b0:    fnSelect = 8'h0F;
-				   1'b1:    fnSelect = 8'hF0;
-				   endcase
-				`INC,`LVWX,
-				`LWX,`LWRX,`LVX:
-				   fnSelect = 8'hFF;
-				default:fnSelect = 8'hFF;
-	     	endcase
-	    else
-				case({ins[31:28],ins[17:16]})
-	       `SBX:
-	           case(adr[2:0])
-	           3'd0:    fnSelect = 8'h01;
-	           3'd1:    fnSelect = 8'h02;
-	           3'd2:    fnSelect = 8'h04;
-	           3'd3:    fnSelect = 8'h08;
-	           3'd4:    fnSelect = 8'h10;
-	           3'd5:    fnSelect = 8'h20;
-	           3'd6:    fnSelect = 8'h40;
-	           3'd7:    fnSelect = 8'h80;
-	           endcase
-	        `SCX:
-	            case(adr[2:1])
-	            2'd0:   fnSelect = 8'h03;
-	            2'd1:   fnSelect = 8'h0C;
-	            2'd2:   fnSelect = 8'h30;
-	            2'd3:   fnSelect = 8'hC0;
-	            endcase
-	    	`SHX:
-	           case(adr[2])
-	           1'b0:    fnSelect = 8'h0F;
-	           1'b1:    fnSelect = 8'hF0;
-	           endcase
-	       `INC,
-	       `SWX,`SWCX,`SVX,`CASX,`PUSH:
-	           fnSelect = 8'hFF;
-	       default: fnSelect = 8'h00;
-		   endcase
+			case(ins[`MSXOP])
+       `SBX:
+           case(adr[2:0])
+           3'd0:    fnSelect = 8'h01;
+           3'd1:    fnSelect = 8'h02;
+           3'd2:    fnSelect = 8'h04;
+           3'd3:    fnSelect = 8'h08;
+           3'd4:    fnSelect = 8'h10;
+           3'd5:    fnSelect = 8'h20;
+           3'd6:    fnSelect = 8'h40;
+           3'd7:    fnSelect = 8'h80;
+           endcase
+        `SCX:
+            case(adr[2:1])
+            2'd0:   fnSelect = 8'h03;
+            2'd1:   fnSelect = 8'h0C;
+            2'd2:   fnSelect = 8'h30;
+            2'd3:   fnSelect = 8'hC0;
+            endcase
+    	`SHX:
+           case(adr[2])
+           1'b0:    fnSelect = 8'h0F;
+           1'b1:    fnSelect = 8'hF0;
+           endcase
+       `INC,
+       `SWX,`SWCX,`SVX,`CASX,`PUSH:
+           fnSelect = 8'hFF;
+       default: fnSelect = 8'h00;
+	   endcase
 		 end
-	   else
-	   	fnSelect = 8'h00;
+   else
+   	fnSelect = 8'h00;
   `LB:
 		case(adr[2:0])
 		3'd0:	fnSelect = 8'h01;
@@ -3587,9 +3591,9 @@ input [47:0] ins;
 input [`ABITS] adr;
 input [63:0] dat;
 case(ins[`INSTRUCTION_OP])
-`MEMNDX:
+`MLX:
 	if (ins[`INSTRUCTION_L2]==2'b00)
-	    case({ins[31:28],ins[22:21]})
+	    case(ins[`MLXOP])
 	    `LBX,`LVBX:
 	        case(adr[2:0])
 	        3'd0:   fnDatiAlign = {{56{dat[7]}},dat[7:0]};
@@ -3699,9 +3703,9 @@ function [63:0] fnDato;
 input [47:0] isn;
 input [63:0] dat;
 case(isn[`INSTRUCTION_OP])
-`MEMNDX:
+`MSX:
 	if (isn[`INSTRUCTION_L2]==2'b00)
-		case({isn[31:28],isn[17:16]})
+		case(isn[`MSXOP])
 		`SBX:   fnDato = {8{dat[7:0]}};
 		`SCX:   fnDato = {4{dat[15:0]}};
 		`SHX:   fnDato = {2{dat[31:0]}};

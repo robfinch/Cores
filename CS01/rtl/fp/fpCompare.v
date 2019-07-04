@@ -1,12 +1,15 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2016-2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2007-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	FT64_shiftb.v
-//		
+//	fp_cmp_unit.v
+//    - floating point comparison unit
+//    - parameterized width
+//    - IEEE 754 representation
+//
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -21,49 +24,51 @@
 // You should have received a copy of the GNU General Public License        
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.    
 //                                                                          
-//
 // ============================================================================
-//
-`include "nvio-config.sv"
-`include "nvio-defines.sv"
-`define HIGHWORDB    15:8
 
-module shiftb(instr, a, b, res, ov);
-parameter DMSB=7;
-input [39:0] instr;
-input [DMSB:0] a;
-input [DMSB:0] b;
-output [DMSB:0] res;
-reg [DMSB:0] res;
-output ov;
-parameter ROTATE_INSN = 1;
+`include "fpConfig.sv"
 
-wire [5:0] opcode = {instr[32:31],instr[`OPCODE4]};
-wire [5:0] func = {instr[`FUNCT5],instr[6]};
-wire [2:0] bb = b;
+module fpCompare(a, b, o, nanx);
+parameter WID = 80;
+`include "fpSize.sv"
 
-wire [15:0] shl = {8'd0,a} << bb[2:0];
-wire [15:0] shr = {a,8'd0} >> bb[2:0];
+input [WID-1+`EXTRA_BITS:0] a, b;
+output [4:0] o;
+reg [4:0] o;
+output nanx;
 
-assign ov = 1'b0;
+// Decompose the operands
+wire sa;
+wire sb;
+wire [EMSB:0] xa;
+wire [EMSB:0] xb;
+wire [FMSB:0] ma;
+wire [FMSB:0] mb;
+wire az, bz;
+wire nan_a, nan_b;
 
-always @*
-casez(opcode)
-`R3:
-	case(func)
-	`SHL,`ASL,`SHLI,`ASLI:	res <= shl[DMSB:0];
-	`SHR,`SHRI:	res <= shr[`HIGHWORDB];
-	`ASR,`ASRI:
-		if (a[DMSB])
-      res <= (shr[`HIGHWORDB]) | ~({8{1'b1}} >> bb[2:0]);
-    else
-      res <= shr[`HIGHWORDB];
-	`ROL,`ROLI:	res <= ROTATE_INSN ? shl[DMSB:0]|shl[`HIGHWORDB] : 8'hDE;
-	`ROR,`RORI:	res <= ROTATE_INSN ? shr[DMSB:0]|shr[`HIGHWORDB] : 8'hDE;
-	default: res <= 8'd0;
-	endcase
-default: res <= 8'd0;
-endcase
+fpDecomp #(WID) u1(.i(a), .sgn(sa), .exp(xa), .man(ma), .vz(az), .qnan(), .snan(), .nan(nan_a) );
+fpDecomp #(WID) u2(.i(b), .sgn(sb), .exp(xb), .man(mb), .vz(bz), .qnan(), .snan(), .nan(nan_b) );
+
+wire unordered = nan_a | nan_b;
+
+wire eq = !unordered & ((az & bz) || (a==b));	// special test for zero
+wire gt1 = {xa,ma} > {xb,mb};
+wire lt1 = {xa,ma} < {xb,mb};
+
+wire lt = sa ^ sb ? sa & !(az & bz): sa ? gt1 : lt1;
+
+always @(unordered or eq or lt or lt1)
+begin
+	o[0] = eq;
+	o[1] = lt;
+	o[2] = lt|eq;
+	o[3] = lt1;
+	o[4] = unordered;
+end
+
+// an unorder comparison will signal a nan exception
+//assign nanx = op!=`FCOR && op!=`FCUN && unordered;
+assign nanx = 1'b0;
 
 endmodule
-

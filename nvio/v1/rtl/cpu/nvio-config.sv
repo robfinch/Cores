@@ -24,7 +24,7 @@
 //
 // The following line is to enable simulation versions of some modules.
 // Comment out for synthesis.
-`define SIM		1'b1
+//`define SIM		1'b1
 
 //`define SUPPORT_VECTOR	1'b1
 //`define SUPPORT_BBMS	1'b1

@@ -320,7 +320,7 @@ case(unit)
 		default:	MemSize = deci;
 		endcase
 	`STB:	MemSize = byt;
-	`STC:	MemSize = wyde;
+	`STW:	MemSize = wyde;
 	`STP:	MemSize = penta;
 	`STD:	MemSize = deci;
 	`STT:	MemSize = tetra;

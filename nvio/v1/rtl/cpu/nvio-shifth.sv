@@ -1,7 +1,6 @@
-`timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2016-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2016-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -25,8 +24,10 @@
 //
 // ============================================================================
 //
+`include "nvio-config.sv"
+`include "nvio-defines.sv"
+
 //`ifndef SHL
-`define R2      6'h02
 `define AMO		6'h2F
 `define AMOSHL		6'h0C
 `define AMOSHR		6'h0D
@@ -36,12 +37,6 @@
 `define AMOSHRI		6'h2D
 `define AMOASRI		6'h2E
 `define AMOROLI		6'h2F
-`define SHL     3'h0
-`define SHR     3'h1
-`define ASL     3'h2
-`define ASR     3'h3
-`define ROL     3'h4
-`define ROR     3'h5
 //`endif
 `define HIGHWORDH    63:32
 
@@ -49,33 +44,32 @@ module shifth(instr, a, b, res, ov);
 parameter DMSB=31;
 input [47:0] instr;
 input [DMSB:0] a;
-input [DMSB:0] b;
+input [6:0] b;
 output [DMSB:0] res;
 reg [DMSB:0] res;
 output ov;
 parameter ROTATE_INSN = 1;
 
-wire [5:0] opcode = instr[5:0];
-wire [5:0] func = instr[31:26];
-wire [3:0] shiftop = instr[35:33];
-wire [4:0] bb = instr[29] ? instr[17:13] : b[4:0];
+wire [5:0] opcode = {instr[32:31],instr[`OPCODE4]};
+wire [5:0] func = {instr[`FUNCT5],instr[6]};
+wire [4:0] bb = b[4:0];
 wire [63:0] shl = {32'd0,a} << bb;
 wire [63:0] shr = {a,32'd0} >> bb;
 
 assign ov = 1'b0;
 
 always @*
-case(opcode)
-`R2:
-  case(shiftop)
-  `SHL,`ASL:	res <= shl[DMSB:0];
-  `SHR:	res <= shr[`HIGHWORDH];
-  `ASR:	if (a[DMSB])
+casez(opcode)
+`R3:
+  case(func)
+  `SHL,`ASL,`SHLI,`ASLI:	res <= shl[DMSB:0];
+  `SHR,`SHRI:	res <= shr[`HIGHWORDH];
+  `ASR,`ASRI:	if (a[DMSB])
               res <= (shr[`HIGHWORDH]) | ~({32{1'b1}} >> bb);
           else
               res <= shr[`HIGHWORDH];
-  `ROL:	res <= ROTATE_INSN ? shl[DMSB:0]|shl[`HIGHWORDH] : 32'hDEADDEAD;
-  `ROR:	res <= ROTATE_INSN ? shr[DMSB:0]|shr[`HIGHWORDH] : 32'hDEADDEAD;
+  `ROL,`ROLI:	res <= ROTATE_INSN ? shl[DMSB:0]|shl[`HIGHWORDH] : 32'hDEADDEAD;
+  `ROR,`RORI:	res <= ROTATE_INSN ? shr[DMSB:0]|shr[`HIGHWORDH] : 32'hDEADDEAD;
   default: res <= 32'd0;
   endcase
 `AMO:
