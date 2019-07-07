@@ -25,7 +25,7 @@
 
 module fpFMAUnit(rst, clk, ce, ld, instr, rm, csr_i, v_i, v_o,
 	tag_i, tag_o, a, b, c, o, zero, inf, pos, neg, exc, idle);
-parameter WID=80;
+parameter FPWID=80;
 input rst;
 input clk;
 input ce;
@@ -37,10 +37,10 @@ input v_i;
 output reg v_o;
 input [`RBITS] tag_i;
 output reg [`RBITS] tag_o;
-input [WID+3:0] a;
-input [WID+3:0] b;
-input [WID+3:0] c;
-output reg [WID+3:0] o;
+input [FPWID+3:0] a;
+input [FPWID+3:0] b;
+input [FPWID+3:0] c;
+output reg [FPWID+3:0] o;
 output reg zero;
 output reg inf;
 output reg pos;
@@ -52,10 +52,10 @@ parameter PIPELINE_DELAY = 6'd28;
 wire [4:0] func5 = instr[`FUNCT5];
 reg fms;
 wire nma = func5==`FNMA || func5==`FNMS;
-reg [WID+3:0] aa, bb, cc;
+reg [FPWID+3:0] aa, bb, cc;
 reg [2:0] rmr;
 wire [22:0] csr;
-wire [WID+3:0] fma_out;
+wire [FPWID+3:0] fma_out;
 wire fma_inf;
 
 wire overflow;
@@ -78,7 +78,7 @@ else begin
 	if (ld) begin
 		idle <= 1'b0;
 		cnt <= 3'd0;
-		aa <= {a[WID+3] ^ nma,a[WID+2:0]};
+		aa <= {a[FPWID+3] ^ nma,a[FPWID+2:0]};
 		bb <= b;
 		cc <= c;
 		rmr <= rm;
@@ -97,7 +97,7 @@ else begin
 end
 
 
-fpFMAnr #(WID+4) u1
+fpFMAnr #(FPWID+4) u1
 (
 	.clk(clk),
 	.ce(ce),
@@ -114,10 +114,10 @@ fpFMAnr #(WID+4) u1
 );
 
 
-wire res_zero = fma_out[WID+2:0]==1'd0;
-vtdl #(.WID(1),.DEP(64)) u3 (.clk(clk), .ce(ce), .a(PIPELINE_DELAY), .d(vi), .q(v));
-vtdl #(.WID(`RBIT),.DEP(64)) u4 (.clk(clk), .ce(ce), .a(PIPELINE_DELAY), .d(tagi), .q(tag));
-vtdl #(.WID(32),.DEP(64)) u5 (.clk(clk), .ce(ce), .a(PIPELINE_DELAY), .d(csri), .q(csr));
+wire res_zero = fma_out[FPWID+2:0]==1'd0;
+vtdl #(.FPWID(1),.DEP(64)) u3 (.clk(clk), .ce(ce), .a(PIPELINE_DELAY), .d(vi), .q(v));
+vtdl #(.FPWID(`RBIT),.DEP(64)) u4 (.clk(clk), .ce(ce), .a(PIPELINE_DELAY), .d(tagi), .q(tag));
+vtdl #(.FPWID(32),.DEP(64)) u5 (.clk(clk), .ce(ce), .a(PIPELINE_DELAY), .d(csri), .q(csr));
 always @(posedge clk)
 begin
 	v_o <= 1'b0;
@@ -140,8 +140,8 @@ if (cnt==3'd5) begin
 		o <= fma_out;
 		inf <= fma_inf;
 		zero <= res_zero;
-		pos <= ~o[WID+3] & ~res_zero;	// positive
-		neg <=  o[WID+3] & ~res_zero;	// negative
+		pos <= ~o[FPWID+3] & ~res_zero;	// positive
+		neg <=  o[FPWID+3] & ~res_zero;	// negative
 	end
 	else
 		exc <= `FLT_NONE;

@@ -22,15 +22,17 @@
 // ============================================================================
 //
 `define DEBUG		1'b1
-`define SIM		1'b1
+//`define SIM		1'b1
 
-module SocCS01(sysclk, btn, pio,
+module SocCS01(sysclk, btn, pio, pio2, pio3,
 	led, led0_r, led0_g, led0_b,
 	uart_rxd_out, uart_txd_in,
 	MemAdr, MemDB, RamOEn, RamWEn, RamCEn);
 input sysclk;
 input [1:0] btn;
-inout tri reg [48:1] pio;
+inout tri [14:1] pio;
+inout tri [6:0] pio2;
+inout tri [22:0] pio3;
 output [1:0] led;
 output reg led0_r;
 output reg led0_g;
@@ -47,6 +49,10 @@ parameter SYNC = 8'hFF;
 parameter HIGH = 1'b1;
 parameter LOW = 1'b0;
 
+
+assign pio2 = 7'bz;
+assign pio3 = 23'bz;
+
 // -----------------------------------------------------------------------------
 // Signals and registers
 // -----------------------------------------------------------------------------
@@ -54,6 +60,7 @@ wire xrst;					// external reset (push button)
 wire rst;						// internal reset
 wire clk;						// system clock (50MHz)
 wire clk14p7;				// uart clock 14.746 MHz
+wire clk20;					// 20MHz for wall clock time
 wire locked;				// clock generation is locked
 wire [1:0] btn_db;	// debounced button output
 
@@ -61,13 +68,16 @@ reg irq;
 reg timer1Irq;
 reg rxIrq;
 wire cyc;						// cpu cycle is active
+wire stb;						// cpu transfer strobe
 reg ack;						// cpu transfer acknowledge
 wire we;						// cpu write cycle
-wire [15:0] adr;		// cpu address
-reg [79:0] dat_i;		// cpu data input
-wire [79:0] dat_o;	// cpu data output
-reg [79:0] dati;		// memory data input
+wire [3:0] sel;			// cpu select lines
+wire [31:0] adr;		// cpu address
+reg [31:0] dat_i;		// cpu data input
+wire [31:0] dat_o;	// cpu data output
+reg [31:0] dati;		// memory data input
 
+wire cs_rom;
 wire cs_io;
 wire cs_mem;
 wire cs_rxmem;
@@ -87,6 +97,7 @@ cs01clkgen ucg1
   // Clock out ports
   .clk50(clk),
   .clk14p7(clk14p7),
+  .clk20(clk20),
   // Status and control signals
   .reset(xrst),
   .locked(locked),
@@ -101,44 +112,61 @@ assign rst = !locked;
 // -----------------------------------------------------------------------------
 // Memory map
 //
-// 0000	+---------------+
-// 			|               |
-// 			|  Ram 52.4kD   | (80 bits wide)
-// 			|               |
-// D000	+---------------+
-// 			|  Rx Buffer    | (32 bits wide)
-// E000	+---------------+
-// 			|  Tx Buffer    |	(32 bits wide)
-// F000	+---------------+
-// 		  |     I/O       |
-// FFFF	+---------------+
+// 00000000	+---------------+
+//  	 	  	|               |
+// 	  	  	|   Ram 128kT   | (32 bits wide)
+// 		  	  |               |
+// 00080000	+---------------+
+// 		  	  |    unused     |
+// FFC0A000	+---------------+
+// 		  	  |  Rx Buffer    | (32 bits wide)
+// FFC0C000	+---------------+
+// 	  		  |  Tx Buffer    |	(32 bits wide)
+// FFD00000 +---------------+
+// 	  	    |     I/O       |
+// FFFC0000	+---------------+
+//          |     ROM       |
+// FFFFFFFF	+---------------+
 //
 // I/O Map
 //
-// F030	+---------------+
-//      |  LED / BTN    |
-// F040	+---------------+
-//      |  IRQ Status   |
-// F050	+---------------+
-//      |  IRQ Status   |
-// F060	+---------------+
-//      |    GPIO       |
-//      +---------------+
+// FFDC0090 +---------------+
+//          |   Buttons     |
+// FFDC00A0 +---------------+
+//          |     GPIO      |
+// FFDC00B0	+---------------+
+//          |  IRQ Status   |
+// FFDC00C0 +---------------+
+//          |   IRQ Ack     |
+// FFDC0600	+---------------+
+//          |    LEDS       |
+//          +---------------+
 //
 // -----------------------------------------------------------------------------
 
-assign cs_io = cyc && adr[15:12]==4'hF;
-assign cs_mem = cyc && adr[15:12] <= 4'hD;
-assign cs_rxmem = cyc && adr[15:12]==4'hD;
-assign cs_txmem = cyc && adr[15:12]==4'hE;
-assign cs_led = cyc && adr[15:4]==12'hF03;
-assign cs_irqsrc = cyc && adr[15:4]==12'hF04;
-assign cs_irqack = cyc && adr[15:4]==12'hF05;
-assign cs_gpio = cyc && adr[15:4]==12'hF06
+assign cs_rom = cyc && stb && adr[31:18]==14'b1111_1111_1111_11;	// $FFFCxxxx to $FFFFxxxx
+assign cs_io = cyc && stb && adr[31:20]==12'hFFD;
+assign cs_mem = cyc && stb && adr[31:16] < 16'h0008;
+assign cs_rxmem = cyc && stb && adr[31:13]==19'b1111_1111_1100_0000_101;
+assign cs_txmem = cyc && stb && adr[31:13]==19'b1111_1111_1100_0000_110;
+assign cs_btn = cyc && stb && adr[31:4]==28'hFFDC009;
+assign cs_gpio = cyc && stb && adr[31:4]==28'hFFDC00A;
+assign cs_irqsrc = cyc && stb && adr[31:4]==28'hFFDC00B;
+assign cs_irqack = cyc && stb && adr[31:4]==28'hFFDC00C;
+assign cs_led = cyc && stb && adr[31:4]==28'hFFDC060;
+
+(* ram_style="block" *)
+reg [31:0] rommem [0:1023];
+wire [31:0] romo;
+initial begin
+`include "../software/boot/cs01rom.ve0"
+end
+assign romo = rommem[adr[11:2]];
+
 
 reg ack_txmem, ack_rxmem;
 reg wr_tx, rd_rx, wrxd;
-reg [13:0] tx_adr, rx_adr;
+reg [12:0] tx_adr, rx_adr;
 wire [31:0] rxdatoa, txdatoa;
 wire [7:0] rxdatob, txdatob;
 wire [7:0] rxdatib;
@@ -150,8 +178,8 @@ rxtx_mem utxmem1
 (
   .clka(clk),
   .ena(cs_txmem),
-  .wea(we),
-  .addra(adr[11:0]),
+  .wea({4{we}} & sel),
+  .addra(adr[12:2]),
   .dina(dat_o[31:0]),
   .douta(txdatoa),
   .clkb(clk14p7),
@@ -165,8 +193,8 @@ rxtx_mem urxmem1
 (
   .clka(clk),
   .ena(cs_rxmem),
-  .wea(we),
-  .addra(adr[11:0]),
+  .wea({4{we}} & sel),
+  .addra(adr[12:2]),
   .dina(dat_o[31:0]),
   .douta(rxdatoa),
   .clkb(clk14p7),
@@ -236,7 +264,7 @@ parameter WR3 = 4'd4;
 parameter RWDONE = 4'd5;
 parameter RWNACK = 4'd6;
 reg [3:0] memCount;
-reg [79:0] memDat;
+reg [31:0] memDat;
 
 always @(posedge clk)
 if (rst) begin
@@ -270,16 +298,16 @@ IDLE:
 	// Simply stay in this state until the count expires.
 RD1:
 	begin
-		dati <= {dati[71:0],MemDB};
+		dati <= {dati[23:0],MemDB};
 		MemAdr <= MemAdr + 2'd1;
 		memCount <= memCount + 4'd1;
-		if (memCount==4'd9)
+		if (memCount==4'd3)
 			state <= RWDONE;
 	end
 	// For a write cycle begin by enabling the ram's write input.
 WR1:
 	begin
-		RamWEn <= LOW;
+		RamWEn <= ~sel[memCount];
 		state <= WR2;
 	end
 	// AFter a cycle disable the write input. This will cause the ram to latch
@@ -295,10 +323,10 @@ WR2:
 	// write state.
 WR3:
 	begin
-		memDat <= {8'h00,memDat[79:8]};
+		memDat <= {8'h00,memDat[31:8]};
 		MemAdr <= MemAdr + 2'd1;
 		memCount <= memCount + 2'd1;
-		if (memCount==4'd9)
+		if (memCount==4'd3)
 			state <= RWDONE;
 		else
 			state <= WR1;
@@ -323,17 +351,18 @@ endcase
 assign MemDB = RamWEn ? 8'bz : memDat[7:0];
 
 always @(posedge clk)
-	ack <= ack_txmem|ack_rxmem|cs_irqsrc|cs_led|ack_mem|cs_gpio;
+	ack <= cs_rom|ack_txmem|ack_rxmem|cs_irqsrc|cs_led|cs_btn|ack_mem|cs_gpio;
 
 always @(posedge clk)
-casez({cs_txmem,cs_rxmem,cs_irqsrc,cs_led,cs_mem,cs_gpio})
-6'b1?????:	dat_i <= txdatoa;
-6'b01????:	dat_i <= rxdatoa;
-6'b001???:	dat_i <= adr[0] ? 8'h00 : {rxIRQ,timer1Irq};
-6'b0001??:	dat_i <= {6'h0,btn};
-6'b00001?:	dat_i <= dati;
-6'b000001:	dat_i <= {pio,1'b0};
-default:	dat_i <= 80'hCCEECCEECCEECCEECCEE;
+casez({cs_rom,cs_txmem,cs_rxmem,cs_irqsrc,cs_btn,cs_mem,cs_gpio})
+7'b1??????:	dat_i <= romo;
+7'b01?????:	dat_i <= txdatoa;
+7'b001????:	dat_i <= rxdatoa;
+7'b0001???:	dat_i <= adr[2] ? 8'h00 : {rxIRQ,timer1Irq};
+7'b00001??:	dat_i <= {6'h0,btn};
+7'b000001?:	dat_i <= dati;
+7'b0000001:	dat_i <= adr[2] ? {pio[14:1],1'b0} : {15'd0,pio3[22:0]};
+default:	dat_i <= 32'hCCEECCEE;
 endcase
 
 // -----------------------------------------------------------------------------
@@ -392,12 +421,12 @@ end
 
 always @(posedge clk14p7)
 if (rst)
- 	tx_adr <= 14'd0;
+ 	tx_adr <= 13'd0;
 else begin
 	if (timer1Irq)
-		tx_adr <= 14'd0;
+		tx_adr <= 13'd0;
 	else if (wr_tx)
-		tx_adr <= tx_adr + 14'd1;
+		tx_adr <= tx_adr + 13'd1;
 end
 
 always @(posedge clk14p7)
@@ -503,13 +532,13 @@ end
 // The sync sequence is 16 or more FF's.
 always @(posedge clk14p7)
 if (rst)
-	rx_adr <= 15'd0;
+	rx_adr <= 13'd0;
 else begin
 	if (wrxd) begin
 		if (synccnt >= 8'd16)
-			rx_adr <= 15'd0;
+			rx_adr <= 13'd0;
 		else
-			rx_adr <= rx_adr + 15'd1;
+			rx_adr <= rx_adr + 13'd1;
 	end
 end
 
@@ -557,37 +586,46 @@ assign led0_b = ~cs_txmem & dvd[12];	// PWM 50% at about 12kHz.
 // GPIO
 // -----------------------------------------------------------------------------
 
-reg [79:0] gpio_ddr;
+reg [63:0] gpio_ddr;
 reg [48:1] gpio_dato;
 integer n;
 
 always @(posedge clk)
 if (rst)
-	gpio_ddr <= 80'd0;
+	gpio_ddr <= 64'd0;
 else begin
 	if (cs_gpio && we)
-		case(adr[3:0])
-		4'd0:	gpio_dato <= dat_o[48:1];
-		4'd1:	gpio_ddr <= dat_o;
+		case(adr[3:2])
+		2'd0:	gpio_dato[31:1] <= dat_o[31:1];
+		2'd1: gpio_dato[48:32] <= dat_o[16:0];
+		2'd2:	gpio_ddr[31:0] <= dat_o;
+		2'd3:	gpio_ddr[63:32] <= dat_o;
 		default:	;
 		endcase
 end
-always @*
-	for (n = 1; n < 49; n = n + 1)
-		pio[n] = gpio_ddr[n] ? gpio_dato[n] : 1'bz;
+
+generate begin : gpi
+for (g = 1; g < 15; g = g + 1) begin
+	assign pio[g] = gpio_ddr[g] ? gpio_dato[g] : 1'bz;
+end
+end
+endgenerate
 
 // -----------------------------------------------------------------------------
 // CPU
 // -----------------------------------------------------------------------------
 
-cs01 ucpu1
+cs01riscv ucpu1
 (
 	.rst_i(rst),
 	.clk_i(clk),
+	.wc_clk_i(clk20),
 	.irq_i(irq),
 	.cyc_o(cyc),
+	.stb_o(stb),
 	.ack_i(ack),
 	.we_o(we),
+	.sel_o(sel),
 	.adr_o(adr),
 	.dat_i(dat_i),
 	.dat_o(dat_o)

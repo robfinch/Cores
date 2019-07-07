@@ -21,7 +21,7 @@
 //
 //	fpUnit.v
 //  - floating point unit
-//  - parameterized width
+//  - parameterized FPWIDth
 //  - IEEE 754 representation
 //
 //	NaN Value		Origin
@@ -130,7 +130,7 @@
 
 module fpUnit(rst, clk, clk4x, ce, ir, ld, a, b, c, imm, o, csr_i, status, exception, done, rm
 );
-parameter WID = 64;
+parameter FPWID = 64;
 `include "fpSize.sv"
 localparam EMSBS = 7;
 localparam FMSBS = 22;
@@ -190,8 +190,8 @@ wire fprem = {op4_i,func6b_i} == {`FLT2,`FREM};
 wire [3:0] op4 = fprem ? op4_r : op4_i;
 wire [5:0] func6b = fprem ? func6b_r : func6b_i;
 wire [2:0] insn_rm = ir[30:28];
-reg [WID-1+`EXTRA_BITS:0] res;
-reg [WID-1+`EXTRA_BITS:0] aop, bop, cop;
+reg [FPWID-1+`EXTRA_BITS:0] res;
+reg [FPWID-1+`EXTRA_BITS:0] aop, bop, cop;
 always @*
 case(srca)
 `RES:	aop <= res;
@@ -201,7 +201,7 @@ always @*
 case(srcb)
 `RES:			bop <= res;
 `POINT5:
-case(WID)
+case(FPWID)
 32:	bop <= `POINT5S;
 40:	bop <= `POINT5SX;
 64:	bop <= `POINT5D;
@@ -214,7 +214,7 @@ case(srcc)
 `AIN:			cop <= a;
 `RES:			cop <= res;
 `ZERO:
-case(WID)
+case(FPWID)
 32:	cop <= `ZEROS;
 40:	cop <= `ZEROSX;
 64:	cop <= `ZEROD;
@@ -310,10 +310,10 @@ reg snanx;		// signalling nan
 wire fdivs = 1'b0;
 wire divDone;
 wire pipe_ce = ce;// & divDone;	// divide must be done in order for pipe to clock
-wire precmatch = 1'b0;//WID==32 ? ir[28:27]==2'b00 :
-                 //WID==64 ? ir[28:27]==2'b01 : 1;
+wire precmatch = 1'b0;//FPWID==32 ? ir[28:27]==2'b00 :
+                 //FPWID==64 ? ir[28:27]==2'b01 : 1;
                  /*
-                 WID==80 ? ir[28:27]==2'b10 :
+                 FPWID==80 ? ir[28:27]==2'b10 :
                  ir[28:27]==2'b11;
                  */
 always @(posedge clk)
@@ -386,16 +386,16 @@ wire [5:0] fn2;
 
 wire [MSB:0] zld_o,lood_o;
 wire [31:0] zls_o,loos_o;
-wire [WID-1+`EXTRA_BITS:0] zlq_o, looq_o;
-wire [WID-1+`EXTRA_BITS:0] scaleb_o;
-fpZLUnit #(WID) u6 (.ir(ir), .op4(op4), .func5(func6b), .a(aop), .b(bop), .c(c), .o(zlq_o), .nanx(nanx) );
-fpLOOUnit #(WID) u7 (.clk(clk), .ce(pipe_ce), .op4(op4), .func5(func6b), .rm(insn_rm==3'b111 ? rm : insn_rm), .a(aop), .b(bop), .o(looq_o), .done() );
+wire [FPWID-1+`EXTRA_BITS:0] zlq_o, looq_o;
+wire [FPWID-1+`EXTRA_BITS:0] scaleb_o;
+fpZLUnit #(FPWID) u6 (.ir(ir), .op4(op4), .func5(func6b), .a(aop), .b(bop), .c(c), .o(zlq_o), .nanx(nanx) );
+fpLOOUnit #(FPWID) u7 (.clk(clk), .ce(pipe_ce), .op4(op4), .func5(func6b), .rm(insn_rm==3'b111 ? rm : insn_rm), .a(aop), .b(bop), .o(looq_o), .done() );
 fpScaleb u16 (.clk(clk), .ce(pipe_ce), .a(aop), .b(bop), .o(scaleb_o));
 
 //fpLOOUnit #(32) u7s (.clk(clk), .ce(pipe_ce), .rm(rm), .op(op), .fn(fn), .a(a[31:0]), .o(loos_o), .done() );
 
-fpDecomp #(WID) u1 (.i(aop), .sgn(sa), .man(ma), .vz(az), .inf(aInf), .nan(aNan) );
-fpDecomp #(WID) u2 (.i(bop), .sgn(sb), .man(mb), .vz(bz), .inf(bInf), .nan(bNan) );
+fpDecomp #(FPWID) u1 (.i(aop), .sgn(sa), .man(ma), .vz(az), .inf(aInf), .nan(aNan) );
+fpDecomp #(FPWID) u2 (.i(bop), .sgn(sb), .man(mb), .vz(bz), .inf(bInf), .nan(bNan) );
 //fp_decomp #(32) u1s (.i(a[31:0]), .sgn(sas), .man(mas), .vz(azs), .inf(aInfs), .nan(aNans) );
 //fp_decomp #(32) u2s (.i(b[31:0]), .sgn(sbs), .man(mbs), .vz(bzs), .inf(bInfs), .nan(bNans) );
 
@@ -446,14 +446,14 @@ reg under,unders;
 wire sqrneg;
 wire fms = func6b==`FMS || func6b==`FNMS;
 wire nma = func6b==`FNMA || func6b==`FNMS;
-wire [WID-1:0] ma_aop = aop ^ (nma << WID-1);
+wire [FPWID-1:0] ma_aop = aop ^ (nma << FPWID-1);
 
-fpAddsub #(WID) u10(.clk(clk), .ce(pipe_ce), .rm(rmd), .op(func6b[0]), .a(aop), .b(bop), .o(fas_o) );
-fpDiv    #(WID) u11(.rst(rst), .clk(clk), .clk4x(clk4x), .ce(pipe_ce), .ld(ld|rem_ld), .a(aop), .b(bop), .o(fdiv_o), .sign_exe(), .underflow(divUnder), .done(divDone) );
-fpMul    #(WID) u12(.clk(clk), .ce(pipe_ce),          .a(aop), .b(bop), .o(fmul_o), .sign_exe(), .inf(), .underflow(mulUnder) );
-fpSqrt	 #(WID) u13(.rst(rst), .clk(clk4x), .ce(pipe_ce), .ld(ld), .a(aop), .o(fsqrt_o), .done(), .sqrinf(), .sqrneg(sqrneg) );
-fpRes    #(WID) u14(.clk(clk), .ce(pipe_ce), .a(aop), .o(fres_o));
-fpFMA 	 #(WID) u15(.clk(clk), .ce(pipe_ce), .op(fms), .rm(rmd), .a(ma_aop), .b(bop), .c(cop), .o(fma_o), .inf());
+fpAddsub #(FPWID) u10(.clk(clk), .ce(pipe_ce), .rm(rmd), .op(func6b[0]), .a(aop), .b(bop), .o(fas_o) );
+fpDiv    #(FPWID) u11(.rst(rst), .clk(clk), .clk4x(clk4x), .ce(pipe_ce), .ld(ld|rem_ld), .a(aop), .b(bop), .o(fdiv_o), .sign_exe(), .underflow(divUnder), .done(divDone) );
+fpMul    #(FPWID) u12(.clk(clk), .ce(pipe_ce),          .a(aop), .b(bop), .o(fmul_o), .sign_exe(), .inf(), .underflow(mulUnder) );
+fpSqrt	 #(FPWID) u13(.rst(rst), .clk(clk4x), .ce(pipe_ce), .ld(ld), .a(aop), .o(fsqrt_o), .done(), .sqrinf(), .sqrneg(sqrneg) );
+fpRes    #(FPWID) u14(.clk(clk), .ce(pipe_ce), .a(aop), .o(fres_o));
+fpFMA 	 #(FPWID) u15(.clk(clk), .ce(pipe_ce), .op(fms), .rm(rmd), .a(ma_aop), .b(bop), .c(cop), .o(fma_o), .inf());
 
 wire [4:0] rem_state;
 fpRemainder ufpr1
@@ -525,15 +525,15 @@ endcase
 
 // pipeline stage
 // one cycle latency
-fpNormalize #(WID) fpn0(.clk(clk), .ce(pipe_ce), .under_i(under), .under_o(), .i(fres), .o(fpn_o) );
+fpNormalize #(FPWID) fpn0(.clk(clk), .ce(pipe_ce), .under_i(under), .under_o(), .i(fres), .o(fpn_o) );
 //fpNormalize #(32) fpns(.clk(clk), .ce(pipe_ce), .under(unders), .i(fress), .o(fpns_o) );
 
 // pipeline stage
 // one cycle latency
-fpRound #(WID) fpr0(.clk(clk), .ce(pipe_ce), .rm(rmd4), .i(fpn_o), .o(fpu_o) );
+fpRound #(FPWID) fpr0(.clk(clk), .ce(pipe_ce), .rm(rmd4), .i(fpn_o), .o(fpu_o) );
 //fpRoundReg #(32) fprs(.clk(clk), .ce(pipe_ce), .rm(rm4), .i(fpns_o), .o(fpus_o) );
 
-wire so = (isNan?nso:fpu_o[WID-1]);
+wire so = (isNan?nso:fpu_o[FPWID-1]);
             //single ? (isNans?nsos:fpus_o[31]): (isNan?nso:fpu_o[63]);
 
 //fix: status should be registered
@@ -597,7 +597,7 @@ end
 
 wire [7:0] maxdivcnt;
 generate begin
-if (WID==128) begin
+if (FPWID==128) begin
     assign inf = &fpu_o[126:112] && fpu_o[111:0]==0;
     assign subinf 	= fpu_o[126:0]==`QSUBINFQ;
     assign infdiv 	= fpu_o[126:0]==`QINFDIVQ;
@@ -605,7 +605,7 @@ if (WID==128) begin
     assign infzero 	= fpu_o[126:0]==`QINFZEROQ;
     assign maxdivcnt = 8'd128;
 end
-else if (WID==80) begin
+else if (FPWID==80) begin
     assign inf = &fpu_o[78:64] && fpu_o[63:0]==0;
     assign subinf 	= fpu_o[78:0]==`QSUBINFDX;
     assign infdiv 	= fpu_o[78:0]==`QINFDIVDX;
@@ -613,7 +613,7 @@ else if (WID==80) begin
     assign infzero 	= fpu_o[78:0]==`QINFZERODX;
     assign maxdivcnt = 8'd80;
 end
-else if (WID==64) begin
+else if (FPWID==64) begin
     assign inf      = &fpu_o[62:52] && fpu_o[51:0]==0;
     assign subinf   = fpu_o[62:0]==`QSUBINFD;
     assign infdiv   = fpu_o[62:0]==`QINFDIVD;
@@ -621,7 +621,7 @@ else if (WID==64) begin
     assign infzero  = fpu_o[62:0]==`QINFZEROD;
     assign maxdivcnt = 8'd64;
 end
-else if (WID==32) begin
+else if (FPWID==32) begin
     assign inf      = &fpu_o[30:23] && fpu_o[22:0]==0;
     assign subinf   = fpu_o[30:0]==`QSUBINFS;
     assign infdiv   = fpu_o[30:0]==`QINFDIVS;

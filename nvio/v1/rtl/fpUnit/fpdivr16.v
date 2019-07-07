@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2006-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2006-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -25,22 +25,22 @@
 // ============================================================================
 
 module fpdivr16(clk, ld, a, b, q, r, done, lzcnt);
-parameter WID1 = 112;
-localparam REM = WID1 % 4;
-localparam WID = ((WID1*4)+3)/4;
-localparam DMSB = WID-1;
+parameter FPWID1 = 112;
+localparam REM = FPWID1 % 4;
+localparam FPWID = ((FPWID1*4)+3)/4;
+localparam DMSB = FPWID-1;
 input clk;
 input ld;
-input [WID-1:0] a;
-input [WID-1:0] b;
-output reg [WID*2-1:0] q = 1'd0;
-output reg [WID-1:0] r = 1'd0;
+input [FPWID-1:0] a;
+input [FPWID-1:0] b;
+output reg [FPWID*2-1:0] q = 1'd0;
+output reg [FPWID-1:0] r = 1'd0;
 output reg done = 1'd0;
 output reg [7:0] lzcnt = 1'd0;
 
 initial begin
-	if (WID % 4) begin
-		$display("fpdvir16: Width must be a multiple of four.");
+	if (FPWID % 4) begin
+		$display("fpdvir16: FPWIDth must be a multiple of four.");
 		$finish;
 	end
 end
@@ -54,23 +54,23 @@ reg b0 = 1'd0,b1 = 1'd0,b2 = 1'd0,b3 = 1'd0;
 reg [DMSB+1:0] r1 = 1'd0,r2 = 1'd0,r3 = 1'd0,r4 = 1'd0;
 reg gotnz = 0;
 
-assign maxcnt = WID*2/4-1;
+assign maxcnt = FPWID*2/4-1;
 always @*
-	b0 = b <= {rxx,q[WID*2-1]};
+	b0 = b <= {rxx,q[FPWID*2-1]};
 always @*
-	r1 = b0 ? {rxx,q[WID*2-1]} - b : {rxx,q[WID*2-1]};
+	r1 = b0 ? {rxx,q[FPWID*2-1]} - b : {rxx,q[FPWID*2-1]};
 always @*
-	b1 = b <= {r1,q[WID*2-2]};
+	b1 = b <= {r1,q[FPWID*2-2]};
 always @*
-	r2 = b1 ? {r1,q[WID*2-2]} - b : {r1,q[WID*2-2]};
+	r2 = b1 ? {r1,q[FPWID*2-2]} - b : {r1,q[FPWID*2-2]};
 always @*
-	b2 = b <= {r2,q[WID*2-3]};
+	b2 = b <= {r2,q[FPWID*2-3]};
 always @*
-	r3 = b2 ? {r2,q[WID*2-3]} - b : {r2,q[WID*2-3]};
+	r3 = b2 ? {r2,q[FPWID*2-3]} - b : {r2,q[FPWID*2-3]};
 always @*
-	b3 = b <= {r3,q[WID*2-4]};
+	b3 = b <= {r3,q[FPWID*2-4]};
 always @*
-	r4 = b3 ? {r3,q[WID*2-4]} - b : {r3,q[WID*2-4]};
+	r4 = b3 ? {r3,q[FPWID*2-4]} - b : {r3,q[FPWID*2-4]};
 
 reg [2:0] state = 0;
 
@@ -83,13 +83,13 @@ case(state)
 		lzcnt <= 0;
 		gotnz <= 0;
 		cnt <= maxcnt;
-		q <= {(a << REM),{WID{1'b0}}};
-        rxx <= {WID{1'b0}};
+		q <= {(a << REM),{FPWID{1'b0}}};
+        rxx <= {FPWID{1'b0}};
 		state <= 1;
 	end
 3'd1:
 	if (!cnt[8]) begin
-		q[WID*2-1:4] <= q[WID*2-5:0];
+		q[FPWID*2-1:4] <= q[FPWID*2-5:0];
 		q[3] <= b0;
 		q[2] <= b1;
 		q[1] <= b2;

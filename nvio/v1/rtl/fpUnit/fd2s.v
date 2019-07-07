@@ -1,4 +1,3 @@
-`timescale 1ns / 1ps
 // ============================================================================
 //        __
 //   \\__/ o\    (C) 2006-2017  Robert Finch, Waterloo
@@ -24,6 +23,8 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.    
 //                                                                          
 // ============================================================================
+
+`include "fpConfig.sv"
 
 module fd2s(a, o);
 input [63:0] a;

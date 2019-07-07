@@ -30,14 +30,14 @@
 `define FRSQRTE_MAGIC		32'h5f3759df
 
 module fpRsqrte(clk, ce, ld, a, o);
-parameter WID = 32;
-localparam MSB = WID-1;
+parameter FPWID = 32;
+localparam MSB = FPWID-1;
 `include "fpSize.sv"
 input clk;
 input ce;
 input ld;
-input [WID-1:0] a;
-output reg [WID-1:0] o;
+input [FPWID-1:0] a;
+output reg [FPWID-1:0] o;
 
 // An implementation of the approximation used in the Quake game.
 

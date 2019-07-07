@@ -9,7 +9,7 @@
 //    - floating point adder/subtracter
 //    - two cycle latency
 //    - can issue every clock cycle
-//    - parameterized width
+//    - parameterized FPWIDth
 //    - IEEE 754 representation
 //
 //
@@ -30,8 +30,8 @@
 
 `include "fpConfig.sv"
 
-module fpAddsub(clk, ce, rm, op, a, b, o);
-parameter FPWID = 64;
+module fpAddsub_L2(clk, ce, rm, op, a, b, o);
+parameter FPWID = 128;
 `include "fpSize.sv"
 
 input clk;		// system clock
@@ -191,8 +191,8 @@ wire xoinf = &xo;
 always @*
 	casez({aInf1&bInf1,aNan1,bNan1,xoinf})
 	4'b1???:	mo1 = {1'b0,op1,{FMSB-1{1'b0}},op1,{FMSB{1'b0}}};	// inf +/- inf - generate QNaN on subtract, inf on add
-	4'b01??:	mo1 = {1'b0,fracta1[FMSB+1:0],{FMSB{1'b0}}};
-	4'b001?: 	mo1 = {1'b0,fractb1[FMSB+1:0],{FMSB{1'b0}}};
+	4'b01??:	mo1 = {1'b1,fracta1[FMSB+1:0],{FMSB{1'b0}}};
+	4'b001?: 	mo1 = {1'b1,fractb1[FMSB+1:0],{FMSB{1'b0}}};
 	4'b0001:	mo1 = 1'd0;
 	default:	mo1 = {mab,{FMSB-1{1'b0}}};	// mab has an extra lead bit and two trailing bits
 	endcase
@@ -201,8 +201,8 @@ delay1 #(FX+1) d3(.clk(clk), .ce(ce), .i(mo1), .o(mo) );
 
 endmodule
 
-module fpAddsubnr(clk, ce, rm, op, a, b, o);
-parameter FPWID = 64;
+module fpAddsubnr_L2(clk, ce, rm, op, a, b, o);
+parameter FPWID = 128;
 `include "fpSize.sv"
 
 input clk;		// system clock
@@ -216,8 +216,8 @@ output [MSB:0] o;	// output
 wire [EX:0] o1;
 wire [MSB+3:0] fpn0;
 
-fpAddsub    #(FPWID) u1 (clk, ce, rm, op, a, b, o1);
-fpNormalize #(FPWID) u2(.clk(clk), .ce(ce), .under_i(1'b0), .i(o1), .o(fpn0) );
+fpAddsub_L2 #(FPWID) u1 (clk, ce, rm, op, a, b, o1);
+fpNormalize #(FPWID) u2(.clk(clk), .ce(ce), .under(1'b0), .i(o1), .o(fpn0) );
 fpRound  		#(FPWID) u3(.clk(clk), .ce(ce), .rm(rm), .i(fpn0), .o(o) );
 
 endmodule

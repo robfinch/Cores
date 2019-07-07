@@ -1,4 +1,3 @@
-`timescale 1ns / 1ps
 // ============================================================================
 //        __
 //   \\__/ o\    (C) 2017-2018  Robert Finch, Waterloo
@@ -25,19 +24,21 @@
 //
 // ============================================================================
 //
+`include "fpConfig.sv"
+
 module DivGoldschmidt(rst, clk, ld, a, b, q, done, lzcnt);
-parameter WID=32;
+parameter FPWID=32;
 parameter WHOLE=16;
 parameter POINTS=16;
 parameter LEFT=1'b1;
-localparam SIZE=WID+WHOLE;
+localparam SIZE=FPWID+WHOLE;
 localparam POINTS2 = POINTS+WHOLE;
 input rst;
 input clk;
 input ld;
-input [WID-1:0] a;
-input [WID-1:0] b;
-output reg [WID*2-1:0] q;
+input [FPWID-1:0] a;
+input [FPWID-1:0] b;
+output reg [FPWID*2-1:0] q;
 output reg done;
 output reg [7:0] lzcnt;
 parameter IDLE = 2'd0;
@@ -62,10 +63,10 @@ wire [7:0] shft;
 always @*
 begin
 	lzcnt2 = 8'd0;
-	if (b[WID-1]==1'b0)
-		for (n = WID-2; n >= 0; n = n - 1)
+	if (b[FPWID-1]==1'b0)
+		for (n = FPWID-2; n >= 0; n = n - 1)
 			if(b[n] && lzcnt2==8'd0)
-				lzcnt2 = (WID-1)-n;
+				lzcnt2 = (FPWID-1)-n;
 end
 
 
@@ -73,10 +74,10 @@ end
 always @*
 begin
 	lzcnt = 8'd0;
-	if (q[WID*2-1]==1'b0)
-		for (n = WID*2-2; n >= 0; n = n - 1)
+	if (q[FPWID*2-1]==1'b0)
+		for (n = FPWID*2-2; n >= 0; n = n - 1)
 			if(q[n] && lzcnt==8'd0)
-				lzcnt = (WID*2-1)-n;
+				lzcnt = (FPWID*2-1)-n;
 end
 
 wire shift_left = lzcnt2 > WHOLE;
@@ -148,12 +149,12 @@ end
 endmodule
 
 module G_divider_tb();
-parameter WID=4;
+parameter FPWID=4;
 reg rst;
 reg clk;
 reg ld;
 wire done;
-wire [WID*2-1:0] qo;
+wire [FPWID*2-1:0] qo;
 reg [3:0] state;
 reg [3:0] a, b;
 reg [7:0] count;
@@ -195,7 +196,7 @@ case(state)
 endcase
 end
 
-DivGoldschmidt #(.WID(WID),.WHOLE(1),.POINTS(3)) u00
+DivGoldschmidt #(.FPWID(FPWID),.WHOLE(1),.POINTS(3)) u00
 (
 	.rst(rst),
 	.clk(clk),

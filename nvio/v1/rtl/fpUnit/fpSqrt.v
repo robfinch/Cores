@@ -32,9 +32,12 @@
 `include "fp_defines.v"
 
 module fpSqrt(rst, clk, ce, ld, a, o, done, sqrinf, sqrneg);
-parameter WID = 128;
+parameter FPWID = 32;
 `include "fpSize.sv"
-
+localparam pShiftAmt =
+	FPWID==80 ? 48 :
+	FPWID==64 ? 36 :
+	FPWID==32 ? 7 : (FMSB+1-16);
 input rst;
 input clk;
 input ce;
@@ -77,6 +80,7 @@ wire aInf;
 wire aNan;
 wire done1;
 wire [7:0] lzcnt;
+wire [MSB:0] aa;
 
 // -----------------------------------------------------------
 // - decode the input operand
@@ -85,9 +89,12 @@ wire [7:0] lzcnt;
 // - calculate fraction
 // -----------------------------------------------------------
 
-fpDecomp #(WID) u1
+fpDecompReg #(FPWID) u1
 (
+	.clk(clk),
+	.ce(ce),
 	.i(a),
+	.o(aa),
 	.sgn(sa),
 	.exp(xa),
 	.fract(fracta),
@@ -100,19 +107,22 @@ fpDecomp #(WID) u1
 assign ex1 = xa + 8'd1;
 assign so = 1'b0;				// square root of positive numbers only
 assign xo = (ex1 >> 1) + (bias >> 1);	// divide by 2 cuts the bias in half, so 1/2 of it is added back in.
-assign mo = aNan ? {1'b1,a[FMSB:0],{FMSB+1{1'b0}}} : (sqrto << 36);
+assign mo = aNan ? {1'b1,aa[FMSB:0],{FMSB+1{1'b0}}} : (sqrto << pShiftAmt);
 assign sqrinf = aInf;
 assign sqrneg = !az & so;
 
 wire [FMSB+2:0] fracta1 = ex1[0] ? {1'b0,fracta} << 1 : {2'b0,fracta};
+
+wire ldd;
+delay1 #(1) u3 (.clk(clk), .ce(ce), .i(ld), .o(ldd));
 
 isqrt #(FX+1) u2
 (
 	.rst(rst),
 	.clk(clk),
 	.ce(ce),
-	.ld(ld),
-	.a({fracta1,{FMSB+1{1'b0}}}),
+	.ld(ldd),
+	.a({1'b0,fracta1,{FMSB+1{1'b0}}}),
 	.o(sqrto),
 	.done(done)
 );
@@ -129,7 +139,7 @@ endcase
 endmodule
 
 module fpSqrtnr(rst, clk, ce, ld, a, o, rm, done, inf, sqrinf, sqrneg);
-parameter WID=32;
+parameter FPWID=32;
 `include "fpSize.sv"
 
 input rst;
@@ -149,9 +159,9 @@ wire inf1;
 wire [MSB+3:0] fpn0;
 wire done1;
 
-fpSqrt      #(WID) u1 (rst, clk, ce, ld, a, o1, done1, sqrinf, sqrneg);
-fpNormalize #(WID) u2(.clk(clk), .ce(ce), .under(1'b0), .i(o1), .o(fpn0) );
-fpRoundReg  #(WID) u3(.clk(clk), .ce(ce), .rm(rm), .i(fpn0), .o(o) );
+fpSqrt      #(FPWID) u1 (rst, clk, ce, ld, a, o1, done1, sqrinf, sqrneg);
+fpNormalize #(FPWID) u2(.clk(clk), .ce(ce), .under_i(1'b0), .i(o1), .o(fpn0) );
+fpRound  #(FPWID) u3(.clk(clk), .ce(ce), .rm(rm), .i(fpn0), .o(o) );
 delay2      #(1)   u5(.clk(clk), .ce(ce), .i(inf1), .o(inf));
 delay2		#(1)   u8(.clk(clk), .ce(ce), .i(done1), .o(done));
 endmodule

@@ -5,7 +5,7 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	fp_cmp_unit.v
+//	fpCompare.sv
 //    - floating point comparison unit
 //    - parameterized FPWIDth
 //    - IEEE 754 representation
@@ -28,11 +28,11 @@
 
 `include "fpConfig.sv"
 
-module fp_cmp_unit(a, b, o, nanx);
+module fpCompare(a, b, o, nanx);
 parameter FPWID = 32;
 `include "fpSize.sv"
 
-input [FPWID-1+`EXTRA_BITS:0] a, b;
+input [MSB:0] a, b;
 output [4:0] o;
 reg [4:0] o;
 output nanx;

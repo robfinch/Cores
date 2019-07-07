@@ -32,12 +32,12 @@
 `define FRSQRTE_MAGIC		32'h5f3759df
 
 module fpRsqrte(clk, ce, ld, a, o);
-parameter WID = 80;
+parameter FPWID = 80;
 input clk;
 input ce;
 input ld;
-input [WID-1:0] a;
-output reg [WID-1:0] o;
+input [FPWID-1:0] a;
+output reg [FPWID-1:0] o;
 
 wire [31:0] a1;
 reg [31:0] x2, x2yy;

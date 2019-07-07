@@ -51,7 +51,7 @@
 `include "fpConfig.sv"
 
 module fpMul (clk, ce, a, b, o, sign_exe, inf, overflow, underflow);
-parameter WID = 80;
+parameter FPWID = 64;
 `include "fpSize.sv"
 
 input clk;
@@ -98,8 +98,8 @@ wire aInf, bInf, aInf1, bInf1;
 // - calculate fraction
 // -----------------------------------------------------------
 
-fpDecomp #(WID) u1a (.i(a), .sgn(sa), .exp(xa), .fract(fracta), .xz(a_dn), .vz(az), .inf(aInf), .nan(aNan) );
-fpDecomp #(WID) u1b (.i(b), .sgn(sb), .exp(xb), .fract(fractb), .xz(b_dn), .vz(bz), .inf(bInf), .nan(bNan) );
+fpDecomp #(FPWID) u1a (.i(a), .sgn(sa), .exp(xa), .fract(fracta), .xz(a_dn), .vz(az), .inf(aInf), .nan(aNan) );
+fpDecomp #(FPWID) u1b (.i(b), .sgn(sb), .exp(xb), .fract(fractb), .xz(b_dn), .vz(bz), .inf(bInf), .nan(bNan) );
 
 // Compute the sum of the exponents.
 // correct the exponent for denormalized operands
@@ -108,7 +108,7 @@ fpDecomp #(WID) u1b (.i(b), .sgn(sb), .exp(xb), .fract(fractb), .xz(b_dn), .vz(b
 assign ex1 = (az|bz) ? 0 : (xa|a_dn) + (xb|b_dn) - bias;
 
 generate
-if (WID==80) begin
+if (FPWID==80) begin
 reg [31:0] p00,p01,p02,p03;
 reg [31:0] p10,p11,p12,p13;
 reg [31:0] p20,p21,p22,p23;
@@ -142,7 +142,7 @@ reg [31:0] p30,p31,p32,p33;
 				;
 	end
 end
-else if (WID==64) begin
+else if (FPWID==64) begin
 reg [35:0] p00,p01,p02;
 reg [35:0] p10,p11,p12;
 reg [35:0] p20,p21,p22;
@@ -163,7 +163,7 @@ reg [35:0] p20,p21,p22;
 				;
 	end
 end
-else if (WID==32) begin
+else if (FPWID==32) begin
 reg [23:0] p00,p01,p02;
 reg [23:0] p10,p11,p12;
 reg [23:0] p20,p21,p22;
@@ -198,12 +198,12 @@ delay2 u7  (.clk(clk), .ce(ce), .i(over), .o(over1) );
 
 // determine when a NaN is output
 wire qNaNOut;
-wire [WID-1:0] a1,b1;
+wire [FPWID-1:0] a1,b1;
 delay2 u5 (.clk(clk), .ce(ce), .i((aInf&bz)|(bInf&az)), .o(qNaNOut) );
 delay2 u14 (.clk(clk), .ce(ce), .i(aNan), .o(aNan1) );
 delay2 u15 (.clk(clk), .ce(ce), .i(bNan), .o(bNan1) );
-delay2 #(WID) u16 (.clk(clk), .ce(ce), .i(a), .o(a1) );
-delay2 #(WID) u17 (.clk(clk), .ce(ce), .i(b), .o(b1) );
+delay2 #(FPWID) u16 (.clk(clk), .ce(ce), .i(a), .o(a1) );
+delay2 #(FPWID) u17 (.clk(clk), .ce(ce), .i(b), .o(b1) );
 
 // -----------------------------------------------------------
 // Second clock
@@ -228,7 +228,7 @@ always @(posedge clk)
 	if (ce)
 		casez({aNan1,bNan1,qNaNOut,aInf1,bInf1,over1})
 		6'b1?????:  mo1 = {1'b1,a1[FMSB:0],{FMSB+1{1'b0}}};
-        6'b01????:  mo1 = {1'b1,b1[FMSB:0],{FMSB+1{1'b0}}};
+    6'b01????:  mo1 = {1'b1,b1[FMSB:0],{FMSB+1{1'b0}}};
 		6'b001???:	mo1 = {1'b1,qNaN|3'd4,{FMSB+1{1'b0}}};	// multiply inf * zero
 		6'b0001??:	mo1 = 0;	// mul inf's
 		6'b00001?:	mo1 = 0;	// mul inf's
@@ -249,7 +249,7 @@ endmodule
 // Multiplier with normalization and rounding.
 
 module fpMulnr(clk, ce, a, b, o, rm, sign_exe, inf, overflow, underflow);
-parameter WID=32;
+parameter FPWID=64;
 `include "fpSize.sv"
 
 input clk;
@@ -266,9 +266,9 @@ wire [EX:0] o1;
 wire sign_exe1, inf1, overflow1, underflow1;
 wire [MSB+3:0] fpn0;
 
-fpMul       #(WID) u1 (clk, ce, a, b, o1, sign_exe1, inf1, overflow1, underflow1);
-fpNormalize #(WID) u2(.clk(clk), .ce(ce), .under_i(underflow1), .i(o1), .o(fpn0) );
-fpRound     #(WID) u3(.clk(clk), .ce(ce), .rm(rm), .i(fpn0), .o(o) );
+fpMul       #(FPWID) u1 (clk, ce, a, b, o1, sign_exe1, inf1, overflow1, underflow1);
+fpNormalize #(FPWID) u2(.clk(clk), .ce(ce), .under_i(underflow1), .i(o1), .o(fpn0) );
+fpRound     #(FPWID) u3(.clk(clk), .ce(ce), .rm(rm), .i(fpn0), .o(o) );
 delay2      #(1)   u4(.clk(clk), .ce(ce), .i(sign_exe1), .o(sign_exe));
 delay2      #(1)   u5(.clk(clk), .ce(ce), .i(inf1), .o(inf));
 delay2      #(1)   u6(.clk(clk), .ce(ce), .i(overflow1), .o(overflow));

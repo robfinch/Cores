@@ -41,18 +41,18 @@
 =============================================================== */
 
 module fpdivr4
-#(	parameter WID = 24 )
+#(	parameter FPWID = 24 )
 (
 	input clk,
 	input ce,
 	input ld,
-	input [WID-1:0] a,
-	input [WID-1:0] b,
-	output reg [WID*2-1:0] q,
-	output [WID-1:0] r,
+	input [FPWID-1:0] a,
+	input [FPWID-1:0] b,
+	output reg [FPWID*2-1:0] q,
+	output [FPWID-1:0] r,
 	output done
 );
-	localparam DMSB = WID-1;
+	localparam DMSB = FPWID-1;
 
 	wire [DMSB:0] rx [1:0];		// remainder holds
 	reg [DMSB:0] rxx;
@@ -62,17 +62,17 @@ module fpdivr4
 	wire sdval;
 	wire sddbz;
 	
-	specialDivider #(WID) u1 (.a(a), .b(b), .q(sdq), .r(sdr), .val(sdval), .divByZero(sdbz) );
+	specialDivider #(FPWID) u1 (.a(a), .b(b), .q(sdq), .r(sdr), .val(sdval), .divByZero(sdbz) );
 
 
-	assign rx[0] = rxx  [DMSB] ? {rxx  ,q[WID*2-1  ]} + b : {rxx  ,q[WID*2-1  ]} - b;
-	assign rx[1] = rx[0][DMSB] ? {rx[0],q[WID*2-1-1]} + b : {rx[0],q[WID*2-1-1]} - b;
+	assign rx[0] = rxx  [DMSB] ? {rxx  ,q[FPWID*2-1  ]} + b : {rxx  ,q[FPWID*2-1  ]} - b;
+	assign rx[1] = rx[0][DMSB] ? {rx[0],q[FPWID*2-1-1]} + b : {rx[0],q[FPWID*2-1-1]} - b;
 
 
 	always @(posedge clk)
 		if (ce) begin
 			if (ld)
-				cnt <= sdval ? 0 : WID;
+				cnt <= sdval ? 0 : FPWID;
 			else if (!done)
 				cnt <= cnt - 1;
 		end
@@ -91,12 +91,12 @@ module fpdivr4
 		if (ce) begin
 			if (ld) begin
 				if (sdval)
-					q = {sdq,{WID{1'b0}}};
+					q = {sdq,{FPWID{1'b0}}};
 				else
-					q = {a,{WID{1'b0}}};
+					q = {a,{FPWID{1'b0}}};
 			end
 			else if (!done) begin
-				q[WID*2-1:2] = q[WID*2-1-2:0];
+				q[FPWID*2-1:2] = q[FPWID*2-1-2:0];
 				q[0] = ~rx[1][DMSB];
 				q[1] = ~rx[0][DMSB];
 			end

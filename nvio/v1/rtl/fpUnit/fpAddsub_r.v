@@ -10,7 +10,7 @@
 //    - floating point adder/subtracter
 //    - ten cycle latency
 //    - can issue every clock cycle
-//    - parameterized width
+//    - parameterized FPWIDth
 //    - IEEE 754 representation
 //
 //
@@ -30,30 +30,30 @@
 // ============================================================================
 
 module fpAddsub(clk, ce, rm, op, a, b, o);
-parameter WID = 128;
-localparam MSB = WID-1;
-localparam EMSB = WID==128 ? 14 :
-                  WID==96 ? 14 :
-                  WID==80 ? 14 :
-                  WID==64 ? 10 :
-				  WID==52 ? 10 :
-				  WID==48 ? 11 :
-				  WID==44 ? 10 :
-				  WID==42 ? 10 :
-				  WID==40 ?  9 :
-				  WID==32 ?  7 :
-				  WID==24 ?  6 : 4;
-localparam FMSB = WID==128 ? 111 :
-                  WID==96 ? 79 :
-                  WID==80 ? 63 :
-                  WID==64 ? 51 :
-				  WID==52 ? 39 :
-				  WID==48 ? 34 :
-				  WID==44 ? 31 :
-				  WID==42 ? 29 :
-				  WID==40 ? 28 :
-				  WID==32 ? 22 :
-				  WID==24 ? 15 : 9;
+parameter FPWID = 128;
+localparam MSB = FPWID-1;
+localparam EMSB = FPWID==128 ? 14 :
+                  FPWID==96 ? 14 :
+                  FPWID==80 ? 14 :
+                  FPWID==64 ? 10 :
+				  FPWID==52 ? 10 :
+				  FPWID==48 ? 11 :
+				  FPWID==44 ? 10 :
+				  FPWID==42 ? 10 :
+				  FPWID==40 ?  9 :
+				  FPWID==32 ?  7 :
+				  FPWID==24 ?  6 : 4;
+localparam FMSB = FPWID==128 ? 111 :
+                  FPWID==96 ? 79 :
+                  FPWID==80 ? 63 :
+                  FPWID==64 ? 51 :
+				  FPWID==52 ? 39 :
+				  FPWID==48 ? 34 :
+				  FPWID==44 ? 31 :
+				  FPWID==42 ? 29 :
+				  FPWID==40 ? 28 :
+				  FPWID==32 ? 22 :
+				  FPWID==24 ? 15 : 9;
 
 localparam FX = (FMSB+2)*2-1;	// the MSB of the expanded fraction
 localparam EX = FX + 1 + EMSB + 1 + 1 - 1;
@@ -62,8 +62,8 @@ input clk;		// system clock
 input ce;		// core clock enable
 input [2:0] rm;	// rounding mode
 input op;		// operation 0 = add, 1 = subtract
-input [WID-1:0] a;	// operand a
-input [WID-1:0] b;	// operand b
+input [FPWID-1:0] a;	// operand a
+input [FPWID-1:0] b;	// operand b
 output [EX:0] o;	// output
 
 wire so;			// sign output
@@ -76,8 +76,8 @@ assign o = {so,xo,mo};
 // Clock edge #1
 // - Decompose inputs into more digestible values.
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-wire [WID-1:0] a1;
-wire [WID-1:0] b1;
+wire [FPWID-1:0] a1;
+wire [FPWID-1:0] b1;
 wire sa1, sb1;
 wire [EMSB:0] xa1, xb1;
 wire [FMSB:0] ma1, mb1;
@@ -89,8 +89,8 @@ wire aNan1, bNan1;
 wire az1, bz1;	// operand a,b is zero
 reg op1;
 
-fpDecompReg #(WID) u1a (.clk(clk), .ce(ce), .i(a), .o(a1), .sgn(sa1), .exp(xa1), .man(ma1), .fract(fracta1), .xz(adn1), .vz(az1), .xinf(xaInf1), .inf(aInf1), .nan(aNan1) );
-fpDecompReg #(WID) u1b (.clk(clk), .ce(ce), .i(b), .o(b1), .sgn(sb1), .exp(xb1), .man(mb1), .fract(fractb1), .xz(bdn1), .vz(bz1), .xinf(xbInf1), .inf(bInf1), .nan(bNan1) );
+fpDecompReg #(FPWID) u1a (.clk(clk), .ce(ce), .i(a), .o(a1), .sgn(sa1), .exp(xa1), .man(ma1), .fract(fracta1), .xz(adn1), .vz(az1), .xinf(xaInf1), .inf(aInf1), .nan(aNan1) );
+fpDecompReg #(FPWID) u1b (.clk(clk), .ce(ce), .i(b), .o(b1), .sgn(sb1), .exp(xb1), .man(mb1), .fract(fractb1), .xz(bdn1), .vz(bz1), .xinf(xbInf1), .inf(bInf1), .nan(bNan1) );
 delay1 #(1)  dop1(.clk(clk), .ce(ce), .i(op), .o(op1) );
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
@@ -248,15 +248,15 @@ delay1 #(FMSB+2) dmsf4(.clk(clk), .ce(ce), .i(mfs4), .o(mfs5));
 
 generate
 begin
-if (WID==128)
+if (FPWID==128)
     redor128 u1 (.a(xdif4), .b({mfs4,2'b0}), .o(sticky) );
-else if (WID==96)
+else if (FPWID==96)
     redor96 u1 (.a(xdif4), .b({mfs4,2'b0}), .o(sticky) );
-else if (WID==80)
+else if (FPWID==80)
     redor80 u1 (.a(xdif4), .b({mfs4,2'b0}), .o(sticky) );
-else if (WID==64)
+else if (FPWID==64)
     redor64 u1 (.a(xdif4), .b({mfs4,2'b0}), .o(sticky) );
-else if (WID==32)
+else if (FPWID==32)
     redor32 u1 (.a(xdif4), .b({mfs4,2'b0}), .o(sticky) );
 end
 endgenerate
@@ -343,30 +343,30 @@ if (ce)
 endmodule
 
 module fpAddsubnr_r(clk, ce, rm, op, a, b, o);
-parameter WID = 128;
-localparam MSB = WID-1;
-localparam EMSB = WID==128 ? 14 :
-                  WID==96 ? 14 :
-                  WID==80 ? 14 :
-                  WID==64 ? 10 :
-				  WID==52 ? 10 :
-				  WID==48 ? 11 :
-				  WID==44 ? 10 :
-				  WID==42 ? 10 :
-				  WID==40 ?  9 :
-				  WID==32 ?  7 :
-				  WID==24 ?  6 : 4;
-localparam FMSB = WID==128 ? 111 :
-                  WID==96 ? 79 :
-                  WID==80 ? 63 :
-                  WID==64 ? 51 :
-				  WID==52 ? 39 :
-				  WID==48 ? 34 :
-				  WID==44 ? 31 :
-				  WID==42 ? 29 :
-				  WID==40 ? 28 :
-				  WID==32 ? 22 :
-				  WID==24 ? 15 : 9;
+parameter FPWID = 128;
+localparam MSB = FPWID-1;
+localparam EMSB = FPWID==128 ? 14 :
+                  FPWID==96 ? 14 :
+                  FPWID==80 ? 14 :
+                  FPWID==64 ? 10 :
+				  FPWID==52 ? 10 :
+				  FPWID==48 ? 11 :
+				  FPWID==44 ? 10 :
+				  FPWID==42 ? 10 :
+				  FPWID==40 ?  9 :
+				  FPWID==32 ?  7 :
+				  FPWID==24 ?  6 : 4;
+localparam FMSB = FPWID==128 ? 111 :
+                  FPWID==96 ? 79 :
+                  FPWID==80 ? 63 :
+                  FPWID==64 ? 51 :
+				  FPWID==52 ? 39 :
+				  FPWID==48 ? 34 :
+				  FPWID==44 ? 31 :
+				  FPWID==42 ? 29 :
+				  FPWID==40 ? 28 :
+				  FPWID==32 ? 22 :
+				  FPWID==24 ? 15 : 9;
 
 localparam FX = (FMSB+2)*2-1;	// the MSB of the expanded fraction
 localparam EX = FX + 1 + EMSB + 1 + 1 - 1;
@@ -382,8 +382,8 @@ output [MSB:0] o;	// output
 wire [EX:0] o1;
 wire [MSB+3:0] fpn0;
 
-fpAddsub_r  #(WID) u1 (clk, ce, rm, op, a, b, o1);
-fpNormalize #(WID) u2(.clk(clk), .ce(ce), .under(1'b0), .i(o1), .o(fpn0) );
-fpRoundReg  #(WID) u3(.clk(clk), .ce(ce), .rm(rm), .i(fpn0), .o(o) );
+fpAddsub_r  #(FPWID) u1 (clk, ce, rm, op, a, b, o1);
+fpNormalize #(FPWID) u2(.clk(clk), .ce(ce), .under(1'b0), .i(o1), .o(fpn0) );
+fpRoundReg  #(FPWID) u3(.clk(clk), .ce(ce), .rm(rm), .i(fpn0), .o(o) );
 
 endmodule

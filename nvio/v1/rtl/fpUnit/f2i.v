@@ -8,7 +8,7 @@
 //	f2i.v
 //		- convert floating point to integer
 //		- single cycle latency floating point unit
-//		- parameterized width
+//		- parameterized FPWIDth
 //		- IEEE 754 representation
 //
 //
@@ -33,7 +33,7 @@
 `include "fpConfig.sv"
 
 module f2i(clk, ce, i, o, overflow);
-parameter WID = 32;
+parameter FPWID = 32;
 `include "fpSize.sv"
 input clk;
 input ce;

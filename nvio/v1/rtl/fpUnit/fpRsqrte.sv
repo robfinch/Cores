@@ -36,7 +36,7 @@
 `define RSQRT_TBL		1'b1
 
 module fpRsqrte(clk, ce, ld, a, o);
-parameter WID = 80;
+parameter FPWID = 80;
 `include "fpSize.sv"
 input clk;
 input ce;

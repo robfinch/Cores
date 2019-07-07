@@ -29,10 +29,10 @@
 `include "fpConfig.sv"
 
 module fpCompare(a, b, o, nanx);
-parameter WID = 80;
+parameter FPWID = 64;
 `include "fpSize.sv"
 
-input [WID-1+`EXTRA_BITS:0] a, b;
+input [FPWID-1+`EXTRA_BITS:0] a, b;
 output [4:0] o;
 reg [4:0] o;
 output nanx;
@@ -47,8 +47,8 @@ wire [FMSB:0] mb;
 wire az, bz;
 wire nan_a, nan_b;
 
-fpDecomp #(WID) u1(.i(a), .sgn(sa), .exp(xa), .man(ma), .vz(az), .qnan(), .snan(), .nan(nan_a) );
-fpDecomp #(WID) u2(.i(b), .sgn(sb), .exp(xb), .man(mb), .vz(bz), .qnan(), .snan(), .nan(nan_b) );
+fpDecomp #(FPWID) u1(.i(a), .sgn(sa), .exp(xa), .man(ma), .vz(az), .qnan(), .snan(), .nan(nan_a) );
+fpDecomp #(FPWID) u2(.i(b), .sgn(sb), .exp(xb), .man(mb), .vz(bz), .qnan(), .snan(), .nan(nan_b) );
 
 wire unordered = nan_a | nan_b;
 

@@ -38,21 +38,21 @@
 
 module fpDiv(rst, clk, clk4x, ce, ld, op, a, b, o, done, sign_exe, overflow, underflow);
 
-parameter WID = 80;
+parameter FPWID = 64;
 `include "fpSize.sv"
 // FADD is a constant that makes the divider width a multiple of four and includes eight extra bits.			
-localparam FADD = WID+`EXTRA_BITS==128 ? 9 :
-				  WID+`EXTRA_BITS==96 ? 9 :
-				  WID+`EXTRA_BITS==84 ? 9 :
-				  WID+`EXTRA_BITS==80 ? 9 :
-				  WID+`EXTRA_BITS==64 ? 13 :
-				  WID+`EXTRA_BITS==52 ? 9 :
-				  WID+`EXTRA_BITS==48 ? 10 :
-				  WID+`EXTRA_BITS==44 ? 9 :
-				  WID+`EXTRA_BITS==42 ? 11 :
-				  WID+`EXTRA_BITS==40 ? 8 :
-				  WID+`EXTRA_BITS==32 ? 10 :
-				  WID+`EXTRA_BITS==24 ? 9 : 11;
+localparam FADD = FPWID+`EXTRA_BITS==128 ? 9 :
+				  FPWID+`EXTRA_BITS==96 ? 9 :
+				  FPWID+`EXTRA_BITS==84 ? 9 :
+				  FPWID+`EXTRA_BITS==80 ? 9 :
+				  FPWID+`EXTRA_BITS==64 ? 13 :
+				  FPWID+`EXTRA_BITS==52 ? 9 :
+				  FPWID+`EXTRA_BITS==48 ? 10 :
+				  FPWID+`EXTRA_BITS==44 ? 9 :
+				  FPWID+`EXTRA_BITS==42 ? 11 :
+				  FPWID+`EXTRA_BITS==40 ? 8 :
+				  FPWID+`EXTRA_BITS==32 ? 10 :
+				  FPWID+`EXTRA_BITS==24 ? 9 : 11;
 				  
 input rst;
 input clk;
@@ -112,8 +112,8 @@ wire signed [7:0] lzcnt;
 // - calculate fraction
 // -----------------------------------------------------------
 
-fpDecomp #(WID) u1a (.i(a), .sgn(sa), .exp(xa), .fract(fracta), .xz(a_dn), .vz(az), .inf(aInf), .nan(aNan) );
-fpDecomp #(WID) u1b (.i(b), .sgn(sb), .exp(xb), .fract(fractb), .xz(b_dn), .vz(bz), .inf(bInf), .nan(bNan) );
+fpDecomp #(FPWID) u1a (.i(a), .sgn(sa), .exp(xa), .fract(fracta), .xz(a_dn), .vz(az), .inf(aInf), .nan(aNan) );
+fpDecomp #(FPWID) u1b (.i(b), .sgn(sb), .exp(xb), .fract(fractb), .xz(b_dn), .vz(bz), .inf(bInf), .nan(bNan) );
 
 // Compute the exponent.
 // - correct the exponent for denormalized operands
@@ -197,7 +197,7 @@ else if (ce) begin
 endmodule
 
 module fpDivnr(rst, clk, clk4x, ce, ld, op, a, b, o, rm, done, sign_exe, inf, overflow, underflow);
-parameter WID=32;
+parameter FPWID=64;
 `include "fpSize.sv"
 
 input rst;
@@ -220,9 +220,9 @@ wire sign_exe1, inf1, overflow1, underflow1;
 wire [MSB+3:0] fpn0;
 wire done1;
 
-fpDiv       #(WID) u1 (rst, clk, clk4x, ce, ld, op, a, b, o1, done1, sign_exe1, overflow1, underflow1);
-fpNormalize #(WID) u2(.clk(clk), .ce(ce), .under_i(underflow1), .i(o1), .o(fpn0) );
-fpRound     #(WID) u3(.clk(clk), .ce(ce), .rm(rm), .i(fpn0), .o(o) );
+fpDiv       #(FPWID) u1 (rst, clk, clk4x, ce, ld, op, a, b, o1, done1, sign_exe1, overflow1, underflow1);
+fpNormalize #(FPWID) u2(.clk(clk), .ce(ce), .under_i(underflow1), .i(o1), .o(fpn0) );
+fpRound     #(FPWID) u3(.clk(clk), .ce(ce), .rm(rm), .i(fpn0), .o(o) );
 delay2      #(1)   u4(.clk(clk), .ce(ce), .i(sign_exe1), .o(sign_exe));
 delay2      #(1)   u5(.clk(clk), .ce(ce), .i(inf1), .o(inf));
 delay2      #(1)   u6(.clk(clk), .ce(ce), .i(overflow1), .o(overflow));

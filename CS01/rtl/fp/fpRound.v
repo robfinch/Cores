@@ -29,7 +29,7 @@
 `include "fpConfig.sv"
 
 module fpRound(clk, ce, rm, i, o);
-parameter WID = 80;
+parameter FPWID = 64;
 `include "fpSize.sv"
 input clk;
 input ce;

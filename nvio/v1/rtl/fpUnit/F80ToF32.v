@@ -1,4 +1,3 @@
-`timescale 1ns / 1ps
 // ============================================================================
 //        __
 //   \\__/ o\    (C) 2006-2019  Robert Finch, Waterloo
@@ -22,6 +21,8 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.    
 //                                                                          
 // ============================================================================
+
+`include "fpConfig.sv"
 
 module F80ToF32(a, o);
 input [79:0] a;

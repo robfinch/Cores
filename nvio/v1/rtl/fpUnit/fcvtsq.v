@@ -26,11 +26,13 @@
 //                                                                          
 // ============================================================================
 
+`include "fpConfig.sv"
+
 module fcvtsq(a, o);
-parameter WID = 128;
+parameter FPWID = 128;
 `include "fpSize.sv"
 input [31:0] a;
-output reg [WID-1:0] o;
+output reg [FPWID-1:0] o;
 wire sa;
 wire [7:0] xa;
 wire [22:0] ma;

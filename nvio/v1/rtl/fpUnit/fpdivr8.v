@@ -26,14 +26,14 @@
 // ============================================================================
 
 module fpdivr8(clk, ld, a, b, q, r, done, lzcnt);
-parameter WID = 112;
-localparam DMSB = WID-1;
+parameter FPWID = 112;
+localparam DMSB = FPWID-1;
 input clk;
 input ld;
-input [WID-1:0] a;
-input [WID-1:0] b;
-output reg [WID-1:0] q;
-output [WID-1:0] r;
+input [FPWID-1:0] a;
+input [FPWID-1:0] b;
+output reg [FPWID-1:0] q;
+output [FPWID-1:0] r;
 output reg done;
 output reg [7:0] lzcnt;
 
@@ -47,19 +47,19 @@ reg gotnz;
 
 wire [7:0] maxcnt;
 wire [2:0] n1;
-assign maxcnt = WID/3+1;
+assign maxcnt = FPWID/3+1;
 assign b0 = b < rxx;
 assign r1 = b0 ? rxx - b : rxx;
-assign b1 = b < {r1,q[WID-1]};
-assign r2 = b1 ? {r1,q[WID-1]} - b : {r1,q[WID-1]};
-assign b2 = b < {r2,q[WID-2]};
-assign r3 = b2 ? {r2,q[WID-2]} - b : {r2,q[WID-2]};
+assign b1 = b < {r1,q[FPWID-1]};
+assign r2 = b1 ? {r1,q[FPWID-1]} - b : {r1,q[FPWID-1]};
+assign b2 = b < {r2,q[FPWID-2]};
+assign r3 = b2 ? {r2,q[FPWID-2]} - b : {r2,q[FPWID-2]};
 
 always @(posedge clk)
     if (ld)
-        rxx <= {WID{1'b0}};
+        rxx <= {FPWID{1'b0}};
     else if (!done)
-        rxx <= {r3,q[WID-3]};
+        rxx <= {r3,q[FPWID-3]};
 
 always @(posedge clk)
 begin
@@ -80,7 +80,7 @@ always @(posedge clk)
 		q <= a;
 	end
 	else if (!done) begin
-		q[WID-1:3] <= q[WID-4:0];
+		q[FPWID-1:3] <= q[FPWID-4:0];
 		q[2] <= b0;
 		q[1] <= b1;
 		q[0] <= b2;

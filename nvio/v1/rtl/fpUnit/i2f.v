@@ -1,13 +1,13 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2006-2016  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2006-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
 //	i2f.v
 //  - convert integer to floating point
-//  - parameterized width
+//  - parameterized FPWIDth
 //  - IEEE 754 representation
 //  - pipelineable
 //  - single cycle latency
@@ -28,13 +28,13 @@
 // ============================================================================
 
 module i2f
-#(	parameter WID = 32)
+#(	parameter FPWID = 32)
 (
 	input clk,
 	input ce,
 	input [2:0] rm,			// rounding mode
-	input [WID-1:0] i,		// integer input
-	output [WID-1:0] o		// float output
+	input [FPWID-1:0] i,		// integer input
+	output [FPWID-1:0] o		// float output
 );
 `include "fpSize.sv"
 
@@ -50,21 +50,21 @@ wire [2:0] rmd;
 
 delay1 #(3)   u0 (.clk(clk), .ce(ce), .i(rm),     .o(rmd) );
 delay1 #(1)   u1 (.clk(clk), .ce(ce), .i(i==0),   .o(iz) );
-delay1 #(WID) u2 (.clk(clk), .ce(ce), .i(imag1),  .o(imag) );
+delay1 #(FPWID) u2 (.clk(clk), .ce(ce), .i(imag1),  .o(imag) );
 delay1 #(1)   u3 (.clk(clk), .ce(ce), .i(i[MSB]), .o(so) );
 generate 
-if (WID==128) begin
+if (FPWID==128) begin
 cntlz128Reg    u4 (.clk(clk), .ce(ce), .i(imag1), .o(lz) );
-end else if (WID==96) begin
+end else if (FPWID==96) begin
 cntlz96Reg    u4 (.clk(clk), .ce(ce), .i(imag1), .o(lz[6:0]) );
 assign lz[7]=1'b0;
-end else if (WID==84) begin
+end else if (FPWID==84) begin
 cntlz96Reg    u4 (.clk(clk), .ce(ce), .i({imag1,12'hfff}), .o(lz[6:0]) );
 assign lz[7]=1'b0;
-end else if (WID==80) begin
+end else if (FPWID==80) begin
 cntlz80Reg    u4 (.clk(clk), .ce(ce), .i(imag1), .o(lz[6:0]) );
 assign lz[7]=1'b0;
-end else if (WID==64) begin
+end else if (FPWID==64) begin
 cntlz64Reg    u4 (.clk(clk), .ce(ce), .i(imag1), .o(lz[6:0]) );
 assign lz[7]=1'b0;
 end else begin
@@ -73,7 +73,7 @@ assign lz[7:6]=2'b00;
 end
 endgenerate
 
-assign wd = zeroXp - 1 + WID - lz;	// constant except for lz
+assign wd = zeroXp - 1 + FPWID - lz;	// constant except for lz
 
 wire [EMSB:0] xo = iz ? 0 : wd;
 wire [MSB:0] simag = imag << lz;		// left align number

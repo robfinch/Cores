@@ -29,7 +29,7 @@
 
 //`define MIN_LATENCY		1'b1
 
-// Number of bits extra beyond specified width for calculation results
+// Number of bits extra beyond specified FPWIDth for calculation results
 // should be a multiple of four
-`define EXTRA_BITS		4
+`define EXTRA_BITS		0
 

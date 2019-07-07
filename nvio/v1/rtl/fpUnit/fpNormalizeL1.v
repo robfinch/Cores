@@ -9,7 +9,7 @@
 //	fpNormalize.v
 //    - floating point normalization unit
 //    - one cycle latency
-//    - parameterized width
+//    - parameterized FPWIDth
 //    - IEEE 754 representation
 //
 //
@@ -33,7 +33,7 @@
 // The mantissa is assumed to start with two whole bits on
 // the left. The remaining bits are fractional.
 //
-// The width of the incoming format is reduced via a generation
+// The FPWIDth of the incoming format is reduced via a generation
 // of sticky bit in place of the low order fractional bits.
 //
 // On an underflowed input, the incoming exponent is assumed
@@ -41,14 +41,14 @@
 // ============================================================================
 
 module fpNormalize(clk, ce, under, i, o);
-parameter WID = 128;
+parameter FPWID = 128;
 `include "fpSize.sv"
 
 input clk;
 input ce;
 input under;
 input [EX:0] i;		// expanded format input
-output [WID+2:0] o;		// normalized output + guard, sticky and round bits, + 1 whole digit
+output [FPWID+2:0] o;		// normalized output + guard, sticky and round bits, + 1 whole digit
 
 // variables
 wire so;
@@ -81,27 +81,27 @@ wire [7:0] leadingZeros2;
 
 generate
 begin
-if (WID <= 32) begin
+if (FPWID <= 32) begin
 cntlz32Reg clz0 (.clk(clk), .ce(ce), .i({mo1,5'b0}), .o(leadingZeros2) );
 assign leadingZeros2[7:6] = 2'b00;
 end
-else if (WID<=64) begin
+else if (FPWID<=64) begin
 assign leadingZeros2[7] = 1'b0;
 cntlz64Reg clz0 (.clk(clk), .ce(ce), .i({mo1,8'h0}), .o(leadingZeros2) );
 end
-else if (WID<=80) begin
+else if (FPWID<=80) begin
 assign leadingZeros2[7] = 1'b0;
 cntlz80Reg clz0 (.clk(clk), .ce(ce), .i({mo1,12'b0}), .o(leadingZeros2) );
 end
-else if (WID<=84) begin
+else if (FPWID<=84) begin
 assign leadingZeros2[7] = 1'b0;
 cntlz96Reg clz0 (.clk(clk), .ce(ce), .i({mo1,24'b0}), .o(leadingZeros2) );
 end
-else if (WID<=96) begin
+else if (FPWID<=96) begin
 assign leadingZeros2[7] = 1'b0;
 cntlz96Reg clz0 (.clk(clk), .ce(ce), .i({mo1,12'b0}), .o(leadingZeros2) );
 end
-else if (WID<=128)
+else if (FPWID<=128)
 cntlz128Reg clz0 (.clk(clk), .ce(ce), .i({mo1,12'b0}), .o(leadingZeros2) );
 end
 endgenerate

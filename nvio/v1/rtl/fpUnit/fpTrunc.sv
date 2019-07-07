@@ -8,7 +8,7 @@
 //	fpTrunc.v
 //		- convert floating point to integer (chop off fractional bits)
 //		- single cycle latency floating point unit
-//		- parameterized width
+//		- parameterized FPWIDth
 //		- IEEE 754 representation
 //
 //
@@ -30,7 +30,7 @@
 `include "fpConfig.sv"
 
 module fpTrunc(clk, ce, i, o, overflow);
-parameter WID = 32;
+parameter FPWID = 32;
 `include "fpSize.sv"
 input clk;
 input ce;

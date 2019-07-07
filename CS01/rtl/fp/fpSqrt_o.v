@@ -34,10 +34,7 @@
 module fpSqrt(rst, clk, ce, ld, a, o, done, sqrinf, sqrneg);
 parameter FPWID = 32;
 `include "fpSize.sv"
-localparam pShiftAmt =
-	FPWID==80 ? 48 :
-	FPWID==64 ? 36 :
-	FPWID==32 ? 7 : (FMSB+1-16);
+localparam SHIFT_AMT = 36;
 input rst;
 input clk;
 input ce;
@@ -67,7 +64,7 @@ wire [EMSB:0] bias = {1'b0,{EMSB{1'b1}}};	//2^0 exponent
 wire [FMSB:0] qNaN  = {1'b1,{FMSB{1'b0}}};
 
 // variables
-wire [EMSB+2:0] ex1;	// sum of exponents
+wire [EMSB+3:0] ex1;	// sum of exponents
 wire [FX:0] sqrto;
 
 // Operands
@@ -80,7 +77,6 @@ wire aInf;
 wire aNan;
 wire done1;
 wire [7:0] lzcnt;
-wire [MSB:0] aa;
 
 // -----------------------------------------------------------
 // - decode the input operand
@@ -89,12 +85,9 @@ wire [MSB:0] aa;
 // - calculate fraction
 // -----------------------------------------------------------
 
-fpDecompReg #(FPWID) u1
+fpDecomp #(FPWID) u1
 (
-	.clk(clk),
-	.ce(ce),
 	.i(a),
-	.o(aa),
 	.sgn(sa),
 	.exp(xa),
 	.fract(fracta),
@@ -104,24 +97,25 @@ fpDecompReg #(FPWID) u1
 	.nan(aNan)
 );
 
+// If the exponent is odd, adding 1 will make it even, but then a right shift 
+// of the mantissa is needed later.
+// If the exponent is even, adding 1 will make it odd, but the odd bit will
+// be trimmed off by the right shift.
 assign ex1 = xa + 8'd1;
 assign so = 1'b0;				// square root of positive numbers only
-assign xo = (ex1 >> 1) + (bias >> 1);	// divide by 2 cuts the bias in half, so 1/2 of it is added back in.
-assign mo = aNan ? {1'b1,aa[FMSB:0],{FMSB+1{1'b0}}} : (sqrto << pShiftAmt);
+assign xo = (ex1 + bias) >> 1;	// divide by 2 cuts the bias in half, so 1/2 of it is added back in.
+assign mo = aNan ? {1'b1,a[FMSB:0],{FMSB+1{1'b0}}} : (sqrto << SHIFT_AMT);
 assign sqrinf = aInf;
 assign sqrneg = !az & so;
 
-wire [FMSB+2:0] fracta1 = ex1[0] ? {1'b0,fracta} << 1 : {2'b0,fracta};
-
-wire ldd;
-delay1 #(1) u3 (.clk(clk), .ce(ce), .i(ld), .o(ldd));
+wire [FMSB+3:0] fracta1 = ex1[0] ? {1'b0,fracta} << 1 : {2'b0,fracta};
 
 isqrt #(FX+1) u2
 (
 	.rst(rst),
 	.clk(clk),
 	.ce(ce),
-	.ld(ldd),
+	.ld(ld),
 	.a({1'b0,fracta1,{FMSB+1{1'b0}}}),
 	.o(sqrto),
 	.done(done)
@@ -139,7 +133,7 @@ endcase
 endmodule
 
 module fpSqrtnr(rst, clk, ce, ld, a, o, rm, done, inf, sqrinf, sqrneg);
-parameter FPWID=32;
+parameter FPWID=64;
 `include "fpSize.sv"
 
 input rst;
@@ -161,7 +155,7 @@ wire done1;
 
 fpSqrt      #(FPWID) u1 (rst, clk, ce, ld, a, o1, done1, sqrinf, sqrneg);
 fpNormalize #(FPWID) u2(.clk(clk), .ce(ce), .under_i(1'b0), .i(o1), .o(fpn0) );
-fpRound  #(FPWID) u3(.clk(clk), .ce(ce), .rm(rm), .i(fpn0), .o(o) );
+fpRound     #(FPWID) u3(.clk(clk), .ce(ce), .rm(rm), .i(fpn0), .o(o) );
 delay2      #(1)   u5(.clk(clk), .ce(ce), .i(inf1), .o(inf));
 delay2		#(1)   u8(.clk(clk), .ce(ce), .i(done1), .o(done));
 endmodule

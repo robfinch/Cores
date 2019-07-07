@@ -42,7 +42,7 @@
 `include "fpConfig.sv"
 
 module fpNormalize(clk, ce, i, o, under_i, under_o, inexact_o);
-parameter WID = 80;
+parameter FPWID = 64;
 `include "fpSize.sv"
 
 input clk;
@@ -165,27 +165,27 @@ delay3 #(1)      u52 (.clk(clk), .ce(ce), .i(xInf2c), .o(xInf5) );
 
 generate
 begin
-if (WID+`EXTRA_BITS <= 32) begin
+if (FPWID+`EXTRA_BITS <= 32) begin
 cntlz32Reg clz0 (.clk(clk), .ce(ce), .i({mo4,5'b0}), .o(leadingZeros5) );
 assign leadingZeros5[7:6] = 2'b00;
 end
-else if (WID+`EXTRA_BITS<=64) begin
+else if (FPWID+`EXTRA_BITS<=64) begin
 assign leadingZeros5[7] = 1'b0;
 cntlz64Reg clz0 (.clk(clk), .ce(ce), .i({mo4,8'h0}), .o(leadingZeros5) );
 end
-else if (WID+`EXTRA_BITS<=80) begin
+else if (FPWID+`EXTRA_BITS<=80) begin
 assign leadingZeros5[7] = 1'b0;
 cntlz80Reg clz0 (.clk(clk), .ce(ce), .i({mo4,12'b0}), .o(leadingZeros5) );
 end
-else if (WID+`EXTRA_BITS<=84) begin
+else if (FPWID+`EXTRA_BITS<=84) begin
 assign leadingZeros5[7] = 1'b0;
 cntlz96Reg clz0 (.clk(clk), .ce(ce), .i({mo4,24'b0}), .o(leadingZeros5) );
 end
-else if (WID+`EXTRA_BITS<=96) begin
+else if (FPWID+`EXTRA_BITS<=96) begin
 assign leadingZeros5[7] = 1'b0;
 cntlz96Reg clz0 (.clk(clk), .ce(ce), .i({mo4,12'b0}), .o(leadingZeros5) );
 end
-else if (WID+`EXTRA_BITS<=128)
+else if (FPWID+`EXTRA_BITS<=128)
 cntlz128Reg clz0 (.clk(clk), .ce(ce), .i({mo4,12'b0}), .o(leadingZeros5) );
 end
 endgenerate

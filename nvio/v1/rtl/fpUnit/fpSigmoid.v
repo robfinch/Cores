@@ -44,7 +44,7 @@
 `define FIVETWELVE32	32'h48000000
 
 module fpSigmoid(clk, ce, a, o);
-parameter WID = 128;
+parameter FPWID = 128;
 `include "fpSize.sv"
 input clk;
 input ce;
@@ -63,18 +63,18 @@ reg [31:0] SigmoidLUT [0:1023];
 // Check if the input is in the range (-8 to +8)
 // We take the absolute value by trimming off the sign bit.
 generate begin : ext
-if (WID+`EXTRA_BITS==80)
-fp_cmp_unit #(WID) u1 (.a(a & 80'h7FFFFFFFFFFFFFFFFFFF), .b(`EIGHT80), .o(cmp1_o), .nanx() );
-else if (WID+`EXTRA_BITS==64)
-fp_cmp_unit #(WID) u1 (.a(a & 64'h7FFFFFFFFFFFFFFF), .b(`EIGHT64), .o(cmp1_o), .nanx() );
-else if (WID+`EXTRA_BITS==40)
-fp_cmp_unit #(WID) u1 (.a(a & 40'h7FFFFFFFFF), .b(`EIGHT40), .o(cmp1_o), .nanx() );
-else if (WID+`EXTRA_BITS==32)
-fp_cmp_unit #(WID) u1 (.a(a & 32'h7FFFFFFF), .b(`EIGHT32), .o(cmp1_o), .nanx() );
+if (FPWID+`EXTRA_BITS==80)
+fp_cmp_unit #(FPWID) u1 (.a(a & 80'h7FFFFFFFFFFFFFFFFFFF), .b(`EIGHT80), .o(cmp1_o), .nanx() );
+else if (FPWID+`EXTRA_BITS==64)
+fp_cmp_unit #(FPWID) u1 (.a(a & 64'h7FFFFFFFFFFFFFFF), .b(`EIGHT64), .o(cmp1_o), .nanx() );
+else if (FPWID+`EXTRA_BITS==40)
+fp_cmp_unit #(FPWID) u1 (.a(a & 40'h7FFFFFFFFF), .b(`EIGHT40), .o(cmp1_o), .nanx() );
+else if (FPWID+`EXTRA_BITS==32)
+fp_cmp_unit #(FPWID) u1 (.a(a & 32'h7FFFFFFF), .b(`EIGHT32), .o(cmp1_o), .nanx() );
 else begin
 	always @*
 	begin
-		$display("Sigmoid: unsupported width.");
+		$display("Sigmoid: unsupported FPWIDth.");
 		$stop;
 	end
 end
@@ -90,7 +90,7 @@ end
 wire sa;
 wire [EMSB:0] xa;
 wire [FMSB:0] ma;
-fpDecomp #(WID) u1 (.i(a), .sgn(sa), .exp(xa), .man(ma), .fract(), .xz(), .vz(), .xinf(), .inf(), .nan() );
+fpDecomp #(FPWID) u1 (.i(a), .sgn(sa), .exp(xa), .man(ma), .fract(), .xz(), .vz(), .xinf(), .inf(), .nan() );
 
 reg [9:0] lutadr;
 wire [5:0] lzcnt;
@@ -103,13 +103,13 @@ wire [31:0] man32b = lutadr==10'h3ff ? man32a : SigmoidLUT[lutadr+1];
 wire [31:0] man32;
 wire [79:0] sig80;
 generate begin : la
-if (WID >= 40) begin
+if (FPWID >= 40) begin
 wire [15:0] eps = ma[FMSB-10:FMSB-10-15];
 wire [47:0] p = (man32b - man32a) * eps;
 assign man32 = man32a + (p >> 26);
 cntlz32 u3 (man32,lzcnt);
 end
-else if (WID==32) begin
+else if (FPWID==32) begin
 wire [12:0] eps = ma[FMSB-10:0];
 wire [43:0] p = (man32b - man32a) * eps;
 assign man32 = man32a + (p >> 26);
@@ -121,7 +121,7 @@ endgenerate
 wire [31:0] man32s = man32 << (lzcnt + 2'd1);	// +1 to hide leading one
 
 // Convert to integer
-f2i #(WID) u2
+f2i #(FPWID) u2
 (
   .clk(clk),
   .ce(1'b1),
@@ -138,12 +138,12 @@ always @(posedge clk)
   if(ce) lutadr <= i1[9:0];
 reg sa1,sa2;
 always @(posedge clk)
-if (ce) sa1 <= a[WID-1];
+if (ce) sa1 <= a[FPWID-1];
 always @(posedge clk)
 if (ce) sa2 <= sa1;
 
 generate begin : ooo
-if (WID==80) begin
+if (FPWID==80) begin
 wire [14:0] ex1 = 15'h3ffe - lzcnt;
 always @(posedge clk)
 if (ce) begin
@@ -153,7 +153,7 @@ if (ce) begin
 	  o <= sa1 ? 80'h0 : `ONE80; 
 end
 end
-else if (WID==64) begin
+else if (FPWID==64) begin
 wire [10:0] ex1 = 11'h3fe - lzcnt;
 always @(posedge clk)
 if (ce) begin
@@ -163,7 +163,7 @@ if (ce) begin
 	  o <= sa1 ? 64'h0 : `ONE64; 
 end
 end
-else if (WID==40) begin
+else if (FPWID==40) begin
 wire [9:0] ex1 = 10'h1fe - lzcnt;
 always @(posedge clk)
 if (ce) begin
@@ -173,7 +173,7 @@ if (ce) begin
 	  o <= sa1 ? 40'h0 : `ONE40; 
 end
 end
-else if (WID==32) begin
+else if (FPWID==32) begin
 wire [7:0] ex1 = 8'h7e - lzcnt;
 always @(posedge clk)
 if (ce) begin

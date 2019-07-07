@@ -8,7 +8,7 @@
 //	fpFMA.v
 //		- floating point fused multiplier + adder
 //		- can issue every clock cycle
-//		- parameterized width
+//		- parameterized FPWIDth
 //		- IEEE 754 representation
 //
 //
@@ -30,7 +30,7 @@
 `include "fpConfig.sv"
 
 module fpFMA (clk, ce, op, rm, a, b, c, o, under, over, inf, zero);
-parameter WID = 32;
+parameter FPWID = 32;
 `include "fpSize.sv"
 
 input clk;
@@ -67,9 +67,9 @@ wire az1, bz1, cz1;
 wire aInf1, bInf1, cInf1;
 reg op1;
 
-fpDecompReg #(WID) u1a (.clk(clk), .ce(ce), .i(a), .sgn(sa1), .exp(xa1), .fract(fracta1), .xz(a_dn1), .vz(az1), .inf(aInf1), .nan(aNan1) );
-fpDecompReg #(WID) u1b (.clk(clk), .ce(ce), .i(b), .sgn(sb1), .exp(xb1), .fract(fractb1), .xz(b_dn1), .vz(bz1), .inf(bInf1), .nan(bNan1) );
-fpDecompReg #(WID) u1c (.clk(clk), .ce(ce), .i(c), .sgn(sc1), .exp(xc1), .fract(fractc1), .xz(c_dn1), .vz(cz1), .inf(cInf1), .nan(cNan1) );
+fpDecompReg #(FPWID) u1a (.clk(clk), .ce(ce), .i(a), .sgn(sa1), .exp(xa1), .fract(fracta1), .xz(a_dn1), .vz(az1), .inf(aInf1), .nan(aNan1) );
+fpDecompReg #(FPWID) u1b (.clk(clk), .ce(ce), .i(b), .sgn(sb1), .exp(xb1), .fract(fractb1), .xz(b_dn1), .vz(bz1), .inf(bInf1), .nan(bNan1) );
+fpDecompReg #(FPWID) u1c (.clk(clk), .ce(ce), .i(c), .sgn(sc1), .exp(xc1), .fract(fractc1), .xz(c_dn1), .vz(cz1), .inf(cInf1), .nan(cNan1) );
 
 always @(posedge clk)
 	if (ce) op1 <= op;
@@ -116,7 +116,7 @@ always @(posedge clk)
 
 reg [FX:0] fract5;
 generate
-if (WID==84) begin
+if (FPWID+`EXTRA_BITS==84) begin
 reg [33:0] p00,p01,p02,p03;
 reg [33:0] p10,p11,p12,p13;
 reg [33:0] p20,p21,p22,p23;
@@ -167,7 +167,7 @@ reg [135:0] fract4b;
 		fract5 <= fract4a + fract4b;
 	end
 end
-else if (WID==80) begin
+else if (FPWID+`EXTRA_BITS==80) begin
 reg [31:0] p00,p01,p02,p03;
 reg [31:0] p10,p11,p12,p13;
 reg [31:0] p20,p21,p22,p23;
@@ -218,7 +218,7 @@ reg [127:0] fract4b;
 		fract5 <= fract4a + fract4b;
 	end
 end
-else if (WID==64) begin
+else if (FPWID+`EXTRA_BITS==64) begin
 reg [35:0] p00,p01,p02;
 reg [35:0] p10,p11,p12;
 reg [35:0] p20,p21,p22;
@@ -256,7 +256,7 @@ reg [108:0] fract4b;
 		fract5 <= fract4a + fract4b;
 	end
 end
-else if (WID==40) begin
+else if (FPWID+`EXTRA_BITS==40) begin
 reg [27:0] p00,p01,p02;
 reg [27:0] p10,p11,p12;
 reg [27:0] p20,p21,p22;
@@ -293,7 +293,7 @@ reg [79:0] fract4b;
 		fract5 <= fract4a + fract4b;
 	end
 end
-else if (WID==32) begin
+else if (FPWID+`EXTRA_BITS==32) begin
 reg [23:0] p00,p01,p02;
 reg [23:0] p10,p11,p12;
 reg [23:0] p20,p21,p22;
@@ -395,12 +395,12 @@ delay4 u2a (.clk(clk), .ce(ce), .i(aInf1), .o(aInf5) );
 delay4 u2b (.clk(clk), .ce(ce), .i(bInf1), .o(bInf5) );
 
 // determine when a NaN is output
-wire [WID-1:0] a5,b5;
+wire [MSB:0] a5,b5;
 delay4 u5 (.clk(clk), .ce(ce), .i((aInf1&bz1)|(bInf1&az1)), .o(qNaNOut5) );
 delay4 u14 (.clk(clk), .ce(ce), .i(aNan1), .o(aNan5) );
 delay4 u15 (.clk(clk), .ce(ce), .i(bNan1), .o(bNan5) );
-delay5 #(WID) u16 (.clk(clk), .ce(ce), .i(a), .o(a5) );
-delay5 #(WID) u17 (.clk(clk), .ce(ce), .i(b), .o(b5) );
+delay5 #(MSB+1) u16 (.clk(clk), .ce(ce), .i(a), .o(a5) );
+delay5 #(MSB+1) u17 (.clk(clk), .ce(ce), .i(b), .o(b5) );
 
 // -----------------------------------------------------------
 // Clock #6
@@ -422,8 +422,8 @@ always @(posedge clk)
 always @(posedge clk)
 	if (ce)
 		casez({aNan5,bNan5,qNaNOut5,aInf5,bInf5,over5})
-		6'b1?????:  mo6 <= {1'b1,a5[FMSB:0],{FMSB+1{1'b0}}};
-    6'b01????:  mo6 <= {1'b1,b5[FMSB:0],{FMSB+1{1'b0}}};
+		6'b1?????:  mo6 <= {1'b1,1'b1,a5[FMSB-1:0],{FMSB+1{1'b0}}};
+    6'b01????:  mo6 <= {1'b1,1'b1,b5[FMSB-1:0],{FMSB+1{1'b0}}};
 		6'b001???:	mo6 <= {1'b1,qNaN|3'd4,{FMSB+1{1'b0}}};	// multiply inf * zero
 		6'b0001??:	mo6 <= 0;	// mul inf's
 		6'b00001?:	mo6 <= 0;	// mul inf's
@@ -617,17 +617,17 @@ wire [7:0] xdif12;
 
 generate
 begin
-if (WID==128)
+if (FPWID+`EXTRA_BITS==128)
     redor128 u121 (.a(xdif11), .b({mfs,2'b0}), .o(sticky) );
-else if (WID==96)
+else if (FPWID+`EXTRA_BITS==96)
     redor96 u121 (.a(xdif11), .b({mfs,2'b0}), .o(sticky) );
-else if (WID==84)
+else if (FPWID+`EXTRA_BITS==84)
     redor84 u121 (.a(xdif11), .b({mfs,2'b0}), .o(sticky) );
-else if (WID==80)
+else if (FPWID+`EXTRA_BITS==80)
     redor80 u121 (.a(xdif11), .b({mfs,2'b0}), .o(sticky) );
-else if (WID==64)
+else if (FPWID+`EXTRA_BITS==64)
     redor64 u121 (.a(xdif11), .b({mfs,2'b0}), .o(sticky) );
-else if (WID==32)
+else if (FPWID+`EXTRA_BITS==32)
     redor32 u121 (.a(xdif11), .b({mfs,2'b0}), .o(sticky) );
 end
 endgenerate
@@ -732,7 +732,7 @@ always @(posedge clk)
 	casez({aInf16&cInf16,Nan16,cNan16,exinf16})
 	4'b1???:	mo17 <= {1'b0,op16,{FMSB-1{1'b0}},op16,{FMSB{1'b0}}};	// inf +/- inf - generate QNaN on subtract, inf on add
 	4'b01??:	mo17 <= {1'b0,mo16};
-	4'b001?: 	mo17 <= {1'b0,fractc16[FMSB+1:0],{FMSB{1'b0}}};
+	4'b001?: 	mo17 <= {1'b1,1'b1,fractc16[FMSB-1:0],{FMSB+1{1'b0}}};
 	4'b0001:	mo17 <= 1'd0;
 	default:	mo17 <= mab[FX+3:2];		// mab has two extra lead bits and two trailing bits
 	endcase
@@ -749,7 +749,7 @@ endmodule
 // Multiplier with normalization and rounding.
 
 module fpFMAnr(clk, ce, op, rm, a, b, c, o, inf, zero, overflow, underflow, inexact);
-parameter WID=64;
+parameter FPWID=64;
 `include "fpSize.sv"
 
 input clk;
@@ -772,7 +772,7 @@ wire norm_inexact;
 wire sign_exe1, inf1, overflow1, underflow1;
 wire [MSB+3:0] fpn0;
 
-fpFMA #(WID) u1
+fpFMA #(FPWID) u1
 (
 	.clk(clk),
 	.ce(ce),
@@ -787,7 +787,7 @@ fpFMA #(WID) u1
 	.zero(),
 	.inf()
 );
-fpNormalize #(WID) u2
+fpNormalize #(FPWID) u2
 (
 	.clk(clk),
 	.ce(ce),
@@ -797,8 +797,8 @@ fpNormalize #(WID) u2
 	.under_o(norm_underflow),
 	.inexact_o(norm_inexact)
 );
-fpRound  	#(WID) u3(.clk(clk), .ce(ce), .rm(rm), .i(fpn0), .o(o) );
-fpDecomp	#(WID) u4(.i(o), .xz(), .vz(zero), .inf(inf));
+fpRound  	#(FPWID) u3(.clk(clk), .ce(ce), .rm(rm), .i(fpn0), .o(o) );
+fpDecomp	#(FPWID) u4(.i(o), .xz(), .vz(zero), .inf(inf));
 vtdl						u5 (.clk(clk), .ce(ce), .a(4'd11), .d(fma_underflow), .q(underflow));
 vtdl						u6 (.clk(clk), .ce(ce), .a(4'd11), .d(fma_overflow), .q(overflow));
 delay3		#(1)	u7 (.clk(clk), .ce(ce), .i(norm_inexact), .o(inexact));

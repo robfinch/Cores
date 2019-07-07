@@ -8,7 +8,7 @@
 //
 //	fp_decomp.v
 //    - decompose floating point value
-//    - parameterized width
+//    - parameterized FPWIDth
 //
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -27,7 +27,7 @@
 // ============================================================================
 
 module fp_decomp(i, sgn, exp, man, fract, xz, mz, vz, inf, xinf, qnan, snan, nan);
-parameter WID=32;
+parameter FPWID=32;
 `include "fpSize.sv"
 
 input [MSB:0] i;

@@ -25,22 +25,22 @@
 // ============================================================================
 
 module fpdivr2(clk4x, ld, a, b, q, r, done, lzcnt);
-parameter WID = 112;
+parameter FPWID = 112;
 parameter RADIX = 2;
-localparam WID1 = WID;//((WID+2)/3)*3;    // make width a multiple of three
-localparam DMSB = WID1-1;
+localparam FPWID1 = FPWID;//((FPWID+2)/3)*3;    // make FPWIDth a multiple of three
+localparam DMSB = FPWID1-1;
 input clk4x;
 input ld;
-input [WID1-1:0] a;
-input [WID1-1:0] b;
-output reg [WID1*2-1:0] q = 0;
-output reg [WID1-1:0] r = 0;
+input [FPWID1-1:0] a;
+input [FPWID1-1:0] b;
+output reg [FPWID1*2-1:0] q = 0;
+output reg [FPWID1-1:0] r = 0;
 output reg done = 1'b0;
 output reg [7:0] lzcnt;
 
 
 reg [8:0] cnt;				// iteration count
-reg [WID1*2-1:0] qi = 0;
+reg [FPWID1*2-1:0] qi = 0;
 reg [DMSB+1:0] ri = 0; 
 wire b0;
 reg gotnz;					// got a non-zero bit
@@ -49,7 +49,7 @@ reg done1;
 wire [7:0] maxcnt;
 assign b0 = b <= ri;
 wire [DMSB+1:0] r1 = b0 ? ri - b : ri;
-assign maxcnt = WID1*2;
+assign maxcnt = FPWID1*2;
 
 // Done pulse for external circuit. Must span over 1 1x clock so that it's
 // recognized.
@@ -98,15 +98,15 @@ end
 
 always @(posedge clk4x)
 if (ld)
-    qi <= {3'b0,a,{WID1{1'b0}}};
+    qi <= {3'b0,a,{FPWID1{1'b0}}};
 else if (!cnt81)
-    qi[WID1*2-1:0] <= {qi[WID1*2-1-1:0],b0};
+    qi[FPWID1*2-1:0] <= {qi[FPWID1*2-1-1:0],b0};
 
 always @(posedge clk4x)
 if (ld)
 	ri <= 0;
 else if (!cnt81)
-    ri <= {r1[DMSB:0],qi[WID1*2-1]};
+    ri <= {r1[DMSB:0],qi[FPWID1*2-1]};
 
 always @(posedge clk4x)
 if (done1)

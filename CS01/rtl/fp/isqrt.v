@@ -60,43 +60,47 @@ reg [7:0] cnt;
 always @(posedge clk)
 if (rst) begin
 	cnt <= WID*2;
-	remLo <= {WID{1'b0}};
-	remHi <= {WID{1'b0}};
-	root <= {WID{1'b0}};
+	remLo <= {WID*2{1'b0}};
+	remHi <= {WID*2{1'b0}};
+	root <= {WID*2+1{1'b0}};
 	state <= IDLE;
 end
-else if (ce) begin
-	if (!cnt_done)
-		cnt <= cnt + 8'd1;
-case(state)
-IDLE:
-	if (ld) begin
-		cnt <= 8'd0;
-		state <= CALC;
-		remLo <= {a,32'h0};
-		remHi <= {WID{1'b0}};
-		root <= {WID{1'b0}};
+else
+begin
+	if (ce) begin
+		if (!cnt_done)
+			cnt <= cnt + 8'd1;
+		if (ld) begin
+			cnt <= 8'd0;
+			state <= CALC;
+			remLo <= {a,32'd0};
+			remHi <= {WID*2{1'b0}};
+			root <= {WID*2+1{1'b0}};
+		end
+		case(state)
+		IDLE:	;
+		CALC:
+			if (!cnt_done) begin
+				// Shift the remainder low
+				remLo <= {remLo[WID*2-3:0],2'd0};
+				// Shift the remainder high
+				remHi <= doesGoInto ? remHiShift - testDiv: remHiShift;
+				// Shift the root
+				root <= {root+doesGoInto,1'b0};	// root * 2 + 1/0
+			end
+			else begin
+				cnt <= 8'h00;
+				state <= DONE;
+			end
+		DONE:
+			begin
+				cnt <= cnt + 8'd1;
+				if (cnt == 8'd6)
+					state <= IDLE;
+			end
+		default: state <= IDLE;
+		endcase
 	end
-CALC:
-	if (!cnt_done) begin
-		// Shift the remainder low
-		remLo <= {remLo[WID*2-3:0],2'd0};
-		// Shift the remainder high
-		remHi <= doesGoInto ? remHiShift - testDiv: remHiShift;
-		// Shift the root
-		root <= {root+doesGoInto,1'b0};	// root * 2 + 1/0
-	end
-	else begin
-		cnt <= 8'h00;
-		state <= DONE;
-	end
-DONE:
-	begin
-		cnt <= cnt + 8'd1;
-		if (cnt == 8'd6)
-			state <= IDLE;
-	end
-endcase
 end
 assign cnt_done = (cnt==WID);
 assign done = state==DONE;

@@ -1,4 +1,3 @@
-`timescale 1ns / 1ps
 // ============================================================================
 //        __
 //   \\__/ o\    (C) 2006-2019  Robert Finch, Waterloo
@@ -8,7 +7,7 @@
 //
 //	fpLOOUnit.v
 //		- single cycle latency floating point unit
-//		- parameterized width
+//		- parameterized FPWIDth
 //		- IEEE 754 representation
 //
 //
@@ -40,34 +39,34 @@
 `define NXTAFT	5'h0B
 
 module fpLOOUnit
-#(parameter WID=32)
+#(parameter FPWID=32)
 (
 	input clk,
 	input ce,
 	input [3:0] op4,
 	input [4:0] func5,
 	input [2:0] rm,
-	input [WID-1+`EXTRA_BITS:0] a,
-	input [WID-1+`EXTRA_BITS:0] b,
-	output reg [WID-1+`EXTRA_BITS:0] o,
+	input [FPWID-1+`EXTRA_BITS:0] a,
+	input [FPWID-1+`EXTRA_BITS:0] b,
+	output reg [FPWID-1+`EXTRA_BITS:0] o,
 	output done
 );
 `include "fpSize.sv"
 
-wire [WID-1:0] i2f_o;
-wire [WID-1+`EXTRA_BITS:0] f2i_o;
-wire [WID-1+`EXTRA_BITS:0] trunc_o;
-wire [WID-1:0] nxtaft_o;
+wire [FPWID-1:0] i2f_o;
+wire [MSB:0] f2i_o;
+wire [MSB:0] trunc_o;
+wire [FPWID-1:0] nxtaft_o;
 
 delay1 u1 (
     .clk(clk),
     .ce(ce),
     .i((op4==`FLT1 && (func5==`ITOF||func5==`FTOI||func5==`TRUNC))||(op4==`FLT2 && (func5==`NXTAFT))),
     .o(done) );
-i2f #(WID)  ui2fs (.clk(clk), .ce(ce), .rm(rm), .i(a[WID-1+`EXTRA_BITS:`EXTRA_BITS]), .o(i2f_o) );
-f2i #(WID)  uf2is (.clk(clk), .ce(ce), .i(a), .o(f2i_o) );
-fpTrunc #(WID+`EXTRA_BITS) urho1 (.clk(clk), .ce(ce), .i(a), .o(trunc_o), .overflow());
-fpNextAfter #(WID) una1 (.clk(clk), .ce(ce), .a(a[WID-1+`EXTRA_BITS:`EXTRA_BITS]), .b(b[WID-1+`EXTRA_BITS:`EXTRA_BITS]), .o(nxtaft_o));
+i2f #(FPWID)  ui2fs (.clk(clk), .ce(ce), .rm(rm), .i(a[FPWID-1+`EXTRA_BITS:`EXTRA_BITS]), .o(i2f_o) );
+f2i #(FPWID)  uf2is (.clk(clk), .ce(ce), .i(a), .o(f2i_o) );
+fpTrunc #(FPWID+`EXTRA_BITS) urho1 (.clk(clk), .ce(ce), .i(a), .o(trunc_o), .overflow());
+fpNextAfter #(FPWID) una1 (.clk(clk), .ce(ce), .a(a[FPWID-1+`EXTRA_BITS:`EXTRA_BITS]), .b(b[FPWID-1+`EXTRA_BITS:`EXTRA_BITS]), .o(nxtaft_o));
 
 always @*
 	case (op4)

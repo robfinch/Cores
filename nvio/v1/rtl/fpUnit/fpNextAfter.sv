@@ -27,7 +27,7 @@
 `include "fpConfig.sv"
 
 module fpNextAfter(clk, ce, a, b, o);
-parameter WID=80;
+parameter FPWID=80;
 `include "fpSize.sv"
 input clk;
 input ce;
@@ -39,9 +39,9 @@ wire [4:0] cmp_o;
 wire nana, nanb;
 wire xza, mza;
 
-fp_cmp_unit #(WID) u1 (.a(a), .b(b), .o(cmp_o), .nanx(nanxab) );
-fpDecomp u2 (.i(a), .sgn(), .exp(), .man(), .fract(), .xz(xza), .mz(mza), .vz(), .inf(), .xinf(), .qnan(), .snan(), .nan(nana));
-fpDecomp u3 (.i(b), .sgn(), .exp(), .man(), .fract(), .xz(), .mz(), .vz(), .inf(), .xinf(), .qnan(), .snan(), .nan(nanb));
+fpCompare #(FPWID) u1 (.a(a), .b(b), .o(cmp_o), .nanx(nanxab) );
+fpDecomp #(FPWID) u2 (.i(a), .sgn(), .exp(), .man(), .fract(), .xz(xza), .mz(mza), .vz(), .inf(), .xinf(), .qnan(), .snan(), .nan(nana));
+fpDecomp #(FPWID) u3 (.i(b), .sgn(), .exp(), .man(), .fract(), .xz(), .mz(), .vz(), .inf(), .xinf(), .qnan(), .snan(), .nan(nanb));
 wire [MSB:0] ap1 = a + {2'd1,{`EXTRA_BITS{1'b0}}};
 wire [MSB:0] am1 = a - {2'd1,{`EXTRA_BITS{1'b0}}};
 wire [EMSB:0] infXp = {EMSB+1{1'b1}};

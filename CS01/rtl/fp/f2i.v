@@ -32,16 +32,17 @@
 
 `include "fpConfig.sv"
 
-module f2i(clk, ce, i, o, overflow);
-parameter WID = 80;
+module f2i(clk, ce, op, i, o, overflow);
+parameter FPWID = 64;
 `include "fpSize.sv"
 input clk;
 input ce;
+input op;					// 1 = signed, 0 = unsigned
 input [MSB:0] i;
 output [MSB:0] o;
 output overflow;
 
-wire [MSB:0] maxInt  = {MSB{1'b1}};		// maximum unsigned integer value
+wire [MSB:0] maxInt  = op ? {MSB{1'b1}} : {FPWID{1'b1}};		// maximum integer value
 wire [EMSB:0] zeroXp = {EMSB{1'b1}};	// simple constant - value of exp for zero
 
 // Decompose fp value
@@ -53,10 +54,10 @@ wire [FMSB+1:0] man = {exp!=0,i[FMSB:0]};	// mantissa including recreate hidden 
 
 wire iz = i[MSB-1:0]==0;					// zero value (special)
 
-assign overflow  = exp - zeroXp > MSB - `EXTRA_BITS;		// lots of numbers are too big - don't forget one less bit is available due to signed values
+assign overflow  = exp - zeroXp > (op ? MSB : FPWID) - `EXTRA_BITS;		// lots of numbers are too big - don't forget one less bit is available due to signed values
 wire underflow = exp < zeroXp - 1;			// value less than 1/2
 
-wire [7:0] shamt = MSB - (exp - zeroXp);	// exp - zeroXp will be <= MSB
+wire [7:0] shamt = (op ? MSB : FPWID) - (exp - zeroXp);	// exp - zeroXp will be <= MSB
 
 wire [MSB+1:0] o1 = {man,{EMSB+1{1'b0}},1'b0} >> shamt;	// keep an extra bit for rounding
 wire [MSB:0] o2 = o1[MSB+1:1] + o1[0];		// round up
@@ -76,7 +77,7 @@ always @(posedge clk)
 			o3 <= o2;
 	end
 		
-assign o = sgn ? -o3 : o3;					// adjust output for correct signed value
+assign o = (op & sgn) ? -o3 : o3;					// adjust output for correct signed value
 
 endmodule
 

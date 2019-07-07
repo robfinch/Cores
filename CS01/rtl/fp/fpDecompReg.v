@@ -28,7 +28,7 @@
 `include "fpConfig.sv"
 
 module fpDecomp(i, sgn, exp, man, fract, xz, mz, vz, inf, xinf, qnan, snan, nan);
-parameter WID=80;
+parameter FPWID=64;
 `include "fpSize.sv"
 
 input [MSB:0] i;
@@ -64,7 +64,7 @@ endmodule
 
 
 module fpDecompReg(clk, ce, i, o, sgn, exp, man, fract, xz, mz, vz, inf, xinf, qnan, snan, nan);
-parameter WID=32;
+parameter FPWID=64;
 `include "fpSize.sv"
 
 input clk;

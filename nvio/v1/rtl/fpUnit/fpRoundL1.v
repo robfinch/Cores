@@ -8,7 +8,7 @@
 //
 //	fpRound.v
 //    - floating point rounding unit
-//    - parameterized width
+//    - parameterized FPWIDth
 //    - IEEE 754 representation
 //
 //
@@ -28,12 +28,12 @@
 // ============================================================================
 
 module fpRound(rm, i, o);
-parameter WID = 128;
+parameter FPWID = 128;
 `include "fpSize.sv"
 
 input [2:0] rm;			// rounding mode
 input [MSB+3:0] i;		// intermediate format input
-output [WID-1:0] o;		// rounded output
+output [FPWID-1:0] o;		// rounded output
 
 //------------------------------------------------------------
 // variables
@@ -90,17 +90,17 @@ endmodule
 // Round and register the output
 
 module fpRoundReg(clk, ce, rm, i, o);
-parameter WID = 128;
+parameter FPWID = 128;
 `include "fpSize.sv"
 
 input clk;
 input ce;
 input [2:0] rm;			// rounding mode
 input [MSB+3:0] i;		// expanded format input
-output reg [WID-1:0] o;		// rounded output
+output reg [FPWID-1:0] o;		// rounded output
 
-wire [WID-1:0] o1;
-fpRound #(WID) u1 (.rm(rm), .i(i), .o(o1) );
+wire [FPWID-1:0] o1;
+fpRound #(FPWID) u1 (.rm(rm), .i(i), .o(o1) );
 
 always @(posedge clk)
 	if (ce)

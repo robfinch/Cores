@@ -1,4 +1,3 @@
-`timescale 1ns / 1ps
 // ============================================================================
 //        __
 //   \\__/ o\    (C) 2006-2019  Robert Finch, Waterloo
@@ -6,11 +5,11 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	fpAddsub_L10.v
+//	fpAddsub.v
 //    - floating point adder/subtracter
 //    - ten cycle latency
 //    - can issue every clock cycle
-//    - parameterized width
+//    - parameterized FPWIDth
 //    - IEEE 754 representation
 //
 //
@@ -29,16 +28,18 @@
 //                                                                          
 // ============================================================================
 
+`include "fpConfig.sv"
+
 module fpAddsub_L10(clk, ce, rm, op, a, b, o);
-parameter WID = 128;
+parameter FPWID = 128;
 `include "fpSize.sv"
 
 input clk;		// system clock
 input ce;		// core clock enable
 input [2:0] rm;	// rounding mode
 input op;		// operation 0 = add, 1 = subtract
-input [WID-1:0] a;	// operand a
-input [WID-1:0] b;	// operand b
+input [MSB:0] a;	// operand a
+input [MSB:0] b;	// operand b
 output [EX:0] o;	// output
 
 wire so;			// sign output
@@ -51,8 +52,8 @@ assign o = {so,xo,mo};
 // Clock edge #1
 // - Decompose inputs into more digestible values.
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-wire [WID-1:0] a1;
-wire [WID-1:0] b1;
+wire [MSB:0] a1;
+wire [MSB:0] b1;
 wire sa1, sb1;
 wire [EMSB:0] xa1, xb1;
 wire [FMSB:0] ma1, mb1;
@@ -64,8 +65,8 @@ wire aNan1, bNan1;
 wire az1, bz1;	// operand a,b is zero
 wire op1;
 
-fpDecompReg #(WID) u1a (.clk(clk), .ce(ce), .i(a), .o(a1), .sgn(sa1), .exp(xa1), .man(ma1), .fract(fracta1), .xz(adn1), .vz(az1), .xinf(xaInf1), .inf(aInf1), .nan(aNan1) );
-fpDecompReg #(WID) u1b (.clk(clk), .ce(ce), .i(b), .o(b1), .sgn(sb1), .exp(xb1), .man(mb1), .fract(fractb1), .xz(bdn1), .vz(bz1), .xinf(xbInf1), .inf(bInf1), .nan(bNan1) );
+fpDecompReg #(FPWID) u1a (.clk(clk), .ce(ce), .i(a), .o(a1), .sgn(sa1), .exp(xa1), .man(ma1), .fract(fracta1), .xz(adn1), .vz(az1), .xinf(xaInf1), .inf(aInf1), .nan(aNan1) );
+fpDecompReg #(FPWID) u1b (.clk(clk), .ce(ce), .i(b), .o(b1), .sgn(sb1), .exp(xb1), .man(mb1), .fract(fractb1), .xz(bdn1), .vz(bz1), .xinf(xbInf1), .inf(bInf1), .nan(bNan1) );
 delay1 #(1)  dop1(.clk(clk), .ce(ce), .i(op), .o(op1) );
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
@@ -225,19 +226,19 @@ delay1 #(FMSB+2) dmsf4(.clk(clk), .ce(ce), .i(mfs4), .o(mfs5));
 
 generate
 begin
-if (WID==128)
+if (FPWID+`EXTRA_BITS==128)
     redor128 u1 (.a(xdif4), .b({mfs4,2'b0}), .o(sticky) );
-else if (WID==96)
+else if (FPWID+`EXTRA_BITS==96)
     redor96 u1 (.a(xdif4), .b({mfs4,2'b0}), .o(sticky) );
-else if (WID==84)
+else if (FPWID+`EXTRA_BITS==84)
     redor84 u1 (.a(xdif4), .b({mfs4,2'b0}), .o(sticky) );
-else if (WID==80)
+else if (FPWID+`EXTRA_BITS==80)
     redor80 u1 (.a(xdif4), .b({mfs4,2'b0}), .o(sticky) );
-else if (WID==64)
+else if (FPWID+`EXTRA_BITS==64)
     redor64 u1 (.a(xdif4), .b({mfs4,2'b0}), .o(sticky) );
-else if (WID==40)
+else if (FPWID+`EXTRA_BITS==40)
     redor40 u1 (.a(xdif4), .b({mfs4,2'b0}), .o(sticky) );
-else if (WID==32)
+else if (FPWID+`EXTRA_BITS==32)
     redor32 u1 (.a(xdif4), .b({mfs4,2'b0}), .o(sticky) );
 end
 endgenerate
@@ -322,8 +323,8 @@ always @(posedge clk)
 if (ce)
 	casez({anbInf9,aNan9,bNan9,xinf9})
 	4'b1???:	mo <= {1'b0,op9,{FMSB-1{1'b0}},op9,{FMSB{1'b0}}};	// inf +/- inf - generate QNaN on subtract, inf on add
-	4'b01??:	mo <= {1'b0,fracta9[FMSB+1:0],{FMSB{1'b0}}};
-	4'b001?: 	mo <= {1'b0,fractb9[FMSB+1:0],{FMSB{1'b0}}};
+	4'b01??:	mo <= {1'b1,1'b1,fracta9[FMSB-1:0],{FMSB+1{1'b0}}};	// Set MSB of Nan to convert to quiet
+	4'b001?: 	mo <= {1'b1,1'b1,fractb9[FMSB-1:0],{FMSB+1{1'b0}}};
 	4'b0001:	mo <= 1'd0;		// exponent hit infinity -> force mantissa to zero
 	default:	mo <= {mab9,{FMSB-1{1'b0}}};	// mab has an extra lead bit and two trailing bits
 	endcase
@@ -331,7 +332,7 @@ if (ce)
 endmodule
 
 module fpAddsubnr_L10(clk, ce, rm, op, a, b, o);
-parameter WID = 128;
+parameter FPWID = 128;
 `include "fpSize.sv"
 
 input clk;		// system clock
@@ -345,8 +346,8 @@ output [MSB:0] o;	// output
 wire [EX:0] o1;
 wire [MSB+3:0] fpn0;
 
-fpAddsub_L10  #(WID) u1 (clk, ce, rm, op, a, b, o1);
-fpNormalize #(WID) u2(.clk(clk), .ce(ce), .under(1'b0), .i(o1), .o(fpn0) );
-fpRoundReg  #(WID) u3(.clk(clk), .ce(ce), .rm(rm), .i(fpn0), .o(o) );
+fpAddsub_L10  #(FPWID) u1 (clk, ce, rm, op, a, b, o1);
+fpNormalize #(FPWID) u2(.clk(clk), .ce(ce), .under_i(1'b0), .i(o1), .o(fpn0) );
+fpRound  	#(FPWID) u3(.clk(clk), .ce(ce), .rm(rm), .i(fpn0), .o(o) );
 
 endmodule

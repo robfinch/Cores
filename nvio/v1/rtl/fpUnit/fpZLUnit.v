@@ -9,7 +9,7 @@
 //		- zero latency floating point unit
 //		- instructions can execute in a single cycle without
 //		  a clock
-//		- parameterized width
+//		- parameterized FPWIDth
 //		- IEEE 754 representation
 //
 //
@@ -72,15 +72,15 @@
 `define UNORD		5'h1F
 
 module fpZLUnit
-#(parameter WID=80)
+#(parameter FPWID=80)
 (
   input [3:0] op4,
   input [4:0] func5,
   input [39:0] ir,
-	input [WID-1+`EXTRA_BITS:0] a,
-	input [WID-1+`EXTRA_BITS:0] b,	// for fcmp
-	input [WID-1+`EXTRA_BITS:0] c,	// for fcmp
-	output reg [WID-1+`EXTRA_BITS:0] o,
+	input [FPWID-1+`EXTRA_BITS:0] a,
+	input [FPWID-1+`EXTRA_BITS:0] b,	// for fcmp
+	input [FPWID-1+`EXTRA_BITS:0] c,	// for fcmp
+	output reg [FPWID-1+`EXTRA_BITS:0] o,
 	output reg nanx
 );
 `include "fpSize.sv"
@@ -96,10 +96,10 @@ wire [4:0] cmp_o, cmpac_o, cmpbc_o;
 
 // Zero is being passed for b in some cases so the NaN must come from a if
 // present.
-fp_cmp_unit #(WID) u1 (.a(a), .b(b), .o(cmp_o), .nanx(nanxab) );
-fp_cmp_unit #(WID) u2 (.a(a), .b(c), .o(cmpac_o), .nanx(nanxac) );
-fp_cmp_unit #(WID) u3 (.a(b), .b(c), .o(cmpbc_o), .nanx(nanxbc) );
-fpDecomp #(WID) u4 (.i(a), .sgn(), .exp(expa), .man(ma), .fract(), .xz(), .mz(), .vz(), .inf(), .xinf(xinfa), .qnan(), .snan(), .nan(nana));
+fpCompare #(FPWID) u1 (.a(a), .b(b), .o(cmp_o), .nanx(nanxab) );
+fpCompare #(FPWID) u2 (.a(a), .b(c), .o(cmpac_o), .nanx(nanxac) );
+fpCompare #(FPWID) u3 (.a(b), .b(c), .o(cmpbc_o), .nanx(nanxbc) );
+fpDecomp #(FPWID) u4 (.i(a), .sgn(), .exp(expa), .man(ma), .fract(), .xz(), .mz(), .vz(), .inf(), .xinf(xinfa), .qnan(), .snan(), .nan(nana));
 wire [127:0] sq_o;
 //fcvtsq u2 (a[31:0], sq_o);
 wire [79:0] sdo;
@@ -109,18 +109,18 @@ fd2s u6 (a, dso);
 wire [79:0] f32to80o;
 wire [31:0] f80to32o;
 F32ToF80 u7 (a[31+`EXTRA_BITS:`EXTRA_BITS], f32to80o);
-F80ToF32 u8 (a[WID-1+`EXTRA_BITS:`EXTRA_BITS], f32to80o);
+F80ToF32 u8 (a[FPWID-1+`EXTRA_BITS:`EXTRA_BITS], f32to80o);
 
 always @*
   case(op4)
   `FLT1:
     case(func5)
-    `FABS:   begin o <= {1'b0,a[WID-2+`EXTRA_BITS:0]}; nanx <= nanxab; end
-    `FNABS:  begin o <= {1'b1,a[WID-2+`EXTRA_BITS:0]}; nanx <= nanxab; end
-    `FNEG:   begin o <= {~a[WID-1+`EXTRA_BITS],a[WID-2+`EXTRA_BITS:0]};	nanx <= nanxab; end
+    `FABS:   begin o <= {1'b0,a[FPWID-2+`EXTRA_BITS:0]}; nanx <= nanxab; end
+    `FNABS:  begin o <= {1'b1,a[FPWID-2+`EXTRA_BITS:0]}; nanx <= nanxab; end
+    `FNEG:   begin o <= {~a[FPWID-1+`EXTRA_BITS],a[FPWID-2+`EXTRA_BITS:0]};	nanx <= nanxab; end
     `FMOV:   begin o <= a; nanx <= nanxab; end
-    `FSIGN:  begin o <= (a[WID-2+`EXTRA_BITS:0]==0) ? 0 : {a[WID-1+`EXTRA_BITS],1'b0,{EMSB{1'b1}},{FMSB+1{1'b0}}}; nanx <= 1'b0; end
-    `FMAN:   begin o <= {a[WID-1+`EXTRA_BITS],1'b0,{EMSB{1'b1}},a[FMSB:0]}; nanx <= 1'b0; end
+    `FSIGN:  begin o <= (a[FPWID-2+`EXTRA_BITS:0]==0) ? 0 : {a[FPWID-1+`EXTRA_BITS],1'b0,{EMSB{1'b1}},{FMSB+1{1'b0}}}; nanx <= 1'b0; end
+    `FMAN:   begin o <= {a[FPWID-1+`EXTRA_BITS],1'b0,{EMSB{1'b1}},a[FMSB:0]}; nanx <= 1'b0; end
     //`FCVTSQ:    o <= sq_o;
     `FCVTSD: begin o <= {sdo,4'h0}; nanx <= nanxab; end
     `FCVTDS: begin o <= {{40{dso[39]}},dso,{`EXTRA_BITS{1'b0}}}; nanx <= nanxab; end
@@ -141,7 +141,7 @@ always @*
     `FSEQ:	 begin o <=  {cmp_o[0],{`EXTRA_BITS{1'b0}}}; nanx <= nanxab; end
     `FSNE:	 begin o <= ~{cmp_o[0],{`EXTRA_BITS{1'b0}}}; nanx <= nanxab; end
     `FSUN:	 begin o <=  {cmp_o[4],{`EXTRA_BITS{1'b0}}}; nanx <= nanxab; end
-    `CPYSGN:	begin o <= {b[WID-1+`EXTRA_BITS],a[WID-2+`EXTRA_BITS:0]}; end
+    `CPYSGN:	begin o <= {b[FPWID-1+`EXTRA_BITS],a[FPWID-2+`EXTRA_BITS:0]}; end
     default: o <= 0;
     endcase
   `FLT3:

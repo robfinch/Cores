@@ -24,12 +24,12 @@
 `include "fpConfig.sv"
 
 module fpRes(clk, ce, a, o);
-parameter WID = 128;
+parameter FPWID = 128;
 `include "fpSize.sv"
 input clk;
 input ce;
-input [WID-1:0] a;
-output [WID-1:0] o;
+input [FPWID-1:0] a;
+output [FPWID-1:0] o;
 
 // This table encodes two endpoints k0, k1 of a piece-wise linear
 // approximation to the reciprocal in the range [1.0,2.0).
@@ -1065,7 +1065,7 @@ end
 wire sa;
 wire [EMSB:0] xa;
 wire [FMSB:0] ma;
-fpDecomp #(WID) u1 (.i(a), .sgn(sa), .exp(xa), .man(ma), .fract(), .xz(), .vz(), .xinf(), .inf(), .nan() );
+fpDecomp #(FPWID) u1 (.i(a), .sgn(sa), .exp(xa), .man(ma), .fract(), .xz(), .vz(), .xinf(), .inf(), .nan() );
 
 wire [EMSB+1:0] bias = {1'b0,{EMSB{1'b1}}};
 wire [EMSB+1:0] x1 = xa - bias;
@@ -1091,7 +1091,7 @@ always @(posedge clk)
 assign o = {sa3,exp3,r0[14:0],{FMSB+2-16{1'b0}}};
 
 always @*
-	if (WID < 48) begin
+	if (FPWID < 48) begin
 		$display("Reciprocal estimate needs at least 48 bit floats.");
 		$stop;
 	end
