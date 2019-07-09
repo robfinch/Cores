@@ -86,7 +86,11 @@ wire cs_led;
 wire cs_irqsrc;
 wire cs_irqack;
 wire cs_gpio;
+wire ack_rom;
 reg ack_mem;
+wire rxDataPresent;
+wire tx_empty;
+wire [7:0] rxDato;
 
 // -----------------------------------------------------------------------------
 // Clock generation
@@ -114,14 +118,10 @@ assign rst = !locked;
 //
 // 00000000	+---------------+
 //  	 	  	|               |
-// 	  	  	|   Ram 128kT   | (32 bits wide)
+// 	  	  	|   Ram 512kB   | (32 bits wide)
 // 		  	  |               |
 // 00080000	+---------------+
 // 		  	  |    unused     |
-// FFC0A000	+---------------+
-// 		  	  |  Rx Buffer    | (32 bits wide)
-// FFC0C000	+---------------+
-// 	  		  |  Tx Buffer    |	(32 bits wide)
 // FFD00000 +---------------+
 // 	  	    |     I/O       |
 // FFFC0000	+---------------+
@@ -142,73 +142,39 @@ assign rst = !locked;
 //          |    LEDS       |
 //          +---------------+
 //
+// FFDC0A00	+---------------+
+//          |    Uart       |
+//          +---------------+
 // -----------------------------------------------------------------------------
 
 assign cs_rom = cyc && stb && adr[31:18]==14'b1111_1111_1111_11;	// $FFFCxxxx to $FFFFxxxx
 assign cs_io = cyc && stb && adr[31:20]==12'hFFD;
 assign cs_mem = cyc && stb && adr[31:16] < 16'h0008;
-assign cs_rxmem = cyc && stb && adr[31:13]==19'b1111_1111_1100_0000_101;
-assign cs_txmem = cyc && stb && adr[31:13]==19'b1111_1111_1100_0000_110;
 assign cs_btn = cyc && stb && adr[31:4]==28'hFFDC009;
 assign cs_gpio = cyc && stb && adr[31:4]==28'hFFDC00A;
 assign cs_irqsrc = cyc && stb && adr[31:4]==28'hFFDC00B;
 assign cs_irqack = cyc && stb && adr[31:4]==28'hFFDC00C;
 assign cs_led = cyc && stb && adr[31:4]==28'hFFDC060;
+assign cs_uart = cyc && stb && adr[31:4]==28'hFFDC0A0;
 
 (* ram_style="block" *)
-reg [31:0] rommem [0:1023];
+reg [31:0] rommem [0:4095];
 wire [31:0] romo;
 initial begin
 `include "../software/boot/cs01rom.ve0"
 end
-assign romo = rommem[adr[11:2]];
+reg [31:0] adrr;
+always @(posedge clk)
+	adrr <= adr;
+assign romo = rommem[adrr[13:2]];
+ack_gen uag1 (.clk_i(clk), .ce_i(1'b1), .i(cs_rom), .we_i(cs_rom), .o(ack_rom));
 
-
-reg ack_txmem, ack_rxmem;
 reg wr_tx, rd_rx, wrxd;
-reg [12:0] tx_adr, rx_adr;
-wire [31:0] rxdatoa, txdatoa;
 wire [7:0] rxdatob, txdatob;
 wire [7:0] rxdatib;
-reg [7:0] readyFifoDato;
-reg [7:0] readyFifoCnt;
+wire rx_empty;
+wire [5:0] rx_data_count;
 reg rxIRQ;
-
-rxtx_mem utxmem1
-(
-  .clka(clk),
-  .ena(cs_txmem),
-  .wea({4{we}} & sel),
-  .addra(adr[12:2]),
-  .dina(dat_o[31:0]),
-  .douta(txdatoa),
-  .clkb(clk14p7),
-  .enb(1'b1),
-  .web(1'b0),
-  .addrb(tx_adr),
-  .dinb(8'h00),
-  .doutb(txdatob)
-);
-rxtx_mem urxmem1
-(
-  .clka(clk),
-  .ena(cs_rxmem),
-  .wea({4{we}} & sel),
-  .addra(adr[12:2]),
-  .dina(dat_o[31:0]),
-  .douta(rxdatoa),
-  .clkb(clk14p7),
-  .enb(1'b1),
-  .web(wrxd),
-  .addrb(rx_adr),
-  .dinb(rxdatib),
-  .doutb()
-);
-
-always @(posedge clk)
-	ack_txmem <= cs_txmem;
-always @(posedge clk)
-	ack_rxmem <= cs_rxmem;
 
 // -----------------------------------------------------------------------------
 // Input debouncing
@@ -351,41 +317,23 @@ endcase
 assign MemDB = RamWEn ? 8'bz : memDat[7:0];
 
 always @(posedge clk)
-	ack <= cs_rom|ack_txmem|ack_rxmem|cs_irqsrc|cs_led|cs_btn|ack_mem|cs_gpio;
+	ack <= ack_rom|cs_irqsrc|cs_led|cs_btn|ack_mem|cs_gpio;
 
 always @(posedge clk)
-casez({cs_rom,cs_txmem,cs_rxmem,cs_irqsrc,cs_btn,cs_mem,cs_gpio})
-7'b1??????:	dat_i <= romo;
-7'b01?????:	dat_i <= txdatoa;
-7'b001????:	dat_i <= rxdatoa;
-7'b0001???:	dat_i <= adr[2] ? 8'h00 : {rxIRQ,timer1Irq};
-7'b00001??:	dat_i <= {6'h0,btn};
-7'b000001?:	dat_i <= dati;
-7'b0000001:	dat_i <= adr[2] ? {pio[14:1],1'b0} : {15'd0,pio3[22:0]};
+casez({cs_rom,cs_irqsrc,cs_btn,cs_mem,cs_gpio,cs_uart})
+6'b1?????:	dat_i <= romo;
+6'b01????:	dat_i <= adr[2] ? 8'h00 : {rxIRQ,timer1Irq};
+6'b001???:	dat_i <= {6'h0,btn};
+6'b0001??:	dat_i <= dati;
+6'b00001?:	dat_i <= adr[2] ? {pio[14:1],1'b0} : {15'd0,pio3[22:0]};
+6'b000001:	dat_i <= adr[2] ? {24'd0,rx_data_count, tx_empty, rx_empty} : {24'h0,rxDato};
 default:	dat_i <= 32'hCCEECCEE;
 endcase
 
 // -----------------------------------------------------------------------------
 // Serial Transmitter
-//
-// The serial transmitter transmits a buffer periodically. The first 32 bytes
-// of the buffer should contain the sync character FF.
 // -----------------------------------------------------------------------------
-wire tx_empty;
-wire pe_tx_empty;
-reg [7:0] txdata;
-`ifdef DEBUG
-reg [255:0] msgHelloWorld = "     H e l l o   w o r l d !    ";
-reg [7:0] chars [0:31];
-genvar g;
-generate begin : strx
-for (g = 0; g < 32; g = g + 1) begin
-	always @*
-		chars[31-g] = msgHelloWorld[g*8+7:g*8];
-	end
-end
-endgenerate
-`endif
+wire pe_wr_tx;
 
 rtfSimpleUartTx utx1
 (
@@ -396,7 +344,7 @@ rtfSimpleUartTx utx1
 	.stb_i(wr_tx),
 	.ack_o(),
 	.we_i(wr_tx),
-	.dat_i(txdata),
+	.dat_i(dat_o[7:0]),
 	//--------------------
 	.cs_i(wr_tx),
 	.baud16x_ce(1'b1),
@@ -408,52 +356,22 @@ rtfSimpleUartTx utx1
 );
 
 //assign uart_rxd_out = uart_txd_in;
-edge_det ued1 (.rst(rst), .clk(clk14p7), .ce(1'b1), .i(tx_empty), .pe(pe_tx_empty), .ne(), .ee());
+edge_det ued1 (.rst(rst), .clk(clk14p7), .ce(1'b1), .i(cs_uart && we && adr[2]==1'b0), .pe(pe_wr_tx), .ne(), .ee());
 
 always @(posedge clk14p7)
 if (rst) 
 	wr_tx <= 1'b0;
 else begin
 	wr_tx <= 1'b0;
-	if (pe_tx_empty)
+	if (pe_wr_tx)
 		wr_tx <= 1'b1;
-end
-
-always @(posedge clk14p7)
-if (rst)
- 	tx_adr <= 13'd0;
-else begin
-	if (timer1Irq)
-		tx_adr <= 13'd0;
-	else if (wr_tx)
-		tx_adr <= tx_adr + 13'd1;
-end
-
-always @(posedge clk14p7)
-if (rst)
-	txdata <= SYNC;
-else begin
-	if (tx_adr < 13'h0014)
-		txdata <= SYNC;
-`ifdef DEBUG
-	else if (tx_adr < 13'h0034)
-		txdata <= chars[tx_adr-8'h14];
-`endif
-	else
-		txdata <= txdatob;
 end
 
 // -----------------------------------------------------------------------------
 // Serial Receiver
-//
-// Recieving begins with the recognition of 16 or more FF bytes and ends
-// with the recognition of 16 or more AA bytes. When the AA bytes are
-// recieved an interrupt to the cpu is asserted.
 // -----------------------------------------------------------------------------
 
-wire rxDataPresent;
-reg [7:0] synccnt;
-reg [7:0] eotcnt;
+wire ne_rd_rx;
 
 rtfSimpleUartRx urx1
 (
@@ -476,6 +394,22 @@ rtfSimpleUartRx urx1
 	.overrun()
 );
 
+// 64-entry fifo for receive
+CS01rxFifo urxf1
+(
+  .rst(rst),
+  .wr_clk(clk14p7),
+  .rd_clk(clk),
+  .din(rxdatib),
+  .wr_en(rd_rx),
+  
+  .rd_en(ne_rd_rx),
+  .dout(rxDato),
+  .full(),
+  .empty(rx_empty),
+  .rd_data_count(rx_data_count)
+);
+
 // Whenever data is present in the reciever generate a read pulse.
 // Read and store the data.
 always @(posedge clk14p7)
@@ -487,60 +421,7 @@ else begin
 		rd_rx <= 1'b1;
 end
 
-always @(posedge clk14p7)
-if (rst)
-	wrxd <= 1'b0;
-else
-	wrxd <= rd_rx;
-
-always @(posedge clk14p7)
-if (rst)
-	synccnt <= 8'd0;
-else begin
-	if (wrxd) begin
-		if (rxdatib == 8'hFF)
-			synccnt <= synccnt + 2'd1;
-		else
-			synccnt <= 8'd0;
-	end
-end
-
-always @(posedge clk14p7)
-if (rst)
-	eotcnt <= 8'd0;
-else begin
-	if (wrxd) begin
-		if (rxdatib == 8'hAA)
-			eotcnt <= eotcnt + 2'd1;
-		else
-			eotcnt <= 8'd0;
-	end
-end
-
-always @(posedge clk14p7)
-if (rst)
-	rxIrq <= 1'b0;
-else begin
-	if (eotcnt==8'd16)
-		rxIrq <= 1'b1;
-	else if (cs_irqack & we)
-		rxIrq <= 1'b0;
-end
-
-// Reciever addressing.
-// Reset the reciever address if a sync sequence is detected.
-// The sync sequence is 16 or more FF's.
-always @(posedge clk14p7)
-if (rst)
-	rx_adr <= 13'd0;
-else begin
-	if (wrxd) begin
-		if (synccnt >= 8'd16)
-			rx_adr <= 13'd0;
-		else
-			rx_adr <= rx_adr + 13'd1;
-	end
-end
+edge_det ued2 (.rst(rst), .clk(clk), .ce(1'b1), .i(cs_uart && !we && adr[2]==1'b0), .pe(), .ne(ne_rd_rx), .ee());
 
 // -----------------------------------------------------------------------------
 // 30 Hz timer interrupt
@@ -604,6 +485,7 @@ else begin
 		endcase
 end
 
+genvar g;
 generate begin : gpi
 for (g = 1; g < 15; g = g + 1) begin
 	assign pio[g] = gpio_ddr[g] ? gpio_dato[g] : 1'bz;

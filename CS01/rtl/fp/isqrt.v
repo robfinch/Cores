@@ -70,13 +70,6 @@ begin
 	if (ce) begin
 		if (!cnt_done)
 			cnt <= cnt + 8'd1;
-		if (ld) begin
-			cnt <= 8'd0;
-			state <= CALC;
-			remLo <= {a,32'd0};
-			remHi <= {WID*2{1'b0}};
-			root <= {WID*2+1{1'b0}};
-		end
 		case(state)
 		IDLE:	;
 		CALC:
@@ -100,6 +93,13 @@ begin
 			end
 		default: state <= IDLE;
 		endcase
+		if (ld) begin
+			cnt <= 8'd0;
+			state <= CALC;
+			remLo <= {a,32'd0};
+			remHi <= {WID*2{1'b0}};
+			root <= {WID*2+1{1'b0}};
+		end
 	end
 end
 assign cnt_done = (cnt==WID);

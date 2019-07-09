@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2006-2018  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2006-2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -78,15 +78,7 @@ always @(posedge clk)
 begin
 done <= 1'b0;
 case(state)
-3'd0:
-	if (ld) begin
-		lzcnt <= 0;
-		gotnz <= 0;
-		cnt <= maxcnt;
-		q <= {(a << REM),{WID{1'b0}}};
-        rxx <= {WID{1'b0}};
-		state <= 1;
-	end
+3'd0:	;
 3'd1:
 	if (!cnt[8]) begin
 		q[WID*2-1:4] <= q[WID*2-5:0];
@@ -118,6 +110,14 @@ case(state)
     end
 default:	state <= 1'd0;
 endcase
+if (ld) begin
+	lzcnt <= 0;
+	gotnz <= 1'b0;
+	cnt <= {1'b0,maxcnt};
+	q <= {(a << REM),{WID{1'b0}}};
+      rxx <= {WID{1'b0}};
+	state <= 3'd1;
+end
 end
 
 endmodule
