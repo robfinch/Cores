@@ -1,0 +1,29 @@
+;
+;
+; Header Section
+RADIX 10
+DEPTH 8192
+WIDTH 8
+DEFAULT 0
+;
+; Data Section
+; Specifies data to be stored in different addresses
+; e.g., DATA 0:A, 1:0
+RADIX 16
+DATA
+; 0:29B 1:1C9 2:215 3:143 4:23B 5:19D 6:1A1 7:1DC
+; 8:187 9:19B A:1DB B:21B C:26B D:212 E:214 F:15B
+; end of LogiBLOX memfile
+; reset vector
+0000: 4C
+0001: 00
+0002: E0
+; NMI vector
+1FFA: 00
+1FFB: E0
+; reset vector
+1FFC: 00
+1FFD: E0
+; IRQ/BRK vector
+1FFE: 00
+1FFF: E0

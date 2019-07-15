@@ -1,0 +1,263 @@
+;==================================================================
+; (C) 2002  Bird Computer
+; All rights reserved.
+;
+; ROM BIOS
+;
+; Downloads an Intel Hex format file and jumps to it
+;
+; Original downloader by Ross Archer posted at www.6502.org
+;
+; Modified to support the bc_uart rather than a 6551
+;==================================================================
+
+UART			equ	$DF00
+VIDEORAM		equ	$C000
+XMIT_FULL		equ	$08		; the transmit buffer is full
+DATA_PRESENT	equ	$40		; there is data preset at the serial port
+
+data_ptr	equ $00
+tmp			equ	$08
+dlfail		equ	$09
+reclen		equ	$0a
+rectype		equ	$0b
+chksum		equ $0c
+startLo		equ	$0e
+startHi		equ	$0f
+
+
+	code
+	org		$fe00
+reset
+	sei					; disable interrupts
+	cld					; disable decimal mode
+	ldx		#$ff		; set the stack pointer
+	txs
+	jsr		putmsg
+	; upper case only!
+	db		"(C) 2001 BIRD COMPUTER", 13, 10, 0
+
+	jsr		dodl
+	jmp		$B000
+
+dodl
+	jmp		($fff8)		; downloader vector
+
+download
+	lda		#0
+	sta		dlfail
+	jsr		putmsg
+	db		"SEND IN INTEL HEX FMT", 13, 10, 0
+	
+dl1
+	jsr		getSerial	; get a character
+	cmp		#':'		; is it a ':' ?
+	bne		dl1			; wait for start of record
+	jsr		getHexSerial
+	sta		reclen
+	sta		chksum
+	jsr		getHexSerial
+	sta		startHi
+	clc
+	adc		chksum
+	sta		chksum
+	jsr		getHexSerial
+	sta		startLo
+	clc
+	adc		chksum
+	sta		chksum
+	jsr		getHexSerial
+	sta		rectype
+	clc
+	adc		chksum
+	sta		chksum
+	lda		rectype
+	bne		dl2
+	ldx		reclen		; number of bytes to write to memory
+	ldy		#0
+dl5
+	jsr		getHexSerial
+	sta		(startLo),y
+	clc
+	adc		chksum
+	sta		chksum
+	iny
+	dex
+	bne		dl5
+	jsr		getHexSerial	; get checksum byte
+	clc
+	adc		chksum
+	bne		dl6				; go to report failure
+	lda		#'#'			; successful record indicator
+	jsr		putSerial
+	jmp		dl1
+	
+dl6
+	lda		#'F'
+	sta		dlfail
+	jsr		putSerial
+	jmp		dl1
+	
+dl2
+	cmp		#1			; check for end of record type
+	beq		dl3
+	jsr		putmsg
+	db		"UNKN RCD TYP $", 0
+	lda		rectype		; flag download failure
+	sta		dlfail		; but continue download to avoid
+	jsr		putHexSerial	; falsely starting a new download
+	lda		#13			; because the current file may take
+	jsr		putSerial	; some time to finish
+	lda		#10
+	jsr		putSerial
+	jmp		dl1
+
+	; reached end-of-records record
+dl3
+	jsr		getHexSerial
+	clc
+	adc		chksum		; checksum should be zero
+	beq		dl4
+	jsr		putmsg
+	db		"BAD RCD CHKSUM", 13, 10, 0
+	jmp		reset
+dl4
+	lda		dlfail
+	beq		dlok
+	jsr		putmsg
+	db		"DL FAIL", 13, 10, 0
+	jmp		reset
+dlok
+	jsr		putmsg
+	db		"DL OK",0
+	rts
+
+;------------------------------------------------------------------
+
+
+; put message to screen
+putmsg
+	pla					; pop the return address off the stack
+	sta		data_ptr	; to use as a pointer to the data
+	pla
+	sta		data_ptr+1
+pm2
+	ldy		#$01
+	lda		(data_ptr),y
+	inc		data_ptr
+	bne		pm3
+	inc		data_ptr+1
+pm3
+	ora		#0			; end of string ?
+	beq		pm1
+	jsr		putSerial
+	jmp		pm2
+pm1						; must update the return address !
+	inc		data_ptr
+	bne		pm4
+	inc		data_ptr+1
+pm4
+	jmp		(data_ptr)
+
+
+; get a hex char from the serial port
+
+getHexSerial
+	jsr		getSerial
+	jsr		asciiToHex
+	asl		a
+	asl		a
+	asl		a
+	asl		a
+	sta		tmp
+	jsr		getSerial
+	jsr		asciiToHex
+	ora		tmp
+	rts
+
+
+; convert an ascii char to hex code
+
+asciiToHex
+	cmp		#'9'+1
+	bcc		a2h1		; less than '9'+1 ?
+	sbc		#8			; shift 'A' to '9'+1
+a2h1
+	sbc		#'0'-1		; -1 to account for carry clear coming in
+	and		#15			; make sure a nybble
+	rts
+
+
+; convert nybble in A to ascii hex char
+
+toAsciiHex
+	and		#15			; make sure it's a nybble
+	cmp		#10			; > 10 ?
+	bcc		tah1
+	adc		#6			; bump it up to the letter 'A'
+tah1
+	adc		#'0'		; bump up to ascii '0'
+	rts
+	
+
+; get character from serial port
+
+getSerial
+gs1
+	lda		UART+1		; get serial port status
+	and		#DATA_PRESENT	; is there data ?
+	beq		gs1			; If not - go back
+	lda		UART		; get the data
+;	pha
+;	jsr		putSerial
+;	pla
+	rts
+	
+
+; put hexcode to serial port
+
+putHexSerial
+	pha
+	lsr		a
+	lsr		a
+	lsr		a
+	lsr		a
+	jsr		toAsciiHex
+	jsr		putSerial
+	pla
+	jsr		toAsciiHex
+	; jsr putSerial
+	; rts
+
+
+; put character to serial port
+
+putSerial
+	pha					; temporarily save character
+ps1
+	lda		UART+1		; get serial port status
+	and		#XMIT_FULL	; is it full ?
+	bne		ps1			; If full then wait
+	pla					; get back the char to write
+	sta		UART		; write it to the xmit register
+	rts
+
+
+; just in case
+
+nmi
+irq
+	rti
+
+	org		$FFF4
+	dw		getSerial	; get byte from serial port
+	dw		putSerial	; put byte to serial port
+	dw		download	; pointer to intel hex format downloader
+
+	; set all vectors to our test routine
+	code
+	org		$FFFA
+	dw		nmi
+	dw		reset
+	dw		irq
+
