@@ -1362,7 +1362,7 @@ int NextToken()
 										return token = tk_biti;
                 }
             }
-			if (gCpu==7 || gCpu=='A' || gCpu=='F') {
+			if (gCpu==7 || gCpu=='A' || gCpu=='F' || gCpu==NVIO) {
                 if ((inptr[1]=='b' || inptr[1]=='B') && 
                     (inptr[2]=='c' || inptr[2]=='C') &&
                      isspace(inptr[3])) {
@@ -1396,7 +1396,7 @@ int NextToken()
 						return (token = tk_cache);
 				}
 			}
-			 if (gCpu==7 || gCpu=='A' || gCpu=='F' || gCpu=='G' || gCpu=='J') {
+			 if (gCpu==7 || gCpu=='A' || gCpu=='F' || gCpu=='G' || gCpu=='J' || gCpu==RISCV) {
                  if ((inptr[1]=='a' || inptr[1]=='A') &&
                      (inptr[2]=='l' || inptr[2]=='L') &&
                      (inptr[3]=='l' || inptr[3]=='L') &&
@@ -1877,7 +1877,7 @@ int NextToken()
 								 tbndx++;
 								 return token = tk_es;
              }
-			 if (gCpu==5) {
+			 if (gCpu==RISCV) {
 				 if ((inptr[1]=='r' || inptr[1]=='R') &&
 					 (inptr[2]=='e' || inptr[2]=='E') &&
 					 (inptr[3]=='t' || inptr[3]=='T') &&
@@ -1965,7 +1965,17 @@ int NextToken()
 								 tbndx++;
 								 return token = tk_fdiv;
              }
-             if ((inptr[1]=='i' || inptr[1]=='I') &&
+						 if ((inptr[1] == 's' || inptr[1] == 'S') &&
+							 (inptr[2] == 'q' || inptr[2] == 'Q') &&
+							 (inptr[3] == 'r' || inptr[3] == 'R') &&
+							 (inptr[4] == 't' || inptr[3] == 'T') &&
+							 (isspace(inptr[5]) || inptr[5] == '.')) {
+							 inptr += 5;
+							 tokenBuffer[tbndx] = tk_fsqrt;
+							 tbndx++;
+							 return token = tk_fsqrt;
+						 }
+						 if ((inptr[1]=='i' || inptr[1]=='I') &&
                  (inptr[2]=='x' || inptr[2]=='X') &&
                  (inptr[3]=='2' || inptr[3]=='2') &&
                  (inptr[4]=='f' || inptr[3]=='F') &&
@@ -2199,6 +2209,33 @@ int NextToken()
 					 return token = tk_fxmul;
 				 }
 			 }
+				if (gCpu == RISCV) {
+					if ((inptr[1]=='l' || inptr[1]=='L')
+						&& (inptr[2]=='w' || inptr[2]=='W')
+						&& isspaceOrDot(inptr[3])) {
+						inptr += 3;
+						tokenBuffer[tbndx] = tk_flw;
+						tbndx++;
+						return token = tk_flw;
+					}
+					if ((inptr[1] == 's' || inptr[1] == 'S')
+						&& (inptr[2] == 'w' || inptr[2] == 'W')
+						&& isspaceOrDot(inptr[3])) {
+						inptr += 3;
+						tokenBuffer[tbndx] = tk_fsw;
+						tbndx++;
+						return token = tk_fsw;
+					}
+					if ((inptr[1] == 'c' || inptr[1] == 'C')
+						&& (inptr[2] == 'v' || inptr[2] == 'V')
+						&& (inptr[3] == 't' || inptr[3] == 'T')
+						&& isspaceOrDot(inptr[4])) {
+						inptr += 4;
+						tokenBuffer[tbndx] = tk_fcvt;
+						tbndx++;
+						return token = tk_fcvt;
+					}
+				}
 
              break;
 
@@ -2438,7 +2475,7 @@ int NextToken()
         // lb lbu lc lcu lf lh lhu lw ld ldi ldis lea lsr lsri lwar lfd lvb lws lvh lvw ltcb link
         case 'l':
         case 'L':
-			if (gCpu=='A' || gCpu==NVIO) {
+			if (gCpu=='A' || gCpu==NVIO || gCpu==RISCV) {
 				if ((inptr[1]=='d' || inptr[1]=='D') &&
 					(inptr[2]=='d' || inptr[2]=='D') &&
 					isspace(inptr[3])) {
@@ -3234,20 +3271,22 @@ int NextToken()
 
         // ret rex rol roli ror rori rtd rte rtf rts rti rtl rodata
         case 'r': case 'R':
-			if (gCpu==7 || gCpu=='A' || gCpu=='F' || gCpu=='J') {
-				if ((inptr[1]=='e' || inptr[1]=='E') && (inptr[2]=='t' || inptr[2]=='T') && isspace(inptr[3])) {
-					inptr += 3;
-					tokenBuffer[tbndx] = tk_ret;
-					tbndx++;
-					return token = tk_ret;
-				}
-				if ((inptr[1]=='e' || inptr[1]=='E') && (inptr[2]=='x' || inptr[2]=='X') && isspace(inptr[3])) {
-					inptr += 3;
-					tokenBuffer[tbndx] = tk_rex;
-					tbndx++;
-					return token = tk_rex;
-				}
-			}
+					if (gCpu == 7 || gCpu == 'A' || gCpu == 'F' || gCpu == 'J' || gCpu == RISCV) {
+						if ((inptr[1] == 'e' || inptr[1] == 'E') && (inptr[2] == 't' || inptr[2] == 'T') && isspace(inptr[3])) {
+							inptr += 3;
+							tokenBuffer[tbndx] = tk_ret;
+							tbndx++;
+							return token = tk_ret;
+						}
+					}
+					if (gCpu == 7 || gCpu == 'A' || gCpu == 'F' || gCpu == 'J') {
+						if ((inptr[1]=='e' || inptr[1]=='E') && (inptr[2]=='x' || inptr[2]=='X') && isspace(inptr[3])) {
+							inptr += 3;
+							tokenBuffer[tbndx] = tk_rex;
+							tbndx++;
+							return token = tk_rex;
+						}
+					}
             if ((inptr[1]=='t' || inptr[1]=='T') && (inptr[2]=='s' || inptr[2]=='S') && isspace(inptr[3])) {
                 inptr += 3;
 								tokenBuffer[tbndx] = tk_rts;
@@ -3337,7 +3376,7 @@ int NextToken()
         // swcr sfd sts sync sws stcmp stmov srai srli stcb sv
 		// DSD9/Itanium: stb stw stp stt std sto
         case 's': case 'S':
-			if (gCpu=='A' || gCpu=='J') {
+			if (gCpu=='A' || gCpu=='J' || gCpu==RISCV) {
 				if ((inptr[1]=='t' || inptr[1]=='T') &&
 					(inptr[2]=='d' || inptr[2]=='D') &&
 					isspace(inptr[3])) {
@@ -3849,8 +3888,16 @@ int NextToken()
             }
             // RiSC-V opcodes
             // slli srli srai
-            if (gCpu==5) {
-              if ((inptr[1]=='l' || inptr[1]=='L') && 
+            if (gCpu==RISCV) {
+							if ((inptr[1] == 'l' || inptr[1] == 'L') &&
+								(inptr[2] == 'l' || inptr[2] == 'L') &&
+								isspaceOrDot(inptr[3])) {
+								inptr += 3;
+								tokenBuffer[tbndx] = tk_sll;
+								tbndx++;
+								return token = tk_sll;
+							}
+							if ((inptr[1]=='l' || inptr[1]=='L') &&
                   (inptr[2]=='l' || inptr[2]=='L') && 
                   (inptr[3]=='i' || inptr[3]=='I') && 
                   isspaceOrDot(inptr[4])) {
@@ -3859,7 +3906,15 @@ int NextToken()
 									tbndx++;
 									return token = tk_slli;
               }
-              if ((inptr[1]=='r' || inptr[1]=='R') && 
+							if ((inptr[1] == 'r' || inptr[1] == 'R') &&
+								(inptr[2] == 'a' || inptr[2] == 'A') &&
+								isspaceOrDot(inptr[3])) {
+								inptr += 3;
+								tokenBuffer[tbndx] = tk_sra;
+								tbndx++;
+								return token = tk_sra;
+							}
+							if ((inptr[1]=='r' || inptr[1]=='R') &&
                   (inptr[2]=='a' || inptr[2]=='A') && 
                   (inptr[3]=='i' || inptr[3]=='I') && 
                   isspaceOrDot(inptr[4])) {
@@ -3868,7 +3923,15 @@ int NextToken()
 									tbndx++;
 									return token = tk_srai;
               }
-              if ((inptr[1]=='r' || inptr[1]=='R') && 
+							if ((inptr[1] == 'r' || inptr[1] == 'R') &&
+								(inptr[2] == 'l' || inptr[2] == 'L') &&
+								isspaceOrDot(inptr[3])) {
+								inptr += 3;
+								tokenBuffer[tbndx] = tk_srl;
+								tbndx++;
+								return token = tk_srl;
+							}
+							if ((inptr[1]=='r' || inptr[1]=='R') &&
                   (inptr[2]=='l' || inptr[2]=='L') && 
                   (inptr[3]=='i' || inptr[3]=='I') && 
                   isspaceOrDot(inptr[4])) {

@@ -193,6 +193,8 @@ void DumpInsnStats()
 	double bpi, nc2;
 	int tot, rem;
 
+	if (gCpu == RISCV)
+		return;
 	fprintf(ofp, "\nInstruction Statistics\n");
 	fprintf(ofp, "Loads:    %6d (%3.6f%%)\n", insnStats.loads, ((double)insnStats.loads / (double)insnStats.total) * 100.0f);
 	fprintf(ofp, "Stores:   %6d (%3.6f%%)\n", insnStats.stores, ((double)insnStats.stores/(double)insnStats.total) * 100.0f);
@@ -439,7 +441,7 @@ void emitHalf(int64_t cd)
 		emitByte(cd & 65535LL);
 		//emitByte((cd >> 16) & 65535LL);
 	}
-  else if (gCpu==5) {
+  else if (gCpu==RISCV) {
      emitByte(cd & 255LL);
      emitByte((cd >> 8) & 255LL);
   }
@@ -454,7 +456,7 @@ void emitHalf(int64_t cd)
 
 void emitWord(int64_t cd)
 {
-  if (gCpu==5 || gCpu==7) {
+  if (gCpu==RISCV || gCpu==7) {
      emitHalf(cd & 0xFFFFLL);
      emitHalf((cd >> 16) & 0xFFFFLL);
   }

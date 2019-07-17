@@ -248,6 +248,7 @@ static int regCnst;
 #define FN6(x)	((FN5((x) >> 1)|(((x) & 1LL) << 6LL))|0x80LL)
 #define FN2(x)	(((x) & 3LL)<<33LL)
 #define SC(x)		(((x) & 7LL) << 28LL)
+#define SZ(x)   (((x) & 7LL) << 28LL)
 #define RT(x)		((x) & 63LL)
 #define RA(x)		(((x) & 63LL) << 10LL)
 #define RB(x)		(((x) & 63LL) << 16LL)
@@ -1969,7 +1970,7 @@ static void process_rrop()
 	//    emit_insn((funct6<<26LL)||(1<<23)||(Rb<<18)|(Rt<<13)|(Ra<<8)|0x02,!expand_flag,4);
 	//	goto xit;
 	//}
-  emit_insn(instr | FN6(funct6)|RB(Rb)|RT(Rt)|RA(Ra),I);
+  emit_insn(instr | FN6(funct6)|SZ(sz)|RB(Rb)|RT(Rt)|RA(Ra),I);
 	xit:
 		prevToken();
 		ScanToEOL();
@@ -2424,6 +2425,7 @@ static void process_rop(int oc)
   Ra = getRegisterX();
 	emit_insn(
 		FN5(oc) |
+		SZ(sz) |
 		OP6(1) |
 		RT(Rt) |
 		RA(Ra)
@@ -2516,6 +2518,58 @@ static int InvertBranchOpcode(int opcode4)
 	case 1:	return (0);	// BNE to BEQ
 	default:	return (opcode4);	// Otherwise operands are swapped.
 	}
+}
+
+static void process_bbc(int opcode6, int opcode2)
+{
+	int Ra, Rc, pred;
+	int64_t bitno, s2;
+	Int128 val;
+	Int128 disp, ca;
+	char *p1, *p2;
+	int sz = 3;
+	char *p;
+	bool isn48 = false;
+
+	p = inptr;
+	if (*p == '.')
+		getSz(&sz);
+
+	pred = 3;		// default: statically predict as always taken
+	p1 = inptr;
+	Ra = getRegisterX();
+	need(',');
+	NextToken();
+	bitno = expr();
+	need(',');
+	p = inptr;
+	Rc = getRegisterX();
+	if (Rc == -1) {
+		inptr = p;
+		val = expr128();
+	}
+	else
+		Int128::Assign(&val, Int128::Zero());
+	ca = Int128(code_address);
+	s2 = val.low & 15L;
+	val.low &= 0xfffffffffffffff0L;
+	ca.low &= 0xfffffffffffffff0L;
+	Int128::Sub(&disp, &val, &ca);
+	if (Rc == -1) {
+		if (!IsNBit128(val, *Int128::MakeInt128(20LL))) {
+			if (pass > 4)
+				error("Branch target too far away");
+		}
+		emit_insn(
+			BT((disp.low & 0xfffffffffffffff0L) | s2) |
+			RB((bitno >> 1L) & 63L) |
+			((bitno & 1) << 2) |
+			RA(Ra) | opcode6
+			, B
+		);
+		return;
+	}
+	error("bbs/bbc: target must be a label");
 }
 
 // ---------------------------------------------------------------------------
@@ -3678,6 +3732,8 @@ static void process_shifti(int64_t op4)
 	}
 	emit_insn(
 		FN6(op4) |
+		FN2(op2) |
+		SZ(sz) |
 		RC(Rc) |
 		RB(val & 0x3fLL) |
 		RT(Rt) |
@@ -3771,7 +3827,6 @@ static void process_shift(int64_t op4)
 	int Rt;
 	char *p, *q;
 	int sz = 3;
-	int func6 = 0x2f;
 	int64_t op2 = 0x00LL;	// NOP
 
 	q = p = inptr;
@@ -3796,7 +3851,7 @@ static void process_shift(int64_t op4)
 		prevToken();
 		Rb = getRegisterX();
 		emit_insn(
-			FN6(func6) |
+			FN6(op4) | SZ(sz) |
 			RT(Rt)| RB(Rb) | RA(Ra),I
 		);
 	 }
@@ -4346,8 +4401,8 @@ static void process_default()
 	case tk_andi:  process_riop(0x08,0x08,0); break;
 	case tk_asl: process_shift(I_ASL); break;
 	case tk_asr: process_shift(I_ASR); break;
-//	case tk_bbc: process_bbc(0x26, 1); break;
-//	case tk_bbs: process_bbc(0x26, 0); break;
+	case tk_bbc: process_bbc(0x141, 1); break;
+	case tk_bbs: process_bbc(0x140, 0); break;
 	case tk_begin_expand: expandedBlock = 1; break;
 	case tk_beqi: process_beqi(0x32, 0); break;
 	case tk_bfchg: process_bitfield(2); break;
