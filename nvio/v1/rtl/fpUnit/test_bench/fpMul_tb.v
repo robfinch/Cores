@@ -37,24 +37,26 @@
 module fpMul_tb();
 reg rst;
 reg clk;
-reg [12:0] adr;
-reg [95:0] mem [0:8191];
-reg [95:0] memo [0:9000];
-reg [191:0] memd [0:8191];
-reg [191:0] memdo [0:9000];
+reg [15:0] adr;
+reg [99:0] mem [0:38000];
+reg [99:0] memo [0:38000];
+reg [191:0] memd [0:38000];
+reg [191:0] memdo [0:38000];
 reg [31:0] a,b;
 wire [31:0] a5,b5;
 wire [31:0] o;
 reg [63:0] ad,bd;
 wire [63:0] ad5,bd5;
 wire [63:0] od;
+reg [3:0] rm;
+wire [3:0] rm5;
 
 initial begin
 	rst = 1'b0;
 	clk = 1'b0;
 	adr = 0;
-	$readmemh("c:/cores5/ft64/trunk/rtl/fpUnit/fpMul_tv.txt", mem);
-	$readmemh("c:/cores5/ft64/trunk/rtl/fpUnit/fpMul_tvd.txt", memd);
+	$readmemh("d:/cores6/nvio/v1/rtl/fpUnit/test_bench/fpMul_tv.txt", mem);
+	//$readmemh("c:/cores5/ft64/trunk/rtl/fpUnit/fpMul_tvd.txt", memd);
 	#20 rst = 1;
 	#50 rst = 0;
 end
@@ -64,31 +66,41 @@ always #5
 
 delay5 #(32) u2 (clk, 1'b1, a, a5);
 delay5 #(32) u3 (clk, 1'b1, b, b5);
+delay5 #(4)  u7 (clk, 1'b1, rm, rm5);
 delay5 #(64) u4 (clk, 1'b1, ad, ad5);
 delay5 #(64) u5 (clk, 1'b1, bd, bd5);
 
+reg [7:0] count;
 always @(posedge clk)
-if (rst)
-	adr = 0;
+if (rst) begin
+	adr <= 0;
+	count <= 0;
+end
 else
 begin
-	adr <= adr + 1;
-	a <= mem[adr][31: 0];
-	b <= mem[adr][63:32];
-	ad <= memd[adr][63: 0];
-	bd <= memd[adr][127:64];
-	if (adr > 5) begin
-		memo[adr-6] <= {o,b5,a5};
-		memdo[adr-6] <= {od,bd5,ad5};
+	count <= count + 1;
+	if (count > 48)
+		count <= 1'd1;
+	if (count==2) begin	
+		a <= mem[adr][31: 0];
+		b <= mem[adr][63:32];
+		rm <= mem[adr][99:96];
+		//ad <= memd[adr][63: 0];
+		//bd <= memd[adr][127:64];
 	end
-	if (adr==8191) begin
-		$writememh("c:/cores5/ft64/trunk/rtl/fpUnit/fpMul_tvo.txt", memo);
-		$writememh("c:/cores5/ft64/trunk/rtl/fpUnit/fpMul_tvdo.txt", memdo);
-		$finish;
+	if (count==47) begin
+			memo[adr] <= {rm,o,b,a};
+//			memdo[adr] <= {od,bd5,ad5};
+		if (adr==8191) begin
+			$writememh("d:/cores6/nvio/v1/rtl/fpUnit/test_bench/fpMul_tvo.txt", memo);
+			//$writememh("c:/cores5/ft64/trunk/rtl/fpUnit/fpMul_tvdo.txt", memdo);
+			$finish;
+		end
+		adr <= adr + 1;
 	end
 end
 
-fpMulnr #(32) u1 (clk, 1'b1, a, b, o, 3'b000);//, sign_exe, inf, overflow, underflow);
+fpMulnr #(32) u1 (clk, 1'b1, a, b, o, rm);//, sign_exe, inf, overflow, underflow);
 fpMulnr #(64) u6 (clk, 1'b1, ad, bd, od, 3'b000);//, sign_exe, inf, overflow, underflow);
 
 endmodule

@@ -7,12 +7,13 @@ reg [191:0] memo [0:9000];
 reg [63:0] a,b,a6,b6;
 wire [63:0] a5,b5;
 wire [63:0] o;
+reg [7:0] count;
 
 initial begin
 	rst = 1'b0;
 	clk = 1'b0;
 	adr = 0;
-	$readmemh("d:/cores6/rtfItanium/v1/rtl/fpUnit/test_bench/fpAddsub_tvd.txt", mem);
+	$readmemh("d:/cores6/nvio/v1/rtl/fpUnit/test_bench/fpAddsub_tvd.txt", mem);
 	#20 rst = 1;
 	#50 rst = 0;
 end
@@ -20,23 +21,30 @@ end
 always #5
 	clk = ~clk;
 
-vtdl #(64) u2 (clk, 1'b1, 4'd11, a, a5);
-vtdl #(64) u3 (clk, 1'b1, 4'd11, b, b5);
+vtdl #(64,32) u2 (clk, 1'b1, 4'd21, a, a5);
+vtdl #(64,32) u3 (clk, 1'b1, 4'd21, b, b5);
 
 always @(posedge clk)
-if (rst)
+if (rst) begin
 	adr = 0;
+	count <= 0;
+end
 else
 begin
-	adr <= adr + 1;
-	a <= mem[adr][63: 0];
-	b <= mem[adr][127:64];
+	count <= count + 1;
+	if (count == 0) begin
+		a <= mem[adr][63: 0];
+		b <= mem[adr][127:64];
+	end
 	a6 <= a5;
 	b6 <= b5;
-	if (adr > 5)
-		memo[adr-6] <= {o,b5,a5};
+	if (count==25) begin
+		memo[adr] <= {o,b,a};
+		adr <= adr + 1;
+		count <= 0;
+	end
 	if (adr==8191) begin
-		$writememh("d:/cores6/rtfItanium/v1/rtl/fpUnit/test_bench/fpAddsub_L10_tvdo.txt", memo);
+		$writememh("d:/cores6/nvio/v1/rtl/fpUnit/test_bench/fpAddsub_L10_tvdo.txt", memo);
 		$finish;
 	end
 end

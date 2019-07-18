@@ -1,3 +1,4 @@
+`timescale 1ns / 1ps
 // ============================================================================
 //        __
 //   \\__/ o\    (C) 2010-2019  Robert Finch, Waterloo
@@ -9,7 +10,7 @@
 //	- integer square root
 //  - uses the standard long form calc.
 //	- geared towards use in an floating point unit
-//	- calculates to FPWID fractional precision (double FPWIDth output)
+//	- calculates to WID fractional precision (double width output)
 //
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -28,8 +29,8 @@
 // ============================================================================
 
 module isqrt(rst, clk, ce, ld, a, o, done);
-parameter FPWID = 32;
-localparam MSB = FPWID-1;
+parameter WID = 32;
+localparam MSB = WID-1;
 parameter IDLE=3'd0;
 parameter CALC=3'd1;
 parameter DONE=3'd2;
@@ -38,66 +39,70 @@ input clk;
 input ce;
 input ld;
 input [MSB:0] a;
-output [FPWID*2-1:0] o;
+output [WID*2-1:0] o;
 output done;
 
 reg [2:0] state;
-reg [FPWID*2:0] root;
-wire [FPWID*2-1:0] testDiv;
-reg [FPWID*2-1:0] remLo;
-reg [FPWID*2-1:0] remHi;
+reg [WID*2:0] root;
+wire [WID*2-1:0] testDiv;
+reg [WID*2-1:0] remLo;
+reg [WID*2-1:0] remHi;
 
 wire cnt_done;
-assign testDiv = {root[FPWID*2-2:0],1'b1};
-wire [FPWID*2-1:0] remHiShift = {remHi[FPWID*2-3:0],remLo[FPWID*2-1:FPWID*2-2]};
+assign testDiv = {root[WID*2-2:0],1'b1};
+wire [WID*2-1:0] remHiShift = {remHi[WID*2-3:0],remLo[WID*2-1:WID*2-2]};
 wire doesGoInto = remHiShift >= testDiv;
-assign o = root[FPWID*2:1];
+assign o = root[WID*2:1];
 
 // Iteration counter
 reg [7:0] cnt;
 
 always @(posedge clk)
 if (rst) begin
-	cnt <= FPWID*2;
-	remLo <= {FPWID*2{1'b0}};
-	remHi <= {FPWID*2{1'b0}};
-	root <= {FPWID*2+1{1'b0}};
+	cnt <= WID*2;
+	remLo <= {WID*2{1'b0}};
+	remHi <= {WID*2{1'b0}};
+	root <= {WID*2+1{1'b0}};
 	state <= IDLE;
 end
-else if (ce) begin
-	if (!cnt_done)
-		cnt <= cnt + 8'd1;
-case(state)
-IDLE:
-	if (ld) begin
-		cnt <= 8'd0;
-		state <= CALC;
-		remLo <= {a,32'h0};
-		remHi <= {FPWID*2{1'b0}};
-		root <= {FPWID*2+1{1'b0}};
+else
+begin
+	if (ce) begin
+		if (!cnt_done)
+			cnt <= cnt + 8'd1;
+		case(state)
+		IDLE:	;
+		CALC:
+			if (!cnt_done) begin
+				// Shift the remainder low
+				remLo <= {remLo[WID*2-3:0],2'd0};
+				// Shift the remainder high
+				remHi <= doesGoInto ? remHiShift - testDiv: remHiShift;
+				// Shift the root
+				root <= {root+doesGoInto,1'b0};	// root * 2 + 1/0
+			end
+			else begin
+				cnt <= 8'h00;
+				state <= DONE;
+			end
+		DONE:
+			begin
+				cnt <= cnt + 8'd1;
+				if (cnt == 8'd6)
+					state <= IDLE;
+			end
+		default: state <= IDLE;
+		endcase
+		if (ld) begin
+			cnt <= 8'd0;
+			state <= CALC;
+			remLo <= {a,32'd0};
+			remHi <= {WID*2{1'b0}};
+			root <= {WID*2+1{1'b0}};
+		end
 	end
-CALC:
-	if (!cnt_done) begin
-		// Shift the remainder low
-		remLo <= {remLo[FPWID*2-3:0],2'd0};
-		// Shift the remainder high
-		remHi <= doesGoInto ? remHiShift - testDiv: remHiShift;
-		// Shift the root
-		root <= {root+doesGoInto,1'b0};	// root * 2 + 1/0
-	end
-	else begin
-		cnt <= 8'h00;
-		state <= DONE;
-	end
-DONE:
-	begin
-		cnt <= cnt + 8'd1;
-		if (cnt == 8'd6)
-			state <= IDLE;
-	end
-endcase
 end
-assign cnt_done = (cnt==FPWID);
+assign cnt_done = (cnt==WID);
 assign done = state==DONE;
 
 endmodule

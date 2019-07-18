@@ -57,8 +57,9 @@
 `define FCVTSD  5'h09
 `define F32TO80	5'h0A
 `define ISNAN		5'h0E
-`define CPYSGN	5'h0F	// FLT2
+`define SGNOP		5'h0F	// FLT2
 `define FINITE	5'h0F	// FLT1
+`define FCLASS	5'h1E
 //`define FCVTSQ  6'h1B
 `define FCVTDS  5'h19
 `define FSLT		5'h10
@@ -92,6 +93,9 @@ wire nana;
 wire [EMSB:0] expa;
 wire [FMSB:0] ma;
 wire xinfa;
+wire a_inf;
+wire a_xz, a_vz;
+wire a_qnan, a_snan;
 wire [4:0] cmp_o, cmpac_o, cmpbc_o;
 
 // Zero is being passed for b in some cases so the NaN must come from a if
@@ -99,7 +103,7 @@ wire [4:0] cmp_o, cmpac_o, cmpbc_o;
 fpCompare #(FPWID) u1 (.a(a), .b(b), .o(cmp_o), .nanx(nanxab) );
 fpCompare #(FPWID) u2 (.a(a), .b(c), .o(cmpac_o), .nanx(nanxac) );
 fpCompare #(FPWID) u3 (.a(b), .b(c), .o(cmpbc_o), .nanx(nanxbc) );
-fpDecomp #(FPWID) u4 (.i(a), .sgn(), .exp(expa), .man(ma), .fract(), .xz(), .mz(), .vz(), .inf(), .xinf(xinfa), .qnan(), .snan(), .nan(nana));
+fpDecomp #(FPWID) u4 (.i(a), .sgn(), .exp(expa), .man(ma), .fract(), .xz(a_xz), .mz(), .vz(a_vz), .inf(a_inf), .xinf(xinfa), .qnan(a_qnan), .snan(a_snan), .nan(nana));
 wire [127:0] sq_o;
 //fcvtsq u2 (a[31:0], sq_o);
 wire [79:0] sdo;
@@ -141,7 +145,30 @@ always @*
     `FSEQ:	 begin o <=  {cmp_o[0],{`EXTRA_BITS{1'b0}}}; nanx <= nanxab; end
     `FSNE:	 begin o <= ~{cmp_o[0],{`EXTRA_BITS{1'b0}}}; nanx <= nanxab; end
     `FSUN:	 begin o <=  {cmp_o[4],{`EXTRA_BITS{1'b0}}}; nanx <= nanxab; end
-    `CPYSGN:	begin o <= {b[FPWID-1+`EXTRA_BITS],a[FPWID-2+`EXTRA_BITS:0]}; end
+    `SGNOP:
+    	case(ir[24:22])
+    	3'd0:	o <= { b[FPWID-1+`EXTRA_BITS],a[FPWID-2+`EXTRA_BITS:0]};
+    	3'd1:	o <= {~b[FPWID-1+`EXTRA_BITS],a[FPWID-2+`EXTRA_BITS:0]};
+    	3'd4:	o <= {a[FPWID-1+`EXTRA_BITS] & b[FPWID-1+`EXTRA_BITS],a[FPWID-2+`EXTRA_BITS:0]};
+    	3'd5:	o <= {a[FPWID-1+`EXTRA_BITS] | b[FPWID-1+`EXTRA_BITS],a[FPWID-2+`EXTRA_BITS:0]};
+    	3'd6:	o <= {a[FPWID-1+`EXTRA_BITS] ^ b[FPWID-1+`EXTRA_BITS],a[FPWID-2+`EXTRA_BITS:0]};
+    	3'd7:	o <= {~(a[FPWID-1+`EXTRA_BITS] ^ b[FPWID-1+`EXTRA_BITS]),a[FPWID-2+`EXTRA_BITS:0]};
+    	default:	o <= 0;
+    	endcase
+    `FCLASS:
+    	begin
+				o[0] <= a[FPWID-1+`EXTRA_BITS] & a_inf;		// -Inf
+				o[1] <= a[FPWID-1+`EXTRA_BITS] & !a_xz;		// -
+				o[2] <= a[FPWID-1+`EXTRA_BITS] &  a_xz;		// -subnormal
+				o[3] <= a[FPWID-1+`EXTRA_BITS] &  a_vz;		// -0
+				o[4] <= ~a[FPWID-1+`EXTRA_BITS] &  a_vz;	// +0
+				o[5] <= ~a[FPWID-1+`EXTRA_BITS] &  a_xz;	// +subnormal
+				o[6] <= ~a[FPWID-1+`EXTRA_BITS] & !a_xz;	// +
+				o[7] <= ~a[FPWID-1+`EXTRA_BITS] & a_inf;	// +Inf
+				o[8] <= a_snan;
+				o[9] <= a_qnan;
+				o[WID-1:10] <= 1'd0;
+    	end
     default: o <= 0;
     endcase
   `FLT3:

@@ -7,9 +7,9 @@
 //
 //	fpAddsub.v
 //    - floating point adder/subtracter
-//    - ten cycle latency
+//    - two cycle latency
 //    - can issue every clock cycle
-//    - parameterized FPWIDth
+//    - parameterized width
 //    - IEEE 754 representation
 //
 //
@@ -31,7 +31,7 @@
 `include "fpConfig.sv"
 
 module fpAddsub(clk, ce, rm, op, a, b, o);
-parameter FPWID = 128;
+parameter FPWID = 64;
 `include "fpSize.sv"
 
 input clk;		// system clock
@@ -42,79 +42,40 @@ input [MSB:0] a;	// operand a
 input [MSB:0] b;	// operand b
 output [EX:0] o;	// output
 
+
+// variables
 wire so;			// sign output
 wire [EMSB:0] xo;	// de normalized exponent output
-reg [FX:0] mo;	// mantissa output
+reg [EMSB:0] xo1;	// de normalized exponent output
+wire [FX:0] mo;	// mantissa output
+reg [FX:0] mo1;	// mantissa output
 
 assign o = {so,xo,mo};
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-// Clock edge #1
-// - Decompose inputs into more digestible values.
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-wire [MSB:0] a1;
-wire [MSB:0] b1;
-wire sa1, sb1;
-wire [EMSB:0] xa1, xb1;
-wire [FMSB:0] ma1, mb1;
-wire [FMSB+1:0] fracta1, fractb1;
-wire adn1, bdn1;		// a,b denormalized ?
-wire xaInf1, xbInf1;
-wire aInf1, bInf1;
-wire aNan1, bNan1;
-wire az1, bz1;	// operand a,b is zero
-wire op1;
-
-fpDecompReg #(FPWID) u1a (.clk(clk), .ce(ce), .i(a), .o(a1), .sgn(sa1), .exp(xa1), .man(ma1), .fract(fracta1), .xz(adn1), .vz(az1), .xinf(xaInf1), .inf(aInf1), .nan(aNan1) );
-fpDecompReg #(FPWID) u1b (.clk(clk), .ce(ce), .i(b), .o(b1), .sgn(sb1), .exp(xb1), .man(mb1), .fract(fractb1), .xz(bdn1), .vz(bz1), .xinf(xbInf1), .inf(bInf1), .nan(bNan1) );
-delay1 #(1)  dop1(.clk(clk), .ce(ce), .i(op), .o(op1) );
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-// Clock edge #2
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-reg xabeq2;
-reg mabeq2;
-reg anbz2;
-reg xabInf2;
-reg anbInf2;
-wire [EMSB:0] xa2, xb2;
-wire [FMSB:0] ma2, mb2;
 // operands sign,exponent,mantissa
-wire [FMSB+1:0] fracta2, fractb2;
-wire az2, bz2;	// operand a,b is zero
-reg xa_gt_xb2;
-reg var2;
-reg [EMSB:0] xad2;
-reg [EMSB:0] xbd2;
-reg realOp2;
+wire sa, sb;
+wire [EMSB:0] xa, xb;
+wire [FMSB:0] ma, mb;
+wire [FMSB+1:0] fracta, fractb;
+wire [FMSB+1:0] fracta1, fractb1;
 
-delay1 #(EMSB+1)  dxa2(.clk(clk), .ce(ce), .i(xa1), .o(xa2) );
-delay1 #(EMSB+1)  dxb2(.clk(clk), .ce(ce), .i(xb1), .o(xb2) );
-delay1 #(FMSB+1)  dma2(.clk(clk), .ce(ce), .i(ma1), .o(ma2) );
-delay1 #(FMSB+1)  dmb2(.clk(clk), .ce(ce), .i(mb1), .o(mb2) );
-delay1 #(1)  daz2(.clk(clk), .ce(ce), .i(az1), .o(az2) );
-delay1 #(1)  dbz2(.clk(clk), .ce(ce), .i(bz1), .o(bz2) );
-delay1 #(FMSB+2)  dfracta2(.clk(clk), .ce(ce), .i(fracta1), .o(fracta2) );
-delay1 #(FMSB+2)  dfractb2(.clk(clk), .ce(ce), .i(fractb1), .o(fractb2) );
+// which has greater magnitude ? Used for sign calc
+wire xa_gt_xb = xa > xb;
+wire xa_gt_xb1;
+wire a_gt_b = xa_gt_xb || (xa==xb && ma > mb);
+wire a_gt_b1;
+wire az, bz;	// operand a,b is zero
 
-always @(posedge clk)
-	if (ce) xa_gt_xb2 <= xa1 > xb1;
-always @(posedge clk)
-	if (ce) var2 <= (xa1==xb1 && ma1 > mb1);
-always @(posedge clk)
-	if (ce) xad2 <= xa1|adn1;	// operand a exponent, compensated for denormalized numbers
-always @(posedge clk)
-	if (ce) xbd2 <= xb1|bdn1;	// operand b exponent, compensated for denormalized numbers
-always @(posedge clk)
-	if (ce) xabeq2 <= xa1==xb1;
-always @(posedge clk)
-	if (ce) mabeq2 <= ma1==mb1;
-always @(posedge clk)
-	if (ce) anbz2 <= az1 & bz1;
-always @(posedge clk)
-	if (ce) xabInf2 <= xaInf1 & xbInf1;
-always @(posedge clk)
-	if (ce) anbInf2 <= aInf1 & bInf1;
+wire adn, bdn;		// a,b denormalized ?
+wire xaInf, xbInf;
+wire aInf, bInf, aInf1, bInf1;
+wire aNan, bNan, aNan1, bNan1;
+
+wire [EMSB:0] xad = xa|adn;	// operand a exponent, compensated for denormalized numbers
+wire [EMSB:0] xbd = xb|bdn; // operand b exponent, compensated for denormalized numbers
+
+fpDecomp #(FPWID) u1a (.i(a), .sgn(sa), .exp(xa), .man(ma), .fract(fracta), .xz(adn), .vz(az), .xinf(xaInf), .inf(aInf), .nan(aNan) );
+fpDecomp #(FPWID) u1b (.i(b), .sgn(sb), .exp(xb), .man(mb), .fract(fractb), .xz(bdn), .vz(bz), .xinf(xbInf), .inf(bInf), .nan(bNan) );
 
 // Figure out which operation is really needed an add or
 // subtract ?
@@ -128,211 +89,120 @@ always @(posedge clk)
 //  a - -b = add,+
 // -a -  b = add,-
 // -a - -b = sub, so of larger
-always @(posedge clk)
-	if (ce) realOp2 <= op1 ^ sa1 ^ sb1;
+wire realOp = op ^ sa ^ sb;
+wire realOp1;
+wire op1;
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-// Clock edge #3
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-wire [EMSB:0] xa3, xb3;
-wire xa_gt_xb3;
-reg x_gt_b3;
-wire xabInf3;
-wire sa3,sb3;
-wire op3;
-wire [2:0] rm3;
-reg [EMSB:0] xdiff3;
-// which has greater magnitude ? Used for sign calc
-reg a_gt_b3;
-reg resZero3;
-reg [FMSB+1:0] mfs3;
-
-delay1 #(EMSB+1)  dxa3(.clk(clk), .ce(ce), .i(xa2), .o(xa3));
-delay1 #(EMSB+1)  dxb3(.clk(clk), .ce(ce), .i(xb2), .o(xb3));
-delay1 #(1) dxabInf2(.clk(clk), .ce(ce), .i(xabInf2), .o(xabInf3));
-delay1 #(1) dxagtxb2(.clk(clk), .ce(ce), .i(xa_gt_xb2), .o(xa_gt_xb3));
-delay2 #(1) dsa2(.clk(clk), .ce(ce), .i(sa1), .o(sa3));
-delay2 #(1) dsb2(.clk(clk), .ce(ce), .i(sb1), .o(sb3));
-delay2 #(1) dop2(.clk(clk), .ce(ce), .i(op1), .o(op3));
-delay3 #(3) drm2(.clk(clk), .ce(ce), .i(rm), .o(rm3));
-
-always @(posedge clk)
-	if (ce) a_gt_b3 <= xa_gt_xb2 || var2;
 // Find out if the result will be zero.
-always @(posedge clk)
-	if (ce) resZero3 <= (realOp2 & xabeq2 & mabeq2) |	anbz2;	// subtract, same magnitude, 	both a,b zero
+wire resZero = (realOp && xa==xb && ma==mb) ||	// subtract, same magnitude
+			   (az & bz);		// both a,b zero
 
-// Compute the difference in exponents, provides shift amount
-always @(posedge clk)
-	if (ce) xdiff3 <= xa_gt_xb2 ? xad2 - xbd2 : xbd2 - xad2;
-// determine which fraction to denormalize
-always @(posedge clk)
-	if (ce) mfs3 <= xa_gt_xb2 ? fractb2 : fracta2;
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-// Clock edge #4
 // Compute output exponent
 //
-// The output exponent is the larger of the two exponents, unless a subtract
-// operation is in progress and the two numbers are equal, in which case the
-// exponent should be zero.
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-reg [EMSB:0] xdif4;
-wire [FMSB+1:0] mfs4;
-reg [EMSB:0] xo4;	// de normalized exponent output
-reg so4;
+// The output exponent is the larger of the two exponents,
+// unless a subtract operation is in progress and the two
+// numbers are equal, in which case the exponent should be
+// zero.
 
-always @(posedge clk)
-	if (ce) xo4 <= xabInf3 ? xa3 : resZero3 ? {EMSB+1{1'b0}} : xa_gt_xb3 ? xa3 : xb3;
+always @(xaInf,xbInf,resZero,xa,xb,xa_gt_xb)
+	xo1 = (xaInf&xbInf) ? xa : resZero ? 0 : xa_gt_xb ? xa : xb;
 
 // Compute output sign
-always @(posedge clk)
-if (ce)
-	case ({resZero3,sa3,op3,sb3})	// synopsys full_case parallel_case
-	4'b0000: so4 <= 0;			// + + + = +
-	4'b0001: so4 <= !a_gt_b3;	// + + - = sign of larger
-	4'b0010: so4 <= !a_gt_b3;	// + - + = sign of larger
-	4'b0011: so4 <= 0;			// + - - = +
-	4'b0100: so4 <= a_gt_b3;		// - + + = sign of larger
-	4'b0101: so4 <= 1;			// - + - = -
-	4'b0110: so4 <= 1;			// - - + = -
-	4'b0111: so4 <= a_gt_b3;		// - - - = sign of larger
-	4'b1000: so4 <= 0;			//  A +  B, sign = +
-	4'b1001: so4 <= rm3==3'd3;		//  A + -B, sign = + unless rounding down
-	4'b1010: so4 <= rm3==3'd3;		//  A -  B, sign = + unless rounding down
-	4'b1011: so4 <= 0;			// +A - -B, sign = +
-	4'b1100: so4 <= rm3==3'd3;		// -A +  B, sign = + unless rounding down
-	4'b1101: so4 <= 1;			// -A + -B, sign = -
-	4'b1110: so4 <= 1;			// -A - +B, sign = -
-	4'b1111: so4 <= rm3==3'd3;		// -A - -B, sign = + unless rounding down
+reg so1;
+always @*
+	case ({resZero,sa,op,sb})	// synopsys full_case parallel_case
+	4'b0000: so1 <= 0;			// + + + = +
+	4'b0001: so1 <= !a_gt_b;	// + + - = sign of larger
+	4'b0010: so1 <= !a_gt_b;	// + - + = sign of larger
+	4'b0011: so1 <= 0;			// + - - = +
+	4'b0100: so1 <= a_gt_b;		// - + + = sign of larger
+	4'b0101: so1 <= 1;			// - + - = -
+	4'b0110: so1 <= 1;			// - - + = -
+	4'b0111: so1 <= a_gt_b;		// - - - = sign of larger
+	4'b1000: so1 <= 0;			//  A +  B, sign = +
+	4'b1001: so1 <= rm==3;		//  A + -B, sign = + unless rounding down
+	4'b1010: so1 <= rm==3;		//  A -  B, sign = + unless rounding down
+	4'b1011: so1 <= 0;			// +A - -B, sign = +
+	4'b1100: so1 <= rm==3;		// -A +  B, sign = + unless rounding down
+	4'b1101: so1 <= 1;			// -A + -B, sign = -
+	4'b1110: so1 <= 1;			// -A - +B, sign = -
+	4'b1111: so1 <= rm==3;		// -A - -B, sign = + unless rounding down
 	endcase
 
-always @(posedge clk)
-if (ce) xdif4 <= xdiff3 > FMSB+3 ? FMSB+3 : xdiff3;
-delay1 #(FMSB+2) dmsf3(.clk(clk), .ce(ce), .i(mfs3), .o(mfs4));
+delay2 #(EMSB+1) d1(.clk(clk), .ce(ce), .i(xo1), .o(xo) );
+delay2 #(1)      d2(.clk(clk), .ce(ce), .i(so1), .o(so) );
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-// Clock edge #5
+// Compute the difference in exponents, provides shift amount
+wire [EMSB:0] xdiff = xa_gt_xb ? xad - xbd : xbd - xad;
+wire [6:0] xdif = xdiff > FMSB+3 ? FMSB+3 : xdiff;
+wire [6:0] xdif1;
+
+// determine which fraction to denormalize
+wire [FMSB+1:0] mfs = xa_gt_xb ? fractb : fracta;
+wire [FMSB+1:0] mfs1;
+
 // Determine the sticky bit
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-wire [EMSB:0] xdif5;
-wire [FMSB+1:0] mfs5;
-wire sticky, sticky5;
-
-// register inputs to shifter and shift
-delay1 #(1)      dstky4(.clk(clk), .ce(ce), .i(sticky), .o(sticky5) );
-delay1 #(EMSB+1) dxdif4(.clk(clk), .ce(ce), .i(xdif4), .o(xdif5) );
-delay1 #(FMSB+2) dmsf4(.clk(clk), .ce(ce), .i(mfs4), .o(mfs5));
-
+wire sticky, sticky1;
 generate
 begin
 if (FPWID+`EXTRA_BITS==128)
-    redor128 u1 (.a(xdif4), .b({mfs4,2'b0}), .o(sticky) );
+    redor128 u1 (.a(xdif), .b({mfs,2'b0}), .o(sticky) );
 else if (FPWID+`EXTRA_BITS==96)
-    redor96 u1 (.a(xdif4), .b({mfs4,2'b0}), .o(sticky) );
+    redor96 u1 (.a(xdif), .b({mfs,2'b0}), .o(sticky) );
 else if (FPWID+`EXTRA_BITS==84)
-    redor84 u1 (.a(xdif4), .b({mfs4,2'b0}), .o(sticky) );
+    redor84 u1 (.a(xdif), .b({mfs,2'b0}), .o(sticky) );
 else if (FPWID+`EXTRA_BITS==80)
-    redor80 u1 (.a(xdif4), .b({mfs4,2'b0}), .o(sticky) );
+    redor80 u1 (.a(xdif), .b({mfs,2'b0}), .o(sticky) );
 else if (FPWID+`EXTRA_BITS==64)
-    redor64 u1 (.a(xdif4), .b({mfs4,2'b0}), .o(sticky) );
-else if (FPWID+`EXTRA_BITS==40)
-    redor40 u1 (.a(xdif4), .b({mfs4,2'b0}), .o(sticky) );
+    redor64 u1 (.a(xdif), .b({mfs,2'b0}), .o(sticky) );
 else if (FPWID+`EXTRA_BITS==32)
-    redor32 u1 (.a(xdif4), .b({mfs4,2'b0}), .o(sticky) );
+    redor32 u1 (.a(xdif), .b({mfs,2'b0}), .o(sticky) );
 end
 endgenerate
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-// Clock edge #6
-// Shift (denormalize)
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-reg [FMSB+3:0] md6;
-wire xa_gt_xb6;
-wire [FMSB+1:0] fracta6, fractb6;
+// register inputs to shifter and shift
+delay1 #(1)      d16(.clk(clk), .ce(ce), .i(sticky), .o(sticky1) );
+delay1 #(7)      d15(.clk(clk), .ce(ce), .i(xdif),   .o(xdif1) );
+delay1 #(FMSB+2) d14(.clk(clk), .ce(ce), .i(mfs),    .o(mfs1) );
 
-delay3 #(1) dxagtxb5(.clk(clk), .ce(ce), .i(xa_gt_xb3), .o(xa_gt_xb6));
-delay4 #(FMSB+2)  dfracta5(.clk(clk), .ce(ce), .i(fracta2), .o(fracta6) );
-delay4 #(FMSB+2)  dfractb5(.clk(clk), .ce(ce), .i(fractb2), .o(fractb6) );
+wire [FMSB+3:0] md1 = ({mfs1,2'b0} >> xdif1)|sticky1;
 
-always @(posedge clk)
-	if (ce) md6 <= ({mfs5,2'b0} >> xdif5)|sticky5;
+// sync control signals
+delay1 #(1) d4 (.clk(clk), .ce(ce), .i(xa_gt_xb), .o(xa_gt_xb1) );
+delay1 #(1) d17(.clk(clk), .ce(ce), .i(a_gt_b), .o(a_gt_b1) );
+delay1 #(1) d5 (.clk(clk), .ce(ce), .i(realOp), .o(realOp1) );
+delay1 #(FMSB+2) d5a(.clk(clk), .ce(ce), .i(fracta), .o(fracta1) );
+delay1 #(FMSB+2) d6a(.clk(clk), .ce(ce), .i(fractb), .o(fractb1) );
+delay1 #(1) d7 (.clk(clk), .ce(ce), .i(aInf), .o(aInf1) );
+delay1 #(1) d8 (.clk(clk), .ce(ce), .i(bInf), .o(bInf1) );
+delay1 #(1) d9 (.clk(clk), .ce(ce), .i(aNan), .o(aNan1) );
+delay1 #(1) d10(.clk(clk), .ce(ce), .i(bNan), .o(bNan1) );
+delay1 #(1) d11(.clk(clk), .ce(ce), .i(op), .o(op1) );
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-// Clock edge #7
-// Sort operands
+// Sort operands and perform add/subtract
 // addition can generate an extra bit, subtract can't go negative
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-reg [FMSB+3:0] oa7;
-reg [FMSB+3:0] ob7;
-wire a_gt_b7;
+wire [FMSB+3:0] oa = xa_gt_xb1 ? {fracta1,2'b0} : md1;
+wire [FMSB+3:0] ob = xa_gt_xb1 ? md1 : {fractb1,2'b0};
+wire [FMSB+3:0] oaa = a_gt_b1 ? oa : ob;
+wire [FMSB+3:0] obb = a_gt_b1 ? ob : oa;
+wire [FMSB+4:0] mab = realOp1 ? oaa - obb : oaa + obb;
+wire xoinf = &xo;
 
-delay4 #(1) dagtb5(.clk(clk), .ce(ce), .i(a_gt_b3), .o(a_gt_b7));
-
-always @(posedge clk)
-	if (ce) oa7 <= xa_gt_xb6 ? {fracta6,2'b0} : md6;
-always @(posedge clk)
-	if (ce) ob7 <= xa_gt_xb6 ? md6 : {fractb6,2'b0};
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-// Clock edge #8
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-reg [FMSB+3:0] oaa8;
-reg [FMSB+3:0] obb8;
-wire [EMSB:0] xo8;
-wire realOp8;
-vtdl #(.WID(1)) drealop7 (.clk(clk), .ce(ce), .a(4'd5), .d(realOp2), .q(realOp8));
-vtdl #(.WID(EMSB+1)) dxo7(.clk(clk), .ce(ce), .a(4'd3), .d(xo4), .q(xo8));
-always @(posedge clk)
-	if (ce) oaa8 <= a_gt_b7 ? oa7 : ob7;
-always @(posedge clk)
-	if (ce) obb8 <= a_gt_b7 ? ob7 : oa7;
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-// Clock edge #9
-// perform add/subtract
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-reg [FMSB+4:0] mab9;
-wire anbInf9;
-wire aNan9, bNan9;
-wire op9;
-wire [FMSB+1:0] fracta9, fractb9;
-wire xo9;
-reg xinf9;
-
-vtdl #(1) danbInf7(.clk(clk), .ce(ce), .a(4'd6), .d(anbInf2), .q(anbInf9));
-vtdl #(1) danan8(.clk(clk), .ce(ce), .a(4'd7), .d(aNan1), .q(aNan9));
-vtdl #(1) dbnan8(.clk(clk), .ce(ce), .a(4'd7), .d(bNan1), .q(bNan9));
-vtdl #(1) dop6(.clk(clk), .ce(ce), .a(4'd5), .d(op3), .q(op9));
-delay3 #(FMSB+2)  dfracta8(.clk(clk), .ce(ce), .i(fracta6), .o(fracta9) );
-delay3 #(FMSB+2)  dfractb8(.clk(clk), .ce(ce), .i(fractb6), .o(fractb9) );
-
-always @(posedge clk)
-	if (ce) mab9 <= realOp8 ? oaa8 - obb8 : oaa8 + obb8;
-always @(posedge clk)
-	if (ce) xinf9 <= xo8 == {EMSB+1{1'b1}};
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-// Clock edge #10
-// Final outputs
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
-vtdl #(1) dso6(.clk(clk), .ce(ce), .a(4'd5), .d(so4), .q(so));
-vtdl #(.WID(EMSB+1)) dxo6(.clk(clk), .ce(ce), .a(4'd1), .d(xo8), .q(xo));
-
-always @(posedge clk)
-if (ce)
-	casez({anbInf9,aNan9,bNan9,xinf9})
-	4'b1???:	mo <= {1'b0,op9,{FMSB-1{1'b0}},op9,{FMSB{1'b0}}};	// inf +/- inf - generate QNaN on subtract, inf on add
-	4'b01??:	mo <= {1'b1,1'b1,fracta9[FMSB-1:0],{FMSB+1{1'b0}}};	// set MSB of Nan to convert to quiet
-	4'b001?: 	mo <= {1'b1,1'b1,fractb9[FMSB-1:0],{FMSB+1{1'b0}}};
-	4'b0001:	mo <= 1'd0;		// exponent hit infinity -> force mantissa to zero
-	default:	mo <= {mab9,{FMSB-1{1'b0}}};	// mab has an extra lead bit and two trailing bits
+always @*
+	casez({aInf1&bInf1,aNan1,bNan1,xoinf})
+	4'b1???:	mo1 = {1'b0,op1,{FMSB-1{1'b0}},op1,{FMSB{1'b0}}};	// inf +/- inf - generate QNaN on subtract, inf on add
+	4'b01??:	mo1 = {1'b0,fracta1[FMSB+1:0],{FMSB{1'b0}}};
+	4'b001?: 	mo1 = {1'b0,fractb1[FMSB+1:0],{FMSB{1'b0}}};
+	4'b0001:	mo1 = 1'd0;
+	default:	mo1 = {mab,{FMSB-1{1'b0}}};	// mab has an extra lead bit and two trailing bits
 	endcase
+
+delay1 #(FX+1) d3(.clk(clk), .ce(ce), .i(mo1), .o(mo) );
 
 endmodule
 
 module fpAddsubnr(clk, ce, rm, op, a, b, o);
-parameter FPWID = 128;
+parameter FPWID = 64;
 `include "fpSize.sv"
 
 input clk;		// system clock
@@ -346,8 +216,8 @@ output [MSB:0] o;	// output
 wire [EX:0] o1;
 wire [MSB+3:0] fpn0;
 
-fpAddsub  #(FPWID) u1 (clk, ce, rm, op, a, b, o1);
-fpNormalize #(FPWID) u2(.clk(clk), .ce(ce), .under(1'b0), .i(o1), .o(fpn0) );
-fpRound  	#(FPWID) u3(.clk(clk), .ce(ce), .rm(rm), .i(fpn0), .o(o) );
+fpAddsub    #(FPWID) u1 (clk, ce, rm, op, a, b, o1);
+fpNormalize #(FPWID) u2(.clk(clk), .ce(ce), .under_i(1'b0), .i(o1), .o(fpn0) );
+fpRound  		#(FPWID) u3(.clk(clk), .ce(ce), .rm(rm), .i(fpn0), .o(o) );
 
 endmodule

@@ -23,14 +23,13 @@
 //
 `include "nvio-defines.sv"
 
-module agen(unit, inst, a, b, c, i, tcb, ma, res2, idle);
+module agen(unit, inst, a, b, c, i, ma, res2, idle);
 input [2:0] unit;
 input [39:0] inst;
 input [79:0] a;
 input [79:0] b;
 input [79:0] c;
 input [79:0] i;
-input [79:0] tcb;
 output reg [79:0] ma;
 output reg [79:0] res2;
 output idle;
@@ -77,26 +76,24 @@ casez(mopcode(inst))
 	`UNLK:	ma <= b;
 	`AMO:		ma <= a;
 	`MLX:		ma <= a + cx + inst[21:18] - (inst[17:16]==2'd1 ? dx : 5'd0);
-	`LDM:		ma <= tcb + i[79:68];
-	default:	ma <= a + {{60{inst[39]}},inst[39:35],inst[30:16]};
+	default:	ma <= a + {{58{inst[39]}},inst[39:35],inst[32:16]};
 	endcase
 `STORE:
 	casez(mopcode(inst))
-	`LINK:	ma <= a - {inst[`FUNCT5],inst[30:22]} - 8'd10;
+	`LINK:	ma <= a - {inst[`FUNCT5],inst[32:22]} - 8'd10;
 	`PUSH:	ma <= a - inst[`FUNCT5];
 	`PUSHC:	ma <= a - 8'd10;
 	`MSX:		ma <= a + cx + inst[5:2] - (inst[1:0]==2'd1 ? dx : 5'd0);
-	`STM:		ma <= tcb + i[79:68];
-	default:	ma <= a + {{60{inst[39]}},inst[39:35],inst[30:22],inst[5:0]};
+	default:	ma <= a + {{58{inst[39]}},inst[39:35],inst[32:22],inst[5:0]};
 	endcase
-default:	ma <= a + {{60{inst[39]}},inst[39:35],inst[30:16]};
+default:	ma <= a + {{58{inst[39]}},inst[39:35],inst[32:16]};
 endcase
 
 always @*
 casez(mopcode(inst))
 `LOAD:
 	casez(mopcode(inst))
-	`LEA:		res2 <= a + {{60{inst[39]}},inst[39:35],inst[30:16]};
+	`LEA:		res2 <= a + {{58{inst[39]}},inst[39:35],inst[32:16]};
 	`PUSHC:	res2 <= a - 8'd10;
 	`POP:		res2 <= a + inst[`FUNCT5];
 	`UNLK:	res2 <= b + inst[`FUNCT5];

@@ -24,7 +24,7 @@
 `include "nvio-config.sv"
 
 module slotValid(rst, clk, branchmiss, phit, nextb, ip_mask, ip_maskd,
-	ip_override, queuedCnt,
+	ip_override, queuedCnt, lsm,
 	slot_jc, slot_ret, take_branch, slotv, slotvd, debug_on);
 parameter QSLOTS = `QSLOTS;
 parameter VAL = 1'b1;
@@ -36,6 +36,7 @@ input clk;
 input branchmiss;
 input nextb;
 input [2:0] queuedCnt;
+input [QSLOTS-1:0] lsm;
 input [QSLOTS-1:0] slot_jc;
 input [QSLOTS-1:0] slot_ret;
 input [QSLOTS-1:0] take_branch;
@@ -89,26 +90,26 @@ else begin
 	default:
 		mark_all_invalid();
 	3'b001:
-		if (queuedCnt==3'd1) begin
+		if (queuedCnt==3'd1 && !lsm[0]) begin
 			mark_all_invalid();
 			if ((slot_jc[0]|slot_ret[0]|take_branch[0]) & ip_override)
 				stomp_next <= TRUE;
 		end
 	3'b010:
-		if (queuedCnt==3'd1) begin
+		if (queuedCnt==3'd1 && !lsm[1]) begin
 			mark_all_invalid();
 			if ((slot_jc[1]|slot_ret[1]|take_branch[1]) & ip_override)
 				stomp_next <= TRUE;
 		end
 	3'b011:
-		if (queuedCnt==3'd2) begin
+		if (queuedCnt==3'd2 && !lsm[0] && !lsm[1]) begin
 			mark_all_invalid();
 			if ((slot_jc[0]|slot_ret[0]|take_branch[0]) & ip_override)
 				stomp_next <= TRUE;
 			else if ((slot_jc[1]|slot_ret[1]|take_branch[1]) & ip_override)
 				stomp_next <= TRUE;
 		end
-		else if (queuedCnt==3'd1) begin
+		else if (queuedCnt==3'd1 && !lsm[0]) begin
 			slotv[0] <= INV;
 			slotv[1] <= VAL;
 			slotv[2] <= INV;
@@ -118,20 +119,20 @@ else begin
 			end
 		end
 	3'b100:
-		if (queuedCnt==3'd1) begin
+		if (queuedCnt==3'd1 && !lsm[2]) begin
 			mark_all_invalid();
 			if ((slot_jc[2]|slot_ret[2]|take_branch[2]) & ip_override)
 				stomp_next <= TRUE;
 		end
 	3'b110:
-		if (queuedCnt==3'd2) begin
+		if (queuedCnt==3'd2 && !lsm[2] && !lsm[1]) begin
 			mark_all_invalid();
 			if ((slot_jc[1]|slot_ret[1]|take_branch[1]) & ip_override)
 				stomp_next <= TRUE;
 			else if ((slot_jc[2]|slot_ret[2]|take_branch[2]) & ip_override)
 				stomp_next <= TRUE;
 		end
-		else if (queuedCnt==3'd1) begin
+		else if (queuedCnt==3'd1 && !lsm[1]) begin
 			slotv[0] <= INV;
 			slotv[1] <= INV;
 			slotv[2] <= VAL;
@@ -141,7 +142,7 @@ else begin
 			end
 		end
 	3'b111:
-		if (queuedCnt==3'd3) begin
+		if (queuedCnt==3'd3 && lsm==3'b000) begin
 			mark_all_invalid();
 			if ((slot_jc[0]|slot_ret[0]|take_branch[0]) & ip_override)
 				stomp_next <= TRUE;
@@ -150,7 +151,7 @@ else begin
 			else if ((slot_jc[2]|slot_ret[2]|take_branch[2]) & ip_override)
 				stomp_next <= TRUE;
 		end
-		else if (queuedCnt==3'd2) begin
+		else if (queuedCnt==3'd2 && lsm[1:0]==2'b00) begin
 			slotv[0] <= INV;
 			slotv[1] <= INV;
 			slotv[2] <= VAL;
@@ -163,7 +164,7 @@ else begin
 				stomp_next <= TRUE;
 			end
 		end
-		else if (queuedCnt==3'd1) begin
+		else if (queuedCnt==3'd1 && lsm[0]==1'b0) begin
 			slotv[0] <= INV;
 			slotv[1] <= VAL;
 			slotv[2] <= VAL;

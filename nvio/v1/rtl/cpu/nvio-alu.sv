@@ -112,7 +112,7 @@ wire [DBW-1:0] andb = b;
 wire [DBW-1:0] bsx20 = {{60{b[19]}},b[19:0]};
 
 wire [21:0] qimm = instr[39:18];
-wire [DBW-1:0] imm = {{58{instr[39]}},instr[39:33],instr[30:16]};
+wire [DBW-1:0] imm = {{58{instr[39]}},instr[39:35],instr[32:16]};
 wire [DBW-1:0] divq, rem;
 wire divByZero;
 wire [15:0] prod80, prod81, prod82, prod83, prod84, prod85, prod86, prod87;
@@ -143,7 +143,7 @@ reg [DBW-1:0] shift9;
 
 function IsMul;
 input [39:0] isn;
-casez({isn[32:31],isn[`OPCODE4]})
+casez({isn[34:33],isn[`OPCODE4]})
 `R3:
   case({isn[`FUNCT5],isn[6]})
   `MULU,`MUL: IsMul = TRUE;
@@ -158,7 +158,7 @@ endfunction
 
 function IsDivmod;
 input [39:0] isn;
-casez({isn[32:31],isn[`OPCODE4]})
+casez({isn[34:33],isn[`OPCODE4]})
 `R3:
   case({isn[`FUNCT5],isn[6]})
   `DIVU,`DIV: IsDivmod = TRUE;
@@ -172,7 +172,7 @@ endfunction
 
 function IsSgn;
 input [39:0] isn;
-casez({isn[32:31],isn[`OPCODE4]})
+casez({isn[34:33],isn[`OPCODE4]})
 `R3:
   case({isn[`FUNCT5],isn[6]})
   `MUL,`DIV,`MOD,`MULH:   IsSgn = TRUE;
@@ -723,7 +723,7 @@ end
 
 always @*
 begin
-casez({instr[32:31],instr[`OPCODE4]})
+casez({instr[34:33],instr[`OPCODE4]})
 `R1:
 		case(instr[`FUNCT5])
 		`CNTLZ:     o = BIG ? {57'd0,clzo} : 64'hCCCCCCCCCCCCCCCC;
@@ -1135,7 +1135,7 @@ else begin
 end
 
 always @(posedge clk)
-casez({instr[32:31],instr[`OPCODE4]})
+casez({instr[34:33],instr[`OPCODE4]})
 `R1:
 	case(instr[21:16])
 	`COM:	addro = ~shift8;
@@ -1241,7 +1241,7 @@ begin
 //    exc <= `FLT_STK;
 //else
 exc <= `FLT_NONE;
-casez({instr[32:31],instr[`OPCODE4]})
+casez({instr[34:33],instr[`OPCODE4]})
 `R3:
     case({instr[`FUNCT5],instr[6]})
     `ADD:   exc <= (fnOverflow(0,a[79],b[79],o[79]) & excen[0] & instr[24]) ? `FLT_OFL : `FLT_NONE;

@@ -1,6 +1,6 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2006-2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2006-2018  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
@@ -9,7 +9,7 @@
 //		- floating point multiplier
 //		- two cycle latency
 //		- can issue every clock cycle
-//		- parameterized FPWIDth
+//		- parameterized width
 //		- IEEE 754 representation
 //
 //
@@ -51,7 +51,7 @@
 `include "fpConfig.sv"
 
 module fpMul (clk, ce, a, b, o, sign_exe, inf, overflow, underflow);
-parameter FPWID = 32;
+parameter FPWID = 64;
 `include "fpSize.sv"
 
 input clk;
@@ -108,7 +108,7 @@ fpDecomp #(FPWID) u1b (.i(b), .sgn(sb), .exp(xb), .fract(fractb), .xz(b_dn), .vz
 assign ex1 = (az|bz) ? 0 : (xa|a_dn) + (xb|b_dn) - bias;
 
 generate
-if (FPWID+`EXTRA_BITS==80) begin
+if (FPWID==80) begin
 reg [31:0] p00,p01,p02,p03;
 reg [31:0] p10,p11,p12,p13;
 reg [31:0] p20,p21,p22,p23;
@@ -142,7 +142,7 @@ reg [31:0] p30,p31,p32,p33;
 				;
 	end
 end
-else if (FPWID+`EXTRA_BITS==64) begin
+else if (FPWID==64) begin
 reg [35:0] p00,p01,p02;
 reg [35:0] p10,p11,p12;
 reg [35:0] p20,p21,p22;
@@ -163,7 +163,7 @@ reg [35:0] p20,p21,p22;
 				;
 	end
 end
-else if (FPWID+`EXTRA_BITS==32) begin
+else if (FPWID==32) begin
 reg [23:0] p00,p01,p02;
 reg [23:0] p10,p11,p12;
 reg [23:0] p20,p21,p22;
@@ -227,8 +227,8 @@ always @(posedge clk)
 always @(posedge clk)
 	if (ce)
 		casez({aNan1,bNan1,qNaNOut,aInf1,bInf1,over1})
-		6'b1?????:  mo1 = {1'b1,1'b1,a1[FMSB-1:0],{FMSB+1{1'b0}}};
-    6'b01????:  mo1 = {1'b1,1'b1,b1[FMSB-1:0],{FMSB+1{1'b0}}};
+		6'b1?????:  mo1 = {1'b1,a1[FMSB:0],{FMSB+1{1'b0}}};
+    6'b01????:  mo1 = {1'b1,b1[FMSB:0],{FMSB+1{1'b0}}};
 		6'b001???:	mo1 = {1'b1,qNaN|3'd4,{FMSB+1{1'b0}}};	// multiply inf * zero
 		6'b0001??:	mo1 = 0;	// mul inf's
 		6'b00001?:	mo1 = 0;	// mul inf's
@@ -249,7 +249,7 @@ endmodule
 // Multiplier with normalization and rounding.
 
 module fpMulnr(clk, ce, a, b, o, rm, sign_exe, inf, overflow, underflow);
-parameter FPWID=32;
+parameter FPWID=64;
 `include "fpSize.sv"
 
 input clk;
@@ -267,8 +267,8 @@ wire sign_exe1, inf1, overflow1, underflow1;
 wire [MSB+3:0] fpn0;
 
 fpMul       #(FPWID) u1 (clk, ce, a, b, o1, sign_exe1, inf1, overflow1, underflow1);
-fpNormalize #(FPWID) u2(.clk(clk), .ce(ce), .under(underflow1), .i(o1), .o(fpn0) );
-fpRoundReg  #(FPWID) u3(.clk(clk), .ce(ce), .rm(rm), .i(fpn0), .o(o) );
+fpNormalize #(FPWID) u2(.clk(clk), .ce(ce), .under_i(underflow1), .i(o1), .o(fpn0) );
+fpRound     #(FPWID) u3(.clk(clk), .ce(ce), .rm(rm), .i(fpn0), .o(o) );
 delay2      #(1)   u4(.clk(clk), .ce(ce), .i(sign_exe1), .o(sign_exe));
 delay2      #(1)   u5(.clk(clk), .ce(ce), .i(inf1), .o(inf));
 delay2      #(1)   u6(.clk(clk), .ce(ce), .i(overflow1), .o(overflow));

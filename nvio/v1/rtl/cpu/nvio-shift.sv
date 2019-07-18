@@ -41,7 +41,7 @@ reg [DMSB:0] res;
 output ov;
 parameter ROTATE_INSN = 1;
 
-wire [5:0] opcode = {instr[32:31],instr[`OPCODE4]};
+wire [5:0] opcode = {instr[34:33],instr[`OPCODE4]};
 wire [5:0] func = {instr[`FUNCT5],instr[6]};
 
 wire [159:0] shl = {80'd0,a} << b[6:0];

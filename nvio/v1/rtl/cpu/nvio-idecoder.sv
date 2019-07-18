@@ -56,9 +56,14 @@ parameter deci = 3'd5;
 //endcase
 //endfunction
 
+function [5:0] aopcode;
+input [39:0] ins;
+aopcode = {ins[34:33],ins[`OPCODE4]};
+endfunction
+
 function [5:0] mopcode;
 input [39:0] ins;
-mopcode = {ins[34:33],ins[9:6]};
+mopcode = {ins[34:33],ins[`OPCODE4]};
 endfunction
 
 function [6:0] fnRd;
@@ -117,33 +122,43 @@ endfunction
 function IsAndi;
 input [2:0] unit;
 input [39:0] isn;
-IsAndi = unit==`IUnit && ({isn[32:31],isn[`OPCODE4]}==`ANDI
-												|| {isn[32:31],isn[`OPCODE4]}==`ANDS1
-												|| {isn[32:31],isn[`OPCODE4]}==`ANDS2
-												|| {isn[32:31],isn[`OPCODE4]}==`ANDS3
+IsAndi = unit==`IUnit && (aopcode(isn)==`ANDI
+												|| aopcode(isn)==`ANDS1
+												|| aopcode(isn)==`ANDS2
+												|| aopcode(isn)==`ANDS3
 												);
 endfunction
 
 function IsOri;
 input [2:0] unit;
 input [39:0] isn;
-IsOri = unit==`IUnit && ({isn[32:31],isn[`OPCODE4]}==`ORI
-												|| {isn[32:31],isn[`OPCODE4]}==`ORS1
-												|| {isn[32:31],isn[`OPCODE4]}==`ORS2
-												|| {isn[32:31],isn[`OPCODE4]}==`ORS3
+IsOri = unit==`IUnit && (aopcode(isn)==`ORI
+												|| aopcode(isn)==`ORS1
+												|| aopcode(isn)==`ORS2
+												|| aopcode(isn)==`ORS3
 												);
 endfunction
 
 function IsXori;
 input [2:0] unit;
 input [39:0] isn;
-IsXori = unit==`IUnit && ({isn[32:31],isn[`OPCODE4]}==`XORI);
+IsXori = unit==`IUnit && (aopcode(isn)==`XORI);
 endfunction
 
 function IsTLB;
 input [2:0] unit;
 input [39:0] isn;
 IsTLB = unit==`MUnit && mopcode(isn)==`TLB;
+endfunction
+
+function IsAMO;
+input [2:0] unit;
+input [39:0] isn;
+casez({unit==`MUnit,mopcode(isn)})
+{7'b1,`AMO}:	IsAMO = TRUE;
+{7'b1,`AMOI}:	IsAMO = TRUE;
+default:	IsAMO = FALSE;
+endcase
 endfunction
 
 // fnCanException
@@ -180,11 +195,11 @@ case(unit)
   default:    fnCanException = FALSE;
 	endcase
 `IUnit:
-	casez({isn[32:31],isn[9:6]})
+	casez(aopcode(isn))
 	`DIVI,`MODI,`MULI:
     fnCanException = `TRUE;
   `R3:
-		case({isn[39:35],isn[6]})
+		case({isn[`FUNCT5],isn[6]})
     `MUL,`DIV,`MOD:
        fnCanException = TRUE;
 	  default:    fnCanException = FALSE;
@@ -192,7 +207,7 @@ case(unit)
 	default:	fnCanException = FALSE;
 	endcase
 `BUnit:
-	case(isn[9:6])
+	case(isn[`OPCODE4])
 	`BRK:	fnCanException = TRUE;
 	`CHK:	fnCanException = TRUE;
 	`CHKI:		fnCanException = TRUE;
@@ -442,7 +457,7 @@ function IsBranch;
 input [2:0] unit;
 input [39:0] isn;
 if (unit==3'd1)
-	case(isn[9:6])
+	case(isn[`OPCODE4])
 	4'h0,4'h1,	// But not BRcc
 	4'h4,4'h6,4'h7:
 		IsBranch = TRUE;
@@ -577,7 +592,7 @@ case(unit)
 	default:	HasConst = FALSE;
 	endcase
 `IUnit:
-	casez({ins[32:31],ins[`OPCODE4]})
+	casez(aopcode(ins))
 	`R3:	HasConst = FALSE;
 	`R1:	HasConst = FALSE;
 	default:	HasConst = TRUE;
@@ -597,7 +612,7 @@ endfunction
 
 function IsAlu0Only;
 input [39:0] ins;
-casez({ins[32:31],ins[`OPCODE4]})
+casez(aopcode(ins))
 `CSRRW:	IsAlu0Only = TRUE;
 default:	IsAlu0Only = FALSE;
 endcase
@@ -614,16 +629,18 @@ begin
 	bus[`IB_CMP] <= 1'b0;//IsCmp(instr);
 	if (unit==`MUnit) begin
 		if (IsPushc(unit,instr))
-			bus[`IB_CONST] <= {{58{instr[39]}},instr[39:33],instr[30:16]};
+			bus[`IB_CONST] <= {{56{instr[39]}},instr[39:16]};
 		else if (instr[34])	// Store?
-			bus[`IB_CONST] <= {{60{instr[39]}},instr[39:35],instr[30:22],instr[5:0]};
+			bus[`IB_CONST] <= {{58{instr[39]}},instr[39:35],instr[32:22],instr[5:0]};
 		else
-			bus[`IB_CONST] <= {{60{instr[39]}},instr[39:35],instr[30:16]};
+			bus[`IB_CONST] <= {{58{instr[39]}},instr[39:35],instr[32:16]};
 	end
+	else if (IsJAL(unit,instr))
+		bus[`IB_CONST] <= {{56{instr[39]}},instr[39:16]};
 	else if (IsChki(unit,instr))
-		bus[`IB_CONST] <= {{58{instr[39]}},instr[39:33],instr[30:22],instr[5:0]};
+		bus[`IB_CONST] <= {{56{instr[39]}},instr[39:22],instr[5:0]};
 	else
-		bus[`IB_CONST] <= {{58{instr[39]}},instr[39:33],instr[30:16]};
+		bus[`IB_CONST] <= {{58{instr[39]}},instr[39:35],instr[32:16]};
 //	bus[`IB_RT]		 <= fnRd(instr,ven,vl,thrd) | {thrd,7'b0};
 //	bus[`IB_RC]		 <= fnRc(instr,ven,thrd) | {thrd,7'b0};
 //	bus[`IB_RA]		 <= fnRa(instr,ven,vl,thrd) | {thrd,7'b0};
@@ -670,8 +687,8 @@ begin
 	bus[`IB_MEMDB]	<= IsMemdb(unit,instr);
 	bus[`IB_MEMSB]	<= IsMemsb(unit,instr);
 	bus[`IB_SEI]		<= IsSEI(unit,instr);
-	bus[`IB_AQ]			<= instr[32];
-	bus[`IB_RL]			<= instr[31];
+	bus[`IB_AQ]			<= instr[32] && IsAMO(unit,instr);
+	bus[`IB_RL]			<= instr[31] && IsAMO(unit,instr);
 	bus[`IB_JMP]		<= IsJmp(unit,instr);
 	bus[`IB_BR]			<= IsBranch(unit,instr);
 	bus[`IB_BRCC]		<= IsBRcc(unit,instr);

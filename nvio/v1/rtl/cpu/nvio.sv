@@ -425,8 +425,8 @@ reg  [7:0] iq_exc	[0:QENTRIES-1];	// only for branches ... indicates a HALT inst
 reg [RBIT:0] iq_rs1 [0:QENTRIES-1];
 reg [RBIT:0] iq_rs2 [0:QENTRIES-1];		// debugging
 reg [RBIT:0] iq_rs3 [0:QENTRIES-1];
-reg [RBIT:0] iq_tgt [0:QENTRIES-1];	// Rt field or ZERO -- this is the instruction's target (if any)
-reg [RBIT:0] iq_tgt2 [0:QENTRIES-1];
+reg [RBIT:0] iq_tgt [0:QENTRIES-1];		// Rt field or ZERO -- this is the instruction's target (if any)
+reg [RBIT:0] iq_tgt2 [0:QENTRIES-1];	// A second target of the instruction
 //reg [3:0] iq_tgtrs [0:QENTRIES-1];
 //reg [3:0] iq_tgt2rs [0:QENTRIES-1];
 reg [WID-1:0] iq_argI	[0:QENTRIES-1];	// argument 0 (immediate)
@@ -867,9 +867,11 @@ wire [QSLOTS-1:0] slot_jal;
 wire [QSLOTS-1:0] slot_br;
 wire [QSLOTS-1:0] slot_call;
 wire [QSLOTS-1:0] slot_ret;
-wire slot_lsm;
+wire [QSLOTS-1:0] slot_lsm;
 
-assign slot_lsm = IsLSM(slotu[0],insnx[0]);
+assign slot_lsm[0] = IsLSM(slotu[0],insnx[0]);
+assign slot_lsm[1] = IsLSM(slotu[1],insnx[1]);
+assign slot_lsm[2] = IsLSM(slotu[2],insnx[2]);
 assign slot_rfw[0] = IsRFW(slotu[0],insnx[0]);
 assign slot_rfw[1] = IsRFW(slotu[1],insnx[1]);
 assign slot_rfw[2] = IsRFW(slotu[2],insnx[2]);
@@ -2083,8 +2085,7 @@ decodeBuffer udcb1
 	.ibundle(ibundle),
 	.template(template),
 	.insnx(insnx),
-	.queued(queuedCnt!=3'd0),
-	.lsmo()
+	.queued(queuedCnt!=3'd0)
 );
 
 
@@ -2211,6 +2212,11 @@ assign Rs3[2] = fnRs3(slotu[2],insnx[2]);
 assign Rd[2] = fnRd(slotu[2],insnx[2]);
 assign Rd2[2] = fnRd2(slotu[2],insnx[2]);
 
+function [5:0] aopcode;
+input [39:0] isn;
+aopcode = {isn[34:33],isn[`OPCODE4]};
+endfunction
+
 function [5:0] mopcode;
 input [39:0] isn;
 mopcode = {isn[34:33],isn[`OPCODE4]};
@@ -2314,7 +2320,7 @@ case(unit)
 `IUnit:	
 	casez({isn[32:31],isn[`OPCODE4]})
 	`R3:
-		case(isn[`FUNCT5])
+		case({isn[`FUNCT5],isn[6]})
 		`SHLI:	Source2Valid = TRUE;
 		`ASLI:	Source2Valid = TRUE;
 		`SHRI:	Source2Valid = TRUE;
@@ -2378,7 +2384,7 @@ case(unit)
 	default:	Source3Valid = TRUE;
 	endcase
 `IUnit:
-	case({isn[32:31],isn[`OPCODE4]})
+	casez({isn[32:31],isn[`OPCODE4]})
 	`R3:	Source3Valid = isn[`RS3]==6'd0;
 	`BITFIELD:	Source3Valid = isn[`RS3]==6'd0;
 	`CSRRW:	Source3Valid = TRUE;
@@ -2612,41 +2618,6 @@ default: IsRFW = FALSE;
 endcase
 endfunction
 
-function IsShifti;
-input [2:0] unit;
-input [39:0] isn;
-if (unit==`IUnit)
-	case({isn[32:31],isn[`OPCODE4]})
-	`R3:
-		case(isn[`FUNCT5])
-		`SHLI,`ASLI,`SHRI,`ASRI,`ROLI,`RORI:
-			IsShifti = TRUE;
-		default:	IsShifti = FALSE;
-		endcase
-	default:	IsShifti = FALSE;
-	endcase
-else
-	IsShifti = FALSE;
-endfunction
-
-function IsShift;
-input [2:0] unit;
-input [39:0] isn;
-if (unit==`IUnit)
-	case({isn[32:31],isn[`OPCODE4]})
-	`R3:
-		case(isn[`FUNCT5])
-		`SHL,`ASL,`SHR,`ASR,`ROL,`ROR,
-		`SHLI,`ASLI,`SHRI,`ASRI,`ROLI,`RORI:
-			IsShift = TRUE;
-		default:	IsShift = FALSE;
-		endcase
-	default:	IsShift = FALSE;
-	endcase
-else
-	IsShift = FALSE;
-endfunction
-
 function IsMul;
 input [2:0] unit;
 input [39:0] isn;
@@ -2654,7 +2625,7 @@ if (unit==`IUnit)
 	casez({isn[32:31],isn[`OPCODE4]})
 	`MUL,`MULU:	IsMul = TRUE;
 	`R3:
-		case(isn[`FUNCT5])
+		case({isn[`FUNCT5],isn[6]})
 		`MUL,`MULU,`MULH,`MULUH:
 			IsMul = TRUE;
 		default:	IsMul = FALSE;
@@ -2681,7 +2652,7 @@ function IsLSM;
 input [2:0] unit;
 input [39:0] isn;
 if (unit==`MUnit)
-	case({isn[34:33],isn[`OPCODE4]})
+	case(mopcode(isn))
 	`LDM,`LDMX,`STM,`STMX:	IsLSM = TRUE;
 	default:	IsLSM = FALSE;
 	endcase
@@ -3812,8 +3783,8 @@ end
 end
 endgenerate
 
-agen uag1(agen0_unit, agen0_instr, agen0_argA, agen0_argB, agen0_argC, agen0_argI, tcb, agen0_ma, agen0_res, agen0_idle);
-agen uag2(agen1_unit, agen1_instr, agen1_argA, agen1_argB, agen1_argC, agen1_argI, tcb, agen1_ma, agen1_res, agen1_idle);
+agen uag1(agen0_unit, agen0_instr, agen0_argA, agen0_argB, agen0_argC, agen0_argI, agen0_ma, agen0_res, agen0_idle);
+agen uag2(agen1_unit, agen1_instr, agen1_argA, agen1_argB, agen1_argC, agen1_argI, agen1_ma, agen1_res, agen1_idle);
 assign agen0_id = agen0_sourceid;
 assign agen1_id = agen1_sourceid;
 assign agen0_v = agen0_dataready;
@@ -7041,7 +7012,7 @@ begin
 		dram0_preload <= iq_preload[n];
 		dram0_tgt 	<= iq_tgt[n];
 		// These two args needed only to support AMO operations
-		dram0_argI	<= {{66{iq_instr[n][34]}},iq_instr[n][34:33],iq_instr[n][27:16]};
+		dram0_argI	<= {{68{iq_instr[n][27]}},iq_instr[n][27:16]};
 		dram0_argB  <= iq_argB_v[n] ? iq_argB[n][WID+3:4]
 			: iq_argB_s[n]==alu0_id ? ralu0_bus
 			: iq_argB_s[n]==alu1_id ? ralu1_bus
@@ -7081,7 +7052,7 @@ begin
 	dram1_preload <= iq_preload[n];
 	dram1_tgt 	<= iq_tgt[n];
 	// These two args needed only to support AMO operations
-	dram1_argI	<= {{66{iq_instr[n][34]}},iq_instr[n][34:33],iq_instr[n][27:16]};
+	dram1_argI	<= {{68{iq_instr[n][27]}},iq_instr[n][27:16]};
 	dram1_argB  <= iq_argB_v[n] ? iq_argB[n][WID+3:4]
 	  : iq_argB_s[n]==alu0_id ? ralu0_bus
 	  : iq_argB_s[n]==alu1_id ? ralu1_bus
