@@ -28,14 +28,15 @@
 
 `include "fpConfig.sv"
 
-module fpCompare(a, b, o, nanx);
+module fpCompare(a, b, o, nan, snan);
 parameter FPWID = 32;
 `include "fpSize.sv"
 
 input [MSB:0] a, b;
 output [4:0] o;
 reg [4:0] o;
-output nanx;
+output nan;
+output snan;
 
 // Decompose the operands
 wire sa;
@@ -46,9 +47,10 @@ wire [FMSB:0] ma;
 wire [FMSB:0] mb;
 wire az, bz;
 wire nan_a, nan_b;
+wire snan_a, snan_b;
 
-fpDecomp #(FPWID) u1(.i(a), .sgn(sa), .exp(xa), .man(ma), .vz(az), .qnan(), .snan(), .nan(nan_a) );
-fpDecomp #(FPWID) u2(.i(b), .sgn(sb), .exp(xb), .man(mb), .vz(bz), .qnan(), .snan(), .nan(nan_b) );
+fpDecomp #(FPWID) u1(.i(a), .sgn(sa), .exp(xa), .man(ma), .vz(az), .qnan(), .snan(snan_a), .nan(nan_a) );
+fpDecomp #(FPWID) u2(.i(b), .sgn(sb), .exp(xb), .man(mb), .vz(bz), .qnan(), .snan(snan_b), .nan(nan_b) );
 
 wire unordered = nan_a | nan_b;
 
@@ -69,6 +71,7 @@ end
 
 // an unorder comparison will signal a nan exception
 //assign nanx = op!=`FCOR && op!=`FCUN && unordered;
-assign nanx = 1'b0;
+assign nan = unordered;
+assign snan = snan_a|snan_b;
 
 endmodule

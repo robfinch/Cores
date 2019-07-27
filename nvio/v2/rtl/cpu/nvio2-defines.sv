@@ -122,10 +122,24 @@
 `define SNEI	7'h59
 `define R1		7'h5A
 `define R3		7'h5B
-`define CMP		7'h5E
-`define CMPU	7'h5F
+`define MULH		6'h00
+`define MULUH		6'h01
+`define MUL			6'h20
+`define MULU		6'h21
+`define DIV			6'h22
+`define DIVU		6'h23
+`define MOD			6'h24
+`define MODU		6'h25
+`define CMPI	7'h5E
+`define CMPUI	7'h5F
 
 `define Bcc		7'h60
+`define BEQ			3'd0
+`define BNE			3'd1
+`define BLT			3'd2
+`define BGE			3'd3
+`define BLTU		3'd6
+`define BGEU		3'd7
 `define BBc		7'h61
 `define BEQI	7'h62
 `define BNEI	7'h63
@@ -144,15 +158,44 @@
 `define CHKI	7'h6F
 
 `define FLT1	7'h71
+`define FCVTF2I	5'd02
+`define FCVTI2F	5'd03
+`define FCVTSQ	5'd10
+`define FCVTDQ	5'd11
+`define FSQRT		5'd13
+`define FCVTQS	5'd26
+`define FCVTQD	5'd27
+`define FCLASS	5'd30
 `define FLT2	7'h72
+`define FMAX		5'd2
+`define FMIN		5'd3
+`define FADD		5'd4
+`define FSUB		5'd5
+`define FCMP		5'd6
+`define FMUL		5'd8
+`define FDIV		5'd9
+`define FSLT		5'd16
+`define FSGE		5'd17
+`define FSLE		5'd18
+`define FSGT		5'd19
+`define FSEQ		5'd20
+`define FSNE		5'd21
+`define FSUN		5'd22
+`define FSGNOP	5'd15
 `define FLT3	7'h73
+`define FMA			3'd0
+`define FMS			3'd1
+`define FNMA		3'd2
+`define FNMS		3'd3
 `define FLT2I	7'h76
+
 
 `define BF		7'h78
 `define LILD	7'h7C
 `define LIAS1	7'h7D
 `define LIAS2	7'h7E
 `define LIAS3	7'h7F
+
 
 `define CC_ILLEGAL_INSN		4'd2
 

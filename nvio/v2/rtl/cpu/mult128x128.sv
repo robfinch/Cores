@@ -33,6 +33,7 @@ input [127:0] b;
 output reg [255:0] p;
 
 reg [127:0] p1d;
+reg [127:0] aa, bb;
 wire [127:0] z0, z2, p1;
 reg [127:0] z1;
 wire [127:0] ad, bd;
