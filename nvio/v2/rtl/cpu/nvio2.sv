@@ -89,12 +89,14 @@ reg [5:0] funct;
 reg [2:0] funct3;
 reg [4:0] fltFunct5;
 reg [2:0] rm3;
+reg [3:0] cond4;
 reg [2:0] cond3;
 reg [1:0] cond2;
 reg [31:0] btgt;			// branch target
 reg [6:0] bitno;
 reg [11:0] csrno;
 reg [2:0] csrop;
+reg [6:0] shamt;			// shift amount
 reg [6:0] Rs1, Rs2, Rs3, Rd;
 reg wrrf;
 reg [7:0] acnt;
@@ -109,7 +111,7 @@ always @(posedge clk_i)
 		regfile[Rd] <= res;
 
 reg [127:0] a, b, c, res, imm;
-reg resp, ap;
+reg resp, ap, bp;
 
 reg [63:0] wc_time;	// wall-clock time
 reg wc_time_irq;
@@ -201,6 +203,11 @@ divr16 #(WID) u16 (
 	.done()
 );
 
+wire [255:0] shlo = a << b[6:0];
+wire [255:0] shro = {a,128'd0} >> b[6:0];
+wire [127:0] rolo = shlo[255:128] | shlo[127:0];
+wire [127:0] roro = shro[255:128] | shro[127:0];
+
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Floating point logic
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -233,19 +240,21 @@ fpCompare #(.FPWID(FPWID)) u1 (.a(a), .b(b), .o(fcmp_o), .nan(cmpnan), .snan(cmp
 assign fcmp_res = fcmp_o[1] ? {FPWID{1'd1}} : fcmp_o[0] ? 1'd0 : 1'd1;
 i2f #(.FPWID(FPWID)) u2 (.clk(clk_g), .ce(1'b1), .op(~Rs2[0]), .rm(rmq), .i(ia), .o(itof_res));
 f2i #(.FPWID(FPWID)) u3 (.clk(clk_g), .ce(1'b1), .op(~Rs2[0]), .i(a), .o(ftoi_res), .overflow());
-fpAddsub #(.FPWID(FPWID)) u4 (.clk(clk_g), .ce(1'b1), .rm(rmq), .op(funct5==`FSUB), .a(a), .b(b), .o(fas_o));
+fpAddsub #(.FPWID(FPWID)) u4 (.clk(clk_g), .ce(1'b1), .rm(rmq), .op((fpopcode==`FLT2 || fpopcode==`FLT2I)&& fltFunct5==`FSUB), .a(a), .b(b), .o(fas_o));
 fpMul #(.FPWID(FPWID)) u5 (.clk(clk_g), .ce(1'b1), .a(a), .b(b), .o(fmul_o), .sign_exe(), .inf(), .overflow(nmul_of), .underflow(mul_uf));
 fpDiv #(.FPWID(FPWID)) u6 (.rst(rst_i), .clk(clk_g), .clk4x(1'b0), .ce(1'b1), .ld(ld), .op(1'b0),
 	.a(a), .b(b), .o(fdiv_o), .done(), .sign_exe(), .overflow(div_of), .underflow(div_uf));
 fpSqrt #(.FPWID(FPWID)) u7 (.rst(rst_i), .clk(clk_g), .ce(1'b1), .ld(ld),
 	.a(a), .o(fsqrt_o), .done(sqrt_done), .sqrinf(sqrinf), .sqrneg(sqrneg));
+wire fms = fpopcode==`FLT3 && (funct3==`FMS || funct3==`FNMS);
+wire fna = fpopcode==`FLT3 && (funct3==`FNMA || funct3==`FNMS);
 fpFMA #(.FPWID(FPWID)) u14
 (
 	.clk(clk),
 	.ce(1'b1),
-	.op(opcode==FMS||opcode==FNMS),
+	.op(fms),
 	.rm(rmq),
-	.a(opcode==`FNMA||opcode==`FNMS ? {~a[FPWID-1],a[FPWID-2:0]} : a),
+	.a(fna ? {~a[FPWID-1],a[FPWID-2:0]} : a),
 	.b(b),
 	.c(c),
 	.o(fma_o),
@@ -345,6 +354,10 @@ else begin
 end
 
 BUFGCE u11 (.CE(!wfi), .I(clk_i), .O(clk_g));
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// Main state machine
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 always @(posedge clk_g)
 if (rst_i) begin
@@ -451,7 +464,7 @@ DECODE:
 		`STB,`STW,`STT,`STO,`STH,`STHC,`MSX,
 		`STFS,`STFD,`STFQ:
 			Rd <= 7'd0;
-		`Bcc,`BBc,`BEQI,`BNEI,`BRG,`NOP,`BMISC1:
+		`Bcc,`FBcc,`BBc,`BEQI,`BNEI,`BRG,`NOP,`BMISC1:
 			Rd <= 7'd0;
 		`CALL:
 			Rd <= {MachineMode,6'd61};
@@ -490,6 +503,7 @@ DECODE:
 		default:	imm <= {{107{ir[39]}},ir[39:19]};
 		endcase
 		Sc <= ir[33:31];
+		cond4 <= ir[10:7];
 		cond3 <= ir[9:7];
 		cond2 <= ir[8:7];
 		btgt <= {{17{ir[39]}},ir[39:25]};
@@ -499,6 +513,7 @@ DECODE:
 		funct3 <= ir[39:37];
 		fltFunct5 <= ir[29:25];
 		rm3 <= ir[33:31];
+		shamt <= ir[25:19];
 	end
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
@@ -516,7 +531,13 @@ REGFETCH:
 			a <= (Rs1[5:0]==6'd0) ? 128'd0 : rfoa;
 		endcase
 		case(opcode)
-		`MULI,`MULUI:	b <= imm;
+		`MULI,`MULUI,`DIVI,`DIVUI:	b <= imm;
+		`R3:
+			case(funct)
+			`SHLI,`ASLI,`SHRI,`ASRI,`ROLI,`RORI:
+				b <= shamt;
+			default:	b <= (Rs2[5:0]==6'd0) ? 128'd0 : rfob;
+			endcase
 		default:
 			b <= (Rs2[5:0]==6'd0) ? 128'd0 : rfob;
 		endcase
@@ -617,7 +638,39 @@ EXECUTE:
 		`SNEI:	begin res <= a != imm; illegal_insn <= 1'b0; resp <= 1'b0; wrrf <= 1'b1; end
 		`CMPI:	begin res <= $signed(a) < $signed(imm) ? -128'd1 : a==imm ? 128'd0 : 128'd1; illegal_insn <= 1'b0; wrrf <= 1'b1; end
 		`CMPUI:	begin res <= a < imm ? -128'd1 : a==imm ? 128'd0 : 128'd1; illegal_insn <= 1'b0; wrrf <= 1'b1; end
-
+		`R3:
+			case(funct)
+			`ADD:	begin res <= a + b; illegal_insn <= 1'b0; resp <= ap ^ bp; wrrf <= 1'b1; end
+			`SUB:	begin res <= a - b; illegal_insn <= 1'b0; resp <= ap ^ bp; wrrf <= 1'b1; end
+			`AND:	begin res <= a & b; illegal_insn <= 1'b0; resp <= ap | bp; wrrf <= 1'b1; end
+			`OR:	begin res <= a | b; illegal_insn <= 1'b0; resp <= ap | bp; wrrf <= 1'b1; end
+			`XOR:	begin res <= a ^ b; illegal_insn <= 1'b0; resp <= ap | bp; wrrf <= 1'b1; end
+			`SLT:	begin res <= $signed(a) < $signed(b); illegal_insn <= 1'b0; resp <= 1'b0; wrrf <= 1'b1; end
+			`SLE:	begin res <= $signed(a) <= $signed(b); illegal_insn <= 1'b0; resp <= 1'b0; wrrf <= 1'b1; end
+			`SGT:	begin res <= $signed(a) > $signed(b); illegal_insn <= 1'b0; resp <= 1'b0; wrrf <= 1'b1; end
+			`SGE:	begin res <= $signed(a) >= $signed(b); illegal_insn <= 1'b0; resp <= 1'b0; wrrf <= 1'b1; end
+			`SLTU:	begin res <= a < b; illegal_insn <= 1'b0; resp <= 1'b0; wrrf <= 1'b1; end
+			`SLEU:	begin res <= a <= b; illegal_insn <= 1'b0; resp <= 1'b0; wrrf <= 1'b1; end
+			`SGTU:	begin res <= a > b; illegal_insn <= 1'b0; resp <= 1'b0; wrrf <= 1'b1; end
+			`SGEU:	begin res <= a >= b; illegal_insn <= 1'b0; resp <= 1'b0; wrrf <= 1'b1; end
+			`SEQ:	begin res <= a == b; illegal_insn <= 1'b0; resp <= 1'b0; wrrf <= 1'b1; end
+			`SNE:	begin res <= a != b; illegal_insn <= 1'b0; resp <= 1'b0; wrrf <= 1'b1; end
+			`CMP:	begin res <= $signed(a) < $signed(b) ? -128'd1 : a==b ? 128'd0 : 128'd1; illegal_insn <= 1'b0; wrrf <= 1'b1; end
+			`CMPU:	begin res <= a < b ? -128'd1 : a==b ? 128'd0 : 128'd1; illegal_insn <= 1'b0; wrrf <= 1'b1; end
+			`SHL,`SHLI:		begin res <= shlo[127:0]; illegal_insn <= 1'b0; wrrf <= 1'b1; end
+			`ASL,`ASLI:		begin res <= shlo[127:0]; illegal_insn <= 1'b0; wrrf <= 1'b1; end
+			`SHR,`SHRI:		begin res <= shro[255:128]; illegal_insn <= 1'b0; wrrf <= 1'b1; end
+			`ASR,`ASRI:
+				begin
+					if (a[WID-1])
+						res <= shro[255:128] | ~({WID{1'b1}} >> b[6:0]);
+					else
+						res <= shro[255:128];
+				end
+			`ROL,`ROLI:	begin res <= rolo; illegal_insn <= 1'b0; wrrf <= 1'b1; end
+			`ROR,`RORI:	begin res <= roro; illegal_insn <= 1'b0; wrrf <= 1'b1; end
+			default:	;
+			endcase
 		// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  
 		// Floating-point
 		// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  
@@ -717,24 +770,40 @@ EXECUTE:
 		// Flow control (branch unit)
 		// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  
 		`Bcc:
-			begin
-				case(cond3)
-				`BEQ:	begin if (a==b) begin ip <= iip[11:0] <= btgt[11:0]; ip[31:12] <= iip[31:12]+btgt[31:12]; end illegal_insn <= 1'b0; end
-				`BNE:	begin if (a!=b) begin ip <= iip[11:0] <= btgt[11:0]; ip[31:12] <= iip[31:12]+btgt[31:12]; end illegal_insn <= 1'b0; end
-				`BLT:	begin if ($signed(a) < $signed(b)) begin ip <= iip[11:0] <= btgt[11:0]; ip[31:12] <= iip[31:12]+btgt[31:12]; end illegal_insn <= 1'b0; end
-				`BGE:	begin if ($signed(a) >= $signed(b)) begin ip <= iip[11:0] <= btgt[11:0]; ip[31:12] <= iip[31:12]+btgt[31:12]; end illegal_insn <= 1'b0; end
-				`BLTU:	begin if (a < b) begin ip <= iip[11:0] <= btgt[11:0]; ip[31:12] <= iip[31:12]+btgt[31:12]; end illegal_insn <= 1'b0; end
-				`BGEU:	begin if (a >= b) begin ip <= iip[11:0] <= btgt[11:0]; ip[31:12] <= iip[31:12]+btgt[31:12]; end illegal_insn <= 1'b0; end
-				endcase
-			end
-		`BBc:
-			case(cond2)
-			2'd0:	begin if ( a[bitno]) begin ip <= iip[11:0] <= btgt[11:0]; ip[31:12] <= iip[31:12]+btgt[31:12]; end illegal_insn <= 1'b0; end
-			2'd1:	begin if (!a[bitno]) begin ip <= iip[11:0] <= btgt[11:0]; ip[31:12] <= iip[31:12]+btgt[31:12]; end illegal_insn <= 1'b0; end
+			case(cond3)
+			`BEQ:	begin if (a==b) begin ip[11:0] <= btgt[11:0]; ip[31:12] <= iip[31:12]+btgt[31:12]; end illegal_insn <= 1'b0; end
+			`BNE:	begin if (a!=b) begin ip[11:0] <= btgt[11:0]; ip[31:12] <= iip[31:12]+btgt[31:12]; end illegal_insn <= 1'b0; end
+			`BLT:	begin if ($signed(a) < $signed(b)) begin ip[11:0] <= btgt[11:0]; ip[31:12] <= iip[31:12]+btgt[31:12]; end illegal_insn <= 1'b0; end
+			`BGE:	begin if ($signed(a) >= $signed(b)) begin ip[11:0] <= btgt[11:0]; ip[31:12] <= iip[31:12]+btgt[31:12]; end illegal_insn <= 1'b0; end
+			`BLTU:	begin if (a < b) begin ip[11:0] <= btgt[11:0]; ip[31:12] <= iip[31:12]+btgt[31:12]; end illegal_insn <= 1'b0; end
+			`BGEU:	begin if (a >= b) begin ip[11:0] <= btgt[11:0]; ip[31:12] <= iip[31:12]+btgt[31:12]; end illegal_insn <= 1'b0; end
 			default:	;
 			endcase
-		`BEQI:	begin if (a==imm) begin ip <= iip[11:0] <= btgt[11:0]; ip[31:12] <= iip[31:12]+btgt[31:12]; end illegal_insn <= 1'b0; end
-		`BNEI:	begin if (a!=imm) begin ip <= iip[11:0] <= btgt[11:0]; ip[31:12] <= iip[31:12]+btgt[31:12]; end illegal_insn <= 1'b0; end
+		`FBcc:
+			case(cond3)
+			`FBEQ:	begin if ( fcmp_o[0] & ~cmpnan) begin ip[11:0] <= btgt[11:0]; ip[31:12] <= iip[31:12]+btgt[31:12]; end illegal_insn <= 1'b0; end
+			`FBNE:	begin if (~fcmp_o[0] & ~cmpnan) begin ip[11:0] <= btgt[11:0]; ip[31:12] <= iip[31:12]+btgt[31:12]; end illegal_insn <= 1'b0; end
+			`FBLT:	begin if ( fcmp_o[1] & ~cmpnan) begin ip[11:0] <= btgt[11:0]; ip[31:12] <= iip[31:12]+btgt[31:12]; end illegal_insn <= 1'b0; end
+			`FBLE:	begin if ( fcmp_o[2] & ~cmpnan) begin ip[11:0] <= btgt[11:0]; ip[31:12] <= iip[31:12]+btgt[31:12]; end illegal_insn <= 1'b0; end
+			`FBUN:	begin if ( cmpnan) begin ip[11:0] <= btgt[11:0]; ip[31:12] <= iip[31:12]+btgt[31:12]; end illegal_insn <= 1'b0; end
+			default:	;
+			endcase
+		`BRG:
+			case(cond4)
+			`BREQ:	begin if (a==b) begin ip <= c; end illegal_insn <= 1'b0; end
+			`BRNE:	begin if (a!=b) begin ip <= c; end illegal_insn <= 1'b0; end
+			`BRLT:	begin if ($signed(a) < $signed(b)) begin ip <= c; end illegal_insn <= 1'b0; end
+			`BRGE:	begin if ($signed(a) >= $signed(b)) begin ip <= c; end illegal_insn <= 1'b0; end
+			default:	;
+			endcase
+		`BBc:
+			case(cond2)
+			2'd0:	begin if ( a[bitno]) begin ip[11:0] <= btgt[11:0]; ip[31:12] <= iip[31:12]+btgt[31:12]; end illegal_insn <= 1'b0; end
+			2'd1:	begin if (!a[bitno]) begin ip[11:0] <= btgt[11:0]; ip[31:12] <= iip[31:12]+btgt[31:12]; end illegal_insn <= 1'b0; end
+			default:	;
+			endcase
+		`BEQI:	begin if (a==imm) begin ip[11:0] <= btgt[11:0]; ip[31:12] <= iip[31:12]+btgt[31:12]; end illegal_insn <= 1'b0; end
+		`BNEI:	begin if (a!=imm) begin ip[11:0] <= btgt[11:0]; ip[31:12] <= iip[31:12]+btgt[31:12]; end illegal_insn <= 1'b0; end
 		`JAL:		begin ip <= a + imm; res <= ip; illegal_insn <= 1'b0; wrrf <= 1'b1; end
 		`JMP:		begin ip <= ir[38:7]; illegal_insn <= 1'b0; end
 		`CALL:	begin ip <= ir[38:7]; illegal_insn <= 1'b0; res <= ip; wrrf <= 1'b1; end
@@ -748,13 +817,22 @@ MULDIV1:
 	begin
 		acnt <= acnt - 2'd1;
 		if (acnt==8'd0) begin
+			goto (IFETCH);
 			case(opcode)
-			`MULI,`MULUI:		res <= mulo[127:0];
+			`MULI,`MULUI:		begin res <= mulo[127:0]; wrrf <= 1'b1; end
+			`DIVI:	begin res <= sgn ? ndiv_q : div_q; wrrf <= 1'b1; end
+			`MODI:	begin res <= sgn ? ndiv_r : div_q; wrrf <= 1'b1; end
+			`DIVUI:	begin res <= div_q; wrrf <= 1'b1; end
+			`MODUI:	begin res <= div_r; wrrf <= 1'b1; end
 			//`MULHI,`MULUHI:	res <= mulo[255:128];
 			`R3:
 				case(funct)
-				`MUL,`MULU:		res <= mulo[127:0];
-				`MULH,`MULUH:	res <= mulo[255:128];
+				`MUL,`MULU:		begin res <= mulo[127:0]; wrrf <= 1'b1; end
+				`MULH,`MULUH:	begin res <= mulo[255:128]; wrrf <= 1'b1; end
+				`DIV:		begin res <= sgn ? ndiv_q : div_q; wrrf <= 1'b1; end
+				`MOD:		begin res <= sgn ? ndiv_r : div_r; wrrf <= 1'b1; end
+				`DIVU:	begin res <= div_q; wrrf <= 1'b1; end
+				`MODU:	begin res <= div_r; wrrf <= 1'b1; end
 				default:			res <= 128'd0;
 				endcase
 			default:	res <= mulo[127:0];
@@ -957,15 +1035,19 @@ FLOAT:
 		mathCnt <= mathCnt - 2'd1;
 		if (mathCnt==8'd0) begin
 			case(fpopcode)
-			`FMA,`FMS,`FNMA,`FNMS:
-				begin
-					wrrf <= 1'b1;
-					res <= fres;
-					if (fdn) fuf <= 1'b1;
-					if (finf) fof <= 1'b1;
-					if (norm_nx) fnx <= 1'b1;
-				end
-			`FLT2:
+			`FLT3:
+				case(funct3)
+				`FMA,`FMS,`FNMA,`FNMS:
+					begin
+						wrrf <= 1'b1;
+						res <= fres;
+						if (fdn) fuf <= 1'b1;
+						if (finf) fof <= 1'b1;
+						if (norm_nx) fnx <= 1'b1;
+					end
+				default:	;
+				endcase
+			`FLT2,`FLT2I:
 				case(fltFunct5)
 				`FADD:
 					begin
