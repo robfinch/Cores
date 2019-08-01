@@ -163,6 +163,18 @@
 `define CMPI	7'h5E
 `define CMPUI	7'h5F
 
+`define V2BITS	6'h30
+`define BITS2V	6'h31
+// Vector mask operations
+`define VMAND		6'h38
+`define VMOR		6'h39
+`define VMXOR		6'h3A
+`define VMXNOR	6'h3B
+`define VMFIRST	6'h3C
+`define VMLAST	6'h3D
+`define VMPOP		6'h3E
+`define VMFILL	6'h3F
+
 `define Bcc		7'h60
 `define BEQ			3'd0
 `define BNE			3'd1
@@ -205,7 +217,6 @@
 `define FCVTQS	5'd26
 `define FCVTQD	5'd27
 `define FCLASS	5'd30
-`define FLT2	7'h72
 `define FMAX		5'd2
 `define FMIN		5'd3
 `define FADD		5'd4
@@ -221,12 +232,20 @@
 `define FSNE		5'd21
 `define FSUN		5'd22
 `define FSGNOP	5'd15
+`define VEC2	7'h72
+`define VEC1		6'h01
+`define VCMPRSS		6'h14
 `define FLT3	7'h73
 `define FMA			3'd0
 `define FMS			3'd1
 `define FNMA		3'd2
 `define FNMS		3'd3
-`define FLT2I	7'h76
+`define FLT2I		3'd6
+`define FLT2		3'd7
+`define VFMA	7'h74
+`define VFMS	7'h75
+`define VFNMA	7'h76
+`define VFNMS	7'h77
 
 
 `define BF		7'h78
