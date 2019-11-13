@@ -32,13 +32,14 @@
 //
 `include "nvio3-config.sv"
 
-module getQueuedCount(branchmiss, phitd, tails, rob_tails, slotvd, slot_jc, slot_ret, take_branch,
+module getQueuedCount(branchmiss, brk, phitd, tails, rob_tails, slotvd, slot_jc, slot_ret, take_branch,
 	iq_v, rob_v, queuedCnt, queuedOnp, debug_on);
 parameter QENTRIES = `QENTRIES;
 parameter QSLOTS = `QSLOTS;
 parameter RENTRIES = `RENTRIES;
 parameter RSLOTS = `RSLOTS;
 input branchmiss;
+input [2:0] brk;
 input phitd;
 input [`QBITS] tails [0:QSLOTS-1];
 input [`RBITS] rob_tails [0:RSLOTS-1];
@@ -73,14 +74,16 @@ begin
       if (iq_v[tails[0]]==`INV && rob_v[rob_tails[0]]==`INV) begin
         queuedCnt <= 3'd1;
         queuedOnp[0] <= `TRUE;
-        if (!(slot_jc[0]|slot_ret[0]|take_branch[0])) begin
-          if (iq_v[tails[1]]==`INV && rob_v[rob_tails[1]]==`INV) begin
-            if (!debug_on && `WAYS > 1) begin
-            	queuedCnt <= 3'd2;
-			        queuedOnp[1] <= `TRUE;
-			      end
-          end
-        end
+        if (!brk[0]) begin
+	        if (!(slot_jc[0]|slot_ret[0]|take_branch[0])) begin
+	          if (iq_v[tails[1]]==`INV && rob_v[rob_tails[1]]==`INV) begin
+	            if (!debug_on && `WAYS > 1) begin
+	            	queuedCnt <= 3'd2;
+				        queuedOnp[1] <= `TRUE;
+				      end
+	          end
+	        end
+	      end
     	end
 		3'b100:
       if (iq_v[tails[0]]==`INV && rob_v[rob_tails[0]]==`INV) begin
@@ -92,34 +95,40 @@ begin
       if (iq_v[tails[0]]==`INV && rob_v[rob_tails[0]]==`INV) begin
         queuedCnt <= 3'd1;
         queuedOnp[1] <= `TRUE;
-        if (!(slot_jc[1]|slot_ret[1]|take_branch[1])) begin
-          if (iq_v[tails[1]]==`INV && rob_v[rob_tails[1]]==`INV) begin
-            if (!debug_on && `WAYS > 1) begin
-            	queuedCnt <= 3'd2;
-            	queuedOnp[2] <= `TRUE;
-            end
-          end
-        end
+        if (!brk[1]) begin
+	        if (!(slot_jc[1]|slot_ret[1]|take_branch[1])) begin
+	          if (iq_v[tails[1]]==`INV && rob_v[rob_tails[1]]==`INV) begin
+	            if (!debug_on && `WAYS > 1) begin
+	            	queuedCnt <= 3'd2;
+	            	queuedOnp[2] <= `TRUE;
+	            end
+	          end
+	        end
+      	end
     	end
 		3'b111:
       if (iq_v[tails[0]]==`INV && rob_v[rob_tails[0]]==`INV) begin
         queuedCnt <= 3'd1;
         queuedOnp[0] <= `TRUE;
-				if (!(slot_jc[0]|slot_ret[0]|take_branch[0])) begin
-          if (iq_v[tails[1]]==`INV && rob_v[rob_tails[1]]==`INV) begin
-            if (!debug_on && `WAYS > 1) begin
-            	queuedCnt <= 3'd2;
-            	queuedOnp[1] <= `TRUE;
-            end
-          	if (!(slot_jc[1]|slot_ret[1]|take_branch[1])) begin
-	            if (iq_v[tails[2]]==`INV && rob_v[rob_tails[2]]==`INV) begin
-		            if (!debug_on && `WAYS > 2) begin
-		            	queuedCnt <= 3'd3;
-		            	queuedOnp[2] <= `TRUE;
-		            end
+        if (!brk[0]) begin
+					if (!(slot_jc[0]|slot_ret[0]|take_branch[0])) begin
+	          if (iq_v[tails[1]]==`INV && rob_v[rob_tails[1]]==`INV) begin
+	            if (!debug_on && `WAYS > 1) begin
+	            	queuedCnt <= 3'd2;
+	            	queuedOnp[1] <= `TRUE;
 	            end
-	          end
-	        end
+	            if (!brk[1]) begin
+		          	if (!(slot_jc[1]|slot_ret[1]|take_branch[1])) begin
+			            if (iq_v[tails[2]]==`INV && rob_v[rob_tails[2]]==`INV) begin
+				            if (!debug_on && `WAYS > 2) begin
+				            	queuedCnt <= 3'd3;
+				            	queuedOnp[2] <= `TRUE;
+				            end
+			            end
+			          end
+		        	end
+		        end
+					end
 				end
 			end
 		default:	;

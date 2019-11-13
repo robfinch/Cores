@@ -153,7 +153,8 @@ reg [127:0] kreg;
 
 wire [127:0] ibundle;
 wire [7:0] template [0:QSLOTS-1];
-wire [39:0] insnx [0:QSLOTS-1];
+wire [40:0] insnx [0:QSLOTS-1];
+wire [2:0] brkbits = ibundle[125:123];
 
 reg [4:0] state;
 reg [7:0] cnt;
@@ -175,27 +176,6 @@ wire [RBIT:0] Rd2 [0:QSLOTS-1];
 wire [127:0] rfoa [0:QSLOTS-1];
 wire [127:0] rfob [0:QSLOTS-1];
 wire [127:0] rfoc [0:QSLOTS-1];
-wire [127:0] gprfoa [0:QSLOTS-1];
-wire [127:0] gprfob [0:QSLOTS-1];
-wire [127:0] gprfoc [0:QSLOTS-1];
-wire [127:0] fprfoa [0:QSLOTS-1];
-wire [127:0] fprfob [0:QSLOTS-1];
-wire [127:0] fprfoc [0:QSLOTS-1];
-always @*
-for (n = 0; n < QSLOTS; n = n + 1)
-	if (Rs1[n] < 7'd32)
-		rfoa[n] <= gprfoa[n];
-	else if (Rs1[n] >= 7'd32 && Rs1[n] < 7'd64)
-		rfoa[n] <= fprfoa[n];
-	else if (Rs1[n] >= 7'd96 && Rs1[n] < 7'd104)	// condition registers
-		;
-	else if (Rs1[n] >= 7'd104 && Rs1[n] < 7'd112)	// link registers
-		rfoa[n] <= lkrfoa[n];
-	else if (Rs1[n] >= 7'd112 && Rs1[n] < 7'd115)	// Count registers
-		rfoa[n] <= ctrfoa[n];
-	// ToDo: vector registers
-	else
-		rfoa[n] <= 128'd0;
 
 wire [AREGS-1:0] rf_v;								// register is valid
 wire [AREGS-1:0] regIsValid;					// register is valid (in this cycle)
@@ -1576,9 +1556,9 @@ assign predict_takenx[1] = insnx[1][39];
 assign predict_takenx[2] = insnx[2][39];
 `endif
 
-assign predict_taken[0] = insnx[0][5]==1'b1 ? insnx[0][4] : predict_takenx[0];
-assign predict_taken[1] = insnx[1][5]==1'b1 ? insnx[1][4] : predict_takenx[1];
-assign predict_taken[2] = insnx[2][5]==1'b1 ? insnx[2][4] : predict_takenx[2];
+assign predict_taken[0] = insnx[0][8+5]==1'b1 ? insnx[0][8+4] : predict_takenx[0];
+assign predict_taken[1] = insnx[1][8+5]==1'b1 ? insnx[1][8+4] : predict_takenx[1];
+assign predict_taken[2] = insnx[2][8+5]==1'b1 ? insnx[2][8+4] : predict_takenx[2];
 
 
 reg StoreAck1, isStore;
@@ -2116,7 +2096,8 @@ decodeBuffer udcb1
 	.ibundle(ibundle),
 	.template(template),
 	.insnx(insnx),
-	.queued(queuedCnt!=3'd0)
+	.queued(queuedCnt!=3'd0),
+	.queuedOnp(queuedOnp)
 );
 
 
@@ -4122,9 +4103,12 @@ always @(posedge clk)
 // there are entries available in both the dispatch and re-order buffer. This
 // quarentees the re-order buffer id is available during queue. The instruction
 // can't execute until there is a place to put the result.
+// The break bit in the instruction template must also be clear in order for an
+// instruction to queue.
 getQueuedCount ugqc1
 (
 	.branchmiss(branchmiss),
+	.brk(brkbits),
 	.phitd(phitd),
 	.tails(tails),
 	.rob_tails(rob_tails),
