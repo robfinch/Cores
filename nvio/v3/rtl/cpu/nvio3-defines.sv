@@ -462,6 +462,8 @@
 `define FPX_SWT			8'd231		// software triggered
 
 `define OPCODE			7:0
+`define AFUNCT6			40:35
+`define BFUNCT4			40:37
 `define FUNCT5			39:35
 `define FUNCT2			34:33
 `define SZ3					30:28

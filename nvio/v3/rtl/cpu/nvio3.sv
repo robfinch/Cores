@@ -139,6 +139,7 @@ reg [AMSB:0] ra;		// return address - predicted
 reg [2:0] ip_mask, ip_maskd;
 reg [AMSB:0] missip, excmissip;
 wire freezeip;
+reg [7:0] condreg [0:7];
 reg [1:0] slot;
 wire [AMSB:0] slot0ip = {ip[AMSB:4],4'h0};
 wire [AMSB:0] slot1ip = {ip[AMSB:4],4'h5};
@@ -171,11 +172,17 @@ wire exv;
 wire [RBIT:0] Rs1 [0:QSLOTS-1];
 wire [RBIT:0] Rs2 [0:QSLOTS-1];
 wire [RBIT:0] Rs3 [0:QSLOTS-1];
+wire [RBIT:0] Rs4 [0:QSLOTS-1];
 wire [RBIT:0] Rd [0:QSLOTS-1];
 wire [RBIT:0] Rd2 [0:QSLOTS-1];
+wire [2:0] Crd [0:QSLOTS-1];
 wire [127:0] rfoa [0:QSLOTS-1];
 wire [127:0] rfob [0:QSLOTS-1];
 wire [127:0] rfoc [0:QSLOTS-1];
+wire [127:0] fp_rfoa [0:QSLOTS-1];
+wire [127:0] fp_rfob [0:QSLOTS-1];
+wire [127:0] fp_rfoc [0:QSLOTS-1];
+wire [127:0] lk_rfo [0:QSLOTS-1];
 
 wire [AREGS-1:0] rf_v;								// register is valid
 wire [AREGS-1:0] regIsValid;					// register is valid (in this cycle)
@@ -430,29 +437,32 @@ reg [RBIT:0] iq_rs2 [0:QENTRIES-1];		// debugging
 reg [RBIT:0] iq_rs3 [0:QENTRIES-1];
 reg [RBIT:0] iq_tgt [0:QENTRIES-1];		// Rt field or ZERO -- this is the instruction's target (if any)
 reg [RBIT:0] iq_tgt2 [0:QENTRIES-1];	// A second target of the instruction
+reg [2:0] iq_crtgt [0:QENTRIES-1];
 //reg [3:0] iq_tgtrs [0:QENTRIES-1];
 //reg [3:0] iq_tgt2rs [0:QENTRIES-1];
 reg [WID-1:0] iq_argI	[0:QENTRIES-1];	// argument 0 (immediate)
-reg [WID-1+`EXTRA_BITS:0] iq_argA	[0:QENTRIES-1];	// argument 1
+reg [WID-1:0] iq_argA	[0:QENTRIES-1];	// argument 1
+reg [WID-1:0] iq_argB	[0:QENTRIES-1];	// argument 2
+reg [WID-1:0] iq_argC	[0:QENTRIES-1];	// argument 3
+reg [WID-1:0] iq_fpargA	[0:QENTRIES-1];	// argument 1
+reg [WID-1:0] iq_fpargB	[0:QENTRIES-1];	// argument 2
+reg [WID-1:0] iq_fpargC	[0:QENTRIES-1];	// argument 3
+reg [WID-1:0] iq_vargA	[0:QENTRIES-1];	// argument 1
+reg [WID-1:0] iq_vargB	[0:QENTRIES-1];	// argument 2
+reg [WID-1:0] iq_vargC	[0:QENTRIES-1];	// argument 3
+reg [WID-1:0] iq_vargD	[0:QENTRIES-1];	// argument 4 (mask register)
+
 reg [QENTRIES-1:0] iq_argA_v;	// arg1 valid
 reg [`RBITSP1] iq_argA_s	[0:QENTRIES-1];	// arg1 source (iq entry # with top bit representing Rd2)
-reg [WID-1+`EXTRA_BITS:0] iq_argB	[0:QENTRIES-1];	// argument 2
 reg [QENTRIES-1:0] iq_argB_v;	// arg2 valid
 reg  [`RBITSP1] iq_argB_s	[0:QENTRIES-1];	// arg2 source (iq entry # with top bit representing Rd2)
-reg [WID-1+`EXTRA_BITS:0] iq_argC	[0:QENTRIES-1];	// argument 3
 reg [QENTRIES-1:0] iq_argC_v;	// arg3 valid
 reg  [`RBITSP1] iq_argC_s	[0:QENTRIES-1];	// arg3 source (iq entry # with top bit representing Rd2))
+reg [QENTRIES-1:0] iq_argD_v;	// arg4 valid
+reg  [`RBITSP1] iq_argD_s	[0:QENTRIES-1];	// arg3 source (iq entry # with top bit representing Rd2))
 
 reg [WID-1:0] iq_fpargI	[0:QENTRIES-1];	// argument 0 (immediate)
-reg [WID-1+`EXTRA_BITS:0] iq_fpargA	[0:QENTRIES-1];	// argument 1
-reg [QENTRIES-1:0] iq_fpargA_v;	// arg1 valid
-reg [`RBITSP1] iq_fpargA_s	[0:QENTRIES-1];	// arg1 source (iq entry # with top bit representing Rd2)
-reg [WID-1+`EXTRA_BITS:0] iq_fpargB	[0:QENTRIES-1];	// argument 2
-reg [QENTRIES-1:0] iq_fpargB_v;	// arg2 valid
-reg  [`RBITSP1] iq_fpargB_s	[0:QENTRIES-1];	// arg2 source (iq entry # with top bit representing Rd2)
-reg [WID-1+`EXTRA_BITS:0] iq_fpargC	[0:QENTRIES-1];	// argument 3
-reg [QENTRIES-1:0] iq_fpargC_v;	// arg3 valid
-reg  [`RBITSP1] iq_fpargC_s	[0:QENTRIES-1];	// arg3 source (iq entry # with top bit representing Rd2))
+reg [WID-1:0] iq_lkreg [0:QENTRIES-1];
 
 reg [`ABITS] iq_ip	[0:QENTRIES-1];	// instruction pointer for this instruction
 reg [AMSB:0] iq_ma [0:QENTRIES-1];	// memory address
@@ -465,11 +475,13 @@ reg [2:0] rob_unit [0:RENTRIES-1];
 reg [39:0] rob_instr[0:RENTRIES-1];	// instruction opcode
 reg [7:0] rob_exc [0:RENTRIES-1];
 reg [AMSB:0] rob_ma [0:RENTRIES-1];
-reg [WID-1+`EXTRA_BITS:0] rob_argA [0:RENTRIES-1];	// value to use for CSR at oddball commit
-reg [WID-1+`EXTRA_BITS:0] rob_res [0:RENTRIES-1];
+reg [WID-1:0] rob_argA [0:RENTRIES-1];	// value to use for CSR at oddball commit
+reg [WID-1:0] rob_res [0:RENTRIES-1];
+reg [7:0] rob_cr [0:RENTRIES-1];
 reg [31:0] rob_status [0:RENTRIES-1];
 reg [RBIT:0] rob_tgt [0:RENTRIES-1];
-reg [WID-1+`EXTRA_BITS:0] rob_res2 [0:RENTRIES-1];
+reg [2:0] rob_crtgt [0:RENTRIES-1];
+reg [WID-1:0] rob_res2 [0:RENTRIES-1];
 reg [RBIT:0] rob_tgt2 [0:RENTRIES-1];
 
 // debugging
@@ -1245,22 +1257,21 @@ Regfile urf1
 (
 	.clk(clk_i),
 	.clk2x(clk2x_i),
-	.wr0(commit0_v),
-	.wa0({commit0_tgt[6] ? fprgs : rgs,commit0_tgt[5:0]}),
+	.wr0(commit0_v && commit0_tgt[6:5]==2'b00),
+	.wa0(commit0_tgt[4:0]),
 	.i0(commit0_bus),
-	.wr1(commit1_v),
-	.wa1({commit0_tgt[6] ? fprgs : rgs,commit1_tgt[5:0]}),
+	.wr1(commit1_v && commit0_tgt[6:5]==2'b00),
+	.wa1(commit1_tgt[4:0]),
 	.i1(commit1_bus),
-	.rclk(~clk_i),
-	.ra0({Rs1[0][6]?fprgs:rgs,Rs1[0][5:0]}),
-	.ra1({Rs2[0][6]?fprgs:rgs,Rs2[0][5:0]}),
-	.ra2({Rs3[0][6]?fprgs:rgs,Rs3[0][5:0]}),
-	.ra3({Rs1[1][6]?fprgs:rgs,Rs1[1][5:0]}),
-	.ra4({Rs2[1][6]?fprgs:rgs,Rs2[1][5:0]}),
-	.ra5({Rs3[1][6]?fprgs:rgs,Rs3[1][5:0]}),
-	.ra6({Rs1[2][6]?fprgs:rgs,Rs1[2][5:0]}),
-	.ra7({Rs2[2][6]?fprgs:rgs,Rs2[2][5:0]}),
-	.ra8({Rs3[2][6]?fprgs:rgs,Rs3[2][5:0]}),
+	.ra0(Rs1[0][4:0]),
+	.ra1(Rs2[0][4:0]),
+	.ra2(Rs3[0][4:0]),
+	.ra3(Rs1[1][4:0]),
+	.ra4(Rs2[1][4:0]),
+	.ra5(Rs3[1][4:0]),
+	.ra6(Rs1[2][4:0]),
+	.ra7(Rs2[2][4:0]),
+	.ra8(Rs3[2][4:0]),
 	.o0(rfoa[0]),
 	.o1(rfob[0]),
 	.o2(rfoc[0]),
@@ -1272,6 +1283,53 @@ Regfile urf1
 	.o8(rfoc[2])
 );
 
+Regfile ufprf1
+(
+	.clk(clk_i),
+	.clk2x(clk2x_i),
+	.wr0(commit0_v && commit0_tgt[6:5]==2'b01),
+	.wa0(commit0_tgt[4:0]),
+	.i0(commit0_bus),
+	.wr1(commit1_v && commit0_tgt[6:5]==2'b01),
+	.wa1(commit1_tgt[4:0]),
+	.i1(commit1_bus),
+	.ra0(Rs1[0][4:0]),
+	.ra1(Rs2[0][4:0]),
+	.ra2(Rs3[0][4:0]),
+	.ra3(Rs1[1][4:0]),
+	.ra4(Rs2[1][4:0]),
+	.ra5(Rs3[1][4:0]),
+	.ra6(Rs1[2][4:0]),
+	.ra7(Rs2[2][4:0]),
+	.ra8(Rs3[2][4:0]),
+	.o0(fp_rfoa[0]),
+	.o1(fp_rfob[0]),
+	.o2(fp_rfoc[0]),
+	.o3(fp_rfoa[1]),
+	.o4(fp_rfob[1]),
+	.o5(fp_rfoc[1]),
+	.o6(fp_rfoa[2]),
+	.o7(fp_rfob[2]),
+	.o8(fp_rfoc[2])
+);
+
+LkRegfile ulrf1
+(
+	.clk(clk_i),
+	.clk2x(clk2x_i),
+	.wr0(commit0_v && commit0_tgt[6:3]==4'b1100),
+	.wr1(commit1_v && commit0_tgt[6:3]==4'b1100),
+	.wa0(commit0_tgt[2:0]),
+	.wa1(commit1_tgt[2:0]),
+	.i0(commit0_bus),
+	.i1(commit1_bus),
+	.ra0(Rs2[0][2:0]),
+	.ra1(Rs2[1][2:0]),
+	.ra2(Rs2[2][2:0]),
+	.o0(lk_rfo[0]),
+	.o1(lk_rfo[1]),
+	.o2(lk_rfo[2])
+);
 
 instructionPointer uip1
 (
@@ -2100,26 +2158,73 @@ decodeBuffer udcb1
 	.queuedOnp(queuedOnp)
 );
 
+function fnUpdCr1;
+input [7:0] opcode;
+endfunction
+
+// Which condition register to update. 
+// The default for all instructions is Cr0 which is considered to be scrap.
+function [2:0] fnCrd;
+input [40:0] ins;
+casez(ins[`OPCODE])
+`CMPI,`CMPUI:	fnCrd = ins[`RD3];
+`R1,`R3:
+	if (ins[34])
+		fnCrd = 3'b001;
+	else
+		fnCrd = 3'b000;
+`R2:
+	case(ins[40:35])
+	`CMP,`CMPU:	fnCrd = ins[`RD3];
+	default:
+		if (ins[34])
+			fnCrd = 3'b001;
+		else
+			fnCrd = 3'b000;
+	endcase
+8'hE?:	// Float operations
+	case(ins[`OPCODE])
+	`FLT2,`FLT2I:
+		case(ins[28:23])
+		`FCMP:	fnCrd = ins[`RD3];
+		default:
+			if (ins[34])
+				fnCrd = 3'b010;
+			else
+				fnCrd = 3'b000;
+		endcase
+	default:
+		if (ins[34])
+			fnCrd = 3'b010;
+		else
+			fnCrd = 3'b000;
+	endcase
+`ADDIr,`MULIr,`DIVIr,`MODIr,`ANDIr,`ORIr,`EORIr:
+	fnCrd = 3'b001;
+default:
+	fnCrd = 3'b000;
+endcase
+endfunction
 
 function [6:0] fnRd;
 input [40:0] ins;
 casez(ins[`OPCODE])
-`CMPI:			fnRd <= {4'b1000,ins[`RD3]};
-`BLT,`BGE,`BLE,`BGT,`BLTU,`BGEU,`BLEU,`BGTU,`BEQ,`BNE,`BRA,`BRN,
-`CALL:			fnRd = {5'b0,ins[`RD2]};
-`RET:				fnRd = {1'b0,ins[`RD]};
-`BMISC:				fnRd = ins[39:35]==`SEI ? {1'b0,ins[`RD]} : 7'd0;
-8'b10??????:	fnRd = {1'b0,ins[`RD]};	// ALU
+`CALL:			fnRd = {4'b1100,ins[`RD3]};
+`RET:				fnRd = {2'b00,ins[`RD]};
+`BMISC:			fnRd = ins[40:37]==`SEI ? {2'b0,ins[`RD]} : ins[40:37]==`MTL ? {4'b1100,ins[`RD3]} : 7'd0;
+8'b10??????:	fnRd = {2'b0,ins[`RD]};	// ALU
 8'hE1:
-	case(ins[`FUNCT5])
-	`FTOI:	fnRd = {1'b0,ins[`RD]};
-	default:	fnRd = {1'b0,ins[`RD]};
+	case(ins[`FUNCT6])
+	`FTOI:	fnRd = {2'b0,ins[`RD]};
+	default:	fnRd = {2'b01,ins[`RD]};
 	endcase
 8'hE2,8'hE3,8'hE4,8'hE5,8'hE6,8'hE7:
-		fnRd = {1'b0,ins[`RD]};
-8'h2D:	fnRd = {1'b0,ins[`RD]};	// TLB
-8'b0?,8'h1?,8'h4?,8'h5?:
-				fnRd = {1'b0,ins[`RD]};	// MLD
+		fnRd = {2'b01,ins[`RD]};
+8'h2D:	fnRd = {2'b00,ins[`RD]};	// TLB
+8'b0?,8'h1?:
+				fnRd = {2'b00,ins[`RD]};	// MLD
+8'h4?,8'h5?:
+				fnRd = {2'b10,ins[`RD]};	// VMLD
 default:	fnRd = 7'd0;
 endcase
 endfunction
@@ -2173,16 +2278,19 @@ assign Rs2[0] = fnRs2(slotu[0],insnx[0]);
 assign Rs3[0] = fnRs3(slotu[0],insnx[0]);
 assign Rd[0] = fnRd(slotu[0],insnx[0]);
 assign Rd2[0] = fnRd2(slotu[0],insnx[0]);
+assign Crd[0] = fnCrd(insnx[0]);
 assign Rs1[1] = fnRs1(slotu[1],insnx[1]);
 assign Rs2[1] = fnRs2(slotu[1],insnx[1]);
 assign Rs3[1] = fnRs3(slotu[1],insnx[1]);
 assign Rd[1] = fnRd(slotu[1],insnx[1]);
 assign Rd2[1] = fnRd2(slotu[1],insnx[1]);
+assign Crd[1] = fnCrd(insnx[1]);
 assign Rs1[2] = fnRs1(slotu[2],insnx[2]);
 assign Rs2[2] = fnRs2(slotu[2],insnx[2]);
 assign Rs3[2] = fnRs3(slotu[2],insnx[2]);
 assign Rd[2] = fnRd(slotu[2],insnx[2]);
 assign Rd2[2] = fnRd2(slotu[2],insnx[2]);
+assign Crd[2] = fnCrd(insnx[2]);
 
 function [5:0] aopcode;
 input [39:0] isn;
@@ -2527,37 +2635,45 @@ IsMemsb = unit==`MUnit && mopcode(isn)==`MSX && isn[`FUNCT5]==`MEMSB;
 endfunction
 
 function IsSEI;
-input [2:0] unit;
-input [39:0] isn;
-IsSEI = unit==`BUnit && isn[`OPCODE4]==`BMISC && isn[`FUNCT5]==`SEI; 
+input [40:0] isn;
+IsSEI = isn[`OPCODE]==`BMISC && isn[`BFUNCT4]==`SEI; 
 endfunction
 
 function IsRet;
-input [2:0] unit;
-input [39:0] isn;
-IsRet = unit==`BUnit && isn[`OPCODE4]==`RET;
+input [40:0] isn;
+IsRet = isn[`OPCODE]==`RTS;
+endfunction
+
+function IsCheck;
+input [40:0] isn;
+IsCheck = isn[`OPCODE]==`CHKI || (isn[`OPCODE]==`R3 && isn[`AFUNCT6]==`CHK);
 endfunction
 
 function IsRFW;
-input [2:0] unit;
-input [39:0] isn;
-if ((fnRd(unit,isn) & 7'h3f)==6'd0 && (fnRd2(unit,isn) & 7'h3f)==6'd0)
+input [40:0] isn;
+if ((fnRd(isn) & 5'h1f)==5'd0 && (fnRd2(isn) & 5'h1f)==5'd0)
     IsRFW = FALSE;
 else
-case(unit)
-`BUnit:
-	case(isn[`OPCODE4])
-	`BMISC:		IsRFW = isn[`FUNCT5]==`SEI;
-	`JAL:     IsRFW = TRUE;
-	`CALL:    IsRFW = TRUE;  
-	`RET:     IsRFW = TRUE; 
+casez(isn[`OPCODE])
+// BUnit:
+`BMISC:	
+	case(isn[`BFUNCT4])
+	`SEI:	IsRFW = TRUE;
+	`MTL:	IsRFW = TRUE;
+	`MFL:	IsRFW = TRUE;
 	default:	IsRFW = FALSE;
-	endcase
-`IUnit:	IsRFW = TRUE;
-`FUnit:
-	case(isn[`OPCODE4])
+	endcase	
+`JRL:     IsRFW = TRUE;
+`JSR:     IsRFW = TRUE;  
+`RTS:     IsRFW = TRUE; 
+// IUnit
+8'h8?,8'h9?,8'hA?,8'hB?:
+	IsRFW = !IsCheck(isn);
+// FUnit:
+8'hE?:
+	case(isn[`OPCODE])
 	`FLT1:
-		case(isn[`FUNCT5])
+		case(isn[`FFUNCT6])
 		`FTX:		IsRFW = FALSE;
 		`FCX:		IsRFW = FALSE;
 		`FEX:		IsRFW = FALSE;
@@ -6447,6 +6563,8 @@ begin
 			iq_argB_s [tails[tails_rc(pat,row)]] <= rf_source[Rs2[row]];
 			iq_argC_v [tails[tails_rc(pat,row)]] <= regIsValid[Rs3[row]] | Source3Valid(slotu[row],insnx[row]);
 			iq_argC_s [tails[tails_rc(pat,row)]] <= rf_source[Rs3[row]];
+			iq_argD_v [tails[tails_rc(pat,row)]] <= regIsValid[Rs4[row]] | Source4Valid(slotu[row],insnx[row]);
+			iq_argD_s [tails[tails_rc(pat,row)]] <= rf_source[Rs4[row]];
 			for (col = 0; col < QSLOTS; col = col + 1) begin
 				if (col < row) begin
 					if (pat[col]) begin
@@ -6461,6 +6579,10 @@ begin
 						if (Rs3[row]==Rd[col] && Rs3[row][5:0]!=6'd0 && slot_rfw[col]) begin
 							iq_argC_v [tails[tails_rc(pat,row)]] <= Source3Valid(slotu[row],insnx[row]);
 							iq_argC_s [tails[tails_rc(pat,row)]] <= {1'b0,tails[tails_rc(pat,col)]};
+						end
+						if (Rs4[row]==Rd[col] && slot_rfw[col]) begin
+							iq_argD_v [tails[tails_rc(pat,row)]] <= Source4Valid(slotu[row],insnx[row]);
+							iq_argD_s [tails[tails_rc(pat,row)]] <= {1'b0,tails[tails_rc(pat,col)]};
 						end
 					end
 				end
@@ -6556,6 +6678,10 @@ begin
 	iq_argA[ndx] <= rfoa[slot];
 	iq_argB[ndx] <= rfob[slot];
 	iq_argC[ndx] <= rfoc[slot];
+	iq_fpargA[ndx] <= fp_rfoa[slot];
+	iq_fpargB[ndx] <= fp_rfob[slot];
+	iq_fpargC[ndx] <= fp-rfoc[slot];
+	iq_lkreg[ndx] <= lk_rfo[slot];
 	iq_argA_v[ndx] <= regIsValid[Rs1[slot]] || Source1Valid(slotu[slot],insnx[slot]);
 	iq_argB_v[ndx] <= regIsValid[Rs2[slot]] || Source2Valid(slotu[slot],insnx[slot]);
 	iq_argC_v[ndx] <= regIsValid[Rs3[slot]] || Source3Valid(slotu[slot],insnx[slot]);
@@ -6565,6 +6691,7 @@ begin
 	iq_pt[ndx] <= predict_taken[slot];
 	iq_tgt[ndx] <= Rd[slot];
 	iq_tgt2[ndx] <= Rd2[slot];
+	iq_crtgt[ndx] <= Crd[slot];
 	set_insn(ndx,id_bus);
 	// Some updates depend on instructions decoded at commit time.
 	rob_unit[rid] <= slotu[slot];
