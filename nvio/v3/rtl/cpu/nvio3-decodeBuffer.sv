@@ -21,8 +21,8 @@
 //
 // ============================================================================
 //
-`include "nvio-config.sv"
-`include "nvio-defines.sv"
+`include "nvio3-config.sv"
+`include "nvio3-defines.sv"
 
 module decodeBuffer(rst, clk, irq_i, im, cause_i, freezeip, int_commit,
 	ic_fault, ic_out, codebuf,
@@ -42,26 +42,26 @@ input int_commit;
 input next_bundle;
 input phit;
 input [1:0] ic_fault;
-input [127:0] ic_out;
+input [159:0] ic_out;
 input [47:0] codebuf [0:63];
-output reg [127:0] ibundlep;
+output reg [159:0] ibundlep;
 output reg [7:0] templatep [0:QSLOTS-1];
 output reg [40:0] insnxp [0:QSLOTS-1];
-output reg [127:0] ibundle;
+output reg [159:0] ibundle;
 output reg [7:0] template [0:QSLOTS-1];
-output reg [40:0] insnx [0:QSLOTS-1];
+output reg [39:0] insnx [0:QSLOTS-1];
 input queued;
-input [2:0] queuedOnp;
+input [3:0] queuedOnp;
 
 integer n;
 
 function IsExec;
-input [40:0] isn;
+input [39:0] isn;
 IsExec = (isn[`OPCODE]==`BMISC && isn[`FUNCT5]==`EXEC);
 endfunction
 
 function IsPfi;
-input [40:0] isn;
+input [39:0] isn;
 IsPfi = (isn[`OPCODE]==`BRK && isn[`FUNCT5]==`PFI);
 endfunction
 
@@ -112,73 +112,97 @@ else begin
 			insnxp[2] <= {1'b1,9'h0,`FLT_IBE,2'b00,4'h0,16'h03C0};
 		end
 		else begin
-			if (IsPfi(ic_out[40:0]))	begin
+			if (IsPfi(ic_out[39:0]))	begin
 				if (~|irq_i) begin
-					ibundlep[40:0] <= `NOP_INSN;
+					ibundlep[39:0] <= `NOP_INSN;
 					insnxp[0] <= `NOP_INSN;
 				end
 				else begin
 					// Need to reset the template here as an instruction is being converted to a NOP.
-					ibundlep <= {3'b0,`NOP_INSN,`NOP_INSN,1'b1,9'h0,cause_i,2'b00,irq_i,16'h03C0};
+					ibundlep <= {3'b0,`NOP_INSN,`NOP_INSN,`NOP_INSN,1'b1,9'h0,cause_i,2'b00,irq_i,16'h03C0};
 					insnxp[0] <= {1'b1,9'h0,cause_i,2'b00,irq_i,16'h03C0};
 					insnxp[1] <= `NOP_INSN;
 					insnxp[2] <= `NOP_INSN;
+					insnxp[3] <= `NOP_INSN;
 				end
 			end
-			else if (IsExec(ic_out[40:0])) begin
-				insnxp[0] <= codebuf[ic_out[`RS1]][40:0];
+			else if (IsExec(ic_out[39:0])) begin
+				insnxp[0] <= codebuf[ic_out[17:13]][39:0];
 			end
-			if (IsPfi(ic_out[81:41])) begin
+
+			if (IsPfi(ic_out[79:40])) begin
 				if (~|irq_i) begin
-					ibundlep[81:41] <= `NOP_INSN;
+					ibundlep[79:40] <= `NOP_INSN;
 					insnxp[1] <= `NOP_INSN;
 				end
 				else begin
 					// Need to reset the template here as an instruction is being converted to a NOP.
-					ibundlep[127:41] <= {3'b0,`NOP_INSN,1'b1,9'h0,cause_i,2'b00,irq_i,16'h03C0};
+					ibundlep[159:40] <= {3'b0,`NOP_INSN,`NOP_INSN,1'b1,9'h0,cause_i,2'b00,irq_i,16'h03C0};
 					insnxp[1] <= {1'b1,9'h0,cause_i,2'b00,irq_i,16'h03C0};
 					insnxp[2] <= `NOP_INSN;
+					insnxp[3] <= `NOP_INSN;
 				end
 			end
-			else if (IsExec(ic_out[81:41])) begin
-				insnxp[1] <= codebuf[ic_out[`RS1]][40:0];
+			else if (IsExec(ic_out[79:40])) begin
+				insnxp[1] <= codebuf[ic_out[57:53]][39:0];
 			end
-			if (IsPfi(ic_out[122:82])) begin
+	
+			if (IsPfi(ic_out[119:80])) begin
 				if (~|irq_i) begin
-					ibundlep[122:82] <= `NOP_INSN;
+					ibundlep[119:80] <= `NOP_INSN;
 					insnxp[2] <= `NOP_INSN;
 				end
 				else begin
-					ibundlep[122:82] <= {1'b1,9'h0,cause_i,2'b00,irq_i,16'h03C0};
+					ibundlep[159:80] <= {`NOP_INSN,1'b1,9'h0,cause_i,2'b00,irq_i,16'h03C0};
 					insnxp[2] <= {1'b1,9'h0,cause_i,2'b00,irq_i,16'h03C0};
+					insnxp[3] <= `NOP_INSN;
 				end
 			end
-			else if (IsExec(ic_out[122:82])) begin
-				insnxp[2] <= codebuf[ic_out[`RS1]][40:0];
+			else if (IsExec(ic_out[119:80])) begin
+				insnxp[2] <= codebuf[ic_out[97:93]][39:0];
 			end
+
+			if (IsPfi(ic_out[159:120])) begin
+				if (~|irq_i) begin
+					ibundlep[159:120] <= `NOP_INSN;
+					insnxp[3] <= `NOP_INSN;
+				end
+				else begin
+					ibundlep[159:120] <= {1'b1,9'h0,cause_i,2'b00,irq_i,16'h03C0};
+					insnxp[3] <= {1'b1,9'h0,cause_i,2'b00,irq_i,16'h03C0};
+				end
+			end
+			else if (IsExec(ic_out[159:120])) begin
+				insnxp[2] <= codebuf[ic_out[137:133]][39:0];
+			end
+
 		end
 	endcase
 end
 
 always @(posedge clk)
 if (rst) begin
-	ibundle <= {3'b0,{3{`NOP_INSN}}};
+	ibundle <= {3'b0,{4{`NOP_INSN}}};
 	insnx[0] <= `NOP_INSN;
 	insnx[1] <= `NOP_INSN;
 	insnx[2] <= `NOP_INSN;
+	insnx[3] <= `NOP_INSN;
 end
 else begin
 	if (queuedOnp[0])
-		ibundle[123] <= 1'b0;
+		ibundle[0] <= 1'b0;
 	if (queuedOnp[1])
-		ibundle[124] <= 1'b0;
+		ibundle[40] <= 1'b0;
 	if (queuedOnp[2])
-		ibundle[125] <= 1'b0;
+		ibundle[80] <= 1'b0;
+	if (queuedOnp[3])
+		ibundle[120] <= 1'b0;
 	if (phit & next_bundle) begin
 		ibundle <= ibundlep;
 		insnx[0] <= insnxp[0];
 		insnx[1] <= insnxp[1];
 		insnx[2] <= insnxp[2];
+		insnx[3] <= insnxp[3];
 	end
 end
 // On a cache miss load NOPs

@@ -150,12 +150,15 @@ reg [2:0] slotu [QSLOTS-1:0];
 reg [2:0] slotup [QSLOTS-1:0];
 reg [3:0] fb_panic;
 wire [`SNBITS] maxsn;
-reg [127:0] kreg;
 
-wire [127:0] ibundle;
-wire [7:0] template [0:QSLOTS-1];
-wire [40:0] insnx [0:QSLOTS-1];
-wire [2:0] brkbits = ibundle[125:123];
+wire [159:0] ibundle;
+wire [39:0] insnx [0:QSLOTS-1];
+wire [3:0] brkbits;
+// BF will be modified to BE by the decode buffer logic once the instruction has queued.
+assign brkbits[0] = insnx[0][7:0]==8'hBF;	// prefix with a break
+assign brkbits[1] = insnx[1][7:0]==8'hBF;
+assign brkbits[2] = insnx[2][7:0]==8'hBF;
+assign brkbits[3] = insnx[3][7:0]==8'hBF;
 
 reg [4:0] state;
 reg [7:0] cnt;

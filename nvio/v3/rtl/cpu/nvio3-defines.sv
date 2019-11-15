@@ -469,10 +469,10 @@
 `define SZ3					30:28
 `define RD3					10:8
 `define RD2					9:8
-`define RD					13:8
-`define RS1					19:14
-`define RS2					25:20
-`define RS3					31:26
+`define RD					12:8
+`define RS1					17:13
+`define RS2					22:18
+`define RS3					27:23
 
 `define INSTRUCTION_IM  31:18
 `define INSTRUCTION_IML	47:18
