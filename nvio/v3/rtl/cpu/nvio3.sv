@@ -1272,6 +1272,9 @@ Regfile urf1
 	.ra6(Rs1[2][4:0]),
 	.ra7(Rs2[2][4:0]),
 	.ra8(Rs3[2][4:0]),
+	.ra9(Rs1[3][4:0]),
+	.ra10(Rs2[3][4:0]),
+	.ra11(Rs3[3][4:0]),
 	.o0(rfoa[0]),
 	.o1(rfob[0]),
 	.o2(rfoc[0]),
@@ -1280,7 +1283,10 @@ Regfile urf1
 	.o5(rfoc[1]),
 	.o6(rfoa[2]),
 	.o7(rfob[2]),
-	.o8(rfoc[2])
+	.o8(rfoc[2]),
+	.o9(rfoa[3]),
+	.o10(rfob[3]),
+	.o11(rfoc[3])
 );
 
 Regfile ufprf1
@@ -1302,6 +1308,9 @@ Regfile ufprf1
 	.ra6(Rs1[2][4:0]),
 	.ra7(Rs2[2][4:0]),
 	.ra8(Rs3[2][4:0]),
+	.ra9(Rs1[3][4:0]),
+	.ra10(Rs2[3][4:0]),
+	.ra11(Rs3[3][4:0]),
 	.o0(fp_rfoa[0]),
 	.o1(fp_rfob[0]),
 	.o2(fp_rfoc[0]),
@@ -1310,7 +1319,10 @@ Regfile ufprf1
 	.o5(fp_rfoc[1]),
 	.o6(fp_rfoa[2]),
 	.o7(fp_rfob[2]),
-	.o8(fp_rfoc[2])
+	.o8(fp_rfoc[2]),
+	.o9(fp_rfoa[3]),
+	.o10(fp_rfob[3]),
+	.o11(fp_rfoc[3])
 );
 
 LkRegfile ulrf1
@@ -1326,9 +1338,11 @@ LkRegfile ulrf1
 	.ra0(Rs2[0][2:0]),
 	.ra1(Rs2[1][2:0]),
 	.ra2(Rs2[2][2:0]),
+	.ra3(Rs2[3][2:0]),
 	.o0(lk_rfo[0]),
 	.o1(lk_rfo[1]),
-	.o2(lk_rfo[2])
+	.o2(lk_rfo[2]),
+	.o3(lk_rfo[3])
 );
 
 instructionPointer uip1
@@ -4819,56 +4833,100 @@ else begin
 	if (!branchmiss) begin
 		queuedOn <= queuedOnp;
 		case(slotvd)
-		3'b001:
+		4'b0001:
 			if (queuedOnp[0]) begin
 				queue_slot(0,rob_tails[0],maxsn+1'd1,id_bus[0],active_tag,rob_tails[0]);
-				tKreg(id_bus[0]);
 			end
-		3'b010:
+		4'b0010:
 			if (queuedOnp[1]) begin
 				queue_slot(1,rob_tails[0],maxsn+1'd1,id_bus[1],active_tag,rob_tails[0]);
-				tKreg(id_bus[1]);
 			end
-		3'b011:
+		4'b0011:
 			if (queuedOnp[0]) begin
 				queue_slot(0,rob_tails[0],maxsn+1'd1,id_bus[0],active_tag,rob_tails[0]);
-				tKreg(id_bus[0]);
 				if (queuedOnp[1]) begin
 					queue_slot(1,rob_tails[1],maxsn+2'd2,id_bus[1],is_branch[0] ? active_tag+2'd1 : active_tag,rob_tails[1]);
-					tKreg(id_bus[1]);
-					arg_vs(3'b011);
+					arg_vs(4'b0011);
 				end
 			end
-		3'b100:
+		4'b0100:
 			if (queuedOnp[2]) begin
 				queue_slot(2,rob_tails[0],maxsn+1'd1,id_bus[2],active_tag,rob_tails[0]);
-				tKreg(id_bus[2]);
 			end
-		3'b101:	;	// illegal
-		3'b110:
+		4'b0101:	;	// illegal
+		4'b0110:
 			if (queuedOnp[1]) begin
 				queue_slot(1,rob_tails[0],maxsn+1'd1,id_bus[1],active_tag,rob_tails[0]);
-				tKreg(id_bus[1]);
 				if (queuedOnp[2]) begin
 					queue_slot(2,rob_tails[1],maxsn+2'd2,id_bus[2],is_branch[1] ? active_tag + 2'd1 : active_tag,rob_tails[1]);
-					tKreg(id_bus[2]);
-					arg_vs(3'b110);
+					arg_vs(4'b0110);
 				end
 			end
-		3'b111:
+		4'b0111:
 			if (queuedOnp[0]) begin
 				queue_slot(0,rob_tails[0],maxsn+1'd1,id_bus[0],active_tag,rob_tails[0]);
-				tKreg(id_bus[0]);
 				if (queuedOnp[1]) begin
 					queue_slot(1,rob_tails[1],maxsn+2'd2,id_bus[1],is_branch[0] ? active_tag + 2'd1 : active_tag,rob_tails[1]);
-					tKreg(id_bus[1]);
-					arg_vs(3'b011);
+					arg_vs(4'b0011);
 					if (queuedOnp[2]) begin
 						queue_slot(2,rob_tails[2],maxsn+2'd3,id_bus[2],
 							is_branch[0] && is_branch[1] ? active_tag + 2'd2 :
 							is_branch[0] ? active_tag + 2'd1 : is_branch[1] ? active_tag + 2'd1 : active_tag,rob_tails[2]);
-						tKreg(id_bus[2]);
-						arg_vs(3'b111);
+						arg_vs(4'b0111);
+					end
+				end
+			end
+		4'b1000:
+			if (queuedOnp[3]) begin
+				queue_slot(3,rob_tails[0],maxsn+1'd1,id_bus[3],active_tag,rob_tails[0]);
+			end
+		4'b1001:	;	// illegal
+		4'b1010:	;	// illegal
+		4'b1011:	;	// illegal
+		4'b1100:
+			if (queuedOnp[2]) begin
+				queue_slot(2,rob_tails[0],maxsn+1'd1,id_bus[2],active_tag,rob_tails[0]);
+				if (queuedOnp[3]) begin
+					queue_slot(3,rob_tails[1],maxsn+2'd2,id_bus[3],is_branch[1] ? active_tag + 2'd1 : active_tag,rob_tails[1]);
+					arg_vs(4'b1100);
+				end
+			end
+		4'b1101:	; // illegal
+		4'b1110:
+			if (queuedOnp[1]) begin
+				queue_slot(1,rob_tails[0],maxsn+1'd1,id_bus[1],active_tag,rob_tails[0]);
+				if (queuedOnp[2]) begin
+					queue_slot(2,rob_tails[1],maxsn+2'd2,id_bus[2],is_branch[0] ? active_tag + 2'd1 : active_tag,rob_tails[1]);
+					arg_vs(4'b0110);
+					if (queuedOnp[3]) begin
+						queue_slot(3,rob_tails[2],maxsn+2'd3,id_bus[3],
+							is_branch[0] && is_branch[1] ? active_tag + 2'd2 :
+							is_branch[0] ? active_tag + 2'd1 : is_branch[1] ? active_tag + 2'd1 : active_tag,rob_tails[2]);
+						arg_vs(4'b1110);
+					end
+				end
+			end
+		4'b1111:
+			if (queuedOnp[0]) begin
+				queue_slot(0,rob_tails[0],maxsn+1'd1,id_bus[0],active_tag,rob_tails[0]);
+				if (queuedOnp[1]) begin
+					queue_slot(1,rob_tails[1],maxsn+2'd2,id_bus[1],is_branch[0] ? active_tag + 2'd1 : active_tag,rob_tails[1]);
+					arg_vs(4'b0011);
+					if (queuedOnp[2]) begin
+						queue_slot(2,rob_tails[2],maxsn+2'd3,id_bus[2],
+							is_branch[0] && is_branch[1] ? active_tag + 2'd2 :
+							is_branch[0] ? active_tag + 2'd1 : is_branch[1] ? active_tag + 2'd1 : active_tag,rob_tails[2]);
+						arg_vs(4'b0111);
+						if (queueOnp[3]) begin
+							queue_slot(3,rob_tails[3],maxsn+2'd4,id_bus[3],
+								is_branch[0] && is_branch[1] && is_branch[2] ? active_tag + 2'd3 :
+								is_branch[0] && is_branch[1] ? active_tag + 2'd2 :
+								is_branch[0] && is_branch[2] ? active_tag + 2'd2 :
+								is_branch[1] && is_branch[2] ? active_tag + 2'd2 :
+								is_branch[0] ? active_tag + 2'd1 : is_branch[1] ? active_tag + 2'd1 : is_branch[2] ? active_tag + 2'd1 : 
+								active_tag,rob_tails[2]);
+							arg_vs(4'b1111);
+						end
 					end
 				end
 			end

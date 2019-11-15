@@ -24,8 +24,8 @@
 `include "nvio3-config.sv"
 
 module Regfile(clk, clk2x, wr0, wr1, wa0, wa1, i0, i1,
-	ra0, ra1, ra2, ra3, ra4, ra5, ra6, ra7, ra8,
-	o0, o1, o2, o3, o4, o5, o6, o7, o8);
+	ra0, ra1, ra2, ra3, ra4, ra5, ra6, ra7, ra8, ra9, ra10, ra11,
+	o0, o1, o2, o3, o4, o5, o6, o7, o8, o9, o10, o11);
 input clk;
 input clk2x;
 input wr0;
@@ -43,6 +43,9 @@ input [4:0] ra5;
 input [4:0] ra6;
 input [4:0] ra7;
 input [4:0] ra8;
+input [4:0] ra9;
+input [4:0] ra10;
+input [4:0] ra11;
 output [127:0] o0;
 output [127:0] o1;
 output [127:0] o2;
@@ -52,6 +55,9 @@ output [127:0] o5;
 output [127:0] o6;
 output [127:0] o7;
 output [127:0] o8;
+output [127:0] o9;
+output [127:0] o10;
+output [127:0] o11;
 reg [127:0] mem [0:31];
 
 wire wr = clk ? wr0 : wr1;
@@ -71,6 +77,9 @@ wire [127:0] p5o = mem[ra5];
 wire [127:0] p6o = mem[ra6];
 wire [127:0] p7o = mem[ra7];
 wire [127:0] p8o = mem[ra8];
+wire [127:0] p9o = mem[ra9];
+wire [127:0] p10o = mem[ra10];
+wire [127:0] p11o = mem[ra11];
 
 assign o0 = ra0==5'd0 ? {128{1'b0}} : ra0==wa1 && wr1 ? i1 : ra0==wa0 && wr0 ? i0 : p0o;
 assign o1 = ra1==5'd0 ? {128{1'b0}} : ra1==wa1 && wr1 ? i1 : ra1==wa0 && wr0 ? i0 : p1o;
@@ -81,5 +90,8 @@ assign o5 = ra5==5'd0 ? {128{1'b0}} : ra5==wa1 && wr1 ? i1 : ra5==wa0 && wr0 ? i
 assign o6 = ra6==5'd0 ? {128{1'b0}} : ra6==wa1 && wr1 ? i1 : ra6==wa0 && wr0 ? i0 : p6o;
 assign o7 = ra7==5'd0 ? {128{1'b0}} : ra7==wa1 && wr1 ? i1 : ra7==wa0 && wr0 ? i0 : p7o;
 assign o8 = ra8==5'd0 ? {128{1'b0}} : ra8==wa1 && wr1 ? i1 : ra8==wa0 && wr0 ? i0 : p8o;
+assign o9 = ra9==5'd0 ? {128{1'b0}} : ra9==wa1 && wr1 ? i1 : ra9==wa0 && wr0 ? i0 : p9o;
+assign o10 = ra10==5'd0 ? {128{1'b0}} : ra10==wa1 && wr1 ? i1 : ra10==wa0 && wr0 ? i0 : p10o;
+assign o11 = ra11==5'd0 ? {128{1'b0}} : ra11==wa1 && wr1 ? i1 : ra11==wa0 && wr0 ? i0 : p11o;
 
 endmodule
