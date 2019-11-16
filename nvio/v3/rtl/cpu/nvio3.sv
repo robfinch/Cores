@@ -178,6 +178,17 @@ wire [RBIT:0] Rs3 [0:QSLOTS-1];
 wire [RBIT:0] Rs4 [0:QSLOTS-1];
 wire [RBIT:0] Rd [0:QSLOTS-1];
 wire [RBIT:0] Rd2 [0:QSLOTS-1];
+wire [2:0] Ms1 [0:QSLOTS-1];
+wire [2:0] Ms2 [0:QSLOTS-1];
+assign Ms1[0] = Rs1[0];
+assign Ms1[1] = Rs1[1];
+assign Ms1[2] = Rs1[2];
+assign Ms1[3] = Rs1[3];
+assign Ms2[0] = insnx[0][33:31];
+assign Ms2[1] = insnx[1][33:31];
+assign Ms2[2] = insnx[2][33:31];
+assign Ms2[3] = insnx[3][33:31];
+
 wire [2:0] Crd [0:QSLOTS-1];
 wire [127:0] rfoa [0:QSLOTS-1];
 wire [127:0] rfob [0:QSLOTS-1];
@@ -465,7 +476,7 @@ reg [QENTRIES-1:0] iq_argD_v;	// arg4 valid
 reg  [`RBITSP1] iq_argD_s	[0:QENTRIES-1];	// arg3 source (iq entry # with top bit representing Rd2))
 
 reg [WID-1:0] iq_fpargI	[0:QENTRIES-1];	// argument 0 (immediate)
-reg [WID-1:0] iq_lkreg [0:QENTRIES-1];
+reg [WID-1:0] iq_argLk [0:QENTRIES-1];
 
 reg [`ABITS] iq_ip	[0:QENTRIES-1];	// instruction pointer for this instruction
 reg [AMSB:0] iq_ma [0:QENTRIES-1];	// memory address
@@ -1078,128 +1089,15 @@ reg [15:0] dsel;
 reg [AMSB:0] dadr;
 reg [127:0] ddat;
 
-function [8:0] fnUnits;
-input [6:0] tmp;
-case(tmp)
-7'h0: fnUnits = {`BUnit,`BUnit,`BUnit};
-7'h1: fnUnits = {`IUnit,`BUnit,`BUnit};
-7'h2: fnUnits = {`FUnit,`BUnit,`BUnit};
-7'h3: fnUnits = {`MUnit,`BUnit,`BUnit};
-7'h4: fnUnits = {`BUnit,`IUnit,`BUnit};
-7'h5: fnUnits = {`IUnit,`IUnit,`BUnit};
-7'h6: fnUnits = {`FUnit,`IUnit,`BUnit};
-7'h7: fnUnits = {`MUnit,`IUnit,`BUnit};
-7'h8: fnUnits = {`BUnit,`FUnit,`BUnit};
-7'h9: fnUnits = {`IUnit,`FUnit,`BUnit};
-7'ha: fnUnits = {`FUnit,`FUnit,`BUnit};
-7'hb: fnUnits = {`MUnit,`FUnit,`BUnit};
-7'hc: fnUnits = {`BUnit,`MUnit,`BUnit};
-7'hd: fnUnits = {`IUnit,`MUnit,`BUnit};
-7'he: fnUnits = {`FUnit,`MUnit,`BUnit};
-7'hf: fnUnits = {`MUnit,`MUnit,`BUnit};
-7'h10: fnUnits = {`BUnit,`BUnit,`IUnit};
-7'h11: fnUnits = {`IUnit,`BUnit,`IUnit};
-7'h12: fnUnits = {`FUnit,`BUnit,`IUnit};
-7'h13: fnUnits = {`MUnit,`BUnit,`IUnit};
-7'h14: fnUnits = {`BUnit,`IUnit,`IUnit};
-7'h15: fnUnits = {`IUnit,`IUnit,`IUnit};
-7'h16: fnUnits = {`FUnit,`IUnit,`IUnit};
-7'h17: fnUnits = {`MUnit,`IUnit,`IUnit};
-7'h18: fnUnits = {`BUnit,`FUnit,`IUnit};
-7'h19: fnUnits = {`IUnit,`FUnit,`IUnit};
-7'h1a: fnUnits = {`FUnit,`FUnit,`IUnit};
-7'h1b: fnUnits = {`MUnit,`FUnit,`IUnit};
-7'h1c: fnUnits = {`BUnit,`MUnit,`IUnit};
-7'h1d: fnUnits = {`IUnit,`MUnit,`IUnit};
-7'h1e: fnUnits = {`FUnit,`MUnit,`IUnit};
-7'h1f: fnUnits = {`MUnit,`MUnit,`IUnit};
-7'h20: fnUnits = {`BUnit,`BUnit,`FUnit};
-7'h21: fnUnits = {`IUnit,`BUnit,`FUnit};
-7'h22: fnUnits = {`FUnit,`BUnit,`FUnit};
-7'h23: fnUnits = {`MUnit,`BUnit,`FUnit};
-7'h24: fnUnits = {`BUnit,`IUnit,`FUnit};
-7'h25: fnUnits = {`IUnit,`IUnit,`FUnit};
-7'h26: fnUnits = {`FUnit,`IUnit,`FUnit};
-7'h27: fnUnits = {`MUnit,`IUnit,`FUnit};
-7'h28: fnUnits = {`BUnit,`FUnit,`FUnit};
-7'h29: fnUnits = {`IUnit,`FUnit,`FUnit};
-7'h2a: fnUnits = {`FUnit,`FUnit,`FUnit};
-7'h2b: fnUnits = {`MUnit,`FUnit,`FUnit};
-7'h2c: fnUnits = {`BUnit,`MUnit,`FUnit};
-7'h2d: fnUnits = {`IUnit,`MUnit,`FUnit};
-7'h2e: fnUnits = {`FUnit,`MUnit,`FUnit};
-7'h2f: fnUnits = {`MUnit,`MUnit,`FUnit};
-7'h30: fnUnits = {`BUnit,`BUnit,`MUnit};
-7'h31: fnUnits = {`IUnit,`BUnit,`MUnit};
-7'h32: fnUnits = {`FUnit,`BUnit,`MUnit};
-7'h33: fnUnits = {`MUnit,`BUnit,`MUnit};
-7'h34: fnUnits = {`BUnit,`IUnit,`MUnit};
-7'h35: fnUnits = {`IUnit,`IUnit,`MUnit};
-7'h36: fnUnits = {`FUnit,`IUnit,`MUnit};
-7'h37: fnUnits = {`MUnit,`IUnit,`MUnit};
-7'h38: fnUnits = {`BUnit,`FUnit,`MUnit};
-7'h39: fnUnits = {`IUnit,`FUnit,`MUnit};
-7'h3a: fnUnits = {`FUnit,`FUnit,`MUnit};
-7'h3b: fnUnits = {`MUnit,`FUnit,`MUnit};
-7'h3c: fnUnits = {`BUnit,`MUnit,`MUnit};
-7'h3d: fnUnits = {`IUnit,`MUnit,`MUnit};
-7'h3e: fnUnits = {`FUnit,`MUnit,`MUnit};
-7'h3f: fnUnits = {`MUnit,`MUnit,`MUnit};
-
-7'h7D: fnUnits = {`IUnit,`NUnit,`NUnit};
-7'h7E: fnUnits = {`FUnit,`NUnit,`NUnit};
-7'h7F: fnUnits = {`MUnit,`NUnit,`NUnit};
-default:	fnUnits = {`NUnit,`NUnit,`NUnit};
-endcase
-endfunction
-
-function mxtbl;
-input [2:0] units;
-case(units)
-`BUnit:	mxtbl = 8'h00;	// branch,branch,branch
-`IUnit:	mxtbl = 8'h01;	// int, branch, branch
-`FUnit:	mxtbl = 8'h02;
-`MUnit:	mxtbl = 8'h03;
-default:	mxtbl = 8'hFF;
-endcase
-endfunction
-
-function [2:0] Unit0;
-input [6:0] tmp;
-reg [8:0] units;
-units = fnUnits(tmp);
-Unit0 = units[8:6];
-endfunction
-
-function [2:0] Unit1;
-input [6:0] tmp;
-reg [8:0] units;
-units = fnUnits(tmp);
-Unit1 = units[5:3];
-endfunction
-
-function [2:0] Unit2;
-input [6:0] tmp;
-reg [8:0] units;
-units = fnUnits(tmp);
-Unit2 = units[2:0];
-endfunction
-
 function IsNop;
-input [2:0] unit;
 input [39:0] ins;
-IsNop = unit==`BUnit && ins[`OPCODE4]==`NOP;
+IsNop = ins[`OPCODE]==`NOP;
 endfunction
 
-assign slotu[0] = Unit0(template[0]);
-assign slotu[1] = Unit1(template[1]);
-assign slotu[2] = Unit2(template[2]);
-assign slotup[0] = Unit0(templatep[0]);
-assign slotup[1] = Unit1(templatep[1]);
-assign slotup[2] = Unit2(templatep[2]);
 wire [`RBITS] next_iq_rid [0:QENTRIES-1];
 wire [`RENTRIES-1:0] next_rob_v;
 
+reg [2:0] n_commit;
 
 regfileValid urfv1
 (
@@ -1212,15 +1110,18 @@ regfileValid urfv1
 	.livetarget2(livetarget2),
 	.branchmiss(branchmiss),
 	.rob_id(rob_id),
-	.commit0_v(commit0_v),
-	.commit1_v(commit1_v),
-	.commit2_v(commit2_v),
+	.commit0_v(commit0_v && n_commit > 3'd0),
+	.commit1_v(commit1_v && n_commit > 3'd1),
+	.commit2_v(commit2_v && n_commit > 3'd2),
+	.commit3_v(commit3_v && n_commit > 3'd3),
 	.commit0_id(commit0_id),
 	.commit1_id(commit1_id),
 	.commit2_id(commit2_id),
+	.commit3_id(commit3_id),
 	.commit0_tgt(commit0_tgt),
 	.commit1_tgt(commit1_tgt),
 	.commit2_tgt(commit2_tgt),
+	.commit3_tgt(commit3_tgt),
 	.rf_source(rf_source),
 	.iq_source(iq_source),
 	.iq_source2(iq_source2),
@@ -1256,16 +1157,25 @@ regfileSource urfs1
 	.rf_source(rf_source)
 );
 
+reg gp0_commit_v, gp1_commit_v;
+reg [2:0] gp0_cs;
+reg [4:0] gp0_commit_tgt, gp1_commit_tgt;
+reg [127:0] gp0_commit_bus, gp1_commit_bus;
+reg [2:0] cmtcnt;
+
+reg [3:0] v_used;
+reg [2:0] n_nulltgt;
+
 Regfile urf1
 (
 	.clk(clk_i),
 	.clk2x(clk2x_i),
-	.wr0(commit0_v && commit0_tgt[6:5]==2'b00),
-	.wa0(commit0_tgt[4:0]),
-	.i0(commit0_bus),
-	.wr1(commit1_v && commit0_tgt[6:5]==2'b00),
-	.wa1(commit1_tgt[4:0]),
-	.i1(commit1_bus),
+	.wr0(gp0_commit_v),
+	.wa0(gp0_commit_tgt),
+	.i0(gp0_commit_bus),
+	.wr1(gp1_commit_v),
+	.wa1(gp1_commit_tgt),
+	.i1(gp1_commit_bus),
 	.ra0(Rs1[0][4:0]),
 	.ra1(Rs2[0][4:0]),
 	.ra2(Rs3[0][4:0]),
@@ -1292,16 +1202,22 @@ Regfile urf1
 	.o11(rfoc[3])
 );
 
+reg fp0_commit_v, fp1_commit_v;
+reg [2:0] fp0_cs;
+reg [4:0] fp0_commit_tgt, fp1_commit_tgt;
+reg [127:0] fp0_commit_bus, fp1_commit_bus;
+
+
 Regfile ufprf1
 (
 	.clk(clk_i),
 	.clk2x(clk2x_i),
-	.wr0(commit0_v && commit0_tgt[6:5]==2'b01),
-	.wa0(commit0_tgt[4:0]),
-	.i0(commit0_bus),
-	.wr1(commit1_v && commit0_tgt[6:5]==2'b01),
-	.wa1(commit1_tgt[4:0]),
-	.i1(commit1_bus),
+	.wr0(fp0_commit_v),
+	.wa0(fp0_commit_tgt),
+	.i0(fp0_commit_bus),
+	.wr1(fp1_commit_v),
+	.wa1(fp1_commit_tgt),
+	.i1(fp1_commit_bus),
 	.ra0(Rs1[0][4:0]),
 	.ra1(Rs2[0][4:0]),
 	.ra2(Rs3[0][4:0]),
@@ -1328,16 +1244,21 @@ Regfile ufprf1
 	.o11(fp_rfoc[3])
 );
 
+reg Lk0_commit_v, Lk1_commit_v;
+reg [2:0] Lk0_cs;
+reg [2:0] Lk0_commit_tgt, Lk1_commit_tgt;
+reg [AMSB:0] Lk0_bus, Lk1_bus;
+
 LkRegfile ulrf1
 (
 	.clk(clk_i),
 	.clk2x(clk2x_i),
-	.wr0(commit0_v && commit0_tgt[6:3]==4'b1100),
-	.wr1(commit1_v && commit0_tgt[6:3]==4'b1100),
-	.wa0(commit0_tgt[2:0]),
-	.wa1(commit1_tgt[2:0]),
-	.i0(commit0_bus),
-	.i1(commit1_bus),
+	.wr0(Lk0_commit_v),
+	.wr1(Lk1_commit_v),
+	.wa0(Lk0_commit0_tgt),
+	.wa1(Lk1_commit1_tgt),
+	.i0(Lk0_commit_bus),
+	.i1(Lk1_commit_bus),
 	.ra0(Rs2[0][2:0]),
 	.ra1(Rs2[1][2:0]),
 	.ra2(Rs2[2][2:0]),
@@ -1347,6 +1268,439 @@ LkRegfile ulrf1
 	.o2(lk_rfo[2]),
 	.o3(lk_rfo[3])
 );
+
+reg Vm0_commit_v, Vm1_commit_v;
+reg [2:0] Vm0_cs;
+reg [2:0] Vm0_commit_tgt, Vm1_commit_tgt;
+reg [AMSB:0] Vm0_bus, Vm1_bus;
+
+VmRegfile ulrf1
+(
+	.clk(clk_i),
+	.clk2x(clk2x_i),
+	.wr0(Vm0_commit_v),
+	.wr1(Vm1_commit_v),
+	.wa0(Vm0_commit0_tgt),
+	.wa1(Vm1_commit1_tgt),
+	.i0(Vm0_commit_bus),
+	.i1(Vm1_commit_bus),
+	.ra0(Ms1[0][2:0]),
+	.ra1(Ms1[1][2:0]),
+	.ra2(Ms1[2][2:0]),
+	.ra3(Ms1[3][2:0]),
+	.ra3(Ms2[0][2:0]),
+	.ra3(Ms2[1][2:0]),
+	.ra3(Ms2[2][2:0]),
+	.ra3(Ms2[3][2:0]),
+	.o0(vm_rfoa[0]),
+	.o1(vm_rfoa[1]),
+	.o2(vm_rfoa[2]),
+	.o3(vm_rfoa[3]),
+	.o4(vm_rfob[0]),
+	.o5(vm_rfob[1]),
+	.o6(vm_rfob[2]),
+	.o7(vm_rfob[3])
+);
+
+reg VL0_commit_v, VL1_commit_v;
+reg [2:0] VL0_cs;
+reg [15:0] VL0_bus, VL1_bus;
+
+reg [15:0] vlen;		// vector length register
+reg [15:0] vlen_o;
+always @(posedge clk_i)
+	if (VL0_commit_v & VL1_commit_v)
+		vlen <= VL1_commit_bus;
+	else if (VL0_commit_v)
+		vlen <= VL0_commit_bus;
+	else if (VL1_commit_v)
+		vlen <= VL1_commit_bus;
+// Register bypassed value output
+always @*
+	if (VL0_commit_v & VL1_commit_v)
+		vlen_o <= VL1_commit_bus;
+	else if (VL0_commit_v)
+		vlen_o <= VL0_commit_bus;
+	else if (VL1_commit_v)
+		vlen_o <= VL1_commit_bus;
+	else
+		vlen_o <= vlen;
+
+always @*
+begin
+	gp0_commit_v = FALSE;
+	gp1_commit_v = FALSE;
+	gp0_cs = 3'd4;
+	gp1_cs = 3'd4;
+	if (commit0_v && commit0_tgt[6:5]==2'b00) begin
+		gp0_commit_v = TRUE;
+		gp0_commit_tgt = commit0_tgt[4:0];
+		gp0_bus = commit0_bus;
+		gp0_cs = 3'd0;
+		v_used[0] = TRUE;
+	end
+	end
+	else if (commit0_v && commit1_v && commit1_tgt[6:5]==2'b00) begin
+		gp0_commit_v = TRUE;
+		gp0_commit_tgt = commit1_tgt[4:0];
+		gp0_bus = commit1_bus;
+		gp0_cs = 3'd1;
+		v_used[1] = TRUE;
+	end
+	else if (commit0_v && commit1_v && commit2_v && commit2_tgt[6:5]==2'b00) begin
+		gp0_commit_v = TRUE;
+		gp0_commit_tgt = commit2_tgt[4:0];
+		gp0_bus = commit2_bus;
+		gp0_cs = 3'd2;
+		v_used[2] = TRUE;
+	end
+	else if (commit0_v && commit1_v && commit2_v && commit3_v && commit3_tgt[6:5]==2'b00) begin
+		gp0_commit_v = TRUE;
+		gp0_commit_tgt = commit3_tgt[4:0];
+		gp0_bus = commit3_bus;
+		gp0_cs = 3'd3;
+		v_used[3] = TRUE;
+	end
+	if (~gp0_cs[2]) begin
+		if (commit0_v && commit1_v && commit1_tgt[6:5]==2'b00 && gp0_cs != 3'd1) begin
+			gp1_commit_v = TRUE;
+			gp1_commit_tgt = commit1_tgt[4:0];
+			gp1_bus = commit1_bus;
+			gp1_cs = 3'd1;
+			v_used[1] = TRUE;
+		end
+		else if (commit0_v && commit1_v && commit2_v && commit2_tgt[6:5]==2'b00 && gp0_cs != 3'd2) begin
+			gp1_commit_v = TRUE;
+			gp1_commit_tgt = commit2_tgt[4:0];
+			gp1_bus = commit2_bus;
+			gp1_cs = 3'd2;
+			v_used[2] = TRUE;
+		end
+		else if (commit0_v && commit1_v && commit2_v && commit3_v && commit3_tgt[6:5]==2'b00 && gp0_cs != 3'd3) begin
+			gp1_commit_v = TRUE;
+			gp1_commit_tgt = commit3_tgt[4:0];
+			gp1_bus = commit3_bus;
+			gp1_cs = 3'd3;
+			v_used[3] = TRUE;
+		end
+	end
+
+// Floating-point register file commit bus routing.
+	fp0_commit_v = FALSE;
+	fp1_commit_v = FALSE;
+	fp0_cs = 3'd4;
+	fp1_cs = 3'd4;
+	if (commit0_v && commit0_tgt[6:5]==2'b00) begin
+		fp0_commit_v = TRUE;
+		fp0_commit_tgt = commit0_tgt[4:0];
+		fp0_bus = commit0_bus;
+		fp0_cs = 3'd0;
+		v_used[0] = TRUE;
+	end
+	else if (commit0_v && commit1_v && commit1_tgt[6:5]==2'b00) begin
+		fp0_commit_v = TRUE;
+		fp0_commit_tgt = commit1_tgt[4:0];
+		fp0_bus = commit1_bus;
+		fp0_cs = 3'd1;
+		v_used[1] = TRUE;
+	end
+	else if (commit0_v && commit1_v && commit2_v && commit2_tgt[6:5]==2'b00) begin
+		fp0_commit_v = TRUE;
+		fp0_commit_tgt = commit2_tgt[4:0];
+		fp0_bus = commit2_bus;
+		fp0_cs = 3'd2;
+		v_used[2] = TRUE;
+	end
+	else if (commit0_v && commit1_v && commit2_v && commit3_v && commit3_tgt[6:5]==2'b00) begin
+		fp0_commit_v = TRUE;
+		fp0_commit_tgt = commit3_tgt[4:0];
+		fp0_bus = commit3_bus;
+		fp0_cs = 3'd3;
+		v_used[3] = TRUE;
+	end
+	if (~fp0_cs[2]) begin
+		if (commit0_v && commit1_v && commit1_tgt[6:5]==2'b00 && fp0_cs != 3'd1) begin
+			fp1_commit_v = TRUE;
+			fp1_commit_tgt = commit1_tgt[4:0];
+			fp1_bus = commit1_bus;
+			fp1_cs = 3'd1;
+			v_used[1] = TRUE;
+		end
+		else if (commit0_v && commit1_v && commit2_v && commit2_tgt[6:5]==2'b00 && fp0_cs != 3'd2) begin
+			fp1_commit_v = TRUE;
+			fp1_commit_tgt = commit2_tgt[4:0];
+			fp1_bus = commit2_bus;
+			fp1_cs = 3'd2;
+			v_used[2] = TRUE;
+		end
+		else if (commit0_v && commit1_v && commit2_v && commit3_v && commit3_tgt[6:5]==2'b00 && fp0_cs != 3'd3) begin
+			fp1_commit_v = TRUE;
+			fp1_commit_tgt = commit3_tgt[4:0];
+			fp1_bus = commit3_bus;
+			fp1_cs = 3'd3;
+			v_used[3] = TRUE;
+		end
+	end
+
+	Lk0_commit_v = FALSE;
+	Lk1_commit_v = FALSE;
+	Lk0_cs = 3'd4;
+	Lk1_cs = 3'd4;
+	if (commit0_v && commit0_tgt[6:3]==4'b1100) begin
+		Lk0_commit_v = TRUE;
+		Lk0_commit_tgt = commit0_tgt[2:0];
+		Lk0_bus = commit0_bus[AMSB:0];
+		Lk0_cs = 3'd0;
+		v_used[0] = TRUE;
+	end
+	else if (commit0_v && commit1_v && commit1_tgt[6:3]==4'b1100) begin
+		Lk0_commit_v = TRUE;
+		Lk0_commit_tgt = commit1_tgt[2:0];
+		Lk0_bus = commit1_bus[AMSB:0];
+		Lk0_cs = 3'd1;
+		v_used[1] = TRUE;
+	end
+	else if (commit0_v && commit1_v && commit2_v && commit2_tgt[6:3]==4'b1100) begin
+		Lk0_commit_v = TRUE;
+		Lk0_commit_tgt = commit2_tgt[2:0];
+		Lk0_bus = commit2_bus[AMSB:0];
+		Lk0_cs = 3'd2;
+		v_used[2] = TRUE;
+	end
+	else if (commit0_v && commit1_v && commit2_v && commit3_v && commit3_tgt[6:3]==4'b1100) begin
+		Lk0_commit_v = TRUE;
+		Lk0_commit_tgt = commit3_tgt[2:0];
+		Lk0_bus = commit3_bus[AMSB:0];
+		Lk0_cs = 3'd3;
+		v_used[3] = TRUE;
+	end
+	if (~Lk0_cs[2]) begin
+		if (commit0_v && commit1_v && commit1_tgt[6:3]==4'b1100 && Lk0_cs != 3'd1) begin
+			Lk1_commit_v = TRUE;
+			Lk1_commit_tgt = commit1_tgt[2:0];
+			Lk1_bus = commit1_bus[AMSB:0];
+			Lk1_cs = 3'd1;
+			v_used[1] = TRUE;
+		end
+		else if (commit0_v && commit1_v && commit2_v && commit2_tgt[6:3]==4'b1100 && Lk0_cs != 3'd2) begin
+			Lk1_commit_v = TRUE;
+			Lk1_commit_tgt = commit2_tgt[2:0];
+			Lk1_bus = commit2_bus[AMSB:0];
+			Lk1_cs = 3'd2;
+			v_used[2] = TRUE;
+		end
+		else if (commit0_v && commit1_v && commit2_v && commit3_v && commit3_tgt[6:3]==4'b1100 && Lk0_cs != 3'd3) begin
+			Lk1_commit_v = TRUE;
+			Lk1_commit_tgt = commit3_tgt[2:0];
+			Lk1_bus = commit3_bus[AMSB:0];
+			Lk1_cs = 3'd3;
+			v_used[3] = TRUE;
+		end
+	end
+	Vm0_commit_v = FALSE;
+	Vm1_commit_v = FALSE;
+	Vm0_cs = 3'd4;
+	Vm1_cs = 3'd4;
+	if (commit0_v && commit0_tgt[6:3]==4'b1101) begin
+		Vm0_commit_v = TRUE;
+		Vm0_commit_tgt = commit0_tgt[2:0];
+		Vm0_bus = commit0_bus[AMSB:0];
+		Vm0_cs = 3'd0;
+		v_used[0] = TRUE;
+	end
+	else if (commit0_v && commit1_v && commit1_tgt[6:3]==4'b1101) begin
+		Vm0_commit_v = TRUE;
+		Vm0_commit_tgt = commit1_tgt[2:0];
+		Vm0_bus = commit1_bus[AMSB:0];
+		Vm0_cs = 3'd1;
+		v_used[1] = TRUE;
+	end
+	else if (commit0_v && commit1_v && commit2_v && commit2_tgt[6:3]==4'b1101) begin
+		Vm0_commit_v = TRUE;
+		Vm0_commit_tgt = commit2_tgt[2:0];
+		Vm0_bus = commit2_bus[AMSB:0];
+		Vm0_cs = 3'd2;
+		v_used[2] = TRUE;
+	end
+	else if (commit0_v && commit1_v && commit2_v && commit3_v && commit3_tgt[6:3]==4'b1101) begin
+		Vm0_commit_v = TRUE;
+		Vm0_commit_tgt = commit3_tgt[2:0];
+		Vm0_bus = commit3_bus[AMSB:0];
+		Vm0_cs = 3'd3;
+		v_used[3] = TRUE;
+	end
+	if (~Vm0_cs[2]) begin
+		if (commit0_v && commit1_v && commit1_tgt[6:3]==4'b1101 && Vm0_cs != 3'd1) begin
+			Vm1_commit_v = TRUE;
+			Vm1_commit_tgt = commit1_tgt[2:0];
+			Vm1_bus = commit1_bus[AMSB:0];
+			Vm1_cs = 3'd1;
+			v_used[1] = TRUE;
+		end
+		else if (commit0_v && commit1_v && commit2_v && commit2_tgt[6:3]==4'b1101 && Vm0_cs != 3'd2) begin
+			Vm1_commit_v = TRUE;
+			Vm1_commit_tgt = commit2_tgt[2:0];
+			Vm1_bus = commit2_bus[AMSB:0];
+			Vm1_cs = 3'd2;
+			v_used[2] = TRUE;
+		end
+		else if (commit0_v && commit1_v && commit2_v && commit3_v && commit3_tgt[6:3]==4'b1101 && Vm0_cs != 3'd3) begin
+			Vm1_commit_v = TRUE;
+			Vm1_commit_tgt = commit3_tgt[2:0];
+			Vm1_bus = commit3_bus[AMSB:0];
+			Vm1_cs = 3'd3;
+			v_used[3] = TRUE;
+		end
+	end
+	VL0_commit_v = FALSE;
+	VL1_commit_v = FALSE;
+	VL0_cs = 3'd4;
+	VL1_cs = 3'd4;
+	if (commit0_v && commit0_tgt==7'd120) begin
+		VL0_commit_v = TRUE;
+		VL0_bus = commit0_bus[15:0];
+		VL0_cs = 3'd0;
+		v_used[0] = TRUE;
+	end
+	else if (commit0_v && commit1_v && commit1_tgt==7'd120) begin
+		VL0_commit_v = TRUE;
+		VL0_bus = commit1_bus[15:0];
+		VL0_cs = 3'd1;
+		v_used[1] = TRUE;
+	end
+	else if (commit0_v && commit1_v && commit2_v && commit2_tgt==7'd120) begin
+		VL0_commit_v = TRUE;
+		VL0_bus = commit2_bus[15:0];
+		VL0_cs = 3'd2;
+		v_used[2] = TRUE;
+	end
+	else if (commit0_v && commit1_v && commit2_v && commit3_v && commit3_tgt==7'd120) begin
+		VL0_commit_v = TRUE;
+		VL0_bus = commit3_bus[15:0];
+		VL0_cs = 3'd3;
+		v_used[3] = TRUE;
+	end
+	if (~VL0_cs[2]) begin
+		if (commit0_v && commit1_v && commit1_tgt==7'd120 && VL0_cs != 3'd1) begin
+			VL1_commit_v = TRUE;
+			VL1_bus = commit1_bus[15:0];
+			VL1_cs = 3'd1;
+			v_used[1] = TRUE;
+		end
+		else if (commit0_v && commit1_v && commit2_v && commit2_tgt==7'd120 && VL0_cs != 3'd2) begin
+			VL1_commit_v = TRUE;
+			VL1_bus = commit2_bus[15:0];
+			VL1_cs = 3'd2;
+			v_used[2] = TRUE;
+		end
+		else if (commit0_v && commit1_v && commit2_v && commit3_v && commit3_tgt==7'd120 && VL0_cs != 3'd3) begin
+			VL1_commit_v = TRUE;
+			VL1_bus = commit3_bus[15:0];
+			VL1_cs = 3'd3;
+			v_used[3] = TRUE;
+		end
+	end
+
+// Count the null targets
+	n_nulltgt = 3'd0;
+	if (commit0_v && commit0_tgt==7'd127) begin
+		n_nulltgt = n_nulltgt + 3'd1;
+		v_used[0] = TRUE;
+	end
+	if (commit0_v && commit1_v && commit1_tgt==7'd127) begin
+		n_nulltgt = n_nulltgt + 3'd1;
+		v_used[1] = TRUE;
+	end
+	if (commit0_v && commit1_v && commmit2_v && commit2_tgt==7'd127) begin
+		n_nulltgt = n_nulltgt + 3'd1;
+		v_used[2] = TRUE;
+	end
+	if (commit0_v && commit1_v && commmit2_v && commit3_v && commit3_tgt==7'd127) begin
+		n_nulltgt = n_nulltgt + 3'd1;
+		v_used[3] = TRUE;
+	end
+
+	// Suppress updates according to update pattern.
+	case(v_used)
+	4'b0000,
+	4'b0010,
+	4'b0100,
+	4'b0110,
+	4'b1000,
+	4'b1010,
+	4'b1100,
+	4'b1110:
+		begin
+			gp0_commit_v = FALSE;
+			gp1_commit_v = FALSE;
+			fp0_commit_v = FALSE;
+			fp1_commit_v = FALSE;
+			Lk0_commit_v = FALSE;
+			Lk1_commit_v = FALSE;
+			Vm0_commit_v = FALSE;
+			Vm1_commit_v = FALSE;
+			VL0_commit_v = FALSE;
+			VL1_commit_v = FALSE;
+		end
+	4'b0001,
+	4'b0101,
+	4'b1001,
+	4'b1101:
+		begin
+			if (gp0_cs > 3'd0) gp0_commit_v = FALSE;
+			if (gp1_cs > 3'd0) gp1_commit_v = FALSE;
+			if (fp0_cs > 3'd0) fp0_commit_v = FALSE;
+			if (fp1_cs > 3'd0) fp1_commit_v = FALSE;
+			if (Lk0_cs > 3'd0) Lk0_commit_v = FALSE;
+			if (Lk1_cs > 3'd0) Lk1_commit_v = FALSE;
+			if (Vm0_cs > 3'd0) Vm0_commit_v = FALSE;
+			if (Vm1_cs > 3'd0) Vm1_commit_v = FALSE;
+			if (VL0_cs > 3'd0) VL0_commit_v = FALSE;
+			if (VL1_cs > 3'd0) VL1_commit_v = FALSE;
+		end
+	4'b0011,
+	4'b1011:
+		begin
+			if (gp0_cs > 3'd1) gp0_commit_v = FALSE;
+			if (gp1_cs > 3'd1) gp1_commit_v = FALSE;
+			if (fp0_cs > 3'd1) fp0_commit_v = FALSE;
+			if (fp1_cs > 3'd1) fp1_commit_v = FALSE;
+			if (Lk0_cs > 3'd1) Lk0_commit_v = FALSE;
+			if (Lk1_cs > 3'd1) Lk1_commit_v = FALSE;
+			if (Vm0_cs > 3'd1) Vm0_commit_v = FALSE;
+			if (Vm1_cs > 3'd1) Vm1_commit_v = FALSE;
+			if (VL0_cs > 3'd1) VL0_commit_v = FALSE;
+			if (VL1_cs > 3'd1) VL1_commit_v = FALSE;
+		end
+	4'b0111:
+		begin
+			if (gp0_cs > 3'd2) gp0_commit_v = FALSE;
+			if (gp1_cs > 3'd2) gp1_commit_v = FALSE;
+			if (fp0_cs > 3'd2) fp0_commit_v = FALSE;
+			if (fp1_cs > 3'd2) fp1_commit_v = FALSE;
+			if (Lk0_cs > 3'd2) Lk0_commit_v = FALSE;
+			if (Lk1_cs > 3'd2) Lk1_commit_v = FALSE;
+			if (Vm0_cs > 3'd2) Vm0_commit_v = FALSE;
+			if (Vm1_cs > 3'd2) Vm1_commit_v = FALSE;
+			if (VL0_cs > 3'd2) VL0_commit_v = FALSE;
+			if (VL1_cs > 3'd2) VL1_commit_v = FALSE;
+		end
+	4'b1111:
+		;
+	endcase
+end
+
+always @*
+begin
+	n_commit = {2'd0,gp0_commit_v} + {2'd0,gp1_commit_v} +
+						 {2'd0,fp0_commit_v} + {2'd0,fp1_commit_v} +
+						 {2'd0,Lk0_commit_v} + {2'd0,Lk1_commit_v} +
+						 {2'd0,Vm0_commit_v} + {2'd0,Vm1_commit_v} +
+						 {2'd0,VL0_commit_v} + {2'd0,VL1_commit_v} +
+						 n_nulltgt
+						 ;
+end
+
 
 instructionPointer uip1
 (
