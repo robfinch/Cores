@@ -23,11 +23,12 @@
 //
 `include "nvio3-config.sv"
 
-module Regfile(clk, clk2x, wr0, wr1, wa0, wa1, i0, i1,
+module Regfile(clk, clk2x, ol, wr0, wr1, wa0, wa1, i0, i1,
 	ra0, ra1, ra2, ra3, ra4, ra5, ra6, ra7, ra8, ra9, ra10, ra11,
 	o0, o1, o2, o3, o4, o5, o6, o7, o8, o9, o10, o11);
 input clk;
 input clk2x;
+input [1:0] ol;
 input wr0;
 input wr1;
 input [4:0] wa0;
@@ -59,27 +60,32 @@ output [127:0] o9;
 output [127:0] o10;
 output [127:0] o11;
 reg [127:0] mem [0:31];
+reg [127:0] sp [0:3];
 
 wire wr = clk ? wr0 : wr1;
 wire [4:0] wa = clk ? wa0 : wa1;
 wire [127:0] i = clk ? i0 : i1;
 
 always @(posedge clk2x)
-	if (wr)
-		mem[wa] <= i;
+	if (wr) begin
+		if (wa==5'd31)
+			sp[ol] <= i;
+		else
+			mem[wa] <= i;
+	end
 
-wire [127:0] p0o = mem[ra0];
-wire [127:0] p1o = mem[ra1];
-wire [127:0] p2o = mem[ra2];
-wire [127:0] p3o = mem[ra3];
-wire [127:0] p4o = mem[ra4];
-wire [127:0] p5o = mem[ra5];
-wire [127:0] p6o = mem[ra6];
-wire [127:0] p7o = mem[ra7];
-wire [127:0] p8o = mem[ra8];
-wire [127:0] p9o = mem[ra9];
-wire [127:0] p10o = mem[ra10];
-wire [127:0] p11o = mem[ra11];
+wire [127:0] p0o = ra0==5'd31 ? sp[ol] : mem[ra0];
+wire [127:0] p1o = ra1==5'd31 ? sp[ol] : mem[ra1];
+wire [127:0] p2o = ra2==5'd31 ? sp[ol] : mem[ra2];
+wire [127:0] p3o = ra3==5'd31 ? sp[ol] : mem[ra3];
+wire [127:0] p4o = ra4==5'd31 ? sp[ol] : mem[ra4];
+wire [127:0] p5o = ra5==5'd31 ? sp[ol] : mem[ra5];
+wire [127:0] p6o = ra6==5'd31 ? sp[ol] : mem[ra6];
+wire [127:0] p7o = ra7==5'd31 ? sp[ol] : mem[ra7];
+wire [127:0] p8o = ra8==5'd31 ? sp[ol] : mem[ra8];
+wire [127:0] p9o = ra9==5'd31 ? sp[ol] : mem[ra9];
+wire [127:0] p10o = ra10==5'd31 ? sp[ol] : mem[ra10];
+wire [127:0] p11o = ra11==5'd31 ? sp[ol] : mem[ra11];
 
 assign o0 = ra0==5'd0 ? {128{1'b0}} : ra0==wa1 && wr1 ? i1 : ra0==wa0 && wr0 ? i0 : p0o;
 assign o1 = ra1==5'd0 ? {128{1'b0}} : ra1==wa1 && wr1 ? i1 : ra1==wa0 && wr0 ? i0 : p1o;

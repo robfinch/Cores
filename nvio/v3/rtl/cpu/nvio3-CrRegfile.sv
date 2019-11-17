@@ -23,7 +23,7 @@
 //
 `include "nvio3-config.sv"
 
-module CrRegfile(clk, clk2x, wr0, wr1, wra0, wra1, wa0, wa1, i0, i1, ia0, ia1, ra0, ra1, ra2, ra3, o0, o1, o2, o3);
+module CrRegfile(clk, clk2x, wr0, wr1, wra0, wra1, wa0, wa1, i0, i1, ia0, ia1, ra0, ra1, ra2, ra3, o0, o1, o2, o3, oa);
 input clk;
 input clk2x;
 input wr0;
@@ -44,7 +44,7 @@ output [7:0] o0;
 output [7:0] o1;
 output [7:0] o2;
 output [7:0] o3;
-output [63:0] ao;
+output [63:0] oa;
 
 reg [7:0] mem [0:7];
 
@@ -87,6 +87,6 @@ wire [7:0] q5o = wa1==3'd5 && wr1 ? i1 : wa0==3'd5 && wr0 ? i0 : mem[5];
 wire [7:0] q6o = wa1==3'd6 && wr1 ? i1 : wa0==3'd6 && wr0 ? i0 : mem[6];
 wire [7:0] q7o = wa1==3'd7 && wr1 ? i1 : wa0==3'd7 && wr0 ? i0 : mem[7];
 
-assign ao = {q7o,q6o,q5o,q4o,q3o,q2o,q1o,q0o};
+assign oa = {q7o,q6o,q5o,q4o,q3o,q2o,q1o,q0o};
 
 endmodule
