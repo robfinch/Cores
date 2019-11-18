@@ -464,13 +464,8 @@ reg [WID-1:0] iq_argI	[0:QENTRIES-1];	// argument 0 (immediate)
 reg [WID-1:0] iq_argA	[0:QENTRIES-1];	// argument 1
 reg [WID-1:0] iq_argB	[0:QENTRIES-1];	// argument 2
 reg [WID-1:0] iq_argC	[0:QENTRIES-1];	// argument 3
-reg [WID-1:0] iq_fpargA	[0:QENTRIES-1];	// argument 1
-reg [WID-1:0] iq_fpargB	[0:QENTRIES-1];	// argument 2
-reg [WID-1:0] iq_fpargC	[0:QENTRIES-1];	// argument 3
-reg [WID-1:0] iq_vargA	[0:QENTRIES-1];	// argument 1
-reg [WID-1:0] iq_vargB	[0:QENTRIES-1];	// argument 2
-reg [WID-1:0] iq_vargC	[0:QENTRIES-1];	// argument 3
-reg [WID-1:0] iq_vargD	[0:QENTRIES-1];	// argument 4 (mask register)
+reg [WID-1:0] iq_argD	[0:QENTRIES-1];	// argument 4
+reg [WID-1:0] iq_argT	[0:QENTRIES-1];	// target
 
 reg [QENTRIES-1:0] iq_argA_v;	// arg1 valid
 reg [`RBITSP1] iq_argA_s	[0:QENTRIES-1];	// arg1 source (iq entry # with top bit representing Rd2)
@@ -479,10 +474,9 @@ reg  [`RBITSP1] iq_argB_s	[0:QENTRIES-1];	// arg2 source (iq entry # with top bi
 reg [QENTRIES-1:0] iq_argC_v;	// arg3 valid
 reg  [`RBITSP1] iq_argC_s	[0:QENTRIES-1];	// arg3 source (iq entry # with top bit representing Rd2))
 reg [QENTRIES-1:0] iq_argD_v;	// arg4 valid
-reg  [`RBITSP1] iq_argD_s	[0:QENTRIES-1];	// arg3 source (iq entry # with top bit representing Rd2))
-
-reg [WID-1:0] iq_fpargI	[0:QENTRIES-1];	// argument 0 (immediate)
-reg [WID-1:0] iq_argLk [0:QENTRIES-1];
+reg  [`RBITSP1] iq_argD_s	[0:QENTRIES-1];	// arg4 source (iq entry # with top bit representing Rd2))
+reg [QENTRIES-1:0] iq_argT_v;	// target valid
+reg  [`RBITSP1] iq_argT_s	[0:QENTRIES-1];	// argt source (iq entry # with top bit representing Rd2))
 
 reg [`ABITS] iq_ip	[0:QENTRIES-1];	// instruction pointer for this instruction
 reg [AMSB:0] iq_ma [0:QENTRIES-1];	// memory address
@@ -790,6 +784,7 @@ reg [7:0] fcu_cr;
 reg [WID-1:0] fcu_argA;
 reg [WID-1:0] fcu_argB;
 reg [WID-1:0] fcu_argC;
+reg [WID-1:0] fcu_argLk;
 reg [WID-1:0] fcu_argI;	// only used by BEQ
 reg [WID-1:0] fcu_argT;
 reg [WID-1:0] fcu_argT2;
@@ -1926,6 +1921,52 @@ begin
 						 ;
 end
 
+reg [WID-1:0] argA[QSLOTS-1:0];
+reg [WID-1:0] argB[QSLOTS-1:0];
+reg [WID-1:0] argC[QSLOTS-1:0];
+reg [WID-1:0] argD[QSLOTS-1:0];
+
+// link registers are never argA
+always @*
+for (n = 0; n < QSLOTS; n = n + 1)
+	casez(Rs1[n])
+	7'b00?????:	argA[n] <= gp_rfoa[n];
+	7'b01?????:	argA[n] <= fp_rfoa[n];
+	7'b10?????:	argA[n] <= vc_rfoa[n];
+	7'b1101???:	argA[n] <= vm_rfoa[n];
+	7'b1110???:	argA[n] <= cr_rfoa[n];
+	7'b1111000:	argA[n] <= vlen_o;
+	7'b1111001:	argA[n] <= cra_o;
+	default:		argA[n] <= 128'd0;
+	endcase
+
+always @*
+for (n = 0; n < QSLOTS; n = n + 1)
+	casez(Rs2[n])
+	7'b00?????:	argB[n] <= gp_rfob[n];
+	7'b01?????:	argB[n] <= fp_rfob[n];
+	7'b10?????:	argB[n] <= vc_rfob[n];
+	7'b1100???:	argB[n] <= lk_rfo[n];
+	default:		argB[n] <= 128'd0;
+	endcase
+	
+always @*
+for (n = 0; n < QSLOTS; n = n + 1)
+	casez(Rs3[n])
+	7'b00?????:	argC[n] <= gp_rfob[n];
+	7'b01?????:	argC[n] <= fp_rfob[n];
+	7'b10?????:	argC[n] <= vc_rfob[n];
+	default:		argC[n] <= 128'd0;
+	endcase
+
+// Only the vector mask register is argD
+always @*
+for (n = 0; n < QSLOTS; n = n + 1)
+	casez(Rs4[n])
+	7'b1101???:	argD[n] <= vm_rfod[n];
+	default:		argD[n] <= 128'd0;
+	endcase
+
 
 instructionPointer uip1
 (
@@ -2860,27 +2901,36 @@ input [39:0] ins;
 fnRs3 = ins[`RS3];
 endfunction
 
+function [6:0] fnRs4;
+input [39:0] ins;
+fnRs4 = {4'n1101,ins[`RS4]};
+endfunction
+
 assign Rs1[0] = fnRs1(insnx[0]);
 assign Rs2[0] = fnRs2(insnx[0]);
 assign Rs3[0] = fnRs3(insnx[0]);
+assign Rs4[0] = fnRs4(insnx[0]);
 assign Rd[0] = fnRd(insnx[0]);
 assign Rd2[0] = fnRd2(insnx[0]);
 assign Crd[0] = fnCrd(insnx[0]);
 assign Rs1[1] = fnRs1(insnx[1]);
 assign Rs2[1] = fnRs2(insnx[1]);
 assign Rs3[1] = fnRs3(insnx[1]);
+assign Rs4[1] = fnRs4(insnx[1]);
 assign Rd[1] = fnRd(insnx[1]);
 assign Rd2[1] = fnRd2(insnx[1]);
 assign Crd[1] = fnCrd(insnx[1]);
 assign Rs1[2] = fnRs1(insnx[2]);
 assign Rs2[2] = fnRs2(insnx[2]);
 assign Rs3[2] = fnRs3(insnx[2]);
+assign Rs4[2] = fnRs4(insnx[2]);
 assign Rd[2] = fnRd(insnx[2]);
 assign Rd2[2] = fnRd2(insnx[2]);
 assign Crd[2] = fnCrd(insnx[2]);
 assign Rs1[3] = fnRs1(insnx[3]);
 assign Rs2[3] = fnRs2(insnx[3]);
 assign Rs3[3] = fnRs3(insnx[3]);
+assign Rs4[3] = fnRs4(insnx[3]);
 assign Rd[3] = fnRd(insnx[3]);
 assign Rd2[3] = fnRd2(insnx[3]);
 assign Crd[3] = fnCrd(insnx[3]);
@@ -2897,12 +2947,10 @@ endfunction
 
 // Detect if a source is automatically valid
 function Source1Valid;
-input [2:0] unit;
 input [39:0] isn;
-case(unit)
-`BUnit:	
-	case(isn[`OPCODE4])
-	`BRK:	Source1Valid = isn[`RS1]==6'd0;
+case(isn[`OPCODE])
+// BUnit:	
+`BRK:	Source1Valid = isn[`RS1]==5'd0;
 	`Bcc:	Source1Valid = isn[`RS1]==6'd0;
 	`BLcc:	Source1Valid = isn[`RS1]==6'd0;
 	`BRcc:	Source1Valid = isn[`RS1]==6'd0;
@@ -2924,6 +2972,7 @@ case(unit)
 		endcase
 	default:	Source1Valid = TRUE;
 	endcase
+
 `IUnit:	Source1Valid = isn[`RS1]==6'd0;
 `FUnit:
 	case(isn[`OPCODE4])
@@ -2959,8 +3008,6 @@ case(unit)
 		endcase
 	default: Source1Valid = isn[`RS1]==6'd0;
 	endcase
-default:	Source1Valid = TRUE;
-endcase
 endfunction
   
 function Source2Valid;
@@ -3078,6 +3125,15 @@ case(unit)
 	default:	Source3Valid = TRUE;
 	endcase
 default: Source3Valid = TRUE;
+endcase
+endfunction
+
+function Source4Valid;
+input [39:0] ins;
+case(ins)
+8'hF1,8'hF2,8'hF4,8'hF5,8'hF6,8'hF7:	// Misc vector instructions (vector mask is arg4)
+	Source4Valid = FALSE;
+default:	Source4Valid = TRUE;
 endcase
 endfunction
 
@@ -3324,15 +3380,13 @@ IsExec = unit==`BUnit && (isn[`OPCODE4]==`BMISC && isn[`FUNCT5]==`EXEC);
 endfunction
 
 function IsPfi;
-input [2:0] unit;
 input [39:0] isn;
-IsPfi = unit==`BUnit && (isn[`OPCODE4]==`BRK && isn[`FUNCT5]==`PFI);
+IsPfi = (isn[`OPCODE]==`BRK && isn[39:36]==`PFI);
 endfunction
 
 function IsBrk;
-input [2:0] unit;
 input [39:0] isn;
-IsBrk = unit==`BUnit && (isn[`OPCODE4]==`BRK && isn[`FUNCT5]==5'd0);
+IsBrk = (isn[`OPCODE]==`BRK && isn[38:36]==3'd0);
 endfunction
 
 function IsRti;
@@ -3360,7 +3414,7 @@ else
 endfunction
 
 function [15:0] fnSelect;
-input [40:0] isn;
+input [39:0] isn;
 casez(isn[`OPCODE])
 `LDB:		fnSelect = 16'h0001;
 `LDBU:	fnSelect = 16'h0001;
@@ -3368,25 +3422,27 @@ casez(isn[`OPCODE])
 `LDWU:	fnSelect = 16'h0003;
 `LDT:		fnSelect = 16'h000F;
 `LDTU:	fnSelect = 16'h000F;
+`LDP:		fnSelect = 16'h001F;
+`LDPU:	fnSelect = 16'h001F;
 `LDO:		fnSelect = 16'h00FF;
 `LDOU:	fnSelect = 16'h00FF;
 `LDH:		fnSelect = 16'hFFFF;
 `LDHR:	fnSelect = 16'hFFFF;
 `MLX:
-	case(isn[`FUNCT5])
-	`LDBX:	fnSelect = 10'h001;
-	`LDBUX:	fnSelect = 10'h001;
-	`LDWX:	fnSelect = 10'h003;
-	`LDWUX:	fnSelect = 10'h003;
-	`LDTX:	fnSelect = 10'h00F;
-	`LDTUX:	fnSelect = 10'h00F;
-	`LDPX:	fnSelect = 10'h01F;
-	`LDPUX:	fnSelect = 10'h01F;
-	`LDOX:	fnSelect = 10'h0FF;
-	`LDOUX:	fnSelect = 10'h0FF;
-	`LDDX:	fnSelect = 10'h3FF;
-	`LDDRX:	fnSelect = 10'h3FF;
-	default:	fnSelect = 10'h000;
+	case(isn[`LXFUNCT5])
+	`LDBX:	fnSelect = 16'h0001;
+	`LDBUX:	fnSelect = 16'h0001;
+	`LDWX:	fnSelect = 16'h0003;
+	`LDWUX:	fnSelect = 16'h0003;
+	`LDTX:	fnSelect = 16'h000F;
+	`LDTUX:	fnSelect = 16'h000F;
+	`LDPX:	fnSelect = 16'h001F;
+	`LDPUX:	fnSelect = 16'h001F;
+	`LDOX:	fnSelect = 16'h00FF;
+	`LDOUX:	fnSelect = 16'h00FF;
+	`LDHX:	fnSelect = 16'hFFFF;
+	`LDHRX:	fnSelect = 16'hFFFF;
+	default:	fnSelect = 16'h0000;
 	endcase
 `AMO:
 	case(isn[`SZ3])
@@ -3398,14 +3454,14 @@ casez(isn[`OPCODE])
 	3'd5:		fnSelect = 10'h3FF;
 	default:	fnSelect = 10'h000;
 	endcase
-`STB:	fnSelect = 10'h001;
-`STW:	fnSelect = 10'h003;
-`STT:	fnSelect = 10'h00F;
-`STP:	fnSelect = 10'h01F;
-`STO:	fnSelect = 10'h0FF;
-`STD:	fnSelect = 10'h3FF;
-`STDC:	fnSelect = 10'h3FF;
-`CAS:	fnSelect = 10'h3FF;
+`STB:	fnSelect = 16'h0001;
+`STW:	fnSelect = 16'h0003;
+`STT:	fnSelect = 16'h000F;
+`STP:	fnSelect = 16'h001F;
+`STO:	fnSelect = 16'h00FF;
+`STH:	fnSelect = 16'hFFFF;
+`STHC:	fnSelect = 16'hFFFF;
+`CAS:	fnSelect = 16'hFFFF;
 `PUSH:	
 	case(isn[`FUNCT5])
 	5'h01:	fnSelect = 10'h001;
@@ -3416,58 +3472,58 @@ casez(isn[`OPCODE])
 	5'h0A:	fnSelect = 10'h3FF;
 	default:	fnSelect = 10'h3FF;
 	endcase
-`PUSHC:	fnSelect = 10'h3FF;
+`PUSHC:	fnSelect = 16'hFFFF;
 `MSX:
-	case(isn[`FUNCT5])
-	`STBX:	fnSelect = 10'h001;
-	`STWX:	fnSelect = 10'h003;
-	`STTX:	fnSelect = 10'h00F;
-	`STPX:	fnSelect = 10'h01F;
-	`STOX:	fnSelect = 10'h0FF;
-	`STDX:	fnSelect = 10'h3FF;
-	`STDCX:	fnSelect = 10'h3FF;
-	`CASX:		fnSelect = 10'h3FF;
-	default:	fnSelect = 10'h000;
+	case(isn[`SXFUNCT5])
+	`STBX:	fnSelect = 16'h0001;
+	`STWX:	fnSelect = 16'h0003;
+	`STTX:	fnSelect = 16'h000F;
+	`STPX:	fnSelect = 16'h001F;
+	`STOX:	fnSelect = 16'h00FF;
+	`STHX:	fnSelect = 16'hFFFF;
+	`STHCX:	fnSelect = 16'hFFFF;
+	`CASX:		fnSelect = 16'hFFFF;
+	default:	fnSelect = 16'h0000;
 	endcase
-default:	fnSelect = 10'h000;
+default:	fnSelect = 16'h0000;
 endcase
 endfunction
 
-function [79:0] fnDataExtend;
+function [127:0] fnDataExtend;
 input [39:0] ins;
-input [79:0] dat;
+input [127:0] dat;
 casez(mopcode(ins))
-`LDB:	fnDataExtend = {{72{dat[7]}},dat[7:0]};
-`LDBU:	fnDataExtend = {72'd0,dat[7:0]};
-`LDW:	fnDataExtend = {{64{dat[15]}},dat[15:0]};
-`LDWU:	fnDataExtend = {64'd0,dat[15:0]};
-`LDT:	fnDataExtend = {{48{dat[31]}},dat[31:0]};
-`LDTU:	fnDataExtend = {48'd0,dat[31:0]};
-`LDP:	fnDataExtend = {{40{dat[39]}},dat[39:0]};
-`LDPU:	fnDataExtend = {40'd0,dat[39:0]};
-`LDO:	fnDataExtend = {{16{dat[63]}},dat[63:0]};
-`LDOU:	fnDataExtend = {16'd0,dat[63:0]};
-`LDD:	fnDataExtend = dat[79:0];
-`LDDR:	fnDataExtend = dat[79:0];
-`POP:		fnDataExtend = dat[79:0];
+`LDB:	fnDataExtend = {{120{dat[7]}},dat[7:0]};
+`LDBU:	fnDataExtend = {120'd0,dat[7:0]};
+`LDW:	fnDataExtend = {{112{dat[15]}},dat[15:0]};
+`LDWU:	fnDataExtend = {112'd0,dat[15:0]};
+`LDT:	fnDataExtend = {{96{dat[31]}},dat[31:0]};
+`LDTU:	fnDataExtend = {96'd0,dat[31:0]};
+`LDP:	fnDataExtend = {{88{dat[39]}},dat[39:0]};
+`LDPU:	fnDataExtend = {88'd0,dat[39:0]};
+`LDO:	fnDataExtend = {{64{dat[63]}},dat[63:0]};
+`LDOU:	fnDataExtend = {64'd0,dat[63:0]};
+`LDH:	fnDataExtend = dat[127:0];
+`LDHR:	fnDataExtend = dat[127:0];
+`POP:		fnDataExtend = dat[127:0];
 `MLX:
 	case(ins[`FUNCT5])
-	`LDBX:	fnDataExtend = {{72{dat[7]}},dat[7:0]};
-	`LDBUX:	fnDataExtend = {72'd0,dat[7:0]};
-	`LDWX:	fnDataExtend = {{64{dat[15]}},dat[15:0]};
-	`LDWUX:	fnDataExtend = {64'd0,dat[15:0]};
-	`LDTX:	fnDataExtend = {{48{dat[31]}},dat[31:0]};
-	`LDTUX:	fnDataExtend = {48'd0,dat[31:0]};
-	`LDPX:	fnDataExtend = {{40{dat[39]}},dat[39:0]};
-	`LDPUX:	fnDataExtend = {40'd0,dat[39:0]};
-	`LDOX:	fnDataExtend = {{16{dat[63]}},dat[63:0]};
-	`LDOUX:	fnDataExtend = {16'd0,dat[63:0]};
-	`LDDX:	fnDataExtend = dat[79:0];
-	`LDDRX:	fnDataExtend = dat[79:0];
-	default:	fnDataExtend = dat[79:0];
+	`LDBX:	fnDataExtend = {{120{dat[7]}},dat[7:0]};
+	`LDBUX:	fnDataExtend = {120'd0,dat[7:0]};
+	`LDWX:	fnDataExtend = {{112{dat[15]}},dat[15:0]};
+	`LDWUX:	fnDataExtend = {112'd0,dat[15:0]};
+	`LDTX:	fnDataExtend = {{96{dat[31]}},dat[31:0]};
+	`LDTUX:	fnDataExtend = {96'd0,dat[31:0]};
+	`LDPX:	fnDataExtend = {{88{dat[39]}},dat[39:0]};
+	`LDPUX:	fnDataExtend = {88'd0,dat[39:0]};
+	`LDOX:	fnDataExtend = {{64{dat[63]}},dat[63:0]};
+	`LDOUX:	fnDataExtend = {64'd0,dat[63:0]};
+	`LDHX:	fnDataExtend = dat[127:0];
+	`LDHRX:	fnDataExtend = dat[127:0];
+	default:	fnDataExtend = dat[127:0];
 	endcase
 	// ToDo: add CAS
-default:    fnDataExtend = dat[79:0];
+default:    fnDataExtend = dat[127:0];
 endcase
 endfunction
 
@@ -6181,7 +6237,7 @@ end
 					alu1_rid:	fcu_argA <= ralu1_bus;
 					fpu1_rid:	fcu_argA <= rfpu1_bus[WID+3:4];
 					fpu2_rid:	fcu_argA <= rfpu2_bus[WID+3:4];
-					default:	fcu_argA <= 80'hDEADDEADDEADDEADDEAD;
+					default:	fcu_argA <= 128'hDEADDEADDEADDEADDEADDEADDEADDEAD;
 					endcase
 `else
 				fcu_argA <= iq_argA[n][WID+3:4];               
@@ -6189,15 +6245,17 @@ end
 `ifdef FU_BYPASS
 				if (iq_imm[n])
 					fcu_argB <= iq_argI[n];
-				else if (iq_argB_v[n])
-					fcu_argB <= iq_argB[n][WID+3:4];
+				else if (iq_argB_v[n]) begin
+					fcu_argB <= iq_argB[n];
+					fcu_argLk <= iq_argLk[n];
+				end
 				else
 					case(iq_argB_s[n][`RBITS])
-					alu0_rid:	fcu_argB <= ralu0_bus;
-					alu1_rid:	fcu_argB <= ralu1_bus;
+					alu0_rid:	begin fcu_argB <= ralu0_bus; fcu_argLk <= ralu0_bus; end
+					alu1_rid:	begin fcu_argB <= ralu1_bus; fcu_argLk <= ralu1_bus; end
 					fpu1_rid:	fcu_argB <= rfpu1_bus[WID+3:4];
 					fpu2_rid:	fcu_argB <= rfpu2_bus[WID+3:4];
-					default:	fcu_argB <= 80'hDEADDEADDEADDEADDEAD;
+					default:	fcu_argB <= 128'hDEADDEADDEADDEADDEADDEADDEADDEAD;
 					endcase
 `else
 				if (iq_imm[n])
@@ -6214,7 +6272,7 @@ end
 					alu1_rid:	fcu_argC <= ralu1_bus;
 					fpu1_rid:	fcu_argC <= rfpu1_bus[WID+3:4];
 					fpu2_rid:	fcu_argC <= rfpu2_bus[WID+3:4];
-					default:	fcu_argC <= 80'hDEADDEADDEADDEADDEAD;
+					default:	fcu_argC <= 128'hDEADDEADDEADDEADDEADDEADDEADDEAD;
 					endcase
 `else
 				fcu_argC <= iq_argC[n][WID+3:4];
@@ -7046,7 +7104,7 @@ task setargs;
 input [`QBITS] nn;
 input [`RBITSP1] id;
 input v;
-input [WID+3:0] bus;
+input [WID-1:0] bus;
 begin
   if (iq_argA_v[nn] == `INV && iq_argA_s[nn][`RBITSP1] == id && iq_v[nn] == `VAL && v == `VAL) begin
 		iq_argA[nn] <= bus;
@@ -7059,6 +7117,14 @@ begin
   if (iq_argC_v[nn] == `INV && iq_argC_s[nn][`RBITSP1] == id && iq_v[nn] == `VAL && v == `VAL) begin
 		iq_argC[nn] <= bus;
 		iq_argC_v[nn] <= `VAL;
+  end
+  if (iq_argD_v[nn] == `INV && iq_argD_s[nn][`RBITSP1] == id && iq_v[nn] == `VAL && v == `VAL) begin
+		iq_argD[nn] <= bus;
+		iq_argD_v[nn] <= `VAL;
+  end
+  if (iq_argT_v[nn] == `INV && iq_argT_s[nn][`RBITSP1] == id && iq_v[nn] == `VAL && v == `VAL) begin
+		iq_argT[nn] <= bus;
+		iq_argT_v[nn] <= `VAL;
   end
 end
 endtask
@@ -7099,6 +7165,8 @@ begin
 			iq_argC_s [tails[tails_rc(pat,row)]] <= rf_source[Rs3[row]];
 			iq_argD_v [tails[tails_rc(pat,row)]] <= regIsValid[Rs4[row]] | Source4Valid(slotu[row],insnx[row]);
 			iq_argD_s [tails[tails_rc(pat,row)]] <= rf_source[Rs4[row]];
+			iq_argT_v [tails[tails_rc(pat,row)]] <= regIsValid[Rd[row]] | SourceTValid(slotu[row],insnx[row]);
+			iq_argT_s [tails[tails_rc(pat,row)]] <= rf_source[Rd[row]];
 			for (col = 0; col < QSLOTS; col = col + 1) begin
 				if (col < row) begin
 					if (pat[col]) begin
@@ -7107,19 +7175,20 @@ begin
 							iq_argA_v [tails[tails_rc(pat,row)]] <= Source1Valid(slotu[row],insnx[row]);
 							iq_argA_s [tails[tails_rc(pat,row)]] <= {1'b0,tails[tails_rc(pat,col)]};
 						end
+						else if (Rs1[row]==Rd[col] && Rs1[row]!=7'b0000000 && Rs1[row] != 7'b0100000 && Rs1[row] != 7'b1000000 && slot_rfw[col]) begin
+							iq_argA_v [tails[tails_rc(pat,row)]] <= Source1Valid(slotu[row],insnx[row]);
+							iq_argA_s [tails[tails_rc(pat,row)]] <= {1'b0,tails[tails_rc(pat,col)]};
+						end
+
 						if (Rs2[row] >= 7'b1110000 && Rs2[row] <= 7'b1110111 && Rd[col]==7'd121 && slot_rfw[col] begin
 							iq_argA_v [tails[tails_rc(pat,row)]] <= Source2Valid(slotu[row],insnx[row]);
 							iq_argA_s [tails[tails_rc(pat,row)]] <= {1'b0,tails[tails_rc(pat,col)]};
 						end
-
-						if (Rs1[row]==Rd[col] && Rs1[row]!=7'b0000000 && Rs1[row] != 7'b0100000 && Rs1[row] != 7'b1000000 && slot_rfw[col]) begin
-							iq_argA_v [tails[tails_rc(pat,row)]] <= Source1Valid(slotu[row],insnx[row]);
-							iq_argA_s [tails[tails_rc(pat,row)]] <= {1'b0,tails[tails_rc(pat,col)]};
-						end
-						if (Rs2[row]==Rd[col] && Rs2[row]!=7'b0000000 && Rs2[row] != 7'b0100000 && Rs2[row] != 7'b1000000 && slot_rfw[col]) begin
+						else if (Rs2[row]==Rd[col] && Rs2[row]!=7'b0000000 && Rs2[row] != 7'b0100000 && Rs2[row] != 7'b1000000 && slot_rfw[col]) begin
 							iq_argB_v [tails[tails_rc(pat,row)]] <= Source2Valid(slotu[row],insnx[row]);
 							iq_argB_s [tails[tails_rc(pat,row)]] <= {1'b0,tails[tails_rc(pat,col)]};
 						end
+
 						if (Rs3[row]==Rd[col] && Rs3[row]!=7'b0000000 && Rs3[row] != 7'b0100000 && Rs3[row] != 7'b1000000 && slot_rfw[col]) begin
 							iq_argC_v [tails[tails_rc(pat,row)]] <= Source3Valid(slotu[row],insnx[row]);
 							iq_argC_s [tails[tails_rc(pat,row)]] <= {1'b0,tails[tails_rc(pat,col)]};
@@ -7127,6 +7196,11 @@ begin
 						if (Rs4[row]==Rd[col] && slot_rfw[col]) begin
 							iq_argD_v [tails[tails_rc(pat,row)]] <= Source4Valid(slotu[row],insnx[row]);
 							iq_argD_s [tails[tails_rc(pat,row)]] <= {1'b0,tails[tails_rc(pat,col)]};
+						end
+						// For vector instructions the target register needs to be read and might have dependencies.
+						if (Rd[row]==Rd[col] && Rd[row]!=7'b0000000 && Rd[row] != 7'b0100000 && Rd[row] != 7'b1000000 && slot_rfw[col]) begin
+							iq_argT_v [tails[tails_rc(pat,row)]] <= SourceTValid(slotu[row],insnx[row]);
+							iq_argT_s [tails[tails_rc(pat,row)]] <= {1'b0,tails[tails_rc(pat,col)]};
 						end
 					end
 				end
@@ -7140,14 +7214,16 @@ task set_insn;
 input [`QBITS] nn;
 input [`IBTOP:0] bus;
 begin
-	case(bus[`IB_PFXX])
-	1'd0:	iq_argI[nn] <= bus[`IB_CONST];
-	1'd1:	iq_argI[nn] <= {iq_argI[(nn+`QENTRIES-1) % `QENTRIES],bus[`IB_CONST32]};
-	endcase
-	case(bus[`IB_PFX])
-	1'd0:	iq_argI[nn] <= bus[`IB_CONST];
-	1'd1: iq_argI[nn] <= {iq_argI[(nn+`QENTRIES-1) % `QENTRIES],bus[`IB_CONST21]};
-	endcase
+	if (bus[`IB_PFXINSN])
+		case(bus[`IB_PFX])
+		1'd0:	iq_argI[nn] <= bus[`IB_CONST];
+		1'd1:	iq_argI[nn] <= {iq_argI[(nn+`QENTRIES-1) % `QENTRIES],bus[`IB_CONST31]};
+		endcase
+	else
+		case(bus[`IB_PFX])
+		1'd0:	iq_argI[nn] <= bus[`IB_CONST];
+		1'd1: iq_argI[nn] <= {iq_argI[(nn+`QENTRIES-1) % `QENTRIES],bus[`IB_CONST21]};
+		endcase
 	iq_imm  [nn]  <= bus[`IB_IMM];
 	iq_cmp	 [nn]  <= bus[`IB_CMP];
 	iq_tlb  [nn]  <= bus[`IB_TLB];
@@ -7192,6 +7268,7 @@ begin
 	iq_rs1   [nn]  <= bus[`IB_RS1];
 	iq_rs2   [nn]  <= bus[`IB_RS2];
 	iq_rs3   [nn]  <= bus[`IB_RS3];
+	iq_rs4   [nn]  <= bus[`IB_RS4];
 	iq_rfw  [nn]  <= bus[`IB_RFW];
 end
 endtask
@@ -7209,30 +7286,31 @@ begin
 	iq_state[ndx] <= IQS_QUEUED;
 	iq_br_tag[ndx] <= btag;
 	case(slot)
-	3'd0:	iq_ip[ndx] <= {ipd[AMSB:4],4'h0};
-	3'd1:	iq_ip[ndx] <= {ipd[AMSB:4],4'h5};
-	3'd2:	iq_ip[ndx] <= {ipd[AMSB:4],4'hA};
-	3'd3:	iq_ip[ndx] <= {ipd[AMSB:4]+2'd1,4'h0};
-	3'd4:	iq_ip[ndx] <= {ipd[AMSB:4]+2'd1,4'h5};
-	3'd5:	iq_ip[ndx] <= {ipd[AMSB:4]+2'd1,4'hA};
-	default:	iq_ip[ndx] <= {ipd[AMSB:4],4'h0};
+	3'd0:	iq_ip[ndx] <= ipd;
+	3'd1:	iq_ip[ndx] <= ipd + 4'h5;
+	3'd2:	iq_ip[ndx] <= ipd + 4'hA;
+	3'd3:	iq_ip[ndx] <= ipd + 4'hF;
+	default:	iq_ip[ndx] <= ipd;
 	endcase
+	if (iq_pfx[ndx])
+		iq_ip[ndx] <= iq_ip[(ndx + QENTRIES - 1) % QENTRIES];
 	iq_unit[ndx] <= slotu[slot];
 	iq_instr[ndx] <= insnx[slot];
-	iq_argA[ndx] <= rfoa[slot];
-	iq_argB[ndx] <= rfob[slot];
-	iq_argC[ndx] <= rfoc[slot];
-	iq_fpargA[ndx] <= fp_rfoa[slot];
-	iq_fpargB[ndx] <= fp_rfob[slot];
-	iq_fpargC[ndx] <= fp-rfoc[slot];
-	iq_lkreg[ndx]  <= lk_rfo[slot];
-	iq_cr[ndx]     <= cr_rfo[slot];
+	iq_argA[ndx] <= argA[slot];
+	iq_argB[ndx] <= argB[slot];
+	iq_argC[ndx] <= argC[slot];
+	iq_argD[ndx] <= argD[slot];
+	iq_argT[ndx] <= argT[slot];
 	iq_argA_v[ndx] <= regIsValid[Rs1[slot]] || Source1Valid(slotu[slot],insnx[slot]);
 	iq_argB_v[ndx] <= regIsValid[Rs2[slot]] || Source2Valid(slotu[slot],insnx[slot]);
 	iq_argC_v[ndx] <= regIsValid[Rs3[slot]] || Source3Valid(slotu[slot],insnx[slot]);
+	iq_argD_v[ndx] <= regIsValid[Rs4[slot]] || Source4Valid(slotu[slot],insnx[slot]);
+	iq_argT_v[ndx] <= regIsValid[Rd[slot]] || SourceTValid(slotu[slot],insnx[slot]);
 	iq_argA_s[ndx] <= rf_source[Rs1[slot]];
 	iq_argB_s[ndx] <= rf_source[Rs2[slot]];
 	iq_argC_s[ndx] <= rf_source[Rs3[slot]];
+	iq_argD_s[ndx] <= rf_source[Rs4[slot]];
+	iq_argT_s[ndx] <= rf_source[Rd[slot]];
 	iq_pt[ndx] <= predict_taken[slot];
 	iq_tgt[ndx] <= Rd[slot];
 	iq_tgt2[ndx] <= Rd2[slot];
@@ -7242,14 +7320,14 @@ begin
 	rob_unit[rid] <= slotu[slot];
 	rob_instr[rid] <= insnx[slot];
 	case(slot)
-	3'd0:	rob_ip[rid] <= {ipd[AMSB:4],4'h0};
-	3'd1:	rob_ip[rid] <= {ipd[AMSB:4],4'h5};
-	3'd2:	rob_ip[rid] <= {ipd[AMSB:4],4'hA};
-	3'd3:	rob_ip[rid] <= {ipd[AMSB:4]+2'd1,4'h0};
-	3'd4:	rob_ip[rid] <= {ipd[AMSB:4]+2'd1,4'h5};
-	3'd5:	rob_ip[rid] <= {ipd[AMSB:4]+2'd1,4'hA};
-	default:	rob_ip[rid] <= {ipd[AMSB:4],4'h0};
+	3'd0:	rob_ip[rid] <= ipd;
+	3'd1:	rob_ip[rid] <= ipd + 4'h5;
+	3'd2:	rob_ip[rid] <= ipd + 4'hA;
+	3'd3:	rob_ip[rid] <= ipd + 4'hF;
+	default:	rob_ip[rid] <= ipd;
 	endcase
+	if (iq_pfx[ndx])
+		rob_ip[ndx] <= iq_ip[(ndx + QENTRIES - 1) % QENTRIES];
 	rob_res[rid] <= 1'd0;
 	rob_status[rid] <= 1'd0;
 	rob_state[rid] <= RS_ASSIGNED;

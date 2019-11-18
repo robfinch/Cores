@@ -473,6 +473,7 @@
 `define RS1					17:13
 `define RS2					22:18
 `define RS3					27:23
+`define RS4					33:31
 
 `define INSTRUCTION_IM  31:18
 `define INSTRUCTION_IML	47:18
