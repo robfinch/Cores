@@ -1,17 +1,19 @@
-# Welcome to the nvio core
+# Welcome to the nvio3 core
 
 # Overview
-nvio is a superscalar core with the following features:
+nvio3 is a superscalar core with the following features:
 - 32 general purpose registers
 - 32 floating point registers
+- 32 array registers of 128 rows by 1 to 16 columns
 - 8 condition code registers
 - 8 link registers
+- 8 mask registers with both row and column components
 - 40 bit fixed size instruction set
 - 128 bit data width
 - branch prediction with branch target buffer (BTB)
 - return address prediction (RSB)
 - register renaming
-- out-of-order instruction execution
+- out-of-order instruction execution (ROB)
 - precise exception handling
 - speculative loading
 - bus interface unit
@@ -25,7 +27,7 @@ nvio is a superscalar core with the following features:
 	- dual floating point unit
 	- one memory unit (handles 2 load / stores)
 
-The nvio fetches four instructions at once and can issue up to seven instructions in a single cycle (2 alu, 1 flow control, 2 floating point, 2 memory) and is capable of committing up to three instructions in a single cycle. 
+The nvio3 fetches four instructions at once and can issue up to seven instructions in a single cycle (2 alu, 1 flow control, 2 floating point, 2 memory) and is capable of committing up to four instructions in a single cycle. 
 
 ## History
 nvio is a work-in-progress beginning in May 2019. nvio originated from FT64 which originated from RiSC-16 by Dr. Bruce Jacob. RiSC-16 evolved from the Little Computer (LC-896) developed by Peter Chen at the University of Michigan. The nvio is the author's first attempt at an 128 bit ISA. The author has tried to be innovative with this design borrowing ideas from a number of other processing cores.
@@ -50,6 +52,6 @@ The ISA supports more data types than usual due to the 128-bit data path size. T
 
 # Instruction Set
 The current instruction set allows for up to three register read ports and one register write ports for a single instruction. Three read ports are handy for multiply-accumulate instructions. While the ISA probably does not offer leading edge performance, it's designed to be more programmer friendly in the author's opinion, while still offering good performance.
-Instructions are executed independently of each other and there is no flags register.
+Instructions are executed independently of each other.
 Large 128-bit immediate constants are supported as sequence of instruction prefixes. Each prefix provides 31 bits of the value. Using a prefix serializes the queuing of the instruction. One clock cycle per prefix is required.
 

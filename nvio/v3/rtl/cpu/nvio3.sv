@@ -1919,12 +1919,15 @@ begin
 						 {2'd0,VL0_commit_v} + {2'd0,VL1_commit_v} +
 						 n_nulltgt
 						 ;
+	if (n_commit > Cr1_cs)
+		n_commit = Cr1_cs;
 end
 
 reg [WID-1:0] argA[QSLOTS-1:0];
 reg [WID-1:0] argB[QSLOTS-1:0];
 reg [WID-1:0] argC[QSLOTS-1:0];
 reg [WID-1:0] argD[QSLOTS-1:0];
+reg [WID-1:0] argT[QSLOTS-1:0];
 
 // link registers are never argA
 always @*
@@ -1942,29 +1945,44 @@ for (n = 0; n < QSLOTS; n = n + 1)
 
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
+if (is_bmm[n])
+	argB[n] <= fp_rfoa[n];
+else
 	casez(Rs2[n])
 	7'b00?????:	argB[n] <= gp_rfob[n];
 	7'b01?????:	argB[n] <= fp_rfob[n];
 	7'b10?????:	argB[n] <= vc_rfob[n];
 	7'b1100???:	argB[n] <= lk_rfo[n];
+	7'b1111001:	argB[n] <= cra_o;
 	default:		argB[n] <= 128'd0;
 	endcase
 	
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
 	casez(Rs3[n])
-	7'b00?????:	argC[n] <= gp_rfob[n];
-	7'b01?????:	argC[n] <= fp_rfob[n];
-	7'b10?????:	argC[n] <= vc_rfob[n];
+	7'b00?????:	argC[n] <= gp_rfoc[n];
+	7'b01?????:	argC[n] <= fp_rfoc[n];
+	7'b10?????:	argC[n] <= vc_rfoc[n];
 	default:		argC[n] <= 128'd0;
 	endcase
 
 // Only the vector mask register is argD
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
+if (is_bmm[n])
+	argD[n] <= fp_rfob[n];
+else
 	casez(Rs4[n])
 	7'b1101???:	argD[n] <= vm_rfod[n];
 	default:		argD[n] <= 128'd0;
+	endcase
+
+// Only thing needing target as a source is vector instructions
+always @*
+for (n = 0; n < QSLOTS; n = n + 1)
+	casez(Rd[n])
+	7'b10?????:	argT[n] <= vc_rfot[n];
+	default:		argT[n] <= 128'd0;
 	endcase
 
 
@@ -2898,7 +2916,8 @@ endfunction
 
 function [6:0] fnRs3;
 input [39:0] ins;
-fnRs3 = ins[`RS3];
+case(ins[`OPCODE])
+fnRs3 = {2'b00,ins[`RS3]};
 endfunction
 
 function [6:0] fnRs4;
@@ -5738,13 +5757,13 @@ end
 					alu0_rid <= iq_rid[n];
 					alu0_instr	<= iq_rtop[n] ? (
 `ifdef FU_BYPASS                 									
-					iq_argC_v[n] ? iq_argC[n][WID+3:4]
+					iq_argC_v[n] ? iq_argC[n][WID-1:0]
           : (iq_argC_s[n] == alu0_id) ? ralu0_bus
           : (iq_argC_s[n] == alu1_id) ? ralu1_bus
-          : (iq_argC_s[n] == fpu1_id && `NUM_FPU > 0) ? rfpu1_bus[WID+3:4]
+          : (iq_argC_s[n] == fpu1_id && `NUM_FPU > 0) ? rfpu1_bus[WID-1:0]
           : `NOP_INSN)
 `else			                           
-					iq_argC[n][WID+3:4]) 
+					iq_argC[n][WID-1:0]) 
 `endif			                            
 											 : iq_instr[n];
 					alu0_sz    <= iq_sz[n];
@@ -5758,50 +5777,50 @@ end
 					// instruction (LEA) to bypass for.
 `ifdef FU_BYPASS
 					if (iq_argA_v[n])
-						alu0_argA <= iq_argA[n][WID+3:4];
+						alu0_argA <= iq_argA[n][WID-1:0];
 					else
 						case(iq_argA_s[n][`RBITS])
 						alu0_rid:	alu0_argA <= ralu0_bus;
 						alu1_rid:	alu0_argA <= ralu1_bus;
-						fpu1_rid:	alu0_argA <= rfpu1_bus[WID+3:4];
-						fpu2_rid:	alu0_argA <= rfpu2_bus[WID+3:4];
+						fpu1_rid:	alu0_argA <= rfpu1_bus[WID-1:0];
+						fpu2_rid:	alu0_argA <= rfpu2_bus[WID-1:0];
 						default:	alu0_argA <= 80'hDEADDEADDEADDEADDEAD;
 						endcase
 `else
-					alu0_argA <= iq_argA[n][WID+3:4];               
+					alu0_argA <= iq_argA[n][WID-1:0];               
 `endif                 
 `ifdef FU_BYPASS
 					if (iq_imm[n])
 						alu0_argB <= iq_argI[n];
 					else if (iq_argB_v[n])
-						alu0_argB <= iq_argB[n][WID+3:4];
+						alu0_argB <= iq_argB[n][WID-1:0];
 					else
 						case(iq_argB_s[n][`RBITS])
 						alu0_rid:	alu0_argB <= ralu0_bus;
 						alu1_rid:	alu0_argB <= ralu1_bus;
-						fpu1_rid:	alu0_argB <= rfpu1_bus[WID+3:4];
-						fpu2_rid:	alu0_argB <= rfpu2_bus[WID+3:4];
+						fpu1_rid:	alu0_argB <= rfpu1_bus[WID-1:0];
+						fpu2_rid:	alu0_argB <= rfpu2_bus[WID-1:0];
 						default:	alu0_argB <= 80'hDEADDEADDEADDEADDEAD;
 						endcase
 `else
 					if (iq_imm[n])
 						alu0_argB <= iq_argI[n];
 					else
-						alu0_argB <= iq_argB[n][WID+3:4];
+						alu0_argB <= iq_argB[n][WID-1:0];
 `endif
 `ifdef FU_BYPASS
 					if (iq_argC_v[n])
-						alu0_argC <= iq_argC[n][WID+3:4];
+						alu0_argC <= iq_argC[n][WID-1:0];
 					else
 						case(iq_argC_s[n][`RBITS])
 						alu0_rid:	alu0_argC <= ralu0_bus;
 						alu1_rid:	alu0_argC <= ralu1_bus;
-						fpu1_rid:	alu0_argC <= rfpu1_bus[WID+3:4];
-						fpu2_rid:	alu0_argC <= rfpu2_bus[WID+3:4];
+						fpu1_rid:	alu0_argC <= rfpu1_bus[WID-1:0];
+						fpu2_rid:	alu0_argC <= rfpu2_bus[WID-1:0];
 						default:	alu0_argC <= 80'hDEADDEADDEADDEADDEAD;
 						endcase
 `else
-					alu0_argC <= iq_argC[n][WID+3:4];
+					alu0_argC <= iq_argC[n][WID-1:0];
 `endif                 
 					alu0_argI	<= iq_argI[n];
 					alu0_tgt    <= iq_tgt[n];
@@ -7286,11 +7305,10 @@ begin
 	iq_state[ndx] <= IQS_QUEUED;
 	iq_br_tag[ndx] <= btag;
 	case(slot)
-	3'd0:	iq_ip[ndx] <= ipd;
-	3'd1:	iq_ip[ndx] <= ipd + 4'h5;
-	3'd2:	iq_ip[ndx] <= ipd + 4'hA;
-	3'd3:	iq_ip[ndx] <= ipd + 4'hF;
-	default:	iq_ip[ndx] <= ipd;
+	3'd0:	iq_ip[ndx] <= {ipd[AMSB:2],2'b00};
+	3'd1:	iq_ip[ndx] <= {ipd[AMSB:2],2'b01};
+	3'd2:	iq_ip[ndx] <= {ipd[AMSB:2],2'b10};
+	3'd3:	iq_ip[ndx] <= {ipd[AMSB:2],2'b11};
 	endcase
 	if (iq_pfx[ndx])
 		iq_ip[ndx] <= iq_ip[(ndx + QENTRIES - 1) % QENTRIES];
@@ -7317,17 +7335,15 @@ begin
 	iq_crtgt[ndx] <= Crd[slot];
 	set_insn(ndx,id_bus);
 	// Some updates depend on instructions decoded at commit time.
-	rob_unit[rid] <= slotu[slot];
 	rob_instr[rid] <= insnx[slot];
 	case(slot)
-	3'd0:	rob_ip[rid] <= ipd;
-	3'd1:	rob_ip[rid] <= ipd + 4'h5;
-	3'd2:	rob_ip[rid] <= ipd + 4'hA;
-	3'd3:	rob_ip[rid] <= ipd + 4'hF;
-	default:	rob_ip[rid] <= ipd;
+	3'd0:	rob_ip[rid] <= {ipd[AMSB:2],2'b00};
+	3'd1:	rob_ip[rid] <= {ipd[AMSB:2],2'b01};
+	3'd2:	rob_ip[rid] <= {ipd[AMSB:2],2'b10};
+	3'd3:	rob_ip[rid] <= {ipd[AMSB:2],2'b11};
 	endcase
 	if (iq_pfx[ndx])
-		rob_ip[ndx] <= iq_ip[(ndx + QENTRIES - 1) % QENTRIES];
+		rob_ip[rid] <= iq_ip[(ndx + QENTRIES - 1) % QENTRIES];
 	rob_res[rid] <= 1'd0;
 	rob_status[rid] <= 1'd0;
 	rob_state[rid] <= RS_ASSIGNED;
@@ -7386,7 +7402,7 @@ begin
         else
         case(rob_unit[head])
         `BUnit:
-					case(rob_instr[head][`OPCODE4])
+					case(rob_instr[head][`OPCODE])
 					`BRK:   
         		// BRK is treated as a nop unless it's a software interrupt or a
         		// hardware interrupt at a higher priority than the current priority.

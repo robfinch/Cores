@@ -474,6 +474,8 @@
 `define RS2					22:18
 `define RS3					27:23
 `define RS4					33:31
+`define LXFUNCT5		22:18
+`define SXFUNCT5		12:8
 
 `define INSTRUCTION_IM  31:18
 `define INSTRUCTION_IML	47:18
