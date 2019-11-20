@@ -29,6 +29,73 @@
 `define INV		1'b0
 `define VAL		1'b1
 
+`define BYTE0		7:0
+`define BYTE1		15:8
+`define BYTE2		23:16
+`define BYTE3		31:24
+`define BYTE4		39:32
+`define BYTE5		47:40
+`define BYTE6		55:48
+`define BYTE7		63:56
+`define BYTE8		71:64
+`define BYTE9		79:72
+`define BYTE10	87:80
+`define BYTE11	95:88
+`define BYTE12	103:96
+`define BYTE13	111:104
+`define BYTE14	119:112
+`define BYTE15	127:120
+`define BYTE16	135:128
+`define BYTE17	143:136
+`define BYTE18	151:144
+`define BYTE19	159:152
+`define BYTE20	167:160
+`define BYTE21	175:168
+`define BYTE22	183:176
+`define BYTE23	191:184
+`define BYTE24	199:192
+`define BYTE25	207:200
+`define BYTE26	215:208
+`define BYTE27	223:216
+`define BYTE28	231:224
+`define BYTE29	239:232
+`define BYTE30	247:240
+`define BYTE31	255:248
+
+`define WYDE0		15:0
+`define WYDE1		31:16
+`define WYDE2		47:32
+`define WYDE3		63:48
+`define WYDE4		79:64
+`define WYDE5		95:80
+`define WYDE6		111:96
+`define WYDE7		127:112
+`define WYDE8		143:128
+`define WYDE9		159:144
+`define WYDE10	175:160
+`define WYDE11	191:176
+`define WYDE12	207:192
+`define WYDE13	223:208
+`define WYDE14	239:224
+`define WYDE15	255:240
+
+`define TETRA0	31:0
+`define TETRA1	63:32
+`define TETRA2	95:64
+`define TETRA3	127:96
+`define TETRA4	159:128
+`define TETRA5	191:160
+`define TETRA6	223:192
+`define TETRA7	255:224
+
+`define OCTA0		63:0
+`define OCTA1		127:64
+`define OCTA2		191:128
+`define OCTA3		255:191
+
+`define HEXI0		127:0
+`define HEXI1		255:128
+
 //`define Q2VECTORS   1'b1
 
 // Branch Unit
@@ -95,21 +162,21 @@
 `define BYTNDXI	6'h1C
 `define WYDNDXI	6'h1D
 `define DIFI		6'h1F
-`define MUL			6'h20
-`define MULI		6'h20
-`define MULU		6'h21
-`define MULUI		6'h21
+`define MULI		8'h80
+`define MULUI		8'h81
+`define MULSUI	8'h90
 `define DIV			6'h22
-`define DIVI		6'h22
 `define DIVU		6'h23
-`define DIVUI		6'h23
+`define DIVI		8'h82
+`define DIVUI		8'h83
+`define DIVSUI	8'h92
 `define MOD			6'h24
-`define MODI		6'h24
 `define MODU		6'h25
-`define MODUI		6'h25
+`define MODI		8'h86
+`define MODUI		8'h87
+`define MODSUI	8'h96
 `define MADF		6'h28
 `define MAJ			6'h2C
-`define FXMUL		6'h30
 `define FXMULI	6'h30
 `define ADDS0		6'h33
 `define ADDS1		6'h34
@@ -149,9 +216,16 @@
 `define SXP					5'h1B
 `define SXO					5'h1C
 
-// R3 Format
+// R2 Format
 `define MULH		6'h00
 `define MULUH		6'h01
+`define CMP			6'h06
+`define CMPU		6'h07
+`define MUL			6'h20
+`define MULU		6'h21
+`define FXMUL		6'h30
+
+// R3 Format
 `define ADDV		6'h02
 `define SUBV		6'h03
 `define SUB			6'h05
@@ -168,6 +242,7 @@
 `define AVG			6'h2D
 `define MUX			6'h29
 `define FXDIV		6'h31
+
 `define SHL			6'h32
 `define ASL			6'h33
 `define SHR			6'h34
@@ -336,7 +411,8 @@
 `define SMX			5'h1A
 
 
-`define R2		6'h02
+`define R2		8'h8C
+`define R2S		8'h8D
 `define RR      6'h02
 `define BCD         6'h00
 `define BCDADD          5'h00
@@ -465,7 +541,10 @@
 `define AFUNCT6			40:35
 `define BFUNCT4			40:37
 `define FUNCT5			39:35
+`define FUNCT6			28:23
+`define FMT4				32:29
 `define FUNCT2			34:33
+`define M3					39:37
 `define SZ3					30:28
 `define RD3					10:8
 `define RD2					9:8
