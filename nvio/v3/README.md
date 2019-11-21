@@ -2,9 +2,9 @@
 
 # Overview
 nvio3 is a superscalar core with the following features:
-- 32 general purpose registers
-- 32 floating point registers
-- 32 array registers of 128 rows by 1 to 16 columns
+- 32 entry general purpose registers
+- 32 entry floating point registers
+- 32 vector registers
 - 8 condition code registers
 - 8 link registers
 - 8 mask registers with both row and column components
