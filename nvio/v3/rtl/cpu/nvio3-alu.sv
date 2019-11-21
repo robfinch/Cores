@@ -20,11 +20,12 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.    
 //
 // ============================================================================
+// 59000
 //
 `include "nvio3-defines.sv"
 `include "nvio3-config.sv"
 
-module alu(rst, clk, ld, abort, instr, fmt, store, a, b, c, t, m, z, pc, Ra, tgt, tgt2,
+module alu(rst, clk, ld, abort, instr, fmt, store, a, b, c, t, m, z, vl, pc, Ra, tgt, tgt2,
     csr, o, ob, done, idle, excen, exc, thrd, ptrmask, state, mem, shift,
     ol, dl, cro
 `ifdef SUPPORT_BBMS 
@@ -54,6 +55,7 @@ input [DBW-1:0] c;
 input [DBW-1:0] t;			// target register value
 input [31:0] m;					// mask register value
 input z;								// 1=zero output, 0=merge
+input [7:0] vl;
 input [31:0] pc;
 input [5:0] Ra;
 input [5:0] tgt;
@@ -97,8 +99,8 @@ parameter tetra_para = 4'd10;
 parameter octa_para = 4'd11;
 parameter hexi_para = 4'd12;
 
-integer n;
-genvar g;
+integer n, x, y;
+genvar g, h;
 
 reg adrDone, adrIdle;
 reg [63:0] usa;			// unsegmented address
@@ -132,6 +134,7 @@ wire [511:0] prod16;
 wire [511:0] prod32;
 wire [511:0] prod64;
 wire [511:0] prod128;
+wire [255:0] prodx8, prodx16, prodx32, prodx64, prodx128;
 wire [DBW*2-1:0] prod;
 wire [31:0] mult_done8, mult_idle8, div_done8, div_idle8;
 wire [15:0] mult_done16, mult_idle16, div_done16, div_idle16;
@@ -145,6 +148,25 @@ wire [6:0] clzo128,cloo128,cpopo128;
 wire [DBW-1:0] shfto128,shfto64,shfto32,shfto16,shfto8;
 wire [DBW-1:0] shftho;
 reg [DBW-1:0] shift9;
+reg [255:0] bx;
+reg [31:0] mx;
+reg [31:0] zx;
+
+function fnArgB;
+input [3:0] fmt;
+input [255:0] B;
+case(fmt)
+byte_para:	fnArgB <= {32{B[7:0]}};
+wyde_para:	fnArgB <= {16{B[15:0]}};
+tetra_para:	fnArgB <= {8{B[31:0]}};
+octa_para:	fnArgB <= {4{B[63:0]}};
+hexi_para:	fnArgB <= {2{B[127:0]}};
+default:		fnArgB <= B;
+endcase
+endfunction
+
+always @*
+	bx <= fnArgB(fmt,b);
 
 function IsMul;
 input [39:0] isn;
@@ -231,7 +253,7 @@ bitfield #(DBW) ubf1
 
 generate begin : mult128s
 for (g = 0; g < 2; g = g + 1)
-if (SIMD || g < 1)
+if (SIMD || g < 1) begin
 multiplier #(128) umult128
 (
 	.rst(rst),
@@ -241,17 +263,19 @@ multiplier #(128) umult128
 	.sgn(IsSgn(instr)),
 	.sgnus(IsSgnus(instr)),
 	.a(a[(g+1)*128-1:g*128]),
-	.b(b[(g+1)*128-1:g*128]),
+	.b(bx[(g+1)*128-1:g*128]),
 	.o(prod[(g+1)*256-1:g * 256]),
 	.done(mult_done128[g]),
 	.idle(mult_idle128[g])
 );
+assign prodx128[(g+1)*128-1:g*128] = prod128[g*256+127:g * 256];
+end
 end
 endgenerate
 
 generate begin : mult64s
 for (g = 0; g < 4; g = g + 1)
-if (SIMD || g < 1)
+if (SIMD || g < 1) begin
 multiplier #(64) umult64
 (
 	.rst(rst),
@@ -261,17 +285,19 @@ multiplier #(64) umult64
 	.sgn(IsSgn(instr)),
 	.sgnus(IsSgnus(instr)),
 	.a(a[(g+1)*64-1:g*64]),
-	.b(b[(g+1)*64-1:g*64]),
+	.b(bx[(g+1)*64-1:g*64]),
 	.o(prod64[(g+1)*128-1:g * 128]),
 	.done(mult_done64[g]),
 	.idle(mult_idle64[g])
 );
+assign prodx64[(g+1)*64-1:g*64] = prod64[g*128+63:g * 128];
+end
 end
 endgenerate
 
 generate begin : mult32s
 for (g = 0; g < 8; g = g + 1)
-if (SIMD || g < 1)
+if (SIMD || g < 1) begin
 multiplier #(32) umult32
 (
 	.rst(rst),
@@ -281,17 +307,19 @@ multiplier #(32) umult32
 	.sgn(IsSgn(instr)),
 	.sgnus(IsSgnus(instr)),
 	.a(a[(g+1)*32-1:g*32]),
-	.b(b[(g+1)*32-1:g*32]),
+	.b(bx[(g+1)*32-1:g*32]),
 	.o(prod32[(g+1)*64-1:g * 64]),
 	.done(mult_done32[g]),
 	.idle(mult_idle32[g])
 );
+assign prodx32[(g+1)*32-1:g*32] = prod32[g*64+31:g * 64];
+end
 end
 endgenerate
 
 generate begin : mult16s
 for (g = 0; g < 16; g = g + 1)
-if (SIMD || g < 1)
+if (SIMD || g < 1) begin
 multiplier #(16) umult16
 (
 	.rst(rst),
@@ -301,17 +329,19 @@ multiplier #(16) umult16
 	.sgn(IsSgn(instr)),
 	.sgnus(IsSgnus(instr)),
 	.a(a[(g+1)*16-1:g*16]),
-	.b(b[(g+1)*16-1:g*16]),
+	.b(bx[(g+1)*16-1:g*16]),
 	.o(prod16[(g+1)*32-1:g * 32]),
 	.done(mult_done16[g]),
 	.idle(mult_idle16[g])
 );
+assign prodx16[(g+1)*16-1:g*16] = prod16[g*32+15:g * 32];
+end
 end
 endgenerate
 
 generate begin : mult8s
 for (g = 0; g < 32; g = g + 1)
-if (SIMD || g < 1)
+if (SIMD || g < 1) begin
 multiplier #(8) umult16
 (
 	.rst(rst),
@@ -321,11 +351,13 @@ multiplier #(8) umult16
 	.sgn(IsSgn(instr)),
 	.sgnus(IsSgnus(instr)),
 	.a(a[(g+1)*8-1:g*8]),
-	.b(b[(g+1)*8-1:g*8]),
+	.b(bx[(g+1)*8-1:g*8]),
 	.o(prod8[(g+1)*16-1:g * 16]),
 	.done(mult_done8[g]),
 	.idle(mult_idle8[g])
 );
+assign prodx8[(g+1)*8-1:g*8] = prod8[g*16+7:g * 16];
+end
 end
 endgenerate
 
@@ -338,7 +370,7 @@ divider #(DBW) udiv1
 	.sgn(IsSgn(instr)),
 	.sgnus(IsSgnus(instr)),
 	.a(a),
-	.b(b),
+	.b(bx),
 	.qo(divq),
 	.ro(rem),
 	.dvByZr(divByZero),
@@ -352,7 +384,7 @@ case (instr[`OPCODE])
 `R2,`R2S:
 	case(instr[`FUNCT6])
 	`SHL,`ASL,`SHR,`ASR,`ROL,`ROR:
-		bshift <= b[6:0];
+		bshift <= bx[6:0];
 	default:
 		bshift <= {instr[35:34],instr[22:18]};
 	endcase
@@ -459,9 +491,6 @@ wire [31:0] s32 = a[31:0] + b[31:0];
 wire [7:0] d8 = a[7:0] - b[7:0];
 wire [15:0] d16 = a[15:0] - b[15:0];
 wire [31:0] d32 = a[31:0] - b[31:0];
-wire [DBW-1:0] and64 = a & b;
-wire [DBW-1:0] or64 = a | b;
-wire [DBW-1:0] xor64 = a ^ b;
 wire [DBW-1:0] redor64 = {63'd0,|a};
 wire [DBW-1:0] redor32 = {31'd0,|a[63:32],31'd0,|a[31:0]};
 wire [DBW-1:0] redor16 = {15'd0,|a[63:48],15'd0,|a[47:32],15'd0,|a[31:16],15'd0,|a[15:0]};
@@ -479,7 +508,7 @@ wire [DBW-1:0] sxb26 = {{58{instr[39]}},instr[39:32],instr[30:16]};
 reg [15:0] mask;
 wire [4:0] cpopom;
 wire signed [DBW-1:0] as = a;
-wire signed [DBW-1:0] bs = b;
+wire signed [DBW-1:0] bs = bx;
 wire signed [DBW-1:0] cs = c;
 
 wire [DBW-1:0] bmmo;
@@ -487,7 +516,7 @@ BMM ubmm1
 (
 	.op(1'b0),
 	.a(a),
-	.b(b),
+	.b(bx),
 	.o(bmmo)
 );
 
@@ -528,89 +557,69 @@ always @*
 begin
 casez(instr[`OPCODE])
 `R1:
-		case(instr[`FUNCT6])
-		`CNTLZ:     o = BIG ? {57'd0,clzo128} : 64'hCCCCCCCCCCCCCCCC;
-		`CNTLO:     o = BIG ? {57'd0,cloo128} : 64'hCCCCCCCCCCCCCCCC;
-		`CNTPOP:    o = BIG ? {57'd0,cpopo128} : 64'hCCCCCCCCCCCCCCCC;
-		`ABS:       case(fmt[1:0])
-								2'd0:   o = BIG ? (a[7] ? -a[7:0] : a[7:0]) : 64'hCCCCCCCCCCCCCCCC;
-								2'd1:   o = BIG ? (a[15] ? -a[15:0] : a[15:0]) : 64'hCCCCCCCCCCCCCCCC;
-								2'd2:   o = BIG ? (a[31] ? -a[31:0] : a[31:0]) : 64'hCCCCCCCCCCCCCCCC;
-								2'd3:   o = BIG ? (a[63] ? -a : a) : 64'hCCCCCCCCCCCCCCCC;
-								endcase
-		`NOT:   case(fmt[1:0])
-						2'd0:   o = {~|a[63:56],~|a[55:48],~|a[47:40],~|a[39:32],~|a[31:24],~|a[23:16],~|a[15:8],~|a[7:0]};
-						2'd1:   o = {~|a[63:48],~|a[47:32],~|a[31:16],~|a[15:0]};
-						2'd2:   o = {~|a[63:32],~|a[31:0]};
-						2'd3:   o = ~|a[63:0];
-						endcase
-		`NEG:
-						case(fmt[1:0])
-						2'd0:	o = {-a[63:56],-a[55:48],-a[47:40],-a[39:32],-a[31:24],-a[23:16],-a[15:8],-a[7:0]};
-						2'd1: o = {-a[63:48],-a[47:32],-a[31:16],-a[15:0]};
-						2'd2:	o = {-a[63:32],-a[31:0]};
-						2'd3:	o = -a;
-						endcase
-    `MOV:		o = a;
-		`PTR:		case (instr[25:23])
-						3'd0:	o = a==64'hFFF0100000000000 || a==64'h0;
-						3'd1:	o = a[63:44]==20'hFFF01;
-						3'd2:	o = a[63:44]==20'hFFF02;
-						default:	o = 64'hDEADDEADDEADDEAD;
-						endcase
-//	        `REDOR: case(fmt[1:0])
-//	                2'd0:   o = redor8;
-//	                2'd1:   o = redor16;
-//	                2'd2:   o = redor32;
-//	                2'd3:   o = redor64;
-//	                endcase
-		`ZXO:		o = {t[`HEXI1],64'd0,a[63:0]};
-		`ZXP:		o = {t[`HEXI1],88'd0,a[39:0]};
-		`ZXT:		o = {t[`HEXI1],96'd0,a[31:0]};
-		`ZXC:		o = {t[`HEXI1],112'd0,a[15:0]};
-		`ZXB:		o = {t[`HEXI1],120'd0,a[7:0]};
-		`SXO:		o = {t[`HEXI1],{64{a[63]}},a[63:0]};
-		`SXP:		o = {t[`HEXI1],{88{a[39]}},a[39:0]};
-		`SXT:		o = {t[`HEXI1],{96{a[31]}},a[31:0]};
-		`SXC:		o = {t[`HEXI1],{112{a[15]}},a[15:0]};
-		`SXB:		o = {t[`HEXI1],{120{a[7]}},a[7:0]};
+	case(instr[`FUNCT6])
+	`ABS:			tskAbs(fmt,mx,zx,a,t,o);
+	`CMPRSS:	tskCmprss(fmt,o);
+	`CNTLZ:     o = BIG ? {57'd0,clzo128} : 64'hCCCCCCCCCCCCCCCC;
+	`CNTLO:     o = BIG ? {57'd0,cloo128} : 64'hCCCCCCCCCCCCCCCC;
+	`CNTPOP:    o = BIG ? {57'd0,cpopo128} : 64'hCCCCCCCCCCCCCCCC;
+	`NOT:   case(fmt[1:0])
+					2'd0:   o = {~|a[63:56],~|a[55:48],~|a[47:40],~|a[39:32],~|a[31:24],~|a[23:16],~|a[15:8],~|a[7:0]};
+					2'd1:   o = {~|a[63:48],~|a[47:32],~|a[31:16],~|a[15:0]};
+					2'd2:   o = {~|a[63:32],~|a[31:0]};
+					2'd3:   o = ~|a[63:0];
+					endcase
+	`NEG:		tskNeg(fmt,mx,zx,a,t,o);
+  `MOV:		o = a;
+	`PTR:		case (instr[25:23])
+					3'd0:	o = a==64'hFFF0100000000000 || a==64'h0;
+					3'd1:	o = a[63:44]==20'hFFF01;
+					3'd2:	o = a[63:44]==20'hFFF02;
+					default:	o = 64'hDEADDEADDEADDEAD;
+					endcase
+	`ZXO:		o = {t[`HEXI1],64'd0,a[63:0]};
+	`ZXP:		o = {t[`HEXI1],88'd0,a[39:0]};
+	`ZXT:		o = {t[`HEXI1],96'd0,a[31:0]};
+	`ZXC:		o = {t[`HEXI1],112'd0,a[15:0]};
+	`ZXB:		o = {t[`HEXI1],120'd0,a[7:0]};
+	`SXO:		o = {t[`HEXI1],{64{a[63]}},a[63:0]};
+	`SXP:		o = {t[`HEXI1],{88{a[39]}},a[39:0]};
+	`SXT:		o = {t[`HEXI1],{96{a[31]}},a[31:0]};
+	`SXC:		o = {t[`HEXI1],{112{a[15]}},a[15:0]};
+	`SXB:		o = {t[`HEXI1],{120{a[7]}},a[7:0]};
 //	        5'h1C:		o[63:0] = tmem[a[9:0]];
-		default:    o = 64'hDEADDEADDEADDEAD;
-		endcase
+	default:    o = {t[`HEXI1],128'hDEADDEADDEADDEADDEADDEADDEADDEAD};
+	endcase
 
 `R2,`R2S:
 	casez(instr[`FUNCT6])
-  `ADD:		tskAdd(fmt,m,z,a,b,t,o);
-  `SUB:		tskSub(fmt,m,z,a,b,t,o);
-  `CMP:		tskCmp(fmt,a,b,t,o);
-  `CMPU:	tskCmpu(fmt,a,b,t,o);
-  `AND:   tskAnd(fmt,m,z,a,b,t,o);
-  `OR:    tskOr(fmt,m,z,a,b,t,o);
-  `XOR:   tskXor(fmt,m,z,a,b,t,o);
-  `NAND:  tskNand(fmt,m,z,a,b,t,o);
-  `NOR:   tskNor(fmt,m,z,a,b,t,o);
-  `XNOR:  tskXnor(fmt,m,z,a,b,t,o);
-	`SEQ:		tskSeq(fmt,a,b,o);
-  `SLT:   tskSlt(fmt,a,b,o);
-  `SLTU:  tskSltu(fmt,a,b,o);
-  `SLE:   tskSle(fmt,a,b,o);
-  `SLEU:  tskSleu(fmt,a,b,o);
+  `ADD:		tskAdd(fmt,mx,zx,a,bx,t,o);
+  `SUB:		tskSub(fmt,mx,zx,a,bx,t,o);
+  `CMP:		tskCmp(fmt,a,bx,t,o);
+  `CMPU:	tskCmpu(fmt,a,bx,t,o);
+  `AND:   tskAnd(fmt,mx,zx,a,bx,t,o);
+  `OR:    tskOr(fmt,mx,zx,a,bx,t,o);
+  `XOR:   tskXor(fmt,mx,zx,a,bx,t,o);
+  `NAND:  tskNand(fmt,mx,zx,a,bx,t,o);
+  `NOR:   tskNor(fmt,mx,zx,a,bx,t,o);
+  `XNOR:  tskXnor(fmt,mx,zx,a,bx,t,o);
+  `MUL,`MULU:
+  				tskMul(fmt,mx,zx,t,o);
+	`SEQ:		tskSeq(fmt,a,bx,o);
+	`SNE:		tskSne(fmt,a,bx,o);
+  `SLT:   tskSlt(fmt,a,bx,o);
+  `SLTU:  tskSltu(fmt,a,bx,o);
+  `SLE:   tskSle(fmt,a,bx,o);
+  `SLEU:  tskSleu(fmt,a,bx,o);
   `SHLI,`ASLI,`SHRI,`ASRI,`ROLI,`RORI,
   `SHL,`ASL,`SHR,`ASR,`ROL,`ROR:
-  	case(fmt)
-  	byt:	o = {t[`HEXI1],{120{1'b0}},shfto8[7:0]};
-  	wyde:	o = {t[`HEXI1],{112{1'b0}},shfto16[15:0]};
-  	tetra:	o = {t[`HEXI1],{96{1'b0}},shfto32[31:0]};
-  	octa:	o = {t[`HEXI1],{64{1'b0}},shfto64[31:0]};
-  	hexi:	o = {t[`HEXI1],shfto128[31:0]};
-  	byte_para: 	o = shfto8;
-  	wyde_para:	o = shfto16;
-  	tetra_para:	o = shfto32;
-  	octa_para:	o = shfto64;
-  	hexi_para:	o = shfto128;
-  	default:	o = shfto128;
-  	endcase
+  				tskShift(fmt,mx,zx,t,o);
   `BMM:		o = BIG ? bmmo : {64{4'hC}};
+  `BYTNDX:	o = bndxo;
+  `WYDNDX:	o = wndxo;
+  `MIN:	 	tskMin(fmt,mx,zx,a,bx,t,o);
+  `MAX: 	tskMax(fmt,mx,zx,a,bx,t,o);
+  default:	o = {64{4'hC}};
 	endcase
 `R3:
 	    casez({instr[`FUNCT5],instr[6]})
@@ -629,23 +638,7 @@ casez(instr[`OPCODE])
 	    `SEI:   o = a | instr[21:16];
 	    `BMISC: o = a | instr[21:16];
 	    `MUX:       for (n = 0; n < DBW; n = n + 1)
-	                    o[n] <= a[n] ? b[n] : c[n];
-	    `MULU,`MUL:
-	    	begin
-	        case(fmt)
-	        byt:	o = prod8[15:0];
-	        wyde: o = prod16[31:0];
-	        tetra:	o = prod32[63:0];
-	        octa:		o = prod64[127:0];
-	        hexi:		o = prod128;
-	        byte_para:		o = prod8;
-	        wyde_para:	o = prod16;
-	        tetra_para:	o = prod32;
-	        octa_para:	o = prod64;
-	        hexi_para:	o = prod128;
-					default:		o = prod128;
-					endcase
-	    	end
+	                    o[n] = a[n] ? b[n] : c[n];
 			`FXMUL:
 				case(fmt)
 				tetra_para:	o = {prod32[47:16] + prod32[15],prod32[47:16] + prod32[15]};
@@ -661,16 +654,12 @@ casez(instr[`OPCODE])
 	    		o1 = a + b + 2'd1;
 	    		o = o1[79] ? {1'b1,o1[79:1]} : {1'b0,o1[79:1]};
 	    	end
-	    `BYTNDX:	o = bndxo;
-	    `WYDNDX:	o = wndxo;
-	    `MIN: tskMin(fmt,m,z,a,b,t,o);
-	    `MAX: tskMax(fmt,m,z,a,b,t,o);
 	    `MAJ:		o = (a & b) | (a & c) | (b & c);
 	    // PTRDIF does an arithmetic shift right.
 	    `PTRDIF:	
 	    	begin
 	    		if (BIG) begin
-		    		o1 = a[43:0] - b[43:0];
+		    		o1 = a[43:0] - bx[43:0];
 		    		o = o1[43] ? (o1 >> instr[25:23]) | ~(64'hFFFFFFFFFFFFFFFF >> instr[25:23])
 		    							: (o1 >> instr[25:23]);
 	    		end
@@ -868,10 +857,325 @@ begin
 	bb <= c;
 end
 
+always @*
+begin
+	for (n = 0; n < 32; n = n + 1)
+		mx[n] = m[n] && vl > n;
+end
+
+always @*
+begin
+	for (n = 0; n < 32; n = n + 1)
+		zx[n] = z && vl > n;
+end
+
+task tskPtrdif;
+input [3:0] fmt;
+input [31:0] mx;
+input [31:0] zx;
+input [DBW:0] a;
+input [DBW:0] b;
+input [DBW:0] t;
+output [DBW:0] o;
+begin
+	if (BIG) begin
+		o1 = a[95:0] - bx[95:0];
+		o = o1[95] ? (o1 >> {instr[23],instr[35:34]}) | ~(128'hFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF >> {instr[23],instr[35:34]})
+							: (o1 >> {instr[23],instr[35:34]});
+	end
+	else
+		o = {t[`HEXI1],128'hDEADDEADDEADDEADDEADDEADDEADDEAD};
+end
+endtask
+
+task tskMul;
+input [3:0] fmt;
+input [31:0] mx;
+input [31:0] zx;
+input [DBW:0] t;
+output [DBW:0] o;
+begin
+  	case(fmt)
+  	byt:	o = {t[`HEXI1],{120{prod8[7]}},prod8[7:0]};
+  	wyde:	o = {t[`HEXI1],{112{prod16[15]}},prod16[15:0]};
+  	tetra:	o = {t[`HEXI1],{96{prod32[31]}},prod32[31:0]};
+  	octa:	o = {t[`HEXI1],{64{prod64[63]}},prod64[63:0]};
+  	hexi:	o = {t[`HEXI1],prod128[127:0]};
+  	byte_para:
+  		begin
+  		o[`BYTE0] = mx[0] ? prodx8[`BYTE0] : zx[0] ? 8'd0 : t[`BYTE0];
+  		o[`BYTE1] = mx[1] ? prodx8[`BYTE1] : zx[1] ? 8'd0 : t[`BYTE1];
+  		o[`BYTE2] = mx[2] ? prodx8[`BYTE2] : zx[2] ? 8'd0 : t[`BYTE2];
+  		o[`BYTE3] = mx[3] ? prodx8[`BYTE3] : zx[3] ? 8'd0 : t[`BYTE3];
+  		o[`BYTE4] = mx[4] ? prodx8[`BYTE4] : zx[4] ? 8'd0 : t[`BYTE4];
+  		o[`BYTE5] = mx[5] ? prodx8[`BYTE5] : zx[5] ? 8'd0 : t[`BYTE5];
+  		o[`BYTE6] = mx[6] ? prodx8[`BYTE6] : zx[6] ? 8'd0 : t[`BYTE6];
+  		o[`BYTE7] = mx[7] ? prodx8[`BYTE7] : zx[7] ? 8'd0 : t[`BYTE7];
+  		o[`BYTE8] = mx[8] ? prodx8[`BYTE8] : zx[8] ? 8'd0 : t[`BYTE8];
+  		o[`BYTE9] = mx[9] ? prodx8[`BYTE9] : zx[9] ? 8'd0 : t[`BYTE9];
+  		o[`BYTE10] = mx[10] ? prodx8[`BYTE10] : zx[10] ? 8'd0 : t[`BYTE10];
+  		o[`BYTE11] = mx[11] ? prodx8[`BYTE11] : zx[11] ? 8'd0 : t[`BYTE11];
+  		o[`BYTE12] = mx[12] ? prodx8[`BYTE12] : zx[12] ? 8'd0 : t[`BYTE12];
+  		o[`BYTE13] = mx[13] ? prodx8[`BYTE13] : zx[13] ? 8'd0 : t[`BYTE13];
+  		o[`BYTE14] = mx[14] ? prodx8[`BYTE14] : zx[14] ? 8'd0 : t[`BYTE14];
+  		o[`BYTE15] = mx[15] ? prodx8[`BYTE15] : zx[15] ? 8'd0 : t[`BYTE15];
+  		o[`BYTE16] = mx[16] ? prodx8[`BYTE16] : zx[16] ? 8'd0 : t[`BYTE16];
+  		o[`BYTE17] = mx[17] ? prodx8[`BYTE17] : zx[17] ? 8'd0 : t[`BYTE17];
+  		o[`BYTE18] = mx[18] ? prodx8[`BYTE18] : zx[18] ? 8'd0 : t[`BYTE18];
+  		o[`BYTE19] = mx[19] ? prodx8[`BYTE19] : zx[19] ? 8'd0 : t[`BYTE19];
+  		o[`BYTE20] = mx[20] ? prodx8[`BYTE20] : zx[20] ? 8'd0 : t[`BYTE20];
+  		o[`BYTE21] = mx[21] ? prodx8[`BYTE21] : zx[21] ? 8'd0 : t[`BYTE21];
+  		o[`BYTE22] = mx[22] ? prodx8[`BYTE22] : zx[22] ? 8'd0 : t[`BYTE22];
+  		o[`BYTE23] = mx[23] ? prodx8[`BYTE23] : zx[23] ? 8'd0 : t[`BYTE23];
+  		o[`BYTE24] = mx[24] ? prodx8[`BYTE24] : zx[24] ? 8'd0 : t[`BYTE24];
+  		o[`BYTE25] = mx[25] ? prodx8[`BYTE25] : zx[25] ? 8'd0 : t[`BYTE25];
+  		o[`BYTE26] = mx[26] ? prodx8[`BYTE26] : zx[26] ? 8'd0 : t[`BYTE26];
+  		o[`BYTE27] = mx[27] ? prodx8[`BYTE27] : zx[27] ? 8'd0 : t[`BYTE27];
+  		o[`BYTE28] = mx[28] ? prodx8[`BYTE28] : zx[28] ? 8'd0 : t[`BYTE28];
+  		o[`BYTE29] = mx[29] ? prodx8[`BYTE29] : zx[29] ? 8'd0 : t[`BYTE29];
+  		o[`BYTE30] = mx[30] ? prodx8[`BYTE30] : zx[30] ? 8'd0 : t[`BYTE30];
+  		o[`BYTE31] = mx[31] ? prodx8[`BYTE31] : zx[31] ? 8'd0 : t[`BYTE31];
+  		end
+  	wyde_para:
+  		begin
+  		o[`WYDE0] = mx[0] ? prodx16[`WYDE0] : zx[0] ? 16'd0 : t[`WYDE0];
+  		o[`WYDE1] = mx[1] ? prodx16[`WYDE1] : zx[1] ? 16'd0 : t[`WYDE1];
+  		o[`WYDE2] = mx[2] ? prodx16[`WYDE2] : zx[2] ? 16'd0 : t[`WYDE2];
+  		o[`WYDE3] = mx[3] ? prodx16[`WYDE3] : zx[3] ? 16'd0 : t[`WYDE3];
+  		o[`WYDE4] = mx[4] ? prodx16[`WYDE4] : zx[4] ? 16'd0 : t[`WYDE4];
+  		o[`WYDE5] = mx[5] ? prodx16[`WYDE5] : zx[5] ? 16'd0 : t[`WYDE5];
+  		o[`WYDE6] = mx[6] ? prodx16[`WYDE6] : zx[6] ? 16'd0 : t[`WYDE6];
+  		o[`WYDE7] = mx[7] ? prodx16[`WYDE7] : zx[7] ? 16'd0 : t[`WYDE7];
+  		o[`WYDE8] = mx[8] ? prodx16[`WYDE8] : zx[8] ? 16'd0 : t[`WYDE8];
+  		o[`WYDE9] = mx[9] ? prodx16[`WYDE9] : zx[9] ? 16'd0 : t[`WYDE9];
+  		o[`WYDE10] = mx[10] ? prodx16[`WYDE10] : zx[10] ? 16'd0 : t[`WYDE10];
+  		o[`WYDE11] = mx[11] ? prodx16[`WYDE11] : zx[11] ? 16'd0 : t[`WYDE11];
+  		o[`WYDE12] = mx[12] ? prodx16[`WYDE12] : zx[12] ? 16'd0 : t[`WYDE12];
+  		o[`WYDE13] = mx[13] ? prodx16[`WYDE13] : zx[13] ? 16'd0 : t[`WYDE13];
+  		o[`WYDE14] = mx[14] ? prodx16[`WYDE14] : zx[14] ? 16'd0 : t[`WYDE14];
+  		o[`WYDE15] = mx[15] ? prodx16[`WYDE15] : zx[15] ? 16'd0 : t[`WYDE15];
+  		end
+  	tetra_para:
+  		begin
+  		o[`TETRA0] = mx[0] ? prodx32[`TETRA0] : zx[0] ? 32'd0 : t[`TETRA0];
+  		o[`TETRA1] = mx[1] ? prodx32[`TETRA1] : zx[1] ? 32'd0 : t[`TETRA1];
+  		o[`TETRA2] = mx[2] ? prodx32[`TETRA2] : zx[2] ? 32'd0 : t[`TETRA2];
+  		o[`TETRA3] = mx[3] ? prodx32[`TETRA3] : zx[3] ? 32'd0 : t[`TETRA3];
+  		o[`TETRA4] = mx[4] ? prodx32[`TETRA4] : zx[4] ? 32'd0 : t[`TETRA4];
+  		o[`TETRA5] = mx[5] ? prodx32[`TETRA5] : zx[5] ? 32'd0 : t[`TETRA5];
+  		o[`TETRA6] = mx[6] ? prodx32[`TETRA6] : zx[6] ? 32'd0 : t[`TETRA6];
+  		o[`TETRA7] = mx[7] ? prodx32[`TETRA7] : zx[7] ? 32'd0 : t[`TETRA7];
+  		end
+  	octa_para:
+  		begin
+  		o[`OCTA0] = mx[0] ? prodx64[`OCTA0] : zx[0] ? 64'd0 : t[`OCTA0];
+  		o[`OCTA1] = mx[1] ? prodx64[`OCTA1] : zx[1] ? 64'd0 : t[`OCTA1];
+  		o[`OCTA2] = mx[2] ? prodx64[`OCTA2] : zx[2] ? 64'd0 : t[`OCTA2];
+  		o[`OCTA3] = mx[3] ? prodx64[`OCTA3] : zx[3] ? 64'd0 : t[`OCTA3];
+  		end
+  	hexi_para:	
+  		begin
+  		o[`HEXI0] = mx[0] ? prodx128[`HEXI0] : zx[0] ? 128'd0 : t[`HEXI0];
+  		o[`HEXI1] = mx[1] ? prodx128[`HEXI1] : zx[1] ? 128'd0 : t[`HEXI1];
+  		end
+  	default:	o = prod128;
+  	endcase
+end
+endtask
+
+task tskShift;
+input [3:0] fmt;
+input [31:0] mx;
+input [31:0] zx;
+input [DBW:0] t;
+output [DBW:0] o;
+begin
+  	case(fmt)
+  	byt:	o = {t[`HEXI1],{120{1'b0}},shfto8[7:0]};
+  	wyde:	o = {t[`HEXI1],{112{1'b0}},shfto16[15:0]};
+  	tetra:	o = {t[`HEXI1],{96{1'b0}},shfto32[31:0]};
+  	octa:	o = {t[`HEXI1],{64{1'b0}},shfto64[63:0]};
+  	hexi:	o = {t[`HEXI1],shfto128[127:0]};
+  	byte_para:
+  		begin
+  		o[`BYTE0] = mx[0] ? shfto8[`BYTE0] : zx[0] ? 8'd0 : t[`BYTE0];
+  		o[`BYTE1] = mx[1] ? shfto8[`BYTE1] : zx[1] ? 8'd0 : t[`BYTE1];
+  		o[`BYTE2] = mx[2] ? shfto8[`BYTE2] : zx[2] ? 8'd0 : t[`BYTE2];
+  		o[`BYTE3] = mx[3] ? shfto8[`BYTE3] : zx[3] ? 8'd0 : t[`BYTE3];
+  		o[`BYTE4] = mx[4] ? shfto8[`BYTE4] : zx[4] ? 8'd0 : t[`BYTE4];
+  		o[`BYTE5] = mx[5] ? shfto8[`BYTE5] : zx[5] ? 8'd0 : t[`BYTE5];
+  		o[`BYTE6] = mx[6] ? shfto8[`BYTE6] : zx[6] ? 8'd0 : t[`BYTE6];
+  		o[`BYTE7] = mx[7] ? shfto8[`BYTE7] : zx[7] ? 8'd0 : t[`BYTE7];
+  		o[`BYTE8] = mx[8] ? shfto8[`BYTE8] : zx[8] ? 8'd0 : t[`BYTE8];
+  		o[`BYTE9] = mx[9] ? shfto8[`BYTE9] : zx[9] ? 8'd0 : t[`BYTE9];
+  		o[`BYTE10] = mx[10] ? shfto8[`BYTE10] : zx[10] ? 8'd0 : t[`BYTE10];
+  		o[`BYTE11] = mx[11] ? shfto8[`BYTE11] : zx[11] ? 8'd0 : t[`BYTE11];
+  		o[`BYTE12] = mx[12] ? shfto8[`BYTE12] : zx[12] ? 8'd0 : t[`BYTE12];
+  		o[`BYTE13] = mx[13] ? shfto8[`BYTE13] : zx[13] ? 8'd0 : t[`BYTE13];
+  		o[`BYTE14] = mx[14] ? shfto8[`BYTE14] : zx[14] ? 8'd0 : t[`BYTE14];
+  		o[`BYTE15] = mx[15] ? shfto8[`BYTE15] : zx[15] ? 8'd0 : t[`BYTE15];
+  		o[`BYTE16] = mx[16] ? shfto8[`BYTE16] : zx[16] ? 8'd0 : t[`BYTE16];
+  		o[`BYTE17] = mx[17] ? shfto8[`BYTE17] : zx[17] ? 8'd0 : t[`BYTE17];
+  		o[`BYTE18] = mx[18] ? shfto8[`BYTE18] : zx[18] ? 8'd0 : t[`BYTE18];
+  		o[`BYTE19] = mx[19] ? shfto8[`BYTE19] : zx[19] ? 8'd0 : t[`BYTE19];
+  		o[`BYTE20] = mx[20] ? shfto8[`BYTE20] : zx[20] ? 8'd0 : t[`BYTE20];
+  		o[`BYTE21] = mx[21] ? shfto8[`BYTE21] : zx[21] ? 8'd0 : t[`BYTE21];
+  		o[`BYTE22] = mx[22] ? shfto8[`BYTE22] : zx[22] ? 8'd0 : t[`BYTE22];
+  		o[`BYTE23] = mx[23] ? shfto8[`BYTE23] : zx[23] ? 8'd0 : t[`BYTE23];
+  		o[`BYTE24] = mx[24] ? shfto8[`BYTE24] : zx[24] ? 8'd0 : t[`BYTE24];
+  		o[`BYTE25] = mx[25] ? shfto8[`BYTE25] : zx[25] ? 8'd0 : t[`BYTE25];
+  		o[`BYTE26] = mx[26] ? shfto8[`BYTE26] : zx[26] ? 8'd0 : t[`BYTE26];
+  		o[`BYTE27] = mx[27] ? shfto8[`BYTE27] : zx[27] ? 8'd0 : t[`BYTE27];
+  		o[`BYTE28] = mx[28] ? shfto8[`BYTE28] : zx[28] ? 8'd0 : t[`BYTE28];
+  		o[`BYTE29] = mx[29] ? shfto8[`BYTE29] : zx[29] ? 8'd0 : t[`BYTE29];
+  		o[`BYTE30] = mx[30] ? shfto8[`BYTE30] : zx[30] ? 8'd0 : t[`BYTE30];
+  		o[`BYTE31] = mx[31] ? shfto8[`BYTE31] : zx[31] ? 8'd0 : t[`BYTE31];
+  		end
+  	wyde_para:
+  		begin
+  		o[`WYDE0] = mx[0] ? shfto16[`WYDE0] : zx[0] ? 16'd0 : t[`WYDE0];
+  		o[`WYDE1] = mx[1] ? shfto16[`WYDE1] : zx[1] ? 16'd0 : t[`WYDE1];
+  		o[`WYDE2] = mx[2] ? shfto16[`WYDE2] : zx[2] ? 16'd0 : t[`WYDE2];
+  		o[`WYDE3] = mx[3] ? shfto16[`WYDE3] : zx[3] ? 16'd0 : t[`WYDE3];
+  		o[`WYDE4] = mx[4] ? shfto16[`WYDE4] : zx[4] ? 16'd0 : t[`WYDE4];
+  		o[`WYDE5] = mx[5] ? shfto16[`WYDE5] : zx[5] ? 16'd0 : t[`WYDE5];
+  		o[`WYDE6] = mx[6] ? shfto16[`WYDE6] : zx[6] ? 16'd0 : t[`WYDE6];
+  		o[`WYDE7] = mx[7] ? shfto16[`WYDE7] : zx[7] ? 16'd0 : t[`WYDE7];
+  		o[`WYDE8] = mx[8] ? shfto16[`WYDE8] : zx[8] ? 16'd0 : t[`WYDE8];
+  		o[`WYDE9] = mx[9] ? shfto16[`WYDE9] : zx[9] ? 16'd0 : t[`WYDE9];
+  		o[`WYDE10] = mx[10] ? shfto16[`WYDE10] : zx[10] ? 16'd0 : t[`WYDE10];
+  		o[`WYDE11] = mx[11] ? shfto16[`WYDE11] : zx[11] ? 16'd0 : t[`WYDE11];
+  		o[`WYDE12] = mx[12] ? shfto16[`WYDE12] : zx[12] ? 16'd0 : t[`WYDE12];
+  		o[`WYDE13] = mx[13] ? shfto16[`WYDE13] : zx[13] ? 16'd0 : t[`WYDE13];
+  		o[`WYDE14] = mx[14] ? shfto16[`WYDE14] : zx[14] ? 16'd0 : t[`WYDE14];
+  		o[`WYDE15] = mx[15] ? shfto16[`WYDE15] : zx[15] ? 16'd0 : t[`WYDE15];
+  		end
+  	tetra_para:
+  		begin
+  		o[`TETRA0] = mx[0] ? shfto32[`TETRA0] : zx[0] ? 32'd0 : t[`TETRA0];
+  		o[`TETRA1] = mx[1] ? shfto32[`TETRA1] : zx[1] ? 32'd0 : t[`TETRA1];
+  		o[`TETRA2] = mx[2] ? shfto32[`TETRA2] : zx[2] ? 32'd0 : t[`TETRA2];
+  		o[`TETRA3] = mx[3] ? shfto32[`TETRA3] : zx[3] ? 32'd0 : t[`TETRA3];
+  		o[`TETRA4] = mx[4] ? shfto32[`TETRA4] : zx[4] ? 32'd0 : t[`TETRA4];
+  		o[`TETRA5] = mx[5] ? shfto32[`TETRA5] : zx[5] ? 32'd0 : t[`TETRA5];
+  		o[`TETRA6] = mx[6] ? shfto32[`TETRA6] : zx[6] ? 32'd0 : t[`TETRA6];
+  		o[`TETRA7] = mx[7] ? shfto32[`TETRA7] : zx[7] ? 32'd0 : t[`TETRA7];
+  		end
+  	octa_para:
+  		begin
+  		o[`OCTA0] = mx[0] ? shfto64[`OCTA0] : zx[0] ? 64'd0 : t[`OCTA0];
+  		o[`OCTA1] = mx[1] ? shfto64[`OCTA1] : zx[1] ? 64'd0 : t[`OCTA1];
+  		o[`OCTA2] = mx[2] ? shfto64[`OCTA2] : zx[2] ? 64'd0 : t[`OCTA2];
+  		o[`OCTA3] = mx[3] ? shfto64[`OCTA3] : zx[3] ? 64'd0 : t[`OCTA3];
+  		end
+  	hexi_para:	
+  		begin
+  		o[`HEXI0] = mx[0] ? shfto128[`HEXI0] : zx[0] ? 128'd0 : t[`HEXI0];
+  		o[`HEXI1] = mx[1] ? shfto128[`HEXI1] : zx[1] ? 128'd0 : t[`HEXI1];
+  		end
+  	default:	o = shfto128;
+  	endcase
+end
+endtask
+
+task tskAbs;
+input [3:0] fmt;
+input [31:0] mx;
+input [31:0] zx;
+input [DBW:0] a;
+input [DBW:0] t;
+output [DBW:0] o;
+begin
+	o = t;
+	if (BIG)
+	case(fmt)
+	byt:   	o[127:0] = (a[7] ? -a[7:0] : a[7:0]);
+	wyde:   o[127:0] = (a[15] ? -a[15:0] : a[15:0]);
+	tetra:  o[127:0] = (a[31] ? -a[31:0] : a[31:0]);
+	octa:   o[127:0] = (a[63] ? -a[63:0] : a[63:0]);
+	hexi:	  o[127:0] = (a[127] ? -a[127:0] : a[127:0]);
+	byte_para:	;
+	wyde_para:	;
+	tetra_para:
+		begin
+			o[`TETRA0] = mx[0] ? (a[ 31] ? -a[`TETRA0] : a[`TETRA0]) : zx[0] ? 32'd0 : t[`TETRA0];
+			o[`TETRA1] = mx[1] ? (a[ 63] ? -a[`TETRA1] : a[`TETRA1]) : zx[1] ? 32'd0 : t[`TETRA1];
+			o[`TETRA2] = mx[2] ? (a[ 95] ? -a[`TETRA2] : a[`TETRA2]) : zx[2] ? 32'd0 : t[`TETRA2];
+			o[`TETRA3] = mx[3] ? (a[127] ? -a[`TETRA3] : a[`TETRA3]) : zx[3] ? 32'd0 : t[`TETRA3];
+			o[`TETRA4] = mx[4] ? (a[159] ? -a[`TETRA4] : a[`TETRA4]) : zx[4] ? 32'd0 : t[`TETRA4];
+			o[`TETRA5] = mx[5] ? (a[191] ? -a[`TETRA5] : a[`TETRA5]) : zx[5] ? 32'd0 : t[`TETRA5];
+			o[`TETRA6] = mx[6] ? (a[223] ? -a[`TETRA6] : a[`TETRA6]) : zx[6] ? 32'd0 : t[`TETRA6];
+			o[`TETRA7] = mx[7] ? (a[255] ? -a[`TETRA7] : a[`TETRA7]) : zx[7] ? 32'd0 : t[`TETRA7];
+		end
+	octa_para:
+		begin
+			o[`OCTA0] = mx[0] ? (a[ 63] ? -a[`OCTA0] : a[`OCTA0]) : zx[0] ? 64'd0 : t[`OCTA0];
+			o[`OCTA1] = mx[1] ? (a[127] ? -a[`OCTA1] : a[`OCTA1]) : zx[1] ? 64'd0 : t[`OCTA1];
+			o[`OCTA2] = mx[2] ? (a[191] ? -a[`OCTA2] : a[`OCTA2]) : zx[2] ? 64'd0 : t[`OCTA2];
+			o[`OCTA3] = mx[3] ? (a[255] ? -a[`OCTA3] : a[`OCTA3]) : zx[3] ? 64'd0 : t[`OCTA3];
+		end
+	hexi_para:
+		begin
+			o[`HEXI0] = mx[0] ? (a[127] ? -a[`HEXI0] : a[`HEXI0]) : zx[0] ? 128'd0 : t[`HEXI0];
+			o[`HEXI1] = mx[1] ? (a[255] ? -a[`HEXI1] : a[`HEXI1]) : zx[1] ? 128'd0 : t[`HEXI1];
+		end
+	endcase
+	else
+		o[127:0] = {32{4'hC}};
+end
+endtask
+
+task tskNeg;
+input [3:0] fmt;
+input [31:0] mx;
+input [31:0] zx;
+input [DBW:0] a;
+input [DBW:0] t;
+output [DBW:0] o;
+begin
+	o = t;
+	if (BIG)
+	case(fmt)
+	byt:   	o[127:0] = -a[7:0];
+	wyde:   o[127:0] = -a[15:0];
+	tetra:  o[127:0] = -a[31:0];
+	octa:   o[127:0] = -a[63:0];
+	hexi:	  o[127:0] = -a[127:0];
+	byte_para:	;
+	wyde_para:	;
+	tetra_para:
+		begin
+			o[`TETRA0] = mx[0] ? -a[`TETRA0] : zx[0] ? 32'd0 : t[`TETRA0];
+			o[`TETRA1] = mx[1] ? -a[`TETRA1] : zx[1] ? 32'd0 : t[`TETRA1];
+			o[`TETRA2] = mx[2] ? -a[`TETRA2] : zx[2] ? 32'd0 : t[`TETRA2];
+			o[`TETRA3] = mx[3] ? -a[`TETRA3] : zx[3] ? 32'd0 : t[`TETRA3];
+			o[`TETRA4] = mx[4] ? -a[`TETRA4] : zx[4] ? 32'd0 : t[`TETRA4];
+			o[`TETRA5] = mx[5] ? -a[`TETRA5] : zx[5] ? 32'd0 : t[`TETRA5];
+			o[`TETRA6] = mx[6] ? -a[`TETRA6] : zx[6] ? 32'd0 : t[`TETRA6];
+			o[`TETRA7] = mx[7] ? -a[`TETRA7] : zx[7] ? 32'd0 : t[`TETRA7];
+		end
+	octa_para:
+		begin
+			o[`OCTA0] = mx[0] ? -a[`OCTA0] : zx[0] ? 64'd0 : t[`OCTA0];
+			o[`OCTA1] = mx[1] ? -a[`OCTA1] : zx[1] ? 64'd0 : t[`OCTA1];
+			o[`OCTA2] = mx[2] ? -a[`OCTA2] : zx[2] ? 64'd0 : t[`OCTA2];
+			o[`OCTA3] = mx[3] ? -a[`OCTA3] : zx[3] ? 64'd0 : t[`OCTA3];
+		end
+	hexi_para:
+		begin
+			o[`HEXI0] = mx[0] ? -a[`HEXI0] : zx[0] ? 128'd0 : t[`HEXI0];
+			o[`HEXI1] = mx[1] ? -a[`HEXI1] : zx[1] ? 128'd0 : t[`HEXI1];
+		end
+	endcase
+	else
+		o[127:0] = {32{4'hC}};
+end
+endtask
+
 task tskAdd;
 input [3:0] fmt;
-input [31:0] m;
-input z;
+input [31:0] mx;
+input [31:0] zx;
 input [DBW:0] a;
 input [DBW:0] b;
 input [DBW:0] t;
@@ -899,7 +1203,7 @@ begin
 	octa:
 		begin
 			o[`OCTA0] = a[`OCTA0] + b[`OCTA0];
-			o[255:64] = {192{o[63]}};
+			o[127:64] = {64{o[63]}};
 			o[`HEXI1] = t[`HEXI1];
 		end
 	hexi:
@@ -909,80 +1213,80 @@ begin
 		end
 	byte_para:
 		begin
-			o[`BYTE0] = m[0] ? a[`BYTE0] + b[`BYTE0] : z ? 8'd0 : t[`BYTE0];
-			o[`BYTE1] = m[1] ? a[`BYTE1] + b[`BYTE1] : z ? 8'd0 : t[`BYTE1];
-			o[`BYTE2] = m[2] ? a[`BYTE2] + b[`BYTE2] : z ? 8'd0 : t[`BYTE2];
-			o[`BYTE3] = m[3] ? a[`BYTE3] + b[`BYTE3] : z ? 8'd0 : t[`BYTE3];
-			o[`BYTE4] = m[4] ? a[`BYTE4] + b[`BYTE4] : z ? 8'd0 : t[`BYTE4];
-			o[`BYTE5] = m[5] ? a[`BYTE5] + b[`BYTE5] : z ? 8'd0 : t[`BYTE5];
-			o[`BYTE6] = m[6] ? a[`BYTE6] + b[`BYTE6] : z ? 8'd0 : t[`BYTE6];
-			o[`BYTE7] = m[7] ? a[`BYTE7] + b[`BYTE7] : z ? 8'd0 : t[`BYTE7];
-			o[`BYTE8] = m[8] ? a[`BYTE8] + b[`BYTE8] : z ? 8'd0 : t[`BYTE8];
-			o[`BYTE9] = m[9] ? a[`BYTE9] + b[`BYTE9] : z ? 8'd0 : t[`BYTE9];
-			o[`BYTE10] = m[10] ? a[`BYTE10] + b[`BYTE10] : z ? 8'd0 : t[`BYTE10];
-			o[`BYTE11] = m[11] ? a[`BYTE11] + b[`BYTE11] : z ? 8'd0 : t[`BYTE11];
-			o[`BYTE12] = m[12] ? a[`BYTE12] + b[`BYTE12] : z ? 8'd0 : t[`BYTE12];
-			o[`BYTE13] = m[13] ? a[`BYTE13] + b[`BYTE13] : z ? 8'd0 : t[`BYTE13];
-			o[`BYTE14] = m[14] ? a[`BYTE14] + b[`BYTE14] : z ? 8'd0 : t[`BYTE14];
-			o[`BYTE15] = m[15] ? a[`BYTE15] + b[`BYTE15] : z ? 8'd0 : t[`BYTE15];
-			o[`BYTE16] = m[16] ? a[`BYTE16] + b[`BYTE16] : z ? 8'd0 : t[`BYTE16];
-			o[`BYTE17] = m[17] ? a[`BYTE17] + b[`BYTE17] : z ? 8'd0 : t[`BYTE17];
-			o[`BYTE18] = m[18] ? a[`BYTE18] + b[`BYTE18] : z ? 8'd0 : t[`BYTE18];
-			o[`BYTE19] = m[19] ? a[`BYTE19] + b[`BYTE19] : z ? 8'd0 : t[`BYTE19];
-			o[`BYTE20] = m[20] ? a[`BYTE20] + b[`BYTE20] : z ? 8'd0 : t[`BYTE20];
-			o[`BYTE21] = m[21] ? a[`BYTE21] + b[`BYTE21] : z ? 8'd0 : t[`BYTE21];
-			o[`BYTE22] = m[22] ? a[`BYTE22] + b[`BYTE22] : z ? 8'd0 : t[`BYTE22];
-			o[`BYTE23] = m[23] ? a[`BYTE23] + b[`BYTE23] : z ? 8'd0 : t[`BYTE23];
-			o[`BYTE24] = m[24] ? a[`BYTE24] + b[`BYTE24] : z ? 8'd0 : t[`BYTE24];
-			o[`BYTE25] = m[25] ? a[`BYTE25] + b[`BYTE25] : z ? 8'd0 : t[`BYTE25];
-			o[`BYTE26] = m[26] ? a[`BYTE26] + b[`BYTE26] : z ? 8'd0 : t[`BYTE26];
-			o[`BYTE27] = m[27] ? a[`BYTE27] + b[`BYTE27] : z ? 8'd0 : t[`BYTE27];
-			o[`BYTE28] = m[28] ? a[`BYTE28] + b[`BYTE28] : z ? 8'd0 : t[`BYTE28];
-			o[`BYTE29] = m[29] ? a[`BYTE29] + b[`BYTE29] : z ? 8'd0 : t[`BYTE29];
-			o[`BYTE30] = m[30] ? a[`BYTE30] + b[`BYTE30] : z ? 8'd0 : t[`BYTE30];
-			o[`BYTE31] = m[31] ? a[`BYTE31] + b[`BYTE31] : z ? 8'd0 : t[`BYTE31];
+			o[`BYTE0] = mx[0] ? a[`BYTE0] + b[`BYTE0] : zx[0] ? 8'd0 : t[`BYTE0];
+			o[`BYTE1] = mx[1] ? a[`BYTE1] + b[`BYTE1] : zx[1] ? 8'd0 : t[`BYTE1];
+			o[`BYTE2] = mx[2] ? a[`BYTE2] + b[`BYTE2] : zx[2] ? 8'd0 : t[`BYTE2];
+			o[`BYTE3] = mx[3] ? a[`BYTE3] + b[`BYTE3] : zx[3] ? 8'd0 : t[`BYTE3];
+			o[`BYTE4] = mx[4] ? a[`BYTE4] + b[`BYTE4] : zx[4] ? 8'd0 : t[`BYTE4];
+			o[`BYTE5] = mx[5] ? a[`BYTE5] + b[`BYTE5] : zx[5] ? 8'd0 : t[`BYTE5];
+			o[`BYTE6] = mx[6] ? a[`BYTE6] + b[`BYTE6] : zx[6] ? 8'd0 : t[`BYTE6];
+			o[`BYTE7] = mx[7] ? a[`BYTE7] + b[`BYTE7] : zx[7] ? 8'd0 : t[`BYTE7];
+			o[`BYTE8] = mx[8] ? a[`BYTE8] + b[`BYTE8] : zx[8] ? 8'd0 : t[`BYTE8];
+			o[`BYTE9] = mx[9] ? a[`BYTE9] + b[`BYTE9] : zx[9] ? 8'd0 : t[`BYTE9];
+			o[`BYTE10] = mx[10] ? a[`BYTE10] + b[`BYTE10] : zx[10] ? 8'd0 : t[`BYTE10];
+			o[`BYTE11] = mx[11] ? a[`BYTE11] + b[`BYTE11] : zx[11] ? 8'd0 : t[`BYTE11];
+			o[`BYTE12] = mx[12] ? a[`BYTE12] + b[`BYTE12] : zx[12] ? 8'd0 : t[`BYTE12];
+			o[`BYTE13] = mx[13] ? a[`BYTE13] + b[`BYTE13] : zx[13] ? 8'd0 : t[`BYTE13];
+			o[`BYTE14] = mx[14] ? a[`BYTE14] + b[`BYTE14] : zx[14] ? 8'd0 : t[`BYTE14];
+			o[`BYTE15] = mx[15] ? a[`BYTE15] + b[`BYTE15] : zx[15] ? 8'd0 : t[`BYTE15];
+			o[`BYTE16] = mx[16] ? a[`BYTE16] + b[`BYTE16] : zx[16] ? 8'd0 : t[`BYTE16];
+			o[`BYTE17] = mx[17] ? a[`BYTE17] + b[`BYTE17] : zx[17] ? 8'd0 : t[`BYTE17];
+			o[`BYTE18] = mx[18] ? a[`BYTE18] + b[`BYTE18] : zx[18] ? 8'd0 : t[`BYTE18];
+			o[`BYTE19] = mx[19] ? a[`BYTE19] + b[`BYTE19] : zx[19] ? 8'd0 : t[`BYTE19];
+			o[`BYTE20] = mx[20] ? a[`BYTE20] + b[`BYTE20] : zx[20] ? 8'd0 : t[`BYTE20];
+			o[`BYTE21] = mx[21] ? a[`BYTE21] + b[`BYTE21] : zx[21] ? 8'd0 : t[`BYTE21];
+			o[`BYTE22] = mx[22] ? a[`BYTE22] + b[`BYTE22] : zx[22] ? 8'd0 : t[`BYTE22];
+			o[`BYTE23] = mx[23] ? a[`BYTE23] + b[`BYTE23] : zx[23] ? 8'd0 : t[`BYTE23];
+			o[`BYTE24] = mx[24] ? a[`BYTE24] + b[`BYTE24] : zx[24] ? 8'd0 : t[`BYTE24];
+			o[`BYTE25] = mx[25] ? a[`BYTE25] + b[`BYTE25] : zx[25] ? 8'd0 : t[`BYTE25];
+			o[`BYTE26] = mx[26] ? a[`BYTE26] + b[`BYTE26] : zx[26] ? 8'd0 : t[`BYTE26];
+			o[`BYTE27] = mx[27] ? a[`BYTE27] + b[`BYTE27] : zx[27] ? 8'd0 : t[`BYTE27];
+			o[`BYTE28] = mx[28] ? a[`BYTE28] + b[`BYTE28] : zx[28] ? 8'd0 : t[`BYTE28];
+			o[`BYTE29] = mx[29] ? a[`BYTE29] + b[`BYTE29] : zx[29] ? 8'd0 : t[`BYTE29];
+			o[`BYTE30] = mx[30] ? a[`BYTE30] + b[`BYTE30] : zx[30] ? 8'd0 : t[`BYTE30];
+			o[`BYTE31] = mx[31] ? a[`BYTE31] + b[`BYTE31] : zx[31] ? 8'd0 : t[`BYTE31];
 		end
 	wyde_para:
 		begin
-			o[`WYDE0] = m[0] ? a[`WYDE0] + b[`WYDE0] : z ? 16'd0 : t[`WYDE0];
-			o[`WYDE1] = m[1] ? a[`WYDE1] + b[`WYDE1] : z ? 16'd0 : t[`WYDE1];
-			o[`WYDE2] = m[2] ? a[`WYDE2] + b[`WYDE2] : z ? 16'd0 : t[`WYDE2];
-			o[`WYDE3] = m[3] ? a[`WYDE3] + b[`WYDE3] : z ? 16'd0 : t[`WYDE3];
-			o[`WYDE4] = m[4] ? a[`WYDE4] + b[`WYDE4] : z ? 16'd0 : t[`WYDE4];
-			o[`WYDE5] = m[5] ? a[`WYDE5] + b[`WYDE5] : z ? 16'd0 : t[`WYDE5];
-			o[`WYDE6] = m[6] ? a[`WYDE6] + b[`WYDE6] : z ? 16'd0 : t[`WYDE6];
-			o[`WYDE7] = m[7] ? a[`WYDE7] + b[`WYDE7] : z ? 16'd0 : t[`WYDE7];
-			o[`WYDE8] = m[8] ? a[`WYDE8] + b[`WYDE8] : z ? 16'd0 : t[`WYDE8];
-			o[`WYDE9] = m[9] ? a[`WYDE9] + b[`WYDE9] : z ? 16'd0 : t[`WYDE9];
-			o[`WYDE10] = m[10] ? a[`WYDE10] + b[`WYDE10] : z ? 16'd0 : t[`WYDE10];
-			o[`WYDE11] = m[11] ? a[`WYDE11] + b[`WYDE11] : z ? 16'd0 : t[`WYDE11];
-			o[`WYDE12] = m[12] ? a[`WYDE12] + b[`WYDE12] : z ? 16'd0 : t[`WYDE12];
-			o[`WYDE13] = m[13] ? a[`WYDE13] + b[`WYDE13] : z ? 16'd0 : t[`WYDE13];
-			o[`WYDE14] = m[14] ? a[`WYDE14] + b[`WYDE14] : z ? 16'd0 : t[`WYDE14];
-			o[`WYDE15] = m[15] ? a[`WYDE15] + b[`WYDE15] : z ? 16'd0 : t[`WYDE15];
+			o[`WYDE0] = mx[0] ? a[`WYDE0] + b[`WYDE0] : zx[0] ? 16'd0 : t[`WYDE0];
+			o[`WYDE1] = mx[1] ? a[`WYDE1] + b[`WYDE1] : zx[1] ? 16'd0 : t[`WYDE1];
+			o[`WYDE2] = mx[2] ? a[`WYDE2] + b[`WYDE2] : zx[2] ? 16'd0 : t[`WYDE2];
+			o[`WYDE3] = mx[3] ? a[`WYDE3] + b[`WYDE3] : zx[3] ? 16'd0 : t[`WYDE3];
+			o[`WYDE4] = mx[4] ? a[`WYDE4] + b[`WYDE4] : zx[4] ? 16'd0 : t[`WYDE4];
+			o[`WYDE5] = mx[5] ? a[`WYDE5] + b[`WYDE5] : zx[5] ? 16'd0 : t[`WYDE5];
+			o[`WYDE6] = mx[6] ? a[`WYDE6] + b[`WYDE6] : zx[6] ? 16'd0 : t[`WYDE6];
+			o[`WYDE7] = mx[7] ? a[`WYDE7] + b[`WYDE7] : zx[7] ? 16'd0 : t[`WYDE7];
+			o[`WYDE8] = mx[8] ? a[`WYDE8] + b[`WYDE8] : zx[8] ? 16'd0 : t[`WYDE8];
+			o[`WYDE9] = mx[9] ? a[`WYDE9] + b[`WYDE9] : zx[9] ? 16'd0 : t[`WYDE9];
+			o[`WYDE10] = mx[10] ? a[`WYDE10] + b[`WYDE10] : zx[10] ? 16'd0 : t[`WYDE10];
+			o[`WYDE11] = mx[11] ? a[`WYDE11] + b[`WYDE11] : zx[11] ? 16'd0 : t[`WYDE11];
+			o[`WYDE12] = mx[12] ? a[`WYDE12] + b[`WYDE12] : zx[12] ? 16'd0 : t[`WYDE12];
+			o[`WYDE13] = mx[13] ? a[`WYDE13] + b[`WYDE13] : zx[13] ? 16'd0 : t[`WYDE13];
+			o[`WYDE14] = mx[14] ? a[`WYDE14] + b[`WYDE14] : zx[14] ? 16'd0 : t[`WYDE14];
+			o[`WYDE15] = mx[15] ? a[`WYDE15] + b[`WYDE15] : zx[15] ? 16'd0 : t[`WYDE15];
 		end
 	tetra_para:
 		begin
-			o[`TETRA0] = m[0] ? a[`TETRA0] + b[`TETRA0] : z ? 32'd0 : t[`TETRA0];
-			o[`TETRA1] = m[1] ? a[`TETRA1] + b[`TETRA1] : z ? 32'd0 : t[`TETRA1];
-			o[`TETRA2] = m[2] ? a[`TETRA2] + b[`TETRA2] : z ? 32'd0 : t[`TETRA2];
-			o[`TETRA3] = m[3] ? a[`TETRA3] + b[`TETRA3] : z ? 32'd0 : t[`TETRA3];
-			o[`TETRA4] = m[4] ? a[`TETRA4] + b[`TETRA4] : z ? 32'd0 : t[`TETRA4];
-			o[`TETRA5] = m[5] ? a[`TETRA5] + b[`TETRA5] : z ? 32'd0 : t[`TETRA5];
-			o[`TETRA6] = m[6] ? a[`TETRA6] + b[`TETRA6] : z ? 32'd0 : t[`TETRA6];
-			o[`TETRA7] = m[7] ? a[`TETRA7] + b[`TETRA7] : z ? 32'd0 : t[`TETRA7];
+			o[`TETRA0] = mx[0] ? a[`TETRA0] + b[`TETRA0] : zx[0] ? 32'd0 : t[`TETRA0];
+			o[`TETRA1] = mx[1] ? a[`TETRA1] + b[`TETRA1] : zx[1] ? 32'd0 : t[`TETRA1];
+			o[`TETRA2] = mx[2] ? a[`TETRA2] + b[`TETRA2] : zx[2] ? 32'd0 : t[`TETRA2];
+			o[`TETRA3] = mx[3] ? a[`TETRA3] + b[`TETRA3] : zx[3] ? 32'd0 : t[`TETRA3];
+			o[`TETRA4] = mx[4] ? a[`TETRA4] + b[`TETRA4] : zx[4] ? 32'd0 : t[`TETRA4];
+			o[`TETRA5] = mx[5] ? a[`TETRA5] + b[`TETRA5] : zx[5] ? 32'd0 : t[`TETRA5];
+			o[`TETRA6] = mx[6] ? a[`TETRA6] + b[`TETRA6] : zx[6] ? 32'd0 : t[`TETRA6];
+			o[`TETRA7] = mx[7] ? a[`TETRA7] + b[`TETRA7] : zx[7] ? 32'd0 : t[`TETRA7];
 		end
 	octa_para:
 		begin
-			o[`OCTA0] = m[0] ? a[`OCTA0] + b[`OCTA0] : z ? 64'd0 : t[`OCTA0];
-			o[`OCTA1] = m[1] ? a[`OCTA1] + b[`OCTA1] : z ? 64'd0 : t[`OCTA1];
-			o[`OCTA2] = m[2] ? a[`OCTA2] + b[`OCTA2] : z ? 64'd0 : t[`OCTA2];
-			o[`OCTA3] = m[3] ? a[`OCTA3] + b[`OCTA3] : z ? 64'd0 : t[`OCTA3];
+			o[`OCTA0] = mx[0] ? a[`OCTA0] + b[`OCTA0] : zx[0] ? 64'd0 : t[`OCTA0];
+			o[`OCTA1] = mx[1] ? a[`OCTA1] + b[`OCTA1] : zx[1] ? 64'd0 : t[`OCTA1];
+			o[`OCTA2] = mx[2] ? a[`OCTA2] + b[`OCTA2] : zx[2] ? 64'd0 : t[`OCTA2];
+			o[`OCTA3] = mx[3] ? a[`OCTA3] + b[`OCTA3] : zx[3] ? 64'd0 : t[`OCTA3];
 		end
 	hexi_para:
 		begin
-			o[`HEXI0] = m[0] ? a[`HEXI0] + b[`HEXI0] : z ? 128'd0 : t[`HEXI0];
-			o[`HEXI1] = m[1] ? a[`HEXI1] + b[`HEXI1] : z ? 128'd0 : t[`HEXI1];
+			o[`HEXI0] = mx[0] ? a[`HEXI0] + b[`HEXI0] : zx[0] ? 128'd0 : t[`HEXI0];
+			o[`HEXI1] = mx[1] ? a[`HEXI1] + b[`HEXI1] : zx[1] ? 128'd0 : t[`HEXI1];
 		end
   default:
   	begin
@@ -995,8 +1299,8 @@ endtask
 
 task tskSub;
 input [3:0] fmt;
-input [31:0] m;
-input z;
+input [31:0] mx;
+input [31:0] zx;
 input [DBW:0] a;
 input [DBW:0] b;
 input [DBW:0] t;
@@ -1024,7 +1328,7 @@ begin
 	octa:
 		begin
 			o[`OCTA0] = a[`OCTA0] - b[`OCTA0];
-			o[255:64] = {192{o[63]}};
+			o[127:64] = {64{o[63]}};
 			o[`HEXI1] = t[`HEXI1];
 		end
 	hexi:
@@ -1034,80 +1338,80 @@ begin
 		end
 	byte_para:
 		begin
-			o[`BYTE0] = m[0] ? a[`BYTE0] - b[`BYTE0] : z ? 8'd0 : t[`BYTE0];
-			o[`BYTE1] = m[1] ? a[`BYTE1] - b[`BYTE1] : z ? 8'd0 : t[`BYTE1];
-			o[`BYTE2] = m[2] ? a[`BYTE2] - b[`BYTE2] : z ? 8'd0 : t[`BYTE2];
-			o[`BYTE3] = m[3] ? a[`BYTE3] - b[`BYTE3] : z ? 8'd0 : t[`BYTE3];
-			o[`BYTE4] = m[4] ? a[`BYTE4] - b[`BYTE4] : z ? 8'd0 : t[`BYTE4];
-			o[`BYTE5] = m[5] ? a[`BYTE5] - b[`BYTE5] : z ? 8'd0 : t[`BYTE5];
-			o[`BYTE6] = m[6] ? a[`BYTE6] - b[`BYTE6] : z ? 8'd0 : t[`BYTE6];
-			o[`BYTE7] = m[7] ? a[`BYTE7] - b[`BYTE7] : z ? 8'd0 : t[`BYTE7];
-			o[`BYTE8] = m[8] ? a[`BYTE8] - b[`BYTE8] : z ? 8'd0 : t[`BYTE8];
-			o[`BYTE9] = m[9] ? a[`BYTE9] - b[`BYTE9] : z ? 8'd0 : t[`BYTE9];
-			o[`BYTE10] = m[10] ? a[`BYTE10] - b[`BYTE10] : z ? 8'd0 : t[`BYTE10];
-			o[`BYTE11] = m[11] ? a[`BYTE11] - b[`BYTE11] : z ? 8'd0 : t[`BYTE11];
-			o[`BYTE12] = m[12] ? a[`BYTE12] - b[`BYTE12] : z ? 8'd0 : t[`BYTE12];
-			o[`BYTE13] = m[13] ? a[`BYTE13] - b[`BYTE13] : z ? 8'd0 : t[`BYTE13];
-			o[`BYTE14] = m[14] ? a[`BYTE14] - b[`BYTE14] : z ? 8'd0 : t[`BYTE14];
-			o[`BYTE15] = m[15] ? a[`BYTE15] - b[`BYTE15] : z ? 8'd0 : t[`BYTE15];
-			o[`BYTE16] = m[16] ? a[`BYTE16] - b[`BYTE16] : z ? 8'd0 : t[`BYTE16];
-			o[`BYTE17] = m[17] ? a[`BYTE17] - b[`BYTE17] : z ? 8'd0 : t[`BYTE17];
-			o[`BYTE18] = m[18] ? a[`BYTE18] - b[`BYTE18] : z ? 8'd0 : t[`BYTE18];
-			o[`BYTE19] = m[19] ? a[`BYTE19] - b[`BYTE19] : z ? 8'd0 : t[`BYTE19];
-			o[`BYTE20] = m[20] ? a[`BYTE20] - b[`BYTE20] : z ? 8'd0 : t[`BYTE20];
-			o[`BYTE21] = m[21] ? a[`BYTE21] - b[`BYTE21] : z ? 8'd0 : t[`BYTE21];
-			o[`BYTE22] = m[22] ? a[`BYTE22] - b[`BYTE22] : z ? 8'd0 : t[`BYTE22];
-			o[`BYTE23] = m[23] ? a[`BYTE23] - b[`BYTE23] : z ? 8'd0 : t[`BYTE23];
-			o[`BYTE24] = m[24] ? a[`BYTE24] - b[`BYTE24] : z ? 8'd0 : t[`BYTE24];
-			o[`BYTE25] = m[25] ? a[`BYTE25] - b[`BYTE25] : z ? 8'd0 : t[`BYTE25];
-			o[`BYTE26] = m[26] ? a[`BYTE26] - b[`BYTE26] : z ? 8'd0 : t[`BYTE26];
-			o[`BYTE27] = m[27] ? a[`BYTE27] - b[`BYTE27] : z ? 8'd0 : t[`BYTE27];
-			o[`BYTE28] = m[28] ? a[`BYTE28] - b[`BYTE28] : z ? 8'd0 : t[`BYTE28];
-			o[`BYTE29] = m[29] ? a[`BYTE29] - b[`BYTE29] : z ? 8'd0 : t[`BYTE29];
-			o[`BYTE30] = m[30] ? a[`BYTE30] - b[`BYTE30] : z ? 8'd0 : t[`BYTE30];
-			o[`BYTE31] = m[31] ? a[`BYTE31] - b[`BYTE31] : z ? 8'd0 : t[`BYTE31];
+			o[`BYTE0] = mx[0] ? a[`BYTE0] - b[`BYTE0] : zx[0] ? 8'd0 : t[`BYTE0];
+			o[`BYTE1] = mx[1] ? a[`BYTE1] - b[`BYTE1] : zx[1] ? 8'd0 : t[`BYTE1];
+			o[`BYTE2] = mx[2] ? a[`BYTE2] - b[`BYTE2] : zx[2] ? 8'd0 : t[`BYTE2];
+			o[`BYTE3] = mx[3] ? a[`BYTE3] - b[`BYTE3] : zx[3] ? 8'd0 : t[`BYTE3];
+			o[`BYTE4] = mx[4] ? a[`BYTE4] - b[`BYTE4] : zx[4] ? 8'd0 : t[`BYTE4];
+			o[`BYTE5] = mx[5] ? a[`BYTE5] - b[`BYTE5] : zx[5] ? 8'd0 : t[`BYTE5];
+			o[`BYTE6] = mx[6] ? a[`BYTE6] - b[`BYTE6] : zx[6] ? 8'd0 : t[`BYTE6];
+			o[`BYTE7] = mx[7] ? a[`BYTE7] - b[`BYTE7] : zx[7] ? 8'd0 : t[`BYTE7];
+			o[`BYTE8] = mx[8] ? a[`BYTE8] - b[`BYTE8] : zx[8] ? 8'd0 : t[`BYTE8];
+			o[`BYTE9] = mx[9] ? a[`BYTE9] - b[`BYTE9] : zx[9] ? 8'd0 : t[`BYTE9];
+			o[`BYTE10] = mx[10] ? a[`BYTE10] - b[`BYTE10] : zx[10] ? 8'd0 : t[`BYTE10];
+			o[`BYTE11] = mx[11] ? a[`BYTE11] - b[`BYTE11] : zx[11] ? 8'd0 : t[`BYTE11];
+			o[`BYTE12] = mx[12] ? a[`BYTE12] - b[`BYTE12] : zx[12] ? 8'd0 : t[`BYTE12];
+			o[`BYTE13] = mx[13] ? a[`BYTE13] - b[`BYTE13] : zx[13] ? 8'd0 : t[`BYTE13];
+			o[`BYTE14] = mx[14] ? a[`BYTE14] - b[`BYTE14] : zx[14] ? 8'd0 : t[`BYTE14];
+			o[`BYTE15] = mx[15] ? a[`BYTE15] - b[`BYTE15] : zx[15] ? 8'd0 : t[`BYTE15];
+			o[`BYTE16] = mx[16] ? a[`BYTE16] - b[`BYTE16] : zx[16] ? 8'd0 : t[`BYTE16];
+			o[`BYTE17] = mx[17] ? a[`BYTE17] - b[`BYTE17] : zx[17] ? 8'd0 : t[`BYTE17];
+			o[`BYTE18] = mx[18] ? a[`BYTE18] - b[`BYTE18] : zx[18] ? 8'd0 : t[`BYTE18];
+			o[`BYTE19] = mx[19] ? a[`BYTE19] - b[`BYTE19] : zx[19] ? 8'd0 : t[`BYTE19];
+			o[`BYTE20] = mx[20] ? a[`BYTE20] - b[`BYTE20] : zx[20] ? 8'd0 : t[`BYTE20];
+			o[`BYTE21] = mx[21] ? a[`BYTE21] - b[`BYTE21] : zx[21] ? 8'd0 : t[`BYTE21];
+			o[`BYTE22] = mx[22] ? a[`BYTE22] - b[`BYTE22] : zx[22] ? 8'd0 : t[`BYTE22];
+			o[`BYTE23] = mx[23] ? a[`BYTE23] - b[`BYTE23] : zx[23] ? 8'd0 : t[`BYTE23];
+			o[`BYTE24] = mx[24] ? a[`BYTE24] - b[`BYTE24] : zx[24] ? 8'd0 : t[`BYTE24];
+			o[`BYTE25] = mx[25] ? a[`BYTE25] - b[`BYTE25] : zx[25] ? 8'd0 : t[`BYTE25];
+			o[`BYTE26] = mx[26] ? a[`BYTE26] - b[`BYTE26] : zx[26] ? 8'd0 : t[`BYTE26];
+			o[`BYTE27] = mx[27] ? a[`BYTE27] - b[`BYTE27] : zx[27] ? 8'd0 : t[`BYTE27];
+			o[`BYTE28] = mx[28] ? a[`BYTE28] - b[`BYTE28] : zx[28] ? 8'd0 : t[`BYTE28];
+			o[`BYTE29] = mx[29] ? a[`BYTE29] - b[`BYTE29] : zx[29] ? 8'd0 : t[`BYTE29];
+			o[`BYTE30] = mx[30] ? a[`BYTE30] - b[`BYTE30] : zx[30] ? 8'd0 : t[`BYTE30];
+			o[`BYTE31] = mx[31] ? a[`BYTE31] - b[`BYTE31] : zx[31] ? 8'd0 : t[`BYTE31];
 		end
 	wyde_para:
 		begin
-			o[`WYDE0] = m[0] ? a[`WYDE0] - b[`WYDE0] : z ? 16'd0 : t[`WYDE0];
-			o[`WYDE1] = m[1] ? a[`WYDE1] - b[`WYDE1] : z ? 16'd0 : t[`WYDE1];
-			o[`WYDE2] = m[2] ? a[`WYDE2] - b[`WYDE2] : z ? 16'd0 : t[`WYDE2];
-			o[`WYDE3] = m[3] ? a[`WYDE3] - b[`WYDE3] : z ? 16'd0 : t[`WYDE3];
-			o[`WYDE4] = m[4] ? a[`WYDE4] - b[`WYDE4] : z ? 16'd0 : t[`WYDE4];
-			o[`WYDE5] = m[5] ? a[`WYDE5] - b[`WYDE5] : z ? 16'd0 : t[`WYDE5];
-			o[`WYDE6] = m[6] ? a[`WYDE6] - b[`WYDE6] : z ? 16'd0 : t[`WYDE6];
-			o[`WYDE7] = m[7] ? a[`WYDE7] - b[`WYDE7] : z ? 16'd0 : t[`WYDE7];
-			o[`WYDE8] = m[8] ? a[`WYDE8] - b[`WYDE8] : z ? 16'd0 : t[`WYDE8];
-			o[`WYDE9] = m[9] ? a[`WYDE9] - b[`WYDE9] : z ? 16'd0 : t[`WYDE9];
-			o[`WYDE10] = m[10] ? a[`WYDE10] - b[`WYDE10] : z ? 16'd0 : t[`WYDE10];
-			o[`WYDE11] = m[11] ? a[`WYDE11] - b[`WYDE11] : z ? 16'd0 : t[`WYDE11];
-			o[`WYDE12] = m[12] ? a[`WYDE12] - b[`WYDE12] : z ? 16'd0 : t[`WYDE12];
-			o[`WYDE13] = m[13] ? a[`WYDE13] - b[`WYDE13] : z ? 16'd0 : t[`WYDE13];
-			o[`WYDE14] = m[14] ? a[`WYDE14] - b[`WYDE14] : z ? 16'd0 : t[`WYDE14];
-			o[`WYDE15] = m[15] ? a[`WYDE15] - b[`WYDE15] : z ? 16'd0 : t[`WYDE15];
+			o[`WYDE0] = mx[0] ? a[`WYDE0] - b[`WYDE0] : zx[0] ? 16'd0 : t[`WYDE0];
+			o[`WYDE1] = mx[1] ? a[`WYDE1] - b[`WYDE1] : zx[1] ? 16'd0 : t[`WYDE1];
+			o[`WYDE2] = mx[2] ? a[`WYDE2] - b[`WYDE2] : zx[2] ? 16'd0 : t[`WYDE2];
+			o[`WYDE3] = mx[3] ? a[`WYDE3] - b[`WYDE3] : zx[3] ? 16'd0 : t[`WYDE3];
+			o[`WYDE4] = mx[4] ? a[`WYDE4] - b[`WYDE4] : zx[4] ? 16'd0 : t[`WYDE4];
+			o[`WYDE5] = mx[5] ? a[`WYDE5] - b[`WYDE5] : zx[5] ? 16'd0 : t[`WYDE5];
+			o[`WYDE6] = mx[6] ? a[`WYDE6] - b[`WYDE6] : zx[6] ? 16'd0 : t[`WYDE6];
+			o[`WYDE7] = mx[7] ? a[`WYDE7] - b[`WYDE7] : zx[7] ? 16'd0 : t[`WYDE7];
+			o[`WYDE8] = mx[8] ? a[`WYDE8] - b[`WYDE8] : zx[8] ? 16'd0 : t[`WYDE8];
+			o[`WYDE9] = mx[9] ? a[`WYDE9] - b[`WYDE9] : zx[9] ? 16'd0 : t[`WYDE9];
+			o[`WYDE10] = mx[10] ? a[`WYDE10] - b[`WYDE10] : zx[10] ? 16'd0 : t[`WYDE10];
+			o[`WYDE11] = mx[11] ? a[`WYDE11] - b[`WYDE11] : zx[11] ? 16'd0 : t[`WYDE11];
+			o[`WYDE12] = mx[12] ? a[`WYDE12] - b[`WYDE12] : zx[12] ? 16'd0 : t[`WYDE12];
+			o[`WYDE13] = mx[13] ? a[`WYDE13] - b[`WYDE13] : zx[13] ? 16'd0 : t[`WYDE13];
+			o[`WYDE14] = mx[14] ? a[`WYDE14] - b[`WYDE14] : zx[14] ? 16'd0 : t[`WYDE14];
+			o[`WYDE15] = mx[15] ? a[`WYDE15] - b[`WYDE15] : zx[15] ? 16'd0 : t[`WYDE15];
 		end
 	tetra_para:
 		begin
-			o[`TETRA0] = m[0] ? a[`TETRA0] - b[`TETRA0] : z ? 32'd0 : t[`TETRA0];
-			o[`TETRA1] = m[1] ? a[`TETRA1] - b[`TETRA1] : z ? 32'd0 : t[`TETRA1];
-			o[`TETRA2] = m[2] ? a[`TETRA2] - b[`TETRA2] : z ? 32'd0 : t[`TETRA2];
-			o[`TETRA3] = m[3] ? a[`TETRA3] - b[`TETRA3] : z ? 32'd0 : t[`TETRA3];
-			o[`TETRA4] = m[4] ? a[`TETRA4] - b[`TETRA4] : z ? 32'd0 : t[`TETRA4];
-			o[`TETRA5] = m[5] ? a[`TETRA5] - b[`TETRA5] : z ? 32'd0 : t[`TETRA5];
-			o[`TETRA6] = m[6] ? a[`TETRA6] - b[`TETRA6] : z ? 32'd0 : t[`TETRA6];
-			o[`TETRA7] = m[7] ? a[`TETRA7] - b[`TETRA7] : z ? 32'd0 : t[`TETRA7];
+			o[`TETRA0] = mx[0] ? a[`TETRA0] - b[`TETRA0] : zx[0] ? 32'd0 : t[`TETRA0];
+			o[`TETRA1] = mx[1] ? a[`TETRA1] - b[`TETRA1] : zx[1] ? 32'd0 : t[`TETRA1];
+			o[`TETRA2] = mx[2] ? a[`TETRA2] - b[`TETRA2] : zx[2] ? 32'd0 : t[`TETRA2];
+			o[`TETRA3] = mx[3] ? a[`TETRA3] - b[`TETRA3] : zx[3] ? 32'd0 : t[`TETRA3];
+			o[`TETRA4] = mx[4] ? a[`TETRA4] - b[`TETRA4] : zx[4] ? 32'd0 : t[`TETRA4];
+			o[`TETRA5] = mx[5] ? a[`TETRA5] - b[`TETRA5] : zx[5] ? 32'd0 : t[`TETRA5];
+			o[`TETRA6] = mx[6] ? a[`TETRA6] - b[`TETRA6] : zx[6] ? 32'd0 : t[`TETRA6];
+			o[`TETRA7] = mx[7] ? a[`TETRA7] - b[`TETRA7] : zx[7] ? 32'd0 : t[`TETRA7];
 		end
 	octa_para:
 		begin
-			o[`OCTA0] = m[0] ? a[`OCTA0] - b[`OCTA0] : z ? 64'd0 : t[`OCTA0];
-			o[`OCTA1] = m[1] ? a[`OCTA1] - b[`OCTA1] : z ? 64'd0 : t[`OCTA1];
-			o[`OCTA2] = m[2] ? a[`OCTA2] - b[`OCTA2] : z ? 64'd0 : t[`OCTA2];
-			o[`OCTA3] = m[3] ? a[`OCTA3] - b[`OCTA3] : z ? 64'd0 : t[`OCTA3];
+			o[`OCTA0] = mx[0] ? a[`OCTA0] - b[`OCTA0] : zx[0] ? 64'd0 : t[`OCTA0];
+			o[`OCTA1] = mx[1] ? a[`OCTA1] - b[`OCTA1] : zx[1] ? 64'd0 : t[`OCTA1];
+			o[`OCTA2] = mx[2] ? a[`OCTA2] - b[`OCTA2] : zx[2] ? 64'd0 : t[`OCTA2];
+			o[`OCTA3] = mx[3] ? a[`OCTA3] - b[`OCTA3] : zx[3] ? 64'd0 : t[`OCTA3];
 		end
 	hexi_para:
 		begin
-			o[`HEXI0] = m[0] ? a[`HEXI0] - b[`HEXI0] : z ? 128'd0 : t[`HEXI0];
-			o[`HEXI1] = m[1] ? a[`HEXI1] - b[`HEXI1] : z ? 128'd0 : t[`HEXI1];
+			o[`HEXI0] = mx[0] ? a[`HEXI0] - b[`HEXI0] : zx[0] ? 128'd0 : t[`HEXI0];
+			o[`HEXI1] = mx[1] ? a[`HEXI1] - b[`HEXI1] : zx[1] ? 128'd0 : t[`HEXI1];
 		end
   default:
   	begin
@@ -1218,8 +1522,8 @@ endtask
 
 task tskAnd;
 input [3:0] fmt;
-input [31:0] m;
-input z;
+input [31:0] mx;
+input [31:0] zx;
 input [DBW:0] a;
 input [DBW:0] b;
 input [DBW:0] t;
@@ -1233,80 +1537,80 @@ begin
 	hexi:		o = {t[`HEXI1],a[`HEXI0] & b[`HEXI0]};
 	byte_para:
 		begin
-		o[`BYTE0] = m[0] ? a[`BYTE0] & b[`BYTE0] : z ? 8'd0 : t[`BYTE0];
-		o[`BYTE1] = m[1] ? a[`BYTE1] & b[`BYTE1] : z ? 8'd0 : t[`BYTE1];
-		o[`BYTE2] = m[2] ? a[`BYTE2] & b[`BYTE2] : z ? 8'd0 : t[`BYTE2];
-		o[`BYTE3] = m[3] ? a[`BYTE3] & b[`BYTE3] : z ? 8'd0 : t[`BYTE3];
-		o[`BYTE4] = m[4] ? a[`BYTE4] & b[`BYTE4] : z ? 8'd0 : t[`BYTE4];
-		o[`BYTE5] = m[5] ? a[`BYTE5] & b[`BYTE5] : z ? 8'd0 : t[`BYTE5];
-		o[`BYTE6] = m[6] ? a[`BYTE6] & b[`BYTE6] : z ? 8'd0 : t[`BYTE6];
-		o[`BYTE7] = m[7] ? a[`BYTE7] & b[`BYTE7] : z ? 8'd0 : t[`BYTE7];
-		o[`BYTE8] = m[8] ? a[`BYTE8] & b[`BYTE8] : z ? 8'd0 : t[`BYTE8];
-		o[`BYTE9] = m[9] ? a[`BYTE9] & b[`BYTE9] : z ? 8'd0 : t[`BYTE9];
-		o[`BYTE10] = m[10] ? a[`BYTE10] & b[`BYTE10] : z ? 8'd0 : t[`BYTE10];
-		o[`BYTE11] = m[11] ? a[`BYTE11] & b[`BYTE11] : z ? 8'd0 : t[`BYTE11];
-		o[`BYTE12] = m[12] ? a[`BYTE12] & b[`BYTE12] : z ? 8'd0 : t[`BYTE12];
-		o[`BYTE13] = m[13] ? a[`BYTE13] & b[`BYTE13] : z ? 8'd0 : t[`BYTE13];
-		o[`BYTE14] = m[14] ? a[`BYTE14] & b[`BYTE14] : z ? 8'd0 : t[`BYTE14];
-		o[`BYTE15] = m[15] ? a[`BYTE15] & b[`BYTE15] : z ? 8'd0 : t[`BYTE15];
-		o[`BYTE16] = m[16] ? a[`BYTE16] & b[`BYTE16] : z ? 8'd0 : t[`BYTE16];
-		o[`BYTE17] = m[17] ? a[`BYTE17] & b[`BYTE17] : z ? 8'd0 : t[`BYTE17];
-		o[`BYTE18] = m[18] ? a[`BYTE18] & b[`BYTE18] : z ? 8'd0 : t[`BYTE18];
-		o[`BYTE19] = m[19] ? a[`BYTE19] & b[`BYTE19] : z ? 8'd0 : t[`BYTE19];
-		o[`BYTE20] = m[20] ? a[`BYTE20] & b[`BYTE20] : z ? 8'd0 : t[`BYTE20];
-		o[`BYTE21] = m[21] ? a[`BYTE21] & b[`BYTE21] : z ? 8'd0 : t[`BYTE21];
-		o[`BYTE22] = m[22] ? a[`BYTE22] & b[`BYTE22] : z ? 8'd0 : t[`BYTE22];
-		o[`BYTE23] = m[23] ? a[`BYTE23] & b[`BYTE23] : z ? 8'd0 : t[`BYTE23];
-		o[`BYTE24] = m[24] ? a[`BYTE24] & b[`BYTE24] : z ? 8'd0 : t[`BYTE24];
-		o[`BYTE25] = m[25] ? a[`BYTE25] & b[`BYTE25] : z ? 8'd0 : t[`BYTE25];
-		o[`BYTE26] = m[26] ? a[`BYTE26] & b[`BYTE26] : z ? 8'd0 : t[`BYTE26];
-		o[`BYTE27] = m[27] ? a[`BYTE27] & b[`BYTE27] : z ? 8'd0 : t[`BYTE27];
-		o[`BYTE28] = m[28] ? a[`BYTE28] & b[`BYTE28] : z ? 8'd0 : t[`BYTE28];
-		o[`BYTE29] = m[29] ? a[`BYTE29] & b[`BYTE29] : z ? 8'd0 : t[`BYTE29];
-		o[`BYTE30] = m[30] ? a[`BYTE30] & b[`BYTE30] : z ? 8'd0 : t[`BYTE30];
-		o[`BYTE31] = m[31] ? a[`BYTE31] & b[`BYTE31] : z ? 8'd0 : t[`BYTE31];
+			o[`BYTE0] = mx[0] ? a[`BYTE0] & b[`BYTE0] : zx[0] ? 8'd0 : t[`BYTE0];
+			o[`BYTE1] = mx[1] ? a[`BYTE1] & b[`BYTE1] : zx[1] ? 8'd0 : t[`BYTE1];
+			o[`BYTE2] = mx[2] ? a[`BYTE2] & b[`BYTE2] : zx[2] ? 8'd0 : t[`BYTE2];
+			o[`BYTE3] = mx[3] ? a[`BYTE3] & b[`BYTE3] : zx[3] ? 8'd0 : t[`BYTE3];
+			o[`BYTE4] = mx[4] ? a[`BYTE4] & b[`BYTE4] : zx[4] ? 8'd0 : t[`BYTE4];
+			o[`BYTE5] = mx[5] ? a[`BYTE5] & b[`BYTE5] : zx[5] ? 8'd0 : t[`BYTE5];
+			o[`BYTE6] = mx[6] ? a[`BYTE6] & b[`BYTE6] : zx[6] ? 8'd0 : t[`BYTE6];
+			o[`BYTE7] = mx[7] ? a[`BYTE7] & b[`BYTE7] : zx[7] ? 8'd0 : t[`BYTE7];
+			o[`BYTE8] = mx[8] ? a[`BYTE8] & b[`BYTE8] : zx[8] ? 8'd0 : t[`BYTE8];
+			o[`BYTE9] = mx[9] ? a[`BYTE9] & b[`BYTE9] : zx[9] ? 8'd0 : t[`BYTE9];
+			o[`BYTE10] = mx[10] ? a[`BYTE10] & b[`BYTE10] : zx[10] ? 8'd0 : t[`BYTE10];
+			o[`BYTE11] = mx[11] ? a[`BYTE11] & b[`BYTE11] : zx[11] ? 8'd0 : t[`BYTE11];
+			o[`BYTE12] = mx[12] ? a[`BYTE12] & b[`BYTE12] : zx[12] ? 8'd0 : t[`BYTE12];
+			o[`BYTE13] = mx[13] ? a[`BYTE13] & b[`BYTE13] : zx[13] ? 8'd0 : t[`BYTE13];
+			o[`BYTE14] = mx[14] ? a[`BYTE14] & b[`BYTE14] : zx[14] ? 8'd0 : t[`BYTE14];
+			o[`BYTE15] = mx[15] ? a[`BYTE15] & b[`BYTE15] : zx[15] ? 8'd0 : t[`BYTE15];
+			o[`BYTE16] = mx[16] ? a[`BYTE16] & b[`BYTE16] : zx[16] ? 8'd0 : t[`BYTE16];
+			o[`BYTE17] = mx[17] ? a[`BYTE17] & b[`BYTE17] : zx[17] ? 8'd0 : t[`BYTE17];
+			o[`BYTE18] = mx[18] ? a[`BYTE18] & b[`BYTE18] : zx[18] ? 8'd0 : t[`BYTE18];
+			o[`BYTE19] = mx[19] ? a[`BYTE19] & b[`BYTE19] : zx[19] ? 8'd0 : t[`BYTE19];
+			o[`BYTE20] = mx[20] ? a[`BYTE20] & b[`BYTE20] : zx[20] ? 8'd0 : t[`BYTE20];
+			o[`BYTE21] = mx[21] ? a[`BYTE21] & b[`BYTE21] : zx[21] ? 8'd0 : t[`BYTE21];
+			o[`BYTE22] = mx[22] ? a[`BYTE22] & b[`BYTE22] : zx[22] ? 8'd0 : t[`BYTE22];
+			o[`BYTE23] = mx[23] ? a[`BYTE23] & b[`BYTE23] : zx[23] ? 8'd0 : t[`BYTE23];
+			o[`BYTE24] = mx[24] ? a[`BYTE24] & b[`BYTE24] : zx[24] ? 8'd0 : t[`BYTE24];
+			o[`BYTE25] = mx[25] ? a[`BYTE25] & b[`BYTE25] : zx[25] ? 8'd0 : t[`BYTE25];
+			o[`BYTE26] = mx[26] ? a[`BYTE26] & b[`BYTE26] : zx[26] ? 8'd0 : t[`BYTE26];
+			o[`BYTE27] = mx[27] ? a[`BYTE27] & b[`BYTE27] : zx[27] ? 8'd0 : t[`BYTE27];
+			o[`BYTE28] = mx[28] ? a[`BYTE28] & b[`BYTE28] : zx[28] ? 8'd0 : t[`BYTE28];
+			o[`BYTE29] = mx[29] ? a[`BYTE29] & b[`BYTE29] : zx[29] ? 8'd0 : t[`BYTE29];
+			o[`BYTE30] = mx[30] ? a[`BYTE30] & b[`BYTE30] : zx[30] ? 8'd0 : t[`BYTE30];
+			o[`BYTE31] = mx[31] ? a[`BYTE31] & b[`BYTE31] : zx[31] ? 8'd0 : t[`BYTE31];
 		end
 	wyde_para:
 		begin
-		o[`WYDE0] = m[0] ? a[`WYDE0] & b[`WYDE0] : z ? 16'd0 : t[`WYDE0];
-		o[`WYDE1] = m[1] ? a[`WYDE1] & b[`WYDE1] : z ? 16'd0 : t[`WYDE1];
-		o[`WYDE2] = m[2] ? a[`WYDE2] & b[`WYDE2] : z ? 16'd0 : t[`WYDE2];
-		o[`WYDE3] = m[3] ? a[`WYDE3] & b[`WYDE3] : z ? 16'd0 : t[`WYDE3];
-		o[`WYDE4] = m[4] ? a[`WYDE4] & b[`WYDE4] : z ? 16'd0 : t[`WYDE4];
-		o[`WYDE5] = m[5] ? a[`WYDE5] & b[`WYDE5] : z ? 16'd0 : t[`WYDE5];
-		o[`WYDE6] = m[6] ? a[`WYDE6] & b[`WYDE6] : z ? 16'd0 : t[`WYDE6];
-		o[`WYDE7] = m[7] ? a[`WYDE7] & b[`WYDE7] : z ? 16'd0 : t[`WYDE7];
-		o[`WYDE8] = m[8] ? a[`WYDE8] & b[`WYDE8] : z ? 16'd0 : t[`WYDE8];
-		o[`WYDE9] = m[9] ? a[`WYDE9] & b[`WYDE9] : z ? 16'd0 : t[`WYDE9];
-		o[`WYDE10] = m[10] ? a[`WYDE10] & b[`WYDE10] : z ? 16'd0 : t[`WYDE10];
-		o[`WYDE11] = m[11] ? a[`WYDE11] & b[`WYDE11] : z ? 16'd0 : t[`WYDE11];
-		o[`WYDE12] = m[12] ? a[`WYDE12] & b[`WYDE12] : z ? 16'd0 : t[`WYDE12];
-		o[`WYDE13] = m[13] ? a[`WYDE13] & b[`WYDE13] : z ? 16'd0 : t[`WYDE13];
-		o[`WYDE14] = m[14] ? a[`WYDE14] & b[`WYDE14] : z ? 16'd0 : t[`WYDE14];
-		o[`WYDE15] = m[15] ? a[`WYDE15] & b[`WYDE15] : z ? 16'd0 : t[`WYDE15];
+			o[`WYDE0] = mx[0] ? a[`WYDE0] & b[`WYDE0] : zx[0] ? 16'd0 : t[`WYDE0];
+			o[`WYDE1] = mx[1] ? a[`WYDE1] & b[`WYDE1] : zx[1] ? 16'd0 : t[`WYDE1];
+			o[`WYDE2] = mx[2] ? a[`WYDE2] & b[`WYDE2] : zx[2] ? 16'd0 : t[`WYDE2];
+			o[`WYDE3] = mx[3] ? a[`WYDE3] & b[`WYDE3] : zx[3] ? 16'd0 : t[`WYDE3];
+			o[`WYDE4] = mx[4] ? a[`WYDE4] & b[`WYDE4] : zx[4] ? 16'd0 : t[`WYDE4];
+			o[`WYDE5] = mx[5] ? a[`WYDE5] & b[`WYDE5] : zx[5] ? 16'd0 : t[`WYDE5];
+			o[`WYDE6] = mx[6] ? a[`WYDE6] & b[`WYDE6] : zx[6] ? 16'd0 : t[`WYDE6];
+			o[`WYDE7] = mx[7] ? a[`WYDE7] & b[`WYDE7] : zx[7] ? 16'd0 : t[`WYDE7];
+			o[`WYDE8] = mx[8] ? a[`WYDE8] & b[`WYDE8] : zx[8] ? 16'd0 : t[`WYDE8];
+			o[`WYDE9] = mx[9] ? a[`WYDE9] & b[`WYDE9] : zx[9] ? 16'd0 : t[`WYDE9];
+			o[`WYDE10] = mx[10] ? a[`WYDE10] & b[`WYDE10] : zx[10] ? 16'd0 : t[`WYDE10];
+			o[`WYDE11] = mx[11] ? a[`WYDE11] & b[`WYDE11] : zx[11] ? 16'd0 : t[`WYDE11];
+			o[`WYDE12] = mx[12] ? a[`WYDE12] & b[`WYDE12] : zx[12] ? 16'd0 : t[`WYDE12];
+			o[`WYDE13] = mx[13] ? a[`WYDE13] & b[`WYDE13] : zx[13] ? 16'd0 : t[`WYDE13];
+			o[`WYDE14] = mx[14] ? a[`WYDE14] & b[`WYDE14] : zx[14] ? 16'd0 : t[`WYDE14];
+			o[`WYDE15] = mx[15] ? a[`WYDE15] & b[`WYDE15] : zx[15] ? 16'd0 : t[`WYDE15];
 		end
 	tetra_para:
 		begin
-		o[`TETRA0] = m[0] ? a[`TETRA0] & b[`TETRA0] : z ? 32'd0 : t[`TETRA0];
-		o[`TETRA1] = m[1] ? a[`TETRA1] & b[`TETRA1] : z ? 32'd0 : t[`TETRA1];
-		o[`TETRA2] = m[2] ? a[`TETRA2] & b[`TETRA2] : z ? 32'd0 : t[`TETRA2];
-		o[`TETRA3] = m[3] ? a[`TETRA3] & b[`TETRA3] : z ? 32'd0 : t[`TETRA3];
-		o[`TETRA4] = m[4] ? a[`TETRA4] & b[`TETRA4] : z ? 32'd0 : t[`TETRA4];
-		o[`TETRA5] = m[5] ? a[`TETRA5] & b[`TETRA5] : z ? 32'd0 : t[`TETRA5];
-		o[`TETRA6] = m[6] ? a[`TETRA6] & b[`TETRA6] : z ? 32'd0 : t[`TETRA6];
-		o[`TETRA7] = m[7] ? a[`TETRA7] & b[`TETRA7] : z ? 32'd0 : t[`TETRA7];
+			o[`TETRA0] = mx[0] ? a[`TETRA0] & b[`TETRA0] : zx[0] ? 32'd0 : t[`TETRA0];
+			o[`TETRA1] = mx[1] ? a[`TETRA1] & b[`TETRA1] : zx[1] ? 32'd0 : t[`TETRA1];
+			o[`TETRA2] = mx[2] ? a[`TETRA2] & b[`TETRA2] : zx[2] ? 32'd0 : t[`TETRA2];
+			o[`TETRA3] = mx[3] ? a[`TETRA3] & b[`TETRA3] : zx[3] ? 32'd0 : t[`TETRA3];
+			o[`TETRA4] = mx[4] ? a[`TETRA4] & b[`TETRA4] : zx[4] ? 32'd0 : t[`TETRA4];
+			o[`TETRA5] = mx[5] ? a[`TETRA5] & b[`TETRA5] : zx[5] ? 32'd0 : t[`TETRA5];
+			o[`TETRA6] = mx[6] ? a[`TETRA6] & b[`TETRA6] : zx[6] ? 32'd0 : t[`TETRA6];
+			o[`TETRA7] = mx[7] ? a[`TETRA7] & b[`TETRA7] : zx[7] ? 32'd0 : t[`TETRA7];
 		end
-	octa_para: 
+	octa_para:
 		begin
-		o[`OCTA0] = m[0] ? a[`OCTA0] & b[`OCTA0] : z ? 64'd0 : t[`OCTA0];
-		o[`OCTA1] = m[1] ? a[`OCTA1] & b[`OCTA1] : z ? 64'd0 : t[`OCTA1];
-		o[`OCTA2] = m[2] ? a[`OCTA2] & b[`OCTA2] : z ? 64'd0 : t[`OCTA2];
-		o[`OCTA3] = m[3] ? a[`OCTA3] & b[`OCTA3] : z ? 64'd0 : t[`OCTA3];
+			o[`OCTA0] = mx[0] ? a[`OCTA0] & b[`OCTA0] : zx[0] ? 64'd0 : t[`OCTA0];
+			o[`OCTA1] = mx[1] ? a[`OCTA1] & b[`OCTA1] : zx[1] ? 64'd0 : t[`OCTA1];
+			o[`OCTA2] = mx[2] ? a[`OCTA2] & b[`OCTA2] : zx[2] ? 64'd0 : t[`OCTA2];
+			o[`OCTA3] = mx[3] ? a[`OCTA3] & b[`OCTA3] : zx[3] ? 64'd0 : t[`OCTA3];
 		end
-hexi_para:
-	begin
-		o[`HEXI0] = m[0] ? a[`HEXI0] & b[`HEXI0] : z ? 128'd0 : t[`HEXI0];
-		o[`HEXI1] = m[1] ? a[`HEXI1] & b[`HEXI1] : z ? 128'd0 : t[`HEXI1];
+	hexi_para:
+		begin
+			o[`HEXI0] = mx[0] ? a[`HEXI0] & b[`HEXI0] : zx[0] ? 128'd0 : t[`HEXI0];
+			o[`HEXI1] = mx[1] ? a[`HEXI1] & b[`HEXI1] : zx[1] ? 128'd0 : t[`HEXI1];
 		end
 	default:
 		o = a & b;
@@ -1316,8 +1620,8 @@ endtask
 
 task tskOr;
 input [3:0] fmt;
-input [31:0] m;
-input z;
+input [31:0] mx;
+input [31:0] zx;
 input [DBW:0] a;
 input [DBW:0] b;
 input [DBW:0] t;
@@ -1331,80 +1635,80 @@ begin
 	hexi:		o = {t[`HEXI1],a[`HEXI0] | b[`HEXI0]};
 	byte_para:
 		begin
-		o[`BYTE0] = m[0] ? a[`BYTE0] | b[`BYTE0] : z ? 8'd0 : t[`BYTE0];
-		o[`BYTE1] = m[1] ? a[`BYTE1] | b[`BYTE1] : z ? 8'd0 : t[`BYTE1];
-		o[`BYTE2] = m[2] ? a[`BYTE2] | b[`BYTE2] : z ? 8'd0 : t[`BYTE2];
-		o[`BYTE3] = m[3] ? a[`BYTE3] | b[`BYTE3] : z ? 8'd0 : t[`BYTE3];
-		o[`BYTE4] = m[4] ? a[`BYTE4] | b[`BYTE4] : z ? 8'd0 : t[`BYTE4];
-		o[`BYTE5] = m[5] ? a[`BYTE5] | b[`BYTE5] : z ? 8'd0 : t[`BYTE5];
-		o[`BYTE6] = m[6] ? a[`BYTE6] | b[`BYTE6] : z ? 8'd0 : t[`BYTE6];
-		o[`BYTE7] = m[7] ? a[`BYTE7] | b[`BYTE7] : z ? 8'd0 : t[`BYTE7];
-		o[`BYTE8] = m[8] ? a[`BYTE8] | b[`BYTE8] : z ? 8'd0 : t[`BYTE8];
-		o[`BYTE9] = m[9] ? a[`BYTE9] | b[`BYTE9] : z ? 8'd0 : t[`BYTE9];
-		o[`BYTE10] = m[10] ? a[`BYTE10] | b[`BYTE10] : z ? 8'd0 : t[`BYTE10];
-		o[`BYTE11] = m[11] ? a[`BYTE11] | b[`BYTE11] : z ? 8'd0 : t[`BYTE11];
-		o[`BYTE12] = m[12] ? a[`BYTE12] | b[`BYTE12] : z ? 8'd0 : t[`BYTE12];
-		o[`BYTE13] = m[13] ? a[`BYTE13] | b[`BYTE13] : z ? 8'd0 : t[`BYTE13];
-		o[`BYTE14] = m[14] ? a[`BYTE14] | b[`BYTE14] : z ? 8'd0 : t[`BYTE14];
-		o[`BYTE15] = m[15] ? a[`BYTE15] | b[`BYTE15] : z ? 8'd0 : t[`BYTE15];
-		o[`BYTE16] = m[16] ? a[`BYTE16] | b[`BYTE16] : z ? 8'd0 : t[`BYTE16];
-		o[`BYTE17] = m[17] ? a[`BYTE17] | b[`BYTE17] : z ? 8'd0 : t[`BYTE17];
-		o[`BYTE18] = m[18] ? a[`BYTE18] | b[`BYTE18] : z ? 8'd0 : t[`BYTE18];
-		o[`BYTE19] = m[19] ? a[`BYTE19] | b[`BYTE19] : z ? 8'd0 : t[`BYTE19];
-		o[`BYTE20] = m[20] ? a[`BYTE20] | b[`BYTE20] : z ? 8'd0 : t[`BYTE20];
-		o[`BYTE21] = m[21] ? a[`BYTE21] | b[`BYTE21] : z ? 8'd0 : t[`BYTE21];
-		o[`BYTE22] = m[22] ? a[`BYTE22] | b[`BYTE22] : z ? 8'd0 : t[`BYTE22];
-		o[`BYTE23] = m[23] ? a[`BYTE23] | b[`BYTE23] : z ? 8'd0 : t[`BYTE23];
-		o[`BYTE24] = m[24] ? a[`BYTE24] | b[`BYTE24] : z ? 8'd0 : t[`BYTE24];
-		o[`BYTE25] = m[25] ? a[`BYTE25] | b[`BYTE25] : z ? 8'd0 : t[`BYTE25];
-		o[`BYTE26] = m[26] ? a[`BYTE26] | b[`BYTE26] : z ? 8'd0 : t[`BYTE26];
-		o[`BYTE27] = m[27] ? a[`BYTE27] | b[`BYTE27] : z ? 8'd0 : t[`BYTE27];
-		o[`BYTE28] = m[28] ? a[`BYTE28] | b[`BYTE28] : z ? 8'd0 : t[`BYTE28];
-		o[`BYTE29] = m[29] ? a[`BYTE29] | b[`BYTE29] : z ? 8'd0 : t[`BYTE29];
-		o[`BYTE30] = m[30] ? a[`BYTE30] | b[`BYTE30] : z ? 8'd0 : t[`BYTE30];
-		o[`BYTE31] = m[31] ? a[`BYTE31] | b[`BYTE31] : z ? 8'd0 : t[`BYTE31];
+			o[`BYTE0] = mx[0] ? a[`BYTE0] | b[`BYTE0] : zx[0] ? 8'd0 : t[`BYTE0];
+			o[`BYTE1] = mx[1] ? a[`BYTE1] | b[`BYTE1] : zx[1] ? 8'd0 : t[`BYTE1];
+			o[`BYTE2] = mx[2] ? a[`BYTE2] | b[`BYTE2] : zx[2] ? 8'd0 : t[`BYTE2];
+			o[`BYTE3] = mx[3] ? a[`BYTE3] | b[`BYTE3] : zx[3] ? 8'd0 : t[`BYTE3];
+			o[`BYTE4] = mx[4] ? a[`BYTE4] | b[`BYTE4] : zx[4] ? 8'd0 : t[`BYTE4];
+			o[`BYTE5] = mx[5] ? a[`BYTE5] | b[`BYTE5] : zx[5] ? 8'd0 : t[`BYTE5];
+			o[`BYTE6] = mx[6] ? a[`BYTE6] | b[`BYTE6] : zx[6] ? 8'd0 : t[`BYTE6];
+			o[`BYTE7] = mx[7] ? a[`BYTE7] | b[`BYTE7] : zx[7] ? 8'd0 : t[`BYTE7];
+			o[`BYTE8] = mx[8] ? a[`BYTE8] | b[`BYTE8] : zx[8] ? 8'd0 : t[`BYTE8];
+			o[`BYTE9] = mx[9] ? a[`BYTE9] | b[`BYTE9] : zx[9] ? 8'd0 : t[`BYTE9];
+			o[`BYTE10] = mx[10] ? a[`BYTE10] | b[`BYTE10] : zx[10] ? 8'd0 : t[`BYTE10];
+			o[`BYTE11] = mx[11] ? a[`BYTE11] | b[`BYTE11] : zx[11] ? 8'd0 : t[`BYTE11];
+			o[`BYTE12] = mx[12] ? a[`BYTE12] | b[`BYTE12] : zx[12] ? 8'd0 : t[`BYTE12];
+			o[`BYTE13] = mx[13] ? a[`BYTE13] | b[`BYTE13] : zx[13] ? 8'd0 : t[`BYTE13];
+			o[`BYTE14] = mx[14] ? a[`BYTE14] | b[`BYTE14] : zx[14] ? 8'd0 : t[`BYTE14];
+			o[`BYTE15] = mx[15] ? a[`BYTE15] | b[`BYTE15] : zx[15] ? 8'd0 : t[`BYTE15];
+			o[`BYTE16] = mx[16] ? a[`BYTE16] | b[`BYTE16] : zx[16] ? 8'd0 : t[`BYTE16];
+			o[`BYTE17] = mx[17] ? a[`BYTE17] | b[`BYTE17] : zx[17] ? 8'd0 : t[`BYTE17];
+			o[`BYTE18] = mx[18] ? a[`BYTE18] | b[`BYTE18] : zx[18] ? 8'd0 : t[`BYTE18];
+			o[`BYTE19] = mx[19] ? a[`BYTE19] | b[`BYTE19] : zx[19] ? 8'd0 : t[`BYTE19];
+			o[`BYTE20] = mx[20] ? a[`BYTE20] | b[`BYTE20] : zx[20] ? 8'd0 : t[`BYTE20];
+			o[`BYTE21] = mx[21] ? a[`BYTE21] | b[`BYTE21] : zx[21] ? 8'd0 : t[`BYTE21];
+			o[`BYTE22] = mx[22] ? a[`BYTE22] | b[`BYTE22] : zx[22] ? 8'd0 : t[`BYTE22];
+			o[`BYTE23] = mx[23] ? a[`BYTE23] | b[`BYTE23] : zx[23] ? 8'd0 : t[`BYTE23];
+			o[`BYTE24] = mx[24] ? a[`BYTE24] | b[`BYTE24] : zx[24] ? 8'd0 : t[`BYTE24];
+			o[`BYTE25] = mx[25] ? a[`BYTE25] | b[`BYTE25] : zx[25] ? 8'd0 : t[`BYTE25];
+			o[`BYTE26] = mx[26] ? a[`BYTE26] | b[`BYTE26] : zx[26] ? 8'd0 : t[`BYTE26];
+			o[`BYTE27] = mx[27] ? a[`BYTE27] | b[`BYTE27] : zx[27] ? 8'd0 : t[`BYTE27];
+			o[`BYTE28] = mx[28] ? a[`BYTE28] | b[`BYTE28] : zx[28] ? 8'd0 : t[`BYTE28];
+			o[`BYTE29] = mx[29] ? a[`BYTE29] | b[`BYTE29] : zx[29] ? 8'd0 : t[`BYTE29];
+			o[`BYTE30] = mx[30] ? a[`BYTE30] | b[`BYTE30] : zx[30] ? 8'd0 : t[`BYTE30];
+			o[`BYTE31] = mx[31] ? a[`BYTE31] | b[`BYTE31] : zx[31] ? 8'd0 : t[`BYTE31];
 		end
 	wyde_para:
 		begin
-		o[`WYDE0] = m[0] ? a[`WYDE0] | b[`WYDE0] : z ? 16'd0 : t[`WYDE0];
-		o[`WYDE1] = m[1] ? a[`WYDE1] | b[`WYDE1] : z ? 16'd0 : t[`WYDE1];
-		o[`WYDE2] = m[2] ? a[`WYDE2] | b[`WYDE2] : z ? 16'd0 : t[`WYDE2];
-		o[`WYDE3] = m[3] ? a[`WYDE3] | b[`WYDE3] : z ? 16'd0 : t[`WYDE3];
-		o[`WYDE4] = m[4] ? a[`WYDE4] | b[`WYDE4] : z ? 16'd0 : t[`WYDE4];
-		o[`WYDE5] = m[5] ? a[`WYDE5] | b[`WYDE5] : z ? 16'd0 : t[`WYDE5];
-		o[`WYDE6] = m[6] ? a[`WYDE6] | b[`WYDE6] : z ? 16'd0 : t[`WYDE6];
-		o[`WYDE7] = m[7] ? a[`WYDE7] | b[`WYDE7] : z ? 16'd0 : t[`WYDE7];
-		o[`WYDE8] = m[8] ? a[`WYDE8] | b[`WYDE8] : z ? 16'd0 : t[`WYDE8];
-		o[`WYDE9] = m[9] ? a[`WYDE9] | b[`WYDE9] : z ? 16'd0 : t[`WYDE9];
-		o[`WYDE10] = m[10] ? a[`WYDE10] | b[`WYDE10] : z ? 16'd0 : t[`WYDE10];
-		o[`WYDE11] = m[11] ? a[`WYDE11] | b[`WYDE11] : z ? 16'd0 : t[`WYDE11];
-		o[`WYDE12] = m[12] ? a[`WYDE12] | b[`WYDE12] : z ? 16'd0 : t[`WYDE12];
-		o[`WYDE13] = m[13] ? a[`WYDE13] | b[`WYDE13] : z ? 16'd0 : t[`WYDE13];
-		o[`WYDE14] = m[14] ? a[`WYDE14] | b[`WYDE14] : z ? 16'd0 : t[`WYDE14];
-		o[`WYDE15] = m[15] ? a[`WYDE15] | b[`WYDE15] : z ? 16'd0 : t[`WYDE15];
+			o[`WYDE0] = mx[0] ? a[`WYDE0] | b[`WYDE0] : zx[0] ? 16'd0 : t[`WYDE0];
+			o[`WYDE1] = mx[1] ? a[`WYDE1] | b[`WYDE1] : zx[1] ? 16'd0 : t[`WYDE1];
+			o[`WYDE2] = mx[2] ? a[`WYDE2] | b[`WYDE2] : zx[2] ? 16'd0 : t[`WYDE2];
+			o[`WYDE3] = mx[3] ? a[`WYDE3] | b[`WYDE3] : zx[3] ? 16'd0 : t[`WYDE3];
+			o[`WYDE4] = mx[4] ? a[`WYDE4] | b[`WYDE4] : zx[4] ? 16'd0 : t[`WYDE4];
+			o[`WYDE5] = mx[5] ? a[`WYDE5] | b[`WYDE5] : zx[5] ? 16'd0 : t[`WYDE5];
+			o[`WYDE6] = mx[6] ? a[`WYDE6] | b[`WYDE6] : zx[6] ? 16'd0 : t[`WYDE6];
+			o[`WYDE7] = mx[7] ? a[`WYDE7] | b[`WYDE7] : zx[7] ? 16'd0 : t[`WYDE7];
+			o[`WYDE8] = mx[8] ? a[`WYDE8] | b[`WYDE8] : zx[8] ? 16'd0 : t[`WYDE8];
+			o[`WYDE9] = mx[9] ? a[`WYDE9] | b[`WYDE9] : zx[9] ? 16'd0 : t[`WYDE9];
+			o[`WYDE10] = mx[10] ? a[`WYDE10] | b[`WYDE10] : zx[10] ? 16'd0 : t[`WYDE10];
+			o[`WYDE11] = mx[11] ? a[`WYDE11] | b[`WYDE11] : zx[11] ? 16'd0 : t[`WYDE11];
+			o[`WYDE12] = mx[12] ? a[`WYDE12] | b[`WYDE12] : zx[12] ? 16'd0 : t[`WYDE12];
+			o[`WYDE13] = mx[13] ? a[`WYDE13] | b[`WYDE13] : zx[13] ? 16'd0 : t[`WYDE13];
+			o[`WYDE14] = mx[14] ? a[`WYDE14] | b[`WYDE14] : zx[14] ? 16'd0 : t[`WYDE14];
+			o[`WYDE15] = mx[15] ? a[`WYDE15] | b[`WYDE15] : zx[15] ? 16'd0 : t[`WYDE15];
 		end
 	tetra_para:
 		begin
-		o[`TETRA0] = m[0] ? a[`TETRA0] | b[`TETRA0] : z ? 32'd0 : t[`TETRA0];
-		o[`TETRA1] = m[1] ? a[`TETRA1] | b[`TETRA1] : z ? 32'd0 : t[`TETRA1];
-		o[`TETRA2] = m[2] ? a[`TETRA2] | b[`TETRA2] : z ? 32'd0 : t[`TETRA2];
-		o[`TETRA3] = m[3] ? a[`TETRA3] | b[`TETRA3] : z ? 32'd0 : t[`TETRA3];
-		o[`TETRA4] = m[4] ? a[`TETRA4] | b[`TETRA4] : z ? 32'd0 : t[`TETRA4];
-		o[`TETRA5] = m[5] ? a[`TETRA5] | b[`TETRA5] : z ? 32'd0 : t[`TETRA5];
-		o[`TETRA6] = m[6] ? a[`TETRA6] | b[`TETRA6] : z ? 32'd0 : t[`TETRA6];
-		o[`TETRA7] = m[7] ? a[`TETRA7] | b[`TETRA7] : z ? 32'd0 : t[`TETRA7];
+			o[`TETRA0] = mx[0] ? a[`TETRA0] | b[`TETRA0] : zx[0] ? 32'd0 : t[`TETRA0];
+			o[`TETRA1] = mx[1] ? a[`TETRA1] | b[`TETRA1] : zx[1] ? 32'd0 : t[`TETRA1];
+			o[`TETRA2] = mx[2] ? a[`TETRA2] | b[`TETRA2] : zx[2] ? 32'd0 : t[`TETRA2];
+			o[`TETRA3] = mx[3] ? a[`TETRA3] | b[`TETRA3] : zx[3] ? 32'd0 : t[`TETRA3];
+			o[`TETRA4] = mx[4] ? a[`TETRA4] | b[`TETRA4] : zx[4] ? 32'd0 : t[`TETRA4];
+			o[`TETRA5] = mx[5] ? a[`TETRA5] | b[`TETRA5] : zx[5] ? 32'd0 : t[`TETRA5];
+			o[`TETRA6] = mx[6] ? a[`TETRA6] | b[`TETRA6] : zx[6] ? 32'd0 : t[`TETRA6];
+			o[`TETRA7] = mx[7] ? a[`TETRA7] | b[`TETRA7] : zx[7] ? 32'd0 : t[`TETRA7];
 		end
-	octa_para: 
+	octa_para:
 		begin
-		o[`OCTA0] = m[0] ? a[`OCTA0] | b[`OCTA0] : z ? 64'd0 : t[`OCTA0];
-		o[`OCTA1] = m[1] ? a[`OCTA1] | b[`OCTA1] : z ? 64'd0 : t[`OCTA1];
-		o[`OCTA2] = m[2] ? a[`OCTA2] | b[`OCTA2] : z ? 64'd0 : t[`OCTA2];
-		o[`OCTA3] = m[3] ? a[`OCTA3] | b[`OCTA3] : z ? 64'd0 : t[`OCTA3];
+			o[`OCTA0] = mx[0] ? a[`OCTA0] | b[`OCTA0] : zx[0] ? 64'd0 : t[`OCTA0];
+			o[`OCTA1] = mx[1] ? a[`OCTA1] | b[`OCTA1] : zx[1] ? 64'd0 : t[`OCTA1];
+			o[`OCTA2] = mx[2] ? a[`OCTA2] | b[`OCTA2] : zx[2] ? 64'd0 : t[`OCTA2];
+			o[`OCTA3] = mx[3] ? a[`OCTA3] | b[`OCTA3] : zx[3] ? 64'd0 : t[`OCTA3];
 		end
-hexi_para:
-	begin
-		o[`HEXI0] = m[0] ? a[`HEXI0] | b[`HEXI0] : z ? 128'd0 : t[`HEXI0];
-		o[`HEXI1] = m[1] ? a[`HEXI1] | b[`HEXI1] : z ? 128'd0 : t[`HEXI1];
+	hexi_para:
+		begin
+			o[`HEXI0] = mx[0] ? a[`HEXI0] | b[`HEXI0] : zx[0] ? 128'd0 : t[`HEXI0];
+			o[`HEXI1] = mx[1] ? a[`HEXI1] | b[`HEXI1] : zx[1] ? 128'd0 : t[`HEXI1];
 		end
 	default:
 		o = a | b;
@@ -1414,8 +1718,8 @@ endtask
 
 task tskXor;
 input [3:0] fmt;
-input [31:0] m;
-input z;
+input [31:0] mx;
+input [31:0] zx;
 input [DBW:0] a;
 input [DBW:0] b;
 input [DBW:0] t;
@@ -1429,80 +1733,80 @@ begin
 	hexi:		o = {t[`HEXI1],a[`HEXI0] ^ b[`HEXI0]};
 	byte_para:
 		begin
-		o[`BYTE0] = m[0] ? a[`BYTE0] ^ b[`BYTE0] : z ? 8'd0 : t[`BYTE0];
-		o[`BYTE1] = m[1] ? a[`BYTE1] ^ b[`BYTE1] : z ? 8'd0 : t[`BYTE1];
-		o[`BYTE2] = m[2] ? a[`BYTE2] ^ b[`BYTE2] : z ? 8'd0 : t[`BYTE2];
-		o[`BYTE3] = m[3] ? a[`BYTE3] ^ b[`BYTE3] : z ? 8'd0 : t[`BYTE3];
-		o[`BYTE4] = m[4] ? a[`BYTE4] ^ b[`BYTE4] : z ? 8'd0 : t[`BYTE4];
-		o[`BYTE5] = m[5] ? a[`BYTE5] ^ b[`BYTE5] : z ? 8'd0 : t[`BYTE5];
-		o[`BYTE6] = m[6] ? a[`BYTE6] ^ b[`BYTE6] : z ? 8'd0 : t[`BYTE6];
-		o[`BYTE7] = m[7] ? a[`BYTE7] ^ b[`BYTE7] : z ? 8'd0 : t[`BYTE7];
-		o[`BYTE8] = m[8] ? a[`BYTE8] ^ b[`BYTE8] : z ? 8'd0 : t[`BYTE8];
-		o[`BYTE9] = m[9] ? a[`BYTE9] ^ b[`BYTE9] : z ? 8'd0 : t[`BYTE9];
-		o[`BYTE10] = m[10] ? a[`BYTE10] ^ b[`BYTE10] : z ? 8'd0 : t[`BYTE10];
-		o[`BYTE11] = m[11] ? a[`BYTE11] ^ b[`BYTE11] : z ? 8'd0 : t[`BYTE11];
-		o[`BYTE12] = m[12] ? a[`BYTE12] ^ b[`BYTE12] : z ? 8'd0 : t[`BYTE12];
-		o[`BYTE13] = m[13] ? a[`BYTE13] ^ b[`BYTE13] : z ? 8'd0 : t[`BYTE13];
-		o[`BYTE14] = m[14] ? a[`BYTE14] ^ b[`BYTE14] : z ? 8'd0 : t[`BYTE14];
-		o[`BYTE15] = m[15] ? a[`BYTE15] ^ b[`BYTE15] : z ? 8'd0 : t[`BYTE15];
-		o[`BYTE16] = m[16] ? a[`BYTE16] ^ b[`BYTE16] : z ? 8'd0 : t[`BYTE16];
-		o[`BYTE17] = m[17] ? a[`BYTE17] ^ b[`BYTE17] : z ? 8'd0 : t[`BYTE17];
-		o[`BYTE18] = m[18] ? a[`BYTE18] ^ b[`BYTE18] : z ? 8'd0 : t[`BYTE18];
-		o[`BYTE19] = m[19] ? a[`BYTE19] ^ b[`BYTE19] : z ? 8'd0 : t[`BYTE19];
-		o[`BYTE20] = m[20] ? a[`BYTE20] ^ b[`BYTE20] : z ? 8'd0 : t[`BYTE20];
-		o[`BYTE21] = m[21] ? a[`BYTE21] ^ b[`BYTE21] : z ? 8'd0 : t[`BYTE21];
-		o[`BYTE22] = m[22] ? a[`BYTE22] ^ b[`BYTE22] : z ? 8'd0 : t[`BYTE22];
-		o[`BYTE23] = m[23] ? a[`BYTE23] ^ b[`BYTE23] : z ? 8'd0 : t[`BYTE23];
-		o[`BYTE24] = m[24] ? a[`BYTE24] ^ b[`BYTE24] : z ? 8'd0 : t[`BYTE24];
-		o[`BYTE25] = m[25] ? a[`BYTE25] ^ b[`BYTE25] : z ? 8'd0 : t[`BYTE25];
-		o[`BYTE26] = m[26] ? a[`BYTE26] ^ b[`BYTE26] : z ? 8'd0 : t[`BYTE26];
-		o[`BYTE27] = m[27] ? a[`BYTE27] ^ b[`BYTE27] : z ? 8'd0 : t[`BYTE27];
-		o[`BYTE28] = m[28] ? a[`BYTE28] ^ b[`BYTE28] : z ? 8'd0 : t[`BYTE28];
-		o[`BYTE29] = m[29] ? a[`BYTE29] ^ b[`BYTE29] : z ? 8'd0 : t[`BYTE29];
-		o[`BYTE30] = m[30] ? a[`BYTE30] ^ b[`BYTE30] : z ? 8'd0 : t[`BYTE30];
-		o[`BYTE31] = m[31] ? a[`BYTE31] ^ b[`BYTE31] : z ? 8'd0 : t[`BYTE31];
+			o[`BYTE0] = mx[0] ? a[`BYTE0] ^ b[`BYTE0] : zx[0] ? 8'd0 : t[`BYTE0];
+			o[`BYTE1] = mx[1] ? a[`BYTE1] ^ b[`BYTE1] : zx[1] ? 8'd0 : t[`BYTE1];
+			o[`BYTE2] = mx[2] ? a[`BYTE2] ^ b[`BYTE2] : zx[2] ? 8'd0 : t[`BYTE2];
+			o[`BYTE3] = mx[3] ? a[`BYTE3] ^ b[`BYTE3] : zx[3] ? 8'd0 : t[`BYTE3];
+			o[`BYTE4] = mx[4] ? a[`BYTE4] ^ b[`BYTE4] : zx[4] ? 8'd0 : t[`BYTE4];
+			o[`BYTE5] = mx[5] ? a[`BYTE5] ^ b[`BYTE5] : zx[5] ? 8'd0 : t[`BYTE5];
+			o[`BYTE6] = mx[6] ? a[`BYTE6] ^ b[`BYTE6] : zx[6] ? 8'd0 : t[`BYTE6];
+			o[`BYTE7] = mx[7] ? a[`BYTE7] ^ b[`BYTE7] : zx[7] ? 8'd0 : t[`BYTE7];
+			o[`BYTE8] = mx[8] ? a[`BYTE8] ^ b[`BYTE8] : zx[8] ? 8'd0 : t[`BYTE8];
+			o[`BYTE9] = mx[9] ? a[`BYTE9] ^ b[`BYTE9] : zx[9] ? 8'd0 : t[`BYTE9];
+			o[`BYTE10] = mx[10] ? a[`BYTE10] ^ b[`BYTE10] : zx[10] ? 8'd0 : t[`BYTE10];
+			o[`BYTE11] = mx[11] ? a[`BYTE11] ^ b[`BYTE11] : zx[11] ? 8'd0 : t[`BYTE11];
+			o[`BYTE12] = mx[12] ? a[`BYTE12] ^ b[`BYTE12] : zx[12] ? 8'd0 : t[`BYTE12];
+			o[`BYTE13] = mx[13] ? a[`BYTE13] ^ b[`BYTE13] : zx[13] ? 8'd0 : t[`BYTE13];
+			o[`BYTE14] = mx[14] ? a[`BYTE14] ^ b[`BYTE14] : zx[14] ? 8'd0 : t[`BYTE14];
+			o[`BYTE15] = mx[15] ? a[`BYTE15] ^ b[`BYTE15] : zx[15] ? 8'd0 : t[`BYTE15];
+			o[`BYTE16] = mx[16] ? a[`BYTE16] ^ b[`BYTE16] : zx[16] ? 8'd0 : t[`BYTE16];
+			o[`BYTE17] = mx[17] ? a[`BYTE17] ^ b[`BYTE17] : zx[17] ? 8'd0 : t[`BYTE17];
+			o[`BYTE18] = mx[18] ? a[`BYTE18] ^ b[`BYTE18] : zx[18] ? 8'd0 : t[`BYTE18];
+			o[`BYTE19] = mx[19] ? a[`BYTE19] ^ b[`BYTE19] : zx[19] ? 8'd0 : t[`BYTE19];
+			o[`BYTE20] = mx[20] ? a[`BYTE20] ^ b[`BYTE20] : zx[20] ? 8'd0 : t[`BYTE20];
+			o[`BYTE21] = mx[21] ? a[`BYTE21] ^ b[`BYTE21] : zx[21] ? 8'd0 : t[`BYTE21];
+			o[`BYTE22] = mx[22] ? a[`BYTE22] ^ b[`BYTE22] : zx[22] ? 8'd0 : t[`BYTE22];
+			o[`BYTE23] = mx[23] ? a[`BYTE23] ^ b[`BYTE23] : zx[23] ? 8'd0 : t[`BYTE23];
+			o[`BYTE24] = mx[24] ? a[`BYTE24] ^ b[`BYTE24] : zx[24] ? 8'd0 : t[`BYTE24];
+			o[`BYTE25] = mx[25] ? a[`BYTE25] ^ b[`BYTE25] : zx[25] ? 8'd0 : t[`BYTE25];
+			o[`BYTE26] = mx[26] ? a[`BYTE26] ^ b[`BYTE26] : zx[26] ? 8'd0 : t[`BYTE26];
+			o[`BYTE27] = mx[27] ? a[`BYTE27] ^ b[`BYTE27] : zx[27] ? 8'd0 : t[`BYTE27];
+			o[`BYTE28] = mx[28] ? a[`BYTE28] ^ b[`BYTE28] : zx[28] ? 8'd0 : t[`BYTE28];
+			o[`BYTE29] = mx[29] ? a[`BYTE29] ^ b[`BYTE29] : zx[29] ? 8'd0 : t[`BYTE29];
+			o[`BYTE30] = mx[30] ? a[`BYTE30] ^ b[`BYTE30] : zx[30] ? 8'd0 : t[`BYTE30];
+			o[`BYTE31] = mx[31] ? a[`BYTE31] ^ b[`BYTE31] : zx[31] ? 8'd0 : t[`BYTE31];
 		end
 	wyde_para:
 		begin
-		o[`WYDE0] = m[0] ? a[`WYDE0] ^ b[`WYDE0] : z ? 16'd0 : t[`WYDE0];
-		o[`WYDE1] = m[1] ? a[`WYDE1] ^ b[`WYDE1] : z ? 16'd0 : t[`WYDE1];
-		o[`WYDE2] = m[2] ? a[`WYDE2] ^ b[`WYDE2] : z ? 16'd0 : t[`WYDE2];
-		o[`WYDE3] = m[3] ? a[`WYDE3] ^ b[`WYDE3] : z ? 16'd0 : t[`WYDE3];
-		o[`WYDE4] = m[4] ? a[`WYDE4] ^ b[`WYDE4] : z ? 16'd0 : t[`WYDE4];
-		o[`WYDE5] = m[5] ? a[`WYDE5] ^ b[`WYDE5] : z ? 16'd0 : t[`WYDE5];
-		o[`WYDE6] = m[6] ? a[`WYDE6] ^ b[`WYDE6] : z ? 16'd0 : t[`WYDE6];
-		o[`WYDE7] = m[7] ? a[`WYDE7] ^ b[`WYDE7] : z ? 16'd0 : t[`WYDE7];
-		o[`WYDE8] = m[8] ? a[`WYDE8] ^ b[`WYDE8] : z ? 16'd0 : t[`WYDE8];
-		o[`WYDE9] = m[9] ? a[`WYDE9] ^ b[`WYDE9] : z ? 16'd0 : t[`WYDE9];
-		o[`WYDE10] = m[10] ? a[`WYDE10] ^ b[`WYDE10] : z ? 16'd0 : t[`WYDE10];
-		o[`WYDE11] = m[11] ? a[`WYDE11] ^ b[`WYDE11] : z ? 16'd0 : t[`WYDE11];
-		o[`WYDE12] = m[12] ? a[`WYDE12] ^ b[`WYDE12] : z ? 16'd0 : t[`WYDE12];
-		o[`WYDE13] = m[13] ? a[`WYDE13] ^ b[`WYDE13] : z ? 16'd0 : t[`WYDE13];
-		o[`WYDE14] = m[14] ? a[`WYDE14] ^ b[`WYDE14] : z ? 16'd0 : t[`WYDE14];
-		o[`WYDE15] = m[15] ? a[`WYDE15] ^ b[`WYDE15] : z ? 16'd0 : t[`WYDE15];
+			o[`WYDE0] = mx[0] ? a[`WYDE0] ^ b[`WYDE0] : zx[0] ? 16'd0 : t[`WYDE0];
+			o[`WYDE1] = mx[1] ? a[`WYDE1] ^ b[`WYDE1] : zx[1] ? 16'd0 : t[`WYDE1];
+			o[`WYDE2] = mx[2] ? a[`WYDE2] ^ b[`WYDE2] : zx[2] ? 16'd0 : t[`WYDE2];
+			o[`WYDE3] = mx[3] ? a[`WYDE3] ^ b[`WYDE3] : zx[3] ? 16'd0 : t[`WYDE3];
+			o[`WYDE4] = mx[4] ? a[`WYDE4] ^ b[`WYDE4] : zx[4] ? 16'd0 : t[`WYDE4];
+			o[`WYDE5] = mx[5] ? a[`WYDE5] ^ b[`WYDE5] : zx[5] ? 16'd0 : t[`WYDE5];
+			o[`WYDE6] = mx[6] ? a[`WYDE6] ^ b[`WYDE6] : zx[6] ? 16'd0 : t[`WYDE6];
+			o[`WYDE7] = mx[7] ? a[`WYDE7] ^ b[`WYDE7] : zx[7] ? 16'd0 : t[`WYDE7];
+			o[`WYDE8] = mx[8] ? a[`WYDE8] ^ b[`WYDE8] : zx[8] ? 16'd0 : t[`WYDE8];
+			o[`WYDE9] = mx[9] ? a[`WYDE9] ^ b[`WYDE9] : zx[9] ? 16'd0 : t[`WYDE9];
+			o[`WYDE10] = mx[10] ? a[`WYDE10] ^ b[`WYDE10] : zx[10] ? 16'd0 : t[`WYDE10];
+			o[`WYDE11] = mx[11] ? a[`WYDE11] ^ b[`WYDE11] : zx[11] ? 16'd0 : t[`WYDE11];
+			o[`WYDE12] = mx[12] ? a[`WYDE12] ^ b[`WYDE12] : zx[12] ? 16'd0 : t[`WYDE12];
+			o[`WYDE13] = mx[13] ? a[`WYDE13] ^ b[`WYDE13] : zx[13] ? 16'd0 : t[`WYDE13];
+			o[`WYDE14] = mx[14] ? a[`WYDE14] ^ b[`WYDE14] : zx[14] ? 16'd0 : t[`WYDE14];
+			o[`WYDE15] = mx[15] ? a[`WYDE15] ^ b[`WYDE15] : zx[15] ? 16'd0 : t[`WYDE15];
 		end
 	tetra_para:
 		begin
-		o[`TETRA0] = m[0] ? a[`TETRA0] ^ b[`TETRA0] : z ? 32'd0 : t[`TETRA0];
-		o[`TETRA1] = m[1] ? a[`TETRA1] ^ b[`TETRA1] : z ? 32'd0 : t[`TETRA1];
-		o[`TETRA2] = m[2] ? a[`TETRA2] ^ b[`TETRA2] : z ? 32'd0 : t[`TETRA2];
-		o[`TETRA3] = m[3] ? a[`TETRA3] ^ b[`TETRA3] : z ? 32'd0 : t[`TETRA3];
-		o[`TETRA4] = m[4] ? a[`TETRA4] ^ b[`TETRA4] : z ? 32'd0 : t[`TETRA4];
-		o[`TETRA5] = m[5] ? a[`TETRA5] ^ b[`TETRA5] : z ? 32'd0 : t[`TETRA5];
-		o[`TETRA6] = m[6] ? a[`TETRA6] ^ b[`TETRA6] : z ? 32'd0 : t[`TETRA6];
-		o[`TETRA7] = m[7] ? a[`TETRA7] ^ b[`TETRA7] : z ? 32'd0 : t[`TETRA7];
+			o[`TETRA0] = mx[0] ? a[`TETRA0] ^ b[`TETRA0] : zx[0] ? 32'd0 : t[`TETRA0];
+			o[`TETRA1] = mx[1] ? a[`TETRA1] ^ b[`TETRA1] : zx[1] ? 32'd0 : t[`TETRA1];
+			o[`TETRA2] = mx[2] ? a[`TETRA2] ^ b[`TETRA2] : zx[2] ? 32'd0 : t[`TETRA2];
+			o[`TETRA3] = mx[3] ? a[`TETRA3] ^ b[`TETRA3] : zx[3] ? 32'd0 : t[`TETRA3];
+			o[`TETRA4] = mx[4] ? a[`TETRA4] ^ b[`TETRA4] : zx[4] ? 32'd0 : t[`TETRA4];
+			o[`TETRA5] = mx[5] ? a[`TETRA5] ^ b[`TETRA5] : zx[5] ? 32'd0 : t[`TETRA5];
+			o[`TETRA6] = mx[6] ? a[`TETRA6] ^ b[`TETRA6] : zx[6] ? 32'd0 : t[`TETRA6];
+			o[`TETRA7] = mx[7] ? a[`TETRA7] ^ b[`TETRA7] : zx[7] ? 32'd0 : t[`TETRA7];
 		end
-	octa_para: 
+	octa_para:
 		begin
-		o[`OCTA0] = m[0] ? a[`OCTA0] ^ b[`OCTA0] : z ? 64'd0 : t[`OCTA0];
-		o[`OCTA1] = m[1] ? a[`OCTA1] ^ b[`OCTA1] : z ? 64'd0 : t[`OCTA1];
-		o[`OCTA2] = m[2] ? a[`OCTA2] ^ b[`OCTA2] : z ? 64'd0 : t[`OCTA2];
-		o[`OCTA3] = m[3] ? a[`OCTA3] ^ b[`OCTA3] : z ? 64'd0 : t[`OCTA3];
+			o[`OCTA0] = mx[0] ? a[`OCTA0] ^ b[`OCTA0] : zx[0] ? 64'd0 : t[`OCTA0];
+			o[`OCTA1] = mx[1] ? a[`OCTA1] ^ b[`OCTA1] : zx[1] ? 64'd0 : t[`OCTA1];
+			o[`OCTA2] = mx[2] ? a[`OCTA2] ^ b[`OCTA2] : zx[2] ? 64'd0 : t[`OCTA2];
+			o[`OCTA3] = mx[3] ? a[`OCTA3] ^ b[`OCTA3] : zx[3] ? 64'd0 : t[`OCTA3];
 		end
-hexi_para:
-	begin
-		o[`HEXI0] = m[0] ? a[`HEXI0] ^ b[`HEXI0] : z ? 128'd0 : t[`HEXI0];
-		o[`HEXI1] = m[1] ? a[`HEXI1] ^ b[`HEXI1] : z ? 128'd0 : t[`HEXI1];
+	hexi_para:
+		begin
+			o[`HEXI0] = mx[0] ? a[`HEXI0] ^ b[`HEXI0] : zx[0] ? 128'd0 : t[`HEXI0];
+			o[`HEXI1] = mx[1] ? a[`HEXI1] ^ b[`HEXI1] : zx[1] ? 128'd0 : t[`HEXI1];
 		end
 	default:
 		o = a ^ b;
@@ -1512,8 +1816,8 @@ endtask
 
 task tskNand;
 input [3:0] fmt;
-input [31:0] m;
-input z;
+input [31:0] mx;
+input [31:0] zx;
 input [DBW:0] a;
 input [DBW:0] b;
 input [DBW:0] t;
@@ -1527,80 +1831,80 @@ begin
 	hexi:		o = {t[`HEXI1],~(a[`HEXI0] & b[`HEXI0])};
 	byte_para:
 		begin
-		o[`BYTE0] = m[0] ? ~(a[`BYTE0] & b[`BYTE0]) : z ? 8'd0 : t[`BYTE0];
-		o[`BYTE1] = m[1] ? ~(a[`BYTE1] & b[`BYTE1]) : z ? 8'd0 : t[`BYTE1];
-		o[`BYTE2] = m[2] ? ~(a[`BYTE2] & b[`BYTE2]) : z ? 8'd0 : t[`BYTE2];
-		o[`BYTE3] = m[3] ? ~(a[`BYTE3] & b[`BYTE3]) : z ? 8'd0 : t[`BYTE3];
-		o[`BYTE4] = m[4] ? ~(a[`BYTE4] & b[`BYTE4]) : z ? 8'd0 : t[`BYTE4];
-		o[`BYTE5] = m[5] ? ~(a[`BYTE5] & b[`BYTE5]) : z ? 8'd0 : t[`BYTE5];
-		o[`BYTE6] = m[6] ? ~(a[`BYTE6] & b[`BYTE6]) : z ? 8'd0 : t[`BYTE6];
-		o[`BYTE7] = m[7] ? ~(a[`BYTE7] & b[`BYTE7]) : z ? 8'd0 : t[`BYTE7];
-		o[`BYTE8] = m[8] ? ~(a[`BYTE8] & b[`BYTE8]) : z ? 8'd0 : t[`BYTE8];
-		o[`BYTE9] = m[9] ? ~(a[`BYTE9] & b[`BYTE9]) : z ? 8'd0 : t[`BYTE9];
-		o[`BYTE10] = m[10] ? ~(a[`BYTE10] & b[`BYTE10]) : z ? 8'd0 : t[`BYTE10];
-		o[`BYTE11] = m[11] ? ~(a[`BYTE11] & b[`BYTE11]) : z ? 8'd0 : t[`BYTE11];
-		o[`BYTE12] = m[12] ? ~(a[`BYTE12] & b[`BYTE12]) : z ? 8'd0 : t[`BYTE12];
-		o[`BYTE13] = m[13] ? ~(a[`BYTE13] & b[`BYTE13]) : z ? 8'd0 : t[`BYTE13];
-		o[`BYTE14] = m[14] ? ~(a[`BYTE14] & b[`BYTE14]) : z ? 8'd0 : t[`BYTE14];
-		o[`BYTE15] = m[15] ? ~(a[`BYTE15] & b[`BYTE15]) : z ? 8'd0 : t[`BYTE15];
-		o[`BYTE16] = m[16] ? ~(a[`BYTE16] & b[`BYTE16]) : z ? 8'd0 : t[`BYTE16];
-		o[`BYTE17] = m[17] ? ~(a[`BYTE17] & b[`BYTE17]) : z ? 8'd0 : t[`BYTE17];
-		o[`BYTE18] = m[18] ? ~(a[`BYTE18] & b[`BYTE18]) : z ? 8'd0 : t[`BYTE18];
-		o[`BYTE19] = m[19] ? ~(a[`BYTE19] & b[`BYTE19]) : z ? 8'd0 : t[`BYTE19];
-		o[`BYTE20] = m[20] ? ~(a[`BYTE20] & b[`BYTE20]) : z ? 8'd0 : t[`BYTE20];
-		o[`BYTE21] = m[21] ? ~(a[`BYTE21] & b[`BYTE21]) : z ? 8'd0 : t[`BYTE21];
-		o[`BYTE22] = m[22] ? ~(a[`BYTE22] & b[`BYTE22]) : z ? 8'd0 : t[`BYTE22];
-		o[`BYTE23] = m[23] ? ~(a[`BYTE23] & b[`BYTE23]) : z ? 8'd0 : t[`BYTE23];
-		o[`BYTE24] = m[24] ? ~(a[`BYTE24] & b[`BYTE24]) : z ? 8'd0 : t[`BYTE24];
-		o[`BYTE25] = m[25] ? ~(a[`BYTE25] & b[`BYTE25]) : z ? 8'd0 : t[`BYTE25];
-		o[`BYTE26] = m[26] ? ~(a[`BYTE26] & b[`BYTE26]) : z ? 8'd0 : t[`BYTE26];
-		o[`BYTE27] = m[27] ? ~(a[`BYTE27] & b[`BYTE27]) : z ? 8'd0 : t[`BYTE27];
-		o[`BYTE28] = m[28] ? ~(a[`BYTE28] & b[`BYTE28]) : z ? 8'd0 : t[`BYTE28];
-		o[`BYTE29] = m[29] ? ~(a[`BYTE29] & b[`BYTE29]) : z ? 8'd0 : t[`BYTE29];
-		o[`BYTE30] = m[30] ? ~(a[`BYTE30] & b[`BYTE30]) : z ? 8'd0 : t[`BYTE30];
-		o[`BYTE31] = m[31] ? ~(a[`BYTE31] & b[`BYTE31]) : z ? 8'd0 : t[`BYTE31];
+		o[`BYTE0] = mx[0] ? ~(a[`BYTE0] & b[`BYTE0]) : zx[0] ? 8'd0 : t[`BYTE0];
+		o[`BYTE1] = mx[1] ? ~(a[`BYTE1] & b[`BYTE1]) : zx[1] ? 8'd0 : t[`BYTE1];
+		o[`BYTE2] = mx[2] ? ~(a[`BYTE2] & b[`BYTE2]) : zx[2] ? 8'd0 : t[`BYTE2];
+		o[`BYTE3] = mx[3] ? ~(a[`BYTE3] & b[`BYTE3]) : zx[3] ? 8'd0 : t[`BYTE3];
+		o[`BYTE4] = mx[4] ? ~(a[`BYTE4] & b[`BYTE4]) : zx[4] ? 8'd0 : t[`BYTE4];
+		o[`BYTE5] = mx[5] ? ~(a[`BYTE5] & b[`BYTE5]) : zx[5] ? 8'd0 : t[`BYTE5];
+		o[`BYTE6] = mx[6] ? ~(a[`BYTE6] & b[`BYTE6]) : zx[6] ? 8'd0 : t[`BYTE6];
+		o[`BYTE7] = mx[7] ? ~(a[`BYTE7] & b[`BYTE7]) : zx[7] ? 8'd0 : t[`BYTE7];
+		o[`BYTE8] = mx[8] ? ~(a[`BYTE8] & b[`BYTE8]) : zx[8] ? 8'd0 : t[`BYTE8];
+		o[`BYTE9] = mx[9] ? ~(a[`BYTE9] & b[`BYTE9]) : zx[9] ? 8'd0 : t[`BYTE9];
+		o[`BYTE10] = mx[10] ? ~(a[`BYTE10] & b[`BYTE10]) : zx[10] ? 8'd0 : t[`BYTE10];
+		o[`BYTE11] = mx[11] ? ~(a[`BYTE11] & b[`BYTE11]) : zx[11] ? 8'd0 : t[`BYTE11];
+		o[`BYTE12] = mx[12] ? ~(a[`BYTE12] & b[`BYTE12]) : zx[12] ? 8'd0 : t[`BYTE12];
+		o[`BYTE13] = mx[13] ? ~(a[`BYTE13] & b[`BYTE13]) : zx[13] ? 8'd0 : t[`BYTE13];
+		o[`BYTE14] = mx[14] ? ~(a[`BYTE14] & b[`BYTE14]) : zx[14] ? 8'd0 : t[`BYTE14];
+		o[`BYTE15] = mx[15] ? ~(a[`BYTE15] & b[`BYTE15]) : zx[15] ? 8'd0 : t[`BYTE15];
+		o[`BYTE16] = mx[16] ? ~(a[`BYTE16] & b[`BYTE16]) : zx[16] ? 8'd0 : t[`BYTE16];
+		o[`BYTE17] = mx[17] ? ~(a[`BYTE17] & b[`BYTE17]) : zx[17] ? 8'd0 : t[`BYTE17];
+		o[`BYTE18] = mx[18] ? ~(a[`BYTE18] & b[`BYTE18]) : zx[18] ? 8'd0 : t[`BYTE18];
+		o[`BYTE19] = mx[19] ? ~(a[`BYTE19] & b[`BYTE19]) : zx[19] ? 8'd0 : t[`BYTE19];
+		o[`BYTE20] = mx[20] ? ~(a[`BYTE20] & b[`BYTE20]) : zx[20] ? 8'd0 : t[`BYTE20];
+		o[`BYTE21] = mx[21] ? ~(a[`BYTE21] & b[`BYTE21]) : zx[21] ? 8'd0 : t[`BYTE21];
+		o[`BYTE22] = mx[22] ? ~(a[`BYTE22] & b[`BYTE22]) : zx[22] ? 8'd0 : t[`BYTE22];
+		o[`BYTE23] = mx[23] ? ~(a[`BYTE23] & b[`BYTE23]) : zx[23] ? 8'd0 : t[`BYTE23];
+		o[`BYTE24] = mx[24] ? ~(a[`BYTE24] & b[`BYTE24]) : zx[24] ? 8'd0 : t[`BYTE24];
+		o[`BYTE25] = mx[25] ? ~(a[`BYTE25] & b[`BYTE25]) : zx[25] ? 8'd0 : t[`BYTE25];
+		o[`BYTE26] = mx[26] ? ~(a[`BYTE26] & b[`BYTE26]) : zx[26] ? 8'd0 : t[`BYTE26];
+		o[`BYTE27] = mx[27] ? ~(a[`BYTE27] & b[`BYTE27]) : zx[27] ? 8'd0 : t[`BYTE27];
+		o[`BYTE28] = mx[28] ? ~(a[`BYTE28] & b[`BYTE28]) : zx[28] ? 8'd0 : t[`BYTE28];
+		o[`BYTE29] = mx[29] ? ~(a[`BYTE29] & b[`BYTE29]) : zx[29] ? 8'd0 : t[`BYTE29];
+		o[`BYTE30] = mx[30] ? ~(a[`BYTE30] & b[`BYTE30]) : zx[30] ? 8'd0 : t[`BYTE30];
+		o[`BYTE31] = mx[31] ? ~(a[`BYTE31] & b[`BYTE31]) : zx[31] ? 8'd0 : t[`BYTE31];
 		end
 	wyde_para:
 		begin
-		o[`WYDE0] = m[0] ? ~(a[`WYDE0] & b[`WYDE0]) : z ? 16'd0 : t[`WYDE0];
-		o[`WYDE1] = m[1] ? ~(a[`WYDE1] & b[`WYDE1]) : z ? 16'd0 : t[`WYDE1];
-		o[`WYDE2] = m[2] ? ~(a[`WYDE2] & b[`WYDE2]) : z ? 16'd0 : t[`WYDE2];
-		o[`WYDE3] = m[3] ? ~(a[`WYDE3] & b[`WYDE3]) : z ? 16'd0 : t[`WYDE3];
-		o[`WYDE4] = m[4] ? ~(a[`WYDE4] & b[`WYDE4]) : z ? 16'd0 : t[`WYDE4];
-		o[`WYDE5] = m[5] ? ~(a[`WYDE5] & b[`WYDE5]) : z ? 16'd0 : t[`WYDE5];
-		o[`WYDE6] = m[6] ? ~(a[`WYDE6] & b[`WYDE6]) : z ? 16'd0 : t[`WYDE6];
-		o[`WYDE7] = m[7] ? ~(a[`WYDE7] & b[`WYDE7]) : z ? 16'd0 : t[`WYDE7];
-		o[`WYDE8] = m[8] ? ~(a[`WYDE8] & b[`WYDE8]) : z ? 16'd0 : t[`WYDE8];
-		o[`WYDE9] = m[9] ? ~(a[`WYDE9] & b[`WYDE9]) : z ? 16'd0 : t[`WYDE9];
-		o[`WYDE10] = m[10] ? ~(a[`WYDE10] & b[`WYDE10]) : z ? 16'd0 : t[`WYDE10];
-		o[`WYDE11] = m[11] ? ~(a[`WYDE11] & b[`WYDE11]) : z ? 16'd0 : t[`WYDE11];
-		o[`WYDE12] = m[12] ? ~(a[`WYDE12] & b[`WYDE12]) : z ? 16'd0 : t[`WYDE12];
-		o[`WYDE13] = m[13] ? ~(a[`WYDE13] & b[`WYDE13]) : z ? 16'd0 : t[`WYDE13];
-		o[`WYDE14] = m[14] ? ~(a[`WYDE14] & b[`WYDE14]) : z ? 16'd0 : t[`WYDE14];
-		o[`WYDE15] = m[15] ? ~(a[`WYDE15] & b[`WYDE15]) : z ? 16'd0 : t[`WYDE15];
+		o[`WYDE0] = mx[0] ? ~(a[`WYDE0] & b[`WYDE0]) : zx[0] ? 16'd0 : t[`WYDE0];
+		o[`WYDE1] = mx[1] ? ~(a[`WYDE1] & b[`WYDE1]) : zx[1] ? 16'd0 : t[`WYDE1];
+		o[`WYDE2] = mx[2] ? ~(a[`WYDE2] & b[`WYDE2]) : zx[2] ? 16'd0 : t[`WYDE2];
+		o[`WYDE3] = mx[3] ? ~(a[`WYDE3] & b[`WYDE3]) : zx[3] ? 16'd0 : t[`WYDE3];
+		o[`WYDE4] = mx[4] ? ~(a[`WYDE4] & b[`WYDE4]) : zx[4] ? 16'd0 : t[`WYDE4];
+		o[`WYDE5] = mx[5] ? ~(a[`WYDE5] & b[`WYDE5]) : zx[5] ? 16'd0 : t[`WYDE5];
+		o[`WYDE6] = mx[6] ? ~(a[`WYDE6] & b[`WYDE6]) : zx[6] ? 16'd0 : t[`WYDE6];
+		o[`WYDE7] = mx[7] ? ~(a[`WYDE7] & b[`WYDE7]) : zx[7] ? 16'd0 : t[`WYDE7];
+		o[`WYDE8] = mx[8] ? ~(a[`WYDE8] & b[`WYDE8]) : zx[8] ? 16'd0 : t[`WYDE8];
+		o[`WYDE9] = mx[9] ? ~(a[`WYDE9] & b[`WYDE9]) : zx[9] ? 16'd0 : t[`WYDE9];
+		o[`WYDE10] = mx[10] ? ~(a[`WYDE10] & b[`WYDE10]) : zx[10] ? 16'd0 : t[`WYDE10];
+		o[`WYDE11] = mx[11] ? ~(a[`WYDE11] & b[`WYDE11]) : zx[11] ? 16'd0 : t[`WYDE11];
+		o[`WYDE12] = mx[12] ? ~(a[`WYDE12] & b[`WYDE12]) : zx[12] ? 16'd0 : t[`WYDE12];
+		o[`WYDE13] = mx[13] ? ~(a[`WYDE13] & b[`WYDE13]) : zx[13] ? 16'd0 : t[`WYDE13];
+		o[`WYDE14] = mx[14] ? ~(a[`WYDE14] & b[`WYDE14]) : zx[14] ? 16'd0 : t[`WYDE14];
+		o[`WYDE15] = mx[15] ? ~(a[`WYDE15] & b[`WYDE15]) : zx[15] ? 16'd0 : t[`WYDE15];
 		end
 	tetra_para:
 		begin
-		o[`TETRA0] = m[0] ? ~(a[`TETRA0] & b[`TETRA0]) : z ? 32'd0 : t[`TETRA0];
-		o[`TETRA1] = m[1] ? ~(a[`TETRA1] & b[`TETRA1]) : z ? 32'd0 : t[`TETRA1];
-		o[`TETRA2] = m[2] ? ~(a[`TETRA2] & b[`TETRA2]) : z ? 32'd0 : t[`TETRA2];
-		o[`TETRA3] = m[3] ? ~(a[`TETRA3] & b[`TETRA3]) : z ? 32'd0 : t[`TETRA3];
-		o[`TETRA4] = m[4] ? ~(a[`TETRA4] & b[`TETRA4]) : z ? 32'd0 : t[`TETRA4];
-		o[`TETRA5] = m[5] ? ~(a[`TETRA5] & b[`TETRA5]) : z ? 32'd0 : t[`TETRA5];
-		o[`TETRA6] = m[6] ? ~(a[`TETRA6] & b[`TETRA6]) : z ? 32'd0 : t[`TETRA6];
-		o[`TETRA7] = m[7] ? ~(a[`TETRA7] & b[`TETRA7]) : z ? 32'd0 : t[`TETRA7];
+		o[`TETRA0] = mx[0] ? ~(a[`TETRA0] & b[`TETRA0]) : zx[0] ? 32'd0 : t[`TETRA0];
+		o[`TETRA1] = mx[1] ? ~(a[`TETRA1] & b[`TETRA1]) : zx[1] ? 32'd0 : t[`TETRA1];
+		o[`TETRA2] = mx[2] ? ~(a[`TETRA2] & b[`TETRA2]) : zx[2] ? 32'd0 : t[`TETRA2];
+		o[`TETRA3] = mx[3] ? ~(a[`TETRA3] & b[`TETRA3]) : zx[3] ? 32'd0 : t[`TETRA3];
+		o[`TETRA4] = mx[4] ? ~(a[`TETRA4] & b[`TETRA4]) : zx[4] ? 32'd0 : t[`TETRA4];
+		o[`TETRA5] = mx[5] ? ~(a[`TETRA5] & b[`TETRA5]) : zx[5] ? 32'd0 : t[`TETRA5];
+		o[`TETRA6] = mx[6] ? ~(a[`TETRA6] & b[`TETRA6]) : zx[6] ? 32'd0 : t[`TETRA6];
+		o[`TETRA7] = mx[7] ? ~(a[`TETRA7] & b[`TETRA7]) : zx[7] ? 32'd0 : t[`TETRA7];
 		end
 	octa_para: 
 		begin
-		o[`OCTA0] = m[0] ? ~(a[`OCTA0] & b[`OCTA0]) : z ? 64'd0 : t[`OCTA0];
-		o[`OCTA1] = m[1] ? ~(a[`OCTA1] & b[`OCTA1]) : z ? 64'd0 : t[`OCTA1];
-		o[`OCTA2] = m[2] ? ~(a[`OCTA2] & b[`OCTA2]) : z ? 64'd0 : t[`OCTA2];
-		o[`OCTA3] = m[3] ? ~(a[`OCTA3] & b[`OCTA3]) : z ? 64'd0 : t[`OCTA3];
+		o[`OCTA0] = mx[0] ? ~(a[`OCTA0] & b[`OCTA0]) : zx[0] ? 64'd0 : t[`OCTA0];
+		o[`OCTA1] = mx[1] ? ~(a[`OCTA1] & b[`OCTA1]) : zx[1] ? 64'd0 : t[`OCTA1];
+		o[`OCTA2] = mx[2] ? ~(a[`OCTA2] & b[`OCTA2]) : zx[2] ? 64'd0 : t[`OCTA2];
+		o[`OCTA3] = mx[3] ? ~(a[`OCTA3] & b[`OCTA3]) : zx[3] ? 64'd0 : t[`OCTA3];
 		end
 hexi_para:
 	begin
-		o[`HEXI0] = m[0] ? ~(a[`HEXI0] & b[`HEXI0]) : z ? 128'd0 : t[`HEXI0];
-		o[`HEXI1] = m[1] ? ~(a[`HEXI1] & b[`HEXI1]) : z ? 128'd0 : t[`HEXI1];
+		o[`HEXI0] = mx[0] ? ~(a[`HEXI0] & b[`HEXI0]) : zx[0] ? 128'd0 : t[`HEXI0];
+		o[`HEXI1] = mx[1] ? ~(a[`HEXI1] & b[`HEXI1]) : zx[1] ? 128'd0 : t[`HEXI1];
 		end
 	default:
 		o = ~(a & b);
@@ -1610,8 +1914,8 @@ endtask
 
 task tskNor;
 input [3:0] fmt;
-input [31:0] m;
-input z;
+input [31:0] mx;
+input [31:0] zx;
 input [DBW:0] a;
 input [DBW:0] b;
 input [DBW:0] t;
@@ -1625,80 +1929,80 @@ begin
 	hexi:		o = {t[`HEXI1],~(a[`HEXI0] | b[`HEXI0])};
 	byte_para:
 		begin
-		o[`BYTE0] = m[0] ? ~(a[`BYTE0] | b[`BYTE0]) : z ? 8'd0 : t[`BYTE0];
-		o[`BYTE1] = m[1] ? ~(a[`BYTE1] | b[`BYTE1]) : z ? 8'd0 : t[`BYTE1];
-		o[`BYTE2] = m[2] ? ~(a[`BYTE2] | b[`BYTE2]) : z ? 8'd0 : t[`BYTE2];
-		o[`BYTE3] = m[3] ? ~(a[`BYTE3] | b[`BYTE3]) : z ? 8'd0 : t[`BYTE3];
-		o[`BYTE4] = m[4] ? ~(a[`BYTE4] | b[`BYTE4]) : z ? 8'd0 : t[`BYTE4];
-		o[`BYTE5] = m[5] ? ~(a[`BYTE5] | b[`BYTE5]) : z ? 8'd0 : t[`BYTE5];
-		o[`BYTE6] = m[6] ? ~(a[`BYTE6] | b[`BYTE6]) : z ? 8'd0 : t[`BYTE6];
-		o[`BYTE7] = m[7] ? ~(a[`BYTE7] | b[`BYTE7]) : z ? 8'd0 : t[`BYTE7];
-		o[`BYTE8] = m[8] ? ~(a[`BYTE8] | b[`BYTE8]) : z ? 8'd0 : t[`BYTE8];
-		o[`BYTE9] = m[9] ? ~(a[`BYTE9] | b[`BYTE9]) : z ? 8'd0 : t[`BYTE9];
-		o[`BYTE10] = m[10] ? ~(a[`BYTE10] | b[`BYTE10]) : z ? 8'd0 : t[`BYTE10];
-		o[`BYTE11] = m[11] ? ~(a[`BYTE11] | b[`BYTE11]) : z ? 8'd0 : t[`BYTE11];
-		o[`BYTE12] = m[12] ? ~(a[`BYTE12] | b[`BYTE12]) : z ? 8'd0 : t[`BYTE12];
-		o[`BYTE13] = m[13] ? ~(a[`BYTE13] | b[`BYTE13]) : z ? 8'd0 : t[`BYTE13];
-		o[`BYTE14] = m[14] ? ~(a[`BYTE14] | b[`BYTE14]) : z ? 8'd0 : t[`BYTE14];
-		o[`BYTE15] = m[15] ? ~(a[`BYTE15] | b[`BYTE15]) : z ? 8'd0 : t[`BYTE15];
-		o[`BYTE16] = m[16] ? ~(a[`BYTE16] | b[`BYTE16]) : z ? 8'd0 : t[`BYTE16];
-		o[`BYTE17] = m[17] ? ~(a[`BYTE17] | b[`BYTE17]) : z ? 8'd0 : t[`BYTE17];
-		o[`BYTE18] = m[18] ? ~(a[`BYTE18] | b[`BYTE18]) : z ? 8'd0 : t[`BYTE18];
-		o[`BYTE19] = m[19] ? ~(a[`BYTE19] | b[`BYTE19]) : z ? 8'd0 : t[`BYTE19];
-		o[`BYTE20] = m[20] ? ~(a[`BYTE20] | b[`BYTE20]) : z ? 8'd0 : t[`BYTE20];
-		o[`BYTE21] = m[21] ? ~(a[`BYTE21] | b[`BYTE21]) : z ? 8'd0 : t[`BYTE21];
-		o[`BYTE22] = m[22] ? ~(a[`BYTE22] | b[`BYTE22]) : z ? 8'd0 : t[`BYTE22];
-		o[`BYTE23] = m[23] ? ~(a[`BYTE23] | b[`BYTE23]) : z ? 8'd0 : t[`BYTE23];
-		o[`BYTE24] = m[24] ? ~(a[`BYTE24] | b[`BYTE24]) : z ? 8'd0 : t[`BYTE24];
-		o[`BYTE25] = m[25] ? ~(a[`BYTE25] | b[`BYTE25]) : z ? 8'd0 : t[`BYTE25];
-		o[`BYTE26] = m[26] ? ~(a[`BYTE26] | b[`BYTE26]) : z ? 8'd0 : t[`BYTE26];
-		o[`BYTE27] = m[27] ? ~(a[`BYTE27] | b[`BYTE27]) : z ? 8'd0 : t[`BYTE27];
-		o[`BYTE28] = m[28] ? ~(a[`BYTE28] | b[`BYTE28]) : z ? 8'd0 : t[`BYTE28];
-		o[`BYTE29] = m[29] ? ~(a[`BYTE29] | b[`BYTE29]) : z ? 8'd0 : t[`BYTE29];
-		o[`BYTE30] = m[30] ? ~(a[`BYTE30] | b[`BYTE30]) : z ? 8'd0 : t[`BYTE30];
-		o[`BYTE31] = m[31] ? ~(a[`BYTE31] | b[`BYTE31]) : z ? 8'd0 : t[`BYTE31];
+		o[`BYTE0] = mx[0] ? ~(a[`BYTE0] | b[`BYTE0]) : zx[0] ? 8'd0 : t[`BYTE0];
+		o[`BYTE1] = mx[1] ? ~(a[`BYTE1] | b[`BYTE1]) : zx[1] ? 8'd0 : t[`BYTE1];
+		o[`BYTE2] = mx[2] ? ~(a[`BYTE2] | b[`BYTE2]) : zx[2] ? 8'd0 : t[`BYTE2];
+		o[`BYTE3] = mx[3] ? ~(a[`BYTE3] | b[`BYTE3]) : zx[3] ? 8'd0 : t[`BYTE3];
+		o[`BYTE4] = mx[4] ? ~(a[`BYTE4] | b[`BYTE4]) : zx[4] ? 8'd0 : t[`BYTE4];
+		o[`BYTE5] = mx[5] ? ~(a[`BYTE5] | b[`BYTE5]) : zx[5] ? 8'd0 : t[`BYTE5];
+		o[`BYTE6] = mx[6] ? ~(a[`BYTE6] | b[`BYTE6]) : zx[6] ? 8'd0 : t[`BYTE6];
+		o[`BYTE7] = mx[7] ? ~(a[`BYTE7] | b[`BYTE7]) : zx[7] ? 8'd0 : t[`BYTE7];
+		o[`BYTE8] = mx[8] ? ~(a[`BYTE8] | b[`BYTE8]) : zx[8] ? 8'd0 : t[`BYTE8];
+		o[`BYTE9] = mx[9] ? ~(a[`BYTE9] | b[`BYTE9]) : zx[9] ? 8'd0 : t[`BYTE9];
+		o[`BYTE10] = mx[10] ? ~(a[`BYTE10] | b[`BYTE10]) : zx[10] ? 8'd0 : t[`BYTE10];
+		o[`BYTE11] = mx[11] ? ~(a[`BYTE11] | b[`BYTE11]) : zx[11] ? 8'd0 : t[`BYTE11];
+		o[`BYTE12] = mx[12] ? ~(a[`BYTE12] | b[`BYTE12]) : zx[12] ? 8'd0 : t[`BYTE12];
+		o[`BYTE13] = mx[13] ? ~(a[`BYTE13] | b[`BYTE13]) : zx[13] ? 8'd0 : t[`BYTE13];
+		o[`BYTE14] = mx[14] ? ~(a[`BYTE14] | b[`BYTE14]) : zx[14] ? 8'd0 : t[`BYTE14];
+		o[`BYTE15] = mx[15] ? ~(a[`BYTE15] | b[`BYTE15]) : zx[15] ? 8'd0 : t[`BYTE15];
+		o[`BYTE16] = mx[16] ? ~(a[`BYTE16] | b[`BYTE16]) : zx[16] ? 8'd0 : t[`BYTE16];
+		o[`BYTE17] = mx[17] ? ~(a[`BYTE17] | b[`BYTE17]) : zx[17] ? 8'd0 : t[`BYTE17];
+		o[`BYTE18] = mx[18] ? ~(a[`BYTE18] | b[`BYTE18]) : zx[18] ? 8'd0 : t[`BYTE18];
+		o[`BYTE19] = mx[19] ? ~(a[`BYTE19] | b[`BYTE19]) : zx[19] ? 8'd0 : t[`BYTE19];
+		o[`BYTE20] = mx[20] ? ~(a[`BYTE20] | b[`BYTE20]) : zx[20] ? 8'd0 : t[`BYTE20];
+		o[`BYTE21] = mx[21] ? ~(a[`BYTE21] | b[`BYTE21]) : zx[21] ? 8'd0 : t[`BYTE21];
+		o[`BYTE22] = mx[22] ? ~(a[`BYTE22] | b[`BYTE22]) : zx[22] ? 8'd0 : t[`BYTE22];
+		o[`BYTE23] = mx[23] ? ~(a[`BYTE23] | b[`BYTE23]) : zx[23] ? 8'd0 : t[`BYTE23];
+		o[`BYTE24] = mx[24] ? ~(a[`BYTE24] | b[`BYTE24]) : zx[24] ? 8'd0 : t[`BYTE24];
+		o[`BYTE25] = mx[25] ? ~(a[`BYTE25] | b[`BYTE25]) : zx[25] ? 8'd0 : t[`BYTE25];
+		o[`BYTE26] = mx[26] ? ~(a[`BYTE26] | b[`BYTE26]) : zx[26] ? 8'd0 : t[`BYTE26];
+		o[`BYTE27] = mx[27] ? ~(a[`BYTE27] | b[`BYTE27]) : zx[27] ? 8'd0 : t[`BYTE27];
+		o[`BYTE28] = mx[28] ? ~(a[`BYTE28] | b[`BYTE28]) : zx[28] ? 8'd0 : t[`BYTE28];
+		o[`BYTE29] = mx[29] ? ~(a[`BYTE29] | b[`BYTE29]) : zx[29] ? 8'd0 : t[`BYTE29];
+		o[`BYTE30] = mx[30] ? ~(a[`BYTE30] | b[`BYTE30]) : zx[30] ? 8'd0 : t[`BYTE30];
+		o[`BYTE31] = mx[31] ? ~(a[`BYTE31] | b[`BYTE31]) : zx[31] ? 8'd0 : t[`BYTE31];
 		end
 	wyde_para:
 		begin
-		o[`WYDE0] = m[0] ? ~(a[`WYDE0] | b[`WYDE0]) : z ? 16'd0 : t[`WYDE0];
-		o[`WYDE1] = m[1] ? ~(a[`WYDE1] | b[`WYDE1]) : z ? 16'd0 : t[`WYDE1];
-		o[`WYDE2] = m[2] ? ~(a[`WYDE2] | b[`WYDE2]) : z ? 16'd0 : t[`WYDE2];
-		o[`WYDE3] = m[3] ? ~(a[`WYDE3] | b[`WYDE3]) : z ? 16'd0 : t[`WYDE3];
-		o[`WYDE4] = m[4] ? ~(a[`WYDE4] | b[`WYDE4]) : z ? 16'd0 : t[`WYDE4];
-		o[`WYDE5] = m[5] ? ~(a[`WYDE5] | b[`WYDE5]) : z ? 16'd0 : t[`WYDE5];
-		o[`WYDE6] = m[6] ? ~(a[`WYDE6] | b[`WYDE6]) : z ? 16'd0 : t[`WYDE6];
-		o[`WYDE7] = m[7] ? ~(a[`WYDE7] | b[`WYDE7]) : z ? 16'd0 : t[`WYDE7];
-		o[`WYDE8] = m[8] ? ~(a[`WYDE8] | b[`WYDE8]) : z ? 16'd0 : t[`WYDE8];
-		o[`WYDE9] = m[9] ? ~(a[`WYDE9] | b[`WYDE9]) : z ? 16'd0 : t[`WYDE9];
-		o[`WYDE10] = m[10] ? ~(a[`WYDE10] | b[`WYDE10]) : z ? 16'd0 : t[`WYDE10];
-		o[`WYDE11] = m[11] ? ~(a[`WYDE11] | b[`WYDE11]) : z ? 16'd0 : t[`WYDE11];
-		o[`WYDE12] = m[12] ? ~(a[`WYDE12] | b[`WYDE12]) : z ? 16'd0 : t[`WYDE12];
-		o[`WYDE13] = m[13] ? ~(a[`WYDE13] | b[`WYDE13]) : z ? 16'd0 : t[`WYDE13];
-		o[`WYDE14] = m[14] ? ~(a[`WYDE14] | b[`WYDE14]) : z ? 16'd0 : t[`WYDE14];
-		o[`WYDE15] = m[15] ? ~(a[`WYDE15] | b[`WYDE15]) : z ? 16'd0 : t[`WYDE15];
+		o[`WYDE0] = mx[0] ? ~(a[`WYDE0] | b[`WYDE0]) : zx[0] ? 16'd0 : t[`WYDE0];
+		o[`WYDE1] = mx[1] ? ~(a[`WYDE1] | b[`WYDE1]) : zx[1] ? 16'd0 : t[`WYDE1];
+		o[`WYDE2] = mx[2] ? ~(a[`WYDE2] | b[`WYDE2]) : zx[2] ? 16'd0 : t[`WYDE2];
+		o[`WYDE3] = mx[3] ? ~(a[`WYDE3] | b[`WYDE3]) : zx[3] ? 16'd0 : t[`WYDE3];
+		o[`WYDE4] = mx[4] ? ~(a[`WYDE4] | b[`WYDE4]) : zx[4] ? 16'd0 : t[`WYDE4];
+		o[`WYDE5] = mx[5] ? ~(a[`WYDE5] | b[`WYDE5]) : zx[5] ? 16'd0 : t[`WYDE5];
+		o[`WYDE6] = mx[6] ? ~(a[`WYDE6] | b[`WYDE6]) : zx[6] ? 16'd0 : t[`WYDE6];
+		o[`WYDE7] = mx[7] ? ~(a[`WYDE7] | b[`WYDE7]) : zx[7] ? 16'd0 : t[`WYDE7];
+		o[`WYDE8] = mx[8] ? ~(a[`WYDE8] | b[`WYDE8]) : zx[8] ? 16'd0 : t[`WYDE8];
+		o[`WYDE9] = mx[9] ? ~(a[`WYDE9] | b[`WYDE9]) : zx[9] ? 16'd0 : t[`WYDE9];
+		o[`WYDE10] = mx[10] ? ~(a[`WYDE10] | b[`WYDE10]) : zx[10] ? 16'd0 : t[`WYDE10];
+		o[`WYDE11] = mx[11] ? ~(a[`WYDE11] | b[`WYDE11]) : zx[11] ? 16'd0 : t[`WYDE11];
+		o[`WYDE12] = mx[12] ? ~(a[`WYDE12] | b[`WYDE12]) : zx[12] ? 16'd0 : t[`WYDE12];
+		o[`WYDE13] = mx[13] ? ~(a[`WYDE13] | b[`WYDE13]) : zx[13] ? 16'd0 : t[`WYDE13];
+		o[`WYDE14] = mx[14] ? ~(a[`WYDE14] | b[`WYDE14]) : zx[14] ? 16'd0 : t[`WYDE14];
+		o[`WYDE15] = mx[15] ? ~(a[`WYDE15] | b[`WYDE15]) : zx[15] ? 16'd0 : t[`WYDE15];
 		end
 	tetra_para:
 		begin
-		o[`TETRA0] = m[0] ? ~(a[`TETRA0] | b[`TETRA0]) : z ? 32'd0 : t[`TETRA0];
-		o[`TETRA1] = m[1] ? ~(a[`TETRA1] | b[`TETRA1]) : z ? 32'd0 : t[`TETRA1];
-		o[`TETRA2] = m[2] ? ~(a[`TETRA2] | b[`TETRA2]) : z ? 32'd0 : t[`TETRA2];
-		o[`TETRA3] = m[3] ? ~(a[`TETRA3] | b[`TETRA3]) : z ? 32'd0 : t[`TETRA3];
-		o[`TETRA4] = m[4] ? ~(a[`TETRA4] | b[`TETRA4]) : z ? 32'd0 : t[`TETRA4];
-		o[`TETRA5] = m[5] ? ~(a[`TETRA5] | b[`TETRA5]) : z ? 32'd0 : t[`TETRA5];
-		o[`TETRA6] = m[6] ? ~(a[`TETRA6] | b[`TETRA6]) : z ? 32'd0 : t[`TETRA6];
-		o[`TETRA7] = m[7] ? ~(a[`TETRA7] | b[`TETRA7]) : z ? 32'd0 : t[`TETRA7];
+		o[`TETRA0] = mx[0] ? ~(a[`TETRA0] | b[`TETRA0]) : zx[0] ? 32'd0 : t[`TETRA0];
+		o[`TETRA1] = mx[1] ? ~(a[`TETRA1] | b[`TETRA1]) : zx[1] ? 32'd0 : t[`TETRA1];
+		o[`TETRA2] = mx[2] ? ~(a[`TETRA2] | b[`TETRA2]) : zx[2] ? 32'd0 : t[`TETRA2];
+		o[`TETRA3] = mx[3] ? ~(a[`TETRA3] | b[`TETRA3]) : zx[3] ? 32'd0 : t[`TETRA3];
+		o[`TETRA4] = mx[4] ? ~(a[`TETRA4] | b[`TETRA4]) : zx[4] ? 32'd0 : t[`TETRA4];
+		o[`TETRA5] = mx[5] ? ~(a[`TETRA5] | b[`TETRA5]) : zx[5] ? 32'd0 : t[`TETRA5];
+		o[`TETRA6] = mx[6] ? ~(a[`TETRA6] | b[`TETRA6]) : zx[6] ? 32'd0 : t[`TETRA6];
+		o[`TETRA7] = mx[7] ? ~(a[`TETRA7] | b[`TETRA7]) : zx[7] ? 32'd0 : t[`TETRA7];
 		end
 	octa_para: 
 		begin
-		o[`OCTA0] = m[0] ? ~(a[`OCTA0] | b[`OCTA0]) : z ? 64'd0 : t[`OCTA0];
-		o[`OCTA1] = m[1] ? ~(a[`OCTA1] | b[`OCTA1]) : z ? 64'd0 : t[`OCTA1];
-		o[`OCTA2] = m[2] ? ~(a[`OCTA2] | b[`OCTA2]) : z ? 64'd0 : t[`OCTA2];
-		o[`OCTA3] = m[3] ? ~(a[`OCTA3] | b[`OCTA3]) : z ? 64'd0 : t[`OCTA3];
+		o[`OCTA0] = mx[0] ? ~(a[`OCTA0] | b[`OCTA0]) : zx[0] ? 64'd0 : t[`OCTA0];
+		o[`OCTA1] = mx[1] ? ~(a[`OCTA1] | b[`OCTA1]) : zx[1] ? 64'd0 : t[`OCTA1];
+		o[`OCTA2] = mx[2] ? ~(a[`OCTA2] | b[`OCTA2]) : zx[2] ? 64'd0 : t[`OCTA2];
+		o[`OCTA3] = mx[3] ? ~(a[`OCTA3] | b[`OCTA3]) : zx[3] ? 64'd0 : t[`OCTA3];
 		end
 hexi_para:
 	begin
-		o[`HEXI0] = m[0] ? ~(a[`HEXI0] | b[`HEXI0]) : z ? 128'd0 : t[`HEXI0];
-		o[`HEXI1] = m[1] ? ~(a[`HEXI1] | b[`HEXI1]) : z ? 128'd0 : t[`HEXI1];
+		o[`HEXI0] = mx[0] ? ~(a[`HEXI0] | b[`HEXI0]) : zx[0] ? 128'd0 : t[`HEXI0];
+		o[`HEXI1] = mx[1] ? ~(a[`HEXI1] | b[`HEXI1]) : zx[1] ? 128'd0 : t[`HEXI1];
 		end
 	default:
 		o = ~(a | b);
@@ -1708,8 +2012,8 @@ endtask
 
 task tskXnor;
 input [3:0] fmt;
-input [31:0] m;
-input z;
+input [31:0] mx;
+input [31:0] zx;
 input [DBW:0] a;
 input [DBW:0] b;
 input [DBW:0] t;
@@ -1723,80 +2027,80 @@ begin
 	hexi:		o = {t[`HEXI1],~(a[`HEXI0] ^ b[`HEXI0])};
 	byte_para:
 		begin
-		o[`BYTE0] = m[0] ? ~(a[`BYTE0] ^ b[`BYTE0]) : z ? 8'd0 : t[`BYTE0];
-		o[`BYTE1] = m[1] ? ~(a[`BYTE1] ^ b[`BYTE1]) : z ? 8'd0 : t[`BYTE1];
-		o[`BYTE2] = m[2] ? ~(a[`BYTE2] ^ b[`BYTE2]) : z ? 8'd0 : t[`BYTE2];
-		o[`BYTE3] = m[3] ? ~(a[`BYTE3] ^ b[`BYTE3]) : z ? 8'd0 : t[`BYTE3];
-		o[`BYTE4] = m[4] ? ~(a[`BYTE4] ^ b[`BYTE4]) : z ? 8'd0 : t[`BYTE4];
-		o[`BYTE5] = m[5] ? ~(a[`BYTE5] ^ b[`BYTE5]) : z ? 8'd0 : t[`BYTE5];
-		o[`BYTE6] = m[6] ? ~(a[`BYTE6] ^ b[`BYTE6]) : z ? 8'd0 : t[`BYTE6];
-		o[`BYTE7] = m[7] ? ~(a[`BYTE7] ^ b[`BYTE7]) : z ? 8'd0 : t[`BYTE7];
-		o[`BYTE8] = m[8] ? ~(a[`BYTE8] ^ b[`BYTE8]) : z ? 8'd0 : t[`BYTE8];
-		o[`BYTE9] = m[9] ? ~(a[`BYTE9] ^ b[`BYTE9]) : z ? 8'd0 : t[`BYTE9];
-		o[`BYTE10] = m[10] ? ~(a[`BYTE10] ^ b[`BYTE10]) : z ? 8'd0 : t[`BYTE10];
-		o[`BYTE11] = m[11] ? ~(a[`BYTE11] ^ b[`BYTE11]) : z ? 8'd0 : t[`BYTE11];
-		o[`BYTE12] = m[12] ? ~(a[`BYTE12] ^ b[`BYTE12]) : z ? 8'd0 : t[`BYTE12];
-		o[`BYTE13] = m[13] ? ~(a[`BYTE13] ^ b[`BYTE13]) : z ? 8'd0 : t[`BYTE13];
-		o[`BYTE14] = m[14] ? ~(a[`BYTE14] ^ b[`BYTE14]) : z ? 8'd0 : t[`BYTE14];
-		o[`BYTE15] = m[15] ? ~(a[`BYTE15] ^ b[`BYTE15]) : z ? 8'd0 : t[`BYTE15];
-		o[`BYTE16] = m[16] ? ~(a[`BYTE16] ^ b[`BYTE16]) : z ? 8'd0 : t[`BYTE16];
-		o[`BYTE17] = m[17] ? ~(a[`BYTE17] ^ b[`BYTE17]) : z ? 8'd0 : t[`BYTE17];
-		o[`BYTE18] = m[18] ? ~(a[`BYTE18] ^ b[`BYTE18]) : z ? 8'd0 : t[`BYTE18];
-		o[`BYTE19] = m[19] ? ~(a[`BYTE19] ^ b[`BYTE19]) : z ? 8'd0 : t[`BYTE19];
-		o[`BYTE20] = m[20] ? ~(a[`BYTE20] ^ b[`BYTE20]) : z ? 8'd0 : t[`BYTE20];
-		o[`BYTE21] = m[21] ? ~(a[`BYTE21] ^ b[`BYTE21]) : z ? 8'd0 : t[`BYTE21];
-		o[`BYTE22] = m[22] ? ~(a[`BYTE22] ^ b[`BYTE22]) : z ? 8'd0 : t[`BYTE22];
-		o[`BYTE23] = m[23] ? ~(a[`BYTE23] ^ b[`BYTE23]) : z ? 8'd0 : t[`BYTE23];
-		o[`BYTE24] = m[24] ? ~(a[`BYTE24] ^ b[`BYTE24]) : z ? 8'd0 : t[`BYTE24];
-		o[`BYTE25] = m[25] ? ~(a[`BYTE25] ^ b[`BYTE25]) : z ? 8'd0 : t[`BYTE25];
-		o[`BYTE26] = m[26] ? ~(a[`BYTE26] ^ b[`BYTE26]) : z ? 8'd0 : t[`BYTE26];
-		o[`BYTE27] = m[27] ? ~(a[`BYTE27] ^ b[`BYTE27]) : z ? 8'd0 : t[`BYTE27];
-		o[`BYTE28] = m[28] ? ~(a[`BYTE28] ^ b[`BYTE28]) : z ? 8'd0 : t[`BYTE28];
-		o[`BYTE29] = m[29] ? ~(a[`BYTE29] ^ b[`BYTE29]) : z ? 8'd0 : t[`BYTE29];
-		o[`BYTE30] = m[30] ? ~(a[`BYTE30] ^ b[`BYTE30]) : z ? 8'd0 : t[`BYTE30];
-		o[`BYTE31] = m[31] ? ~(a[`BYTE31] ^ b[`BYTE31]) : z ? 8'd0 : t[`BYTE31];
+		o[`BYTE0] = mx[0] ? ~(a[`BYTE0] ^ b[`BYTE0]) : zx[0] ? 8'd0 : t[`BYTE0];
+		o[`BYTE1] = mx[1] ? ~(a[`BYTE1] ^ b[`BYTE1]) : zx[1] ? 8'd0 : t[`BYTE1];
+		o[`BYTE2] = mx[2] ? ~(a[`BYTE2] ^ b[`BYTE2]) : zx[2] ? 8'd0 : t[`BYTE2];
+		o[`BYTE3] = mx[3] ? ~(a[`BYTE3] ^ b[`BYTE3]) : zx[3] ? 8'd0 : t[`BYTE3];
+		o[`BYTE4] = mx[4] ? ~(a[`BYTE4] ^ b[`BYTE4]) : zx[4] ? 8'd0 : t[`BYTE4];
+		o[`BYTE5] = mx[5] ? ~(a[`BYTE5] ^ b[`BYTE5]) : zx[5] ? 8'd0 : t[`BYTE5];
+		o[`BYTE6] = mx[6] ? ~(a[`BYTE6] ^ b[`BYTE6]) : zx[6] ? 8'd0 : t[`BYTE6];
+		o[`BYTE7] = mx[7] ? ~(a[`BYTE7] ^ b[`BYTE7]) : zx[7] ? 8'd0 : t[`BYTE7];
+		o[`BYTE8] = mx[8] ? ~(a[`BYTE8] ^ b[`BYTE8]) : zx[8] ? 8'd0 : t[`BYTE8];
+		o[`BYTE9] = mx[9] ? ~(a[`BYTE9] ^ b[`BYTE9]) : zx[9] ? 8'd0 : t[`BYTE9];
+		o[`BYTE10] = mx[10] ? ~(a[`BYTE10] ^ b[`BYTE10]) : zx[10] ? 8'd0 : t[`BYTE10];
+		o[`BYTE11] = mx[11] ? ~(a[`BYTE11] ^ b[`BYTE11]) : zx[11] ? 8'd0 : t[`BYTE11];
+		o[`BYTE12] = mx[12] ? ~(a[`BYTE12] ^ b[`BYTE12]) : zx[12] ? 8'd0 : t[`BYTE12];
+		o[`BYTE13] = mx[13] ? ~(a[`BYTE13] ^ b[`BYTE13]) : zx[13] ? 8'd0 : t[`BYTE13];
+		o[`BYTE14] = mx[14] ? ~(a[`BYTE14] ^ b[`BYTE14]) : zx[14] ? 8'd0 : t[`BYTE14];
+		o[`BYTE15] = mx[15] ? ~(a[`BYTE15] ^ b[`BYTE15]) : zx[15] ? 8'd0 : t[`BYTE15];
+		o[`BYTE16] = mx[16] ? ~(a[`BYTE16] ^ b[`BYTE16]) : zx[16] ? 8'd0 : t[`BYTE16];
+		o[`BYTE17] = mx[17] ? ~(a[`BYTE17] ^ b[`BYTE17]) : zx[17] ? 8'd0 : t[`BYTE17];
+		o[`BYTE18] = mx[18] ? ~(a[`BYTE18] ^ b[`BYTE18]) : zx[18] ? 8'd0 : t[`BYTE18];
+		o[`BYTE19] = mx[19] ? ~(a[`BYTE19] ^ b[`BYTE19]) : zx[19] ? 8'd0 : t[`BYTE19];
+		o[`BYTE20] = mx[20] ? ~(a[`BYTE20] ^ b[`BYTE20]) : zx[20] ? 8'd0 : t[`BYTE20];
+		o[`BYTE21] = mx[21] ? ~(a[`BYTE21] ^ b[`BYTE21]) : zx[21] ? 8'd0 : t[`BYTE21];
+		o[`BYTE22] = mx[22] ? ~(a[`BYTE22] ^ b[`BYTE22]) : zx[22] ? 8'd0 : t[`BYTE22];
+		o[`BYTE23] = mx[23] ? ~(a[`BYTE23] ^ b[`BYTE23]) : zx[23] ? 8'd0 : t[`BYTE23];
+		o[`BYTE24] = mx[24] ? ~(a[`BYTE24] ^ b[`BYTE24]) : zx[24] ? 8'd0 : t[`BYTE24];
+		o[`BYTE25] = mx[25] ? ~(a[`BYTE25] ^ b[`BYTE25]) : zx[25] ? 8'd0 : t[`BYTE25];
+		o[`BYTE26] = mx[26] ? ~(a[`BYTE26] ^ b[`BYTE26]) : zx[26] ? 8'd0 : t[`BYTE26];
+		o[`BYTE27] = mx[27] ? ~(a[`BYTE27] ^ b[`BYTE27]) : zx[27] ? 8'd0 : t[`BYTE27];
+		o[`BYTE28] = mx[28] ? ~(a[`BYTE28] ^ b[`BYTE28]) : zx[28] ? 8'd0 : t[`BYTE28];
+		o[`BYTE29] = mx[29] ? ~(a[`BYTE29] ^ b[`BYTE29]) : zx[29] ? 8'd0 : t[`BYTE29];
+		o[`BYTE30] = mx[30] ? ~(a[`BYTE30] ^ b[`BYTE30]) : zx[30] ? 8'd0 : t[`BYTE30];
+		o[`BYTE31] = mx[31] ? ~(a[`BYTE31] ^ b[`BYTE31]) : zx[31] ? 8'd0 : t[`BYTE31];
 		end
 	wyde_para:
 		begin
-		o[`WYDE0] = m[0] ? ~(a[`WYDE0] ^ b[`WYDE0]) : z ? 16'd0 : t[`WYDE0];
-		o[`WYDE1] = m[1] ? ~(a[`WYDE1] ^ b[`WYDE1]) : z ? 16'd0 : t[`WYDE1];
-		o[`WYDE2] = m[2] ? ~(a[`WYDE2] ^ b[`WYDE2]) : z ? 16'd0 : t[`WYDE2];
-		o[`WYDE3] = m[3] ? ~(a[`WYDE3] ^ b[`WYDE3]) : z ? 16'd0 : t[`WYDE3];
-		o[`WYDE4] = m[4] ? ~(a[`WYDE4] ^ b[`WYDE4]) : z ? 16'd0 : t[`WYDE4];
-		o[`WYDE5] = m[5] ? ~(a[`WYDE5] ^ b[`WYDE5]) : z ? 16'd0 : t[`WYDE5];
-		o[`WYDE6] = m[6] ? ~(a[`WYDE6] ^ b[`WYDE6]) : z ? 16'd0 : t[`WYDE6];
-		o[`WYDE7] = m[7] ? ~(a[`WYDE7] ^ b[`WYDE7]) : z ? 16'd0 : t[`WYDE7];
-		o[`WYDE8] = m[8] ? ~(a[`WYDE8] ^ b[`WYDE8]) : z ? 16'd0 : t[`WYDE8];
-		o[`WYDE9] = m[9] ? ~(a[`WYDE9] ^ b[`WYDE9]) : z ? 16'd0 : t[`WYDE9];
-		o[`WYDE10] = m[10] ? ~(a[`WYDE10] ^ b[`WYDE10]) : z ? 16'd0 : t[`WYDE10];
-		o[`WYDE11] = m[11] ? ~(a[`WYDE11] ^ b[`WYDE11]) : z ? 16'd0 : t[`WYDE11];
-		o[`WYDE12] = m[12] ? ~(a[`WYDE12] ^ b[`WYDE12]) : z ? 16'd0 : t[`WYDE12];
-		o[`WYDE13] = m[13] ? ~(a[`WYDE13] ^ b[`WYDE13]) : z ? 16'd0 : t[`WYDE13];
-		o[`WYDE14] = m[14] ? ~(a[`WYDE14] ^ b[`WYDE14]) : z ? 16'd0 : t[`WYDE14];
-		o[`WYDE15] = m[15] ? ~(a[`WYDE15] ^ b[`WYDE15]) : z ? 16'd0 : t[`WYDE15];
+		o[`WYDE0] = mx[0] ? ~(a[`WYDE0] ^ b[`WYDE0]) : zx[0] ? 16'd0 : t[`WYDE0];
+		o[`WYDE1] = mx[1] ? ~(a[`WYDE1] ^ b[`WYDE1]) : zx[1] ? 16'd0 : t[`WYDE1];
+		o[`WYDE2] = mx[2] ? ~(a[`WYDE2] ^ b[`WYDE2]) : zx[2] ? 16'd0 : t[`WYDE2];
+		o[`WYDE3] = mx[3] ? ~(a[`WYDE3] ^ b[`WYDE3]) : zx[3] ? 16'd0 : t[`WYDE3];
+		o[`WYDE4] = mx[4] ? ~(a[`WYDE4] ^ b[`WYDE4]) : zx[4] ? 16'd0 : t[`WYDE4];
+		o[`WYDE5] = mx[5] ? ~(a[`WYDE5] ^ b[`WYDE5]) : zx[5] ? 16'd0 : t[`WYDE5];
+		o[`WYDE6] = mx[6] ? ~(a[`WYDE6] ^ b[`WYDE6]) : zx[6] ? 16'd0 : t[`WYDE6];
+		o[`WYDE7] = mx[7] ? ~(a[`WYDE7] ^ b[`WYDE7]) : zx[7] ? 16'd0 : t[`WYDE7];
+		o[`WYDE8] = mx[8] ? ~(a[`WYDE8] ^ b[`WYDE8]) : zx[8] ? 16'd0 : t[`WYDE8];
+		o[`WYDE9] = mx[9] ? ~(a[`WYDE9] ^ b[`WYDE9]) : zx[9] ? 16'd0 : t[`WYDE9];
+		o[`WYDE10] = mx[10] ? ~(a[`WYDE10] ^ b[`WYDE10]) : zx[10] ? 16'd0 : t[`WYDE10];
+		o[`WYDE11] = mx[11] ? ~(a[`WYDE11] ^ b[`WYDE11]) : zx[11] ? 16'd0 : t[`WYDE11];
+		o[`WYDE12] = mx[12] ? ~(a[`WYDE12] ^ b[`WYDE12]) : zx[12] ? 16'd0 : t[`WYDE12];
+		o[`WYDE13] = mx[13] ? ~(a[`WYDE13] ^ b[`WYDE13]) : zx[13] ? 16'd0 : t[`WYDE13];
+		o[`WYDE14] = mx[14] ? ~(a[`WYDE14] ^ b[`WYDE14]) : zx[14] ? 16'd0 : t[`WYDE14];
+		o[`WYDE15] = mx[15] ? ~(a[`WYDE15] ^ b[`WYDE15]) : zx[15] ? 16'd0 : t[`WYDE15];
 		end
 	tetra_para:
 		begin
-		o[`TETRA0] = m[0] ? ~(a[`TETRA0] ^ b[`TETRA0]) : z ? 32'd0 : t[`TETRA0];
-		o[`TETRA1] = m[1] ? ~(a[`TETRA1] ^ b[`TETRA1]) : z ? 32'd0 : t[`TETRA1];
-		o[`TETRA2] = m[2] ? ~(a[`TETRA2] ^ b[`TETRA2]) : z ? 32'd0 : t[`TETRA2];
-		o[`TETRA3] = m[3] ? ~(a[`TETRA3] ^ b[`TETRA3]) : z ? 32'd0 : t[`TETRA3];
-		o[`TETRA4] = m[4] ? ~(a[`TETRA4] ^ b[`TETRA4]) : z ? 32'd0 : t[`TETRA4];
-		o[`TETRA5] = m[5] ? ~(a[`TETRA5] ^ b[`TETRA5]) : z ? 32'd0 : t[`TETRA5];
-		o[`TETRA6] = m[6] ? ~(a[`TETRA6] ^ b[`TETRA6]) : z ? 32'd0 : t[`TETRA6];
-		o[`TETRA7] = m[7] ? ~(a[`TETRA7] ^ b[`TETRA7]) : z ? 32'd0 : t[`TETRA7];
+		o[`TETRA0] = mx[0] ? ~(a[`TETRA0] ^ b[`TETRA0]) : zx[0] ? 32'd0 : t[`TETRA0];
+		o[`TETRA1] = mx[1] ? ~(a[`TETRA1] ^ b[`TETRA1]) : zx[1] ? 32'd0 : t[`TETRA1];
+		o[`TETRA2] = mx[2] ? ~(a[`TETRA2] ^ b[`TETRA2]) : zx[2] ? 32'd0 : t[`TETRA2];
+		o[`TETRA3] = mx[3] ? ~(a[`TETRA3] ^ b[`TETRA3]) : zx[3] ? 32'd0 : t[`TETRA3];
+		o[`TETRA4] = mx[4] ? ~(a[`TETRA4] ^ b[`TETRA4]) : zx[4] ? 32'd0 : t[`TETRA4];
+		o[`TETRA5] = mx[5] ? ~(a[`TETRA5] ^ b[`TETRA5]) : zx[5] ? 32'd0 : t[`TETRA5];
+		o[`TETRA6] = mx[6] ? ~(a[`TETRA6] ^ b[`TETRA6]) : zx[6] ? 32'd0 : t[`TETRA6];
+		o[`TETRA7] = mx[7] ? ~(a[`TETRA7] ^ b[`TETRA7]) : zx[7] ? 32'd0 : t[`TETRA7];
 		end
 	octa_para: 
 		begin
-		o[`OCTA0] = m[0] ? ~(a[`OCTA0] ^ b[`OCTA0]) : z ? 64'd0 : t[`OCTA0];
-		o[`OCTA1] = m[1] ? ~(a[`OCTA1] ^ b[`OCTA1]) : z ? 64'd0 : t[`OCTA1];
-		o[`OCTA2] = m[2] ? ~(a[`OCTA2] ^ b[`OCTA2]) : z ? 64'd0 : t[`OCTA2];
-		o[`OCTA3] = m[3] ? ~(a[`OCTA3] ^ b[`OCTA3]) : z ? 64'd0 : t[`OCTA3];
+		o[`OCTA0] = mx[0] ? ~(a[`OCTA0] ^ b[`OCTA0]) : zx[0] ? 64'd0 : t[`OCTA0];
+		o[`OCTA1] = mx[1] ? ~(a[`OCTA1] ^ b[`OCTA1]) : zx[1] ? 64'd0 : t[`OCTA1];
+		o[`OCTA2] = mx[2] ? ~(a[`OCTA2] ^ b[`OCTA2]) : zx[2] ? 64'd0 : t[`OCTA2];
+		o[`OCTA3] = mx[3] ? ~(a[`OCTA3] ^ b[`OCTA3]) : zx[3] ? 64'd0 : t[`OCTA3];
 		end
 hexi_para:
 	begin
-		o[`HEXI0] = m[0] ? ~(a[`HEXI0] ^ b[`HEXI0]) : z ? 128'd0 : t[`HEXI0];
-		o[`HEXI1] = m[1] ? ~(a[`HEXI1] ^ b[`HEXI1]) : z ? 128'd0 : t[`HEXI1];
+		o[`HEXI0] = mx[0] ? ~(a[`HEXI0] ^ b[`HEXI0]) : zx[0] ? 128'd0 : t[`HEXI0];
+		o[`HEXI1] = mx[1] ? ~(a[`HEXI1] ^ b[`HEXI1]) : zx[1] ? 128'd0 : t[`HEXI1];
 		end
 	default:
 		o = ~(a ^ b);
@@ -1806,8 +2110,8 @@ endtask
 
 task tskMin;
 input [3:0] fmt;
-input [31:0] m;
-input z;
+input [31:0] mx;
+input [31:0] zx;
 input [DBW:0] a;
 input [DBW:0] b;
 input [DBW:0] t;
@@ -1815,63 +2119,89 @@ output [DBW:0] o;
 begin
 	if (BIG)
 	case(fmt)
-	3'd0:	o = BIG ? ($signed(a[7:0]) < $signed(b[7:0]) ? {{56{a[7]}},a[7:0]} : {{56{b[7]}},b[7:0]}) : 64'hCCCCCCCCCCCCCCCC;			
-	3'd1:	o = BIG ? ($signed(a[15:0]) < $signed(b[15:0]) ? {{48{a[15]}},a[15:0]} : {{48{b[15]}},b[15:0]}) : 64'hCCCCCCCCCCCCCCCC;
-	3'd2:	o = BIG ? ($signed(a[31:0]) < $signed(b[31:0]) ? {{32{a[31]}},a[31:0]} : {{32{b[31]}},b[31:0]}) : 64'hCCCCCCCCCCCCCCCC;
-	3'd3:	o = BIG ? ($signed(a) < $signed(b) ? a : b) : 64'hCCCCCCCCCCCCCCCC;
+	byt:	o[`BYTE0] = $signed(a[`BYTE0]) < $signed(b[`BYTE0]) ? a[`BYTE0] : b[`BYTE0];
+	wyde:	o[`WYDE0] = $signed(a[`WYDE0]) < $signed(b[`WYDE0]) ? a[`WYDE0] : b[`WYDE0];
+	tetra:	o[`TETRA0] = $signed(a[`TETRA0]) < $signed(b[`TETRA0]) ? a[`TETRA0] : b[`TETRA0];
+	octa:	o[`OCTA0] = $signed(a[`OCTA0]) < $signed(b[`OCTA0]) ? a[`OCTA0] : b[`OCTA0];
+	hexi:	o[`HEXI0] = $signed(a[`HEXI0]) < $signed(b[`HEXI0]) ? a[`HEXI0] : b[`HEXI0];
+	3'd5: o = $signed(a) < $signed(b) ? a : b;
 	byte_para:
 		begin
-		o[7:0] = BIG ? ($signed(a[7:0]) < $signed(b[7:0]) ? a[7:0] : b[7:0]) : 64'hCCCCCCCCCCCCCCCC;
-		o[15:8] = BIG ? ($signed(a[15:8]) < $signed(b[15:8]) ? a[15:8] : b[15:8]) : 64'hCCCCCCCCCCCCCCCC;
-		o[23:16] = BIG ? ($signed(a[23:16]) < $signed(b[23:16]) ? a[23:16] : b[23:16]) : 64'hCCCCCCCCCCCCCCCC;
-		o[31:24] = BIG ? ($signed(a[31:24]) < $signed(b[31:24]) ? a[31:24] : b[31:24]) : 64'hCCCCCCCCCCCCCCCC;
-		o[39:32] = BIG ? ($signed(a[39:32]) < $signed(b[39:32]) ? a[39:32] : b[39:32]) : 64'hCCCCCCCCCCCCCCCC;
-		o[47:40] = BIG ? ($signed(a[47:40]) < $signed(b[47:40]) ? a[47:40] : b[47:40]) : 64'hCCCCCCCCCCCCCCCC;
-		o[55:48] = BIG ? ($signed(a[55:48]) < $signed(b[55:48]) ? a[55:48] : b[55:48]) : 64'hCCCCCCCCCCCCCCCC;
-		o[63:56] = BIG ? ($signed(a[63:56]) < $signed(b[63:56]) ? a[63:56] : b[63:56]) : 64'hCCCCCCCCCCCCCCCC;
+		o[`BYTE0] = mx[0] ? ($signed(a[`BYTE0]) < $signed(b[`BYTE0]) ? a[`BYTE0] : b[`BYTE0]) : zx[0] ? 8'd0 : t[`BYTE0];
+		o[`BYTE1] = mx[1] ? ($signed(a[`BYTE1]) < $signed(b[`BYTE1]) ? a[`BYTE1] : b[`BYTE1]) : zx[1] ? 8'd0 : t[`BYTE1];
+		o[`BYTE2] = mx[2] ? ($signed(a[`BYTE2]) < $signed(b[`BYTE2]) ? a[`BYTE2] : b[`BYTE2]) : zx[2] ? 8'd0 : t[`BYTE2];
+		o[`BYTE3] = mx[3] ? ($signed(a[`BYTE3]) < $signed(b[`BYTE3]) ? a[`BYTE3] : b[`BYTE3]) : zx[3] ? 8'd0 : t[`BYTE3];
+		o[`BYTE4] = mx[4] ? ($signed(a[`BYTE4]) < $signed(b[`BYTE4]) ? a[`BYTE4] : b[`BYTE4]) : zx[4] ? 8'd0 : t[`BYTE4];
+		o[`BYTE5] = mx[5] ? ($signed(a[`BYTE5]) < $signed(b[`BYTE5]) ? a[`BYTE5] : b[`BYTE5]) : zx[5] ? 8'd0 : t[`BYTE5];
+		o[`BYTE6] = mx[6] ? ($signed(a[`BYTE6]) < $signed(b[`BYTE6]) ? a[`BYTE6] : b[`BYTE6]) : zx[6] ? 8'd0 : t[`BYTE6];
+		o[`BYTE7] = mx[7] ? ($signed(a[`BYTE7]) < $signed(b[`BYTE7]) ? a[`BYTE7] : b[`BYTE7]) : zx[7] ? 8'd0 : t[`BYTE7];
+		o[`BYTE8] = mx[8] ? ($signed(a[`BYTE8]) < $signed(b[`BYTE8]) ? a[`BYTE8] : b[`BYTE8]) : zx[8] ? 8'd0 : t[`BYTE8];
+		o[`BYTE9] = mx[9] ? ($signed(a[`BYTE9]) < $signed(b[`BYTE9]) ? a[`BYTE9] : b[`BYTE9]) : zx[9] ? 8'd0 : t[`BYTE9];
+		o[`BYTE10] = mx[10] ? ($signed(a[`BYTE10]) < $signed(b[`BYTE10]) ? a[`BYTE10] : b[`BYTE10]) : zx[10] ? 8'd0 : t[`BYTE10];
+		o[`BYTE11] = mx[11] ? ($signed(a[`BYTE11]) < $signed(b[`BYTE11]) ? a[`BYTE11] : b[`BYTE11]) : zx[11] ? 8'd0 : t[`BYTE11];
+		o[`BYTE12] = mx[12] ? ($signed(a[`BYTE12]) < $signed(b[`BYTE12]) ? a[`BYTE12] : b[`BYTE12]) : zx[12] ? 8'd0 : t[`BYTE12];
+		o[`BYTE13] = mx[13] ? ($signed(a[`BYTE13]) < $signed(b[`BYTE13]) ? a[`BYTE13] : b[`BYTE13]) : zx[13] ? 8'd0 : t[`BYTE13];
+		o[`BYTE14] = mx[14] ? ($signed(a[`BYTE14]) < $signed(b[`BYTE14]) ? a[`BYTE14] : b[`BYTE14]) : zx[14] ? 8'd0 : t[`BYTE14];
+		o[`BYTE15] = mx[15] ? ($signed(a[`BYTE15]) < $signed(b[`BYTE15]) ? a[`BYTE15] : b[`BYTE15]) : zx[15] ? 8'd0 : t[`BYTE15];
+		o[`BYTE16] = mx[16] ? ($signed(a[`BYTE16]) < $signed(b[`BYTE16]) ? a[`BYTE16] : b[`BYTE16]) : zx[16] ? 8'd0 : t[`BYTE16];
+		o[`BYTE17] = mx[17] ? ($signed(a[`BYTE17]) < $signed(b[`BYTE17]) ? a[`BYTE17] : b[`BYTE17]) : zx[17] ? 8'd0 : t[`BYTE17];
+		o[`BYTE18] = mx[18] ? ($signed(a[`BYTE18]) < $signed(b[`BYTE18]) ? a[`BYTE18] : b[`BYTE18]) : zx[18] ? 8'd0 : t[`BYTE18];
+		o[`BYTE19] = mx[19] ? ($signed(a[`BYTE19]) < $signed(b[`BYTE19]) ? a[`BYTE19] : b[`BYTE19]) : zx[19] ? 8'd0 : t[`BYTE19];
+		o[`BYTE20] = mx[20] ? ($signed(a[`BYTE20]) < $signed(b[`BYTE20]) ? a[`BYTE20] : b[`BYTE20]) : zx[20] ? 8'd0 : t[`BYTE20];
+		o[`BYTE21] = mx[21] ? ($signed(a[`BYTE21]) < $signed(b[`BYTE21]) ? a[`BYTE21] : b[`BYTE21]) : zx[21] ? 8'd0 : t[`BYTE21];
+		o[`BYTE22] = mx[22] ? ($signed(a[`BYTE22]) < $signed(b[`BYTE22]) ? a[`BYTE22] : b[`BYTE22]) : zx[22] ? 8'd0 : t[`BYTE22];
+		o[`BYTE23] = mx[23] ? ($signed(a[`BYTE23]) < $signed(b[`BYTE23]) ? a[`BYTE23] : b[`BYTE23]) : zx[23] ? 8'd0 : t[`BYTE23];
+		o[`BYTE24] = mx[24] ? ($signed(a[`BYTE24]) < $signed(b[`BYTE24]) ? a[`BYTE24] : b[`BYTE24]) : zx[24] ? 8'd0 : t[`BYTE24];
+		o[`BYTE25] = mx[25] ? ($signed(a[`BYTE25]) < $signed(b[`BYTE25]) ? a[`BYTE25] : b[`BYTE25]) : zx[25] ? 8'd0 : t[`BYTE25];
+		o[`BYTE26] = mx[26] ? ($signed(a[`BYTE26]) < $signed(b[`BYTE26]) ? a[`BYTE26] : b[`BYTE26]) : zx[26] ? 8'd0 : t[`BYTE26];
+		o[`BYTE27] = mx[27] ? ($signed(a[`BYTE27]) < $signed(b[`BYTE27]) ? a[`BYTE27] : b[`BYTE27]) : zx[27] ? 8'd0 : t[`BYTE27];
+		o[`BYTE28] = mx[28] ? ($signed(a[`BYTE28]) < $signed(b[`BYTE28]) ? a[`BYTE28] : b[`BYTE28]) : zx[28] ? 8'd0 : t[`BYTE28];
+		o[`BYTE29] = mx[29] ? ($signed(a[`BYTE29]) < $signed(b[`BYTE29]) ? a[`BYTE29] : b[`BYTE29]) : zx[29] ? 8'd0 : t[`BYTE29];
+		o[`BYTE30] = mx[30] ? ($signed(a[`BYTE30]) < $signed(b[`BYTE30]) ? a[`BYTE30] : b[`BYTE30]) : zx[30] ? 8'd0 : t[`BYTE30];
+		o[`BYTE31] = mx[31] ? ($signed(a[`BYTE31]) < $signed(b[`BYTE31]) ? a[`BYTE31] : b[`BYTE31]) : zx[31] ? 8'd0 : t[`BYTE31];
 		end
 	wyde_para:
 		begin
-		o[`WYDE0] = m[0] ? ($signed(a[`WYDE0]) < $signed(b[`WYDE0]) ? a[`WYDE0] : b[`WYDE0]) : z ? 16'd0 : t[`WYDE0];
-		o[`WYDE1] = m[1] ? ($signed(a[`WYDE1]) < $signed(b[`WYDE1]) ? a[`WYDE1] : b[`WYDE1]) : z ? 16'd0 : t[`WYDE1];
-		o[`WYDE2] = m[2] ? ($signed(a[`WYDE2]) < $signed(b[`WYDE2]) ? a[`WYDE2] : b[`WYDE2]) : z ? 16'd0 : t[`WYDE2];
-		o[`WYDE3] = m[3] ? ($signed(a[`WYDE3]) < $signed(b[`WYDE3]) ? a[`WYDE3] : b[`WYDE3]) : z ? 16'd0 : t[`WYDE3];
-		o[`WYDE4] = m[4] ? ($signed(a[`WYDE4]) < $signed(b[`WYDE4]) ? a[`WYDE4] : b[`WYDE4]) : z ? 16'd0 : t[`WYDE4];
-		o[`WYDE5] = m[5] ? ($signed(a[`WYDE5]) < $signed(b[`WYDE5]) ? a[`WYDE5] : b[`WYDE5]) : z ? 16'd0 : t[`WYDE5];
-		o[`WYDE6] = m[6] ? ($signed(a[`WYDE6]) < $signed(b[`WYDE6]) ? a[`WYDE6] : b[`WYDE6]) : z ? 16'd0 : t[`WYDE6];
-		o[`WYDE7] = m[7] ? ($signed(a[`WYDE7]) < $signed(b[`WYDE7]) ? a[`WYDE7] : b[`WYDE7]) : z ? 16'd0 : t[`WYDE7];
-		o[`WYDE8] = m[0] ? ($signed(a[`WYDE8]) < $signed(b[`WYDE8]) ? a[`WYDE8] : b[`WYDE8]) : z ? 16'd0 : t[`WYDE8];
-		o[`WYDE9] = m[1] ? ($signed(a[`WYDE9]) < $signed(b[`WYDE9]) ? a[`WYDE9] : b[`WYDE9]) : z ? 16'd0 : t[`WYDE9];
-		o[`WYDE10] = m[2] ? ($signed(a[`WYDE10]) < $signed(b[`WYDE10]) ? a[`WYDE10] : b[`WYDE10]) : z ? 16'd0 : t[`WYDE10];
-		o[`WYDE11] = m[3] ? ($signed(a[`WYDE11]) < $signed(b[`WYDE11]) ? a[`WYDE11] : b[`WYDE11]) : z ? 16'd0 : t[`WYDE11];
-		o[`WYDE12] = m[4] ? ($signed(a[`WYDE12]) < $signed(b[`WYDE12]) ? a[`WYDE12] : b[`WYDE12]) : z ? 16'd0 : t[`WYDE12];
-		o[`WYDE13] = m[5] ? ($signed(a[`WYDE13]) < $signed(b[`WYDE13]) ? a[`WYDE13] : b[`WYDE13]) : z ? 16'd0 : t[`WYDE13];
-		o[`WYDE14] = m[6] ? ($signed(a[`WYDE14]) < $signed(b[`WYDE14]) ? a[`WYDE14] : b[`WYDE14]) : z ? 16'd0 : t[`WYDE14];
-		o[`WYDE15] = m[7] ? ($signed(a[`WYDE15]) < $signed(b[`WYDE15]) ? a[`WYDE15] : b[`WYDE15]) : z ? 16'd0 : t[`WYDE15];
+		o[`WYDE0] = mx[0] ? ($signed(a[`WYDE0]) < $signed(b[`WYDE0]) ? a[`WYDE0] : b[`WYDE0]) : zx[0] ? 16'd0 : t[`WYDE0];
+		o[`WYDE1] = mx[1] ? ($signed(a[`WYDE1]) < $signed(b[`WYDE1]) ? a[`WYDE1] : b[`WYDE1]) : zx[1] ? 16'd0 : t[`WYDE1];
+		o[`WYDE2] = mx[2] ? ($signed(a[`WYDE2]) < $signed(b[`WYDE2]) ? a[`WYDE2] : b[`WYDE2]) : zx[2] ? 16'd0 : t[`WYDE2];
+		o[`WYDE3] = mx[3] ? ($signed(a[`WYDE3]) < $signed(b[`WYDE3]) ? a[`WYDE3] : b[`WYDE3]) : zx[3] ? 16'd0 : t[`WYDE3];
+		o[`WYDE4] = mx[4] ? ($signed(a[`WYDE4]) < $signed(b[`WYDE4]) ? a[`WYDE4] : b[`WYDE4]) : zx[4] ? 16'd0 : t[`WYDE4];
+		o[`WYDE5] = mx[5] ? ($signed(a[`WYDE5]) < $signed(b[`WYDE5]) ? a[`WYDE5] : b[`WYDE5]) : zx[5] ? 16'd0 : t[`WYDE5];
+		o[`WYDE6] = mx[6] ? ($signed(a[`WYDE6]) < $signed(b[`WYDE6]) ? a[`WYDE6] : b[`WYDE6]) : zx[6] ? 16'd0 : t[`WYDE6];
+		o[`WYDE7] = mx[7] ? ($signed(a[`WYDE7]) < $signed(b[`WYDE7]) ? a[`WYDE7] : b[`WYDE7]) : zx[7] ? 16'd0 : t[`WYDE7];
+		o[`WYDE8] = mx[8] ? ($signed(a[`WYDE8]) < $signed(b[`WYDE8]) ? a[`WYDE8] : b[`WYDE8]) : zx[8] ? 16'd0 : t[`WYDE8];
+		o[`WYDE9] = mx[9] ? ($signed(a[`WYDE9]) < $signed(b[`WYDE9]) ? a[`WYDE9] : b[`WYDE9]) : zx[9] ? 16'd0 : t[`WYDE9];
+		o[`WYDE10] = mx[10] ? ($signed(a[`WYDE10]) < $signed(b[`WYDE10]) ? a[`WYDE10] : b[`WYDE10]) : zx[10] ? 16'd0 : t[`WYDE10];
+		o[`WYDE11] = mx[11] ? ($signed(a[`WYDE11]) < $signed(b[`WYDE11]) ? a[`WYDE11] : b[`WYDE11]) : zx[11] ? 16'd0 : t[`WYDE11];
+		o[`WYDE12] = mx[12] ? ($signed(a[`WYDE12]) < $signed(b[`WYDE12]) ? a[`WYDE12] : b[`WYDE12]) : zx[12] ? 16'd0 : t[`WYDE12];
+		o[`WYDE13] = mx[13] ? ($signed(a[`WYDE13]) < $signed(b[`WYDE13]) ? a[`WYDE13] : b[`WYDE13]) : zx[13] ? 16'd0 : t[`WYDE13];
+		o[`WYDE14] = mx[14] ? ($signed(a[`WYDE14]) < $signed(b[`WYDE14]) ? a[`WYDE14] : b[`WYDE14]) : zx[14] ? 16'd0 : t[`WYDE14];
+		o[`WYDE15] = mx[15] ? ($signed(a[`WYDE15]) < $signed(b[`WYDE15]) ? a[`WYDE15] : b[`WYDE15]) : zx[15] ? 16'd0 : t[`WYDE15];
 		end
 	tetra_para:
 		begin
-		o[`TETRA0] = m[0] ? ($signed(a[`TETRA0]) < $signed(b[`TETRA0]) ? a[`TETRA0] : b[`TETRA0]) : z ? 32'd0 : t[`TETRA0];
-		o[`TETRA1] = m[1] ? ($signed(a[`TETRA1]) < $signed(b[`TETRA1]) ? a[`TETRA1] : b[`TETRA1]) : z ? 32'd0 : t[`TETRA1];
-		o[`TETRA2] = m[2] ? ($signed(a[`TETRA2]) < $signed(b[`TETRA2]) ? a[`TETRA2] : b[`TETRA2]) : z ? 32'd0 : t[`TETRA2];
-		o[`TETRA3] = m[3] ? ($signed(a[`TETRA3]) < $signed(b[`TETRA3]) ? a[`TETRA3] : b[`TETRA3]) : z ? 32'd0 : t[`TETRA3];
-		o[`TETRA4] = m[4] ? ($signed(a[`TETRA4]) < $signed(b[`TETRA4]) ? a[`TETRA4] : b[`TETRA4]) : z ? 32'd0 : t[`TETRA4];
-		o[`TETRA5] = m[5] ? ($signed(a[`TETRA5]) < $signed(b[`TETRA5]) ? a[`TETRA5] : b[`TETRA5]) : z ? 32'd0 : t[`TETRA5];
-		o[`TETRA6] = m[6] ? ($signed(a[`TETRA6]) < $signed(b[`TETRA6]) ? a[`TETRA6] : b[`TETRA6]) : z ? 32'd0 : t[`TETRA6];
-		o[`TETRA7] = m[7] ? ($signed(a[`TETRA7]) < $signed(b[`TETRA7]) ? a[`TETRA7] : b[`TETRA7]) : z ? 32'd0 : t[`TETRA7];
+		o[`TETRA0] = mx[0] ? ($signed(a[`TETRA0]) < $signed(b[`TETRA0]) ? a[`TETRA0] : b[`TETRA0]) : zx[0] ? 32'd0 : t[`TETRA0];
+		o[`TETRA1] = mx[1] ? ($signed(a[`TETRA1]) < $signed(b[`TETRA1]) ? a[`TETRA1] : b[`TETRA1]) : zx[1] ? 32'd0 : t[`TETRA1];
+		o[`TETRA2] = mx[2] ? ($signed(a[`TETRA2]) < $signed(b[`TETRA2]) ? a[`TETRA2] : b[`TETRA2]) : zx[2] ? 32'd0 : t[`TETRA2];
+		o[`TETRA3] = mx[3] ? ($signed(a[`TETRA3]) < $signed(b[`TETRA3]) ? a[`TETRA3] : b[`TETRA3]) : zx[3] ? 32'd0 : t[`TETRA3];
+		o[`TETRA4] = mx[4] ? ($signed(a[`TETRA4]) < $signed(b[`TETRA4]) ? a[`TETRA4] : b[`TETRA4]) : zx[4] ? 32'd0 : t[`TETRA4];
+		o[`TETRA5] = mx[5] ? ($signed(a[`TETRA5]) < $signed(b[`TETRA5]) ? a[`TETRA5] : b[`TETRA5]) : zx[5] ? 32'd0 : t[`TETRA5];
+		o[`TETRA6] = mx[6] ? ($signed(a[`TETRA6]) < $signed(b[`TETRA6]) ? a[`TETRA6] : b[`TETRA6]) : zx[6] ? 32'd0 : t[`TETRA6];
+		o[`TETRA7] = mx[7] ? ($signed(a[`TETRA7]) < $signed(b[`TETRA7]) ? a[`TETRA7] : b[`TETRA7]) : zx[7] ? 32'd0 : t[`TETRA7];
 		end
 	octa_para: 
 		begin
-		o[`OCTA0] = m[0] ? ($signed(a[`OCTA0]) < $signed(b[`OCTA0]) ? a[`OCTA0] : b[`OCTA0]) : z ? 64'd0 : t[`OCTA0];
-		o[`OCTA1] = m[1] ? ($signed(a[`OCTA1]) < $signed(b[`OCTA1]) ? a[`OCTA1] : b[`OCTA1]) : z ? 64'd0 : t[`OCTA1];
-		o[`OCTA2] = m[2] ? ($signed(a[`OCTA2]) < $signed(b[`OCTA2]) ? a[`OCTA2] : b[`OCTA2]) : z ? 64'd0 : t[`OCTA2];
-		o[`OCTA3] = m[3] ? ($signed(a[`OCTA3]) < $signed(b[`OCTA3]) ? a[`OCTA3] : b[`OCTA3]) : z ? 64'd0 : t[`OCTA3];
+		o[`OCTA0] = mx[0] ? ($signed(a[`OCTA0]) < $signed(b[`OCTA0]) ? a[`OCTA0] : b[`OCTA0]) : zx[0] ? 64'd0 : t[`OCTA0];
+		o[`OCTA1] = mx[1] ? ($signed(a[`OCTA1]) < $signed(b[`OCTA1]) ? a[`OCTA1] : b[`OCTA1]) : zx[1] ? 64'd0 : t[`OCTA1];
+		o[`OCTA2] = mx[2] ? ($signed(a[`OCTA2]) < $signed(b[`OCTA2]) ? a[`OCTA2] : b[`OCTA2]) : zx[2] ? 64'd0 : t[`OCTA2];
+		o[`OCTA3] = mx[3] ? ($signed(a[`OCTA3]) < $signed(b[`OCTA3]) ? a[`OCTA3] : b[`OCTA3]) : zx[3] ? 64'd0 : t[`OCTA3];
 		end
 //	hexi_para:
 	default:
 		begin
-		o[`HEXI0] = m[0] ? ($signed(a[`HEXI0]) < $signed(b[`HEXI0]) ? a[`HEXI0] : b[`HEXI0]) : z ? 128'd0 : t[`HEXI0];
-		o[`HEXI1] = m[1] ? ($signed(a[`HEXI1]) < $signed(b[`HEXI1]) ? a[`HEXI1] : b[`HEXI1]) : z ? 128'd0 : t[`HEXI1];
+		o[`HEXI0] = mx[0] ? ($signed(a[`HEXI0]) < $signed(b[`HEXI0]) ? a[`HEXI0] : b[`HEXI0]) : zx[0] ? 128'd0 : t[`HEXI0];
+		o[`HEXI1] = mx[1] ? ($signed(a[`HEXI1]) < $signed(b[`HEXI1]) ? a[`HEXI1] : b[`HEXI1]) : zx[1] ? 128'd0 : t[`HEXI1];
 		end
 	endcase
 	else
@@ -1881,8 +2211,8 @@ endtask
 
 task tskMax;
 input [3:0] fmt;
-input [31:0] m;
-input z;
+input [31:0] mx;
+input [31:0] zx;
 input [DBW:0] a;
 input [DBW:0] b;
 input [DBW:0] t;
@@ -1890,63 +2220,89 @@ output [DBW:0] o;
 begin
 	if (BIG)
 	case(fmt)
-	3'd0:	o = BIG ? ($signed(a[7:0]) > $signed(b[7:0]) ? {{56{a[7]}},a[7:0]} : {{56{b[7]}},b[7:0]}) : 64'hCCCCCCCCCCCCCCCC;			
-	3'd1:	o = BIG ? ($signed(a[15:0]) > $signed(b[15:0]) ? {{48{a[15]}},a[15:0]} : {{48{b[15]}},b[15:0]}) : 64'hCCCCCCCCCCCCCCCC;
-	3'd2:	o = BIG ? ($signed(a[31:0]) > $signed(b[31:0]) ? {{32{a[31]}},a[31:0]} : {{32{b[31]}},b[31:0]}) : 64'hCCCCCCCCCCCCCCCC;
-	3'd3:	o = BIG ? ($signed(a) > $signed(b) ? a : b) : 64'hCCCCCCCCCCCCCCCC;
+	byt:	o[`BYTE0] = $signed(a[`BYTE0]) > $signed(b[`BYTE0]) ? a[`BYTE0] : b[`BYTE0];
+	wyde:	o[`WYDE0] = $signed(a[`WYDE0]) > $signed(b[`WYDE0]) ? a[`WYDE0] : b[`WYDE0];
+	tetra:	o[`TETRA0] = $signed(a[`TETRA0]) > $signed(b[`TETRA0]) ? a[`TETRA0] : b[`TETRA0];
+	octa:	o[`OCTA0] = $signed(a[`OCTA0]) > $signed(b[`OCTA0]) ? a[`OCTA0] : b[`OCTA0];
+	hexi:	o[`HEXI0] = $signed(a[`HEXI0]) > $signed(b[`HEXI0]) ? a[`HEXI0] : b[`HEXI0];
+	3'd5: o = $signed(a) > $signed(b) ? a : b;
 	byte_para:
 		begin
-		o[7:0] = BIG ? ($signed(a[7:0]) > $signed(b[7:0]) ? a[7:0] : b[7:0]) : 64'hCCCCCCCCCCCCCCCC;
-		o[15:8] = BIG ? ($signed(a[15:8]) > $signed(b[15:8]) ? a[15:8] : b[15:8]) : 64'hCCCCCCCCCCCCCCCC;
-		o[23:16] = BIG ? ($signed(a[23:16]) > $signed(b[23:16]) ? a[23:16] : b[23:16]) : 64'hCCCCCCCCCCCCCCCC;
-		o[31:24] = BIG ? ($signed(a[31:24]) > $signed(b[31:24]) ? a[31:24] : b[31:24]) : 64'hCCCCCCCCCCCCCCCC;
-		o[39:32] = BIG ? ($signed(a[39:32]) > $signed(b[39:32]) ? a[39:32] : b[39:32]) : 64'hCCCCCCCCCCCCCCCC;
-		o[47:40] = BIG ? ($signed(a[47:40]) > $signed(b[47:40]) ? a[47:40] : b[47:40]) : 64'hCCCCCCCCCCCCCCCC;
-		o[55:48] = BIG ? ($signed(a[55:48]) > $signed(b[55:48]) ? a[55:48] : b[55:48]) : 64'hCCCCCCCCCCCCCCCC;
-		o[63:56] = BIG ? ($signed(a[63:56]) > $signed(b[63:56]) ? a[63:56] : b[63:56]) : 64'hCCCCCCCCCCCCCCCC;
+		o[`BYTE0] = mx[0] ? ($signed(a[`BYTE0]) > $signed(b[`BYTE0]) ? a[`BYTE0] : b[`BYTE0]) : zx[0] ? 8'd0 : t[`BYTE0];
+		o[`BYTE1] = mx[1] ? ($signed(a[`BYTE1]) > $signed(b[`BYTE1]) ? a[`BYTE1] : b[`BYTE1]) : zx[1] ? 8'd0 : t[`BYTE1];
+		o[`BYTE2] = mx[2] ? ($signed(a[`BYTE2]) > $signed(b[`BYTE2]) ? a[`BYTE2] : b[`BYTE2]) : zx[2] ? 8'd0 : t[`BYTE2];
+		o[`BYTE3] = mx[3] ? ($signed(a[`BYTE3]) > $signed(b[`BYTE3]) ? a[`BYTE3] : b[`BYTE3]) : zx[3] ? 8'd0 : t[`BYTE3];
+		o[`BYTE4] = mx[4] ? ($signed(a[`BYTE4]) > $signed(b[`BYTE4]) ? a[`BYTE4] : b[`BYTE4]) : zx[4] ? 8'd0 : t[`BYTE4];
+		o[`BYTE5] = mx[5] ? ($signed(a[`BYTE5]) > $signed(b[`BYTE5]) ? a[`BYTE5] : b[`BYTE5]) : zx[5] ? 8'd0 : t[`BYTE5];
+		o[`BYTE6] = mx[6] ? ($signed(a[`BYTE6]) > $signed(b[`BYTE6]) ? a[`BYTE6] : b[`BYTE6]) : zx[6] ? 8'd0 : t[`BYTE6];
+		o[`BYTE7] = mx[7] ? ($signed(a[`BYTE7]) > $signed(b[`BYTE7]) ? a[`BYTE7] : b[`BYTE7]) : zx[7] ? 8'd0 : t[`BYTE7];
+		o[`BYTE8] = mx[8] ? ($signed(a[`BYTE8]) > $signed(b[`BYTE8]) ? a[`BYTE8] : b[`BYTE8]) : zx[8] ? 8'd0 : t[`BYTE8];
+		o[`BYTE9] = mx[9] ? ($signed(a[`BYTE9]) > $signed(b[`BYTE9]) ? a[`BYTE9] : b[`BYTE9]) : zx[9] ? 8'd0 : t[`BYTE9];
+		o[`BYTE10] = mx[10] ? ($signed(a[`BYTE10]) > $signed(b[`BYTE10]) ? a[`BYTE10] : b[`BYTE10]) : zx[10] ? 8'd0 : t[`BYTE10];
+		o[`BYTE11] = mx[11] ? ($signed(a[`BYTE11]) > $signed(b[`BYTE11]) ? a[`BYTE11] : b[`BYTE11]) : zx[11] ? 8'd0 : t[`BYTE11];
+		o[`BYTE12] = mx[12] ? ($signed(a[`BYTE12]) > $signed(b[`BYTE12]) ? a[`BYTE12] : b[`BYTE12]) : zx[12] ? 8'd0 : t[`BYTE12];
+		o[`BYTE13] = mx[13] ? ($signed(a[`BYTE13]) > $signed(b[`BYTE13]) ? a[`BYTE13] : b[`BYTE13]) : zx[13] ? 8'd0 : t[`BYTE13];
+		o[`BYTE14] = mx[14] ? ($signed(a[`BYTE14]) > $signed(b[`BYTE14]) ? a[`BYTE14] : b[`BYTE14]) : zx[14] ? 8'd0 : t[`BYTE14];
+		o[`BYTE15] = mx[15] ? ($signed(a[`BYTE15]) > $signed(b[`BYTE15]) ? a[`BYTE15] : b[`BYTE15]) : zx[15] ? 8'd0 : t[`BYTE15];
+		o[`BYTE16] = mx[16] ? ($signed(a[`BYTE16]) > $signed(b[`BYTE16]) ? a[`BYTE16] : b[`BYTE16]) : zx[16] ? 8'd0 : t[`BYTE16];
+		o[`BYTE17] = mx[17] ? ($signed(a[`BYTE17]) > $signed(b[`BYTE17]) ? a[`BYTE17] : b[`BYTE17]) : zx[17] ? 8'd0 : t[`BYTE17];
+		o[`BYTE18] = mx[18] ? ($signed(a[`BYTE18]) > $signed(b[`BYTE18]) ? a[`BYTE18] : b[`BYTE18]) : zx[18] ? 8'd0 : t[`BYTE18];
+		o[`BYTE19] = mx[19] ? ($signed(a[`BYTE19]) > $signed(b[`BYTE19]) ? a[`BYTE19] : b[`BYTE19]) : zx[19] ? 8'd0 : t[`BYTE19];
+		o[`BYTE20] = mx[20] ? ($signed(a[`BYTE20]) > $signed(b[`BYTE20]) ? a[`BYTE20] : b[`BYTE20]) : zx[20] ? 8'd0 : t[`BYTE20];
+		o[`BYTE21] = mx[21] ? ($signed(a[`BYTE21]) > $signed(b[`BYTE21]) ? a[`BYTE21] : b[`BYTE21]) : zx[21] ? 8'd0 : t[`BYTE21];
+		o[`BYTE22] = mx[22] ? ($signed(a[`BYTE22]) > $signed(b[`BYTE22]) ? a[`BYTE22] : b[`BYTE22]) : zx[22] ? 8'd0 : t[`BYTE22];
+		o[`BYTE23] = mx[23] ? ($signed(a[`BYTE23]) > $signed(b[`BYTE23]) ? a[`BYTE23] : b[`BYTE23]) : zx[23] ? 8'd0 : t[`BYTE23];
+		o[`BYTE24] = mx[24] ? ($signed(a[`BYTE24]) > $signed(b[`BYTE24]) ? a[`BYTE24] : b[`BYTE24]) : zx[24] ? 8'd0 : t[`BYTE24];
+		o[`BYTE25] = mx[25] ? ($signed(a[`BYTE25]) > $signed(b[`BYTE25]) ? a[`BYTE25] : b[`BYTE25]) : zx[25] ? 8'd0 : t[`BYTE25];
+		o[`BYTE26] = mx[26] ? ($signed(a[`BYTE26]) > $signed(b[`BYTE26]) ? a[`BYTE26] : b[`BYTE26]) : zx[26] ? 8'd0 : t[`BYTE26];
+		o[`BYTE27] = mx[27] ? ($signed(a[`BYTE27]) > $signed(b[`BYTE27]) ? a[`BYTE27] : b[`BYTE27]) : zx[27] ? 8'd0 : t[`BYTE27];
+		o[`BYTE28] = mx[28] ? ($signed(a[`BYTE28]) > $signed(b[`BYTE28]) ? a[`BYTE28] : b[`BYTE28]) : zx[28] ? 8'd0 : t[`BYTE28];
+		o[`BYTE29] = mx[29] ? ($signed(a[`BYTE29]) > $signed(b[`BYTE29]) ? a[`BYTE29] : b[`BYTE29]) : zx[29] ? 8'd0 : t[`BYTE29];
+		o[`BYTE30] = mx[30] ? ($signed(a[`BYTE30]) > $signed(b[`BYTE30]) ? a[`BYTE30] : b[`BYTE30]) : zx[30] ? 8'd0 : t[`BYTE30];
+		o[`BYTE31] = mx[31] ? ($signed(a[`BYTE31]) > $signed(b[`BYTE31]) ? a[`BYTE31] : b[`BYTE31]) : zx[31] ? 8'd0 : t[`BYTE31];
 		end
 	wyde_para:
 		begin
-		o[`WYDE0] = m[0] ? ($signed(a[`WYDE0]) > $signed(b[`WYDE0]) ? a[`WYDE0] : b[`WYDE0]) : z ? 16'd0 : t[`WYDE0];
-		o[`WYDE1] = m[1] ? ($signed(a[`WYDE1]) > $signed(b[`WYDE1]) ? a[`WYDE1] : b[`WYDE1]) : z ? 16'd0 : t[`WYDE1];
-		o[`WYDE2] = m[2] ? ($signed(a[`WYDE2]) > $signed(b[`WYDE2]) ? a[`WYDE2] : b[`WYDE2]) : z ? 16'd0 : t[`WYDE2];
-		o[`WYDE3] = m[3] ? ($signed(a[`WYDE3]) > $signed(b[`WYDE3]) ? a[`WYDE3] : b[`WYDE3]) : z ? 16'd0 : t[`WYDE3];
-		o[`WYDE4] = m[4] ? ($signed(a[`WYDE4]) > $signed(b[`WYDE4]) ? a[`WYDE4] : b[`WYDE4]) : z ? 16'd0 : t[`WYDE4];
-		o[`WYDE5] = m[5] ? ($signed(a[`WYDE5]) > $signed(b[`WYDE5]) ? a[`WYDE5] : b[`WYDE5]) : z ? 16'd0 : t[`WYDE5];
-		o[`WYDE6] = m[6] ? ($signed(a[`WYDE6]) > $signed(b[`WYDE6]) ? a[`WYDE6] : b[`WYDE6]) : z ? 16'd0 : t[`WYDE6];
-		o[`WYDE7] = m[7] ? ($signed(a[`WYDE7]) > $signed(b[`WYDE7]) ? a[`WYDE7] : b[`WYDE7]) : z ? 16'd0 : t[`WYDE7];
-		o[`WYDE8] = m[0] ? ($signed(a[`WYDE8]) > $signed(b[`WYDE8]) ? a[`WYDE8] : b[`WYDE8]) : z ? 16'd0 : t[`WYDE8];
-		o[`WYDE9] = m[1] ? ($signed(a[`WYDE9]) > $signed(b[`WYDE9]) ? a[`WYDE9] : b[`WYDE9]) : z ? 16'd0 : t[`WYDE9];
-		o[`WYDE10] = m[2] ? ($signed(a[`WYDE10]) > $signed(b[`WYDE10]) ? a[`WYDE10] : b[`WYDE10]) : z ? 16'd0 : t[`WYDE10];
-		o[`WYDE11] = m[3] ? ($signed(a[`WYDE11]) > $signed(b[`WYDE11]) ? a[`WYDE11] : b[`WYDE11]) : z ? 16'd0 : t[`WYDE11];
-		o[`WYDE12] = m[4] ? ($signed(a[`WYDE12]) > $signed(b[`WYDE12]) ? a[`WYDE12] : b[`WYDE12]) : z ? 16'd0 : t[`WYDE12];
-		o[`WYDE13] = m[5] ? ($signed(a[`WYDE13]) > $signed(b[`WYDE13]) ? a[`WYDE13] : b[`WYDE13]) : z ? 16'd0 : t[`WYDE13];
-		o[`WYDE14] = m[6] ? ($signed(a[`WYDE14]) > $signed(b[`WYDE14]) ? a[`WYDE14] : b[`WYDE14]) : z ? 16'd0 : t[`WYDE14];
-		o[`WYDE15] = m[7] ? ($signed(a[`WYDE15]) > $signed(b[`WYDE15]) ? a[`WYDE15] : b[`WYDE15]) : z ? 16'd0 : t[`WYDE15];
+		o[`WYDE0] = mx[0] ? ($signed(a[`WYDE0]) > $signed(b[`WYDE0]) ? a[`WYDE0] : b[`WYDE0]) : zx[0] ? 16'd0 : t[`WYDE0];
+		o[`WYDE1] = mx[1] ? ($signed(a[`WYDE1]) > $signed(b[`WYDE1]) ? a[`WYDE1] : b[`WYDE1]) : zx[1] ? 16'd0 : t[`WYDE1];
+		o[`WYDE2] = mx[2] ? ($signed(a[`WYDE2]) > $signed(b[`WYDE2]) ? a[`WYDE2] : b[`WYDE2]) : zx[2] ? 16'd0 : t[`WYDE2];
+		o[`WYDE3] = mx[3] ? ($signed(a[`WYDE3]) > $signed(b[`WYDE3]) ? a[`WYDE3] : b[`WYDE3]) : zx[3] ? 16'd0 : t[`WYDE3];
+		o[`WYDE4] = mx[4] ? ($signed(a[`WYDE4]) > $signed(b[`WYDE4]) ? a[`WYDE4] : b[`WYDE4]) : zx[4] ? 16'd0 : t[`WYDE4];
+		o[`WYDE5] = mx[5] ? ($signed(a[`WYDE5]) > $signed(b[`WYDE5]) ? a[`WYDE5] : b[`WYDE5]) : zx[5] ? 16'd0 : t[`WYDE5];
+		o[`WYDE6] = mx[6] ? ($signed(a[`WYDE6]) > $signed(b[`WYDE6]) ? a[`WYDE6] : b[`WYDE6]) : zx[6] ? 16'd0 : t[`WYDE6];
+		o[`WYDE7] = mx[7] ? ($signed(a[`WYDE7]) > $signed(b[`WYDE7]) ? a[`WYDE7] : b[`WYDE7]) : zx[7] ? 16'd0 : t[`WYDE7];
+		o[`WYDE8] = mx[8] ? ($signed(a[`WYDE8]) > $signed(b[`WYDE8]) ? a[`WYDE8] : b[`WYDE8]) : zx[8] ? 16'd0 : t[`WYDE8];
+		o[`WYDE9] = mx[9] ? ($signed(a[`WYDE9]) > $signed(b[`WYDE9]) ? a[`WYDE9] : b[`WYDE9]) : zx[9] ? 16'd0 : t[`WYDE9];
+		o[`WYDE10] = mx[10] ? ($signed(a[`WYDE10]) > $signed(b[`WYDE10]) ? a[`WYDE10] : b[`WYDE10]) : zx[10] ? 16'd0 : t[`WYDE10];
+		o[`WYDE11] = mx[11] ? ($signed(a[`WYDE11]) > $signed(b[`WYDE11]) ? a[`WYDE11] : b[`WYDE11]) : zx[11] ? 16'd0 : t[`WYDE11];
+		o[`WYDE12] = mx[12] ? ($signed(a[`WYDE12]) > $signed(b[`WYDE12]) ? a[`WYDE12] : b[`WYDE12]) : zx[12] ? 16'd0 : t[`WYDE12];
+		o[`WYDE13] = mx[13] ? ($signed(a[`WYDE13]) > $signed(b[`WYDE13]) ? a[`WYDE13] : b[`WYDE13]) : zx[13] ? 16'd0 : t[`WYDE13];
+		o[`WYDE14] = mx[14] ? ($signed(a[`WYDE14]) > $signed(b[`WYDE14]) ? a[`WYDE14] : b[`WYDE14]) : zx[14] ? 16'd0 : t[`WYDE14];
+		o[`WYDE15] = mx[15] ? ($signed(a[`WYDE15]) > $signed(b[`WYDE15]) ? a[`WYDE15] : b[`WYDE15]) : zx[15] ? 16'd0 : t[`WYDE15];
 		end
 	tetra_para:
 		begin
-		o[`TETRA0] = m[0] ? ($signed(a[`TETRA0]) > $signed(b[`TETRA0]) ? a[`TETRA0] : b[`TETRA0]) : z ? 32'd0 : t[`TETRA0];
-		o[`TETRA1] = m[1] ? ($signed(a[`TETRA1]) > $signed(b[`TETRA1]) ? a[`TETRA1] : b[`TETRA1]) : z ? 32'd0 : t[`TETRA1];
-		o[`TETRA2] = m[2] ? ($signed(a[`TETRA2]) > $signed(b[`TETRA2]) ? a[`TETRA2] : b[`TETRA2]) : z ? 32'd0 : t[`TETRA2];
-		o[`TETRA3] = m[3] ? ($signed(a[`TETRA3]) > $signed(b[`TETRA3]) ? a[`TETRA3] : b[`TETRA3]) : z ? 32'd0 : t[`TETRA3];
-		o[`TETRA4] = m[4] ? ($signed(a[`TETRA4]) > $signed(b[`TETRA4]) ? a[`TETRA4] : b[`TETRA4]) : z ? 32'd0 : t[`TETRA4];
-		o[`TETRA5] = m[5] ? ($signed(a[`TETRA5]) > $signed(b[`TETRA5]) ? a[`TETRA5] : b[`TETRA5]) : z ? 32'd0 : t[`TETRA5];
-		o[`TETRA6] = m[6] ? ($signed(a[`TETRA6]) > $signed(b[`TETRA6]) ? a[`TETRA6] : b[`TETRA6]) : z ? 32'd0 : t[`TETRA6];
-		o[`TETRA7] = m[7] ? ($signed(a[`TETRA7]) > $signed(b[`TETRA7]) ? a[`TETRA7] : b[`TETRA7]) : z ? 32'd0 : t[`TETRA7];
+		o[`TETRA0] = mx[0] ? ($signed(a[`TETRA0]) > $signed(b[`TETRA0]) ? a[`TETRA0] : b[`TETRA0]) : zx[0] ? 32'd0 : t[`TETRA0];
+		o[`TETRA1] = mx[1] ? ($signed(a[`TETRA1]) > $signed(b[`TETRA1]) ? a[`TETRA1] : b[`TETRA1]) : zx[1] ? 32'd0 : t[`TETRA1];
+		o[`TETRA2] = mx[2] ? ($signed(a[`TETRA2]) > $signed(b[`TETRA2]) ? a[`TETRA2] : b[`TETRA2]) : zx[2] ? 32'd0 : t[`TETRA2];
+		o[`TETRA3] = mx[3] ? ($signed(a[`TETRA3]) > $signed(b[`TETRA3]) ? a[`TETRA3] : b[`TETRA3]) : zx[3] ? 32'd0 : t[`TETRA3];
+		o[`TETRA4] = mx[4] ? ($signed(a[`TETRA4]) > $signed(b[`TETRA4]) ? a[`TETRA4] : b[`TETRA4]) : zx[4] ? 32'd0 : t[`TETRA4];
+		o[`TETRA5] = mx[5] ? ($signed(a[`TETRA5]) > $signed(b[`TETRA5]) ? a[`TETRA5] : b[`TETRA5]) : zx[5] ? 32'd0 : t[`TETRA5];
+		o[`TETRA6] = mx[6] ? ($signed(a[`TETRA6]) > $signed(b[`TETRA6]) ? a[`TETRA6] : b[`TETRA6]) : zx[6] ? 32'd0 : t[`TETRA6];
+		o[`TETRA7] = mx[7] ? ($signed(a[`TETRA7]) > $signed(b[`TETRA7]) ? a[`TETRA7] : b[`TETRA7]) : zx[7] ? 32'd0 : t[`TETRA7];
 		end
 	octa_para: 
 		begin
-		o[`OCTA0] = m[0] ? ($signed(a[`OCTA0]) > $signed(b[`OCTA0]) ? a[`OCTA0] : b[`OCTA0]) : z ? 64'd0 : t[`OCTA0];
-		o[`OCTA1] = m[1] ? ($signed(a[`OCTA1]) > $signed(b[`OCTA1]) ? a[`OCTA1] : b[`OCTA1]) : z ? 64'd0 : t[`OCTA1];
-		o[`OCTA2] = m[2] ? ($signed(a[`OCTA2]) > $signed(b[`OCTA2]) ? a[`OCTA2] : b[`OCTA2]) : z ? 64'd0 : t[`OCTA2];
-		o[`OCTA3] = m[3] ? ($signed(a[`OCTA3]) > $signed(b[`OCTA3]) ? a[`OCTA3] : b[`OCTA3]) : z ? 64'd0 : t[`OCTA3];
+		o[`OCTA0] = mx[0] ? ($signed(a[`OCTA0]) > $signed(b[`OCTA0]) ? a[`OCTA0] : b[`OCTA0]) : zx[0] ? 64'd0 : t[`OCTA0];
+		o[`OCTA1] = mx[1] ? ($signed(a[`OCTA1]) > $signed(b[`OCTA1]) ? a[`OCTA1] : b[`OCTA1]) : zx[1] ? 64'd0 : t[`OCTA1];
+		o[`OCTA2] = mx[2] ? ($signed(a[`OCTA2]) > $signed(b[`OCTA2]) ? a[`OCTA2] : b[`OCTA2]) : zx[2] ? 64'd0 : t[`OCTA2];
+		o[`OCTA3] = mx[3] ? ($signed(a[`OCTA3]) > $signed(b[`OCTA3]) ? a[`OCTA3] : b[`OCTA3]) : zx[3] ? 64'd0 : t[`OCTA3];
 		end
 //	hexi_para:
 	default:
 		begin
-		o[`HEXI0] = m[0] ? ($signed(a[`HEXI0]) > $signed(b[`HEXI0]) ? a[`HEXI0] : b[`HEXI0]) : z ? 128'd0 : t[`HEXI0];
-		o[`HEXI1] = m[1] ? ($signed(a[`HEXI1]) > $signed(b[`HEXI1]) ? a[`HEXI1] : b[`HEXI1]) : z ? 128'd0 : t[`HEXI1];
+		o[`HEXI0] = mx[0] ? ($signed(a[`HEXI0]) > $signed(b[`HEXI0]) ? a[`HEXI0] : b[`HEXI0]) : zx[0] ? 128'd0 : t[`HEXI0];
+		o[`HEXI1] = mx[1] ? ($signed(a[`HEXI1]) > $signed(b[`HEXI1]) ? a[`HEXI1] : b[`HEXI1]) : zx[1] ? 128'd0 : t[`HEXI1];
 		end
 	endcase
 	else
@@ -2034,12 +2390,103 @@ begin
 											$signed(a[`OCTA1]) == $signed(b[`OCTA1]),
 											$signed(a[`OCTA0]) == $signed(b[`OCTA0])
 										};
-//S	hexi_para:
-	default:		
+	hexi_para:
 								o = {
 											$signed(a[`HEXI1]) == $signed(b[`HEXI1]),
 											$signed(a[`HEXI0]) == $signed(b[`HEXI0])
 										};
+	default:		  o = a == b;
+  endcase
+end
+endtask
+
+task tskSne;
+input [3:0] fmt;
+input [255:0] a;
+input [255:0] b;
+output [255:0] o;
+begin
+	case(fmt)
+  byt:   o = a[7:0] != b[7:0];
+  wyde:   o = a[15:0] != b[15:0];
+  tetra:   o = a[31:0] != b[31:0];
+  octa:   o = a[63:0] != b[63:0];
+  hexi:   o = a[127:0] != b[127:0];
+  byte_para:		o = {
+						        	a[`BYTE31] != b[`BYTE31],
+						        	a[`BYTE30] != b[`BYTE30],
+						        	a[`BYTE29] != b[`BYTE29],
+						        	a[`BYTE28] != b[`BYTE28],
+						        	a[`BYTE27] != b[`BYTE27],
+						        	a[`BYTE26] != b[`BYTE26],
+						        	a[`BYTE25] != b[`BYTE25],
+						        	a[`BYTE24] != b[`BYTE24],
+						        	a[`BYTE23] != b[`BYTE23],
+						        	a[`BYTE22] != b[`BYTE22],
+						        	a[`BYTE21] != b[`BYTE21],
+						        	a[`BYTE20] != b[`BYTE20],
+						        	a[`BYTE19] != b[`BYTE19],
+						        	a[`BYTE18] != b[`BYTE18],
+						        	a[`BYTE17] != b[`BYTE17],
+						        	a[`BYTE16] != b[`BYTE16],
+						        	a[`BYTE15] != b[`BYTE15],
+						        	a[`BYTE14] != b[`BYTE14],
+						        	a[`BYTE13] != b[`BYTE13],
+						        	a[`BYTE12] != b[`BYTE12],
+						        	a[`BYTE11] != b[`BYTE11],
+						        	a[`BYTE10] != b[`BYTE10],
+						        	a[`BYTE9] != b[`BYTE9],
+						        	a[`BYTE8] != b[`BYTE8],
+						        	a[`BYTE7] != b[`BYTE7],
+						        	a[`BYTE6] != b[`BYTE6],
+						        	a[`BYTE5] != b[`BYTE5],
+						        	a[`BYTE4] != b[`BYTE4],
+						        	a[`BYTE3] != b[`BYTE3],
+						        	a[`BYTE2] != b[`BYTE2],
+						        	a[`BYTE1] != b[`BYTE1],
+						        	a[`BYTE0] != b[`BYTE0]
+						        };
+  wyde_para:		o = {
+						        	a[`WYDE15] != b[`WYDE15],
+						        	a[`WYDE14] != b[`WYDE14],
+						        	a[`WYDE13] != b[`WYDE13],
+						        	a[`WYDE12] != b[`WYDE12],
+						        	a[`WYDE11] != b[`WYDE11],
+						        	a[`WYDE10] != b[`WYDE10],
+						        	a[`WYDE9] != b[`WYDE9],
+						        	a[`WYDE8] != b[`WYDE8],
+						        	a[`WYDE7] != b[`WYDE7],
+						        	a[`WYDE6] != b[`WYDE6],
+						        	a[`WYDE5] != b[`WYDE5],
+						        	a[`WYDE4] != b[`WYDE4],
+						        	a[`WYDE3] != b[`WYDE3],
+						        	a[`WYDE2] != b[`WYDE2],
+						        	a[`WYDE1] != b[`WYDE1],
+						        	a[`WYDE0] != b[`WYDE0]
+						        };
+  tetra_para:		o = {
+					        		a[`TETRA7] != b[`TETRA7],
+					        		a[`TETRA6] != b[`TETRA6],
+					        		a[`TETRA5] != b[`TETRA5],
+					        		a[`TETRA4] != b[`TETRA4],
+					        		a[`TETRA3] != b[`TETRA3],
+					        		a[`TETRA2] != b[`TETRA2],
+					        		a[`TETRA1] != b[`TETRA1],
+					        		a[`TETRA0] != b[`TETRA0]
+						        };
+	octa_para:		o = {
+											a[`OCTA3] != b[`OCTA3],
+											a[`OCTA2] != b[`OCTA2],
+											a[`OCTA1] != b[`OCTA1],
+											a[`OCTA0] != b[`OCTA0]
+										};
+	hexi_para:		
+								o = {
+											a[`HEXI1] != b[`HEXI1],
+											a[`HEXI0] != b[`HEXI0]
+										};
+	default:
+		o = a != b;
   endcase
 end
 endtask
@@ -2051,10 +2498,12 @@ input [255:0] b;
 output [255:0] o;
 begin
 	case(fmt)
-  3'd0:   o = $signed(a[7:0]) < $signed(b[7:0]);
-  3'd1:   o = $signed(a[15:0]) < $signed(b[15:0]);
-  3'd2:   o = $signed(a[31:0]) < $signed(b[31:0]);
-  3'd3:   o = $signed(a) < $signed(b);
+  byt:   o = $signed(a[7:0]) < $signed(b[7:0]);
+  wyde:   o = $signed(a[15:0]) < $signed(b[15:0]);
+  tetra:   o = $signed(a[31:0]) < $signed(b[31:0]);
+  octa:		o = $signed(a[63:0]) < $signed(b[63:0]);
+  hexi:		o = $signed(a[127:0]) < $signed(b[127:0]);
+  3'd5:   o = $signed(a) < $signed(b);
   byte_para:		o = {
 						        	$signed(a[`BYTE31]) < $signed(b[`BYTE31]),
 						        	$signed(a[`BYTE30]) < $signed(b[`BYTE30]),
@@ -2127,6 +2576,7 @@ begin
 											$signed(a[`HEXI1]) < $signed(b[`HEXI1]),
 											$signed(a[`HEXI0]) < $signed(b[`HEXI0])
 										};
+	default:			o = $signed(a) < $signed(b);
   endcase
 end
 endtask
@@ -2138,10 +2588,12 @@ input [255:0] b;
 output [255:0] o;
 begin
 	case(fmt)
-  3'd0:   o = $signed(a[7:0]) <= $signed(b[7:0]);
-  3'd1:   o = $signed(a[15:0]) <= $signed(b[15:0]);
-  3'd2:   o = $signed(a[31:0]) <= $signed(b[31:0]);
-  3'd3:   o = $signed(a) <= $signed(b);
+  byt:   o = $signed(a[7:0]) <= $signed(b[7:0]);
+  wyde:   o = $signed(a[15:0]) <= $signed(b[15:0]);
+  tetra:   o = $signed(a[31:0]) <= $signed(b[31:0]);
+  octa:		o = $signed(a[63:0]) <= $signed(b[63:0]);
+  hexi:		o = $signed(a[127:0]) <= $signed(b[127:0]);
+  3'd5:   o = $signed(a) <= $signed(b);
   byte_para:		o = {
 						        	$signed(a[`BYTE31]) <= $signed(b[`BYTE31]),
 						        	$signed(a[`BYTE30]) <= $signed(b[`BYTE30]),
@@ -2214,6 +2666,7 @@ begin
 											$signed(a[`HEXI1]) <= $signed(b[`HEXI1]),
 											$signed(a[`HEXI0]) <= $signed(b[`HEXI0])
 										};
+	default:			o = $signed(a) <= $signed(b);
   endcase
 end
 endtask
@@ -2225,10 +2678,12 @@ input [255:0] b;
 output [255:0] o;
 begin
 	case(fmt)
-  3'd0:   o = a[7:0] < b[7:0];
-  3'd1:   o = a[15:0] < b[15:0];
-  3'd2:   o = a[31:0] < b[31:0];
-  3'd3:   o = a < b;
+  byt:   o = a[7:0] < b[7:0];
+  wyde:   o = a[15:0] < b[15:0];
+  tetra:   o = a[31:0] < b[31:0];
+  octa:		o = a[63:0] < b[63:0];
+  hexi:		o = a[127:0] <= b[127:0];
+  3'd5:   o = a < b;
   byte_para:		o = {
 						        	a[`BYTE31] < b[`BYTE31],
 						        	a[`BYTE30] < b[`BYTE30],
@@ -2301,6 +2756,7 @@ begin
 											a[`HEXI1] < b[`HEXI1],
 											a[`HEXI0] < b[`HEXI0]
 										};
+	default:		o = a < b;
   endcase
 end
 endtask
@@ -2312,10 +2768,12 @@ input [255:0] b;
 output [255:0] o;
 begin
 	case(fmt)
-  3'd0:   o = a[7:0] <= b[7:0];
-  3'd1:   o = a[15:0] <= b[15:0];
-  3'd2:   o = a[31:0] <= b[31:0];
-  3'd3:   o = a <= b;
+  byt:   o = a[7:0] <= b[7:0];
+  wyde:   o = a[15:0] <= b[15:0];
+  tetra:  o = a[31:0] <= b[31:0];
+  octa:   o = a[63:0] <= b[63:0];
+  hexi:		o = a[127:0] <= b[127:0];
+  3'd5:   o = a <= b;
   byte_para:		o = {
 						        	a[`BYTE31] <= b[`BYTE31],
 						        	a[`BYTE30] <= b[`BYTE30],
@@ -2384,13 +2842,112 @@ begin
 											a[`OCTA1] <= b[`OCTA1],
 											a[`OCTA0] <= b[`OCTA0]
 										};
-//	hexi_para:		
-	default:
+	hexi_para:		
 								o = {
 											a[`HEXI1] <= b[`HEXI1],
 											a[`HEXI0] <= b[`HEXI0]
 										};
+	default:
+		o = a <= b;
   endcase
+end
+endtask
+
+reg [255:0] vcmp8, vcmp16, vcmp32, vcmp64, vcmp128;
+
+generate begin : vcmprss8
+	always @* 
+	begin
+		y = 0;
+		vcmp8 = 256'd0;
+		for (x = 0; x < 32; x = x + 1)
+		begin
+			if (mx[x] && x < vl) begin
+				vcmp8[y*8+:8] = a[x*8+:8];
+				y = y + 1;
+			end
+		end
+	end
+end
+endgenerate
+
+generate begin : vcmprss16
+	always @* 
+	begin
+		y = 0;
+		vcmp16 = 256'd0;
+		for (x = 0; x < 16; x = x + 1)
+		begin
+			if (mx[x] && x < vl) begin
+				vcmp16[y*16+:16] = a[x*16+:16];
+				y = y + 1;
+			end
+		end
+	end
+end
+endgenerate
+
+generate begin : vcmprss32
+	always @* 
+	begin
+		y = 0;
+		vcmp32 = 256'd0;
+		for (x = 0; x < 8; x = x + 1)
+		begin
+			if (mx[x] && x < vl) begin
+				vcmp32[y*32+:32] = a[x*32+:32];
+				y = y + 1;
+			end
+		end
+	end
+end
+endgenerate
+
+generate begin : vcmprss64
+	always @* 
+	begin
+		y = 0;
+		vcmp64 = 256'd0;
+		for (x = 0; x < 4; x = x + 1)
+		begin
+			if (mx[x] && x < vl) begin
+				vcmp64[y*64+:64] = a[x*64+:64];
+				y = y + 1;
+			end
+		end
+	end
+end
+endgenerate
+
+generate begin : vcmprss128
+	always @* 
+	begin
+		y = 0;
+		vcmp128 = 256'd0;
+		for (x = 0; x < 2; x = x + 1)
+		begin
+			if (mx[x] && x < vl) begin
+				vcmp128[y*128+:128] = a[x*128+:128];
+				y = y + 1;
+			end
+		end
+	end
+end
+endgenerate
+
+
+task tskCmprss;
+input [3:0] fmt;
+output [255:0] o;
+begin
+	case(fmt)
+	byte_para:	o = vcmp8;
+	wyde_para:	o = vcmp16;
+	tetra_para:	o = vcmp32;
+	octa_para:	o = vcmp64;
+	hexi_para:	o = vcmp128;
+	default:		o = vcmp128;
+	endcase
 end
 endtask
 

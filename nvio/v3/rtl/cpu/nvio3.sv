@@ -28,6 +28,7 @@ module nvio3(hartid_i, rst_i, clk_i, clk2x_i, clk4x_i, tm_clk_i, irq_i, cause_i,
 		bte_o, cti_o, bok_i, cyc_o, stb_o, ack_i, err_i, we_o, sel_o, adr_o, dat_o, dat_i,
     ol_o, pcr_o, pcr2_o, pkeys_o, icl_o, sr_o, cr_o, rbi_i, signal_i, exc_o);
 parameter WID = 128;
+parameter VWID = 256;
 input [127:0] hartid_i;
 input rst_i;
 input clk_i;
@@ -85,7 +86,14 @@ parameter wyde = 3'd1;
 parameter tetra = 3'd2;
 parameter penta = 3'd3;
 parameter octa = 3'd4;
-parameter deci = 3'd5;
+parameter hexi = 3'd5;
+
+parameter byte_para = 4'd8;
+parameter wyde_para = 4'd9;
+parameter tetra_para = 4'd10;
+parameter octa_para = 4'd11;
+parameter hexi_para = 4'd12;
+
 // IQ states
 parameter IQS_INVALID = 3'd0;
 parameter IQS_QUEUED = 3'd1;
@@ -202,6 +210,10 @@ wire [127:0] fp_rfob [0:QSLOTS-1];
 wire [127:0] fp_rfoc [0:QSLOTS-1];
 wire [127:0] lk_rfo [0:QSLOTS-1];
 wire [7:0] cr_rfo [0:QSLOTS-1];
+wire [255:0] vc_rfoa [0:QSLOTS-1];
+wire [255:0] vc_rfob [0:QSLOTS-1];
+wire [255:0] vc_rfoc [0:QSLOTS-1];
+wire [255:0] vc_rfot [0:QSLOTS-1];
 
 wire [AREGS-1:0] rf_v;								// register is valid
 wire [AREGS-1:0] regIsValid;					// register is valid (in this cycle)
@@ -461,11 +473,11 @@ reg [2:0] iq_crtgt [0:QENTRIES-1];
 //reg [3:0] iq_tgtrs [0:QENTRIES-1];
 //reg [3:0] iq_tgt2rs [0:QENTRIES-1];
 reg [WID-1:0] iq_argI	[0:QENTRIES-1];	// argument 0 (immediate)
-reg [WID-1:0] iq_argA	[0:QENTRIES-1];	// argument 1
-reg [WID-1:0] iq_argB	[0:QENTRIES-1];	// argument 2
-reg [WID-1:0] iq_argC	[0:QENTRIES-1];	// argument 3
-reg [WID-1:0] iq_argD	[0:QENTRIES-1];	// argument 4
-reg [WID-1:0] iq_argT	[0:QENTRIES-1];	// target
+reg [VWID-1:0] iq_argA	[0:QENTRIES-1];	// argument 1
+reg [VWID-1:0] iq_argB	[0:QENTRIES-1];	// argument 2
+reg [VWID-1:0] iq_argC	[0:QENTRIES-1];	// argument 3
+reg [VWID-1:0] iq_argD	[0:QENTRIES-1];	// argument 4
+reg [VWID-1:0] iq_argT	[0:QENTRIES-1];	// target
 
 reg [QENTRIES-1:0] iq_argA_v;	// arg1 valid
 reg [`RBITSP1] iq_argA_s	[0:QENTRIES-1];	// arg1 source (iq entry # with top bit representing Rd2)
@@ -489,14 +501,14 @@ reg [2:0] rob_unit [0:RENTRIES-1];
 reg [39:0] rob_instr[0:RENTRIES-1];	// instruction opcode
 reg [7:0] rob_exc [0:RENTRIES-1];
 reg [AMSB:0] rob_ma [0:RENTRIES-1];
-reg [WID-1:0] rob_argA [0:RENTRIES-1];	// value to use for CSR at oddball commit
-reg [WID-1:0] rob_res [0:RENTRIES-1];
+reg [VWID-1:0] rob_argA [0:RENTRIES-1];	// value to use for CSR at oddball commit
+reg [VWID-1:0] rob_res [0:RENTRIES-1];
 reg [7:0] rob_cr [0:RENTRIES-1];
 reg [31:0] rob_status [0:RENTRIES-1];
 reg [RBIT:0] rob_tgt [0:RENTRIES-1];
 reg [3:0] rob_crtgt [0:RENTRIES-1];
 reg [7:0] rob_crres [0:RENTRIES-1];S
-reg [WID-1:0] rob_res2 [0:RENTRIES-1];
+reg [VWID-1:0] rob_res2 [0:RENTRIES-1];
 reg [RBIT:0] rob_tgt2 [0:RENTRIES-1];
 
 // debugging
@@ -1181,7 +1193,7 @@ reg [2:0] cmtcnt;
 reg [3:0] v_used;
 reg [2:0] n_nulltgt;
 
-Regfile urf1
+GpRegfile urf1
 (
 	.clk(clk_i),
 	.clk2x(clk2x_i),
@@ -1217,13 +1229,62 @@ Regfile urf1
 	.o11(rfoc[3])
 );
 
+reg iv0_commit_v, iv1_commit_v;
+reg [2:0] iv0_cs;
+reg [4:0] iv0_commit_tgt, iv1_commit_tgt;
+reg [255:0] iv0_commit_bus, iv1_commit_bus;
+
+VecRegfile uivrf1
+(
+	.clk(clk_i),
+	.clk2x(clk2x_i),
+	.wr0(iv0_commit_v),
+	.wa0(iv0_commit_tgt),
+	.i0(iv0_commit_bus),
+	.wr1(iv1_commit_v),
+	.wa1(iv1_commit_tgt),
+	.i1(iv1_commit_bus),
+	.ra0(Rs1[0][4:0]),
+	.ra1(Rs2[0][4:0]),
+	.ra2(Rs3[0][4:0]),
+	.ra3(Rd[0][4:0]),
+	.ra4(Rs1[1][4:0]),
+	.ra5(Rs2[1][4:0]),
+	.ra6(Rs3[1][4:0]),
+	.ra7(Rd[1][4:0]),
+	.ra8(Rs1[2][4:0]),
+	.ra9(Rs2[2][4:0]),
+	.ra10(Rs3[2][4:0]),
+	.ra11(Rd[2][4:0]),
+	.ra12(Rs1[3][4:0]),
+	.ra13(Rs2[3][4:0]),
+	.ra14(Rs3[3][4:0]),
+	.ra15(Rd[3][4:0]),
+	.o0(vc_rfoa[0]),
+	.o1(vc_rfob[0]),
+	.o2(vc_rfoc[0]),
+	.o3(vc_rfot[0]),
+	.o4(vc_rfoa[1]),
+	.o5(vc_rfob[1]),
+	.o6(vc_rfoc[1]),
+	.o7(vc_rfot[1]),
+	.o8(vc_rfoa[2]),
+	.o9(vc_rfob[2]),
+	.o10(vc_rfoc[2]),
+	.o11(vc_rfot[2]),
+	.o12(vc_rfoa[3]),
+	.o13(vc_rfob[3]),
+	.o14(vc_rfoc[3]),
+	.o15(vc_rfot[3])
+);
+
 reg fp0_commit_v, fp1_commit_v;
 reg [2:0] fp0_cs;
 reg [4:0] fp0_commit_tgt, fp1_commit_tgt;
 reg [127:0] fp0_commit_bus, fp1_commit_bus;
 
 
-Regfile ufprf1
+FpRegfile ufprf1
 (
 	.clk(clk_i),
 	.clk2x(clk2x_i),
@@ -1496,6 +1557,64 @@ begin
 			iv_used[commit3_id] = TRUE;
 		end
 	end
+
+	iv0_commit_v = FALSE;
+	iv1_commit_v = FALSE;
+	iv0_cs = 3'd4;
+	iv1_cs = 3'd4;
+	if (commit0_v && commit0_tgt[6:5]==2'b10) begin
+		iv0_commit_v = TRUE;
+		iv0_commit_tgt = commit0_tgt[4:0];
+		iv0_bus = commit0_bus;
+		iv0_cs = 3'd0;
+		v_used[0] = TRUE;
+	end
+	end
+	else if (commit0_v && commit1_v && commit1_tgt[6:5]==2'b10) begin
+		iv0_commit_v = TRUE;
+		iv0_commit_tgt = commit1_tgt[4:0];
+		iv0_bus = commit1_bus;
+		iv0_cs = 3'd1;
+		v_used[1] = TRUE;
+	end
+	else if (commit0_v && commit1_v && commit2_v && commit2_tgt[6:5]==2'b10) begin
+		iv0_commit_v = TRUE;
+		iv0_commit_tgt = commit2_tgt[4:0];
+		iv0_bus = commit2_bus;
+		iv0_cs = 3'd2;
+		v_used[2] = TRUE;
+	end
+	else if (commit0_v && commit1_v && commit2_v && commit3_v && commit3_tgt[6:5]==2'b10) begin
+		iv0_commit_v = TRUE;
+		iv0_commit_tgt = commit3_tgt[4:0];
+		iv0_bus = commit3_bus;
+		iv0_cs = 3'd3;
+		v_used[3] = TRUE;
+	end
+	if (~iv0_cs[2]) begin
+		if (commit0_v && commit1_v && commit1_tgt[6:5]==2'b10 && iv0_cs != 3'd1) begin
+			iv1_commit_v = TRUE;
+			iv1_commit_tgt = commit1_tgt[4:0];
+			iv1_bus = commit1_bus;
+			iv1_cs = 3'd1;
+			v_used[1] = TRUE;
+		end
+		else if (commit0_v && commit1_v && commit2_v && commit2_tgt[6:5]==2'b10 && iv0_cs != 3'd2) begin
+			iv1_commit_v = TRUE;
+			iv1_commit_tgt = commit2_tgt[4:0];
+			iv1_bus = commit2_bus;
+			iv1_cs = 3'd2;
+			v_used[2] = TRUE;
+		end
+		else if (commit0_v && commit1_v && commit2_v && commit3_v && commit3_tgt[6:5]==2'b10 && iv0_cs != 3'd3) begin
+			iv1_commit_v = TRUE;
+			iv1_commit_tgt = commit3_tgt[4:0];
+			iv1_bus = commit3_bus;
+			iv1_cs = 3'd3;
+			v_used[3] = TRUE;
+		end
+	end
+
 
 	Lk0_commit_v = FALSE;
 	Lk1_commit_v = FALSE;
@@ -1771,6 +1890,8 @@ begin
 			gp1_commit_v = FALSE;
 			fp0_commit_v = FALSE;
 			fp1_commit_v = FALSE;
+			iv0_commit_v = FALSE;
+			iv1_commit_v = FALSE;
 			Lk0_commit_v = FALSE;
 			Lk1_commit_v = FALSE;
 			Vm0_commit_v = FALSE;
@@ -1787,6 +1908,8 @@ begin
 			if (gp1_cs > 3'd0) gp1_commit_v = FALSE;
 			if (fp0_cs > 3'd0) fp0_commit_v = FALSE;
 			if (fp1_cs > 3'd0) fp1_commit_v = FALSE;
+			if (iv0_cs > 3'd0) iv0_commit_v = FALSE;
+			if (iv1_cs > 3'd0) iv1_commit_v = FALSE;
 			if (Lk0_cs > 3'd0) Lk0_commit_v = FALSE;
 			if (Lk1_cs > 3'd0) Lk1_commit_v = FALSE;
 			if (Vm0_cs > 3'd0) Vm0_commit_v = FALSE;
@@ -1801,6 +1924,8 @@ begin
 			if (gp1_cs > 3'd1) gp1_commit_v = FALSE;
 			if (fp0_cs > 3'd1) fp0_commit_v = FALSE;
 			if (fp1_cs > 3'd1) fp1_commit_v = FALSE;
+			if (iv0_cs > 3'd1) iv0_commit_v = FALSE;
+			if (iv1_cs > 3'd1) iv1_commit_v = FALSE;
 			if (Lk0_cs > 3'd1) Lk0_commit_v = FALSE;
 			if (Lk1_cs > 3'd1) Lk1_commit_v = FALSE;
 			if (Vm0_cs > 3'd1) Vm0_commit_v = FALSE;
@@ -1814,6 +1939,8 @@ begin
 			if (gp1_cs > 3'd2) gp1_commit_v = FALSE;
 			if (fp0_cs > 3'd2) fp0_commit_v = FALSE;
 			if (fp1_cs > 3'd2) fp1_commit_v = FALSE;
+			if (iv0_cs > 3'd2) iv0_commit_v = FALSE;
+			if (iv1_cs > 3'd2) iv1_commit_v = FALSE;
 			if (Lk0_cs > 3'd2) Lk0_commit_v = FALSE;
 			if (Lk1_cs > 3'd2) Lk1_commit_v = FALSE;
 			if (Vm0_cs > 3'd2) Vm0_commit_v = FALSE;
@@ -1828,6 +1955,8 @@ begin
 	if (gp1_cs > Cr1_cs) gp1_commit_v = FALSE;
 	if (fp0_cs > Cr1_cs) fp0_commit_v = FALSE;
 	if (fp1_cs > Cr1_cs) fp1_commit_v = FALSE;
+	if (iv0_cs > Cr1_cs) iv0_commit_v = FALSE;
+	if (iv1_cs > Cr1_cs) iv1_commit_v = FALSE;
 	if (Lk0_cs > Cr1_cs) Lk0_commit_v = FALSE;
 	if (Lk1_cs > Cr1_cs) Lk1_commit_v = FALSE;
 	if (Vm0_cs > Cr1_cs) Vm0_commit_v = FALSE;
@@ -1914,6 +2043,7 @@ always @*
 begin
 	n_commit = {2'd0,gp0_commit_v} + {2'd0,gp1_commit_v} +
 						 {2'd0,fp0_commit_v} + {2'd0,fp1_commit_v} +
+						 {2'd0,iv0_commit_v} + {2'd0,iv1_commit_v} +
 						 {2'd0,Lk0_commit_v} + {2'd0,Lk1_commit_v} +
 						 {2'd0,Vm0_commit_v} + {2'd0,Vm1_commit_v} +
 						 {2'd0,VL0_commit_v} + {2'd0,VL1_commit_v} +
@@ -1940,21 +2070,18 @@ for (n = 0; n < QSLOTS; n = n + 1)
 	7'b1110???:	argA[n] <= cr_rfoa[n];
 	7'b1111000:	argA[n] <= vlen_o;
 	7'b1111001:	argA[n] <= cra_o;
-	default:		argA[n] <= 128'd0;
+	default:		argA[n] <= 256'd0;
 	endcase
 
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
-if (is_bmm[n])
-	argB[n] <= fp_rfoa[n];
-else
 	casez(Rs2[n])
 	7'b00?????:	argB[n] <= gp_rfob[n];
 	7'b01?????:	argB[n] <= fp_rfob[n];
 	7'b10?????:	argB[n] <= vc_rfob[n];
 	7'b1100???:	argB[n] <= lk_rfo[n];
 	7'b1111001:	argB[n] <= cra_o;
-	default:		argB[n] <= 128'd0;
+	default:		argB[n] <= 256'd0;
 	endcase
 	
 always @*
@@ -1963,18 +2090,15 @@ for (n = 0; n < QSLOTS; n = n + 1)
 	7'b00?????:	argC[n] <= gp_rfoc[n];
 	7'b01?????:	argC[n] <= fp_rfoc[n];
 	7'b10?????:	argC[n] <= vc_rfoc[n];
-	default:		argC[n] <= 128'd0;
+	default:		argC[n] <= 256'd0;
 	endcase
 
 // Only the vector mask register is argD
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
-if (is_bmm[n])
-	argD[n] <= fp_rfob[n];
-else
 	casez(Rs4[n])
 	7'b1101???:	argD[n] <= vm_rfod[n];
-	default:		argD[n] <= 128'd0;
+	default:		argD[n] <= 256'd0;
 	endcase
 
 // Only thing needing target as a source is vector instructions
@@ -1982,7 +2106,7 @@ always @*
 for (n = 0; n < QSLOTS; n = n + 1)
 	casez(Rd[n])
 	7'b10?????:	argT[n] <= vc_rfot[n];
-	default:		argT[n] <= 128'd0;
+	default:		argT[n] <= 256'd0;
 	endcase
 
 
@@ -4620,9 +4744,9 @@ wire will_clear_branchmiss = branchmiss && (
 
 always @*
 begin
-case(fcu_instr[`OPCODE4])
+case(fcu_instr[`OPCODE])
 `BMISC:	fcu_missip = fcu_ipc;		// RTI (we don't bother fully decoding this as it's the only R2)
-`RET:	fcu_missip = fcu_argB;
+`RTS:	fcu_missip = fcu_argB;
 `REX:	fcu_missip = fcu_bus;
 `BRK:	fcu_missip = {tvec[0][AMSB:8], 1'b0, olm, 5'h0};
 `JAL:	fcu_missip = fcu_argA + fcu_argI;
@@ -4684,7 +4808,7 @@ else
 // execute if they are before the branch target.
 // Also, if it's a large immediate bundle, don't try and execute the immediate.
 always @*
-	case(ip[3:2])
+	case(ip[1:0])
 	2'b00:	ip_mask = 4'b1111;
 	2'b01:	ip_mask = 4'b1110;
 	2'b10:	ip_mask = 4'b1100;
@@ -5793,7 +5917,7 @@ end
 					if (iq_imm[n])
 						alu0_argB <= iq_argI[n];
 					else if (iq_argB_v[n])
-						alu0_argB <= iq_argB[n][WID-1:0];
+						alu0_argB <= iq_argB[n];
 					else
 						case(iq_argB_s[n][`RBITS])
 						alu0_rid:	alu0_argB <= ralu0_bus;

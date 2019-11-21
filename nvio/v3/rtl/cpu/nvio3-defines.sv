@@ -215,6 +215,7 @@
 `define SXB					5'h1A
 `define SXP					5'h1B
 `define SXO					5'h1C
+`define CMPRSS		6'h22
 
 // R2 Format
 `define MULH		6'h00
