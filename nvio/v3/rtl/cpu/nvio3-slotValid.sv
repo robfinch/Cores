@@ -24,7 +24,7 @@
 `include "nvio-config.sv"
 
 module slotValid(rst, clk, branchmiss, phit, nextb, ip_mask, ip_maskd,
-	ip_override, queuedCnt,
+	ip_override, queuedCnt, slot_lsm,
 	slot_jc, slot_ret, take_branch, slotv, slotvd, debug_on);
 parameter QSLOTS = `QSLOTS;
 parameter VAL = 1'b1;
@@ -36,6 +36,7 @@ input clk;
 input branchmiss;
 input nextb;
 input [2:0] queuedCnt;
+input [QSLOTS-1:0] slot_lsm;
 input [QSLOTS-1:0] slot_jc;
 input [QSLOTS-1:0] slot_ret;
 input [QSLOTS-1:0] take_branch;
@@ -90,13 +91,15 @@ else begin
 		mark_all_invalid();
 	3'b001:
 		if (queuedCnt==3'd1) begin
-			mark_all_invalid();
+			if (!slot_lsm[0])
+				mark_all_invalid();
 			if ((slot_jc[0]|slot_ret[0]|take_branch[0]) & ip_override)
 				stomp_next <= TRUE;
 		end
 	3'b010:
 		if (queuedCnt==3'd1) begin
-			mark_all_invalid();
+			if (!slot_lsm[1])
+				mark_all_invalid();
 			if ((slot_jc[1]|slot_ret[1]|take_branch[1]) & ip_override)
 				stomp_next <= TRUE;
 		end
@@ -109,7 +112,8 @@ else begin
 				stomp_next <= TRUE;
 		end
 		else if (queuedCnt==3'd1) begin
-			slotv[0] <= INV;
+			if (!slot_lsm[0])
+				slotv[0] <= INV;
 			slotv[1] <= VAL;
 			slotv[2] <= INV;
 			if ((slot_jc[0]|slot_ret[0]|take_branch[0]) & ip_override) begin
@@ -119,7 +123,8 @@ else begin
 		end
 	3'b100:
 		if (queuedCnt==3'd1) begin
-			mark_all_invalid();
+			if (!slot_lsm[2])
+				mark_all_invalid();
 			if ((slot_jc[2]|slot_ret[2]|take_branch[2]) & ip_override)
 				stomp_next <= TRUE;
 		end
@@ -133,7 +138,8 @@ else begin
 		end
 		else if (queuedCnt==3'd1) begin
 			slotv[0] <= INV;
-			slotv[1] <= INV;
+			if (!slot_lsm[1])
+				slotv[1] <= INV;
 			slotv[2] <= VAL;
 			if ((slot_jc[1]|slot_ret[1]|take_branch[1]) & ip_override) begin
 				mark_all_invalid();
@@ -164,7 +170,8 @@ else begin
 			end
 		end
 		else if (queuedCnt==3'd1) begin
-			slotv[0] <= INV;
+			if (!slot_lsm[0])
+				slotv[0] <= INV;
 			slotv[1] <= VAL;
 			slotv[2] <= VAL;
 			if ((slot_jc[0]|slot_ret[0]|take_branch[0]) & ip_override) begin

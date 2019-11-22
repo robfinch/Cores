@@ -32,8 +32,8 @@
 //
 `include "nvio3-config.sv"
 
-module getQueuedCount(branchmiss, brk, phitd, tails, rob_tails, slotvd, slot_jc, slot_ret, take_branch,
-	iq_v, rob_v, queuedCnt, queuedOnp, debug_on);
+module getQueuedCount(branchmiss, brk, phitd, tails, rob_tails, slotvd, slot_lsm,
+	slot_jc, slot_ret, take_branch, iq_v, rob_v, queuedCnt, queuedOnp, debug_on);
 parameter QENTRIES = `QENTRIES;
 parameter QSLOTS = `QSLOTS;
 parameter RENTRIES = `RENTRIES;
@@ -44,6 +44,7 @@ input phitd;
 input [`QBITS] tails [0:QSLOTS-1];
 input [`RBITS] rob_tails [0:RSLOTS-1];
 input [QSLOTS-1:0] slotvd;
+input [QSLOTS-1:0] slot_lsm;
 input [QSLOTS-1:0] slot_jc;
 input [QSLOTS-1:0] slot_ret;
 input [QSLOTS-1:0] take_branch;
@@ -74,7 +75,7 @@ begin
       if (iq_v[tails[0]]==`INV && rob_v[rob_tails[0]]==`INV) begin
         queuedCnt <= 3'd1;
         queuedOnp[0] <= `TRUE;
-        if (!brk[0]) begin
+        if (!brk[0] && !slot_lsm[0]) begin
 	        if (!(slot_jc[0]|slot_ret[0]|take_branch[0])) begin
 	          if (iq_v[tails[1]]==`INV && rob_v[rob_tails[1]]==`INV) begin
 	            if (!debug_on && `WAYS > 1) begin
@@ -95,7 +96,7 @@ begin
       if (iq_v[tails[0]]==`INV && rob_v[rob_tails[0]]==`INV) begin
         queuedCnt <= 3'd1;
         queuedOnp[1] <= `TRUE;
-        if (!brk[1]) begin
+        if (!brk[1] && !slot_lsm[1]) begin
 	        if (!(slot_jc[1]|slot_ret[1]|take_branch[1])) begin
 	          if (iq_v[tails[1]]==`INV && rob_v[rob_tails[1]]==`INV) begin
 	            if (!debug_on && `WAYS > 1) begin
@@ -110,7 +111,7 @@ begin
       if (iq_v[tails[0]]==`INV && rob_v[rob_tails[0]]==`INV) begin
         queuedCnt <= 3'd1;
         queuedOnp[0] <= `TRUE;
-        if (!brk[0]) begin
+        if (!brk[0] && !slot_lsm[0]) begin
 					if (!(slot_jc[0]|slot_ret[0]|take_branch[0])) begin
 	          if (iq_v[tails[1]]==`INV && rob_v[rob_tails[1]]==`INV) begin
 	            if (!debug_on && `WAYS > 1) begin
@@ -143,7 +144,7 @@ begin
       if (iq_v[tails[0]]==`INV && rob_v[rob_tails[0]]==`INV) begin
         queuedCnt <= 3'd1;
         queuedOnp[2] <= `TRUE;
-        if (!brk[2]) begin
+        if (!brk[2] && !slot_lsm[2]) begin
 	        if (!(slot_jc[2]|slot_ret[2]|take_branch[2])) begin
 	          if (iq_v[tails[1]]==`INV && rob_v[rob_tails[1]]==`INV) begin
 	            if (!debug_on && `WAYS > 1) begin
@@ -159,7 +160,7 @@ begin
       if (iq_v[tails[0]]==`INV && rob_v[rob_tails[0]]==`INV) begin
         queuedCnt <= 3'd1;
         queuedOnp[1] <= `TRUE;
-        if (!brk[1]) begin
+        if (!brk[1] && !slot_lsm[1]) begin
 					if (!(slot_jc[1]|slot_ret[1]|take_branch[1])) begin
 	          if (iq_v[tails[1]]==`INV && rob_v[rob_tails[1]]==`INV) begin
 	            if (!debug_on && `WAYS > 1) begin
@@ -184,7 +185,7 @@ begin
       if (iq_v[tails[0]]==`INV && rob_v[rob_tails[0]]==`INV) begin
         queuedCnt <= 3'd1;
         queuedOnp[0] <= `TRUE;
-        if (!brk[0]) begin
+        if (!brk[0] && !slot_lsm[0]) begin
 					if (!(slot_jc[0]|slot_ret[0]|take_branch[0])) begin
 	          if (iq_v[tails[1]]==`INV && rob_v[rob_tails[1]]==`INV) begin
 	            if (!debug_on && `WAYS > 1) begin

@@ -25,7 +25,7 @@
 `include "nvio3-defines.sv"
 
 module decodeBuffer(rst, clk, irq_i, im, cause_i, freezeip, int_commit,
-	ic_fault, ic_out, codebuf,
+	ic_fault, ic_out, codebuf, stop_string, lsm,
 	phit, next_bundle,
 	ibundlep, templatep, insnxp,
 	ibundle, template, insnx, queued, queuedOnp
@@ -44,6 +44,8 @@ input phit;
 input [1:0] ic_fault;
 input [159:0] ic_out;
 input [47:0] codebuf [0:63];
+input stop_string;
+input [QSLOTS-1:0] lsm;
 output reg [159:0] ibundlep;
 output reg [7:0] templatep [0:QSLOTS-1];
 output reg [40:0] insnxp [0:QSLOTS-1];
@@ -189,14 +191,81 @@ if (rst) begin
 	insnx[3] <= `NOP_INSN;
 end
 else begin
-	if (queuedOnp[0])
-		ibundle[0] <= 1'b0;
-	if (queuedOnp[1])
-		ibundle[40] <= 1'b0;
-	if (queuedOnp[2])
-		ibundle[80] <= 1'b0;
-	if (queuedOnp[3])
-		ibundle[120] <= 1'b0;
+	// Increment register spec fields (Rs2,Rd) once bundle has queued.
+	// IF the instruction queues a subsequent time, then the updated 
+	// register spec will apply.
+	if (queuedOnp[0]) begin
+		ibundle[12:8] <= ibundle[12:8] + 5'd1;
+		ibundle[22:18] <= ibundle[22:18] + 5'd1;
+		if (stop_string) begin
+			insnx[0] <= `NOP_INSN;
+			ibundle[39:0] <= `NOP_INSN;
+		end
+		if (lsm[0]) begin
+			if (ibundle[27:23] != 5'd0)
+				ibundle[27:23] <= ibundle[27:23] - 5'd1;
+			else begin
+				insnx[0] <= `NOP_INSN;
+				ibundle[39:0] <= `NOP_INSN;
+			end
+		end
+		else
+			ibundle[0] <= 1'b0;
+	end
+	if (queuedOnp[1]) begin
+		ibundle[52:48] <= ibundle[52:48] + 5'd1;
+		ibundle[62:58] <= ibundle[62:58] + 5'd1;
+		if (stop_string) begin
+			insnx[1] <= `NOP_INSN;
+			ibundle[79:40] <= `NOP_INSN;
+		end
+		if (lsm[1]) begin
+			if (ibundle[67:63] != 5'd0)
+				ibundle[67:63] <= ibundle[67:63] - 5'd1;
+			else begin
+				insnx[1] <= `NOP_INSN;
+				ibundle[79:40] <= `NOP_INSN;
+			end
+		end
+		else
+			ibundle[40] <= 1'b0;
+	end
+	if (queuedOnp[2]) begin
+		ibundle[92:88] <= ibundle[92:88] + 5'd1;
+		ibundle[102:98] <= ibundle[102:98] + 5'd1;
+		if (stop_string) begin
+			insnx[2] <= `NOP_INSN;
+			ibundle[119:80] <= `NOP_INSN;
+		end
+		if (lsm[2]) begin
+			if (ibundle[107:103] != 5'd0)
+				ibundle[107:103] <= ibundle[107:103] - 5'd1;
+			else begin
+				insnx[2] <= `NOP_INSN;
+				ibundle[119:80] <= `NOP_INSN;
+			end
+		end
+		else
+			ibundle[80] <= 1'b0;
+	end
+	if (queuedOnp[3]) begin
+		ibundle[132:128] <= ibundle[132:128] + 5'd1;
+		ibundle[142:138] <= ibundle[142:138] + 5'd1;
+		if (stop_string) begin
+			insnx[3] <= `NOP_INSN;
+			ibundle[159:120] <= `NOP_INSN;
+		end
+		if (lsm[3]) begin
+			if (ibundle[147:143] != 5'd0)
+				ibundle[147:143] <= ibundle[147:143] - 5'd1;
+			else begin
+				insnx[3] <= `NOP_INSN;
+				ibundle[159:120] <= `NOP_INSN;
+			end
+		end
+		else
+			ibundle[120] <= 1'b0;
+	end
 	if (phit & next_bundle) begin
 		ibundle <= ibundlep;
 		insnx[0] <= insnxp[0];

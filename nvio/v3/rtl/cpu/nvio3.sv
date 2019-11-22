@@ -698,6 +698,9 @@ reg [AMSB:0] agen0_ma;
 reg [WID-1:0] agen0_res;
 reg [WID-1:0] agen0_argA, agen0_argB, agen0_argC, agen0_argI;
 reg agen0_dne = TRUE;
+reg agen0_stopString;
+reg agen0_bytecnt;
+reg agen0_offset;
 
 wire agen1_v;
 wire agen1_vsn;
@@ -2925,6 +2928,7 @@ decodeBuffer udcb1
 	.ic_fault(ic_fault),
 	.ic_out(ic_out),
 	.codebuf(codebuf),
+	.stop_string(agen0_stopString),
 	.phit(phit),
 	.next_bundle(nextb),
 	.ibundlep(ibundlep),
@@ -4532,8 +4536,8 @@ end
 end
 endgenerate
 
-agen uag1(agen0_unit, agen0_instr, agen0_argA, agen0_argB, agen0_argC, agen0_argI, agen0_ma, agen0_res, agen0_idle);
-agen uag2(agen1_unit, agen1_instr, agen1_argA, agen1_argB, agen1_argC, agen1_argI, agen1_ma, agen1_res, agen1_idle);
+agen uag1(agen0_instr, agen0_argA, agen0_argB, agen0_argC, agen0_argI, agen0_offset, agen0_ma, agen0_res, agen0_idle);
+agen uag2(agen1_instr, agen1_argA, agen1_argB, agen1_argC, agen1_argI, 128'd0, agen1_ma, agen1_res, agen1_idle);
 assign agen0_id = agen0_sourceid;
 assign agen1_id = agen1_sourceid;
 assign agen0_v = agen0_dataready;
@@ -5334,6 +5338,9 @@ if (rst_i|(rst_ctr < 32'd2)) begin
 		agen0_argB <= 1'd0;
 		agen0_argC <= 1'd0;
 		agen0_dataready <= FALSE;
+		agen0_stopString <= FALSE;
+		agen0_bytecnt <= 16'hFFFF;
+		agen0_offset <= 16'h0;
 		agen1_argA <= 1'd0;
 		agen1_argB <= 1'd0;
 		agen1_argC <= 1'd0;
@@ -6072,38 +6079,68 @@ end
                  agen0_memdb <= iq_memdb[n];
 `ifdef FU_BYPASS
 								 if (iq_argA_v[n])
-								 	 agen0_argA <= iq_argA[n][WID+3:4];
+								 	 agen0_argA <= iq_argA[n][WID-1:0];
 								 else
 	                 case(iq_argA_s[n][`RBITS])
 	                 alu0_rid:	agen0_argA <= ralu0_bus;
 	                 alu1_rid:	agen0_argA <= ralu1_bus;
-	                 fpu1_rid:	agen0_argA <= rfpu1_bus[WID+3:4];
-	                 fpu2_rid:	agen0_argA <= rfpu2_bus[WID+3:4];
+	                 fpu1_rid:	agen0_argA <= rfpu1_bus[WID-1:0];
+	                 fpu2_rid:	agen0_argA <= rfpu2_bus[WID-1:0];
 	                 default:	agen0_argA <= 80'hDEADDEADDEADDEADDEAD;
 	                 endcase
 `else
-								agen0_argA <= iq_argA[n][WID+3:4];
+								agen0_argA <= iq_argA[n][WID-1:0];
 `endif                 
+							if (agen0_bytecnt[11]) begin
+								agen0_offset <= 16'd0;
+									if (iq_lsstring[n]) begin
+`ifdef FU_BYPASS
+									 if (iq_argC_v[n])
+									 	agen0_bytecnt <= iq_argC[n][WID-1:0];
+									 else
+		                 case(iq_argC_s[n][`RBITS])
+		                 alu0_rid:	agen0_bytecnt <= ralu0_bus;
+		                 alu1_rid:	agen0_bytecnt <= ralu1_bus;
+		                 fpu1_rid:	agen0_bytecnt <= rfpu1_bus[WID-1:0];
+		                 fpu2_rid:	agen0_bytecnt <= rfpu2_bus[WID-1:0];
+		                 default:	agen0_bytecnt <= 16'hFFFF;
+		                 endcase
+`else
+									agen0_bytecnt <= iq_argC[n][WID-1:0];
+								end
+`endif           
+							end
+							else begin
+								agen0_bytecnt <= agen0_bytecnt - 16'd32;
+								agen0_offset <= agen0_offset + 16'd32;
+								if (agen0_bytecnt < 16'd32)
+									agen0_stopString <= TRUE;
+							end
 //                 agen0_argB	<= iq_argB[n];	// ArgB not used by agen
 `ifdef FU_BYPASS
 								 if (iq_argC_v[n])
-								 	agen0_argC <= iq_argC[n][WID+3:4];
+								 	agen0_argC <= iq_argC[n][WID-1:0];
 								 else
 	                 case(iq_argC_s[n][`RBITS])
 	                 alu0_rid:	agen0_argC <= ralu0_bus;
 	                 alu1_rid:	agen0_argC <= ralu1_bus;
-	                 fpu1_rid:	agen0_argC <= rfpu1_bus[WID+3:4];
-	                 fpu2_rid:	agen0_argC <= rfpu2_bus[WID+3:4];
+	                 fpu1_rid:	agen0_argC <= rfpu1_bus[WID-1:0];
+	                 fpu2_rid:	agen0_argC <= rfpu2_bus[WID-1:0];
 	                 default:	agen0_argC <= 80'hDEADDEADDEADDEADDEAD;
 	                 endcase
 `else
-								agen0_argC <= iq_argC[n][WID+3:4];
+								agen0_argC <= iq_argC[n][WID-1:0];
 `endif           
 								agen0_argI <= iq_argI[n];      
                  agen0_tgt    <= iq_tgt[n];
                  agen0_tgt2   <= iq_tgt2[n];
                  agen0_dataready <= 1'b1;
-                 iq_state[n] <= IQS_OUT;
+                 if (iq_lsm[n] & agen0_stopString)
+                 	iq_state[n] <= IQS_INVALID;
+                 else begin
+                 	agen0_stopString <= FALSE;
+                 	iq_state[n] <= IQS_OUT;
+               		end
             end
         end
 
@@ -6138,32 +6175,32 @@ end
                  agen1_memdb <= iq_memdb[n];
 `ifdef FU_BYPASS
 								 if (iq_argA_v[n])
-								 	 agen1_argA <= iq_argA[n][WID+3:4];
+								 	 agen1_argA <= iq_argA[n][WID-1:0];
 								 else
 	                 case(iq_argA_s[n][`RBITS])
 	                 alu0_rid:	agen1_argA <= ralu0_bus;
 	                 alu1_rid:	agen1_argA <= ralu1_bus;
-	                 fpu1_rid:	agen1_argA <= rfpu1_bus[WID+3:4];
-	                 fpu2_rid:	agen1_argA <= rfpu2_bus[WID+3:4];
+	                 fpu1_rid:	agen1_argA <= rfpu1_bus[WID-1:0];
+	                 fpu2_rid:	agen1_argA <= rfpu2_bus[WID-1:0];
 	                 default:	agen1_argA <= 80'hDEADDEADDEADDEADDEAD;
 	                 endcase
 `else
-								agen1_argA <= iq_argA[n][WID+3:4];
+								agen1_argA <= iq_argA[n][WID-1:0];
 `endif                 
 //                 agen1_argB	<= iq_argB[n];	// ArgB not used by agen
 `ifdef FU_BYPASS
 								 if (iq_argC_v[n])
-								 	agen1_argC <= iq_argC[n][WID+3:4];
+								 	agen1_argC <= iq_argC[n][WID-1:0];
 								 else
 	                 case(iq_argC_s[n][`RBITS])
 	                 alu0_rid:	agen1_argC <= ralu0_bus;
 	                 alu1_rid:	agen1_argC <= ralu1_bus;
-	                 fpu1_rid:	agen1_argC <= rfpu1_bus[WID+3:4];
-	                 fpu2_rid:	agen1_argC <= rfpu2_bus[WID+3:4];
+	                 fpu1_rid:	agen1_argC <= rfpu1_bus[WID-1:0];
+	                 fpu2_rid:	agen1_argC <= rfpu2_bus[WID-1:0];
 	                 default:	agen1_argC <= 80'hDEADDEADDEADDEADDEAD;
 	                 endcase
 `else
-								agen1_argC <= iq_argC[n][WID+3:4];
+								agen1_argC <= iq_argC[n][WID-1:0];
 `endif                 
 								agen1_argI <= iq_argI[n];      
                  agen1_tgt    <= iq_tgt[n];
@@ -7893,6 +7930,8 @@ begin
 			: 80'hDEADDEADDEADDEADDEAD;
 		if (iq_imm[n] & iq_pushc[n])
 			dram0_data <= iq_argI[n];
+		else if (iq_stpair[n])
+			dram0_data <= {iq_argC[n][127:0],iq_argB[n][127:0]};
 		else
 			dram0_data <= iq_argB[n][WID-1:0];
 		dram0_addr	<= iq_ma[n];
@@ -7933,6 +7972,8 @@ begin
 	  : 80'hDEADDEADDEADDEADDEAD;
 	if (iq_imm[n] & iq_pushc[n])
 		dram1_data <= iq_argI[n];
+	else if (iq_stpair[n])
+		dram1_data <= {iq_argC[n][127:0],iq_argB[n][127:0]};
 	else
 		dram1_data <= iq_argB[n][WID-1:0];
 	dram1_addr	<= iq_ma[n];
