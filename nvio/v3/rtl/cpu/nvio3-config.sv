@@ -65,6 +65,7 @@
 
 // bitfield representing a re-order buffer index.
 `define RBIT			$clog2(`RENTRIES)
+`define RBIT2			($clog2(`RENTRIES) << 1)
 `define RBITS			`RBIT-1:0
 `define RBITSP1		`RBIT:0
 

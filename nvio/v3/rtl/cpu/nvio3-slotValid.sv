@@ -21,7 +21,7 @@
 //
 // ============================================================================
 //
-`include "nvio-config.sv"
+`include "nvio3-config.sv"
 
 module slotValid(rst, clk, branchmiss, phit, nextb, ip_mask, ip_maskd,
 	ip_override, queuedCnt, slot_lsm,

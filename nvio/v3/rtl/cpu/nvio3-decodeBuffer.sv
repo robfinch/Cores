@@ -48,7 +48,7 @@ input stop_string;
 input [QSLOTS-1:0] lsm;
 output reg [159:0] ibundlep;
 output reg [7:0] templatep [0:QSLOTS-1];
-output reg [40:0] insnxp [0:QSLOTS-1];
+output reg [39:0] insnxp [0:QSLOTS-1];
 output reg [159:0] ibundle;
 output reg [7:0] template [0:QSLOTS-1];
 output reg [39:0] insnx [0:QSLOTS-1];

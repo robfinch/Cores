@@ -49,7 +49,7 @@ output reg [7:0] fault;
 output reg [QENTRIES-1:0] uid;
 output reg [RENTRIES-1:0] ruid;
 output reg [WB_DEPTH-1:0] wb_v;
-output reg [79:0] wb_addr [0:WB_DEPTH-1];
+output reg [`ABITS] wb_addr [0:WB_DEPTH-1];
 input wb_en_i;
 
 input [`QBITS] p0_id_i;

@@ -155,7 +155,7 @@ begin
 	        end
       	end
     	end
-    4'b1101:	// illegal
+    4'b1101:	;// illegal
     4'b1110:
       if (iq_v[tails[0]]==`INV && rob_v[rob_tails[0]]==`INV) begin
         queuedCnt <= 3'd1;
@@ -168,7 +168,7 @@ begin
 	            	queuedOnp[2] <= `TRUE;
 	            end
 	            if (!brk[2]) begin
-		          	if (!(slot_jc[2]|slot_ret[2]]|take_branch[2])) begin
+		          	if (!(slot_jc[2]|slot_ret[2]|take_branch[2])) begin
 			            if (iq_v[tails[2]]==`INV && rob_v[rob_tails[2]]==`INV) begin
 				            if (!debug_on && `WAYS > 2) begin
 				            	queuedCnt <= 3'd3;

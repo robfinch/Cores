@@ -1,12 +1,10 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2017-2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-// FCU_Calc.v
-// - flow control calcs
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -23,42 +21,25 @@
 //
 // ============================================================================
 //
-`include ".\nvio3-defines.sv"
+`include "nvio3-config.sv"
 
-module FCU_Calc(ol, instr, tvec, a, nextpc, im, waitctr, bus);
-parameter WID = 128;
-parameter AMSB = 127;
-input [1:0] ol;
-input [39:0] instr;
-input [WID-1:0] tvec;
-input [WID-1:0] a;
-input [AMSB:0] nextpc;
-input [3:0] im;
-input [WID-1:0] waitctr;
-output reg [WID-1:0] bus;
+module next_bundle(rst, slotv, phit, next);
+parameter QSLOTS = `QSLOTS;
+input rst;
+input [QSLOTS-1:0] slotv;
+input phit;
+output reg next;
+parameter TRUE = 1'b1;
+parameter FALSE = 1'b0;
 
 always @*
-begin
-  case(instr[`OPCODE])
-  `BRK:   bus <= {72'd0,a[7:0]} | {72'b0,instr[29:22]};
-  `JRL:		bus <= nextpc;
-  `JSR:		bus <= nextpc;
-  `RTS:		bus <= a + {instr[39:23],4'h0};
-  `REX:
-    case(ol)
-    `OL_USER:   bus <= 80'hCCCCCCCCCCCCCCCCCCCC;
-    // ToDo: fix im test
-    default:    bus <= (im < ~{ol,2'b00}) ? tvec : nextpc;
-    endcase
-  `BMISC:
-  	case(instr[`FUNCT5])
-  	`RTI:		bus <= 80'hCCCCCCCCCCCCCCCCCCCC;	// RTI
-  	`WAIT:  bus = waitctr==64'd1;
-  	default:	bus <= 80'hCCCCCCCCCCCCCCCCCCCC;
-  	endcase
-  default:    bus <= 80'hCCCCCCCCCCCCCCCCCCCC;
-  endcase
+if (rst)
+	next <= TRUE;
+else begin
+	if (slotv==4'b0000 && phit)
+		next <= TRUE;
+	else
+		next <= FALSE;
 end
 
 endmodule
-

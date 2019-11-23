@@ -1,12 +1,10 @@
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2017-2019  Robert Finch, Waterloo
+//   \\__/ o\    (C) 2019  Robert Finch, Waterloo
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-// FCU_Calc.v
-// - flow control calcs
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -23,42 +21,42 @@
 //
 // ============================================================================
 //
-`include ".\nvio3-defines.sv"
+`include "nvio3-config.sv"
 
-module FCU_Calc(ol, instr, tvec, a, nextpc, im, waitctr, bus);
-parameter WID = 128;
-parameter AMSB = 127;
-input [1:0] ol;
-input [39:0] instr;
-input [WID-1:0] tvec;
-input [WID-1:0] a;
-input [AMSB:0] nextpc;
-input [3:0] im;
-input [WID-1:0] waitctr;
-output reg [WID-1:0] bus;
+// Pointers to the head of the queue. The pointers increment every cycle by
+// the number of instructions that were committed during the cycle.
 
-always @*
-begin
-  case(instr[`OPCODE])
-  `BRK:   bus <= {72'd0,a[7:0]} | {72'b0,instr[29:22]};
-  `JRL:		bus <= nextpc;
-  `JSR:		bus <= nextpc;
-  `RTS:		bus <= a + {instr[39:23],4'h0};
-  `REX:
-    case(ol)
-    `OL_USER:   bus <= 80'hCCCCCCCCCCCCCCCCCCCC;
-    // ToDo: fix im test
-    default:    bus <= (im < ~{ol,2'b00}) ? tvec : nextpc;
-    endcase
-  `BMISC:
-  	case(instr[`FUNCT5])
-  	`RTI:		bus <= 80'hCCCCCCCCCCCCCCCCCCCC;	// RTI
-  	`WAIT:  bus = waitctr==64'd1;
-  	default:	bus <= 80'hCCCCCCCCCCCCCCCCCCCC;
-  	endcase
-  default:    bus <= 80'hCCCCCCCCCCCCCCCCCCCC;
-  endcase
+module headptrs(rst, clk, amt, heads, ramt, rob_heads);
+parameter QENTRIES = `QENTRIES;
+parameter RENTRIES = `RENTRIES;
+parameter RSLOTS = `RSLOTS;
+input rst;
+input clk;
+input [3:0] amt;
+output reg [`QBITS] heads [0:QENTRIES-1];
+input [3:0] ramt;
+output reg [`RBITSP1] rob_heads [0:RSLOTS-1];
+
+integer n;
+
+always @(posedge clk)
+if (rst) begin
+	for (n = 0; n < QENTRIES; n = n + 1)
+		heads[n] <= n;
+end
+else begin
+	for (n = 0; n < QENTRIES; n = n + 1)
+     heads[n] <= (heads[n] + amt) % QENTRIES;
+end
+
+always @(posedge clk)
+if (rst) begin
+	for (n = 0; n < RSLOTS; n = n + 1)
+		rob_heads[n] <= n;
+end
+else begin
+	for (n = 0; n < RSLOTS; n = n + 1)
+     rob_heads[n] <= (rob_heads[n] + ramt) % RENTRIES;
 end
 
 endmodule
-

@@ -275,8 +275,8 @@ initial begin
     mem0[n] <= 1'd0;
     mem1[n] <= 1'd0;
     mem2[n] <= 1'd0;
+    mem3[n] <= 1'd0;
     mem4[n] <= 1'd0;
-    mem5[n] <= 1'd0;
   end
 end
 
