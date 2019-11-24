@@ -21,6 +21,7 @@
 //                                                                          
 // ============================================================================
 // 382174 611478
+// 552138	883421
 `include "nvio3-config.sv"
 `include "nvio3-defines.sv"
 
@@ -933,28 +934,28 @@ reg [47:0] CC;	// commit count
 reg commit0_v;
 reg [`RBITS] commit0_id;
 reg [RBIT:0] commit0_tgt;
-reg [WID:0] commit0_bus;
+reg [VWID:0] commit0_bus;
 reg [3:0] commit0_crtgt;
 reg [7:0] commit0_crbus;
 reg [3:0] commit0_rid;
 reg commit1_v;
 reg [`RBITS] commit1_id;
 reg [RBIT:0] commit1_tgt;
-reg [WID:0] commit1_bus;
+reg [VWID:0] commit1_bus;
 reg [3:0] commit1_crtgt;
 reg [7:0] commit1_crbus;
 reg [3:0] commit1_rid;
 reg commit2_v;
 reg [`RBITS] commit2_id;
 reg [RBIT:0] commit2_tgt;
-reg [WID:0] commit2_bus;
+reg [VWID:0] commit2_bus;
 reg [3:0] commit2_crtgt;
 reg [7:0] commit2_crbus;
 reg [3:0] commit2_rid;
 reg commit3_v;
 reg [`RBITS] commit3_id;
 reg [RBIT:0] commit3_tgt;
-reg [WID:0] commit3_bus;
+reg [VWID:0] commit3_bus;
 reg [3:0] commit3_crtgt;
 reg [7:0] commit3_crbus;
 reg [3:0] commit3_rid;
@@ -1884,7 +1885,7 @@ begin
 	end
 	Cr0a_commit_v = FALSE;
 	Cr1a_commit_v = FALSE;
-	if (commit0_v && commit0_tgt=7'b1111001) begin
+	if (commit0_v && commit0_tgt==7'b1111001) begin
 		Cr0a_commit_v = TRUE;
 		Cr0a_commit_bus = commit0_bus[63:0];
 		Cr0a_cs = 3'd0;
@@ -3047,35 +3048,34 @@ input [7:0] opcode;
 endfunction
 
 // Which condition register to update. 
-// The default for all instructions is Cr0 which is considered to be scrap.
 function [3:0] fnCrd;
 input [39:0] ins;
 casez(ins[`OPCODE])
 `R1,`R2,`R2S:
 	if (ins[33])
-		fnCrd = 4'b1001;
+		fnCrd = 4'b1000;
 	else
 		fnCrd = 4'b0000;
 `R2:
 	if (ins[33])
-		fnCrd = 4'b1001;
+		fnCrd = 4'b1000;
 	else
 		fnCrd = 4'b0000;
 8'hE?:	// Float operations
 	case(ins[`OPCODE])
 	`FLT2,`FLT2I,`FLT2S:
 		if (ins[33])
-			fnCrd = 4'b1010;
+			fnCrd = 4'b1001;
 		else
 			fnCrd = 4'b0000;
 	default:
 		if (ins[33])
-			fnCrd = 4'b1010;
+			fnCrd = 4'b1001;
 		else
 			fnCrd = 4'b0000;
 	endcase
 `ADDIr,`MULIr,`DIVIr,`MODIr,`ANDIr,`ORIr,`EORIr:
-	fnCrd = 4'b1001;
+	fnCrd = 4'b1000;
 default:
 	fnCrd = 4'b0000;
 endcase
@@ -3091,7 +3091,7 @@ casez(ins[`OPCODE])
 	case(ins[`BFUNCT4])
 	`SEI: fnRd = {2'b0,ins[`RD]};
 	`MTL:	fnRd = {2'b11,ins[`RD]};				// MTM and MTL
-	`CRLOG:	fnRd = {4'b1110,ins[13:11]};	// CRLOG (for dependency check)
+	`CRLOG:	fnRd = 4'b1110001;	// CRLOG (for dependency check)
 	default: fnRd = 7'd0;
 	endcase
 8'b10??????:
@@ -4809,6 +4809,7 @@ FCU_Calc #(.AMSB(AMSB)) ufcuc1
 	.instr(fcu_instr),
 	.tvec(tvec[fcu_instr[14:13]]),
 	.a(fcu_argA),
+	.b(fcu_argB),
 	.nextpc(fcu_nextip),
 	.im(im),
 	.waitctr(waitctr),

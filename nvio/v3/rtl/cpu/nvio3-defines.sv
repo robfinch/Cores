@@ -132,8 +132,19 @@
 `define MTL			4'h6
 `define MFL			4'h7
 `define CRLOG		4'h8
+`define CRAND			4'h8
+`define CROR			4'h9
+`define CRXOR			4'hA
+`define CRANDC		4'hB
+`define CRNAND		4'hC
+`define CRNOR			4'hD
+`define CRXNOR		4'hE
+`define CRORC			4'hF
 `define MTCR		4'hA
 `define MFCR		4'hB
+`define MEMDB		4'hC
+`define MEMSB		4'hD
+
 
 // Integer Operations
 `define R3			6'b00001?
@@ -391,9 +402,6 @@
 `define LINK		8'h3D
 `define STORE		8'b0?1?????
 
-`define MEMSB		5'h18
-`define MEMDB		5'h19
-
 
 `define R2		8'h8C
 `define R2S		8'h8D
@@ -527,6 +535,7 @@
 `define FUNCT5			39:35
 `define FUNCT6			28:23
 `define FFUNCT5			27:23
+`define CRLOGFN			31:28
 `define SCALE				30:28
 `define FMT4				32:29
 `define FUNCT2			34:33
