@@ -35,7 +35,7 @@ input clk;
 input [3:0] amt;
 output reg [`QBITS] heads [0:QENTRIES-1];
 input [3:0] ramt;
-output reg [`RBITSP1] rob_heads [0:RSLOTS-1];
+output reg [`RBIT2-1:0] rob_heads [0:RSLOTS-1];
 
 integer n;
 
@@ -52,11 +52,11 @@ end
 always @(posedge clk)
 if (rst) begin
 	for (n = 0; n < RSLOTS; n = n + 1)
-		rob_heads[n] <= n;
+		rob_heads[n] <= {n,1'b0};
 end
 else begin
 	for (n = 0; n < RSLOTS; n = n + 1)
-     rob_heads[n] <= (rob_heads[n] + ramt) % RENTRIES;
+     rob_heads[n] <= (rob_heads[n] + ramt) % (RENTRIES << 1);
 end
 
 endmodule

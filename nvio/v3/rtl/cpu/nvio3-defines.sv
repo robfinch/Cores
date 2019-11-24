@@ -576,7 +576,8 @@
 `define PANIC_BRANCHBACK	4'd11
 `define PANIC_BADTARGETID	4'd12
 
-`define IBTOP			167
+`define IBTOP			172
+`define IB_FMT		171:168
 `define IB_PFXINSN	167
 `define IB_PFX		166
 `define IB_RS3		165:160
@@ -592,7 +593,7 @@
 `define IB_CMP		48
 `define IB_PUSH		47
 `define IB_TLB		46
-`define IB_SZ			45:43
+`define IB_Z			43
 `define IB_IRQ		42
 `define IB_RTI		41
 `define IB_BRK		40

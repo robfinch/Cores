@@ -702,9 +702,26 @@ end
 always @*
 begin
 	cro = 8'h00;
-	cro[0] = o[`HEXI0]==128'd0;
-	cro[1] = o[127];
-	cro[4] = o[0];
+	case(instr[7:0])
+	`CMPI,`CMPUI:
+		cro = o;
+	`R2:
+		case(instr[`FUNCT6])
+		`CMP,`CMPU:	cro = o;
+		default:
+			begin		
+			cro[0] = o[`HEXI0]==128'd0;
+			cro[1] = o[127];
+			cro[4] = o[0];
+			end
+		endcase
+	default:
+		begin		
+		cro[0] = o[`HEXI0]==128'd0;
+		cro[1] = o[127];
+		cro[4] = o[0];
+		end
+	endcase
 end
 
 always @(posedge clk)

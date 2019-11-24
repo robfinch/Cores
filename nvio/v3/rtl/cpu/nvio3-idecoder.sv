@@ -65,16 +65,33 @@ casez(ins[`OPCODE])
 	case(ins[`BFUNCT4])
 	`SEI: fnRd = {2'b0,ins[`RD]};
 	`MTL:	fnRd = {2'b11,ins[`RD]};				// MTM and MTL
-	`CRLOG:	fnRd = {4'b1110,ins[13:11]};	// CRLOG
+	`CRLOG:	fnRd = {4'b1110,ins[13:11]};	// CRLOG (for dependency check)
 	default: fnRd = 7'd0;
 	endcase
-8'b10??????:	fnRd = {2'b0,ins[`RD]};	// ALU
+8'b10??????:
+	case(ins[`OPCODE])
+	`CMPI,`CMPUI:	fnRd = {4'b1110,ins[`RD3]};
+	`R2,`R2S:
+		case(ins[`FUNCT6])
+		`CMP,`CMPU:	fnRd = {4'b1110,ins[`RD3]};
+		default:
+			fnRd = {2'b0,ins[`RD]};	// ALU
+		endcase
+	default:
+		fnRd = {2'b0,ins[`RD]};	// ALU
+	endcase
 8'hE1:
 	case(ins[`FUNCT6])
 	`FTOI:	fnRd = {2'b0,ins[`RD]};
 	default:	fnRd = {2'b01,ins[`RD]};
 	endcase
-8'hE2,8'hE3,8'hE4,8'hE5,8'hE6,8'hE7:
+`FLT2,`FLT2S:
+	case(ins[`FFUNCT5])
+	`FCMP,`FCMPM:	fnRd = {4'b1110,ins[`RD3]};
+	default:
+		fnRd = {2'b01,ins[`RD]};
+	endcase
+8'hE3,8'hE4,8'hE5,8'hE6,8'hE7:
 		fnRd = {2'b01,ins[`RD]};
 8'h2D:	fnRd = {2'b00,ins[`RD]};	// TLB
 8'b0?,8'h1?:
@@ -103,6 +120,15 @@ casez(ins[`OPCODE])
 	default:	fnRd2 = 7'd0;
 	endcase
 default:	fnRd2 = 7'd0;
+endcase
+endfunction
+
+function fnZ;
+input [39:0] ins;
+casez(ins[`OPCODE])
+8'b10??????:	fnZ=ins[36];
+8'hEx:	fnZ = ins[27];
+default:	fnZ = 0;
 endcase
 endfunction
 
@@ -534,7 +560,8 @@ begin
 //	bus[`IB_A2V]   <= Source2Valid(instr);
 //	bus[`IB_A1V]   <= Source1Valid(instr);
 	bus[`IB_TLB]	 <= IsTLB(instr);
-	bus[`IB_SZ]    <= instr[31:29];	// 3'd3=word size
+	bus[`IB_FMT]   <= instr[32:29];	// 3'd3=word size
+	bus[`IB_Z]		 <= fnZ(instr);
 	bus[`IB_IRQ]	 <= IsIrq(instr);
 	bus[`IB_BRK]	 <= isBrk;
 	bus[`IB_RTI]	 <= isRti;
