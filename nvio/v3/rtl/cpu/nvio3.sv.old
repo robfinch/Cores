@@ -182,7 +182,7 @@ reg r1IsFp,r2IsFp,r3IsFp;
 wire  [`QBITS] tails [0:QSLOTS-1];
 wire  [`QBITS] heads [0:QENTRIES-1];
 wire [`RBITS] rob_tails [0:RSLOTS-1];
-wire [`RBITS] rob_heads [0:RSLOTS-1];
+wire [`RBIT2-1:0] rob_heads [0:RSLOTS-1];
 
 wire tlb_miss;
 wire exv;
@@ -443,7 +443,6 @@ reg [QENTRIES-1:0] iq_load;	// is a memory load instruction
 reg [QENTRIES-1:0] iq_store;	// is a memory store instruction
 reg [QENTRIES-1:0] iq_preload;	// is a memory preload instruction
 reg [QENTRIES-1:0] iq_ldcmp;
-reg [1:0] iq_base [0:QENTRIES-1];
 reg [QENTRIES-1:0] iq_mem;	// touches memory: 1 if LW/SW
 reg [QENTRIES-1:0] iq_mem2;		// 2nd memory result
 reg [QENTRIES-1:0] iq_memndx;  // indexed memory operation 
@@ -732,7 +731,6 @@ reg agen0_stopString;
 reg [11:0] agen0_bytecnt;
 reg agen0_offset;
 wire agen0_upd2;
-reg [1:0] agen0_base;
 
 wire agen1_v;
 wire agen1_vsn;
@@ -757,7 +755,6 @@ reg [WID-1:0] agen1_res;
 reg [WID-1:0] agen1_argA, agen1_argB, agen1_argC, agen1_argI;
 reg agen1_dne = TRUE;
 wire agen1_upd2;
-reg [1:0] agen1_base;
 
 wire [`XBITS] fpu_exc;
 reg 				fpu1_cmt;
@@ -787,7 +784,7 @@ wire [7:0] fpu1_cro;
 wire  [`QBITS] fpu1_id;
 wire  [`XBITS] fpu1_exc;
 wire        fpu1_v;
-reg [255:0] fpu1_status;
+wire [255:0] fpu1_status;
 reg fpu1_dne = TRUE;
 
 reg 				fpu2_cmt;
@@ -817,7 +814,7 @@ wire [7:0] fpu2_cro;
 wire  [`QBITS] fpu2_id;
 wire  [`XBITS] fpu2_exc;
 wire        fpu2_v;
-reg [255:0] fpu2_status;
+wire [255:0] fpu2_status;
 reg fpu2_dne = TRUE;
 
 reg [7:0] fccnt;
@@ -1492,18 +1489,6 @@ CrRegfile ucrrf1
 	.oa(cra_o)
 );
 
-reg [AMSB:0] program_base;
-reg [AMSB:0] data_base;
-reg [AMSB:0] io_base;
-reg [AMSB:0] extra_base;
-
-initial begin
-	program_base = 1'd0;
-	data_base = 1'd0;
-	io_base = 1'd0;
-	extra_base = 1'd0;
-end
-
 // Maximum commit slot used during this cycle. Used to determine how much to
 // increment the rob pointer by.
 reg [2:0] max_cs;
@@ -1905,25 +1890,25 @@ begin
 	end
 	Cr0a_commit_v = FALSE;
 	Cr1a_commit_v = FALSE;
-	if (commit0_v && commit0_tgt==7'b1111101) begin
+	if (commit0_v && commit0_tgt==7'b1111001) begin
 		Cr0a_commit_v = TRUE;
 		Cr0a_commit_bus = commit0_bus[63:0];
 		Cr0a_cs = 3'd0;
 		v_used[0] = TRUE;
 	end
-	else if (commit0_v && commit1_v && commit1_tgt==7'b1111101) begin
+	else if (commit0_v && commit1_v && commit1_tgt==7'b1111001) begin
 		Cr0a_commit_v = TRUE;
 		Cr0a_commit_bus = commit1_bus[63:0];
 		Cr0a_cs = 3'd1;
 		v_used[1] = TRUE;
 	end
-	else if (commit0_v && commit1_v && commit2_v && commit2_tgt==7'b111101) begin
+	else if (commit0_v && commit1_v && commit2_v && commit2_tgt==7'b1111001) begin
 		Cr0a_commit_v = TRUE;
 		Cr0a_commit_bus = commit2_bus[63:0];
 		Cr0a_cs = 3'd2;
 		v_used[2] = TRUE;
 	end
-	else if (commit0_v && commit1_v && commit2_v && commit3_v && commit3_tgt==7'b1111101) begin
+	else if (commit0_v && commit1_v && commit2_v && commit3_v && commit3_tgt==7'b1111001) begin
 		Cr0a_commit_v = TRUE;
 		Cr0a_commit_bus = commit3_bus[63:0];
 		Cr0a_cs = 3'd3;
@@ -2070,20 +2055,20 @@ begin
 	r_amt[0] = 1'b0;
 	// Now search ahead for invalid entries that can be skipped over.
 	nxtrb = (rob_heads[0] + r_amt) % (RENTRIES << 1);
-	if (rob_state[nxtrb[`RBITS]]==RS_INVALID && rob_heads[nxtrb[`RBITS]]!=rob_tails[0]) begin
-		r_amt = r_amt + 4'd1;
+	if (rob_state[nxtrb[`RBIT2-1:1]]==RS_INVALID && rob_heads[nxtrb[`RBIT2-1:1]]!=rob_tails[0]) begin
+		r_amt = r_amt + 4'd2;
 		r_amt[0] = 1'b0;
 		nxtrb = rob_heads[0] + r_amt;
-		if (rob_state[nxtrb[`RBITS]]==RS_INVALID && rob_heads[nxtrb[`RBITS]]!=rob_tails[0]) begin
-			r_amt = r_amt + 4'd1;
+		if (rob_state[nxtrb[`RBIT2-1:1]]==RS_INVALID && rob_heads[nxtrb[`RBIT2-1:1]]!=rob_tails[0]) begin
+			r_amt = r_amt + 4'd2;
 			r_amt[0] = 1'b0;
 			nxtrb = rob_heads[0] + r_amt;
-			if (rob_state[nxtrb[`RBITS]]==RS_INVALID && rob_heads[nxtrb[`RBITS]]!=rob_tails[0]) begin
-				r_amt = r_amt + 4'd1;
+			if (rob_state[nxtrb[`RBIT2-1:1]]==RS_INVALID && rob_heads[nxtrb[`RBIT2-1:1]]!=rob_tails[0]) begin
+				r_amt = r_amt + 4'd2;
 				r_amt[0] = 1'b0;
 				nxtrb = rob_heads[0] + r_amt;
-				if (rob_state[nxtrb[`RBITS]]==RS_INVALID && rob_heads[nxtrb[`RBITS]]!=rob_tails[0]) begin
-					r_amt = r_amt + 4'd1;
+				if (rob_state[nxtrb[`RBIT2-1:1]]==RS_INVALID && rob_heads[nxtrb[`RBIT2-1:1]]!=rob_tails[0]) begin
+					r_amt = r_amt + 4'd2;
 					r_amt[0] = 1'b0;
 					nxtrb = rob_heads[0] + r_amt;
 				end
@@ -2194,8 +2179,8 @@ for (n = 0; n < QSLOTS; n = n + 1)
 	7'b10?????:	argA[n] <= vc_rfoa[n];
 	7'b1101???:	argA[n] <= vm_rfoa[n];
 	7'b1110???:	argA[n] <= cr_rfoa[n];
-	7'b1111100:	argA[n] <= vlen_o;			// for move
-	7'b1111101:	argA[n] <= cra_o;
+	7'b1111000:	argA[n] <= vlen_o;			// for move
+	7'b1111001:	argA[n] <= cra_o;
 	default:		argA[n] <= 256'd0;
 	endcase
 
@@ -2206,8 +2191,8 @@ for (n = 0; n < QSLOTS; n = n + 1)
 	7'b01?????:	argB[n] <= fp_rfob[n];
 	7'b10?????:	argB[n] <= vc_rfob[n];
 	7'b1100???:	argB[n] <= lk_rfo[n];
-	7'b1111100:	argA[n] <= vlen_o;			// For store
-	7'b1111101:	argB[n] <= cra_o;
+	7'b1111000:	argA[n] <= vlen_o;			// For store
+	7'b1111001:	argB[n] <= cra_o;
 	default:		argB[n] <= 256'd0;
 	endcase
 	
@@ -2265,13 +2250,6 @@ instructionPointer uip1
 	.debug_on(debug_on)
 );
 
-reg [AMSB:0] ipb;
-always @*
-if (ol!=2'b00 && ip[AMSB:AMSB-11]!=12'hFFF)
-	ipb <= ip + program_base;
-else
-	ipb <= ip;
-
 `ifdef FCU_RSB
 RSB ursb1
 (
@@ -2307,7 +2285,7 @@ ICController uicc1
 (
 	.rst_i(rst_i),
 	.clk_i(clk_i),
-	.ip(ipb),
+	.ip(ip),
 	.hit(L1_ihit),
 	.bstate(bstate),
 	.state(icstate),
@@ -2351,7 +2329,7 @@ L1_icache uic1
 	.nxt(L1_nxt),
 	.wr(L1_wr),
 	.wadr(L1_adr),
-	.adr(L1_selpc ? ipb : L1_adr),
+	.adr(L1_selpc ? ip : L1_adr),
 	.i(L1_dat),
 	.o(ic_out),
 	.fault(),
@@ -3118,7 +3096,7 @@ casez(ins[`OPCODE])
 	case(ins[`BFUNCT4])
 	`SEI: fnRd = {2'b0,ins[`RD]};
 	`MTL:	fnRd = {2'b11,ins[`RD]};				// MTM and MTL
-	`CRLOG:	fnRd = 7'b1111101;	// CRLOG (for dependency check)
+	`CRLOG:	fnRd = 7'b1110001;	// CRLOG (for dependency check)
 	default: fnRd = 7'd0;
 	endcase
 8'b10??????:
@@ -3187,7 +3165,7 @@ case(ins[`OPCODE])
 	fnRs1 = {4'b1110,ins[10:8]};
 `BMISC2:
 	if (ins[`BFUNCT4]==`CRLOG)	// CRLOG
-		fnRs1 = 7'b1111101;
+		fnRs1 = 7'b1110001;
 	else
 		fnRs1 = ins[`RS1];
 default:
@@ -3201,7 +3179,7 @@ case(ins[`OPCODE])
 `JRL:	fnRs2 = {4'b1100,ins[20:18]};
 `BMISC2:
 	if (ins[`BFUNCT4]==`CRLOG)	// CRLOG
-		fnRs2 = 7'b1111101;
+		fnRs2 = 7'b1110001;
 	else
 		fnRs2 = ins[`RS2];
 default:
@@ -4500,58 +4478,8 @@ end
 end
 endgenerate
 
-reg [AMSB:0] prog_base;
-always @(posedge clk_i)
-	prog_base <= {program_base,2'b0} + program_base;
-
-reg [AMSB:0] bse0, bse1;
-always @*
-if (dl==2'd0)
-	bse0 <= 1'd0;
-else
-	case(agen0_base)
-	2'd0:	bse0 <= prog_base;
-	2'd1: bse0 <= data_base;
-	2'd2: bse0 <= io_base;
-	2'd3: bse0 <= extra_base;
-	endcase
-always @*
-if (dl==2'd0)
-	bse1 <= 1'd0;
-else
-	case(agen1_base)
-	2'd0:	bse1 <= prog_base;
-	2'd1: bse1 <= data_base;
-	2'd2: bse1 <= io_base;
-	2'd3: bse1 <= extra_base;
-	endcase
-
-agen uag1
-(
-	.inst(agen0_instr),
-	.a(agen0_argA),
-	.b(agen0_argB),
-	.c(agen0_argC),
-	.i(agen0_argI),
-	.base(bse0),
-	.offset(agen0_offset),
-	.ma(agen0_ma),
-	.idle(agen0_idle)
-);
-
-agen uag2
-(
-	.inst(agen1_instr),
-	.a(agen1_argA),
-	.b(agen1_argB),
-	.c(agen1_argC),
-	.i(agen1_argI),
-	.base(bse1),
-	.offset(128'd0),
-	.ma(agen1_ma),
-	.idle(agen1_idle)
-);
-
+agen uag1(agen0_instr, agen0_argA, agen0_argB, agen0_argC, agen0_argI, agen0_offset, agen0_ma, agen0_res, agen0_idle);
+agen uag2(agen1_instr, agen1_argA, agen1_argB, agen1_argC, agen1_argI, 128'd0, agen1_ma, agen1_res, agen1_idle);
 assign agen0_id = agen0_sourceid;
 assign agen1_id = agen1_sourceid;
 assign agen0_v = agen0_dataready;
@@ -5081,10 +5009,10 @@ assign outstanding_stores = (dram0 && dram0_store) ||
 reg [2:0] cmap [0:3];
 always @*
 begin
-	casez({rob_tgt2[rob_heads[0][`RBITS]][6:0]!=7'd0,
-				rob_tgt2[rob_heads[1][`RBITS]][6:0]!=7'd0,
-				rob_tgt2[rob_heads[2][`RBITS]][6:0]!=7'd0,
-				rob_tgt2[rob_heads[3][`RBITS]][6:0]!=7'd0
+	casez({rob_tgt2[rob_heads[0][`RBIT2-1:1]][6:0]!=7'd0,
+				rob_tgt2[rob_heads[1][`RBIT2-1:1]][6:0]!=7'd0,
+				rob_tgt2[rob_heads[2][`RBIT2-1:1]][6:0]!=7'd0,
+				rob_tgt2[rob_heads[3][`RBIT2-1:1]][6:0]!=7'd0
 				})
 	4'b0000,
 	4'b0001:
@@ -5141,46 +5069,131 @@ end
 always @*
 begin
 	// The first commit bus is always tied to the same place
-  commit0_v <= (rob_state[rob_heads[0][`RBITS]] == RS_CMT && ~|panic);
-  commit0_id <= rob_heads[0][`RBITS];	// if a memory op, it has a DRAM-bus id
-  commit0_tgt <= rob_tgt[rob_heads[0][`RBITS]];
-  commit0_bus <= rob_res[rob_heads[0][`RBITS]];
-  commit0_crtgt <= rob_crtgt[rob_heads[0][`RBITS]];
-  commit0_crbus <= rob_crres[rob_heads[0][`RBITS]];
+  commit0_v <= (rob_state[rob_heads[0][`RBIT2-1:1]] == RS_CMT && ~|panic);
+  commit0_id <= rob_heads[0][`RBIT2-1:1];	// if a memory op, it has a DRAM-bus id
+  commit0_tgt <= rob_tgt[rob_heads[0][`RBIT2-1:1]];
+  commit0_bus <= rob_res[rob_heads[0][`RBIT2-1:1]];
+  commit0_crtgt <= rob_crtgt[rob_heads[0][`RBIT2-1:1]];
+  commit0_crbus <= rob_crres[rob_heads[0][`RBIT2-1:1]];
   commit0_rid <= rob_heads[0];
 
-  commit1_v <= (rob_state[rob_heads[0][`RBITS]] == RS_CMT
-             && rob_state[rob_heads[1][`RBITS]] == RS_CMT
-             && ~|panic);
-	commit1_id <= rob_heads[1][`RBITS];
-	commit1_tgt <= rob_tgt[rob_heads[1][`RBITS]];
-	commit1_bus <= rob_res[rob_heads[1][`RBITS]];
-  commit1_crtgt <= rob_crtgt[rob_heads[1][`RBITS]];
-  commit1_crbus <= rob_crres[rob_heads[1][`RBITS]];
-  commit1_rid <= rob_heads[1];
+	if (cmap[1][0]) begin
+		commit1_v <= (rob_state[rob_heads[0][`RBIT2-1:1]] == RS_CMT && ~|panic);
+		commit1_id <= rob_heads[0][`RBIT2-1:1];
+		commit1_tgt <= rob_tgt2[rob_heads[0][`RBIT2-1:1]];
+		commit1_bus <= rob_res2[rob_heads[0][`RBIT2-1:1]];
+	  commit1_crtgt <= rob_crtgt[rob_heads[0][`RBIT2-1:1]];
+	  commit1_crbus <= rob_crres[rob_heads[0][`RBIT2-1:1]];
+	  commit1_rid <= rob_heads[0] + 4'd1;
+	end
+	else begin
+	  commit1_v <= (rob_state[rob_heads[0][`RBIT2-1:1]] == RS_CMT
+	             && rob_state[rob_heads[1][`RBIT2-1:1]] == RS_CMT
+	             && ~|panic);
+		commit1_id <= rob_heads[1][`RBIT2-1:1];
+		commit1_tgt <= rob_tgt[rob_heads[1][`RBIT2-1:1]];
+		commit1_bus <= rob_res[rob_heads[1][`RBIT2-1:1]];
+	  commit1_crtgt <= rob_crtgt[rob_heads[1][`RBIT2-1:1]];
+	  commit1_crbus <= rob_crres[rob_heads[1][`RBIT2-1:1]];
+	  commit1_rid <= rob_heads[1];
+	end
 
-  commit2_v <= (rob_state[rob_heads[0][`RBITS]] == RS_CMT
-             && rob_state[rob_heads[1][`RBITS]] == RS_CMT
-             && rob_state[rob_heads[2][`RBITS]] == RS_CMT
-             && ~|panic);
-  commit2_id <= rob_heads[2];
-  commit2_tgt <= rob_tgt[rob_heads[2][`RBITS]];  
-  commit2_bus <= rob_res[rob_heads[2][`RBITS]];
-  commit2_crtgt <= rob_crtgt[rob_heads[2][`RBITS]];
-  commit2_crbus <= rob_crres[rob_heads[2][`RBITS]];
-  commit2_rid <= rob_heads[2];
+	case(cmap[2])
+	3'd2:
+		begin
+		  commit2_v <= (rob_state[rob_heads[0][`RBIT2-1:1]] == RS_CMT
+		             && rob_state[rob_heads[1][`RBIT2-1:1]] == RS_CMT
+		             && ~|panic);
+		  commit2_id <= rob_heads[1];
+		  commit2_tgt <= rob_tgt[rob_heads[1][`RBIT2-1:1]];  
+		  commit2_bus <= rob_res[rob_heads[1][`RBIT2-1:1]];
+		  commit2_crtgt <= rob_crtgt[rob_heads[1][`RBIT2-1:1]];
+		  commit2_crbus <= rob_crres[rob_heads[1][`RBIT2-1:1]];
+		  commit2_rid <= rob_heads[1];
+		end
+	3'd3:
+		begin
+		  commit2_v <= (rob_state[rob_heads[0][`RBIT2-1:1]] == RS_CMT
+		             && rob_state[rob_heads[1][`RBIT2-1:1]] == RS_CMT
+		             && ~|panic);
+		  commit2_id <= rob_heads[1];
+		  commit2_tgt <= rob_tgt2[rob_heads[1][`RBIT2-1:1]];  
+		  commit2_bus <= rob_res2[rob_heads[1][`RBIT2-1:1]];
+		  commit2_crtgt <= rob_crtgt[rob_heads[1][`RBIT2-1:1]];
+		  commit2_crbus <= rob_crres[rob_heads[1][`RBIT2-1:1]];
+		  commit2_rid <= rob_heads[1] + 4'd1;
+		end
+	3'd4:
+		begin
+		  commit2_v <= (rob_state[rob_heads[0][`RBIT2-1:1]] == RS_CMT
+		             && rob_state[rob_heads[1][`RBIT2-1:1]] == RS_CMT
+		             && rob_state[rob_heads[2][`RBIT2-1:1]] == RS_CMT
+		             && ~|panic);
+		  commit2_id <= rob_heads[2];
+		  commit2_tgt <= rob_tgt[rob_heads[2][`RBIT2-1:1]];  
+		  commit2_bus <= rob_res[rob_heads[2][`RBIT2-1:1]];
+		  commit2_crtgt <= rob_crtgt[rob_heads[2][`RBIT2-1:1]];
+		  commit2_crbus <= rob_crres[rob_heads[2][`RBIT2-1:1]];
+		  commit2_rid <= rob_heads[2];
+		end
+	default:	;	// invalid / unreaachable values
+	endcase
 	
-  commit3_v <= (rob_state[rob_heads[0][`RBITS]] == RS_CMT
-		         && rob_state[rob_heads[1][`RBITS]] == RS_CMT
-    		     && rob_state[rob_heads[2][`RBITS]] == RS_CMT
-        		 && rob_state[rob_heads[3][`RBITS]] == RS_CMT
-         		&& ~|panic);
-  commit3_id <= rob_heads[3][`RBITS];
-  commit3_tgt <= rob_tgt[rob_heads[3][`RBITS]];  
-  commit3_bus <= rob_res[rob_heads[3][`RBITS]];
-  commit3_crtgt <= rob_crtgt[rob_heads[3][`RBITS]];
-  commit3_crbus <= rob_crres[rob_heads[3][`RBITS]];
-  commit3_rid <= rob_heads[3];
+	case (cmap[3])
+	3'd3:
+		begin
+		  commit3_v <= (rob_state[rob_heads[0][`RBIT2-1:1]] == RS_CMT
+		             && rob_state[rob_heads[1][`RBIT2-1:1]] == RS_CMT
+		             && ~|panic);
+		  commit3_id <= rob_heads[1][`RBIT2-1:1];
+		  commit3_tgt <= rob_tgt2[rob_heads[1][`RBIT2-1:1]];  
+		  commit3_bus <= rob_res2[rob_heads[1][`RBIT2-1:1]];
+		  commit3_crtgt <= rob_crtgt[rob_heads[1][`RBIT2-1:1]];
+		  commit3_crbus <= rob_crres[rob_heads[1][`RBIT2-1:1]];
+		  commit3_rid <= rob_heads[1] + 4'd1;
+		end
+	3'd4:
+		begin
+		  commit3_v <= (rob_state[rob_heads[0][`RBIT2-1:1]] == RS_CMT
+		             && rob_state[rob_heads[1][`RBIT2-1:1]] == RS_CMT
+		             && rob_state[rob_heads[2][`RBIT2-1:1]] == RS_CMT
+		             && ~|panic);
+		  commit3_id <= rob_heads[2][`RBIT2-1:1];
+		  commit3_tgt <= rob_tgt[rob_heads[2][`RBIT2-1:1]];  
+		  commit3_bus <= rob_res[rob_heads[2][`RBIT2-1:1]];
+		  commit3_crtgt <= rob_crtgt[rob_heads[2][`RBIT2-1:1]];
+		  commit3_crbus <= rob_crres[rob_heads[2][`RBIT2-1:1]];
+		  commit3_rid <= rob_heads[2];
+		end
+	3'd5:
+		begin
+		  commit3_v <= (rob_state[rob_heads[0][`RBIT2-1:1]] == RS_CMT
+		             && rob_state[rob_heads[1][`RBIT2-1:1]] == RS_CMT
+		             && rob_state[rob_heads[2][`RBIT2-1:1]] == RS_CMT
+		             && ~|panic);
+		  commit3_id <= rob_heads[2][`RBIT2-1:1];
+		  commit3_tgt <= rob_tgt2[rob_heads[2][`RBIT2-1:1]];  
+		  commit3_bus <= rob_res2[rob_heads[2][`RBIT2-1:1]];
+		  commit3_crtgt <= rob_crtgt[rob_heads[2][`RBIT2-1:1]];
+		  commit3_crbus <= rob_crres[rob_heads[2][`RBIT2-1:1]];
+		  commit3_rid <= rob_heads[2] + 4'd1;
+		end
+	3'd6:
+		begin
+		  commit3_v <= (rob_state[rob_heads[0][`RBIT2-1:1]] == RS_CMT
+    		         && rob_state[rob_heads[1][`RBIT2-1:1]] == RS_CMT
+        		     && rob_state[rob_heads[2][`RBIT2-1:1]] == RS_CMT
+            		 && rob_state[rob_heads[3][`RBIT2-1:1]] == RS_CMT
+             		&& ~|panic);
+		  commit3_id <= rob_heads[3][`RBIT2-1:1];
+		  commit3_tgt <= rob_tgt[rob_heads[3][`RBIT2-1:1]];  
+		  commit3_bus <= rob_res[rob_heads[3][`RBIT2-1:1]];
+		  commit3_crtgt <= rob_crtgt[rob_heads[3][`RBIT2-1:1]];
+		  commit3_crbus <= rob_crres[rob_heads[3][`RBIT2-1:1]];
+		  commit3_rid <= rob_heads[3];
+		end
+	default:	;	// invalid / unreachable
+	endcase
 end
 
 assign int_commit = (commit0_v && iq_irq[heads[0]])
@@ -5945,8 +5958,10 @@ end
 
 if (alu0_v) begin
 	rob_tgt [ alu0_rid ] <= alu0_tgt;
+	rob_tgt2 [ alu0_rid ] <= alu0_tgt2;
 	rob_crtgt [ alu0_rid] <= alu0_crtgt;
 	rob_res	[ alu0_rid ] <= ralu0_bus;
+	rob_res2	[ alu0_rid ] <= alu0_bus2;
 	rob_crres [ alu0_rid] <= alu0_cro;
 	rob_argA [alu0_rid] <= alu0_argA;
 	rob_exc	[ alu0_rid ] <= alu0_exc;
@@ -5972,8 +5987,10 @@ end
 
 if (alu1_v && `NUM_ALU > 1) begin
 	rob_tgt [ alu1_rid ] <= alu1_tgt;
+	rob_tgt2 [ alu1_rid ] <= alu1_tgt2;
 	rob_crtgt [ alu1_rid] <= alu1_crtgt;
 	rob_res	[ alu1_rid ] <= ralu1_bus;
+	rob_res2	[ alu1_rid ] <= alu1_bus2;
 	rob_crres [ alu1_rid] <= alu1_cro;
 	rob_argA [alu1_rid] <= alu1_argA;
 	rob_exc	[ alu1_rid ] <= alu1_exc;
@@ -5993,12 +6010,14 @@ end
 
 if (agen0_v) begin
 	rob_tgt[agen0_rid] <= agen0_tgt;
+	rob_tgt2[agen0_rid] <= agen0_tgt2;
 	if (iq_state[agen0_id]==IQS_OUT)
 		iq_state[agen0_id] <= (agen0_lea|agen0_memdb|agen0_memsb) ? IQS_CMT : IQS_AGEN;
 	if (agen0_lea|agen0_memdb|agen0_memsb)
 		if (rob_state[agen0_rid]==RS_ASSIGNED)
 			rob_state[agen0_rid] <= RS_CMT;
 	rob_res[agen0_rid] <= agen0_ma;		// LEA/PUSH needs this result
+	rob_res2[agen0_rid] <= agen0_res;
 	rob_exc[agen0_rid] <= `FLT_NONE;
 	if (iq_state[agen0_id]!=IQS_AGEN)
 		iq_ma[agen0_id] <= agen0_ma;
@@ -6007,12 +6026,14 @@ end
 
 if (agen1_v && `NUM_AGEN > 1) begin
 	rob_tgt[agen1_rid] <= agen1_tgt;
+	rob_tgt2[agen1_rid] <= agen1_tgt2;
 	if (iq_state[agen1_id]==IQS_OUT)
 		iq_state[agen1_id] <= (agen1_lea|agen1_memdb|agen1_memsb) ? IQS_CMT : IQS_AGEN;
 	if (agen1_lea|agen1_memdb|agen1_memsb)
 		if (rob_state[agen1_rid]==RS_ASSIGNED)
 			rob_state[agen1_rid] <= RS_CMT;
 	rob_res[agen1_rid] <= agen1_ma;		// LEA needs this result
+	rob_res2[agen1_rid] <= agen1_res;
 	rob_exc[agen1_rid] <= `FLT_NONE;
 	if (iq_state[agen1_id]!=IQS_AGEN)
 		iq_ma[agen1_id] <= agen1_ma;
@@ -6024,6 +6045,7 @@ if (fpu1_done_pe)
 
 if (fpu1_v && `NUM_FPU > 0) begin
 	rob_tgt [ fpu1_rid] <= fpu1_tgt;
+	rob_tgt2 [ fpu1_rid] <= fpu1_tgt2;
 	rob_crtgt [ fpu1_rid] <= fpu1_crtgt;
 	rob_res [ fpu1_rid ] <= rfpu1_bus;
 	rob_status[ fpu1_rid ] <= fpu1_status;
@@ -6042,6 +6064,7 @@ if (fpu2_done_pe)
 
 if (fpu2_v && `NUM_FPU > 1) begin
 	rob_tgt [ fpu2_rid] <= fpu2_tgt;
+	rob_tgt2 [ fpu2_rid] <= fpu2_tgt2;
 	rob_crtgt [ fpu2_rid] <= fpu2_crtgt;
 	rob_res [ fpu2_rid ] <= rfpu2_bus;
 	rob_status[ fpu2_rid ] <= fpu2_status;
@@ -6065,6 +6088,7 @@ if (fcu_v) begin
 	fcu_done <= `TRUE;
 	iq_ma  [ fcu_id ] <= fcu_missip;
 	rob_tgt [ fcu_rid] <= fcu_tgt;
+	rob_tgt2 [ fcu_rid] <= fcu_tgt2;
   rob_res [ fcu_rid ] <= {rfcu_bus,4'd0};
   rob_exc [ fcu_rid ] <= fcu_exc;
 	if (iq_state[fcu_id]==IQS_OUT) begin
@@ -7657,18 +7681,20 @@ input [`RBITSP1] amt;
 begin
 	for (n = 0; n < RENTRIES; n = n + 1)
 		if (n < amt) begin
-			
-			if (!((rob_heads[n][`RBITS]==rob_tails[0] && queuedCnt==3'd1)
-				|| (rob_heads[n][`RBITS]==rob_tails[1] && queuedCnt==3'd2)
-				|| (rob_heads[n][`RBITS]==rob_tails[2] && queuedCnt==3'd3)
-				|| (rob_heads[n][`RBITS]==rob_tails[3] && queuedCnt==3'd4)
+			/*
+			if (!((rob_heads[n][`RBIT-1:1]==rob_tails[0] && queuedCnt==3'd1)
+				|| (rob_heads[n][`RBIT-1:1]==rob_tails[1] && queuedCnt==3'd2)
+				|| (rob_heads[n][`RBIT-1:1]==rob_tails[2] && queuedCnt==3'd3)
+				|| (rob_heads[n][`RBIT-1:1]==rob_tails[3] && queuedCnt==3'd4)
 				)) begin
-				
+				*/
 //					rob_state[rob_heads[n]] <= RS_INVALID;
 					//iq_state[rob_id[rob_heads[n]]] <= IQS_INVALID;
 					$display("rob_head_inc: IQS_INVALID[%d]",rob_id[rob_heads[n]]);
-					rob_state[rob_heads[n]] <= RS_INVALID;
-			end
+				if (!(n == amt-3'd1 && amt[0])) begin
+					rob_state[rob_heads[n]>>1] <= RS_INVALID;
+				end
+			//end
 		end
 	CC <= CC + amt;
 end
@@ -7745,7 +7771,7 @@ begin
 				if (col < row) begin
 					if (pat[col]) begin
 						// Special checking for condition register sideways slice
-						if (Rs1[row] >= 7'b1110000 && Rs1[row] <= 7'b1110111 && Rd[col]==7'd125 && slot_rfw[col]) begin
+						if (Rs1[row] >= 7'b1110000 && Rs1[row] <= 7'b1110111 && Rd[col]==7'd121 && slot_rfw[col]) begin
 							iq_argA_v [tails[tails_rc(pat,row)]] <= Source1Valid(insnx[row]);
 							iq_argA_s [tails[tails_rc(pat,row)]] <= {1'b0,tails[tails_rc(pat,col)]};
 						end
@@ -7754,7 +7780,7 @@ begin
 							iq_argA_s [tails[tails_rc(pat,row)]] <= {1'b0,tails[tails_rc(pat,col)]};
 						end
 
-						if (Rs2[row] >= 7'b1110000 && Rs2[row] <= 7'b1110111 && Rd[col]==7'd125 && slot_rfw[col]) begin
+						if (Rs2[row] >= 7'b1110000 && Rs2[row] <= 7'b1110111 && Rd[col]==7'd121 && slot_rfw[col]) begin
 							iq_argA_v [tails[tails_rc(pat,row)]] <= Source2Valid(insnx[row]);
 							iq_argA_s [tails[tails_rc(pat,row)]] <= {1'b0,tails[tails_rc(pat,col)]};
 						end

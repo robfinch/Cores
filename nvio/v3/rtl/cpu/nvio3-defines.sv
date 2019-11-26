@@ -333,7 +333,10 @@
 `define FSNE		5'h15
 `define FSUN		5'h16
 
+`define MEMORY	8'b0???????
+
 // Load operations
+`define LOADS		8'h0x,8'h1x,8'h4x,8'h5x
 `define LDB			8'h00
 `define LDW			8'h01
 `define LDT			8'h02
