@@ -147,6 +147,11 @@ input [39:0] isn;
 IsXori = isn[`OPCODE]==`XORI;
 endfunction
 
+function IsVSet;
+input [39:0] isn;
+IsVSet = (isn[`OPCODE]==`R2 || isn[`OPCODE]==`R2S) && (isn[`FUNCT6] >= `SLT && isn[`FUNCT6] <= `SNE);
+endfunction
+
 function IsTLB;
 input [39:0] isn;
 IsTLB = isn[`OPCODE]==`TLB;
@@ -562,6 +567,7 @@ begin
 	bus[`IB_TLB]	 <= IsTLB(instr);
 	bus[`IB_FMT]   <= instr[32:29];	// 3'd3=word size
 	bus[`IB_Z]		 <= fnZ(instr);
+	bus[`IB_VSET]  <= IsVSet(instr);
 	bus[`IB_IRQ]	 <= IsIrq(instr);
 	bus[`IB_BRK]	 <= isBrk;
 	bus[`IB_RTI]	 <= isRti;

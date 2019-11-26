@@ -560,15 +560,12 @@ casez(instr[`OPCODE])
 	case(instr[`FUNCT6])
 	`ABS:			tskAbs(fmt,mx,zx,a,t,o);
 	`CMPRSS:	tskCmprss(fmt,o);
+	`V2BITS:	tskV2bits(fmt,mx,zx,a,t,o);
+
 	`CNTLZ:     o = BIG ? {57'd0,clzo128} : 64'hCCCCCCCCCCCCCCCC;
 	`CNTLO:     o = BIG ? {57'd0,cloo128} : 64'hCCCCCCCCCCCCCCCC;
 	`CNTPOP:    o = BIG ? {57'd0,cpopo128} : 64'hCCCCCCCCCCCCCCCC;
-	`NOT:   case(fmt[1:0])
-					2'd0:   o = {~|a[63:56],~|a[55:48],~|a[47:40],~|a[39:32],~|a[31:24],~|a[23:16],~|a[15:8],~|a[7:0]};
-					2'd1:   o = {~|a[63:48],~|a[47:32],~|a[31:16],~|a[15:0]};
-					2'd2:   o = {~|a[63:32],~|a[31:0]};
-					2'd3:   o = ~|a[63:0];
-					endcase
+	`NOT:   tskNot(fmt,mx,zx,a,t,o);
 	`NEG:		tskNeg(fmt,mx,zx,a,t,o);
   `MOV:		o = a;
 	`PTR:		case (instr[25:23])
@@ -1182,6 +1179,53 @@ begin
 		begin
 			o[`HEXI0] = mx[0] ? -a[`HEXI0] : zx[0] ? 128'd0 : t[`HEXI0];
 			o[`HEXI1] = mx[1] ? -a[`HEXI1] : zx[1] ? 128'd0 : t[`HEXI1];
+		end
+	endcase
+	else
+		o[127:0] = {32{4'hC}};
+end
+endtask
+
+task tskNot;
+input [3:0] fmt;
+input [31:0] mx;
+input [31:0] zx;
+input [DBW:0] a;
+input [DBW:0] t;
+output [DBW:0] o;
+begin
+	o = t;
+	if (BIG)
+	case(fmt)
+	byt:   	o[127:0] = a[7:0] == 8'd0;
+	wyde:   o[127:0] = a[15:0] == 16'd0;
+	tetra:  o[127:0] = a[31:0] == 32'd0;
+	octa:   o[127:0] = a[63:0] == 64'd0;
+	hexi:	  o[127:0] = a[127:0] == 128'd0;
+	byte_para:	;
+	wyde_para:	;
+	tetra_para:
+		begin
+			o[`TETRA0] = mx[0] ? a[`TETRA0] == 32'd0 : zx[0] ? 32'd0 : t[`TETRA0];
+			o[`TETRA1] = mx[1] ? a[`TETRA1] == 32'd0 : zx[1] ? 32'd0 : t[`TETRA1];
+			o[`TETRA2] = mx[2] ? a[`TETRA2] == 32'd0 : zx[2] ? 32'd0 : t[`TETRA2];
+			o[`TETRA3] = mx[3] ? a[`TETRA3] == 32'd0 : zx[3] ? 32'd0 : t[`TETRA3];
+			o[`TETRA4] = mx[4] ? a[`TETRA4] == 32'd0 : zx[4] ? 32'd0 : t[`TETRA4];
+			o[`TETRA5] = mx[5] ? a[`TETRA5] == 32'd0 : zx[5] ? 32'd0 : t[`TETRA5];
+			o[`TETRA6] = mx[6] ? a[`TETRA6] == 32'd0 : zx[6] ? 32'd0 : t[`TETRA6];
+			o[`TETRA7] = mx[7] ? a[`TETRA7] == 32'd0 : zx[7] ? 32'd0 : t[`TETRA7];
+		end
+	octa_para:
+		begin
+			o[`OCTA0] = mx[0] ? a[`OCTA0] == 64'd0 : zx[0] ? 64'd0 : t[`OCTA0];
+			o[`OCTA1] = mx[1] ? a[`OCTA1] == 64'd0 : zx[1] ? 64'd0 : t[`OCTA1];
+			o[`OCTA2] = mx[2] ? a[`OCTA2] == 64'd0 : zx[2] ? 64'd0 : t[`OCTA2];
+			o[`OCTA3] = mx[3] ? a[`OCTA3] == 64'd0 : zx[3] ? 64'd0 : t[`OCTA3];
+		end
+	hexi_para:
+		begin
+			o[`HEXI0] = mx[0] ? a[`HEXI0] == 128'd0 : zx[0] ? 128'd0 : t[`HEXI0];
+			o[`HEXI1] = mx[1] ? a[`HEXI1] == 128'd0 : zx[1] ? 128'd0 : t[`HEXI1];
 		end
 	endcase
 	else
@@ -2964,6 +3008,92 @@ begin
 	octa_para:	o = vcmp64;
 	hexi_para:	o = vcmp128;
 	default:		o = vcmp128;
+	endcase
+end
+endtask
+
+task tskV2bits;
+input [3:0] fmt;
+input [31:0] mx;
+input [31:0] zx;
+input [255:0] a;
+input [255:0] t;
+output [255:0] o;
+begin
+	case(fmt)
+	byte_para:	o = {
+								mx[31] ? a[248] : zx[31] ? 1'b0 : t[248],
+								mx[30] ? a[240] : zx[30] ? 1'b0 : t[240],
+								mx[29] ? a[232] : zx[29] ? 1'b0 : t[232],
+								mx[28] ? a[224] : zx[28] ? 1'b0 : t[224],
+								mx[27] ? a[216] : zx[27] ? 1'b0 : t[216],
+								mx[26] ? a[208] : zx[26] ? 1'b0 : t[208],
+								mx[25] ? a[200] : zx[25] ? 1'b0 : t[200],
+								mx[24] ? a[192] : zx[24] ? 1'b0 : t[192],
+								mx[23] ? a[184] : zx[23] ? 1'b0 : t[184],
+								mx[22] ? a[176] : zx[22] ? 1'b0 : t[176],
+								mx[21] ? a[168] : zx[21] ? 1'b0 : t[168],
+								mx[20] ? a[160] : zx[20] ? 1'b0 : t[160],
+								mx[19] ? a[152] : zx[19] ? 1'b0 : t[152],
+								mx[18] ? a[144] : zx[18] ? 1'b0 : t[144],
+								mx[17] ? a[136] : zx[17] ? 1'b0 : t[136],
+								mx[16] ? a[128] : zx[16] ? 1'b0 : t[128],
+								mx[15] ? a[120] : zx[15] ? 1'b0 : t[120],
+								mx[14] ? a[112] : zx[14] ? 1'b0 : t[112],
+								mx[13] ? a[104] : zx[13] ? 1'b0 : t[104],
+								mx[12] ? a[ 96] : zx[12] ? 1'b0 : t[ 96],
+								mx[11] ? a[ 88] : zx[11] ? 1'b0 : t[ 88],
+								mx[10] ? a[ 80] : zx[10] ? 1'b0 : t[ 80],
+								mx[ 9] ? a[ 72] : zx[ 9] ? 1'b0 : t[ 72],
+								mx[ 8] ? a[ 64] : zx[ 8] ? 1'b0 : t[ 64],
+								mx[ 7] ? a[ 56] : zx[ 7] ? 1'b0 : t[ 56],
+								mx[ 6] ? a[ 48] : zx[ 6] ? 1'b0 : t[ 48],
+								mx[ 5] ? a[ 40] : zx[ 5] ? 1'b0 : t[ 40],
+								mx[ 4] ? a[ 32] : zx[ 4] ? 1'b0 : t[ 32],
+								mx[ 3] ? a[ 24] : zx[ 3] ? 1'b0 : t[ 24],
+								mx[ 2] ? a[ 16] : zx[ 2] ? 1'b0 : t[ 16],
+								mx[ 1] ? a[  8] : zx[ 1] ? 1'b0 : t[  8],
+								mx[ 0] ? a[  0] : zx[ 0] ? 1'b0 : t[  0]
+							};
+	wyde_para:	o = {
+								mx[15] ? a[240] : zx[15] ? 1'b0 : t[240],
+								mx[14] ? a[224] : zx[14] ? 1'b0 : t[224],
+								mx[13] ? a[208] : zx[13] ? 1'b0 : t[208],
+								mx[12] ? a[192] : zx[12] ? 1'b0 : t[192],
+								mx[11] ? a[176] : zx[11] ? 1'b0 : t[176],
+								mx[10] ? a[160] : zx[10] ? 1'b0 : t[160],
+								mx[ 9] ? a[144] : zx[ 9] ? 1'b0 : t[144],
+								mx[ 8] ? a[128] : zx[ 8] ? 1'b0 : t[128],
+								mx[ 7] ? a[112] : zx[ 7] ? 1'b0 : t[112],
+								mx[ 6] ? a[ 96] : zx[ 6] ? 1'b0 : t[ 96],
+								mx[ 5] ? a[ 80] : zx[ 5] ? 1'b0 : t[ 80],
+								mx[ 4] ? a[ 64] : zx[ 4] ? 1'b0 : t[ 64],
+								mx[ 3] ? a[ 48] : zx[ 3] ? 1'b0 : t[ 48],
+								mx[ 2] ? a[ 32] : zx[ 2] ? 1'b0 : t[ 32],
+								mx[ 1] ? a[ 16] : zx[ 1] ? 1'b0 : t[ 16],
+								mx[ 0] ? a[  0] : zx[ 0] ? 1'b0 : t[  0]
+							};
+	tetra_para:	o = {
+								mx[ 7] ? a[224] : zx[ 7] ? 1'b0 : t[224],
+								mx[ 6] ? a[192] : zx[ 6] ? 1'b0 : t[192],
+								mx[ 5] ? a[160] : zx[ 5] ? 1'b0 : t[160],
+								mx[ 4] ? a[128] : zx[ 4] ? 1'b0 : t[128],
+								mx[ 3] ? a[ 96] : zx[ 3] ? 1'b0 : t[ 96],
+								mx[ 2] ? a[ 64] : zx[ 2] ? 1'b0 : t[ 64],
+								mx[ 1] ? a[ 32] : zx[ 1] ? 1'b0 : t[ 32],
+								mx[ 0] ? a[  0] : zx[ 0] ? 1'b0 : t[  0]
+							};
+	octa_para:	o = {
+								mx[ 3] ? a[192] : zx[ 3] ? 1'b0 : t[192],
+								mx[ 2] ? a[128] : zx[ 2] ? 1'b0 : t[128],
+								mx[ 1] ? a[ 64] : zx[ 1] ? 1'b0 : t[ 64],
+								mx[ 0] ? a[  0] : zx[ 0] ? 1'b0 : t[  0]
+							};
+	hexi_para:	o = {
+								mx[ 1] ? a[128] : zx[ 1] ? 1'b0 : t[128],
+								mx[ 0] ? a[  0] : zx[ 0] ? 1'b0 : t[  0]
+							};
+	default:	o = 256'd0;
 	endcase
 end
 endtask

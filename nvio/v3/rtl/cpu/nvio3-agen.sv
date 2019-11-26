@@ -25,6 +25,8 @@
 
 module agen(inst, a, b, c, i, offset, ma, res2, idle);
 parameter AMSB = 95;
+parameter TRUE = 1'b1;
+parameter FALSE = 1'b0;
 input [39:0] inst;
 input [AMSB:0] a;
 input [AMSB:0] b;
@@ -184,5 +186,6 @@ casez(inst[`OPCODE])
 	endcase
 default:	res2 <= 1'd0;
 endcase
+
 
 endmodule

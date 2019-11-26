@@ -434,6 +434,7 @@ reg [QENTRIES-1:0] iq_pfx;		// prefix instruction
 reg [QENTRIES-1:0] iq_alu = 8'h00;  // alu type instruction
 reg [QENTRIES-1:0] iq_alu0 = 1'b0;
 reg [QENTRIES-1:0] iq_fpu;  // floating point instruction
+reg [QENTRIES-1:0] iq_vset;  // floating point instruction
 reg [QENTRIES-1:0] iq_fc;   // flow control instruction
 reg [QENTRIES-1:0] iq_canex = 8'h00;	// true if it's an instruction that can exception
 reg [QENTRIES-1:0] iq_oddball = 8'h00;	// writes to register file
@@ -729,6 +730,7 @@ reg agen0_dne = TRUE;
 reg agen0_stopString;
 reg [11:0] agen0_bytecnt;
 reg agen0_offset;
+wire agen0_upd2;
 
 wire agen1_v;
 wire agen1_vsn;
@@ -752,6 +754,7 @@ reg [AMSB:0] agen1_ma;
 reg [WID-1:0] agen1_res;
 reg [WID-1:0] agen1_argA, agen1_argB, agen1_argC, agen1_argI;
 reg agen1_dne = TRUE;
+wire agen1_upd2;
 
 wire [`XBITS] fpu_exc;
 reg 				fpu1_cmt;
@@ -763,6 +766,7 @@ reg [`QBITS] fpu1_sourceid;
 reg [`RBITS] fpu1_rid;
 reg [39:0] fpu1_instr;
 reg [3:0] fpu1_fmt;
+reg fpu1_vset;
 reg fpu1_z;
 reg [VWID-1:0] fpu1_argA;
 reg [VWID-1:0] fpu1_argB;
@@ -780,7 +784,7 @@ wire [7:0] fpu1_cro;
 wire  [`QBITS] fpu1_id;
 wire  [`XBITS] fpu1_exc;
 wire        fpu1_v;
-wire [31:0] fpu1_status;
+wire [255:0] fpu1_status;
 reg fpu1_dne = TRUE;
 
 reg 				fpu2_cmt;
@@ -792,6 +796,7 @@ reg [`QBITS] fpu2_sourceid;
 reg [`RBITS] fpu2_rid;
 reg [39:0] fpu2_instr;
 reg [3:0] fpu2_fmt;
+reg fpu2_vset;
 reg fpu2_z;
 reg [VWID-1:0] fpu2_argA;
 reg [VWID-1:0] fpu2_argB;
@@ -809,7 +814,7 @@ wire [7:0] fpu2_cro;
 wire  [`QBITS] fpu2_id;
 wire  [`XBITS] fpu2_exc;
 wire        fpu2_v;
-wire [31:0] fpu2_status;
+wire [255:0] fpu2_status;
 reg fpu2_dne = TRUE;
 
 reg [7:0] fccnt;
@@ -3133,16 +3138,21 @@ input [39:0] ins;
 casez(ins[`OPCODE])
 `POP:			fnRd2 = {1'b0,ins[`RS1]};
 8'b0???????:
-	case(ins[`AM])
-	2'd1:	fnRd2 = {2'b00,ins[`RS1]};
-	2'd2:	fnRd2 = {2'b00,ins[`RS1]};
-	2'd3:
-		case(ins[`AMX])
+	case(ins[`OPCODE])
+	`PUSHC:	fnRd2 <= 7'd0;
+	`LINK:	fnRd2 <= 7'd0;
+	default:
+		case(ins[`AM])
 		2'd1:	fnRd2 = {2'b00,ins[`RS1]};
 		2'd2:	fnRd2 = {2'b00,ins[`RS1]};
+		2'd3:
+			case(ins[`AMX])
+			2'd1:	fnRd2 = {2'b00,ins[`RS1]};
+			2'd2:	fnRd2 = {2'b00,ins[`RS1]};
+			default:	fnRd2 = 7'd0;
+			endcase
 		default:	fnRd2 = 7'd0;
 		endcase
-	default:	fnRd2 = 7'd0;
 	endcase
 default:	fnRd2 = 7'd0;
 endcase
@@ -3150,19 +3160,26 @@ endfunction
 
 function [6:0] fnRs1;
 input [39:0] ins;
-if (ins[`OPCODE]==8'hDD && ins[39:36]==4'h8)	// CRLOG
-	fnRs1 = {4'b1110,ins[19:17]};
-else
+case(ins[`OPCODE])
+`JLT,`JLE,`JGT,`JGE,`JEQ,`JNE,`JCS,`JCC,`JVS,`JVC,`JUS,`JUC:
+	fnRs1 = {4'b1110,ins[10:8]};
+`BMISC2:
+	if (ins[`BFUNCT4]==`CRLOG)	// CRLOG
+		fnRs1 = 4'b1110001;
+	else
+		fnRs1 = ins[`RS1];
+default:
 	fnRs1 = ins[`RS1];
+endcase
 endfunction
 
 function [6:0] fnRs2;
 input [39:0] ins;
 case(ins[`OPCODE])
 `JRL:	fnRs2 = {4'b1100,ins[20:18]};
-8'hDD:
-	if (ins[39:36]==4'h8)	// CRLOG
-		fnRs2 = {4'b1110,ins[25:23]};
+`BMISC2:
+	if (ins[`BFUNCT4]==`CRLOG)	// CRLOG
+		fnRs2 = 4'b1110001;
 	else
 		fnRs2 = ins[`RS2];
 default:
@@ -4552,6 +4569,7 @@ wire [1:0] fpu128a_done;
 wire [3:0] fpu64a_done;
 wire [7:0] fpu32a_done;
 wire [255:0] fpu1_out128, fpu1_out64, fpu1_out32;
+wire [255:0] fpu1_status128,fpu1_status64,fpu1_status32;
 
 for (g = 0; g < 2; g = g + 1)
 fpUnit #(128) ufp1_128a
@@ -4568,7 +4586,7 @@ fpUnit #(128) ufp1_128a
   .imm(fpu1_argI),
   .o(fpu1_out128[g*128+:128]),
   .csr_i(),
-  .status(),
+  .status(fpu1_status128[g*32+:32]),
   .exception(),
   .done(fpu128a_done[g])
 );
@@ -4588,7 +4606,7 @@ fpUnit #(64) ufp1_64a
   .imm(fpu1_argI),
   .o(fpu1_out64[g*64+:64]),
   .csr_i(),
-  .status(),
+  .status(fpu1_status64[g*32+:32]),
   .exception(),
   .done(fpu64a_done[g])
 );
@@ -4608,12 +4626,37 @@ fpUnit #(32) ufp1_32a
   .imm(fpu1_argI),
   .o(fpu1_out32[g*32+:32]),
   .csr_i(),
-  .status(),
+  .status(fpu1_status32[g*32+:32]),
   .exception(),
   .done(fpu32a_done[g])
 );
 
 always @*
+if (fpu1_vset) begin
+case(fpu1_fmt)
+fp32_para:	fpu1_out = {
+												fpu1_argD[7] ? fpu1_out128[224] : fpu1_z ? 1'b0 : fpu1_argT[7],
+												fpu1_argD[6] ? fpu1_out128[192] : fpu1_z ? 1'b0 : fpu1_argT[6],
+												fpu1_argD[5] ? fpu1_out128[160] : fpu1_z ? 1'b0 : fpu1_argT[5],
+												fpu1_argD[4] ? fpu1_out128[128] : fpu1_z ? 1'b0 : fpu1_argT[4],
+												fpu1_argD[3] ? fpu1_out128[ 96] : fpu1_z ? 1'b0 : fpu1_argT[3],
+												fpu1_argD[2] ? fpu1_out128[ 64] : fpu1_z ? 1'b0 : fpu1_argT[2],
+												fpu1_argD[1] ? fpu1_out128[ 32] : fpu1_z ? 1'b0 : fpu1_argT[1],
+											  fpu1_argD[0] ? fpu1_out128[  0] : fpu1_z ? 1'b0 : fpu1_argT[0]
+											 };
+fp64_para:	fpu1_out = {
+												fpu1_argD[3] ? fpu1_out128[192] : fpu1_z ? 1'b0 : fpu1_argT[3],
+												fpu1_argD[2] ? fpu1_out128[128] : fpu1_z ? 1'b0 : fpu1_argT[2],
+												fpu1_argD[1] ? fpu1_out128[ 64] : fpu1_z ? 1'b0 : fpu1_argT[1],
+											  fpu1_argD[0] ? fpu1_out128[  0] : fpu1_z ? 1'b0 : fpu1_argT[0]
+											 };
+fp128_para:	fpu1_out = {fpu1_argD[1] ? fpu1_out128[128] : fpu1_z ? 1'b0 : fpu1_argT[1],
+											  fpu1_argD[0] ? fpu1_out128[  0] : fpu1_z ? 1'b0 : fpu1_argT[0]
+											 };
+default:	fpu1_out = 256'd0;
+endcase
+end
+else
 case(fpu1_fmt)
 fp32:	fpu1_out = {224'd0,fpu1_out32[31:0]};
 fp64:	fpu1_out = {192'd0,fpu1_out64[63:0]};
@@ -4637,6 +4680,17 @@ endcase
 
 always @*
 case(fpu1_fmt)
+fp32:	fpu1_status = fpu1_status32[31:0];
+fp64:	fpu1_status = fpu1_status64[31:0];
+fp128:	fpu1_status = fpu1_status128[31:0];
+fp32_para:	fpu1_status = fpu1_status32;
+fp64_para:	fpu1_status = fpu1_status64;
+fp128_para:	fpu1_status = fpu1_status128;
+default:	fpu1_status = 256'd0;
+endcase
+
+always @*
+case(fpu1_fmt)
 fp32,fp32_para:	fpu1_done = &fpu32a_done;
 fp64,fp64_para:	fpu1_done = &fpu64a_done;
 default:	fpu1_done = &fpu128a_done;
@@ -4656,6 +4710,7 @@ wire [1:0] fpu128b_done;
 wire [3:0] fpu64b_done;
 wire [7:0] fpu32b_done;
 wire [255:0] fpu2_out128, fpu2_out64, fpu2_out32;
+wire [255:0] fpu2_status128,fpu2_status64,fpu2_status32;
 
 for (g = 0; g < 2; g = g + 1)
 fpUnit #(128) ufp1_128b
@@ -4672,7 +4727,7 @@ fpUnit #(128) ufp1_128b
   .imm(fpu2_argI),
   .o(fpu2_out128[g*128+:128]),
   .csr_i(),
-  .status(),
+  .status(fpu2_status128[g*32+:32]),
   .exception(),
   .done(fpu128b_done[g])
 );
@@ -4692,7 +4747,7 @@ fpUnit #(64) ufp1_64b
   .imm(fpu2_argI),
   .o(fpu2_out64[g*64+:64]),
   .csr_i(),
-  .status(),
+  .status(fpu2_status64[g*32+:32]),
   .exception(),
   .done(fpu64b_done[g])
 );
@@ -4712,12 +4767,37 @@ fpUnit #(32) ufp1_32b
   .imm(fpu2_argI),
   .o(fpu2_out64[g*32+:32]),
   .csr_i(),
-  .status(),
+  .status(fpu2_status32[g*32+:32]),
   .exception(),
   .done(fpu32b_done[g])
 );
 
 always @*
+if (fpu2_vset) begin
+case(fpu2_fmt)
+fp32_para:	fpu2_out = {
+												fpu2_argD[7] ? fpu2_out128[224] : fpu2_z ? 1'b0 : fpu2_argT[7],
+												fpu2_argD[6] ? fpu2_out128[192] : fpu2_z ? 1'b0 : fpu2_argT[6],
+												fpu2_argD[5] ? fpu2_out128[160] : fpu2_z ? 1'b0 : fpu2_argT[5],
+												fpu2_argD[4] ? fpu2_out128[128] : fpu2_z ? 1'b0 : fpu2_argT[4],
+												fpu2_argD[3] ? fpu2_out128[ 96] : fpu2_z ? 1'b0 : fpu2_argT[3],
+												fpu2_argD[2] ? fpu2_out128[ 64] : fpu2_z ? 1'b0 : fpu2_argT[2],
+												fpu2_argD[1] ? fpu2_out128[ 32] : fpu2_z ? 1'b0 : fpu2_argT[1],
+											  fpu2_argD[0] ? fpu2_out128[  0] : fpu2_z ? 1'b0 : fpu2_argT[0]
+											 };
+fp64_para:	fpu2_out = {
+												fpu2_argD[3] ? fpu2_out128[192] : fpu2_z ? 1'b0 : fpu2_argT[3],
+												fpu2_argD[2] ? fpu2_out128[128] : fpu2_z ? 1'b0 : fpu2_argT[2],
+												fpu2_argD[1] ? fpu2_out128[ 64] : fpu2_z ? 1'b0 : fpu2_argT[1],
+											  fpu2_argD[0] ? fpu2_out128[  0] : fpu2_z ? 1'b0 : fpu2_argT[0]
+											 };
+fp128_para:	fpu2_out = {fpu2_argD[1] ? fpu2_out128[128] : fpu2_z ? 1'b0 : fpu2_argT[1],
+											  fpu2_argD[0] ? fpu2_out128[  0] : fpu2_z ? 1'b0 : fpu2_argT[0]
+											 };
+default:	fpu2_out = 256'd0;
+endcase
+end
+else
 case(fpu2_fmt)
 fp32:	fpu2_out = {224'd0,fpu2_out32[31:0]};
 fp64:	fpu2_out = {192'd0,fpu2_out64[63:0]};
@@ -4738,6 +4818,18 @@ fp128_para:	fpu2_out = {fpu2_argD[1] ? fpu2_out128[255:128] : fpu2_z ? 128'd0 : 
 												fpu2_argD[0] ? fpu2_out128[127:0] : fpu2_z ? 128'd0 : fpu2_argT[127:0]};
 default:	fpu2_out = 256'd0;
 endcase
+
+always @*
+case(fpu2_fmt)
+fp32:	fpu2_status = fpu2_status32[31:0];
+fp64:	fpu2_status = fpu2_status64[31:0];
+fp128:	fpu2_status = fpu2_status128[31:0];
+fp32_para:	fpu2_status = fpu2_status32;
+fp64_para:	fpu2_status = fpu2_status64;
+fp128_para:	fpu2_status = fpu2_status128;
+default:	fpu2_status = 256'd0;
+endcase
+
 
 always @*
 case(fpu2_fmt)
@@ -6521,6 +6613,7 @@ end
                  fpu1_instr	<= iq_instr[n];
                  fpu1_fmt   <= iq_fmt[n];
                  fpu1_z     <= iq_z[n];
+                 fpu1_vset  <= iq_vset[n];
                  fpu1_ip		<= iq_ip[n];
 `ifdef FU_BYPASS
 								 if (iq_argA_v[n])
@@ -6615,6 +6708,7 @@ end
                  fpu2_instr	<= iq_instr[n];
                  fpu2_fmt   <= iq_fmt[n];
                  fpu2_z     <= iq_z[n];
+                 fpu2_vset  <= iq_vset[n];
                  fpu2_ip		<= iq_ip[n];
 `ifdef FU_BYPASS
 								 if (iq_argA_v[n])
@@ -7735,6 +7829,7 @@ begin
 	iq_tlb  [nn]  <= bus[`IB_TLB];
 	iq_fmt   [nn]  <= bus[`IB_FMT];
 	iq_z		[nn]  <= bus[`IB_Z];
+	iq_vset [nn]  <= bus[`IB_VSET];
 	iq_chk  [nn]  <= bus[`IB_CHK];
 	iq_rex  [nn]	<= bus[`IB_REX];
 	iq_jrl	 [nn]  <= bus[`IB_JRL];

@@ -211,12 +211,14 @@
 `define FXMULI	6'h30
 
 // R1 Format
-`define CNTLZ       5'h00
-`define CNTLO       5'h01
-`define CNTPOP      5'h02
-`define COM         5'h03
-`define ABS         5'h04
-`define NOT         5'h05
+`define CNTLZ       6'h00
+`define CNTLO       6'h01
+`define CNTPOP      6'h02
+`define COM         6'h03
+`define ABS         6'h04
+`define NOT         6'h05
+`define SWAP				6'h13
+`define V2BITS			6'h20
 //`define REDOR       5'h06
 `define PTR					5'h06
 `define NEG         5'h07
@@ -602,6 +604,7 @@
 `define IB_CMP		48
 `define IB_PUSH		47
 `define IB_TLB		46
+`define IB_VSET		44
 `define IB_Z			43
 `define IB_IRQ		42
 `define IB_RTI		41
