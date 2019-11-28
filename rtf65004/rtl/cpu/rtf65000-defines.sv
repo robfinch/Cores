@@ -510,6 +510,7 @@
 `define CPX_ZP		9'hE4
 `define CPX_ZPX		9'hE4
 `define CPX_ABS		9'hEC
+
 `define CPY_IMM		9'hC0
 `define CPY_IMM32	9'hC0
 `define CPY_IMM8	9'hC1

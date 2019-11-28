@@ -1,7 +1,32 @@
+// ============================================================================
+//        __
+//   \\__/ o\    (C) 2019  Robert Finch, Waterloo
+//    \  __ /    All rights reserved.
+//     \/_//     robfinch<remove>@finitron.ca
+//       ||
+//
+//
+// This source file is free software: you can redistribute it and/or modify 
+// it under the terms of the GNU Lesser General Public License as published 
+// by the Free Software Foundation, either version 3 of the License, or     
+// (at your option) any later version.                                      
+//                                                                          
+// This source file is distributed in the hope that it will be useful,      
+// but WITHOUT ANY WARRANTY; without even the implied warranty of           
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            
+// GNU General Public License for more details.                             
+//                                                                          
+// You should have received a copy of the GNU General Public License        
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.    
+//                                                                          
+// ============================================================================
+
 `include "rtf65000-config.sv"
 `include "rtf65000-defines.sv"
 
-module rtf65000();
+module rtf65000(rst_i, clk_i);
+input rst_i;
+input clk_i;
 
 
 reg [7:0] ac;
@@ -24,19 +49,37 @@ wire [31:0] ic3_out;
 wire [3:0] len1, len2, len3;
 reg [23:0] insnx [0:1];
 
+// Micro-op queue
+reg [UOQ_ENTRIES-1:0] uoq_v;
 reg [15:0] uoq_pc [0:UOQ_ENTRIES-1];
 reg [15:0] uoq_uop [0:UOQ_ENTRIES-1];
 reg [15:0] uoq_const [0:UOQ_ENTRIES-1];
 reg [1:0] uoq_fl;		// first or last micro-op
 reg [1:0] uoq_flagsupd [0:UOQ_ENTRIES-1];
-
 reg [UOQ_ENTRIES-1:0] uqo_jc;
 reg [UOQ_ENTRIES-1:0] uqo_br;
 reg [UOQ_ENTRIES-1:0] uqo_ret;
 
-reg [15:0] iq_pc [0:QENTRIES-1];
-reg [4:0] iq_instr [0:QENTRIES-1];
-reg [2:0] iq_tgt [0:QENTRIES-1];
+// Issue queue
+reg [2:0] iq_state [0:IQ_ENTRIES-1];
+reg [5:0] iq_sn  [0:IQ_ENTRIES-1];		// sequence number
+reg [15:0] iq_pc [0:IQ_ENTRIES-1];	// program counter associated with instruction
+reg [5:0] iq_instr [0:IQ_ENTRIES-1];	// micro-op instruction
+reg [1:0] iq_fl [0:IQ_ENTRIES-1];			// first or last indicators
+reg [IQ_ENTRIES-1:0] iq_pt;						// predicted taken branch
+reg [2:0] iq_tgt [0:IQ_ENTRIES-1];		// target register
+reg [15:0] iq_argA [0:IQ_ENTRIES-1];	// First argument
+reg [15:0] iq_argB [0:IQ_ENTRIES-1];	// Second argument
+reg [ 7:0] iq_argS [0:IQ_ENTRIES-1];	// status register input
+reg [`RBITS] iq_argA_s [0:IQ_ENTRIES-1];
+reg [`RBITS] iq_argB_s [0:IQ_ENTRIES-1]; 
+reg [`RBITS] iq_argS_s [0:IQ_ENTRIES-1];
+reg [IQ_ENTRIES-1:0] iq_argA_v;
+reg [IQ_ENTRIES-1:0] iq_argB_v;
+reg [IQ_ENTRIES-1:0] iq_argS_v;
+reg [IQ_ENTRIES-1:0] iq_uses_sr;		// instruction uses the status register (eg adc, php)
+reg [1:0] iq_sr_tgts [0:IQ_ENTRIES-1];			// status register bits targeted
+reg [`RBITS] iq_rid [0:IQ_ENTRIES-1];	// index of rob entry
 
 // Re-order buffer
 reg [RENTRIES-1:0] rob_v;
@@ -47,7 +90,7 @@ reg [4:0] rob_instr[0:RENTRIES-1];	// instruction opcode
 reg [7:0] rob_exc [0:RENTRIES-1];
 reg [15:0] rob_ma [0:RENTRIES-1];
 reg [15:0] rob_res [0:RENTRIES-1];
-reg [7:0] rob_cr [0:RENTRIES-1];
+reg [7:0] rob_sr [0:RENTRIES-1];		// status register result
 reg [RBIT:0] rob_tgt [0:RENTRIES-1];
 reg [7:0] rob_crres [0:RENTRIES-1];
 
@@ -127,22 +170,39 @@ uopl[`LDX_ZP]		= {2'd0,`UOF_NZ,2'd0,`UO_LDB,`UO_R8,`UO_XR,`UO_ZR,48'h0};
 uopl[`LDX_ZPY]	= {2'd0,`UOF_NZ,2'd0,`UO_LDB,`UO_R8,`UO_XR,`UO_YR,48'h0};
 uopl[`LDX_ABS]	= {2'd0,`UOF_NZ,2'd0,`UO_LDB,`UO_R16,`UO_XR,`UO_ZR,48'h0};
 uopl[`LDX_ABSY]	= {2'd0,`UOF_NZ,2'd0,`UO_LDB,`UO_R16,`UO_XR,`UO_YR,48'h0};
+uopl[`STX_ZP]	  = {2'd0,`UOF_NONE,2'd0,`UO_STB,`UO_R8,`UO_XR,`UO_ZR,48'h0};
+uopl[`STX_ZPY]  = {2'd0,`UOF_NONE,2'd0,`UO_STB,`UO_R8,`UO_XR,`UO_YR,48'h0};
+uopl[`STX_ABS]	= {2'd0,`UOF_NONE,2'd0,`UO_STB,`UO_R16,`UO_XR,`UO_ZR,48'h0};
 uopl[`CPX_IMM]	= {2'd0,`UOF_NZ,2'd0,`UO_CMPIB,`UO_R8,`UO_XR,`UO_ZR,48'h0};
 uopl[`CPX_ZP]		= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_CMPB,`UO_ZERO,`UO_XR,`UO_TMP,32'h0};
 uopl[`CPX_ZPY]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_YR,`UO_CMPB,`UO_ZERO,`UO_XR,`UO_TMP,32'h0};
 uopl[`CPX_ABS]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_CMP,`UO_ZERO,`UO_XR,`UO_TMP,32'h0};
+uopl[`LDY_IMM]	= {2'd0,`UOF_NZ,2'd0,`UO_LDIB,`UO_R8,`UO_YR,`UO_ZR,48'h0};
+uopl[`LDY_ZP]		= {2'd0,`UOF_NZ,2'd0,`UO_LDB,`UO_R8,`UO_YR,`UO_ZR,48'h0};
+uopl[`LDY_ZPX]	= {2'd0,`UOF_NZ,2'd0,`UO_LDB,`UO_R8,`UO_YR,`UO_XR,48'h0};
+uopl[`LDY_ABS]	= {2'd0,`UOF_NZ,2'd0,`UO_LDB,`UO_R16,`UO_YR,`UO_ZR,48'h0};
+uopl[`LDY_ABSX]	= {2'd0,`UOF_NZ,2'd0,`UO_LDB,`UO_R16,`UO_YR,`UO_XR,48'h0};
+uopl[`STY_ZP]	  = {2'd0,`UOF_NONE,2'd0,`UO_STB,`UO_R8,`UO_YR,`UO_ZR,48'h0};
+uopl[`STY_ZPX]  = {2'd0,`UOF_NONE,2'd0,`UO_STB,`UO_R8,`UO_YR,`UO_XR,48'h0};
+uopl[`STY_ABS]	= {2'd0,`UOF_NONE,2'd0,`UO_STB,`UO_R16,`UO_YR,`UO_ZR,48'h0};
+uopl[`CPY_IMM]	= {2'd0,`UOF_NZ,2'd0,`UO_CMPIB,`UO_R8,`UO_YR,`UO_ZR,48'h0};
+uopl[`CPY_ZP]		= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_CMPB,`UO_ZERO,`UO_YR,`UO_TMP,32'h0};
+uopl[`CPY_ZPX]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_CMPB,`UO_ZERO,`UO_YR,`UO_TMP,32'h0};
+uopl[`CPY_ABS]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_CMP,`UO_ZERO,`UO_YR,`UO_TMP,32'h0};
 uopl[`INX]			= {2'd0,`UOF_NZ,2'd1,`UO_ADDIB,`UO_P1,`UO_XR,`UO_ZR,48'h0};
 uopl[`DEX]			= {2'd0,`UOF_NZ,2'd1,`UO_ADDIB,`UO_M1,`UO_XR,`UO_ZR,48'h0};
 uopl[`INY]			= {2'd0,`UOF_NZ,2'd1,`UO_ADDIB,`UO_P1,`UO_YR,`UO_ZR,48'h0};
 uopl[`DEY]			= {2'd0,`UOF_NZ,2'd1,`UO_ADDIB,`UO_M1,`UO_YR,`UO_ZR,48'h0};
 uopl[`PHA]			= {2'd1,`UOF_NONE,2'd0,`UO_SB,`UO_100H,`UO_ACC,`UO_SP,`UO_ADDIB,`UO_M1,`UO_SP,`UO_ZR,32'h0};
 uopl[`PLA]			= {2'd1,`UOF_NZ,2'd1,`UO_ADDIB,`UO_P1,`UO_SP,`UO_ZR,`UO_LDB,`UO_100H,`UO_ACC,`UO_SP,32'h0};
+uopl[`PHP]			= {2'd1,`UOF_NONE,2'd0,`UO_SB,`UO_100H,`UO_SR,`UO_SP,`UO_ADDIB,`UO_M1,`UO_SP,`UO_ZR,32'h0};
+uopl[`PLP]			= {2'd1,`UOF_NZ,2'd1,`UO_ADDIB,`UO_P1,`UO_SP,`UO_ZR,`UO_LDB,`UO_100H,`UO_SR,`UO_SP,32'h0};
 uopl[`TAX]			= {2'd0,`UOF_NZ,2'd0,`UO_MOV,`UO_ZERO,`UO_XR,`UO_ACC};
 uopl[`TXA]			= {2'd0,`UOF_NZ,2'd0,`UO_MOV,`UO_ZERO,`UO_ACC,`UO_XR};
 uopl[`TAY]			= {2'd0,`UOF_NZ,2'd0,`UO_MOV,`UO_ZERO,`UO_YR,`UO_ACC};
 uopl[`TYA]			= {2'd0,`UOF_NZ,2'd0,`UO_MOV,`UO_ZERO,`UO_ACC,`UO_YR};
 uopl[`TSX]			= {2'd0,`UOF_NZ,2'd0,`UO_MOV,`UO_ZERO,`UO_XR,`UO_SP};
-uopl[`TXS]			= {2'd0,`UOF_NZ,2'd0,`UO_MOV,`UO_ZERO,`UO_SP,`UO_XR};
+uopl[`TXS]			= {2'd0,`UOF_NONE,2'd0,`UO_MOV,`UO_ZERO,`UO_SP,`UO_XR};
 uopl[`BEQ]			= {2'd0,`UOF_NONE,2'd0,`UO_BEQ,`UO_R8,`UO_PC,`UO_ZR};
 uopl[`BNE]			= {2'd0,`UOF_NONE,2'd0,`UO_BNE,`UO_R8,`UO_PC,`UO_ZR};
 uopl[`BCS]			= {2'd0,`UOF_NONE,2'd0,`UO_BCS,`UO_R8,`UO_PC,`UO_ZR};
@@ -200,8 +260,23 @@ assign uo_insn2[4] = uopl[opcode2][15: 0];
 `define UO_RN		2:0
 
 wire [QSLOTS-1:0] slotv;
+wire [4:0] uoq_size = 5'd16;
 reg [7:0] uoq_tail, uoq_head;
-wire [7:0] uoq_room = uoq_tail > uoq_head ? uoq_head + uoq_size - uoq_tail : uoq_head - uoq_tail;
+
+// Only scans up to eight ahead because that's all the room that might be
+// needed (there could be more than eight available).
+reg [4:0] uoq_room;
+reg uoq_hitv; 
+always @*
+begin
+uoq_hitv = FALSE;
+uoq_room = 5'd0;
+for (n = 0; n < 8; n = n + 1)
+	if (uoq_v[(uoq_tail + n) % UOQ_ENTRIES] == `INV && !uoq_hitv) begin
+		uoq_room = uoq_room + 5'd1;
+		uoq_hitv = TRUE;
+	end
+end
 
 always @*
 begin
@@ -211,107 +286,6 @@ begin
 		q2 <= TRUE;
 	else if (uoq_room >= uo_len1) begin
 		q1 <= TRUE;
-end
-
-always @(posedge clk_i)
-if (rst_i) begin
-	for (n = 0; n < UOQ_ENTRIES; n = n + 1) begin
-		uoq_uop[n] <= 14'd0;
-		uoq_const[n] <= 16'h0000;
-	end
-end
-begin
-	if (q2) begin
-		uoq_pc[uoq_tail] <= pc;
-		uoq_uop[uoq_tail] <= uo_insn1[0];
-		uoq_fl[uoq_tail] <= uo_len1==2'b00 ? 2'b11: 2'b01;
-		uoq_flagsupd[uoq_tail + uo_whflg1] = uo_flags1;
-		tskLd4(uo_insn1[0][`UO_LD4],insnx[0],uoq_const[uoq_tail]);
-		if (uopl[opcode1][65:64]>2'b00) begin
-			uoq_pc[(uoq_tail+1) % UOQ_ENTRIES] <= pc;
-			uoq_uop[(uoq_tail+1) % UOQ_ENTRIES] <= uo_insn1[1];
-			uoq_fl[(uoq_tail+1) % UOQ_ENTRIES] <= uopl[opcode1][65:64]==2'b01 ? 2'b10 : 2'b00;
-			tskLd4(uo_insn1[1][`UO_LD4],insnx[0],uoq_const[(uoq_tail+1) % UOQ_ENTRIES]);
-		end
-		if (uopl[opcode1][65:64]>2'b01) begin
-			uoq_pc[(uoq_tail+2) % UOQ_ENTRIES] <= pc;
-			uoq_uop[(uoq_tail+2) % UOQ_ENTRIES] <= uo_insn1[2];
-			uoq_fl[(uoq_tail+2) % UOQ_ENTRIES] <= uopl[opcode1][65:64]==2'b10 ? 2'b10 : 2'b00;
-			tskLd4(uo_insn1[2][`UO_LD4],insnx[0],uoq_const[(uoq_tail+2) % UOQ_ENTRIES]);
-		end
-		if (uopl[opcode1][65:64]>2'b10) begin
-			uoq_pc[(uoq_tail+3) % UOQ_ENTRIES] <= pc;
-			uoq_uop[(uoq_tail+3) % UOQ_ENTRIES] <= uo_insn1[3];
-			uoq_fl[(uoq_tail+3) % UOQ_ENTRIES] <= 2'b10;
-			tskLd4(uo_insn1[3][`UO_LD4],insnx[0],uoq_const[(uoq_tail+3) % UOQ_ENTRIES]);
-		end
-		for (n = 0; n < 4; n = n + 1)
-			if (n < uo_len1)
-				uop_flagsupd[(uop_tail+n) % UOQ_ENTRIES] = `UOF_NONE;
-		uop_flagsupd[(uop_tail+uo_whflg1) % UOP_ENTRIES] = uo_flags1;
-		uoq_pc[uoq_tail_uo_len1] <= pc + len1;
-		uoq_uop[uoq_tail+uo_len1] <= uo_insn2[0];
-		uoq_fl[(uoq_tail+uo_len1) % UOQ_ENTRIES] <= uo_len2==2'b00 ? 2'b11 : 2'b01;
-		uoq_tail <= (uoq_tail + uo_len1 + 8'd1) % UOQ_ENTRIES;
-		tskLd4(uo_insn2[0][`UO_LD4],insnx[1],uoq_const[uoq_tail + uo_len1]);
-		if (uo_len2 > 2'b00) begin
-			uoq_pc[(uoq_tail+uo_len1+1) % UOQ_ENTRIES] <= pc + len1;
-			uoq_uop[(uoq_tail+uo_len1+1) % UOQ_ENTRIES] <= uo_insn2[1];
-			uoq_fl[(uoq_tail+uo_len1+1) % UOQ_ENTRIES] <= uo_len2==2'b01 ? 2'b10 : 2'b00;
-			uoq_tail <= (uoq_tail + uo_len1 + 8'd2) % UOQ_ENTRIES;
-			tskLd4(uo_insn2[1][`UO_LD4],insnx[1],uoq_const[(uoq_tail+uo_len1+1) % UOQ_ENTRIES]);
-		end
-		if (uo_len2 > 2'b01) begin
-			uoq_pc[(uoq_tail+uo_len1+2) % UOQ_ENTRIES] <= pc + len1;
-			uoq_uop[(uoq_tail+uo_len1+2) % UOQ_ENTRIES] <= uo_insn2[2];
-			uoq_fl[(uoq_tail+uo_len1+2) % UOQ_ENTRIES] <= uo_len2==2'b10 ? 2'b10 : 2'b00;
-			uoq_tail <= (uoq_tail + uo_len1 + 8'd3) % UOQ_ENTRIES;
-			tskLd4(uo_insn2[2][`UO_LD4],insnx[1],uoq_const[(uoq_tail+uo_len1+2) % UOQ_ENTRIES]);
-		end
-		if (uo_len2 > 2'b10) begin
-			uoq_pc[(uoq_tail+uo_len1+3) % UOQ_ENTRIES] <= pc + len1;
-			uoq_uop[(uoq_tail+uo_len1+3) % UOQ_ENTRIES] <= uo_insn2[3];
-			uoq_fl[(uoq_tail+uo_len1+3) % UOQ_ENTRIES] <= 2'b10;
-			uoq_tail <= (uoq_tail + uo_len1 + 8'd4) % UOQ_ENTRIES;
-			tskLd4(uo_insn2[3][`UO_LD4],insnx[1],uoq_const[(uoq_tail+uo_len1+3) % UOQ_ENTRIES]);
-		end
-		for (n = 0; n < 4; n = n + 1)
-			if (n < uo_len2)
-				uop_flagsupd[(uop_tail+uo_len1+n) % UOQ_ENTRIES] = `UOF_NONE;
-		uop_flagsupd[(uop_tail+uo_len1+uo_whflg1) % UOP_ENTRIES] = uo_flags1;
-	end
-	else if (q1) begin
-		uoq_pc[uoq_tail] <= pc;
-		uoq_uop[uoq_tail] <= uo_insn1[0];
-		uoq_fl[uoq_tail] <= uo_len1==2'b00 ? 2'b11: 2'b01;
-		uoq_tail <= (uoq_tail + 8'd1) % UOQ_ENTRIES;
-		tskLd4(uo_insn1[0][`UO_LD4],insnx[0],uoq_const[uoq_tail]);
-		if (uo_len1 > 2'b00) begin
-			uoq_pc[(uoq_tail+1) % UOQ_ENTRIES] <= pc;
-			uoq_uop[(uoq_tail+1) % UOQ_ENTRIES] <= uo_insn1[1];
-			uoq_fl[(uoq_tail+1) % UOQ_ENTRIES] <= uopl[opcode1][65:64]==2'b01 ? 2'b10 : 2'b00;
-			uoq_tail <= (uoq_tail + 8'd2) % UOQ_ENTRIES;
-			tskLd4(uo_insn1[1][`UO_LD4],insnx[0],uoq_const[(uoq_tail+1) % UOQ_ENTRIES]);
-		end
-		if (uo_len1 > 2'b01) begin
-			uoq_pc[(uoq_tail+2) % UOQ_ENTRIES] <= pc;
-			uoq_uop[(uoq_tail+2) % UOQ_ENTRIES] <= uo_insn1[2];
-			uoq_fl[(uoq_tail+2) % UOQ_ENTRIES] <= uopl[opcode1][65:64]==2'b10 ? 2'b10 : 2'b00;
-			uoq_tail <= (uoq_tail + 8'd3) % UOQ_ENTRIES;
-			tskLd4(uo_insn1[2][`UO_LD4],insnx[0],uoq_const[(uoq_tail+2) % UOQ_ENTRIES]);
-		end
-		if (uo_len1 > 2'b10) begin
-			uoq_pc[(uoq_tail+3) % UOQ_ENTRIES] <= pc;
-			uoq_uop[(uoq_tail+3) % UOQ_ENTRIES] <= uo_insn1[3];
-			uoq_fl[(uoq_tail+3) % UOQ_ENTRIES] <= 2'b10;
-			uoq_tail <= (uoq_tail + 8'd4) % UOQ_ENTRIES;
-			tskLd4(uo_insn1[3][`UO_LD4],insnx[0],uoq_const[(uoq_tail+3) % UOQ_ENTRIES]);
-		end
-		for (n = 0; n < 4; n = n + 1)
-			if (n < uo_len1)
-				uop_flagsupd[(uop_tail+n) % UOQ_ENTRIES] = `UOF_NONE;
-		uop_flagsupd[(uop_tail+uo_whflg1) % UOP_ENTRIES] = uo_flags1;
-	end
 end
 
 reg [3:0] queuedCnt;
@@ -328,6 +302,9 @@ begin
 end
 
 always @(posedge clk_i)
+if (rst_i)
+	uoq_head <= 4'd0;
+else
 	uoq_head <= (uoq_head + queuedCnt) % UOQ_ENTRIES;
 
 assign slotv[0] = uoq_head != uoq_tail;
@@ -339,6 +316,18 @@ wire [7:0] opcode1 = ic_out[7:0];
 wire [7:0] opcode2 = ic2_out[7:0];
 instLength il1 (opcode1, len1);
 instLength il2 (opcode2, len2);
+
+wire [1:0] slot_rts;
+wire [1:0] slot_br;
+wire [1:0] slot_jc;
+assign slot_rts[0] = opcode1==`RTS;
+assign slot_rts[1] = opcode2==`RTS;
+assign slot_br[0] = opcode1==`BEQ || opcode1==`BNE || opcode1==`BCS || opcode1==`BCC ||
+										 opcode1==`BVS || opcode1==`BVC || opcode1==`BMI || opcode1==`BPL;
+assign slot_br[1] = opcode2==`BEQ || opcode2==`BNE || opcode2==`BCS || opcode2==`BCC ||
+										 opcode2==`BVS || opcode2==`BVC || opcode2==`BMI || opcode2==`BPL;
+assign slot_jc[0] = opcode1==`JMP || opcode1==`JSR;
+assign slot_jc[1] = opcode2==`JMP || opcode2==`JSR;
 
 programCounter upc1
 (
@@ -354,7 +343,7 @@ programCounter upc1
 	.len1(len1),
 	.len2(len2),
 	.jc(slot_jc),
-	.rts(slot_ret),
+	.rts(slot_rts),
 	.br(slot_br),
 	.take_branch(take_branch),
 	.btgt(btgt),
@@ -366,14 +355,14 @@ programCounter upc1
 );
 
 reg [2:0] Rd;
-reg [1:0] Rn;
+reg [2:0] Rn;
 
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
-	Rd[n] = uoq_uop[(uoq_head+n)%UOQ_ENTRIES][4:2];
+	Rd[n] = uoq_uop[(uoq_head+n)%UOQ_ENTRIES][5:3];
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
-	Rn[n] = uoq_uop[(uoq_head+n)%UOQ_ENTRIES][1:0];
+	Rn[n] = uoq_uop[(uoq_head+n)%UOQ_ENTRIES][2:0];
 
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
@@ -397,8 +386,14 @@ for (n = 0; n < QSLOTS; n = n + 1)
 	2'd3:	rfob[n] <= {8'h1,sp};
 	endcase
 
+always @*
+for (n = 0; n < QSLOTS; n = n + 1)
+	rfos[n] <= sr;
+
+
 wire [15:0] argA [0:QSLOTS-1];
 wire [15:0] argB [0:QSLOTS-1];
+wire [ 7:0] argS [0:QSLOTS-1];
 
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
@@ -406,9 +401,18 @@ for (n = 0; n < QSLOTS; n = n + 1)
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
 	argB[n] = rfob[n];
+always @*
+for (n = 0; n < QSLOTS; n = n + 1)
+	argS[n] = rfos[n];
 	
 always @(posedge clk_i)
 if (rst_i) begin
+	uoq_tail <= 4'd0;
+	for (n = 0; n < UOQ_ENTRIES; n = n + 1) begin
+		uoq_v[n] <= `INV;
+		uoq_uop[n] <= 14'd0;
+		uoq_const[n] <= 16'h0000;
+	end
 end
 else begin
 
@@ -475,48 +479,172 @@ else begin
   if (iq_fc[fcu_id] && iq_v[fcu_id] && !iq_done[fcu_id] && iq_out[fcu_id])
   	fcu_timeout <= fcu_timeout + 8'd1;
 
+	if (q2) begin
+		uoq_v[uop_tail] <= `VAL;
+		uoq_pc[uoq_tail] <= pc;
+		uoq_uop[uoq_tail] <= uo_insn1[0];
+		uoq_fl[uoq_tail] <= uo_len1==2'b00 ? 2'b11: 2'b01;
+		uoq_flagsupd[uoq_tail + uo_whflg1] = uo_flags1;
+		tskLd4(uo_insn1[0][`UO_LD4],insnx[0],uoq_const[uoq_tail]);
+		if (uopl[opcode1][65:64]>2'b00) begin
+			uoq_v[(uoq_tail+1) % UOQ_ENTRIES] <= `VAL;
+			uoq_pc[(uoq_tail+1) % UOQ_ENTRIES] <= pc;
+			uoq_uop[(uoq_tail+1) % UOQ_ENTRIES] <= uo_insn1[1];
+			uoq_fl[(uoq_tail+1) % UOQ_ENTRIES] <= uopl[opcode1][65:64]==2'b01 ? 2'b10 : 2'b00;
+			tskLd4(uo_insn1[1][`UO_LD4],insnx[0],uoq_const[(uoq_tail+1) % UOQ_ENTRIES]);
+		end
+		if (uopl[opcode1][65:64]>2'b01) begin
+			uoq_v[(uoq_tail+2) % UOQ_ENTRIES] <= `VAL;
+			uoq_pc[(uoq_tail+2) % UOQ_ENTRIES] <= pc;
+			uoq_uop[(uoq_tail+2) % UOQ_ENTRIES] <= uo_insn1[2];
+			uoq_fl[(uoq_tail+2) % UOQ_ENTRIES] <= uopl[opcode1][65:64]==2'b10 ? 2'b10 : 2'b00;
+			tskLd4(uo_insn1[2][`UO_LD4],insnx[0],uoq_const[(uoq_tail+2) % UOQ_ENTRIES]);
+		end
+		if (uopl[opcode1][65:64]>2'b10) begin
+			uoq_v[(uoq_tail+3) % UOQ_ENTRIES] <= `VAL;
+			uoq_pc[(uoq_tail+3) % UOQ_ENTRIES] <= pc;
+			uoq_uop[(uoq_tail+3) % UOQ_ENTRIES] <= uo_insn1[3];
+			uoq_fl[(uoq_tail+3) % UOQ_ENTRIES] <= 2'b10;
+			tskLd4(uo_insn1[3][`UO_LD4],insnx[0],uoq_const[(uoq_tail+3) % UOQ_ENTRIES]);
+		end
+		for (n = 0; n < 4; n = n + 1)
+			if (n < uo_len1)
+				uop_flagsupd[(uop_tail+n) % UOQ_ENTRIES] <= `UOF_NONE;
+		uop_flagsupd[(uop_tail+uo_whflg1) % UOP_ENTRIES] <= uo_flags1;
+		uoq_v[(uoq_tail+uo_len1) % UOQ_ENTRIES] <= `VAL;
+		uoq_pc[(uoq_tail+uo_len1) % UOQ_ENTRIES] <= pc + len1;
+		uoq_uop[(uoq_tail+uo_len1) % UOQ_ENTRIES] <= uo_insn2[0];
+		uoq_fl[(uoq_tail+uo_len1) % UOQ_ENTRIES] <= uo_len2==2'b00 ? 2'b11 : 2'b01;
+		uoq_tail <= (uoq_tail + uo_len1 + 8'd1) % UOQ_ENTRIES;
+		tskLd4(uo_insn2[0][`UO_LD4],insnx[1],uoq_const[uoq_tail + uo_len1]);
+		if (uo_len2 > 2'b00) begin
+			uoq_v[(uoq_tail+uo_len1+1) % UOQ_ENTRIES] <= `VAL;
+			uoq_pc[(uoq_tail+uo_len1+1) % UOQ_ENTRIES] <= pc + len1;
+			uoq_uop[(uoq_tail+uo_len1+1) % UOQ_ENTRIES] <= uo_insn2[1];
+			uoq_fl[(uoq_tail+uo_len1+1) % UOQ_ENTRIES] <= uo_len2==2'b01 ? 2'b10 : 2'b00;
+			uoq_tail <= (uoq_tail + uo_len1 + 8'd2) % UOQ_ENTRIES;
+			tskLd4(uo_insn2[1][`UO_LD4],insnx[1],uoq_const[(uoq_tail+uo_len1+1) % UOQ_ENTRIES]);
+		end
+		if (uo_len2 > 2'b01) begin
+			uoq_v[(uoq_tail+uo_len1+2) % UOQ_ENTRIES] <= `VAL;
+			uoq_pc[(uoq_tail+uo_len1+2) % UOQ_ENTRIES] <= pc + len1;
+			uoq_uop[(uoq_tail+uo_len1+2) % UOQ_ENTRIES] <= uo_insn2[2];
+			uoq_fl[(uoq_tail+uo_len1+2) % UOQ_ENTRIES] <= uo_len2==2'b10 ? 2'b10 : 2'b00;
+			uoq_tail <= (uoq_tail + uo_len1 + 8'd3) % UOQ_ENTRIES;
+			tskLd4(uo_insn2[2][`UO_LD4],insnx[1],uoq_const[(uoq_tail+uo_len1+2) % UOQ_ENTRIES]);
+		end
+		if (uo_len2 > 2'b10) begin
+			uoq_v[(uoq_tail+uo_len1+3) % UOQ_ENTRIES] <= `VAL;
+			uoq_pc[(uoq_tail+uo_len1+3) % UOQ_ENTRIES] <= pc + len1;
+			uoq_uop[(uoq_tail+uo_len1+3) % UOQ_ENTRIES] <= uo_insn2[3];
+			uoq_fl[(uoq_tail+uo_len1+3) % UOQ_ENTRIES] <= 2'b10;
+			uoq_tail <= (uoq_tail + uo_len1 + 8'd4) % UOQ_ENTRIES;
+			tskLd4(uo_insn2[3][`UO_LD4],insnx[1],uoq_const[(uoq_tail+uo_len1+3) % UOQ_ENTRIES]);
+		end
+		for (n = 0; n < 4; n = n + 1)
+			if (n < uo_len2)
+				uop_flagsupd[(uop_tail+uo_len1+n) % UOQ_ENTRIES] <= `UOF_NONE;
+		uop_flagsupd[(uop_tail+uo_len1+uo_whflg1) % UOP_ENTRIES] <= uo_flags1;
+	end
+	else if (q1) begin
+		uoq_v[uoq_tail] <= `VAL;
+		uoq_pc[uoq_tail] <= pc;
+		uoq_uop[uoq_tail] <= uo_insn1[0];
+		uoq_fl[uoq_tail] <= uo_len1==2'b00 ? 2'b11: 2'b01;
+		uoq_tail <= (uoq_tail + 8'd1) % UOQ_ENTRIES;
+		tskLd4(uo_insn1[0][`UO_LD4],insnx[0],uoq_const[uoq_tail]);
+		if (uo_len1 > 2'b00) begin
+			uoq_v[(uoq_tail+1) % UOQ_ENTRIES] <= `VAL;
+			uoq_pc[(uoq_tail+1) % UOQ_ENTRIES] <= pc;
+			uoq_uop[(uoq_tail+1) % UOQ_ENTRIES] <= uo_insn1[1];
+			uoq_fl[(uoq_tail+1) % UOQ_ENTRIES] <= uopl[opcode1][65:64]==2'b01 ? 2'b10 : 2'b00;
+			uoq_tail <= (uoq_tail + 8'd2) % UOQ_ENTRIES;
+			tskLd4(uo_insn1[1][`UO_LD4],insnx[0],uoq_const[(uoq_tail+1) % UOQ_ENTRIES]);
+		end
+		if (uo_len1 > 2'b01) begin
+			uoq_v[(uoq_tail+2) % UOQ_ENTRIES] <= `VAL;
+			uoq_pc[(uoq_tail+2) % UOQ_ENTRIES] <= pc;
+			uoq_uop[(uoq_tail+2) % UOQ_ENTRIES] <= uo_insn1[2];
+			uoq_fl[(uoq_tail+2) % UOQ_ENTRIES] <= uopl[opcode1][65:64]==2'b10 ? 2'b10 : 2'b00;
+			uoq_tail <= (uoq_tail + 8'd3) % UOQ_ENTRIES;
+			tskLd4(uo_insn1[2][`UO_LD4],insnx[0],uoq_const[(uoq_tail+2) % UOQ_ENTRIES]);
+		end
+		if (uo_len1 > 2'b10) begin
+			uoq_v[(uoq_tail+3) % UOQ_ENTRIES] <= `VAL;
+			uoq_pc[(uoq_tail+3) % UOQ_ENTRIES] <= pc;
+			uoq_uop[(uoq_tail+3) % UOQ_ENTRIES] <= uo_insn1[3];
+			uoq_fl[(uoq_tail+3) % UOQ_ENTRIES] <= 2'b10;
+			uoq_tail <= (uoq_tail + 8'd4) % UOQ_ENTRIES;
+			tskLd4(uo_insn1[3][`UO_LD4],insnx[0],uoq_const[(uoq_tail+3) % UOQ_ENTRIES]);
+		end
+		for (n = 0; n < 4; n = n + 1)
+			if (n < uo_len1)
+				uop_flagsupd[(uop_tail+n) % UOQ_ENTRIES] <= `UOF_NONE;
+		uop_flagsupd[(uop_tail+uo_whflg1) % UOP_ENTRIES] <= uo_flags1;
+	end
+
 	if (!branchmiss) begin
 		queuedOn <= queuedOnp;
 		case(slotvd)
 		3'b001:
 			if (queuedOnp[0]) begin
 				queue_slot(0,rob_tails[0],maxsn+1'd1,id_bus[0],active_tag,rob_tails[0]);
+				uoq_v[uoq_head] <= `INV;
+				uoq_head <= uoq_head + 3'd1;
 			end
 		3'b010:
 			if (queuedOnp[1]) begin
 				queue_slot(1,rob_tails[0],maxsn+1'd1,id_bus[1],active_tag,rob_tails[0]);
+				uoq_v[uoq_head] <= `INV;
+				uoq_head <= uoq_head + 3'd1;
 			end
 		3'b011:
 			if (queuedOnp[0]) begin
 				queue_slot(0,rob_tails[0],maxsn+1'd1,id_bus[0],active_tag,rob_tails[0]);
+				uoq_v[uoq_head] <= `INV;
+				uoq_head <= uoq_head + 3'd1;
 				if (queuedOnp[1]) begin
 					queue_slot(1,rob_tails[1],maxsn+2'd2,id_bus[1],is_branch[0] ? active_tag+2'd1 : active_tag,rob_tails[1]);
+					uoq_v[(uoq_head + 1) % UOQ_ENTRIES] <= `INV;
+					uoq_head <= uoq_head + 3'd2;
 					arg_vs(4'b0011);
 				end
 			end
 		3'b100:
 			if (queuedOnp[2]) begin
 				queue_slot(2,rob_tails[0],maxsn+1'd1,id_bus[2],active_tag,rob_tails[0]);
+				uoq_v[uoq_head] <= `INV;
+				uoq_head <= uoq_head + 3'd1;
 			end
 		3'b101:	;	// illegal
 		3'b110:
 			if (queuedOnp[1]) begin
 				queue_slot(1,rob_tails[0],maxsn+1'd1,id_bus[1],active_tag,rob_tails[0]);
+				uoq_v[uoq_head] <= `INV;
+				uoq_head <= uoq_head + 3'd1;
 				if (queuedOnp[2]) begin
 					queue_slot(2,rob_tails[1],maxsn+2'd2,id_bus[2],is_branch[1] ? active_tag + 2'd1 : active_tag,rob_tails[1]);
+					uoq_v[(uoq_head + 1) % UOQ_ENTRIES] <= `INV;
+					uoq_head <= uoq_head + 3'd2;
 					arg_vs(4'b0110);
 				end
 			end
 		3'b111:
 			if (queuedOnp[0]) begin
+				uoq_head <= uoq_head + 3'd1;
+				uoq_v[uoq_head] <= `INV;
 				queue_slot(0,rob_tails[0],maxsn+1'd1,id_bus[0],active_tag,rob_tails[0]);
 				if (queuedOnp[1]) begin
 					queue_slot(1,rob_tails[1],maxsn+2'd2,id_bus[1],is_branch[0] ? active_tag + 2'd1 : active_tag,rob_tails[1]);
+					uoq_v[(uoq_head + 1) % UOQ_ENTRIES] <= `INV;
+					uoq_head <= uoq_head + 3'd2;
 					arg_vs(4'b0011);
 					if (queuedOnp[2]) begin
 						queue_slot(2,rob_tails[2],maxsn+2'd3,id_bus[2],
 							is_branch[0] && is_branch[1] ? active_tag + 2'd2 :
 							is_branch[0] ? active_tag + 2'd1 : is_branch[1] ? active_tag + 2'd1 : active_tag,rob_tails[2]);
+						uoq_v[(uoq_head + 2) % UOQ_ENTRIES] <= `INV;
+						uoq_head <= uoq_head + 3'd3;
 						arg_vs(4'b0111);
 					end
 				end
@@ -592,29 +720,24 @@ begin
 	iq_sn[ndx] <= seqnum;
 	iq_state[ndx] <= IQS_QUEUED;
 	iq_br_tag[ndx] <= btag;
-	iq_pc <= uoq_pc[(uo_head+slot) % UOQ_ENTRIES];
-	iq_instr[ndx][4:0] <= uoq_uop[(uo_head+slot) % UOQ_ENTRIES][12:8];
-	case (uo_queue[uoq_head+slot][7:5])
-	3'd0:	iq_instr[ndx][28:13] <= 16'd0;
-	3'd1:	iq_instr[ndx][28:13] <= 16'd1;
-	3'd2:	iq_instr[ndx][28:13] <= 16'd2;
-	3'd3:	iq_instr[ndx][28:13] <= 16'd3;
-	3'd4:	iq_instr[ndx][28:13] <= insnx[slot][15:8];
-	3'd5:	iq_instr[ndx][28:13] <= insnx[slot][23:8];
-	3'd7:	iq_instr[ndx][28:13] <= 16'hFFFF;
-	default:	iq_instr[ndx][28:13] <= 16'd0;
-	endcase
+	iq_pc <= uoq_pc[(uoq_head+slot) % UOQ_ENTRIES];
+	iq_instr[ndx][5:0] <= uoq_uop[(uoq_head+slot) % UOQ_ENTRIES][15:10];
+	iq_fl[ndx] <= uoq_fl[(uoq_head+slot) % UOQ_ENTRIES];
+	iq_argI[ndx] <= uoq_const[(uoq_head+slot) % UOQ_ENTRIES];
 	iq_argA[ndx] <= argA[slot];
 	iq_argB[ndx] <= argB[slot];
-	iq_argA_v[ndx] <= regIsValid[Rd[slot]] || Source1Valid(uoq_uop[(uo_head+slot) % UOQ_ENTRIES][12:8]);
-	iq_argB_v[ndx] <= regIsValid[Rs2[slot]] || Source2Valid(uoq_uop[(uo_head+slot) % UOQ_ENTRIES][12:8]);
+	iq_argS[ndx] <= argS[slot];
+	iq_argA_v[ndx] <= regIsValid[Rd[slot]] || Source1Valid(uoq_uop[(uoq_head+slot) % UOQ_ENTRIES][15:10]);
+	iq_argB_v[ndx] <= regIsValid[Rn[slot]] || Source2Valid(uoq_uop[(uoq_head+slot) % UOQ_ENTRIES][15:10]);
+	iq_argS_v[ndx] <= regIsValid[7] || SourceSValid(uoq_uop[(uoq_head+slot) % UOQ_ENTRIES][15:10]);
 	iq_argA_s[ndx] <= rf_source[Rd[slot]];
 	iq_argB_s[ndx] <= rf_source[Rn[slot]];
+	iq_argS_s[ndx] <= rf_source[7];
 	iq_pt[ndx] <= predict_taken[slot];
-	iq_tgt[ndx] <= uoq_uop[(uo_head+slot) % UOQ_ENTRIES][4:2];
-	iq_crtgt[ndx] <= Crd[slot];
+	iq_tgt[ndx] <= uoq_uop[(uoq_head+slot) % UOQ_ENTRIES][5:3];
+	iq_sr_tgts[ndx] <= uoq_flagsupd[(uoq_head+slot) % UOQ_ENTRIES];
 	set_insn(ndx,id_bus);
-	rob_pc[rid] <= uoq_pc[(uo_head+slot) % UOQ_ENTRIES];
+	rob_pc[rid] <= uoq_pc[(uoq_head+slot) % UOQ_ENTRIES];
 	rob_res[rid] <= 1'd0;
 	rob_status[rid] <= 1'd0;
 	rob_state[rid] <= RS_ASSIGNED;
