@@ -24,10 +24,93 @@
 `include "rtf65000-config.sv"
 `include "rtf65000-defines.sv"
 
-module rtf65000(rst_i, clk_i);
+module rtf65000(rst_i, clk_i, clk2x_i, clk4x_i, tm_clk_i, irq_i, 
+		bte_o, cti_o, bok_i, cyc_o, stb_o, ack_i, err_i, we_o, sel_o, adr_o, dat_o, dat_i,
+    icl_o, exc_o);
+parameter WID = 16;
 input rst_i;
 input clk_i;
+input clk2x_i;
+input clk4x_i;
+input tm_clk_i;
+input irq_i;
+output reg [1:0] bte_o;
+output reg [2:0] cti_o;
+input bok_i;
+output cyc_o;
+output reg stb_o;
+input ack_i;
+input err_i;
+output we_o;
+output reg [15:0] sel_o;
+output [`ABITS] adr_o;
+output reg [127:0] dat_o;
+input [127:0] dat_i;
+output icl_o;
+output [7:0] exc_o;
+parameter TM_CLKFREQ = 20000000;
+parameter UOQ_ENTRIES = `UOQ_ENTRIES;
+parameter IQ_ENTRIES = `IQ_ENTRIES;
+parameter QSLOTS = `QSLOTS;
+parameter RENTRIES = `RENTRIES;
+parameter RSLOTS = `RSLOTS;
+parameter AREGS = 8;
+parameter TRUE = 1'b1;
+parameter FALSE = 1'b0;
+parameter HIGH = 1'b1;
+parameter LOW = 1'b0;
+parameter VAL = 1'b1;
+parameter INV = 1'b0;
+parameter RSTIP = 16'hFFFC;
+parameter BRKIP = 16'hFFFE;
+parameter DEBUG = 1'b0;
+parameter DBW = 16;
+parameter ABW = 16;
+parameter AMSB = ABW-1;
+parameter RBIT = 6;
+parameter WB_DEPTH = 7;
 
+// Memory access sizes
+parameter byt = 3'd0;
+parameter wyde = 3'd1;
+
+// IQ states
+parameter IQS_INVALID = 3'd0;
+parameter IQS_QUEUED = 3'd1;
+parameter IQS_OUT = 3'd2;
+parameter IQS_AGEN = 3'd3;
+parameter IQS_MEM = 3'd4;
+parameter IQS_DONE = 3'd5;
+parameter IQS_CMT = 3'd6;
+
+parameter RS_INVALID = 2'd0;
+parameter RS_ASSIGNED = 2'd1;
+parameter RS_DONE = 2'd2;
+parameter RS_CMT = 2'd3;
+
+`include "rtf65000-busStates.sv"
+
+wire clk;
+//BUFG uclkb1
+//(
+//	.I(clk_i),
+//	.O(clk)
+//);
+assign clk = clk_i;
+
+wire rdv_i;
+wire wrv_i;
+reg [AMSB:0] vadr;
+reg cyc;
+reg stb;
+reg cyc_pending;	// An i-cache load is about to happen
+reg we;
+
+reg [7:0] i;
+integer n;
+integer j, k;
+integer row, col;
+genvar g, h;
 
 reg [7:0] ac;
 reg [7:0] xr;
@@ -40,14 +123,37 @@ reg [7:0] sr;
 reg [15:0] rfoa [0:QSLOTS-1];
 reg [15:0] rfob [0:QSLOTS-1];
 
+wire tlb_miss;
+wire exv;
+
 reg q1, q2;	// number of macro instructions queued
+
 
 wire [95:0] ic1_out;
 wire [63:0] ic2_out;
 wire [31:0] ic3_out;
 
+reg  [3:0] panic;		// indexes the message structure
+reg [127:0] message [0:15];	// indexed by panic
+
+wire int_commit;
+
+reg [371:0] xdati;
+
+wire [2:0] queuedCnt;
+wire [2:0] rqueuedCnt;
+reg queuedNop;
+reg [2:0] hi_amt;
+reg [2:0] r_amt, r_amt2;
+wire [`SNBITS] tosub;
+
 wire [3:0] len1, len2, len3;
 reg [23:0] insnx [0:1];
+
+wire [`QBITS] tails [0:QSLOTS-1];
+wire [`QBITS] heads [0:IQ_ENTRIES-1];
+wire [`RBITS] rob_tails [0:RSLOTS-1];
+wire [`RBITS] rob_heads [0:RSLOTS-1];
 
 // Micro-op queue
 reg [UOQ_ENTRIES-1:0] uoq_v;
@@ -61,12 +167,33 @@ reg [UOQ_ENTRIES-1:0] uqo_br;
 reg [UOQ_ENTRIES-1:0] uqo_ret;
 
 // Issue queue
+reg [IQ_ENTRIES-1:0] iq_v;						// valid indicator (set from iq_state)
+reg [IQ_ENTRIES-1:0] iq_done;
+reg [IQ_ENTRIES-1:0] iq_out;
+reg [IQ_ENTRIES-1:0] iq_agen;
 reg [2:0] iq_state [0:IQ_ENTRIES-1];
-reg [5:0] iq_sn  [0:IQ_ENTRIES-1];		// sequence number
+reg [`SNBITS] iq_sn  [0:IQ_ENTRIES-1];		// sequence number
 reg [15:0] iq_pc [0:IQ_ENTRIES-1];	// program counter associated with instruction
+reg [15:0] iq_ma [0:IQ_ENTRIES-1];		// memory address
 reg [5:0] iq_instr [0:IQ_ENTRIES-1];	// micro-op instruction
 reg [1:0] iq_fl [0:IQ_ENTRIES-1];			// first or last indicators
+reg [IQ_ENTRIES-1:0] iq_alu = 1'h0;  	// alu type instruction
+reg [IQ_ENTRIES-1:0] iq_canex = 8'h00;	// true if it's an instruction that can exception
+reg [IQ_ENTRIES-1:0] iq_mem;	// touches memory: 1 if LW/SW
+reg [IQ_ENTRIES-1:0] iq_load;	// is a memory load instruction
+reg [IQ_ENTRIES-1:0] iq_store;	// is a memory store instruction
+reg [IQ_ENTRIES-1:0] iq_rmw;	// memory RMW op
+reg [IQ_ENTRIES-1:0] iq_bt;						// branch taken
 reg [IQ_ENTRIES-1:0] iq_pt;						// predicted taken branch
+reg [IQ_ENTRIES-1:0] iq_fc;						// flow control instruction
+reg [IQ_ENTRIES-1:0] iq_jmp;					// changes control flow: 1 if BEQ/JALR
+reg [IQ_ENTRIES-1:0] iq_br;						// branch instruction
+reg [IQ_ENTRIES-1:0] iq_rts;
+reg [IQ_ENTRIES-1:0] iq_irq;
+reg [IQ_ENTRIES-1:0] iq_brk;
+reg [IQ_ENTRIES-1:0] iq_rti;
+reg [IQ_ENTRIES-1:0] iq_rfw;	// writes to register file
+reg [3:0] iq_exc	[0:IQ_ENTRIES-1];	// only for branches ... indicates a HALT instruction
 reg [2:0] iq_tgt [0:IQ_ENTRIES-1];		// target register
 reg [15:0] iq_argA [0:IQ_ENTRIES-1];	// First argument
 reg [15:0] iq_argB [0:IQ_ENTRIES-1];	// Second argument
@@ -94,6 +221,325 @@ reg [7:0] rob_sr [0:RENTRIES-1];		// status register result
 reg [RBIT:0] rob_tgt [0:RENTRIES-1];
 reg [7:0] rob_crres [0:RENTRIES-1];
 
+// debugging
+initial begin
+for (n = 0; n < IQ_ENTRIES; n = n + 1)
+	iq_argA_s[n] <= 1'd0;
+	iq_argB_s[n] <= 1'd0;
+	iq_argS_s[n] <= 1'd0;
+end
+
+reg [IQ_ENTRIES-1:0] iq_source = {IQ_ENTRIES{1'b0}};
+reg [IQ_ENTRIES-1:0] iq_source2 = {IQ_ENTRIES{1'b0}};
+reg [IQ_ENTRIES-1:0] iq_imm;
+reg [IQ_ENTRIES-1:0] iq_memready;
+reg [IQ_ENTRIES-1:0] iq_memopsvalid;
+
+reg [1:0] missued;
+reg [7:0] last_issue0, last_issue1, last_issue2;
+reg  [IQ_ENTRIES-1:0] iq_memissue;
+reg [IQ_ENTRIES-1:0] iq_stomp;
+reg [3:0] stompedOnRets;
+reg [3:0] iq_fuid [0:IQ_ENTRIES-1];
+reg  [IQ_ENTRIES-1:0] iq_alu0_issue;
+reg  [IQ_ENTRIES-1:0] iq_alu1_issue;
+reg  [IQ_ENTRIES-1:0] iq_agen0_issue;
+reg  [IQ_ENTRIES-1:0] iq_agen1_issue;
+reg  [IQ_ENTRIES-1:0] iq_id1issue;
+reg  [IQ_ENTRIES-1:0] iq_id2issue;
+reg  [IQ_ENTRIES-1:0] iq_id3issue;
+reg [1:0] iq_mem_islot [0:IQ_ENTRIES-1];
+reg [IQ_ENTRIES-1:0] iq_fcu_issue;
+
+reg [AREGS-1:1] livetarget;
+reg [AREGS-1:1] iq_livetarget [0:IQ_ENTRIES-1];
+reg [AREGS-1:1] iq_latestID [0:IQ_ENTRIES-1];
+reg [AREGS-1:1] iq_cumulative [0:IQ_ENTRIES-1];
+wire  [AREGS-1:1] iq_out2 [0:IQ_ENTRIES-1];
+wire  [AREGS-1:1] iq_out2a [0:IQ_ENTRIES-1];
+
+wire [QSLOTS-1:0] take_branch;
+
+reg         id1_v;
+reg   [`QBITS] id1_id;
+reg  [23:0] id1_instr;
+reg         id1_pt;
+reg   [5:0] id1_Rt;
+wire [`IBTOP:0] id_bus [0:QSLOTS-1];
+
+reg         id2_v;
+reg   [`QBITS] id2_id;
+reg  [23:0] id2_instr;
+reg         id2_pt;
+reg   [5:0] id2_Rt;
+
+reg         id3_v;
+reg   [`QBITS] id3_id;
+reg  [23:0] id3_instr;
+reg         id3_pt;
+reg   [5:0] id3_Rt;
+
+reg [`SNBITS] alu0_sn;
+reg 				alu0_cmt;
+wire				alu0_abort;
+reg        alu0_ld;
+reg        alu0_dataready;
+wire       alu0_done;
+wire       alu0_idle;
+reg  [`QBITS] alu0_sourceid;
+reg [`RBITS] alu0_rid;
+reg [23:0] alu0_instr;
+reg        alu0_mem;
+reg        alu0_load;
+reg        alu0_store;
+reg        alu0_shft;
+reg [RBIT:0] alu0_Ra;
+reg [VWID-1:0] alu0_argA;
+reg [VWID-1:0] alu0_argB;
+reg [VWID-1:0] alu0_argC;
+reg [WID-1:0] alu0_argI;	// only used by BEQ
+reg [RBIT:0] alu0_tgt;
+reg [`ABITS] alu0_pc;
+reg [WID-1:0] alu0_bus;
+wire [WID-1:0] alu0_out;
+wire [7:0] alu0_cro;
+wire  [`QBITS] alu0_id;
+(* mark_debug="true" *)
+wire  [`XBITS] alu0_exc;
+wire        alu0_v;
+reg [`QBITS] alu0_id1;
+reg [`QBITS] alu1_id1;
+reg [WID-1:0] alu0_bus1;
+reg [WID-1:0] alu1_bus1;
+reg issuing_on_alu0;
+reg alu0_dne = TRUE;
+
+reg [`SNBITS] alu1_sn;
+reg 				alu1_cmt;
+wire				alu1_abort;
+reg        alu1_ld;
+reg        alu1_dataready;
+wire       alu1_done;
+wire       alu1_idle;
+reg  [`QBITS] alu1_sourceid;
+reg [`RBITS] alu1_rid;
+reg [39:0] alu1_instr;
+reg        alu1_mem;
+reg        alu1_load;
+reg        alu1_store;
+reg        alu1_shft;
+reg [RBIT:0] alu1_Ra;
+reg [WID-1:0] alu1_argA;
+reg [WID-1:0] alu1_argB;
+reg [WID-1:0] alu1_argC;
+reg [WID-1:0] alu1_argI;	// only used by BEQ
+reg [RBIT:0] alu1_tgt;
+reg [`ABITS] alu1_pc;
+reg [WID-1:0] alu1_bus;
+wire [WID-1:0] alu1_out;
+wire [7:0] alu1_cro;
+wire  [`QBITS] alu1_id;
+wire  [`XBITS] alu1_exc;
+wire        alu1_v;
+reg alu1_v1;
+wire alu1_vsn;
+reg issuing_on_alu1;
+reg alu1_dne = TRUE;
+
+wire agen0_v;
+wire agen0_vsn;
+wire agen0_idle;
+reg [`SNBITS] agen0_sn;
+reg [`QBITS] agen0_sourceid;
+wire [`QBITS] agen0_id;
+reg [`RBITS] agen0_rid;
+reg [RBIT:0] agen0_tgt;
+reg agen0_dataready;
+reg [2:0] agen0_unit;
+reg [23:0] agen0_instr;
+reg agen0_mem2;
+reg [AMSB:0] agen0_ma;
+reg [WID-1:0] agen0_res;
+reg [WID-1:0] agen0_argA, agen0_argB, agen0_argC, agen0_argI;
+reg agen0_dne = TRUE;
+reg agen0_stopString;
+reg [11:0] agen0_bytecnt;
+reg agen0_offset;
+wire agen0_upd2;
+reg [1:0] agen0_base;
+
+wire agen1_v;
+wire agen1_vsn;
+wire agen1_idle;
+reg [`SNBITS] agen1_sn;
+reg [`QBITS] agen1_sourceid;
+wire [`QBITS] agen1_id;
+reg [`RBITS] agen1_rid;
+reg [RBIT:0] agen1_tgt;
+reg agen1_dataready;
+reg [2:0] agen1_unit;
+reg [39:0] agen1_instr;
+reg agen1_mem2;
+reg agen1_memdb;
+reg agen1_memsb;
+reg [AMSB:0] agen1_ma;
+reg [WID-1:0] agen1_res;
+reg [WID-1:0] agen1_argA, agen1_argB, agen1_argC, agen1_argI;
+reg agen1_dne = TRUE;
+wire agen1_upd2;
+reg [1:0] agen1_base;
+
+reg [7:0] fccnt;
+reg [47:0] waitctr;
+reg 				fcu_cmt;
+reg        fcu_ld;
+reg        fcu_dataready;
+reg        fcu_done;
+reg         fcu_idle = 1'b1;
+reg [`QBITS] fcu_sourceid;
+reg [`RBITS] fcu_rid;
+reg [23:0] fcu_instr;
+reg [23:0] fcu_prevInstr;
+reg  [2:0] fcu_insln;
+reg        fcu_pt;			// predict taken
+reg        fcu_branch;
+reg        fcu_jsr;
+reg        fcu_rts;
+reg        fcu_jal;
+reg        fcu_brk;
+reg        fcu_rti;
+reg				fcu_chk;
+reg 			fcu_rex;
+reg [7:0] fcu_cr;
+reg [WID-1:0] fcu_argA;
+reg [WID-1:0] fcu_argB;
+reg [WID-1:0] fcu_argC;
+reg [WID-1:0] fcu_argI;	// only used by BEQ
+reg [RBIT:0] fcu_tgt;
+reg [WID-1:0] fcu_ipc;
+reg [`ABITS] fcu_ip;
+reg [`ABITS] fcu_nextip;
+reg [`ABITS] fcu_brdisp;
+wire [WID-1:0] fcu_out;
+reg [WID-1:0] fcu_bus;
+wire  [`QBITS] fcu_id;
+reg   [`XBITS] fcu_exc;
+wire        fcu_v;
+reg        fcu_branchmiss;
+reg fcu_branchhit;
+reg  fcu_clearbm;
+reg [`ABITS] fcu_missip;
+reg fcu_wait;
+reg fcu_dne = TRUE;
+
+reg [WID-1:0] rmw_argA;
+reg [WID-1:0] rmw_argB;
+reg [WID-1:0] rmw_argC;
+wire [WID-1:0] rmw_res;
+reg [23:0] rmw_instr;
+
+// write buffer
+wire [2:0] wb_ptr;
+wire [WID-1:0] wb_data;
+wire [`ABITS] wb_addr [0:WB_DEPTH-1];
+wire [1:0] wb_ol;
+wire [WB_DEPTH-1:0] wb_v;
+wire wb_rmw;
+wire [IQ_ENTRIES-1:0] wb_id;
+wire [IQ_ENTRIES-1:0] wbo_id;
+wire [1:0] wb_sel;
+reg wb_en;
+wire wb_hit0, wb_hit1;
+
+reg branchmiss = 1'b0;
+reg branchhit = 1'b0;
+reg  [`QBITS] missid;
+
+wire [1:0] issue_count;
+reg [1:0] missue_count;
+wire [IQ_ENTRIES-1:0] memissue;
+
+wire        dram_avail;
+reg	 [2:0] dram0;	// state of the DRAM request (latency = 4; can have three in pipeline)
+reg	 [2:0] dram1;	// state of the DRAM request (latency = 4; can have three in pipeline)
+reg [79:0] dram0_argI, dram0_argB;
+reg [WID-1:0] dram0_data;
+reg [`ABITS] dram0_addr;
+reg [23:0] dram0_instr;
+reg        dram0_rmw;
+reg		   dram0_preload;
+reg [RBIT:0] dram0_tgt;
+reg  [`QBITS] dram0_id;
+reg [`RBITS] dram0_rid;
+reg        dram0_unc;
+reg [2:0]  dram0_memsize;
+reg        dram0_load;	// is a load operation
+reg        dram0_store;
+reg  [1:0] dram0_ol;
+reg [15:0] dram1_argI, dram1_argB;
+reg [WID-1:0] dram1_data;
+reg [`ABITS] dram1_addr;
+reg [23:0] dram1_instr;
+reg        dram1_rmw;
+reg		   dram1_preload;
+reg [RBIT:0] dram1_tgt;
+reg  [`QBITS] dram1_id;
+reg [`RBITS] dram1_rid;
+reg        dram1_unc;
+reg [2:0]  dram1_memsize;
+reg        dram1_load;
+reg        dram1_store;
+reg  [1:0] dram1_ol;
+
+reg        dramA_v;
+reg  [`QBITS] dramA_id;
+reg [`RBITS] dramA_rid;
+reg [WID-1:0] dramA_bus;
+reg        dramB_v;
+reg  [`QBITS] dramB_id;
+reg [`QBITS] dramB_rid;
+reg [WID-1:0] dramB_bus;
+
+wire        outstanding_stores;
+reg [47:0] I;		// instruction count
+reg [47:0] CC;	// commit count
+
+reg commit0_v;
+reg [`RBITS] commit0_id;
+reg [RBIT:0] commit0_tgt;
+reg [WID-1:0] commit0_bus;
+reg [7:0] commit0_crbus;
+reg [3:0] commit0_rid;
+reg commit0_tgts_sr;
+reg commit1_v;
+reg [`RBITS] commit1_id;
+reg [RBIT:0] commit1_tgt;
+reg [WID-1:0] commit1_bus;
+reg [7:0] commit1_crbus;
+reg [3:0] commit1_rid;
+reg commit1_tgts_sr;
+reg commit2_v;
+reg [`RBITS] commit2_id;
+reg [RBIT:0] commit2_tgt;
+reg [WID-1:0] commit2_bus;
+reg [7:0] commit2_crbus;
+reg [3:0] commit2_rid;
+reg commit2_tgts_sr;
+
+reg [QSLOTS-1:0] queuedOn;
+reg [QENTRIES-1:0] rqueuedOn;
+wire [QSLOTS-1:0] queuedOnp;
+wire [QSLOTS-1:0] predict_taken;
+wire predict_taken0;
+wire predict_taken1;
+wire predict_taken2;
+wire [FSLOTS-1:0] slot_rfw;
+
+
+// Instruction to micro-op translation table.
+// Each instruction may translate into 1 to 4 micro-ops.
+// There is additional meta-data associated with the instruction.
+
 reg [69:0] uopl [0:255];
 initial begin
 	// Initialize everything to NOPs
@@ -115,8 +561,6 @@ uopl[`STA_IY]		= {2'd2,`UOF_NONE,2'd0,`UO_LDW,`UO_R8,`UO_TMP,`UO_ZR,`UO_ADDW,`UO
 uopl[`STA_ABS]	= {2'd0,`UOF_NONE,2'd0,`UO_STB,`UO_R16,`UO_ACC,`UO_ZR,48'h0};
 uopl[`STA_ABSX]	= {2'd0,`UOF_NONE,2'd0,`UO_STB,`UO_R16,`UO_ACC,`UO_XR,48'h0};
 uopl[`STA_ABSY]	= {2'd0,`UOF_NONE,2'd0,`UO_STB,`UO_R16,`UO_ACC,`UO_YR,48'h0};
-uopl[`LDX_IMM]	= {2'd0,`UOF_NZ,2'd0,`UO_LDIB,`UO_R8,`UO_XR,`UO_ZR,48'h0};
-uopl[`LDY_IMM]	= {2'd0,`UOF_NZ,2'd0,`UO_LDIB,`UO_R8,`UO_YR,`UO_ZR,48'h0};
 uopl[`ADC_IMM]	= {2'd0,`UOF_CVNZ,2'd0,`UO_ADCIB,`UO_R8,`UO_ACC,`UO_ZR,48'h0};
 uopl[`ADC_ZP]		= {2'd1,`UOF_CVNZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_ADCB,`UO_ZERO,`UO_ACC,`UO_TMP,32'h0};
 uopl[`ADC_ZPX]	= {2'd1,`UOF_CVNZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_ADCB,`UO_ZERO,`UO_ACC,`UO_TMP,32'h0};
@@ -216,6 +660,7 @@ uopl[`SEC]			= {2'd0,`UOF_NONE,2'd0,`UO_SEC,`UO_ZERO,`UO_ZR,`UO_ZR};
 uopl[`JMP]			= {2'd0,`UOF_NONE,2'd0,`UO_LDIW,`UO_R16,`UO_PC,`OU_ZR,48'h0};
 uopl[`JSR]			= {2'd1,`UOF_NONE,2'd0,`UO_STW,`UO_FFH,`UO_PC2,`UO_SP,`UO_ADDIB,`UO_M2,`UO_SP,`UO_ZR,32'h0};
 uopl[`RTS]		  = {2'd2,`UOF_NONE,2'd0,`UO_ADDIB,`UO_P2,`UO_SP,`UO_ZR,`UO_LDW,`UO_FFFFH,`UO_PC,`UO_SP,`UO_ADDW,`UO_P1,`UO_PC,`UO_ZR,16'h0};
+uopl[`RTI]		  = {2'd2,`UOF_NONE,2'd0,`UO_ADDIB,`UO_P3,`UO_SP,`UO_ZR,`UO_LDW,`UO_FFFFH,`UO_PC,`UO_SP,`UO_LDB,`UO_FFFEH,`UO_SR,`UO_SP,16'h0};
 end
 
 task tskLd4;
@@ -253,11 +698,6 @@ assign uo_insn2[1] = uopl[opcode2][63:48];
 assign uo_insn2[2] = uopl[opcode2][47:32];
 assign uo_insn2[3] = uopl[opcode2][31:16];
 assign uo_insn2[4] = uopl[opcode2][15: 0];
-
-`define UO_OP		15:10
-`define UO_LD4	9:6
-`define UO_RD		5:3
-`define UO_RN		2:0
 
 wire [QSLOTS-1:0] slotv;
 wire [4:0] uoq_size = 5'd16;
@@ -317,9 +757,144 @@ wire [7:0] opcode2 = ic2_out[7:0];
 instLength il1 (opcode1, len1);
 instLength il2 (opcode2, len2);
 
+wire [`ABITS] btgt [0:QSLOTS-1];
+wire [23:0] insnxp [0:QSLOTS-1];
+reg invdcl;
+reg [AMSB:0] invlineAddr;
+wire L1_invline;
+wire [15:0] L1_adr, L2_adr;
+wire [257:0] L1_dat, L2_dat;
+wire L1_wr, L2_wr;
+wire L1_selpc;
+wire L2_ld;
+wire L1_ihit, L2_ihit, L2_ihita;
+assign ihit = L1_ihit;
+wire L1_nxt, L2_nxt;					// advances cache way lfsr
+wire [2:0] L2_cnt;
+wire [255:0] ROM_dat;
+wire [255:0] d0ROM_dat;
+wire [255:0] d1ROM_dat;
+
+wire isROM;
+wire d0isROM, d1isROM;
+wire d0L1_wr, d0L2_ld;
+wire d1L1_wr, d1L2_ld;
+wire [15:0] d0L1_adr, d0L2_adr;
+wire [15:0] d1L1_adr, d1L2_adr;
+wire d0L1_rhit, d0L2_rhit, d0L2_whit;
+wire d0L2_rhita, d1L2_rhita;
+wire d0L1_nxt, d0L2_nxt;					// advances cache way lfsr
+wire d1L1_dhit, d1L2_rhit, d1L2_whit;
+wire d1L1_nxt, d1L2_nxt;					// advances cache way lfsr
+wire [32:0] d0L1_sel, d0L2_sel;
+wire [32:0] d1L1_sel, d1L2_sel;
+wire [263:0] d0L1_dat, d0L2_rdat, d0L2_wdat;
+wire [263:0] d1L1_dat, d1L2_rdat, d1L2_wdat;
+wire d0L1_dhit, d0L2_hit;
+wire d0L1_selpc, d0L2_selpc;
+wire d1L1_selpc, d1L2_selpc;
+wire d0L1_invline,d1L1_invline;
+//reg [255:0] dcbuf;
+
+reg preload;
+reg [1:0] dccnt;
+reg [3:0] dcwait = 4'd3;
+reg [3:0] dcwait_ctr = 4'd3;
+wire dhit0, dhit1;
+wire dhit0a, dhit1a;
+wire dhit00, dhit10;
+wire dhit01, dhit11;
+reg [`ABITS] dcadr;
+reg [WID-1:0] dcdat;
+reg dcwr;
+reg [1:0] dcsel;
+wire update_iq;
+wire [QENTRIES-1:0] uid;
+wire [RENTRIES-1:0] ruid;
+
+wire [2:0] icti;
+wire [1:0] ibte;
+wire [1:0] iol = 2'b00;
+wire icyc;
+wire istb;
+wire iwe = 1'b0;
+wire [15:0] isel;
+wire [AMSB:0] iadr;
+reg iack_i;
+reg iexv_i;
+reg ierr_i;
+
+wire [2:0] d0cti;
+wire [1:0] d0bte;
+wire [1:0] d0ol = 2'b00;
+wire d0cyc;
+wire d0stb;
+wire d0we = 1'b0;
+wire [15:0] d0sel;
+wire [AMSB:0] d0adr;
+reg d0ack_i;
+reg d0rdv_i;
+reg d0wrv_i;
+reg d0err_i;
+
+wire [2:0] d1cti;
+wire [1:0] d1bte;
+wire [1:0] d1ol = 2'b00;
+wire d1cyc;
+wire d1stb;
+wire d1we = 1'b0;
+wire [15:0] d1sel;
+wire [AMSB:0] d1adr;
+reg d1ack_i;
+reg d1rdv_i;
+reg d1wrv_i;
+reg d1err_i;
+
+wire [1:0] wol;
+wire wcyc;
+wire wstb;
+wire wwe;
+wire [15:0] wsel;
+wire [AMSB:0] wadr;
+wire [127:0] wdat;
+wire wcr;
+reg wack_i;
+reg werr_i;
+reg wrdv_i;
+reg wwrv_i;
+reg wtlbmiss_i;
+
+reg [1:0] dol;
+reg [2:0] dcti;
+reg [1:0] dbte;
+reg dcyc;
+reg dstb;
+reg dack_i;
+reg derr_i;
+reg dwe;
+reg [15:0] dsel;
+reg [AMSB:0] dadr;
+reg [127:0] ddat;
+
+function IsBranch;
+input [7:0] opcode;
+IsBranch = opcode==`BEQ || opcode==`BNE || opcode==`BCS || opcode==`BCC ||
+						opcode==`BVS || opcode==`BVC || opcode==`BMI || opcode==`BPL;
+endfunction
+function IsBrk;
+input [7:0] opcode;
+IsBrk = opcode==`BRK;
+endfunction
+function IsRti;
+input [7:0] opcode;
+IsRti = opcode==`RTI;
+endfunction
+
+// Branch decodes, needed to guide the program counter logic.
 wire [1:0] slot_rts;
 wire [1:0] slot_br;
 wire [1:0] slot_jc;
+wire [1:0] take_branch;
 assign slot_rts[0] = opcode1==`RTS;
 assign slot_rts[1] = opcode2==`RTS;
 assign slot_br[0] = opcode1==`BEQ || opcode1==`BNE || opcode1==`BCS || opcode1==`BCC ||
@@ -328,11 +903,162 @@ assign slot_br[1] = opcode2==`BEQ || opcode2==`BNE || opcode2==`BCS || opcode2==
 										 opcode2==`BVS || opcode2==`BVC || opcode2==`BMI || opcode2==`BPL;
 assign slot_jc[0] = opcode1==`JMP || opcode1==`JSR;
 assign slot_jc[1] = opcode2==`JMP || opcode2==`JSR;
+assign slot_br[0] = opcode1==`BRK || opcode1==`RTI;
+assign slot_br[1] = opcode2==`BRK || opcode2==`RTI;
+assign take_branch[0] = (IsBranch(opcode1) && predict_taken[0]) || IsBrk(opcode1) || IsRti(opcode1);
+assign take_branch[1] = (IsBranch(opcode2) && predict_taken[1]) || IsBrk(opcode2) || IsRti(opcode2);
+// Branching for purposes of the branch shadow.
+wire [FSLOTS-1:0] is_branch;
+reg [IQ_ENTRIES-1:0] is_qbranch;
+assign is_branch[0] = IsBranch(opcode1) || id_bus[0][`IB_BRK] || id_bus[0][`IB_RTI] || id_bus[0][`IB_RTS] || id_bus[0][`IB_JRL];
+assign is_branch[1] = IsBranch(opcode2) || id_bus[1][`IB_BRK] || id_bus[1][`IB_RTI] || id_bus[1][`IB_RTS] || id_bus[1][`IB_JRL];
+always @*
+for (n = 0; n < IQ_ENTRIES; n = n + 1)
+	is_qbranch[n] = iq_br[n] | iq_brk[n] | iq_rti[n] | iq_rts[n];
+
+wire [1:0] ic_fault;
+wire [1023:0] ic_out;
+wire [AMSB:0] missadr;
+reg invic, invdc;
+reg invicl;
+reg [4:0] bstate;
+wire [3:0] icstate;
+reg [1:0] bwhich;
+wire ihit;
+reg phit;
+reg phitd;
+// The L1 address might not be equal to the ip if a cache update is taking
+// place. This can lead to a false hit because once the cache is updated
+// it'll match L1, but L1 hasn't switched back to ip yet, and it's a hit
+// on the ip address we're looking for. => make sure the cache controller
+// is IDLE.
+wire nextb;		// fetch next bundle
+always @*
+	phit <= (ihit&&icstate==IDLE) && !invicl && icstate==IDLE;
+always @(posedge clk)
+if (rst_i)
+	phitd <= 1'b1;
+else begin
+	if (phit & nextb)
+		phitd <= phit;
+end
+
+function IsNop;
+input [23:0] ins;
+IsNop = ins[`OPCODE]==`NOP;
+endfunction
+
+wire [`RBITS] next_iq_rid [0:IQ_ENTRIES-1];
+wire [`RENTRIES-1:0] next_rob_v;
+
+
+
+wire [AREGS-1:0] rf_v;								// register is valid
+wire [AREGS-1:0] regIsValid;					// register is valid (in this cycle)
+reg  [`QBITSP1] rf_source[0:AREGS-1];
+
+regfileValid urfv1
+(
+	.rst(rst_i),
+	.clk(clk),
+	.slotvd(slotvd),
+	.slot_rfw(slot_rfw),
+	.tails(tails),
+	.livetarget(livetarget),
+	.branchmiss(branchmiss),
+	.rob_id(rob_id),
+	.commit0_v(commit0_v),
+	.commit1_v(commit1_v),
+	.commit2_v(commit2_v),
+	.commit0_id(commit0_id),
+	.commit1_id(commit1_id),
+	.commit2_id(commit2_id),
+	.commit0_tgt(commit0_tgt),
+	.commit1_tgt(commit1_tgt),
+	.commit2_tgt(commit2_tgt),
+	.rf_source(rf_source),
+	.iq_source(iq_source),
+	.take_branch(take_branch),
+	.Rd(Rd),
+	.queuedOn(queuedOnp),
+	.rf_v(rf_v),
+	.regIsValid(regIsValid)
+);
+
+regfileSource urfs1
+(
+	.rst(rst_i),
+	.clk(clk),
+	.branchmiss(branchmiss),
+	.heads(heads),
+	.slotvd(slotvd),
+	.slot_rfw(slot_rfw),
+	.queuedOn(queuedOnp),
+	.rqueuedOn(rqueuedOn),
+	.iq_state(iq_state),
+	.iq_rfw(iq_rfw),
+	.iq_Rd(iq_tgt),
+	.Rd(Rd),
+	.rob_tails(rob_tails),
+	.iq_latestID(iq_latestID),
+	.iq_tgt(iq_tgt),
+	.iq_rid(iq_rid),
+	.rf_source(rf_source)
+);
+
+reg [3:0] nxtrb;
+always @*
+begin
+	if (commit0_v & commit1_v & commit2_v)
+		max_cs = 2'd2;
+	else if (commit0_v & commimt1_v)
+		max_cs = 2'd1;
+	else if (commit0_v)
+		max_cs = 2'd0;
+
+	// Amount to increment reorder buffer pointer by
+	case(max_cs)
+	2'd0:	r_amt = commit0_rid - rob_heads[0] + 4'd1;
+	2'd1:	r_amt = commit1_rid - rob_heads[0] + 4'd1;
+	2'd2:	r_amt = commit2_rid - rob_heads[0] + 4'd1;
+	default:	r_amt = 1'd0;
+	endcase
+	// Now search ahead for invalid entries that can be skipped over.
+	nxtrb = (rob_heads[0] + r_amt) % RENTRIES;
+	if (rob_state[nxtrb[`RBITS]]==RS_INVALID && rob_heads[nxtrb[`RBITS]]!=rob_tails[0]) begin
+		r_amt = r_amt + 4'd1;
+		nxtrb = rob_heads[0] + r_amt;
+		if (rob_state[nxtrb[`RBITS]]==RS_INVALID && rob_heads[nxtrb[`RBITS]]!=rob_tails[0]) begin
+			r_amt = r_amt + 4'd1;
+			nxtrb = rob_heads[0] + r_amt;
+			if (rob_state[nxtrb[`RBITS]]==RS_INVALID && rob_heads[nxtrb[`RBITS]]!=rob_tails[0]) begin
+				r_amt = r_amt + 4'd1;
+				nxtrb = rob_heads[0] + r_amt;
+				if (rob_state[nxtrb[`RBITS]]==RS_INVALID && rob_heads[nxtrb[`RBITS]]!=rob_tails[0]) begin
+					r_amt = r_amt + 4'd1;
+					nxtrb = rob_heads[0] + r_amt;
+				end
+			end
+		end
+	end
+end
 
 programCounter upc1
 (
 	.rst(rst_i),
 	.clk(clk),
+	// This should be handled by branch miss logic
+/*
+	.commit0_v(commit0_v),
+	.commit1_v(commit1_v),
+	.commit2_v(commit2_v),
+	.commit0_bus(commit0_bus),
+	.commit1_bus(commit1_bus),
+	.commit2_bus(commit2_bus),
+	.commit0_tgt(commit0_tgt),
+	.commit1_tgt(commit1_tgt),
+	.commit2_tgt(commit2_tgt),
+*/
 	.q1(q1),
 	.q2(q2),
 	.insnx(insnx),
@@ -354,8 +1080,520 @@ programCounter upc1
 	.debug_on(debug_on)
 );
 
-reg [2:0] Rd;
-reg [2:0] Rn;
+`ifdef FCU_RSB
+RSB ursb1
+(
+	.rst(rst_i),
+	.clk(clk),
+	.clk2x(clk2x_i),
+	.clk4x(clk4x_i),
+	.regLR(6'd61),
+	.queuedOn(queuedOn),
+	.jal(slot_jal),
+	.Ra(Rn),
+	.Rd(Rd),
+	.call(slot_jsr),
+	.ret(slot_rts),
+	.pc(pcd),
+	.ra(ra),
+	.stompedRets(),
+	.stompedRet()
+);
+`else
+assign ra = `FCU_RA;
+`endif
+
+next_bundle unb1
+(
+	.rst(rst_i),
+	.slotv(slotv),
+	.phit(phit),
+	.next(nextb)
+);
+
+ICController uicc1
+(
+	.rst_i(rst_i),
+	.clk_i(clk_i),
+	.missadr(missadr),
+	.hit(L1_ihit),
+	.bstate(bstate),
+	.state(icstate),
+	.invline(invicl),
+	.invlineAddr(invlineAddr),
+	.icl_ctr(),
+	.ihitL2(L2_ihit),
+	.L2_ld(L2_ld),
+	.L2_cnt(L2_cnt),
+	.L2_adr(L2_adr),
+	.L2_dat(L2_dat),
+	.L2_nxt(L2_nxt),
+	.L1_selpc(L1_selpc),
+	.L1_adr(L1_adr),
+	.L1_dat(L1_dat),
+	.L1_wr(L1_wr),
+	.L1_invline(L1_invline),
+	.ROM_dat(ROM_dat),
+	.isROM(isROM),
+	.icnxt(L1_nxt),
+	.icwhich(),
+	.icl_o(icl_o),
+	.cti_o(icti),
+	.bte_o(ibte),
+	.bok_i(bok_i),
+	.cyc_o(icyc),
+	.stb_o(istb),
+	.ack_i(iack_i),
+	.err_i(ierr_i),
+	.tlbmiss_i(tlb_miss),
+	.exv_i(iexv_i),
+	.sel_o(isel),
+	.adr_o(iadr),
+	.dat_i(dat_i)
+);
+
+L1_icache uic1
+(
+	.rst(rst_i),
+	.clk(clk_i),
+	.nxt(L1_nxt),
+	.wr(L1_wr),
+	.wadr(L1_adr),
+	.adr(L1_selpc ? pc : L1_adr),
+	.i(L1_dat),
+	.o(ic_out),
+	.fault(),
+	.hit(L1_ihit),
+	.invall(invic),
+	.invline(L1_invline),
+	.missadr(missadr)
+);
+
+L2_icache uic2
+(
+	.rst(rst_i),
+	.clk(clk_i),
+	.nxt(L2_nxt),
+	.wr(L2_ld),
+	.adr(L2_ld ? L2_adr : L1_adr),
+	.cnt(L2_cnt),
+	.exv_i(1'b0),
+	.i(dat_i),
+	.err_i(1'b0),
+	.o(L2_dat),
+	.hit(L2_ihita),
+	.invall(invic),
+	.invline(L1_invline)
+);
+
+assign L2_ihit = isROM|L2_ihita;
+assign d0L2_rhit = d0isROM|d0L2_rhita;
+assign d1L2_rhit = d1isROM|d1L2_rhita;
+
+reg [12:0] rL1_adr;
+reg [12:0] rd0L1_adr;
+reg [12:0] rd1L1_adr;
+(* ram_style="block" *)
+reg [255:0] rommem [0:7167];
+initial begin
+`include "d:/cores6/nvio/v1/software/boot/boottc.ve0"
+end
+always @(posedge clk)
+	rL1_adr <= L1_adr[17:5];
+always @(posedge clk)
+	rd0L1_adr <= d0L1_adr[17:5];
+always @(posedge clk)
+	rd1L1_adr <= d1L1_adr[17:5];
+assign ROM_dat = rommem[rL1_adr];
+assign d0ROM_dat = rommem[rd0L1_adr];
+assign d1ROM_dat = rommem[rd1L1_adr];
+
+//wire predict_taken;
+wire predict_takenA;
+wire predict_takenB;
+wire predict_takenC;
+wire predict_takenD;
+wire predict_takenE;
+wire predict_takenF;
+wire predict_takenA1;
+wire predict_takenB1;
+wire predict_takenC1;
+wire predict_takenD1;
+
+wire btbwr0 = iq_state[heads[0]]==IQS_CMT && iq_fc[heads[0]];
+wire btbwr1 = iq_state[heads[1]]==IQS_CMT && iq_fc[heads[1]];
+wire btbwr2 = iq_state[heads[2]]==IQS_CMT && iq_fc[heads[2]];
+
+wire fcu_clk;
+`ifdef FCU_ENH
+//BUFGCE ufcuclk
+//(
+//	.I(clk_i),
+//	.CE(fcu_available),
+//	.O(fcu_clk)
+//);
+`endif
+assign fcu_clk = clk_i;
+
+`ifdef FCU_BTB
+BTB #(.AMSB(AMSB)) ubtb1
+(
+  .rst(rst_i),
+  .clk(clk_i),
+  .clk2x(clk2x_i),
+  .clk4x(clk4x_i),
+  .wr0(btbwr0),  
+  .wadr0(iq_pc[heads[0]]),
+  .wdat0(iq_ma[heads[0]]),
+  .valid0((iq_br[heads[0]] ? iq_takb[heads[0]] : iq_bt[heads[0]]) & iq_v[heads[0]]),
+  .wr1(btbwr1),  
+  .wadr1(iq_pc[heads[1]]),
+  .wdat1(iq_ma[heads[1]]),
+  .valid1((iq_br[heads[1]] ? iq_takb[heads[1]] : iq_bt[heads[1]]) & iq_v[heads[1]]),
+  .wr2(btbwr2),  
+  .wadr2(iq_pc[heads[2]]),
+  .wdat2(iq_ma[heads[2]]),
+  .valid2((iq_br[heads[2]] ? iq_takb[heads[2]] : iq_bt[heads[2]]) & iq_v[heads[2]]),
+  .rclk(~clk),
+  .pcA(pc),
+  .btgtA(btgt[0]),
+  .pcB(pc + len1),
+  .btgtB(btgt[1]),
+  .pcC(pc + len1 + len2),
+  .btgtC(),
+  .npcA(pc + len1),
+  .npcB(pc + len1 + len2),
+  .npcC())
+);
+`else
+assign btgt[0] = pc + len1;
+assign btgt[1] = pc + len1 + len2;
+`endif
+
+wire [AMSB:0] pcs [0:FSLOTS-1];
+assign pcs[0] = pc;
+assign pcs[1] = pc + len1;
+
+wire [3:0] xisBr;
+wire [AMSB:0] xpc [0:3];
+wire [3:0] xtkb;
+
+assign xisBr[0] = iq_br[heads[0]] & commit0_v & ~iq_instr[heads[0]][5];
+assign xisBr[1] = iq_br[heads[1]] & commit1_v & ~iq_instr[heads[1]][5];
+assign xisBr[2] = iq_br[heads[2]] & commit1_v & ~iq_instr[heads[2]][5];
+assign xisBr[3] = 1'b0;
+assign xpc[0] = iq_pc[heads[0]];
+assign xpc[1] = iq_pc[heads[1]];
+assign xpc[2] = iq_pc[heads[2]];
+assign xpc[3] = 1'd0;
+assign xtkb[0] = commit0_v & iq_takb[heads[0]];
+assign xtkb[1] = commit1_v & iq_takb[heads[1]];
+assign xtkb[2] = commit2_v & iq_takb[heads[2]];
+assign xtkb[3] = 1'b0;
+
+wire [FSLOTS-1:0] predict_takenx;
+
+`ifdef FCU_BP
+BranchPredictor ubp1
+(
+  .rst(rst_i),
+  .clk(clk_i),
+  .clk2x(clk2x_i),
+  .clk4x(clk4x_i),
+  .en(bpe),
+  .xisBranch(xisBr),
+  .xip(xpc),
+  .takb(xtkb),
+  .pc(pcs),
+  .predict_taken(predict_takenx)
+);
+`else
+assign predict_takenx[0] = insnx[0][15];
+assign predict_takenx[1] = insnx[1][15];
+`endif
+
+assign predict_taken[0] = predict_takenx[0];
+assign predict_taken[1] = predict_takenx[1];
+
+
+reg StoreAck1, isStore;
+wire [15:0] dc0_out, dc1_out;
+wire whit0, whit1, whit2;
+
+wire wr_dcache0 = (dcwr)||(((bstate==B_StoreAck && StoreAck1) || (bstate==B_LSNAck && isStore)) && whit0);
+wire wr_dcache1 = (dcwr)||(((bstate==B_StoreAck && StoreAck1) || (bstate==B_LSNAck && isStore)) && whit1);
+wire rd_dcache0 = !dram0_unc & (dram0_load | dram0_rmw);
+wire rd_dcache1 = !dram1_unc & (dram1_load | dram1_rmw);
+
+DCController udcc1
+(
+	.rst_i(rst_i),
+	.clk_i(clk_i),
+	.dadr(dram0_addr),
+	.rd(rd_dcache0),
+	.wr(dcwr),
+	.wsel(dcsel),
+	.wadr(dcadr),
+	.wdat(dcdat),
+	.bstate(bstate),
+	.state(),
+	.invline(invdcl),
+	.invlineAddr(invlineAddr),
+	.icl_ctr(),
+	.isROM(d0isROM),
+	.ROM_dat(d0ROM_dat),
+	.dL2_rhit(d0L2_rhit),
+	.dL2_rdat(d0L2_rdat),
+	.dL2_whit(d0L2_whit),
+	.dL2_ld(d0L2_ld),
+	.dL2_wsel(d0L2_sel),
+	.dL2_wadr(d0L2_adr),
+	.dL2_wdat(d0L2_wdat),
+	.dL2_nxt(d0L2_nxt),
+	.dL1_hit(d0L1_dhit),
+	.dL1_selpc(d0L1_selpc),
+	.dL1_sel(d0L1_sel),
+	.dL1_adr(d0L1_adr),
+	.dL1_dat(d0L1_dat),
+	.dL1_wr(d0L1_wr),
+	.dL1_invline(d0L1_invline),
+	.dcnxt(),
+	.dcwhich(),
+	.dcl_o(),
+	.cti_o(d0cti),
+	.bte_o(d0bte),
+	.bok_i(bok_i),
+	.cyc_o(d0cyc),
+	.stb_o(d0stb),
+	.ack_i(d0ack_i),
+	.err_i(d0err_i),
+	.wrv_i(d0wrv_i),
+	.rdv_i(d0rdv_i),
+	.sel_o(d0sel),
+	.adr_o(d0adr),
+	.dat_i(dat_i)
+);
+
+L1_dcache udc1
+(
+	.rst(rst_i),
+	.clk(clk_i),
+	.nxt(d0L1_nxt),
+	.wr(d0L1_wr),
+	.sel(d0L1_sel),
+	.adr(d0L1_selpc ? dram0_addr : d0L1_adr),
+	.i({5'd0,d0L1_dat}),
+	.o(dc0_out),
+	.fault(),
+	.hit(d0L1_dhit),
+	.invall(invdc),
+	.invline(d0L1_invline)
+);
+
+L2_dcache udc2
+(
+	.rst(rst_i),
+	.clk(clk_i),
+	.nxt(d0L2_nxt),
+	.wr(d0L2_ld),
+	.wadr(d0L2_adr),
+	.radr(d0L1_adr),
+	.sel(d0L2_sel),
+	.tlbmiss_i(1'b0),
+	.rdv_i(1'b0),
+	.wrv_i(1'b0),
+	.i(d0L2_wdat),
+	.err_i(1'b0),
+	.o(d0L2_rdat),
+	.rhit(d0L2_rhita),
+	.whit(d0L2_whit),
+	.invall(invdc),
+	.invline(d0L1_invline)
+);
+
+
+DCController udcc2
+(
+	.rst_i(rst_i),
+	.clk_i(clk_i),
+	.dadr(dram1_addr),
+	.rd(rd_dcache1),
+	.wr(dcwr),
+	.wsel(dcsel),
+	.wadr(dcadr),
+	.wdat(dcdat),
+	.bstate(bstate),
+	.state(),
+	.invline(invdcl),
+	.invlineAddr(invlineAddr),
+	.icl_ctr(),
+	.isROM(d1isROM),
+	.ROM_dat(d1ROM_dat),
+	.dL2_rhit(d1L2_rhit),
+	.dL2_rdat(d1L2_rdat),
+	.dL2_whit(d1L2_whit),
+	.dL2_ld(d1L2_ld),
+	.dL2_wsel(d1L2_sel),
+	.dL2_wadr(d1L2_adr),
+	.dL2_wdat(d1L2_wdat),
+	.dL2_nxt(d1L2_nxt),
+	.dL1_hit(d1L1_dhit),
+	.dL1_selpc(d1L1_selpc),
+	.dL1_sel(d1L1_sel),
+	.dL1_adr(d1L1_adr),
+	.dL1_dat(d1L1_dat),
+	.dL1_wr(d1L1_wr),
+	.dL1_invline(d1L1_invline),
+	.dcnxt(),
+	.dcwhich(),
+	.dcl_o(),
+	.cti_o(d1cti),
+	.bte_o(d1bte),
+	.bok_i(bok_i),
+	.cyc_o(d1cyc),
+	.stb_o(d1stb),
+	.ack_i(d1ack_i),
+	.err_i(d1err_i),
+	.wrv_i(d1wrv_i),
+	.rdv_i(d1rdv_i),
+	.sel_o(d1sel),
+	.adr_o(d1adr),
+	.dat_i(dat_i)
+);
+
+L1_dcache udc3
+(
+	.rst(rst_i),
+	.clk(clk_i),
+	.nxt(d1L1_nxt),
+	.wr(d1L1_wr),
+	.sel(d1L1_sel),
+	.adr(d1L1_selpc ? dram1_addr : d1L1_adr),
+	.i({5'd0,d1L1_dat}),
+	.o(dc1_out),
+	.fault(),
+	.hit(d1L1_dhit),
+	.invall(invdc),
+	.invline(d1L1_invline)
+);
+
+L2_dcache udc4
+(
+	.rst(rst_i),
+	.clk(clk_i),
+	.nxt(d1L2_nxt),
+	.wr(d1L2_ld),
+	.wadr(d1L2_adr),
+	.radr(d1L1_adr),
+	.sel(d1L2_sel),
+	.tlbmiss_i(1'b0),
+	.rdv_i(1'b0),
+	.wrv_i(1'b0),
+	.i(d1L2_wdat),
+	.err_i(1'b0),
+	.o(d1L2_rdat),
+	.rhit(d1L2_rhita),
+	.whit(d1L2_whit),
+	.invall(invdc),
+	.invline(d1L1_invline)
+);
+
+wire [127:0] aligned_data = fnDatiAlign(dram0_addr,xdati);
+wire [127:0] rdat0, rdat1;
+assign rdat0 = fnDataExtend(dram0_instr,dram0_unc ? aligned_data : dc0_out);
+assign rdat1 = fnDataExtend(dram1_instr,dram1_unc ? aligned_data : dc1_out);
+reg [15:0] rmw_ad0, rmw_ad1;
+assign dhit0a = d0L1_dhit;
+assign dhit1a = d1L1_dhit;
+
+wire [7:0] wb_fault;
+wire wb_q0_done, wb_q1_done;
+wire wb_has_bus;
+assign dhit0 = dhit0a && !wb_hit0;
+assign dhit1 = dhit1a && !wb_hit1;
+wire wb_p0_wr = (dram0==`DRAMSLOT_BUSY && dram0_store)
+							 || (dram0==`DRAMSLOT_RMW2 && dram0_rmw);
+wire wb_p1_wr = (dram1==`DRAMSLOT_BUSY && dram1_store)
+							 || (dram1==`DRAMSLOT_RMW2 && dram1_rmw);
+
+writeBuffer #(.QENTRIES(QENTRIES)) uwb1
+(
+	.rst_i(rst_i),
+	.clk_i(clk),
+	.bstate(bstate),
+	.cyc_pending(cyc_pending),
+	.wb_has_bus(wb_has_bus),
+	.wb_v(wb_v),
+	.wb_addr(wb_addr),
+	.update_iq(update_iq),
+	.uid(uid),
+	.ruid(ruid),
+	.fault(wb_fault),
+	.p0_id_i(dram0_id),
+	.p0_rid_i(dram0_rid),
+	.p0_ol_i(dram0_ol),
+	.p0_wr_i(wb_p0_wr),
+	.p0_ack_o(wb_q0_done),
+	.p0_sel_i(fnSelect(dram0_instr)),
+	.p0_adr_i(dram0_addr),
+	.p0_dat_i(dram0_data),
+	.p0_hit(wb_hit0),
+	.p1_id_i(dram1_id),
+	.p1_rid_i(dram1_rid),
+	.p1_ol_i(dram1_ol),
+	.p1_wr_i(wb_p1_wr),
+	.p1_ack_o(wb_q1_done),
+	.p1_sel_i(fnSelect(dram1_instr)),
+	.p1_adr_i(dram1_addr),
+	.p1_dat_i(dram1_data),
+	.p1_hit(wb_hit1),
+	.ol_o(wol),
+	.cyc_o(wcyc),
+	.stb_o(wstb),
+	.ack_i(wack_i),
+	.err_i(werr_i),
+	.tlbmiss_i(wtlbmiss_i),
+	.wrv_i(wwrv_i),
+	.we_o(wwe),
+	.sel_o(wsel),
+	.adr_o(wadr),
+	.dat_o(wdat),
+	.cr_o(wcr),
+	.cwr_o(dcwr),
+	.csel_o(dcsel),
+	.cadr_o(dcadr),
+	.cdat_o(dcdat)
+);
+
+headptrs uhp1
+(
+	.rst(rst_i),
+	.clk(clk),
+	.amt(hi_amt),
+	.heads(heads),
+	.ramt(r_amt),
+	.rob_heads(rob_heads)
+);
+
+tailptrs utp1
+(
+	.rst_i(rst_i),
+	.clk_i(clk_i),
+	.branchmiss(branchmiss),
+	.iq_stomp(iq_stomp),
+	.iq_br_tag(iq_br_tag),
+	.queuedCnt(queuedCnt),
+	.iq_tails(tails),
+	.rqueuedCnt(queuedCnt),
+	.rob_tails(rob_tails),
+	.active_tag(miss_tag),
+	.iq_rid(iq_rid)
+);
+
+
+// Register read ports
+reg [2:0] Rd [QSLOTS-1:0];
+reg [2:0] Rn [QSLOTS-1:0];
 
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
@@ -371,7 +1609,7 @@ for (n = 0; n < QSLOTS; n = n + 1)
 	3'd1:	rfoa[n] <= {8'h00,xr};
 	3'd2:	rfoa[n] <= {8'h00,yr};
 	3'd3:	rfoa[n] <= {8'h01,sp};
-	3'd4:	rfoa[n] <= pc;
+	3'd4:	rfoa[n] <= uoq_pc[(uoq_head+n) % UOQ_ENTRIES];
 	3'd5: rfoa[n] <= tmp;
 	3'd7:	rfoa[n] <= {8'h00,sr};
 	default:	rfoa[n] <= 16'h0;
@@ -390,6 +1628,47 @@ always @*
 for (n = 0; n < QSLOTS; n = n + 1)
 	rfos[n] <= sr;
 
+// Writes to the register file. Fortunately the register file is small so
+// three update ports are easily supported.
+always @(posedge clk)
+	if (commit2_v && commit2_tgt==`UO_ACC)
+		ac <= commit2_bus;
+	else if (commit1_v && commit1_tgt==`UO_ACC)
+		ac <= commit1_bus;
+	else if (commit0_v && commit0_tgt==`UO_ACC)
+		ac <= commit0_bus;
+
+always @(posedge clk)
+	if (commit2_v && commit2_tgt==`UO_XR)
+		xr <= commit2_bus;
+	else if (commit1_v && commit1_tgt==`UO_XR)
+		xr <= commit1_bus;
+	else if (commit0_v && commit0_tgt==`UO_XR)
+		xr <= commit0_bus;
+
+always @(posedge clk)
+	if (commit2_v && commit2_tgt==`UO_YR)
+		yr <= commit2_bus;
+	else if (commit1_v && commit1_tgt==`UO_YR)
+		yr <= commit1_bus;
+	else if (commit0_v && commit0_tgt==`UO_YR)
+		yr <= commit0_bus;
+
+always @(posedge clk)
+	if (commit2_v && commit2_tgt==`UO_SP)
+		sp <= commit2_bus;
+	else if (commit1_v && commit1_tgt==`UO_SP)
+		sp <= commit1_bus;
+	else if (commit0_v && commit0_tgt==`UO_SP)
+		sp <= commit0_bus;
+
+always @(posedge clk)
+	if (commit2_v && commit2_tgt==`UO_TMP)
+		tmp <= commit2_bus;
+	else if (commit1_v && commit1_tgt==`UO_TMP)
+		tmp <= commit1_bus;
+	else if (commit0_v && commit0_tgt==`UO_TMP)
+		tmp <= commit0_bus;
 
 wire [15:0] argA [0:QSLOTS-1];
 wire [15:0] argB [0:QSLOTS-1];
@@ -404,7 +1683,486 @@ for (n = 0; n < QSLOTS; n = n + 1)
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
 	argS[n] = rfos[n];
+
+generate begin : gDecoderInst
+for (g = 0; g < IQ_ENTRIES; g = g + 1) begin
+decoder3 iq0 (
+	.num(iq_tgt[g][2:0]),
+	.out(iq_out2[g])
+);
+end
+end
+endgenerate
+
+initial begin: Init
+	//
+	//
+	// set up panic messages
+	message[ `PANIC_NONE ]			= "NONE            ";
+	message[ `PANIC_FETCHBUFBEQ ]		= "FETCHBUFBEQ     ";
+	message[ `PANIC_INVALIDISLOT ]		= "INVALIDISLOT    ";
+	message[ `PANIC_IDENTICALDRAMS ]	= "IDENTICALDRAMS  ";
+	message[ `PANIC_OVERRUN ]		= "OVERRUN         ";
+	message[ `PANIC_HALTINSTRUCTION ]	= "HALTINSTRUCTION ";
+	message[ `PANIC_INVALIDMEMOP ]		= "INVALIDMEMOP    ";
+	message[ `PANIC_INVALIDFBSTATE ]	= "INVALIDFBSTATE  ";
+	message[ `PANIC_INVALIDIQSTATE ]	= "INVALIDIQSTATE  ";
+	message[ `PANIC_BRANCHBACK ]		= "BRANCHBACK      ";
+	message[ `PANIC_MEMORYRACE ]		= "MEMORYRACE      ";
+
+end
+
+// Determine the head increment amount, this must match code later on.
+always @*
+begin
+	hi_amt <= 3'd0;
+	if (iq_v[heads[0]] && iq_state[heads[0]]==IQS_CMT) begin
+		hi_amt <= 3'd1;
+		if (iq_v[heads[1]] && iq_state[heads[1]]==IQS_CMT) begin
+			hi_amt <= 3'd2;
+			if (iq_v[heads[2]] && iq_state[heads[2]]==IQS_CMT) begin
+				hi_amt <= 3'd3;
+			end
+		end
+	end
+	else if (!iq_v[heads[0]]) begin
+		if (heads[0] != tails[0]) begin
+			hi_amt <= 3'd1;
+			if (iq_v[heads[1]] && iq_state[heads[1]]==IQS_CMT) begin
+				hi_amt <= 3'd2;
+				if (iq_v[heads[2]] && iq_state[heads[2]]==IQS_CMT) begin
+					hi_amt <= 3'd3;
+				end
+			end
+			else if (!iq_v[heads[1]]) begin
+				if (heads[1] != tails[0]) begin
+					hi_amt <= 3'd2;
+					if (iq_v[heads[2]] && iq_state[heads[2]]==IQS_CMT) begin
+						hi_amt <= 3'd3;
+					end
+					else if (!iq_v[heads[2]]) begin
+						if (heads[2] != tails[0]) begin
+							hi_amt <= 3'd3;
+						end
+					end
+				end
+			end
+		end
+	end
+end
+
+//
+// BRANCH-MISS LOGIC: livetarget
+//
+// livetarget implies that there is a not-to-be-stomped instruction that targets the register in question
+// therefore, if it is zero it implies the rf_v value should become VALID on a branchmiss
+// 
+
+always @*
+	for (n = 0; n < IQ_ENTRIES; n = n + 1)
+		iq_livetarget[n] = {AREGS {iq_v[n]}} & {AREGS {~iq_stomp[n]}} & iq_out2[n];
+
+
+always @*
+for (j = 1; j < AREGS; j = j + 1) begin
+	livetarget[j] = 1'b0;
+	for (n = 0; n < QENTRIES; n = n + 1)
+		livetarget[j] = livetarget[j] | iq_livetarget[n][j];
+end
+
+//
+// BRANCH-MISS LOGIC: latestID
+//
+// latestID is the instruction queue ID of the newest instruction (latest) that targets
+// a particular register.  looks a lot like scheduling logic, but in reverse.
+// 
+always @*
+	for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
+		iq_cumulative[n] = 1'b0;
+		for (j = n; j < n + IQ_ENTRIES; j = j + 1) begin
+			if (missid==(j % IQ_ENTRIES))
+				for (k = n; k <= j; k = k + 1)
+					iq_cumulative[n] = iq_cumulative[n] | iq_livetarget[k % IQ_ENTRIES];
+		end
+	end
+
+always @*
+	for (n = 0; n < IQ_ENTRIES; n = n + 1)
+    iq_latestID[n] = (missid == n || ((iq_livetarget[n] & iq_cumulative[(n+1)%IQ_ENTRIES]) == {AREGS{1'b0}}))
+				    ? iq_livetarget[n]
+				    : {AREGS{1'b0}};
+
+always @*
+	for (n = 0; n < IQ_ENTRIES; n = n + 1)
+	  iq_source[n] = | iq_latestID[n];
+
+//
+// additional logic for ISSUE
+//
+// for the moment, we look at ALU-input buffers to allow back-to-back issue of 
+// dependent instructions ... we do not, however, look ahead for DRAM requests 
+// that will become valid in the next cycle.  instead, these have to propagate
+// their results into the IQ entry directly, at which point it becomes issue-able
+//
+
+// note that, for all intents & purposes, iq_done == iq_agen ... no need to duplicate
+
+wire [IQ_ENTRIES-1:0] args_valid;
+wire [IQ_ENTRIES-1:0] could_issue;
+wire [IQ_ENTRIES-1:0] could_issueid;
+
+// Note that bypassing is provided only from the first fpu.
+generate begin : issue_logic
+for (g = 0; g < IQ_ENTRIES; g = g + 1)
+begin
+assign args_valid[g] =
+		  (iq_argA_v[g] 
+`ifdef FU_BYPASS
+        || (iq_argA_s[g][`RBITS] == alu0_rid && alu0_vsn)
+        || ((iq_argA_s[g][`RBITS] == alu1_rid && alu1_vsn) && (`NUM_ALU > 1))
+        || ((iq_argA_s[g][`RBITS] == fpu1_rid && fpu1_dataready) && (`NUM_FPU > 0))
+        || ((iq_argA_s[g][`RBITS] == fpu2_rid && fpu2_dataready) && (`NUM_FPU > 1))
+`endif
+        )
+    && (iq_argB_v[g] || iq_mem[g]	// a2 does not need to be valid immediately for a mem op (agen), it is checked by iq_memready logic
+`ifdef FU_BYPASS
+        || (iq_argB_s[g][`RBITS] == alu0_rid && alu0_vsn)
+        || ((iq_argB_s[g][`RBITS] == alu1_rid && alu1_vsn) && (`NUM_ALU > 1))
+        || ((iq_argB_s[g][`RBITS] == fpu1_rid && fpu1_dataready) && (`NUM_FPU > 0))
+        || ((iq_argB_s[g][`RBITS] == fpu2_rid && fpu2_dataready) && (`NUM_FPU > 1))
+`endif
+        )
+    && (iq_argS_v[g] 
+        || (iq_mem[g] & ~iq_agen[g] & ~iq_memndx[g])    // a3 needs to be valid for indexed instruction
+//        || (iq_mem[g] & ~iq_agen[g])
+`ifdef FU_BYPASS
+        || (iq_argS_s[g][`RBITS] == alu0_rid && alu0_vsn)
+        || ((iq_argS_s[g][`RBITS] == alu1_rid && alu1_vsn) && (`NUM_ALU > 1))
+        || ((iq_argS_s[g][`RBITS] == fpu1_rid && fpu1_dataready) && (`NUM_FPU > 0))
+        || ((iq_argS_s[g][`RBITS] == fpu2_rid && fpu2_dataready) && (`NUM_FPU > 1))
+`endif
+        )
+    ;
+
+assign could_issue[g] = iq_v[g] && iq_state[g]==IQS_QUEUED	&& args_valid[g];
+                        //&& (iq_mem[g] ? !iq_agen[g] : 1'b1);
+
+assign could_issueid[g] = (iq_v[g]);// || (g==tails[0] && canq1))// || (g==tails[1] && canq2))
+end                                 
+end
+endgenerate
+
+// Detect if there are any valid queue entries prior to the given queue entry.
+reg [IQ_ENTRIES-1:0] prior_valid;
+//generate begin : gPriorValid
+always @*
+for (j = 0; j < IQ_ENTRIES; j = j + 1)
+begin
+	prior_valid[heads[j]] = 1'b0;
+	if (j > 0)
+		for (n = j-1; n >= 0; n = n - 1)
+			prior_valid[heads[j]] = prior_valid[heads[j]]|iq_v[heads[n]];
+end
+//end
+//endgenerate
+
+// Detect if there are any valid sync instructions prior to the given queue 
+// entry.
+reg [IQ_ENTRIES-1:0] prior_sync;
+//generate begin : gPriorSync
+always @*
+for (j = 0; j < IQ_ENTRIES; j = j + 1)
+begin
+	prior_sync[heads[j]] = 1'b0;
+	if (j > 0)
+		for (n = j-1; n >= 0; n = n - 1)
+			prior_sync[heads[j]] = prior_sync[heads[j]]|(iq_v[heads[n]] & iq_sync[heads[n]]);
+end
+//end
+//endgenerate
+
+//end
+//endgenerate
+// Start search for instructions to process at head of queue (oldest instruction).
+always @*
+begin
+	iq_alu0_issue = {IQ_ENTRIES{1'b0}};
+	iq_alu1_issue = {IQ_ENTRIES{1'b0}};
 	
+	if (alu0_available & alu0_idle) begin
+		for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
+			if (could_issue[heads[n]] && iq_alu[heads[n]]
+			&& iq_alu0_issue == {IQ_ENTRIES{1'b0}}
+			// If there are no valid queue entries prior it doesn't matter if there is
+			// a sync.
+			&& (!prior_sync[heads[n]] || !prior_valid[heads[n]])
+			)
+			  iq_alu0_issue[heads[n]] = `TRUE;
+		end
+	end
+
+	if (alu1_available && alu1_idle && `NUM_ALU > 1) begin
+//		if ((could_issue & ~iq_alu0_issue & ~iq_alu0) != {IQ_ENTRIES{1'b0}}) begin
+			for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
+				if (could_issue[heads[n]] && iq_alu[heads[n]]
+					&& !iq_alu0_issue[heads[n]]
+					&& iq_alu1_issue == {IQ_ENTRIES{1'b0}}
+					&& (!prior_sync[heads[n]] || !prior_valid[heads[n]])
+				)
+				  iq_alu1_issue[heads[n]] = `TRUE;
+			end
+//		end
+	end
+end
+
+always @*
+begin
+issuing_on_alu0 = FALSE;
+for (n = 0; n < IQ_ENTRIES; n = n + 1)
+	if (iq_alu0_issue[n] && !(iq_v[n] && iq_stomp[n])
+												&& (alu0_available & alu0_done))
+		issuing_on_alu0 = TRUE;
+end
+
+always @*
+begin
+issuing_on_alu1 = FALSE;
+for (n = 0; n < IQ_ENTRIES; n = n + 1)
+	if (iq_alu1_issue[n] && !(iq_v[n] && iq_stomp[n])
+												&& (alu1_available & alu1_done))
+		issuing_on_alu1 = TRUE;
+end
+
+reg issuing_on_agen0;
+always @*
+begin
+issuing_on_agen0 = FALSE;
+for (n = 0; n < IQ_ENTRIES; n = n + 1)
+	if (iq_agen0_issue[n] && !(iq_v[n] && iq_stomp[n]))
+		issuing_on_agen0 = TRUE;
+end
+
+reg issuing_on_agen1;
+always @*
+begin
+issuing_on_agen1 = FALSE;
+for (n = 0; n < IQ_ENTRIES; n = n + 1)
+	if (iq_agen1_issue[n] && !(iq_v[n] && iq_stomp[n]))
+		issuing_on_agen1 = TRUE;
+end
+
+reg issuing_on_fcu;
+always @*
+begin
+issuing_on_fcu = FALSE;
+for (n = 0; n < IQ_ENTRIES; n = n + 1)
+	if (iq_fcu_issue[n] && !(iq_v[n] && iq_stomp[n]) && fcu_done)
+		issuing_on_fcu = TRUE;
+end
+
+always @*
+begin
+	iq_agen0_issue = {IQ_ENTRIES{1'b0}};
+	iq_agen1_issue = {IQ_ENTRIES{1'b0}};
+	
+	if (agen0_idle) begin
+		for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
+			if (could_issue[heads[n]] && iq_mem[heads[n]]
+			&& iq_agen0_issue == {IQ_ENTRIES{1'b0}}
+			// If there are no valid queue entries prior it doesn't matter if there is
+			// a sync.
+			&& (!prior_sync[heads[n]] || !prior_valid[heads[n]])
+			)
+			  iq_agen0_issue[heads[n]] = `TRUE;
+		end
+	end
+
+	if (agen1_idle && `NUM_AGEN > 1) begin
+//		if ((could_issue & ~iq_alu0_issue & ~iq_alu0) != {IQ_ENTRIES{1'b0}}) begin
+			for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
+				if (could_issue[heads[n]] && iq_mem[heads[n]]
+					&& !iq_agen0_issue[heads[n]]
+					&& iq_agen1_issue == {IQ_ENTRIES{1'b0}}
+					&& (!prior_sync[heads[n]] || !prior_valid[heads[n]])
+				)
+				  iq_agen1_issue[heads[n]] = `TRUE;
+			end
+//		end
+	end
+end
+
+reg [`QBITS] nids [0:IQ_ENTRIES-1];
+always @*
+for (j = 0; j < IQ_ENTRIES; j = j + 1) begin
+	// We can't both start and stop at j
+	for (n = j; n != (j+1)%IQ_ENTRIES; n = (n + (IQ_ENTRIES-1)) % IQ_ENTRIES)
+		nids[j] = n;
+	// Do the last one
+	nids[j] = (j+1)%IQ_ENTRIES;
+end
+
+reg [IQ_ENTRIES-1:0] nextqd;
+
+// Search the queue for the next entry on the same thread.
+reg [`QBITS] nid;
+always @*
+begin
+	nid = fcu_id;
+	for (n = IQ_ENTRIES-1; n > 0; n = n - 1)
+		nid = (fcu_id + n) % IQ_ENTRIES;
+end
+
+always @*
+for (n = 0; n < IQ_ENTRIES; n = n + 1)
+	nextqd[n] <= iq_sn[nids[n]] > iq_sn[n] || iq_v[n];
+
+//assign nextqd = 8'hFF;
+
+// Don't issue to the fcu until the following instruction is enqueued.
+// However, if the queue is full then issue anyway. A branch miss will likely occur.
+// Start search for instructions at head of queue (oldest instruction).
+always @*
+begin
+	iq_fcu_issue = {IQ_ENTRIES{1'b0}};
+	
+	if (fcu_done & ~branchmiss) begin
+		for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
+			if (could_issue[heads[n]] && iq_fc[heads[n]] && (nextqd[heads[n]] || iq_br[heads[n]])
+			&& iq_fcu_issue == {IQ_ENTRIES{1'b0}}
+			&& (!prior_sync[heads[n]] || !prior_valid[heads[n]])
+			)
+			  iq_fcu_issue[heads[n]] = `TRUE;
+		end
+	end
+end
+
+// Test if a given address is in the write buffer. This is done only for the
+// first two queue slots to save logic on comparators.
+reg inwb0;
+always @*
+begin
+	inwb0 = FALSE;
+	for (n = 0; n < `WB_DEPTH; n = n + 1)
+		if (iq_ma[heads[0]][AMSB:4]==wb_addr[n][AMSB:4] && wb_v[n])
+			inwb0 = TRUE;
+end
+
+reg inwb1;
+always @*
+begin
+	inwb1 = FALSE;
+	for (n = 0; n < `WB_DEPTH; n = n + 1)
+		if (iq_ma[heads[1]][AMSB:4]==wb_addr[n][AMSB:4] && wb_v[n])
+			inwb1 = TRUE;
+end
+
+always @*
+begin
+	for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
+		iq_v[n] = iq_state[n] != IQS_INVALID;
+		iq_done[n] = iq_state[n]==IQS_DONE || iq_state[n]==IQS_CMT;
+		iq_out[n] = iq_state[n]==IQS_OUT;
+		iq_agen[n] = iq_state[n]==IQS_AGEN;
+	end
+end
+
+always @*
+begin
+	for (n = 0; n < RENTRIES; n = n + 1)
+		rob_v[n] = rob_state[n] != RS_INVALID;
+end
+
+// determine if the instructions ready to issue can, in fact, issue.
+// "ready" means that the instruction has valid operands but has not gone yet
+memissueLogic umi1
+(
+	.heads(heads),
+	.iq_v(iq_v),
+	.iq_memready(iq_memready),
+	.iq_out(iq_out),
+	.iq_done(iq_done),
+	.iq_mem(iq_mem),
+	.iq_agen(iq_agen), 
+	.iq_load(iq_load),
+	.iq_store(iq_store),
+	.iq_fc(iq_fc),
+	.iq_aq(1'b0),
+	.iq_rl(1'b0),
+	.iq_ma(iq_ma),
+	.iq_memsb(1'b0),
+	.iq_memdb(1'b0),
+	.iq_stomp(iq_stomp),
+	.iq_canex(iq_canex), 
+	.wb_v(wb_v),
+	.inwb0(inwb0),
+	.inwb1(inwb1),
+	.sple(sple),
+	.memissue(memissue),
+	.issue_count(issue_count)
+);
+
+// Starts search for instructions to issue at the head of the queue and 
+// progresses from there. This ensures that the oldest instructions are
+// selected first for processing.
+always @*
+begin
+	last_issue0 = IQ_ENTRIES;
+	last_issue1 = IQ_ENTRIES;
+	for (n = 0; n < IQ_ENTRIES; n = n + 1)
+    if (~iq_stomp[heads[n]] && iq_memissue[heads[n]] && !iq_done[heads[n]] && iq_v[heads[n]]) begin
+      if (mem1_available && dram0 == `DRAMSLOT_AVAIL) begin
+       last_issue0 = heads[n];
+      end
+    end
+	for (n = 0; n < IQ_ENTRIES; n = n + 1)
+    if (~iq_stomp[heads[n]] && iq_memissue[heads[n]]) begin
+    	if (mem2_available && heads[n] != last_issue0 && `NUM_MEM > 1) begin
+        if (dram1 == `DRAMSLOT_AVAIL) begin
+					last_issue1 = heads[n];
+        end
+    	end
+    end
+end
+
+always @*
+begin
+	iq_stomp = 1'b0;
+	if (branchmiss) begin
+		for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
+			if (iq_sn[n] > iq_sn[missid])
+				iq_stomp[n] = TRUE;
+		end
+	end
+end
+
+always @*
+begin
+	stompedOnRets = 1'b0;
+	for (n = 0; n < IQ_ENTRIES; n = n + 1)
+		if (iq_stomp[n] && iq_rts[n])
+			stompedOnRets = stompedOnRets + 4'd1;
+end
+
+//wire [143:0] id_bus[0], id_bus[1], id_bus[2];
+
+generate begin : idecoders
+for (g = 0; g < QSLOTS; g = g + 1)
+begin
+idecoder uid1
+(
+	.instr(insnx[g]),
+	.Rt(Rd[g][2:0]),
+	.predict_taken(predict_taken[g]),
+	.bus(id_bus[g]),
+	.debug_on(debug_on)
+);
+end
+end
+endgenerate
+
+
+
+
 always @(posedge clk_i)
 if (rst_i) begin
 	uoq_tail <= 4'd0;

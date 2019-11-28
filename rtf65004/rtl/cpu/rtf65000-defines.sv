@@ -67,6 +67,11 @@
 `define UOF_CNZ		2'd2
 `define UOF_NZ		2'd3
 
+`define UO_OP		15:10
+`define UO_LD4	9:6
+`define UO_RD		5:3
+`define UO_RN		2:0
+
 
 `define UO_ACC	3'd0
 `define UO_ZR		3'd0

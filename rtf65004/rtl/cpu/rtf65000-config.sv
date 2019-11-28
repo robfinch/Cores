@@ -47,22 +47,23 @@
 // Number of fetch slots
 `define FSLOTS		2
 
+`define UOQ_ENTRIES	16
 // Queue size should not be an even power of two!
 // Don't use 4,8,16,32,64 etc. As a value of all ones for the qid and rid
 // is used to indicate and invalid value.
 // If set greater than 10, then memory instructions won't
 // issue until they are within 10 of the head of the queue.
-`define QENTRIES	13		// (3 to 15)	// number of entries in dispatch queue
+`define IQ_ENTRIES	13		// (3 to 15)	// number of entries in dispatch queue
 // The number of entries in the re-order buffer should not be greater than
 // the number of entries in the dispatch buffer or some of them will sit
 // empty all the time.
-`define RENTRIES	`QENTRIES		// number of entries in re-order buffer
+`define RENTRIES	`IQ_ENTRIES		// number of entries in re-order buffer
 
 // bitfield representing a queue entry index. The field must be large
 // enough to accomodate a queue entry number, determined by the number
 // of queue entries above.
 // QBIT should be at least as large as RBIT
-`define QBIT			$clog2(`RENTRIES > `QENTRIES ? `RENTRIES : `QENTRIES)
+`define QBIT			$clog2(`RENTRIES > `IQ_ENTRIES ? `RENTRIES : `IQ_ENTRIES)
 `define QBITS			`QBIT-1:0
 `define QBITSP1		`QBIT:0
 
@@ -77,7 +78,7 @@
 // can overflow a little bit. Since queue sizes that are an exact power of two
 // are not allowed, it's just the ceiliing log2 of the queue size. For a
 // fifteen entry queue this works out to a five bit number.
-`define SNBIT			$clog2(QENTRIES)
+`define SNBIT			$clog2(IQ_ENTRIES)
 `define SNBITS		`SNBIT:0
 
 // The following constant controls the maximum number of instructions that will

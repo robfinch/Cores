@@ -24,7 +24,10 @@
 `include "rtf65000-config.sv"
 `include "rtf65000-defines.sv"
 
-module programCounter(rst, clk, q1, q2, insnx, freezepc, 
+module programCounter(rst, clk,
+	commit0_v, commit1_v, commit2_v, commit0_bus, commit1_bus, commit2_bus,
+	commit0_tgt, commit1_tgt, commit2_tgt,
+	q1, q2, insnx, freezepc, 
 	phit, branchmiss, misspc, pc_mask, pc_maskd, len1, len2, len3,
 	slotv, slotvd, jc, rts, br, take_branch, btgt, pc, pcd, branch_pc, 
 	ra, pc_override,
@@ -36,6 +39,15 @@ parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
 input rst;
 input clk;
+input commit0_v;
+input commit1_v;
+input commit2_v;
+input [15:0] commit0_bus;
+input [15:0] commit1_bus;
+input [15:0] commit2_bus;
+input [2:0] commit0_tgt;
+input [2:0] commit1_tgt;
+input [2:0] commit2_tgt;
 input q2;
 input q1;
 input [23:0] insnx [0:FSLOTS-1];
@@ -118,6 +130,12 @@ else begin
 		if (pc_override)
 			pc <= branch_pc;
 	end
+	if (commit2_v && commit2_tgt==`UO_PC)
+		pc <= commit2_bus;
+	else if (commit1_v && commit1_tgt==`UO_PC)
+		pc <= commit1_bus;
+	else if (commit0_v && commit0_tgt==`UO_PC)
+		pc <= commit0_bus;
 	//pc <= next_pc;
 end
 
