@@ -1,13 +1,12 @@
 `timescale 1ns / 1ps
 // ============================================================================
 //        __
-//   \\__/ o\    (C) 2013, 2014  Robert Finch, Stratford
+//   \\__/ o\    (C) 2019  Robert Finch, Stratford
 //    \  __ /    All rights reserved.
 //     \/_//     robfinch<remove>@opencores.org
 //       ||
 //
-// rtf65003.v
-//  - 32 bit CPU
+// rtf65004-defines.sv
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -62,10 +61,12 @@
 `define BRK_VECT_816	32'h0000FFE6
 `define COP_VECT_816	32'h0000FFE4
 
-`define UOF_NONE	2'd0
-`define UOF_CVNZ	2'd1
-`define UOF_CNZ		2'd2
-`define UOF_NZ		2'd3
+`define UOF_NONE	4'h0
+`define UOF_CVNZ	4'hF
+`define UOF_CNZ		4'hB
+`define UOF_NZ		4'h3
+`define UOF_C			4'h8
+`define UOF_V			4'h4
 
 `define UO_OP		15:10
 `define UO_LD4	9:6
@@ -90,6 +91,7 @@
 `define UO_R16	4'h9
 `define UO_M3		4'hD
 
+`define UO_NOP	6'h00
 `define UO_LDB	6'h01
 `define UO_LDW	6'h02
 `define UO_STB	6'h03
@@ -98,6 +100,28 @@
 `define UO_ADDW	6'h06
 `define UO_LDIB	6'h08
 `define UO_LDIW	6'h09
+`define UO_ADCB	6'h0A
+`define UO_SBCB	6'h0B
+`define UO_CMPB	6'h0C
+`define UO_ANDB	6'h0D
+`define UO_ORB	6'h0E
+`define UO_EORB	6'h0F
+`define UO_BEQ	6'h10
+`define UO_BNE	6'h11
+`define UO_BCS	6'h12
+`define UO_BCC	6'h13
+`define UO_BVS	6'h14
+`define UO_BVC	6'h15
+`define UO_BMI	6'h16
+`define UO_BPL	6'h17
+`define UO_CLC	6'h18
+`define UO_SEC	6'h19
+`define UO_CLV	6'h1A
+`define UO_CLI	6'h1C
+`define UO_SEI	6'h1D
+`define UO_MOV	6'h1E
+`define UO_JMP	6'h1F
+`define	UO_BITB	6'h20
 
 `define BYTE		9'h87
 `define UBYTE		9'hA7

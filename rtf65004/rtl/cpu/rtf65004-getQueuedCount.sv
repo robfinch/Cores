@@ -30,7 +30,7 @@
 //
 // ============================================================================
 //
-`include "rtf65000-config.sv"
+`include "rtf65004-config.sv"
 
 module getQueuedCount(branchmiss, brk, phitd, tails, rob_tails, slotvd,
 	slot_jc, slot_rts, take_branch, uoq_v, rob_v, queuedCnt, queuedOnp, debug_on);

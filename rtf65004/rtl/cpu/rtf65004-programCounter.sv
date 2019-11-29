@@ -21,8 +21,8 @@
 //
 // ============================================================================
 //
-`include "rtf65000-config.sv"
-`include "rtf65000-defines.sv"
+`include "rtf65004-config.sv"
+`include "rtf65004-defines.sv"
 
 module programCounter(rst, clk,
 	commit0_v, commit1_v, commit2_v, commit0_bus, commit1_bus, commit2_bus,
