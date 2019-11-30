@@ -24,7 +24,7 @@
 `include "rtf65004-config.sv"
 `include "rtf65004-defines.sv"
 
-module rtf65000(rst_i, clk_i, clk2x_i, clk4x_i, tm_clk_i, irq_i, 
+module rtf65004(rst_i, clk_i, clk2x_i, clk4x_i, tm_clk_i, irq_i, 
 		bte_o, cti_o, bok_i, cyc_o, stb_o, ack_i, err_i, we_o, sel_o, adr_o, dat_o, dat_i,
     icl_o, exc_o);
 parameter WID = 16;
@@ -219,7 +219,6 @@ reg [15:0] rob_ma [0:RENTRIES-1];
 reg [15:0] rob_res [0:RENTRIES-1];
 reg [7:0] rob_sr [0:RENTRIES-1];		// status register result
 reg [RBIT:0] rob_tgt [0:RENTRIES-1];
-reg [7:0] rob_crres [0:RENTRIES-1];
 
 // debugging
 initial begin
@@ -2567,8 +2566,1057 @@ else begin
 		default:	;
 		endcase
 	end
-	
+
+	if (alu0_v) begin
+		rob_tgt [ alu0_rid ] <= alu0_tgt;
+		rob_res	[ alu0_rid ] <= ralu0_bus;
+		rob_sr [ alu0_rid] <= alu0_sro;
+		rob_argA [alu0_rid] <= alu0_argA;
+		rob_exc	[ alu0_rid ] <= 4'h0;
+	//	if (alu0_done) begin
+			if (iq_state[alu0_id]==IQS_OUT) begin
+				iq_state[alu0_id] <= IQS_CMT;
+				rob_state[alu0_rid] <= RS_CMT;
+			end
+	//	end
+		alu0_dataready <= FALSE;
+	end
+
+	if (alu1_v && `NUM_ALU > 1) begin
+		rob_tgt [ alu1_rid ] <= alu1_tgt;
+		rob_res	[ alu1_rid ] <= ralu1_bus;
+		rob_sr [ alu1_rid] <= alu1_sro;
+		rob_argA [alu1_rid] <= alu1_argA;
+		rob_exc	[ alu1_rid ] <= alu1_exc;
+	//	if (alu1_done) begin
+			if (iq_state[alu1_id]==IQS_OUT) begin
+				iq_state[alu1_id] <= IQS_CMT;
+				rob_state[alu1_rid] <= RS_CMT;
+			end
+	//	end
+		alu1_dataready <= FALSE;
+	end
+
+	if (agen0_v) begin
+		rob_tgt[agen0_rid] <= agen0_tgt;
+		if (iq_state[agen0_id]==IQS_OUT)
+			iq_state[agen0_id] <= IQS_AGEN;
+		rob_res[agen0_rid] <= agen0_ma;
+		rob_exc[agen0_rid] <= 4'h0;
+		if (iq_state[agen0_id]!=IQS_AGEN)
+			iq_ma[agen0_id] <= agen0_ma;
+		agen0_dataready <= FALSE;
+	end
+
+	if (agen1_v && `NUM_AGEN > 1) begin
+		rob_tgt[agen1_rid] <= agen1_tgt;
+		if (iq_state[agen1_id]==IQS_OUT)
+			iq_state[agen1_id] <= IQS_AGEN;
+		rob_res[agen1_rid] <= agen1_ma;		// LEA needs this result
+		rob_exc[agen1_rid] <= 4'h0;
+		if (iq_state[agen1_id]!=IQS_AGEN)
+			iq_ma[agen1_id] <= agen1_ma;
+		agen1_dataready <= FALSE;
+	end
+
+	if (fcu_v) begin
+		fcu_done <= `TRUE;
+		iq_ma  [ fcu_id ] <= fcu_missip;
+		rob_tgt [ fcu_rid] <= fcu_tgt;
+	  rob_res [ fcu_rid ] <= rfcu_bus;
+	  rob_exc [ fcu_rid ] <= fcu_exc;
+		if (iq_state[fcu_id]==IQS_OUT) begin
+			iq_state[fcu_id ] <= IQS_CMT;
+			rob_state[fcu_rid ] <= RS_CMT;
+		end
+		// takb is looked at only for branches to update the predictor. Here it is
+		// unconditionally set, the value will be ignored if it's not a branch.
+		iq_takb[ fcu_id ] <= fcu_takb;
+		br_ctr <= br_ctr + fcu_branch;
+		fcu_dataready <= `INV;
+	end
+
+	// dramX_v only set on a load
+	if (dramA_v && iq_v[ dramA_id ]) begin
+		rob_res	[ dramA_rid ] <= rdramA_bus;
+		rob_state[dramA_rid ] <= RS_CMT;
+		iq_state[dramA_id ] <= IQS_CMT;
+	end
+	if (`NUM_MEM > 1 && dramB_v && iq_v[ dramB_id ]) begin
+		rob_res	[ dramB_id ] <= rdramB_bus;
+		rob_state[dramB_rid ] <= RS_CMT;
+		iq_state[dramB_id ] <= IQS_CMT;
+	end
+
+	if (wb_q0_done) begin
+		dram0 <= `DRAMREQ_READY;
+		iq_state[ dram0_id ] <= IQS_DONE;
+	end
+	if (wb_q1_done) begin
+		dram1 <= `DRAMREQ_READY;
+		iq_state[ dram1_id ] <= IQS_DONE;
+	end
+
+	if (update_iq) begin
+		for (n = 0; n < RENTRIES; n = n + 1) begin
+			if (ruid[n]) begin
+	      rob_exc[n] <= wb_fault;
+	     	rob_state[n] <= RS_CMT;
+			end
+		end
+	end
+	if (update_iq) begin
+		for (n = 0; n < QENTRIES; n = n + 1) begin
+			if (uid[n]) begin
+				iq_state[n] <= IQS_CMT;
+			end
+		end
+	end
+
+//
+// see if anybody else wants the results ... look at lots of buses:
+//  - fpu_bus
+//  - alu0_bus
+//  - alu1_bus
+//  - fcu_bus
+//  - dram_bus
+//  - commit0_bus
+//  - commit1_bus
+//
+
+	for (n = 0; n < QENTRIES; n = n + 1)
+	begin
+		setargs(n,{1'b0,commit0_id},commit0_v,commit0_bus);
+		setargs(n,{1'b0,commit1_id},commit1_v,commit1_bus);
+		setargs(n,{1'b0,commit2_id},commit2_v,commit2_bus);
+
+		setargs(n,{1'b0,alu0_rid},alu0_v,ralu0_bus);
+		if (`NUM_ALU > 1)
+			setargs(n,{1'b0,alu1_rid},alu1_v,ralu1_bus);
+
+		setargs(n,{1'b1,agen0_rid},agen0_v & agen0_mem2,agen0_res);
+		if (`NUM_AGEN > 1) begin
+			setargs(n,{1'b1,agen1_rid},agen1_v & agen1_mem2,agen1_res);
+		end
+
+		setargs(n,{1'b0,fcu_rid},fcu_v,rfcu_bus);
+
+		setargs(n,{1'b0,dramA_rid},dramA_v,rdramA_bus);
+		if (`NUM_MEM > 1)
+			setargs(n,{1'b0,dramB_rid},dramB_v,rdramB_bus);
+	end
+
+
+// X's on unused busses cause problems in SIM.
+  for (n = 0; n < QENTRIES; n = n + 1)
+    if (iq_alu0_issue[n] && !(iq_v[n] && iq_stomp[n])
+										&& (alu0_available & alu0_done)) begin
+			iq_fuid[n] <= 3'd0;
+			alu0_sn <= iq_sn[n];
+			alu0_sourceid	<= n[`QBITS];
+			check_done(n[`QBITS]);
+			if (alu1_rid==n[`QBITS] && !issuing_on_alu1)
+				alu1_rid <= {`QBIT{1'b1}};
+			if (agen0_rid==n[`QBITS] && !issuing_on_agen0)
+				agen0_rid <= {`QBIT{1'b1}};
+			if (agen1_rid==n[`QBITS] && !issuing_on_agen1)
+				agen1_rid <= {`QBIT{1'b1}};
+			if (fcu_rid==n[`QBITS] && !issuing_on_fcu)
+				fcu_rid <= {`QBIT{1'b1}};
+					// The following line is a hack. The alu is done (tested above) so it
+					// should be setting the state to CMT.
+//					if (iq_state[alu0_id]==IQS_OUT)
+//						iq_state[alu0_id] <= IQS_CMT;
+			alu0_rid <= iq_rid[n];
+			alu0_instr	<= iq_instr[n];
+			alu0_pc		<= iq_pc[n];
+					// Agen output is not bypassed since there's only one
+					// instruction (LEA) to bypass for.
+`ifdef FU_BYPASS
+			if (iq_argA_v[n])
+				alu0_argA <= iq_argA[n][WID-1:0];
+			else
+				case(iq_argA_s[n][`RBITS])
+				alu0_rid:	alu0_argA <= ralu0_bus;
+				alu1_rid:	alu0_argA <= ralu1_bus;
+				default:	alu0_argA <= 16'hDEAD;
+				endcase
+`else
+			alu0_argA <= iq_argA[n][WID-1:0];               
+`endif                 
+`ifdef FU_BYPASS
+			if (iq_imm[n])
+				alu0_argB <= iq_argI[n];
+			else if (iq_argB_v[n])
+				alu0_argB <= iq_argB[n];
+			else
+				case(iq_argB_s[n][`RBITS])
+				alu0_rid:	alu0_argB <= ralu0_bus;
+				alu1_rid:	alu0_argB <= ralu1_bus;
+				default:	alu0_argB <= {1{16'hDEAD}};
+				endcase
+`else
+			if (iq_imm[n])
+				alu0_argB <= iq_argI[n];
+			else
+				alu0_argB <= iq_argB[n][WID-1:0];
+`endif
+`ifdef FU_BYPASS
+			if (iq_argS_v[n])
+				alu0_argS <= iq_argS[n][7:0];
+			else
+				case(iq_argS_s[n][`RBITS])
+				alu0_rid:	alu0_argS <= ralu0_bus;
+				alu1_rid:	alu0_argS <= ralu1_bus;
+				default:	alu0_argS <= 8'h00;
+				endcase
+`else
+			alu0_argS <= iq_argS[n][WID-1:0];
+`endif                 
+`ifdef FU_BYPASS
+			if (iq_argT_v[n])
+				alu0_argT <= iq_argT[n][WID-1:0];
+			else
+				case(iq_argT_s[n][`RBITS])
+				alu0_rid:	alu0_argT <= ralu0_bus;
+				alu1_rid:	alu0_argT <= ralu1_bus;
+				default:	alu0_argT <= {1{16'hDEAD}};
+				endcase
+`else
+			alu0_argT <= iq_argT[n][WID-1:0];
+`endif                 
+			alu0_argI	<= iq_argI[n];
+			alu0_tgt    <= iq_tgt[n];
+			alu0_dataready <= 1'b1;	//IsSingleCycle(iq_instr[n]);
+			alu0_ld <= TRUE;
+			iq_state[n] <= IQS_OUT;
+    end
+
+	if (`NUM_ALU > 1) begin
+    for (n = 0; n < QENTRIES; n = n + 1)
+        if ((iq_alu1_issue[n] && !(iq_v[n] && iq_stomp[n])
+												&& (alu1_available & alu1_done))) begin
+								iq_fuid[n] <= 3'd1;
+            		 alu1_sn <= iq_sn[n];
+                 alu1_sourceid	<= n[`QBITS];
+								check_done(n[`QBITS]);
+					if (alu0_rid==n[`QBITS] && !issuing_on_alu0)
+						alu0_rid <= {`QBIT{1'b1}};
+					if (agen0_rid==n[`QBITS] && !issuing_on_agen0)
+						agen0_rid <= {`QBIT{1'b1}};
+					if (agen1_rid==n[`QBITS] && !issuing_on_agen1)
+						agen1_rid <= {`QBIT{1'b1}};
+					if (fcu_rid==n[`QBITS] && !issuing_on_fcu)
+						fcu_rid <= {`QBIT{1'b1}};
+								// The following line is a hack. The alu is done (tested above) so it
+								// should be setting the state to CMT.
+	//							if (iq_state[alu1_id]==IQS_OUT)
+	//								iq_state[alu1_id] <= IQS_CMT;
+                 alu1_rid <= iq_rid[n];
+                 alu1_instr	<= iq_instr[n];
+                 alu1_pc		<= iq_pc[n];
+`ifdef FU_BYPASS
+								 if (iq_argA_v[n])
+								 	 alu1_argA <= iq_argA[n][WID-1:0];
+								 else
+	                 case(iq_argA_s[n][`RBITS])
+	                 alu0_rid:	alu1_argA <= ralu0_bus;
+	                 alu1_rid:	alu1_argA <= ralu1_bus;
+	                 default:	alu1_argA <= {1{16'hDEAD}};
+	                 endcase
+`else
+								alu1_argA <= iq_argA[n][WID-1:0];               
+`endif                 
+`ifdef FU_BYPASS
+								if (iq_imm[n])
+									alu1_argB <= iq_argI[n];
+								else if (iq_argB_v[n])
+									alu1_argB <= iq_argB[n][WID-1:0];
+								else
+									case(iq_argB_s[n][`RBITS])
+									alu0_rid:	alu1_argB <= ralu0_bus;
+									alu1_rid:	alu1_argB <= ralu1_bus;
+									default:	alu1_argB <= {1{16'hDEAD}};
+									endcase
+`else
+								if (iq_imm[n])
+									alu1_argB <= iq_argI[n];
+								else
+									alu1_argB <= iq_argB[n][WID-1:0];
+`endif
+`ifdef FU_BYPASS
+								 if (iq_argS_v[n])
+								 	alu1_argS <= iq_argS[n][7:0];
+								 else
+	                 case(iq_argC_s[n][`RBITS])
+	                 alu0_rid:	alu1_argS <= ralu0_bus[7:0];
+	                 alu1_rid:	alu1_argS <= ralu1_bus[7:0];
+	                 default:	alu1_argS <= 8'h00;
+	                 endcase
+`else
+								alu1_argS <= iq_argS[n][7:0];
+`endif                 
+`ifdef FU_BYPASS
+					if (iq_argT_v[n])
+						alu1_argT <= iq_argT[n][WID-1:0];
+					else
+						case(iq_argT_s[n][`RBITS])
+						alu0_rid:	alu1_argT <= ralu0_bus;
+						alu1_rid:	alu1_argT <= ralu1_bus;
+						default:	alu1_argT <= {1{16'hDEAD}};
+						endcase
+`else
+					alu1_argT <= iq_argT[n][WID-1:0];
+`endif                 
+                 alu1_argI	<= iq_argI[n];
+                 alu1_tgt    <= iq_tgt[n];
+                 alu1_dataready <= 1'b1;	//IsSingleCycle(iq_instr[n]);
+                 alu1_ld <= TRUE;
+                 iq_state[n] <= IQS_OUT;
+        end
+  end
+
+    for (n = 0; n < QENTRIES; n = n + 1)
+        if (iq_agen0_issue[n] && !(iq_v[n] && iq_stomp[n])) begin
+            if (1'b1) begin
+							iq_fuid[n] <= 3'd2;
+            		agen0_sn <= iq_sn[n];
+                 agen0_sourceid	<= n[`QBITS];
+								check_done(n[`QBITS]);
+					if (alu0_rid==n[`QBITS] && !issuing_on_alu0)
+						alu0_rid <= {`QBIT{1'b1}};
+					if (alu1_rid==n[`QBITS] && !issuing_on_alu1)
+						alu1_rid <= {`QBIT{1'b1}};
+					if (agen1_rid==n[`QBITS] && !issuing_on_agen1)
+						agen1_rid <= {`QBIT{1'b1}};
+					if (fcu_rid==n[`QBITS] && !issuing_on_fcu)
+						fcu_rid <= {`QBIT{1'b1}};
+                 agen0_rid <= iq_rid[n];
+                 agen0_instr	<= iq_instr[n];
+`ifdef FU_BYPASS
+								 if (iq_argA_v[n])
+								 	 agen0_argA <= iq_argA[n][WID-1:0];
+								 else
+	                 case(iq_argA_s[n][`RBITS])
+	                 alu0_rid:	agen0_argA <= ralu0_bus;
+	                 alu1_rid:	agen0_argA <= ralu1_bus;
+	                 default:	agen0_argA <= {16{16'hDEAD}};
+	                 endcase
+`else
+								agen0_argA <= iq_argA[n][WID-1:0];
+`endif                 
+`ifdef FU_BYPASS
+								 if (iq_argB_v[n])
+								 	agen0_argB <= iq_argB[n][WID-1:0];
+								 else
+	                 case(iq_argB_s[n][`RBITS])
+	                 alu0_rid:	agen0_argC <= ralu0_bus;
+	                 alu1_rid:	agen0_argC <= ralu1_bus;
+	                 default:	agen0_argB <= {1{16'hDEAD}};
+	                 endcase
+`else
+								agen0_argB <= iq_argB[n][WID-1:0];
+`endif           
+                 agen0_dataready <= 1'b1;
+               	iq_state[n] <= IQS_OUT;
+            end
+        end
+
+	if (`NUM_AGEN > 1) begin
+    for (n = 0; n < QENTRIES; n = n + 1)
+        if (iq_agen1_issue[n] && !(iq_v[n] && iq_stomp[n])) begin
+            if (1'b1) begin
+							iq_fuid[n] <= 3'd3;
+            		agen1_sn <= iq_sn[n];
+                 agen1_sourceid	<= n[`QBITS];
+								check_done(n[`QBITS]);
+					if (alu0_rid==n[`QBITS] && !issuing_on_alu0)
+						alu0_rid <= {`QBIT{1'b1}};
+					if (alu1_rid==n[`QBITS] && !issuing_on_alu1)
+						alu1_rid <= {`QBIT{1'b1}};
+					if (agen0_rid==n[`QBITS] && !issuing_on_agen0)
+						agen0_rid <= {`QBIT{1'b1}};
+					if (fcu_rid==n[`QBITS] && !issuing_on_fcu)
+						fcu_rid <= {`QBIT{1'b1}};
+                 agen1_rid <= iq_rid[n];
+                 agen1_instr	<= iq_instr[n];
+`ifdef FU_BYPASS
+								 if (iq_argA_v[n])
+								 	 agen1_argA <= iq_argA[n][WID-1:0];
+								 else
+	                 case(iq_argA_s[n][`RBITS])
+	                 alu0_rid:	agen1_argA <= ralu0_bus;
+	                 alu1_rid:	agen1_argA <= ralu1_bus;
+	                 default:	agen1_argA <={1{16'hDEAD}};
+	                 endcase
+`else
+								agen1_argA <= iq_argA[n][WID-1:0];
+`endif                 
+//                 agen1_argB	<= iq_argB[n];	// ArgB not used by agen
+`ifdef FU_BYPASS
+								 if (iq_argB_v[n])
+								 	agen1_argB <= iq_argB[n][WID-1:0];
+								 else
+	                 case(iq_argB_s[n][`RBITS])
+	                 alu0_rid:	agen1_argB <= ralu0_bus;
+	                 alu1_rid:	agen1_argB <= ralu1_bus;
+	                 default:	agen1_argB <= {16{16'hDEAD}};
+	                 endcase
+`else
+								agen1_argB <= iq_argB[n][WID-1:0];
+`endif                 
+                 agen1_dataready <= 1'b1;
+                 iq_state[n] <= IQS_OUT;
+            end
+        end
+  end
+
+  for (n = 0; n < QENTRIES; n = n + 1)
+    if (iq_fcu_issue[n] && !(iq_v[n] && iq_stomp[n])) begin
+      if (fcu_done) begin
+					iq_fuid[n] <= 3'd6;
+				fcu_sourceid	<= n[`QBITS];
+				check_done(n[`QBITS]);
+        fcu_rid <= iq_rid[n];
+					if (alu0_rid==n[`QBITS] && !issuing_on_alu0)
+						alu0_rid <= {`QBIT{1'b1}};
+					if (alu1_rid==n[`QBITS] && !issuing_on_alu1)
+						alu1_rid <= {`QBIT{1'b1}};
+					if (agen0_rid==n[`QBITS] && !issuing_on_agen0)
+						agen0_rid <= {`QBIT{1'b1}};
+					if (agen1_rid==n[`QBITS] && !issuing_on_agen1)
+						agen1_rid <= {`QBIT{1'b1}};
+				fcu_prevInstr <= fcu_instr;
+				fcu_instr	<= iq_instr[n];
+				fcu_pc		<= iq_pc[n];
+				fcu_nextip <= iq_pc[n] + iq_len[n];
+				fcu_pt     <= iq_pt[n];
+				fcu_brdisp <= iq_instr[n][37:11];
+				//$display("Branch tgt: %h", {iq_instr[n][39:22],iq_instr[n][5:3],iq_instr[n][4:3]});
+				fcu_branch <= iq_br[n];
+				fcu_jsr    <= IsJSR(iq_instr[n]);
+				fcu_rts    <= iq_rts[n];
+				fcu_brk  <= iq_brk[n];
+				fcu_rti  <= iq_rti[n];
+`ifdef FU_BYPASS
+				if (iq_argA_v[n])
+					fcu_argA <= iq_argA[n][WID-1:0];
+				else
+					case(iq_argA_s[n][`RBITS])
+					alu0_rid:	fcu_argA <= ralu0_bus;
+					alu1_rid:	fcu_argA <= ralu1_bus;
+					default:	fcu_argA <= 16'hDEAD;
+					endcase
+`else
+				fcu_argA <= iq_argA[n][WID-1:0];               
+`endif                 
+`ifdef FU_BYPASS
+				if (iq_imm[n])
+					fcu_argB <= iq_argI[n];
+				else if (iq_argB_v[n])
+					fcu_argB <= iq_argB[n];
+				else
+					case(iq_argB_s[n][`RBITS])
+					alu0_rid:	begin fcu_argB <= ralu0_bus; fcu_argLk <= ralu0_bus; end
+					alu1_rid:	begin fcu_argB <= ralu1_bus; fcu_argLk <= ralu1_bus; end
+					default:	fcu_argB <= 16'hDEAD;
+					endcase
+`else
+				if (iq_imm[n])
+					fcu_argB <= iq_argI[n];
+				else
+					fcu_argB <= iq_argB[n][WID-1:0];
+`endif
+				fcu_argI	<= iq_argI[n];
+				fcu_pc  <= pc;
+				fcu_dataready <= 1'b1;
+				fcu_clearbm <= `FALSE;
+				fcu_ld <= TRUE;
+				iq_state[n] <= IQS_OUT;
+				fcu_done <= `FALSE;
+      end
+    end
+    
+//
+// MEMORY
+//
+// update the memory queues and put data out on bus if appropriate
+//
+
+//
+// dram0, dram1, dram2 are the "state machines" that keep track
+// of three pipelined DRAM requests.  if any has the value "000", 
+// then it can accept a request (which bumps it up to the value "001"
+// at the end of the cycle).  once it hits the value "111" the request
+// is finished and the dram_bus takes the value.  if it is a store, the 
+// dram_bus value is not used, but the dram_v value along with the
+// dram_id value signals the waiting memq entry that the store is
+// completed and the instruction can commit.
+//
+
+// Flip the ready status to available. Used for loads or stores.
+
+	if (dram0 == `DRAMREQ_READY)
+		dram0 <= `DRAMSLOT_AVAIL;
+	if (dram1 == `DRAMREQ_READY && `NUM_MEM > 1)
+		dram1 <= `DRAMSLOT_AVAIL;
+
+// grab requests that have finished and put them on the dram_bus
+// If stomping on the instruction don't place the value on the argument
+// bus to be loaded.
+	if (dram0 == `DRAMREQ_READY && dram0_load) begin
+		dramA_v <= !iq_stomp[dram0_id];
+		dramA_id <= dram0_id;
+		dramA_rid <= dram0_rid;
+		dramA_bus <= rdat0;
+	end
+	if (dram1 == `DRAMREQ_READY && dram1_load && `NUM_MEM > 1) begin
+		dramB_v <= !iq_stomp[dram1_id];
+		dramB_id <= dram1_id;
+		dramB_rid <= dram1_rid;
+		dramB_bus <= rdat1;
+	end
+
+//
+// determine if the instructions ready to issue can, in fact, issue.
+// "ready" means that the instruction has valid operands but has not gone yet
+	for (n = 0; n < IQ_ENTRIES; n = n + 1)
+	if (memissue[n])
+		iq_memissue[n] <= `VAL;
+	//iq_memissue <= memissue;
+	missue_count <= issue_count;
+
+	for (n = 0; n < IQ_ENTRIES; n = n + 1)
+		if (iq_v[n] && iq_stomp[n]) begin
+			iq_mem[n] <= `INV;
+			iq_load[n] <= `INV;
+			iq_store[n] <= `INV;
+			iq_state[n] <= IQS_INVALID;
+			rob_state[iq_rid[n]] <= RS_INVALID;
+	//		if (alu0_id==n)
+	//			alu0_dataready <= FALSE;
+	//		if (alu1_id==n)
+	//			alu1_dataready <= FALSE;
+			$display("stomp: IQS_INVALID[%d]",n);
+		end
+
+	if (last_issue0 < IQ_ENTRIES)
+		tDram0Issue(last_issue0);
+	if (last_issue1 < IQ_ENTRIES)
+		tDram1Issue(last_issue1);
+/*
+	if (ohead[0]==heads[0])
+		cmt_timer <= cmt_timer + 12'd1;
+	else
+		cmt_timer <= 12'd0;
+
+	if (cmt_timer==12'd1000 && icstate==IDLE) begin
+		iq_state[heads[0]] <= IQS_CMT;
+		iq_exc[heads[0]] <= `FLT_CMT;
+		cmt_timer <= 12'd0;
+	end
+*/
+//
+// COMMIT PHASE (dequeue only ... not register-file update)
+//
+// look at heads[0] and heads[1] and let 'em write to the register file if they are ready
+//
+//    always @(posedge clk) begin: commit_phase
+	ohead[0] <= heads[0];
+	ohead[1] <= heads[1];
+	ohead[2] <= heads[2];
+	ocommit0_v <= commit0_v;
+	ocommit1_v <= commit1_v;
+	ocommit2_v <= commit2_v;
+
+	oddball_commit(commit0_v && n_commit > 3'd0, heads[0], 2'd0);
+	oddball_commit(commit1_v && n_commit > 3'd1, heads[1], 2'd1);
+	oddball_commit(commit2_v && n_commit > 3'd2, heads[2], 2'd2);
+
+// Fetch and queue are limited to two instructions per cycle, so we might as
+// well limit retiring to two instructions max to conserve logic.
+//
+	head_inc(hi_amt);
+	rob_head_inc(r_amt);
+
+// A store will never be stomped on because they aren't issued until it's
+// guarenteed there will be no change of flow.
+// A load or other long running instruction might be stomped on by a change
+// of program flow. Stomped on loads already in progress can be aborted early.
+// In the case of an aborted load, random data is returned and any exceptions
+// are nullified.
+if (dram0_load)
+case(dram0)
+`DRAMSLOT_AVAIL:	;
+`DRAMSLOT_BUSY:
+	if (iq_v[dram0_id] && !iq_stomp[dram0_id]) begin
+		if (dhit0 & !dram0_unc)
+			dram0 <= `DRAMREQ_READY;
+	end
+	else begin
+		dram0 <= `DRAMREQ_READY;
+		dram0_load <= `FALSE;
+		//xdati <= {13{lfsro}};
+	end
+`DRAMSLOT_REQBUS:	
+	if (iq_v[dram0_id] && !iq_stomp[dram0_id])
+		;
+	else begin
+		dram0 <= `DRAMREQ_READY;
+		dram0_load <= `FALSE;
+		//xdati <= {13{lfsro}};
+	end
+`DRAMSLOT_HASBUS:
+	if (iq_v[dram0_id] && !iq_stomp[dram0_id])
+		;
+	else begin
+		dram0 <= `DRAMREQ_READY;
+		dram0_load <= `FALSE;
+		//xdati <= {13{lfsro}};
+	end
+`DRAMREQ_READY:		dram0 <= `DRAMSLOT_AVAIL;
+endcase
+
+if (dram1_load)
+case(dram1)
+`DRAMSLOT_AVAIL:	;
+`DRAMSLOT_BUSY:
+	if (iq_v[dram1_id] && !iq_stomp[dram1_id]) begin
+		if (dhit1 && !dram1_unc)
+			dram1 <= `DRAMREQ_READY;
+	end
+	else begin
+		dram1 <= `DRAMREQ_READY;
+		dram1_load <= `FALSE;
+		//xdati <= {13{lfsro}};
+	end
+`DRAMSLOT_REQBUS:	
+	if (iq_v[dram1_id] && !iq_stomp[dram1_id])
+		;
+	else begin
+		dram1 <= `DRAMREQ_READY;
+		dram1_load <= `FALSE;
+		//xdati <= {13{lfsro}};
+	end
+`DRAMSLOT_HASBUS:
+	if (iq_v[dram1_id] && !iq_stomp[dram1_id])
+		;
+	else begin
+		dram1 <= `DRAMREQ_READY;
+		dram1_load <= `FALSE;
+		//xdati <= {13{lfsro}};
+	end
+`DRAMREQ_READY:		dram1 <= `DRAMSLOT_AVAIL;
+endcase
+
+case(bstate)
+BIDLE:
+	begin
+		isSpt <= FALSE;
+		rdvq <= 1'b0;
+		errq <= 1'b0;
+		exvq <= 1'b0;
+		bwhich <= 2'b00;
+		preload <= FALSE;
+
+        if (~|wb_v && dram0_unc && dram0==`DRAMSLOT_BUSY && dram0_load
+        	&& !iq_stomp[dram0_id]) begin
+`ifdef SUPPORT_DBG        	
+            if (dbg_lmatch0) begin
+               dramA_v <= `TRUE;
+               dramA_id <= dram0_id;
+               dramA_bus <= 64'h0;
+               iq_exc[dram0_id] <= `FLT_DBG;
+               dram0 <= `DRAMSLOT_AVAIL;
+            end
+            else
+`endif            
+            if (!dack_i) begin
+               bwhich <= 2'b00;
+               dram0 <= `DRAMSLOT_HASBUS;
+               dcyc <= `HIGH;
+               dstb <= `HIGH;
+               dsel <= fnSelect(dram0_instr);
+               dadr <= {dram0_addr[AMSB:3],3'b0};
+               sr_o <=  IsLWR(dram0_instr);
+               ol_o  <= dram0_ol;
+               dccnt <= 2'd0;
+               bstate <= B_DLoadAck;
+            end
+        end
+        else if (~|wb_v && dram1_unc && dram1==`DRAMSLOT_BUSY && dram1_load && `NUM_MEM > 1
+        	&& !iq_stomp[dram1_id]) begin
+`ifdef SUPPORT_DBG        	
+            if (dbg_lmatch1) begin
+               dramB_v <= `TRUE;
+               dramB_id <= dram1_id;
+               dramB_bus <= 64'h0;
+               iq_exc[dram1_id] <= `FLT_DBG;
+               dram1 <= `DRAMSLOT_AVAIL;
+            end
+            else
+`endif            
+            if (!dack_i) begin
+               bwhich <= 2'b01;
+               dram1 <= `DRAMSLOT_HASBUS;
+               dcyc <= `HIGH;
+               dstb <= `HIGH;
+               dsel <= fnSelect(dram1_instr);
+               dadr <= {dram1_addr[AMSB:3],3'b0};
+               sr_o <=  IsLWR(dram1_instr);
+               ol_o  <= dram1_ol;
+               dccnt <= 2'd0;
+               bstate <= B_DLoadAck;
+            end
+        end
+        // Check for L2 cache miss
+        else if (~|wb_v && !L2_ihit && !dack_i)
+        begin
+        	cyc_pending <= `HIGH;
+        	bstate <= B_WaitIC;
+        	/*
+           cti_o <= 3'b001;
+           bte_o <= 2'b00;//2'b01;	// 4 beat burst wrap
+           cyc <= `HIGH;
+           stb_o <= `HIGH;
+           sel_o <= 8'hFF;
+           icl_o <= `HIGH;
+           iccnt <= 3'd0;
+           icack <= 1'b0;
+//            adr_o <= icwhich ? {pc0[31:5],5'b0} : {pc1[31:5],5'b0};
+//            L2_adr <= icwhich ? {pc0[31:5],5'b0} : {pc1[31:5],5'b0};
+           vadr <= {L1_adr[AMSB:5],5'h0};
+`ifdef SUPPORT_SMT          
+`else 
+           ol_o  <= ol;//???
+`endif
+           L2_adr <= {L1_adr[AMSB:5],5'h0};
+           L2_xsel <= 1'b0;
+           selL2 <= TRUE;
+           bstate <= B_ICacheAck;
+           */
+        end
+    end
+B_WaitIC:
+	begin
+		cyc_pending <= `LOW;
+//		cti_o <= icti;
+//		bte_o <= ibte;
+//		cyc <= icyc;
+//		stb_o <= istb;
+//		sel_o <= isel;
+//		vadr <= iadr;
+//		we <= 1'b0;
+		if (L2_nxt)
+			bstate <= BIDLE;
+	end
+
+// Regular load
+B_DLoadAck:
+  if (dack_i|derr_i|tlb_miss|rdv_i) begin
+  	if (!bok_i) begin
+  		dstb <= `LOW;
+			dadr[AMSB:4] <= dadr[AMSB:4] + 2'd1;
+  		state <= B_DLoadNack;
+  	end
+  	//wb_nack();
+		sr_o <= `LOW;
+		case(dccnt)
+		2'd0:	xdati[127:0] <= dat_i;
+		2'd1:	xdati[255:128] <= dat_i;
+		2'd2:	xdati[371:256] <= dat_i[119:0];
+		2'd3:	;
+		endcase
+    case(bwhich)
+    2'b00:  begin
+           		dram0 <= `DRAMREQ_READY;
+             	if (iq_stomp[dram0_id])
+             		iq_exc [dram0_id] <= `FLT_NONE;
+             	else
+             		iq_exc [ dram0_id ] <= tlb_miss ? `FLT_TLB : err_i ? `FLT_DRF : rdv_i ? `FLT_DRF : `FLT_NONE;
+            end
+    2'b01:  if (`NUM_MEM > 1) begin
+             dram1 <= `DRAMREQ_READY;
+             	if (iq_stomp[dram1_id])
+             		iq_exc [dram1_id] <= `FLT_NONE;
+             	else
+	             iq_exc [ dram1_id ] <= tlb_miss ? `FLT_TLB : err_i ? `FLT_DRF : rdv_i ? `FLT_DRF : `FLT_NONE;
+            end
+    default:    ;
+    endcase
+    dccnt <= dccnt + 2'd1;
+    case(dccnt)
+    2'd1:	cti_o <= 3'b111;
+    2'd2: begin cti_o <= 3'd000; wb_nack(); bstate <= B_LSNAck; end
+  	endcase
+		check_abort_load();
+	end
+B_DLoadNack:
+	if (~dack_i) begin
+		dstb <= `HIGH;
+		bstate <= B_DLoadAck;
+		check_abort_load();
+	end
+
+// Three cycles to detemrine if there's a cache hit during a store.
+B16:
+	begin
+    case(bwhich)
+    2'd0:      if (dhit0) begin  dram0 <= `DRAMREQ_READY; bstate <= B17; end
+    2'd1:      if (dhit1) begin  dram1 <= `DRAMREQ_READY; bstate <= B17; end
+    default:    bstate <= BIDLE;
+    endcase
+		check_abort_load();
+  end
+B17:
+	begin
+    bstate <= B18;
+		check_abort_load();
+  end
+B18:
+	begin
+  	bstate <= B_LSNAck;
+		check_abort_load();
+	end
+B_LSNAck:
+	begin
+		bstate <= BIDLE;
+		StoreAck1 <= `FALSE;
+		isStore <= `FALSE;
+		check_abort_load();
+	end
+default:     bstate <= BIDLE;
+endcase
+
+`ifdef SIM
+	$display("\n\n\n\n\n\n\n\n");
+	$display("TIME %0d", $time);
+	$display("%b %h #", ip_mask, pc);
+	$display("%b %h #", ip_mask, pcd);
+    $display ("--------------------------------------------------------------------- Regfile: %d ---------------------------------------------------------------------", rgs);
+  $display("ac: %h %d %o #", ac, regIsValid[0], rf_source[0);
+  $display("xr: %h %d %o #", xr, regIsValid[1], rf_source[1);
+  $display("yr: %h %d %o #", yr, regIsValid[2], rf_source[2);
+  $display("sp: %h %d %o #", sp, regIsValid[3], rf_source[3);
+`ifdef FCU_ENH
+	$display("Call Stack:");
+	for (n = 0; n < 16; n = n + 4)
+		$display("%c%d: %h   %c%d: %h   %c%d: %h   %c%d: %h",
+			ursb1.rasp==n+0 ?">" : " ", n[4:0]+0, ursb1.ras[n+0],
+			ursb1.rasp==n+1 ?">" : " ", n[4:0]+1, ursb1.ras[n+1],
+			ursb1.rasp==n+2 ?">" : " ", n[4:0]+2, ursb1.ras[n+2],
+			ursb1.rasp==n+3 ?">" : " ", n[4:0]+3, ursb1.ras[n+3]
+		);
+	$display("\n");
+`endif
+//    $display("Return address stack:");
+//    for (n = 0; n < 16; n = n + 1)
+//        $display("%d %h", rasp+n[3:0], ras[rasp+n[3:0]]);
+	$display("TakeBr:%d #", take_branch);//, backpc);
+	$display("Insn%d: %h", 0, insnx[0]);
+	$display ("------------------------------------------------------------------------ Dispatch Buffer -----------------------------------------------------------------------");
+	for (i=0; i<QENTRIES; i=i+1) 
+	    $display("%c%c %d: %c%c%c %d %d %c%c %c %c%h %d,%d %h %h %d %d %d %h %d %d %d %h %d %d %d %h %o %h#",
+		 (i[`QBITS]==heads[0])?"C":".",
+		 (i[`QBITS]==tails[0])?"Q":".",
+		  i[`QBITS],
+		  iq_state[i]==IQS_INVALID ? "-" :
+		  iq_state[i]==IQS_QUEUED ? "Q" :
+		  iq_state[i]==IQS_OUT ? "O"  :
+		  iq_state[i]==IQS_AGEN ? "A"  :
+		  iq_state[i]==IQS_MEM ? "M"  :
+		  iq_state[i]==IQS_DONE ? "D"  :
+		  iq_state[i]==IQS_CMT ? "C"  : "?",
+//		 iq_v[i] ? "v" : "-",
+		 iq_done[i]?"d":"-",
+		 iq_out[i]?"o":"-",
+		 iq_bt[i],
+		 iq_memissue[i],
+		 iq_agen[i] ? "a": "-",
+		 iq_alu0_issue[i]?"0":iq_alu1_issue[i]?"1":"-",
+		 iq_stomp[i]?"s":"-",
+		iq_fc[i] ? "F" : iq_mem[i] ? "M" : (iq_alu[i]==1'b1) ? "a" : iq_fpu[i] ? "f" : "O", 
+		iq_instr[i], iq_tgt[i][5:0], iq_tgt[i][5:0],
+		iq_argI[i],
+		iq_argA[i], iq_rs1[i], iq_argA_v[i], iq_argA_s[i],
+		iq_argB[i], iq_rs2[i], iq_argB_v[i], iq_argB_s[i],
+		iq_argC[i], iq_rs3[i], iq_argC_v[i], iq_argC_s[i],
+		iq_pc[i],
+		iq_sn[i],
+		iq_br_tag[i]
+		);
+	$display ("------------- Reorder Buffer ------------");
+	for (i = 0; i < RENTRIES; i = i + 1)
+	$display("%c%c %d(%d): %c %h %d %h#",
+		 (i[`RBITS]==rob_heads[0])?"C":".",
+		 (i[`RBITS]==rob_tails[0])?"Q":".",
+		  i[`RBITS],
+		  rob_id[i],
+		  rob_state[i]==RS_INVALID ? "-" :
+		  rob_state[i]==RS_ASSIGNED ? "A"  :
+		  rob_state[i]==RS_CMT ? "C"  : "D",
+		  rob_exc[i],
+		  rob_tgt[i],
+		  rob_res[i]
+		);
+    $display("DRAM");
+	$display("%d %h %h %c%h %o #",
+	    dram0, dram0_addr, dram0_data, (IsFlowCtrl(dram0_instr) ? 98 : (IsMem(dram0_instr)) ? 109 : 97), 
+	    dram0_instr, dram0_id);
+	  if (`NUM_MEM > 1)
+	$display("%d %h %h %c%h %o #",
+	    dram1, dram1_addr, dram1_data, (IsFlowCtrl(dram1_instr) ? 98 : (IsMem(dram1_instr)) ? 109 : 97), 
+	    dram1_instr, dram1_id);
+	$display("%d %h %o #", dramA_v, dramA_bus, dramA_id);
+	if (`NUM_MEM > 1)
+	$display("%d %h %o #", dramB_v, dramB_bus, dramB_id);
+    $display("ALU");
+	$display("%d %h %h %h %c%h %o %h #",
+		alu0_dataready, alu0_argI, alu0_argA, alu0_argB, 
+		 (IsFlowCtrl(alu0_instr) ? 98 : IsMem(alu0_instr) ? 109 : 97),
+		alu0_instr, alu0_sourceid, alu0_ip);
+	$display("%d %h %o 0 #", alu0_v, alu0_bus, alu0_id);
+	if (`NUM_ALU > 1) begin
+		$display("%d %h %h %h %c%h %o %h #",
+			alu1_dataready, alu1_argI, alu1_argA, alu1_argB, 
+		 	(IsFlowCtrl(alu1_instr) ? 98 : IsMem(alu1_instr) ? 109 : 97),
+			alu1_instr, alu1_sourceid, alu1_ip);
+		$display("%d %h %o 0 #", alu1_v, alu1_bus, alu1_id);
+	end
+	$display("FCU");
+	$display("%d %h %h %h %h %c%c #", fcu_v, fcu_bus, fcu_argI, fcu_argA, fcu_argB, fcu_takb?"T":"-", fcu_pt?"T":"-");
+	$display("%c %h %h %h %h #", fcu_branchmiss?"m":" ", fcu_sourceid, fcu_missip, fcu_nextip, fcu_brdisp); 
+    $display("Commit");
+	$display("0: %c %h %o %d #", commit0_v?"v":" ", commit0_bus, commit0_id, commit0_tgt[2:0]);
+	$display("1: %c %h %o %d #", commit1_v?"v":" ", commit1_bus, commit1_id, commit1_tgt[2:0]);
+	$display("3: %c %h %o %d #", commit2_v?"v":" ", commit2_bus, commit2_id, commit2_tgt[2:0]);
+    $display("instructions committed: %d valid committed: %d ticks: %d ", CC, I, tick);
+  $display("Write Buffer:");
+  for (n = `WB_DEPTH-1; n >= 0; n = n - 1)
+  	$display("%c adr: %h dat: %h", wb_v[n]?" ":"*", wb_addr[n], uwb1.wb_data[n]);
+    //$display("Write merges: %d", wb_merges);
+`endif	// SIM
+
+	$display("");
+
+	if (|panic) begin
+	    $display("");
+	    $display("-----------------------------------------------------------------");
+	    $display("-----------------------------------------------------------------");
+	    $display("---------------     PANIC:%s     -----------------", message[panic]);
+	    $display("-----------------------------------------------------------------");
+	    $display("-----------------------------------------------------------------");
+	    $display("");
+	    $display("instructions committed: %d", I);
+	    $display("total execution cycles: %d", $time / 10);
+	    $display("");
+	end
+	if (|panic && ~outstanding_stores) begin
+	    $finish;
+	end
+end	// end of clock domain
+
+// ============================================================================
+// ============================================================================
+// Start of Tasks
+// ============================================================================
+// ============================================================================
+
+task check_abort_load;
+begin
+  case(bwhich)
+  2'd0:	if (iq_stomp[dram0_id]) begin bstate <= BIDLE; dram0 <= `DRAMREQ_READY; end
+  2'd1:	if (iq_stomp[dram1_id]) begin bstate <= BIDLE; dram1 <= `DRAMREQ_READY; end
+  default:	if (iq_stomp[dram0_id]) begin bstate <= BIDLE; dram0 <= `DRAMREQ_READY; end
+  endcase
 end
+endtask
+
+// Increment the head pointers
+// Also increments the instruction counter
+// Used when instructions are committed.
+// Also clear any outstanding state bits that foul things up.
+//
+task head_inc;
+input [`QBITS] amt;
+begin
+	for (n = 0; n < QENTRIES; n = n + 1)
+		if (n < amt) begin
+			if (!((heads[n]==tails[0] && queuedCnt==3'd1)
+			|| (heads[n]==tails[1] && queuedCnt==3'd2)
+			|| (heads[n]==tails[2] && queuedCnt==3'd3)
+			|| (heads[n]==tails[3] && queuedCnt==3'd4)
+			)) begin
+				iq_state[heads[n]] <= IQS_INVALID;
+				iq_mem[heads[n]] <= `FALSE;
+				iq_alu[heads[n]] <= `FALSE;
+				iq_fc[heads[n]] <= `FALSE;
+//				if (alu0_id==heads[n] && iq_state[alu0_id]==IQS_CMT
+//					&& !issuing_on_alu0)
+//					alu0_dataready <= `FALSE;
+//				if (alu1_id==heads[n] && iq_state[alu1_id]==IQS_CMT
+//					&& !issuing_on_alu1)
+//					alu1_dataready <= `FALSE;
+//					$display("head_inc: IQS_INVALID[%d]",heads[n]);
+			end
+		end
+	for (n = 0; n < QENTRIES; n = n + 1)
+		if (iq_v[n])
+			iq_sn[n] <= iq_sn[n] - tosub;
+end
+endtask
+
+// If incrementing by 1/2 then the first result in the rob entry was committed,
+// but the second one wasn't. So leave the rob entry as valid and allow the
+// commit to try again on the next cycle.
+task rob_head_inc;
+input [`RBITSP1] amt;
+begin
+	for (n = 0; n < RENTRIES; n = n + 1)
+		if (n < amt) begin
+			
+			if (!((rob_heads[n][`RBITS]==rob_tails[0] && queuedCnt==3'd1)
+				|| (rob_heads[n][`RBITS]==rob_tails[1] && queuedCnt==3'd2)
+				|| (rob_heads[n][`RBITS]==rob_tails[2] && queuedCnt==3'd3)
+				|| (rob_heads[n][`RBITS]==rob_tails[3] && queuedCnt==3'd4)
+				)) begin
+				
+//					rob_state[rob_heads[n]] <= RS_INVALID;
+					//iq_state[rob_id[rob_heads[n]]] <= IQS_INVALID;
+					$display("rob_head_inc: IQS_INVALID[%d]",rob_id[rob_heads[n]]);
+					rob_state[rob_heads[n]] <= RS_INVALID;
+			end
+		end
+	CC <= CC + amt;
+end
+endtask
+
+task setargs;
+input [`QBITS] nn;
+input [`RBITSP1] id;
+input v;
+input [WID-1:0] bus;
+begin
+  if (iq_argA_v[nn] == `INV && iq_argA_s[nn][`RBITSP1] == id && iq_v[nn] == `VAL && v == `VAL) begin
+		iq_argA[nn] <= bus;
+		iq_argA_v[nn] <= `VAL;
+  end
+  if (iq_argB_v[nn] == `INV && iq_argB_s[nn][`RBITSP1] == id && iq_v[nn] == `VAL && v == `VAL) begin
+		iq_argB[nn] <= bus;
+		iq_argB_v[nn] <= `VAL;
+  end
+  if (iq_argS_v[nn] == `INV && iq_argS_s[nn][`RBITSP1] == id && iq_v[nn] == `VAL && v == `VAL) begin
+		iq_argS[nn] <= bus[7:0];
+		iq_argS_v[nn] <= `VAL;
+  end
+  if (iq_argT_v[nn] == `INV && iq_argT_s[nn][`RBITSP1] == id && iq_v[nn] == `VAL && v == `VAL) begin
+		iq_argT[nn] <= bus;
+		iq_argT_v[nn] <= `VAL;
+  end
+end
+endtask
+
+
 
 // Patterns do not have all one bits! The tail queue slot depends on which set
 // bit of the pattern is present. For instance patterns 001,010, and 100 all
@@ -2622,6 +3670,39 @@ begin
 	end
 end
 endtask
+
+task set_insn;
+input [`QBITS] nn;
+input [`IBTOP:0] bus;
+begin
+	iq_argI[nn] <= bus[`IB_CONST];
+	iq_imm  [nn]  <= bus[`IB_IMM];
+	iq_cmp	 [nn]  <= bus[`IB_CMP];
+	iq_rts  [nn]  <= bus[`IB_RTS];
+	iq_irq  [nn]  <= bus[`IB_IRQ];
+	iq_brk	 [nn]  <= bus[`IB_BRK];
+	iq_rti  [nn]  <= bus[`IB_RTI];
+	iq_bt   [nn]  <= bus[`IB_BT];
+	iq_alu  [nn]  <= bus[`IB_ALU];
+	iq_fc   [nn]  <= bus[`IB_FC];
+	iq_canex[nn]  <= bus[`IB_CANEX];
+	iq_load [nn]  <= bus[`IB_LOAD];
+	iq_store[nn]  <= bus[`IB_STORE];
+	iq_push [nn]  <= bus[`IB_PUSH];
+	iq_pop   [nn]  <= bus[`IB_POP];
+	iq_oddball[nn] <= bus[`IB_ODDBALL];
+	iq_memsz[nn]  <= bus[`IB_MEMSZ];
+	iq_mem  [nn]  <= bus[`IB_MEM];
+	iq_sei	 [nn]	 <= bus[`IB_SEI];
+	iq_jmp  [nn]  <= bus[`IB_JMP];
+	iq_br   [nn]  <= bus[`IB_BR];
+	iq_rs1   [nn]  <= bus[`IB_RS1];
+	iq_rs2   [nn]  <= bus[`IB_RS2];
+	iq_rs3   [nn]  <= bus[`IB_RS3];
+	iq_rfw  [nn]  <= bus[`IB_RFW];
+end
+endtask
+	
 
 task queue_slot;
 input [2:0] slot;
@@ -2754,6 +3835,17 @@ begin
 //	vadr <= 32'hCCCCCCCC;
 end
 endtask
+
+endmodule
+
+module decoder3 (num, out);
+input [2:0] num;
+output [7:1] out;
+
+wire [7:0] out1;
+
+assign out1 = 8'd1 << num;
+assign out = out1[7:1];
 
 endmodule
 
