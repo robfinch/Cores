@@ -61,12 +61,18 @@
 `define BRK_VECT_816	32'h0000FFE6
 `define COP_VECT_816	32'h0000FFE4
 
-`define UOF_NONE	4'h0
-`define UOF_CVNZ	4'hF
-`define UOF_CNZ		4'hB
-`define UOF_NZ		4'h3
-`define UOF_C			4'h8
-`define UOF_V			4'h4
+`define UOF_NONE	8'h00
+`define UOF_C			8'h01
+`define UOF_Z			8'h02
+`define UOF_I			8'h04
+`define UOF_D			8'h08
+`define UOF_B			8'h10
+`define UOF_V			8'h40
+`define UOF_N			8'h80
+`define UOF_CVNZ	(`UOF_C|`UOF_V|`UOF_N|`UOF_Z)
+`define UOF_CNZ		(`UOF_C|`UOF_N|`UOF_Z)
+`define UOF_NZ		(`UOF_N|`UOF_Z)
+`define UOF_ALL		8'hFF
 
 `define UO_OP		15:10
 `define UO_LD4	9:6
