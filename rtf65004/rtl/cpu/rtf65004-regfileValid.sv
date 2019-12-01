@@ -25,7 +25,7 @@
 `define VAL		1'b1
 `define INV		1'b0
 
-module regfileValid(rst, clk, slotvd, slot_rfw, tails,
+module regfileValid(rst, clk, slotv, slot_rfw, tails,
 	livetarget, branchmiss, rob_id,
 	commit0_v, commit1_v, commit2_v,
 	commit0_id, commit1_id, commit2_id,
@@ -41,7 +41,7 @@ parameter VAL = 1'b1;
 parameter INV = 1'b0;
 input rst;
 input clk;
-input [QSLOTS-1:0] slotvd;
+input [QSLOTS-1:0] slotv;
 input [QSLOTS-1:0] slot_rfw;
 input [`QBITS] tails [0:QSLOTS-1];
 input [AREGS-1:1] livetarget;
@@ -157,7 +157,7 @@ else begin
   end
 
 	if (!branchmiss)
-		case(slotvd)
+		case(slotv)
 		3'b000:	;
 		3'b001:
 			if (queuedOn[0]) begin
