@@ -145,7 +145,7 @@ if (rst) begin
 end
 else begin
 	branch_pc <= pc;
-	if (q2) begin
+	if (q1) begin
 		if (rts[0])
 			branch_pc <= ra;
 		else if (take_branch[0])
@@ -153,7 +153,7 @@ else begin
 		else if (jc[0])
 			branch_pc <= insnx[0][23:8];
 	end
-	else if (q1) begin
+	else if (q2) begin
 		if (rts[0])
 			branch_pc <= ra;
 		else if (take_branch[0])
