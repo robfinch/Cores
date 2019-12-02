@@ -113,6 +113,18 @@ default
 endcase
 endfunction
 
+function fnNeedSr;
+input [15:0] isn;
+case(isn[15:10])
+`UO_ADCB,`UO_SBCB,`UO_ROL,`UO_ROR:	// carry input
+	fnNeedSr = TRUE;
+`UO_BEQ,`UO_BNE,`UO_BCS,`UO_BCC,`UO_BVS,`UO_BVC,`UO_BMI,`UO_BPL:
+	fnNeedSr = TRUE;
+default:
+	fnNeedSr = FALSE;
+endcase
+endfunction
+
 always @*
 begin
 	bus <= 167'h0;
@@ -140,6 +152,7 @@ begin
 	bus[`IB_JMP]		<= IsJmp(instr);
 	bus[`IB_BR]			<= IsBranch(instr);
 	bus[`IB_RFW]		<= IsRFW(instr);
+	bus[`IB_NEED_SR]	<= fnNeedSr(instr);
 end
 
 endmodule

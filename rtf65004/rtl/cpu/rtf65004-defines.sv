@@ -701,4 +701,37 @@
 `define STW_IA70	6'd46
 `define STW_BRA		6'd47
 
+`define IBTOP			172
+`define IB_FMT		171:168
+`define IB_PFXINSN	167
+`define IB_PFX		166
+`define IB_RS3		165:160
+`define IB_CONST	159:80
+`define IB_CONST31	110:80
+`define IB_CONST21	100:80
+`define IB_CONST19	98:80
+`define IB_LN			78:76
+`define IB_RD			75:71
+`define IB_RS1		61:56
+`define IB_RS2		55:50
+`define IB_BRCC		49
+`define IB_CMP		48
+`define IB_NEED_SR	39
+`define IB_STORE	36
+`define IB_MEMSZ	35:33
+`define IB_MEM2		32
+`define IB_IMM		31
+`define IB_MEM    30
+`define IB_POP		29
+`define IB_BT     28
+`define IB_ALU		27
+`define IB_FC			24
+`define IB_CANEX	23
+`define IB_LOAD		22
+`define IB_RMW		19
+`define IB_SEI		15
+`define IB_JMP		12
+`define IB_BR			11
+`define IB_RFW		8
+
 `endif

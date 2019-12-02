@@ -189,6 +189,7 @@ reg [IQ_ENTRIES-1:0] iq_fc;						// flow control instruction
 reg [IQ_ENTRIES-1:0] iq_jmp;					// changes control flow: 1 if BEQ/JALR
 reg [IQ_ENTRIES-1:0] iq_br;						// branch instruction
 reg [IQ_ENTRIES-1:0] iq_rfw;	// writes to register file
+reg [IQ_ENTRIES-1:0] iq_need_sr;
 reg [3:0] iq_src1 [0:IQ_ENTRIES-1];
 reg [2:0] iq_src2 [0:IQ_ENTRIES-1];
 reg [2:0] iq_dst  [0:IQ_ENTRIES-1];
@@ -402,22 +403,14 @@ reg [23:0] fcu_prevInstr;
 reg  [2:0] fcu_insln;
 reg        fcu_pt;			// predict taken
 reg        fcu_branch;
-reg        fcu_jsr;
-reg        fcu_rts;
-reg        fcu_jal;
-reg        fcu_brk;
-reg        fcu_rti;
-reg				fcu_chk;
-reg 			fcu_rex;
-reg [7:0] fcu_cr;
+reg [7:0] fcu_argS;
 reg [WID-1:0] fcu_argT;
 reg [WID-1:0] fcu_argB;
 reg [WID-1:0] fcu_argC;
 reg [WID-1:0] fcu_argI;	// only used by BEQ
 reg [RBIT:0] fcu_tgt;
-reg [WID-1:0] fcu_ipc;
-reg [`ABITS] fcu_ip;
-reg [`ABITS] fcu_nextip;
+reg [`ABITS] fcu_pc;
+reg [`ABITS] fcu_nextpc;
 reg [`ABITS] fcu_brdisp;
 wire [WID-1:0] fcu_out;
 reg [WID-1:0] fcu_bus;
@@ -427,7 +420,7 @@ wire        fcu_v;
 reg        fcu_branchmiss;
 reg fcu_branchhit;
 reg  fcu_clearbm;
-reg [`ABITS] fcu_missip;
+reg [`ABITS] fcu_misspc;
 reg fcu_wait;
 reg fcu_dne = TRUE;
 
@@ -501,23 +494,23 @@ reg commit0_v;
 reg [`RBITS] commit0_id;
 reg [RBIT:0] commit0_tgt;
 reg [WID-1:0] commit0_bus;
-reg [7:0] commit0_srbus;
+reg [7:0] commit0_sr_bus;
 reg [3:0] commit0_rid;
-reg commit0_tgts_sr;
+reg commit0_sr_tgts;
 reg commit1_v;
 reg [`RBITS] commit1_id;
 reg [RBIT:0] commit1_tgt;
 reg [WID-1:0] commit1_bus;
-reg [7:0] commit1_srbus;
+reg [7:0] commit1_sr_bus;
 reg [3:0] commit1_rid;
-reg commit1_tgts_sr;
+reg commit1_sr_tgts;
 reg commit2_v;
 reg [`RBITS] commit2_id;
 reg [RBIT:0] commit2_tgt;
 reg [WID-1:0] commit2_bus;
-reg [7:0] commit2_srbus;
+reg [7:0] commit2_sr_bus;
 reg [3:0] commit2_rid;
-reg commit2_tgts_sr;
+reg commit2_sr_tgts;
 
 reg [QSLOTS-1:0] queuedOn;
 reg [QENTRIES-1:0] rqueuedOn;
@@ -602,26 +595,26 @@ uopl[`EOR_IY]		= {2'd3,`UOF_NZ,2'd3,`UO_LDW,`UO_R8,`UO_TMP,`UO_ZR,`UO_ADDW,`UO_Z
 uopl[`EOR_ABS]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_EORB,`UO_ZERO,`UO_ACC,`UO_TMP,32'h0};
 uopl[`EOR_ABSX]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_EORB,`UO_ZERO,`UO_ACC,`UO_TMP,32'h0};
 uopl[`EOR_ABSY]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_YR,`UO_EORB,`UO_ZERO,`UO_ACC,`UO_TMP,32'h0};
-uopl[`ASL_ACC]  = {2'd0,`UOF_CNZ,2'd0,`UO_ASL,`UO_ZERO,`UO_ACC,`UO_ZR,48'h0};
-uopl[`ASL_ZP]		= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_ASL,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R8,`UO_TMP,`UO_ZR,16'h0};
-uopl[`ASL_ZPX]	= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_ASL,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R8,`UO_TMP,`UO_XR,16'h0};
-uopl[`ASL_ABS]	= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_ASL,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R16,`UO_TMP,`UO_ZR,16'h0};
-uopl[`ASL_ABSX]	= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_ASL,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R16,`UO_TMP,`UO_XR,16'h0};
-uopl[`ROL_ACC]  = {2'd0,`UOF_CNZ,2'd0,`UO_ROL,`UO_ZERO,`UO_ACC,`UO_ZR,48'h0};
-uopl[`ROL_ZP]		= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_ROL,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R8,`UO_TMP,`UO_ZR,16'h0};
-uopl[`ROL_ZPX]	= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_ROL,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R8,`UO_TMP,`UO_XR,16'h0};
-uopl[`ROL_ABS]	= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_ROL,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R16,`UO_TMP,`UO_ZR,16'h0};
-uopl[`ROL_ABSX]	= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_ROL,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R16,`UO_TMP,`UO_XR,16'h0};
-uopl[`LSR_ACC]  = {2'd0,`UOF_CNZ,2'd0,`UO_LSR,`UO_ZERO,`UO_ACC,`UO_ZR,48'h0};
-uopl[`LSR_ZP]		= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_LSR,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R8,`UO_TMP,`UO_ZR,16'h0};
-uopl[`LSR_ZPX]	= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_LSR,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R8,`UO_TMP,`UO_XR,16'h0};
-uopl[`LSR_ABS]	= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_LSR,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R16,`UO_TMP,`UO_ZR,16'h0};
-uopl[`LSR_ABSX]	= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_LSR,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R16,`UO_TMP,`UO_XR,16'h0};
-uopl[`ROR_ACC]  = {2'd0,`UOF_CNZ,2'd0,`UO_ROR,`UO_ZERO,`UO_ACC,`UO_ZR,48'h0};
-uopl[`ROR_ZP]		= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_ROR,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R8,`UO_TMP,`UO_ZR,16'h0};
-uopl[`ROR_ZPX]	= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_ROR,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R8,`UO_TMP,`UO_XR,16'h0};
-uopl[`ROR_ABS]	= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_ROR,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R16,`UO_TMP,`UO_ZR,16'h0};
-uopl[`ROR_ABSX]	= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_ROR,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R16,`UO_TMP,`UO_XR,16'h0};
+uopl[`ASL_ACC]  = {2'd0,`UOF_CNZ,2'd0,`UO_ASLB,`UO_ZERO,`UO_ACC,`UO_ZR,48'h0};
+uopl[`ASL_ZP]		= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_ASLB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R8,`UO_TMP,`UO_ZR,16'h0};
+uopl[`ASL_ZPX]	= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_ASLB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R8,`UO_TMP,`UO_XR,16'h0};
+uopl[`ASL_ABS]	= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_ASLB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R16,`UO_TMP,`UO_ZR,16'h0};
+uopl[`ASL_ABSX]	= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_ASLB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R16,`UO_TMP,`UO_XR,16'h0};
+uopl[`ROL_ACC]  = {2'd0,`UOF_CNZ,2'd0,`UO_ROLB,`UO_ZERO,`UO_ACC,`UO_ZR,48'h0};
+uopl[`ROL_ZP]		= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_ROLB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R8,`UO_TMP,`UO_ZR,16'h0};
+uopl[`ROL_ZPX]	= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_ROLB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R8,`UO_TMP,`UO_XR,16'h0};
+uopl[`ROL_ABS]	= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_ROLB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R16,`UO_TMP,`UO_ZR,16'h0};
+uopl[`ROL_ABSX]	= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_ROLB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R16,`UO_TMP,`UO_XR,16'h0};
+uopl[`LSR_ACC]  = {2'd0,`UOF_CNZ,2'd0,`UO_LSRB,`UO_ZERO,`UO_ACC,`UO_ZR,48'h0};
+uopl[`LSR_ZP]		= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_LSRB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R8,`UO_TMP,`UO_ZR,16'h0};
+uopl[`LSR_ZPX]	= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_LSRB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R8,`UO_TMP,`UO_XR,16'h0};
+uopl[`LSR_ABS]	= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_LSRB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R16,`UO_TMP,`UO_ZR,16'h0};
+uopl[`LSR_ABSX]	= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_LSRB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R16,`UO_TMP,`UO_XR,16'h0};
+uopl[`ROR_ACC]  = {2'd0,`UOF_CNZ,2'd0,`UO_RORB,`UO_ZERO,`UO_ACC,`UO_ZR,48'h0};
+uopl[`ROR_ZP]		= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_RORB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R8,`UO_TMP,`UO_ZR,16'h0};
+uopl[`ROR_ZPX]	= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_RORB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R8,`UO_TMP,`UO_XR,16'h0};
+uopl[`ROR_ABS]	= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_RORB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R16,`UO_TMP,`UO_ZR,16'h0};
+uopl[`ROR_ABSX]	= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_RORB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R16,`UO_TMP,`UO_XR,16'h0};
 uopl[`INC_ZP]		= {2'd2,`UOF_NZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_ADDIB,`UO_P1,`UO_TMP,`UO_TMP,`UO_STB,`UO_R8,`UO_TMP,`UO_ZR,16'h0};
 uopl[`INC_ZPX]	= {2'd2,`UOF_NZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_ADDIB,`UO_P1,`UO_TMP,`UO_TMP,`UO_STB,`UO_R8,`UO_TMP,`UO_XR,16'h0};
 uopl[`INC_ABS]	= {2'd2,`UOF_NZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_ADDIB,`UO_P1,`UO_TMP,`UO_TMP,`UO_STB,`UO_R16,`UO_TMP,`UO_ZR,16'h0};
@@ -1685,43 +1678,67 @@ for (n = 0; n < QSLOTS; n = n + 1)
 // three update ports are easily supported.
 always @(posedge clk)
 	if (commit2_v && commit2_tgt==`UO_ACC)
-		ac <= commit2_bus;
+		ac <= commit2_bus[7:0];
 	else if (commit1_v && commit1_tgt==`UO_ACC)
-		ac <= commit1_bus;
+		ac <= commit1_bus[7:0];
 	else if (commit0_v && commit0_tgt==`UO_ACC)
-		ac <= commit0_bus;
+		ac <= commit0_bus[7:0];
 
 always @(posedge clk)
 	if (commit2_v && commit2_tgt==`UO_XR)
-		xr <= commit2_bus;
+		xr <= commit2_bus[7:0];
 	else if (commit1_v && commit1_tgt==`UO_XR)
-		xr <= commit1_bus;
+		xr <= commit1_bus[7:0];
 	else if (commit0_v && commit0_tgt==`UO_XR)
-		xr <= commit0_bus;
+		xr <= commit0_bus[7:0];
 
 always @(posedge clk)
 	if (commit2_v && commit2_tgt==`UO_YR)
-		yr <= commit2_bus;
+		yr <= commit2_bus[7:0];
 	else if (commit1_v && commit1_tgt==`UO_YR)
-		yr <= commit1_bus;
+		yr <= commit1_bus[7:0];
 	else if (commit0_v && commit0_tgt==`UO_YR)
-		yr <= commit0_bus;
+		yr <= commit0_bus[7:0];
 
 always @(posedge clk)
 	if (commit2_v && commit2_tgt==`UO_SP)
-		sp <= commit2_bus;
+		sp <= commit2_bus[7:0];
 	else if (commit1_v && commit1_tgt==`UO_SP)
-		sp <= commit1_bus;
+		sp <= commit1_bus[7:0];
 	else if (commit0_v && commit0_tgt==`UO_SP)
-		sp <= commit0_bus;
+		sp <= commit0_bus[7:0];
 
 always @(posedge clk)
-	if (commit2_v && commit2_tgts_sr)
-		sr <= commit2_srbus;
-	else if (commit1_v && commit1_tgts_sr)
-		sr <= commit1_srbus;
-	else if (commit0_v && commit0_tgts_sr)
-		sr <= commit0_srbus;
+	if (commit2_v) begin
+		sr[0] <= commit2_sr_tgts[0] ? commit2_sr_bus[0] : sr[0];
+		sr[1] <= commit2_sr_tgts[1] ? commit2_sr_bus[1] : sr[1];
+		sr[2] <= commit2_sr_tgts[2] ? commit2_sr_bus[2] : sr[2];
+		sr[3] <= commit2_sr_tgts[3] ? commit2_sr_bus[3] : sr[3];
+		sr[4] <= commit2_sr_tgts[4] ? commit2_sr_bus[4] : sr[4];
+		sr[5] <= commit2_sr_tgts[5] ? commit2_sr_bus[5] : sr[5];
+		sr[6] <= commit2_sr_tgts[6] ? commit2_sr_bus[6] : sr[6];
+		sr[7] <= commit2_sr_tgts[7] ? commit2_sr_bus[7] : sr[7];
+	end
+	else if (commit1_v) begin
+		sr[0] <= commit1_sr_tgts[0] ? commit1_sr_bus[0] : sr[0];
+		sr[1] <= commit1_sr_tgts[1] ? commit1_sr_bus[1] : sr[1];
+		sr[2] <= commit1_sr_tgts[2] ? commit1_sr_bus[2] : sr[2];
+		sr[3] <= commit1_sr_tgts[3] ? commit1_sr_bus[3] : sr[3];
+		sr[4] <= commit1_sr_tgts[4] ? commit1_sr_bus[4] : sr[4];
+		sr[5] <= commit1_sr_tgts[5] ? commit1_sr_bus[5] : sr[5];
+		sr[6] <= commit1_sr_tgts[6] ? commit1_sr_bus[6] : sr[6];
+		sr[7] <= commit1_sr_tgts[7] ? commit1_sr_bus[7] : sr[7];
+	end
+	else if (commit0_v) begin
+		sr[0] <= commit0_sr_tgts[0] ? commit0_sr_bus[0] : sr[0];
+		sr[1] <= commit0_sr_tgts[1] ? commit0_sr_bus[1] : sr[1];
+		sr[2] <= commit0_sr_tgts[2] ? commit0_sr_bus[2] : sr[2];
+		sr[3] <= commit0_sr_tgts[3] ? commit0_sr_bus[3] : sr[3];
+		sr[4] <= commit0_sr_tgts[4] ? commit0_sr_bus[4] : sr[4];
+		sr[5] <= commit0_sr_tgts[5] ? commit0_sr_bus[5] : sr[5];
+		sr[6] <= commit0_sr_tgts[6] ? commit0_sr_bus[6] : sr[6];
+		sr[7] <= commit0_sr_tgts[7] ? commit0_sr_bus[7] : sr[7];
+	end
 
 always @(posedge clk)
 	if (commit2_v && commit2_tgt==`UO_TMP)
@@ -1973,14 +1990,14 @@ assign args_valid[g] =
         || ((iq_argT_s[g][`RBITS] == alu1_rid && alu1_vsn) && (`NUM_ALU > 1))
 `endif
         )
-    && (iq_argB_v[g] || iq_mem[g]	// a2 does not need to be valid immediately for a mem op (agen), it is checked by iq_memready logic
+        // argA is a constant, it'll always be valid
+    && (iq_argB_v[g] //|| iq_mem[g]	// a2 does not need to be valid immediately for a mem op (agen), it is checked by iq_memready logic
 `ifdef FU_BYPASS
         || (iq_argB_s[g][`RBITS] == alu0_rid && alu0_vsn)
         || ((iq_argB_s[g][`RBITS] == alu1_rid && alu1_vsn) && (`NUM_ALU > 1))
 `endif
         )
-    && (iq_argS_v[g] 
-        || (iq_mem[g] & ~iq_agen[g] & ~iq_memndx[g])    // a3 needs to be valid for indexed instruction
+    && (iq_argS_v[g] || !iq_need_sr[g]
 //        || (iq_mem[g] & ~iq_agen[g])
 `ifdef FU_BYPASS
         || (iq_argS_s[g][`RBITS] == alu0_rid && alu0_vsn)
@@ -2288,6 +2305,67 @@ begin
 			stompedOnRets = stompedOnRets + 4'd1;
 end
 
+EvalBranch ube1
+(
+	.instr(fcu_instr),
+	.sr(fcu_argS),
+	.takb(fcu_takb)
+);
+
+
+wire will_clear_branchmiss = branchmiss && (
+															(uoq_slotv[0] && uoq_pc[uoq_head]==misspc)
+															|| (uoq_slotv[1] && uoq_pc[(uoq_head + 2'd1) % UOQ_ENTRIES]==misspc)
+															|| (uoq_slotv[2] && uoq_pc[(uoq_head + 2'd2) % UOQ_ENTRIES]==misspc)
+															);
+
+always @*
+	fcu_misspc = fcu_pt ? fcu_nextpc : fcu_nextpc + fcu_brdisp;
+
+// To avoid false branch mispredicts the branch isn't evaluated until the
+// following instruction queues. The address of the next instruction is
+// looked at to see if the BTB predicted correctly.
+
+`ifdef FCU_ENH
+wire fcu_followed = iq_sn[nid] > iq_sn[fcu_id];
+`else
+wire fcu_followed = `TRUE;
+`endif
+always @*
+if (fcu_v) begin
+	// Break and RTI switch register sets, and so are always treated as a branch miss in order to
+	// flush the pipeline. Hardware interrupts also stream break instructions so they need to 
+	// flushed from the queue so the interrupt is recognized only once.
+	// BRK and RTI are handled as excmiss types which are processed during the commit stage.
+	fcu_branchhit <= (fcu_branch && !(fcu_takb ^ fcu_pt));
+	if (fcu_branch && (fcu_takb ^ fcu_pt))
+    fcu_branchmiss = TRUE;
+	else
+    fcu_branchmiss = FALSE;
+end
+else
+	fcu_branchmiss = FALSE;
+
+// A holdover from nvio3 - not really needed here.
+always @*
+	ip_mask = 2'b11;
+
+//
+// additional DRAM-enqueue logic
+
+assign dram_avail = (dram0 == `DRAMSLOT_AVAIL || dram1 == `DRAMSLOT_AVAIL);
+
+always @*
+for (n = 0; n < IQ_ENTRIES; n = n + 1)
+	iq_memopsvalid[n] <= (iq_mem[n] && (iq_store[n] ? iq_argB_v[n] : 1'b1) && iq_state[n]==IQS_AGEN);
+
+always @*
+for (n = 0; n < IQ_ENTRIES; n = n + 1)
+	iq_memready[n] <= (iq_v[n] & iq_memopsvalid[n] & ~iq_memissue[n] & ~iq_stomp[n]);
+
+assign outstanding_stores = (dram0 && dram0_store) ||
+                            (dram1 && dram1_store);
+
 //
 // additional COMMIT logic
 //
@@ -2299,8 +2377,8 @@ begin
   commit0_id <= rob_heads[0][`RBITS];	// if a memory op, it has a DRAM-bus id
   commit0_tgt <= rob_tgt[rob_heads[0][`RBITS]];
   commit0_bus <= rob_res[rob_heads[0][`RBITS]];
-  commit0_tgts_sr <= rob_tgts_sr[rob_heads[0][`RBITS]];
-  commit0_srbus <= rob_srres[rob_heads[0][`RBITS]];
+  commit0_sr_tgts <= rob_sr_tgts[rob_heads[0][`RBITS]];
+  commit0_sr_bus <= rob_sr_res[rob_heads[0][`RBITS]];
   commit0_rid <= rob_heads[0];
 
   commit1_v <= (rob_state[rob_heads[0][`RBITS]] == RS_CMT
@@ -2309,8 +2387,8 @@ begin
 	commit1_id <= rob_heads[1][`RBITS];
 	commit1_tgt <= rob_tgt[rob_heads[1][`RBITS]];
 	commit1_bus <= rob_res[rob_heads[1][`RBITS]];
-  commit1_tgts_sr <= rob_tgts_sr[rob_heads[1][`RBITS]];
-  commit1_srbus <= rob_srres[rob_heads[1][`RBITS]];
+  commit1_sr_tgts <= rob_sr_tgts[rob_heads[1][`RBITS]];
+  commit1_sr_bus <= rob_sr_res[rob_heads[1][`RBITS]];
   commit1_rid <= rob_heads[1];
 
   commit2_v <= (rob_state[rob_heads[0][`RBITS]] == RS_CMT
@@ -2320,8 +2398,8 @@ begin
   commit2_id <= rob_heads[2];
   commit2_tgt <= rob_tgt[rob_heads[2][`RBITS]];  
   commit2_bus <= rob_res[rob_heads[2][`RBITS]];
-  commit2_tgts_sr <= rob_tgts_sr[rob_heads[2][`RBITS]];
-  commit2_srbus <= rob_srres[rob_heads[2][`RBITS]];
+  commit2_sr_tgts <= rob_sr_tgts[rob_heads[2][`RBITS]];
+  commit2_sr_bus <= rob_sr_res[rob_heads[2][`RBITS]];
   commit2_rid <= rob_heads[2];
 end
 
@@ -2759,12 +2837,12 @@ else begin
 	if (!branchmiss) begin
 		if (excmiss) begin
 			branchmiss <= `TRUE;
-			missip <= excmissip;
+			misspc <= excmisspc;
 			missid <= (|iq_exc[heads[0]] ? heads[0] : |iq_exc[heads[1]] ? heads[1] : heads[2]);
 		end
 		else if (fcu_branchmiss) begin
 			branchmiss <= `TRUE;
-			missip <= fcu_missip;
+			misspc<= fcu_misspc;
 			missid <= fcu_sourceid;
 		end
 	end
@@ -3082,7 +3160,7 @@ else begin
 
 	if (fcu_v) begin
 		fcu_done <= `TRUE;
-		iq_ma  [ fcu_id ] <= fcu_missip;
+		iq_ma  [ fcu_id ] <= fcu_misspc;
 		rob_tgt [ fcu_rid] <= fcu_tgt;
 	  rob_res [ fcu_rid ] <= rfcu_bus;
 	  rob_exc [ fcu_rid ] <= fcu_exc;
@@ -3165,6 +3243,21 @@ else begin
 		setargs(n,{1'b0,dramA_rid},dramA_v,rdramA_bus);
 		if (`NUM_MEM > 1)
 			setargs(n,{1'b0,dramB_rid},dramB_v,rdramB_bus);
+			
+		set_sr_args(n,{1'b0,commit0_id},commit0_v,commit0_sr_bus);
+		set_sr_args(n,{1'b0,commit1_id},commit1_v,commit1_sr_bus);
+		set_sr_args(n,{1'b0,commit2_id},commit2_v,commit2_sr_bus);
+
+		set_sr_args(n,{1'b0,alu0_rid},alu0_v,alu0_sr_bus);
+		if (`NUM_ALU > 1)
+			set_sr_args(n,{1'b0,alu1_rid},alu1_v,alu1_sr_bus);
+
+		//set_sr_args(n,{1'b0,fcu_rid},fcu_v,fcu_sr_bus);
+
+		set_sr_args(n,{1'b0,dramA_rid},dramA_v,rdramA_sr_bus);
+		if (`NUM_MEM > 1)
+			set_sr_args(n,{1'b0,dramB_rid},dramB_v,rdramB_sr_bus);
+			
 	end
 
 
@@ -3227,8 +3320,8 @@ else begin
 				alu0_argS <= iq_argS[n][7:0];
 			else
 				case(iq_argS_s[n][`RBITS])
-				alu0_rid:	alu0_argS <= ralu0_bus;
-				alu1_rid:	alu0_argS <= ralu1_bus;
+				alu0_rid:	alu0_argS <= alu0_sr_bus;
+				alu1_rid:	alu0_argS <= alu1_sr_bus;
 				default:	alu0_argS <= 8'h00;
 				endcase
 `else
@@ -3310,8 +3403,8 @@ else begin
 								 	alu1_argS <= iq_argS[n][7:0];
 								 else
 	                 case(iq_argC_s[n][`RBITS])
-	                 alu0_rid:	alu1_argS <= ralu0_bus[7:0];
-	                 alu1_rid:	alu1_argS <= ralu1_bus[7:0];
+	                 alu0_rid:	alu1_argS <= alu0_sr_bus[7:0];
+	                 alu1_rid:	alu1_argS <= alu1_sr_bus[7:0];
 	                 default:	alu1_argS <= 8'h00;
 	                 endcase
 `else
@@ -3450,15 +3543,11 @@ else begin
 				fcu_prevInstr <= fcu_instr;
 				fcu_instr	<= iq_instr[n];
 				fcu_pc		<= iq_pc[n];
-				fcu_nextip <= iq_pc[n] + iq_len[n];
+				fcu_nextpc <= iq_pc[n] + iq_len[n];
 				fcu_pt     <= iq_pt[n];
-				fcu_brdisp <= iq_instr[n][37:11];
+				fcu_brdisp <= {{8{iq_const[7]}},iq_const[n][7:0]};
 				//$display("Branch tgt: %h", {iq_instr[n][39:22],iq_instr[n][5:3],iq_instr[n][4:3]});
 				fcu_branch <= iq_br[n];
-				fcu_jsr    <= IsJSR(iq_instr[n]);
-				fcu_rts    <= iq_rts[n];
-				fcu_brk  <= iq_brk[n];
-				fcu_rti  <= iq_rti[n];
 `ifdef FU_BYPASS
 				if (iq_argA_v[n])
 					fcu_argA <= iq_argA[n][WID-1:0];
@@ -3478,8 +3567,8 @@ else begin
 					fcu_argB <= iq_argB[n];
 				else
 					case(iq_argB_s[n][`RBITS])
-					alu0_rid:	begin fcu_argB <= ralu0_bus; fcu_argLk <= ralu0_bus; end
-					alu1_rid:	begin fcu_argB <= ralu1_bus; fcu_argLk <= ralu1_bus; end
+					alu0_rid:	begin fcu_argB <= ralu0_bus; end
+					alu1_rid:	begin fcu_argB <= ralu1_bus; end
 					default:	fcu_argB <= 16'hDEAD;
 					endcase
 `else
@@ -3487,6 +3576,18 @@ else begin
 					fcu_argB <= iq_argI[n];
 				else
 					fcu_argB <= iq_argB[n][WID-1:0];
+`endif
+`ifdef FU_BYPASS
+				if (iq_argS_v[n])
+					fcu_argS <= iq_argS[n][7:0];
+				else
+					case(iq_argS_s[n][`RBITS])
+					alu0_rid:	fcu_argS <= alu0_sr_bus;
+					alu1_rid:	fcu_argS <= alu1_sr_bus;
+					default:	fcu_argS <= 8'h00;
+					endcase
+`else
+				fcu_argS <= iq_argS[n][7:0];
 `endif
 				fcu_argI	<= iq_argI[n];
 				fcu_pc  <= pc;
@@ -3947,7 +4048,7 @@ endcase
 	end
 	$display("FCU");
 	$display("%d %h %h %h %h %c%c #", fcu_v, fcu_bus, fcu_argI, fcu_argA, fcu_argB, fcu_takb?"T":"-", fcu_pt?"T":"-");
-	$display("%c %h %h %h %h #", fcu_branchmiss?"m":" ", fcu_sourceid, fcu_missip, fcu_nextip, fcu_brdisp); 
+	$display("%c %h %h %h %h #", fcu_branchmiss?"m":" ", fcu_sourceid, fcu_misspc, fcu_nextpc, fcu_brdisp); 
     $display("Commit");
 	$display("0: %c %h %o %d #", commit0_v?"v":" ", commit0_bus, commit0_id, commit0_tgt[2:0]);
 	$display("1: %c %h %o %d #", commit1_v?"v":" ", commit1_bus, commit1_id, commit1_tgt[2:0]);
@@ -4063,10 +4164,6 @@ begin
 		iq_argB[nn] <= bus;
 		iq_argB_v[nn] <= `VAL;
   end
-  if (iq_argS_v[nn] == `INV && iq_argS_s[nn][`RBITSP1] == id && iq_v[nn] == `VAL && v == `VAL) begin
-		iq_argS[nn] <= bus[7:0];
-		iq_argS_v[nn] <= `VAL;
-  end
   if (iq_argT_v[nn] == `INV && iq_argT_s[nn][`RBITSP1] == id && iq_v[nn] == `VAL && v == `VAL) begin
 		iq_argT[nn] <= bus;
 		iq_argT_v[nn] <= `VAL;
@@ -4074,6 +4171,16 @@ begin
 end
 endtask
 
+task set_sr_args;
+input [`QBITS] nn;
+input [`RBITSP1] id;
+input v;
+input [7:0] bus;
+  if (iq_argS_v[nn] == `INV && iq_argS_s[nn][`RBITSP1] == id && iq_v[nn] == `VAL && v == `VAL) begin
+		iq_argS[nn] <= bus[7:0];
+		iq_argS_v[nn] <= `VAL;
+  end
+endtask
 
 
 // Patterns do not have all one bits! The tail queue slot depends on which set
@@ -4153,6 +4260,7 @@ begin
 	iq_src2   [nn]  <= bus[`IB_SRC2];
 	iq_dst   [nn]  <= bus[`IB_DST];
 	iq_rfw  [nn]  <= bus[`IB_RFW];
+	iq_need_sr[nn] <= bus[`IB_NEED_SR];
 end
 endtask
 	
