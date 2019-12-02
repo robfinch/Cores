@@ -481,10 +481,12 @@ reg        dramA_v;
 reg  [`QBITS] dramA_id;
 reg [`RBITS] dramA_rid;
 reg [WID-1:0] dramA_bus;
+reg [7:0] dramA_sr_bus;
 reg        dramB_v;
 reg  [`QBITS] dramB_id;
 reg [`QBITS] dramB_rid;
 reg [WID-1:0] dramB_bus;
+reg [7:0] dramB_sr_bus;
 
 wire        outstanding_stores;
 reg [47:0] I;		// instruction count
@@ -1544,11 +1546,10 @@ L2_dcache udc4
 	.invline(d1L1_invline)
 );
 
-wire [127:0] aligned_data = fnDatiAlign(dram0_addr,xdati);
-wire [127:0] rdat0, rdat1;
+wire [15:0] aligned_data = fnDatiAlign(dram0_addr,xdati);
+wire [15:0] rdat0, rdat1;
 assign rdat0 = fnDataExtend(dram0_instr,dram0_unc ? aligned_data : dc0_out);
 assign rdat1 = fnDataExtend(dram1_instr,dram1_unc ? aligned_data : dc1_out);
-reg [15:0] rmw_ad0, rmw_ad1;
 assign dhit0a = d0L1_dhit;
 assign dhit1a = d1L1_dhit;
 
@@ -1851,6 +1852,16 @@ case(isn[15:10])
 `UO_LDW,`UO_STW:	fnSelect = 2'b11;
 default:	fnSelect = 2'b00;
 endcase
+endfunction
+
+function [15:0] fnDatiAlign;
+input [`ABITS] adr;
+input [247:0] dat;
+reg [247:0] adat;
+begin
+adat = dat >> {adr[3:0],3'b0};
+fnDatiAlign = adat[15:0];
+end
 endfunction
 
 function [15:0] fnDataExtend;
@@ -3178,11 +3189,13 @@ else begin
 	// dramX_v only set on a load
 	if (dramA_v && iq_v[ dramA_id ]) begin
 		rob_res	[ dramA_rid ] <= rdramA_bus;
+		rob_sr_res [dramA_rid] <= dramA_sr_bus;
 		rob_state[dramA_rid ] <= RS_CMT;
 		iq_state[dramA_id ] <= IQS_CMT;
 	end
 	if (`NUM_MEM > 1 && dramB_v && iq_v[ dramB_id ]) begin
 		rob_res	[ dramB_id ] <= rdramB_bus;
+		rob_sr_res [dramB_rid] <= dramB_sr_bus;
 		rob_state[dramB_rid ] <= RS_CMT;
 		iq_state[dramB_id ] <= IQS_CMT;
 	end
@@ -3254,9 +3267,9 @@ else begin
 
 		//set_sr_args(n,{1'b0,fcu_rid},fcu_v,fcu_sr_bus);
 
-		set_sr_args(n,{1'b0,dramA_rid},dramA_v,rdramA_sr_bus);
+		set_sr_args(n,{1'b0,dramA_rid},dramA_v,dramA_sr_bus);
 		if (`NUM_MEM > 1)
-			set_sr_args(n,{1'b0,dramB_rid},dramB_v,rdramB_sr_bus);
+			set_sr_args(n,{1'b0,dramB_rid},dramB_v,dramB_sr_bus);
 			
 	end
 
@@ -3631,12 +3644,18 @@ else begin
 		dramA_id <= dram0_id;
 		dramA_rid <= dram0_rid;
 		dramA_bus <= rdat0;
+		dramA_sr_bus <= 8'h00;
+		dramA_sr_bus[1] <= rdat0[7:0]==8'h00;
+		dramA_sr_bus[7] <= rdat0[7];
 	end
 	if (dram1 == `DRAMREQ_READY && dram1_load && `NUM_MEM > 1) begin
 		dramB_v <= !iq_stomp[dram1_id];
 		dramB_id <= dram1_id;
 		dramB_rid <= dram1_rid;
 		dramB_bus <= rdat1;
+		dramB_sr_bus <= 8'h00;
+		dramB_sr_bus[1] <= rdat1[7:0]==8'h00;
+		dramB_sr_bus[7] <= rdat1[7];
 	end
 
 //
