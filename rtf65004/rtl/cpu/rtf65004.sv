@@ -753,7 +753,7 @@ begin
 	q1 <= FALSE;
 	q2 <= FALSE;
 	if (opcode1==`BRK) begin
-		if (uoq_room >= 3'd6)	begin // must have room for six micro-ops
+		if (uoq_room >= 3'd5)	begin // must have room for five micro-ops
 			qb <= TRUE;
 			q1 <= TRUE;								// For pc increment
 		end
@@ -2897,7 +2897,7 @@ else begin
   if (iq_fc[fcu_id] && iq_v[fcu_id] && !iq_done[fcu_id] && iq_out[fcu_id])
   	fcu_timeout <= fcu_timeout + 8'd1;
 
-	// BRK is queued specially because it's the only instruction requiring six 
+	// BRK is queued specially because it's the only instruction requiring five 
 	// micro-ops. Also the brk vector must be modified for the appropriate type.
 	if (qb) begin
 		uoq_v[uop_tail] <= `VAL;
@@ -2915,20 +2915,14 @@ else begin
 
 		uoq_v[(uoq_tail+2) % UOQ_ENTRIES] <= `VAL;
 		uoq_pc[(uoq_tail+2) % UOQ_ENTRIES] <= pc;
-		uoq_uop[(uoq_tail+2) % UOQ_ENTRIES] <= {`UO_STW,`UO_P2,`UO_PC,`UO_SP};
+		uoq_uop[(uoq_tail+2) % UOQ_ENTRIES] <= {`UO_STW,`UO_P2,(IsIrq ? `UO_PC2: `UO_PC),`UO_SP};
 		uoq_fl[(uoq_tail+2) % UOQ_ENTRIES] <= 2'b00;
 		tskLd4(`UO_P2,insnx[0],uoq_const[(uoq_tail+2) % UOQ_ENTRIES]);
 
 		uoq_v[(uoq_tail+3) % UOQ_ENTRIES] <= `VAL;
 		uoq_pc[(uoq_tail+3) % UOQ_ENTRIES] <= pc;
-		uoq_uop[(uoq_tail+3) % UOQ_ENTRIES] <= {`UO_SEI,`UO_ZERO,`UO_ZR,`UO_ZR};
+		uoq_uop[(uoq_tail+3) % UOQ_ENTRIES] <= {`UO_LDW,`UO_M2,`UO_TMP,`UO_ZR};
 		uoq_fl[(uoq_tail+3) % UOQ_ENTRIES] <= 2'b00;
-		tskLd4(`UO_ZERO,insnx[0],uoq_const[(uoq_tail+3) % UOQ_ENTRIES]);
-
-		uoq_v[(uoq_tail+4) % UOQ_ENTRIES] <= `VAL;
-		uoq_pc[(uoq_tail+4) % UOQ_ENTRIES] <= pc;
-		uoq_uop[(uoq_tail+4) % UOQ_ENTRIES] <= {`UO_LDW,`UO_M2,`UO_TMP,`UO_ZR};
-		uoq_fl[(uoq_tail+4) % UOQ_ENTRIES] <= 2'b00;
 		if (IsRst)
 			uoq_const[(uoq_tail+3) % UOQ_ENTRIES] <= 16'hFFFC;
 		else if (IsNmi)
@@ -2938,11 +2932,11 @@ else begin
 		else
 			uoq_const[(uoq_tail+3) % UOQ_ENTRIES] <= 16'hFFFE;
 
-		uoq_v[(uoq_tail+5) % UOQ_ENTRIES] <= `VAL;
-		uoq_pc[(uoq_tail+5) % UOQ_ENTRIES] <= pc;
-		uoq_uop[(uoq_tail+5) % UOQ_ENTRIES] <= {`UO_JMP,`UO_ZERO,`UO_ZR,`UO_TMP};
-		uoq_fl[(uoq_tail+5) % UOQ_ENTRIES] <= 2'b10;
-		tskLd4(`UO_ZERO,insnx[0],uoq_const[(uoq_tail+3) % UOQ_ENTRIES]);
+		uoq_v[(uoq_tail+4) % UOQ_ENTRIES] <= `VAL;
+		uoq_pc[(uoq_tail+4) % UOQ_ENTRIES] <= pc;
+		uoq_uop[(uoq_tail+4) % UOQ_ENTRIES] <= {`UO_JSI,`UO_ZERO,`UO_ZR,`UO_TMP};
+		uoq_fl[(uoq_tail+4) % UOQ_ENTRIES] <= 2'b10;
+		tskLd4(`UO_ZERO,insnx[0],uoq_const[(uoq_tail+4) % UOQ_ENTRIES]);
 	end
 	// uopl[`BRK] 			= {2'd3,`UOF_NONE,2'd3,`UO_ADDB,`UO_M3,`UO_SP,2'd0,`UO_STB,`UO_P1,`UO_SR,`UO_SP,`UO_STW,`UO_P2,`UO_PC,`UO_SP,`UO_LDW,`UO_M2,`UO_PC,2'd0};
 	else if (q2) begin
@@ -2952,21 +2946,21 @@ else begin
 		uoq_fl[uoq_tail] <= uo_len1==2'b00 ? 2'b11: 2'b01;
 		uoq_flagsupd[uoq_tail + uo_whflg1] = uo_flags1;
 		tskLd4(uo_insn1[0][`UO_LD4],insnx[0],uoq_const[uoq_tail]);
-		if (uopl[opcode1][65:64]>2'b00) begin
+		if (uo_len1 > 2'b00) begin
 			uoq_v[(uoq_tail+1) % UOQ_ENTRIES] <= `VAL;
 			uoq_pc[(uoq_tail+1) % UOQ_ENTRIES] <= pc;
 			uoq_uop[(uoq_tail+1) % UOQ_ENTRIES] <= uo_insn1[1];
 			uoq_fl[(uoq_tail+1) % UOQ_ENTRIES] <= uo_len1==2'b01 ? 2'b10 : 2'b00;
 			tskLd4(uo_insn1[1][`UO_LD4],insnx[0],uoq_const[(uoq_tail+1) % UOQ_ENTRIES]);
 		end
-		if (uopl[opcode1][65:64]>2'b01) begin
+		if (uo_len1 > 2'b01) begin
 			uoq_v[(uoq_tail+2) % UOQ_ENTRIES] <= `VAL;
 			uoq_pc[(uoq_tail+2) % UOQ_ENTRIES] <= pc;
 			uoq_uop[(uoq_tail+2) % UOQ_ENTRIES] <= uo_insn1[2];
 			uoq_fl[(uoq_tail+2) % UOQ_ENTRIES] <= uo_len1==2'b10 ? 2'b10 : 2'b00;
 			tskLd4(uo_insn1[2][`UO_LD4],insnx[0],uoq_const[(uoq_tail+2) % UOQ_ENTRIES]);
 		end
-		if (uopl[opcode1][65:64]>2'b10) begin
+		if (uo_len1 > 2'b10) begin
 			uoq_v[(uoq_tail+3) % UOQ_ENTRIES] <= `VAL;
 			uoq_pc[(uoq_tail+3) % UOQ_ENTRIES] <= pc;
 			uoq_uop[(uoq_tail+3) % UOQ_ENTRIES] <= uo_insn1[3];
