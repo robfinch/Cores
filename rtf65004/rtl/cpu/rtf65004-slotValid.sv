@@ -25,7 +25,7 @@
 
 module slotValid(rst, clk, branchmiss, phit, nextb, pc_mask, pc_maskd,
 	pc_override, q1, q2,
-	slot_jmp, take_branch, slotv, slotvd, debug_on);
+	slot_jc, slot_rts, take_branch, slotv, slotvd, debug_on);
 parameter FSLOTS = `FSLOTS;
 parameter VAL = 1'b1;
 parameter INV = 1'b0;
@@ -51,7 +51,7 @@ input debug_on;
 integer n;
 
 wire [2:0] pat;
-assign pat = /*{slotv[0],slotv[1],slotv[2]} &*/ {3{phit}} & ip_maskd;
+assign pat = /*{slotv[0],slotv[1],slotv[2]} &*/ {3{phit}} & pc_maskd;
 reg nextb3;
 reg stomp_next;		// stomp on next bundle
 reg stomp_next2;

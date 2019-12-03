@@ -21,7 +21,7 @@
 //
 // ============================================================================
 // 18854
-`include "rtf65000-config.sv"
+`include "rtf65004-config.sv"
 `define VAL		1'b1
 `define INV		1'b0
 
@@ -32,7 +32,7 @@ parameter AREGS = 8;
 parameter IQ_ENTRIES = `IQ_ENTRIES;
 parameter RENTRIES = `RENTRIES;
 parameter QSLOTS = `QSLOTS;
-parameter RBIT = 3;
+parameter RBIT = 2;
 input rst;
 input clk;
 input branchmiss;
@@ -66,7 +66,7 @@ if (rst) begin
 end
 else begin
 	if (branchmiss) begin
-		for (n = 0; n < QENTRIES; n = n + 1) begin
+		for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
     	if (|iq_latestID[n])
     		rf_source[ iq_tgt[n][RBIT:0] ] <= {{`QBIT{1'b0}},iq_rid[n[`QBITS]]};
     end

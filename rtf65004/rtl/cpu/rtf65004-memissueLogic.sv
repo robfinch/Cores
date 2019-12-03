@@ -21,7 +21,7 @@
 //
 // ============================================================================
 //
-`include "nvio-config.sv"
+`include "rtf65004-config.sv"
 
 module memissueLogic (heads, iq_v, iq_memready, iq_out, iq_done, iq_mem, iq_agen, 
 	iq_load, iq_store, iq_fc, iq_aq, iq_rl, iq_ma, iq_memsb, iq_memdb, iq_stomp, iq_canex, 
@@ -154,7 +154,7 @@ begin
 	 if (memissue[heads[3]])
 	 	issue_count = issue_count + 1;
 
-	if (QENTRIES > 4) begin
+	if (IQ_ENTRIES > 4) begin
 	 memissue[ heads[4] ] =	~iq_stomp[heads[4]] && iq_memready[ heads[4] ]		// addr and data are valid
 					// ... and no preceding instruction is ready to go
 					&& issue_count < `NUM_MEM
@@ -216,7 +216,7 @@ begin
 	 	issue_count = issue_count + 1;
 	end
 
-	if (QENTRIES > 5) begin
+	if (IQ_ENTRIES > 5) begin
 	 memissue[ heads[5] ] =	~iq_stomp[heads[5]] && iq_memready[ heads[5] ]		// addr and data are valid
 					// ... and no preceding instruction is ready to go
 					&& issue_count < `NUM_MEM
@@ -298,7 +298,7 @@ begin
 	end
 
 `ifdef FULL_ISSUE_LOGIC
-if (QENTRIES > 6) begin
+if (IQ_ENTRIES > 6) begin
  memissue[ heads[6] ] =	~iq_stomp[heads[6]] && iq_memready[ heads[6] ]		// addr and data are valid
 					// ... and no preceding instruction is ready to go
 					&& issue_count < `NUM_MEM
@@ -398,7 +398,7 @@ if (QENTRIES > 6) begin
 	 	issue_count = issue_count + 1;
 	end
 
-	if (QENTRIES > 7) begin
+	if (IQ_ENTRIES > 7) begin
 	memissue[ heads[7] ] =	~iq_stomp[heads[7]] && iq_memready[ heads[7] ]		// addr and data are valid
 					// ... and no preceding instruction is ready to go
 					&& issue_count < `NUM_MEM
@@ -520,7 +520,7 @@ if (QENTRIES > 6) begin
 	 	issue_count = issue_count + 1;
 	end
 
-	if (QENTRIES > 8) begin
+	if (IQ_ENTRIES > 8) begin
 	memissue[ heads[8] ] =	~iq_stomp[heads[8]] && iq_memready[ heads[8] ]		// addr and data are valid
 					// ... and no preceding instruction is ready to go
 					&& issue_count < `NUM_MEM
@@ -668,7 +668,7 @@ if (QENTRIES > 6) begin
 	 	issue_count = issue_count + 1;
 	end
 
-	if (QENTRIES > 9) begin
+	if (IQ_ENTRIES > 9) begin
 	memissue[ heads[9] ] =	~iq_stomp[heads[9]] && iq_memready[ heads[9] ]		// addr and data are valid
 					// ... and no preceding instruction is ready to go
 					&& issue_count < `NUM_MEM

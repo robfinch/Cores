@@ -36,14 +36,14 @@ wire [5:0] opcode = instr[15:10];
 //Evaluate branch condition
 always @*
 case(opcode)
-`UO_BEQ:		takb <=  cr[1];
-`UO_BCS:		takb <=  cr[0];
-`UO_BVS:		takb <=  cr[6];
-`UO_BNE:		takb <= !cr[1];
-`UO_BCC:		takb <= !cr[0];
-`UO_BVC:		takb <= !cr[6];
-`UO_BMI:		takb <=  cr[7];
-`UO_BPL:		takb <= !cr[7];
+`UO_BEQ:		takb <=  sr[1];
+`UO_BCS:		takb <=  sr[0];
+`UO_BVS:		takb <=  sr[6];
+`UO_BNE:		takb <= !sr[1];
+`UO_BCC:		takb <= !sr[0];
+`UO_BVC:		takb <= !sr[6];
+`UO_BMI:		takb <=  sr[7];
+`UO_BPL:		takb <= !sr[7];
 default:	takb <= `TRUE;
 endcase
 

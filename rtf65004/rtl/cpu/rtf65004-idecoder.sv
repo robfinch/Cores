@@ -45,6 +45,14 @@ default:
 endcase
 endfunction
 
+function IsCmp;
+input [15:0] isn;
+case(isn[15:10])
+`UO_CMPB:	IsCmp = TRUE;
+default:	IsCmp = FALSE;
+endcase
+endfunction
+
 function IsLoad;
 input [15:0] isn;
 case(isn[15:10])
@@ -116,7 +124,7 @@ endfunction
 function fnNeedSr;
 input [15:0] isn;
 case(isn[15:10])
-`UO_ADCB,`UO_SBCB,`UO_ROL,`UO_ROR:	// carry input
+`UO_ADCB,`UO_SBCB,`UO_ROLB,`UO_RORB:	// carry input
 	fnNeedSr = TRUE;
 `UO_BEQ,`UO_BNE,`UO_BCS,`UO_BCC,`UO_BVS,`UO_BVC,`UO_BMI,`UO_BPL:
 	fnNeedSr = TRUE;
@@ -128,7 +136,7 @@ endfunction
 function fnWrap;
 input [15:0] isn;
 case(isn[15:10])
-`LDBW,`STBW:	fnWrap = TRUE;
+`UO_LDBW,`UO_STBW:	fnWrap = TRUE;
 default:	fnWrap = FALSE;
 endcase
 endfunction
@@ -144,14 +152,14 @@ begin
 	bus[`IB_SRC1]		 <= instr[9:6];
 	bus[`IB_SRC2]		 <= instr[2:0];
 	bus[`IB_DST]		 <= instr[5:3];
-	bus[`IB_IMM]	 <= HasConst(instr);
+//	bus[`IB_IMM]	 <= HasConst(instr);
 	// IB_BT is now used to indicate when to update the branch target buffer.
 	// This occurs when one of the instructions with an unknown or calculated
 	// target is present.
 	bus[`IB_BT]		 <= 1'b0;
 	bus[`IB_ALU]   <= instr[7:6]==2'b10;
 	bus[`IB_FC]		 <= instr[7:5]==3'h6;
-	bus[`IB_CANEX] <= fnCanException(instr);
+//	bus[`IB_CANEX] <= fnCanException(instr);
 	bus[`IB_LOAD]	 <= IsLoad(instr);
 	bus[`IB_STORE]	<= IsStore(instr);
 	bus[`IB_MEMSZ]  <= MemSize(instr);

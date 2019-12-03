@@ -28,8 +28,8 @@ module programCounter(rst, clk,
 	commit0_v, commit1_v, commit2_v, commit0_bus, commit1_bus, commit2_bus,
 	commit0_tgt, commit1_tgt, commit2_tgt,
 	q1, q2, insnx, freezepc, 
-	phit, branchmiss, misspc, pc_mask, pc_maskd, len1, len2, len3,
-	slotv, slotvd, jc, rts, br, take_branch, btgt, pc, pcd, branch_pc, 
+	phit, branchmiss, misspc, len1, len2, len3,
+	jc, rts, br, take_branch, btgt, pc, pcd, branch_pc, 
 	ra, pc_override,
 	debug_on);
 parameter AMSB = 15;
@@ -55,12 +55,16 @@ input freezepc;
 input phit;
 input branchmiss;
 input [AMSB:0] misspc;
+input [2:0] len1;
+input [2:0] len2;
+input [2:0] len3;
 input [FSLOTS-1:0] jc;
 input [FSLOTS-1:0] rts;
 input [FSLOTS-1:0] br;
 input [FSLOTS-1:0] take_branch;
 input [AMSB:0] btgt [0:FSLOTS-1];
 output reg [AMSB:0] pc;
+output reg [AMSB:0] pcd;
 output reg [AMSB:0] branch_pc;
 input [AMSB:0] ra;
 output pc_override;
@@ -98,7 +102,7 @@ always @(posedge clk)
 if (rst) begin
 	pc <= RSTIP;
 	pcd <= RSTIP;
-	pc_maskd <= 2'b11;
+	//pc_maskd <= 2'b11;
 	phitd <= 1'b1;
 end
 else begin

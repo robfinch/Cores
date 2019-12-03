@@ -21,7 +21,7 @@
 //
 // ============================================================================
 //
-`include "nvio-config.sv"
+`include "rtf65004-config.sv"
 
 module writeBuffer(rst_i, clk_i, bstate, cyc_pending, wb_has_bus, update_iq, uid, ruid, fault,
 	wb_v, wb_addr, wb_en_i, cwr_o, csel_o, cadr_o, cdat_o,
@@ -29,7 +29,7 @@ module writeBuffer(rst_i, clk_i, bstate, cyc_pending, wb_has_bus, update_iq, uid
 	p1_id_i, p1_rid_i, p1_wr_i, p1_wrap_i, p1_ack_o, p1_sel_i, p1_adr_i, p1_dat_i, p1_hit,
 	cyc_o, stb_o, ack_i, err_i, tlbmiss_i, wrv_i, we_o, sel_o, adr_o, dat_o, cr_o);
 parameter WB_DEPTH = 7;
-parameter IQ_ENTRIES = `QENTRIES;
+parameter IQ_ENTRIES = `IQ_ENTRIES;
 parameter RENTRIES = `RENTRIES;
 parameter INV = 1'b0;
 parameter TRUE = 1'b1;
@@ -298,7 +298,7 @@ StoreAck1:
 	    if (err_i|tlbmiss_i|wrv_i) begin	// should abort cycle
 	    	wb_v <= 1'b0;			// Invalidate write buffer if there is a problem with the store
 	    	wb_en <= FALSE;	// and disable write buffer
-				fault <= tlbmiss_i ? `FLT_TLB : wrv_i ? `FLT_DWF : err_i ? `FLT_DBE : `FLT_NONE;
+//				fault <= tlbmiss_i ? `FLT_TLB : wrv_i ? `FLT_DWF : err_i ? `FLT_DBE : `FLT_NONE;
 	    end
     	cwr_o <= HIGH;
 			csel_o <= wb_sel[0];
@@ -339,7 +339,7 @@ StoreAck2:
     if (err_i|tlbmiss_i|wrv_i) begin
     	wb_v <= 1'b0;			// Invalidate write buffer if there is a problem with the store
     	wb_en <= FALSE;	// and disable write buffer
-			fault <= tlbmiss_i ? `FLT_TLB : wrv_i ? `FLT_DWF : err_i ? `FLT_DBE : `FLT_NONE;
+//			fault <= tlbmiss_i ? `FLT_TLB : wrv_i ? `FLT_DWF : err_i ? `FLT_DBE : `FLT_NONE;
     end
   	cwr_o <= HIGH;
   	if (wrap_cycle) begin

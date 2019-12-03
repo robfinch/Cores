@@ -27,7 +27,7 @@
 module BranchPredictor(rst, clk, clk2x, clk4x, en, xisBranch, xip, takb, ip, predict_taken);
 parameter AMSB=15;
 parameter DBW=16;
-parameter QSLOTS = `QSLOTS;
+parameter FSLOTS = `FSLOTS;
 input rst;
 input clk;
 input clk2x;
@@ -36,8 +36,8 @@ input en;
 input [3:0] xisBranch;
 input [AMSB:0] xip [0:3];
 input [3:0] takb;
-input [AMSB:0] ip [0:QSLOTS-1];
-output reg [QSLOTS-1:0] predict_taken;
+input [AMSB:0] ip [0:FSLOTS-1];
+output reg [FSLOTS-1:0] predict_taken;
 
 integer n;
 
@@ -57,10 +57,10 @@ initial begin
 end
 wire [8:0] bht_wa = {pc[8:2],gbl_branch_hist[2:1]};		// write address
 wire [1:0] bht_xbits = branch_history_table[bht_wa];
-reg [8:0] bht_ra [0:QSLOTS-1];
-reg [1:0] bht_ibits [0:QSLOTS-1];
+reg [8:0] bht_ra [0:FSLOTS-1];
+reg [1:0] bht_ibits [0:FSLOTS-1];
 always @*
-for (n = 0; n < QSLOTS; n = n + 1) begin
+for (n = 0; n < FSLOTS; n = n + 1) begin
 	bht_ra [n] = {ip[n][8:2],gbl_branch_hist[2:1]};	// read address (IF stage)
 	bht_ibits [n] = branch_history_table[bht_ra[n]];
 	predict_taken[n] = (bht_ibits[n]==2'd0 || bht_ibits[n]==2'd1) && en;

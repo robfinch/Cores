@@ -21,7 +21,7 @@
 //
 // ============================================================================
 //
-`include "rtf65000-config.sv"
+`include "rtf65004-config.sv"
 `define VAL		1'b1
 `define INV		1'b0
 
@@ -57,8 +57,8 @@ input [RBIT:0] commit0_tgt;
 input [RBIT:0] commit1_tgt;
 input [RBIT:0] commit2_tgt;
 input [`QBITSP1] rf_source [0:AREGS-1];
-input [QENTRIES-1:0] iq_source;
-input [QENTRIES-1:0] iq_source2;
+input [IQ_ENTRIES-1:0] iq_source;
+input [IQ_ENTRIES-1:0] iq_source2;
 input [QSLOTS-1:0] take_branch;
 input [2:0] Rd [0:QSLOTS-1];
 input [QSLOTS-1:0] queuedOn;
@@ -104,7 +104,7 @@ begin
 	begin
 		regIsValid[n] = rf_v[n];
 		if (branchmiss) begin
-       if (~(livetarget[n]|livetarget2[n]))
+       if (~(livetarget[n]))
      			regIsValid[n] = `VAL;
     end
 
@@ -127,7 +127,7 @@ else begin
 
 	if (branchmiss) begin
 		for (n = 1; n < AREGS; n = n + 1)
-			if (~(livetarget[n]|livetarget2[n])) begin
+			if (~(livetarget[n])) begin
 				rf_v[n] <= `VAL;
 		end
 	end

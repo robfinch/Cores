@@ -36,7 +36,7 @@
 // of address bits processed. The test system for instance has only 512MB of
 // memory, so the address size is limited to 32 bits.
 // ** The ASID is stored in the upper 8 bits of the address
-`define AMSB			127
+`define AMSB			15
 `define ABITS			`AMSB:0
 
 // The following should match the defintion in the fpConfig.sv file.

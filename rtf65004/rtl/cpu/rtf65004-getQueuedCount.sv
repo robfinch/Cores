@@ -34,7 +34,7 @@
 
 module getQueuedCount(branchmiss, brk, phitd, tails, rob_tails, slotvd,
 	slot_jc, slot_rts, take_branch, uoq_v, rob_v, queuedCnt, queuedOnp, debug_on);
-parameter UO_QENTRIES = `UO_QENTRIES;
+parameter UOQ_ENTRIES = `UOQ_ENTRIES;
 parameter QSLOTS = `QSLOTS;
 parameter RENTRIES = `RENTRIES;
 parameter RSLOTS = `RSLOTS;
@@ -47,7 +47,7 @@ input [QSLOTS-1:0] slotvd;
 input [QSLOTS-1:0] slot_jc;
 input [QSLOTS-1:0] slot_rts;
 input [QSLOTS-1:0] take_branch;
-input [UO_QENTRIES-1:0] uoq_v;
+input [UOQ_ENTRIES-1:0] uoq_v;
 input [RENTRIES-1:0] rob_v;
 output reg [2:0] queuedCnt;
 output reg [QSLOTS-1:0] queuedOnp;

@@ -28,6 +28,8 @@
 
 `define TRUE		1'b1
 `define FALSE		1'b0
+`define VAL			1'b1
+`define INV			1'b0
 
 `define DEBUG		1'b1
 
@@ -87,6 +89,9 @@
 `define UO_SP		3'd3
 `define UO_PC		3'd4
 `define UO_TMP	3'd5
+`define UO_PC2	3'd6
+`define UO_SR		3'd7
+`define UO_M1R	3'd6
 
 `define UO_ZERO	4'h0
 `define UO_P1		4'h1
@@ -96,6 +101,10 @@
 `define UO_R8		4'h8
 `define UO_R16	4'h9
 `define UO_M3		4'hD
+`define UO_FFFEH	4'hE
+`define UO_M2		4'hE
+`define UO_FFFFH	4'hF
+`define UO_M1		4'hF
 
 `define UO_NOP	6'h00
 `define UO_LDB	6'h01
@@ -132,6 +141,11 @@
 `define UO_LDWW	6'h22
 `define UO_STBW	6'h23
 `define UO_STWW	6'h24
+`define UO_ASLB	6'h25
+`define UO_LSRB	6'h26
+`define UO_ROLB	6'h27
+`define UO_RORB	6'h28
+`define UO_JSI	6'h29
 
 `define BYTE		9'h87
 `define UBYTE		9'hA7
@@ -705,6 +719,15 @@
 `define STW_IA70	6'd46
 `define STW_BRA		6'd47
 
+`define DRAMSLOT_AVAIL	3'b000
+`define DRAMSLOT_BUSY		3'b001
+`define DRAMSLOT_RMW		3'b010
+`define DRAMSLOT_RMW2		3'b011
+`define DRAMSLOT_REQBUS	3'b101
+`define DRAMSLOT_HASBUS	3'b110
+`define DRAMREQ_READY		3'b111
+
+
 `define IBTOP			172
 `define IB_FMT		171:168
 `define IB_PFXINSN	167
@@ -720,6 +743,7 @@
 `define IB_RS2		55:50
 `define IB_BRCC		49
 `define IB_CMP		48
+`define IB_SRC2		42:40
 `define IB_NEED_SR	39
 `define IB_WRAP		38
 `define IB_STORE	36
@@ -738,5 +762,6 @@
 `define IB_JMP		12
 `define IB_BR			11
 `define IB_RFW		8
-
+`define IB_SRC1		6:3
+`define IB_DST		2:0
 `endif

@@ -82,14 +82,14 @@ parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
 
 reg [3:0] picstate;
-`include ".\nvio3-busStates.sv"
+`include ".\rtf65004-busStates.sv"
 reg invline_r = 1'b0;
 reg [79:0] invlineAddr_r = 72'd0;
 
 //assign L2_ld = (state==IC_Ack) && (ack_i|err_i|tlbmiss_i|exv_i);
 reg selpc1;
 assign L1_selpc = (state==IDLE||selpc1) && !invline_r;
-assign isROM = L1_adr[AMSB:20]=={AMSB+1-20{1'b1}};
+assign isROM = L1_adr[15:13]==3'b111;
 wire clk = clk_i;
 reg [2:0] iccnt;
 assign L2_cnt = iccnt;
