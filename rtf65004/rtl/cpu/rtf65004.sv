@@ -275,12 +275,12 @@ reg  [IQ_ENTRIES-1:0] iq_id3issue;
 reg [1:0] iq_mem_islot [0:IQ_ENTRIES-1];
 reg [IQ_ENTRIES-1:0] iq_fcu_issue;
 
-reg [AREGS-1:1] livetarget;
-reg [AREGS-1:1] iq_livetarget [0:IQ_ENTRIES-1];
-reg [AREGS-1:1] iq_latestID [0:IQ_ENTRIES-1];
-reg [AREGS-1:1] iq_cumulative [0:IQ_ENTRIES-1];
-wire  [AREGS-1:1] iq_out2 [0:IQ_ENTRIES-1];
-wire  [AREGS-1:1] iq_out2a [0:IQ_ENTRIES-1];
+reg [AREGS-1:0] livetarget;
+reg [AREGS-1:0] iq_livetarget [0:IQ_ENTRIES-1];
+reg [AREGS-1:0] iq_latestID [0:IQ_ENTRIES-1];
+reg [AREGS-1:0] iq_cumulative [0:IQ_ENTRIES-1];
+wire  [AREGS-1:0] iq_out2 [0:IQ_ENTRIES-1];
+wire  [AREGS-1:0] iq_out2a [0:IQ_ENTRIES-1];
 
 wire [FSLOTS-1:0] take_branch;
 reg [`QBITS] active_tag;
@@ -309,7 +309,7 @@ reg 				alu0_cmt;
 wire				alu0_abort;
 reg        alu0_ld;
 reg        alu0_dataready;
-wire       alu0_done;
+wire       alu0_done = 1'b1;
 wire       alu0_idle;
 reg  [`QBITS] alu0_sourceid;
 reg [`RBITS] alu0_rid;
@@ -329,10 +329,10 @@ reg [`ABITS] alu0_pc;
 reg [WID-1:0] alu0_bus;
 wire [WID-1:0] alu0_out;
 wire [7:0] alu0_sro;
-wire  [`QBITS] alu0_id;
+reg  [`QBITS] alu0_id;
 (* mark_debug="true" *)
 wire  [`XBITS] alu0_exc;
-wire        alu0_v;
+wire        alu0_v = 1'b1;
 reg [`QBITS] alu0_id1;
 reg [`QBITS] alu1_id1;
 reg [WID-1:0] alu0_bus1;
@@ -345,7 +345,7 @@ reg 				alu1_cmt;
 wire				alu1_abort;
 reg        alu1_ld;
 reg        alu1_dataready;
-wire       alu1_done;
+wire       alu1_done = 1'b1;
 wire       alu1_idle;
 reg  [`QBITS] alu1_sourceid;
 reg [`RBITS] alu1_rid;
@@ -365,20 +365,20 @@ reg [`ABITS] alu1_pc;
 reg [WID-1:0] alu1_bus;
 wire [WID-1:0] alu1_out;
 wire [7:0] alu1_sro;
-wire  [`QBITS] alu1_id;
+reg  [`QBITS] alu1_id;
 wire  [`XBITS] alu1_exc;
-wire        alu1_v;
+wire        alu1_v = 1'b1;
 reg alu1_v1;
 wire alu1_vsn;
 reg issuing_on_alu1;
 reg alu1_dne = TRUE;
 
-wire agen0_v;
+wire agen0_v = 1'b1;
 wire agen0_vsn;
 wire agen0_idle;
 reg [`SNBITS] agen0_sn;
 reg [`QBITS] agen0_sourceid;
-wire [`QBITS] agen0_id;
+reg [`QBITS] agen0_id;
 reg [`RBITS] agen0_rid;
 reg [RBIT:0] agen0_tgt;
 reg agen0_dataready;
@@ -395,12 +395,12 @@ reg agen0_offset;
 wire agen0_upd2;
 reg [1:0] agen0_base;
 
-wire agen1_v;
+wire agen1_v = 1'b1;
 wire agen1_vsn;
 wire agen1_idle;
 reg [`SNBITS] agen1_sn;
 reg [`QBITS] agen1_sourceid;
-wire [`QBITS] agen1_id;
+reg [`QBITS] agen1_id;
 reg [`RBITS] agen1_rid;
 reg [RBIT:0] agen1_tgt;
 reg agen1_dataready;
@@ -442,7 +442,7 @@ reg [`ABITS] fcu_brdisp;
 wire [WID-1:0] fcu_out;
 reg [WID-1:0] fcu_bus;
 reg [7:0] fcu_sr_bus;
-wire  [`QBITS] fcu_id;
+reg  [`QBITS] fcu_id;
 reg   [`XBITS] fcu_exc;
 wire        fcu_v;
 reg        fcu_branchmiss;
@@ -838,6 +838,8 @@ assign freezepc = (rst_ctr < 32'd10 | nmi_i | (irq_i & ~sr[3])) && !int_commit;
 
 assign opcode1 = freezepc ? `BRK : ic1_out[7:0];
 assign opcode2 = freezepc ? `BRK : ic2_out[7:0];
+assign insnx[0] = freezepc ? `BRK : ic1_out[23:0];
+assign insnx[1] = freezepc ? `BRK : ic2_out[23:0];
 wire IsRst = (freezepc & rst_i);
 wire IsNmi = (freezepc & nmi_i);
 wire IsIrq = (freezepc & irq_i & ~sr[3]);
@@ -1803,46 +1805,51 @@ always @(posedge clk)
 // brk flag is set is during execution of the BRK opcode. Even if the brk flag
 // is set to one in memory, it still reads back as zero.
 always @(posedge clk)
-	if (commit2_v) begin
-		if (commit2_tgt==`UO_SR)
-			sr <= commit2_bus[7:0] & 8'hEF;	// clear break bit
-		else begin
-			sr[0] <= commit2_sr_tgts[0] ? commit2_sr_bus[0] : sr[0];
-			sr[1] <= commit2_sr_tgts[1] ? commit2_sr_bus[1] : sr[1];
-			sr[2] <= commit2_sr_tgts[2] ? commit2_sr_bus[2] : sr[2];
-			sr[3] <= commit2_sr_tgts[3] ? commit2_sr_bus[3] : sr[3];
-			sr[4] <= commit2_sr_tgts[4] ? commit2_sr_bus[4] : sr[4];
-			sr[5] <= commit2_sr_tgts[5] ? commit2_sr_bus[5] : sr[5];
-			sr[6] <= commit2_sr_tgts[6] ? commit2_sr_bus[6] : sr[6];
-			sr[7] <= commit2_sr_tgts[7] ? commit2_sr_bus[7] : sr[7];
-		end
+	if (rst_i) begin
+		sr <= 8'h04;	// mask interrupts on reset, clear decimal mode
 	end
-	else if (commit1_v) begin
-		if (commit1_tgt==`UO_SR)
-			sr <= commit1_bus[7:0] & 8'hEF;	// clear break bit
-		else begin
-			sr[0] <= commit1_sr_tgts[0] ? commit1_sr_bus[0] : sr[0];
-			sr[1] <= commit1_sr_tgts[1] ? commit1_sr_bus[1] : sr[1];
-			sr[2] <= commit1_sr_tgts[2] ? commit1_sr_bus[2] : sr[2];
-			sr[3] <= commit1_sr_tgts[3] ? commit1_sr_bus[3] : sr[3];
-			sr[4] <= commit1_sr_tgts[4] ? commit1_sr_bus[4] : sr[4];
-			sr[5] <= commit1_sr_tgts[5] ? commit1_sr_bus[5] : sr[5];
-			sr[6] <= commit1_sr_tgts[6] ? commit1_sr_bus[6] : sr[6];
-			sr[7] <= commit1_sr_tgts[7] ? commit1_sr_bus[7] : sr[7];
+	else begin
+		if (commit2_v) begin
+			if (commit2_tgt==`UO_SR)
+				sr <= commit2_bus[7:0] & 8'hEF;	// clear break bit
+			else begin
+				sr[0] <= commit2_sr_tgts[0] ? commit2_sr_bus[0] : sr[0];
+				sr[1] <= commit2_sr_tgts[1] ? commit2_sr_bus[1] : sr[1];
+				sr[2] <= commit2_sr_tgts[2] ? commit2_sr_bus[2] : sr[2];
+				sr[3] <= commit2_sr_tgts[3] ? commit2_sr_bus[3] : sr[3];
+				sr[4] <= commit2_sr_tgts[4] ? commit2_sr_bus[4] : sr[4];
+				sr[5] <= commit2_sr_tgts[5] ? commit2_sr_bus[5] : sr[5];
+				sr[6] <= commit2_sr_tgts[6] ? commit2_sr_bus[6] : sr[6];
+				sr[7] <= commit2_sr_tgts[7] ? commit2_sr_bus[7] : sr[7];
+			end
 		end
-	end
-	else if (commit0_v) begin
-		if (commit0_tgt==`UO_SR)
-			sr <= commit0_bus[7:0] & 8'hEF;	// clear break bit
-		else begin
-			sr[0] <= commit0_sr_tgts[0] ? commit0_sr_bus[0] : sr[0];
-			sr[1] <= commit0_sr_tgts[1] ? commit0_sr_bus[1] : sr[1];
-			sr[2] <= commit0_sr_tgts[2] ? commit0_sr_bus[2] : sr[2];
-			sr[3] <= commit0_sr_tgts[3] ? commit0_sr_bus[3] : sr[3];
-			sr[4] <= commit0_sr_tgts[4] ? commit0_sr_bus[4] : sr[4];
-			sr[5] <= commit0_sr_tgts[5] ? commit0_sr_bus[5] : sr[5];
-			sr[6] <= commit0_sr_tgts[6] ? commit0_sr_bus[6] : sr[6];
-			sr[7] <= commit0_sr_tgts[7] ? commit0_sr_bus[7] : sr[7];
+		else if (commit1_v) begin
+			if (commit1_tgt==`UO_SR)
+				sr <= commit1_bus[7:0] & 8'hEF;	// clear break bit
+			else begin
+				sr[0] <= commit1_sr_tgts[0] ? commit1_sr_bus[0] : sr[0];
+				sr[1] <= commit1_sr_tgts[1] ? commit1_sr_bus[1] : sr[1];
+				sr[2] <= commit1_sr_tgts[2] ? commit1_sr_bus[2] : sr[2];
+				sr[3] <= commit1_sr_tgts[3] ? commit1_sr_bus[3] : sr[3];
+				sr[4] <= commit1_sr_tgts[4] ? commit1_sr_bus[4] : sr[4];
+				sr[5] <= commit1_sr_tgts[5] ? commit1_sr_bus[5] : sr[5];
+				sr[6] <= commit1_sr_tgts[6] ? commit1_sr_bus[6] : sr[6];
+				sr[7] <= commit1_sr_tgts[7] ? commit1_sr_bus[7] : sr[7];
+			end
+		end
+		else if (commit0_v) begin
+			if (commit0_tgt==`UO_SR)
+				sr <= commit0_bus[7:0] & 8'hEF;	// clear break bit
+			else begin
+				sr[0] <= commit0_sr_tgts[0] ? commit0_sr_bus[0] : sr[0];
+				sr[1] <= commit0_sr_tgts[1] ? commit0_sr_bus[1] : sr[1];
+				sr[2] <= commit0_sr_tgts[2] ? commit0_sr_bus[2] : sr[2];
+				sr[3] <= commit0_sr_tgts[3] ? commit0_sr_bus[3] : sr[3];
+				sr[4] <= commit0_sr_tgts[4] ? commit0_sr_bus[4] : sr[4];
+				sr[5] <= commit0_sr_tgts[5] ? commit0_sr_bus[5] : sr[5];
+				sr[6] <= commit0_sr_tgts[6] ? commit0_sr_bus[6] : sr[6];
+				sr[7] <= commit0_sr_tgts[7] ? commit0_sr_bus[7] : sr[7];
+			end
 		end
 	end
 
@@ -1988,6 +1995,22 @@ default:	fnDataExtend = dat;
 endcase
 endfunction
 
+function [31:0] fnMnemonic;
+input [5:0] ins;
+case(ins)
+`UO_LDB:	fnMnemonic = "LDB ";
+`UO_LDBW:	fnMnemonic = "LDBW";
+`UO_LDW:	fnMnemonic = "LDW ";
+`UO_STB:	fnMnemonic = "STB ";
+`UO_STBW:	fnMnemonic = "STBW";
+`UO_STW:	fnMnemonic = "STW ";
+`UO_ADDB:	fnMnemonic = "ADDB";
+`UO_JMP:	fnMnemonic = "JMP ";
+`UO_JSI:	fnMnemonic = "JSI ";
+default:	fnMnemonic = "????";
+endcase
+endfunction
+
 /*
 initial begin: Init
 	//
@@ -2059,7 +2082,7 @@ always @*
 
 
 always @*
-for (j = 1; j < AREGS; j = j + 1) begin
+for (j = 0; j < AREGS; j = j + 1) begin
 	livetarget[j] = 1'b0;
 	for (n = 0; n < IQ_ENTRIES; n = n + 1)
 		livetarget[j] = livetarget[j] | iq_livetarget[n][j];
@@ -2440,11 +2463,14 @@ EvalBranch ube1
 );
 
 
+/*
 wire will_clear_branchmiss = branchmiss && (
 															(uoq_slotv[0] && uoq_pc[uoq_head]==misspc)
 															|| (uoq_slotv[1] && uoq_pc[(uoq_head + 2'd1) % UOQ_ENTRIES]==misspc)
 															|| (uoq_slotv[2] && uoq_pc[(uoq_head + 2'd2) % UOQ_ENTRIES]==misspc)
 															);
+*/													
+wire will_clear_branchmiss = branchmiss && (slotv[0] && pc==misspc);
 
 always @*
 	fcu_misspc = fcu_pt ? fcu_nextpc : fcu_nextpc + fcu_brdisp;
@@ -2483,7 +2509,7 @@ assign dram_avail = (dram0 == `DRAMSLOT_AVAIL || dram1 == `DRAMSLOT_AVAIL);
 
 always @*
 for (n = 0; n < IQ_ENTRIES; n = n + 1)
-	iq_memopsvalid[n] <= (iq_mem[n] && (iq_store[n] ? iq_argB_v[n] : 1'b1) && iq_state[n]==IQS_AGEN);
+	iq_memopsvalid[n] <= (iq_mem[n] && (iq_store[n] ? iq_argT_v[n] : 1'b1) && iq_state[n]==IQS_AGEN);
 
 always @*
 for (n = 0; n < IQ_ENTRIES; n = n + 1)
@@ -3169,7 +3195,13 @@ else begin
 		uoq_flagsupd[(uoq_tail+uo_whflg1) % UOQ_ENTRIES] <= uo_flags1;
 	end
 
-	if (!branchmiss) begin
+	// Invalidate all entries in the micro-op queue on a branch miss.
+	if (branchmiss) begin
+		uoq_v <= 1'd0;
+		uoq_tail <= 1'd0;
+		uoq_head <= 1'd0;
+	end
+	else begin
 		queuedOn <= queuedOnp;
 		case(uoq_slotv)
 		3'b001:
@@ -3421,11 +3453,13 @@ else begin
 					// should be setting the state to CMT.
 //					if (iq_state[alu0_id]==IQS_OUT)
 //						iq_state[alu0_id] <= IQS_CMT;
+			alu0_id <= n;
 			alu0_rid <= iq_rid[n];
 			alu0_instr	<= iq_instr[n];
 			alu0_pc		<= iq_pc[n];
 					// Agen output is not bypassed since there's only one
 					// instruction (LEA) to bypass for.
+      alu0_argI <= iq_const[n];
 `ifdef FU_BYPASS
 			if (iq_argB_v[n])
 				alu0_argB <= iq_argB[n];
@@ -3491,9 +3525,11 @@ else begin
 								// should be setting the state to CMT.
 	//							if (iq_state[alu1_id]==IQS_OUT)
 	//								iq_state[alu1_id] <= IQS_CMT;
+								 alu1_id <= n;
                  alu1_rid <= iq_rid[n];
                  alu1_instr	<= iq_instr[n];
                  alu1_pc		<= iq_pc[n];
+						     alu1_argI <= iq_const[n];
 `ifdef FU_BYPASS
 								if (iq_argB_v[n])
 									alu1_argB <= iq_argB[n][WID-1:0];
@@ -3555,8 +3591,10 @@ else begin
 						agen1_rid <= {`QBIT{1'b1}};
 					if (fcu_rid==n[`QBITS] && !issuing_on_fcu)
 						fcu_rid <= {`QBIT{1'b1}};
+								agen0_id <= n;
                  agen0_rid <= iq_rid[n];
                  agen0_instr	<= iq_instr[n];
+                 agen0_argI <= iq_const[n];
 `ifdef FU_BYPASS
 								 if (iq_argB_v[n])
 								 	agen0_argB <= iq_argB[n][WID-1:0];
@@ -3590,9 +3628,11 @@ else begin
 						agen0_rid <= {`QBIT{1'b1}};
 					if (fcu_rid==n[`QBITS] && !issuing_on_fcu)
 						fcu_rid <= {`QBIT{1'b1}};
+							agen1_id <= n;
                  agen1_rid <= iq_rid[n];
                  agen1_instr	<= iq_instr[n];
 //                 agen1_argB	<= iq_argB[n];	// ArgB not used by agen
+                 agen1_argI <= iq_const[n];
 `ifdef FU_BYPASS
 								 if (iq_argB_v[n])
 								 	agen1_argB <= iq_argB[n][WID-1:0];
@@ -3626,6 +3666,7 @@ else begin
 						agen0_rid <= {`QBIT{1'b1}};
 					if (agen1_rid==n[`QBITS] && !issuing_on_agen1)
 						agen1_rid <= {`QBIT{1'b1}};
+				fcu_id <= n;
 				fcu_prevInstr <= fcu_instr;
 				fcu_instr	<= iq_instr[n];
 				fcu_hs		<= iq_hs[n];
@@ -4056,7 +4097,7 @@ endcase
 			);
 	$display ("------------------------------------------------------------------------ Dispatch Buffer -----------------------------------------------------------------------");
 	for (i=0; i<IQ_ENTRIES; i=i+1) 
-	    $display("%c%c %d: %c%c%c %d %d %c%c %c %c%h %d,%d %h %h %d %d %d %h %d %d %d %h %d %d %d %h %o #",
+	    $display("%c%c %d: %c%c%c %d %d %c%c %c %c%h %s %d,%d %h %h %d %d %d %h %d %d %d %h %d %d %d %h %o #",
 		 (i[`QBITS]==heads[0])?"C":".",
 		 (i[`QBITS]==tails[0])?"Q":".",
 		  i[`QBITS],
@@ -4075,9 +4116,9 @@ endcase
 		 iq_agen[i] ? "a": "-",
 		 iq_alu0_issue[i]?"0":iq_alu1_issue[i]?"1":"-",
 		 iq_stomp[i]?"s":"-",
-		iq_fc[i] ? "F" : iq_mem[i] ? "M" : (iq_alu[i]==1'b1) ? "a" : "O", 
-		iq_instr[i], iq_tgt[i][2:0], iq_tgt[i][2:0],
-		0,
+		iq_fc[i] ? "F" : iq_mem[i] ? "M" : (iq_alu[i]==1'b1) ? "A" : "O", 
+		iq_instr[i],fnMnemonic(iq_instr[i]), iq_tgt[i][2:0], iq_tgt[i][2:0],
+		iq_const[i],
 		iq_argT[i], iq_src1[i], iq_argT_v[i], iq_argT_s[i],
 		iq_argB[i], iq_src2[i], iq_argB_v[i], iq_argB_s[i],
 		iq_argS[i], iq_src2[i], iq_argS_v[i], iq_argS_s[i],
@@ -4379,6 +4420,7 @@ begin
 	//iq_br_tag[ndx] <= btag;
 	iq_pc[ndx] <= uoq_pc[(uoq_head+slot) % UOQ_ENTRIES];
 	iq_instr[ndx][5:0] <= uoq_uop[(uoq_head+slot) % UOQ_ENTRIES][15:10];
+	iq_const[ndx] <= uoq_const[(uoq_head+slot) % UOQ_ENTRIES];
 	iq_hs[ndx] <= uoq_hs[(uoq_head+slot) % UOQ_ENTRIES];
 	iq_fl[ndx] <= uoq_fl[(uoq_head+slot) % UOQ_ENTRIES];
 	//iq_argI[ndx] <= uoq_const[(uoq_head+slot) % UOQ_ENTRIES];
@@ -4474,12 +4516,12 @@ endmodule
 
 module decoder3 (num, out);
 input [2:0] num;
-output [7:1] out;
+output [7:0] out;
 
 wire [7:0] out1;
 
 assign out1 = 8'd1 << num;
-assign out = out1[7:1];
+assign out = out1[7:0];
 
 endmodule
 

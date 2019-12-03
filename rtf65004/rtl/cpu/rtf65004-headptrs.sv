@@ -51,11 +51,11 @@ end
 
 always @(posedge clk)
 if (rst) begin
-	for (n = 0; n < RSLOTS; n = n + 1)
+	for (n = 0; n < RENTRIES; n = n + 1)
 		rob_heads[n] <= n;
 end
 else begin
-	for (n = 0; n < RSLOTS; n = n + 1)
+	for (n = 0; n < RENTRIES; n = n + 1)
      rob_heads[n] <= (rob_heads[n] + ramt) % RENTRIES;
 end
 

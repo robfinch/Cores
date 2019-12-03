@@ -44,7 +44,7 @@ input clk;
 input [QSLOTS-1:0] slotv;
 input [QSLOTS-1:0] slot_rfw;
 input [`QBITS] tails [0:QSLOTS-1];
-input [AREGS-1:1] livetarget;
+input [AREGS-1:0] livetarget;
 input branchmiss;
 input [`QBITS] rob_id [0:RENTRIES-1];
 input commit0_v;
@@ -100,7 +100,7 @@ integer n;
 // So a signal is created here with it's own always block.
 always @*
 begin
-	for (n = 1; n < AREGS; n = n + 1)
+	for (n = 0; n < AREGS; n = n + 1)
 	begin
 		regIsValid[n] = rf_v[n];
 		if (branchmiss) begin
@@ -126,7 +126,7 @@ end
 else begin
 
 	if (branchmiss) begin
-		for (n = 1; n < AREGS; n = n + 1)
+		for (n = 0; n < AREGS; n = n + 1)
 			if (~(livetarget[n])) begin
 				rf_v[n] <= `VAL;
 		end

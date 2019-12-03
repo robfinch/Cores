@@ -46,7 +46,7 @@ input [IQ_ENTRIES-1:0] iq_rfw;
 input [RBIT:0] iq_Rd [0:IQ_ENTRIES-1];
 input [RBIT:0] Rd [0:QSLOTS-1];
 input [`RBITS] rob_tails [0:QSLOTS-1];
-input [AREGS-1:1] iq_latestID [0:IQ_ENTRIES-1];
+input [AREGS-1:0] iq_latestID [0:IQ_ENTRIES-1];
 input [RBIT:0] iq_tgt [0:IQ_ENTRIES-1];
 input [`RBITS] iq_rid [0:IQ_ENTRIES-1];
 output reg [`QBITSP1] rf_source [0:AREGS-1];
