@@ -21,6 +21,7 @@
 //                                                                          
 // ============================================================================
 // 36010 57616
+// 14924 23878
 `include "rtf65004-config.sv"
 `include "rtf65004-defines.sv"
 
@@ -561,7 +562,8 @@ initial begin
 	// Initialize everything to NOPs
 	for (n = 0; n < 256; n = n + 1)
 		uopl[n] = {2'd0,74'h0};
-uopl[`BRK] 			= {2'd3,`UOF_NONE,2'd3,`UO_ADDB,`UO_M3,`UO_SP,2'd0,`UO_STB,`UO_P1,`UO_SR,`UO_SP,`UO_STW,`UO_P2,`UO_PC,`UO_SP,`UO_LDW,`UO_M2,`UO_PC,2'd0};
+// BRK has special handling at queue stage
+//uopl[`BRK] 			= {2'd3,`UOF_NONE,2'd3,`UO_ADDB,`UO_M3,`UO_SP,2'd0,`UO_STB,`UO_P1,`UO_SR,`UO_SP,`UO_STW,`UO_P2,`UO_PC,`UO_SP,`UO_LDW,`UO_M2,`UO_PC,2'd0};
 uopl[`LDA_IMM]	= {2'd0,`UOF_NZ,2'd0,`UO_LDIB,`UO_R8,`UO_ACC,`UO_ZR,48'h0};
 uopl[`LDA_ZP]		= {2'd0,`UOF_NZ,2'd0,`UO_LDB,`UO_R8,`UO_ACC,`UO_ZR,48'h0};
 uopl[`LDA_ZPX]	= {2'd0,`UOF_NZ,2'd0,`UO_LDB,`UO_R8,`UO_ACC,`UO_XR,48'h0};
@@ -686,10 +688,10 @@ uopl[`INX]			= {2'd0,`UOF_NZ,2'd1,`UO_ADDB,`UO_P1,`UO_XR,`UO_ZR,48'h0};
 uopl[`DEX]			= {2'd0,`UOF_NZ,2'd1,`UO_ADDB,`UO_M1,`UO_XR,`UO_ZR,48'h0};
 uopl[`INY]			= {2'd0,`UOF_NZ,2'd1,`UO_ADDB,`UO_P1,`UO_YR,`UO_ZR,48'h0};
 uopl[`DEY]			= {2'd0,`UOF_NZ,2'd1,`UO_ADDB,`UO_M1,`UO_YR,`UO_ZR,48'h0};
-uopl[`PHA]			= {2'd1,`UOF_NONE,2'd0,`UO_STB,`UO_100H,`UO_ACC,`UO_SP,`UO_ADDB,`UO_M1,`UO_SP,`UO_ZR,32'h0};
-uopl[`PLA]			= {2'd1,`UOF_NZ,2'd1,`UO_ADDB,`UO_P1,`UO_SP,`UO_ZR,`UO_LDB,`UO_100H,`UO_ACC,`UO_SP,32'h0};
-uopl[`PHP]			= {2'd1,`UOF_NONE,2'd0,`UO_STB,`UO_100H,`UO_SR,`UO_SP,`UO_ADDB,`UO_M1,`UO_SP,`UO_ZR,32'h0};
-uopl[`PLP]			= {2'd1,`UOF_NZ,2'd1,`UO_ADDB,`UO_P1,`UO_SP,`UO_ZR,`UO_LDB,`UO_100H,`UO_SR,`UO_SP,32'h0};
+uopl[`PHA]			= {2'd1,`UOF_NONE,2'd0,`UO_STBW,`UO_100H,`UO_ACC,`UO_SP,`UO_ADDB,`UO_M1,`UO_SP,`UO_ZR,32'h0};
+uopl[`PLA]			= {2'd1,`UOF_NZ,2'd1,`UO_ADDB,`UO_P1,`UO_SP,`UO_ZR,`UO_LDBW,`UO_100H,`UO_ACC,`UO_SP,32'h0};
+uopl[`PHP]			= {2'd1,`UOF_NONE,2'd0,`UO_STBW,`UO_100H,`UO_SR,`UO_SP,`UO_ADDB,`UO_M1,`UO_SP,`UO_ZR,32'h0};
+uopl[`PLP]			= {2'd1,`UOF_NONE,2'd0,`UO_ADDB,`UO_P1,`UO_SP,`UO_ZR,`UO_LDBW,`UO_100H,`UO_SR,`UO_SP,32'h0};
 uopl[`TAX]			= {2'd0,`UOF_NZ,2'd0,`UO_MOV,`UO_ZERO,`UO_XR,`UO_ACC,48'h0};
 uopl[`TXA]			= {2'd0,`UOF_NZ,2'd0,`UO_MOV,`UO_ZERO,`UO_ACC,`UO_XR,48'h0};
 uopl[`TAY]			= {2'd0,`UOF_NZ,2'd0,`UO_MOV,`UO_ZERO,`UO_YR,`UO_ACC,48'h0};
@@ -713,7 +715,7 @@ uopl[`JMP]			= {2'd0,`UOF_NONE,2'd0,`UO_JMP,`UO_R16,`UO_ZERO,`UO_ZR,48'h0};
 uopl[`JMP_IND]	= {2'd1,`UOF_NONE,2'd0,`UO_LDW,`UO_R16,`UO_TMP,`UO_ZR,`UO_JMP,`UO_ZERO,`UO_ZR,`UO_TMP,32'h0};
 uopl[`JSR]			= {2'd2,`UOF_NONE,2'd0,`UO_STWW,`UO_FFFFH,`UO_PC2,`UO_SP,`UO_ADDB,`UO_M2,`UO_SP,`UO_ZR,`UO_JMP,`UO_R16,`UO_ZERO,`UO_ZR,16'h0};
 uopl[`RTS]		  = {2'd2,`UOF_NONE,2'd0,`UO_ADDB,`UO_P2,`UO_SP,`UO_ZR,`UO_LDW,`UO_FFFFH,`UO_TMP,`UO_SP,`UO_JMP,`UO_P1,`UO_TMP,`UO_ZR,16'h0};
-uopl[`RTI]		  = {2'd3,`UOF_ALL,2'd2,`UO_ADDB,`UO_P3,`UO_SP,`UO_ZR,`UO_LDW,`UO_FFFFH,`UO_TMP,`UO_SP,`UO_LDB,`UO_FFFEH,`UO_SR,`UO_SP,`UO_JMP,`UO_ZERO,`UO_TMP,`UO_ZR};
+uopl[`RTI]		  = {2'd3,`UOF_NONE,2'd0,`UO_ADDB,`UO_P3,`UO_SP,`UO_ZR,`UO_LDW,`UO_FFFFH,`UO_TMP,`UO_SP,`UO_LDB,`UO_FFFEH,`UO_SR,`UO_SP,`UO_JMP,`UO_ZERO,`UO_TMP,`UO_ZR};
 end
 
 task tskLd4;
@@ -1736,36 +1738,52 @@ always @(posedge clk)
 	else if (commit0_v && commit0_tgt==`UO_SP)
 		sp <= commit0_bus[7:0];
 
+// PLP and RTI target the sr during a load. They write the whole word.
+// The brk flag in the status register always loads as zero. The only time the
+// brk flag is set is during execution of the BRK opcode. Even if the brk flag
+// is set to one in memory, it still reads back as zero.
 always @(posedge clk)
 	if (commit2_v) begin
-		sr[0] <= commit2_sr_tgts[0] ? commit2_sr_bus[0] : sr[0];
-		sr[1] <= commit2_sr_tgts[1] ? commit2_sr_bus[1] : sr[1];
-		sr[2] <= commit2_sr_tgts[2] ? commit2_sr_bus[2] : sr[2];
-		sr[3] <= commit2_sr_tgts[3] ? commit2_sr_bus[3] : sr[3];
-		sr[4] <= commit2_sr_tgts[4] ? commit2_sr_bus[4] : sr[4];
-		sr[5] <= commit2_sr_tgts[5] ? commit2_sr_bus[5] : sr[5];
-		sr[6] <= commit2_sr_tgts[6] ? commit2_sr_bus[6] : sr[6];
-		sr[7] <= commit2_sr_tgts[7] ? commit2_sr_bus[7] : sr[7];
+		if (commit2_tgt==`UO_SR)
+			sr <= commit2_bus[7:0] & 8'hEF;	// clear break bit
+		else begin
+			sr[0] <= commit2_sr_tgts[0] ? commit2_sr_bus[0] : sr[0];
+			sr[1] <= commit2_sr_tgts[1] ? commit2_sr_bus[1] : sr[1];
+			sr[2] <= commit2_sr_tgts[2] ? commit2_sr_bus[2] : sr[2];
+			sr[3] <= commit2_sr_tgts[3] ? commit2_sr_bus[3] : sr[3];
+			sr[4] <= commit2_sr_tgts[4] ? commit2_sr_bus[4] : sr[4];
+			sr[5] <= commit2_sr_tgts[5] ? commit2_sr_bus[5] : sr[5];
+			sr[6] <= commit2_sr_tgts[6] ? commit2_sr_bus[6] : sr[6];
+			sr[7] <= commit2_sr_tgts[7] ? commit2_sr_bus[7] : sr[7];
+		end
 	end
 	else if (commit1_v) begin
-		sr[0] <= commit1_sr_tgts[0] ? commit1_sr_bus[0] : sr[0];
-		sr[1] <= commit1_sr_tgts[1] ? commit1_sr_bus[1] : sr[1];
-		sr[2] <= commit1_sr_tgts[2] ? commit1_sr_bus[2] : sr[2];
-		sr[3] <= commit1_sr_tgts[3] ? commit1_sr_bus[3] : sr[3];
-		sr[4] <= commit1_sr_tgts[4] ? commit1_sr_bus[4] : sr[4];
-		sr[5] <= commit1_sr_tgts[5] ? commit1_sr_bus[5] : sr[5];
-		sr[6] <= commit1_sr_tgts[6] ? commit1_sr_bus[6] : sr[6];
-		sr[7] <= commit1_sr_tgts[7] ? commit1_sr_bus[7] : sr[7];
+		if (commit1_tgt==`UO_SR)
+			sr <= commit1_bus[7:0] & 8'hEF;	// clear break bit
+		else begin
+			sr[0] <= commit1_sr_tgts[0] ? commit1_sr_bus[0] : sr[0];
+			sr[1] <= commit1_sr_tgts[1] ? commit1_sr_bus[1] : sr[1];
+			sr[2] <= commit1_sr_tgts[2] ? commit1_sr_bus[2] : sr[2];
+			sr[3] <= commit1_sr_tgts[3] ? commit1_sr_bus[3] : sr[3];
+			sr[4] <= commit1_sr_tgts[4] ? commit1_sr_bus[4] : sr[4];
+			sr[5] <= commit1_sr_tgts[5] ? commit1_sr_bus[5] : sr[5];
+			sr[6] <= commit1_sr_tgts[6] ? commit1_sr_bus[6] : sr[6];
+			sr[7] <= commit1_sr_tgts[7] ? commit1_sr_bus[7] : sr[7];
+		end
 	end
 	else if (commit0_v) begin
-		sr[0] <= commit0_sr_tgts[0] ? commit0_sr_bus[0] : sr[0];
-		sr[1] <= commit0_sr_tgts[1] ? commit0_sr_bus[1] : sr[1];
-		sr[2] <= commit0_sr_tgts[2] ? commit0_sr_bus[2] : sr[2];
-		sr[3] <= commit0_sr_tgts[3] ? commit0_sr_bus[3] : sr[3];
-		sr[4] <= commit0_sr_tgts[4] ? commit0_sr_bus[4] : sr[4];
-		sr[5] <= commit0_sr_tgts[5] ? commit0_sr_bus[5] : sr[5];
-		sr[6] <= commit0_sr_tgts[6] ? commit0_sr_bus[6] : sr[6];
-		sr[7] <= commit0_sr_tgts[7] ? commit0_sr_bus[7] : sr[7];
+		if (commit0_tgt==`UO_SR)
+			sr <= commit0_bus[7:0] & 8'hEF;	// clear break bit
+		else begin
+			sr[0] <= commit0_sr_tgts[0] ? commit0_sr_bus[0] : sr[0];
+			sr[1] <= commit0_sr_tgts[1] ? commit0_sr_bus[1] : sr[1];
+			sr[2] <= commit0_sr_tgts[2] ? commit0_sr_bus[2] : sr[2];
+			sr[3] <= commit0_sr_tgts[3] ? commit0_sr_bus[3] : sr[3];
+			sr[4] <= commit0_sr_tgts[4] ? commit0_sr_bus[4] : sr[4];
+			sr[5] <= commit0_sr_tgts[5] ? commit0_sr_bus[5] : sr[5];
+			sr[6] <= commit0_sr_tgts[6] ? commit0_sr_bus[6] : sr[6];
+			sr[7] <= commit0_sr_tgts[7] ? commit0_sr_bus[7] : sr[7];
+		end
 	end
 
 always @(posedge clk)

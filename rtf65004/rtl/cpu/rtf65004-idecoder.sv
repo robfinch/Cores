@@ -35,13 +35,38 @@ parameter FALSE = 1'b0;
 parameter byt = 3'd0;
 parameter wyde = 3'd1;
 
+function IsAlu;
+input [15:0] isn;
+case(isn[15:10])
+`UO_LDIB,`UO_ADDW,
+`UO_ADCB,`UO_SBCB,`UO_CMPB,
+`UO_ANDB,`UO_BITB,`UO_ORB,`UO_EORB,
+`UO_ASLB,`UO_LSRB,`UO_RORB,`UO_ROLB,
+`UO_SEC,`UO_CLC,`UO_SEI,`UO_CLI,`UO_CLV,
+`UO_MOV:
+	IsAlu = TRUE;
+default:	IsAlu = FALSE;
+endcase
+endfunction
+
 function IsMem;
 input [15:0] isn;
 case(isn[15:10])
+`UO_LDBW,`UO_LDWW,`UO_STBW,`UO_STWW,
 `UO_LDB,`UO_LDW,`UO_STB,`UO_STW:
 	IsMem = TRUE;
 default:
 	IsMem = FALSE;
+endcase
+endfunction
+
+function IsFcu;
+input [15:0] isn;
+case(isn[15:10])
+`UO_BEQ,`UO_BNE,`UO_BCS,`UO_BCC,`UO_BVS,`UO_BVC,`UO_BMI,`UO_BPL,
+`UO_JSI,`UO_JMP:
+	IsFcu = TRUE;
+default:	IsFcu = FALSE;
 endcase
 endfunction
 
@@ -56,7 +81,7 @@ endfunction
 function IsLoad;
 input [15:0] isn;
 case(isn[15:10])
-`UO_LDB,`UO_LDW:
+`UO_LDB,`UO_LDW,`UO_LDBW,`UO_LDWW:
 	IsLoad = TRUE;
 default:
 	IsLoad = FALSE;
@@ -66,7 +91,7 @@ endfunction
 function IsStore;
 input [15:0] isn;
 case(isn[15:10])
-`UO_STB,`UO_STW:
+`UO_STB,`UO_STW,`UO_STBW,`UO_STWW:
 	IsStore = TRUE;
 default:
 	IsStore = FALSE;
@@ -77,10 +102,10 @@ endfunction
 function [2:0] MemSize;
 input [15:0] isn;
 casez(isn[15:10])
-`UO_LDB:	MemSize = byt;
-`UO_LDW:	MemSize = wyde;
-`UO_STB:	MemSize = byt;
-`UO_STW:	MemSize = wyde;
+`UO_LDB,`UO_LDBW:	MemSize = byt;
+`UO_LDW,`UO_LDWW:	MemSize = wyde;
+`UO_STB,`UO_STBW:	MemSize = byt;
+`UO_STW,`UO_STWW:	MemSize = wyde;
 default:	MemSize = byt;
 endcase
 endfunction
@@ -110,7 +135,7 @@ endfunction
 function IsRFW;
 input [15:0] isn;
 case(isn[15:10])
-`UO_LDB,`UO_LDW,
+`UO_LDB,`UO_LDW,`UO_LDBW,`UO_LDWW,
 `UO_ADDB,`UO_ADDW,`UO_ADCB,`UO_SBCB,
 `UO_ANDB,`UO_ORB,`UO_EORB,
 `UO_ASLB,`UO_LSRB,`UO_ROLB,`UO_RORB,
@@ -124,6 +149,8 @@ endfunction
 function fnNeedSr;
 input [15:0] isn;
 case(isn[15:10])
+`UO_STB,`UO_STBW:
+	fnNeedSr = isn[5:3]==`UO_SR;
 `UO_ADCB,`UO_SBCB,`UO_ROLB,`UO_RORB:	// carry input
 	fnNeedSr = TRUE;
 `UO_BEQ,`UO_BNE,`UO_BCS,`UO_BCC,`UO_BVS,`UO_BVC,`UO_BMI,`UO_BPL:
@@ -136,7 +163,7 @@ endfunction
 function fnWrap;
 input [15:0] isn;
 case(isn[15:10])
-`UO_LDBW,`UO_STBW:	fnWrap = TRUE;
+`UO_LDBW,`UO_STBW,`UO_LDWW,`UO_STWW:	fnWrap = TRUE;
 default:	fnWrap = FALSE;
 endcase
 endfunction
@@ -157,8 +184,8 @@ begin
 	// This occurs when one of the instructions with an unknown or calculated
 	// target is present.
 	bus[`IB_BT]		 <= 1'b0;
-	bus[`IB_ALU]   <= instr[7:6]==2'b10;
-	bus[`IB_FC]		 <= instr[7:5]==3'h6;
+	bus[`IB_ALU]   <= IsAlu(instr);
+	bus[`IB_FC]		 <= IsFcu(instr);
 //	bus[`IB_CANEX] <= fnCanException(instr);
 	bus[`IB_LOAD]	 <= IsLoad(instr);
 	bus[`IB_STORE]	<= IsStore(instr);
