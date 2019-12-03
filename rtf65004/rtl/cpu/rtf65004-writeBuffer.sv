@@ -25,8 +25,8 @@
 
 module writeBuffer(rst_i, clk_i, bstate, cyc_pending, wb_has_bus, update_iq, uid, ruid, fault,
 	wb_v, wb_addr, wb_en_i, cwr_o, csel_o, cadr_o, cdat_o,
-	p0_id_i, p0_rid_i, p0_wr_i, p0_ack_o, p0_sel_i, p0_adr_i, p0_dat_i, p0_hit,
-	p1_id_i, p1_rid_i, p1_wr_i, p1_ack_o, p1_sel_i, p1_adr_i, p1_dat_i, p1_hit,
+	p0_id_i, p0_rid_i, p0_wr_i, p0_wrap_i, p0_ack_o, p0_sel_i, p0_adr_i, p0_dat_i, p0_hit,
+	p1_id_i, p1_rid_i, p1_wr_i, p1_wrap_i, p1_ack_o, p1_sel_i, p1_adr_i, p1_dat_i, p1_hit,
 	cyc_o, stb_o, ack_i, err_i, tlbmiss_i, wrv_i, we_o, sel_o, adr_o, dat_o, cr_o);
 parameter WB_DEPTH = 7;
 parameter IQ_ENTRIES = `QENTRIES;
@@ -54,6 +54,7 @@ input wb_en_i;
 input [`QBITS] p0_id_i;
 input [`RBITS] p0_rid_i;
 input p0_wr_i;
+input p0_wrap_i;
 input [1:0] p0_sel_i;
 input [15:0] p0_adr_i;
 input [15:0] p0_dat_i;
@@ -63,6 +64,7 @@ output reg p0_hit;
 input [`QBITS] p1_id_i;
 input [`RBITS] p1_rid_i;
 input p1_wr_i;
+input p1_wrap_i;
 input [1:0] p1_sel_i;
 input [15:0] p1_adr_i;
 input [15:0] p1_dat_i;
@@ -95,6 +97,8 @@ reg [RENTRIES-1:0] wb_rid [0:WB_DEPTH-1];
 reg [WB_DEPTH-1:0] wb_rmw;
 reg [IQ_ENTRIES-1:0] wbo_id;
 reg [RENTRIES-1:0] wbo_rid;
+reg [WB_DEPTH-1:0] wb_wrap;
+reg wrap_cycle;
 
 wire writing_wb = /*(p0_wr_i && p1_wr_i && wb_ptr < WB_DEPTH-2) ||*/
 									   (p0_wr_i && wb_ptr < WB_DEPTH-1)
@@ -134,7 +138,7 @@ IDLE:
 		state <= StoreAck1;
 StoreAck1:
 	if (ack_i|err_i|tlbmiss_i|wrv_i) begin
-		if (sel_shift[16]==1'h0)
+		if (sel_shift[16]==1'h0 && !wrap_cycle)
 			state <= IDLE;
 		else
 			state <= Store2;
@@ -163,6 +167,7 @@ if (rst_i) begin
 	uid <= 1'd0;
 	ruid <= 1'd0;
 	update_iq <= FALSE;
+	wrap_cycle <= FALSE;
 end
 else begin
 	if (wb_en_i)
@@ -206,6 +211,7 @@ else begin
 	if (p0_wr_i & ~p0_ack_o) begin
 		if (wb_ptr < WB_DEPTH-1) begin
 			wb_v[wb_ptr] <= 1'b1;
+			wb_wrap[wb_ptr] <= p0_wrap_i;
 			wb_sel[wb_ptr] <= p0_sel_i;
 			wb_addr[wb_ptr] <= p0_adr_i;
 			wb_data[wb_ptr] <= p0_dat_i;
@@ -218,6 +224,7 @@ else begin
 	else if (p1_wr_i & ~p1_ack_o) begin
 		if (wb_ptr < WB_DEPTH-1) begin
 			wb_v[wb_ptr] <= 1'b1;
+			wb_wrap[wb_ptr] <= p1_wrap_i;
 			wb_sel[wb_ptr] <= p1_sel_i;
 			wb_addr[wb_ptr] <= p1_adr_i;
 			wb_data[wb_ptr] <= p1_dat_i;
@@ -235,7 +242,12 @@ IDLE:
 			cyc_o <= HIGH;
 			stb_o <= HIGH;
 			we_o <= HIGH;
-			sel_o <= wb_sel[0] << wb_addr[0][3:0];
+			if (wb_wrap[0] && wb_addr[0][7:0]==8'hFF) begin
+				sel_o <= 16'b01 << wb_addr[0][3:0];
+				wrap_cycle <= TRUE;
+			end
+			else
+				sel_o <= wb_sel[0] << wb_addr[0][3:0];
 			adr_o <= {wb_addr[0][AMSB:4],4'h0};
 			dat_o <= wb_data[0] << {wb_addr[0][3:0],3'h0};
 			wbo_id <= wb_id[0];
@@ -266,7 +278,7 @@ IDLE:
 StoreAck1:
 	if (ack_i|err_i|tlbmiss_i|wrv_i) begin
 		stb_o <= LOW;
-		if (sel_shift[16]==1'h0) begin
+		if (sel_shift[16]==1'h0 && !wrap_cycle) begin
 			cyc_o <= LOW;
 			we_o <= LOW;
 			sel_o <= 16'h0000;
@@ -294,12 +306,21 @@ StoreAck1:
 			cdat_o <= wb_data[0];
 	    wb_has_bus <= FALSE;
 		end
+		else begin
+    	cwr_o <= HIGH;
+			csel_o <= wrap_cycle ? 2'b01 : wb_sel[0];
+			cadr_o <= wb_addr[0];
+			cdat_o <= wb_data[0];
+		end
 	end
 Store2:
 	if (~ack_i) begin
 		stb_o <= HIGH;
-		sel_o <= {15'h0,sel_shift[16]};
-		adr_o[AMSB:4] <= adr_o[AMSB:4] + 2'd1;
+		sel_o <= {15'h0,1'b1};
+		if (wrap_cycle)
+			adr_o[AMSB:4] <= adr_o[AMSB:4] & 12'hFF0;
+		else
+			adr_o[AMSB:4] <= adr_o[AMSB:4] + 2'd1;
 		adr_o[3:0] <= 4'b0;
 		dat_o <= {120'd0,dat_shift[135:128]};
 	end
@@ -321,9 +342,16 @@ StoreAck2:
 			fault <= tlbmiss_i ? `FLT_TLB : wrv_i ? `FLT_DWF : err_i ? `FLT_DBE : `FLT_NONE;
     end
   	cwr_o <= HIGH;
-		csel_o <= wb_sel[0];
-		cadr_o <= wb_addr[0];
-		cdat_o <= wb_data[0];
+  	if (wrap_cycle) begin
+			csel_o <= 2'b01;
+			cadr_o <= (wb_addr[0] + 16'd1) & 16'hFF00;
+			cdat_o <= {wb_data[0][15:8],wb_data[0][15:8]};
+  	end
+  	else begin
+			csel_o <= wb_sel[0];
+			cadr_o <= wb_addr[0];
+			cdat_o <= wb_data[0];
+  	end
     wb_has_bus <= FALSE;
 	end
 endcase

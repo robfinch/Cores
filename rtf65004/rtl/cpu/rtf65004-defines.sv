@@ -128,6 +128,10 @@
 `define UO_MOV	6'h1E
 `define UO_JMP	6'h1F
 `define	UO_BITB	6'h20
+`define UO_LDBW	6'h21
+`define UO_LDWW	6'h22
+`define UO_STBW	6'h23
+`define UO_STWW	6'h24
 
 `define BYTE		9'h87
 `define UBYTE		9'hA7
@@ -717,6 +721,7 @@
 `define IB_BRCC		49
 `define IB_CMP		48
 `define IB_NEED_SR	39
+`define IB_WRAP		38
 `define IB_STORE	36
 `define IB_MEMSZ	35:33
 `define IB_MEM2		32

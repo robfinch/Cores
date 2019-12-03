@@ -125,6 +125,14 @@ default:
 endcase
 endfunction
 
+function fnWrap;
+input [15:0] isn;
+case(isn[15:10])
+`LDBW,`STBW:	fnWrap = TRUE;
+default:	fnWrap = FALSE;
+endcase
+endfunction
+
 always @*
 begin
 	bus <= 167'h0;
@@ -153,6 +161,7 @@ begin
 	bus[`IB_BR]			<= IsBranch(instr);
 	bus[`IB_RFW]		<= IsRFW(instr);
 	bus[`IB_NEED_SR]	<= fnNeedSr(instr);
+	bus[`IB_WRAP]		<= fnWrap(instr);
 end
 
 endmodule
