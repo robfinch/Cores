@@ -109,6 +109,7 @@ reg stb;
 reg cyc_pending;	// An i-cache load is about to happen
 reg we;
 
+reg [31:0] rst_ctr;
 reg [7:0] i;
 integer n;
 integer j, k;
@@ -122,6 +123,9 @@ reg [7:0] sp;
 reg [15:0] pc;
 reg [15:0] tmp;
 reg [7:0] sr;
+
+wire [15:0] pcd;
+reg [31:0] tick;
 
 reg [15:0] rfoa [0:QSLOTS-1];
 reg [15:0] rfob [0:QSLOTS-1];
@@ -174,9 +178,10 @@ reg [15:0] uoq_const [0:UOQ_ENTRIES-1];
 reg [1:0] uoq_fl;		// first or last micro-op
 reg [1:0] uoq_flagsupd [0:UOQ_ENTRIES-1];
 reg [UOQ_ENTRIES-1:0] uoq_hs;
-reg [UOQ_ENTRIES-1:0] uqo_jc;
-reg [UOQ_ENTRIES-1:0] uqo_br;
-reg [UOQ_ENTRIES-1:0] uqo_ret;
+reg [UOQ_ENTRIES-1:0] uoq_jc;
+reg [UOQ_ENTRIES-1:0] uoq_br;
+reg [UOQ_ENTRIES-1:0] uoq_ret;
+reg [UOQ_ENTRIES-1:0] uoq_takb;
 
 // Issue queue
 reg [IQ_ENTRIES-1:0] iq_v;						// valid indicator (set from iq_state)
@@ -770,8 +775,9 @@ uoq_room = 5'd0;
 for (n = 0; n < 8; n = n + 1)
 	if (uoq_v[(uoq_tail + n) % UOQ_ENTRIES] == `INV && !uoq_hitv) begin
 		uoq_room = uoq_room + 5'd1;
-		uoq_hitv = TRUE;
 	end
+	else
+		uoq_hitv = TRUE;
 end
 
 // q1 and q2 determine the pc increment. The pc determines which instructions
@@ -807,10 +813,12 @@ if (rst_i) begin
 end
 else begin
 	uo_queuedCnt <= 4'd0;
-	if (q2)
-		uo_queuedCnt <= 4'd2 + uo_len1 + uo_len2;
+	if (qb)
+		uo_queuedCnt <= 4'd5;
+	else if (q2)
+		uo_queuedCnt <= uo_len1 + uo_len2;
 	else if (q1)
-		uo_queuedCnt <= 4'd1 + uo_len1;
+		uo_queuedCnt <= uo_len1;
 end
 
 always @(posedge clk_i)
@@ -824,10 +832,11 @@ assign uoq_slotv[1] = uoq_head != uoq_tail && uoq_head + 4'd1 != uoq_tail;
 assign uoq_slotv[2] = uoq_head != uoq_tail && uoq_head + 4'd1 != uoq_tail && uoq_head + 4'd2 != uoq_tail;
 
 wire freezepc;
+assign ic1_out = ic_out[95:0];
 assign ic2_out = ic1_out >> {len1,3'b0};
-assign freezepc = (rst_i | nmi_i | (irq_i & ~sr[3])) && !int_commit;
+assign freezepc = (rst_ctr < 32'd10 | nmi_i | (irq_i & ~sr[3])) && !int_commit;
 
-assign opcode1 = freezepc ? `BRK : ic_out[7:0];
+assign opcode1 = freezepc ? `BRK : ic1_out[7:0];
 assign opcode2 = freezepc ? `BRK : ic2_out[7:0];
 wire IsRst = (freezepc & rst_i);
 wire IsNmi = (freezepc & nmi_i);
@@ -850,9 +859,9 @@ wire ihit;
 assign ihit = L1_ihit;
 wire L1_nxt, L2_nxt;					// advances cache way lfsr
 wire [2:0] L2_cnt;
-wire [255:0] ROM_dat;
-wire [255:0] d0ROM_dat;
-wire [255:0] d1ROM_dat;
+wire [511:0] ROM_dat;
+wire [511:0] d0ROM_dat;
+wire [511:0] d1ROM_dat;
 
 wire isROM;
 wire d0isROM, d1isROM;
@@ -996,6 +1005,16 @@ wire [FSLOTS-1:0] is_branch;
 reg [IQ_ENTRIES-1:0] is_qbranch;
 assign is_branch[0] = IsBranch(opcode1) || IsBrk(opcode1) || IsRti(opcode1) || IsRts(opcode1);
 assign is_branch[1] = IsBranch(opcode2) || IsBrk(opcode2) || IsRti(opcode2) || IsRts(opcode2);
+reg [QSLOTS-1:0] slot_jmp;
+reg [QSLOTS-1:0] uoq_take_branch;
+always @*
+for (n = 0; n < QSLOTS; n = n + 1)
+	slot_jmp[n] = uoq_uop[(uoq_head + n) % UOQ_ENTRIES][15:10]==`UO_JMP ||
+								uoq_uop[(uoq_head + n) % UOQ_ENTRIES][15:10]==`UO_JSI;
+always @*
+for (n = 0; n < QSLOTS; n = n + 1)
+	uoq_take_branch = uoq_takb[(uoq_head + n) % UOQ_ENTRIES];
+
 always @*
 for (n = 0; n < IQ_ENTRIES; n = n + 1)
 	is_qbranch[n] = iq_br[n];
@@ -1089,6 +1108,43 @@ regfileSource urfs1
 	.iq_rid(iq_rid),
 	.rf_source(rf_source)
 );
+
+// Check how many instructions can be queued. An instruction can queue only if
+// there are entries available in both the dispatch and re-order buffer. This
+// quarentees the re-order buffer id is available during queue. The instruction
+// can't execute until there is a place to put the result.
+// The break bit in the instruction template must also be clear in order for an
+// instruction to queue.
+getQueuedCount ugqc1
+(
+	.branchmiss(branchmiss),
+	.brk(3'b0),
+	.phitd(phitd),
+	.tails(tails),
+	.rob_tails(rob_tails),
+	.slotvd(uoq_slotv),
+	.slot_jmp(slot_jmp),
+	.take_branch(uoq_take_branch),
+	.iq_v(iq_v),
+	.rob_v(rob_v),
+	.queuedCnt(queuedCnt),
+	.queuedOnp(queuedOnp)
+);
+
+getRQueuedCount ugrqct1
+(
+	.rst(rst_i),
+	.rob_tails(rob_tails),
+	.rob_v_i(rob_v),
+	.rob_v_o(next_rob_v),
+	.heads(heads),
+	.iq_state(iq_state),
+	.iq_rid_i(iq_rid),
+	.iq_rid_o(next_iq_rid),
+	.rqueuedCnt(rqueuedCnt),
+	.rqueuedOn(rqueuedOn)
+);
+
 
 reg [3:0] nxtrb;
 reg [1:0] max_cs;
@@ -1276,20 +1332,20 @@ assign L2_ihit = isROM|L2_ihita;
 assign d0L2_rhit = d0isROM|d0L2_rhita;
 assign d1L2_rhit = d1isROM|d1L2_rhita;
 
-reg [12:0] rL1_adr;
-reg [12:0] rd0L1_adr;
-reg [12:0] rd1L1_adr;
+reg [8:0] rL1_adr;
+reg [8:0] rd0L1_adr;
+reg [8:0] rd1L1_adr;
 (* ram_style="block" *)
-reg [255:0] rommem [0:7167];
+reg [511:0] rommem [0:511];
 initial begin
-`include "d:/cores6/nvio/v1/software/boot/boottc.ve0"
+`include "d:/cores6/rtf65004/v1/software/boot/boottc.ve0"
 end
 always @(posedge clk)
-	rL1_adr <= L1_adr[15:5];
+	rL1_adr <= L1_adr[14:6];
 always @(posedge clk)
-	rd0L1_adr <= d0L1_adr[15:5];
+	rd0L1_adr <= d0L1_adr[14:6];
 always @(posedge clk)
-	rd1L1_adr <= d1L1_adr[15:5];
+	rd1L1_adr <= d1L1_adr[14:6];
 assign ROM_dat = rommem[rL1_adr];
 assign d0ROM_dat = rommem[rd0L1_adr];
 assign d1ROM_dat = rommem[rd1L1_adr];
@@ -1731,12 +1787,16 @@ always @(posedge clk)
 		yr <= commit0_bus[7:0];
 
 always @(posedge clk)
-	if (commit2_v && commit2_tgt==`UO_SP)
-		sp <= commit2_bus[7:0];
-	else if (commit1_v && commit1_tgt==`UO_SP)
-		sp <= commit1_bus[7:0];
-	else if (commit0_v && commit0_tgt==`UO_SP)
-		sp <= commit0_bus[7:0];
+	if (rst_i)
+		sp <= 8'hFF;
+	else begin
+		if (commit2_v && commit2_tgt==`UO_SP)
+			sp <= commit2_bus[7:0];
+		else if (commit1_v && commit1_tgt==`UO_SP)
+			sp <= commit1_bus[7:0];
+		else if (commit0_v && commit0_tgt==`UO_SP)
+			sp <= commit0_bus[7:0];
+	end
 
 // PLP and RTI target the sr during a load. They write the whole word.
 // The brk flag in the status register always loads as zero. The only time the
@@ -2707,7 +2767,6 @@ default:
 endcase
 
 // Hold reset for five seconds
-reg [31:0] rst_ctr;
 always @(posedge clk)
 if (rst_i)
 	rst_ctr <= 32'd0;
@@ -2752,6 +2811,7 @@ seqnum usqn1
 
 always @(posedge clk_i)
 if (rst_i) begin
+	tick <= 0;
 	uoq_tail <= 4'd0;
 	for (n = 0; n < UOQ_ENTRIES; n = n + 1) begin
 		uoq_v[n] <= `INV;
@@ -2760,6 +2820,7 @@ if (rst_i) begin
 		uoq_flagsupd[n] <= 8'h00;
 		uoq_fl[n] <= 2'b11;
 		uoq_pc[n] <= 16'hFFFC;
+		uoq_takb[n] <= FALSE;
 	end
   for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
   	iq_state[n] <= IQS_INVALID;
@@ -2926,7 +2987,7 @@ else begin
 	if (L1_invline)
 		invicl <= FALSE;
 	invdcl <= FALSE;
-//	tick <= tick + 4'd1;
+	tick <= tick + 4'd1;
 	alu0_ld <= FALSE;
 	alu1_ld <= FALSE;
 	fcu_ld <= FALSE;
@@ -2985,6 +3046,7 @@ else begin
 		uoq_flagsupd[(uoq_tail+4) % UOQ_ENTRIES] <= `UOF_I|`UOF_D|`UOF_B;
 		uoq_hs[(uoq_tail+4) % UOQ_ENTRIES] <= (IsRst|IsNmi|IsIrq) ? 1'b1 : 1'b0;
 		tskLd4(`UO_ZERO,insnx[0],uoq_const[(uoq_tail+4) % UOQ_ENTRIES]);
+		uoq_tail <= (uoq_tail + 8'd5) % UOQ_ENTRIES;
 	end
 	// uopl[`BRK] 			= {2'd3,`UOF_NONE,2'd3,`UO_ADDB,`UO_M3,`UO_SP,2'd0,`UO_STB,`UO_P1,`UO_SR,`UO_SP,`UO_STW,`UO_P2,`UO_PC,`UO_SP,`UO_LDW,`UO_M2,`UO_PC,2'd0};
 	else if (q2) begin
@@ -2994,6 +3056,7 @@ else begin
 		uoq_fl[uoq_tail] <= uo_len1==2'b00 ? 2'b11: 2'b01;
 		uoq_flagsupd[uoq_tail + uo_whflg1] = uo_flags1;
 		uoq_hs[(uoq_tail+0) % UOQ_ENTRIES] <= 1'b0;
+		uoq_takb[(uoq_tail+0) % UOQ_ENTRIES] <= take_branch[0];
 		tskLd4(uo_insn1[0][`UO_LD4],insnx[0],uoq_const[uoq_tail]);
 		if (uo_len1 > 2'b00) begin
 			uoq_v[(uoq_tail+1) % UOQ_ENTRIES] <= `VAL;
@@ -3029,6 +3092,7 @@ else begin
 		uoq_uop[(uoq_tail+uo_len1) % UOQ_ENTRIES] <= uo_insn2[0];
 		uoq_fl[(uoq_tail+uo_len1) % UOQ_ENTRIES] <= uo_len2==2'b00 ? 2'b11 : 2'b01;
 		uoq_hs[(uoq_tail+uo_len1+0) % UOQ_ENTRIES] <= 1'b0;
+		uoq_takb[(uoq_tail+uo_len1+0) % UOQ_ENTRIES] <= take_branch[1];
 		uoq_tail <= (uoq_tail + uo_len1 + 8'd1) % UOQ_ENTRIES;
 		tskLd4(uo_insn2[0][`UO_LD4],insnx[1],uoq_const[uoq_tail + uo_len1]);
 		if (uo_len2 > 2'b00) begin
@@ -3069,6 +3133,7 @@ else begin
 		uoq_uop[uoq_tail] <= uo_insn1[0];
 		uoq_fl[uoq_tail] <= uo_len1==2'b00 ? 2'b11: 2'b01;
 		uoq_hs[(uoq_tail+0) % UOQ_ENTRIES] <= 1'b0;
+		uoq_takb[(uoq_tail+0) % UOQ_ENTRIES] <= take_branch[0];
 		uoq_tail <= (uoq_tail + 8'd1) % UOQ_ENTRIES;
 		tskLd4(uo_insn1[0][`UO_LD4],insnx[0],uoq_const[uoq_tail]);
 		if (uo_len1 > 2'b00) begin
@@ -3111,22 +3176,26 @@ else begin
 			if (queuedOnp[0]) begin
 				queue_slot(0,rob_tails[0],maxsn+1'd1,id_bus[0],active_tag,rob_tails[0]);
 				uoq_v[uoq_head] <= `INV;
+				uoq_takb[uoq_head] <= FALSE;
 				uoq_head <= uoq_head + 3'd1;
 			end
 		3'b010:
 			if (queuedOnp[1]) begin
 				queue_slot(1,rob_tails[0],maxsn+1'd1,id_bus[1],active_tag,rob_tails[0]);
 				uoq_v[uoq_head] <= `INV;
+				uoq_takb[uoq_head] <= FALSE;
 				uoq_head <= uoq_head + 3'd1;
 			end
 		3'b011:
 			if (queuedOnp[0]) begin
 				queue_slot(0,rob_tails[0],maxsn+1'd1,id_bus[0],active_tag,rob_tails[0]);
 				uoq_v[uoq_head] <= `INV;
+				uoq_takb[uoq_head] <= FALSE;
 				uoq_head <= uoq_head + 3'd1;
 				if (queuedOnp[1]) begin
 					queue_slot(1,rob_tails[1],maxsn+2'd2,id_bus[1],is_branch[0] ? active_tag+2'd1 : active_tag,rob_tails[1]);
 					uoq_v[(uoq_head + 1) % UOQ_ENTRIES] <= `INV;
+					uoq_takb[(uoq_head + 1) % UOQ_ENTRIES] <= FALSE;
 					uoq_head <= uoq_head + 3'd2;
 					arg_vs(3'b011);
 				end
@@ -3135,6 +3204,7 @@ else begin
 			if (queuedOnp[2]) begin
 				queue_slot(2,rob_tails[0],maxsn+1'd1,id_bus[2],active_tag,rob_tails[0]);
 				uoq_v[uoq_head] <= `INV;
+				uoq_takb[uoq_head] <= FALSE;
 				uoq_head <= uoq_head + 3'd1;
 			end
 		3'b101:	;	// illegal
@@ -3142,10 +3212,12 @@ else begin
 			if (queuedOnp[1]) begin
 				queue_slot(1,rob_tails[0],maxsn+1'd1,id_bus[1],active_tag,rob_tails[0]);
 				uoq_v[uoq_head] <= `INV;
+				uoq_takb[uoq_head] <= FALSE;
 				uoq_head <= uoq_head + 3'd1;
 				if (queuedOnp[2]) begin
 					queue_slot(2,rob_tails[1],maxsn+2'd2,id_bus[2],is_branch[1] ? active_tag + 2'd1 : active_tag,rob_tails[1]);
 					uoq_v[(uoq_head + 1) % UOQ_ENTRIES] <= `INV;
+					uoq_takb[(uoq_head + 1) % UOQ_ENTRIES] <= FALSE;
 					uoq_head <= uoq_head + 3'd2;
 					arg_vs(3'b110);
 				end
@@ -3154,10 +3226,12 @@ else begin
 			if (queuedOnp[0]) begin
 				uoq_head <= uoq_head + 3'd1;
 				uoq_v[uoq_head] <= `INV;
+				uoq_takb[uoq_head] <= FALSE;
 				queue_slot(0,rob_tails[0],maxsn+1'd1,id_bus[0],active_tag,rob_tails[0]);
 				if (queuedOnp[1]) begin
 					queue_slot(1,rob_tails[1],maxsn+2'd2,id_bus[1],is_branch[0] ? active_tag + 2'd1 : active_tag,rob_tails[1]);
 					uoq_v[(uoq_head + 1) % UOQ_ENTRIES] <= `INV;
+					uoq_takb[(uoq_head + 1) % UOQ_ENTRIES] <= FALSE;
 					uoq_head <= uoq_head + 3'd2;
 					arg_vs(3'b011);
 					if (queuedOnp[2]) begin
@@ -3165,6 +3239,7 @@ else begin
 							is_branch[0] && is_branch[1] ? active_tag + 2'd2 :
 							is_branch[0] ? active_tag + 2'd1 : is_branch[1] ? active_tag + 2'd1 : active_tag,rob_tails[2]);
 						uoq_v[(uoq_head + 2) % UOQ_ENTRIES] <= `INV;
+						uoq_takb[(uoq_head + 2) % UOQ_ENTRIES] <= FALSE;
 						uoq_head <= uoq_head + 3'd3;
 						arg_vs(3'b111);
 					end
@@ -3942,14 +4017,14 @@ endcase
 `ifdef SIM
 	$display("\n\n\n\n\n\n\n\n");
 	$display("TIME %0d", $time);
-	$display("%b %h #", ip_mask, pc);
-	$display("%b %h #", ip_mask, pcd);
-    $display ("--------------------------------------------------------------------- Regfile: %d ---------------------------------------------------------------------", rgs);
-  $display("ac: %h %d %o #", ac, regIsValid[0], rf_source[0);
-  $display("xr: %h %d %o #", xr, regIsValid[1], rf_source[1);
-  $display("yr: %h %d %o #", yr, regIsValid[2], rf_source[2);
-  $display("sp: %h %d %o #", sp, regIsValid[3], rf_source[3);
-  $display("sr: %h %d %o #", sr, regIsValid[7], rf_source[7);
+	$display("%b %h #", pc_mask, pc);
+	$display("%b %h #", pc_mask, pcd);
+    $display ("--------------------------------------------------------------------- Regfile ---------------------------------------------------------------------");
+  $display("ac: %h %d %o #", ac, regIsValid[0], rf_source[0]);
+  $display("xr: %h %d %o #", xr, regIsValid[1], rf_source[1]);
+  $display("yr: %h %d %o #", yr, regIsValid[2], rf_source[2]);
+  $display("sp: %h %d %o #", sp, regIsValid[3], rf_source[3]);
+  $display("sr: %h %d %o #", sr, regIsValid[7], rf_source[7]);
 `ifdef FCU_ENH
 	$display("Call Stack:");
 	for (n = 0; n < 16; n = n + 4)
@@ -3966,9 +4041,22 @@ endcase
 //        $display("%d %h", rasp+n[3:0], ras[rasp+n[3:0]]);
 	$display("TakeBr:%d #", take_branch);//, backpc);
 	$display("Insn%d: %h", 0, insnx[0]);
+	$display ("------------------------------------------------------------------------ Micro-op Buffer -----------------------------------------------------------------------");
+	for (i = 0; i < UOQ_ENTRIES; i = i + 1)
+		$display("%c%c %d: %c%c %h %h %h %h #",
+			i[`UOQ_BITS]==uoq_head ? "H":".",
+			i[`UOQ_BITS]==uoq_tail ? "T":".",
+			i[`UOQ_BITS],
+			uoq_v[i] ? "v" : "-",
+			uoq_fl[i]==2'b01 ? "F" : uoq_fl[i]==2'b10 ? "L" : uoq_fl[i]==2'b11 ? "B" : "-",
+			uoq_pc[i],
+			uoq_uop[i],
+			uoq_const[i],
+			uoq_flagsupd[i]
+			);
 	$display ("------------------------------------------------------------------------ Dispatch Buffer -----------------------------------------------------------------------");
-	for (i=0; i<QENTRIES; i=i+1) 
-	    $display("%c%c %d: %c%c%c %d %d %c%c %c %c%h %d,%d %h %h %d %d %d %h %d %d %d %h %d %d %d %h %o %h#",
+	for (i=0; i<IQ_ENTRIES; i=i+1) 
+	    $display("%c%c %d: %c%c%c %d %d %c%c %c %c%h %d,%d %h %h %d %d %d %h %d %d %d %h %d %d %d %h %o #",
 		 (i[`QBITS]==heads[0])?"C":".",
 		 (i[`QBITS]==tails[0])?"Q":".",
 		  i[`QBITS],
@@ -3987,19 +4075,18 @@ endcase
 		 iq_agen[i] ? "a": "-",
 		 iq_alu0_issue[i]?"0":iq_alu1_issue[i]?"1":"-",
 		 iq_stomp[i]?"s":"-",
-		iq_fc[i] ? "F" : iq_mem[i] ? "M" : (iq_alu[i]==1'b1) ? "a" : iq_fpu[i] ? "f" : "O", 
+		iq_fc[i] ? "F" : iq_mem[i] ? "M" : (iq_alu[i]==1'b1) ? "a" : "O", 
 		iq_instr[i], iq_tgt[i][2:0], iq_tgt[i][2:0],
-		iq_argI[i],
+		0,
 		iq_argT[i], iq_src1[i], iq_argT_v[i], iq_argT_s[i],
 		iq_argB[i], iq_src2[i], iq_argB_v[i], iq_argB_s[i],
 		iq_argS[i], iq_src2[i], iq_argS_v[i], iq_argS_s[i],
 		iq_pc[i],
-		iq_sn[i],
-		iq_br_tag[i]
+		iq_sn[i]
 		);
 	$display ("------------- Reorder Buffer ------------");
 	for (i = 0; i < RENTRIES; i = i + 1)
-	$display("%c%c %d(%d): %c %h %d %h#",
+	$display("%c%c %d(%d): %c %h %d %h %h#",
 		 (i[`RBITS]==rob_heads[0])?"C":".",
 		 (i[`RBITS]==rob_tails[0])?"Q":".",
 		  i[`RBITS],
@@ -4009,7 +4096,8 @@ endcase
 		  rob_state[i]==RS_CMT ? "C"  : "D",
 		  rob_exc[i],
 		  rob_tgt[i],
-		  rob_res[i]
+		  rob_res[i],
+		  rob_sr_res[i]
 		);
     $display("DRAM");
 	$display("%d %h %h %c%h %o #",
@@ -4024,19 +4112,19 @@ endcase
 	$display("%d %h %o #", dramB_v, dramB_bus, dramB_id);
     $display("ALU");
 	$display("%d %h %h %h %c%h %o %h #",
-		alu0_dataready, alu0_argI, alu0_argA, alu0_argB, 
+		alu0_dataready, 0, alu0_argT, alu0_argB, 
 		 (IsFlowCtrl(alu0_instr) ? 98 : IsMem(alu0_instr) ? 109 : 97),
-		alu0_instr, alu0_sourceid, alu0_ip);
+		alu0_instr, alu0_sourceid, alu0_pc);
 	$display("%d %h %o 0 #", alu0_v, alu0_bus, alu0_id);
 	if (`NUM_ALU > 1) begin
 		$display("%d %h %h %h %c%h %o %h #",
-			alu1_dataready, alu1_argI, alu1_argA, alu1_argB, 
+			alu1_dataready, 0, alu1_argT, alu1_argB, 
 		 	(IsFlowCtrl(alu1_instr) ? 98 : IsMem(alu1_instr) ? 109 : 97),
-			alu1_instr, alu1_sourceid, alu1_ip);
+			alu1_instr, alu1_sourceid, alu1_pc);
 		$display("%d %h %o 0 #", alu1_v, alu1_bus, alu1_id);
 	end
 	$display("FCU");
-	$display("%d %h %h %h %h %c%c #", fcu_v, fcu_bus, fcu_argI, fcu_argA, fcu_argB, fcu_takb?"T":"-", fcu_pt?"T":"-");
+	$display("%d %h %h %h %h %c%c #", fcu_v, fcu_bus, 0, fcu_argT, fcu_argB, fcu_takb?"T":"-", fcu_pt?"T":"-");
 	$display("%c %h %h %h %h #", fcu_branchmiss?"m":" ", fcu_sourceid, fcu_misspc, fcu_nextpc, fcu_brdisp); 
     $display("Commit");
 	$display("0: %c %h %o %d #", commit0_v?"v":" ", commit0_bus, commit0_id, commit0_tgt[2:0]);
@@ -4402,7 +4490,7 @@ output reg [3:0] len;
 always @*
 case(opcode)
 `SEP,`REP:	len <= 4'd2;
-`BRK:	len <= 4'd0;
+`BRK:	len <= 4'd2;
 `BPL,`BMI,`BCS,`BCC,`BVS,`BVC,`BEQ,`BNE,`BRA:	len <= 4'd2;
 `BRL: len <= 4'd3;
 `CLC,`SEC,`CLD,`SED,`CLV,`CLI,`SEI:	len <= 4'd1;
@@ -4410,9 +4498,10 @@ case(opcode)
 `INY,`DEY,`INX,`DEX,`INA,`DEA: len <= 4'd1;
 `XCE,`WDM: len <= 4'd1;
 `STP,`WAI: len <= 4'd1;
-`JMP,`JML,`JMP_IND,`JMP_INDX,
-`RTS,`RTL,`RTI: len <= 4'd0;
-`JSR,`JSR_INDX:	len <= 4'd2;
+`JMP,`JMP_IND,`JMP_INDX: len <= 4'd3;
+`JML: len <= 4'd4;
+`RTS,`RTL,`RTI: len <= 4'd1;
+`JSR,`JSR_INDX:	len <= 4'd3;
 `JSL:	len <= 4'd3;
 `NOP: len <= 4'd1;
 

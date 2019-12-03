@@ -24,7 +24,7 @@
 //
 // The following line is to enable simulation versions of some modules.
 // Comment out for synthesis.
-//`define SIM		1'b1
+`define SIM		1'b1
 
 //`define SUPPORT_VECTOR	1'b1
 //`define SUPPORT_BBMS	1'b1
@@ -48,6 +48,9 @@
 `define FSLOTS		2
 
 `define UOQ_ENTRIES	16
+`define UOQ_BIT 	$clog2(UOQ_ENTRIES)
+`define UOQ_BITS	`UOQ_BIT:0
+
 // Queue size should not be an even power of two!
 // Don't use 4,8,16,32,64 etc. As a value of all ones for the qid and rid
 // is used to indicate and invalid value.
@@ -86,8 +89,8 @@
 // however the branch predictor won't be effective as it depends on this
 // configuration constant. Reducing the constant to one for instance will cause
 // the branch predictor to operate only on slot 0.
-`define QSLOTS		4
-`define RSLOTS		4
+`define QSLOTS		3
+`define RSLOTS		3
 
 // Bitfield for representing exception codes
 `define XBITS			7:0

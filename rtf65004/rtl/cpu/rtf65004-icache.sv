@@ -206,7 +206,7 @@ endmodule
 
 module L1_icache(rst, clk, nxt, wr, wadr, adr, i, o, fault, hit, invall, invline, missadr);
 parameter pSize = 2;
-parameter AMSB = 63;
+parameter AMSB = 15;
 localparam pLines = pSize==4 ? 128 : 64;
 localparam pLNMSB = pSize==4 ? 6 : 5;
 input rst;
@@ -344,7 +344,7 @@ endmodule
 module L2_icache(rst, clk, nxt, wr, adr, cnt, exv_i, i, err_i, o, hit, invall, invline);
 parameter CAMTAGS = 1'b0;   // 32 way
 parameter FOURWAY = 1'b1;
-parameter AMSB = 79;
+parameter AMSB = 15;
 input rst;
 input clk;
 input nxt;
@@ -420,7 +420,7 @@ endmodule
 
 // Four way set associative tag memory
 module L2_icache_cmptag4way(rst, clk, nxt, wr, wr2, inv, invall, adr, lineno, hit);
-parameter AMSB = 63;
+parameter AMSB = 15;
 input rst;
 input clk;
 input nxt;
