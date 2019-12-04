@@ -123,7 +123,7 @@
 
 `define FCU_RA		pc			// return address if no RSB
 // Comment out the following to remove bypassing logic on the functional units
-`define FU_BYPASS	1
+//`define FU_BYPASS	1
 
 `define SUPPORT_TLB		1
 

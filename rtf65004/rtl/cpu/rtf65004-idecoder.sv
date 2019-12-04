@@ -141,7 +141,7 @@ case(isn[15:10])
 `UO_ASLB,`UO_LSRB,`UO_ROLB,`UO_RORB,
 `UO_MOV:
 	IsRFW = TRUE;
-default
+default:
 	IsRFW = FALSE;
 endcase
 endfunction

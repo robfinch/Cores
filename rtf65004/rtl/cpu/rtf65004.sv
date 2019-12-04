@@ -22,6 +22,7 @@
 // ============================================================================
 // 36010 57616
 // 14924 23878
+// 31412 50259
 `include "rtf65004-config.sv"
 `include "rtf65004-defines.sv"
 
@@ -192,7 +193,7 @@ reg [2:0] iq_state [0:IQ_ENTRIES-1];
 reg [`SNBITS] iq_sn  [0:IQ_ENTRIES-1];		// sequence number
 reg [15:0] iq_pc [0:IQ_ENTRIES-1];	// program counter associated with instruction
 reg [2:0] iq_len [0:IQ_ENTRIES-1];
-reg [15:0] iq_ma [0:IQ_ENTRIES-1];		// memory address
+reg [`ABITS] iq_ma [0:IQ_ENTRIES-1];		// memory address
 reg [5:0] iq_instr [0:IQ_ENTRIES-1];	// micro-op instruction
 reg [1:0] iq_fl [0:IQ_ENTRIES-1];			// first or last indicators
 reg [15:0] iq_const [0:IQ_ENTRIES-1];
@@ -332,7 +333,7 @@ wire [7:0] alu0_sro;
 reg  [`QBITS] alu0_id;
 (* mark_debug="true" *)
 wire  [`XBITS] alu0_exc;
-wire        alu0_v = 1'b1;
+wire        alu0_v = alu0_dataready;
 reg [`QBITS] alu0_id1;
 reg [`QBITS] alu1_id1;
 reg [WID-1:0] alu0_bus1;
@@ -367,13 +368,12 @@ wire [WID-1:0] alu1_out;
 wire [7:0] alu1_sro;
 reg  [`QBITS] alu1_id;
 wire  [`XBITS] alu1_exc;
-wire        alu1_v = 1'b1;
+wire        alu1_v = alu1_dataready;
 reg alu1_v1;
 wire alu1_vsn;
 reg issuing_on_alu1;
 reg alu1_dne = TRUE;
 
-wire agen0_v = 1'b1;
 wire agen0_vsn;
 wire agen0_idle;
 reg [`SNBITS] agen0_sn;
@@ -382,6 +382,7 @@ reg [`QBITS] agen0_id;
 reg [`RBITS] agen0_rid;
 reg [RBIT:0] agen0_tgt;
 reg agen0_dataready;
+wire agen0_v = agen0_dataready;
 reg [2:0] agen0_unit;
 reg [15:0] agen0_instr;
 reg agen0_mem2;
@@ -395,7 +396,6 @@ reg agen0_offset;
 wire agen0_upd2;
 reg [1:0] agen0_base;
 
-wire agen1_v = 1'b1;
 wire agen1_vsn;
 wire agen1_idle;
 reg [`SNBITS] agen1_sn;
@@ -404,6 +404,7 @@ reg [`QBITS] agen1_id;
 reg [`RBITS] agen1_rid;
 reg [RBIT:0] agen1_tgt;
 reg agen1_dataready;
+wire agen1_v = agen1_dataready;
 reg [2:0] agen1_unit;
 reg [15:0] agen1_instr;
 reg agen1_mem2;
@@ -425,8 +426,8 @@ reg        fcu_done;
 reg         fcu_idle = 1'b1;
 reg [`QBITS] fcu_sourceid;
 reg [`RBITS] fcu_rid;
-reg [23:0] fcu_instr;
-reg [23:0] fcu_prevInstr;
+reg [5:0] fcu_instr;
+reg [5:0] fcu_prevInstr;
 reg  [2:0] fcu_insln;
 reg        fcu_pt;			// predict taken
 reg        fcu_branch;
@@ -434,7 +435,7 @@ reg [7:0] fcu_argS;
 reg [WID-1:0] fcu_argT;
 reg [WID-1:0] fcu_argB;
 reg [WID-1:0] fcu_argC;
-reg [WID-1:0] fcu_argI;	// only used by BEQ
+reg [WID-1:0] fcu_argI;
 reg [RBIT:0] fcu_tgt;
 reg [`ABITS] fcu_pc;
 reg [`ABITS] fcu_nextpc;
@@ -444,7 +445,7 @@ reg [WID-1:0] fcu_bus;
 reg [7:0] fcu_sr_bus;
 reg  [`QBITS] fcu_id;
 reg   [`XBITS] fcu_exc;
-wire        fcu_v;
+wire        fcu_v = fcu_dataready;
 reg        fcu_branchmiss;
 reg fcu_branchhit;
 reg  fcu_clearbm;
@@ -483,7 +484,7 @@ reg [79:0] dram0_argI, dram0_argB;
 reg [WID-1:0] dram0_data;
 reg dram0_wrap;
 reg [`ABITS] dram0_addr;
-reg [23:0] dram0_instr;
+reg [5:0] dram0_instr;
 reg        dram0_rmw;
 reg		   dram0_preload;
 reg [RBIT:0] dram0_tgt;
@@ -498,7 +499,7 @@ reg [15:0] dram1_argI, dram1_argB;
 reg [WID-1:0] dram1_data;
 reg dram1_wrap;
 reg [`ABITS] dram1_addr;
-reg [23:0] dram1_instr;
+reg [5:0] dram1_instr;
 reg        dram1_rmw;
 reg		   dram1_preload;
 reg [RBIT:0] dram1_tgt;
@@ -554,7 +555,7 @@ wire [QSLOTS-1:0] predict_taken;
 wire predict_taken0;
 wire predict_taken1;
 wire predict_taken2;
-wire [FSLOTS-1:0] slot_rfw;
+reg [QSLOTS-1:0] slot_rfw;
 
 wire [7:0] opcode1, opcode2;
 
@@ -729,15 +730,15 @@ input [23:0] insn;
 output [15:0] cnst;
 begin
 	case(ld4)
-	`UO_M3:	cnst <= 16'hFFFD;
-	`UO_M2:	cnst <= 16'hFFFE;
-	`UO_M1:	cnst <= 16'hFFFF;
-	`UO_P3:	cnst <= 16'h0003;
-	`UO_P2:	cnst <= 16'h0002;
-	`UO_P1:	cnst <= 16'h0001;
-	`UO_R8:	cnst <= insn[15:8];
-	`UO_R16:	cnst <= insn[23:8];
-	default:	cnst <= 16'h0000;
+	`UO_M3:	cnst = 16'hFFFD;
+	`UO_M2:	cnst = 16'hFFFE;
+	`UO_M1:	cnst = 16'hFFFF;
+	`UO_P3:	cnst = 16'h0003;
+	`UO_P2:	cnst = 16'h0002;
+	`UO_P1:	cnst = 16'h0001;
+	`UO_R8:	cnst = insn[15:8];
+	`UO_R16:	cnst = insn[23:8];
+	default:	cnst = 16'h0000;
 	endcase
 end
 endtask
@@ -762,7 +763,8 @@ assign uo_insn2[4] = uopl[opcode2][15: 0];
 wire [FSLOTS-1:0] slotv;
 wire [QSLOTS-1:0] uoq_slotv;
 wire [4:0] uoq_size = 5'd16;
-reg [7:0] uoq_tail, uoq_head;
+reg [7:0] uoq_tail [0:7];
+reg [7:0] uoq_head;
 
 // Only scans up to eight ahead because that's all the room that might be
 // needed (there could be more than eight available).
@@ -773,7 +775,7 @@ begin
 uoq_hitv = FALSE;
 uoq_room = 5'd0;
 for (n = 0; n < 8; n = n + 1)
-	if (uoq_v[(uoq_tail + n) % UOQ_ENTRIES] == `INV && !uoq_hitv) begin
+	if (uoq_v[uoq_tail[n]] == `INV && !uoq_hitv) begin
 		uoq_room = uoq_room + 5'd1;
 	end
 	else
@@ -827,20 +829,20 @@ if (rst_i)
 else
 	uoq_head <= (uoq_head + uo_queuedCnt) % UOQ_ENTRIES;
 
-assign uoq_slotv[0] = uoq_head != uoq_tail;
-assign uoq_slotv[1] = uoq_head != uoq_tail && uoq_head + 4'd1 != uoq_tail;
-assign uoq_slotv[2] = uoq_head != uoq_tail && uoq_head + 4'd1 != uoq_tail && uoq_head + 4'd2 != uoq_tail;
+assign uoq_slotv[0] = uoq_head != uoq_tail[0];
+assign uoq_slotv[1] = uoq_head != uoq_tail[0] && uoq_head + 4'd1 != uoq_tail[0];
+assign uoq_slotv[2] = uoq_head != uoq_tail[0] && uoq_head + 4'd1 != uoq_tail[0] && uoq_head + 4'd2 != uoq_tail[0];
 
 wire freezepc;
 assign ic1_out = ic_out[95:0];
 assign ic2_out = ic1_out >> {len1,3'b0};
-assign freezepc = (rst_ctr < 32'd10 | nmi_i | (irq_i & ~sr[3])) && !int_commit;
+assign freezepc = ((rst_ctr < 32'd10) || nmi_i || (irq_i & ~sr[3])) && !int_commit;
 
 assign opcode1 = freezepc ? `BRK : ic1_out[7:0];
 assign opcode2 = freezepc ? `BRK : ic2_out[7:0];
 assign insnx[0] = freezepc ? `BRK : ic1_out[23:0];
 assign insnx[1] = freezepc ? `BRK : ic2_out[23:0];
-wire IsRst = (freezepc & rst_i);
+wire IsRst = (freezepc && rst_ctr < 4'd10);
 wire IsNmi = (freezepc & nmi_i);
 wire IsIrq = (freezepc & irq_i & ~sr[3]);
 instLength il1 (opcode1, len1);
@@ -852,7 +854,7 @@ reg invdcl;
 reg [AMSB:0] invlineAddr;
 wire L1_invline;
 wire [15:0] L1_adr, L2_adr;
-wire [257:0] L1_dat, L2_dat;
+wire [527:0] L1_dat, L2_dat;
 wire L1_wr, L2_wr;
 wire L1_selpc;
 wire L2_ld;
@@ -876,10 +878,10 @@ wire d0L2_rhita, d1L2_rhita;
 wire d0L1_nxt, d0L2_nxt;					// advances cache way lfsr
 wire d1L1_dhit, d1L2_rhit, d1L2_whit;
 wire d1L1_nxt, d1L2_nxt;					// advances cache way lfsr
-wire [32:0] d0L1_sel, d0L2_sel;
-wire [32:0] d1L1_sel, d1L2_sel;
-wire [263:0] d0L1_dat, d0L2_rdat, d0L2_wdat;
-wire [263:0] d1L1_dat, d1L2_rdat, d1L2_wdat;
+wire [65:0] d0L1_sel, d0L2_sel;
+wire [65:0] d1L1_sel, d1L2_sel;
+wire [527:0] d0L1_dat, d0L2_rdat, d0L2_wdat;
+wire [527:0] d1L1_dat, d1L2_rdat, d1L2_wdat;
 wire d0L1_dhit, d0L2_hit;
 wire d0L1_selpc, d0L2_selpc;
 wire d1L1_selpc, d1L2_selpc;
@@ -1013,6 +1015,10 @@ always @*
 for (n = 0; n < QSLOTS; n = n + 1)
 	slot_jmp[n] = uoq_uop[(uoq_head + n) % UOQ_ENTRIES][15:10]==`UO_JMP ||
 								uoq_uop[(uoq_head + n) % UOQ_ENTRIES][15:10]==`UO_JSI;
+always @*
+for (n = 0; n < QSLOTS; n = n + 1)
+	slot_rfw[n] = IsRFW(uoq_uop[(uoq_head + n) % UOQ_ENTRIES]);
+
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
 	uoq_take_branch = uoq_takb[(uoq_head + n) % UOQ_ENTRIES];
@@ -1158,6 +1164,8 @@ begin
 		max_cs = 2'd1;
 	else if (commit0_v)
 		max_cs = 2'd0;
+	else
+		max_cs = 2'd3;
 
 	// Amount to increment reorder buffer pointer by
 	case(max_cs)
@@ -1422,9 +1430,9 @@ wire [3:0] xisBr;
 wire [AMSB:0] xpc [0:3];
 wire [3:0] xtkb;
 
-assign xisBr[0] = iq_br[heads[0]] & commit0_v & ~iq_instr[heads[0]][5];
-assign xisBr[1] = iq_br[heads[1]] & commit1_v & ~iq_instr[heads[1]][5];
-assign xisBr[2] = iq_br[heads[2]] & commit1_v & ~iq_instr[heads[2]][5];
+assign xisBr[0] = iq_br[heads[0]] & commit0_v;// & ~iq_instr[heads[0]][5];
+assign xisBr[1] = iq_br[heads[1]] & commit1_v;// & ~iq_instr[heads[1]][5];
+assign xisBr[2] = iq_br[heads[2]] & commit2_v;// & ~iq_instr[heads[2]][5];
 assign xisBr[3] = 1'b0;
 assign xpc[0] = iq_pc[heads[0]];
 assign xpc[1] = iq_pc[heads[1]];
@@ -1501,7 +1509,7 @@ DCController udcc1
 	.dL1_dat(d0L1_dat),
 	.dL1_wr(d0L1_wr),
 	.dL1_invline(d0L1_invline),
-	.dcnxt(),
+	.dcnxt(d0L1_nxt),
 	.dcwhich(),
 	.dcl_o(),
 	.cti_o(d0cti),
@@ -1588,7 +1596,7 @@ DCController udcc2
 	.dL1_dat(d1L1_dat),
 	.dL1_wr(d1L1_wr),
 	.dL1_invline(d1L1_invline),
-	.dcnxt(),
+	.dcnxt(d1L1_nxt),
 	.dcwhich(),
 	.dcl_o(),
 	.cti_o(d1cti),
@@ -1752,10 +1760,14 @@ for (n = 0; n < QSLOTS; n = n + 1)
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
 	case(Rn[n])
-	2'd0:	rfob[n] <= 16'h0000;
-	2'd1:	rfob[n] <= {8'h0,xr};
-	2'd2:	rfob[n] <= {8'h0,yr};
-	2'd3:	rfob[n] <= {8'h1,sp};
+	3'd0:	rfob[n] <= 16'h0000;
+	3'd1:	rfob[n] <= {8'h0,xr};
+	3'd2:	rfob[n] <= {8'h0,yr};
+	3'd3:	rfob[n] <= {8'h1,sp};
+	3'd4:	rfob[n] <= 16'hFFFF;
+	3'd5:	rfob[n] <= tmp;
+	3'd6:	rfob[n] <= 16'd2;
+	default:	rfob[n] <= 16'h0;
 	endcase
 
 always @*
@@ -1892,9 +1904,16 @@ endfunction
 
 function Source2Valid;
 input [15:0] ins;
-case(ins[2:0])
-3'd0,3'd4,3'd6:	Source2Valid = TRUE;
-default:	Source2Valid = FALSE;
+case(ins[15:10])
+`UO_BEQ,`UO_BNE,`UO_BCS,`UO_BCC,`UO_BVS,`UO_BVC,`UO_BMI,`UO_BPL:	
+	Source2Valid = TRUE;
+`UO_CLC,`UO_SEC,`UO_CLV,`UO_CLI,`UO_SEI:
+	Source2Valid = TRUE;
+default:
+	case(ins[2:0])
+	3'd0,3'd4,3'd6:	Source2Valid = TRUE;
+	default:	Source2Valid = FALSE;
+	endcase
 endcase
 endfunction
 
@@ -1909,6 +1928,7 @@ endfunction
 function SourceTValid;
 input [15:0] ins;
 case(ins[15:10])
+`UO_NOP,
 `UO_BEQ,`UO_BNE,`UO_BCC,`UO_BCS,`UO_BVC,`UO_BVS,`UO_BMI,`UO_BPL,
 `UO_CLC,`UO_SEC,`UO_CLV,`UO_CLI,`UO_SEI:
 	SourceTValid = TRUE;
@@ -1960,16 +1980,18 @@ case(isn[15:10])
 `UO_CMPB,`UO_BITB,`UO_STB,`UO_STW:	IsRFW = FALSE;
 `UO_BEQ,`UO_BNE,`UO_BCS,`UO_BCC,`UO_BVS,`UO_BVC,`UO_BMI,`UO_BPL:	
 	IsRFW = FALSE;
-`UO_JMP:	IsRFW = FALSE;
+`UO_JMP,`UO_JSI:	IsRFW = FALSE;
 `UO_CLC,`UO_SEC,`UO_CLV,`UO_SEI,`UO_CLI:
 	IsRFW = FALSE;
+`UO_LDB,`UO_LDBW,`UO_LDW,`UO_LDWW:
+	IsRFW = TRUE;
 default:	IsRFW = TRUE;
 endcase
 endfunction
 
 function [1:0] fnSelect;
-input [15:0] isn;
-case(isn[15:10])
+input [5:0] isn;
+case(isn)
 `UO_LDB,`UO_STB,`UO_LDBW,`UO_STBW:	fnSelect = 2'b01;
 `UO_LDW,`UO_STW,`UO_LDWW,`UO_STWW:	fnSelect = 2'b11;
 default:	fnSelect = 2'b00;
@@ -1987,9 +2009,9 @@ end
 endfunction
 
 function [15:0] fnDataExtend;
-input [15:0] isn;
+input [5:0] isn;
 input [15:0] dat;
-case(isn[15:10])
+case(isn[5:0])
 `UO_LDB,`UO_LDBW:	fnDataExtend = {{8{dat[7]}},dat[7:0]};
 default:	fnDataExtend = dat;
 endcase
@@ -2011,6 +2033,9 @@ default:	fnMnemonic = "????";
 endcase
 endfunction
 
+initial begin
+	panic = 4'd0;
+end
 /*
 initial begin: Init
 	//
@@ -2134,7 +2159,7 @@ generate begin : issue_logic
 for (g = 0; g < IQ_ENTRIES; g = g + 1)
 begin
 assign args_valid[g] =
-		  (iq_argT_v[g] 
+		  (iq_argT_v[g] || iq_mem[g]
 `ifdef FU_BYPASS
         || (iq_argT_s[g][`RBITS] == alu0_rid)
         || ((iq_argT_s[g][`RBITS] == alu1_rid) && (`NUM_ALU > 1))
@@ -2473,7 +2498,11 @@ wire will_clear_branchmiss = branchmiss && (
 wire will_clear_branchmiss = branchmiss && (slotv[0] && pc==misspc);
 
 always @*
+case(fcu_instr)
+`UO_JSI:	fcu_misspc = fcu_argI + fcu_argB;
+default:
 	fcu_misspc = fcu_pt ? fcu_nextpc : fcu_nextpc + fcu_brdisp;
+endcase
 
 // To avoid false branch mispredicts the branch isn't evaluated until the
 // following instruction queues. The address of the next instruction is
@@ -2493,6 +2522,8 @@ if (fcu_v) begin
 	fcu_branchhit <= (fcu_branch && !(fcu_takb ^ fcu_pt));
 	if (fcu_branch && (fcu_takb ^ fcu_pt))
     fcu_branchmiss = TRUE;
+	else if (fcu_instr==`UO_JSI)
+		fcu_branchmiss = TRUE;
 	else
     fcu_branchmiss = FALSE;
 end
@@ -2581,7 +2612,7 @@ rtf65004_alu ualu1
 	.dst(alu0_argT),
 	.src1(alu0_argI),
 	.src2(alu0_argB),
-	.o(alu0_out),
+	.o(alu0_bus),
 	.s_i(alu0_argS),
 	.s_o(alu0_sro),
 	.idle(alu0_idle)
@@ -2593,7 +2624,7 @@ rtf65004_alu ualu2
 	.dst(alu1_argT),
 	.src1(alu1_argI),
 	.src2(alu1_argB),
-	.o(alu1_out),
+	.o(alu1_bus),
 	.s_i(alu1_argS),
 	.s_o(alu1_sro),
 	.idle(alu1_idle)
@@ -2731,6 +2762,10 @@ case(mwhich)
 		dat_o <= 1'h0;
 	end
 endcase
+assign cyc_o = cyc;
+assign stb_o = stb;
+assign we_o = we;
+assign adr_o = vadr;
 
 always @*
 case(mwhich)
@@ -2838,7 +2873,8 @@ seqnum usqn1
 always @(posedge clk_i)
 if (rst_i) begin
 	tick <= 0;
-	uoq_tail <= 4'd0;
+	for (n = 0; n < 8; n = n + 1)
+		uoq_tail[n] <= n;
 	for (n = 0; n < UOQ_ENTRIES; n = n + 1) begin
 		uoq_v[n] <= `INV;
 		uoq_uop[n] <= 16'd0;
@@ -2846,6 +2882,7 @@ if (rst_i) begin
 		uoq_flagsupd[n] <= 8'h00;
 		uoq_fl[n] <= 2'b11;
 		uoq_pc[n] <= 16'hFFFC;
+		uoq_hs[n] <= 1'd0;
 		uoq_takb[n] <= FALSE;
 	end
   for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
@@ -2861,7 +2898,7 @@ if (rst_i) begin
 		iq_load[n] <= FALSE;
 		iq_rfw[n] <= FALSE;
 		iq_pc[n] <= 16'hE000;
-		iq_instr[n] <= 16'h0000;	// `UO_NOP
+		iq_instr[n] <= 5'h00;	// `UO_NOP
 		iq_mem[n] <= FALSE;
 		iq_memissue[n] <= FALSE;
 		iq_mem_islot[n] <= 3'd0;
@@ -3025,180 +3062,179 @@ else begin
 	// BRK is queued specially because it's the only instruction requiring five 
 	// micro-ops. Also the brk vector must be modified for the appropriate type.
 	if (qb) begin
-		uoq_v[uoq_tail] <= `VAL;
-		uoq_pc[uoq_tail] <= pc;
-		uoq_uop[uoq_tail] <= {`UO_ADDB,`UO_M3,`UO_SP,`UO_ZR};
-		uoq_fl[uoq_tail] <= 2'b01;
+		uoq_v[uoq_tail[0]] <= `VAL;
+		uoq_pc[uoq_tail[0]] <= pc;
+		uoq_uop[uoq_tail[0]] <= {`UO_ADDB,`UO_M3,`UO_SP,`UO_ZR};
+		uoq_fl[uoq_tail[0]] <= 2'b01;
 		//uoq_flagsupd[uoq_tail + uo_whflg1] = uo_flags1;
-		uoq_flagsupd[uoq_tail] <= 8'h00;
-		uoq_hs[(uoq_tail+0) % UOQ_ENTRIES] <= 1'b0;
-		tskLd4(`UO_M3,insnx[0],uoq_const[uoq_tail]);
+		uoq_flagsupd[uoq_tail[0]] <= 8'h00;
+		uoq_hs[uoq_tail[0]] <= 1'b0;
+		tskLd4(`UO_M3,{16'h0,`BRK},uoq_const[uoq_tail[0]]);
 
-		uoq_v[(uoq_tail+1) % UOQ_ENTRIES] <= `VAL;
-		uoq_pc[(uoq_tail+1) % UOQ_ENTRIES] <= pc;
-		uoq_uop[(uoq_tail+1) % UOQ_ENTRIES] <= {`UO_STB,`UO_P1,`UO_SR,`UO_SP};
-		uoq_fl[(uoq_tail+1) % UOQ_ENTRIES] <= 2'b00;
-		uoq_flagsupd[(uoq_tail+1) % UOQ_ENTRIES] <= 8'h00;
-		uoq_hs[(uoq_tail+1) % UOQ_ENTRIES] <= 1'b0;
-		tskLd4(`UO_P1,insnx[0],uoq_const[(uoq_tail+1) % UOQ_ENTRIES]);
+		uoq_v[uoq_tail[1]] <= `VAL;
+		uoq_pc[uoq_tail[1]] <= pc;
+		uoq_uop[uoq_tail[1]] <= {`UO_STB,`UO_P1,`UO_SR,`UO_SP};
+		uoq_fl[uoq_tail[1]] <= 2'b00;
+		uoq_flagsupd[uoq_tail[1]] <= 8'h00;
+		uoq_hs[uoq_tail[1]] <= 1'b0;
+		tskLd4(`UO_P1,{16'h0,`BRK},uoq_const[uoq_tail[1]]);
 
-		uoq_v[(uoq_tail+2) % UOQ_ENTRIES] <= `VAL;
-		uoq_pc[(uoq_tail+2) % UOQ_ENTRIES] <= pc;
-		uoq_uop[(uoq_tail+2) % UOQ_ENTRIES] <= {`UO_STW,`UO_P2,(IsIrq ? `UO_PC2: `UO_PC),`UO_SP};
-		uoq_fl[(uoq_tail+2) % UOQ_ENTRIES] <= 2'b00;
-		uoq_flagsupd[(uoq_tail+2) % UOQ_ENTRIES] <= 8'h00;
-		uoq_hs[(uoq_tail+2) % UOQ_ENTRIES] <= 1'b0;
-		tskLd4(`UO_P2,insnx[0],uoq_const[(uoq_tail+2) % UOQ_ENTRIES]);
+		uoq_v[uoq_tail[2]] <= `VAL;
+		uoq_pc[uoq_tail[2]] <= pc;
+		uoq_uop[uoq_tail[2]] <= {`UO_STW,`UO_P2,(IsIrq ? `UO_PC2: `UO_PC),`UO_SP};
+		uoq_fl[uoq_tail[2]] <= 2'b00;
+		uoq_flagsupd[uoq_tail[2]] <= 8'h00;
+		uoq_hs[uoq_tail[2]] <= 1'b0;
+		tskLd4(`UO_P2,{16'h0,`BRK},uoq_const[uoq_tail[2]]);
 
-		uoq_v[(uoq_tail+3) % UOQ_ENTRIES] <= `VAL;
-		uoq_pc[(uoq_tail+3) % UOQ_ENTRIES] <= pc;
-		uoq_uop[(uoq_tail+3) % UOQ_ENTRIES] <= {`UO_LDW,`UO_M2,`UO_TMP,`UO_ZR};
-		uoq_fl[(uoq_tail+3) % UOQ_ENTRIES] <= 2'b00;
-		uoq_flagsupd[(uoq_tail+3) % UOQ_ENTRIES] <= 8'h00;
-		uoq_hs[(uoq_tail+3) % UOQ_ENTRIES] <= 1'b0;
+		uoq_v[uoq_tail[3]] <= `VAL;
+		uoq_pc[uoq_tail[3]] <= pc;
+		uoq_uop[uoq_tail[3]] <= {`UO_LDW,`UO_M2,`UO_TMP,`UO_ZR};
+		uoq_fl[uoq_tail[3]] <= 2'b00;
+		uoq_flagsupd[uoq_tail[3]] <= 8'h00;
+		uoq_hs[uoq_tail[3]] <= 1'b0;
 		if (IsRst)
-			uoq_const[(uoq_tail+3) % UOQ_ENTRIES] <= 16'hFFFC;
+			uoq_const[uoq_tail[3]] <= 16'hFFFC;
 		else if (IsNmi)
-			uoq_const[(uoq_tail+3) % UOQ_ENTRIES] <= 16'hFFFA;
+			uoq_const[uoq_tail[3]] <= 16'hFFFA;
 		else if (IsIrq)
-			uoq_const[(uoq_tail+3) % UOQ_ENTRIES] <= 16'hFFFE;
+			uoq_const[uoq_tail[3]] <= 16'hFFFE;
 		else
-			uoq_const[(uoq_tail+3) % UOQ_ENTRIES] <= 16'hFFFE;
+			uoq_const[uoq_tail[3]] <= 16'hFFFE;
 
-		uoq_v[(uoq_tail+4) % UOQ_ENTRIES] <= `VAL;
-		uoq_pc[(uoq_tail+4) % UOQ_ENTRIES] <= pc;
-		uoq_uop[(uoq_tail+4) % UOQ_ENTRIES] <= {`UO_JSI,`UO_ZERO,`UO_ZR,`UO_TMP};
-		uoq_fl[(uoq_tail+4) % UOQ_ENTRIES] <= 2'b10;
-		uoq_flagsupd[(uoq_tail+4) % UOQ_ENTRIES] <= `UOF_I|`UOF_D|`UOF_B;
-		uoq_hs[(uoq_tail+4) % UOQ_ENTRIES] <= (IsRst|IsNmi|IsIrq) ? 1'b1 : 1'b0;
-		tskLd4(`UO_ZERO,insnx[0],uoq_const[(uoq_tail+4) % UOQ_ENTRIES]);
-		uoq_tail <= (uoq_tail + 8'd5) % UOQ_ENTRIES;
+		uoq_v[uoq_tail[4]] <= `VAL;
+		uoq_pc[uoq_tail[4]] <= pc;
+		uoq_uop[uoq_tail[4]] <= {`UO_JSI,`UO_ZERO,`UO_ZR,`UO_TMP};
+		uoq_fl[uoq_tail[4]] <= 2'b10;
+		uoq_flagsupd[uoq_tail[4]] <= `UOF_I|`UOF_D|`UOF_B;
+		uoq_hs[uoq_tail[4]] <= (IsRst|IsNmi|IsIrq) ? 1'b1 : 1'b0;
+		tskLd4(`UO_ZERO,{16'h0,`BRK},uoq_const[uoq_tail[4]]);
+		for (n = 0; n < 8; n = n + 1)
+			uoq_tail[n] <= (uoq_tail[n] + 4'd5) % UOQ_ENTRIES;
 	end
 	// uopl[`BRK] 			= {2'd3,`UOF_NONE,2'd3,`UO_ADDB,`UO_M3,`UO_SP,2'd0,`UO_STB,`UO_P1,`UO_SR,`UO_SP,`UO_STW,`UO_P2,`UO_PC,`UO_SP,`UO_LDW,`UO_M2,`UO_PC,2'd0};
 	else if (q2) begin
-		uoq_v[uoq_tail] <= `VAL;
-		uoq_pc[uoq_tail] <= pc;
-		uoq_uop[uoq_tail] <= uo_insn1[0];
-		uoq_fl[uoq_tail] <= uo_len1==2'b00 ? 2'b11: 2'b01;
-		uoq_flagsupd[uoq_tail + uo_whflg1] = uo_flags1;
-		uoq_hs[(uoq_tail+0) % UOQ_ENTRIES] <= 1'b0;
-		uoq_takb[(uoq_tail+0) % UOQ_ENTRIES] <= take_branch[0];
-		tskLd4(uo_insn1[0][`UO_LD4],insnx[0],uoq_const[uoq_tail]);
+		uoq_v[uoq_tail[0]] <= `VAL;
+		uoq_pc[uoq_tail[0]] <= pc;
+		uoq_uop[uoq_tail[0]] <= uo_insn1[0];
+		uoq_fl[uoq_tail[0]] <= uo_len1==2'b00 ? 2'b11: 2'b01;
+		uoq_hs[uoq_tail[0]] <= 1'b0;
+		uoq_takb[uoq_tail[0]] <= take_branch[0];
+		tskLd4(uo_insn1[0][`UO_LD4],insnx[0],uoq_const[uoq_tail[0]]);
 		if (uo_len1 > 2'b00) begin
-			uoq_v[(uoq_tail+1) % UOQ_ENTRIES] <= `VAL;
-			uoq_pc[(uoq_tail+1) % UOQ_ENTRIES] <= pc;
-			uoq_uop[(uoq_tail+1) % UOQ_ENTRIES] <= uo_insn1[1];
-			uoq_fl[(uoq_tail+1) % UOQ_ENTRIES] <= uo_len1==2'b01 ? 2'b10 : 2'b00;
-			uoq_hs[(uoq_tail+1) % UOQ_ENTRIES] <= 1'b0;
-			tskLd4(uo_insn1[1][`UO_LD4],insnx[0],uoq_const[(uoq_tail+1) % UOQ_ENTRIES]);
+			uoq_v[uoq_tail[1]] <= `VAL;
+			uoq_pc[uoq_tail[1]] <= pc;
+			uoq_uop[uoq_tail[1]] <= uo_insn1[1];
+			uoq_fl[uoq_tail[1]] <= uo_len1==2'b01 ? 2'b10 : 2'b00;
+			uoq_hs[uoq_tail[1]] <= 1'b0;
+			tskLd4(uo_insn1[1][`UO_LD4],insnx[0],uoq_const[uoq_tail[1]]);
 		end
 		if (uo_len1 > 2'b01) begin
-			uoq_v[(uoq_tail+2) % UOQ_ENTRIES] <= `VAL;
-			uoq_pc[(uoq_tail+2) % UOQ_ENTRIES] <= pc;
-			uoq_uop[(uoq_tail+2) % UOQ_ENTRIES] <= uo_insn1[2];
-			uoq_fl[(uoq_tail+2) % UOQ_ENTRIES] <= uo_len1==2'b10 ? 2'b10 : 2'b00;
-			uoq_hs[(uoq_tail+2) % UOQ_ENTRIES] <= 1'b0;
-			tskLd4(uo_insn1[2][`UO_LD4],insnx[0],uoq_const[(uoq_tail+2) % UOQ_ENTRIES]);
+			uoq_v[uoq_tail[2]] <= `VAL;
+			uoq_pc[uoq_tail[2]] <= pc;
+			uoq_uop[uoq_tail[2]] <= uo_insn1[2];
+			uoq_fl[uoq_tail[2]] <= uo_len1==2'b10 ? 2'b10 : 2'b00;
+			uoq_hs[uoq_tail[2]] <= 1'b0;
+			tskLd4(uo_insn1[2][`UO_LD4],insnx[0],uoq_const[uoq_tail[2]]);
 		end
 		if (uo_len1 > 2'b10) begin
-			uoq_v[(uoq_tail+3) % UOQ_ENTRIES] <= `VAL;
-			uoq_pc[(uoq_tail+3) % UOQ_ENTRIES] <= pc;
-			uoq_uop[(uoq_tail+3) % UOQ_ENTRIES] <= uo_insn1[3];
-			uoq_fl[(uoq_tail+3) % UOQ_ENTRIES] <= 2'b10;
-			uoq_hs[(uoq_tail+3) % UOQ_ENTRIES] <= 1'b0;
-			tskLd4(uo_insn1[3][`UO_LD4],insnx[0],uoq_const[(uoq_tail+3) % UOQ_ENTRIES]);
+			uoq_v[uoq_tail[3]] <= `VAL;
+			uoq_pc[uoq_tail[3]] <= pc;
+			uoq_uop[uoq_tail[3]] <= uo_insn1[3];
+			uoq_fl[uoq_tail[3]] <= 2'b10;
+			uoq_hs[uoq_tail[3]] <= 1'b0;
+			tskLd4(uo_insn1[3][`UO_LD4],insnx[0],uoq_const[uoq_tail[3]]);
 		end
 		for (n = 0; n < 4; n = n + 1)
 			if (n < uo_len1) begin
-				uoq_flagsupd[(uoq_tail+n) % UOQ_ENTRIES] <= `UOF_NONE;
+				uoq_flagsupd[uoq_tail[n]] <= `UOF_NONE;
 			end
-		uoq_flagsupd[(uoq_tail+uo_whflg1) % UOQ_ENTRIES] <= uo_flags1;
-		uoq_v[(uoq_tail+uo_len1) % UOQ_ENTRIES] <= `VAL;
-		uoq_pc[(uoq_tail+uo_len1) % UOQ_ENTRIES] <= pc + len1;
-		uoq_uop[(uoq_tail+uo_len1) % UOQ_ENTRIES] <= uo_insn2[0];
-		uoq_fl[(uoq_tail+uo_len1) % UOQ_ENTRIES] <= uo_len2==2'b00 ? 2'b11 : 2'b01;
-		uoq_hs[(uoq_tail+uo_len1+0) % UOQ_ENTRIES] <= 1'b0;
-		uoq_takb[(uoq_tail+uo_len1+0) % UOQ_ENTRIES] <= take_branch[1];
-		uoq_tail <= (uoq_tail + uo_len1 + 8'd1) % UOQ_ENTRIES;
-		tskLd4(uo_insn2[0][`UO_LD4],insnx[1],uoq_const[uoq_tail + uo_len1]);
+		uoq_v[uoq_tail[uo_len1]] <= `VAL;
+		uoq_pc[uoq_tail[uo_len1]] <= pc + len1;
+		uoq_uop[uoq_tail[uo_len1]] <= uo_insn2[0];
+		uoq_fl[uoq_tail[uo_len1]] <= uo_len2==2'b00 ? 2'b11 : 2'b01;
+		uoq_hs[uoq_tail[uo_len1]] <= 1'b0;
+		uoq_takb[uoq_tail[uo_len1]] <= take_branch[1];
+		//uoq_tail[0] <= (uoq_tail[0] + uo_len1 + 8'd1) % UOQ_ENTRIES;
+		tskLd4(uo_insn2[0][`UO_LD4],insnx[1],uoq_const[uoq_tail[uo_len1]]);
 		if (uo_len2 > 2'b00) begin
-			uoq_v[(uoq_tail+uo_len1+1) % UOQ_ENTRIES] <= `VAL;
-			uoq_pc[(uoq_tail+uo_len1+1) % UOQ_ENTRIES] <= pc + len1;
-			uoq_uop[(uoq_tail+uo_len1+1) % UOQ_ENTRIES] <= uo_insn2[1];
-			uoq_fl[(uoq_tail+uo_len1+1) % UOQ_ENTRIES] <= uo_len2==2'b01 ? 2'b10 : 2'b00;
-			uoq_hs[(uoq_tail+uo_len1+1) % UOQ_ENTRIES] <= 1'b0;
-			uoq_tail <= (uoq_tail + uo_len1 + 8'd2) % UOQ_ENTRIES;
-			tskLd4(uo_insn2[1][`UO_LD4],insnx[1],uoq_const[(uoq_tail+uo_len1+1) % UOQ_ENTRIES]);
+			uoq_v[uoq_tail[uo_len1 + 1]] <= `VAL;
+			uoq_pc[uoq_tail[uo_len1 + 1]] <= pc + len1;
+			uoq_uop[uoq_tail[uo_len1 + 1]] <= uo_insn2[1];
+			uoq_fl[uoq_tail[uo_len1 + 1]] <= uo_len2==2'b01 ? 2'b10 : 2'b00;
+			uoq_hs[uoq_tail[uo_len1 + 1]] <= 1'b0;
+			tskLd4(uo_insn2[1][`UO_LD4],insnx[1],uoq_const[uoq_tail[uo_len1 + 1]]);
 		end
 		if (uo_len2 > 2'b01) begin
-			uoq_v[(uoq_tail+uo_len1+2) % UOQ_ENTRIES] <= `VAL;
-			uoq_pc[(uoq_tail+uo_len1+2) % UOQ_ENTRIES] <= pc + len1;
-			uoq_uop[(uoq_tail+uo_len1+2) % UOQ_ENTRIES] <= uo_insn2[2];
-			uoq_fl[(uoq_tail+uo_len1+2) % UOQ_ENTRIES] <= uo_len2==2'b10 ? 2'b10 : 2'b00;
-			uoq_hs[(uoq_tail+uo_len1+2) % UOQ_ENTRIES] <= 1'b0;
-			uoq_tail <= (uoq_tail + uo_len1 + 8'd3) % UOQ_ENTRIES;
-			tskLd4(uo_insn2[2][`UO_LD4],insnx[1],uoq_const[(uoq_tail+uo_len1+2) % UOQ_ENTRIES]);
+			uoq_v[uoq_tail[uo_len1 + 2]] <= `VAL;
+			uoq_pc[uoq_tail[uo_len1 + 2]] <= pc + len1;
+			uoq_uop[uoq_tail[uo_len1 + 2]] <= uo_insn2[2];
+			uoq_fl[uoq_tail[uo_len1 + 2]] <= uo_len2==2'b10 ? 2'b10 : 2'b00;
+			uoq_hs[uoq_tail[uo_len1 + 2]] <= 1'b0;
+			tskLd4(uo_insn2[2][`UO_LD4],insnx[1],uoq_const[uoq_tail[uo_len1 + 2]]);
 		end
 		if (uo_len2 > 2'b10) begin
-			uoq_v[(uoq_tail+uo_len1+3) % UOQ_ENTRIES] <= `VAL;
-			uoq_pc[(uoq_tail+uo_len1+3) % UOQ_ENTRIES] <= pc + len1;
-			uoq_uop[(uoq_tail+uo_len1+3) % UOQ_ENTRIES] <= uo_insn2[3];
-			uoq_fl[(uoq_tail+uo_len1+3) % UOQ_ENTRIES] <= 2'b10;
-			uoq_hs[(uoq_tail+uo_len1+3) % UOQ_ENTRIES] <= 1'b0;
-			uoq_tail <= (uoq_tail + uo_len1 + 8'd4) % UOQ_ENTRIES;
-			tskLd4(uo_insn2[3][`UO_LD4],insnx[1],uoq_const[(uoq_tail+uo_len1+3) % UOQ_ENTRIES]);
+			uoq_v[uoq_tail[uo_len1 + 3]] <= `VAL;
+			uoq_pc[uoq_tail[uo_len1 + 3]] <= pc + len1;
+			uoq_uop[uoq_tail[uo_len1 + 3]] <= uo_insn2[3];
+			uoq_fl[uoq_tail[uo_len1 + 3]] <= 2'b10;
+			uoq_hs[uoq_tail[uo_len1 + 3]] <= 1'b0;
+			tskLd4(uo_insn2[3][`UO_LD4],insnx[1],uoq_const[uoq_tail[uo_len1 + 3]]);
 		end
 		for (n = 0; n < 4; n = n + 1)
 			if (n < uo_len2)
-				uoq_flagsupd[(uoq_tail+uo_len1+n) % UOQ_ENTRIES] <= `UOF_NONE;
-		uoq_flagsupd[(uoq_tail+uo_len1+uo_whflg1) % UOQ_ENTRIES] <= uo_flags1;
+				uoq_flagsupd[uoq_tail[uo_len1+n]] <= `UOF_NONE;
+		uoq_flagsupd[uoq_tail[0 + uo_whflg1]] = uo_flags1;
+		uoq_flagsupd[uoq_tail[uo_len1+uo_whflg2]] <= uo_flags2;
+		for (n = 0; n < 8; n = n + 1)
+			uoq_tail[n] <= (uoq_tail[n] + uo_len1 + uo_len2) % UOQ_ENTRIES;
 	end
 	else if (q1) begin
-		uoq_v[uoq_tail] <= `VAL;
-		uoq_pc[uoq_tail] <= pc;
-		uoq_uop[uoq_tail] <= uo_insn1[0];
-		uoq_fl[uoq_tail] <= uo_len1==2'b00 ? 2'b11: 2'b01;
-		uoq_hs[(uoq_tail+0) % UOQ_ENTRIES] <= 1'b0;
-		uoq_takb[(uoq_tail+0) % UOQ_ENTRIES] <= take_branch[0];
-		uoq_tail <= (uoq_tail + 8'd1) % UOQ_ENTRIES;
-		tskLd4(uo_insn1[0][`UO_LD4],insnx[0],uoq_const[uoq_tail]);
+		uoq_v[uoq_tail[0]] <= `VAL;
+		uoq_pc[uoq_tail[0]] <= pc;
+		uoq_uop[uoq_tail[0]] <= uo_insn1[0];
+		uoq_fl[uoq_tail[0]] <= uo_len1==2'b00 ? 2'b11: 2'b01;
+		uoq_hs[uoq_tail[0]] <= 1'b0;
+		uoq_takb[uoq_tail[0]] <= take_branch[0];
+//		uoq_tail <= (uoq_tail + 8'd1) % UOQ_ENTRIES;
+		tskLd4(uo_insn1[0][`UO_LD4],insnx[0],uoq_const[uoq_tail[0]]);
 		if (uo_len1 > 2'b00) begin
-			uoq_v[(uoq_tail+1) % UOQ_ENTRIES] <= `VAL;
-			uoq_pc[(uoq_tail+1) % UOQ_ENTRIES] <= pc;
-			uoq_uop[(uoq_tail+1) % UOQ_ENTRIES] <= uo_insn1[1];
-			uoq_fl[(uoq_tail+1) % UOQ_ENTRIES] <= uo_len1==2'b01 ? 2'b10 : 2'b00;
-			uoq_hs[(uoq_tail+1) % UOQ_ENTRIES] <= 1'b0;
-			uoq_tail <= (uoq_tail + 8'd2) % UOQ_ENTRIES;
-			tskLd4(uo_insn1[1][`UO_LD4],insnx[0],uoq_const[(uoq_tail+1) % UOQ_ENTRIES]);
+			uoq_v[uoq_tail[1]] <= `VAL;
+			uoq_pc[uoq_tail[1]] <= pc;
+			uoq_uop[uoq_tail[1]] <= uo_insn1[1];
+			uoq_fl[uoq_tail[1]] <= uo_len1==2'b01 ? 2'b10 : 2'b00;
+			uoq_hs[uoq_tail[1]] <= 1'b0;
+			tskLd4(uo_insn1[1][`UO_LD4],insnx[0],uoq_const[uoq_tail[1]]);
 		end
 		if (uo_len1 > 2'b01) begin
-			uoq_v[(uoq_tail+2) % UOQ_ENTRIES] <= `VAL;
-			uoq_pc[(uoq_tail+2) % UOQ_ENTRIES] <= pc;
-			uoq_uop[(uoq_tail+2) % UOQ_ENTRIES] <= uo_insn1[2];
-			uoq_fl[(uoq_tail+2) % UOQ_ENTRIES] <= uo_len1==2'b10 ? 2'b10 : 2'b00;
-			uoq_hs[(uoq_tail+2) % UOQ_ENTRIES] <= 1'b0;
-			uoq_tail <= (uoq_tail + 8'd3) % UOQ_ENTRIES;
-			tskLd4(uo_insn1[2][`UO_LD4],insnx[0],uoq_const[(uoq_tail+2) % UOQ_ENTRIES]);
+			uoq_v[uoq_tail[2]] <= `VAL;
+			uoq_pc[uoq_tail[2]] <= pc;
+			uoq_uop[uoq_tail[2]] <= uo_insn1[2];
+			uoq_fl[uoq_tail[2]] <= uo_len1==2'b10 ? 2'b10 : 2'b00;
+			uoq_hs[uoq_tail[2]] <= 1'b0;
+			tskLd4(uo_insn1[2][`UO_LD4],insnx[0],uoq_const[uoq_tail[2]]);
 		end
 		if (uo_len1 > 2'b10) begin
-			uoq_v[(uoq_tail+3) % UOQ_ENTRIES] <= `VAL;
-			uoq_pc[(uoq_tail+3) % UOQ_ENTRIES] <= pc;
-			uoq_uop[(uoq_tail+3) % UOQ_ENTRIES] <= uo_insn1[3];
-			uoq_fl[(uoq_tail+3) % UOQ_ENTRIES] <= 2'b10;
-			uoq_hs[(uoq_tail+3) % UOQ_ENTRIES] <= 1'b0;
-			uoq_tail <= (uoq_tail + 8'd4) % UOQ_ENTRIES;
-			tskLd4(uo_insn1[3][`UO_LD4],insnx[0],uoq_const[(uoq_tail+3) % UOQ_ENTRIES]);
+			uoq_v[uoq_tail[3]] <= `VAL;
+			uoq_pc[uoq_tail[3]] <= pc;
+			uoq_uop[uoq_tail[3]] <= uo_insn1[3];
+			uoq_fl[uoq_tail[3]] <= 2'b10;
+			uoq_hs[uoq_tail[3]] <= 1'b0;
+			tskLd4(uo_insn1[3][`UO_LD4],insnx[0],uoq_const[uoq_tail[3]]);
 		end
 		for (n = 0; n < 4; n = n + 1)
 			if (n < uo_len1)
-				uoq_flagsupd[(uoq_tail+n) % UOQ_ENTRIES] <= `UOF_NONE;
-		uoq_flagsupd[(uoq_tail+uo_whflg1) % UOQ_ENTRIES] <= uo_flags1;
+				uoq_flagsupd[uoq_tail[n]] <= `UOF_NONE;
+		uoq_flagsupd[(uoq_tail[0]+uo_whflg1) % UOQ_ENTRIES] <= uo_flags1;
+		for (n = 0; n < 8; n = n + 1)
+			uoq_tail[n] <= (uoq_tail[n] + uo_len1) % UOQ_ENTRIES;
 	end
 
 	// Invalidate all entries in the micro-op queue on a branch miss.
 	if (branchmiss) begin
 		uoq_v <= 1'd0;
-		uoq_tail <= 1'd0;
+		for (n = 0; n < 8; n = n + 1)
+			uoq_tail[n] <= n;
 		uoq_head <= 1'd0;
 	end
 	else begin
@@ -3310,9 +3346,9 @@ else begin
 	if (agen0_v) begin
 		if (iq_state[agen0_id]==IQS_OUT)
 			iq_state[agen0_id] <= IQS_AGEN;
-		rob_res[agen0_rid] <= agen0_ma;
+		rob_res[agen0_rid] <= 16'h0;//agen0_ma;
 		rob_exc[agen0_rid] <= 4'h0;
-		if (iq_state[agen0_id]!=IQS_AGEN)
+		if (iq_state[agen0_id]==IQS_OUT)
 			iq_ma[agen0_id] <= agen0_ma;
 		agen0_dataready <= FALSE;
 	end
@@ -3320,18 +3356,18 @@ else begin
 	if (agen1_v && `NUM_AGEN > 1) begin
 		if (iq_state[agen1_id]==IQS_OUT)
 			iq_state[agen1_id] <= IQS_AGEN;
-		rob_res[agen1_rid] <= agen1_ma;		// LEA needs this result
+		rob_res[agen1_rid] <= 16'h0;//agen1_ma;		// LEA needs this result
 		rob_exc[agen1_rid] <= 4'h0;
-		if (iq_state[agen1_id]!=IQS_AGEN)
+		if (iq_state[agen1_id]==IQS_OUT)
 			iq_ma[agen1_id] <= agen1_ma;
 		agen1_dataready <= FALSE;
 	end
 
 	if (fcu_v) begin
 		fcu_done <= `TRUE;
-		fcu_sr_bus <= (fcu_instr[15:10]==`UO_JSI) ? (fcu_argS | `UOF_I | (`UOF_B & {8{~fcu_hs}})) : fcu_argS;
-		rob_sr_res[fcu_id] <= (fcu_instr[15:10]==`UO_JSI) ? (fcu_argS | `UOF_I | (`UOF_B & {8{~fcu_hs}})) : fcu_argS;
-		iq_ma  [ fcu_id ] <= fcu_misspc;
+		fcu_sr_bus <= (fcu_instr==`UO_JSI) ? (fcu_argS | `UOF_I | (`UOF_B & {8{~fcu_hs}})) : fcu_argS;
+		rob_sr_res[fcu_id] <= (fcu_instr==`UO_JSI) ? (fcu_argS | `UOF_I | (`UOF_B & {8{~fcu_hs}})) : fcu_argS;
+		//iq_ma  [ fcu_id ] <= fcu_misspc;
 	  rob_res [ fcu_rid ] <= rfcu_bus;
 	  rob_exc [ fcu_rid ] <= fcu_exc;
 		if (iq_state[fcu_id]==IQS_OUT) begin
@@ -3405,10 +3441,10 @@ else begin
 		if (`NUM_ALU > 1)
 			setargs(n,{1'b0,alu1_rid},alu1_v,ralu1_bus);
 
-		setargs(n,{1'b1,agen0_rid},agen0_v & agen0_mem2,agen0_res);
-		if (`NUM_AGEN > 1) begin
-			setargs(n,{1'b1,agen1_rid},agen1_v & agen1_mem2,agen1_res);
-		end
+//		setargs(n,{1'b1,agen0_rid},agen0_v & agen0_mem2,agen0_res);
+//		if (`NUM_AGEN > 1) begin
+//			setargs(n,{1'b1,agen1_rid},agen1_v & agen1_mem2,agen1_res);
+//		end
 
 		setargs(n,{1'b0,fcu_rid},fcu_v,rfcu_bus);
 
@@ -3470,10 +3506,7 @@ else begin
 				default:	alu0_argB <= {1{16'hDEAD}};
 				endcase
 `else
-			if (iq_imm[n])
-				alu0_argB <= iq_argI[n];
-			else
-				alu0_argB <= iq_argB[n][WID-1:0];
+			alu0_argB <= iq_argB[n][WID-1:0];
 `endif
 `ifdef FU_BYPASS
 			if (iq_argS_v[n])
@@ -3540,10 +3573,7 @@ else begin
 									default:	alu1_argB <= {1{16'hDEAD}};
 									endcase
 `else
-								if (iq_imm[n])
-									alu1_argB <= iq_argI[n];
-								else
-									alu1_argB <= iq_argB[n][WID-1:0];
+								alu1_argB <= iq_argB[n][WID-1:0];
 `endif
 `ifdef FU_BYPASS
 								 if (iq_argS_v[n])
@@ -3578,7 +3608,7 @@ else begin
 
     for (n = 0; n < IQ_ENTRIES; n = n + 1)
         if (iq_agen0_issue[n] && !(iq_v[n] && iq_stomp[n])) begin
-            if (1'b1) begin
+            if (~agen0_v) begin
 							iq_fuid[n] <= 3'd2;
             		agen0_sn <= iq_sn[n];
                  agen0_sourceid	<= n[`QBITS];
@@ -3600,8 +3630,8 @@ else begin
 								 	agen0_argB <= iq_argB[n][WID-1:0];
 								 else
 	                 case(iq_argB_s[n][`RBITS])
-	                 alu0_rid:	agen0_argC <= ralu0_bus;
-	                 alu1_rid:	agen0_argC <= ralu1_bus;
+	                 alu0_rid:	agen0_argB <= ralu0_bus;
+	                 alu1_rid:	agen0_argB <= ralu1_bus;
 	                 default:	agen0_argB <= {1{16'hDEAD}};
 	                 endcase
 `else
@@ -3615,7 +3645,7 @@ else begin
 	if (`NUM_AGEN > 1) begin
     for (n = 0; n < IQ_ENTRIES; n = n + 1)
         if (iq_agen1_issue[n] && !(iq_v[n] && iq_stomp[n])) begin
-            if (1'b1) begin
+            if (~agen1_v) begin
 							iq_fuid[n] <= 3'd3;
             		agen1_sn <= iq_sn[n];
                  agen1_sourceid	<= n[`QBITS];
@@ -3640,7 +3670,7 @@ else begin
 	                 case(iq_argB_s[n][`RBITS])
 	                 alu0_rid:	agen1_argB <= ralu0_bus;
 	                 alu1_rid:	agen1_argB <= ralu1_bus;
-	                 default:	agen1_argB <= {16{16'hDEAD}};
+	                 default:	agen1_argB <= {1{16'hDEAD}};
 	                 endcase
 `else
 								agen1_argB <= iq_argB[n][WID-1:0];
@@ -3676,6 +3706,7 @@ else begin
 				fcu_brdisp <= {{8{iq_const[7]}},iq_const[n][7:0]};
 				//$display("Branch tgt: %h", {iq_instr[n][39:22],iq_instr[n][5:3],iq_instr[n][4:3]});
 				fcu_branch <= iq_br[n];
+				fcu_argI <= iq_const[n];
 `ifdef FU_BYPASS
 				if (iq_argB_v[n])
 					fcu_argB <= iq_argB[n];
@@ -3686,10 +3717,7 @@ else begin
 					default:	fcu_argB <= 16'hDEAD;
 					endcase
 `else
-				if (iq_imm[n])
-					fcu_argB <= iq_argI[n];
-				else
-					fcu_argB <= iq_argB[n][WID-1:0];
+				fcu_argB <= iq_argB[n][WID-1:0];
 `endif
 `ifdef FU_BYPASS
 				if (iq_argS_v[n])
@@ -4066,6 +4094,7 @@ endcase
   $display("yr: %h %d %o #", yr, regIsValid[2], rf_source[2]);
   $display("sp: %h %d %o #", sp, regIsValid[3], rf_source[3]);
   $display("sr: %h %d %o #", sr, regIsValid[7], rf_source[7]);
+  $display("tmp: %h %d %o #", tmp, regIsValid[4], rf_source[4]);
 `ifdef FCU_ENH
 	$display("Call Stack:");
 	for (n = 0; n < 16; n = n + 4)
@@ -4086,7 +4115,7 @@ endcase
 	for (i = 0; i < UOQ_ENTRIES; i = i + 1)
 		$display("%c%c %d: %c%c %h %h %h %h #",
 			i[`UOQ_BITS]==uoq_head ? "H":".",
-			i[`UOQ_BITS]==uoq_tail ? "T":".",
+			i[`UOQ_BITS]==uoq_tail[0] ? "T":".",
 			i[`UOQ_BITS],
 			uoq_v[i] ? "v" : "-",
 			uoq_fl[i]==2'b01 ? "F" : uoq_fl[i]==2'b10 ? "L" : uoq_fl[i]==2'b11 ? "B" : "-",
@@ -4170,7 +4199,7 @@ endcase
     $display("Commit");
 	$display("0: %c %h %o %d #", commit0_v?"v":" ", commit0_bus, commit0_id, commit0_tgt[2:0]);
 	$display("1: %c %h %o %d #", commit1_v?"v":" ", commit1_bus, commit1_id, commit1_tgt[2:0]);
-	$display("3: %c %h %o %d #", commit2_v?"v":" ", commit2_bus, commit2_id, commit2_tgt[2:0]);
+	$display("2: %c %h %o %d #", commit2_v?"v":" ", commit2_bus, commit2_id, commit2_tgt[2:0]);
     $display("instructions committed: %d valid committed: %d ticks: %d ", CC, I, tick);
   $display("Write Buffer:");
   for (n = `WB_DEPTH-1; n >= 0; n = n - 1)
@@ -4352,26 +4381,26 @@ input [QSLOTS-1:0] pat;
 begin
 	for (row = 0; row < QSLOTS; row = row + 1) begin
 		if (pat[row]) begin
-			iq_argT_v [tails[tails_rc(pat,row)]] <= regIsValid[Rd[row]] | SourceTValid(uoq_uop[(uoq_head+row) % UOQ_ENTRIES][15:10]);
+			iq_argT_v [tails[tails_rc(pat,row)]] <= regIsValid[Rd[row]] | SourceTValid(uoq_uop[(uoq_head+row) % UOQ_ENTRIES]);
 			iq_argT_s [tails[tails_rc(pat,row)]] <= rf_source[Rd[row]];
 			// iq_argA is a constant
-			iq_argB_v [tails[tails_rc(pat,row)]] <= regIsValid[Rn[row]] | Source2Valid(uoq_uop[(uoq_head+row) % UOQ_ENTRIES][15:10]);
+			iq_argB_v [tails[tails_rc(pat,row)]] <= regIsValid[Rn[row]] | Source2Valid(uoq_uop[(uoq_head+row) % UOQ_ENTRIES]);
 			iq_argB_s [tails[tails_rc(pat,row)]] <= rf_source[Rn[row]];
-			iq_argS_v [tails[tails_rc(pat,row)]] <= regIsValid[7] | SourceSValid(uoq_uop[(uoq_head+row) % UOQ_ENTRIES][15:10]);
+			iq_argS_v [tails[tails_rc(pat,row)]] <= regIsValid[7] | SourceSValid(uoq_uop[(uoq_head+row) % UOQ_ENTRIES]);
 			iq_argS_s [tails[tails_rc(pat,row)]] <= rf_source[7];
 			for (col = 0; col < QSLOTS; col = col + 1) begin
 				if (col < row) begin
 					if (pat[col]) begin
 						if (Rd[row]==Rd[col] && slot_rfw[col]) begin
-							iq_argT_v [tails[tails_rc(pat,row)]] <= SourceTValid(uoq_uop[(uoq_head+row) % UOQ_ENTRIES][15:10]);
+							iq_argT_v [tails[tails_rc(pat,row)]] <= SourceTValid(uoq_uop[(uoq_head+row) % UOQ_ENTRIES]);
 							iq_argT_s [tails[tails_rc(pat,row)]] <= {1'b0,tails[tails_rc(pat,col)]};
 						end
 						if (Rn[row]==Rd[col] && slot_rfw[col]) begin
-							iq_argB_v [tails[tails_rc(pat,row)]] <= Source2Valid(uoq_uop[(uoq_head+row) % UOQ_ENTRIES][15:10]);
+							iq_argB_v [tails[tails_rc(pat,row)]] <= Source2Valid(uoq_uop[(uoq_head+row) % UOQ_ENTRIES]);
 							iq_argB_s [tails[tails_rc(pat,row)]] <= {1'b0,tails[tails_rc(pat,col)]};
 						end
 						if (3'd7==Rd[col] && slot_rfw[col]) begin
-							iq_argS_v [tails[tails_rc(pat,row)]] <= SourceSValid(uoq_uop[(uoq_head+row) % UOQ_ENTRIES][15:10]);
+							iq_argS_v [tails[tails_rc(pat,row)]] <= SourceSValid(uoq_uop[(uoq_head+row) % UOQ_ENTRIES]);
 							iq_argS_s [tails[tails_rc(pat,row)]] <= {1'b0,tails[tails_rc(pat,col)]};
 						end
 					end
@@ -4427,13 +4456,14 @@ begin
 	iq_argT[ndx] <= argT[slot];
 	iq_argB[ndx] <= argB[slot];
 	iq_argS[ndx] <= argS[slot];
-	iq_argT_v[ndx] <= regIsValid[Rd[slot]] || SourceTValid(uoq_uop[(uoq_head+slot) % UOQ_ENTRIES][15:10]);
-	iq_argB_v[ndx] <= regIsValid[Rn[slot]] || Source2Valid(uoq_uop[(uoq_head+slot) % UOQ_ENTRIES][15:10]);
-	iq_argS_v[ndx] <= regIsValid[7] || SourceSValid(uoq_uop[(uoq_head+slot) % UOQ_ENTRIES][15:10]);
+	iq_argT_v[ndx] <= regIsValid[Rd[slot]] || SourceTValid(uoq_uop[(uoq_head+slot) % UOQ_ENTRIES]);
+	iq_argB_v[ndx] <= regIsValid[Rn[slot]] || Source2Valid(uoq_uop[(uoq_head+slot) % UOQ_ENTRIES]);
+	iq_argS_v[ndx] <= regIsValid[7] || SourceSValid(uoq_uop[(uoq_head+slot) % UOQ_ENTRIES]);
 	iq_argT_s[ndx] <= rf_source[Rd[slot]];
 	iq_argB_s[ndx] <= rf_source[Rn[slot]];
 	iq_argS_s[ndx] <= rf_source[7];
 	iq_pt[ndx] <= predict_taken[slot];
+	iq_tgt[ndx] <= uoq_uop[(uoq_head+slot) % UOQ_ENTRIES][5:3];
 	set_insn(ndx,id_bus);
 	rob_pc[rid] <= uoq_pc[(uoq_head+slot) % UOQ_ENTRIES];
 	rob_tgt[rid] <= uoq_uop[(uoq_head+slot) % UOQ_ENTRIES][5:3];
@@ -4455,7 +4485,7 @@ begin
 		dram0_rid <= iq_rid[n];
 		dram0_instr <= iq_instr[n];
 		dram0_tgt 	<= iq_tgt[n];
-		dram0_data <= iq_argB[n][WID-1:0];
+		dram0_data <= iq_argT[n][WID-1:0];
 		dram0_addr	<= iq_ma[n];
 		dram0_unc   <= 1'b0;//iq_ma[n][31:20]==12'hFFD || !dce;
 		dram0_wrap  <= iq_wrap[n] && ((iq_ma[n] & 8'hFF) == 8'hFF);
@@ -4483,7 +4513,7 @@ begin
 	dram1_rid <= iq_rid[n];
 	dram1_instr <= iq_instr[n];
 	dram1_tgt 	<= iq_tgt[n];
-	dram1_data <= iq_argB[n][WID-1:0];
+	dram1_data <= iq_argT[n][WID-1:0];
 	dram1_addr	<= iq_ma[n];
 	dram1_wrap  <= iq_wrap[n] && ((iq_ma[n] & 8'hFF) == 8'hFF);
 	//	             if (ol[iq_thrd[n]]==`OL_USER)

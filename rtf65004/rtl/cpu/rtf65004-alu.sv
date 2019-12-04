@@ -39,6 +39,7 @@ always @*
 case(op)
 `UO_LDIB:	o = {{8{src1[7]}},src1[7:0]};
 `UO_ADDW:	o = dst + src1 + src2;
+`UO_ADDB:	o = dst[7:0] + src1[7:0] + src2[7:0];
 `UO_ADCB:	o = dst[7:0] + src1[7:0] + src2[7:0] + s_i[0];
 `UO_SBCB:	o = dst[7:0] - src1[7:0] - src2[7:0] - ~s_i[0];
 `UO_CMPB:	o = dst[7:0] - src1[7:0] - src2[7:0] - ~s_i[0];
@@ -51,7 +52,7 @@ case(op)
 `UO_LSRB:	o = {dst[0],1'b0,dst[7:1]};
 `UO_ROLB:	o = {dst[7:0],s_i[0]};
 `UO_RORB:	o = {7'h00,dst[7],s_i[0],dst[7:1]};
-default:	o = 16'hDEAD;
+default:	o = 16'hDEAE;
 endcase
 
 always @*

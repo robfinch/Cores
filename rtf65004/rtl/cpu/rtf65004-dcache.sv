@@ -36,11 +36,11 @@
 
 module L1_dcache_mem(clk, wr, sel, lineno, i, o);
 parameter pLines = 128;
-parameter pLineWidth = 272;
+parameter pLineWidth = 528;
 localparam pLNMSB = $clog2(pLines)-1;
 input clk;
 input wr;
-input [33:0] sel;
+input [65:0] sel;
 input [pLNMSB:0] lineno;
 input [pLineWidth-1:0] i;
 output [pLineWidth-1:0] o;
@@ -59,7 +59,7 @@ end
 genvar v;
 
 generate begin : mupd
-for (v = 0; v < 34; v = v + 1)
+for (v = 0; v < 66; v = v + 1)
 begin : mw
 always @(posedge clk)
 	if (wr & sel[v])  mem[lineno][v*8+7:v*8] <= i[v*8+7:v*8];
@@ -74,7 +74,7 @@ assign o = mem[lineno];
 genvar g;
 
 generate begin : mem2
-for (g = 0; g < 34; g = g + 1) begin
+for (g = 0; g < 66; g = g + 1) begin
 // 128 lines (32 x 4 way)
 L1_dcache_mem2 u1
 (
@@ -103,13 +103,13 @@ localparam pLNMSB = $clog2(pLines)-1;
 input clk;
 input wr;
 input [pLNMSB:0] lineno;
-input [AMSB-5:0] i;
-output [AMSB-5:0] o;
+input [AMSB-6:0] i;
+output [AMSB-6:0] o;
 
 `ifdef XILINX_SIMULATOR
 integer n;
 (* ram_style="distributed" *)
-reg [AMSB-5:0] mem [0:pLines-1];
+reg [AMSB-6:0] mem [0:pLines-1];
 initial begin
 	for (n = 0; n < pLines; n = n + 1)
 		mem[n] = 1'd0;
@@ -151,10 +151,10 @@ output reg [pLNMSB:0] lineno;
 output hit;
 
 
-wire [AMSB-5:0] memo0;
-wire [AMSB-5:0] memo1;
-wire [AMSB-5:0] memo2;
-wire [AMSB-5:0] memo3;
+wire [AMSB-6:0] memo0;
+wire [AMSB-6:0] memo1;
+wire [AMSB-6:0] memo2;
+wire [AMSB-6:0] memo3;
 reg [AMSB:0] rradr;
 reg [pLines/4-1:0] mem0v;
 reg [pLines/4-1:0] mem1v;
@@ -177,11 +177,11 @@ wire [21:0] lfsro;
 lfsr #(22,22'h0ACE3) u1 (rst, clk, nxt, 1'b0, lfsro);
 wire [pLNMSB:0] wlineno;
 
-assign wlineno = {lfsro[1:0],adr[pMSB:5]};
-L1_dcache_tagram #(pLines/4) u2 (.clk(clk), .wr(wr && !hit && lfsro[1:0]==2'b00), .lineno(adr[pMSB:5]), .i(adr[AMSB:5]), .o(memo0));
-L1_dcache_tagram #(pLines/4) u3 (.clk(clk), .wr(wr && !hit && lfsro[1:0]==2'b01), .lineno(adr[pMSB:5]), .i(adr[AMSB:5]), .o(memo1));
-L1_dcache_tagram #(pLines/4) u4 (.clk(clk), .wr(wr && !hit && lfsro[1:0]==2'b10), .lineno(adr[pMSB:5]), .i(adr[AMSB:5]), .o(memo2));
-L1_dcache_tagram #(pLines/4) u5 (.clk(clk), .wr(wr && !hit && lfsro[1:0]==2'b11), .lineno(adr[pMSB:5]), .i(adr[AMSB:5]), .o(memo3));
+assign wlineno = {lfsro[1:0],adr[pMSB:6]};
+L1_dcache_tagram #(pLines/4) u2 (.clk(clk), .wr(wr && !hit && lfsro[1:0]==2'b00), .lineno(adr[pMSB:6]), .i(adr[AMSB:6]), .o(memo0));
+L1_dcache_tagram #(pLines/4) u3 (.clk(clk), .wr(wr && !hit && lfsro[1:0]==2'b01), .lineno(adr[pMSB:6]), .i(adr[AMSB:6]), .o(memo1));
+L1_dcache_tagram #(pLines/4) u4 (.clk(clk), .wr(wr && !hit && lfsro[1:0]==2'b10), .lineno(adr[pMSB:6]), .i(adr[AMSB:6]), .o(memo2));
+L1_dcache_tagram #(pLines/4) u5 (.clk(clk), .wr(wr && !hit && lfsro[1:0]==2'b11), .lineno(adr[pMSB:6]), .i(adr[AMSB:6]), .o(memo3));
 
 always @(posedge clk)
 if (rst) begin
@@ -198,32 +198,32 @@ else begin
 		mem3v <= 1'd0;
 	end
 	else if (invline) begin
-		if (hit0) mem0v[adr[pMSB:5]] <= 1'b0;
-		if (hit1) mem1v[adr[pMSB:5]] <= 1'b0;
-		if (hit2) mem2v[adr[pMSB:5]] <= 1'b0;
-		if (hit3) mem3v[adr[pMSB:5]] <= 1'b0;
+		if (hit0) mem0v[adr[pMSB:6]] <= 1'b0;
+		if (hit1) mem1v[adr[pMSB:6]] <= 1'b0;
+		if (hit2) mem2v[adr[pMSB:6]] <= 1'b0;
+		if (hit3) mem3v[adr[pMSB:6]] <= 1'b0;
 	end
 	else if (wr & ~hit) begin
 		case(lfsro[1:0])
-		2'b00:	begin  mem0v[adr[pMSB:5]] <= 1'b1; end
-		2'b01:	begin  mem1v[adr[pMSB:5]] <= 1'b1; end
-		2'b10:	begin  mem2v[adr[pMSB:5]] <= 1'b1; end
-		2'b11:	begin  mem3v[adr[pMSB:5]] <= 1'b1; end
+		2'b00:	begin  mem0v[adr[pMSB:6]] <= 1'b1; end
+		2'b01:	begin  mem1v[adr[pMSB:6]] <= 1'b1; end
+		2'b10:	begin  mem2v[adr[pMSB:6]] <= 1'b1; end
+		2'b11:	begin  mem3v[adr[pMSB:6]] <= 1'b1; end
 		endcase
 	end	
 end
 
 
-assign hit0 = memo0==adr[AMSB:5] & mem0v[adr[pMSB:5]];
-assign hit1 = memo1==adr[AMSB:5] & mem1v[adr[pMSB:5]];
-assign hit2 = memo2==adr[AMSB:5] & mem2v[adr[pMSB:5]];
-assign hit3 = memo3==adr[AMSB:5] & mem3v[adr[pMSB:5]];
+assign hit0 = memo0==adr[AMSB:6] & mem0v[adr[pMSB:6]];
+assign hit1 = memo1==adr[AMSB:6] & mem1v[adr[pMSB:6]];
+assign hit2 = memo2==adr[AMSB:6] & mem2v[adr[pMSB:6]];
+assign hit3 = memo3==adr[AMSB:6] & mem3v[adr[pMSB:6]];
 always @*
   if (wr & ~hit) lineno = wlineno;
-  else if (hit0)  lineno = {2'b00,adr[pMSB:5]};
-  else if (hit1)  lineno = {2'b01,adr[pMSB:5]};
-  else if (hit2)  lineno = {2'b10,adr[pMSB:5]};
-  else  lineno = {2'b11,adr[pMSB:5]};
+  else if (hit0)  lineno = {2'b00,adr[pMSB:6]};
+  else if (hit1)  lineno = {2'b01,adr[pMSB:6]};
+  else if (hit2)  lineno = {2'b10,adr[pMSB:6]};
+  else  lineno = {2'b11,adr[pMSB:6]};
 assign hit = hit0|hit1|hit2|hit3;
 endmodule
 
@@ -240,21 +240,21 @@ input rst;
 input clk;
 input nxt;
 input wr;
-input [41:0] sel;
+input [65:0] sel;
 input [AMSB:0] adr;
-input [335:0] i;
-output reg [79:0] o;
+input [527:0] i;
+output reg [15:0] o;
 output reg [2:0] fault;
 output hit;
 input invall;
 input invline;
 
-wire [335:0] ic;
-reg [335:0] i1;
+wire [527:0] ic;
+reg [527:0] i1;
 wire [pLNMSB:0] lineno;
 wire taghit;
 reg wr1;
-reg [41:0] sel1;
+reg [65:0] sel1;
 
 wire iclk;
 //BUFH ucb1 (.I(clk), .O(iclk));
@@ -296,9 +296,9 @@ assign hit = taghit;
 
 //always @(radr or ic0 or ic1)
 always @(adr or ic)
-	o <= ic >> {adr[4:0],3'b0};
+	o <= ic >> {adr[5:0],3'b0};
 always @*
-	fault <= ic[330:328];
+	fault <= ic[527:525];
 
 endmodule
 
@@ -308,16 +308,16 @@ endmodule
 module L2_dcache_mem(clk, wr, sel, wlineno, rlineno, i, fault, o);
 input clk;
 input wr;
-input [22:0] sel;
+input [65:0] sel;
 input [8:0] wlineno;
 input [8:0] rlineno;
-input [271:0] i;
+input [527:0] i;
 input [3:0] fault;
-output [271:0] o;
+output [527:0] o;
 
 // Block ram must be a multiple of eight bits wide to use byte write enables.
 (* ram_style="block" *)
-reg [271:0] mem [0:511];
+reg [527:0] mem [0:511];
 (* ram_style="distributed" *)
 reg [8:0] rrcl;
 
@@ -330,7 +330,7 @@ end
 
 genvar v;
 generate begin : memupd
-for (v = 0; v < 34; v = v + 1)
+for (v = 0; v < 66; v = v + 1)
 always @(posedge clk)
 begin
 	if (wr & sel[v])
@@ -360,15 +360,15 @@ input rst;
 input clk;
 input nxt;
 input wr;
-input [33:0] sel;
+input [65:0] sel;
 input [AMSB:0] wadr;
 input [AMSB:0] radr;
 input tlbmiss_i;
 input rdv_i;
 input wrv_i;
 input err_i;
-input [263:0] i;
-output [271:0] o;
+input [527:0] i;
+output [527:0] o;
 output whit;
 output rhit;
 input invall;
@@ -377,8 +377,8 @@ input invline;
 wire [8:0] wlineno,rlineno;
 wire taghit;
 reg wr1 = 1'b0,wr2 = 1'b0;
-reg [41:0] sel1 = 3'd0,sel2= 3'd0;
-reg [271:0] i1 = 64'd0,i2 = 64'd0;
+reg [65:0] sel1 = 3'd0,sel2= 3'd0;
+reg [527:0] i1 = 64'd0,i2 = 64'd0;
 
 // Must update the cache memory on the cycle after a write to the tag memmory.
 // Otherwise lineno won't be valid. camTag memory takes two clock cycles to update.
