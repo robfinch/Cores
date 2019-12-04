@@ -139,7 +139,7 @@ module L1_dcache_cmptag4way(rst, clk, nxt, wr, invline, invall, adr, lineno, hit
 parameter pLines = 128;
 parameter AMSB = 15;
 localparam pLNMSB = $clog2(pLines) - 1;
-localparam pMSB = $clog2(pLines) - 1 + 3;
+localparam pMSB = $clog2(pLines) - 3 + 6;
 input rst;
 input clk;
 input nxt;
@@ -155,7 +155,6 @@ wire [AMSB-6:0] memo0;
 wire [AMSB-6:0] memo1;
 wire [AMSB-6:0] memo2;
 wire [AMSB-6:0] memo3;
-reg [AMSB:0] rradr;
 reg [pLines/4-1:0] mem0v;
 reg [pLines/4-1:0] mem1v;
 reg [pLines/4-1:0] mem2v;

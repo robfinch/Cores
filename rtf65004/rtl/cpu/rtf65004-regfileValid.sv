@@ -30,10 +30,10 @@ module regfileValid(rst, clk, slotv, slot_rfw, tails,
 	commit0_v, commit1_v, commit2_v,
 	commit0_id, commit1_id, commit2_id,
 	commit0_tgt, commit1_tgt, commit2_tgt,
-	rf_source, iq_source, iq_source2, queuedOn,
+	rf_source, iq_source, queuedOn,
 	take_branch, Rd, rf_v, regIsValid);
 parameter AREGS = 8;
-parameter RBIT = 3;
+parameter RBIT = 2;
 parameter IQ_ENTRIES = `IQ_ENTRIES;
 parameter QSLOTS = `QSLOTS;
 parameter RENTRIES = `RENTRIES;
@@ -58,7 +58,6 @@ input [RBIT:0] commit1_tgt;
 input [RBIT:0] commit2_tgt;
 input [`QBITSP1] rf_source [0:AREGS-1];
 input [IQ_ENTRIES-1:0] iq_source;
-input [IQ_ENTRIES-1:0] iq_source2;
 input [QSLOTS-1:0] take_branch;
 input [2:0] Rd [0:QSLOTS-1];
 input [QSLOTS-1:0] queuedOn;
@@ -109,11 +108,11 @@ begin
     end
 
 		if (commit0_v && n=={commit0_tgt[RBIT:0]} && !rf_v[n])
-			regIsValid[n] = ((rf_source[ {commit0_tgt[RBIT:0]} ][`RBITS] == commit0_id) || (branchmiss && (iq_source[ rob_id[commit0_id] ]) | iq_source2[rob_id[commit0_id]]));
+			regIsValid[n] = ((rf_source[ {commit0_tgt[RBIT:0]} ][`RBITS] == commit0_id) || (branchmiss && (iq_source[ rob_id[commit0_id] ])));
 		if (commit1_v && n=={commit1_tgt[RBIT:0]} && !rf_v[n])
-			regIsValid[n] = ((rf_source[ {commit1_tgt[RBIT:0]} ][`RBITS] == commit1_id) || (branchmiss && (iq_source[ rob_id[commit1_id] ]) | iq_source2[rob_id[commit1_id]]));
+			regIsValid[n] = ((rf_source[ {commit1_tgt[RBIT:0]} ][`RBITS] == commit1_id) || (branchmiss && (iq_source[ rob_id[commit1_id] ])));
 		if (commit2_v && n=={commit2_tgt[RBIT:0]} && !rf_v[n])
-			regIsValid[n] = ((rf_source[ {commit2_tgt[RBIT:0]} ][`RBITS] == commit2_id) || (branchmiss && (iq_source[ rob_id[commit2_id] ]) | iq_source2[rob_id[commit2_id]]));
+			regIsValid[n] = ((rf_source[ {commit2_tgt[RBIT:0]} ][`RBITS] == commit2_id) || (branchmiss && (iq_source[ rob_id[commit2_id] ])));
 	end
 end
 
@@ -138,24 +137,27 @@ else begin
 	if (commit0_v) begin
 		$display("!rfv=%d %d",!rf_v[ commit0_tgt[RBIT:0] ], rf_v[ commit0_tgt[RBIT:0] ] );
     if (!rf_v[ commit0_tgt[RBIT:0] ]) begin
-      rf_v[ commit0_tgt[RBIT:0] ] <= (rf_source[ commit0_tgt[RBIT:0] ][`RBITS] == commit0_id) || (branchmiss && (iq_source[ rob_id[commit0_id] ] | iq_source2[rob_id[commit0_id]]));
+      rf_v[ commit0_tgt[RBIT:0] ] <= (rf_source[ commit0_tgt[RBIT:0] ][`RBITS] == commit0_id) || (branchmiss && (iq_source[ rob_id[commit0_id] ]));
       $display("rfv 0: %d %d %d", rf_source[ commit0_tgt[RBIT:0]][`RBITS], commit0_id, rf_source[ commit0_tgt[RBIT:0] ][`QBIT]);
     end
   end
   if (commit1_v) begin
 		$display("!rfv=%d %d",!rf_v[ commit1_tgt[RBIT:0] ], rf_v[ commit1_tgt[RBIT:0] ] );
     if (!rf_v[ commit1_tgt[RBIT:0] ]) begin //&& !(commit0_v && (rf_source[ commit0_tgt[RBIT:0] ] == commit0_id || (branchmiss && iq_source[ commit0_id[`QBITS] ]))))
-      rf_v[ commit1_tgt[RBIT:0] ] <= (rf_source[ commit1_tgt[RBIT:0] ][`RBITS] == commit1_id) || (branchmiss && (iq_source[ rob_id[commit1_id] ] | iq_source2[rob_id[commit1_id]]));
+      rf_v[ commit1_tgt[RBIT:0] ] <= (rf_source[ commit1_tgt[RBIT:0] ][`RBITS] == commit1_id) || (branchmiss && (iq_source[ rob_id[commit1_id] ]));
       $display("rfv 1: %d %d %d", rf_source[ commit0_tgt[RBIT:0]][`RBITS], commit0_id, rf_source[ commit0_tgt[RBIT:0] ][`QBIT]);
     end
   end
   if (commit2_v) begin
 		$display("!rfv=%d %d",!rf_v[ commit2_tgt[RBIT:0] ], rf_v[ commit2_tgt[RBIT:0] ] );
     if (!rf_v[ commit2_tgt[RBIT:0] ]) begin //&& !(commit0_v && (rf_source[ commit0_tgt[RBIT:0] ] == commit0_id || (branchmiss && iq_source[ commit0_id[`QBITS] ]))))
-      rf_v[ commit2_tgt[RBIT:0] ] <= (rf_source[ commit2_tgt[RBIT:0] ][`RBITS] == commit2_id) || (branchmiss && (iq_source[ rob_id[commit2_id] ] | iq_source2[rob_id[commit2_id]]));
+      rf_v[ commit2_tgt[RBIT:0] ] <= (rf_source[ commit2_tgt[RBIT:0] ][`RBITS] == commit2_id) || (branchmiss && (iq_source[ rob_id[commit2_id] ]));
     end
   end
 
+	$display("slot_rfw: %h", slot_rfw);
+	$display("quedon : %h", queuedOn);
+	$display("slotv: %h", slotv);
 	if (!branchmiss)
 		case(slotv)
 		3'b000:	;
@@ -172,9 +174,11 @@ else begin
 				end
 			end
 		3'b011:
-			if (queuedOn[0]) begin
-				if (slot_rfw[0]) begin
-					rf_v [Rd[0]] <= `INV;
+			begin
+				if (queuedOn[0]) begin
+					if (slot_rfw[0]) begin
+						rf_v [Rd[0]] <= `INV;
+					end
 				end
 				if (queuedOn[1]) begin
 					if (slot_rfw[1]) begin
@@ -189,9 +193,11 @@ else begin
 				end
 			end
 		3'b101:
-			if (queuedOn[0]) begin
-				if (slot_rfw[0]) begin
-					rf_v [Rd[0]] <= `INV;
+			begin
+				if (queuedOn[0]) begin
+					if (slot_rfw[0]) begin
+						rf_v [Rd[0]] <= `INV;
+					end
 				end
 				if (queuedOn[2]) begin
 					if (slot_rfw[2]) begin
@@ -200,9 +206,11 @@ else begin
 				end
 			end
 		3'b110:
-			if (queuedOn[1]) begin
-				if (slot_rfw[1]) begin
-					rf_v [Rd[1]] <= `INV;
+			begin
+				if (queuedOn[1]) begin
+					if (slot_rfw[1]) begin
+						rf_v [Rd[1]] <= `INV;
+					end
 				end
 				if (queuedOn[2]) begin
 					if (slot_rfw[2]) begin
@@ -211,18 +219,23 @@ else begin
 				end
 			end
 		3'b111:
-			if (queuedOn[0]) begin
-				if (slot_rfw[0]) begin
-					rf_v [Rd[0]] <= `INV;
+			begin
+				if (queuedOn[0]) begin
+					if (slot_rfw[0]) begin
+						$display("setting inv0:%h",Rd[0]);
+						rf_v [Rd[0]] <= `INV;
+					end
 				end
 				if (queuedOn[1]) begin
 					if (slot_rfw[1]) begin
+						$display("setting inv1:%h",Rd[1]);
 						rf_v [Rd[1]] <= `INV;
 					end
-					if (queuedOn[2]) begin
-						if (slot_rfw[2]) begin
-							rf_v [Rd[2]] <= `INV;
-						end
+				end
+				if (queuedOn[2]) begin
+					if (slot_rfw[2]) begin
+						$display("setting inv2:%h",Rd[2]);
+						rf_v [Rd[2]] <= `INV;
 					end
 				end
 			end

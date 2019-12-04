@@ -29,7 +29,7 @@ module programCounter(rst, clk,
 	commit0_tgt, commit1_tgt, commit2_tgt,
 	q1, q2, insnx, freezepc, 
 	phit, branchmiss, misspc, len1, len2, len3,
-	jc, rts, br, take_branch, btgt, pc, pcd, branch_pc, 
+	jc, rts, br, take_branch, btgt, pc, pcd, pc_chg, branch_pc, 
 	ra, pc_override,
 	debug_on);
 parameter AMSB = 15;
@@ -65,12 +65,14 @@ input [FSLOTS-1:0] take_branch;
 input [AMSB:0] btgt [0:FSLOTS-1];
 output reg [AMSB:0] pc;
 output reg [AMSB:0] pcd;
+output pc_chg;
 output reg [AMSB:0] branch_pc;
 input [AMSB:0] ra;
 output pc_override;
 input debug_on;
 
 assign pc_override = pc != branch_pc;
+assign pc_chg = pc != pcd;
 
 reg phitd;
 reg [AMSB:0] next_pc;
@@ -125,21 +127,21 @@ else begin
 					pc <= pc + len1 + len2;
 				else if (q1)
 					pc <= pc + len1;
-				if (br[0])
+				if ((q1|q2) & br[0])
 					pc <= btgt[0];
-				if (q2 & br[1])
+				else if (q2 & br[1])
 					pc <= btgt[1];
 			end
 		end
 		if (pc_override)
 			pc <= branch_pc;
 	end
-	if (commit2_v && commit2_tgt==`UO_PC)
-		pc <= commit2_bus;
-	else if (commit1_v && commit1_tgt==`UO_PC)
-		pc <= commit1_bus;
-	else if (commit0_v && commit0_tgt==`UO_PC)
-		pc <= commit0_bus;
+//	if (commit2_v && commit2_tgt==`UO_PC)
+//		pc <= commit2_bus;
+//	else if (commit1_v && commit1_tgt==`UO_PC)
+//		pc <= commit1_bus;
+//	else if (commit0_v && commit0_tgt==`UO_PC)
+//		pc <= commit0_bus;
 	//pc <= next_pc;
 end
 
@@ -152,22 +154,28 @@ else begin
 	if (q1) begin
 		if (rts[0])
 			branch_pc <= ra;
-		else if (take_branch[0])
+		else if (take_branch[0]) begin
+			$display("take branch 0");
 			branch_pc <= pc + {{8{insnx[0][15]}},insnx[0][15:8]} + 4'd2;
+		end
 		else if (jc[0])
 			branch_pc <= insnx[0][23:8];
 	end
 	else if (q2) begin
 		if (rts[0])
 			branch_pc <= ra;
-		else if (take_branch[0])
+		else if (take_branch[0]) begin
+			$display("take branch 0");
 			branch_pc <= pc + {{8{insnx[0][15]}},insnx[0][15:8]} + 4'd2;
+		end
 		else if (jc[0])
 			branch_pc <= insnx[0][23:8];
 		else if (rts[1])
 			branch_pc <= ra;
-		else if (take_branch[1])
+		else if (take_branch[1]) begin
+			$display("take branch 1");
 			branch_pc <= pc + {{8{insnx[1][15]}},insnx[1][15:8]} + len1 + 4'd2;
+		end
 		else if (jc[1])
 			branch_pc <= insnx[1][23:8];
 	end

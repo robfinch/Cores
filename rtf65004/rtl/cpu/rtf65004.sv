@@ -23,6 +23,7 @@
 // 36010 57616
 // 14924 23878
 // 31412 50259
+// 42046 67274
 `include "rtf65004-config.sv"
 `include "rtf65004-defines.sv"
 
@@ -155,6 +156,8 @@ wire int_commit;
 
 reg [371:0] xdati;
 
+reg [31:0] uop_queued;
+reg [31:0] ins_queued;
 wire [2:0] queuedCnt;
 wire [2:0] rqueuedCnt;
 reg queuedNop;
@@ -169,12 +172,13 @@ wire [`QBITS] tails [0:QSLOTS-1];
 wire [`QBITS] heads [0:IQ_ENTRIES-1];
 wire [`RBITS] rob_tails [0:RSLOTS-1];
 wire [`RBITS] rob_heads [0:RSLOTS-1];
-wire [FSLOTS-1:0] slotvd, pc_maskd;
+wire [FSLOTS-1:0] slotvd, pc_maskd, pc_mask;
 
 // Micro-op queue
 reg [UOQ_ENTRIES-1:0] uoq_v;
 reg [15:0] uoq_pc [0:UOQ_ENTRIES-1];
 reg [15:0] uoq_uop [0:UOQ_ENTRIES-1];
+reg [23:0] uoq_inst [0:UOQ_ENTRIES-1];
 reg [15:0] uoq_const [0:UOQ_ENTRIES-1];
 reg [1:0] uoq_fl;		// first or last micro-op
 reg [1:0] uoq_flagsupd [0:UOQ_ENTRIES-1];
@@ -193,6 +197,7 @@ reg [2:0] iq_state [0:IQ_ENTRIES-1];
 reg [`SNBITS] iq_sn  [0:IQ_ENTRIES-1];		// sequence number
 reg [15:0] iq_pc [0:IQ_ENTRIES-1];	// program counter associated with instruction
 reg [2:0] iq_len [0:IQ_ENTRIES-1];
+reg [IQ_ENTRIES-1:0] iq_canex;
 reg [`ABITS] iq_ma [0:IQ_ENTRIES-1];		// memory address
 reg [5:0] iq_instr [0:IQ_ENTRIES-1];	// micro-op instruction
 reg [1:0] iq_fl [0:IQ_ENTRIES-1];			// first or last indicators
@@ -205,6 +210,7 @@ reg [2:0] iq_memsz [0:IQ_ENTRIES-1];
 reg [IQ_ENTRIES-1:0] iq_wrap;
 reg [IQ_ENTRIES-1:0] iq_load;	// is a memory load instruction
 reg [IQ_ENTRIES-1:0] iq_store;	// is a memory store instruction
+reg [16:0] iq_sel [0:IQ_ENTRIES-1];		// select lines, for memory overlap detect
 reg [IQ_ENTRIES-1:0] iq_bt;						// branch taken
 reg [IQ_ENTRIES-1:0] iq_pt;						// predicted taken branch
 reg [IQ_ENTRIES-1:0] iq_fc;						// flow control instruction
@@ -468,6 +474,10 @@ wire [IQ_ENTRIES-1:0] wbo_id;
 wire [1:0] wb_sel;
 reg wb_en;
 wire wb_hit0, wb_hit1;
+
+wire freezepc;
+reg phit;
+reg phitd;
 
 reg branchmiss = 1'b0;
 reg branchhit = 1'b0;
@@ -755,10 +765,10 @@ assign uo_insn1[0] = uopl[opcode1][63:48];
 assign uo_insn1[1] = uopl[opcode1][47:32];
 assign uo_insn1[2] = uopl[opcode1][31:16];
 assign uo_insn1[3] = uopl[opcode1][15: 0];
-assign uo_insn2[1] = uopl[opcode2][63:48];
-assign uo_insn2[2] = uopl[opcode2][47:32];
-assign uo_insn2[3] = uopl[opcode2][31:16];
-assign uo_insn2[4] = uopl[opcode2][15: 0];
+assign uo_insn2[0] = uopl[opcode2][63:48];
+assign uo_insn2[1] = uopl[opcode2][47:32];
+assign uo_insn2[2] = uopl[opcode2][31:16];
+assign uo_insn2[3] = uopl[opcode2][15: 0];
 
 wire [FSLOTS-1:0] slotv;
 wire [QSLOTS-1:0] uoq_slotv;
@@ -772,14 +782,24 @@ reg [4:0] uoq_room;
 reg uoq_hitv; 
 always @*
 begin
-uoq_hitv = FALSE;
-uoq_room = 5'd0;
-for (n = 0; n < 8; n = n + 1)
-	if (uoq_v[uoq_tail[n]] == `INV && !uoq_hitv) begin
-		uoq_room = uoq_room + 5'd1;
-	end
-	else
-		uoq_hitv = TRUE;
+//	if (uoq_tail[0] > uoq_head)
+//		uoq_room = UOQ_ENTRIES - (uoq_tail[0] - uoq_head);
+//	// If head and tail are the same, then either the queue is full or it's empty
+//	// Detection of the queue full is done by checking a single entry for valid.
+//	else if (uoq_head - uoq_tail[0] == 1'd0)
+//		uoq_room = uoq_v[0] ? 5'd0 : UOQ_ENTRIES;
+//	else
+//		uoq_room = uoq_head - uoq_tail[0];
+//end
+	uoq_hitv = FALSE;
+	uoq_room = 5'd0;
+	for (n = 0; n < 8; n = n + 1)
+		if (uoq_v[uoq_tail[n]] == `INV)
+			uoq_room = uoq_room + 5'd1;
+//		if (uoq_v[uoq_tail[n]] == `INV && !uoq_hitv)
+//			uoq_room = uoq_room + 5'd1;
+//		else
+//			uoq_hitv = TRUE;
 end
 
 // q1 and q2 determine the pc increment. The pc determines which instructions
@@ -790,22 +810,24 @@ begin
 	qb <= FALSE;
 	q1 <= FALSE;
 	q2 <= FALSE;
-	if (opcode1==`BRK) begin
-		if (uoq_room >= 3'd5)	begin // must have room for five micro-ops
-			qb <= TRUE;
-			q1 <= TRUE;								// For pc increment
+	if (phit|freezepc) begin
+		if (opcode1==`BRK) begin
+			if (uoq_room >= 3'd5)	begin // must have room for five micro-ops
+				qb <= TRUE;
+				q1 <= TRUE;								// For pc increment
+			end
 		end
-	end
-	// BRK is queued only from the opcode1 slot. If there is a brk on opcode2
-	// wait until the pc advances it to the opcode1 slot.
-	else if (opcode2==`BRK) begin
-		if (uoq_room >= uo_len1)
+		// BRK is queued only from the opcode1 slot. If there is a brk on opcode2
+		// wait until the pc advances it to the opcode1 slot.
+		else if (opcode2==`BRK) begin
+			if (uoq_room >= uo_len1)
+				q1 <= TRUE;
+		end
+		else if (uoq_room >= uo_len1 + uo_len2)
+			q2 <= TRUE;
+		else if (uoq_room >= uo_len1)
 			q1 <= TRUE;
 	end
-	else if (uoq_room >= uo_len1 + uo_len2)
-		q2 <= TRUE;
-	else if (uoq_room >= uo_len1)
-		q1 <= TRUE;
 end
 
 reg [3:0] uo_queuedCnt;
@@ -823,17 +845,10 @@ else begin
 		uo_queuedCnt <= uo_len1;
 end
 
-always @(posedge clk_i)
-if (rst_i)
-	uoq_head <= 4'd0;
-else
-	uoq_head <= (uoq_head + uo_queuedCnt) % UOQ_ENTRIES;
-
 assign uoq_slotv[0] = uoq_head != uoq_tail[0];
 assign uoq_slotv[1] = uoq_head != uoq_tail[0] && uoq_head + 4'd1 != uoq_tail[0];
 assign uoq_slotv[2] = uoq_head != uoq_tail[0] && uoq_head + 4'd1 != uoq_tail[0] && uoq_head + 4'd2 != uoq_tail[0];
 
-wire freezepc;
 assign ic1_out = ic_out[95:0];
 assign ic2_out = ic1_out >> {len1,3'b0};
 assign freezepc = ((rst_ctr < 32'd10) || nmi_i || (irq_i & ~sr[3])) && !int_commit;
@@ -873,7 +888,7 @@ wire d0L1_wr, d0L2_ld;
 wire d1L1_wr, d1L2_ld;
 wire [15:0] d0L1_adr, d0L2_adr;
 wire [15:0] d1L1_adr, d1L2_adr;
-wire d0L1_rhit, d0L2_rhit, d0L2_whit;
+wire d0L2_rhit, d0L2_whit;
 wire d0L2_rhita, d1L2_rhita;
 wire d0L1_nxt, d0L2_nxt;					// advances cache way lfsr
 wire d1L1_dhit, d1L2_rhit, d1L2_whit;
@@ -882,8 +897,8 @@ wire [65:0] d0L1_sel, d0L2_sel;
 wire [65:0] d1L1_sel, d1L2_sel;
 wire [527:0] d0L1_dat, d0L2_rdat, d0L2_wdat;
 wire [527:0] d1L1_dat, d1L2_rdat, d1L2_wdat;
-wire d0L1_dhit, d0L2_hit;
-wire d0L1_selpc, d0L2_selpc;
+wire d0L1_dhit;
+wire d0L1_selpc;
 wire d1L1_selpc, d1L2_selpc;
 wire d0L1_invline,d1L1_invline;
 //reg [255:0] dcbuf;
@@ -1036,8 +1051,6 @@ reg [4:0] bstate;
 wire [3:0] icstate;
 reg [1:0] bwhich;
 
-reg phit;
-reg phitd;
 // The L1 address might not be equal to the ip if a cache update is taking
 // place. This can lead to a false hit because once the cache is updated
 // it'll match L1, but L1 hasn't switched back to ip yet, and it's a hit
@@ -1072,7 +1085,7 @@ regfileValid urfv1
 (
 	.rst(rst_i),
 	.clk(clk),
-//	.slotvd(uoq_slotv),
+	.slotv(uoq_slotv),
 	.slot_rfw(slot_rfw),
 	.tails(tails),
 	.livetarget(livetarget),
@@ -1226,6 +1239,7 @@ programCounter upc1
 	.take_branch(take_branch),
 	.btgt(btgt),
 	.pc(pc),
+	.pc_chg(nextb),
 	.branch_pc(next_pc),
 	.ra(ra),
 	.pc_override(pc_override),
@@ -1254,14 +1268,14 @@ RSB ursb1
 `else
 assign ra = `FCU_RA;
 `endif
-
-next_bundle unb1
-(
-	.rst(rst_i),
-	.slotv(slotv),
-	.phit(phit),
-	.next(nextb)
-);
+//
+//next_bundle unb1
+//(
+//	.rst(rst_i),
+//	.slotv(slotv),
+//	.phit(phit),
+//	.next(nextb)
+//);
 
 ICController uicc1
 (
@@ -1538,8 +1552,8 @@ L1_dcache udc1
 	.o(dc0_out),
 	.fault(),
 	.hit(d0L1_dhit),
-	.invall(invdc),
-	.invline(d0L1_invline)
+	.invall(1'b0),//invdc),
+	.invline(1'b0)//d0L1_invline)
 );
 
 L2_dcache udc2
@@ -1559,8 +1573,8 @@ L2_dcache udc2
 	.o(d0L2_rdat),
 	.rhit(d0L2_rhita),
 	.whit(d0L2_whit),
-	.invall(invdc),
-	.invline(d0L1_invline)
+	.invall(1'b0),//invdc),
+	.invline(1'b0)//d0L1_invline)
 );
 
 
@@ -1625,8 +1639,8 @@ L1_dcache udc3
 	.o(dc1_out),
 	.fault(),
 	.hit(d1L1_dhit),
-	.invall(invdc),
-	.invline(d1L1_invline)
+	.invall(1'b0),//invdc),
+	.invline(1'b0)//d1L1_invline)
 );
 
 L2_dcache udc4
@@ -1646,8 +1660,8 @@ L2_dcache udc4
 	.o(d1L2_rdat),
 	.rhit(d1L2_rhita),
 	.whit(d1L2_whit),
-	.invall(invdc),
-	.invline(d1L1_invline)
+	.invall(1'b0),//invdc),
+	.invline(1'b0)//d1L1_invline)
 );
 
 wire [15:0] aligned_data = fnDatiAlign(dram0_addr,xdati);
@@ -1866,12 +1880,16 @@ always @(posedge clk)
 	end
 
 always @(posedge clk)
-	if (commit2_v && commit2_tgt==`UO_TMP)
-		tmp <= commit2_bus;
-	else if (commit1_v && commit1_tgt==`UO_TMP)
-		tmp <= commit1_bus;
-	else if (commit0_v && commit0_tgt==`UO_TMP)
-		tmp <= commit0_bus;
+	if (rst_i)
+		tmp <= 16'h0;
+	else begin
+		if (commit2_v && commit2_tgt==`UO_TMP)
+			tmp <= commit2_bus;
+		else if (commit1_v && commit1_tgt==`UO_TMP)
+			tmp <= commit1_bus;
+		else if (commit0_v && commit0_tgt==`UO_TMP)
+			tmp <= commit0_bus;
+	end
 
 reg [15:0] argT [0:QSLOTS-1];
 reg [15:0] argB [0:QSLOTS-1];
@@ -2020,6 +2038,7 @@ endfunction
 function [31:0] fnMnemonic;
 input [5:0] ins;
 case(ins)
+`UO_LDIB:	fnMnemonic = "LDIB";
 `UO_LDB:	fnMnemonic = "LDB ";
 `UO_LDBW:	fnMnemonic = "LDBW";
 `UO_LDW:	fnMnemonic = "LDW ";
@@ -2027,8 +2046,16 @@ case(ins)
 `UO_STBW:	fnMnemonic = "STBW";
 `UO_STW:	fnMnemonic = "STW ";
 `UO_ADDB:	fnMnemonic = "ADDB";
+`UO_ADCB:	fnMnemonic = "ADCB";
+`UO_SBCB:	fnMnemonic = "SBCB";
+`UO_CMPB:	fnMnemonic = "CMPB";
 `UO_JMP:	fnMnemonic = "JMP ";
 `UO_JSI:	fnMnemonic = "JSI ";
+`UO_SEC:	fnMnemonic = "SEC ";
+`UO_CLC:	fnMnemonic = "CLC ";
+`UO_BEQ:	fnMnemonic = "BEQ ";
+`UO_BNE:	fnMnemonic = "BNE ";
+`UO_MOV:	fnMnemonic = "MOV ";
 default:	fnMnemonic = "????";
 endcase
 endfunction
@@ -2168,8 +2195,8 @@ assign args_valid[g] =
         // argA is a constant, it'll always be valid
     && (iq_argB_v[g] //|| iq_mem[g]	// a2 does not need to be valid immediately for a mem op (agen), it is checked by iq_memready logic
 `ifdef FU_BYPASS
-        || (iq_argB_s[g][`RBITS] == alu0_rid)
-        || ((iq_argB_s[g][`RBITS] == alu1_rid) && (`NUM_ALU > 1))
+//        || (iq_argB_s[g][`RBITS] == alu0_rid)
+//        || ((iq_argB_s[g][`RBITS] == alu1_rid) && (`NUM_ALU > 1))
 `endif
         )
     && (iq_argS_v[g] || !iq_need_sr[g]
@@ -2422,14 +2449,15 @@ memissueLogic umi1
 	.iq_agen(iq_agen), 
 	.iq_load(iq_load),
 	.iq_store(iq_store),
+	.iq_sel(iq_sel),
 	.iq_fc(iq_fc),
-	.iq_aq(1'b0),
-	.iq_rl(1'b0),
+	.iq_aq({IQ_ENTRIES{1'b0}}),
+	.iq_rl({IQ_ENTRIES{1'b0}}),
 	.iq_ma(iq_ma),
-	.iq_memsb(1'b0),
-	.iq_memdb(1'b0),
+	.iq_memsb({IQ_ENTRIES{1'b0}}),
+	.iq_memdb({IQ_ENTRIES{1'b0}}),
 	.iq_stomp(iq_stomp),
-	.iq_canex(1'b0), 
+	.iq_canex({IQ_ENTRIES{1'b0}}), 
 	.wb_v(wb_v),
 	.inwb0(inwb0),
 	.inwb1(inwb1),
@@ -2495,7 +2523,7 @@ wire will_clear_branchmiss = branchmiss && (
 															|| (uoq_slotv[2] && uoq_pc[(uoq_head + 2'd2) % UOQ_ENTRIES]==misspc)
 															);
 */													
-wire will_clear_branchmiss = branchmiss && (slotv[0] && pc==misspc);
+wire will_clear_branchmiss = branchmiss && (pc==misspc);
 
 always @*
 case(fcu_instr)
@@ -2873,6 +2901,9 @@ seqnum usqn1
 always @(posedge clk_i)
 if (rst_i) begin
 	tick <= 0;
+	uop_queued <= 0;
+	ins_queued <= 0;
+	uoq_head <= 0;
 	for (n = 0; n < 8; n = n + 1)
 		uoq_tail[n] <= n;
 	for (n = 0; n < UOQ_ENTRIES; n = n + 1) begin
@@ -2902,6 +2933,12 @@ if (rst_i) begin
 		iq_mem[n] <= FALSE;
 		iq_memissue[n] <= FALSE;
 		iq_mem_islot[n] <= 3'd0;
+		iq_sel[n] <= 1'd0;
+//		iq_memdb[n] <= 1'd0;
+//		iq_memsb[n] <= 1'd0;
+//		iq_aq[n] <= 1'd0;
+//		iq_rl[n] <= 1'd0;
+		iq_canex[n] <= 1'd0;
 		iq_tgt[n] <= 6'd0;
 		iq_imm[n] <= 1'b0;
 		iq_ma[n] <= 1'b0;
@@ -3059,6 +3096,16 @@ else begin
   if (waitctr != 48'd0)
 		waitctr <= waitctr - 4'd1;
 
+	// The tail can't point to a valid slot unless the queue is full.
+	// For some reason in simulation the tail slot was being marked as valid
+	// when two instructions queued at the same time. I've double-checked the
+	// code and can't find out why the extra slot is validated. I'm 
+	// assuming a bit error in sim for now. The issue is that it blocks
+	// further queuing. So for now if this situation occurs the slot at the
+	// tail is set to invalid.
+//	if (uoq_v[uoq_tail[0]] && uoq_tail[0] != uoq_head)
+//		uoq_v[uoq_tail[0]] <= `INV;
+
 	// BRK is queued specially because it's the only instruction requiring five 
 	// micro-ops. Also the brk vector must be modified for the appropriate type.
 	if (qb) begin
@@ -3111,12 +3158,15 @@ else begin
 		tskLd4(`UO_ZERO,{16'h0,`BRK},uoq_const[uoq_tail[4]]);
 		for (n = 0; n < 8; n = n + 1)
 			uoq_tail[n] <= (uoq_tail[n] + 4'd5) % UOQ_ENTRIES;
+		uop_queued <= uop_queued + 4'd5;
+		ins_queued <= ins_queued + 4'd1;
 	end
 	// uopl[`BRK] 			= {2'd3,`UOF_NONE,2'd3,`UO_ADDB,`UO_M3,`UO_SP,2'd0,`UO_STB,`UO_P1,`UO_SR,`UO_SP,`UO_STW,`UO_P2,`UO_PC,`UO_SP,`UO_LDW,`UO_M2,`UO_PC,2'd0};
 	else if (q2) begin
 		uoq_v[uoq_tail[0]] <= `VAL;
 		uoq_pc[uoq_tail[0]] <= pc;
 		uoq_uop[uoq_tail[0]] <= uo_insn1[0];
+		uoq_inst[uoq_tail[0]] <= insnx[0];
 		uoq_fl[uoq_tail[0]] <= uo_len1==2'b00 ? 2'b11: 2'b01;
 		uoq_hs[uoq_tail[0]] <= 1'b0;
 		uoq_takb[uoq_tail[0]] <= take_branch[0];
@@ -3152,9 +3202,13 @@ else begin
 		uoq_v[uoq_tail[uo_len1]] <= `VAL;
 		uoq_pc[uoq_tail[uo_len1]] <= pc + len1;
 		uoq_uop[uoq_tail[uo_len1]] <= uo_insn2[0];
+		uoq_inst[uoq_tail[uo_len1]] <= insnx[1];
 		uoq_fl[uoq_tail[uo_len1]] <= uo_len2==2'b00 ? 2'b11 : 2'b01;
 		uoq_hs[uoq_tail[uo_len1]] <= 1'b0;
 		uoq_takb[uoq_tail[uo_len1]] <= take_branch[1];
+		$display("uo_insn2[0]=%h", uo_insn2[0]);
+		if (uo_insn2[0]==16'h8C00)
+			$stop;
 		//uoq_tail[0] <= (uoq_tail[0] + uo_len1 + 8'd1) % UOQ_ENTRIES;
 		tskLd4(uo_insn2[0][`UO_LD4],insnx[1],uoq_const[uoq_tail[uo_len1]]);
 		if (uo_len2 > 2'b00) begin
@@ -3188,6 +3242,8 @@ else begin
 		uoq_flagsupd[uoq_tail[uo_len1+uo_whflg2]] <= uo_flags2;
 		for (n = 0; n < 8; n = n + 1)
 			uoq_tail[n] <= (uoq_tail[n] + uo_len1 + uo_len2) % UOQ_ENTRIES;
+		uop_queued <= uop_queued + uo_len1 + uo_len2;
+		ins_queued <= ins_queued + 4'd2;
 	end
 	else if (q1) begin
 		uoq_v[uoq_tail[0]] <= `VAL;
@@ -3228,7 +3284,10 @@ else begin
 		uoq_flagsupd[(uoq_tail[0]+uo_whflg1) % UOQ_ENTRIES] <= uo_flags1;
 		for (n = 0; n < 8; n = n + 1)
 			uoq_tail[n] <= (uoq_tail[n] + uo_len1) % UOQ_ENTRIES;
+		uop_queued <= uop_queued + uo_len1;
+		ins_queued <= ins_queued + 4'd1;
 	end
+
 
 	// Invalidate all entries in the micro-op queue on a branch miss.
 	if (branchmiss) begin
@@ -3245,26 +3304,26 @@ else begin
 				queue_slot(0,rob_tails[0],maxsn+1'd1,id_bus[0],active_tag,rob_tails[0]);
 				uoq_v[uoq_head] <= `INV;
 				uoq_takb[uoq_head] <= FALSE;
-				uoq_head <= uoq_head + 3'd1;
+				uoq_head <= (uoq_head + 3'd1) % UOQ_ENTRIES;
 			end
 		3'b010:
 			if (queuedOnp[1]) begin
 				queue_slot(1,rob_tails[0],maxsn+1'd1,id_bus[1],active_tag,rob_tails[0]);
 				uoq_v[uoq_head] <= `INV;
 				uoq_takb[uoq_head] <= FALSE;
-				uoq_head <= uoq_head + 3'd1;
+				uoq_head <= (uoq_head + 3'd1) % UOQ_ENTRIES;
 			end
 		3'b011:
 			if (queuedOnp[0]) begin
 				queue_slot(0,rob_tails[0],maxsn+1'd1,id_bus[0],active_tag,rob_tails[0]);
 				uoq_v[uoq_head] <= `INV;
 				uoq_takb[uoq_head] <= FALSE;
-				uoq_head <= uoq_head + 3'd1;
+				uoq_head <= (uoq_head + 3'd1) % UOQ_ENTRIES;
 				if (queuedOnp[1]) begin
 					queue_slot(1,rob_tails[1],maxsn+2'd2,id_bus[1],is_branch[0] ? active_tag+2'd1 : active_tag,rob_tails[1]);
 					uoq_v[(uoq_head + 1) % UOQ_ENTRIES] <= `INV;
 					uoq_takb[(uoq_head + 1) % UOQ_ENTRIES] <= FALSE;
-					uoq_head <= uoq_head + 3'd2;
+					uoq_head <= (uoq_head + 3'd2) % UOQ_ENTRIES;
 					arg_vs(3'b011);
 				end
 			end
@@ -3273,7 +3332,7 @@ else begin
 				queue_slot(2,rob_tails[0],maxsn+1'd1,id_bus[2],active_tag,rob_tails[0]);
 				uoq_v[uoq_head] <= `INV;
 				uoq_takb[uoq_head] <= FALSE;
-				uoq_head <= uoq_head + 3'd1;
+				uoq_head <= (uoq_head + 3'd1) % UOQ_ENTRIES;
 			end
 		3'b101:	;	// illegal
 		3'b110:
@@ -3281,18 +3340,18 @@ else begin
 				queue_slot(1,rob_tails[0],maxsn+1'd1,id_bus[1],active_tag,rob_tails[0]);
 				uoq_v[uoq_head] <= `INV;
 				uoq_takb[uoq_head] <= FALSE;
-				uoq_head <= uoq_head + 3'd1;
+				uoq_head <= (uoq_head + 3'd1) % UOQ_ENTRIES;
 				if (queuedOnp[2]) begin
 					queue_slot(2,rob_tails[1],maxsn+2'd2,id_bus[2],is_branch[1] ? active_tag + 2'd1 : active_tag,rob_tails[1]);
 					uoq_v[(uoq_head + 1) % UOQ_ENTRIES] <= `INV;
 					uoq_takb[(uoq_head + 1) % UOQ_ENTRIES] <= FALSE;
-					uoq_head <= uoq_head + 3'd2;
+					uoq_head <= (uoq_head + 3'd2) % UOQ_ENTRIES;
 					arg_vs(3'b110);
 				end
 			end
 		3'b111:
 			if (queuedOnp[0]) begin
-				uoq_head <= uoq_head + 3'd1;
+				uoq_head <= (uoq_head + 3'd1) % UOQ_ENTRIES;
 				uoq_v[uoq_head] <= `INV;
 				uoq_takb[uoq_head] <= FALSE;
 				queue_slot(0,rob_tails[0],maxsn+1'd1,id_bus[0],active_tag,rob_tails[0]);
@@ -3300,7 +3359,7 @@ else begin
 					queue_slot(1,rob_tails[1],maxsn+2'd2,id_bus[1],is_branch[0] ? active_tag + 2'd1 : active_tag,rob_tails[1]);
 					uoq_v[(uoq_head + 1) % UOQ_ENTRIES] <= `INV;
 					uoq_takb[(uoq_head + 1) % UOQ_ENTRIES] <= FALSE;
-					uoq_head <= uoq_head + 3'd2;
+					uoq_head <= (uoq_head + 3'd2) % UOQ_ENTRIES;
 					arg_vs(3'b011);
 					if (queuedOnp[2]) begin
 						queue_slot(2,rob_tails[2],maxsn+2'd3,id_bus[2],
@@ -3308,7 +3367,7 @@ else begin
 							is_branch[0] ? active_tag + 2'd1 : is_branch[1] ? active_tag + 2'd1 : active_tag,rob_tails[2]);
 						uoq_v[(uoq_head + 2) % UOQ_ENTRIES] <= `INV;
 						uoq_takb[(uoq_head + 2) % UOQ_ENTRIES] <= FALSE;
-						uoq_head <= uoq_head + 3'd3;
+						uoq_head <= (uoq_head + 3'd3) % UOQ_ENTRIES;
 						arg_vs(3'b111);
 					end
 				end
@@ -3348,8 +3407,10 @@ else begin
 			iq_state[agen0_id] <= IQS_AGEN;
 		rob_res[agen0_rid] <= 16'h0;//agen0_ma;
 		rob_exc[agen0_rid] <= 4'h0;
-		if (iq_state[agen0_id]==IQS_OUT)
+		if (iq_state[agen0_id]==IQS_OUT) begin
 			iq_ma[agen0_id] <= agen0_ma;
+			iq_sel[agen0_id] <= fnSelect(agen0_instr) << agen0_ma[3:0];
+		end
 		agen0_dataready <= FALSE;
 	end
 
@@ -3358,8 +3419,10 @@ else begin
 			iq_state[agen1_id] <= IQS_AGEN;
 		rob_res[agen1_rid] <= 16'h0;//agen1_ma;		// LEA needs this result
 		rob_exc[agen1_rid] <= 4'h0;
-		if (iq_state[agen1_id]==IQS_OUT)
+		if (iq_state[agen1_id]==IQS_OUT) begin
 			iq_ma[agen1_id] <= agen1_ma;
+			iq_sel[agen1_id] <= fnSelect(agen1_instr) << agen1_ma[3:0];
+		end
 		agen1_dataready <= FALSE;
 	end
 
@@ -3518,7 +3581,7 @@ else begin
 				default:	alu0_argS <= 8'h00;
 				endcase
 `else
-			alu0_argS <= iq_argS[n][WID-1:0];
+			alu0_argS <= iq_argS[n][7:0];
 `endif                 
 `ifdef FU_BYPASS
 			if (iq_argT_v[n])
@@ -3708,6 +3771,8 @@ else begin
 				fcu_branch <= iq_br[n];
 				fcu_argI <= iq_const[n];
 `ifdef FU_BYPASS
+				$display("fcuiss: %c argB_s:%h alu0_rid:%h alu1_rid:%h alu0_bus:%h, alu1_bus:%h iq_argB:%h",
+					iq_argB_v[n]?"V":"-", iq_argB_s[n], alu0_rid, alu1_rid, ralu0_bus, ralu1_bus, iq_argB[n]);
 				if (iq_argB_v[n])
 					fcu_argB <= iq_argB[n];
 				else
@@ -3717,7 +3782,7 @@ else begin
 					default:	fcu_argB <= 16'hDEAD;
 					endcase
 `else
-				fcu_argB <= iq_argB[n][WID-1:0];
+				fcu_argB <= iq_argB[n];
 `endif
 `ifdef FU_BYPASS
 				if (iq_argS_v[n])
@@ -4094,7 +4159,7 @@ endcase
   $display("yr: %h %d %o #", yr, regIsValid[2], rf_source[2]);
   $display("sp: %h %d %o #", sp, regIsValid[3], rf_source[3]);
   $display("sr: %h %d %o #", sr, regIsValid[7], rf_source[7]);
-  $display("tmp: %h %d %o #", tmp, regIsValid[4], rf_source[4]);
+  $display("tmp: %h %d %o #", tmp, regIsValid[5], rf_source[5]);
 `ifdef FCU_ENH
 	$display("Call Stack:");
 	for (n = 0; n < 16; n = n + 4)
@@ -4110,10 +4175,10 @@ endcase
 //    for (n = 0; n < 16; n = n + 1)
 //        $display("%d %h", rasp+n[3:0], ras[rasp+n[3:0]]);
 	$display("TakeBr:%d #", take_branch);//, backpc);
-	$display("Insn%d: %h", 0, insnx[0]);
+	$display("Insn%d: %h %h %h %h", 0, insnx[0], insnx[1], opcode1, opcode2);
 	$display ("------------------------------------------------------------------------ Micro-op Buffer -----------------------------------------------------------------------");
 	for (i = 0; i < UOQ_ENTRIES; i = i + 1)
-		$display("%c%c %d: %c%c %h %h %h %h #",
+		$display("%c%c %d: %c%c %h %h %h %h ins=%h#",
 			i[`UOQ_BITS]==uoq_head ? "H":".",
 			i[`UOQ_BITS]==uoq_tail[0] ? "T":".",
 			i[`UOQ_BITS],
@@ -4122,7 +4187,8 @@ endcase
 			uoq_pc[i],
 			uoq_uop[i],
 			uoq_const[i],
-			uoq_flagsupd[i]
+			uoq_flagsupd[i],
+			uoq_inst[i]
 			);
 	$display ("------------------------------------------------------------------------ Dispatch Buffer -----------------------------------------------------------------------");
 	for (i=0; i<IQ_ENTRIES; i=i+1) 
@@ -4201,6 +4267,7 @@ endcase
 	$display("1: %c %h %o %d #", commit1_v?"v":" ", commit1_bus, commit1_id, commit1_tgt[2:0]);
 	$display("2: %c %h %o %d #", commit2_v?"v":" ", commit2_bus, commit2_id, commit2_tgt[2:0]);
     $display("instructions committed: %d valid committed: %d ticks: %d ", CC, I, tick);
+    $display("micro-ops queued: %d   instr. queued: %d", uop_queued, ins_queued);
   $display("Write Buffer:");
   for (n = `WB_DEPTH-1; n >= 0; n = n - 1)
   	$display("%c adr: %h dat: %h", wb_v[n]?" ":"*", wb_addr[n], uwb1.wb_data[n]);
@@ -4384,7 +4451,7 @@ begin
 			iq_argT_v [tails[tails_rc(pat,row)]] <= regIsValid[Rd[row]] | SourceTValid(uoq_uop[(uoq_head+row) % UOQ_ENTRIES]);
 			iq_argT_s [tails[tails_rc(pat,row)]] <= rf_source[Rd[row]];
 			// iq_argA is a constant
-			iq_argB_v [tails[tails_rc(pat,row)]] <= regIsValid[Rn[row]] | Source2Valid(uoq_uop[(uoq_head+row) % UOQ_ENTRIES]);
+			iq_argB_v [tails[tails_rc(pat,row)]] <= regIsValid[Rn[row]] || Rn[row]==3'd0 || Source2Valid(uoq_uop[(uoq_head+row) % UOQ_ENTRIES]);
 			iq_argB_s [tails[tails_rc(pat,row)]] <= rf_source[Rn[row]];
 			iq_argS_v [tails[tails_rc(pat,row)]] <= regIsValid[7] | SourceSValid(uoq_uop[(uoq_head+row) % UOQ_ENTRIES]);
 			iq_argS_s [tails[tails_rc(pat,row)]] <= rf_source[7];
@@ -4395,7 +4462,7 @@ begin
 							iq_argT_v [tails[tails_rc(pat,row)]] <= SourceTValid(uoq_uop[(uoq_head+row) % UOQ_ENTRIES]);
 							iq_argT_s [tails[tails_rc(pat,row)]] <= {1'b0,tails[tails_rc(pat,col)]};
 						end
-						if (Rn[row]==Rd[col] && slot_rfw[col]) begin
+						if (Rn[row]==Rd[col] && slot_rfw[col] && Rn[row] != 3'd0) begin
 							iq_argB_v [tails[tails_rc(pat,row)]] <= Source2Valid(uoq_uop[(uoq_head+row) % UOQ_ENTRIES]);
 							iq_argB_s [tails[tails_rc(pat,row)]] <= {1'b0,tails[tails_rc(pat,col)]};
 						end
@@ -4457,7 +4524,7 @@ begin
 	iq_argB[ndx] <= argB[slot];
 	iq_argS[ndx] <= argS[slot];
 	iq_argT_v[ndx] <= regIsValid[Rd[slot]] || SourceTValid(uoq_uop[(uoq_head+slot) % UOQ_ENTRIES]);
-	iq_argB_v[ndx] <= regIsValid[Rn[slot]] || Source2Valid(uoq_uop[(uoq_head+slot) % UOQ_ENTRIES]);
+	iq_argB_v[ndx] <= regIsValid[Rn[slot]] || Rn[slot]==3'd0 || Source2Valid(uoq_uop[(uoq_head+slot) % UOQ_ENTRIES]);
 	iq_argS_v[ndx] <= regIsValid[7] || SourceSValid(uoq_uop[(uoq_head+slot) % UOQ_ENTRIES]);
 	iq_argT_s[ndx] <= rf_source[Rd[slot]];
 	iq_argB_s[ndx] <= rf_source[Rn[slot]];

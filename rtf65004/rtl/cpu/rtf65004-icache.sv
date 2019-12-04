@@ -74,7 +74,7 @@ endmodule
 
 module L1_icache_cmptag4way(rst, clk, nxt, wr, invline, invall, adr, lineno, nxt_lineno, hit, missadr);
 parameter pLines = 128;
-parameter AMSB = 63;
+parameter AMSB = 15;
 localparam pLNMSB = pLines==128 ? 6 : 5;
 localparam pMSB = pLines==128 ? 8 : 7;
 input rst;
@@ -94,7 +94,6 @@ reg [AMSB-5:0] mem0 [0:pLines/4-1];
 reg [AMSB-5:0] mem1 [0:pLines/4-1];
 reg [AMSB-5:0] mem2 [0:pLines/4-1];
 reg [AMSB-5:0] mem3 [0:pLines/4-1];
-reg [AMSB:0] rradr;
 reg [pLines/4-1:0] mem0v;
 reg [pLines/4-1:0] mem1v;
 reg [pLines/4-1:0] mem2v;
@@ -273,8 +272,8 @@ L1_icache_cmptag4way #(.pLines(pLines)) u2
 assign hit = taghit;
 
 //always @(radr or ic0 or ic1)
-always @(ic)
-	o <= ic[1023:0];
+always @*
+	o <= ic[1023:0] >> {adr[5:0],3'b0};
 always @*
 	fault <= ic[1026:1024];
 
