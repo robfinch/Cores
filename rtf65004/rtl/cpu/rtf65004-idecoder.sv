@@ -38,6 +38,7 @@ parameter wyde = 3'd1;
 function IsAlu;
 input [15:0] isn;
 case(isn[15:10])
+`UO_NOP,
 `UO_LDIB,`UO_ADDW,`UO_ADDB,
 `UO_ADCB,`UO_SBCB,`UO_CMPB,
 `UO_ANDB,`UO_BITB,`UO_ORB,`UO_EORB,

@@ -59,7 +59,7 @@ always @*
 begin
 s_o = s_i;
 case(op)
-`UO_LDIB,
+`UO_LDIB,`UO_ADDB,
 `UO_ANDB,`UO_BITB,`UO_ORB,`UO_EORB:
 	begin
 		s_o[1] = o[7:0]==8'h00;

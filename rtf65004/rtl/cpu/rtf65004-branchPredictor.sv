@@ -42,7 +42,7 @@ output reg [FSLOTS-1:0] predict_taken;
 integer n;
 
 reg [AMSB:0] pcs [0:31];
-reg [AMSB:0] pc;
+reg [AMSB:0] pc = 1'd0;
 reg takbx;
 reg [4:0] pcshead,pcstail;
 reg wrhist;
@@ -55,13 +55,13 @@ initial begin
 	for (n = 0; n < 512; n = n + 1)
 		branch_history_table[n] = 3;
 end
-wire [8:0] bht_wa = {pc[8:2],gbl_branch_hist[2:1]};		// write address
+wire [8:0] bht_wa = {pc[6:0],gbl_branch_hist[2:1]};		// write address
 wire [1:0] bht_xbits = branch_history_table[bht_wa];
 reg [8:0] bht_ra [0:FSLOTS-1];
 reg [1:0] bht_ibits [0:FSLOTS-1];
 always @*
 for (n = 0; n < FSLOTS; n = n + 1) begin
-	bht_ra [n] = {ip[n][8:2],gbl_branch_hist[2:1]};	// read address (IF stage)
+	bht_ra [n] = {ip[n][6:0],gbl_branch_hist[2:1]};	// read address (IF stage)
 	bht_ibits [n] = branch_history_table[bht_ra[n]];
 	predict_taken[n] = (bht_ibits[n]==2'd0 || bht_ibits[n]==2'd1) && en;
 end

@@ -476,7 +476,7 @@
 `define BPL			9'h10
 `define BVC			9'h50
 `define BCC			9'h90
-`define BNE			8'hD0
+`define BNE			9'hD0
 `define BMI			9'h30
 `define BVS			9'h70
 `define BCS			9'hB0

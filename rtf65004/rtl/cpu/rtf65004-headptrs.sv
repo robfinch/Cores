@@ -35,7 +35,7 @@ input clk;
 input [2:0] amt;
 output reg [`QBITS] heads [0:IQ_ENTRIES-1];
 input [2:0] ramt;
-output reg [`RBITS] rob_heads [0:RSLOTS-1];
+output reg [`RBITS] rob_heads [0:RENTRIES-1];
 
 integer n;
 
@@ -56,7 +56,7 @@ if (rst) begin
 end
 else begin
 	for (n = 0; n < RENTRIES; n = n + 1)
-     rob_heads[n] <= (rob_heads[n] + ramt) % RENTRIES;
+    rob_heads[n] <= (rob_heads[n] + ramt) % RENTRIES;
 end
 
 endmodule
