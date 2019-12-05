@@ -25,6 +25,7 @@
 // 31412 50259
 // 42046 67274
 // 44015 70424
+// 41136 65818
 `include "rtf65004-config.sv"
 `include "rtf65004-defines.sv"
 
@@ -183,11 +184,10 @@ reg [15:0] uoq_uop [0:UOQ_ENTRIES-1];
 reg [23:0] uoq_inst [0:UOQ_ENTRIES-1];
 reg [15:0] uoq_const [0:UOQ_ENTRIES-1];
 reg [1:0] uoq_fl;		// first or last micro-op
-reg [1:0] uoq_flagsupd [0:UOQ_ENTRIES-1];
+reg [7:0] uoq_flagsupd [0:UOQ_ENTRIES-1];
+reg [UOQ_ENTRIES-1:0] uoq_rfw;
 reg [UOQ_ENTRIES-1:0] uoq_hs;
 reg [UOQ_ENTRIES-1:0] uoq_jc;
-reg [UOQ_ENTRIES-1:0] uoq_br;
-reg [UOQ_ENTRIES-1:0] uoq_ret;
 reg [UOQ_ENTRIES-1:0] uoq_takb;
 
 // Issue queue
@@ -253,6 +253,7 @@ reg [15:0] rob_res [0:RENTRIES-1];
 reg [7:0] rob_sr_res [0:RENTRIES-1];		// status register result
 reg [RBIT:0] rob_tgt [0:RENTRIES-1];
 reg [7:0] rob_sr_tgts [0:RENTRIES-1];
+reg [RENTRIES-1:0] rob_rfw;
 
 // debugging
 initial begin
@@ -262,6 +263,7 @@ for (n = 0; n < IQ_ENTRIES; n = n + 1)
 	iq_argS_s[n] <= 1'd0;
 end
 
+reg [IQ_ENTRIES-1:0] iq_sr_source = {IQ_ENTRIES{1'b0}};
 reg [IQ_ENTRIES-1:0] iq_source = {IQ_ENTRIES{1'b0}};
 reg [IQ_ENTRIES-1:0] iq_source2 = {IQ_ENTRIES{1'b0}};
 reg [IQ_ENTRIES-1:0] iq_imm;
@@ -290,6 +292,7 @@ reg [AREGS-1:0] iq_latestID [0:IQ_ENTRIES-1];
 reg [AREGS-1:0] iq_cumulative [0:IQ_ENTRIES-1];
 wire  [AREGS-1:0] iq_out2 [0:IQ_ENTRIES-1];
 wire  [AREGS-1:0] iq_out2a [0:IQ_ENTRIES-1];
+reg [IQ_ENTRIES-1:0] iq_latest_sr_ID;
 
 wire [FSLOTS-1:0] take_branch;
 reg [`QBITS] active_tag;
@@ -541,6 +544,7 @@ reg [47:0] CC;	// commit count
 reg commit0_v;
 reg [`RBITS] commit0_id;
 reg [RBIT:0] commit0_tgt;
+reg commit0_rfw;
 reg [WID-1:0] commit0_bus;
 reg [7:0] commit0_sr_bus;
 reg [3:0] commit0_rid;
@@ -548,6 +552,7 @@ reg [7:0] commit0_sr_tgts;
 reg commit1_v;
 reg [`RBITS] commit1_id;
 reg [RBIT:0] commit1_tgt;
+reg commit1_rfw;
 reg [WID-1:0] commit1_bus;
 reg [7:0] commit1_sr_bus;
 reg [3:0] commit1_rid;
@@ -555,6 +560,7 @@ reg [7:0] commit1_sr_tgts;
 reg commit2_v;
 reg [`RBITS] commit2_id;
 reg [RBIT:0] commit2_tgt;
+reg commit2_rfw;
 reg [WID-1:0] commit2_bus;
 reg [7:0] commit2_sr_bus;
 reg [3:0] commit2_rid;
@@ -568,6 +574,7 @@ wire predict_taken0;
 wire predict_taken1;
 wire predict_taken2;
 reg [QSLOTS-1:0] slot_rfw;
+reg [7:0] slot_sr_tgts [0:QSLOTS-1];
 
 wire [7:0] opcode1, opcode2;
 
@@ -582,157 +589,157 @@ initial begin
 		uopl[n] = {2'd0,74'h0};
 // BRK has special handling at queue stage
 //uopl[`BRK] 			= {2'd3,`UOF_NONE,2'd3,`UO_ADDB,`UO_M3,`UO_SP,2'd0,`UO_STB,`UO_P1,`UO_SR,`UO_SP,`UO_STW,`UO_P2,`UO_PC,`UO_SP,`UO_LDW,`UO_M2,`UO_PC,2'd0};
-uopl[`LDA_IMM]	= {2'd0,`UOF_NZ,2'd0,`UO_LDIB,`UO_R8,`UO_ACC,`UO_ZR,48'h0};
-uopl[`LDA_ZP]		= {2'd0,`UOF_NZ,2'd0,`UO_LDB,`UO_R8,`UO_ACC,`UO_ZR,48'h0};
-uopl[`LDA_ZPX]	= {2'd0,`UOF_NZ,2'd0,`UO_LDB,`UO_R8,`UO_ACC,`UO_XR,48'h0};
-uopl[`LDA_IX]		= {2'd1,`UOF_NZ,2'd1,`UO_LDW,`UO_R8,`UO_TMP,`UO_XR,`UO_LDB,`UO_ZERO,`UO_ACC,`UO_TMP,32'h0000};
-uopl[`LDA_IY]		= {2'd2,`UOF_NZ,2'd2,`UO_LDW,`UO_R8,`UO_TMP,`UO_ZR,`UO_ADDW,`UO_ZERO,`UO_TMP,`UO_YR,`UO_LDB,`UO_ZERO,`UO_ACC,`UO_TMP,16'h0000};
-uopl[`LDA_ABS]	= {2'd0,`UOF_NZ,2'd0,`UO_LDB,`UO_R16,`UO_ACC,`UO_ZR,48'h0};
-uopl[`LDA_ABSX]	= {2'd0,`UOF_NZ,2'd0,`UO_LDB,`UO_R16,`UO_ACC,`UO_XR,48'h0};
-uopl[`LDA_ABSY]	= {2'd0,`UOF_NZ,2'd0,`UO_LDB,`UO_R16,`UO_ACC,`UO_YR,48'h0};
-uopl[`STA_ZP]	  = {2'd0,`UOF_NONE,2'd0,`UO_STB,`UO_R8,`UO_ACC,`UO_ZR,48'h0};
-uopl[`STA_ZPX]  = {2'd0,`UOF_NONE,2'd0,`UO_STB,`UO_R8,`UO_ACC,`UO_XR,48'h0};
-uopl[`STA_IX]		= {2'd1,`UOF_NONE,2'd0,`UO_LDW,`UO_R8,`UO_TMP,`UO_XR,`UO_STB,`UO_ZERO,`UO_ACC,`UO_TMP,32'h0000};
-uopl[`STA_IY]		= {2'd2,`UOF_NONE,2'd0,`UO_LDW,`UO_R8,`UO_TMP,`UO_ZR,`UO_ADDW,`UO_ZERO,`UO_TMP,`UO_YR,`UO_STB,`UO_ZERO,`UO_ACC,`UO_TMP,16'h0000};
-uopl[`STA_ABS]	= {2'd0,`UOF_NONE,2'd0,`UO_STB,`UO_R16,`UO_ACC,`UO_ZR,48'h0};
-uopl[`STA_ABSX]	= {2'd0,`UOF_NONE,2'd0,`UO_STB,`UO_R16,`UO_ACC,`UO_XR,48'h0};
-uopl[`STA_ABSY]	= {2'd0,`UOF_NONE,2'd0,`UO_STB,`UO_R16,`UO_ACC,`UO_YR,48'h0};
-uopl[`ADC_IMM]	= {2'd0,`UOF_CVNZ,2'd0,`UO_ADCB,`UO_R8,`UO_ACC,`UO_ZR,48'h0};
-uopl[`ADC_ZP]		= {2'd1,`UOF_CVNZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_ADCB,`UO_ZERO,`UO_ACC,`UO_TMP,32'h0};
-uopl[`ADC_ZPX]	= {2'd1,`UOF_CVNZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_ADCB,`UO_ZERO,`UO_ACC,`UO_TMP,32'h0};
-uopl[`ADC_IX]		= {2'd2,`UOF_CVNZ,2'd2,`UO_LDW,`UO_R8,`UO_TMP,`UO_XR,`UO_LDB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_ADCB,`UO_ZERO,`UO_ACC,`UO_TMP,16'h0000};
+uopl[`LDA_IMM]	= {2'd0,`UOF_NZ,2'd0,`UO_LDIB,`UO_R8,`UO_ACC,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`LDA_ZP]		= {2'd0,`UOF_NZ,2'd0,`UO_LDB,`UO_R8,`UO_ACC,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`LDA_ZPX]	= {2'd0,`UOF_NZ,2'd0,`UO_LDB,`UO_R8,`UO_ACC,`UO_XR,{3{`UO_NOP_MOP}}};
+uopl[`LDA_IX]		= {2'd1,`UOF_NZ,2'd1,`UO_LDW,`UO_R8,`UO_TMP,`UO_XR,`UO_LDB,`UO_ZERO,`UO_ACC,`UO_TMP,{2{`UO_NOP_MOP}}};
+uopl[`LDA_IY]		= {2'd2,`UOF_NZ,2'd2,`UO_LDW,`UO_R8,`UO_TMP,`UO_ZR,`UO_ADDW,`UO_ZERO,`UO_TMP,`UO_YR,`UO_LDB,`UO_ZERO,`UO_ACC,`UO_TMP,{1{`UO_NOP_MOP}}};
+uopl[`LDA_ABS]	= {2'd0,`UOF_NZ,2'd0,`UO_LDB,`UO_R16,`UO_ACC,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`LDA_ABSX]	= {2'd0,`UOF_NZ,2'd0,`UO_LDB,`UO_R16,`UO_ACC,`UO_XR,{3{`UO_NOP_MOP}}};
+uopl[`LDA_ABSY]	= {2'd0,`UOF_NZ,2'd0,`UO_LDB,`UO_R16,`UO_ACC,`UO_YR,{3{`UO_NOP_MOP}}};
+uopl[`STA_ZP]	  = {2'd0,`UOF_NONE,2'd0,`UO_STB,`UO_R8,`UO_ACC,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`STA_ZPX]  = {2'd0,`UOF_NONE,2'd0,`UO_STB,`UO_R8,`UO_ACC,`UO_XR,{3{`UO_NOP_MOP}}};
+uopl[`STA_IX]		= {2'd1,`UOF_NONE,2'd0,`UO_LDW,`UO_R8,`UO_TMP,`UO_XR,`UO_STB,`UO_ZERO,`UO_ACC,`UO_TMP,{2{`UO_NOP_MOP}}};
+uopl[`STA_IY]		= {2'd2,`UOF_NONE,2'd0,`UO_LDW,`UO_R8,`UO_TMP,`UO_ZR,`UO_ADDW,`UO_ZERO,`UO_TMP,`UO_YR,`UO_STB,`UO_ZERO,`UO_ACC,`UO_TMP,{1{`UO_NOP_MOP}}};
+uopl[`STA_ABS]	= {2'd0,`UOF_NONE,2'd0,`UO_STB,`UO_R16,`UO_ACC,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`STA_ABSX]	= {2'd0,`UOF_NONE,2'd0,`UO_STB,`UO_R16,`UO_ACC,`UO_XR,{3{`UO_NOP_MOP}}};
+uopl[`STA_ABSY]	= {2'd0,`UOF_NONE,2'd0,`UO_STB,`UO_R16,`UO_ACC,`UO_YR,{3{`UO_NOP_MOP}}};
+uopl[`ADC_IMM]	= {2'd0,`UOF_CVNZ,2'd0,`UO_ADCB,`UO_R8,`UO_ACC,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`ADC_ZP]		= {2'd1,`UOF_CVNZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_ADCB,`UO_ZERO,`UO_ACC,`UO_TMP,{2{`UO_NOP_MOP}}};
+uopl[`ADC_ZPX]	= {2'd1,`UOF_CVNZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_ADCB,`UO_ZERO,`UO_ACC,`UO_TMP,{2{`UO_NOP_MOP}}};
+uopl[`ADC_IX]		= {2'd2,`UOF_CVNZ,2'd2,`UO_LDW,`UO_R8,`UO_TMP,`UO_XR,`UO_LDB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_ADCB,`UO_ZERO,`UO_ACC,`UO_TMP,{1{`UO_NOP_MOP}}};
 uopl[`ADC_IY]		= {2'd3,`UOF_CVNZ,2'd3,`UO_LDW,`UO_R8,`UO_TMP,`UO_ZR,`UO_ADDW,`UO_ZERO,`UO_TMP,`UO_YR,`UO_LDB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_ADCB,`UO_ZERO,`UO_ACC,`UO_TMP};
-uopl[`ADC_ABS]	= {2'd1,`UOF_CVNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_ADCB,`UO_ZERO,`UO_ACC,`UO_TMP,32'h0};
-uopl[`ADC_ABSX]	= {2'd1,`UOF_CVNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_ADCB,`UO_ZERO,`UO_ACC,`UO_TMP,32'h0};
-uopl[`ADC_ABSY]	= {2'd1,`UOF_CVNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_YR,`UO_ADCB,`UO_ZERO,`UO_ACC,`UO_TMP,32'h0};
-uopl[`SBC_IMM]	= {2'd0,`UOF_CVNZ,2'd0,`UO_SBCB,`UO_R8,`UO_ACC,`UO_ZR,48'h0};
-uopl[`SBC_ZP]		= {2'd1,`UOF_CVNZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_SBCB,`UO_ZERO,`UO_ACC,`UO_TMP,32'h0};
-uopl[`SBC_ZPX]	= {2'd1,`UOF_CVNZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_SBCB,`UO_ZERO,`UO_ACC,`UO_TMP,32'h0};
-uopl[`SBC_IX]		= {2'd2,`UOF_CVNZ,2'd2,`UO_LDW,`UO_R8,`UO_TMP,`UO_XR,`UO_LDB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_SBCB,`UO_ZERO,`UO_ACC,`UO_TMP,16'h0000};
+uopl[`ADC_ABS]	= {2'd1,`UOF_CVNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_ADCB,`UO_ZERO,`UO_ACC,`UO_TMP,{2{`UO_NOP_MOP}}};
+uopl[`ADC_ABSX]	= {2'd1,`UOF_CVNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_ADCB,`UO_ZERO,`UO_ACC,`UO_TMP,{2{`UO_NOP_MOP}}};
+uopl[`ADC_ABSY]	= {2'd1,`UOF_CVNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_YR,`UO_ADCB,`UO_ZERO,`UO_ACC,`UO_TMP,{2{`UO_NOP_MOP}}};
+uopl[`SBC_IMM]	= {2'd0,`UOF_CVNZ,2'd0,`UO_SBCB,`UO_R8,`UO_ACC,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`SBC_ZP]		= {2'd1,`UOF_CVNZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_SBCB,`UO_ZERO,`UO_ACC,`UO_TMP,{2{`UO_NOP_MOP}}};
+uopl[`SBC_ZPX]	= {2'd1,`UOF_CVNZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_SBCB,`UO_ZERO,`UO_ACC,`UO_TMP,{2{`UO_NOP_MOP}}};
+uopl[`SBC_IX]		= {2'd2,`UOF_CVNZ,2'd2,`UO_LDW,`UO_R8,`UO_TMP,`UO_XR,`UO_LDB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_SBCB,`UO_ZERO,`UO_ACC,`UO_TMP,{1{`UO_NOP_MOP}}};
 uopl[`SBC_IY]		= {2'd3,`UOF_CVNZ,2'd3,`UO_LDW,`UO_R8,`UO_TMP,`UO_ZR,`UO_ADDW,`UO_ZERO,`UO_TMP,`UO_YR,`UO_LDB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_SBCB,`UO_ZERO,`UO_ACC,`UO_TMP};
-uopl[`SBC_ABS]	= {2'd1,`UOF_CVNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_SBCB,`UO_ZERO,`UO_ACC,`UO_TMP,32'h0};
-uopl[`SBC_ABSX]	= {2'd1,`UOF_CVNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_SBCB,`UO_ZERO,`UO_ACC,`UO_TMP,32'h0};
-uopl[`SBC_ABSY]	= {2'd1,`UOF_CVNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_YR,`UO_SBCB,`UO_ZERO,`UO_ACC,`UO_TMP,32'h0};
-uopl[`CMP_IMM]	= {2'd0,`UOF_CNZ,2'd0,`UO_CMPB,`UO_R8,`UO_ACC,`UO_ZR,48'h0};
-uopl[`CMP_ZP]		= {2'd1,`UOF_CNZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_CMPB,`UO_ZERO,`UO_ACC,`UO_TMP,32'h0};
-uopl[`CMP_ZPX]	= {2'd1,`UOF_CNZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_CMPB,`UO_ZERO,`UO_ACC,`UO_TMP,32'h0};
-uopl[`CMP_IX]		= {2'd2,`UOF_CNZ,2'd2,`UO_LDW,`UO_R8,`UO_TMP,`UO_XR,`UO_LDB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_CMPB,`UO_ZERO,`UO_ACC,`UO_TMP,16'h0000};
+uopl[`SBC_ABS]	= {2'd1,`UOF_CVNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_SBCB,`UO_ZERO,`UO_ACC,`UO_TMP,{2{`UO_NOP_MOP}}};
+uopl[`SBC_ABSX]	= {2'd1,`UOF_CVNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_SBCB,`UO_ZERO,`UO_ACC,`UO_TMP,{2{`UO_NOP_MOP}}};
+uopl[`SBC_ABSY]	= {2'd1,`UOF_CVNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_YR,`UO_SBCB,`UO_ZERO,`UO_ACC,`UO_TMP,{2{`UO_NOP_MOP}}};
+uopl[`CMP_IMM]	= {2'd0,`UOF_CNZ,2'd0,`UO_CMPB,`UO_R8,`UO_ACC,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`CMP_ZP]		= {2'd1,`UOF_CNZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_CMPB,`UO_ZERO,`UO_ACC,`UO_TMP,{2{`UO_NOP_MOP}}};
+uopl[`CMP_ZPX]	= {2'd1,`UOF_CNZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_CMPB,`UO_ZERO,`UO_ACC,`UO_TMP,{2{`UO_NOP_MOP}}};
+uopl[`CMP_IX]		= {2'd2,`UOF_CNZ,2'd2,`UO_LDW,`UO_R8,`UO_TMP,`UO_XR,`UO_LDB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_CMPB,`UO_ZERO,`UO_ACC,`UO_TMP,{1{`UO_NOP_MOP}}};
 uopl[`CMP_IY]		= {2'd3,`UOF_CNZ,2'd3,`UO_LDW,`UO_R8,`UO_TMP,`UO_ZR,`UO_ADDW,`UO_ZERO,`UO_TMP,`UO_YR,`UO_LDB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_CMPB,`UO_ZERO,`UO_ACC,`UO_TMP};
-uopl[`CMP_ABS]	= {2'd1,`UOF_CNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_CMPB,`UO_ZERO,`UO_ACC,`UO_TMP,32'h0};
-uopl[`CMP_ABSX]	= {2'd1,`UOF_CNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_CMPB,`UO_ZERO,`UO_ACC,`UO_TMP,32'h0};
-uopl[`CMP_ABSY]	= {2'd1,`UOF_CNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_YR,`UO_CMPB,`UO_ZERO,`UO_ACC,`UO_TMP,32'h0};
-uopl[`AND_IMM]	= {2'd0,`UOF_NZ,2'd0,`UO_ANDB,`UO_R8,`UO_ACC,`UO_M1R,48'h0};
-uopl[`AND_ZP]		= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_ANDB,`UO_M1,`UO_ACC,`UO_TMP,32'h0};
-uopl[`AND_ZPX]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_ANDB,`UO_M1,`UO_ACC,`UO_TMP,32'h0};
-uopl[`AND_IX]		= {2'd2,`UOF_NZ,2'd2,`UO_LDW,`UO_R8,`UO_TMP,`UO_XR,`UO_LDB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_ANDB,`UO_M1,`UO_ACC,`UO_TMP,16'h0000};
+uopl[`CMP_ABS]	= {2'd1,`UOF_CNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_CMPB,`UO_ZERO,`UO_ACC,`UO_TMP,{2{`UO_NOP_MOP}}};
+uopl[`CMP_ABSX]	= {2'd1,`UOF_CNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_CMPB,`UO_ZERO,`UO_ACC,`UO_TMP,{2{`UO_NOP_MOP}}};
+uopl[`CMP_ABSY]	= {2'd1,`UOF_CNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_YR,`UO_CMPB,`UO_ZERO,`UO_ACC,`UO_TMP,{2{`UO_NOP_MOP}}};
+uopl[`AND_IMM]	= {2'd0,`UOF_NZ,2'd0,`UO_ANDB,`UO_R8,`UO_ACC,`UO_M1R,{3{`UO_NOP_MOP}}};
+uopl[`AND_ZP]		= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_ANDB,`UO_M1,`UO_ACC,`UO_TMP,{2{`UO_NOP_MOP}}};
+uopl[`AND_ZPX]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_ANDB,`UO_M1,`UO_ACC,`UO_TMP,{2{`UO_NOP_MOP}}};
+uopl[`AND_IX]		= {2'd2,`UOF_NZ,2'd2,`UO_LDW,`UO_R8,`UO_TMP,`UO_XR,`UO_LDB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_ANDB,`UO_M1,`UO_ACC,`UO_TMP,{1{`UO_NOP_MOP}}};
 uopl[`AND_IY]		= {2'd3,`UOF_NZ,2'd3,`UO_LDW,`UO_R8,`UO_TMP,`UO_ZR,`UO_ADDW,`UO_ZERO,`UO_TMP,`UO_YR,`UO_LDB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_ANDB,`UO_M1,`UO_ACC,`UO_TMP};
-uopl[`AND_ABS]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_ANDB,`UO_M1,`UO_ACC,`UO_TMP,32'h0};
-uopl[`AND_ABSX]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_ANDB,`UO_M1,`UO_ACC,`UO_TMP,32'h0};
-uopl[`AND_ABSY]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_YR,`UO_ANDB,`UO_M1,`UO_ACC,`UO_TMP,32'h0};
-uopl[`ORA_IMM]	= {2'd0,`UOF_NZ,2'd0,`UO_ORB,`UO_R8,`UO_ACC,`UO_ZR,48'h0};
-uopl[`ORA_ZP]		= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_ORB,`UO_ZERO,`UO_ACC,`UO_TMP,32'h0};
-uopl[`ORA_ZPX]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_ORB,`UO_ZERO,`UO_ACC,`UO_TMP,32'h0};
-uopl[`ORA_IX]		= {2'd2,`UOF_NZ,2'd2,`UO_LDW,`UO_R8,`UO_TMP,`UO_XR,`UO_LDB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_ORB,`UO_ZERO,`UO_ACC,`UO_TMP,16'h0000};
+uopl[`AND_ABS]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_ANDB,`UO_M1,`UO_ACC,`UO_TMP,{2{`UO_NOP_MOP}}};
+uopl[`AND_ABSX]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_ANDB,`UO_M1,`UO_ACC,`UO_TMP,{2{`UO_NOP_MOP}}};
+uopl[`AND_ABSY]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_YR,`UO_ANDB,`UO_M1,`UO_ACC,`UO_TMP,{2{`UO_NOP_MOP}}};
+uopl[`ORA_IMM]	= {2'd0,`UOF_NZ,2'd0,`UO_ORB,`UO_R8,`UO_ACC,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`ORA_ZP]		= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_ORB,`UO_ZERO,`UO_ACC,`UO_TMP,{2{`UO_NOP_MOP}}};
+uopl[`ORA_ZPX]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_ORB,`UO_ZERO,`UO_ACC,`UO_TMP,{2{`UO_NOP_MOP}}};
+uopl[`ORA_IX]		= {2'd2,`UOF_NZ,2'd2,`UO_LDW,`UO_R8,`UO_TMP,`UO_XR,`UO_LDB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_ORB,`UO_ZERO,`UO_ACC,`UO_TMP,{1{`UO_NOP_MOP}}};
 uopl[`ORA_IY]		= {2'd3,`UOF_NZ,2'd3,`UO_LDW,`UO_R8,`UO_TMP,`UO_ZR,`UO_ADDW,`UO_ZERO,`UO_TMP,`UO_YR,`UO_LDB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_ORB,`UO_ZERO,`UO_ACC,`UO_TMP};
-uopl[`ORA_ABS]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_ORB,`UO_ZERO,`UO_ACC,`UO_TMP,32'h0};
-uopl[`ORA_ABSX]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_ORB,`UO_ZERO,`UO_ACC,`UO_TMP,32'h0};
-uopl[`ORA_ABSY]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_YR,`UO_ORB,`UO_ZERO,`UO_ACC,`UO_TMP,32'h0};
-uopl[`EOR_IMM]	= {2'd0,`UOF_NZ,2'd0,`UO_EORB,`UO_R8,`UO_ACC,`UO_ZR,48'h0};
-uopl[`EOR_ZP]		= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_EORB,`UO_ZERO,`UO_ACC,`UO_TMP,32'h0};
-uopl[`EOR_ZPX]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_EORB,`UO_ZERO,`UO_ACC,`UO_TMP,32'h0};
-uopl[`EOR_IX]		= {2'd2,`UOF_NZ,2'd2,`UO_LDW,`UO_R8,`UO_TMP,`UO_XR,`UO_LDB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_EORB,`UO_ZERO,`UO_ACC,`UO_TMP,16'h0000};
+uopl[`ORA_ABS]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_ORB,`UO_ZERO,`UO_ACC,`UO_TMP,{2{`UO_NOP_MOP}}};
+uopl[`ORA_ABSX]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_ORB,`UO_ZERO,`UO_ACC,`UO_TMP,{2{`UO_NOP_MOP}}};
+uopl[`ORA_ABSY]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_YR,`UO_ORB,`UO_ZERO,`UO_ACC,`UO_TMP,{2{`UO_NOP_MOP}}};
+uopl[`EOR_IMM]	= {2'd0,`UOF_NZ,2'd0,`UO_EORB,`UO_R8,`UO_ACC,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`EOR_ZP]		= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_EORB,`UO_ZERO,`UO_ACC,`UO_TMP,{2{`UO_NOP_MOP}}};
+uopl[`EOR_ZPX]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_EORB,`UO_ZERO,`UO_ACC,`UO_TMP,{2{`UO_NOP_MOP}}};
+uopl[`EOR_IX]		= {2'd2,`UOF_NZ,2'd2,`UO_LDW,`UO_R8,`UO_TMP,`UO_XR,`UO_LDB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_EORB,`UO_ZERO,`UO_ACC,`UO_TMP,{1{`UO_NOP_MOP}}};
 uopl[`EOR_IY]		= {2'd3,`UOF_NZ,2'd3,`UO_LDW,`UO_R8,`UO_TMP,`UO_ZR,`UO_ADDW,`UO_ZERO,`UO_TMP,`UO_YR,`UO_LDB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_EORB,`UO_ZERO,`UO_ACC,`UO_TMP};
-uopl[`EOR_ABS]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_EORB,`UO_ZERO,`UO_ACC,`UO_TMP,32'h0};
-uopl[`EOR_ABSX]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_EORB,`UO_ZERO,`UO_ACC,`UO_TMP,32'h0};
-uopl[`EOR_ABSY]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_YR,`UO_EORB,`UO_ZERO,`UO_ACC,`UO_TMP,32'h0};
-uopl[`ASL_ACC]  = {2'd0,`UOF_CNZ,2'd0,`UO_ASLB,`UO_ZERO,`UO_ACC,`UO_ZR,48'h0};
-uopl[`ASL_ZP]		= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_ASLB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R8,`UO_TMP,`UO_ZR,16'h0};
-uopl[`ASL_ZPX]	= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_ASLB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R8,`UO_TMP,`UO_XR,16'h0};
-uopl[`ASL_ABS]	= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_ASLB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R16,`UO_TMP,`UO_ZR,16'h0};
-uopl[`ASL_ABSX]	= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_ASLB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R16,`UO_TMP,`UO_XR,16'h0};
-uopl[`ROL_ACC]  = {2'd0,`UOF_CNZ,2'd0,`UO_ROLB,`UO_ZERO,`UO_ACC,`UO_ZR,48'h0};
-uopl[`ROL_ZP]		= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_ROLB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R8,`UO_TMP,`UO_ZR,16'h0};
-uopl[`ROL_ZPX]	= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_ROLB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R8,`UO_TMP,`UO_XR,16'h0};
-uopl[`ROL_ABS]	= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_ROLB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R16,`UO_TMP,`UO_ZR,16'h0};
-uopl[`ROL_ABSX]	= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_ROLB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R16,`UO_TMP,`UO_XR,16'h0};
-uopl[`LSR_ACC]  = {2'd0,`UOF_CNZ,2'd0,`UO_LSRB,`UO_ZERO,`UO_ACC,`UO_ZR,48'h0};
-uopl[`LSR_ZP]		= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_LSRB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R8,`UO_TMP,`UO_ZR,16'h0};
-uopl[`LSR_ZPX]	= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_LSRB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R8,`UO_TMP,`UO_XR,16'h0};
-uopl[`LSR_ABS]	= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_LSRB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R16,`UO_TMP,`UO_ZR,16'h0};
-uopl[`LSR_ABSX]	= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_LSRB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R16,`UO_TMP,`UO_XR,16'h0};
-uopl[`ROR_ACC]  = {2'd0,`UOF_CNZ,2'd0,`UO_RORB,`UO_ZERO,`UO_ACC,`UO_ZR,48'h0};
-uopl[`ROR_ZP]		= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_RORB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R8,`UO_TMP,`UO_ZR,16'h0};
-uopl[`ROR_ZPX]	= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_RORB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R8,`UO_TMP,`UO_XR,16'h0};
-uopl[`ROR_ABS]	= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_RORB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R16,`UO_TMP,`UO_ZR,16'h0};
-uopl[`ROR_ABSX]	= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_RORB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R16,`UO_TMP,`UO_XR,16'h0};
-uopl[`INC_ZP]		= {2'd2,`UOF_NZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_ADDB,`UO_P1,`UO_TMP,`UO_TMP,`UO_STB,`UO_R8,`UO_TMP,`UO_ZR,16'h0};
-uopl[`INC_ZPX]	= {2'd2,`UOF_NZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_ADDB,`UO_P1,`UO_TMP,`UO_TMP,`UO_STB,`UO_R8,`UO_TMP,`UO_XR,16'h0};
-uopl[`INC_ABS]	= {2'd2,`UOF_NZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_ADDB,`UO_P1,`UO_TMP,`UO_TMP,`UO_STB,`UO_R16,`UO_TMP,`UO_ZR,16'h0};
-uopl[`INC_ABSX]	= {2'd2,`UOF_NZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_ADDB,`UO_P1,`UO_TMP,`UO_TMP,`UO_STB,`UO_R16,`UO_TMP,`UO_XR,16'h0};
-uopl[`DEC_ZP]		= {2'd2,`UOF_NZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_ADDB,`UO_M1,`UO_TMP,`UO_TMP,`UO_STB,`UO_R8,`UO_TMP,`UO_ZR,16'h0};
-uopl[`DEC_ZPX]	= {2'd2,`UOF_NZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_ADDB,`UO_M1,`UO_TMP,`UO_TMP,`UO_STB,`UO_R8,`UO_TMP,`UO_XR,16'h0};
-uopl[`DEC_ABS]	= {2'd2,`UOF_NZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_ADDB,`UO_M1,`UO_TMP,`UO_TMP,`UO_STB,`UO_R16,`UO_TMP,`UO_ZR,16'h0};
-uopl[`DEC_ABSX]	= {2'd2,`UOF_NZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_ADDB,`UO_M1,`UO_TMP,`UO_TMP,`UO_STB,`UO_R16,`UO_TMP,`UO_XR,16'h0};
-uopl[`BIT_IMM]	= {2'd0,`UOF_NZ,2'd0,`UO_BITB,`UO_R8,`UO_ACC,`UO_ZR,48'h0};
-uopl[`BIT_ZP]		= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_BITB,`UO_ZERO,`UO_ACC,`UO_TMP,32'h0};
-uopl[`BIT_ZPX]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_BITB,`UO_ZERO,`UO_ACC,`UO_TMP,32'h0};
-uopl[`BIT_ABS]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_BITB,`UO_ZERO,`UO_ACC,`UO_TMP,32'h0};
-uopl[`BIT_ABSX]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_BITB,`UO_ZERO,`UO_ACC,`UO_TMP,32'h0};
-uopl[`LDX_IMM]	= {2'd0,`UOF_NZ,2'd0,`UO_LDIB,`UO_R8,`UO_XR,`UO_ZR,48'h0};
-uopl[`LDX_ZP]		= {2'd0,`UOF_NZ,2'd0,`UO_LDB,`UO_R8,`UO_XR,`UO_ZR,48'h0};
-uopl[`LDX_ZPY]	= {2'd0,`UOF_NZ,2'd0,`UO_LDB,`UO_R8,`UO_XR,`UO_YR,48'h0};
-uopl[`LDX_ABS]	= {2'd0,`UOF_NZ,2'd0,`UO_LDB,`UO_R16,`UO_XR,`UO_ZR,48'h0};
-uopl[`LDX_ABSY]	= {2'd0,`UOF_NZ,2'd0,`UO_LDB,`UO_R16,`UO_XR,`UO_YR,48'h0};
-uopl[`STX_ZP]	  = {2'd0,`UOF_NONE,2'd0,`UO_STB,`UO_R8,`UO_XR,`UO_ZR,48'h0};
-uopl[`STX_ZPY]  = {2'd0,`UOF_NONE,2'd0,`UO_STB,`UO_R8,`UO_XR,`UO_YR,48'h0};
-uopl[`STX_ABS]	= {2'd0,`UOF_NONE,2'd0,`UO_STB,`UO_R16,`UO_XR,`UO_ZR,48'h0};
-uopl[`CPX_IMM]	= {2'd0,`UOF_NZ,2'd0,`UO_CMPB,`UO_R8,`UO_XR,`UO_ZR,48'h0};
-uopl[`CPX_ZP]		= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_CMPB,`UO_ZERO,`UO_XR,`UO_TMP,32'h0};
-//uopl[`CPX_ZPY]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_YR,`UO_CMPB,`UO_ZERO,`UO_XR,`UO_TMP,32'h0};
-uopl[`CPX_ABS]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_CMPB,`UO_ZERO,`UO_XR,`UO_TMP,32'h0};
-uopl[`LDY_IMM]	= {2'd0,`UOF_NZ,2'd0,`UO_LDIB,`UO_R8,`UO_YR,`UO_ZR,48'h0};
-uopl[`LDY_ZP]		= {2'd0,`UOF_NZ,2'd0,`UO_LDB,`UO_R8,`UO_YR,`UO_ZR,48'h0};
-uopl[`LDY_ZPX]	= {2'd0,`UOF_NZ,2'd0,`UO_LDB,`UO_R8,`UO_YR,`UO_XR,48'h0};
-uopl[`LDY_ABS]	= {2'd0,`UOF_NZ,2'd0,`UO_LDB,`UO_R16,`UO_YR,`UO_ZR,48'h0};
-uopl[`LDY_ABSX]	= {2'd0,`UOF_NZ,2'd0,`UO_LDB,`UO_R16,`UO_YR,`UO_XR,48'h0};
-uopl[`STY_ZP]	  = {2'd0,`UOF_NONE,2'd0,`UO_STB,`UO_R8,`UO_YR,`UO_ZR,48'h0};
-uopl[`STY_ZPX]  = {2'd0,`UOF_NONE,2'd0,`UO_STB,`UO_R8,`UO_YR,`UO_XR,48'h0};
-uopl[`STY_ABS]	= {2'd0,`UOF_NONE,2'd0,`UO_STB,`UO_R16,`UO_YR,`UO_ZR,48'h0};
-uopl[`CPY_IMM]	= {2'd0,`UOF_NZ,2'd0,`UO_CMPB,`UO_R8,`UO_YR,`UO_ZR,48'h0};
-uopl[`CPY_ZP]		= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_CMPB,`UO_ZERO,`UO_YR,`UO_TMP,32'h0};
-//uopl[`CPY_ZPX]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_CMPB,`UO_ZERO,`UO_YR,`UO_TMP,32'h0};
-uopl[`CPY_ABS]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_CMPB,`UO_ZERO,`UO_YR,`UO_TMP,32'h0};
-uopl[`INX]			= {2'd0,`UOF_NZ,2'd1,`UO_ADDB,`UO_P1,`UO_XR,`UO_ZR,48'h0};
-uopl[`DEX]			= {2'd0,`UOF_NZ,2'd1,`UO_ADDB,`UO_M1,`UO_XR,`UO_ZR,48'h0};
-uopl[`INY]			= {2'd0,`UOF_NZ,2'd1,`UO_ADDB,`UO_P1,`UO_YR,`UO_ZR,48'h0};
-uopl[`DEY]			= {2'd0,`UOF_NZ,2'd1,`UO_ADDB,`UO_M1,`UO_YR,`UO_ZR,48'h0};
-uopl[`PHA]			= {2'd1,`UOF_NONE,2'd0,`UO_STBW,`UO_100H,`UO_ACC,`UO_SP,`UO_ADDB,`UO_M1,`UO_SP,`UO_ZR,32'h0};
-uopl[`PLA]			= {2'd1,`UOF_NZ,2'd1,`UO_ADDB,`UO_P1,`UO_SP,`UO_ZR,`UO_LDBW,`UO_100H,`UO_ACC,`UO_SP,32'h0};
-uopl[`PHP]			= {2'd1,`UOF_NONE,2'd0,`UO_STBW,`UO_100H,`UO_SR,`UO_SP,`UO_ADDB,`UO_M1,`UO_SP,`UO_ZR,32'h0};
-uopl[`PLP]			= {2'd1,`UOF_NONE,2'd0,`UO_ADDB,`UO_P1,`UO_SP,`UO_ZR,`UO_LDBW,`UO_100H,`UO_SR,`UO_SP,32'h0};
-uopl[`TAX]			= {2'd0,`UOF_NZ,2'd0,`UO_MOV,`UO_ZERO,`UO_XR,`UO_ACC,48'h0};
-uopl[`TXA]			= {2'd0,`UOF_NZ,2'd0,`UO_MOV,`UO_ZERO,`UO_ACC,`UO_XR,48'h0};
-uopl[`TAY]			= {2'd0,`UOF_NZ,2'd0,`UO_MOV,`UO_ZERO,`UO_YR,`UO_ACC,48'h0};
-uopl[`TYA]			= {2'd0,`UOF_NZ,2'd0,`UO_MOV,`UO_ZERO,`UO_ACC,`UO_YR,48'h0};
-uopl[`TSX]			= {2'd0,`UOF_NZ,2'd0,`UO_MOV,`UO_ZERO,`UO_XR,`UO_SP,48'h0};
-uopl[`TXS]			= {2'd0,`UOF_NONE,2'd0,`UO_MOV,`UO_ZERO,`UO_SP,`UO_XR,48'h0};
-uopl[`BEQ]			= {2'd0,`UOF_NONE,2'd0,`UO_BEQ,`UO_R8,`UO_ZR,`UO_ZR,48'h0};
-uopl[`BNE]			= {2'd0,`UOF_NONE,2'd0,`UO_BNE,`UO_R8,`UO_ZR,`UO_ZR,48'h0};
-uopl[`BCS]			= {2'd0,`UOF_NONE,2'd0,`UO_BCS,`UO_R8,`UO_ZR,`UO_ZR,48'h0};
-uopl[`BCC]			= {2'd0,`UOF_NONE,2'd0,`UO_BCC,`UO_R8,`UO_ZR,`UO_ZR,48'h0};
-uopl[`BVS]			= {2'd0,`UOF_NONE,2'd0,`UO_BVS,`UO_R8,`UO_ZR,`UO_ZR,48'h0};
-uopl[`BVC]			= {2'd0,`UOF_NONE,2'd0,`UO_BVC,`UO_R8,`UO_ZR,`UO_ZR,48'h0};
-uopl[`BMI]			= {2'd0,`UOF_NONE,2'd0,`UO_BMI,`UO_R8,`UO_ZR,`UO_ZR,48'h0};
-uopl[`BPL]			= {2'd0,`UOF_NONE,2'd0,`UO_BPL,`UO_R8,`UO_ZR,`UO_ZR,48'h0};
-uopl[`CLC]			= {2'd0,`UOF_C,2'd0,`UO_CLC,`UO_ZERO,`UO_ZR,`UO_ZR,48'h0};
-uopl[`SEC]			= {2'd0,`UOF_C,2'd0,`UO_SEC,`UO_ZERO,`UO_ZR,`UO_ZR,48'h0};
-uopl[`CLV]			= {2'd0,`UOF_V,2'd0,`UO_CLV,`UO_ZERO,`UO_ZR,`UO_ZR,48'h0};
-uopl[`SEI]			= {2'd0,`UOF_I,2'd0,`UO_SEI,`UO_ZERO,`UO_ZR,`UO_ZR,48'h0};
-uopl[`CLI]			= {2'd0,`UOF_I,2'd0,`UO_CLI,`UO_ZERO,`UO_ZR,`UO_ZR,48'h0};
-uopl[`JMP]			= {2'd0,`UOF_NONE,2'd0,`UO_JMP,`UO_R16,`UO_ZERO,`UO_ZR,48'h0};
-uopl[`JMP_IND]	= {2'd1,`UOF_NONE,2'd0,`UO_LDW,`UO_R16,`UO_TMP,`UO_ZR,`UO_JMP,`UO_ZERO,`UO_ZR,`UO_TMP,32'h0};
-uopl[`JSR]			= {2'd2,`UOF_NONE,2'd0,`UO_STWW,`UO_FFFFH,`UO_PC2,`UO_SP,`UO_ADDB,`UO_M2,`UO_SP,`UO_ZR,`UO_JMP,`UO_R16,`UO_ZERO,`UO_ZR,16'h0};
-uopl[`RTS]		  = {2'd2,`UOF_NONE,2'd0,`UO_ADDB,`UO_P2,`UO_SP,`UO_ZR,`UO_LDW,`UO_FFFFH,`UO_TMP,`UO_SP,`UO_JMP,`UO_P1,`UO_TMP,`UO_ZR,16'h0};
+uopl[`EOR_ABS]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_EORB,`UO_ZERO,`UO_ACC,`UO_TMP,{2{`UO_NOP_MOP}}};
+uopl[`EOR_ABSX]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_EORB,`UO_ZERO,`UO_ACC,`UO_TMP,{2{`UO_NOP_MOP}}};
+uopl[`EOR_ABSY]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_YR,`UO_EORB,`UO_ZERO,`UO_ACC,`UO_TMP,{2{`UO_NOP_MOP}}};
+uopl[`ASL_ACC]  = {2'd0,`UOF_CNZ,2'd0,`UO_ASLB,`UO_ZERO,`UO_ACC,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`ASL_ZP]		= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_ASLB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R8,`UO_TMP,`UO_ZR,{1{`UO_NOP_MOP}}};
+uopl[`ASL_ZPX]	= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_ASLB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R8,`UO_TMP,`UO_XR,{1{`UO_NOP_MOP}}};
+uopl[`ASL_ABS]	= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_ASLB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R16,`UO_TMP,`UO_ZR,{1{`UO_NOP_MOP}}};
+uopl[`ASL_ABSX]	= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_ASLB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R16,`UO_TMP,`UO_XR,{1{`UO_NOP_MOP}}};
+uopl[`ROL_ACC]  = {2'd0,`UOF_CNZ,2'd0,`UO_ROLB,`UO_ZERO,`UO_ACC,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`ROL_ZP]		= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_ROLB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R8,`UO_TMP,`UO_ZR,{1{`UO_NOP_MOP}}};
+uopl[`ROL_ZPX]	= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_ROLB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R8,`UO_TMP,`UO_XR,{1{`UO_NOP_MOP}}};
+uopl[`ROL_ABS]	= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_ROLB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R16,`UO_TMP,`UO_ZR,{1{`UO_NOP_MOP}}};
+uopl[`ROL_ABSX]	= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_ROLB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R16,`UO_TMP,`UO_XR,{1{`UO_NOP_MOP}}};
+uopl[`LSR_ACC]  = {2'd0,`UOF_CNZ,2'd0,`UO_LSRB,`UO_ZERO,`UO_ACC,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`LSR_ZP]		= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_LSRB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R8,`UO_TMP,`UO_ZR,{1{`UO_NOP_MOP}}};
+uopl[`LSR_ZPX]	= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_LSRB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R8,`UO_TMP,`UO_XR,{1{`UO_NOP_MOP}}};
+uopl[`LSR_ABS]	= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_LSRB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R16,`UO_TMP,`UO_ZR,{1{`UO_NOP_MOP}}};
+uopl[`LSR_ABSX]	= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_LSRB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R16,`UO_TMP,`UO_XR,{1{`UO_NOP_MOP}}};
+uopl[`ROR_ACC]  = {2'd0,`UOF_CNZ,2'd0,`UO_RORB,`UO_ZERO,`UO_ACC,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`ROR_ZP]		= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_RORB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R8,`UO_TMP,`UO_ZR,{1{`UO_NOP_MOP}}};
+uopl[`ROR_ZPX]	= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_RORB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R8,`UO_TMP,`UO_XR,{1{`UO_NOP_MOP}}};
+uopl[`ROR_ABS]	= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_RORB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R16,`UO_TMP,`UO_ZR,{1{`UO_NOP_MOP}}};
+uopl[`ROR_ABSX]	= {2'd2,`UOF_CNZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_RORB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_STB,`UO_R16,`UO_TMP,`UO_XR,{1{`UO_NOP_MOP}}};
+uopl[`INC_ZP]		= {2'd2,`UOF_NZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_ADDB,`UO_P1,`UO_TMP,`UO_TMP,`UO_STB,`UO_R8,`UO_TMP,`UO_ZR,{1{`UO_NOP_MOP}}};
+uopl[`INC_ZPX]	= {2'd2,`UOF_NZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_ADDB,`UO_P1,`UO_TMP,`UO_TMP,`UO_STB,`UO_R8,`UO_TMP,`UO_XR,{1{`UO_NOP_MOP}}};
+uopl[`INC_ABS]	= {2'd2,`UOF_NZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_ADDB,`UO_P1,`UO_TMP,`UO_TMP,`UO_STB,`UO_R16,`UO_TMP,`UO_ZR,{1{`UO_NOP_MOP}}};
+uopl[`INC_ABSX]	= {2'd2,`UOF_NZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_ADDB,`UO_P1,`UO_TMP,`UO_TMP,`UO_STB,`UO_R16,`UO_TMP,`UO_XR,{1{`UO_NOP_MOP}}};
+uopl[`DEC_ZP]		= {2'd2,`UOF_NZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_ADDB,`UO_M1,`UO_TMP,`UO_TMP,`UO_STB,`UO_R8,`UO_TMP,`UO_ZR,{1{`UO_NOP_MOP}}};
+uopl[`DEC_ZPX]	= {2'd2,`UOF_NZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_ADDB,`UO_M1,`UO_TMP,`UO_TMP,`UO_STB,`UO_R8,`UO_TMP,`UO_XR,{1{`UO_NOP_MOP}}};
+uopl[`DEC_ABS]	= {2'd2,`UOF_NZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_ADDB,`UO_M1,`UO_TMP,`UO_TMP,`UO_STB,`UO_R16,`UO_TMP,`UO_ZR,{1{`UO_NOP_MOP}}};
+uopl[`DEC_ABSX]	= {2'd2,`UOF_NZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_ADDB,`UO_M1,`UO_TMP,`UO_TMP,`UO_STB,`UO_R16,`UO_TMP,`UO_XR,{1{`UO_NOP_MOP}}};
+uopl[`BIT_IMM]	= {2'd0,`UOF_NZ,2'd0,`UO_BITB,`UO_R8,`UO_ACC,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`BIT_ZP]		= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_BITB,`UO_ZERO,`UO_ACC,`UO_TMP,{2{`UO_NOP_MOP}}};
+uopl[`BIT_ZPX]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_BITB,`UO_ZERO,`UO_ACC,`UO_TMP,{2{`UO_NOP_MOP}}};
+uopl[`BIT_ABS]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_BITB,`UO_ZERO,`UO_ACC,`UO_TMP,{2{`UO_NOP_MOP}}};
+uopl[`BIT_ABSX]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_BITB,`UO_ZERO,`UO_ACC,`UO_TMP,{2{`UO_NOP_MOP}}};
+uopl[`LDX_IMM]	= {2'd0,`UOF_NZ,2'd0,`UO_LDIB,`UO_R8,`UO_XR,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`LDX_ZP]		= {2'd0,`UOF_NZ,2'd0,`UO_LDB,`UO_R8,`UO_XR,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`LDX_ZPY]	= {2'd0,`UOF_NZ,2'd0,`UO_LDB,`UO_R8,`UO_XR,`UO_YR,{3{`UO_NOP_MOP}}};
+uopl[`LDX_ABS]	= {2'd0,`UOF_NZ,2'd0,`UO_LDB,`UO_R16,`UO_XR,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`LDX_ABSY]	= {2'd0,`UOF_NZ,2'd0,`UO_LDB,`UO_R16,`UO_XR,`UO_YR,{3{`UO_NOP_MOP}}};
+uopl[`STX_ZP]	  = {2'd0,`UOF_NONE,2'd0,`UO_STB,`UO_R8,`UO_XR,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`STX_ZPY]  = {2'd0,`UOF_NONE,2'd0,`UO_STB,`UO_R8,`UO_XR,`UO_YR,{3{`UO_NOP_MOP}}};
+uopl[`STX_ABS]	= {2'd0,`UOF_NONE,2'd0,`UO_STB,`UO_R16,`UO_XR,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`CPX_IMM]	= {2'd0,`UOF_NZ,2'd0,`UO_CMPB,`UO_R8,`UO_XR,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`CPX_ZP]		= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_CMPB,`UO_ZERO,`UO_XR,`UO_TMP,{2{`UO_NOP_MOP}}};
+//uopl[`CPX_ZPY]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_YR,`UO_CMPB,`UO_ZERO,`UO_XR,`UO_TMP,{2{`UO_NOP_MOP}}};
+uopl[`CPX_ABS]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_CMPB,`UO_ZERO,`UO_XR,`UO_TMP,{2{`UO_NOP_MOP}}};
+uopl[`LDY_IMM]	= {2'd0,`UOF_NZ,2'd0,`UO_LDIB,`UO_R8,`UO_YR,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`LDY_ZP]		= {2'd0,`UOF_NZ,2'd0,`UO_LDB,`UO_R8,`UO_YR,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`LDY_ZPX]	= {2'd0,`UOF_NZ,2'd0,`UO_LDB,`UO_R8,`UO_YR,`UO_XR,{3{`UO_NOP_MOP}}};
+uopl[`LDY_ABS]	= {2'd0,`UOF_NZ,2'd0,`UO_LDB,`UO_R16,`UO_YR,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`LDY_ABSX]	= {2'd0,`UOF_NZ,2'd0,`UO_LDB,`UO_R16,`UO_YR,`UO_XR,{3{`UO_NOP_MOP}}};
+uopl[`STY_ZP]	  = {2'd0,`UOF_NONE,2'd0,`UO_STB,`UO_R8,`UO_YR,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`STY_ZPX]  = {2'd0,`UOF_NONE,2'd0,`UO_STB,`UO_R8,`UO_YR,`UO_XR,{3{`UO_NOP_MOP}}};
+uopl[`STY_ABS]	= {2'd0,`UOF_NONE,2'd0,`UO_STB,`UO_R16,`UO_YR,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`CPY_IMM]	= {2'd0,`UOF_NZ,2'd0,`UO_CMPB,`UO_R8,`UO_YR,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`CPY_ZP]		= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_CMPB,`UO_ZERO,`UO_YR,`UO_TMP,{2{`UO_NOP_MOP}}};
+//uopl[`CPY_ZPX]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_CMPB,`UO_ZERO,`UO_YR,`UO_TMP,{2{`UO_NOP_MOP}}};
+uopl[`CPY_ABS]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_CMPB,`UO_ZERO,`UO_YR,`UO_TMP,{2{`UO_NOP_MOP}}};
+uopl[`INX]			= {2'd0,`UOF_NZ,2'd1,`UO_ADDB,`UO_P1,`UO_XR,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`DEX]			= {2'd0,`UOF_NZ,2'd1,`UO_ADDB,`UO_M1,`UO_XR,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`INY]			= {2'd0,`UOF_NZ,2'd1,`UO_ADDB,`UO_P1,`UO_YR,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`DEY]			= {2'd0,`UOF_NZ,2'd1,`UO_ADDB,`UO_M1,`UO_YR,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`PHA]			= {2'd1,`UOF_NONE,2'd0,`UO_STBW,`UO_100H,`UO_ACC,`UO_SP,`UO_ADDB,`UO_M1,`UO_SP,`UO_ZR,{2{`UO_NOP_MOP}}};
+uopl[`PLA]			= {2'd1,`UOF_NZ,2'd1,`UO_ADDB,`UO_P1,`UO_SP,`UO_ZR,`UO_LDBW,`UO_100H,`UO_ACC,`UO_SP,{2{`UO_NOP_MOP}}};
+uopl[`PHP]			= {2'd1,`UOF_NONE,2'd0,`UO_STBW,`UO_100H,`UO_SR,`UO_SP,`UO_ADDB,`UO_M1,`UO_SP,`UO_ZR,{2{`UO_NOP_MOP}}};
+uopl[`PLP]			= {2'd1,`UOF_NONE,2'd0,`UO_ADDB,`UO_P1,`UO_SP,`UO_ZR,`UO_LDBW,`UO_100H,`UO_SR,`UO_SP,{2{`UO_NOP_MOP}}};
+uopl[`TAX]			= {2'd0,`UOF_NZ,2'd0,`UO_MOV,`UO_ZERO,`UO_XR,`UO_ACC,{3{`UO_NOP_MOP}}};
+uopl[`TXA]			= {2'd0,`UOF_NZ,2'd0,`UO_MOV,`UO_ZERO,`UO_ACC,`UO_XR,{3{`UO_NOP_MOP}}};
+uopl[`TAY]			= {2'd0,`UOF_NZ,2'd0,`UO_MOV,`UO_ZERO,`UO_YR,`UO_ACC,{3{`UO_NOP_MOP}}};
+uopl[`TYA]			= {2'd0,`UOF_NZ,2'd0,`UO_MOV,`UO_ZERO,`UO_ACC,`UO_YR,{3{`UO_NOP_MOP}}};
+uopl[`TSX]			= {2'd0,`UOF_NZ,2'd0,`UO_MOV,`UO_ZERO,`UO_XR,`UO_SP,{3{`UO_NOP_MOP}}};
+uopl[`TXS]			= {2'd0,`UOF_NONE,2'd0,`UO_MOV,`UO_ZERO,`UO_SP,`UO_XR,{3{`UO_NOP_MOP}}};
+uopl[`BEQ]			= {2'd0,`UOF_NONE,2'd0,`UO_BEQ,`UO_R8,`UO_ZR,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`BNE]			= {2'd0,`UOF_NONE,2'd0,`UO_BNE,`UO_R8,`UO_ZR,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`BCS]			= {2'd0,`UOF_NONE,2'd0,`UO_BCS,`UO_R8,`UO_ZR,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`BCC]			= {2'd0,`UOF_NONE,2'd0,`UO_BCC,`UO_R8,`UO_ZR,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`BVS]			= {2'd0,`UOF_NONE,2'd0,`UO_BVS,`UO_R8,`UO_ZR,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`BVC]			= {2'd0,`UOF_NONE,2'd0,`UO_BVC,`UO_R8,`UO_ZR,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`BMI]			= {2'd0,`UOF_NONE,2'd0,`UO_BMI,`UO_R8,`UO_ZR,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`BPL]			= {2'd0,`UOF_NONE,2'd0,`UO_BPL,`UO_R8,`UO_ZR,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`CLC]			= {2'd0,`UOF_C,2'd0,`UO_CLC,`UO_ZERO,`UO_ZR,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`SEC]			= {2'd0,`UOF_C,2'd0,`UO_SEC,`UO_ZERO,`UO_ZR,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`CLV]			= {2'd0,`UOF_V,2'd0,`UO_CLV,`UO_ZERO,`UO_ZR,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`SEI]			= {2'd0,`UOF_I,2'd0,`UO_SEI,`UO_ZERO,`UO_ZR,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`CLI]			= {2'd0,`UOF_I,2'd0,`UO_CLI,`UO_ZERO,`UO_ZR,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`JMP]			= {2'd0,`UOF_NONE,2'd0,`UO_JMP,`UO_R16,`UO_ZERO,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`JMP_IND]	= {2'd1,`UOF_NONE,2'd0,`UO_LDW,`UO_R16,`UO_TMP,`UO_ZR,`UO_JMP,`UO_ZERO,`UO_ZR,`UO_TMP,{2{`UO_NOP_MOP}}};
+uopl[`JSR]			= {2'd2,`UOF_NONE,2'd0,`UO_STWW,`UO_FFFFH,`UO_PC2,`UO_SP,`UO_ADDB,`UO_M2,`UO_SP,`UO_ZR,`UO_JMP,`UO_R16,`UO_ZERO,`UO_ZR,{1{`UO_NOP_MOP}}};
+uopl[`RTS]		  = {2'd2,`UOF_NONE,2'd0,`UO_ADDB,`UO_P2,`UO_SP,`UO_ZR,`UO_LDW,`UO_FFFFH,`UO_TMP,`UO_SP,`UO_JMP,`UO_P1,`UO_TMP,`UO_ZR,{1{`UO_NOP_MOP}}};
 uopl[`RTI]		  = {2'd3,`UOF_NONE,2'd0,`UO_ADDB,`UO_P3,`UO_SP,`UO_ZR,`UO_LDW,`UO_FFFFH,`UO_TMP,`UO_SP,`UO_LDB,`UO_FFFEH,`UO_SR,`UO_SP,`UO_JMP,`UO_ZERO,`UO_TMP,`UO_ZR};
 end
 
@@ -1035,6 +1042,9 @@ for (n = 0; n < QSLOTS; n = n + 1)
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
 	slot_rfw[n] = IsRFW(uoq_uop[(uoq_head + n) % UOQ_ENTRIES]);
+always @*
+for (n = 0; n < QSLOTS; n = n + 1)
+	slot_sr_tgts[n] = uoq_flagsupd[(uoq_head + n) % UOQ_ENTRIES];
 
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
@@ -1089,6 +1099,7 @@ regfileValid urfv1
 	.clk(clk),
 	.slotv(uoq_slotv),
 	.slot_rfw(slot_rfw),
+	.slot_sr_tgts(slot_sr_tgts),
 	.tails(tails),
 	.livetarget(livetarget),
 	.branchmiss(branchmiss),
@@ -1102,8 +1113,16 @@ regfileValid urfv1
 	.commit0_tgt(commit0_tgt),
 	.commit1_tgt(commit1_tgt),
 	.commit2_tgt(commit2_tgt),
+	.commit0_rfw(commit0_rfw),
+	.commit1_rfw(commit1_rfw),
+	.commit2_rfw(commit2_rfw),
+	.commit0_sr_tgts(commit0_sr_tgts),
+	.commit1_sr_tgts(commit1_sr_tgts),
+	.commit2_sr_tgts(commit2_sr_tgts),
 	.rf_source(rf_source),
 	.iq_source(iq_source),
+	.iq_sr_source(iq_sr_source),
+	.iq_latest_sr_ID(iq_latest_sr_ID),
 	.take_branch(take_branch),
 	.Rd(Rd),
 	.queuedOn(queuedOnp),
@@ -1119,6 +1138,7 @@ regfileSource urfs1
 	.heads(heads),
 	.slotv(uoq_slotv),
 	.slot_rfw(slot_rfw),
+	.slot_sr_tgts(slot_sr_tgts),
 	.queuedOn(queuedOnp),
 	.rqueuedOn(rqueuedOn),
 	.iq_state(iq_state),
@@ -1127,6 +1147,7 @@ regfileSource urfs1
 	.Rd(Rd),
 	.rob_tails(tails),
 	.iq_latestID(iq_latestID),
+	.iq_latest_sr_ID(iq_latest_sr_ID),
 	.iq_tgt(iq_tgt),
 	.iq_rid(iq_rid),
 	.rf_source(rf_source)
@@ -1795,38 +1816,38 @@ for (n = 0; n < QSLOTS; n = n + 1)
 // Writes to the register file. Fortunately the register file is small so
 // three update ports are easily supported.
 always @(posedge clk)
-	if (commit2_v && commit2_tgt==`UO_ACC)
+	if (commit2_v && commit2_tgt==`UO_ACC && commit2_rfw)
 		ac <= commit2_bus[7:0];
-	else if (commit1_v && commit1_tgt==`UO_ACC)
+	else if (commit1_v && commit1_tgt==`UO_ACC && commit1_rfw)
 		ac <= commit1_bus[7:0];
-	else if (commit0_v && commit0_tgt==`UO_ACC)
+	else if (commit0_v && commit0_tgt==`UO_ACC && commit0_rfw)
 		ac <= commit0_bus[7:0];
 
 always @(posedge clk)
-	if (commit2_v && commit2_tgt==`UO_XR)
+	if (commit2_v && commit2_tgt==`UO_XR && commit2_rfw)
 		xr <= commit2_bus[7:0];
-	else if (commit1_v && commit1_tgt==`UO_XR)
+	else if (commit1_v && commit1_tgt==`UO_XR && commit1_rfw)
 		xr <= commit1_bus[7:0];
-	else if (commit0_v && commit0_tgt==`UO_XR)
+	else if (commit0_v && commit0_tgt==`UO_XR && commit0_rfw)
 		xr <= commit0_bus[7:0];
 
 always @(posedge clk)
-	if (commit2_v && commit2_tgt==`UO_YR)
+	if (commit2_v && commit2_tgt==`UO_YR && commit2_rfw)
 		yr <= commit2_bus[7:0];
-	else if (commit1_v && commit1_tgt==`UO_YR)
+	else if (commit1_v && commit1_tgt==`UO_YR && commit1_rfw)
 		yr <= commit1_bus[7:0];
-	else if (commit0_v && commit0_tgt==`UO_YR)
+	else if (commit0_v && commit0_tgt==`UO_YR && commit0_rfw)
 		yr <= commit0_bus[7:0];
 
 always @(posedge clk)
 	if (rst_i)
 		sp <= 8'hFF;
 	else begin
-		if (commit2_v && commit2_tgt==`UO_SP)
+		if (commit2_v && commit2_tgt==`UO_SP && commit2_rfw)
 			sp <= commit2_bus[7:0];
-		else if (commit1_v && commit1_tgt==`UO_SP)
+		else if (commit1_v && commit1_tgt==`UO_SP && commit1_rfw)
 			sp <= commit1_bus[7:0];
-		else if (commit0_v && commit0_tgt==`UO_SP)
+		else if (commit0_v && commit0_tgt==`UO_SP && commit0_rfw)
 			sp <= commit0_bus[7:0];
 	end
 
@@ -1840,11 +1861,9 @@ always @(posedge clk)
 	end
 	else begin
 		if (commit2_v) begin
-			if (commit2_tgt==`UO_SR)
+			if (commit2_tgt==`UO_SR && commit2_rfw)
 				sr <= commit2_bus[7:0] & 8'hEF;	// clear break bit
 			else begin
-				if (commit2_sr_bus != 8'h04)
-					$stop;
 				sr[0] <= commit2_sr_tgts[0] ? commit2_sr_bus[0] : sr[0];
 				sr[1] <= commit2_sr_tgts[1] ? commit2_sr_bus[1] : sr[1];
 				sr[2] <= commit2_sr_tgts[2] ? commit2_sr_bus[2] : sr[2];
@@ -1856,11 +1875,9 @@ always @(posedge clk)
 			end
 		end
 		else if (commit1_v) begin
-			if (commit1_tgt==`UO_SR)
+			if (commit1_tgt==`UO_SR && commit1_rfw)
 				sr <= commit1_bus[7:0] & 8'hEF;	// clear break bit
 			else begin
-				if (commit1_sr_bus != 8'h04)
-					$stop;
 				sr[0] <= commit1_sr_tgts[0] ? commit1_sr_bus[0] : sr[0];
 				sr[1] <= commit1_sr_tgts[1] ? commit1_sr_bus[1] : sr[1];
 				sr[2] <= commit1_sr_tgts[2] ? commit1_sr_bus[2] : sr[2];
@@ -1872,11 +1889,9 @@ always @(posedge clk)
 			end
 		end
 		else if (commit0_v) begin
-			if (commit0_tgt==`UO_SR)
+			if (commit0_tgt==`UO_SR && commit0_rfw)
 				sr <= commit0_bus[7:0] & 8'hEF;	// clear break bit
 			else begin
-				if (commit0_sr_bus != 8'h04)
-					$stop;
 				sr[0] <= commit0_sr_tgts[0] ? commit0_sr_bus[0] : sr[0];
 				sr[1] <= commit0_sr_tgts[1] ? commit0_sr_bus[1] : sr[1];
 				sr[2] <= commit0_sr_tgts[2] ? commit0_sr_bus[2] : sr[2];
@@ -1893,11 +1908,11 @@ always @(posedge clk)
 	if (rst_i)
 		tmp <= 16'h0;
 	else begin
-		if (commit2_v && commit2_tgt==`UO_TMP)
+		if (commit2_v && commit2_tgt==`UO_TMP && commit2_rfw)
 			tmp <= commit2_bus;
-		else if (commit1_v && commit1_tgt==`UO_TMP)
+		else if (commit1_v && commit1_tgt==`UO_TMP && commit1_rfw)
 			tmp <= commit1_bus;
-		else if (commit0_v && commit0_tgt==`UO_TMP)
+		else if (commit0_v && commit0_tgt==`UO_TMP && commit0_rfw)
 			tmp <= commit0_bus;
 	end
 
@@ -1919,6 +1934,7 @@ generate begin : gDecoderInst
 for (g = 0; g < IQ_ENTRIES; g = g + 1) begin
 decoder3 iq0 (
 	.num(iq_tgt[g][2:0]),
+	.rfw(iq_rfw[g]),
 	.out(iq_out2[g])
 );
 end
@@ -2144,6 +2160,28 @@ end
 always @*
 	for (n = 0; n < IQ_ENTRIES; n = n + 1)
 		iq_livetarget[n] = {AREGS {iq_v[n]}} & {AREGS {~iq_stomp[n]}} & iq_out2[n];
+
+always @*
+begin
+	iq_latest_sr_ID = {`QBIT{1'b1}};
+	iq_sr_source = {IQ_ENTRIES{1'b0}};
+	for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
+		for (j = n; j < n + IQ_ENTRIES; j = j + 1) begin
+			if (missid==(j % IQ_ENTRIES))
+				for (k = n; k <= j; k = k + 1) begin
+					if (iq_v[k % IQ_ENTRIES]
+						&& ~iq_stomp[k % IQ_ENTRIES]					// not stomped on
+						&& iq_sr_tgts[k % IQ_ENTRIES]!=8'h00	// and updates the sr
+						&& iq_latest_sr_ID == {`QBIT{1'b1}})	begin // and not found yet
+						iq_latest_sr_ID = k % IQ_ENTRIES;
+						iq_sr_source[k % IQ_ENTRIES] = TRUE;
+					end
+				end
+		end
+	end
+end
+
+
 
 
 always @*
@@ -2601,6 +2639,7 @@ begin
   commit0_v <= (iq_state[heads[0][`RBITS]] == IQS_CMT && ~|panic);
   commit0_id <= heads[0][`RBITS];	// if a memory op, it has a DRAM-bus id
   commit0_tgt <= rob_tgt[heads[0][`RBITS]];
+  commit0_rfw <= rob_rfw[heads[0]];
   commit0_bus <= rob_res[heads[0][`RBITS]];
   commit0_sr_tgts <= rob_sr_tgts[heads[0][`RBITS]];
   commit0_sr_bus <= rob_sr_res[heads[0][`RBITS]];
@@ -2611,6 +2650,7 @@ begin
              && ~|panic);
 	commit1_id <= heads[1][`RBITS];
 	commit1_tgt <= rob_tgt[heads[1][`RBITS]];
+  commit1_rfw <= rob_rfw[heads[1]];
 	commit1_bus <= rob_res[heads[1][`RBITS]];
   commit1_sr_tgts <= rob_sr_tgts[heads[1][`RBITS]];
   commit1_sr_bus <= rob_sr_res[heads[1][`RBITS]];
@@ -2622,6 +2662,7 @@ begin
              && ~|panic);
   commit2_id <= heads[2];
   commit2_tgt <= rob_tgt[heads[2][`RBITS]];  
+  commit2_rfw <= rob_rfw[heads[2]];
   commit2_bus <= rob_res[heads[2][`RBITS]];
   commit2_sr_tgts <= rob_sr_tgts[heads[2][`RBITS]];
   commit2_sr_bus <= rob_sr_res[heads[2][`RBITS]];
@@ -3669,6 +3710,8 @@ else begin
 						case(iq_argT_s[n][`RBITS])
 						alu0_rid:	alu1_argT <= ralu0_bus;
 						alu1_rid:	alu1_argT <= ralu1_bus;
+//						dramA_rid:	alu1_argT <= rdramA_bus;
+//						dramB_rid:	alu1_argT <= rdramB_bus;
 						default:	alu1_argT <= {1{16'hDEAD}};
 						endcase
 `else
@@ -4165,12 +4208,12 @@ endcase
 	$display("%b %h #", pc_mask, pc);
 	$display("%b %h #", pc_mask, pcd);
     $display ("--------------------------------------------------------------------- Regfile ---------------------------------------------------------------------");
-  $display("ac: %h %d %o #", ac, regIsValid[0], rf_source[0]);
-  $display("xr: %h %d %o #", xr, regIsValid[1], rf_source[1]);
-  $display("yr: %h %d %o #", yr, regIsValid[2], rf_source[2]);
-  $display("sp: %h %d %o #", sp, regIsValid[3], rf_source[3]);
-  $display("sr: %h %d %o #", sr, regIsValid[7], rf_source[7]);
-  $display("tmp: %h %d %o #", tmp, regIsValid[5], rf_source[5]);
+  $display("ac: %h %d %d #", ac, regIsValid[0], rf_source[0]);
+  $display("xr: %h %d %d #", xr, regIsValid[1], rf_source[1]);
+  $display("yr: %h %d %d #", yr, regIsValid[2], rf_source[2]);
+  $display("sp: %h %d %d #", sp, regIsValid[3], rf_source[3]);
+  $display("sr: %h %d %d #", sr, regIsValid[7], rf_source[7]);
+  $display("tmp: %h %d %d #", tmp, regIsValid[5], rf_source[5]);
 `ifdef FCU_ENH
 	$display("Call Stack:");
 	for (n = 0; n < 16; n = n + 4)
@@ -4549,6 +4592,7 @@ begin
 	set_insn(ndx,id_bus);
 	rob_pc[rid] <= uoq_pc[(uoq_head+slot) % UOQ_ENTRIES];
 	rob_tgt[rid] <= uoq_uop[(uoq_head+slot) % UOQ_ENTRIES][5:3];
+	rob_rfw[rid] <= IsRFW(uoq_uop[(uoq_head+slot) % UOQ_ENTRIES]);
 	rob_res[rid] <= 1'd0;
 	rob_sr_tgts[rid] <= uoq_flagsupd[(uoq_head+slot) % UOQ_ENTRIES];
 	rob_sr_res[rid] <= 1'd0;
@@ -4626,13 +4670,14 @@ endtask
 
 endmodule
 
-module decoder3 (num, out);
+module decoder3 (num, rfw, out);
 input [2:0] num;
+input rfw;
 output [7:0] out;
 
 wire [7:0] out1;
 
-assign out1 = 8'd1 << num;
+assign out1 = {7'd0,rfw} << num;
 assign out = out1[7:0];
 
 endmodule

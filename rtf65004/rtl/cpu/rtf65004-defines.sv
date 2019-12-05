@@ -147,6 +147,8 @@
 `define UO_RORB	6'h28
 `define UO_JSI	6'h29
 
+`define UO_NOP_MOP	{`UO_NOP,`UO_ZERO,`UO_ZR,`UO_ZR}
+
 `define BYTE		9'h87
 `define UBYTE		9'hA7
 `define CHAR		9'h97
