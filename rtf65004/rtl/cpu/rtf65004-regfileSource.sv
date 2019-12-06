@@ -87,34 +87,34 @@ else begin
 				if (slot_rfw[0]) begin
 					rf_source[Rd[0]] <= {{`QBIT{1'b0}},rob_tails[0]};
 					rf_source[Rd[0]][`QBIT] <= 1'b0;
-					if (slot_sr_tgts[0]!=8'h00)
-						rf_source[7] <= {{`QBIT{1'b0}},rob_tails[0]};
 				end
+				if (slot_sr_tgts[0]!=8'h00)
+					rf_source[7] <= {{`QBIT{1'b0}},rob_tails[0]};
 			end
 		3'b010:
 			if (queuedOn[1]) begin
 				if (slot_rfw[1]) begin
 					rf_source[Rd[1]] <= {{`QBIT{1'b0}},rob_tails[0]};
 					rf_source[Rd[1]][`QBIT] <= 1'b0;
-					if (slot_sr_tgts[0]!=8'h00)
-						rf_source[7] <= {{`QBIT{1'b0}},rob_tails[0]};
 				end
+				if (slot_sr_tgts[1]!=8'h00)
+					rf_source[7] <= {{`QBIT{1'b0}},rob_tails[0]};
 			end
 		3'b011:
 			if (queuedOn[0]) begin
 				if (slot_rfw[0]) begin
 					rf_source[Rd[0]] <= {{`QBIT{1'b0}},rob_tails[0]};
 					rf_source[Rd[0]][`QBIT] <= 1'b0;
-					if (slot_sr_tgts[0]!=8'h00)
-						rf_source[7] <= {{`QBIT{1'b0}},rob_tails[0]};
 				end
+				if (slot_sr_tgts[0]!=8'h00)
+					rf_source[7] <= {{`QBIT{1'b0}},rob_tails[0]};
 				if (queuedOn[1]) begin
 					if (slot_rfw[1]) begin
 						rf_source[Rd[1]] <= {{`QBIT{1'b0}},rob_tails[1]};
 						rf_source[Rd[1]][`QBIT] <= 1'b0;
-						if (slot_sr_tgts[0]!=8'h00)
-							rf_source[7] <= {{`QBIT{1'b0}},rob_tails[1]};
 					end
+					if (slot_sr_tgts[1]!=8'h00)
+						rf_source[7] <= {{`QBIT{1'b0}},rob_tails[1]};
 				end
 			end
 		3'b100:
@@ -122,25 +122,25 @@ else begin
 				if (slot_rfw[2]) begin
 					rf_source[Rd[2]] <= {{`QBIT{1'b0}},rob_tails[0]};
 					rf_source[Rd[2]][`QBIT] <= 1'b0;
-					if (slot_sr_tgts[0]!=8'h00)
-						rf_source[7] <= {{`QBIT{1'b0}},rob_tails[0]};
 				end
+				if (slot_sr_tgts[2]!=8'h00)
+					rf_source[7] <= {{`QBIT{1'b0}},rob_tails[0]};
 			end
 		3'b101:
 			if (queuedOn[0]) begin
 				if (slot_rfw[0]) begin
 					rf_source[Rd[0]] <= {{`QBIT{1'b0}},rob_tails[0]};
 					rf_source[Rd[0]][`QBIT] <= 1'b0;
-					if (slot_sr_tgts[0]!=8'h00)
-						rf_source[7] <= {{`QBIT{1'b0}},rob_tails[0]};
 				end
+				if (slot_sr_tgts[0]!=8'h00)
+					rf_source[7] <= {{`QBIT{1'b0}},rob_tails[0]};
 				if (queuedOn[2]) begin
 					if (slot_rfw[2]) begin
 						rf_source[Rd[2]] <= {{`QBIT{1'b0}},rob_tails[1]};
 						rf_source[Rd[2]][`QBIT] <= 1'b0;
-						if (slot_sr_tgts[0]!=8'h00)
-							rf_source[7] <= {{`QBIT{1'b0}},rob_tails[1]};
 					end
+					if (slot_sr_tgts[2]!=8'h00)
+						rf_source[7] <= {{`QBIT{1'b0}},rob_tails[1]};
 				end
 			end
 		3'b110:
@@ -148,16 +148,16 @@ else begin
 				if (slot_rfw[1]) begin
 					rf_source[Rd[1]] <= {{`QBIT{1'b0}},rob_tails[0]};
 					rf_source[Rd[1]][`QBIT] <= 1'b0;
-					if (slot_sr_tgts[0]!=8'h00)
-						rf_source[7] <= {{`QBIT{1'b0}},rob_tails[0]};
 				end
+				if (slot_sr_tgts[1]!=8'h00)
+					rf_source[7] <= {{`QBIT{1'b0}},rob_tails[0]};
 				if (queuedOn[2]) begin
 					if (slot_rfw[2]) begin
 						rf_source[Rd[2]] <= {{`QBIT{1'b0}},rob_tails[1]};
 						rf_source[Rd[2]][`QBIT] <= 1'b0;
-						if (slot_sr_tgts[0]!=8'h00)
-							rf_source[7] <= {{`QBIT{1'b0}},rob_tails[1]};
 					end
+					if (slot_sr_tgts[2]!=8'h00)
+						rf_source[7] <= {{`QBIT{1'b0}},rob_tails[1]};
 				end
 			end
 		3'b111:
@@ -165,23 +165,23 @@ else begin
 				if (slot_rfw[0]) begin
 					rf_source[Rd[0]] <= {{`QBIT{1'b0}},rob_tails[0]};
 					rf_source[Rd[0]][`QBIT] <= 1'b0;
-					if (slot_sr_tgts[0]!=8'h00)
-						rf_source[7] <= {{`QBIT{1'b0}},rob_tails[0]};
 				end
+				if (slot_sr_tgts[0]!=8'h00)
+					rf_source[7] <= {{`QBIT{1'b0}},rob_tails[0]};
 				if (queuedOn[1]) begin
 					if (slot_rfw[1]) begin
 						rf_source[Rd[1]] <= {{`QBIT{1'b0}},rob_tails[1]};
 						rf_source[Rd[1]][`QBIT] <= 1'b0;
-						if (slot_sr_tgts[0]!=8'h00)
-							rf_source[7] <= {{`QBIT{1'b0}},rob_tails[1]};
 					end
+					if (slot_sr_tgts[1]!=8'h00)
+						rf_source[7] <= {{`QBIT{1'b0}},rob_tails[1]};
 					if (queuedOn[2]) begin
 						if (slot_rfw[2]) begin
 							rf_source[Rd[2]] <= {{`QBIT{1'b0}},rob_tails[2]};
 							rf_source[Rd[2]][`QBIT] <= 1'b0;
-							if (slot_sr_tgts[0]!=8'h00)
-								rf_source[7] <= {{`QBIT{1'b0}},rob_tails[2]};
 						end
+						if (slot_sr_tgts[2]!=8'h00)
+							rf_source[7] <= {{`QBIT{1'b0}},rob_tails[2]};
 					end
 				end
 			end

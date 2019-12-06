@@ -26,6 +26,7 @@
 // 42046 67274
 // 44015 70424
 // 41136 65818
+// 42757 68411
 `include "rtf65004-config.sv"
 `include "rtf65004-defines.sv"
 
@@ -160,6 +161,12 @@ reg [371:0] xdati;
 
 reg [31:0] uop_queued;
 reg [31:0] ins_queued;
+reg [31:0] ins_stomped;
+reg [31:0] uop_stomped;
+wire [31:0] uop_committed;
+reg [31:0] ic_stalls;
+reg [31:0] br_override;
+
 wire [2:0] queuedCnt;
 wire [2:0] rqueuedCnt;
 reg queuedNop;
@@ -205,7 +212,6 @@ reg [5:0] iq_instr [0:IQ_ENTRIES-1];	// micro-op instruction
 reg [1:0] iq_fl [0:IQ_ENTRIES-1];			// first or last indicators
 reg [15:0] iq_const [0:IQ_ENTRIES-1];
 reg [IQ_ENTRIES-1:0] iq_hs;						// hardware (1) or software (0) interrupt
-reg [IQ_ENTRIES-1:0] iq_irq = 1'h0;
 reg [IQ_ENTRIES-1:0] iq_alu = 1'h0;  	// alu type instruction
 reg [IQ_ENTRIES-1:0] iq_mem;	// touches memory: 1 if LW/SW
 reg [2:0] iq_memsz [0:IQ_ENTRIES-1];
@@ -709,10 +715,10 @@ uopl[`CPY_IMM]	= {2'd0,`UOF_NZ,2'd0,`UO_CMPB,`UO_R8,`UO_YR,`UO_ZR,{3{`UO_NOP_MOP
 uopl[`CPY_ZP]		= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_CMPB,`UO_ZERO,`UO_YR,`UO_TMP,{2{`UO_NOP_MOP}}};
 //uopl[`CPY_ZPX]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_CMPB,`UO_ZERO,`UO_YR,`UO_TMP,{2{`UO_NOP_MOP}}};
 uopl[`CPY_ABS]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_CMPB,`UO_ZERO,`UO_YR,`UO_TMP,{2{`UO_NOP_MOP}}};
-uopl[`INX]			= {2'd0,`UOF_NZ,2'd1,`UO_ADDB,`UO_P1,`UO_XR,`UO_ZR,{3{`UO_NOP_MOP}}};
-uopl[`DEX]			= {2'd0,`UOF_NZ,2'd1,`UO_ADDB,`UO_M1,`UO_XR,`UO_ZR,{3{`UO_NOP_MOP}}};
-uopl[`INY]			= {2'd0,`UOF_NZ,2'd1,`UO_ADDB,`UO_P1,`UO_YR,`UO_ZR,{3{`UO_NOP_MOP}}};
-uopl[`DEY]			= {2'd0,`UOF_NZ,2'd1,`UO_ADDB,`UO_M1,`UO_YR,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`INX]			= {2'd0,`UOF_NZ,2'd0,`UO_ADDB,`UO_P1,`UO_XR,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`DEX]			= {2'd0,`UOF_NZ,2'd0,`UO_ADDB,`UO_M1,`UO_XR,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`INY]			= {2'd0,`UOF_NZ,2'd0,`UO_ADDB,`UO_P1,`UO_YR,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`DEY]			= {2'd0,`UOF_NZ,2'd0,`UO_ADDB,`UO_M1,`UO_YR,`UO_ZR,{3{`UO_NOP_MOP}}};
 uopl[`PHA]			= {2'd1,`UOF_NONE,2'd0,`UO_STBW,`UO_100H,`UO_ACC,`UO_SP,`UO_ADDB,`UO_M1,`UO_SP,`UO_ZR,{2{`UO_NOP_MOP}}};
 uopl[`PLA]			= {2'd1,`UOF_NZ,2'd1,`UO_ADDB,`UO_P1,`UO_SP,`UO_ZR,`UO_LDBW,`UO_100H,`UO_ACC,`UO_SP,{2{`UO_NOP_MOP}}};
 uopl[`PHP]			= {2'd1,`UOF_NONE,2'd0,`UO_STBW,`UO_100H,`UO_SR,`UO_SP,`UO_ADDB,`UO_M1,`UO_SP,`UO_ZR,{2{`UO_NOP_MOP}}};
@@ -837,6 +843,24 @@ begin
 		else if (uoq_room >= uo_len1)
 			q1 <= TRUE;
 	end
+end
+
+always @(posedge clk_i)
+if (rst_i) begin
+	ic_stalls <= 0;
+end
+else begin
+	if (!phit)
+		ic_stalls <= ic_stalls + 2'd1;
+end
+
+always @(posedge clk_i)
+if (rst_i) begin
+	br_override <= 0;
+end
+else begin
+	if (pc_override)
+		br_override <= br_override + 2'd1;
 end
 
 reg [3:0] uo_queuedCnt;
@@ -1757,7 +1781,8 @@ headptrs uhp1
 	.amt(hi_amt),
 	.heads(heads),
 	.ramt(r_amt),
-	.rob_heads(rob_heads)
+	.rob_heads(rob_heads),
+	.headcnt(uop_committed)
 );
 
 tailptrs utp1
@@ -2121,6 +2146,8 @@ begin
 			hi_amt <= 3'd2;
 			if (iq_v[heads[2]] && iq_state[heads[2]]==IQS_CMT) begin
 				hi_amt <= 3'd3;
+				if (!iq_v[heads[3]] && heads[3] != tails[0])
+					hi_amt <= 3'd4;
 			end
 		end
 	end
@@ -2131,6 +2158,8 @@ begin
 				hi_amt <= 3'd2;
 				if (iq_v[heads[2]] && iq_state[heads[2]]==IQS_CMT) begin
 					hi_amt <= 3'd3;
+					if (!iq_v[heads[3]] && heads[3] != tails[0])
+						hi_amt <= 3'd4;
 				end
 			end
 			else if (!iq_v[heads[1]]) begin
@@ -2669,9 +2698,9 @@ begin
   commit2_rid <= heads[2];
 end
 
-assign int_commit = (commit0_v && iq_irq[heads[0]])
-									 || (commit0_v && commit1_v && iq_irq[heads[1]])
-									 || (commit0_v && commit1_v && commit2_v && iq_irq[heads[2]]);
+assign int_commit = (commit0_v && iq_instr[heads[0]]==`UO_JSI)
+									 || (commit0_v && commit1_v && iq_instr[heads[1]]==`UO_JSI)
+									 || (commit0_v && commit1_v && commit2_v && iq_instr[heads[2]]==`UO_JSI);
 
 
 //wire [143:0] id_bus[0], id_bus[1], id_bus[2];
@@ -2955,9 +2984,19 @@ seqnum usqn1
 
 always @(posedge clk_i)
 if (rst_i) begin
+	ins_stomped = 0;
+end
+else begin
+	for (n = 0; n < IQ_ENTRIES; n = n + 1)
+		ins_stomped = ins_stomped + iq_stomp[n];
+end
+
+always @(posedge clk_i)
+if (rst_i) begin
 	tick <= 0;
 	uop_queued <= 0;
 	ins_queued <= 0;
+	uop_stomped <= 0;
 	uoq_head <= 0;
 	for (n = 0; n < 8; n = n + 1)
 		uoq_tail[n] <= n;
@@ -3148,6 +3187,7 @@ else begin
 	alu1_ld <= FALSE;
 	fcu_ld <= FALSE;
 	queuedOn <= 1'b0;
+//	ins_queued <= ins_queued + queuedCnt;
 
   if (waitctr != 48'd0)
 		waitctr <= waitctr - 4'd1;
@@ -3345,6 +3385,8 @@ else begin
 	// Invalidate all entries in the micro-op queue on a branch miss.
 	if (branchmiss) begin
 		uoq_v <= 1'd0;
+		for (n = 0; n < UOQ_ENTRIES; n = n + 1)
+			uop_stomped <= uop_stomped + uoq_v[n];
 		for (n = 0; n < 8; n = n + 1)
 			uoq_tail[n] <= n;
 		uoq_head <= 1'd0;
@@ -4320,8 +4362,11 @@ endcase
 	$display("0: %c %h %o %d #", commit0_v?"v":" ", commit0_bus, commit0_id, commit0_tgt[2:0]);
 	$display("1: %c %h %o %d #", commit1_v?"v":" ", commit1_bus, commit1_id, commit1_tgt[2:0]);
 	$display("2: %c %h %o %d #", commit2_v?"v":" ", commit2_bus, commit2_id, commit2_tgt[2:0]);
-    $display("instructions committed: %d valid committed: %d ticks: %d ", CC, I, tick);
+    $display("micro-ops committed: %d  ticks: %d ", uop_committed, tick);
     $display("micro-ops queued: %d   instr. queued: %d", uop_queued, ins_queued);
+    $display("micro-ops stomped by branches: %d ", ins_stomped);
+    $display("I$ load stalls cycles: %d", ic_stalls);
+    $display("Branch override BTB: %d", br_override);
   $display("Write Buffer:");
   for (n = `WB_DEPTH-1; n >= 0; n = n - 1)
   	$display("%c adr: %h dat: %h", wb_v[n]?" ":"*", wb_addr[n], uwb1.wb_data[n]);
@@ -4418,7 +4463,6 @@ begin
 	for (n = 0; n < IQ_ENTRIES; n = n + 1)
 		if (iq_v[n])
 			iq_sn[n] <= iq_sn[n] - tosub;
-	CC <= CC + amt;
 end
 endtask
 

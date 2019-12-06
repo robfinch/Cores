@@ -26,7 +26,7 @@
 // Pointers to the head of the queue. The pointers increment every cycle by
 // the number of instructions that were committed during the cycle.
 
-module headptrs(rst, clk, amt, heads, ramt, rob_heads);
+module headptrs(rst, clk, amt, heads, ramt, rob_heads, headcnt);
 parameter IQ_ENTRIES = `IQ_ENTRIES;
 parameter RENTRIES = `RENTRIES;
 parameter RSLOTS = `RSLOTS;
@@ -36,15 +36,18 @@ input [2:0] amt;
 output reg [`QBITS] heads [0:IQ_ENTRIES-1];
 input [2:0] ramt;
 output reg [`RBITS] rob_heads [0:RENTRIES-1];
+output reg [31:0] headcnt;
 
 integer n;
 
 always @(posedge clk)
 if (rst) begin
+	headcnt <= 0;
 	for (n = 0; n < IQ_ENTRIES; n = n + 1)
 		heads[n] <= n;
 end
 else begin
+	headcnt <= headcnt + amt;
 	for (n = 0; n < IQ_ENTRIES; n = n + 1)
      heads[n] <= (heads[n] + amt) % IQ_ENTRIES;
 end
