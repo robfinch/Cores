@@ -2058,6 +2058,20 @@ default:	IsUoBranch = FALSE;
 endcase
 endfunction
 
+function fnNeedSr;
+input [15:0] isn;
+case(isn[15:10])
+`UO_STB,`UO_STBW:
+	fnNeedSr = isn[5:3]==`UO_SR;
+`UO_ADCB,`UO_SBCB,`UO_ROLB,`UO_RORB:	// carry input
+	fnNeedSr = TRUE;
+`UO_BEQ,`UO_BNE,`UO_BCS,`UO_BCC,`UO_BVS,`UO_BVC,`UO_BMI,`UO_BPL:
+	fnNeedSr = TRUE;
+default:
+	fnNeedSr = FALSE;
+endcase
+endfunction
+
 function IsFlowCtrl;
 input [15:0] isn;
 case(isn[15:10])
@@ -3296,27 +3310,27 @@ else begin
 		uoq_pc[uoq_tail[0]] <= pc;
 		uoq_uop[uoq_tail[0]] <= uo_insn1[0];
 		uoq_inst[uoq_tail[0]] <= insnx[0];
-		uoq_fl[uoq_tail[0]] <= uo_len1==2'b00 ? 2'b11: 2'b01;
+		uoq_fl[uoq_tail[0]] <= uo_len1==3'd1 ? 2'b11: 2'b01;
 		uoq_hs[uoq_tail[0]] <= 1'b0;
 		uoq_takb[uoq_tail[0]] <= take_branch[0];
 		tskLd4(uo_insn1[0][`UO_LD4],insnx[0],uoq_const[uoq_tail[0]]);
-		if (uo_len1 > 2'b00) begin
+		if (uo_len1 > 3'd1) begin
 			uoq_v[uoq_tail[1]] <= `VAL;
 			uoq_pc[uoq_tail[1]] <= pc;
 			uoq_uop[uoq_tail[1]] <= uo_insn1[1];
-			uoq_fl[uoq_tail[1]] <= uo_len1==2'b01 ? 2'b10 : 2'b00;
+			uoq_fl[uoq_tail[1]] <= uo_len1==3'd2 ? 2'b10 : 2'b00;
 			uoq_hs[uoq_tail[1]] <= 1'b0;
 			tskLd4(uo_insn1[1][`UO_LD4],insnx[0],uoq_const[uoq_tail[1]]);
 		end
-		if (uo_len1 > 2'b01) begin
+		if (uo_len1 > 3'd2) begin
 			uoq_v[uoq_tail[2]] <= `VAL;
 			uoq_pc[uoq_tail[2]] <= pc;
 			uoq_uop[uoq_tail[2]] <= uo_insn1[2];
-			uoq_fl[uoq_tail[2]] <= uo_len1==2'b10 ? 2'b10 : 2'b00;
+			uoq_fl[uoq_tail[2]] <= uo_len1==3'd3 ? 2'b10 : 2'b00;
 			uoq_hs[uoq_tail[2]] <= 1'b0;
 			tskLd4(uo_insn1[2][`UO_LD4],insnx[0],uoq_const[uoq_tail[2]]);
 		end
-		if (uo_len1 > 2'b10) begin
+		if (uo_len1 > 3'd3) begin
 			uoq_v[uoq_tail[3]] <= `VAL;
 			uoq_pc[uoq_tail[3]] <= pc;
 			uoq_uop[uoq_tail[3]] <= uo_insn1[3];
@@ -3324,36 +3338,32 @@ else begin
 			uoq_hs[uoq_tail[3]] <= 1'b0;
 			tskLd4(uo_insn1[3][`UO_LD4],insnx[0],uoq_const[uoq_tail[3]]);
 		end
-		for (n = 0; n < 4; n = n + 1)
-			if (n < uo_len1) begin
-				uoq_flagsupd[uoq_tail[n]] <= `UOF_NONE;
-			end
 		uoq_v[uoq_tail[uo_len1]] <= `VAL;
 		uoq_pc[uoq_tail[uo_len1]] <= pc + len1;
 		uoq_uop[uoq_tail[uo_len1]] <= uo_insn2[0];
 		uoq_inst[uoq_tail[uo_len1]] <= insnx[1];
-		uoq_fl[uoq_tail[uo_len1]] <= uo_len2==2'b00 ? 2'b11 : 2'b01;
+		uoq_fl[uoq_tail[uo_len1]] <= uo_len2==3'd1 ? 2'b11 : 2'b01;
 		uoq_hs[uoq_tail[uo_len1]] <= 1'b0;
 		uoq_takb[uoq_tail[uo_len1]] <= take_branch[1];
 		//uoq_tail[0] <= (uoq_tail[0] + uo_len1 + 8'd1) % UOQ_ENTRIES;
 		tskLd4(uo_insn2[0][`UO_LD4],insnx[1],uoq_const[uoq_tail[uo_len1]]);
-		if (uo_len2 > 2'b00) begin
+		if (uo_len2 > 3'd1) begin
 			uoq_v[uoq_tail[uo_len1 + 1]] <= `VAL;
 			uoq_pc[uoq_tail[uo_len1 + 1]] <= pc + len1;
 			uoq_uop[uoq_tail[uo_len1 + 1]] <= uo_insn2[1];
-			uoq_fl[uoq_tail[uo_len1 + 1]] <= uo_len2==2'b01 ? 2'b10 : 2'b00;
+			uoq_fl[uoq_tail[uo_len1 + 1]] <= uo_len2==3'd2 ? 2'b10 : 2'b00;
 			uoq_hs[uoq_tail[uo_len1 + 1]] <= 1'b0;
 			tskLd4(uo_insn2[1][`UO_LD4],insnx[1],uoq_const[uoq_tail[uo_len1 + 1]]);
 		end
-		if (uo_len2 > 2'b01) begin
+		if (uo_len2 > 3'd2) begin
 			uoq_v[uoq_tail[uo_len1 + 2]] <= `VAL;
 			uoq_pc[uoq_tail[uo_len1 + 2]] <= pc + len1;
 			uoq_uop[uoq_tail[uo_len1 + 2]] <= uo_insn2[2];
-			uoq_fl[uoq_tail[uo_len1 + 2]] <= uo_len2==2'b10 ? 2'b10 : 2'b00;
+			uoq_fl[uoq_tail[uo_len1 + 2]] <= uo_len2==3'd3 ? 2'b10 : 2'b00;
 			uoq_hs[uoq_tail[uo_len1 + 2]] <= 1'b0;
 			tskLd4(uo_insn2[2][`UO_LD4],insnx[1],uoq_const[uoq_tail[uo_len1 + 2]]);
 		end
-		if (uo_len2 > 2'b10) begin
+		if (uo_len2 > 3'd3) begin
 			uoq_v[uoq_tail[uo_len1 + 3]] <= `VAL;
 			uoq_pc[uoq_tail[uo_len1 + 3]] <= pc + len1;
 			uoq_uop[uoq_tail[uo_len1 + 3]] <= uo_insn2[3];
@@ -3361,10 +3371,10 @@ else begin
 			uoq_hs[uoq_tail[uo_len1 + 3]] <= 1'b0;
 			tskLd4(uo_insn2[3][`UO_LD4],insnx[1],uoq_const[uoq_tail[uo_len1 + 3]]);
 		end
-		for (n = 0; n < 4; n = n + 1)
-			if (n < uo_len2)
-				uoq_flagsupd[uoq_tail[uo_len1+n]] <= `UOF_NONE;
-		uoq_flagsupd[uoq_tail[0 + uo_whflg1]] = uo_flags1;
+		for (n = 0; n < 8; n = n + 1)
+			if (n < uo_len1 + uo_len2)
+				uoq_flagsupd[uoq_tail[n]] <= `UOF_NONE;
+		uoq_flagsupd[uoq_tail[3'd0 + uo_whflg1]] <= uo_flags1;
 		uoq_flagsupd[uoq_tail[uo_len1+uo_whflg2]] <= uo_flags2;
 		for (n = 0; n < 8; n = n + 1)
 			uoq_tail[n] <= (uoq_tail[n] + uo_len1 + uo_len2) % UOQ_ENTRIES;
@@ -3375,28 +3385,28 @@ else begin
 		uoq_v[uoq_tail[0]] <= `VAL;
 		uoq_pc[uoq_tail[0]] <= pc;
 		uoq_uop[uoq_tail[0]] <= uo_insn1[0];
-		uoq_fl[uoq_tail[0]] <= uo_len1==2'b00 ? 2'b11: 2'b01;
+		uoq_fl[uoq_tail[0]] <= uo_len1==3'd1 ? 2'b11: 2'b01;
 		uoq_hs[uoq_tail[0]] <= 1'b0;
 		uoq_takb[uoq_tail[0]] <= take_branch[0];
 //		uoq_tail <= (uoq_tail + 8'd1) % UOQ_ENTRIES;
 		tskLd4(uo_insn1[0][`UO_LD4],insnx[0],uoq_const[uoq_tail[0]]);
-		if (uo_len1 > 2'b00) begin
+		if (uo_len1 > 3'd1) begin
 			uoq_v[uoq_tail[1]] <= `VAL;
 			uoq_pc[uoq_tail[1]] <= pc;
 			uoq_uop[uoq_tail[1]] <= uo_insn1[1];
-			uoq_fl[uoq_tail[1]] <= uo_len1==2'b01 ? 2'b10 : 2'b00;
+			uoq_fl[uoq_tail[1]] <= uo_len1==3'd2 ? 2'b10 : 2'b00;
 			uoq_hs[uoq_tail[1]] <= 1'b0;
 			tskLd4(uo_insn1[1][`UO_LD4],insnx[0],uoq_const[uoq_tail[1]]);
 		end
-		if (uo_len1 > 2'b01) begin
+		if (uo_len1 > 3'd2) begin
 			uoq_v[uoq_tail[2]] <= `VAL;
 			uoq_pc[uoq_tail[2]] <= pc;
 			uoq_uop[uoq_tail[2]] <= uo_insn1[2];
-			uoq_fl[uoq_tail[2]] <= uo_len1==2'b10 ? 2'b10 : 2'b00;
+			uoq_fl[uoq_tail[2]] <= uo_len1==3'd3 ? 2'b10 : 2'b00;
 			uoq_hs[uoq_tail[2]] <= 1'b0;
 			tskLd4(uo_insn1[2][`UO_LD4],insnx[0],uoq_const[uoq_tail[2]]);
 		end
-		if (uo_len1 > 2'b10) begin
+		if (uo_len1 > 3'd3) begin
 			uoq_v[uoq_tail[3]] <= `VAL;
 			uoq_pc[uoq_tail[3]] <= pc;
 			uoq_uop[uoq_tail[3]] <= uo_insn1[3];
@@ -3407,7 +3417,7 @@ else begin
 		for (n = 0; n < 4; n = n + 1)
 			if (n < uo_len1)
 				uoq_flagsupd[uoq_tail[n]] <= `UOF_NONE;
-		uoq_flagsupd[(uoq_tail[0]+uo_whflg1) % UOQ_ENTRIES] <= uo_flags1;
+		uoq_flagsupd[uoq_tail[0+uo_whflg1]] <= uo_flags1;
 		for (n = 0; n < 8; n = n + 1)
 			uoq_tail[n] <= (uoq_tail[n] + uo_len1) % UOQ_ENTRIES;
 		uop_queued <= uop_queued + uo_len1;
@@ -4600,9 +4610,12 @@ begin
 							iq_argB_v [tails[tails_rc(pat,row)]] <= Source2Valid(uoq_uop[(uoq_head+row) % UOQ_ENTRIES]);
 							iq_argB_s [tails[tails_rc(pat,row)]] <= {1'b0,tails[tails_rc(pat,col)]};
 						end
-						if (3'd7==Rd[col] && slot_rfw[col]) begin
-							iq_argS_v [tails[tails_rc(pat,row)]] <= SourceSValid(uoq_uop[(uoq_head+row) % UOQ_ENTRIES]);
-							iq_argS_s [tails[tails_rc(pat,row)]] <= {1'b0,tails[tails_rc(pat,col)]};
+//						if (3'd7==Rd[col] && slot_sr_tgts[col]!=8'h00) begin
+						if (fnNeedSr(uoq_uop[(uoq_head+row) % UOQ_ENTRIES])) begin
+							if (slot_sr_tgts[col]!=8'h00) begin
+								iq_argS_v [tails[tails_rc(pat,row)]] <= SourceSValid(uoq_uop[(uoq_head+row) % UOQ_ENTRIES]);
+								iq_argS_s [tails[tails_rc(pat,row)]] <= {1'b0,tails[tails_rc(pat,col)]};
+							end
 						end
 					end
 				end
@@ -4657,7 +4670,7 @@ begin
 	//iq_argI[ndx] <= uoq_const[(uoq_head+slot) % UOQ_ENTRIES];
 	iq_argT[ndx] <= argT[slot % FSLOTS];
 	iq_argB[ndx] <= argB[slot % FSLOTS];
-	iq_argS[ndx] <= sr;//argS[slot % FSLOTS];
+	iq_argS[ndx] <= srx;//argS[slot % FSLOTS];
 	iq_argT_v[ndx] <= regIsValid[Rd[slot % FSLOTS]] || SourceTValid(uoq_uop[(uoq_head+slot) % UOQ_ENTRIES]);
 	iq_argB_v[ndx] <= regIsValid[Rn[slot % FSLOTS]] || Rn[slot % FSLOTS]==3'd0 || Source2Valid(uoq_uop[(uoq_head+slot) % UOQ_ENTRIES]);
 	iq_argS_v[ndx] <= regIsValid[7] || SourceSValid(uoq_uop[(uoq_head+slot) % UOQ_ENTRIES]);
