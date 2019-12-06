@@ -128,6 +128,12 @@ reg [7:0] sp;
 reg [15:0] pc;
 reg [15:0] tmp;
 reg [7:0] sr;
+reg [7:0] acx;
+reg [7:0] xrx;
+reg [7:0] yrx;
+reg [7:0] spx;
+reg [15:0] tmpx;
+reg [7:0] srx;
 
 wire [15:0] pcd;
 reg [31:0] tick;
@@ -742,6 +748,8 @@ uopl[`SEC]			= {2'd0,`UOF_C,2'd0,`UO_SEC,`UO_ZERO,`UO_ZR,`UO_ZR,{3{`UO_NOP_MOP}}
 uopl[`CLV]			= {2'd0,`UOF_V,2'd0,`UO_CLV,`UO_ZERO,`UO_ZR,`UO_ZR,{3{`UO_NOP_MOP}}};
 uopl[`SEI]			= {2'd0,`UOF_I,2'd0,`UO_SEI,`UO_ZERO,`UO_ZR,`UO_ZR,{3{`UO_NOP_MOP}}};
 uopl[`CLI]			= {2'd0,`UOF_I,2'd0,`UO_CLI,`UO_ZERO,`UO_ZR,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`CLD]			= {2'd0,`UOF_D,2'd0,`UO_CLD,`UO_ZERO,`UO_ZR,`UO_ZR,{3{`UO_NOP_MOP}}};
+uopl[`SED]			= {2'd0,`UOF_D,2'd0,`UO_SED,`UO_ZERO,`UO_ZR,`UO_ZR,{3{`UO_NOP_MOP}}};
 uopl[`JMP]			= {2'd0,`UOF_NONE,2'd0,`UO_JMP,`UO_R16,`UO_ZERO,`UO_ZR,{3{`UO_NOP_MOP}}};
 uopl[`JMP_IND]	= {2'd1,`UOF_NONE,2'd0,`UO_LDW,`UO_R16,`UO_TMP,`UO_ZR,`UO_JMP,`UO_ZERO,`UO_ZR,`UO_TMP,{2{`UO_NOP_MOP}}};
 uopl[`JSR]			= {2'd2,`UOF_NONE,2'd0,`UO_STWW,`UO_FFFFH,`UO_PC2,`UO_SP,`UO_ADDB,`UO_M2,`UO_SP,`UO_ZR,`UO_JMP,`UO_R16,`UO_ZERO,`UO_ZR,{1{`UO_NOP_MOP}}};
@@ -1811,13 +1819,13 @@ for (n = 0; n < QSLOTS; n = n + 1)
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
 	case(Rd[n])
-	3'd0:	rfoa[n] <= {8'h00,ac};
-	3'd1:	rfoa[n] <= {8'h00,xr};
-	3'd2:	rfoa[n] <= {8'h00,yr};
-	3'd3:	rfoa[n] <= {8'h01,sp};
+	3'd0:	rfoa[n] <= {8'h00,acx};
+	3'd1:	rfoa[n] <= {8'h00,xrx};
+	3'd2:	rfoa[n] <= {8'h00,yrx};
+	3'd3:	rfoa[n] <= {8'h01,spx};
 	3'd4:	rfoa[n] <= uoq_pc[(uoq_head+n) % UOQ_ENTRIES];
-	3'd5: rfoa[n] <= tmp;
-	3'd7:	rfoa[n] <= {8'h00,sr};
+	3'd5: rfoa[n] <= tmpx;
+	3'd7:	rfoa[n] <= {8'h00,srx};
 	default:	rfoa[n] <= 16'h0;
 	endcase
 
@@ -1825,121 +1833,146 @@ always @*
 for (n = 0; n < QSLOTS; n = n + 1)
 	case(Rn[n])
 	3'd0:	rfob[n] <= 16'h0000;
-	3'd1:	rfob[n] <= {8'h0,xr};
-	3'd2:	rfob[n] <= {8'h0,yr};
-	3'd3:	rfob[n] <= {8'h1,sp};
+	3'd1:	rfob[n] <= {8'h0,xrx};
+	3'd2:	rfob[n] <= {8'h0,yrx};
+	3'd3:	rfob[n] <= {8'h1,spx};
 	3'd4:	rfob[n] <= 16'hFFFF;
-	3'd5:	rfob[n] <= tmp;
+	3'd5:	rfob[n] <= tmpx;
 	3'd6:	rfob[n] <= 16'd2;
 	default:	rfob[n] <= 16'h0;
 	endcase
 
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
-	rfos[n] <= sr;
+	rfos[n] <= srx;
 
 // Writes to the register file. Fortunately the register file is small so
 // three update ports are easily supported.
-always @(posedge clk)
+
+always @*
 	if (commit2_v && commit2_tgt==`UO_ACC && commit2_rfw)
-		ac <= commit2_bus[7:0];
+		acx <= commit2_bus[7:0];
 	else if (commit1_v && commit1_tgt==`UO_ACC && commit1_rfw)
-		ac <= commit1_bus[7:0];
+		acx <= commit1_bus[7:0];
 	else if (commit0_v && commit0_tgt==`UO_ACC && commit0_rfw)
-		ac <= commit0_bus[7:0];
-
+		acx <= commit0_bus[7:0];
+	else
+		acx <= ac;
 always @(posedge clk)
+	ac <= acx;
+
+always @*
 	if (commit2_v && commit2_tgt==`UO_XR && commit2_rfw)
-		xr <= commit2_bus[7:0];
+		xrx <= commit2_bus[7:0];
 	else if (commit1_v && commit1_tgt==`UO_XR && commit1_rfw)
-		xr <= commit1_bus[7:0];
+		xrx <= commit1_bus[7:0];
 	else if (commit0_v && commit0_tgt==`UO_XR && commit0_rfw)
-		xr <= commit0_bus[7:0];
-
+		xrx <= commit0_bus[7:0];
+	else
+		xrx <= xr;
 always @(posedge clk)
+	xr <= xrx;
+
+always @*
 	if (commit2_v && commit2_tgt==`UO_YR && commit2_rfw)
-		yr <= commit2_bus[7:0];
+		yrx <= commit2_bus[7:0];
 	else if (commit1_v && commit1_tgt==`UO_YR && commit1_rfw)
-		yr <= commit1_bus[7:0];
+		yrx <= commit1_bus[7:0];
 	else if (commit0_v && commit0_tgt==`UO_YR && commit0_rfw)
-		yr <= commit0_bus[7:0];
-
+		yrx <= commit0_bus[7:0];
+	else
+		yrx <= yr;
 always @(posedge clk)
+	yr <= yrx;
+
+always @*
 	if (rst_i)
-		sp <= 8'hFF;
+		spx <= 8'hFF;
 	else begin
 		if (commit2_v && commit2_tgt==`UO_SP && commit2_rfw)
-			sp <= commit2_bus[7:0];
+			spx <= commit2_bus[7:0];
 		else if (commit1_v && commit1_tgt==`UO_SP && commit1_rfw)
-			sp <= commit1_bus[7:0];
+			spx <= commit1_bus[7:0];
 		else if (commit0_v && commit0_tgt==`UO_SP && commit0_rfw)
-			sp <= commit0_bus[7:0];
+			spx <= commit0_bus[7:0];
+		else
+			spx <= sp;
 	end
+always @(posedge clk)
+	sp <= spx;
 
 // PLP and RTI target the sr during a load. They write the whole word.
 // The brk flag in the status register always loads as zero. The only time the
 // brk flag is set is during execution of the BRK opcode. Even if the brk flag
 // is set to one in memory, it still reads back as zero.
-always @(posedge clk)
+always @*
 	if (rst_i) begin
-		sr <= 8'h04;	// mask interrupts on reset, clear decimal mode
+		srx <= 8'h04;	// mask interrupts on reset, clear decimal mode
 	end
 	else begin
 		if (commit2_v) begin
 			if (commit2_tgt==`UO_SR && commit2_rfw)
-				sr <= commit2_bus[7:0] & 8'hEF;	// clear break bit
+				srx <= commit2_bus[7:0] & 8'hEF;	// clear break bit
 			else begin
-				sr[0] <= commit2_sr_tgts[0] ? commit2_sr_bus[0] : sr[0];
-				sr[1] <= commit2_sr_tgts[1] ? commit2_sr_bus[1] : sr[1];
-				sr[2] <= commit2_sr_tgts[2] ? commit2_sr_bus[2] : sr[2];
-				sr[3] <= commit2_sr_tgts[3] ? commit2_sr_bus[3] : sr[3];
-				sr[4] <= commit2_sr_tgts[4] ? commit2_sr_bus[4] : sr[4];
-				sr[5] <= commit2_sr_tgts[5] ? commit2_sr_bus[5] : sr[5];
-				sr[6] <= commit2_sr_tgts[6] ? commit2_sr_bus[6] : sr[6];
-				sr[7] <= commit2_sr_tgts[7] ? commit2_sr_bus[7] : sr[7];
+				srx[0] <= commit2_sr_tgts[0] ? commit2_sr_bus[0] : sr[0];
+				srx[1] <= commit2_sr_tgts[1] ? commit2_sr_bus[1] : sr[1];
+				srx[2] <= commit2_sr_tgts[2] ? commit2_sr_bus[2] : sr[2];
+				srx[3] <= commit2_sr_tgts[3] ? commit2_sr_bus[3] : sr[3];
+				srx[4] <= commit2_sr_tgts[4] ? commit2_sr_bus[4] : sr[4];
+				srx[5] <= commit2_sr_tgts[5] ? commit2_sr_bus[5] : sr[5];
+				srx[6] <= commit2_sr_tgts[6] ? commit2_sr_bus[6] : sr[6];
+				srx[7] <= commit2_sr_tgts[7] ? commit2_sr_bus[7] : sr[7];
 			end
 		end
 		else if (commit1_v) begin
 			if (commit1_tgt==`UO_SR && commit1_rfw)
-				sr <= commit1_bus[7:0] & 8'hEF;	// clear break bit
+				srx <= commit1_bus[7:0] & 8'hEF;	// clear break bit
 			else begin
-				sr[0] <= commit1_sr_tgts[0] ? commit1_sr_bus[0] : sr[0];
-				sr[1] <= commit1_sr_tgts[1] ? commit1_sr_bus[1] : sr[1];
-				sr[2] <= commit1_sr_tgts[2] ? commit1_sr_bus[2] : sr[2];
-				sr[3] <= commit1_sr_tgts[3] ? commit1_sr_bus[3] : sr[3];
-				sr[4] <= commit1_sr_tgts[4] ? commit1_sr_bus[4] : sr[4];
-				sr[5] <= commit1_sr_tgts[5] ? commit1_sr_bus[5] : sr[5];
-				sr[6] <= commit1_sr_tgts[6] ? commit1_sr_bus[6] : sr[6];
-				sr[7] <= commit1_sr_tgts[7] ? commit1_sr_bus[7] : sr[7];
+				srx[0] <= commit1_sr_tgts[0] ? commit1_sr_bus[0] : sr[0];
+				srx[1] <= commit1_sr_tgts[1] ? commit1_sr_bus[1] : sr[1];
+				srx[2] <= commit1_sr_tgts[2] ? commit1_sr_bus[2] : sr[2];
+				srx[3] <= commit1_sr_tgts[3] ? commit1_sr_bus[3] : sr[3];
+				srx[4] <= commit1_sr_tgts[4] ? commit1_sr_bus[4] : sr[4];
+				srx[5] <= commit1_sr_tgts[5] ? commit1_sr_bus[5] : sr[5];
+				srx[6] <= commit1_sr_tgts[6] ? commit1_sr_bus[6] : sr[6];
+				srx[7] <= commit1_sr_tgts[7] ? commit1_sr_bus[7] : sr[7];
 			end
 		end
 		else if (commit0_v) begin
 			if (commit0_tgt==`UO_SR && commit0_rfw)
-				sr <= commit0_bus[7:0] & 8'hEF;	// clear break bit
+				srx <= commit0_bus[7:0] & 8'hEF;	// clear break bit
 			else begin
-				sr[0] <= commit0_sr_tgts[0] ? commit0_sr_bus[0] : sr[0];
-				sr[1] <= commit0_sr_tgts[1] ? commit0_sr_bus[1] : sr[1];
-				sr[2] <= commit0_sr_tgts[2] ? commit0_sr_bus[2] : sr[2];
-				sr[3] <= commit0_sr_tgts[3] ? commit0_sr_bus[3] : sr[3];
-				sr[4] <= commit0_sr_tgts[4] ? commit0_sr_bus[4] : sr[4];
-				sr[5] <= commit0_sr_tgts[5] ? commit0_sr_bus[5] : sr[5];
-				sr[6] <= commit0_sr_tgts[6] ? commit0_sr_bus[6] : sr[6];
-				sr[7] <= commit0_sr_tgts[7] ? commit0_sr_bus[7] : sr[7];
+				srx[0] <= commit0_sr_tgts[0] ? commit0_sr_bus[0] : sr[0];
+				srx[1] <= commit0_sr_tgts[1] ? commit0_sr_bus[1] : sr[1];
+				srx[2] <= commit0_sr_tgts[2] ? commit0_sr_bus[2] : sr[2];
+				srx[3] <= commit0_sr_tgts[3] ? commit0_sr_bus[3] : sr[3];
+				srx[4] <= commit0_sr_tgts[4] ? commit0_sr_bus[4] : sr[4];
+				srx[5] <= commit0_sr_tgts[5] ? commit0_sr_bus[5] : sr[5];
+				srx[6] <= commit0_sr_tgts[6] ? commit0_sr_bus[6] : sr[6];
+				srx[7] <= commit0_sr_tgts[7] ? commit0_sr_bus[7] : sr[7];
 			end
 		end
+		else
+			srx <= sr;
 	end
-
 always @(posedge clk)
+	sr <= srx;
+
+always @*
 	if (rst_i)
-		tmp <= 16'h0;
+		tmpx <= 16'h0;
 	else begin
 		if (commit2_v && commit2_tgt==`UO_TMP && commit2_rfw)
-			tmp <= commit2_bus;
+			tmpx <= commit2_bus;
 		else if (commit1_v && commit1_tgt==`UO_TMP && commit1_rfw)
-			tmp <= commit1_bus;
+			tmpx <= commit1_bus;
 		else if (commit0_v && commit0_tgt==`UO_TMP && commit0_rfw)
-			tmp <= commit0_bus;
+			tmpx <= commit0_bus;
+		else
+			tmpx <= tmp;
 	end
+always @(posedge clk)
+	tmp <= tmpx;
 
 reg [15:0] argT [0:QSLOTS-1];
 reg [15:0] argB [0:QSLOTS-1];
@@ -3524,7 +3557,7 @@ else begin
 	if (fcu_v) begin
 		fcu_done <= `TRUE;
 		fcu_sr_bus <= (fcu_instr==`UO_JSI) ? (fcu_argS | `UOF_I | (`UOF_B & {8{~fcu_hs}})) : fcu_argS;
-		rob_sr_res[fcu_id] <= (fcu_instr==`UO_JSI) ? (fcu_argS | `UOF_I | (`UOF_B & {8{~fcu_hs}})) : fcu_argS;
+		rob_sr_res[fcu_rid] <= (fcu_instr==`UO_JSI) ? (fcu_argS | `UOF_I | (`UOF_B & {8{~fcu_hs}})) : fcu_argS;
 		//iq_ma  [ fcu_id ] <= fcu_misspc;
 	  rob_res [ fcu_rid ] <= rfcu_bus;
 	  rob_exc [ fcu_rid ] <= fcu_exc;
@@ -3591,9 +3624,9 @@ else begin
 
 	for (n = 0; n < IQ_ENTRIES; n = n + 1)
 	begin
-		setargs(n,{1'b0,commit0_id},commit0_v,commit0_bus);
-		setargs(n,{1'b0,commit1_id},commit1_v,commit1_bus);
-		setargs(n,{1'b0,commit2_id},commit2_v,commit2_bus);
+		setargs(n,{1'b0,commit0_id},commit0_v & commit0_rfw,commit0_bus);
+		setargs(n,{1'b0,commit1_id},commit1_v & commit1_rfw,commit1_bus);
+		setargs(n,{1'b0,commit2_id},commit2_v & commit2_rfw,commit2_bus);
 
 		setargs(n,{1'b0,alu0_rid},alu0_v,ralu0_bus);
 		if (`NUM_ALU > 1)
@@ -3610,9 +3643,9 @@ else begin
 		if (`NUM_MEM > 1)
 			setargs(n,{1'b0,dramB_rid},dramB_v,rdramB_bus);
 			
-		set_sr_args(n,{1'b0,commit0_id},commit0_v,commit0_sr_bus);
-		set_sr_args(n,{1'b0,commit1_id},commit1_v,commit1_sr_bus);
-		set_sr_args(n,{1'b0,commit2_id},commit2_v,commit2_sr_bus);
+		set_sr_args(n,{1'b0,commit0_id},commit0_v && commit0_sr_tgts!=8'h00,commit0_sr_bus);
+		set_sr_args(n,{1'b0,commit1_id},commit1_v && commit1_sr_tgts!=8'h00,commit1_sr_bus);
+		set_sr_args(n,{1'b0,commit2_id},commit2_v && commit2_sr_tgts!=8'h00,commit2_sr_bus);
 
 		set_sr_args(n,{1'b0,alu0_rid},alu0_v,alu0_sro);
 		if (`NUM_ALU > 1)
@@ -4462,7 +4495,7 @@ begin
 		end
 	for (n = 0; n < IQ_ENTRIES; n = n + 1)
 		if (iq_v[n])
-			iq_sn[n] <= iq_sn[n] - tosub;
+			iq_sn[n] <= (tosub > iq_sn[n]) ? 1'd0 : iq_sn[n] - tosub;
 end
 endtask
 

@@ -146,6 +146,8 @@
 `define UO_ROLB	6'h27
 `define UO_RORB	6'h28
 `define UO_JSI	6'h29
+`define UO_CLD	6'h2A
+`define UO_SED	6'h2B
 
 `define UO_NOP_MOP	{`UO_NOP,`UO_ZERO,`UO_ZR,`UO_ZR}
 
