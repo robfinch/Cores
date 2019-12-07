@@ -44,6 +44,7 @@ case(isn[15:10])
 `UO_ANDB,`UO_BITB,`UO_ORB,`UO_EORB,
 `UO_ASLB,`UO_LSRB,`UO_RORB,`UO_ROLB,
 `UO_SEC,`UO_CLC,`UO_SEI,`UO_CLI,`UO_CLV,
+`UO_SED,`UO_CLD,`UO_SEB,`UO_CLB,
 `UO_MOV:
 	IsAlu = TRUE;
 default:	IsAlu = FALSE;
@@ -149,6 +150,8 @@ endfunction
 
 function fnNeedSr;
 input [15:0] isn;
+fnNeedSr = TRUE;
+/*
 case(isn[15:10])
 `UO_STB,`UO_STBW:
 	fnNeedSr = isn[5:3]==`UO_SR;
@@ -159,6 +162,7 @@ case(isn[15:10])
 default:
 	fnNeedSr = FALSE;
 endcase
+*/
 endfunction
 
 function fnWrap;

@@ -83,7 +83,6 @@
 
 
 `define UO_ACC	3'd0
-`define UO_ZR		3'd0
 `define UO_XR		3'd1
 `define UO_YR		3'd2
 `define UO_SP		3'd3
@@ -92,6 +91,7 @@
 `define UO_PC2	3'd6
 `define UO_SR		3'd7
 `define UO_M1R	3'd6
+`define UO_ZR		3'd7
 
 `define UO_ZERO	4'h0
 `define UO_P1		4'h1
@@ -148,6 +148,8 @@
 `define UO_JSI	6'h29
 `define UO_CLD	6'h2A
 `define UO_SED	6'h2B
+`define UO_SEB	6'h2C
+`define UO_CLB	6'h2D
 
 `define UO_NOP_MOP	{`UO_NOP,`UO_ZERO,`UO_ZR,`UO_ZR}
 

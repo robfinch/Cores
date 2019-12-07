@@ -26,16 +26,13 @@
 `include "rtf65004-defines.sv"
 
 module EvalBranch(instr, sr, takb);
-parameter WID=128;
-input [15:0] instr;
+input [5:0] instr;
 input [7:0] sr;
 output reg takb;
 
-wire [5:0] opcode = instr[15:10];
-
 //Evaluate branch condition
 always @*
-case(opcode)
+case(instr)
 `UO_BEQ:		takb <=  sr[1];
 `UO_BCS:		takb <=  sr[0];
 `UO_BVS:		takb <=  sr[6];

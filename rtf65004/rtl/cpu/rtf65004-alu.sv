@@ -74,7 +74,7 @@ case(op)
 	end
 `UO_SBCB:
 	begin
-		s_o[0] = o[8];
+		s_o[0] = ~o[8];
 		s_o[1] = o[7:0]==8'h00;
 		s_o[6] = (1'b1 ^ o[7] ^ src1[7] ^ src2[7]) & (dst[7] ^ src1[7] ^ src2[7]);
 		s_o[7] = o[7];
@@ -99,8 +99,12 @@ case(op)
 `UO_CLC:	s_o[0] = 1'b0;
 `UO_SEC:	s_o[0] = 1'b1;
 `UO_CLV:	s_o[6] = 1'b0;
-`UO_SEI:	s_o[3] = 1'b1;
-`UO_CLI:	s_o[3] = 1'b0;
+`UO_SEI:	s_o[2] = 1'b1;
+`UO_CLI:	s_o[2] = 1'b0;
+`UO_SED:	s_o[3] = 1'b1;
+`UO_CLD:	s_o[3] = 1'b0;
+`UO_SEB:	s_o[4] = 1'b1;
+`UO_CLB:	s_o[4] = 1'b0;
 default:
 	s_o = 8'h00;
 endcase
