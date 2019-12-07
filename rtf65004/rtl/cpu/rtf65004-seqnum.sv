@@ -50,15 +50,15 @@ begin
 end
 endfunction
 
-assign tosub = sn_dec(hi_amt);
+assign tosub = 0;//sn_dec(hi_amt);
 
 always @*
 begin
 maxsn = 1'd0;
 for (n = 0; n < IQ_ENTRIES; n = n + 1)
-	if (iq_sn[n] > maxsn && iq_v[n])
+	if (iq_sn[n] > maxsn)// && iq_v[n])
 		maxsn = iq_sn[n];
-maxsn = maxsn - tosub;
+//maxsn = maxsn - tosub;
 end
 
 endmodule

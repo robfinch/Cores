@@ -81,7 +81,7 @@
 // can overflow a little bit. Since queue sizes that are an exact power of two
 // are not allowed, it's just the ceiliing log2 of the queue size. For a
 // fifteen entry queue this works out to a five bit number.
-`define SNBIT			$clog2(IQ_ENTRIES)
+`define SNBIT			$clog2(IQ_ENTRIES)+2
 `define SNBITS		`SNBIT:0
 
 // The following constant controls the maximum number of instructions that will

@@ -41,7 +41,7 @@ output reg [FSLOTS-1:0] predict_taken;
 
 integer n;
 
-reg [AMSB:0] pcs [0:31];
+reg [AMSB+1:0] pcs [0:31];
 reg [AMSB:0] pc = 1'd0;
 reg takbx;
 reg [4:0] pcshead,pcstail;
@@ -81,7 +81,7 @@ if (rst)
 	pcstail <= 5'd0;
 else begin
 	if (xisBr) begin
-		pcs[pcstail] <= {xipx[AMSB:1],xtkb};
+		pcs[pcstail] <= {xtkb,xipx[AMSB:0]};
 		pcstail <= pcstail + 5'd1;
 	end
 end
@@ -92,8 +92,8 @@ if (rst)
 else begin
 	wrhist <= 1'b0;
 	if (pcshead != pcstail) begin
-		pc <= pcs[pcshead];
-		takbx <= pcs[pcshead][0];
+		pc <= pcs[pcshead][AMSB:0];
+		takbx <= pcs[pcshead][AMSB+1];
 		wrhist <= 1'b1;
 		pcshead <= pcshead + 5'd1;
 	end

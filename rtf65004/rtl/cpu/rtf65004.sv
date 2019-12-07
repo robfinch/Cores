@@ -28,6 +28,7 @@
 // 41136 65818
 // 42757 68411
 // 43714 69942
+// 44792 71667
 `include "rtf65004-config.sv"
 `include "rtf65004-defines.sv"
 
@@ -173,6 +174,8 @@ reg [31:0] uop_stomped;
 wire [31:0] uop_committed;
 reg [31:0] ic_stalls;
 reg [31:0] br_override;
+reg [31:0] br_total;
+reg [31:0] br_missed;
 
 wire [2:0] queuedCnt;
 wire [2:0] rqueuedCnt;
@@ -3072,6 +3075,17 @@ else begin
 	for (n = 0; n < IQ_ENTRIES; n = n + 1)
 		ins_stomped = ins_stomped + iq_stomp[n];
 end
+always @(posedge clk_i)
+if (rst_i)
+	br_missed <= 0;
+else
+	br_missed <= br_missed + (fcu_branch & fcu_branchmiss);
+always @(posedge clk_i)
+if (rst_i)
+	br_total <= 0;
+else
+	br_total <= br_total + (fcu_branch & fcu_v);
+
 
 always @(posedge clk_i)
 if (rst_i) begin
@@ -3094,7 +3108,7 @@ if (rst_i) begin
 	end
   for (n = 0; n < IQ_ENTRIES; n = n + 1) begin
   	iq_state[n] <= IQS_INVALID;
-		iq_sn[n] <= 1'd0;
+		iq_sn[n] <= n;
 		iq_pt[n] <= FALSE;
 		iq_bt[n] <= FALSE;
 		iq_br[n] <= FALSE;
@@ -3194,6 +3208,7 @@ if (rst_i) begin
 		agen1_argB <= 1'd0;
 		agen1_argC <= 1'd0;
 		agen1_dataready <= FALSE;
+		fcu_branch <= 1'd0;
 		fcu_sr_tgts <= 8'h00;
 `endif
      fcu_dataready <= 0;
@@ -4389,7 +4404,7 @@ endcase
 			);
 	$display ("------------------------------------------------------------------------ Dispatch Buffer -----------------------------------------------------------------------");
 	for (i=0; i<IQ_ENTRIES; i=i+1) 
-	    $display("%c%c %d: %c%c%c %d %d %c%c %c %c%h %s %d,%d %h %h %d %d %d %h %d %d %d %h %d %d %d %h %o #",
+	    $display("%c%c %d: %c%c%c %d %d %c%c %c %c%h %s %d,%d %h %h %d %d %d %h %d %d %d %h %d %d %d %h %d #",
 		 (i[`QBITS]==heads[0])?"C":".",
 		 (i[`QBITS]==tails[0])?"Q":".",
 		  i[`QBITS],
@@ -4469,6 +4484,8 @@ endcase
     $display("micro-ops stomped by branches: %d ", ins_stomped);
     $display("I$ load stalls cycles: %d", ic_stalls);
     $display("Branch override BTB: %d", br_override);
+    $display("Total branches: %d", br_total);
+    $display("Missed branches: %d", br_missed);
   $display("Write Buffer:");
   for (n = `WB_DEPTH-1; n >= 0; n = n - 1)
   	$display("%c adr: %h dat: %h", wb_v[n]?" ":"*", wb_addr[n], uwb1.wb_data[n]);
@@ -4532,6 +4549,17 @@ begin
 end
 endtask
 
+// Detect overflow of a sequence number, done by testing the high order bit for
+// each queue entry.
+function sn_overflow;
+input dummy;
+begin
+	sn_overflow = FALSE;
+	for (n = 0; n < IQ_ENTRIES; n = n + 1)
+		if (iq_sn[n][`SNBIT])
+			sn_overflow = TRUE;
+end
+endfunction
 
 // Increment the head pointers
 // Also increments the instruction counter
@@ -4562,9 +4590,12 @@ begin
 //					$display("head_inc: IQS_INVALID[%d]",heads[n]);
 			end
 		end
-	for (n = 0; n < IQ_ENTRIES; n = n + 1)
-		if (iq_v[n])
-			iq_sn[n] <= (tosub > iq_sn[n]) ? 1'd0 : iq_sn[n] - tosub;
+	if (sn_overflow(1))
+		for (n = 0; n < IQ_ENTRIES; n = n + 1)
+			iq_sn[n] <= iq_sn[n] - {2'b01,{`SNBIT-2{1'b0}}};
+			
+//		if (iq_v[n])
+//			iq_sn[n] <= /*(tosub > iq_sn[n]) ? 1'd0 : */iq_sn[n] - tosub;
 end
 endtask
 
@@ -4748,7 +4779,7 @@ begin
 	iq_argT_s[ndx] <= rf_source[Rd[slot % FSLOTS]];
 	iq_argB_s[ndx] <= rf_source[Rn[slot % FSLOTS]];
 	iq_argS_s[ndx] <= rf_source[7];
-	iq_pt[ndx] <= predict_taken[slot % FSLOTS];
+	iq_pt[ndx] <= uoq_takb[(uoq_head+slot) % UOQ_ENTRIES];
 	iq_tgt[ndx] <= uoq_uop[(uoq_head+slot) % UOQ_ENTRIES][5:3];
 	set_insn(ndx,id_bus);
 	rob_pc[rid] <= uoq_pc[(uoq_head+slot) % UOQ_ENTRIES];
