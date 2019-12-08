@@ -56,7 +56,7 @@
 // is used to indicate and invalid value.
 // If set greater than 10, then memory instructions won't
 // issue until they are within 10 of the head of the queue.
-`define IQ_ENTRIES	13		// (3 to 15)	// number of entries in dispatch queue
+`define IQ_ENTRIES	11		// (3 to 15)	// number of entries in dispatch queue
 // The number of entries in the re-order buffer should not be greater than
 // the number of entries in the dispatch buffer or some of them will sit
 // empty all the time.
@@ -123,7 +123,7 @@
 
 `define FCU_RA		pc			// return address if no RSB
 // Comment out the following to remove bypassing logic on the functional units
-//`define FU_BYPASS	1
+`define FU_BYPASS	1
 
 `define SUPPORT_TLB		1
 
