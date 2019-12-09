@@ -36,7 +36,7 @@
 // of address bits processed. The test system for instance has only 512MB of
 // memory, so the address size is limited to 32 bits.
 // ** The ASID is stored in the upper 8 bits of the address
-`define AMSB			15
+`define AMSB			23
 `define ABITS			`AMSB:0
 
 // The following should match the defintion in the fpConfig.sv file.
@@ -47,7 +47,7 @@
 // Number of fetch slots
 `define FSLOTS		2
 
-`define UOQ_ENTRIES	16
+`define UOQ_ENTRIES	12
 `define UOQ_BIT 	$clog2(UOQ_ENTRIES)
 `define UOQ_BITS	`UOQ_BIT:0
 
@@ -56,7 +56,7 @@
 // is used to indicate and invalid value.
 // If set greater than 10, then memory instructions won't
 // issue until they are within 10 of the head of the queue.
-`define IQ_ENTRIES	11		// (3 to 15)	// number of entries in dispatch queue
+`define IQ_ENTRIES	12		// (3 to 15)	// number of entries in dispatch queue
 // The number of entries in the re-order buffer should not be greater than
 // the number of entries in the dispatch buffer or some of them will sit
 // empty all the time.

@@ -29,11 +29,11 @@ module programCounter(rst, clk,
 	commit0_tgt, commit1_tgt, commit2_tgt,
 	q1, q2, insnx, freezepc, 
 	phit, branchmiss, misspc, len1, len2, len3,
-	jc, rts, br, take_branch, btgt, pc, pcd, pc_chg, branch_pc, 
+	jc, jcl, rts, br, take_branch, btgt, pc, pcd, pc_chg, branch_pc, 
 	ra, pc_override,
 	debug_on);
-parameter AMSB = 15;
-parameter RSTIP = 16'hFFFC;
+parameter AMSB = 23;
+parameter RSTIP = 24'h00FFFC;
 parameter FSLOTS = `FSLOTS;
 parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
@@ -42,15 +42,15 @@ input clk;
 input commit0_v;
 input commit1_v;
 input commit2_v;
-input [15:0] commit0_bus;
-input [15:0] commit1_bus;
-input [15:0] commit2_bus;
+input [23:0] commit0_bus;
+input [23:0] commit1_bus;
+input [23:0] commit2_bus;
 input [2:0] commit0_tgt;
 input [2:0] commit1_tgt;
 input [2:0] commit2_tgt;
 input q2;
 input q1;
-input [23:0] insnx [0:FSLOTS-1];
+input [31:0] insnx [0:FSLOTS-1];
 input freezepc;
 input phit;
 input branchmiss;
@@ -59,6 +59,7 @@ input [2:0] len1;
 input [2:0] len2;
 input [2:0] len3;
 input [FSLOTS-1:0] jc;
+input [FSLOTS-1:0] jcl;
 input [FSLOTS-1:0] rts;
 input [FSLOTS-1:0] br;
 input [FSLOTS-1:0] take_branch;
@@ -156,28 +157,34 @@ else begin
 			branch_pc <= ra;
 		else if (take_branch[0]) begin
 			$display("take branch 0");
-			branch_pc <= pc + {{8{insnx[0][15]}},insnx[0][15:8]} + 4'd2;
+			branch_pc[15:0] <= pc[15:0] + {{8{insnx[0][15]}},insnx[0][15:8]} + 4'd2;
 		end
 		else if (jc[0])
-			branch_pc <= insnx[0][23:8];
+			branch_pc[15:0] <= insnx[0][23:8];
+		else if (jcl[0])
+			branch_pc <= insnx[0][31:8];
 	end
 	else if (q2) begin
 		if (rts[0])
 			branch_pc <= ra;
 		else if (take_branch[0]) begin
 			$display("take branch 0");
-			branch_pc <= pc + {{8{insnx[0][15]}},insnx[0][15:8]} + 4'd2;
+			branch_pc[15:0] <= pc[15:0] + {{8{insnx[0][15]}},insnx[0][15:8]} + 4'd2;
 		end
 		else if (jc[0])
-			branch_pc <= insnx[0][23:8];
+			branch_pc[15:0] <= insnx[0][23:8];
+		else if (jcl[0])
+			branch_pc <= insnx[0][31:8];
 		else if (rts[1])
 			branch_pc <= ra;
 		else if (take_branch[1]) begin
 			$display("take branch 1");
-			branch_pc <= pc + {{8{insnx[1][15]}},insnx[1][15:8]} + len1 + 4'd2;
+			branch_pc[15:0] <= pc[15:0] + {{8{insnx[1][15]}},insnx[1][15:8]} + len1 + 4'd2;
 		end
 		else if (jc[1])
-			branch_pc <= insnx[1][23:8];
+			branch_pc[15:0] <= insnx[1][23:8];
+		else if (jcl[1])
+			branch_pc <= insnx[1][31:8];
 	end
 end
 

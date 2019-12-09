@@ -25,10 +25,10 @@
 
 module rtf65004_alu(op, dst, src1, src2, o, s_i, s_o, idle);
 input [5:0] op;
-input [15:0] dst;
-input [15:0] src1;
-input [15:0] src2;
-output reg [15:0] o;
+input [23:0] dst;
+input [23:0] src1;
+input [23:0] src2;
+output reg [23:0] o;
 input [7:0] s_i;
 output reg [7:0] s_o;
 output idle;

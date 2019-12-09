@@ -41,6 +41,7 @@ case(instr)
 `UO_BVC:		takb <= !sr[6];
 `UO_BMI:		takb <=  sr[7];
 `UO_BPL:		takb <= !sr[7];
+`UO_BRA:		takb <= `TRUE;
 default:	takb <= `TRUE;
 endcase
 

@@ -24,7 +24,7 @@
 `include "rtf65004-defines.sv"
 
 module agen(wrap, src1, src2, ma, idle);
-parameter AMSB = 15;
+parameter AMSB = 23;
 parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
 input wrap;
@@ -37,7 +37,7 @@ assign idle = 1'b1;
 
 always @*
 	if (wrap)
-		ma <= {src1[15:8],src1[7:0] + src2[7:0]};
+		ma <= {src1[23:8],src1[7:0] + src2[7:0]};
 	else
 		ma <= src1 + src2;
 

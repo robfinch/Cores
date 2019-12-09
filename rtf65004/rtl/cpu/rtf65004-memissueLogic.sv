@@ -30,7 +30,7 @@ module memissueLogic (heads, iq_v, iq_memready, iq_out, iq_done, iq_mem, iq_agen
 parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
 parameter IQ_ENTRIES = `IQ_ENTRIES;
-parameter AMSB = 15;
+parameter AMSB = 23;
 localparam QCHKS = `IQ_ENTRIES > 9 ? 10 : `IQ_ENTRIES;
 input [`QBITS] heads [0:IQ_ENTRIES-1];
 input [IQ_ENTRIES-1:0] iq_v;
@@ -41,7 +41,7 @@ input [IQ_ENTRIES-1:0] iq_mem;
 input [IQ_ENTRIES-1:0] iq_agen;
 input [IQ_ENTRIES-1:0] iq_load;
 input [IQ_ENTRIES-1:0] iq_store;
-input [16:0] iq_sel [0:IQ_ENTRIES-1];
+input [17:0] iq_sel [0:IQ_ENTRIES-1];
 input [IQ_ENTRIES-1:0] iq_fc;
 input [IQ_ENTRIES-1:0] iq_aq;
 input [IQ_ENTRIES-1:0] iq_rl;
@@ -49,7 +49,7 @@ input [IQ_ENTRIES-1:0] iq_memsb;
 input [IQ_ENTRIES-1:0] iq_memdb;
 input [IQ_ENTRIES-1:0] iq_stomp;
 input [IQ_ENTRIES-1:0] iq_canex;
-input [7:0] wb_v;
+input [`WB_DEPTH-1:0] wb_v;
 input inwb0;
 input inwb1;
 input sple;
@@ -58,6 +58,7 @@ output reg [IQ_ENTRIES-1:0] memissue = 1'd0;
 output reg [1:0] issue_count;
 
 integer n, m;
+reg [7:0] store_count;
 reg [QCHKS-1:0] adr_ok [0:QCHKS-1];
 reg [QCHKS-1:0] memsb_ok [0:QCHKS-1];
 reg [QCHKS-1:0] memdb_ok [0:QCHKS-1];
@@ -68,15 +69,17 @@ reg [QCHKS-1:0] memdb_pass;
 always @*
 for (n = 0; n < QCHKS; n = n + 1) begin
 	for (m = 0; m < QCHKS; m = m + 1) begin
-		adr_ok[n][m] = 1'b0;
+		adr_ok[n][m] = 1'b1;
 		if (m < n) begin
 			adr_ok[n][m] = 
-					(!iq_mem[heads[m]] || (iq_agen[heads[m]] & iq_out[heads[m]])  || iq_done[heads[m]]
-						|| ((((iq_ma[heads[n]][AMSB:4] != iq_ma[heads[m]][AMSB:4]) && !(iq_sel[heads[n]][16] || iq_sel[heads[m]][16])) || iq_out[heads[m]] || iq_done[heads[m]])))
-						// If we have two loads to overlapping addresses we don't care.
-						|| (iq_load[heads[n]] && iq_load[heads[m]])
-						// Or select lines don't overlap
-						|| ((iq_sel[heads[n]] & iq_sel[heads[m]]) == 17'd0);
+						// Select lines don't overlap
+						((iq_sel[heads[n]] & iq_sel[heads[m]]) == 18'd0)
+						&& ((!iq_mem[heads[m]] /*|| (iq_agen[heads[m]] & iq_out[heads[m]]) */ || iq_done[heads[m]]
+							|| (((iq_ma[heads[n]][AMSB:4] != iq_ma[heads[m]][AMSB:4]) && !(|iq_sel[heads[n]][17:16] || |iq_sel[heads[m]][17:16])) || iq_out[heads[m]] || iq_done[heads[m]]))
+							// If we have two loads to overlapping addresses we don't care.
+							|| (iq_load[heads[n]] && iq_load[heads[m]])
+						)
+						;
 		end
 	end
 end
@@ -131,27 +134,32 @@ generate begin : gMemIssue
 always @*
 begin
 	issue_count = 0;
+	store_count = 0;
 	 memissue[ heads[0] ] =	iq_memready[ heads[0] ] && !(iq_load[heads[0]] && inwb0);		// first in line ... go as soon as ready
 	 if (memissue[heads[0]])
 	 	issue_count = issue_count + 1;
+	 if (iq_store[heads[0]])
+	 	store_count = store_count + 1;
 
 	 memissue[ heads[1] ] =	~iq_stomp[heads[1]] && iq_memready[ heads[1] ]		// addr and data are valid
 					&& issue_count < `NUM_MEM
 					// ... and no preceding instruction is ready to go
 					//&& ~iq_memready[heads[0]]
 					// ... and there is no address-overlap with any preceding instruction
-					&& adr_pass[1]
+					&& adr_pass[heads[1]]
 					// ... if a release, any prior memory ops must be done before this one
 					&& (iq_rl[heads[1]] ? iq_done[heads[0]] || !iq_v[heads[0]] || !iq_mem[heads[0]] : 1'b1)
 					// ... if a preivous op has the aquire bit set
 					&& !(iq_aq[heads[0]] && iq_v[heads[0]])
 					// ... and there's nothing in the write buffer during a load
-					&& !(iq_load[heads[1]] && (inwb1 || iq_store[heads[0]]))
+					&& (!(iq_load[heads[1]] && inwb1) || store_count > 8'd0)
 					// ... and, if it is a store, there is no chance of it being undone
 					&& ((iq_load[heads[1]] && sple) ||
 					   !(iq_fc[heads[0]]||iq_canex[heads[0]]));
 	 if (memissue[heads[1]])
 	 	issue_count = issue_count + 1;
+	 if (iq_store[heads[1]])
+	 	store_count = store_count + 1;
 
 	 memissue[ heads[2] ] =	~iq_stomp[heads[2]] && iq_memready[ heads[2] ]		// addr and data are valid
 					// ... and no preceding instruction is ready to go
@@ -159,7 +167,7 @@ begin
 					//&& ~iq_memready[heads[0]]
 					//&& ~iq_memready[heads[1]] 
 					// ... and there is no address-overlap with any preceding instruction
-					&& adr_pass[2]
+					&& adr_pass[heads[2]]
 					// ... if a release, any prior memory ops must be done before this one
 					&& (iq_rl[heads[2]] ? (iq_done[heads[0]] || !iq_v[heads[0]] || !iq_mem[heads[0]])
 										 && (iq_done[heads[1]] || !iq_v[heads[1]] || !iq_mem[heads[1]])
@@ -168,17 +176,18 @@ begin
 					&& !(iq_aq[heads[0]] && iq_v[heads[0]])
 					&& !(iq_aq[heads[1]] && iq_v[heads[1]])
 					// ... and there's nothing in the write buffer during a load
-					&& !(iq_load[heads[2]] && (wb_v!=1'b0
-						|| iq_store[heads[0]] || iq_store[heads[1]]))
+					&& !(iq_load[heads[2]] && (wb_v!=1'b0 || store_count > 8'd0))
 					// ... and there isn't a barrier, or everything before the barrier is done or invalid
-					&& memsb_pass[2]
-					&& memdb_pass[2]
+					&& memsb_pass[heads[2]]
+					&& memdb_pass[heads[2]]
 					// ... and, if it is a SW, there is no chance of it being undone
 					&& ((iq_load[heads[2]] && sple) ||
 					      !(iq_fc[heads[0]]||iq_canex[heads[0]])
 					   && !(iq_fc[heads[1]]||iq_canex[heads[1]]));
 	 if (memissue[heads[2]])
 	 	issue_count = issue_count + 1;
+	 if (iq_store[heads[2]])
+	 	store_count = store_count + 1;
 					        
 	 memissue[ heads[3] ] =	~iq_stomp[heads[3]] && iq_memready[ heads[3] ]		// addr and data are valid
 					// ... and no preceding instruction is ready to go
@@ -187,29 +196,31 @@ begin
 					//&& ~iq_memready[heads[1]] 
 					//&& ~iq_memready[heads[2]] 
 					// ... and there is no address-overlap with any preceding instruction
-					&& adr_pass[3]
+					&& adr_pass[heads[3]]
 					// ... if a release, any prior memory ops must be done before this one
-					&& (iq_rl[heads[3]] ? (iq_done[heads[0]] || !iq_v[heads[0]] || !iq_mem[heads[0]])
-										 && (iq_done[heads[1]] || !iq_v[heads[1]] || !iq_mem[heads[1]])
-										 && (iq_done[heads[2]] || !iq_v[heads[2]] || !iq_mem[heads[2]])
-											 : 1'b1)
+//					&& (iq_rl[heads[3]] ? (iq_done[heads[0]] || !iq_v[heads[0]] || !iq_mem[heads[0]])
+//										 && (iq_done[heads[1]] || !iq_v[heads[1]] || !iq_mem[heads[1]])
+//										 && (iq_done[heads[2]] || !iq_v[heads[2]] || !iq_mem[heads[2]])
+//											 : 1'b1)
 					// ... if a preivous op has the aquire bit set
-					&& !(iq_aq[heads[0]] && iq_v[heads[0]])
-					&& !(iq_aq[heads[1]] && iq_v[heads[1]])
-					&& !(iq_aq[heads[2]] && iq_v[heads[2]])
+//					&& !(iq_aq[heads[0]] && iq_v[heads[0]])
+//					&& !(iq_aq[heads[1]] && iq_v[heads[1]])
+//					&& !(iq_aq[heads[2]] && iq_v[heads[2]])
 					// ... and there's nothing in the write buffer during a load
-					&& !(iq_load[heads[3]] && (wb_v!=1'b0
-						|| iq_store[heads[0]] || iq_store[heads[1]] || iq_store[heads[2]]))
+					&& !(iq_load[heads[3]] && (wb_v!=1'b0 || store_count > 8'd0))
 					// ... and there isn't a barrier, or everything before the barrier is done or invalid
-					&& memsb_pass[3]
-					&& memdb_pass[3]
+					&& memsb_pass[heads[3]]
+					&& memdb_pass[heads[3]]
                     // ... and, if it is a SW, there is no chance of it being undone
 					&& ((iq_load[heads[3]] && sple) ||
 		      		      !(iq_fc[heads[0]]||iq_canex[heads[0]])
                        && !(iq_fc[heads[1]]||iq_canex[heads[1]])
-                       && !(iq_fc[heads[2]]||iq_canex[heads[2]]));
+                       && !(iq_fc[heads[2]]||iq_canex[heads[2]]))
+          ;
 	 if (memissue[heads[3]])
 	 	issue_count = issue_count + 1;
+	 if (iq_store[heads[3]])
+	 	store_count = store_count + 1;
 
 	if (IQ_ENTRIES > 4) begin
 	 memissue[ heads[4] ] =	~iq_stomp[heads[4]] && iq_memready[ heads[4] ]		// addr and data are valid
@@ -220,7 +231,7 @@ begin
 					//&& ~iq_memready[heads[2]] 
 					//&& ~iq_memready[heads[3]] 
 					// ... and there is no address-overlap with any preceding instruction
-					&& adr_pass[4]
+					&& adr_pass[heads[4]]
 					// ... if a release, any prior memory ops must be done before this one
 					&& (iq_rl[heads[4]] ? (iq_done[heads[0]] || !iq_v[heads[0]] || !iq_mem[heads[0]])
 										 && (iq_done[heads[1]] || !iq_v[heads[1]] || !iq_mem[heads[1]])
@@ -233,11 +244,10 @@ begin
 					&& !(iq_aq[heads[2]] && iq_v[heads[2]])
 					&& !(iq_aq[heads[3]] && iq_v[heads[3]])
 					// ... and there's nothing in the write buffer during a load
-					&& !(iq_load[heads[4]] && (wb_v!=1'b0
-						|| iq_store[heads[0]] || iq_store[heads[1]] || iq_store[heads[2]] || iq_store[heads[3]]))
+					&& !(iq_load[heads[4]] && (wb_v!=1'b0 || store_count > 8'd0))
 					// ... and there isn't a barrier, or everything before the barrier is done or invalid
-					&& memsb_pass[4]
-					&& memdb_pass[4]
+					&& memsb_pass[heads[4]]
+					&& memdb_pass[heads[4]]
 					// ... and, if it is a SW, there is no chance of it being undone
 					&& ((iq_load[heads[4]] && sple) ||
 		      		      !(iq_fc[heads[0]]||iq_canex[heads[0]])
@@ -247,6 +257,8 @@ begin
 	 if (memissue[heads[4]])
 	 	issue_count = issue_count + 1;
 	end
+	 if (iq_store[heads[4]])
+	 	store_count = store_count + 1;
 
 	if (IQ_ENTRIES > 5) begin
 	 memissue[ heads[5] ] =	~iq_stomp[heads[5]] && iq_memready[ heads[5] ]		// addr and data are valid
@@ -258,7 +270,7 @@ begin
 					//&& ~iq_memready[heads[3]] 
 					//&& ~iq_memready[heads[4]] 
 					// ... and there is no address-overlap with any preceding instruction
-					&& adr_pass[5]
+					&& adr_pass[heads[5]]
 					// ... if a release, any prior memory ops must be done before this one
 					&& (iq_rl[heads[5]] ? (iq_done[heads[0]] || !iq_v[heads[0]] || !iq_mem[heads[0]])
 										 && (iq_done[heads[1]] || !iq_v[heads[1]] || !iq_mem[heads[1]])
@@ -273,12 +285,10 @@ begin
 					&& !(iq_aq[heads[3]] && iq_v[heads[3]])
 					&& !(iq_aq[heads[4]] && iq_v[heads[4]])
 					// ... and there's nothing in the write buffer during a load
-					&& !(iq_load[heads[5]] && (wb_v!=1'b0
-						|| iq_store[heads[0]] || iq_store[heads[1]] || iq_store[heads[2]] || iq_store[heads[3]]
-						|| iq_store[heads[4]]))
+					&& !(iq_load[heads[5]] && (wb_v!=1'b0 || store_count > 8'd0))
 					// ... and there isn't a barrier, or everything before the barrier is done or invalid
-					&& memsb_pass[5]
-					&& memdb_pass[5]
+					&& memsb_pass[heads[5]]
+					&& memdb_pass[heads[5]]
 					// ... and, if it is a SW, there is no chance of it being undone
 					&& ((iq_load[heads[5]] && sple) ||
 		      		      !(iq_fc[heads[0]]||iq_canex[heads[0]])
@@ -288,6 +298,8 @@ begin
                        && !(iq_fc[heads[4]]||iq_canex[heads[4]]));
 	 if (memissue[heads[5]])
 	 	issue_count = issue_count + 1;
+	 if (iq_store[heads[5]])
+	 	store_count = store_count + 1;
 	end
 
 `ifdef FULL_ISSUE_LOGIC
@@ -302,7 +314,7 @@ if (IQ_ENTRIES > 6) begin
 					//&& ~iq_memready[heads[4]] 
 					//&& ~iq_memready[heads[5]] 
 					// ... and there is no address-overlap with any preceding instruction
-					&& adr_pass[6]
+					&& adr_pass[heads[6]]
 					&& (iq_rl[heads[6]] ? (iq_done[heads[0]] || !iq_v[heads[0]] || !iq_mem[heads[0]])
 										 && (iq_done[heads[1]] || !iq_v[heads[1]] || !iq_mem[heads[1]])
 										 && (iq_done[heads[2]] || !iq_v[heads[2]] || !iq_mem[heads[2]])
@@ -318,12 +330,10 @@ if (IQ_ENTRIES > 6) begin
 					&& !(iq_aq[heads[4]] && iq_v[heads[4]])
 					&& !(iq_aq[heads[5]] && iq_v[heads[5]])
 					// ... and there's nothing in the write buffer during a load
-					&& !(iq_load[heads[6]] && (wb_v!=1'b0
-						|| iq_store[heads[0]] || iq_store[heads[1]] || iq_store[heads[2]] || iq_store[heads[3]]
-						|| iq_store[heads[4]] || iq_store[heads[5]]))
+					&& !(iq_load[heads[6]] && (wb_v!=1'b0 || store_count > 8'd0))
 					// ... and there isn't a barrier, or everything before the barrier is done or invalid
-					&& memsb_pass[6]
-					&& memdb_pass[6]
+					&& memsb_pass[heads[6]]
+					&& memdb_pass[heads[6]]
 					// ... and, if it is a SW, there is no chance of it being undone
 					&& ((iq_load[heads[6]] && sple) ||
 		      		      !(iq_fc[heads[0]]||iq_canex[heads[0]])
@@ -335,6 +345,8 @@ if (IQ_ENTRIES > 6) begin
 	 if (memissue[heads[6]])
 	 	issue_count = issue_count + 1;
 	end
+	 if (iq_store[heads[6]])
+	 	store_count = store_count + 1;
 
 	if (IQ_ENTRIES > 7) begin
 	memissue[ heads[7] ] =	~iq_stomp[heads[7]] && iq_memready[ heads[7] ]		// addr and data are valid
@@ -348,7 +360,7 @@ if (IQ_ENTRIES > 6) begin
 					//&& ~iq_memready[heads[5]] 
 					//&& ~iq_memready[heads[6]] 
 					// ... and there is no address-overlap with any preceding instruction
-					&& adr_pass[7]
+					&& adr_pass[heads[7]]
 					&& (iq_rl[heads[7]] ? (iq_done[heads[0]] || !iq_v[heads[0]] || !iq_mem[heads[0]])
 										 && (iq_done[heads[1]] || !iq_v[heads[1]] || !iq_mem[heads[1]])
 										 && (iq_done[heads[2]] || !iq_v[heads[2]] || !iq_mem[heads[2]])
@@ -366,12 +378,10 @@ if (IQ_ENTRIES > 6) begin
 					&& !(iq_aq[heads[5]] && iq_v[heads[5]])
 					&& !(iq_aq[heads[6]] && iq_v[heads[6]])
 					// ... and there's nothing in the write buffer during a load
-					&& !(iq_load[heads[7]] && (wb_v!=1'b0
-						|| iq_store[heads[0]] || iq_store[heads[1]] || iq_store[heads[2]] || iq_store[heads[3]]
-						|| iq_store[heads[4]] || iq_store[heads[5]] || iq_store[heads[6]]))
+					&& !(iq_load[heads[7]] && (wb_v!=1'b0 || store_count > 8'd0))
 					// ... and there isn't a barrier, or everything before the barrier is done or invalid
-					&& memsb_pass[7]
-					&& memdb_pass[7]
+					&& memsb_pass[heads[7]]
+					&& memdb_pass[heads[7]]
 					// ... and, if it is a SW, there is no chance of it being undone
 					&& ((iq_load[heads[7]] && sple) ||
 		      		      !(iq_fc[heads[0]]||iq_canex[heads[0]])
@@ -383,6 +393,8 @@ if (IQ_ENTRIES > 6) begin
                        && !(iq_fc[heads[6]]||iq_canex[heads[6]]));
 	 if (memissue[heads[7]])
 	 	issue_count = issue_count + 1;
+	 if (iq_store[heads[7]])
+	 	store_count = store_count + 1;
 	end
 
 	if (IQ_ENTRIES > 8) begin
@@ -397,7 +409,7 @@ if (IQ_ENTRIES > 6) begin
 					//&& ~iq_memready[heads[5]] 
 					//&& ~iq_memready[heads[6]] 
 					// ... and there is no address-overlap with any preceding instruction
-					&& adr_pass[8]
+					&& adr_pass[heads[8]]
 					&& (iq_rl[heads[8]] ? (iq_done[heads[0]] || !iq_v[heads[0]] || !iq_mem[heads[0]])
 										 && (iq_done[heads[1]] || !iq_v[heads[1]] || !iq_mem[heads[1]])
 										 && (iq_done[heads[2]] || !iq_v[heads[2]] || !iq_mem[heads[2]])
@@ -417,12 +429,10 @@ if (IQ_ENTRIES > 6) begin
 					&& !(iq_aq[heads[6]] && iq_v[heads[6]])
 					&& !(iq_aq[heads[7]] && iq_v[heads[7]])
 					// ... and there's nothing in the write buffer during a load
-					&& !(iq_load[heads[8]] && (wb_v!=1'b0
-						|| iq_store[heads[0]] || iq_store[heads[1]] || iq_store[heads[2]] || iq_store[heads[3]]
-						|| iq_store[heads[4]] || iq_store[heads[5]] || iq_store[heads[6]] || iq_store[heads[7]]))
+					&& !(iq_load[heads[8]] && (wb_v!=1'b0 || store_count > 8'd0))
 					// ... and there isn't a barrier, or everything before the barrier is done or invalid
-					&& memsb_pass[8]
-					&& memdb_pass[8]
+					&& memsb_pass[heads[8]]
+					&& memdb_pass[heads[8]]
 					// ... and, if it is a SW, there is no chance of it being undone
 					&& ((iq_load[heads[8]] && sple) ||
 		      		      !(iq_fc[heads[0]]||iq_canex[heads[0]])
@@ -436,6 +446,8 @@ if (IQ_ENTRIES > 6) begin
                        );
 	 if (memissue[heads[8]])
 	 	issue_count = issue_count + 1;
+	 if (iq_store[heads[8]])
+	 	store_count = store_count + 1;
 	end
 
 	if (IQ_ENTRIES > 9) begin
@@ -450,7 +462,7 @@ if (IQ_ENTRIES > 6) begin
 					//&& ~iq_memready[heads[5]] 
 					//&& ~iq_memready[heads[6]] 
 					// ... and there is no address-overlap with any preceding instruction
-					&& adr_pass[9]
+					&& adr_pass[heads[9]]
 					&& (iq_rl[heads[9]] ? (iq_done[heads[0]] || !iq_v[heads[0]] || !iq_mem[heads[0]])
 										 && (iq_done[heads[1]] || !iq_v[heads[1]] || !iq_mem[heads[1]])
 										 && (iq_done[heads[2]] || !iq_v[heads[2]] || !iq_mem[heads[2]])
@@ -472,13 +484,10 @@ if (IQ_ENTRIES > 6) begin
 					&& !(iq_aq[heads[7]] && iq_v[heads[7]])
 					&& !(iq_aq[heads[8]] && iq_v[heads[8]])
 					// ... and there's nothing in the write buffer during a load
-					&& !(iq_load[heads[9]] && (wb_v!=1'b0
-						|| iq_store[heads[0]] || iq_store[heads[1]] || iq_store[heads[2]] || iq_store[heads[3]]
-						|| iq_store[heads[4]] || iq_store[heads[5]] || iq_store[heads[6]] || iq_store[heads[7]]
-						|| iq_store[heads[8]]))
+					&& !(iq_load[heads[9]] && (wb_v!=1'b0 || store_count > 8'd0))
 					// ... and there isn't a barrier, or everything before the barrier is done or invalid
-					&& memsb_pass[9]
-					&& memdb_pass[9]
+					&& memsb_pass[heads[9]]
+					&& memdb_pass[heads[9]]
 					// ... and, if it is a store, there is no chance of it being undone
 					&& ((iq_load[heads[9]] && sple) ||
 		      		      !(iq_fc[heads[0]]||iq_canex[heads[0]])
@@ -493,6 +502,8 @@ if (IQ_ENTRIES > 6) begin
                        );
 	 if (memissue[heads[9]])
 	 	issue_count = issue_count + 1;
+	 if (iq_store[heads[9]])
+	 	store_count = store_count + 1;
 	end
 end
 end

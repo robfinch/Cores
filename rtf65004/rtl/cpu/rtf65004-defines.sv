@@ -76,22 +76,23 @@
 `define UOF_NZ		(`UOF_N|`UOF_Z)
 `define UOF_ALL		8'hFF
 
-`define UO_OP		15:10
-`define UO_LD4	9:6
-`define UO_RD		5:3
-`define UO_RN		2:0
+`define UO_OP		17:12
+`define UO_LD4	11:8
+`define UO_RD		7:4
+`define UO_RN		3:0
 
 
-`define UO_ACC	3'd0
-`define UO_XR		3'd1
-`define UO_YR		3'd2
-`define UO_SP		3'd3
-`define UO_PC		3'd4
-`define UO_TMP	3'd5
-`define UO_PC2	3'd6
-`define UO_SR		3'd7
-`define UO_M1R	3'd6
-`define UO_ZR		3'd7
+`define UO_ACC	4'd0
+`define UO_XR		4'd1
+`define UO_YR		4'd2
+`define UO_SP		4'd3
+`define UO_PC		4'd4
+`define UO_TMP	4'd5
+`define UO_PC2	4'd6
+`define UO_SR		4'd7
+`define UO_M1R	4'd6
+`define UO_ZR		4'd7
+`define UO_PC3	4'h8
 
 `define UO_ZERO	4'h0
 `define UO_P1		4'h1
@@ -100,6 +101,8 @@
 `define UO_100H	4'h7
 `define UO_R8		4'h8
 `define UO_R16	4'h9
+`define UO_R24	4'hA
+`define UO_M4		4'hC
 `define UO_M3		4'hD
 `define UO_FFFEH	4'hE
 `define UO_M2		4'hE
@@ -150,6 +153,11 @@
 `define UO_SED	6'h2B
 `define UO_SEB	6'h2C
 `define UO_CLB	6'h2D
+
+`define UO_LDJ	6'h30		// Load 24 bits
+`define UO_JML	6'h31
+`define UO_BRA	6'h32
+`define UO_STJ	6'h33
 
 `define UO_NOP_MOP	{`UO_NOP,`UO_ZERO,`UO_ZR,`UO_ZR}
 

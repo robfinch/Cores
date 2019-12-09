@@ -69,7 +69,7 @@ input [`QBITSP1] rf_source [0:AREGS-1];
 input [IQ_ENTRIES-1:0] iq_source;
 input [IQ_ENTRIES-1:0] iq_sr_source;
 input [QSLOTS-1:0] take_branch;
-input [2:0] Rd [0:QSLOTS-1];
+input [3:0] Rd [0:QSLOTS-1];
 input [QSLOTS-1:0] queuedOn;
 input [`QBITS] iq_latest_sr_ID;
 input [7:0] slot_sr_tgts [0:QSLOTS-1];
@@ -202,7 +202,7 @@ else begin
 		3'b001:
 			if (queuedOn[0]) begin
 				if (slot_rfw[0]) begin
-					rf_v [Rd[0]] <= `INV;
+					rf_v [Rd[0][2:0]] <= `INV;
 				end
 				if (slot_sr_tgts[0] != 8'h00)
 					rf_v[7] <= `INV;
@@ -210,7 +210,7 @@ else begin
 		3'b010:
 			if (queuedOn[1]) begin
 				if (slot_rfw[1]) begin
-					rf_v [Rd[1]] <= `INV;
+					rf_v [Rd[1][2:0]] <= `INV;
 				end
 				if (slot_sr_tgts[0] != 8'h00)
 					rf_v[7] <= `INV;
@@ -219,14 +219,14 @@ else begin
 			begin
 				if (queuedOn[0]) begin
 					if (slot_rfw[0]) begin
-						rf_v [Rd[0]] <= `INV;
+						rf_v [Rd[0][2:0]] <= `INV;
 					end
 					if (slot_sr_tgts[0] != 8'h00)
 						rf_v[7] <= `INV;
 				end
 				if (queuedOn[1]) begin
 					if (slot_rfw[1]) begin
-						rf_v [Rd[1]] <= `INV;
+						rf_v [Rd[1][2:0]] <= `INV;
 					end
 					if (slot_sr_tgts[1] != 8'h00)
 						rf_v[7] <= `INV;
@@ -235,7 +235,7 @@ else begin
 		3'b100:
 			if (queuedOn[2]) begin
 				if (slot_rfw[2]) begin
-					rf_v [Rd[2]] <= `INV;
+					rf_v [Rd[2][2:0]] <= `INV;
 				end
 				if (slot_sr_tgts[0] != 8'h00)
 					rf_v[7] <= `INV;
@@ -244,14 +244,14 @@ else begin
 			begin
 				if (queuedOn[0]) begin
 					if (slot_rfw[0]) begin
-						rf_v [Rd[0]] <= `INV;
+						rf_v [Rd[0][2:0]] <= `INV;
 					end
 					if (slot_sr_tgts[0] != 8'h00)
 						rf_v[7] <= `INV;
 				end
 				if (queuedOn[2]) begin
 					if (slot_rfw[2]) begin
-						rf_v [Rd[2]] <= `INV;
+						rf_v [Rd[2][2:0]] <= `INV;
 					end
 					if (slot_sr_tgts[2] != 8'h00)
 						rf_v[7] <= `INV;
@@ -261,14 +261,14 @@ else begin
 			begin
 				if (queuedOn[1]) begin
 					if (slot_rfw[1]) begin
-						rf_v [Rd[1]] <= `INV;
+						rf_v [Rd[1][2:0]] <= `INV;
 					end
 					if (slot_sr_tgts[1] != 8'h00)
 						rf_v[7] <= `INV;
 				end
 				if (queuedOn[2]) begin
 					if (slot_rfw[2]) begin
-						rf_v [Rd[2]] <= `INV;
+						rf_v [Rd[2][2:0]] <= `INV;
 					end
 					if (slot_sr_tgts[2] != 8'h00)
 						rf_v[7] <= `INV;
@@ -279,7 +279,7 @@ else begin
 				if (queuedOn[0]) begin
 					if (slot_rfw[0]) begin
 						$display("setting inv0:%h",Rd[0]);
-						rf_v [Rd[0]] <= `INV;
+						rf_v [Rd[0][2:0]] <= `INV;
 					end
 					if (slot_sr_tgts[0] != 8'h00)
 						rf_v[7] <= `INV;
@@ -287,7 +287,7 @@ else begin
 				if (queuedOn[1]) begin
 					if (slot_rfw[1]) begin
 						$display("setting inv1:%h",Rd[1]);
-						rf_v [Rd[1]] <= `INV;
+						rf_v [Rd[1][2:0]] <= `INV;
 					end
 					if (slot_sr_tgts[1] != 8'h00)
 						rf_v[7] <= `INV;
@@ -295,7 +295,7 @@ else begin
 				if (queuedOn[2]) begin
 					if (slot_rfw[2]) begin
 						$display("setting inv2:%h",Rd[2]);
-						rf_v [Rd[2]] <= `INV;
+						rf_v [Rd[2][2:0]] <= `INV;
 					end
 					if (slot_sr_tgts[2] != 8'h00)
 						rf_v[7] <= `INV;

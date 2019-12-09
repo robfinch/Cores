@@ -74,7 +74,7 @@ endmodule
 
 module L1_icache_cmptag4way(rst, clk, nxt, wr, invline, invall, adr, lineno, nxt_lineno, hit, missadr);
 parameter pLines = 128;
-parameter AMSB = 15;
+parameter AMSB = 23;
 localparam pLNMSB = pLines==128 ? 6 : 5;
 localparam pMSB = pLines==128 ? 8 : 7;
 input rst;
@@ -186,7 +186,6 @@ if (adr[5:0] > 6'd43) begin
 				(hit1 & hit1n) | 
 				(hit2 & hit2n) |
 				(hit3 & hit3n);
-	missadr = (hit0|hit1|hit2|hit3) ? nxt_adr : adr;
 end
 else begin
   if (wr) lineno = {lfsro[1:0],adr[pMSB:5]};
@@ -195,8 +194,14 @@ else begin
   else if (hit2)  lineno = {2'b10,adr[pMSB:5]};
   else  lineno = {2'b11,adr[pMSB:5]};
 	hit = hit0|hit1|hit2|hit3;
-	missadr = adr;
 end
+
+always @*
+if (adr[5:0] > 6'd43)
+	missadr = (hit0|hit1|hit2|hit3) ? nxt_adr : adr;
+else
+	missadr = adr;
+
 endmodule
 
 
@@ -205,7 +210,7 @@ endmodule
 
 module L1_icache(rst, clk, nxt, wr, wadr, adr, i, o, fault, hit, invall, invline, missadr);
 parameter pSize = 2;
-parameter AMSB = 15;
+parameter AMSB = 23;
 localparam pLines = pSize==4 ? 128 : 64;
 localparam pLNMSB = pSize==4 ? 6 : 5;
 input rst;
@@ -343,7 +348,7 @@ endmodule
 module L2_icache(rst, clk, nxt, wr, adr, cnt, exv_i, i, err_i, o, hit, invall, invline);
 parameter CAMTAGS = 1'b0;   // 32 way
 parameter FOURWAY = 1'b1;
-parameter AMSB = 15;
+parameter AMSB = 23;
 input rst;
 input clk;
 input nxt;
@@ -419,7 +424,7 @@ endmodule
 
 // Four way set associative tag memory
 module L2_icache_cmptag4way(rst, clk, nxt, wr, wr2, inv, invall, adr, lineno, hit);
-parameter AMSB = 15;
+parameter AMSB = 23;
 input rst;
 input clk;
 input nxt;

@@ -25,7 +25,7 @@
 `include ".\rtf65004-defines.sv"
 
 module idecoder(instr,predict_taken,bus);
-input [15:0] instr;
+input [17:0] instr;
 input predict_taken;
 output reg [`IBTOP:0] bus;
 
@@ -34,10 +34,11 @@ parameter FALSE = 1'b0;
 // Memory access sizes
 parameter byt = 3'd0;
 parameter wyde = 3'd1;
+parameter tbyt = 3'd2;
 
 function IsAlu;
-input [15:0] isn;
-case(isn[15:10])
+input [17:0] isn;
+case(isn[17:12])
 `UO_NOP,
 `UO_LDIB,`UO_ADDW,`UO_ADDB,
 `UO_ADCB,`UO_SBCB,`UO_CMPB,
@@ -52,9 +53,9 @@ endcase
 endfunction
 
 function IsMem;
-input [15:0] isn;
-case(isn[15:10])
-`UO_LDBW,`UO_LDWW,`UO_STBW,`UO_STWW,
+input [17:0] isn;
+case(isn[17:12])
+`UO_LDBW,`UO_LDWW,`UO_STBW,`UO_STWW,`UO_STJ,
 `UO_LDB,`UO_LDW,`UO_STB,`UO_STW:
 	IsMem = TRUE;
 default:
@@ -63,26 +64,26 @@ endcase
 endfunction
 
 function IsFcu;
-input [15:0] isn;
-case(isn[15:10])
-`UO_BEQ,`UO_BNE,`UO_BCS,`UO_BCC,`UO_BVS,`UO_BVC,`UO_BMI,`UO_BPL,
-`UO_JSI,`UO_JMP:
+input [17:0] isn;
+case(isn[17:12])
+`UO_BEQ,`UO_BNE,`UO_BCS,`UO_BCC,`UO_BVS,`UO_BVC,`UO_BMI,`UO_BPL,`UO_BRA,
+`UO_JSI,`UO_JMP,`UO_JML:
 	IsFcu = TRUE;
 default:	IsFcu = FALSE;
 endcase
 endfunction
 
 function IsCmp;
-input [15:0] isn;
-case(isn[15:10])
+input [17:0] isn;
+case(isn[17:12])
 `UO_CMPB:	IsCmp = TRUE;
 default:	IsCmp = FALSE;
 endcase
 endfunction
 
 function IsLoad;
-input [15:0] isn;
-case(isn[15:10])
+input [17:0] isn;
+case(isn[17:12])
 `UO_LDB,`UO_LDW,`UO_LDBW,`UO_LDWW:
 	IsLoad = TRUE;
 default:
@@ -91,9 +92,9 @@ endcase
 endfunction
 
 function IsStore;
-input [15:0] isn;
-case(isn[15:10])
-`UO_STB,`UO_STW,`UO_STBW,`UO_STWW:
+input [17:0] isn;
+case(isn[17:12])
+`UO_STB,`UO_STW,`UO_STBW,`UO_STWW,`UO_STJ:
 	IsStore = TRUE;
 default:
 	IsStore = FALSE;
@@ -102,32 +103,33 @@ endfunction
 
 
 function [2:0] MemSize;
-input [15:0] isn;
-casez(isn[15:10])
+input [17:0] isn;
+casez(isn[17:12])
 `UO_LDB,`UO_LDBW:	MemSize = byt;
 `UO_LDW,`UO_LDWW:	MemSize = wyde;
 `UO_STB,`UO_STBW:	MemSize = byt;
 `UO_STW,`UO_STWW:	MemSize = wyde;
+`UO_STJ:					MemSize = tbyt;
 default:	MemSize = byt;
 endcase
 endfunction
 
 function IsSei;
-input [15:0] isn;
-IsSei = isn[15:10]==`UO_SEI;
+input [17:0] isn;
+IsSei = isn[17:12]==`UO_SEI;
 endfunction
 
 function IsJmp;
-input [15:0] isn;
-IsJmp = isn[15:0]==`UO_JMP;
+input [17:0] isn;
+IsJmp = isn[17:0]==`UO_JMP;
 endfunction
 
 // Really IsPredictableBranch
 // Does not include BccR's
 function IsBranch;
-input [15:0] isn;
-case(isn[15:10])
-`UO_BEQ,`UO_BNE,`UO_BCS,`UO_BCC,`UO_BVS,`UO_BVC,`UO_BMI,`UO_BPL:
+input [17:0] isn;
+case(isn[17:12])
+`UO_BEQ,`UO_BNE,`UO_BCS,`UO_BCC,`UO_BVS,`UO_BVC,`UO_BMI,`UO_BPL,`UO_BRA:
 	IsBranch = TRUE;
 default:
 	IsBranch = FALSE;
@@ -135,8 +137,8 @@ endcase
 endfunction
 
 function IsRFW;
-input [15:0] isn;
-case(isn[15:10])
+input [17:0] isn;
+case(isn[17:12])
 `UO_LDB,`UO_LDW,`UO_LDBW,`UO_LDWW,
 `UO_ADDB,`UO_ADDW,`UO_ADCB,`UO_SBCB,
 `UO_ANDB,`UO_ORB,`UO_EORB,
@@ -149,10 +151,10 @@ endcase
 endfunction
 
 function fnNeedSr;
-input [15:0] isn;
+input [17:0] isn;
 fnNeedSr = TRUE;
 /*
-case(isn[15:10])
+case(isn[17:12])
 `UO_STB,`UO_STBW:
 	fnNeedSr = isn[5:3]==`UO_SR;
 `UO_ADCB,`UO_SBCB,`UO_ROLB,`UO_RORB:	// carry input
@@ -166,8 +168,8 @@ endcase
 endfunction
 
 function fnWrap;
-input [15:0] isn;
-case(isn[15:10])
+input [17:0] isn;
+case(isn[17:12])
 `UO_LDBW,`UO_STBW,`UO_LDWW,`UO_STWW:	fnWrap = TRUE;
 default:	fnWrap = FALSE;
 endcase
