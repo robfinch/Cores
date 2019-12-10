@@ -31,7 +31,7 @@ module DCController(rst_i, clk_i, dadr, rd, wr, wsel, wadr, wdat, bstate, state,
 	dL2_rhit, dL2_rdat, dL2_whit, dL2_ld, dL2_wsel, dL2_wadr, dL2_wdat, dL2_nxt,
 	dL1_hit, dL1_selpc, dL1_sel, dL1_adr, dL1_dat, dL1_wr, dL1_invline, dcnxt, dcwhich,
 	dcl_o, cti_o, bte_o, bok_i, cyc_o, stb_o, ack_i, err_i, wrv_i, rdv_i, sel_o, adr_o, dat_i);
-parameter ABW = 24;
+parameter ABW = 64;
 parameter AMSB = ABW-1;
 parameter L2_ReadLatency = 3'd3;
 parameter L1_WriteLatency = 3'd3;
@@ -41,9 +41,9 @@ input clk_i;
 input [AMSB:0] dadr;
 input rd;
 input wr;
-input [2:0] wsel;
+input [7:0] wsel;
 input [AMSB:0] wadr;
-input [23:0] wdat;
+input [63:0] wdat;
 input [4:0] bstate;
 (* mark_debug="true" *)
 output reg [3:0] state;

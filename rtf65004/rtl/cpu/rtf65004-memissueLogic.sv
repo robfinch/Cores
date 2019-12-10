@@ -30,7 +30,7 @@ module memissueLogic (heads, iq_v, iq_memready, iq_out, iq_done, iq_mem, iq_agen
 parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
 parameter IQ_ENTRIES = `IQ_ENTRIES;
-parameter AMSB = 23;
+parameter AMSB = 63;
 localparam QCHKS = `IQ_ENTRIES > 9 ? 10 : `IQ_ENTRIES;
 input [`QBITS] heads [0:IQ_ENTRIES-1];
 input [IQ_ENTRIES-1:0] iq_v;
@@ -41,7 +41,7 @@ input [IQ_ENTRIES-1:0] iq_mem;
 input [IQ_ENTRIES-1:0] iq_agen;
 input [IQ_ENTRIES-1:0] iq_load;
 input [IQ_ENTRIES-1:0] iq_store;
-input [17:0] iq_sel [0:IQ_ENTRIES-1];
+input [22:0] iq_sel [0:IQ_ENTRIES-1];
 input [IQ_ENTRIES-1:0] iq_fc;
 input [IQ_ENTRIES-1:0] iq_aq;
 input [IQ_ENTRIES-1:0] iq_rl;
@@ -75,7 +75,7 @@ for (n = 0; n < QCHKS; n = n + 1) begin
 						// Select lines don't overlap
 						((iq_sel[heads[n]] & iq_sel[heads[m]]) == 18'd0)
 						&& ((!iq_mem[heads[m]] /*|| (iq_agen[heads[m]] & iq_out[heads[m]]) */ || iq_done[heads[m]]
-							|| (((iq_ma[heads[n]][AMSB:4] != iq_ma[heads[m]][AMSB:4]) && !(|iq_sel[heads[n]][17:16] || |iq_sel[heads[m]][17:16])) || iq_out[heads[m]] || iq_done[heads[m]]))
+							|| (((iq_ma[heads[n]][AMSB:4] != iq_ma[heads[m]][AMSB:4]) && !(|iq_sel[heads[n]][22:16] || |iq_sel[heads[m]][22:16])) || iq_out[heads[m]] || iq_done[heads[m]]))
 							// If we have two loads to overlapping addresses we don't care.
 							|| (iq_load[heads[n]] && iq_load[heads[m]])
 						)

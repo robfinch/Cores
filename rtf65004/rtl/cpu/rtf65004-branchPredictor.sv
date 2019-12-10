@@ -25,7 +25,7 @@
 `include "rtf65004-config.sv"
 
 module BranchPredictor(rst, clk, clk2x, clk4x, en, xisBranch, xip, takb, ip, predict_taken);
-parameter AMSB=23;
+parameter AMSB=63;
 parameter DBW=16;
 parameter FSLOTS = `FSLOTS;
 input rst;

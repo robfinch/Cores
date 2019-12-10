@@ -36,7 +36,7 @@ parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
 parameter HIGH = 1'b1;
 parameter LOW = 1'b0;
-parameter AMSB = 23;
+parameter AMSB = 63;
 parameter BIDLE = 5'd0;
 input rst_i;
 input clk_i;
@@ -48,16 +48,16 @@ output reg [7:0] fault;
 output reg [IQ_ENTRIES-1:0] uid;
 output reg [RENTRIES-1:0] ruid;
 output reg [WB_DEPTH-1:0] wb_v;
-output reg [23:0] wb_addr [0:WB_DEPTH-1];
+output reg [63:0] wb_addr [0:WB_DEPTH-1];
 input wb_en_i;
 
 input [`QBITS] p0_id_i;
 input [`RBITS] p0_rid_i;
 input p0_wr_i;
 input p0_wrap_i;
-input [2:0] p0_sel_i;
-input [23:0] p0_adr_i;
-input [23:0] p0_dat_i;
+input [15:0] p0_sel_i;
+input [63:0] p0_adr_i;
+input [63:0] p0_dat_i;
 output reg p0_ack_o;
 output reg p0_hit;
 
@@ -65,9 +65,9 @@ input [`QBITS] p1_id_i;
 input [`RBITS] p1_rid_i;
 input p1_wr_i;
 input p1_wrap_i;
-input [2:0] p1_sel_i;
-input [23:0] p1_adr_i;
-input [23:0] p1_dat_i;
+input [15:0] p1_sel_i;
+input [63:0] p1_adr_i;
+input [63:0] p1_dat_i;
 output reg p1_ack_o;
 output reg p1_hit;
 
@@ -83,18 +83,17 @@ output reg [AMSB:0] adr_o;
 output reg [127:0] dat_o;
 output reg cr_o;
 output reg cwr_o;
-output reg [2:0] csel_o;
+output reg [15:0] csel_o;
 output reg [AMSB:0] cadr_o;
-output reg [23:0] cdat_o;
+output reg [63:0] cdat_o;
 
 integer n, j;
 reg wb_en;
 reg [3:0] wb_ptr;
-reg [ 2:0] wb_sel  [0:WB_DEPTH-1];
-reg [23:0] wb_data [0:WB_DEPTH-1];
+reg [22:0] wb_sel  [0:WB_DEPTH-1];
+reg [63:0] wb_data [0:WB_DEPTH-1];
 reg [IQ_ENTRIES-1:0] wb_id [0:WB_DEPTH-1];
 reg [RENTRIES-1:0] wb_rid [0:WB_DEPTH-1];
-reg [WB_DEPTH-1:0] wb_rmw;
 reg [IQ_ENTRIES-1:0] wbo_id;
 reg [RENTRIES-1:0] wbo_rid;
 reg [WB_DEPTH-1:0] wb_wrap;
@@ -124,7 +123,7 @@ begin
 	end
 end
 
-reg [17:0] sel_shift;
+reg [22:0] sel_shift;
 reg [143:0] dat_shift;
 
 reg [2:0] state;
@@ -138,7 +137,7 @@ IDLE:
 		state <= StoreAck1;
 StoreAck1:
 	if (ack_i|err_i|tlbmiss_i|wrv_i) begin
-		if (sel_shift[17:16]==2'h0 && !wrap_cycle)
+		if (sel_shift[22:16]==7'h0 && !wrap_cycle)
 			state <= IDLE;
 		else
 			state <= Store2;
@@ -164,10 +163,14 @@ if (rst_i) begin
 	wb_v <= 1'b0;
 	wb_ptr <= 1'd0;
 	wb_en <= TRUE;
+	wbo_id <= 1'd0;
+	wbo_rid <= 1'd0;
+	wb_wrap <= 1'd0;
 	uid <= 1'd0;
 	ruid <= 1'd0;
 	update_iq <= FALSE;
 	wrap_cycle <= FALSE;
+	sel_shift <= 23'h0;
 end
 else begin
 	if (wb_en_i)
@@ -261,7 +264,7 @@ IDLE:
 		   	wb_v[j-1] <= wb_v[j];
 		   	wb_id[j-1] <= wb_id[j];
 		   	wb_rid[j-1] <= wb_rid[j];
-		   	wb_rmw[j-1] <= wb_rmw[j];
+		   	wb_wrap[j-1] <= wb_wrap[j];
 		   	wb_sel[j-1] <= wb_sel[j];
 		   	wb_addr[j-1] <= wb_addr[j];
 		   	wb_data[j-1] <= wb_data[j];
@@ -270,7 +273,6 @@ IDLE:
 			end
 			wb_v[WB_DEPTH-1] <= INV;
 			wb_sel[WB_DEPTH-1] <= 1'd0;
-			wb_rmw[WB_DEPTH-1] <= FALSE;
 		end
 	end
 
@@ -278,7 +280,7 @@ IDLE:
 StoreAck1:
 	if (ack_i|err_i|tlbmiss_i|wrv_i) begin
 		stb_o <= LOW;
-		if (sel_shift[17:16]==2'h0 && !wrap_cycle) begin
+		if (sel_shift[22:16]==7'h0 && !wrap_cycle) begin
 			cyc_o <= LOW;
 			we_o <= LOW;
 			sel_o <= 16'h0000;

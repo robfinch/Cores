@@ -98,7 +98,7 @@ endmodule
 
 module L1_dcache_tagram(clk, wr, lineno, i, o);
 parameter pLines = 32;
-parameter AMSB = 23;
+parameter AMSB = 63;
 localparam pLNMSB = $clog2(pLines)-1;
 input clk;
 input wr;
@@ -137,7 +137,7 @@ endmodule
 
 module L1_dcache_cmptag4way(rst, clk, nxt, wr, invline, invall, adr, lineno, hit);
 parameter pLines = 128;
-parameter AMSB = 23;
+parameter AMSB = 63;
 localparam pLNMSB = $clog2(pLines) - 1;
 localparam pMSB = $clog2(pLines) - 3 + 6;
 input rst;
@@ -232,7 +232,7 @@ endmodule
 
 module L1_dcache(rst, clk, nxt, wr, sel, adr, i, o, fault, hit, invall, invline);
 parameter pSize = 2;
-parameter AMSB = 23;
+parameter AMSB = 63;
 localparam pLines = pSize==4 ? 128 : 64;
 localparam pLNMSB = $clog2(pLines) - 1;
 input rst;
@@ -354,7 +354,7 @@ endmodule
 // -----------------------------------------------------------------------------
 
 module L2_dcache(rst, clk, nxt, wr, sel, wadr, radr, tlbmiss_i, rdv_i, wrv_i, i, err_i, o, whit, rhit, invall, invline);
-parameter AMSB = 23;
+parameter AMSB = 63;
 input rst;
 input clk;
 input nxt;
@@ -446,7 +446,7 @@ endmodule
 
 // Four way set associative tag memory
 module L2_dcache_cmptag4way(rst, clk, nxt, wr, wr2, inv, invall, wadr, radr, wlineno, rlineno, whit, rhit);
-parameter AMSB = 23;
+parameter AMSB = 63;
 input rst;
 input clk;
 input nxt;

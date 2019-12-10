@@ -24,11 +24,12 @@
 `include "rtf65004-defines.sv"
 
 module rtf65004_alu(op, dst, src1, src2, o, s_i, s_o, idle);
+parameter WID=64;
 input [5:0] op;
-input [23:0] dst;
-input [23:0] src1;
-input [23:0] src2;
-output reg [23:0] o;
+input [WID-1:0] dst;
+input [WID-1:0] src1;
+input [WID-1:0] src2;
+output reg [WID-1:0] o;
 input [7:0] s_i;
 output reg [7:0] s_o;
 output idle;
@@ -37,7 +38,7 @@ assign idle = 1'b1;
 
 always @*
 case(op)
-`UO_LDIB:	o = {{8{src1[7]}},src1[7:0]};
+`UO_LDIB:	o = {{56{src1[7]}},src1[7:0]};
 `UO_ADDW:	o = dst + src1 + src2;
 `UO_ADDB:	o = dst[7:0] + src1[7:0] + src2[7:0];
 `UO_ADCB:	o = dst[7:0] + src1[7:0] + src2[7:0] + s_i[0];
@@ -48,7 +49,7 @@ case(op)
 `UO_BITB:	o = dst[7:0] & src1[7:0] & src2[7:0];
 `UO_ORB:		o = dst[7:0] | src1[7:0] | src2[7:0];
 `UO_EORB:	o = dst[7:0] ^ src1[7:0] ^ src2[7:0];
-`UO_MOV:		o = src2[7:0];
+`UO_MOV:		o = src2;
 `UO_ASLB:	o = {dst[7:0],1'b0};
 `UO_LSRB:	o = {dst[0],1'b0,dst[7:1]};
 `UO_ROLB:	o = {dst[7:0],s_i[0]};

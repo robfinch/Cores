@@ -82,17 +82,20 @@
 `define UO_RN		3:0
 
 
-`define UO_ACC	4'd0
-`define UO_XR		4'd1
-`define UO_YR		4'd2
-`define UO_SP		4'd3
-`define UO_PC		4'd4
-`define UO_TMP	4'd5
-`define UO_PC2	4'd6
-`define UO_SR		4'd7
-`define UO_M1R	4'd6
-`define UO_ZR		4'd7
-`define UO_PC3	4'h8
+`define UO_ZR		4'h0
+`define UO_ACC	4'h2
+`define UO_XR		4'h3
+`define UO_YR		4'h4
+`define UO_SP		4'h5
+`define UO_PC		4'h6
+`define UO_TMP	4'h7
+`define UO_PC2	4'h8
+`define UO_SR		4'h9
+`define UO_M1R	4'h6
+`define UO_PC3	4'hA
+`define UO_RT		4'hB
+`define UO_RA		4'hC
+`define UO_RB		4'hD
 
 `define UO_ZERO	4'h0
 `define UO_P1		4'h1

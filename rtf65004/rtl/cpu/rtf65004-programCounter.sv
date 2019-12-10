@@ -30,8 +30,8 @@ module programCounter(rst, clk,
 	jc, jcl, rts, br, take_branch, btgt, pc, pcd, pc_chg, branch_pc, 
 	ra, pc_override,
 	debug_on);
-parameter AMSB = 23;
-parameter RSTIP = 24'h00FFFC;
+parameter AMSB = 63;
+parameter RSTIP = 64'h00FFFC;
 parameter FSLOTS = `FSLOTS;
 parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
@@ -40,7 +40,7 @@ input clk;
 input q2;
 input q1;
 input q1bx;
-input [31:0] insnx [0:FSLOTS-1];
+input [47:0] insnx [0:FSLOTS-1];
 input freezepc;
 input phit;
 input branchmiss;
@@ -118,10 +118,10 @@ else begin
 					pc <= pc + len1 + len2;
 				else if (q1 & ~q1bx)
 					pc <= pc + len1;
-				if (((q1 & ~q1bx)|q2) & br[0])
-					pc <= btgt[0];
-				else if (q2 & br[1])
-					pc <= btgt[1];
+//				if (((q1 & ~q1bx)|q2) & br[0])
+//					pc <= btgt[0];
+//				else if (q2 & br[1])
+//					pc <= btgt[1];
 			end
 		end
 		if (pc_override)
