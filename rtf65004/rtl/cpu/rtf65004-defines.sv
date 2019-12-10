@@ -153,7 +153,7 @@
 `define UO_SED	6'h2B
 `define UO_SEB	6'h2C
 `define UO_CLB	6'h2D
-
+`define UO_ANDC	6'h2E
 `define UO_LDJ	6'h30		// Load 24 bits
 `define UO_JML	6'h31
 `define UO_BRA	6'h32
@@ -163,10 +163,12 @@
 
 `define BYTE		9'h87
 `define UBYTE		9'hA7
-`define CHAR		9'h97
-`define UCHAR		9'hB7
-`define LEA			9'hC7
-`define R			9'hD7
+`define WYDE		9'h97
+`define UWYDE		9'hB7
+`define TETRA		9'hC7
+`define UTETRA	9'hD7
+//`define LEA			9'hC7
+//`define R			9'hD7
 `define SXB				4'h0
 `define SXC				4'h1
 `define ZXB				4'h2

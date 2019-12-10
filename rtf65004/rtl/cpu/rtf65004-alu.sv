@@ -44,6 +44,7 @@ case(op)
 `UO_SBCB:	o = dst[7:0] - src1[7:0] - src2[7:0] - ~s_i[0];
 `UO_CMPB:	o = dst[7:0] - src1[7:0] - src2[7:0] - ~s_i[0];
 `UO_ANDB:	o = dst[7:0] & src1[7:0] & src2[7:0];
+`UO_ANDC:	o = dst[7:0] & src1[7:0] & ~src2[7:0];
 `UO_BITB:	o = dst[7:0] & src1[7:0] & src2[7:0];
 `UO_ORB:		o = dst[7:0] | src1[7:0] | src2[7:0];
 `UO_EORB:	o = dst[7:0] ^ src1[7:0] ^ src2[7:0];
@@ -64,6 +65,10 @@ case(op)
 	begin
 		s_o[1] = o[7:0]==8'h00;
 		s_o[7] = o[7];
+	end
+`UO_ANDC:
+	begin
+		s_o[1] = o[7:0]==8'h00;
 	end
 `UO_ADCB:
 	begin

@@ -25,9 +25,7 @@
 `include "rtf65004-defines.sv"
 
 module programCounter(rst, clk,
-	commit0_v, commit1_v, commit2_v, commit0_bus, commit1_bus, commit2_bus,
-	commit0_tgt, commit1_tgt, commit2_tgt,
-	q1, q2, insnx, freezepc, 
+	q1, q2, q1bx, insnx, freezepc, 
 	phit, branchmiss, misspc, len1, len2, len3,
 	jc, jcl, rts, br, take_branch, btgt, pc, pcd, pc_chg, branch_pc, 
 	ra, pc_override,
@@ -39,17 +37,9 @@ parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
 input rst;
 input clk;
-input commit0_v;
-input commit1_v;
-input commit2_v;
-input [23:0] commit0_bus;
-input [23:0] commit1_bus;
-input [23:0] commit2_bus;
-input [2:0] commit0_tgt;
-input [2:0] commit1_tgt;
-input [2:0] commit2_tgt;
 input q2;
 input q1;
+input q1bx;
 input [31:0] insnx [0:FSLOTS-1];
 input freezepc;
 input phit;
@@ -126,9 +116,9 @@ else begin
 			begin
 				if (q2)
 					pc <= pc + len1 + len2;
-				else if (q1)
+				else if (q1 & ~q1bx)
 					pc <= pc + len1;
-				if ((q1|q2) & br[0])
+				if (((q1 & ~q1bx)|q2) & br[0])
 					pc <= btgt[0];
 				else if (q2 & br[1])
 					pc <= btgt[1];
@@ -152,7 +142,7 @@ if (rst) begin
 end
 else begin
 	branch_pc <= pc;
-	if (q1) begin
+	if (q1 & ~q1bx) begin
 		if (rts[0])
 			branch_pc <= ra;
 		else if (take_branch[0]) begin

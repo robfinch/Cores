@@ -34,7 +34,7 @@ module regfileValid(rst, clk, slotv, slot_rfw, tails,
 	commit0_sr_tgts, commit1_sr_tgts, commit2_sr_tgts,
 	rf_source, iq_source, queuedOn, iq_latest_sr_ID,
 	slot_sr_tgts, iq_sr_source,
-	take_branch, Rd, rf_v, regIsValid);
+	Rd, rf_v, regIsValid);
 parameter AREGS = 8;
 parameter RBIT = 2;
 parameter IQ_ENTRIES = `IQ_ENTRIES;
@@ -68,7 +68,6 @@ input commit2_rfw;
 input [`QBITSP1] rf_source [0:AREGS-1];
 input [IQ_ENTRIES-1:0] iq_source;
 input [IQ_ENTRIES-1:0] iq_sr_source;
-input [QSLOTS-1:0] take_branch;
 input [3:0] Rd [0:QSLOTS-1];
 input [QSLOTS-1:0] queuedOn;
 input [`QBITS] iq_latest_sr_ID;
