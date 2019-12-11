@@ -26,7 +26,7 @@
 `define HIGH	1'b1
 `define LOW		1'b0
 
-module ICController(rst_i, clk_i, ip, hit, bstate, state,
+module ICController(rst_i, clk_i, missadr, hit, bstate, state,
 	invline, invlineAddr, icl_ctr,
 	thread_en, ihitL2, L2_ld, L2_cnt, L2_adr, L2_dat, L2_nxt,
 	L1_selpc, L1_adr, L1_dat, L1_wr, L1_invline, icnxt, icwhich,
@@ -40,7 +40,7 @@ parameter L1_WriteLatency = 3'd3;
 parameter ROM_ReadLatency = 3'd1;
 input rst_i;
 input clk_i;
-input [AMSB:0] ip;
+input [AMSB:0] missadr;
 input hit;
 input [4:0] bstate;
 (* mark_debug="true" *)
@@ -53,14 +53,14 @@ input ihitL2;
 output reg L2_ld;
 output [2:0] L2_cnt;
 output reg [AMSB:0] L2_adr = RSTPC;
-input [642:0] L2_dat;
+input [514:0] L2_dat;
 output reg L2_nxt;
 output L1_selpc;
 output reg [AMSB:0] L1_adr = RSTPC;
-output reg [642:0] L1_dat = {8'h1F,120'h0};	// NOP
+output reg [514:0] L1_dat = {512'h0};
 output reg L1_wr;
 output reg L1_invline;
-input [639:0] ROM_dat;
+input [511:0] ROM_dat;
 output isROM;
 output reg icnxt;
 output reg [1:0] icwhich = 2'b00;
@@ -105,7 +105,7 @@ if (rst_i) begin
 	cyc_o <= `LOW;
 	stb_o <= `LOW;
 	sel_o <= 16'h00;
-	adr_o <= {ip[AMSB:5],5'h0};
+	adr_o <= {missadr[AMSB:5],5'h0};
 	state <= IDLE;
 	L2_ld <= FALSE;
 end
@@ -141,7 +141,7 @@ IDLE:
 		// we have to wait.
 		else begin
 			if (!hit) begin
-				L1_adr <= {ip[AMSB:4],4'h0};
+				L1_adr <= {missadr[AMSB:5],5'h0};
 				icwhich <= 2'b00;
 				state <= IC2;
 			end
@@ -183,7 +183,7 @@ IC_WaitL2:
 			cyc_o <= `HIGH;
 			stb_o <= `HIGH;
 			sel_o <= 16'hFFFF;
-			adr_o <= {L1_adr,6'd0} + {L1_adr,4'd0};		// * 80 bytes per line
+			adr_o <= L1_adr;
 			L2_adr <= L1_adr;
 			L2_ld <= TRUE;
 			state <= IC_Ack;
@@ -210,18 +210,18 @@ IC_Ack:
   		state <= IC_Nack2;
   	end
 		if (tlbmiss_i) begin
-			L1_dat[642:640] <= 2'd1;
-			L1_dat[639:0] <= {16{40'hD2}};	// NOP
+			L1_dat[514:512] <= 2'd1;
+			L1_dat[511:0] <= {16{40'hD2}};	// NOP
 			nack();
 	  end
 		else if (exv_i) begin
-			L1_dat[642:640] <= 2'd2;
-			L1_dat[639:0] <= {16{40'hD2}};	// NOP
+			L1_dat[514:512] <= 2'd2;
+			L1_dat[511:0] <= {16{40'hD2}};	// NOP
 			nack();
 		end
 	  else if (err_i) begin
-			L1_dat[642:640] <= 2'd3;
-			L1_dat[639:0] <= {16{40'hD2}};	// NOP
+			L1_dat[514:512] <= 2'd3;
+			L1_dat[511:0] <= {16{40'hD2}};	// NOP
 			nack();
 	  end
 	  else
@@ -229,14 +229,13 @@ IC_Ack:
 	  	3'd0:	L1_dat[127:0] <= dat_i;
 	  	3'd1:	L1_dat[255:128] <= dat_i;
 	  	3'd2:	L1_dat[383:256] <= dat_i;
-	  	3'd3:	L1_dat[511:384] <= dat_i;
-	  	3'd4:	L1_dat[642:512] <= {3'b00,dat_i};
+	  	3'd3:	L1_dat[514:384] <= {3'b000,dat_i};
 	  	default:	L1_dat <= L1_dat;
 	  	endcase
     iccnt <= iccnt + 3'd1;
-    if (iccnt==3'd3)
+    if (iccnt==3'd2)
       cti_o <= 3'b111;
-    if (iccnt==3'd4)
+    if (iccnt==3'd3)
     	nack();
   end
 // This state only used when burst mode is not allowed.

@@ -30,7 +30,7 @@ module instructionPointer(rst, clk, queuedCnt, insnx, freezeip,
 	ra, ip_override,
 	debug_on);
 parameter AMSB = 127;
-parameter RSTIP = 80'hFFFFFFFFFFFFFFFC0100;
+parameter RSTIP = 128'hFFFFFFFFFFFFFFFFFFFFFFFFFFFC0100;
 parameter QSLOTS = `QSLOTS;
 parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
@@ -132,6 +132,15 @@ else begin
 	//ip <= next_ip;
 end
 
+reg [28:0] brtgt [0:3];
+always @*
+begin
+	brtgt[0] = ip[28:0] + {{7{insnx[0][39]}},insnx[0][39:18]};
+	brtgt[1] = ip[28:0] + {{7{insnx[1][39]}},insnx[1][39:18]} + 4'd5;
+	brtgt[2] = ip[28:0] + {{7{insnx[2][39]}},insnx[2][39:18]} + 4'd10;
+	brtgt[3] = ip[28:0] + {{7{insnx[3][39]}},insnx[3][39:18]} + 4'd15;
+end
+
 always @*
 if (rst) begin
 	branch_ip <= RSTIP;
@@ -144,7 +153,7 @@ else begin
 			if (slot_ret[0])
 				branch_ip <= ra;
 			else if (take_branch[0])
-				branch_ip[26:0] <= insnx[0][37:11];
+				branch_ip[28:0] <= brtgt[0];
 			else if (slot_jc[0])
 				branch_ip[28:0] <= insnx[0][39:11];
 		end
@@ -153,9 +162,9 @@ else begin
 			if (slot_ret[1])
 				branch_ip <= ra;
 			else if (take_branch[1])
-				branch_ip[26:0] <= insnx[1][37:11];
+				branch_ip[28:0] <= brtgt[1];
 			else if (slot_jc[1])
-				branch_ip[37:0] <= insnx[1][39:11];
+				branch_ip[28:0] <= insnx[1][39:11];
 		end
 	4'b0011:
 		if (queuedCnt==3'd2) begin
@@ -164,13 +173,13 @@ else begin
 			else if (slot_jc[0])
 				branch_ip[28:0] <= insnx[0][39:11];
 			else if (take_branch[0])
-				branch_ip[26:0] <= insnx[0][37:11];
+				branch_ip[28:0] <= brtgt[0];
 			else if (slot_ret[1])
 				branch_ip <= ra;
 			else if (slot_jc[1])
 				branch_ip[28:0] <= insnx[1][39:11];
 			else if (take_branch[1])
-				branch_ip[26:0] <= insnx[1][37:11];
+				branch_ip[28:0] <= brtgt[1];
 		end
 		else if (queuedCnt==3'd1) begin
 			if (slot_ret[0])
@@ -178,7 +187,7 @@ else begin
 			else if (slot_jc[0])
 				branch_ip[28:0] <= insnx[0][39:11];
 			else if (take_branch[0])
-				branch_ip[26:0] <= insnx[0][37:11];
+				branch_ip[28:0] <= brtgt[0];
 		end
 	4'b0100:
 		if (queuedCnt==3'd1) begin
@@ -187,7 +196,7 @@ else begin
 			else if (slot_jc[2])
 				branch_ip[28:0] <= insnx[2][39:11];
 			else if (take_branch[2])
-				branch_ip[26:0] <= insnx[2][37:11];
+				branch_ip[28:0] <= brtgt[2];
 		end
 	4'b0110:
 		if (queuedCnt==3'd2) begin
@@ -196,13 +205,13 @@ else begin
 			else if (slot_jc[1])
 				branch_ip[28:0] <= insnx[1][39:11];
 			else if (take_branch[1])
-				branch_ip[26:0] <= insnx[1][37:11];
+				branch_ip[28:0] <= brtgt[1];
 			else if (slot_ret[2])
 				branch_ip <= ra;
 			else if (slot_jc[2])
 				branch_ip[28:0] <= insnx[2][39:11];
 			else if (take_branch[2])
-				branch_ip[26:0] <= insnx[2][37:11];
+				branch_ip[28:0] <= brtgt[2];
 		end
 		else if (queuedCnt==3'd1) begin
 			if (slot_ret[1])
@@ -210,7 +219,7 @@ else begin
 			else if (slot_jc[1])
 				branch_ip[28:0] <= insnx[1][39:11];
 			else if (take_branch[1])
-				branch_ip[26:0] <= insnx[1][37:11];
+				branch_ip[28:0] <= brtgt[1];
 		end
 	4'b0111:
 		if (queuedCnt==3'd3) begin
@@ -219,19 +228,19 @@ else begin
 			else if (slot_jc[0])
 				branch_ip[28:0] <= insnx[0][39:11];
 			else if (take_branch[0])
-				branch_ip[26:0] <= insnx[0][37:11];
+				branch_ip[28:0] <= brtgt[0];
 			else if (slot_ret[1])
 				branch_ip <= ra;
 			else if (slot_jc[1])
 				branch_ip[28:0] <= insnx[1][39:11];
 			else if (take_branch[1])
-				branch_ip[26:0] <= insnx[1][37:11];
+				branch_ip[28:0] <= brtgt[1];
 			else if (slot_ret[2])
 				branch_ip <= ra;
 			else if (slot_jc[2])
 				branch_ip[28:0] <= insnx[2][39:11];
 			else if (take_branch[2])
-				branch_ip[26:0] <= insnx[2][37:11];
+				branch_ip[28:0] <= brtgt[2];
 		end
 		else if (queuedCnt==3'd2) begin
 			if (slot_ret[0])
@@ -239,13 +248,13 @@ else begin
 			else if (slot_jc[0])
 				branch_ip[28:0] <= insnx[0][39:11];
 			else if (take_branch[0])
-				branch_ip[26:0] <= insnx[0][37:11];
+				branch_ip[28:0] <= brtgt[0];
 			else if (slot_ret[1])
 				branch_ip <= ra;
 			else if (slot_jc[1])
 				branch_ip[28:0] <= insnx[1][39:11];
 			else if (take_branch[1])
-				branch_ip[26:0] <= insnx[1][37:11];
+				branch_ip[28:0] <= brtgt[1];
 		end
 		else if (queuedCnt==3'd1) begin
 			if (slot_ret[0])
@@ -253,14 +262,14 @@ else begin
 			else if (slot_jc[0])
 				branch_ip[28:0] <= insnx[0][39:11];
 			else if (take_branch[0])
-				branch_ip[26:0] <= insnx[0][37:11];
+				branch_ip[28:0] <= brtgt[0];
 		end
 	4'b1000:
 		if (queuedCnt==3'd1) begin
 			if (slot_ret[3])
 				branch_ip <= ra;
 			else if (take_branch[3])
-				branch_ip[26:0] <= insnx[3][37:11];
+				branch_ip[28:0] <= brtgt[3];
 			else if (slot_jc[3])
 				branch_ip[28:0] <= insnx[3][39:11];
 		end
@@ -274,13 +283,13 @@ else begin
 			else if (slot_jc[2])
 				branch_ip[28:0] <= insnx[2][39:11];
 			else if (take_branch[2])
-				branch_ip[26:0] <= insnx[2][37:11];
+				branch_ip[28:0] <= brtgt[2];
 			else if (slot_ret[3])
 				branch_ip <= ra;
 			else if (slot_jc[3])
 				branch_ip[28:0] <= insnx[3][39:11];
 			else if (take_branch[3])
-				branch_ip[26:0] <= insnx[3][37:11];
+				branch_ip[28:0] <= brtgt[3];
 		end
 		else if (queuedCnt==3'd1) begin
 			if (slot_ret[2])
@@ -288,7 +297,7 @@ else begin
 			else if (slot_jc[2])
 				branch_ip[28:0] <= insnx[2][39:11];
 			else if (take_branch[2])
-				branch_ip[26:0] <= insnx[2][37:11];
+				branch_ip[28:0] <= brtgt[2];
 //			else
 //				branch_ip[3:0] <= 4'hA;
 		end
@@ -300,19 +309,19 @@ else begin
 			else if (slot_jc[1])
 				branch_ip[28:0] <= insnx[1][39:11];
 			else if (take_branch[1])
-				branch_ip[26:0] <= insnx[1][37:11];
+				branch_ip[28:0] <= brtgt[1];
 			else if (slot_ret[2])
 				branch_ip <= ra;
 			else if (slot_jc[2])
 				branch_ip[28:0] <= insnx[2][39:11];
 			else if (take_branch[2])
-				branch_ip[26:0] <= insnx[2][37:11];
+				branch_ip[28:0] <= brtgt[2];
 			else if (slot_ret[3])
 				branch_ip <= ra;
 			else if (slot_jc[3])
 				branch_ip[28:0] <= insnx[3][39:11];
 			else if (take_branch[3])
-				branch_ip[26:0] <= insnx[3][37:11];
+				branch_ip[28:0] <= brtgt[3];
 		end
 		else if (queuedCnt==3'd2) begin
 			if (slot_ret[1])
@@ -320,13 +329,13 @@ else begin
 			else if (slot_jc[1])
 				branch_ip[28:0] <= insnx[1][39:11];
 			else if (take_branch[1])
-				branch_ip[26:0] <= insnx[1][37:11];
+				branch_ip[28:0] <= brtgt[1];
 			else if (slot_ret[2])
 				branch_ip <= ra;
 			else if (slot_jc[2])
 				branch_ip[28:0] <= insnx[2][39:11];
 			else if (take_branch[2])
-				branch_ip[26:0] <= insnx[2][37:11];
+				branch_ip[28:0] <= brtgt[2];
 		end
 		else if (queuedCnt==3'd1) begin
 			if (slot_ret[1])
@@ -334,7 +343,7 @@ else begin
 			else if (slot_jc[1])
 				branch_ip[28:0] <= insnx[1][39:11];
 			else if (take_branch[1])
-				branch_ip[26:0] <= insnx[1][37:11];
+				branch_ip[28:0] <= brtgt[1];
 		end
 	4'b1111:
 		if (queuedCnt==3'd4) begin
@@ -343,25 +352,25 @@ else begin
 			else if (slot_jc[0])
 				branch_ip[28:0] <= insnx[0][39:11];
 			else if (take_branch[0])
-				branch_ip[26:0] <= insnx[0][37:11];
+				branch_ip[28:0] <= brtgt[0];
 			else if (slot_ret[1])
 				branch_ip <= ra;
 			else if (slot_jc[1])
 				branch_ip[28:0] <= insnx[1][39:11];
 			else if (take_branch[1])
-				branch_ip[26:0] <= insnx[1][37:11];
+				branch_ip[28:0] <= brtgt[1];
 			else if (slot_ret[2])
 				branch_ip <= ra;
 			else if (slot_jc[2])
 				branch_ip[28:0] <= insnx[2][39:11];
 			else if (take_branch[2])
-				branch_ip[26:0] <= insnx[2][37:11];
+				branch_ip[28:0] <= brtgt[2];
 			else if (slot_ret[3])
 				branch_ip <= ra;
 			else if (slot_jc[3])
 				branch_ip[28:0] <= insnx[3][39:11];
 			else if (take_branch[3])
-				branch_ip[26:0] <= insnx[3][37:11];
+				branch_ip[28:0] <= brtgt[3];
 		end
 		else if (queuedCnt==3'd3) begin
 			if (slot_ret[0])
@@ -369,19 +378,19 @@ else begin
 			else if (slot_jc[0])
 				branch_ip[28:0] <= insnx[0][39:11];
 			else if (take_branch[0])
-				branch_ip[26:0] <= insnx[0][37:11];
+				branch_ip[28:0] <= brtgt[0];
 			else if (slot_ret[1])
 				branch_ip <= ra;
 			else if (slot_jc[1])
 				branch_ip[28:0] <= insnx[1][39:11];
 			else if (take_branch[1])
-				branch_ip[26:0] <= insnx[1][37:11];
+				branch_ip[28:0] <= brtgt[1];
 			else if (slot_ret[2])
 				branch_ip <= ra;
 			else if (slot_jc[2])
 				branch_ip[28:0] <= insnx[2][39:11];
 			else if (take_branch[2])
-				branch_ip[26:0] <= insnx[2][37:11];
+				branch_ip[28:0] <= brtgt[2];
 		end
 		else if (queuedCnt==3'd2) begin
 			if (slot_ret[0])
@@ -389,13 +398,13 @@ else begin
 			else if (slot_jc[0])
 				branch_ip[28:0] <= insnx[0][39:11];
 			else if (take_branch[0])
-				branch_ip[26:0] <= insnx[0][37:11];
+				branch_ip[28:0] <= brtgt[0];
 			else if (slot_ret[1])
 				branch_ip <= ra;
 			else if (slot_jc[1])
 				branch_ip[28:0] <= insnx[1][39:11];
 			else if (take_branch[1])
-				branch_ip[26:0] <= insnx[1][37:11];
+				branch_ip[28:0] <= brtgt[1];
 		end
 		else if (queuedCnt==3'd1) begin
 			if (slot_ret[0])
@@ -403,7 +412,7 @@ else begin
 			else if (slot_jc[0])
 				branch_ip[28:0] <= insnx[0][39:11];
 			else if (take_branch[0])
-				branch_ip[26:0] <= insnx[0][37:11];
+				branch_ip[28:0] <= brtgt[0];
 		end
 	default:	;
 	endcase

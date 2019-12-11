@@ -45,7 +45,7 @@ Assembler, compiler and emulator, all very buggy at this stage.
 The current version in the works is version three.
 
 # Status
-Still working on the ISA, some preliminary coding has been done. A test synthesis shows the core to be about 900,000 LC's.
+Still working on the ISA, some preliminary coding has been done. A test synthesis shows the core to be about 900,000 LC's. The most recent update was to change absolute branches to relative ones.
 
 # Primitive Data Types
 The ISA supports more data types than usual due to the 128-bit data path size. The author feels it would be foolish not to support typical sizes found in a 64-bit core which include 1,2,4 and 8 byte data types. So, nvio supports 1,2,4,5,8 and 16 byte data types. The data types are referred to as numbers - byte, wyde, tetra, penta, octa, and hexi. Scaled indexed addressing accomodates 5 byte sized primitives as well as the 1,2,4,8,16 type sizes. The penta-byte data size is provided for accessing instructions which are five bytes in size.

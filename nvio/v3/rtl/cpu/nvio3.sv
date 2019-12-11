@@ -22,6 +22,8 @@
 // ============================================================================
 // 382174 611478
 // 552138	883421
+// 550578	880925
+// 564334 902934
 `include "nvio3-config.sv"
 `include "nvio3-defines.sv"
 
@@ -166,7 +168,6 @@ wire [QSLOTS-1:0] slotvd;
 reg [3:0] fb_panic;
 wire [`SNBITS] maxsn;
 
-wire [159:0] ibundle;
 wire [39:0] insnx [0:QSLOTS-1];
 wire [3:0] brkbits;
 // BF will be modified to BE by the decode buffer logic once the instruction has queued.
@@ -401,7 +402,7 @@ reg [127:0] message [0:15];	// indexed by panic
 
 wire int_commit;
 
-reg [199:0] xdati;
+reg [371:0] xdati;
 
 wire [2:0] queuedCnt;
 wire [2:0] rqueuedCnt;
@@ -487,7 +488,6 @@ reg [RBIT:0] iq_rs1 [0:QENTRIES-1];
 reg [RBIT:0] iq_rs2 [0:QENTRIES-1];		// debugging
 reg [RBIT:0] iq_rs3 [0:QENTRIES-1];
 reg [RBIT:0] iq_tgt [0:QENTRIES-1];		// Rt field or ZERO -- this is the instruction's target (if any)
-reg [RBIT:0] iq_tgt2 [0:QENTRIES-1];	// A second target of the instruction
 reg [3:0] iq_crtgt [0:QENTRIES-1];
 //reg [3:0] iq_tgtrs [0:QENTRIES-1];
 //reg [3:0] iq_tgt2rs [0:QENTRIES-1];
@@ -528,7 +528,6 @@ reg [RBIT:0] rob_tgt [0:RENTRIES-1];
 reg [3:0] rob_crtgt [0:RENTRIES-1];
 reg [7:0] rob_crres [0:RENTRIES-1];
 reg [VWID-1:0] rob_res2 [0:RENTRIES-1];
-reg [RBIT:0] rob_tgt2 [0:RENTRIES-1];
 reg [`RBIT2+1:0] nxtrb;
 
 // debugging
@@ -643,7 +642,6 @@ reg alu0_z;
 reg [WID-1:0] alu0_argI;	// only used by BEQ
 reg [3:0]  alu0_fmt;
 reg [RBIT:0] alu0_tgt;
-reg [RBIT:0] alu0_tgt2;
 reg [3:0] alu0_crtgt;
 reg [`ABITS] alu0_ip;
 reg [WID-1:0] alu0_bus;
@@ -690,7 +688,6 @@ reg [WID-1:0] alu1_argT;
 reg [WID-1:0] alu1_argI;	// only used by BEQ
 reg [3:0]  alu1_fmt;
 reg [RBIT:0] alu1_tgt;
-reg [RBIT:0] alu1_tgt2;
 reg [3:0] alu1_crtgt;
 reg [`ABITS] alu1_ip;
 reg [WID-1:0] alu1_bus;
@@ -714,7 +711,6 @@ reg [`QBITS] agen0_sourceid;
 wire [`QBITS] agen0_id;
 reg [`RBITS] agen0_rid;
 reg [RBIT:0] agen0_tgt;
-reg [RBIT:0] agen0_tgt2;
 reg agen0_dataready;
 reg [2:0] agen0_unit;
 reg [39:0] agen0_instr;
@@ -742,7 +738,6 @@ reg [`QBITS] agen1_sourceid;
 wire [`QBITS] agen1_id;
 reg [`RBITS] agen1_rid;
 reg [RBIT:0] agen1_tgt;
-reg [RBIT:0] agen1_tgt2;
 reg agen1_dataready;
 reg [2:0] agen1_unit;
 reg [39:0] agen1_instr;
@@ -778,7 +773,6 @@ reg [15:0] fpu1_argD;
 reg [VWID-1:0] fpu1_argT;
 reg [WID-1:0] fpu1_argI;	// only used by BEQ
 reg [RBIT:0] fpu1_tgt;
-reg [RBIT:0] fpu1_tgt2;
 reg [3:0] fpu1_crtgt;
 reg [`ABITS] fpu1_ip;
 reg [VWID-1:0] fpu1_out = 256'h0;
@@ -808,7 +802,6 @@ reg [15:0] fpu2_argD;
 reg [VWID-1:0] fpu2_argT;
 reg [WID-1:0] fpu2_argI;	// only used by BEQ
 reg [RBIT:0] fpu2_tgt;
-reg [RBIT:0] fpu2_tgt2;
 reg [3:0] fpu2_crtgt;
 reg [`ABITS] fpu2_ip;
 reg [VWID-1:0] fpu2_out = 256'h0;
@@ -834,8 +827,8 @@ reg [39:0] fcu_prevInstr;
 reg  [2:0] fcu_insln;
 reg        fcu_pt;			// predict taken
 reg        fcu_branch;
-reg        fcu_call;
-reg        fcu_ret;
+reg        fcu_jsr;
+reg        fcu_rts;
 reg        fcu_jal;
 reg        fcu_brk;
 reg        fcu_rti;
@@ -850,7 +843,6 @@ reg [WID-1:0] fcu_argI;	// only used by BEQ
 reg [WID-1:0] fcu_argT;
 reg [WID-1:0] fcu_argT2;
 reg [RBIT:0] fcu_tgt;
-reg [RBIT:0] fcu_tgt2;
 reg [WID-1:0] fcu_ipc;
 reg [`ABITS] fcu_ip;
 reg [`ABITS] fcu_nextip;
@@ -1027,7 +1019,8 @@ always @*
 for (n = 0; n < QENTRIES; n = n + 1)
 	is_qbranch[n] = iq_br[n] | iq_brk[n] | iq_rti[n] | iq_rts[n] | iq_jrl[n] | iq_brcc[n];
 wire [1:0] ic_fault;
-wire [127:0] ic_out;
+wire [1023:0] ic_out;
+wire [AMSB:0] missadr;
 reg invic, invdc;
 reg invicl;
 reg [4:0] bstate;
@@ -1053,7 +1046,6 @@ else begin
 end
 
 wire [`ABITS] btgt [0:QSLOTS-1];
-wire [127:0] ibundlep;
 wire [39:0] insnxp [0:QSLOTS-1];
 wire [7:0] templatep [0:QSLOTS-1];
 reg invdcl;
@@ -1230,7 +1222,6 @@ regfileSource urfs1
 	.iq_state(iq_state),
 	.iq_rfw(iq_rfw),
 	.iq_Rd(iq_tgt),
-	.iq_tgt2(iq_tgt2),
 	.Rd(Rd),
 	.Rd2(Rd2),
 	.rob_tails(rob_tails),
@@ -2066,25 +2057,19 @@ begin
 	2'd2:	r_amt = commit2_rid - rob_heads[0] + 4'd1;
 	2'd3:	r_amt = commit3_rid - rob_heads[0] + 4'd1;
 	endcase
-	// Round down to an even increment
-	r_amt[0] = 1'b0;
 	// Now search ahead for invalid entries that can be skipped over.
-	nxtrb = (rob_heads[0] + r_amt) % (RENTRIES << 1);
+	nxtrb = (rob_heads[0] + r_amt) % RENTRIES;
 	if (rob_state[nxtrb[`RBITS]]==RS_INVALID && rob_heads[nxtrb[`RBITS]]!=rob_tails[0]) begin
 		r_amt = r_amt + 4'd1;
-		r_amt[0] = 1'b0;
 		nxtrb = rob_heads[0] + r_amt;
 		if (rob_state[nxtrb[`RBITS]]==RS_INVALID && rob_heads[nxtrb[`RBITS]]!=rob_tails[0]) begin
 			r_amt = r_amt + 4'd1;
-			r_amt[0] = 1'b0;
 			nxtrb = rob_heads[0] + r_amt;
 			if (rob_state[nxtrb[`RBITS]]==RS_INVALID && rob_heads[nxtrb[`RBITS]]!=rob_tails[0]) begin
 				r_amt = r_amt + 4'd1;
-				r_amt[0] = 1'b0;
 				nxtrb = rob_heads[0] + r_amt;
 				if (rob_state[nxtrb[`RBITS]]==RS_INVALID && rob_heads[nxtrb[`RBITS]]!=rob_tails[0]) begin
 					r_amt = r_amt + 4'd1;
-					r_amt[0] = 1'b0;
 					nxtrb = rob_heads[0] + r_amt;
 				end
 			end
@@ -2307,7 +2292,7 @@ ICController uicc1
 (
 	.rst_i(rst_i),
 	.clk_i(clk_i),
-	.ip(ipb),
+	.missadr(missadr),
 	.hit(L1_ihit),
 	.bstate(bstate),
 	.state(icstate),
@@ -2357,7 +2342,8 @@ L1_icache uic1
 	.fault(),
 	.hit(L1_ihit),
 	.invall(invic),
-	.invline(L1_invline)
+	.invline(L1_invline),
+	.missadr(missadr)
 );
 
 L2_icache uic2
@@ -2714,8 +2700,8 @@ L2_dcache udc4
 	.invline(d1L1_invline)
 );
 
-wire [79:0] aligned_data = fnDatiAlign(dram0_addr,xdati);
-wire [79:0] rdat0, rdat1;
+wire [255:0] aligned_data = fnDatiAlign(dram0_addr,xdati);
+wire [255:0] rdat0, rdat1;
 assign rdat0 = fnDataExtend(dram0_instr,dram0_unc ? aligned_data : dc0_out);
 assign rdat1 = fnDataExtend(dram1_instr,dram1_unc ? aligned_data : dc1_out);
 reg [79:0] rmw_ad0, rmw_ad1;
@@ -3062,10 +3048,9 @@ decodeBuffer udcb1
 	.stop_string(agen0_stopString),
 	.phit(phit),
 	.next_bundle(nextb),
-	.ibundlep(ibundlep),
 	.insnxp(insnxp),
-	.ibundle(ibundle),
 	.insnx(insnx),
+	.ip(ipb[5:0]),
 	.queued(queuedCnt!=3'd0),
 	.queuedOnp(queuedOnp)
 );
@@ -3715,10 +3700,10 @@ end
 // Stores might exception so we don't want the heads to advance if a subsequent
 // instruction is store even though there's no target register.
 // If commiting two results on a single head, increment by one, not two.
-wire cmt_head2 = (!iq_rfw[heads[2]] && rob_tgt2[rob_heads[0]][5:0]==6'd0 && !iq_oddball[heads[2]] && ~|iq_exc[heads[2]]);
-wire cmt_head2r = (!iq_rfw[rob_heads[2]] && rob_tgt2[rob_heads[0]][5:0]==6'd0 && !iq_oddball[rob_heads[2]] && ~|iq_exc[rob_heads[2]]);
-wire cmt_tgt2 = rob_tgt2[rob_heads[0]][5:0]!=6'd0;
-wire cmt_tgt21 = rob_tgt2[rob_heads[1]][5:0]!=6'd0;
+//wire cmt_head2 = (!iq_rfw[heads[2]] && rob_tgt2[rob_heads[0]][5:0]==6'd0 && !iq_oddball[heads[2]] && ~|iq_exc[heads[2]]);
+//wire cmt_head2r = (!iq_rfw[rob_heads[2]] && rob_tgt2[rob_heads[0]][5:0]==6'd0 && !iq_oddball[rob_heads[2]] && ~|iq_exc[rob_heads[2]]);
+//wire cmt_tgt2 = rob_tgt2[rob_heads[0]][5:0]!=6'd0;
+//wire cmt_tgt21 = rob_tgt2[rob_heads[1]][5:0]!=6'd0;
 
 // Determine the head increment amount, this must match code later on.
 always @*
@@ -4500,17 +4485,13 @@ end
 end
 endgenerate
 
-reg [AMSB:0] prog_base;
-always @(posedge clk_i)
-	prog_base <= {program_base,2'b0} + program_base;
-
 reg [AMSB:0] bse0, bse1;
 always @*
 if (dl==2'd0)
 	bse0 <= 1'd0;
 else
 	case(agen0_base)
-	2'd0:	bse0 <= prog_base;
+	2'd0:	bse0 <= program_base;
 	2'd1: bse0 <= data_base;
 	2'd2: bse0 <= io_base;
 	2'd3: bse0 <= extra_base;
@@ -4520,7 +4501,7 @@ if (dl==2'd0)
 	bse1 <= 1'd0;
 else
 	case(agen1_base)
-	2'd0:	bse1 <= prog_base;
+	2'd0:	bse1 <= program_base;
 	2'd1: bse1 <= data_base;
 	2'd2: bse1 <= io_base;
 	2'd3: bse1 <= extra_base;
@@ -4973,7 +4954,6 @@ FCU_Calc #(.AMSB(AMSB)) ufcuc1
 	.instr(fcu_instr),
 	.tvec(tvec[fcu_instr[14:13]]),
 	.a(fcu_argA),
-	.b(fcu_argB),
 	.nextpc(fcu_nextip),
 	.im(im),
 	.waitctr(waitctr),
@@ -4998,7 +4978,7 @@ case(fcu_instr[`OPCODE])
 //`JMP,`CALL:	fcu_missip = {fcu_ip[AMSB:38],fcu_instr[39:10],fcu_instr[5:0],fcu_instr[1:0]};
 //`CHK:	fcu_missip = fcu_nextip + fcu_argI;	// Handled as an instruction exception
 // Default: branch
-default:	fcu_missip = fcu_pt ? fcu_nextip : {fcu_ip[AMSB:4]+fcu_brdisp[AMSB:4],fcu_brdisp[3:0]};
+default:	fcu_missip = fcu_pt ? fcu_nextip : {fcu_ip[AMSB:27],fcu_brdisp[26:0]};
 endcase
 fcu_missip[0] = 1'b0;
 end
@@ -5009,11 +4989,11 @@ end
 
 wire fcu_brk_miss = fcu_brk || fcu_rti;
 `ifdef FCU_ENH
-wire fcu_ret_miss = fcu_ret && (fcu_argB != iq_ip[nid]);
+wire fcu_rts_miss = fcu_rts && (fcu_argB != iq_ip[nid]);
 wire fcu_jal_miss = fcu_jal && (fcu_argA + fcu_argI != iq_ip[nid]);
 wire fcu_followed = iq_sn[nid] > iq_sn[fcu_id];
 `else
-wire fcu_ret_miss = fcu_ret;
+wire fcu_rts_miss = fcu_rts;
 wire fcu_jal_miss = fcu_jal;
 wire fcu_followed = `TRUE;
 `endif
@@ -5024,7 +5004,7 @@ if (fcu_v) begin
 	// flushed from the queue so the interrupt is recognized only once.
 	// BRK and RTI are handled as excmiss types which are processed during the commit stage.
 	fcu_branchhit <= (fcu_branch && !(fcu_takb ^ fcu_pt))
-		|| (fcu_ret && (fcu_argB == iq_ip[nid]))
+		|| (fcu_rts && (fcu_argB == iq_ip[nid]))
 		|| (fcu_jal && (fcu_argA + fcu_argI == iq_ip[nid]))
 		 ;
 	if (fcu_brk_miss)
@@ -5034,7 +5014,7 @@ if (fcu_v) begin
 	else
 		if (fcu_rex && (im < ~ol))
 		fcu_branchmiss = TRUE;
-	else if (fcu_ret_miss)
+	else if (fcu_rts_miss)
 		fcu_branchmiss = TRUE;
 	else if (fcu_jal_miss)
     fcu_branchmiss = TRUE;
@@ -5078,65 +5058,6 @@ assign outstanding_stores = (dram0 && dram0_store) ||
 //
 // additional COMMIT logic
 //
-reg [2:0] cmap [0:3];
-always @*
-begin
-	casez({rob_tgt2[rob_heads[0][`RBITS]][6:0]!=7'd0,
-				rob_tgt2[rob_heads[1][`RBITS]][6:0]!=7'd0,
-				rob_tgt2[rob_heads[2][`RBITS]][6:0]!=7'd0,
-				rob_tgt2[rob_heads[3][`RBITS]][6:0]!=7'd0
-				})
-	4'b0000,
-	4'b0001:
-		begin
-			cmap[0] = 3'd0;
-			cmap[1] = 3'd2;
-			cmap[2] = 3'd4;
-			cmap[3] = 3'd6;
-		end
-	4'b0010,
-	4'b0011:
-		begin
-			cmap[0] = 3'd0;
-			cmap[1] = 3'd2;
-			cmap[2] = 3'd4;
-			cmap[3] = 3'd5;
-		end
-	4'b0100,
-	4'b0101,
-	4'b0110,
-	4'b0111:
-		begin
-			cmap[0] = 3'd0;
-			cmap[1] = 3'd2;
-			cmap[2] = 3'd3;
-			cmap[3] = 3'd4;
-		end
-	4'b1000,
-	4'b1001:
-		begin
-			cmap[0] = 3'd0;
-			cmap[1] = 3'd1;
-			cmap[2] = 3'd2;
-			cmap[3] = 3'd4;
-		end
-	4'b1010,
-	4'b1011:
-		begin
-			cmap[0] = 3'd0;
-			cmap[1] = 3'd1;
-			cmap[2] = 3'd2;
-			cmap[3] = 3'd4;
-		end
-	default:
-		begin
-			cmap[0] = 3'd0;
-			cmap[1] = 3'd1;
-			cmap[2] = 3'd2;
-			cmap[3] = 3'd3;
-		end
-	endcase
-end
 
 always @*
 begin
@@ -5648,7 +5569,7 @@ if (rst_i|(rst_ctr < 32'd2)) begin
 `endif
      fcu_dataready <= 0;
      fcu_instr <= `NOP_INSN;
-     fcu_call <= 1'b0;
+     fcu_jsr <= 1'b0;
      dramA_v <= 0;
      dramB_v <= 0;
      I <= 0;
@@ -6065,7 +5986,7 @@ if (fcu_v) begin
 	fcu_done <= `TRUE;
 	iq_ma  [ fcu_id ] <= fcu_missip;
 	rob_tgt [ fcu_rid] <= fcu_tgt;
-  rob_res [ fcu_rid ] <= {rfcu_bus,4'd0};
+  rob_res [ fcu_rid ] <= rfcu_bus;
   rob_exc [ fcu_rid ] <= fcu_exc;
 	if (iq_state[fcu_id]==IQS_OUT) begin
 		iq_state[fcu_id ] <= IQS_CMT;
@@ -6080,13 +6001,13 @@ end
 
 // dramX_v only set on a load
 if (dramA_v && iq_v[ dramA_id ]) begin
-	rob_res	[ dramA_rid ] <= {rdramA_bus,4'd0};
+	rob_res	[ dramA_rid ] <= rdramA_bus;
 	rob_state[dramA_rid ] <= RS_CMT;
 	iq_state[dramA_id ] <= IQS_CMT;
 	iq_aq  [ dramA_id ] <= `INV;
 end
 if (`NUM_MEM > 1 && dramB_v && iq_v[ dramB_id ]) begin
-	rob_res	[ dramB_id ] <= {rdramB_bus,4'd0};
+	rob_res	[ dramB_id ] <= rdramB_bus;
 	rob_state[dramB_rid ] <= RS_CMT;
 	iq_state[dramB_id ] <= IQS_CMT;
 	iq_aq  [ dramB_id ] <= `INV;
@@ -6213,10 +6134,10 @@ end
 						alu1_rid:	alu0_argA <= ralu1_bus;
 						fpu1_rid:	alu0_argA <= rfpu1_bus[VWID-1:0];
 						fpu2_rid:	alu0_argA <= rfpu2_bus[VWID-1:0];
-						default:	alu0_argA <= 80'hDEADDEADDEADDEADDEAD;
+						default:	alu0_argA <= {16{16'hDEAD}};
 						endcase
 `else
-					alu0_argA <= iq_argA[n][WID-1:0];               
+					alu0_argA <= iq_argA[n][VWID-1:0];               
 `endif                 
 `ifdef FU_BYPASS
 					if (iq_imm[n])
@@ -6229,7 +6150,7 @@ end
 						alu1_rid:	alu0_argB <= ralu1_bus;
 						fpu1_rid:	alu0_argB <= rfpu1_bus[VWID-1:0];
 						fpu2_rid:	alu0_argB <= rfpu2_bus[VWID-1:0];
-						default:	alu0_argB <= 80'hDEADDEADDEADDEADDEAD;
+						default:	alu0_argB <= {16{16'hDEAD}};
 						endcase
 `else
 					if (iq_imm[n])
@@ -6246,7 +6167,7 @@ end
 						alu1_rid:	alu0_argC <= ralu1_bus;
 						fpu1_rid:	alu0_argC <= rfpu1_bus[VWID-1:0];
 						fpu2_rid:	alu0_argC <= rfpu2_bus[VWID-1:0];
-						default:	alu0_argC <= 80'hDEADDEADDEADDEADDEAD;
+						default:	alu0_argC <= {16{16'hDEAD}};
 						endcase
 `else
 					alu0_argC <= iq_argC[n][VWID-1:0];
@@ -6260,7 +6181,7 @@ end
 						alu1_rid:	alu0_argD <= ralu1_bus;
 						fpu1_rid:	alu0_argD <= rfpu1_bus[WID-1:0];
 						fpu2_rid:	alu0_argD <= rfpu2_bus[WID-1:0];
-						default:	alu0_argD <= 80'hDEADDEADDEADDEADDEAD;
+						default:	alu0_argD <= {16{16'hDEAD}};
 						endcase
 `else
 					alu0_argD <= iq_argD[n][31:0];
@@ -6274,14 +6195,13 @@ end
 						alu1_rid:	alu0_argT <= ralu1_bus;
 						fpu1_rid:	alu0_argT <= rfpu1_bus[WID-1:0];
 						fpu2_rid:	alu0_argT <= rfpu2_bus[WID-1:0];
-						default:	alu0_argT <= 80'hDEADDEADDEADDEADDEAD;
+						default:	alu0_argT <= {16{16'hDEAD}};
 						endcase
 `else
 					alu0_argT <= iq_argT[n][VWID-1:0];
 `endif                 
 					alu0_argI	<= iq_argI[n];
 					alu0_tgt    <= iq_tgt[n];
-					alu0_tgt2   <= iq_tgt2[n];
 					alu0_dataready <= IsSingleCycle(iq_instr[n]);
 					alu0_ld <= TRUE;
 					iq_state[n] <= IQS_OUT;
@@ -6329,7 +6249,7 @@ end
 	                 alu1_rid:	alu1_argA <= ralu1_bus;
 	                 fpu1_rid:	alu1_argA <= rfpu1_bus[VWID-1:0];
 	                 fpu2_rid:	alu1_argA <= rfpu2_bus[VWID-1:0];
-	                 default:	alu1_argA <= 80'hDEADDEADDEADDEADDEAD;
+	                 default:	alu1_argA <= {16{16'hDEAD}};
 	                 endcase
 `else
 								alu1_argA <= iq_argA[n][VWID-1:0];               
@@ -6345,7 +6265,7 @@ end
 									alu1_rid:	alu1_argB <= ralu1_bus;
 									fpu1_rid:	alu1_argB <= rfpu1_bus[VWID-1:0];
 									fpu2_rid:	alu1_argB <= rfpu2_bus[VWID-1:0];
-									default:	alu1_argB <= 80'hDEADDEADDEADDEADDEAD;
+									default:	alu1_argB <= {16{16'hDEAD}};
 									endcase
 `else
 								if (iq_imm[n])
@@ -6362,7 +6282,7 @@ end
 	                 alu1_rid:	alu1_argC <= ralu1_bus;
 	                 fpu1_rid:	alu1_argC <= rfpu1_bus[VWID-1:0];
 	                 fpu2_rid:	alu1_argC <= rfpu2_bus[VWID-1:0];
-	                 default:	alu1_argC <= 80'hDEADDEADDEADDEADDEAD;
+	                 default:	alu1_argC <= {16{16'hDEAD}};
 	                 endcase
 `else
 								alu1_argC <= iq_argC[n][VWID-1:0];
@@ -6376,7 +6296,7 @@ end
 						alu1_rid:	alu1_argD <= ralu1_bus;
 						fpu1_rid:	alu1_argD <= rfpu1_bus[31:0];
 						fpu2_rid:	alu1_argD <= rfpu2_bus[31:0];
-						default:	alu1_argD <= 80'hDEADDEADDEADDEADDEAD;
+						default:	alu1_argD <= {16{16'hDEAD}};
 						endcase
 `else
 					alu1_argD <= iq_argD[n][31:0];
@@ -6390,14 +6310,13 @@ end
 						alu1_rid:	alu1_argT <= ralu1_bus;
 						fpu1_rid:	alu1_argT <= rfpu1_bus[VWID-1:0];
 						fpu2_rid:	alu1_argT <= rfpu2_bus[VWID-1:0];
-						default:	alu1_argT <= 80'hDEADDEADDEADDEADDEAD;
+						default:	alu1_argT <= {16{16'hDEAD}};
 						endcase
 `else
 					alu1_argT <= iq_argT[n][VWID-1:0];
 `endif                 
                  alu1_argI	<= iq_argI[n];
                  alu1_tgt    <= iq_tgt[n];
-									alu1_tgt2   <= iq_tgt2[n];
                  alu1_dataready <= IsSingleCycle(iq_instr[n]);
                  alu1_ld <= TRUE;
                  iq_state[n] <= IQS_OUT;
@@ -6441,7 +6360,7 @@ end
 	                 alu1_rid:	agen0_argA <= ralu1_bus;
 	                 fpu1_rid:	agen0_argA <= rfpu1_bus[WID-1:0];
 	                 fpu2_rid:	agen0_argA <= rfpu2_bus[WID-1:0];
-	                 default:	agen0_argA <= 80'hDEADDEADDEADDEADDEAD;
+	                 default:	agen0_argA <= {16{16'hDEAD}};
 	                 endcase
 `else
 								agen0_argA <= iq_argA[n][WID-1:0];
@@ -6481,14 +6400,13 @@ end
 	                 alu1_rid:	agen0_argC <= ralu1_bus;
 	                 fpu1_rid:	agen0_argC <= rfpu1_bus[WID-1:0];
 	                 fpu2_rid:	agen0_argC <= rfpu2_bus[WID-1:0];
-	                 default:	agen0_argC <= 80'hDEADDEADDEADDEADDEAD;
+	                 default:	agen0_argC <= {16{16'hDEAD}};
 	                 endcase
 `else
 								agen0_argC <= iq_argC[n][WID-1:0];
 `endif           
 								agen0_argI <= iq_argI[n];      
                  agen0_tgt    <= iq_tgt[n];
-                 agen0_tgt2   <= iq_tgt2[n];
                  agen0_dataready <= 1'b1;
                  if (iq_lsm[n] & agen0_stopString)
                  	iq_state[n] <= IQS_INVALID;
@@ -6537,7 +6455,7 @@ end
 	                 alu1_rid:	agen1_argA <= ralu1_bus;
 	                 fpu1_rid:	agen1_argA <= rfpu1_bus[WID-1:0];
 	                 fpu2_rid:	agen1_argA <= rfpu2_bus[WID-1:0];
-	                 default:	agen1_argA <= 80'hDEADDEADDEADDEADDEAD;
+	                 default:	agen1_argA <={16{16'hDEAD}};
 	                 endcase
 `else
 								agen1_argA <= iq_argA[n][WID-1:0];
@@ -6552,14 +6470,13 @@ end
 	                 alu1_rid:	agen1_argC <= ralu1_bus;
 	                 fpu1_rid:	agen1_argC <= rfpu1_bus[WID-1:0];
 	                 fpu2_rid:	agen1_argC <= rfpu2_bus[WID-1:0];
-	                 default:	agen1_argC <= 80'hDEADDEADDEADDEADDEAD;
+	                 default:	agen1_argC <= {16{16'hDEAD}};
 	                 endcase
 `else
 								agen1_argC <= iq_argC[n][WID-1:0];
 `endif                 
 								agen1_argI <= iq_argI[n];      
                  agen1_tgt    <= iq_tgt[n];
-                 agen1_tgt2   <= iq_tgt2[n];
                  agen1_dataready <= 1'b1;
                  iq_state[n] <= IQS_OUT;
             end
@@ -6600,7 +6517,7 @@ end
 	                 alu1_rid:	fpu1_argA <= {ralu1_bus};
 	                 fpu1_rid:	fpu1_argA <= rfpu1_bus;
 	                 fpu2_rid:	fpu1_argA <= rfpu2_bus;
-	                 default:	fpu1_argA <= 80'hDEADDEADDEADDEADDEAD;
+	                 default:	fpu1_argA <= {16{16'hDEAD}};
 	                 endcase
 `else
 								fpu1_argA <= iq_argA[n];               
@@ -6616,7 +6533,7 @@ end
 									alu1_rid:	fpu1_argB <= {ralu1_bus};
 									fpu1_rid:	fpu1_argB <= rfpu1_bus;
 									fpu2_rid:	fpu1_argB <= rfpu2_bus;
-									default:	fpu1_argB <= 80'hDEADDEADDEADDEADDEAD;
+									default:	fpu1_argB <= {16{16'hDEAD}};
 									endcase
 `else
 								if (iq_imm[n])
@@ -6633,7 +6550,7 @@ end
 	                 alu1_rid:	fpu1_argC <= {ralu1_bus};
 	                 fpu1_rid:	fpu1_argC <= rfpu1_bus;
 	                 fpu2_rid:	fpu1_argC <= rfpu2_bus;
-	                 default:	fpu1_argC <= 80'hDEADDEADDEADDEADDEAD;
+	                 default:	fpu1_argC <= {16{16'hDEAD}};
 	                 endcase
 `else
 								fpu1_argC <= iq_argC[n];
@@ -6647,16 +6564,29 @@ end
 	                 alu1_rid:	fpu1_argD <= {ralu1_bus};
 	                 fpu1_rid:	fpu1_argD <= rfpu1_bus;
 	                 fpu2_rid:	fpu1_argD <= rfpu2_bus;
-	                 default:	fpu1_argD <= 16'hDEAD;
+	                 default:	fpu1_argD <= {16{16'hDEAD}};
 	                 endcase
 `else
 								fpu1_argD <= iq_argD[n];
+`endif                 
+`ifdef FU_BYPASS
+								if (iq_argT_v[n])
+									fpu1_argT <= iq_argT[n][VWID-1:0];
+								else
+									case(iq_argT_s[n][`RBITS])
+									alu0_rid:	fpu1_argT <= ralu0_bus;
+									alu1_rid:	fpu1_argT <= ralu1_bus;
+									fpu1_rid:	fpu1_argT <= rfpu1_bus[VWID-1:0];
+									fpu2_rid:	fpu1_argT <= rfpu2_bus[VWID-1:0];
+									default:	fpu1_argT <= {16{16'hDEAD}};
+									endcase
+`else
+								fpu1_argT <= iq_argT[n][VWID-1:0];
 `endif                 
                  fpu1_argI	<= iq_argI[n];
                  fpu1_dataready <= `VAL;
                  fpu1_ld <= TRUE;
                  fpu1_tgt <= iq_tgt[n];
-                 fpu1_tgt2 <= iq_tgt2[n];
                  iq_state[n] <= IQS_OUT;
             end
         end
@@ -6695,7 +6625,7 @@ end
 	                 alu1_rid:	fpu2_argA <= {ralu1_bus};
 	                 fpu1_rid:	fpu2_argA <= rfpu1_bus;
 	                 fpu2_rid:	fpu2_argA <= rfpu2_bus;
-	                 default:	fpu2_argA <= 80'hDEADDEADDEADDEADDEAD;
+	                 default:	fpu2_argA <= {16{16'hDEAD}};
 	                 endcase
 `else
 								fpu2_argA <= iq_argA[n];               
@@ -6711,7 +6641,7 @@ end
 									alu1_rid:	fpu2_argB <= {ralu1_bus};
 									fpu1_rid:	fpu2_argB <= rfpu1_bus;
 									fpu2_rid:	fpu2_argB <= rfpu2_bus;
-									default:	fpu2_argB <= 80'hDEADDEADDEADDEADDEAD;
+									default:	fpu2_argB <= {16{16'hDEAD}};
 									endcase
 `else
 								if (iq_imm[n])
@@ -6728,7 +6658,7 @@ end
 	                 alu1_rid:	fpu2_argC <= {ralu1_bus};
 	                 fpu1_rid:	fpu2_argC <= rfpu1_bus;
 	                 fpu2_rid:	fpu2_argC <= rfpu2_bus;
-	                 default:	fpu2_argC <= 80'hDEADDEADDEADDEADDEAD;
+	                 default:	fpu2_argC <={16{16'hDEAD}};
 	                 endcase
 `else
 								fpu2_argC <= iq_argC[n];
@@ -6742,16 +6672,29 @@ end
 	                 alu1_rid:	fpu2_argD <= {ralu1_bus};
 	                 fpu1_rid:	fpu2_argD <= rfpu1_bus;
 	                 fpu2_rid:	fpu2_argD <= rfpu2_bus;
-	                 default:	fpu2_argD <= 16'hDEAD;
+	                 default:	fpu2_argD <= {16{16'hDEAD}};
 	                 endcase
 `else
 								fpu2_argD <= iq_argD[n];
+`endif                 
+`ifdef FU_BYPASS
+								if (iq_argT_v[n])
+									fpu2_argT <= iq_argT[n][VWID-1:0];
+								else
+									case(iq_argT_s[n][`RBITS])
+									alu0_rid:	fpu2_argT <= ralu0_bus;
+									alu1_rid:	fpu2_argT <= ralu1_bus;
+									fpu1_rid:	fpu2_argT <= rfpu1_bus[VWID-1:0];
+									fpu2_rid:	fpu2_argT <= rfpu2_bus[VWID-1:0];
+									default:	fpu2_argT <= {16{16'hDEAD}};
+									endcase
+`else
+								fpu2_argT <= iq_argT[n][VWID-1:0];
 `endif                 
                  fpu2_argI	<= iq_argI[n];
                  fpu2_dataready <= `VAL;
                  fpu2_ld <= TRUE;
                  fpu2_tgt <= iq_tgt[n];
-                 fpu2_tgt2 <= iq_tgt2[n];
                  iq_state[n] <= IQS_OUT;
             end
         end
@@ -6778,20 +6721,15 @@ end
 				fcu_prevInstr <= fcu_instr;
 				fcu_instr	<= iq_instr[n];
 				fcu_ip		<= iq_ip[n];
-				case(iq_ip[n][3:0])
-				4'h0:	fcu_nextip <= {iq_ip[n][79:4],4'h5};
-				4'h5:	fcu_nextip <= {iq_ip[n][79:4],4'hA};
-				4'hA:	fcu_nextip <= {iq_ip[n][79:4],4'h0} + 8'd16;
-				default:	begin fcu_nextip <= iq_ip[n]; end
-				endcase
+				fcu_nextip <= iq_ip[n] + 4'd5;
 				fcu_pt     <= iq_pt[n];
-				fcu_brdisp <= {{60{iq_instr[n][39]}},iq_instr[n][39:24],iq_instr[n][23:22],iq_instr[n][23:22]};
+				fcu_brdisp <= iq_instr[n][37:11];
 				//$display("Branch tgt: %h", {iq_instr[n][39:22],iq_instr[n][5:3],iq_instr[n][4:3]});
 				fcu_branch <= iq_br[n];
 				fcu_cr     <= iq_cr[n];
-				fcu_call    <= IsJSR(iq_instr[n])|iq_jrl[n];
+				fcu_jsr    <= IsJSR(iq_instr[n])|iq_jrl[n];
 				fcu_jal     <= iq_jrl[n];
-				fcu_ret    <= iq_rts[n];
+				fcu_rts    <= iq_rts[n];
 				fcu_brk  <= iq_brk[n];
 				fcu_rti  <= iq_rti[n];
 				fcu_rex  <= iq_rex[n];
@@ -6867,7 +6805,6 @@ end
 				fcu_ld <= TRUE;
 				fcu_timeout <= 8'h00;
         fcu_tgt <= iq_tgt[n];
-        fcu_tgt2 <= iq_tgt2[n];
 				iq_state[n] <= IQS_OUT;
 				fcu_done <= `FALSE;
       end
@@ -7338,11 +7275,18 @@ B_RMWAck:
 // Regular load
 B_DLoadAck:
   if (dack_i|derr_i|tlb_miss|rdv_i) begin
-  	wb_nack();
+  	if (!bok_i) begin
+  		dstb <= `LOW;
+			dadr[AMSB:4] <= dadr[AMSB:4] + 2'd1;
+  		state <= B_DLoadNack;
+  	end
+  	//wb_nack();
 		sr_o <= `LOW;
 		case(dccnt)
 		2'd0:	xdati[127:0] <= dat_i;
-		2'd1:	xdati[199:128] <= dat_i[71:0];
+		2'd1:	xdati[255:128] <= dat_i;
+		2'd2:	xdati[371:256] <= dat_i[119:0];
+		2'd3:	;
 		endcase
     case(bwhich)
     2'b00:  begin
@@ -7361,7 +7305,11 @@ B_DLoadAck:
             end
     default:    ;
     endcase
-		bstate <= B_LSNAck;
+    dccnt <= dccnt + 2'd1;
+    case(dccnt)
+    2'd1:	cti_o <= 3'b111;
+    2'd2: begin cti_o <= 3'd000; wb_nack(); bstate <= B_LSNAck; end
+  	endcase
 		check_abort_load();
 	end
 B_DLoadNack:
@@ -7435,15 +7383,15 @@ endcase
 `ifdef SIM
 	$display("\n\n\n\n\n\n\n\n");
 	$display("TIME %0d", $time);
-	$display("%b %h %h#", ip_mask, ip, ibundlep);
-	$display("%b %h %h#", ip_mask, ipd, ibundle);
+	$display("%b %h #", ip_mask, ip);
+	$display("%b %h #", ip_mask, ipd);
     $display ("--------------------------------------------------------------------- Regfile: %d ---------------------------------------------------------------------", rgs);
-	for (n=0; n < 64; n=n+4) begin
+	for (n=0; n < 32; n=n+4) begin
 	    $display("%d: %h %d %o   %d: %h %d %o   %d: %h %d %o   %d: %h %d %o#",
-	       n[5:0]+0, urf1.mem[{rgs,n[5:2],2'b00}], regIsValid[n+0], rf_source[n+0],
-	       n[5:0]+1, urf1.mem[{rgs,n[5:2],2'b01}], regIsValid[n+1], rf_source[n+1],
-	       n[5:0]+2, urf1.mem[{rgs,n[5:2],2'b10}], regIsValid[n+2], rf_source[n+2],
-	       n[5:0]+3, urf1.mem[{rgs,n[5:2],2'b11}], regIsValid[n+3], rf_source[n+3]
+	       n[4:0]+0, urf1.mem[{rgs,n[4:2],2'b00}], regIsValid[n+0], rf_source[n+0],
+	       n[4:0]+1, urf1.mem[{rgs,n[4:2],2'b01}], regIsValid[n+1], rf_source[n+1],
+	       n[4:0]+2, urf1.mem[{rgs,n[4:2],2'b10}], regIsValid[n+2], rf_source[n+2],
+	       n[4:0]+3, urf1.mem[{rgs,n[4:2],2'b11}], regIsValid[n+3], rf_source[n+3]
 	       );
 	end
 `ifdef FCU_ENH
@@ -7484,7 +7432,7 @@ endcase
 		 iq_alu0_issue[i]?"0":iq_alu1_issue[i]?"1":"-",
 		 iq_stomp[i]?"s":"-",
 		iq_fc[i] ? "F" : iq_mem[i] ? "M" : (iq_alu[i]==1'b1) ? "a" : iq_fpu[i] ? "f" : "O", 
-		iq_instr[i], iq_tgt[i][5:0], iq_tgt2[i][5:0],
+		iq_instr[i], iq_tgt[i][5:0], iq_tgt[i][5:0],
 		iq_argI[i],
 		iq_argA[i], iq_rs1[i], iq_argA_v[i], iq_argA_s[i],
 		iq_argB[i], iq_rs2[i], iq_argB_v[i], iq_argB_s[i],
@@ -7886,7 +7834,6 @@ begin
 	iq_argT_s[ndx] <= rf_source[Rd[slot]];
 	iq_pt[ndx] <= predict_taken[slot];
 	iq_tgt[ndx] <= Rd[slot];
-	iq_tgt2[ndx] <= Rd2[slot];
 	iq_crtgt[ndx] <= Crd[slot];
 	set_insn(ndx,id_bus);
 	// Some updates depend on instructions decoded at commit time.

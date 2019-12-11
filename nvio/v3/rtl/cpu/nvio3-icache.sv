@@ -32,29 +32,39 @@
 // within a single clock cycle.
 // -----------------------------------------------------------------------------
 
-module L1_icache_mem(clk, wr, lineno, i, o);
+module L1_icache_mem(clk, wr, lineno, nxt_lineno, i, f, o);
 parameter pLines = 128;
-parameter pLineWidth = 643;
+parameter pLineWidth = 512;
 localparam pLNMSB = pLines==128 ? 6 : 5;
 input clk;
 input wr;
 input [pLNMSB:0] lineno;
+input [pLNMSB:0] nxt_lineno;
 input [pLineWidth-1:0] i;
-output [pLineWidth-1:0] o;
+input [2:0] f;
+output [pLineWidth*2+2:0] o;
 
 integer n;
 
 (* ram_style="distributed" *)
 reg [pLineWidth-1:0] mem [0:pLines-1];
+reg [2:0] fmem[0:pLines-1];
 
 initial begin
-	for (n = 0; n < pLines; n = n + 1)
+	for (n = 0; n < pLines; n = n + 1) begin
 		mem[n] <= {pLineWidth{1'b0}};
+		fmem[n] <= 3'd0;
+	end
 end
 
 always  @(posedge clk)
-	if (wr)  mem[lineno] <= i;
-assign o = mem[lineno];
+	if (wr)
+		mem[lineno] <= i;
+always  @(posedge clk)
+	if (wr)
+		fmem[lineno] <= f;
+
+assign o = {fmem[nxt_lineno]|fmem[lineno],mem[nxt_lineno],mem[lineno]};
 
 endmodule
 
@@ -62,7 +72,7 @@ endmodule
 // Four way set associative tag memory for L1 cache.
 // -----------------------------------------------------------------------------
 
-module L1_icache_cmptag4way(rst, clk, nxt, wr, invline, invall, adr, lineno, hit);
+module L1_icache_cmptag4way(rst, clk, nxt, wr, invline, invall, adr, lineno, nxt_lineno, hit, missadr);
 parameter pLines = 128;
 parameter AMSB = 63;
 localparam pLNMSB = pLines==128 ? 6 : 5;
@@ -75,7 +85,9 @@ input invline;
 input invall;
 input [AMSB:0] adr;
 output reg [pLNMSB:0] lineno;
-output hit;
+output reg [pLNMSB:0] nxt_lineno;
+output reg hit;
+output reg [AMSB:0] missadr;
 
 (* ram_style="distributed" *)
 reg [AMSB-5:0] mem0 [0:pLines/4-1];
@@ -102,6 +114,8 @@ initial begin
   end
 end
 
+wire [AMSB:0] nxt_adr = adr + 8'd64;
+
 wire [21:0] lfsro;
 lfsr #(22,22'h0ACE3) u1 (rst, clk, nxt, 1'b0, lfsro);
 reg [pLNMSB:0] wlineno;
@@ -111,10 +125,10 @@ if (rst)
 else begin
 	if (wr) begin
 		case(lfsro[1:0])
-		2'b00:	begin  mem0[adr[pMSB:4]] <= adr[AMSB:4];  wlineno <= {2'b00,adr[pMSB:4]}; end
-		2'b01:	begin  mem1[adr[pMSB:4]] <= adr[AMSB:4];  wlineno <= {2'b01,adr[pMSB:4]}; end
-		2'b10:	begin  mem2[adr[pMSB:4]] <= adr[AMSB:4];  wlineno <= {2'b10,adr[pMSB:4]}; end
-		2'b11:	begin  mem3[adr[pMSB:4]] <= adr[AMSB:4];  wlineno <= {2'b11,adr[pMSB:4]}; end
+		2'b00:	begin  mem0[adr[pMSB:5]] <= adr[AMSB:5];  wlineno <= {2'b00,adr[pMSB:5]}; end
+		2'b01:	begin  mem1[adr[pMSB:5]] <= adr[AMSB:5];  wlineno <= {2'b01,adr[pMSB:5]}; end
+		2'b10:	begin  mem2[adr[pMSB:5]] <= adr[AMSB:5];  wlineno <= {2'b10,adr[pMSB:5]}; end
+		2'b11:	begin  mem3[adr[pMSB:5]] <= adr[AMSB:5];  wlineno <= {2'b11,adr[pMSB:5]}; end
 		endcase
 	end
 end
@@ -134,40 +148,63 @@ else begin
 		mem3v <= 1'd0;
 	end
 	else if (invline) begin
-		if (hit0) mem0v[adr[pMSB:4]] <= 1'b0;
-		if (hit1) mem1v[adr[pMSB:4]] <= 1'b0;
-		if (hit2) mem2v[adr[pMSB:4]] <= 1'b0;
-		if (hit3) mem3v[adr[pMSB:4]] <= 1'b0;
+		if (hit0) mem0v[adr[pMSB:5]] <= 1'b0;
+		if (hit1) mem1v[adr[pMSB:5]] <= 1'b0;
+		if (hit2) mem2v[adr[pMSB:5]] <= 1'b0;
+		if (hit3) mem3v[adr[pMSB:5]] <= 1'b0;
 	end
 	else if (wr) begin
 		case(lfsro[1:0])
-		2'b00:	begin  mem0v[adr[pMSB:4]] <= 1'b1; end
-		2'b01:	begin  mem1v[adr[pMSB:4]] <= 1'b1; end
-		2'b10:	begin  mem2v[adr[pMSB:4]] <= 1'b1; end
-		2'b11:	begin  mem3v[adr[pMSB:4]] <= 1'b1; end
+		2'b00:	begin  mem0v[adr[pMSB:5]] <= 1'b1; end
+		2'b01:	begin  mem1v[adr[pMSB:5]] <= 1'b1; end
+		2'b10:	begin  mem2v[adr[pMSB:5]] <= 1'b1; end
+		2'b11:	begin  mem3v[adr[pMSB:5]] <= 1'b1; end
 		endcase
 	end	
 end
 
 
-wire hit0 = mem0[adr[pMSB:4]]==adr[AMSB:4] & mem0v[adr[pMSB:4]];
-wire hit1 = mem1[adr[pMSB:4]]==adr[AMSB:4] & mem1v[adr[pMSB:4]];
-wire hit2 = mem2[adr[pMSB:4]]==adr[AMSB:4] & mem2v[adr[pMSB:4]];
-wire hit3 = mem3[adr[pMSB:4]]==adr[AMSB:4] & mem3v[adr[pMSB:4]];
+wire hit0 = mem0[adr[pMSB:5]]==adr[AMSB:5] & mem0v[adr[pMSB:5]];
+wire hit1 = mem1[adr[pMSB:5]]==adr[AMSB:5] & mem1v[adr[pMSB:5]];
+wire hit2 = mem2[adr[pMSB:5]]==adr[AMSB:5] & mem2v[adr[pMSB:5]];
+wire hit3 = mem3[adr[pMSB:5]]==adr[AMSB:5] & mem3v[adr[pMSB:5]];
+wire hit0n = mem0[nxt_adr[pMSB:5]]==nxt_adr[AMSB:5] & mem0v[nxt_adr[pMSB:5]];
+wire hit1n = mem1[nxt_adr[pMSB:5]]==nxt_adr[AMSB:5] & mem1v[nxt_adr[pMSB:5]];
+wire hit2n = mem2[nxt_adr[pMSB:5]]==nxt_adr[AMSB:5] & mem2v[nxt_adr[pMSB:5]];
+wire hit3n = mem3[nxt_adr[pMSB:5]]==nxt_adr[AMSB:5] & mem3v[nxt_adr[pMSB:5]];
 always @*
-  if (wr) lineno = {lfsro[1:0],adr[pMSB:4]};
-  else if (hit0)  lineno = {2'b00,adr[pMSB:4]};
-  else if (hit1)  lineno = {2'b01,adr[pMSB:4]};
-  else if (hit2)  lineno = {2'b10,adr[pMSB:4]};
-  else  lineno = {2'b11,adr[pMSB:4]};
-assign hit = hit0|hit1|hit2|hit3;
+if (adr[5:0] > 6'd43) begin
+  if (wr) lineno = {lfsro[1:0],adr[pMSB:5]};
+  else if (hit0)  lineno = {2'b00,adr[pMSB:5]};
+  else if (hit1)  lineno = {2'b01,adr[pMSB:5]};
+  else if (hit2)  lineno = {2'b10,adr[pMSB:5]};
+  else  lineno = {2'b11,adr[pMSB:5]};
+  if (hit0n)  nxt_lineno = {2'b00,nxt_adr[pMSB:5]};
+  else if (hit1n)  nxt_lineno = {2'b01,nxt_adr[pMSB:5]};
+  else if (hit2n)  nxt_lineno = {2'b10,nxt_adr[pMSB:5]};
+  else  nxt_lineno = {2'b11,nxt_adr[pMSB:5]};
+	hit = (hit0 & hit0n) |
+				(hit1 & hit1n) | 
+				(hit2 & hit2n) |
+				(hit3 & hit3n);
+	missadr = (hit0|hit1|hit2|hit3) ? nxt_adr : adr;
+end
+else begin
+  if (wr) lineno = {lfsro[1:0],adr[pMSB:5]};
+  else if (hit0)  lineno = {2'b00,adr[pMSB:5]};
+  else if (hit1)  lineno = {2'b01,adr[pMSB:5]};
+  else if (hit2)  lineno = {2'b10,adr[pMSB:5]};
+  else  lineno = {2'b11,adr[pMSB:5]};
+	hit = hit0|hit1|hit2|hit3;
+	missadr = adr;
+end
 endmodule
 
 
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
 
-module L1_icache(rst, clk, nxt, wr, wadr, adr, i, o, fault, hit, invall, invline);
+module L1_icache(rst, clk, nxt, wr, wadr, adr, i, o, fault, hit, invall, invline, missadr);
 parameter pSize = 2;
 parameter AMSB = 63;
 localparam pLines = pSize==4 ? 128 : 64;
@@ -178,16 +215,17 @@ input nxt;
 input wr;
 input [AMSB:0] adr;
 input [AMSB:0] wadr;
-input [642:0] i;
-output reg [127:0] o;
+input [514:0] i;
+output reg [1023:0] o;
 output reg [2:0] fault;
 output hit;
 input invall;
 input invline;
+output [AMSB:0] missadr;
 
-wire [642:0] ic;
-reg [642:0] i1, i2;
-wire [pLNMSB:0] lineno;
+wire [1026:0] ic;
+reg [514:0] i1, i2;
+wire [pLNMSB:0] lineno, nxt_lineno;
 wire taghit;
 reg wr1,wr2;
 
@@ -202,7 +240,7 @@ always @(posedge iclk)
 always @(posedge iclk)
 	wr2 <= wr1;
 always @(posedge iclk)
-	i1 <= i[642:0];
+	i1 <= i[514:0];
 always @(posedge iclk)
 	i2 <= i1;
 
@@ -210,8 +248,10 @@ L1_icache_mem #(.pLines(pLines)) u1
 (
   .clk(iclk),
   .wr(wr1),
-  .i(i1),
+  .i(i1[511:0]),
+  .f(i1[514:512]),
   .lineno(lineno),
+  .nxt_lineno(nxt_lineno),
   .o(ic)
 );
 
@@ -225,21 +265,18 @@ L1_icache_cmptag4way #(.pLines(pLines)) u2
 	.invall(invall),
 	.adr(adr),
 	.lineno(lineno),
-	.hit(taghit)
+	.nxt_lineno(nxt_lineno),
+	.hit(taghit),
+	.missadr(missadr)
 );
 
 assign hit = taghit;
 
 //always @(radr or ic0 or ic1)
-always @(adr or ic)
-case(adr[3:2])
-2'd0:	o <= ic[159:0];
-2'd1:	o <= ic[319:160];
-2'd2:	o <= ic[479:320];
-2'd3:	o <= ic[639:480];
-endcase
+always @(ic)
+	o <= ic[1023:0];
 always @*
-	fault <= ic[642:640];
+	fault <= ic[1026:1024];
 
 endmodule
 
@@ -254,7 +291,7 @@ input [8:0] lineno;
 input [2:0] sel;
 input [127:0] i;
 input [1:0] fault;
-output [642:0] o;
+output [514:0] o;
 
 (* ram_style="block" *)
 reg [127:0] mem0 [0:511];
@@ -263,9 +300,7 @@ reg [127:0] mem1 [0:511];
 (* ram_style="block" *)
 reg [127:0] mem2 [0:511];
 (* ram_style="block" *)
-reg [127:0] mem3 [0:511];
-(* ram_style="block" *)
-reg [130:0] mem4 [0:511];
+reg [130:0] mem3 [0:511];
 (* ram_style="distributed" *)
 reg [8:0] rrcl;
 
@@ -276,7 +311,6 @@ initial begin
     mem1[n] <= 1'd0;
     mem2[n] <= 1'd0;
     mem3[n] <= 1'd0;
-    mem4[n] <= 1'd0;
   end
 end
 
@@ -287,8 +321,7 @@ begin
     3'd0:   mem0[lineno] <= i;
     3'd1:   mem1[lineno] <= i;
     3'd2:   mem2[lineno] <= i;
-    3'd3:   mem3[lineno] <= i;
-    3'd4:		mem4[lineno] <= {fault,i};
+    3'd3:   mem3[lineno] <= {fault,i};
     endcase
   end
 end
@@ -296,7 +329,7 @@ end
 always @(posedge clk)
 	rrcl <= lineno;        
     
-assign o = {mem4[rrcl],mem3[rrcl],mem2[rrcl],mem1[rrcl],mem0[rrcl]};
+assign o = {mem3[rrcl],mem2[rrcl],mem1[rrcl],mem0[rrcl]};
 
 endmodule
 
@@ -321,7 +354,7 @@ input [2:0] cnt;
 input exv_i;
 input [127:0] i;
 input err_i;
-output [642:0] o;
+output [514:0] o;
 output hit;
 input invall;
 input invline;
