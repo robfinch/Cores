@@ -38,7 +38,7 @@ input clk;
 input branchmiss;
 input [`QBITS] heads [0:QENTRIES-1];
 input [QSLOTS-1:0] slotvd;
-input [QENTRIES-1:0] slot_rfw;
+input [QSLOTS-1:0] slot_rfw;
 input [QSLOTS-1:0] queuedOn;
 input [QENTRIES-1:0] rqueuedOn;
 input [2:0] iq_state [0:QENTRIES-1];

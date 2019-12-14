@@ -55,7 +55,7 @@ input [127:0] dat_i;
 output reg [1:0] ol_o;
 output [31:0] pcr_o;
 output [63:0] pcr2_o;
-output [79:0] pkeys_o;
+output [127:0] pkeys_o;
 output icl_o;
 output reg cr_o;
 output reg sr_o;
@@ -78,7 +78,7 @@ parameter RSTIP = 128'hFFFFFFFFFFFFFFFFFFFFFFFFFFFF0100;
 parameter BRKIP = 128'hFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000;
 parameter DEBUG = 1'b0;
 parameter DBW = 80;
-parameter ABW = 80;
+parameter ABW = 128;
 parameter AMSB = ABW-1;
 parameter RBIT = 6;
 parameter WB_DEPTH = 7;
@@ -210,6 +210,20 @@ assign Crs[1] = insnx[1][10:8];
 assign Crs[2] = insnx[2][10:8];
 assign Crs[3] = insnx[3][10:8];
 
+reg [WID-1:0] gp_regfilex [0:31];
+reg [WID-1:0] gp_regfile [0:31];
+reg [WID-1:0] fp_regfilex [0:31];
+reg [WID-1:0] fp_regfile [0:31];
+reg [WID-1:0] lk_regfilex [0:31];
+reg [WID-1:0] lk_regfile [0:31];
+reg [VWID-1:0] vc_regfilex [0:31];
+reg [VWID-1:0] vc_regfile [0:31];
+reg [31:0] vm_regfilex [0:31];
+reg [31:0] vm_regfile [0:31];
+reg [15:0] vl_regx, vl_reg;
+reg [7:0] cr_regfilex [0:7];
+reg [7:0] cr_regfile [0:7];
+
 wire [3:0] Crd [0:QSLOTS-1];
 wire [127:0] gp_rfoa [0:QSLOTS-1];
 wire [127:0] gp_rfob [0:QSLOTS-1];
@@ -218,8 +232,7 @@ wire [127:0] fp_rfoa [0:QSLOTS-1];
 wire [127:0] fp_rfob [0:QSLOTS-1];
 wire [127:0] fp_rfoc [0:QSLOTS-1];
 wire [127:0] lk_rfo [0:QSLOTS-1];
-wire [7:0] cr_rfoa [0:QSLOTS-1];
-wire [7:0] cr_rfob [0:QSLOTS-1];
+wire [7:0] cr_rfo [0:QSLOTS-1];
 wire [255:0] vc_rfoa [0:QSLOTS-1];
 wire [255:0] vc_rfob [0:QSLOTS-1];
 wire [255:0] vc_rfoc [0:QSLOTS-1];
@@ -440,6 +453,7 @@ reg [QENTRIES-1:0] iq_fc;   // flow control instruction
 reg [QENTRIES-1:0] iq_canex = 8'h00;	// true if it's an instruction that can exception
 reg [QENTRIES-1:0] iq_oddball = 8'h00;	// writes to register file
 reg [QENTRIES-1:0] iq_lea;
+reg [62:0] iq_sel [0:QENTRIES-1];
 reg [QENTRIES-1:0] iq_load;	// is a memory load instruction
 reg [QENTRIES-1:0] iq_store;	// is a memory store instruction
 reg [QENTRIES-1:0] iq_preload;	// is a memory preload instruction
@@ -491,11 +505,11 @@ reg [RBIT:0] iq_tgt [0:QENTRIES-1];		// Rt field or ZERO -- this is the instruct
 reg [3:0] iq_crtgt [0:QENTRIES-1];
 //reg [3:0] iq_tgtrs [0:QENTRIES-1];
 //reg [3:0] iq_tgt2rs [0:QENTRIES-1];
-reg [WID-1:0] iq_argI	[0:QENTRIES-1];	// argument 0 (immediate)
+reg [VWID-1:0] iq_argI	[0:QENTRIES-1];	// argument 0 (immediate)
 reg [VWID-1:0] iq_argA	[0:QENTRIES-1];	// argument 1
 reg [VWID-1:0] iq_argB	[0:QENTRIES-1];	// argument 2
 reg [VWID-1:0] iq_argC	[0:QENTRIES-1];	// argument 3
-reg [VWID-1:0] iq_argD	[0:QENTRIES-1];	// argument 4
+reg [31:0] iq_argD	[0:QENTRIES-1];			// argument 4 (vector mask)
 reg [VWID-1:0] iq_argT	[0:QENTRIES-1];	// target
 
 reg [QENTRIES-1:0] iq_argA_v;	// arg1 valid
@@ -678,13 +692,12 @@ reg        alu1_store;
 reg 			 alu1_push;
 reg        alu1_shft;
 reg [RBIT:0] alu1_Ra;
-reg [WID-1:0] alu1_argA;
-reg [WID-1:0] alu1_argB;
-reg [WID-1:0] alu1_argC;
+reg [VWID-1:0] alu1_argA;
+reg [VWID-1:0] alu1_argB;
+reg [VWID-1:0] alu1_argC;
 reg [31:0] alu1_argD;
 reg [VWID-1:0] alu1_argT;
 reg alu1_z;
-reg [WID-1:0] alu1_argT;
 reg [WID-1:0] alu1_argI;	// only used by BEQ
 reg [3:0]  alu1_fmt;
 reg [RBIT:0] alu1_tgt;
@@ -1096,7 +1109,7 @@ wire dhit01, dhit11;
 reg [`ABITS] dcadr;
 reg [WID-1:0] dcdat;
 reg dcwr;
-reg [9:0] dcsel;
+reg [31:0] dcsel;
 wire update_iq;
 wire [QENTRIES-1:0] uid;
 wire [RENTRIES-1:0] ruid;
@@ -1173,8 +1186,6 @@ endfunction
 wire [`RBITS] next_iq_rid [0:QENTRIES-1];
 wire [`RENTRIES-1:0] next_rob_v;
 
-reg [2:0] n_commit;
-
 regfileValid urfv1
 (
 	.rst(rst_i),
@@ -1186,10 +1197,10 @@ regfileValid urfv1
 	.livetarget2(livetarget2),
 	.branchmiss(branchmiss),
 	.rob_id(rob_id),
-	.commit0_v(commit0_v && n_commit > 3'd0),
-	.commit1_v(commit1_v && n_commit > 3'd1),
-	.commit2_v(commit2_v && n_commit > 3'd2),
-	.commit3_v(commit3_v && n_commit > 3'd3),
+	.commit0_v(commit0_v),
+	.commit1_v(commit1_v),
+	.commit2_v(commit2_v),
+	.commit3_v(commit3_v),
 	.commit0_id(commit0_id),
 	.commit1_id(commit1_id),
 	.commit2_id(commit2_id),
@@ -1232,256 +1243,67 @@ regfileSource urfs1
 	.rf_source(rf_source)
 );
 
-reg gp0_commit_v, gp1_commit_v;
-reg [2:0] gp0_cs, gp1_cs;
-reg [4:0] gp0_commit_tgt, gp1_commit_tgt;
-reg [127:0] gp0_commit_bus, gp1_commit_bus;
-reg [2:0] cmtcnt;
+assign gp_rfoa[0] = gp_regfilex[Rs1[0][4:0]];
+assign gp_rfoa[1] = gp_regfilex[Rs1[1][4:0]];
+assign gp_rfoa[2] = gp_regfilex[Rs1[2][4:0]];
+assign gp_rfoa[3] = gp_regfilex[Rs1[3][4:0]];
+assign gp_rfob[0] = gp_regfilex[Rs2[0][4:0]];
+assign gp_rfob[1] = gp_regfilex[Rs2[1][4:0]];
+assign gp_rfob[2] = gp_regfilex[Rs2[2][4:0]];
+assign gp_rfob[3] = gp_regfilex[Rs2[3][4:0]];
+assign gp_rfoc[0] = gp_regfilex[Rs3[0][4:0]];
+assign gp_rfoc[1] = gp_regfilex[Rs3[1][4:0]];
+assign gp_rfoc[2] = gp_regfilex[Rs3[2][4:0]];
+assign gp_rfoc[3] = gp_regfilex[Rs3[3][4:0]];
 
-reg [3:0] v_used;
-reg [2:0] n_nulltgt;
+assign fp_rfoa[0] = fp_regfilex[Rs1[0][4:0]];
+assign fp_rfoa[1] = fp_regfilex[Rs1[1][4:0]];
+assign fp_rfoa[2] = fp_regfilex[Rs1[2][4:0]];
+assign fp_rfoa[3] = fp_regfilex[Rs1[3][4:0]];
+assign fp_rfob[0] = fp_regfilex[Rs2[0][4:0]];
+assign fp_rfob[1] = fp_regfilex[Rs2[1][4:0]];
+assign fp_rfob[2] = fp_regfilex[Rs2[2][4:0]];
+assign fp_rfob[3] = fp_regfilex[Rs2[3][4:0]];
+assign fp_rfoc[0] = fp_regfilex[Rs3[0][4:0]];
+assign fp_rfoc[1] = fp_regfilex[Rs3[1][4:0]];
+assign fp_rfoc[2] = fp_regfilex[Rs3[2][4:0]];
+assign fp_rfoc[3] = fp_regfilex[Rs3[3][4:0]];
 
-GpRegfile urf1
-(
-	.clk(clk_i),
-	.clk2x(clk2x_i),
-	.wr0(gp0_commit_v),
-	.wa0(gp0_commit_tgt),
-	.i0(gp0_commit_bus),
-	.wr1(gp1_commit_v),
-	.wa1(gp1_commit_tgt),
-	.i1(gp1_commit_bus),
-	.ra0(Rs1[0][4:0]),
-	.ra1(Rs2[0][4:0]),
-	.ra2(Rs3[0][4:0]),
-	.ra3(Rs1[1][4:0]),
-	.ra4(Rs2[1][4:0]),
-	.ra5(Rs3[1][4:0]),
-	.ra6(Rs1[2][4:0]),
-	.ra7(Rs2[2][4:0]),
-	.ra8(Rs3[2][4:0]),
-	.ra9(Rs1[3][4:0]),
-	.ra10(Rs2[3][4:0]),
-	.ra11(Rs3[3][4:0]),
-	.o0(gp_rfoa[0]),
-	.o1(gp_rfob[0]),
-	.o2(gp_rfoc[0]),
-	.o3(gp_rfoa[1]),
-	.o4(gp_rfob[1]),
-	.o5(gp_rfoc[1]),
-	.o6(gp_rfoa[2]),
-	.o7(gp_rfob[2]),
-	.o8(gp_rfoc[2]),
-	.o9(gp_rfoa[3]),
-	.o10(gp_rfob[3]),
-	.o11(gp_rfoc[3])
-);
+assign vc_rfoa[0] = vc_regfilex[Rs1[0][4:0]];
+assign vc_rfoa[1] = vc_regfilex[Rs1[1][4:0]];
+assign vc_rfoa[2] = vc_regfilex[Rs1[2][4:0]];
+assign vc_rfoa[3] = vc_regfilex[Rs1[3][4:0]];
+assign vc_rfob[0] = vc_regfilex[Rs2[0][4:0]];
+assign vc_rfob[1] = vc_regfilex[Rs2[1][4:0]];
+assign vc_rfob[2] = vc_regfilex[Rs2[2][4:0]];
+assign vc_rfob[3] = vc_regfilex[Rs2[3][4:0]];
+assign vc_rfoc[0] = vc_regfilex[Rs3[0][4:0]];
+assign vc_rfoc[1] = vc_regfilex[Rs3[1][4:0]];
+assign vc_rfoc[2] = vc_regfilex[Rs3[2][4:0]];
+assign vc_rfoc[3] = vc_regfilex[Rs3[3][4:0]];
+assign vc_rfot[0] = vc_regfilex[Rd[0][4:0]];
+assign vc_rfot[1] = vc_regfilex[Rd[1][4:0]];
+assign vc_rfot[2] = vc_regfilex[Rd[2][4:0]];
+assign vc_rfot[3] = vc_regfilex[Rd[3][4:0]];
 
-reg iv0_commit_v, iv1_commit_v;
-reg [2:0] iv0_cs, iv1_cs;
-reg [4:0] iv0_commit_tgt, iv1_commit_tgt;
-reg [255:0] iv0_commit_bus, iv1_commit_bus;
+assign lk_rfo[0] = lk_regfilex[Rs2[0][2:0]];
+assign lk_rfo[1] = lk_regfilex[Rs2[1][2:0]];
+assign lk_rfo[2] = lk_regfilex[Rs2[2][2:0]];
+assign lk_rfo[3] = lk_regfilex[Rs2[3][2:0]];
 
-VecRegfile uivrf1
-(
-	.clk(clk_i),
-	.clk2x(clk2x_i),
-	.wr0(iv0_commit_v),
-	.wa0(iv0_commit_tgt),
-	.i0(iv0_commit_bus),
-	.wr1(iv1_commit_v),
-	.wa1(iv1_commit_tgt),
-	.i1(iv1_commit_bus),
-	.ra0(Rs1[0][4:0]),
-	.ra1(Rs2[0][4:0]),
-	.ra2(Rs3[0][4:0]),
-	.ra3(Rd[0][4:0]),
-	.ra4(Rs1[1][4:0]),
-	.ra5(Rs2[1][4:0]),
-	.ra6(Rs3[1][4:0]),
-	.ra7(Rd[1][4:0]),
-	.ra8(Rs1[2][4:0]),
-	.ra9(Rs2[2][4:0]),
-	.ra10(Rs3[2][4:0]),
-	.ra11(Rd[2][4:0]),
-	.ra12(Rs1[3][4:0]),
-	.ra13(Rs2[3][4:0]),
-	.ra14(Rs3[3][4:0]),
-	.ra15(Rd[3][4:0]),
-	.o0(vc_rfoa[0]),
-	.o1(vc_rfob[0]),
-	.o2(vc_rfoc[0]),
-	.o3(vc_rfot[0]),
-	.o4(vc_rfoa[1]),
-	.o5(vc_rfob[1]),
-	.o6(vc_rfoc[1]),
-	.o7(vc_rfot[1]),
-	.o8(vc_rfoa[2]),
-	.o9(vc_rfob[2]),
-	.o10(vc_rfoc[2]),
-	.o11(vc_rfot[2]),
-	.o12(vc_rfoa[3]),
-	.o13(vc_rfob[3]),
-	.o14(vc_rfoc[3]),
-	.o15(vc_rfot[3])
-);
+assign vm_rfoa[0] = vm_regfilex[Ms1[0][2:0]];
+assign vm_rfoa[1] = vm_regfilex[Ms1[1][2:0]];
+assign vm_rfoa[2] = vm_regfilex[Ms1[2][2:0]];
+assign vm_rfoa[3] = vm_regfilex[Ms1[3][2:0]];
+assign vm_rfob[0] = vm_regfilex[Ms2[0][2:0]];
+assign vm_rfob[1] = vm_regfilex[Ms2[1][2:0]];
+assign vm_rfob[2] = vm_regfilex[Ms2[2][2:0]];
+assign vm_rfob[3] = vm_regfilex[Ms2[3][2:0]];
 
-reg fp0_commit_v, fp1_commit_v;
-reg [2:0] fp0_cs, fp1_cs;
-reg [4:0] fp0_commit_tgt, fp1_commit_tgt;
-reg [127:0] fp0_commit_bus, fp1_commit_bus;
-
-
-FpRegfile ufprf1
-(
-	.clk(clk_i),
-	.clk2x(clk2x_i),
-	.wr0(fp0_commit_v),
-	.wa0(fp0_commit_tgt),
-	.i0(fp0_commit_bus),
-	.wr1(fp1_commit_v),
-	.wa1(fp1_commit_tgt),
-	.i1(fp1_commit_bus),
-	.ra0(Rs1[0][4:0]),
-	.ra1(Rs2[0][4:0]),
-	.ra2(Rs3[0][4:0]),
-	.ra3(Rs1[1][4:0]),
-	.ra4(Rs2[1][4:0]),
-	.ra5(Rs3[1][4:0]),
-	.ra6(Rs1[2][4:0]),
-	.ra7(Rs2[2][4:0]),
-	.ra8(Rs3[2][4:0]),
-	.ra9(Rs1[3][4:0]),
-	.ra10(Rs2[3][4:0]),
-	.ra11(Rs3[3][4:0]),
-	.o0(fp_rfoa[0]),
-	.o1(fp_rfob[0]),
-	.o2(fp_rfoc[0]),
-	.o3(fp_rfoa[1]),
-	.o4(fp_rfob[1]),
-	.o5(fp_rfoc[1]),
-	.o6(fp_rfoa[2]),
-	.o7(fp_rfob[2]),
-	.o8(fp_rfoc[2]),
-	.o9(fp_rfoa[3]),
-	.o10(fp_rfob[3]),
-	.o11(fp_rfoc[3])
-);
-
-reg Lk0_commit_v, Lk1_commit_v;
-reg [2:0] Lk0_cs, Lk1_cs;
-reg [2:0] Lk0_commit_tgt, Lk1_commit_tgt;
-reg [AMSB:0] Lk0_commit_bus, Lk1_commit_bus;
-
-LkRegfile ulrf1
-(
-	.clk(clk_i),
-	.clk2x(clk2x_i),
-	.wr0(Lk0_commit_v),
-	.wr1(Lk1_commit_v),
-	.wa0(Lk0_commit_tgt),
-	.wa1(Lk1_commit_tgt),
-	.i0(Lk0_commit_bus),
-	.i1(Lk1_commit_bus),
-	.ra0(Rs2[0][2:0]),
-	.ra1(Rs2[1][2:0]),
-	.ra2(Rs2[2][2:0]),
-	.ra3(Rs2[3][2:0]),
-	.o0(lk_rfo[0]),
-	.o1(lk_rfo[1]),
-	.o2(lk_rfo[2]),
-	.o3(lk_rfo[3])
-);
-
-reg Vm0_commit_v, Vm1_commit_v;
-reg [2:0] Vm0_cs, Vm1_cs;
-reg [2:0] Vm0_commit_tgt, Vm1_commit_tgt;
-reg [AMSB:0] Vm0_commit_bus, Vm1_commit_bus;
-
-VmRegfile uvmrf1
-(
-	.clk(clk_i),
-	.clk2x(clk2x_i),
-	.wr0(Vm0_commit_v),
-	.wr1(Vm1_commit_v),
-	.wa0(Vm0_commit_tgt),
-	.wa1(Vm1_commit_tgt),
-	.i0(Vm0_commit_bus),
-	.i1(Vm1_commit_bus),
-	.ra0(Ms1[0][2:0]),
-	.ra1(Ms1[1][2:0]),
-	.ra2(Ms1[2][2:0]),
-	.ra3(Ms1[3][2:0]),
-	.ra4(Ms2[0][2:0]),
-	.ra5(Ms2[1][2:0]),
-	.ra6(Ms2[2][2:0]),
-	.ra7(Ms2[3][2:0]),
-	.o0(vm_rfoa[0]),
-	.o1(vm_rfoa[1]),
-	.o2(vm_rfoa[2]),
-	.o3(vm_rfoa[3]),
-	.o4(vm_rfob[0]),
-	.o5(vm_rfob[1]),
-	.o6(vm_rfob[2]),
-	.o7(vm_rfob[3])
-);
-
-reg VL0_commit_v, VL1_commit_v;
-reg [2:0] VL0_cs, VL1_cs;
-reg [15:0] VL0_commit_bus, VL1_commit_bus;
-
-reg [15:0] vlen;		// vector length register
-reg [15:0] vlen_o;
-always @(posedge clk_i)
-	if (VL0_commit_v & VL1_commit_v)
-		vlen <= VL1_commit_bus;
-	else if (VL0_commit_v)
-		vlen <= VL0_commit_bus;
-	else if (VL1_commit_v)
-		vlen <= VL1_commit_bus;
-// Register bypassed value output
-always @*
-	if (VL0_commit_v & VL1_commit_v)
-		vlen_o <= VL1_commit_bus;
-	else if (VL0_commit_v)
-		vlen_o <= VL0_commit_bus;
-	else if (VL1_commit_v)
-		vlen_o <= VL1_commit_bus;
-	else
-		vlen_o <= vlen;
-
-reg Cr0_commit_v, Cr1_commit_v;
-reg Cr0a_commit_v, Cr1a_commit_v;
-reg [2:0] Cr0_cs, Cr1_cs, Cr2_cs, Cr3_cs;
-reg [2:0] Cr0a_cs, Cr1a_cs;
-reg [7:0] Cr0_commit_bus, Cr1_commit_bus;
-reg [63:0] Cr0a_commit_bus, Cr1a_commit_bus;
-reg [2:0] Cr0_commit_tgt, Cr1_commit_tgt;
-
-CrRegfile ucrrf1
-(
-	.clk(clk_i),
-	.clk2x(clk2x_i),
-	.wr0(Cr0_commit_v),
-	.wr1(Cr1_commit_v),
-	.wra0(Cr0a_commit_v),
-	.wra1(Cr1a_commit_v),
-	.wa0(Cr0_commit_tgt),
-	.wa1(Cr1_commit_tgt),
-	.i0(Cr0_commit_bus),
-	.i1(Cr1_commit_bus),
-	.ia0(Cr0a_commit_bus),
-	.ia1(Cr1a_commit_bus),
-	.ra0(Crs[0]),
-	.ra1(Crs[1]),
-	.ra2(Crs[2]),
-	.ra3(Crs[3]),
-	.o0(cr_rfoa[0]),
-	.o1(cr_rfoa[1]),
-	.o2(cr_rfoa[2]),
-	.o3(cr_rfoa[3]),
-	.oa(cra_o)
-);
+assign cr_rfo[0] = cr_regfilex[Crs[0][2:0]];
+assign cr_rfo[1] = cr_regfilex[Crs[1][2:0]];
+assign cr_rfo[2] = cr_regfilex[Crs[2][2:0]];
+assign cr_rfo[3] = cr_regfilex[Crs[3][2:0]];
 
 reg [AMSB:0] program_base;
 reg [AMSB:0] data_base;
@@ -1495,568 +1317,22 @@ initial begin
 	extra_base = 1'd0;
 end
 
-// Maximum commit slot used during this cycle. Used to determine how much to
-// increment the rob pointer by.
-reg [2:0] max_cs;
-
+// Determine amount to advance reorder head pointer by. Based on number of
+// consecutive valid commits. Also up to four additional slot that have been
+// marked invalid may be advanced past.
 always @*
 begin
-	v_used = 1'd0;
-	gp0_commit_v = FALSE;
-	gp1_commit_v = FALSE;
-	gp0_cs = 3'd4;
-	gp1_cs = 3'd4;
-	if (commit0_v && commit0_tgt[6:5]==2'b00) begin
-		gp0_commit_v = TRUE;
-		gp0_commit_tgt = commit0_tgt[4:0];
-		gp0_commit_bus = commit0_bus;
-		gp0_cs = 3'd0;
-		v_used[0] = TRUE;
-	end
-	else if (commit0_v && commit1_v && commit1_tgt[6:5]==2'b00) begin
-		gp0_commit_v = TRUE;
-		gp0_commit_tgt = commit1_tgt[4:0];
-		gp0_commit_bus = commit1_bus;
-		gp0_cs = 3'd1;
-		v_used[1] = TRUE;
-	end
-	else if (commit0_v && commit1_v && commit2_v && commit2_tgt[6:5]==2'b00) begin
-		gp0_commit_v = TRUE;
-		gp0_commit_tgt = commit2_tgt[4:0];
-		gp0_commit_bus = commit2_bus;
-		gp0_cs = 3'd2;
-		v_used[2] = TRUE;
-	end
-	else if (commit0_v && commit1_v && commit2_v && commit3_v && commit3_tgt[6:5]==2'b00) begin
-		gp0_commit_v = TRUE;
-		gp0_commit_tgt = commit3_tgt[4:0];
-		gp0_commit_bus = commit3_bus;
-		gp0_cs = 3'd3;
-		v_used[3] = TRUE;
-	end
-	if (~gp0_cs[2]) begin
-		if (commit0_v && commit1_v && commit1_tgt[6:5]==2'b00 && gp0_cs != 3'd1) begin
-			gp1_commit_v = TRUE;
-			gp1_commit_tgt = commit1_tgt[4:0];
-			gp1_commit_bus = commit1_bus;
-			gp1_cs = 3'd1;
-			v_used[1] = TRUE;
-		end
-		else if (commit0_v && commit1_v && commit2_v && commit2_tgt[6:5]==2'b00 && gp0_cs != 3'd2) begin
-			gp1_commit_v = TRUE;
-			gp1_commit_tgt = commit2_tgt[4:0];
-			gp1_commit_bus = commit2_bus;
-			gp1_cs = 3'd2;
-			v_used[2] = TRUE;
-		end
-		else if (commit0_v && commit1_v && commit2_v && commit3_v && commit3_tgt[6:5]==2'b00 && gp0_cs != 3'd3) begin
-			gp1_commit_v = TRUE;
-			gp1_commit_tgt = commit3_tgt[4:0];
-			gp1_commit_bus = commit3_bus;
-			gp1_cs = 3'd3;
-			v_used[3] = TRUE;
-		end
-	end
+	if (commit0_v & commit1_v & commit2_v & commit3_v)
+		r_amt = 3'd4;
+	else if (commit0_v & commit1_v & commit2_v)
+		r_amt = 3'd3;
+	else if (commit0_v & commit1_v)
+		r_amt = 3'd2;
+	else if (commit0_v)
+		r_amt = 3'd1;
+	else
+		r_amt = 3'd0;
 
-// Floating-point register file commit bus routing.
-	fp0_commit_v = FALSE;
-	fp1_commit_v = FALSE;
-	fp0_cs = 3'd4;
-	fp1_cs = 3'd4;
-	if (commit0_v && commit0_tgt[6:5]==2'b00) begin
-		fp0_commit_v = TRUE;
-		fp0_commit_tgt = commit0_tgt[4:0];
-		fp0_commit_bus = commit0_bus;
-		fp0_cs = 3'd0;
-		v_used[0] = TRUE;
-	end
-	else if (commit0_v && commit1_v && commit1_tgt[6:5]==2'b00) begin
-		fp0_commit_v = TRUE;
-		fp0_commit_tgt = commit1_tgt[4:0];
-		fp0_commit_bus = commit1_bus;
-		fp0_cs = 3'd1;
-		v_used[1] = TRUE;
-	end
-	else if (commit0_v && commit1_v && commit2_v && commit2_tgt[6:5]==2'b00) begin
-		fp0_commit_v = TRUE;
-		fp0_commit_tgt = commit2_tgt[4:0];
-		fp0_commit_bus = commit2_bus;
-		fp0_cs = 3'd2;
-		v_used[2] = TRUE;
-	end
-	else if (commit0_v && commit1_v && commit2_v && commit3_v && commit3_tgt[6:5]==2'b00) begin
-		fp0_commit_v = TRUE;
-		fp0_commit_tgt = commit3_tgt[4:0];
-		fp0_commit_bus = commit3_bus;
-		fp0_cs = 3'd3;
-		v_used[3] = TRUE;
-	end
-	if (~fp0_cs[2]) begin
-		if (commit0_v && commit1_v && commit1_tgt[6:5]==2'b00 && fp0_cs != 3'd1) begin
-			fp1_commit_v = TRUE;
-			fp1_commit_tgt = commit1_tgt[4:0];
-			fp1_commit_bus = commit1_bus;
-			fp1_cs = 3'd1;
-			v_used[1] = TRUE;
-		end
-		else if (commit0_v && commit1_v && commit2_v && commit2_tgt[6:5]==2'b00 && fp0_cs != 3'd2) begin
-			fp1_commit_v = TRUE;
-			fp1_commit_tgt = commit2_tgt[4:0];
-			fp1_commit_bus = commit2_bus;
-			fp1_cs = 3'd2;
-			v_used[2] = TRUE;
-		end
-		else if (commit0_v && commit1_v && commit2_v && commit3_v && commit3_tgt[6:5]==2'b00 && fp0_cs != 3'd3) begin
-			fp1_commit_v = TRUE;
-			fp1_commit_tgt = commit3_tgt[4:0];
-			fp1_commit_bus = commit3_bus;
-			fp1_cs = 3'd3;
-			v_used[3] = TRUE;
-		end
-	end
-
-	iv0_commit_v = FALSE;
-	iv1_commit_v = FALSE;
-	iv0_cs = 3'd4;
-	iv1_cs = 3'd4;
-	if (commit0_v && commit0_tgt[6:5]==2'b10) begin
-		iv0_commit_v = TRUE;
-		iv0_commit_tgt = commit0_tgt[4:0];
-		iv0_commit_bus = commit0_bus;
-		iv0_cs = 3'd0;
-		v_used[0] = TRUE;
-	end
-	else if (commit0_v && commit1_v && commit1_tgt[6:5]==2'b10) begin
-		iv0_commit_v = TRUE;
-		iv0_commit_tgt = commit1_tgt[4:0];
-		iv0_commit_bus = commit1_bus;
-		iv0_cs = 3'd1;
-		v_used[1] = TRUE;
-	end
-	else if (commit0_v && commit1_v && commit2_v && commit2_tgt[6:5]==2'b10) begin
-		iv0_commit_v = TRUE;
-		iv0_commit_tgt = commit2_tgt[4:0];
-		iv0_commit_bus = commit2_bus;
-		iv0_cs = 3'd2;
-		v_used[2] = TRUE;
-	end
-	else if (commit0_v && commit1_v && commit2_v && commit3_v && commit3_tgt[6:5]==2'b10) begin
-		iv0_commit_v = TRUE;
-		iv0_commit_tgt = commit3_tgt[4:0];
-		iv0_commit_bus = commit3_bus;
-		iv0_cs = 3'd3;
-		v_used[3] = TRUE;
-	end
-	if (~iv0_cs[2]) begin
-		if (commit0_v && commit1_v && commit1_tgt[6:5]==2'b10 && iv0_cs != 3'd1) begin
-			iv1_commit_v = TRUE;
-			iv1_commit_tgt = commit1_tgt[4:0];
-			iv1_commit_bus = commit1_bus;
-			iv1_cs = 3'd1;
-			v_used[1] = TRUE;
-		end
-		else if (commit0_v && commit1_v && commit2_v && commit2_tgt[6:5]==2'b10 && iv0_cs != 3'd2) begin
-			iv1_commit_v = TRUE;
-			iv1_commit_tgt = commit2_tgt[4:0];
-			iv1_commit_bus = commit2_bus;
-			iv1_cs = 3'd2;
-			v_used[2] = TRUE;
-		end
-		else if (commit0_v && commit1_v && commit2_v && commit3_v && commit3_tgt[6:5]==2'b10 && iv0_cs != 3'd3) begin
-			iv1_commit_v = TRUE;
-			iv1_commit_tgt = commit3_tgt[4:0];
-			iv1_commit_bus = commit3_bus;
-			iv1_cs = 3'd3;
-			v_used[3] = TRUE;
-		end
-	end
-
-
-	Lk0_commit_v = FALSE;
-	Lk1_commit_v = FALSE;
-	Lk0_cs = 3'd4;
-	Lk1_cs = 3'd4;
-	if (commit0_v && commit0_tgt[6:3]==4'b1100) begin
-		Lk0_commit_v = TRUE;
-		Lk0_commit_tgt = commit0_tgt[2:0];
-		Lk0_commit_bus = commit0_bus[AMSB:0];
-		Lk0_cs = 3'd0;
-		v_used[0] = TRUE;
-	end
-	else if (commit0_v && commit1_v && commit1_tgt[6:3]==4'b1100) begin
-		Lk0_commit_v = TRUE;
-		Lk0_commit_tgt = commit1_tgt[2:0];
-		Lk0_commit_bus = commit1_bus[AMSB:0];
-		Lk0_cs = 3'd1;
-		v_used[1] = TRUE;
-	end
-	else if (commit0_v && commit1_v && commit2_v && commit2_tgt[6:3]==4'b1100) begin
-		Lk0_commit_v = TRUE;
-		Lk0_commit_tgt = commit2_tgt[2:0];
-		Lk0_commit_bus = commit2_bus[AMSB:0];
-		Lk0_cs = 3'd2;
-		v_used[2] = TRUE;
-	end
-	else if (commit0_v && commit1_v && commit2_v && commit3_v && commit3_tgt[6:3]==4'b1100) begin
-		Lk0_commit_v = TRUE;
-		Lk0_commit_tgt = commit3_tgt[2:0];
-		Lk0_commit_bus = commit3_bus[AMSB:0];
-		Lk0_cs = 3'd3;
-		v_used[3] = TRUE;
-	end
-	if (~Lk0_cs[2]) begin
-		if (commit0_v && commit1_v && commit1_tgt[6:3]==4'b1100 && Lk0_cs != 3'd1) begin
-			Lk1_commit_v = TRUE;
-			Lk1_commit_tgt = commit1_tgt[2:0];
-			Lk1_commit_bus = commit1_bus[AMSB:0];
-			Lk1_cs = 3'd1;
-			v_used[1] = TRUE;
-		end
-		else if (commit0_v && commit1_v && commit2_v && commit2_tgt[6:3]==4'b1100 && Lk0_cs != 3'd2) begin
-			Lk1_commit_v = TRUE;
-			Lk1_commit_tgt = commit2_tgt[2:0];
-			Lk1_commit_bus = commit2_bus[AMSB:0];
-			Lk1_cs = 3'd2;
-			v_used[2] = TRUE;
-		end
-		else if (commit0_v && commit1_v && commit2_v && commit3_v && commit3_tgt[6:3]==4'b1100 && Lk0_cs != 3'd3) begin
-			Lk1_commit_v = TRUE;
-			Lk1_commit_tgt = commit3_tgt[2:0];
-			Lk1_commit_bus = commit3_bus[AMSB:0];
-			Lk1_cs = 3'd3;
-			v_used[3] = TRUE;
-		end
-	end
-	Vm0_commit_v = FALSE;
-	Vm1_commit_v = FALSE;
-	Vm0_cs = 3'd4;
-	Vm1_cs = 3'd4;
-	if (commit0_v && commit0_tgt[6:3]==4'b1101) begin
-		Vm0_commit_v = TRUE;
-		Vm0_commit_tgt = commit0_tgt[2:0];
-		Vm0_commit_bus = commit0_bus[AMSB:0];
-		Vm0_cs = 3'd0;
-		v_used[0] = TRUE;
-	end
-	else if (commit0_v && commit1_v && commit1_tgt[6:3]==4'b1101) begin
-		Vm0_commit_v = TRUE;
-		Vm0_commit_tgt = commit1_tgt[2:0];
-		Vm0_commit_bus = commit1_bus[AMSB:0];
-		Vm0_cs = 3'd1;
-		v_used[1] = TRUE;
-	end
-	else if (commit0_v && commit1_v && commit2_v && commit2_tgt[6:3]==4'b1101) begin
-		Vm0_commit_v = TRUE;
-		Vm0_commit_tgt = commit2_tgt[2:0];
-		Vm0_commit_bus = commit2_bus[AMSB:0];
-		Vm0_cs = 3'd2;
-		v_used[2] = TRUE;
-	end
-	else if (commit0_v && commit1_v && commit2_v && commit3_v && commit3_tgt[6:3]==4'b1101) begin
-		Vm0_commit_v = TRUE;
-		Vm0_commit_tgt = commit3_tgt[2:0];
-		Vm0_commit_bus = commit3_bus[AMSB:0];
-		Vm0_cs = 3'd3;
-		v_used[3] = TRUE;
-	end
-	if (~Vm0_cs[2]) begin
-		if (commit0_v && commit1_v && commit1_tgt[6:3]==4'b1101 && Vm0_cs != 3'd1) begin
-			Vm1_commit_v = TRUE;
-			Vm1_commit_tgt = commit1_tgt[2:0];
-			Vm1_commit_bus = commit1_bus[AMSB:0];
-			Vm1_cs = 3'd1;
-			v_used[1] = TRUE;
-		end
-		else if (commit0_v && commit1_v && commit2_v && commit2_tgt[6:3]==4'b1101 && Vm0_cs != 3'd2) begin
-			Vm1_commit_v = TRUE;
-			Vm1_commit_tgt = commit2_tgt[2:0];
-			Vm1_commit_bus = commit2_bus[AMSB:0];
-			Vm1_cs = 3'd2;
-			v_used[2] = TRUE;
-		end
-		else if (commit0_v && commit1_v && commit2_v && commit3_v && commit3_tgt[6:3]==4'b1101 && Vm0_cs != 3'd3) begin
-			Vm1_commit_v = TRUE;
-			Vm1_commit_tgt = commit3_tgt[2:0];
-			Vm1_commit_bus = commit3_bus[AMSB:0];
-			Vm1_cs = 3'd3;
-			v_used[3] = TRUE;
-		end
-	end
-	VL0_commit_v = FALSE;
-	VL1_commit_v = FALSE;
-	VL0_cs = 3'd4;
-	VL1_cs = 3'd4;
-	if (commit0_v && commit0_tgt==7'd120) begin
-		VL0_commit_v = TRUE;
-		VL0_commit_bus = commit0_bus[15:0];
-		VL0_cs = 3'd0;
-		v_used[0] = TRUE;
-	end
-	else if (commit0_v && commit1_v && commit1_tgt==7'd120) begin
-		VL0_commit_v = TRUE;
-		VL0_commit_bus = commit1_bus[15:0];
-		VL0_cs = 3'd1;
-		v_used[1] = TRUE;
-	end
-	else if (commit0_v && commit1_v && commit2_v && commit2_tgt==7'd120) begin
-		VL0_commit_v = TRUE;
-		VL0_commit_bus = commit2_bus[15:0];
-		VL0_cs = 3'd2;
-		v_used[2] = TRUE;
-	end
-	else if (commit0_v && commit1_v && commit2_v && commit3_v && commit3_tgt==7'd120) begin
-		VL0_commit_v = TRUE;
-		VL0_commit_bus = commit3_bus[15:0];
-		VL0_cs = 3'd3;
-		v_used[3] = TRUE;
-	end
-	if (~VL0_cs[2]) begin
-		if (commit0_v && commit1_v && commit1_tgt==7'd120 && VL0_cs != 3'd1) begin
-			VL1_commit_v = TRUE;
-			VL1_commit_bus = commit1_bus[15:0];
-			VL1_cs = 3'd1;
-			v_used[1] = TRUE;
-		end
-		else if (commit0_v && commit1_v && commit2_v && commit2_tgt==7'd120 && VL0_cs != 3'd2) begin
-			VL1_commit_v = TRUE;
-			VL1_commit_bus = commit2_bus[15:0];
-			VL1_cs = 3'd2;
-			v_used[2] = TRUE;
-		end
-		else if (commit0_v && commit1_v && commit2_v && commit3_v && commit3_tgt==7'd120 && VL0_cs != 3'd3) begin
-			VL1_commit_v = TRUE;
-			VL1_commit_bus = commit3_bus[15:0];
-			VL1_cs = 3'd3;
-			v_used[3] = TRUE;
-		end
-	end
-
-	Cr0_commit_v = FALSE;
-	Cr1_commit_v = FALSE;
-	Cr0_cs = 3'd4;
-	Cr1_cs = 3'd4;
-	Cr2_cs = 3'd4;
-	Cr3_cs = 3'd4;
-	if (commit0_v && commit0_crtgt[3]) begin
-		Cr0_commit_v = TRUE;
-		Cr0_commit_bus = commit0_crbus;
-		Cr0_commit_tgt = commit0_crtgt[2:0];
-		Cr0_cs = 3'd0;
-	end
-	else if (commit0_v && commit1_v && commit1_crtgt[3]) begin
-		Cr0_commit_v = TRUE;
-		Cr0_commit_bus = commit1_crbus;
-		Cr0_commit_tgt = commit1_crtgt[2:0];
-		Cr0_cs = 3'd1;
-	end
-	else if (commit0_v && commit1_v && commit2_v && commit2_crtgt[3]) begin
-		Cr0_commit_v = TRUE;
-		Cr0_commit_bus = commit2_crbus;
-		Cr0_commit_tgt = commit2_crtgt[2:0];
-		Cr0_cs = 3'd2;
-	end
-	else if (commit0_v && commit1_v && commit2_v && commit3_v && commit3_crtgt[3]) begin
-		Cr0_commit_v = TRUE;
-		Cr0_commit_bus = commit3_crbus;
-		Cr0_commit_tgt = commit3_crtgt[2:0];
-		Cr0_cs = 3'd3;
-	end
-	if (~Cr0_cs[2]) begin
-		if (commit0_v && commit1_v && commit1_crtgt[3] && Cr0_cs != 3'd1) begin
-			Cr1_commit_v = TRUE;
-			Cr1_commit_bus = commit1_crbus;
-			Cr1_commit_tgt = commit1_crtgt[2:0];
-			Cr1_cs = 3'd1;
-		end
-		else if (commit0_v && commit1_v && commit2_v && commit2_crtgt[3] && Cr0_cs != 3'd2) begin
-			Cr1_commit_v = TRUE;
-			Cr1_commit_bus = commit2_crbus;
-			Cr1_commit_tgt = commit2_crtgt[2:0];
-			Cr1_cs = 3'd2;
-		end
-		else if (commit0_v && commit1_v && commit2_v && commit3_v && commit3_crtgt[3] && Cr0_cs != 3'd3) begin
-			Cr1_commit_v = TRUE;
-			Cr1_commit_bus = commit3_crbus;
-			Cr1_commit_tgt = commit3_crtgt[2:0];
-			Cr1_cs = 3'd3;
-		end
-	end
-	if (~Cr1_cs[2]) begin
-		if (commit0_v && commit1_v && commit2_v && commit2_crtgt[3] && Cr1_cs != 3'd2) begin
-			Cr2_cs = 3'd2;
-		end
-		else if (commit0_v && commit1_v && commit2_v && commit3_v && commit3_crtgt[3] && Cr1_cs != 3'd3) begin
-			Cr2_cs = 3'd3;
-		end
-	end
-	if (~Cr2_cs[2]) begin
-		if (commit0_v && commit1_v && commit2_v && commit3_v && commit3_crtgt[3] && Cr2_cs != 3'd3) begin
-			Cr3_cs = 3'd3;
-		end
-	end
-	Cr0a_commit_v = FALSE;
-	Cr1a_commit_v = FALSE;
-	if (commit0_v && commit0_tgt==7'b1111101) begin
-		Cr0a_commit_v = TRUE;
-		Cr0a_commit_bus = commit0_bus[63:0];
-		Cr0a_cs = 3'd0;
-		v_used[0] = TRUE;
-	end
-	else if (commit0_v && commit1_v && commit1_tgt==7'b1111101) begin
-		Cr0a_commit_v = TRUE;
-		Cr0a_commit_bus = commit1_bus[63:0];
-		Cr0a_cs = 3'd1;
-		v_used[1] = TRUE;
-	end
-	else if (commit0_v && commit1_v && commit2_v && commit2_tgt==7'b111101) begin
-		Cr0a_commit_v = TRUE;
-		Cr0a_commit_bus = commit2_bus[63:0];
-		Cr0a_cs = 3'd2;
-		v_used[2] = TRUE;
-	end
-	else if (commit0_v && commit1_v && commit2_v && commit3_v && commit3_tgt==7'b1111101) begin
-		Cr0a_commit_v = TRUE;
-		Cr0a_commit_bus = commit3_bus[63:0];
-		Cr0a_cs = 3'd3;
-		v_used[3] = TRUE;
-	end
-
-// Count the null targets
-	n_nulltgt = 3'd0;
-	if (commit0_v && commit0_tgt==7'd127) begin
-		n_nulltgt = n_nulltgt + 3'd1;
-		v_used[0] = TRUE;
-	end
-	if (commit0_v && commit1_v && commit1_tgt==7'd127) begin
-		n_nulltgt = n_nulltgt + 3'd1;
-		v_used[1] = TRUE;
-	end
-	if (commit0_v && commit1_v && commit2_v && commit2_tgt==7'd127) begin
-		n_nulltgt = n_nulltgt + 3'd1;
-		v_used[2] = TRUE;
-	end
-	if (commit0_v && commit1_v && commit2_v && commit3_v && commit3_tgt==7'd127) begin
-		n_nulltgt = n_nulltgt + 3'd1;
-		v_used[3] = TRUE;
-	end
-
-	// Suppress updates according to update pattern.
-	case(v_used)
-	4'b0000,
-	4'b0010,
-	4'b0100,
-	4'b0110,
-	4'b1000,
-	4'b1010,
-	4'b1100,
-	4'b1110:
-		begin
-			gp0_commit_v = FALSE;
-			gp1_commit_v = FALSE;
-			fp0_commit_v = FALSE;
-			fp1_commit_v = FALSE;
-			iv0_commit_v = FALSE;
-			iv1_commit_v = FALSE;
-			Lk0_commit_v = FALSE;
-			Lk1_commit_v = FALSE;
-			Vm0_commit_v = FALSE;
-			Vm1_commit_v = FALSE;
-			VL0_commit_v = FALSE;
-			VL1_commit_v = FALSE;
-			Cr0a_commit_v = FALSE;
-		end
-	4'b0001,
-	4'b0101,
-	4'b1001,
-	4'b1101:
-		begin
-			if (gp0_cs > 3'd0) gp0_commit_v = FALSE;
-			if (gp1_cs > 3'd0) gp1_commit_v = FALSE;
-			if (fp0_cs > 3'd0) fp0_commit_v = FALSE;
-			if (fp1_cs > 3'd0) fp1_commit_v = FALSE;
-			if (iv0_cs > 3'd0) iv0_commit_v = FALSE;
-			if (iv1_cs > 3'd0) iv1_commit_v = FALSE;
-			if (Lk0_cs > 3'd0) Lk0_commit_v = FALSE;
-			if (Lk1_cs > 3'd0) Lk1_commit_v = FALSE;
-			if (Vm0_cs > 3'd0) Vm0_commit_v = FALSE;
-			if (Vm1_cs > 3'd0) Vm1_commit_v = FALSE;
-			if (VL0_cs > 3'd0) VL0_commit_v = FALSE;
-			if (VL1_cs > 3'd0) VL1_commit_v = FALSE;
-			if (Cr0a_cs > 3'd0) Cr0a_commit_v = FALSE;
-		end
-	4'b0011,
-	4'b1011:
-		begin
-			if (gp0_cs > 3'd1) gp0_commit_v = FALSE;
-			if (gp1_cs > 3'd1) gp1_commit_v = FALSE;
-			if (fp0_cs > 3'd1) fp0_commit_v = FALSE;
-			if (fp1_cs > 3'd1) fp1_commit_v = FALSE;
-			if (iv0_cs > 3'd1) iv0_commit_v = FALSE;
-			if (iv1_cs > 3'd1) iv1_commit_v = FALSE;
-			if (Lk0_cs > 3'd1) Lk0_commit_v = FALSE;
-			if (Lk1_cs > 3'd1) Lk1_commit_v = FALSE;
-			if (Vm0_cs > 3'd1) Vm0_commit_v = FALSE;
-			if (Vm1_cs > 3'd1) Vm1_commit_v = FALSE;
-			if (VL0_cs > 3'd1) VL0_commit_v = FALSE;
-			if (VL1_cs > 3'd1) VL1_commit_v = FALSE;
-			if (Cr0a_cs > 3'd1) Cr0a_commit_v = FALSE;
-		end
-	4'b0111:
-		begin
-			if (gp0_cs > 3'd2) gp0_commit_v = FALSE;
-			if (gp1_cs > 3'd2) gp1_commit_v = FALSE;
-			if (fp0_cs > 3'd2) fp0_commit_v = FALSE;
-			if (fp1_cs > 3'd2) fp1_commit_v = FALSE;
-			if (iv0_cs > 3'd2) iv0_commit_v = FALSE;
-			if (iv1_cs > 3'd2) iv1_commit_v = FALSE;
-			if (Lk0_cs > 3'd2) Lk0_commit_v = FALSE;
-			if (Lk1_cs > 3'd2) Lk1_commit_v = FALSE;
-			if (Vm0_cs > 3'd2) Vm0_commit_v = FALSE;
-			if (Vm1_cs > 3'd2) Vm1_commit_v = FALSE;
-			if (VL0_cs > 3'd2) VL0_commit_v = FALSE;
-			if (VL1_cs > 3'd2) VL1_commit_v = FALSE;
-			if (Cr0a_cs > 3'd2) Cr0a_commit_v = FALSE;
-		end
-	4'b1111:
-		;
-	endcase
-	if (gp0_cs > Cr1_cs) gp0_commit_v = FALSE;
-	if (gp1_cs > Cr1_cs) gp1_commit_v = FALSE;
-	if (fp0_cs > Cr1_cs) fp0_commit_v = FALSE;
-	if (fp1_cs > Cr1_cs) fp1_commit_v = FALSE;
-	if (iv0_cs > Cr1_cs) iv0_commit_v = FALSE;
-	if (iv1_cs > Cr1_cs) iv1_commit_v = FALSE;
-	if (Lk0_cs > Cr1_cs) Lk0_commit_v = FALSE;
-	if (Lk1_cs > Cr1_cs) Lk1_commit_v = FALSE;
-	if (Vm0_cs > Cr1_cs) Vm0_commit_v = FALSE;
-	if (Vm1_cs > Cr1_cs) Vm1_commit_v = FALSE;
-	if (VL0_cs > Cr1_cs) VL0_commit_v = FALSE;
-	if (VL1_cs > Cr1_cs) VL1_commit_v = FALSE;
-	if (Cr0a_cs > Cr1_cs) Cr0a_commit_v = FALSE;
-
-	// Find the highest commit slot
-	max_cs = 3'd0;
-	if (gp0_commit_v && gp0_cs > max_cs) max_cs = gp0_cs;
-	if (gp1_commit_v && gp1_cs > max_cs) max_cs = gp1_cs;
-	if (fp0_commit_v && fp0_cs > max_cs) max_cs = fp0_cs;
-	if (fp1_commit_v && fp1_cs > max_cs) max_cs = fp1_cs;
-	if (iv0_commit_v && iv0_cs > max_cs) max_cs = iv0_cs;
-	if (iv1_commit_v && iv1_cs > max_cs) max_cs = iv1_cs;
-	if (Lk0_commit_v && Lk0_cs > max_cs) max_cs = Lk0_cs;
-	if (Lk1_commit_v && Lk1_cs > max_cs) max_cs = Lk1_cs;
-	if (Vm0_commit_v && Vm0_cs > max_cs) max_cs = Vm0_cs;
-	if (Vm1_commit_v && Vm1_cs > max_cs) max_cs = Vm1_cs;
-	if (VL0_commit_v && VL0_cs > max_cs) max_cs = VL0_cs;
-	if (VL1_commit_v && VL1_cs > max_cs) max_cs = VL1_cs;
-	if (Cr0a_commit_v && Cr0a_cs > max_cs) max_cs = Cr0a_cs;
-	
-	// Amount to increment reorder buffer pointer by
-	case(max_cs)
-	2'd0:	r_amt = commit0_rid - rob_heads[0] + 4'd1;
-	2'd1:	r_amt = commit1_rid - rob_heads[0] + 4'd1;
-	2'd2:	r_amt = commit2_rid - rob_heads[0] + 4'd1;
-	2'd3:	r_amt = commit3_rid - rob_heads[0] + 4'd1;
-	endcase
 	// Now search ahead for invalid entries that can be skipped over.
 	nxtrb = (rob_heads[0] + r_amt) % RENTRIES;
 	if (rob_state[nxtrb[`RBITS]]==RS_INVALID && rob_heads[nxtrb[`RBITS]]!=rob_tails[0]) begin
@@ -2076,93 +1352,194 @@ begin
 		end
 	end
 end
-/*
-	case(v_used)
-	4'b0000:	
-			if (rob_heads[0] != rob_tails[0] && rob_heads[1] != rob_tails[0] && rob_heads[2] != rob_tails[0] && rob_heads[3] != rob_tails[0])
-				r_amt = 3'd4;
-			else if (rob_heads[0] != rob_tails[0] && rob_heads[1] != rob_tails[0] && rob_heads[2] != rob_tails[0])
-				r_amt = 3'd3;
-			else if (rob_heads[0] != rob_tails[0] && rob_heads[1] != rob_tails[0])
-				r_amt = 3'd2;
-			else if (rob_heads[0] != rob_tails[0])
-				r_amt = 3'd1;
-	4'b0010,
-	4'b0110,
-	4'b1010,
-	4'b1110:
-			if (rob_heads[0] != rob_tails[0])
-				r_amt = 3'd1;
-	4'b0100,
-	4'b1100:
-			if (rob_heads[0] != rob_tails[0] && rob_heads[1] != rob_tails[0])
-				r_amt = 3'd2;
-			else if (rob_heads[0] != rob_tails[0])
-				r_amt = 3'd1;
-	4'b1000:
-			if (rob_heads[0] != rob_tails[0] && rob_heads[1] != rob_tails[0] && rob_heads[2] != rob_tails[0])
-				r_amt = 3'd3;
-			else if (rob_heads[0] != rob_tails[0] && rob_heads[1] != rob_tails[0])
-				r_amt = 3'd2;
-			else if (rob_heads[0] != rob_tails[0])
-				r_amt = 3'd1;
-	4'b0001:
-			if (rob_heads[1] != rob_tails[0] && rob_heads[2] != rob_tails[0] && rob_heads[3] != rob_tails[0])
-				r_amt = 3'd4;
-			else if (rob_heads[1] != rob_tails[0] && rob_heads[2] != rob_tails[0])
-				r_amt = 3'd3;
-			else if (rob_heads[1] != rob_tails[0])
-				r_amt = 3'd2;
-			else
-				r_amt = 3'd1;
-	4'b0101,
-	4'b1101:	
-			if (rob_heads[1] != rob_tails[0])
-				r_amt = 3'd2;
-			else
-				r_amt = 3'd1;
-	4'b1001:	
-			if (rob_heads[1] != rob_tails[0] && rob_heads[2] != rob_tails[0])
-				r_amt = 3'd3;
-			else if (rob_heads[1] != rob_tails[0])
-				r_amt = 3'd2;
-			else
-				r_amt = 3'd1;
-	4'b0011:
-			if (rob_heads[2] != rob_tails[0] && rob_heads[3] != rob_tails[0])
-				r_amt = 3'd4;
-			else if (rob_heads[2] != rob_tails[0])
-				r_amt = 3'd3;
-			else
-				r_amt = 3'd2;
-	4'b1011:	
-			if (rob_heads[2] != rob_tails[0])
-				r_amt = 3'd3;
-			else
-				r_amt = 3'd2;
-	4'b0111:	
-			if (rob_heads[3] != rob_tails[0])
-				r_amt = 3'd4;
-			else
-				r_amt = 3'd3;
-	4'b1111:	r_amt = 3'd4;
-	endcase
+
+// For vector length
+task rf_upd16;
+input [`RBITS] n;
+input [15:0] i;
+output [15:0] o;
+begin
+	if (commit3_v && commit3_tgt==n)
+		o = commit3_bus[15:0];
+	else if (commit2_v && commit2_tgt==n)
+		o = commit2_bus[15:0];
+	else if (commit1_v && commit1_tgt==n)
+		o = commit1_bus[15:0];
+	else if (commit0_v && commit0_tgt==n)
+		o = commit0_bus[15:0];
+	else
+		o = i;
 end
-*/
+endtask
+
+// For vector masks
+task rf_upd32;
+input [`RBITS] n;
+input [31:0] i;
+output [31:0] o;
+begin
+	if (commit3_v && commit3_tgt==n)
+		o = commit3_bus[31:0];
+	else if (commit2_v && commit2_tgt==n)
+		o = commit2_bus[31:0];
+	else if (commit1_v && commit1_tgt==n)
+		o = commit1_bus[31:0];
+	else if (commit0_v && commit0_tgt==n)
+		o = commit0_bus[31:0];
+	else
+		o = i;
+end
+endtask
+
+task rf_upd128;
+input [`RBITS] n;
+input [127:0] i;
+output [127:0] o;
+begin
+	if (commit3_v && commit3_tgt==n)
+		o = commit3_bus[127:0];
+	else if (commit2_v && commit2_tgt==n)
+		o = commit2_bus[127:0];
+	else if (commit1_v && commit1_tgt==n)
+		o = commit1_bus[127:0];
+	else if (commit0_v && commit0_tgt==n)
+		o = commit0_bus[127:0];
+	else
+		o = i;
+end
+endtask
+
+task rf_upd256;
+input [`RBITS] n;
+input [255:0] i;
+output [255:0] o;
+begin
+	if (commit3_v && commit3_tgt==n)
+		o = commit3_bus[255:0];
+	else if (commit2_v && commit2_tgt==n)
+		o = commit2_bus[255:0];
+	else if (commit1_v && commit1_tgt==n)
+		o = commit1_bus[255:0];
+	else if (commit0_v && commit0_tgt==n)
+		o = commit0_bus[255:0];
+	else
+		o = i;
+end
+endtask
+
 always @*
 begin
-	n_commit = {2'd0,gp0_commit_v} + {2'd0,gp1_commit_v} +
-						 {2'd0,fp0_commit_v} + {2'd0,fp1_commit_v} +
-						 {2'd0,iv0_commit_v} + {2'd0,iv1_commit_v} +
-						 {2'd0,Lk0_commit_v} + {2'd0,Lk1_commit_v} +
-						 {2'd0,Vm0_commit_v} + {2'd0,Vm1_commit_v} +
-						 {2'd0,VL0_commit_v} + {2'd0,VL1_commit_v} +
-						 {2'd0,Cr0a_commit_v} +
-						 n_nulltgt
-						 ;
-	if (n_commit > Cr1_cs)
-		n_commit = Cr1_cs;
+gp_regfilex[0] = 128'd0;
+for (n = 1; n < 32; n = n + 1)
+	rf_upd128({2'b00,n[4:0]},gp_regfile[n],gp_regfilex[n]);
 end
+always @*
+begin
+fp_regfilex[0] = 128'd0;
+for (n = 1; n < 32; n = n + 1)
+	rf_upd128({2'b01,n[4:0]},fp_regfile[n],fp_regfilex[n]);
+end
+always @*
+for (n = 0; n < 32; n = n + 1)
+	rf_upd256({2'b10,n[4:0]},vc_regfile[n],vc_regfilex[n]);
+always @*
+begin
+lk_regfilex[0] = 128'd0;
+for (n = 1; n < 8; n = n + 1)
+	rf_upd128({4'b1100,n[2:0]},lk_regfile[n],lk_regfilex[n]);
+end
+always @*
+for (n = 0; n < 8; n = n + 1)
+	rf_upd32({4'b1101,n[2:0]},vm_regfile[n],vm_regfilex[n]);
+always @*
+	rf_upd16(124,vl_reg,vl_regx);
+
+always @(posedge clk)
+for (n = 1; n < 32; n = n + 1)
+	gp_regfile[n] <= gp_regfilex[n];
+always @(posedge clk)
+for (n = 1; n < 32; n = n + 1)
+	fp_regfile[n] <= fp_regfilex[n];
+always @(posedge clk)
+for (n = 0; n < 32; n = n + 1)
+	vc_regfile[n] <= vc_regfilex[n];
+always @(posedge clk)
+for (n = 1; n < 8; n = n + 1)
+	lk_regfile[n] <= lk_regfilex[n];
+always @(posedge clk)
+for (n = 0; n < 8; n = n + 1)
+	vm_regfile[n] <= vm_regfilex[n];
+always @(posedge clk)
+	vl_reg <= vl_regx;
+
+always @*
+begin
+if (commit3_v && commit3_tgt==7'd125) begin
+	cr_regfilex[0] <= commit3_bus[7:0];
+	cr_regfilex[1] <= commit3_bus[15:8];
+	cr_regfilex[2] <= commit3_bus[23:16];
+	cr_regfilex[3] <= commit3_bus[31:24];
+	cr_regfilex[4] <= commit3_bus[39:32];
+	cr_regfilex[5] <= commit3_bus[47:40];
+	cr_regfilex[6] <= commit3_bus[55:48];
+	cr_regfilex[7] <= commit3_bus[63:56];
+end
+else if (commit2_v && commit2_tgt==7'd125) begin
+	cr_regfilex[0] <= commit2_bus[7:0];
+	cr_regfilex[1] <= commit2_bus[15:8];
+	cr_regfilex[2] <= commit2_bus[23:16];
+	cr_regfilex[3] <= commit2_bus[31:24];
+	cr_regfilex[4] <= commit2_bus[39:32];
+	cr_regfilex[5] <= commit2_bus[47:40];
+	cr_regfilex[6] <= commit2_bus[55:48];
+	cr_regfilex[7] <= commit2_bus[63:56];
+end
+else if (commit1_v && commit1_tgt==7'd125) begin
+	cr_regfilex[0] <= commit1_bus[7:0];
+	cr_regfilex[1] <= commit1_bus[15:8];
+	cr_regfilex[2] <= commit1_bus[23:16];
+	cr_regfilex[3] <= commit1_bus[31:24];
+	cr_regfilex[4] <= commit1_bus[39:32];
+	cr_regfilex[5] <= commit1_bus[47:40];
+	cr_regfilex[6] <= commit1_bus[55:48];
+	cr_regfilex[7] <= commit1_bus[63:56];
+end
+else if (commit0_v && commit0_tgt==7'd125) begin
+	cr_regfilex[0] <= commit0_bus[7:0];
+	cr_regfilex[1] <= commit0_bus[15:8];
+	cr_regfilex[2] <= commit0_bus[23:16];
+	cr_regfilex[3] <= commit0_bus[31:24];
+	cr_regfilex[4] <= commit0_bus[39:32];
+	cr_regfilex[5] <= commit0_bus[47:40];
+	cr_regfilex[6] <= commit0_bus[55:48];
+	cr_regfilex[7] <= commit0_bus[63:56];
+end
+else begin
+	for (n = 0; n < 8; n = n + 1) begin
+	if (commit3_v && commit3_tgt=={4'b1110,n[2:0]})
+		cr_regfilex[n] <= commit3_bus[7:0];
+	else if (commit2_v && commit2_tgt=={4'b1110,n[2:0]})
+		cr_regfilex[n] <= commit2_bus[7:0];
+	else if (commit1_v && commit1_tgt=={4'b1110,n[2:0]})
+		cr_regfilex[n] <= commit1_bus[7:0];
+	else if (commit0_v && commit0_tgt=={4'b1110,n[2:0]})
+		cr_regfilex[n] <= commit0_bus[7:0];
+	else if (commit3_v && commit3_crtgt=={1'b1,n[2:0]})
+		cr_regfilex[n] <= commit3_crbus;
+	else if (commit2_v && commit2_crtgt=={1'b1,n[2:0]})
+		cr_regfilex[n] <= commit2_crbus;
+	else if (commit1_v && commit1_crtgt=={1'b1,n[2:0]})
+		cr_regfilex[n] <= commit1_crbus;
+	else if (commit0_v && commit0_crtgt=={1'b1,n[2:0]})
+		cr_regfilex[n] <= commit0_crbus;
+	else
+		cr_regfilex[n] <= cr_regfile[n];
+	end
+end
+end
+always @(posedge clk)
+for (n = 0; n < 8; n = n + 1)
+	cr_regfile[n] <= cr_regfilex[n];
 
 reg [WID-1:0] argA[QSLOTS-1:0];
 reg [WID-1:0] argB[QSLOTS-1:0];
@@ -2178,9 +1555,9 @@ for (n = 0; n < QSLOTS; n = n + 1)
 	7'b01?????:	argA[n] <= fp_rfoa[n];
 	7'b10?????:	argA[n] <= vc_rfoa[n];
 	7'b1101???:	argA[n] <= vm_rfoa[n];
-	7'b1110???:	argA[n] <= cr_rfoa[n];
-	7'b1111100:	argA[n] <= vlen_o;			// for move
-	7'b1111101:	argA[n] <= cra_o;
+	7'b1110???:	argA[n] <= cr_rfo[n];
+	7'b1111100:	argA[n] <= vl_regx;			// for move
+	7'b1111101:	argA[n] <= {cr_regfilex[7],cr_regfilex[6],cr_regfilex[5],cr_regfilex[4],cr_regfilex[3],cr_regfilex[2],cr_regfilex[1],cr_regfilex[0]};
 	default:		argA[n] <= 256'd0;
 	endcase
 
@@ -2191,8 +1568,8 @@ for (n = 0; n < QSLOTS; n = n + 1)
 	7'b01?????:	argB[n] <= fp_rfob[n];
 	7'b10?????:	argB[n] <= vc_rfob[n];
 	7'b1100???:	argB[n] <= lk_rfo[n];
-	7'b1111100:	argA[n] <= vlen_o;			// For store
-	7'b1111101:	argB[n] <= cra_o;
+	7'b1111100:	argA[n] <= vl_regx;			// For store
+	7'b1111101:	argB[n] <= {cr_regfilex[7],cr_regfilex[6],cr_regfilex[5],cr_regfilex[4],cr_regfilex[3],cr_regfilex[2],cr_regfilex[1],cr_regfilex[0]};
 	default:		argB[n] <= 256'd0;
 	endcase
 	
@@ -2481,15 +1858,15 @@ wire [3:0] xtkb;
 assign xisBr[0] = iq_br[heads[0]] & commit0_v & ~iq_instr[heads[0]][5];
 assign xisBr[1] = iq_br[heads[1]] & commit1_v & ~iq_instr[heads[1]][5];
 assign xisBr[2] = iq_br[heads[2]] & commit2_v & ~iq_instr[heads[2]][5];
-assign xisBr[3] = 1'b0;
+assign xisBr[3] = iq_br[heads[3]] & commit3_v & ~iq_instr[heads[3]][5];
 assign xip[0] = iq_ip[heads[0]];
 assign xip[1] = iq_ip[heads[1]];
 assign xip[2] = iq_ip[heads[2]];
-assign xip[3] = 1'd0;
+assign xip[3] = iq_ip[heads[3]];
 assign xtkb[0] = commit0_v & iq_takb[heads[0]];
 assign xtkb[1] = commit1_v & iq_takb[heads[1]];
 assign xtkb[2] = commit2_v & iq_takb[heads[2]];
-assign xtkb[3] = 1'b0;
+assign xtkb[3] = commit3_v & iq_takb[heads[3]];
 
 wire [QSLOTS-1:0] predict_takenx;
 
@@ -2513,9 +1890,9 @@ assign predict_takenx[1] = insnx[1][39];
 assign predict_takenx[2] = insnx[2][39];
 `endif
 
-assign predict_taken[0] = insnx[0][8+5]==1'b1 ? insnx[0][8+4] : predict_takenx[0];
-assign predict_taken[1] = insnx[1][8+5]==1'b1 ? insnx[1][8+4] : predict_takenx[1];
-assign predict_taken[2] = insnx[2][8+5]==1'b1 ? insnx[2][8+4] : predict_takenx[2];
+assign predict_taken[0] = insnx[0][12]==1'b1 ? insnx[0][11] : predict_takenx[0];
+assign predict_taken[1] = insnx[1][12]==1'b1 ? insnx[1][11] : predict_takenx[1];
+assign predict_taken[2] = insnx[2][12]==1'b1 ? insnx[2][11] : predict_takenx[2];
 
 
 reg StoreAck1, isStore;
@@ -3055,10 +2432,6 @@ decodeBuffer udcb1
 	.queuedOnp(queuedOnp)
 );
 
-function fnUpdCr1;
-input [7:0] opcode;
-endfunction
-
 // Which condition register to update. 
 function [3:0] fnCrd;
 input [39:0] ins;
@@ -3134,6 +2507,11 @@ casez(ins[`OPCODE])
 8'h2D:	fnRd = {2'b00,ins[`RD]};	// TLB
 8'b0?,8'h1?:
 				fnRd = {2'b00,ins[`RD]};	// MLD
+`STORE:
+	case(ins[`OPCODE])
+	`PUSH,`PUSHC:	fnRd = {2'b00,ins[`RD]};
+	default:	fnRd = 7'd0;
+	endcase
 8'h4?,8'h5?:
 				fnRd = {2'b10,ins[`RD]};	// VMLD
 default:	fnRd = 7'd0;
@@ -3168,7 +2546,7 @@ endfunction
 function [6:0] fnRs1;
 input [39:0] ins;
 case(ins[`OPCODE])
-`JLT,`JLE,`JGT,`JGE,`JEQ,`JNE,`JCS,`JCC,`JVS,`JVC,`JUS,`JUC:
+`BRANCH:
 	fnRs1 = {4'b1110,ins[10:8]};
 `BMISC2:
 	if (ins[`BFUNCT4]==`CRLOG)	// CRLOG
@@ -3239,8 +2617,7 @@ input [39:0] isn;
 casez(isn[`OPCODE])
 // BUnit:	
 `BRK:	Source1Valid = isn[`RS1]==5'd0;
-`JLT,`JLE,`JGT,`JGE,`JEQ,`JNE,`JCS,`JCC,`JVS,`JVC,`JUS,`JUC:
-			Source1Valid = FALSE;
+`BRANCH:	Source1Valid = FALSE;
 `CHK:	Source1Valid = isn[`RS1]==5'd0;
 `CHKI:	Source1Valid = isn[`RS1]==5'd0;
 `JRL:	Source1Valid = isn[`RS1]==5'd0;
@@ -3282,8 +2659,7 @@ input [39:0] isn;
 // `BUnit:	
 case(isn[`OPCODE])
 `BRK:		Source2Valid = TRUE;
-`JLT,`JLE,`JGT,`JGE,`JEQ,`JNE,`JCS,`JCC,`JVS,`JVC,`JUS,`JUC:
-				Source2Valid = TRUE;
+`BRANCH:	Source2Valid = TRUE;
 `JRL:		Source2Valid = TRUE;
 `RTS:		Source2Valid = isn[`RS2]==5'd0;
 `JSR:		Source2Valid = TRUE;
@@ -3419,7 +2795,7 @@ endfunction
 function IsBranch;
 input [39:0] isn;
 case(isn[`OPCODE])
-`JEQ,`JNE,`JLT,`JGT,`JLE,`JGE,`JCS,`JCC,`JVS,`JVC,`JUS,`JUC:	
+`BRANCH:	
 	IsBranch = TRUE;
 default:	IsBranch = FALSE;
 endcase
@@ -3511,9 +2887,9 @@ casez(isn[`OPCODE])
 	default:	IsRFW = TRUE;
 	endcase
 // MUnit
-8'b0???????:	// Memory
+`MEMORY:	// Memory
 	casez(isn[`OPCODE])
-	8'h0?,8'h1?,8'h4?,8'h5?:	IsRFW = TRUE;
+	`LOAD:	IsRFW = TRUE;
 	`TLB:		IsRFW = TRUE;
 	`PUSH:	IsRFW = TRUE;
 	`PUSHC:	IsRFW = TRUE;
@@ -4191,6 +3567,7 @@ memissueLogic umi1
 	.iq_agen(iq_agen), 
 	.iq_load(iq_load),
 	.iq_store(iq_store),
+	.iq_sel(iq_sel),
 	.iq_fc(iq_fc),
 	.iq_aq(iq_aq),
 	.iq_rl(iq_rl),
@@ -5479,6 +4856,7 @@ if (rst_i|(rst_ctr < 32'd2)) begin
        iq_tgt[n] <= 6'd0;
        iq_imm[n] <= 1'b0;
        iq_ma[n] <= 1'b0;
+       iq_sel[n] <= 1'd0;
        iq_argI[n] <= 64'd0;
        iq_argA[n] <= 64'd0;
        iq_argB[n] <= 64'd0;
@@ -5921,8 +5299,11 @@ if (agen0_v) begin
 			rob_state[agen0_rid] <= RS_CMT;
 	rob_res[agen0_rid] <= agen0_ma;		// LEA/PUSH needs this result
 	rob_exc[agen0_rid] <= `FLT_NONE;
-	if (iq_state[agen0_id]!=IQS_AGEN)
+	if (iq_state[agen0_id]!=IQS_AGEN) begin
 		iq_ma[agen0_id] <= agen0_ma;
+		iq_sel[agen0_id] <= fnSelect(agen0_instr) << agen0_ma[4:0];
+		rob_res[agen0_rid] <= agen0_ma;
+	end
 	agen0_dataready <= FALSE;
 end
 
@@ -5935,8 +5316,11 @@ if (agen1_v && `NUM_AGEN > 1) begin
 			rob_state[agen1_rid] <= RS_CMT;
 	rob_res[agen1_rid] <= agen1_ma;		// LEA needs this result
 	rob_exc[agen1_rid] <= `FLT_NONE;
-	if (iq_state[agen1_id]!=IQS_AGEN)
+	if (iq_state[agen1_id]!=IQS_AGEN) begin
 		iq_ma[agen1_id] <= agen1_ma;
+		iq_sel[agen1_id] <= fnSelect(agen1_instr) << agen1_ma[4:0];
+		rob_res[agen1_rid] <= agen1_ma;
+	end
 	agen1_dataready <= FALSE;
 end
 
@@ -6079,6 +5463,7 @@ begin
 		setargs(n,{1'b0,dramB_rid},dramB_v,rdramB_bus);
 end
 
+// Argument loading to functional units.
 // X's on unused busses cause problems in SIM.
     for (n = 0; n < QENTRIES; n = n + 1)
         if (iq_alu0_issue[n] && !(iq_v[n] && iq_stomp[n])
@@ -6087,18 +5472,7 @@ end
 					alu0_sn <= iq_sn[n];
 					alu0_sourceid	<= n[`QBITS];
 					check_done(n[`QBITS]);
-					if (alu1_rid==n[`QBITS] && !issuing_on_alu1)
-						alu1_rid <= {`QBIT{1'b1}};
-					if (fpu1_rid==n[`QBITS] && !issuing_on_fpu1)
-						fpu1_rid <= {`QBIT{1'b1}};
-					if (fpu2_rid==n[`QBITS] && !issuing_on_fpu2)
-						fpu2_rid <= {`QBIT{1'b1}};
-					if (agen0_rid==n[`QBITS] && !issuing_on_agen0)
-						agen0_rid <= {`QBIT{1'b1}};
-					if (agen1_rid==n[`QBITS] && !issuing_on_agen1)
-						agen1_rid <= {`QBIT{1'b1}};
-					if (fcu_rid==n[`QBITS] && !issuing_on_fcu)
-						fcu_rid <= {`QBIT{1'b1}};
+					check_issue(7'b1111110);
 					// The following line is a hack. The alu is done (tested above) so it
 					// should be setting the state to CMT.
 //					if (iq_state[alu0_id]==IQS_OUT)
@@ -6125,81 +5499,11 @@ end
 					alu0_ip		<= iq_ip[n];
 					// Agen output is not bypassed since there's only one
 					// instruction (LEA) to bypass for.
-`ifdef FU_BYPASS
-					if (iq_argA_v[n])
-						alu0_argA <= iq_argA[n][VWID-1:0];
-					else
-						case(iq_argA_s[n][`RBITS])
-						alu0_rid:	alu0_argA <= ralu0_bus;
-						alu1_rid:	alu0_argA <= ralu1_bus;
-						fpu1_rid:	alu0_argA <= rfpu1_bus[VWID-1:0];
-						fpu2_rid:	alu0_argA <= rfpu2_bus[VWID-1:0];
-						default:	alu0_argA <= {16{16'hDEAD}};
-						endcase
-`else
-					alu0_argA <= iq_argA[n][VWID-1:0];               
-`endif                 
-`ifdef FU_BYPASS
-					if (iq_imm[n])
-						alu0_argB <= iq_argI[n];
-					else if (iq_argB_v[n])
-						alu0_argB <= iq_argB[n];
-					else
-						case(iq_argB_s[n][`RBITS])
-						alu0_rid:	alu0_argB <= ralu0_bus;
-						alu1_rid:	alu0_argB <= ralu1_bus;
-						fpu1_rid:	alu0_argB <= rfpu1_bus[VWID-1:0];
-						fpu2_rid:	alu0_argB <= rfpu2_bus[VWID-1:0];
-						default:	alu0_argB <= {16{16'hDEAD}};
-						endcase
-`else
-					if (iq_imm[n])
-						alu0_argB <= iq_argI[n];
-					else
-						alu0_argB <= iq_argB[n][VWID-1:0];
-`endif
-`ifdef FU_BYPASS
-					if (iq_argC_v[n])
-						alu0_argC <= iq_argC[n][VWID-1:0];
-					else
-						case(iq_argC_s[n][`RBITS])
-						alu0_rid:	alu0_argC <= ralu0_bus;
-						alu1_rid:	alu0_argC <= ralu1_bus;
-						fpu1_rid:	alu0_argC <= rfpu1_bus[VWID-1:0];
-						fpu2_rid:	alu0_argC <= rfpu2_bus[VWID-1:0];
-						default:	alu0_argC <= {16{16'hDEAD}};
-						endcase
-`else
-					alu0_argC <= iq_argC[n][VWID-1:0];
-`endif                 
-`ifdef FU_BYPASS
-					if (iq_argD_v[n])
-						alu0_argD <= iq_argD[n][31:0];
-					else
-						case(iq_argD_s[n][`RBITS])
-						alu0_rid:	alu0_argD <= ralu0_bus;
-						alu1_rid:	alu0_argD <= ralu1_bus;
-						fpu1_rid:	alu0_argD <= rfpu1_bus[WID-1:0];
-						fpu2_rid:	alu0_argD <= rfpu2_bus[WID-1:0];
-						default:	alu0_argD <= {16{16'hDEAD}};
-						endcase
-`else
-					alu0_argD <= iq_argD[n][31:0];
-`endif                 
-`ifdef FU_BYPASS
-					if (iq_argT_v[n])
-						alu0_argT <= iq_argT[n][VWID-1:0];
-					else
-						case(iq_argT_s[n][`RBITS])
-						alu0_rid:	alu0_argT <= ralu0_bus;
-						alu1_rid:	alu0_argT <= ralu1_bus;
-						fpu1_rid:	alu0_argT <= rfpu1_bus[WID-1:0];
-						fpu2_rid:	alu0_argT <= rfpu2_bus[WID-1:0];
-						default:	alu0_argT <= {16{16'hDEAD}};
-						endcase
-`else
-					alu0_argT <= iq_argT[n][VWID-1:0];
-`endif                 
+					bypass(0,0,iq_argA_v[n],iq_argA_s[n][`RBITS],iq_argA[n][VWID-1:0],alu0_argA);
+					bypass(iq_imm[n],iq_argI[n],iq_argB_v[n],iq_argB_s[n][`RBITS],iq_argB[n][VWID-1:0],alu0_argB);
+					bypass(0,0,iq_argC_v[n],iq_argC_s[n][`RBITS],iq_argC[n][VWID-1:0],alu0_argC);
+					bypass32 (0,0,iq_argD_v[n],iq_argD_s[n][`RBITS],iq_argD[n][31:0],alu0_argD);
+					bypass(0,0,iq_argT_v[n],iq_argT_s[n][`RBITS],iq_argT[n][VWID-1:0],alu0_argT);
 					alu0_argI	<= iq_argI[n];
 					alu0_tgt    <= iq_tgt[n];
 					alu0_dataready <= IsSingleCycle(iq_instr[n]);
@@ -6215,18 +5519,7 @@ end
             		 alu1_sn <= iq_sn[n];
                  alu1_sourceid	<= n[`QBITS];
 								check_done(n[`QBITS]);
-					if (alu0_rid==n[`QBITS] && !issuing_on_alu0)
-						alu0_rid <= {`QBIT{1'b1}};
-					if (fpu1_rid==n[`QBITS] && !issuing_on_fpu1)
-						fpu1_rid <= {`QBIT{1'b1}};
-					if (fpu2_rid==n[`QBITS] && !issuing_on_fpu2)
-						fpu2_rid <= {`QBIT{1'b1}};
-					if (agen0_rid==n[`QBITS] && !issuing_on_agen0)
-						agen0_rid <= {`QBIT{1'b1}};
-					if (agen1_rid==n[`QBITS] && !issuing_on_agen1)
-						agen1_rid <= {`QBIT{1'b1}};
-					if (fcu_rid==n[`QBITS] && !issuing_on_fcu)
-						fcu_rid <= {`QBIT{1'b1}};
+								check_issue(7'b1111101);
 								// The following line is a hack. The alu is done (tested above) so it
 								// should be setting the state to CMT.
 	//							if (iq_state[alu1_id]==IQS_OUT)
@@ -6240,81 +5533,11 @@ end
                  alu1_store <= iq_store[n];
                  alu1_shft  <= iq_shft[n];
                  alu1_ip		<= iq_ip[n];
-`ifdef FU_BYPASS
-								 if (iq_argA_v[n])
-								 	 alu1_argA <= iq_argA[n][VWID-1:0];
-								 else
-	                 case(iq_argA_s[n][`RBITS])
-	                 alu0_rid:	alu1_argA <= ralu0_bus;
-	                 alu1_rid:	alu1_argA <= ralu1_bus;
-	                 fpu1_rid:	alu1_argA <= rfpu1_bus[VWID-1:0];
-	                 fpu2_rid:	alu1_argA <= rfpu2_bus[VWID-1:0];
-	                 default:	alu1_argA <= {16{16'hDEAD}};
-	                 endcase
-`else
-								alu1_argA <= iq_argA[n][VWID-1:0];               
-`endif                 
-`ifdef FU_BYPASS
-								if (iq_imm[n])
-									alu1_argB <= iq_argI[n];
-								else if (iq_argB_v[n])
-									alu1_argB <= iq_argB[n][VWID-1:0];
-								else
-									case(iq_argB_s[n][`RBITS])
-									alu0_rid:	alu1_argB <= ralu0_bus;
-									alu1_rid:	alu1_argB <= ralu1_bus;
-									fpu1_rid:	alu1_argB <= rfpu1_bus[VWID-1:0];
-									fpu2_rid:	alu1_argB <= rfpu2_bus[VWID-1:0];
-									default:	alu1_argB <= {16{16'hDEAD}};
-									endcase
-`else
-								if (iq_imm[n])
-									alu1_argB <= iq_argI[n];
-								else
-									alu1_argB <= iq_argB[n][VWID-1:0];
-`endif
-`ifdef FU_BYPASS
-								 if (iq_argC_v[n])
-								 	alu1_argC <= iq_argC[n][VWID-1:0];
-								 else
-	                 case(iq_argC_s[n][`RBITS])
-	                 alu0_rid:	alu1_argC <= ralu0_bus;
-	                 alu1_rid:	alu1_argC <= ralu1_bus;
-	                 fpu1_rid:	alu1_argC <= rfpu1_bus[VWID-1:0];
-	                 fpu2_rid:	alu1_argC <= rfpu2_bus[VWID-1:0];
-	                 default:	alu1_argC <= {16{16'hDEAD}};
-	                 endcase
-`else
-								alu1_argC <= iq_argC[n][VWID-1:0];
-`endif                 
-`ifdef FU_BYPASS
-					if (iq_argD_v[n])
-						alu1_argD <= iq_argD[n][31:0];
-					else
-						case(iq_argD_s[n][`RBITS])
-						alu0_rid:	alu1_argD <= ralu0_bus;
-						alu1_rid:	alu1_argD <= ralu1_bus;
-						fpu1_rid:	alu1_argD <= rfpu1_bus[31:0];
-						fpu2_rid:	alu1_argD <= rfpu2_bus[31:0];
-						default:	alu1_argD <= {16{16'hDEAD}};
-						endcase
-`else
-					alu1_argD <= iq_argD[n][31:0];
-`endif                 
-`ifdef FU_BYPASS
-					if (iq_argT_v[n])
-						alu1_argT <= iq_argT[n][VWID-1:0];
-					else
-						case(iq_argT_s[n][`RBITS])
-						alu0_rid:	alu1_argT <= ralu0_bus;
-						alu1_rid:	alu1_argT <= ralu1_bus;
-						fpu1_rid:	alu1_argT <= rfpu1_bus[VWID-1:0];
-						fpu2_rid:	alu1_argT <= rfpu2_bus[VWID-1:0];
-						default:	alu1_argT <= {16{16'hDEAD}};
-						endcase
-`else
-					alu1_argT <= iq_argT[n][VWID-1:0];
-`endif                 
+								bypass(0,0,iq_argA_v[n],iq_argA_s[n][`RBITS],iq_argA[n][VWID-1:0],alu1_argA);
+								bypass(iq_imm[n],iq_argI[n],iq_argB_v[n],iq_argB_s[n][`RBITS],iq_argB[n][VWID-1:0],alu1_argB);
+								bypass(0,0,iq_argC_v[n],iq_argC_s[n][`RBITS],iq_argC[n][VWID-1:0],alu1_argC);
+								bypass32 (0,0,iq_argD_v[n],iq_argD_s[n][`RBITS],iq_argD[n][31:0],alu1_argD);
+								bypass(0,0,iq_argT_v[n],iq_argT_s[n][`RBITS],iq_argT[n][VWID-1:0],alu1_argT);
                  alu1_argI	<= iq_argI[n];
                  alu1_tgt    <= iq_tgt[n];
                  alu1_dataready <= IsSingleCycle(iq_instr[n]);
@@ -6330,18 +5553,7 @@ end
             		agen0_sn <= iq_sn[n];
                  agen0_sourceid	<= n[`QBITS];
 								check_done(n[`QBITS]);
-					if (alu0_rid==n[`QBITS] && !issuing_on_alu0)
-						alu0_rid <= {`QBIT{1'b1}};
-					if (alu1_rid==n[`QBITS] && !issuing_on_alu1)
-						alu1_rid <= {`QBIT{1'b1}};
-					if (fpu1_rid==n[`QBITS] && !issuing_on_fpu1)
-						fpu1_rid <= {`QBIT{1'b1}};
-					if (fpu2_rid==n[`QBITS] && !issuing_on_fpu2)
-						fpu2_rid <= {`QBIT{1'b1}};
-					if (agen1_rid==n[`QBITS] && !issuing_on_agen1)
-						agen1_rid <= {`QBIT{1'b1}};
-					if (fcu_rid==n[`QBITS] && !issuing_on_fcu)
-						fcu_rid <= {`QBIT{1'b1}};
+								check_issue(7'b1111011);
                  agen0_rid <= iq_rid[n];
                  agen0_unit <= iq_unit[n];
                  agen0_instr	<= iq_instr[n];
@@ -6351,37 +5563,11 @@ end
                  agen0_mem2 <= iq_mem2[n];
                  agen0_memsb <= iq_memsb[n];
                  agen0_memdb <= iq_memdb[n];
-`ifdef FU_BYPASS
-								 if (iq_argA_v[n])
-								 	 agen0_argA <= iq_argA[n][WID-1:0];
-								 else
-	                 case(iq_argA_s[n][`RBITS])
-	                 alu0_rid:	agen0_argA <= ralu0_bus;
-	                 alu1_rid:	agen0_argA <= ralu1_bus;
-	                 fpu1_rid:	agen0_argA <= rfpu1_bus[WID-1:0];
-	                 fpu2_rid:	agen0_argA <= rfpu2_bus[WID-1:0];
-	                 default:	agen0_argA <= {16{16'hDEAD}};
-	                 endcase
-`else
-								agen0_argA <= iq_argA[n][WID-1:0];
-`endif                 
+								bypass128 (0,0,iq_argA_v[n],iq_argA_s[n][`RBITS],iq_argA[n][VWID-1:0],agen0_argA);
 							if (agen0_bytecnt[11]) begin
 								agen0_offset <= 16'd0;
 									if (iq_lsstring[n]) begin
-`ifdef FU_BYPASS
-									 if (iq_argC_v[n])
-									 	agen0_bytecnt <= iq_argC[n][WID-1:0];
-									 else
-		                 case(iq_argC_s[n][`RBITS])
-		                 alu0_rid:	agen0_bytecnt <= ralu0_bus;
-		                 alu1_rid:	agen0_bytecnt <= ralu1_bus;
-		                 fpu1_rid:	agen0_bytecnt <= rfpu1_bus[WID-1:0];
-		                 fpu2_rid:	agen0_bytecnt <= rfpu2_bus[WID-1:0];
-		                 default:	agen0_bytecnt <= 16'hFFFF;
-		                 endcase
-`else
-									agen0_bytecnt <= iq_argC[n][WID-1:0];
-`endif           
+										bypass128 (0,0,iq_argC_v[n],iq_argC_s[n][`RBITS],iq_argC[n][VWID-1:0],agen0_bytecnt);
 								end
 							end
 							else begin
@@ -6391,20 +5577,7 @@ end
 									agen0_stopString <= TRUE;
 							end
 //                 agen0_argB	<= iq_argB[n];	// ArgB not used by agen
-`ifdef FU_BYPASS
-								 if (iq_argC_v[n])
-								 	agen0_argC <= iq_argC[n][WID-1:0];
-								 else
-	                 case(iq_argC_s[n][`RBITS])
-	                 alu0_rid:	agen0_argC <= ralu0_bus;
-	                 alu1_rid:	agen0_argC <= ralu1_bus;
-	                 fpu1_rid:	agen0_argC <= rfpu1_bus[WID-1:0];
-	                 fpu2_rid:	agen0_argC <= rfpu2_bus[WID-1:0];
-	                 default:	agen0_argC <= {16{16'hDEAD}};
-	                 endcase
-`else
-								agen0_argC <= iq_argC[n][WID-1:0];
-`endif           
+							bypass128 (0,0,iq_argC_v[n],iq_argC_s[n][`RBITS],iq_argC[n][VWID-1:0],agen0_argC);
 								agen0_argI <= iq_argI[n];      
                  agen0_tgt    <= iq_tgt[n];
                  agen0_dataready <= 1'b1;
@@ -6425,18 +5598,7 @@ end
             		agen1_sn <= iq_sn[n];
                  agen1_sourceid	<= n[`QBITS];
 								check_done(n[`QBITS]);
-					if (alu0_rid==n[`QBITS] && !issuing_on_alu0)
-						alu0_rid <= {`QBIT{1'b1}};
-					if (alu1_rid==n[`QBITS] && !issuing_on_alu1)
-						alu1_rid <= {`QBIT{1'b1}};
-					if (fpu1_rid==n[`QBITS] && !issuing_on_fpu1)
-						fpu1_rid <= {`QBIT{1'b1}};
-					if (fpu2_rid==n[`QBITS] && !issuing_on_fpu2)
-						fpu2_rid <= {`QBIT{1'b1}};
-					if (agen0_rid==n[`QBITS] && !issuing_on_agen0)
-						agen0_rid <= {`QBIT{1'b1}};
-					if (fcu_rid==n[`QBITS] && !issuing_on_fcu)
-						fcu_rid <= {`QBIT{1'b1}};
+								check_issue(7'b1110111);
                  agen1_rid <= iq_rid[n];
                  agen1_unit <= iq_unit[n];
                  agen1_instr	<= iq_instr[n];
@@ -6446,35 +5608,9 @@ end
                  agen1_mem2 <= iq_mem2[n];
                  agen1_memsb <= iq_memsb[n];
                  agen1_memdb <= iq_memdb[n];
-`ifdef FU_BYPASS
-								 if (iq_argA_v[n])
-								 	 agen1_argA <= iq_argA[n][WID-1:0];
-								 else
-	                 case(iq_argA_s[n][`RBITS])
-	                 alu0_rid:	agen1_argA <= ralu0_bus;
-	                 alu1_rid:	agen1_argA <= ralu1_bus;
-	                 fpu1_rid:	agen1_argA <= rfpu1_bus[WID-1:0];
-	                 fpu2_rid:	agen1_argA <= rfpu2_bus[WID-1:0];
-	                 default:	agen1_argA <={16{16'hDEAD}};
-	                 endcase
-`else
-								agen1_argA <= iq_argA[n][WID-1:0];
-`endif                 
+								bypass128 (0,0,iq_argA_v[n],iq_argA_s[n][`RBITS],iq_argA[n][VWID-1:0],agen1_argA);
 //                 agen1_argB	<= iq_argB[n];	// ArgB not used by agen
-`ifdef FU_BYPASS
-								 if (iq_argC_v[n])
-								 	agen1_argC <= iq_argC[n][WID-1:0];
-								 else
-	                 case(iq_argC_s[n][`RBITS])
-	                 alu0_rid:	agen1_argC <= ralu0_bus;
-	                 alu1_rid:	agen1_argC <= ralu1_bus;
-	                 fpu1_rid:	agen1_argC <= rfpu1_bus[WID-1:0];
-	                 fpu2_rid:	agen1_argC <= rfpu2_bus[WID-1:0];
-	                 default:	agen1_argC <= {16{16'hDEAD}};
-	                 endcase
-`else
-								agen1_argC <= iq_argC[n][WID-1:0];
-`endif                 
+								bypass128 (0,0,iq_argC_v[n],iq_argC_s[n][`RBITS],iq_argC[n][VWID-1:0],agen1_argC);
 								agen1_argI <= iq_argI[n];      
                  agen1_tgt    <= iq_tgt[n];
                  agen1_dataready <= 1'b1;
@@ -6483,214 +5619,60 @@ end
         end
   end
 
-	if (`NUM_FPU > 0) begin
+	// Produces an unimplmented operation exception if no FPU's are selected.
     for (n = 0; n < QENTRIES; n = n + 1)
         if (iq_fpu1_issue[n] && !(iq_v[n] && iq_stomp[n])) begin
             if (fpu1_available & fpu1_done) begin
+            	if (`NUM_FPU > 0) begin
 								iq_fuid[n] <= 3'd4;
                  fpu1_sourceid	<= n[`QBITS];
 								check_done(n[`QBITS]);
-					if (alu0_rid==n[`QBITS] && !issuing_on_alu0)
-						alu0_rid <= {`QBIT{1'b1}};
-					if (alu1_rid==n[`QBITS] && !issuing_on_alu1)
-						alu1_rid <= {`QBIT{1'b1}};
-					if (fpu2_rid==n[`QBITS] && !issuing_on_fpu2)
-						fpu2_rid <= {`QBIT{1'b1}};
-					if (agen0_rid==n[`QBITS] && !issuing_on_agen0)
-						agen0_rid <= {`QBIT{1'b1}};
-					if (agen1_rid==n[`QBITS] && !issuing_on_agen1)
-						agen1_rid <= {`QBIT{1'b1}};
-					if (fcu_rid==n[`QBITS] && !issuing_on_fcu)
-						fcu_rid <= {`QBIT{1'b1}};
+								check_issue(7'b1101111);
                  fpu1_rid <= iq_rid[n];
                  fpu1_instr	<= iq_instr[n];
                  fpu1_fmt   <= iq_fmt[n];
                  fpu1_z     <= iq_z[n];
                  fpu1_vset  <= iq_vset[n];
                  fpu1_ip		<= iq_ip[n];
-`ifdef FU_BYPASS
-								 if (iq_argA_v[n])
-								 	 fpu1_argA <= iq_argA[n];
-								 else
-	                 case(iq_argA_s[n][`RBITS])
-	                 alu0_rid:	fpu1_argA <= {ralu0_bus};
-	                 alu1_rid:	fpu1_argA <= {ralu1_bus};
-	                 fpu1_rid:	fpu1_argA <= rfpu1_bus;
-	                 fpu2_rid:	fpu1_argA <= rfpu2_bus;
-	                 default:	fpu1_argA <= {16{16'hDEAD}};
-	                 endcase
-`else
-								fpu1_argA <= iq_argA[n];               
-`endif                 
-`ifdef FU_BYPASS
-								if (iq_imm[n])
-									fpu1_argB <= {iq_argI[n],4'd0};
-								else if (iq_argB_v[n])
-									fpu1_argB <= iq_argB[n];
-								else
-									case(iq_argB_s[n][`RBITS])
-									alu0_rid:	fpu1_argB <= {ralu0_bus};
-									alu1_rid:	fpu1_argB <= {ralu1_bus};
-									fpu1_rid:	fpu1_argB <= rfpu1_bus;
-									fpu2_rid:	fpu1_argB <= rfpu2_bus;
-									default:	fpu1_argB <= {16{16'hDEAD}};
-									endcase
-`else
-								if (iq_imm[n])
-									fpu1_argB <= iq_argI[n];
-								else
-									fpu1_argB <= iq_argB[n];
-`endif
-`ifdef FU_BYPASS
-								 if (iq_argC_v[n])
-								 	fpu1_argC <= iq_argC[n];
-								 else
-	                 case(iq_argC_s[n][`RBITS])
-	                 alu0_rid:	fpu1_argC <= {ralu0_bus};
-	                 alu1_rid:	fpu1_argC <= {ralu1_bus};
-	                 fpu1_rid:	fpu1_argC <= rfpu1_bus;
-	                 fpu2_rid:	fpu1_argC <= rfpu2_bus;
-	                 default:	fpu1_argC <= {16{16'hDEAD}};
-	                 endcase
-`else
-								fpu1_argC <= iq_argC[n];
-`endif                 
-`ifdef FU_BYPASS
-								 if (iq_argD_v[n])
-								 	fpu1_argD <= iq_argD[n];
-								 else
-	                 case(iq_argD_s[n][`RBITS])
-	                 alu0_rid:	fpu1_argD <= {ralu0_bus};
-	                 alu1_rid:	fpu1_argD <= {ralu1_bus};
-	                 fpu1_rid:	fpu1_argD <= rfpu1_bus;
-	                 fpu2_rid:	fpu1_argD <= rfpu2_bus;
-	                 default:	fpu1_argD <= {16{16'hDEAD}};
-	                 endcase
-`else
-								fpu1_argD <= iq_argD[n];
-`endif                 
-`ifdef FU_BYPASS
-								if (iq_argT_v[n])
-									fpu1_argT <= iq_argT[n][VWID-1:0];
-								else
-									case(iq_argT_s[n][`RBITS])
-									alu0_rid:	fpu1_argT <= ralu0_bus;
-									alu1_rid:	fpu1_argT <= ralu1_bus;
-									fpu1_rid:	fpu1_argT <= rfpu1_bus[VWID-1:0];
-									fpu2_rid:	fpu1_argT <= rfpu2_bus[VWID-1:0];
-									default:	fpu1_argT <= {16{16'hDEAD}};
-									endcase
-`else
-								fpu1_argT <= iq_argT[n][VWID-1:0];
-`endif                 
+								bypass(0,0,iq_argA_v[n],iq_argA_s[n][`RBITS],iq_argA[n][VWID-1:0],fpu1_argA);
+								bypass(iq_imm[n],iq_argI[n],iq_argB_v[n],iq_argB_s[n][`RBITS],iq_argB[n][VWID-1:0],fpu1_argB);
+								bypass(0,0,iq_argC_v[n],iq_argC_s[n][`RBITS],iq_argC[n][VWID-1:0],fpu1_argC);
+								bypass32 (0,0,iq_argD_v[n],iq_argD_s[n][`RBITS],iq_argD[n][31:0],fpu1_argD);
+								bypass(0,0,iq_argT_v[n],iq_argT_s[n][`RBITS],iq_argT[n][VWID-1:0],fpu1_argT);
                  fpu1_argI	<= iq_argI[n];
                  fpu1_dataready <= `VAL;
                  fpu1_ld <= TRUE;
                  fpu1_tgt <= iq_tgt[n];
                  iq_state[n] <= IQS_OUT;
+              end
+              else begin
+								check_done(n[`QBITS]);
+								check_issue(7'b1101111);
+                iq_exc[n] <= `FLT_UNIMP;
+                iq_state[n] <= IQS_CMT;
+            	end
             end
         end
-	end
 
+	if (`NUM_FPU > 1) begin
     for (n = 0; n < QENTRIES; n = n + 1)
-        if (`NUM_FPU > 1 && iq_fpu2_issue[n] && !(iq_v[n] && iq_stomp[n])) begin
+        if (iq_fpu2_issue[n] && !(iq_v[n] && iq_stomp[n])) begin
             if (fpu2_available & fpu2_done) begin
 							iq_fuid[n] <= 3'd5;
                  fpu2_sourceid	<= n[`QBITS];
 								check_done(n[`QBITS]);
-					if (alu0_rid==n[`QBITS] && !issuing_on_alu0)
-						alu0_rid <= {`QBIT{1'b1}};
-					if (alu1_rid==n[`QBITS] && !issuing_on_alu1)
-						alu1_rid <= {`QBIT{1'b1}};
-					if (fpu1_rid==n[`QBITS] && !issuing_on_fpu1)
-						fpu1_rid <= {`QBIT{1'b1}};
-					if (agen0_rid==n[`QBITS] && !issuing_on_agen0)
-						agen0_rid <= {`QBIT{1'b1}};
-					if (agen1_rid==n[`QBITS] && !issuing_on_agen1)
-						agen1_rid <= {`QBIT{1'b1}};
-					if (fcu_rid==n[`QBITS] && !issuing_on_fcu)
-						fcu_rid <= {`QBIT{1'b1}};
+								check_issue(7'b1011111);
                  fpu2_rid <= iq_rid[n];
                  fpu2_instr	<= iq_instr[n];
                  fpu2_fmt   <= iq_fmt[n];
                  fpu2_z     <= iq_z[n];
                  fpu2_vset  <= iq_vset[n];
                  fpu2_ip		<= iq_ip[n];
-`ifdef FU_BYPASS
-								 if (iq_argA_v[n])
-								 	 fpu2_argA <= iq_argA[n];
-								 else
-	                 case(iq_argA_s[n][`RBITS])
-	                 alu0_rid:	fpu2_argA <= {ralu0_bus};
-	                 alu1_rid:	fpu2_argA <= {ralu1_bus};
-	                 fpu1_rid:	fpu2_argA <= rfpu1_bus;
-	                 fpu2_rid:	fpu2_argA <= rfpu2_bus;
-	                 default:	fpu2_argA <= {16{16'hDEAD}};
-	                 endcase
-`else
-								fpu2_argA <= iq_argA[n];               
-`endif                 
-`ifdef FU_BYPASS
-								if (iq_imm[n])
-									fpu2_argB <= iq_argI[n];
-								else if (iq_argB_v[n])
-									fpu2_argB <= iq_argB[n];
-								else
-									case(iq_argB_s[n][`RBITS])
-									alu0_rid:	fpu2_argB <= {ralu0_bus};
-									alu1_rid:	fpu2_argB <= {ralu1_bus};
-									fpu1_rid:	fpu2_argB <= rfpu1_bus;
-									fpu2_rid:	fpu2_argB <= rfpu2_bus;
-									default:	fpu2_argB <= {16{16'hDEAD}};
-									endcase
-`else
-								if (iq_imm[n])
-									fpu2_argB <= {iq_argI[n],4'd0};
-								else
-									fpu2_argB <= iq_argB[n];
-`endif
-`ifdef FU_BYPASS
-								 if (iq_argC_v[n])
-								 	fpu2_argC <= iq_argC[n];
-								 else
-	                 case(iq_argC_s[n][`RBITS])
-	                 alu0_rid:	fpu2_argC <= {ralu0_bus};
-	                 alu1_rid:	fpu2_argC <= {ralu1_bus};
-	                 fpu1_rid:	fpu2_argC <= rfpu1_bus;
-	                 fpu2_rid:	fpu2_argC <= rfpu2_bus;
-	                 default:	fpu2_argC <={16{16'hDEAD}};
-	                 endcase
-`else
-								fpu2_argC <= iq_argC[n];
-`endif                 
-`ifdef FU_BYPASS
-								 if (iq_argD_v[n])
-								 	fpu2_argD <= iq_argD[n];
-								 else
-	                 case(iq_argD_s[n][`RBITS])
-	                 alu0_rid:	fpu2_argD <= {ralu0_bus};
-	                 alu1_rid:	fpu2_argD <= {ralu1_bus};
-	                 fpu1_rid:	fpu2_argD <= rfpu1_bus;
-	                 fpu2_rid:	fpu2_argD <= rfpu2_bus;
-	                 default:	fpu2_argD <= {16{16'hDEAD}};
-	                 endcase
-`else
-								fpu2_argD <= iq_argD[n];
-`endif                 
-`ifdef FU_BYPASS
-								if (iq_argT_v[n])
-									fpu2_argT <= iq_argT[n][VWID-1:0];
-								else
-									case(iq_argT_s[n][`RBITS])
-									alu0_rid:	fpu2_argT <= ralu0_bus;
-									alu1_rid:	fpu2_argT <= ralu1_bus;
-									fpu1_rid:	fpu2_argT <= rfpu1_bus[VWID-1:0];
-									fpu2_rid:	fpu2_argT <= rfpu2_bus[VWID-1:0];
-									default:	fpu2_argT <= {16{16'hDEAD}};
-									endcase
-`else
-								fpu2_argT <= iq_argT[n][VWID-1:0];
-`endif                 
+								bypass(0,0,iq_argA_v[n],iq_argA_s[n][`RBITS],iq_argA[n][VWID-1:0],fpu2_argA);
+								bypass(iq_imm[n],iq_argI[n],iq_argB_v[n],iq_argB_s[n][`RBITS],iq_argB[n][VWID-1:0],fpu2_argB);
+								bypass(0,0,iq_argC_v[n],iq_argC_s[n][`RBITS],iq_argC[n][VWID-1:0],fpu2_argC);
+								bypass32 (0,0,iq_argD_v[n],iq_argD_s[n][`RBITS],iq_argD[n][31:0],fpu2_argD);
+								bypass(0,0,iq_argT_v[n],iq_argT_s[n][`RBITS],iq_argT[n][VWID-1:0],fpu2_argT);
                  fpu2_argI	<= iq_argI[n];
                  fpu2_dataready <= `VAL;
                  fpu2_ld <= TRUE;
@@ -6698,6 +5680,7 @@ end
                  iq_state[n] <= IQS_OUT;
             end
         end
+  end
 
   for (n = 0; n < QENTRIES; n = n + 1)
     if (iq_fcu_issue[n] && !(iq_v[n] && iq_stomp[n])) begin
@@ -6706,18 +5689,7 @@ end
 				fcu_sourceid	<= n[`QBITS];
 				check_done(n[`QBITS]);
         fcu_rid <= iq_rid[n];
-					if (alu0_rid==n[`QBITS] && !issuing_on_alu0)
-						alu0_rid <= {`QBIT{1'b1}};
-					if (alu1_rid==n[`QBITS] && !issuing_on_alu1)
-						alu1_rid <= {`QBIT{1'b1}};
-					if (fpu1_rid==n[`QBITS] && !issuing_on_fpu1)
-						fpu1_rid <= {`QBIT{1'b1}};
-					if (fpu2_rid==n[`QBITS] && !issuing_on_fpu2)
-						fpu2_rid <= {`QBIT{1'b1}};
-					if (agen0_rid==n[`QBITS] && !issuing_on_agen0)
-						agen0_rid <= {`QBIT{1'b1}};
-					if (agen1_rid==n[`QBITS] && !issuing_on_agen1)
-						agen1_rid <= {`QBIT{1'b1}};
+				check_issue(7'b0111111);
 				fcu_prevInstr <= fcu_instr;
 				fcu_instr	<= iq_instr[n];
 				fcu_ip		<= iq_ip[n];
@@ -6735,71 +5707,13 @@ end
 				fcu_rex  <= iq_rex[n];
 				fcu_chk  <= iq_chk[n];
 				fcu_wait <= iq_wait[n];
-`ifdef FU_BYPASS
-				if (iq_argA_v[n])
-					fcu_argA <= iq_argA[n][WID-1:0];
-				else
-					case(iq_argA_s[n][`RBITS])
-					alu0_rid:	fcu_argA <= ralu0_bus;
-					alu1_rid:	fcu_argA <= ralu1_bus;
-					fpu1_rid:	fcu_argA <= rfpu1_bus[WID-1:0];
-					fpu2_rid:	fcu_argA <= rfpu2_bus[WID-1:0];
-					default:	fcu_argA <= 128'hDEADDEADDEADDEADDEADDEADDEADDEAD;
-					endcase
-`else
-				fcu_argA <= iq_argA[n][WID-1:0];               
-`endif                 
-`ifdef FU_BYPASS
-				if (iq_imm[n])
-					fcu_argB <= iq_argI[n];
-				else if (iq_argB_v[n]) begin
-					fcu_argB <= iq_argB[n];
-					fcu_argLk <= iq_argB[n];
-				end
-				else
-					case(iq_argB_s[n][`RBITS])
-					alu0_rid:	begin fcu_argB <= ralu0_bus; fcu_argLk <= ralu0_bus; end
-					alu1_rid:	begin fcu_argB <= ralu1_bus; fcu_argLk <= ralu1_bus; end
-					fpu1_rid:	fcu_argB <= rfpu1_bus[WID-1:0];
-					fpu2_rid:	fcu_argB <= rfpu2_bus[WID-1:0];
-					default:	fcu_argB <= 128'hDEADDEADDEADDEADDEADDEADDEADDEAD;
-					endcase
-`else
-				if (iq_imm[n])
-					fcu_argB <= iq_argI[n];
-				else
-					fcu_argB <= iq_argB[n][WID-1:0];
-`endif
-`ifdef FU_BYPASS
-				if (iq_argC_v[n])
-					fcu_argC <= iq_argC[n][WID+3:4];
-				else
-					case(iq_argC_s[n][`RBITS])
-					alu0_rid:	fcu_argC <= ralu0_bus;
-					alu1_rid:	fcu_argC <= ralu1_bus;
-					fpu1_rid:	fcu_argC <= rfpu1_bus[WID-1:0];
-					fpu2_rid:	fcu_argC <= rfpu2_bus[WID-1:0];
-					default:	fcu_argC <= 128'hDEADDEADDEADDEADDEADDEADDEADDEAD;
-					endcase
-`else
-				fcu_argC <= iq_argC[n][WID-1:0];
-`endif                 
+				bypass128 (0,0,iq_argA_v[n],iq_argA_s[n][`RBITS],iq_argA[n][VWID-1:0],fcu_argA);
+				bypass128 (iq_imm[n],iq_argI[n],iq_argB_v[n],iq_argB_s[n][`RBITS],iq_argB[n][VWID-1:0],fcu_argB);
+				bypass128 (0,0,iq_argB_v[n],iq_argB_s[n][`RBITS],iq_argB[n][VWID-1:0],fcu_argLk);
+				bypass128 (0,0,iq_argC_v[n],iq_argC_s[n][`RBITS],iq_argC[n][VWID-1:0],fcu_argC);
 				fcu_argI	<= iq_argI[n];
 				fcu_ipc  <= ipc0;
-`ifdef FU_BYPASS
-				if (iq_argB_v[n])
-					waitctr <= iq_argB[n][51:4];
-				else
-					case(iq_argB_s[n][`RBITS])
-					alu0_rid:	waitctr <= ralu0_bus[47:0];
-					alu1_rid:	waitctr <= ralu1_bus[47:0];
-					fpu1_rid:	waitctr <= rfpu1_bus[51:4];
-					fpu2_rid:	waitctr <= rfpu2_bus[51:4];
-					default:	waitctr <= 48'hDEADDEADDEAD;
-					endcase
-`else
-				waitctr <= iq_argB[n][51:4];
-`endif
+				bypass32 (0,0,iq_argB_v[n],iq_argB_s[n][`RBITS],iq_argB[n][VWID-1:0],waitctr);
 				fcu_dataready <= !IsWait(iq_instr[n]);
 				fcu_clearbm <= `FALSE;
 				fcu_ld <= TRUE;
@@ -6902,10 +5816,10 @@ ocommit0_v <= commit0_v;
 ocommit1_v <= commit1_v;
 ocommit2_v <= commit2_v;
 
-oddball_commit(commit0_v && n_commit > 3'd0, heads[0], 2'd0);
-oddball_commit(commit1_v && n_commit > 3'd1, heads[1], 2'd1);
-oddball_commit(commit2_v && n_commit > 3'd2, heads[2], 2'd2);
-oddball_commit(commit3_v && n_commit > 3'd3, heads[3], 2'd3);
+oddball_commit(commit0_v, heads[0], 2'd0);
+oddball_commit(commit1_v, heads[1], 2'd1);
+oddball_commit(commit2_v, heads[2], 2'd2);
+oddball_commit(commit3_v, heads[3], 2'd3);
 
 // Fetch and queue are limited to two instructions per cycle, so we might as
 // well limit retiring to two instructions max to conserve logic.
@@ -7537,6 +6451,123 @@ begin
 end
 endtask
 
+
+// Bypassing between functional units. There is only bypassing of integer and 
+// floating-point units.
+// Most of the time i is hard-coded as false and there is no immediate to bypass.
+task bypass;
+input i;
+input [VWID-1:0] imm;
+input v;
+input [`RBITS] src;
+input [VWID-1:0] arg;
+output [VWID-1:0] o;
+begin
+`ifdef FU_BYPASS
+	if (i)
+		o = imm[VWID-1:0];
+	else if (v)
+		o = arg[VWID-1:0];
+	else
+		case(src)
+		alu0_rid:	o = ralu0_bus[VWID-1:0];
+		alu1_rid:	o = ralu1_bus[VWID-1:0];
+		fpu1_rid:	o = rfpu1_bus[VWID-1:0];
+		fpu2_rid:	o = rfpu2_bus[VWID-1:0];
+		default:	o = {16{16'hDEAD}};
+		endcase
+`else
+	if (i)
+		o = imm;
+	else
+		o = arg[VWID-1:0];
+`endif                 
+end
+endtask
+
+task bypass128;
+input i;
+input [127:0] imm;
+input v;
+input [`RBITS] src;
+input [127:0] arg;
+output [127:0] o;
+begin
+`ifdef FU_BYPASS
+	if (i)
+		o = imm[127:0];
+	else if (v)
+		o = arg[127:0];
+	else
+		case(src)
+		alu0_rid:	o = ralu0_bus[127:0];
+		alu1_rid:	o = ralu1_bus[127:0];
+		fpu1_rid:	o = rfpu1_bus[127:0];
+		fpu2_rid:	o = rfpu2_bus[127:0];
+		default:	o = {16{16'hDEAD}};
+		endcase
+`else
+	if (i)
+		o = imm;
+	else
+		o = arg[127:0];
+`endif                 
+end
+endtask
+
+task bypass32;
+input i;
+input [31:0] imm;
+input v;
+input [`RBITS] src;
+input [31:0] arg;
+output [31:0] o;
+begin
+`ifdef FU_BYPASS
+	if (i)
+		o = imm[31:0];
+	else if (v)
+		o = arg[31:0];
+	else
+		case(src)
+		alu0_rid:	o = ralu0_bus[31:0];
+		alu1_rid:	o = ralu1_bus[31:0];
+		fpu1_rid:	o = rfpu1_bus[31:0];
+		fpu2_rid:	o = rfpu2_bus[31:0];
+		default:	o = {16{16'hDEAD}};
+		endcase
+`else
+	if (i)
+		o = imm;
+	else
+		o = arg[31:0];
+`endif                 
+end
+endtask
+
+// Check if the core is no longer issuing to a functional unit and set it's
+// rid to the non-issue value. This is checked for every instance of an
+// issue.
+task check_issue;
+input [6:0] pat;
+begin
+	if (alu0_rid==n[`QBITS] && !issuing_on_alu0 && pat[0])
+		alu0_rid <= {`QBIT{1'b1}};
+	if (alu1_rid==n[`QBITS] && !issuing_on_alu1 && pat[1])
+		alu1_rid <= {`QBIT{1'b1}};
+	if (fpu1_rid==n[`QBITS] && !issuing_on_fpu1 && pat[2])
+		fpu1_rid <= {`QBIT{1'b1}};
+	if (fpu2_rid==n[`QBITS] && !issuing_on_fpu2 && pat[3])
+		fpu2_rid <= {`QBIT{1'b1}};
+	if (agen0_rid==n[`QBITS] && !issuing_on_agen0 && pat[4])
+		agen0_rid <= {`QBIT{1'b1}};
+	if (agen1_rid==n[`QBITS] && !issuing_on_agen1 && pat[5])
+		agen1_rid <= {`QBIT{1'b1}};
+	if (fcu_rid==n[`QBITS] && !issuing_on_fcu && pat[6])
+		fcu_rid <= {`QBIT{1'b1}};
+end
+endtask
+
 // Check for units that should no longer be ready.
 // If issuing to the same queue slot as a "ready" functional unit make that
 // functional unit unready.
@@ -7626,7 +6657,7 @@ task setargs;
 input [`QBITS] nn;
 input [`RBITSP1] id;
 input v;
-input [WID-1:0] bus;
+input [VWID-1:0] bus;
 begin
   if (iq_argA_v[nn] == `INV && iq_argA_s[nn][`RBITSP1] == id && iq_v[nn] == `VAL && v == `VAL) begin
 		iq_argA[nn] <= bus;
@@ -8223,6 +7254,7 @@ input [`QBITS] n;
 begin
 	if (iq_state[n]==IQS_AGEN) begin
 //	dramA_v <= `INV;
+		check_issue(7'b1111111);
 		dram0 		<= `DRAMSLOT_BUSY;
 		dram0_id 	<= n[`QBITS];
 		dram0_rid <= iq_rid[n];
@@ -8232,11 +7264,8 @@ begin
 		dram0_tgt 	<= iq_tgt[n];
 		// These two args needed only to support AMO operations
 		dram0_argI	<= {{68{iq_instr[n][27]}},iq_instr[n][27:16]};
-		dram0_argB  <= iq_argB_v[n] ? iq_argB[n][WID-1:0]
-			: iq_argB_s[n]==alu0_id ? ralu0_bus
-			: iq_argB_s[n]==alu1_id ? ralu1_bus
-			: iq_argB_s[n]==fpu1_id ? rfpu1_bus[WID-1:0]
-			: 80'hDEADDEADDEADDEADDEAD;
+		// argB must have been valid for the memory instruction to issue.
+		dram0_argB <= iq_argB[n];
 		if (iq_imm[n] & iq_pushc[n])
 			dram0_data <= iq_argI[n];
 		else if (iq_stpair[n])
@@ -8264,39 +7293,37 @@ task tDram1Issue;
 input [`QBITS] n;
 begin
 	if (iq_state[n]==IQS_AGEN) begin
+		check_issue(7'b1111111);
 //	dramB_v <= `INV;
-	dram1 		<= `DRAMSLOT_BUSY;
-	dram1_id 	<= n[`QBITS];
-	dram1_rid <= iq_rid[n];
-	dram1_instr <= iq_instr[n];
-	dram1_rmw  <= iq_rmw[n];
-	dram1_preload <= iq_preload[n];
-	dram1_tgt 	<= iq_tgt[n];
-	// These two args needed only to support AMO operations
-	dram1_argI	<= {{68{iq_instr[n][27]}},iq_instr[n][27:16]};
-	dram1_argB  <= iq_argB_v[n] ? iq_argB[n][WID-1:0]
-	  : iq_argB_s[n]==alu0_id ? ralu0_bus
-	  : iq_argB_s[n]==alu1_id ? ralu1_bus
-	  : iq_argB_s[n]==fpu1_id ? rfpu1_bus[WID-1:0]
-	  : 80'hDEADDEADDEADDEADDEAD;
-	if (iq_imm[n] & iq_pushc[n])
-		dram1_data <= iq_argI[n];
-	else if (iq_stpair[n])
-		dram1_data <= {iq_argC[n][127:0],iq_argB[n][127:0]};
-	else
-		dram1_data <= iq_argB[n][WID-1:0];
-	dram1_addr	<= iq_ma[n];
-	//	             if (ol[iq_thrd[n]]==`OL_USER)
-	//	             	dram1_seg   <= (iq_rs1[n]==5'd30 || iq_rs1[n]==5'd31) ? {ss[iq_thrd[n]],13'd0} : {ds[iq_thrd[n]],13'd0};
-	//	             else
-	dram1_unc   <= iq_ma[n][31:20]==12'hFFD || !dce;
-	dram1_memsize <= iq_memsz[n];
-	dram1_load <= iq_load[n];
-	dram1_store <= iq_store[n];
-	dram1_ol   <= (iq_rs1[n][RBIT:0]==7'd31 || iq_rs1[n][RBIT:0]==7'd30) ? ol : dl;
-	//iq_a1_v[n] <= `INV;
-	iq_state[n] <= IQS_MEM;
-	iq_memissue[n] <= `INV;
+		dram1 		<= `DRAMSLOT_BUSY;
+		dram1_id 	<= n[`QBITS];
+		dram1_rid <= iq_rid[n];
+		dram1_instr <= iq_instr[n];
+		dram1_rmw  <= iq_rmw[n];
+		dram1_preload <= iq_preload[n];
+		dram1_tgt 	<= iq_tgt[n];
+		// These two args needed only to support AMO operations
+		dram1_argI	<= {{68{iq_instr[n][27]}},iq_instr[n][27:16]};
+		// argB must have been valid for the memory instruction to issue.
+		dram1_argB <= iq_argB[n];
+		if (iq_imm[n] & iq_pushc[n])
+			dram1_data <= iq_argI[n];
+		else if (iq_stpair[n])
+			dram1_data <= {iq_argC[n][127:0],iq_argB[n][127:0]};
+		else
+			dram1_data <= iq_argB[n][WID-1:0];
+		dram1_addr	<= iq_ma[n];
+		//	             if (ol[iq_thrd[n]]==`OL_USER)
+		//	             	dram1_seg   <= (iq_rs1[n]==5'd30 || iq_rs1[n]==5'd31) ? {ss[iq_thrd[n]],13'd0} : {ds[iq_thrd[n]],13'd0};
+		//	             else
+		dram1_unc   <= iq_ma[n][31:20]==12'hFFD || !dce;
+		dram1_memsize <= iq_memsz[n];
+		dram1_load <= iq_load[n];
+		dram1_store <= iq_store[n];
+		dram1_ol   <= (iq_rs1[n][RBIT:0]==7'd31 || iq_rs1[n][RBIT:0]==7'd30) ? ol : dl;
+		//iq_a1_v[n] <= `INV;
+		iq_state[n] <= IQS_MEM;
+		iq_memissue[n] <= `INV;
 	end
 end
 endtask

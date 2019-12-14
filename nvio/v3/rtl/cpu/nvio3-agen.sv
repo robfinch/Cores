@@ -24,7 +24,7 @@
 `include "nvio3-defines.sv"
 
 module agen(inst, a, b, c, i, base, offset, ma, idle);
-parameter AMSB = 95;
+parameter AMSB = 127;
 parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
 input [39:0] inst;
@@ -69,6 +69,8 @@ casez(inst[`OPCODE])
 		1'd0:		ma <= base + a + {{AMSB{inst[36]}},inst[36:23],inst[12:8]};
 		1'd1:		ma <= base + a + cx + {inst[36:33],inst[12:8]};
 		endcase
+	`PUSH,`PUSHC:
+		ma <= base + a - 8'd16;
 	default:	
 		case(inst[`AM])
 		1'd0:	ma <= base + a + {{AMSB{inst[36]}},inst[36:23],inst[12:8]} + offset;

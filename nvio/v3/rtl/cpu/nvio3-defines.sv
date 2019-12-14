@@ -99,23 +99,24 @@
 //`define Q2VECTORS   1'b1
 
 // Branch Unit
-`define JLT			8'hC0
-`define JGE			8'hC1
-`define JLE			8'hC2
-`define JGT			8'hC3
-`define JEQ			8'hC4
-`define JNE			8'hC5
-`define JCS			8'hC6
-`define JCC			8'hC7
-`define JVS			8'hC8
-`define JVC			8'hC9
-`define JUS			8'hCA
-`define JUC			8'hCB
+`define BLT			5'h00
+`define BGE			5'h01
+`define BLE			5'h02
+`define BGT			5'h03
+`define BEQ			5'h04
+`define BNE			5'h05
+`define BCS			5'h06
+`define BCC			5'h07
+`define BVS			5'h08
+`define BVC			5'h09
+`define BUS			5'h0A
+`define BUC			5'h0B
 
 `define JSR			8'hD0
 `define RTS			8'hD1
 `define NOP			8'hD2
 `define JRL			8'hD3
+`define BRANCH	8'hD4
 
 `define CHKI		4'hC
 `define CHK			4'hD
@@ -156,6 +157,7 @@
 `define CMPI		8'h98
 `define CMPUI		8'h99
 `define CHKI		8'h9A
+`define BITI		8'h9B
 `define MULIr		8'hA0
 `define DIVIr		8'hA2
 `define ADDIr		8'hA4
@@ -190,6 +192,7 @@
 `define SGTUI		6'h17
 `define SEQI		6'h18
 `define SNEI		6'h19
+`define BIT			6'h1B
 `define BYTNDXI	6'h1C
 `define WYDNDXI	6'h1D
 `define DIFI		6'h1F
@@ -590,12 +593,12 @@
 `define PANIC_BRANCHBACK	4'd11
 `define PANIC_BADTARGETID	4'd12
 
-`define IBTOP			172
-`define IB_FMT		171:168
-`define IB_PFXINSN	167
-`define IB_PFX		166
-`define IB_RS3		165:160
-`define IB_CONST	159:80
+`define IBTOP			220
+`define IB_FMT		219:216
+`define IB_PFXINSN	215
+`define IB_PFX		214
+`define IB_RS3		213:208
+`define IB_CONST	207:80
 `define IB_CONST31	110:80
 `define IB_CONST21	100:80
 `define IB_CONST19	98:80

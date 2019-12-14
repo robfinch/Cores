@@ -23,19 +23,7 @@
 //
 // ============================================================================
 //
-`define TRUE    1'b1
-`define JLT		8'hC0
-`define JGE		8'hC1
-`define JLE		8'hC2
-`define JGT		8'hC3
-`define JEQ		8'hC4
-`define JNE		8'hC5
-`define JCS		8'hC6
-`define JCC		8'hC7
-`define JVS		8'hC8
-`define JVC		8'hC9
-`define JUS		8'hCA
-`define JUC		8'hCB
+`include "nvio3-defines.sv"
 
 module EvalBranch(instr, cr, takb);
 parameter WID=128;
@@ -43,24 +31,24 @@ input [39:0] instr;
 input [7:0] cr;
 output reg takb;
 
-wire [7:0] opcode = instr[7:0];
+wire [4:0] cond = instr[`RS1];
 
 //Evaluate branch condition
 always @*
-case(opcode)
-`JEQ:		takb <=  cr[0];
-`JLT:		takb <=  cr[1];
-`JGT:		takb <=  cr[2];
-`JCS:		takb <=  cr[3];
-`JVS:		takb <=  cr[5];
-`JNE:		takb <= !cr[0];
-`JGE:		takb <= !cr[1];
-`JLE:		takb <= !cr[2];
-`JCC:		takb <= !cr[3];
-`JVC:		takb <= !cr[5];
-`JUS:		takb <=  cr[7];
-`JUC:		takb <= !cr[7];
-default:	takb <= `TRUE;
+case(cond)
+`BEQ:		takb <=  cr[0];
+`BLT:		takb <=  cr[1];
+`BGT:		takb <=  cr[2];
+`BCS:		takb <=  cr[3];
+`BVS:		takb <=  cr[5];
+`BNE:		takb <= !cr[0];
+`BGE:		takb <= !cr[1];
+`BLE:		takb <= !cr[2];
+`BCC:		takb <= !cr[3];
+`BVC:		takb <= !cr[5];
+`BUS:		takb <=  cr[7];
+`BUC:		takb <= !cr[7];
+default:	takb <= 1'b1;
 endcase
 
 endmodule

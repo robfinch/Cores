@@ -595,6 +595,7 @@ casez(instr[`OPCODE])
   `CMP:		tskCmp(fmt,a,bx,t,o);
   `CMPU:	tskCmpu(fmt,a,bx,t,o);
   `AND:   tskAnd(fmt,mx,zx,a,bx,t,o);
+  `BIT:   tskBit(fmt,a,bx,t,o);
   `OR:    tskOr(fmt,mx,zx,a,bx,t,o);
   `XOR:   tskXor(fmt,mx,zx,a,bx,t,o);
   `NAND:  tskNand(fmt,mx,zx,a,bx,t,o);
@@ -674,6 +675,7 @@ casez(instr[`OPCODE])
 `ANDI:	o = {t[`HEXI1],a[`HEXI0] & b[`HEXI0]};
 `ORI:		o = {t[`HEXI1],a[`HEXI0] | b[`HEXI0]};
 `XORI:	o = {t[`HEXI1],a[`HEXI0] ^ b[`HEXI0]};
+`BITI:	o = {t[`HEXI1],a[`HEXI0] & b[`HEXI0]};
 `MULUI:	o = prod[DBW-1:0];
 `MULI:	o = prod[DBW-1:0];
 `MULFI:	begin
@@ -1675,6 +1677,50 @@ begin
 		end
 	default:
 		o = a & b;
+	endcase
+end
+endtask
+
+task tskBit;
+input [3:0] fmt;
+input [DBW:0] a;
+input [DBW:0] b;
+input [DBW:0] t;
+output [DBW:0] o;
+begin
+	case(fmt)
+	byt:
+		begin
+			o = {t[`HEXI1],128'd0};
+			o[0] = (a[`BYTE0] & b[`BYTE0]) == 1'd0;
+			o[1] = (a[`BYTE0] & b[`BYTE0] & 8'h80) == 8'h80;
+		end
+	wyde:
+		begin
+			o = {t[`HEXI1],128'd0};
+			o[0] = (a[`WYDE0] & b[`WYDE0]) == 1'd0;
+			o[1] = (a[`WYDE0] & b[`WYDE0] & 16'h8000) == 16'h8000;
+		end
+	tetra:
+		begin
+			o = {t[`HEXI1],128'd0};
+			o[0] = (a[`TETRA0] & b[`TETRA0]) == 32'd0;
+			o[1] = (a[`TETRA0] & b[`TETRA0] & 32'h80000000) == 32'h80000000;
+		end
+	octa:
+		begin
+			o = {t[`HEXI1],128'd0};
+			o[0] = (a[`OCTA0] & b[`OCTA0]) == 64'd0;
+			o[1] = (a[`OCTA0] & b[`OCTA0] & 64'h8000000000000000) == 64'h8000000000000000;
+		end
+	hexi:
+		begin
+			o = {t[`HEXI1],128'd0};
+			o[0] = (a[`HEXI0] & b[`HEXI0]) ==  128'd0;
+			o[1] = (a[`HEXI0] & b[`HEXI0] & 128'h80000000000000000000000000000000) == 128'h80000000000000000000000000000000;
+		end
+	default:
+			o = {t[`HEXI1],128'd0};
 	endcase
 end
 endtask

@@ -25,7 +25,7 @@
 `include "nvio3-config.sv"
 
 module BranchPredictor(rst, clk, clk2x, clk4x, en, xisBranch, xip, takb, ip, predict_taken);
-parameter AMSB=79;
+parameter AMSB=`AMSB;
 parameter DBW=80;
 parameter QSLOTS = `QSLOTS;
 input rst;

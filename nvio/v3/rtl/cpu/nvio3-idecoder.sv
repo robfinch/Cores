@@ -96,6 +96,11 @@ casez(ins[`OPCODE])
 8'h2D:	fnRd = {2'b00,ins[`RD]};	// TLB
 8'b0?,8'h1?:
 				fnRd = {2'b00,ins[`RD]};	// MLD
+`STORE:
+	case(ins[`OPCODE])
+	`PUSH,`PUSHC:	fnRd = {2'b0,ins[`RD]};
+	default:	fnRd = 7'd0;
+	endcase
 8'h4?,8'h5?:
 				fnRd = {2'b10,ins[`RD]};	// VMLD
 default:	fnRd = 7'd0;
@@ -382,7 +387,7 @@ endfunction
 function IsBranch;
 input [39:0] isn;
 case(isn[`OPCODE])
-`JLT,`JGT,`JLE,`JGE,`JEQ,`JNE,`JVC,`JVS,`JCC,`JCS,`JUS,`JUS:
+`BRANCH:
 	IsBranch = TRUE;
 default:
 	IsBranch = FALSE;
@@ -508,6 +513,7 @@ casez(ins[`OPCODE])
 8'b0???????:
 	case(ins[`OPCODE])
 	`PUSH:	HasConst = FALSE;
+	`PUSHC:	HasConst = TRUE;
 	`POP:		HasConst = FALSE;
 	`LINK:	HasConst = FALSE;
 	`LDST:	HasConst = FALSE;
@@ -538,22 +544,16 @@ wire isRti = IsRti(instr);
 
 always @*
 begin
-	bus <= 167'h0;
+	bus <= 1'h0;
 	bus[`IB_CMP] <= 1'b0;//IsCmp(instr);
-	if (!instr[7]) begin	// MemUnit
-		if (IsPushc(instr))
-			bus[`IB_CONST] <= {{56{instr[39]}},instr[39:16]};
-		else if (instr[34])	// Store?
-			bus[`IB_CONST] <= {{58{instr[39]}},instr[39:35],instr[32:22],instr[5:0]};
-		else
-			bus[`IB_CONST] <= {{58{instr[39]}},instr[39:35],instr[32:16]};
-	end
-	else if (IsJRL(instr))
-		bus[`IB_CONST] <= {{56{instr[39]}},instr[39:16]};
-	else if (IsChki(instr))
-		bus[`IB_CONST] <= {{56{instr[39]}},instr[39:22],instr[5:0]};
-	else
-		bus[`IB_CONST] <= {{58{instr[39]}},instr[39:35],instr[32:16]};
+	casez(instr[`OPCODE])
+	`PUSHC: bus[`IB_CONST] <= {{107{instr[38]}},instr[38:18]};
+	`STORE:	bus[`IB_CONST] <= {{110{instr[35]}},instr[35:23],instr[4:0]};
+	`LOAD:	bus[`IB_CONST] <= {{110{instr[35]}},instr[35:18]};
+	`JRL:		bus[`IB_CONST] <= {{110{instr[38]}},instr[38:21]};
+	`CHKI:	bus[`IB_CONST] <= {{107{instr[38]}},instr[38:23],instr[4:0]};
+	default:	bus[`IB_CONST] <= {{107{instr[38]}},instr[38:18]};
+	endcase
 //	bus[`IB_RT]		 <= fnRd(instr,ven,vl,thrd) | {thrd,7'b0};
 //	bus[`IB_RC]		 <= fnRc(instr,ven,thrd) | {thrd,7'b0};
 //	bus[`IB_RA]		 <= fnRa(instr,ven,vl,thrd) | {thrd,7'b0};

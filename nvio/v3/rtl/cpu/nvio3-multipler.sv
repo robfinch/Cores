@@ -91,7 +91,7 @@ mult64 umul1
   .CLK(clk),  // input wire CLK
   .A(aa[63:0]),      // input wire [63 : 0] A
   .B(bb[63:0]),      // input wire [63 : 0] B
-  .P(pp)      // output wire [127 : 0] P
+  .P(pp[127:0])      // output wire [127 : 0] P
 );
 assign pp[255:128] = 1'd0;
 end
@@ -101,7 +101,7 @@ mult32 umul1
   .CLK(clk),  // input wire CLK
   .A(aa[31:0]),      // input wire [63 : 0] A
   .B(bb[31:0]),      // input wire [63 : 0] B
-  .P(pp)      // output wire [127 : 0] P
+  .P(pp[63:0])      // output wire [127 : 0] P
 );
 assign pp[255:64] = 1'd0;
 end
@@ -111,7 +111,7 @@ mult16 umul1
   .CLK(clk),  // input wire CLK
   .A(aa[15:0]),      // input wire [63 : 0] A
   .B(bb[15:0]),      // input wire [63 : 0] B
-  .P(pp)      // output wire [127 : 0] P
+  .P(pp[31:0])      // output wire [127 : 0] P
 );
 assign pp[255:32] = 1'd0;
 end

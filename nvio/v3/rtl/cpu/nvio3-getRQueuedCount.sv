@@ -75,7 +75,7 @@ else begin
 			rqueuedCnt = rqueuedCnt + 1;
 			rqueuedOn[heads[n]] = TRUE;
 			iq_rid_o[heads[n]] = j[`QBITS];
-			iq_rid_o[heads[n]][`QBIT] = 1'b1;
+			//iq_rid_o[heads[n]][`QBIT] = 1'b1; ??? why set msb to one?
 			j = (j + 1) % RENTRIES;
 			k = k + 1;
 		end
