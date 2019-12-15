@@ -146,20 +146,20 @@ begin
 	sum1[3] = 0;
 	sum1[4] = 0;
 	for (n = 0; n < 5; n = n + 1)
-		sum1[0] = global_history[n] ? sum + {{6{wghts[n][7]}},wghts[n]} : sum - {{6{wghts[n][7]}},wghts[n]};
+		sum1[0] = global_history[n] ? sum1[0] + {{6{wghts[n][7]}},wghts[n]} : sum1[0] - {{6{wghts[n][7]}},wghts[n]};
 	for (n = 5; n < 10; n = n + 1)
-		sum1[1] = global_history[n] ? sum + {{6{wghts[n][7]}},wghts[n]} : sum - {{6{wghts[n][7]}},wghts[n]};
+		sum1[1] = global_history[n] ? sum1[1] + {{6{wghts[n][7]}},wghts[n]} : sum1[1] - {{6{wghts[n][7]}},wghts[n]};
 	for (n = 10; n < 15; n = n + 1)
-		sum1[2] = global_history[n] ? sum + {{6{wghts[n][7]}},wghts[n]} : sum - {{6{wghts[n][7]}},wghts[n]};
+		sum1[2] = global_history[n] ? sum1[2] + {{6{wghts[n][7]}},wghts[n]} : sum1[2] - {{6{wghts[n][7]}},wghts[n]};
 	for (n = 15; n < 20; n = n + 1)
-		sum1[3] = global_history[n] ? sum + {{6{wghts[n][7]}},wghts[n]} : sum - {{6{wghts[n][7]}},wghts[n]};
+		sum1[3] = global_history[n] ? sum1[3] + {{6{wghts[n][7]}},wghts[n]} : sum1[3] - {{6{wghts[n][7]}},wghts[n]};
 	for (n = 20; n < 22; n = n + 1)
-		sum1[4] = global_history[n] ? sum + {{6{wghts[n][7]}},wghts[n]} : sum - {{6{wghts[n][7]}},wghts[n]};
+		sum1[4] = global_history[n] ? sum1[4] + {{6{wghts[n][7]}},wghts[n]} : sum1[4] - {{6{wghts[n][7]}},wghts[n]};
 end
 
 always @*
 begin
-	sum = 0;
+	sum = 0;	// bias weight
 	for (n = 0; n < 5; n = n + 1)
 		sum = sum + sum1[n];
 end
