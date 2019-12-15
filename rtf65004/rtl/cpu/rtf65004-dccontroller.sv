@@ -53,20 +53,20 @@ output reg [39:0] icl_ctr;
 output isROM;
 input [511:0] ROM_dat;
 input dL2_rhit;
-input [527:0] dL2_rdat;
+input [575:0] dL2_rdat;
 input dL2_whit;
 output reg dL2_ld;
-output reg [65:0] dL2_wsel;
+output reg [71:0] dL2_wsel;
 output reg [AMSB:0] dL2_wadr;
-output reg [527:0] dL2_wdat;
+output reg [575:0] dL2_wdat;
 output reg dL2_nxt;
 
 input dL1_hit;
 output dL1_selpc;
 output reg [AMSB:0] dL1_adr;
-output reg [527:0] dL1_dat = 528'd0;	// NOP
+output reg [575:0] dL1_dat = 568'd0;	// NOP
 output reg dL1_wr;
-output reg [65:0] dL1_sel;
+output reg [71:0] dL1_sel;
 output reg dL1_invline;
 output reg dcnxt;
 output reg [1:0] dcwhich = 2'b00;
@@ -144,7 +144,7 @@ IDLE:
 	begin
 		dL2_ld <= FALSE;
 		dL2_wsel <= wsel << wadr[5:0];
-		dL2_wsel[65] <= 1'b1;
+		dL2_wsel[71] <= 1'b1;
 		dL2_wadr <= {wadr[AMSB:6],6'h0};
 		dL2_wdat <= {512'd0,wdat} << {wadr[5:0],3'b0};
 		dccnt <= 3'd0;
@@ -159,7 +159,7 @@ IDLE:
 			if (dL1_hit && wr) begin
 				dL1_wr <= 1'b1;
 				dL1_sel <= wsel << wadr[5:0];
-				dL1_sel[65] <= 1'b1;
+				dL1_sel[71] <= 1'b1;
 				dL1_adr <= {wadr[AMSB:6],6'h0};
 				dL1_dat <= {512'd0,wdat} << {wadr[5:0],3'b0};
 				dL2_ld <= 1'b1;
@@ -183,7 +183,7 @@ IC2:
 			if (dccnt==ROM_ReadLatency) begin
 				state <= IC_WaitROM;
 				dL1_wr <= TRUE;
-				dL1_sel <= {64{1'b1}};
+				dL1_sel <= {72{1'b1}};
 				dL1_dat <= {256'd0,ROM_dat};
 				dccnt <= 3'd0;
 				state <= IC5;
@@ -206,7 +206,7 @@ IC2:
 IC_WaitL2: 
 	if (dL2_rhit && picstate==IC2) begin
 		dL1_wr <= TRUE;
-		dL1_sel <= {66{1'b1}};
+		dL1_sel <= {72{1'b1}};
 		dL1_dat <= dL2_rdat;
 		dccnt <= 3'd0;
 		state <= IC5;
@@ -247,24 +247,24 @@ IC_Ack:
   		state <= IC_Nack2;
   	end
 		if (wrv_i) begin
-			dL1_dat[527:525] <= 2'd1;
+			dL1_dat[575:573] <= 2'd1;
 			dL1_dat[519:0] <= 520'd0;
 			dL2_wdat[527:525] <= 2'd1;
-			dL2_wdat[519:0] <= 520'd0;
+			dL2_wdat[571:0] <= 520'd0;
 			nack();
 	  end
 		else if (rdv_i) begin
-			dL1_dat[527:525] <= 2'd2;
+			dL1_dat[575:573] <= 2'd2;
 			dL1_dat[519:0] <= 520'd0;
 			dL2_wdat[527:525] <= 2'd2;
-			dL2_wdat[519:0] <= 520'd0;
+			dL2_wdat[571:0] <= 520'd0;
 			nack();
 		end
 	  else if (err_i) begin
-			dL1_dat[527:525] <= 2'd3;
+			dL1_dat[575:573] <= 2'd3;
 			dL1_dat[519:0] <= 520'd0;
 			dL2_wdat[527:525] <= 2'd3;
-			dL2_wdat[519:0] <= 520'd0;
+			dL2_wdat[571:0] <= 520'd0;
 			nack();
 	  end
 	  else begin
@@ -273,7 +273,7 @@ IC_Ack:
 	  	3'd1:	dL1_dat[255:128] <= dat_i;
 	  	3'd2:	dL1_dat[383:256] <= dat_i;
 	  	3'd3:	dL1_dat[511:384] <= dat_i;
-	  	3'd4:	dL1_dat[527:512] <= {8'b000,dat_i[7:0]};
+	  	3'd4:	dL1_dat[575:512] <= {8'h00,dat_i[55:0]};
 	  	default:	dL1_dat <= dL1_dat;
 	  	endcase
 	  	case(dccnt)
@@ -281,7 +281,7 @@ IC_Ack:
 	  	3'd1:	dL2_wdat[255:128] <= dat_i;
 	  	3'd2:	dL2_wdat[383:256] <= dat_i;
 	  	3'd3:	dL2_wdat[511:384] <= dat_i;
-	  	3'd4:	dL2_wdat[527:512] <= {8'b000,dat_i[7:0]};
+	  	3'd4:	dL2_wdat[575:512] <= {8'h00,dat_i[55:0]};
 	  	default:	dL2_wdat <= dL2_wdat;
 	  	endcase
 	  end
@@ -302,10 +302,10 @@ IC_Nack2:
 IC_Nack:
 	begin
 		dL2_ld <= TRUE;
-		dL2_wsel <= {66{1'b1}};
+		dL2_wsel <= {72{1'b1}};
     dccnt <= 3'd0;
 		dL1_wr <= TRUE;
-		dL1_sel <= {66{1'b1}};
+		dL1_sel <= {72{1'b1}};
 		icl_ctr <= icl_ctr + 40'd1;
 		state <= IC5;	// Wait for write latency to expire
 	end

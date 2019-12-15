@@ -88,7 +88,11 @@ begin
         queuedCnt <= 3'd1;
         queuedOnp[2] <= `TRUE;
       end
-    3'b101:	; // Illegal
+    3'b101:		//; // Illegal
+      if (iq_v[tails[0]]==`INV && rob_v[rob_tails[0]]==`INV) begin
+        queuedCnt <= 3'd1;
+        queuedOnp[0] <= `TRUE;
+      end
     3'b110:
       if (iq_v[tails[0]]==`INV && rob_v[rob_tails[0]]==`INV) begin
         queuedCnt <= 3'd1;

@@ -76,10 +76,11 @@
 `define UOF_NZ		(`UOF_N|`UOF_Z)
 `define UOF_ALL		8'hFF
 
-`define UO_OP		17:12
-`define UO_LD4	11:8
-`define UO_RD		7:4
-`define UO_RN		3:0
+`define UO_OP		23:16
+`define UO_LD4	15:12
+`define UO_RT		11:8
+`define UO_RA		7:4
+`define UO_RB		3:0
 
 
 `define UO_ZR		4'h0
@@ -101,10 +102,12 @@
 `define UO_P1		4'h1
 `define UO_P2		4'h2
 `define UO_P3		4'h3
+`define UO_R40	4'h4
 `define UO_100H	4'h7
 `define UO_R8		4'h8
 `define UO_R16	4'h9
 `define UO_R24	4'hA
+`define UO_R8B	4'hB		// 8 or 16 bits for branches
 `define UO_M4		4'hC
 `define UO_M3		4'hD
 `define UO_FFFEH	4'hE
@@ -161,8 +164,37 @@
 `define UO_JML	6'h31
 `define UO_BRA	6'h32
 `define UO_STJ	6'h33
+`define UO_XCE	6'h34
+`define UO_ADD	6'h35
+`define UO_SUB	6'h36
+`define UO_CMP	6'h37
+`define UO_AND	6'h38
+`define UO_OR		6'h39
+`define UO_EOR	6'h3A
+`define UO_ASL	6'h3B
+`define UO_LSR	6'h3C
 
-`define UO_NOP_MOP	{`UO_NOP,`UO_ZERO,`UO_ZR,`UO_ZR}
+`define UO_NOP_MOP	{`UO_NOP,`UO_ZERO,`UO_ZR,`UO_ZR,`UO_ZR}
+
+typedef struct packed
+{
+	logic [7:0] opcode;
+	logic [3:0] cnst;
+	logic [3:0] Rt;
+	logic [3:0] Ra;
+	logic [3:0] Rb;
+} MicroOp;
+
+typedef struct packed
+{
+	logic[3:0] len;
+	logic[7:0] flagmask;
+	logic[1:0] flagndx;
+	MicroOp uop0;
+	MicroOp uop1;
+	MicroOp uop2;
+	MicroOp uop3;
+} MicroBundle;
 
 `define BYTE		9'h87
 `define UBYTE		9'hA7
@@ -227,6 +259,14 @@
 `define PEI			9'hD4
 `define PER			9'h62
 `define WDM			9'h42
+
+`define NAT_INX			9'h1E8
+`define NAT_DEX			9'h1CA
+`define NAT_INY			9'h1C8
+`define NAT_DEY			9'h188
+
+`define NAT_SEC			9'h138
+`define NAT_XCE			9'h1FB
 
 `define RR			9'h02
 `define ADD_RR			4'd0
@@ -429,6 +469,14 @@
 `define LDA_DSP		9'hA3
 `define LDA_DSPIY	9'hB3
 
+`define NAT_LDA_IMM		9'h1A9
+`define NAT_LDA_ZPX		9'h1B5
+`define NAT_LDA_IX		9'h1A1
+`define NAT_LDA_IY		9'h1B1
+`define NAT_LDA_ABSX	9'h1BD
+`define NAT_LDA_DSP		9'h1A3
+`define NAT_LDA_DSPIY	9'h1B3
+
 `define STA_ZP		9'h85
 `define STA_ZPX		9'h95
 `define STA_IX		9'h81
@@ -509,6 +557,17 @@
 `define BGT			9'hD3
 `define BLE			9'hF3
 `define ACBR		9'h53
+
+`define NAT_BPL			9'h110
+`define NAT_BVC			9'h150
+`define NAT_BCC			9'h190
+`define NAT_BNE			9'h1D0
+`define NAT_BMI			9'h130
+`define NAT_BVS			9'h170
+`define NAT_BCS			9'h1B0
+`define NAT_BEQ			9'h1F0
+`define NAT_BRL			9'h182
+`define NAT_BRA			9'h180
 
 `define JML			9'h5C
 `define JMP			9'h4C

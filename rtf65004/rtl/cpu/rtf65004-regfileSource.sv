@@ -60,6 +60,7 @@ integer n;
 initial begin
 for (n = 0; n <= AREGS; n = n + 1)
 	rf_source[n] = 1'b0;
+sr_source = 1'b0;
 end
 
 always @(posedge clk)
@@ -78,7 +79,7 @@ else begin
 				$stop;
     end
     if (iq_latest_sr_ID != {`QBIT{1'b1}})
-			sr_source = iq_latest_sr_ID;
+			sr_source <= iq_latest_sr_ID;
 	end
 	else begin
 		// Setting the rf valid and source

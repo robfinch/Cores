@@ -36,11 +36,11 @@
 
 module L1_dcache_mem(clk, wr, sel, lineno, i, o);
 parameter pLines = 128;
-parameter pLineWidth = 528;
+parameter pLineWidth = 576;
 localparam pLNMSB = $clog2(pLines)-1;
 input clk;
 input wr;
-input [65:0] sel;
+input [71:0] sel;
 input [pLNMSB:0] lineno;
 input [pLineWidth-1:0] i;
 output [pLineWidth-1:0] o;
@@ -59,7 +59,7 @@ end
 genvar v;
 
 generate begin : mupd
-for (v = 0; v < 66; v = v + 1)
+for (v = 0; v < 72; v = v + 1)
 begin : mw
 always @(posedge clk)
 	if (wr & sel[v])  mem[lineno][v*8+7:v*8] <= i[v*8+7:v*8];
@@ -74,7 +74,7 @@ assign o = mem[lineno];
 genvar g;
 
 generate begin : mem2
-for (g = 0; g < 66; g = g + 1) begin
+for (g = 0; g < 72; g = g + 1) begin
 // 128 lines (32 x 4 way)
 L1_dcache_mem2 u1
 (
@@ -239,21 +239,21 @@ input rst;
 input clk;
 input nxt;
 input wr;
-input [65:0] sel;
+input [71:0] sel;
 input [AMSB:0] adr;
-input [527:0] i;
+input [575:0] i;
 output reg [15:0] o;
 output reg [2:0] fault;
 output hit;
 input invall;
 input invline;
 
-wire [527:0] ic;
-reg [527:0] i1;
+wire [575:0] ic;
+reg [575:0] i1;
 wire [pLNMSB:0] lineno;
 wire taghit;
 reg wr1;
-reg [65:0] sel1;
+reg [71:0] sel1;
 
 wire iclk;
 //BUFH ucb1 (.I(clk), .O(iclk));
@@ -297,7 +297,7 @@ assign hit = taghit;
 always @(adr or ic)
 	o <= ic >> {adr[5:0],3'b0};
 always @*
-	fault <= ic[527:525];
+	fault <= ic[575:573];
 
 endmodule
 
@@ -316,7 +316,7 @@ output [527:0] o;
 
 // Block ram must be a multiple of eight bits wide to use byte write enables.
 (* ram_style="block" *)
-reg [527:0] mem [0:511];
+reg [575:0] mem [0:511];
 (* ram_style="distributed" *)
 reg [8:0] rrcl;
 
@@ -329,7 +329,7 @@ end
 
 genvar v;
 generate begin : memupd
-for (v = 0; v < 66; v = v + 1)
+for (v = 0; v < 72; v = v + 1)
 always @(posedge clk)
 begin
 	if (wr & sel[v])
@@ -359,15 +359,15 @@ input rst;
 input clk;
 input nxt;
 input wr;
-input [65:0] sel;
+input [71:0] sel;
 input [AMSB:0] wadr;
 input [AMSB:0] radr;
 input tlbmiss_i;
 input rdv_i;
 input wrv_i;
 input err_i;
-input [527:0] i;
-output [527:0] o;
+input [575:0] i;
+output [575:0] o;
 output whit;
 output rhit;
 input invall;
@@ -376,8 +376,8 @@ input invline;
 wire [8:0] wlineno,rlineno;
 wire taghit;
 reg wr1 = 1'b0,wr2 = 1'b0;
-reg [65:0] sel1 = 3'd0,sel2= 3'd0;
-reg [527:0] i1 = 64'd0,i2 = 64'd0;
+reg [71:0] sel1 = 3'd0,sel2= 3'd0;
+reg [575:0] i1 = 64'd0,i2 = 64'd0;
 
 // Must update the cache memory on the cycle after a write to the tag memmory.
 // Otherwise lineno won't be valid. camTag memory takes two clock cycles to update.
