@@ -805,6 +805,9 @@ typedef struct packed
 `define DRAMSLOT_HASBUS	3'b110
 `define DRAMREQ_READY		3'b111
 
+`define RT		12:8
+`define RA		17:13
+`define RB		22:18
 
 `define IBTOP			172
 `define IB_FMT		171:168

@@ -27,7 +27,8 @@
 module programCounter(rst, clk,
 	q1, q2, q1bx, insnx, freezepc, 
 	phit, branchmiss, misspc, len1, len2, len3,
-	jc, jcl, rts, br, take_branch, btgt, pc, pcd, pc_chg, branch_pc, 
+	jc, jcl, rts, br, take_branch,
+	btgt, pc, pcd, pc_chg, branch_pc, 
 	ra, pc_override,
 	debug_on);
 parameter AMSB = 63;
@@ -67,6 +68,17 @@ assign pc_chg = pc != pcd;
 
 reg phitd;
 reg [AMSB:0] next_pc;
+reg [AMSB:0] branch_pcd1, branch_pcd2;
+reg [AMSB:0] pcd1, pcd2;
+
+always @(posedge clk)
+	branch_pcd1 <= branch_pc;
+always @(posedge clk)
+	branch_pcd2 <= branch_pcd1;
+always @(posedge clk)
+	pcd1 <= pc;
+always @(posedge clk)
+	pcd2 <= pcd1;
 
 always @*
 if (rst) begin

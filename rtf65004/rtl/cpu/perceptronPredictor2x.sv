@@ -21,31 +21,34 @@
 //                                                                          
 // ============================================================================
 
-module perceptronPredictor(rst, clk, clk2x, clk4x, id_i, id_o, xbr, xadr, prediction_i, outcome, adr, prediction_o);
+module perceptronPredictor2x(rst, clk, clk2x, clk4x, id_i, id_o, xbr, xadr, prediction_i, outcome, adr, prediction_o);
 parameter AMSB = 63;
 input rst;
 input clk;
 input clk2x;
 input clk4x;
-input [7:0] id_i;
-output reg [7:0] id_o;
+input [7:0] id_i [1:0];
+output reg [7:0] id_o [1:0];
 input [3:0] xbr;
 input [AMSB:0] xadr [3:0];
 input [3:0] prediction_i;
 input [3:0] outcome;
-input [AMSB:0] adr;
-output reg prediction_o;
+input [AMSB:0] adr [1:0];
+output reg [1:0] prediction_o;
 
 integer n;
 
 reg [22:0] global_history;
-wire [175:0] weights_row, weights_rowx;
+wire [175:0] weights_row, weights_rowx, weights_row2;
 reg [7:0] wghts [0:21];
+reg [7:0] wghts2 [0:21];
 reg [175:0] weights_row_new;
-reg [7:0] bh, bhx, bhxd;
+reg [7:0] bh, bhx, bhxd, bh2;
 reg xbrd;
 
-perceptronRam weights_ram0
+// Perceptron ram: 256 rows by 176 bits (22 bytes)
+// Simple dual port.
+perceptronRam weights_ramr0
 (
   .a(bhxd),        
   .d(weights_row_new),
@@ -55,7 +58,17 @@ perceptronRam weights_ram0
   .dpo(weights_row)
 );
 
-perceptronRam weights_ram1
+perceptronRam weights_ramr1
+(
+  .a(bhxd),        
+  .d(weights_row_new),
+  .dpra(bh2),
+  .clk(clk),
+  .we(xbrd),
+  .dpo(weights_row2)
+);
+
+perceptronRam weights_ramw
 (
   .a(bhxd),        
   .d(weights_row_new),
@@ -108,11 +121,14 @@ else begin
 	end
 end
 
-
+// Ram address hash to select perceptron. Going on the basis that in all
+// likelyhood the app is less than 16MB in size.
 always @*
-	bh <= adr[7:0] ^ adr[15:8] ^ adr[23:16] ^ adr[31:24];
+	bh <= adr[0][7:0] ^ adr[0][15:8] ^ adr[0][23:16];// ^ adr[0][31:24];
 always @*
-	bhx <= pc[7:0] ^ pc[15:8] ^ pc[23:16] ^ pc[31:24];
+	bh2 <= adr[1][7:0] ^ adr[1][15:8] ^ adr[1][23:16];// ^ adr[1][31:24];
+always @*
+	bhx <= pc[7:0] ^ pc[15:8] ^ pc[23:16];// ^ pc[31:24];
 
 // Capture global branch history
 always @(posedge clk)
@@ -136,12 +152,21 @@ always @*
 end
 endgenerate
 
+generate begin : slice2
+for (g = 0; g < 22; g = g + 1)
+always @*
+	wghts2[g] = weights_row2[g*8+7:g*8];
+end
+endgenerate
+
 reg [12:0] sum;
 reg [12:0] sum1 [0:4];
-reg [7:0] id1;
+reg [12:0] sum2;
+reg [12:0] sum2a [0:4];
+reg [7:0] id1 [1:0];
 
 // Form dot product of input and weights.
-always @(posedge clk)
+always @*
 begin
 	sum1[0] = 0;
 	sum1[1] = 0;
@@ -158,7 +183,7 @@ begin
 		sum1[3] = global_history[n] ? sum1[3] + {{6{wghts[n][7]}},wghts[n]} : sum1[3] - {{6{wghts[n][7]}},wghts[n]};
 	for (n = 20; n < 22; n = n + 1)
 		sum1[4] = global_history[n] ? sum1[4] + {{6{wghts[n][7]}},wghts[n]} : sum1[4] - {{6{wghts[n][7]}},wghts[n]};
-	id1 <= id_i;
+	id1[0] <= id_i[0];
 end
 
 always @*
@@ -168,12 +193,42 @@ begin
 		sum = sum + sum1[n];
 end
 
+// Form dot product of input and weights.
+always @(posedge clk)
+begin
+	sum2a[0] = 0;
+	sum2a[1] = 0;
+	sum2a[2] = 0;
+	sum2a[3] = 0;
+	sum2a[4] = 0;
+	for (n = 0; n < 5; n = n + 1)
+		sum2a[0] = global_history[n] ? sum2a[0] + {{6{wghts2[n][7]}},wghts2[n]} : sum2a[0] - {{6{wghts2[n][7]}},wghts2[n]};
+	for (n = 5; n < 10; n = n + 1)
+		sum2a[1] = global_history[n] ? sum2a[1] + {{6{wghts2[n][7]}},wghts2[n]} : sum2a[1] - {{6{wghts2[n][7]}},wghts2[n]};
+	for (n = 10; n < 15; n = n + 1)
+		sum2a[2] = global_history[n] ? sum2a[2] + {{6{wghts2[n][7]}},wghts2[n]} : sum2a[2] - {{6{wghts2[n][7]}},wghts2[n]};
+	for (n = 15; n < 20; n = n + 1)
+		sum2a[3] = global_history[n] ? sum2a[3] + {{6{wghts2[n][7]}},wghts2[n]} : sum2a[3] - {{6{wghts2[n][7]}},wghts2[n]};
+	for (n = 20; n < 22; n = n + 1)
+		sum2a[4] = global_history[n] ? sum2a[4] + {{6{wghts2[n][7]}},wghts2[n]} : sum2a[4] - {{6{wghts2[n][7]}},wghts2[n]};
+	id1[1] <= id_i[1];
+end
+
+always @*
+begin
+	sum2 = 0;	// bias weight
+	for (n = 0; n < 5; n = n + 1)
+		sum2 = sum2 + sum2a[n];
+end
+
 // < 0 means don't take branch, >= 0 means take branch => the take branch
 // bit is inverted.
 always @(posedge clk)
 begin
-	prediction_o <= ~sum[12];
-	id_o <= id1;
+	prediction_o[0] <= ~sum[12];
+	prediction_o[1] <= ~sum2[12];
+	id_o[0] <= id1[0];
+	id_o[1] <= id1[1];
 end
 
 generate begin : train

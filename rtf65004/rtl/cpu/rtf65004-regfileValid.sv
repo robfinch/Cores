@@ -215,7 +215,7 @@ else begin
 				if (slot_rfw[1]) begin
 					rf_v [Rd[1]] <= `INV;
 				end
-				if (slot_sr_tgts[0] != 8'h00)
+				if (slot_sr_tgts[1] != 8'h00)
 					rf_v[AREGS] <= `INV;
 			end
 		3'b011:
@@ -240,7 +240,7 @@ else begin
 				if (slot_rfw[2]) begin
 					rf_v [Rd[2]] <= `INV;
 				end
-				if (slot_sr_tgts[0] != 8'h00)
+				if (slot_sr_tgts[2] != 8'h00)
 					rf_v[AREGS] <= `INV;
 			end
 		3'b101:
