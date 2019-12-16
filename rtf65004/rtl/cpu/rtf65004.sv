@@ -2009,7 +2009,7 @@ always @*
 	for (n = 0; n < QSLOTS; n = n + 1) begin
 		case(Ra[n])
 		`UO_ZR:		rfoa[n] <= 64'h0;
-		`UO_RT:		rfoa[n] <= RD[n]==6'd0 ? 64'd0 : regsx[Rd[n]];
+		`UO_RT:		rfoa[n] <= Rd[n]==6'd0 ? 64'd0 : regsx[Rd[n]];
 		`UO_RA:		rfoa[n] <= Ra[n]==6'd0 ? 64'd0 : regsx[Ra[n]];
 		`UO_ACC:	rfoa[n] <= regsx[1];
 		`UO_XR:		rfoa[n] <= regsx[2];
@@ -2058,8 +2058,8 @@ for (n = 0; n < QSLOTS; n = n + 1)
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
 	case(Rd[n])
-	`UO_RT:		RdReal[n] <= uoq_uop[(uoq_head+n) % UOQ_ENTRIES].Rt;
-	`UO_RA:		RdReal[n] <= uoq_uop[(uoq_head+n) % UOQ_ENTRIES].Ra;
+	`UO_RT:		RdReal[n] <= uoq_inst[(uoq_head+n) % UOQ_ENTRIES][`RT];
+	`UO_RA:		RdReal[n] <= uoq_inst[(uoq_head+n) % UOQ_ENTRIES][`RA];
 	`UO_ACC:	RdReal[n] <= 6'd1;
 	`UO_XR:		RdReal[n] <= 6'd2;
 	`UO_YR:		RdReal[n] <= 6'd3;
@@ -2071,9 +2071,9 @@ for (n = 0; n < QSLOTS; n = n + 1)
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
 	case(Rn[n])
-	`UO_RT:		RnReal[n] <= uoq_uop[(uoq_head+n) % UOQ_ENTRIES].Rt;
+	`UO_RT:		RnReal[n] <= uoq_inst[(uoq_head+n) % UOQ_ENTRIES][`RT];
 //	`UO_RA:		RnReal[n] <= uoq_Ra[(uoq_head+n) % UOQ_ENTRIES];
-	`UO_RB:		RnReal[n] <= uoq_uop[(uoq_head+n) % UOQ_ENTRIES].Rb;
+	`UO_RB:		RnReal[n] <= uoq_inst[(uoq_head+n) % UOQ_ENTRIES][`RB];
 	`UO_ACC:	RnReal[n] <= 6'd1;
 	`UO_XR:		RnReal[n] <= 6'd2;
 	`UO_YR:		RnReal[n] <= 6'd3;
@@ -2085,8 +2085,8 @@ for (n = 0; n < QSLOTS; n = n + 1)
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
 	case(Ra[n])
-	`UO_RT:		RaReal[n] <= uoq_uop[(uoq_head+n) % UOQ_ENTRIES].Rt;
-	`UO_RA:		RaReal[n] <= uoq_uop[(uoq_head+n) % UOQ_ENTRIES].Ra;
+	`UO_RT:		RaReal[n] <= uoq_inst[(uoq_head+n) % UOQ_ENTRIES][`RT];
+	`UO_RA:		RaReal[n] <= uoq_inst[(uoq_head+n) % UOQ_ENTRIES][`RA];
 	`UO_ACC:	RaReal[n] <= 6'd1;
 	`UO_XR:		RaReal[n] <= 6'd2;
 	`UO_YR:		RaReal[n] <= 6'd3;
@@ -3669,6 +3669,7 @@ else begin
 	end
 	else if (qb) begin
 		queue_uop(uoq_tail[0],pc,{`UO_ADDB,em ? `UO_M3 : `UO_M4,`UO_SP,`UO_SP,`UO_ZR},2'b01,8'h00,1'b0,4'h0);
+		uoq_inst[uoq_tail[0]] <= 48'h0;
 		tskLd4(`UO_M3,{16'h0,`BRK},uoq_const[uoq_tail[0]]);
 
 		queue_uop(uoq_tail[1],pc,{IsRst|IsNmi|IsIrq ? `UO_CLB : `UO_SEB,`UO_ZERO,`UO_ZR,`UO_ZR,`UO_ZR},2'b00,`UOF_B,1'b0,4'h0);
@@ -3778,6 +3779,7 @@ else begin
 	end
 	else if (q1) begin
 		queue_uop(uoq_tail[0],pc,uo_insn1[0],uo_len1==3'd1 ? 2'b11: 2'b01,8'h00,1'b0,4'h0);
+		uoq_inst[uoq_tail[0]] <= insnx[0];
 		uoq_takb[uoq_tail[0]] <= take_branch[0];
 //		uoq_tail <= (uoq_tail + 8'd1) % UOQ_ENTRIES;
 		tskLd4(uo_insn1[0][`UO_LD4],insnx[0],uoq_const[uoq_tail[0]]);
@@ -4589,12 +4591,12 @@ endcase
 	$display("%b %h #", pc_mask, pc);
 	$display("%b %h #", pc_mask, pcd);
     $display ("--------------------------------------------------------------------- Regfile ---------------------------------------------------------------------");
-  $display("ac: %h %d %d #", acx, regIsValid[0], rf_source[0]);
-  $display("xr: %h %d %d #", xrx, regIsValid[1], rf_source[1]);
-  $display("yr: %h %d %d #", yrx, regIsValid[2], rf_source[2]);
-  $display("sp: %h %d %d #", spx, regIsValid[31], rf_source[31]);
+  $display("ac: %h %d %d #", regsx[1], regIsValid[1], rf_source[1]);
+  $display("xr: %h %d %d #", regsx[2], regIsValid[2], rf_source[2]);
+  $display("yr: %h %d %d #", regsx[3], regIsValid[3], rf_source[3]);
+  $display("sp: %h %d %d #", regsx[31], regIsValid[31], rf_source[31]);
   $display("sr: %h %d %d #", srx, regIsValid[AREGS], sr_source);
-  $display("tmp: %h %d %d #", tmpx, regIsValid[5], rf_source[5]);
+  $display("tmp: %h %d %d #", regsx[4], regIsValid[4], rf_source[4]);
 `ifdef FCU_ENH
 	$display("Call Stack:");
 	for (n = 0; n < 16; n = n + 4)
@@ -5069,7 +5071,7 @@ begin
 	iq_argB_s[ndx] <= rf_source[RnReal[slot % FSLOTS]];
 	iq_argS_s[ndx] <= sr_source;
 	iq_pt[ndx] <= uoq_takb[(uoq_head+slot) % UOQ_ENTRIES];
-	iq_tgt[ndx] <= uoq_uop[(uoq_head+slot) % UOQ_ENTRIES].Rt;
+	iq_tgt[ndx] <= RdReal[slot % FSLOTS];
 	set_insn(ndx,id_bus);
 	rob_pc[rid] <= uoq_pc[(uoq_head+slot) % UOQ_ENTRIES];
 	rob_tgt[rid] <= uoq_uop[(uoq_head+slot) % UOQ_ENTRIES].Rt;
