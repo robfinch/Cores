@@ -271,8 +271,8 @@ reg [IQ_ENTRIES-1:0] iq_rfw;	// writes to register file
 reg [IQ_ENTRIES-1:0] iq_sei;
 reg [IQ_ENTRIES-1:0] iq_need_sr;
 reg [3:0] iq_src1 [0:IQ_ENTRIES-1];
-reg [2:0] iq_src2 [0:IQ_ENTRIES-1];
-reg [2:0] iq_dst  [0:IQ_ENTRIES-1];
+reg [3:0] iq_src2 [0:IQ_ENTRIES-1];
+reg [3:0] iq_dst  [0:IQ_ENTRIES-1];
 reg [3:0] iq_exc	[0:IQ_ENTRIES-1];	// only for branches ... indicates a HALT instruction
 reg [RBIT+1:0] iq_tgt [0:IQ_ENTRIES-1];		// target register
 reg [WID-1:0] iq_argA [0:IQ_ENTRIES-1];	// First argument
@@ -2050,7 +2050,7 @@ for (n = 0; n < QSLOTS; n = n + 1)
 	`UO_YR:		rfob[n] <= regsx[3];
 	`UO_SP:		rfob[n] <= regsx[31];
 	`UO_M1:		rfob[n] <= 64'hFFFFFFFFFFFFFFFF;
-	`UO_TMP:	rfob[n] <= tmpx;
+	`UO_TMP:	rfob[n] <= regsx[4];
 	`UO_P2:		rfob[n] <= 64'd2;
 	default:	rfob[n] <= 64'h0;
 	endcase
@@ -2101,7 +2101,7 @@ for (n = 0; n < QSLOTS; n = n + 1)
 	rfos[n] <= srx;
 
 task regupd;
-input [4:0] n;
+input [5:0] n;
 input [63:0] i;
 output [63:0] o;
 begin
@@ -2282,23 +2282,18 @@ end
 end
 endgenerate
 
-function Source1Valid;
-input [23:0] ins;
-Source1Valid = TRUE;
-endfunction
-
-function Source2Valid;
+function SourceBValid;
 input [23:0] ins;
 case(ins[23:16])
 `UO_BEQ,`UO_BNE,`UO_BCS,`UO_BCC,`UO_BVS,`UO_BVC,`UO_BMI,`UO_BPL,`UO_BRA:	
-	Source2Valid = TRUE;
+	SourceBValid = TRUE;
 `UO_CLC,`UO_SEC,`UO_CLV,`UO_CLI,`UO_SEI,`UO_CLD,`UO_SED:
-	Source2Valid = TRUE;
+	SourceBValid = TRUE;
 default:
 	casez(ins[3:0])
-	4'd0:	Source2Valid = TRUE;
-	4'b1???:	Source2Valid = TRUE;
-	default:	Source2Valid = FALSE;
+	4'd0:	SourceBValid = TRUE;
+	4'b1???:	SourceBValid = TRUE;
+	default:	SourceBValid = FALSE;
 	endcase
 endcase
 endfunction
@@ -2320,7 +2315,12 @@ case(ins[23:16])
 `UO_BEQ,`UO_BNE,`UO_BCC,`UO_BCS,`UO_BVC,`UO_BVS,`UO_BMI,`UO_BPL,`UO_BRA,
 `UO_CLC,`UO_SEC,`UO_CLV,`UO_CLI,`UO_SEI,`UO_CLD,`UO_SED:
 	SourceTValid = TRUE;
-default:	SourceTValid = FALSE;
+default:
+	casez(ins[15:11])
+	4'd0:	SourceTValid = TRUE;
+	4'b1???:	SourceTValid = TRUE;
+	default:	SourceTValid = FALSE;
+	endcase
 endcase
 endfunction
 
@@ -2331,7 +2331,12 @@ case(ins[23:16])
 `UO_BEQ,`UO_BNE,`UO_BCC,`UO_BCS,`UO_BVC,`UO_BVS,`UO_BMI,`UO_BPL,`UO_BRA,
 `UO_CLC,`UO_SEC,`UO_CLV,`UO_CLI,`UO_SEI,`UO_CLD,`UO_SED:
 	SourceAValid = TRUE;
-default:	SourceAValid = FALSE;
+default:
+	casez(ins[7:4])
+	4'd0:	SourceAValid = TRUE;
+	4'b1???:	SourceAValid = TRUE;
+	default:	SourceAValid = FALSE;
+	endcase
 endcase
 endfunction
 
@@ -2470,14 +2475,13 @@ endfunction
 function [23:0] fnRegT;
 input [5:0] rg;
 case(rg)
-`UO_ACC:	fnRegT = "ACC";
-`UO_XR:		fnRegT = "XR ";
-`UO_YR:		fnRegT = "YR ";
-`UO_SP:		fnRegT = "SP ";
-`UO_TMP:	fnRegT = "TMP";
-`UO_SR:		fnRegT = "SR ";
-4'd4:			fnRegT = "PC ";
-4'd6:			fnRegT = "PC2";
+6'd1:		fnRegT = "ACC";
+6'd2:		fnRegT = "XR ";
+6'd3:		fnRegT = "YR ";
+6'd31:	fnRegT = "SP ";
+6'd4:		fnRegT = "TMP";
+6'd32:	fnRegT = "SR ";
+default:	fnRegT = "???";
 endcase
 endfunction
 
@@ -4967,7 +4971,7 @@ begin
 			iq_argA_v [tails[tails_rc(pat,row)]] <= regIsValid[RaReal[row]] | SourceAValid(uoq_uop[(uoq_head+row) % UOQ_ENTRIES]);
 			iq_argA_s [tails[tails_rc(pat,row)]] <= RaReal[row]==6'd32 ? sr_source : rf_source[RaReal[row]];
 			// iq_argA is a constant
-			iq_argB_v [tails[tails_rc(pat,row)]] <= regIsValid[RnReal[row]] || RnReal[row]==6'd0 || Source2Valid(uoq_uop[(uoq_head+row) % UOQ_ENTRIES]);
+			iq_argB_v [tails[tails_rc(pat,row)]] <= regIsValid[RnReal[row]] || RnReal[row]==6'd0 || SourceBValid(uoq_uop[(uoq_head+row) % UOQ_ENTRIES]);
 			iq_argB_s [tails[tails_rc(pat,row)]] <= rf_source[RnReal[row]];
 			iq_argS_v [tails[tails_rc(pat,row)]] <= regIsValid[AREGS] | SourceSValid(uoq_uop[(uoq_head+row) % UOQ_ENTRIES]);
 			iq_argS_s [tails[tails_rc(pat,row)]] <= sr_source;
@@ -4979,7 +4983,7 @@ begin
 							iq_argA_s [tails[tails_rc(pat,row)]] <= {1'b0,tails[tails_rc(pat,col)]};
 						end
 						if (RnReal[row]==RdReal[col] && slot_rfw[col] && RnReal[row] != 6'd0) begin
-							iq_argB_v [tails[tails_rc(pat,row)]] <= Source2Valid(uoq_uop[(uoq_head+row) % UOQ_ENTRIES]);
+							iq_argB_v [tails[tails_rc(pat,row)]] <= SourceBValid(uoq_uop[(uoq_head+row) % UOQ_ENTRIES]);
 							iq_argB_s [tails[tails_rc(pat,row)]] <= {1'b0,tails[tails_rc(pat,col)]};
 						end
 //						if (3'd7==Rd[col] && slot_sr_tgts[col]!=8'h00) begin
@@ -5065,7 +5069,7 @@ begin
 	iq_argB[ndx] <= argB[slot % FSLOTS];
 	iq_argS[ndx] <= srx;//argS[slot % FSLOTS];
 	iq_argA_v[ndx] <= regIsValid[RaReal[slot % FSLOTS]] || SourceAValid(uoq_uop[(uoq_head+slot) % UOQ_ENTRIES]);
-	iq_argB_v[ndx] <= regIsValid[RnReal[slot % FSLOTS]] || RnReal[slot % FSLOTS]==6'd0 || Source2Valid(uoq_uop[(uoq_head+slot) % UOQ_ENTRIES]);
+	iq_argB_v[ndx] <= regIsValid[RnReal[slot % FSLOTS]] || RnReal[slot % FSLOTS]==6'd0 || SourceBValid(uoq_uop[(uoq_head+slot) % UOQ_ENTRIES]);
 	iq_argS_v[ndx] <= regIsValid[AREGS] || SourceSValid(uoq_uop[(uoq_head+slot) % UOQ_ENTRIES]);
 	iq_argA_s[ndx] <= RaReal[slot % FSLOTS]==6'd32 ? sr_source : rf_source[RaReal[slot % FSLOTS]];
 	iq_argB_s[ndx] <= rf_source[RnReal[slot % FSLOTS]];
@@ -5074,7 +5078,7 @@ begin
 	iq_tgt[ndx] <= RdReal[slot % FSLOTS];
 	set_insn(ndx,id_bus);
 	rob_pc[rid] <= uoq_pc[(uoq_head+slot) % UOQ_ENTRIES];
-	rob_tgt[rid] <= uoq_uop[(uoq_head+slot) % UOQ_ENTRIES].Rt;
+	rob_tgt[rid] <= RdReal[slot % FSLOTS];
 	rob_rfw[rid] <= IsRFW(uoq_uop[(uoq_head+slot) % UOQ_ENTRIES]);
 	rob_res[rid] <= 1'd0;
 	rob_sr_tgts[rid] <= uoq_flagsupd[(uoq_head+slot) % UOQ_ENTRIES];

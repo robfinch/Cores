@@ -824,7 +824,7 @@ typedef struct packed
 `define IB_RS2		55:50
 `define IB_BRCC		49
 `define IB_CMP		48
-`define IB_SRC2		42:40
+`define IB_SRC2		43:40
 `define IB_NEED_SR	39
 `define IB_WRAP		38
 `define IB_STORE	36
@@ -843,6 +843,6 @@ typedef struct packed
 `define IB_JMP		12
 `define IB_BR			11
 `define IB_RFW		8
-`define IB_SRC1		6:3
-`define IB_DST		2:0
+`define IB_SRC1		7:4
+`define IB_DST		3:0
 `endif

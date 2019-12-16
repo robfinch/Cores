@@ -183,9 +183,9 @@ begin
 //	bus[`IB_RT]		 <= fnRd(instr,ven,vl,thrd) | {thrd,7'b0};
 //	bus[`IB_RC]		 <= fnRc(instr,ven,thrd) | {thrd,7'b0};
 //	bus[`IB_RA]		 <= fnRa(instr,ven,vl,thrd) | {thrd,7'b0};
-	bus[`IB_SRC1]		 <= instr[9:6];
-	bus[`IB_SRC2]		 <= instr[2:0];
-	bus[`IB_DST]		 <= instr[5:3];
+	bus[`IB_SRC1]		 <= instr[7:4];
+	bus[`IB_SRC2]		 <= instr[3:0];
+	bus[`IB_DST]		 <= instr[11:8];
 //	bus[`IB_IMM]	 <= HasConst(instr);
 	// IB_BT is now used to indicate when to update the branch target buffer.
 	// This occurs when one of the instructions with an unknown or calculated
