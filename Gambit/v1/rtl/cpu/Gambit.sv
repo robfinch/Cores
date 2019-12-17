@@ -31,13 +31,14 @@
 // 44792 71667
 // 41659 66654
 // 76202 121923
-`include "rtf65004-config.sv"
-`include "rtf65004-defines.sv"
+`include "..\common\Gambit-config.sv"
+`include "..\common\Gambit-types.sv"
+`include "..\common\Gambit-defines.sv"
 
-module rtf65004(rst_i, clk_i, clk2x_i, clk4x_i, tm_clk_i, nmi_i, irq_i,
+module Gambit(rst_i, clk_i, clk2x_i, clk4x_i, tm_clk_i, nmi_i, irq_i,
 		bte_o, cti_o, bok_i, cyc_o, stb_o, ack_i, err_i, we_o, sel_o, adr_o, dat_o, dat_i,
     icl_o, exc_o);
-parameter WID = 64;
+parameter WID = 52;
 input rst_i;
 input clk_i;
 input clk2x_i;
@@ -53,10 +54,10 @@ output reg stb_o;
 input ack_i;
 input err_i;
 output we_o;
-output reg [15:0] sel_o;
+output reg [7:0] sel_o;
 output [`ABITS] adr_o;
-output reg [127:0] dat_o;
-input [127:0] dat_i;
+output reg [103:0] dat_o;
+input [103:0] dat_i;
 output icl_o;
 output [7:0] exc_o;
 parameter TM_CLKFREQ = 20000000;
@@ -107,7 +108,7 @@ parameter RS_ASSIGNED = 2'd1;
 parameter RS_DONE = 2'd2;
 parameter RS_CMT = 2'd3;
 
-`include "rtf65004-busStates.sv"
+`include "..\common\Gambit-busStates.sv"
 
 wire clk;
 //BUFG uclkb1
@@ -220,6 +221,9 @@ wire [`RBITS] rob_tails [0:RSLOTS-1];
 wire [`RBITS] rob_heads [0:RENTRIES-1];
 wire [FSLOTS-1:0] slotvd, pc_maskd, pc_mask;
 
+// Micro instruction pointers.
+reg [11:0] mip1, mip2;
+
 // Micro-op queue
 reg [UOQ_ENTRIES-1:0] uoq_v;
 reg [WID-1:0] uoq_pc [0:UOQ_ENTRIES-1];
@@ -271,8 +275,8 @@ reg [IQ_ENTRIES-1:0] iq_rfw;	// writes to register file
 reg [IQ_ENTRIES-1:0] iq_sei;
 reg [IQ_ENTRIES-1:0] iq_need_sr;
 reg [3:0] iq_src1 [0:IQ_ENTRIES-1];
-reg [3:0] iq_src2 [0:IQ_ENTRIES-1];
-reg [3:0] iq_dst  [0:IQ_ENTRIES-1];
+reg [2:0] iq_src2 [0:IQ_ENTRIES-1];
+reg [2:0] iq_dst  [0:IQ_ENTRIES-1];
 reg [3:0] iq_exc	[0:IQ_ENTRIES-1];	// only for branches ... indicates a HALT instruction
 reg [RBIT+1:0] iq_tgt [0:IQ_ENTRIES-1];		// target register
 reg [WID-1:0] iq_argA [0:IQ_ENTRIES-1];	// First argument
@@ -631,270 +635,106 @@ reg [7:0] slot_sr_tgts [0:QSLOTS-1];
 
 wire [8:0] opcode1, opcode2;
 
-// Instruction to micro-op translation table.
-// Each instruction may translate into 1 to 4 micro-ops.
-// There is additional meta-data associated with the instruction.
+`include "..\common\Gambit-micro-program.sv"
 
-MicroBundle uopl [0:543];
-reg [4:0] uoplx [0:511];
+reg [7:0] uop_map [0:511];
 
+// Instruction to micro-program address translation table.
 initial begin
-	// Initialize everything to NOPs
-	for (n = 0; n < 543; n = n + 1)
-		uopl[n] = {4'd0,82'h0};
-	for (n = 0; n < 512; n = n + 1)
-		uoplx[n] <= 5'h0;
+uop_map = {
+	ADD_RR,ADD_RR,ADD_RR,ADD_RR,ADD_RR,ADD_RR,ADD_RR,ADD_RR,
+	ADD_RI23,ADD_RI23,ADD_RI23,ADD_RI23,ADD_RI23,ADD_RI23,ADD_RI23,ADD_RI23,
+	ADD_RI36,ADD_RI36,ADD_RI36,ADD_RI36,ADD_RI36,ADD_RI36,ADD_RI36,ADD_RI36,
+	UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,
+	JMP_ABS,JMP_ABS,JMP_ABS,JMP_ABS,JMP_ABS,JMP_ABS,JMP_ABS,JMP_ABS,
+	BEQ_D4,BNE_D4,BPL_D4,BMI_D4,BVS_D4,BVC_D4,BCS_D4,BCC_D4,
+	ASL_RR,ASL_RR,ASL_RR,ASL_RR,ASL_RR,ASL_RR,ASL_RR,ASL_RR,
+	UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,
 
-// BRK has special handling at queue stage
-//uopl[`BRK] 			= {2'd3,`UOF_NONE,2'd3,`UO_ADDB,`UO_M3,`UO_SP,2'd0,`UO_STB,`UO_P1,`UO_SR,`UO_SP,`UO_STW,`UO_P2,`UO_PC,`UO_SP,`UO_LDW,`UO_M2,`UO_PC,2'd0};
-uopl[`LDA_IMM]	= '{4'd1,`UOF_NZ,2'd0,{`UO_LDIB,`UO_R8,`UO_ACC,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`LDA_ZP]		= '{4'd1,`UOF_NZ,2'd0,{`UO_LDB,`UO_R8,`UO_ACC,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`LDA_ZPX]	= '{4'd1,`UOF_NZ,2'd0,{`UO_LDB,`UO_R8,`UO_ACC,`UO_XR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`LDA_I]		= '{4'd2,`UOF_NZ,2'd1,{`UO_LDW,`UO_R8,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_LDB,`UO_ZERO,`UO_ACC,`UO_TMP,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`LDA_IX]		= '{4'd2,`UOF_NZ,2'd1,{`UO_LDW,`UO_R8,`UO_TMP,`UO_XR,`UO_ZR},{`UO_LDB,`UO_ZERO,`UO_ACC,`UO_TMP,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`LDA_IY]		= '{4'd3,`UOF_NZ,2'd2,{`UO_LDW,`UO_R8,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_ADDW,`UO_ZERO,`UO_TMP,`UO_YR,`UO_ZR},{`UO_LDB,`UO_ZERO,`UO_ACC,`UO_TMP,`UO_ZR},{`UO_NOP_MOP}};
-uopl[`LDA_ABS]	= '{4'd1,`UOF_NZ,2'd0,{`UO_LDB,`UO_R16,`UO_ACC,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`LDA_ABSX]	= '{4'd1,`UOF_NZ,2'd0,{`UO_LDB,`UO_R16,`UO_ACC,`UO_XR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`LDA_ABSY]	= '{4'd1,`UOF_NZ,2'd0,{`UO_LDB,`UO_R16,`UO_ACC,`UO_YR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
+	SUB_RR,SUB_RR,SUB_RR,SUB_RR,SUB_RR,SUB_RR,SUB_RR,SUB_RR,
+	SUB_RI23,SUB_RI23,SUB_RI23,SUB_RI23,SUB_RI23,SUB_RI23,SUB_RI23,SUB_RI23,
+	SUB_RI36,SUB_RI36,SUB_RI36,SUB_RI36,SUB_RI36,SUB_RI36,SUB_RI36,SUB_RI36,
+	UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,
+	JSR_ABS,JSR_ABS,JSR_ABS,JSR_ABS,JSR_ABS,JSR_ABS,JSR_ABS,JSR_ABS,
+	BEQ_D17,BNE_D17,BPL_D17,BMI_D17,BVS_D17,BVC_D17,BCS_D17,BCC_D17,
+	LSR_RR,LSR_RR,LSR_RR,LSR_RR,LSR_RR,LSR_RR,LSR_RR,LSR_RR,
+	UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,
 
-uopl[`STA_ZP]	  = '{4'd1,`UOF_NONE,2'd0,{`UO_STB,`UO_R8,`UO_ACC,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`STA_ZPX]  = '{4'd1,`UOF_NONE,2'd0,{`UO_STB,`UO_R8,`UO_ACC,`UO_XR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`STA_I]		= '{4'd2,`UOF_NONE,2'd0,{`UO_LDW,`UO_R8,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_STB,`UO_ZERO,`UO_ACC,`UO_TMP,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`STA_IX]		= '{4'd2,`UOF_NONE,2'd0,{`UO_LDW,`UO_R8,`UO_TMP,`UO_XR,`UO_ZR},{`UO_STB,`UO_ZERO,`UO_ACC,`UO_TMP,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`STA_IY]		= '{4'd3,`UOF_NONE,2'd0,{`UO_LDW,`UO_R8,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_ADDW,`UO_ZERO,`UO_TMP,`UO_YR,`UO_ZR},{`UO_STB,`UO_ZERO,`UO_ACC,`UO_TMP,`UO_ZR},{`UO_NOP_MOP}};
-uopl[`STA_ABS]	= '{4'd1,`UOF_NONE,2'd0,{`UO_STB,`UO_R16,`UO_ACC,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`STA_ABSX]	= '{4'd1,`UOF_NONE,2'd0,{`UO_STB,`UO_R16,`UO_ACC,`UO_XR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`STA_ABSY]	= '{4'd1,`UOF_NONE,2'd0,{`UO_STB,`UO_R16,`UO_ACC,`UO_YR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
+	UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,
+	UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,
+	UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,
+	UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,
+	RTS,RTI,PFI_0,PFI_1,WAI_0,WAI_1,STP,NOP,
+	BRA_D4,UNIMP,BUS_D4,BUC_D4,UNIMP,UNIMP,UNIMP,UNIMP,
+	ROL_RR,ROL_RR,ROL_RR,ROL_RR,ROL_RR,ROL_RR,ROL_RR,ROL_RR,
+	UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,
 
-uopl[`ADC_IMM]	= '{4'd1,`UOF_CVNZ,2'd0,{`UO_ADCB,`UO_R8,`UO_ACC,`UO_ACC,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`ADC_ZP]		= '{4'd2,`UOF_CVNZ,2'd1,{`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_ADCB,`UO_ZERO,`UO_ACC,`UO_TMP,`UO_ACC},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`ADC_ZPX]	= '{4'd2,`UOF_CVNZ,2'd1,{`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_ZR},{`UO_ADCB,`UO_ZERO,`UO_ACC,`UO_TMP,`UO_ACC},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`ADC_I]		= '{4'd3,`UOF_CVNZ,2'd2,{`UO_LDW,`UO_R8,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_LDB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_ZR},{`UO_ADCB,`UO_ZERO,`UO_ACC,`UO_TMP,`UO_ACC},{`UO_NOP_MOP}};
-uopl[`ADC_IX]		= '{4'd3,`UOF_CVNZ,2'd2,{`UO_LDW,`UO_R8,`UO_TMP,`UO_XR,`UO_ZR},{`UO_LDB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_ZR},{`UO_ADCB,`UO_ZERO,`UO_ACC,`UO_TMP,`UO_ACC},{`UO_NOP_MOP}};
-uopl[`ADC_IY]		= '{4'd4,`UOF_CVNZ,2'd3,{`UO_LDW,`UO_R8,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_ADDW,`UO_ZERO,`UO_TMP,`UO_YR,`UO_TMP},{`UO_LDB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_ZR},{`UO_ADCB,`UO_ZERO,`UO_ACC,`UO_TMP,`UO_ACC}};
-uopl[`ADC_ABS]	= '{4'd2,`UOF_CVNZ,2'd1,{`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_ADCB,`UO_ZERO,`UO_ACC,`UO_TMP,`UO_ACC},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`ADC_ABSX]	= '{4'd2,`UOF_CVNZ,2'd1,{`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_ZR},{`UO_ADCB,`UO_ZERO,`UO_ACC,`UO_TMP,`UO_ACC},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`ADC_ABSY]	= '{4'd2,`UOF_CVNZ,2'd1,{`UO_LDB,`UO_R16,`UO_TMP,`UO_YR,`UO_ZR},{`UO_ADCB,`UO_ZERO,`UO_ACC,`UO_TMP,`UO_ACC},{`UO_NOP_MOP},{`UO_NOP_MOP}};
+	AND_RR,AND_RR,AND_RR,AND_RR,AND_RR,AND_RR,AND_RR,AND_RR,
+	AND_RI23,AND_RI23,AND_RI23,AND_RI23,AND_RI23,AND_RI23,AND_RI23,AND_RI23,
+	AND_RI36,AND_RI36,AND_RI36,AND_RI36,AND_RI36,AND_RI36,AND_RI36,AND_RI36,
+	UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,
+	RST,NMI,IRQ,BRK,BRK,BRK,BRK,BRK,
+	BRA_D17,UNIMP,BUS_D17,BUC_D17,UNIMP,UNIMP,UNIMP,UNIMP,
+	ROR_RR,ROR_RR,ROR_RR,ROR_RR,ROR_RR,ROR_RR,ROR_RR,ROR_RR,
+	UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,
 
-uopl[`SBC_IMM]	= '{4'd1,`UOF_CVNZ,2'd0,{`UO_SBCB,`UO_R8,`UO_ACC,`UO_ACC,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};                                                                                     
-uopl[`SBC_ZP]		= '{4'd2,`UOF_CVNZ,2'd1,{`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_SBCB,`UO_ZERO,`UO_ACC,`UO_ACC,`UO_TMP},{`UO_NOP_MOP},{`UO_NOP_MOP}};                                                         
-uopl[`SBC_ZPX]	= '{4'd2,`UOF_CVNZ,2'd1,{`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_ZR},{`UO_SBCB,`UO_ZERO,`UO_ACC,`UO_ACC,`UO_TMP},{`UO_NOP_MOP},{`UO_NOP_MOP}};                                                         
-uopl[`SBC_I]		= '{4'd3,`UOF_CVNZ,2'd2,{`UO_LDW,`UO_R8,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_LDB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_ZR},{`UO_SBCB,`UO_ZERO,`UO_ACC,`UO_ACC,`UO_TMP},{`UO_NOP_MOP}};                             
-uopl[`SBC_IX]		= '{4'd3,`UOF_CVNZ,2'd2,{`UO_LDW,`UO_R8,`UO_TMP,`UO_XR,`UO_ZR},{`UO_LDB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_ZR},{`UO_SBCB,`UO_ZERO,`UO_ACC,`UO_ACC,`UO_TMP},{`UO_NOP_MOP}};                             
-uopl[`SBC_IY]		= '{4'd4,`UOF_CVNZ,2'd3,{`UO_LDW,`UO_R8,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_ADDW,`UO_ZERO,`UO_TMP,`UO_YR,`UO_TMP},{`UO_LDB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_ZR},{`UO_SBCB,`UO_ZERO,`UO_ACC,`UO_ACC,`UO_TMP}};
-uopl[`SBC_ABS]	= '{4'd2,`UOF_CVNZ,2'd1,{`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_SBCB,`UO_ZERO,`UO_ACC,`UO_ACC,`UO_TMP},{`UO_NOP_MOP},{`UO_NOP_MOP}};                                                        
-uopl[`SBC_ABSX]	= '{4'd2,`UOF_CVNZ,2'd1,{`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_ZR},{`UO_SBCB,`UO_ZERO,`UO_ACC,`UO_ACC,`UO_TMP},{`UO_NOP_MOP},{`UO_NOP_MOP}};                                                        
-uopl[`SBC_ABSY]	= '{4'd2,`UOF_CVNZ,2'd1,{`UO_LDB,`UO_R16,`UO_TMP,`UO_YR,`UO_ZR},{`UO_SBCB,`UO_ZERO,`UO_ACC,`UO_ACC,`UO_TMP},{`UO_NOP_MOP},{`UO_NOP_MOP}};                                                        
+	OR_RR,OR_RR,OR_RR,OR_RR,OR_RR,OR_RR,OR_RR,OR_RR,
+	OR_RI23,OR_RI23,OR_RI23,OR_RI23,OR_RI23,OR_RI23,OR_RI23,OR_RI23,
+	OR_RI36,OR_RI36,OR_RI36,OR_RI36,OR_RI36,OR_RI36,OR_RI36,OR_RI36,
+	UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,
+	JMP_R,JMP_R,JMP_R,JMP_R,JMP_R,JMP_R,JMP_R,JMP_R,
+	MVNB,MVPB,STSB,CMPSB,MVN,MVP,STS,CMPS,
+	LSEP,LSEP,LSEP,LSEP,LSEP,LSEP,LSEP,LSEP,
+	UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,
 
-uopl[`CMP_IMM]	= '{4'd1,`UOF_CNZ,2'd0,{`UO_CMPB,`UO_R8,`UO_ZR,`UO_ACC,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};                                                                                     
-uopl[`CMP_ZP]		= '{4'd2,`UOF_CNZ,2'd1,{`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_CMPB,`UO_ZERO,`UO_ZR,`UO_ACC,`UO_TMP},{`UO_NOP_MOP},{`UO_NOP_MOP}};                                                         
-uopl[`CMP_ZPX]	= '{4'd2,`UOF_CNZ,2'd1,{`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_ZR},{`UO_CMPB,`UO_ZERO,`UO_ZR,`UO_ACC,`UO_TMP},{`UO_NOP_MOP},{`UO_NOP_MOP}};                                                         
-uopl[`CMP_I]		= '{4'd3,`UOF_CNZ,2'd2,{`UO_LDW,`UO_R8,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_LDB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_ZR},{`UO_CMPB,`UO_ZERO,`UO_ZR,`UO_ACC,`UO_TMP},{`UO_NOP_MOP}};                             
-uopl[`CMP_IX]		= '{4'd3,`UOF_CNZ,2'd2,{`UO_LDW,`UO_R8,`UO_TMP,`UO_XR,`UO_ZR},{`UO_LDB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_ZR},{`UO_CMPB,`UO_ZERO,`UO_ZR,`UO_ACC,`UO_TMP},{`UO_NOP_MOP}};                             
-uopl[`CMP_IY]		= '{4'd4,`UOF_CNZ,2'd3,{`UO_LDW,`UO_R8,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_ADDW,`UO_ZERO,`UO_TMP,`UO_YR,`UO_TMP},{`UO_LDB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_ZR},{`UO_CMPB,`UO_ZERO,`UO_ZR,`UO_ACC,`UO_TMP}};
-uopl[`CMP_ABS]	= '{4'd2,`UOF_CNZ,2'd1,{`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_CMPB,`UO_ZERO,`UO_ZR,`UO_ACC,`UO_TMP},{`UO_NOP_MOP},{`UO_NOP_MOP}};                                                        
-uopl[`CMP_ABSX]	= '{4'd2,`UOF_CNZ,2'd1,{`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_ZR},{`UO_CMPB,`UO_ZERO,`UO_ZR,`UO_ACC,`UO_TMP},{`UO_NOP_MOP},{`UO_NOP_MOP}};                                                        
-uopl[`CMP_ABSY]	= '{4'd2,`UOF_CNZ,2'd1,{`UO_LDB,`UO_R16,`UO_TMP,`UO_YR,`UO_ZR},{`UO_CMPB,`UO_ZERO,`UO_ZR,`UO_ACC,`UO_TMP},{`UO_NOP_MOP},{`UO_NOP_MOP}};                                                        
+	EOR_RR,EOR_RR,EOR_RR,EOR_RR,EOR_RR,EOR_RR,EOR_RR,EOR_RR,
+	EOR_RI23,EOR_RI23,EOR_RI23,EOR_RI23,EOR_RI23,EOR_RI23,EOR_RI23,EOR_RI23,
+	EOR_RI36,EOR_RI36,EOR_RI36,EOR_RI36,EOR_RI36,EOR_RI36,EOR_RI36,EOR_RI36,
+	UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,
+	JSR_R,JSR_R,JSR_R,JSR_R,JSR_R,JSR_R,JSR_R,JSR_R,			
+	UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,
+	LREP,LREP,LREP,LREP,LREP,LREP,LREP,LREP,
+	UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,
 
-uopl[`AND_IMM]	= '{4'd1,`UOF_NZ,2'd0,{`UO_ANDB,`UO_R8,`UO_ACC,`UO_ACC,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};                                                                                     
-uopl[`AND_ZP]		= '{4'd2,`UOF_NZ,2'd1,{`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_ANDB,`UO_ZERO,`UO_ACC,`UO_ACC,`UO_TMP},{`UO_NOP_MOP},{`UO_NOP_MOP}};                                                         
-uopl[`AND_ZPX]	= '{4'd2,`UOF_NZ,2'd1,{`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_ZR},{`UO_ANDB,`UO_ZERO,`UO_ACC,`UO_ACC,`UO_TMP},{`UO_NOP_MOP},{`UO_NOP_MOP}};                                                         
-uopl[`AND_I]		= '{4'd3,`UOF_NZ,2'd2,{`UO_LDW,`UO_R8,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_LDB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_ZR},{`UO_ANDB,`UO_ZERO,`UO_ACC,`UO_ACC,`UO_TMP},{`UO_NOP_MOP}};                             
-uopl[`AND_IX]		= '{4'd3,`UOF_NZ,2'd2,{`UO_LDW,`UO_R8,`UO_TMP,`UO_XR,`UO_ZR},{`UO_LDB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_ZR},{`UO_ANDB,`UO_ZERO,`UO_ACC,`UO_ACC,`UO_TMP},{`UO_NOP_MOP}};                             
-uopl[`AND_IY]		= '{4'd4,`UOF_NZ,2'd3,{`UO_LDW,`UO_R8,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_ADDW,`UO_ZERO,`UO_TMP,`UO_YR,`UO_TMP},{`UO_LDB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_ZR},{`UO_ANDB,`UO_ZERO,`UO_ACC,`UO_ACC,`UO_TMP}};
-uopl[`AND_ABS]	= '{4'd2,`UOF_NZ,2'd1,{`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_ANDB,`UO_ZERO,`UO_ACC,`UO_ACC,`UO_TMP},{`UO_NOP_MOP},{`UO_NOP_MOP}};                                                        
-uopl[`AND_ABSX]	= '{4'd2,`UOF_NZ,2'd1,{`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_ZR},{`UO_ANDB,`UO_ZERO,`UO_ACC,`UO_ACC,`UO_TMP},{`UO_NOP_MOP},{`UO_NOP_MOP}};                                                        
-uopl[`AND_ABSY]	= '{4'd2,`UOF_NZ,2'd1,{`UO_LDB,`UO_R16,`UO_TMP,`UO_YR,`UO_ZR},{`UO_ANDB,`UO_ZERO,`UO_ACC,`UO_ACC,`UO_TMP},{`UO_NOP_MOP},{`UO_NOP_MOP}};                                                        
+	LD_D9,LD_D9,LD_D9,LD_D9,LD_D9,LD_D9,LD_D9,LD_D9,
+	LD_D23,LD_D23,LD_D23,LD_D23,LD_D23,LD_D23,LD_D23,LD_D23,
+	LD_D36,LD_D36,LD_D36,LD_D36,LD_D36,LD_D36,LD_D36,LD_D36,
+	UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,
+	LDB_D36,LDB_D36,LDB_D36,LDB_D36,LDB_D36,LDB_D36,LDB_D36,LDB_D36,
+	PLP,PLP,PLP,PLP,PLP,PLP,PLP,PLP,
+	POP,POP,POP,POP,POP,POP,POP,POP,	
+	UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,
 
-uopl[`ORA_IMM]	= '{4'd1,`UOF_NZ,2'd0,{`UO_ORB,`UO_R8,`UO_ACC,`UO_ACC,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};                                                                                     
-uopl[`ORA_ZP]		= '{4'd2,`UOF_NZ,2'd1,{`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_ORB,`UO_ZERO,`UO_ACC,`UO_ACC,`UO_TMP},{`UO_NOP_MOP},{`UO_NOP_MOP}};                                                         
-uopl[`ORA_ZPX]	= '{4'd2,`UOF_NZ,2'd1,{`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_ZR},{`UO_ORB,`UO_ZERO,`UO_ACC,`UO_ACC,`UO_TMP},{`UO_NOP_MOP},{`UO_NOP_MOP}};                                                         
-uopl[`ORA_I]		= '{4'd3,`UOF_NZ,2'd2,{`UO_LDW,`UO_R8,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_LDB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_ZR},{`UO_ORB,`UO_ZERO,`UO_ACC,`UO_ACC,`UO_TMP},{`UO_NOP_MOP}};                             
-uopl[`ORA_IX]		= '{4'd3,`UOF_NZ,2'd2,{`UO_LDW,`UO_R8,`UO_TMP,`UO_XR,`UO_ZR},{`UO_LDB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_ZR},{`UO_ORB,`UO_ZERO,`UO_ACC,`UO_ACC,`UO_TMP},{`UO_NOP_MOP}};                             
-uopl[`ORA_IY]		= '{4'd4,`UOF_NZ,2'd3,{`UO_LDW,`UO_R8,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_ADDW,`UO_ZERO,`UO_TMP,`UO_YR,`UO_TMP},{`UO_LDB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_ZR},{`UO_ORB,`UO_ZERO,`UO_ACC,`UO_ACC,`UO_TMP}};
-uopl[`ORA_ABS]	= '{4'd2,`UOF_NZ,2'd1,{`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_ORB,`UO_ZERO,`UO_ACC,`UO_ACC,`UO_TMP},{`UO_NOP_MOP},{`UO_NOP_MOP}};                                                        
-uopl[`ORA_ABSX]	= '{4'd2,`UOF_NZ,2'd1,{`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_ZR},{`UO_ORB,`UO_ZERO,`UO_ACC,`UO_ACC,`UO_TMP},{`UO_NOP_MOP},{`UO_NOP_MOP}};                                                        
-uopl[`ORA_ABSY]	= '{4'd2,`UOF_NZ,2'd1,{`UO_LDB,`UO_R16,`UO_TMP,`UO_YR,`UO_ZR},{`UO_ORB,`UO_ZERO,`UO_ACC,`UO_ACC,`UO_TMP},{`UO_NOP_MOP},{`UO_NOP_MOP}};                                                        
-
-uopl[`EOR_IMM]	= '{4'd1,`UOF_NZ,2'd0,{`UO_EORB,`UO_R8,`UO_ACC,`UO_ACC,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};                                                                                     
-uopl[`EOR_ZP]		= '{4'd2,`UOF_NZ,2'd1,{`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_EORB,`UO_ZERO,`UO_ACC,`UO_ACC,`UO_TMP},{`UO_NOP_MOP},{`UO_NOP_MOP}};                                                         
-uopl[`EOR_ZPX]	= '{4'd2,`UOF_NZ,2'd1,{`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_ZR},{`UO_EORB,`UO_ZERO,`UO_ACC,`UO_ACC,`UO_TMP},{`UO_NOP_MOP},{`UO_NOP_MOP}};                                                         
-uopl[`EOR_I]		= '{4'd3,`UOF_NZ,2'd2,{`UO_LDW,`UO_R8,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_LDB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_ZR},{`UO_EORB,`UO_ZERO,`UO_ACC,`UO_ACC,`UO_TMP},{`UO_NOP_MOP}};                             
-uopl[`EOR_IX]		= '{4'd3,`UOF_NZ,2'd2,{`UO_LDW,`UO_R8,`UO_TMP,`UO_XR,`UO_ZR},{`UO_LDB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_ZR},{`UO_EORB,`UO_ZERO,`UO_ACC,`UO_ACC,`UO_TMP},{`UO_NOP_MOP}};                             
-uopl[`EOR_IY]		= '{4'd4,`UOF_NZ,2'd3,{`UO_LDW,`UO_R8,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_ADDW,`UO_ZERO,`UO_TMP,`UO_YR,`UO_TMP},{`UO_LDB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_ZR},{`UO_EORB,`UO_ZERO,`UO_ACC,`UO_ACC,`UO_TMP}};
-uopl[`EOR_ABS]	= '{4'd2,`UOF_NZ,2'd1,{`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_EORB,`UO_ZERO,`UO_ACC,`UO_ACC,`UO_TMP},{`UO_NOP_MOP},{`UO_NOP_MOP}};                                                        
-uopl[`EOR_ABSX]	= '{4'd2,`UOF_NZ,2'd1,{`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_ZR},{`UO_EORB,`UO_ZERO,`UO_ACC,`UO_ACC,`UO_TMP},{`UO_NOP_MOP},{`UO_NOP_MOP}};                                                        
-uopl[`EOR_ABSY]	= '{4'd2,`UOF_NZ,2'd1,{`UO_LDB,`UO_R16,`UO_TMP,`UO_YR,`UO_ZR},{`UO_EORB,`UO_ZERO,`UO_ACC,`UO_ACC,`UO_TMP},{`UO_NOP_MOP},{`UO_NOP_MOP}};                                                        
-
-uopl[`ASL_ACC]  = '{4'd1,`UOF_CNZ,2'd0,{`UO_ASLB,`UO_P1,`UO_ACC,`UO_ACC,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`ASL_ZP]		= '{4'd3,`UOF_CNZ,2'd1,{`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_ASLB,`UO_P1,`UO_TMP,`UO_TMP,`UO_ZR},{`UO_STB,`UO_R8,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_NOP_MOP}};
-uopl[`ASL_ZPX]	= '{4'd3,`UOF_CNZ,2'd1,{`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_ZR},{`UO_ASLB,`UO_P1,`UO_TMP,`UO_TMP,`UO_ZR},{`UO_STB,`UO_R8,`UO_TMP,`UO_XR,`UO_ZR},{`UO_NOP_MOP}};
-uopl[`ASL_ABS]	= '{4'd3,`UOF_CNZ,2'd1,{`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_ASLB,`UO_P1,`UO_TMP,`UO_TMP,`UO_ZR},{`UO_STB,`UO_R16,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_NOP_MOP}};
-uopl[`ASL_ABSX]	= '{4'd3,`UOF_CNZ,2'd1,{`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_ZR},{`UO_ASLB,`UO_P1,`UO_TMP,`UO_TMP,`UO_ZR},{`UO_STB,`UO_R16,`UO_TMP,`UO_XR,`UO_ZR},{`UO_NOP_MOP}};
-
-uopl[`ROL_ACC]  = '{4'd1,`UOF_CNZ,2'd0,{`UO_ROLB,`UO_ZERO,`UO_ACC,`UO_ACC,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`ROL_ZP]		= '{4'd3,`UOF_CNZ,2'd1,{`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_ROLB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_ZR},{`UO_STB,`UO_R8,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_NOP_MOP}};
-uopl[`ROL_ZPX]	= '{4'd3,`UOF_CNZ,2'd1,{`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_ZR},{`UO_ROLB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_ZR},{`UO_STB,`UO_R8,`UO_TMP,`UO_XR,`UO_ZR},{`UO_NOP_MOP}};
-uopl[`ROL_ABS]	= '{4'd3,`UOF_CNZ,2'd1,{`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_ROLB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_ZR},{`UO_STB,`UO_R16,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_NOP_MOP}};
-uopl[`ROL_ABSX]	= '{4'd3,`UOF_CNZ,2'd1,{`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_ZR},{`UO_ROLB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_ZR},{`UO_STB,`UO_R16,`UO_TMP,`UO_XR,`UO_ZR},{`UO_NOP_MOP}};
-
-uopl[`LSR_ACC]  = '{4'd1,`UOF_CNZ,2'd0,{`UO_LSRB,`UO_ZERO,`UO_ACC,`UO_ACC,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};                                                    
-uopl[`LSR_ZP]		= '{4'd3,`UOF_CNZ,2'd1,{`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_LSRB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_ZR},{`UO_STB,`UO_R8,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_NOP_MOP}};  
-uopl[`LSR_ZPX]	= '{4'd3,`UOF_CNZ,2'd1,{`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_ZR},{`UO_LSRB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_ZR},{`UO_STB,`UO_R8,`UO_TMP,`UO_XR,`UO_ZR},{`UO_NOP_MOP}};  
-uopl[`LSR_ABS]	= '{4'd3,`UOF_CNZ,2'd1,{`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_LSRB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_ZR},{`UO_STB,`UO_R16,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_NOP_MOP}}; 
-uopl[`LSR_ABSX]	= '{4'd3,`UOF_CNZ,2'd1,{`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_ZR},{`UO_LSRB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_ZR},{`UO_STB,`UO_R16,`UO_TMP,`UO_XR,`UO_ZR},{`UO_NOP_MOP}};
-
-uopl[`ROR_ACC]  = '{4'd1,`UOF_CNZ,2'd0,{`UO_RORB,`UO_ZERO,`UO_ACC,`UO_ACC,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};                                                    
-uopl[`ROR_ZP]		= '{4'd3,`UOF_CNZ,2'd1,{`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_RORB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_ZR},{`UO_STB,`UO_R8,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_NOP_MOP}};  
-uopl[`ROR_ZPX]	= '{4'd3,`UOF_CNZ,2'd1,{`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_ZR},{`UO_RORB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_ZR},{`UO_STB,`UO_R8,`UO_TMP,`UO_XR,`UO_ZR},{`UO_NOP_MOP}};  
-uopl[`ROR_ABS]	= '{4'd3,`UOF_CNZ,2'd1,{`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_RORB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_ZR},{`UO_STB,`UO_R16,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_NOP_MOP}}; 
-uopl[`ROR_ABSX]	= '{4'd3,`UOF_CNZ,2'd1,{`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_ZR},{`UO_RORB,`UO_ZERO,`UO_TMP,`UO_TMP,`UO_ZR},{`UO_STB,`UO_R16,`UO_TMP,`UO_XR,`UO_ZR},{`UO_NOP_MOP}};
-
-uopl[`INC_ZP]		= '{4'd3,`UOF_NZ,2'd1,{`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_ADDB,`UO_P1,`UO_TMP,`UO_TMP,`UO_ZR},{`UO_STB,`UO_R8,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_NOP_MOP}};
-uopl[`INC_ZPX]	= '{4'd3,`UOF_NZ,2'd1,{`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_ZR},{`UO_ADDB,`UO_P1,`UO_TMP,`UO_TMP,`UO_ZR},{`UO_STB,`UO_R8,`UO_TMP,`UO_XR,`UO_ZR},{`UO_NOP_MOP}};
-uopl[`INC_ABS]	= '{4'd3,`UOF_NZ,2'd1,{`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_ADDB,`UO_P1,`UO_TMP,`UO_TMP,`UO_ZR},{`UO_STB,`UO_R16,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_NOP_MOP}};
-uopl[`INC_ABSX]	= '{4'd3,`UOF_NZ,2'd1,{`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_ZR},{`UO_ADDB,`UO_P1,`UO_TMP,`UO_TMP,`UO_ZR},{`UO_STB,`UO_R16,`UO_TMP,`UO_XR,`UO_ZR},{`UO_NOP_MOP}};
-
-uopl[`DEC_ZP]		= '{4'd3,`UOF_NZ,2'd1,{`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_ADDB,`UO_M1,`UO_TMP,`UO_TMP,`UO_ZR},{`UO_STB,`UO_R8,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_NOP_MOP}};  
-uopl[`DEC_ZPX]	= '{4'd3,`UOF_NZ,2'd1,{`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_ZR},{`UO_ADDB,`UO_M1,`UO_TMP,`UO_TMP,`UO_ZR},{`UO_STB,`UO_R8,`UO_TMP,`UO_XR,`UO_ZR},{`UO_NOP_MOP}};  
-uopl[`DEC_ABS]	= '{4'd3,`UOF_NZ,2'd1,{`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_ADDB,`UO_M1,`UO_TMP,`UO_TMP,`UO_ZR},{`UO_STB,`UO_R16,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_NOP_MOP}};
-uopl[`DEC_ABSX]	= '{4'd3,`UOF_NZ,2'd1,{`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_ZR},{`UO_ADDB,`UO_M1,`UO_TMP,`UO_TMP,`UO_ZR},{`UO_STB,`UO_R16,`UO_TMP,`UO_XR,`UO_ZR},{`UO_NOP_MOP}};
-
-uopl[`BIT_IMM]	= '{4'd1,`UOF_NZ,2'd0,{`UO_BITB,`UO_R8,`UO_ACC,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`BIT_ZP]		= '{4'd2,`UOF_NZ,2'd1,{`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_BITB,`UO_ZERO,`UO_ACC,`UO_TMP,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`BIT_ZPX]	= '{4'd2,`UOF_NZ,2'd1,{`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_ZR},{`UO_BITB,`UO_ZERO,`UO_ACC,`UO_TMP,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`BIT_ABS]	= '{4'd2,`UOF_NZ,2'd1,{`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_BITB,`UO_ZERO,`UO_ACC,`UO_TMP,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`BIT_ABSX]	= '{4'd2,`UOF_NZ,2'd1,{`UO_LDB,`UO_R16,`UO_TMP,`UO_XR,`UO_ZR},{`UO_BITB,`UO_ZERO,`UO_ACC,`UO_TMP,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-
-uopl[`LDX_IMM]	= {4'd1,`UOF_NZ,2'd0,`UO_LDIB,`UO_R8,`UO_XR,`UO_ZR,{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`LDX_ZP]		= {4'd1,`UOF_NZ,2'd0,`UO_LDB,`UO_R8,`UO_XR,`UO_ZR,{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`LDX_ZPY]	= {4'd1,`UOF_NZ,2'd0,`UO_LDB,`UO_R8,`UO_XR,`UO_YR,{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`LDX_ABS]	= {4'd1,`UOF_NZ,2'd0,`UO_LDB,`UO_R16,`UO_XR,`UO_ZR,{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`LDX_ABSY]	= {4'd1,`UOF_NZ,2'd0,`UO_LDB,`UO_R16,`UO_XR,`UO_YR,{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`STX_ZP]	  = {4'd1,`UOF_NONE,2'd0,`UO_STB,`UO_R8,`UO_XR,`UO_ZR,{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`STX_ZPY]  = {4'd1,`UOF_NONE,2'd0,`UO_STB,`UO_R8,`UO_XR,`UO_YR,{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`STX_ABS]	= {4'd1,`UOF_NONE,2'd0,`UO_STB,`UO_R16,`UO_XR,`UO_ZR,{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`CPX_IMM]	= {4'd1,`UOF_NZ,2'd0,`UO_CMPB,`UO_R8,`UO_XR,`UO_ZR,{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`CPX_ZP]		= {4'd2,`UOF_NZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_CMPB,`UO_ZERO,`UO_XR,`UO_TMP,{`UO_NOP_MOP},{`UO_NOP_MOP}};
-//uopl[`CPX_ZPY]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_YR,`UO_CMPB,`UO_ZERO,`UO_XR,`UO_TMP,{2{`UO_NOP_MOP}}};
-uopl[`CPX_ABS]	= {4'd2,`UOF_NZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_CMPB,`UO_ZERO,`UO_XR,`UO_TMP,{`UO_NOP_MOP},{`UO_NOP_MOP}};
-
-uopl[`LDY_IMM]	= '{4'd1,`UOF_NZ,2'd0,{`UO_LDIB,`UO_R8,`UO_YR,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`LDY_ZP]		= {4'd1,`UOF_NZ,2'd0,`UO_LDB,`UO_R8,`UO_YR,`UO_ZR,{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`LDY_ZPX]	= {4'd1,`UOF_NZ,2'd0,`UO_LDB,`UO_R8,`UO_YR,`UO_XR,{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`LDY_ABS]	= {4'd1,`UOF_NZ,2'd0,`UO_LDB,`UO_R16,`UO_YR,`UO_ZR,{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`LDY_ABSX]	= {4'd1,`UOF_NZ,2'd0,`UO_LDB,`UO_R16,`UO_YR,`UO_XR,{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`STY_ZP]	  = {4'd1,`UOF_NONE,2'd0,`UO_STB,`UO_R8,`UO_YR,`UO_ZR,{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`STY_ZPX]  = {4'd1,`UOF_NONE,2'd0,`UO_STB,`UO_R8,`UO_YR,`UO_XR,{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`STY_ABS]	= {4'd1,`UOF_NONE,2'd0,`UO_STB,`UO_R16,`UO_YR,`UO_ZR,{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`CPY_IMM]	= {4'd1,`UOF_NZ,2'd0,`UO_CMPB,`UO_R8,`UO_YR,`UO_ZR,{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`CPY_ZP]		= {4'd2,`UOF_NZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_CMPB,`UO_ZERO,`UO_YR,`UO_TMP,{`UO_NOP_MOP},{`UO_NOP_MOP}};
-//uopl[`CPY_ZPX]	= {2'd1,`UOF_NZ,2'd1,`UO_LDB,`UO_R8,`UO_TMP,`UO_XR,`UO_CMPB,`UO_ZERO,`UO_YR,`UO_TMP,{2{`UO_NOP_MOP}}};
-uopl[`CPY_ABS]	= {4'd2,`UOF_NZ,2'd1,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_CMPB,`UO_ZERO,`UO_YR,`UO_TMP,{`UO_NOP_MOP},{`UO_NOP_MOP}};
-
-uopl[`STZ_ZP]	  = '{4'd1,`UOF_NONE,2'd0,{`UO_STB,`UO_R8,`UO_ZR,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`STZ_ZPX]  = '{4'd1,`UOF_NONE,2'd0,{`UO_STB,`UO_R8,`UO_ZR,`UO_XR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`STZ_ABS]	= '{4'd1,`UOF_NONE,2'd0,{`UO_STB,`UO_R16,`UO_ZR,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`STZ_ABSX]	= '{4'd1,`UOF_NONE,2'd0,{`UO_STB,`UO_R16,`UO_ZR,`UO_XR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-
-uopl[`TSB_ZP]	  = {4'd4,`UOF_Z,2'd3,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_ORB,`UO_ZERO,`UO_TMP,`UO_ACC,`UO_STB,`UO_R8,`UO_TMP,`UO_ZR,`UO_BITB,`UO_M1,`UO_TMP,`UO_ACC};
-uopl[`TSB_ABS]  = {4'd4,`UOF_Z,2'd3,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_ORB,`UO_ZERO,`UO_TMP,`UO_ACC,`UO_STB,`UO_R16,`UO_TMP,`UO_ZR,`UO_BITB,`UO_M1,`UO_TMP,`UO_ACC};
-uopl[`TRB_ZP]	  = {4'd4,`UOF_Z,2'd3,`UO_LDB,`UO_R8,`UO_TMP,`UO_ZR,`UO_ANDC,`UO_M1,`UO_TMP,`UO_ACC,`UO_STB,`UO_R8,`UO_TMP,`UO_ZR,`UO_BITB,`UO_M1,`UO_TMP,`UO_ACC};
-uopl[`TRB_ABS]  = {4'd4,`UOF_Z,2'd3,`UO_LDB,`UO_R16,`UO_TMP,`UO_ZR,`UO_ANDC,`UO_M1,`UO_TMP,`UO_ACC,`UO_STB,`UO_R16,`UO_TMP,`UO_ZR,`UO_BITB,`UO_M1,`UO_TMP,`UO_ACC};
-
-uopl[`INA]			= {4'd1,`UOF_NZ,2'd0,`UO_ADDB,`UO_P1,`UO_ACC,`UO_ZR,{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`DEA]			= {4'd1,`UOF_NZ,2'd0,`UO_ADDB,`UO_M1,`UO_ACC,`UO_ZR,{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`INX]			= '{4'd1,`UOF_NZ,2'd0,{`UO_ADDB,`UO_P1,`UO_XR,`UO_XR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`DEX]			= '{4'd1,`UOF_NZ,2'd0,{`UO_ADDB,`UO_M1,`UO_XR,`UO_XR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`INY]			= '{4'd1,`UOF_NZ,2'd0,{`UO_ADDB,`UO_P1,`UO_YR,`UO_YR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`DEY]			= '{4'd1,`UOF_NZ,2'd0,{`UO_ADDB,`UO_M1,`UO_YR,`UO_YR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-
-uopl[`PHA]			= {4'd2,`UOF_NONE,2'd0,`UO_STBW,`UO_100H,`UO_ACC,`UO_SP,`UO_ADDB,`UO_M1,`UO_SP,`UO_ZR,{2{`UO_NOP_MOP}}};
-uopl[`PLA]			= {4'd2,`UOF_NZ,2'd1,`UO_ADDB,`UO_P1,`UO_SP,`UO_ZR,`UO_LDBW,`UO_100H,`UO_ACC,`UO_SP,{2{`UO_NOP_MOP}}};
-uopl[`PHX]			= {4'd2,`UOF_NONE,2'd0,`UO_STBW,`UO_100H,`UO_XR,`UO_SP,`UO_ADDB,`UO_M1,`UO_SP,`UO_ZR,{2{`UO_NOP_MOP}}};
-uopl[`PLX]			= {4'd2,`UOF_NZ,2'd1,`UO_ADDB,`UO_P1,`UO_SP,`UO_ZR,`UO_LDBW,`UO_100H,`UO_XR,`UO_SP,{2{`UO_NOP_MOP}}};
-uopl[`PHY]			= {4'd2,`UOF_NONE,2'd0,`UO_STBW,`UO_100H,`UO_YR,`UO_SP,`UO_ADDB,`UO_M1,`UO_SP,`UO_ZR,{2{`UO_NOP_MOP}}};
-uopl[`PLY]			= {4'd2,`UOF_NZ,2'd1,`UO_ADDB,`UO_P1,`UO_SP,`UO_ZR,`UO_LDBW,`UO_100H,`UO_YR,`UO_SP,{2{`UO_NOP_MOP}}};
-uopl[`PHP]			= {4'd2,`UOF_NONE,2'd0,`UO_STBW,`UO_100H,`UO_SR,`UO_SP,`UO_ADDB,`UO_M1,`UO_SP,`UO_ZR,{2{`UO_NOP_MOP}}};
-uopl[`PLP]			= {4'd2,`UOF_NONE,2'd0,`UO_ADDB,`UO_P1,`UO_SP,`UO_ZR,`UO_LDBW,`UO_100H,`UO_SR,`UO_SP,{2{`UO_NOP_MOP}}};
-
-uopl[`TAX]			= '{4'd1,`UOF_NZ,2'd0,{`UO_MOV,`UO_ZERO,`UO_XR,`UO_ACC,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`TXA]			= '{4'd1,`UOF_NZ,2'd0,{`UO_MOV,`UO_ZERO,`UO_ACC,`UO_XR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`TAY]			= '{4'd1,`UOF_NZ,2'd0,{`UO_MOV,`UO_ZERO,`UO_YR,`UO_ACC,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`TYA]			= '{4'd1,`UOF_NZ,2'd0,{`UO_MOV,`UO_ZERO,`UO_ACC,`UO_YR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`TSX]			= '{4'd1,`UOF_NZ,2'd0,{`UO_MOV,`UO_ZERO,`UO_XR,`UO_SP,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`TXS]			= '{4'd1,`UOF_NONE,2'd0,{`UO_MOV,`UO_ZERO,`UO_SP,`UO_XR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`TXY]			= '{4'd1,`UOF_NZ,2'd0,{`UO_MOV,`UO_ZERO,`UO_YR,`UO_XR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`TYX]			= '{4'd1,`UOF_NZ,2'd0,{`UO_MOV,`UO_ZERO,`UO_XR,`UO_YR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`TAS]			= '{4'd1,`UOF_NONE,2'd0,{`UO_MOV,`UO_ZERO,`UO_SP,`UO_ACC,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`TSA]			= '{4'd1,`UOF_NZ,2'd0,{`UO_MOV,`UO_ZERO,`UO_ACC,`UO_SP,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-
-uopl[`BEQ]			= '{4'd1,`UOF_NONE,2'd0,{`UO_BEQ,`UO_R8,`UO_ZR,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`BNE]			= '{4'd1,`UOF_NONE,2'd0,{`UO_BNE,`UO_R8,`UO_ZR,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`BCS]			= '{4'd1,`UOF_NONE,2'd0,{`UO_BCS,`UO_R8,`UO_ZR,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`BCC]			= '{4'd1,`UOF_NONE,2'd0,{`UO_BCC,`UO_R8,`UO_ZR,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`BVS]			= '{4'd1,`UOF_NONE,2'd0,{`UO_BVS,`UO_R8,`UO_ZR,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`BVC]			= '{4'd1,`UOF_NONE,2'd0,{`UO_BVC,`UO_R8,`UO_ZR,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`BMI]			= '{4'd1,`UOF_NONE,2'd0,{`UO_BMI,`UO_R8,`UO_ZR,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`BPL]			= '{4'd1,`UOF_NONE,2'd0,{`UO_BPL,`UO_R8,`UO_ZR,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`BRA]			= '{4'd1,`UOF_NONE,2'd0,{`UO_BRA,`UO_R8,`UO_ZR,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-
-uopl[`CLC]			= '{4'd1,`UOF_C,2'd0,{`UO_CLC,`UO_ZERO,`UO_ZR,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`SEC]			= '{4'd1,`UOF_C,2'd0,{`UO_SEC,`UO_ZERO,`UO_ZR,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`CLV]			= '{4'd1,`UOF_V,2'd0,{`UO_CLV,`UO_ZERO,`UO_ZR,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`SEI]			= '{4'd1,`UOF_I,2'd0,{`UO_SEI,`UO_ZERO,`UO_ZR,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`CLI]			= '{4'd1,`UOF_I,2'd0,{`UO_CLI,`UO_ZERO,`UO_ZR,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`CLD]			= '{4'd1,`UOF_D,2'd0,{`UO_CLD,`UO_ZERO,`UO_ZR,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`SED]			= '{4'd1,`UOF_D,2'd0,{`UO_SED,`UO_ZERO,`UO_ZR,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`JMP]			= '{4'd1,`UOF_NONE,2'd0,{`UO_JMP,`UO_R16,`UO_ZR,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`JML]			= '{4'd1,`UOF_NONE,2'd0,{`UO_JMP,`UO_R24,`UO_ZR,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`JMP_IND]	= {4'd2,`UOF_NONE,2'd0,`UO_LDW,`UO_R16,`UO_TMP,`UO_ZR,`UO_JMP,`UO_ZERO,`UO_PC,`UO_TMP,{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`JSR]			= '{4'd3,`UOF_NONE,2'd0,{`UO_STWW,`UO_FFFFH,`UO_PC2,`UO_SP,`UO_ZR},{`UO_ADDB,`UO_M2,`UO_SP,`UO_SP,`UO_ZR},{`UO_JMP,`UO_R16,`UO_ZR,`UO_ZR,`UO_ZR},{`UO_NOP_MOP}};
-uopl[`JSL]			= {4'd3,`UOF_NONE,2'd0,`UO_STWW,`UO_FFFFH,`UO_PC3,`UO_SP,`UO_ADDB,`UO_M2,`UO_SP,`UO_ZR,`UO_JMP,`UO_R24,`UO_ZERO,`UO_ZR,{`UO_NOP_MOP}};
-uopl[`RTS]		  = '{4'd3,`UOF_NONE,2'd0,{`UO_ADDB,`UO_P2,`UO_SP,`UO_SP,`UO_ZR},{`UO_LDW,`UO_FFFFH,`UO_TMP,`UO_SP,`UO_ZR},{`UO_JMP,`UO_P1,`UO_TMP,`UO_ZR,`UO_ZR},{`UO_NOP_MOP}};
-uopl[`RTL]		  = {4'd3,`UOF_NONE,2'd0,`UO_ADDB,`UO_P3,`UO_SP,`UO_ZR,`UO_LDJ,`UO_FFFFH,`UO_TMP,`UO_SP,`UO_JMP,`UO_P1,`UO_TMP,`UO_ZR,{`UO_NOP_MOP}};
-uopl[`RTI]		  = {4'd4,`UOF_NONE,2'd0,`UO_ADDB,`UO_P3,`UO_SP,`UO_ZR,`UO_LDW,`UO_FFFFH,`UO_TMP,`UO_SP,`UO_LDB,`UO_FFFEH,`UO_SR,`UO_SP,`UO_JMP,`UO_ZERO,`UO_TMP,`UO_ZR};
-uopl[`XCE]			= '{4'd1,`UOF_NONE,2'd0,{`UO_XCE,`UO_ZERO,`UO_SR,`UO_SR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-
-uopl[`NAT_INX]	= '{4'd1,`UOF_NZ,2'd0,{`UO_ADDB,`UO_P1,`UO_XR,`UO_XR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`NAT_DEX]	= '{4'd1,`UOF_NZ,2'd0,{`UO_ADDB,`UO_M1,`UO_XR,`UO_XR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`NAT_INY]	= '{4'd1,`UOF_NZ,2'd0,{`UO_ADDB,`UO_P1,`UO_YR,`UO_YR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`NAT_DEY]	= '{4'd1,`UOF_NZ,2'd0,{`UO_ADDB,`UO_M1,`UO_YR,`UO_YR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-
-uopl[`NAT_BEQ]	= '{4'd1,`UOF_NONE,2'd0,{`UO_BEQ,`UO_R8B,`UO_ZR,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`NAT_BNE]	= '{4'd1,`UOF_NONE,2'd0,{`UO_BNE,`UO_R8B,`UO_ZR,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`NAT_BCS]	= '{4'd1,`UOF_NONE,2'd0,{`UO_BCS,`UO_R8B,`UO_ZR,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`NAT_BCC]	= '{4'd1,`UOF_NONE,2'd0,{`UO_BCC,`UO_R8B,`UO_ZR,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`NAT_BVS]	= '{4'd1,`UOF_NONE,2'd0,{`UO_BVS,`UO_R8B,`UO_ZR,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`NAT_BVC]	= '{4'd1,`UOF_NONE,2'd0,{`UO_BVC,`UO_R8B,`UO_ZR,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`NAT_BMI]	= '{4'd1,`UOF_NONE,2'd0,{`UO_BMI,`UO_R8B,`UO_ZR,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`NAT_BPL]	= '{4'd1,`UOF_NONE,2'd0,{`UO_BPL,`UO_R8B,`UO_ZR,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`NAT_BRA]	= '{4'd1,`UOF_NONE,2'd0,{`UO_BRA,`UO_R8B,`UO_ZR,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-
-//uopl[`NAT_JML]	= '{4'd1,`UOF_NONE,2'd0,{`UO_JMP,`UO_R40,`UO_ZR,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-
-uopl[`NAT_XCE]	= '{4'd1,`UOF_NONE,2'd0,{`UO_XCE,`UO_ZERO,`UO_SR,`UO_SR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-uopl[`NAT_SEC]	= '{4'd1,`UOF_C,2'd0,{`UO_SEC,`UO_ZERO,`UO_ZR,`UO_ZR,`UO_ZR},{`UO_NOP_MOP},{`UO_NOP_MOP},{`UO_NOP_MOP}};
-
+	ST_D9,ST_D9,ST_D9,ST_D9,ST_D9,ST_D9,ST_D9,ST_D9,
+	ST_D23,ST_D23,ST_D23,ST_D23,ST_D23,ST_D23,ST_D23,ST_D23,
+	ST_D36,ST_D36,ST_D36,ST_D36,ST_D36,ST_D36,ST_D36,ST_D36,
+	UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,
+	STB_D36,STB_D36,STB_D36,STB_D36,STB_D36,STB_D36,STB_D36,STB_D36,
+	PHP,PHP,PHP,PHP,PHP,PHP,PHP,PHP,
+	PSH,PSH,PSH,PSH,PSH,PSH,PSH,PSH,
+	UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP
+};
 end
 
 task tskLd4;
 input [3:0] ld4;
-input [47:0] insn;
-output [63:0] cnst;
+input [51:0] insn;
+output [51:0] cnst;
 begin
 	case(ld4)
-	`UO_M3:	cnst = 64'hFFFFFFFFFFFFFFFD;
-	`UO_M2:	cnst = 64'hFFFFFFFFFFFFFFFE;
-	`UO_M1:	cnst = 64'hFFFFFFFFFFFFFFFF;
-	`UO_P3:	cnst = 64'h0003;
-	`UO_P2:	cnst = 64'h0002;
-	`UO_P1:	cnst = 64'h0001;
-	`UO_R8:	cnst = {56'd0,insn[15:8]};
-	`UO_R16:	cnst = {48'd0,insn[23:8]};
-	`UO_R24:	cnst = {40'd0,insn[31:8]};
-	`UO_R8B:	cnst = insn[15:8]==8'hFE ? {{48{insn[31]}},insn[31:16]} : {{56{insn[15]}},insn[15:8]};
-	default:	cnst = 64'h0000;
+	ZERO:	cnst = 52'h0000;
+	ONE:	cnst = 52'h0001;
+	TWO:	cnst = 52'h0002;
+	THREE:	cnst = 52'h0003;
+	FOUR:		cnst = 52'h0004;
+	REF4:		cnst = {{48{insn[12]}},insn[12:9]};
+	REF17:	cnst = {{35{insn[25]}},insn[25:9]};
+	REF46:	cnst = {6'd0,insn[51:6]};
+	REF23:	cnst = {{29{insn[38]}},insn[38:16]};
+	REF36:	cnst = {{16{insn[51]}},insn[51:16]};
+	REF7:		cnst = insn[12:6];
+	MFOUR:	cnst = 52'hFFFFFFFFFFFFC;
+	default:	cnst = 52'h0000;
 	endcase
 end
 endtask
@@ -968,27 +808,10 @@ end
 always @*
 begin
 	qb <= FALSE;
-	q1 <= FALSE;
-	q2 <= FALSE;
-	q1bx <= uo_len1 > 3'd4 && !q1b;
+	uopQueued <= FALSE;
 	if (phit|freezepc) begin
-		if (slot_brk[0]) begin
-			if (uoq_room >= 3'd6)	begin // must have room for five micro-ops
-				qb <= TRUE;
-				q1 <= TRUE;								// For pc increment
-			end
-		end
-		// BRK is queued only from the opcode1 slot. If there is a brk on opcode2
-		// wait until the pc advances it to the opcode1 slot.
-		// Ibid for prefixes.
-		else if (slot_brk[1] | slot_pf[1]) begin
-			if (uoq_room >= uo_len1)
-				q1 <= TRUE;
-		end
-		else if (uoq_room >= uo_len1 + uo_len2)
-			q2 <= TRUE;
-		else if (uoq_room >= uo_len1)
-			q1 <= TRUE;
+		if (uoq_room >= 3'd4)
+			uopQueued <= TRUE;
 	end
 end
 
@@ -1044,6 +867,114 @@ begin
 		uoq_slotv[2] <= ((uoq_head + 2'd2) % UOQ_ENTRIES) != uoq_tail[0] && uoq_v[(uoq_head + 2'd2) % UOQ_ENTRIES];
 	end
 end
+
+reg [11:0] ptr [0:3];
+// Compute pointers into micro-instruction program.
+always @*
+begin
+	if (~|mip1) begin
+		ptr[0] = mip2;
+		ptr[1] = mip2 + 1;
+		ptr[2] = mip2 + 2;
+		ptr[3] = mip2 + 3;
+	end
+	else begin
+		ptr[0] = mip1;
+		if (uop[ptr[0]].fl[1]) begin
+			ptr[1] = mip2;
+			ptr[2] = mip2+1;
+			ptr[3] = mip2+2;
+		end
+		else begin
+			ptr[1] = mip1+1;
+			if (uop[ptr[1]].fl[1]) begin
+				ptr[2] = mip2;
+				ptr[3] = mip2+1;
+			end
+			else begin
+				ptr[2] = mip1+2;
+				if (uop[ptr[2]].fl[1]) begin
+					ptr[3] = mip2;
+				end
+				else begin
+					ptr[3] = mip1+3;
+				end
+			end
+		end
+	end
+end
+
+wire [2:0] qcnt2 =
+						uop_prg[ptr[0]].fl[1] + 
+						uop_prg[ptr[1]].fl[1] + 
+						uop_prg[ptr[2]].fl[1] + 
+						uop_prg[ptr[3]].fl[1] ;
+wire [2:0] qcnt = qcnt2 > 3'd2 ? 3'd2 : qcnt2;
+
+// Although four micro-ops are fetched from the table we might not want to
+// queue all four. We only want to queue up to the end of the program for
+// that instruction.
+reg [2:0] uopqc;
+always @*
+	case({uop_prg[ptr[3]]].fl[1],uop_prg[ptr[2]]].fl[1],uop_prg[ptr[1]]].fl[1],uop_prg[ptr[0]]].fl[1]})
+	4'b0000:	uopqc = 3'd4;
+	4'b0001:	if (|mip1) uopqc = 3'd4; else uopqc = 3'd1;
+	4'b0010:	if (|mip1) uopqc = 3'd4; else uopqc = 3'd2;
+	4'b0011:	if (|mip1) uopqc = 3'd2; else uopqc = 3'd1;
+	4'b0100:	if (|mip1) uopqc = 3'd4; else uopqc = 3'd3;
+	4'b0101:	if (|mip1) uopqc = 3'd3; else uopqc = 3'd1;
+	4'b0110:	if (|mip1) uopqc = 3'd3; else uopqc = 3'd2;
+	4'b0111:	if (|mip1) uopqc = 3'd2; else uopqc = 3'd1;
+	4'b1000:	uopqc = 3'd4;
+	4'b1001:	if (|mip1) uopqc = 3'd4; else uopqc = 3'd1;
+	4'b1010:	if (|mip1) uopqc = 3'd4; else uopqc = 3'd2;
+	4'b1011:	if (|mip1) uopqc = 3'd2; else uopqc = 3'd1;
+	4'b1100:	if (|mip1) uopqc = 3'd4; else uopqc = 3'd3;
+	4'b1101:	if (|mip1) uopqc = 3'd3; else uopqc = 3'd1;
+	4'b1110:	if (|mip1) uopqc = 3'd3; else uopqc = 3'd2;
+	4'b1111:	if (|mip1) uopqc = 3'd2; else uopqc = 3'd1;
+	endcase
+
+MicroOp uop2q [0:3];
+
+always @(posedge clk_i)
+if (rst_i) begin
+	mip1 <= 12'd0;
+	mip2 <= 12'd0;
+	nextBundle <= TRUE;
+end
+else begin
+	if (nextBundle) begin
+		mip1 <= uop_map[insnx[0][8:0]];
+		mip2 <= uop_map[insnx[1][8:0]];
+		nextBundle <= FALSE;
+	end
+	else (uopQueued) begin
+		case({uop_prg[ptr[3]]].fl[1],uop_prg[ptr[2]]].fl[1],uop_prg[ptr[1]]].fl[1],uop_prg[ptr[0]]].fl[1]})
+		4'b0000:	begin if (|mip1) mip1 <= mip1 + 3'd4; else mip2 <= mip2 + 3'd4; end
+		4'b0001:	begin mip1 <= 12'd0; if (|mip1) mip2 <= mip2 + 3'd3; else nextBundle <= TRUE; end
+		4'b0010:	begin mip1 <= 12'd0; if (|mip1) mip2 <= mip2 + 3'd2; else nextBundle <= TRUE; end
+		4'b0011:	begin mip1 <= 12'd0; mip2 <= 12'd0; nextBundle <= TRUE; end
+		4'b0100:	begin mip1 <= 12'd0; if (|mip1) mip2 <= mop2 + 3'd1; else nextBundle <= TRUE; end
+		4'b0101:	begin mip1 <= 12'd0; mip2 <= 12'd0; nextBundle <= TRUE; end
+		4'b0110:	begin mip1 <= 12'd0; mip2 <= 12'd0; nextBundle <= TRUE; end
+		4'b0111:	begin mip1 <= 12'd0; mip2 <= 12'd0; nextBundle <= TRUE; end
+		4'b1000:	begin mip1 <= 12'd0; if (~|mip1) nextBundle <= TRUE; end
+		4'b1001:	begin mip1 <= 12'd0; mip2 <= 12'd0; nextBundle <= TRUE; end
+		4'b1010:	begin mip1 <= 12'd0; mip2 <= 12'd0; nextBundle <= TRUE; end
+		4'b1011:	begin mip1 <= 12'd0; mip2 <= 12'd0; nextBundle <= TRUE; end
+		4'b1100:	begin mip1 <= 12'd0; mip2 <= 12'd0; nextBundle <= TRUE; end
+		4'b1101:	begin mip1 <= 12'd0; mip2 <= 12'd0; nextBundle <= TRUE; end
+		4'b1110:	begin mip1 <= 12'd0; mip2 <= 12'd0; nextBundle <= TRUE; end
+		4'b1111:	begin mip1 <= 12'd0; mip2 <= 12'd0; nextBundle <= TRUE; end
+		endcase
+		uop2q[0] <= uop_prg[ptr[0]];
+		uop2q[1] <= uop_prg[ptr[1]];
+		uop2q[2] <= uop_prg[ptr[2]];
+		uop2q[3] <= uop_prg[ptr[3]];
+	end
+end
+
 //assign uoq_slotv[0] = uoq_v[uoq_head]==`VAL;	//uoq_head != uoq_tail[0] || ~|uoq_v || &uoq_v;
 //assign uoq_slotv[1] = uoq_slotv[0] && uoq_v[(uoq_head+1) % UOQ_ENTRIES] == `VAL && ((uoq_head + 2'd1) % UOQ_ENTRIES) != uoq_tail[1];//(uoq_head != uoq_tail[0] && uoq_head + 4'd1 != uoq_tail[0]) || ~|uoq_v || &uoq_v;
 //assign uoq_slotv[2] = uoq_slotv[1] && uoq_v[(uoq_head+2) % UOQ_ENTRIES] == `VAL && ((uoq_head + 2'd2) % UOQ_ENTRIES) != uoq_tail[2];//(uoq_head != uoq_tail[0] && uoq_head + 4'd1 != uoq_tail[0] && uoq_head + 4'd2 != uoq_tail[0])  || ~|uoq_v || &uoq_v;
@@ -1185,51 +1116,39 @@ reg [127:0] ddat;
 reg dwrap;
 
 function IsBranch;
-input [7:0] opcode;
-IsBranch = opcode==`BEQ || opcode==`BNE || opcode==`BCS || opcode==`BCC ||
-						opcode==`BVS || opcode==`BVC || opcode==`BMI || opcode==`BPL ||
-						opcode==`BRA;
+input [51:0] insn;
+reg [5:0] opcode = insn[5:0];
+IsBranch = opcode==`BccD4a || opcode==`BccD4b || opcode==`BccD17a || opcode==`BccD17b;
 endfunction
 function IsBrk;
-input [7:0] opcode;
-IsBrk = opcode==`BRK;
+input [51:0] insn;
+IsBrk = insn[`OPCODE]==`BRKGRP;
 endfunction
 function IsRti;
-input [7:0] opcode;
-IsRti = opcode==`RTI;
+input [51:0] insn;
+IsRti = insn[`OPCODE]==`RETGRP && insn[8:6]==`RTI;
 endfunction
 function IsRts;
-input [7:0] opcode;
-IsRts = opcode==`RTS || opcode==`RTL;
+input [51:0] insn;
+IsRts = insn[`OPCODE]==`RETGRP && insn[8:6]==`RTS;
+endfunction
+function IsJsr;
+input [51:0] insn;
+IsJsr = insn[`OPCODE]==`JSR;
+endfunction
+function IsJmp;
+input [51:0] insn;
+IsJmp = insn[`OPCODE]==`JMP;
 endfunction
 
 generate begin : mdecoders
 for (g = 0; g < 8; g = g + 1)
 always @*
 begin
-	slot_rtsx[g] = ic1_out[g*8+:8]==`RTS || ic1_out[g*8+:8]==`RTL;
-	slot_brx[g] = ic1_out[g*8+:8]==`BEQ || 
-								ic1_out[g*8+:8]==`BNE ||
-								ic1_out[g*8+:8]==`BCS ||
-								ic1_out[g*8+:8]==`BCC ||
-								ic1_out[g*8+:8]==`BVS ||
-								ic1_out[g*8+:8]==`BVC ||
-								ic1_out[g*8+:8]==`BMI ||
-								ic1_out[g*8+:8]==`BPL ||
-								ic1_out[g*8+:8]==`BRA
-								;
-	slot_jcx[g]	= ic1_out[g*8+:8]==`JMP || ic1_out[g*8+:8]==`JSR;
-	slot_jclx[g]	= ic1_out[g*8+:8]==`JML || ic1_out[g*8+:8]==`JSL;
-	slot_brkx[g]	= ic1_out[g*8+:8]==`BRK || ic1_out[g*8+:8]==`RTI;
-	case(ic1_out[g*8+:8])
-	`BYTE:	slot_pfx[g] = byt;
-	`UBYTE:	slot_pfx[g] = ubyt;
-	`WYDE:	slot_pfx[g] = wyde;
-	`UWYDE:	slot_pfx[g] = uwyde;
-	`TETRA:	slot_pfx[g] = tetra;
-	`UTETRA:	slot_pfx[g] = utetra;
-	default:	slot_pfx[g] = 4'd0;
-	endcase
+	slot_rtsx[g] = IsRts(ic1_out[g*8+:52]);
+	slot_brx[g] = IsBranch(ic1_out[g*8+:52]);
+	slot_jcx[g]	= IsJsr(ic1_out[g*8+:52]) || IsJmp(ic1_out[g*8+:52]);
+	slot_brkx[g]	= IsBrk(ic1_out[g*8+:52]) || IsRti(ic1_out[g*8+:52]);
 end
 end
 endgenerate
@@ -1259,8 +1178,7 @@ reg [QSLOTS-1:0] slot_jmp;
 reg [QSLOTS-1:0] uoq_take_branch;
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
-	slot_jmp[n] = uoq_uop[(uoq_head + n) % UOQ_ENTRIES].opcode==`UO_JMP ||
-								uoq_uop[(uoq_head + n) % UOQ_ENTRIES].opcode==`UO_JSI;
+	slot_jmp[n] = uoq_uop[(uoq_head + n) % UOQ_ENTRIES].opcode==JMP;
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
 	slot_rfw[n] = IsRFW(uoq_uop[(uoq_head + n) % UOQ_ENTRIES]);
@@ -1697,7 +1615,7 @@ assign xtkb[3] = 1'b0;
 wire [FSLOTS-1:0] predict_takenx;
 
 `ifdef FCU_BP
-BranchPredictor ubp1
+gshareBranchPredictor ubp1
 (
   .rst(rst_i),
   .clk(clk_i),
@@ -2008,33 +1926,35 @@ for (n = 0; n < QSLOTS; n = n + 1)
 always @*
 	for (n = 0; n < QSLOTS; n = n + 1) begin
 		case(Ra[n])
-		`UO_ZR:		rfoa[n] <= 64'h0;
-		`UO_RT:		rfoa[n] <= Rd[n]==6'd0 ? 64'd0 : regsx[Rd[n]];
-		`UO_RA:		rfoa[n] <= Ra[n]==6'd0 ? 64'd0 : regsx[Ra[n]];
-		`UO_ACC:	rfoa[n] <= regsx[1];
-		`UO_XR:		rfoa[n] <= regsx[2];
-		`UO_YR:		rfoa[n] <= regsx[3];
-		`UO_SP:		rfoa[n] <= regsx[31];
-		`UO_PC:		rfoa[n] <= uoq_pc[(uoq_head+n) % UOQ_ENTRIES];
-		`UO_TMP: 	rfoa[n] <= regsx[4];
-		`UO_SR:		rfoa[n] <= {16'h00,srx};
-		`UO_PC2:	rfoa[n] <= uoq_pc[(uoq_head+n) % UOQ_ENTRIES] + 2'd2;
-		`UO_PC3:	rfoa[n] <= uoq_pc[(uoq_head+n) % UOQ_ENTRIES] + 2'd3;
-		default:	rfoa[n] <= 64'h0;
+		ZERO:		rfoa[n] <= 64'h0;
+		//`UO_RT:		rfoa[n] <= regsx[uoq_Rt[(uoq_head+n) % UOQ_ENTRIES]];
+		Rareg:		rfoa[n] <= uoq_Ra[(uoq_head+n) % UOQ_ENTRIES]==6'd0 ? 52'd0 : regsx[uoq_Ra[(uoq_head+n) % UOQ_ENTRIES]];
+		acc:	rfoa[n] <= regsx[1];
+		xr:		rfoa[n] <= regsx[2];
+		yr:		rfoa[n] <= regsx[3];
+		SP:		rfoa[n] <= regsx[31];
+		PC:		rfoa[n] <= uoq_pc[(uoq_head+n) % UOQ_ENTRIES];
+		TMP1: 	rfoa[n] <= regsx[4];
+		TMP2: 	rfoa[n] <= regsx[5];
+		SR:		rfoa[n] <= {16'h00,srx};
+		PC1:	rfoa[n] <= uoq_pc[(uoq_head+n) % UOQ_ENTRIES] + 3'd1;
+		PC4:	rfoa[n] <= uoq_pc[(uoq_head+n) % UOQ_ENTRIES] + 3'd4;
+		default:	rfoa[n] <= 52'h0;
 		endcase
 		case(Rd[n])
-		`UO_ZR:		rfot[n] <= 64'h0;
-		`UO_RT:		rfot[n] <= regsx[Rd[n]];
-		`UO_RA:		rfot[n] <= Ra[n]==6'd0 ? 64'd0 : regsx[Ra[n]];
-		`UO_ACC:	rfot[n] <= regsx[1];
-		`UO_XR:		rfot[n] <= regsx[2];
-		`UO_YR:		rfot[n] <= regsx[3];
-		`UO_SP:		rfot[n] <= regsx[31];
-		`UO_PC:		rfot[n] <= uoq_pc[(uoq_head+n) % UOQ_ENTRIES];
-		`UO_TMP: 	rfot[n] <= regsx[4];
-		`UO_SR:		rfot[n] <= {16'h00,srx};
-		`UO_PC2:	rfot[n] <= uoq_pc[(uoq_head+n) % UOQ_ENTRIES] + 2'd2;
-		`UO_PC3:	rfot[n] <= uoq_pc[(uoq_head+n) % UOQ_ENTRIES] + 2'd3;
+		ZERO:		rfot[n] <= 64'h0;
+		Rtreg:		rfot[n] <= regsx[uoq_Rt[(uoq_head+n) % UOQ_ENTRIES]];
+		//`UO_RA:		rfot[n] <= uoq_Ra[(uoq_head+n) % UOQ_ENTRIES]==6'd0 ? 64'd0 : regsx[uoq_Ra[(uoq_head+n) % UOQ_ENTRIES]];
+		acc:	rfot[n] <= regsx[1];
+		xr:		rfot[n] <= regsx[2];
+		yr:		rfot[n] <= regsx[3];
+		SP:		rfot[n] <= regsx[31];
+		PC:		rfot[n] <= uoq_pc[(uoq_head+n) % UOQ_ENTRIES];
+		TMP1: 	rfot[n] <= regsx[4];
+		TMP2: 	rfot[n] <= regsx[5];
+		SR:		rfot[n] <= {16'h00,srx};
+		PC1:	rfot[n] <= uoq_pc[(uoq_head+n) % UOQ_ENTRIES] + 3'd1;
+		PC4:	rfot[n] <= uoq_pc[(uoq_head+n) % UOQ_ENTRIES] + 3'd4;
 		default:	rfot[n] <= 64'h0;
 		endcase
 	end
@@ -2042,57 +1962,61 @@ always @*
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
 	case(Rn[n])
-	`UO_ZR:		rfob[n] <= 64'h0;
+	ZERO:		rfob[n] <= 52'h0;
 //	`UO_RA:		rfob[n] <= regsx[uoq_Ra[(uoq_head+n) % UOQ_ENTRIES]];
-	`UO_RB:		rfob[n] <= Rn[n]==6'd0 ? 64'd0 : regsx[Rn[n]];
-	`UO_ACC:	rfob[n] <= regsx[1];
-	`UO_XR:		rfob[n] <= regsx[2];
-	`UO_YR:		rfob[n] <= regsx[3];
-	`UO_SP:		rfob[n] <= regsx[31];
-	`UO_M1:		rfob[n] <= 64'hFFFFFFFFFFFFFFFF;
-	`UO_TMP:	rfob[n] <= regsx[4];
-	`UO_P2:		rfob[n] <= 64'd2;
+	Rbreg:		rfob[n] <= uoq_Rb[(uoq_head+n) % UOQ_ENTRIES]==6'd0 ? 52'd0 : regsx[uoq_Rb[(uoq_head+n) % UOQ_ENTRIES]];
+	acc:	rfob[n] <= regsx[1];
+	xr:		rfob[n] <= regsx[2];
+	yr:		rfob[n] <= regsx[3];
+	SP:		rfob[n] <= regsx[31];
+	MONE:		rfob[n] <= 52'hFFFFFFFFFFFFF;
+	TMP1:	rfob[n] <= regsx[4];
+	TMP2:	rfob[n] <= regsx[5];
+	//`UO_P2:		rfob[n] <= 64'd2;
 	default:	rfob[n] <= 64'h0;
 	endcase
 
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
 	case(Rd[n])
-	`UO_RT:		RdReal[n] <= uoq_inst[(uoq_head+n) % UOQ_ENTRIES][`RT];
-	`UO_RA:		RdReal[n] <= uoq_inst[(uoq_head+n) % UOQ_ENTRIES][`RA];
-	`UO_ACC:	RdReal[n] <= 6'd1;
-	`UO_XR:		RdReal[n] <= 6'd2;
-	`UO_YR:		RdReal[n] <= 6'd3;
-	`UO_TMP:	RdReal[n] <= 6'd4;
-	`UO_SP:		RdReal[n] <= 6'd31;
-	`UO_SR:		RdReal[n] <= 6'd32;
+	Rtreg:		RdReal[n] <= uoq_Rt[(uoq_head+n) % UOQ_ENTRIES];
+	//`UO_RA:		RdReal[n] <= uoq_Ra[(uoq_head+n) % UOQ_ENTRIES];
+	acc:	RdReal[n] <= 6'd1;
+	xr:		RdReal[n] <= 6'd2;
+	yr:		RdReal[n] <= 6'd3;
+	TMP1:	RdReal[n] <= 6'd4;
+	TMP2:	RdReal[n] <= 6'd5;
+	SP:		RdReal[n] <= 6'd31;
+	SR:		RdReal[n] <= 6'd32;
 	default:	RdReal[n] <= 6'd0;
 	endcase
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
 	case(Rn[n])
-	`UO_RT:		RnReal[n] <= uoq_inst[(uoq_head+n) % UOQ_ENTRIES][`RT];
+//	`UO_RT:		RnReal[n] <= uoq_Rt[(uoq_head+n) % UOQ_ENTRIES];
 //	`UO_RA:		RnReal[n] <= uoq_Ra[(uoq_head+n) % UOQ_ENTRIES];
-	`UO_RB:		RnReal[n] <= uoq_inst[(uoq_head+n) % UOQ_ENTRIES][`RB];
-	`UO_ACC:	RnReal[n] <= 6'd1;
-	`UO_XR:		RnReal[n] <= 6'd2;
-	`UO_YR:		RnReal[n] <= 6'd3;
-	`UO_TMP:	RnReal[n] <= 6'd4;
-	`UO_SP:		RnReal[n] <= 6'd31;
-	`UO_SR:		RnReal[n] <= 6'd32;
+	Rbreg:		RnReal[n] <= uoq_Rb[(uoq_head+n) % UOQ_ENTRIES];
+	acc:	RnReal[n] <= 6'd1;
+	xr:		RnReal[n] <= 6'd2;
+	yr:		RnReal[n] <= 6'd3;
+	TMP1:	RnReal[n] <= 6'd4;
+	TMP2:	RnReal[n] <= 6'd5;
+	SP:		RnReal[n] <= 6'd31;
+	SR:		RnReal[n] <= 6'd32;
 	default:	RnReal[n] <= 6'd0;
 	endcase
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
 	case(Ra[n])
-	`UO_RT:		RaReal[n] <= uoq_inst[(uoq_head+n) % UOQ_ENTRIES][`RT];
-	`UO_RA:		RaReal[n] <= uoq_inst[(uoq_head+n) % UOQ_ENTRIES][`RA];
-	`UO_ACC:	RaReal[n] <= 6'd1;
-	`UO_XR:		RaReal[n] <= 6'd2;
-	`UO_YR:		RaReal[n] <= 6'd3;
-	`UO_TMP:	RaReal[n] <= 6'd4;
-	`UO_SP:		RaReal[n] <= 6'd31;
-	`UO_SR:		RaReal[n] <= 6'd32;
+//	`UO_RT:		RaReal[n] <= uoq_Rt[(uoq_head+n) % UOQ_ENTRIES];
+	Rareg:		RaReal[n] <= uoq_Ra[(uoq_head+n) % UOQ_ENTRIES];
+	acc:	RaReal[n] <= 6'd1;
+	xr:		RaReal[n] <= 6'd2;
+	yr:		RaReal[n] <= 6'd3;
+	TMP1:	RaReal[n] <= 6'd4;
+	TMP2:	RaReal[n] <= 6'd5;
+	SP:		RaReal[n] <= 6'd31;
+	SR:		RaReal[n] <= 6'd32;
 	default:	RaReal[n] <= 6'd0;
 	endcase
 
@@ -2101,9 +2025,9 @@ for (n = 0; n < QSLOTS; n = n + 1)
 	rfos[n] <= srx;
 
 task regupd;
-input [5:0] n;
-input [63:0] i;
-output [63:0] o;
+input [4:0] n;
+input [51:0] i;
+output [51:0] o;
 begin
 	if (commit2_v && commit2_tgt==n && commit2_rfw)
 		o = commit2_bus;
@@ -2122,15 +2046,14 @@ endtask
 always @*
 	for (n = 1; n < 32; n = n + 1)
 		regupd(n,regs[n], regsx[n]);
-//always @(posedge clk)
-//if (rst_i) begin
-//	regs[0] <= 64'h0;
-//	regs[31] <= 64'h01FF;
-//end
-//else begin
-//	for (n = 1; n < 32; n = n + 1)
-//		regs[n] <= regsx[n];
-//end
+always @(posedge clk)
+if (rst_i)
+	regs[31] <= 52'h01FFC;
+else begin
+	for (n = 1; n < 32; n = n + 1)
+		regs[n] <= regsx[n];
+end
+
 
 // PLP and RTI target the sr during a load. They write the whole word.
 // The brk flag in the status register always loads as zero. The only time the
@@ -2188,6 +2111,8 @@ always @*
 			end
 		end
 	end
+always @(posedge clk)
+	sr <= srx;
 
 reg [WID-1:0] argA [0:QSLOTS-1];
 reg [WID-1:0] argB [0:QSLOTS-1];
@@ -2214,68 +2139,64 @@ end
 end
 endgenerate
 
-function SourceBValid;
+function Source1Valid;
 input [23:0] ins;
-case(ins[23:16])
-`UO_BEQ,`UO_BNE,`UO_BCS,`UO_BCC,`UO_BVS,`UO_BVC,`UO_BMI,`UO_BPL,`UO_BRA:	
-	SourceBValid = TRUE;
-`UO_CLC,`UO_SEC,`UO_CLV,`UO_CLI,`UO_SEI,`UO_CLD,`UO_SED:
-	SourceBValid = TRUE;
+Source1Valid = TRUE;
+endfunction
+
+function Source2Valid;
+input [23:0] ins;
+case(ins[21:16])
+`BccD4a,`BccD4b,`BccD17a,`BccD17b:
+	Source2Valid = TRUE;
+`REP,`SEP:
+	Source2Valid = TRUE;
 default:
 	casez(ins[3:0])
-	4'd0:	SourceBValid = TRUE;
-	4'b1???:	SourceBValid = TRUE;
-	default:	SourceBValid = FALSE;
+	4'd0:	Source2Valid = TRUE;
+	4'b1???:	Source2Valid = TRUE;
+	default:	Source2Valid = FALSE;
 	endcase
 endcase
 endfunction
 
 function SourceSValid;
 input [23:0] ins;
-case(ins[23:16])
-`UO_BEQ,`UO_BNE,`UO_BCS,`UO_BCC,`UO_BVS,`UO_BVC,`UO_BMI,`UO_BPL:	
+case(ins[21:16])
+`BccD4a,`BccD4b,`BccD17a,`BccD17b:
 	SourceSValid = FALSE;
-`UO_ADCB,`UO_SBCB,`UO_ROLB,`UO_RORB:	SourceSValid = FALSE;
 default:	SourceSValid = TRUE;
 endcase
 endfunction
 
 function SourceTValid;
 input [23:0] ins;
-case(ins[23:16])
-`UO_NOP,
-`UO_BEQ,`UO_BNE,`UO_BCC,`UO_BCS,`UO_BVC,`UO_BVS,`UO_BMI,`UO_BPL,`UO_BRA,
-`UO_CLC,`UO_SEC,`UO_CLV,`UO_CLI,`UO_SEI,`UO_CLD,`UO_SED:
+case(ins[21:16])
+`NOP,
+`BccD4a,`BccD4b,`BccD17a,`BccD17b,
+`REP,`SEP:
 	SourceTValid = TRUE;
-default:
-	casez(ins[15:11])
-	4'd0:	SourceTValid = TRUE;
-	4'b1???:	SourceTValid = TRUE;
-	default:	SourceTValid = FALSE;
-	endcase
+default:	SourceTValid = FALSE;
 endcase
 endfunction
 
 function SourceAValid;
 input [23:0] ins;
-case(ins[23:16])
-`UO_NOP,
-`UO_BEQ,`UO_BNE,`UO_BCC,`UO_BCS,`UO_BVC,`UO_BVS,`UO_BMI,`UO_BPL,`UO_BRA,
-`UO_CLC,`UO_SEC,`UO_CLV,`UO_CLI,`UO_SEI,`UO_CLD,`UO_SED:
+case(ins[21:16])
+`NOP,
+`BccD4a,`BccD4b,`BccD17a,`BccD17b,
+`REP,`SEP:
 	SourceAValid = TRUE;
-default:
-	casez(ins[7:4])
-	4'd0:	SourceAValid = TRUE;
-	4'b1???:	SourceAValid = TRUE;
-	default:	SourceAValid = FALSE;
-	endcase
+default:	SourceAValid = FALSE;
 endcase
 endfunction
 
 function IsMem;
 input [23:0] isn;
-case(isn[23:16])
-`UO_LDB,`UO_LDBW,`UO_LDW,`UO_LDWW,`UO_STB,`UO_STBW,`UO_STW,`UO_STWW,`UO_STJ:	IsMem = TRUE;
+case(isn[21:16])
+LD_D9,LD_D23,LD_D36,LDB_D36,
+ST_D9,ST_D23,ST_D36,STB_D36:
+	IsMem = TRUE;
 default:	IsMem = FALSE;
 endcase
 endfunction
@@ -2283,8 +2204,8 @@ endfunction
 // Really IsPredictableBranch
 function IsUoBranch;
 input [23:0] isn;
-case(isn[23:16])
-`UO_BEQ,`UO_BNE,`UO_BCS,`UO_BCC,`UO_BVS,`UO_BVC,`UO_BMI,`UO_BPL,`UO_BRA:	
+case(isn[21:16])
+`BccD4a,`BccD4b,`BccD17a,`BccD17b:
 	IsUoBranch = TRUE;
 default:	IsUoBranch = FALSE;
 endcase
@@ -2292,14 +2213,10 @@ endfunction
 
 function fnNeedSr;
 input [23:0] isn;
-case(isn[23:16])
-`UO_STB,`UO_STBW:
-	fnNeedSr = isn[5:3]==`UO_SR;
-`UO_ADCB,`UO_SBCB,`UO_ROLB,`UO_RORB:	// carry input
-	fnNeedSr = TRUE;
-`UO_BEQ,`UO_BNE,`UO_BCS,`UO_BCC,`UO_BVS,`UO_BVC,`UO_BMI,`UO_BPL:
-	fnNeedSr = TRUE;
-`UO_XCE:
+case(isn[21:16])
+ST_D9,ST_S23,ST_D36:
+	fnNeedSr = isn[11:8]==SR;
+`BccD4a,`BccD4b,`BccD17a,`BccD17b:
 	fnNeedSr = TRUE;
 default:
 	fnNeedSr = FALSE;
@@ -2308,53 +2225,43 @@ endfunction
 
 function IsFlowCtrl;
 input [23:0] isn;
-case(isn[23:16])
-`UO_BEQ,`UO_BNE,`UO_BCS,`UO_BCC,`UO_BVS,`UO_BVC,`UO_BMI,`UO_BPL,`UO_BRA:	
+case(isn[21:16])
+JMP,JSR,JMP_RN,JSR_RN,
+`BccD4a,`BccD4b,`BccD17a,`BccD17b:
 	IsFlowCtrl = TRUE;
-`UO_JMP,`UO_JML:	IsFlowCtrl = TRUE;
-`UO_SEI,`UO_CLI:	IsFlowCtrl = TRUE;
 default:	IsFlowCtrl = FALSE;
-endcase
-endfunction
-
-function IsSei;
-input [23:0] isn;
-case(isn[23:16])
-`UO_SEI:	IsSei = TRUE;
-default:	IsSei = FALSE;
 endcase
 endfunction
 
 function IsRFW;
 input [23:0] isn;
-case(isn[23:16])
-`UO_NOP:	IsRFW = FALSE;
-`UO_CMPB,`UO_BITB,`UO_STB,`UO_STW,`UO_STJ:	IsRFW = FALSE;
-`UO_BEQ,`UO_BNE,`UO_BCS,`UO_BCC,`UO_BVS,`UO_BVC,`UO_BMI,`UO_BPL,`UO_BRA:	
-	IsRFW = FALSE;
-`UO_JMP,`UO_JML,`UO_JSI:	IsRFW = FALSE;
-`UO_CLC,`UO_SEC,`UO_CLV,`UO_SEI,`UO_CLI:
-	IsRFW = FALSE;
-`UO_LDB,`UO_LDBW,`UO_LDW,`UO_LDWW:
-	IsRFW = TRUE;
+case(isn[21:16])
+NOP:	IsRFW = FALSE;
+JMP,
+`BccD4a,`BccD4b,`BccD17a,`BccD17b:	IsRFW = FALSE;
+SUB_D9,SUB_D23,SUB_D36,
+AND_D9,AND_D23,AND_D36:
+	IsRFW = isn[11:8]!=6'd0;
+REP,SEP:	IsRFW = FALSE;
 default:	IsRFW = TRUE;
 endcase
 endfunction
 
-function [15:0] fnSelect;
+function [3:0] fnSelect;
 input [5:0] isn;
 case(isn)
-`UO_LDB,`UO_STB,`UO_LDBW,`UO_STBW:	fnSelect = 16'b001;
-`UO_LDW,`UO_STW,`UO_LDWW,`UO_STWW:	fnSelect = 16'b011;
-`UO_LDJ,`UO_STJ:	fnSelect = 16'b111;
-default:	fnSelect = 16'b000;
+LD_D9,LD_D23,LD_D36:	fnSelect = 4'b1111;
+LDB_D36:	fnSelect = 4'b0001;
+ST_D9,ST_D23,ST_D36:	fnSelect = 4'b1111;
+STB_D36:	fnSelect = 4'b0001;
+default:	fnSelect = 4'b000;
 endcase
 endfunction
 
 function [WID-1:0] fnDatiAlign;
 input [`ABITS] adr;
-input [311:0] dat;
-reg [311:0] adat;
+input [247:0] dat;
+reg [247:0] adat;
 begin
 adat = dat >> {adr[3:0],3'b0};
 fnDatiAlign = adat[WID-1:0];
@@ -2365,8 +2272,7 @@ function [WID-1:0] fnDataExtend;
 input [5:0] isn;
 input [WID-1:0] dat;
 case(isn[5:0])
-`UO_LDB,`UO_LDBW:	fnDataExtend = {{56{dat[7]}},dat[7:0]};
-`UO_LDW:	fnDataExtend = {8'h00,dat[15:0]};
+LDB_D36:	fnDataExtend = {{39{dat[12]}},dat[12:0]};
 default:	fnDataExtend = dat;
 endcase
 endfunction
@@ -2375,31 +2281,11 @@ endfunction
 function [31:0] fnMnemonic;
 input [5:0] ins;
 case(ins)
-`UO_LDIB:	fnMnemonic = "LDIB";
-`UO_LDB:	fnMnemonic = "LDB ";
-`UO_LDBW:	fnMnemonic = "LDBW";
-`UO_LDW:	fnMnemonic = "LDW ";
-`UO_STB:	fnMnemonic = "STB ";
-`UO_STBW:	fnMnemonic = "STBW";
-`UO_STW:	fnMnemonic = "STW ";
-`UO_STJ:	fnMnemonic = "STJ ";
-`UO_ADDW:	fnMnemonic = "ADDW";
-`UO_ADDB:	fnMnemonic = "ADDB";
-`UO_ADCB:	fnMnemonic = "ADCB";
-`UO_SBCB:	fnMnemonic = "SBCB";
-`UO_CMPB:	fnMnemonic = "CMPB";
-`UO_ANDB:	fnMnemonic = "ANDB";
-`UO_ORB:	fnMnemonic = "ORB ";
-`UO_EORB:	fnMnemonic = "EORB";
-`UO_JMP:	fnMnemonic = "JMP ";
-`UO_JSI:	fnMnemonic = "JSI ";
-`UO_SEC:	fnMnemonic = "SEC ";
-`UO_CLB:	fnMnemonic = "CLB ";
-`UO_CLC:	fnMnemonic = "CLC ";
-`UO_BEQ:	fnMnemonic = "BEQ ";
-`UO_BNE:	fnMnemonic = "BNE ";
-`UO_MOV:	fnMnemonic = "MOV ";
-`UO_NOP:	fnMnemonic = "NOP ";
+JMP:	fnMnemonic = "JMP ";
+SEP:	fnMnemonic = "SEP ";
+`BccD4a:	fnMnemonic = "Bcc ";
+`BccD4b:	fnMnemonic = "Bcc ";
+NOP:	fnMnemonic = "NOP ";
 default:	fnMnemonic = "????";
 endcase
 endfunction
@@ -2407,13 +2293,16 @@ endfunction
 function [23:0] fnRegT;
 input [5:0] rg;
 case(rg)
-6'd1:		fnRegT = "ACC";
-6'd2:		fnRegT = "XR ";
-6'd3:		fnRegT = "YR ";
-6'd31:	fnRegT = "SP ";
-6'd4:		fnRegT = "TMP";
-6'd32:	fnRegT = "SR ";
-default:	fnRegT = "???";
+acc:	fnRegT = "ACC ";
+xr:		fnRegT = "XR  ";
+yr:		fnRegT = "YR  ";
+SP:		fnRegT = "SP  ";
+TMP1:	fnRegT = "TMP1";
+TMP2:	fnRegT = "TMP2";
+SR:		fnRegT = "SR ";
+PC:		fnRegT = "PC ";
+PC1:	fnRegT = "PC1";
+PC4:	fnRegT = "PC4";
 endcase
 endfunction
 
@@ -3033,7 +2922,7 @@ end
 end
 endgenerate
 
-rtf65004_alu ualu1
+alu ualu1
 (
 	.op(alu0_instr),
 	.a(alu0_argA),
@@ -3045,7 +2934,7 @@ rtf65004_alu ualu1
 	.idle(alu0_idle)
 );
 
-rtf65004_alu ualu2
+alu ualu2
 (
 	.op(alu1_instr),
 	.a(alu1_argA),
@@ -3489,15 +3378,8 @@ if (rst_i) begin
 		dsel <= 16'h0000;
 		dadr <= RSTIP;
 		ddat <= 128'h0;
-	regs[0] <= 64'h0;
-	regs[31] <= 64'h01FF;
-	sr <= 16'h104;
 end
 else begin
-
-	for (n = 1; n < 32; n = n + 1)
-		regs[n] <= regsx[n];
-	sr <= srx;
 
 //	if (|fb_panic)
 //		panic <= fb_panic;
@@ -3605,7 +3487,6 @@ else begin
 	end
 	else if (qb) begin
 		queue_uop(uoq_tail[0],pc,{`UO_ADDB,em ? `UO_M3 : `UO_M4,`UO_SP,`UO_SP,`UO_ZR},2'b01,8'h00,1'b0,4'h0);
-		uoq_inst[uoq_tail[0]] <= 48'h0;
 		tskLd4(`UO_M3,{16'h0,`BRK},uoq_const[uoq_tail[0]]);
 
 		queue_uop(uoq_tail[1],pc,{IsRst|IsNmi|IsIrq ? `UO_CLB : `UO_SEB,`UO_ZERO,`UO_ZR,`UO_ZR,`UO_ZR},2'b00,`UOF_B,1'b0,4'h0);
@@ -3715,7 +3596,6 @@ else begin
 	end
 	else if (q1) begin
 		queue_uop(uoq_tail[0],pc,uo_insn1[0],uo_len1==3'd1 ? 2'b11: 2'b01,8'h00,1'b0,4'h0);
-		uoq_inst[uoq_tail[0]] <= insnx[0];
 		uoq_takb[uoq_tail[0]] <= take_branch[0];
 //		uoq_tail <= (uoq_tail + 8'd1) % UOQ_ENTRIES;
 		tskLd4(uo_insn1[0][`UO_LD4],insnx[0],uoq_const[uoq_tail[0]]);
@@ -3796,13 +3676,7 @@ else begin
 				uoq_takb[uoq_head] <= FALSE;
 				uoq_head <= (uoq_head + 3'd1) % UOQ_ENTRIES;
 			end
-		3'b101:	//;	// illegal
-			if (queuedOnp[0]) begin
-				queue_slot(0,tails[0],maxsn+2'd1,id_bus[0],tails[0]);
-				uoq_v[uoq_head] <= `INV;
-				uoq_takb[uoq_head] <= FALSE;
-				uoq_head <= (uoq_head + 3'd1) % UOQ_ENTRIES;
-			end
+		3'b101:	;	// illegal
 		3'b110:
 			if (queuedOnp[1]) begin
 				queue_slot(1,tails[0],maxsn+2'd1,id_bus[1],tails[0]);
@@ -4527,12 +4401,12 @@ endcase
 	$display("%b %h #", pc_mask, pc);
 	$display("%b %h #", pc_mask, pcd);
     $display ("--------------------------------------------------------------------- Regfile ---------------------------------------------------------------------");
-  $display("ac: %h %d %d #", regsx[1], regIsValid[1], rf_source[1]);
-  $display("xr: %h %d %d #", regsx[2], regIsValid[2], rf_source[2]);
-  $display("yr: %h %d %d #", regsx[3], regIsValid[3], rf_source[3]);
-  $display("sp: %h %d %d #", regsx[31], regIsValid[31], rf_source[31]);
+  $display("ac: %h %d %d #", acx, regIsValid[0], rf_source[0]);
+  $display("xr: %h %d %d #", xrx, regIsValid[1], rf_source[1]);
+  $display("yr: %h %d %d #", yrx, regIsValid[2], rf_source[2]);
+  $display("sp: %h %d %d #", spx, regIsValid[31], rf_source[31]);
   $display("sr: %h %d %d #", srx, regIsValid[AREGS], sr_source);
-  $display("tmp: %h %d %d #", regsx[4], regIsValid[4], rf_source[4]);
+  $display("tmp: %h %d %d #", tmpx, regIsValid[5], rf_source[5]);
 `ifdef FCU_ENH
 	$display("Call Stack:");
 	for (n = 0; n < 16; n = n + 4)
@@ -4903,7 +4777,7 @@ begin
 			iq_argA_v [tails[tails_rc(pat,row)]] <= regIsValid[RaReal[row]] | SourceAValid(uoq_uop[(uoq_head+row) % UOQ_ENTRIES]);
 			iq_argA_s [tails[tails_rc(pat,row)]] <= RaReal[row]==6'd32 ? sr_source : rf_source[RaReal[row]];
 			// iq_argA is a constant
-			iq_argB_v [tails[tails_rc(pat,row)]] <= regIsValid[RnReal[row]] || RnReal[row]==6'd0 || SourceBValid(uoq_uop[(uoq_head+row) % UOQ_ENTRIES]);
+			iq_argB_v [tails[tails_rc(pat,row)]] <= regIsValid[RnReal[row]] || RnReal[row]==6'd0 || Source2Valid(uoq_uop[(uoq_head+row) % UOQ_ENTRIES]);
 			iq_argB_s [tails[tails_rc(pat,row)]] <= rf_source[RnReal[row]];
 			iq_argS_v [tails[tails_rc(pat,row)]] <= regIsValid[AREGS] | SourceSValid(uoq_uop[(uoq_head+row) % UOQ_ENTRIES]);
 			iq_argS_s [tails[tails_rc(pat,row)]] <= sr_source;
@@ -4915,7 +4789,7 @@ begin
 							iq_argA_s [tails[tails_rc(pat,row)]] <= {1'b0,tails[tails_rc(pat,col)]};
 						end
 						if (RnReal[row]==RdReal[col] && slot_rfw[col] && RnReal[row] != 6'd0) begin
-							iq_argB_v [tails[tails_rc(pat,row)]] <= SourceBValid(uoq_uop[(uoq_head+row) % UOQ_ENTRIES]);
+							iq_argB_v [tails[tails_rc(pat,row)]] <= Source2Valid(uoq_uop[(uoq_head+row) % UOQ_ENTRIES]);
 							iq_argB_s [tails[tails_rc(pat,row)]] <= {1'b0,tails[tails_rc(pat,col)]};
 						end
 //						if (3'd7==Rd[col] && slot_sr_tgts[col]!=8'h00) begin
@@ -5001,16 +4875,16 @@ begin
 	iq_argB[ndx] <= argB[slot % FSLOTS];
 	iq_argS[ndx] <= srx;//argS[slot % FSLOTS];
 	iq_argA_v[ndx] <= regIsValid[RaReal[slot % FSLOTS]] || SourceAValid(uoq_uop[(uoq_head+slot) % UOQ_ENTRIES]);
-	iq_argB_v[ndx] <= regIsValid[RnReal[slot % FSLOTS]] || RnReal[slot % FSLOTS]==6'd0 || SourceBValid(uoq_uop[(uoq_head+slot) % UOQ_ENTRIES]);
+	iq_argB_v[ndx] <= regIsValid[RnReal[slot % FSLOTS]] || RnReal[slot % FSLOTS]==6'd0 || Source2Valid(uoq_uop[(uoq_head+slot) % UOQ_ENTRIES]);
 	iq_argS_v[ndx] <= regIsValid[AREGS] || SourceSValid(uoq_uop[(uoq_head+slot) % UOQ_ENTRIES]);
 	iq_argA_s[ndx] <= RaReal[slot % FSLOTS]==6'd32 ? sr_source : rf_source[RaReal[slot % FSLOTS]];
 	iq_argB_s[ndx] <= rf_source[RnReal[slot % FSLOTS]];
 	iq_argS_s[ndx] <= sr_source;
 	iq_pt[ndx] <= uoq_takb[(uoq_head+slot) % UOQ_ENTRIES];
-	iq_tgt[ndx] <= RdReal[slot % FSLOTS];
+	iq_tgt[ndx] <= uoq_uop[(uoq_head+slot) % UOQ_ENTRIES].Rt;
 	set_insn(ndx,id_bus);
 	rob_pc[rid] <= uoq_pc[(uoq_head+slot) % UOQ_ENTRIES];
-	rob_tgt[rid] <= RdReal[slot % FSLOTS];
+	rob_tgt[rid] <= uoq_uop[(uoq_head+slot) % UOQ_ENTRIES].Rt;
 	rob_rfw[rid] <= IsRFW(uoq_uop[(uoq_head+slot) % UOQ_ENTRIES]);
 	rob_res[rid] <= 1'd0;
 	rob_sr_tgts[rid] <= uoq_flagsupd[(uoq_head+slot) % UOQ_ENTRIES];
@@ -5174,7 +5048,7 @@ case(opcode)
 	len <= 4'd1;
 `NAT_BPL,`NAT_BMI,`NAT_BCS,`NAT_BCC,`NAT_BVS,`NAT_BVC,`NAT_BEQ,`NAT_BNE,`NAT_BRA:
 	len <= byte1==8'hFE ? 4'd3 : 4'd2;
-//`NAT_JML:	len <= 4'd6;
+`NAT_JML:	len <= 4'd6;
 
 default:	len <= 4'd0;	// unimplemented instruction
 endcase
