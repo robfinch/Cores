@@ -141,19 +141,8 @@ initial begin
 		regs[n] = 1'd0;
 	end
 end
-reg [WID-1:0] ac;
-reg [WID-1:0] xr;
-reg [WID-1:0] yr;
-reg [WID-1:0] sp;
-reg [WID-1:0] pc;
-reg [WID-1:0] tmp;
 reg [15:0] sr;
 reg sre;
-reg [WID-1:0] acx;
-reg [WID-1:0] xrx;
-reg [WID-1:0] yrx;
-reg [WID-1:0] spx;
-reg [WID-1:0] tmpx;
 reg [15:0] srx;
 reg srex;
 wire em = sr[8];
@@ -183,16 +172,15 @@ reg q1, q2, q1b, q1bx;	// number of macro instructions queued
 reg qb;						// queue a brk instruction
 
 
-wire [95:0] ic1_out;
-wire [63:0] ic2_out;
-wire [31:0] ic3_out;
+wire [103:0] ic1_out;
+wire [51:0] ic2_out;
 
 reg  [3:0] panic;		// indexes the message structure
 reg [127:0] message [0:15];	// indexed by panic
 
 wire int_commit;
 
-reg [371:0] xdati;
+reg [179:0] xdati;
 
 reg [31:0] uop_queued;
 reg [31:0] ins_queued;
@@ -739,23 +727,6 @@ begin
 end
 endtask
 
-wire [3:0] uo_len1 = uopl[opcode1].len;
-wire [3:0] uo_len2 = uopl[opcode2].len;
-wire [7:0] uo_flags1 = uopl[q1b ? 256+uoplx[opcode1] : opcode1].flagmask;
-wire [7:0] uo_flags2 = uopl[opcode2].flagmask;
-wire [1:0] uo_whflg1 = uopl[q1b ? 256+uoplx[opcode1] : opcode1].flagndx;
-wire [1:0] uo_whflg2 = uopl[opcode2].flagndx;
-wire [23:0] uo_insn1 [0:3];
-wire [23:0] uo_insn2 [0:3];
-assign uo_insn1[0] = uopl[q1b ? 256+uoplx[opcode1] : opcode1].uop0;
-assign uo_insn1[1] = uopl[q1b ? 256+uoplx[opcode1] : opcode1].uop1;
-assign uo_insn1[2] = uopl[q1b ? 256+uoplx[opcode1] : opcode1].uop2;
-assign uo_insn1[3] = uopl[q1b ? 256+uoplx[opcode1] : opcode1].uop3;
-assign uo_insn2[0] = uopl[opcode2].uop0;
-assign uo_insn2[1] = uopl[opcode2].uop1;
-assign uo_insn2[2] = uopl[opcode2].uop2;
-assign uo_insn2[3] = uopl[opcode2].uop3;
-
 wire [FSLOTS-1:0] slotv;
 reg [QSLOTS-1:0] uoq_slotv;
 reg [7:0] uoq_tail [0:7];
@@ -805,6 +776,7 @@ end
 // q1 and q2 determine the pc increment. The pc determines which instructions
 // appear at the I$ output. q1 and q2 also determine how many micro-ops are
 // placed in the queue.
+/*
 always @*
 begin
 	qb <= FALSE;
@@ -814,7 +786,7 @@ begin
 			uopQueued <= TRUE;
 	end
 end
-
+*/
 always @(posedge clk_i)
 if (rst_i) begin
 	ic_stalls <= 0;
@@ -831,21 +803,6 @@ end
 else begin
 	if (pc_override)
 		br_override <= br_override + 2'd1;
-end
-
-reg [3:0] uo_queuedCnt;
-always @(posedge clk_i)
-if (rst_i) begin
-	uo_queuedCnt <= 4'd0;
-end
-else begin
-	uo_queuedCnt <= 4'd0;
-	if (qb)
-		uo_queuedCnt <= 4'd5;
-	else if (q2)
-		uo_queuedCnt <= uo_len1 + uo_len2;
-	else if (q1)
-		uo_queuedCnt <= uo_len1;
 end
 
 always @*
@@ -869,7 +826,10 @@ begin
 end
 
 reg [11:0] ptr [0:3];
+reg [3:0] whinst;			// Which instruction the corresponding pointer points to.
+
 // Compute pointers into micro-instruction program.
+// Set which instruction a pointer points to.
 always @*
 begin
 	if (~|mip1) begin
@@ -877,27 +837,35 @@ begin
 		ptr[1] = mip2 + 1;
 		ptr[2] = mip2 + 2;
 		ptr[3] = mip2 + 3;
+		whinst = 4'hF;
 	end
 	else begin
 		ptr[0] = mip1;
+		whinst[0] = 1'b0;
 		if (uop[ptr[0]].fl[1]) begin
 			ptr[1] = mip2;
 			ptr[2] = mip2+1;
 			ptr[3] = mip2+2;
+			whinst[3:1] = 3'd7;
 		end
 		else begin
 			ptr[1] = mip1+1;
+			whinst[1] = 1'b0;
 			if (uop[ptr[1]].fl[1]) begin
 				ptr[2] = mip2;
 				ptr[3] = mip2+1;
+				whinst[3:2] = 2'd3;
 			end
 			else begin
 				ptr[2] = mip1+2;
+				whinst[2] = 1'b0;
 				if (uop[ptr[2]].fl[1]) begin
 					ptr[3] = mip2;
+					whinst[3] = 1'b1;
 				end
 				else begin
 					ptr[3] = mip1+3;
+					whinst[3] = 1'b0;
 				end
 			end
 		end
@@ -935,8 +903,25 @@ always @*
 	4'b1111:	if (|mip1) uopqc = 3'd2; else uopqc = 3'd1;
 	endcase
 
+always @*
+if (uop_room > 3'd3)
+	uopqd <= uopqc;
+else if (uop_room > 3'd2)
+	uopqd <= uopqc > 3'd3 ? 3'd3 : uopqc;
+else if (uop_room > 3'd1)
+	uopqd <= uopqc > 3'd2 ? 3'd2 : uopqc;
+else if (uop_room > 3'd0)
+	uopqd <= uopqc > 3'd1 ? 3'd1 : uopqc;
+else
+	uopqd <= 3'd0;
+
+wire uopQueued = uopqd > 3'd0;
+
 MicroOp uop2q [0:3];
 
+// The following is the micro-program engine. It advances the micro-program
+// counters as micro-instructions are queued. And select which micro-program
+// instructions to queue.
 always @(posedge clk_i)
 if (rst_i) begin
 	mip1 <= 12'd0;
@@ -981,18 +966,18 @@ end
 
 assign ic1_out = ic_out[95:0];
 assign ic2_out = ic1_out >> {iclen1,3'b0};
-assign freezepc = ((rst_ctr < 32'd10) || nmi_i || (irq_i & ~sr[3])) && !int_commit;
+assign freezepc = ((rst_ctr < 32'd10) || nmi_i || (irq_i & ~sr[4])) && !int_commit;
 
-assign opcode1 = freezepc ? {nat,`BRK} : {nat,ic1_out[7:0]};
-assign opcode2 = freezepc ? {nat,`BRK} : {nat,ic2_out[7:0]};
-assign insnx[0] = freezepc ? `BRK : ic1_out[47:0];
-assign insnx[1] = freezepc ? `BRK : ic2_out[47:0];
+assign opcode1 = freezepc ? {rst_i ? `RST : nmi_i ? `NMI : irq_i ? `IRQ,`BRK} : ic1_out[8:0];
+assign opcode2 = freezepc ? {rst_i ? `RST : nmi_i ? `NMI : irq_i ? `IRQ,`BRK} : ic2_out[8:0];
+assign insnx[0] = freezepc ? {rst_i ? `RST : nmi_i ? `NMI : irq_i ? `IRQ,`BRK} : ic1_out[51:0];
+assign insnx[1] = freezepc ? {rst_i ? `RST : nmi_i ? `NMI : irq_i ? `IRQ,`BRK} : ic2_out[51:0];
 wire IsRst = (freezepc && rst_ctr < 4'd10);
 wire IsNmi = (freezepc & nmi_i);
 wire IsIrq = (freezepc & irq_i & ~sr[3]);
-instLength il1 ({nat,ic1_out[7:0]}, ic1_out[15:8], iclen1);
-instLength il2 ({nat,opcode1}, ic1_out[15:8],len1);
-instLength il3 ({nat,opcode2}, ic2_out[15:8],len2);
+instLength il1 (ic1_out[5:0], iclen1);
+instLength il2 (opcode1[5:0], len1);
+instLength il3 (opcode2[5:0], len2);
 
 wire [`ABITS] btgt [0:FSLOTS-1];
 wire [47:0] insnxp [0:QSLOTS-1];
@@ -1376,8 +1361,8 @@ programCounter upc1
 (
 	.rst(rst_i),
 	.clk(clk),
-	.q1(q1),
-	.q2(q2),
+	.q1(1'b0),
+	.q2(nextBundle),
 	.q1bx(q1bx),
 	.insnx(insnx),
 	.phit(phit),
@@ -3460,6 +3445,30 @@ else begin
 	// BRK is queued specially because it's the only instruction requiring six 
 	// micro-ops. Also the brk vector must be modified for the appropriate type.
 	if (1'b1) begin
+		if (uopqd > 3'd0) begin
+			queue_uop(uoq_tail[0],pc,uop2q[0],2'b00,8'h00,1'b0,1'b0);
+			uoq_takb[uoq_tail[0]] <= take_branch[0];
+			tskLd4(uop2q[0].cnst,insnx[whinst[0]],uoq_const[uoq_tail[0]]);
+		end
+		if (uopqd > 3'd1) begin
+			queue_uop(uoq_tail[1],pc,uop2q[1],2'b00,8'h00,1'b0,1'b0);
+			uoq_takb[uoq_tail[1]] <= take_branch[1];
+			tskLd4(uop2q[1].cnst,insnx[whinst[1]],uoq_const[uoq_tail[1]]);
+		end
+		if (uopqd > 3'd2) begin
+			queue_uop(uoq_tail[2],pc,uop2q[2],2'b00,8'h00,1'b0,1'b0);
+			uoq_takb[uoq_tail[2]] <= take_branch[2];
+			tskLd4(uop2q[2].cnst,insnx[whinst[2]],uoq_const[uoq_tail[2]]);
+		end
+		if (uopqd > 3'd3) begin
+			queue_uop(uoq_tail[3],pc,uop2q[3],2'b00,8'h00,1'b0,1'b0);
+			uoq_takb[uoq_tail[3]] <= take_branch[3];
+			tskLd4(uop2q[3].cnst,insnx[whinst[3]],uoq_const[uoq_tail[3]]);
+		end
+		for (n = 0; n < 8; n = n + 1)
+			uoq_tail[n] <= (uoq_tail[n] + uopqd) % UOQ_ENTRIES;
+	end
+/*
 	if (q1b) begin
 		q1b <= FALSE;
 		queue_uop(uoq_tail[0],pc,uo_insn1[0],uo_len1==3'd5 ? 2'b11: 2'b01,8'h00,1'b0,slot_pf[0]);
@@ -3621,7 +3630,6 @@ else begin
 		for (n = 0; n < 8; n = n + 1)
 			uoq_tail[n] <= (uoq_tail[n] + (uo_len1 > 3'd4 ? 3'd4 : uo_len1)) % UOQ_ENTRIES;
 	end
-	end
 
 	// Invalidate all entries in the micro-op queue on a branch miss.
 	if (branchmiss) begin
@@ -3637,7 +3645,7 @@ else begin
 		//	uoq_tail[n] = n;
 		//uoq_head <= 2'd0;
 	end
-
+*/
 	if (!branchmiss) begin
 		queuedOn <= queuedOnp;
 		case(uoq_slotv)
@@ -4975,81 +4983,55 @@ assign out = out1[32:0];
 
 endmodule
 
-module instLength(opcode,byte1,len);
-input [8:0] opcode;
-input [7:0] byte1;
+module instLength(opcode,len);
+input [5:0] opcode;
 output reg [3:0] len;
 
 always @*
 case(opcode)
-`SEP,`REP:	len <= 4'd2;
-`BRK:	len <= 4'd2;
-`BPL,`BMI,`BCS,`BCC,`BVS,`BVC,`BEQ,`BNE,`BRA:	len <= 4'd2;
-`BRL: len <= 4'd3;
-`CLC,`SEC,`CLD,`SED,`CLV,`CLI,`SEI:	len <= 4'd1;
-`TAS,`TSA,`TAY,`TYA,`TAX,`TXA,`TSX,`TXS,`TYX,`TXY,`TCD,`TDC,`XBA:	len <= 4'd1;
-`INY,`DEY,`INX,`DEX,`INA,`DEA: len <= 4'd1;
-`XCE,`WDM: len <= 4'd1;
-`STP,`WAI: len <= 4'd1;
-`JMP,`JMP_IND,`JMP_INDX: len <= 4'd3;
-`JML: len <= 4'd4;
-`RTS,`RTL,`RTI: len <= 4'd1;
-`JSR,`JSR_INDX:	len <= 4'd3;
-`JSL:	len <= 4'd4;
-`NOP: len <= 4'd1;
-
-`ADC_IMM,`SBC_IMM,`CMP_IMM,`AND_IMM,`ORA_IMM,`EOR_IMM,`LDA_IMM,`BIT_IMM:	len <= 4'd2;
-`LDX_IMM,`LDY_IMM,`CPX_IMM,`CPY_IMM: len <= 4'd2;
-
-`TRB_ZP,`TSB_ZP,
-`ADC_ZP,`SBC_ZP,`CMP_ZP,`AND_ZP,`ORA_ZP,`EOR_ZP,`LDA_ZP,`STA_ZP: len <= 4'd2;
-`LDY_ZP,`LDX_ZP,`STY_ZP,`STX_ZP,`CPX_ZP,`CPY_ZP,`BIT_ZP,`STZ_ZP: len <= 4'd2;
-`ASL_ZP,`ROL_ZP,`LSR_ZP,`ROR_ZP,`INC_ZP,`DEC_ZP: len <= 4'd2;
-
-`ADC_ZPX,`SBC_ZPX,`CMP_ZPX,`AND_ZPX,`ORA_ZPX,`EOR_ZPX,`LDA_ZPX,`STA_ZPX: len <= 4'd2;
-`LDY_ZPX,`STY_ZPX,`BIT_ZPX,`STZ_ZPX: len <= 4'd2;
-`ASL_ZPX,`ROL_ZPX,`LSR_ZPX,`ROR_ZPX,`INC_ZPX,`DEC_ZPX: len <= 4'd2;
-`LDX_ZPY,`STX_ZPY: len <= 4'd2;
-
-`ADC_I,`SBC_I,`AND_I,`ORA_I,`EOR_I,`CMP_I,`LDA_I,`STA_I,
-`ADC_IL,`SBC_IL,`AND_IL,`ORA_IL,`EOR_IL,`CMP_IL,`LDA_IL,`STA_IL,
-`ADC_IX,`SBC_IX,`CMP_IX,`AND_IX,`OR_IX,`EOR_IX,`LDA_IX,`STA_IX: len <= 4'd2;
-
-`ADC_IY,`SBC_IY,`CMP_IY,`AND_IY,`OR_IY,`EOR_IY,`LDA_IY,`STA_IY: len <= 4'd2;
-`ADC_IYL,`SBC_IYL,`CMP_IYL,`AND_IYL,`ORA_IYL,`EOR_IYL,`LDA_IYL,`STA_IYL: len <= 4'd2;
-
-`TRB_ABS,`TSB_ABS,
-`ADC_ABS,`SBC_ABS,`CMP_ABS,`AND_ABS,`OR_ABS,`EOR_ABS,`LDA_ABS,`STA_ABS: len <= 4'd3;
-`LDX_ABS,`LDY_ABS,`STX_ABS,`STY_ABS,`CPX_ABS,`CPY_ABS,`BIT_ABS,`STZ_ABS: len <= 4'd3;
-`ASL_ABS,`ROL_ABS,`LSR_ABS,`ROR_ABS,`INC_ABS,`DEC_ABS: len <= 4'd3;
-
-`ADC_ABSX,`SBC_ABSX,`CMP_ABSX,`AND_ABSX,`OR_ABSX,`EOR_ABSX,`LDA_ABSX,`STA_ABSX: len <= 4'd3;
-`LDY_ABSX,`BIT_ABSX,`STZ_ABSX:	len <= 4'd3;
-`ASL_ABSX,`ROL_ABSX,`LSR_ABSX,`ROR_ABSX,`INC_ABSX,`DEC_ABSX: len <= 4'd3;
-
-`ADC_ABSY,`SBC_ABSY,`CMP_ABSY,`AND_ABSY,`ORA_ABSY,`EOR_ABSY,`LDA_ABSY,`STA_ABSY: len <= 4'd3;
-`LDX_ABSY: len <= 4'd3;
-
-`ADC_AL,`SBC_AL,`CMP_AL,`AND_AL,`ORA_AL,`EOR_AL,`LDA_AL,`STA_AL: len <= 4'd4;
-`ADC_ALX,`SBC_ALX,`CMP_ALX,`AND_ALX,`ORA_ALX,`EOR_ALX,`LDA_ALX,`STA_ALX: len <= 4'd4;
-
-`ADC_DSP,`SBC_DSP,`CMP_DSP,`AND_DSP,`ORA_DSP,`EOR_DSP,`LDA_DSP,`STA_DSP: len <= 4'd2;
-`ADC_DSPIY,`SBC_DSPIY,`CMP_DSPIY,`AND_DSPIY,`ORA_DSPIY,`EOR_DSPIY,`LDA_DSPIY,`STA_DSPIY: len <= 4'd2;
-
-`ASL_ACC,`LSR_ACC,`ROR_ACC,`ROL_ACC: len <= 4'd1;
-
-`PHP,`PHA,`PHX,`PHY,`PHK,`PHB,`PHD,`PLP,`PLA,`PLX,`PLY,`PLB,`PLD: len <= 4'd1;
-`PEA,`PER,`MVN,`MVP: len <= 4'd3;
-`PEI:	len <= 4'd2;
-// = = = = = = = = = = = = = = = = = Native Mode = = = = = = = = = = = = = = = 
-`NAT_XCE:	len <= 4'd1;
-`NAT_SEC:	len <= 4'd1;
-`NAT_INX,`NAT_DEX,`NAT_INY,`NAT_DEY:
-	len <= 4'd1;
-`NAT_BPL,`NAT_BMI,`NAT_BCS,`NAT_BCC,`NAT_BVS,`NAT_BVC,`NAT_BEQ,`NAT_BNE,`NAT_BRA:
-	len <= byte1==8'hFE ? 4'd3 : 4'd2;
-`NAT_JML:	len <= 4'd6;
-
-default:	len <= 4'd0;	// unimplemented instruction
+`ADD_3R:	len <= 4'd2;
+`ADD_I23:	len <= 4'd3;
+`ADD_I36:	len <= 4'd4;
+`JMP:			len <= 4'd4;
+`ASL_3R:	len <= 4'd2;
+`SUB_3R:	len <= 4'd2;
+`SUB_I23:	len <= 4'd3;
+`SUB_I36:	len <= 4'd4;
+`JSR:			len <= 4'd4;
+`LSR_R3:	len <= 4'd2;
+`RETGRP:	len <= 4'd1;
+`ROL_R3:	len <= 4'd2;
+`AND_3R:	len <= 4'd2;
+`AND_I23: len <= 4'd3;
+`AND_I36: len <= 4'd4;
+`BRKGRP:	len <= 4'd1;
+`ROR_R3:	len <= 4'd2;
+`OR_3R:		len <= 4'd2;
+`OR_I23:	len <= 4'd3;
+`OR_I36:	len <= 4'd4;
+`JMP_RN:	len <= 4'd1;
+`SEP:			len <= 4'd1;
+`EOR_3R:	len <= 4'd2;
+`EOR_I23:	len <= 4'd3;
+`EOR_I36: len <= 4'd4;
+`JSR_RN:	len <= 4'd1;
+`REP:			len <= 4'd1;
+`LD_D9:		len <= 4'd2;
+`LD_D23:	len <= 4'd3;
+`LD_D36:	len <= 4'd4;
+`LDB_D36:	len <= 4'd4;
+`PLP:			len <= 4'd1;
+`POP:			len <= 4'd1;
+`ST_D9:		len <= 4'd2;
+`ST_D23:	len <= 4'd3;
+`ST_D36:	len <= 4'd4;
+`STB_D36:	len <= 4'd4;
+`PHP:			len <= 4'd1;
+`PSH:			len <= 4'd1;
+`BccD4a:	len <= 4'd1;
+`BccD4b:	len <= 4'd1;
+`BccD17a:	len <= 4'd2;
+`BccD17b:	len <= 4'd2;
+default:	len <= 4'd1;	// unimplemented instruction
 endcase
 endmodule
