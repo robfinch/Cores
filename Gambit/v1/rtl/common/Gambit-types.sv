@@ -23,7 +23,7 @@
 //
 // Types
 
-typedef struct _tagMicroOp
+typedef struct 
 {
 logic [1:0] fl;
 logic [5:0] opcode;

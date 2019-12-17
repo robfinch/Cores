@@ -21,8 +21,8 @@
 //
 // ============================================================================
 //
-`include ".\rtf65004-config.sv"
-`include ".\rtf65004-defines.sv"
+`include ".\Gambit-config.sv"
+`include ".\Gambit-defines.sv"
 
 module idecoder(instr,predict_taken,bus);
 input [23:0] instr;
@@ -33,20 +33,16 @@ parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
 // Memory access sizes
 parameter byt = 3'd0;
-parameter wyde = 3'd1;
-parameter tbyt = 3'd2;
+parameter word = 3'd1;
 
 function IsAlu;
 input [23:0] isn;
-case(isn[23:16])
-`UO_NOP,
-`UO_LDIB,`UO_ADDW,`UO_ADDB,
-`UO_ADCB,`UO_SBCB,`UO_CMPB,
-`UO_ANDB,`UO_BITB,`UO_ORB,`UO_EORB,
-`UO_ASLB,`UO_LSRB,`UO_RORB,`UO_ROLB,
-`UO_SEC,`UO_CLC,`UO_SEI,`UO_CLI,`UO_CLV,
-`UO_SED,`UO_CLD,`UO_SEB,`UO_CLB,
-`UO_MOV,`UO_XCE:
+case(isn[21:16])
+`UO_ADD,`UO_SUB,
+`UO_ADDu,`UO_SUBu,
+`UO_ANDu,`UO_ORu,`UO_EORu,
+`UO_ASLu,`UO_LSRu,`UO_RORu,`UO_ROLu,
+`UO_REP,`UO_SEP:
 	IsAlu = TRUE;
 default:	IsAlu = FALSE;
 endcase
@@ -54,9 +50,9 @@ endfunction
 
 function IsMem;
 input [23:0] isn;
-case(isn[23:16])
-`UO_LDBW,`UO_LDWW,`UO_STBW,`UO_STWW,`UO_STJ,
-`UO_LDB,`UO_LDW,`UO_STB,`UO_STW:
+case(isn[21:16])
+`UO_LD,`UO_LDB,`UO_LDu,`UO_LDBu,
+`UO_ST,`UO_STB:
 	IsMem = TRUE;
 default:
 	IsMem = FALSE;
@@ -65,9 +61,9 @@ endfunction
 
 function IsFcu;
 input [23:0] isn;
-case(isn[23:16])
+case(isn[21:16])
 `UO_BEQ,`UO_BNE,`UO_BCS,`UO_BCC,`UO_BVS,`UO_BVC,`UO_BMI,`UO_BPL,`UO_BRA,
-`UO_JSI,`UO_JMP,`UO_JML:
+`UO_JMP:
 	IsFcu = TRUE;
 default:	IsFcu = FALSE;
 endcase
@@ -75,16 +71,16 @@ endfunction
 
 function IsCmp;
 input [23:0] isn;
-case(isn[23:16])
-`UO_CMPB:	IsCmp = TRUE;
+case(isn[21:16])
+`UO_SUBu:	IsCmp = isn[3:0]==4'h0;
 default:	IsCmp = FALSE;
 endcase
 endfunction
 
 function IsLoad;
 input [23:0] isn;
-case(isn[23:16])
-`UO_LDB,`UO_LDW,`UO_LDBW,`UO_LDWW:
+case(isn[21:16])
+`UO_LDB,`UO_LD,`UO_LDBu,`UO_LDu:
 	IsLoad = TRUE;
 default:
 	IsLoad = FALSE;
@@ -93,8 +89,8 @@ endfunction
 
 function IsStore;
 input [23:0] isn;
-case(isn[23:16])
-`UO_STB,`UO_STW,`UO_STBW,`UO_STWW,`UO_STJ:
+case(isn[21:16])
+`UO_STB,`UO_ST:
 	IsStore = TRUE;
 default:
 	IsStore = FALSE;
@@ -104,24 +100,15 @@ endfunction
 
 function [2:0] MemSize;
 input [23:0] isn;
-casez(isn[23:16])
-`UO_LDB,`UO_LDBW:	MemSize = byt;
-`UO_LDW,`UO_LDWW:	MemSize = wyde;
-`UO_STB,`UO_STBW:	MemSize = byt;
-`UO_STW,`UO_STWW:	MemSize = wyde;
-`UO_STJ:					MemSize = tbyt;
-default:	MemSize = byt;
+casez(isn[21:16])
+`UO_LDB,`UO_LDBu,`UO_STB:	MemSize = byt;
+default:	MemSize = word;
 endcase
-endfunction
-
-function IsSei;
-input [23:0] isn;
-IsSei = isn[23:16]==`UO_SEI;
 endfunction
 
 function IsJmp;
 input [23:0] isn;
-IsJmp = isn[23:0]==`UO_JMP;
+IsJmp = isn[21:0]==`UO_JMP;
 endfunction
 
 // Really IsPredictableBranch
@@ -138,12 +125,11 @@ endfunction
 
 function IsRFW;
 input [23:0] isn;
-case(isn[23:16])
-`UO_LDB,`UO_LDW,`UO_LDBW,`UO_LDWW,
-`UO_ADDB,`UO_ADDW,`UO_ADCB,`UO_SBCB,
-`UO_ANDB,`UO_ORB,`UO_EORB,
-`UO_ASLB,`UO_LSRB,`UO_ROLB,`UO_RORB,
-`UO_MOV:
+case(isn[21:16])
+`UO_LDB,`UO_LDBu,`UO_LD,`UO_LDu,
+`UO_ADD,`UO_ADDu,`UO_SUB,`UO_SUBu,
+`UO_ANDu,`UO_ORu,`UO_EORu,
+`UO_ASLu,`UO_LSRu,`UO_ROLu,`UO_RORu:
 	IsRFW = TRUE;
 default:
 	IsRFW = FALSE;
@@ -165,14 +151,6 @@ default:
 	fnNeedSr = FALSE;
 endcase
 */
-endfunction
-
-function fnWrap;
-input [23:0] isn;
-case(isn[23:16])
-`UO_LDBW,`UO_STBW,`UO_LDWW,`UO_STWW:	fnWrap = TRUE;
-default:	fnWrap = FALSE;
-endcase
 endfunction
 
 always @*
@@ -198,12 +176,10 @@ begin
 	bus[`IB_STORE]	<= IsStore(instr);
 	bus[`IB_MEMSZ]  <= MemSize(instr);
 	bus[`IB_MEM]		<= IsMem(instr);
-	bus[`IB_SEI]		<= IsSei(instr);
 	bus[`IB_JMP]		<= IsJmp(instr);
 	bus[`IB_BR]			<= IsBranch(instr);
 	bus[`IB_RFW]		<= IsRFW(instr);
 	bus[`IB_NEED_SR]	<= fnNeedSr(instr);
-	bus[`IB_WRAP]		<= fnWrap(instr);
 end
 
 endmodule

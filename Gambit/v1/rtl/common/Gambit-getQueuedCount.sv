@@ -30,7 +30,8 @@
 //
 // ============================================================================
 //
-`include "rtf65004-config.sv"
+`include "Gambit-config.sv"
+`include "Gambit-defines.sv"
 
 module getQueuedCount(branchmiss, brk, phitd, tails, rob_tails, slotvd,
 	slot_jmp, take_branch, iq_v, rob_v, queuedCnt, queuedOnp);

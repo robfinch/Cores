@@ -20,6 +20,10 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.    
 //                                                                          
 // ============================================================================
+`define TRUE			1'b1
+`define FALSE			1'b0
+`define VAL				1'b1
+`define INV				1'b0
 
 `define ADD_3R		6'o00
 `define ADD_I23		6'o01
@@ -75,4 +79,62 @@
 `define BccD17a		6'o15
 `define BccD17b		6'o35
 
+`define UO_ADD		6'd0
+`define UO_ADDu		6'd1
+`define UO_SUB		6'd2
+`define UO_SUBu		6'd3
+`define UO_ANDu		6'd4
+`define UO_ORu		6'd5
+`define UO_EORu		6'd6
+`define UO_LD			6'd7
+`define UO_LDu		6'd8
+`define UO_LDB		6'd9
+`define UO_LDBu		6'd10
+`define UO_ST			6'd11
+`define UO_STB		6'd12
+`define UO_ASLu		6'd13
+`define UO_ROLu		6'd14
+`define UO_LSRu		6'd15
+`define UO_RORu		6'd16
+`define UO_BRA		6'd17
+`define UO_BEQ		6'd18
+`define UO_BNE		6'd19
+`define UO_BMI		6'd20
+`define UO_BPL		6'd21
+`define UO_BCS		6'd22
+`define UO_BCC		6'd23
+`define UO_BVS		6'd24
+`define UO_BVC		6'd25
+`define UO_SEP		6'd26
+`define UO_REP		6'd27
+`define UO_JMP		6'd28
+`define UO_STP		6'd29
+`define UO_WAI		6'd30
+
 `define OPCODE		5:0
+
+`define DRAMSLOT_AVAIL	3'b000
+`define DRAMSLOT_BUSY		3'b001
+`define DRAMSLOT_RMW		3'b010
+`define DRAMSLOT_RMW2		3'b011
+`define DRAMSLOT_REQBUS	3'b101
+`define DRAMSLOT_HASBUS	3'b110
+`define DRAMREQ_READY		3'b111
+
+
+`define IB_CMP		0
+`define IB_SRC1		4:1
+`define IB_SRC2		8:5
+`define IB_DST		12:9
+`define IB_BT			13
+`define IB_ALU		14
+`define IB_FC			15
+`define IB_LOAD		16
+`define IB_STORE	17
+`define IB_MEMSZ	18
+`define IB_MEM		19
+`define IB_JMP		20
+`define IB_BR			21
+`define IB_RFW		22
+`define IB_NEED_SR	23
+`define IBTOP		24

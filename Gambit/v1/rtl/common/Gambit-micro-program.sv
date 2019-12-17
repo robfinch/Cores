@@ -47,10 +47,12 @@ parameter SP = 5;
 parameter tmp1 = 6;
 parameter TMP1 = 6;
 parameter tmp2 = 7;
+parameter TMP2 = 7;
 parameter PC = 9;
 parameter PC1 = 10;
 parameter PC4 = 11;
 parameter SR = 12;
+parameter IFLAG = 13;
 
 // Micro Instructions
 parameter ADD = 6'd0;
@@ -85,6 +87,8 @@ parameter JMP = 6'd28;
 parameter STP = 6'd29;
 parameter WAI = 6'd30;
 parameter CAUSE = 6'd31;
+parameter BUC = 6'd32;
+parameter BUS = 6'd33;
 
 parameter ADD_RR = 1;
 parameter ADD_RI23 = 2;
@@ -122,7 +126,7 @@ parameter RTI = 86;
 parameter NOP = 91;
 parameter PFI_0 = 92;
 parameter PFI_1 = 93;
-parameter STP = 100;
+parameter LSTP = 100;
 parameter WAI_0 = 101;
 parameter WAI_1 = 102;
 parameter BRA_D4 = 109;
@@ -184,7 +188,7 @@ MicroOp uop_prg [0:191] = {
 {3,	EORu,	Rtreg,Rareg,Rbreg,0},
 {3,	EORu,	Rtreg,Rareg,0,REF23},
 {3,	EORu,	Rtreg,Rareg,0,REF36},
-{3.	ASLu,	Rtreg,Rareg,Rbreg,0},
+{3,	ASLu,	Rtreg,Rareg,Rbreg,0},
 {3,	ROLu,	Rtreg,Rareg,Rbreg,0},
 {3,	LSRu,	Rtreg,Rareg,Rbreg,0},
 {3,	RORu,	Rtreg,Rareg,Rbreg,0},
@@ -214,7 +218,7 @@ MicroOp uop_prg [0:191] = {
 {0,	ADD,		yr,yr,0,1},
 {0,	SUB,		acc,acc,0,1},
 {0,	BEQ,		1,0,0,0},
-{0, CMPu,		0,tmp1,tmp2,0},
+{0, SUBu,		0,tmp1,tmp2,0},
 {2,	BEQ,		0,0,0,0},
 // MVN (44):
 {1,	LD,			tmp1,xr,0,0},
@@ -224,7 +228,7 @@ MicroOp uop_prg [0:191] = {
 {0,	SUB,		acc,acc,0,1},
 {2,	BNE,		0,0,0,0},
 // MVP (50):
-{1,	LD,			tmp1,,xr,0,0},
+{1,	LD,			tmp1,xr,0,0},
 {0,	ST,			tmp1,yr,0,0},
 {0,	SUB,		xr,xr,0,4},
 {0,	SUB,		yr,yr,0,4},
@@ -242,7 +246,7 @@ MicroOp uop_prg [0:191] = {
 {0,	ADD,		yr,yr,0,4},
 {0,	SUB,		acc,acc,0,1},
 {0, BEQ,		1,0,0,0},
-{0,	CMPu,		0,tmp1,tmp2,0},
+{0,	SUBu,		0,tmp1,tmp2,0},
 {2,	BEQ,		0,0,0,0},
 // BRK (68):
 {1,	SUB,		SP,SP,0,4},
@@ -266,8 +270,8 @@ MicroOp uop_prg [0:191] = {
 {2,	JMP,		0,0,0,REF46},
 // RTS (83):
 {1,	LD,			TMP1,SP,0,0},
-{0,	ADD		SP,SP,0,4},
-{2,	JMP		0,TMP1,0,0},
+{0,	ADD,		SP,SP,0,4},
+{2,	JMP,		0,TMP1,0,0},
 // RTI (86):
 {1,	LD,			SR,SP,0,0},
 {0,	ADD,		SP,SP,0,4},
@@ -374,7 +378,7 @@ MicroOp uop_prg [0:191] = {
 // LSEP (147):
 {3,	SEP,		0,0,0,REF7},
 // LREP (148):
-{3,	REP,		0,0,0,REF7}
+{3,	REP,		0,0,0,REF7},
 // UNIMP (149):
 {1, CAUSE,	0,0,0,0},
 {0,	SUB,		SP,SP,0,4},
@@ -419,5 +423,5 @@ MicroOp uop_prg [0:191] = {
 {0,	ST,			SR,SP,0,0},
 {0,	SEP,		IFLAG,0,0,0},
 {0,	LD,			TMP1,0,0,-4},
-{2,	JMP,		0,TMP1,0,0},
+{2,	JMP,		0,TMP1,0,0}
 };
