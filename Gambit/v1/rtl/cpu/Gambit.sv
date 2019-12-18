@@ -996,9 +996,9 @@ wire ihit;
 assign ihit = L1_ihit;
 wire L1_nxt, L2_nxt;					// advances cache way lfsr
 wire [2:0] L2_cnt;
-wire [511:0] ROM_dat;
-wire [511:0] d0ROM_dat;
-wire [511:0] d1ROM_dat;
+wire [415:0] ROM_dat;
+wire [415:0] d0ROM_dat;
+wire [415:0] d1ROM_dat;
 
 wire isROM;
 wire d0isROM, d1isROM;
@@ -1504,7 +1504,7 @@ reg [8:0] rd1L1_adr;
 (* ram_style="block" *)
 reg [511:0] rommem [0:511];
 initial begin
-`include "d:/cores6/rtf65004/v1/software/boot/boottc.ve0"
+`include "d:/cores5/Gambit/trunk/software/boot/fibonacci.ve0"
 end
 always @(posedge clk)
 	rL1_adr <= L1_adr[14:6];
@@ -1512,9 +1512,18 @@ always @(posedge clk)
 	rd0L1_adr <= d0L1_adr[14:6];
 always @(posedge clk)
 	rd1L1_adr <= d1L1_adr[14:6];
-assign ROM_dat = rommem[rL1_adr];
-assign d0ROM_dat = rommem[rd0L1_adr];
-assign d1ROM_dat = rommem[rd1L1_adr];
+generate begin : romslices
+for (g = 0; g < 32; g = g + 1)
+begin
+assign ROM_dat[g*13+:13] = rommem[rL1_adr][g*16+:13];
+assign d0ROM_dat[g*13+:13] = rommem[rd0L1_adr][g*16+:13];
+assign d1ROM_dat[g*13+:13] = rommem[rd1L1_adr][g*16+:13];
+end
+end
+endgenerate
+//assign ROM_dat = rommem[rL1_adr];
+//assign d0ROM_dat = rommem[rd0L1_adr];
+//assign d1ROM_dat = rommem[rd1L1_adr];
 
 //wire predict_taken;
 wire predict_takenA;

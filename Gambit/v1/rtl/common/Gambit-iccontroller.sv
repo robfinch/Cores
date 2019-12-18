@@ -32,9 +32,9 @@ module ICController(rst_i, clk_i, missadr, hit, bstate, state,
 	L1_selpc, L1_adr, L1_dat, L1_wr, L1_invline, icnxt, icwhich,
 	ROM_dat, isROM,
 	icl_o, cti_o, bte_o, bok_i, cyc_o, stb_o, ack_i, err_i, tlbmiss_i, exv_i, sel_o, adr_o, dat_i);
-parameter ABW = 64;
+parameter ABW = 52;
 parameter AMSB = ABW-1;
-parameter RSTPC = 64'hFFFFFFFFFFFC0100;
+parameter RSTPC = 52'hFFFFFFFFC0100;
 parameter L2_ReadLatency = 3'd3;
 parameter L1_WriteLatency = 3'd3;
 parameter ROM_ReadLatency = 3'd1;
@@ -53,14 +53,14 @@ input ihitL2;
 output reg L2_ld;
 output [2:0] L2_cnt;
 output reg [AMSB:0] L2_adr = RSTPC;
-input [514:0] L2_dat;
+input [418:0] L2_dat;
 output reg L2_nxt;
 output L1_selpc;
 output reg [AMSB:0] L1_adr = RSTPC;
-output reg [514:0] L1_dat = {512'h0};
+output reg [418:0] L1_dat = {416'h0};
 output reg L1_wr;
 output reg L1_invline;
-input [511:0] ROM_dat;
+input [415:0] ROM_dat;
 output isROM;
 output reg icnxt;
 output reg [1:0] icwhich = 2'b00;
@@ -74,9 +74,9 @@ input ack_i;
 input err_i;
 input tlbmiss_i;
 input exv_i;
-output reg [15:0] sel_o;
-output reg [63:0] adr_o;
-input [127:0] dat_i;
+output reg [7:0] sel_o;
+output reg [AMSB:0] adr_o;
+input [103:0] dat_i;
 
 parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
@@ -89,7 +89,7 @@ reg [79:0] invlineAddr_r = 72'd0;
 //assign L2_ld = (state==IC_Ack) && (ack_i|err_i|tlbmiss_i|exv_i);
 reg selpc1;
 assign L1_selpc = (state==IDLE||selpc1) && !invline_r;
-assign isROM = L1_adr[63:15]==17'b1;
+assign isROM = L1_adr[51:15]==17'b1;
 wire clk = clk_i;
 reg [2:0] iccnt;
 assign L2_cnt = iccnt;
@@ -206,22 +206,22 @@ IC_Ack:
   if (ack_i|err_i|tlbmiss_i|exv_i) begin
   	if (!bok_i) begin
   		stb_o <= `LOW;
-			adr_o[63:4] <= adr_o[63:4] + 2'd1;
+			adr_o[63:4] <= adr_o[AMSB:4] + 2'd1;
   		state <= IC_Nack2;
   	end
 		if (tlbmiss_i) begin
-			L1_dat[514:512] <= 2'd1;
-			L1_dat[511:0] <= {16{40'hD2}};	// NOP
+			L1_dat[418:416] <= 2'd1;
+			L1_dat[415:0] <= {16{40'hD2}};	// NOP
 			nack();
 	  end
 		else if (exv_i) begin
-			L1_dat[514:512] <= 2'd2;
-			L1_dat[511:0] <= {16{40'hD2}};	// NOP
+			L1_dat[418:416] <= 2'd2;
+			L1_dat[415:0] <= {16{40'hD2}};	// NOP
 			nack();
 		end
 	  else if (err_i) begin
-			L1_dat[514:512] <= 2'd3;
-			L1_dat[511:0] <= {16{40'hD2}};	// NOP
+			L1_dat[418:416] <= 2'd3;
+			L1_dat[415:0] <= {16{40'hD2}};	// NOP
 			nack();
 	  end
 	  else
@@ -229,7 +229,7 @@ IC_Ack:
 	  	3'd0:	L1_dat[127:0] <= dat_i;
 	  	3'd1:	L1_dat[255:128] <= dat_i;
 	  	3'd2:	L1_dat[383:256] <= dat_i;
-	  	3'd3:	L1_dat[514:384] <= {3'b000,dat_i};
+	  	3'd3:	L1_dat[418:384] <= {3'b000,dat_i[31:0]};
 	  	default:	L1_dat <= L1_dat;
 	  	endcase
     iccnt <= iccnt + 3'd1;

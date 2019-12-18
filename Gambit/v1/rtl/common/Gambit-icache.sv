@@ -34,7 +34,7 @@
 
 module L1_icache_mem(clk, wr, lineno, nxt_lineno, i, f, o);
 parameter pLines = 128;
-parameter pLineWidth = 512;
+parameter pLineWidth = 416;
 localparam pLNMSB = pLines==128 ? 6 : 5;
 input clk;
 input wr;
@@ -74,7 +74,7 @@ endmodule
 
 module L1_icache_cmptag4way(rst, clk, nxt, wr, invline, invall, adr, lineno, nxt_lineno, hit, missadr);
 parameter pLines = 128;
-parameter AMSB = 63;
+parameter AMSB = 51;
 localparam pLNMSB = pLines==128 ? 6 : 5;
 localparam pMSB = pLines==128 ? 8 : 7;
 input rst;
@@ -210,7 +210,7 @@ endmodule
 
 module L1_icache(rst, clk, nxt, wr, wadr, adr, i, o, fault, hit, invall, invline, missadr);
 parameter pSize = 2;
-parameter AMSB = 63;
+parameter AMSB = 51;
 localparam pLines = pSize==4 ? 128 : 64;
 localparam pLNMSB = pSize==4 ? 6 : 5;
 input rst;
@@ -219,16 +219,16 @@ input nxt;
 input wr;
 input [AMSB:0] adr;
 input [AMSB:0] wadr;
-input [514:0] i;
-output reg [1023:0] o;
+input [418:0] i;
+output reg [831:0] o;
 output reg [2:0] fault;
 output hit;
 input invall;
 input invline;
 output [AMSB:0] missadr;
 
-wire [1026:0] ic;
-reg [514:0] i1, i2;
+wire [834:0] ic;
+reg [418:0] i1, i2;
 wire [pLNMSB:0] lineno, nxt_lineno;
 wire taghit;
 reg wr1,wr2;
@@ -244,7 +244,7 @@ always @(posedge iclk)
 always @(posedge iclk)
 	wr2 <= wr1;
 always @(posedge iclk)
-	i1 <= i[514:0];
+	i1 <= i[418:0];
 always @(posedge iclk)
 	i2 <= i1;
 
@@ -252,8 +252,8 @@ L1_icache_mem #(.pLines(pLines)) u1
 (
   .clk(iclk),
   .wr(wr1),
-  .i(i1[511:0]),
-  .f(i1[514:512]),
+  .i(i1[415:0]),
+  .f(i1[418:416]),
   .lineno(lineno),
   .nxt_lineno(nxt_lineno),
   .o(ic)
@@ -278,9 +278,9 @@ assign hit = taghit;
 
 //always @(radr or ic0 or ic1)
 always @*
-	o <= ic[1023:0] >> {adr[5:0],3'b0};
+	o <= ic[831:0] >> (adr[4:0] * 13);
 always @*
-	fault <= ic[1026:1024];
+	fault <= ic[834:832];
 
 endmodule
 
@@ -295,7 +295,7 @@ input [8:0] lineno;
 input [2:0] sel;
 input [127:0] i;
 input [1:0] fault;
-output [514:0] o;
+output [418:0] o;
 
 (* ram_style="block" *)
 reg [127:0] mem0 [0:511];
@@ -304,7 +304,7 @@ reg [127:0] mem1 [0:511];
 (* ram_style="block" *)
 reg [127:0] mem2 [0:511];
 (* ram_style="block" *)
-reg [130:0] mem3 [0:511];
+reg [34:0] mem3 [0:511];
 (* ram_style="distributed" *)
 reg [8:0] rrcl;
 
@@ -325,7 +325,7 @@ begin
     3'd0:   mem0[lineno] <= i;
     3'd1:   mem1[lineno] <= i;
     3'd2:   mem2[lineno] <= i;
-    3'd3:   mem3[lineno] <= {fault,i};
+    3'd3:   mem3[lineno] <= {fault,i[31:0]};
     endcase
   end
 end
@@ -348,7 +348,7 @@ endmodule
 module L2_icache(rst, clk, nxt, wr, adr, cnt, exv_i, i, err_i, o, hit, invall, invline);
 parameter CAMTAGS = 1'b0;   // 32 way
 parameter FOURWAY = 1'b1;
-parameter AMSB = 63;
+parameter AMSB = 51;
 input rst;
 input clk;
 input nxt;
@@ -358,7 +358,7 @@ input [2:0] cnt;
 input exv_i;
 input [127:0] i;
 input err_i;
-output [514:0] o;
+output [418:0] o;
 output hit;
 input invall;
 input invline;
@@ -424,7 +424,7 @@ endmodule
 
 // Four way set associative tag memory
 module L2_icache_cmptag4way(rst, clk, nxt, wr, wr2, inv, invall, adr, lineno, hit);
-parameter AMSB = 63;
+parameter AMSB = 51;
 input rst;
 input clk;
 input nxt;
