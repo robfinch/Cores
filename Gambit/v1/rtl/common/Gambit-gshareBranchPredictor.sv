@@ -23,11 +23,11 @@
 //
 //=============================================================================
 //
-`include "rtf65004-config.sv"
+`include "Gambit-config.sv"
 
 module gshareBranchPredictor(rst, clk, clk2x, clk4x, en, xisBranch, xip, takb, ip, predict_taken);
-parameter AMSB=63;
-parameter DBW=64;
+parameter AMSB=51;
+parameter DBW=52;
 parameter FSLOTS = `FSLOTS;
 parameter TBLSZ = 4096;
 localparam TBIT = $clog2(TBLSZ)-5;

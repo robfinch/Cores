@@ -21,8 +21,8 @@
 //
 // ============================================================================
 //
-`include "rtf65004-config.sv"
-`include "rtf65004-defines.sv"
+`include "Gambit-config.sv"
+`include "Gambit-defines.sv"
 
 module programCounter(rst, clk,
 	q1, q2, q1bx, insnx, freezepc, 
@@ -31,8 +31,8 @@ module programCounter(rst, clk,
 	btgt, pc, pcd, pc_chg, branch_pc, 
 	ra, pc_override,
 	debug_on);
-parameter AMSB = 63;
-parameter RSTIP = 64'h00FFFC;
+parameter AMSB = 51;
+parameter RSTIP = 52'h00FFFC;
 parameter FSLOTS = `FSLOTS;
 parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;

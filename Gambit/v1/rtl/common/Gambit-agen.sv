@@ -21,7 +21,7 @@
 //                                                                          
 // ============================================================================
 //
-`include "rtf65004-defines.sv"
+`include "Gambit-defines.sv"
 
 module agen(wrap, src1, src2, ma, idle);
 parameter AMSB = 63;

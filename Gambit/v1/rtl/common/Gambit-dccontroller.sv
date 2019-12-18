@@ -22,7 +22,7 @@
 //
 // ============================================================================
 // 3668
-`include ".\rtf65004-config.sv"
+`include ".\Gambit-config.sv"
 `define HIGH	1'b1
 `define LOW		1'b0
 
@@ -89,7 +89,7 @@ parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
 
 reg [3:0] picstate;
-`include ".\rtf65004-busStates.sv"
+`include ".\Gambit-busStates.sv"
 reg invline_r = 1'b0;
 reg [79:0] invlineAddr_r = 72'd0;
 

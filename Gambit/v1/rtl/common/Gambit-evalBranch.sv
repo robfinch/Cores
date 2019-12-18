@@ -23,7 +23,7 @@
 //
 // ============================================================================
 //
-`include "rtf65004-defines.sv"
+`include "Gambit-defines.sv"
 
 module EvalBranch(instr, sr, takb);
 input [5:0] instr;

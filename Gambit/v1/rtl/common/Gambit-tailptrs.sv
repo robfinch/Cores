@@ -21,8 +21,8 @@
 //                                                                          
 // ============================================================================
 //
-`include "rtf65004-config.sv"
-`include "rtf65004-defines.sv"
+`include "Gambit-config.sv"
+`include "Gambit-defines.sv"
 
 module tailptrs(rst_i, clk_i, branchmiss, iq_stomp, queuedCnt, iq_tails, 
 	rqueuedCnt, rob_tails, iq_rid);

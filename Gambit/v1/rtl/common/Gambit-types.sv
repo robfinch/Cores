@@ -22,8 +22,10 @@
 // ============================================================================
 //
 // Types
+`ifndef TYPES_H
+`define TYPES_H		1
 
-typedef struct 
+typedef struct packed
 {
 logic [1:0] fl;
 logic [5:0] opcode;
@@ -33,3 +35,4 @@ logic [3:0] src2;
 logic [3:0] cnst;
 } MicroOp;
 
+`endif

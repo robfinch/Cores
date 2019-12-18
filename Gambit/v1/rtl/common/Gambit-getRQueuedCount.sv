@@ -30,7 +30,7 @@
 //
 // ============================================================================
 //
-`include "rtf65004-config.sv"
+`include "Gambit-config.sv"
 
 module getRQueuedCount(rst, rob_tails, heads, rob_v_i, rob_v_o, iq_state, iq_rid_i, iq_rid_o, rqueuedCnt, rqueuedOn);
 parameter IQ_ENTRIES = `IQ_ENTRIES;

@@ -23,43 +23,44 @@
 //
 `include "Gambit-config.sv"
 
-// Pointers to the head of the queue. The pointers increment every cycle by
-// the number of instructions that were committed during the cycle.
-
-module headptrs(rst, clk, amt, heads, ramt, rob_heads, headcnt);
+module seqnum(rst, clk, heads, hi_amt, iq_v, iq_sn, maxsn, tosub);
 parameter IQ_ENTRIES = `IQ_ENTRIES;
-parameter RENTRIES = `RENTRIES;
-parameter RSLOTS = `RSLOTS;
+parameter QSLOTS = `QSLOTS;
 input rst;
 input clk;
+input [`QBITS] heads [0:IQ_ENTRIES-1];
+input [2:0] hi_amt;
+input [IQ_ENTRIES-1:0] iq_v;
+input [`SNBITS] iq_sn [0:IQ_ENTRIES-1];
+output reg [`SNBITS] maxsn;
+output [`SNBITS] tosub;
+
+integer n, j;
+
+// Amount subtracted from sequence numbers
+function [`SNBITS] sn_dec;
 input [2:0] amt;
-output reg [`QBITS] heads [0:IQ_ENTRIES-1];
-input [2:0] ramt;
-output reg [`RBITS] rob_heads [0:RENTRIES-1];
-output reg [31:0] headcnt;
-
-integer n;
-
-always @(posedge clk)
-if (rst) begin
-	headcnt <= 0;
-	for (n = 0; n < IQ_ENTRIES; n = n + 1)
-		heads[n] <= n;
+begin
+	sn_dec = 1'd0;
+	for (j = 0; j < IQ_ENTRIES; j = j + 1)
+		if (j < amt) begin
+			if (iq_v[heads[j]])
+				sn_dec = iq_sn[heads[j]];
+		end
 end
-else begin
-	headcnt <= headcnt + amt;
-	for (n = 0; n < IQ_ENTRIES; n = n + 1)
-     heads[n] <= (heads[n] + amt) % IQ_ENTRIES;
-end
+endfunction
 
-always @(posedge clk)
-if (rst) begin
-	for (n = 0; n < RENTRIES; n = n + 1)
-		rob_heads[n] <= n;
-end
-else begin
-	for (n = 0; n < RENTRIES; n = n + 1)
-    rob_heads[n] <= (rob_heads[n] + ramt) % RENTRIES;
+assign tosub = 0;//sn_dec(hi_amt);
+
+always @*
+begin
+maxsn = 1'd0;
+for (n = 0; n < IQ_ENTRIES; n = n + 1)
+	if (iq_sn[n] > maxsn)// && iq_v[n])
+		maxsn = iq_sn[n];
+//maxsn = maxsn - tosub;
 end
 
 endmodule
+
+

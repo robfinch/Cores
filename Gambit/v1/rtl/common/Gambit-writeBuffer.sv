@@ -21,7 +21,7 @@
 //
 // ============================================================================
 //
-`include "rtf65004-config.sv"
+`include "Gambit-config.sv"
 
 module writeBuffer(rst_i, clk_i, bstate, cyc_pending, wb_has_bus, update_iq, uid, ruid, fault,
 	wb_v, wb_addr, wb_en_i, cwr_o, csel_o, cadr_o, cdat_o,
@@ -36,7 +36,7 @@ parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
 parameter HIGH = 1'b1;
 parameter LOW = 1'b0;
-parameter AMSB = 63;
+parameter AMSB = 51;
 parameter BIDLE = 5'd0;
 input rst_i;
 input clk_i;
@@ -48,7 +48,7 @@ output reg [7:0] fault;
 output reg [IQ_ENTRIES-1:0] uid;
 output reg [RENTRIES-1:0] ruid;
 output reg [WB_DEPTH-1:0] wb_v;
-output reg [63:0] wb_addr [0:WB_DEPTH-1];
+output reg [AMSB:0] wb_addr [0:WB_DEPTH-1];
 input wb_en_i;
 
 input [`QBITS] p0_id_i;
@@ -56,8 +56,8 @@ input [`RBITS] p0_rid_i;
 input p0_wr_i;
 input p0_wrap_i;
 input [15:0] p0_sel_i;
-input [63:0] p0_adr_i;
-input [63:0] p0_dat_i;
+input [AMSB:0] p0_adr_i;
+input [51:0] p0_dat_i;
 output reg p0_ack_o;
 output reg p0_hit;
 
@@ -66,8 +66,8 @@ input [`RBITS] p1_rid_i;
 input p1_wr_i;
 input p1_wrap_i;
 input [15:0] p1_sel_i;
-input [63:0] p1_adr_i;
-input [63:0] p1_dat_i;
+input [AMSB:0] p1_adr_i;
+input [51:0] p1_dat_i;
 output reg p1_ack_o;
 output reg p1_hit;
 
@@ -78,20 +78,20 @@ input err_i;
 input tlbmiss_i;
 input wrv_i;
 output reg we_o;
-output reg [15:0] sel_o;
+output reg [7:0] sel_o;
 output reg [AMSB:0] adr_o;
-output reg [127:0] dat_o;
+output reg [103:0] dat_o;
 output reg cr_o;
 output reg cwr_o;
-output reg [15:0] csel_o;
+output reg [3:0] csel_o;
 output reg [AMSB:0] cadr_o;
-output reg [63:0] cdat_o;
+output reg [51:0] cdat_o;
 
 integer n, j;
 reg wb_en;
 reg [3:0] wb_ptr;
-reg [22:0] wb_sel  [0:WB_DEPTH-1];
-reg [63:0] wb_data [0:WB_DEPTH-1];
+reg [10:0] wb_sel  [0:WB_DEPTH-1];
+reg [51:0] wb_data [0:WB_DEPTH-1];
 reg [IQ_ENTRIES-1:0] wb_id [0:WB_DEPTH-1];
 reg [RENTRIES-1:0] wb_rid [0:WB_DEPTH-1];
 reg [IQ_ENTRIES-1:0] wbo_id;
@@ -123,8 +123,8 @@ begin
 	end
 end
 
-reg [22:0] sel_shift;
-reg [143:0] dat_shift;
+reg [10:0] sel_shift;
+reg [141:0] dat_shift;
 
 reg [2:0] state;
 always @(posedge clk_i)
@@ -137,7 +137,7 @@ IDLE:
 		state <= StoreAck1;
 StoreAck1:
 	if (ack_i|err_i|tlbmiss_i|wrv_i) begin
-		if (sel_shift[22:16]==7'h0 && !wrap_cycle)
+		if (sel_shift[10:8]==3'h0 && !wrap_cycle)
 			state <= IDLE;
 		else
 			state <= Store2;
@@ -158,7 +158,7 @@ if (rst_i) begin
 	cyc_o <= LOW;
 	stb_o <= LOW;
 	we_o <= LOW;
-	sel_o <= 16'h0000;
+	sel_o <= 8'h00;
 	wb_has_bus <= FALSE;
 	wb_v <= 1'b0;
 	wb_ptr <= 1'd0;
@@ -170,7 +170,7 @@ if (rst_i) begin
 	ruid <= 1'd0;
 	update_iq <= FALSE;
 	wrap_cycle <= FALSE;
-	sel_shift <= 23'h0;
+	sel_shift <= 11'h0;
 end
 else begin
 	if (wb_en_i)
@@ -250,13 +250,13 @@ IDLE:
 				wrap_cycle <= TRUE;
 			end
 			else
-				sel_o <= wb_sel[0] << wb_addr[0][3:0];
+				sel_o <= wb_sel[0] << wb_addr[0][2:0];
 			adr_o <= {wb_addr[0][AMSB:4],4'h0};
-			dat_o <= wb_data[0] << {wb_addr[0][3:0],3'h0};
+			dat_o <= wb_data[0] << wb_addr[0][2:0] * 13;
 			wbo_id <= wb_id[0];
 			wbo_rid <= wb_rid[0];
-			sel_shift <= {22'd0,wb_sel[0]} << wb_addr[0][3:0];
-			dat_shift <= {120'd0,wb_data[0]} << {wb_addr[0][3:0],3'b0};
+			sel_shift <= {22'd0,wb_sel[0]} << wb_addr[0][2:0];
+			dat_shift <= {120'd0,wb_data[0]} << wb_addr[0][2:0] * 13;
 			wb_has_bus <= 1'b1;
 		end
 		if (wb_v[0]==INV && !writing_wb) begin
@@ -280,10 +280,10 @@ IDLE:
 StoreAck1:
 	if (ack_i|err_i|tlbmiss_i|wrv_i) begin
 		stb_o <= LOW;
-		if (sel_shift[22:16]==7'h0 && !wrap_cycle) begin
+		if (sel_shift[10:8]==3'h0 && !wrap_cycle) begin
 			cyc_o <= LOW;
 			we_o <= LOW;
-			sel_o <= 16'h0000;
+			sel_o <= 8'h00;
 			cr_o <= 1'b0;
     // This isn't a good way of doing things; the state should be propagated
     // to the commit stage, however since this is a store we know there will
@@ -318,11 +318,11 @@ StoreAck1:
 Store2:
 	if (~ack_i) begin
 		stb_o <= HIGH;
-		sel_o <= {15'h0,1'b1};
+		sel_o <= {7'h0,1'b1};
 		if (wrap_cycle)
-			adr_o[AMSB:4] <= adr_o[AMSB:4] & 12'hFF0;
+			adr_o[AMSB:3] <= adr_o[AMSB:3] & 12'hFF0;
 		else
-			adr_o[AMSB:4] <= adr_o[AMSB:4] + 2'd1;
+			adr_o[AMSB:3] <= adr_o[AMSB:3] + 2'd1;
 		adr_o[3:0] <= 4'b0;
 		dat_o <= {120'd0,dat_shift[135:128]};
 	end
@@ -331,7 +331,7 @@ StoreAck2:
 		cyc_o <= LOW;
 		stb_o <= LOW;
 		we_o <= LOW;
-		sel_o <= 16'h0000;
+		sel_o <= 8'h00;
 //    if (cr_o)
 //			sema[0] <= rbi_i;
 		wb_v[0] <= 1'b0;
@@ -347,7 +347,7 @@ StoreAck2:
   	if (wrap_cycle) begin
 			csel_o <= 2'b01;
 			cadr_o <= (wb_addr[0] + 16'd1) & 16'hFF00;
-			cdat_o <= {wb_data[0][15:8],wb_data[0][15:8]};
+			cdat_o <= {wb_data[0][26:13],wb_data[0][26:13]};
   	end
   	else begin
 			csel_o <= wb_sel[0];

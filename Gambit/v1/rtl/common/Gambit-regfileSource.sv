@@ -21,7 +21,7 @@
 //
 // ============================================================================
 // 18854
-`include "rtf65004-config.sv"
+`include "Gambit-config.sv"
 `define VAL		1'b1
 `define INV		1'b0
 

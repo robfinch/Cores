@@ -78,7 +78,7 @@ parameter RSTIP = 16'hFFFC;
 parameter BRKIP = 16'hFFFE;
 parameter DEBUG = 1'b0;
 parameter DBW = 16;
-parameter ABW = 64;
+parameter ABW = 52;
 parameter AMSB = ABW-1;
 parameter RBIT = 4;
 parameter WB_DEPTH = 7;
@@ -172,7 +172,7 @@ reg q1, q2, q1b, q1bx;	// number of macro instructions queued
 reg qb;						// queue a brk instruction
 
 
-wire [103:0] ic1_out;
+wire [115:0] ic1_out;
 wire [51:0] ic2_out;
 
 reg  [3:0] panic;		// indexes the message structure
@@ -843,7 +843,7 @@ begin
 	else begin
 		ptr[0] = mip1;
 		whinst[0] = 1'b0;
-		if (uop[ptr[0]].fl[1]) begin
+		if (uop_prg[ptr[0]].fl[1]) begin
 			ptr[1] = mip2;
 			ptr[2] = mip2+1;
 			ptr[3] = mip2+2;
@@ -852,7 +852,7 @@ begin
 		else begin
 			ptr[1] = mip1+1;
 			whinst[1] = 1'b0;
-			if (uop[ptr[1]].fl[1]) begin
+			if (uop_prg[ptr[1]].fl[1]) begin
 				ptr[2] = mip2;
 				ptr[3] = mip2+1;
 				whinst[3:2] = 2'd3;
@@ -860,7 +860,7 @@ begin
 			else begin
 				ptr[2] = mip1+2;
 				whinst[2] = 1'b0;
-				if (uop[ptr[2]].fl[1]) begin
+				if (uop_prg[ptr[2]].fl[1]) begin
 					ptr[3] = mip2;
 					whinst[3] = 1'b1;
 				end
@@ -1900,14 +1900,14 @@ tailptrs utp1
 
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
-	Rd[n] = uoq_uop[(uoq_head+n)%UOQ_ENTRIES].Rt;
+	Rd[n] = uoq_uop[(uoq_head+n)%UOQ_ENTRIES].tgt;
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
-	Rn[n] = uoq_uop[(uoq_head+n)%UOQ_ENTRIES].Rb;
+	Rn[n] = uoq_uop[(uoq_head+n)%UOQ_ENTRIES].src2;
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
-	Ra[n] = em ? uoq_uop[(uoq_head+n)%UOQ_ENTRIES].Rt :
-							 uoq_uop[(uoq_head+n)%UOQ_ENTRIES].Ra ;
+	Ra[n] = em ? uoq_uop[(uoq_head+n)%UOQ_ENTRIES].tgt :
+							 uoq_uop[(uoq_head+n)%UOQ_ENTRIES].src1 ;
 
 // In emulation mode, rfot and rfoa are the same
 always @*
@@ -2790,10 +2790,10 @@ wire will_clear_branchmiss = branchmiss && (pc==misspc);
 
 always @*
 case(fcu_instr)
-JMP:	fcu_misspc = {fcu_pc[63:16],fcu_argI[15:0] + fcu_argB[15:0]};
+JMP:	fcu_misspc = {fcu_pc[`AMSB:16],fcu_argI[15:0] + fcu_argB[15:0]};
 default:
 	// The length of the branch instruction is hardcoded here.
-	fcu_misspc = {fcu_pc[63:16],fcu_pt ? (fcu_pc[15:0] + 2'd2) : (fcu_pc[15:0] + fcu_brdisp[15:0] + 2'd2)};
+	fcu_misspc = {fcu_pc[`AMSB:16],fcu_pt ? (fcu_pc[15:0] + 2'd2) : (fcu_pc[15:0] + fcu_brdisp[15:0] + 2'd2)};
 endcase
 
 // To avoid false branch mispredicts the branch isn't evaluated until the
@@ -4407,12 +4407,13 @@ endcase
 	$display("%b %h #", pc_mask, pc);
 	$display("%b %h #", pc_mask, pcd);
     $display ("--------------------------------------------------------------------- Regfile ---------------------------------------------------------------------");
-  $display("ac: %h %d %d #", acx, regIsValid[0], rf_source[0]);
-  $display("xr: %h %d %d #", xrx, regIsValid[1], rf_source[1]);
-  $display("yr: %h %d %d #", yrx, regIsValid[2], rf_source[2]);
-  $display("sp: %h %d %d #", spx, regIsValid[31], rf_source[31]);
+  $display("ac: %h %d %d #", regsx[1], regIsValid[1], rf_source[1]);
+  $display("xr: %h %d %d #", regsx[2], regIsValid[2], rf_source[2]);
+  $display("yr: %h %d %d #", regsx[3], regIsValid[3], rf_source[3]);
+  $display("sp: %h %d %d #", regsx[31], regIsValid[31], rf_source[31]);
   $display("sr: %h %d %d #", srx, regIsValid[AREGS], sr_source);
-  $display("tmp: %h %d %d #", tmpx, regIsValid[5], rf_source[5]);
+  $display("tmp1: %h %d %d #", regsx[4], regIsValid[4], rf_source[4]);
+  $display("tmp2: %h %d %d #", regsx[5], regIsValid[5], rf_source[5]);
 `ifdef FCU_ENH
 	$display("Call Stack:");
 	for (n = 0; n < 16; n = n + 4)
@@ -4881,15 +4882,15 @@ begin
 	iq_argS[ndx] <= srx;//argS[slot % FSLOTS];
 	iq_argA_v[ndx] <= regIsValid[RaReal[slot % FSLOTS]] || SourceAValid(uoq_uop[(uoq_head+slot) % UOQ_ENTRIES].opcode);
 	iq_argB_v[ndx] <= regIsValid[RnReal[slot % FSLOTS]] || RnReal[slot % FSLOTS]==6'd0 || Source2Valid(uoq_uop[(uoq_head+slot) % UOQ_ENTRIES].opcode);
-	iq_argS_v[ndx] <= regIsValid[AREGS] || SourceSValid(uoq_uop[(uoq_head+slot) % UOQ_ENTRIES].copde);
+	iq_argS_v[ndx] <= regIsValid[AREGS] || SourceSValid(uoq_uop[(uoq_head+slot) % UOQ_ENTRIES].opcode);
 	iq_argA_s[ndx] <= RaReal[slot % FSLOTS]==6'd32 ? sr_source : rf_source[RaReal[slot % FSLOTS]];
 	iq_argB_s[ndx] <= rf_source[RnReal[slot % FSLOTS]];
 	iq_argS_s[ndx] <= sr_source;
 	iq_pt[ndx] <= uoq_takb[(uoq_head+slot) % UOQ_ENTRIES];
-	iq_tgt[ndx] <= uoq_uop[(uoq_head+slot) % UOQ_ENTRIES].Rt;
+	iq_tgt[ndx] <= RdReal[slot % FSLOTS];
 	set_insn(ndx,id_bus);
 	rob_pc[rid] <= uoq_pc[(uoq_head+slot) % UOQ_ENTRIES];
-	rob_tgt[rid] <= uoq_uop[(uoq_head+slot) % UOQ_ENTRIES].Rt;
+	rob_tgt[rid] <= RdReal[slot % FSLOTS];
 	rob_rfw[rid] <= IsRFW(uoq_uop[(uoq_head+slot) % UOQ_ENTRIES].opcode);
 	rob_res[rid] <= 1'd0;
 	rob_sr_tgts[rid] <= uoq_flagsupd[(uoq_head+slot) % UOQ_ENTRIES];
