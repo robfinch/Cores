@@ -5,7 +5,7 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	rtf65004-dcache.v
+//	Gambit-dcache.v
 //		
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -36,11 +36,11 @@
 
 module L1_dcache_mem(clk, wr, sel, lineno, i, o);
 parameter pLines = 128;
-parameter pLineWidth = 576;
+parameter pLineWidth = 476;
 localparam pLNMSB = $clog2(pLines)-1;
 input clk;
 input wr;
-input [71:0] sel;
+input [36:0] sel;
 input [pLNMSB:0] lineno;
 input [pLineWidth-1:0] i;
 output [pLineWidth-1:0] o;
@@ -59,10 +59,10 @@ end
 genvar v;
 
 generate begin : mupd
-for (v = 0; v < 72; v = v + 1)
+for (v = 0; v < 37; v = v + 1)
 begin : mw
 always @(posedge clk)
-	if (wr & sel[v])  mem[lineno][v*8+7:v*8] <= i[v*8+7:v*8];
+	if (wr & sel[v])  mem[lineno][v*13+:13] <= i[v*13+:13];
 end
 end
 endgenerate
@@ -74,15 +74,15 @@ assign o = mem[lineno];
 genvar g;
 
 generate begin : mem2
-for (g = 0; g < 72; g = g + 1) begin
+for (g = 0; g < 37; g = g + 1) begin
 // 128 lines (32 x 4 way)
 L1_dcache_mem2 u1
 (
   .a(lineno),
-  .d(i[g*8+7:g*8]),
+  .d(i[g*13+:13]),
   .clk(clk),
   .we(wr & sel[g]),
-  .spo(o[g*8+7:g*8])
+  .spo(o[g*13+:13])
 );
 end
 end
@@ -239,21 +239,21 @@ input rst;
 input clk;
 input nxt;
 input wr;
-input [71:0] sel;
+input [36:0] sel;
 input [AMSB:0] adr;
-input [575:0] i;
-output reg [15:0] o;
+input [475:0] i;
+output reg [51:0] o;
 output reg [2:0] fault;
 output hit;
 input invall;
 input invline;
 
-wire [575:0] ic;
-reg [575:0] i1;
+wire [475:0] ic;
+reg [475:0] i1;
 wire [pLNMSB:0] lineno;
 wire taghit;
 reg wr1;
-reg [71:0] sel1;
+reg [36:0] sel1;
 
 wire iclk;
 //BUFH ucb1 (.I(clk), .O(iclk));
@@ -295,9 +295,9 @@ assign hit = taghit;
 
 //always @(radr or ic0 or ic1)
 always @(adr or ic)
-	o <= ic >> {adr[5:0],3'b0};
+	o <= ic >> (adr[4:0] * 13);
 always @*
-	fault <= ic[575:573];
+	fault <= ic[475:473];
 
 endmodule
 
@@ -307,12 +307,12 @@ endmodule
 module L2_dcache_mem(clk, wr, sel, wlineno, rlineno, i, fault, o);
 input clk;
 input wr;
-input [65:0] sel;
+input [35:0] sel;
 input [8:0] wlineno;
 input [8:0] rlineno;
-input [527:0] i;
+input [418:0] i;
 input [3:0] fault;
-output [527:0] o;
+output [418:0] o;
 
 // Block ram must be a multiple of eight bits wide to use byte write enables.
 (* ram_style="block" *)
@@ -329,19 +329,23 @@ end
 
 genvar v;
 generate begin : memupd
-for (v = 0; v < 72; v = v + 1)
+for (v = 0; v < 36; v = v + 1)
 always @(posedge clk)
 begin
 	if (wr & sel[v])
-		mem[wlineno][v*8+7:v*8] <= i[v*8+7:v*8];
+		mem[wlineno][v*16+:16] <= {3'b0,i[v*13+:13]};
 end
 end
 endgenerate
 
 always @(posedge clk)
 	rrcl <= rlineno;        
-    
-assign o = mem[rrcl];
+
+generate begin : memrd
+for (v = 0; v < 36; v = v + 1)
+assign o[v*13+:13] = mem[rrcl][v*16+:13];
+end
+endgenerate
 
 endmodule
 
@@ -359,25 +363,25 @@ input rst;
 input clk;
 input nxt;
 input wr;
-input [71:0] sel;
+input [35:0] sel;
 input [AMSB:0] wadr;
 input [AMSB:0] radr;
 input tlbmiss_i;
 input rdv_i;
 input wrv_i;
 input err_i;
-input [575:0] i;
-output [575:0] o;
+input [475:0] i;
+output [475:0] o;
 output whit;
 output rhit;
 input invall;
 input invline;
 
-wire [8:0] wlineno,rlineno;
+wire [9:0] wlineno,rlineno;
 wire taghit;
 reg wr1 = 1'b0,wr2 = 1'b0;
-reg [71:0] sel1 = 3'd0,sel2= 3'd0;
-reg [575:0] i1 = 64'd0,i2 = 64'd0;
+reg [35:0] sel1 = 3'd0,sel2= 3'd0;
+reg [475:0] i1 = 64'd0,i2 = 64'd0;
 
 // Must update the cache memory on the cycle after a write to the tag memmory.
 // Otherwise lineno won't be valid. camTag memory takes two clock cycles to update.
@@ -398,17 +402,23 @@ always @(posedge clk)
 wire pe_wr;
 edge_det u3 (.rst(rst), .clk(clk), .ce(1'b1), .i(wr && cnt==3'd0), .pe(pe_wr), .ne(), .ee() );
 
+genvar g;
+generate begin : dmem
+for (g = 0; g < 36; g = g + 1)
 L2_dcache_ram u1 (
   .clka(clk),    // input wire clka
   .ena(wr2),      // input wire ena
-  .wea(sel2),      // input wire [41 : 0] wea
+  .wea(sel2[g]),      // input wire [41 : 0] wea
   .addra(wlineno),  // input wire [8 : 0] addra
-  .dina(i2),    // input wire [335 : 0] dina
+  .dina({3'b0,i2[g*13+:13]}),    // input wire [335 : 0] dina
   .clkb(clk),    // input wire clkb
   .enb(1'b1),      // input wire enb
   .addrb(rlineno),  // input wire [8 : 0] addrb
-  .doutb(o)  // output wire [335 : 0] doutb
+  .doutb(o[g*13+:13])  // output wire [335 : 0] doutb
 );
+end
+endgenerate
+
 /*
 L2_dcache_mem u1
 (
@@ -455,29 +465,29 @@ input wr2;
 input inv;
 input invall;
 input [AMSB+8:0] wadr;
-output reg [8:0] wlineno;
+output reg [9:0] wlineno;
 input [AMSB+8:0] radr;
-output reg [8:0] rlineno;
+output reg [9:0] rlineno;
 output whit;
 output rhit;
 
 (* ram_style="block" *)
-reg [AMSB+8-5:0] mem0 [0:127];
+reg [AMSB+8-5:0] mem0 [0:255];
 (* ram_style="block" *)
-reg [AMSB+8-5:0] mem1 [0:127];
+reg [AMSB+8-5:0] mem1 [0:255];
 (* ram_style="block" *)
-reg [AMSB+8-5:0] mem2 [0:127];
+reg [AMSB+8-5:0] mem2 [0:255];
 (* ram_style="block" *)
-reg [AMSB+8-5:0] mem3 [0:127];
+reg [AMSB+8-5:0] mem3 [0:255];
 (* ram_style="distributed" *)
-reg [511:0] valid;
+reg [1023:0] valid;
 reg [AMSB+8:0] rradr, rwadr;
 reg rwr;
 
 integer n;
 initial begin
-	valid <= 512'b0;
-  for (n = 0; n < 128; n = n + 1)
+	valid <= 1024'b0;
+  for (n = 0; n < 256; n = n + 1)
   begin
     mem0[n] = 0;
     mem1[n] = 0;
@@ -496,25 +506,25 @@ always @(posedge clk)
 	inv2 <= inv;
 always @(posedge clk)
 	if (invall)
-		valid <= 512'b0;
+		valid <= 1024'b0;
 	else if (inv2) begin
-		if (whit0) valid[{2'b00,wadr[11:5]}] <= 1'b0;
-		if (whit1) valid[{2'b01,wadr[11:5]}] <= 1'b0;
-		if (whit2) valid[{2'b10,wadr[11:5]}] <= 1'b0;
-		if (whit3) valid[{2'b11,wadr[11:5]}] <= 1'b0;
+		if (whit0) valid[{2'b00,wadr[12:5]}] <= 1'b0;
+		if (whit1) valid[{2'b01,wadr[12:5]}] <= 1'b0;
+		if (whit2) valid[{2'b10,wadr[12:5]}] <= 1'b0;
+		if (whit3) valid[{2'b11,wadr[12:5]}] <= 1'b0;
 	end
 	else if (wr)
-		valid[{lfsro[1:0],wadr[11:5]}] <= 1'b1;
+		valid[{lfsro[1:0],wadr[12:5]}] <= 1'b1;
 // Don't update the tag (select a new line) if there's a write hit.
 always @(posedge clk)
 	if (whit0|whit1|whit2|whit3)
 		;
 	else if (rwr)
 		case(lfsro[1:0])
-		2'b00:	mem0[rwadr[11:5]] <= rwadr[AMSB+8:5];
-		2'b01:	mem1[rwadr[11:5]] <= rwadr[AMSB+8:5];
-		2'b10:	mem2[rwadr[11:5]] <= rwadr[AMSB+8:5];
-		2'b11:	mem3[rwadr[11:5]] <= rwadr[AMSB+8:5];
+		2'b00:	mem0[rwadr[12:5]] <= rwadr[AMSB+9:5];
+		2'b01:	mem1[rwadr[12:5]] <= rwadr[AMSB+9:5];
+		2'b10:	mem2[rwadr[12:5]] <= rwadr[AMSB+9:5];
+		2'b11:	mem3[rwadr[12:5]] <= rwadr[AMSB+9:5];
 		endcase
 always @(posedge clk)
 	rwr <= wr;
@@ -523,25 +533,25 @@ always @(posedge clk)
 always @(posedge clk)
 	rwadr <= wadr;
 
-assign whit0 = mem0[rwadr[11:5]]==rwadr[AMSB+8:5] && valid[{2'b00,wadr[11:5]}];
-assign whit1 = mem1[rwadr[11:5]]==rwadr[AMSB+8:5] && valid[{2'b01,wadr[11:5]}];
-assign whit2 = mem2[rwadr[11:5]]==rwadr[AMSB+8:5] && valid[{2'b10,wadr[11:5]}];
-assign whit3 = mem3[rwadr[11:5]]==rwadr[AMSB+8:5] && valid[{2'b11,wadr[11:5]}];
-assign rhit0 = mem0[rradr[11:5]]==rradr[AMSB+8:5] && valid[{2'b00,radr[11:5]}];
-assign rhit1 = mem1[rradr[11:5]]==rradr[AMSB+8:5] && valid[{2'b01,radr[11:5]}];
-assign rhit2 = mem2[rradr[11:5]]==rradr[AMSB+8:5] && valid[{2'b10,radr[11:5]}];
-assign rhit3 = mem3[rradr[11:5]]==rradr[AMSB+8:5] && valid[{2'b11,radr[11:5]}];
+assign whit0 = mem0[rwadr[12:5]]==rwadr[AMSB+8:5] && valid[{2'b00,wadr[12:5]}];
+assign whit1 = mem1[rwadr[12:5]]==rwadr[AMSB+8:5] && valid[{2'b01,wadr[12:5]}];
+assign whit2 = mem2[rwadr[12:5]]==rwadr[AMSB+8:5] && valid[{2'b10,wadr[12:5]}];
+assign whit3 = mem3[rwadr[12:5]]==rwadr[AMSB+8:5] && valid[{2'b11,wadr[12:5]}];
+assign rhit0 = mem0[rradr[12:5]]==rradr[AMSB+8:5] && valid[{2'b00,radr[12:5]}];
+assign rhit1 = mem1[rradr[12:5]]==rradr[AMSB+8:5] && valid[{2'b01,radr[12:5]}];
+assign rhit2 = mem2[rradr[12:5]]==rradr[AMSB+8:5] && valid[{2'b10,radr[12:5]}];
+assign rhit3 = mem3[rradr[12:5]]==rradr[AMSB+8:5] && valid[{2'b11,radr[12:5]}];
 always @*
-       if (whit0)  wlineno = {2'b00,wadr[11:5]};
-  else if (whit1)  wlineno = {2'b01,wadr[11:5]};
-  else if (whit2)  wlineno = {2'b10,wadr[11:5]};
-  else if (whit3)  wlineno = {2'b11,wadr[11:5]};
-	else if (rwr|wr2) wlineno = {lfsro[1:0],rwadr[11:5]};
+       if (whit0)  wlineno = {2'b00,wadr[12:5]};
+  else if (whit1)  wlineno = {2'b01,wadr[12:5]};
+  else if (whit2)  wlineno = {2'b10,wadr[12:5]};
+  else if (whit3)  wlineno = {2'b11,wadr[12:5]};
+	else if (rwr|wr2) wlineno = {lfsro[1:0],rwadr[12:5]};
 always @*
-  if (rhit0)  rlineno = {2'b00,radr[11:5]};
-  else if (rhit1)  rlineno = {2'b01,radr[11:5]};
-  else if (rhit2)  rlineno = {2'b10,radr[11:5]};
-  else  rlineno = {2'b11,radr[11:5]};
+  if (rhit0)  rlineno = {2'b00,radr[12:5]};
+  else if (rhit1)  rlineno = {2'b01,radr[12:5]};
+  else if (rhit2)  rlineno = {2'b10,radr[12:5]};
+  else  rlineno = {2'b11,radr[12:5]};
 assign whit = whit0|whit1|whit2|whit3;
 assign rhit = rhit0|rhit1|rhit2|rhit3;
 endmodule

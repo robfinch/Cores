@@ -110,6 +110,12 @@
 `define UO_JMP		6'd28
 `define UO_STP		6'd29
 `define UO_WAI		6'd30
+`define UO_CAUSE	6'd31
+`define UO_BUC		6'd32
+`define UO_BUS		6'd33
+`define UO_JSI		6'd34
+
+`define UOF_I			7'b0010000
 
 `define OPCODE		5:0
 

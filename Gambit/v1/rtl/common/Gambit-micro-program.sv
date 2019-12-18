@@ -89,6 +89,7 @@ parameter WAI = 6'd30;
 parameter CAUSE = 6'd31;
 parameter BUC = 6'd32;
 parameter BUS = 6'd33;
+parameter JSI = 6'd34;
 
 parameter ADD_RR = 1;
 parameter ADD_RI23 = 2;
@@ -386,8 +387,8 @@ MicroOp uop_prg [0:188] = '{
 '{2'd0,	SUB,		SP,SP,ZERO,FOUR},
 '{2'd0,	ST,			SR,SP,ZERO,ZERO},
 '{2'd0,	SEP,		IFLAG,ZERO,ZERO,ZERO},
-'{2'd0,	LD,			TMP1,ZERO,ZERO,-FOUR},
-'{2'd2,	JMP,		ZERO,TMP1,ZERO,ZERO},
+'{2'd0,	LD,			TMP1,ZERO,ZERO,MFOUR},
+'{2'd2,	JSI,		ZERO,TMP1,ZERO,ZERO},
 // IRQ (ONE57):
 '{2'd1, CAUSE,	ZERO,ZERO,ZERO,ONE},
 '{2'd0,	SUB,		SP,SP,ZERO,FOUR},
@@ -395,8 +396,8 @@ MicroOp uop_prg [0:188] = '{
 '{2'd0,	SUB,		SP,SP,ZERO,FOUR},
 '{2'd0,	ST,			SR,SP,ZERO,ZERO},
 '{2'd0,	SEP,		IFLAG,ZERO,ZERO,ZERO},
-'{2'd0,	LD,			TMP1,ZERO,ZERO,-FOUR},
-'{2'd2,	JMP,		ZERO,TMP1,ZERO,ZERO},
+'{2'd0,	LD,			TMP1,ZERO,ZERO,MFOUR},
+'{2'd2,	JSI,		ZERO,TMP1,ZERO,ZERO},
 // NMI (ONE65):
 '{2'd1, CAUSE,	ZERO,ZERO,ZERO,TWO},
 '{2'd0,	SUB,		SP,SP,ZERO,FOUR},
@@ -404,8 +405,8 @@ MicroOp uop_prg [0:188] = '{
 '{2'd0,	SUB,		SP,SP,ZERO,FOUR},
 '{2'd0,	ST,			SR,SP,ZERO,ZERO},
 '{2'd0,	SEP,		IFLAG,ZERO,ZERO,ZERO},
-'{2'd0,	LD,			TMP1,ZERO,ZERO,-FOUR},
-'{2'd2,	JMP,		ZERO,TMP1,ZERO,ZERO},
+'{2'd0,	LD,			TMP1,ZERO,ZERO,MFOUR},
+'{2'd2,	JSI,		ZERO,TMP1,ZERO,ZERO},
 // RST (ONE73):
 '{2'd1, CAUSE,	ZERO,ZERO,ZERO,THREE},
 '{2'd0,	SUB,		SP,SP,ZERO,FOUR},
@@ -413,8 +414,8 @@ MicroOp uop_prg [0:188] = '{
 '{2'd0,	SUB,		SP,SP,ZERO,FOUR},
 '{2'd0,	ST,			SR,SP,ZERO,ZERO},
 '{2'd0,	SEP,		IFLAG,ZERO,ZERO,ZERO},
-'{2'd0,	LD,			TMP1,ZERO,ZERO,-FOUR},
-'{2'd2,	JMP,		ZERO,TMP1,ZERO,ZERO},
+'{2'd0,	LD,			TMP1,ZERO,ZERO,MFOUR},
+'{2'd2,	JSI,		ZERO,TMP1,ZERO,ZERO},
 // BRK (ONE8ONE):
 '{2'd1, CAUSE,	ZERO,ZERO,ZERO,FOUR},
 '{2'd0,	SUB,		SP,SP,ZERO,FOUR},
@@ -422,6 +423,6 @@ MicroOp uop_prg [0:188] = '{
 '{2'd0,	SUB,		SP,SP,ZERO,FOUR},
 '{2'd0,	ST,			SR,SP,ZERO,ZERO},
 '{2'd0,	SEP,		IFLAG,ZERO,ZERO,ZERO},
-'{2'd0,	LD,			TMP1,ZERO,ZERO,-FOUR},
-'{2'd2,	JMP,		ZERO,TMP1,ZERO,ZERO}
+'{2'd0,	LD,			TMP1,ZERO,ZERO,MFOUR},
+'{2'd2,	JSI,		ZERO,TMP1,ZERO,ZERO}
 };

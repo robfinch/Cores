@@ -220,7 +220,7 @@ reg [2:0] uoq_ilen [0:UOQ_ENTRIES-1];
 MicroOp uoq_uop [0:UOQ_ENTRIES-1];
 reg [47:0] uoq_inst [0:UOQ_ENTRIES-1];
 reg [3:0] uoq_size [0:UOQ_ENTRIES-1];
-reg [31:0] uoq_const [0:UOQ_ENTRIES-1];
+reg [51:0] uoq_const [0:UOQ_ENTRIES-1];
 reg [1:0] uoq_fl [0:UOQ_ENTRIES-1];		// first or last micro-op
 reg [7:0] uoq_flagsupd [0:UOQ_ENTRIES-1];
 reg [4:0] uoq_Ra [0:UOQ_ENTRIES-1];
@@ -928,6 +928,10 @@ always @(posedge clk_i)
 if (rst_i) begin
 	mip1 <= 12'd0;
 	mip2 <= 12'd0;
+	uop2q[0] <= {2'd3,ADD,4'd0,4'd0,4'd0,4'd0};
+	uop2q[1] <= {2'd3,ADD,4'd0,4'd0,4'd0,4'd0};
+	uop2q[2] <= {2'd3,ADD,4'd0,4'd0,4'd0,4'd0};
+	uop2q[3] <= {2'd3,ADD,4'd0,4'd0,4'd0,4'd0};
 	nextBundle <= TRUE;
 end
 else begin
@@ -970,10 +974,10 @@ assign ic1_out = ic_out[103:0];
 assign ic2_out = ic1_out >> {iclen1,3'b0};
 assign freezepc = ((rst_ctr < 32'd10) || nmi_i || (irq_i & ~sr[4])) && !int_commit;
 
-assign opcode1 = freezepc ? {rst_i ? `RST : nmi_i ? `NMI : irq_i ? `IRQ : 3'd7,`BRK} : ic1_out[8:0];
-assign opcode2 = freezepc ? {rst_i ? `RST : nmi_i ? `NMI : irq_i ? `IRQ : 3'd7,`BRK} : ic2_out[8:0];
-assign insnx[0] = freezepc ? {rst_i ? `RST : nmi_i ? `NMI : irq_i ? `IRQ : 3'd7,`BRK} : ic1_out[51:0];
-assign insnx[1] = freezepc ? {rst_i ? `RST : nmi_i ? `NMI : irq_i ? `IRQ : 3'd7,`BRK} : ic2_out[51:0];
+assign opcode1 = freezepc ? {(rst_ctr < 32'd10) ? `RST : nmi_i ? `NMI : irq_i ? `IRQ : 3'd7,`BRKGRP} : ic1_out[8:0];
+assign opcode2 = freezepc ? {(rst_ctr < 32'd10) ? `RST : nmi_i ? `NMI : irq_i ? `IRQ : 3'd7,`BRKGRP} : ic2_out[8:0];
+assign insnx[0] = freezepc ? {(rst_ctr < 32'd10) ? `RST : nmi_i ? `NMI : irq_i ? `IRQ : 3'd7,`BRKGRP} : ic1_out[51:0];
+assign insnx[1] = freezepc ? {(rst_ctr < 32'd10) ? `RST : nmi_i ? `NMI : irq_i ? `IRQ : 3'd7,`BRKGRP} : ic2_out[51:0];
 wire IsRst = (freezepc && rst_ctr < 4'd10);
 wire IsNmi = (freezepc & nmi_i);
 wire IsIrq = (freezepc & irq_i & ~sr[3]);
@@ -987,7 +991,7 @@ reg invdcl;
 reg [AMSB:0] invlineAddr = 24'h0;
 wire L1_invline;
 wire [WID-1:0] L1_adr, L2_adr;
-wire [527:0] L1_dat, L2_dat;
+wire [475:0] L1_dat, L2_dat;
 wire L1_wr, L2_wr;
 wire L1_selpc;
 wire L2_ld;
@@ -1013,8 +1017,8 @@ wire d1L1_dhit, d1L2_rhit, d1L2_whit;
 wire d1L1_nxt, d1L2_nxt;					// advances cache way lfsr
 wire [71:0] d0L1_sel, d0L2_sel;
 wire [71:0] d1L1_sel, d1L2_sel;
-wire [575:0] d0L1_dat, d0L2_rdat, d0L2_wdat;
-wire [575:0] d1L1_dat, d1L2_rdat, d1L2_wdat;
+wire [475:0] d0L1_dat, d0L2_rdat, d0L2_wdat;
+wire [475:0] d1L1_dat, d1L2_rdat, d1L2_wdat;
 wire d0L1_dhit;
 wire d0L1_selpc;
 wire d1L1_selpc, d1L2_selpc;
@@ -1182,7 +1186,7 @@ for (n = 0; n < IQ_ENTRIES; n = n + 1)
 	is_qbranch[n] = iq_br[n];
 
 wire [1:0] ic_fault;
-wire [1023:0] ic_out;
+wire [831:0] ic_out;
 wire [AMSB:0] missadr;
 reg invic, invdc;
 reg invicl;
@@ -2277,6 +2281,11 @@ endfunction
 function [31:0] fnMnemonic;
 input [5:0] ins;
 case(ins)
+CAUSE:	fnMnemonic = "CAUS";
+SUB:	fnMnemonic = "SUB ";
+LD:		fnMnemonic = "LD  ";
+ST:		fnMnemonic = "ST  ";
+JSI:	fnMnemonic = "JSI ";
 JMP:	fnMnemonic = "JMP ";
 SEP:	fnMnemonic = "SEP ";
 `BccD4a:	fnMnemonic = "Bcc ";
@@ -2799,7 +2808,7 @@ wire will_clear_branchmiss = branchmiss && (pc==misspc);
 
 always @*
 case(fcu_instr)
-JMP:	fcu_misspc = {fcu_pc[`AMSB:16],fcu_argI[15:0] + fcu_argB[15:0]};
+JMP,JSI:	fcu_misspc = {fcu_pc[`AMSB:16],fcu_argI[15:0] + fcu_argB[15:0]};
 default:
 	// The length of the branch instruction is hardcoded here.
 	fcu_misspc = {fcu_pc[`AMSB:16],fcu_pt ? (fcu_pc[15:0] + 2'd2) : (fcu_pc[15:0] + fcu_brdisp[15:0] + 2'd2)};
@@ -2823,7 +2832,7 @@ if (fcu_v) begin
 	fcu_branchhit <= (fcu_branch && !(fcu_takb ^ fcu_pt));
 	if (fcu_branch && (fcu_takb ^ fcu_pt))
     fcu_branchmiss = TRUE;
-	else if (fcu_instr==JMP) begin
+	else if (fcu_instr==JMP || fcu_instr==JSI) begin
 		if (fcu_followed)
 			fcu_branchmiss = iq_pc[nid]!=fcu_misspc;
 		else
@@ -2894,9 +2903,9 @@ begin
   commit2_rid <= heads[2][`RBITS];
 end
 
-//assign int_commit = (commit0_v && iq_instr[heads[0]]==`UO_JSI)
-//									 || (commit0_v && commit1_v && iq_instr[heads[1]]==`UO_JSI)
-//									 || (commit0_v && commit1_v && commit2_v && iq_instr[heads[2]]==`UO_JSI);
+assign int_commit = (commit0_v && iq_instr[heads[0]]==`UO_JSI)
+									 || (commit0_v && commit1_v && iq_instr[heads[1]]==`UO_JSI)
+									 || (commit0_v && commit1_v && commit2_v && iq_instr[heads[2]]==`UO_JSI);
 
 
 //wire [143:0] id_bus[0], id_bus[1], id_bus[2];
@@ -2941,7 +2950,7 @@ alu ualu2
 agen uagn1
 (
 	.src1(agen0_argI),
-	.src2(em ? agen0_argB : agen0_argA),
+	.src2(agen0_argA),
 	.ma(agen0_ma),
 	.idle(agen0_idle)
 );
@@ -2949,7 +2958,7 @@ agen uagn1
 agen uagn2
 (
 	.src1(agen1_argI),
-	.src2(em ? agen1_argB : agen1_argA),
+	.src2(agen1_argA),
 	.ma(agen1_ma),
 	.idle(agen1_idle)
 );
@@ -3781,10 +3790,10 @@ else begin
 
 	if (fcu_v) begin
 		fcu_done <= `TRUE;
-		//fcu_sr_bus <= (fcu_instr==`UO_JSI) ? (fcu_argS | `UOF_I) : fcu_argS;
-		//rob_sr_res[fcu_rid] <= (fcu_instr==`UO_JSI) ? (fcu_argS | `UOF_I) : fcu_argS;
-		fcu_sr_bus <= fcu_argS;
-		rob_sr_res[fcu_id] <= fcu_argS;
+		fcu_sr_bus <= (fcu_instr==JSI) ? (fcu_argS | `UOF_I) : fcu_argS;
+		rob_sr_res[fcu_rid] <= (fcu_instr==JSI) ? (fcu_argS | `UOF_I) : fcu_argS;
+		//fcu_sr_bus <= fcu_argS;
+		//rob_sr_res[fcu_id] <= fcu_argS;
 		//iq_ma  [ fcu_id ] <= fcu_misspc;
 	  rob_res [ fcu_rid ] <= rfcu_bus;
 	  rob_exc [ fcu_rid ] <= fcu_exc;

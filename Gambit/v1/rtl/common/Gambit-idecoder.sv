@@ -38,6 +38,7 @@ parameter word = 3'd1;
 function IsAlu;
 input [23:0] isn;
 case(isn[21:16])
+`UO_CAUSE,
 `UO_ADD,`UO_SUB,
 `UO_ADDu,`UO_SUBu,
 `UO_ANDu,`UO_ORu,`UO_EORu,
@@ -63,7 +64,7 @@ function IsFcu;
 input [23:0] isn;
 case(isn[21:16])
 `UO_BEQ,`UO_BNE,`UO_BCS,`UO_BCC,`UO_BVS,`UO_BVC,`UO_BMI,`UO_BPL,`UO_BRA,
-`UO_JMP:
+`UO_JMP,`UO_JSI:
 	IsFcu = TRUE;
 default:	IsFcu = FALSE;
 endcase

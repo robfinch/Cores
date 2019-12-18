@@ -31,7 +31,7 @@ module DCController(rst_i, clk_i, dadr, rd, wr, wsel, wadr, wdat, bstate, state,
 	dL2_rhit, dL2_rdat, dL2_whit, dL2_ld, dL2_wsel, dL2_wadr, dL2_wdat, dL2_nxt,
 	dL1_hit, dL1_selpc, dL1_sel, dL1_adr, dL1_dat, dL1_wr, dL1_invline, dcnxt, dcwhich,
 	dcl_o, cti_o, bte_o, bok_i, cyc_o, stb_o, ack_i, err_i, wrv_i, rdv_i, sel_o, adr_o, dat_i);
-parameter ABW = 64;
+parameter ABW = 52;
 parameter AMSB = ABW-1;
 parameter L2_ReadLatency = 3'd3;
 parameter L1_WriteLatency = 3'd3;
@@ -43,7 +43,7 @@ input rd;
 input wr;
 input [7:0] wsel;
 input [AMSB:0] wadr;
-input [63:0] wdat;
+input [51:0] wdat;
 input [4:0] bstate;
 (* mark_debug="true" *)
 output reg [3:0] state;
@@ -51,22 +51,22 @@ input invline;
 input [71:0] invlineAddr;
 output reg [39:0] icl_ctr;
 output isROM;
-input [511:0] ROM_dat;
+input [415:0] ROM_dat;
 input dL2_rhit;
-input [575:0] dL2_rdat;
+input [467:0] dL2_rdat;
 input dL2_whit;
 output reg dL2_ld;
-output reg [71:0] dL2_wsel;
+output reg [58:0] dL2_wsel;
 output reg [AMSB:0] dL2_wadr;
-output reg [575:0] dL2_wdat;
+output reg [467:0] dL2_wdat;
 output reg dL2_nxt;
 
 input dL1_hit;
 output dL1_selpc;
 output reg [AMSB:0] dL1_adr;
-output reg [575:0] dL1_dat = 568'd0;	// NOP
+output reg [467:0] dL1_dat = 468'd0;	// NOP
 output reg dL1_wr;
-output reg [71:0] dL1_sel;
+output reg [58:0] dL1_sel;
 output reg dL1_invline;
 output reg dcnxt;
 output reg [1:0] dcwhich = 2'b00;
@@ -81,9 +81,9 @@ input ack_i;
 input err_i;
 input wrv_i;
 input rdv_i;
-output reg [15:0] sel_o;
+output reg [7:0] sel_o;
 output reg [AMSB:0] adr_o;
-input [127:0] dat_i;
+input [103:0] dat_i;
 
 parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
@@ -95,7 +95,7 @@ reg [79:0] invlineAddr_r = 72'd0;
 
 //assign L2_ld = (state==IC_Ack) && (ack_i|err_i|tlbmiss_i|exv_i);
 assign dL1_selpc = (state==IDLE||state==IC5) && !invline_r;
-assign isROM = dL1_adr[23:15]==17'b1;
+assign isROM = dL1_adr[51:15]=={37{1'b1}};
 
 wire clk = clk_i;
 reg [2:0] dccnt;
@@ -143,13 +143,13 @@ case(state)
 IDLE:
 	begin
 		dL2_ld <= FALSE;
-		dL2_wsel <= wsel << wadr[5:0];
+		dL2_wsel <= wsel << wadr[4:0];
 		dL2_wsel[71] <= 1'b1;
-		dL2_wadr <= {wadr[AMSB:6],6'h0};
-		dL2_wdat <= {512'd0,wdat} << {wadr[5:0],3'b0};
+		dL2_wadr <= {wadr[AMSB:5],5'h0};
+		dL2_wdat <= {512'd0,wdat} << (wadr[4:0] * 13);
 		dccnt <= 3'd0;
 		if (invline_r) begin
-			dL1_adr <= {invlineAddr_r[AMSB:6],6'b0};
+			dL1_adr <= {invlineAddr_r[AMSB:5],5'b0};
 			dL1_invline <= TRUE;
 			invline_r <= 1'b0;
 		end
@@ -158,14 +158,14 @@ IDLE:
 		else begin
 			if (dL1_hit && wr) begin
 				dL1_wr <= 1'b1;
-				dL1_sel <= wsel << wadr[5:0];
+				dL1_sel <= wsel << wadr[4:0];
 				dL1_sel[71] <= 1'b1;
-				dL1_adr <= {wadr[AMSB:6],6'h0};
-				dL1_dat <= {512'd0,wdat} << {wadr[5:0],3'b0};
+				dL1_adr <= {wadr[AMSB:5],5'h0};
+				dL1_dat <= {512'd0,wdat} << (wadr[4:0] * 13);
 				dL2_ld <= 1'b1;
 			end
 			else if (!dL1_hit && rd && !(dL2_whit && wr)) begin
-				dL1_adr <= {dadr[AMSB:6],6'h0};
+				dL1_adr <= {dadr[AMSB:5],5'h0};
 				dcwhich <= 2'b00;
 				state <= IC2;
 			end
@@ -183,7 +183,7 @@ IC2:
 			if (dccnt==ROM_ReadLatency) begin
 				state <= IC_WaitROM;
 				dL1_wr <= TRUE;
-				dL1_sel <= {72{1'b1}};
+				dL1_sel <= {59{1'b1}};
 				dL1_dat <= {256'd0,ROM_dat};
 				dccnt <= 3'd0;
 				state <= IC5;
@@ -206,7 +206,7 @@ IC2:
 IC_WaitL2: 
 	if (dL2_rhit && picstate==IC2) begin
 		dL1_wr <= TRUE;
-		dL1_sel <= {72{1'b1}};
+		dL1_sel <= {59{1'b1}};
 		dL1_dat <= dL2_rdat;
 		dccnt <= 3'd0;
 		state <= IC5;
@@ -219,10 +219,10 @@ IC_WaitL2:
 			bte_o <= 2'b00;
 			cyc_o <= `HIGH;
 			stb_o <= `HIGH;
-			sel_o <= 16'hFFFF;
-			adr_o <= {dL1_adr[AMSB:6],6'b0};
+			sel_o <= 8'hFF;
+			adr_o <= {dL1_adr[AMSB:5],5'b0};
 			dL2_wadr <= dL1_adr;
-			dL2_wadr[5:0] <= 6'd0;
+			dL2_wadr[4:0] <= 5'd0;
 			dL2_ld <= TRUE;
 			state <= IC_Ack;
 		end
@@ -243,28 +243,28 @@ IC_Ack:
   if (ack_i|err_i|wrv_i|rdv_i) begin
   	if (!bok_i) begin
   		stb_o <= `LOW;
-			adr_o[AMSB:4] <= adr_o[AMSB:4] + 2'd1;
+			adr_o[AMSB:3] <= adr_o[AMSB:3] + 2'd1;
   		state <= IC_Nack2;
   	end
 		if (wrv_i) begin
-			dL1_dat[575:573] <= 2'd1;
-			dL1_dat[519:0] <= 520'd0;
-			dL2_wdat[527:525] <= 2'd1;
-			dL2_wdat[571:0] <= 520'd0;
+			dL1_dat[470:468] <= 2'd1;
+			dL1_dat[468:0] <= 468'd0;
+			dL2_wdat[470:468] <= 2'd1;
+			dL2_wdat[467:0] <= 468'd0;
 			nack();
 	  end
 		else if (rdv_i) begin
-			dL1_dat[575:573] <= 2'd2;
-			dL1_dat[519:0] <= 520'd0;
-			dL2_wdat[527:525] <= 2'd2;
-			dL2_wdat[571:0] <= 520'd0;
+			dL1_dat[470:468] <= 2'd2;
+			dL1_dat[468:0] <= 468'd0;
+			dL2_wdat[470:468] <= 2'd2;
+			dL2_wdat[467:0] <= 468'd0;
 			nack();
 		end
 	  else if (err_i) begin
-			dL1_dat[575:573] <= 2'd3;
-			dL1_dat[519:0] <= 520'd0;
-			dL2_wdat[527:525] <= 2'd3;
-			dL2_wdat[571:0] <= 520'd0;
+			dL1_dat[470:468] <= 2'd3;
+			dL1_dat[468:0] <= 468'd0;
+			dL2_wdat[470:468] <= 2'd3;
+			dL2_wdat[467:0] <= 468'd0;
 			nack();
 	  end
 	  else begin
@@ -272,23 +272,21 @@ IC_Ack:
 	  	3'd0:	dL1_dat[127:0] <= dat_i;
 	  	3'd1:	dL1_dat[255:128] <= dat_i;
 	  	3'd2:	dL1_dat[383:256] <= dat_i;
-	  	3'd3:	dL1_dat[511:384] <= dat_i;
-	  	3'd4:	dL1_dat[575:512] <= {8'h00,dat_i[55:0]};
+	  	3'd3:	dL1_dat[475:384] <= {8'h00,dat_i[83:0]};
 	  	default:	dL1_dat <= dL1_dat;
 	  	endcase
 	  	case(dccnt)
 	  	3'd0:	dL2_wdat[127:0] <= dat_i;
 	  	3'd1:	dL2_wdat[255:128] <= dat_i;
 	  	3'd2:	dL2_wdat[383:256] <= dat_i;
-	  	3'd3:	dL2_wdat[511:384] <= dat_i;
-	  	3'd4:	dL2_wdat[575:512] <= {8'h00,dat_i[55:0]};
+	  	3'd3:	dL2_wdat[475:384] <= {8'h00,dat_i[83:0]};
 	  	default:	dL2_wdat <= dL2_wdat;
 	  	endcase
 	  end
     dccnt <= dccnt + 3'd1;
-    if (dccnt==3'd3)
+    if (dccnt==3'd2)
       cti_o <= 3'b111;
-    if (dccnt==3'd4)
+    if (dccnt==3'd3)
     	nack();
   end
 // This state only used when burst mode is not allowed.
@@ -302,10 +300,10 @@ IC_Nack2:
 IC_Nack:
 	begin
 		dL2_ld <= TRUE;
-		dL2_wsel <= {72{1'b1}};
+		dL2_wsel <= {59{1'b1}};
     dccnt <= 3'd0;
 		dL1_wr <= TRUE;
-		dL1_sel <= {72{1'b1}};
+		dL1_sel <= {59{1'b1}};
 		icl_ctr <= icl_ctr + 40'd1;
 		state <= IC5;	// Wait for write latency to expire
 	end

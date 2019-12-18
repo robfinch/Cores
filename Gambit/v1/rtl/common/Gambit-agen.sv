@@ -21,10 +21,11 @@
 //                                                                          
 // ============================================================================
 //
+`include "Gambit-config.sv"
 `include "Gambit-defines.sv"
 
 module agen(wrap, src1, src2, ma, idle);
-parameter AMSB = 63;
+parameter AMSB = `AMSB;
 parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
 input wrap;
