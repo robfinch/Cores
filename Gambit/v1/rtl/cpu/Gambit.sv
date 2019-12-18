@@ -145,8 +145,6 @@ reg [15:0] sr;
 reg sre;
 reg [15:0] srx;
 reg srex;
-wire em = sr[8];
-wire nat = ~sr[8];			// native mode flag
 
 wire [WID-1:0] pcd;
 reg [31:0] tick;
@@ -180,7 +178,7 @@ reg [127:0] message [0:15];	// indexed by panic
 
 wire int_commit;
 
-reg [179:0] xdati;
+reg [103:0] xdati;
 
 reg [31:0] uop_queued;
 reg [31:0] ins_queued;
@@ -210,7 +208,7 @@ wire [`RBITS] rob_heads [0:RENTRIES-1];
 wire [FSLOTS-1:0] slotvd, pc_maskd, pc_mask;
 
 // Micro instruction pointers.
-reg [11:0] mip1, mip2;
+reg [7:0] mip1, mip2;
 reg nextBundle;
 
 // Micro-op queue
@@ -826,7 +824,7 @@ begin
 	end
 end
 
-reg [11:0] ptr [0:3];
+reg [7:0] ptr [0:3];
 reg [3:0] whinst;			// Which instruction the corresponding pointer points to.
 
 // Compute pointers into micro-instruction program.
@@ -906,16 +904,13 @@ always @*
 
 reg [2:0] uopqd;
 always @*
-if (uoq_room > 3'd3)
-	uopqd <= uopqc;
-else if (uoq_room > 3'd2)
-	uopqd <= uopqc > 3'd3 ? 3'd3 : uopqc;
-else if (uoq_room > 3'd1)
-	uopqd <= uopqc > 3'd2 ? 3'd2 : uopqc;
-else if (uoq_room > 3'd0)
-	uopqd <= uopqc > 3'd1 ? 3'd1 : uopqc;
-else
-	uopqd <= 3'd0;
+case(uoq_room)
+3'd0:	uopqd <= 3'd0;
+3'd1:	uopqd <= uopqc > 3'd1 ? 3'd1 : uopqc;
+3'd2:	uopqd <= uopqc > 3'd2 ? 3'd2 : uopqc;
+3'd3:	uopqd <= uopqc > 3'd3 ? 3'd3 : uopqc;
+default:	uopqd <= uopqc;
+endcase
 
 wire uopQueued = uopqd > 3'd0;
 
@@ -942,22 +937,155 @@ else begin
 	end
 	else if (uopQueued) begin
 		case({uop_prg[ptr[3]].fl[1],uop_prg[ptr[2]].fl[1],uop_prg[ptr[1]].fl[1],uop_prg[ptr[0]].fl[1]})
-		4'b0000:	begin if (|mip1) mip1 <= mip1 + 3'd4; else mip2 <= mip2 + 3'd4; end
-		4'b0001:	begin mip1 <= 12'd0; if (|mip1) mip2 <= mip2 + 3'd3; else nextBundle <= TRUE; end
-		4'b0010:	begin mip1 <= 12'd0; if (|mip1) mip2 <= mip2 + 3'd2; else nextBundle <= TRUE; end
-		4'b0011:	begin mip1 <= 12'd0; mip2 <= 12'd0; nextBundle <= TRUE; end
-		4'b0100:	begin mip1 <= 12'd0; if (|mip1) mip2 <= mip2 + 3'd1; else nextBundle <= TRUE; end
-		4'b0101:	begin mip1 <= 12'd0; mip2 <= 12'd0; nextBundle <= TRUE; end
-		4'b0110:	begin mip1 <= 12'd0; mip2 <= 12'd0; nextBundle <= TRUE; end
-		4'b0111:	begin mip1 <= 12'd0; mip2 <= 12'd0; nextBundle <= TRUE; end
-		4'b1000:	begin mip1 <= 12'd0; if (~|mip1) nextBundle <= TRUE; end
-		4'b1001:	begin mip1 <= 12'd0; mip2 <= 12'd0; nextBundle <= TRUE; end
-		4'b1010:	begin mip1 <= 12'd0; mip2 <= 12'd0; nextBundle <= TRUE; end
-		4'b1011:	begin mip1 <= 12'd0; mip2 <= 12'd0; nextBundle <= TRUE; end
-		4'b1100:	begin mip1 <= 12'd0; mip2 <= 12'd0; nextBundle <= TRUE; end
-		4'b1101:	begin mip1 <= 12'd0; mip2 <= 12'd0; nextBundle <= TRUE; end
-		4'b1110:	begin mip1 <= 12'd0; mip2 <= 12'd0; nextBundle <= TRUE; end
-		4'b1111:	begin mip1 <= 12'd0; mip2 <= 12'd0; nextBundle <= TRUE; end
+		4'b0000:	begin if (|mip1) mip1 <= mip1 + uopqd; else mip2 <= mip2 + uopqd; end
+		4'b0001:	begin mip1 <= 1'd0; if (|mip1) mip2 <= mip2 + uopqd - 3'd1; else nextBundle <= TRUE; end
+		4'b0010:	begin 
+								if (|mip1) begin
+									mip1 <= uopqd >= 3'd2 ? 1'd0 : mip1 + 3'd1;
+									mip2 <= uopqd > 3'd2 ? mip2 + uopqd - 3'd2 : mip2;
+									if (uopqd >= 3'd4)
+										nextBundle <= TRUE;
+								end
+								else begin
+									mip2 <= mip2 + uopqd;
+									if (uopqd >= 3'd2)
+										nextBundle <= TRUE;
+								end
+							end
+		4'b0011:	begin mip1 <= 1'd0; mip2 <= uopqd > 3'd1 ? 1'd0 : mip2; nextBundle <= uopqd > 3'd1; end
+		4'b0100:	begin 
+								if (|mip1) begin
+									mip1 <= uopqd > 3'd2 ? 1'd0 : mip1 - uopqd;
+									mip2 <= uopqd > 3'd2 ? mip2 + uopqd - 3'd3 : mip2;
+									if (uopqd > 3'd3)
+										nextBundle <= TRUE;
+								end
+								else begin
+									mip2 <= mip2 + uopqd;
+									if (uopqd > 3'd2)
+										nextBundle <= TRUE;
+								end
+							end
+		4'b0101:	begin 
+								if (|mip1) begin
+									mip1 <= 1'd0;
+									mip2 <= uopqd > 3'd2 ? 1'd0 : mip2 + uopqd - 3'd1;
+									nextBundle <= uopqd > 3'd2;
+								end
+								else begin
+									mip2 <= 1'd0;
+									nextBundle <= TRUE;
+								end
+							end
+		4'b0110:	begin
+								if (|mip1) begin
+									mip1 <= uopqd > 3'd1 ? 1'd0 : mip1 + uopqd;
+									mip2 <= uopqd > 3'd2 ? mip2 + uopqd - 3'd2 : mip2;
+									nextBundle <= uopqd > 3'd2;
+								end
+								else begin
+									mip2 <= uopqd > 3'd1 ? 1'd0 : mip2 + uopqd;
+									nextBundle <= uopqd > 3'd1;
+								end
+							end
+		4'b0111:	begin 
+								if (|mip1) begin
+									mip1 <= 1'd0;
+									mip2 <= uopqd > 3'd1 ? 1'd0 : mip2;
+									nextBundle <= uopqd > 3'd1;
+								end
+								else begin
+									mip2 <= 1'd0;
+									nextBundle <= TRUE;
+								end
+							end
+		4'b1000:	begin 
+								if (|mip1) begin
+									mip1 <= uopqd > 3'd3 ? 1'd0 : mip1 + uopqd;
+									nextBundle <= uopqd >= 3'd3;
+								end
+								else begin
+									mip2 <= uopqd > 3'd3 ? 1'd0 : mip2 + uopqd;
+									nextBundle <= uopqd > 3'd3;
+								end
+							end
+		4'b1001:	begin 
+								if (|mip1) begin
+									mip1 <= 1'd0;
+									mip2 <= uopqd > 3'd3 ? 1'd0 : mip2 + uopqd - 3'd1;
+									nextBundle <= uopqd > 3'd3;
+								end
+								else begin
+									mip2 <= 1'd0;
+									nextBundle <= TRUE;
+								end
+							end
+		4'b1010:	begin 
+								if (|mip1) begin
+									mip1 <= uopqd > 3'd1 ? 1'd0 : mip1 + uopqd;
+									mip2 <= uopqd > 3'd3 ? 1'd0 : uopqd > 3'd2 ? mip2 + uopqd - 3'd2 : mip2;
+									nextBundle <= uopqd > 3'd3;
+								end
+								else begin
+									mip2 <= uopqd > 3'd1 ? 1'd0 : mip2 + uopqd;
+									nextBundle <= uopqd > 3'd1;
+								end
+							end
+		4'b1011:	begin
+								if (|mip1) begin
+									mip1 <= 1'd0;
+									mip2 <= uopqd > 3'd1 ? 1'd0 : mip2;
+									nextBundle <= uopqd >= 3'd2;
+								end
+								else begin
+									mip2 <= 1'd0;
+									nextBundle <= TRUE;
+								end
+							end
+		4'b1100:	begin
+								if (|mip1) begin
+									mip1 <= uopqd > 3'd2 ? 1'd0 : mip1 + uopqd;
+									mip2 <= uopqd > 3'd3 ? 1'd0 : mip2;
+									nextBundle <= uopqd > 3'd3;
+								end
+								else begin
+									mip2 <= uopqd > 3'd2 ? 1'd0 : mip2 + uopqd;
+									nextBundle <= uopqd > 3'd2;
+								end
+							end
+		4'b1101:	begin
+								if (|mip1) begin
+									mip1 <= 1'd0;
+									mip2 <= uopqd > 3'd1 ? mip2 + uopqd - 3'd1 : mip2;
+									nextBundle <= uopqd > 3'd2;
+								end
+								else begin
+									mip2 <= 1'd0;
+									nextBundle <= TRUE;
+								end
+							end
+		4'b1110:	begin
+								if (|mip1) begin
+									mip1 <= uopqd > 3'd1 ? 1'd0 : mip1 + uopqd;
+									mip2 <= uopqd > 3'd2 ? 1'd0 : mip2;
+									nextBundle <= uopqd > 3'd2;
+								end
+								else begin
+									mip2 <= uopqd > 3'd1 ? 1'd0 : mip2 + uopqd;
+									nextBundle <= uopqd > 3'd1;
+								end
+							end
+		4'b1111:	begin
+								if (|mip1) begin
+									mip1 <= 1'd0;
+									mip2 <= uopqd > 3'd1 ? 1'd0 : mip2;
+									nextBundle <= uopqd > 3'd1;
+								end
+								else begin
+									mip2 <= 1'd0;
+									nextBundle <= TRUE;
+								end
+							end
 		endcase
 		uop2q[0] <= uop_prg[ptr[0]];
 		uop2q[1] <= uop_prg[ptr[1]];
@@ -1101,9 +1229,10 @@ reg dstb;
 reg dack_i;
 reg derr_i;
 reg dwe;
-reg [15:0] dsel;
+reg [7:0] dsel;
 reg [AMSB:0] dadr;
 reg [127:0] ddat;
+wire [15:0] dselx = dsel << dadr[2:0];
 reg dwrap;
 
 function IsBranch;
@@ -1919,8 +2048,7 @@ for (n = 0; n < QSLOTS; n = n + 1)
 	Rn[n] = uoq_uop[(uoq_head+n)%UOQ_ENTRIES].src2;
 always @*
 for (n = 0; n < QSLOTS; n = n + 1)
-	Ra[n] = em ? uoq_uop[(uoq_head+n)%UOQ_ENTRIES].tgt :
-							 uoq_uop[(uoq_head+n)%UOQ_ENTRIES].src1 ;
+	Ra[n] = uoq_uop[(uoq_head+n)%UOQ_ENTRIES].src1;
 
 // In emulation mode, rfot and rfoa are the same
 always @*
@@ -2024,36 +2152,19 @@ always @*
 for (n = 0; n < QSLOTS; n = n + 1)
 	rfos[n] <= srx;
 
-task regupd;
-input [4:0] n;
-input [51:0] i;
-output [51:0] o;
-begin
-	if (commit2_v && commit2_tgt==n && commit2_rfw)
-		o = commit2_bus;
-	else if (commit1_v && commit1_tgt==n && commit1_rfw)
-		o = commit1_bus;
-	else if (commit0_v && commit0_tgt==n && commit0_rfw)
-		o = commit0_bus;
-	else
-		o = i;
-end
-endtask
-
-// Writes to the register file. Fortunately the register file is small so
-// three update ports are easily supported.
-
+generate begin : regupd
+for (g = 1; g < 32; g = g + 1)
 always @*
-	for (n = 1; n < 32; n = n + 1)
-		regupd(n,regs[n], regsx[n]);
-always @(posedge clk)
-if (rst_i)
-	regs[31] <= 52'h01FFC;
-else begin
-	for (n = 1; n < 32; n = n + 1)
-		regs[n] <= regsx[n];
+	if (commit2_v && commit2_tgt==g && commit2_rfw)
+		regsx[g] = commit2_bus;
+	else if (commit1_v && commit1_tgt==g && commit1_rfw)
+		regsx[g] = commit1_bus;
+	else if (commit0_v && commit0_tgt==g && commit0_rfw)
+		regsx[g] = commit0_bus;
+	else
+		regsx[g] = regs[g];
 end
-
+endgenerate
 
 // PLP and RTI target the sr during a load. They write the whole word.
 // The brk flag in the status register always loads as zero. The only time the
@@ -2139,31 +2250,22 @@ end
 end
 endgenerate
 
-function Source1Valid;
-input [23:0] ins;
-Source1Valid = TRUE;
-endfunction
-
-function Source2Valid;
+function SourceBValid;
 input [23:0] ins;
 case(ins[21:16])
-`BccD4a,`BccD4b,`BccD17a,`BccD17b:
-	Source2Valid = TRUE;
-`REP,`SEP:
-	Source2Valid = TRUE;
+`UO_BEQ,`UO_BNE,`UO_BMI,`UO_BPL,`UO_BCS,`UO_BCC,`UO_BVS,`UO_BVC,`UO_BRA,`UO_BUS,`UO_BUC:
+	SourceBValid = TRUE;
+`UO_REP,`UO_SEP:
+	SourceBValid = TRUE;
 default:
-	casez(ins[3:0])
-	4'd0:	Source2Valid = TRUE;
-	4'b1???:	Source2Valid = TRUE;
-	default:	Source2Valid = FALSE;
-	endcase
+	SourceBValid = ins[7:4]>4'd8 || ins[7:4]==4'd0;
 endcase
 endfunction
 
 function SourceSValid;
 input [23:0] ins;
 case(ins[21:16])
-`BccD4a,`BccD4b,`BccD17a,`BccD17b:
+`UO_BEQ,`UO_BNE,`UO_BMI,`UO_BPL,`UO_BCS,`UO_BCC,`UO_BVS,`UO_BVC,`UO_BRA,`UO_BUS,`UO_BUC:
 	SourceSValid = FALSE;
 default:	SourceSValid = TRUE;
 endcase
@@ -2172,22 +2274,22 @@ endfunction
 function SourceTValid;
 input [23:0] ins;
 case(ins[21:16])
-`NOP,
-`BccD4a,`BccD4b,`BccD17a,`BccD17b,
-`REP,`SEP:
+`UO_BEQ,`UO_BNE,`UO_BMI,`UO_BPL,`UO_BCS,`UO_BCC,`UO_BVS,`UO_BVC,`UO_BRA,`UO_BUS,`UO_BUC,
+`UO_REP,`UO_SEP:
 	SourceTValid = TRUE;
-default:	SourceTValid = FALSE;
+default:
+	SourceTValid = ins[15:12]>4'd8 || ins[15:12]==4'd0;
 endcase
 endfunction
 
 function SourceAValid;
 input [23:0] ins;
 case(ins[21:16])
-`NOP,
-`BccD4a,`BccD4b,`BccD17a,`BccD17b,
-`REP,`SEP:
+`UO_BEQ,`UO_BNE,`UO_BMI,`UO_BPL,`UO_BCS,`UO_BCC,`UO_BVS,`UO_BVC,`UO_BRA,`UO_BUS,`UO_BUC,
+`UO_REP,`UO_SEP:
 	SourceAValid = TRUE;
-default:	SourceAValid = FALSE;
+default:
+	SourceAValid = ins[11:8]>4'd8 || ins[11:8]==4'd0;
 endcase
 endfunction
 
@@ -2205,7 +2307,7 @@ endfunction
 function IsUoBranch;
 input [23:0] isn;
 case(isn[21:16])
-`BccD4a,`BccD4b,`BccD17a,`BccD17b:
+`UO_BEQ,`UO_BNE,`UO_BMI,`UO_BPL,`UO_BCS,`UO_BCC,`UO_BVS,`UO_BVC,`UO_BRA,`UO_BUS,`UO_BUC:
 	IsUoBranch = TRUE;
 default:	IsUoBranch = FALSE;
 endcase
@@ -2216,7 +2318,7 @@ input [23:0] isn;
 case(isn[21:16])
 ST_D9,ST_D23,ST_D36:
 	fnNeedSr = isn[15:12]==SR;
-`BccD4a,`BccD4b,`BccD17a,`BccD17b:
+`UO_BEQ,`UO_BNE,`UO_BMI,`UO_BPL,`UO_BCS,`UO_BCC,`UO_BVS,`UO_BVC,`UO_BRA,`UO_BUS,`UO_BUC:
 	fnNeedSr = TRUE;
 default:
 	fnNeedSr = FALSE;
@@ -2227,7 +2329,7 @@ function IsFlowCtrl;
 input [23:0] isn;
 case(isn[21:16])
 JMP,
-`BccD4a,`BccD4b,`BccD17a,`BccD17b:
+`UO_BEQ,`UO_BNE,`UO_BMI,`UO_BPL,`UO_BCS,`UO_BCC,`UO_BVS,`UO_BVC,`UO_BRA,`UO_BUS,`UO_BUC:
 	IsFlowCtrl = TRUE;
 default:	IsFlowCtrl = FALSE;
 endcase
@@ -2237,12 +2339,14 @@ function IsRFW;
 input [23:0] isn;
 case(isn[21:16])
 NOP:	IsRFW = FALSE;
+CAUSE:	IsRFW = FALSE;
 JMP,
-`BccD4a,`BccD4b,`BccD17a,`BccD17b:	IsRFW = FALSE;
+`UO_BEQ,`UO_BNE,`UO_BMI,`UO_BPL,`UO_BCS,`UO_BCC,`UO_BVS,`UO_BVC,`UO_BRA,`UO_BUS,`UO_BUC:	IsRFW = FALSE;
 SUBu,
 ANDu:
 	IsRFW = isn[15:12]!=6'd0;
 REP,SEP:	IsRFW = FALSE;
+ST,STB:		IsRFW = FALSE;
 default:	IsRFW = TRUE;
 endcase
 endfunction
@@ -2260,10 +2364,10 @@ endfunction
 
 function [WID-1:0] fnDatiAlign;
 input [`ABITS] adr;
-input [247:0] dat;
-reg [247:0] adat;
+input [103:0] dat;
+reg [103:0] adat;
 begin
-adat = dat >> {adr[3:0],3'b0};
+adat = dat >> (adr[3:0] * 13);
 fnDatiAlign = adat[WID-1:0];
 end
 endfunction
@@ -2282,6 +2386,8 @@ function [31:0] fnMnemonic;
 input [5:0] ins;
 case(ins)
 CAUSE:	fnMnemonic = "CAUS";
+ADD:	fnMnemonic = "ADD ";
+ADDu:	fnMnemonic = "ADDu";
 SUB:	fnMnemonic = "SUB ";
 LD:		fnMnemonic = "LD  ";
 ST:		fnMnemonic = "ST  ";
@@ -3374,11 +3480,15 @@ if (rst_i) begin
 		dcyc <= `LOW;
 		dstb <= `LOW;
 		dwe <= `LOW;
-		dsel <= 16'h0000;
+		dsel <= 8'h00;
 		dadr <= RSTIP;
 		ddat <= 128'h0;
+		regs[31] <= 52'h01FFC;
 end
 else begin
+
+	for (n = 1; n < 32; n = n + 1)
+		regs[n] <= regsx[n];
 
 //	if (|fb_panic)
 //		panic <= fb_panic;
@@ -4342,13 +4452,8 @@ B_WaitIC:
 // Regular load
 B_DLoadAck:
   if (dack_i|derr_i|tlb_miss|rdv_i) begin
-  	if (dwrap) begin
-  		dstb <= `LOW;
-  		dwrap <= `FALSE;
- 			dadr[7:0] <= 8'h00;
-  		bstate <= B_DLoadNack;
-  	end
-  	else if (dadr[3:0]==4'hF) begin
+  	if (dselx > 16'h00FF && dccnt==2'd0) begin
+  		dsel <= dselx[15:8];
   		dstb <= `LOW;
   		dadr <= dadr + 16'd1;
   		bstate <= B_DLoadNack;
@@ -4358,8 +4463,15 @@ B_DLoadAck:
   		bstate <= B_LSNAck;
   	end
 		case(dccnt)
-		2'd0:	xdati[15:0] <= dat_i >> {dadr[3:0],3'b0};
-		2'd1:	xdati[15:8] <= dat_i[7:0];
+		2'd0:	xdati[103:0] <= dat_i >> (dadr[2:0] * 13);
+		2'd1:	
+			case(dsel)
+			8'b00000000:	;
+			8'b00000001:	xdati[103:91] <= dat_i;
+			8'b00000011:	xdati[103:78] <= dat_i;
+			8'b00000111:	xdati[103:65] <= dat_i;
+			default:			;
+			endcase
 		default:	;
 		endcase
     case(bwhich)
@@ -4802,7 +4914,7 @@ begin
 			iq_argA_v [tails[tails_rc(pat,row)]] <= regIsValid[RaReal[row]] | SourceAValid(uoq_uop[(uoq_head+row) % UOQ_ENTRIES].opcode);
 			iq_argA_s [tails[tails_rc(pat,row)]] <= RaReal[row]==6'd32 ? sr_source : rf_source[RaReal[row]];
 			// iq_argA is a constant
-			iq_argB_v [tails[tails_rc(pat,row)]] <= regIsValid[RnReal[row]] || RnReal[row]==6'd0 || Source2Valid(uoq_uop[(uoq_head+row) % UOQ_ENTRIES].opcode);
+			iq_argB_v [tails[tails_rc(pat,row)]] <= regIsValid[RnReal[row]] || RnReal[row]==6'd0 || SourceBValid(uoq_uop[(uoq_head+row) % UOQ_ENTRIES].opcode);
 			iq_argB_s [tails[tails_rc(pat,row)]] <= rf_source[RnReal[row]];
 			iq_argS_v [tails[tails_rc(pat,row)]] <= regIsValid[AREGS] | SourceSValid(uoq_uop[(uoq_head+row) % UOQ_ENTRIES].opcode);
 			iq_argS_s [tails[tails_rc(pat,row)]] <= sr_source;
@@ -4814,7 +4926,7 @@ begin
 							iq_argA_s [tails[tails_rc(pat,row)]] <= {1'b0,tails[tails_rc(pat,col)]};
 						end
 						if (RnReal[row]==RdReal[col] && slot_rfw[col] && RnReal[row] != 6'd0) begin
-							iq_argB_v [tails[tails_rc(pat,row)]] <= Source2Valid(uoq_uop[(uoq_head+row) % UOQ_ENTRIES].opcode);
+							iq_argB_v [tails[tails_rc(pat,row)]] <= SourceBValid(uoq_uop[(uoq_head+row) % UOQ_ENTRIES].opcode);
 							iq_argB_s [tails[tails_rc(pat,row)]] <= {1'b0,tails[tails_rc(pat,col)]};
 						end
 //						if (3'd7==Rd[col] && slot_sr_tgts[col]!=8'h00) begin
@@ -4899,7 +5011,7 @@ begin
 	iq_argB[ndx] <= argB[slot % FSLOTS];
 	iq_argS[ndx] <= srx;//argS[slot % FSLOTS];
 	iq_argA_v[ndx] <= regIsValid[RaReal[slot % FSLOTS]] || SourceAValid(uoq_uop[(uoq_head+slot) % UOQ_ENTRIES].opcode);
-	iq_argB_v[ndx] <= regIsValid[RnReal[slot % FSLOTS]] || RnReal[slot % FSLOTS]==6'd0 || Source2Valid(uoq_uop[(uoq_head+slot) % UOQ_ENTRIES].opcode);
+	iq_argB_v[ndx] <= regIsValid[RnReal[slot % FSLOTS]] || RnReal[slot % FSLOTS]==6'd0 || SourceBValid(uoq_uop[(uoq_head+slot) % UOQ_ENTRIES].opcode);
 	iq_argS_v[ndx] <= regIsValid[AREGS] || SourceSValid(uoq_uop[(uoq_head+slot) % UOQ_ENTRIES].opcode);
 	iq_argA_s[ndx] <= RaReal[slot % FSLOTS]==6'd32 ? sr_source : rf_source[RaReal[slot % FSLOTS]];
 	iq_argB_s[ndx] <= rf_source[RnReal[slot % FSLOTS]];
@@ -4935,6 +5047,7 @@ begin
 		dram0_memsize <= iq_memsz[n];
 		dram0_load <= iq_load[n];
 		dram0_store <= iq_store[n];
+		dram0_preload <= iq_load[n] & iq_tgt[n]==6'd0;
 	// Once the memory op is issued reset the a1_v flag.
 	// This will cause the a1 bus to look for new data from memory (a1_s is pointed to a memory bus)
 	// This is used for the load and compare instructions.
@@ -4966,6 +5079,7 @@ begin
 	dram1_memsize <= iq_memsz[n];
 	dram1_load <= iq_load[n];
 	dram1_store <= iq_store[n];
+	dram1_preload <= iq_load[n] & iq_tgt[n]==6'd0;
 	//iq_a1_v[n] <= `INV;
 	iq_state[n] <= IQS_MEM;
 	iq_memissue[n] <= `INV;
