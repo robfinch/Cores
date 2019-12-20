@@ -483,7 +483,7 @@ reg [5:0] fcu_prevInstr;
 reg  [2:0] fcu_insln;
 reg        fcu_pt = 1'b0;			// predict taken
 reg        fcu_branch;
-reg [7:0] fcu_argS;
+reg [6:0] fcu_argS;
 reg [WID-1:0] fcu_argT;
 reg [WID-1:0] fcu_argA;
 reg [WID-1:0] fcu_argB;
@@ -841,10 +841,18 @@ begin
 	whinst[2] = 1'b1;
 	whinst[3] = 1'b1;
 	if (~|mip1) begin
-		ptr[0] = mip2;
-		ptr[1] = mip2 + 1;
-		ptr[2] = mip2 + 2;
-		ptr[3] = mip2 + 3;
+		if (|mip2) begin
+			ptr[0] = mip2;
+			ptr[1] = mip2 + 1;
+			ptr[2] = mip2 + 2;
+			ptr[3] = mip2 + 3;
+		end
+		else begin
+			ptr[0] = 1'd0;
+			ptr[1] = 1'd0;
+			ptr[2] = 1'd0;
+			ptr[3] = 1'd0;
+		end
 	end
 	else begin
 		ptr[0] = mip1;
@@ -875,6 +883,12 @@ begin
 				end
 			end
 		end
+	end
+	if (branchmiss|branchmiss1) begin
+		ptr[0] = 1'd0;
+		ptr[1] = 1'd0;
+		ptr[2] = 1'd0;
+		ptr[3] = 1'd0;
 	end
 end
 
@@ -944,6 +958,7 @@ wire stall_uoq = (uopqd < uopqc);// || !(qcnt==3'd2 || (qcnt==3'd1 && ~|mip1));
 assign nextBundle = mipst==MIP_RUN && !stall_uoq;
 
 // Compute next micro-instruction pointers
+// (dead code)
 nextMip umnm1
 (
 	.rst(rst_i),
@@ -955,6 +970,8 @@ nextMip umnm1
 	.nmip1(nmip1),
 	.nmip2(nmip2)
 );
+
+reg branchmiss1, branchmiss2;
 
 // The following is the micro-program engine. It advances the micro-program
 // counters as micro-instructions are queued. And select which micro-program
@@ -970,6 +987,8 @@ if (rst_i) begin
 	pcr[0] <= 1'd0;
 	pcr[1] <= 1'd0;
 	mipst <= MIP_RUN;
+	branchmiss1 <= FALSE;
+	branchmiss2 <= FALSE;
 end
 else begin
 	case(mipst)
@@ -981,12 +1000,13 @@ else begin
 			insnxy[1] <= insnx[1];
 			pcr[0] <= pc;						// and associated program counter
 			pcr[1] <= pc + len1;
+			branchmiss1 <= branchmiss;
 			if (phit) begin
 				mip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
 				mip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
 			end
 			else begin
-				mip1 <= 1'd0;
+				mip1 <= 1'd0;	// Queue NOPs
 				mip2 <= 1'd0;
 				//nmip1 <= 1'd0;
 				//nmip2 <= 1'd0;
@@ -994,6 +1014,7 @@ else begin
 			// stage 2
 			// select micro-instructions to queue
 			// increment mmicro-program counters
+			branchmiss2 <= branchmiss1;
 			insnxx[0] <= insnxy[0];
 			insnxx[1] <= insnxy[1];
 			uop2q[0] <= uop_prg[ptr[0]];
@@ -1006,6 +1027,8 @@ else begin
 			uoppc[3] <= whinst[3] ? pcr[1] : pcr[0];
 		end
 		else begin
+			branchmiss1 <= branchmiss;
+			branchmiss2 <= branchmiss1;
 //			mip1 <= nmip1;
 //			mip2 <= nmip2;
 			mipst <= MIP_STALL;
@@ -1129,6 +1152,8 @@ else begin
 		end
 	MIP_STALL:
 		begin
+			branchmiss1 <= branchmiss;
+			branchmiss2 <= branchmiss1;
 			if (!stall_uoq)
 				mipst <= MIP_RUN;
 			insnxx[0] <= insnx[0];
@@ -2131,7 +2156,7 @@ wire [3:0] xisBr;
 wire [AMSB:0] xpc [0:3];
 wire [3:0] xtkb;
 
-assign xisBr[0] = iq_br[heads[0]] & commit0_v;// & ~iq_instr[heads[0]][5];
+assign xisBr[0] = iq_br[heads[0]] & commit0_v;// & ~\[heads[0]][5];
 assign xisBr[1] = iq_br[heads[1]] & commit1_v;// & ~iq_instr[heads[1]][5];
 assign xisBr[2] = iq_br[heads[2]] & commit2_v;// & ~iq_instr[heads[2]][5];
 assign xisBr[3] = 1'b0;
@@ -2997,8 +3022,8 @@ assign args_valid[g] =
     && (iq_argS_v[g] || !iq_need_sr[g]
 //        || (iq_mem[g] & ~iq_agen[g])
 `ifdef FU_BYPASS
-        || (iq_argS_s[g] == alu0_rid)
-        || ((iq_argS_s[g] == alu1_rid) && (`NUM_ALU > 1))
+        || (iq_argS_s[g] == alu0_rid && alu0_v)
+        || ((iq_argS_s[g] == alu1_rid && alu1_v) && (`NUM_ALU > 1))
 `endif
         )
     ;
@@ -3978,7 +4003,7 @@ else begin
 
 	// Invalidate all entries in the micro-op queue on a branch miss.
 
-	if (branchmiss) begin
+	if (branchmiss|branchmiss1) begin
 		// Must take core not to clear already cleared entries. The already cleared
 		// entries may be in the process of queuing new instructions from the 
 		// target address.
@@ -3991,205 +4016,39 @@ else begin
 			uoq_tail[n] <= n;
 		uoq_head <= 2'd0;
 	end
-	// BRK is queued specially because it's the only instruction requiring six 
-	// micro-ops. Also the brk vector must be modified for the appropriate type.
-	if (!branchmiss) begin
-		begin
-			if (uopqd > 3'd0) begin
-				queue_uop(uoq_tail[0],uoppc[0],uop2q[0],2'b00,8'h00,1'b0,1'b0);
-				uoq_takb[uoq_tail[0]] <= take_branch[whinst[0]];
-				uoq_inst[uoq_tail[0]] <= insnxx[whinst[0]];
-				tskLd4(uop2q[0].cnst,insnxx[whinst[0]],uoq_const[uoq_tail[0]]);
-				flagsUpd(uop2q[0],uoq_flagsupd[uoq_tail[0]]);
-			end
-			if (uopqd > 3'd1) begin
-				queue_uop(uoq_tail[1],uoppc[1],uop2q[1],2'b00,8'h00,1'b0,1'b0);
-				uoq_takb[uoq_tail[1]] <= take_branch[whinst[1]];
-				uoq_inst[uoq_tail[1]] <= insnxx[whinst[1]];
-				tskLd4(uop2q[1].cnst,insnxx[whinst[1]],uoq_const[uoq_tail[1]]);
-				flagsUpd(uop2q[1],uoq_flagsupd[uoq_tail[1]]);
-			end
-			if (uopqd > 3'd2) begin
-				queue_uop(uoq_tail[2],uoppc[2],uop2q[2],2'b00,8'h00,1'b0,1'b0);
-				uoq_takb[uoq_tail[2]] <= take_branch[whinst[2]];
-				uoq_inst[uoq_tail[2]] <= insnxx[whinst[2]];
-				tskLd4(uop2q[2].cnst,insnxx[whinst[2]],uoq_const[uoq_tail[2]]);
-				flagsUpd(uop2q[2],uoq_flagsupd[uoq_tail[2]]);
-			end
-			if (uopqd > 3'd3) begin
-				queue_uop(uoq_tail[3],uoppc[3],uop2q[3],2'b00,8'h00,1'b0,1'b0);
-				uoq_takb[uoq_tail[3]] <= take_branch[whinst[3]];
-				uoq_inst[uoq_tail[3]] <= insnxx[whinst[3]];
-				tskLd4(uop2q[3].cnst,insnxx[whinst[3]],uoq_const[uoq_tail[3]]);
-				flagsUpd(uop2q[3],uoq_flagsupd[uoq_tail[3]]);
-			end
-			for (n = 0; n < 8; n = n + 1)
-				uoq_tail[n] <= (uoq_tail[n] + uopqd) % UOQ_ENTRIES;
+	
+	if (!(branchmiss|branchmiss1)) begin
+		if (uopqd > 3'd0) begin
+			queue_uop(uoq_tail[0],uoppc[0],uop2q[0],2'b00,8'h00,1'b0,1'b0);
+			uoq_takb[uoq_tail[0]] <= take_branch[whinst[0]];
+			uoq_inst[uoq_tail[0]] <= insnxx[whinst[0]];
+			tskLd4(uop2q[0].cnst,insnxx[whinst[0]],uoq_const[uoq_tail[0]]);
+			flagsUpd(uop2q[0],uoq_flagsupd[uoq_tail[0]]);
 		end
-	end
-/*
-	if (q1b) begin
-		q1b <= FALSE;
-		queue_uop(uoq_tail[0],pc,uo_insn1[0],uo_len1==3'd5 ? 2'b11: 2'b01,8'h00,1'b0,slot_pf[0]);
-		uoq_takb[uoq_tail[0]] <= take_branch[0];
-//		uoq_tail <= (uoq_tail + 8'd1) % UOQ_ENTRIES;
-		tskLd4(uo_insn1[0][`UO_LD4],insnx[0],uoq_const[uoq_tail[0]]);
-		if (uo_len1 > 3'd5) begin
-			queue_uop(uoq_tail[1],pc,uo_insn1[1],uo_len1==3'd6 ? 2'b10: 2'b00,8'h00,1'b0,slot_pf[0]);
-			tskLd4(uo_insn1[1][`UO_LD4],insnx[0],uoq_const[uoq_tail[1]]);
+		if (uopqd > 3'd1) begin
+			queue_uop(uoq_tail[1],uoppc[1],uop2q[1],2'b00,8'h00,1'b0,1'b0);
+			uoq_takb[uoq_tail[1]] <= take_branch[whinst[1]];
+			uoq_inst[uoq_tail[1]] <= insnxx[whinst[1]];
+			tskLd4(uop2q[1].cnst,insnxx[whinst[1]],uoq_const[uoq_tail[1]]);
+			flagsUpd(uop2q[1],uoq_flagsupd[uoq_tail[1]]);
 		end
-		if (uo_len1 > 3'd6) begin
-			queue_uop(uoq_tail[2],pc,uo_insn1[2],uo_len1==3'd7 ? 2'b10: 2'b00,8'h00,1'b0,slot_pf[0]);
-			tskLd4(uo_insn1[2][`UO_LD4],insnx[0],uoq_const[uoq_tail[2]]);
+		if (uopqd > 3'd2) begin
+			queue_uop(uoq_tail[2],uoppc[2],uop2q[2],2'b00,8'h00,1'b0,1'b0);
+			uoq_takb[uoq_tail[2]] <= take_branch[whinst[2]];
+			uoq_inst[uoq_tail[2]] <= insnxx[whinst[2]];
+			tskLd4(uop2q[2].cnst,insnxx[whinst[2]],uoq_const[uoq_tail[2]]);
+			flagsUpd(uop2q[2],uoq_flagsupd[uoq_tail[2]]);
 		end
-		if (uo_len1 > 3'd7) begin
-			queue_uop(uoq_tail[3],pc,uo_insn1[3],2'b10,8'h00,1'b0,slot_pf[0]);
-			tskLd4(uo_insn1[3][`UO_LD4],insnx[0],uoq_const[uoq_tail[3]]);
+		if (uopqd > 3'd3) begin
+			queue_uop(uoq_tail[3],uoppc[3],uop2q[3],2'b00,8'h00,1'b0,1'b0);
+			uoq_takb[uoq_tail[3]] <= take_branch[whinst[3]];
+			uoq_inst[uoq_tail[3]] <= insnxx[whinst[3]];
+			tskLd4(uop2q[3].cnst,insnxx[whinst[3]],uoq_const[uoq_tail[3]]);
+			flagsUpd(uop2q[3],uoq_flagsupd[uoq_tail[3]]);
 		end
-		uop_queued <= uop_queued + uo_len1;
-		ins_queued <= ins_queued + 4'd1;
-		if (uo_whflg1 > 3'd4)
-			uoq_flagsupd[uoq_tail[uo_whflg1 - 3'd4]] <= uo_flags1;
 		for (n = 0; n < 8; n = n + 1)
-			uoq_tail[n] <= (uoq_tail[n] + (uo_len1 - 3'd4)) % UOQ_ENTRIES;
+			uoq_tail[n] <= (uoq_tail[n] + uopqd) % UOQ_ENTRIES;
 	end
-	else if (qb) begin
-		queue_uop(uoq_tail[0],pc,{`UO_ADDB,em ? `UO_M3 : `UO_M4,`UO_SP,`UO_SP,`UO_ZR},2'b01,8'h00,1'b0,4'h0);
-		tskLd4(`UO_M3,{16'h0,`BRK},uoq_const[uoq_tail[0]]);
-
-		queue_uop(uoq_tail[1],pc,{IsRst|IsNmi|IsIrq ? `UO_CLB : `UO_SEB,`UO_ZERO,`UO_ZR,`UO_ZR,`UO_ZR},2'b00,`UOF_B,1'b0,4'h0);
-		tskLd4(`UO_M3,{16'h0,`BRK},uoq_const[uoq_tail[1]]);
-
-		queue_uop(uoq_tail[2],pc,{`UO_STB,`UO_P1,`UO_SR,`UO_ZR,`UO_SP},2'b00,8'h00,1'b0,4'h0);
-		tskLd4(`UO_P1,{16'h0,`BRK},uoq_const[uoq_tail[2]]);
-
-		if (em)
-			queue_uop(uoq_tail[3],pc,{`UO_STW,`UO_P2,(IsIrq ? `UO_PC2: `UO_PC),`UO_ZR,`UO_SP},2'b00,8'h00,1'b0,4'h0);
-		else
-			queue_uop(uoq_tail[3],pc,{`UO_STJ,`UO_P2,(IsIrq ? `UO_PC3: `UO_PC),`UO_ZR,`UO_SP},2'b00,8'h00,1'b0,4'h0);
-		tskLd4(`UO_P2,{16'h0,`BRK},uoq_const[uoq_tail[3]]);
-
-		queue_uop(uoq_tail[4],pc,{`UO_LDW,`UO_M2,`UO_TMP,`UO_ZR,`UO_ZR},2'b00,8'h00,1'b0,4'h0);
-		if (IsRst)
-			uoq_const[uoq_tail[4]] <= 16'hFFFC;
-		else if (IsNmi)
-			uoq_const[uoq_tail[4]] <= 16'hFFFA;
-		else if (IsIrq)
-			uoq_const[uoq_tail[4]] <= 16'hFFFE;
-		else
-			uoq_const[uoq_tail[4]] <= 16'hFFFE;
-
-		queue_uop(uoq_tail[5],pc,{`UO_JSI,`UO_ZERO,`UO_ZR,`UO_ZR,`UO_TMP},2'b10,`UOF_I|`UOF_D,(IsRst|IsNmi|IsIrq) ? 1'b1 : 1'b0, 4'h0);
-		tskLd4(`UO_ZERO,{16'h0,`BRK},uoq_const[uoq_tail[5]]);
-
-		for (n = 0; n < 8; n = n + 1)
-			uoq_tail[n] <= (uoq_tail[n] + 4'd6) % UOQ_ENTRIES;
-		uop_queued <= uop_queued + 4'd6;
-		ins_queued <= ins_queued + 4'd1;
-	end
-	// uopl[`BRK] 			= {2'd3,`UOF_NONE,2'd3,`UO_ADDB,`UO_M3,`UO_SP,2'd0,`UO_STB,`UO_P1,`UO_SR,`UO_SP,`UO_STW,`UO_P2,`UO_PC,`UO_SP,`UO_LDW,`UO_M2,`UO_PC,2'd0};
-	else if (q2) begin
-		if (slot_pf[0]!=4'h0) begin
-			queue_uop(uoq_tail[0],pc,uo_insn2[0],uo_len2==3'd1 ? 2'b11: 2'b01,8'h00,1'b0,slot_pf[0]);
-			uoq_inst[uoq_tail[0]] <= insnx[1];
-			uoq_takb[uoq_tail[0]] <= take_branch[1];
-			tskLd4(uo_insn2[0][`UO_LD4],insnx[1],uoq_const[uoq_tail[0]]);
-			if (uo_len2 > 3'd1) begin
-				queue_uop(uoq_tail[1],pc,uo_insn2[1],uo_len2==3'd2 ? 2'b10: 2'b00,8'h00,1'b0,slot_pf[0]);
-				tskLd4(uo_insn2[1][`UO_LD4],insnx[1],uoq_const[uoq_tail[1]]);
-			end
-			if (uo_len2 > 3'd2) begin
-				queue_uop(uoq_tail[2],pc,uo_insn2[2],uo_len2==3'd3 ? 2'b10: 2'b00,8'h00,1'b0,slot_pf[0]);
-				tskLd4(uo_insn2[2][`UO_LD4],insnx[1],uoq_const[uoq_tail[2]]);
-			end
-			if (uo_len2 > 3'd3) begin
-				queue_uop(uoq_tail[3],pc,uo_insn2[3],2'b10,8'h00,1'b0,slot_pf[0]);
-				tskLd4(uo_insn2[3][`UO_LD4],insnx[1],uoq_const[uoq_tail[3]]);
-			end
-			if (uo_whflg2 <= 3'd4)
-				uoq_flagsupd[uoq_tail[uo_whflg2]] <= uo_flags2;
-			if (uo_len2 > 3'd4) begin
-				q1b <= TRUE;
-				for (n = 0; n < 8; n = n + 1)
-					uoq_tail[n] <= (uoq_tail[n] + 3'd4) % UOQ_ENTRIES;
-			end
-			else begin
-				for (n = 0; n < 8; n = n + 1)
-					uoq_tail[n] <= (uoq_tail[n] + uo_len1 + uo_len2) % UOQ_ENTRIES;
-				uop_queued <= uop_queued + uo_len1 + uo_len2;
-				ins_queued <= ins_queued + 4'd2;
-			end
-		end
-		else begin
-			queue_uop(uoq_tail[0],pc,uo_insn1[0],uo_len1==3'd1 ? 2'b11: 2'b01,8'h00,1'b0,4'h0);
-			uoq_inst[uoq_tail[0]] <= insnx[0];
-			uoq_takb[uoq_tail[0]] <= take_branch[0];
-			tskLd4(uo_insn1[0][`UO_LD4],insnx[0],uoq_const[uoq_tail[0]]);
-			if (uo_len1 > 3'd1) begin
-				queue_uop(uoq_tail[1],pc,uo_insn1[1],uo_len1==3'd2 ? 2'b10: 2'b00,8'h00,1'b0,4'h0);
-				tskLd4(uo_insn1[1][`UO_LD4],insnx[0],uoq_const[uoq_tail[1]]);
-			end
-			if (uo_len1 > 3'd2) begin
-				queue_uop(uoq_tail[2],pc,uo_insn1[2],uo_len1==3'd3 ? 2'b10: 2'b00,8'h00,1'b0,4'h0);
-				tskLd4(uo_insn1[2][`UO_LD4],insnx[0],uoq_const[uoq_tail[2]]);
-			end
-			if (uo_len1 > 3'd3) begin
-				queue_uop(uoq_tail[3],pc,uo_insn1[3],2'b10,8'h00,1'b0,slot_pf[0]);
-				tskLd4(uo_insn1[3][`UO_LD4],insnx[0],uoq_const[uoq_tail[3]]);
-			end
-			queue_uop(uoq_tail[uo_len1],pc+len1,uo_insn2[0],uo_len2==3'd1 ? 2'b11: 2'b01,8'h00,1'b0,4'h0);
-			uoq_inst[uoq_tail[uo_len1]] <= insnx[1];
-			uoq_takb[uoq_tail[uo_len1]] <= take_branch[1];
-			//uoq_tail[0] <= (uoq_tail[0] + uo_len1 + 8'd1) % UOQ_ENTRIES;
-			tskLd4(uo_insn2[0][`UO_LD4],insnx[1],uoq_const[uoq_tail[uo_len1]]);
-			if (uo_len2 > 3'd1) begin
-				queue_uop(uoq_tail[uo_len1 + 1],pc+len1,uo_insn2[1],uo_len2==3'd2 ? 2'b10: 2'b00,8'h00,1'b0,4'h0);
-				tskLd4(uo_insn2[1][`UO_LD4],insnx[1],uoq_const[uoq_tail[uo_len1 + 1]]);
-			end
-			if (uo_len2 > 3'd2) begin
-				queue_uop(uoq_tail[uo_len1 + 2],pc+len1,uo_insn2[2],uo_len2==3'd3 ? 2'b10: 2'b00,8'h00,1'b0,4'h0);
-				tskLd4(uo_insn2[2][`UO_LD4],insnx[1],uoq_const[uoq_tail[uo_len1 + 2]]);
-			end
-			if (uo_len2 > 3'd3) begin
-				queue_uop(uoq_tail[uo_len1 + 3],pc+len1,uo_insn2[3],2'b10,8'h00,1'b0,4'h0);
-				tskLd4(uo_insn2[3][`UO_LD4],insnx[1],uoq_const[uoq_tail[uo_len1 + 3]]);
-			end
-			uoq_flagsupd[uoq_tail[3'd0 + uo_whflg1]] <= uo_flags1;
-			uoq_flagsupd[uoq_tail[uo_len1+uo_whflg2]] <= uo_flags2;
-			for (n = 0; n < 8; n = n + 1)
-				uoq_tail[n] <= (uoq_tail[n] + uo_len1 + uo_len2) % UOQ_ENTRIES;
-			uop_queued <= uop_queued + uo_len1 + uo_len2;
-			ins_queued <= ins_queued + 4'd2;
-		end
-	end
-	else if (q1) begin
-		queue_uop(uoq_tail[0],pc,uo_insn1[0],uo_len1==3'd1 ? 2'b11: 2'b01,8'h00,1'b0,4'h0);
-		uoq_takb[uoq_tail[0]] <= take_branch[0];
-//		uoq_tail <= (uoq_tail + 8'd1) % UOQ_ENTRIES;
-		tskLd4(uo_insn1[0][`UO_LD4],insnx[0],uoq_const[uoq_tail[0]]);
-		if (uo_len1 > 3'd1) begin
-			queue_uop(uoq_tail[1],pc,uo_insn1[1],uo_len1==3'd2 ? 2'b10: 2'b00,8'h00,1'b0,4'h0);
-			tskLd4(uo_insn1[1][`UO_LD4],insnx[0],uoq_const[uoq_tail[1]]);
-		end
-		if (uo_len1 > 3'd2) begin
-			queue_uop(uoq_tail[2],pc,uo_insn1[2],uo_len1==3'd3 ? 2'b10: 2'b00,8'h00,1'b0,4'h0);
-			tskLd4(uo_insn1[2][`UO_LD4],insnx[0],uoq_const[uoq_tail[2]]);
-		end
-		if (uo_len1 > 3'd3) begin
-			queue_uop(uoq_tail[3],pc,uo_insn1[3],uo_len1==3'd4 ? 2'b10: 2'b00,8'h00,1'b0,4'h0);
-			tskLd4(uo_insn1[3][`UO_LD4],insnx[0],uoq_const[uoq_tail[3]]);
-		end
-		if (uo_len1 > 3'd4)
-			q1b <= TRUE;
-		else begin 
-			uop_queued <= uop_queued + uo_len1;
-			ins_queued <= ins_queued + 4'd1;
-		end
-		uoq_flagsupd[uoq_tail[uo_whflg1]] <= uo_flags1;
-		for (n = 0; n < 8; n = n + 1)
-			uoq_tail[n] <= (uoq_tail[n] + (uo_len1 > 3'd4 ? 3'd4 : uo_len1)) % UOQ_ENTRIES;
-	end
-*/
 
 	if (!branchmiss) begin
 		queuedOn <= queuedOnp;
@@ -4571,13 +4430,13 @@ else begin
 				fcu_pc		<= iq_pc[n];
 				fcu_nextpc <= iq_pc[n] + iq_len[n];
 				fcu_pt     <= iq_pt[n];
-				fcu_brdisp <= {{8{iq_const[n][7]}},iq_const[n][7:0]};
+				fcu_brdisp <= iq_const[n];
 				fcu_sr_tgts <= iq_sr_tgts[n];
 				//$display("Branch tgt: %h", {iq_instr[n][39:22],iq_instr[n][5:3],iq_instr[n][4:3]});
 				fcu_branch <= iq_br[n];
 				fcu_argI <= iq_const[n];
 				argBypass(iq_argA_v[n],iq_argA_s[n],iq_argA[n],fcu_argA);
-				argBypassS(iq_argS_v[n],iq_argS_s[n],iq_argS[n][7:0],fcu_argS);
+				argBypassS(iq_argS_v[n],iq_argS_s[n],iq_argS[n][6:0],fcu_argS);
 				fcu_dataready <= 1'b1;
 				fcu_clearbm <= `FALSE;
 				fcu_ld <= TRUE;
@@ -5166,8 +5025,8 @@ endtask
 task argBypassS;
 input v;
 input [`RBITS] src;
-input [7:0] iq_arg;
-output [7:0] arg;
+input [6:0] iq_arg;
+output [6:0] arg;
 begin
 `ifdef FU_BYPASS
 	if (v)
