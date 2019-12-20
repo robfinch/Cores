@@ -32,7 +32,7 @@ module programCounter(rst, clk,
 	ra, pc_override,
 	debug_on);
 parameter AMSB = 51;
-parameter RSTIP = 52'h00FFFC;
+parameter RSTPC = 52'hFFFFFFFFC0000;
 parameter FSLOTS = `FSLOTS;
 parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
@@ -41,7 +41,7 @@ input clk;
 input q2;
 input q1;
 input q1bx;
-input [47:0] insnx [0:FSLOTS-1];
+input [51:0] insnx [0:FSLOTS-1];
 input freezepc;
 input phit;
 input branchmiss;
@@ -55,8 +55,8 @@ input [FSLOTS-1:0] rts;
 input [FSLOTS-1:0] br;
 input [FSLOTS-1:0] take_branch;
 input [AMSB:0] btgt [0:FSLOTS-1];
-output reg [AMSB:0] pc;
-output reg [AMSB:0] pcd;
+output reg [AMSB:0] pc = RSTPC;
+output reg [AMSB:0] pcd = RSTPC;
 output pc_chg;
 output reg [AMSB:0] branch_pc;
 input [AMSB:0] ra;
@@ -82,7 +82,7 @@ always @(posedge clk)
 
 always @*
 if (rst) begin
-	next_pc <= RSTIP;
+	next_pc <= RSTPC;
 end
 else begin
 	if (branchmiss)
@@ -105,8 +105,8 @@ end
 
 always @(posedge clk)
 if (rst) begin
-	pc <= RSTIP;
-	pcd <= RSTIP;
+	pc <= RSTPC;
+	pcd <= RSTPC;
 	//pc_maskd <= 2'b11;
 	phitd <= 1'b1;
 end
@@ -150,7 +150,7 @@ end
 
 always @*
 if (rst) begin
-	branch_pc <= RSTIP;
+	branch_pc <= RSTPC;
 end
 else begin
 	branch_pc <= pc;

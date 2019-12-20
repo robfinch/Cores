@@ -221,7 +221,7 @@ reg [51:0] uoq_inst [0:UOQ_ENTRIES-1];
 reg [3:0] uoq_size [0:UOQ_ENTRIES-1];
 reg [51:0] uoq_const [0:UOQ_ENTRIES-1];
 reg [1:0] uoq_fl [0:UOQ_ENTRIES-1];		// first or last micro-op
-reg [7:0] uoq_flagsupd [0:UOQ_ENTRIES-1];
+reg [6:0] uoq_flagsupd [0:UOQ_ENTRIES-1];
 reg [4:0] uoq_Ra [0:UOQ_ENTRIES-1];
 reg [4:0] uoq_Rb [0:UOQ_ENTRIES-1];
 reg [4:0] uoq_Rt [0:UOQ_ENTRIES-1];
@@ -2574,7 +2574,7 @@ endgenerate
 // be able to happen.  Can't use a if/elseif tree here.
 always @*
 	if (rst_i) begin
-		srx = 16'h0104;	// mask interrupts on reset, clear decimal mode, emulation mode
+		srx = 16'h0110;	// mask interrupts on reset, clear decimal mode, emulation mode
 	end
 	else begin
 		srx = sr;
@@ -2713,10 +2713,10 @@ endcase
 endfunction
 
 function fnNeedSr;
-input [23:0] isn;
-case(isn[21:16])
+input MicroOp isn;
+case(isn.opcode)
 ST_D9,ST_D23,ST_D36:
-	fnNeedSr = isn[15:12]==SR;
+	fnNeedSr = isn.tgt==SR;
 `UO_BEQ,`UO_BNE,`UO_BMI,`UO_BPL,`UO_BCS,`UO_BCC,`UO_BVS,`UO_BVC,`UO_BRA,`UO_BUS,`UO_BUC:
 	fnNeedSr = TRUE;
 default:
@@ -2788,6 +2788,7 @@ CAUSE:	fnMnemonic = "CAUS";
 ADD:	fnMnemonic = "ADD ";
 ADDu:	fnMnemonic = "ADDu";
 SUB:	fnMnemonic = "SUB ";
+SUBu:	fnMnemonic = "SUBu";
 ORu:	fnMnemonic = "ORu ";
 LD:		fnMnemonic = "LD  ";
 ST:		fnMnemonic = "ST  ";
@@ -3746,7 +3747,7 @@ if (rst_i) begin
 		uoq_uop[n] <= {0,0,0,0,0};
 		uoq_const[n] <= 64'h0000;
 		uoq_inst[n] <= 52'h0;
-		uoq_flagsupd[n] <= 8'h00;
+		uoq_flagsupd[n] <= 7'h00;
 		uoq_fl[n] <= 2'b11;
 		uoq_pc[n] <= 64'h00FFFC;
 		uoq_hs[n] <= 1'd0;
@@ -3991,24 +3992,28 @@ else begin
 				uoq_takb[uoq_tail[0]] <= take_branch[0];
 				uoq_inst[uoq_tail[0]] <= insnxx[whinst[0]];
 				tskLd4(uop2q[0].cnst,insnxx[whinst[0]],uoq_const[uoq_tail[0]]);
+				flagsUpd(uop2q[0],uoq_flagsupd[uoq_tail[0]]);
 			end
 			if (uopqd > 3'd1) begin
 				queue_uop(uoq_tail[1],uoppc[1],uop2q[1],2'b00,8'h00,1'b0,1'b0);
 				uoq_takb[uoq_tail[1]] <= take_branch[1];
 				uoq_inst[uoq_tail[1]] <= insnxx[whinst[1]];
 				tskLd4(uop2q[1].cnst,insnxx[whinst[1]],uoq_const[uoq_tail[1]]);
+				flagsUpd(uop2q[1],uoq_flagsupd[uoq_tail[1]]);
 			end
 			if (uopqd > 3'd2) begin
 				queue_uop(uoq_tail[2],uoppc[2],uop2q[2],2'b00,8'h00,1'b0,1'b0);
 				uoq_takb[uoq_tail[2]] <= take_branch[2];
 				uoq_inst[uoq_tail[2]] <= insnxx[whinst[2]];
 				tskLd4(uop2q[2].cnst,insnxx[whinst[2]],uoq_const[uoq_tail[2]]);
+				flagsUpd(uop2q[2],uoq_flagsupd[uoq_tail[2]]);
 			end
 			if (uopqd > 3'd3) begin
 				queue_uop(uoq_tail[3],uoppc[3],uop2q[3],2'b00,8'h00,1'b0,1'b0);
 				uoq_takb[uoq_tail[3]] <= take_branch[3];
 				uoq_inst[uoq_tail[3]] <= insnxx[whinst[3]];
 				tskLd4(uop2q[3].cnst,insnxx[whinst[3]],uoq_const[uoq_tail[3]]);
+				flagsUpd(uop2q[3],uoq_flagsupd[uoq_tail[3]]);
 			end
 			for (n = 0; n < 8; n = n + 1)
 				uoq_tail[n] <= (uoq_tail[n] + uopqd) % UOQ_ENTRIES;
@@ -5099,6 +5104,32 @@ end	// end of clock domain
 // ============================================================================
 // ============================================================================
 
+task flagsUpd;
+input MicroOp op;
+output [6:0] upd;
+case(op.opcode)
+ADDu:	upd = 7'b0001111;
+SUBu:	
+	if (op.tgt==4'd0)
+		upd = 7'b0001011;
+	else
+		upd = 7'b0001111;
+ANDu:
+	if (op.tgt==4'd0)
+		upd = 7'b0000111;
+	else
+		upd = 7'b0000011;
+ORu:	upd = 7'b0000011;
+EORu:	upd = 7'b0000011;
+ASLu:	upd = 7'b0001011;
+ROLu:	upd = 7'b0001011;
+LSRu:	upd = 7'b0001011;
+RORu:	upd = 7'b0001011;
+default:
+	upd = 7'h00;
+endcase
+endtask
+
 // Note the use of blocking(=) assigments here. For some reason in sim <= 
 // assignments didn't work.
 task argBypass;
@@ -5338,7 +5369,7 @@ begin
 							iq_argB_s [tails[tails_rc(pat,row)]] <= {1'b0,tails[tails_rc(pat,col)]};
 						end
 //						if (3'd7==Rd[col] && slot_sr_tgts[col]!=8'h00) begin
-						if (fnNeedSr(uoq_uop[(uoq_head+row) % UOQ_ENTRIES].opcode)) begin
+						if (fnNeedSr(uoq_uop[(uoq_head+row) % UOQ_ENTRIES])) begin
 							if (slot_sr_tgts[col]!=8'h00) begin
 								iq_argS_v [tails[tails_rc(pat,row)]] <= SourceSValid(uoq_uop[(uoq_head+row) % UOQ_ENTRIES]);
 								iq_argS_s [tails[tails_rc(pat,row)]] <= {1'b0,tails[tails_rc(pat,col)]};

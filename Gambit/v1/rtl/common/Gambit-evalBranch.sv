@@ -33,14 +33,14 @@ output reg takb;
 //Evaluate branch condition
 always @*
 case(instr)
-`UO_BEQ:		takb <=  sr[1];
-`UO_BCS:		takb <=  sr[0];
-`UO_BVS:		takb <=  sr[6];
-`UO_BNE:		takb <= !sr[1];
-`UO_BCC:		takb <= !sr[0];
-`UO_BVC:		takb <= !sr[6];
-`UO_BMI:		takb <=  sr[7];
-`UO_BPL:		takb <= !sr[7];
+`UO_BEQ:		takb <=  sr[0];
+`UO_BCS:		takb <=  sr[3];
+`UO_BVS:		takb <=  sr[5];
+`UO_BNE:		takb <= !sr[0];
+`UO_BCC:		takb <= !sr[3];
+`UO_BVC:		takb <= !sr[5];
+`UO_BMI:		takb <=  sr[6];
+`UO_BPL:		takb <= !sr[6];
 `UO_BRA:		takb <= `TRUE;
 default:	takb <= `TRUE;
 endcase

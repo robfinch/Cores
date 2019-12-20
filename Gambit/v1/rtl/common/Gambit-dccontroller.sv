@@ -95,7 +95,7 @@ reg [79:0] invlineAddr_r = 72'd0;
 
 //assign L2_ld = (state==IC_Ack) && (ack_i|err_i|tlbmiss_i|exv_i);
 assign dL1_selpc = (state==IDLE||state==IC5) && !invline_r;
-assign isROM = dL1_adr[51:15]=={37{1'b1}};
+assign isROM = dL1_adr[51:18]=={34{1'b1}};
 
 wire clk = clk_i;
 reg [2:0] dccnt;

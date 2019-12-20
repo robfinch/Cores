@@ -34,7 +34,7 @@
 `define SUB_I23		6'o11
 `define SUB_I36		6'o12
 `define JSR				6'o14
-`define LSR_R3		6'o16
+`define LSR_3R		6'o16
 `define RETGRP		6'o24
 `define RTS					3'd0
 `define RTI					3'd1
@@ -42,7 +42,7 @@
 `define WAI					3'd4
 `define STP					3'd6
 `define NOP					3'd7
-`define ROL_R3		6'o26
+`define ROL_3R		6'o26
 `define AND_3R		6'o30
 `define AND_I23		6'o31
 `define AND_I36		6'o32
@@ -51,7 +51,7 @@
 `define NMI					3'd1
 `define IRQ					3'd2
 `define BRK					3'd3
-`define ROR_R3		6'o36
+`define ROR_3R		6'o36
 `define OR_3R			6'o40
 `define OR_I23		6'o41
 `define OR_I36		6'o42
@@ -118,6 +118,9 @@
 `define UOF_I			7'b0010000
 
 `define OPCODE		5:0
+`define RT				10:6
+`define RA				15:11
+`define RB				20:16
 
 `define DRAMSLOT_AVAIL	3'b000
 `define DRAMSLOT_BUSY		3'b001

@@ -34,7 +34,7 @@ module ICController(rst_i, clk_i, missadr, hit, bstate, state,
 	icl_o, cti_o, bte_o, bok_i, cyc_o, stb_o, ack_i, err_i, tlbmiss_i, exv_i, sel_o, adr_o, dat_i);
 parameter ABW = 52;
 parameter AMSB = ABW-1;
-parameter RSTPC = 52'hFFFFFFFFC0100;
+parameter RSTPC = 52'hFFFFFFFFC0000;
 parameter L2_ReadLatency = 3'd3;
 parameter L1_WriteLatency = 3'd3;
 parameter ROM_ReadLatency = 3'd1;
@@ -89,7 +89,7 @@ reg [79:0] invlineAddr_r = 72'd0;
 //assign L2_ld = (state==IC_Ack) && (ack_i|err_i|tlbmiss_i|exv_i);
 reg selpc1;
 assign L1_selpc = (state==IDLE||selpc1) && !invline_r;
-assign isROM = L1_adr[51:15]=={37{1'b1}};
+assign isROM = L1_adr[51:18]=={34{1'b1}};
 wire clk = clk_i;
 reg [2:0] iccnt;
 assign L2_cnt = iccnt;

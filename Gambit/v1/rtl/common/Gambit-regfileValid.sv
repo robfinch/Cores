@@ -111,7 +111,7 @@ integer n;
 // So a signal is created here with it's own always block.
 always @*
 begin
-	for (n = 0; n < AREGS; n = n + 1)
+	for (n = 1; n < AREGS; n = n + 1)
 	begin
 		regIsValid[n] = rf_v[n];
 		if (branchmiss) begin
@@ -137,6 +137,7 @@ begin
 		regIsValid[AREGS] = ((sr_source[`RBITS] == commit1_id) || (branchmiss && (iq_sr_source[ rob_id[commit1_id] ])));
 	if (commit2_v && !rf_v[AREGS] && commit2_sr_tgts != 8'h00)
 		regIsValid[AREGS] = ((sr_source[`RBITS] == commit2_id) || (branchmiss && (iq_sr_source[ rob_id[commit2_id] ])));
+	regIsValid[0] = `VAL;
 end
 
 
@@ -148,7 +149,7 @@ end
 else begin
 
 	if (branchmiss) begin
-		for (n = 0; n < AREGS; n = n + 1)
+		for (n = 1; n < AREGS; n = n + 1)
 			if (~(livetarget[n])) begin
 				rf_v[n] <= `VAL;
 		end
@@ -305,6 +306,7 @@ else begin
 				end
 			end
 		endcase
+	rf_v[0] <= `VAL;
 end
 
 endmodule

@@ -35,13 +35,22 @@ output reg [15:0] s_o;
 output idle;
 
 assign idle = 1'b1;
+reg [WID:0] os;
 
 always @*
 case(op)
 `UO_ADD:	o = a + imm + b;
-`UO_ADDu:	o = a + imm + b;
+`UO_ADDu:
+	begin
+		os = a + imm + b;
+		o = os[WID-1:0];
+	end
 `UO_SUB:	o = a - imm - b;
-`UO_SUBu:	o = a - imm - b;
+`UO_SUBu:
+	begin
+		os = a - imm - b;
+		o = os[WID-1:0];
+	end
 `UO_ANDu:	o = a & imm & b;
 `UO_ORu:	o = a | imm | b;
 `UO_EORu:	o = a ^ imm ^ b;
@@ -56,17 +65,28 @@ always @*
 begin
 s_o = s_i;
 case(op)
-`UO_ADDu,
+`UO_ADDu:
+	begin
+		s_o[0] = o[51:0]==52'h00;
+		s_o[3] = os[WID];
+		s_o[6] = o[51];
+	end
 `UO_ANDu,`UO_ORu,`UO_EORu:
 	begin
-		s_o[1] = o[51:0]==52'h00;
-		s_o[7] = o[51];
+		s_o[0] = o[51:0]==52'h00;
+		s_o[6] = o[51];
+	end
+`UO_SUBu:
+	begin
+		s_o[0] = o[51:0]==52'h00;
+		s_o[3] = os[WID];
+		s_o[6] = o[51];
 	end
 `UO_ASLu,`UO_LSRu,`UO_ROLu,`UO_RORu:
 	begin
-		s_o[0] = o[8];
-		s_o[1] = o[51:0]==52'h00;
-		s_o[7] = o[51];
+		s_o[3] = o[8];
+		s_o[0] = o[51:0]==52'h00;
+		s_o[6] = o[51];
 	end
 `UO_REP:	s_o[6:0] = s_i[6:0] & ~imm[6:0];
 `UO_SEP:	s_o[6:0] = s_i[6:0] | imm[6:0];
