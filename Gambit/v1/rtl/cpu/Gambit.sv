@@ -888,8 +888,9 @@ wire [2:0] qcnt = qcnt2 > 3'd2 ? 3'd2 : qcnt2;
 // queue all four. We only want to queue up to the end of the program 
 // sequence for that instruction.
 reg [2:0] uopqc;
+wire [3:0] qc_sel = {uop_prg[ptr[3]].fl[1],uop_prg[ptr[2]].fl[1],uop_prg[ptr[1]].fl[1],uop_prg[ptr[0]].fl[1]};
 always @*
-	case({uop_prg[ptr[3]].fl[1],uop_prg[ptr[2]].fl[1],uop_prg[ptr[1]].fl[1],uop_prg[ptr[0]].fl[1]})
+	case(qc_sel)
 	4'b0000:	if (|mip1) uopqc = 3'd4; else if (|mip2) uopqc = 3'd4; else uopqc = 3'd0;
 	4'b0001:	if (|mip1) uopqc = 3'd4; else if (|mip2) uopqc = 3'd1; else uopqc = 3'd0;
 	4'b0010:	if (|mip1) uopqc = 3'd4; else if (|mip2) uopqc = 3'd2; else uopqc = 3'd0;
@@ -912,7 +913,7 @@ always @*
 // length of the micro-sequence.
 reg [2:0] uopqd;
 always @*
-if (phit)
+//if (phit)
 	case(uoq_room)
 	4'd0:	uopqd <= 3'd0;
 	4'd1:	uopqd <= uopqc > 3'd1 ? 3'd1 : uopqc;
@@ -920,8 +921,8 @@ if (phit)
 	4'd3:	uopqd <= uopqc > 3'd3 ? 3'd3 : uopqc;
 	default:	uopqd <= uopqc;
 	endcase
-else
-	uopqd <= 3'd0;
+//else
+//	uopqd <= 3'd0;
 
 wire uopQueued = uopqd > 3'd0;
 
@@ -938,7 +939,7 @@ reg [51:0] insnxx [0:FSLOTS-1];
 reg [51:0] insnxy [0:FSLOTS-1];
 reg [AMSB:0] pcr [0:1];
 
-wire stall_uoq = (uopqd < uopqc) || !((~|mip1 & ~|mip2) || qcnt==3'd2 || (qcnt==3'd1 && ~|mip1));
+wire stall_uoq = (uopqd < uopqc);// || !(qcnt==3'd2 || (qcnt==3'd1 && ~|mip1));
 assign nextBundle = mipst==MIP_RUN && !stall_uoq;
 
 // Compute next micro-instruction pointers
@@ -961,12 +962,10 @@ always @(posedge clk_i)
 if (rst_i) begin
 	mip1 <= 12'd1;
 	mip2 <= 12'd1;
-	nmip1 <= 12'd1;
-	nmip2 <= 12'd1;
-	uop_prg[0] <= {2'd3,ADD,4'd0,4'd0,4'd0,4'd0};
-	uop_prg[1] <= {2'd3,ADD,4'd0,4'd0,4'd0,4'd0};
-	uop_prg[2] <= {2'd3,ADD,4'd0,4'd0,4'd0,4'd0};
-	uop_prg[3] <= {2'd3,ADD,4'd0,4'd0,4'd0,4'd0};
+	uop2q[0] <= {2'd3,ADD,4'd0,4'd0,4'd0,4'd0};
+	uop2q[1] <= {2'd3,ADD,4'd0,4'd0,4'd0,4'd0};
+	uop2q[2] <= {2'd3,ADD,4'd0,4'd0,4'd0,4'd0};
+	uop2q[3] <= {2'd3,ADD,4'd0,4'd0,4'd0,4'd0};
 	pcr[0] <= 1'd0;
 	pcr[1] <= 1'd0;
 	mipst <= MIP_RUN;
@@ -984,8 +983,6 @@ else begin
 			if (phit) begin
 				mip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
 				mip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
-				nmip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
-				nmip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
 			end
 			else begin
 				mip1 <= 1'd0;
@@ -1008,9 +1005,126 @@ else begin
 			uoppc[3] <= whinst[3] ? pcr[1] : pcr[0];
 		end
 		else begin
-			mip1 <= nmip1;
-			mip2 <= nmip2;
+//			mip1 <= nmip1;
+//			mip2 <= nmip2;
 			mipst <= MIP_STALL;
+			if (|mip1) begin
+				mip1 <= mip1 + uopqd;
+				if (!uop_prg[mip1].fl[1]) begin
+					if (uopqd > 3'd1) begin
+						if (!uop_prg[mip1+1].fl[1]) begin
+							if (uopqd > 3'd2) begin
+								if (!uop_prg[mip1+2].fl[1]) begin
+									if (uopqd > 3'd3) begin
+										if (uop_prg[mip1+3].fl[1])
+											mip1 <= 1'd0;
+									end
+								end
+								else begin
+									mip1 <= 1'd0;
+									if (uopqd > 3'd3) begin
+										mip2 <= mip2 + uopqd - 3'd3;
+										if (uop_prg[mip2].fl[1]) begin
+											mip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
+											mip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
+											mipst <= MIP_RUN;
+										end
+									end
+								end
+							end
+						end
+						else begin
+							mip1 <= 1'd0;
+							if (uopqd > 3'd2) begin
+								mip2 <= mip2 + uopqd - 3'd2;
+								if (!uop_prg[mip2].fl[1]) begin
+									if (uopqd > 3'd3) begin
+										mip2 <= mip2 + uopqd - 3'd3;
+										if (uop_prg[mip2+1].fl[1]) begin
+											mip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
+											mip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
+											mipst <= MIP_RUN;
+										end
+									end
+								end
+								else begin
+									mip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
+									mip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
+									mipst <= MIP_RUN;
+								end
+							end
+						end
+					end
+				end
+				else begin
+					mip1 <= 1'd0;
+					if (uopqd > 3'd1) begin
+						mip2 <= mip2 + uopqd - 3'd1;
+						if (!uop_prg[mip2].fl[1]) begin
+							if (uopqd > 3'd2) begin
+								mip2 <= mip2 + uopqd - 3'd2;
+								if (!uop_prg[mip2+1].fl[1]) begin
+									if (uopqd > 3'd3) begin
+										mip2 <= mip2 + uopqd - 3'd3;
+										if (uop_prg[mip2+2].fl[1]) begin
+											mip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
+											mip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
+											mipst <= MIP_RUN;
+										end
+									end
+								end
+								else begin
+									mip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
+									mip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
+									mipst <= MIP_RUN;
+								end
+							end
+						end
+						else begin
+							mip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
+							mip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
+							mipst <= MIP_RUN;
+						end
+					end
+				end
+			end
+			else begin
+				if (|mip2) begin
+					mip2 <= mip2 + uopqd;
+					if (!uop_prg[mip2].fl[1]) begin
+						if (uopqd > 3'd1) begin
+							if (!uop_prg[mip2+1].fl[1]) begin
+								if (uopqd > 3'd2) begin
+									if (!uop_prg[mip2+2].fl[1]) begin
+										if (uopqd > 3'd3) begin
+											if (uop_prg[mip2+3].fl[1]) begin
+												mip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
+												mip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
+												mipst <= MIP_RUN;
+											end
+										end
+									end
+									else begin
+										mip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
+										mip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
+										mipst <= MIP_RUN;
+									end
+								end
+							end
+							else begin
+								mip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
+								mip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
+								mipst <= MIP_RUN;
+							end
+						end
+					end
+					else begin
+						mip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
+						mip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
+						mipst <= MIP_RUN;
+					end
+				end
+			end
 		end
 	MIP_STALL:
 		begin
@@ -1042,8 +1156,11 @@ else begin
 									mip1 <= 1'd0;
 									if (uopqd > 3'd3) begin
 										mip2 <= mip2 + uopqd - 3'd3;
-										if (uop_prg[mip2].fl[1])
-											mip2 <= 1'd0;
+										if (uop_prg[mip2].fl[1]) begin
+											mip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
+											mip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
+											mipst <= MIP_RUN;
+										end
 									end
 								end
 							end
@@ -1055,12 +1172,18 @@ else begin
 								if (!uop_prg[mip2].fl[1]) begin
 									if (uopqd > 3'd3) begin
 										mip2 <= mip2 + uopqd - 3'd3;
-										if (uop_prg[mip2+1].fl[1])
-											mip2 <= 1'd0;
+										if (uop_prg[mip2+1].fl[1]) begin
+											mip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
+											mip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
+											mipst <= MIP_RUN;
+										end
 									end
 								end
-								else
-									mip2 <= 1'd0;
+								else begin
+									mip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
+									mip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
+									mipst <= MIP_RUN;
+								end
 							end
 						end
 					end
@@ -1075,16 +1198,25 @@ else begin
 								if (!uop_prg[mip2+1].fl[1]) begin
 									if (uopqd > 3'd3) begin
 										mip2 <= mip2 + uopqd - 3'd3;
-										if (uop_prg[mip2+2].fl[1])
-											mip2 <= 1'd0;
+										if (uop_prg[mip2+2].fl[1]) begin
+											mip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
+											mip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
+											mipst <= MIP_RUN;
+										end
 									end
 								end
-								else
-									mip2 <= 1'd0;
+								else begin
+									mip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
+									mip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
+									mipst <= MIP_RUN;
+								end
 							end
 						end
-						else
-							mip2 <= 1'd0;
+						else begin
+							mip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
+							mip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
+							mipst <= MIP_RUN;
+						end
 					end
 				end
 			end
@@ -1097,20 +1229,32 @@ else begin
 								if (uopqd > 3'd2) begin
 									if (!uop_prg[mip2+2].fl[1]) begin
 										if (uopqd > 3'd3) begin
-											if (uop_prg[mip2+3].fl[1])
-												mip2 <= 1'd0;
+											if (uop_prg[mip2+3].fl[1]) begin
+												mip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
+												mip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
+												mipst <= MIP_RUN;
+											end
 										end
 									end
-									else
-										mip2 <= 1'd0;
+									else begin
+										mip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
+										mip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
+										mipst <= MIP_RUN;
+									end
 								end
 							end
-							else
-								mip2 <= 1'd0;
+							else begin
+								mip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
+								mip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
+								mipst <= MIP_RUN;
+							end
 						end
 					end
-					else
-						mip2 <= 1'd0;
+					else begin
+						mip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
+						mip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
+						mipst <= MIP_RUN;
+					end
 				end
 			end
 		end
@@ -2650,8 +2794,7 @@ ST:		fnMnemonic = "ST  ";
 JSI:	fnMnemonic = "JSI ";
 JMP:	fnMnemonic = "JMP ";
 SEP:	fnMnemonic = "SEP ";
-`BccD4a:	fnMnemonic = "Bcc ";
-`BccD4b:	fnMnemonic = "Bcc ";
+BNE:	fnMnemonic = "BNE ";
 NOP:	fnMnemonic = "NOP ";
 default:	fnMnemonic = "????";
 endcase
@@ -3846,22 +3989,26 @@ else begin
 			if (uopqd > 3'd0) begin
 				queue_uop(uoq_tail[0],uoppc[0],uop2q[0],2'b00,8'h00,1'b0,1'b0);
 				uoq_takb[uoq_tail[0]] <= take_branch[0];
-				tskLd4(uop_prg[0].cnst,insnxx[whinst[0]],uoq_const[uoq_tail[0]]);
+				uoq_inst[uoq_tail[0]] <= insnxx[whinst[0]];
+				tskLd4(uop2q[0].cnst,insnxx[whinst[0]],uoq_const[uoq_tail[0]]);
 			end
 			if (uopqd > 3'd1) begin
 				queue_uop(uoq_tail[1],uoppc[1],uop2q[1],2'b00,8'h00,1'b0,1'b0);
 				uoq_takb[uoq_tail[1]] <= take_branch[1];
-				tskLd4(uop_prg[1].cnst,insnxx[whinst[1]],uoq_const[uoq_tail[1]]);
+				uoq_inst[uoq_tail[1]] <= insnxx[whinst[1]];
+				tskLd4(uop2q[1].cnst,insnxx[whinst[1]],uoq_const[uoq_tail[1]]);
 			end
 			if (uopqd > 3'd2) begin
 				queue_uop(uoq_tail[2],uoppc[2],uop2q[2],2'b00,8'h00,1'b0,1'b0);
 				uoq_takb[uoq_tail[2]] <= take_branch[2];
-				tskLd4(uop_prg[2].cnst,insnxx[whinst[2]],uoq_const[uoq_tail[2]]);
+				uoq_inst[uoq_tail[2]] <= insnxx[whinst[2]];
+				tskLd4(uop2q[2].cnst,insnxx[whinst[2]],uoq_const[uoq_tail[2]]);
 			end
 			if (uopqd > 3'd3) begin
 				queue_uop(uoq_tail[3],uoppc[3],uop2q[3],2'b00,8'h00,1'b0,1'b0);
 				uoq_takb[uoq_tail[3]] <= take_branch[3];
-				tskLd4(uop_prg[3].cnst,insnxx[whinst[3]],uoq_const[uoq_tail[3]]);
+				uoq_inst[uoq_tail[3]] <= insnxx[whinst[3]];
+				tskLd4(uop2q[3].cnst,insnxx[whinst[3]],uoq_const[uoq_tail[3]]);
 			end
 			for (n = 0; n < 8; n = n + 1)
 				uoq_tail[n] <= (uoq_tail[n] + uopqd) % UOQ_ENTRIES;
@@ -5438,13 +5585,13 @@ input [7:0] mip1;
 input [7:0] mip2;
 input [2:0] uopqd;
 input MicroOp uop_prg [0:188];
-output [7:0] nmip1;
-output [7:0] nmip2;
+output reg [7:0] nmip1;
+output reg [7:0] nmip2;
 
 always @(posedge clk)
 if (rst) begin
-	nmip1 <= 1'd0;
-	nmip2 <= 1'd0;
+	nmip1 <= 1'd1;
+	nmip2 <= 1'd1;
 end
 else begin
 	nmip1 <= mip1 + uopqd;
