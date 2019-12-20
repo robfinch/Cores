@@ -116,7 +116,7 @@ endfunction
 // Does not include BccR's
 function IsBranch;
 input [23:0] isn;
-case(isn[23:16])
+case(isn[21:16])
 `UO_BEQ,`UO_BNE,`UO_BCS,`UO_BCC,`UO_BVS,`UO_BVC,`UO_BMI,`UO_BPL,`UO_BRA:
 	IsBranch = TRUE;
 default:

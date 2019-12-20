@@ -31,6 +31,7 @@ parameter FOUR = 4'd4;
 parameter REF17 = 4'd5;
 parameter REF4 = 4'd6;
 parameter REF46 = 4'd7;
+parameter REF9 = 4'd8;
 parameter REF23 = 4'd9;
 parameter REF36	= 4'd10;
 parameter REF7 = 4'd11;
@@ -174,25 +175,25 @@ parameter BRK = 181;
 
 MicroOp uop_prg [0:188] = '{
 '{2'd3, ADD, 4'd0,4'd0,4'd0,4'd0},
-'{2'd3,	ADDu,	Rtreg,Rareg,Rbreg,ZERO},
+'{2'd3,	ADDu,	Rtreg,Rareg,Rbreg,REF9},
 '{2'd3,	ADDu,	Rtreg,Rareg,ZERO,REF23},
 '{2'd3,	ADDu,	Rtreg,Rareg,ZERO,REF36},
-'{2'd3,	SUBu,	Rtreg,Rareg,Rbreg,ZERO},
+'{2'd3,	SUBu,	Rtreg,Rareg,Rbreg,REF9},
 '{2'd3,	SUBu,	Rtreg,Rareg,ZERO,REF23},
 '{2'd3,	SUBu,	Rtreg,Rareg,ZERO,REF36},
-'{2'd3,	ANDu,	Rtreg,Rareg,Rbreg,ZERO},
+'{2'd3,	ANDu,	Rtreg,Rareg,Rbreg,REF9},
 '{2'd3,	ANDu,	Rtreg,Rareg,ZERO,REF23},
 '{2'd3,	ANDu,	Rtreg,Rareg,ZERO,REF36},
-'{2'd3,	ORu,	Rtreg,Rareg,Rbreg,ZERO},
+'{2'd3,	ORu,	Rtreg,Rareg,Rbreg,REF9},
 '{2'd3,	ORu,	Rtreg,Rareg,ZERO,REF23},
 '{2'd3,	ORu,	Rtreg,Rareg,ZERO,REF36},
-'{2'd3,	EORu,	Rtreg,Rareg,Rbreg,ZERO},
+'{2'd3,	EORu,	Rtreg,Rareg,Rbreg,REF9},
 '{2'd3,	EORu,	Rtreg,Rareg,ZERO,REF23},
 '{2'd3,	EORu,	Rtreg,Rareg,ZERO,REF36},
-'{2'd3,	ASLu,	Rtreg,Rareg,Rbreg,ZERO},
-'{2'd3,	ROLu,	Rtreg,Rareg,Rbreg,ZERO},
-'{2'd3,	LSRu,	Rtreg,Rareg,Rbreg,ZERO},
-'{2'd3,	RORu,	Rtreg,Rareg,Rbreg,ZERO},
+'{2'd3,	ASLu,	Rtreg,Rareg,Rbreg,REF9},
+'{2'd3,	ROLu,	Rtreg,Rareg,Rbreg,REF9},
+'{2'd3,	LSRu,	Rtreg,Rareg,Rbreg,REF9},
+'{2'd3,	RORu,	Rtreg,Rareg,Rbreg,REF9},
 // MVNB (20):
 '{2'd1,	LDB,		TMP1,xr,ZERO,ZERO},
 '{2'd0,	STB,		TMP1,yr,ZERO,ZERO},
@@ -349,7 +350,7 @@ MicroOp uop_prg [0:188] = '{
 // BUS_DONE7 (ONE3ZERO)
 '{2'd3,	BUS,		ZERO,ZERO,ZERO,REF17},
 // LD_D9 (ONE3ONE):
-'{2'd3,	LD,			Rtreg,Rareg,Rbreg,ZERO},
+'{2'd3,	LD,			Rtreg,Rareg,Rbreg,REF9},
 // LD_D23 (ONE32):
 '{2'd3,	LD,			Rtreg,Rareg,ZERO,REF23},
 // LD_D36 (ONE33):
@@ -357,7 +358,7 @@ MicroOp uop_prg [0:188] = '{
 // LDB_D36 (ONE3FOUR):
 '{2'd3,	LDB,		Rtreg,Rareg,ZERO,REF36},
 // ST_D9 (ONE35):
-'{2'd3,	ST,			Rtreg,Rareg,Rbreg,ZERO},
+'{2'd3,	ST,			Rtreg,Rareg,Rbreg,REF9},
 // ST_D23 (ONE36):
 '{2'd3,	ST,			Rtreg,Rareg,ZERO,REF23},
 // STD_36 (ONE37):

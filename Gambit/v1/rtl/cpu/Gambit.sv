@@ -615,7 +615,7 @@ reg [7:0] commit2_sr_tgts;
 reg [QSLOTS-1:0] queuedOn;
 reg [IQ_ENTRIES-1:0] rqueuedOn;
 wire [QSLOTS-1:0] queuedOnp;
-wire [QSLOTS-1:0] predict_taken;
+wire [FSLOTS-1:0] predict_taken;
 wire predict_taken0;
 wire predict_taken1;
 wire predict_taken2;
@@ -722,6 +722,7 @@ begin
 	REF23:	cnst = {{29{insn[38]}},insn[38:16]};
 	REF36:	cnst = {{16{insn[51]}},insn[51:16]};
 	REF7:		cnst = insn[12:6];
+	REF9:		cnst = insn[25] ? {{43{insn[24]}},insn[24:16]} : 52'd0;
 	MFOUR:	cnst = 52'hFFFFFFFFFFFFC;
 	default:	cnst = 52'h0000;
 	endcase
@@ -1673,10 +1674,13 @@ assign slot_brk[1] = slot_brkx[iclen1];
 assign slot_pf[0] = slot_pfx[0];
 assign slot_pf[1] = slot_pfx[iclen1];
 
+initial begin
+	take_branch = 2'b00;
+end
 always @*
 begin
 	take_branch[0] = (slot_br[0] && predict_taken[0]) || slot_brk[0];
-	take_branch[1] = (slot_br[iclen1] &&  predict_taken[iclen1]) || slot_brk[iclen1];
+	take_branch[1] = (slot_br[1] && predict_taken[1]) || slot_brk[1];
 end
 
 // Branching for purposes of the branch shadow.
@@ -2491,7 +2495,11 @@ for (n = 0; n < QSLOTS; n = n + 1)
 	case(Rn[n])
 	ZERO:		rfob[n] <= 52'h0;
 //	`UO_RA:		rfob[n] <= regsx[uoq_Ra[(uoq_head+n) % UOQ_ENTRIES]];
-	Rbreg:		rfob[n] <= uoq_inst[(uoq_head+n) % UOQ_ENTRIES][`RB]==6'd0 ? 52'd0 : regsx[uoq_inst[(uoq_head+n) % UOQ_ENTRIES][`RB]];
+	Rbreg:
+		if (uoq_inst[(uoq_head+n) % UOQ_ENTRIES][25])
+			rfob[n] <= 52'd0;// uoq_const[(uoq_head+n) % UOQ_ENTRIES];
+		else
+			rfob[n] <= uoq_inst[(uoq_head+n) % UOQ_ENTRIES][`RB]==6'd0 ? 52'd0 : regsx[uoq_inst[(uoq_head+n) % UOQ_ENTRIES][`RB]];
 	acc:	rfob[n] <= regsx[1];
 	xr:		rfob[n] <= regsx[2];
 	yr:		rfob[n] <= regsx[3];
@@ -2522,7 +2530,7 @@ for (n = 0; n < QSLOTS; n = n + 1)
 	case(Rn[n])
 //	`UO_RT:		RnReal[n] <= uoq_Rt[(uoq_head+n) % UOQ_ENTRIES];
 //	`UO_RA:		RnReal[n] <= uoq_Ra[(uoq_head+n) % UOQ_ENTRIES];
-	Rbreg:		RnReal[n] <= uoq_inst[(uoq_head+n) % UOQ_ENTRIES][`RB];
+	Rbreg:		RnReal[n] <= uoq_inst[(uoq_head+n) % UOQ_ENTRIES][25] ? 6'd0 : uoq_inst[(uoq_head+n) % UOQ_ENTRIES][`RB];
 	acc:	RnReal[n] <= 6'd1;
 	xr:		RnReal[n] <= 6'd2;
 	yr:		RnReal[n] <= 6'd3;
@@ -3989,28 +3997,28 @@ else begin
 		begin
 			if (uopqd > 3'd0) begin
 				queue_uop(uoq_tail[0],uoppc[0],uop2q[0],2'b00,8'h00,1'b0,1'b0);
-				uoq_takb[uoq_tail[0]] <= take_branch[0];
+				uoq_takb[uoq_tail[0]] <= take_branch[whinst[0]];
 				uoq_inst[uoq_tail[0]] <= insnxx[whinst[0]];
 				tskLd4(uop2q[0].cnst,insnxx[whinst[0]],uoq_const[uoq_tail[0]]);
 				flagsUpd(uop2q[0],uoq_flagsupd[uoq_tail[0]]);
 			end
 			if (uopqd > 3'd1) begin
 				queue_uop(uoq_tail[1],uoppc[1],uop2q[1],2'b00,8'h00,1'b0,1'b0);
-				uoq_takb[uoq_tail[1]] <= take_branch[1];
+				uoq_takb[uoq_tail[1]] <= take_branch[whinst[1]];
 				uoq_inst[uoq_tail[1]] <= insnxx[whinst[1]];
 				tskLd4(uop2q[1].cnst,insnxx[whinst[1]],uoq_const[uoq_tail[1]]);
 				flagsUpd(uop2q[1],uoq_flagsupd[uoq_tail[1]]);
 			end
 			if (uopqd > 3'd2) begin
 				queue_uop(uoq_tail[2],uoppc[2],uop2q[2],2'b00,8'h00,1'b0,1'b0);
-				uoq_takb[uoq_tail[2]] <= take_branch[2];
+				uoq_takb[uoq_tail[2]] <= take_branch[whinst[2]];
 				uoq_inst[uoq_tail[2]] <= insnxx[whinst[2]];
 				tskLd4(uop2q[2].cnst,insnxx[whinst[2]],uoq_const[uoq_tail[2]]);
 				flagsUpd(uop2q[2],uoq_flagsupd[uoq_tail[2]]);
 			end
 			if (uopqd > 3'd3) begin
 				queue_uop(uoq_tail[3],uoppc[3],uop2q[3],2'b00,8'h00,1'b0,1'b0);
-				uoq_takb[uoq_tail[3]] <= take_branch[3];
+				uoq_takb[uoq_tail[3]] <= take_branch[whinst[3]];
 				uoq_inst[uoq_tail[3]] <= insnxx[whinst[3]];
 				tskLd4(uop2q[3].cnst,insnxx[whinst[3]],uoq_const[uoq_tail[3]]);
 				flagsUpd(uop2q[3],uoq_flagsupd[uoq_tail[3]]);
