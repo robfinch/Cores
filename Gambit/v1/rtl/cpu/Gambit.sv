@@ -622,7 +622,7 @@ wire predict_taken2;
 reg [QSLOTS-1:0] slot_rfw;
 reg [7:0] slot_sr_tgts [0:QSLOTS-1];
 
-wire [8:0] opcode1, opcode2;
+reg [8:0] opcode1, opcode2;
 
 `include "..\common\Gambit-micro-program.sv"
 
@@ -653,7 +653,7 @@ uop_map = {
 	UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,
 	UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,
 	UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,
-	RTS,RTI,PFI_0,PFI_1,WAI_0,WAI_1,LSTP,LNOP,
+	RTS,RTI,PFI_0,IRQ,WAI_0,IRQ,LSTP,LNOP,
 	BRA_D4,UNIMP,BUS_D4,BUC_D4,UNIMP,UNIMP,UNIMP,UNIMP,
 	ROL_RR,ROL_RR,ROL_RR,ROL_RR,ROL_RR,ROL_RR,ROL_RR,ROL_RR,
 	UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,
@@ -1515,8 +1515,21 @@ assign ic1_out = ic_out[103:0];
 assign ic2_out = ic1_out >> (iclen1 * 13);
 assign freezepc = ((rst_ctr < 32'd16) || nmi_i || (irq_i & ~sr[4])) && !int_commit;
 
-assign opcode1 = freezepc ? {(rst_ctr < 32'd16) ? `RST : nmi_i ? `NMI : irq_i ? `IRQ : 3'd7,`BRKGRP} : ic1_out[8:0];
-assign opcode2 = freezepc ? {(rst_ctr < 32'd16) ? `RST : nmi_i ? `NMI : irq_i ? `IRQ : 3'd7,`BRKGRP} : ic2_out[8:0];
+// Since the micro-program doesn't support conditional logic or branches a 
+// conditional load for the PFI instruction is accomplished here.
+wire [8:0] opcode1a = freezepc ? {(rst_ctr < 32'd16) ? `RST : nmi_i ? `NMI : irq_i ? `IRQ : 3'd7,`BRKGRP} : ic1_out[8:0];
+wire [8:0] opcode2a = freezepc ? {(rst_ctr < 32'd16) ? `RST : nmi_i ? `NMI : irq_i ? `IRQ : 3'd7,`BRKGRP} : ic2_out[8:0];
+always @*
+	if ((opcode1a==`PFI || opcode1a==`WAI) && irq_i && !srx[4])
+		opcode1 <= opcode1a|9'b1;
+	else
+		opcode1 <= opcode1a;
+always @*
+	if ((opcode2a==`PFI || opcode2a==`WAI) && irq_i && !srx[4])
+		opcode2 <= opcode2a|9'b1;
+	else
+		opcode2 <= opcode1a;
+
 assign insnx[0] = freezepc ? {(rst_ctr < 32'd16) ? `RST : nmi_i ? `NMI : irq_i ? `IRQ : 3'd7,`BRKGRP} : ic1_out[51:0];
 assign insnx[1] = freezepc ? {(rst_ctr < 32'd16) ? `RST : nmi_i ? `NMI : irq_i ? `IRQ : 3'd7,`BRKGRP} : ic2_out[51:0];
 wire IsRst = (freezepc && rst_ctr < 4'd16);
@@ -1665,6 +1678,10 @@ function IsRts;
 input [51:0] insn;
 IsRts = insn[`OPCODE]==`RETGRP && insn[8:6]==`RTS;
 endfunction
+function IsWai;
+input [51:0] insn;
+IsWai = insn[`OPCODE]==`RETGRP && insn[8:6]==`WAI;
+endfunction
 function IsJsr;
 input [51:0] insn;
 IsJsr = insn[`OPCODE]==`JSR;
@@ -1674,6 +1691,8 @@ input [51:0] insn;
 IsJmp = insn[`OPCODE]==`JMP;
 endfunction
 
+reg [7:0] slot_waix;
+wire [FSLOTS-1:0] slot_wai;
 generate begin : mdecoders
 for (g = 0; g < 8; g = g + 1)
 always @*
@@ -1682,6 +1701,7 @@ begin
 	slot_brx[g] = IsBranch(ic1_out[g*13+:52]);
 	slot_jcx[g]	= IsJsr(ic1_out[g*13+:52]) || IsJmp(ic1_out[g*13+:52]);
 	slot_brkx[g]	= IsBrk(ic1_out[g*13+:52]) || IsRti(ic1_out[g*13+:52]);
+	slot_waix[g] = IsWai(ic1_out[g*13+:52]);
 end
 end
 endgenerate
@@ -1698,6 +1718,8 @@ assign slot_brk[0] = slot_brkx[0];
 assign slot_brk[1] = slot_brkx[iclen1];
 assign slot_pf[0] = slot_pfx[0];
 assign slot_pf[1] = slot_pfx[iclen1];
+assign slot_wai[0] = slot_waix[0];
+assign slot_wai[1] = slot_waix[iclen1];
 
 initial begin
 	take_branch = 2'b00;
@@ -1927,6 +1949,7 @@ programCounter upc1
 	.jcl(slot_jcl),
 	.rts(slot_rts),
 	.br(slot_br),
+	.wai(slot_wai),
 	.take_branch(take_branch),
 	.btgt(btgt),
 	.pc(pc),

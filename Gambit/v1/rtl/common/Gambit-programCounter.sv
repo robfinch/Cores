@@ -27,7 +27,7 @@
 module programCounter(rst, clk,
 	q1, q2, q1bx, insnx, freezepc, 
 	phit, branchmiss, misspc, len1, len2, len3,
-	jc, jcl, rts, br, take_branch,
+	jc, jcl, rts, br, wai, take_branch,
 	btgt, pc, pcd, pc_chg, branch_pc, 
 	ra, pc_override,
 	debug_on);
@@ -53,6 +53,7 @@ input [FSLOTS-1:0] jc;
 input [FSLOTS-1:0] jcl;
 input [FSLOTS-1:0] rts;
 input [FSLOTS-1:0] br;
+input [FSLOTS-1:0] wai;
 input [FSLOTS-1:0] take_branch;
 input [AMSB:0] btgt [0:FSLOTS-1];
 output reg [AMSB:0] pc = RSTPC;
@@ -155,38 +156,38 @@ end
 else begin
 	branch_pc <= pc;
 	if (q1 & ~q1bx) begin
-		if (rts[0])
+		if (wai[0])
+			branch_pc <= pc - 52'd1;
+		else if (rts[0])
 			branch_pc <= ra;
 		else if (take_branch[0]) begin
 			$display("take branch 0");
-			branch_pc[15:0] <= pc[15:0] + {{8{insnx[0][15]}},insnx[0][15:8]} + 4'd2;
+			branch_pc <= pc + {{35{insnx[0][25]}},insnx[0][25:9]} + 4'd2;
 		end
 		else if (jc[0])
-			branch_pc[15:0] <= insnx[0][23:8];
-		else if (jcl[0])
-			branch_pc <= insnx[0][31:8];
+			branch_pc[45:0] <= insnx[0][51:6];
 	end
 	else if (q2) begin
-		if (rts[0])
+		if (wai[0])
+			branch_pc <= pc - 52'd1;
+		else if (rts[0])
 			branch_pc <= ra;
 		else if (take_branch[0]) begin
 			$display("take branch 0");
-			branch_pc[15:0] <= pc[15:0] + {{8{insnx[0][15]}},insnx[0][15:8]} + 4'd2;
+			branch_pc <= pc + {{35{insnx[0][25]}},insnx[0][25:9]} + 4'd2;
 		end
 		else if (jc[0])
-			branch_pc[15:0] <= insnx[0][23:8];
-		else if (jcl[0])
-			branch_pc <= insnx[0][31:8];
+			branch_pc[45:0] <= insnx[0][51:6];
 		else if (rts[1])
 			branch_pc <= ra;
+		else if (wai[1])
+			branch_pc <= pc - 52'd1 + len1;
 		else if (take_branch[1]) begin
 			$display("take branch 1");
-			branch_pc[15:0] <= pc[15:0] + {{8{insnx[1][15]}},insnx[1][15:8]} + len1 + 4'd2;
+			branch_pc <= pc + {{35{insnx[1][25]}},insnx[1][25:9]} + 4'd2 + len1;
 		end
 		else if (jc[1])
-			branch_pc[15:0] <= insnx[1][23:8];
-		else if (jcl[1])
-			branch_pc <= insnx[1][31:8];
+			branch_pc[45:0] <= insnx[1][51:6];
 	end
 end
 

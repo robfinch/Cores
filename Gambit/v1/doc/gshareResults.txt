@@ -1,0 +1,11 @@
+
+Global History
+0000000	<- no branches taken
+0000001 <- first taken branch of loop recorded
+0000011	<- 2nd branch of loop
+0000111 <- 3rd branch of loop
+...
+1111111 <- seventh branch of loop
+1111111 <- eigth etc. branch of loop
+
+Note the above pattern is used as a table index. Since the pattern differs seven times in a row, a different pht entry is selected to be updated. Since the pht entry must be hit several times in order for it to flip it's decision, it ends up taking about 12-13 branches before the predictor settles into a 'it's taken' result.
