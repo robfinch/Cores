@@ -91,6 +91,7 @@ parameter CAUSE = 6'd31;
 parameter BUC = 6'd32;
 parameter BUS = 6'd33;
 parameter JSI = 6'd34;
+parameter NOP = 6'd35;
 
 parameter ADD_RR = 1;
 parameter ADD_RI23 = 2;
@@ -125,7 +126,7 @@ parameter JSR_R = 77;
 parameter JSR_ABS = 80;
 parameter RTS = 83;
 parameter RTI = 86;
-parameter NOP = 91;
+parameter LNOP = 91;
 parameter PFI_0 = 92;
 parameter PFI_1 = 93;
 parameter LSTP = 100;
@@ -173,8 +174,11 @@ parameter NMI = 165;
 parameter RST = 173;
 parameter BRK = 181;
 
+// The first instruction of this table is a NOP by design so that when the 
+// micro-program counters are zeroed out they will cause a fetch of the NOP
+// instruction.
 MicroOp uop_prg [0:188] = '{
-'{2'd3, ADD, 4'd0,4'd0,4'd0,4'd0},
+'{2'd3, NOP, 4'd0,4'd0,4'd0,4'd0},
 '{2'd3,	ADDu,	Rtreg,Rareg,Rbreg,REF9},
 '{2'd3,	ADDu,	Rtreg,Rareg,ZERO,REF23},
 '{2'd3,	ADDu,	Rtreg,Rareg,ZERO,REF36},

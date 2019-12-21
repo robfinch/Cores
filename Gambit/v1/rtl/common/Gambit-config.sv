@@ -47,7 +47,7 @@
 // Number of fetch slots
 `define FSLOTS		2
 
-`define UOQ_ENTRIES	12
+`define UOQ_ENTRIES	8
 `define UOQ_BIT 	$clog2(UOQ_ENTRIES)
 `define UOQ_BITS	`UOQ_BIT:0
 

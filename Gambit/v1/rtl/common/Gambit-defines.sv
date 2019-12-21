@@ -114,6 +114,7 @@
 `define UO_BUC		6'd32
 `define UO_BUS		6'd33
 `define UO_JSI		6'd34
+`define UO_NOP		6'd35
 
 `define UOF_I			7'b0010000
 

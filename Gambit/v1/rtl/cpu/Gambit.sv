@@ -653,7 +653,7 @@ uop_map = {
 	UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,
 	UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,
 	UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,
-	RTS,RTI,PFI_0,PFI_1,WAI_0,WAI_1,LSTP,NOP,
+	RTS,RTI,PFI_0,PFI_1,WAI_0,WAI_1,LSTP,LNOP,
 	BRA_D4,UNIMP,BUS_D4,BUC_D4,UNIMP,UNIMP,UNIMP,UNIMP,
 	ROL_RR,ROL_RR,ROL_RR,ROL_RR,ROL_RR,ROL_RR,ROL_RR,ROL_RR,
 	UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,
@@ -2687,7 +2687,7 @@ input MicroOp ins;
 case(ins.opcode)
 `UO_BEQ,`UO_BNE,`UO_BMI,`UO_BPL,`UO_BCS,`UO_BCC,`UO_BVS,`UO_BVC,`UO_BRA,`UO_BUS,`UO_BUC:
 	SourceBValid = TRUE;
-`UO_REP,`UO_SEP:
+`UO_REP,`UO_SEP,`UO_NOP:
 	SourceBValid = TRUE;
 default:
 	SourceBValid = ins.src2 > 4'd8 || ins.src2==4'd0;
@@ -2707,7 +2707,7 @@ function SourceTValid;
 input MicroOp ins;
 case(ins.opcode)
 `UO_BEQ,`UO_BNE,`UO_BMI,`UO_BPL,`UO_BCS,`UO_BCC,`UO_BVS,`UO_BVC,`UO_BRA,`UO_BUS,`UO_BUC,
-`UO_REP,`UO_SEP:
+`UO_REP,`UO_SEP,`UO_NOP:
 	SourceTValid = TRUE;
 default:
 	SourceTValid = ins.tgt > 4'd8 || ins.tgt==4'd0;
@@ -2718,7 +2718,7 @@ function SourceAValid;
 input MicroOp ins;
 case(ins.opcode)
 `UO_BEQ,`UO_BNE,`UO_BMI,`UO_BPL,`UO_BCS,`UO_BCC,`UO_BVS,`UO_BVC,`UO_BRA,`UO_BUS,`UO_BUC,
-`UO_REP,`UO_SEP:
+`UO_REP,`UO_SEP,`UO_NOP:
 	SourceAValid = TRUE;
 default:
 	SourceAValid = ins.src1>4'd8 || ins.src1==4'd0;
@@ -3721,6 +3721,7 @@ seqnum usqn1
 	.hi_amt(hi_amt),
 	.iq_v(iq_v),
 	.iq_sn(iq_sn),
+	.overflow(sn_overflow(1)),
 	.maxsn(maxsn),
 	.tosub(tosub)
 );
@@ -3921,6 +3922,10 @@ if (rst_i) begin
 		regs[31] <= 52'h01FFC;
 end
 else begin
+
+	if (sn_overflow(1))
+		for (n = 0; n < IQ_ENTRIES; n = n + 1)
+			iq_sn[n] <= iq_sn[n] - {2'b01,{`SNBIT-2{1'b0}}};
 
 	for (n = 1; n < 32; n = n + 1)
 		regs[n] <= regsx[n];
@@ -5114,11 +5119,7 @@ begin
 //					&& !issuing_on_alu1)
 //					alu1_dataready <= `FALSE;
 //					$display("head_inc: IQS_INVALID[%d]",heads[n]);
-			end
 		end
-	if (sn_overflow(1)) begin
-		for (n = 0; n < IQ_ENTRIES; n = n + 1)
-			iq_sn[n] <= iq_sn[n] - {2'b01,{`SNBIT-2{1'b0}}};
 	end
 			
 //		if (iq_v[n])

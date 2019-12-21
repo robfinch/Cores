@@ -23,7 +23,7 @@
 //
 `include "Gambit-config.sv"
 
-module seqnum(rst, clk, heads, hi_amt, iq_v, iq_sn, maxsn, tosub);
+module seqnum(rst, clk, heads, hi_amt, iq_v, iq_sn, overflow, maxsn, tosub);
 parameter IQ_ENTRIES = `IQ_ENTRIES;
 parameter QSLOTS = `QSLOTS;
 input rst;
@@ -31,6 +31,7 @@ input clk;
 input [`QBITS] heads [0:IQ_ENTRIES-1];
 input [2:0] hi_amt;
 input [IQ_ENTRIES-1:0] iq_v;
+input overflow;
 input [`SNBITS] iq_sn [0:IQ_ENTRIES-1];
 output reg [`SNBITS] maxsn;
 output [`SNBITS] tosub;
@@ -58,6 +59,7 @@ maxsn = 1'd0;
 for (n = 0; n < IQ_ENTRIES; n = n + 1)
 	if (iq_sn[n] > maxsn)// && iq_v[n])
 		maxsn = iq_sn[n];
+maxsn = overflow ? maxsn - {2'b01,{`SNBIT-2{1'b0}}} : maxsn;
 //maxsn = maxsn - tosub;
 end
 

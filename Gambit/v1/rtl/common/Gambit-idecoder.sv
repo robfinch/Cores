@@ -38,6 +38,7 @@ parameter word = 3'd1;
 function IsAlu;
 input [23:0] isn;
 case(isn[21:16])
+`UO_NOP,
 `UO_CAUSE,
 `UO_ADD,`UO_SUB,
 `UO_ADDu,`UO_SUBu,
