@@ -21,7 +21,7 @@
 //                                                                          
 // ============================================================================
 
-`include "Gambit-defines.sv"
+`include "..\Gambit-defines.sv"
 
 module alu(op, a, imm, b, o, s_i, s_o, idle);
 parameter WID=52;

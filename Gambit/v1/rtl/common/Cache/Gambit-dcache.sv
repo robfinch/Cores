@@ -59,7 +59,7 @@ end
 genvar v;
 
 generate begin : mupd
-for (v = 0; v < 37; v = v + 1)
+for (v = 0; v < 36; v = v + 1)
 begin : mw
 always @(posedge clk)
 	if (wr & sel[v])  mem[lineno][v*13+:13] <= i[v*13+:13];
@@ -74,7 +74,7 @@ assign o = mem[lineno];
 genvar g;
 
 generate begin : mem2
-for (g = 0; g < 37; g = g + 1) begin
+for (g = 0; g < 36; g = g + 1) begin
 // 128 lines (32 x 4 way)
 L1_dcache_mem2 u1
 (
@@ -521,10 +521,10 @@ always @(posedge clk)
 		;
 	else if (rwr)
 		case(lfsro[1:0])
-		2'b00:	mem0[rwadr[12:5]] <= rwadr[AMSB+9:5];
-		2'b01:	mem1[rwadr[12:5]] <= rwadr[AMSB+9:5];
-		2'b10:	mem2[rwadr[12:5]] <= rwadr[AMSB+9:5];
-		2'b11:	mem3[rwadr[12:5]] <= rwadr[AMSB+9:5];
+		2'b00:	mem0[rwadr[12:5]] <= rwadr[AMSB+8:5];
+		2'b01:	mem1[rwadr[12:5]] <= rwadr[AMSB+8:5];
+		2'b10:	mem2[rwadr[12:5]] <= rwadr[AMSB+8:5];
+		2'b11:	mem3[rwadr[12:5]] <= rwadr[AMSB+8:5];
 		endcase
 always @(posedge clk)
 	rwr <= wr;

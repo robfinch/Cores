@@ -20,17 +20,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.    
 //                                                                          
 // ============================================================================
-// 36010 57616
-// 14924 23878
-// 31412 50259
-// 42046 67274
-// 44015 70424
-// 41136 65818
-// 42757 68411
-// 43714 69942
-// 44792 71667
-// 41659 66654
-// 76202 121923
+// 81708 130733
 `include "..\common\Gambit-config.sv"
 `include "..\common\Gambit-types.sv"
 `include "..\common\Gambit-defines.sv"
@@ -108,6 +98,7 @@ parameter RS_ASSIGNED = 2'd1;
 parameter RS_DONE = 2'd2;
 parameter RS_CMT = 2'd3;
 
+`include "..\common\Micro-op_Engine\Gambit-micro-program-parameters.sv"
 `include "..\common\Gambit-busStates.sv"
 
 wire clk;
@@ -171,7 +162,7 @@ reg q1, q2, q1b, q1bx;	// number of macro instructions queued
 reg qb;						// queue a brk instruction
 
 
-wire [115:0] ic1_out;
+wire [143:0] ic1_out;
 wire [51:0] ic2_out;
 
 reg  [3:0] panic;		// indexes the message structure
@@ -624,87 +615,6 @@ reg [7:0] slot_sr_tgts [0:QSLOTS-1];
 
 reg [8:0] opcode1, opcode2;
 
-`include "..\common\Gambit-micro-program.sv"
-
-reg [7:0] uop_map [0:511];
-
-// Instruction to micro-program address translation table.
-initial begin
-uop_map = {
-	ADD_RR,ADD_RR,ADD_RR,ADD_RR,ADD_RR,ADD_RR,ADD_RR,ADD_RR,
-	ADD_RI23,ADD_RI23,ADD_RI23,ADD_RI23,ADD_RI23,ADD_RI23,ADD_RI23,ADD_RI23,
-	ADD_RI36,ADD_RI36,ADD_RI36,ADD_RI36,ADD_RI36,ADD_RI36,ADD_RI36,ADD_RI36,
-	UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,
-	JMP_ABS,JMP_ABS,JMP_ABS,JMP_ABS,JMP_ABS,JMP_ABS,JMP_ABS,JMP_ABS,
-	BEQ_D4,BNE_D4,BPL_D4,BMI_D4,BVS_D4,BVC_D4,BCS_D4,BCC_D4,
-	ASL_RR,ASL_RR,ASL_RR,ASL_RR,ASL_RR,ASL_RR,ASL_RR,ASL_RR,
-	UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,
-
-	SUB_RR,SUB_RR,SUB_RR,SUB_RR,SUB_RR,SUB_RR,SUB_RR,SUB_RR,
-	SUB_RI23,SUB_RI23,SUB_RI23,SUB_RI23,SUB_RI23,SUB_RI23,SUB_RI23,SUB_RI23,
-	SUB_RI36,SUB_RI36,SUB_RI36,SUB_RI36,SUB_RI36,SUB_RI36,SUB_RI36,SUB_RI36,
-	UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,
-	JSR_ABS,JSR_ABS,JSR_ABS,JSR_ABS,JSR_ABS,JSR_ABS,JSR_ABS,JSR_ABS,
-	BEQ_D17,BNE_D17,BPL_D17,BMI_D17,BVS_D17,BVC_D17,BCS_D17,BCC_D17,
-	LSR_RR,LSR_RR,LSR_RR,LSR_RR,LSR_RR,LSR_RR,LSR_RR,LSR_RR,
-	UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,
-
-	UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,
-	UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,
-	UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,
-	UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,
-	RTS,RTI,PFI_0,IRQ,WAI_0,IRQ,LSTP,LNOP,
-	BRA_D4,UNIMP,BUS_D4,BUC_D4,UNIMP,UNIMP,UNIMP,UNIMP,
-	ROL_RR,ROL_RR,ROL_RR,ROL_RR,ROL_RR,ROL_RR,ROL_RR,ROL_RR,
-	UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,
-
-	AND_RR,AND_RR,AND_RR,AND_RR,AND_RR,AND_RR,AND_RR,AND_RR,
-	AND_RI23,AND_RI23,AND_RI23,AND_RI23,AND_RI23,AND_RI23,AND_RI23,AND_RI23,
-	AND_RI36,AND_RI36,AND_RI36,AND_RI36,AND_RI36,AND_RI36,AND_RI36,AND_RI36,
-	UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,
-	RST,NMI,IRQ,BRK,BRK,BRK,BRK,BRK,
-	BRA_D17,UNIMP,BUS_D17,BUC_D17,UNIMP,UNIMP,UNIMP,UNIMP,
-	ROR_RR,ROR_RR,ROR_RR,ROR_RR,ROR_RR,ROR_RR,ROR_RR,ROR_RR,
-	UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,
-
-	OR_RR,OR_RR,OR_RR,OR_RR,OR_RR,OR_RR,OR_RR,OR_RR,
-	OR_RI23,OR_RI23,OR_RI23,OR_RI23,OR_RI23,OR_RI23,OR_RI23,OR_RI23,
-	OR_RI36,OR_RI36,OR_RI36,OR_RI36,OR_RI36,OR_RI36,OR_RI36,OR_RI36,
-	UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,
-	JMP_R,JMP_R,JMP_R,JMP_R,JMP_R,JMP_R,JMP_R,JMP_R,
-	MVNB,MVPB,STSB,CMPSB,MVN,MVP,STS,CMPS,
-	LSEP,LSEP,LSEP,LSEP,LSEP,LSEP,LSEP,LSEP,
-	UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,
-
-	EOR_RR,EOR_RR,EOR_RR,EOR_RR,EOR_RR,EOR_RR,EOR_RR,EOR_RR,
-	EOR_RI23,EOR_RI23,EOR_RI23,EOR_RI23,EOR_RI23,EOR_RI23,EOR_RI23,EOR_RI23,
-	EOR_RI36,EOR_RI36,EOR_RI36,EOR_RI36,EOR_RI36,EOR_RI36,EOR_RI36,EOR_RI36,
-	UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,
-	JSR_R,JSR_R,JSR_R,JSR_R,JSR_R,JSR_R,JSR_R,JSR_R,			
-	UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,
-	LREP,LREP,LREP,LREP,LREP,LREP,LREP,LREP,
-	UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,
-
-	LD_D9,LD_D9,LD_D9,LD_D9,LD_D9,LD_D9,LD_D9,LD_D9,
-	LD_D23,LD_D23,LD_D23,LD_D23,LD_D23,LD_D23,LD_D23,LD_D23,
-	LD_D36,LD_D36,LD_D36,LD_D36,LD_D36,LD_D36,LD_D36,LD_D36,
-	UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,
-	LDB_D36,LDB_D36,LDB_D36,LDB_D36,LDB_D36,LDB_D36,LDB_D36,LDB_D36,
-	PLP,PLP,PLP,PLP,PLP,PLP,PLP,PLP,
-	POP,POP,POP,POP,POP,POP,POP,POP,	
-	UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,
-
-	ST_D9,ST_D9,ST_D9,ST_D9,ST_D9,ST_D9,ST_D9,ST_D9,
-	ST_D23,ST_D23,ST_D23,ST_D23,ST_D23,ST_D23,ST_D23,ST_D23,
-	ST_D36,ST_D36,ST_D36,ST_D36,ST_D36,ST_D36,ST_D36,ST_D36,
-	UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,
-	STB_D36,STB_D36,STB_D36,STB_D36,STB_D36,STB_D36,STB_D36,STB_D36,
-	PHP,PHP,PHP,PHP,PHP,PHP,PHP,PHP,
-	PSH,PSH,PSH,PSH,PSH,PSH,PSH,PSH,
-	UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP,UNIMP
-};
-end
-
 task tskLd4;
 input [3:0] ld4;
 input [51:0] insn;
@@ -827,70 +737,26 @@ begin
 	end
 end
 
+`include "..\common\Micro-op_Engine\Gambit-micro-program.sv"
+
 MicroOp uop2q [0:3];
-reg [7:0] ptr [0:3];
-reg [3:0] whinst;			// Which instruction the corresponding pointer points to.
+wire [7:0] ptr [0:3];
+wire [3:0] whinst;			// Which instruction the corresponding pointer points to.
 wire [7:0] nmip1, nmip2;
+wire branchmiss1, branchmiss2;
+wire [51:0] insnxx [0:1];
 
 // Compute pointers into micro-instruction program.
 // Set which instruction a pointer points to.
-always @*
-begin
-	whinst[0] = 1'b1;
-	whinst[1] = 1'b1;
-	whinst[2] = 1'b1;
-	whinst[3] = 1'b1;
-	if (~|mip1) begin
-		if (|mip2) begin
-			ptr[0] = mip2;
-			ptr[1] = mip2 + 1;
-			ptr[2] = mip2 + 2;
-			ptr[3] = mip2 + 3;
-		end
-		else begin
-			ptr[0] = 1'd0;
-			ptr[1] = 1'd0;
-			ptr[2] = 1'd0;
-			ptr[3] = 1'd0;
-		end
-	end
-	else begin
-		ptr[0] = mip1;
-		whinst[0] = 1'b0;
-		if (uop_prg[ptr[0]].fl[1]) begin
-			ptr[1] = mip2;
-			ptr[2] = mip2+1;
-			ptr[3] = mip2+2;
-		end
-		else begin
-			ptr[1] = mip1+1;
-			whinst[1] = 1'b0;
-			if (uop_prg[ptr[1]].fl[1]) begin
-				ptr[2] = mip2;
-				ptr[3] = mip2+1;
-				whinst[3:2] = 2'd3;
-			end
-			else begin
-				ptr[2] = mip1+2;
-				whinst[2] = 1'b0;
-				if (uop_prg[ptr[2]].fl[1]) begin
-					ptr[3] = mip2;
-					whinst[3] = 1'b1;
-				end
-				else begin
-					ptr[3] = mip1+3;
-					whinst[3] = 1'b0;
-				end
-			end
-		end
-	end
-	if (branchmiss|branchmiss1) begin
-		ptr[0] = 1'd0;
-		ptr[1] = 1'd0;
-		ptr[2] = 1'd0;
-		ptr[3] = 1'd0;
-	end
-end
+mip_ptr ump1
+(
+	.uop_prg(uop_prg),
+	.mip1(mip1),
+	.mip2(mip2),
+	.branchmiss(branchmiss|branchmiss1),
+	.ptr(ptr),
+	.whinst(whinst)
+);
 
 wire [2:0] qcnt2 =
 						uop_prg[ptr[0]].fl[1] + 
@@ -902,616 +768,65 @@ wire [2:0] qcnt = qcnt2 > 3'd2 ? 3'd2 : qcnt2;
 // Although four micro-ops are fetched from the table we might not want to
 // queue all four. We only want to queue up to the end of the program 
 // sequence for that instruction.
-reg [2:0] uopqc;
-wire [3:0] qc_sel = {uop_prg[ptr[3]].fl[1],uop_prg[ptr[2]].fl[1],uop_prg[ptr[1]].fl[1],uop_prg[ptr[0]].fl[1]};
-always @*
-	case(qc_sel)
-	4'b0000:	if (|mip1) uopqc = 3'd4; else if (|mip2) uopqc = 3'd4; else uopqc = 3'd0;
-	4'b0001:	if (|mip1) uopqc = 3'd4; else if (|mip2) uopqc = 3'd1; else uopqc = 3'd0;
-	4'b0010:	if (|mip1) uopqc = 3'd4; else if (|mip2) uopqc = 3'd2; else uopqc = 3'd0;
-	4'b0011:	if (|mip1) uopqc = 3'd2; else if (|mip2) uopqc = 3'd1; else uopqc = 3'd0;
-	4'b0100:	if (|mip1) uopqc = 3'd4; else if (|mip2) uopqc = 3'd3; else uopqc = 3'd0;
-	4'b0101:	if (|mip1) uopqc = 3'd3; else if (|mip2) uopqc = 3'd1; else uopqc = 3'd0;
-	4'b0110:	if (|mip1) uopqc = 3'd3; else if (|mip2) uopqc = 3'd2; else uopqc = 3'd0;
-	4'b0111:	if (|mip1) uopqc = 3'd2; else if (|mip2) uopqc = 3'd1; else uopqc = 3'd0;
-	4'b1000:	if (|mip1) uopqc = 3'd4; else if (|mip2) uopqc = 3'd4; else uopqc = 3'd0;
-	4'b1001:	if (|mip1) uopqc = 3'd4; else if (|mip2) uopqc = 3'd1; else uopqc = 3'd0;
-	4'b1010:	if (|mip1) uopqc = 3'd4; else if (|mip2) uopqc = 3'd2; else uopqc = 3'd0;
-	4'b1011:	if (|mip1) uopqc = 3'd2; else if (|mip2) uopqc = 3'd1; else uopqc = 3'd0;
-	4'b1100:	if (|mip1) uopqc = 3'd4; else if (|mip2) uopqc = 3'd3; else uopqc = 3'd0;
-	4'b1101:	if (|mip1) uopqc = 3'd3; else if (|mip2) uopqc = 3'd1; else uopqc = 3'd0;
-	4'b1110:	if (|mip1) uopqc = 3'd3; else if (|mip2) uopqc = 3'd2; else uopqc = 3'd0;
-	4'b1111:	if (|mip1) uopqc = 3'd2; else if (|mip2) uopqc = 3'd1; else uopqc = 3'd0;
-	endcase
+wire [2:0] uopqc;
+calc_uopqc ucalcqc1
+(
+	.ptr(ptr),
+	.uop_prg(uop_prg),
+	.mip1(mip1),
+	.mip2(mip2),
+	.uopqc(uopqc)
+);
 
 // Calc how many micro-ops to queue. Depends on the room available and the
 // length of the micro-sequence.
-reg [2:0] uopqd;
-always @*
-//if (phit)
-	case(uoq_room)
-	4'd0:	uopqd <= 3'd0;
-	4'd1:	uopqd <= uopqc > 3'd1 ? 3'd1 : uopqc;
-	4'd2:	uopqd <= uopqc > 3'd2 ? 3'd2 : uopqc;
-	4'd3:	uopqd <= uopqc > 3'd3 ? 3'd3 : uopqc;
-	default:	uopqd <= uopqc;
-	endcase
-//else
-//	uopqd <= 3'd0;
+wire [2:0] uopqd;
+calc_uopqd ucalcqd1
+(
+	.uoq_room(uoq_room),
+	.uopqc(uopqc),
+	.uopqd(uopqd)
+);
 
 wire uopQueued = uopqd > 3'd0;
 
-reg [AMSB:0] uoppc [0:3];
-reg [2:0] mipst;
-parameter MIP_RUN = 3'd1;
-parameter MIP_STALL = 3'd2;
-parameter MIP_MACRO_FETCH = 3'd2;
-parameter MIP_MAP = 3'd3;
-parameter MIP_FETCH = 3'd4;
-parameter MIP_QUEUE = 3'd5;
-
-reg [51:0] insnxx [0:FSLOTS-1];
-reg [51:0] insnxy [0:FSLOTS-1];
-reg [AMSB:0] pcr [0:1];
+wire [AMSB:0] uoppc [0:3];
 
 wire stall_uoq = (uopqd < uopqc);// || !(qcnt==3'd2 || (qcnt==3'd1 && ~|mip1));
-assign nextBundle = mipst==MIP_RUN && !stall_uoq;
-
-// Compute next micro-instruction pointers
-// (dead code)
-nextMip umnm1
-(
-	.rst(rst_i),
-	.clk(clk_i),
-	.mip1(mip1),
-	.mip2(mip2),
-	.uopqd(uopqd),
-	.uop_prg(uop_prg),
-	.nmip1(nmip1),
-	.nmip2(nmip2)
-);
-
-reg branchmiss1, branchmiss2;
 
 // The following is the micro-program engine. It advances the micro-program
 // counters as micro-instructions are queued. And select which micro-program
 // instructions to queue.
-always @(posedge clk_i)
-if (rst_i) begin
-	mip1 <= 12'd1;
-	mip2 <= 12'd1;
-	uop2q[0] <= {2'd3,ADD,4'd0,4'd0,4'd0,4'd0};
-	uop2q[1] <= {2'd3,ADD,4'd0,4'd0,4'd0,4'd0};
-	uop2q[2] <= {2'd3,ADD,4'd0,4'd0,4'd0,4'd0};
-	uop2q[3] <= {2'd3,ADD,4'd0,4'd0,4'd0,4'd0};
-	pcr[0] <= 1'd0;
-	pcr[1] <= 1'd0;
-	mipst <= MIP_RUN;
-	branchmiss1 <= FALSE;
-	branchmiss2 <= FALSE;
-end
-else begin
-	case(mipst)
-	MIP_RUN:
-		if (!stall_uoq) begin
-			// Stage 1
-			// map opcodes
-			insnxy[0] <= insnx[0];	// capture instruction
-			insnxy[1] <= insnx[1];
-			pcr[0] <= pc;						// and associated program counter
-			pcr[1] <= pc + len1;
-			branchmiss1 <= branchmiss;
-			if (phit) begin
-				mip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
-				mip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
-			end
-			else begin
-				mip1 <= 1'd0;	// Queue NOPs
-				mip2 <= 1'd0;
-				//nmip1 <= 1'd0;
-				//nmip2 <= 1'd0;
-			end
-			// stage 2
-			// select micro-instructions to queue
-			// increment mmicro-program counters
-			branchmiss2 <= branchmiss1;
-			insnxx[0] <= insnxy[0];
-			insnxx[1] <= insnxy[1];
-			uop2q[0] <= uop_prg[ptr[0]];
-			uop2q[1] <= uop_prg[ptr[1]];
-			uop2q[2] <= uop_prg[ptr[2]];
-			uop2q[3] <= uop_prg[ptr[3]];
-			uoppc[0] <= whinst[0] ? pcr[1] : pcr[0];
-			uoppc[1] <= whinst[1] ? pcr[1] : pcr[0];
-			uoppc[2] <= whinst[2] ? pcr[1] : pcr[0];
-			uoppc[3] <= whinst[3] ? pcr[1] : pcr[0];
-		end
-		else begin
-			branchmiss1 <= branchmiss;
-			branchmiss2 <= branchmiss1;
-//			mip1 <= nmip1;
-//			mip2 <= nmip2;
-			mipst <= MIP_STALL;
-			if (|mip1) begin
-				mip1 <= mip1 + uopqd;
-				if (!uop_prg[mip1].fl[1]) begin
-					if (uopqd > 3'd1) begin
-						if (!uop_prg[mip1+1].fl[1]) begin
-							if (uopqd > 3'd2) begin
-								if (!uop_prg[mip1+2].fl[1]) begin
-									if (uopqd > 3'd3) begin
-										if (uop_prg[mip1+3].fl[1])
-											mip1 <= 1'd0;
-									end
-								end
-								else begin
-									mip1 <= 1'd0;
-									if (uopqd > 3'd3) begin
-										mip2 <= mip2 + uopqd - 3'd3;
-										if (uop_prg[mip2].fl[1]) begin
-											mip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
-											mip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
-											mipst <= MIP_RUN;
-										end
-									end
-								end
-							end
-						end
-						else begin
-							mip1 <= 1'd0;
-							if (uopqd > 3'd2) begin
-								mip2 <= mip2 + uopqd - 3'd2;
-								if (!uop_prg[mip2].fl[1]) begin
-									if (uopqd > 3'd3) begin
-										mip2 <= mip2 + uopqd - 3'd3;
-										if (uop_prg[mip2+1].fl[1]) begin
-											mip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
-											mip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
-											mipst <= MIP_RUN;
-										end
-									end
-								end
-								else begin
-									mip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
-									mip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
-									mipst <= MIP_RUN;
-								end
-							end
-						end
-					end
-				end
-				else begin
-					mip1 <= 1'd0;
-					if (uopqd > 3'd1) begin
-						mip2 <= mip2 + uopqd - 3'd1;
-						if (!uop_prg[mip2].fl[1]) begin
-							if (uopqd > 3'd2) begin
-								mip2 <= mip2 + uopqd - 3'd2;
-								if (!uop_prg[mip2+1].fl[1]) begin
-									if (uopqd > 3'd3) begin
-										mip2 <= mip2 + uopqd - 3'd3;
-										if (uop_prg[mip2+2].fl[1]) begin
-											mip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
-											mip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
-											mipst <= MIP_RUN;
-										end
-									end
-								end
-								else begin
-									mip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
-									mip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
-									mipst <= MIP_RUN;
-								end
-							end
-						end
-						else begin
-							mip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
-							mip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
-							mipst <= MIP_RUN;
-						end
-					end
-				end
-			end
-			else begin
-				if (|mip2) begin
-					mip2 <= mip2 + uopqd;
-					if (!uop_prg[mip2].fl[1]) begin
-						if (uopqd > 3'd1) begin
-							if (!uop_prg[mip2+1].fl[1]) begin
-								if (uopqd > 3'd2) begin
-									if (!uop_prg[mip2+2].fl[1]) begin
-										if (uopqd > 3'd3) begin
-											if (uop_prg[mip2+3].fl[1]) begin
-												mip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
-												mip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
-												mipst <= MIP_RUN;
-											end
-										end
-									end
-									else begin
-										mip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
-										mip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
-										mipst <= MIP_RUN;
-									end
-								end
-							end
-							else begin
-								mip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
-								mip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
-								mipst <= MIP_RUN;
-							end
-						end
-					end
-					else begin
-						mip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
-						mip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
-						mipst <= MIP_RUN;
-					end
-				end
-			end
-		end
-	MIP_STALL:
-		begin
-			branchmiss1 <= branchmiss;
-			branchmiss2 <= branchmiss1;
-			if (!stall_uoq)
-				mipst <= MIP_RUN;
-			insnxx[0] <= insnx[0];
-			insnxx[1] <= insnx[1];
-			uop2q[0] <= uop_prg[ptr[0]];
-			uop2q[1] <= uop_prg[ptr[1]];
-			uop2q[2] <= uop_prg[ptr[2]];
-			uop2q[3] <= uop_prg[ptr[3]];
-			uoppc[0] <= whinst[0] ? pcr[1] : pcr[0];
-			uoppc[1] <= whinst[1] ? pcr[1] : pcr[0];
-			uoppc[2] <= whinst[2] ? pcr[1] : pcr[0];
-			uoppc[3] <= whinst[3] ? pcr[1] : pcr[0];
-			if (|mip1) begin
-				mip1 <= mip1 + uopqd;
-				if (!uop_prg[mip1].fl[1]) begin
-					if (uopqd > 3'd1) begin
-						if (!uop_prg[mip1+1].fl[1]) begin
-							if (uopqd > 3'd2) begin
-								if (!uop_prg[mip1+2].fl[1]) begin
-									if (uopqd > 3'd3) begin
-										if (uop_prg[mip1+3].fl[1])
-											mip1 <= 1'd0;
-									end
-								end
-								else begin
-									mip1 <= 1'd0;
-									if (uopqd > 3'd3) begin
-										mip2 <= mip2 + uopqd - 3'd3;
-										if (uop_prg[mip2].fl[1]) begin
-											mip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
-											mip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
-											mipst <= MIP_RUN;
-										end
-									end
-								end
-							end
-						end
-						else begin
-							mip1 <= 1'd0;
-							if (uopqd > 3'd2) begin
-								mip2 <= mip2 + uopqd - 3'd2;
-								if (!uop_prg[mip2].fl[1]) begin
-									if (uopqd > 3'd3) begin
-										mip2 <= mip2 + uopqd - 3'd3;
-										if (uop_prg[mip2+1].fl[1]) begin
-											mip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
-											mip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
-											mipst <= MIP_RUN;
-										end
-									end
-								end
-								else begin
-									mip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
-									mip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
-									mipst <= MIP_RUN;
-								end
-							end
-						end
-					end
-				end
-				else begin
-					mip1 <= 1'd0;
-					if (uopqd > 3'd1) begin
-						mip2 <= mip2 + uopqd - 3'd1;
-						if (!uop_prg[mip2].fl[1]) begin
-							if (uopqd > 3'd2) begin
-								mip2 <= mip2 + uopqd - 3'd2;
-								if (!uop_prg[mip2+1].fl[1]) begin
-									if (uopqd > 3'd3) begin
-										mip2 <= mip2 + uopqd - 3'd3;
-										if (uop_prg[mip2+2].fl[1]) begin
-											mip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
-											mip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
-											mipst <= MIP_RUN;
-										end
-									end
-								end
-								else begin
-									mip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
-									mip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
-									mipst <= MIP_RUN;
-								end
-							end
-						end
-						else begin
-							mip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
-							mip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
-							mipst <= MIP_RUN;
-						end
-					end
-				end
-			end
-			else begin
-				if (|mip2) begin
-					mip2 <= mip2 + uopqd;
-					if (!uop_prg[mip2].fl[1]) begin
-						if (uopqd > 3'd1) begin
-							if (!uop_prg[mip2+1].fl[1]) begin
-								if (uopqd > 3'd2) begin
-									if (!uop_prg[mip2+2].fl[1]) begin
-										if (uopqd > 3'd3) begin
-											if (uop_prg[mip2+3].fl[1]) begin
-												mip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
-												mip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
-												mipst <= MIP_RUN;
-											end
-										end
-									end
-									else begin
-										mip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
-										mip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
-										mipst <= MIP_RUN;
-									end
-								end
-							end
-							else begin
-								mip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
-								mip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
-								mipst <= MIP_RUN;
-							end
-						end
-					end
-					else begin
-						mip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
-						mip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
-						mipst <= MIP_RUN;
-					end
-				end
-			end
-		end
-/*
-	MIP_FETCH:
-		mipst <= MIP_QUEUE;
-	MIP_QUEUE:
-		if (uopQueued) begin
-//		case({uop_prg[ptr[3]].fl[1],uop_prg[ptr[2]].fl[1],uop_prg[ptr[1]].fl[1],uop_prg[ptr[0]].fl[1]})
-		case({uop_prg[3].fl[1],uop_prg[2].fl[1],uop_prg[1].fl[1],uop_prg[0].fl[1]})
-		4'b0000:	begin if (|mip1) mip1 <= mip1 + uopqd; else mip2 <= mip2 + uopqd; end
-		4'b0001:	begin 
-								if (|mip1) begin
-									mip1 <= 1'd0;
-									mip2 <= mip2 + uopqd - 3'd1;
-								end
-								else begin
-									mip2 <= 1'd0;
-									mipst <= MIP_MACRO_FETCH;
-								end
-							end
-		4'b0010:	begin 
-								if (|mip1) begin
-									mip1 <= uopqd >= 3'd2 ? 1'd0 : mip1 + 3'd1;
-									mip2 <= uopqd > 3'd2 ? mip2 + uopqd - 3'd2 : mip2;
-								end
-								else begin
-									mip2 <= mip2 + uopqd;
-									if (uopqd >= 3'd2) begin
-										mipst <= MIP_MACRO_FETCH;
-										mip2 <= 1'd0;
-									end
-								end
-							end
-		4'b0011:	begin 
-								if (|mip1) begin
-									mip1 <= 1'd0;
-									mip2 <= uopqd > 3'd1 ? 1'd0 : mip2;
-									if (uopqd > 3'd1)
-										mipst <= MIP_MACRO_FETCH;
-								end
-								else begin
-									mip2 <= 1'd0;
-									mipst <= MIP_MACRO_FETCH;
-								end
-							end
-		4'b0100:	begin 
-								if (|mip1) begin
-									mip1 <= uopqd > 3'd2 ? 1'd0 : mip1 - uopqd;
-									mip2 <= uopqd > 3'd2 ? mip2 + uopqd - 3'd3 : mip2;
-								end
-								else begin
-									mip2 <= mip2 + uopqd;
-									if (uopqd > 3'd2) begin
-										mip2 <= 1'd0;
-										mipst <= MIP_MACRO_FETCH;
-									end
-								end
-							end
-		4'b0101:	begin 
-								if (|mip1) begin
-									mip1 <= 1'd0;
-									mip2 <= uopqd > 3'd2 ? 1'd0 : mip2 + uopqd - 3'd1;
-									if (uopqd > 3'd2)
-										mipst <= MIP_MACRO_FETCH;
-								end
-								else begin
-									mip2 <= 1'd0;
-									mipst <= MIP_MACRO_FETCH;
-								end
-							end
-		4'b0110:	begin
-								if (|mip1) begin
-									mip1 <= uopqd > 3'd1 ? 1'd0 : mip1 + uopqd;
-									mip2 <= uopqd > 3'd2 ? 1'd0 : mip2;
-									if (uopqd > 3'd2)
-										mipst <= MIP_MACRO_FETCH;
-								end
-								else begin
-									mip2 <= uopqd > 3'd1 ? 1'd0 : mip2 + uopqd;
-									if (uopqd > 3'd1)
-										mipst <= MIP_MACRO_FETCH;
-								end
-							end
-		4'b0111:	begin 
-								if (|mip1) begin
-									mip1 <= 1'd0;
-									mip2 <= uopqd > 3'd1 ? 1'd0 : mip2;
-									if (uopqd > 3'd1)
-										mipst <= MIP_MACRO_FETCH;
-								end
-								else begin
-									mip2 <= 1'd0;
-									mipst <= MIP_MACRO_FETCH;
-								end
-							end
-		4'b1000:	begin 
-								if (|mip1) begin
-									mip1 <= uopqd > 3'd3 ? 1'd0 : mip1 + uopqd;
-								end
-								else begin
-									mip2 <= uopqd > 3'd3 ? 1'd0 : mip2 + uopqd;
-									mipst <= MIP_MACRO_FETCH;
-								end
-							end
-		4'b1001:	begin 
-								if (|mip1) begin
-									mip1 <= 1'd0;
-									mip2 <= uopqd > 3'd3 ? 1'd0 : mip2 + uopqd - 3'd1;
-									if (uopqd > 3'd3)
-										mipst <= MIP_MACRO_FETCH;
-								end
-								else begin
-									mip2 <= 1'd0;
-									mipst <= MIP_MACRO_FETCH;
-								end
-							end
-		4'b1010:	begin 
-								if (|mip1) begin
-									mip1 <= uopqd > 3'd1 ? 1'd0 : mip1 + uopqd;
-									mip2 <= uopqd > 3'd3 ? 1'd0 : uopqd > 3'd2 ? mip2 + uopqd - 3'd2 : mip2;
-									if (uopqd > 3'd3)
-										mipst <= MIP_MACRO_FETCH;
-								end
-								else begin
-									mip2 <= uopqd > 3'd1 ? 1'd0 : mip2 + uopqd;
-									if (uopqd > 3'd1)
-										mipst <= MIP_MACRO_FETCH;
-								end
-							end
-		4'b1011:	begin
-								if (|mip1) begin
-									mip1 <= 1'd0;
-									mip2 <= uopqd > 3'd1 ? 1'd0 : mip2;
-									if (uopqd > 3'd2)
-										mipst <= MIP_MACRO_FETCH;
-								end
-								else begin
-									mip2 <= 1'd0;
-									mipst <= MIP_MACRO_FETCH;
-								end
-							end
-		4'b1100:	begin
-								if (|mip1) begin
-									mip1 <= uopqd > 3'd2 ? 1'd0 : mip1 + uopqd;
-									mip2 <= uopqd > 3'd3 ? 1'd0 : mip2;
-									if (uopqd > 3'd3)
-										mipst <= MIP_MACRO_FETCH;
-								end
-								else begin
-									mip2 <= uopqd > 3'd2 ? 1'd0 : mip2 + uopqd;
-									if (uopqd > 3'd2)
-										mipst <= MIP_MACRO_FETCH;
-								end
-							end
-		4'b1101:	begin
-								if (|mip1) begin
-									mip1 <= 1'd0;
-									mip2 <= uopqd > 3'd2 ? 1'd0 : uopqd > 3'd1 ? mip2 + uopqd - 3'd1 : mip2;
-									if (uopqd > 3'd2)
-										mipst <= MIP_MACRO_FETCH;
-								end
-								else begin
-									mip2 <= 1'd0;
-									mipst <= MIP_MACRO_FETCH;
-								end
-							end
-		4'b1110:	begin
-								if (|mip1) begin
-									mip1 <= uopqd > 3'd1 ? 1'd0 : mip1 + uopqd;
-									mip2 <= uopqd > 3'd2 ? 1'd0 : mip2;
-									if (uopqd > 3'd2)
-										mipst <= MIP_MACRO_FETCH;
-								end
-								else begin
-									mip2 <= uopqd > 3'd1 ? 1'd0 : mip2 + uopqd;
-									if (uopqd > 3'd1)
-										mipst <= MIP_MACRO_FETCH;
-								end
-							end
-		4'b1111:	begin
-								if (|mip1) begin
-									mip1 <= 1'd0;
-									mip2 <= uopqd > 3'd1 ? 1'd0 : mip2;
-									if (uopqd > 3'd1)
-										mipst <= MIP_MACRO_FETCH;
-								end
-								else begin
-									mip2 <= 1'd0;
-									mipst <= MIP_MACRO_FETCH;
-								end
-							end
-		endcase
-		end
-*/
-	endcase
-	if (branchmiss) begin
-		mip1 <= 1'd0;
-		mip2 <= 1'd0;
-	end
-end
+microop_engine umoe1
+(
+	.rst(rst_i),
+	.clk(clk_i),
+	.phit(phit),
+	.stall_uoq(stall_uoq),
+	.opcode1(opcode1),
+	.opcode2(opcode2),
+	.pc(pc),
+	.len1(len1),
+	.uop_prg(uop_prg),
+	.uopqd(uopqd),
+	.branchmiss(branchmiss),
+	.ptr(ptr),
+	.insnx(insnx),
+	.insnxx(insnxx),
+	.whinst(whinst),
+	.mip1(mip1),
+	.mip2(mip2),
+	.uop2q(uop2q),
+	.uoppc(uoppc),
+	.branchmiss1(branchmiss1),
+	.nextBundle(nextBundle)
+);
 
-// Queue NOPs on reset or branch miss.
-/*
-always @(posedge clk)
-if (rst_i) begin
-	uop_prg[0] <= {2'd3,ADD,4'd0,4'd0,4'd0,4'd0};
-	uop_prg[1] <= {2'd3,ADD,4'd0,4'd0,4'd0,4'd0};
-	uop_prg[2] <= {2'd3,ADD,4'd0,4'd0,4'd0,4'd0};
-	uop_prg[3] <= {2'd3,ADD,4'd0,4'd0,4'd0,4'd0};
-end
-else begin
-	if (branchmiss) begin
-		uop_prg[0] <= {2'd3,ADD,4'd0,4'd0,4'd0,4'd0};
-		uop_prg[1] <= {2'd3,ADD,4'd0,4'd0,4'd0,4'd0};
-		uop_prg[2] <= {2'd3,ADD,4'd0,4'd0,4'd0,4'd0};
-		uop_prg[3] <= {2'd3,ADD,4'd0,4'd0,4'd0,4'd0};
-	end
-	else if (mipst==MIP_RUN) begin
-		uop_prg[0] <= uop_prg[ptr[0]];
-		uop_prg[1] <= uop_prg[ptr[1]];
-		uop_prg[2] <= uop_prg[ptr[2]];
-		uop_prg[3] <= uop_prg[ptr[3]];
-	end
-end
-*/
 //assign uoq_slotv[0] = uoq_v[uoq_head]==`VAL;	//uoq_head != uoq_tail[0] || ~|uoq_v || &uoq_v;
 //assign uoq_slotv[1] = uoq_slotv[0] && uoq_v[(uoq_head+1) % UOQ_ENTRIES] == `VAL && ((uoq_head + 2'd1) % UOQ_ENTRIES) != uoq_tail[1];//(uoq_head != uoq_tail[0] && uoq_head + 4'd1 != uoq_tail[0]) || ~|uoq_v || &uoq_v;
 //assign uoq_slotv[2] = uoq_slotv[1] && uoq_v[(uoq_head+2) % UOQ_ENTRIES] == `VAL && ((uoq_head + 2'd2) % UOQ_ENTRIES) != uoq_tail[2];//(uoq_head != uoq_tail[0] && uoq_head + 4'd1 != uoq_tail[0] && uoq_head + 4'd2 != uoq_tail[0])  || ~|uoq_v || &uoq_v;
 
-assign ic1_out = ic_out[103:0];
+assign ic1_out = ic_out[143:0];
 assign ic2_out = ic1_out >> (iclen1 * 13);
 assign freezepc = ((rst_ctr < 32'd16) || nmi_i || (irq_i & ~sr[4])) && !int_commit;
 
@@ -1528,7 +843,7 @@ always @*
 	if ((opcode2a==`PFI || opcode2a==`WAI) && irq_i && !srx[4])
 		opcode2 <= opcode2a|9'b1;
 	else
-		opcode2 <= opcode1a;
+		opcode2 <= opcode2a;
 
 assign insnx[0] = freezepc ? {(rst_ctr < 32'd16) ? `RST : nmi_i ? `NMI : irq_i ? `IRQ : 3'd7,`BRKGRP} : ic1_out[51:0];
 assign insnx[1] = freezepc ? {(rst_ctr < 32'd16) ? `RST : nmi_i ? `NMI : irq_i ? `IRQ : 3'd7,`BRKGRP} : ic2_out[51:0];
@@ -1540,7 +855,7 @@ instLength il2 (opcode1[5:0], len1);
 instLength il3 (opcode2[5:0], len2);
 
 wire [`ABITS] btgt [0:FSLOTS-1];
-wire [47:0] insnxp [0:QSLOTS-1];
+wire [51:0] insnxp [0:QSLOTS-1];
 reg invdcl;
 reg [AMSB:0] invlineAddr = 24'h0;
 wire L1_invline;
