@@ -35,4 +35,6 @@ logic [3:0] src2;
 logic [3:0] cnst;
 } MicroOp;
 
+typedef logic [7:0] MicroOpPtr;
+
 `endif

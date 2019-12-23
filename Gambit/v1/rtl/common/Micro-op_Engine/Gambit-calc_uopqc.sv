@@ -28,10 +28,10 @@
 `include "..\Gambit-types.sv"
 
 module calc_uopqc(ptr, uop_prg, mip1, mip2, uopqc);
-input [7:0] ptr [0:3];
+input MicroOpPtr ptr [0:3];
 input MicroOp uop_prg [0:`LAST_UOP];
-input [7:0] mip1;
-input [7:0] mip2;
+input MicroOpPtr mip1;
+input MicroOpPtr mip2;
 output reg [2:0] uopqc;
 
 wire [3:0] qc_sel = {uop_prg[ptr[3]].fl[1],uop_prg[ptr[2]].fl[1],uop_prg[ptr[1]].fl[1],uop_prg[ptr[0]].fl[1]};

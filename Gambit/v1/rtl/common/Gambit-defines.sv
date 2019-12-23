@@ -24,6 +24,8 @@
 `define FALSE			1'b0
 `define VAL				1'b1
 `define INV				1'b0
+`define HIGH			1'b1
+`define LOW				1'b0
 
 `define ADD_3R		6'o00
 `define ADD_I23		6'o01

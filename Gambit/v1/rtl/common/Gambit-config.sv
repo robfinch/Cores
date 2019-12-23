@@ -51,6 +51,9 @@
 `define UOQ_BIT 	$clog2(UOQ_ENTRIES)
 `define UOQ_BITS	`UOQ_BIT:0
 
+// The number of micro-ops in the program.
+`define LAST_UOP	188
+
 // Queue size should not be an even power of two!
 // Don't use 4,8,16,32,64 etc. As a value of all ones for the qid and rid
 // is used to indicate and invalid value.
@@ -81,7 +84,7 @@
 // can overflow a little bit. Since queue sizes that are an exact power of two
 // are not allowed, it's just the ceiliing log2 of the queue size. For a
 // fifteen entry queue this works out to a five bit number.
-`define SNBIT			$clog2(IQ_ENTRIES)+2
+`define SNBIT			32	//$clog2(IQ_ENTRIES)+2
 `define SNBITS		`SNBIT:0
 
 // The following constant controls the maximum number of instructions that will
@@ -122,6 +125,12 @@
 `define FCU_BTB		1				// Branch target buffer
 
 `define FCU_RA		pc			// return address if no RSB
+
+// Adds logic to bypass results directly from one queue entry to another. This option
+// increases the core performance as results are bypassed more quickly, however it
+// adds significantly to the size of the core (20%).
+//`define QBYPASSING		1
+
 // Comment out the following to remove bypassing logic on the functional units
 `define FU_BYPASS	1
 

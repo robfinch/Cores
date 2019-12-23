@@ -30,10 +30,10 @@
 
 module mip_ptr(uop_prg, mip1, mip2, branchmiss, ptr, whinst);
 input MicroOp uop_prg [0:`LAST_UOP];
-input [7:0] mip1;
-input [7:0] mip2;
+input MicroOpPtr mip1;
+input MicroOpPtr mip2;
 input branchmiss;
-output reg [7:0] ptr [0:3];
+output MicroOpPtr ptr [0:3];
 output reg [3:0] whinst;
 
 always @*
@@ -45,9 +45,25 @@ begin
 	if (~|mip1) begin		// Is the 1st macro instruction completed? (mip == 0)
 		if (|mip2) begin
 			ptr[0] = mip2;
-			ptr[1] = mip2 + 1;
-			ptr[2] = mip2 + 2;
-			ptr[3] = mip2 + 3;
+			if (uop_prg[ptr[0]].fl[1]) begin
+				ptr[1] = 1'd0;
+				ptr[2] = 1'd0;
+				ptr[3] = 1'd0;
+			end
+			else begin
+				ptr[1] = mip2 + 1;
+				if (uop_prg[ptr[1]].fl[1]) begin
+					ptr[2] = 1'd0;
+					ptr[3] = 1'd0;
+				end
+				else begin
+					ptr[2] = mip2 + 2;
+					if (uop_prg[ptr[2]].fl[1])
+						ptr[3] = 1'd0;
+					else
+						ptr[3] = mip2 + 3;
+				end
+			end
 		end
 		else begin
 			ptr[0] = 1'd0;
@@ -61,15 +77,27 @@ begin
 		whinst[0] = 1'b0;
 		if (uop_prg[ptr[0]].fl[1]) begin
 			ptr[1] = mip2;
-			ptr[2] = mip2+1;
-			ptr[3] = mip2+2;
+			if (uop_prg[ptr[1]].fl[1]) begin
+				ptr[2] = 1'd0;
+				ptr[3] = 1'd0;
+			end
+			else begin
+				ptr[2] = mip2+1;
+				if (uop_prg[ptr[2]].fl[1])
+					ptr[3] = 1'd0;
+				else
+					ptr[3] = mip2+2;
+			end
 		end
 		else begin
 			ptr[1] = mip1+1;
 			whinst[1] = 1'b0;
 			if (uop_prg[ptr[1]].fl[1]) begin
 				ptr[2] = mip2;
-				ptr[3] = mip2+1;
+				if (uop_prg[ptr[2]].fl[1])
+					ptr[3] = 1'd0;
+				else
+					ptr[3] = mip2+1;
 				whinst[3:2] = 2'd3;
 			end
 			else begin

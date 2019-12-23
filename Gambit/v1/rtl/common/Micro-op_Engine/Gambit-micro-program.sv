@@ -180,13 +180,13 @@ MicroOp uop_prg [0:`LAST_UOP] = '{
 // BUS_DFOUR (ONEONE9)
 '{2'd3,	BUS,		ZERO,ZERO,ZERO,REF4},
 
-// BRA_DONE7 (ONE20):
+// BRA_DONE7 (120):
 '{2'd3,	BRA,		ZERO,ZERO,ZERO,REF17},
-// BEQ_DONE7 (ONE2ONE):
+// BEQ_DONE7 (121):
 '{2'd3,	BEQ,		ZERO,ZERO,ZERO,REF17},	
-// BNE_DONE7 (ONE22):
+// BNE_DONE7 (122):
 '{2'd3,	BNE,		ZERO,ZERO,ZERO,REF17},
-// BCC_DONE7 (ONE23):
+// BCC_DONE7 (123):
 '{2'd3,	BCC,		ZERO,ZERO,ZERO,REF17},
 // BCS_DONE7 (ONE2FOUR):
 '{2'd3,	BCS,		ZERO,ZERO,ZERO,REF17},
@@ -210,7 +210,7 @@ MicroOp uop_prg [0:`LAST_UOP] = '{
 '{2'd3,	LD,			Rtreg,Rareg,ZERO,REF36},
 // LDB_D36 (ONE3FOUR):
 '{2'd3,	LDB,		Rtreg,Rareg,ZERO,REF36},
-// ST_D9 (ONE35):
+// ST_D9 (135):
 '{2'd3,	ST,			Rtreg,Rareg,Rbreg,REF9},
 // ST_D23 (ONE36):
 '{2'd3,	ST,			Rtreg,Rareg,ZERO,REF23},

@@ -38,7 +38,7 @@ assign idle = 1'b1;
 
 always @*
 	if (wrap)
-		ma <= {src1[63:8],src1[7:0] + src2[7:0]};
+		ma <= {src1[AMSB:8],src1[7:0] + src2[7:0]};
 	else
 		ma <= src1 + src2;
 
