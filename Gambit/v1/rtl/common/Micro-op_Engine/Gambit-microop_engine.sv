@@ -57,6 +57,7 @@ output nextBundle;
 parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;
 
+integer n;
 reg branchmiss2;
 reg [`AMSB:0] pcr [0:1];
 reg [`AMSB:0] pcrx [0:1];
@@ -64,7 +65,7 @@ reg [2:0] mipst;
 reg [51:0] insnxy [0:1];
 reg [1:0] tb;
 reg [2:0] uopqd1;
-reg stall1, stall2;
+reg stall1, stall2, stall3;
 reg nxtb;
 reg [5:0] empty_ctr;
 MicroOpPtr mip1x, mip2x;
@@ -159,7 +160,11 @@ wire nbx;
 wire willmap = 
 	mipst==MIP_RUN && !stall1 && (qcnt==3'd2 || (mip1==1'd0 && qcnt==3'd1) || (mip1==1'd0 && mip2==1'd0)) && phit;
 	
-assign nextBundle = (mipst==MIP_RUN && !stall1 && (qcnt==3'd2 || (mip1==1'd0 && qcnt==3'd1) || (mip1==1'd0 && mip2==1'd0)) && (phit)) || nxtb;
+// Ready to fetch once both macro-instructions have queued, or we've run out of micro-ops.
+wire ready_to_fetch = qcnt==3'd2 || (mip2==1'd0 && qcnt==3'd1) || (mip1==1'd0 && mip2==1'd0);
+
+assign nextBundle = ((mipst==MIP_RUN && !stall_uoq) && (ready_to_fetch) && (phit));// || nxtb;
+
 //	(
 //	(nbx && mipst==MIP_RUN && !stall1 && !(qcnt==3'd2 || (mip1==1'd0 && qcnt==3'd1) || (mip1==1'd0 && mip2==1'd0))) ||
 //	(nbx && mipst==MIP_RUN && stall1 && uopqd > 3'd0) ||
@@ -191,11 +196,13 @@ if (rst) begin
 	uopqd_o <= 3'd0;
 	stall1 <= 1'd0;
 	stall2 <= 1'd0;
+	stall3 <= 1'b0;
 	nxtb <= 1'b0;
 	empty_ctr <= 6'd0;
 end
 else begin
 	nxtb <= FALSE;
+	stall3 <= stall2;
 	
 	if (uoq_empty) begin
 		empty_ctr <= empty_ctr + 2'd1;
@@ -208,133 +215,72 @@ else begin
 	case(mipst)
 	MIP_RUN:
 		begin
-			if (!pcchg) begin
-				mip1 <= 1'd0;
-				mip2 <= 1'd0;
-			end
 			stall1 <= stall_uoq;
 			stall2 <= stall1;
-			if (!stall1) begin
+			if (!stall_uoq) begin
 				// stage 2
 				// select micro-instructions to queue
 				// increment mmicro-program counters
-				mip1 <= 1'd0;
-				mip2 <= 1'd0;
-				insnxy[0] <= 52'd0;
-				insnxy[1] <= 52'd0;
 				propagatePipeline();
+				advancePtrs();
 
 				// Stage 1
 				// map opcodes
-				if (pcchg) begin
-					insnxy[0] <= insnx[0];	// capture instruction
-					insnxy[1] <= insnx[1];
-				end
-				else begin
-					insnxy[0] <= 52'd0;
-					insnxy[1] <= 52'd0;
-					mip1 <= 1'd0;
-					mip2 <= 1'd0;
-				end
-
 				// Fetch new pointers or advance current ones.
-				if (qcnt==3'd2 || (mip1==1'd0 && qcnt==3'd1) || (mip1==1'd0 && mip2==1'd0)) begin
+				if (ready_to_fetch) begin
 					if (phit) begin
-						if (pcchg) begin
-							mip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
-							mip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
-						end
-						else if (!stall1) begin
-							mip1 <= 1'd0;
-							mip2 <= 1'd0;
-						end
+						mip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
+						mip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
 						pcr[0] <= pc;						// and associated program counter
 						pcr[1] <= pc + len1;
+						insnxy[0] <= insnx[0];	// capture instruction
+						insnxy[1] <= insnx[1];
 					end
-					else if (!stall1) begin
+					else begin
 						mip1 <= 1'd0;
 						mip2 <= 1'd0;
+						pcr[0] <= 1'd0;
+						pcr[1] <= 1'd0;
+						insnxy[0] <= 1'd0;
+						insnxy[1] <= 1'd0;
 					end
 				end
-				else
-					advancePtrs();
-			end
-			// A stall occurs when there isn't enough room in the micro-op queue to
-			// queue more micro-ops. In that case a transition is made to a state
-			// that waits for the stall to clear.
-			else begin
-				if (uopqd > 3'd0) begin
-					mip1 <= 1'd0;
-					mip2 <= 1'd0;
-					insnxy[0] <= 52'd0;
-					insnxy[1] <= 52'd0;
-					propagatePipeline();
-					advancePtrs();
-				end
-				mipst <= MIP_STALL;
 			end
 		end
 	
+	// There is a stall because there isn't enough room in the uop queue.
+	// During the stall state check and see if more uops can be queued. Propagate the
+	// pipeline forward, and advance the pointers when transitioning back to the run
+	// state. Saves a clock cycle.
 	MIP_STALL:
 		begin
-			if (!pcchg) begin
-				mip1 <= 1'd0;
-				mip2 <= 1'd0;
-			end
 			stall1 <= stall_uoq;
 			stall2 <= stall1;
-			if (uopqd > 3'd0) begin
-				insnxy[0] <= 52'd0;
-				insnxy[1] <= 52'd0;
-				mip1 <= 1'd0;
-				mip2 <= 1'd0;
+			if (!stall1) begin
 				propagatePipeline();
 				advancePtrs();
-			end
-			else begin
-				mip1 <= 1'd0;
-				mip2 <= 1'd0;
-			end		
-			if (!stall1) begin
 				mipst <= MIP_RUN;
 			end
 		end
 	endcase
 		
-end
+	if (branchmiss) begin
+		mip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
+		mip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
+		pcr[0] <= pc;						// and associated program counter
+		pcr[1] <= pc + len1;
+		insnxy[0] <= insnx[0];	// capture instruction
+		insnxy[1] <= insnx[1];
+	end
 
-task doMap;
-begin
-	mip2 <= 1'd0;
-	if (phit) begin
-		if (pcchg) begin
-			insnxy[0] <= insnx[0];
-			insnxy[1] <= insnx[1];
-			mip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
-			mip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
-			pcr[0] <= pc;						// and associated program counter
-			pcr[1] <= pc + len1;
-			nxtb <= TRUE;
-			propagatePipeline();
-		end
-		else begin
-			mip1 <= 1'd0;
-			mip2 <= 1'd0;
-		end
-	end
-	else begin
-		mip1 <= 1'd0;
-		mip2 <= 1'd0;
-		insnxy[0] <= 52'd0;
-		insnxy[1] <= 52'd0;
-	end
 end
-endtask
 
 task propagatePipeline;
 begin
 	branchmiss1 <= branchmiss;
 	branchmiss2 <= branchmiss1;
+	insnxy[0] <= insnx[0];
+	insnxy[1] <= insnx[1];
 	insnxx[0] <= insnxy[0];
 	insnxx[1] <= insnxy[1];
 	uop2q[0] <= uop_prg[ptr[0]];
@@ -353,26 +299,38 @@ begin
 end
 endtask
 
-wire nb1 = |mip1 && !uop_prg[mip1].fl[1] && uopqd > 3'd1 && !uop_prg[mip1+1].fl[1] && (uopqd > 3'd2)
-					&& uop_prg[mip1+2].fl[1] && (uopqd > 3'd3) && uop_prg[mip2].fl[1] && phit;
-wire nb2 = |mip1 && !uop_prg[mip1].fl[1] && uopqd > 3'd1 &&  uop_prg[mip1+1].fl[1] && (uopqd > 3'd2)
-					&& !uop_prg[mip2].fl[1] && (uopqd > 3'd3) && uop_prg[mip2+1].fl[1] && phit;
-wire nb3 = |mip1 && !uop_prg[mip1].fl[1] && uopqd > 3'd1 &&  uop_prg[mip1+1].fl[1] && (uopqd > 3'd2)
-					&& uop_prg[mip2].fl[1] && phit;
-wire nb4 = |mip1 && uop_prg[mip1].fl[1] && (uopqd > 3'd1) && !uop_prg[mip2].fl[1] && (uopqd > 3'd2)
-					&& !uop_prg[mip2+1].fl[1] && (uopqd > 3'd3) && uop_prg[mip2+2].fl[1] && phit;
-wire nb5 = |mip1 && uop_prg[mip1].fl[1] && (uopqd > 3'd1) && !uop_prg[mip2].fl[1] && (uopqd > 3'd2)
-					&& uop_prg[mip2+1].fl[1] && phit;
-wire nb6 = |mip1 && uop_prg[mip1].fl[1] && (uopqd > 3'd1) && uop_prg[mip2].fl[1] && phit;
-wire nb7 = ~|mip1 && !uop_prg[mip2].fl[1] && (uopqd > 3'd1) && !uop_prg[mip2+1].fl[1] && (uopqd > 3'd2)
-					&& !uop_prg[mip2+2].fl[1] && (uopqd > 3'd3) && uop_prg[mip2+3].fl[1] && phit;
-wire nb8 = ~|mip1 && !uop_prg[mip2].fl[1] && (uopqd > 3'd1) && !uop_prg[mip2+1].fl[1] && (uopqd > 3'd2)
-					&& uop_prg[mip2+2].fl[1] && phit;
-wire nb9 = ~|mip1 && !uop_prg[mip2].fl[1] && (uopqd > 3'd1) && uop_prg[mip2+1].fl[1] & phit;
-wire nb10 = ~|mip1 && uop_prg[mip2].fl[1] & phit;
+// Advance the micro-program pointers.
 
-assign nbx = nb1|nb2|nb3|nb4|nb5|nb6|nb7|nb8|nb9|nb10;
-
+task advancePtrs;
+begin
+	if (|mip1) begin
+		mip1 <= mip1 + uopqd;
+		for (n = `MAX_UOPQ - 1; n >= 0; n = n - 1) begin
+			if (uop_prg[ptr[n]].fl[1] && uopqd > n + 1) begin
+				// Mip1 has gone to zero, there are only uops to queue for mip2.
+				if (whinst[n]==1'b0) begin
+					if (mip2) begin
+						mip1 <= mip2 + uopqd - n - 1;
+						mip2 <= 1'd0;
+						insnxy[0] <= insnxy[1];
+						insnxy[1] <= 52'd0;
+						pcr[0] <= pcr[1];
+						pcr[1] <= 1'd0;
+					end
+					else begin
+						mip1 <= 1'd0;
+						insnxy[0] <= 52'd0;
+						insnxy[1] <= 52'd0;
+						pcr[0] <= 1'd0;
+						pcr[1] <= 1'd0;
+					end
+				end
+			end
+		end
+	end
+end
+endtask
+/*
 task advancePtrs;
 begin
 	if (|mip1) begin
@@ -474,5 +432,5 @@ begin
 	end
 end
 endtask
-
+*/
 endmodule

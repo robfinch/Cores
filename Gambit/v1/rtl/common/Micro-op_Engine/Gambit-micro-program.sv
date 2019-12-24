@@ -270,7 +270,7 @@ MicroOp uop_prg [0:`LAST_UOP] = '{
 '{2'd0,	SEP,		IFLAG,ZERO,ZERO,ZERO},
 '{2'd0,	LD,			TMP1,ZERO,ZERO,MFOUR},
 '{2'd2,	JSI,		ZERO,TMP1,ZERO,ZERO},
-// BRK (ONE8ONE):
+// BRK (181):
 '{2'd1, CAUSE,	ZERO,ZERO,ZERO,FOUR},
 '{2'd0,	SUB,		SP,SP,ZERO,FOUR},
 '{2'd0,	ST,			PC1,SP,ZERO,ZERO},
@@ -278,5 +278,10 @@ MicroOp uop_prg [0:`LAST_UOP] = '{
 '{2'd0,	ST,			SR,SP,ZERO,ZERO},
 '{2'd0,	SEP,		IFLAG,ZERO,ZERO,ZERO},
 '{2'd0,	LD,			TMP1,ZERO,ZERO,MFOUR},
-'{2'd2,	JSI,		ZERO,TMP1,ZERO,ZERO}
+'{2'd2,	JSI,		ZERO,TMP1,ZERO,ZERO},
+// 
+'{2'd3, NOP, 4'd0,4'd0,4'd0,4'd0},
+'{2'd3, NOP, 4'd0,4'd0,4'd0,4'd0},
+'{2'd3, NOP, 4'd0,4'd0,4'd0,4'd0},
+'{2'd3, NOP, 4'd0,4'd0,4'd0,4'd0}
 };

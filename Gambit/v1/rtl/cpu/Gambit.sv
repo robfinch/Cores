@@ -164,8 +164,8 @@ reg q1, q2, q1b, q1bx;	// number of macro instructions queued
 reg qb;						// queue a brk instruction
 
 
-wire [143:0] ic1_out;
-wire [51:0] ic2_out;
+reg [143:0] ic1_out;
+reg [51:0] ic2_out;
 
 reg  [3:0] panic;		// indexes the message structure
 reg [127:0] message [0:15];	// indexed by panic
@@ -751,9 +751,9 @@ end
 
 `include "..\common\Micro-op_Engine\Gambit-micro-program.sv"
 
-MicroOp uop2q [0:3];
-wire MicroOpPtr ptr [0:3];
-wire [3:0] whinst, whinst1;			// Which instruction the corresponding pointer points to.
+MicroOp uop2q [0:`MAX_UOPQ-1];
+wire MicroOpPtr ptr [0:`MAX_UOPQ-1];
+wire [`MAX_UOPQ-1:0] whinst, whinst1;			// Which instruction the corresponding pointer points to.
 wire MicroOpPtr nmip1, nmip2;
 wire branchmiss1, branchmiss2;
 wire [51:0] insnxx [0:1];
@@ -807,9 +807,9 @@ calc_uopqd ucalcqd1
 
 wire uopQueued = uopqd > 3'd0;
 
-wire [AMSB:0] uoppc [0:3];
+wire [AMSB:0] uoppc [0:`MAX_UOPQ-1];
 
-wire stall_uoq = (uopqd < uopqc) || uoq_room < uopqd;// || !(qcnt==3'd2 || (qcnt==3'd1 && ~|mip1));
+wire stall_uoq = /*(uopqd < uopqc) ||*/ uoq_room < uopqd1;// || !(qcnt==3'd2 || (qcnt==3'd1 && ~|mip1));
 
 // The following is the micro-program engine. It advances the micro-program
 // counters as micro-instructions are queued. And select which micro-program
@@ -849,8 +849,18 @@ microop_engine umoe1
 //assign uoq_slotv[1] = uoq_slotv[0] && uoq_v[(uoq_head+1) % UOQ_ENTRIES] == `VAL && ((uoq_head + 2'd1) % UOQ_ENTRIES) != uoq_tail[1];//(uoq_head != uoq_tail[0] && uoq_head + 4'd1 != uoq_tail[0]) || ~|uoq_v || &uoq_v;
 //assign uoq_slotv[2] = uoq_slotv[1] && uoq_v[(uoq_head+2) % UOQ_ENTRIES] == `VAL && ((uoq_head + 2'd2) % UOQ_ENTRIES) != uoq_tail[2];//(uoq_head != uoq_tail[0] && uoq_head + 4'd1 != uoq_tail[0] && uoq_head + 4'd2 != uoq_tail[0])  || ~|uoq_v || &uoq_v;
 
-assign ic1_out = ic_out[143:0];
-assign ic2_out = ic1_out >> (iclen1 * 13);
+generate begin : icouto
+for (g = 0; g < 11; g = g + 1) begin
+	always @*
+		ic1_out[g*13+:13] = ic_out[g*16+:13];
+end
+for (g = 0; g < 4; g = g + 1) begin
+	always @*
+		ic2_out[g*13+:13] = ic_out[(g+iclen1)*16+:13];
+end
+end
+endgenerate
+
 assign freezepc = ((rst_ctr < 32'd16) || nmi_i || (irq_i & ~sr[4])) && !int_commit;
 
 // Since the micro-program doesn't support conditional logic or branches a 
@@ -1091,7 +1101,7 @@ for (n = 0; n < IQ_ENTRIES; n = n + 1)
 	is_qbranch[n] = iq_br[n];
 
 wire [1:0] ic_fault;
-wire [831:0] ic_out;
+wire [1023:0] ic_out;
 wire [AMSB:0] missadr;
 reg invic, invdc;
 reg invicl;
@@ -1273,8 +1283,8 @@ programCounter upc1
 	.rst(rst_i),
 	.clk(clk),
 	.q1(1'b0),
-	.q2(nextBundle & phit),
-	.q1bx(q1bx),
+	.q2(nextBundle),
+	.q1bx(1'b0),
 	.insnx(insnx),
 	.phit(phit),
 	.freezepc(freezepc),
@@ -1293,7 +1303,7 @@ programCounter upc1
 	.pc(pc),
 	.pc_chg(nextb),
 	.branch_pc(next_pc),
-	.ra(ra),
+	.ra(52'd0),	//(ra),
 	.pc_override(pc_override),
 	.debug_on(debug_on)
 );
@@ -3069,8 +3079,8 @@ slotValid usv1
 	.pc_mask(pc_mask),
 	.pc_maskd(pc_maskd),
 	.pc_override(pc_override),
-	.q1(q1),
-	.q2(q2),
+	.q1(1'b0),
+	.q2(nextBundle & phit),//q2),
 	.slot_jc(slot_jc),
 	.slot_rts(slot_rts),
 	.take_branch(take_branch),
@@ -4204,7 +4214,7 @@ endcase
 	$display("\n\n\n\n\n\n\n\n");
 	$display("TIME %0d", $time);
 	$display("%b %h #", pc_mask, pc);
-	$display("%b %h #", pc_mask, pcd);
+	$display("%b %h #", pc_mask, pc + len1);
     $display ("--------------------------------------------------------------------- Regfile ---------------------------------------------------------------------");
   $display("ac: %h %d %d #", regsx[1], regIsValid[1], rf_source[1]);
   $display("xr: %h %d %d #", regsx[2], regIsValid[2], rf_source[2]);

@@ -5,7 +5,7 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-//	rtf65004-icache.sv
+//	Gambit-icache.sv
 //		
 //
 // This source file is free software: you can redistribute it and/or modify 
@@ -30,6 +30,9 @@
 // -----------------------------------------------------------------------------
 // Small, 64 line cache memory (5kiB) made from distributed RAM. Access is
 // within a single clock cycle.
+// While the input is in terms of 13-bit bytes, the output outputs 16-bit
+// bytes for the benefit of future alignment operations. (It gets rid of a
+// multiply by 13 in a couple of places).
 // -----------------------------------------------------------------------------
 
 module L1_icache_mem(clk, wr, lineno, nxt_lineno, i, f, o);
@@ -42,9 +45,10 @@ input [pLNMSB:0] lineno;
 input [pLNMSB:0] nxt_lineno;
 input [pLineWidth-1:0] i;
 input [2:0] f;
-output [pLineWidth*2+2:0] o;
+output reg [1023+3:0] o;
 
 integer n;
+genvar g;
 
 (* ram_style="distributed" *)
 reg [pLineWidth-1:0] mem [0:pLines-1];
@@ -64,7 +68,18 @@ always  @(posedge clk)
 	if (wr)
 		fmem[lineno] <= f;
 
-assign o = {fmem[nxt_lineno]|fmem[lineno],mem[nxt_lineno],mem[lineno]};
+generate begin : icacheo
+for (g = 0; g < 32; g = g + 1) begin
+always @*
+begin
+	o[g*16+:16] = {3'b0,mem[lineno][g*13+:13]};
+	o[512+g*16+:16] = {3'b0,mem[nxt_lineno][g*13+:13]};
+end
+end
+end
+endgenerate
+always @*
+	o[1026:1024] = fmem[nxt_lineno]|fmem[lineno];
 
 endmodule
 
@@ -220,14 +235,14 @@ input wr;
 input [AMSB:0] adr;
 input [AMSB:0] wadr;
 input [418:0] i;
-output reg [831:0] o;
+output reg [1023:0] o;
 output reg [2:0] fault;
 output hit;
 input invall;
 input invline;
 output [AMSB:0] missadr;
 
-wire [834:0] ic;
+wire [1026:0] ic;
 reg [418:0] i1, i2;
 wire [pLNMSB:0] lineno, nxt_lineno;
 wire taghit;
@@ -278,9 +293,9 @@ assign hit = taghit;
 
 //always @(radr or ic0 or ic1)
 always @*
-	o <= ic[831:0] >> (adr[4:0] * 13);
+	o <= ic[1023:0] >> {adr[4:0],4'h0};
 always @*
-	fault <= ic[834:832];
+	fault <= ic[1026:1024];
 
 endmodule
 
