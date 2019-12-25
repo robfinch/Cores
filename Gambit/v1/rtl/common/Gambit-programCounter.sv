@@ -154,40 +154,40 @@ if (rst) begin
 	branch_pc <= RSTPC;
 end
 else begin
-	branch_pc <= pc;
+	branch_pc = pc;
 	if (q1 & ~q1bx) begin
 		if (wai[0])
-			branch_pc <= pc - 52'd1;
+			branch_pc = pc - 52'd1;
 		else if (rts[0])
-			branch_pc <= ra;
+			branch_pc = ra;
 		else if (take_branch[0]) begin
 			$display("take branch 0");
-			branch_pc <= pc + {{35{insnx[0][25]}},insnx[0][25:9]} + 4'd2;
+			branch_pc = pc + {{35{insnx[0][25]}},insnx[0][25:9]} + 4'd2;
 		end
 		else if (jc[0])
-			branch_pc[45:0] <= insnx[0][51:6];
+			branch_pc[45:0] = insnx[0][51:6];
 	end
 	else if (q2) begin
 		if (wai[0])
-			branch_pc <= pc - 52'd1;
+			branch_pc = pc - 52'd1;
 		else if (rts[0])
-			branch_pc <= ra;
+			branch_pc = ra;
 		else if (take_branch[0]) begin
 			$display("take branch 0");
-			branch_pc <= pc + {{35{insnx[0][25]}},insnx[0][25:9]} + 4'd2;
+			branch_pc = pc + {{35{insnx[0][25]}},insnx[0][25:9]} + 4'd2;
 		end
 		else if (jc[0])
-			branch_pc[45:0] <= insnx[0][51:6];
+			branch_pc[45:0] = insnx[0][51:6];
 		else if (rts[1])
-			branch_pc <= ra;
+			branch_pc = ra;
 		else if (wai[1])
-			branch_pc <= pc - 52'd1 + len1;
+			branch_pc = pc - 52'd1 + len1;
 		else if (take_branch[1]) begin
 			$display("take branch 1");
-			branch_pc <= pc + {{35{insnx[1][25]}},insnx[1][25:9]} + 4'd2 + len1;
+			branch_pc = pc + {{35{insnx[1][25]}},insnx[1][25:9]} + 4'd2 + len1;
 		end
 		else if (jc[1])
-			branch_pc[45:0] <= insnx[1][51:6];
+			branch_pc[45:0] = insnx[1][51:6];
 	end
 end
 

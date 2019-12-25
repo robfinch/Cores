@@ -5,6 +5,7 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
+//
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
 // by the Free Software Foundation, either version 3 of the License, or     
@@ -17,50 +18,58 @@
 //                                                                          
 // You should have received a copy of the GNU General Public License        
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.    
-//
-// Compute pointers into micro-instruction program.
-// Set which instruction a pointer points to.
-// The pointers allow accessing the micro-program as a four read-port memory,
-// rather than using mip1, mip1+1, etc. directly which would require more
-// ports.
+//                                                                          
 // ============================================================================
 //
-`include "..\Gambit-config.sv"
-`include "..\Gambit-types.sv"
-
-module mip_ptr(uop_prg, mip1, mip2, branchmiss, ptr, whinst);
-input MicroOp uop_prg [0:`LAST_UOP];
-input MicroOpPtr mip1;
-input MicroOpPtr mip2;
-input branchmiss;
-output MicroOpPtr ptr [0:`MAX_UOPQ-1];
-output reg [`MAX_UOPQ-1:0] whinst;
-
-integer n, m;
-integer a;
+module instLength(opcode,len);
+input [5:0] opcode;
+output reg [2:0] len;
 
 always @*
-begin
-	a = 0;
-	for (n = 0; n < `MAX_UOPQ; n = n + 1) begin
-		ptr[n] = mip1 + n;
-		whinst[n] = 1'b0;
-	end
-	whinst[0] = 1'b0;
-	for (n = 0; n < `MAX_UOPQ; n = n + 1) begin
-		if (uop_prg[ptr[n]].fl[1] && !a) begin
-			for (m = n + 1; m < `MAX_UOPQ; m = m + 1) begin
-				ptr[m] = mip2 + m - n - 1;
-				whinst[m] = 1'b1;
-				a = 1;
-			end
-		end
-	end
-	// Point everything to NOPs on a branch miss.
-	if (branchmiss) begin
-		for (n = 0; n < `MAX_UOPQ; n = n + 1)
-			ptr[n] = 1'd0;
-	end
-end
-
+case(opcode)
+`ADD_3R:	len <= 3'd2;
+`ADD_I23:	len <= 3'd3;
+`ADD_I36:	len <= 3'd4;
+`JMP:			len <= 3'd4;
+`ASL_3R:	len <= 3'd2;
+`SUB_3R:	len <= 3'd2;
+`SUB_I23:	len <= 3'd3;
+`SUB_I36:	len <= 3'd4;
+`JSR:			len <= 3'd4;
+`LSR_3R:	len <= 3'd2;
+`RETGRP:	len <= 3'd1;
+`ROL_3R:	len <= 3'd2;
+`AND_3R:	len <= 3'd2;
+`AND_I23: len <= 3'd3;
+`AND_I36: len <= 3'd4;
+`BRKGRP:	len <= 3'd1;
+`ROR_3R:	len <= 3'd2;
+`OR_3R:		len <= 3'd2;
+`OR_I23:	len <= 3'd3;
+`OR_I36:	len <= 3'd4;
+`JMP_RN:	len <= 3'd1;
+`SEP:			len <= 3'd1;
+`EOR_3R:	len <= 3'd2;
+`EOR_I23:	len <= 3'd3;
+`EOR_I36: len <= 3'd4;
+`JSR_RN:	len <= 3'd1;
+`REP:			len <= 3'd1;
+`LD_D9:		len <= 3'd2;
+`LD_D23:	len <= 3'd3;
+`LD_D36:	len <= 3'd4;
+`LDB_D36:	len <= 3'd4;
+`PLP:			len <= 3'd1;
+`POP:			len <= 3'd1;
+`ST_D9:		len <= 3'd2;
+`ST_D23:	len <= 3'd3;
+`ST_D36:	len <= 3'd4;
+`STB_D36:	len <= 3'd4;
+`PHP:			len <= 3'd1;
+`PSH:			len <= 3'd1;
+`BccD4a:	len <= 3'd1;
+`BccD4b:	len <= 3'd1;
+`BccD17a:	len <= 3'd2;
+`BccD17b:	len <= 3'd2;
+default:	len <= 3'd1;	// unimplemented instruction
+endcase
 endmodule

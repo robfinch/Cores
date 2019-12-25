@@ -50,8 +50,10 @@ output reg [1023+3:0] o;
 integer n;
 genvar g;
 
+wire [2:0] len [0:31];
+
 (* ram_style="distributed" *)
-reg [pLineWidth-1:0] mem [0:pLines-1];
+reg [pLineWidth * 16 / 13+1:0] mem [0:pLines-1];
 reg [2:0] fmem[0:pLines-1];
 
 initial begin
@@ -61,9 +63,21 @@ initial begin
 	end
 end
 
+generate begin : memupd
+for (g = 0; g < 32; g = g + 1) begin
+instLength uil
+(
+	.opcode(i[g*13+:6]),
+	.len(len[g])
+);
+
 always  @(posedge clk)
 	if (wr)
-		mem[lineno] <= i;
+		mem[lineno][g*16+:16] <= {len[g],i[g*13+:13]};
+end
+end
+endgenerate
+
 always  @(posedge clk)
 	if (wr)
 		fmem[lineno] <= f;
@@ -72,8 +86,8 @@ generate begin : icacheo
 for (g = 0; g < 32; g = g + 1) begin
 always @*
 begin
-	o[g*16+:16] = {3'b0,mem[lineno][g*13+:13]};
-	o[512+g*16+:16] = {3'b0,mem[nxt_lineno][g*13+:13]};
+	o[g*16+:16] = mem[lineno][g*16+:16];
+	o[512+g*16+:16] = mem[nxt_lineno][g*16+:16];
 end
 end
 end

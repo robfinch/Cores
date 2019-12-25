@@ -52,7 +52,10 @@
 `define UOQ_BITS	`UOQ_BIT:0
 
 // The number of micro-ops in the program.
-`define LAST_UOP	188
+`define LAST_UOP	192
+
+// Maximum number of micro-ops that can queue at once.
+`define MAX_UOPQ 	4
 
 // Queue size should not be an even power of two!
 // Don't use 4,8,16,32,64 etc. As a value of all ones for the qid and rid

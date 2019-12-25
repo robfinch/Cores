@@ -65,7 +65,6 @@ reg [2:0] mipst;
 reg [51:0] insnxy [0:1];
 reg [1:0] tb;
 reg [2:0] uopqd1;
-reg stall1, stall2, stall3;
 reg nxtb;
 reg [5:0] empty_ctr;
 MicroOpPtr mip1x, mip2x;
@@ -155,22 +154,10 @@ uop_map = {
 };
 end
 
-wire pcchg = pcr[0] != pc;
-wire nbx;
-wire willmap = 
-	mipst==MIP_RUN && !stall1 && (qcnt==3'd2 || (mip1==1'd0 && qcnt==3'd1) || (mip1==1'd0 && mip2==1'd0)) && phit;
-	
 // Ready to fetch once both macro-instructions have queued, or we've run out of micro-ops.
 wire ready_to_fetch = qcnt==3'd2 || (mip2==1'd0 && qcnt==3'd1) || (mip1==1'd0 && mip2==1'd0);
 
-assign nextBundle = ((mipst==MIP_RUN && !stall_uoq) && (ready_to_fetch) && (phit));// || nxtb;
-
-//	(
-//	(nbx && mipst==MIP_RUN && !stall1 && !(qcnt==3'd2 || (mip1==1'd0 && qcnt==3'd1) || (mip1==1'd0 && mip2==1'd0))) ||
-//	(nbx && mipst==MIP_RUN && stall1 && uopqd > 3'd0) ||
-//	(nbx && mipst==MIP_STALL && uopqd > 3'd0)
-//	)
-//	;
+assign nextBundle = rst || ((mipst==MIP_RUN && !stall_uoq) && (ready_to_fetch) && (phit));// || nxtb;
 
 // The following is the micro-program engine. It advances the micro-program
 // counters as micro-instructions are queued. And select which micro-program
@@ -194,15 +181,11 @@ if (rst) begin
 	branchmiss2 <= FALSE;
 	whinst_o <= 4'h0;
 	uopqd_o <= 3'd0;
-	stall1 <= 1'd0;
-	stall2 <= 1'd0;
-	stall3 <= 1'b0;
 	nxtb <= 1'b0;
 	empty_ctr <= 6'd0;
 end
 else begin
 	nxtb <= FALSE;
-	stall3 <= stall2;
 	
 	if (uoq_empty) begin
 		empty_ctr <= empty_ctr + 2'd1;
@@ -211,12 +194,12 @@ else begin
 			empty_ctr <= 6'd0;
 		end
 	end
+	branchmiss1 <= branchmiss;
+	branchmiss2 <= branchmiss1;
 
 	case(mipst)
 	MIP_RUN:
 		begin
-			stall1 <= stall_uoq;
-			stall2 <= stall1;
 			if (!stall_uoq) begin
 				// stage 2
 				// select micro-instructions to queue
@@ -248,22 +231,8 @@ else begin
 			end
 		end
 	
-	// There is a stall because there isn't enough room in the uop queue.
-	// During the stall state check and see if more uops can be queued. Propagate the
-	// pipeline forward, and advance the pointers when transitioning back to the run
-	// state. Saves a clock cycle.
-	MIP_STALL:
-		begin
-			stall1 <= stall_uoq;
-			stall2 <= stall1;
-			if (!stall1) begin
-				propagatePipeline();
-				advancePtrs();
-				mipst <= MIP_RUN;
-			end
-		end
 	endcase
-		
+
 	if (branchmiss) begin
 		mip1 <= uop_map[{opcode1[5:0],opcode1[8:6]}];
 		mip2 <= uop_map[{opcode2[5:0],opcode2[8:6]}];
@@ -277,8 +246,6 @@ end
 
 task propagatePipeline;
 begin
-	branchmiss1 <= branchmiss;
-	branchmiss2 <= branchmiss1;
 	insnxy[0] <= insnx[0];
 	insnxy[1] <= insnx[1];
 	insnxx[0] <= insnxy[0];
@@ -330,107 +297,5 @@ begin
 	end
 end
 endtask
-/*
-task advancePtrs;
-begin
-	if (|mip1) begin
-		mip1 <= mip1 + uopqd;
-		if (!uop_prg[mip1].fl[1]) begin
-			if (uopqd > 3'd1) begin
-				if (!uop_prg[mip1+1].fl[1]) begin
-					if (uopqd > 3'd2) begin
-						if (!uop_prg[mip1+2].fl[1]) begin
-							if (uopqd > 3'd3) begin
-								if (uop_prg[mip1+3].fl[1])
-									mip1 <= 1'd0;
-							end
-						end
-						else begin
-							mip1 <= 1'd0;
-							if (uopqd > 3'd3) begin
-								mip2 <= mip2 + uopqd - 3'd3;
-								if (uop_prg[mip2].fl[1]) begin
-									doMap();
-								end
-							end
-						end
-					end
-				end
-				else begin
-					mip1 <= 1'd0;
-					if (uopqd > 3'd2) begin
-						mip2 <= mip2 + uopqd - 3'd2;
-						if (!uop_prg[mip2].fl[1]) begin
-							if (uopqd > 3'd3) begin
-								mip2 <= mip2 + uopqd - 3'd3;
-								if (uop_prg[mip2+1].fl[1]) begin
-									doMap();
-								end
-							end
-						end
-						else begin
-							doMap();
-						end
-					end
-				end
-			end
-		end
-		else begin
-			mip1 <= 1'd0;
-			if (uopqd > 3'd1) begin
-				mip2 <= mip2 + uopqd - 3'd1;
-				if (!uop_prg[mip2].fl[1]) begin
-					if (uopqd > 3'd2) begin
-						mip2 <= mip2 + uopqd - 3'd2;
-						if (!uop_prg[mip2+1].fl[1]) begin
-							if (uopqd > 3'd3) begin
-								mip2 <= mip2 + uopqd - 3'd3;
-								if (uop_prg[mip2+2].fl[1]) begin
-									doMap();
-								end
-							end
-						end
-						else begin
-							doMap();
-						end
-					end
-				end
-				else begin
-					doMap();
-				end
-			end
-		end
-	end
-	else begin
-		if (|mip2) begin
-			mip2 <= mip2 + uopqd;
-			if (!uop_prg[mip2].fl[1]) begin
-				if (uopqd > 3'd1) begin
-					if (!uop_prg[mip2+1].fl[1]) begin
-						if (uopqd > 3'd2) begin
-							if (!uop_prg[mip2+2].fl[1]) begin
-								if (uopqd > 3'd3) begin
-									if (uop_prg[mip2+3].fl[1]) begin
-										doMap();
-									end
-								end
-							end
-							else begin
-								doMap();
-							end
-						end
-					end
-					else begin
-						doMap();
-					end
-				end
-			end
-			else begin
-				doMap();
-			end
-		end
-	end
-end
-endtask
-*/
+
 endmodule

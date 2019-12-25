@@ -192,7 +192,8 @@ reg [2:0] hi_amt;
 reg [2:0] r_amt, r_amt2;
 wire [`SNBITS] tosub;
 
-wire [3:0] len1, len2, len3, iclen1;
+wire [2:0] iclen1;
+reg [2:0] len1, len2, len1d, len2d;
 reg [51:0] insnx [0:1];
 
 wire [`QBITS] tails [0:QSLOTS-1];
@@ -327,6 +328,7 @@ wire  [AREGS-1:0] iq_out2a [0:IQ_ENTRIES-1];
 reg [IQ_ENTRIES-1:0] iq_latest_sr_ID;
 
 reg [FSLOTS-1:0] take_branch;
+wire [FSLOTS-1:0] take_branchd;
 reg [FSLOTS-1:0] take_branchq;
 reg [`QBITS] active_tag;
 
@@ -522,6 +524,7 @@ reg phit;
 reg phitd;
 
 reg branchmiss = 1'b0;
+wire branchmissd2;
 reg branchhit = 1'b0;
 reg  [`QBITS] missid;
 reg [`SNBITS] misssn;
@@ -765,7 +768,8 @@ mip_ptr ump1
 	.uop_prg(uop_prg),
 	.mip1(mip1),
 	.mip2(mip2),
-	.branchmiss(branchmiss|branchmiss1),
+//	.branchmiss(branchmiss|branchmiss1),
+	.branchmiss(branchmiss),
 	.ptr(ptr),
 	.whinst(whinst)
 );
@@ -811,6 +815,16 @@ wire [AMSB:0] uoppc [0:`MAX_UOPQ-1];
 
 wire stall_uoq = /*(uopqd < uopqc) ||*/ uoq_room < uopqd1;// || !(qcnt==3'd2 || (qcnt==3'd1 && ~|mip1));
 
+wire [AMSB:0] pcd2;
+wire [2:0] len1d2;
+
+// Under construction: additional pipelining
+delay2 #(AMSB+1) udl1 (.clk(clk_i), .ce(nextBundle), .i(pc), .o(pcd2));
+delay2 #(FSLOTS) udl2 (.clk(clk_i), .ce(nextBundle), .i(take_branch), .o(take_branchd));
+delay2 #(3) udl3 (.clk(clk_i), .ce(nextBundle), .i(len1), .o(len1d2));
+delay2 #(1) udl4 (.clk(clk_i), .ce(nextBundle), .i(branchmiss), .o(branchmissd2));
+
+
 // The following is the micro-program engine. It advances the micro-program
 // counters as micro-instructions are queued. And select which micro-program
 // instructions to queue.
@@ -848,8 +862,17 @@ microop_engine umoe1
 //assign uoq_slotv[0] = uoq_v[uoq_head]==`VAL;	//uoq_head != uoq_tail[0] || ~|uoq_v || &uoq_v;
 //assign uoq_slotv[1] = uoq_slotv[0] && uoq_v[(uoq_head+1) % UOQ_ENTRIES] == `VAL && ((uoq_head + 2'd1) % UOQ_ENTRIES) != uoq_tail[1];//(uoq_head != uoq_tail[0] && uoq_head + 4'd1 != uoq_tail[0]) || ~|uoq_v || &uoq_v;
 //assign uoq_slotv[2] = uoq_slotv[1] && uoq_v[(uoq_head+2) % UOQ_ENTRIES] == `VAL && ((uoq_head + 2'd2) % UOQ_ENTRIES) != uoq_tail[2];//(uoq_head != uoq_tail[0] && uoq_head + 4'd1 != uoq_tail[0] && uoq_head + 4'd2 != uoq_tail[0])  || ~|uoq_v || &uoq_v;
-
+wire [1023:0] ic_out;
+reg [2:0] len2g [0:10];
 generate begin : icouto
+assign iclen1 = ic_out[15:13];
+always @*
+	len1 = ic_out[15:13];
+for (g = 0; g < 11; g = g + 1)
+always @*
+	len2g[g] = ic_out[{g,4'h0}+15:{g,4'h0}+13];
+always @*
+	len2 = len2g[iclen1];
 for (g = 0; g < 11; g = g + 1) begin
 	always @*
 		ic1_out[g*13+:13] = ic_out[g*16+:13];
@@ -865,8 +888,8 @@ assign freezepc = ((rst_ctr < 32'd16) || nmi_i || (irq_i & ~sr[4])) && !int_comm
 
 // Since the micro-program doesn't support conditional logic or branches a 
 // conditional load for the PFI instruction is accomplished here.
-wire [8:0] opcode1a = freezepc ? {(rst_ctr < 32'd16) ? `RST : nmi_i ? `NMI : irq_i ? `IRQ : 3'd7,`BRKGRP} : ic1_out[8:0];
-wire [8:0] opcode2a = freezepc ? {(rst_ctr < 32'd16) ? `RST : nmi_i ? `NMI : irq_i ? `IRQ : 3'd7,`BRKGRP} : ic2_out[8:0];
+wire [8:0] opcode1a = branchmiss ? 1'd0 : freezepc ? {(rst_ctr < 32'd16) ? `RST : nmi_i ? `NMI : irq_i ? `IRQ : 3'd7,`BRKGRP} : ic1_out[8:0];
+wire [8:0] opcode2a = branchmiss ? 1'd0 : freezepc ? {(rst_ctr < 32'd16) ? `RST : nmi_i ? `NMI : irq_i ? `IRQ : 3'd7,`BRKGRP} : ic2_out[8:0];
 always @*
 	if ((opcode1a==`PFI || opcode1a==`WAI) && irq_i && !srx[4])
 		opcode1 <= opcode1a|9'b1;
@@ -878,14 +901,14 @@ always @*
 	else
 		opcode2 <= opcode2a;
 
-assign insnx[0] = freezepc ? {(rst_ctr < 32'd16) ? `RST : nmi_i ? `NMI : irq_i ? `IRQ : 3'd7,`BRKGRP} : ic1_out[51:0];
-assign insnx[1] = freezepc ? {(rst_ctr < 32'd16) ? `RST : nmi_i ? `NMI : irq_i ? `IRQ : 3'd7,`BRKGRP} : ic2_out[51:0];
+always @*
+	insnx[0] = freezepc ? {(rst_ctr < 32'd16) ? `RST : nmi_i ? `NMI : irq_i ? `IRQ : 3'd7,`BRKGRP} : ic1_out[51:0];
+always @*
+	insnx[1] = freezepc ? {(rst_ctr < 32'd16) ? `RST : nmi_i ? `NMI : irq_i ? `IRQ : 3'd7,`BRKGRP} : ic2_out[51:0];
+
 wire IsRst = (freezepc && rst_ctr < 4'd16);
 wire IsNmi = (freezepc & nmi_i);
 wire IsIrq = (freezepc & irq_i & ~sr[3]);
-instLength il1 (ic1_out[5:0], iclen1);
-instLength il2 (opcode1[5:0], len1);
-instLength il3 (opcode2[5:0], len2);
 
 wire [`ABITS] btgt [0:FSLOTS-1];
 wire [51:0] insnxp [0:QSLOTS-1];
@@ -1101,7 +1124,6 @@ for (n = 0; n < IQ_ENTRIES; n = n + 1)
 	is_qbranch[n] = iq_br[n];
 
 wire [1:0] ic_fault;
-wire [1023:0] ic_out;
 wire [AMSB:0] missadr;
 reg invic, invdc;
 reg invicl;
@@ -1301,6 +1323,7 @@ programCounter upc1
 	.take_branch(take_branch),
 	.btgt(btgt),
 	.pc(pc),
+	.pcd(pcd),
 	.pc_chg(nextb),
 	.branch_pc(next_pc),
 	.ra(52'd0),	//(ra),
@@ -3400,7 +3423,7 @@ else begin
 			uoq_tail[n] <= n;
 		uoq_head <= 2'd0;
 	end
-	
+
 	if (!(branchmiss||branchmiss1||uoq_room < uopqd1)) begin
 		if (uopqd1 > 3'd0) begin
 			queue_uop(uoq_tail[0],uoppc[0],uop2q[0],uop2q[0].fl,8'h00,1'b0,1'b0);
@@ -4832,54 +4855,54 @@ endmodule
 
 module instLength(opcode,len);
 input [5:0] opcode;
-output reg [3:0] len;
+output reg [2:0] len;
 
 always @*
 case(opcode)
-`ADD_3R:	len <= 4'd2;
-`ADD_I23:	len <= 4'd3;
-`ADD_I36:	len <= 4'd4;
-`JMP:			len <= 4'd4;
-`ASL_3R:	len <= 4'd2;
-`SUB_3R:	len <= 4'd2;
-`SUB_I23:	len <= 4'd3;
-`SUB_I36:	len <= 4'd4;
-`JSR:			len <= 4'd4;
-`LSR_3R:	len <= 4'd2;
-`RETGRP:	len <= 4'd1;
-`ROL_3R:	len <= 4'd2;
-`AND_3R:	len <= 4'd2;
-`AND_I23: len <= 4'd3;
-`AND_I36: len <= 4'd4;
-`BRKGRP:	len <= 4'd1;
-`ROR_3R:	len <= 4'd2;
-`OR_3R:		len <= 4'd2;
-`OR_I23:	len <= 4'd3;
-`OR_I36:	len <= 4'd4;
-`JMP_RN:	len <= 4'd1;
-`SEP:			len <= 4'd1;
-`EOR_3R:	len <= 4'd2;
-`EOR_I23:	len <= 4'd3;
-`EOR_I36: len <= 4'd4;
-`JSR_RN:	len <= 4'd1;
-`REP:			len <= 4'd1;
-`LD_D9:		len <= 4'd2;
-`LD_D23:	len <= 4'd3;
-`LD_D36:	len <= 4'd4;
-`LDB_D36:	len <= 4'd4;
-`PLP:			len <= 4'd1;
-`POP:			len <= 4'd1;
-`ST_D9:		len <= 4'd2;
-`ST_D23:	len <= 4'd3;
-`ST_D36:	len <= 4'd4;
-`STB_D36:	len <= 4'd4;
-`PHP:			len <= 4'd1;
-`PSH:			len <= 4'd1;
-`BccD4a:	len <= 4'd1;
-`BccD4b:	len <= 4'd1;
-`BccD17a:	len <= 4'd2;
-`BccD17b:	len <= 4'd2;
-default:	len <= 4'd1;	// unimplemented instruction
+`ADD_3R:	len <= 3'd2;
+`ADD_I23:	len <= 3'd3;
+`ADD_I36:	len <= 3'd4;
+`JMP:			len <= 3'd4;
+`ASL_3R:	len <= 3'd2;
+`SUB_3R:	len <= 3'd2;
+`SUB_I23:	len <= 3'd3;
+`SUB_I36:	len <= 3'd4;
+`JSR:			len <= 3'd4;
+`LSR_3R:	len <= 3'd2;
+`RETGRP:	len <= 3'd1;
+`ROL_3R:	len <= 3'd2;
+`AND_3R:	len <= 3'd2;
+`AND_I23: len <= 3'd3;
+`AND_I36: len <= 3'd4;
+`BRKGRP:	len <= 3'd1;
+`ROR_3R:	len <= 3'd2;
+`OR_3R:		len <= 3'd2;
+`OR_I23:	len <= 3'd3;
+`OR_I36:	len <= 3'd4;
+`JMP_RN:	len <= 3'd1;
+`SEP:			len <= 3'd1;
+`EOR_3R:	len <= 3'd2;
+`EOR_I23:	len <= 3'd3;
+`EOR_I36: len <= 3'd4;
+`JSR_RN:	len <= 3'd1;
+`REP:			len <= 3'd1;
+`LD_D9:		len <= 3'd2;
+`LD_D23:	len <= 3'd3;
+`LD_D36:	len <= 3'd4;
+`LDB_D36:	len <= 3'd4;
+`PLP:			len <= 3'd1;
+`POP:			len <= 3'd1;
+`ST_D9:		len <= 3'd2;
+`ST_D23:	len <= 3'd3;
+`ST_D36:	len <= 3'd4;
+`STB_D36:	len <= 3'd4;
+`PHP:			len <= 3'd1;
+`PSH:			len <= 3'd1;
+`BccD4a:	len <= 3'd1;
+`BccD4b:	len <= 3'd1;
+`BccD17a:	len <= 3'd2;
+`BccD17b:	len <= 3'd2;
+default:	len <= 3'd1;	// unimplemented instruction
 endcase
 endmodule
 
