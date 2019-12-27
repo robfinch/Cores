@@ -24,7 +24,7 @@
 `include "..\inc\Gambit-defines.sv"
 
 module instLength(opcode,len);
-input [5:0] opcode;
+input [6:0] opcode;
 output reg [2:0] len;
 
 always @*

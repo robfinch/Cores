@@ -82,12 +82,11 @@
 `define RBITS			`RBIT-1:0
 `define RBITSP1		`RBIT:0
 
-// The following bitfield spec is for the instruction sequence number. It
-// must have at least one more bit in it than the QBITS above as the counter
-// can overflow a little bit. Since queue sizes that are an exact power of two
-// are not allowed, it's just the ceiliing log2 of the queue size. For a
-// fifteen entry queue this works out to a five bit number.
-`define SNBIT			32	//$clog2(IQ_ENTRIES)+2
+// The following bitfield spec is for the instruction sequence number. The
+// sequence number must be reset periodically so it needs enough bits to
+// run until an interrupt routine may reset it. It alos needs to be small
+// enough not to cause timing issues.
+`define SNBIT			25
 `define SNBITS		`SNBIT:0
 
 // The following constant controls the maximum number of instructions that will

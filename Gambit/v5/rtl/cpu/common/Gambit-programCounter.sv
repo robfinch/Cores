@@ -32,7 +32,7 @@ module programCounter(rst, clk,
 	ra, pc_override,
 	debug_on);
 parameter AMSB = 51;
-parameter RSTPC = 52'hFFFFFFFFC0000;
+parameter RSTPC = 52'hFFFFFFFFE0000;
 parameter FSLOTS = `FSLOTS;
 parameter TRUE = 1'b1;
 parameter FALSE = 1'b0;

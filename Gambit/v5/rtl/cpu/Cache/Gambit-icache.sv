@@ -66,13 +66,15 @@ generate begin : memupd
 for (g = 0; g < 32; g = g + 1) begin
 instLength uil
 (
-	.opcode(i[g*13+:6]),
+	.opcode(i[g*13+:7]),
 	.len(len[g])
 );
 
 always  @(posedge clk)
-	if (wr)
+	if (wr) begin
 		mem[lineno][g*16+:16] <= {len[g],i[g*13+:13]};
+		$display("%d %d", lineno, len[g]);
+	end
 end
 end
 endgenerate
@@ -379,7 +381,7 @@ L1_icache_mem #(.pLines(pLines)) u1
   .o(ic)
 );
 
-L1_icache_pdmem
+L1_icache_pdmem updm1
 (
 	.clk(iclk),
 	.wr(wr1),

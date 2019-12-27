@@ -1,0 +1,87 @@
+                        	.file "fibonacci.asm",1
+                        	.file "fibonacci.asm",1
+                        	; Fibonacci calculator Gambit v5 asm
+                        	; r1 in the end will hold the Nth fibonacci number
+                        	
+                        		org	$FFFFFFFFFFFE0000
+                        	
+                        	start:
+FFFFFFFFFFFE0000 0119 0FD0 0000           		LDI	r2,#$FD
+FFFFFFFFFFFE0003 0109 1010                 		LDI	r2,#$01	; x = 1
+FFFFFFFFFFFE0005 0158 1000                 		ST	r2,$00
+                        	
+FFFFFFFFFFFE0007 0189 1100                 		LDI	r3,#$10		; calculates 16th fibonacci number (13 = D in hex) (CHANGE HERE IF YOU WANT TO CALCULATE ANOTHER NUMBER)
+FFFFFFFFFFFE0009 1089 0001                 		OR	r1,r3,r0	; transfer y register to accumulator
+FFFFFFFFFFFE000B 1185 1031                 		SUB	r3,r3,#3	; handles the algorithm iteration counting
+                        	
+FFFFFFFFFFFE000D 0089 1020                 		LDI	r1,#$2		; a = 2
+FFFFFFFFFFFE000F 00D8 1040                 		ST	r1,$04		; stores a
+                        	
+                        	loop: 
+FFFFFFFFFFFE0011 0150 1040                 		LD	r2,$04		; x = a
+FFFFFFFFFFFE0013 1084 0020                 		ADD	r1,r1,r2	; a += x
+FFFFFFFFFFFE0015 00D8 1040                 		ST	r1,$04		; stores a
+FFFFFFFFFFFE0017 0158 1000                 		ST	r2,$00		; stores x
+FFFFFFFFFFFE0019 1185 1011                 		SUB	r3,r3,#1	; y -= 1
+FFFFFFFFFFFE001B 00C0 1FE8                 	  BNE loop			; jumps back to loop if Z bit != 0 (y's decremention isn't zero yet)
+                        	
+                        	.file "fibonacci.asm",1
+                        	.file "fibonacci.asm",1
+                        	
+                        		rodata
+                        		align 8
+                        	begin_init_data:
+                        	_begin_init_data:
+                        	
+                        		rodata
+                        		align 8
+                        	end_init_data:
+                        	_end_init_data:
+5 symbols
+  Symbol Name                              seg     address bits
+  _end_init_data                           rodata  fffffffffffe0800 32
+  begin_init_data                          rodata  fffffffffffe0800 32
+  end_init_data                            rodata  fffffffffffe0800 32
+  loop                                       code  fffffffffffe0011 32
+  start                                      code  fffffffffffe0000 32
+
+Undefined Symbols
+
+  Macro Name
+0 compressable instructions
+The top 1024 are:
+Comp  Opcode  Count
+
+Instruction Statistics
+Loads:         1 (7.142857%)
+Stores:        2 (14.285714%)
+  Indexed:     0 (0.000000%)
+Pushes:        0 (0.000000%)
+Branches:      0 (0.000000%)
+  BEQI:		     0 (0.000000%)
+  BNEI:		     0 (0.000000%)
+  BBc:		     0 (0.000000%)
+  BLcc:		     0 (0.000000%)
+Calls:		     0 (0.000000%)
+Returns:	     0 (0.000000%)
+Adds:	         0 (0.000000%)
+Ands:	         0 (0.000000%)
+Ors:	         1 (7.142857%)
+Xors:	         0 (0.000000%)
+Lshifts:       0 (0.000000%)
+shifts:	       0 (0.000000%)
+Luis:	         0 (0.000000%)
+Moves:	       0 (0.000000%)
+CMoves:	       0 (0.000000%)
+Sets:	         1 (7.142857%)
+Ptrdif:        0 (0.000000%)
+Floatops:      0 (0.000000%)
+others:        9 (64.285714%)
+Total:        14
+
+number of bytes: 29.000000
+number of instructions: 14
+number of compressed instructions: 0
+2.071429 bytes (16 bits) per instruction
+Compression ratio: 0.000000%
+Number of long branches: 0

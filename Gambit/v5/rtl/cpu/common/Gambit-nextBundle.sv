@@ -5,8 +5,6 @@
 //     \/_//     robfinch<remove>@finitron.ca
 //       ||
 //
-// EvalBranch.v
-// - branch evaluation
 //
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU Lesser General Public License as published 
@@ -23,31 +21,25 @@
 //
 // ============================================================================
 //
-`include "..\inc\Gambit-defines.sv"
+`include "..\inc\Gambit-config.sv"
 
-module EvalBranch(instr, a, takb);
-input [51:0] instr;
-input [1:0] a;
-output reg takb;
+module next_bundle(rst, slotv, phit, next);
+parameter QSLOTS = `QSLOTS;
+input rst;
+input [QSLOTS-1:0] slotv;
+input phit;
+output reg next;
+parameter TRUE = 1'b1;
+parameter FALSE = 1'b0;
 
-//Evaluate branch condition
 always @*
-case(instr[6:0])
-`BRANCH0:
-	case(instr[8:7])
-	`BEQ:		takb = a==2'b00;
-	`BNE:		takb = a!=2'b00;
-	`BGT:		takb = a==2'b01;
-	`BLT:		takb = a==2'b11;
-	endcase
-`BRANCH1:
-	case(instr[8:7])
-	`BGE:		takb = ~a[1];
-	`BLE:		takb = $signed(a) <= 2'b00;
-	`BRA:		takb = 1'b1;
-	default:	takb = 1'b0;
-	endcase
-default:	takb = `TRUE;
-endcase
+if (rst)
+	next <= TRUE;
+else begin
+	if (slotv==2'b00 && phit)
+		next <= TRUE;
+	else
+		next <= FALSE;
+end
 
 endmodule

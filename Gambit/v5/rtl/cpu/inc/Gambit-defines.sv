@@ -49,7 +49,14 @@
 `define PERM_3R		7'h20
 `define LSR_3R		7'h0D
 `define BRANCH0		7'h40
+`define BEQ					2'd0
+`define BNE					2'd1
+`define BGT					2'd2
+`define BLT					2'd3
 `define BRANCH1		7'h41
+`define BGE					2'd0
+`define BLE					2'd1
+`define BRA					2'd2
 `define JAL				7'h42
 `define RETGRP		7'h44
 `define RET					2'd0
